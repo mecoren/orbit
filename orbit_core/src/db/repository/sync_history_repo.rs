@@ -1,0 +1,134 @@
+//! sync_history_repo — 同步历史记录仓储
+//!
+//! 记录每次同步操作的元数据（类型、状态、计数、耗时）。
+//! 同步引擎在 full_sync 开始时 insert，结束时 update_status。
+
+use sqlx::SqlitePool;
+
+use crate::error::CoreResult;
+use crate::models::business::SyncHistory;
+
+/// 插入一条同步历史记录，返回自增 id
+///
+/// - `sync_type`: "full" | "incremental" | "pull_only" | "push_only"
+/// - `status`: "running" | "success" | "failed" | "cancelled"
+pub async fn insert(
+    pool: &SqlitePool,
+    sync_type: &str,
+    status: &str,
+    started_at: i64,
+) -> CoreResult<i64> {
+    let result = sqlx::query(
+        "INSERT INTO sync_history (sync_type, status, started_at, pulled_count, pushed_count, conflict_count)
+         VALUES (?, ?, ?, 0, 0, 0)",
+    )
+    .bind(sync_type)
+    .bind(status)
+    .bind(started_at)
+    .execute(pool)
+    .await?;
+
+    Ok(result.last_insert_rowid())
+}
+
+/// 更新同步历史状态（结束时调用）
+pub async fn update_status(
+    pool: &SqlitePool,
+    id: i64,
+    status: &str,
+    finished_at: i64,
+    pulled_count: i64,
+    pushed_count: i64,
+    conflict_count: i64,
+    error_message: Option<&str>,
+) -> CoreResult<()> {
+    sqlx::query(
+        "UPDATE sync_history
+         SET status = ?, finished_at = ?, pulled_count = ?, pushed_count = ?,
+             conflict_count = ?, error_message = ?
+         WHERE id = ?",
+    )
+    .bind(status)
+    .bind(finished_at)
+    .bind(pulled_count)
+    .bind(pushed_count)
+    .bind(conflict_count)
+    .bind(error_message)
+    .bind(id)
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
+/// 获取最近的同步历史（按 started_at 降序）
+pub async fn get_recent(pool: &SqlitePool, limit: i64) -> CoreResult<Vec<SyncHistory>> {
+    let items = sqlx::query_as::<_, SyncHistory>(
+        "SELECT id, sync_type, status, started_at, finished_at,
+                pulled_count, pushed_count, conflict_count, error_message
+         FROM sync_history ORDER BY started_at DESC LIMIT ?",
+    )
+    .bind(limit)
+    .fetch_all(pool)
+    .await?;
+    Ok(items)
+}
+
+/// 获取指定类型集合的最近同步历史（按 started_at 降序）
+///
+/// 用于桌面端 Tabs 布局下按 sync_type 过滤展示：
+/// - 「云端全量备份」Tab 传入 `["cloud_full_backup", "local_full_backup"]`
+/// - 「云端增量同步」Tab 暂不调用（功能开发中）
+///
+/// `sync_types` 为空时返回空 Vec，避免生成 `IN ()` 非法 SQL。
+pub async fn get_recent_by_types(
+    pool: &SqlitePool,
+    sync_types: &[&str],
+    limit: i64,
+) -> CoreResult<Vec<SyncHistory>> {
+    if sync_types.is_empty() {
+        return Ok(Vec::new());
+    }
+    let placeholders = sync_types.iter().map(|_| "?").collect::<Vec<_>>().join(",");
+    let sql = format!(
+        "SELECT id, sync_type, status, started_at, finished_at,
+                pulled_count, pushed_count, conflict_count, error_message
+         FROM sync_history
+         WHERE sync_type IN ({})
+         ORDER BY started_at DESC LIMIT ?",
+        placeholders
+    );
+    let mut q = sqlx::query_as::<_, SyncHistory>(&sql);
+    for t in sync_types {
+        q = q.bind(t);
+    }
+    q = q.bind(limit);
+    let items = q.fetch_all(pool).await?;
+    Ok(items)
+}
+
+/// 获取最后一次成功的同步记录
+pub async fn get_last_successful(
+    pool: &SqlitePool,
+    sync_type: &str,
+) -> CoreResult<Option<SyncHistory>> {
+    let item = sqlx::query_as::<_, SyncHistory>(
+        "SELECT id, sync_type, status, started_at, finished_at,
+                pulled_count, pushed_count, conflict_count, error_message
+         FROM sync_history
+         WHERE sync_type = ? AND status = 'success'
+         ORDER BY started_at DESC LIMIT 1",
+    )
+    .bind(sync_type)
+    .fetch_optional(pool)
+    .await?;
+    Ok(item)
+}
+
+/// 删除指定天数前的历史记录，返回删除条数
+pub async fn delete_old(pool: &SqlitePool, before_timestamp: i64) -> CoreResult<i64> {
+    let result = sqlx::query("DELETE FROM sync_history WHERE started_at < ?")
+        .bind(before_timestamp)
+        .execute(pool)
+        .await?;
+    Ok(result.rows_affected() as i64)
+}

@@ -1,0 +1,166 @@
+/**
+ * TaskListView — 任务列表行（04 文档 §3.2 复刻）
+ *
+ * 行规格：圆形 checkbox（done 联动 status/done_at）+ 标题（划线）+
+ * 元信息行（优先级色点/项目名/截止时间，逾期整段红）+ hover 星标。
+ */
+import { formatDistanceToNow } from "date-fns";
+import { zhCN } from "date-fns/locale";
+import { Clock, Star } from "lucide-react";
+
+import { cn } from "@/lib/utils";
+import { todoTaskUpdate, type TodoProject, type TodoTask } from "@/lib/tauri";
+import { FAVORITE_COLOR, OVERDUE_COLOR_CLASS, PRIORITY_COLOR } from "../shared/constants";
+import { TaskContextMenu } from "./task-context-menu";
+
+interface TaskListViewProps {
+  tasks: TodoTask[];
+  projects: TodoProject[];
+  loading?: boolean;
+  onOpenDetail: (id: number) => void;
+}
+
+/** 截止文案：±15 天内相对时间，否则 MM-dd（04 §3.2） */
+function dueText(dueDate: number | null): string | null {
+  if (!dueDate) return null;
+  const ms = dueDate;
+  const diff = Math.abs(ms - Date.now());
+  if (diff <= 15 * 24 * 3600 * 1000) {
+    return formatDistanceToNow(new Date(ms), { addSuffix: true, locale: zhCN });
+  }
+  const d = new Date(ms);
+  return `${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+export function TaskListView({ tasks, projects, loading, onOpenDetail }: TaskListViewProps) {
+  if (loading) {
+    return <div className="p-8 text-center text-sm text-muted-foreground">加载中</div>;
+  }
+  if (tasks.length === 0) {
+    return <div className="p-8 text-center text-sm text-muted-foreground">暂无任务</div>;
+  }
+
+  const projectById = new Map(projects.map((p) => [p.id, p]));
+
+  const toggleDone = (t: TodoTask) => {
+    const done = t.done ? 0 : 1;
+    void todoTaskUpdate(t.id, {
+      done,
+      done_at: done ? Date.now() : null,
+      status: done ? "done" : "pending",
+    });
+  };
+
+  const toggleFavorite = (t: TodoTask) => {
+    void todoTaskUpdate(t.id, { is_favorite: t.is_favorite ? 0 : 1 });
+  };
+
+  return (
+    <div className="flex-1 divide-y divide-border/30 overflow-y-auto">
+      {tasks.map((t) => {
+        const overdue = !!t.due_date && !t.done && t.due_date < Date.now();
+        const due = dueText(t.due_date);
+        const projectName = t.project_id != null ? projectById.get(t.project_id)?.title : undefined;
+        return (
+          <TaskContextMenu
+            key={t.id}
+            task={t}
+            projects={projects}
+            onOpenDetail={() => onOpenDetail(t.id)}
+          >
+            <div
+              className="group flex items-center gap-3 px-4 py-3 hover:bg-accent/30"
+              onClick={() => onOpenDetail(t.id)}
+            >
+            {/* 完成 checkbox：圆环 */}
+            <button
+              type="button"
+              aria-label={t.done ? "标记未完成" : "标记完成"}
+              className={cn(
+                "h-5 w-5 shrink-0 rounded-full border-2 transition-colors",
+                t.done
+                  ? "border-primary bg-primary"
+                  : "border-muted-foreground/30 hover:border-primary",
+              )}
+              onClick={(e) => {
+                e.stopPropagation();
+                toggleDone(t);
+              }}
+            >
+              {t.done ? <CheckSvg /> : null}
+            </button>
+
+            {/* 标题 + 元信息 */}
+            <div className="min-w-0 flex-1">
+              <div
+                className={cn(
+                  "truncate text-[15px] leading-5",
+                  t.done && "text-muted-foreground line-through",
+                )}
+              >
+                {t.title}
+              </div>
+              {(t.priority > 0 || projectName || due) && (
+                <div
+                  className={cn(
+                    "mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground",
+                    overdue && OVERDUE_COLOR_CLASS,
+                  )}
+                >
+                  {t.priority > 0 && (
+                    <span
+                      className="h-1.5 w-1.5 rounded-full"
+                      style={{ background: PRIORITY_COLOR[t.priority] }}
+                    />
+                  )}
+                  {projectName && <span>{projectName}</span>}
+                  {due && (
+                    <span className="inline-flex items-center gap-0.5">
+                      <Clock size={11} />
+                      {due}
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* 星标：hover 显现 */}
+            <button
+              type="button"
+              aria-label={t.is_favorite ? "取消收藏" : "收藏"}
+              className={cn(
+                "shrink-0",
+                t.is_favorite
+                  ? "opacity-100"
+                  : "opacity-0 group-hover:opacity-100",
+              )}
+              style={{ color: FAVORITE_COLOR }}
+              onClick={(e) => {
+                e.stopPropagation();
+                toggleFavorite(t);
+              }}
+            >
+              <Star size={16} fill={t.is_favorite ? "currentColor" : "none"} />
+            </button>
+          </div>
+          </TaskContextMenu>
+        );
+      })}
+    </div>
+  );
+}
+
+/** 完成态白色对勾（04 §3.2：白勾 SVG） */
+function CheckSvg() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      className="m-auto size-3 text-white"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={3}
+    >
+      <path d="M20 6L9 17l-5-5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}

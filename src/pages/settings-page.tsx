@@ -1,0 +1,59 @@
+/**
+ * 设置页 —— 左导航 + 右内容布局（对齐 wait-home SettingsPage）
+ *
+ * 左侧 w-48 导航（安全/主题），右侧 max-w-2xl 内容区按分类渲染分区组件。
+ * 同步 / 数据等分区随 M3 交付后追加进 settingsCategories。
+ */
+import { useState } from "react";
+
+import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import {
+  settingsCategories,
+  type SettingsCategoryKey,
+} from "@/components/settings/categories";
+import { SecuritySection } from "@/components/settings/security-section";
+import { ThemeSection } from "@/components/settings/theme-section";
+
+export function SettingsPage() {
+  const [active, setActive] = useState<SettingsCategoryKey>("security");
+
+  return (
+    <div className="flex h-full flex-col">
+      {/* 页头 */}
+      <header className="border-b px-6 py-4">
+        <h1 className="text-lg font-semibold text-foreground">设置</h1>
+      </header>
+
+      <div className="flex min-h-0 flex-1">
+        {/* 左导航 */}
+        <nav className="w-48 shrink-0 space-y-1 overflow-y-auto border-r p-3">
+          {settingsCategories.map((cat) => (
+            <Button
+              key={cat.key}
+              variant="ghost"
+              onClick={() => setActive(cat.key)}
+              className={cn(
+                "flex w-full items-center justify-start gap-2 px-3 py-2",
+                active === cat.key
+                  ? "bg-accent text-accent-foreground"
+                  : "text-muted-foreground hover:bg-accent/50 hover:text-foreground",
+              )}
+            >
+              <cat.icon className="size-4" />
+              {cat.label}
+            </Button>
+          ))}
+        </nav>
+
+        {/* 右内容 */}
+        <div className="min-w-0 flex-1 overflow-y-auto">
+          <div className="mx-auto max-w-2xl p-6">
+            {active === "security" && <SecuritySection />}
+            {active === "theme" && <ThemeSection />}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}

@@ -1,0 +1,526 @@
+@import "tailwindcss";
+@plugin "tailwindcss-animate";
+
+@custom-variant dark (&:is(.dark *));
+
+/* ============================================================
+ * 默认 :root（亮色基底，作为未设置 data-palette 时的 fallback）
+ * ============================================================ */
+:root {
+  --radius: 0.625rem;
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.145 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.145 0 0);
+  --primary: oklch(0.205 0 0);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.97 0 0);
+  --secondary-foreground: oklch(0.205 0 0);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.556 0 0);
+  --accent: oklch(0.97 0 0);
+  --accent-foreground: oklch(0.205 0 0);
+  --destructive: oklch(0.577 0.245 27.325);
+  --success: oklch(0.596 0.145 163.225);
+  --warning: oklch(0.666 0.179 58.322);
+  --border: oklch(0.922 0 0);
+  --input: oklch(0.922 0 0);
+  --ring: oklch(0.708 0 0);
+  --chart-1: oklch(0.646 0.222 41.116);
+  --chart-2: oklch(0.6 0.118 184.704);
+  --chart-3: oklch(0.398 0.07 227.392);
+  --chart-4: oklch(0.828 0.189 84.429);
+  --chart-5: oklch(0.769 0.188 70.08);
+  --sidebar: oklch(0.985 0 0);
+  --sidebar-foreground: oklch(0.145 0 0);
+  --sidebar-primary: oklch(0.205 0 0);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.97 0 0);
+  --sidebar-accent-foreground: oklch(0.205 0 0);
+  --sidebar-border: oklch(0.922 0 0);
+  --sidebar-ring: oklch(0.708 0 0);
+  /* ── 动效时长（毫秒，供 CSS transition 直接使用）── */
+  --duration-instant: 100ms;
+  --duration-fast: 150ms;
+  --duration-base: 200ms;
+  --duration-slow: 300ms;
+  /* ── 滚动条滑块色（DevToys 风格悬浮滑块；亮色基底用黑 alpha）── */
+  --scrollbar-slider-bg: oklch(0 0 0 / 12%);
+  --scrollbar-slider-hover-bg: oklch(0 0 0 / 20%);
+  --scrollbar-slider-active-bg: oklch(0 0 0 / 27%);
+}
+
+/* ============================================================
+ * 色板：黑曜石（默认深色，蓝调）
+ * ============================================================ */
+[data-palette="obsidian"] {
+  --background: oklch(0.16 0.01 264);
+  --foreground: oklch(0.96 0.01 264);
+  --card: oklch(0.21 0.01 264);
+  --card-foreground: oklch(0.96 0.01 264);
+  --popover: oklch(0.21 0.01 264);
+  --popover-foreground: oklch(0.96 0.01 264);
+  --primary: oklch(0.62 0.19 264);
+  --primary-foreground: oklch(0.99 0 0);
+  --secondary: oklch(0.27 0.01 264);
+  --secondary-foreground: oklch(0.96 0.01 264);
+  --muted: oklch(0.24 0.01 264);
+  --muted-foreground: oklch(0.68 0.02 264);
+  --accent: oklch(0.27 0.02 264);
+  --accent-foreground: oklch(0.96 0.01 264);
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.62 0.19 264);
+  --chart-1: oklch(0.488 0.243 264.376);
+  --chart-2: oklch(0.696 0.17 162.48);
+  --chart-3: oklch(0.769 0.188 70.08);
+  --chart-4: oklch(0.627 0.265 303.9);
+  --chart-5: oklch(0.645 0.246 16.439);
+  --sidebar: oklch(0.18 0.01 264);
+  --sidebar-foreground: oklch(0.96 0.01 264);
+  --sidebar-primary: oklch(0.62 0.19 264);
+  --sidebar-primary-foreground: oklch(0.99 0 0);
+  --sidebar-accent: oklch(0.24 0.02 264);
+  --sidebar-accent-foreground: oklch(0.96 0.01 264);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: oklch(0.62 0.19 264);
+}
+
+/* ============================================================
+ * 色板：深海（青蓝调）
+ * ============================================================ */
+[data-palette="deep-sea"] {
+  --background: oklch(0.16 0.01 220);
+  --foreground: oklch(0.96 0.01 220);
+  --card: oklch(0.21 0.01 220);
+  --card-foreground: oklch(0.96 0.01 220);
+  --popover: oklch(0.21 0.01 220);
+  --popover-foreground: oklch(0.96 0.01 220);
+  --primary: oklch(0.62 0.16 220);
+  --primary-foreground: oklch(0.99 0 0);
+  --secondary: oklch(0.27 0.01 220);
+  --secondary-foreground: oklch(0.96 0.01 220);
+  --muted: oklch(0.24 0.01 220);
+  --muted-foreground: oklch(0.68 0.02 220);
+  --accent: oklch(0.27 0.02 220);
+  --accent-foreground: oklch(0.96 0.01 220);
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.62 0.16 220);
+  --chart-1: oklch(0.488 0.243 264.376);
+  --chart-2: oklch(0.696 0.17 162.48);
+  --chart-3: oklch(0.769 0.188 70.08);
+  --chart-4: oklch(0.627 0.265 303.9);
+  --chart-5: oklch(0.645 0.246 16.439);
+  --sidebar: oklch(0.18 0.01 220);
+  --sidebar-foreground: oklch(0.96 0.01 220);
+  --sidebar-primary: oklch(0.62 0.16 220);
+  --sidebar-primary-foreground: oklch(0.99 0 0);
+  --sidebar-accent: oklch(0.24 0.02 220);
+  --sidebar-accent-foreground: oklch(0.96 0.01 220);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: oklch(0.62 0.16 220);
+}
+
+/* ============================================================
+ * 色板：暮光（橙红暖调）
+ * ============================================================ */
+[data-palette="twilight"] {
+  --background: oklch(0.16 0.01 25);
+  --foreground: oklch(0.96 0.01 25);
+  --card: oklch(0.21 0.01 25);
+  --card-foreground: oklch(0.96 0.01 25);
+  --popover: oklch(0.21 0.01 25);
+  --popover-foreground: oklch(0.96 0.01 25);
+  --primary: oklch(0.62 0.20 25);
+  --primary-foreground: oklch(0.99 0 0);
+  --secondary: oklch(0.27 0.01 25);
+  --secondary-foreground: oklch(0.96 0.01 25);
+  --muted: oklch(0.24 0.01 25);
+  --muted-foreground: oklch(0.68 0.02 25);
+  --accent: oklch(0.27 0.02 25);
+  --accent-foreground: oklch(0.96 0.01 25);
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.62 0.20 25);
+  --chart-1: oklch(0.488 0.243 264.376);
+  --chart-2: oklch(0.696 0.17 162.48);
+  --chart-3: oklch(0.769 0.188 70.08);
+  --chart-4: oklch(0.627 0.265 303.9);
+  --chart-5: oklch(0.645 0.246 16.439);
+  --sidebar: oklch(0.18 0.01 25);
+  --sidebar-foreground: oklch(0.96 0.01 25);
+  --sidebar-primary: oklch(0.62 0.20 25);
+  --sidebar-primary-foreground: oklch(0.99 0 0);
+  --sidebar-accent: oklch(0.24 0.02 25);
+  --sidebar-accent-foreground: oklch(0.96 0.01 25);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: oklch(0.62 0.20 25);
+}
+
+/* ============================================================
+ * 色板：翡翠夜（翠绿护眼）
+ * ============================================================ */
+[data-palette="emerald-night"] {
+  --background: oklch(0.16 0.01 162);
+  --foreground: oklch(0.96 0.01 162);
+  --card: oklch(0.21 0.01 162);
+  --card-foreground: oklch(0.96 0.01 162);
+  --popover: oklch(0.21 0.01 162);
+  --popover-foreground: oklch(0.96 0.01 162);
+  --primary: oklch(0.62 0.16 162);
+  --primary-foreground: oklch(0.99 0 0);
+  --secondary: oklch(0.27 0.01 162);
+  --secondary-foreground: oklch(0.96 0.01 162);
+  --muted: oklch(0.24 0.01 162);
+  --muted-foreground: oklch(0.68 0.02 162);
+  --accent: oklch(0.27 0.02 162);
+  --accent-foreground: oklch(0.96 0.01 162);
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.62 0.16 162);
+  --chart-1: oklch(0.488 0.243 264.376);
+  --chart-2: oklch(0.696 0.17 162.48);
+  --chart-3: oklch(0.769 0.188 70.08);
+  --chart-4: oklch(0.627 0.265 303.9);
+  --chart-5: oklch(0.645 0.246 16.439);
+  --sidebar: oklch(0.18 0.01 162);
+  --sidebar-foreground: oklch(0.96 0.01 162);
+  --sidebar-primary: oklch(0.62 0.16 162);
+  --sidebar-primary-foreground: oklch(0.99 0 0);
+  --sidebar-accent: oklch(0.24 0.02 162);
+  --sidebar-accent-foreground: oklch(0.96 0.01 162);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: oklch(0.62 0.16 162);
+}
+
+/* ============================================================
+ * 色板：日光（亮色模式默认）
+ * ============================================================ */
+[data-palette="daylight"] {
+  --background: oklch(0.99 0.005 264);
+  --foreground: oklch(0.18 0.01 264);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.18 0.01 264);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.18 0.01 264);
+  --primary: oklch(0.55 0.22 264);
+  --primary-foreground: oklch(0.99 0 0);
+  --secondary: oklch(0.96 0.01 264);
+  --secondary-foreground: oklch(0.20 0.01 264);
+  --muted: oklch(0.96 0.01 264);
+  --muted-foreground: oklch(0.52 0.01 264);
+  --accent: oklch(0.96 0.01 264);
+  --accent-foreground: oklch(0.20 0.01 264);
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: oklch(0.92 0.005 264);
+  --input: oklch(0.92 0.005 264);
+  --ring: oklch(0.55 0.22 264);
+  --chart-1: oklch(0.646 0.222 41.116);
+  --chart-2: oklch(0.6 0.118 184.704);
+  --chart-3: oklch(0.398 0.07 227.392);
+  --chart-4: oklch(0.828 0.189 84.429);
+  --chart-5: oklch(0.769 0.188 70.08);
+  --sidebar: oklch(0.97 0.005 264);
+  --sidebar-foreground: oklch(0.18 0.01 264);
+  --sidebar-primary: oklch(0.55 0.22 264);
+  --sidebar-primary-foreground: oklch(0.99 0 0);
+  --sidebar-accent: oklch(0.95 0.01 264);
+  --sidebar-accent-foreground: oklch(0.20 0.01 264);
+  --sidebar-border: oklch(0.92 0.005 264);
+  --sidebar-ring: oklch(0.55 0.22 264);
+}
+
+/* ============================================================
+ * 色板：自定义（深色基底，关键变量由 JS inline style 覆盖）
+ *
+ * 此块仅提供基础深色基底，--primary / --ring / --sidebar-primary 等
+ * 关键交互色由 color-theme.ts 的 applyPalette() 通过 inline style 注入。
+ * ============================================================ */
+[data-palette="custom"] {
+  --background: oklch(0.16 0 0);
+  --foreground: oklch(0.96 0 0);
+  --card: oklch(0.21 0 0);
+  --card-foreground: oklch(0.96 0 0);
+  --popover: oklch(0.21 0 0);
+  --popover-foreground: oklch(0.96 0 0);
+  --primary: oklch(0.62 0.19 264);
+  --primary-foreground: oklch(0.99 0 0);
+  --secondary: oklch(0.27 0 0);
+  --secondary-foreground: oklch(0.96 0 0);
+  --muted: oklch(0.24 0 0);
+  --muted-foreground: oklch(0.68 0 0);
+  --accent: oklch(0.27 0 0);
+  --accent-foreground: oklch(0.96 0 0);
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.62 0.19 264);
+  --chart-1: oklch(0.488 0.243 264.376);
+  --chart-2: oklch(0.696 0.17 162.48);
+  --chart-3: oklch(0.769 0.188 70.08);
+  --chart-4: oklch(0.627 0.265 303.9);
+  --chart-5: oklch(0.645 0.246 16.439);
+  --sidebar: oklch(0.18 0 0);
+  --sidebar-foreground: oklch(0.96 0 0);
+  --sidebar-primary: oklch(0.62 0.19 264);
+  --sidebar-primary-foreground: oklch(0.99 0 0);
+  --sidebar-accent: oklch(0.24 0 0);
+  --sidebar-accent-foreground: oklch(0.96 0 0);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: oklch(0.62 0.19 264);
+}
+
+/* 自定义（浅色基底）：data-custom-mode="light" 时覆盖为浅色变量
+ * 亮度更高，foreground 用深色，配合同名 inline override 注入的 accent */
+[data-palette="custom"][data-custom-mode="light"] {
+  --background: oklch(0.99 0.005 264);
+  --foreground: oklch(0.18 0.01 264);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.18 0.01 264);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.18 0.01 264);
+  --secondary: oklch(0.96 0.01 264);
+  --secondary-foreground: oklch(0.20 0.01 264);
+  --muted: oklch(0.96 0.01 264);
+  --muted-foreground: oklch(0.52 0.01 264);
+  --accent: oklch(0.96 0.01 264);
+  --accent-foreground: oklch(0.20 0.01 264);
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: oklch(0.92 0.005 264);
+  --input: oklch(0.92 0.005 264);
+  --sidebar: oklch(0.97 0.005 264);
+  --sidebar-foreground: oklch(0.18 0.01 264);
+  --sidebar-accent: oklch(0.95 0.01 264);
+  --sidebar-accent-foreground: oklch(0.20 0.01 264);
+  --sidebar-border: oklch(0.92 0.005 264);
+  color-scheme: light;
+}
+
+/* 深色色板统一启用 color-scheme: dark，让原生控件（滚动条等）也跟随；
+   并注入深色基底的状态语义色（成功 / 警告）与滚动条滑块色（白 alpha） */
+[data-palette="obsidian"],
+[data-palette="deep-sea"],
+[data-palette="twilight"],
+[data-palette="emerald-night"],
+[data-palette="custom"][data-custom-mode="dark"] {
+  color-scheme: dark;
+  --success: oklch(0.696 0.17 162.48);
+  --warning: oklch(0.769 0.188 70.08);
+  --scrollbar-slider-bg: oklch(1 0 0 / 12%);
+  --scrollbar-slider-hover-bg: oklch(1 0 0 / 20%);
+  --scrollbar-slider-active-bg: oklch(1 0 0 / 27%);
+}
+
+/* 亮色色板（含自定义浅色基底）：亮色状态语义色 */
+[data-palette="daylight"],
+[data-palette="custom"][data-custom-mode="light"] {
+  color-scheme: light;
+  --success: oklch(0.596 0.145 163.225);
+  --warning: oklch(0.666 0.179 58.322);
+}
+
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --animate-accordion-down: accordion-down var(--duration-base) ease-out;
+  --animate-accordion-up: accordion-up var(--duration-base) ease-out;
+  /* ── 动效时长 token（映射为 Tailwind duration-* 类）──
+     Fix-26：两个历史问题——
+     1) 命名空间错误：Tailwind v4 的 duration 工具类只读取
+        `--transition-duration-*` 命名空间，原 `--duration-*` 键
+        从未生成过任何工具类（产物 CSS 中不存在）；
+     2) 自引用：`--duration-x: var(--duration-x)` 若被发射到 ：root 会形成循环引用。
+     现以正确命名空间引用上方 ：root 的 token（键名不同，无自引用），
+     @theme inline 将 var 表达式内联进工具类，运行时从 ：root 取值。 */
+  --transition-duration-instant: var(--duration-instant);
+  --transition-duration-fast: var(--duration-fast);
+  --transition-duration-base: var(--duration-base);
+  --transition-duration-slow: var(--duration-slow);
+  /* ── 淡入动画（供 sync-overlay 等直接挂载组件使用）── */
+  --animate-fade-in: fade-in var(--duration-base) ease-out;
+}
+
+@keyframes accordion-down {
+  from {
+    height: 0;
+  }
+  to {
+    height: var(--radix-accordion-content-height);
+  }
+}
+
+@keyframes accordion-up {
+  from {
+    height: var(--radix-accordion-content-height);
+  }
+  to {
+    height: 0;
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* 页面切换过渡动画：路由 pathname 变化时通过 key 重新挂载触发 */
+@keyframes page-enter {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.page-transition {
+  animation: page-enter var(--duration-base) ease-out;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  /* html/body 均不设不透明背景：让 Mica 材质透过 WebView2 透明背景显示。
+     主内容区 <main> 在 AppShell 中使用 bg-background/60 dark:bg-background/85，
+     与标题栏、侧边栏保持一致的半透明云母/毛玻璃效果。
+     注：window-vibrancy 官方示例要求 html, body 必须 transparent。 */
+  html {
+    background: transparent;
+  }
+  body {
+    @apply text-foreground;
+  }
+}
+
+/* ============================================================
+ * 全局滚动条美化（DevToys 风格，参考 qraft 同款实现）—— 全应用统一
+ * - 10px 细滚动条，轨道透明（仅悬浮滑块，与 Radix ScrollArea 观感一致），
+ *   thumb 主题色圆角滑块（2px 内缩）
+ * - thumb 最小 28px，便于抓取；hover/active 加深 + 平滑过渡
+ * - 颜色全部取自主题 token（--scrollbar-slider-*），深浅主题自动适配
+ *
+ * 注意：不要再额外声明标准属性 `scrollbar-color`（勿用 `*` 通配注入）。
+ * Chromium ≥121 / WebView2 下，一旦元素的 scrollbar-color 计算值非 auto，
+ * 该元素的所有 ::-webkit-scrollbar 自定义样式会被整体禁用，退化为
+ * 系统原生粗滚动条。颜色已由下方 ::-webkit-scrollbar-* 规则按同一
+ * token 提供，无需重复。
+ *
+ * 覆盖范围：所有原生滚动容器（任务列表 / 看板 / 侧栏 / 设置 / 关于 /
+ * 命令面板与下拉列表等）+ Radix ScrollArea 自绘滑块（scroll-area.tsx
+ * 改用同一 token）
+ * ============================================================ */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  /* 无轨道底色：只保留悬浮滑块本身，避免列表右侧出现整条灰色背景柱 */
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background-color: var(--scrollbar-slider-bg);
+  /* padding-box + 2px 透明 border：滑块四周内缩 2px，更精致 */
+  background-clip: padding-box;
+  border: 2px solid transparent;
+  min-height: 28px;
+  min-width: 28px;
+  border-radius: 2em;
+  transition: background-color var(--duration-slow) ease;
+  cursor: pointer;
+}
+::-webkit-scrollbar-thumb:hover {
+  background-color: var(--scrollbar-slider-hover-bg);
+}
+::-webkit-scrollbar-thumb:active {
+  background-color: var(--scrollbar-slider-active-bg);
+}
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* ScrollArea 内容容器改为 block 布局 —— 让行内 truncate 正常显示省略号(...)
+ * 背景：Radix 会把内容包在 <div style="min-width:100%; display:table"> 中，
+ * table 布局按内容的 max-content 撑宽容器；而 truncate 是 whitespace-nowrap，
+ * 其 max-content 就是完整文本宽度 —— 长文本会把整行撑到超出容器被裁掉，
+ * 永远不触发 text-ellipsis。改为 block 后容器宽度受 viewport 约束
+ * （min-width:100% 保留），行内 min-w-0 + truncate 即可正常收缩显示 ...。
+ * !important 用于覆盖 Radix 写在内联 style 上的 display:table。 */
+[data-radix-scroll-area-viewport] > div,
+[data-slot="scroll-area-viewport"] > div {
+  display: block !important;
+}
+
+/* ============================================================
+ * ScrollArea 兜底样式 —— 普通 CSS 选择器直击滑块，不依赖 utility 产物
+ * Tailwind v4 vite prod scan 偶发漏扫组件目录的任意值 utility
+ * （bg-[var(--...)] 等），导致滑块无色；此处顶层选择器一定留在产物中。
+ * 数值与 scroll-area.tsx 的 className 完全一致，不带来视觉差异。
+ * ============================================================ */
+[data-slot="scroll-area-thumb"] {
+  background-color: var(--scrollbar-slider-bg);
+  border-radius: 9999px;
+  transition: background-color var(--duration-slow) ease;
+}
+[data-orientation]:hover [data-slot="scroll-area-thumb"],
+[data-slot="scroll-area-thumb"]:hover {
+  background-color: var(--scrollbar-slider-hover-bg);
+}
+
+/* 侧边栏折叠态：隐藏滚动区原生滚动条占位，避免分组图标相对顶部/底部图标左移
+ * （Radix Viewport 内联 overflow:scroll，原生滚动条与自绘悬浮条会二重出现） */
+[data-slot="scroll-area-viewport"] {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+[data-slot="scroll-area-viewport"]::-webkit-scrollbar {
+  display: none;
+}

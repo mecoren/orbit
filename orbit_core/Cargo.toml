@@ -1,0 +1,63 @@
+# =============================================================================
+# orbit_core — Rust 业务逻辑核心
+# 零 FFI 依赖（不依赖 tauri / flutter_rust_bridge），由 src-tauri 薄壳包装为命令。
+# 资产来源：wait-home rust_core（wait_core）按 02 文档 §四 清单裁剪平移。
+# 所有版本与配置由根 Cargo.toml [workspace.dependencies] 单点管控。
+# =============================================================================
+[package]
+name = "orbit_core"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[lib]
+name = "orbit_core"
+crate-type = ["rlib", "staticlib", "cdylib"]
+
+[dependencies]
+# 异步运行时
+tokio.workspace = true
+async-trait.workspace = true
+futures.workspace = true
+
+# 序列化
+serde.workspace = true
+serde_json.workspace = true
+
+# 数据库（SQLCipher 特性按目标平台注入，见下方 target 段）
+sqlx.workspace = true
+libsqlite3-sys.workspace = true
+
+# 加密
+aes-gcm.workspace = true
+pbkdf2.workspace = true
+hmac.workspace = true
+sha2.workspace = true
+subtle.workspace = true
+rand.workspace = true
+
+# 同步与网络
+reqwest.workspace = true
+zip.workspace = true
+base64.workspace = true
+quick-xml.workspace = true
+zstd.workspace = true
+
+# 工具
+thiserror.workspace = true
+anyhow.workspace = true
+once_cell.workspace = true
+uuid.workspace = true
+chrono.workspace = true
+whoami.workspace = true
+tempfile.workspace = true
+tokio-util.workspace = true
+log.workspace = true
+regex.workspace = true
+url.workspace = true
+urlencoding.workspace = true
+
+# Android 交叉编译时跳过 SQLCipher（避免 vendored OpenSSL 无法交叉构建），
+# 其他平台保留完整加密能力
+[target.'cfg(not(target_os = "android"))'.dependencies]
+libsqlite3-sys = { version = "0.30", features = ["bundled-sqlcipher-vendored-openssl"] }

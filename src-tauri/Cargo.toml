@@ -1,0 +1,66 @@
+# =============================================================================
+# src-tauri — Tauri 2 桌面端 Rust 壳（唯一前端通道）
+# 职责：薄壳包装 orbit_core 的公共 API 为 #[tauri::command]，不含业务逻辑。
+# =============================================================================
+[package]
+name = "orbit-desktop"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[lib]
+name = "orbit_desktop_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[dependencies]
+# 核心库（Monorepo path 依赖）
+orbit_core = { path = "../orbit_core" }
+
+# Tauri v2 + 插件（02 文档 §七：notification/window-state/dialog/fs/shell/log）
+tauri.workspace = true
+tauri-plugin-shell.workspace = true
+tauri-plugin-dialog.workspace = true
+tauri-plugin-fs.workspace = true
+tauri-plugin-notification.workspace = true
+tauri-plugin-window-state.workspace = true
+tauri-plugin-log.workspace = true
+
+# 序列化
+serde.workspace = true
+serde_json.workspace = true
+
+# AppState 持有 SqlitePool
+sqlx.workspace = true
+
+# 数据目录解析（Builder 阶段无 AppHandle 时复现 app_data_dir）
+dirs = "6"
+
+# 提醒轮询守护（专用 SQL + 去重集合 + 定时器 + 时间格式化）
+once_cell.workspace = true
+tokio.workspace = true
+chrono.workspace = true
+
+# M3 安全与同步（钥匙串 CEK/同步密码缓存 + base64 编解码 + 主机名）
+keyring.workspace = true
+base64.workspace = true
+whoami.workspace = true
+
+# Windows 平台：Mica 云母材质（DWM 直调）+ 系统字体枚举预留
+[target.'cfg(target_os = "windows")'.dependencies]
+windows = { version = "0.61", features = [
+    "Win32_Graphics_Dwm",
+    "Win32_Foundation",
+    "Win32_UI_WindowsAndMessaging",
+    "Win32_System_SystemInformation",
+] }
+# 获取窗口 HWND 设置 Mica（版本与 Tauri 内部 raw-window-handle 对齐）
+raw-window-handle = "0.6"
+
+# 日志级别配置（tauri-plugin-log Builder 使用 log::LevelFilter）
+log.workspace = true
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(mobile)'] }

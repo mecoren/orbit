@@ -1,0 +1,19 @@
+# Rust
+/target/
+**/*.rs.bk
+
+# Node / 前端
+node_modules/
+dist/
+
+# Tauri 生成物（schema 随构建再生；移动端 gen/ 在 M4 init 后按需纳管）
+src-tauri/gen/schemas/
+
+# 日志与临时文件
+*.log
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/

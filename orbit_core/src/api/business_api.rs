@@ -1,0 +1,462 @@
+//! business_api — 业务编排层（Orbit MVP：todo 段 + cfg 必需段 + 备份辅助）
+//!
+//! 平移自 wait-home wait_core（02 文档 §四 A/B 类）。
+//! 白名单常量统一收口到 db::sync_registry（03 文档 §六），本文件经 pub use 转发。
+
+pub use crate::db::sync_registry::FULL_BACKUP_TABLES;
+
+use sqlx::SqlitePool;
+
+use crate::db::repository::generic_repo;
+use crate::db::repository::import_type_validator::normalize_import_fields;
+use crate::error::{CoreError, CoreResult};
+use crate::eventbus::{
+    EVENT_BUS,
+    events::{DbEvent, DbOp},
+};
+use crate::models::business::*;
+
+
+// =============================================================================
+// todo_projects / todo_tasks / todo_subtasks / todo_labels / todo_task_labels
+// todo_comments / todo_task_relations / todo_reminders（Vikunja 化重构，8 张表）
+// =============================================================================
+
+// =============================================================================
+// todo_projects / todo_tasks / todo_subtasks / todo_labels / todo_task_labels
+// todo_comments / todo_task_relations / todo_reminders
+// （Vikunja 化重构，8 张表）
+// =============================================================================
+
+// ---------- todo_projects ----------
+/// 列出用户的 todo 项目，按 sort_order 升序（同序则按 id 升序作为稳定排序）。
+///
+/// 不走 generic_repo::list（统一按 updated_at DESC），因为项目列表的展示顺序
+/// 由用户拖拽结果决定（sort_order 字段），updated_at 排序会让新建/重排后的项目跳到最前。
+pub async fn list_todo_projects(pool: &SqlitePool, filter: &ListFilter) -> CoreResult<Vec<TodoProject>> {
+    let page_size = if filter.page_size == 0 { 20 } else { filter.page_size } as i32;
+    let offset = filter.page.saturating_sub(1).saturating_mul(filter.page_size) as i32;
+
+    // 关键词过滤：与 generic_repo::list 保持一致（按 title/description LIKE）
+    let keyword_clause = if let Some(kw) = filter.keyword.as_deref() {
+        if !kw.is_empty() {
+            format!(" AND (title LIKE ? OR description LIKE ?)")
+        } else {
+            String::new()
+        }
+    } else {
+        String::new()
+    };
+
+    let sql = format!(
+        "SELECT * FROM todo_projects WHERE is_deleted = 0{} \
+         ORDER BY sort_order ASC, id ASC LIMIT ? OFFSET ?",
+        keyword_clause
+    );
+
+    let mut q = sqlx::query_as::<_, TodoProject>(&sql);
+    if let Some(kw) = filter.keyword.as_deref() {
+        if !kw.is_empty() {
+            let pattern = format!("%{}%", kw);
+            q = q.bind(pattern.clone()).bind(pattern);
+        }
+    }
+    q = q.bind(page_size).bind(offset);
+
+    Ok(q.fetch_all(pool).await?)
+}
+pub async fn get_todo_project(pool: &SqlitePool, id: i64) -> CoreResult<TodoProject> {
+    generic_repo::get_by_id(pool, "todo_projects", id).await
+}
+pub async fn create_todo_project(pool: &SqlitePool, input: &TodoProjectCreateInput) -> CoreResult<TodoProject> {
+    generic_repo::create_todo_project(pool, input).await
+}
+pub async fn update_todo_project(pool: &SqlitePool, id: i64, input: &TodoProjectUpdateInput) -> CoreResult<TodoProject> {
+    generic_repo::update_todo_project(pool, id, input).await
+}
+pub async fn delete_todo_project(pool: &SqlitePool, id: i64) -> CoreResult<()> {
+    let t: TodoProject = generic_repo::get_by_id(pool, "todo_projects", id).await?;
+    generic_repo::soft_delete_by_id(pool, "todo_projects", id, &t.uuid).await
+}
+
+// ---------- todo_tasks ----------
+pub async fn list_todo_tasks(pool: &SqlitePool, filter: &ListFilter) -> CoreResult<Vec<TodoTask>> {
+    generic_repo::list(pool, "todo_tasks", filter).await
+}
+pub async fn get_todo_task(pool: &SqlitePool, id: i64) -> CoreResult<TodoTask> {
+    generic_repo::get_by_id(pool, "todo_tasks", id).await
+}
+pub async fn create_todo_task(pool: &SqlitePool, input: &TodoTaskCreateInput) -> CoreResult<TodoTask> {
+    generic_repo::create_todo_task(pool, input).await
+}
+pub async fn update_todo_task(pool: &SqlitePool, id: i64, input: &TodoTaskUpdateInput) -> CoreResult<TodoTask> {
+    generic_repo::update_todo_task(pool, id, input).await
+}
+pub async fn delete_todo_task(pool: &SqlitePool, id: i64) -> CoreResult<()> {
+    let t: TodoTask = generic_repo::get_by_id(pool, "todo_tasks", id).await?;
+    generic_repo::soft_delete_by_id(pool, "todo_tasks", id, &t.uuid).await
+}
+
+// ---------- todo_subtasks ----------
+pub async fn list_todo_subtasks(pool: &SqlitePool, filter: &ListFilter) -> CoreResult<Vec<TodoSubtask>> {
+    generic_repo::list(pool, "todo_subtasks", filter).await
+}
+pub async fn get_todo_subtask(pool: &SqlitePool, id: i64) -> CoreResult<TodoSubtask> {
+    generic_repo::get_by_id(pool, "todo_subtasks", id).await
+}
+pub async fn create_todo_subtask(pool: &SqlitePool, input: &TodoSubtaskCreateInput) -> CoreResult<TodoSubtask> {
+    generic_repo::create_todo_subtask(pool, input).await
+}
+pub async fn update_todo_subtask(pool: &SqlitePool, id: i64, input: &TodoSubtaskUpdateInput) -> CoreResult<TodoSubtask> {
+    generic_repo::update_todo_subtask(pool, id, input).await
+}
+pub async fn delete_todo_subtask(pool: &SqlitePool, id: i64) -> CoreResult<()> {
+    let t: TodoSubtask = generic_repo::get_by_id(pool, "todo_subtasks", id).await?;
+    generic_repo::soft_delete_by_id(pool, "todo_subtasks", id, &t.uuid).await
+}
+
+// ---------- todo_labels ----------
+pub async fn list_todo_labels(pool: &SqlitePool, filter: &ListFilter) -> CoreResult<Vec<TodoLabel>> {
+    generic_repo::list(pool, "todo_labels", filter).await
+}
+pub async fn get_todo_label(pool: &SqlitePool, id: i64) -> CoreResult<TodoLabel> {
+    generic_repo::get_by_id(pool, "todo_labels", id).await
+}
+pub async fn create_todo_label(pool: &SqlitePool, input: &TodoLabelCreateInput) -> CoreResult<TodoLabel> {
+    generic_repo::create_todo_label(pool, input).await
+}
+pub async fn update_todo_label(pool: &SqlitePool, id: i64, input: &TodoLabelUpdateInput) -> CoreResult<TodoLabel> {
+    generic_repo::update_todo_label(pool, id, input).await
+}
+pub async fn delete_todo_label(pool: &SqlitePool, id: i64) -> CoreResult<()> {
+    let t: TodoLabel = generic_repo::get_by_id(pool, "todo_labels", id).await?;
+    generic_repo::soft_delete_by_id(pool, "todo_labels", id, &t.uuid).await
+}
+
+// ---------- todo_task_labels ----------
+pub async fn list_todo_task_labels(pool: &SqlitePool, filter: &ListFilter) -> CoreResult<Vec<TodoTaskLabel>> {
+    generic_repo::list(pool, "todo_task_labels", filter).await
+}
+pub async fn get_todo_task_label(pool: &SqlitePool, id: i64) -> CoreResult<TodoTaskLabel> {
+    generic_repo::get_by_id(pool, "todo_task_labels", id).await
+}
+pub async fn create_todo_task_label(pool: &SqlitePool, input: &TodoTaskLabelCreateInput) -> CoreResult<TodoTaskLabel> {
+    generic_repo::create_todo_task_label(pool, input).await
+}
+pub async fn delete_todo_task_label(pool: &SqlitePool, id: i64) -> CoreResult<()> {
+    let row = generic_repo::get_by_id::<TodoTaskLabel>(pool, "todo_task_labels", id).await?;
+    generic_repo::soft_delete_by_id(pool, "todo_task_labels", id, &row.uuid).await
+}
+
+// ---------- todo_comments ----------
+pub async fn list_todo_comments(pool: &SqlitePool, filter: &ListFilter) -> CoreResult<Vec<TodoComment>> {
+    generic_repo::list(pool, "todo_comments", filter).await
+}
+pub async fn get_todo_comment(pool: &SqlitePool, id: i64) -> CoreResult<TodoComment> {
+    generic_repo::get_by_id(pool, "todo_comments", id).await
+}
+pub async fn create_todo_comment(pool: &SqlitePool, input: &TodoCommentCreateInput) -> CoreResult<TodoComment> {
+    generic_repo::create_todo_comment(pool, input).await
+}
+pub async fn delete_todo_comment(pool: &SqlitePool, id: i64) -> CoreResult<()> {
+    let t: TodoComment = generic_repo::get_by_id(pool, "todo_comments", id).await?;
+    generic_repo::soft_delete_by_id(pool, "todo_comments", id, &t.uuid).await
+}
+
+// ---------- todo_task_relations ----------
+pub async fn list_todo_task_relations(pool: &SqlitePool, filter: &ListFilter) -> CoreResult<Vec<TodoTaskRelation>> {
+    generic_repo::list(pool, "todo_task_relations", filter).await
+}
+pub async fn get_todo_task_relation(pool: &SqlitePool, id: i64) -> CoreResult<TodoTaskRelation> {
+    generic_repo::get_by_id(pool, "todo_task_relations", id).await
+}
+pub async fn create_todo_task_relation(pool: &SqlitePool, input: &TodoTaskRelationCreateInput) -> CoreResult<TodoTaskRelation> {
+    generic_repo::create_todo_task_relation(pool, input).await
+}
+pub async fn delete_todo_task_relation(pool: &SqlitePool, id: i64) -> CoreResult<()> {
+    let row = generic_repo::get_by_id::<TodoTaskRelation>(pool, "todo_task_relations", id).await?;
+    generic_repo::soft_delete_by_id(pool, "todo_task_relations", id, &row.uuid).await
+}
+
+// ---------- todo_reminders ----------
+pub async fn list_todo_reminders(pool: &SqlitePool, filter: &ListFilter) -> CoreResult<Vec<TodoReminder>> {
+    generic_repo::list(pool, "todo_reminders", filter).await
+}
+pub async fn get_todo_reminder(pool: &SqlitePool, id: i64) -> CoreResult<TodoReminder> {
+    generic_repo::get_by_id(pool, "todo_reminders", id).await
+}
+pub async fn create_todo_reminder(pool: &SqlitePool, input: &TodoReminderCreateInput) -> CoreResult<TodoReminder> {
+    generic_repo::create_todo_reminder(pool, input).await
+}
+pub async fn delete_todo_reminder(pool: &SqlitePool, id: i64) -> CoreResult<()> {
+    let t: TodoReminder = generic_repo::get_by_id(pool, "todo_reminders", id).await?;
+    generic_repo::soft_delete_by_id(pool, "todo_reminders", id, &t.uuid).await
+}
+
+// ---------- cfg_feature_modules（壳导航/强调色数据源） ----------
+
+// ---------- cfg_feature_modules ----------
+pub async fn list_feature_modules(
+    pool: &SqlitePool,
+    filter: &ListFilter,
+) -> CoreResult<Vec<FeatureModule>> {
+    generic_repo::list(pool, "cfg_feature_modules", filter).await
+}
+pub async fn get_feature_module(pool: &SqlitePool, id: i64) -> CoreResult<FeatureModule> {
+    generic_repo::get_by_id(pool, "cfg_feature_modules", id).await
+}
+pub async fn delete_feature_module(pool: &SqlitePool, id: i64) -> CoreResult<()> {
+    generic_repo::soft_delete_by_id(pool, "cfg_feature_modules", id, "").await
+}
+
+// =============================================================================
+// Phase 7C: A 组 21 张表 create/update（泛型 JSON + 事件 emit）
+// =============================================================================
+
+/// 宏：为 A 组表批量生成 create + update 函数
+/// 自动补充元数据字段，emit DbEvent（Insert/Update）
+macro_rules! impl_crud_json {
+    ($create_fn:ident, $update_fn:ident, $table:expr, $type:ty) => {
+        pub async fn $create_fn(
+            pool: &SqlitePool,
+            fields: &serde_json::Value,
+        ) -> CoreResult<$type> {
+            let map = fields
+                .as_object()
+                .ok_or_else(|| CoreError::Other("fields must be a JSON object".into()))?;
+            let record: $type =
+                generic_repo::create_record_by_json(pool, $table, map).await?;
+            let now = chrono::Utc::now().timestamp_millis();
+            let payload = serde_json::to_value(&record).ok();
+            EVENT_BUS.emit(DbEvent {
+                table: $table.into(),
+                op: DbOp::Insert,
+                record_id: record.id,
+                record_uuid: record.uuid.clone(),
+                payload,
+                device_id: generic_repo::current_device_id(),
+                timestamp: now,
+            });
+            Ok(record)
+        }
+
+        pub async fn $update_fn(
+            pool: &SqlitePool,
+            id: i64,
+            fields: &serde_json::Value,
+        ) -> CoreResult<$type> {
+            let map = fields
+                .as_object()
+                .ok_or_else(|| CoreError::Other("fields must be a JSON object".into()))?;
+            let record: $type = generic_repo::update_record_by_json(pool, $table, id, map).await?;
+            let now = chrono::Utc::now().timestamp_millis();
+            let payload = serde_json::to_value(&record).ok();
+            EVENT_BUS.emit(DbEvent {
+                table: $table.into(),
+                op: DbOp::Update,
+                record_id: record.id,
+                record_uuid: record.uuid.clone(),
+                payload,
+                device_id: generic_repo::current_device_id(),
+                timestamp: now,
+            });
+            Ok(record)
+        }
+    };
+}
+
+impl_crud_json!(create_todo_project_by_json, update_todo_project_by_json, "todo_projects", TodoProject);
+impl_crud_json!(create_todo_task_by_json, update_todo_task_by_json, "todo_tasks", TodoTask);
+
+pub async fn list_enabled_feature_modules(
+    pool: &SqlitePool,
+) -> CoreResult<Vec<FeatureModule>> {
+    let items = sqlx::query_as::<_, FeatureModule>(
+        "SELECT * FROM cfg_feature_modules WHERE is_enabled = 1 AND deleted_at IS NULL ORDER BY sort_order, id",
+    )
+    .fetch_all(pool)
+    .await?;
+    Ok(items)
+}
+
+/// 查询全部未删除功能模块（含禁用，按 sort_order 排序）— 用于菜单排序页
+pub async fn list_feature_modules_active(
+    pool: &SqlitePool,
+) -> CoreResult<Vec<FeatureModule>> {
+    let items = sqlx::query_as::<_, FeatureModule>(
+        "SELECT * FROM cfg_feature_modules WHERE deleted_at IS NULL ORDER BY sort_order, id",
+    )
+    .fetch_all(pool)
+    .await?;
+    Ok(items)
+}
+
+/// 按 module_key 查询单个功能模块
+pub async fn get_feature_module_by_key(
+    pool: &SqlitePool,
+    key: &str,
+) -> CoreResult<Option<FeatureModule>> {
+    let item = sqlx::query_as::<_, FeatureModule>(
+        "SELECT * FROM cfg_feature_modules WHERE module_key = ? AND deleted_at IS NULL LIMIT 1",
+    )
+    .bind(key)
+    .fetch_optional(pool)
+    .await?;
+    Ok(item)
+}
+
+/// 更新功能模块排序序号
+pub async fn update_feature_module_sort_order(
+    pool: &SqlitePool,
+    id: i64,
+    sort_order: i32,
+) -> CoreResult<()> {
+    let now = chrono::Utc::now().timestamp_millis();
+    sqlx::query(
+        "UPDATE cfg_feature_modules SET sort_order = ?, updated_at = ?, version = version + 1 WHERE id = ?",
+    )
+    .bind(sort_order)
+    .bind(now)
+    .bind(id)
+    .execute(pool)
+    .await?;
+
+    EVENT_BUS.emit(DbEvent {
+        table: "cfg_feature_modules".into(),
+        op: DbOp::Update,
+        record_id: id,
+        record_uuid: String::new(),
+        payload: None,
+        device_id: String::new(),
+        timestamp: now,
+    });
+    Ok(())
+}
+
+/// 更新功能模块启用状态
+pub async fn update_feature_module_enabled(
+    pool: &SqlitePool,
+    id: i64,
+    is_enabled: i32,
+) -> CoreResult<()> {
+    let now = chrono::Utc::now().timestamp_millis();
+    sqlx::query(
+        "UPDATE cfg_feature_modules SET is_enabled = ?, updated_at = ?, version = version + 1 WHERE id = ?",
+    )
+    .bind(is_enabled)
+    .bind(now)
+    .bind(id)
+    .execute(pool)
+    .await?;
+
+    EVENT_BUS.emit(DbEvent {
+        table: "cfg_feature_modules".into(),
+        op: DbOp::Update,
+        record_id: id,
+        record_uuid: String::new(),
+        payload: None,
+        device_id: String::new(),
+        timestamp: now,
+    });
+    Ok(())
+}
+/// 宏：为 A 组表生成 get_by_uuid 函数
+macro_rules! impl_get_by_uuid {
+    ($fn_name:ident, $table:expr, $type:ty) => {
+        pub async fn $fn_name(pool: &SqlitePool, uuid: &str) -> CoreResult<Option<$type>> {
+            generic_repo::get_by_uuid(pool, $table, uuid).await
+        }
+    };
+}
+
+impl_get_by_uuid!(get_todo_project_by_uuid, "todo_projects", TodoProject);
+impl_get_by_uuid!(get_todo_task_by_uuid, "todo_tasks", TodoTask);
+
+// =============================================================================
+// 全量备份/导出辅助（白名单统一收口 db::sync_registry，03 文档 §六）
+// =============================================================================
+
+/// 通用查询：按表名拉取未删除记录的 JSON 字符串（导出用）
+///
+/// 表名经白名单校验后拼入 SQL（防注入），其余参数走 sqlx bind。
+/// 返回 JSON 数组字符串，如 `[{"id":1,"title":"..."},...]`。
+pub async fn list_records_as_json(
+    pool: &SqlitePool,
+    table: &str,
+) -> CoreResult<String> {
+    if !FULL_BACKUP_TABLES.contains(&table) {
+        return Err(CoreError::Other(format!(
+            "table '{}' is not allowed for export/import",
+            table
+        )));
+    }
+    // 白名单已校验，安全拼接表名
+    let sql = format!("SELECT * FROM \"{}\" WHERE is_deleted = 0", table);
+    let rows = sqlx::query(&sql).fetch_all(pool).await?;
+    let arr: Vec<serde_json::Value> = rows.iter().map(|row| sqlite_row_to_json(row)).collect();
+    serde_json::to_string(&arr).map_err(CoreError::from)
+}
+
+/// 通用创建（无返回值）：逐条导入时使用，单条失败不阻塞整体流程
+///
+/// 内部调用 generic_repo::create_record_by_json_void，自动补充
+/// uuid/timestamps/version（v1 全量同步直读业务表）。
+pub async fn create_record_void(
+    pool: &SqlitePool,
+    table: &str,
+    fields: &serde_json::Map<String, serde_json::Value>,
+) -> CoreResult<()> {
+    // 按目标表列声明类型规范化字段值，防止字符串写入 INTEGER 列等类型不匹配问题
+    let normalized = normalize_import_fields(pool, table, fields, true).await?;
+    crate::db::repository::generic_repo::create_record_by_json_void(pool, table, &normalized).await
+}
+
+/// 将 sqlx SqliteRow 转为 serde_json::Value（Object）
+///
+/// SQLite 动态类型，按列声明类型（type_info）分派解码：
+/// INTEGER → i64, REAL → f64, TEXT → String, 其他 → 依次尝试 i64/f64/String
+fn sqlite_row_to_json(row: &sqlx::sqlite::SqliteRow) -> serde_json::Value {
+    use sqlx::{Column, Row, TypeInfo};
+    let mut obj = serde_json::Map::new();
+    for (i, col) in row.columns().iter().enumerate() {
+        let name = col.name().to_string();
+        let type_name = col.type_info().name();
+        let val = match type_name {
+            "INTEGER" | "INT" | "INTEGER8" => {
+                let v: Option<i64> = row.try_get(i).unwrap_or(None);
+                serde_json::Value::from(v)
+            }
+            "REAL" | "FLOAT" | "DOUBLE" | "REAL8" => {
+                let v: Option<f64> = row.try_get(i).unwrap_or(None);
+                v.map(serde_json::Value::from)
+                    .unwrap_or(serde_json::Value::Null)
+            }
+            "TEXT" | "VARCHAR" | "CHAR" => {
+                let v: Option<String> = row.try_get(i).unwrap_or(None);
+                v.map(serde_json::Value::from)
+                    .unwrap_or(serde_json::Value::Null)
+            }
+            _ => {
+                // 未知类型：依次尝试 i64 → f64 → String → null
+                if let Ok(v) = row.try_get::<Option<i64>, _>(i) {
+                    serde_json::Value::from(v)
+                } else if let Ok(v) = row.try_get::<Option<f64>, _>(i) {
+                    v.map(serde_json::Value::from)
+                        .unwrap_or(serde_json::Value::Null)
+                } else if let Ok(v) = row.try_get::<Option<String>, _>(i) {
+                    v.map(serde_json::Value::from)
+                        .unwrap_or(serde_json::Value::Null)
+                } else {
+                    serde_json::Value::Null
+                }
+            }
+        };
+        obj.insert(name, val);
+    }
+    serde_json::Value::Object(obj)
+}
+
+/// 通用业务表记录数查询（列表页计数角标；仅适用于有 is_deleted 列的表）
+pub async fn business_count(pool: &SqlitePool, table: &str) -> CoreResult<i64> {
+    crate::db::repository::generic_repo::count_all(pool, table).await
+}
