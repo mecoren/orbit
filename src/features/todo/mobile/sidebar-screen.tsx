@@ -74,6 +74,8 @@ function useSurfaceHighest(): string {
 function useLongPress(onLongPress: () => void, enabled = true) {
   const timer = useRef<number | null>(null);
   const origin = useRef<{ x: number; y: number } | null>(null);
+  // 长按已触发标记：抬指后的合成 click 必须吞掉，否则导航卸载当前屏、删除流程被打断
+  const firedRef = useRef(false);
   const clear = () => {
     if (timer.current != null) {
       window.clearTimeout(timer.current);
@@ -85,10 +87,12 @@ function useLongPress(onLongPress: () => void, enabled = true) {
 
   return {
     onPointerDown: (e: ReactPointerEvent) => {
-      if (!enabled || e.button !== 0) return;
+      if (!enabled || e.button !== 0 || !e.isPrimary) return;
       origin.current = { x: e.clientX, y: e.clientY };
+      firedRef.current = false;
       timer.current = window.setTimeout(() => {
         clear();
+        firedRef.current = true;
         onLongPress();
       }, 500);
     },
@@ -100,6 +104,13 @@ function useLongPress(onLongPress: () => void, enabled = true) {
     onPointerCancel: clear,
     /** 抑制长按弹出的系统右键菜单 */
     onContextMenu: (e: ReactMouseEvent) => e.preventDefault(),
+    /** 长按触发后吞掉同元素的合成 click（capture 先于 bubble，stopPropagation 拦截同元素 onClick） */
+    onClickCapture: (e: ReactMouseEvent) => {
+      if (firedRef.current) {
+        firedRef.current = false;
+        e.stopPropagation();
+      }
+    },
   };
 }
 
@@ -296,13 +307,19 @@ export function SidebarScreen() {
       .filter((p): p is TodoProject => p != null);
 
     qc.setQueryData<TodoProject[]>(["todo-project", "list"], reordered);
+    // 逐条落库不中断：中途 break 会留下新旧混杂的撞号 sort_order（比拖拽前更乱），
+    // 收集失败项、循环到底，最后统一 toast 一次并失效重拉对账
+    let failed = false;
     try {
       for (let i = 0; i < reordered.length; i++) {
-        await todoProjectUpdateSortOrder(reordered[i].id, i + 1);
+        try {
+          await todoProjectUpdateSortOrder(reordered[i].id, i + 1);
+        } catch {
+          failed = true;
+        }
       }
-    } catch {
-      waitToast.destructive("排序失败");
     } finally {
+      if (failed) waitToast.destructive("排序失败");
       void qc.invalidateQueries({ queryKey: ["todo-project", "list"] });
     }
   };
@@ -395,7 +412,8 @@ export function SidebarScreen() {
                     {activeProject.title}
                   </span>
                   {(undoneCounts[activeProject.id] ?? 0) > 0 && (
-                    <CountBadge n={undoneCounts[activeProject.id]} bg={surfaceHighest} />
+                    /* 代理底色与 badge 同为 surfaceHighest 会吞掉 badge 形状，改用页面 surface 底+描边区分 */
+                    <CountBadge n={undoneCounts[activeProject.id]} bg="var(--m-surface)" />
                   )}
                 </div>
               )}
