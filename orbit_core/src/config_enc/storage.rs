@@ -16,7 +16,7 @@ use serde::de::DeserializeOwned;
 use serde::Serialize;
 
 use crate::config_enc::cek::CekProvider;
-use crate::config_enc::error::ConfigEncResult;
+use crate::config_enc::error::{ConfigEncError, ConfigEncResult};
 use crate::crypto::aes_gcm::{aes_gcm_decrypt, aes_gcm_encrypt};
 use crate::crypto::random::random_bytes;
 
@@ -102,9 +102,12 @@ impl EncryptedConfigStorage {
         Ok(())
     }
 
-    /// 加密保存；加密写入失败时降级为明文 JSON（ADR 0001 §七-① 裁决方案 a）
+    /// 加密保存；**仅** CEK 不可用时降级为明文 JSON（ADR 0001 §七-① 裁决方案 a）
     ///
-    /// 与 `full_sync_backup::backup_prefs` 的「加密优先、明文降级」模式对称：
+    /// 与 `full_sync_backup::backup_prefs` 的「加密优先、明文降级」模式对称，
+    /// 但触发条件收窄：只有 `CekUnavailable`（移动端 KeyringCekProvider 的恒定契约）
+    /// 才降级；其余错误（磁盘 IO、序列化等）原样向上传播——桌面端钥匙串/IO 故障
+    /// 不得静默把高敏感凭据落成明文再报成功。
     /// - 桌面端 CEK 可用，`save()` 恒成功，恒走 `.enc` 加密分支（行为零变化）；
     /// - 移动端 `KeyringCekProvider` 恒返 `CekUnavailable`，降级写同目录 `{name}.json`
     ///   （路径与读取侧 `read_device_name_from_config` 的明文降级一致）。
@@ -115,17 +118,16 @@ impl EncryptedConfigStorage {
         name: &str,
         value: &T,
     ) -> ConfigEncResult<()> {
-        match self.save(name, value) {
-            Ok(()) => Ok(()),
-            Err(e) => {
-                // 只记错误摘要，不落配置内容（02 §九 日志脱敏红线）
-                log::info!("[config_enc] {name} 加密写入失败，降级明文: {e}");
-                let path = self.app_data_dir.join(format!("{name}.json"));
-                let content = serde_json::to_vec_pretty(value)?;
-                crate::fs_util::write_atomic(&path, &content)?;
-                Ok(())
-            }
+        if let Err(e @ ConfigEncError::CekUnavailable(_)) = self.save(name, value) {
+            // 安全降级事件须可观测（tauri-plugin-log 未接线前 eprintln 可见）；
+            // 只记错误摘要，不落配置内容（02 §九 日志脱敏红线）
+            eprintln!("[config_enc] {name} CEK 不可用，降级明文写入: {e}");
+            let path = self.app_data_dir.join(format!("{name}.json"));
+            let content = serde_json::to_vec_pretty(value)?;
+            crate::fs_util::write_atomic(&path, &content)?;
+            return Ok(());
         }
+        self.save(name, value)
     }
 
     /// 删除 `.enc` 配置文件
@@ -201,5 +203,37 @@ mod tests {
         assert!(storage.enc_path("sync_config").exists());
         assert!(!dir.path().join("sync_config.json").exists());
         assert_eq!(storage.load::<serde_json::Value>("sync_config").unwrap(), Some(cfg));
+    }
+
+    /// 非 CekUnavailable 错误必须向上传播，不得静默降级明文（评审 Issue：桌面
+    /// 钥匙串/IO 故障不得把高敏感凭据落成明文再报成功）
+    #[test]
+    fn fallback_propagates_non_cek_errors() {
+        struct BrokenIoProvider;
+        impl CekProvider for BrokenIoProvider {
+            fn get_or_create(&self) -> ConfigEncResult<[u8; CEK_LEN]> {
+                Ok([7u8; CEK_LEN])
+            }
+            fn is_available(&self) -> bool {
+                true
+            }
+        }
+
+        let dir = TempDir::new().unwrap();
+        // app_data_dir 指向一个文件路径，使 .enc 写入必然 IO 失败
+        let blocker = dir.path().join("blocker");
+        std::fs::write(&blocker, b"x").unwrap();
+        let storage = EncryptedConfigStorage::new(
+            std::sync::Arc::new(BrokenIoProvider),
+            blocker.clone(),
+        );
+        let cfg = json!({"engine": "webdav"});
+
+        let err = storage
+            .save_with_plaintext_fallback("sync_config", &cfg)
+            .unwrap_err();
+        assert!(matches!(err, ConfigEncError::Io(_)));
+        // 明文文件绝不允许出现
+        assert!(!blocker.join("sync_config.json").exists());
     }
 }

@@ -144,6 +144,6 @@ cargo:warning=configuring OpenSSL build: '...\perl.exe' reported failure with ex
 
 ## 七、遗留工单（本 ADR 派生）
 
-1. **sync_config 明文降级对称化**：`write_config_file` 在 CEK 不可用时与 backup_prefs 不同、无明文降级而直接报错 → 移动端当前无法保存同步配置。二选一：(a) 补齐与 backup_prefs 对称的明文降级（隐私声明按 §四清单覆盖）；(b) 移动端显式禁用保存并引导至桌面端配置。**已裁决：方案 (a)**——M4 T17 落地 `EncryptedConfigStorage::save_with_plaintext_fallback`（orbit_core/src/config_enc/storage.rs），CEK 不可用（移动端）时降级写明文 `sync_config.json`，与 backup_prefs/读取侧模式对称；桌面 CEK 可用恒走加密分支，行为零变化（提交占位 `<T17 提交哈希>`）。
+1. **sync_config 明文降级对称化**：`write_config_file` 在 CEK 不可用时与 backup_prefs 不同、无明文降级而直接报错 → 移动端当前无法保存同步配置。二选一：(a) 补齐与 backup_prefs 对称的明文降级（隐私声明按 §四清单覆盖）；(b) 移动端显式禁用保存并引导至桌面端配置。**已裁决：方案 (a)**——M4 T17 落地 `EncryptedConfigStorage::save_with_plaintext_fallback`（orbit_core/src/config_enc/storage.rs），CEK 不可用（移动端）时降级写明文 `sync_config.json`，与 backup_prefs/读取侧模式对称；桌面 CEK 可用恒走加密分支，行为零变化（落地提交 61b52e4；评审修正：降级触发收窄为仅 `CekUnavailable`，其余错误向上传播并附传播性单测）。
 2. **per-connection SQLCipher key 注入**：`orbit_core/src/db/pool.rs` 的 `init_pool` 仅对单个连接执行 PRAGMA key；目标态启用 SQLCipher 前必须改为每连接注入（after_connect 或 SqliteConnectOptions pragma），并独立核查桌面端现有高并发场景是否受影响。
 3. **Android 主密码迁移入口规避**：`sqlcipher_export` 在 Android 必然失败（§1.2）；移动端设置页须隐藏/禁用"开启主密码"迁移入口，或 db_cmd 层返回明确错误文案，避免混合状态。**已处置：由 M4 设置页只读设计规避**（T17）——移动 `/settings` 安全卡仅只读展示主密码状态，不提供开启/迁移主密码入口，天然不触达 `sqlcipher_export` 必败路径；修改入口记 M6+。
