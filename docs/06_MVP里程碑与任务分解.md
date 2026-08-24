@@ -10,8 +10,10 @@
 | M1 | 数据链路贯通 | 加解锁流程可用；全部 todo 命令经 devtools 验证通 |
 | M2 | 桌面 UI 复刻 | 04 文档 §八 清单全过 |
 | M3 | 安全与同步 | 双实例同步收敛 DoD（01 文档 §五） |
-| M4 | 移动端复刻 | 四屏观感对照通过 + C 级验收（01 文档 §四） |
+| M4 | 移动端复刻 ✅ 代码完成（Android） | 四屏观感对照通过 + C 级验收（01 文档 §四） |
 | M5 | 发布工程 | 五端产物签名/分发就绪 |
+
+> M4 说明：代码完成以 Android 为准（release APK 已产出并通过全量自动化门禁）；iOS 因签名证书/macOS 构建前置延后，真机验收清单见 [superpowers/plans/2026-08-24-m4-device-checklist.md](superpowers/plans/2026-08-24-m4-device-checklist.md)。
 
 ## 二、任务分解
 
