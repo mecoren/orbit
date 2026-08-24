@@ -598,3 +598,8 @@ html[data-platform="mobile"] {
     );
   }
 }
+
+/* ===== M4 WaitToast 皮肤类（05 §五 WaitToast：variant default/destructive）=====
+ * sonner 经调用方 className 注入；surface 底 + 圆角 12，destructive 文字用逾期红 */
+.wait-toast { background: var(--m-surface); color: var(--m-text); border-radius: 12px; }
+.wait-toast-destructive { background: var(--m-surface); color: #F44336; border-radius: 12px; }
