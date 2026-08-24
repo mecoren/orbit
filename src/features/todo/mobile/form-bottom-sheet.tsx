@@ -345,6 +345,8 @@ export function RecordFormBottomSheet({
       void qc.invalidateQueries({ queryKey: ["todo_tasks"] });
       if (editingTaskId != null) {
         void qc.invalidateQueries({ queryKey: ["todo-task-detail", editingTaskId] });
+        // 预填缓存必须移除：gcTime 内重开同任务会拿旧快照做 diff 基准，静默回滚已保存字段
+        qc.removeQueries({ queryKey: ["todo-task-form-prefill", editingTaskId] });
       }
     } catch {
       waitToast.destructive("保存失败");
@@ -378,7 +380,8 @@ export function RecordFormBottomSheet({
   if (!open) return null;
 
   const isEdit = editingTaskId != null;
-  const editingLoadFailed = isEdit && taskQuery.isError;
+  // 已有预填数据时的后台重取失败不算加载失败（网络抖动不应顶掉编辑中的表单）
+  const editingLoadFailed = isEdit && taskQuery.isError && !taskQuery.data;
 
   return (
     <BottomSheet open={open} onClose={onClose}>
