@@ -30,8 +30,8 @@ export function EqSpinner({ size = 48, color = "#4E8CFF" }: { size?: number; col
         // 相对贴地位置的位移（≤0 为腾空），逻辑 y → 像素
         const groundTop = GROUND_Y - DOT_SIZE;
         const dy = (b.y - groundTop) * k;
-        ball.style.transform = `translateY(${dy}px) scale(${1 + b.squash}, ${1 - b.squash})`;
-        ball.style.opacity = b.active || b.cycElapsed >= b.delay ? "1" : "0";
+        ball.style.transform = `translateY(${dy}px) scale(${1 + b.squash * 0.7}, ${1 - b.squash})`;
+        ball.style.opacity = b.active ? "1" : "0";
       });
       raf = requestAnimationFrame(tick);
     };
@@ -39,7 +39,7 @@ export function EqSpinner({ size = 48, color = "#4E8CFF" }: { size?: number; col
     return () => cancelAnimationFrame(raf);
   }, [size]);
 
-  // 球径 = 31/121 × 容器高；三球水平均分（i*34% 左缘对齐，右缘不越界）
+  // 球径 = 31/121 × 容器高；三球水平均分（left=8+30i%，最坏挤压下右缘不越界）
   const ballSize = Math.round(DOT_SIZE * kScale(size));
   return (
     <div ref={ref} role="status" aria-label="加载中" className="relative overflow-hidden" style={{ width: size, height: size }}>
