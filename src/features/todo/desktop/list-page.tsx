@@ -25,6 +25,7 @@ import { useAppStore } from "@/stores/app-store";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { todoProjectList, todoTaskList, type TodoTask } from "@/lib/tauri";
 import { LS_VIEW_MODE, QUICK_VIEWS, type QuickViewKey } from "../shared/constants";
+import { filterTasks, sortTasks } from "../shared/task-filters";
 import { ProjectSidebar } from "./project-sidebar";
 import { TaskListView } from "./task-list-view";
 import { QuickAddBar } from "./quick-add-bar";
@@ -94,62 +95,21 @@ export default function TodoListPage() {
     return map;
   }, [tasks]);
 
-  // ---- 内存筛选 + 固定排序（position asc → created_at desc）----
-  const visibleTasks = useMemo(() => {
-    let list = tasks;
-    const todayStart = new Date();
-    todayStart.setHours(0, 0, 0, 0);
-    const todayEnd = todayStart.getTime() + 24 * 3600 * 1000;
-    const weekEnd = todayEnd + 6 * 24 * 3600 * 1000;
-
-    if (ungrouped) {
-      list = list.filter((t) => t.project_id == null);
-    } else if (projectId != null) {
-      list = list.filter((t) => t.project_id === projectId);
-    } else {
-      switch (quickView) {
-        case "undone":
-          list = list.filter((t) => !t.done);
-          break;
-        case "done":
-          list = list.filter((t) => !!t.done);
-          break;
-        case "today":
-          list = list.filter(
-            (t) => t.due_date != null && t.due_date >= todayStart.getTime() && t.due_date < todayEnd,
-          );
-          break;
-        case "week":
-          list = list.filter(
-            (t) => t.due_date != null && t.due_date >= todayStart.getTime() && t.due_date < weekEnd,
-          );
-          break;
-        case "favorite":
-          list = list.filter((t) => !!t.is_favorite);
-          break;
-        default:
-          break;
-      }
-    }
-
-    if (!ungrouped && projectId == null) {
-      // 快捷视图下的状态筛选仍生效；项目视图沿用现版无工具栏语义
-      if (statusFilter === "undone") list = list.filter((t) => !t.done);
-      if (statusFilter === "pending") list = list.filter((t) => t.status === "pending");
-      if (statusFilter === "doing") list = list.filter((t) => t.status === "doing");
-      if (statusFilter === "done") list = list.filter((t) => !!t.done || t.status === "done");
-      if (priorityFilter !== "all") {
-        list = list.filter((t) => String(t.priority) === priorityFilter);
-      }
-    }
-
-    return [...list].sort((a, b) => {
-      const pa = a.position ?? 0;
-      const pb = b.position ?? 0;
-      if (pa !== pb) return pa - pb;
-      return b.created_at - a.created_at;
-    });
-  }, [tasks, quickView, projectId, ungrouped, statusFilter, priorityFilter]);
+  // ---- 内存筛选 + 固定排序（共享模块，语义同 04 §四）----
+  // keyword 走后端查询（tasksQuery），不在此处内存过滤
+  const visibleTasks = useMemo(
+    () =>
+      sortTasks(
+        filterTasks(tasks, {
+          quickView,
+          projectId,
+          ungrouped,
+          statusFilter,
+          priorityFilter: priorityFilter === "all" ? null : Number(priorityFilter),
+        }),
+      ),
+    [tasks, quickView, projectId, ungrouped, statusFilter, priorityFilter],
+  );
 
   // ---- 标题映射（04 §二）----
   const activeQuickDef = QUICK_VIEWS.find((v) => v.key === quickView);
