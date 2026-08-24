@@ -175,6 +175,12 @@ describe("filterTasks - statusFilter / priorityFilter", () => {
     expect(filterTasks(tasks, { priorityFilter: 2 }).map((t) => t.id)).toEqual([1]);
     expect(filterTasks(tasks, { priorityFilter: null }).length).toBe(2);
   });
+
+  it("priorityFilter=0 命中无优先级任务（falsy 陷阱回归）", () => {
+    const tasks = [mk({ id: 1, priority: 0 }), mk({ id: 2, priority: 2 })];
+    const out = filterTasks(tasks, { priorityFilter: 0 });
+    expect(out.map((t) => t.id)).toEqual([1]);
+  });
 });
 
 describe("sortTasks - position 升序，同 position 按 created_at 降序", () => {
@@ -183,7 +189,7 @@ describe("sortTasks - position 升序，同 position 按 created_at 降序", () 
     expect(out.map((t) => t.id)).toEqual([1, 3]);
   });
 
-  it("position 相同按 created_at 降序；position 为 null/undefined 视为 0", () => {
+  it("position 相同按 created_at 降序", () => {
     const out = sortTasks([
       mk({ id: 1, position: 1, created_at: 100 }),
       mk({ id: 2, position: 1, created_at: 300 }),
@@ -196,5 +202,25 @@ describe("sortTasks - position 升序，同 position 按 created_at 降序", () 
     const input = [mk({ id: 2, position: 5 }), mk({ id: 1, position: 1 })];
     sortTasks(input);
     expect(input.map((t) => t.id)).toEqual([2, 1]);
+  });
+});
+
+describe("工具栏筛选门控（桌面等价不变量锁定）", () => {
+  it("projectId 视图下 statusFilter/priorityFilter 不生效", () => {
+    const tasks = [
+      mk({ id: 1, project_id: 3, done: 0, priority: 5 }),
+      mk({ id: 2, project_id: 3, done: 1, priority: 1 }),
+    ];
+    const out = filterTasks(tasks, { projectId: 3, statusFilter: "done", priorityFilter: 1 });
+    expect(out.map((t) => t.id).sort()).toEqual([1, 2]);
+  });
+
+  it("ungrouped 视图下 statusFilter/priorityFilter 不生效", () => {
+    const tasks = [
+      mk({ id: 1, project_id: null, done: 0, priority: 5 }),
+      mk({ id: 2, project_id: null, done: 1, priority: 1 }),
+    ];
+    const out = filterTasks(tasks, { ungrouped: true, statusFilter: "done", priorityFilter: 1 });
+    expect(out.map((t) => t.id).sort()).toEqual([1, 2]);
   });
 });
