@@ -566,3 +566,35 @@ html[data-platform="mobile"] {
   -webkit-font-smoothing: antialiased;
   user-select: none;
 }
+
+/* ===== M4 玻璃高光线（05 §三：1px 五段 alpha；亮 [0,.85,1,.85,0] 暗 [0,.30,.45,.30,0]）=====
+ * 静态类替代组件内 <style> 注入（GlassHighlight 多实例时避免重复注入）；
+ * 仅移动玻璃组件消费，桌面端无引用零成本。 */
+.glass-hl {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0.85) 25%,
+    rgba(255, 255, 255, 1) 50%,
+    rgba(255, 255, 255, 0.85) 75%,
+    rgba(255, 255, 255, 0) 100%
+  );
+}
+.glass-hl-bottom { bottom: 0; }
+.glass-hl-inner-bottom { bottom: 1px; border-radius: 9999px; inset-inline: 6px; }
+@media (prefers-color-scheme: dark) {
+  .glass-hl {
+    background: linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0) 0%,
+      rgba(255, 255, 255, 0.3) 25%,
+      rgba(255, 255, 255, 0.45) 50%,
+      rgba(255, 255, 255, 0.3) 75%,
+      rgba(255, 255, 255, 0) 100%
+    );
+  }
+}
