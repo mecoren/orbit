@@ -1,9 +1,10 @@
 /**
- * InfoSection —— 详情基本信息区（05 §4.3 基本信息行序固定五行；M4 Task 13）
+ * InfoSection —— 详情基本信息区（05 §4.3 基本信息行序固定五行；M4 Task 13/15）
  *
  * 行序：优先级(P0–P5 文本 + 10×10 色点，0 显"无") / 状态(待办·进行中·已完成 + 色点) /
  * 项目(项目名或"未分组") / 截止日期(yyyy-MM-dd 或"无") / 进度(N% 仅 percent_done>0 显示，
- * 只读无箭头)。编辑一律 SelectSheet（优先级/状态/项目三项；日期选择器随 Task 15 注入）。
+ * 只读无箭头)。编辑一律 SelectSheet（优先级/状态/项目三项）；截止日期行经 WaitDatePickerSheet
+ * 选择（Task 15 注入，date 模式）。
  *
  * 状态切换与桌面 task-detail-drawer.tsx PropertyGrid.setStatus 完全同源：
  * 选 done → { status:"done", done:1, done_at:now }；切走 → { status:key, done:0, done_at:null }。
@@ -13,6 +14,7 @@ import { useQuery } from "@tanstack/react-query";
 
 import { MaterialIcon } from "@/components/mobile/material-icon";
 import { SelectSheet } from "@/components/mobile/select-sheet";
+import { WaitDatePickerSheet } from "@/components/mobile/wait-date-picker-sheet";
 import {
   todoProjectList,
   type TodoTaskDetail,
@@ -90,6 +92,8 @@ function _InfoTile({
 
 export function InfoSection({ task, onPatch }: InfoSectionProps) {
   const [sheet, setSheet] = useState<SheetKind>(null);
+  // 截止日期选择（Task 15 WaitDatePickerSheet，date 模式；initial=当前值）
+  const [duePickerOpen, setDuePickerOpen] = useState(false);
 
   const projectsQuery = useQuery({
     queryKey: ["todo-project", "list"],
@@ -146,9 +150,9 @@ export function InfoSection({ task, onPatch }: InfoSectionProps) {
       <_InfoTile
         label="截止日期"
         value={task.due_date != null ? formatDue(task.due_date) : "无"}
-        // Task 14 接线点注释钩子：截止日期更新后需重调度提醒（scheduleTodoReminder）；
-        // 日期选择器随 Task 15 WaitDatePickerSheet 注入后接 onClick
-        onClick={() => undefined}
+        // 说明：截止日期更新后无需手动重调度提醒——到期拾取由 notification_scheduler
+        // 前台轮询守护自动承担（R2 兜底基线），落库即生效。
+        onClick={() => setDuePickerOpen(true)}
       />
       {/* 进度：仅 percent_done>0 显示，只读无箭头 */}
       {task.percent_done > 0 && (
@@ -183,6 +187,15 @@ export function InfoSection({ task, onPatch }: InfoSectionProps) {
         current={projectCurrent}
         onSelect={(v) => void onPatch({ project_id: v === "" ? null : Number(v) })}
         onClose={() => setSheet(null)}
+      />
+
+      {/* 截止日期选择：date 模式，确认走 patchTask（清除→null；轮询守护自动拾取提醒） */}
+      <WaitDatePickerSheet
+        open={duePickerOpen}
+        mode="date"
+        initial={task.due_date}
+        onConfirm={(d) => void onPatch({ due_date: d ? d.getTime() : null })}
+        onClose={() => setDuePickerOpen(false)}
       />
     </SectionCard>
   );

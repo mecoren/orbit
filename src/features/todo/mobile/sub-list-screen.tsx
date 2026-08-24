@@ -4,8 +4,10 @@
  * 入口三参数互斥：projectId > ungrouped > view（04 §四 同款优先级）。
  * 列表消费共享 filterTasks/sortTasks；空态文案按入口八种映射；
  * FAB 右下 fixed（AboveBottomNavFab extraMargin=4 ≈ bottom-5 right-4）。
+ * 表单抽屉（Task 15）：FAB 新建携 defaultProjectId=当前 projectId；
+ * Tile 长按「编辑」携 editingTaskId——抽屉挂本屏层级。
  */
-import { useMemo, useRef } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
@@ -22,6 +24,7 @@ import {
 import { QUICK_VIEWS, type QuickViewKey } from "../shared/constants";
 import { applyDoneToggle } from "../shared/task-actions";
 import { filterTasks, sortTasks } from "../shared/task-filters";
+import { RecordFormBottomSheet } from "./form-bottom-sheet";
 import { TodoTaskTile } from "./todo-task-tile";
 
 /** 空态图标 + 文案八种映射（05 §4.2，按入口取值） */
@@ -44,16 +47,19 @@ function emptyMessage(target: { projectId: number | null; ungrouped: boolean; vi
   }
 }
 
-interface SubListScreenProps {
-  /** FAB → 表单抽屉（携 defaultProjectId）；Task 15 接线，缺省占位提示 */
-  onOpenForm?: (defaultProjectId?: number) => void;
-}
-
-export function SubListScreen({ onOpenForm }: SubListScreenProps) {
+export function SubListScreen() {
   const navigate = useNavigate();
   const qc = useQueryClient();
   const scrollRef = useRef<HTMLDivElement>(null);
   const [searchParams] = useSearchParams();
+
+  // ---- 表单抽屉状态（Task 15）：新建携 defaultProjectId / 编辑携 editingTaskId ----
+  const [formOpen, setFormOpen] = useState(false);
+  const [editingTaskId, setEditingTaskId] = useState<number | null>(null);
+  const openForm = (taskId?: number | null) => {
+    setEditingTaskId(taskId ?? null);
+    setFormOpen(true);
+  };
 
   // ---- searchParams 解析：三参数互斥，projectId 优先 > ungrouped > view ----
   const projectIdRaw = searchParams.get("projectId");
@@ -116,11 +122,8 @@ export function SubListScreen({ onOpenForm }: SubListScreenProps) {
   const toggleFavorite = (t: TodoTask) =>
     void patchTask(t.id, { is_favorite: t.is_favorite ? 0 : 1 }, "更新失败");
 
-  // 项目入口 FAB 携 defaultProjectId（05 §4.2）
-  const handleFabClick = () => {
-    if (onOpenForm) onOpenForm(projectId ?? undefined);
-    else waitToast.message("表单抽屉将在 Task 15 接入");
-  };
+  // 项目入口 FAB 携 defaultProjectId=当前 projectId（05 §4.2/Task 15）
+  const handleFabClick = () => openForm(null);
 
   return (
     <div className="h-dvh bg-[var(--m-bg)] text-[var(--m-text)]">
@@ -153,6 +156,7 @@ export function SubListScreen({ onOpenForm }: SubListScreenProps) {
                 projectTitle={t.project_id != null ? (projectTitleById.get(t.project_id) ?? null) : null}
                 onToggleDone={() => toggleDone(t)}
                 onToggleFavorite={() => toggleFavorite(t)}
+                onEdit={() => openForm(t.id)}
               />
             ))}
             {visible.length === 0 && (
@@ -174,6 +178,14 @@ export function SubListScreen({ onOpenForm }: SubListScreenProps) {
           <MaterialIcon name="add_rounded" size={24} />
         </GlassFab>
       </div>
+
+      {/* 表单抽屉（Task 15）：新建携当前 projectId，编辑携任务 id（挂本屏层级） */}
+      <RecordFormBottomSheet
+        open={formOpen}
+        editingTaskId={editingTaskId}
+        defaultProjectId={projectId}
+        onClose={() => setFormOpen(false)}
+      />
     </div>
   );
 }
