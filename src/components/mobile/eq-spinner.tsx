@@ -1,23 +1,14 @@
 import { useEffect, useRef } from "react";
+import { DELAYS, DOT_SIZE, GROUND_Y, createBlock, stepBlock } from "./eq-spinner-physics";
 
 /**
- * EqSpinner —— 三球错峰弹跳加载指示器（05 §三/§五 EqSpinner 物理参数，移植 wait-home bounce-blocks）：
- * 重力 2600 px/s²、restitution 0.62、挤压弹簧 170/14、三球延迟 0/.65/1.3s。
- * rAF 驱动、transform 直写，不触发 React 重渲；卸载时 cancelAnimationFrame。
+ * EqSpinner —— 三球错峰弹跳加载指示器（05 §五：移植 web 版 bounce-blocks 物理模型）。
+ * 物理常量与状态机在 eq-spinner-physics.ts（纯函数，含 vitest 数值回归）；
+ * 本组件只做 rAF 调度与 transform 直写，零 React 重渲，卸载时 cancelAnimationFrame。
+ *
+ * 渲染坐标 = 逻辑坐标 × (size / GROUND_Y)，各尺寸下节奏与观感完全一致。
  */
-const GRAVITY = 2600;
-const RESTITUTION = 0.62;
-const SQUASH_STIFFNESS = 170;
-const SQUASH_DAMPING = 14;
-/** 三球入场延迟（ms）：0 / .65s / 1.3s */
-const DELAYS = [0, 650, 1300];
-
-interface BallState {
-  y: number;
-  vy: number;
-  squash: number;
-  squashV: number;
-}
+const kScale = (size: number) => size / GROUND_Y;
 
 export function EqSpinner({ size = 48, color = "#4E8CFF" }: { size?: number; color?: string }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -26,36 +17,21 @@ export function EqSpinner({ size = 48, color = "#4E8CFF" }: { size?: number; col
     const container = ref.current;
     if (!container) return;
     const balls = Array.from(container.children) as HTMLElement[];
-    const dropH = size * 0.9;
-    const state: BallState[] = balls.map(() => ({ y: -dropH, vy: 0, squash: 1, squashV: 0 }));
-    const start = performance.now();
+    const blocks = DELAYS.map((d) => createBlock(d));
+    const k = kScale(size);
     let raf = 0;
     let last = performance.now();
     const tick = (now: number) => {
       const dt = Math.min((now - last) / 1000, 0.032);
       last = now;
       balls.forEach((ball, i) => {
-        const s = state[i];
-        const active = now - start >= DELAYS[i]; // 三球延迟入场
-        if (active) {
-          s.vy += GRAVITY * dt;
-          s.y += s.vy * dt * (size / 48); // 尺寸缩放位移
-          if (s.y >= 0) {
-            // 触地
-            s.y = 0;
-            s.vy = Math.abs(s.vy) > 40 ? -Math.abs(s.vy) * RESTITUTION : 0;
-            // 经验标定，观感对齐蓝本：挤压冲量随帧注入（非严格物理量纲）
-            s.squashV -= 2600 * dt;
-          }
-          // 挤压弹簧回弹
-          const force = -SQUASH_STIFFNESS * (s.squash - 1);
-          s.squashV += force * dt;
-          s.squashV -= SQUASH_DAMPING * s.squashV * dt;
-          // 经验标定，观感对齐蓝本：×10 增益补偿小步长下的弹簧响应
-          s.squash += s.squashV * dt * 10;
-        }
-        ball.style.transform = `translateY(${s.y}px) scale(${2 - s.squash}, ${s.squash})`;
-        ball.style.opacity = active ? "1" : "0";
+        const b = blocks[i];
+        stepBlock(b, dt);
+        // 相对贴地位置的位移（≤0 为腾空），逻辑 y → 像素
+        const groundTop = GROUND_Y - DOT_SIZE;
+        const dy = (b.y - groundTop) * k;
+        ball.style.transform = `translateY(${dy}px) scale(${1 + b.squash}, ${1 - b.squash})`;
+        ball.style.opacity = b.active || b.cycElapsed >= b.delay ? "1" : "0";
       });
       raf = requestAnimationFrame(tick);
     };
@@ -63,19 +39,21 @@ export function EqSpinner({ size = 48, color = "#4E8CFF" }: { size?: number; col
     return () => cancelAnimationFrame(raf);
   }, [size]);
 
-  const ballSize = Math.max(size * 0.16, 4);
+  // 球径 = 31/121 × 容器高；三球水平均分（i*34% 左缘对齐，右缘不越界）
+  const ballSize = Math.round(DOT_SIZE * kScale(size));
   return (
-    <div ref={ref} className="relative overflow-hidden" style={{ width: size, height: size }}>
+    <div ref={ref} role="status" aria-label="加载中" className="relative overflow-hidden" style={{ width: size, height: size }}>
       {[0, 1, 2].map((i) => (
         <span
           key={i}
           className="absolute rounded-full"
           style={{
-            width: ballSize * 2,
-            height: ballSize * 2,
-            left: `${8 + i * 34}%`,
-            top: size - ballSize * 2,
+            width: ballSize,
+            height: ballSize,
+            left: `${8 + i * 30}%`,
+            top: size - ballSize,
             background: color,
+            opacity: 0,
             transformOrigin: "center bottom",
             willChange: "transform",
           }}

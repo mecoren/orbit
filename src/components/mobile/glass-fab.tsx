@@ -16,6 +16,7 @@ interface GlassFabProps {
 export function GlassFab({ onClick, ariaLabel, accentColor = "#4E8CFF", children }: GlassFabProps) {
   return (
     <button
+      type="button"
       onClick={onClick}
       aria-label={ariaLabel}
       className="relative grid h-14 w-14 place-items-center rounded-full shadow-lg active:scale-95 transition-transform duration-150"
