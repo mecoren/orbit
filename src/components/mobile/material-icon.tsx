@@ -23,7 +23,7 @@ export function MaterialIcon({ name, size = 22, fill = 0, weight = 400, color, c
       <span
         aria-hidden
         className={className}
-        style={{ display: "inline-block", width: size, height: size, borderRadius: "50%", background: "currentColor", opacity: 0.25, flexShrink: 0, ...style }}
+        style={{ display: "inline-block", width: size, height: size, borderRadius: "50%", background: "currentColor", color, opacity: 0.25, flexShrink: 0, ...style }}
       />
     );
   }
