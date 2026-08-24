@@ -7,9 +7,19 @@ interface LiquidGlassTitleBarProps {
   title: string;
   actions?: ReactNode;
   onBack?: () => void;
-  /** 联动的滚动容器；offset>0 时显示渐变模糊层 */
+  /**
+   * 联动的滚动容器；offset>0 时显示渐变模糊层。
+   * 契约：ref.current 必须与标题栏在同一次 commit 内完成赋值（同屏条件渲染），
+   * 否则 effect 空跑且不重连，模糊层不启用。
+   */
   scrollRef?: RefObject<HTMLElement | null>;
 }
+
+/** mask 能力探测运行期不变，提为模块常量（避免每次渲染重算 + memo prop 结构性稳定） */
+const SUPPORTS_MASK =
+  typeof CSS !== "undefined" &&
+  (CSS.supports("-webkit-mask-image", "linear-gradient(black, transparent)") ||
+    CSS.supports("mask-image", "linear-gradient(black, transparent)"));
 
 /**
  * 滚动淡入模糊层（05 §三性能纪律）：独立 memo 组件（对应蓝本 RepaintBoundary）。
@@ -21,7 +31,7 @@ const ScrollFadeBlur = memo(function ScrollFadeBlur({ strategy }: { strategy: Gl
   return (
     <div
       data-scroll-fade
-      className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-150"
+      className="pointer-events-none absolute inset-0 opacity-0"
       style={
         strategy === "mask"
           ? {
@@ -50,11 +60,7 @@ const ScrollFadeBlur = memo(function ScrollFadeBlur({ strategy }: { strategy: Gl
  */
 export function LiquidGlassTitleBar({ title, actions, onBack, scrollRef }: LiquidGlassTitleBarProps) {
   const wrapRef = useRef<HTMLDivElement>(null);
-  const strategy = pickGlassStrategy(
-    typeof CSS !== "undefined" &&
-      (CSS.supports("-webkit-mask-image", "linear-gradient(black, transparent)") ||
-        CSS.supports("mask-image", "linear-gradient(black, transparent)")),
-  );
+  const strategy = pickGlassStrategy(SUPPORTS_MASK);
 
   useEffect(() => {
     const el = scrollRef?.current;
