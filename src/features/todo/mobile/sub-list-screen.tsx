@@ -19,7 +19,7 @@ import {
   todoTaskUpdate,
   type TodoTask,
 } from "@/lib/tauri";
-import { QUICK_VIEWS, TODO_ACCENT, type QuickViewKey } from "../shared/constants";
+import { QUICK_VIEWS, type QuickViewKey } from "../shared/constants";
 import { applyDoneToggle } from "../shared/task-actions";
 import { filterTasks, sortTasks } from "../shared/task-filters";
 import { TodoTaskTile } from "./todo-task-tile";
@@ -58,7 +58,9 @@ export function SubListScreen({ onOpenForm }: SubListScreenProps) {
   // ---- searchParams 解析：三参数互斥，projectId 优先 > ungrouped > view ----
   const projectIdRaw = searchParams.get("projectId");
   const ungrouped = searchParams.get("ungrouped") != null;
-  const projectId = projectIdRaw != null && Number.isFinite(Number(projectIdRaw)) ? Number(projectIdRaw) : null;
+  // 合法 projectId 须为正整数（空串 Number("")=0、非数字串在此一并拦截）
+  const projectId =
+    projectIdRaw != null && /^\d+$/.test(projectIdRaw) && Number(projectIdRaw) > 0 ? Number(projectIdRaw) : null;
   const view: QuickViewKey | null =
     !projectIdRaw && !ungrouped ? (QUICK_VIEWS.find((v) => v.key === searchParams.get("view"))?.key ?? null) : null;
 
@@ -166,9 +168,9 @@ export function SubListScreen({ onOpenForm }: SubListScreenProps) {
         </div>
       </div>
 
-      {/* FAB：右下 fixed（AboveBottomNavFab extraMargin=4 ≈ bottom-5 right-4），GlassFab accentColor=#4E8CFF */}
+      {/* FAB：右下 fixed（AboveBottomNavFab extraMargin=4 ≈ bottom-5 right-4）；accent=themeAccent #4E8CFF（GlassFab 默认值，05 §2.1/§4.2） */}
       <div className="fixed right-4 bottom-5 z-40">
-        <GlassFab ariaLabel="新建待办" accentColor={TODO_ACCENT} onClick={handleFabClick}>
+        <GlassFab ariaLabel="新建待办" onClick={handleFabClick}>
           <MaterialIcon name="add_rounded" size={24} />
         </GlassFab>
       </div>
