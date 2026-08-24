@@ -11,15 +11,20 @@
 use std::path::{Path, PathBuf};
 
 use tauri::AppHandle;
+#[cfg(not(desktop))]
+use tauri::Manager;
 
 /// 应用数据目录标识（生产环境；必须与 tauri.conf.json identifier 一致）
+#[cfg_attr(not(desktop), allow(dead_code))] // 移动端目录命名由 Tauri 决定
 pub const APP_IDENTIFIER: &str = "cn.wait.orbit";
 /// 开发环境目录后缀：debug 构建使用 `cn.wait.orbit.dev`
+#[cfg(desktop)]
 const DEV_IDENTIFIER: &str = "cn.wait.orbit.dev";
 /// 数据目录覆盖文件名（放在默认 app_data_dir 下）
 pub const OVERRIDE_FILE_NAME: &str = "data_dir_override.json";
 
 /// 生效目录标识：debug 构建 → .dev，release → 正式
+#[cfg(desktop)]
 fn effective_identifier() -> &'static str {
     if cfg!(debug_assertions) {
         DEV_IDENTIFIER
@@ -36,10 +41,25 @@ struct DataDirOverride {
 
 /// 获取默认 app_data_dir（不考虑覆盖文件），若目录不存在则创建
 ///
-/// 直接基于 dirs::data_dir()/effective_identifier() 解析（而非 Tauri 的
+/// 桌面端：直接基于 dirs::data_dir()/effective_identifier() 解析（而非 Tauri 的
 /// app_data_dir()），使运行期与 Builder 早期两条路径永远一致。
+#[cfg(desktop)]
 pub fn default_app_data_dir(_app: &AppHandle) -> Result<PathBuf, String> {
     let dir = default_app_data_dir_early()?;
+    if !dir.exists() {
+        std::fs::create_dir_all(&dir).map_err(|e| format!("创建 app_data_dir 失败: {}", e))?;
+    }
+    Ok(dir)
+}
+
+/// 移动端版本：无 Builder 早期需求，直接走 Tauri path API 解析
+/// （Android/iOS 上 dirs 无桌面语义，数据目录由 OS/Tauri 决定）
+#[cfg(not(desktop))]
+pub fn default_app_data_dir(app: &AppHandle) -> Result<PathBuf, String> {
+    let dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("解析 app_data_dir 失败: {}", e))?;
     if !dir.exists() {
         std::fs::create_dir_all(&dir).map_err(|e| format!("创建 app_data_dir 失败: {}", e))?;
     }
@@ -78,6 +98,7 @@ pub fn window_state_path(app: &AppHandle) -> Result<PathBuf, String> {
 /// 无 AppHandle 版默认数据目录（精确复现 tauri 的 `app_data_dir()`）
 ///
 /// tauri 实现（desktop.rs）：`dirs::data_dir()/<bundle_identifier>`。
+#[cfg(desktop)]
 fn default_app_data_dir_early() -> Result<PathBuf, String> {
     let base = dirs::data_dir().ok_or_else(|| "解析用户数据目录失败".to_string())?;
     Ok(base.join(effective_identifier()))
@@ -87,6 +108,7 @@ fn default_app_data_dir_early() -> Result<PathBuf, String> {
 ///
 /// 与 `resolve_app_data_dir` 逻辑一致，但无需 AppHandle，
 /// 供 Builder 阶段（窗口创建前）定位 window-state 文件使用。
+#[cfg(desktop)]
 fn resolve_app_data_dir_early() -> Result<PathBuf, String> {
     let default_dir = default_app_data_dir_early()?;
 
@@ -110,6 +132,7 @@ fn resolve_app_data_dir_early() -> Result<PathBuf, String> {
 ///
 /// 必须返回可随插件 `with_filename` 传入的字符串；解析失败时回退为相对文件名
 /// （插件将回落到默认 `app_config_dir` 行为）。
+#[cfg(desktop)]
 pub fn window_state_file_early() -> String {
     match resolve_app_data_dir_early() {
         Ok(dir) => dir.join(".window-state.json").to_string_lossy().to_string(),

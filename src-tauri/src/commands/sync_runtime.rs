@@ -14,11 +14,14 @@
 use std::path::PathBuf;
 use std::sync::{Arc, OnceLock};
 
+#[cfg(desktop)]
 use base64::{Engine, engine::general_purpose::STANDARD as BASE64};
 use orbit_core::api::cloud_sync_api;
 use orbit_core::cloud_sync::engine::SyncEngine;
 use orbit_core::cloud_sync::progress::{ProgressSender, SyncProgress};
-use orbit_core::config_enc::cek::{CEK_LEN, CekProvider, generate_cek};
+use orbit_core::config_enc::cek::{CEK_LEN, CekProvider};
+#[cfg(desktop)]
+use orbit_core::config_enc::cek::generate_cek;
 use orbit_core::config_enc::error::ConfigEncError;
 use orbit_core::context;
 use orbit_core::db::repository::sync_config_repo::SyncConfigRepo;
@@ -30,10 +33,13 @@ use crate::commands::data_dir::resolve_app_data_dir;
 use crate::AppState;
 
 /// 钥匙串 service 名（03 文档 §七：service=orbit.sync-crypto）
+#[cfg(desktop)]
 const KEYRING_SERVICE: &str = "orbit.sync-crypto";
 /// CEK 在钥匙串中的条目名
+#[cfg(desktop)]
 const KEYRING_CEK_ACCOUNT: &str = "config-cek";
 /// 同步密码在钥匙串中的条目名
+#[cfg(desktop)]
 const KEYRING_PASSWORD_ACCOUNT: &str = "sync-password";
 
 // ============================================================================
@@ -109,13 +115,16 @@ impl ProgressSender for TauriProgressSender {
 }
 
 // ============================================================================
-// CEK 提供者（系统钥匙串保管）
+// CEK 提供者（桌面系统钥匙串保管；移动端无凭据库 → 明文降级）
 // ============================================================================
 
-/// 桌面端 CEK 提供者：32B 随机密钥存于 OS 钥匙串，首次访问自动生成
+/// CEK 提供者：32B 随机密钥存于 OS 钥匙串（桌面），首次访问自动生成；
+/// 移动端无系统凭据库，上报不可用由上层走明文降级
 pub struct KeyringCekProvider;
 
 impl CekProvider for KeyringCekProvider {
+    /// 桌面端：CEK 存钥匙串 service=orbit.sync-crypto / account=config-cek
+    #[cfg(desktop)]
     fn get_or_create(&self) -> Result<[u8; CEK_LEN], ConfigEncError> {
         let entry = keyring::Entry::new(KEYRING_SERVICE, KEYRING_CEK_ACCOUNT)
             .map_err(|e| ConfigEncError::CekUnavailable(format!("钥匙串不可用: {e}")))?;
@@ -147,6 +156,15 @@ impl CekProvider for KeyringCekProvider {
         }
     }
 
+    /// 移动端：无持久凭据库，CEK 永远不可用（配置存储自动降级，不 panic）
+    #[cfg(not(desktop))]
+    fn get_or_create(&self) -> Result<[u8; CEK_LEN], ConfigEncError> {
+        Err(ConfigEncError::CekUnavailable(
+            "移动端无系统凭据库，CEK 不可用".to_string(),
+        ))
+    }
+
+    #[cfg(desktop)]
     fn is_available(&self) -> bool {
         keyring::Entry::new(KEYRING_SERVICE, KEYRING_CEK_ACCOUNT)
             .map(|entry| {
@@ -156,6 +174,12 @@ impl CekProvider for KeyringCekProvider {
                 )
             })
             .unwrap_or(false)
+    }
+
+    /// 移动端恒不可用（启动诊断据此降级明文）
+    #[cfg(not(desktop))]
+    fn is_available(&self) -> bool {
+        false
     }
 }
 
@@ -173,15 +197,18 @@ pub fn register_global_encrypted_storage(app: &AppHandle) -> Result<(), String> 
 }
 
 // ============================================================================
-// 同步密码钥匙串缓存（session 恢复）
+// 同步密码钥匙串缓存（session 恢复；移动端无持久缓存，会话内有效）
 // ============================================================================
 
+/// 同步密码钥匙串条目（service=orbit.sync-crypto / account=sync-password）
+#[cfg(desktop)]
 fn password_entry() -> Result<keyring::Entry, String> {
     keyring::Entry::new(KEYRING_SERVICE, KEYRING_PASSWORD_ACCOUNT)
         .map_err(|e| format!("[other] 钥匙串不可用: {e}"))
 }
 
 /// 缓存同步密码到钥匙串（解锁成功后调用；失败仅告警不阻断）
+#[cfg(desktop)]
 pub fn cache_sync_password(password: &str) {
     match password_entry().and_then(|e| e.set_password(password).map_err(|e| e.to_string())) {
         Ok(()) => {}
@@ -189,7 +216,12 @@ pub fn cache_sync_password(password: &str) {
     }
 }
 
+/// 移动端：无系统凭据库，不做持久缓存（静默跳过；重启后需重输同步密码）
+#[cfg(not(desktop))]
+pub fn cache_sync_password(_password: &str) {}
+
 /// 清除钥匙串中的同步密码缓存（尽力而为）
+#[cfg(desktop)]
 pub fn clear_cached_sync_password() {
     if let Ok(entry) = password_entry() {
         match entry.delete_credential() {
@@ -199,7 +231,12 @@ pub fn clear_cached_sync_password() {
     }
 }
 
+/// 移动端：无缓存可清（静默跳过）
+#[cfg(not(desktop))]
+pub fn clear_cached_sync_password() {}
+
 /// 读取缓存的同步密码（无缓存返回 None）
+#[cfg(desktop)]
 pub fn read_cached_sync_password() -> Option<String> {
     let entry = password_entry().ok()?;
     match entry.get_password() {
@@ -210,6 +247,12 @@ pub fn read_cached_sync_password() -> Option<String> {
             None
         }
     }
+}
+
+/// 移动端：无持久缓存（读恒未命中）
+#[cfg(not(desktop))]
+pub fn read_cached_sync_password() -> Option<String> {
+    None
 }
 
 // ============================================================================

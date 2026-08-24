@@ -11,6 +11,7 @@
 //! - （M3 安全与同步已平移：sync_cmd / sync_crypto_cmd / cloud_sync_cmd /
 //!   full_sync_cmd + sync_runtime 单例 + sync_scheduler 60s tick 守护）
 //! - （提醒轮询守护已平移：commands/notification_scheduler.rs 专用 SQL 版）
+//! - （定时备份守护已接线：commands/backup_scheduler.rs，core v4 调度器）
 
 mod commands;
 
@@ -18,7 +19,9 @@ use commands::notification_scheduler;
 use commands::sync_runtime::SyncRuntime;
 use tauri::Manager;
 
-use commands::{business_cmd, crypto_cmd, data_dir, db_cmd, mica_cmd, todo_cmd};
+#[cfg(desktop)]
+use commands::data_dir;
+use commands::{business_cmd, crypto_cmd, db_cmd, mica_cmd, todo_cmd};
 use sqlx::SqlitePool;
 
 /// 应用全局状态：持有数据库连接池供所有 command 共享
@@ -37,24 +40,27 @@ impl AppState {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    // window-state 文件跟随数据目录（数据目录迁移后窗口状态不丢）
-    let window_state_file = data_dir::window_state_file_early();
-
-    tauri::Builder::default()
+    // 通用插件：双端无条件注册
+    let builder = tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
-        .plugin(tauri_plugin_notification::init())
-        .plugin(
-            tauri_plugin_window_state::Builder::default()
-                .with_filename(window_state_file)
-                .build(),
-        )
+        .plugin(tauri_plugin_notification::init());
+
+    // 桌面专属插件：window-state（窗口状态文件跟随数据目录，数据目录迁移后不丢）
+    #[cfg(desktop)]
+    let builder = builder.plugin(
+        tauri_plugin_window_state::Builder::default()
+            .with_filename(data_dir::window_state_file_early())
+            .build(),
+    );
+
+    builder
         .setup(|_app| {
             // Mica 云母材质：绕过 Tauri 原生 windowEffects 在无边框窗口上的局限，
             // 直接在窗口就绪阶段通过 Windows DWM API 设置 DWMSBT_MAINWINDOW。
             // 亮暗切换由前端 use-mica-effect 经 apply_mica/disable_mica 联动。
-            #[cfg(target_os = "windows")]
+            #[cfg(all(desktop, target_os = "windows"))]
             if let Err(e) = mica_cmd::apply_mica_dwm(_app.handle()) {
                 eprintln!("[mica] dwm apply failed: {e}");
             }
@@ -72,6 +78,12 @@ pub fn run() {
             }
             commands::sync_scheduler::sync_scheduler_start(_app.handle().clone());
             commands::sync_scheduler::sync_on_change_watcher_start(_app.handle().clone());
+
+            // 定时全量备份守护（60s tick；core v4 调度器接线，
+            // 钥匙串缓存同步密码作为加密口令，无缓存时静默等待）
+            // 桌面专属：依赖钥匙串密码缓存，移动端无持久凭据库
+            #[cfg(desktop)]
+            commands::backup_scheduler::backup_scheduler_start(_app.handle().clone());
 
             Ok(())
         })
@@ -193,6 +205,9 @@ pub fn run() {
             commands::full_sync_cmd::full_backup_import,
             commands::full_sync_cmd::full_backup_list_local,
             commands::full_sync_cmd::full_backup_device_info,
+            // 定时自动备份偏好（backup_scheduler 守护的数据源）
+            commands::backup_scheduler::backup_prefs_get,
+            commands::backup_scheduler::backup_prefs_save,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

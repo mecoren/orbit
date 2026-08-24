@@ -1,5 +1,6 @@
 //! Tauri command 模块：每个业务域一个文件，薄壳包装 orbit_core::api。
 
+pub mod backup_scheduler;
 pub mod business_cmd;
 pub mod cloud_sync_cmd;
 pub mod crypto_cmd;

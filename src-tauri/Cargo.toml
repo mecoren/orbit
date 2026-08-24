@@ -25,7 +25,6 @@ tauri-plugin-shell.workspace = true
 tauri-plugin-dialog.workspace = true
 tauri-plugin-fs.workspace = true
 tauri-plugin-notification.workspace = true
-tauri-plugin-window-state.workspace = true
 tauri-plugin-log.workspace = true
 
 # 序列化
@@ -35,18 +34,23 @@ serde_json.workspace = true
 # AppState 持有 SqlitePool
 sqlx.workspace = true
 
-# 数据目录解析（Builder 阶段无 AppHandle 时复现 app_data_dir）
-dirs = "6"
-
 # 提醒轮询守护（专用 SQL + 去重集合 + 定时器 + 时间格式化）
 once_cell.workspace = true
 tokio.workspace = true
 chrono.workspace = true
 
-# M3 安全与同步（钥匙串 CEK/同步密码缓存 + base64 编解码 + 主机名）
-keyring.workspace = true
+# M3 安全与同步（base64 编解码 + 主机名；keyring 见下方桌面段）
 base64.workspace = true
 whoami.workspace = true
+
+# 桌面专属依赖：window-state 插件（窗口概念）、keyring 3.x（移动端无原生
+# 凭据库）、dirs（数据目录早期解析仅桌面需要，移动端统一走 Tauri app_data_dir）
+# 注：Cargo 的 target 依赖解析不认 tauri-build 注入的 cfg(desktop)（实测
+# cargo tree 桌面/安卓双目标均不匹配），须用 rustc 原生 target cfg 表达。
+[target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
+tauri-plugin-window-state.workspace = true
+keyring.workspace = true
+dirs = "6"
 
 # Windows 平台：Mica 云母材质（DWM 直调）+ 系统字体枚举预留
 [target.'cfg(target_os = "windows")'.dependencies]
@@ -63,4 +67,5 @@ raw-window-handle = "0.6"
 log.workspace = true
 
 [lints.rust]
-unexpected_cfgs = { level = "warn", check-cfg = ['cfg(mobile)'] }
+# desktop cfg 由 tauri-build 注入；显式登记避免依赖其自动 emit 行为
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(mobile)', 'cfg(desktop)'] }
