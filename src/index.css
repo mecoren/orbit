@@ -545,3 +545,24 @@ html[data-platform="mobile"] {
 /* 安全区 + 手势条兜底（滚动容器尾部 spacer 用） */
 .m-safe-bottom { padding-bottom: max(env(safe-area-inset-bottom), 48px); }
 .m-safe-top { padding-top: env(safe-area-inset-top); }
+
+/* ===== M4 Material Symbols Rounded 自托管字体（05 §2.3；本地打包不走 CDN）===== */
+@font-face {
+  font-family: "Material Symbols Rounded";
+  src: url("/fonts/MaterialSymbolsRounded.woff2") format("woff2");
+  font-display: block;
+}
+.msr {
+  font-family: "Material Symbols Rounded";
+  font-weight: normal;
+  font-style: normal;
+  line-height: 1;
+  letter-spacing: normal;
+  text-transform: none;
+  white-space: nowrap;
+  word-wrap: normal;
+  direction: ltr;
+  font-feature-settings: "liga";
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+}
