@@ -12,10 +12,14 @@
 
 ### 1.2 现状明文事实（实验前基线）
 
-`orbit_core/Cargo.toml:62-63` 以 `cfg(not(target_os = "android"))` 仅给非 Android 目标注入 `libsqlite3-sys` 的 `bundled-sqlcipher-vendored-openssl` 特性；Android 目标只从 workspace 依赖获得 `bundled`（明文 SQLite）。因此：
+`orbit_core/Cargo.toml` 的 `[target.'cfg(not(target_os = "android"))']` 目标段仅给非 Android 目标注入 `libsqlite3-sys` 的 `bundled-sqlcipher-vendored-openssl` 特性；Android 目标只从 workspace 依赖获得 `bundled`（明文 SQLite）。因此：
 
-- `orbit_core/src/db/pool.rs` 中 `init_pool` 的 `PRAGMA key` 在 Android 上**无加密语义**（底层不是 SQLCipher，PRAGMA key 被忽略），`db_init_encrypted` 实际打开的是明文库；
-- 移动端 `KeyringCekProvider::get_or_create()` 恒返 `CekUnavailable`（src-tauri/src/commands/sync_runtime.rs:160-165），`config_enc` 注册表走"加密优先、明文降级"路径 → `sync_config.json` 与 `full_sync_backup_prefs.json` 均落**明文 JSON**；
+- `orbit_core/src/db/pool.rs` 中 `init_pool` 的 `PRAGMA key` 在 Android 上**无加密语义**（底层不是 SQLCipher，PRAGMA key 被静默忽略），`db_init_encrypted` 实际打开的是明文库；
+- **主密码开启迁移路径在 Android 硬失败**：`db_migrate_to_encrypted` 依赖 `sqlcipher_export`（orbit_core/src/db/migrate.rs），纯 SQLite 下报 `no such function`（干净报错、无静默损坏）；而解锁重开路径 `db_init_encrypted` 因 PRAGMA key 被忽略反而"成功"。两路径叠加：若 meta 已持久化而后迁移失败，重启后应用走解锁流程进入**明文库**的混合状态——移动端 UI 层须规避该入口（遗留工单 §七-③）；
+- 移动端 `KeyringCekProvider::get_or_create()` 恒返 `CekUnavailable`（src-tauri/src/commands/sync_runtime.rs 的 `#[cfg(not(desktop))]` 分支）。config_enc 存储的两条消费路径行为**不对称**：
+  - `full_sync_backup_prefs`：有"加密优先、明文降级"分支 → `full_sync_backup_prefs.json` 落**明文 JSON**；
+  - `sync_config.json`：写入方 `write_config_file`（src-tauri/src/commands/sync_cmd.rs）**无降级分支**，`save()` 返回 `Err(CekUnavailable)` 直接抛给前端 → 配置文件不落盘，移动端"保存同步配置"命令当前必然报错（遗留工单 §七-①）；
+  - 另注意：同步凭据同时经 `SyncConfigRepo::save_config` 写入 DB 表 `sync_configs`（credential 列）→ 在 Android 上随**明文 orbit.db** 一并落盘，敏感度并入让步清单第 1 项评估；
 - `master_auth.json` 不受影响：v2 格式下 DB Key 经主密码 PBKDF2(600k) 派生密钥包裹，密钥材料本身不落明文。
 
 ## 二、实验 A 记录 —— Android 启用 vendored SQLCipher 交叉构建
@@ -101,17 +105,26 @@ cargo:warning=configuring OpenSSL build: '...\perl.exe' reported failure with ex
 
 理由：在本机 Windows 宿主工具链上，实验 A 被 openssl-src 对 Unix 构建环境的硬性要求阻断（两轮实证 + 源码级确认），B1 无收益、B2 成本超 MVP 承受度；B3 是唯一零新增工作量且不伤云同步安全模型的选项。
 
-### 影响面（隐私承诺让步清单——共三处明文落盘）
+决策矩阵速览：
 
-若决策为维持降级，隐私声明中"本地数据加密存储"的表述须明确覆盖以下三处（均位于应用数据目录）：
+| 方案 | 成本 | 风险 | 结论 |
+|---|---|---|---|
+| A vendored 全端统一 SQLCipher | Windows 宿主被 perl/make 工具链阻断；Unix/CI 宿主可行 | 低（路径明确） | **目标态**（回滚条件触发后重试） |
+| B1 bundled-sqlcipher 自备 libcrypto | ≥ vendored + 产物版本漂移维护 | 中 | 否决（无独立收益） |
+| B2 sqlcipher-android AAR/JNI | L 级：sqlx 整条链路作废重写 | 高 | 后续里程碑候选，不进 MVP |
+| B3 Keystore 包裹 + 明文库降级 | 0（维持现状） | 隐私让步（见下表） | **MVP 采纳** |
+
+### 影响面（隐私承诺让步清单）
+
+若决策为维持降级，隐私声明中"本地数据加密存储"的表述须明确覆盖以下落盘面（均位于应用数据目录）：
 
 | # | 文件 | 内容 | 敏感度 |
 |---|---|---|---|
-| 1 | `orbit.db` | 全部待办业务数据 | 高 |
-| 2 | `sync_config.json` | 同步引擎配置，**含 WebDAV/S3 凭据** | 高（敏感面最大） |
-| 3 | `full_sync_backup_prefs.json` | 备份偏好与调度状态（路径/开关/时间戳） | 低 |
+| 1 | `orbit.db` | 全部待办业务数据 + `sync_configs` 表的同步凭据（credential 列） | 高（敏感面最大） |
+| 2 | `sync_config.json` | 同步引擎配置（含 WebDAV/S3 凭据）。⚠ **现状移动端不会产生此文件**：写入无明文降级分支而直接报错（§七-①）；一旦补齐降级则成为独立敏感文件 | 高（补降级前为 0，补降级后同凭据敏感级） |
+| 3 | `full_sync_backup_prefs.json` | 备份偏好与调度状态（路径/开关/时间戳），现状即走明文降级分支落盘 | 低 |
 
-- **不在让步清单内**：`master_auth.json`（v2 包裹格式，DB Key 不落明文）、`sync_crypto_meta.json`（仅存包裹后的 Data Key）、`.orsync` 备份包（整体 AES-GCM 加密）。
+- **不在让步清单内**：`master_auth.json`（v2 包裹格式，DB Key 不落明文；v1 遗留格式除外——其 hash 字段即派生密钥本身，升级仅在首次解锁时发生）、`sync_crypto_meta.json`（仅存包裹后的 Data Key）、`.orsync` 备份包（整体 AES-GCM 加密）。
 - **云同步 E2E 承诺边界（不受影响，须说清）**：上行载荷先 zstd 压缩再经 Data Key AES-256-GCM 加密（OSZS 格式），WebDAV/S3 服务端只见密文；本地明文降级不改变云端零知识属性。桌面端三处文件维持原有加密行为，承诺不变。
 - **威胁模型口径**：让步限于设备本地攻击面（设备丢失、root 提权后同应用目录读取）；不影响传输与云端机密性。
 
@@ -119,12 +132,18 @@ cargo:warning=configuring OpenSSL build: '...\perl.exe' reported failure with ex
 
 满足任一条即在 Linux/macOS 宿主或 WSL2 完整发行版上重跑实验 A（命令与本 ADR 第二节相同）：
 
-1. **构建宿主切换**：CI 采用 ubuntu-latest 出 Android 包，或本机建立 WSL2 完整开发发行版（含 make/perl/NDK）——openssl-src 在 Unix 宿主走原生 make 路径，两个 Configure 阻塞均不存在，成功概率最高；
+1. **构建宿主切换**：CI 采用 ubuntu-latest 出 Android 包，或本机建立 WSL2 完整开发发行版（含 make/perl/NDK）——openssl-src 在 Unix 宿主走原生 make 路径，两个 Configure 阻塞均不存在，成功概率最高。**验收前提：重试方案必须包含 per-connection key 注入改造**——现 `init_pool` 的 PRAGMA key 仅作用于池内单个连接（orbit_core/src/db/pool.rs），SQLCipher 真实启用后其余连接将报 file is not a database（桌面高并发场景存在同款潜在隐患，见 §七-② 独立核查）；
 2. **上游工具链演进**：openssl-src ≥ 当前版本发布对 Windows 宿主交叉编译的支持修复，或 libsqlite3-sys 升级改用其他加密后端；
 3. **NDK 大版本变更**（如 29 → 30+）：API level / clang 行为变化时顺带重验；
 4. **产品要求升级**：隐私承诺决定收紧为"五端一致本地加密"，届时按优先序重估 A → B2。
 
 ## 六、附：本次实验产物
 
-- 实验日志：`%TEMP%\opencode\expA-android-build.log`、`expA-retry-build.log`（会话临时区，不入库）
+- 实验日志（脱敏归档）：`docs/adr/assets/0001/expA-android-build.log`、`expA-retry-build.log`
 - `git checkout -- orbit_core/Cargo.toml` 已恢复；恢复后 `cargo check --workspace` 通过
+
+## 七、遗留工单（本 ADR 派生）
+
+1. **sync_config 明文降级对称化**：`write_config_file` 在 CEK 不可用时与 backup_prefs 不同、无明文降级而直接报错 → 移动端当前无法保存同步配置。二选一：(a) 补齐与 backup_prefs 对称的明文降级（隐私声明按 §四清单覆盖）；(b) 移动端显式禁用保存并引导至桌面端配置。**M4 T17（同步开关 UI）落地前必须裁决。**
+2. **per-connection SQLCipher key 注入**：`orbit_core/src/db/pool.rs` 的 `init_pool` 仅对单个连接执行 PRAGMA key；目标态启用 SQLCipher 前必须改为每连接注入（after_connect 或 SqliteConnectOptions pragma），并独立核查桌面端现有高并发场景是否受影响。
+3. **Android 主密码迁移入口规避**：`sqlcipher_export` 在 Android 必然失败（§1.2）；移动端设置页须隐藏/禁用"开启主密码"迁移入口，或 db_cmd 层返回明确错误文案，避免混合状态（T17 设置页实现时一并处理）。
