@@ -1,16 +1,18 @@
 /**
- * DetailScreen —— 任务详情全屏 /todo/:id（05 §4.3 前半；M4 Task 13）
+ * DetailScreen —— 任务详情全屏 /todo/:id（05 §4.3 全节；M4 Task 13/14）
  *
  * 页面结构：LiquidGlassTitleBar（title=任务标题截断或"详情"）+ 滚动容器
- * + 尾部留白 80 + m-safe-bottom。区块顺序：标题区 → 基本信息 → 描述 →
- * （Task 14 插槽固定序：子任务 → 标签 → 提醒 → 关联任务 → 评论）。
+ * + 尾部留白 80 + m-safe-bottom。八区块固定顺序：标题区 → 基本信息 → 描述 →
+ * 子任务 → 标签 → 提醒 → 关联任务 → 评论。
  *
  * 数据源 todoTaskGetDetail(id) 聚合查询（react-query key ["todo-task-detail", id]，
  * 返回 TodoTaskDetail = 任务本体 + subtasks/labels/comments/relations/reminders）；
- * 更新统一走 patchTask 出口（todoTaskUpdate 缺省键=跳过语义，02 §三要点 3），
- * 成功后失效 ["todo_tasks"] 与详情 key。
+ * 上半三区更新走 patchTask 出口（todoTaskUpdate 缺省键=跳过语义，02 §三要点 3），
+ * 下半五区（Task 14）增删改统一走 refreshDetail 失效出口——两者均只失效
+ * ["todo_tasks"] 与详情 key，禁 setQueryData 局部合并。
+ * 内容容器以 taskId 为 key：路由参数切换整树重挂载，消除区块内局部编辑态残留。
  */
-import { useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
@@ -27,8 +29,13 @@ import {
 
 import { TODO_ACCENT } from "../shared/constants";
 import { applyDoneToggle } from "../shared/task-actions";
+import { CommentsSection } from "./detail/comments-section";
 import { DescriptionSection } from "./detail/description-section";
 import { InfoSection } from "./detail/info-section";
+import { LabelsSection } from "./detail/labels-section";
+import { RelationsSection } from "./detail/relations-section";
+import { RemindersSection } from "./detail/reminders-section";
+import { SubtasksSection } from "./detail/subtasks-section";
 import { SectionCard } from "./section-card";
 
 /** 详情标题区（05 §4.3）：28px 完成 checkbox 在左 + headlineSmall(24px/w400) 原地编辑 */
@@ -159,6 +166,19 @@ export function DetailScreen() {
     }
   };
 
+  /**
+   * Task 14 下半五区（子任务/标签/提醒/关联/评论）增删改统一失效出口，
+   * 经 props 下发；只失效不合并（禁 setQueryData 局部写入）。
+   * 标签池 ["todo-label"] 为 labels-section 共享数据源，随详情一并失效
+   * 保证"新建标签后立即出现在可选列表"。
+   */
+  const refreshDetail = useCallback(async () => {
+    if (taskId == null) return;
+    await qc.invalidateQueries({ queryKey: ["todo-task-detail", taskId] });
+    await qc.invalidateQueries({ queryKey: ["todo_tasks"] });
+    await qc.invalidateQueries({ queryKey: ["todo-label"] });
+  }, [qc, taskId]);
+
   return (
     <div className="h-dvh bg-[var(--m-bg)] text-[var(--m-text)]">
       <div ref={scrollRef} className="h-full overflow-y-auto overscroll-y-contain">
@@ -187,12 +207,16 @@ export function DetailScreen() {
             <EqSpinner size={48} />
           </div>
         ) : (
-          <div className="space-y-3 px-4 pb-20 pt-3">
-            {/* 区块顺序（05 §4.3）：标题区 → 基本信息 → 描述 */}
+          <div key={taskId ?? "invalid"} className="space-y-3 px-4 pb-20 pt-3">
+            {/* 八区块固定顺序（05 §4.3）：标题区 → 基本信息 → 描述 → 子任务 → 标签 → 提醒 → 关联任务 → 评论 */}
             <TitleSection task={detail} onPatch={patchTask} />
             <InfoSection task={detail} onPatch={patchTask} />
             <DescriptionSection task={detail} onPatch={patchTask} />
-            {/* Task 14 插槽（顺序预留）：子任务 → 标签 → 提醒 → 关联任务 → 评论 */}
+            <SubtasksSection task={detail} refreshDetail={refreshDetail} />
+            <LabelsSection task={detail} refreshDetail={refreshDetail} />
+            <RemindersSection task={detail} refreshDetail={refreshDetail} />
+            <RelationsSection relations={detail.relations} />
+            <CommentsSection task={detail} refreshDetail={refreshDetail} />
           </div>
         )}
 
