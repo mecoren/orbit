@@ -288,14 +288,24 @@ export function SidebarScreen() {
           title="待办"
           scrollRef={scrollRef}
           actions={
-            <button
-              type="button"
-              aria-label="搜索"
-              onClick={() => navigate("/todo/tasks?view=all")}
-              className="grid h-12 w-12 place-items-center text-[var(--m-text)]"
-            >
-              <MaterialIcon name="search_rounded" size={24} />
-            </button>
+            <>
+              <button
+                type="button"
+                aria-label="搜索"
+                onClick={() => navigate("/todo/tasks?view=all")}
+                className="grid h-12 w-12 place-items-center text-[var(--m-text)]"
+              >
+                <MaterialIcon name="search_rounded" size={24} />
+              </button>
+              <button
+                type="button"
+                aria-label="设置"
+                onClick={() => navigate("/settings")}
+                className="grid h-12 w-12 place-items-center text-[var(--m-text)]"
+              >
+                <MaterialIcon name="settings_rounded" size={24} />
+              </button>
+            </>
           }
         />
 

@@ -102,6 +102,32 @@ impl EncryptedConfigStorage {
         Ok(())
     }
 
+    /// 加密保存；加密写入失败时降级为明文 JSON（ADR 0001 §七-① 裁决方案 a）
+    ///
+    /// 与 `full_sync_backup::backup_prefs` 的「加密优先、明文降级」模式对称：
+    /// - 桌面端 CEK 可用，`save()` 恒成功，恒走 `.enc` 加密分支（行为零变化）；
+    /// - 移动端 `KeyringCekProvider` 恒返 `CekUnavailable`，降级写同目录 `{name}.json`
+    ///   （路径与读取侧 `read_device_name_from_config` 的明文降级一致）。
+    ///
+    /// 隐私让步：明文落盘按 ADR 0001 §四清单 #2 纳入本地攻击面披露。
+    pub fn save_with_plaintext_fallback<T: Serialize>(
+        &self,
+        name: &str,
+        value: &T,
+    ) -> ConfigEncResult<()> {
+        match self.save(name, value) {
+            Ok(()) => Ok(()),
+            Err(e) => {
+                // 只记错误摘要，不落配置内容（02 §九 日志脱敏红线）
+                log::info!("[config_enc] {name} 加密写入失败，降级明文: {e}");
+                let path = self.app_data_dir.join(format!("{name}.json"));
+                let content = serde_json::to_vec_pretty(value)?;
+                crate::fs_util::write_atomic(&path, &content)?;
+                Ok(())
+            }
+        }
+    }
+
     /// 删除 `.enc` 配置文件
     pub fn remove(&self, name: &str) -> ConfigEncResult<()> {
         let enc = self.enc_path(name);
@@ -114,5 +140,66 @@ impl EncryptedConfigStorage {
     /// 返回 app_data_dir 引用
     pub fn app_data_dir(&self) -> &Path {
         &self.app_data_dir
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config_enc::cek::{CekProvider, CEK_LEN};
+    use serde_json::json;
+    use tempfile::TempDir;
+
+    /// 恒失败的 CEK 提供者（模拟移动端 KeyringCekProvider 恒 CekUnavailable）
+    struct UnavailableCekProvider;
+
+    impl CekProvider for UnavailableCekProvider {
+        fn get_or_create(&self) -> ConfigEncResult<[u8; CEK_LEN]> {
+            Err(crate::config_enc::error::ConfigEncError::CekUnavailable(
+                "test: 恒不可用".to_string(),
+            ))
+        }
+        fn is_available(&self) -> bool {
+            false
+        }
+    }
+
+    #[test]
+    fn fallback_writes_plain_json_when_cek_unavailable() {
+        let dir = TempDir::new().unwrap();
+        let storage = EncryptedConfigStorage::new(
+            std::sync::Arc::new(UnavailableCekProvider),
+            dir.path().to_path_buf(),
+        );
+        let cfg = json!({"engine": "webdav", "auto_sync_enabled": true});
+        storage
+            .save_with_plaintext_fallback("sync_config", &cfg)
+            .unwrap();
+
+        // .enc 不落盘，明文 JSON 落同目录同名（与读取侧降级路径一致）
+        assert!(!storage.enc_path("sync_config").exists());
+        let raw = std::fs::read_to_string(dir.path().join("sync_config.json")).unwrap();
+        assert_eq!(
+            serde_json::from_str::<serde_json::Value>(&raw).unwrap(),
+            cfg
+        );
+    }
+
+    #[test]
+    fn fallback_prefers_encrypted_when_cek_ok() {
+        let dir = TempDir::new().unwrap();
+        let storage = EncryptedConfigStorage::new(
+            std::sync::Arc::new(crate::config_enc::cek::InMemoryCekProvider::new()),
+            dir.path().to_path_buf(),
+        );
+        let cfg = json!({"engine": "s3"});
+        storage
+            .save_with_plaintext_fallback("sync_config", &cfg)
+            .unwrap();
+
+        // CEK 可用走加密分支，不产生明文文件（桌面行为零变化）
+        assert!(storage.enc_path("sync_config").exists());
+        assert!(!dir.path().join("sync_config.json").exists());
+        assert_eq!(storage.load::<serde_json::Value>("sync_config").unwrap(), Some(cfg));
     }
 }

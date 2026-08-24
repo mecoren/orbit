@@ -121,7 +121,7 @@ cargo:warning=configuring OpenSSL build: '...\perl.exe' reported failure with ex
 | # | 文件 | 内容 | 敏感度 |
 |---|---|---|---|
 | 1 | `orbit.db` | 全部待办业务数据 + `sync_configs` 表的同步凭据（credential 列） | 高（敏感面最大） |
-| 2 | `sync_config.json` | 同步引擎配置（含 WebDAV/S3 凭据）。⚠ **现状移动端不会产生此文件**：写入无明文降级分支而直接报错（§七-①）；一旦补齐降级则成为独立敏感文件 | 高（补降级前为 0，补降级后同凭据敏感级） |
+| 2 | `sync_config.json` | 同步引擎配置（含 WebDAV/S3 凭据）。**明文降级已生效**（M4 T17，§七-① 方案 a）：移动端 CEK 不可用时写明文 `sync_config.json`；桌面恒走 `sync_config.enc` 加密分支 | 高（同凭据敏感级） |
 | 3 | `full_sync_backup_prefs.json` | 备份偏好与调度状态（路径/开关/时间戳），现状即走明文降级分支落盘 | 低 |
 
 - **不在让步清单内**：`master_auth.json`（v2 包裹格式，DB Key 不落明文；v1 遗留格式除外——其 hash 字段即派生密钥本身，升级仅在首次解锁时发生）、`sync_crypto_meta.json`（仅存包裹后的 Data Key）、`.orsync` 备份包（整体 AES-GCM 加密）。
@@ -144,6 +144,6 @@ cargo:warning=configuring OpenSSL build: '...\perl.exe' reported failure with ex
 
 ## 七、遗留工单（本 ADR 派生）
 
-1. **sync_config 明文降级对称化**：`write_config_file` 在 CEK 不可用时与 backup_prefs 不同、无明文降级而直接报错 → 移动端当前无法保存同步配置。二选一：(a) 补齐与 backup_prefs 对称的明文降级（隐私声明按 §四清单覆盖）；(b) 移动端显式禁用保存并引导至桌面端配置。**M4 T17（同步开关 UI）落地前必须裁决。**
+1. **sync_config 明文降级对称化**：`write_config_file` 在 CEK 不可用时与 backup_prefs 不同、无明文降级而直接报错 → 移动端当前无法保存同步配置。二选一：(a) 补齐与 backup_prefs 对称的明文降级（隐私声明按 §四清单覆盖）；(b) 移动端显式禁用保存并引导至桌面端配置。**已裁决：方案 (a)**——M4 T17 落地 `EncryptedConfigStorage::save_with_plaintext_fallback`（orbit_core/src/config_enc/storage.rs），CEK 不可用（移动端）时降级写明文 `sync_config.json`，与 backup_prefs/读取侧模式对称；桌面 CEK 可用恒走加密分支，行为零变化（提交占位 `<T17 提交哈希>`）。
 2. **per-connection SQLCipher key 注入**：`orbit_core/src/db/pool.rs` 的 `init_pool` 仅对单个连接执行 PRAGMA key；目标态启用 SQLCipher 前必须改为每连接注入（after_connect 或 SqliteConnectOptions pragma），并独立核查桌面端现有高并发场景是否受影响。
-3. **Android 主密码迁移入口规避**：`sqlcipher_export` 在 Android 必然失败（§1.2）；移动端设置页须隐藏/禁用"开启主密码"迁移入口，或 db_cmd 层返回明确错误文案，避免混合状态（T17 设置页实现时一并处理）。
+3. **Android 主密码迁移入口规避**：`sqlcipher_export` 在 Android 必然失败（§1.2）；移动端设置页须隐藏/禁用"开启主密码"迁移入口，或 db_cmd 层返回明确错误文案，避免混合状态。**已处置：由 M4 设置页只读设计规避**（T17）——移动 `/settings` 安全卡仅只读展示主密码状态，不提供开启/迁移主密码入口，天然不触达 `sqlcipher_export` 必败路径；修改入口记 M6+。

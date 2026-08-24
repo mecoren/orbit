@@ -210,6 +210,9 @@ pub async fn sync_config_save(app: AppHandle, input: SyncConfigInput) -> Result<
 }
 
 /// 写入加密文件侧（03 §八契约字段；写入失败不阻断 DB 已保存的事实，仅告警）
+///
+/// ADR 0001 §七-① 方案 (a)：CEK 不可用（移动端）时降级写明文 sync_config.json，
+/// 与 backup_prefs「加密优先、明文降级」模式对称；桌面 CEK 可用恒走加密分支，行为不变。
 fn write_config_file(input: &SyncConfigInput, engine: &str) -> Result<(), String> {
     let device_name = whoami::fallible::hostname().unwrap_or_default();
     let cfg = if engine == "webdav" {
@@ -242,10 +245,12 @@ fn write_config_file(input: &SyncConfigInput, engine: &str) -> Result<(), String
         })
     };
     if let Some(storage) = orbit_core::config_enc::get_global_storage() {
-        storage.save("sync_config", &cfg).map_err(|e| {
-            eprintln!("[sync-cmd] 配置文件写入失败（DB 已保存）: {e}");
-            format!("[other] 配置文件写入失败: {e}")
-        })?;
+        storage
+            .save_with_plaintext_fallback("sync_config", &cfg)
+            .map_err(|e| {
+                eprintln!("[sync-cmd] 配置文件写入失败（DB 已保存）: {e}");
+                format!("[other] 配置文件写入失败: {e}")
+            })?;
     }
     Ok(())
 }
