@@ -6,10 +6,10 @@ describe("pickSnapIndex", () => {
   it("静止时吸附最近点", () => {
     expect(pickSnapIndex(600, 0, snaps)).toBe(1);
   });
-  it("快速上滑(负速度)强制向上选点", () => {
+  it("快速上滑(负速度)从最近档向上步进一档", () => {
     expect(pickSnapIndex(640, -600, snaps)).toBe(2);
   });
-  it("快速下滑(正速度)强制向下选点", () => {
+  it("快速下滑(正速度)从最近档向下步进一档", () => {
     expect(pickSnapIndex(360, 600, snaps)).toBe(0);
   });
   it("慢速时阈值内就近", () => {

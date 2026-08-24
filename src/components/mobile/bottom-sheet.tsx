@@ -42,6 +42,9 @@ export function BottomSheet({ open, onClose, title, snapPoints = [0.35, 0.65, 1]
   const dragRef = useRef<{ startY: number; startPos: number; active: boolean } | null>(null);
   const samplesRef = useRef<{ t: number; y: number }[]>([]);
   const draggedRef = useRef(false);
+  // 渲染生命周期与 open 解耦：open→false 时先播退出动画（滑落到贴底）再卸载，
+  // 避免外部同步关闭导致面板瞬失 + posRef 残留使下次打开中屏 pop-in
+  const [render, setRender] = useState(open);
   const [maxHeight, setMaxHeight] = useState(() => (typeof window === "undefined" ? 0 : window.innerHeight));
 
   // 打开动画目标 = 最大非满档（默认 .65；单档如 [0.55] 即该值本身）
@@ -51,11 +54,15 @@ export function BottomSheet({ open, onClose, title, snapPoints = [0.35, 0.65, 1]
   initialFractionRef.current = initialFraction;
 
   const animateTo = useCallback(
-    (target: number) => {
+    (target: number, onSettled?: () => void) => {
       cancelAnimationFrame(rafRef.current);
       velRef.current = 0;
-      const loop = () => {
-        const [p, v] = springStep(posRef.current, velRef.current, target, SPRING.stiffness, SPRING.damping, 1 / 60);
+      // dt 取真实帧间隔（clamp ≤32ms 防后台切换跳变）：固定 1/60 在 90/120Hz 高刷屏上会把弹簧时长系统性缩短
+      let lastT = 0;
+      const loop = (now: number) => {
+        const dt = lastT ? Math.min((now - lastT) / 1000, 0.032) : 1 / 60;
+        lastT = now;
+        const [p, v] = springStep(posRef.current, velRef.current, target, SPRING.stiffness, SPRING.damping, dt);
         posRef.current = p;
         velRef.current = v;
         if (panelRef.current) panelRef.current.style.transform = `translate3d(0,${p}px,0)`; // 纯平移
@@ -63,23 +70,55 @@ export function BottomSheet({ open, onClose, title, snapPoints = [0.35, 0.65, 1]
           posRef.current = target;
           velRef.current = 0;
           if (panelRef.current) panelRef.current.style.transform = `translate3d(0,${target}px,0)`;
-          if (target === 0) onClose(); // 关闭动画到位后再卸载
+          onSettled?.();
           return;
         }
         rafRef.current = requestAnimationFrame(loop);
       };
       rafRef.current = requestAnimationFrame(loop);
     },
-    [onClose],
+    [],
   );
   const animateToRef = useRef(animateTo);
   animateToRef.current = animateTo;
 
   useEffect(() => {
-    if (!open) return;
-    setMaxHeight(window.innerHeight);
-    animateToRef.current(-window.innerHeight * initialFractionRef.current); // 定位 initial snap
+    if (open) {
+      setRender(true);
+      setMaxHeight(window.innerHeight);
+      animateToRef.current(-window.innerHeight * initialFractionRef.current); // 定位 initial snap
+      return () => cancelAnimationFrame(rafRef.current);
+    }
+    // 外部关闭：先播滑落动画，贴底后卸载并复位状态（内部拖拽关闭走 onClose，由父级置 open=false 走同一出口）
+    if (!render) return;
+    if (posRef.current === 0) {
+      setRender(false);
+      return;
+    }
+    animateToRef.current(0, () => {
+      posRef.current = 0;
+      velRef.current = 0;
+      setRender(false);
+    });
     return () => cancelAnimationFrame(rafRef.current);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
+  // open 期间跟踪视口变化（旋转/分屏）：更新 maxHeight 并按当前 fraction 重映射位置
+  useEffect(() => {
+    if (!open) return;
+    const onResize = () => {
+      const h = window.innerHeight;
+      setMaxHeight((prev) => {
+        if (prev === h || prev <= 0) return h;
+        const f = clamp(-posRef.current / prev, 0, 1);
+        posRef.current = -f * h;
+        if (panelRef.current) panelRef.current.style.transform = `translate3d(0,${posRef.current}px,0)`;
+        return h;
+      });
+    };
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
   }, [open]);
 
   useEffect(() => {
@@ -130,7 +169,7 @@ export function BottomSheet({ open, onClose, title, snapPoints = [0.35, 0.65, 1]
       // 指针已释放时忽略
     }
     if (!draggedRef.current) {
-      animateToRef.current(0); // 遮罩点按 → 关闭
+      animateToRef.current(0, onClose); // 遮罩点按 → 滑落贴底后回调父级关闭
       return;
     }
     const samples = samplesRef.current;
@@ -140,10 +179,11 @@ export function BottomSheet({ open, onClose, title, snapPoints = [0.35, 0.65, 1]
     if (first && last && last.t > first.t) velocity = ((last.y - first.y) / (last.t - first.t)) * 1000;
     const snapsH = [0, ...snapPoints.map((f) => f * maxHeight)]; // 高度空间：0 档 = 关闭位
     const idx = pickSnapIndex(-posRef.current, velocity, snapsH);
-    animateToRef.current(-snapsH[idx]);
+    // 选到 0 档（关闭位）时，动画到位后需通知父级卸载
+    animateToRef.current(-snapsH[idx], snapsH[idx] === 0 ? onClose : undefined);
   };
 
-  if (!open) return null;
+  if (!render) return null;
   const dragHandlers = {
     onPointerDown: beginDrag,
     onPointerMove: moveDrag,
