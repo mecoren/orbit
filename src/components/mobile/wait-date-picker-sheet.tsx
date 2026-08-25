@@ -10,13 +10,22 @@
  * 头部相对日期副标题（今天/明天/yyyy-MM-dd）、清除/确认双钮 r10；
  * datetime 模式在日格下方追加 HH:mm 时间行（原生 input[type=time] 样式化）。
  * zhCN locale、周一起始。容器复用 BottomSheet 单档 [.65]（表单抽屉同款档位）。
+ *
+ * 快捷日期 chips（今天/明天/下周；datetime 另含 一小时后/今天晚些时候）与桌面
+ * lib/quick-dates 同源口径，保证移动/桌面各入口快捷项一致；点选仅设置草稿，
+ * 仍走清除/确认双钮语义。
  */
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { DayPicker } from "react-day-picker";
 import { zhCN } from "date-fns/locale";
 
 import { BottomSheet } from "./bottom-sheet";
 import { MaterialIcon } from "./material-icon";
+import {
+  buildQuickDateOptions,
+  buildQuickDateTimeOptions,
+  type QuickDateOption,
+} from "@/lib/quick-dates";
 
 export interface WaitDatePickerSheetProps {
   open: boolean;
@@ -64,6 +73,13 @@ export function WaitDatePickerSheet({
   const [timeStr, setTimeStr] = useState("09:00");
   const yearScrollRef = useRef<HTMLDivElement>(null);
 
+  // 快捷日期选项：打开瞬间定格计算，避免抽屉停留期间「一小时后」漂移
+  const quickOptions = useMemo<QuickDateOption[]>(
+    () => (mode === "datetime" ? buildQuickDateTimeOptions() : buildQuickDateOptions()),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [open, mode],
+  );
+
   // 打开时按 initial 重置草稿/游标/时间，并回到日视图
   useEffect(() => {
     if (!open) return;
@@ -89,6 +105,16 @@ export function WaitDatePickerSheet({
 
   const shiftMonth = (delta: number) => {
     setCursor((c) => new Date(c.getFullYear(), c.getMonth() + delta, 1));
+  };
+
+  /** 快捷项点选：设置草稿（datetime 同步时间行）并定位日历月份，仍需确认 */
+  const applyQuick = (opt: QuickDateOption) => {
+    setDraft(new Date(opt.value.getFullYear(), opt.value.getMonth(), opt.value.getDate()));
+    setCursor(new Date(opt.value.getFullYear(), opt.value.getMonth(), 1));
+    if (mode === "datetime") {
+      const p = (n: number) => String(n).padStart(2, "0");
+      setTimeStr(`${p(opt.value.getHours())}:${p(opt.value.getMinutes())}`);
+    }
   };
 
   /** 确认：date 模式归零时分秒（与列表 today 过滤/逾期判断的零点口径一致）；未选日期恒 null */
@@ -158,9 +184,42 @@ export function WaitDatePickerSheet({
         </div>
 
         {view === "day" && (
-          /* 36×36 圆格日历：h-9 w-9 rounded-full；选中实底 accent 白字；今天 1.5px 描边。
-             默认文字色由容器继承（day_button 不设色），selected 类才能同权重覆盖 */
           <div className="text-[var(--m-text)]">
+            {/* 快捷日期 chips（与桌面 lib/quick-dates 同口径）：点选设置草稿，仍需确认 */}
+            <div className="flex flex-wrap gap-1.5 px-2 pb-1 pt-1">
+              {quickOptions.map((opt) => {
+                const active =
+                  draft != null &&
+                  draft.getFullYear() === opt.value.getFullYear() &&
+                  draft.getMonth() === opt.value.getMonth() &&
+                  draft.getDate() === opt.value.getDate();
+                return (
+                  <button
+                    key={opt.key}
+                    type="button"
+                    className="h-8 rounded-full border px-3 text-xs active:opacity-70"
+                    style={
+                      active
+                        ? {
+                            background: "color-mix(in srgb, #3B82F6 15%, transparent)",
+                            borderColor: "#3B82F6",
+                            color: "#3B82F6",
+                            fontWeight: 500,
+                          }
+                        : {
+                            borderColor: "rgba(121, 116, 126, .3)",
+                            color: "var(--m-text)",
+                          }
+                    }
+                    onClick={() => applyQuick(opt)}
+                  >
+                    {opt.label}
+                  </button>
+                );
+              })}
+            </div>
+            {/* 36×36 圆格日历：h-9 w-9 rounded-full；选中实底 accent 白字；今天 1.5px 描边。
+               默认文字色由容器继承（day_button 不设色），selected 类才能同权重覆盖 */}
             <DayPicker
             mode="single"
             locale={zhCN}

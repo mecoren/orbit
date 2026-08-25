@@ -64,6 +64,9 @@ function SectionHeader({ title, desc }: { title: string; desc: string }) {
   );
 }
 
+/** 统一档位按钮规格：显示模式/字号/字重/基底四组 pill 共用（同高 28px，选中 default/未选 outline） */
+const PILL_CLS = "h-7 px-3";
+
 function CardShell({
   icon: Icon,
   title,
@@ -342,7 +345,7 @@ export function ThemeSection() {
                 key={m}
                 variant={mode === m ? "default" : "outline"}
                 size="sm"
-                className="h-7"
+                className={PILL_CLS}
                 onClick={() => handleMode(m)}
               >
                 <Icon size={13} className="mr-1" />
@@ -364,7 +367,7 @@ export function ThemeSection() {
                   key={lv.label}
                   size="sm"
                   variant={sizeLevel === i ? "default" : "outline"}
-                  className="h-7 flex-1"
+                  className={cn(PILL_CLS, "flex-1 px-2")}
                   onClick={() => handleSizeLevel(i)}
                 >
                   {lv.label}
@@ -380,7 +383,7 @@ export function ThemeSection() {
                   key={lv.label}
                   size="sm"
                   variant={weightLevel === i ? "default" : "outline"}
-                  className="flex-1"
+                  className={cn(PILL_CLS, "flex-1 px-2")}
                   style={{ fontWeight: lv.weight }}
                   onClick={() => handleWeightLevel(i)}
                 >
@@ -426,7 +429,7 @@ export function ThemeSection() {
                     key={m}
                     size="sm"
                     variant={draftMode === m ? "default" : "outline"}
-                    className="flex-1"
+                    className={cn(PILL_CLS, "flex-1")}
                     onClick={() => setDraftMode(m)}
                   >
                     {m === "dark" ? "深色" : "浅色"}

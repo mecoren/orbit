@@ -30,7 +30,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 
-/** 默认色（HEX 大写），无 moduleKey 时回退到此值 */
+/** 默认色（HEX 大写），未提供初始颜色时回退到此值 */
 export const DEFAULT_ACCENT_COLOR = "#0EA5E9";
 
 /**

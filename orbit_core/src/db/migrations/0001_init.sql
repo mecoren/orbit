@@ -226,27 +226,6 @@ CREATE INDEX IF NOT EXISTS idx_todo_reminders_task_id ON todo_reminders(task_id)
 CREATE INDEX IF NOT EXISTS idx_todo_reminders_remind_at ON todo_reminders(remind_at);
 CREATE INDEX IF NOT EXISTS idx_todo_reminders_uuid ON todo_reminders(uuid);
 
--- 功能模块表
-CREATE TABLE IF NOT EXISTS cfg_feature_modules (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  module_key TEXT NOT NULL DEFAULT '',
-  module_name TEXT NOT NULL DEFAULT '',
-  module_version TEXT NOT NULL DEFAULT '',
-  description TEXT NOT NULL DEFAULT '',
-  icon TEXT NOT NULL DEFAULT '',
-  route_path TEXT NOT NULL DEFAULT '',
-  accent_color TEXT NOT NULL DEFAULT '',
-  icon_variant TEXT NOT NULL DEFAULT 'filled',
-  is_enabled INTEGER NOT NULL DEFAULT 1,
-  sort_order INTEGER NOT NULL DEFAULT 0,
-  page_type TEXT NOT NULL DEFAULT 'independent',
-  created_at INTEGER NOT NULL DEFAULT 0,
-  updated_at INTEGER NOT NULL DEFAULT 0,
-  deleted_at INTEGER,
-  version INTEGER NOT NULL DEFAULT 1
-);
-CREATE INDEX IF NOT EXISTS idx_cfg_feature_modules_module_key ON cfg_feature_modules(module_key);
-
 CREATE TABLE IF NOT EXISTS cfg_option_categories (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   category_key TEXT NOT NULL DEFAULT '',
@@ -304,11 +283,6 @@ CREATE TABLE IF NOT EXISTS sys_attachments (
 -- ============================================================================
 -- 种子数据
 -- ============================================================================
-
--- 功能模块注册（仅 todo；应用壳侧栏/强调色数据源）
-INSERT OR IGNORE INTO cfg_feature_modules (module_key, module_name, module_version, description, icon, route_path, accent_color, icon_variant, is_enabled, sort_order, page_type, created_at, updated_at, version)
-VALUES
-  ('todo', '待办', '1.0.0', '待办事项管理', 'checklist', '/todo', '#3B82F6', 'filled', 1, 1, 'extension', 0, 0, 1);
 
 -- 2.1 待办默认项目"收件箱"（id=1，原 0004_todo_vikunja_refactor 迁移种子）
 INSERT OR IGNORE INTO todo_projects (id, uuid, title, description, hex_color, sort_order, is_deleted, created_at, updated_at, version)
@@ -496,8 +470,3 @@ WHERE uuid IS NOT NULL AND uuid != '' AND rowid NOT IN (
 );
 DROP INDEX IF EXISTS idx_todo_reminders_uuid;
 CREATE UNIQUE INDEX IF NOT EXISTS ux_todo_reminders_uuid ON todo_reminders(uuid);
-
--- 仅对 deleted_at IS NULL 的活动行强制 module_key 唯一
-CREATE UNIQUE INDEX IF NOT EXISTS idx_cfg_feature_modules_key_active
-  ON cfg_feature_modules(module_key)
-  WHERE deleted_at IS NULL;

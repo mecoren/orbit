@@ -292,7 +292,37 @@ impl SyncEngine {
     /// **Fix-08**：Data Key 同步（`sync_data_key_from_cloud`）移入互斥锁内执行。
     /// 历史问题：该步骤曾在 api 层于锁外执行，并发触发两个同步入口时可同时
     /// 进行 Data Key 导入/解密探针，与另一路 pull 交错可能误报 KeyMismatch。
+    /// 失败时补发 Error 进度事件。
+    ///
+    /// Done 事件仅在成功路径末尾发送；失败若不发事件，后台调度器只 eprintln，
+    /// 前端悬浮指示器会永远停在最后一个 pushing/pulling 帧。
+    fn emit_error_on_failure(&self, origin: SyncOrigin, result: &Result<SyncResult, CloudSyncError>) {
+        if let Err(e) = result {
+            self.progress_sender.send(SyncProgress::Error {
+                origin,
+                message: e.to_string(),
+                module: None,
+            });
+        }
+    }
+
     pub async fn sync_now(
+        &self,
+        adapter: &dyn SyncAdapter,
+        raw_adapter: &dyn SyncAdapter,
+        base_path: &str,
+        origin: SyncOrigin,
+        device_id: &str,
+        attachments_dir: &str,
+    ) -> Result<SyncResult, CloudSyncError> {
+        let r = self
+            .sync_now_inner(adapter, raw_adapter, base_path, origin, device_id, attachments_dir)
+            .await;
+        self.emit_error_on_failure(origin, &r);
+        r
+    }
+
+    async fn sync_now_inner(
         &self,
         adapter: &dyn SyncAdapter,
         raw_adapter: &dyn SyncAdapter,
@@ -402,6 +432,22 @@ impl SyncEngine {
         device_id: &str,
         attachments_dir: &str,
     ) -> Result<SyncResult, CloudSyncError> {
+        let r = self
+            .push_only_inner(adapter, raw_adapter, base_path, origin, device_id, attachments_dir)
+            .await;
+        self.emit_error_on_failure(origin, &r);
+        r
+    }
+
+    async fn push_only_inner(
+        &self,
+        adapter: &dyn SyncAdapter,
+        raw_adapter: &dyn SyncAdapter,
+        base_path: &str,
+        origin: SyncOrigin,
+        device_id: &str,
+        attachments_dir: &str,
+    ) -> Result<SyncResult, CloudSyncError> {
         let _guard = match self.acquire_lock().await? {
             Some(g) => g,
             None => return Ok(SyncResult::skipped()),
@@ -468,6 +514,22 @@ impl SyncEngine {
     ///
     /// **Fix-08**：Data Key 同步移入互斥锁内执行（见 `sync_now` 文档）。
     pub async fn pull_then_push(
+        &self,
+        adapter: &dyn SyncAdapter,
+        raw_adapter: &dyn SyncAdapter,
+        base_path: &str,
+        origin: SyncOrigin,
+        device_id: &str,
+        attachments_dir: &str,
+    ) -> Result<SyncResult, CloudSyncError> {
+        let r = self
+            .pull_then_push_inner(adapter, raw_adapter, base_path, origin, device_id, attachments_dir)
+            .await;
+        self.emit_error_on_failure(origin, &r);
+        r
+    }
+
+    async fn pull_then_push_inner(
         &self,
         adapter: &dyn SyncAdapter,
         raw_adapter: &dyn SyncAdapter,

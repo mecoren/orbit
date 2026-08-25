@@ -5,7 +5,7 @@
  * Enter 提交并保持焦点连续录入；Esc 重置。
  * 提醒时间为独立实体：任务创建成功后追加 todo_reminders_create。
  */
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { format } from "date-fns";
 import { zhCN } from "date-fns/locale";
 import { Calendar, CalendarPlus, Clock, Flag, Folder, Plus } from "lucide-react";
@@ -16,6 +16,7 @@ import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { WaitCalendar } from "@/components/ui/wait-calendar";
 import { DateTimePicker } from "@/components/business/date-picker";
+import { QuickDateMenu } from "@/components/business/quick-date-options";
 import { todoReminderCreate, todoTaskCreate, type TodoProject } from "@/lib/tauri";
 import { PRIORITY_COLOR, TODO_ACCENT } from "../shared/constants";
 
@@ -32,6 +33,12 @@ export function QuickAddBar({ projects, defaultProjectId }: QuickAddBarProps) {
   const [title, setTitle] = useState("");
   const [priority, setPriority] = useState(0);
   const [dueDate, setDueDate] = useState<Date | null>(null);
+  /** 截止日期弹层：快捷菜单 ⇄ 完整日历视图（关闭时复位，与表单 DatePicker 同口径） */
+  const [dueOpen, setDueOpen] = useState(false);
+  const [dueCalendar, setDueCalendar] = useState(false);
+  useEffect(() => {
+    if (!dueOpen) setDueCalendar(false);
+  }, [dueOpen]);
   /** 提醒时间草稿（DateTimePicker 值格式 YYYY-MM-DDTHH:MM；空 = 不提醒） */
   const [remindDraft, setRemindDraft] = useState("");
   const [projectId, setProjectId] = useState<number | null | "default">("default");
@@ -102,8 +109,8 @@ export function QuickAddBar({ projects, defaultProjectId }: QuickAddBarProps) {
         {/* 有输入后才浮现的快捷区（shrink-0 防止被输入框挤压变形） */}
         {hasInput && (
           <div className="flex shrink-0 items-center gap-0.5">
-            {/* 截止日期 */}
-            <Popover>
+            {/* 截止日期：快捷选项（今天/明天/下周）⇄ 完整日历，与表单 DatePicker 同构 */}
+            <Popover open={dueOpen} onOpenChange={setDueOpen}>
               <PopoverTrigger asChild>
                 <Button
                   variant="ghost"
@@ -117,23 +124,31 @@ export function QuickAddBar({ projects, defaultProjectId }: QuickAddBarProps) {
                 </Button>
               </PopoverTrigger>
               {/* 宽度需设上限：DayPicker 表格 w-full+aspect-square 在无界 w-auto 下无法收敛 */}
-              <PopoverContent align="end" className="w-auto min-w-[280px] max-w-[320px] p-3">
-                <p className="mb-2 text-sm font-medium">截止日期</p>
-                <WaitCalendar
-                  mode="single"
-                  selected={dueDate ?? undefined}
-                  onSelect={(d) => setDueDate(d ?? null)}
-                />
-                <div className="mt-2 flex justify-end gap-2 border-t pt-2">
-                  {dueDate && (
-                    <Button variant="link" size="sm" onClick={() => setDueDate(null)}>
-                      清除
-                    </Button>
-                  )}
-                  <Button size="sm" variant="outline" onClick={() => setDueDate(new Date())}>
-                    今天
-                  </Button>
-                </div>
+              <PopoverContent align="end" className="w-auto min-w-[280px] max-w-[320px] p-0">
+                {dueCalendar ? (
+                  <div className="p-3">
+                    <WaitCalendar
+                      mode="single"
+                      selected={dueDate ?? undefined}
+                      onSelect={(d) => setDueDate(d ?? null)}
+                    />
+                    <div className="mt-2 flex justify-end gap-2 border-t pt-2">
+                      {dueDate && (
+                        <Button variant="link" size="sm" onClick={() => setDueDate(null)}>
+                          清除
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <QuickDateMenu
+                    kind="date"
+                    value={dueDate ? format(dueDate, "yyyy-MM-dd") : ""}
+                    onSelect={(d) => setDueDate(d)}
+                    customLabel="选择日期"
+                    onCustom={() => setDueCalendar(true)}
+                  />
+                )}
               </PopoverContent>
             </Popover>
 

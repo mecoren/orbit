@@ -34,6 +34,16 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -134,6 +144,8 @@ function ConnectionCard() {
   const [timeoutSecs, setTimeoutSecs] = useState(30);
   const [busy, setBusy] = useState(false);
   const [testing, setTesting] = useState(false);
+  // 断开前确认（断开只清本机配置，不动本地数据与云端文件）
+  const [confirmDisconnect, setConfirmDisconnect] = useState(false);
 
   useEffect(() => {
     syncConfigGet()
@@ -204,6 +216,7 @@ function ConnectionCard() {
       await syncDisconnect();
       toast.success("已断开云同步（本地数据与云端文件均未删除）");
       setConfig(null);
+      setConfirmDisconnect(false);
     } catch (err) {
       toast.error(errMsg(err));
     } finally {
@@ -356,7 +369,12 @@ function ConnectionCard() {
 
       <div className="flex justify-end gap-2 border-t pt-3">
         {config && (
-          <Button variant="ghost" className="text-destructive" disabled={busy} onClick={() => void handleDisconnect()}>
+          <Button
+            variant="ghost"
+            className="text-destructive"
+            disabled={busy}
+            onClick={() => setConfirmDisconnect(true)}
+          >
             断开
           </Button>
         )}
@@ -369,6 +387,29 @@ function ConnectionCard() {
           保存
         </Button>
       </div>
+
+      {/* 断开确认：断开仅清除本机连接配置，不删本地数据与云端文件 */}
+      <AlertDialog open={confirmDisconnect} onOpenChange={setConfirmDisconnect}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>断开云同步？</AlertDialogTitle>
+            <AlertDialogDescription>
+              将清除本机保存的连接配置与凭据；本地数据与云端文件均不会删除，之后可随时重新配置。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>取消</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-white hover:bg-destructive/90"
+              disabled={busy}
+              onClick={() => void handleDisconnect()}
+            >
+              {busy ? <Loader2 className="mr-1 size-3 animate-spin" /> : null}
+              断开
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
@@ -518,6 +559,7 @@ function SyncPasswordCard() {
           </div>
           <div className="flex justify-end">
             <Button size="sm" disabled={busy || !pw} onClick={() => void handleSetup()}>
+              {busy ? <Loader2 className="mr-1 size-3 animate-spin" /> : null}
               设置并解锁
             </Button>
           </div>
@@ -561,7 +603,7 @@ function SyncPasswordCard() {
                 }}
               />
               <Button size="sm" variant="outline" disabled={busy || !unlockPw} onClick={() => void handleUnlock()}>
-                <LockOpen className="mr-1 size-3" />
+                {busy ? <Loader2 className="mr-1 size-3 animate-spin" /> : <LockOpen className="mr-1 size-3" />}
                 解锁
               </Button>
             </div>
@@ -632,6 +674,7 @@ function SyncPasswordCard() {
               取消
             </Button>
             <Button size="sm" disabled={busy || !oldPw || newPw.length < 6} onClick={() => void handleChange()}>
+              {busy ? <Loader2 className="mr-1 size-3 animate-spin" /> : null}
               确认修改
             </Button>
           </div>

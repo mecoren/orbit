@@ -1,6 +1,6 @@
 //! 同步/备份/导入白名单注册表 —— 唯一权威来源（03 文档 §六）
 //!
-//! MVP 仅保留 todo 单模块：8 张 todo 业务表 + cfg_feature_modules。
+//! MVP 仅保留 todo 单模块：8 张 todo 业务表。
 //! 改动此文件时必须同步核对 `cloud_sync::modules` 的 SYNC_MODULES 定义与测试断言。
 //! （本文件替代 wait-home 中散落在 business_api / db_loader / import_api 的各自为政的常量。）
 
@@ -14,7 +14,6 @@ pub const SYNCABLE_TABLES: &[&str] = &[
     "todo_comments",
     "todo_task_relations",
     "todo_reminders",
-    "cfg_feature_modules",
 ];
 
 /// 全量备份包（.orsync）遍历导出的业务表白名单

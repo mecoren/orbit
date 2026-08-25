@@ -154,15 +154,6 @@ pub fn run() {
             business_cmd::todo_reminders_get,
             business_cmd::todo_reminders_create,
             business_cmd::todo_reminders_delete,
-            // cfg_feature_modules（壳导航/强调色数据源）
-            business_cmd::feature_module_list,
-            business_cmd::feature_module_list_active,
-            business_cmd::feature_module_list_enabled,
-            business_cmd::feature_module_get,
-            business_cmd::feature_module_get_by_key,
-            business_cmd::feature_module_update_sort_order,
-            business_cmd::feature_module_update_enabled,
-            business_cmd::feature_module_delete,
             // 计数（列表页角标）
             business_cmd::business_count,
             // todo_cmd 复杂查询（7 组）

@@ -3,6 +3,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { WaitCalendar } from "@/components/ui/wait-calendar";
+import { QuickDateMenu } from "@/components/business/quick-date-options";
 import { CalendarIcon, ChevronLeft, ChevronRight, X } from "lucide-react";
 import { format, parse, isValid } from "date-fns";
 import { cn } from "@/lib/utils";
@@ -12,6 +13,8 @@ interface DatePickerProps {
   onChange: (v: string) => void;
   placeholder?: string;
   disabled?: boolean;
+  /** 弹层首选快捷选项（今天/明天/下周）；false 直接展示日历（如年月精度复合选择器） */
+  quick?: boolean;
 }
 
 export function DatePicker({
@@ -19,8 +22,14 @@ export function DatePicker({
   onChange,
   placeholder = "选择日期",
   disabled,
+  quick = true,
 }: DatePickerProps) {
   const [open, setOpen] = useState(false);
+  // 快捷菜单 ⇄ 完整日历视图切换；关闭弹层时复位为快捷视图
+  const [showCalendar, setShowCalendar] = useState(false);
+  useEffect(() => {
+    if (!open) setShowCalendar(false);
+  }, [open]);
   const selectedDate = useMemo(() => {
     if (!value) return undefined;
     const d = parse(value, "yyyy-MM-dd", new Date());
@@ -74,7 +83,20 @@ export function DatePicker({
         className="w-auto min-w-[var(--radix-popover-trigger-width)] max-w-[320px] p-0"
         align="start"
       >
-        <WaitCalendar mode="single" selected={selectedDate} onSelect={handleSelect} />
+        {quick && !showCalendar ? (
+          <QuickDateMenu
+            kind="date"
+            value={value}
+            onSelect={(d) => {
+              onChange(format(d, "yyyy-MM-dd"));
+              setOpen(false);
+            }}
+            customLabel="选择日期"
+            onCustom={() => setShowCalendar(true)}
+          />
+        ) : (
+          <WaitCalendar mode="single" selected={selectedDate} onSelect={handleSelect} />
+        )}
       </PopoverContent>
     </Popover>
   );
@@ -85,6 +107,8 @@ interface DateTimePickerProps {
   onChange: (v: string) => void;
   placeholder?: string;
   disabled?: boolean;
+  /** 弹层首选快捷选项（一小时后/今天晚些时候/明天/下周）；false 直接展示日历+时间 */
+  quick?: boolean;
 }
 
 export function DateTimePicker({
@@ -92,8 +116,14 @@ export function DateTimePicker({
   onChange,
   placeholder = "选择日期时间",
   disabled,
+  quick = true,
 }: DateTimePickerProps) {
   const [open, setOpen] = useState(false);
+  // 快捷菜单 ⇄ 完整日历+时间视图切换；关闭弹层时复位为快捷视图
+  const [showCalendar, setShowCalendar] = useState(false);
+  useEffect(() => {
+    if (!open) setShowCalendar(false);
+  }, [open]);
 
   const { datePart, hourPart, minutePart } = useMemo(() => {
     if (!value) return { datePart: "", hourPart: "0", minutePart: "0" };
@@ -166,33 +196,48 @@ export function DateTimePicker({
         className="w-auto min-w-[var(--radix-popover-trigger-width)] max-w-[320px] p-0"
         align="start"
       >
-        <WaitCalendar mode="single" selected={selectedDate} onSelect={handleSelect} />
-        <div className="flex items-center gap-2 border-t p-3">
-          <span className="text-xs text-muted-foreground">时间</span>
-          <Input
-            type="number"
-            min={0}
-            max={23}
-            value={hourPart}
-            onChange={(e) => {
-              const v = Math.min(23, Math.max(0, Number(e.target.value) || 0));
-              updateValue(datePart, String(v), minutePart);
+        {quick && !showCalendar ? (
+          <QuickDateMenu
+            kind="datetime"
+            value={value}
+            onSelect={(d) => {
+              onChange(format(d, "yyyy-MM-dd'T'HH:mm"));
+              setOpen(false);
             }}
-            className="h-8 w-16"
+            customLabel="选择日期和时间"
+            onCustom={() => setShowCalendar(true)}
           />
-          <span>:</span>
-          <Input
-            type="number"
-            min={0}
-            max={59}
-            value={minutePart}
-            onChange={(e) => {
-              const v = Math.min(59, Math.max(0, Number(e.target.value) || 0));
-              updateValue(datePart, hourPart, String(v));
-            }}
-            className="h-8 w-16"
-          />
-        </div>
+        ) : (
+          <>
+            <WaitCalendar mode="single" selected={selectedDate} onSelect={handleSelect} />
+            <div className="flex items-center gap-2 border-t p-3">
+              <span className="text-xs text-muted-foreground">时间</span>
+              <Input
+                type="number"
+                min={0}
+                max={23}
+                value={hourPart}
+                onChange={(e) => {
+                  const v = Math.min(23, Math.max(0, Number(e.target.value) || 0));
+                  updateValue(datePart, String(v), minutePart);
+                }}
+                className="h-8 w-16"
+              />
+              <span>:</span>
+              <Input
+                type="number"
+                min={0}
+                max={59}
+                value={minutePart}
+                onChange={(e) => {
+                  const v = Math.min(59, Math.max(0, Number(e.target.value) || 0));
+                  updateValue(datePart, hourPart, String(v));
+                }}
+                className="h-8 w-16"
+              />
+            </div>
+          </>
+        )}
       </PopoverContent>
     </Popover>
   );
@@ -540,6 +585,7 @@ export function DateMonthPicker({
           onChange={onChange}
           placeholder={placeholder}
           disabled={disabled}
+          quick={false}
         />
       )}
     </div>

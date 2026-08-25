@@ -193,22 +193,6 @@ pub async fn delete_todo_reminder(pool: &SqlitePool, id: i64) -> CoreResult<()> 
     generic_repo::soft_delete_by_id(pool, "todo_reminders", id, &t.uuid).await
 }
 
-// ---------- cfg_feature_modules（壳导航/强调色数据源） ----------
-
-// ---------- cfg_feature_modules ----------
-pub async fn list_feature_modules(
-    pool: &SqlitePool,
-    filter: &ListFilter,
-) -> CoreResult<Vec<FeatureModule>> {
-    generic_repo::list(pool, "cfg_feature_modules", filter).await
-}
-pub async fn get_feature_module(pool: &SqlitePool, id: i64) -> CoreResult<FeatureModule> {
-    generic_repo::get_by_id(pool, "cfg_feature_modules", id).await
-}
-pub async fn delete_feature_module(pool: &SqlitePool, id: i64) -> CoreResult<()> {
-    generic_repo::soft_delete_by_id(pool, "cfg_feature_modules", id, "").await
-}
-
 // =============================================================================
 // Phase 7C: A 组 21 张表 create/update（泛型 JSON + 事件 emit）
 // =============================================================================
@@ -268,98 +252,6 @@ macro_rules! impl_crud_json {
 impl_crud_json!(create_todo_project_by_json, update_todo_project_by_json, "todo_projects", TodoProject);
 impl_crud_json!(create_todo_task_by_json, update_todo_task_by_json, "todo_tasks", TodoTask);
 
-pub async fn list_enabled_feature_modules(
-    pool: &SqlitePool,
-) -> CoreResult<Vec<FeatureModule>> {
-    let items = sqlx::query_as::<_, FeatureModule>(
-        "SELECT * FROM cfg_feature_modules WHERE is_enabled = 1 AND deleted_at IS NULL ORDER BY sort_order, id",
-    )
-    .fetch_all(pool)
-    .await?;
-    Ok(items)
-}
-
-/// 查询全部未删除功能模块（含禁用，按 sort_order 排序）— 用于菜单排序页
-pub async fn list_feature_modules_active(
-    pool: &SqlitePool,
-) -> CoreResult<Vec<FeatureModule>> {
-    let items = sqlx::query_as::<_, FeatureModule>(
-        "SELECT * FROM cfg_feature_modules WHERE deleted_at IS NULL ORDER BY sort_order, id",
-    )
-    .fetch_all(pool)
-    .await?;
-    Ok(items)
-}
-
-/// 按 module_key 查询单个功能模块
-pub async fn get_feature_module_by_key(
-    pool: &SqlitePool,
-    key: &str,
-) -> CoreResult<Option<FeatureModule>> {
-    let item = sqlx::query_as::<_, FeatureModule>(
-        "SELECT * FROM cfg_feature_modules WHERE module_key = ? AND deleted_at IS NULL LIMIT 1",
-    )
-    .bind(key)
-    .fetch_optional(pool)
-    .await?;
-    Ok(item)
-}
-
-/// 更新功能模块排序序号
-pub async fn update_feature_module_sort_order(
-    pool: &SqlitePool,
-    id: i64,
-    sort_order: i32,
-) -> CoreResult<()> {
-    let now = chrono::Utc::now().timestamp_millis();
-    sqlx::query(
-        "UPDATE cfg_feature_modules SET sort_order = ?, updated_at = ?, version = version + 1 WHERE id = ?",
-    )
-    .bind(sort_order)
-    .bind(now)
-    .bind(id)
-    .execute(pool)
-    .await?;
-
-    EVENT_BUS.emit(DbEvent {
-        table: "cfg_feature_modules".into(),
-        op: DbOp::Update,
-        record_id: id,
-        record_uuid: String::new(),
-        payload: None,
-        device_id: String::new(),
-        timestamp: now,
-    });
-    Ok(())
-}
-
-/// 更新功能模块启用状态
-pub async fn update_feature_module_enabled(
-    pool: &SqlitePool,
-    id: i64,
-    is_enabled: i32,
-) -> CoreResult<()> {
-    let now = chrono::Utc::now().timestamp_millis();
-    sqlx::query(
-        "UPDATE cfg_feature_modules SET is_enabled = ?, updated_at = ?, version = version + 1 WHERE id = ?",
-    )
-    .bind(is_enabled)
-    .bind(now)
-    .bind(id)
-    .execute(pool)
-    .await?;
-
-    EVENT_BUS.emit(DbEvent {
-        table: "cfg_feature_modules".into(),
-        op: DbOp::Update,
-        record_id: id,
-        record_uuid: String::new(),
-        payload: None,
-        device_id: String::new(),
-        timestamp: now,
-    });
-    Ok(())
-}
 /// 宏：为 A 组表生成 get_by_uuid 函数
 macro_rules! impl_get_by_uuid {
     ($fn_name:ident, $table:expr, $type:ty) => {

@@ -48,7 +48,6 @@ import { ColorPickerDialog } from "@/components/ui/color-picker-dialog";
 import { LucideIconPickerDialog } from "@/components/ui/lucide-icon-picker-dialog";
 import { getIcon } from "@/lib/icon-map";
 import { DatePicker, DateTimePicker, DateMonthPicker } from "@/components/business/date-picker";
-import { useModuleAccentColor } from "@/hooks/use-module-accent-color";
 import {
   collectFormValues,
   extractInitialValues,
@@ -89,18 +88,9 @@ interface EntityFormSheetProps {
     node: ReactNode | ((value: unknown) => ReactNode);
   };
   /**
-   * 分区标题强调色。传入时分区标题文字使用此色（与模块强调色对齐），
-   * 不传则回退到默认前景色。
-   *
-   * 优先级：accent > moduleKey 拉取的色 > 默认色
-   * 传 accent 时忽略 moduleKey（向后兼容旧调用方）。
+   * 分区标题强调色。传入时分区标题文字使用此色，不传则回退到默认前景色。
    */
   accent?: string;
-  /**
-   * 关联的功能模块 module_key。传入时组件内部从功能模块缓存读取 accent_color，
-   * 与导航配置中"修改模块颜色"实时联动；不传则不联动。
-   */
-  moduleKey?: string;
 }
 
 export function EntityFormSheet({
@@ -117,16 +107,10 @@ export function EntityFormSheet({
   insertAfter,
   fieldAction,
   accent,
-  moduleKey,
 }: EntityFormSheetProps) {
   const [values, setValues] = useState<FormValues>({});
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  // 从功能模块缓存读取该模块当前的强调色（与导航配置联动）
-  // 显式传入的 accent 优先（向后兼容）；否则使用 moduleKey 拉取的色；都没有则回退默认前景色
-  const moduleAccent = useModuleAccentColor(moduleKey);
-  const effectiveAccent = accent ?? moduleAccent;
 
   // 打开时或 initialRecord 变化时重置表单
   useEffect(() => {
@@ -213,13 +197,13 @@ export function EntityFormSheet({
                       <span
                         className="h-4 w-[3px] shrink-0 rounded-sm"
                         style={{
-                          backgroundColor: effectiveAccent ?? "currentColor",
+                          backgroundColor: accent ?? "currentColor",
                         }}
                         aria-hidden
                       />
                       <span
                         className="text-sm font-semibold"
-                        style={effectiveAccent ? { color: effectiveAccent } : undefined}
+                        style={accent ? { color: accent } : undefined}
                       >
                         {field.section}
                       </span>
@@ -227,9 +211,9 @@ export function EntityFormSheet({
                       <span
                         className="h-px flex-1"
                         style={
-                          effectiveAccent
+                          accent
                             ? {
-                                backgroundImage: `linear-gradient(to right, ${effectiveAccent}40, transparent)`,
+                                backgroundImage: `linear-gradient(to right, ${accent}40, transparent)`,
                               }
                             : undefined
                         }

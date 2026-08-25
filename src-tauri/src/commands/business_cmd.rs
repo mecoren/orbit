@@ -1,4 +1,4 @@
-//! business_cmd - Orbit MVP 命令面（todo 8 表 + cfg_feature_modules + 计数）
+//! business_cmd - Orbit MVP 命令面（todo 8 表 + 计数）
 //!
 //! 平移自 wait-home（02 文档 §四 A 类）；表集合与 db::sync_registry 对齐。
 
@@ -172,32 +172,8 @@ pub async fn todo_reminders_create(state: State<'_, AppState>, input: TodoRemind
     business_api::create_todo_reminder(&state.pool, &input).await.map_err(|e| e.to_string())
 }
 
-
-/// 查询用户全部功能模块（含禁用，按 sort_order 排序）— Wave 1 功能模块管理
-#[tauri::command]
-pub async fn feature_module_list_active(
-    state: State<'_, AppState>,
-) -> Result<Vec<FeatureModule>, String> {
-    business_api::list_feature_modules_active(&state.pool)
-        .await
-        .map_err(|e| e.to_string())
-}
-
-// ---------- cfg_feature_modules ----------
-#[tauri::command]
-pub async fn feature_module_list(state: State<'_, AppState>, filter: ListFilter) -> Result<Vec<FeatureModule>, String> {
-    business_api::list_feature_modules(&state.pool, &filter).await.map_err(|e| e.to_string())
-}
-#[tauri::command]
-pub async fn feature_module_get(state: State<'_, AppState>, id: i64) -> Result<FeatureModule, String> {
-    business_api::get_feature_module(&state.pool, id).await.map_err(|e| e.to_string())
-}
-#[tauri::command]
-pub async fn feature_module_delete(state: State<'_, AppState>, id: i64) -> Result<(), String> {
-    business_api::delete_feature_module(&state.pool, id).await.map_err(|e| e.to_string())
-}
-
 // 注：cfg_theme_configs / sec_encryption_keys 的 list/get/delete 命令已删除（前端未使用）。
+// 注：cfg_feature_modules 全链路（表/命令/同步）已删除（壳导航/强调色体系退役，前端无消费方）。
 
 /// 用于首页仪表盘统计各模块记录数。
 #[tauri::command]
@@ -241,53 +217,4 @@ macro_rules! impl_cmd_get_by_uuid {
 
 impl_cmd_get_by_uuid!(todo_projects_get_by_uuid, business_api::get_todo_project_by_uuid, TodoProject);
 impl_cmd_get_by_uuid!(todo_tasks_get_by_uuid, business_api::get_todo_task_by_uuid, TodoTask);
-
-// =============================================================================
-// Phase 9C: 功能模块精细管理（4 个命令，对应移动端 feature_module_api）
-// =============================================================================
-
-/// 查询用户已启用的功能模块列表（按 sort_order 排序）
-#[tauri::command]
-pub async fn feature_module_list_enabled(
-    state: State<'_, AppState>,
-) -> Result<Vec<FeatureModule>, String> {
-    business_api::list_enabled_feature_modules(&state.pool)
-        .await
-        .map_err(|e| e.to_string())
-}
-
-/// 按 module_key 查询单个功能模块
-#[tauri::command]
-pub async fn feature_module_get_by_key(
-    state: State<'_, AppState>,
-    module_key: String,
-) -> Result<Option<FeatureModule>, String> {
-    business_api::get_feature_module_by_key(&state.pool, &module_key)
-        .await
-        .map_err(|e| e.to_string())
-}
-
-/// 更新功能模块排序顺序（drag-and-drop 排序后批量更新 sort_order）
-#[tauri::command]
-pub async fn feature_module_update_sort_order(
-    state: State<'_, AppState>,
-    id: i64,
-    sort_order: i32,
-) -> Result<(), String> {
-    business_api::update_feature_module_sort_order(&state.pool, id, sort_order)
-        .await
-        .map_err(|e| e.to_string())
-}
-
-/// 启用/禁用功能模块（is_enabled: 0=禁用, 1=启用）
-#[tauri::command]
-pub async fn feature_module_update_enabled(
-    state: State<'_, AppState>,
-    id: i64,
-    is_enabled: i32,
-) -> Result<(), String> {
-    business_api::update_feature_module_enabled(&state.pool, id, is_enabled)
-        .await
-        .map_err(|e| e.to_string())
-}
 

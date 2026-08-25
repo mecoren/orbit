@@ -18,31 +18,7 @@ export interface ListFilter {
   page_size: number;
 }
 
-// ---------- 功能模块（壳导航/强调色数据源）----------
-
-export interface FeatureModule {
-  id: number;
-  module_key: string;
-  module_name: string;
-  module_version: string;
-  description: string;
-  icon: string;
-  route_path: string;
-  accent_color: string;
-  icon_variant: string;
-  is_enabled: number;
-  sort_order: number;
-  page_type: string;
-  created_at: number;
-  updated_at: number;
-  deleted_at: number | null;
-  version: number;
-}
-
-/** 已启用功能模块（use-nav-data 数据源，按 sort_order 升序） */
-export async function featureModuleListEnabled(): Promise<FeatureModule[]> {
-  return invoke<FeatureModule[]>("feature_module_list_enabled");
-}
+// ---------- 通用业务 ----------
 
 /** 通用业务表记录数（列表页计数角标） */
 export async function businessCount(table: string): Promise<number> {

@@ -235,7 +235,7 @@ mod tests {
         for t in crate::db::sync_registry::SYNCABLE_TABLES {
             assert!(is_syncable(t), "注册表白名单内的表应可同步: {t}");
         }
-        // todo 8 张业务表 + cfg 模块表全部可同步
+        // todo 8 张业务表全部可同步
         assert!(is_syncable("todo_projects"));
         assert!(is_syncable("todo_tasks"));
         assert!(is_syncable("todo_subtasks"));
@@ -244,8 +244,8 @@ mod tests {
         assert!(is_syncable("todo_comments"));
         assert!(is_syncable("todo_task_relations"));
         assert!(is_syncable("todo_reminders"));
-        assert!(is_syncable("cfg_feature_modules"));
-        // 已裁剪模块的表不可同步
+        // 已裁剪模块的表不可同步（含已退役的壳导航表）
+        assert!(!is_syncable("cfg_feature_modules"));
         assert!(!is_syncable("rec_movies"));
         assert!(!is_syncable("usr_family_members"));
         assert!(!is_syncable("career_companies"));

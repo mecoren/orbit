@@ -1,7 +1,7 @@
 //! business — Orbit 业务表数据模型（MVP 所需段落）
 //!
 //! 平移自 wait-home wait_core models/business.rs（02 文档 §四 A 类），仅保留：
-//! FlexibleI64 / ListFilter / todo 8 表全部 struct / FeatureModule。
+//! FlexibleI64 / ListFilter / todo 8 表全部 struct。
 //! 字段与 0001_init.sql 一一对应；DateTime 统一 i64 毫秒时间戳；可空字段 Option<T>。
 
 use serde::{Deserialize, Serialize};
@@ -377,27 +377,6 @@ pub struct TodoReminder {
 pub struct TodoReminderCreateInput {
     pub task_id: i64,
     pub remind_at: i64,
-}
-
-// ---------- cfg_feature_modules ----------
-#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
-pub struct FeatureModule {
-    pub id: i64,
-    pub module_key: String,
-    pub module_name: String,
-    pub module_version: String,
-    pub description: String,
-    pub icon: String,
-    pub route_path: String,
-    pub accent_color: String,
-    pub icon_variant: String,
-    pub is_enabled: i32,
-    pub sort_order: i32,
-    pub page_type: String,
-    pub created_at: i64,
-    pub updated_at: i64,
-    pub deleted_at: Option<i64>,
-    pub version: i32,
 }
 
 // ---------- sys_attachments（PK: hash）----------

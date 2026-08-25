@@ -41,6 +41,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { DateTimePicker } from "@/components/business/date-picker";
+import { QuickDateMenu } from "@/components/business/quick-date-options";
 import { WaitCalendar } from "@/components/ui/wait-calendar";
 import { useTodoStore } from "@/features/todo/store";
 import { hideFromQueries, useUndoableDeleteAction } from "@/hooks/use-undoable-delete";
@@ -500,7 +501,7 @@ function RepeatEditor({
   );
 }
 
-/** 截止日期编辑器：DateTimePicker + 清除（04 §3.4 即改即存） */
+/** 截止日期编辑器：快捷选项 ⇄ 日历+时间，即改即存（04 §3.4；快捷项与表单/快捷新增同口径） */
 function DueDateEditor({
   value,
   onChange,
@@ -510,10 +511,13 @@ function DueDateEditor({
 }) {
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState("");
+  // 快捷菜单 ⇄ 完整日历+时间视图；关闭弹层时复位
+  const [showPicker, setShowPicker] = useState(false);
 
   useEffect(() => {
     if (open) {
       setDraft(value ? format(new Date(value), "yyyy-MM-dd'T'HH:mm") : "");
+      setShowPicker(false);
     }
   }, [open, value]);
 
@@ -534,15 +538,32 @@ function DueDateEditor({
         </button>
       </PopoverTrigger>
       <PopoverContent align="end" className="w-auto space-y-2 p-3">
-        <WaitCalendar
-          mode="single"
-          selected={draft ? new Date(draft.replace(" ", "T")) : undefined}
-          onSelect={(d) => {
-            const prevTime = draft.split("T")[1] ?? "09:00";
-            setDraft(d ? `${format(d, "yyyy-MM-dd")}T${prevTime}` : "");
-          }}
-        />
-        <DateTimePicker value={draft} onChange={setDraft} />
+        {showPicker ? (
+          <>
+            <WaitCalendar
+              mode="single"
+              selected={draft ? new Date(draft.replace(" ", "T")) : undefined}
+              onSelect={(d) => {
+                const prevTime = draft.split("T")[1] ?? "09:00";
+                setDraft(d ? `${format(d, "yyyy-MM-dd")}T${prevTime}` : "");
+              }}
+            />
+            <DateTimePicker value={draft} onChange={setDraft} />
+          </>
+        ) : (
+          <QuickDateMenu
+            kind="datetime"
+            value={draft}
+            onSelect={(d) => {
+              const ms = d.getTime();
+              setDraft(format(ms, "yyyy-MM-dd'T'HH:mm"));
+              onChange(ms);
+              setOpen(false);
+            }}
+            customLabel="选择日期和时间"
+            onCustom={() => setShowPicker(true)}
+          />
+        )}
         <div className="flex justify-end gap-2 border-t pt-2">
           {value != null && (
             <Button size="sm" variant="link" onClick={() => { onChange(null); setOpen(false); }}>
@@ -550,7 +571,7 @@ function DueDateEditor({
             </Button>
           )}
           <Button size="sm" variant="outline" onClick={() => setOpen(false)}>取消</Button>
-          <Button size="sm" onClick={commit}>确定</Button>
+          {showPicker && <Button size="sm" onClick={commit}>确定</Button>}
         </div>
       </PopoverContent>
     </Popover>

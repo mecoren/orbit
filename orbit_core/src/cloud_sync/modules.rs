@@ -5,8 +5,7 @@
 //!
 //! 与 `db::sync_registry` 的关系：
 //! - SYNCABLE_TABLES / FULL_BACKUP_TABLES / IMPORTABLE_TABLES 是表级白名单（唯一权威来源）
-//! - SYNC_MODULES 是增量同步的模块视图；todos 模块覆盖全部 9 张可同步表
-//! - `cfg_feature_modules` 排在末位：随模块整体指纹一并同步，保证新设备壳导航一致
+//! - SYNC_MODULES 是增量同步的模块视图；todos 模块覆盖全部 8 张可同步表
 
 /// 同步模块定义
 ///
@@ -50,7 +49,6 @@ pub const SYNC_MODULES: &[SyncModuleDef] = &[
             "todo_comments",
             "todo_task_relations",
             "todo_reminders",
-            "cfg_feature_modules",
         ],
         // R10.7 沿革：todo 模块不接入附件（01 文档 §3.3：attachments/ 仅预留）
         has_attachments: false,
