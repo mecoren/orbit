@@ -583,3 +583,50 @@ export const fullBackupImport = (
   });
 export const fullBackupListLocal = () => invoke<BackupEntryView[]>("full_backup_list_local");
 
+// ---------- 定时自动备份（backup_scheduler） ----------
+
+export type BackupScheduleType =
+  | "off"
+  | "hourly"
+  | "daily"
+  | "weekly"
+  | "monthly"
+  | "yearly";
+
+/** BackupPrefs（full_sync_backup_prefs，snake_case 直传；时间戳为 Unix 秒） */
+export interface BackupPrefs {
+  local_path: string | null;
+  keep_latest: boolean;
+  /** 云端备份开关：关闭时定时/同步前自动备份均不上传云端 */
+  cloud_backup_enabled: boolean;
+  /** 本地备份开关：关闭时不写入 backups 目录 */
+  local_backup_enabled: boolean;
+  schedule_type: BackupScheduleType;
+  /** "HH:mm"（UTC），用于 daily/weekly/monthly/yearly */
+  schedule_time: string;
+  /** 0-59，用于 hourly */
+  schedule_minute: number;
+  /** 0-6（0=周日），用于 weekly */
+  schedule_weekday: number;
+  /** 1-28，用于 monthly/yearly */
+  schedule_day_of_month: number;
+  /** 1-12，用于 yearly */
+  schedule_month: number;
+  last_backup_at: number;
+  next_backup_at: number;
+}
+
+/** 读取备份偏好（返回值含服务端回填的 next_backup_at） */
+export const backupPrefsGet = () => invoke<BackupPrefs>("backup_prefs_get");
+export const backupPrefsSave = (prefs: BackupPrefs) =>
+  invoke<BackupPrefs>("backup_prefs_save", { prefs });
+
+/** 自动备份完成事件载荷（auto-backup-finished） */
+export interface AutoBackupFinishedEvent {
+  ok: boolean;
+  local_path?: string | null;
+  cloud_uploaded?: boolean;
+  cloud_error?: string | null;
+  error?: string;
+}
+

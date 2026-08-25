@@ -24,8 +24,9 @@ pub struct BackupEntryView {
 
 /// 导出全量备份到本地 `{data_dir}/backups/{filename}`，可选上传云端副本
 ///
-/// cloud_backup_enabled 偏好由 core 内 backup_prefs 控制；upload_cloud=true
-/// 且存在激活云配置时才传 cloud_config。
+/// 手动导出走 [`full_sync_backup_api::export_full_sync_backup_manual`]，
+/// 不受定时自动备份的偏好开关（local/cloud_backup_enabled）约束；
+/// upload_cloud=true 且存在激活云配置时才传 cloud_config。
 #[tauri::command]
 pub async fn full_backup_export(
     app: AppHandle,
@@ -50,9 +51,15 @@ pub async fn full_backup_export(
         None
     };
 
-    full_sync_backup_api::export_full_sync_backup_with_cloud(&pool, &dir, &password, cloud_config)
-        .await
-        .map_err(|e| format!("[backup] 导出失败: {e}"))
+    full_sync_backup_api::export_full_sync_backup_manual(
+        &pool,
+        &dir,
+        &password,
+        cloud_config,
+        upload_cloud,
+    )
+    .await
+    .map_err(|e| format!("[backup] 导出失败: {e}"))
 }
 
 /// 从 .waitfullsync 文件全量覆盖恢复

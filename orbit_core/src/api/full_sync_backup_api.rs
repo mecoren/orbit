@@ -80,16 +80,86 @@ pub struct SchemaVersion {
 
 /// 导出全量同步备份到本地文件（不触发云端上传）
 ///
+/// 两阶段开关取自备份偏好（`local_backup_enabled` / `cloud_backup_enabled`，
+/// 均关时返回错误）。供同步前自动备份等"偏好驱动"场景使用；
 /// 如需同时上传到云端，请使用 [`export_full_sync_backup_with_cloud`]。
 pub async fn export_full_sync_backup(
     pool: &SqlitePool,
     app_data_dir: &Path,
     sync_password: &str,
 ) -> FullSyncBackupResult<ExportResult> {
-    export_full_sync_backup_with_cloud(pool, app_data_dir, sync_password, None).await
+    let prefs = load_prefs(app_data_dir)?;
+    ensure_any_switch_enabled(&prefs)?;
+    export_full_sync_backup_inner(
+        pool,
+        app_data_dir,
+        sync_password,
+        None,
+        prefs.local_backup_enabled,
+        prefs.cloud_backup_enabled,
+    )
+    .await
 }
 
 /// 导出全量同步备份到本地文件，并可选上传到云端
+///
+/// 与 [`export_full_sync_backup`] 相同的偏好开关门控；差异仅在可携带云端配置
+/// （仍受 `cloud_backup_enabled` 门控）。供定时自动备份守护使用。
+pub async fn export_full_sync_backup_with_cloud(
+    pool: &SqlitePool,
+    app_data_dir: &Path,
+    sync_password: &str,
+    cloud_config: Option<EngineSyncConfig>,
+) -> FullSyncBackupResult<ExportResult> {
+    let prefs = load_prefs(app_data_dir)?;
+    ensure_any_switch_enabled(&prefs)?;
+    export_full_sync_backup_inner(
+        pool,
+        app_data_dir,
+        sync_password,
+        cloud_config,
+        prefs.local_backup_enabled,
+        prefs.cloud_backup_enabled,
+    )
+    .await
+}
+
+/// 手动导出全量备份（不受备份偏好开关约束）
+///
+/// 用户在 UI 显式点击导出时调用：
+/// - 始终尝试写入本地 backups 目录
+/// - `upload_cloud=true` 且提供 `cloud_config` 时额外上传云端副本
+///
+/// `local_path` / `keep_latest` 等目录偏好仍然生效。
+pub async fn export_full_sync_backup_manual(
+    pool: &SqlitePool,
+    app_data_dir: &Path,
+    sync_password: &str,
+    cloud_config: Option<EngineSyncConfig>,
+    upload_cloud: bool,
+) -> FullSyncBackupResult<ExportResult> {
+    export_full_sync_backup_inner(
+        pool,
+        app_data_dir,
+        sync_password,
+        cloud_config,
+        true,
+        upload_cloud,
+    )
+    .await
+}
+
+/// 偏好驱动导出的前置校验：云端与本地开关均为关闭时拒绝执行
+fn ensure_any_switch_enabled(prefs: &BackupPrefs) -> FullSyncBackupResult<()> {
+    if !prefs.cloud_backup_enabled && !prefs.local_backup_enabled {
+        return Err(FullSyncBackupError::InvalidState(
+            "云端备份与本地备份开关均为关闭，请至少开启一项后再执行备份".to_string(),
+        ));
+    }
+    Ok(())
+}
+
+/// 导出公共实现
 ///
 /// v6 重构流程（云端 → 本地 两阶段，分别记录 sync_history）：
 /// 1. 用 SyncCryptoService::unlock 校验同步密码（失败立即返回）
@@ -99,19 +169,22 @@ pub async fn export_full_sync_backup(
 /// 5. 查 schema_migrations 当前版本
 /// 6. 构造 manifest（填充 device_name）+ encode_backup（单次编码）
 /// 7. 生成文件名（device_name 优先，device_id 回退）
-/// 8. 【云端阶段】若提供 cloud_config，上传字节到云端
+/// 8. 【云端阶段】`cloud_enabled` 且提供 cloud_config 时上传字节到云端
 ///    - 记录 sync_history(sync_type="cloud_full_backup", status=success/failed)
 ///    - 失败不中断，继续执行本地阶段
-/// 9. 【本地阶段】写入 `{backup_dir}/{filename}`（自动覆盖）
+/// 9. 【本地阶段】`local_enabled` 时写入 `{backup_dir}/{filename}`（自动覆盖）
 ///    - 记录 sync_history(sync_type="local_full_backup", status=success/failed)
 ///    - 若 keep_latest=true，扫描删除其他备份
 ///
 /// 云端上传失败不会阻塞本地备份，错误信息会写入 `ExportResult.cloud_error`。
-pub async fn export_full_sync_backup_with_cloud(
+#[allow(clippy::too_many_arguments)]
+async fn export_full_sync_backup_inner(
     pool: &SqlitePool,
     app_data_dir: &Path,
     sync_password: &str,
-    cloud_config: Option<EngineSyncConfig>,
+    cloud_config_in: Option<EngineSyncConfig>,
+    local_enabled: bool,
+    cloud_enabled: bool,
 ) -> FullSyncBackupResult<ExportResult> {
     // 1. 校验同步密码
     let svc = SyncCryptoService::new(app_data_dir);
@@ -172,27 +245,17 @@ pub async fn export_full_sync_backup_with_cloud(
     // 7. 解析备份目录 + 生成文件名
     let prefs = load_prefs(app_data_dir)?;
 
-    // 备份开关控制（需求2）：
-    // - cloud_backup_enabled=false 时，即使存在激活的云端配置也不上传
-    // - local_backup_enabled=false 时，跳过本地文件写入
-    // - 两者皆 false 时直接返回错误，避免无意义的编码与历史记录
-    if !prefs.cloud_backup_enabled && !prefs.local_backup_enabled {
-        return Err(FullSyncBackupError::InvalidState(
-            "云端备份与本地备份开关均为关闭，请至少开启一项后再执行备份".to_string(),
-        ));
-    }
-
     let backup_dir = resolve_backup_dir(app_data_dir, prefs.local_path.as_deref());
     // 仅在启用本地备份时创建目录，避免残留空目录
-    if prefs.local_backup_enabled {
+    if local_enabled {
         std::fs::create_dir_all(&backup_dir)?;
     }
     let filename = generate_backup_filename_with_name(&device_name, &device_id, Utc::now());
 
     // ===== 8. 云端阶段 =====
     // 根据开关屏蔽 cloud_config：关闭云端备份时视为无云端配置
-    let cloud_config = if prefs.cloud_backup_enabled {
-        cloud_config
+    let cloud_config = if cloud_enabled {
+        cloud_config_in
     } else {
         None
     };
@@ -239,12 +302,12 @@ pub async fn export_full_sync_backup_with_cloud(
         .await;
     }
 
-    // ===== 9. 本地阶段（受 local_backup_enabled 开关控制）=====
+    // ===== 9. 本地阶段（受 local_enabled 开关控制）=====
     // 关闭本地备份时跳过文件写入与历史记录，仅保留云端阶段结果
     let target_path = backup_dir.join(&filename);
     let mut local_path: Option<String> = None;
     let mut local_error: Option<String> = None;
-    if prefs.local_backup_enabled {
+    if local_enabled {
         match std::fs::write(&target_path, &encoded.bytes) {
             Ok(()) => {
                 local_path = Some(target_path.to_string_lossy().to_string());

@@ -1,21 +1,21 @@
 import { useEffect, useState } from "react";
 import { RouterProvider } from "react-router";
-import { Toaster } from "sonner";
 
 import { router } from "@/router";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { Toaster } from "@/components/ui/sonner";
 import { EqualizerLoader } from "@/components/EqualizerLoader";
 import { UnlockPage } from "@/pages/unlock-page";
 import { SyncIndicator } from "@/components/layout/sync-indicator";
-import { useDbInvalidation } from "@/lib/events";
+import { useDbInvalidation, useSyncInvalidation } from "@/lib/events";
 import { isMobilePlatform } from "@/lib/platform";
 import { useTodoReminderListener } from "@/hooks/use-todo-reminder-listener";
+import { useStartupSync } from "@/hooks/use-startup-sync";
 import {
   dbInitEncrypted,
   dbInitPlaintext,
   dbSetDeviceId,
   masterAuthHas,
-  syncCryptoRestoreSession,
 } from "@/lib/tauri";
 
 /**
@@ -39,21 +39,20 @@ async function ensureDeviceId() {
   await dbSetDeviceId(id).catch(() => {});
 }
 
-/** 主界面壳：挂载 db-change 全局失效（须在 DB 就绪后渲染） */
+/** 主界面壳：挂载 db-change / sync-finished 全局失效（须在 DB 就绪后渲染） */
 function ReadyShell() {
   useDbInvalidation();
+  useSyncInvalidation();
   useTodoReminderListener();
-
-  // M3：DB 就绪后尝试用钥匙串缓存的同步密码静默恢复会话（失败静默）
-  useEffect(() => {
-    void syncCryptoRestoreSession().catch(() => {});
-  }, []);
+  // M3：静默恢复同步会话 + 启动时一次 pull_then_push（未配置/未解锁自动跳过）
+  useStartupSync();
 
   return (
     <TooltipProvider>
       <RouterProvider router={router} />
-      {/* sonner：richColors + top-right（04 文档 §六 Toast 规格）；移动端贴底居中（05 §五） */}
-      <Toaster richColors position={isMobilePlatform() ? "bottom-center" : "top-right"} />
+      {/* sonner：top-right（04 文档 §六 Toast 规格）；移动端贴底居中（05 §五）。
+          不开 richColors：对齐 shadcn 示例观感——popover 卡片底 + 彩色类型图标 */}
+      <Toaster position={isMobilePlatform() ? "bottom-center" : "top-right"} />
       {/* M3：后台自动同步悬浮指示器（仅响应 origin=background） */}
       <SyncIndicator />
     </TooltipProvider>

@@ -1,8 +1,7 @@
 /**
  * 设置页 —— 左导航 + 右内容布局（对齐 wait-home SettingsPage）
  *
- * 左侧 w-48 导航（安全/主题），右侧 max-w-2xl 内容区按分类渲染分区组件。
- * 同步 / 数据等分区随 M3 交付后追加进 settingsCategories。
+ * 左侧 w-48 导航（安全/同步/主题），右侧 max-w-2xl 内容区按分类渲染分区组件。
  */
 import { useState } from "react";
 
@@ -13,6 +12,7 @@ import {
   type SettingsCategoryKey,
 } from "@/components/settings/categories";
 import { SecuritySection } from "@/components/settings/security-section";
+import { SyncSection } from "@/components/settings/sync-section";
 import { ThemeSection } from "@/components/settings/theme-section";
 
 export function SettingsPage() {
@@ -50,6 +50,7 @@ export function SettingsPage() {
         <div className="min-w-0 flex-1 overflow-y-auto">
           <div className="mx-auto max-w-2xl p-6">
             {active === "security" && <SecuritySection />}
+            {active === "sync" && <SyncSection />}
             {active === "theme" && <ThemeSection />}
           </div>
         </div>

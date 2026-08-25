@@ -21,6 +21,8 @@
     "fs:default",
     "fs:allow-write-file",
     "fs:allow-read-file",
+    "fs:allow-write-text-file",
+    "fs:allow-read-text-file",
     "notification:default",
     "notification:allow-notify",
     "notification:allow-is-permission-granted",

@@ -1,9 +1,9 @@
-//! engine — 云端备份适配器构造与配置校验
+//! engine — 云端适配器构造与配置校验
 //!
-//! 提供 S3/WebDAV 适配器构造能力，供云端备份（full_sync_backup_api）和
-//! 同步诊断（sync_diag_api）复用。
+//! 提供 S3/WebDAV 适配器构造能力，供云端备份（full_sync_backup_api）、
+//! 云端增量同步（cloud_sync 经 BasePathAdapter）与连接测试复用。
 //!
-//! 云端同步（原 full_sync 主流程）已移除，待未来实现。
+//! 注：v1 全量主流程式同步已移除；现行增量云同步见 crate::cloud_sync。
 
 use serde::{Deserialize, Serialize};
 

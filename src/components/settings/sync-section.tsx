@@ -3,9 +3,12 @@
  *
  * 结构：
  * 1. 连接卡：WebDAV/S3 引擎切换 + 表单 + 测试连接/保存/断开
- * 2. 同步密码卡（E2E）：未设置 → 设置；已设置 → 解锁/锁定/修改
+ * 2. 同步密码卡（E2E）：未设置 → 设置；已设置 → 解锁/锁定/修改 + 密钥包导出
  * 3. 同步执行卡：立即同步 + 进度事件 + 上次同步时间
- * 4. 备份卡：.orsync 导出 / 导入（全量覆盖恢复）
+ * 4. 自动备份卡：调度频率（core v4 调度器）+ 本地/云端开关 + 上次/下次时间
+ * 5. 备份卡：.orsync 导出（可选云端副本）/ 导入恢复 / 本地历史备份列表
+ *
+ * sync-config-changed（保存/断开）→ 重挂连接与执行卡刷新配置视图。
  */
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
@@ -13,8 +16,11 @@ import { useQueryClient } from "@tanstack/react-query";
 import { listen } from "@tauri-apps/api/event";
 import { toast } from "sonner";
 import {
+  CalendarClock,
   CloudUpload,
   DatabaseBackup,
+  Download,
+  History,
   KeyRound,
   Loader2,
   Lock,
@@ -36,12 +42,17 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import {
+  backupPrefsGet,
+  backupPrefsSave,
   cloudSyncNow,
   fullBackupExport,
   fullBackupImport,
+  fullBackupListLocal,
   syncConfigGet,
   syncConfigSave,
   syncCryptoChangePassword,
+  syncCryptoExportBundle,
+  syncCryptoForgetSession,
   syncCryptoInit,
   syncCryptoLock,
   syncCryptoStatus,
@@ -49,6 +60,10 @@ import {
   syncDisconnect,
   syncErrorTag,
   syncTestConnection,
+  type AutoBackupFinishedEvent,
+  type BackupEntryView,
+  type BackupPrefs,
+  type BackupScheduleType,
   type SyncConfigView,
   type SyncCryptoStatus,
   type SyncEngineKind,
@@ -69,13 +84,32 @@ function errMsg(err: unknown): string {
   return msg.replace(/^\[\w+\]\s*/, "");
 }
 
+function formatBytes(n: number): string {
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+  return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 export function SyncSection() {
+  // 配置保存/断开后重挂连接与执行卡（表单回读已保存值、刷新上次同步时间）
+  const [version, setVersion] = useState(0);
+
+  useEffect(() => {
+    const unlisten = listen("sync-config-changed", () => {
+      setVersion((v) => v + 1);
+    });
+    return () => {
+      unlisten.then((fn) => fn());
+    };
+  }, []);
+
   return (
     <div className="space-y-6">
       <SectionHeader title="同步与备份" desc="E2E 加密云同步 · WebDAV / S3 · 全量备份" />
-      <ConnectionCard />
+      <ConnectionCard key={`conn-${version}`} />
       <SyncPasswordCard />
-      <SyncRunCard />
+      <SyncRunCard key={`run-${version}`} />
+      <AutoBackupCard />
       <BackupCard />
     </div>
   );
@@ -405,6 +439,36 @@ function SyncPasswordCard() {
     refresh();
   };
 
+  /** 导出 crypto bundle：跨设备 Data Key 分发载体（恢复页可导入） */
+  const handleExportBundle = async () => {
+    try {
+      const bundle = await syncCryptoExportBundle();
+      const { save } = await import("@tauri-apps/plugin-dialog");
+      const path = await save({
+        defaultPath: `orbit-crypto-bundle-${new Date().toISOString().slice(0, 10)}.json`,
+        filters: [{ name: "Crypto Bundle", extensions: ["json"] }],
+      });
+      if (!path) return;
+      const { writeTextFile } = await import("@tauri-apps/plugin-fs");
+      await writeTextFile(path, JSON.stringify(bundle, null, 2));
+      toast.success("密钥包已导出。请妥善保管：在其他设备导入它即可恢复解密能力");
+    } catch (err) {
+      toast.error(errMsg(err));
+    }
+  };
+
+  const handleForgetSession = async () => {
+    if (!window.confirm("将清除系统钥匙串中缓存的同步密码，下次启动需手动输入解锁。确定？")) {
+      return;
+    }
+    try {
+      await syncCryptoForgetSession();
+      toast.success("已清除本机密码缓存（当前会话仍保持解锁）");
+    } catch (err) {
+      toast.error(errMsg(err));
+    }
+  };
+
   const handleChange = async () => {
     setBusy(true);
     try {
@@ -524,6 +588,29 @@ function SyncPasswordCard() {
         </div>
       )}
 
+      {status !== null && status.has_password && (
+        <div className="flex items-center justify-between border-t pt-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 text-xs text-muted-foreground"
+            onClick={() => void handleExportBundle()}
+            title="导出 crypto bundle，用于在其他设备恢复解密能力"
+          >
+            <Download className="mr-1 size-3" />
+            导出密钥包
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 text-xs text-muted-foreground"
+            onClick={() => void handleForgetSession()}
+          >
+            忘记此设备的同步密码缓存
+          </Button>
+        </div>
+      )}
+
       {changeOpen && (
         <div className="space-y-3 rounded-md border bg-muted/20 p-3">
           <div className="grid grid-cols-2 gap-3">
@@ -565,6 +652,16 @@ function SyncRunCard() {
 
   useEffect(() => {
     syncConfigGet().then(setConfig).catch(() => {});
+  }, []);
+
+  // 后台同步完成（含定时触发）→ 刷新上次同步时间展示
+  useEffect(() => {
+    const unlisten = listen("sync-finished", () => {
+      syncConfigGet().then(setConfig).catch(() => {});
+    });
+    return () => {
+      unlisten.then((fn) => fn());
+    };
   }, []);
 
   // 手动同步进度（origin=manual；background 由全局 SyncIndicator 展示）
@@ -639,16 +736,324 @@ function SyncRunCard() {
   );
 }
 
-/* ============================ 4. 备份卡 ============================ */
+/* ============================ 4. 自动备份卡 ============================ */
+
+const SCHEDULE_LABELS: Record<BackupScheduleType, string> = {
+  off: "关闭",
+  hourly: "每小时",
+  daily: "每天",
+  weekly: "每周",
+  monthly: "每月",
+  yearly: "每年",
+};
+
+const WEEKDAY_LABELS = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"];
+
+function formatTsSecs(ts: number): string | null {
+  return ts > 0 ? new Date(ts * 1000).toLocaleString() : null;
+}
+
+function AutoBackupCard() {
+  const [prefs, setPrefs] = useState<BackupPrefs | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    backupPrefsGet()
+      .then(setPrefs)
+      .catch(() => setPrefs(null));
+  }, []);
+
+  // 定时备份完成事件 → 刷新上次/下次展示 + toast 提示
+  useEffect(() => {
+    const unlisten = listen<AutoBackupFinishedEvent>("auto-backup-finished", (evt) => {
+      backupPrefsGet().then(setPrefs).catch(() => {});
+      const p = evt.payload;
+      if (!p.ok) {
+        toast.warning(`自动备份失败：${p.error ?? "未知错误"}`);
+        return;
+      }
+      if (p.local_path) {
+        const name = p.local_path.split(/[\\/]/).pop();
+        toast.success(`自动备份完成：${name ?? ""}`);
+      } else {
+        toast.success("自动备份完成（仅云端）");
+      }
+      if (p.cloud_error) toast.warning(`云端副本上传失败：${p.cloud_error}`);
+    });
+    return () => {
+      unlisten.then((fn) => fn());
+    };
+  }, []);
+
+  const patch = (u: Partial<BackupPrefs>) =>
+    setPrefs((p) => (p ? { ...p, ...u } : p));
+
+  const handleSave = async () => {
+    if (!prefs) return;
+    setBusy(true);
+    try {
+      const saved = await backupPrefsSave(prefs);
+      setPrefs(saved);
+      toast.success(
+        saved.schedule_type === "off"
+          ? "已关闭定时自动备份"
+          : `自动备份已保存，下次执行：${formatTsSecs(saved.next_backup_at) ?? "待调度"}`,
+      );
+    } catch (err) {
+      toast.error(errMsg(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (!prefs) {
+    return (
+      <div className="flex items-center gap-2 rounded-lg border p-5">
+        <CalendarClock className="size-4 text-muted-foreground" />
+        <span className="text-sm font-medium">自动备份</span>
+        <span className="ml-auto text-xs text-muted-foreground">加载中…</span>
+      </div>
+    );
+  }
+
+  const st = prefs.schedule_type;
+
+  return (
+    <div className="space-y-4 rounded-lg border p-5">
+      <div className="flex items-center gap-2">
+        <CalendarClock className="size-4 text-muted-foreground" />
+        <span className="text-sm font-medium">自动备份</span>
+        {st !== "off" && (
+          <span className="ml-auto text-xs text-muted-foreground">
+            已启用 · {SCHEDULE_LABELS[st]}
+          </span>
+        )}
+      </div>
+
+      {/* 调度频率 */}
+      <div className="grid grid-cols-[80px_1fr] items-center gap-3">
+        <Label htmlFor="backup-schedule">频率</Label>
+        <Select
+          value={st}
+          onValueChange={(v) => patch({ schedule_type: v as BackupScheduleType })}
+        >
+          <SelectTrigger id="backup-schedule" className="w-40">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {(Object.keys(SCHEDULE_LABELS) as BackupScheduleType[]).map((k) => (
+              <SelectItem key={k} value={k}>
+                {SCHEDULE_LABELS[k]}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      {/* 调度时刻（按类型显示对应字段；core 以 UTC 计算） */}
+      {st !== "off" && (
+        <div className="grid grid-cols-[80px_1fr] items-center gap-3">
+          <Label htmlFor="backup-time">时刻</Label>
+          <div className="flex flex-wrap items-center gap-2">
+            {st === "hourly" && (
+              <>
+                <span className="text-xs text-muted-foreground">每小时的第</span>
+                <Input
+                  id="backup-time"
+                  type="number"
+                  min={0}
+                  max={59}
+                  className="h-8 w-20"
+                  value={prefs.schedule_minute}
+                  onChange={(e) =>
+                    patch({
+                      schedule_minute: Math.min(59, Math.max(0, Number(e.target.value) || 0)),
+                    })
+                  }
+                />
+                <span className="text-xs text-muted-foreground">分</span>
+              </>
+            )}
+            {st === "weekly" && (
+              <Select
+                value={String(prefs.schedule_weekday)}
+                onValueChange={(v) => patch({ schedule_weekday: Number(v) })}
+              >
+                <SelectTrigger className="h-8 w-24">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {WEEKDAY_LABELS.map((label, i) => (
+                    <SelectItem key={i} value={String(i)}>
+                      {label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+            {st === "monthly" && (
+              <>
+                <span className="text-xs text-muted-foreground">每月</span>
+                <Select
+                  value={String(prefs.schedule_day_of_month)}
+                  onValueChange={(v) => patch({ schedule_day_of_month: Number(v) })}
+                >
+                  <SelectTrigger className="h-8 w-20">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Array.from({ length: 28 }, (_, i) => i + 1).map((d) => (
+                      <SelectItem key={d} value={String(d)}>
+                        {d} 日
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </>
+            )}
+            {st === "yearly" && (
+              <>
+                <Select
+                  value={String(prefs.schedule_month)}
+                  onValueChange={(v) => patch({ schedule_month: Number(v) })}
+                >
+                  <SelectTrigger className="h-8 w-24">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
+                      <SelectItem key={m} value={String(m)}>
+                        {m} 月
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Select
+                  value={String(prefs.schedule_day_of_month)}
+                  onValueChange={(v) => patch({ schedule_day_of_month: Number(v) })}
+                >
+                  <SelectTrigger className="h-8 w-20">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Array.from({ length: 28 }, (_, i) => i + 1).map((d) => (
+                      <SelectItem key={d} value={String(d)}>
+                        {d} 日
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </>
+            )}
+            {st !== "hourly" && (
+              <Input
+                type="time"
+                className="h-8 w-32"
+                value={prefs.schedule_time}
+                onChange={(e) => patch({ schedule_time: e.target.value || "03:00" })}
+              />
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* 阶段开关 */}
+      <div className="space-y-2.5">
+        <div className="flex items-center gap-2">
+          <Switch
+            id="backup-local-enabled"
+            checked={prefs.local_backup_enabled}
+            onCheckedChange={(v) => patch({ local_backup_enabled: v })}
+            aria-label="本地备份开关"
+          />
+          <Label htmlFor="backup-local-enabled" className="text-xs font-normal">
+            写入本地 backups 目录
+          </Label>
+        </div>
+        <div className="flex items-center gap-2">
+          <Switch
+            id="backup-cloud-enabled"
+            checked={prefs.cloud_backup_enabled}
+            onCheckedChange={(v) => patch({ cloud_backup_enabled: v })}
+            aria-label="云端备份开关"
+          />
+          <Label htmlFor="backup-cloud-enabled" className="text-xs font-normal">
+            上传云端副本
+          </Label>
+          <span className="text-xs text-muted-foreground">需已配置云同步</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <Switch
+            id="backup-keep-latest"
+            checked={prefs.keep_latest}
+            onCheckedChange={(v) => patch({ keep_latest: v })}
+            aria-label="仅保留最新备份开关"
+          />
+          <Label htmlFor="backup-keep-latest" className="text-xs font-normal">
+            仅保留最新一份（防堆积）
+          </Label>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          开关同时作用于云同步前的自动备份；加密口令取自钥匙串缓存的同步密码。
+        </p>
+      </div>
+
+      {/* 状态与保存 */}
+      <p className="text-xs text-muted-foreground">
+        上次备份：
+        {formatTsSecs(prefs.last_backup_at) ?? "从未执行"}
+        {" · "}
+        下次：
+        {st === "off"
+          ? "未调度"
+          : formatTsSecs(prefs.next_backup_at) ?? "待调度"}
+        （时刻按 UTC 计算，展示为本地时间）
+      </p>
+
+      <div className="flex justify-end border-t pt-3">
+        <Button size="sm" disabled={busy} onClick={() => void handleSave()}>
+          {busy ? <Loader2 className="mr-1 size-3 animate-spin" /> : null}
+          保存设置
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+/* ============================ 5. 备份卡 ============================ */
 
 function BackupCard() {
   const [pw, setPw] = useState("");
   const [busy, setBusy] = useState<"export" | "import" | null>(null);
+  const [cloudCopy, setCloudCopy] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [history, setHistory] = useState<BackupEntryView[] | null>(null);
+
+  const loadHistory = () => {
+    fullBackupListLocal()
+      .then(setHistory)
+      .catch(() => setHistory([]));
+  };
+
+  // 首次展开时懒加载；导出成功后由 handleExport 调 loadHistory 刷新
+  useEffect(() => {
+    if (historyOpen && history === null) loadHistory();
+  }, [historyOpen]);
+
+  // 定时自动备份完成 → 静默刷新历史列表（含未展开时的计数）
+  useEffect(() => {
+    const unlisten = listen<AutoBackupFinishedEvent>("auto-backup-finished", () => {
+      loadHistory();
+    });
+    return () => {
+      unlisten.then((fn) => fn());
+    };
+  }, []);
 
   const handleExport = async () => {
     setBusy("export");
     try {
-      const r = await fullBackupExport(pw, false);
+      const r = await fullBackupExport(pw, cloudCopy);
       if (r.local_path) {
         const name = r.local_path.split(/[\\/]/).pop();
         toast.success(`已导出：${name ?? r.local_path}`);
@@ -656,6 +1061,7 @@ function BackupCard() {
       } else {
         toast.error(r.local_error ?? "导出失败");
       }
+      if (historyOpen) loadHistory();
     } catch (err) {
       toast.error(errMsg(err));
     } finally {
@@ -684,7 +1090,7 @@ function BackupCard() {
     }
   };
 
-  const handleImport = async () => {
+  const handleImportFile = async () => {
     const { open } = await import("@tauri-apps/plugin-dialog");
     const selected = await open({
       filters: [{ name: "Orbit 备份", extensions: ["orsync", "waitfullsync"] }],
@@ -696,6 +1102,13 @@ function BackupCard() {
     );
     if (!confirmed) return;
     await doImport(selected, pw, false);
+  };
+
+  const handleRestoreEntry = async (entry: BackupEntryView) => {
+    if (!window.confirm(`从「${entry.filename}」恢复将完全覆盖当前全部待办数据。确定继续？`)) {
+      return;
+    }
+    await doImport(entry.file_path, pw, false);
   };
 
   return (
@@ -719,11 +1132,69 @@ function BackupCard() {
           {busy === "export" ? <Loader2 className="mr-1 size-3 animate-spin" /> : null}
           导出
         </Button>
-        <Button size="sm" variant="outline" disabled={!!busy || !pw} onClick={() => void handleImport()}>
+        <Button size="sm" variant="outline" disabled={!!busy || !pw} onClick={() => void handleImportFile()}>
           {busy === "import" ? <Loader2 className="mr-1 size-3 animate-spin" /> : null}
           导入恢复
         </Button>
       </div>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Switch
+            id="backup-cloud-copy"
+            checked={cloudCopy}
+            onCheckedChange={setCloudCopy}
+            aria-label="上传云端副本开关"
+          />
+          <Label htmlFor="backup-cloud-copy" className="text-xs font-normal">
+            导出后同时上传云端副本
+          </Label>
+          <span className="text-xs text-muted-foreground">
+            {cloudCopy ? "需已配置云同步并解锁" : "仅保存到本地 backups 目录"}
+          </span>
+        </div>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-7 text-xs text-muted-foreground"
+          onClick={() => {
+            if (!historyOpen && history === null) loadHistory();
+            setHistoryOpen((v) => !v);
+          }}
+        >
+          <History className="mr-1 size-3" />
+          历史备份{history ? `（${history.length}）` : ""}
+        </Button>
+      </div>
+
+      {historyOpen && (
+        <div className="space-y-1 rounded-md border bg-muted/20 p-2">
+          {history === null && (
+            <p className="px-1 py-0.5 text-xs text-muted-foreground">加载中…</p>
+          )}
+          {history !== null && history.length === 0 && (
+            <p className="px-1 py-0.5 text-xs text-muted-foreground">暂无本地备份</p>
+          )}
+          {history?.map((e) => (
+            <div key={e.file_path} className="flex items-center gap-2 rounded px-1 py-0.5 hover:bg-accent/40">
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-xs font-medium">{e.filename}</p>
+                <p className="text-[11px] text-muted-foreground">
+                  {new Date(e.modified_at * 1000).toLocaleString()} · {formatBytes(e.size_bytes)}
+                </p>
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 text-xs"
+                disabled={!!busy || !pw}
+                onClick={() => void handleRestoreEntry(e)}
+              >
+                恢复
+              </Button>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
