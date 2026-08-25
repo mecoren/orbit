@@ -27,7 +27,8 @@ describe("material icon 子集清单守卫", () => {
 
   it("所有静态 name 字面量都已登记", () => {
     const missing: string[] = [];
-    const re = /<MaterialIcon\s+name="([a-z0-9_]+)"/g;
+    // 不假定属性顺序:<MaterialIcon className="x" name="foo" 也纳入检查
+    const re = /<MaterialIcon\b[^>]*?\bname="([a-z0-9_]+)"/g;
     for (const file of walk(SRC_DIR)) {
       const content = readFileSync(file, "utf8");
       for (const m of content.matchAll(re)) {
