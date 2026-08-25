@@ -17,6 +17,7 @@ import {
   FolderOpen,
   Link2,
   ListChecks,
+  Repeat,
   Send,
   Star,
   Tag as TagIcon,
@@ -43,6 +44,7 @@ import { DateTimePicker } from "@/components/business/date-picker";
 import { WaitCalendar } from "@/components/ui/wait-calendar";
 import { useTodoStore } from "@/features/todo/store";
 import { PRIORITY_COLOR, TODO_ACCENT } from "../shared/constants";
+import { REPEAT_MODE, REPEAT_PRESETS, repeatLabel } from "../shared/repeat";
 import {
   todoCommentCreate,
   todoCommentDelete,
@@ -124,7 +126,7 @@ export function TaskDetailDrawer({ projects }: TaskDetailDrawerProps) {
     <Sheet open={open} onOpenChange={(o) => !o && setSelectedTaskId(null)}>
       <SheetContent className="w-full max-w-xl overflow-y-auto sm:max-w-xl">
         {t ? (
-          <div className="flex flex-col gap-4 px-6 pb-8 pt-2">
+          <div className="flex flex-col gap-4 px-6 pb-8 pt-8">
             {/* 1. 标题行 */}
             <TitleRow task={t} onPatch={updateTask} />
             {/* 2. 属性网格 */}
@@ -138,7 +140,13 @@ export function TaskDetailDrawer({ projects }: TaskDetailDrawerProps) {
             {/* 5. 标签 */}
             <LabelsSection taskId={t.id} labels={t.labels} onChanged={refetchDetail} />
             {/* 6. 提醒 */}
-            <RemindersSection taskId={t.id} reminders={t.reminders} onChanged={refetchDetail} />
+            <RemindersSection
+              taskId={t.id}
+              reminders={t.reminders}
+              repeatMode={t.repeat_mode}
+              repeatAfter={t.repeat_after}
+              onChanged={refetchDetail}
+            />
             {/* 7. 关联任务 */}
             {t.relations.length > 0 && (
               <SectionBlock icon={Link2} title="关联任务">
@@ -188,12 +196,12 @@ function TitleRow({
   };
 
   return (
-    <div className="flex items-start gap-3 border-b pb-4">
+    <div className="flex items-center gap-3 border-b pb-4">
       <button
         type="button"
         aria-label={task.done ? "标记未完成" : "标记完成"}
         className={cn(
-          "mt-1 h-5 w-5 shrink-0 rounded-full border-2 transition-colors",
+          "h-5 w-5 shrink-0 rounded-full border-2 transition-colors",
           task.done ? "border-primary bg-primary" : "border-muted-foreground/30 hover:border-primary",
         )}
         onClick={() =>
@@ -401,7 +409,85 @@ function PropertyGrid({
       <InfoRow icon={ListChecks} label="进度">
         {task.percent_done > 0 ? `${Math.round(task.percent_done)}%` : null}
       </InfoRow>
+
+      {/* 重复规则（repeat_after/repeat_mode；提醒触发后前端排下一次） */}
+      <InfoRow icon={Repeat} label="重复">
+        <RepeatEditor
+          mode={task.repeat_mode}
+          after={task.repeat_after}
+          onChange={(m, a) => void onPatch({ repeat_mode: m, repeat_after: a })}
+        />
+      </InfoRow>
     </div>
+  );
+}
+
+/** 重复规则选择器：预设（每天/周/月/年）+ 自定义 N 天（04 §3.4 即改即存） */
+function RepeatEditor({
+  mode,
+  after,
+  onChange,
+}: {
+  mode: number;
+  after: number;
+  onChange: (mode: number, after: number) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [customDays, setCustomDays] = useState("3");
+
+  const pick = (m: number, a: number) => {
+    onChange(m, a);
+    setOpen(false);
+  };
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button type="button" className="truncate font-medium hover:text-primary">
+          {mode === REPEAT_MODE.NONE ? "不重复" : repeatLabel(mode, after)}
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-44 p-1">
+        {REPEAT_PRESETS.map((p) => (
+          <button key={p.mode} type="button"
+            className={cn("flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-accent",
+              mode === p.mode && after === p.after && "bg-accent font-medium")}
+            onClick={() => pick(p.mode, p.after)}
+          >
+            {p.label}
+            {mode === p.mode && after === p.after && <Check size={13} className="ml-auto text-primary" />}
+          </button>
+        ))}
+        <div className="my-1 border-t" />
+        <button type="button"
+          className={cn("flex w-full items-center rounded-sm px-2 py-1.5 text-sm hover:bg-accent",
+            mode === REPEAT_MODE.NONE && "bg-accent font-medium")}
+          onClick={() => pick(REPEAT_MODE.NONE, 0)}
+        >
+          不重复
+          {mode === REPEAT_MODE.NONE && <Check size={13} className="ml-auto text-primary" />}
+        </button>
+        <div className="flex items-center gap-1.5 px-2 py-1.5">
+          <span className="shrink-0 text-xs text-muted-foreground">每</span>
+          <Input
+            type="number"
+            min={1}
+            value={customDays}
+            onChange={(e) => setCustomDays(e.target.value)}
+            className="h-6 w-14 px-1.5 text-xs"
+            onKeyDown={(e) => {
+              if (e.key === "Enter") pick(REPEAT_MODE.DAILY, Math.max(1, Number(customDays) || 1));
+            }}
+          />
+          <span className="shrink-0 text-xs text-muted-foreground">天</span>
+          <Button size="sm" variant="ghost" className="ml-auto h-6 px-2 text-xs"
+            onClick={() => pick(REPEAT_MODE.DAILY, Math.max(1, Number(customDays) || 1))}
+          >
+            确定
+          </Button>
+        </div>
+      </PopoverContent>
+    </Popover>
   );
 }
 
@@ -670,10 +756,15 @@ function LabelsSection({
 function RemindersSection({
   taskId,
   reminders,
+  repeatMode,
+  repeatAfter,
   onChanged,
 }: {
   taskId: number;
   reminders: Awaited<ReturnType<typeof todoTaskGetDetail>>["reminders"];
+  /** 任务重复规则（>0 时提醒行显示徽标；触发后由监听器自动排下一次） */
+  repeatMode: number;
+  repeatAfter: number;
   onChanged: () => void;
 }) {
   // 编辑态：{reminderId, draft}——编辑=删旧建新（04 §3.4）
@@ -718,13 +809,18 @@ function RemindersSection({
             </div>
           ) : (
             <div key={r.id} className="group flex items-center gap-2 rounded-lg bg-muted/40 px-3 py-2 text-[13px]">
-              <Bell size={13} className="text-muted-foreground" />
-              <button type="button" className="flex-1 text-left hover:text-primary"
+              <Bell size={13} className="shrink-0 text-muted-foreground" />
+              <button type="button" className="flex-1 truncate text-left hover:text-primary"
                 onClick={() => setEditing({ id: r.id, draft: fmt(r.remind_at) })}
               >
                 {fmt(r.remind_at)}
               </button>
-              <button type="button" aria-label="删除提醒" className="opacity-0 group-hover:opacity-100"
+              {repeatMode > 0 && (
+                <span className="shrink-0 rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] text-primary">
+                  {repeatLabel(repeatMode, repeatAfter)}
+                </span>
+              )}
+              <button type="button" aria-label="删除提醒" className="shrink-0 opacity-0 group-hover:opacity-100"
                 onClick={async () => { await todoReminderDelete(r.id); onChanged(); }}
               >
                 <X size={13} className="text-muted-foreground hover:text-destructive" />
