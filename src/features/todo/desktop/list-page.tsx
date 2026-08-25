@@ -290,11 +290,13 @@ export default function TodoListPage() {
               projects={projects}
               loading={tasksQuery.isLoading}
               error={
-                tasksQuery.error instanceof Error
-                  ? tasksQuery.error.message
-                  : tasksQuery.error
-                    ? String(tasksQuery.error)
-                    : null
+                // 仅"无任何数据"的失败才整块替换;后台 refetch 失败时保留旧数据展示
+                // (placeholderData 语义),避免瞬时 IPC 失败清掉可见列表
+                tasksQuery.isError && tasks.length === 0
+                  ? tasksQuery.error instanceof Error
+                    ? tasksQuery.error.message
+                    : String(tasksQuery.error)
+                  : null
               }
               onCreateClick={() => {
                 setEditingTask(null);

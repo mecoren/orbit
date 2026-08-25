@@ -43,7 +43,7 @@ function dueText(dueDate: number | null): string | null {
 export function TaskListView({ tasks, projects, loading, error, onCreateClick, onOpenDetail }: TaskListViewProps) {
   if (loading) {
     return (
-      <div className="flex-1 divide-y divide-border/30" aria-busy="true">
+      <div className="flex-1 divide-y divide-border/30 overflow-y-auto" aria-busy="true">
         {Array.from({ length: 8 }, (_, i) => (
           <div key={i} className="flex items-center gap-3 px-4 py-3">
             <Skeleton className="h-5 w-5 shrink-0 rounded-full" />
