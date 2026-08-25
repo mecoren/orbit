@@ -11,6 +11,7 @@
 resolver = "2"
 members = [
     "crates/orbit_core",
+    "crates/flutter-plugin-orbit",
 ]
 
 [workspace.package]
@@ -18,7 +19,9 @@ edition = "2024"
 rust-version = "1.96"
 version = "0.1.0"
 
+# 内部 crate 统一注册（omnipass 模式）：成员用 `xxx.workspace = true` 引用
 [workspace.dependencies]
+orbit_core = { path = "crates/orbit_core" }
 # 异步运行时
 tokio = { version = "1.45", features = ["rt-multi-thread", "macros", "sync", "fs", "io-util"] }
 async-trait = "0.1"

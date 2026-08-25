@@ -20,10 +20,8 @@ dependencies:
   # 时间格式化（相对时间、zh-CN 本地化）
   intl: ^0.20.0
 
-  # ── FRB 桥接（Phase 5 接入；接入前 UI 层经 MockOrbitBridge 开发）──
-  # flutter_rust_bridge: <锁定版本>
-  # rust_lib_orbit:
-  #   path: rust_builder
+  # ── FRB 桥接（rust_builder 插件壳随后续步骤接入）──
+  flutter_rust_bridge: 2.12.0
 
 dev_dependencies:
   flutter_test:
