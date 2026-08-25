@@ -7,6 +7,7 @@ import { Suspense, lazy, type ReactNode } from "react";
 import { Navigate, createHashRouter } from "react-router";
 
 import { EqualizerLoader } from "@/components/EqualizerLoader";
+import { RouteError } from "@/components/layout/route-error";
 
 const SidebarScreen = lazy(() =>
   import("@/features/todo/mobile/sidebar-screen").then((m) => ({ default: m.SidebarScreen })),
@@ -43,10 +44,10 @@ export const mobileRouter = createHashRouter([
     path: "/",
     children: [
       { index: true, element: <Navigate to="/todo" replace /> },
-      { path: "todo", element: page(<SidebarScreen />) },
-      { path: "todo/tasks", element: page(<SubListScreen />) },
-      { path: "todo/:id", element: page(<DetailScreen />) },
-      { path: "settings", element: page(<SettingsMobileScreen />) },
+      { path: "todo", element: page(<SidebarScreen />), errorElement: <RouteError fullScreen /> },
+      { path: "todo/tasks", element: page(<SubListScreen />), errorElement: <RouteError fullScreen /> },
+      { path: "todo/:id", element: page(<DetailScreen />), errorElement: <RouteError fullScreen /> },
+      { path: "settings", element: page(<SettingsMobileScreen />), errorElement: <RouteError fullScreen /> },
       {
         path: "about",
         element: page(
@@ -54,6 +55,7 @@ export const mobileRouter = createHashRouter([
             <AboutPage />
           </div>,
         ),
+        errorElement: <RouteError fullScreen />,
       },
     ],
   },

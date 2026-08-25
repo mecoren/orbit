@@ -10,6 +10,7 @@ import { Navigate, createBrowserRouter } from "react-router";
 
 import { AppShell } from "@/components/layout/app-shell";
 import { EqualizerLoader } from "@/components/EqualizerLoader";
+import { RouteError } from "@/components/layout/route-error";
 import { isMobilePlatform } from "@/lib/platform";
 import { mobileRouter } from "@/router.mobile";
 
@@ -37,13 +38,13 @@ function page(node: ReactNode) {
   return <Suspense fallback={<LazyFallback />}>{node}</Suspense>;
 }
 
-/** 桌面子路由表（路径与 M4 前一致，零行为变化） */
+/** 桌面子路由表（路径与 M4 前一致，零行为变化；每个懒页挂 errorElement 兜 chunk 失败） */
 const desktopChildren = [
   { index: true, element: <Navigate to="/todo" replace /> },
-  { path: "todo", element: page(<TodoListPage />) },
-  { path: "settings", element: page(<SettingsPage />) },
-  { path: "about", element: page(<AboutPage />) },
-  { path: "sync-recovery", element: page(<SyncRecoveryPage />) },
+  { path: "todo", element: page(<TodoListPage />), errorElement: <RouteError /> },
+  { path: "settings", element: page(<SettingsPage />), errorElement: <RouteError /> },
+  { path: "about", element: page(<AboutPage />), errorElement: <RouteError /> },
+  { path: "sync-recovery", element: page(<SyncRecoveryPage />), errorElement: <RouteError /> },
 ];
 
 export const router = isMobilePlatform()
