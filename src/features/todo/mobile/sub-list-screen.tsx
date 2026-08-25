@@ -7,9 +7,10 @@
  * 表单抽屉（Task 15）：FAB 新建携 defaultProjectId=当前 projectId；
  * Tile 长按「编辑」携 editingTaskId——抽屉挂本屏层级。
  */
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useVirtualizer } from "@tanstack/react-virtual";
 
 import { GlassFab } from "@/components/mobile/glass-fab";
 import { LiquidGlassTitleBar } from "@/components/mobile/liquid-glass-title-bar";
@@ -109,6 +110,22 @@ export function SubListScreen() {
 
   const projectTitleById = useMemo(() => new Map(projects.map((p) => [p.id, p.title])), [projects]);
 
+  // P0 虚拟化：scrollRef 同时是 LiquidGlassTitleBar 的滚动契约，复用为虚拟滚动容器；
+  // 列表区在 AppBar 之下，offsetTop 作为 scrollMargin 换算坐标系（官方模式）
+  const listRef = useRef<HTMLDivElement | null>(null);
+  const [listOffset, setListOffset] = useState(0);
+  useEffect(() => {
+    if (listRef.current) setListOffset(listRef.current.offsetTop);
+  }, []);
+  const virtualizer = useVirtualizer({
+    count: visible.length,
+    getScrollElement: () => scrollRef.current,
+    estimateSize: () => 76,
+    overscan: 6,
+    getItemKey: (i) => visible[i].id,
+    scrollMargin: listOffset,
+  });
+
   // 勾选/星标变更：todoTaskUpdate 落库后失效任务列表
   const patchTask = async (id: number, input: Record<string, unknown>, failMsg: string) => {
     try {
@@ -148,25 +165,44 @@ export function SubListScreen() {
 
         {/* ListView padding top8/bottom48（05 §4.2）+ 底部安全区 */}
         <div className="flex min-h-full flex-col pt-2 pb-12">
-          <div className="flex-1">
-            {visible.map((t) => (
-              <TodoTaskTile
-                key={t.id}
-                task={t}
-                projectTitle={t.project_id != null ? (projectTitleById.get(t.project_id) ?? null) : null}
-                onToggleDone={() => toggleDone(t)}
-                onToggleFavorite={() => toggleFavorite(t)}
-                onEdit={() => openForm(t.id)}
-              />
-            ))}
-            {visible.length === 0 && (
-              /* 空态 EmptyState（05 §4.2）：checklist 大图标 + 八种映射文案 */
-              <div className="flex flex-col items-center gap-3 pt-24 text-[var(--m-sub)]">
-                <MaterialIcon name="checklist" size={56} className="opacity-40" />
-                <p className="text-sm">{emptyMessage({ projectId, ungrouped, view })}</p>
-              </div>
-            )}
-          </div>
+            <div ref={listRef} className="flex-1">
+              {visible.length > 0 && (
+                <div style={{ height: virtualizer.getTotalSize(), position: "relative" }}>
+                  {virtualizer.getVirtualItems().map((vi) => {
+                    const t = visible[vi.index];
+                    return (
+                      <div
+                        key={vi.key}
+                        data-index={vi.index}
+                        ref={virtualizer.measureElement}
+                        style={{
+                          position: "absolute",
+                          top: 0,
+                          left: 0,
+                          width: "100%",
+                          transform: `translateY(${vi.start - virtualizer.options.scrollMargin}px)`,
+                        }}
+                      >
+                        <TodoTaskTile
+                          task={t}
+                          projectTitle={t.project_id != null ? (projectTitleById.get(t.project_id) ?? null) : null}
+                          onToggleDone={() => toggleDone(t)}
+                          onToggleFavorite={() => toggleFavorite(t)}
+                          onEdit={() => openForm(t.id)}
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+              {visible.length === 0 && (
+                /* 空态 EmptyState（05 §4.2）：checklist 大图标 + 八种映射文案 */
+                <div className="flex flex-col items-center gap-3 pt-24 text-[var(--m-sub)]">
+                  <MaterialIcon name="checklist" size={56} className="opacity-40" />
+                  <p className="text-sm">{emptyMessage({ projectId, ungrouped, view })}</p>
+                </div>
+              )}
+            </div>
           {/* 底部安全区 spacer（space48 预留由 .m-safe-bottom 覆盖） */}
           <div className="m-safe-bottom" aria-hidden />
         </div>

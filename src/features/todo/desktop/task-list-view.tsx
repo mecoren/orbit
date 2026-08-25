@@ -4,9 +4,11 @@
  * 行规格：圆形 checkbox（done 联动 status/done_at）+ 标题（划线）+
  * 元信息行（优先级色点/项目名/截止时间，逾期整段红）+ hover 星标。
  */
+import { useRef } from "react";
 import { formatDistanceToNow } from "date-fns";
 import { zhCN } from "date-fns/locale";
 import { Clock, Inbox, Plus, Star } from "lucide-react";
+import { useVirtualizer } from "@tanstack/react-virtual";
 
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -41,6 +43,17 @@ function dueText(dueDate: number | null): string | null {
 }
 
 export function TaskListView({ tasks, projects, loading, error, onCreateClick, onOpenDetail }: TaskListViewProps) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  // P0 虚拟化：仅渲染可视窗 ± overscan（page_size=10000 全量拉取下的 DOM 治理）。
+  // 行高估算 57（py-3×2 + 标题20 + meta16 + 边框），measureElement 动态校正两态行高差。
+  const virtualizer = useVirtualizer({
+    count: tasks.length,
+    getScrollElement: () => scrollRef.current,
+    estimateSize: () => 57,
+    overscan: 8,
+    getItemKey: (i) => tasks[i].id,
+  });
+
   if (loading) {
     return (
       <div className="flex-1 divide-y divide-border/30 overflow-y-auto" aria-busy="true">
@@ -99,22 +112,36 @@ export function TaskListView({ tasks, projects, loading, error, onCreateClick, o
   };
 
   return (
-    <div className="flex-1 divide-y divide-border/30 overflow-y-auto">
-      {tasks.map((t) => {
-        const overdue = !!t.due_date && !t.done && t.due_date < Date.now();
-        const due = dueText(t.due_date);
-        const projectName = t.project_id != null ? projectById.get(t.project_id)?.title : undefined;
-        return (
-          <TaskContextMenu
-            key={t.id}
-            task={t}
-            projects={projects}
-            onOpenDetail={() => onOpenDetail(t.id)}
-          >
+    <div ref={scrollRef} className="flex-1 overflow-y-auto">
+      <div style={{ height: virtualizer.getTotalSize(), position: "relative" }}>
+        {virtualizer.getVirtualItems().map((vi) => {
+          const t = tasks[vi.index];
+          const overdue = !!t.due_date && !t.done && t.due_date < Date.now();
+          const due = dueText(t.due_date);
+          const projectName = t.project_id != null ? projectById.get(t.project_id)?.title : undefined;
+          return (
+            // 绝对定位行容器：divide-y 在脱离文档流的兄弟间不生效，改每行自带 border-b
             <div
-              className="group flex items-center gap-3 px-4 py-3 hover:bg-accent/30"
-              onClick={() => onOpenDetail(t.id)}
+              key={t.id}
+              data-index={vi.index}
+              ref={virtualizer.measureElement}
+              style={{
+                position: "absolute",
+                top: 0,
+                left: 0,
+                width: "100%",
+                transform: `translateY(${vi.start}px)`,
+              }}
             >
+              <TaskContextMenu
+                task={t}
+                projects={projects}
+                onOpenDetail={() => onOpenDetail(t.id)}
+              >
+                <div
+                  className="group flex items-center gap-3 border-b border-border/30 px-4 py-3 hover:bg-accent/30"
+                  onClick={() => onOpenDetail(t.id)}
+                >
             {/* 完成 checkbox：圆环 */}
             <button
               type="button"
@@ -185,10 +212,12 @@ export function TaskListView({ tasks, projects, loading, error, onCreateClick, o
             >
               <Star size={16} fill={t.is_favorite ? "currentColor" : "none"} />
             </button>
-          </div>
-          </TaskContextMenu>
-        );
-      })}
+                </div>
+              </TaskContextMenu>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
