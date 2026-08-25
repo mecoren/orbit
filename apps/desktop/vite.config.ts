@@ -27,10 +27,10 @@ export default defineConfig({
       ? { protocol: "ws", host, port: 5174 }
       : undefined,
     watch: {
-      // 平铺 monorepo：vite 根 = 仓库根，必须排除 Rust 构建产物与源码目录
-      // （target/ 内的 dll 在 cargo 链接时被锁定，fs.watch 会抛 EBUSY 致 dev server 崩溃；
-      //   Rust 源码变更由 Tauri 自身监视重启，Vite 不重复触发）
-      ignored: ["**/src-tauri/**", "**/orbit_core/**", "**/target/**"],
+      // monorepo：vite cwd = apps/desktop，必须排除 Rust 构建产物与源码目录
+      // （target/ 内的 dll 在 cargo 链接时被锁定，fs.watch 会抛 EBUSY 致
+      //   dev server 崩溃；Rust 源码变更由 Tauri 自身监视重启，Vite 不重复触发）
+      ignored: ["**/src-tauri/**", "**/crates/**", "**/target/**"],
     },
   },
 });

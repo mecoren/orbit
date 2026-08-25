@@ -1,13 +1,17 @@
-# Rust
-/target/
+# Rust（任意层级的 target/：根 workspace 与 apps/desktop/src-tauri 嵌套 workspace 各有构建目录）
+target/
 **/*.rs.bk
 
 # Node / 前端
 node_modules/
 dist/
 
+# Flutter / Dart（Phase 3 起生效）
+apps/mobile/.dart_tool/
+apps/mobile/build/
+
 # Tauri 生成物（schema 随构建再生；移动端 gen/ 在 M4 init 后按需纳管）
-src-tauri/gen/schemas/
+apps/desktop/src-tauri/gen/schemas/
 
 # 日志与临时文件
 *.log

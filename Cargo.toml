@@ -1,13 +1,16 @@
 # =============================================================================
 # Orbit（循迹）— Monorepo 根 Cargo Workspace
-# 参考 wait-home 模式：[workspace.dependencies] 单点管控所有 crate 依赖版本，
-# 子 crate 一律 `xxx.workspace = true` 引用，避免版本漂移。
+# 参考 omnipass 模式：
+#   - 根 workspace 仅管理 crates/*（核心库 + 各端桥接层），单点管控依赖版本，
+#     子 crate 一律 `xxx.workspace = true` 引用，避免版本漂移。
+#   - apps/desktop/src-tauri 为嵌套独立 workspace，自行声明版本；
+#   - apps/mobile 为 Flutter 应用，不在任何 Cargo workspace 内，
+#     经 crates/flutter-plugin-orbit（FRB 桥接）复用 orbit_core。
 # =============================================================================
 [workspace]
 resolver = "2"
 members = [
-    "orbit_core",
-    "src-tauri",
+    "crates/orbit_core",
 ]
 
 [workspace.package]
@@ -61,18 +64,8 @@ urlencoding = "2"
 # 日志（sqlx/hyper 传递引入 log v0.4，显式声明供 orbit_core / 插件配置使用）
 log = "0.4"
 
-# 系统钥匙串（M3：CEK 保管 + 同步密码缓存 service=orbit.sync-crypto）
-# 注：keyring 3.x 阻塞 API 为默认；三平台原生凭据库特性显式声明
-keyring = { version = "3", features = ["windows-native", "apple-native", "linux-native"] }
-
-# Tauri 2（全五端单前端）
-tauri = { version = "2", features = ["devtools", "image-png"] }
-tauri-plugin-shell = "2"
-tauri-plugin-notification = "2"
-tauri-plugin-dialog = "2"
-tauri-plugin-fs = "2"
-tauri-plugin-window-state = "2"
-tauri-plugin-log = "2"
+# 注：Tauri 系依赖与 keyring 已随桌面壳独立 workspace 化移出本清单，
+# 版本由 apps/desktop/src-tauri/Cargo.toml 单点声明。
 
 [profile.release]
 opt-level = "z"
