@@ -289,6 +289,17 @@ export default function TodoListPage() {
               tasks={visibleTasks}
               projects={projects}
               loading={tasksQuery.isLoading}
+              error={
+                tasksQuery.error instanceof Error
+                  ? tasksQuery.error.message
+                  : tasksQuery.error
+                    ? String(tasksQuery.error)
+                    : null
+              }
+              onCreateClick={() => {
+                setEditingTask(null);
+                setFormOpen(true);
+              }}
               onOpenDetail={(id) => setSelectedTaskId(id)}
             />
           )}

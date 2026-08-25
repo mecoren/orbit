@@ -6,9 +6,13 @@
  */
 import { formatDistanceToNow } from "date-fns";
 import { zhCN } from "date-fns/locale";
-import { Clock, Star } from "lucide-react";
+import { Clock, Inbox, Plus, Star } from "lucide-react";
 
 import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
+import { ErrorState } from "@/components/business/error-state";
+import { EmptyState } from "@/components/business/empty-state";
 import { todoTaskUpdate, type TodoProject, type TodoTask } from "@/lib/tauri";
 import { FAVORITE_COLOR, OVERDUE_COLOR_CLASS, PRIORITY_COLOR } from "../shared/constants";
 import { TaskContextMenu } from "./task-context-menu";
@@ -17,6 +21,10 @@ interface TaskListViewProps {
   tasks: TodoTask[];
   projects: TodoProject[];
   loading?: boolean;
+  /** 列表查询错误文案；非空时整块渲染 ErrorState */
+  error?: string | null;
+  /** 空态"新建任务"动作回调（由 list-page 注入打开表单） */
+  onCreateClick?: () => void;
   onOpenDetail: (id: number) => void;
 }
 
@@ -32,12 +40,47 @@ function dueText(dueDate: number | null): string | null {
   return `${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-export function TaskListView({ tasks, projects, loading, onOpenDetail }: TaskListViewProps) {
+export function TaskListView({ tasks, projects, loading, error, onCreateClick, onOpenDetail }: TaskListViewProps) {
   if (loading) {
-    return <div className="p-8 text-center text-sm text-muted-foreground">加载中</div>;
+    return (
+      <div className="flex-1 divide-y divide-border/30" aria-busy="true">
+        {Array.from({ length: 8 }, (_, i) => (
+          <div key={i} className="flex items-center gap-3 px-4 py-3">
+            <Skeleton className="h-5 w-5 shrink-0 rounded-full" />
+            <div className="min-w-0 flex-1 space-y-2">
+              <Skeleton className="h-4 w-2/5" />
+              <Skeleton className="h-3 w-1/5" />
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  }
+  if (error) {
+    return (
+      <div className="flex-1 overflow-y-auto p-4">
+        <ErrorState message={error} />
+      </div>
+    );
   }
   if (tasks.length === 0) {
-    return <div className="p-8 text-center text-sm text-muted-foreground">暂无任务</div>;
+    return (
+      <div className="flex flex-1 items-center justify-center overflow-y-auto">
+        <EmptyState
+          icon={Inbox}
+          title="暂无任务"
+          hint="用底部输入栏快速记录，或点击下方按钮"
+          action={
+            onCreateClick ? (
+              <Button size="sm" variant="outline" onClick={onCreateClick}>
+                <Plus size={14} className="mr-1" />
+                新建任务
+              </Button>
+            ) : undefined
+          }
+        />
+      </div>
+    );
   }
 
   const projectById = new Map(projects.map((p) => [p.id, p]));
