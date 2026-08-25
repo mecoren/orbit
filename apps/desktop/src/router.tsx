@@ -2,7 +2,7 @@
  * router — 桌面端路由（createBrowserRouter）
  *
  * MVP 路由面：/todo + /settings + /about + /sync-recovery。
- * M4 平台分叉：移动 UA 下改挂 router.mobile.tsx 的 hash 路由，桌面路由零变化。
+ * 移动端已拆分为独立 Flutter 应用（apps/mobile），本文件仅服务桌面。
  * P0 性能治理：React.lazy 路由级分包——首屏仅加载当前页。
  */
 import { Suspense, lazy, type ReactNode } from "react";
@@ -11,8 +11,6 @@ import { Navigate, createBrowserRouter } from "react-router";
 import { AppShell } from "@/components/layout/app-shell";
 import { EqualizerLoader } from "@/components/EqualizerLoader";
 import { RouteError } from "@/components/layout/route-error";
-import { isMobilePlatform } from "@/lib/platform";
-import { mobileRouter } from "@/router.mobile";
 
 const TodoListPage = lazy(() => import("@/features/todo/desktop/list-page"));
 const SettingsPage = lazy(() =>
@@ -47,6 +45,6 @@ const desktopChildren = [
   { path: "sync-recovery", element: page(<SyncRecoveryPage />), errorElement: <RouteError /> },
 ];
 
-export const router = isMobilePlatform()
-  ? mobileRouter
-  : createBrowserRouter([{ path: "/", element: <AppShell />, children: desktopChildren }]);
+export const router = createBrowserRouter([
+  { path: "/", element: <AppShell />, children: desktopChildren },
+]);

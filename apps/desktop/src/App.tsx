@@ -8,7 +8,6 @@ import { EqualizerLoader } from "@/components/EqualizerLoader";
 import { UnlockPage } from "@/pages/unlock-page";
 import { SyncIndicator } from "@/components/layout/sync-indicator";
 import { useDbInvalidation, useSyncInvalidation } from "@/lib/events";
-import { isMobilePlatform } from "@/lib/platform";
 import { useTodoReminderListener } from "@/hooks/use-todo-reminder-listener";
 import { useStartupSync } from "@/hooks/use-startup-sync";
 import {
@@ -50,9 +49,9 @@ function ReadyShell() {
   return (
     <TooltipProvider>
       <RouterProvider router={router} />
-      {/* sonner：top-right（04 文档 §六 Toast 规格）；移动端贴底居中（05 §五）。
+      {/* sonner：top-right（04 文档 §六 Toast 规格）。
           不开 richColors：对齐 shadcn 示例观感——popover 卡片底 + 彩色类型图标 */}
-      <Toaster position={isMobilePlatform() ? "bottom-center" : "top-right"} />
+      <Toaster position="top-right" />
       {/* M3：后台自动同步悬浮指示器（仅响应 origin=background） */}
       <SyncIndicator />
     </TooltipProvider>
@@ -62,11 +61,6 @@ function ReadyShell() {
 export default function App() {
   const [boot, setBoot] = useState<BootState>("checking");
   const [bootError, setBootError] = useState<string | null>(null);
-
-  // M4：平台标记注入（index.css 移动 token 段按 html[data-platform] 生效）
-  useEffect(() => {
-    document.documentElement.dataset.platform = isMobilePlatform() ? "mobile" : "desktop";
-  }, []);
 
   useEffect(() => {
     (async () => {

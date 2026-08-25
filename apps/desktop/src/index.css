@@ -1,10 +1,10 @@
-@import "tailwindcss";
+﻿@import "tailwindcss";
 @plugin "tailwindcss-animate";
 
 @custom-variant dark (&:is(.dark *));
 
 /* ============================================================
- * 默认 :root（亮色基底，作为未设置 data-palette 时的 fallback）
+ * 榛樿 :root锛堜寒鑹插熀搴曪紝浣滀负鏈缃?data-palette 鏃剁殑 fallback锛?
  * ============================================================ */
 :root {
   --radius: 0.625rem;
@@ -41,19 +41,19 @@
   --sidebar-accent-foreground: oklch(0.205 0 0);
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
-  /* ── 动效时长（毫秒，供 CSS transition 直接使用）── */
+  /* 鈹€鈹€ 鍔ㄦ晥鏃堕暱锛堟绉掞紝渚?CSS transition 鐩存帴浣跨敤锛夆攢鈹€ */
   --duration-instant: 100ms;
   --duration-fast: 150ms;
   --duration-base: 200ms;
   --duration-slow: 300ms;
-  /* ── 滚动条滑块色（DevToys 风格悬浮滑块；亮色基底用黑 alpha）── */
+  /* 鈹€鈹€ 婊氬姩鏉℃粦鍧楄壊锛圖evToys 椋庢牸鎮诞婊戝潡锛涗寒鑹插熀搴曠敤榛?alpha锛夆攢鈹€ */
   --scrollbar-slider-bg: oklch(0 0 0 / 12%);
   --scrollbar-slider-hover-bg: oklch(0 0 0 / 20%);
   --scrollbar-slider-active-bg: oklch(0 0 0 / 27%);
 }
 
 /* ============================================================
- * 色板：黑曜石（默认深色，蓝调）
+ * 鑹叉澘锛氶粦鏇滅煶锛堥粯璁ゆ繁鑹诧紝钃濊皟锛?
  * ============================================================ */
 [data-palette="obsidian"] {
   --background: oklch(0.16 0.01 264);
@@ -90,7 +90,7 @@
 }
 
 /* ============================================================
- * 色板：深海（青蓝调）
+ * 鑹叉澘锛氭繁娴凤紙闈掕摑璋冿級
  * ============================================================ */
 [data-palette="deep-sea"] {
   --background: oklch(0.16 0.01 220);
@@ -127,7 +127,7 @@
 }
 
 /* ============================================================
- * 色板：暮光（橙红暖调）
+ * 鑹叉澘锛氭毊鍏夛紙姗欑孩鏆栬皟锛?
  * ============================================================ */
 [data-palette="twilight"] {
   --background: oklch(0.16 0.01 25);
@@ -164,7 +164,7 @@
 }
 
 /* ============================================================
- * 色板：翡翠夜（翠绿护眼）
+ * 鑹叉澘锛氱俊缈犲锛堢繝缁挎姢鐪硷級
  * ============================================================ */
 [data-palette="emerald-night"] {
   --background: oklch(0.16 0.01 162);
@@ -201,7 +201,7 @@
 }
 
 /* ============================================================
- * 色板：日光（亮色模式默认）
+ * 鑹叉澘锛氭棩鍏夛紙浜壊妯″紡榛樿锛?
  * ============================================================ */
 [data-palette="daylight"] {
   --background: oklch(0.99 0.005 264);
@@ -238,10 +238,10 @@
 }
 
 /* ============================================================
- * 色板：自定义（深色基底，关键变量由 JS inline style 覆盖）
+ * 鑹叉澘锛氳嚜瀹氫箟锛堟繁鑹插熀搴曪紝鍏抽敭鍙橀噺鐢?JS inline style 瑕嗙洊锛?
  *
- * 此块仅提供基础深色基底，--primary / --ring / --sidebar-primary 等
- * 关键交互色由 color-theme.ts 的 applyPalette() 通过 inline style 注入。
+ * 姝ゅ潡浠呮彁渚涘熀纭€娣辫壊鍩哄簳锛?-primary / --ring / --sidebar-primary 绛?
+ * 鍏抽敭浜や簰鑹茬敱 color-theme.ts 鐨?applyPalette() 閫氳繃 inline style 娉ㄥ叆銆?
  * ============================================================ */
 [data-palette="custom"] {
   --background: oklch(0.16 0 0);
@@ -277,8 +277,8 @@
   --sidebar-ring: oklch(0.62 0.19 264);
 }
 
-/* 自定义（浅色基底）：data-custom-mode="light" 时覆盖为浅色变量
- * 亮度更高，foreground 用深色，配合同名 inline override 注入的 accent */
+/* 鑷畾涔夛紙娴呰壊鍩哄簳锛夛細data-custom-mode="light" 鏃惰鐩栦负娴呰壊鍙橀噺
+ * 浜害鏇撮珮锛宖oreground 鐢ㄦ繁鑹诧紝閰嶅悎鍚屽悕 inline override 娉ㄥ叆鐨?accent */
 [data-palette="custom"][data-custom-mode="light"] {
   --background: oklch(0.99 0.005 264);
   --foreground: oklch(0.18 0.01 264);
@@ -303,8 +303,8 @@
   color-scheme: light;
 }
 
-/* 深色色板统一启用 color-scheme: dark，让原生控件（滚动条等）也跟随；
-   并注入深色基底的状态语义色（成功 / 警告）与滚动条滑块色（白 alpha） */
+/* 娣辫壊鑹叉澘缁熶竴鍚敤 color-scheme: dark锛岃鍘熺敓鎺т欢锛堟粴鍔ㄦ潯绛夛級涔熻窡闅忥紱
+   骞舵敞鍏ユ繁鑹插熀搴曠殑鐘舵€佽涔夎壊锛堟垚鍔?/ 璀﹀憡锛変笌婊氬姩鏉℃粦鍧楄壊锛堢櫧 alpha锛?*/
 [data-palette="obsidian"],
 [data-palette="deep-sea"],
 [data-palette="twilight"],
@@ -318,7 +318,7 @@
   --scrollbar-slider-active-bg: oklch(1 0 0 / 27%);
 }
 
-/* 亮色色板（含自定义浅色基底）：亮色状态语义色 */
+/* 浜壊鑹叉澘锛堝惈鑷畾涔夋祬鑹插熀搴曪級锛氫寒鑹茬姸鎬佽涔夎壊 */
 [data-palette="daylight"],
 [data-palette="custom"][data-custom-mode="light"] {
   color-scheme: light;
@@ -366,19 +366,19 @@
   --color-sidebar-ring: var(--sidebar-ring);
   --animate-accordion-down: accordion-down var(--duration-base) ease-out;
   --animate-accordion-up: accordion-up var(--duration-base) ease-out;
-  /* ── 动效时长 token（映射为 Tailwind duration-* 类）──
-     Fix-26：两个历史问题——
-     1) 命名空间错误：Tailwind v4 的 duration 工具类只读取
-        `--transition-duration-*` 命名空间，原 `--duration-*` 键
-        从未生成过任何工具类（产物 CSS 中不存在）；
-     2) 自引用：`--duration-x: var(--duration-x)` 若被发射到 ：root 会形成循环引用。
-     现以正确命名空间引用上方 ：root 的 token（键名不同，无自引用），
-     @theme inline 将 var 表达式内联进工具类，运行时从 ：root 取值。 */
+  /* 鈹€鈹€ 鍔ㄦ晥鏃堕暱 token锛堟槧灏勪负 Tailwind duration-* 绫伙級鈹€鈹€
+     Fix-26锛氫袱涓巻鍙查棶棰樷€斺€?
+     1) 鍛藉悕绌洪棿閿欒锛歍ailwind v4 鐨?duration 宸ュ叿绫诲彧璇诲彇
+        `--transition-duration-*` 鍛藉悕绌洪棿锛屽師 `--duration-*` 閿?
+        浠庢湭鐢熸垚杩囦换浣曞伐鍏风被锛堜骇鐗?CSS 涓笉瀛樺湪锛夛紱
+     2) 鑷紩鐢細`--duration-x: var(--duration-x)` 鑻ヨ鍙戝皠鍒?锛歳oot 浼氬舰鎴愬惊鐜紩鐢ㄣ€?
+     鐜颁互姝ｇ‘鍛藉悕绌洪棿寮曠敤涓婃柟 锛歳oot 鐨?token锛堥敭鍚嶄笉鍚岋紝鏃犺嚜寮曠敤锛夛紝
+     @theme inline 灏?var 琛ㄨ揪寮忓唴鑱旇繘宸ュ叿绫伙紝杩愯鏃朵粠 锛歳oot 鍙栧€笺€?*/
   --transition-duration-instant: var(--duration-instant);
   --transition-duration-fast: var(--duration-fast);
   --transition-duration-base: var(--duration-base);
   --transition-duration-slow: var(--duration-slow);
-  /* ── 淡入动画（供 sync-overlay 等直接挂载组件使用）── */
+  /* 鈹€鈹€ 娣″叆鍔ㄧ敾锛堜緵 sync-overlay 绛夌洿鎺ユ寕杞界粍浠朵娇鐢級鈹€鈹€ */
   --animate-fade-in: fade-in var(--duration-base) ease-out;
 }
 
@@ -409,7 +409,7 @@
   }
 }
 
-/* 页面切换过渡动画：路由 pathname 变化时通过 key 重新挂载触发 */
+/* 椤甸潰鍒囨崲杩囨浮鍔ㄧ敾锛氳矾鐢?pathname 鍙樺寲鏃堕€氳繃 key 閲嶆柊鎸傝浇瑙﹀彂 */
 @keyframes page-enter {
   from {
     opacity: 0;
@@ -429,10 +429,10 @@
   * {
     @apply border-border outline-ring/50;
   }
-  /* html/body 均不设不透明背景：让 Mica 材质透过 WebView2 透明背景显示。
-     主内容区 <main> 在 AppShell 中使用 bg-background/60 dark:bg-background/85，
-     与标题栏、侧边栏保持一致的半透明云母/毛玻璃效果。
-     注：window-vibrancy 官方示例要求 html, body 必须 transparent。 */
+  /* html/body 鍧囦笉璁句笉閫忔槑鑳屾櫙锛氳 Mica 鏉愯川閫忚繃 WebView2 閫忔槑鑳屾櫙鏄剧ず銆?
+     涓诲唴瀹瑰尯 <main> 鍦?AppShell 涓娇鐢?bg-background/60 dark:bg-background/85锛?
+     涓庢爣棰樻爮銆佷晶杈规爮淇濇寔涓€鑷寸殑鍗婇€忔槑浜戞瘝/姣涚幓鐠冩晥鏋溿€?
+     娉細window-vibrancy 瀹樻柟绀轰緥瑕佹眰 html, body 蹇呴』 transparent銆?*/
   html {
     background: transparent;
   }
@@ -442,33 +442,33 @@
 }
 
 /* ============================================================
- * 全局滚动条美化（DevToys 风格，参考 qraft 同款实现）—— 全应用统一
- * - 10px 细滚动条，轨道透明（仅悬浮滑块，与 Radix ScrollArea 观感一致），
- *   thumb 主题色圆角滑块（2px 内缩）
- * - thumb 最小 28px，便于抓取；hover/active 加深 + 平滑过渡
- * - 颜色全部取自主题 token（--scrollbar-slider-*），深浅主题自动适配
+ * 鍏ㄥ眬婊氬姩鏉＄編鍖栵紙DevToys 椋庢牸锛屽弬鑰?qraft 鍚屾瀹炵幇锛夆€斺€?鍏ㄥ簲鐢ㄧ粺涓€
+ * - 10px 缁嗘粴鍔ㄦ潯锛岃建閬撻€忔槑锛堜粎鎮诞婊戝潡锛屼笌 Radix ScrollArea 瑙傛劅涓€鑷达級锛?
+ *   thumb 涓婚鑹插渾瑙掓粦鍧楋紙2px 鍐呯缉锛?
+ * - thumb 鏈€灏?28px锛屼究浜庢姄鍙栵紱hover/active 鍔犳繁 + 骞虫粦杩囨浮
+ * - 棰滆壊鍏ㄩ儴鍙栬嚜涓婚 token锛?-scrollbar-slider-*锛夛紝娣辨祬涓婚鑷姩閫傞厤
  *
- * 注意：不要再额外声明标准属性 `scrollbar-color`（勿用 `*` 通配注入）。
- * Chromium ≥121 / WebView2 下，一旦元素的 scrollbar-color 计算值非 auto，
- * 该元素的所有 ::-webkit-scrollbar 自定义样式会被整体禁用，退化为
- * 系统原生粗滚动条。颜色已由下方 ::-webkit-scrollbar-* 规则按同一
- * token 提供，无需重复。
+ * 娉ㄦ剰锛氫笉瑕佸啀棰濆澹版槑鏍囧噯灞炴€?`scrollbar-color`锛堝嬁鐢?`*` 閫氶厤娉ㄥ叆锛夈€?
+ * Chromium 鈮?21 / WebView2 涓嬶紝涓€鏃﹀厓绱犵殑 scrollbar-color 璁＄畻鍊奸潪 auto锛?
+ * 璇ュ厓绱犵殑鎵€鏈?::-webkit-scrollbar 鑷畾涔夋牱寮忎細琚暣浣撶鐢紝閫€鍖栦负
+ * 绯荤粺鍘熺敓绮楁粴鍔ㄦ潯銆傞鑹插凡鐢变笅鏂?::-webkit-scrollbar-* 瑙勫垯鎸夊悓涓€
+ * token 鎻愪緵锛屾棤闇€閲嶅銆?
  *
- * 覆盖范围：所有原生滚动容器（任务列表 / 看板 / 侧栏 / 设置 / 关于 /
- * 命令面板与下拉列表等）+ Radix ScrollArea 自绘滑块（scroll-area.tsx
- * 改用同一 token）
+ * 瑕嗙洊鑼冨洿锛氭墍鏈夊師鐢熸粴鍔ㄥ鍣紙浠诲姟鍒楄〃 / 鐪嬫澘 / 渚ф爮 / 璁剧疆 / 鍏充簬 /
+ * 鍛戒护闈㈡澘涓庝笅鎷夊垪琛ㄧ瓑锛? Radix ScrollArea 鑷粯婊戝潡锛坰croll-area.tsx
+ * 鏀圭敤鍚屼竴 token锛?
  * ============================================================ */
 ::-webkit-scrollbar {
   width: 10px;
   height: 10px;
 }
 ::-webkit-scrollbar-track {
-  /* 无轨道底色：只保留悬浮滑块本身，避免列表右侧出现整条灰色背景柱 */
+  /* 鏃犺建閬撳簳鑹诧細鍙繚鐣欐偓娴粦鍧楁湰韬紝閬垮厤鍒楄〃鍙充晶鍑虹幇鏁存潯鐏拌壊鑳屾櫙鏌?*/
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
   background-color: var(--scrollbar-slider-bg);
-  /* padding-box + 2px 透明 border：滑块四周内缩 2px，更精致 */
+  /* padding-box + 2px 閫忔槑 border锛氭粦鍧楀洓鍛ㄥ唴缂?2px锛屾洿绮捐嚧 */
   background-clip: padding-box;
   border: 2px solid transparent;
   min-height: 28px;
@@ -487,23 +487,23 @@
   background: transparent;
 }
 
-/* ScrollArea 内容容器改为 block 布局 —— 让行内 truncate 正常显示省略号(...)
- * 背景：Radix 会把内容包在 <div style="min-width:100%; display:table"> 中，
- * table 布局按内容的 max-content 撑宽容器；而 truncate 是 whitespace-nowrap，
- * 其 max-content 就是完整文本宽度 —— 长文本会把整行撑到超出容器被裁掉，
- * 永远不触发 text-ellipsis。改为 block 后容器宽度受 viewport 约束
- * （min-width:100% 保留），行内 min-w-0 + truncate 即可正常收缩显示 ...。
- * !important 用于覆盖 Radix 写在内联 style 上的 display:table。 */
+/* ScrollArea 鍐呭瀹瑰櫒鏀逛负 block 甯冨眬 鈥斺€?璁╄鍐?truncate 姝ｅ父鏄剧ず鐪佺暐鍙?...)
+ * 鑳屾櫙锛歊adix 浼氭妸鍐呭鍖呭湪 <div style="min-width:100%; display:table"> 涓紝
+ * table 甯冨眬鎸夊唴瀹圭殑 max-content 鎾戝瀹瑰櫒锛涜€?truncate 鏄?whitespace-nowrap锛?
+ * 鍏?max-content 灏辨槸瀹屾暣鏂囨湰瀹藉害 鈥斺€?闀挎枃鏈細鎶婃暣琛屾拺鍒拌秴鍑哄鍣ㄨ瑁佹帀锛?
+ * 姘歌繙涓嶈Е鍙?text-ellipsis銆傛敼涓?block 鍚庡鍣ㄥ搴﹀彈 viewport 绾︽潫
+ * 锛坢in-width:100% 淇濈暀锛夛紝琛屽唴 min-w-0 + truncate 鍗冲彲姝ｅ父鏀剁缉鏄剧ず ...銆?
+ * !important 鐢ㄤ簬瑕嗙洊 Radix 鍐欏湪鍐呰仈 style 涓婄殑 display:table銆?*/
 [data-radix-scroll-area-viewport] > div,
 [data-slot="scroll-area-viewport"] > div {
   display: block !important;
 }
 
 /* ============================================================
- * ScrollArea 兜底样式 —— 普通 CSS 选择器直击滑块，不依赖 utility 产物
- * Tailwind v4 vite prod scan 偶发漏扫组件目录的任意值 utility
- * （bg-[var(--...)] 等），导致滑块无色；此处顶层选择器一定留在产物中。
- * 数值与 scroll-area.tsx 的 className 完全一致，不带来视觉差异。
+ * ScrollArea 鍏滃簳鏍峰紡 鈥斺€?鏅€?CSS 閫夋嫨鍣ㄧ洿鍑绘粦鍧楋紝涓嶄緷璧?utility 浜х墿
+ * Tailwind v4 vite prod scan 鍋跺彂婕忔壂缁勪欢鐩綍鐨勪换鎰忓€?utility
+ * 锛坆g-[var(--...)] 绛夛級锛屽鑷存粦鍧楁棤鑹诧紱姝ゅ椤跺眰閫夋嫨鍣ㄤ竴瀹氱暀鍦ㄤ骇鐗╀腑銆?
+ * 鏁板€间笌 scroll-area.tsx 鐨?className 瀹屽叏涓€鑷达紝涓嶅甫鏉ヨ瑙夊樊寮傘€?
  * ============================================================ */
 [data-slot="scroll-area-thumb"] {
   background-color: var(--scrollbar-slider-bg);
@@ -515,8 +515,8 @@
   background-color: var(--scrollbar-slider-hover-bg);
 }
 
-/* 侧边栏折叠态：隐藏滚动区原生滚动条占位，避免分组图标相对顶部/底部图标左移
- * （Radix Viewport 内联 overflow:scroll，原生滚动条与自绘悬浮条会二重出现） */
+/* 渚ц竟鏍忔姌鍙犳€侊細闅愯棌婊氬姩鍖哄師鐢熸粴鍔ㄦ潯鍗犱綅锛岄伩鍏嶅垎缁勫浘鏍囩浉瀵归《閮?搴曢儴鍥炬爣宸︾Щ
+ * 锛圧adix Viewport 鍐呰仈 overflow:scroll锛屽師鐢熸粴鍔ㄦ潯涓庤嚜缁樻偓娴潯浼氫簩閲嶅嚭鐜帮級 */
 [data-slot="scroll-area-viewport"] {
   scrollbar-width: none;
   -ms-overflow-style: none;
@@ -525,83 +525,3 @@
   display: none;
 }
 
-/* ===== M4 移动端 token（05 §2.2；独立命名空间，勿与 OKLCH 六色板混用）===== */
-html[data-platform="mobile"] {
-  --m-bg: #f3f3f3;
-  --m-surface: #f9f9f9;
-  --m-text: #1a1d26;
-  --m-sub: #6b7685;
-  --m-glass-tint: rgba(255, 255, 255, 0.18);
-}
-@media (prefers-color-scheme: dark) {
-  html[data-platform="mobile"] {
-    --m-bg: #000000;
-    --m-surface: #181818;
-    --m-text: #eaecf0;
-    --m-sub: #8b92a5;
-    --m-glass-tint: rgba(24, 26, 34, 0.15);
-  }
-}
-/* 安全区 + 手势条兜底（滚动容器尾部 spacer 用） */
-.m-safe-bottom { padding-bottom: max(env(safe-area-inset-bottom), 48px); }
-.m-safe-top { padding-top: env(safe-area-inset-top); }
-
-/* ===== M4 Material Symbols Rounded 自托管字体（05 §2.3；本地打包不走 CDN）
-   P0 治理：按 scripts/icon-names.json 生成的 ligature 子集（7KB，全量 5.1MB 已移除；
-   新增图标须先登记清单再 pnpm fonts:subset 重新生成）===== */
-@font-face {
-  font-family: "Material Symbols Rounded";
-  src: url("/fonts/MaterialSymbolsRounded.subset.woff2") format("woff2");
-  font-display: block;
-}
-.msr {
-  font-family: "Material Symbols Rounded";
-  font-weight: normal;
-  font-style: normal;
-  line-height: 1;
-  letter-spacing: normal;
-  text-transform: none;
-  white-space: nowrap;
-  word-wrap: normal;
-  direction: ltr;
-  font-feature-settings: "liga";
-  -webkit-font-smoothing: antialiased;
-  user-select: none;
-}
-
-/* ===== M4 玻璃高光线（05 §三：1px 五段 alpha；亮 [0,.85,1,.85,0] 暗 [0,.30,.45,.30,0]）=====
- * 静态类替代组件内 <style> 注入（GlassHighlight 多实例时避免重复注入）；
- * 仅移动玻璃组件消费，桌面端无引用零成本。 */
-.glass-hl {
-  position: absolute;
-  left: 0;
-  right: 0;
-  height: 1px;
-  background: linear-gradient(
-    90deg,
-    rgba(255, 255, 255, 0) 0%,
-    rgba(255, 255, 255, 0.85) 25%,
-    rgba(255, 255, 255, 1) 50%,
-    rgba(255, 255, 255, 0.85) 75%,
-    rgba(255, 255, 255, 0) 100%
-  );
-}
-.glass-hl-bottom { bottom: 0; }
-.glass-hl-inner-bottom { bottom: 1px; border-radius: 9999px; inset-inline: 6px; }
-@media (prefers-color-scheme: dark) {
-  .glass-hl {
-    background: linear-gradient(
-      90deg,
-      rgba(255, 255, 255, 0) 0%,
-      rgba(255, 255, 255, 0.3) 25%,
-      rgba(255, 255, 255, 0.45) 50%,
-      rgba(255, 255, 255, 0.3) 75%,
-      rgba(255, 255, 255, 0) 100%
-    );
-  }
-}
-
-/* ===== M4 WaitToast 皮肤类（05 §五 WaitToast：variant default/destructive）=====
- * sonner 经调用方 className 注入；surface 底 + 圆角 12，destructive 文字用逾期红 */
-.wait-toast { background: var(--m-surface); color: var(--m-text); border-radius: 12px; }
-.wait-toast-destructive { background: var(--m-surface); color: #F44336; border-radius: 12px; }

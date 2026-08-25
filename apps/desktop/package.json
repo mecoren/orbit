@@ -9,7 +9,6 @@
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "fonts:subset": "node scripts/subset-icons.mjs",
     "tauri": "tauri"
   },
   "dependencies": {

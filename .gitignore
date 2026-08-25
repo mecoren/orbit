@@ -10,8 +10,8 @@ dist/
 apps/mobile/.dart_tool/
 apps/mobile/build/
 
-# Tauri 生成物（schema 随构建再生；移动端 gen/ 在 M4 init 后按需纳管）
-apps/desktop/src-tauri/gen/schemas/
+# Tauri 生成物（gen/ 整体随构建再生：桌面 schemas、历史遗留 Android 工程均已清除）
+apps/desktop/src-tauri/gen/
 
 # 日志与临时文件
 *.log

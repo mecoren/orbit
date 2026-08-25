@@ -38,7 +38,8 @@ impl AppState {
     }
 }
 
-#[cfg_attr(mobile, tauri::mobile_entry_point)]
+// 移动端已拆分为独立 Flutter 应用（apps/mobile），本壳仅服务桌面，
+// 不再声明 tauri::mobile_entry_point。
 pub fn run() {
     // 通用插件：双端无条件注册
     let builder = tauri::Builder::default()
