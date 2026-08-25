@@ -120,17 +120,18 @@ export function TaskListView({ tasks, projects, loading, error, onCreateClick, o
           const due = dueText(t.due_date);
           const projectName = t.project_id != null ? projectById.get(t.project_id)?.title : undefined;
           return (
-            // 绝对定位行容器：divide-y 在脱离文档流的兄弟间不生效，改每行自带 border-b
+            // 绝对定位行容器：divide-y 在脱离文档流的兄弟间不生效，改每行自带 border-b。
+            // 用 top 而非 transform 定位——transform 会让本行成为 fixed 后代
+            // （ContextMenuBase 的哨兵锚点）的 containing block，滚动后菜单错位飞出
             <div
               key={t.id}
               data-index={vi.index}
               ref={virtualizer.measureElement}
               style={{
                 position: "absolute",
-                top: 0,
+                top: vi.start,
                 left: 0,
                 width: "100%",
-                transform: `translateY(${vi.start}px)`,
               }}
             >
               <TaskContextMenu

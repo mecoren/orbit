@@ -7,7 +7,7 @@
  * 表单抽屉（Task 15）：FAB 新建携 defaultProjectId=当前 projectId；
  * Tile 长按「编辑」携 editingTaskId——抽屉挂本屏层级。
  */
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useVirtualizer } from "@tanstack/react-virtual";
@@ -114,7 +114,8 @@ export function SubListScreen() {
   // 列表区在 AppBar 之下，offsetTop 作为 scrollMargin 换算坐标系（官方模式）
   const listRef = useRef<HTMLDivElement | null>(null);
   const [listOffset, setListOffset] = useState(0);
-  useEffect(() => {
+  // useLayoutEffect：首帧即取准 offsetTop，可视窗口计算不偏差
+  useLayoutEffect(() => {
     if (listRef.current) setListOffset(listRef.current.offsetTop);
   }, []);
   const virtualizer = useVirtualizer({
@@ -176,11 +177,12 @@ export function SubListScreen() {
                         data-index={vi.index}
                         ref={virtualizer.measureElement}
                         style={{
+                          // top 而非 transform：行内长按 BottomSheet / WaitAlertDialog
+                          // 均为无 portal 的 fixed，transform 会把定位压进单行盒子
                           position: "absolute",
-                          top: 0,
+                          top: vi.start - virtualizer.options.scrollMargin,
                           left: 0,
                           width: "100%",
-                          transform: `translateY(${vi.start - virtualizer.options.scrollMargin}px)`,
                         }}
                       >
                         <TodoTaskTile
