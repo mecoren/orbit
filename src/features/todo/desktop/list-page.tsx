@@ -11,6 +11,7 @@ import { LayoutGrid, ListTodo, Plus, Search, Tag } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 
 import { cn } from "@/lib/utils";
+import { UndoableDeleteProvider } from "@/hooks/use-undoable-delete";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -120,6 +121,7 @@ export default function TodoListPage() {
       : (activeQuickDef?.label ?? "全部任务");
 
   return (
+    <UndoableDeleteProvider>
     <div className="flex h-full overflow-hidden">
       {/* 左栏 */}
       <ProjectSidebar
@@ -329,5 +331,6 @@ export default function TodoListPage() {
       {/* 标签管理器十色板（04 §3.8） */}
       <LabelManager open={labelManagerOpen} onOpenChange={setLabelManagerOpen} />
     </div>
+    </UndoableDeleteProvider>
   );
 }

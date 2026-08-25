@@ -55,6 +55,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { ContextMenuBase } from "./context-menu";
+import { hideFromQueries, useUndoableDeleteAction } from "@/hooks/use-undoable-delete";
 import {
   todoCommentCreate,
   todoLabelList,
@@ -110,6 +111,7 @@ export function TaskContextMenu({
   const [commentOpen, setCommentOpen] = useState(false);
   const [commentDraft, setCommentDraft] = useState("");
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const undoableDelete = useUndoableDeleteAction();
 
   const patch = (p: Parameters<typeof todoTaskUpdate>[1]) =>
     todoTaskUpdate(task.id, p).then(refetch);
@@ -430,20 +432,28 @@ export function TaskContextMenu({
         </DialogContent>
       </Dialog>
 
-      {/* 删除确认 */}
+      {/* 删除确认（P0：确认后进入 5s 撤销窗口，非立即落库） */}
       <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>删除待办</AlertDialogTitle>
             <AlertDialogDescription>
-              确定要删除「{task.title}」吗？此操作无法撤销。
+              确定要删除「{task.title}」吗？删除后 5 秒内可撤销。
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>取消</AlertDialogCancel>
             <AlertDialogAction
               className="bg-destructive text-white hover:bg-destructive/90"
-              onClick={() => { void todoTaskDelete(task.id).then(refetch); }}
+              onClick={() => {
+                setDeleteOpen(false);
+                undoableDelete({
+                  entityLabel: "任务",
+                  recordName: task.title,
+                  commit: () => todoTaskDelete(task.id),
+                  hide: (qc) => hideFromQueries(qc, ["todo_tasks"], task.id),
+                });
+              }}
             >
               删除
             </AlertDialogAction>

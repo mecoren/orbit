@@ -43,6 +43,7 @@ import {
 import { DateTimePicker } from "@/components/business/date-picker";
 import { WaitCalendar } from "@/components/ui/wait-calendar";
 import { useTodoStore } from "@/features/todo/store";
+import { hideFromQueries, useUndoableDeleteAction } from "@/hooks/use-undoable-delete";
 import { PRIORITY_COLOR, TODO_ACCENT } from "../shared/constants";
 import { REPEAT_MODE, REPEAT_PRESETS, repeatLabel } from "../shared/repeat";
 import {
@@ -183,6 +184,7 @@ function TitleRow({
   const [draft, setDraft] = useState(task.title);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const setSelectedTaskId = useTodoStore((s) => s.setSelectedTaskId);
+  const undoableDelete = useUndoableDeleteAction();
 
   useEffect(() => {
     setDraft(task.title);
@@ -261,16 +263,23 @@ function TitleRow({
           <AlertDialogHeader>
             <AlertDialogTitle>删除待办</AlertDialogTitle>
             <AlertDialogDescription>
-              确定要删除「{task.title}」吗？此操作无法撤销。
+              确定要删除「{task.title}」吗？删除后 5 秒内可撤销。
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>取消</AlertDialogCancel>
             <AlertDialogAction
               className="bg-destructive text-white hover:bg-destructive/90"
-              onClick={async () => {
-                await todoTaskDelete(task.id);
+              onClick={() => {
+                setConfirmDelete(false);
                 setSelectedTaskId(null);
+                // Provider 在 ListPage 层：抽屉关闭卸载不丢撤销窗口
+                undoableDelete({
+                  entityLabel: "任务",
+                  recordName: task.title,
+                  commit: () => todoTaskDelete(task.id),
+                  hide: (qc) => hideFromQueries(qc, ["todo_tasks"], task.id),
+                });
               }}
             >
               删除

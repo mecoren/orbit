@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/dialog";
 import { todoLabelCreate, todoLabelDelete, todoLabelList, todoLabelUpdate } from "@/lib/tauri";
 import type { TodoLabel } from "@/lib/tauri";
+import { hideFromQueries, useUndoableDeleteAction } from "@/hooks/use-undoable-delete";
 
 /** 10 色预设色板（04 §3.8，默认选中第 4 色 #3B82F6） */
 const PRESET_COLORS = [
@@ -32,6 +33,7 @@ interface LabelManagerProps {
 
 export function LabelManager({ open, onOpenChange }: LabelManagerProps) {
   const qc = useQueryClient();
+  const undoableDelete = useUndoableDeleteAction();
   const [labels, setLabels] = useState<TodoLabel[]>([]);
   const [newTitle, setNewTitle] = useState("");
 
@@ -71,9 +73,13 @@ export function LabelManager({ open, onOpenChange }: LabelManagerProps) {
     void refetch();
   };
 
-  const remove = async (label: TodoLabel) => {
-    await todoLabelDelete(label.id);
-    void refetch();
+  const remove = (label: TodoLabel) => {
+    undoableDelete({
+      entityLabel: "标签",
+      recordName: label.title,
+      commit: () => todoLabelDelete(label.id),
+      hide: (qc) => hideFromQueries(qc, ["todo-label"], label.id),
+    });
   };
 
   return (

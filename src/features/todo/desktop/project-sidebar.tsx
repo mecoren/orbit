@@ -18,6 +18,7 @@ import {
 import { GripVertical, Inbox, Plus } from "lucide-react";
 
 import { cn } from "@/lib/utils";
+import { hideFromQueries, useUndoableDeleteAction } from "@/hooks/use-undoable-delete";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -111,12 +112,20 @@ export function ProjectSidebar({
     }
   };
 
-  // 删除项目：项目下有未完成任务 → 拒绝；无任务 → 确认后软删
-  const confirmDelete = async (project: TodoProject) => {
-    await todoProjectDelete(project.id);
-    if (activeProjectId === project.id) navigate("/todo");
-    await refetchProjects();
+  // 删除项目：项目下有未完成任务 → 拒绝；无任务 → 确认后进入撤销窗口软删
+  const undoableDelete = useUndoableDeleteAction();
+  const confirmDelete = (project: TodoProject) => {
     setDeleteTarget(null);
+    if (activeProjectId === project.id) navigate("/todo");
+    undoableDelete({
+      entityLabel: "项目",
+      recordName: project.title,
+      commit: async () => {
+        await todoProjectDelete(project.id);
+        await refetchProjects();
+      },
+      hide: (qc) => hideFromQueries(qc, ["todo-project"], project.id),
+    });
   };
 
   // 拖拽结束：组合列表 arraymove；未分组位置存 localStorage，
@@ -267,7 +276,7 @@ export function ProjectSidebar({
             <AlertDialogCancel>取消</AlertDialogCancel>
             <AlertDialogAction
               className="bg-destructive text-white hover:bg-destructive/90"
-              onClick={() => deleteTarget && void confirmDelete(deleteTarget.project)}
+              onClick={() => deleteTarget && confirmDelete(deleteTarget.project)}
             >
               删除
             </AlertDialogAction>
