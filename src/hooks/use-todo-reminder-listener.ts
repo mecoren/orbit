@@ -14,6 +14,12 @@ import { isPermissionGranted, requestPermission } from "@tauri-apps/plugin-notif
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { isMobilePlatform } from "@/lib/platform";
+import {
+  todoReminderCreate,
+  todoReminderDelete,
+  todoTaskGet,
+} from "@/lib/tauri";
+import { nextRepeatAt } from "@/features/todo/shared/repeat";
 import { waitToast } from "@/components/mobile/wait-toast";
 
 interface ReminderDuePayload {
@@ -56,6 +62,20 @@ export function useTodoReminderListener() {
         })}`,
         duration: 10_000,
       });
+      // 重复提醒：任务带 repeat 规则时删旧建新排下一次（失败不影响本次提醒）
+      void (async () => {
+        try {
+          const task = await todoTaskGet(r.task_id);
+          const next = nextRepeatAt(r.remind_at, task.repeat_mode, task.repeat_after, Date.now());
+          if (next != null) {
+            await todoReminderDelete(r.id);
+            await todoReminderCreate({ task_id: r.task_id, remind_at: next });
+            void qc.invalidateQueries({ queryKey: ["todo-task-detail", r.task_id] });
+          }
+        } catch {
+          /* 重复调度失败静默 */
+        }
+      })();
       // 提醒触发不改变数据，无需失效查询
     });
     return () => {

@@ -1,9 +1,10 @@
 /**
- * InfoSection —— 详情基本信息区（05 §4.3 基本信息行序固定五行；M4 Task 13/15）
+ * InfoSection —— 详情基本信息区（05 §4.3 基本信息行序固定五行 + 重复规则行；M4 Task 13/15）
  *
  * 行序：优先级(P0–P5 文本 + 10×10 色点，0 显"无") / 状态(待办·进行中·已完成 + 色点) /
  * 项目(项目名或"未分组") / 截止日期(yyyy-MM-dd 或"无") / 进度(N% 仅 percent_done>0 显示，
- * 只读无箭头)。编辑一律 SelectSheet（优先级/状态/项目三项）；截止日期行经 WaitDatePickerSheet
+ * 只读无箭头) / 重复(不重复·每天·每周·每月·每年等预设，对齐桌面 PropertyGrid)。
+ * 编辑一律 SelectSheet（优先级/状态/项目/重复四项）；截止日期行经 WaitDatePickerSheet
  * 选择（Task 15 注入，date 模式）。
  *
  * 状态切换与桌面 task-detail-drawer.tsx PropertyGrid.setStatus 完全同源：
@@ -21,6 +22,7 @@ import {
   type TodoTaskUpdateInput,
 } from "@/lib/tauri";
 import { PRIORITY_COLOR, STATUS_COLOR, TODO_ACCENT } from "../../shared/constants";
+import { REPEAT_MODE, repeatLabel } from "../../shared/repeat";
 import { SectionCard } from "../section-card";
 
 /** 优先级文案（与桌面 task-detail-drawer PRIORITY_LABELS 一致） */
@@ -45,7 +47,20 @@ interface InfoSectionProps {
   onPatch: (input: TodoTaskUpdateInput) => Promise<void>;
 }
 
-type SheetKind = "priority" | "status" | "project" | null;
+type SheetKind = "priority" | "status" | "project" | "repeat" | null;
+
+/** 重复预设（value 编码 "mode:after"，与桌面 RepeatEditor 语义一致；每季度=每 3 月） */
+const REPEAT_ITEMS = [
+  { value: "0:0", label: "不重复" },
+  { value: "1:1", label: "每天" },
+  { value: "1:2", label: "每 2 天" },
+  { value: "1:3", label: "每 3 天" },
+  { value: "2:1", label: "每周" },
+  { value: "2:2", label: "每 2 周" },
+  { value: "3:1", label: "每月" },
+  { value: "3:3", label: "每季度" },
+  { value: "4:1", label: "每年" },
+] as const;
 
 /** _InfoTile（05 §4.3）：InkWell 等价 active:bg 反馈 rounded-lg + v-padding8；
  * Row[label 12px/sub 固定列宽 80 → value 行：10×10 色点 + 15px 文本] → 尾 keyboard_arrow_right_rounded(20/sub) */
@@ -158,6 +173,12 @@ export function InfoSection({ task, onPatch }: InfoSectionProps) {
       {task.percent_done > 0 && (
         <_InfoTile label="进度" value={`${Math.round(task.percent_done)}%`} arrow={false} />
       )}
+      {/* 重复规则（repeat_after/repeat_mode；触发后由全局监听器自动排下一次，与桌面同源） */}
+      <_InfoTile
+        label="重复"
+        value={task.repeat_mode === REPEAT_MODE.NONE ? "不重复" : repeatLabel(task.repeat_mode, task.repeat_after)}
+        onClick={() => setSheet("repeat")}
+      />
 
       {/* 编辑一律底部弹层选择器：12×12 圆点 ListTile + 当前值尾 check_rounded（SelectSheet 内建） */}
       <SelectSheet
@@ -186,6 +207,17 @@ export function InfoSection({ task, onPatch }: InfoSectionProps) {
         items={projectItems}
         current={projectCurrent}
         onSelect={(v) => void onPatch({ project_id: v === "" ? null : Number(v) })}
+        onClose={() => setSheet(null)}
+      />
+      <SelectSheet
+        open={sheet === "repeat"}
+        title="重复"
+        items={REPEAT_ITEMS.map((it) => ({ ...it }))}
+        current={`${task.repeat_mode}:${task.repeat_after}`}
+        onSelect={(v) => {
+          const [mode, after] = v.split(":").map(Number);
+          void onPatch({ repeat_mode: mode, repeat_after: after });
+        }}
         onClose={() => setSheet(null)}
       />
 

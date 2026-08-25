@@ -1,20 +1,22 @@
 /**
- * QuickAddBar — 底部常驻快速输入栏（04 文档 §3.5 复刻，todo 模块唯一毛玻璃点）
+ * QuickAddBar — 底部常驻快速输入栏（04 文档 §3.5 复刻；背景与应用背景同色）
  *
- * 输入后浮现三个快捷 Popover（截止日期 / 优先级 / 项目）；
+ * 输入后浮现四个快捷 Popover（截止日期 / 提醒时间 / 优先级 / 项目）；
  * Enter 提交并保持焦点连续录入；Esc 重置。
+ * 提醒时间为独立实体：任务创建成功后追加 todo_reminders_create。
  */
 import { useRef, useState } from "react";
 import { format } from "date-fns";
 import { zhCN } from "date-fns/locale";
-import { Calendar, CalendarPlus, Flag, Folder, Plus } from "lucide-react";
+import { Calendar, CalendarPlus, Clock, Flag, Folder, Plus } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { WaitCalendar } from "@/components/ui/wait-calendar";
-import { todoTaskCreate, type TodoProject } from "@/lib/tauri";
+import { DateTimePicker } from "@/components/business/date-picker";
+import { todoReminderCreate, todoTaskCreate, type TodoProject } from "@/lib/tauri";
 import { PRIORITY_COLOR, TODO_ACCENT } from "../shared/constants";
 
 const PRIORITY_LABELS = ["无", "低", "中", "高", "紧急", "立即处理"];
@@ -30,6 +32,8 @@ export function QuickAddBar({ projects, defaultProjectId }: QuickAddBarProps) {
   const [title, setTitle] = useState("");
   const [priority, setPriority] = useState(0);
   const [dueDate, setDueDate] = useState<Date | null>(null);
+  /** 提醒时间草稿（DateTimePicker 值格式 YYYY-MM-DDTHH:MM；空 = 不提醒） */
+  const [remindDraft, setRemindDraft] = useState("");
   const [projectId, setProjectId] = useState<number | null | "default">("default");
 
   const hasInput = title.trim().length > 0;
@@ -40,6 +44,7 @@ export function QuickAddBar({ projects, defaultProjectId }: QuickAddBarProps) {
     setTitle("");
     setPriority(0);
     setDueDate(null);
+    setRemindDraft("");
     setProjectId("default");
   };
 
@@ -47,12 +52,19 @@ export function QuickAddBar({ projects, defaultProjectId }: QuickAddBarProps) {
     const t = title.trim();
     if (!t) return;
     try {
-      await todoTaskCreate({
+      const created = await todoTaskCreate({
         title: t,
         priority,
         due_date: dueDate ? dueDate.getTime() : null,
         project_id: effectiveProjectId,
       });
+      // 提醒为独立实体：任务创建成功后追加；失败不影响任务本身
+      if (remindDraft) {
+        const ms = new Date(remindDraft).getTime();
+        if (!Number.isNaN(ms)) {
+          await todoReminderCreate({ task_id: created.id, remind_at: ms });
+        }
+      }
       // 连续录入：清空并保持焦点（04 §3.5）
       reset();
       requestAnimationFrame(() => inputRef.current?.focus());
@@ -61,9 +73,11 @@ export function QuickAddBar({ projects, defaultProjectId }: QuickAddBarProps) {
     }
   };
 
+  // 背景保持透明：壳层 main 为 bg-background/60 半透明底（透出 Mica），
+  // 此处再叠任何不透明底都会与周围所见背景产生色差
   return (
-    <div className="border-t border-border bg-background/95 px-4 py-2.5 backdrop-blur">
-      <div className="flex items-center gap-2 rounded-md border border-border bg-card px-2 py-1.5 shadow-sm">
+    <div className="border-t border-border px-4 py-2.5">
+      <div className="flex items-center gap-2 rounded-md border border-border px-2 py-1.5 shadow-sm">
         <span
           className={cn(
             "flex h-5 w-5 items-center justify-center rounded-full border-2",
@@ -102,7 +116,8 @@ export function QuickAddBar({ projects, defaultProjectId }: QuickAddBarProps) {
                   <Calendar className="size-4" />
                 </Button>
               </PopoverTrigger>
-              <PopoverContent align="end" className="w-auto p-3">
+              {/* 宽度需设上限：DayPicker 表格 w-full+aspect-square 在无界 w-auto 下无法收敛 */}
+              <PopoverContent align="end" className="w-auto min-w-[280px] max-w-[320px] p-3">
                 <p className="mb-2 text-sm font-medium">截止日期</p>
                 <WaitCalendar
                   mode="single"
@@ -118,6 +133,33 @@ export function QuickAddBar({ projects, defaultProjectId }: QuickAddBarProps) {
                   <Button size="sm" variant="outline" onClick={() => setDueDate(new Date())}>
                     今天
                   </Button>
+                </div>
+              </PopoverContent>
+            </Popover>
+
+            {/* 提醒时间 */}
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className={cn(
+                    "h-7 w-7",
+                    remindDraft && "bg-primary/10 text-primary",
+                  )}
+                >
+                  <Clock className="size-4" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent align="end" className="w-[320px] p-3">
+                <p className="mb-2 text-sm font-medium">提醒时间</p>
+                <DateTimePicker value={remindDraft} onChange={setRemindDraft} />
+                <div className="mt-2 flex justify-end gap-2 border-t pt-2">
+                  {remindDraft && (
+                    <Button variant="link" size="sm" onClick={() => setRemindDraft("")}>
+                      清除
+                    </Button>
+                  )}
                 </div>
               </PopoverContent>
             </Popover>

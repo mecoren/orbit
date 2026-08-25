@@ -20,6 +20,7 @@ import {
 } from "@/lib/tauri";
 import { formatDateTime } from "../../shared/time";
 import { TODO_ACCENT } from "../../shared/constants";
+import { repeatLabel } from "../../shared/repeat";
 import { SectionCard } from "../section-card";
 
 interface RemindersSectionProps {
@@ -81,6 +82,14 @@ export function RemindersSection({ task, refreshDetail }: RemindersSectionProps)
               <span className="min-w-0 flex-1 truncate text-[15px] text-[var(--m-text)]">
                 {formatDateTime(r.remind_at)}
               </span>
+              {task.repeat_mode > 0 && (
+                <span
+                  className="shrink-0 rounded-full px-2 py-0.5 text-[11px]"
+                  style={{ color: TODO_ACCENT, background: `color-mix(in srgb, ${TODO_ACCENT} 12%, transparent)` }}
+                >
+                  {repeatLabel(task.repeat_mode, task.repeat_after)}
+                </span>
+              )}
               <button
                 type="button"
                 aria-label="删除提醒"
