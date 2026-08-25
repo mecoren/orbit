@@ -1,27 +1,49 @@
 /**
  * router — 桌面端路由（createBrowserRouter）
  *
- * MVP 路由面：/todo（待办，M2 复刻替换占位）+ /settings + /about。
- * M1 将追加 /unlock 解锁页与启动引导流（01 文档 §四）。
+ * MVP 路由面：/todo + /settings + /about + /sync-recovery。
  * M4 平台分叉：移动 UA 下改挂 router.mobile.tsx 的 hash 路由，桌面路由零变化。
+ * P0 性能治理：React.lazy 路由级分包——首屏仅加载当前页。
  */
+import { Suspense, lazy, type ReactNode } from "react";
 import { Navigate, createBrowserRouter } from "react-router";
 
 import { AppShell } from "@/components/layout/app-shell";
-import TodoListPage from "@/features/todo/desktop/list-page";
-import { SettingsPage } from "@/pages/settings-page";
-import { AboutPage } from "@/pages/about-page";
-import { SyncRecoveryPage } from "@/pages/sync-recovery-page";
+import { EqualizerLoader } from "@/components/EqualizerLoader";
 import { isMobilePlatform } from "@/lib/platform";
 import { mobileRouter } from "@/router.mobile";
 
-/** 桌面子路由表（M4 前的内联数组原样抽出，内容不变） */
+const TodoListPage = lazy(() => import("@/features/todo/desktop/list-page"));
+const SettingsPage = lazy(() =>
+  import("@/pages/settings-page").then((m) => ({ default: m.SettingsPage })),
+);
+const AboutPage = lazy(() =>
+  import("@/pages/about-page").then((m) => ({ default: m.AboutPage })),
+);
+const SyncRecoveryPage = lazy(() =>
+  import("@/pages/sync-recovery-page").then((m) => ({ default: m.SyncRecoveryPage })),
+);
+
+/** 懒加载页统一 fallback：壳内居中加载动画 */
+function LazyFallback() {
+  return (
+    <div className="grid h-full place-items-center">
+      <EqualizerLoader />
+    </div>
+  );
+}
+
+function page(node: ReactNode) {
+  return <Suspense fallback={<LazyFallback />}>{node}</Suspense>;
+}
+
+/** 桌面子路由表（路径与 M4 前一致，零行为变化） */
 const desktopChildren = [
   { index: true, element: <Navigate to="/todo" replace /> },
-  { path: "todo", element: <TodoListPage /> },
-  { path: "settings", element: <SettingsPage /> },
-  { path: "about", element: <AboutPage /> },
-  { path: "sync-recovery", element: <SyncRecoveryPage /> },
+  { path: "todo", element: page(<TodoListPage />) },
+  { path: "settings", element: page(<SettingsPage />) },
+  { path: "about", element: page(<AboutPage />) },
+  { path: "sync-recovery", element: page(<SyncRecoveryPage />) },
 ];
 
 export const router = isMobilePlatform()
