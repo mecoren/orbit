@@ -661,10 +661,11 @@ import { useVirtualizer } from "@tanstack/react-virtual";
               ref={virtualizer.measureElement}
               style={{
                 position: "absolute",
-                top: 0,
+                // ⚠ 实施修订（审查后）：必须用 top 而非 transform——transform 祖先会成为
+                // fixed 后代（右键菜单哨兵无 portal）的 containing block，滚动后菜单错位
+                top: vi.start,
                 left: 0,
                 width: "100%",
-                transform: `translateY(${vi.start}px)`,
               }}
             >
               <TaskContextMenu
@@ -737,10 +738,11 @@ import { useVirtualizer } from "@tanstack/react-virtual";
                         ref={virtualizer.measureElement}
                         style={{
                           position: "absolute",
-                          top: 0,
+                          // ⚠ 实施修订（审查后）：top 而非 transform——行内长按 BottomSheet /
+                          // WaitAlertDialog 均为无 portal 的 fixed，transform 会压进单行盒子
+                          top: vi.start - virtualizer.options.scrollMargin,
                           left: 0,
                           width: "100%",
-                          transform: `translateY(${vi.start - virtualizer.options.scrollMargin}px)`,
                         }}
                       >
                         <TodoTaskTile
