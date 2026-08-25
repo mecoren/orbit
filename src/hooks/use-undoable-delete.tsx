@@ -7,6 +7,10 @@
  *
  * Provider 挂在 ListPage 层：任务行（虚拟化滚动会卸载）与详情抽屉（关闭即卸载）
  * 都可能中途消失，撤销状态必须活得更久。
+ *
+ * 已知限制（MVP 接受）：窗口期内任何无关写库会触发全局 invalidateQueries，
+ * 以 DB 真值覆盖缓存使被隐藏的未提交行短暂"复活"，落库后再消失；
+ * 中期方向是按实体收窄失效粒度（events.ts 粗粒度失效改造）。
  */
 import { createContext, useCallback, useContext, useEffect, useRef, type ReactNode } from "react";
 import { useQueryClient, type QueryClient } from "@tanstack/react-query";
@@ -47,16 +51,20 @@ function useUndoableDeleteImpl() {
     (input: UndoableDeleteInput) => {
       input.hide(qc);
       pendingRef.current?.flush(); // 连续删除：上一笔先落库（MVP 单槽位足够）
-      pendingRef.current = createDelayedRun(async () => {
+      // self 守卫：上一笔 run 的 finally 不得清掉指向本笔的引用，
+      // 否则第二笔的撤销点击会静默失效（审查 C1）
+      let self: DelayedRun | null = null;
+      self = createDelayedRun(async () => {
         try {
           await input.commit();
         } catch {
           toast.error(`删除${input.entityLabel}失败`);
         } finally {
-          pendingRef.current = null;
+          if (pendingRef.current === self) pendingRef.current = null;
           void qc.invalidateQueries();
         }
       }, UNDO_DELAY_MS);
+      pendingRef.current = self;
 
       let toastId: string | number = "";
       toastId = toast.success(

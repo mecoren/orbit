@@ -74,6 +74,10 @@ export function LabelManager({ open, onOpenChange }: LabelManagerProps) {
   };
 
   const remove = (label: TodoLabel) => {
+    // 本地态同步摘除：对话框渲染的是 useState 而非查询缓存，
+    // 仅 hideFromQueries 不足以让 chip 即刻消失（审查 I2）；
+    // 撤销恢复由 invalidate→重开对话框时的 useEffect 拉取兜底
+    setLabels((prev) => prev.filter((l) => l.id !== label.id));
     undoableDelete({
       entityLabel: "标签",
       recordName: label.title,

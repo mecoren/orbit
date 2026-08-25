@@ -269,7 +269,7 @@ export function ProjectSidebar({
           <AlertDialogHeader>
             <AlertDialogTitle>删除项目</AlertDialogTitle>
             <AlertDialogDescription>
-              确定要删除项目「{deleteTarget?.project.title}」吗？此操作无法撤销。
+              确定要删除项目「{deleteTarget?.project.title}」吗？删除后 5 秒内可撤销。
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
