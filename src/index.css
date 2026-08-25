@@ -546,10 +546,12 @@ html[data-platform="mobile"] {
 .m-safe-bottom { padding-bottom: max(env(safe-area-inset-bottom), 48px); }
 .m-safe-top { padding-top: env(safe-area-inset-top); }
 
-/* ===== M4 Material Symbols Rounded 自托管字体（05 §2.3；本地打包不走 CDN）===== */
+/* ===== M4 Material Symbols Rounded 自托管字体（05 §2.3；本地打包不走 CDN）
+   P0 治理：按 scripts/icon-names.json 生成的 ligature 子集（7KB，全量 5.1MB 已移除；
+   新增图标须先登记清单再 pnpm fonts:subset 重新生成）===== */
 @font-face {
   font-family: "Material Symbols Rounded";
-  src: url("/fonts/MaterialSymbolsRounded.woff2") format("woff2");
+  src: url("/fonts/MaterialSymbolsRounded.subset.woff2") format("woff2");
   font-display: block;
 }
 .msr {
