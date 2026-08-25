@@ -182,7 +182,7 @@ export default function TodoListPage() {
               value={priorityFilter}
               onValueChange={(v) => setPriorityFilter(v as PriorityFilter)}
             >
-              <SelectTrigger className="h-8 w-28">
+              <SelectTrigger className="h-8 w-32">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>

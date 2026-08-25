@@ -3,7 +3,7 @@
  *
  * 任务菜单：打开详情 / 标记完成·标记未完成 / 收藏·取消收藏 / ─ /
  *           设置优先级▸(6档) / 修改标签▸(勾选切换) / 更换项目▸ /
- *           设置截止时间(Popover+DateTimePicker) / 设置提醒(Dialog) /
+ *           设置截止时间(Dialog) / 设置提醒(Dialog) /
  *           添加评论(Dialog,Textarea) / ─ / 删除
  * 项目菜单：项目名标题头 + 删除项目（destructive；删除保护由父级弹窗处理）
  */
@@ -43,7 +43,6 @@ import {
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { DateTimePicker } from "@/components/business/date-picker";
 import {
   AlertDialog,
@@ -104,6 +103,7 @@ export function TaskContextMenu({
   // 菜单内触发的二级对话框
   const [dueOpen, setDueOpen] = useState(false);
   const [dueDraft, setDueDraft] = useState("");
+  const [dueError, setDueError] = useState<string | null>(null);
   const [reminderOpen, setReminderOpen] = useState(false);
   const [reminderDraft, setReminderDraft] = useState("");
   const [reminderError, setReminderError] = useState<string | null>(null);
@@ -140,14 +140,16 @@ export function TaskContextMenu({
     refetch();
   };
 
-  const saveDue = (close: () => void) => {
+  const saveDue = () => {
     const raw = dueDraft.trim();
     if (!raw) return;
     const ts = new Date(raw.replace(" ", "T")).getTime();
-    if (Number.isNaN(ts)) return;
+    if (Number.isNaN(ts)) {
+      setDueError("时间格式不正确");
+      return;
+    }
     void patch({ due_date: ts });
     setDueOpen(false);
-    close();
   };
 
   return (
@@ -202,12 +204,15 @@ export function TaskContextMenu({
                     className={cn(task.priority === lv && "font-medium text-accent-foreground")}
                     onSelect={() => { close(); void patch({ priority: lv }); }}
                   >
-                    {lv > 0 && (
-                      <span
-                        className="mr-1 inline-block h-2 w-2 shrink-0 rounded-full"
-                        style={{ backgroundColor: PRIORITY_COLOR[lv] }}
-                      />
-                    )}
+                    {/* 固定 16px 前缀槽：无优先级留空也占位，保证各行文字对齐 */}
+                    <span className="flex w-4 shrink-0 items-center justify-center">
+                      {lv > 0 && (
+                        <span
+                          className="h-2 w-2 rounded-full"
+                          style={{ backgroundColor: PRIORITY_COLOR[lv] }}
+                        />
+                      )}
+                    </span>
                     {label}
                   </DropdownMenuItem>
                 ))}
@@ -233,13 +238,15 @@ export function TaskContextMenu({
                         key={label.id}
                         onSelect={() => void toggleLabel(label.id)}
                       >
-                        <span
-                          className={cn(
-                            "inline-block h-2.5 w-2.5 shrink-0 rounded-full",
-                            checked && "ring-2 ring-primary ring-offset-1 ring-offset-popover",
-                          )}
-                          style={{ background: label.hex_color }}
-                        />
+                        <span className="flex w-4 shrink-0 items-center justify-center">
+                          <span
+                            className={cn(
+                              "h-2.5 w-2.5 rounded-full",
+                              checked && "ring-2 ring-primary ring-offset-1 ring-offset-popover",
+                            )}
+                            style={{ background: label.hex_color }}
+                          />
+                        </span>
                         <span className="min-w-0 flex-1 truncate">{label.title}</span>
                         {checked && <Check size={13} className="text-primary" />}
                       </DropdownMenuItem>
@@ -273,58 +280,30 @@ export function TaskContextMenu({
                     )}
                     onSelect={() => { close(); void patch({ project_id: p.id }); }}
                   >
-                    <span
-                      className="size-2.5 shrink-0 rounded-sm"
-                      style={{ background: p.hex_color || TODO_ACCENT }}
-                    />
+                    <span className="flex w-4 shrink-0 items-center justify-center">
+                      <span
+                        className="h-2.5 w-2.5 rounded-sm"
+                        style={{ background: p.hex_color || TODO_ACCENT }}
+                      />
+                    </span>
                     {p.title}
                   </DropdownMenuItem>
                 ))}
               </DropdownMenuSubContent>
             </DropdownMenuSub>
 
-            {/* 设置截止时间（Popover 内嵌 DateTimePicker） */}
-            <Popover
-              open={dueOpen}
-              onOpenChange={(o) => {
-                if (o) setDueDraft(task.due_date != null ? tsToInputValue(task.due_date) : "");
-                setDueOpen(o);
+            {/* 设置截止时间（与设置提醒同构：先关菜单再弹 Dialog） */}
+            <DropdownMenuItem
+              onSelect={() => {
+                setDueDraft(task.due_date != null ? tsToInputValue(task.due_date) : "");
+                setDueError(null);
+                close();
+                setDueOpen(true);
               }}
             >
-              <PopoverTrigger asChild>
-                <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
-                  <Calendar size={14} />
-                  设置截止时间
-                </DropdownMenuItem>
-              </PopoverTrigger>
-              <PopoverContent
-                side="right"
-                align="start"
-                className="w-auto p-3"
-                onOpenAutoFocus={(e) => e.preventDefault()}
-              >
-                <DateTimePicker value={dueDraft} onChange={setDueDraft} />
-                <div className="mt-3 flex justify-end gap-2">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => {
-                      void patch({ due_date: null });
-                      setDueOpen(false);
-                      close();
-                    }}
-                  >
-                    清除
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={() => setDueOpen(false)}>
-                    取消
-                  </Button>
-                  <Button size="sm" disabled={!dueDraft.trim()} onClick={() => saveDue(close)}>
-                    确定
-                  </Button>
-                </div>
-              </PopoverContent>
-            </Popover>
+              <Calendar size={14} />
+              设置截止时间
+            </DropdownMenuItem>
 
             <DropdownMenuItem onSelect={() => { close(); setReminderOpen(true); }}>
               <Clock size={14} />
@@ -345,6 +324,41 @@ export function TaskContextMenu({
       >
         {children}
       </ContextMenuBase>
+
+      {/* 设置截止时间（与设置提醒同构：Dialog + DateTimePicker，含清除） */}
+      <Dialog open={dueOpen} onOpenChange={setDueOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>设置截止时间 · {task.title}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">截止时间：</p>
+            <DateTimePicker
+              value={dueDraft}
+              onChange={(v) => {
+                setDueDraft(v);
+                setDueError(null);
+              }}
+            />
+            {dueError && <p className="text-xs text-destructive">{dueError}</p>}
+          </div>
+          <DialogFooter>
+            <Button
+              variant="ghost"
+              onClick={() => {
+                void patch({ due_date: null });
+                setDueOpen(false);
+              }}
+            >
+              清除
+            </Button>
+            <Button variant="outline" onClick={() => setDueOpen(false)}>取消</Button>
+            <Button disabled={!dueDraft.trim()} onClick={saveDue}>
+              确定
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* 设置提醒（⚖① 统一用自有 DateTimePicker） */}
       <Dialog open={reminderOpen} onOpenChange={setReminderOpen}>

@@ -260,8 +260,9 @@ function KanbanColumn({
         <span className="text-xs text-muted-foreground">{tasks.length}</span>
       </div>
 
-      {/* 卡片区 */}
-      <div ref={setNodeRef} className="min-h-0 flex-1 space-y-2 overflow-y-auto p-2">
+      {/* 卡片区：flex+gap 控制卡片间距。不可用 space-y——卡片被 ContextMenuBase 的
+          display:contents 包裹层与 fixed 哨兵隔开，margin 落在无盒子元素上不生效 */}
+      <div ref={setNodeRef} className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto p-2">
         {tasks.length === 0 ? (
           <div className="flex h-20 items-center justify-center text-xs text-muted-foreground/40">
             拖拽任务到此处

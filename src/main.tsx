@@ -11,6 +11,17 @@ initThemeOnStartup();
 // 启动时恢复字体设置（字体族 + 字号 + 字重），避免字体闪烁
 initFontSettingsOnStartup();
 
+// 生产环境屏蔽默认网页右键菜单：应用内自定义右键菜单在组件层已 stopPropagation，
+// 不受此影响；输入类元素保留原生菜单以便复制粘贴。开发环境不屏蔽，便于调试。
+if (!import.meta.env.DEV) {
+  document.addEventListener("contextmenu", (e) => {
+    const target = e.target as Element | null;
+    if (!target?.closest("input, textarea, [contenteditable]")) {
+      e.preventDefault();
+    }
+  });
+}
+
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
