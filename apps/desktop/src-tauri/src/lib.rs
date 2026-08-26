@@ -165,6 +165,7 @@ pub fn run() {
             todo_cmd::todo_tasks_kanban_by_project,
             todo_cmd::todo_tasks_kanban_by_status,
             todo_cmd::todo_tasks_recalc_percent,
+            commands::todo_cmd::global_search,
             // Mica 云母材质（Windows DWM 直调；setup 阶段已应用，此处供主题联动兜底）
             mica_cmd::apply_mica,
             mica_cmd::disable_mica,

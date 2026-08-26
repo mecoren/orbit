@@ -7,8 +7,10 @@
 //! - 看板视图数据
 
 use tauri::State;
+use orbit_core::api::business_api;
+use orbit_core::api::business_api::GlobalSearchResult;
 use orbit_core::api::todo_api;
-use orbit_core::models::business::{TodoTask};
+use orbit_core::models::business::TodoTask;
 
 use crate::AppState;
 
@@ -86,6 +88,18 @@ pub async fn todo_tasks_recalc_percent(
     task_id: i64,
 ) -> Result<(), String> {
     todo_api::recalc_task_percent_done(&state.pool, task_id)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// 全局跨表搜索（07 报告 §五-P1#9）：tasks/projects/comments 三路聚合
+#[tauri::command]
+pub async fn global_search(
+    state: State<'_, AppState>,
+    keyword: String,
+    limit: Option<i32>,
+) -> Result<GlobalSearchResult, String> {
+    business_api::search_all(&state.pool, &keyword, limit.unwrap_or(20))
         .await
         .map_err(|e| e.to_string())
 }

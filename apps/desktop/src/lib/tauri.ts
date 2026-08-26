@@ -345,6 +345,22 @@ export const todoCommentGet = (id: number) => invoke<TodoComment>("todo_comments
 export const todoCommentCreate = (input: TodoCommentCreateInput) => invoke<TodoComment>("todo_comments_create", { input });
 export const todoCommentDelete = (id: number) => invoke<void>("todo_comments_delete", { id });
 
+// ========== global_search（07 报告 §五-P1#9）==========
+export interface CommentSearchHit {
+  comment_id: number;
+  task_id: number;
+  task_title: string;
+  content: string;
+  created_at: number;
+}
+export interface GlobalSearchResult {
+  tasks: TodoTask[];
+  projects: TodoProject[];
+  comments: CommentSearchHit[];
+}
+export const globalSearch = (keyword: string, limit = 20) =>
+  invoke<GlobalSearchResult>("global_search", { keyword, limit });
+
 // ========== todo_task_relations ==========
 export interface TodoTaskRelation {
   id: number;

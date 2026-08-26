@@ -17,6 +17,9 @@ interface AppState {
   viewToggleIntent: number;
   bumpViewToggleIntent: () => void;
   consumeViewToggleIntent: () => void;
+  /** 全局搜索对话框开关（Ctrl+K，07 §五-P1#9） */
+  searchOpen: boolean;
+  setSearchOpen: (open: boolean) => void;
 }
 
 export const useAppStore = create<AppState>((set) => ({
@@ -29,4 +32,6 @@ export const useAppStore = create<AppState>((set) => ({
   viewToggleIntent: 0,
   bumpViewToggleIntent: () => set((s) => ({ viewToggleIntent: s.viewToggleIntent + 1 })),
   consumeViewToggleIntent: () => set({ viewToggleIntent: 0 }),
+  searchOpen: false,
+  setSearchOpen: (open) => set({ searchOpen: open }),
 }));

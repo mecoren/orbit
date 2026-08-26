@@ -11,12 +11,15 @@ import { Outlet, useLocation } from "react-router";
 
 import { TitleBar } from "@/components/layout/title-bar";
 import { CommandPalette } from "@/components/layout/command-palette";
+import { GlobalSearchDialog } from "@/components/layout/global-search-dialog";
 import { useAppStore } from "@/stores/app-store";
 import { useMicaEffect } from "@/hooks/use-mica-effect";
 
 export function AppShell() {
   const commandOpen = useAppStore((s) => s.commandOpen);
   const setCommandOpen = useAppStore((s) => s.setCommandOpen);
+  const searchOpen = useAppStore((s) => s.searchOpen);
+  const setSearchOpen = useAppStore((s) => s.setSearchOpen);
   useMicaEffect();
 
   const location = useLocation();
@@ -35,6 +38,8 @@ export function AppShell() {
       </main>
       {/* 全局命令面板：提升到 AppShell 层级，避免嵌套在 TitleBar 定位容器中 */}
       <CommandPalette open={commandOpen} onOpenChange={setCommandOpen} />
+      {/* 全局搜索（Ctrl+K，07 §五-P1#9）：与命令面板平级的壳层入口 */}
+      <GlobalSearchDialog open={searchOpen} onOpenChange={setSearchOpen} />
     </div>
   );
 }

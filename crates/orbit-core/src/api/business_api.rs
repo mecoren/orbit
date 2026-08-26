@@ -5,6 +5,7 @@
 
 pub use crate::db::sync_registry::FULL_BACKUP_TABLES;
 
+use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
 
 use crate::db::repository::generic_repo;
@@ -351,4 +352,97 @@ fn sqlite_row_to_json(row: &sqlx::sqlite::SqliteRow) -> serde_json::Value {
 /// 通用业务表记录数查询（列表页计数角标；仅适用于有 is_deleted 列的表）
 pub async fn business_count(pool: &SqlitePool, table: &str) -> CoreResult<i64> {
     crate::db::repository::generic_repo::count_all(pool, table).await
+}
+
+// ---------- global search ----------
+/// 全局搜索单条评论命中（附带所属任务标题，避免前端二次查询）
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+pub struct CommentSearchHit {
+    pub comment_id: i64,
+    pub task_id: i64,
+    pub task_title: String,
+    pub content: String,
+    pub created_at: i64,
+}
+
+/// 跨表聚合搜索结果（tasks/projects/comments 三路 LIKE，07 报告 §五-P1#9）
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct GlobalSearchResult {
+    pub tasks: Vec<TodoTask>,
+    pub projects: Vec<TodoProject>,
+    pub comments: Vec<CommentSearchHit>,
+}
+
+/// 全局搜索：复用 generic_repo 同款 %kw% LIKE 口径，各表限 top limit 条。
+/// 评论经 JOIN todo_tasks 带出任务标题；任务按 updated_at DESC、
+/// 项目按 sort_order ASC（与各自列表页排序一致，保证命中顺序符合直觉）。
+pub async fn search_all(pool: &SqlitePool, keyword: &str, limit: i32) -> CoreResult<GlobalSearchResult> {
+    let kw = keyword.trim();
+    if kw.is_empty() {
+        return Ok(GlobalSearchResult::default());
+    }
+    let pattern = format!("%{}%", kw);
+    let limit = if limit <= 0 { 20 } else { limit };
+
+    let tasks = sqlx::query_as::<_, TodoTask>(
+        "SELECT * FROM todo_tasks \
+         WHERE is_deleted = 0 AND (title LIKE ? OR description LIKE ?) \
+         ORDER BY updated_at DESC LIMIT ?",
+    )
+    .bind(&pattern)
+    .bind(&pattern)
+    .bind(limit)
+    .fetch_all(pool)
+    .await?;
+
+    let projects = sqlx::query_as::<_, TodoProject>(
+        "SELECT * FROM todo_projects \
+         WHERE is_deleted = 0 AND (title LIKE ? OR description LIKE ?) \
+         ORDER BY sort_order ASC, id ASC LIMIT ?",
+    )
+    .bind(&pattern)
+    .bind(&pattern)
+    .bind(limit)
+    .fetch_all(pool)
+    .await?;
+
+    let comments = sqlx::query_as::<_, CommentSearchHit>(
+        "SELECT c.id AS comment_id, c.task_id AS task_id, \
+                t.title AS task_title, c.content AS content, c.created_at AS created_at \
+         FROM todo_comments c \
+         JOIN todo_tasks t ON t.id = c.task_id AND t.is_deleted = 0 \
+         WHERE c.is_deleted = 0 AND c.content LIKE ? \
+         ORDER BY c.created_at DESC LIMIT ?",
+    )
+    .bind(&pattern)
+    .bind(limit)
+    .fetch_all(pool)
+    .await?;
+
+    Ok(GlobalSearchResult { tasks, projects, comments })
+}
+
+#[cfg(test)]
+mod global_search_tests {
+    use super::*;
+
+    /// serde 往返：字段保持 snake_case（前端 typed invoke 依赖该形状）
+    #[test]
+    fn global_search_result_serializes_snake_case() {
+        let r = GlobalSearchResult {
+            tasks: vec![],
+            projects: vec![],
+            comments: vec![CommentSearchHit {
+                comment_id: 1,
+                task_id: 2,
+                task_title: "写周报".into(),
+                content: "记得带数据".into(),
+                created_at: 3,
+            }],
+        };
+        let v = serde_json::to_value(&r).unwrap();
+        assert_eq!(v["comments"][0]["comment_id"], 1);
+        assert_eq!(v["comments"][0]["task_title"], "写周报");
+        assert_eq!(v["comments"][0]["created_at"], 3);
+    }
 }

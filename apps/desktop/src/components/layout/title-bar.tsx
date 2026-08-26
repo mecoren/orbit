@@ -70,6 +70,7 @@ export function TitleBar() {
   const appWindow = getCurrentWindow();
   const [isMaximized, setIsMaximized] = useState(false);
   const toggleCommand = useAppStore((s) => s.toggleCommand);
+  const setSearchOpen = useAppStore((s) => s.setSearchOpen);
 
   // 监听窗口大小变化：onResized 触发时同步 isMaximized，用于切换最大化图标 ▢/❐
   useEffect(() => {
@@ -83,17 +84,21 @@ export function TitleBar() {
     };
   }, [appWindow]);
 
-  // 全局快捷键 Ctrl+P / Cmd+P 打开/关闭命令面板
+  // 全局快捷键：Ctrl/Cmd+P 命令面板；Ctrl/Cmd+K 全局搜索
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === "p") {
+      if (!(e.ctrlKey || e.metaKey)) return;
+      if (e.key === "p") {
         e.preventDefault();
         toggleCommand();
+      } else if (e.key === "k") {
+        e.preventDefault();
+        setSearchOpen(true);
       }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [toggleCommand]);
+  }, [toggleCommand, setSearchOpen]);
 
   return (
     <>
