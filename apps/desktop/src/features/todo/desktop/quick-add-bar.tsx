@@ -5,10 +5,11 @@
  * Enter 提交并保持焦点连续录入；Esc 重置。
  * 提醒时间为独立实体：任务创建成功后追加 todo_reminders_create。
  */
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { format } from "date-fns";
 import { zhCN } from "date-fns/locale";
-import { Calendar, CalendarPlus, Clock, Flag, Folder, Plus } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { Calendar, CalendarPlus, Clock, Flag, Folder, Plus, Tag } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -17,7 +18,14 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { WaitCalendar } from "@/components/ui/wait-calendar";
 import { DateTimePicker } from "@/components/business/date-picker";
 import { QuickDateMenu } from "@/components/business/quick-date-options";
-import { todoReminderCreate, todoTaskCreate, type TodoProject } from "@/lib/tauri";
+import {
+  todoLabelList,
+  todoReminderCreate,
+  todoTaskCreate,
+  todoTaskLabelCreate,
+  type TodoProject,
+} from "@/lib/tauri";
+import { parseQuickInput } from "../shared/parse-quick-input";
 import { PRIORITY_COLOR, TODO_ACCENT } from "../shared/constants";
 
 const PRIORITY_LABELS = ["无", "低", "中", "高", "紧急", "立即处理"];
@@ -47,6 +55,30 @@ export function QuickAddBar({ projects, defaultProjectId }: QuickAddBarProps) {
   const effectiveProjectId =
     projectId === "default" ? (defaultProjectId ?? null) : projectId;
 
+  // 标签清单：有输入才拉取（@标签 解析与预览需要）
+  const labelsQuery = useQuery({
+    queryKey: ["todo-label", "list"],
+    queryFn: () => todoLabelList({ page: 1, page_size: 500 }),
+    enabled: hasInput,
+    staleTime: 60_000,
+  });
+
+  // 实时解析结果（预览 chips 与提示用；提交时以最新输入重算一次为准）
+  const parsed = useMemo(
+    () =>
+      parseQuickInput(title, {
+        projects: projects.map((p) => ({ id: p.id, title: p.title })),
+        labels: (labelsQuery.data ?? []).map((l) => ({ id: l.id, title: l.title })),
+        now: new Date(),
+      }),
+    [title, projects, labelsQuery.data],
+  );
+  const hasHits =
+    parsed.dueDate != null ||
+    parsed.priority > 0 ||
+    parsed.projectId != null ||
+    parsed.labelIds.length > 0;
+
   const reset = () => {
     setTitle("");
     setPriority(0);
@@ -56,15 +88,29 @@ export function QuickAddBar({ projects, defaultProjectId }: QuickAddBarProps) {
   };
 
   const submit = async () => {
-    const t = title.trim();
+    // 用提交瞬间最新输入重算（避免 memo 时差）；token 显式值优先于手动 Popover 选择
+    const p = parseQuickInput(title, {
+      projects: projects.map((pr) => ({ id: pr.id, title: pr.title })),
+      labels: (labelsQuery.data ?? []).map((l) => ({ id: l.id, title: l.title })),
+      now: new Date(),
+    });
+    const t = p.title.trim();
     if (!t) return;
     try {
       const created = await todoTaskCreate({
         title: t,
-        priority,
-        due_date: dueDate ? dueDate.getTime() : null,
-        project_id: effectiveProjectId,
+        priority: p.priority || priority,
+        due_date: p.dueDate ? p.dueDate.getTime() : dueDate ? dueDate.getTime() : null,
+        project_id: p.projectId ?? effectiveProjectId,
       });
+      // 标签挂载：单个失败不阻断任务本身
+      for (const labelId of p.labelIds) {
+        try {
+          await todoTaskLabelCreate({ task_id: created.id, label_id: labelId });
+        } catch {
+          /* 忽略单个标签失败 */
+        }
+      }
       // 提醒为独立实体：任务创建成功后追加；失败不影响任务本身
       if (remindDraft) {
         const ms = new Date(remindDraft).getTime();
@@ -84,6 +130,38 @@ export function QuickAddBar({ projects, defaultProjectId }: QuickAddBarProps) {
   // 此处再叠任何不透明底都会与周围所见背景产生色差
   return (
     <div className="border-t border-border px-4 py-2.5">
+      {/* NLP 解析预览 chips（07 §五-P1#7）：仅展示命中项 */}
+      {hasInput && hasHits && (
+        <div className="mb-1.5 flex flex-wrap items-center gap-1.5 px-1 text-xs text-muted-foreground">
+          {parsed.dueDate && (
+            <span className="inline-flex items-center gap-1 rounded-sm bg-primary/10 px-1.5 py-0.5 text-primary">
+              <Calendar className="size-3" />
+              {format(parsed.dueDate, "M月d日 EEEE", { locale: zhCN })}
+            </span>
+          )}
+          {parsed.priority > 0 && (
+            <span className="inline-flex items-center gap-1 rounded-sm bg-primary/10 px-1.5 py-0.5 text-primary">
+              <Flag className="size-3" />
+              {PRIORITY_LABELS[parsed.priority]}
+            </span>
+          )}
+          {parsed.projectId != null && (
+            <span className="inline-flex items-center gap-1 rounded-sm bg-primary/10 px-1.5 py-0.5 text-primary">
+              <Folder className="size-3" />
+              {projects.find((pr) => pr.id === parsed.projectId)?.title}
+            </span>
+          )}
+          {parsed.labelIds.map((id) => (
+            <span
+              key={id}
+              className="inline-flex items-center gap-1 rounded-sm bg-primary/10 px-1.5 py-0.5 text-primary"
+            >
+              <Tag className="size-3" />
+              {(labelsQuery.data ?? []).find((l) => l.id === id)?.title}
+            </span>
+          ))}
+        </div>
+      )}
       <div className="flex items-center gap-2 rounded-md border border-border px-2 py-1.5 shadow-sm">
         <span
           className={cn(
@@ -102,7 +180,7 @@ export function QuickAddBar({ projects, defaultProjectId }: QuickAddBarProps) {
             if (e.key === "Enter") void submit();
             if (e.key === "Escape") reset();
           }}
-          placeholder="添加任务"
+          placeholder="添加任务…支持「明天 #项目 @标签 !3」"
           className="h-7 min-w-0 flex-1 border-0 bg-transparent px-1 shadow-none focus-visible:ring-0"
         />
 
