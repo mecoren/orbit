@@ -41,7 +41,17 @@ export function useTodoReminderListener() {
       void (async () => {
         try {
           const task = await todoTaskGet(r.task_id);
-          if (task.done) return; // P1#10：真引擎接管后，已完成实例不再续排提醒
+          if (task.done) {
+            // P1#10：真引擎接管后，已完成实例不再续排提醒；
+            // 顺手清理该僵尸提醒行，避免 24h 窗口内（含重启后）对归档实例再响一次
+            try {
+              await todoReminderDelete(r.id);
+              void qc.invalidateQueries({ queryKey: ["todo-task-detail", r.task_id] });
+            } catch {
+              /* 清理失败静默 */
+            }
+            return;
+          }
           const next = nextRepeatAt(r.remind_at, task.repeat_mode, task.repeat_after, Date.now());
           if (next != null) {
             await todoReminderDelete(r.id);

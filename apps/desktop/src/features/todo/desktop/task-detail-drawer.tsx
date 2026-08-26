@@ -320,8 +320,10 @@ function PropertyGrid({
   const statusDef = STATUS_ITEMS.find((s) => s.key === task.status);
 
   const setStatus = (key: string) => {
-    if (key === "done") void completeTask(task);
-    else void onPatch({ status: key, done: 0, done_at: null });
+    // 评审 I2：对已完成任务再点「已完成」是幂等动作，不得经 completeTask 翻回待办
+    if (key === "done") {
+      if (!task.done) void completeTask(task);
+    } else void onPatch({ status: key, done: 0, done_at: null });
   };
 
   return (

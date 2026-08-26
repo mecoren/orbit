@@ -3,7 +3,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { TodoSubtask, TodoTask } from "@/lib/tauri";
-import { REPEAT_MODE } from "./repeat";
+import { nextRepeatAt, REPEAT_MODE } from "./repeat";
 import { planNextRecurringInstance, subtasksToClone } from "./repeat-task";
 
 const DAY = 86_400_000;
@@ -109,5 +109,25 @@ describe("subtasksToClone", () => {
       { title: "甲", position: 0 },
       { title: "丙", position: 2 },
     ]);
+  });
+});
+
+describe("nextRepeatAt · 月末截断回归（评审 I3，锁定 repeat.ts 修复）", () => {
+  it("YEARLY：闰日 2024-02-29 推进一年 clamp 到 2025-02-28（而非滚到 03-01）", () => {
+    const base = new Date(2024, 1, 29).getTime();
+    const next = nextRepeatAt(base, REPEAT_MODE.YEARLY, 1, new Date(2024, 5, 1).getTime())!;
+    expect(new Date(next).getFullYear()).toBe(2025);
+    expect(new Date(next).getMonth()).toBe(1);
+    expect(new Date(next).getDate()).toBe(28);
+  });
+
+  it("MONTHLY：月末日链式推进不回弹（1/31 → 2/28 → 3/28）", () => {
+    const jan31 = new Date(2026, 0, 31).getTime();
+    const feb = nextRepeatAt(jan31, REPEAT_MODE.MONTHLY, 1, jan31)!;
+    expect(new Date(feb).getMonth()).toBe(1);
+    expect(new Date(feb).getDate()).toBe(28);
+    const mar = nextRepeatAt(feb, REPEAT_MODE.MONTHLY, 1, feb)!;
+    expect(new Date(mar).getMonth()).toBe(2);
+    expect(new Date(mar).getDate()).toBe(28);
   });
 });
