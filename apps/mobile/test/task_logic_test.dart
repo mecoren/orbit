@@ -1,4 +1,5 @@
-// 任务共享纯函数单测：筛选互斥 / 排序 / 勾选 patch 构造 / 时间格式化
+// 任务共享纯函数单测：筛选互斥 / 排序 / 勾选 patch 构造 / 时间格式化 /
+// 拖拽重排映射 / 标签勾选 diff（Phase 7）
 //
 // 对应 lib/modules/todo/logic/task_logic.dart（语义来源：原 React 版
 // shared/task-filters.ts、shared/task-actions.ts、shared/time.ts）。
@@ -267,6 +268,99 @@ void main() {
         emptyMessageFor(const TaskFilterInput(quickView: QuickViewKey.all)),
         '暂无任务',
       );
+    });
+  });
+
+  group('reorderItems 拖拽重排映射（侧栏项目段）', () {
+    test('向上拖动：尾元素移到头部', () {
+      expect(reorderItems([1, 2, 3, 4], 3, 0), [4, 1, 2, 3]);
+    });
+
+    test('向下拖动：onReorderItem 已归一化 newIndex（旧位先移除口径）', () {
+      // ReorderableListView 把 a 拖到 c 之后：旧 onReorder 回调 (0,3)，
+      // 归一化后 onReorderItem 回调 (0,2) —— 直接消费
+      expect(reorderItems(['a', 'b', 'c'], 0, 2), ['b', 'c', 'a']);
+      // 相邻下移：(0,1) → a 与 b 交换
+      expect(reorderItems(['a', 'b', 'c'], 0, 1), ['b', 'a', 'c']);
+    });
+
+    test('原位放置不变序', () {
+      expect(reorderItems([1, 2, 3], 1, 1), [1, 2, 3]);
+    });
+
+    test('不修改原列表', () {
+      final src = [1, 2, 3];
+      reorderItems(src, 0, 2);
+      expect(src, [1, 2, 3]);
+    });
+
+    test('越界索引防御性返回原序拷贝', () {
+      expect(reorderItems([1, 2, 3], -1, 1), [1, 2, 3]);
+      expect(reorderItems([1, 2, 3], 3, 1), [1, 2, 3]);
+      expect(reorderItems([1, 2, 3], 1, -1), [1, 2, 3]);
+      expect(reorderItems([1, 2, 3], 1, 3), [1, 2, 3]);
+    });
+  });
+
+  group('diffLabelSelection 标签勾选 diff（详情页标签编辑）', () {
+    final taskLabelIdByLabelId = <int, int>{101: 9, 102: 8, 103: 7};
+
+    test('新勾选 → attachLabelIds 携标签 id', () {
+      final diff = diffLabelSelection(
+        before: {101},
+        after: {101, 102},
+        taskLabelIdByLabelId: taskLabelIdByLabelId,
+      );
+      expect(diff.attachLabelIds, [102]);
+      expect(diff.detachTaskLabelIds, isEmpty);
+    });
+
+    test('取消已挂载勾选 → detachTaskLabelIds 经映射反查关联主键', () {
+      final diff = diffLabelSelection(
+        before: {101, 102},
+        after: {102},
+        taskLabelIdByLabelId: taskLabelIdByLabelId,
+      );
+      expect(diff.attachLabelIds, isEmpty);
+      expect(diff.detachTaskLabelIds, [9]);
+    });
+
+    test('取消无关联映射的 id 视为已不存在，跳过删除', () {
+      final diff = diffLabelSelection(
+        before: {999},
+        after: {},
+        taskLabelIdByLabelId: taskLabelIdByLabelId,
+      );
+      expect(diff.attachLabelIds, isEmpty);
+      expect(diff.detachTaskLabelIds, isEmpty);
+    });
+
+    test('增删并存一次算清（批量落库口径）', () {
+      final diff = diffLabelSelection(
+        before: {101, 102},
+        after: {102, 103, 104},
+        taskLabelIdByLabelId: taskLabelIdByLabelId,
+      );
+      expect(diff.attachLabelIds.toSet(), {103, 104});
+      expect(diff.detachTaskLabelIds, [9]);
+    });
+
+    test('勾选态无变化 → 空 diff', () {
+      final diff = diffLabelSelection(
+        before: {101},
+        after: {101},
+        taskLabelIdByLabelId: taskLabelIdByLabelId,
+      );
+      expect(diff.attachLabelIds, isEmpty);
+      expect(diff.detachTaskLabelIds, isEmpty);
+    });
+  });
+
+  group('labelPaletteHexes 固定 8 色板', () {
+    test('共 8 色、无重复、含默认第 4 色 #3B82F6', () {
+      expect(labelPaletteHexes.length, 8);
+      expect(labelPaletteHexes.toSet().length, 8);
+      expect(labelPaletteHexes[3], '#3B82F6');
     });
   });
 }

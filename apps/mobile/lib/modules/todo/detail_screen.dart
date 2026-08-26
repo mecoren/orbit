@@ -11,10 +11,12 @@ import '../../data/providers/bridge_provider.dart';
 import '../../shared/utils/hex_color.dart';
 import '../../shared/widgets/circle_checkbox.dart';
 import '../../shared/widgets/liquid_glass_title_bar.dart';
+import '../../shared/widgets/more_actions_sheet.dart' show bottomSheetTopShape;
 import '../../shared/widgets/scroll_offset_listenable.dart';
 import '../../shared/widgets/section_card.dart';
 import '../../shared/widgets/select_bottom_sheet.dart';
 import '../../shared/widgets/wait_toast.dart';
+import 'form_bottom_sheet.dart' show showTodoDatePicker;
 import 'logic/task_logic.dart';
 import 'providers/todo_providers.dart';
 
@@ -168,7 +170,7 @@ class _DetailView extends StatelessWidget {
         const SizedBox(height: AppDimens.space12),
         _SubtasksSection(detail: detail, onChanged: onRefresh),
         const SizedBox(height: AppDimens.space12),
-        _LabelsSection(labels: detail.labels),
+        _LabelsSection(detail: detail),
         const SizedBox(height: AppDimens.space12),
         _RemindersSection(reminders: detail.reminders),
         if (detail.relations.isNotEmpty) ...[
@@ -276,13 +278,14 @@ class _TitleSectionState extends State<_TitleSection> {
 
 // ── 二、基本信息 ──
 
-/// 信息行（docs/05 §4.3 _InfoTile）：label 固定列宽 80 → 色点 + 值 → 尾箭头
+/// 信息行（docs/05 §4.3 _InfoTile）：label 固定列宽 80 → 色点 + 值 → 清除钮 / 尾箭头
 class _InfoTile extends StatelessWidget {
   const _InfoTile({
     required this.label,
     required this.value,
     this.dotColorHex,
     this.onClick,
+    this.onClear,
   });
 
   final String label;
@@ -291,6 +294,9 @@ class _InfoTile extends StatelessWidget {
   /// 值前 10×10 色点 hex（空串不渲染）
   final String? dotColorHex;
   final VoidCallback? onClick;
+
+  /// 可清除值（如截止日期）的清除钮回调；null 不渲染
+  final VoidCallback? onClear;
 
   @override
   Widget build(BuildContext context) {
@@ -329,6 +335,17 @@ class _InfoTile extends StatelessWidget {
             ],
           ),
         ),
+        if (onClear != null) ...[
+          GestureDetector(
+            onTap: onClear,
+            child: Icon(
+              Icons.close_rounded,
+              size: AppDimens.iconSizeSm,
+              color: colors.secondaryText,
+            ),
+          ),
+          const SizedBox(width: AppDimens.space4),
+        ],
         if (onClick != null)
           Icon(
             Icons.keyboard_arrow_right_rounded,
@@ -434,10 +451,27 @@ class _InfoSection extends ConsumerWidget {
           _InfoTile(
             label: '截止日期',
             value: detail.dueDate != null ? formatYmd(detail.dueDate!) : '无',
+            onClick: () => _pickDueDate(context),
+            // 有值才可清除；patch {"due_date": null} 走三态清空语义
+            onClear: detail.dueDate == null
+                ? null
+                : () => onPatch(const {'due_date': null}),
           ),
         ],
       ),
     );
+  }
+
+  /// 截止日期行点击 → 与表单抽屉同一选择器，选中归一化本地零点回填
+  Future<void> _pickDueDate(BuildContext context) async {
+    final picked = await showTodoDatePicker(
+      context,
+      initialDate: detail.dueDate != null
+          ? DateTime.fromMillisecondsSinceEpoch(detail.dueDate!)
+          : null,
+    );
+    if (picked == null || !context.mounted) return;
+    await onPatch({'due_date': dateToMidnightMs(picked)});
   }
 }
 
@@ -653,23 +687,27 @@ class _SubtasksSectionState extends ConsumerState<_SubtasksSection> {
   }
 }
 
-// ── 五、标签（chip 只读展示）──
+// ── 五、标签（chip 展示 + "编辑"多选弹层，Phase 7）──
 
 class _LabelsSection extends StatelessWidget {
-  const _LabelsSection({required this.labels});
+  const _LabelsSection({required this.detail});
 
-  final List<TaskLabelWithId> labels;
+  final TodoTaskDetail detail;
 
   @override
   Widget build(BuildContext context) {
     final colors = AppColors.ofContext(context);
     return SectionCard(
       title: '标签',
+      trailing: TextButton(
+        onPressed: () => _openEditor(context),
+        child: const Text('编辑'),
+      ),
       child: Wrap(
         spacing: AppDimens.space8,
         runSpacing: AppDimens.space8,
         children: [
-          for (final label in labels)
+          for (final label in detail.labels)
             Container(
               padding: const EdgeInsets.symmetric(
                 horizontal: AppDimens.space8 + 2,
@@ -689,7 +727,7 @@ class _LabelsSection extends StatelessWidget {
                 ),
               ),
             ),
-          if (labels.isEmpty)
+          if (detail.labels.isEmpty)
             Text(
               '暂无标签',
               style: TextStyle(
@@ -698,6 +736,264 @@ class _LabelsSection extends StatelessWidget {
               ),
             ),
         ],
+      ),
+    );
+  }
+
+  void _openEditor(BuildContext context) {
+    final colors = AppColors.ofContext(context);
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: colors.popup,
+      shape: bottomSheetTopShape,
+      builder: (_) => _LabelEditSheet(taskId: detail.id),
+    );
+  }
+}
+
+/// 标签编辑弹层（Phase 7）：现有标签多选勾选态（勾选变化即建/删关联）+
+/// 底部"新建标签"行（标题 + 固定 8 色板选色）。勾选态直接从详情 provider
+/// 派生（写后 invalidate 即回读权威态），本地不复制状态避免漂移。
+class _LabelEditSheet extends ConsumerStatefulWidget {
+  const _LabelEditSheet({required this.taskId});
+
+  final int taskId;
+
+  @override
+  ConsumerState<_LabelEditSheet> createState() => _LabelEditSheetState();
+}
+
+class _LabelEditSheetState extends ConsumerState<_LabelEditSheet> {
+  final _titleController = TextEditingController();
+
+  /// 新建标签选色（默认第 4 色 #3B82F6，对齐桌面 LabelManager）
+  String _newColorHex = labelPaletteHexes[3];
+
+  @override
+  void dispose() {
+    _titleController.dispose();
+    super.dispose();
+  }
+
+  /// 勾选/取消一个标签：经 diffLabelSelection 计算关联增删后逐条落库，
+  /// 完成统一 invalidate 详情（列表 chip 与勾选态一并刷新）。
+  Future<void> _toggleLabel(TodoLabel label) async {
+    final detail = ref.read(taskDetailProvider(widget.taskId)).value;
+    if (detail == null) return;
+    final taskLabelIdByLabelId = {
+      for (final l in detail.labels) l.id: l.taskLabelId,
+    };
+    final before = taskLabelIdByLabelId.keys.toSet();
+    final after = before.contains(label.id)
+        ? ({...before}..remove(label.id))
+        : ({...before, label.id});
+    final diff = diffLabelSelection(
+      before: before,
+      after: after,
+      taskLabelIdByLabelId: taskLabelIdByLabelId,
+    );
+    try {
+      final bridge = ref.read(orbitBridgeProvider);
+      for (final labelId in diff.attachLabelIds) {
+        await bridge.todoTaskLabelCreate(TodoTaskLabelCreateInput(
+          taskId: widget.taskId,
+          labelId: labelId,
+        ));
+      }
+      for (final taskLabelId in diff.detachTaskLabelIds) {
+        await bridge.todoTaskLabelDelete(taskLabelId);
+      }
+      ref.invalidate(taskDetailProvider(widget.taskId));
+    } catch (_) {
+      WaitToast.destructive('操作失败');
+    }
+  }
+
+  /// 新建标签：todoLabelCreate 后 invalidate 标签列表供即时勾选
+  Future<void> _createLabel() async {
+    final title = _titleController.text.trim();
+    if (title.isEmpty) return;
+    try {
+      await ref.read(orbitBridgeProvider).todoLabelCreate(
+            TodoLabelCreateInput(title: title, hexColor: _newColorHex),
+          );
+      _titleController.clear();
+      if (!mounted) return;
+      setState(() => _newColorHex = labelPaletteHexes[3]);
+      ref.invalidate(todoLabelsProvider);
+    } catch (_) {
+      WaitToast.destructive('创建失败');
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = AppColors.ofContext(context);
+    final labels = ref.watch(todoLabelsProvider).value ?? const <TodoLabel>[];
+    final attachedIds =
+        ref.watch(taskDetailProvider(widget.taskId)).value?.labels
+                .map((l) => l.id)
+                .toSet() ??
+            <int>{};
+
+    // 键盘避让：底部 padding 跟随 viewInsets
+    return Padding(
+      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      child: SafeArea(
+        top: false,
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.of(context).size.height * 0.7,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Padding(
+                padding: const EdgeInsets.all(AppDimens.space16),
+                child: Text(
+                  '编辑标签',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: colors.titleText,
+                  ),
+                ),
+              ),
+              Flexible(
+                child: labels.isEmpty
+                    ? Padding(
+                        padding:
+                            const EdgeInsets.all(AppDimens.space16),
+                        child: Text(
+                          '暂无可选标签',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: colors.secondaryText.withValues(alpha: 0.5),
+                          ),
+                        ),
+                      )
+                    : ListView(
+                        shrinkWrap: true,
+                        padding: EdgeInsets.zero,
+                        children: [
+                          for (final label in labels)
+                            InkWell(
+                              onTap: () => _toggleLabel(label),
+                              child: SizedBox(
+                                height: AppDimens.touchTarget,
+                                child: Row(
+                                  children: [
+                                    const SizedBox(width: AppDimens.space16),
+                                    CircleCheckbox(
+                                      checked: attachedIds.contains(label.id),
+                                      size: AppDimens.iconSizeMd + 2,
+                                      checkSize: AppDimens.iconSizeSm,
+                                      onToggle: () => _toggleLabel(label),
+                                    ),
+                                    const SizedBox(width: AppDimens.space12),
+                                    Container(
+                                      width: AppDimens.colorDotSize,
+                                      height: AppDimens.colorDotSize,
+                                      decoration: BoxDecoration(
+                                        shape: BoxShape.circle,
+                                        color: hexToColor(label.hexColor),
+                                      ),
+                                    ),
+                                    const SizedBox(width: AppDimens.space8),
+                                    Expanded(
+                                      child: Text(
+                                        label.title,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                          fontSize: 15,
+                                          color: colors.bodyText,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+              ),
+              // 新建标签行：输入标题 + 固定 8 色板选色 → todoLabelCreate
+              Container(
+                padding: const EdgeInsets.fromLTRB(
+                  AppDimens.space16,
+                  AppDimens.space8,
+                  AppDimens.space16,
+                  0,
+                ),
+                decoration: BoxDecoration(
+                  border: Border(
+                    top: BorderSide(
+                      color: colors.divider.withValues(alpha: 0.3),
+                    ),
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: _titleController,
+                            maxLength: 50,
+                            style: TextStyle(
+                                fontSize: 15, color: colors.bodyText),
+                            decoration: const InputDecoration(
+                              hintText: '新建标签',
+                              counterText: '',
+                              isDense: true,
+                            ),
+                            onSubmitted: (_) => _createLabel(),
+                          ),
+                        ),
+                        IconButton(
+                          icon: Icon(Icons.add_rounded,
+                              size: AppDimens.iconSizeLg,
+                              color: OrbitAccents.todoAccent),
+                          onPressed: _createLabel,
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: AppDimens.space8),
+                    Wrap(
+                      spacing: AppDimens.space12,
+                      runSpacing: AppDimens.space8,
+                      children: [
+                        for (final hex in labelPaletteHexes)
+                          GestureDetector(
+                            onTap: () => setState(() => _newColorHex = hex),
+                            child: Container(
+                              width: 26,
+                              height: 26,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: hexToColor(hex),
+                                border: Border.all(
+                                  width: _newColorHex == hex ? 3 : 1,
+                                  color: _newColorHex == hex
+                                      ? OrbitAccents.themeAccent
+                                      : colors.divider.withValues(alpha: 0.6),
+                                ),
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                    SizedBox(height: AppDimens.gestureInsetFallback / 2),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

@@ -51,3 +51,47 @@ jobs:
 
       - name: 检查核心库 workspace
         run: cargo check --workspace --all-targets
+
+  flutter-mobile:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/mobile
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      # FRB codegen 一致性门禁：重新生成后产物必须与仓库一致
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            crates
+            ~/.cargo
+
+      - name: 安装 flutter_rust_bridge_codegen（锁定 2.12.0）
+        run: cargo install flutter_rust_bridge_codegen --version 2.12.0
+
+      - name: FRB codegen 一致性校验
+        working-directory: ${{ github.workspace }}
+        run: |
+          flutter_rust_bridge_codegen generate \
+            --config-file crates/flutter-plugin-orbit/flutter_rust_bridge.yaml
+          git diff --exit-code apps/mobile/lib/src/rust crates/flutter-plugin-orbit/src/frb_generated.rs \
+            || (echo "::error::FRB 生成物与仓库不一致，请本地重新执行 codegen 并提交" && exit 1)
+
+      - name: 静态分析
+        run: flutter analyze
+
+      - name: 单元测试
+        run: flutter test

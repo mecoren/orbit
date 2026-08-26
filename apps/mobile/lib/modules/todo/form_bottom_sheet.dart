@@ -9,8 +9,23 @@ import '../../data/api/dto.dart';
 import '../../data/providers/bridge_provider.dart';
 import '../../shared/utils/hex_color.dart';
 import '../../shared/widgets/wait_toast.dart';
-import 'logic/task_logic.dart' show formatYmd, priorityColorHex, priorityLabel;
+import 'logic/task_logic.dart'
+    show dateToMidnightMs, formatYmd, priorityColorHex, priorityLabel;
 import 'providers/todo_providers.dart';
+
+/// 截止日期选择器（表单抽屉"自定义"与详情页截止日期行共用；
+/// zh locale 语境下文案本地化，主题色自动继承）
+Future<DateTime?> showTodoDatePicker(
+  BuildContext context, {
+  DateTime? initialDate,
+}) {
+  return showDatePicker(
+    context: context,
+    initialDate: initialDate ?? DateTime.now(),
+    firstDate: DateTime(2000),
+    lastDate: DateTime(2100),
+  );
+}
 
 /// 新建/编辑待办底部抽屉（docs/05 §4.4 简化版，移动端任务书口径）
 ///
@@ -138,24 +153,18 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
 
   int _midnightOf(int offsetDays) {
     final now = DateTime.now();
-    return DateTime(now.year, now.month, now.day + offsetDays)
-        .millisecondsSinceEpoch;
+    return dateToMidnightMs(DateTime(now.year, now.month, now.day + offsetDays));
   }
 
   Future<void> _pickCustomDate() async {
-    final picked = await showDatePicker(
-      context: context,
+    final picked = await showTodoDatePicker(
+      context,
       initialDate: _dueDate != null
           ? DateTime.fromMillisecondsSinceEpoch(_dueDate!)
-          : DateTime.now(),
-      firstDate: DateTime(2000),
-      lastDate: DateTime(2100),
+          : null,
     );
     if (picked != null && mounted) {
-      setState(
-        () => _dueDate = DateTime(picked.year, picked.month, picked.day)
-            .millisecondsSinceEpoch,
-      );
+      setState(() => _dueDate = dateToMidnightMs(picked));
     }
   }
 

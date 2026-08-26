@@ -19,7 +19,7 @@ import 'providers/todo_providers.dart';
 /// 侧栏首屏 /todo（docs/05 §4.1 + 移动端任务书）
 ///
 /// 三段结构：快捷视图六行（今天/本周/全部/已完成/收藏/无日期，带未完成计数
-/// badge）→ 项目段（色点 + 标题 + 未完成数）→ 未分组行。
+/// badge）→ 项目段（色点 + 标题 + 未完成数，右侧把手可拖拽重排）→ 未分组行。
 /// 行点击 push 子列表；长按项目弹 MoreActions 底部菜单（编辑 / 删除保护流）。
 class SidebarScreen extends ConsumerStatefulWidget {
   const SidebarScreen({super.key});
@@ -68,6 +68,25 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
       context.push('/todo/tasks?projectId=${p.id}');
 
   void _openUngrouped() => context.push('/todo/tasks?ungrouped=1');
+
+  // ── 项目拖拽重排（Phase 7）──
+
+  /// onReorderItem（newIndex 已归一化为语义插入位）：本地重排 → 逐条落库
+  /// sortOrder（单条失败忽略，继续其余）→ 完成后 invalidate 项目 provider
+  /// 以服务端权威顺序刷新。
+  Future<void> _reorderProjects(int oldIndex, int newIndex) async {
+    final reordered =
+        reorderItems(ref.read(todoProjectsProvider).value ?? const [], oldIndex, newIndex);
+    final bridge = ref.read(orbitBridgeProvider);
+    for (var i = 0; i < reordered.length; i++) {
+      try {
+        await bridge.todoProjectUpdateSortOrder(reordered[i].id, i);
+      } catch (_) {
+        // 忽略单条失败：继续落剩余排序，最后统一 invalidate 兜底
+      }
+    }
+    ref.invalidate(todoProjectsProvider);
+  }
 
   // ── 项目长按菜单（编辑 / 删除保护流）──
 
@@ -205,10 +224,21 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
               const SectionHeader(label: '快捷视图'),
               for (final key in QuickViewKey.values)
                 _buildQuickViewRow(key, tasks, surfaceHighest),
-              // 二、项目（色块 + 名称 + 未完成计数；长按菜单）
+              // 二、项目（色块 + 名称 + 未完成计数；长按菜单；右侧把手拖拽重排）
               const SectionHeader(label: '项目'),
-              for (final project in projects)
-                _buildProjectRow(project, undoneByProject),
+              ReorderableListView.builder(
+                shrinkWrap: true,
+                padding: EdgeInsets.zero,
+                physics: const NeverScrollableScrollPhysics(),
+                buildDefaultDragHandles: false,
+                itemCount: projects.length,
+                itemBuilder: (context, index) => _buildProjectRow(
+                  projects[index],
+                  undoneByProject,
+                  index,
+                ),
+                onReorderItem: _reorderProjects,
+              ),
               // 三、未分组
               ListTile(
                 leading: Icon(
@@ -306,10 +336,12 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
   Widget _buildProjectRow(
     TodoProject project,
     Map<int, int> undoneByProject,
+    int index,
   ) {
     final colors = AppColors.ofContext(context);
     final undone = undoneByProject[project.id] ?? 0;
     return InkWell(
+      key: ValueKey(project.id),
       borderRadius: AppShapes.medium,
       onTap: () => _openProject(project),
       onLongPress: () => _showProjectActions(project, undone),
@@ -343,12 +375,27 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
                 ),
               ),
             ),
-            if (undone > 0)
+            if (undone > 0) ...[
               CountBadge(
                 n: undone,
                 background:
                     Theme.of(context).colorScheme.surfaceContainerHighest,
               ),
+              const SizedBox(width: AppDimens.space8),
+            ],
+            // 拖拽把手（仅把手可拖，行体点击仍进列表不冲突）
+            ReorderableDragStartListener(
+              index: index,
+              child: SizedBox(
+                width: AppDimens.iconSizeMd + AppDimens.space8,
+                height: AppDimens.touchTarget - AppDimens.space12,
+                child: Icon(
+                  Icons.drag_handle_rounded,
+                  size: AppDimens.iconSizeMd,
+                  color: colors.secondaryText,
+                ),
+              ),
+            ),
           ],
         ),
       ),

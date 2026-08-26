@@ -5,7 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/theme/orbit_accents.dart';
 import '../../data/providers/bridge_provider.dart';
-import '../../shared/widgets/wait_toast.dart';
+import '../../services/notification_service.dart';
 import '../todo/providers/todo_providers.dart';
 import '../auth/unlock_page.dart';
 
@@ -14,8 +14,8 @@ import '../auth/unlock_page.dart';
 /// - masterAuthHas == true → 展示 [UnlockPage]，解锁成功 dbInitEncrypted；
 /// - 否则 → dbInitPlaintext 直入；
 /// - ready 后渲染主路由内容（[BootGate.child]），并挂载桥层事件流监听：
-///   dbChanges 全量失效业务缓存；reminderDue 弹 warning toast
-///   （本地通知 Phase 7 再做）。
+///   dbChanges 全量失效业务缓存；reminderDue 经 [NotificationService]
+///   呈现本地通知（无权限静默降级 warning toast）。
 class BootGate extends ConsumerStatefulWidget {
   const BootGate({super.key, required this.child});
 
@@ -71,6 +71,8 @@ class _BootGateState extends ConsumerState<BootGate> {
   }
 
   void _goReady() {
+    // 本地通知插件初始化 + 权限请求（幂等；拒绝则事件回落 toast，静默降级）
+    NotificationService.instance.ensureInitialized();
     _subscribeStreams();
     if (mounted) setState(() => _phase = _BootPhase.ready);
   }
@@ -91,10 +93,10 @@ class _BootGateState extends ConsumerState<BootGate> {
       invalidateBusinessCaches(ref);
     });
 
-    // 提醒到期 → warning toast（本地通知排程 Phase 7 接入）
-    _reminderDueSub = bridge.reminderDue.listen((e) {
-      WaitToast.warning('待办提醒：${e.title}');
-    });
+    // 提醒到期 → 本地通知即时呈现（无权限 / 异常时内部回落 warning toast）
+    _reminderDueSub = bridge.reminderDue.listen(
+      (e) => NotificationService.instance.handleReminderDue(e),
+    );
   }
 
   @override

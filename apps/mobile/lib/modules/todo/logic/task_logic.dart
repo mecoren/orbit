@@ -137,6 +137,74 @@ Map<String, Object?> buildStatusPatch(String status) {
   return {'status': status, 'done': 0, 'done_at': null};
 }
 
+// ---------- 拖拽重排（侧栏项目段 Phase 7） ----------
+
+/// 通用列表重排（纯函数）：把 [oldIndex] 元素移动到语义插入位 [newIndex]。
+///
+/// 索引口径为 [ReorderableListView.onReorderItem] 回调（v3.41+）：newIndex
+/// 已按"旧元素先移除"归一化，取值 0..length-1；旧版 onReorder 回调需自行
+/// 做 oldIndex < newIndex 时 -1 的映射，勿直接传入。
+/// 返回新列表，不改入参；索引越界时防御性返回原序拷贝（脏回调不致崩溃）。
+List<T> reorderItems<T>(List<T> items, int oldIndex, int newIndex) {
+  final n = items.length;
+  if (oldIndex < 0 || oldIndex >= n || newIndex < 0 || newIndex >= n) {
+    return [...items];
+  }
+  final reordered = [...items];
+  final moved = reordered.removeAt(oldIndex);
+  reordered.insert(newIndex, moved);
+  return reordered;
+}
+
+// ---------- 标签勾选 diff（详情页标签编辑 Phase 7） ----------
+
+/// 固定 8 色板（新建标签选色用；对齐桌面端 PRESET_COLORS，
+/// 默认选中第 4 色 #3B82F6 与桌面 LabelManager 一致）
+const List<String> labelPaletteHexes = [
+  '#EF4444',
+  '#F59E0B',
+  '#22C55E',
+  '#3B82F6',
+  '#8B5CF6',
+  '#EC4899',
+  '#14B8A6',
+  '#6B7280',
+];
+
+/// 勾选态 diff 结果：待建关联的标签 id 集 / 待删关联主键集
+class LabelSelectionDiff {
+  /// 新勾选 → 逐条 todoTaskLabelCreate(taskId, labelId)
+  final List<int> attachLabelIds;
+
+  /// 取消勾选 → 逐条 todoTaskLabelDelete(taskLabelId)
+  final List<int> detachTaskLabelIds;
+
+  const LabelSelectionDiff({
+    this.attachLabelIds = const [],
+    this.detachTaskLabelIds = const [],
+  });
+}
+
+/// 由前后勾选态计算关联增删（纯函数）：
+/// - 新勾选且详情中未挂载 → 进 [LabelSelectionDiff.attachLabelIds]；
+/// - 取消勾选且仍挂载 → 经 taskLabelIdByLabelId 反查关联主键进
+///   [LabelSelectionDiff.detachTaskLabelIds]（无映射视为已不存在，跳过）。
+LabelSelectionDiff diffLabelSelection({
+  required Set<int> before,
+  required Set<int> after,
+  required Map<int, int> taskLabelIdByLabelId,
+}) {
+  final added = after.difference(before).toList();
+  final detached = <int>[
+    for (final id in before.difference(after))
+      if (taskLabelIdByLabelId[id] != null) taskLabelIdByLabelId[id]!,
+  ];
+  return LabelSelectionDiff(
+    attachLabelIds: added,
+    detachTaskLabelIds: detached,
+  );
+}
+
 // ---------- 时间展示 ----------
 
 const int _msPerMinute = 60000;
@@ -144,6 +212,10 @@ const int _msPerHour = 3600000;
 const int _msPerDay = 86400000;
 
 String _two(int n) => n.toString().padLeft(2, '0');
+
+/// 本地时区自然日零点毫秒（表单快捷项 / 日期选择器回填共用归一化）
+int dateToMidnightMs(DateTime d) =>
+    DateTime(d.year, d.month, d.day).millisecondsSinceEpoch;
 
 /// yyyy-MM-dd（本地时区）
 String formatYmd(int ms) {

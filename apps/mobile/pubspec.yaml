@@ -23,6 +23,11 @@ dependencies:
   # 应用数据目录（FRB base_dir 参数源）
   path_provider: ^2.1.0
 
+  # 本地通知三件套（Phase 7 平台集成：提醒到期系统通知，无权限静默降级 toast）
+  flutter_local_notifications: ^22.3.0
+  timezone: ^0.11.1
+  flutter_timezone: ^5.1.0
+
   # ── FRB 桥接（cargokit FFI 插件壳，构建 crates/flutter-plugin-orbit）──
   flutter_rust_bridge: 2.12.0
   rust_lib_orbit:

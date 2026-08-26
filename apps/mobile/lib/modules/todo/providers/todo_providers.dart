@@ -16,6 +16,12 @@ final todoProjectsProvider = FutureProvider<List<TodoProject>>((ref) async {
   return bridge.todoProjectList(const ListFilter(pageSize: 1000));
 });
 
+/// 标签列表（React queryKey ["todo-label","list"]；详情页标签编辑弹层消费）
+final todoLabelsProvider = FutureProvider<List<TodoLabel>>((ref) async {
+  final bridge = ref.watch(orbitBridgeProvider);
+  return bridge.todoLabelList(const ListFilter(pageSize: 1000));
+});
+
 /// 任务列表查询键（React queryKey ["todo_tasks", keyword]）
 class TaskListQuery {
   final String keyword;
@@ -50,6 +56,7 @@ final syncConfigProvider = FutureProvider<SyncConfigView?>(
 /// 全量失效业务缓存（dbChanges / syncFinished(pulled>0) 时调用）
 void invalidateBusinessCaches(WidgetRef ref) {
   ref.invalidate(todoProjectsProvider);
+  ref.invalidate(todoLabelsProvider);
   ref.invalidate(todoTasksProvider);
   ref.invalidate(taskDetailProvider);
   ref.invalidate(syncConfigProvider);
