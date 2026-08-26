@@ -47,7 +47,9 @@ export default function TodoListPage() {
   const setSelectedTaskId = useTodoStore((s) => s.setSelectedTaskId);
   const setCommandOpen = useAppStore((s) => s.setCommandOpen);
   const taskFormIntent = useAppStore((s) => s.taskFormIntent);
+  const consumeTaskFormIntent = useAppStore((s) => s.consumeTaskFormIntent);
   const viewToggleIntent = useAppStore((s) => s.viewToggleIntent);
+  const consumeViewToggleIntent = useAppStore((s) => s.consumeViewToggleIntent);
 
   // ---- 选中态三选一互斥（04 §二）----
   const [quickView, setQuickView] = useState<QuickViewKey>("all");
@@ -70,17 +72,20 @@ export default function TodoListPage() {
     localStorage.setItem(LS_VIEW_MODE, viewMode);
   }, [viewMode]);
 
-  // 壳层命令面板的动作意图（07 §五-P1#8）；计数器为 0 视为初始挂载，跳过
+  // 壳层命令面板的动作意图（07 §五-P1#8）：消费即归零（评审 C1）——
+  // 防止历史意图在页面重挂载时被重放；0 视为无待处理意图
   useEffect(() => {
     if (taskFormIntent === 0) return;
     setEditingTask(null);
     setFormOpen(true);
-  }, [taskFormIntent]);
+    consumeTaskFormIntent();
+  }, [taskFormIntent, consumeTaskFormIntent]);
 
   useEffect(() => {
     if (viewToggleIntent === 0) return;
     setViewMode((m) => (m === "list" ? "kanban" : "list"));
-  }, [viewToggleIntent]);
+    consumeViewToggleIntent();
+  }, [viewToggleIntent, consumeViewToggleIntent]);
 
   // ---- 数据查询（db-change 事件自动失效刷新）----
   const projectsQuery = useQuery({

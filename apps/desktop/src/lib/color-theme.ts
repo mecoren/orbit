@@ -359,8 +359,25 @@ export function setPalette(
  * 运行时切换主题模式（无闪烁）
  *
  * 同时持久化 theme_mode 并映射到对应色板。
+ * 派发同窗口自定义事件（评审 I2）：storage 事件不跨同页组件，
+ * ThemeModeToggle 等订阅者据此同步 UI。
  */
 export function setThemeMode(mode: ThemeMode): void {
   localStorage.setItem(THEME_MODE_STORAGE_KEY, mode);
   setPalette(THEME_MODE_TO_PALETTE[mode]);
+  window.dispatchEvent(new Event(THEME_MODE_CHANGE_EVENT));
+}
+
+/** 主题模式变更事件名（同窗口内广播；跨 storage 变更仍走原生 storage 事件） */
+export const THEME_MODE_CHANGE_EVENT = "orbit:theme-mode";
+
+/** 三态循环顺序（命令面板「切换主题」与 ThemeModeToggle 共用，避免漂移） */
+export const THEME_MODE_CYCLE: ThemeMode[] = ["system", "light", "dark"];
+
+/** 切换到循环中的下一个主题模式并应用，返回新模式 */
+export function cycleThemeMode(): ThemeMode {
+  const next =
+    THEME_MODE_CYCLE[(THEME_MODE_CYCLE.indexOf(getStoredThemeMode()) + 1) % THEME_MODE_CYCLE.length];
+  setThemeMode(next);
+  return next;
 }

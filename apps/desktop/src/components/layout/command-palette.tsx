@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/command";
 import { useTodoStore } from "@/features/todo/store";
 import { useAppStore } from "@/stores/app-store";
-import { getStoredThemeMode, setThemeMode, type ThemeMode } from "@/lib/color-theme";
+import { cycleThemeMode } from "@/lib/color-theme";
 import { todoTaskList } from "@/lib/tauri";
 
 interface RouteItem {
@@ -54,13 +54,6 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
   const setSelectedTaskId = useTodoStore((s) => s.setSelectedTaskId);
   const bumpTaskFormIntent = useAppStore((s) => s.bumpTaskFormIntent);
   const bumpViewToggleIntent = useAppStore((s) => s.bumpViewToggleIntent);
-
-  /** 与 components/theme-mode-toggle.tsx 相同的三态循环 */
-  const cycleTheme = () => {
-    const CYCLE: ThemeMode[] = ["system", "light", "dark"];
-    const next = CYCLE[(CYCLE.indexOf(getStoredThemeMode()) + 1) % CYCLE.length];
-    setThemeMode(next);
-  };
 
   // 最近任务组（⚖③ M2 接线）：复用 ["todo_tasks"] 缓存，updated_at 降序取前 5
   const { data: tasks } = useQuery({
@@ -110,7 +103,7 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
           <CommandItem
             value="切换主题 theme light dark system"
             onSelect={() => {
-              cycleTheme();
+              cycleThemeMode();
               onOpenChange(false);
             }}
           >

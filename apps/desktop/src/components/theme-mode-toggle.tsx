@@ -8,13 +8,12 @@ import { Moon, Sun, Monitor } from "lucide-react";
 
 import {
   type ThemeMode,
+  cycleThemeMode,
   getStoredThemeMode,
-  setThemeMode,
+  THEME_MODE_CHANGE_EVENT,
 } from "@/lib/color-theme";
 import { cn } from "@/lib/utils";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-
-const MODE_CYCLE: ThemeMode[] = ["system", "light", "dark"];
 
 const MODE_ICONS: Record<ThemeMode, typeof Sun> = {
   light: Sun,
@@ -40,20 +39,21 @@ export const ThemeModeToggle = forwardRef<
   const [mode, setMode] = useState<ThemeMode>(() => getStoredThemeMode());
 
   useEffect(() => {
+    // 跨窗口走原生 storage；同窗口（命令面板切换主题）走自定义事件（评审 I2）
+    const refresh = () => setMode(getStoredThemeMode());
     const handleStorage = (e: StorageEvent) => {
-      if (e.key === "theme_mode") {
-        setMode(getStoredThemeMode());
-      }
+      if (e.key === "theme_mode") refresh();
     };
     window.addEventListener("storage", handleStorage);
-    return () => window.removeEventListener("storage", handleStorage);
+    window.addEventListener(THEME_MODE_CHANGE_EVENT, refresh);
+    return () => {
+      window.removeEventListener("storage", handleStorage);
+      window.removeEventListener(THEME_MODE_CHANGE_EVENT, refresh);
+    };
   }, []);
 
   const handleClick = () => {
-    const nextIndex = (MODE_CYCLE.indexOf(mode) + 1) % MODE_CYCLE.length;
-    const next = MODE_CYCLE[nextIndex];
-    setMode(next);
-    setThemeMode(next);
+    setMode(cycleThemeMode());
   };
 
   const Icon = MODE_ICONS[mode];
