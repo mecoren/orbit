@@ -1,6 +1,6 @@
 # =============================================================================
 # flutter-plugin-orbit — 移动端 FRB 桥接薄壳（omnipass flutter-plugin-omnipass 同款）
-# 职责：将 orbit_core 公共 API 包装为 flutter_rust_bridge 可导出函数，不含业务逻辑。
+# 职责：将 orbit-core 公共 API 包装为 flutter_rust_bridge 可导出函数，不含业务逻辑。
 # 与桌面壳 apps/desktop/src-tauri 的 #[tauri::command] 面一一对应。
 # 状态管理：无 Tauri Manager，改用 crate 级全局单例（parking_lot Mutex），
 # 由 Flutter 侧调用 init_orbit_state() 初始化。
@@ -17,7 +17,7 @@ crate-type = ["cdylib", "staticlib", "rlib"]
 
 [dependencies]
 # 核心库（Monorepo path 依赖；内部依赖统一注册在根 workspace.dependencies）
-orbit_core.workspace = true
+orbit-core.workspace = true
 
 # flutter_rust_bridge v2（默认特性含 tokio runtime 与 spawn；chrono 支持时间类型）
 flutter_rust_bridge = { version = "=2.12.0", features = ["chrono"] }

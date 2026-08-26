@@ -1,11 +1,13 @@
 # =============================================================================
-# orbit_core — Rust 业务逻辑核心
+# orbit-core — Rust 业务逻辑核心
 # 零 FFI 依赖（不依赖 tauri / flutter_rust_bridge），由 src-tauri 薄壳包装为命令。
 # 资产来源：wait-home rust_core（wait_core）按 02 文档 §四 清单裁剪平移。
 # 所有版本与配置由根 Cargo.toml [workspace.dependencies] 单点管控。
+# 命名约定：包名/目录 kebab-case（orbit-core）；lib 名 snake_case（orbit_core），
+# 依赖方代码统一 `use orbit_core::…`，与 lib 名对齐。
 # =============================================================================
 [package]
-name = "orbit_core"
+name = "orbit-core"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

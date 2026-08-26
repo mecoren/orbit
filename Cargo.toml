@@ -5,12 +5,12 @@
 #     子 crate 一律 `xxx.workspace = true` 引用，避免版本漂移。
 #   - apps/desktop/src-tauri 为嵌套独立 workspace，自行声明版本；
 #   - apps/mobile 为 Flutter 应用，不在任何 Cargo workspace 内，
-#     经 crates/flutter-plugin-orbit（FRB 桥接）复用 orbit_core。
+#     经 crates/flutter-plugin-orbit（FRB 桥接）复用 orbit-core。
 # =============================================================================
 [workspace]
 resolver = "2"
 members = [
-    "crates/orbit_core",
+    "crates/orbit-core",
     "crates/flutter-plugin-orbit",
 ]
 
@@ -20,8 +20,9 @@ rust-version = "1.96"
 version = "0.1.0"
 
 # 内部 crate 统一注册（omnipass 模式）：成员用 `xxx.workspace = true` 引用
+# 命名约定：包名/目录 kebab-case；依赖键随包名（orbit-core），代码 import 用 lib 名 orbit_core
 [workspace.dependencies]
-orbit_core = { path = "crates/orbit_core" }
+orbit-core = { path = "crates/orbit-core" }
 # 异步运行时
 tokio = { version = "1.45", features = ["rt-multi-thread", "macros", "sync", "fs", "io-util"] }
 async-trait = "0.1"
@@ -64,7 +65,7 @@ regex = "1"
 url = "2"
 urlencoding = "2"
 
-# 日志（sqlx/hyper 传递引入 log v0.4，显式声明供 orbit_core / 插件配置使用）
+# 日志（sqlx/hyper 传递引入 log v0.4，显式声明供 orbit-core / 插件配置使用）
 log = "0.4"
 
 # 注：Tauri 系依赖与 keyring 已随桌面壳独立 workspace 化移出本清单，

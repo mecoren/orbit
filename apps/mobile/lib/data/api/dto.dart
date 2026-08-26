@@ -2,7 +2,7 @@
 
 /// 数据传输对象（DTO）
 ///
-/// 与 crates/orbit_core serde 模型字段一一对应，snake_case 直传；
+/// 与 crates/orbit-core serde 模型字段一一对应，snake_case 直传；
 /// 自 apps/desktop/src/lib/tauri.ts 的 TS 接口镜像而来。
 ///
 /// 时间戳约定：Unix 毫秒（Rust i64）。

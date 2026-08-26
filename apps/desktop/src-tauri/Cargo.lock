@@ -3024,35 +3024,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "04744f49eae99ab78e0d5c0b603ab218f515ea8cfe5a456d7629ad883a3b6e7d"
 
 [[package]]
-name = "orbit-desktop"
-version = "0.1.0"
-dependencies = [
- "base64 0.22.1",
- "chrono",
- "dirs",
- "keyring",
- "log",
- "once_cell",
- "orbit_core",
- "raw-window-handle",
- "serde",
- "serde_json",
- "sqlx",
- "tauri",
- "tauri-build",
- "tauri-plugin-dialog",
- "tauri-plugin-fs",
- "tauri-plugin-log",
- "tauri-plugin-notification",
- "tauri-plugin-shell",
- "tauri-plugin-window-state",
- "tokio",
- "whoami",
- "windows",
-]
-
-[[package]]
-name = "orbit_core"
+name = "orbit-core"
 version = "0.1.0"
 dependencies = [
  "aes-gcm",
@@ -3085,6 +3057,34 @@ dependencies = [
  "whoami",
  "zip",
  "zstd",
+]
+
+[[package]]
+name = "orbit-desktop"
+version = "0.1.0"
+dependencies = [
+ "base64 0.22.1",
+ "chrono",
+ "dirs",
+ "keyring",
+ "log",
+ "once_cell",
+ "orbit-core",
+ "raw-window-handle",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "tauri",
+ "tauri-build",
+ "tauri-plugin-dialog",
+ "tauri-plugin-fs",
+ "tauri-plugin-log",
+ "tauri-plugin-notification",
+ "tauri-plugin-shell",
+ "tauri-plugin-window-state",
+ "tokio",
+ "whoami",
+ "windows",
 ]
 
 [[package]]

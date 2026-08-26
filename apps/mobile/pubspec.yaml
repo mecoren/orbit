@@ -1,5 +1,5 @@
 name: orbit
-description: "Orbit（循迹）移动端 — Flutter 重构版。桌面端为 Tauri（apps/desktop），两端共享 crates/orbit_core。"
+description: "Orbit（循迹）移动端 — Flutter 重构版。桌面端为 Tauri（apps/desktop），两端共享 crates/orbit-core。"
 publish_to: "none"
 version: 0.1.0+1
 

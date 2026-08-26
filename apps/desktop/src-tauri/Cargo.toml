@@ -1,6 +1,6 @@
 # =============================================================================
 # src-tauri — Tauri 2 桌面端 Rust 壳（唯一前端通道）
-# 职责：薄壳包装 orbit_core 的公共 API 为 #[tauri::command]，不含业务逻辑。
+# 职责：薄壳包装 orbit-core 的公共 API 为 #[tauri::command]，不含业务逻辑。
 #
 # 参考 omnipass 模式：本 crate 为嵌套【独立 workspace】（下方空 [workspace] 表），
 # 刻意脱离根 workspace，避免 Tauri 依赖图与核心库耦合；
@@ -23,7 +23,7 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 
 [dependencies]
 # 核心库（Monorepo path 依赖）
-orbit_core = { path = "../../../crates/orbit_core" }
+orbit-core = { path = "../../../crates/orbit-core" }
 
 # Tauri v2 + 插件（02 文档 §七：notification/window-state/dialog/fs/shell/log）
 tauri = { version = "2", features = ["devtools", "image-png"] }
