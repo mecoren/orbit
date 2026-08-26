@@ -1,43 +1,46 @@
 import 'package:go_router/go_router.dart';
 
-import '../../modules/shell/placeholder_page.dart';
+import 'router_keys.dart';
+import '../../modules/settings/about_page.dart';
+import '../../modules/settings/settings_screen.dart';
+import '../../modules/todo/detail_screen.dart';
+import '../../modules/todo/sidebar_screen.dart';
+import '../../modules/todo/sub_list_screen.dart';
 
-/// 应用路由（go_router）
+/// 应用路由（go_router，栈式导航语义，对齐原 React 版 router.mobile.tsx）
 ///
-/// 栈式导航语义（对齐 React 版 router.mobile.tsx，无底部 Tab）：
 /// ```
 /// /todo            侧栏首屏（快捷视图 + 项目 + 未分组）
-/// /todo/tasks      任务子列表
+/// /todo/tasks      任务子列表（query 三参数互斥 view/projectId/ungrouped）
 /// /todo/:id        任务详情全屏
 /// /settings        设置
 /// /about           关于
 /// ```
-/// 各屏面在 Phase 6 实现；当前为占位页。
+///
+/// query 参数解析收口在 [SubListScreen.parseQuery]；
+/// 详情 id 非正整数时传 null 走屏内失败态。
 final appRouter = GoRouter(
+  navigatorKey: rootNavigatorKey,
   initialLocation: '/todo',
   routes: [
     GoRoute(
-      path: '/todo',
-      builder: (context, state) => const PlaceholderPage(label: '侧栏首屏'),
-      routes: [
-        GoRoute(
-          path: 'tasks',
-          builder: (context, state) => const PlaceholderPage(label: '任务子列表'),
-        ),
-        GoRoute(
-          path: ':id',
-          builder: (context, state) =>
-              PlaceholderPage(label: '详情 ${state.pathParameters['id']}'),
-        ),
-      ],
+      path: '/',
+      redirect: (_, _) => '/todo',
+    ),
+    GoRoute(path: '/todo', builder: (context, state) => const SidebarScreen()),
+    GoRoute(
+      path: '/todo/tasks',
+      builder: (context, state) =>
+          SubListScreen(query: SubListScreen.parseQuery(state)),
     ),
     GoRoute(
-      path: '/settings',
-      builder: (context, state) => const PlaceholderPage(label: '设置'),
+      path: '/todo/:id',
+      // 注意：go_router 静态段优先于动态段，/todo/tasks 不会被本路由吞掉
+      builder: (context, state) => DetailScreen(
+        taskId: int.tryParse(state.pathParameters['id'] ?? ''),
+      ),
     ),
-    GoRoute(
-      path: '/about',
-      builder: (context, state) => const PlaceholderPage(label: '关于'),
-    ),
+    GoRoute(path: '/settings', builder: (context, state) => const SettingsScreen()),
+    GoRoute(path: '/about', builder: (context, state) => const AboutPage()),
   ],
 );
