@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import 'router_keys.dart';
@@ -19,6 +20,29 @@ import '../../modules/todo/sub_list_screen.dart';
 ///
 /// query 参数解析收口在 [SubListScreen.parseQuery]；
 /// 详情 id 非正整数时传 null 走屏内失败态。
+
+/// 入栈自右滑入（07 报告 §五-P1#12：方向随入栈/出栈，pop 时反向播放）。
+/// 三屏 todo 栈与设置页共用；时长/曲线集中在此，后续调手感只改一处。
+CustomTransitionPage<void> pageSlideFromRight(Widget child, {LocalKey? key}) =>
+    CustomTransitionPage<void>(
+      key: key,
+      child: child,
+      transitionDuration: const Duration(milliseconds: 280),
+      reverseTransitionDuration: const Duration(milliseconds: 220),
+      transitionsBuilder: (context, animation, secondaryAnimation, child) {
+        final curved = CurvedAnimation(
+          parent: animation,
+          curve: Curves.easeOutCubic,
+          reverseCurve: Curves.easeInCubic,
+        );
+        return SlideTransition(
+          position: Tween(begin: const Offset(1, 0), end: Offset.zero)
+              .animate(curved),
+          child: child,
+        );
+      },
+    );
+
 final appRouter = GoRouter(
   navigatorKey: rootNavigatorKey,
   initialLocation: '/todo',
@@ -30,17 +54,24 @@ final appRouter = GoRouter(
     GoRoute(path: '/todo', builder: (context, state) => const SidebarScreen()),
     GoRoute(
       path: '/todo/tasks',
-      builder: (context, state) =>
-          SubListScreen(query: SubListScreen.parseQuery(state)),
+      pageBuilder: (context, state) => pageSlideFromRight(
+        SubListScreen(query: SubListScreen.parseQuery(state)),
+      ),
     ),
     GoRoute(
       path: '/todo/:id',
       // 注意：go_router 静态段优先于动态段，/todo/tasks 不会被本路由吞掉
-      builder: (context, state) => DetailScreen(
-        taskId: int.tryParse(state.pathParameters['id'] ?? ''),
+      pageBuilder: (context, state) => pageSlideFromRight(
+        DetailScreen(
+          taskId: int.tryParse(state.pathParameters['id'] ?? ''),
+        ),
       ),
     ),
-    GoRoute(path: '/settings', builder: (context, state) => const SettingsScreen()),
+    GoRoute(
+      path: '/settings',
+      pageBuilder: (context, state) =>
+          pageSlideFromRight(const SettingsScreen()),
+    ),
     GoRoute(path: '/about', builder: (context, state) => const AboutPage()),
   ],
 );
