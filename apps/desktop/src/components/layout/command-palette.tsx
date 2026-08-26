@@ -9,7 +9,7 @@
 import { useMemo } from "react";
 import { useNavigate } from "react-router";
 import { useQuery } from "@tanstack/react-query";
-import { CheckSquare, Clock, Settings, Info } from "lucide-react";
+import { CheckSquare, Clock, Info, LayoutGrid, Plus, Settings, SunMoon } from "lucide-react";
 
 import {
   CommandDialog,
@@ -20,6 +20,8 @@ import {
   CommandList,
 } from "@/components/ui/command";
 import { useTodoStore } from "@/features/todo/store";
+import { useAppStore } from "@/stores/app-store";
+import { getStoredThemeMode, setThemeMode, type ThemeMode } from "@/lib/color-theme";
 import { todoTaskList } from "@/lib/tauri";
 
 interface RouteItem {
@@ -50,6 +52,15 @@ interface CommandPaletteProps {
 export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
   const navigate = useNavigate();
   const setSelectedTaskId = useTodoStore((s) => s.setSelectedTaskId);
+  const bumpTaskFormIntent = useAppStore((s) => s.bumpTaskFormIntent);
+  const bumpViewToggleIntent = useAppStore((s) => s.bumpViewToggleIntent);
+
+  /** 与 components/theme-mode-toggle.tsx 相同的三态循环 */
+  const cycleTheme = () => {
+    const CYCLE: ThemeMode[] = ["system", "light", "dark"];
+    const next = CYCLE[(CYCLE.indexOf(getStoredThemeMode()) + 1) % CYCLE.length];
+    setThemeMode(next);
+  };
 
   // 最近任务组（⚖③ M2 接线）：复用 ["todo_tasks"] 缓存，updated_at 降序取前 5
   const { data: tasks } = useQuery({
@@ -85,6 +96,38 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
       <CommandInput placeholder="搜索页面或最近任务..." autoFocus />
       <CommandList>
         <CommandEmpty>无匹配结果</CommandEmpty>
+        <CommandGroup heading="命令">
+          <CommandItem
+            value="新建任务 new task"
+            onSelect={() => {
+              onOpenChange(false);
+              bumpTaskFormIntent();
+            }}
+          >
+            <Plus className="size-4" />
+            <span>新建任务</span>
+          </CommandItem>
+          <CommandItem
+            value="切换主题 theme light dark system"
+            onSelect={() => {
+              cycleTheme();
+              onOpenChange(false);
+            }}
+          >
+            <SunMoon className="size-4" />
+            <span>切换主题</span>
+          </CommandItem>
+          <CommandItem
+            value="切换视图 view kanban list 看板 列表"
+            onSelect={() => {
+              onOpenChange(false);
+              bumpViewToggleIntent();
+            }}
+          >
+            <LayoutGrid className="size-4" />
+            <span>切换列表/看板视图</span>
+          </CommandItem>
+        </CommandGroup>
         {groupedRoutes.map(([group, items]) => (
           <CommandGroup key={group} heading={group}>
             {items.map((item) => (
