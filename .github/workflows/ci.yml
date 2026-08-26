@@ -10,33 +10,29 @@ on:
 jobs:
   web:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: apps/desktop
     steps:
       - uses: actions/checkout@v4
 
+      # 版本由根 package.json 的 packageManager 字段驱动（与本地 pnpm 统一）
       - uses: pnpm/action-setup@v4
-        with:
-          version: 9
 
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: pnpm
-          cache-dependency-path: apps/desktop/pnpm-lock.yaml
+          cache-dependency-path: pnpm-lock.yaml
 
       - name: 安装依赖
         run: pnpm install --frozen-lockfile
 
       - name: 类型检查
-        run: pnpm typecheck
+        run: pnpm --filter orbit typecheck
 
       - name: 单元测试
-        run: pnpm test
+        run: pnpm --filter orbit test
 
       - name: 生产构建(纯 web,不含 Tauri)
-        run: pnpm build
+        run: pnpm --filter orbit build
 
   rust-core:
     runs-on: ubuntu-latest
