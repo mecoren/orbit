@@ -5,13 +5,13 @@
 #     子 crate 一律 `xxx.workspace = true` 引用，避免版本漂移。
 #   - apps/desktop/src-tauri 为嵌套独立 workspace，自行声明版本；
 #   - apps/mobile 为 Flutter 应用，不在任何 Cargo workspace 内，
-#     经 crates/flutter-plugin-orbit（FRB 桥接）复用 orbit-core。
+#     经 crates/orbit-flutter（FRB 桥接）复用 orbit-core。
 # =============================================================================
 [workspace]
 resolver = "2"
 members = [
     "crates/orbit-core",
-    "crates/flutter-plugin-orbit",
+    "crates/orbit-flutter",
 ]
 
 [workspace.package]

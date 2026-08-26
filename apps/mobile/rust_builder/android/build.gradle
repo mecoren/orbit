@@ -51,6 +51,6 @@ android {
 
 apply from: "../cargokit/gradle/plugin.gradle"
 cargokit {
-    manifestDir = "../../../../crates/flutter-plugin-orbit"
-    libname = "flutter_plugin_orbit"
+    manifestDir = "../../../../crates/orbit-flutter"
+    libname = "orbit_flutter"
 }

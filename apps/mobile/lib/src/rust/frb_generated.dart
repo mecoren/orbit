@@ -73,8 +73,8 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
-        stem: 'flutter_plugin_orbit',
-        ioDirectory: '../../crates/flutter-plugin-orbit/target/release/',
+        stem: 'orbit_flutter',
+        ioDirectory: '../../crates/orbit-flutter/target/release/',
         webPrefix: 'pkg/',
         wasmBindgenName: 'wasm_bindgen',
       );

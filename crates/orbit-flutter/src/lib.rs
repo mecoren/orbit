@@ -1,4 +1,4 @@
-//! flutter_plugin_orbit — Orbit 移动端 Rust 桥接层
+//! orbit_flutter — Orbit 移动端 Rust 桥接层
 //!
 //! 分层模型（对齐 omnipass）：
 //!

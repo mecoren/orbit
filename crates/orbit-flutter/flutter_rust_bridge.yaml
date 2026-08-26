@@ -1,7 +1,7 @@
 # flutter_rust_bridge codegen 配置（FRB 2.x 新语法；参考 wait-home）
 #
 # 用法：在仓库根目录执行
-#   flutter_rust_bridge_codegen generate --config-file crates/flutter-plugin-orbit/flutter_rust_bridge.yaml
+#   flutter_rust_bridge_codegen generate --config-file crates/orbit-flutter/flutter_rust_bridge.yaml
 # 注：rust_root / dart_output 相对本配置文件所在目录解析。
 rust_root: .
 rust_input: crate::api

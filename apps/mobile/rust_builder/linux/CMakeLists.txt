@@ -8,7 +8,7 @@ set(PROJECT_NAME "rust_lib_orbit")
 project(${PROJECT_NAME} LANGUAGES CXX)
 
 include("../cargokit/cmake/cargokit.cmake")
-apply_cargokit(${PROJECT_NAME} ../../../../crates/flutter-plugin-orbit flutter_plugin_orbit "")
+apply_cargokit(${PROJECT_NAME} ../../../../crates/orbit-flutter orbit_flutter "")
 
 # List of absolute paths to libraries that should be bundled with the plugin.
 # This list could contain prebuilt libraries, or libraries created by an

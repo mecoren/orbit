@@ -6,7 +6,7 @@
 | 端 | 技术栈 | 位置 |
 |---|---|---|
 | 桌面 | Tauri 2 + React 19 + Vite | `apps/desktop`（Rust 壳：`apps/desktop/src-tauri`） |
-| 移动 | Flutter + flutter_rust_bridge 2.12 | `apps/mobile`（FRB 桥：`crates/flutter-plugin-orbit`） |
+| 移动 | Flutter + flutter_rust_bridge 2.12 | `apps/mobile`（FRB 桥：`crates/orbit-flutter`） |
 | 核心 | Rust（SQLCipher / 云同步 / 备份 / 事件总线） | `crates/orbit-core` |
 
 ## 目录结构
@@ -15,7 +15,7 @@
 orbit/
 ├── crates/                  # 根 Cargo workspace 成员
 │   ├── orbit-core/          # 业务核心（零 FFI 依赖）
-│   └── flutter-plugin-orbit/ # FRB 薄壳，导出 API 给 Flutter
+│   └── orbit-flutter/ # FRB 薄壳，导出 API 给 Flutter
 ├── apps/
 │   ├── desktop/             # Tauri 桌面端（src-tauri 为嵌套独立 workspace）
 │   └── mobile/              # Flutter 应用（不入任何 Cargo workspace）
@@ -45,7 +45,7 @@ cd apps/desktop/src-tauri && cargo check
 
 # FRB codegen（移动端桥接产物一致性由 CI 门禁校验）
 flutter_rust_bridge_codegen generate \
-  --config-file crates/flutter-plugin-orbit/flutter_rust_bridge.yaml
+  --config-file crates/orbit-flutter/flutter_rust_bridge.yaml
 ```
 
 ## 工程约定

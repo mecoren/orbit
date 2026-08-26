@@ -18,6 +18,10 @@
 - pnpm lockfile 由 apps/desktop 上收至仓库根：新增根 `package.json` +
   `pnpm-workspace.yaml`，pnpm 版本由 `packageManager` 字段锁定；
   CI web job 迁至仓库根并以 `pnpm --filter orbit …` 执行
+- `crates/flutter-plugin-orbit` 更名 `crates/orbit-flutter`：三层 Rust 包统一
+  `orbit-*` 前缀，lib 名同步改为 `orbit_flutter`；cargokit 三平台构建参数、
+  FRB 配置注释、CI 路径、`Cargo.lock` 连带更新；Dart 插件名 `rust_lib_orbit`
+  与历史文档旧名保持不变
 
 ## [0.1.0] - 2026-08-26
 

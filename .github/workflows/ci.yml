@@ -80,10 +80,10 @@ jobs:
         working-directory: ${{ github.workspace }}
         run: |
           flutter_rust_bridge_codegen generate \
-            --config-file crates/flutter-plugin-orbit/flutter_rust_bridge.yaml
+            --config-file crates/orbit-flutter/flutter_rust_bridge.yaml
           # 生成物入库前统一经 rustfmt（与仓库内已格式化的 frb_generated.rs 对齐）
           cargo fmt --all
-          git diff --exit-code apps/mobile/lib/src/rust crates/flutter-plugin-orbit/src/frb_generated.rs \
+          git diff --exit-code apps/mobile/lib/src/rust crates/orbit-flutter/src/frb_generated.rs \
             || (echo "::error::FRB 生成物与仓库不一致，请本地重新执行 codegen 并运行 cargo fmt 后提交" && exit 1)
 
       - name: 静态分析

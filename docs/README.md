@@ -72,6 +72,7 @@ wait-home                          Orbit
 | 中文名 / 应用名 | 循迹（用户可见的应用显示名：标题栏、关于页、安装包等处使用） |
 | 命名语言约定 | 代码、文档、标识符用 Orbit；面向用户的界面文案用「循迹」 |
 | Rust 核心包名 | `orbit_core` |
+| 历史 crate 名 | 存量文档中的 `flutter-plugin-orbit` 为历史名（现 `crates/orbit-flutter`），不回改 |
 | 数据库文件 | `orbit.db` |
 | 全量备份包后缀 | `.orsync`（格式同 `.waitsync`，magic 改为 `"ORSN"`） |
 | 同步载荷 magic | `"OSZS"`（沿用 wait-home 的 `"WSZS"` 格式骨架，仅换 Orbit 标识） |
