@@ -32,8 +32,9 @@ cmd 引导阶段报"路径找不到"（非编译器错误，与 ADR 0001 工具�
 
 ## 后续（未竟事项）
 
-- 本地通知 flutter_local_notifications（现 reminderDue 仅应用内 toast）
-- 项目拖拽重排 UI（桥已备 updateSortOrder）、标签管理入口、表单 snap 分档
-- 详情页截止日期选择器接入、percent_done 回算命令面
-- iOS 工程（podspec 已备）与签名验证；CI 增加 Flutter/APK 流水线
-- README 架构图与 docs/02 更新以反映新布局
+- ~~本地通知~~ ✅ 已落地：flutter_local_notifications 即时呈现 + 权限降级 toast
+- ~~项目拖拽重排 UI~~ ✅ 已落地（把手限定，逐条落库）；~~标签管理入口~~ ✅；
+  ~~表单/详情日期选择器~~ ✅（共用 showTodoDatePicker）
+- 表单抽屉 snap 分档吸附（现为固定高度滚动，可后续移植 DraggableScrollableSheet snap）
+- iOS 工程（podspec 已备）与签名验证
+- README 架构图与 docs/02 更新以反映新布局；percent_done 回算命令面
