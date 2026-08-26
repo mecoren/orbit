@@ -112,14 +112,16 @@ export function parseQuickInput(raw: string, ctx: QuickInputContext): ParsedQuic
     const dayOfMonth = Number(m[2]);
     if (month < 0 || month > 11 || dayOfMonth < 1 || dayOfMonth > 31) return false;
     const cand = new Date(ctx.now.getFullYear(), month, dayOfMonth);
+    // JS Date 会把 2月29日(平年)/2月30日 静默滚动到 3 月 —— 视为无效日期保留原文
+    if (cand.getDate() !== dayOfMonth) return false;
     if (cand.getTime() < startOfDay(ctx.now).getTime()) {
       cand.setFullYear(cand.getFullYear() + 1);
     }
     setDueDate(m.index, cand);
     return true;
   });
-  // ---- 优先级 !1-!5 ----
-  take(/!([1-5])/g, (m) => {
+  // ---- 优先级 !1-!5（负向先行排除 !12 这类多位数的前缀误命中）----
+  take(/!([1-5])(?!\d)/g, (m) => {
     priority = Number(m[1]);
     return true;
   });

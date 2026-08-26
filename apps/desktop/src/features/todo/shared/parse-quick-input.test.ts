@@ -106,4 +106,24 @@ describe("parseQuickInput · 兜底语义", () => {
   it("剥离后收敛多余空白", () => {
     expect(parseQuickInput("买 牛奶  明天", CTX).title).toBe("买 牛奶");
   });
+
+  it("!10 以上不识别且不损坏标题（评审修复：负向先行）", () => {
+    const r = parseQuickInput("买菜 !12", CTX);
+    expect(r.title).toBe("买菜 !12");
+    expect(r.priority).toBe(0);
+  });
+
+  it("无效日期（平年 2月29日）不静默滚动，保留原文", () => {
+    const r = parseQuickInput("2月29日聚会", CTX);
+    expect(r.dueDate).toBeNull();
+    expect(r.title).toBe("2月29日聚会");
+  });
+
+  it("词形变体：今天/后天/星期X/礼拜X/M月d号", () => {
+    expect(parseQuickInput("今天交", CTX).dueDate!.getTime()).toBe(day(8, 26));
+    expect(parseQuickInput("后天搬", CTX).dueDate!.getTime()).toBe(day(8, 28));
+    expect(parseQuickInput("星期四复诊", CTX).dueDate!.getTime()).toBe(day(8, 27));
+    expect(parseQuickInput("礼拜六加班", CTX).dueDate!.getTime()).toBe(day(8, 29));
+    expect(parseQuickInput("9月10号体检", CTX).dueDate!.getTime()).toBe(day(9, 10));
+  });
 });
