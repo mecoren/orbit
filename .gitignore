@@ -6,18 +6,26 @@ target/
 node_modules/
 dist/
 
-# Flutter / Dart（Phase 3 起生效）
-apps/mobile/.dart_tool/
-apps/mobile/build/
+# Flutter / Dart（顶层通配：apps/mobile 等任意层级均覆盖）
+.dart_tool/
+build/
 
 # Tauri 生成物（gen/ 整体随构建再生：桌面 schemas、历史遗留 Android 工程均已清除）
 apps/desktop/src-tauri/gen/
 
+# 数据库伴生文件（SQLite WAL/SHM）
+*.sqlite-shm
+*.sqlite-wal
+
 # 日志与临时文件
 *.log
+*.pid
+hs_err_pid*.log
+replay_pid*.log
 .DS_Store
 Thumbs.db
 
 # IDE
 .idea/
 .vscode/
+*.iml
