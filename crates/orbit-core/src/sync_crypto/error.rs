@@ -64,9 +64,9 @@ impl From<crate::sync::error::SyncError> for SyncCryptoError {
     fn from(err: crate::sync::error::SyncError) -> Self {
         match err {
             // 保留「资源不存在」类型，供上层做 404 分支判断（不再字符串嗅探）
-            crate::sync::error::SyncError::NotFound { message } => SyncCryptoError::NotFound {
-                path: message,
-            },
+            crate::sync::error::SyncError::NotFound { message } => {
+                SyncCryptoError::NotFound { path: message }
+            }
             other => SyncCryptoError::Adapter {
                 message: other.to_string(),
             },

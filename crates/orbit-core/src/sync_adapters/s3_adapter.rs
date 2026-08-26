@@ -34,7 +34,11 @@ pub struct S3Adapter {
 
 impl S3Adapter {
     pub fn new(config: S3Config) -> Result<Self, SyncError> {
-        let timeout = if config.timeout_secs == 0 { 30 } else { config.timeout_secs };
+        let timeout = if config.timeout_secs == 0 {
+            30
+        } else {
+            config.timeout_secs
+        };
         let http = HttpClient::new(timeout, 3, config.skip_tls_verify)?;
         Ok(Self { http, config })
     }
@@ -316,9 +320,7 @@ impl SyncAdapter for S3Adapter {
         // 旧版本文件名为 {hash}（无后缀），保持原样。两者去重后返回。
         let mut hashes: Vec<String> = keys
             .into_iter()
-            .map(|k| {
-                k.strip_suffix(".waitsync").unwrap_or(&k).to_string()
-            })
+            .map(|k| k.strip_suffix(".waitsync").unwrap_or(&k).to_string())
             .collect();
         hashes.dedup();
         Ok(hashes)

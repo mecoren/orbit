@@ -370,9 +370,11 @@ mod tests {
         assert!(upgraded_meta.hash.is_empty(), "v2 的 hash 字段应为空");
 
         // 升级后的 meta 应能正确解锁
-        let (unlocked2, upgraded2) =
-            unlock_master_auth("legacy_pw", &upgraded_meta).unwrap();
-        assert_eq!(unlocked2, original_db_key, "v2 解锁的 DB Key 必须与 v1 一致");
+        let (unlocked2, upgraded2) = unlock_master_auth("legacy_pw", &upgraded_meta).unwrap();
+        assert_eq!(
+            unlocked2, original_db_key,
+            "v2 解锁的 DB Key 必须与 v1 一致"
+        );
         assert!(upgraded2.is_none(), "v2 不应再次触发升级");
     }
 
@@ -396,6 +398,10 @@ mod tests {
 
         // verify_hash 不应等于 derived_key 的 base64（长度不同即可证明）
         // derived_key base64 = 44 字符，verify_hash hex = 64 字符
-        assert_ne!(verify_hash.len(), 44, "verify_hash 不应是 derived_key 的 base64");
+        assert_ne!(
+            verify_hash.len(),
+            44,
+            "verify_hash 不应是 derived_key 的 base64"
+        );
     }
 }

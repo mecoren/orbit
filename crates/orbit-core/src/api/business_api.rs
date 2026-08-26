@@ -17,7 +17,6 @@ use crate::eventbus::{
 };
 use crate::models::business::*;
 
-
 // =============================================================================
 // todo_projects / todo_tasks / todo_subtasks / todo_labels / todo_task_labels
 // todo_comments / todo_task_relations / todo_reminders（Vikunja 化重构，8 张表）
@@ -34,9 +33,19 @@ use crate::models::business::*;
 ///
 /// 不走 generic_repo::list（统一按 updated_at DESC），因为项目列表的展示顺序
 /// 由用户拖拽结果决定（sort_order 字段），updated_at 排序会让新建/重排后的项目跳到最前。
-pub async fn list_todo_projects(pool: &SqlitePool, filter: &ListFilter) -> CoreResult<Vec<TodoProject>> {
-    let page_size = if filter.page_size == 0 { 20 } else { filter.page_size } as i32;
-    let offset = filter.page.saturating_sub(1).saturating_mul(filter.page_size) as i32;
+pub async fn list_todo_projects(
+    pool: &SqlitePool,
+    filter: &ListFilter,
+) -> CoreResult<Vec<TodoProject>> {
+    let page_size = if filter.page_size == 0 {
+        20
+    } else {
+        filter.page_size
+    } as i32;
+    let offset = filter
+        .page
+        .saturating_sub(1)
+        .saturating_mul(filter.page_size) as i32;
 
     // 关键词过滤：与 generic_repo::list 保持一致（按 title/description LIKE）
     let keyword_clause = if let Some(kw) = filter.keyword.as_deref() {
@@ -69,10 +78,17 @@ pub async fn list_todo_projects(pool: &SqlitePool, filter: &ListFilter) -> CoreR
 pub async fn get_todo_project(pool: &SqlitePool, id: i64) -> CoreResult<TodoProject> {
     generic_repo::get_by_id(pool, "todo_projects", id).await
 }
-pub async fn create_todo_project(pool: &SqlitePool, input: &TodoProjectCreateInput) -> CoreResult<TodoProject> {
+pub async fn create_todo_project(
+    pool: &SqlitePool,
+    input: &TodoProjectCreateInput,
+) -> CoreResult<TodoProject> {
     generic_repo::create_todo_project(pool, input).await
 }
-pub async fn update_todo_project(pool: &SqlitePool, id: i64, input: &TodoProjectUpdateInput) -> CoreResult<TodoProject> {
+pub async fn update_todo_project(
+    pool: &SqlitePool,
+    id: i64,
+    input: &TodoProjectUpdateInput,
+) -> CoreResult<TodoProject> {
     generic_repo::update_todo_project(pool, id, input).await
 }
 pub async fn delete_todo_project(pool: &SqlitePool, id: i64) -> CoreResult<()> {
@@ -87,10 +103,17 @@ pub async fn list_todo_tasks(pool: &SqlitePool, filter: &ListFilter) -> CoreResu
 pub async fn get_todo_task(pool: &SqlitePool, id: i64) -> CoreResult<TodoTask> {
     generic_repo::get_by_id(pool, "todo_tasks", id).await
 }
-pub async fn create_todo_task(pool: &SqlitePool, input: &TodoTaskCreateInput) -> CoreResult<TodoTask> {
+pub async fn create_todo_task(
+    pool: &SqlitePool,
+    input: &TodoTaskCreateInput,
+) -> CoreResult<TodoTask> {
     generic_repo::create_todo_task(pool, input).await
 }
-pub async fn update_todo_task(pool: &SqlitePool, id: i64, input: &TodoTaskUpdateInput) -> CoreResult<TodoTask> {
+pub async fn update_todo_task(
+    pool: &SqlitePool,
+    id: i64,
+    input: &TodoTaskUpdateInput,
+) -> CoreResult<TodoTask> {
     generic_repo::update_todo_task(pool, id, input).await
 }
 pub async fn delete_todo_task(pool: &SqlitePool, id: i64) -> CoreResult<()> {
@@ -99,16 +122,26 @@ pub async fn delete_todo_task(pool: &SqlitePool, id: i64) -> CoreResult<()> {
 }
 
 // ---------- todo_subtasks ----------
-pub async fn list_todo_subtasks(pool: &SqlitePool, filter: &ListFilter) -> CoreResult<Vec<TodoSubtask>> {
+pub async fn list_todo_subtasks(
+    pool: &SqlitePool,
+    filter: &ListFilter,
+) -> CoreResult<Vec<TodoSubtask>> {
     generic_repo::list(pool, "todo_subtasks", filter).await
 }
 pub async fn get_todo_subtask(pool: &SqlitePool, id: i64) -> CoreResult<TodoSubtask> {
     generic_repo::get_by_id(pool, "todo_subtasks", id).await
 }
-pub async fn create_todo_subtask(pool: &SqlitePool, input: &TodoSubtaskCreateInput) -> CoreResult<TodoSubtask> {
+pub async fn create_todo_subtask(
+    pool: &SqlitePool,
+    input: &TodoSubtaskCreateInput,
+) -> CoreResult<TodoSubtask> {
     generic_repo::create_todo_subtask(pool, input).await
 }
-pub async fn update_todo_subtask(pool: &SqlitePool, id: i64, input: &TodoSubtaskUpdateInput) -> CoreResult<TodoSubtask> {
+pub async fn update_todo_subtask(
+    pool: &SqlitePool,
+    id: i64,
+    input: &TodoSubtaskUpdateInput,
+) -> CoreResult<TodoSubtask> {
     generic_repo::update_todo_subtask(pool, id, input).await
 }
 pub async fn delete_todo_subtask(pool: &SqlitePool, id: i64) -> CoreResult<()> {
@@ -117,16 +150,26 @@ pub async fn delete_todo_subtask(pool: &SqlitePool, id: i64) -> CoreResult<()> {
 }
 
 // ---------- todo_labels ----------
-pub async fn list_todo_labels(pool: &SqlitePool, filter: &ListFilter) -> CoreResult<Vec<TodoLabel>> {
+pub async fn list_todo_labels(
+    pool: &SqlitePool,
+    filter: &ListFilter,
+) -> CoreResult<Vec<TodoLabel>> {
     generic_repo::list(pool, "todo_labels", filter).await
 }
 pub async fn get_todo_label(pool: &SqlitePool, id: i64) -> CoreResult<TodoLabel> {
     generic_repo::get_by_id(pool, "todo_labels", id).await
 }
-pub async fn create_todo_label(pool: &SqlitePool, input: &TodoLabelCreateInput) -> CoreResult<TodoLabel> {
+pub async fn create_todo_label(
+    pool: &SqlitePool,
+    input: &TodoLabelCreateInput,
+) -> CoreResult<TodoLabel> {
     generic_repo::create_todo_label(pool, input).await
 }
-pub async fn update_todo_label(pool: &SqlitePool, id: i64, input: &TodoLabelUpdateInput) -> CoreResult<TodoLabel> {
+pub async fn update_todo_label(
+    pool: &SqlitePool,
+    id: i64,
+    input: &TodoLabelUpdateInput,
+) -> CoreResult<TodoLabel> {
     generic_repo::update_todo_label(pool, id, input).await
 }
 pub async fn delete_todo_label(pool: &SqlitePool, id: i64) -> CoreResult<()> {
@@ -135,13 +178,19 @@ pub async fn delete_todo_label(pool: &SqlitePool, id: i64) -> CoreResult<()> {
 }
 
 // ---------- todo_task_labels ----------
-pub async fn list_todo_task_labels(pool: &SqlitePool, filter: &ListFilter) -> CoreResult<Vec<TodoTaskLabel>> {
+pub async fn list_todo_task_labels(
+    pool: &SqlitePool,
+    filter: &ListFilter,
+) -> CoreResult<Vec<TodoTaskLabel>> {
     generic_repo::list(pool, "todo_task_labels", filter).await
 }
 pub async fn get_todo_task_label(pool: &SqlitePool, id: i64) -> CoreResult<TodoTaskLabel> {
     generic_repo::get_by_id(pool, "todo_task_labels", id).await
 }
-pub async fn create_todo_task_label(pool: &SqlitePool, input: &TodoTaskLabelCreateInput) -> CoreResult<TodoTaskLabel> {
+pub async fn create_todo_task_label(
+    pool: &SqlitePool,
+    input: &TodoTaskLabelCreateInput,
+) -> CoreResult<TodoTaskLabel> {
     generic_repo::create_todo_task_label(pool, input).await
 }
 pub async fn delete_todo_task_label(pool: &SqlitePool, id: i64) -> CoreResult<()> {
@@ -150,13 +199,19 @@ pub async fn delete_todo_task_label(pool: &SqlitePool, id: i64) -> CoreResult<()
 }
 
 // ---------- todo_comments ----------
-pub async fn list_todo_comments(pool: &SqlitePool, filter: &ListFilter) -> CoreResult<Vec<TodoComment>> {
+pub async fn list_todo_comments(
+    pool: &SqlitePool,
+    filter: &ListFilter,
+) -> CoreResult<Vec<TodoComment>> {
     generic_repo::list(pool, "todo_comments", filter).await
 }
 pub async fn get_todo_comment(pool: &SqlitePool, id: i64) -> CoreResult<TodoComment> {
     generic_repo::get_by_id(pool, "todo_comments", id).await
 }
-pub async fn create_todo_comment(pool: &SqlitePool, input: &TodoCommentCreateInput) -> CoreResult<TodoComment> {
+pub async fn create_todo_comment(
+    pool: &SqlitePool,
+    input: &TodoCommentCreateInput,
+) -> CoreResult<TodoComment> {
     generic_repo::create_todo_comment(pool, input).await
 }
 pub async fn delete_todo_comment(pool: &SqlitePool, id: i64) -> CoreResult<()> {
@@ -165,13 +220,19 @@ pub async fn delete_todo_comment(pool: &SqlitePool, id: i64) -> CoreResult<()> {
 }
 
 // ---------- todo_task_relations ----------
-pub async fn list_todo_task_relations(pool: &SqlitePool, filter: &ListFilter) -> CoreResult<Vec<TodoTaskRelation>> {
+pub async fn list_todo_task_relations(
+    pool: &SqlitePool,
+    filter: &ListFilter,
+) -> CoreResult<Vec<TodoTaskRelation>> {
     generic_repo::list(pool, "todo_task_relations", filter).await
 }
 pub async fn get_todo_task_relation(pool: &SqlitePool, id: i64) -> CoreResult<TodoTaskRelation> {
     generic_repo::get_by_id(pool, "todo_task_relations", id).await
 }
-pub async fn create_todo_task_relation(pool: &SqlitePool, input: &TodoTaskRelationCreateInput) -> CoreResult<TodoTaskRelation> {
+pub async fn create_todo_task_relation(
+    pool: &SqlitePool,
+    input: &TodoTaskRelationCreateInput,
+) -> CoreResult<TodoTaskRelation> {
     generic_repo::create_todo_task_relation(pool, input).await
 }
 pub async fn delete_todo_task_relation(pool: &SqlitePool, id: i64) -> CoreResult<()> {
@@ -180,13 +241,19 @@ pub async fn delete_todo_task_relation(pool: &SqlitePool, id: i64) -> CoreResult
 }
 
 // ---------- todo_reminders ----------
-pub async fn list_todo_reminders(pool: &SqlitePool, filter: &ListFilter) -> CoreResult<Vec<TodoReminder>> {
+pub async fn list_todo_reminders(
+    pool: &SqlitePool,
+    filter: &ListFilter,
+) -> CoreResult<Vec<TodoReminder>> {
     generic_repo::list(pool, "todo_reminders", filter).await
 }
 pub async fn get_todo_reminder(pool: &SqlitePool, id: i64) -> CoreResult<TodoReminder> {
     generic_repo::get_by_id(pool, "todo_reminders", id).await
 }
-pub async fn create_todo_reminder(pool: &SqlitePool, input: &TodoReminderCreateInput) -> CoreResult<TodoReminder> {
+pub async fn create_todo_reminder(
+    pool: &SqlitePool,
+    input: &TodoReminderCreateInput,
+) -> CoreResult<TodoReminder> {
     generic_repo::create_todo_reminder(pool, input).await
 }
 pub async fn delete_todo_reminder(pool: &SqlitePool, id: i64) -> CoreResult<()> {
@@ -209,8 +276,7 @@ macro_rules! impl_crud_json {
             let map = fields
                 .as_object()
                 .ok_or_else(|| CoreError::Other("fields must be a JSON object".into()))?;
-            let record: $type =
-                generic_repo::create_record_by_json(pool, $table, map).await?;
+            let record: $type = generic_repo::create_record_by_json(pool, $table, map).await?;
             let now = chrono::Utc::now().timestamp_millis();
             let payload = serde_json::to_value(&record).ok();
             EVENT_BUS.emit(DbEvent {
@@ -250,8 +316,18 @@ macro_rules! impl_crud_json {
     };
 }
 
-impl_crud_json!(create_todo_project_by_json, update_todo_project_by_json, "todo_projects", TodoProject);
-impl_crud_json!(create_todo_task_by_json, update_todo_task_by_json, "todo_tasks", TodoTask);
+impl_crud_json!(
+    create_todo_project_by_json,
+    update_todo_project_by_json,
+    "todo_projects",
+    TodoProject
+);
+impl_crud_json!(
+    create_todo_task_by_json,
+    update_todo_task_by_json,
+    "todo_tasks",
+    TodoTask
+);
 
 /// 宏：为 A 组表生成 get_by_uuid 函数
 macro_rules! impl_get_by_uuid {
@@ -273,10 +349,7 @@ impl_get_by_uuid!(get_todo_task_by_uuid, "todo_tasks", TodoTask);
 ///
 /// 表名经白名单校验后拼入 SQL（防注入），其余参数走 sqlx bind。
 /// 返回 JSON 数组字符串，如 `[{"id":1,"title":"..."},...]`。
-pub async fn list_records_as_json(
-    pool: &SqlitePool,
-    table: &str,
-) -> CoreResult<String> {
+pub async fn list_records_as_json(pool: &SqlitePool, table: &str) -> CoreResult<String> {
     if !FULL_BACKUP_TABLES.contains(&table) {
         return Err(CoreError::Other(format!(
             "table '{}' is not allowed for export/import",
@@ -376,7 +449,11 @@ pub struct GlobalSearchResult {
 /// 全局搜索：复用 generic_repo 同款 %kw% LIKE 口径，各表限 top limit 条。
 /// 评论经 JOIN todo_tasks 带出任务标题；任务按 updated_at DESC、
 /// 项目按 sort_order ASC（与各自列表页排序一致，保证命中顺序符合直觉）。
-pub async fn search_all(pool: &SqlitePool, keyword: &str, limit: i32) -> CoreResult<GlobalSearchResult> {
+pub async fn search_all(
+    pool: &SqlitePool,
+    keyword: &str,
+    limit: i32,
+) -> CoreResult<GlobalSearchResult> {
     let kw = keyword.trim();
     if kw.is_empty() {
         return Ok(GlobalSearchResult::default());
@@ -419,7 +496,11 @@ pub async fn search_all(pool: &SqlitePool, keyword: &str, limit: i32) -> CoreRes
     .fetch_all(pool)
     .await?;
 
-    Ok(GlobalSearchResult { tasks, projects, comments })
+    Ok(GlobalSearchResult {
+        tasks,
+        projects,
+        comments,
+    })
 }
 
 #[cfg(test)]

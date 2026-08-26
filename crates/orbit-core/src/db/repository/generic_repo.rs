@@ -10,17 +10,16 @@ use sqlx::SqlitePool;
 
 use crate::context;
 use crate::error::{CoreError, CoreResult};
-use crate::eventbus::{EVENT_BUS, events::{DbEvent, DbOp}};
+use crate::eventbus::{
+    EVENT_BUS,
+    events::{DbEvent, DbOp},
+};
 use crate::models::business::{
-    ListFilter,
-    TodoProject, TodoProjectCreateInput, TodoProjectUpdateInput,
-    TodoTask, TodoTaskCreateInput, TodoTaskUpdateInput,
-    TodoSubtask, TodoSubtaskCreateInput, TodoSubtaskUpdateInput,
-    TodoLabel, TodoLabelCreateInput, TodoLabelUpdateInput,
-    TodoTaskLabel, TodoTaskLabelCreateInput,
-    TodoComment, TodoCommentCreateInput,
-    TodoTaskRelation, TodoTaskRelationCreateInput,
-    TodoReminder, TodoReminderCreateInput,
+    ListFilter, TodoComment, TodoCommentCreateInput, TodoLabel, TodoLabelCreateInput,
+    TodoLabelUpdateInput, TodoProject, TodoProjectCreateInput, TodoProjectUpdateInput,
+    TodoReminder, TodoReminderCreateInput, TodoSubtask, TodoSubtaskCreateInput,
+    TodoSubtaskUpdateInput, TodoTask, TodoTaskCreateInput, TodoTaskLabel, TodoTaskLabelCreateInput,
+    TodoTaskRelation, TodoTaskRelationCreateInput, TodoTaskUpdateInput,
 };
 
 // =============================================================================
@@ -42,11 +41,7 @@ pub(crate) fn current_device_id() -> String {
 ///
 /// 当 filter.keyword 非空时，按 [searchable_fields] 返回的字段白名单拼接 LIKE OR 子句。
 /// 调用方需保证 T: sqlx::FromRow 且表结构匹配。
-pub async fn list<T>(
-    pool: &SqlitePool,
-    table: &str,
-    filter: &ListFilter,
-) -> CoreResult<Vec<T>>
+pub async fn list<T>(pool: &SqlitePool, table: &str, filter: &ListFilter) -> CoreResult<Vec<T>>
 where
     T: for<'r> sqlx::FromRow<'r, sqlx::sqlite::SqliteRow> + Send + Unpin,
 {
@@ -221,10 +216,7 @@ pub async fn count_since(pool: &SqlitePool, table: &str, since_ms: i64) -> CoreR
         "SELECT COUNT(*) FROM {} WHERE is_deleted = 0 AND created_at >= ?",
         table
     );
-    let (count,): (i64,) = sqlx::query_as(&sql)
-        .bind(since_ms)
-        .fetch_one(pool)
-        .await?;
+    let (count,): (i64,) = sqlx::query_as(&sql).bind(since_ms).fetch_one(pool).await?;
     Ok(count)
 }
 
@@ -424,7 +416,10 @@ pub async fn soft_delete_by_id(
 // ---------- todo_projects ----------
 
 /// todo_projects 创建
-pub async fn create_todo_project(pool: &SqlitePool, input: &TodoProjectCreateInput) -> CoreResult<TodoProject> {
+pub async fn create_todo_project(
+    pool: &SqlitePool,
+    input: &TodoProjectCreateInput,
+) -> CoreResult<TodoProject> {
     let now = chrono::Utc::now().timestamp_millis();
     let uuid = uuid::Uuid::new_v4().to_string();
 
@@ -446,21 +441,47 @@ pub async fn create_todo_project(pool: &SqlitePool, input: &TodoProjectCreateInp
 }
 
 /// todo_projects 更新
-pub async fn update_todo_project(pool: &SqlitePool, id: i64, input: &TodoProjectUpdateInput) -> CoreResult<TodoProject> {
+pub async fn update_todo_project(
+    pool: &SqlitePool,
+    id: i64,
+    input: &TodoProjectUpdateInput,
+) -> CoreResult<TodoProject> {
     let now = chrono::Utc::now().timestamp_millis();
     let mut sets: Vec<String> = vec!["updated_at = ?".into(), "version = version + 1".into()];
-    if input.title.is_some() { sets.push("title = ?".into()); }
-    if input.description.is_some() { sets.push("description = ?".into()); }
-    if input.hex_color.is_some() { sets.push("hex_color = ?".into()); }
-    if input.sort_order.is_some() { sets.push("sort_order = ?".into()); }
+    if input.title.is_some() {
+        sets.push("title = ?".into());
+    }
+    if input.description.is_some() {
+        sets.push("description = ?".into());
+    }
+    if input.hex_color.is_some() {
+        sets.push("hex_color = ?".into());
+    }
+    if input.sort_order.is_some() {
+        sets.push("sort_order = ?".into());
+    }
 
-    let sql = format!("UPDATE todo_projects SET {} WHERE id = ? RETURNING *", sets.join(", "));
+    let sql = format!(
+        "UPDATE todo_projects SET {} WHERE id = ? RETURNING *",
+        sets.join(", ")
+    );
     let mut q = sqlx::query_as::<_, TodoProject>(&sql).bind(now);
-    if let Some(v) = &input.title { q = q.bind(v); }
-    if let Some(v) = input.description.as_ref() { q = q.bind(v); }
-    if let Some(v) = &input.hex_color { q = q.bind(v); }
-    if let Some(v) = input.sort_order { q = q.bind(v); }
-    let row = q.bind(id).fetch_optional(pool).await?
+    if let Some(v) = &input.title {
+        q = q.bind(v);
+    }
+    if let Some(v) = input.description.as_ref() {
+        q = q.bind(v);
+    }
+    if let Some(v) = &input.hex_color {
+        q = q.bind(v);
+    }
+    if let Some(v) = input.sort_order {
+        q = q.bind(v);
+    }
+    let row = q
+        .bind(id)
+        .fetch_optional(pool)
+        .await?
         .ok_or_else(|| CoreError::NotFound(format!("todo_project id={}", id)))?;
 
     emit_event("todo_projects", row.id, &row.uuid, DbOp::Update, now);
@@ -470,7 +491,10 @@ pub async fn update_todo_project(pool: &SqlitePool, id: i64, input: &TodoProject
 // ---------- todo_tasks ----------
 
 /// todo_tasks 创建
-pub async fn create_todo_task(pool: &SqlitePool, input: &TodoTaskCreateInput) -> CoreResult<TodoTask> {
+pub async fn create_todo_task(
+    pool: &SqlitePool,
+    input: &TodoTaskCreateInput,
+) -> CoreResult<TodoTask> {
     let now = chrono::Utc::now().timestamp_millis();
     let uuid = uuid::Uuid::new_v4().to_string();
 
@@ -501,52 +525,127 @@ pub async fn create_todo_task(pool: &SqlitePool, input: &TodoTaskCreateInput) ->
     .bind(input.is_favorite.unwrap_or(0))
     .bind(now)
     .bind(now)
-    .fetch_one(pool).await?;
+    .fetch_one(pool)
+    .await?;
 
     emit_event("todo_tasks", row.id, &row.uuid, DbOp::Insert, now);
     Ok(row)
 }
 
 /// todo_tasks 更新（Option<Option<T>> 模式）
-pub async fn update_todo_task(pool: &SqlitePool, id: i64, input: &TodoTaskUpdateInput) -> CoreResult<TodoTask> {
+pub async fn update_todo_task(
+    pool: &SqlitePool,
+    id: i64,
+    input: &TodoTaskUpdateInput,
+) -> CoreResult<TodoTask> {
     let now = chrono::Utc::now().timestamp_millis();
     let mut sets: Vec<String> = vec!["updated_at = ?".into(), "version = version + 1".into()];
-    if input.title.is_some() { sets.push("title = ?".into()); }
-    if input.description.is_some() { sets.push("description = ?".into()); }
-    if input.project_id.is_some() { sets.push("project_id = ?".into()); }
-    if input.priority.is_some() { sets.push("priority = ?".into()); }
-    if input.status.is_some() { sets.push("status = ?".into()); }
-    if input.done.is_some() { sets.push("done = ?".into()); }
-    if input.done_at.is_some() { sets.push("done_at = ?".into()); }
-    if input.due_date.is_some() { sets.push("due_date = ?".into()); }
-    if input.start_date.is_some() { sets.push("start_date = ?".into()); }
-    if input.end_date.is_some() { sets.push("end_date = ?".into()); }
-    if input.repeat_after.is_some() { sets.push("repeat_after = ?".into()); }
-    if input.repeat_mode.is_some() { sets.push("repeat_mode = ?".into()); }
-    if input.hex_color.is_some() { sets.push("hex_color = ?".into()); }
-    if input.percent_done.is_some() { sets.push("percent_done = ?".into()); }
-    if input.position.is_some() { sets.push("position = ?".into()); }
-    if input.is_favorite.is_some() { sets.push("is_favorite = ?".into()); }
+    if input.title.is_some() {
+        sets.push("title = ?".into());
+    }
+    if input.description.is_some() {
+        sets.push("description = ?".into());
+    }
+    if input.project_id.is_some() {
+        sets.push("project_id = ?".into());
+    }
+    if input.priority.is_some() {
+        sets.push("priority = ?".into());
+    }
+    if input.status.is_some() {
+        sets.push("status = ?".into());
+    }
+    if input.done.is_some() {
+        sets.push("done = ?".into());
+    }
+    if input.done_at.is_some() {
+        sets.push("done_at = ?".into());
+    }
+    if input.due_date.is_some() {
+        sets.push("due_date = ?".into());
+    }
+    if input.start_date.is_some() {
+        sets.push("start_date = ?".into());
+    }
+    if input.end_date.is_some() {
+        sets.push("end_date = ?".into());
+    }
+    if input.repeat_after.is_some() {
+        sets.push("repeat_after = ?".into());
+    }
+    if input.repeat_mode.is_some() {
+        sets.push("repeat_mode = ?".into());
+    }
+    if input.hex_color.is_some() {
+        sets.push("hex_color = ?".into());
+    }
+    if input.percent_done.is_some() {
+        sets.push("percent_done = ?".into());
+    }
+    if input.position.is_some() {
+        sets.push("position = ?".into());
+    }
+    if input.is_favorite.is_some() {
+        sets.push("is_favorite = ?".into());
+    }
 
-    let sql = format!("UPDATE todo_tasks SET {} WHERE id = ? RETURNING *", sets.join(", "));
+    let sql = format!(
+        "UPDATE todo_tasks SET {} WHERE id = ? RETURNING *",
+        sets.join(", ")
+    );
     let mut q = sqlx::query_as::<_, TodoTask>(&sql).bind(now);
-    if let Some(v) = &input.title { q = q.bind(v); }
-    if let Some(v) = input.description.as_ref() { q = q.bind(v); }
-    if let Some(v) = input.project_id { q = q.bind(v); }
-    if let Some(v) = input.priority { q = q.bind(v); }
-    if let Some(v) = &input.status { q = q.bind(v); }
-    if let Some(v) = input.done { q = q.bind(v); }
-    if let Some(v) = input.done_at { q = q.bind(v); }
-    if let Some(v) = input.due_date { q = q.bind(v); }
-    if let Some(v) = input.start_date { q = q.bind(v); }
-    if let Some(v) = input.end_date { q = q.bind(v); }
-    if let Some(v) = input.repeat_after { q = q.bind(v); }
-    if let Some(v) = input.repeat_mode { q = q.bind(v); }
-    if let Some(v) = &input.hex_color { q = q.bind(v); }
-    if let Some(v) = input.percent_done { q = q.bind(v); }
-    if let Some(v) = input.position { q = q.bind(v); }
-    if let Some(v) = input.is_favorite { q = q.bind(v); }
-    let row = q.bind(id).fetch_optional(pool).await?
+    if let Some(v) = &input.title {
+        q = q.bind(v);
+    }
+    if let Some(v) = input.description.as_ref() {
+        q = q.bind(v);
+    }
+    if let Some(v) = input.project_id {
+        q = q.bind(v);
+    }
+    if let Some(v) = input.priority {
+        q = q.bind(v);
+    }
+    if let Some(v) = &input.status {
+        q = q.bind(v);
+    }
+    if let Some(v) = input.done {
+        q = q.bind(v);
+    }
+    if let Some(v) = input.done_at {
+        q = q.bind(v);
+    }
+    if let Some(v) = input.due_date {
+        q = q.bind(v);
+    }
+    if let Some(v) = input.start_date {
+        q = q.bind(v);
+    }
+    if let Some(v) = input.end_date {
+        q = q.bind(v);
+    }
+    if let Some(v) = input.repeat_after {
+        q = q.bind(v);
+    }
+    if let Some(v) = input.repeat_mode {
+        q = q.bind(v);
+    }
+    if let Some(v) = &input.hex_color {
+        q = q.bind(v);
+    }
+    if let Some(v) = input.percent_done {
+        q = q.bind(v);
+    }
+    if let Some(v) = input.position {
+        q = q.bind(v);
+    }
+    if let Some(v) = input.is_favorite {
+        q = q.bind(v);
+    }
+    let row = q
+        .bind(id)
+        .fetch_optional(pool)
+        .await?
         .ok_or_else(|| CoreError::NotFound(format!("todo_task id={}", id)))?;
 
     emit_event("todo_tasks", row.id, &row.uuid, DbOp::Update, now);
@@ -555,7 +654,10 @@ pub async fn update_todo_task(pool: &SqlitePool, id: i64, input: &TodoTaskUpdate
 
 // ---------- todo_subtasks ----------
 
-pub async fn create_todo_subtask(pool: &SqlitePool, input: &TodoSubtaskCreateInput) -> CoreResult<TodoSubtask> {
+pub async fn create_todo_subtask(
+    pool: &SqlitePool,
+    input: &TodoSubtaskCreateInput,
+) -> CoreResult<TodoSubtask> {
     let now = chrono::Utc::now().timestamp_millis();
     let uuid = uuid::Uuid::new_v4().to_string();
     let row = sqlx::query_as::<_, TodoSubtask>(
@@ -569,20 +671,46 @@ pub async fn create_todo_subtask(pool: &SqlitePool, input: &TodoSubtaskCreateInp
     Ok(row)
 }
 
-pub async fn update_todo_subtask(pool: &SqlitePool, id: i64, input: &TodoSubtaskUpdateInput) -> CoreResult<TodoSubtask> {
+pub async fn update_todo_subtask(
+    pool: &SqlitePool,
+    id: i64,
+    input: &TodoSubtaskUpdateInput,
+) -> CoreResult<TodoSubtask> {
     let now = chrono::Utc::now().timestamp_millis();
     let mut sets: Vec<String> = vec!["updated_at = ?".into(), "version = version + 1".into()];
-    if input.title.is_some() { sets.push("title = ?".into()); }
-    if input.done.is_some() { sets.push("done = ?".into()); }
-    if input.done_at.is_some() { sets.push("done_at = ?".into()); }
-    if input.position.is_some() { sets.push("position = ?".into()); }
-    let sql = format!("UPDATE todo_subtasks SET {} WHERE id = ? RETURNING *", sets.join(", "));
+    if input.title.is_some() {
+        sets.push("title = ?".into());
+    }
+    if input.done.is_some() {
+        sets.push("done = ?".into());
+    }
+    if input.done_at.is_some() {
+        sets.push("done_at = ?".into());
+    }
+    if input.position.is_some() {
+        sets.push("position = ?".into());
+    }
+    let sql = format!(
+        "UPDATE todo_subtasks SET {} WHERE id = ? RETURNING *",
+        sets.join(", ")
+    );
     let mut q = sqlx::query_as::<_, TodoSubtask>(&sql).bind(now);
-    if let Some(v) = &input.title { q = q.bind(v); }
-    if let Some(v) = input.done { q = q.bind(v); }
-    if let Some(v) = input.done_at { q = q.bind(v); }
-    if let Some(v) = input.position { q = q.bind(v); }
-    let row = q.bind(id).fetch_optional(pool).await?
+    if let Some(v) = &input.title {
+        q = q.bind(v);
+    }
+    if let Some(v) = input.done {
+        q = q.bind(v);
+    }
+    if let Some(v) = input.done_at {
+        q = q.bind(v);
+    }
+    if let Some(v) = input.position {
+        q = q.bind(v);
+    }
+    let row = q
+        .bind(id)
+        .fetch_optional(pool)
+        .await?
         .ok_or_else(|| CoreError::NotFound(format!("todo_subtask id={}", id)))?;
     emit_event("todo_subtasks", row.id, &row.uuid, DbOp::Update, now);
     Ok(row)
@@ -590,7 +718,10 @@ pub async fn update_todo_subtask(pool: &SqlitePool, id: i64, input: &TodoSubtask
 
 // ---------- todo_labels ----------
 
-pub async fn create_todo_label(pool: &SqlitePool, input: &TodoLabelCreateInput) -> CoreResult<TodoLabel> {
+pub async fn create_todo_label(
+    pool: &SqlitePool,
+    input: &TodoLabelCreateInput,
+) -> CoreResult<TodoLabel> {
     let now = chrono::Utc::now().timestamp_millis();
     let uuid = uuid::Uuid::new_v4().to_string();
     let row = sqlx::query_as::<_, TodoLabel>(
@@ -604,16 +735,34 @@ pub async fn create_todo_label(pool: &SqlitePool, input: &TodoLabelCreateInput) 
     Ok(row)
 }
 
-pub async fn update_todo_label(pool: &SqlitePool, id: i64, input: &TodoLabelUpdateInput) -> CoreResult<TodoLabel> {
+pub async fn update_todo_label(
+    pool: &SqlitePool,
+    id: i64,
+    input: &TodoLabelUpdateInput,
+) -> CoreResult<TodoLabel> {
     let now = chrono::Utc::now().timestamp_millis();
     let mut sets: Vec<String> = vec!["updated_at = ?".into(), "version = version + 1".into()];
-    if input.title.is_some() { sets.push("title = ?".into()); }
-    if input.hex_color.is_some() { sets.push("hex_color = ?".into()); }
-    let sql = format!("UPDATE todo_labels SET {} WHERE id = ? RETURNING *", sets.join(", "));
+    if input.title.is_some() {
+        sets.push("title = ?".into());
+    }
+    if input.hex_color.is_some() {
+        sets.push("hex_color = ?".into());
+    }
+    let sql = format!(
+        "UPDATE todo_labels SET {} WHERE id = ? RETURNING *",
+        sets.join(", ")
+    );
     let mut q = sqlx::query_as::<_, TodoLabel>(&sql).bind(now);
-    if let Some(v) = &input.title { q = q.bind(v); }
-    if let Some(v) = &input.hex_color { q = q.bind(v); }
-    let row = q.bind(id).fetch_optional(pool).await?
+    if let Some(v) = &input.title {
+        q = q.bind(v);
+    }
+    if let Some(v) = &input.hex_color {
+        q = q.bind(v);
+    }
+    let row = q
+        .bind(id)
+        .fetch_optional(pool)
+        .await?
         .ok_or_else(|| CoreError::NotFound(format!("todo_label id={}", id)))?;
     emit_event("todo_labels", row.id, &row.uuid, DbOp::Update, now);
     Ok(row)
@@ -621,7 +770,10 @@ pub async fn update_todo_label(pool: &SqlitePool, id: i64, input: &TodoLabelUpda
 
 // ---------- todo_task_labels（仅 create + delete） ----------
 
-pub async fn create_todo_task_label(pool: &SqlitePool, input: &TodoTaskLabelCreateInput) -> CoreResult<TodoTaskLabel> {
+pub async fn create_todo_task_label(
+    pool: &SqlitePool,
+    input: &TodoTaskLabelCreateInput,
+) -> CoreResult<TodoTaskLabel> {
     let now = chrono::Utc::now().timestamp_millis();
     let uuid = uuid::Uuid::new_v4().to_string();
     let row = sqlx::query_as::<_, TodoTaskLabel>(
@@ -636,7 +788,10 @@ pub async fn create_todo_task_label(pool: &SqlitePool, input: &TodoTaskLabelCrea
 
 // ---------- todo_comments（仅 create） ----------
 
-pub async fn create_todo_comment(pool: &SqlitePool, input: &TodoCommentCreateInput) -> CoreResult<TodoComment> {
+pub async fn create_todo_comment(
+    pool: &SqlitePool,
+    input: &TodoCommentCreateInput,
+) -> CoreResult<TodoComment> {
     let now = chrono::Utc::now().timestamp_millis();
     let uuid = uuid::Uuid::new_v4().to_string();
     let row = sqlx::query_as::<_, TodoComment>(
@@ -651,7 +806,10 @@ pub async fn create_todo_comment(pool: &SqlitePool, input: &TodoCommentCreateInp
 
 // ---------- todo_task_relations（仅 create） ----------
 
-pub async fn create_todo_task_relation(pool: &SqlitePool, input: &TodoTaskRelationCreateInput) -> CoreResult<TodoTaskRelation> {
+pub async fn create_todo_task_relation(
+    pool: &SqlitePool,
+    input: &TodoTaskRelationCreateInput,
+) -> CoreResult<TodoTaskRelation> {
     let now = chrono::Utc::now().timestamp_millis();
     let uuid = uuid::Uuid::new_v4().to_string();
     let row = sqlx::query_as::<_, TodoTaskRelation>(
@@ -666,7 +824,10 @@ pub async fn create_todo_task_relation(pool: &SqlitePool, input: &TodoTaskRelati
 
 // ---------- todo_reminders（仅 create） ----------
 
-pub async fn create_todo_reminder(pool: &SqlitePool, input: &TodoReminderCreateInput) -> CoreResult<TodoReminder> {
+pub async fn create_todo_reminder(
+    pool: &SqlitePool,
+    input: &TodoReminderCreateInput,
+) -> CoreResult<TodoReminder> {
     let now = chrono::Utc::now().timestamp_millis();
     let uuid = uuid::Uuid::new_v4().to_string();
     let row = sqlx::query_as::<_, TodoReminder>(

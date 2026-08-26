@@ -47,29 +47,23 @@ pub async fn get_category_by_key(
 /// 新建分组，返回新 id
 ///
 /// fields_json 包含: category_key, label, description, is_active, sort_order
-pub async fn create_category(
-    pool: &SqlitePool,
-    fields: &serde_json::Value,
-) -> CoreResult<i64> {
+pub async fn create_category(pool: &SqlitePool, fields: &serde_json::Value) -> CoreResult<i64> {
     let now = chrono::Utc::now().timestamp_millis();
-    let map = fields.as_object()
+    let map = fields
+        .as_object()
         .ok_or_else(|| CoreError::Other("fields_json 必须是 JSON 对象".to_string()))?;
 
-    let category_key = map.get("category_key")
+    let category_key = map
+        .get("category_key")
         .and_then(|v| v.as_str())
         .unwrap_or("");
-    let label = map.get("label")
+    let label = map.get("label").and_then(|v| v.as_str()).unwrap_or("");
+    let description = map
+        .get("description")
         .and_then(|v| v.as_str())
         .unwrap_or("");
-    let description = map.get("description")
-        .and_then(|v| v.as_str())
-        .unwrap_or("");
-    let is_active = map.get("is_active")
-        .and_then(|v| v.as_i64())
-        .unwrap_or(1);
-    let sort_order = map.get("sort_order")
-        .and_then(|v| v.as_i64())
-        .unwrap_or(0);
+    let is_active = map.get("is_active").and_then(|v| v.as_i64()).unwrap_or(1);
+    let sort_order = map.get("sort_order").and_then(|v| v.as_i64()).unwrap_or(0);
 
     if category_key.is_empty() {
         return Err(CoreError::Other("category_key 不能为空".to_string()));
@@ -98,24 +92,21 @@ pub async fn update_category(
     fields: &serde_json::Value,
 ) -> CoreResult<()> {
     let now = chrono::Utc::now().timestamp_millis();
-    let map = fields.as_object()
+    let map = fields
+        .as_object()
         .ok_or_else(|| CoreError::Other("fields_json 必须是 JSON 对象".to_string()))?;
 
-    let category_key = map.get("category_key")
+    let category_key = map
+        .get("category_key")
         .and_then(|v| v.as_str())
         .unwrap_or("");
-    let label = map.get("label")
+    let label = map.get("label").and_then(|v| v.as_str()).unwrap_or("");
+    let description = map
+        .get("description")
         .and_then(|v| v.as_str())
         .unwrap_or("");
-    let description = map.get("description")
-        .and_then(|v| v.as_str())
-        .unwrap_or("");
-    let is_active = map.get("is_active")
-        .and_then(|v| v.as_i64())
-        .unwrap_or(1);
-    let sort_order = map.get("sort_order")
-        .and_then(|v| v.as_i64())
-        .unwrap_or(0);
+    let is_active = map.get("is_active").and_then(|v| v.as_i64()).unwrap_or(1);
+    let sort_order = map.get("sort_order").and_then(|v| v.as_i64()).unwrap_or(0);
 
     sqlx::query(
         "UPDATE cfg_option_categories SET category_key = ?, label = ?, description = ?, is_active = ?, sort_order = ?, updated_at = ? WHERE id = ? AND is_deleted = 0",
@@ -206,35 +197,22 @@ pub async fn list_items_by_category(
 /// 新建选项项，返回新 id
 ///
 /// fields_json 包含: category_id, value, label, sort_order, is_default, is_active, color
-pub async fn create_item(
-    pool: &SqlitePool,
-    fields: &serde_json::Value,
-) -> CoreResult<i64> {
+pub async fn create_item(pool: &SqlitePool, fields: &serde_json::Value) -> CoreResult<i64> {
     let now = chrono::Utc::now().timestamp_millis();
-    let map = fields.as_object()
+    let map = fields
+        .as_object()
         .ok_or_else(|| CoreError::Other("fields_json 必须是 JSON 对象".to_string()))?;
 
-    let category_id = map.get("category_id")
+    let category_id = map
+        .get("category_id")
         .and_then(|v| v.as_i64())
         .ok_or_else(|| CoreError::Other("category_id 不能为空".to_string()))?;
-    let value = map.get("value")
-        .and_then(|v| v.as_str())
-        .unwrap_or("");
-    let label = map.get("label")
-        .and_then(|v| v.as_str())
-        .unwrap_or("");
-    let sort_order = map.get("sort_order")
-        .and_then(|v| v.as_i64())
-        .unwrap_or(0);
-    let is_default = map.get("is_default")
-        .and_then(|v| v.as_i64())
-        .unwrap_or(0);
-    let is_active = map.get("is_active")
-        .and_then(|v| v.as_i64())
-        .unwrap_or(1);
-    let color = map.get("color")
-        .and_then(|v| v.as_str())
-        .unwrap_or("");
+    let value = map.get("value").and_then(|v| v.as_str()).unwrap_or("");
+    let label = map.get("label").and_then(|v| v.as_str()).unwrap_or("");
+    let sort_order = map.get("sort_order").and_then(|v| v.as_i64()).unwrap_or(0);
+    let is_default = map.get("is_default").and_then(|v| v.as_i64()).unwrap_or(0);
+    let is_active = map.get("is_active").and_then(|v| v.as_i64()).unwrap_or(1);
+    let color = map.get("color").and_then(|v| v.as_str()).unwrap_or("");
 
     if value.is_empty() {
         return Err(CoreError::Other("value 不能为空".to_string()));
@@ -270,33 +248,18 @@ pub async fn create_item(
 }
 
 /// 更新选项项
-pub async fn update_item(
-    pool: &SqlitePool,
-    id: i64,
-    fields: &serde_json::Value,
-) -> CoreResult<()> {
+pub async fn update_item(pool: &SqlitePool, id: i64, fields: &serde_json::Value) -> CoreResult<()> {
     let now = chrono::Utc::now().timestamp_millis();
-    let map = fields.as_object()
+    let map = fields
+        .as_object()
         .ok_or_else(|| CoreError::Other("fields_json 必须是 JSON 对象".to_string()))?;
 
-    let value = map.get("value")
-        .and_then(|v| v.as_str())
-        .unwrap_or("");
-    let label = map.get("label")
-        .and_then(|v| v.as_str())
-        .unwrap_or("");
-    let sort_order = map.get("sort_order")
-        .and_then(|v| v.as_i64())
-        .unwrap_or(0);
-    let is_default = map.get("is_default")
-        .and_then(|v| v.as_i64())
-        .unwrap_or(0);
-    let is_active = map.get("is_active")
-        .and_then(|v| v.as_i64())
-        .unwrap_or(1);
-    let color = map.get("color")
-        .and_then(|v| v.as_str())
-        .unwrap_or("");
+    let value = map.get("value").and_then(|v| v.as_str()).unwrap_or("");
+    let label = map.get("label").and_then(|v| v.as_str()).unwrap_or("");
+    let sort_order = map.get("sort_order").and_then(|v| v.as_i64()).unwrap_or(0);
+    let is_default = map.get("is_default").and_then(|v| v.as_i64()).unwrap_or(0);
+    let is_active = map.get("is_active").and_then(|v| v.as_i64()).unwrap_or(1);
+    let color = map.get("color").and_then(|v| v.as_str()).unwrap_or("");
 
     if value.is_empty() {
         return Err(CoreError::Other("value 不能为空".to_string()));

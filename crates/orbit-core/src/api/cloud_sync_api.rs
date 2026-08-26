@@ -19,12 +19,12 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use sqlx::SqlitePool;
 
+use crate::cloud_sync::SyncResult;
 use crate::cloud_sync::engine::SyncEngine;
 use crate::cloud_sync::error::CloudSyncError;
 use crate::cloud_sync::progress::{ProgressSender, SyncOrigin};
 use crate::cloud_sync::state::SyncState;
-use crate::cloud_sync::SyncResult;
-use crate::sync::engine::{create_adapter, validate_config, SyncConfig};
+use crate::sync::engine::{SyncConfig, create_adapter, validate_config};
 use crate::sync::error::SyncError;
 use crate::sync_adapters::traits::{RemoteFile, SyncAdapter};
 use crate::sync_crypto::SyncCryptoService;
@@ -206,7 +206,14 @@ pub async fn sync_now(
     let raw_adapter = create_raw_adapter(config)?;
     let adapter = create_base_path_adapter(config)?;
     engine
-        .sync_now(&adapter, &*raw_adapter, &config.base_path, origin, device_id, attachments_dir)
+        .sync_now(
+            &adapter,
+            &*raw_adapter,
+            &config.base_path,
+            origin,
+            device_id,
+            attachments_dir,
+        )
         .await
 }
 
@@ -228,7 +235,14 @@ pub async fn push_only(
     let raw_adapter = create_raw_adapter(config)?;
     let adapter = create_base_path_adapter(config)?;
     engine
-        .push_only(&adapter, &*raw_adapter, &config.base_path, origin, device_id, attachments_dir)
+        .push_only(
+            &adapter,
+            &*raw_adapter,
+            &config.base_path,
+            origin,
+            device_id,
+            attachments_dir,
+        )
         .await
 }
 
@@ -251,7 +265,14 @@ pub async fn pull_then_push(
     let raw_adapter = create_raw_adapter(config)?;
     let adapter = create_base_path_adapter(config)?;
     engine
-        .pull_then_push(&adapter, &*raw_adapter, &config.base_path, origin, device_id, attachments_dir)
+        .pull_then_push(
+            &adapter,
+            &*raw_adapter,
+            &config.base_path,
+            origin,
+            device_id,
+            attachments_dir,
+        )
         .await
 }
 

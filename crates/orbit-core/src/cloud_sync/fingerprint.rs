@@ -169,10 +169,7 @@ mod tests {
     #[test]
     fn fingerprint_handles_missing_uuid() {
         // 缺失 uuid 的记录按空字符串排序，不应 panic
-        let items = vec![
-            json!({"name": "B"}),
-            json!({"uuid": "a", "name": "A"}),
-        ];
+        let items = vec![json!({"name": "B"}), json!({"uuid": "a", "name": "A"})];
         let fp = compute_fingerprint(&items);
         assert!(fp.is_ok());
     }

@@ -103,9 +103,10 @@ pub fn decrypt_payload(payload: &[u8], data_key: &[u8]) -> Result<Vec<u8>, Cloud
     }
 
     // zstd 解压
-    let plaintext = zstd::decode_all(compressed.as_slice()).map_err(|e| CloudSyncError::Crypto {
-        message: format!("zstd 解压失败: {}", e),
-    })?;
+    let plaintext =
+        zstd::decode_all(compressed.as_slice()).map_err(|e| CloudSyncError::Crypto {
+            message: format!("zstd 解压失败: {}", e),
+        })?;
     Ok(plaintext)
 }
 

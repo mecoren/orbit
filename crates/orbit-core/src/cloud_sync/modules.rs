@@ -36,24 +36,22 @@ impl SyncModuleDef {
 /// 同步模块静态注册表（Orbit MVP：单模块）
 ///
 /// 顺序影响 Push/Pull 遍历顺序与进度条显示；未来新增模块在此追加。
-pub const SYNC_MODULES: &[SyncModuleDef] = &[
-    SyncModuleDef {
-        name: "todos",
-        display_name: "待办数据",
-        tables: &[
-            "todo_projects",
-            "todo_tasks",
-            "todo_subtasks",
-            "todo_labels",
-            "todo_task_labels",
-            "todo_comments",
-            "todo_task_relations",
-            "todo_reminders",
-        ],
-        // R10.7 沿革：todo 模块不接入附件（01 文档 §3.3：attachments/ 仅预留）
-        has_attachments: false,
-    },
-];
+pub const SYNC_MODULES: &[SyncModuleDef] = &[SyncModuleDef {
+    name: "todos",
+    display_name: "待办数据",
+    tables: &[
+        "todo_projects",
+        "todo_tasks",
+        "todo_subtasks",
+        "todo_labels",
+        "todo_task_labels",
+        "todo_comments",
+        "todo_task_relations",
+        "todo_reminders",
+    ],
+    // R10.7 沿革：todo 模块不接入附件（01 文档 §3.3：attachments/ 仅预留）
+    has_attachments: false,
+}];
 
 /// 按名称查找模块定义
 pub fn find_module(name: &str) -> Option<&'static SyncModuleDef> {
@@ -107,15 +105,23 @@ mod tests {
     /// 核心不变量：SYNC_MODULES 覆盖的表集合必须与白名单注册表完全一致
     #[test]
     fn modules_match_syncable_tables_exactly() {
-        let mut module_tables: HashSet<&str> =
-            SYNC_MODULES.iter().flat_map(|m| m.tables.iter().copied()).collect();
+        let mut module_tables: HashSet<&str> = SYNC_MODULES
+            .iter()
+            .flat_map(|m| m.tables.iter().copied())
+            .collect();
 
         let registry: HashSet<&str> = SYNCABLE_TABLES.iter().copied().collect();
 
         let missing: Vec<&str> = registry.difference(&module_tables).copied().collect();
-        assert!(missing.is_empty(), "白名单中的表未被任何模块覆盖: {missing:?}");
+        assert!(
+            missing.is_empty(),
+            "白名单中的表未被任何模块覆盖: {missing:?}"
+        );
 
-        let extra: Vec<&str> = module_tables.drain().filter(|t| !registry.contains(t)).collect();
+        let extra: Vec<&str> = module_tables
+            .drain()
+            .filter(|t| !registry.contains(t))
+            .collect();
         assert!(extra.is_empty(), "模块声明了白名单之外的表: {extra:?}");
     }
 }

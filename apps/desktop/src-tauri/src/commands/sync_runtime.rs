@@ -19,9 +19,9 @@ use base64::{Engine, engine::general_purpose::STANDARD as BASE64};
 use orbit_core::api::cloud_sync_api;
 use orbit_core::cloud_sync::engine::SyncEngine;
 use orbit_core::cloud_sync::progress::{ProgressSender, SyncProgress};
-use orbit_core::config_enc::cek::{CEK_LEN, CekProvider};
 #[cfg(desktop)]
 use orbit_core::config_enc::cek::generate_cek;
+use orbit_core::config_enc::cek::{CEK_LEN, CekProvider};
 use orbit_core::config_enc::error::ConfigEncError;
 use orbit_core::context;
 use orbit_core::db::repository::sync_config_repo::SyncConfigRepo;
@@ -29,8 +29,8 @@ use orbit_core::models::sync_config::SyncConfigRecord;
 use orbit_core::sync_crypto::SyncCryptoService;
 use tauri::{AppHandle, Emitter, Manager};
 
-use crate::commands::data_dir::resolve_app_data_dir;
 use crate::AppState;
+use crate::commands::data_dir::resolve_app_data_dir;
 
 /// 钥匙串 service 名（03 文档 §七：service=orbit.sync-crypto）
 #[cfg(desktop)]
@@ -150,9 +150,7 @@ impl CekProvider for KeyringCekProvider {
                     .map_err(|e| ConfigEncError::CekUnavailable(format!("CEK 写入失败: {e}")))?;
                 Ok(cek)
             }
-            Err(e) => Err(ConfigEncError::CekUnavailable(format!(
-                "CEK 读取失败: {e}"
-            ))),
+            Err(e) => Err(ConfigEncError::CekUnavailable(format!("CEK 读取失败: {e}"))),
         }
     }
 
@@ -167,12 +165,7 @@ impl CekProvider for KeyringCekProvider {
     #[cfg(desktop)]
     fn is_available(&self) -> bool {
         keyring::Entry::new(KEYRING_SERVICE, KEYRING_CEK_ACCOUNT)
-            .map(|entry| {
-                matches!(
-                    entry.get_password(),
-                    Ok(_) | Err(keyring::Error::NoEntry)
-                )
-            })
+            .map(|entry| matches!(entry.get_password(), Ok(_) | Err(keyring::Error::NoEntry)))
             .unwrap_or(false)
     }
 
@@ -277,7 +270,9 @@ pub async fn get_active_config(app: &AppHandle) -> Result<Option<SyncConfigRecor
 /// 与 full_sync_backup_api::engine_config_from_record 的差异：
 /// access_key/secret_key 直接取 credential 语义对（WebDAV 用户名/S3 AK 存
 /// record.device_id 列——沿袭 wait-home 移动端列复用约定），device_id 取进程上下文。
-pub fn engine_config_of_record(record: &SyncConfigRecord) -> Option<orbit_core::sync::engine::SyncConfig> {
+pub fn engine_config_of_record(
+    record: &SyncConfigRecord,
+) -> Option<orbit_core::sync::engine::SyncConfig> {
     let adapter_type = record.protocol.to_lowercase();
     if adapter_type == "local" || adapter_type.is_empty() {
         return None;

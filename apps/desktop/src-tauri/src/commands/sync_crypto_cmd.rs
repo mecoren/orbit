@@ -1,4 +1,4 @@
-﻿//! sync_crypto_cmd — 同步密码 / Data Key 命令组（06 任务 3.3）
+//! sync_crypto_cmd — 同步密码 / Data Key 命令组（06 任务 3.3）
 //!
 //! 一比一包装 orbit_core::sync_crypto::SyncCryptoService 单例；
 //! unlock 成功后联动 engine.set_sync_password（同步前自动备份依赖），
@@ -43,7 +43,11 @@ pub async fn sync_crypto_status(app: AppHandle) -> Result<SyncCryptoStatus, Stri
 ///
 /// remember=true 时同时缓存到系统钥匙串（service=orbit.sync-crypto）。
 #[tauri::command]
-pub async fn sync_crypto_init(app: AppHandle, password: String, remember: bool) -> Result<(), String> {
+pub async fn sync_crypto_init(
+    app: AppHandle,
+    password: String,
+    remember: bool,
+) -> Result<(), String> {
     let svc = sync_runtime::sync_crypto(&app)?;
     svc.init(&password).map_err(err_tagged)?;
     attach_password_to_engine(&app, &password);
@@ -55,7 +59,11 @@ pub async fn sync_crypto_init(app: AppHandle, password: String, remember: bool) 
 
 /// 解锁同步加密（验证密码并将 Data Key 载入内存）
 #[tauri::command]
-pub async fn sync_crypto_unlock(app: AppHandle, password: String, remember: bool) -> Result<(), String> {
+pub async fn sync_crypto_unlock(
+    app: AppHandle,
+    password: String,
+    remember: bool,
+) -> Result<(), String> {
     let svc = sync_runtime::sync_crypto(&app)?;
     svc.unlock(&password).map_err(err_tagged)?;
     attach_password_to_engine(&app, &password);

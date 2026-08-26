@@ -185,7 +185,12 @@ impl SyncProgress {
                 format!("正在合并{display_name}...")
             }
             SyncProgress::LocalDataApplied { .. } => "本地数据已更新".to_string(),
-            SyncProgress::Attachments { action, current, total, .. } => {
+            SyncProgress::Attachments {
+                action,
+                current,
+                total,
+                ..
+            } => {
                 if action == "upload" {
                     format!("正在上传附件 {current}/{total}...")
                 } else {
@@ -456,7 +461,10 @@ mod tests {
             downloaded_attachments: 4,
         };
         let json = serde_json::to_string(&p).unwrap();
-        assert!(json.contains("\"phase\":\"done\""), "JSON 必须含 phase 标签");
+        assert!(
+            json.contains("\"phase\":\"done\""),
+            "JSON 必须含 phase 标签"
+        );
         assert!(
             json.contains("\"origin\":\"background\""),
             "JSON 必须含 origin 字段"

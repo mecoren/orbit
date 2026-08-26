@@ -644,7 +644,11 @@ impl From<orbit_core::api::todo_api::TodoTaskDetail> for TodoTaskDetail {
             subtasks: d.subtasks.into_iter().map(TodoSubtask::from).collect(),
             labels: d.labels.into_iter().map(TaskLabelWithId::from).collect(),
             comments: d.comments.into_iter().map(TodoComment::from).collect(),
-            relations: d.relations.into_iter().map(TodoTaskRelation::from).collect(),
+            relations: d
+                .relations
+                .into_iter()
+                .map(TodoTaskRelation::from)
+                .collect(),
             reminders: d.reminders.into_iter().map(TodoReminder::from).collect(),
         }
     }

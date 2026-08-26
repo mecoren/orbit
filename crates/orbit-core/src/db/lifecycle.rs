@@ -12,8 +12,8 @@
 
 use std::path::{Path, PathBuf};
 
-use crate::crypto::master_auth::MasterAuthMeta;
 use crate::crypto::is_legacy_v1_format;
+use crate::crypto::master_auth::MasterAuthMeta;
 use crate::error::CoreResult;
 
 /// 数据库文件名

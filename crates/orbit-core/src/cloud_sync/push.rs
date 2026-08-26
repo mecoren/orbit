@@ -28,12 +28,10 @@
 use sqlx::SqlitePool;
 
 use crate::cloud_sync::crypto_io::{decrypt_payload, encrypt_payload};
-use crate::cloud_sync::db_loader::{
-    load_all_tombstones, load_module_items, now_ms,
-};
+use crate::cloud_sync::db_loader::{load_all_tombstones, load_module_items, now_ms};
 use crate::cloud_sync::error::CloudSyncError;
 use crate::cloud_sync::meta::{GlobalMeta, ModuleData, ModuleMetaEntry, TombstoneEntry};
-use crate::cloud_sync::modules::{SyncModuleDef, SYNC_MODULES};
+use crate::cloud_sync::modules::{SYNC_MODULES, SyncModuleDef};
 use crate::cloud_sync::paths;
 use crate::cloud_sync::progress::{ProgressBuilder, ProgressSender, SyncOrigin};
 use crate::cloud_sync::state::{ModuleSyncState, SyncState, SyncStateStore};
@@ -78,9 +76,7 @@ pub async fn push_all(
     device_id: &str,
 ) -> Result<PushResult, CloudSyncError> {
     let mut state = state_store.load()?;
-    let data_key = crypto
-        .get_data_key()
-        .ok_or(CloudSyncError::CryptoLocked)?;
+    let data_key = crypto.get_data_key().ok_or(CloudSyncError::CryptoLocked)?;
 
     // Push 前探测远端 _meta.waitsync，感知"远端被外部清空或修改"场景：
     // - 远端 _meta 404 → 清空所有模块 remote_fp，触发全量 push（修复"删除云端后不同步"bug）
@@ -104,7 +100,8 @@ pub async fn push_all(
     // 部分服务器对并发 MKCOL 返回 503（"Service Temporarily Unavailable"），
     // 导致 push_all 整体失败 + with_retry 重试，表现为"不停同步"。
     // 串行避免并发目录创建冲突，且代码更简单。
-    let mut outcomes: Vec<Result<PushModuleOutcome, CloudSyncError>> = Vec::with_capacity(prev_states.len());
+    let mut outcomes: Vec<Result<PushModuleOutcome, CloudSyncError>> =
+        Vec::with_capacity(prev_states.len());
     for (idx, (module_def, prev_state)) in prev_states.into_iter().enumerate() {
         let current = idx as u32 + 1;
         let outcome = push_single_module(
@@ -142,7 +139,9 @@ pub async fn push_all(
         let global_meta = build_global_meta(&state, device_id);
         let global_json = serde_json::to_vec(&global_meta)?;
         let encrypted_global = encrypt_payload(&global_json, &data_key)?;
-        adapter.upload(paths::GLOBAL_META_PATH, &encrypted_global).await?;
+        adapter
+            .upload(paths::GLOBAL_META_PATH, &encrypted_global)
+            .await?;
     }
 
     // 批量保存 state（循环结束后一次性写入，避免每模块都写文件）
@@ -213,7 +212,11 @@ async fn push_single_module(
     adapter.upload(&meta_path, &encrypted_meta).await?;
 
     // 7. 构造新状态（委托纯函数，便于单元测试）
-    let new_state = build_pushed_state(&local_fp, prev_state.as_ref(), module_data.items.len() as u64);
+    let new_state = build_pushed_state(
+        &local_fp,
+        prev_state.as_ref(),
+        module_data.items.len() as u64,
+    );
 
     Ok(PushModuleOutcome::Pushed {
         name: module_def.name.to_string(),
@@ -252,8 +255,7 @@ fn should_skip_push(
     // 确保本地数据与上次记录的远端数据一致才跳过，
     // 远端被其他设备覆盖时本设备能重新 Push 恢复
     prev_state.is_some_and(|s| {
-        s.fp == local_fp && !s.fp.is_empty() && !s.remote_fp.is_empty()
-            && s.fp == s.remote_fp
+        s.fp == local_fp && !s.fp.is_empty() && !s.remote_fp.is_empty() && s.fp == s.remote_fp
     })
 }
 

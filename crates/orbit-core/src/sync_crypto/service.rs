@@ -480,7 +480,9 @@ mod tests {
         assert!(!svc_b.has_sync_password());
 
         // B 设备导入 A 的 bundle
-        let data_key_b = svc_b.import_crypto_bundle(&bundle, "shared_pw", true).unwrap();
+        let data_key_b = svc_b
+            .import_crypto_bundle(&bundle, "shared_pw", true)
+            .unwrap();
 
         // 两端 Data Key 必须一致
         assert_eq!(data_key_a, data_key_b, "跨设备导入后 Data Key 必须一致");
@@ -543,11 +545,15 @@ mod tests {
 
         let tmp_b = TempDir::new().unwrap();
         let svc_b = SyncCryptoService::new(tmp_b.path());
-        svc_b.import_crypto_bundle(&bundle, "shared_pw", true).unwrap();
+        svc_b
+            .import_crypto_bundle(&bundle, "shared_pw", true)
+            .unwrap();
 
         // 云端与本地完全一致时，force=false 也应幂等成功（不触发守卫）
         assert!(
-            svc_b.import_crypto_bundle(&bundle, "shared_pw", false).is_ok(),
+            svc_b
+                .import_crypto_bundle(&bundle, "shared_pw", false)
+                .is_ok(),
             "meta 一致时应幂等成功"
         );
     }

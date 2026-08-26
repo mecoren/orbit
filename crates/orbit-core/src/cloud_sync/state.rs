@@ -62,10 +62,7 @@ impl SyncState {
 
     /// 获取指定模块的状态，不存在则返回默认值
     pub fn module(&self, name: &str) -> ModuleSyncState {
-        self.modules
-            .get(name)
-            .cloned()
-            .unwrap_or_default()
+        self.modules.get(name).cloned().unwrap_or_default()
     }
 
     /// 更新模块状态并写入文件（便利方法）
@@ -140,11 +137,7 @@ impl SyncStateStore {
     }
 
     /// 更新单个模块状态并立即持久化
-    pub fn update_module(
-        &self,
-        name: &str,
-        update: ModuleSyncState,
-    ) -> Result<(), CloudSyncError> {
+    pub fn update_module(&self, name: &str, update: ModuleSyncState) -> Result<(), CloudSyncError> {
         let mut state = self.load()?;
         state.set_module(name, update);
         self.save(&state)
@@ -266,9 +259,6 @@ mod tests {
     #[test]
     fn path_is_in_app_data_dir() {
         let store = SyncStateStore::new(Path::new("/tmp/test_app"));
-        assert_eq!(
-            store.path(),
-            Path::new("/tmp/test_app/sync_state.json")
-        );
+        assert_eq!(store.path(), Path::new("/tmp/test_app/sync_state.json"));
     }
 }

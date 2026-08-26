@@ -250,12 +250,7 @@ impl SyncEngine {
         crypto: SyncCryptoService,
         app_data_dir: &Path,
     ) -> Self {
-        Self::new(
-            db_pool,
-            crypto,
-            app_data_dir,
-            Arc::new(NoopProgressSender),
-        )
+        Self::new(db_pool, crypto, app_data_dir, Arc::new(NoopProgressSender))
     }
 
     /// 获取同步状态
@@ -296,7 +291,11 @@ impl SyncEngine {
     ///
     /// Done 事件仅在成功路径末尾发送；失败若不发事件，后台调度器只 eprintln，
     /// 前端悬浮指示器会永远停在最后一个 pushing/pulling 帧。
-    fn emit_error_on_failure(&self, origin: SyncOrigin, result: &Result<SyncResult, CloudSyncError>) {
+    fn emit_error_on_failure(
+        &self,
+        origin: SyncOrigin,
+        result: &Result<SyncResult, CloudSyncError>,
+    ) {
         if let Err(e) = result {
             self.progress_sender.send(SyncProgress::Error {
                 origin,
@@ -316,7 +315,14 @@ impl SyncEngine {
         attachments_dir: &str,
     ) -> Result<SyncResult, CloudSyncError> {
         let r = self
-            .sync_now_inner(adapter, raw_adapter, base_path, origin, device_id, attachments_dir)
+            .sync_now_inner(
+                adapter,
+                raw_adapter,
+                base_path,
+                origin,
+                device_id,
+                attachments_dir,
+            )
             .await;
         self.emit_error_on_failure(origin, &r);
         r
@@ -433,7 +439,14 @@ impl SyncEngine {
         attachments_dir: &str,
     ) -> Result<SyncResult, CloudSyncError> {
         let r = self
-            .push_only_inner(adapter, raw_adapter, base_path, origin, device_id, attachments_dir)
+            .push_only_inner(
+                adapter,
+                raw_adapter,
+                base_path,
+                origin,
+                device_id,
+                attachments_dir,
+            )
             .await;
         self.emit_error_on_failure(origin, &r);
         r
@@ -523,7 +536,14 @@ impl SyncEngine {
         attachments_dir: &str,
     ) -> Result<SyncResult, CloudSyncError> {
         let r = self
-            .pull_then_push_inner(adapter, raw_adapter, base_path, origin, device_id, attachments_dir)
+            .pull_then_push_inner(
+                adapter,
+                raw_adapter,
+                base_path,
+                origin,
+                device_id,
+                attachments_dir,
+            )
             .await;
         self.emit_error_on_failure(origin, &r);
         r
@@ -637,10 +657,7 @@ impl SyncEngine {
             .map(|k| data_key_fingerprint(k))
             .unwrap_or_else(|| "<none>".to_string());
         let has_password = self.get_sync_password().is_some();
-        format!(
-            "data_key_fp={}, has_password={}",
-            dk_fp, has_password,
-        )
+        format!("data_key_fp={}, has_password={}", dk_fp, has_password,)
     }
 
     /// 获取互斥锁
@@ -755,7 +772,8 @@ impl SyncEngine {
                     .unwrap_or_else(|| "<none>".to_string());
                 log::info!(
                     "[sync_data_key] 成功导入云端 Data Key，指纹变化: {} → {}",
-                    pre_fp, post_fp
+                    pre_fp,
+                    post_fp
                 );
                 Ok(())
             }
@@ -772,9 +790,7 @@ impl SyncEngine {
                 // 此处按类型匹配，不再对错误消息做 "404"/"409" 字符串嗅探
                 // （历史问题：响应体偶然含这些子串会误判为首次同步）。
                 if matches!(e, crate::sync_crypto::SyncCryptoError::NotFound { .. }) {
-                    log::info!(
-                        "[sync_data_key] 云端无 crypto/config（404/409 AncestorsNotFound）"
-                    );
+                    log::info!("[sync_data_key] 云端无 crypto/config（404/409 AncestorsNotFound）");
                     // 守卫：自动补传本地 bundle 前必须确认云端无模块数据。
                     //
                     // 历史问题：旧逻辑只要本地有 Data Key 就自动补传，
@@ -794,9 +810,7 @@ impl SyncEngine {
                             return Ok(());
                         }
                         AutoUploadDecision::Skip => {
-                            log::info!(
-                                "[sync_data_key] 本地无 Data Key，跳过自动补传"
-                            );
+                            log::info!("[sync_data_key] 本地无 Data Key，跳过自动补传");
                             return Ok(());
                         }
                         AutoUploadDecision::Block => {
@@ -885,11 +899,7 @@ impl SyncEngine {
     ///
     /// `list_files` 返回错误（网络故障等）时无法确认云端状态，
     /// 宽松返回 `false`（不阻断），让原容错流程继续。
-    async fn cloud_has_module_data(
-        &self,
-        raw_adapter: &dyn SyncAdapter,
-        base_path: &str,
-    ) -> bool {
+    async fn cloud_has_module_data(&self, raw_adapter: &dyn SyncAdapter, base_path: &str) -> bool {
         match raw_adapter.list_files(base_path).await {
             Ok(files) => {
                 // 仅匹配 `modules/{name}/data.waitsync`：真正的模块业务数据
@@ -934,37 +944,29 @@ impl SyncEngine {
     /// 上传失败不阻塞同步流程（仅记录日志），因为：
     /// - 若本地 Data Key 与云端加密数据匹配：pull 会成功，下次同步可再补传
     /// - 若不匹配：pull 会返回 CryptoLocked，提示用户输入正确同步密码
-    async fn auto_upload_crypto_bundle(
-        &self,
-        raw_adapter: &dyn SyncAdapter,
-        base_path: &str,
-    ) {
+    async fn auto_upload_crypto_bundle(&self, raw_adapter: &dyn SyncAdapter, base_path: &str) {
         log::info!(
             "[sync_data_key] 自动补传：本地有 Data Key，上传 crypto/config 到云端 (base_path={})",
             base_path
         );
         match self.crypto.export_crypto_bundle() {
-            Ok(bundle) => {
-                match crate::sync_crypto::bundle_io::upload_crypto_bundle_with_base_path(
-                    raw_adapter,
-                    base_path,
-                    &bundle,
-                )
-                .await
-                {
-                    Ok(_) => {
-                        log::info!(
-                            "[sync_data_key] 自动补传 crypto/config 成功"
-                        );
-                    }
-                    Err(e) => {
-                        log::info!(
-                            "[sync_data_key] 自动补传 crypto/config 失败（不阻塞同步）: {}",
-                            e
-                        );
-                    }
+            Ok(bundle) => match crate::sync_crypto::bundle_io::upload_crypto_bundle_with_base_path(
+                raw_adapter,
+                base_path,
+                &bundle,
+            )
+            .await
+            {
+                Ok(_) => {
+                    log::info!("[sync_data_key] 自动补传 crypto/config 成功");
                 }
-            }
+                Err(e) => {
+                    log::info!(
+                        "[sync_data_key] 自动补传 crypto/config 失败（不阻塞同步）: {}",
+                        e
+                    );
+                }
+            },
             Err(e) => {
                 log::info!(
                     "[sync_data_key] 自动补传跳过：导出本地 crypto bundle 失败: {}",
@@ -1019,9 +1021,7 @@ impl SyncEngine {
             Ok(_) => log::info!("[backup_before_sync] 同步前备份成功"),
             Err(e) => {
                 log::info!("[backup_before_sync] 同步前备份失败，继续同步: {}", e);
-                result
-                    .errors
-                    .push(format!("同步前备份失败: {}", e));
+                result.errors.push(format!("同步前备份失败: {}", e));
             }
         }
     }
@@ -1065,17 +1065,18 @@ impl SyncEngine {
                             .copied()
                             .unwrap_or(120)
                     } else {
-                        normal_delays
-                            .get(attempt as usize)
-                            .copied()
-                            .unwrap_or(8)
+                        normal_delays.get(attempt as usize).copied().unwrap_or(8)
                     };
                     log::info!(
                         "[with_retry] {} 第{}次失败，{}秒后重试{}: {}",
                         label,
                         attempt + 1,
                         delay_secs,
-                        if is_rate_limited { "（限流退避）" } else { "" },
+                        if is_rate_limited {
+                            "（限流退避）"
+                        } else {
+                            ""
+                        },
                         e
                     );
                     tokio::time::sleep(Duration::from_secs(delay_secs)).await;
@@ -1137,7 +1138,9 @@ mod tests {
         assert!(is_module_data_path("modules/movies/data.waitsync"));
         assert!(is_module_data_path("modules/games/data.waitsync"));
         // 带 base_path 前缀
-        assert!(is_module_data_path("wait-sync/user1/modules/movies/data.waitsync"));
+        assert!(is_module_data_path(
+            "wait-sync/user1/modules/movies/data.waitsync"
+        ));
     }
 
     #[test]
@@ -1147,7 +1150,9 @@ mod tests {
         assert!(!is_module_data_path("wait-sync/user1/_meta.waitsync"));
         // 附件（非模块数据，加密 Key 可能不同）
         assert!(!is_module_data_path("assets/abc123.waitsync"));
-        assert!(!is_module_data_path("wait-sync/user1/assets/abc123.waitsync"));
+        assert!(!is_module_data_path(
+            "wait-sync/user1/assets/abc123.waitsync"
+        ));
         // 模块元数据（不是 data）
         assert!(!is_module_data_path("modules/movies/meta.waitsync"));
         // crypto/config（无 .waitsync 后缀，理论上 list_files 不会返回）
@@ -1282,10 +1287,7 @@ mod tests {
 
         // 4. 同步 C 尝试获取锁：应成功
         let result_c = lock.clone().try_lock_owned();
-        assert!(
-            result_c.is_ok(),
-            "锁释放后 try_lock_owned 应成功获取"
-        );
+        assert!(result_c.is_ok(), "锁释放后 try_lock_owned 应成功获取");
     }
 
     // ========================================================================
@@ -1349,7 +1351,10 @@ mod tests {
     #[test]
     fn join_base_path_returns_file_path_when_base_empty() {
         assert_eq!(join_base_path("", "_meta.waitsync"), "_meta.waitsync");
-        assert_eq!(join_base_path("", "modules/movies/data.waitsync"), "modules/movies/data.waitsync");
+        assert_eq!(
+            join_base_path("", "modules/movies/data.waitsync"),
+            "modules/movies/data.waitsync"
+        );
     }
 
     #[test]
@@ -1428,7 +1433,10 @@ mod tests {
             }
         }
         async fn upload(&self, path: &str, data: &[u8]) -> Result<(), SyncError> {
-            self.upload_calls.lock().unwrap().push((path.to_string(), data.to_vec()));
+            self.upload_calls
+                .lock()
+                .unwrap()
+                .push((path.to_string(), data.to_vec()));
             Ok(())
         }
         async fn delete(&self, _path: &str) -> Result<(), SyncError> {
@@ -1464,7 +1472,11 @@ mod tests {
         let adapter = ProbeMockAdapter::new().with_file("_meta.waitsync", encrypted_meta);
 
         let result = probe_data_key_with_global_meta(&adapter, "", &key).await;
-        assert!(result.is_ok(), "Key 匹配时探针应返回 Ok，实际: {:?}", result);
+        assert!(
+            result.is_ok(),
+            "Key 匹配时探针应返回 Ok，实际: {:?}",
+            result
+        );
     }
 
     #[tokio::test]
@@ -1502,8 +1514,8 @@ mod tests {
         let key = test_data_key(0x42);
         let encrypted_meta = encrypt_payload(b"{}", &key).unwrap();
         // 文件放在 base_path 之下
-        let adapter = ProbeMockAdapter::new()
-            .with_file("wait-sync/user1/_meta.waitsync", encrypted_meta);
+        let adapter =
+            ProbeMockAdapter::new().with_file("wait-sync/user1/_meta.waitsync", encrypted_meta);
 
         let result = probe_data_key_with_global_meta(&adapter, "wait-sync/user1", &key).await;
         assert!(result.is_ok(), "base_path 非空时探针应正确拼接路径并下载");

@@ -38,11 +38,10 @@ use orbit_core::models::business::{
 // 注：TaskLabelWithId 仅作为 TodoTaskDetail.labels 的元素类型出现，
 // 生成代码经 crate::api::dto 路径引用，无需在此再导出。
 pub use super::dto::{
-    ListFilter, TodoComment, TodoCommentCreateInput, TodoLabel,
-    TodoLabelCreateInput, TodoProject, TodoProjectCreateInput, TodoReminder,
-    TodoReminderCreateInput, TodoSubtask, TodoSubtaskCreateInput, TodoTask,
-    TodoTaskCreateInput, TodoTaskDetail, TodoTaskLabel, TodoTaskLabelCreateInput,
-    TodoTaskRelation, TodoTaskRelationCreateInput,
+    ListFilter, TodoComment, TodoCommentCreateInput, TodoLabel, TodoLabelCreateInput, TodoProject,
+    TodoProjectCreateInput, TodoReminder, TodoReminderCreateInput, TodoSubtask,
+    TodoSubtaskCreateInput, TodoTask, TodoTaskCreateInput, TodoTaskDetail, TodoTaskLabel,
+    TodoTaskLabelCreateInput, TodoTaskRelation, TodoTaskRelationCreateInput,
 };
 
 fn pool() -> Result<sqlx::SqlitePool, String> {
@@ -351,9 +350,7 @@ pub async fn todo_comments_delete(id: i64) -> Result<(), String> {
 // =============================================================================
 
 /// 列出任务关系（对应桌面 todo_task_relations_list）
-pub async fn todo_task_relations_list(
-    filter: ListFilter,
-) -> Result<Vec<TodoTaskRelation>, String> {
+pub async fn todo_task_relations_list(filter: ListFilter) -> Result<Vec<TodoTaskRelation>, String> {
     let pool = pool()?;
     let items = business_api::list_todo_task_relations(&pool, &filter.into())
         .await

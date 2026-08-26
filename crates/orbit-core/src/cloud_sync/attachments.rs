@@ -56,9 +56,7 @@ pub async fn sync_attachments_push(
     origin: SyncOrigin,
     attachments_dir: &str,
 ) -> Result<AttachmentSyncResult, CloudSyncError> {
-    let data_key = crypto
-        .get_data_key()
-        .ok_or(CloudSyncError::CryptoLocked)?;
+    let data_key = crypto.get_data_key().ok_or(CloudSyncError::CryptoLocked)?;
 
     let mut result = AttachmentSyncResult::default();
 
@@ -79,7 +77,9 @@ pub async fn sync_attachments_push(
     let cloud_hashes: HashSet<String> = match adapter.list_assets().await {
         Ok(list) => list.into_iter().collect(),
         Err(e) => {
-            result.errors.push(format!("列出云端附件失败，本轮跳过附件上传: {}", e));
+            result
+                .errors
+                .push(format!("列出云端附件失败，本轮跳过附件上传: {}", e));
             return Ok(result);
         }
     };
@@ -127,10 +127,7 @@ pub async fn sync_attachments_push(
                 };
 
                 if file_data.is_empty() {
-                    return (
-                        hash,
-                        Err(format!("本地文件为空或不存在: {}", local_path)),
-                    );
+                    return (hash, Err(format!("本地文件为空或不存在: {}", local_path)));
                 }
 
                 // 4b. 加密
@@ -189,9 +186,7 @@ pub async fn sync_attachments_pull(
     origin: SyncOrigin,
     attachments_dir: &str,
 ) -> Result<AttachmentSyncResult, CloudSyncError> {
-    let data_key = crypto
-        .get_data_key()
-        .ok_or(CloudSyncError::CryptoLocked)?;
+    let data_key = crypto.get_data_key().ok_or(CloudSyncError::CryptoLocked)?;
 
     let mut result = AttachmentSyncResult::default();
 
@@ -201,7 +196,9 @@ pub async fn sync_attachments_pull(
     let cloud_hashes: Vec<String> = match adapter.list_assets().await {
         Ok(list) => list,
         Err(e) => {
-            result.errors.push(format!("列出云端附件失败，本轮跳过附件下载: {}", e));
+            result
+                .errors
+                .push(format!("列出云端附件失败，本轮跳过附件下载: {}", e));
             return Ok(result);
         }
     };

@@ -47,9 +47,9 @@ use orbit_core::cloud_sync::state::SyncStateStore;
 use orbit_core::context;
 use orbit_core::db::repository::sync_config_repo::SyncConfigRepo;
 use orbit_core::models::sync_config::{SyncConfigRecord, SyncConfigSaveInput};
+use orbit_core::sync_crypto::SyncCryptoService;
 use orbit_core::sync_crypto::error::SyncCryptoError;
 use orbit_core::sync_crypto::meta_store::SyncCryptoMeta;
-use orbit_core::sync_crypto::SyncCryptoService;
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 

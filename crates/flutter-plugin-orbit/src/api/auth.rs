@@ -65,7 +65,9 @@ pub async fn db_set_device_id(device_id: String) -> Result<(), String> {
 
 /// 读取当前设备 ID（未设置时返回空字符串）
 pub async fn db_get_device_id() -> Result<String, String> {
-    Ok(orbit_core::context::get_device_id().map(String::from).unwrap_or_default())
+    Ok(orbit_core::context::get_device_id()
+        .map(String::from)
+        .unwrap_or_default())
 }
 
 /// 移除状态（迁移场景：pool 已 close 后由 Dart 调用，随后重开连接池）

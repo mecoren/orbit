@@ -28,7 +28,9 @@ pub enum CloudSyncError {
     #[error("同步加密未解锁：请先输入同步密码")]
     CryptoLocked,
 
-    #[error("Data Key 与云端密文不匹配：本地已解锁但解密云端数据失败，需走恢复流程（重输密码无效）")]
+    #[error(
+        "Data Key 与云端密文不匹配：本地已解锁但解密云端数据失败，需走恢复流程（重输密码无效）"
+    )]
     KeyMismatch,
 
     #[error("未知模块: {0}")]

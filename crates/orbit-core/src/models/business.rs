@@ -5,11 +5,11 @@
 //! 字段与 0001_init.sql 一一对应；DateTime 统一 i64 毫秒时间戳；可空字段 Option<T>。
 
 use serde::{Deserialize, Serialize};
-use sqlx::decode::Decode;
-use sqlx::sqlite::{Sqlite, SqliteTypeInfo, SqliteValueRef};
 use sqlx::Type;
 use sqlx::TypeInfo;
 use sqlx::ValueRef;
+use sqlx::decode::Decode;
+use sqlx::sqlite::{Sqlite, SqliteTypeInfo, SqliteValueRef};
 
 /// 兼容 INTEGER 与「数字文本」(TEXT) 的整型包装。
 ///
@@ -77,7 +77,6 @@ pub struct ListFilter {
     pub page: u32,
     pub page_size: u32,
 }
-
 
 // ---------- todo_projects ----------
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
@@ -171,8 +170,8 @@ pub struct TodoTaskCreateInput {
 /// 标准 serde 对 `Option<Option<T>>` 反序列化 JSON `null` 会得到 `None`（外层 Option 短路），
 /// 导致前端传 `project_id: null` 等「清空」意图被误判为「不更新」。此函数修正该行为。
 mod nullable {
-    use serde::{Deserialize, Deserializer};
     use serde::de::{self, Visitor};
+    use serde::{Deserialize, Deserializer};
     use std::fmt;
     use std::marker::PhantomData;
 

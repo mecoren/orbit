@@ -11,22 +11,22 @@
 use serde::Serialize;
 
 #[cfg(target_os = "windows")]
-use tauri::Manager;
-#[cfg(target_os = "windows")]
 use raw_window_handle::{HasWindowHandle, RawWindowHandle};
+#[cfg(target_os = "windows")]
+use tauri::Manager;
 #[cfg(target_os = "windows")]
 use windows::Win32::Foundation::HWND;
 #[cfg(target_os = "windows")]
-use windows::Win32::UI::WindowsAndMessaging::{
-    GetParent, GetWindowLongPtrW, GWL_EXSTYLE, WS_EX_NOREDIRECTIONBITMAP,
-};
-#[cfg(target_os = "windows")]
 use windows::Win32::Graphics::Dwm::{
-    DwmSetWindowAttribute, DwmGetWindowAttribute, DWMWA_SYSTEMBACKDROP_TYPE,
-    DWMSBT_MAINWINDOW, DWMSBT_NONE,
+    DWMSBT_MAINWINDOW, DWMSBT_NONE, DWMWA_SYSTEMBACKDROP_TYPE, DwmGetWindowAttribute,
+    DwmSetWindowAttribute,
 };
 #[cfg(target_os = "windows")]
 use windows::Win32::System::SystemInformation::{GetVersionExW, OSVERSIONINFOW};
+#[cfg(target_os = "windows")]
+use windows::Win32::UI::WindowsAndMessaging::{
+    GWL_EXSTYLE, GetParent, GetWindowLongPtrW, WS_EX_NOREDIRECTIONBITMAP,
+};
 
 /// 诊断快照：返回 Mica 链路上每个关键环节的实测状态，
 /// 供前端调试时一次性看清「卡在哪一层」。
@@ -105,9 +105,7 @@ fn set_backdrop(
 
 /// 解析 main 窗口的顶层 HWND，顺带返回 WebView 自身 HWND（用于诊断）。
 #[cfg(target_os = "windows")]
-fn resolve_top_hwnd(
-    app: &tauri::AppHandle,
-) -> Result<(HWND, HWND), String> {
+fn resolve_top_hwnd(app: &tauri::AppHandle) -> Result<(HWND, HWND), String> {
     let window = app
         .get_webview_window("main")
         .ok_or_else(|| "main window not found".to_string())?;
@@ -116,9 +114,7 @@ fn resolve_top_hwnd(
         .map_err(|e| format!("get window handle failed: {e}"))?;
 
     let webview_hwnd = match handle.as_raw() {
-        RawWindowHandle::Win32(h) => {
-            HWND(h.hwnd.get() as *mut std::ffi::c_void)
-        }
+        RawWindowHandle::Win32(h) => HWND(h.hwnd.get() as *mut std::ffi::c_void),
         _ => return Err("not a win32 window".to_string()),
     };
 
@@ -155,10 +151,8 @@ fn windows_build_number() -> Option<(u32, u32, u32)> {
 /// Mica 完全不渲染，且 API 调用与读回值均显示"正常"。
 #[cfg(target_os = "windows")]
 fn transparency_enabled() -> Option<bool> {
+    use windows::Win32::System::Registry::{HKEY_CURRENT_USER, RRF_RT_REG_DWORD, RegGetValueW};
     use windows::core::w;
-    use windows::Win32::System::Registry::{
-        RegGetValueW, HKEY_CURRENT_USER, RRF_RT_REG_DWORD,
-    };
 
     let mut value: u32 = 0;
     let mut size = std::mem::size_of::<u32>() as u32;
@@ -211,13 +205,12 @@ fn has_no_redirection_bitmap(hwnd: HWND) -> Option<bool> {
 pub fn mica_diagnostics(app: tauri::AppHandle) -> MicaDiagnostics {
     #[cfg(target_os = "windows")]
     {
-        let (major, minor, build) = windows_build_number()
-            .unwrap_or((0, 0, 0));
+        let (major, minor, build) = windows_build_number().unwrap_or((0, 0, 0));
         let mica_supported = build >= 22000;
 
-        let top_hwnd_info = resolve_top_hwnd(&app).ok().map(|(top, _wv)| {
-            (top, has_no_redirection_bitmap(top))
-        });
+        let top_hwnd_info = resolve_top_hwnd(&app)
+            .ok()
+            .map(|(top, _wv)| (top, has_no_redirection_bitmap(top)));
 
         let top_hwnd = top_hwnd_info.map(|(h, _)| format!("{:p}", h.0));
         let has_nrbitmap = top_hwnd_info.and_then(|(_, f)| f);

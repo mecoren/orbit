@@ -88,7 +88,12 @@ async fn poll_once(app: &AppHandle) {
         // ② 无论成功与否 emit 事件 → 前端 sonner toast 兜底
         let _ = app.emit(
             "todo_reminder:due",
-            ReminderDueEvent { id, task_id, title, remind_at },
+            ReminderDueEvent {
+                id,
+                task_id,
+                title,
+                remind_at,
+            },
         );
 
         // ③ 记入去重集合

@@ -11,7 +11,7 @@
 //! 每个 api 函数都是薄包装：取全局状态 → 一行委托 orbit_core。
 //! CPU 密集操作（KDF 等）由 FRB 自动在 isolate 中执行。
 
-mod frb_generated; /* AUTO INJECTED BY flutter_rust_bridge. This line may not be accurate, and you can change it according to your needs. */
 mod api;
+mod frb_generated; /* AUTO INJECTED BY flutter_rust_bridge. This line may not be accurate, and you can change it according to your needs. */
 
 pub use api::orbit_state_initialized;

@@ -41,7 +41,11 @@ pub struct WebDavAdapter {
 impl WebDavAdapter {
     pub fn new(config: WebDavConfig) -> Result<Self, SyncError> {
         // timeout_secs=0 视为未设置，回落默认 30s
-        let timeout = if config.timeout_secs == 0 { 30 } else { config.timeout_secs };
+        let timeout = if config.timeout_secs == 0 {
+            30
+        } else {
+            config.timeout_secs
+        };
         let http = HttpClient::new(timeout, 3, config.skip_tls_verify)?;
         Ok(Self {
             http,

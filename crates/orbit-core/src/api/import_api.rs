@@ -198,30 +198,20 @@ pub async fn bulk_import_records_from_values(
 
         match (existing_id, strategy_normalized.as_str()) {
             // 无冲突：INSERT
-            (None, _) => {
-                match build_and_execute_insert(
-                    &mut tx, table_name, fields, now,
-                )
-                .await
-                {
-                    Ok(()) => success += 1,
-                    Err(e) => {
-                        fail += 1;
-                        errors.push(format!("记录(uuid={})插入失败: {}", uuid, e));
-                    }
+            (None, _) => match build_and_execute_insert(&mut tx, table_name, fields, now).await {
+                Ok(()) => success += 1,
+                Err(e) => {
+                    fail += 1;
+                    errors.push(format!("记录(uuid={})插入失败: {}", uuid, e));
                 }
-            }
+            },
             // 冲突 + skip：跳过
             (Some(_), "skip") => {
                 skip += 1;
             }
             // 冲突 + overwrite：UPDATE 现有记录
             (Some(id), "overwrite") => {
-                match build_and_execute_update(
-                    &mut tx, table_name, id, fields, now,
-                )
-                .await
-                {
+                match build_and_execute_update(&mut tx, table_name, id, fields, now).await {
                     Ok(()) => success += 1,
                     Err(e) => {
                         fail += 1;
@@ -231,11 +221,7 @@ pub async fn bulk_import_records_from_values(
             }
             // 冲突 + forceInsert：作为新记录插入（uuid 由 Rust 生成新值）
             (Some(_), "forceinsert") => {
-                match build_and_execute_insert(
-                    &mut tx, table_name, fields, now,
-                )
-                .await
-                {
+                match build_and_execute_insert(&mut tx, table_name, fields, now).await {
                     Ok(()) => success += 1,
                     Err(e) => {
                         fail += 1;

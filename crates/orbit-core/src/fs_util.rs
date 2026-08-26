@@ -19,9 +19,9 @@ use std::path::{Path, PathBuf};
 /// 原子写入文件内容（同目录临时文件 + rename 替换）
 pub fn write_atomic(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
     use base64::Engine;
-    let parent = path.parent().ok_or_else(|| {
-        std::io::Error::new(std::io::ErrorKind::InvalidInput, "路径无父目录")
-    })?;
+    let parent = path
+        .parent()
+        .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::InvalidInput, "路径无父目录"))?;
     std::fs::create_dir_all(parent)?;
 
     // 临时文件名带随机后缀，避免同目录并发写入同名 tmp 冲突
@@ -109,11 +109,13 @@ mod tests {
         let quarantined = quarantine_corrupt_file(&file).unwrap();
         assert!(!file.exists(), "原路径应已腾空");
         assert!(quarantined.exists());
-        assert!(quarantined
-            .file_name()
-            .unwrap()
-            .to_string_lossy()
-            .contains("corrupt-"));
+        assert!(
+            quarantined
+                .file_name()
+                .unwrap()
+                .to_string_lossy()
+                .contains("corrupt-")
+        );
     }
 
     #[test]

@@ -1,4 +1,4 @@
-﻿//! full_sync_cmd — .orsync 全量备份导出/导入命令组（06 任务 3.4）
+//! full_sync_cmd — .orsync 全量备份导出/导入命令组（06 任务 3.4）
 //!
 //! 包装 orbit_core::api::full_sync_backup_api；sync_password 每次由前端显式携带
 //! （api 层即用即毁：unlock → 编解码 → lock，不驻留）。
@@ -10,8 +10,8 @@ use tauri::{AppHandle, Emitter, Manager};
 use orbit_core::api::full_sync_backup_api::{self, ExportResult, ImportResult};
 use orbit_core::context;
 
-use crate::commands::data_dir::resolve_app_data_dir;
 use crate::AppState;
+use crate::commands::data_dir::resolve_app_data_dir;
 
 /// 备份文件条目（本地 backups 目录列表项）
 #[derive(Debug, Clone, Serialize)]
@@ -91,7 +91,10 @@ pub async fn full_backup_import(
     .map_err(|e| format!("[backup] 导入失败: {e}"))?;
 
     // 全量覆盖后通知前端失效全部业务缓存（useDbInvalidation 监听 db-change）
-    let _ = app.emit("db-change", serde_json::json!({ "table": "*", "kind": "import" }));
+    let _ = app.emit(
+        "db-change",
+        serde_json::json!({ "table": "*", "kind": "import" }),
+    );
     Ok(result)
 }
 
@@ -99,7 +102,8 @@ pub async fn full_backup_import(
 #[tauri::command]
 pub async fn full_backup_list_local(app: AppHandle) -> Result<Vec<BackupEntryView>, String> {
     let dir = resolve_app_data_dir(&app)?;
-    let backup_dir = dir.join(orbit_core::full_sync_backup::backup_repository::DEFAULT_BACKUP_DIR_NAME);
+    let backup_dir =
+        dir.join(orbit_core::full_sync_backup::backup_repository::DEFAULT_BACKUP_DIR_NAME);
     let entries = orbit_core::full_sync_backup::backup_repository::list_backups(&backup_dir)
         .map_err(|e| format!("[backup] {e}"))?;
     Ok(entries

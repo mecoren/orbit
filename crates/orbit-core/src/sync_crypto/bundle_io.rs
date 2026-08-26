@@ -146,10 +146,7 @@ pub async fn upload_crypto_bundle_with_base_path(
         message: format!("序列化 crypto bundle 失败: {e}"),
     })?;
     let new_path = join_base_path(base_path, CRYPTO_CONFIG_PATH);
-    log::info!(
-        "[bundle_io] 上传 crypto bundle 到新路径: {}",
-        new_path
-    );
+    log::info!("[bundle_io] 上传 crypto bundle 到新路径: {}", new_path);
     adapter
         .upload(&new_path, &json)
         .await
@@ -232,10 +229,7 @@ pub async fn download_and_import_crypto_bundle_with_base_path(
             .await;
         }
         Err(e) if is_not_found(&e) => {
-            log::info!(
-                "[bundle_io] 旧路径也 404，云端无 crypto/config: {}",
-                e
-            );
+            log::info!("[bundle_io] 旧路径也 404，云端无 crypto/config: {}", e);
             // 双读都 404，视为云端无 crypto/config
             Ok(None)
         }
@@ -373,10 +367,7 @@ async fn migrate_legacy_to_new_path(
         );
         return;
     }
-    log::info!(
-        "[bundle_io] 自动迁移：上传到新路径 {} 成功",
-        new_path
-    );
+    log::info!("[bundle_io] 自动迁移：上传到新路径 {} 成功", new_path);
 
     // 删除旧路径
     if let Err(e) = adapter.delete(legacy).await {
@@ -387,8 +378,5 @@ async fn migrate_legacy_to_new_path(
         );
         return;
     }
-    log::info!(
-        "[bundle_io] 自动迁移：删除旧路径 {} 成功",
-        legacy
-    );
+    log::info!("[bundle_io] 自动迁移：删除旧路径 {} 成功", legacy);
 }

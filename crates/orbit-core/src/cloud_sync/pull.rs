@@ -23,7 +23,7 @@ use crate::cloud_sync::crypto_io::decrypt_payload;
 use crate::cloud_sync::db_loader::{load_module_items, now_ms};
 use crate::cloud_sync::error::CloudSyncError;
 use crate::cloud_sync::meta::{GlobalMeta, ModuleData, ModuleMetaEntry};
-use crate::cloud_sync::modules::{SyncModuleDef, SYNC_MODULES};
+use crate::cloud_sync::modules::{SYNC_MODULES, SyncModuleDef};
 use crate::cloud_sync::paths;
 use crate::cloud_sync::progress::{ProgressBuilder, ProgressSender, SyncOrigin};
 use crate::cloud_sync::state::{ModuleSyncState, SyncStateStore};
@@ -80,9 +80,7 @@ pub async fn pull_all(
     let data_key = crypto.get_data_key().ok_or_else(|| {
         // 诊断日志：Data Key 为 None，说明 crypto 实例未 unlock
         // 这通常意味着 sync_crypto_unlock 未被调用，或 unlock 后 Data Key 被清除
-        log::info!(
-            "[pull_all] Data Key 为 None：crypto 实例未解锁，返回 CryptoLocked"
-        );
+        log::info!("[pull_all] Data Key 为 None：crypto 实例未解锁，返回 CryptoLocked");
         CloudSyncError::CryptoLocked
     })?;
     log::info!(
@@ -120,7 +118,13 @@ pub async fn pull_all(
     // 预捕获所有模块的 local_state，避免并行任务借用 state
     // 元组：(模块名, 远端指纹, 远端 updated_at, 本地 state, 模块定义)
     // 使用 owned String 避免引用 global_meta 的生命周期问题
-    let module_entries: Vec<(String, String, i64, Option<ModuleSyncState>, Option<&'static SyncModuleDef>)> = global_meta
+    let module_entries: Vec<(
+        String,
+        String,
+        i64,
+        Option<ModuleSyncState>,
+        Option<&'static SyncModuleDef>,
+    )> = global_meta
         .modules
         .iter()
         .map(|(name, remote_meta)| {
@@ -227,10 +231,9 @@ async fn pull_single_module(
     builder.pulling(module_name, module_def.display_name, current, total);
 
     // 1. 比对指纹：远端 fp == 本地记录的 remote_fp → 跳过
-    if local_state
-        .as_ref()
-        .map_or(false, |s| s.remote_fp == remote_fp && !s.remote_fp.is_empty())
-    {
+    if local_state.as_ref().map_or(false, |s| {
+        s.remote_fp == remote_fp && !s.remote_fp.is_empty()
+    }) {
         return PullModuleOutcome::Skipped;
     }
 
@@ -242,9 +245,7 @@ async fn pull_single_module(
         Err(e) => {
             if paths::is_not_found_error(&e) {
                 // 远端无此模块数据，更新 remote_fp 避免重复尝试
-                let fp = local_state
-                    .as_ref()
-                    .map_or(String::new(), |s| s.fp.clone());
+                let fp = local_state.as_ref().map_or(String::new(), |s| s.fp.clone());
                 let new_state = ModuleSyncState {
                     fp,
                     remote_fp: remote_fp.to_string(),

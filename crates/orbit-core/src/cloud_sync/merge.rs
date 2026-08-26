@@ -23,12 +23,14 @@ use std::collections::HashMap;
 
 use sqlx::SqlitePool;
 
-use crate::cloud_sync::db_loader::{load_local_uuid_map, LocalRecordState};
+use crate::cloud_sync::db_loader::{LocalRecordState, load_local_uuid_map};
 use crate::cloud_sync::error::CloudSyncError;
 use crate::cloud_sync::meta::TombstoneEntry;
 use crate::cloud_sync::modules::SyncModuleDef;
 use crate::db::repository::generic_repo::{push_json_value, validate_column_name};
-use crate::db::repository::import_type_validator::{load_table_columns, normalize_value, ColumnMeta};
+use crate::db::repository::import_type_validator::{
+    ColumnMeta, load_table_columns, normalize_value,
+};
 
 /// 批量 INSERT 单批最大记录数
 ///
@@ -129,9 +131,7 @@ pub async fn merge_items(
                 result.errors.extend(table_result.errors);
             }
             Err(e) => {
-                result
-                    .errors
-                    .push(format!("表 {} 合并失败: {}", table, e));
+                result.errors.push(format!("表 {} 合并失败: {}", table, e));
             }
         }
     }
@@ -142,9 +142,7 @@ pub async fn merge_items(
             result.deleted = count;
         }
         Err(e) => {
-            result
-                .errors
-                .push(format!("墓碑应用失败: {}", e));
+            result.errors.push(format!("墓碑应用失败: {}", e));
         }
     }
 
@@ -163,11 +161,12 @@ async fn merge_table_items(
     items: &[&serde_json::Value],
     local_map: &HashMap<String, LocalRecordState>,
 ) -> Result<MergeResult, CloudSyncError> {
-    let columns = load_table_columns(db_pool, table)
-        .await
-        .map_err(|e| CloudSyncError::Database {
-            message: format!("加载表 {} 列元数据失败: {}", table, e),
-        })?;
+    let columns =
+        load_table_columns(db_pool, table)
+            .await
+            .map_err(|e| CloudSyncError::Database {
+                message: format!("加载表 {} 列元数据失败: {}", table, e),
+            })?;
 
     let mut result = MergeResult::default();
 
@@ -179,7 +178,9 @@ async fn merge_table_items(
         let obj = match item.as_object() {
             Some(o) => o,
             None => {
-                result.errors.push(format!("表 {}: 记录不是 JSON 对象", table));
+                result
+                    .errors
+                    .push(format!("表 {}: 记录不是 JSON 对象", table));
                 continue;
             }
         };
@@ -196,10 +197,7 @@ async fn merge_table_items(
             continue;
         }
 
-        let remote_updated = obj
-            .get("updated_at")
-            .and_then(|v| v.as_i64())
-            .unwrap_or(0);
+        let remote_updated = obj.get("updated_at").and_then(|v| v.as_i64()).unwrap_or(0);
 
         // 三分支裁决（Fix-01）：
         // 1. 本地无该 uuid → INSERT 新纪录
@@ -222,16 +220,17 @@ async fn merge_table_items(
                 match decision {
                     LwwDecision::Update => {
                         // 远端胜出（updated_at 更大，或平局时 version 更高）→ UPDATE
-                        let uuid_ref = obj
-                            .get("uuid")
-                            .and_then(|v| v.as_str())
-                            .unwrap_or("");
+                        let uuid_ref = obj.get("uuid").and_then(|v| v.as_str()).unwrap_or("");
                         // 平局裁决时输出 warn 日志，便于排查（非平局的正常 Update 不打日志）
                         if remote_updated == local.updated_at {
                             log::warn!(
                                 "[merge] LWW 平局裁决：表 {} uuid={} updated_at={}，\
                                  远端 version={} > 本地 {}，采用远端",
-                                table, uuid_ref, remote_updated, remote_version, local.version
+                                table,
+                                uuid_ref,
+                                remote_updated,
+                                remote_version,
+                                local.version
                             );
                         }
                         to_update.push((uuid_ref, obj));
@@ -255,18 +254,21 @@ async fn merge_table_items(
                     log::info!(
                         "[merge] 复活裁决：表 {} uuid={} 远端更新时间 {} ≥ 本地删除时间 {}，\
                          恢复存活（UPDATE，不 INSERT）",
-                        table, uuid, remote_updated, local.deleted_at
+                        table,
+                        uuid,
+                        remote_updated,
+                        local.deleted_at
                     );
-                    let uuid_ref = obj
-                        .get("uuid")
-                        .and_then(|v| v.as_str())
-                        .unwrap_or("");
+                    let uuid_ref = obj.get("uuid").and_then(|v| v.as_str()).unwrap_or("");
                     to_update.push((uuid_ref, obj));
                 } else {
                     log::info!(
                         "[merge] 复活裁决：表 {} uuid={} 远端更新时间 {} < 本地删除时间 {}，\
                          删除胜出，跳过",
-                        table, uuid, remote_updated, local.deleted_at
+                        table,
+                        uuid,
+                        remote_updated,
+                        local.deleted_at
                     );
                     result.skipped += 1;
                 }
@@ -440,7 +442,10 @@ async fn update_record_in_tx(
     q.push(" WHERE uuid = ");
     q.push_bind(uuid.to_string());
 
-    q.build().execute(&mut **tx).await.map_err(|e| e.to_string())?;
+    q.build()
+        .execute(&mut **tx)
+        .await
+        .map_err(|e| e.to_string())?;
     Ok(())
 }
 
@@ -500,7 +505,11 @@ async fn apply_tombstones(
     for table in module_def.tables {
         for (uuid, tombstone_deleted_at) in &to_delete {
             // 旧格式墓碑（无时间戳）保留旧的 now() 兜底；正常路径用原始删除时间
-            let ts = if *tombstone_deleted_at == 0 { now } else { *tombstone_deleted_at };
+            let ts = if *tombstone_deleted_at == 0 {
+                now
+            } else {
+                *tombstone_deleted_at
+            };
             let sql = format!(
                 "UPDATE \"{}\" SET is_deleted = 1, deleted_at = ?, updated_at = ? \
                  WHERE uuid = ? AND is_deleted = 0",
@@ -676,12 +685,11 @@ mod tests {
         }
 
         async fn row_count(pool: &SqlitePool, uuid: &str) -> i64 {
-            let (c,): (i64,) =
-                sqlx::query_as("SELECT COUNT(*) FROM todo_projects WHERE uuid = ?")
-                    .bind(uuid)
-                    .fetch_one(pool)
-                    .await
-                    .unwrap();
+            let (c,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM todo_projects WHERE uuid = ?")
+                .bind(uuid)
+                .fetch_one(pool)
+                .await
+                .unwrap();
             c
         }
 
@@ -785,10 +793,7 @@ mod tests {
             assert_eq!(deleted, 1);
             let row = get_row(&pool, "r4").await.unwrap();
             assert_eq!(row.is_deleted, 1);
-            assert_eq!(
-                row.deleted_at, 100,
-                "deleted_at 必须保留墓碑原始删除时间"
-            );
+            assert_eq!(row.deleted_at, 100, "deleted_at 必须保留墓碑原始删除时间");
             assert_eq!(
                 row.updated_at, 100,
                 "updated_at 必须跟随墓碑删除时间而非 now()"

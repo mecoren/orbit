@@ -5,14 +5,16 @@
 //!   2a. 未设置 -> db_init_plaintext() 明文库
 //!   2b. 已设置 -> 解锁页 master_auth_unlock(pw) -> db_init_encrypted(db_key_hex)
 
-use tauri::{AppHandle, Emitter, Manager};
-use orbit_core::db::migrate::{finalize_encrypted_migration, finalize_migration, migrate_to_encrypted, migrate_to_plaintext};
+use orbit_core::context;
+use orbit_core::db::migrate::{
+    finalize_encrypted_migration, finalize_migration, migrate_to_encrypted, migrate_to_plaintext,
+};
 use orbit_core::db::pool::{init_pool, init_pool_unencrypted};
 use orbit_core::eventbus::EVENT_BUS;
-use orbit_core::context;
+use tauri::{AppHandle, Emitter, Manager};
 
-use crate::commands::data_dir::resolve_app_data_dir;
 use crate::AppState;
+use crate::commands::data_dir::resolve_app_data_dir;
 
 /// 初始化明文数据库（未设置主密码时使用）
 ///
@@ -138,7 +140,6 @@ pub async fn db_migrate_to_plaintext(app: AppHandle) -> Result<(), String> {
 // 供 generic_repo 在 create/update/delete 时自动填充 device_id 列。
 // =============================================================================
 
-
 /// 写入当前设备 ID（进程级 OnceCell，仅可调用一次）
 ///
 /// 前端应在数据库初始化 + 设备注册完成后立即调用。
@@ -155,7 +156,6 @@ pub async fn db_get_device_id() -> Result<String, String> {
         .map(String::from)
         .or_else(|_| Ok(String::new()))
 }
-
 
 /// 明文→加密数据库迁移（设置主密码场景，与 migrate_to_plaintext 对称）
 ///

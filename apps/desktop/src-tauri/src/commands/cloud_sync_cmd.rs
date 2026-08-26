@@ -1,4 +1,4 @@
-﻿//! cloud_sync_cmd — 云端增量同步执行命令组（06 任务 3.5）
+//! cloud_sync_cmd — 云端增量同步执行命令组（06 任务 3.5）
 //!
 //! 全部走 orbit_core::api::cloud_sync_api 高阶函数（BasePathAdapter、重试退避、
 //! Data Key 对账守卫均在 core 内闭环）；壳层只做：引擎/配置获取 → 执行 →
@@ -10,9 +10,9 @@ use orbit_core::api::cloud_sync_api;
 use orbit_core::cloud_sync::progress::SyncOrigin;
 use orbit_core::db::repository::sync_config_repo::SyncConfigRepo;
 
+use crate::AppState;
 use crate::commands::data_dir::resolve_app_data_dir;
 use crate::commands::sync_runtime;
-use crate::AppState;
 
 /// CloudSyncError → `[tag] message`（key_mismatch 前端跳恢复页）
 fn err_tagged(e: orbit_core::cloud_sync::error::CloudSyncError) -> String {
@@ -35,7 +35,11 @@ enum SyncAction {
 }
 
 /// 同步执行公共骨架：配置 + 引擎 + 附件目录 → 动作 → last_synced_at 记账
-async fn run_sync(app: &AppHandle, origin: SyncOrigin, action: SyncAction) -> Result<String, String> {
+async fn run_sync(
+    app: &AppHandle,
+    origin: SyncOrigin,
+    action: SyncAction,
+) -> Result<String, String> {
     let record = sync_runtime::get_active_config(app)
         .await?
         .ok_or_else(|| "[config] 尚未配置同步，请先在设置中填写连接信息".to_string())?;
@@ -50,7 +54,9 @@ async fn run_sync(app: &AppHandle, origin: SyncOrigin, action: SyncAction) -> Re
 
     let dir = resolve_app_data_dir(app)?;
     let attachments = sync_runtime::attachments_dir(&dir);
-    let device_id = orbit_core::context::get_device_id().unwrap_or_default().to_string();
+    let device_id = orbit_core::context::get_device_id()
+        .unwrap_or_default()
+        .to_string();
 
     let result = match action {
         SyncAction::Now => {

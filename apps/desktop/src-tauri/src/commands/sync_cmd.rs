@@ -1,4 +1,4 @@
-﻿//! sync_cmd — 同步连接配置命令组（06 任务 3.2/3.5）
+//! sync_cmd — 同步连接配置命令组（06 任务 3.2/3.5）
 //!
 //! 配置双存储（03 文档 §八）：DB `sync_configs` 表（激活互斥、last_synced_at 记账）
 //! + `sync_config.enc` 加密文件（03 §八最小字段契约，供备份命名等松耦合读取）。
@@ -130,7 +130,10 @@ async fn sync_config_active(app: &AppHandle) -> Result<Option<SyncConfigRecord>,
 ///
 /// 成功后 emit("sync-config-changed")；调度器在下个 60s tick 读取新配置生效。
 #[tauri::command]
-pub async fn sync_config_save(app: AppHandle, input: SyncConfigInput) -> Result<SyncConfigView, String> {
+pub async fn sync_config_save(
+    app: AppHandle,
+    input: SyncConfigInput,
+) -> Result<SyncConfigView, String> {
     let engine = input.engine.to_lowercase();
     if engine != "webdav" && engine != "s3" {
         return Err("[config] 不支持的引擎类型，仅支持 webdav/s3".to_string());
@@ -260,10 +263,7 @@ fn write_config_file(input: &SyncConfigInput, engine: &str) -> Result<(), String
 /// 密码/用户名留空且已有激活配置时，沿用已存凭据（前端不回显密码）。
 /// 返回云端根目录发现的条目数；网络/认证错误统一 `[network]` 前缀。
 #[tauri::command]
-pub async fn sync_test_connection(
-    app: AppHandle,
-    input: SyncConfigInput,
-) -> Result<u32, String> {
+pub async fn sync_test_connection(app: AppHandle, input: SyncConfigInput) -> Result<u32, String> {
     let engine = input.engine.to_lowercase();
     if engine != "webdav" && engine != "s3" {
         return Err("[config] 不支持的引擎类型，仅支持 webdav/s3".to_string());

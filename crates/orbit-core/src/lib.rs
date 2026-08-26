@@ -12,8 +12,8 @@
 //! - 业务编排层：api
 
 // 统一错误与全局上下文（device_id 供 generic_repo 自动入队）
-pub mod error;
 pub mod context;
+pub mod error;
 
 // 基础能力域
 pub mod config_enc;

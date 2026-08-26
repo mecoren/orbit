@@ -11,7 +11,7 @@ pub mod error;
 pub mod registry;
 pub mod storage;
 
-pub use cek::{CekProvider, InMemoryCekProvider, CEK_LEN};
+pub use cek::{CEK_LEN, CekProvider, InMemoryCekProvider};
 pub use error::{ConfigEncError, ConfigEncResult};
 pub use registry::{get_global_storage, set_global_storage, try_with_global_storage};
 pub use storage::EncryptedConfigStorage;

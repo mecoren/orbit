@@ -44,12 +44,13 @@ pub async fn load_module_items(
         }
 
         let sql = format!("SELECT * FROM \"{}\" WHERE is_deleted = 0", table);
-        let rows = sqlx::query(&sql)
-            .fetch_all(pool)
-            .await
-            .map_err(|e| CloudSyncError::Database {
-                message: format!("加载表 {} 失败: {}", table, e),
-            })?;
+        let rows =
+            sqlx::query(&sql)
+                .fetch_all(pool)
+                .await
+                .map_err(|e| CloudSyncError::Database {
+                    message: format!("加载表 {} 失败: {}", table, e),
+                })?;
 
         for row in &rows {
             let mut obj = sqlite_row_to_json(row);
@@ -86,12 +87,13 @@ pub async fn load_all_tombstones(
              FROM \"{}\" WHERE is_deleted = 1",
             table
         );
-        let rows = sqlx::query(&sql)
-            .fetch_all(pool)
-            .await
-            .map_err(|e| CloudSyncError::Database {
-                message: format!("加载表 {} 墓碑失败: {}", table, e),
-            })?;
+        let rows =
+            sqlx::query(&sql)
+                .fetch_all(pool)
+                .await
+                .map_err(|e| CloudSyncError::Database {
+                    message: format!("加载表 {} 墓碑失败: {}", table, e),
+                })?;
 
         for row in rows {
             let uuid: String = row.try_get("uuid").unwrap_or_default();
@@ -146,11 +148,11 @@ pub async fn load_local_uuid_map(
              FROM \"{}\"",
             table
         );
-        let rows: Vec<(String, i64, i64, i64, i64)> =
-            sqlx::query_as(&sql).fetch_all(pool).await.map_err(|e| {
-                CloudSyncError::Database {
-                    message: format!("加载表 {} uuid 映射失败: {}", table, e),
-                }
+        let rows: Vec<(String, i64, i64, i64, i64)> = sqlx::query_as(&sql)
+            .fetch_all(pool)
+            .await
+            .map_err(|e| CloudSyncError::Database {
+                message: format!("加载表 {} uuid 映射失败: {}", table, e),
             })?;
 
         for (uuid, updated_at, version, is_deleted, deleted_at) in rows {

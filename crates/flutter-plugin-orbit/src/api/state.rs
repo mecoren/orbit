@@ -33,7 +33,9 @@ static ORBIT_STATE: Lazy<Mutex<Option<OrbitState>>> = Lazy::new(|| Mutex::new(No
 /// 以只读方式访问状态（未初始化时返回错误）
 pub(crate) fn with_state<T>(f: impl FnOnce(&OrbitState) -> Result<T, String>) -> Result<T, String> {
     let guard = ORBIT_STATE.lock();
-    let state = guard.as_ref().ok_or_else(|| "[not_initialized] 数据库未初始化".to_string())?;
+    let state = guard
+        .as_ref()
+        .ok_or_else(|| "[not_initialized] 数据库未初始化".to_string())?;
     f(state)
 }
 
@@ -43,7 +45,9 @@ pub(crate) fn with_state_mut<T>(
     f: impl FnOnce(&mut OrbitState) -> Result<T, String>,
 ) -> Result<T, String> {
     let mut guard = ORBIT_STATE.lock();
-    let state = guard.as_mut().ok_or_else(|| "[not_initialized] 数据库未初始化".to_string())?;
+    let state = guard
+        .as_mut()
+        .ok_or_else(|| "[not_initialized] 数据库未初始化".to_string())?;
     f(state)
 }
 

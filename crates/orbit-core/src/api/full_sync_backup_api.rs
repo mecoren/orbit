@@ -254,11 +254,7 @@ async fn export_full_sync_backup_inner(
 
     // ===== 8. 云端阶段 =====
     // 根据开关屏蔽 cloud_config：关闭云端备份时视为无云端配置
-    let cloud_config = if cloud_enabled {
-        cloud_config_in
-    } else {
-        None
-    };
+    let cloud_config = if cloud_enabled { cloud_config_in } else { None };
 
     // 提前记录是否有云端配置（cloud_config 在 if let Some(config) 中会被部分 move，
     // 后续无法再调用 cloud_config.is_some()，故用独立布尔变量记录）
@@ -567,10 +563,7 @@ pub async fn import_full_sync_backup(
 
         // DELETE FROM <table>（物理删除，包括软删除的）
         let delete_sql = format!("DELETE FROM \"{}\"", table_name);
-        if let Err(e) = sqlx::query(&delete_sql)
-            .execute(&mut *tx)
-            .await
-        {
+        if let Err(e) = sqlx::query(&delete_sql).execute(&mut *tx).await {
             return Err(FullSyncBackupError::Db(e));
         }
     }

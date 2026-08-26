@@ -1,4 +1,4 @@
-﻿//! sync_scheduler — 定时同步守护（06 任务 3.5，03 文档 §八「引擎与调度」）
+//! sync_scheduler — 定时同步守护（06 任务 3.5，03 文档 §八「引擎与调度」）
 //!
 //! 60s tick 轮询（与 wait-home 桌面版口径一致）：
 //! - DB 未就绪 / 未配置 / 总开关关 / interval=0 → 静默跳过
@@ -14,12 +14,12 @@ use tauri::{AppHandle, Emitter, Manager};
 
 use orbit_core::api::cloud_sync_api;
 use orbit_core::cloud_sync::progress::SyncOrigin;
-use orbit_core::db::repository::sync_config_repo::SyncConfigRepo;
 use orbit_core::context;
+use orbit_core::db::repository::sync_config_repo::SyncConfigRepo;
 
+use crate::AppState;
 use crate::commands::data_dir::resolve_app_data_dir;
 use crate::commands::sync_runtime;
-use crate::AppState;
 
 /// tick 周期：60s（03 文档 §八 判据之一）
 const TICK_SECS: u64 = 60;
@@ -179,9 +179,14 @@ async fn tick(app: &AppHandle) {
         Err(_) => return,
     };
 
-    let result =
-        cloud_sync_api::sync_now(&engine, &config, SyncOrigin::Background, &device_id, &attachments)
-            .await;
+    let result = cloud_sync_api::sync_now(
+        &engine,
+        &config,
+        SyncOrigin::Background,
+        &device_id,
+        &attachments,
+    )
+    .await;
     match result {
         Ok(r) => {
             if !r.skipped {

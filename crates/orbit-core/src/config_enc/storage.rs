@@ -12,8 +12,8 @@
 
 use std::path::{Path, PathBuf};
 
-use serde::de::DeserializeOwned;
 use serde::Serialize;
+use serde::de::DeserializeOwned;
 
 use crate::config_enc::cek::CekProvider;
 use crate::config_enc::error::{ConfigEncError, ConfigEncResult};
@@ -69,11 +69,9 @@ impl EncryptedConfigStorage {
         }
         let bytes = std::fs::read(&path)?;
         if bytes.len() < MIN_FILE_LEN {
-            return Err(crate::config_enc::error::ConfigEncError::Corrupted(format!(
-                "文件长度不足: {} < {}",
-                bytes.len(),
-                MIN_FILE_LEN
-            )));
+            return Err(crate::config_enc::error::ConfigEncError::Corrupted(
+                format!("文件长度不足: {} < {}", bytes.len(), MIN_FILE_LEN),
+            ));
         }
         let nonce = &bytes[..NONCE_LEN];
         let ciphertext_with_tag = &bytes[NONCE_LEN..];
@@ -148,7 +146,7 @@ impl EncryptedConfigStorage {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config_enc::cek::{CekProvider, CEK_LEN};
+    use crate::config_enc::cek::{CEK_LEN, CekProvider};
     use serde_json::json;
     use tempfile::TempDir;
 
@@ -202,7 +200,10 @@ mod tests {
         // CEK 可用走加密分支，不产生明文文件（桌面行为零变化）
         assert!(storage.enc_path("sync_config").exists());
         assert!(!dir.path().join("sync_config.json").exists());
-        assert_eq!(storage.load::<serde_json::Value>("sync_config").unwrap(), Some(cfg));
+        assert_eq!(
+            storage.load::<serde_json::Value>("sync_config").unwrap(),
+            Some(cfg)
+        );
     }
 
     /// 非 CekUnavailable 错误必须向上传播，不得静默降级明文（评审 Issue：桌面
@@ -223,10 +224,8 @@ mod tests {
         // app_data_dir 指向一个文件路径，使 .enc 写入必然 IO 失败
         let blocker = dir.path().join("blocker");
         std::fs::write(&blocker, b"x").unwrap();
-        let storage = EncryptedConfigStorage::new(
-            std::sync::Arc::new(BrokenIoProvider),
-            blocker.clone(),
-        );
+        let storage =
+            EncryptedConfigStorage::new(std::sync::Arc::new(BrokenIoProvider), blocker.clone());
         let cfg = json!({"engine": "webdav"});
 
         let err = storage

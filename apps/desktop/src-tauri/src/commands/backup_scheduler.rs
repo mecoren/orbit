@@ -18,12 +18,12 @@ use tauri::{AppHandle, Emitter, Manager};
 
 use orbit_core::api::full_sync_backup_api;
 use orbit_core::full_sync_backup::backup_prefs::{BackupPrefs, ScheduleType};
-use orbit_core::full_sync_backup::scheduler::calculate_next_backup_at;
 use orbit_core::full_sync_backup::save_prefs;
+use orbit_core::full_sync_backup::scheduler::calculate_next_backup_at;
 
+use crate::AppState;
 use crate::commands::data_dir::resolve_app_data_dir;
 use crate::commands::sync_runtime;
-use crate::AppState;
 
 /// tick 周期：60s
 const TICK_SECS: u64 = 60;
@@ -96,14 +96,13 @@ async fn tick(app: &AppHandle) {
         None
     };
 
-    let result =
-        full_sync_backup_api::export_full_sync_backup_with_cloud(
-            &state.pool,
-            &dir,
-            &password,
-            cloud_config,
-        )
-        .await;
+    let result = full_sync_backup_api::export_full_sync_backup_with_cloud(
+        &state.pool,
+        &dir,
+        &password,
+        cloud_config,
+    )
+    .await;
 
     match result {
         Ok(r) => {

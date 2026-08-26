@@ -180,7 +180,9 @@ pub fn extract_bundle(
         let kind_str = match e.kind {
             crate::crypto::CryptoErrorKind::DecryptionFailed => "解密失败(DecryptionFailed)",
             crate::crypto::CryptoErrorKind::InvalidKeyLength => "密钥长度非法(InvalidKeyLength)",
-            crate::crypto::CryptoErrorKind::InvalidNonceLength => "nonce 长度非法(InvalidNonceLength)",
+            crate::crypto::CryptoErrorKind::InvalidNonceLength => {
+                "nonce 长度非法(InvalidNonceLength)"
+            }
             crate::crypto::CryptoErrorKind::EncryptionFailed => "加密失败(EncryptionFailed)",
             crate::crypto::CryptoErrorKind::DerivationFailed => "密钥派生失败(DerivationFailed)",
         };

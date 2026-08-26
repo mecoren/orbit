@@ -4,15 +4,15 @@
 //! 1. 通用加密工具（sha256/random）— 无状态，直接调用
 //! 2. 主密码认证（master_auth_*）— 读写 app_data_dir/master_auth.json
 
-use tauri::{AppHandle, State};
 use orbit_core::crypto::master_auth::{
     change_master_auth_password, db_key_to_hex, init_master_auth, unlock_master_auth,
     verify_master_auth,
 };
 use orbit_core::db::lifecycle;
+use tauri::{AppHandle, State};
 
-use crate::commands::data_dir::resolve_app_data_dir;
 use crate::AppState;
+use crate::commands::data_dir::resolve_app_data_dir;
 
 // ==================== 通用加密工具 ====================
 
@@ -59,7 +59,9 @@ pub async fn master_auth_init(app: AppHandle, password: String) -> Result<String
 
     // 已设置则拒绝重复初始化
     if lifecycle::has_master_auth(&dir) {
-        return Err("主密码已设置，请使用 master_auth_unlock 或 master_auth_change_password".to_string());
+        return Err(
+            "主密码已设置，请使用 master_auth_unlock 或 master_auth_change_password".to_string(),
+        );
     }
 
     let (meta, db_key) = init_master_auth(&password).map_err(|e| e.to_string())?;
@@ -79,7 +81,8 @@ pub async fn master_auth_unlock(app: AppHandle, password: String) -> Result<Stri
         .map_err(|e| e.to_string())?
         .ok_or_else(|| "未设置主密码".to_string())?;
 
-    let (db_key, upgraded_meta) = unlock_master_auth(&password, &meta).map_err(|e| e.to_string())?;
+    let (db_key, upgraded_meta) =
+        unlock_master_auth(&password, &meta).map_err(|e| e.to_string())?;
 
     // v1→v2 自动升级：解锁成功后持久化升级后的 meta（参考 master_auth.rs 文档）
     // 不保存会导致 v1 旧格式用户每次解锁都重复升级，永远停留在 v1

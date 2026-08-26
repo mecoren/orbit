@@ -144,7 +144,9 @@ pub async fn get_by_hashes(pool: &SqlitePool, hashes: &[String]) -> CoreResult<V
 pub async fn delete_orphans(pool: &SqlitePool, active_hashes: &[String]) -> CoreResult<()> {
     if active_hashes.is_empty() {
         // 无活跃附件时清空全部
-        sqlx::query("DELETE FROM sys_attachments").execute(pool).await?;
+        sqlx::query("DELETE FROM sys_attachments")
+            .execute(pool)
+            .await?;
         return Ok(());
     }
     // SQLite 不支持绑定 Vec<String>，逐条删除（附件数量通常不大）

@@ -64,10 +64,7 @@ impl GlobalMeta {
 #[serde(untagged)]
 pub enum TombstoneEntry {
     /// 新格式：uuid + 删除时间戳
-    WithTimestamp {
-        uuid: String,
-        deleted_at: i64,
-    },
+    WithTimestamp { uuid: String, deleted_at: i64 },
     /// 旧格式：仅 uuid（向后兼容，deleted_at 视为 0）
     Legacy(String),
 }
@@ -249,9 +246,12 @@ mod tests {
     fn btreemap_keys_are_sorted_in_json() {
         // BTreeMap 保证序列化时 key 按字典序，确保指纹一致性
         let mut meta = GlobalMeta::empty("d");
-        meta.modules.insert("zebra".to_string(), ModuleMetaEntry::empty());
-        meta.modules.insert("apple".to_string(), ModuleMetaEntry::empty());
-        meta.modules.insert("mango".to_string(), ModuleMetaEntry::empty());
+        meta.modules
+            .insert("zebra".to_string(), ModuleMetaEntry::empty());
+        meta.modules
+            .insert("apple".to_string(), ModuleMetaEntry::empty());
+        meta.modules
+            .insert("mango".to_string(), ModuleMetaEntry::empty());
 
         let json = serde_json::to_string(&meta).unwrap();
         let apple_pos = json.find("apple").unwrap();

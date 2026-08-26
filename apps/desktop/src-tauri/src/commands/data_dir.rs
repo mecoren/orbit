@@ -155,8 +155,8 @@ pub fn copy_dir_all(src: &Path, dst: &Path) -> Result<(), String> {
     std::fs::create_dir_all(dst)
         .map_err(|e| format!("创建目标目录失败 {}: {}", dst.display(), e))?;
 
-    for entry in std::fs::read_dir(src)
-        .map_err(|e| format!("读取源目录失败 {}: {}", src.display(), e))?
+    for entry in
+        std::fs::read_dir(src).map_err(|e| format!("读取源目录失败 {}: {}", src.display(), e))?
     {
         let entry = entry.map_err(|e| format!("读取目录条目失败: {}", e))?;
         let file_type = entry

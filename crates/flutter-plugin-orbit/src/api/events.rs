@@ -11,8 +11,8 @@ use std::collections::HashSet;
 use std::time::Duration;
 
 use once_cell::sync::Lazy;
-use orbit_core::eventbus::events::{DbEvent, DbOp};
 use orbit_core::eventbus::EVENT_BUS;
+use orbit_core::eventbus::events::{DbEvent, DbOp};
 use serde::Serialize;
 
 // StreamSink 由 codegen 生成的模块提供（FRB 2.x 约定）
@@ -66,10 +66,8 @@ const BATCH_LIMIT: i64 = 100;
 const DAY_MS: i64 = 86_400_000;
 
 /// 转发任务只允许启动一次（db_init_* 幂等保护之外的第二道闸）
-static FORWARDER_STARTED: std::sync::atomic::AtomicBool =
-    std::sync::atomic::AtomicBool::new(false);
-static POLLER_STARTED: std::sync::atomic::AtomicBool =
-    std::sync::atomic::AtomicBool::new(false);
+static FORWARDER_STARTED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+static POLLER_STARTED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
 /// 已通知去重集合（reminder.id；重启后允许重新扫描历史 24h 内项）
 static NOTIFIED_REMINDERS: Lazy<std::sync::Mutex<HashSet<i64>>> =
@@ -137,7 +135,12 @@ async fn poll_once(sink: &StreamSink<ReminderDueDto>) {
             continue;
         }
 
-        let _ = sink.add(ReminderDueDto { id, task_id, title, remind_at });
+        let _ = sink.add(ReminderDueDto {
+            id,
+            task_id,
+            title,
+            remind_at,
+        });
         NOTIFIED_REMINDERS.lock().unwrap().insert(id);
     }
 }
