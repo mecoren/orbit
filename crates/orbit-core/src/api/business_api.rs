@@ -441,6 +441,8 @@ mod global_search_tests {
             }],
         };
         let v = serde_json::to_value(&r).unwrap();
+        assert!(v["tasks"].is_array());
+        assert!(v["projects"].is_array());
         assert_eq!(v["comments"][0]["comment_id"], 1);
         assert_eq!(v["comments"][0]["task_title"], "写周报");
         assert_eq!(v["comments"][0]["created_at"], 3);

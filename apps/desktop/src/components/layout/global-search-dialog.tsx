@@ -49,11 +49,12 @@ export function GlobalSearchDialog({ open, onOpenChange }: GlobalSearchDialogPro
     if (!open) setKeyword("");
   }, [open]);
 
-  const { data, isFetching } = useQuery({
+  const { data, isFetching, isError } = useQuery({
     queryKey: ["global-search", debounced],
     queryFn: () => globalSearch(debounced, 20),
     enabled: open && debounced.length > 0,
     staleTime: 30_000,
+    placeholderData: (prev) => prev, // 逐词输入时保留旧结果，避免闪烁（评审 M3）
   });
 
   const go = (path: string) => {
@@ -79,13 +80,23 @@ export function GlobalSearchDialog({ open, onOpenChange }: GlobalSearchDialogPro
       />
       <CommandList>
         <CommandEmpty>
-          {debounced.length === 0 ? "输入关键词开始搜索" : isFetching ? "搜索中…" : "无匹配结果"}
+          {debounced.length === 0
+            ? "输入关键词开始搜索"
+            : isError
+              ? "搜索出错，请重试"
+              : isFetching
+                ? "搜索中…"
+                : "无匹配结果"}
         </CommandEmpty>
 
         {projects.length > 0 && (
           <CommandGroup heading="项目">
             {projects.map((p) => (
-              <CommandItem key={p.id} value={`项目 ${p.title}`} onSelect={() => go("/todo")}>
+              <CommandItem
+                key={p.id}
+                value={`项目 ${p.title} ${p.description ?? ""}`}
+                onSelect={() => go("/todo")}
+              >
                 <Folder
                   className="size-4 shrink-0"
                   style={{ color: p.hex_color || undefined }}
