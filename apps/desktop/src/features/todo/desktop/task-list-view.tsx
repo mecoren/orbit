@@ -61,7 +61,18 @@ export function TaskListView({ tasks, projects, loading, error, onCreateClick, o
   const focusRow = (index: number) => {
     if (index < 0 || index >= tasks.length) return;
     virtualizer.scrollToIndex(index, { align: "auto" });
-    requestAnimationFrame(() => rowRefs.current.get(tasks[index]?.id)?.focus());
+    // 动态 measureElement 下，目标行可能晚一帧才挂载：rAF 重试至多 5 帧
+    // （评审 I2：快速连按 j/k + 行高校正时单次 rAF 会静默丢焦点）
+    let tries = 0;
+    const tryFocus = () => {
+      const el = rowRefs.current.get(tasks[index]?.id);
+      if (el) {
+        el.focus();
+      } else if (++tries < 5) {
+        requestAnimationFrame(tryFocus);
+      }
+    };
+    requestAnimationFrame(tryFocus);
   };
 
   if (loading) {
@@ -161,7 +172,10 @@ export function TaskListView({ tasks, projects, loading, error, onCreateClick, o
                   onClick={() => onOpenDetail(t.id)}
                   onKeyDown={(e) => {
                     if (e.nativeEvent.isComposing) return; // IME 组合期不响应
-                    if (isListActivationKey(e.key)) {
+                    // 评审 C1：焦点在内层 checkbox/星标上时保留其原生 Enter/Space
+                    // 点击（keydown 冒泡至此会劫持并 preventDefault 掉原生 click）；
+                    // 仅当焦点在本行容器时才拦截为"打开详情"。j/k 导航保持冒泡可用。
+                    if (e.target === e.currentTarget && isListActivationKey(e.key)) {
                       e.preventDefault();
                       onOpenDetail(t.id);
                       return;
@@ -228,12 +242,12 @@ export function TaskListView({ tasks, projects, loading, error, onCreateClick, o
             <button
               type="button"
               aria-label={t.is_favorite ? "取消收藏" : "收藏"}
-              className={cn(
-                "shrink-0",
-                t.is_favorite
-                  ? "opacity-100"
-                  : "opacity-0 group-hover:opacity-100",
-              )}
+          className={cn(
+            "shrink-0",
+            t.is_favorite
+              ? "opacity-100"
+              : "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100",
+          )}
               style={{ color: FAVORITE_COLOR }}
               onClick={(e) => {
                 e.stopPropagation();

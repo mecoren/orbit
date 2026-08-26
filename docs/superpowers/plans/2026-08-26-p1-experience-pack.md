@@ -1709,7 +1709,18 @@ export function TaskListView({ tasks, projects, loading, error, onCreateClick, o
   const focusRow = (index: number) => {
     if (index < 0 || index >= tasks.length) return;
     virtualizer.scrollToIndex(index, { align: "auto" });
-    requestAnimationFrame(() => rowRefs.current.get(tasks[index]?.id)?.focus());
+    // 动态 measureElement 下，目标行可能晚一帧才挂载：rAF 重试至多 5 帧
+    // （评审 I2 修复，与 Task 3 落地版保持一致）
+    let tries = 0;
+    const tryFocus = () => {
+      const el = rowRefs.current.get(tasks[index]?.id);
+      if (el) {
+        el.focus();
+      } else if (++tries < 5) {
+        requestAnimationFrame(tryFocus);
+      }
+    };
+    requestAnimationFrame(tryFocus);
   };
 
   // P0 虚拟化：仅渲染可视窗 ± overscan。行高估算 57（py-3×2 + 标题20 + meta16 + 边框）
@@ -1935,7 +1946,9 @@ function TaskRow({
       onClick={onActivate}
       onKeyDown={(e) => {
         if (e.nativeEvent.isComposing) return; // IME 组合期不响应
-        if (isListActivationKey(e.key)) {
+        // 评审 C1 修复（与 Task 3 落地版一致）：焦点在内层控件上时保留其原生
+        // Enter/Space 点击；仅当焦点在本行容器时才拦截为打开详情。j/k 冒泡可用。
+        if (e.target === e.currentTarget && isListActivationKey(e.key)) {
           e.preventDefault();
           onActivate();
           return;
@@ -2016,7 +2029,9 @@ function TaskRow({
         aria-label={t.is_favorite ? "取消收藏" : "收藏"}
         className={cn(
           "shrink-0",
-          t.is_favorite ? "opacity-100" : "opacity-0 group-hover:opacity-100",
+          t.is_favorite
+            ? "opacity-100"
+            : "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100",
         )}
         style={{ color: FAVORITE_COLOR }}
         onClick={(e) => {
