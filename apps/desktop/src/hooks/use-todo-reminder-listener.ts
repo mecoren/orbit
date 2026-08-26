@@ -41,6 +41,7 @@ export function useTodoReminderListener() {
       void (async () => {
         try {
           const task = await todoTaskGet(r.task_id);
+          if (task.done) return; // P1#10：真引擎接管后，已完成实例不再续排提醒
           const next = nextRepeatAt(r.remind_at, task.repeat_mode, task.repeat_after, Date.now());
           if (next != null) {
             await todoReminderDelete(r.id);

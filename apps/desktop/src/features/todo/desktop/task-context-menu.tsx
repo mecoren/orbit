@@ -71,6 +71,7 @@ import {
   type TodoTaskLabel,
 } from "@/lib/tauri";
 import { PRIORITY_COLOR, FAVORITE_COLOR, TODO_ACCENT } from "../shared/constants";
+import { completeTask } from "../shared/task-actions";
 
 const PRIORITY_LABELS = ["无", "低", "中", "高", "紧急", "立即处理"];
 
@@ -166,11 +167,7 @@ export function TaskContextMenu({
             <DropdownMenuItem
               onSelect={() => {
                 close();
-                void patch(
-                  task.done
-                    ? { done: 0, done_at: null, status: "pending" }
-                    : { done: 1, done_at: Date.now(), status: "done" },
-                );
+                void completeTask(task);
               }}
             >
               <Check size={14} />

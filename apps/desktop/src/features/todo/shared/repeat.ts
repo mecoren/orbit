@@ -40,8 +40,24 @@ export function repeatLabel(mode: number, after: number): string {
 
 /**
  * base 的下一次发生时间（> from）；无规则或快进超限返回 null。
- * 天/周为固定毫秒数；月/年走日历语义（setMonth/setFullYear，月末自动截断）。
+ * 天/周为固定毫秒数；月/年走日历语义（日号超过目标月天数时截断到月末，
+ * 如 1/31 → 2/28，避免 setMonth 溢出滚入下下月）。
  */
+function advanceCalendarMonths(d: Date, months: number): void {
+  const moved = new Date(
+    d.getFullYear(),
+    d.getMonth() + months,
+    1,
+    d.getHours(),
+    d.getMinutes(),
+    d.getSeconds(),
+    d.getMilliseconds(),
+  );
+  const daysInTarget = new Date(moved.getFullYear(), moved.getMonth() + 1, 0).getDate();
+  moved.setDate(Math.min(d.getDate(), daysInTarget));
+  d.setTime(moved.getTime());
+}
+
 export function nextRepeatAt(
   baseMs: number,
   mode: number,
@@ -61,10 +77,10 @@ export function nextRepeatAt(
         next.setDate(next.getDate() + 7 * step);
         break;
       case REPEAT_MODE.MONTHLY:
-        next.setMonth(next.getMonth() + step);
+        advanceCalendarMonths(next, step);
         break;
       case REPEAT_MODE.YEARLY:
-        next.setFullYear(next.getFullYear() + step);
+        advanceCalendarMonths(next, 12 * step);
         break;
       default:
         return null;

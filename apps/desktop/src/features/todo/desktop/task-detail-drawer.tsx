@@ -47,6 +47,7 @@ import { useTodoStore } from "@/features/todo/store";
 import { hideFromQueries, useUndoableDeleteAction } from "@/hooks/use-undoable-delete";
 import { PRIORITY_COLOR, TODO_ACCENT } from "../shared/constants";
 import { REPEAT_MODE, REPEAT_PRESETS, repeatLabel } from "../shared/repeat";
+import { completeTask } from "@/features/todo/shared/task-actions";
 import {
   todoCommentCreate,
   todoCommentDelete,
@@ -207,13 +208,7 @@ function TitleRow({
           "h-5 w-5 shrink-0 rounded-full border-2 transition-colors",
           task.done ? "border-primary bg-primary" : "border-muted-foreground/30 hover:border-primary",
         )}
-        onClick={() =>
-          onPatch(
-            task.done
-              ? { done: 0, done_at: null, status: "pending" }
-              : { done: 1, done_at: Date.now(), status: "done" },
-          )
-        }
+        onClick={() => void completeTask(task)}
       >
         {task.done ? <Check className="m-auto size-3 text-white" /> : null}
       </button>
@@ -325,7 +320,7 @@ function PropertyGrid({
   const statusDef = STATUS_ITEMS.find((s) => s.key === task.status);
 
   const setStatus = (key: string) => {
-    if (key === "done") void onPatch({ status: "done", done: 1, done_at: Date.now() });
+    if (key === "done") void completeTask(task);
     else void onPatch({ status: key, done: 0, done_at: null });
   };
 

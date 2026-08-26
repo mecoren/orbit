@@ -18,6 +18,7 @@ import { EmptyState } from "@/components/business/empty-state";
 import { todoTaskUpdate, type TodoProject, type TodoTask } from "@/lib/tauri";
 import { FAVORITE_COLOR, OVERDUE_COLOR_CLASS, PRIORITY_COLOR } from "../shared/constants";
 import { isListActivationKey, listNavDirection } from "../shared/list-keyboard";
+import { completeTask } from "../shared/task-actions";
 import { TaskContextMenu } from "./task-context-menu";
 
 interface TaskListViewProps {
@@ -120,12 +121,7 @@ export function TaskListView({ tasks, projects, loading, error, onCreateClick, o
   const projectById = new Map(projects.map((p) => [p.id, p]));
 
   const toggleDone = (t: TodoTask) => {
-    const done = t.done ? 0 : 1;
-    void todoTaskUpdate(t.id, {
-      done,
-      done_at: done ? Date.now() : null,
-      status: done ? "done" : "pending",
-    });
+    void completeTask(t);
   };
 
   const toggleFavorite = (t: TodoTask) => {

@@ -32,6 +32,7 @@ import {
   type TodoTask,
 } from "@/lib/tauri";
 import { FAVORITE_COLOR, PRIORITY_COLOR, STATUS_COLOR, TODO_ACCENT } from "../shared/constants";
+import { completeTask } from "../shared/task-actions";
 import { TaskContextMenu } from "./task-context-menu";
 
 export type KanbanGroupBy = "project" | "status";
@@ -110,7 +111,8 @@ export function KanbanView({ tasks, projects, groupBy }: KanbanViewProps) {
       const pid = colKey === "ungrouped" ? null : Number(colKey);
       await todoTaskUpdate(taskId, { project_id: pid });
     } else if (colKey === "done") {
-      await todoTaskUpdate(taskId, { status: "done", done: 1, done_at: Date.now() });
+      const task = tasks.find((t) => t.id === taskId);
+      if (task) await completeTask(task);
     } else {
       await todoTaskUpdate(taskId, { status: colKey, done: 0, done_at: null });
     }
