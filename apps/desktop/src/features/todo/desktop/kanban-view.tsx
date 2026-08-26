@@ -33,6 +33,7 @@ import {
 } from "@/lib/tauri";
 import { FAVORITE_COLOR, PRIORITY_COLOR, STATUS_COLOR, TODO_ACCENT } from "../shared/constants";
 import { completeTask } from "../shared/task-actions";
+import { midpoint } from "../shared/position";
 import { TaskContextMenu } from "./task-context-menu";
 
 export type KanbanGroupBy = "project" | "status";
@@ -41,11 +42,6 @@ interface KanbanViewProps {
   tasks: TodoTask[];
   projects: TodoProject[];
   groupBy: KanbanGroupBy;
-}
-
-/** position 取中值（03 文档 §一 公式） */
-function midpoint(prev: number | undefined, next: number | undefined): number {
-  return ((prev ?? 0) + (next ?? 100000)) / 2;
 }
 
 interface ColumnDef {
