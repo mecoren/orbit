@@ -1,0 +1,3 @@
+# Clippy 配置（在仓库根执行 cargo clippy 时对整个 workspace 生效）
+# 仅登记稳定通道可用项；lint 阈值调整须经 ADR 记录。
+msrv = "1.96"

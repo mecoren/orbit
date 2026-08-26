@@ -1,0 +1,2 @@
+# rustfmt 配置（仅启用稳定选项；nightly-only 选项一律不用，保证 CI 可复现）
+edition = "2024"
