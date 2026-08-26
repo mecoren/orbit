@@ -58,7 +58,7 @@ export function QuickAddBar({ projects, defaultProjectId }: QuickAddBarProps) {
   // 标签清单：有输入才拉取（@标签 解析与预览需要）
   const labelsQuery = useQuery({
     queryKey: ["todo-label", "list"],
-    queryFn: () => todoLabelList({ page: 1, page_size: 500 }),
+    queryFn: () => todoLabelList({ page: 1, page_size: 1000 }),
     enabled: hasInput,
     staleTime: 60_000,
   });
@@ -132,7 +132,11 @@ export function QuickAddBar({ projects, defaultProjectId }: QuickAddBarProps) {
     <div className="border-t border-border px-4 py-2.5">
       {/* NLP 解析预览 chips（07 §五-P1#7）：仅展示命中项 */}
       {hasInput && hasHits && (
-        <div className="mb-1.5 flex flex-wrap items-center gap-1.5 px-1 text-xs text-muted-foreground">
+        <div
+          role="status"
+          aria-live="polite"
+          className="mb-1.5 flex flex-wrap items-center gap-1.5 px-1 text-xs text-muted-foreground"
+        >
           {parsed.dueDate && (
             <span className="inline-flex items-center gap-1 rounded-sm bg-primary/10 px-1.5 py-0.5 text-primary">
               <Calendar className="size-3" />
@@ -177,6 +181,7 @@ export function QuickAddBar({ projects, defaultProjectId }: QuickAddBarProps) {
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           onKeyDown={(e) => {
+            if (e.nativeEvent.isComposing) return; // IME 组合期：选词 Enter 不提交（评审修复）
             if (e.key === "Enter") void submit();
             if (e.key === "Escape") reset();
           }}
@@ -264,7 +269,7 @@ export function QuickAddBar({ projects, defaultProjectId }: QuickAddBarProps) {
                   variant="ghost"
                   size="icon"
                   className="h-7 w-7"
-                  style={{ color: PRIORITY_COLOR[priority] || undefined }}
+                  style={{ color: PRIORITY_COLOR[parsed.priority || priority] || undefined }}
                 >
                   <Flag className="size-4" />
                 </Button>
