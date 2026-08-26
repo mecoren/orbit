@@ -1,4 +1,4 @@
-import 'dart:convert';
+﻿import 'dart:convert';
 
 /// 数据传输对象（DTO）
 ///
@@ -42,7 +42,7 @@ class TodoProject {
   final String title;
   final String? description;
   final String hexColor;
-  final int sortOrder;
+  final double sortOrder;
   final int isDeleted;
   final int createdAt;
   final int updatedAt;
@@ -69,7 +69,7 @@ class TodoProject {
         title: j['title'] as String,
         description: j['description'] as String?,
         hexColor: j['hex_color'] as String,
-        sortOrder: j['sort_order'] as int,
+        sortOrder: (j['sort_order'] as num).toDouble(),
         isDeleted: j['is_deleted'] as int,
         createdAt: j['created_at'] as int,
         updatedAt: j['updated_at'] as int,
@@ -82,7 +82,7 @@ class TodoProjectCreateInput {
   final String title;
   final String? description;
   final String? hexColor;
-  final int? sortOrder;
+  final double? sortOrder;
 
   const TodoProjectCreateInput({
     required this.title,
@@ -110,8 +110,8 @@ class TodoTask {
   final int repeatAfter;
   final int repeatMode;
   final String hexColor;
-  final int percentDone;
-  final int position;
+  final double percentDone;
+  final double position;
   final int isFavorite;
   final int isDeleted;
   final int createdAt;
@@ -161,8 +161,8 @@ class TodoTask {
         repeatAfter: j['repeat_after'] as int,
         repeatMode: j['repeat_mode'] as int,
         hexColor: j['hex_color'] as String,
-        percentDone: j['percent_done'] as int,
-        position: j['position'] as int,
+        percentDone: (j['percent_done'] as num).toDouble(),
+        position: (j['position'] as num).toDouble(),
         isFavorite: j['is_favorite'] as int,
         isDeleted: j['is_deleted'] as int,
         createdAt: j['created_at'] as int,
@@ -192,7 +192,7 @@ class TodoTaskCreateInput {
   final int? repeatAfter;
   final int? repeatMode;
   final String? hexColor;
-  final int? position;
+  final double? position;
   final int? isFavorite;
 
   const TodoTaskCreateInput({
@@ -223,7 +223,7 @@ class TodoSubtask {
   final String title;
   final int done;
   final int? doneAt;
-  final int position;
+  final double position;
   final int isDeleted;
   final int createdAt;
   final int updatedAt;
@@ -252,7 +252,7 @@ class TodoSubtask {
         title: j['title'] as String,
         done: j['done'] as int,
         doneAt: j['done_at'] as int?,
-        position: j['position'] as int,
+        position: (j['position'] as num).toDouble(),
         isDeleted: j['is_deleted'] as int,
         createdAt: j['created_at'] as int,
         updatedAt: j['updated_at'] as int,
@@ -266,7 +266,7 @@ class TodoSubtask {
 class TodoSubtaskCreateInput {
   final int taskId;
   final String title;
-  final int? position;
+  final double? position;
 
   const TodoSubtaskCreateInput({
     required this.taskId,
@@ -561,8 +561,8 @@ class TodoTaskDetail extends TodoTask {
         repeatAfter: j['repeat_after'] as int,
         repeatMode: j['repeat_mode'] as int,
         hexColor: j['hex_color'] as String,
-        percentDone: j['percent_done'] as int,
-        position: j['position'] as int,
+        percentDone: (j['percent_done'] as num).toDouble(),
+        position: (j['position'] as num).toDouble(),
         isFavorite: j['is_favorite'] as int,
         isDeleted: j['is_deleted'] as int,
         createdAt: j['created_at'] as int,

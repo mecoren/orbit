@@ -4,6 +4,7 @@
 // ignore_for_file: unused_import, unused_element, unnecessary_import, duplicate_ignore, invalid_use_of_internal_member, annotate_overrides, non_constant_identifier_names, curly_braces_in_flow_control_structures, prefer_const_literals_to_create_immutables, unused_field
 
 import 'api/auth.dart';
+import 'api/dto.dart';
 import 'api/events.dart';
 import 'api/state.dart';
 import 'api/sync.dart';
@@ -22,296 +23,8 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
     required super.portManager,
   });
 
-  CrossPlatformFinalizerArg
-  get rust_arc_decrement_strong_count_ListFilterPtr => wire
-      ._rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerListFilterPtr;
-
-  CrossPlatformFinalizerArg
-  get rust_arc_decrement_strong_count_TodoCommentPtr => wire
-      ._rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoCommentPtr;
-
-  CrossPlatformFinalizerArg
-  get rust_arc_decrement_strong_count_TodoCommentCreateInputPtr => wire
-      ._rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoCommentCreateInputPtr;
-
-  CrossPlatformFinalizerArg
-  get rust_arc_decrement_strong_count_TodoLabelPtr => wire
-      ._rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoLabelPtr;
-
-  CrossPlatformFinalizerArg
-  get rust_arc_decrement_strong_count_TodoLabelCreateInputPtr => wire
-      ._rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoLabelCreateInputPtr;
-
-  CrossPlatformFinalizerArg
-  get rust_arc_decrement_strong_count_TodoProjectPtr => wire
-      ._rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoProjectPtr;
-
-  CrossPlatformFinalizerArg
-  get rust_arc_decrement_strong_count_TodoProjectCreateInputPtr => wire
-      ._rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoProjectCreateInputPtr;
-
-  CrossPlatformFinalizerArg
-  get rust_arc_decrement_strong_count_TodoReminderPtr => wire
-      ._rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoReminderPtr;
-
-  CrossPlatformFinalizerArg
-  get rust_arc_decrement_strong_count_TodoReminderCreateInputPtr => wire
-      ._rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoReminderCreateInputPtr;
-
-  CrossPlatformFinalizerArg
-  get rust_arc_decrement_strong_count_TodoSubtaskPtr => wire
-      ._rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoSubtaskPtr;
-
-  CrossPlatformFinalizerArg
-  get rust_arc_decrement_strong_count_TodoSubtaskCreateInputPtr => wire
-      ._rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoSubtaskCreateInputPtr;
-
-  CrossPlatformFinalizerArg
-  get rust_arc_decrement_strong_count_TodoTaskPtr => wire
-      ._rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskPtr;
-
-  CrossPlatformFinalizerArg
-  get rust_arc_decrement_strong_count_TodoTaskCreateInputPtr => wire
-      ._rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskCreateInputPtr;
-
-  CrossPlatformFinalizerArg
-  get rust_arc_decrement_strong_count_TodoTaskDetailPtr => wire
-      ._rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskDetailPtr;
-
-  CrossPlatformFinalizerArg
-  get rust_arc_decrement_strong_count_TodoTaskLabelPtr => wire
-      ._rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskLabelPtr;
-
-  CrossPlatformFinalizerArg
-  get rust_arc_decrement_strong_count_TodoTaskLabelCreateInputPtr => wire
-      ._rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskLabelCreateInputPtr;
-
-  CrossPlatformFinalizerArg
-  get rust_arc_decrement_strong_count_TodoTaskRelationPtr => wire
-      ._rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskRelationPtr;
-
-  CrossPlatformFinalizerArg
-  get rust_arc_decrement_strong_count_TodoTaskRelationCreateInputPtr => wire
-      ._rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskRelationCreateInputPtr;
-
   @protected
   AnyhowException dco_decode_AnyhowException(dynamic raw);
-
-  @protected
-  ListFilter
-  dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerListFilter(
-    dynamic raw,
-  );
-
-  @protected
-  TodoComment
-  dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoComment(
-    dynamic raw,
-  );
-
-  @protected
-  TodoCommentCreateInput
-  dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoCommentCreateInput(
-    dynamic raw,
-  );
-
-  @protected
-  TodoLabel
-  dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoLabel(
-    dynamic raw,
-  );
-
-  @protected
-  TodoLabelCreateInput
-  dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoLabelCreateInput(
-    dynamic raw,
-  );
-
-  @protected
-  TodoProject
-  dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoProject(
-    dynamic raw,
-  );
-
-  @protected
-  TodoProjectCreateInput
-  dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoProjectCreateInput(
-    dynamic raw,
-  );
-
-  @protected
-  TodoReminder
-  dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoReminder(
-    dynamic raw,
-  );
-
-  @protected
-  TodoReminderCreateInput
-  dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoReminderCreateInput(
-    dynamic raw,
-  );
-
-  @protected
-  TodoSubtask
-  dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoSubtask(
-    dynamic raw,
-  );
-
-  @protected
-  TodoSubtaskCreateInput
-  dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoSubtaskCreateInput(
-    dynamic raw,
-  );
-
-  @protected
-  TodoTask
-  dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTask(
-    dynamic raw,
-  );
-
-  @protected
-  TodoTaskCreateInput
-  dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskCreateInput(
-    dynamic raw,
-  );
-
-  @protected
-  TodoTaskDetail
-  dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskDetail(
-    dynamic raw,
-  );
-
-  @protected
-  TodoTaskLabel
-  dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskLabel(
-    dynamic raw,
-  );
-
-  @protected
-  TodoTaskLabelCreateInput
-  dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskLabelCreateInput(
-    dynamic raw,
-  );
-
-  @protected
-  TodoTaskRelation
-  dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskRelation(
-    dynamic raw,
-  );
-
-  @protected
-  TodoTaskRelationCreateInput
-  dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskRelationCreateInput(
-    dynamic raw,
-  );
-
-  @protected
-  ListFilter
-  dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerListFilter(
-    dynamic raw,
-  );
-
-  @protected
-  TodoComment
-  dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoComment(
-    dynamic raw,
-  );
-
-  @protected
-  TodoCommentCreateInput
-  dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoCommentCreateInput(
-    dynamic raw,
-  );
-
-  @protected
-  TodoLabel
-  dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoLabel(
-    dynamic raw,
-  );
-
-  @protected
-  TodoLabelCreateInput
-  dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoLabelCreateInput(
-    dynamic raw,
-  );
-
-  @protected
-  TodoProject
-  dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoProject(
-    dynamic raw,
-  );
-
-  @protected
-  TodoProjectCreateInput
-  dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoProjectCreateInput(
-    dynamic raw,
-  );
-
-  @protected
-  TodoReminder
-  dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoReminder(
-    dynamic raw,
-  );
-
-  @protected
-  TodoReminderCreateInput
-  dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoReminderCreateInput(
-    dynamic raw,
-  );
-
-  @protected
-  TodoSubtask
-  dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoSubtask(
-    dynamic raw,
-  );
-
-  @protected
-  TodoSubtaskCreateInput
-  dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoSubtaskCreateInput(
-    dynamic raw,
-  );
-
-  @protected
-  TodoTask
-  dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTask(
-    dynamic raw,
-  );
-
-  @protected
-  TodoTaskCreateInput
-  dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskCreateInput(
-    dynamic raw,
-  );
-
-  @protected
-  TodoTaskDetail
-  dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskDetail(
-    dynamic raw,
-  );
-
-  @protected
-  TodoTaskLabel
-  dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskLabel(
-    dynamic raw,
-  );
-
-  @protected
-  TodoTaskLabelCreateInput
-  dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskLabelCreateInput(
-    dynamic raw,
-  );
-
-  @protected
-  TodoTaskRelation
-  dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskRelation(
-    dynamic raw,
-  );
-
-  @protected
-  TodoTaskRelationCreateInput
-  dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskRelationCreateInput(
-    dynamic raw,
-  );
 
   @protected
   RustStreamSink<DbEventDto> dco_decode_StreamSink_db_event_dto_Sse(
@@ -333,7 +46,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   bool dco_decode_box_autoadd_bool(dynamic raw);
 
   @protected
+  double dco_decode_box_autoadd_f_64(dynamic raw);
+
+  @protected
+  int dco_decode_box_autoadd_i_32(dynamic raw);
+
+  @protected
   PlatformInt64 dco_decode_box_autoadd_i_64(dynamic raw);
+
+  @protected
+  ListFilter dco_decode_box_autoadd_list_filter(dynamic raw);
 
   @protected
   SyncConfigInput dco_decode_box_autoadd_sync_config_input(dynamic raw);
@@ -342,70 +64,100 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   SyncConfigView dco_decode_box_autoadd_sync_config_view(dynamic raw);
 
   @protected
+  TodoCommentCreateInput dco_decode_box_autoadd_todo_comment_create_input(
+    dynamic raw,
+  );
+
+  @protected
+  TodoLabelCreateInput dco_decode_box_autoadd_todo_label_create_input(
+    dynamic raw,
+  );
+
+  @protected
+  TodoProjectCreateInput dco_decode_box_autoadd_todo_project_create_input(
+    dynamic raw,
+  );
+
+  @protected
+  TodoReminderCreateInput dco_decode_box_autoadd_todo_reminder_create_input(
+    dynamic raw,
+  );
+
+  @protected
+  TodoSubtaskCreateInput dco_decode_box_autoadd_todo_subtask_create_input(
+    dynamic raw,
+  );
+
+  @protected
+  TodoTaskCreateInput dco_decode_box_autoadd_todo_task_create_input(
+    dynamic raw,
+  );
+
+  @protected
+  TodoTaskLabelCreateInput dco_decode_box_autoadd_todo_task_label_create_input(
+    dynamic raw,
+  );
+
+  @protected
+  TodoTaskRelationCreateInput
+  dco_decode_box_autoadd_todo_task_relation_create_input(dynamic raw);
+
+  @protected
   DbEventDto dco_decode_db_event_dto(dynamic raw);
 
   @protected
   double dco_decode_f_64(dynamic raw);
 
   @protected
+  int dco_decode_i_32(dynamic raw);
+
+  @protected
   PlatformInt64 dco_decode_i_64(dynamic raw);
 
   @protected
-  List<TodoComment>
-  dco_decode_list_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoComment(
-    dynamic raw,
-  );
-
-  @protected
-  List<TodoLabel>
-  dco_decode_list_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoLabel(
-    dynamic raw,
-  );
-
-  @protected
-  List<TodoProject>
-  dco_decode_list_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoProject(
-    dynamic raw,
-  );
-
-  @protected
-  List<TodoReminder>
-  dco_decode_list_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoReminder(
-    dynamic raw,
-  );
-
-  @protected
-  List<TodoSubtask>
-  dco_decode_list_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoSubtask(
-    dynamic raw,
-  );
-
-  @protected
-  List<TodoTask>
-  dco_decode_list_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTask(
-    dynamic raw,
-  );
-
-  @protected
-  List<TodoTaskLabel>
-  dco_decode_list_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskLabel(
-    dynamic raw,
-  );
-
-  @protected
-  List<TodoTaskRelation>
-  dco_decode_list_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskRelation(
-    dynamic raw,
-  );
+  ListFilter dco_decode_list_filter(dynamic raw);
 
   @protected
   Uint8List dco_decode_list_prim_u_8_strict(dynamic raw);
+
+  @protected
+  List<TaskLabelWithId> dco_decode_list_task_label_with_id(dynamic raw);
+
+  @protected
+  List<TodoComment> dco_decode_list_todo_comment(dynamic raw);
+
+  @protected
+  List<TodoLabel> dco_decode_list_todo_label(dynamic raw);
+
+  @protected
+  List<TodoProject> dco_decode_list_todo_project(dynamic raw);
+
+  @protected
+  List<TodoReminder> dco_decode_list_todo_reminder(dynamic raw);
+
+  @protected
+  List<TodoSubtask> dco_decode_list_todo_subtask(dynamic raw);
+
+  @protected
+  List<TodoTask> dco_decode_list_todo_task(dynamic raw);
+
+  @protected
+  List<TodoTaskLabel> dco_decode_list_todo_task_label(dynamic raw);
+
+  @protected
+  List<TodoTaskRelation> dco_decode_list_todo_task_relation(dynamic raw);
 
   @protected
   String? dco_decode_opt_String(dynamic raw);
 
   @protected
   bool? dco_decode_opt_box_autoadd_bool(dynamic raw);
+
+  @protected
+  double? dco_decode_opt_box_autoadd_f_64(dynamic raw);
+
+  @protected
+  int? dco_decode_opt_box_autoadd_i_32(dynamic raw);
 
   @protected
   PlatformInt64? dco_decode_opt_box_autoadd_i_64(dynamic raw);
@@ -426,6 +178,62 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   SyncCryptoStatus dco_decode_sync_crypto_status(dynamic raw);
 
   @protected
+  TaskLabelWithId dco_decode_task_label_with_id(dynamic raw);
+
+  @protected
+  TodoComment dco_decode_todo_comment(dynamic raw);
+
+  @protected
+  TodoCommentCreateInput dco_decode_todo_comment_create_input(dynamic raw);
+
+  @protected
+  TodoLabel dco_decode_todo_label(dynamic raw);
+
+  @protected
+  TodoLabelCreateInput dco_decode_todo_label_create_input(dynamic raw);
+
+  @protected
+  TodoProject dco_decode_todo_project(dynamic raw);
+
+  @protected
+  TodoProjectCreateInput dco_decode_todo_project_create_input(dynamic raw);
+
+  @protected
+  TodoReminder dco_decode_todo_reminder(dynamic raw);
+
+  @protected
+  TodoReminderCreateInput dco_decode_todo_reminder_create_input(dynamic raw);
+
+  @protected
+  TodoSubtask dco_decode_todo_subtask(dynamic raw);
+
+  @protected
+  TodoSubtaskCreateInput dco_decode_todo_subtask_create_input(dynamic raw);
+
+  @protected
+  TodoTask dco_decode_todo_task(dynamic raw);
+
+  @protected
+  TodoTaskCreateInput dco_decode_todo_task_create_input(dynamic raw);
+
+  @protected
+  TodoTaskDetail dco_decode_todo_task_detail(dynamic raw);
+
+  @protected
+  TodoTaskLabel dco_decode_todo_task_label(dynamic raw);
+
+  @protected
+  TodoTaskLabelCreateInput dco_decode_todo_task_label_create_input(dynamic raw);
+
+  @protected
+  TodoTaskRelation dco_decode_todo_task_relation(dynamic raw);
+
+  @protected
+  TodoTaskRelationCreateInput dco_decode_todo_task_relation_create_input(
+    dynamic raw,
+  );
+
+  @protected
   int dco_decode_u_32(dynamic raw);
 
   @protected
@@ -435,226 +243,7 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void dco_decode_unit(dynamic raw);
 
   @protected
-  BigInt dco_decode_usize(dynamic raw);
-
-  @protected
   AnyhowException sse_decode_AnyhowException(SseDeserializer deserializer);
-
-  @protected
-  ListFilter
-  sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerListFilter(
-    SseDeserializer deserializer,
-  );
-
-  @protected
-  TodoComment
-  sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoComment(
-    SseDeserializer deserializer,
-  );
-
-  @protected
-  TodoCommentCreateInput
-  sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoCommentCreateInput(
-    SseDeserializer deserializer,
-  );
-
-  @protected
-  TodoLabel
-  sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoLabel(
-    SseDeserializer deserializer,
-  );
-
-  @protected
-  TodoLabelCreateInput
-  sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoLabelCreateInput(
-    SseDeserializer deserializer,
-  );
-
-  @protected
-  TodoProject
-  sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoProject(
-    SseDeserializer deserializer,
-  );
-
-  @protected
-  TodoProjectCreateInput
-  sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoProjectCreateInput(
-    SseDeserializer deserializer,
-  );
-
-  @protected
-  TodoReminder
-  sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoReminder(
-    SseDeserializer deserializer,
-  );
-
-  @protected
-  TodoReminderCreateInput
-  sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoReminderCreateInput(
-    SseDeserializer deserializer,
-  );
-
-  @protected
-  TodoSubtask
-  sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoSubtask(
-    SseDeserializer deserializer,
-  );
-
-  @protected
-  TodoSubtaskCreateInput
-  sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoSubtaskCreateInput(
-    SseDeserializer deserializer,
-  );
-
-  @protected
-  TodoTask
-  sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTask(
-    SseDeserializer deserializer,
-  );
-
-  @protected
-  TodoTaskCreateInput
-  sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskCreateInput(
-    SseDeserializer deserializer,
-  );
-
-  @protected
-  TodoTaskDetail
-  sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskDetail(
-    SseDeserializer deserializer,
-  );
-
-  @protected
-  TodoTaskLabel
-  sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskLabel(
-    SseDeserializer deserializer,
-  );
-
-  @protected
-  TodoTaskLabelCreateInput
-  sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskLabelCreateInput(
-    SseDeserializer deserializer,
-  );
-
-  @protected
-  TodoTaskRelation
-  sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskRelation(
-    SseDeserializer deserializer,
-  );
-
-  @protected
-  TodoTaskRelationCreateInput
-  sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskRelationCreateInput(
-    SseDeserializer deserializer,
-  );
-
-  @protected
-  ListFilter
-  sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerListFilter(
-    SseDeserializer deserializer,
-  );
-
-  @protected
-  TodoComment
-  sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoComment(
-    SseDeserializer deserializer,
-  );
-
-  @protected
-  TodoCommentCreateInput
-  sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoCommentCreateInput(
-    SseDeserializer deserializer,
-  );
-
-  @protected
-  TodoLabel
-  sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoLabel(
-    SseDeserializer deserializer,
-  );
-
-  @protected
-  TodoLabelCreateInput
-  sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoLabelCreateInput(
-    SseDeserializer deserializer,
-  );
-
-  @protected
-  TodoProject
-  sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoProject(
-    SseDeserializer deserializer,
-  );
-
-  @protected
-  TodoProjectCreateInput
-  sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoProjectCreateInput(
-    SseDeserializer deserializer,
-  );
-
-  @protected
-  TodoReminder
-  sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoReminder(
-    SseDeserializer deserializer,
-  );
-
-  @protected
-  TodoReminderCreateInput
-  sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoReminderCreateInput(
-    SseDeserializer deserializer,
-  );
-
-  @protected
-  TodoSubtask
-  sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoSubtask(
-    SseDeserializer deserializer,
-  );
-
-  @protected
-  TodoSubtaskCreateInput
-  sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoSubtaskCreateInput(
-    SseDeserializer deserializer,
-  );
-
-  @protected
-  TodoTask
-  sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTask(
-    SseDeserializer deserializer,
-  );
-
-  @protected
-  TodoTaskCreateInput
-  sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskCreateInput(
-    SseDeserializer deserializer,
-  );
-
-  @protected
-  TodoTaskDetail
-  sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskDetail(
-    SseDeserializer deserializer,
-  );
-
-  @protected
-  TodoTaskLabel
-  sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskLabel(
-    SseDeserializer deserializer,
-  );
-
-  @protected
-  TodoTaskLabelCreateInput
-  sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskLabelCreateInput(
-    SseDeserializer deserializer,
-  );
-
-  @protected
-  TodoTaskRelation
-  sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskRelation(
-    SseDeserializer deserializer,
-  );
-
-  @protected
-  TodoTaskRelationCreateInput
-  sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskRelationCreateInput(
-    SseDeserializer deserializer,
-  );
 
   @protected
   RustStreamSink<DbEventDto> sse_decode_StreamSink_db_event_dto_Sse(
@@ -676,7 +265,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   bool sse_decode_box_autoadd_bool(SseDeserializer deserializer);
 
   @protected
+  double sse_decode_box_autoadd_f_64(SseDeserializer deserializer);
+
+  @protected
+  int sse_decode_box_autoadd_i_32(SseDeserializer deserializer);
+
+  @protected
   PlatformInt64 sse_decode_box_autoadd_i_64(SseDeserializer deserializer);
+
+  @protected
+  ListFilter sse_decode_box_autoadd_list_filter(SseDeserializer deserializer);
 
   @protected
   SyncConfigInput sse_decode_box_autoadd_sync_config_input(
@@ -689,70 +287,110 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  TodoCommentCreateInput sse_decode_box_autoadd_todo_comment_create_input(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  TodoLabelCreateInput sse_decode_box_autoadd_todo_label_create_input(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  TodoProjectCreateInput sse_decode_box_autoadd_todo_project_create_input(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  TodoReminderCreateInput sse_decode_box_autoadd_todo_reminder_create_input(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  TodoSubtaskCreateInput sse_decode_box_autoadd_todo_subtask_create_input(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  TodoTaskCreateInput sse_decode_box_autoadd_todo_task_create_input(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  TodoTaskLabelCreateInput sse_decode_box_autoadd_todo_task_label_create_input(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  TodoTaskRelationCreateInput
+  sse_decode_box_autoadd_todo_task_relation_create_input(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   DbEventDto sse_decode_db_event_dto(SseDeserializer deserializer);
 
   @protected
   double sse_decode_f_64(SseDeserializer deserializer);
 
   @protected
+  int sse_decode_i_32(SseDeserializer deserializer);
+
+  @protected
   PlatformInt64 sse_decode_i_64(SseDeserializer deserializer);
 
   @protected
-  List<TodoComment>
-  sse_decode_list_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoComment(
-    SseDeserializer deserializer,
-  );
-
-  @protected
-  List<TodoLabel>
-  sse_decode_list_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoLabel(
-    SseDeserializer deserializer,
-  );
-
-  @protected
-  List<TodoProject>
-  sse_decode_list_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoProject(
-    SseDeserializer deserializer,
-  );
-
-  @protected
-  List<TodoReminder>
-  sse_decode_list_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoReminder(
-    SseDeserializer deserializer,
-  );
-
-  @protected
-  List<TodoSubtask>
-  sse_decode_list_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoSubtask(
-    SseDeserializer deserializer,
-  );
-
-  @protected
-  List<TodoTask>
-  sse_decode_list_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTask(
-    SseDeserializer deserializer,
-  );
-
-  @protected
-  List<TodoTaskLabel>
-  sse_decode_list_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskLabel(
-    SseDeserializer deserializer,
-  );
-
-  @protected
-  List<TodoTaskRelation>
-  sse_decode_list_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskRelation(
-    SseDeserializer deserializer,
-  );
+  ListFilter sse_decode_list_filter(SseDeserializer deserializer);
 
   @protected
   Uint8List sse_decode_list_prim_u_8_strict(SseDeserializer deserializer);
+
+  @protected
+  List<TaskLabelWithId> sse_decode_list_task_label_with_id(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  List<TodoComment> sse_decode_list_todo_comment(SseDeserializer deserializer);
+
+  @protected
+  List<TodoLabel> sse_decode_list_todo_label(SseDeserializer deserializer);
+
+  @protected
+  List<TodoProject> sse_decode_list_todo_project(SseDeserializer deserializer);
+
+  @protected
+  List<TodoReminder> sse_decode_list_todo_reminder(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  List<TodoSubtask> sse_decode_list_todo_subtask(SseDeserializer deserializer);
+
+  @protected
+  List<TodoTask> sse_decode_list_todo_task(SseDeserializer deserializer);
+
+  @protected
+  List<TodoTaskLabel> sse_decode_list_todo_task_label(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  List<TodoTaskRelation> sse_decode_list_todo_task_relation(
+    SseDeserializer deserializer,
+  );
 
   @protected
   String? sse_decode_opt_String(SseDeserializer deserializer);
 
   @protected
   bool? sse_decode_opt_box_autoadd_bool(SseDeserializer deserializer);
+
+  @protected
+  double? sse_decode_opt_box_autoadd_f_64(SseDeserializer deserializer);
+
+  @protected
+  int? sse_decode_opt_box_autoadd_i_32(SseDeserializer deserializer);
 
   @protected
   PlatformInt64? sse_decode_opt_box_autoadd_i_64(SseDeserializer deserializer);
@@ -775,6 +413,76 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   SyncCryptoStatus sse_decode_sync_crypto_status(SseDeserializer deserializer);
 
   @protected
+  TaskLabelWithId sse_decode_task_label_with_id(SseDeserializer deserializer);
+
+  @protected
+  TodoComment sse_decode_todo_comment(SseDeserializer deserializer);
+
+  @protected
+  TodoCommentCreateInput sse_decode_todo_comment_create_input(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  TodoLabel sse_decode_todo_label(SseDeserializer deserializer);
+
+  @protected
+  TodoLabelCreateInput sse_decode_todo_label_create_input(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  TodoProject sse_decode_todo_project(SseDeserializer deserializer);
+
+  @protected
+  TodoProjectCreateInput sse_decode_todo_project_create_input(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  TodoReminder sse_decode_todo_reminder(SseDeserializer deserializer);
+
+  @protected
+  TodoReminderCreateInput sse_decode_todo_reminder_create_input(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  TodoSubtask sse_decode_todo_subtask(SseDeserializer deserializer);
+
+  @protected
+  TodoSubtaskCreateInput sse_decode_todo_subtask_create_input(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  TodoTask sse_decode_todo_task(SseDeserializer deserializer);
+
+  @protected
+  TodoTaskCreateInput sse_decode_todo_task_create_input(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  TodoTaskDetail sse_decode_todo_task_detail(SseDeserializer deserializer);
+
+  @protected
+  TodoTaskLabel sse_decode_todo_task_label(SseDeserializer deserializer);
+
+  @protected
+  TodoTaskLabelCreateInput sse_decode_todo_task_label_create_input(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  TodoTaskRelation sse_decode_todo_task_relation(SseDeserializer deserializer);
+
+  @protected
+  TodoTaskRelationCreateInput sse_decode_todo_task_relation_create_input(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   int sse_decode_u_32(SseDeserializer deserializer);
 
   @protected
@@ -784,266 +492,8 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_decode_unit(SseDeserializer deserializer);
 
   @protected
-  BigInt sse_decode_usize(SseDeserializer deserializer);
-
-  @protected
-  int sse_decode_i_32(SseDeserializer deserializer);
-
-  @protected
   void sse_encode_AnyhowException(
     AnyhowException self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void
-  sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerListFilter(
-    ListFilter self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void
-  sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoComment(
-    TodoComment self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void
-  sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoCommentCreateInput(
-    TodoCommentCreateInput self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void
-  sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoLabel(
-    TodoLabel self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void
-  sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoLabelCreateInput(
-    TodoLabelCreateInput self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void
-  sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoProject(
-    TodoProject self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void
-  sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoProjectCreateInput(
-    TodoProjectCreateInput self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void
-  sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoReminder(
-    TodoReminder self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void
-  sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoReminderCreateInput(
-    TodoReminderCreateInput self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void
-  sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoSubtask(
-    TodoSubtask self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void
-  sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoSubtaskCreateInput(
-    TodoSubtaskCreateInput self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void
-  sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTask(
-    TodoTask self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void
-  sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskCreateInput(
-    TodoTaskCreateInput self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void
-  sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskDetail(
-    TodoTaskDetail self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void
-  sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskLabel(
-    TodoTaskLabel self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void
-  sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskLabelCreateInput(
-    TodoTaskLabelCreateInput self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void
-  sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskRelation(
-    TodoTaskRelation self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void
-  sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskRelationCreateInput(
-    TodoTaskRelationCreateInput self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void
-  sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerListFilter(
-    ListFilter self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void
-  sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoComment(
-    TodoComment self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void
-  sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoCommentCreateInput(
-    TodoCommentCreateInput self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void
-  sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoLabel(
-    TodoLabel self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void
-  sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoLabelCreateInput(
-    TodoLabelCreateInput self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void
-  sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoProject(
-    TodoProject self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void
-  sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoProjectCreateInput(
-    TodoProjectCreateInput self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void
-  sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoReminder(
-    TodoReminder self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void
-  sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoReminderCreateInput(
-    TodoReminderCreateInput self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void
-  sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoSubtask(
-    TodoSubtask self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void
-  sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoSubtaskCreateInput(
-    TodoSubtaskCreateInput self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void
-  sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTask(
-    TodoTask self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void
-  sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskCreateInput(
-    TodoTaskCreateInput self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void
-  sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskDetail(
-    TodoTaskDetail self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void
-  sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskLabel(
-    TodoTaskLabel self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void
-  sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskLabelCreateInput(
-    TodoTaskLabelCreateInput self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void
-  sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskRelation(
-    TodoTaskRelation self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void
-  sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskRelationCreateInput(
-    TodoTaskRelationCreateInput self,
     SseSerializer serializer,
   );
 
@@ -1069,8 +519,20 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_box_autoadd_bool(bool self, SseSerializer serializer);
 
   @protected
+  void sse_encode_box_autoadd_f_64(double self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_i_32(int self, SseSerializer serializer);
+
+  @protected
   void sse_encode_box_autoadd_i_64(
     PlatformInt64 self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_box_autoadd_list_filter(
+    ListFilter self,
     SseSerializer serializer,
   );
 
@@ -1087,69 +549,67 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_box_autoadd_todo_comment_create_input(
+    TodoCommentCreateInput self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_box_autoadd_todo_label_create_input(
+    TodoLabelCreateInput self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_box_autoadd_todo_project_create_input(
+    TodoProjectCreateInput self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_box_autoadd_todo_reminder_create_input(
+    TodoReminderCreateInput self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_box_autoadd_todo_subtask_create_input(
+    TodoSubtaskCreateInput self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_box_autoadd_todo_task_create_input(
+    TodoTaskCreateInput self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_box_autoadd_todo_task_label_create_input(
+    TodoTaskLabelCreateInput self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_box_autoadd_todo_task_relation_create_input(
+    TodoTaskRelationCreateInput self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_db_event_dto(DbEventDto self, SseSerializer serializer);
 
   @protected
   void sse_encode_f_64(double self, SseSerializer serializer);
 
   @protected
+  void sse_encode_i_32(int self, SseSerializer serializer);
+
+  @protected
   void sse_encode_i_64(PlatformInt64 self, SseSerializer serializer);
 
   @protected
-  void
-  sse_encode_list_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoComment(
-    List<TodoComment> self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void
-  sse_encode_list_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoLabel(
-    List<TodoLabel> self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void
-  sse_encode_list_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoProject(
-    List<TodoProject> self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void
-  sse_encode_list_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoReminder(
-    List<TodoReminder> self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void
-  sse_encode_list_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoSubtask(
-    List<TodoSubtask> self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void
-  sse_encode_list_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTask(
-    List<TodoTask> self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void
-  sse_encode_list_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskLabel(
-    List<TodoTaskLabel> self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void
-  sse_encode_list_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskRelation(
-    List<TodoTaskRelation> self,
-    SseSerializer serializer,
-  );
+  void sse_encode_list_filter(ListFilter self, SseSerializer serializer);
 
   @protected
   void sse_encode_list_prim_u_8_strict(
@@ -1158,10 +618,67 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_list_task_label_with_id(
+    List<TaskLabelWithId> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_todo_comment(
+    List<TodoComment> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_todo_label(
+    List<TodoLabel> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_todo_project(
+    List<TodoProject> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_todo_reminder(
+    List<TodoReminder> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_todo_subtask(
+    List<TodoSubtask> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_todo_task(List<TodoTask> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_todo_task_label(
+    List<TodoTaskLabel> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_todo_task_relation(
+    List<TodoTaskRelation> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_opt_String(String? self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_box_autoadd_bool(bool? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_f_64(double? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_i_32(int? self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_box_autoadd_i_64(
@@ -1200,6 +717,93 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_task_label_with_id(
+    TaskLabelWithId self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_todo_comment(TodoComment self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_todo_comment_create_input(
+    TodoCommentCreateInput self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_todo_label(TodoLabel self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_todo_label_create_input(
+    TodoLabelCreateInput self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_todo_project(TodoProject self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_todo_project_create_input(
+    TodoProjectCreateInput self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_todo_reminder(TodoReminder self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_todo_reminder_create_input(
+    TodoReminderCreateInput self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_todo_subtask(TodoSubtask self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_todo_subtask_create_input(
+    TodoSubtaskCreateInput self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_todo_task(TodoTask self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_todo_task_create_input(
+    TodoTaskCreateInput self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_todo_task_detail(
+    TodoTaskDetail self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_todo_task_label(TodoTaskLabel self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_todo_task_label_create_input(
+    TodoTaskLabelCreateInput self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_todo_task_relation(
+    TodoTaskRelation self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_todo_task_relation_create_input(
+    TodoTaskRelationCreateInput self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_u_32(int self, SseSerializer serializer);
 
   @protected
@@ -1207,12 +811,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_unit(void self, SseSerializer serializer);
-
-  @protected
-  void sse_encode_usize(BigInt self, SseSerializer serializer);
-
-  @protected
-  void sse_encode_i_32(int self, SseSerializer serializer);
 }
 
 // Section: wire_class
@@ -1228,616 +826,4 @@ class RustLibWire implements BaseWire {
   /// The symbols are looked up in [dynamicLibrary].
   RustLibWire(ffi.DynamicLibrary dynamicLibrary)
     : _lookup = dynamicLibrary.lookup;
-
-  void
-  rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerListFilter(
-    ffi.Pointer<ffi.Void> ptr,
-  ) {
-    return _rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerListFilter(
-      ptr,
-    );
-  }
-
-  late final _rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerListFilterPtr =
-      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Pointer<ffi.Void>)>>(
-        'frbgen_orbit_rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerListFilter',
-      );
-  late final _rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerListFilter =
-      _rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerListFilterPtr
-          .asFunction<void Function(ffi.Pointer<ffi.Void>)>();
-
-  void
-  rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerListFilter(
-    ffi.Pointer<ffi.Void> ptr,
-  ) {
-    return _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerListFilter(
-      ptr,
-    );
-  }
-
-  late final _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerListFilterPtr =
-      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Pointer<ffi.Void>)>>(
-        'frbgen_orbit_rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerListFilter',
-      );
-  late final _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerListFilter =
-      _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerListFilterPtr
-          .asFunction<void Function(ffi.Pointer<ffi.Void>)>();
-
-  void
-  rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoComment(
-    ffi.Pointer<ffi.Void> ptr,
-  ) {
-    return _rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoComment(
-      ptr,
-    );
-  }
-
-  late final _rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoCommentPtr =
-      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Pointer<ffi.Void>)>>(
-        'frbgen_orbit_rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoComment',
-      );
-  late final _rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoComment =
-      _rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoCommentPtr
-          .asFunction<void Function(ffi.Pointer<ffi.Void>)>();
-
-  void
-  rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoComment(
-    ffi.Pointer<ffi.Void> ptr,
-  ) {
-    return _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoComment(
-      ptr,
-    );
-  }
-
-  late final _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoCommentPtr =
-      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Pointer<ffi.Void>)>>(
-        'frbgen_orbit_rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoComment',
-      );
-  late final _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoComment =
-      _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoCommentPtr
-          .asFunction<void Function(ffi.Pointer<ffi.Void>)>();
-
-  void
-  rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoCommentCreateInput(
-    ffi.Pointer<ffi.Void> ptr,
-  ) {
-    return _rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoCommentCreateInput(
-      ptr,
-    );
-  }
-
-  late final _rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoCommentCreateInputPtr =
-      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Pointer<ffi.Void>)>>(
-        'frbgen_orbit_rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoCommentCreateInput',
-      );
-  late final _rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoCommentCreateInput =
-      _rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoCommentCreateInputPtr
-          .asFunction<void Function(ffi.Pointer<ffi.Void>)>();
-
-  void
-  rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoCommentCreateInput(
-    ffi.Pointer<ffi.Void> ptr,
-  ) {
-    return _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoCommentCreateInput(
-      ptr,
-    );
-  }
-
-  late final _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoCommentCreateInputPtr =
-      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Pointer<ffi.Void>)>>(
-        'frbgen_orbit_rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoCommentCreateInput',
-      );
-  late final _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoCommentCreateInput =
-      _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoCommentCreateInputPtr
-          .asFunction<void Function(ffi.Pointer<ffi.Void>)>();
-
-  void
-  rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoLabel(
-    ffi.Pointer<ffi.Void> ptr,
-  ) {
-    return _rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoLabel(
-      ptr,
-    );
-  }
-
-  late final _rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoLabelPtr =
-      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Pointer<ffi.Void>)>>(
-        'frbgen_orbit_rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoLabel',
-      );
-  late final _rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoLabel =
-      _rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoLabelPtr
-          .asFunction<void Function(ffi.Pointer<ffi.Void>)>();
-
-  void
-  rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoLabel(
-    ffi.Pointer<ffi.Void> ptr,
-  ) {
-    return _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoLabel(
-      ptr,
-    );
-  }
-
-  late final _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoLabelPtr =
-      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Pointer<ffi.Void>)>>(
-        'frbgen_orbit_rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoLabel',
-      );
-  late final _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoLabel =
-      _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoLabelPtr
-          .asFunction<void Function(ffi.Pointer<ffi.Void>)>();
-
-  void
-  rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoLabelCreateInput(
-    ffi.Pointer<ffi.Void> ptr,
-  ) {
-    return _rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoLabelCreateInput(
-      ptr,
-    );
-  }
-
-  late final _rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoLabelCreateInputPtr =
-      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Pointer<ffi.Void>)>>(
-        'frbgen_orbit_rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoLabelCreateInput',
-      );
-  late final _rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoLabelCreateInput =
-      _rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoLabelCreateInputPtr
-          .asFunction<void Function(ffi.Pointer<ffi.Void>)>();
-
-  void
-  rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoLabelCreateInput(
-    ffi.Pointer<ffi.Void> ptr,
-  ) {
-    return _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoLabelCreateInput(
-      ptr,
-    );
-  }
-
-  late final _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoLabelCreateInputPtr =
-      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Pointer<ffi.Void>)>>(
-        'frbgen_orbit_rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoLabelCreateInput',
-      );
-  late final _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoLabelCreateInput =
-      _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoLabelCreateInputPtr
-          .asFunction<void Function(ffi.Pointer<ffi.Void>)>();
-
-  void
-  rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoProject(
-    ffi.Pointer<ffi.Void> ptr,
-  ) {
-    return _rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoProject(
-      ptr,
-    );
-  }
-
-  late final _rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoProjectPtr =
-      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Pointer<ffi.Void>)>>(
-        'frbgen_orbit_rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoProject',
-      );
-  late final _rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoProject =
-      _rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoProjectPtr
-          .asFunction<void Function(ffi.Pointer<ffi.Void>)>();
-
-  void
-  rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoProject(
-    ffi.Pointer<ffi.Void> ptr,
-  ) {
-    return _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoProject(
-      ptr,
-    );
-  }
-
-  late final _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoProjectPtr =
-      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Pointer<ffi.Void>)>>(
-        'frbgen_orbit_rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoProject',
-      );
-  late final _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoProject =
-      _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoProjectPtr
-          .asFunction<void Function(ffi.Pointer<ffi.Void>)>();
-
-  void
-  rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoProjectCreateInput(
-    ffi.Pointer<ffi.Void> ptr,
-  ) {
-    return _rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoProjectCreateInput(
-      ptr,
-    );
-  }
-
-  late final _rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoProjectCreateInputPtr =
-      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Pointer<ffi.Void>)>>(
-        'frbgen_orbit_rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoProjectCreateInput',
-      );
-  late final _rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoProjectCreateInput =
-      _rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoProjectCreateInputPtr
-          .asFunction<void Function(ffi.Pointer<ffi.Void>)>();
-
-  void
-  rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoProjectCreateInput(
-    ffi.Pointer<ffi.Void> ptr,
-  ) {
-    return _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoProjectCreateInput(
-      ptr,
-    );
-  }
-
-  late final _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoProjectCreateInputPtr =
-      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Pointer<ffi.Void>)>>(
-        'frbgen_orbit_rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoProjectCreateInput',
-      );
-  late final _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoProjectCreateInput =
-      _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoProjectCreateInputPtr
-          .asFunction<void Function(ffi.Pointer<ffi.Void>)>();
-
-  void
-  rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoReminder(
-    ffi.Pointer<ffi.Void> ptr,
-  ) {
-    return _rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoReminder(
-      ptr,
-    );
-  }
-
-  late final _rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoReminderPtr =
-      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Pointer<ffi.Void>)>>(
-        'frbgen_orbit_rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoReminder',
-      );
-  late final _rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoReminder =
-      _rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoReminderPtr
-          .asFunction<void Function(ffi.Pointer<ffi.Void>)>();
-
-  void
-  rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoReminder(
-    ffi.Pointer<ffi.Void> ptr,
-  ) {
-    return _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoReminder(
-      ptr,
-    );
-  }
-
-  late final _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoReminderPtr =
-      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Pointer<ffi.Void>)>>(
-        'frbgen_orbit_rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoReminder',
-      );
-  late final _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoReminder =
-      _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoReminderPtr
-          .asFunction<void Function(ffi.Pointer<ffi.Void>)>();
-
-  void
-  rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoReminderCreateInput(
-    ffi.Pointer<ffi.Void> ptr,
-  ) {
-    return _rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoReminderCreateInput(
-      ptr,
-    );
-  }
-
-  late final _rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoReminderCreateInputPtr =
-      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Pointer<ffi.Void>)>>(
-        'frbgen_orbit_rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoReminderCreateInput',
-      );
-  late final _rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoReminderCreateInput =
-      _rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoReminderCreateInputPtr
-          .asFunction<void Function(ffi.Pointer<ffi.Void>)>();
-
-  void
-  rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoReminderCreateInput(
-    ffi.Pointer<ffi.Void> ptr,
-  ) {
-    return _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoReminderCreateInput(
-      ptr,
-    );
-  }
-
-  late final _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoReminderCreateInputPtr =
-      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Pointer<ffi.Void>)>>(
-        'frbgen_orbit_rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoReminderCreateInput',
-      );
-  late final _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoReminderCreateInput =
-      _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoReminderCreateInputPtr
-          .asFunction<void Function(ffi.Pointer<ffi.Void>)>();
-
-  void
-  rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoSubtask(
-    ffi.Pointer<ffi.Void> ptr,
-  ) {
-    return _rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoSubtask(
-      ptr,
-    );
-  }
-
-  late final _rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoSubtaskPtr =
-      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Pointer<ffi.Void>)>>(
-        'frbgen_orbit_rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoSubtask',
-      );
-  late final _rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoSubtask =
-      _rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoSubtaskPtr
-          .asFunction<void Function(ffi.Pointer<ffi.Void>)>();
-
-  void
-  rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoSubtask(
-    ffi.Pointer<ffi.Void> ptr,
-  ) {
-    return _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoSubtask(
-      ptr,
-    );
-  }
-
-  late final _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoSubtaskPtr =
-      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Pointer<ffi.Void>)>>(
-        'frbgen_orbit_rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoSubtask',
-      );
-  late final _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoSubtask =
-      _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoSubtaskPtr
-          .asFunction<void Function(ffi.Pointer<ffi.Void>)>();
-
-  void
-  rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoSubtaskCreateInput(
-    ffi.Pointer<ffi.Void> ptr,
-  ) {
-    return _rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoSubtaskCreateInput(
-      ptr,
-    );
-  }
-
-  late final _rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoSubtaskCreateInputPtr =
-      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Pointer<ffi.Void>)>>(
-        'frbgen_orbit_rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoSubtaskCreateInput',
-      );
-  late final _rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoSubtaskCreateInput =
-      _rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoSubtaskCreateInputPtr
-          .asFunction<void Function(ffi.Pointer<ffi.Void>)>();
-
-  void
-  rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoSubtaskCreateInput(
-    ffi.Pointer<ffi.Void> ptr,
-  ) {
-    return _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoSubtaskCreateInput(
-      ptr,
-    );
-  }
-
-  late final _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoSubtaskCreateInputPtr =
-      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Pointer<ffi.Void>)>>(
-        'frbgen_orbit_rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoSubtaskCreateInput',
-      );
-  late final _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoSubtaskCreateInput =
-      _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoSubtaskCreateInputPtr
-          .asFunction<void Function(ffi.Pointer<ffi.Void>)>();
-
-  void
-  rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTask(
-    ffi.Pointer<ffi.Void> ptr,
-  ) {
-    return _rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTask(
-      ptr,
-    );
-  }
-
-  late final _rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskPtr =
-      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Pointer<ffi.Void>)>>(
-        'frbgen_orbit_rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTask',
-      );
-  late final _rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTask =
-      _rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskPtr
-          .asFunction<void Function(ffi.Pointer<ffi.Void>)>();
-
-  void
-  rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTask(
-    ffi.Pointer<ffi.Void> ptr,
-  ) {
-    return _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTask(
-      ptr,
-    );
-  }
-
-  late final _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskPtr =
-      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Pointer<ffi.Void>)>>(
-        'frbgen_orbit_rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTask',
-      );
-  late final _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTask =
-      _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskPtr
-          .asFunction<void Function(ffi.Pointer<ffi.Void>)>();
-
-  void
-  rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskCreateInput(
-    ffi.Pointer<ffi.Void> ptr,
-  ) {
-    return _rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskCreateInput(
-      ptr,
-    );
-  }
-
-  late final _rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskCreateInputPtr =
-      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Pointer<ffi.Void>)>>(
-        'frbgen_orbit_rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskCreateInput',
-      );
-  late final _rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskCreateInput =
-      _rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskCreateInputPtr
-          .asFunction<void Function(ffi.Pointer<ffi.Void>)>();
-
-  void
-  rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskCreateInput(
-    ffi.Pointer<ffi.Void> ptr,
-  ) {
-    return _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskCreateInput(
-      ptr,
-    );
-  }
-
-  late final _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskCreateInputPtr =
-      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Pointer<ffi.Void>)>>(
-        'frbgen_orbit_rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskCreateInput',
-      );
-  late final _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskCreateInput =
-      _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskCreateInputPtr
-          .asFunction<void Function(ffi.Pointer<ffi.Void>)>();
-
-  void
-  rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskDetail(
-    ffi.Pointer<ffi.Void> ptr,
-  ) {
-    return _rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskDetail(
-      ptr,
-    );
-  }
-
-  late final _rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskDetailPtr =
-      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Pointer<ffi.Void>)>>(
-        'frbgen_orbit_rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskDetail',
-      );
-  late final _rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskDetail =
-      _rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskDetailPtr
-          .asFunction<void Function(ffi.Pointer<ffi.Void>)>();
-
-  void
-  rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskDetail(
-    ffi.Pointer<ffi.Void> ptr,
-  ) {
-    return _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskDetail(
-      ptr,
-    );
-  }
-
-  late final _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskDetailPtr =
-      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Pointer<ffi.Void>)>>(
-        'frbgen_orbit_rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskDetail',
-      );
-  late final _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskDetail =
-      _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskDetailPtr
-          .asFunction<void Function(ffi.Pointer<ffi.Void>)>();
-
-  void
-  rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskLabel(
-    ffi.Pointer<ffi.Void> ptr,
-  ) {
-    return _rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskLabel(
-      ptr,
-    );
-  }
-
-  late final _rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskLabelPtr =
-      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Pointer<ffi.Void>)>>(
-        'frbgen_orbit_rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskLabel',
-      );
-  late final _rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskLabel =
-      _rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskLabelPtr
-          .asFunction<void Function(ffi.Pointer<ffi.Void>)>();
-
-  void
-  rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskLabel(
-    ffi.Pointer<ffi.Void> ptr,
-  ) {
-    return _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskLabel(
-      ptr,
-    );
-  }
-
-  late final _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskLabelPtr =
-      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Pointer<ffi.Void>)>>(
-        'frbgen_orbit_rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskLabel',
-      );
-  late final _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskLabel =
-      _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskLabelPtr
-          .asFunction<void Function(ffi.Pointer<ffi.Void>)>();
-
-  void
-  rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskLabelCreateInput(
-    ffi.Pointer<ffi.Void> ptr,
-  ) {
-    return _rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskLabelCreateInput(
-      ptr,
-    );
-  }
-
-  late final _rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskLabelCreateInputPtr =
-      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Pointer<ffi.Void>)>>(
-        'frbgen_orbit_rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskLabelCreateInput',
-      );
-  late final _rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskLabelCreateInput =
-      _rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskLabelCreateInputPtr
-          .asFunction<void Function(ffi.Pointer<ffi.Void>)>();
-
-  void
-  rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskLabelCreateInput(
-    ffi.Pointer<ffi.Void> ptr,
-  ) {
-    return _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskLabelCreateInput(
-      ptr,
-    );
-  }
-
-  late final _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskLabelCreateInputPtr =
-      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Pointer<ffi.Void>)>>(
-        'frbgen_orbit_rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskLabelCreateInput',
-      );
-  late final _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskLabelCreateInput =
-      _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskLabelCreateInputPtr
-          .asFunction<void Function(ffi.Pointer<ffi.Void>)>();
-
-  void
-  rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskRelation(
-    ffi.Pointer<ffi.Void> ptr,
-  ) {
-    return _rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskRelation(
-      ptr,
-    );
-  }
-
-  late final _rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskRelationPtr =
-      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Pointer<ffi.Void>)>>(
-        'frbgen_orbit_rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskRelation',
-      );
-  late final _rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskRelation =
-      _rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskRelationPtr
-          .asFunction<void Function(ffi.Pointer<ffi.Void>)>();
-
-  void
-  rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskRelation(
-    ffi.Pointer<ffi.Void> ptr,
-  ) {
-    return _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskRelation(
-      ptr,
-    );
-  }
-
-  late final _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskRelationPtr =
-      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Pointer<ffi.Void>)>>(
-        'frbgen_orbit_rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskRelation',
-      );
-  late final _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskRelation =
-      _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskRelationPtr
-          .asFunction<void Function(ffi.Pointer<ffi.Void>)>();
-
-  void
-  rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskRelationCreateInput(
-    ffi.Pointer<ffi.Void> ptr,
-  ) {
-    return _rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskRelationCreateInput(
-      ptr,
-    );
-  }
-
-  late final _rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskRelationCreateInputPtr =
-      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Pointer<ffi.Void>)>>(
-        'frbgen_orbit_rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskRelationCreateInput',
-      );
-  late final _rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskRelationCreateInput =
-      _rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskRelationCreateInputPtr
-          .asFunction<void Function(ffi.Pointer<ffi.Void>)>();
-
-  void
-  rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskRelationCreateInput(
-    ffi.Pointer<ffi.Void> ptr,
-  ) {
-    return _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskRelationCreateInput(
-      ptr,
-    );
-  }
-
-  late final _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskRelationCreateInputPtr =
-      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Pointer<ffi.Void>)>>(
-        'frbgen_orbit_rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskRelationCreateInput',
-      );
-  late final _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskRelationCreateInput =
-      _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskRelationCreateInputPtr
-          .asFunction<void Function(ffi.Pointer<ffi.Void>)>();
 }

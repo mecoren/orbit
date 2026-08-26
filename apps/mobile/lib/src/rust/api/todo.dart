@@ -4,7 +4,10 @@
 // ignore_for_file: invalid_use_of_internal_member, unused_import, unnecessary_import
 
 import '../frb_generated.dart';
+import 'dto.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
+
+// These functions are ignored because they are not marked as `pub`: `pool`
 
 /// 列出项目（对应桌面 todo_projects_list）
 Future<List<TodoProject>> todoProjectsList({required ListFilter filter}) =>
@@ -201,57 +204,3 @@ Future<TodoReminder> todoRemindersCreate({
 /// 删除提醒（软删，对应桌面 todo_reminders_delete）
 Future<void> todoRemindersDelete({required PlatformInt64 id}) =>
     RustLib.instance.api.crateApiTodoTodoRemindersDelete(id: id);
-
-// Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<ListFilter>>
-abstract class ListFilter implements RustOpaqueInterface {}
-
-// Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<TodoComment>>
-abstract class TodoComment implements RustOpaqueInterface {}
-
-// Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<TodoCommentCreateInput>>
-abstract class TodoCommentCreateInput implements RustOpaqueInterface {}
-
-// Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<TodoLabel>>
-abstract class TodoLabel implements RustOpaqueInterface {}
-
-// Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<TodoLabelCreateInput>>
-abstract class TodoLabelCreateInput implements RustOpaqueInterface {}
-
-// Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<TodoProject>>
-abstract class TodoProject implements RustOpaqueInterface {}
-
-// Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<TodoProjectCreateInput>>
-abstract class TodoProjectCreateInput implements RustOpaqueInterface {}
-
-// Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<TodoReminder>>
-abstract class TodoReminder implements RustOpaqueInterface {}
-
-// Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<TodoReminderCreateInput>>
-abstract class TodoReminderCreateInput implements RustOpaqueInterface {}
-
-// Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<TodoSubtask>>
-abstract class TodoSubtask implements RustOpaqueInterface {}
-
-// Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<TodoSubtaskCreateInput>>
-abstract class TodoSubtaskCreateInput implements RustOpaqueInterface {}
-
-// Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<TodoTask>>
-abstract class TodoTask implements RustOpaqueInterface {}
-
-// Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<TodoTaskCreateInput>>
-abstract class TodoTaskCreateInput implements RustOpaqueInterface {}
-
-// Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner< TodoTaskDetail>>
-abstract class TodoTaskDetail implements RustOpaqueInterface {}
-
-// Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<TodoTaskLabel>>
-abstract class TodoTaskLabel implements RustOpaqueInterface {}
-
-// Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<TodoTaskLabelCreateInput>>
-abstract class TodoTaskLabelCreateInput implements RustOpaqueInterface {}
-
-// Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<TodoTaskRelation>>
-abstract class TodoTaskRelation implements RustOpaqueInterface {}
-
-// Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<TodoTaskRelationCreateInput>>
-abstract class TodoTaskRelationCreateInput implements RustOpaqueInterface {}

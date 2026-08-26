@@ -4,6 +4,7 @@
 // ignore_for_file: unused_import, unused_element, unnecessary_import, duplicate_ignore, invalid_use_of_internal_member, annotate_overrides, non_constant_identifier_names, curly_braces_in_flow_control_structures, prefer_const_literals_to_create_immutables, unused_field
 
 import 'api/auth.dart';
+import 'api/dto.dart';
 import 'api/events.dart';
 import 'api/state.dart';
 import 'api/sync.dart';
@@ -303,161 +304,6 @@ abstract class RustLibApi extends BaseApi {
     required PlatformInt64 id,
     required double position,
   });
-
-  RustArcIncrementStrongCountFnType
-  get rust_arc_increment_strong_count_ListFilter;
-
-  RustArcDecrementStrongCountFnType
-  get rust_arc_decrement_strong_count_ListFilter;
-
-  CrossPlatformFinalizerArg get rust_arc_decrement_strong_count_ListFilterPtr;
-
-  RustArcIncrementStrongCountFnType
-  get rust_arc_increment_strong_count_TodoComment;
-
-  RustArcDecrementStrongCountFnType
-  get rust_arc_decrement_strong_count_TodoComment;
-
-  CrossPlatformFinalizerArg get rust_arc_decrement_strong_count_TodoCommentPtr;
-
-  RustArcIncrementStrongCountFnType
-  get rust_arc_increment_strong_count_TodoCommentCreateInput;
-
-  RustArcDecrementStrongCountFnType
-  get rust_arc_decrement_strong_count_TodoCommentCreateInput;
-
-  CrossPlatformFinalizerArg
-  get rust_arc_decrement_strong_count_TodoCommentCreateInputPtr;
-
-  RustArcIncrementStrongCountFnType
-  get rust_arc_increment_strong_count_TodoLabel;
-
-  RustArcDecrementStrongCountFnType
-  get rust_arc_decrement_strong_count_TodoLabel;
-
-  CrossPlatformFinalizerArg get rust_arc_decrement_strong_count_TodoLabelPtr;
-
-  RustArcIncrementStrongCountFnType
-  get rust_arc_increment_strong_count_TodoLabelCreateInput;
-
-  RustArcDecrementStrongCountFnType
-  get rust_arc_decrement_strong_count_TodoLabelCreateInput;
-
-  CrossPlatformFinalizerArg
-  get rust_arc_decrement_strong_count_TodoLabelCreateInputPtr;
-
-  RustArcIncrementStrongCountFnType
-  get rust_arc_increment_strong_count_TodoProject;
-
-  RustArcDecrementStrongCountFnType
-  get rust_arc_decrement_strong_count_TodoProject;
-
-  CrossPlatformFinalizerArg get rust_arc_decrement_strong_count_TodoProjectPtr;
-
-  RustArcIncrementStrongCountFnType
-  get rust_arc_increment_strong_count_TodoProjectCreateInput;
-
-  RustArcDecrementStrongCountFnType
-  get rust_arc_decrement_strong_count_TodoProjectCreateInput;
-
-  CrossPlatformFinalizerArg
-  get rust_arc_decrement_strong_count_TodoProjectCreateInputPtr;
-
-  RustArcIncrementStrongCountFnType
-  get rust_arc_increment_strong_count_TodoReminder;
-
-  RustArcDecrementStrongCountFnType
-  get rust_arc_decrement_strong_count_TodoReminder;
-
-  CrossPlatformFinalizerArg get rust_arc_decrement_strong_count_TodoReminderPtr;
-
-  RustArcIncrementStrongCountFnType
-  get rust_arc_increment_strong_count_TodoReminderCreateInput;
-
-  RustArcDecrementStrongCountFnType
-  get rust_arc_decrement_strong_count_TodoReminderCreateInput;
-
-  CrossPlatformFinalizerArg
-  get rust_arc_decrement_strong_count_TodoReminderCreateInputPtr;
-
-  RustArcIncrementStrongCountFnType
-  get rust_arc_increment_strong_count_TodoSubtask;
-
-  RustArcDecrementStrongCountFnType
-  get rust_arc_decrement_strong_count_TodoSubtask;
-
-  CrossPlatformFinalizerArg get rust_arc_decrement_strong_count_TodoSubtaskPtr;
-
-  RustArcIncrementStrongCountFnType
-  get rust_arc_increment_strong_count_TodoSubtaskCreateInput;
-
-  RustArcDecrementStrongCountFnType
-  get rust_arc_decrement_strong_count_TodoSubtaskCreateInput;
-
-  CrossPlatformFinalizerArg
-  get rust_arc_decrement_strong_count_TodoSubtaskCreateInputPtr;
-
-  RustArcIncrementStrongCountFnType
-  get rust_arc_increment_strong_count_TodoTask;
-
-  RustArcDecrementStrongCountFnType
-  get rust_arc_decrement_strong_count_TodoTask;
-
-  CrossPlatformFinalizerArg get rust_arc_decrement_strong_count_TodoTaskPtr;
-
-  RustArcIncrementStrongCountFnType
-  get rust_arc_increment_strong_count_TodoTaskCreateInput;
-
-  RustArcDecrementStrongCountFnType
-  get rust_arc_decrement_strong_count_TodoTaskCreateInput;
-
-  CrossPlatformFinalizerArg
-  get rust_arc_decrement_strong_count_TodoTaskCreateInputPtr;
-
-  RustArcIncrementStrongCountFnType
-  get rust_arc_increment_strong_count_TodoTaskDetail;
-
-  RustArcDecrementStrongCountFnType
-  get rust_arc_decrement_strong_count_TodoTaskDetail;
-
-  CrossPlatformFinalizerArg
-  get rust_arc_decrement_strong_count_TodoTaskDetailPtr;
-
-  RustArcIncrementStrongCountFnType
-  get rust_arc_increment_strong_count_TodoTaskLabel;
-
-  RustArcDecrementStrongCountFnType
-  get rust_arc_decrement_strong_count_TodoTaskLabel;
-
-  CrossPlatformFinalizerArg
-  get rust_arc_decrement_strong_count_TodoTaskLabelPtr;
-
-  RustArcIncrementStrongCountFnType
-  get rust_arc_increment_strong_count_TodoTaskLabelCreateInput;
-
-  RustArcDecrementStrongCountFnType
-  get rust_arc_decrement_strong_count_TodoTaskLabelCreateInput;
-
-  CrossPlatformFinalizerArg
-  get rust_arc_decrement_strong_count_TodoTaskLabelCreateInputPtr;
-
-  RustArcIncrementStrongCountFnType
-  get rust_arc_increment_strong_count_TodoTaskRelation;
-
-  RustArcDecrementStrongCountFnType
-  get rust_arc_decrement_strong_count_TodoTaskRelation;
-
-  CrossPlatformFinalizerArg
-  get rust_arc_decrement_strong_count_TodoTaskRelationPtr;
-
-  RustArcIncrementStrongCountFnType
-  get rust_arc_increment_strong_count_TodoTaskRelationCreateInput;
-
-  RustArcDecrementStrongCountFnType
-  get rust_arc_decrement_strong_count_TodoTaskRelationCreateInput;
-
-  CrossPlatformFinalizerArg
-  get rust_arc_decrement_strong_count_TodoTaskRelationCreateInputPtr;
 }
 
 class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
@@ -1423,10 +1269,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       NormalTask(
         callFfi: (port_) {
           final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoCommentCreateInput(
-            input,
-            serializer,
-          );
+          sse_encode_box_autoadd_todo_comment_create_input(input, serializer);
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
@@ -1435,8 +1278,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
         },
         codec: SseCodec(
-          decodeSuccessData:
-              sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoComment,
+          decodeSuccessData: sse_decode_todo_comment,
           decodeErrorData: sse_decode_String,
         ),
         constMeta: kCrateApiTodoTodoCommentsCreateConstMeta,
@@ -1495,8 +1337,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
         },
         codec: SseCodec(
-          decodeSuccessData:
-              sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoComment,
+          decodeSuccessData: sse_decode_todo_comment,
           decodeErrorData: sse_decode_String,
         ),
         constMeta: kCrateApiTodoTodoCommentsGetConstMeta,
@@ -1517,10 +1358,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       NormalTask(
         callFfi: (port_) {
           final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerListFilter(
-            filter,
-            serializer,
-          );
+          sse_encode_box_autoadd_list_filter(filter, serializer);
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
@@ -1529,8 +1367,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
         },
         codec: SseCodec(
-          decodeSuccessData:
-              sse_decode_list_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoComment,
+          decodeSuccessData: sse_decode_list_todo_comment,
           decodeErrorData: sse_decode_String,
         ),
         constMeta: kCrateApiTodoTodoCommentsListConstMeta,
@@ -1554,10 +1391,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       NormalTask(
         callFfi: (port_) {
           final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoLabelCreateInput(
-            input,
-            serializer,
-          );
+          sse_encode_box_autoadd_todo_label_create_input(input, serializer);
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
@@ -1566,8 +1400,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
         },
         codec: SseCodec(
-          decodeSuccessData:
-              sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoLabel,
+          decodeSuccessData: sse_decode_todo_label,
           decodeErrorData: sse_decode_String,
         ),
         constMeta: kCrateApiTodoTodoLabelsCreateConstMeta,
@@ -1616,10 +1449,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       NormalTask(
         callFfi: (port_) {
           final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerListFilter(
-            filter,
-            serializer,
-          );
+          sse_encode_box_autoadd_list_filter(filter, serializer);
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
@@ -1628,8 +1458,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
         },
         codec: SseCodec(
-          decodeSuccessData:
-              sse_decode_list_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoLabel,
+          decodeSuccessData: sse_decode_list_todo_label,
           decodeErrorData: sse_decode_String,
         ),
         constMeta: kCrateApiTodoTodoLabelsListConstMeta,
@@ -1661,8 +1490,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
         },
         codec: SseCodec(
-          decodeSuccessData:
-              sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoLabel,
+          decodeSuccessData: sse_decode_todo_label,
           decodeErrorData: sse_decode_String,
         ),
         constMeta: kCrateApiTodoTodoLabelsUpdateConstMeta,
@@ -1686,10 +1514,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       NormalTask(
         callFfi: (port_) {
           final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoProjectCreateInput(
-            input,
-            serializer,
-          );
+          sse_encode_box_autoadd_todo_project_create_input(input, serializer);
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
@@ -1698,8 +1523,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
         },
         codec: SseCodec(
-          decodeSuccessData:
-              sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoProject,
+          decodeSuccessData: sse_decode_todo_project,
           decodeErrorData: sse_decode_String,
         ),
         constMeta: kCrateApiTodoTodoProjectsCreateConstMeta,
@@ -1758,8 +1582,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
         },
         codec: SseCodec(
-          decodeSuccessData:
-              sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoProject,
+          decodeSuccessData: sse_decode_todo_project,
           decodeErrorData: sse_decode_String,
         ),
         constMeta: kCrateApiTodoTodoProjectsGetConstMeta,
@@ -1780,10 +1603,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       NormalTask(
         callFfi: (port_) {
           final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerListFilter(
-            filter,
-            serializer,
-          );
+          sse_encode_box_autoadd_list_filter(filter, serializer);
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
@@ -1792,8 +1612,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
         },
         codec: SseCodec(
-          decodeSuccessData:
-              sse_decode_list_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoProject,
+          decodeSuccessData: sse_decode_list_todo_project,
           decodeErrorData: sse_decode_String,
         ),
         constMeta: kCrateApiTodoTodoProjectsListConstMeta,
@@ -1828,8 +1647,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
         },
         codec: SseCodec(
-          decodeSuccessData:
-              sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoProject,
+          decodeSuccessData: sse_decode_todo_project,
           decodeErrorData: sse_decode_String,
         ),
         constMeta: kCrateApiTodoTodoProjectsUpdateConstMeta,
@@ -1888,10 +1706,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       NormalTask(
         callFfi: (port_) {
           final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoReminderCreateInput(
-            input,
-            serializer,
-          );
+          sse_encode_box_autoadd_todo_reminder_create_input(input, serializer);
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
@@ -1900,8 +1715,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
         },
         codec: SseCodec(
-          decodeSuccessData:
-              sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoReminder,
+          decodeSuccessData: sse_decode_todo_reminder,
           decodeErrorData: sse_decode_String,
         ),
         constMeta: kCrateApiTodoTodoRemindersCreateConstMeta,
@@ -1962,8 +1776,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
         },
         codec: SseCodec(
-          decodeSuccessData:
-              sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoReminder,
+          decodeSuccessData: sse_decode_todo_reminder,
           decodeErrorData: sse_decode_String,
         ),
         constMeta: kCrateApiTodoTodoRemindersGetConstMeta,
@@ -1984,10 +1797,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       NormalTask(
         callFfi: (port_) {
           final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerListFilter(
-            filter,
-            serializer,
-          );
+          sse_encode_box_autoadd_list_filter(filter, serializer);
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
@@ -1996,8 +1806,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
         },
         codec: SseCodec(
-          decodeSuccessData:
-              sse_decode_list_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoReminder,
+          decodeSuccessData: sse_decode_list_todo_reminder,
           decodeErrorData: sse_decode_String,
         ),
         constMeta: kCrateApiTodoTodoRemindersListConstMeta,
@@ -2021,10 +1830,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       NormalTask(
         callFfi: (port_) {
           final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoSubtaskCreateInput(
-            input,
-            serializer,
-          );
+          sse_encode_box_autoadd_todo_subtask_create_input(input, serializer);
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
@@ -2033,8 +1839,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
         },
         codec: SseCodec(
-          decodeSuccessData:
-              sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoSubtask,
+          decodeSuccessData: sse_decode_todo_subtask,
           decodeErrorData: sse_decode_String,
         ),
         constMeta: kCrateApiTodoTodoSubtasksCreateConstMeta,
@@ -2093,8 +1898,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
         },
         codec: SseCodec(
-          decodeSuccessData:
-              sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoSubtask,
+          decodeSuccessData: sse_decode_todo_subtask,
           decodeErrorData: sse_decode_String,
         ),
         constMeta: kCrateApiTodoTodoSubtasksGetConstMeta,
@@ -2115,10 +1919,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       NormalTask(
         callFfi: (port_) {
           final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerListFilter(
-            filter,
-            serializer,
-          );
+          sse_encode_box_autoadd_list_filter(filter, serializer);
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
@@ -2127,8 +1928,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
         },
         codec: SseCodec(
-          decodeSuccessData:
-              sse_decode_list_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoSubtask,
+          decodeSuccessData: sse_decode_list_todo_subtask,
           decodeErrorData: sse_decode_String,
         ),
         constMeta: kCrateApiTodoTodoSubtasksListConstMeta,
@@ -2198,8 +1998,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
         },
         codec: SseCodec(
-          decodeSuccessData:
-              sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoSubtask,
+          decodeSuccessData: sse_decode_todo_subtask,
           decodeErrorData: sse_decode_String,
         ),
         constMeta: kCrateApiTodoTodoSubtasksUpdateConstMeta,
@@ -2223,7 +2022,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       NormalTask(
         callFfi: (port_) {
           final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskLabelCreateInput(
+          sse_encode_box_autoadd_todo_task_label_create_input(
             input,
             serializer,
           );
@@ -2235,8 +2034,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
         },
         codec: SseCodec(
-          decodeSuccessData:
-              sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskLabel,
+          decodeSuccessData: sse_decode_todo_task_label,
           decodeErrorData: sse_decode_String,
         ),
         constMeta: kCrateApiTodoTodoTaskLabelsCreateConstMeta,
@@ -2291,10 +2089,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       NormalTask(
         callFfi: (port_) {
           final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerListFilter(
-            filter,
-            serializer,
-          );
+          sse_encode_box_autoadd_list_filter(filter, serializer);
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
@@ -2303,8 +2098,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
         },
         codec: SseCodec(
-          decodeSuccessData:
-              sse_decode_list_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskLabel,
+          decodeSuccessData: sse_decode_list_todo_task_label,
           decodeErrorData: sse_decode_String,
         ),
         constMeta: kCrateApiTodoTodoTaskLabelsListConstMeta,
@@ -2328,7 +2122,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       NormalTask(
         callFfi: (port_) {
           final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskRelationCreateInput(
+          sse_encode_box_autoadd_todo_task_relation_create_input(
             input,
             serializer,
           );
@@ -2340,8 +2134,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
         },
         codec: SseCodec(
-          decodeSuccessData:
-              sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskRelation,
+          decodeSuccessData: sse_decode_todo_task_relation,
           decodeErrorData: sse_decode_String,
         ),
         constMeta: kCrateApiTodoTodoTaskRelationsCreateConstMeta,
@@ -2407,8 +2200,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
         },
         codec: SseCodec(
-          decodeSuccessData:
-              sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskRelation,
+          decodeSuccessData: sse_decode_todo_task_relation,
           decodeErrorData: sse_decode_String,
         ),
         constMeta: kCrateApiTodoTodoTaskRelationsGetConstMeta,
@@ -2432,10 +2224,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       NormalTask(
         callFfi: (port_) {
           final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerListFilter(
-            filter,
-            serializer,
-          );
+          sse_encode_box_autoadd_list_filter(filter, serializer);
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
@@ -2444,8 +2233,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
         },
         codec: SseCodec(
-          decodeSuccessData:
-              sse_decode_list_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskRelation,
+          decodeSuccessData: sse_decode_list_todo_task_relation,
           decodeErrorData: sse_decode_String,
         ),
         constMeta: kCrateApiTodoTodoTaskRelationsListConstMeta,
@@ -2469,10 +2257,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       NormalTask(
         callFfi: (port_) {
           final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskCreateInput(
-            input,
-            serializer,
-          );
+          sse_encode_box_autoadd_todo_task_create_input(input, serializer);
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
@@ -2481,8 +2266,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
         },
         codec: SseCodec(
-          decodeSuccessData:
-              sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTask,
+          decodeSuccessData: sse_decode_todo_task,
           decodeErrorData: sse_decode_String,
         ),
         constMeta: kCrateApiTodoTodoTasksCreateConstMeta,
@@ -2538,8 +2322,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
         },
         codec: SseCodec(
-          decodeSuccessData:
-              sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTask,
+          decodeSuccessData: sse_decode_todo_task,
           decodeErrorData: sse_decode_String,
         ),
         constMeta: kCrateApiTodoTodoTasksGetConstMeta,
@@ -2569,8 +2352,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
         },
         codec: SseCodec(
-          decodeSuccessData:
-              sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskDetail,
+          decodeSuccessData: sse_decode_todo_task_detail,
           decodeErrorData: sse_decode_String,
         ),
         constMeta: kCrateApiTodoTodoTasksGetDetailConstMeta,
@@ -2591,10 +2373,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       NormalTask(
         callFfi: (port_) {
           final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerListFilter(
-            filter,
-            serializer,
-          );
+          sse_encode_box_autoadd_list_filter(filter, serializer);
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
@@ -2603,8 +2382,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
         },
         codec: SseCodec(
-          decodeSuccessData:
-              sse_decode_list_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTask,
+          decodeSuccessData: sse_decode_list_todo_task,
           decodeErrorData: sse_decode_String,
         ),
         constMeta: kCrateApiTodoTodoTasksListConstMeta,
@@ -2636,8 +2414,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
         },
         codec: SseCodec(
-          decodeSuccessData:
-              sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTask,
+          decodeSuccessData: sse_decode_todo_task,
           decodeErrorData: sse_decode_String,
         ),
         constMeta: kCrateApiTodoTodoTasksUpdateConstMeta,
@@ -2688,502 +2465,10 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         argNames: ["id", "position"],
       );
 
-  RustArcIncrementStrongCountFnType
-  get rust_arc_increment_strong_count_ListFilter => wire
-      .rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerListFilter;
-
-  RustArcDecrementStrongCountFnType
-  get rust_arc_decrement_strong_count_ListFilter => wire
-      .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerListFilter;
-
-  RustArcIncrementStrongCountFnType
-  get rust_arc_increment_strong_count_TodoComment => wire
-      .rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoComment;
-
-  RustArcDecrementStrongCountFnType
-  get rust_arc_decrement_strong_count_TodoComment => wire
-      .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoComment;
-
-  RustArcIncrementStrongCountFnType
-  get rust_arc_increment_strong_count_TodoCommentCreateInput => wire
-      .rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoCommentCreateInput;
-
-  RustArcDecrementStrongCountFnType
-  get rust_arc_decrement_strong_count_TodoCommentCreateInput => wire
-      .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoCommentCreateInput;
-
-  RustArcIncrementStrongCountFnType
-  get rust_arc_increment_strong_count_TodoLabel => wire
-      .rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoLabel;
-
-  RustArcDecrementStrongCountFnType
-  get rust_arc_decrement_strong_count_TodoLabel => wire
-      .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoLabel;
-
-  RustArcIncrementStrongCountFnType
-  get rust_arc_increment_strong_count_TodoLabelCreateInput => wire
-      .rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoLabelCreateInput;
-
-  RustArcDecrementStrongCountFnType
-  get rust_arc_decrement_strong_count_TodoLabelCreateInput => wire
-      .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoLabelCreateInput;
-
-  RustArcIncrementStrongCountFnType
-  get rust_arc_increment_strong_count_TodoProject => wire
-      .rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoProject;
-
-  RustArcDecrementStrongCountFnType
-  get rust_arc_decrement_strong_count_TodoProject => wire
-      .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoProject;
-
-  RustArcIncrementStrongCountFnType
-  get rust_arc_increment_strong_count_TodoProjectCreateInput => wire
-      .rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoProjectCreateInput;
-
-  RustArcDecrementStrongCountFnType
-  get rust_arc_decrement_strong_count_TodoProjectCreateInput => wire
-      .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoProjectCreateInput;
-
-  RustArcIncrementStrongCountFnType
-  get rust_arc_increment_strong_count_TodoReminder => wire
-      .rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoReminder;
-
-  RustArcDecrementStrongCountFnType
-  get rust_arc_decrement_strong_count_TodoReminder => wire
-      .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoReminder;
-
-  RustArcIncrementStrongCountFnType
-  get rust_arc_increment_strong_count_TodoReminderCreateInput => wire
-      .rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoReminderCreateInput;
-
-  RustArcDecrementStrongCountFnType
-  get rust_arc_decrement_strong_count_TodoReminderCreateInput => wire
-      .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoReminderCreateInput;
-
-  RustArcIncrementStrongCountFnType
-  get rust_arc_increment_strong_count_TodoSubtask => wire
-      .rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoSubtask;
-
-  RustArcDecrementStrongCountFnType
-  get rust_arc_decrement_strong_count_TodoSubtask => wire
-      .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoSubtask;
-
-  RustArcIncrementStrongCountFnType
-  get rust_arc_increment_strong_count_TodoSubtaskCreateInput => wire
-      .rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoSubtaskCreateInput;
-
-  RustArcDecrementStrongCountFnType
-  get rust_arc_decrement_strong_count_TodoSubtaskCreateInput => wire
-      .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoSubtaskCreateInput;
-
-  RustArcIncrementStrongCountFnType
-  get rust_arc_increment_strong_count_TodoTask => wire
-      .rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTask;
-
-  RustArcDecrementStrongCountFnType
-  get rust_arc_decrement_strong_count_TodoTask => wire
-      .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTask;
-
-  RustArcIncrementStrongCountFnType
-  get rust_arc_increment_strong_count_TodoTaskCreateInput => wire
-      .rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskCreateInput;
-
-  RustArcDecrementStrongCountFnType
-  get rust_arc_decrement_strong_count_TodoTaskCreateInput => wire
-      .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskCreateInput;
-
-  RustArcIncrementStrongCountFnType
-  get rust_arc_increment_strong_count_TodoTaskDetail => wire
-      .rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskDetail;
-
-  RustArcDecrementStrongCountFnType
-  get rust_arc_decrement_strong_count_TodoTaskDetail => wire
-      .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskDetail;
-
-  RustArcIncrementStrongCountFnType
-  get rust_arc_increment_strong_count_TodoTaskLabel => wire
-      .rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskLabel;
-
-  RustArcDecrementStrongCountFnType
-  get rust_arc_decrement_strong_count_TodoTaskLabel => wire
-      .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskLabel;
-
-  RustArcIncrementStrongCountFnType
-  get rust_arc_increment_strong_count_TodoTaskLabelCreateInput => wire
-      .rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskLabelCreateInput;
-
-  RustArcDecrementStrongCountFnType
-  get rust_arc_decrement_strong_count_TodoTaskLabelCreateInput => wire
-      .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskLabelCreateInput;
-
-  RustArcIncrementStrongCountFnType
-  get rust_arc_increment_strong_count_TodoTaskRelation => wire
-      .rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskRelation;
-
-  RustArcDecrementStrongCountFnType
-  get rust_arc_decrement_strong_count_TodoTaskRelation => wire
-      .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskRelation;
-
-  RustArcIncrementStrongCountFnType
-  get rust_arc_increment_strong_count_TodoTaskRelationCreateInput => wire
-      .rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskRelationCreateInput;
-
-  RustArcDecrementStrongCountFnType
-  get rust_arc_decrement_strong_count_TodoTaskRelationCreateInput => wire
-      .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskRelationCreateInput;
-
   @protected
   AnyhowException dco_decode_AnyhowException(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return AnyhowException(raw as String);
-  }
-
-  @protected
-  ListFilter
-  dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerListFilter(
-    dynamic raw,
-  ) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return ListFilterImpl.frbInternalDcoDecode(raw as List<dynamic>);
-  }
-
-  @protected
-  TodoComment
-  dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoComment(
-    dynamic raw,
-  ) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return TodoCommentImpl.frbInternalDcoDecode(raw as List<dynamic>);
-  }
-
-  @protected
-  TodoCommentCreateInput
-  dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoCommentCreateInput(
-    dynamic raw,
-  ) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return TodoCommentCreateInputImpl.frbInternalDcoDecode(
-      raw as List<dynamic>,
-    );
-  }
-
-  @protected
-  TodoLabel
-  dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoLabel(
-    dynamic raw,
-  ) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return TodoLabelImpl.frbInternalDcoDecode(raw as List<dynamic>);
-  }
-
-  @protected
-  TodoLabelCreateInput
-  dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoLabelCreateInput(
-    dynamic raw,
-  ) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return TodoLabelCreateInputImpl.frbInternalDcoDecode(raw as List<dynamic>);
-  }
-
-  @protected
-  TodoProject
-  dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoProject(
-    dynamic raw,
-  ) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return TodoProjectImpl.frbInternalDcoDecode(raw as List<dynamic>);
-  }
-
-  @protected
-  TodoProjectCreateInput
-  dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoProjectCreateInput(
-    dynamic raw,
-  ) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return TodoProjectCreateInputImpl.frbInternalDcoDecode(
-      raw as List<dynamic>,
-    );
-  }
-
-  @protected
-  TodoReminder
-  dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoReminder(
-    dynamic raw,
-  ) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return TodoReminderImpl.frbInternalDcoDecode(raw as List<dynamic>);
-  }
-
-  @protected
-  TodoReminderCreateInput
-  dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoReminderCreateInput(
-    dynamic raw,
-  ) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return TodoReminderCreateInputImpl.frbInternalDcoDecode(
-      raw as List<dynamic>,
-    );
-  }
-
-  @protected
-  TodoSubtask
-  dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoSubtask(
-    dynamic raw,
-  ) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return TodoSubtaskImpl.frbInternalDcoDecode(raw as List<dynamic>);
-  }
-
-  @protected
-  TodoSubtaskCreateInput
-  dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoSubtaskCreateInput(
-    dynamic raw,
-  ) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return TodoSubtaskCreateInputImpl.frbInternalDcoDecode(
-      raw as List<dynamic>,
-    );
-  }
-
-  @protected
-  TodoTask
-  dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTask(
-    dynamic raw,
-  ) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return TodoTaskImpl.frbInternalDcoDecode(raw as List<dynamic>);
-  }
-
-  @protected
-  TodoTaskCreateInput
-  dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskCreateInput(
-    dynamic raw,
-  ) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return TodoTaskCreateInputImpl.frbInternalDcoDecode(raw as List<dynamic>);
-  }
-
-  @protected
-  TodoTaskDetail
-  dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskDetail(
-    dynamic raw,
-  ) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return TodoTaskDetailImpl.frbInternalDcoDecode(raw as List<dynamic>);
-  }
-
-  @protected
-  TodoTaskLabel
-  dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskLabel(
-    dynamic raw,
-  ) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return TodoTaskLabelImpl.frbInternalDcoDecode(raw as List<dynamic>);
-  }
-
-  @protected
-  TodoTaskLabelCreateInput
-  dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskLabelCreateInput(
-    dynamic raw,
-  ) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return TodoTaskLabelCreateInputImpl.frbInternalDcoDecode(
-      raw as List<dynamic>,
-    );
-  }
-
-  @protected
-  TodoTaskRelation
-  dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskRelation(
-    dynamic raw,
-  ) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return TodoTaskRelationImpl.frbInternalDcoDecode(raw as List<dynamic>);
-  }
-
-  @protected
-  TodoTaskRelationCreateInput
-  dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskRelationCreateInput(
-    dynamic raw,
-  ) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return TodoTaskRelationCreateInputImpl.frbInternalDcoDecode(
-      raw as List<dynamic>,
-    );
-  }
-
-  @protected
-  ListFilter
-  dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerListFilter(
-    dynamic raw,
-  ) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return ListFilterImpl.frbInternalDcoDecode(raw as List<dynamic>);
-  }
-
-  @protected
-  TodoComment
-  dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoComment(
-    dynamic raw,
-  ) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return TodoCommentImpl.frbInternalDcoDecode(raw as List<dynamic>);
-  }
-
-  @protected
-  TodoCommentCreateInput
-  dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoCommentCreateInput(
-    dynamic raw,
-  ) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return TodoCommentCreateInputImpl.frbInternalDcoDecode(
-      raw as List<dynamic>,
-    );
-  }
-
-  @protected
-  TodoLabel
-  dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoLabel(
-    dynamic raw,
-  ) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return TodoLabelImpl.frbInternalDcoDecode(raw as List<dynamic>);
-  }
-
-  @protected
-  TodoLabelCreateInput
-  dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoLabelCreateInput(
-    dynamic raw,
-  ) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return TodoLabelCreateInputImpl.frbInternalDcoDecode(raw as List<dynamic>);
-  }
-
-  @protected
-  TodoProject
-  dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoProject(
-    dynamic raw,
-  ) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return TodoProjectImpl.frbInternalDcoDecode(raw as List<dynamic>);
-  }
-
-  @protected
-  TodoProjectCreateInput
-  dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoProjectCreateInput(
-    dynamic raw,
-  ) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return TodoProjectCreateInputImpl.frbInternalDcoDecode(
-      raw as List<dynamic>,
-    );
-  }
-
-  @protected
-  TodoReminder
-  dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoReminder(
-    dynamic raw,
-  ) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return TodoReminderImpl.frbInternalDcoDecode(raw as List<dynamic>);
-  }
-
-  @protected
-  TodoReminderCreateInput
-  dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoReminderCreateInput(
-    dynamic raw,
-  ) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return TodoReminderCreateInputImpl.frbInternalDcoDecode(
-      raw as List<dynamic>,
-    );
-  }
-
-  @protected
-  TodoSubtask
-  dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoSubtask(
-    dynamic raw,
-  ) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return TodoSubtaskImpl.frbInternalDcoDecode(raw as List<dynamic>);
-  }
-
-  @protected
-  TodoSubtaskCreateInput
-  dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoSubtaskCreateInput(
-    dynamic raw,
-  ) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return TodoSubtaskCreateInputImpl.frbInternalDcoDecode(
-      raw as List<dynamic>,
-    );
-  }
-
-  @protected
-  TodoTask
-  dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTask(
-    dynamic raw,
-  ) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return TodoTaskImpl.frbInternalDcoDecode(raw as List<dynamic>);
-  }
-
-  @protected
-  TodoTaskCreateInput
-  dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskCreateInput(
-    dynamic raw,
-  ) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return TodoTaskCreateInputImpl.frbInternalDcoDecode(raw as List<dynamic>);
-  }
-
-  @protected
-  TodoTaskDetail
-  dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskDetail(
-    dynamic raw,
-  ) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return TodoTaskDetailImpl.frbInternalDcoDecode(raw as List<dynamic>);
-  }
-
-  @protected
-  TodoTaskLabel
-  dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskLabel(
-    dynamic raw,
-  ) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return TodoTaskLabelImpl.frbInternalDcoDecode(raw as List<dynamic>);
-  }
-
-  @protected
-  TodoTaskLabelCreateInput
-  dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskLabelCreateInput(
-    dynamic raw,
-  ) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return TodoTaskLabelCreateInputImpl.frbInternalDcoDecode(
-      raw as List<dynamic>,
-    );
-  }
-
-  @protected
-  TodoTaskRelation
-  dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskRelation(
-    dynamic raw,
-  ) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return TodoTaskRelationImpl.frbInternalDcoDecode(raw as List<dynamic>);
-  }
-
-  @protected
-  TodoTaskRelationCreateInput
-  dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskRelationCreateInput(
-    dynamic raw,
-  ) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return TodoTaskRelationCreateInputImpl.frbInternalDcoDecode(
-      raw as List<dynamic>,
-    );
   }
 
   @protected
@@ -3221,9 +2506,27 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  double dco_decode_box_autoadd_f_64(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw as double;
+  }
+
+  @protected
+  int dco_decode_box_autoadd_i_32(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw as int;
+  }
+
+  @protected
   PlatformInt64 dco_decode_box_autoadd_i_64(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return dco_decode_i_64(raw);
+  }
+
+  @protected
+  ListFilter dco_decode_box_autoadd_list_filter(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_list_filter(raw);
   }
 
   @protected
@@ -3236,6 +2539,69 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   SyncConfigView dco_decode_box_autoadd_sync_config_view(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return dco_decode_sync_config_view(raw);
+  }
+
+  @protected
+  TodoCommentCreateInput dco_decode_box_autoadd_todo_comment_create_input(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_todo_comment_create_input(raw);
+  }
+
+  @protected
+  TodoLabelCreateInput dco_decode_box_autoadd_todo_label_create_input(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_todo_label_create_input(raw);
+  }
+
+  @protected
+  TodoProjectCreateInput dco_decode_box_autoadd_todo_project_create_input(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_todo_project_create_input(raw);
+  }
+
+  @protected
+  TodoReminderCreateInput dco_decode_box_autoadd_todo_reminder_create_input(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_todo_reminder_create_input(raw);
+  }
+
+  @protected
+  TodoSubtaskCreateInput dco_decode_box_autoadd_todo_subtask_create_input(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_todo_subtask_create_input(raw);
+  }
+
+  @protected
+  TodoTaskCreateInput dco_decode_box_autoadd_todo_task_create_input(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_todo_task_create_input(raw);
+  }
+
+  @protected
+  TodoTaskLabelCreateInput dco_decode_box_autoadd_todo_task_label_create_input(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_todo_task_label_create_input(raw);
+  }
+
+  @protected
+  TodoTaskRelationCreateInput
+  dco_decode_box_autoadd_todo_task_relation_create_input(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_todo_task_relation_create_input(raw);
   }
 
   @protected
@@ -3261,119 +2627,88 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  int dco_decode_i_32(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw as int;
+  }
+
+  @protected
   PlatformInt64 dco_decode_i_64(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return dcoDecodeI64(raw);
   }
 
   @protected
-  List<TodoComment>
-  dco_decode_list_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoComment(
-    dynamic raw,
-  ) {
+  ListFilter dco_decode_list_filter(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
-    return (raw as List<dynamic>)
-        .map(
-          dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoComment,
-        )
-        .toList();
-  }
-
-  @protected
-  List<TodoLabel>
-  dco_decode_list_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoLabel(
-    dynamic raw,
-  ) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return (raw as List<dynamic>)
-        .map(
-          dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoLabel,
-        )
-        .toList();
-  }
-
-  @protected
-  List<TodoProject>
-  dco_decode_list_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoProject(
-    dynamic raw,
-  ) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return (raw as List<dynamic>)
-        .map(
-          dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoProject,
-        )
-        .toList();
-  }
-
-  @protected
-  List<TodoReminder>
-  dco_decode_list_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoReminder(
-    dynamic raw,
-  ) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return (raw as List<dynamic>)
-        .map(
-          dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoReminder,
-        )
-        .toList();
-  }
-
-  @protected
-  List<TodoSubtask>
-  dco_decode_list_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoSubtask(
-    dynamic raw,
-  ) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return (raw as List<dynamic>)
-        .map(
-          dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoSubtask,
-        )
-        .toList();
-  }
-
-  @protected
-  List<TodoTask>
-  dco_decode_list_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTask(
-    dynamic raw,
-  ) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return (raw as List<dynamic>)
-        .map(
-          dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTask,
-        )
-        .toList();
-  }
-
-  @protected
-  List<TodoTaskLabel>
-  dco_decode_list_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskLabel(
-    dynamic raw,
-  ) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return (raw as List<dynamic>)
-        .map(
-          dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskLabel,
-        )
-        .toList();
-  }
-
-  @protected
-  List<TodoTaskRelation>
-  dco_decode_list_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskRelation(
-    dynamic raw,
-  ) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return (raw as List<dynamic>)
-        .map(
-          dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskRelation,
-        )
-        .toList();
+    final arr = raw as List<dynamic>;
+    if (arr.length != 3)
+      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
+    return ListFilter(
+      keyword: dco_decode_opt_String(arr[0]),
+      page: dco_decode_u_32(arr[1]),
+      pageSize: dco_decode_u_32(arr[2]),
+    );
   }
 
   @protected
   Uint8List dco_decode_list_prim_u_8_strict(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw as Uint8List;
+  }
+
+  @protected
+  List<TaskLabelWithId> dco_decode_list_task_label_with_id(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_task_label_with_id).toList();
+  }
+
+  @protected
+  List<TodoComment> dco_decode_list_todo_comment(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_todo_comment).toList();
+  }
+
+  @protected
+  List<TodoLabel> dco_decode_list_todo_label(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_todo_label).toList();
+  }
+
+  @protected
+  List<TodoProject> dco_decode_list_todo_project(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_todo_project).toList();
+  }
+
+  @protected
+  List<TodoReminder> dco_decode_list_todo_reminder(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_todo_reminder).toList();
+  }
+
+  @protected
+  List<TodoSubtask> dco_decode_list_todo_subtask(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_todo_subtask).toList();
+  }
+
+  @protected
+  List<TodoTask> dco_decode_list_todo_task(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_todo_task).toList();
+  }
+
+  @protected
+  List<TodoTaskLabel> dco_decode_list_todo_task_label(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_todo_task_label).toList();
+  }
+
+  @protected
+  List<TodoTaskRelation> dco_decode_list_todo_task_relation(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_todo_task_relation).toList();
   }
 
   @protected
@@ -3386,6 +2721,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   bool? dco_decode_opt_box_autoadd_bool(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw == null ? null : dco_decode_box_autoadd_bool(raw);
+  }
+
+  @protected
+  double? dco_decode_opt_box_autoadd_f_64(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw == null ? null : dco_decode_box_autoadd_f_64(raw);
+  }
+
+  @protected
+  int? dco_decode_opt_box_autoadd_i_32(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw == null ? null : dco_decode_box_autoadd_i_32(raw);
   }
 
   @protected
@@ -3473,6 +2820,353 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  TaskLabelWithId dco_decode_task_label_with_id(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 10)
+      throw Exception('unexpected arr length: expect 10 but see ${arr.length}');
+    return TaskLabelWithId(
+      id: dco_decode_i_64(arr[0]),
+      uuid: dco_decode_String(arr[1]),
+      title: dco_decode_String(arr[2]),
+      hexColor: dco_decode_String(arr[3]),
+      isDeleted: dco_decode_i_32(arr[4]),
+      createdAt: dco_decode_i_64(arr[5]),
+      updatedAt: dco_decode_i_64(arr[6]),
+      deletedAt: dco_decode_opt_box_autoadd_i_64(arr[7]),
+      version: dco_decode_i_32(arr[8]),
+      taskLabelId: dco_decode_i_64(arr[9]),
+    );
+  }
+
+  @protected
+  TodoComment dco_decode_todo_comment(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 9)
+      throw Exception('unexpected arr length: expect 9 but see ${arr.length}');
+    return TodoComment(
+      id: dco_decode_i_64(arr[0]),
+      uuid: dco_decode_String(arr[1]),
+      taskId: dco_decode_i_64(arr[2]),
+      content: dco_decode_String(arr[3]),
+      isDeleted: dco_decode_i_32(arr[4]),
+      createdAt: dco_decode_i_64(arr[5]),
+      updatedAt: dco_decode_i_64(arr[6]),
+      deletedAt: dco_decode_opt_box_autoadd_i_64(arr[7]),
+      version: dco_decode_i_32(arr[8]),
+    );
+  }
+
+  @protected
+  TodoCommentCreateInput dco_decode_todo_comment_create_input(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 2)
+      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+    return TodoCommentCreateInput(
+      taskId: dco_decode_i_64(arr[0]),
+      content: dco_decode_String(arr[1]),
+    );
+  }
+
+  @protected
+  TodoLabel dco_decode_todo_label(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 9)
+      throw Exception('unexpected arr length: expect 9 but see ${arr.length}');
+    return TodoLabel(
+      id: dco_decode_i_64(arr[0]),
+      uuid: dco_decode_String(arr[1]),
+      title: dco_decode_String(arr[2]),
+      hexColor: dco_decode_String(arr[3]),
+      isDeleted: dco_decode_i_32(arr[4]),
+      createdAt: dco_decode_i_64(arr[5]),
+      updatedAt: dco_decode_i_64(arr[6]),
+      deletedAt: dco_decode_opt_box_autoadd_i_64(arr[7]),
+      version: dco_decode_i_32(arr[8]),
+    );
+  }
+
+  @protected
+  TodoLabelCreateInput dco_decode_todo_label_create_input(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 2)
+      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+    return TodoLabelCreateInput(
+      title: dco_decode_String(arr[0]),
+      hexColor: dco_decode_opt_String(arr[1]),
+    );
+  }
+
+  @protected
+  TodoProject dco_decode_todo_project(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 11)
+      throw Exception('unexpected arr length: expect 11 but see ${arr.length}');
+    return TodoProject(
+      id: dco_decode_i_64(arr[0]),
+      uuid: dco_decode_String(arr[1]),
+      title: dco_decode_String(arr[2]),
+      description: dco_decode_opt_String(arr[3]),
+      hexColor: dco_decode_String(arr[4]),
+      sortOrder: dco_decode_f_64(arr[5]),
+      isDeleted: dco_decode_i_32(arr[6]),
+      createdAt: dco_decode_i_64(arr[7]),
+      updatedAt: dco_decode_i_64(arr[8]),
+      deletedAt: dco_decode_opt_box_autoadd_i_64(arr[9]),
+      version: dco_decode_i_32(arr[10]),
+    );
+  }
+
+  @protected
+  TodoProjectCreateInput dco_decode_todo_project_create_input(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 4)
+      throw Exception('unexpected arr length: expect 4 but see ${arr.length}');
+    return TodoProjectCreateInput(
+      title: dco_decode_String(arr[0]),
+      description: dco_decode_opt_String(arr[1]),
+      hexColor: dco_decode_opt_String(arr[2]),
+      sortOrder: dco_decode_opt_box_autoadd_f_64(arr[3]),
+    );
+  }
+
+  @protected
+  TodoReminder dco_decode_todo_reminder(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 9)
+      throw Exception('unexpected arr length: expect 9 but see ${arr.length}');
+    return TodoReminder(
+      id: dco_decode_i_64(arr[0]),
+      uuid: dco_decode_String(arr[1]),
+      taskId: dco_decode_i_64(arr[2]),
+      remindAt: dco_decode_i_64(arr[3]),
+      isDeleted: dco_decode_i_32(arr[4]),
+      createdAt: dco_decode_i_64(arr[5]),
+      updatedAt: dco_decode_i_64(arr[6]),
+      deletedAt: dco_decode_opt_box_autoadd_i_64(arr[7]),
+      version: dco_decode_i_32(arr[8]),
+    );
+  }
+
+  @protected
+  TodoReminderCreateInput dco_decode_todo_reminder_create_input(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 2)
+      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+    return TodoReminderCreateInput(
+      taskId: dco_decode_i_64(arr[0]),
+      remindAt: dco_decode_i_64(arr[1]),
+    );
+  }
+
+  @protected
+  TodoSubtask dco_decode_todo_subtask(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 12)
+      throw Exception('unexpected arr length: expect 12 but see ${arr.length}');
+    return TodoSubtask(
+      id: dco_decode_i_64(arr[0]),
+      uuid: dco_decode_String(arr[1]),
+      taskId: dco_decode_i_64(arr[2]),
+      title: dco_decode_String(arr[3]),
+      done: dco_decode_i_32(arr[4]),
+      doneAt: dco_decode_opt_box_autoadd_i_64(arr[5]),
+      position: dco_decode_f_64(arr[6]),
+      isDeleted: dco_decode_i_32(arr[7]),
+      createdAt: dco_decode_i_64(arr[8]),
+      updatedAt: dco_decode_i_64(arr[9]),
+      deletedAt: dco_decode_opt_box_autoadd_i_64(arr[10]),
+      version: dco_decode_i_32(arr[11]),
+    );
+  }
+
+  @protected
+  TodoSubtaskCreateInput dco_decode_todo_subtask_create_input(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 3)
+      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
+    return TodoSubtaskCreateInput(
+      taskId: dco_decode_i_64(arr[0]),
+      title: dco_decode_String(arr[1]),
+      position: dco_decode_opt_box_autoadd_f_64(arr[2]),
+    );
+  }
+
+  @protected
+  TodoTask dco_decode_todo_task(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 23)
+      throw Exception('unexpected arr length: expect 23 but see ${arr.length}');
+    return TodoTask(
+      id: dco_decode_i_64(arr[0]),
+      uuid: dco_decode_String(arr[1]),
+      title: dco_decode_String(arr[2]),
+      description: dco_decode_opt_String(arr[3]),
+      projectId: dco_decode_opt_box_autoadd_i_64(arr[4]),
+      priority: dco_decode_i_32(arr[5]),
+      status: dco_decode_String(arr[6]),
+      done: dco_decode_i_32(arr[7]),
+      doneAt: dco_decode_opt_box_autoadd_i_64(arr[8]),
+      dueDate: dco_decode_opt_box_autoadd_i_64(arr[9]),
+      startDate: dco_decode_opt_box_autoadd_i_64(arr[10]),
+      endDate: dco_decode_opt_box_autoadd_i_64(arr[11]),
+      repeatAfter: dco_decode_i_64(arr[12]),
+      repeatMode: dco_decode_i_32(arr[13]),
+      hexColor: dco_decode_String(arr[14]),
+      percentDone: dco_decode_f_64(arr[15]),
+      position: dco_decode_f_64(arr[16]),
+      isFavorite: dco_decode_i_32(arr[17]),
+      isDeleted: dco_decode_i_32(arr[18]),
+      createdAt: dco_decode_i_64(arr[19]),
+      updatedAt: dco_decode_i_64(arr[20]),
+      deletedAt: dco_decode_opt_box_autoadd_i_64(arr[21]),
+      version: dco_decode_i_32(arr[22]),
+    );
+  }
+
+  @protected
+  TodoTaskCreateInput dco_decode_todo_task_create_input(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 15)
+      throw Exception('unexpected arr length: expect 15 but see ${arr.length}');
+    return TodoTaskCreateInput(
+      title: dco_decode_String(arr[0]),
+      description: dco_decode_opt_String(arr[1]),
+      projectId: dco_decode_opt_box_autoadd_i_64(arr[2]),
+      priority: dco_decode_opt_box_autoadd_i_32(arr[3]),
+      status: dco_decode_opt_String(arr[4]),
+      done: dco_decode_opt_box_autoadd_i_32(arr[5]),
+      doneAt: dco_decode_opt_box_autoadd_i_64(arr[6]),
+      dueDate: dco_decode_opt_box_autoadd_i_64(arr[7]),
+      startDate: dco_decode_opt_box_autoadd_i_64(arr[8]),
+      endDate: dco_decode_opt_box_autoadd_i_64(arr[9]),
+      repeatAfter: dco_decode_opt_box_autoadd_i_64(arr[10]),
+      repeatMode: dco_decode_opt_box_autoadd_i_32(arr[11]),
+      hexColor: dco_decode_opt_String(arr[12]),
+      position: dco_decode_opt_box_autoadd_f_64(arr[13]),
+      isFavorite: dco_decode_opt_box_autoadd_i_32(arr[14]),
+    );
+  }
+
+  @protected
+  TodoTaskDetail dco_decode_todo_task_detail(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 28)
+      throw Exception('unexpected arr length: expect 28 but see ${arr.length}');
+    return TodoTaskDetail(
+      id: dco_decode_i_64(arr[0]),
+      uuid: dco_decode_String(arr[1]),
+      title: dco_decode_String(arr[2]),
+      description: dco_decode_opt_String(arr[3]),
+      projectId: dco_decode_opt_box_autoadd_i_64(arr[4]),
+      priority: dco_decode_i_32(arr[5]),
+      status: dco_decode_String(arr[6]),
+      done: dco_decode_i_32(arr[7]),
+      doneAt: dco_decode_opt_box_autoadd_i_64(arr[8]),
+      dueDate: dco_decode_opt_box_autoadd_i_64(arr[9]),
+      startDate: dco_decode_opt_box_autoadd_i_64(arr[10]),
+      endDate: dco_decode_opt_box_autoadd_i_64(arr[11]),
+      repeatAfter: dco_decode_i_64(arr[12]),
+      repeatMode: dco_decode_i_32(arr[13]),
+      hexColor: dco_decode_String(arr[14]),
+      percentDone: dco_decode_f_64(arr[15]),
+      position: dco_decode_f_64(arr[16]),
+      isFavorite: dco_decode_i_32(arr[17]),
+      isDeleted: dco_decode_i_32(arr[18]),
+      createdAt: dco_decode_i_64(arr[19]),
+      updatedAt: dco_decode_i_64(arr[20]),
+      deletedAt: dco_decode_opt_box_autoadd_i_64(arr[21]),
+      version: dco_decode_i_32(arr[22]),
+      subtasks: dco_decode_list_todo_subtask(arr[23]),
+      labels: dco_decode_list_task_label_with_id(arr[24]),
+      comments: dco_decode_list_todo_comment(arr[25]),
+      relations: dco_decode_list_todo_task_relation(arr[26]),
+      reminders: dco_decode_list_todo_reminder(arr[27]),
+    );
+  }
+
+  @protected
+  TodoTaskLabel dco_decode_todo_task_label(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 9)
+      throw Exception('unexpected arr length: expect 9 but see ${arr.length}');
+    return TodoTaskLabel(
+      id: dco_decode_i_64(arr[0]),
+      uuid: dco_decode_String(arr[1]),
+      taskId: dco_decode_i_64(arr[2]),
+      labelId: dco_decode_i_64(arr[3]),
+      isDeleted: dco_decode_i_32(arr[4]),
+      createdAt: dco_decode_i_64(arr[5]),
+      updatedAt: dco_decode_i_64(arr[6]),
+      deletedAt: dco_decode_opt_box_autoadd_i_64(arr[7]),
+      version: dco_decode_i_32(arr[8]),
+    );
+  }
+
+  @protected
+  TodoTaskLabelCreateInput dco_decode_todo_task_label_create_input(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 2)
+      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+    return TodoTaskLabelCreateInput(
+      taskId: dco_decode_i_64(arr[0]),
+      labelId: dco_decode_i_64(arr[1]),
+    );
+  }
+
+  @protected
+  TodoTaskRelation dco_decode_todo_task_relation(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 10)
+      throw Exception('unexpected arr length: expect 10 but see ${arr.length}');
+    return TodoTaskRelation(
+      id: dco_decode_i_64(arr[0]),
+      uuid: dco_decode_String(arr[1]),
+      taskId: dco_decode_i_64(arr[2]),
+      otherTaskId: dco_decode_i_64(arr[3]),
+      relationType: dco_decode_String(arr[4]),
+      isDeleted: dco_decode_i_32(arr[5]),
+      createdAt: dco_decode_i_64(arr[6]),
+      updatedAt: dco_decode_i_64(arr[7]),
+      deletedAt: dco_decode_opt_box_autoadd_i_64(arr[8]),
+      version: dco_decode_i_32(arr[9]),
+    );
+  }
+
+  @protected
+  TodoTaskRelationCreateInput dco_decode_todo_task_relation_create_input(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 3)
+      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
+    return TodoTaskRelationCreateInput(
+      taskId: dco_decode_i_64(arr[0]),
+      otherTaskId: dco_decode_i_64(arr[1]),
+      relationType: dco_decode_String(arr[2]),
+    );
+  }
+
+  @protected
   int dco_decode_u_32(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw as int;
@@ -3491,448 +3185,10 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  BigInt dco_decode_usize(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return dcoDecodeU64(raw);
-  }
-
-  @protected
   AnyhowException sse_decode_AnyhowException(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var inner = sse_decode_String(deserializer);
     return AnyhowException(inner);
-  }
-
-  @protected
-  ListFilter
-  sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerListFilter(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    return ListFilterImpl.frbInternalSseDecode(
-      sse_decode_usize(deserializer),
-      sse_decode_i_32(deserializer),
-    );
-  }
-
-  @protected
-  TodoComment
-  sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoComment(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    return TodoCommentImpl.frbInternalSseDecode(
-      sse_decode_usize(deserializer),
-      sse_decode_i_32(deserializer),
-    );
-  }
-
-  @protected
-  TodoCommentCreateInput
-  sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoCommentCreateInput(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    return TodoCommentCreateInputImpl.frbInternalSseDecode(
-      sse_decode_usize(deserializer),
-      sse_decode_i_32(deserializer),
-    );
-  }
-
-  @protected
-  TodoLabel
-  sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoLabel(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    return TodoLabelImpl.frbInternalSseDecode(
-      sse_decode_usize(deserializer),
-      sse_decode_i_32(deserializer),
-    );
-  }
-
-  @protected
-  TodoLabelCreateInput
-  sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoLabelCreateInput(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    return TodoLabelCreateInputImpl.frbInternalSseDecode(
-      sse_decode_usize(deserializer),
-      sse_decode_i_32(deserializer),
-    );
-  }
-
-  @protected
-  TodoProject
-  sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoProject(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    return TodoProjectImpl.frbInternalSseDecode(
-      sse_decode_usize(deserializer),
-      sse_decode_i_32(deserializer),
-    );
-  }
-
-  @protected
-  TodoProjectCreateInput
-  sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoProjectCreateInput(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    return TodoProjectCreateInputImpl.frbInternalSseDecode(
-      sse_decode_usize(deserializer),
-      sse_decode_i_32(deserializer),
-    );
-  }
-
-  @protected
-  TodoReminder
-  sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoReminder(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    return TodoReminderImpl.frbInternalSseDecode(
-      sse_decode_usize(deserializer),
-      sse_decode_i_32(deserializer),
-    );
-  }
-
-  @protected
-  TodoReminderCreateInput
-  sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoReminderCreateInput(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    return TodoReminderCreateInputImpl.frbInternalSseDecode(
-      sse_decode_usize(deserializer),
-      sse_decode_i_32(deserializer),
-    );
-  }
-
-  @protected
-  TodoSubtask
-  sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoSubtask(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    return TodoSubtaskImpl.frbInternalSseDecode(
-      sse_decode_usize(deserializer),
-      sse_decode_i_32(deserializer),
-    );
-  }
-
-  @protected
-  TodoSubtaskCreateInput
-  sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoSubtaskCreateInput(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    return TodoSubtaskCreateInputImpl.frbInternalSseDecode(
-      sse_decode_usize(deserializer),
-      sse_decode_i_32(deserializer),
-    );
-  }
-
-  @protected
-  TodoTask
-  sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTask(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    return TodoTaskImpl.frbInternalSseDecode(
-      sse_decode_usize(deserializer),
-      sse_decode_i_32(deserializer),
-    );
-  }
-
-  @protected
-  TodoTaskCreateInput
-  sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskCreateInput(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    return TodoTaskCreateInputImpl.frbInternalSseDecode(
-      sse_decode_usize(deserializer),
-      sse_decode_i_32(deserializer),
-    );
-  }
-
-  @protected
-  TodoTaskDetail
-  sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskDetail(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    return TodoTaskDetailImpl.frbInternalSseDecode(
-      sse_decode_usize(deserializer),
-      sse_decode_i_32(deserializer),
-    );
-  }
-
-  @protected
-  TodoTaskLabel
-  sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskLabel(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    return TodoTaskLabelImpl.frbInternalSseDecode(
-      sse_decode_usize(deserializer),
-      sse_decode_i_32(deserializer),
-    );
-  }
-
-  @protected
-  TodoTaskLabelCreateInput
-  sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskLabelCreateInput(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    return TodoTaskLabelCreateInputImpl.frbInternalSseDecode(
-      sse_decode_usize(deserializer),
-      sse_decode_i_32(deserializer),
-    );
-  }
-
-  @protected
-  TodoTaskRelation
-  sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskRelation(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    return TodoTaskRelationImpl.frbInternalSseDecode(
-      sse_decode_usize(deserializer),
-      sse_decode_i_32(deserializer),
-    );
-  }
-
-  @protected
-  TodoTaskRelationCreateInput
-  sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskRelationCreateInput(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    return TodoTaskRelationCreateInputImpl.frbInternalSseDecode(
-      sse_decode_usize(deserializer),
-      sse_decode_i_32(deserializer),
-    );
-  }
-
-  @protected
-  ListFilter
-  sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerListFilter(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    return ListFilterImpl.frbInternalSseDecode(
-      sse_decode_usize(deserializer),
-      sse_decode_i_32(deserializer),
-    );
-  }
-
-  @protected
-  TodoComment
-  sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoComment(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    return TodoCommentImpl.frbInternalSseDecode(
-      sse_decode_usize(deserializer),
-      sse_decode_i_32(deserializer),
-    );
-  }
-
-  @protected
-  TodoCommentCreateInput
-  sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoCommentCreateInput(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    return TodoCommentCreateInputImpl.frbInternalSseDecode(
-      sse_decode_usize(deserializer),
-      sse_decode_i_32(deserializer),
-    );
-  }
-
-  @protected
-  TodoLabel
-  sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoLabel(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    return TodoLabelImpl.frbInternalSseDecode(
-      sse_decode_usize(deserializer),
-      sse_decode_i_32(deserializer),
-    );
-  }
-
-  @protected
-  TodoLabelCreateInput
-  sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoLabelCreateInput(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    return TodoLabelCreateInputImpl.frbInternalSseDecode(
-      sse_decode_usize(deserializer),
-      sse_decode_i_32(deserializer),
-    );
-  }
-
-  @protected
-  TodoProject
-  sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoProject(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    return TodoProjectImpl.frbInternalSseDecode(
-      sse_decode_usize(deserializer),
-      sse_decode_i_32(deserializer),
-    );
-  }
-
-  @protected
-  TodoProjectCreateInput
-  sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoProjectCreateInput(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    return TodoProjectCreateInputImpl.frbInternalSseDecode(
-      sse_decode_usize(deserializer),
-      sse_decode_i_32(deserializer),
-    );
-  }
-
-  @protected
-  TodoReminder
-  sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoReminder(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    return TodoReminderImpl.frbInternalSseDecode(
-      sse_decode_usize(deserializer),
-      sse_decode_i_32(deserializer),
-    );
-  }
-
-  @protected
-  TodoReminderCreateInput
-  sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoReminderCreateInput(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    return TodoReminderCreateInputImpl.frbInternalSseDecode(
-      sse_decode_usize(deserializer),
-      sse_decode_i_32(deserializer),
-    );
-  }
-
-  @protected
-  TodoSubtask
-  sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoSubtask(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    return TodoSubtaskImpl.frbInternalSseDecode(
-      sse_decode_usize(deserializer),
-      sse_decode_i_32(deserializer),
-    );
-  }
-
-  @protected
-  TodoSubtaskCreateInput
-  sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoSubtaskCreateInput(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    return TodoSubtaskCreateInputImpl.frbInternalSseDecode(
-      sse_decode_usize(deserializer),
-      sse_decode_i_32(deserializer),
-    );
-  }
-
-  @protected
-  TodoTask
-  sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTask(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    return TodoTaskImpl.frbInternalSseDecode(
-      sse_decode_usize(deserializer),
-      sse_decode_i_32(deserializer),
-    );
-  }
-
-  @protected
-  TodoTaskCreateInput
-  sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskCreateInput(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    return TodoTaskCreateInputImpl.frbInternalSseDecode(
-      sse_decode_usize(deserializer),
-      sse_decode_i_32(deserializer),
-    );
-  }
-
-  @protected
-  TodoTaskDetail
-  sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskDetail(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    return TodoTaskDetailImpl.frbInternalSseDecode(
-      sse_decode_usize(deserializer),
-      sse_decode_i_32(deserializer),
-    );
-  }
-
-  @protected
-  TodoTaskLabel
-  sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskLabel(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    return TodoTaskLabelImpl.frbInternalSseDecode(
-      sse_decode_usize(deserializer),
-      sse_decode_i_32(deserializer),
-    );
-  }
-
-  @protected
-  TodoTaskLabelCreateInput
-  sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskLabelCreateInput(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    return TodoTaskLabelCreateInputImpl.frbInternalSseDecode(
-      sse_decode_usize(deserializer),
-      sse_decode_i_32(deserializer),
-    );
-  }
-
-  @protected
-  TodoTaskRelation
-  sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskRelation(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    return TodoTaskRelationImpl.frbInternalSseDecode(
-      sse_decode_usize(deserializer),
-      sse_decode_i_32(deserializer),
-    );
-  }
-
-  @protected
-  TodoTaskRelationCreateInput
-  sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskRelationCreateInput(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    return TodoTaskRelationCreateInputImpl.frbInternalSseDecode(
-      sse_decode_usize(deserializer),
-      sse_decode_i_32(deserializer),
-    );
   }
 
   @protected
@@ -3971,9 +3227,27 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  double sse_decode_box_autoadd_f_64(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_f_64(deserializer));
+  }
+
+  @protected
+  int sse_decode_box_autoadd_i_32(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_i_32(deserializer));
+  }
+
+  @protected
   PlatformInt64 sse_decode_box_autoadd_i_64(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     return (sse_decode_i_64(deserializer));
+  }
+
+  @protected
+  ListFilter sse_decode_box_autoadd_list_filter(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_list_filter(deserializer));
   }
 
   @protected
@@ -3990,6 +3264,71 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     return (sse_decode_sync_config_view(deserializer));
+  }
+
+  @protected
+  TodoCommentCreateInput sse_decode_box_autoadd_todo_comment_create_input(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_todo_comment_create_input(deserializer));
+  }
+
+  @protected
+  TodoLabelCreateInput sse_decode_box_autoadd_todo_label_create_input(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_todo_label_create_input(deserializer));
+  }
+
+  @protected
+  TodoProjectCreateInput sse_decode_box_autoadd_todo_project_create_input(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_todo_project_create_input(deserializer));
+  }
+
+  @protected
+  TodoReminderCreateInput sse_decode_box_autoadd_todo_reminder_create_input(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_todo_reminder_create_input(deserializer));
+  }
+
+  @protected
+  TodoSubtaskCreateInput sse_decode_box_autoadd_todo_subtask_create_input(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_todo_subtask_create_input(deserializer));
+  }
+
+  @protected
+  TodoTaskCreateInput sse_decode_box_autoadd_todo_task_create_input(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_todo_task_create_input(deserializer));
+  }
+
+  @protected
+  TodoTaskLabelCreateInput sse_decode_box_autoadd_todo_task_label_create_input(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_todo_task_label_create_input(deserializer));
+  }
+
+  @protected
+  TodoTaskRelationCreateInput
+  sse_decode_box_autoadd_todo_task_relation_create_input(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_todo_task_relation_create_input(deserializer));
   }
 
   @protected
@@ -4018,161 +3357,28 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  int sse_decode_i_32(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return deserializer.buffer.getInt32();
+  }
+
+  @protected
   PlatformInt64 sse_decode_i_64(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     return deserializer.buffer.getPlatformInt64();
   }
 
   @protected
-  List<TodoComment>
-  sse_decode_list_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoComment(
-    SseDeserializer deserializer,
-  ) {
+  ListFilter sse_decode_list_filter(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
-
-    var len_ = sse_decode_i_32(deserializer);
-    var ans_ = <TodoComment>[];
-    for (var idx_ = 0; idx_ < len_; ++idx_) {
-      ans_.add(
-        sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoComment(
-          deserializer,
-        ),
-      );
-    }
-    return ans_;
-  }
-
-  @protected
-  List<TodoLabel>
-  sse_decode_list_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoLabel(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-
-    var len_ = sse_decode_i_32(deserializer);
-    var ans_ = <TodoLabel>[];
-    for (var idx_ = 0; idx_ < len_; ++idx_) {
-      ans_.add(
-        sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoLabel(
-          deserializer,
-        ),
-      );
-    }
-    return ans_;
-  }
-
-  @protected
-  List<TodoProject>
-  sse_decode_list_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoProject(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-
-    var len_ = sse_decode_i_32(deserializer);
-    var ans_ = <TodoProject>[];
-    for (var idx_ = 0; idx_ < len_; ++idx_) {
-      ans_.add(
-        sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoProject(
-          deserializer,
-        ),
-      );
-    }
-    return ans_;
-  }
-
-  @protected
-  List<TodoReminder>
-  sse_decode_list_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoReminder(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-
-    var len_ = sse_decode_i_32(deserializer);
-    var ans_ = <TodoReminder>[];
-    for (var idx_ = 0; idx_ < len_; ++idx_) {
-      ans_.add(
-        sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoReminder(
-          deserializer,
-        ),
-      );
-    }
-    return ans_;
-  }
-
-  @protected
-  List<TodoSubtask>
-  sse_decode_list_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoSubtask(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-
-    var len_ = sse_decode_i_32(deserializer);
-    var ans_ = <TodoSubtask>[];
-    for (var idx_ = 0; idx_ < len_; ++idx_) {
-      ans_.add(
-        sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoSubtask(
-          deserializer,
-        ),
-      );
-    }
-    return ans_;
-  }
-
-  @protected
-  List<TodoTask>
-  sse_decode_list_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTask(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-
-    var len_ = sse_decode_i_32(deserializer);
-    var ans_ = <TodoTask>[];
-    for (var idx_ = 0; idx_ < len_; ++idx_) {
-      ans_.add(
-        sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTask(
-          deserializer,
-        ),
-      );
-    }
-    return ans_;
-  }
-
-  @protected
-  List<TodoTaskLabel>
-  sse_decode_list_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskLabel(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-
-    var len_ = sse_decode_i_32(deserializer);
-    var ans_ = <TodoTaskLabel>[];
-    for (var idx_ = 0; idx_ < len_; ++idx_) {
-      ans_.add(
-        sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskLabel(
-          deserializer,
-        ),
-      );
-    }
-    return ans_;
-  }
-
-  @protected
-  List<TodoTaskRelation>
-  sse_decode_list_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskRelation(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-
-    var len_ = sse_decode_i_32(deserializer);
-    var ans_ = <TodoTaskRelation>[];
-    for (var idx_ = 0; idx_ < len_; ++idx_) {
-      ans_.add(
-        sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskRelation(
-          deserializer,
-        ),
-      );
-    }
-    return ans_;
+    var var_keyword = sse_decode_opt_String(deserializer);
+    var var_page = sse_decode_u_32(deserializer);
+    var var_pageSize = sse_decode_u_32(deserializer);
+    return ListFilter(
+      keyword: var_keyword,
+      page: var_page,
+      pageSize: var_pageSize,
+    );
   }
 
   @protected
@@ -4180,6 +3386,122 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var len_ = sse_decode_i_32(deserializer);
     return deserializer.buffer.getUint8List(len_);
+  }
+
+  @protected
+  List<TaskLabelWithId> sse_decode_list_task_label_with_id(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <TaskLabelWithId>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_task_label_with_id(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  List<TodoComment> sse_decode_list_todo_comment(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <TodoComment>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_todo_comment(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  List<TodoLabel> sse_decode_list_todo_label(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <TodoLabel>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_todo_label(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  List<TodoProject> sse_decode_list_todo_project(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <TodoProject>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_todo_project(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  List<TodoReminder> sse_decode_list_todo_reminder(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <TodoReminder>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_todo_reminder(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  List<TodoSubtask> sse_decode_list_todo_subtask(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <TodoSubtask>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_todo_subtask(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  List<TodoTask> sse_decode_list_todo_task(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <TodoTask>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_todo_task(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  List<TodoTaskLabel> sse_decode_list_todo_task_label(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <TodoTaskLabel>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_todo_task_label(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  List<TodoTaskRelation> sse_decode_list_todo_task_relation(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <TodoTaskRelation>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_todo_task_relation(deserializer));
+    }
+    return ans_;
   }
 
   @protected
@@ -4199,6 +3521,28 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
     if (sse_decode_bool(deserializer)) {
       return (sse_decode_box_autoadd_bool(deserializer));
+    } else {
+      return null;
+    }
+  }
+
+  @protected
+  double? sse_decode_opt_box_autoadd_f_64(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    if (sse_decode_bool(deserializer)) {
+      return (sse_decode_box_autoadd_f_64(deserializer));
+    } else {
+      return null;
+    }
+  }
+
+  @protected
+  int? sse_decode_opt_box_autoadd_i_32(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    if (sse_decode_bool(deserializer)) {
+      return (sse_decode_box_autoadd_i_32(deserializer));
     } else {
       return null;
     }
@@ -4321,6 +3665,462 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  TaskLabelWithId sse_decode_task_label_with_id(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_id = sse_decode_i_64(deserializer);
+    var var_uuid = sse_decode_String(deserializer);
+    var var_title = sse_decode_String(deserializer);
+    var var_hexColor = sse_decode_String(deserializer);
+    var var_isDeleted = sse_decode_i_32(deserializer);
+    var var_createdAt = sse_decode_i_64(deserializer);
+    var var_updatedAt = sse_decode_i_64(deserializer);
+    var var_deletedAt = sse_decode_opt_box_autoadd_i_64(deserializer);
+    var var_version = sse_decode_i_32(deserializer);
+    var var_taskLabelId = sse_decode_i_64(deserializer);
+    return TaskLabelWithId(
+      id: var_id,
+      uuid: var_uuid,
+      title: var_title,
+      hexColor: var_hexColor,
+      isDeleted: var_isDeleted,
+      createdAt: var_createdAt,
+      updatedAt: var_updatedAt,
+      deletedAt: var_deletedAt,
+      version: var_version,
+      taskLabelId: var_taskLabelId,
+    );
+  }
+
+  @protected
+  TodoComment sse_decode_todo_comment(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_id = sse_decode_i_64(deserializer);
+    var var_uuid = sse_decode_String(deserializer);
+    var var_taskId = sse_decode_i_64(deserializer);
+    var var_content = sse_decode_String(deserializer);
+    var var_isDeleted = sse_decode_i_32(deserializer);
+    var var_createdAt = sse_decode_i_64(deserializer);
+    var var_updatedAt = sse_decode_i_64(deserializer);
+    var var_deletedAt = sse_decode_opt_box_autoadd_i_64(deserializer);
+    var var_version = sse_decode_i_32(deserializer);
+    return TodoComment(
+      id: var_id,
+      uuid: var_uuid,
+      taskId: var_taskId,
+      content: var_content,
+      isDeleted: var_isDeleted,
+      createdAt: var_createdAt,
+      updatedAt: var_updatedAt,
+      deletedAt: var_deletedAt,
+      version: var_version,
+    );
+  }
+
+  @protected
+  TodoCommentCreateInput sse_decode_todo_comment_create_input(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_taskId = sse_decode_i_64(deserializer);
+    var var_content = sse_decode_String(deserializer);
+    return TodoCommentCreateInput(taskId: var_taskId, content: var_content);
+  }
+
+  @protected
+  TodoLabel sse_decode_todo_label(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_id = sse_decode_i_64(deserializer);
+    var var_uuid = sse_decode_String(deserializer);
+    var var_title = sse_decode_String(deserializer);
+    var var_hexColor = sse_decode_String(deserializer);
+    var var_isDeleted = sse_decode_i_32(deserializer);
+    var var_createdAt = sse_decode_i_64(deserializer);
+    var var_updatedAt = sse_decode_i_64(deserializer);
+    var var_deletedAt = sse_decode_opt_box_autoadd_i_64(deserializer);
+    var var_version = sse_decode_i_32(deserializer);
+    return TodoLabel(
+      id: var_id,
+      uuid: var_uuid,
+      title: var_title,
+      hexColor: var_hexColor,
+      isDeleted: var_isDeleted,
+      createdAt: var_createdAt,
+      updatedAt: var_updatedAt,
+      deletedAt: var_deletedAt,
+      version: var_version,
+    );
+  }
+
+  @protected
+  TodoLabelCreateInput sse_decode_todo_label_create_input(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_title = sse_decode_String(deserializer);
+    var var_hexColor = sse_decode_opt_String(deserializer);
+    return TodoLabelCreateInput(title: var_title, hexColor: var_hexColor);
+  }
+
+  @protected
+  TodoProject sse_decode_todo_project(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_id = sse_decode_i_64(deserializer);
+    var var_uuid = sse_decode_String(deserializer);
+    var var_title = sse_decode_String(deserializer);
+    var var_description = sse_decode_opt_String(deserializer);
+    var var_hexColor = sse_decode_String(deserializer);
+    var var_sortOrder = sse_decode_f_64(deserializer);
+    var var_isDeleted = sse_decode_i_32(deserializer);
+    var var_createdAt = sse_decode_i_64(deserializer);
+    var var_updatedAt = sse_decode_i_64(deserializer);
+    var var_deletedAt = sse_decode_opt_box_autoadd_i_64(deserializer);
+    var var_version = sse_decode_i_32(deserializer);
+    return TodoProject(
+      id: var_id,
+      uuid: var_uuid,
+      title: var_title,
+      description: var_description,
+      hexColor: var_hexColor,
+      sortOrder: var_sortOrder,
+      isDeleted: var_isDeleted,
+      createdAt: var_createdAt,
+      updatedAt: var_updatedAt,
+      deletedAt: var_deletedAt,
+      version: var_version,
+    );
+  }
+
+  @protected
+  TodoProjectCreateInput sse_decode_todo_project_create_input(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_title = sse_decode_String(deserializer);
+    var var_description = sse_decode_opt_String(deserializer);
+    var var_hexColor = sse_decode_opt_String(deserializer);
+    var var_sortOrder = sse_decode_opt_box_autoadd_f_64(deserializer);
+    return TodoProjectCreateInput(
+      title: var_title,
+      description: var_description,
+      hexColor: var_hexColor,
+      sortOrder: var_sortOrder,
+    );
+  }
+
+  @protected
+  TodoReminder sse_decode_todo_reminder(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_id = sse_decode_i_64(deserializer);
+    var var_uuid = sse_decode_String(deserializer);
+    var var_taskId = sse_decode_i_64(deserializer);
+    var var_remindAt = sse_decode_i_64(deserializer);
+    var var_isDeleted = sse_decode_i_32(deserializer);
+    var var_createdAt = sse_decode_i_64(deserializer);
+    var var_updatedAt = sse_decode_i_64(deserializer);
+    var var_deletedAt = sse_decode_opt_box_autoadd_i_64(deserializer);
+    var var_version = sse_decode_i_32(deserializer);
+    return TodoReminder(
+      id: var_id,
+      uuid: var_uuid,
+      taskId: var_taskId,
+      remindAt: var_remindAt,
+      isDeleted: var_isDeleted,
+      createdAt: var_createdAt,
+      updatedAt: var_updatedAt,
+      deletedAt: var_deletedAt,
+      version: var_version,
+    );
+  }
+
+  @protected
+  TodoReminderCreateInput sse_decode_todo_reminder_create_input(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_taskId = sse_decode_i_64(deserializer);
+    var var_remindAt = sse_decode_i_64(deserializer);
+    return TodoReminderCreateInput(taskId: var_taskId, remindAt: var_remindAt);
+  }
+
+  @protected
+  TodoSubtask sse_decode_todo_subtask(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_id = sse_decode_i_64(deserializer);
+    var var_uuid = sse_decode_String(deserializer);
+    var var_taskId = sse_decode_i_64(deserializer);
+    var var_title = sse_decode_String(deserializer);
+    var var_done = sse_decode_i_32(deserializer);
+    var var_doneAt = sse_decode_opt_box_autoadd_i_64(deserializer);
+    var var_position = sse_decode_f_64(deserializer);
+    var var_isDeleted = sse_decode_i_32(deserializer);
+    var var_createdAt = sse_decode_i_64(deserializer);
+    var var_updatedAt = sse_decode_i_64(deserializer);
+    var var_deletedAt = sse_decode_opt_box_autoadd_i_64(deserializer);
+    var var_version = sse_decode_i_32(deserializer);
+    return TodoSubtask(
+      id: var_id,
+      uuid: var_uuid,
+      taskId: var_taskId,
+      title: var_title,
+      done: var_done,
+      doneAt: var_doneAt,
+      position: var_position,
+      isDeleted: var_isDeleted,
+      createdAt: var_createdAt,
+      updatedAt: var_updatedAt,
+      deletedAt: var_deletedAt,
+      version: var_version,
+    );
+  }
+
+  @protected
+  TodoSubtaskCreateInput sse_decode_todo_subtask_create_input(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_taskId = sse_decode_i_64(deserializer);
+    var var_title = sse_decode_String(deserializer);
+    var var_position = sse_decode_opt_box_autoadd_f_64(deserializer);
+    return TodoSubtaskCreateInput(
+      taskId: var_taskId,
+      title: var_title,
+      position: var_position,
+    );
+  }
+
+  @protected
+  TodoTask sse_decode_todo_task(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_id = sse_decode_i_64(deserializer);
+    var var_uuid = sse_decode_String(deserializer);
+    var var_title = sse_decode_String(deserializer);
+    var var_description = sse_decode_opt_String(deserializer);
+    var var_projectId = sse_decode_opt_box_autoadd_i_64(deserializer);
+    var var_priority = sse_decode_i_32(deserializer);
+    var var_status = sse_decode_String(deserializer);
+    var var_done = sse_decode_i_32(deserializer);
+    var var_doneAt = sse_decode_opt_box_autoadd_i_64(deserializer);
+    var var_dueDate = sse_decode_opt_box_autoadd_i_64(deserializer);
+    var var_startDate = sse_decode_opt_box_autoadd_i_64(deserializer);
+    var var_endDate = sse_decode_opt_box_autoadd_i_64(deserializer);
+    var var_repeatAfter = sse_decode_i_64(deserializer);
+    var var_repeatMode = sse_decode_i_32(deserializer);
+    var var_hexColor = sse_decode_String(deserializer);
+    var var_percentDone = sse_decode_f_64(deserializer);
+    var var_position = sse_decode_f_64(deserializer);
+    var var_isFavorite = sse_decode_i_32(deserializer);
+    var var_isDeleted = sse_decode_i_32(deserializer);
+    var var_createdAt = sse_decode_i_64(deserializer);
+    var var_updatedAt = sse_decode_i_64(deserializer);
+    var var_deletedAt = sse_decode_opt_box_autoadd_i_64(deserializer);
+    var var_version = sse_decode_i_32(deserializer);
+    return TodoTask(
+      id: var_id,
+      uuid: var_uuid,
+      title: var_title,
+      description: var_description,
+      projectId: var_projectId,
+      priority: var_priority,
+      status: var_status,
+      done: var_done,
+      doneAt: var_doneAt,
+      dueDate: var_dueDate,
+      startDate: var_startDate,
+      endDate: var_endDate,
+      repeatAfter: var_repeatAfter,
+      repeatMode: var_repeatMode,
+      hexColor: var_hexColor,
+      percentDone: var_percentDone,
+      position: var_position,
+      isFavorite: var_isFavorite,
+      isDeleted: var_isDeleted,
+      createdAt: var_createdAt,
+      updatedAt: var_updatedAt,
+      deletedAt: var_deletedAt,
+      version: var_version,
+    );
+  }
+
+  @protected
+  TodoTaskCreateInput sse_decode_todo_task_create_input(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_title = sse_decode_String(deserializer);
+    var var_description = sse_decode_opt_String(deserializer);
+    var var_projectId = sse_decode_opt_box_autoadd_i_64(deserializer);
+    var var_priority = sse_decode_opt_box_autoadd_i_32(deserializer);
+    var var_status = sse_decode_opt_String(deserializer);
+    var var_done = sse_decode_opt_box_autoadd_i_32(deserializer);
+    var var_doneAt = sse_decode_opt_box_autoadd_i_64(deserializer);
+    var var_dueDate = sse_decode_opt_box_autoadd_i_64(deserializer);
+    var var_startDate = sse_decode_opt_box_autoadd_i_64(deserializer);
+    var var_endDate = sse_decode_opt_box_autoadd_i_64(deserializer);
+    var var_repeatAfter = sse_decode_opt_box_autoadd_i_64(deserializer);
+    var var_repeatMode = sse_decode_opt_box_autoadd_i_32(deserializer);
+    var var_hexColor = sse_decode_opt_String(deserializer);
+    var var_position = sse_decode_opt_box_autoadd_f_64(deserializer);
+    var var_isFavorite = sse_decode_opt_box_autoadd_i_32(deserializer);
+    return TodoTaskCreateInput(
+      title: var_title,
+      description: var_description,
+      projectId: var_projectId,
+      priority: var_priority,
+      status: var_status,
+      done: var_done,
+      doneAt: var_doneAt,
+      dueDate: var_dueDate,
+      startDate: var_startDate,
+      endDate: var_endDate,
+      repeatAfter: var_repeatAfter,
+      repeatMode: var_repeatMode,
+      hexColor: var_hexColor,
+      position: var_position,
+      isFavorite: var_isFavorite,
+    );
+  }
+
+  @protected
+  TodoTaskDetail sse_decode_todo_task_detail(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_id = sse_decode_i_64(deserializer);
+    var var_uuid = sse_decode_String(deserializer);
+    var var_title = sse_decode_String(deserializer);
+    var var_description = sse_decode_opt_String(deserializer);
+    var var_projectId = sse_decode_opt_box_autoadd_i_64(deserializer);
+    var var_priority = sse_decode_i_32(deserializer);
+    var var_status = sse_decode_String(deserializer);
+    var var_done = sse_decode_i_32(deserializer);
+    var var_doneAt = sse_decode_opt_box_autoadd_i_64(deserializer);
+    var var_dueDate = sse_decode_opt_box_autoadd_i_64(deserializer);
+    var var_startDate = sse_decode_opt_box_autoadd_i_64(deserializer);
+    var var_endDate = sse_decode_opt_box_autoadd_i_64(deserializer);
+    var var_repeatAfter = sse_decode_i_64(deserializer);
+    var var_repeatMode = sse_decode_i_32(deserializer);
+    var var_hexColor = sse_decode_String(deserializer);
+    var var_percentDone = sse_decode_f_64(deserializer);
+    var var_position = sse_decode_f_64(deserializer);
+    var var_isFavorite = sse_decode_i_32(deserializer);
+    var var_isDeleted = sse_decode_i_32(deserializer);
+    var var_createdAt = sse_decode_i_64(deserializer);
+    var var_updatedAt = sse_decode_i_64(deserializer);
+    var var_deletedAt = sse_decode_opt_box_autoadd_i_64(deserializer);
+    var var_version = sse_decode_i_32(deserializer);
+    var var_subtasks = sse_decode_list_todo_subtask(deserializer);
+    var var_labels = sse_decode_list_task_label_with_id(deserializer);
+    var var_comments = sse_decode_list_todo_comment(deserializer);
+    var var_relations = sse_decode_list_todo_task_relation(deserializer);
+    var var_reminders = sse_decode_list_todo_reminder(deserializer);
+    return TodoTaskDetail(
+      id: var_id,
+      uuid: var_uuid,
+      title: var_title,
+      description: var_description,
+      projectId: var_projectId,
+      priority: var_priority,
+      status: var_status,
+      done: var_done,
+      doneAt: var_doneAt,
+      dueDate: var_dueDate,
+      startDate: var_startDate,
+      endDate: var_endDate,
+      repeatAfter: var_repeatAfter,
+      repeatMode: var_repeatMode,
+      hexColor: var_hexColor,
+      percentDone: var_percentDone,
+      position: var_position,
+      isFavorite: var_isFavorite,
+      isDeleted: var_isDeleted,
+      createdAt: var_createdAt,
+      updatedAt: var_updatedAt,
+      deletedAt: var_deletedAt,
+      version: var_version,
+      subtasks: var_subtasks,
+      labels: var_labels,
+      comments: var_comments,
+      relations: var_relations,
+      reminders: var_reminders,
+    );
+  }
+
+  @protected
+  TodoTaskLabel sse_decode_todo_task_label(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_id = sse_decode_i_64(deserializer);
+    var var_uuid = sse_decode_String(deserializer);
+    var var_taskId = sse_decode_i_64(deserializer);
+    var var_labelId = sse_decode_i_64(deserializer);
+    var var_isDeleted = sse_decode_i_32(deserializer);
+    var var_createdAt = sse_decode_i_64(deserializer);
+    var var_updatedAt = sse_decode_i_64(deserializer);
+    var var_deletedAt = sse_decode_opt_box_autoadd_i_64(deserializer);
+    var var_version = sse_decode_i_32(deserializer);
+    return TodoTaskLabel(
+      id: var_id,
+      uuid: var_uuid,
+      taskId: var_taskId,
+      labelId: var_labelId,
+      isDeleted: var_isDeleted,
+      createdAt: var_createdAt,
+      updatedAt: var_updatedAt,
+      deletedAt: var_deletedAt,
+      version: var_version,
+    );
+  }
+
+  @protected
+  TodoTaskLabelCreateInput sse_decode_todo_task_label_create_input(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_taskId = sse_decode_i_64(deserializer);
+    var var_labelId = sse_decode_i_64(deserializer);
+    return TodoTaskLabelCreateInput(taskId: var_taskId, labelId: var_labelId);
+  }
+
+  @protected
+  TodoTaskRelation sse_decode_todo_task_relation(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_id = sse_decode_i_64(deserializer);
+    var var_uuid = sse_decode_String(deserializer);
+    var var_taskId = sse_decode_i_64(deserializer);
+    var var_otherTaskId = sse_decode_i_64(deserializer);
+    var var_relationType = sse_decode_String(deserializer);
+    var var_isDeleted = sse_decode_i_32(deserializer);
+    var var_createdAt = sse_decode_i_64(deserializer);
+    var var_updatedAt = sse_decode_i_64(deserializer);
+    var var_deletedAt = sse_decode_opt_box_autoadd_i_64(deserializer);
+    var var_version = sse_decode_i_32(deserializer);
+    return TodoTaskRelation(
+      id: var_id,
+      uuid: var_uuid,
+      taskId: var_taskId,
+      otherTaskId: var_otherTaskId,
+      relationType: var_relationType,
+      isDeleted: var_isDeleted,
+      createdAt: var_createdAt,
+      updatedAt: var_updatedAt,
+      deletedAt: var_deletedAt,
+      version: var_version,
+    );
+  }
+
+  @protected
+  TodoTaskRelationCreateInput sse_decode_todo_task_relation_create_input(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_taskId = sse_decode_i_64(deserializer);
+    var var_otherTaskId = sse_decode_i_64(deserializer);
+    var var_relationType = sse_decode_String(deserializer);
+    return TodoTaskRelationCreateInput(
+      taskId: var_taskId,
+      otherTaskId: var_otherTaskId,
+      relationType: var_relationType,
+    );
+  }
+
+  @protected
   int sse_decode_u_32(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     return deserializer.buffer.getUint32();
@@ -4338,496 +4138,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  BigInt sse_decode_usize(SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    return deserializer.buffer.getBigUint64();
-  }
-
-  @protected
-  int sse_decode_i_32(SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    return deserializer.buffer.getInt32();
-  }
-
-  @protected
   void sse_encode_AnyhowException(
     AnyhowException self,
     SseSerializer serializer,
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_String(self.message, serializer);
-  }
-
-  @protected
-  void
-  sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerListFilter(
-    ListFilter self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_usize(
-      (self as ListFilterImpl).frbInternalSseEncode(move: true),
-      serializer,
-    );
-  }
-
-  @protected
-  void
-  sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoComment(
-    TodoComment self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_usize(
-      (self as TodoCommentImpl).frbInternalSseEncode(move: true),
-      serializer,
-    );
-  }
-
-  @protected
-  void
-  sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoCommentCreateInput(
-    TodoCommentCreateInput self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_usize(
-      (self as TodoCommentCreateInputImpl).frbInternalSseEncode(move: true),
-      serializer,
-    );
-  }
-
-  @protected
-  void
-  sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoLabel(
-    TodoLabel self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_usize(
-      (self as TodoLabelImpl).frbInternalSseEncode(move: true),
-      serializer,
-    );
-  }
-
-  @protected
-  void
-  sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoLabelCreateInput(
-    TodoLabelCreateInput self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_usize(
-      (self as TodoLabelCreateInputImpl).frbInternalSseEncode(move: true),
-      serializer,
-    );
-  }
-
-  @protected
-  void
-  sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoProject(
-    TodoProject self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_usize(
-      (self as TodoProjectImpl).frbInternalSseEncode(move: true),
-      serializer,
-    );
-  }
-
-  @protected
-  void
-  sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoProjectCreateInput(
-    TodoProjectCreateInput self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_usize(
-      (self as TodoProjectCreateInputImpl).frbInternalSseEncode(move: true),
-      serializer,
-    );
-  }
-
-  @protected
-  void
-  sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoReminder(
-    TodoReminder self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_usize(
-      (self as TodoReminderImpl).frbInternalSseEncode(move: true),
-      serializer,
-    );
-  }
-
-  @protected
-  void
-  sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoReminderCreateInput(
-    TodoReminderCreateInput self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_usize(
-      (self as TodoReminderCreateInputImpl).frbInternalSseEncode(move: true),
-      serializer,
-    );
-  }
-
-  @protected
-  void
-  sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoSubtask(
-    TodoSubtask self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_usize(
-      (self as TodoSubtaskImpl).frbInternalSseEncode(move: true),
-      serializer,
-    );
-  }
-
-  @protected
-  void
-  sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoSubtaskCreateInput(
-    TodoSubtaskCreateInput self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_usize(
-      (self as TodoSubtaskCreateInputImpl).frbInternalSseEncode(move: true),
-      serializer,
-    );
-  }
-
-  @protected
-  void
-  sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTask(
-    TodoTask self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_usize(
-      (self as TodoTaskImpl).frbInternalSseEncode(move: true),
-      serializer,
-    );
-  }
-
-  @protected
-  void
-  sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskCreateInput(
-    TodoTaskCreateInput self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_usize(
-      (self as TodoTaskCreateInputImpl).frbInternalSseEncode(move: true),
-      serializer,
-    );
-  }
-
-  @protected
-  void
-  sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskDetail(
-    TodoTaskDetail self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_usize(
-      (self as TodoTaskDetailImpl).frbInternalSseEncode(move: true),
-      serializer,
-    );
-  }
-
-  @protected
-  void
-  sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskLabel(
-    TodoTaskLabel self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_usize(
-      (self as TodoTaskLabelImpl).frbInternalSseEncode(move: true),
-      serializer,
-    );
-  }
-
-  @protected
-  void
-  sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskLabelCreateInput(
-    TodoTaskLabelCreateInput self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_usize(
-      (self as TodoTaskLabelCreateInputImpl).frbInternalSseEncode(move: true),
-      serializer,
-    );
-  }
-
-  @protected
-  void
-  sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskRelation(
-    TodoTaskRelation self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_usize(
-      (self as TodoTaskRelationImpl).frbInternalSseEncode(move: true),
-      serializer,
-    );
-  }
-
-  @protected
-  void
-  sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskRelationCreateInput(
-    TodoTaskRelationCreateInput self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_usize(
-      (self as TodoTaskRelationCreateInputImpl).frbInternalSseEncode(
-        move: true,
-      ),
-      serializer,
-    );
-  }
-
-  @protected
-  void
-  sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerListFilter(
-    ListFilter self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_usize(
-      (self as ListFilterImpl).frbInternalSseEncode(move: null),
-      serializer,
-    );
-  }
-
-  @protected
-  void
-  sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoComment(
-    TodoComment self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_usize(
-      (self as TodoCommentImpl).frbInternalSseEncode(move: null),
-      serializer,
-    );
-  }
-
-  @protected
-  void
-  sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoCommentCreateInput(
-    TodoCommentCreateInput self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_usize(
-      (self as TodoCommentCreateInputImpl).frbInternalSseEncode(move: null),
-      serializer,
-    );
-  }
-
-  @protected
-  void
-  sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoLabel(
-    TodoLabel self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_usize(
-      (self as TodoLabelImpl).frbInternalSseEncode(move: null),
-      serializer,
-    );
-  }
-
-  @protected
-  void
-  sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoLabelCreateInput(
-    TodoLabelCreateInput self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_usize(
-      (self as TodoLabelCreateInputImpl).frbInternalSseEncode(move: null),
-      serializer,
-    );
-  }
-
-  @protected
-  void
-  sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoProject(
-    TodoProject self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_usize(
-      (self as TodoProjectImpl).frbInternalSseEncode(move: null),
-      serializer,
-    );
-  }
-
-  @protected
-  void
-  sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoProjectCreateInput(
-    TodoProjectCreateInput self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_usize(
-      (self as TodoProjectCreateInputImpl).frbInternalSseEncode(move: null),
-      serializer,
-    );
-  }
-
-  @protected
-  void
-  sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoReminder(
-    TodoReminder self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_usize(
-      (self as TodoReminderImpl).frbInternalSseEncode(move: null),
-      serializer,
-    );
-  }
-
-  @protected
-  void
-  sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoReminderCreateInput(
-    TodoReminderCreateInput self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_usize(
-      (self as TodoReminderCreateInputImpl).frbInternalSseEncode(move: null),
-      serializer,
-    );
-  }
-
-  @protected
-  void
-  sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoSubtask(
-    TodoSubtask self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_usize(
-      (self as TodoSubtaskImpl).frbInternalSseEncode(move: null),
-      serializer,
-    );
-  }
-
-  @protected
-  void
-  sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoSubtaskCreateInput(
-    TodoSubtaskCreateInput self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_usize(
-      (self as TodoSubtaskCreateInputImpl).frbInternalSseEncode(move: null),
-      serializer,
-    );
-  }
-
-  @protected
-  void
-  sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTask(
-    TodoTask self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_usize(
-      (self as TodoTaskImpl).frbInternalSseEncode(move: null),
-      serializer,
-    );
-  }
-
-  @protected
-  void
-  sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskCreateInput(
-    TodoTaskCreateInput self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_usize(
-      (self as TodoTaskCreateInputImpl).frbInternalSseEncode(move: null),
-      serializer,
-    );
-  }
-
-  @protected
-  void
-  sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskDetail(
-    TodoTaskDetail self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_usize(
-      (self as TodoTaskDetailImpl).frbInternalSseEncode(move: null),
-      serializer,
-    );
-  }
-
-  @protected
-  void
-  sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskLabel(
-    TodoTaskLabel self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_usize(
-      (self as TodoTaskLabelImpl).frbInternalSseEncode(move: null),
-      serializer,
-    );
-  }
-
-  @protected
-  void
-  sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskLabelCreateInput(
-    TodoTaskLabelCreateInput self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_usize(
-      (self as TodoTaskLabelCreateInputImpl).frbInternalSseEncode(move: null),
-      serializer,
-    );
-  }
-
-  @protected
-  void
-  sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskRelation(
-    TodoTaskRelation self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_usize(
-      (self as TodoTaskRelationImpl).frbInternalSseEncode(move: null),
-      serializer,
-    );
-  }
-
-  @protected
-  void
-  sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskRelationCreateInput(
-    TodoTaskRelationCreateInput self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_usize(
-      (self as TodoTaskRelationCreateInputImpl).frbInternalSseEncode(
-        move: null,
-      ),
-      serializer,
-    );
   }
 
   @protected
@@ -4883,12 +4199,33 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_box_autoadd_f_64(double self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_f_64(self, serializer);
+  }
+
+  @protected
+  void sse_encode_box_autoadd_i_32(int self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self, serializer);
+  }
+
+  @protected
   void sse_encode_box_autoadd_i_64(
     PlatformInt64 self,
     SseSerializer serializer,
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_i_64(self, serializer);
+  }
+
+  @protected
+  void sse_encode_box_autoadd_list_filter(
+    ListFilter self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_list_filter(self, serializer);
   }
 
   @protected
@@ -4910,6 +4247,78 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_box_autoadd_todo_comment_create_input(
+    TodoCommentCreateInput self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_todo_comment_create_input(self, serializer);
+  }
+
+  @protected
+  void sse_encode_box_autoadd_todo_label_create_input(
+    TodoLabelCreateInput self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_todo_label_create_input(self, serializer);
+  }
+
+  @protected
+  void sse_encode_box_autoadd_todo_project_create_input(
+    TodoProjectCreateInput self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_todo_project_create_input(self, serializer);
+  }
+
+  @protected
+  void sse_encode_box_autoadd_todo_reminder_create_input(
+    TodoReminderCreateInput self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_todo_reminder_create_input(self, serializer);
+  }
+
+  @protected
+  void sse_encode_box_autoadd_todo_subtask_create_input(
+    TodoSubtaskCreateInput self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_todo_subtask_create_input(self, serializer);
+  }
+
+  @protected
+  void sse_encode_box_autoadd_todo_task_create_input(
+    TodoTaskCreateInput self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_todo_task_create_input(self, serializer);
+  }
+
+  @protected
+  void sse_encode_box_autoadd_todo_task_label_create_input(
+    TodoTaskLabelCreateInput self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_todo_task_label_create_input(self, serializer);
+  }
+
+  @protected
+  void sse_encode_box_autoadd_todo_task_relation_create_input(
+    TodoTaskRelationCreateInput self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_todo_task_relation_create_input(self, serializer);
+  }
+
+  @protected
   void sse_encode_db_event_dto(DbEventDto self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_String(self.table, serializer);
@@ -4927,137 +4336,23 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_i_32(int self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    serializer.buffer.putInt32(self);
+  }
+
+  @protected
   void sse_encode_i_64(PlatformInt64 self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     serializer.buffer.putPlatformInt64(self);
   }
 
   @protected
-  void
-  sse_encode_list_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoComment(
-    List<TodoComment> self,
-    SseSerializer serializer,
-  ) {
+  void sse_encode_list_filter(ListFilter self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_i_32(self.length, serializer);
-    for (final item in self) {
-      sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoComment(
-        item,
-        serializer,
-      );
-    }
-  }
-
-  @protected
-  void
-  sse_encode_list_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoLabel(
-    List<TodoLabel> self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_i_32(self.length, serializer);
-    for (final item in self) {
-      sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoLabel(
-        item,
-        serializer,
-      );
-    }
-  }
-
-  @protected
-  void
-  sse_encode_list_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoProject(
-    List<TodoProject> self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_i_32(self.length, serializer);
-    for (final item in self) {
-      sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoProject(
-        item,
-        serializer,
-      );
-    }
-  }
-
-  @protected
-  void
-  sse_encode_list_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoReminder(
-    List<TodoReminder> self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_i_32(self.length, serializer);
-    for (final item in self) {
-      sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoReminder(
-        item,
-        serializer,
-      );
-    }
-  }
-
-  @protected
-  void
-  sse_encode_list_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoSubtask(
-    List<TodoSubtask> self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_i_32(self.length, serializer);
-    for (final item in self) {
-      sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoSubtask(
-        item,
-        serializer,
-      );
-    }
-  }
-
-  @protected
-  void
-  sse_encode_list_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTask(
-    List<TodoTask> self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_i_32(self.length, serializer);
-    for (final item in self) {
-      sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTask(
-        item,
-        serializer,
-      );
-    }
-  }
-
-  @protected
-  void
-  sse_encode_list_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskLabel(
-    List<TodoTaskLabel> self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_i_32(self.length, serializer);
-    for (final item in self) {
-      sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskLabel(
-        item,
-        serializer,
-      );
-    }
-  }
-
-  @protected
-  void
-  sse_encode_list_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskRelation(
-    List<TodoTaskRelation> self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_i_32(self.length, serializer);
-    for (final item in self) {
-      sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTodoTaskRelation(
-        item,
-        serializer,
-      );
-    }
+    sse_encode_opt_String(self.keyword, serializer);
+    sse_encode_u_32(self.page, serializer);
+    sse_encode_u_32(self.pageSize, serializer);
   }
 
   @protected
@@ -5068,6 +4363,114 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_i_32(self.length, serializer);
     serializer.buffer.putUint8List(self);
+  }
+
+  @protected
+  void sse_encode_list_task_label_with_id(
+    List<TaskLabelWithId> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_task_label_with_id(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_todo_comment(
+    List<TodoComment> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_todo_comment(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_todo_label(
+    List<TodoLabel> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_todo_label(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_todo_project(
+    List<TodoProject> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_todo_project(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_todo_reminder(
+    List<TodoReminder> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_todo_reminder(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_todo_subtask(
+    List<TodoSubtask> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_todo_subtask(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_todo_task(
+    List<TodoTask> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_todo_task(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_todo_task_label(
+    List<TodoTaskLabel> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_todo_task_label(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_todo_task_relation(
+    List<TodoTaskRelation> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_todo_task_relation(item, serializer);
+    }
   }
 
   @protected
@@ -5087,6 +4490,26 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_bool(self != null, serializer);
     if (self != null) {
       sse_encode_box_autoadd_bool(self, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_opt_box_autoadd_f_64(double? self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    sse_encode_bool(self != null, serializer);
+    if (self != null) {
+      sse_encode_box_autoadd_f_64(self, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_opt_box_autoadd_i_32(int? self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    sse_encode_bool(self != null, serializer);
+    if (self != null) {
+      sse_encode_box_autoadd_i_32(self, serializer);
     }
   }
 
@@ -5181,6 +4604,295 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_task_label_with_id(
+    TaskLabelWithId self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_64(self.id, serializer);
+    sse_encode_String(self.uuid, serializer);
+    sse_encode_String(self.title, serializer);
+    sse_encode_String(self.hexColor, serializer);
+    sse_encode_i_32(self.isDeleted, serializer);
+    sse_encode_i_64(self.createdAt, serializer);
+    sse_encode_i_64(self.updatedAt, serializer);
+    sse_encode_opt_box_autoadd_i_64(self.deletedAt, serializer);
+    sse_encode_i_32(self.version, serializer);
+    sse_encode_i_64(self.taskLabelId, serializer);
+  }
+
+  @protected
+  void sse_encode_todo_comment(TodoComment self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_64(self.id, serializer);
+    sse_encode_String(self.uuid, serializer);
+    sse_encode_i_64(self.taskId, serializer);
+    sse_encode_String(self.content, serializer);
+    sse_encode_i_32(self.isDeleted, serializer);
+    sse_encode_i_64(self.createdAt, serializer);
+    sse_encode_i_64(self.updatedAt, serializer);
+    sse_encode_opt_box_autoadd_i_64(self.deletedAt, serializer);
+    sse_encode_i_32(self.version, serializer);
+  }
+
+  @protected
+  void sse_encode_todo_comment_create_input(
+    TodoCommentCreateInput self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_64(self.taskId, serializer);
+    sse_encode_String(self.content, serializer);
+  }
+
+  @protected
+  void sse_encode_todo_label(TodoLabel self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_64(self.id, serializer);
+    sse_encode_String(self.uuid, serializer);
+    sse_encode_String(self.title, serializer);
+    sse_encode_String(self.hexColor, serializer);
+    sse_encode_i_32(self.isDeleted, serializer);
+    sse_encode_i_64(self.createdAt, serializer);
+    sse_encode_i_64(self.updatedAt, serializer);
+    sse_encode_opt_box_autoadd_i_64(self.deletedAt, serializer);
+    sse_encode_i_32(self.version, serializer);
+  }
+
+  @protected
+  void sse_encode_todo_label_create_input(
+    TodoLabelCreateInput self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.title, serializer);
+    sse_encode_opt_String(self.hexColor, serializer);
+  }
+
+  @protected
+  void sse_encode_todo_project(TodoProject self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_64(self.id, serializer);
+    sse_encode_String(self.uuid, serializer);
+    sse_encode_String(self.title, serializer);
+    sse_encode_opt_String(self.description, serializer);
+    sse_encode_String(self.hexColor, serializer);
+    sse_encode_f_64(self.sortOrder, serializer);
+    sse_encode_i_32(self.isDeleted, serializer);
+    sse_encode_i_64(self.createdAt, serializer);
+    sse_encode_i_64(self.updatedAt, serializer);
+    sse_encode_opt_box_autoadd_i_64(self.deletedAt, serializer);
+    sse_encode_i_32(self.version, serializer);
+  }
+
+  @protected
+  void sse_encode_todo_project_create_input(
+    TodoProjectCreateInput self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.title, serializer);
+    sse_encode_opt_String(self.description, serializer);
+    sse_encode_opt_String(self.hexColor, serializer);
+    sse_encode_opt_box_autoadd_f_64(self.sortOrder, serializer);
+  }
+
+  @protected
+  void sse_encode_todo_reminder(TodoReminder self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_64(self.id, serializer);
+    sse_encode_String(self.uuid, serializer);
+    sse_encode_i_64(self.taskId, serializer);
+    sse_encode_i_64(self.remindAt, serializer);
+    sse_encode_i_32(self.isDeleted, serializer);
+    sse_encode_i_64(self.createdAt, serializer);
+    sse_encode_i_64(self.updatedAt, serializer);
+    sse_encode_opt_box_autoadd_i_64(self.deletedAt, serializer);
+    sse_encode_i_32(self.version, serializer);
+  }
+
+  @protected
+  void sse_encode_todo_reminder_create_input(
+    TodoReminderCreateInput self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_64(self.taskId, serializer);
+    sse_encode_i_64(self.remindAt, serializer);
+  }
+
+  @protected
+  void sse_encode_todo_subtask(TodoSubtask self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_64(self.id, serializer);
+    sse_encode_String(self.uuid, serializer);
+    sse_encode_i_64(self.taskId, serializer);
+    sse_encode_String(self.title, serializer);
+    sse_encode_i_32(self.done, serializer);
+    sse_encode_opt_box_autoadd_i_64(self.doneAt, serializer);
+    sse_encode_f_64(self.position, serializer);
+    sse_encode_i_32(self.isDeleted, serializer);
+    sse_encode_i_64(self.createdAt, serializer);
+    sse_encode_i_64(self.updatedAt, serializer);
+    sse_encode_opt_box_autoadd_i_64(self.deletedAt, serializer);
+    sse_encode_i_32(self.version, serializer);
+  }
+
+  @protected
+  void sse_encode_todo_subtask_create_input(
+    TodoSubtaskCreateInput self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_64(self.taskId, serializer);
+    sse_encode_String(self.title, serializer);
+    sse_encode_opt_box_autoadd_f_64(self.position, serializer);
+  }
+
+  @protected
+  void sse_encode_todo_task(TodoTask self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_64(self.id, serializer);
+    sse_encode_String(self.uuid, serializer);
+    sse_encode_String(self.title, serializer);
+    sse_encode_opt_String(self.description, serializer);
+    sse_encode_opt_box_autoadd_i_64(self.projectId, serializer);
+    sse_encode_i_32(self.priority, serializer);
+    sse_encode_String(self.status, serializer);
+    sse_encode_i_32(self.done, serializer);
+    sse_encode_opt_box_autoadd_i_64(self.doneAt, serializer);
+    sse_encode_opt_box_autoadd_i_64(self.dueDate, serializer);
+    sse_encode_opt_box_autoadd_i_64(self.startDate, serializer);
+    sse_encode_opt_box_autoadd_i_64(self.endDate, serializer);
+    sse_encode_i_64(self.repeatAfter, serializer);
+    sse_encode_i_32(self.repeatMode, serializer);
+    sse_encode_String(self.hexColor, serializer);
+    sse_encode_f_64(self.percentDone, serializer);
+    sse_encode_f_64(self.position, serializer);
+    sse_encode_i_32(self.isFavorite, serializer);
+    sse_encode_i_32(self.isDeleted, serializer);
+    sse_encode_i_64(self.createdAt, serializer);
+    sse_encode_i_64(self.updatedAt, serializer);
+    sse_encode_opt_box_autoadd_i_64(self.deletedAt, serializer);
+    sse_encode_i_32(self.version, serializer);
+  }
+
+  @protected
+  void sse_encode_todo_task_create_input(
+    TodoTaskCreateInput self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.title, serializer);
+    sse_encode_opt_String(self.description, serializer);
+    sse_encode_opt_box_autoadd_i_64(self.projectId, serializer);
+    sse_encode_opt_box_autoadd_i_32(self.priority, serializer);
+    sse_encode_opt_String(self.status, serializer);
+    sse_encode_opt_box_autoadd_i_32(self.done, serializer);
+    sse_encode_opt_box_autoadd_i_64(self.doneAt, serializer);
+    sse_encode_opt_box_autoadd_i_64(self.dueDate, serializer);
+    sse_encode_opt_box_autoadd_i_64(self.startDate, serializer);
+    sse_encode_opt_box_autoadd_i_64(self.endDate, serializer);
+    sse_encode_opt_box_autoadd_i_64(self.repeatAfter, serializer);
+    sse_encode_opt_box_autoadd_i_32(self.repeatMode, serializer);
+    sse_encode_opt_String(self.hexColor, serializer);
+    sse_encode_opt_box_autoadd_f_64(self.position, serializer);
+    sse_encode_opt_box_autoadd_i_32(self.isFavorite, serializer);
+  }
+
+  @protected
+  void sse_encode_todo_task_detail(
+    TodoTaskDetail self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_64(self.id, serializer);
+    sse_encode_String(self.uuid, serializer);
+    sse_encode_String(self.title, serializer);
+    sse_encode_opt_String(self.description, serializer);
+    sse_encode_opt_box_autoadd_i_64(self.projectId, serializer);
+    sse_encode_i_32(self.priority, serializer);
+    sse_encode_String(self.status, serializer);
+    sse_encode_i_32(self.done, serializer);
+    sse_encode_opt_box_autoadd_i_64(self.doneAt, serializer);
+    sse_encode_opt_box_autoadd_i_64(self.dueDate, serializer);
+    sse_encode_opt_box_autoadd_i_64(self.startDate, serializer);
+    sse_encode_opt_box_autoadd_i_64(self.endDate, serializer);
+    sse_encode_i_64(self.repeatAfter, serializer);
+    sse_encode_i_32(self.repeatMode, serializer);
+    sse_encode_String(self.hexColor, serializer);
+    sse_encode_f_64(self.percentDone, serializer);
+    sse_encode_f_64(self.position, serializer);
+    sse_encode_i_32(self.isFavorite, serializer);
+    sse_encode_i_32(self.isDeleted, serializer);
+    sse_encode_i_64(self.createdAt, serializer);
+    sse_encode_i_64(self.updatedAt, serializer);
+    sse_encode_opt_box_autoadd_i_64(self.deletedAt, serializer);
+    sse_encode_i_32(self.version, serializer);
+    sse_encode_list_todo_subtask(self.subtasks, serializer);
+    sse_encode_list_task_label_with_id(self.labels, serializer);
+    sse_encode_list_todo_comment(self.comments, serializer);
+    sse_encode_list_todo_task_relation(self.relations, serializer);
+    sse_encode_list_todo_reminder(self.reminders, serializer);
+  }
+
+  @protected
+  void sse_encode_todo_task_label(
+    TodoTaskLabel self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_64(self.id, serializer);
+    sse_encode_String(self.uuid, serializer);
+    sse_encode_i_64(self.taskId, serializer);
+    sse_encode_i_64(self.labelId, serializer);
+    sse_encode_i_32(self.isDeleted, serializer);
+    sse_encode_i_64(self.createdAt, serializer);
+    sse_encode_i_64(self.updatedAt, serializer);
+    sse_encode_opt_box_autoadd_i_64(self.deletedAt, serializer);
+    sse_encode_i_32(self.version, serializer);
+  }
+
+  @protected
+  void sse_encode_todo_task_label_create_input(
+    TodoTaskLabelCreateInput self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_64(self.taskId, serializer);
+    sse_encode_i_64(self.labelId, serializer);
+  }
+
+  @protected
+  void sse_encode_todo_task_relation(
+    TodoTaskRelation self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_64(self.id, serializer);
+    sse_encode_String(self.uuid, serializer);
+    sse_encode_i_64(self.taskId, serializer);
+    sse_encode_i_64(self.otherTaskId, serializer);
+    sse_encode_String(self.relationType, serializer);
+    sse_encode_i_32(self.isDeleted, serializer);
+    sse_encode_i_64(self.createdAt, serializer);
+    sse_encode_i_64(self.updatedAt, serializer);
+    sse_encode_opt_box_autoadd_i_64(self.deletedAt, serializer);
+    sse_encode_i_32(self.version, serializer);
+  }
+
+  @protected
+  void sse_encode_todo_task_relation_create_input(
+    TodoTaskRelationCreateInput self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_64(self.taskId, serializer);
+    sse_encode_i_64(self.otherTaskId, serializer);
+    sse_encode_String(self.relationType, serializer);
+  }
+
+  @protected
   void sse_encode_u_32(int self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     serializer.buffer.putUint32(self);
@@ -5196,452 +4908,4 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   void sse_encode_unit(void self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
   }
-
-  @protected
-  void sse_encode_usize(BigInt self, SseSerializer serializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    serializer.buffer.putBigUint64(self);
-  }
-
-  @protected
-  void sse_encode_i_32(int self, SseSerializer serializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    serializer.buffer.putInt32(self);
-  }
-}
-
-@sealed
-class ListFilterImpl extends RustOpaque implements ListFilter {
-  // Not to be used by end users
-  ListFilterImpl.frbInternalDcoDecode(List<dynamic> wire)
-    : super.frbInternalDcoDecode(wire, _kStaticData);
-
-  // Not to be used by end users
-  ListFilterImpl.frbInternalSseDecode(BigInt ptr, int externalSizeOnNative)
-    : super.frbInternalSseDecode(ptr, externalSizeOnNative, _kStaticData);
-
-  static final _kStaticData = RustArcStaticData(
-    rustArcIncrementStrongCount:
-        RustLib.instance.api.rust_arc_increment_strong_count_ListFilter,
-    rustArcDecrementStrongCount:
-        RustLib.instance.api.rust_arc_decrement_strong_count_ListFilter,
-    rustArcDecrementStrongCountPtr:
-        RustLib.instance.api.rust_arc_decrement_strong_count_ListFilterPtr,
-  );
-}
-
-@sealed
-class TodoCommentCreateInputImpl extends RustOpaque
-    implements TodoCommentCreateInput {
-  // Not to be used by end users
-  TodoCommentCreateInputImpl.frbInternalDcoDecode(List<dynamic> wire)
-    : super.frbInternalDcoDecode(wire, _kStaticData);
-
-  // Not to be used by end users
-  TodoCommentCreateInputImpl.frbInternalSseDecode(
-    BigInt ptr,
-    int externalSizeOnNative,
-  ) : super.frbInternalSseDecode(ptr, externalSizeOnNative, _kStaticData);
-
-  static final _kStaticData = RustArcStaticData(
-    rustArcIncrementStrongCount: RustLib
-        .instance
-        .api
-        .rust_arc_increment_strong_count_TodoCommentCreateInput,
-    rustArcDecrementStrongCount: RustLib
-        .instance
-        .api
-        .rust_arc_decrement_strong_count_TodoCommentCreateInput,
-    rustArcDecrementStrongCountPtr: RustLib
-        .instance
-        .api
-        .rust_arc_decrement_strong_count_TodoCommentCreateInputPtr,
-  );
-}
-
-@sealed
-class TodoCommentImpl extends RustOpaque implements TodoComment {
-  // Not to be used by end users
-  TodoCommentImpl.frbInternalDcoDecode(List<dynamic> wire)
-    : super.frbInternalDcoDecode(wire, _kStaticData);
-
-  // Not to be used by end users
-  TodoCommentImpl.frbInternalSseDecode(BigInt ptr, int externalSizeOnNative)
-    : super.frbInternalSseDecode(ptr, externalSizeOnNative, _kStaticData);
-
-  static final _kStaticData = RustArcStaticData(
-    rustArcIncrementStrongCount:
-        RustLib.instance.api.rust_arc_increment_strong_count_TodoComment,
-    rustArcDecrementStrongCount:
-        RustLib.instance.api.rust_arc_decrement_strong_count_TodoComment,
-    rustArcDecrementStrongCountPtr:
-        RustLib.instance.api.rust_arc_decrement_strong_count_TodoCommentPtr,
-  );
-}
-
-@sealed
-class TodoLabelCreateInputImpl extends RustOpaque
-    implements TodoLabelCreateInput {
-  // Not to be used by end users
-  TodoLabelCreateInputImpl.frbInternalDcoDecode(List<dynamic> wire)
-    : super.frbInternalDcoDecode(wire, _kStaticData);
-
-  // Not to be used by end users
-  TodoLabelCreateInputImpl.frbInternalSseDecode(
-    BigInt ptr,
-    int externalSizeOnNative,
-  ) : super.frbInternalSseDecode(ptr, externalSizeOnNative, _kStaticData);
-
-  static final _kStaticData = RustArcStaticData(
-    rustArcIncrementStrongCount: RustLib
-        .instance
-        .api
-        .rust_arc_increment_strong_count_TodoLabelCreateInput,
-    rustArcDecrementStrongCount: RustLib
-        .instance
-        .api
-        .rust_arc_decrement_strong_count_TodoLabelCreateInput,
-    rustArcDecrementStrongCountPtr: RustLib
-        .instance
-        .api
-        .rust_arc_decrement_strong_count_TodoLabelCreateInputPtr,
-  );
-}
-
-@sealed
-class TodoLabelImpl extends RustOpaque implements TodoLabel {
-  // Not to be used by end users
-  TodoLabelImpl.frbInternalDcoDecode(List<dynamic> wire)
-    : super.frbInternalDcoDecode(wire, _kStaticData);
-
-  // Not to be used by end users
-  TodoLabelImpl.frbInternalSseDecode(BigInt ptr, int externalSizeOnNative)
-    : super.frbInternalSseDecode(ptr, externalSizeOnNative, _kStaticData);
-
-  static final _kStaticData = RustArcStaticData(
-    rustArcIncrementStrongCount:
-        RustLib.instance.api.rust_arc_increment_strong_count_TodoLabel,
-    rustArcDecrementStrongCount:
-        RustLib.instance.api.rust_arc_decrement_strong_count_TodoLabel,
-    rustArcDecrementStrongCountPtr:
-        RustLib.instance.api.rust_arc_decrement_strong_count_TodoLabelPtr,
-  );
-}
-
-@sealed
-class TodoProjectCreateInputImpl extends RustOpaque
-    implements TodoProjectCreateInput {
-  // Not to be used by end users
-  TodoProjectCreateInputImpl.frbInternalDcoDecode(List<dynamic> wire)
-    : super.frbInternalDcoDecode(wire, _kStaticData);
-
-  // Not to be used by end users
-  TodoProjectCreateInputImpl.frbInternalSseDecode(
-    BigInt ptr,
-    int externalSizeOnNative,
-  ) : super.frbInternalSseDecode(ptr, externalSizeOnNative, _kStaticData);
-
-  static final _kStaticData = RustArcStaticData(
-    rustArcIncrementStrongCount: RustLib
-        .instance
-        .api
-        .rust_arc_increment_strong_count_TodoProjectCreateInput,
-    rustArcDecrementStrongCount: RustLib
-        .instance
-        .api
-        .rust_arc_decrement_strong_count_TodoProjectCreateInput,
-    rustArcDecrementStrongCountPtr: RustLib
-        .instance
-        .api
-        .rust_arc_decrement_strong_count_TodoProjectCreateInputPtr,
-  );
-}
-
-@sealed
-class TodoProjectImpl extends RustOpaque implements TodoProject {
-  // Not to be used by end users
-  TodoProjectImpl.frbInternalDcoDecode(List<dynamic> wire)
-    : super.frbInternalDcoDecode(wire, _kStaticData);
-
-  // Not to be used by end users
-  TodoProjectImpl.frbInternalSseDecode(BigInt ptr, int externalSizeOnNative)
-    : super.frbInternalSseDecode(ptr, externalSizeOnNative, _kStaticData);
-
-  static final _kStaticData = RustArcStaticData(
-    rustArcIncrementStrongCount:
-        RustLib.instance.api.rust_arc_increment_strong_count_TodoProject,
-    rustArcDecrementStrongCount:
-        RustLib.instance.api.rust_arc_decrement_strong_count_TodoProject,
-    rustArcDecrementStrongCountPtr:
-        RustLib.instance.api.rust_arc_decrement_strong_count_TodoProjectPtr,
-  );
-}
-
-@sealed
-class TodoReminderCreateInputImpl extends RustOpaque
-    implements TodoReminderCreateInput {
-  // Not to be used by end users
-  TodoReminderCreateInputImpl.frbInternalDcoDecode(List<dynamic> wire)
-    : super.frbInternalDcoDecode(wire, _kStaticData);
-
-  // Not to be used by end users
-  TodoReminderCreateInputImpl.frbInternalSseDecode(
-    BigInt ptr,
-    int externalSizeOnNative,
-  ) : super.frbInternalSseDecode(ptr, externalSizeOnNative, _kStaticData);
-
-  static final _kStaticData = RustArcStaticData(
-    rustArcIncrementStrongCount: RustLib
-        .instance
-        .api
-        .rust_arc_increment_strong_count_TodoReminderCreateInput,
-    rustArcDecrementStrongCount: RustLib
-        .instance
-        .api
-        .rust_arc_decrement_strong_count_TodoReminderCreateInput,
-    rustArcDecrementStrongCountPtr: RustLib
-        .instance
-        .api
-        .rust_arc_decrement_strong_count_TodoReminderCreateInputPtr,
-  );
-}
-
-@sealed
-class TodoReminderImpl extends RustOpaque implements TodoReminder {
-  // Not to be used by end users
-  TodoReminderImpl.frbInternalDcoDecode(List<dynamic> wire)
-    : super.frbInternalDcoDecode(wire, _kStaticData);
-
-  // Not to be used by end users
-  TodoReminderImpl.frbInternalSseDecode(BigInt ptr, int externalSizeOnNative)
-    : super.frbInternalSseDecode(ptr, externalSizeOnNative, _kStaticData);
-
-  static final _kStaticData = RustArcStaticData(
-    rustArcIncrementStrongCount:
-        RustLib.instance.api.rust_arc_increment_strong_count_TodoReminder,
-    rustArcDecrementStrongCount:
-        RustLib.instance.api.rust_arc_decrement_strong_count_TodoReminder,
-    rustArcDecrementStrongCountPtr:
-        RustLib.instance.api.rust_arc_decrement_strong_count_TodoReminderPtr,
-  );
-}
-
-@sealed
-class TodoSubtaskCreateInputImpl extends RustOpaque
-    implements TodoSubtaskCreateInput {
-  // Not to be used by end users
-  TodoSubtaskCreateInputImpl.frbInternalDcoDecode(List<dynamic> wire)
-    : super.frbInternalDcoDecode(wire, _kStaticData);
-
-  // Not to be used by end users
-  TodoSubtaskCreateInputImpl.frbInternalSseDecode(
-    BigInt ptr,
-    int externalSizeOnNative,
-  ) : super.frbInternalSseDecode(ptr, externalSizeOnNative, _kStaticData);
-
-  static final _kStaticData = RustArcStaticData(
-    rustArcIncrementStrongCount: RustLib
-        .instance
-        .api
-        .rust_arc_increment_strong_count_TodoSubtaskCreateInput,
-    rustArcDecrementStrongCount: RustLib
-        .instance
-        .api
-        .rust_arc_decrement_strong_count_TodoSubtaskCreateInput,
-    rustArcDecrementStrongCountPtr: RustLib
-        .instance
-        .api
-        .rust_arc_decrement_strong_count_TodoSubtaskCreateInputPtr,
-  );
-}
-
-@sealed
-class TodoSubtaskImpl extends RustOpaque implements TodoSubtask {
-  // Not to be used by end users
-  TodoSubtaskImpl.frbInternalDcoDecode(List<dynamic> wire)
-    : super.frbInternalDcoDecode(wire, _kStaticData);
-
-  // Not to be used by end users
-  TodoSubtaskImpl.frbInternalSseDecode(BigInt ptr, int externalSizeOnNative)
-    : super.frbInternalSseDecode(ptr, externalSizeOnNative, _kStaticData);
-
-  static final _kStaticData = RustArcStaticData(
-    rustArcIncrementStrongCount:
-        RustLib.instance.api.rust_arc_increment_strong_count_TodoSubtask,
-    rustArcDecrementStrongCount:
-        RustLib.instance.api.rust_arc_decrement_strong_count_TodoSubtask,
-    rustArcDecrementStrongCountPtr:
-        RustLib.instance.api.rust_arc_decrement_strong_count_TodoSubtaskPtr,
-  );
-}
-
-@sealed
-class TodoTaskCreateInputImpl extends RustOpaque
-    implements TodoTaskCreateInput {
-  // Not to be used by end users
-  TodoTaskCreateInputImpl.frbInternalDcoDecode(List<dynamic> wire)
-    : super.frbInternalDcoDecode(wire, _kStaticData);
-
-  // Not to be used by end users
-  TodoTaskCreateInputImpl.frbInternalSseDecode(
-    BigInt ptr,
-    int externalSizeOnNative,
-  ) : super.frbInternalSseDecode(ptr, externalSizeOnNative, _kStaticData);
-
-  static final _kStaticData = RustArcStaticData(
-    rustArcIncrementStrongCount: RustLib
-        .instance
-        .api
-        .rust_arc_increment_strong_count_TodoTaskCreateInput,
-    rustArcDecrementStrongCount: RustLib
-        .instance
-        .api
-        .rust_arc_decrement_strong_count_TodoTaskCreateInput,
-    rustArcDecrementStrongCountPtr: RustLib
-        .instance
-        .api
-        .rust_arc_decrement_strong_count_TodoTaskCreateInputPtr,
-  );
-}
-
-@sealed
-class TodoTaskDetailImpl extends RustOpaque implements TodoTaskDetail {
-  // Not to be used by end users
-  TodoTaskDetailImpl.frbInternalDcoDecode(List<dynamic> wire)
-    : super.frbInternalDcoDecode(wire, _kStaticData);
-
-  // Not to be used by end users
-  TodoTaskDetailImpl.frbInternalSseDecode(BigInt ptr, int externalSizeOnNative)
-    : super.frbInternalSseDecode(ptr, externalSizeOnNative, _kStaticData);
-
-  static final _kStaticData = RustArcStaticData(
-    rustArcIncrementStrongCount:
-        RustLib.instance.api.rust_arc_increment_strong_count_TodoTaskDetail,
-    rustArcDecrementStrongCount:
-        RustLib.instance.api.rust_arc_decrement_strong_count_TodoTaskDetail,
-    rustArcDecrementStrongCountPtr:
-        RustLib.instance.api.rust_arc_decrement_strong_count_TodoTaskDetailPtr,
-  );
-}
-
-@sealed
-class TodoTaskImpl extends RustOpaque implements TodoTask {
-  // Not to be used by end users
-  TodoTaskImpl.frbInternalDcoDecode(List<dynamic> wire)
-    : super.frbInternalDcoDecode(wire, _kStaticData);
-
-  // Not to be used by end users
-  TodoTaskImpl.frbInternalSseDecode(BigInt ptr, int externalSizeOnNative)
-    : super.frbInternalSseDecode(ptr, externalSizeOnNative, _kStaticData);
-
-  static final _kStaticData = RustArcStaticData(
-    rustArcIncrementStrongCount:
-        RustLib.instance.api.rust_arc_increment_strong_count_TodoTask,
-    rustArcDecrementStrongCount:
-        RustLib.instance.api.rust_arc_decrement_strong_count_TodoTask,
-    rustArcDecrementStrongCountPtr:
-        RustLib.instance.api.rust_arc_decrement_strong_count_TodoTaskPtr,
-  );
-}
-
-@sealed
-class TodoTaskLabelCreateInputImpl extends RustOpaque
-    implements TodoTaskLabelCreateInput {
-  // Not to be used by end users
-  TodoTaskLabelCreateInputImpl.frbInternalDcoDecode(List<dynamic> wire)
-    : super.frbInternalDcoDecode(wire, _kStaticData);
-
-  // Not to be used by end users
-  TodoTaskLabelCreateInputImpl.frbInternalSseDecode(
-    BigInt ptr,
-    int externalSizeOnNative,
-  ) : super.frbInternalSseDecode(ptr, externalSizeOnNative, _kStaticData);
-
-  static final _kStaticData = RustArcStaticData(
-    rustArcIncrementStrongCount: RustLib
-        .instance
-        .api
-        .rust_arc_increment_strong_count_TodoTaskLabelCreateInput,
-    rustArcDecrementStrongCount: RustLib
-        .instance
-        .api
-        .rust_arc_decrement_strong_count_TodoTaskLabelCreateInput,
-    rustArcDecrementStrongCountPtr: RustLib
-        .instance
-        .api
-        .rust_arc_decrement_strong_count_TodoTaskLabelCreateInputPtr,
-  );
-}
-
-@sealed
-class TodoTaskLabelImpl extends RustOpaque implements TodoTaskLabel {
-  // Not to be used by end users
-  TodoTaskLabelImpl.frbInternalDcoDecode(List<dynamic> wire)
-    : super.frbInternalDcoDecode(wire, _kStaticData);
-
-  // Not to be used by end users
-  TodoTaskLabelImpl.frbInternalSseDecode(BigInt ptr, int externalSizeOnNative)
-    : super.frbInternalSseDecode(ptr, externalSizeOnNative, _kStaticData);
-
-  static final _kStaticData = RustArcStaticData(
-    rustArcIncrementStrongCount:
-        RustLib.instance.api.rust_arc_increment_strong_count_TodoTaskLabel,
-    rustArcDecrementStrongCount:
-        RustLib.instance.api.rust_arc_decrement_strong_count_TodoTaskLabel,
-    rustArcDecrementStrongCountPtr:
-        RustLib.instance.api.rust_arc_decrement_strong_count_TodoTaskLabelPtr,
-  );
-}
-
-@sealed
-class TodoTaskRelationCreateInputImpl extends RustOpaque
-    implements TodoTaskRelationCreateInput {
-  // Not to be used by end users
-  TodoTaskRelationCreateInputImpl.frbInternalDcoDecode(List<dynamic> wire)
-    : super.frbInternalDcoDecode(wire, _kStaticData);
-
-  // Not to be used by end users
-  TodoTaskRelationCreateInputImpl.frbInternalSseDecode(
-    BigInt ptr,
-    int externalSizeOnNative,
-  ) : super.frbInternalSseDecode(ptr, externalSizeOnNative, _kStaticData);
-
-  static final _kStaticData = RustArcStaticData(
-    rustArcIncrementStrongCount: RustLib
-        .instance
-        .api
-        .rust_arc_increment_strong_count_TodoTaskRelationCreateInput,
-    rustArcDecrementStrongCount: RustLib
-        .instance
-        .api
-        .rust_arc_decrement_strong_count_TodoTaskRelationCreateInput,
-    rustArcDecrementStrongCountPtr: RustLib
-        .instance
-        .api
-        .rust_arc_decrement_strong_count_TodoTaskRelationCreateInputPtr,
-  );
-}
-
-@sealed
-class TodoTaskRelationImpl extends RustOpaque implements TodoTaskRelation {
-  // Not to be used by end users
-  TodoTaskRelationImpl.frbInternalDcoDecode(List<dynamic> wire)
-    : super.frbInternalDcoDecode(wire, _kStaticData);
-
-  // Not to be used by end users
-  TodoTaskRelationImpl.frbInternalSseDecode(
-    BigInt ptr,
-    int externalSizeOnNative,
-  ) : super.frbInternalSseDecode(ptr, externalSizeOnNative, _kStaticData);
-
-  static final _kStaticData = RustArcStaticData(
-    rustArcIncrementStrongCount:
-        RustLib.instance.api.rust_arc_increment_strong_count_TodoTaskRelation,
-    rustArcDecrementStrongCount:
-        RustLib.instance.api.rust_arc_decrement_strong_count_TodoTaskRelation,
-    rustArcDecrementStrongCountPtr: RustLib
-        .instance
-        .api
-        .rust_arc_decrement_strong_count_TodoTaskRelationPtr,
-  );
 }
