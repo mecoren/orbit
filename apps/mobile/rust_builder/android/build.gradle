@@ -1,4 +1,4 @@
-﻿// The Android Gradle Plugin builds the native code with the Android NDK.
+// The Android Gradle Plugin builds the native code with the Android NDK.
 
 group 'com.flutter_rust_bridge.rust_lib_orbit'
 version '1.0'

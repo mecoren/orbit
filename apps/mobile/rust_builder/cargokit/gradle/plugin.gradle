@@ -1,4 +1,4 @@
-﻿/// This is copied from Cargokit (which is the official way to use it currently)
+/// This is copied from Cargokit (which is the official way to use it currently)
 /// Details: https://fzyzcjy.github.io/flutter_rust_bridge/manual/integrate/builtin
 
 import java.nio.file.Paths
@@ -59,7 +59,7 @@ abstract class CargoKitBuildTask extends DefaultTask {
 
         def rootProjectDir = project.rootProject.projectDir
 
-        // Gradle 9.x 绉婚櫎浜?project.exec {}锛屾敼鐢?ProcessBuilder
+        // Gradle 9.x 移除了 project.exec {}，改用 ProcessBuilder
         if (!Os.isFamily(Os.FAMILY_WINDOWS)) {
             def chmodProc = new ProcessBuilder("chmod", "+x", path.toString())
                 .redirectErrorStream(true)
@@ -141,7 +141,9 @@ class CargoKitPlugin implements Plugin<Project> {
 
             final buildType = variant.buildType.name
 
-            // 璺宠繃 AGP 涓嶆敮鎸佺殑 build type锛堝 library 椤圭洰鐨?profile锛?            // AGP 9.x 鐨?library 妯″潡娌℃湁 profile source set锛宮aybeCreate 浼氭姤閿?            if (buildType != "debug" && buildType != "release") {
+            // 跳过 AGP 不支持的 build type（如 library 项目的 profile）
+            // AGP 9.x 的 library 模块没有 profile source set，maybeCreate 会报错
+            if (buildType != "debug" && buildType != "release") {
                 return
             }
 
