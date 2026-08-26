@@ -23,6 +23,7 @@ import {
   useDroppable,
   useSensor,
   useSensors,
+  type CollisionDetection,
   type DragEndEvent,
   type DragStartEvent,
 } from "@dnd-kit/core";
@@ -69,6 +70,15 @@ function rowIdOf(raw: string | number): number {
   const s = String(raw);
   return s.startsWith("row:") ? Number(s.slice(4)) : Number.NaN;
 }
+
+/** 行优先碰撞（评审 I3）：pointerWithin 对同含指针的矩形按「到中心距离」排序，
+ *  小列表上高大的容器矩形会抢赢行目标、把"插某行前"误判为尾追——
+ *  故先只取行命中，无行命中才回落容器。 */
+const rowsFirstCollision: CollisionDetection = (args) => {
+  const collisions = pointerWithin(args);
+  const rowHits = collisions.filter((c) => String(c.id) !== "rows-container");
+  return rowHits.length > 0 ? rowHits : collisions;
+};
 
 export function TaskListView({ tasks, projects, loading, error, onCreateClick, onOpenDetail }: TaskListViewProps) {
   const qc = useQueryClient();
@@ -192,9 +202,10 @@ export function TaskListView({ tasks, projects, loading, error, onCreateClick, o
   return (
     <DndContext
       sensors={sensors}
-      collisionDetection={pointerWithin}
+      collisionDetection={rowsFirstCollision}
       onDragStart={handleDragStart}
       onDragEnd={(e) => void handleDragEnd(e)}
+      onDragCancel={() => setDraggingId(null)}
     >
       <div ref={scrollRef} className="flex-1 overflow-y-auto">
         <RowContainerDropZone totalSize={virtualizer.getTotalSize()}>
@@ -250,11 +261,17 @@ export function TaskListView({ tasks, projects, loading, error, onCreateClick, o
   );
 }
 
-/** 容器 droppable：承接落在行间隙/空白处的拖拽（尾部追加） */
+/** 容器 droppable：承接落在末行以下空白处的拖拽（尾部追加）。
+ *  min-h-full 让内容不足一屏时容器仍覆盖滚动区全部视口（评审 I2：
+ *  否则高度=totalSize 与行矩形完全重合，「移到末位」几何上不可达）。 */
 function RowContainerDropZone({ totalSize, children }: { totalSize: number; children: ReactNode }) {
   const { setNodeRef } = useDroppable({ id: "rows-container" });
   return (
-    <div ref={setNodeRef} style={{ height: totalSize, position: "relative" }}>
+    <div
+      ref={setNodeRef}
+      style={{ height: totalSize, position: "relative" }}
+      className="min-h-full"
+    >
       {children}
     </div>
   );
@@ -339,6 +356,7 @@ function TaskRow({
         onClick={(e) => e.stopPropagation()}
         {...listeners}
         {...attributes}
+        tabIndex={-1}
       >
         <GripVertical size={14} />
       </button>
