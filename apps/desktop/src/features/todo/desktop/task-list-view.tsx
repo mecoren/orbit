@@ -17,6 +17,7 @@ import { ErrorState } from "@/components/business/error-state";
 import { EmptyState } from "@/components/business/empty-state";
 import { todoTaskUpdate, type TodoProject, type TodoTask } from "@/lib/tauri";
 import { FAVORITE_COLOR, OVERDUE_COLOR_CLASS, PRIORITY_COLOR } from "../shared/constants";
+import { isListActivationKey, listNavDirection } from "../shared/list-keyboard";
 import { TaskContextMenu } from "./task-context-menu";
 
 interface TaskListViewProps {
@@ -53,6 +54,15 @@ export function TaskListView({ tasks, projects, loading, error, onCreateClick, o
     overscan: 8,
     getItemKey: (i) => tasks[i].id,
   });
+
+  // 键盘导航（P1#8）：行 DOM 注册表（task id → 元素）；j/k 移动焦点并由
+  // scrollToIndex 让可视窗跟随，避免焦点行滚出屏幕丢失
+  const rowRefs = useRef(new Map<number, HTMLDivElement>());
+  const focusRow = (index: number) => {
+    if (index < 0 || index >= tasks.length) return;
+    virtualizer.scrollToIndex(index, { align: "auto" });
+    requestAnimationFrame(() => rowRefs.current.get(tasks[index]?.id)?.focus());
+  };
 
   if (loading) {
     return (
@@ -140,8 +150,27 @@ export function TaskListView({ tasks, projects, loading, error, onCreateClick, o
                 onOpenDetail={() => onOpenDetail(t.id)}
               >
                 <div
-                  className="group flex items-center gap-3 border-b border-border/30 px-4 py-3 hover:bg-accent/30"
+                  ref={(el) => {
+                    if (el) rowRefs.current.set(t.id, el);
+                    else rowRefs.current.delete(t.id);
+                  }}
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`${t.done ? "已完成" : "未完成"}任务：${t.title}`}
+                  className="group flex cursor-default items-center gap-3 border-b border-border/30 px-4 py-3 hover:bg-accent/30 focus-visible:bg-accent/40 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring"
                   onClick={() => onOpenDetail(t.id)}
+                  onKeyDown={(e) => {
+                    if (e.nativeEvent.isComposing) return; // IME 组合期不响应
+                    if (isListActivationKey(e.key)) {
+                      e.preventDefault();
+                      onOpenDetail(t.id);
+                      return;
+                    }
+                    const dir = listNavDirection(e.key);
+                    if (!dir) return;
+                    e.preventDefault();
+                    focusRow(vi.index + (dir === "down" ? 1 : -1));
+                  }}
                 >
             {/* 完成 checkbox：圆环 */}
             <button
