@@ -11,10 +11,10 @@ void main() {
     final router = GoRouter(
       initialLocation: '/a',
       routes: [
-        GoRoute(path: '/a', builder: (_, __) => const Scaffold(body: Text('A 页'))),
+        GoRoute(path: '/a', builder: (_, _) => const Scaffold(body: Text('A 页'))),
         GoRoute(
           path: '/b',
-          pageBuilder: (_, __) =>
+          pageBuilder: (_, _) =>
               pageSlideFromRight(const Scaffold(body: Text('B 页'))),
         ),
       ],

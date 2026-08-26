@@ -56,6 +56,7 @@ final appRouter = GoRouter(
       path: '/todo/tasks',
       pageBuilder: (context, state) => pageSlideFromRight(
         SubListScreen(query: SubListScreen.parseQuery(state)),
+        key: state.pageKey,
       ),
     ),
     GoRoute(
@@ -65,12 +66,15 @@ final appRouter = GoRouter(
         DetailScreen(
           taskId: int.tryParse(state.pathParameters['id'] ?? ''),
         ),
+        key: state.pageKey,
       ),
     ),
     GoRoute(
       path: '/settings',
-      pageBuilder: (context, state) =>
-          pageSlideFromRight(const SettingsScreen()),
+      pageBuilder: (context, state) => pageSlideFromRight(
+        const SettingsScreen(),
+        key: state.pageKey,
+      ),
     ),
     GoRoute(path: '/about', builder: (context, state) => const AboutPage()),
   ],
