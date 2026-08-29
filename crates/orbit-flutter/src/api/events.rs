@@ -65,6 +65,24 @@ const POLL_INTERVAL_SECS: u64 = 20;
 const BATCH_LIMIT: i64 = 100;
 const DAY_MS: i64 = 86_400_000;
 
+/// 在 FRB 自带的 tokio 运行时上spawn 后台任务
+///
+/// 不能用 flutter_rust_bridge::spawn（= tokio::spawn）：本文件两个导出函数是
+/// 同步函数，执行时没有 tokio 上下文，直接 spawn 会 panic
+/// （"there is no reactor running"）。FRB handler 暴露的 async_runtime 与
+/// async 桥接函数共用同一运行时——sqlx 连接池也创建在该运行时上，
+/// 统一到这里可避免跨运行时使用连接池的问题。
+fn spawn_on_bridge_runtime<F>(future: F)
+where
+    F: std::future::Future + Send + 'static,
+    F::Output: Send + 'static,
+{
+    use flutter_rust_bridge::BaseAsyncRuntime;
+    crate::frb_generated::FLUTTER_RUST_BRIDGE_HANDLER
+        .async_runtime()
+        .spawn(future);
+}
+
 /// 转发任务只允许启动一次（db_init_* 幂等保护之外的第二道闸）
 static FORWARDER_STARTED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 static POLLER_STARTED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
@@ -84,7 +102,7 @@ pub fn subscribe_db_changes(sink: StreamSink<DbEventDto>) {
         // 移动端启动流程保证仅调用一次；重复调用静默忽略。
         return;
     }
-    flutter_rust_bridge::spawn(async move {
+    spawn_on_bridge_runtime(async move {
         let mut rx = EVENT_BUS.subscribe();
         while let Ok(event) = rx.recv().await {
             let _ = sink.add(DbEventDto::from(&event));
@@ -100,7 +118,7 @@ pub fn start_reminder_poller(sink: StreamSink<ReminderDueDto>) {
     if POLLER_STARTED.swap(true, std::sync::atomic::Ordering::SeqCst) {
         return;
     }
-    flutter_rust_bridge::spawn(async move {
+    spawn_on_bridge_runtime(async move {
         loop {
             poll_once(&sink).await;
             tokio::time::sleep(Duration::from_secs(POLL_INTERVAL_SECS)).await;

@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -9,10 +9,12 @@ import '../../core/theme/orbit_accents.dart';
 import '../../data/api/dto.dart';
 import '../../data/providers/bridge_provider.dart';
 import '../../shared/utils/hex_color.dart';
+import '../../shared/widgets/glass_fab.dart';
 import '../../shared/widgets/liquid_glass_title_bar.dart';
 import '../../shared/widgets/more_actions_sheet.dart';
 import '../../shared/widgets/scroll_offset_listenable.dart';
 import '../../shared/widgets/wait_toast.dart';
+import 'form_bottom_sheet.dart';
 import 'logic/task_logic.dart';
 import 'providers/todo_providers.dart';
 
@@ -289,6 +291,15 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
                   onPressed: () => context.push('/settings'),
                 ),
               ],
+            ),
+          ),
+          // FAB：右下，一级页面直达新建任务（不携带默认项目，表单内自选）
+          Positioned(
+            right: AppDimens.space16,
+            bottom: AppDimens.gestureInsetFallback + AppDimens.space16,
+            child: GlassFab(
+              accentColor: OrbitAccents.themeAccent,
+              onPressed: () => showTodoFormSheet(context),
             ),
           ),
         ],

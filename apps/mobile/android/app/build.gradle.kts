@@ -12,6 +12,8 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
+        // flutter_local_notifications 要求启用核心库脱糖（java.time 等在低 API 设备上的支持）
+        isCoreLibraryDesugaringEnabled = true
     }
 
     defaultConfig {
@@ -38,6 +40,11 @@ kotlin {
     compilerOptions {
         jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17
     }
+}
+
+dependencies {
+    // 核心库脱糖所需的 desugar_jdk_libs
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
 }
 
 flutter {

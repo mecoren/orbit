@@ -21,20 +21,8 @@ class DbChangeEvent {
   });
 }
 
-/// "sync-finished"：云同步完成事件
-class SyncFinishedEvent {
-  final int pushedModules;
-  final int pulledModules;
-  final int durationMs;
-  final bool skipped;
-
-  const SyncFinishedEvent({
-    required this.pushedModules,
-    required this.pulledModules,
-    required this.durationMs,
-    required this.skipped,
-  });
-}
+/// "sync-finished" 事件已移除（ADR 0003）：云同步结果经 cloudSyncNow
+/// 返回值直达，不存在可订阅的事件流。
 
 /// "todo_reminder:due"：提醒到期事件
 class ReminderDueEvent {
@@ -159,13 +147,10 @@ abstract class OrbitBridge {
     bool force = false,
   });
 
-  // ── 事件流（下行三通道，替代 Tauri event listen）──
+  // ── 事件流（下行通道，替代 Tauri event listen）──
 
   /// 本地写操作事件 → 全量失效业务缓存
   Stream<DbChangeEvent> get dbChanges;
-
-  /// 云同步完成事件 → pulled_modules > 0 时失效
-  Stream<SyncFinishedEvent> get syncFinished;
 
   /// 提醒到期事件 → 本地通知 + 重复提醒排程
   Stream<ReminderDueEvent> get reminderDue;

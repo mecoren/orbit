@@ -23,9 +23,14 @@ class ManifestException {
 }
 
 class CrateInfo {
-  CrateInfo({required this.packageName});
+  CrateInfo({required this.packageName, required this.libName});
 
   final String packageName;
+
+  /// [lib] name（实际产物文件名前缀）。与 packageName 分离：当 crate 自定义
+  /// [lib] name（如 orbit-flutter → orbit_flutter）时，cargo 产物为
+  /// liborbit_flutter.so，而按 packageName 查找会静默失配、什么都不拷贝。
+  final String libName;
 
   static CrateInfo parseManifest(String manifest, {final String? fileName}) {
     final toml = TomlDocument.parse(manifest);
@@ -37,7 +42,10 @@ class CrateInfo {
     if (name == null) {
       throw ManifestException('Missing package name', fileName: fileName);
     }
-    return CrateInfo(packageName: name);
+    // 与 cargo 命名规则一致：未声明 [lib] name 时，默认取包名并把 '-' 换成 '_'
+    final lib = toml.toMap()['lib'];
+    final libName = (lib?['name'] as String?) ?? name.replaceAll('-', '_');
+    return CrateInfo(packageName: name, libName: libName);
   }
 
   static CrateInfo load(String manifestDir) {

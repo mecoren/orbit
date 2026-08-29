@@ -14,7 +14,6 @@ class MockOrbitBridge implements OrbitBridge {
   static const _latency = Duration(milliseconds: 120);
 
   final _dbChangesCtrl = StreamController<DbChangeEvent>.broadcast();
-  final _syncFinishedCtrl = StreamController<SyncFinishedEvent>.broadcast();
   final _reminderDueCtrl = StreamController<ReminderDueEvent>.broadcast();
 
   Future<T> _delay<T>(T Function() body) async {
@@ -521,12 +520,6 @@ class MockOrbitBridge implements OrbitBridge {
           skipped: false,
           errors: [],
         );
-        _syncFinishedCtrl.add(SyncFinishedEvent(
-          pushedModules: result.pushedModules,
-          pulledModules: result.pulledModules,
-          durationMs: result.durationMs,
-          skipped: result.skipped,
-        ));
         return result;
       });
 
@@ -554,9 +547,6 @@ class MockOrbitBridge implements OrbitBridge {
 
   @override
   Stream<DbChangeEvent> get dbChanges => _dbChangesCtrl.stream;
-
-  @override
-  Stream<SyncFinishedEvent> get syncFinished => _syncFinishedCtrl.stream;
 
   @override
   Stream<ReminderDueEvent> get reminderDue => _reminderDueCtrl.stream;

@@ -8,6 +8,7 @@ import 'package:orbit/data/providers/bridge_provider.dart';
 import 'package:orbit/modules/todo/logic/task_logic.dart';
 import 'package:orbit/modules/todo/sidebar_screen.dart';
 import 'package:orbit/modules/todo/sub_list_screen.dart';
+import 'package:orbit/shared/widgets/glass_fab.dart';
 
 Widget _wrap(Widget child, MockOrbitBridge bridge) => ProviderScope(
       overrides: [orbitBridgeProvider.overrideWithValue(bridge)],
@@ -39,6 +40,19 @@ void main() {
     // 项目种子数据
     expect(find.text('工作'), findsOneWidget);
     expect(find.text('未分组'), findsOneWidget);
+  });
+
+  testWidgets('侧栏首屏：FAB 点击弹出"添加待办"底部抽屉', (tester) async {
+    final bridge = MockOrbitBridge();
+    await tester.pumpWidget(_wrap(const SidebarScreen(), bridge));
+    await _settlePastMockLatency(tester);
+
+    // 一级页面右下 FAB → 新建任务表单抽屉出现
+    await tester.tap(find.byType(GlassFab));
+    await tester.pumpAndSettle();
+
+    expect(find.text('添加待办'), findsOneWidget);
+    expect(find.text('标题 *'), findsOneWidget);
   });
 
   testWidgets('任务子列表：全量视图渲染任务行卡片', (tester) async {

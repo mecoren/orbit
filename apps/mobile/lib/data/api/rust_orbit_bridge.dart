@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:path_provider/path_provider.dart';
@@ -434,10 +434,6 @@ class RustOrbitBridge implements OrbitBridge {
             deviceId: e.deviceId,
             timestamp: e.timestamp,
           ));
-
-  @override
-  Stream<SyncFinishedEvent> get syncFinished =>
-      throw UnsupportedError('sync-finished 由 cloudSyncNow 返回值直达，无需订阅');
 
   @override
   Stream<ReminderDueEvent> get reminderDue =>

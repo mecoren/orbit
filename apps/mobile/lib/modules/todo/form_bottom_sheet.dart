@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/theme/app_colors.dart';
@@ -6,24 +6,35 @@ import '../../core/theme/app_dimens.dart';
 import '../../core/theme/app_shapes.dart';
 import '../../core/theme/orbit_accents.dart';
 import '../../data/api/dto.dart';
+import '../../data/api/orbit_bridge.dart';
 import '../../data/providers/bridge_provider.dart';
 import '../../shared/utils/hex_color.dart';
+import '../../shared/widgets/section_card.dart';
+import '../../shared/widgets/wait_date_picker.dart';
 import '../../shared/widgets/wait_toast.dart';
+// as rep：规避 Flutter widgets 自带 RepeatMode 类名冲突
+import 'logic/repeat_logic.dart' as rep;
 import 'logic/task_logic.dart'
-    show dateToMidnightMs, formatYmd, priorityColorHex, priorityLabel;
+    show
+        dateToMidnightMs,
+        formatDateTime,
+        formatYmd,
+        priorityColorHex,
+        priorityLabel;
 import 'providers/todo_providers.dart';
 
-/// 截止日期选择器（表单抽屉"自定义"与详情页截止日期行共用；
-/// zh locale 语境下文案本地化，主题色自动继承）
+/// 截止日期选择器（表单抽屉"自定义"与详情页截止日期行共用）
+///
+/// 已切换为 wait-home 移植的 WaitDatePicker 底部面板（月历 + 年月/年视图），
+/// 函数签名保持不变，detail_screen 等调用方自动跟随。
 Future<DateTime?> showTodoDatePicker(
   BuildContext context, {
   DateTime? initialDate,
 }) {
-  return showDatePicker(
-    context: context,
-    initialDate: initialDate ?? DateTime.now(),
-    firstDate: DateTime(2000),
-    lastDate: DateTime(2100),
+  return WaitDatePicker.pick(
+    context,
+    initialDate: initialDate,
+    accent: OrbitAccents.todoAccent,
   );
 }
 
@@ -49,6 +60,28 @@ Future<void> showTodoFormSheet(
   );
 }
 
+/// 提醒同步（桌面端 task-form-sheet 同语义）：
+/// - 清空（remindAt=null）→ 删旧提醒；
+/// - 变更 → 删旧建新；
+/// - 未动（同值）→ 跳过。
+/// 新建场景 existing 传 null：有值即建立。
+Future<void> syncTaskReminder(
+  OrbitBridge bridge,
+  int taskId,
+  int? remindAt,
+  TodoReminder? existing,
+) async {
+  if (remindAt == null) {
+    if (existing != null) await bridge.todoReminderDelete(existing.id);
+    return;
+  }
+  if (existing != null && existing.remindAt == remindAt) return;
+  if (existing != null) await bridge.todoReminderDelete(existing.id);
+  await bridge.todoReminderCreate(
+    TodoReminderCreateInput(taskId: taskId, remindAt: remindAt),
+  );
+}
+
 class _TodoFormSheet extends ConsumerStatefulWidget {
   const _TodoFormSheet({this.editingTaskId, this.defaultProjectId});
 
@@ -65,14 +98,34 @@ class _TodoFormSheet extends ConsumerStatefulWidget {
 class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
   final _titleController = TextEditingController();
   final _descriptionController = TextEditingController();
+  final _colorController = TextEditingController();
+  final _intervalController = TextEditingController(text: '1');
   final _formKey = GlobalKey<FormState>();
 
   int? _projectId;
   int _priority = 0;
   int? _dueDate;
+  String _status = 'pending';
+  int? _startDate;
+  int? _endDate;
+  int? _remindAt;
+  TodoReminder? _existingReminder;
+  int _repeatMode = rep.RepeatMode.none;
+  int _repeatAfter = 1;
+  bool _customRepeat = false;
+  rep.RepeatUnit _customUnit = rep.RepeatUnit.day;
   bool _saving = false;
   bool _loaded = false;
   String? _loadError;
+
+  /// 自定义档位派生 mode：单位 → repeat_mode
+  int get _effectiveRepeatMode =>
+      _customRepeat ? rep.modeForUnit(_customUnit) : _repeatMode;
+
+  /// 自定义档位派生 after：间隔输入（解析失败按 1 兜底）
+  int get _effectiveRepeatAfter => _customRepeat
+      ? (int.tryParse(_intervalController.text.trim()) ?? 1)
+      : _repeatAfter;
 
   @override
   void initState() {
@@ -89,13 +142,21 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
   void dispose() {
     _titleController.dispose();
     _descriptionController.dispose();
+    _colorController.dispose();
+    _intervalController.dispose();
     super.dispose();
   }
 
-  /// 编辑态异步预填
+  /// 编辑态异步预填（含提醒：取该任务第一条未删除提醒）
   Future<void> _loadEditing(int taskId) async {
     try {
-      final task = await ref.read(orbitBridgeProvider).todoTaskGet(taskId);
+      final bridge = ref.read(orbitBridgeProvider);
+      final task = await bridge.todoTaskGet(taskId);
+      // 提醒为独立实体，列表拉取后按 task_id 过滤（与桌面端一致）
+      final reminders = await bridge.todoReminderList(const ListFilter());
+      final firstReminder = reminders
+          .where((r) => r.taskId == taskId && r.isDeleted == 0)
+          .firstOrNull;
       if (!mounted) return;
       setState(() {
         _titleController.text = task.title;
@@ -103,12 +164,36 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
         _projectId = task.projectId;
         _priority = task.priority;
         _dueDate = task.dueDate;
+        _status = task.status;
+        _startDate = task.startDate;
+        _endDate = task.endDate;
+        _colorController.text = task.hexColor;
+        _repeatMode = task.repeatMode;
+        _repeatAfter = task.repeatAfter;
+        _existingReminder = firstReminder;
+        _remindAt = firstReminder?.remindAt;
+        // 非预设组合（如"每 3 天"）→ 进自定义态并回填间隔/单位
+        final isPreset = rep.repeatPresets.any((p) =>
+            p.mode == task.repeatMode &&
+            (p.mode == rep.RepeatMode.none || task.repeatAfter == p.after));
+        _customRepeat =
+            task.repeatMode != rep.RepeatMode.none && !isPreset;
+        _customUnit = _unitForMode(task.repeatMode);
+        _intervalController.text = '${task.repeatAfter <= 0 ? 1 : task.repeatAfter}';
         _loaded = true;
       });
     } catch (_) {
       if (mounted) setState(() => _loadError = '记录不存在或加载失败');
     }
   }
+
+  /// repeat_mode → 自定义单位（编辑回填用；不重复归到"天"占位）
+  rep.RepeatUnit _unitForMode(int mode) => switch (mode) {
+        rep.RepeatMode.weekly => rep.RepeatUnit.week,
+        rep.RepeatMode.monthly => rep.RepeatUnit.month,
+        rep.RepeatMode.yearly => rep.RepeatUnit.year,
+        _ => rep.RepeatUnit.day,
+      };
 
   // ── 保存链：校验标题非空 → create/update → invalidate + 关闭 ──
 
@@ -117,16 +202,30 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
     setState(() => _saving = true);
     final title = _titleController.text.trim();
     final description = _descriptionController.text.trim();
+    // 颜色：空=不设置；正则已在 TextFormField validator 拦截非法值
+    final hexColor = _colorController.text.trim();
+    final repeatMode = _effectiveRepeatMode;
+    final repeatAfter = _effectiveRepeatAfter;
     try {
       final bridge = ref.read(orbitBridgeProvider);
       if (widget.editingTaskId == null) {
-        await bridge.todoTaskCreate(TodoTaskCreateInput(
+        final created = await bridge.todoTaskCreate(TodoTaskCreateInput(
           title: title,
           description: description.isEmpty ? null : description,
           projectId: _projectId,
           priority: _priority,
+          status: _status,
           dueDate: _dueDate,
+          startDate: _startDate,
+          endDate: _endDate,
+          repeatMode: repeatMode,
+          repeatAfter: repeatAfter,
+          hexColor: hexColor.isEmpty ? null : hexColor,
         ));
+        // 新建：设置提醒 → 建立提醒实体
+        if (_remindAt != null) {
+          await syncTaskReminder(bridge, created.id, _remindAt, null);
+        }
       } else {
         await bridge.todoTaskUpdate(
           widget.editingTaskId!,
@@ -135,8 +234,21 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
             'description': description.isEmpty ? null : description,
             'project_id': _projectId,
             'priority': _priority,
+            'status': _status,
             'due_date': _dueDate,
+            'start_date': _startDate,
+            'end_date': _endDate,
+            'repeat_mode': repeatMode,
+            'repeat_after': repeatAfter,
+            'hex_color': hexColor.isEmpty ? null : hexColor,
           }),
+        );
+        // 编辑：提醒按"清空删/变更删旧建新/未动跳过"同步
+        await syncTaskReminder(
+          bridge,
+          widget.editingTaskId!,
+          _remindAt,
+          _existingReminder,
         );
       }
       ref.invalidate(todoTasksProvider);
@@ -148,6 +260,55 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
       if (mounted) setState(() => _saving = false);
     }
   }
+
+  // ── 新字段选择器 ──
+
+  /// 日期字段选择（开始/结束日期共用：取自然日零点毫秒）
+  Future<void> _pickDateField({
+    required int? current,
+    required ValueChanged<int> onPicked,
+  }) async {
+    final picked = await showTodoDatePicker(
+      context,
+      initialDate: current != null
+          ? DateTime.fromMillisecondsSinceEpoch(current)
+          : null,
+    );
+    if (picked != null && mounted) onPicked(dateToMidnightMs(picked));
+  }
+
+  /// 提醒时间选择：wait 面板 showTime 模式，日期+时分单面板一次选完
+  Future<void> _pickReminder() async {
+    final picked = await WaitDatePicker.pick(
+      context,
+      initialDate: _remindAt != null
+          ? DateTime.fromMillisecondsSinceEpoch(_remindAt!)
+          : null,
+      showTime: true,
+      accent: OrbitAccents.todoAccent,
+    );
+    // null = 取消或面板内清除；取消不动值，清空走字段行叉号（语义与桌面一致）
+    if (picked == null || !mounted) return;
+    setState(() => _remindAt = picked.millisecondsSinceEpoch);
+  }
+
+  /// 字段小节标题（与优先级/截止日期小节同规格：12px secondary）
+  Widget _sectionLabel(String text) {
+    final colors = AppColors.ofContext(context);
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Text(
+        text,
+        style: TextStyle(fontSize: 12, color: colors.secondaryText),
+      ),
+    );
+  }
+
+  /// 行间分隔线（日期与提醒卡片内）
+  Widget _tileDivider(AppColorSet colors) => Container(
+        height: 0.5,
+        color: colors.divider.withValues(alpha: 0.3),
+      );
 
   // ── 截止日期快捷项（本地时区自然日零点）──
 
@@ -289,7 +450,14 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
                                 for (final project in projects)
                                   DropdownMenuItem(
                                     value: '${project.id}',
+                                    // 注意：菜单项 child 禁用 Flexible/Expanded——
+                                    // DropdownButtonFormField 构建时会以无界宽度
+                                    // 预量每个菜单项（弹层定宽），flex 子件遇无界
+                                    // 宽度约束会抛断言导致抽屉布局崩溃。
+                                    // mainAxisSize.min + 普通文本在无界下取固有
+                                    // 宽度、有界下仍可 ellipsis，两端皆安全。
                                     child: Row(
+                                      mainAxisSize: MainAxisSize.min,
                                       children: [
                                         Container(
                                           width: AppDimens.colorDotSize,
@@ -302,12 +470,10 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
                                           ),
                                         ),
                                         const SizedBox(width: AppDimens.space8),
-                                        Flexible(
-                                          child: Text(
-                                            project.title,
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                          ),
+                                        Text(
+                                          project.title,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
                                         ),
                                       ],
                                     ),
@@ -341,59 +507,197 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
                               ],
                             ),
                             const SizedBox(height: AppDimens.space16),
-                            // 5. 截止日期（今天/明天/下周/自定义 + 清除）
-                            Align(
-                              alignment: Alignment.centerLeft,
-                              child: Text(
-                                '截止日期',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: colors.secondaryText,
-                                ),
-                              ),
-                            ),
+                            // 5. 状态（三档单选，默认待办）
+                            _sectionLabel('状态'),
                             const SizedBox(height: AppDimens.space8),
                             Wrap(
                               spacing: AppDimens.space8,
                               runSpacing: AppDimens.space8,
                               children: [
-                                for (final (label, days) in const [
-                                  ('今天', 0),
-                                  ('明天', 1),
-                                  ('下周', 7),
+                                for (final (label, value) in const [
+                                  ('待办', 'pending'),
+                                  ('进行中', 'doing'),
+                                  ('已完成', 'done'),
                                 ])
-                                  ActionChip(
+                                  ChoiceChip(
                                     label: Text(label),
-                                    side: BorderSide(
-                                      color:
-                                          colors.divider.withValues(alpha: 0.3),
-                                    ),
-                                    onPressed: () => setState(
-                                        () => _dueDate = _midnightOf(days)),
-                                  ),
-                                ActionChip(
-                                  label: const Text('自定义'),
-                                  side: BorderSide(
-                                    color: colors.divider.withValues(alpha: 0.3),
-                                  ),
-                                  onPressed: _pickCustomDate,
-                                ),
-                                if (_dueDate != null)
-                                  ActionChip(
-                                    label: Text(formatYmd(_dueDate!)),
-                                    avatar: Icon(
-                                      Icons.close_rounded,
-                                      size: AppDimens.iconSizeSm,
-                                      color: colors.secondaryText,
-                                    ),
-                                    side: BorderSide(
-                                      color:
-                                          colors.divider.withValues(alpha: 0.3),
-                                    ),
-                                    onPressed: () =>
-                                        setState(() => _dueDate = null),
+                                    selected: _status == value,
+                                    onSelected: (_) =>
+                                        setState(() => _status = value),
                                   ),
                               ],
+                            ),
+                            const SizedBox(height: AppDimens.space16),
+                            // 6-9. 日期与提醒（卡片信息行：与详情页 _InfoTile 同设计语言）
+                            SectionCard(
+                              title: '日期与提醒',
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  // 截止日期：未设 → 行内快捷胶囊；已设 → 值 + 清除
+                                  _FormDateTile(
+                                    icon: Icons.flag_outlined,
+                                    label: '截止日期',
+                                    value: _dueDate != null
+                                        ? formatYmd(_dueDate!)
+                                        : null,
+                                    onTap: _pickCustomDate,
+                                    onClear: _dueDate == null
+                                        ? null
+                                        : () =>
+                                            setState(() => _dueDate = null),
+                                    trailing: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        _QuickCapsule(
+                                            label: '今天',
+                                            onTap: () => setState(
+                                                () => _dueDate = _midnightOf(0))),
+                                        const SizedBox(width: 6),
+                                        _QuickCapsule(
+                                            label: '明天',
+                                            onTap: () => setState(
+                                                () => _dueDate = _midnightOf(1))),
+                                        const SizedBox(width: 6),
+                                        _QuickCapsule(
+                                            label: '下周',
+                                            onTap: () => setState(
+                                                () => _dueDate = _midnightOf(7))),
+                                      ],
+                                    ),
+                                  ),
+                                  _tileDivider(colors),
+                                  _FormDateTile(
+                                    icon: Icons.play_circle_outline_rounded,
+                                    label: '开始日期',
+                                    value: _startDate != null
+                                        ? formatYmd(_startDate!)
+                                        : null,
+                                    onTap: () => _pickDateField(
+                                      current: _startDate,
+                                      onPicked: (ms) =>
+                                          setState(() => _startDate = ms),
+                                    ),
+                                    onClear: _startDate == null
+                                        ? null
+                                        : () =>
+                                            setState(() => _startDate = null),
+                                  ),
+                                  _tileDivider(colors),
+                                  _FormDateTile(
+                                    icon: Icons.stop_circle_outlined,
+                                    label: '结束日期',
+                                    value: _endDate != null
+                                        ? formatYmd(_endDate!)
+                                        : null,
+                                    onTap: () => _pickDateField(
+                                      current: _endDate,
+                                      onPicked: (ms) =>
+                                          setState(() => _endDate = ms),
+                                    ),
+                                    onClear: _endDate == null
+                                        ? null
+                                        : () =>
+                                            setState(() => _endDate = null),
+                                  ),
+                                  _tileDivider(colors),
+                                  // 提醒时间（虚拟字段：提交时同步 todo_reminders）
+                                  _FormDateTile(
+                                    icon: Icons.notifications_outlined,
+                                    label: '提醒时间',
+                                    value: _remindAt != null
+                                        ? formatDateTime(_remindAt!)
+                                        : null,
+                                    onTap: _pickReminder,
+                                    onClear: _remindAt == null
+                                        ? null
+                                        : () =>
+                                            setState(() => _remindAt = null),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: AppDimens.space16),
+                            // 10. 重复规则（预设 + 自定义 N×单位）
+                            _sectionLabel('重复'),
+                            const SizedBox(height: AppDimens.space8),
+                            Wrap(
+                              spacing: AppDimens.space8,
+                              runSpacing: AppDimens.space8,
+                              children: [
+                                for (final preset in rep.repeatPresets)
+                                  ChoiceChip(
+                                    label: Text(preset.label),
+                                    // 预设选中态：非自定义且 mode/after 与预设一致
+                                    selected: !_customRepeat &&
+                                        preset.mode == _repeatMode &&
+                                        (preset.mode ==
+                                                rep.RepeatMode.none ||
+                                            _repeatAfter == preset.after),
+                                    onSelected: (_) => setState(() {
+                                      _customRepeat = false;
+                                      _repeatMode = preset.mode;
+                                      _repeatAfter = preset.after;
+                                    }),
+                                  ),
+                                ChoiceChip(
+                                  label: const Text('自定义'),
+                                  selected: _customRepeat,
+                                  onSelected: (_) =>
+                                      setState(() => _customRepeat = true),
+                                ),
+                              ],
+                            ),
+                            if (_customRepeat) ...[
+                              const SizedBox(height: AppDimens.space8),
+                              Wrap(
+                                spacing: AppDimens.space8,
+                                runSpacing: AppDimens.space8,
+                                children: [
+                                  SizedBox(
+                                    width: 88,
+                                    child: TextFormField(
+                                      controller: _intervalController,
+                                      keyboardType: TextInputType.number,
+                                      style: TextStyle(
+                                          fontSize: 15,
+                                          color: colors.bodyText),
+                                      decoration: const InputDecoration(
+                                        labelText: '间隔',
+                                        counterText: '',
+                                      ),
+                                    ),
+                                  ),
+                                  for (final unit in rep.RepeatUnit.values)
+                                    ChoiceChip(
+                                      label: Text(unit.label),
+                                      selected: _customUnit == unit,
+                                      onSelected: (_) =>
+                                          setState(() => _customUnit = unit),
+                                    ),
+                                ],
+                              ),
+                            ],
+                            const SizedBox(height: AppDimens.space16),
+                            // 11. 颜色（#RRGGBB 文本 + 正则校验，桌面 MVP 同口径）
+                            TextFormField(
+                              controller: _colorController,
+                              maxLength: 7,
+                              style: TextStyle(
+                                  fontSize: 15, color: colors.bodyText),
+                              decoration: const InputDecoration(
+                                labelText: '颜色',
+                                hintText: '#3B82F6',
+                                counterText: '',
+                              ),
+                              validator: (v) {
+                                final t = v?.trim() ?? '';
+                                if (t.isEmpty) return null;
+                                return RegExp(r'^#[0-9a-fA-F]{6}$')
+                                        .hasMatch(t)
+                                    ? null
+                                    : '格式应为 #RRGGBB';
+                              },
                             ),
                           ],
                         ),
@@ -435,6 +739,129 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
           ],
         ),
       );
+}
+
+/// 日期/提醒信息行（与详情页 _InfoTile 同设计语言，表单版）
+///
+/// 结构：图标 + 标签 → Spacer → 值区（已设：值+清除叉；未设：trailing
+/// 快捷胶囊或「无」占位）→ 尾箭头。整行可点唤起选择面板。
+class _FormDateTile extends StatelessWidget {
+  const _FormDateTile({
+    required this.icon,
+    required this.label,
+    required this.value,
+    this.onTap,
+    this.onClear,
+    this.trailing,
+  });
+
+  final IconData icon;
+
+  /// 行标签（截止日期/开始日期/结束日期/提醒时间）
+  final String label;
+
+  /// 已设值文本；null = 未设（显示 trailing 或「无」占位）
+  final String? value;
+
+  final VoidCallback? onTap;
+
+  /// 已设值的清除回调；null 不渲染清除叉
+  final VoidCallback? onClear;
+
+  /// 未设值时的行内快捷胶囊组（仅截止日期行使用）
+  final Widget? trailing;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = AppColors.ofContext(context);
+    final hasValue = value != null;
+
+    final row = Row(
+      children: [
+        Icon(icon,
+            size: AppDimens.iconSizeSm + 2, color: colors.secondaryText),
+        const SizedBox(width: AppDimens.space12),
+        Text(label, style: TextStyle(fontSize: 14, color: colors.bodyText)),
+        const Spacer(),
+        if (!hasValue && trailing != null)
+          trailing!
+        else if (!hasValue)
+          Text(
+            '无',
+            style: TextStyle(
+              fontSize: 14,
+              color: colors.secondaryText.withValues(alpha: 0.5),
+            ),
+          ),
+        if (hasValue) ...[
+          Flexible(
+            child: Text(
+              value!,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(fontSize: 14, color: colors.bodyText),
+            ),
+          ),
+          if (onClear != null) ...[
+            const SizedBox(width: AppDimens.space8),
+            GestureDetector(
+              onTap: onClear,
+              child: Icon(
+                Icons.close_rounded,
+                size: AppDimens.iconSizeSm,
+                color: colors.secondaryText,
+              ),
+            ),
+          ],
+        ],
+        if (onTap != null) ...[
+          const SizedBox(width: AppDimens.space4),
+          Icon(
+            Icons.keyboard_arrow_right_rounded,
+            size: AppDimens.iconSizeSm + 2,
+            color: colors.secondaryText,
+          ),
+        ],
+      ],
+    );
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: AppDimens.space12),
+      child: onTap == null
+          ? row
+          : InkWell(
+              borderRadius: AppShapes.small,
+              onTap: onTap,
+              child: row,
+            ),
+    );
+  }
+}
+
+/// 行内快捷胶囊（截止日期未设时：今天/明天/下周，点选即设）
+class _QuickCapsule extends StatelessWidget {
+  const _QuickCapsule({required this.label, required this.onTap});
+
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = AppColors.ofContext(context);
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        decoration: BoxDecoration(
+          borderRadius: AppShapes.full,
+          border: Border.all(color: colors.divider.withValues(alpha: 0.4))),
+        child: Text(
+          label,
+          style: TextStyle(fontSize: 12, color: colors.secondaryText),
+        ),
+      ),
+    );
+  }
 }
 
 /// 优先级色点（32px 圆；P0 无色用灰描边占位，选中 3px accent 环）

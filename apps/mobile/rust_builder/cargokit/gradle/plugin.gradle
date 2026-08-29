@@ -42,6 +42,9 @@ abstract class CargoKitBuildTask extends DefaultTask {
     @Input
     List<String> targetPlatforms
 
+    @Input
+    String flutterSdk
+
     @TaskAction
     def build() {
         if (project.cargokit.manifestDir == null) {
@@ -82,8 +85,22 @@ abstract class CargoKitBuildTask extends DefaultTask {
             "CARGOKIT_JAVA_HOME"         : System.properties['java.home'] ?: "",
         ]
 
+        // Fix: run_build_tool.cmd 依赖 %FLUTTER_ROOT% 定位 dart.exe，但 Gradle 守护进程
+        // 只继承其启动时的环境快照——flutter CLI 升级/守护进程复用时该变量会丢失，
+        // 导致 "系统找不到指定的路径"(exit code 3)、.so 不进 APK。
+        // 这里从 android/local.properties 的 flutter.sdk 显式回填。
         def pb = new ProcessBuilder(path.toString(), "build-gradle")
         def processEnv = pb.environment()
+        if ((flutterSdk != null) && !flutterSdk.isEmpty()) {
+            def currentRoot = processEnv.get("FLUTTER_ROOT")
+            def dartValid = false
+            if (currentRoot != null) {
+                dartValid = new File(currentRoot, "bin/cache/dart-sdk/bin").exists()
+            }
+            if (!dartValid) {
+                processEnv.put("FLUTTER_ROOT", flutterSdk)
+            }
+        }
         env.each { k, v -> processEnv.put(k.toString(), v.toString()) }
         pb.redirectErrorStream(true)
         pb.directory(project.projectDir)
@@ -100,6 +117,24 @@ abstract class CargoKitBuildTask extends DefaultTask {
 class CargoKitPlugin implements Plugin<Project> {
 
     static String file;
+
+    /// 解析 Flutter SDK 路径：优先 android/local.properties 的 flutter.sdk，
+    /// 其次进程环境变量 FLUTTER_ROOT。用于修复 Gradle 守护进程环境快照
+    /// 缺失 FLUTTER_ROOT 时 cargokit 找不到 dart.exe 的问题。
+    static String resolveFlutterSdk(Project project) {
+        try {
+            def props = new Properties()
+            def localProps = new File(project.rootProject.projectDir, "local.properties")
+            if (localProps.exists()) {
+                localProps.withInputStream { props.load(it) }
+                def fs = props.getProperty("flutter.sdk")
+                if (fs != null && !fs.trim().isEmpty()) {
+                    return fs.trim()
+                }
+            }
+        } catch (Exception ignored) {}
+        return System.getenv("FLUTTER_ROOT")
+    }
 
     private Plugin findFlutterPlugin(Project rootProject) {
         _findFlutterPlugin(rootProject.childProjects)
@@ -187,6 +222,9 @@ class CargoKitPlugin implements Plugin<Project> {
                     compileSdkVersion = plugin.project.android.compileSdkVersion.substring(8) as int
                     targetPlatforms = platforms
                     pluginFile = CargoKitPlugin.file
+                    // 从 android/local.properties 读取 flutter.sdk（flutter CLI 必写），
+                    // 兜底系统环境变量
+                    flutterSdk = resolveFlutterSdk(project)
                 }
                 def onTask = { newTask ->
                     if (newTask.name == "merge${buildType.capitalize()}NativeLibs") {

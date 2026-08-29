@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -46,6 +46,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       final result =
           await ref.read(orbitBridgeProvider).cloudSyncNow(origin: 'manual');
       ref.invalidate(syncConfigProvider);
+      // 同步结果经返回值直达（ADR 0003）：拉取到数据时失效业务缓存，
+      // 原行为由 BootGate 的 syncFinished 订阅承担，流移除后在此兜住
+      if (result.pulledModules > 0) invalidateBusinessCaches(ref);
       WaitToast.success(
         result.skipped
             ? '已有同步任务在进行中'

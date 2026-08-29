@@ -106,7 +106,7 @@ class PrecompileBinaries {
     for (final target in targets) {
       final artifactNames = getArtifactNames(
         target: target,
-        libraryName: crateInfo.packageName,
+        libraryName: crateInfo.libName,
         remote: true,
       );
 

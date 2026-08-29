@@ -16,6 +16,9 @@ import '../auth/unlock_page.dart';
 /// - ready 后渲染主路由内容（[BootGate.child]），并挂载桥层事件流监听：
 ///   dbChanges 全量失效业务缓存；reminderDue 经 [NotificationService]
 ///   呈现本地通知（无权限静默降级 warning toast）。
+///   注：云同步结果经 cloudSyncNow 返回值直达（ADR 0003），无 sync-finished 流。
+///   bootstrap 失败回落解锁页仅针对"已设密码需解锁"场景；
+///   未设密码时初始化异常也回落解锁页属历史兜底，真实错误经日志暴露。
 class BootGate extends ConsumerStatefulWidget {
   const BootGate({super.key, required this.child});
 
@@ -32,7 +35,6 @@ class _BootGateState extends ConsumerState<BootGate> {
   _BootPhase _phase = _BootPhase.booting;
 
   StreamSubscription<dynamic>? _dbChangesSub;
-  StreamSubscription<dynamic>? _syncFinishedSub;
   StreamSubscription<dynamic>? _reminderDueSub;
 
   @override
@@ -44,7 +46,6 @@ class _BootGateState extends ConsumerState<BootGate> {
   @override
   void dispose() {
     _dbChangesSub?.cancel();
-    _syncFinishedSub?.cancel();
     _reminderDueSub?.cancel();
     super.dispose();
   }
@@ -58,8 +59,10 @@ class _BootGateState extends ConsumerState<BootGate> {
       }
       await bridge.dbInitPlaintext();
       _goReady();
-    } catch (_) {
-      // 初始化失败：回退解锁态让用户重试（明文库场景下重试即重跑流程）
+    } catch (e, st) {
+      // 初始化失败：回退解锁态让用户重试（明文库场景下重试即重跑流程）。
+      // 必须留痕：此 catch 曾静默吞掉订阅异常导致未设密码也误入解锁页。
+      debugPrint('[BootGate] bootstrap failed: $e\n$st');
       if (mounted) setState(() => _phase = _BootPhase.unlock);
     }
   }
@@ -84,12 +87,6 @@ class _BootGateState extends ConsumerState<BootGate> {
     // 本地写操作 → 全量失效业务缓存（列表/详情/配置）
     _dbChangesSub = bridge.dbChanges.listen((_) {
       if (!mounted) return;
-      invalidateBusinessCaches(ref);
-    });
-
-    // 云同步完成 → pulled_modules > 0 才失效（纯推送无需刷新本地缓存）
-    _syncFinishedSub = bridge.syncFinished.listen((e) {
-      if (!mounted || e.pulledModules <= 0) return;
       invalidateBusinessCaches(ref);
     });
 

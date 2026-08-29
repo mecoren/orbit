@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -15,8 +15,11 @@ import '../../shared/widgets/more_actions_sheet.dart' show bottomSheetTopShape;
 import '../../shared/widgets/scroll_offset_listenable.dart';
 import '../../shared/widgets/section_card.dart';
 import '../../shared/widgets/select_bottom_sheet.dart';
+import '../../shared/widgets/wait_date_picker.dart';
 import '../../shared/widgets/wait_toast.dart';
-import 'form_bottom_sheet.dart' show showTodoDatePicker;
+import 'form_bottom_sheet.dart' show showTodoDatePicker, syncTaskReminder;
+// as rep：规避 Flutter widgets 自带 RepeatMode 类名冲突
+import 'logic/repeat_logic.dart' as rep;
 import 'logic/task_logic.dart';
 import 'providers/todo_providers.dart';
 
@@ -87,7 +90,12 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
                     ),
                     error: (_, _) => const _ErrorView(),
                     data: (detail) => _DetailView(
-                      key: ValueKey('${detail.id}:${detail.updatedAt}'),
+                      // key 仅绑 id，不纳入 updatedAt——若含之，任何 patch 后
+                      // invalidate 会导致整树按新 key 替换重建，旧 ListView
+                      // 延迟卸载与新 ListView 挂载同帧共存，_scrollController
+                      // 瞬时双附着触发断言。各区块外部变更同步已由
+                      // didUpdateWidget / provider 回读覆盖，无需整树重置。
+                      key: ValueKey('task-detail:${detail.id}'),
                       detail: detail,
                       scrollController: _scrollController,
                       onPatch: _patchTask,
@@ -172,7 +180,13 @@ class _DetailView extends StatelessWidget {
         const SizedBox(height: AppDimens.space12),
         _LabelsSection(detail: detail),
         const SizedBox(height: AppDimens.space12),
-        _RemindersSection(reminders: detail.reminders),
+        _RemindersSection(
+          taskId: detail.id,
+          reminders: detail.reminders,
+          repeatMode: detail.repeatMode,
+          repeatAfter: detail.repeatAfter,
+          onChanged: onRefresh,
+        ),
         if (detail.relations.isNotEmpty) ...[
           const SizedBox(height: AppDimens.space12),
           _RelationsSection(relations: detail.relations),
@@ -457,6 +471,35 @@ class _InfoSection extends ConsumerWidget {
                 ? null
                 : () => onPatch(const {'due_date': null}),
           ),
+          _InfoTile(
+            label: '开始日期',
+            value: detail.startDate != null ? formatYmd(detail.startDate!) : '无',
+            onClick: () => _pickDateField(context,
+                current: detail.startDate, key: 'start_date'),
+            onClear: detail.startDate == null
+                ? null
+                : () => onPatch(const {'start_date': null}),
+          ),
+          _InfoTile(
+            label: '结束日期',
+            value: detail.endDate != null ? formatYmd(detail.endDate!) : '无',
+            onClick: () => _pickDateField(context,
+                current: detail.endDate, key: 'end_date'),
+            onClear: detail.endDate == null
+                ? null
+                : () => onPatch(const {'end_date': null}),
+          ),
+          _InfoTile(
+            label: '重复',
+            value: rep.repeatLabel(detail.repeatMode, detail.repeatAfter),
+            onClick: () => _editRepeat(context),
+          ),
+          _InfoTile(
+            label: '颜色',
+            value: detail.hexColor.isEmpty ? '无' : detail.hexColor,
+            dotColorHex: detail.hexColor.isEmpty ? null : detail.hexColor,
+            onClick: () => _editColor(context),
+          ),
         ],
       ),
     );
@@ -472,6 +515,200 @@ class _InfoSection extends ConsumerWidget {
     );
     if (picked == null || !context.mounted) return;
     await onPatch({'due_date': dateToMidnightMs(picked)});
+  }
+
+  /// 开始/结束日期行点击：与截止日期同一选择器，按 patch key 落库
+  Future<void> _pickDateField(
+    BuildContext context, {
+    required int? current,
+    required String key,
+  }) async {
+    final picked = await showTodoDatePicker(
+      context,
+      initialDate: current != null
+          ? DateTime.fromMillisecondsSinceEpoch(current)
+          : null,
+    );
+    if (picked == null || !context.mounted) return;
+    await onPatch({key: dateToMidnightMs(picked)});
+  }
+
+  /// 重复行点击 → 编辑弹层（预设即选即存，自定义 N×单位走应用）
+  Future<void> _editRepeat(BuildContext context) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: AppColors.ofContext(context).popup,
+      shape: bottomSheetTopShape,
+      builder: (_) => _RepeatEditSheet(
+        mode: detail.repeatMode,
+        after: detail.repeatAfter,
+        onApply: (m, a) => onPatch({'repeat_mode': m, 'repeat_after': a}),
+      ),
+    );
+  }
+
+  /// 颜色行点击 → 对话框编辑 #RRGGBB（空=清除，正则校验，桌面同口径）
+  Future<void> _editColor(BuildContext context) async {
+    final controller = TextEditingController(text: detail.hexColor);
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('颜色'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          maxLength: 7,
+          decoration: const InputDecoration(
+            hintText: '#3B82F6',
+            counterText: '',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('保存'),
+          ),
+        ],
+      ),
+    );
+    final text = controller.text.trim();
+    controller.dispose();
+    if (ok != true || !context.mounted) return;
+    if (!text.isEmpty && !RegExp(r'^#[0-9a-fA-F]{6}$').hasMatch(text)) {
+      WaitToast.destructive('格式应为 #RRGGBB');
+      return;
+    }
+    if (text == detail.hexColor) return;
+    await onPatch({'hex_color': text.isEmpty ? null : text});
+  }
+}
+
+/// 重复规则编辑弹层：预设 ChoiceChips（点击即存即关）+ 自定义 N×单位
+class _RepeatEditSheet extends StatefulWidget {
+  const _RepeatEditSheet({
+    required this.mode,
+    required this.after,
+    required this.onApply,
+  });
+
+  final int mode;
+  final int after;
+  final void Function(int mode, int after) onApply;
+
+  @override
+  State<_RepeatEditSheet> createState() => _RepeatEditSheetState();
+}
+
+class _RepeatEditSheetState extends State<_RepeatEditSheet> {
+  late int _mode = widget.mode;
+  late int _after = widget.after;
+  bool _custom = false;
+  final _intervalController = TextEditingController(text: '1');
+  rep.RepeatUnit _unit = rep.RepeatUnit.day;
+
+  @override
+  void dispose() {
+    _intervalController.dispose();
+    super.dispose();
+  }
+
+  void _applyAndClose(int mode, int after) {
+    widget.onApply(mode, after);
+    Navigator.of(context).pop();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = AppColors.ofContext(context);
+    return SafeArea(
+      top: false,
+      child: Padding(
+        padding: const EdgeInsets.all(AppDimens.space16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '重复规则',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: colors.titleText,
+              ),
+            ),
+            const SizedBox(height: AppDimens.space16),
+            Wrap(
+              spacing: AppDimens.space8,
+              runSpacing: AppDimens.space8,
+              children: [
+                for (final preset in rep.repeatPresets)
+                  ChoiceChip(
+                    label: Text(preset.label),
+                    selected: !_custom &&
+                        preset.mode == _mode &&
+                        (preset.mode == rep.RepeatMode.none ||
+                            _after == preset.after),
+                    onSelected: (_) =>
+                        _applyAndClose(preset.mode, preset.after),
+                  ),
+                ChoiceChip(
+                  label: const Text('自定义'),
+                  selected: _custom,
+                  onSelected: (_) =>
+                      setState(() => _custom = true),
+                ),
+              ],
+            ),
+            if (_custom) ...[
+              const SizedBox(height: AppDimens.space12),
+              Wrap(
+                spacing: AppDimens.space8,
+                runSpacing: AppDimens.space8,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  SizedBox(
+                    width: 88,
+                    child: TextField(
+                      controller: _intervalController,
+                      keyboardType: TextInputType.number,
+                      style:
+                          TextStyle(fontSize: 15, color: colors.bodyText),
+                      decoration: const InputDecoration(
+                        labelText: '间隔',
+                        counterText: '',
+                        isDense: true,
+                      ),
+                    ),
+                  ),
+                  for (final unit in rep.RepeatUnit.values)
+                    ChoiceChip(
+                      label: Text(unit.label),
+                      selected: _unit == unit,
+                      onSelected: (_) => setState(() => _unit = unit),
+                    ),
+                ],
+              ),
+              const SizedBox(height: AppDimens.space16),
+              Align(
+                alignment: Alignment.centerRight,
+                child: FilledButton(
+                  onPressed: () => _applyAndClose(
+                    rep.modeForUnit(_unit),
+                    int.tryParse(_intervalController.text.trim()) ?? 1,
+                  ),
+                  child: const Text('应用'),
+                ),
+              ),
+            ],
+            SizedBox(height: AppDimens.gestureInsetFallback / 2),
+          ],
+        ),
+      ),
+    );
   }
 }
 
@@ -999,18 +1236,94 @@ class _LabelEditSheetState extends ConsumerState<_LabelEditSheet> {
   }
 }
 
-// ── 六、提醒（列表 + 相对时间）──
+// ── 六、提醒（可增改删；编辑=删旧建新，桌面 task-detail-drawer 同语义）──
 
-class _RemindersSection extends StatelessWidget {
-  const _RemindersSection({required this.reminders});
+class _RemindersSection extends ConsumerWidget {
+  const _RemindersSection({
+    required this.taskId,
+    required this.reminders,
+    required this.repeatMode,
+    required this.repeatAfter,
+    required this.onChanged,
+  });
 
+  final int taskId;
   final List<TodoReminder> reminders;
 
+  /// 任务重复规则（>0 时提醒行显示规则徽标，对齐桌面）
+  final int repeatMode;
+  final int repeatAfter;
+
+  final VoidCallback onChanged;
+
+  /// 底部弹 wait 面板选日期+时间，确认返回毫秒；取消/清除返回 null
+  Future<DateTime?> _pick(BuildContext context, int? currentMs) {
+    return WaitDatePicker.pick(
+      context,
+      initialDate: currentMs != null
+          ? DateTime.fromMillisecondsSinceEpoch(currentMs)
+          : null,
+      showTime: true,
+      accent: OrbitAccents.todoAccent,
+    );
+  }
+
+  /// 变更统一出口：落库 → onChanged 失效详情与列表
+  Future<void> _mutate(
+    BuildContext context,
+    WidgetRef ref,
+    Future<void> Function() action,
+  ) async {
+    try {
+      await action();
+      onChanged();
+    } catch (_) {
+      WaitToast.destructive('操作失败');
+    }
+  }
+
+  /// 添加提醒：默认初值一小时后
+  Future<void> _add(BuildContext context, WidgetRef ref) async {
+    final picked = await _pick(
+        context, DateTime.now().millisecondsSinceEpoch + 3600000);
+    if (picked == null || !context.mounted) return;
+    await _mutate(context, ref, () async {
+      final bridge = ref.read(orbitBridgeProvider);
+      await bridge.todoReminderCreate(
+        TodoReminderCreateInput(
+            taskId: taskId, remindAt: picked.millisecondsSinceEpoch),
+      );
+    });
+  }
+
+  /// 编辑提醒：点行唤起面板，变更走删旧建新（复用表单 syncTaskReminder）
+  Future<void> _edit(
+    BuildContext context,
+    WidgetRef ref,
+    TodoReminder reminder,
+  ) async {
+    final picked = await _pick(context, reminder.remindAt);
+    if (picked == null || !context.mounted) return;
+    await _mutate(context, ref, () async {
+      final bridge = ref.read(orbitBridgeProvider);
+      await syncTaskReminder(
+        bridge,
+        taskId,
+        picked.millisecondsSinceEpoch,
+        reminder,
+      );
+    });
+  }
+
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final colors = AppColors.ofContext(context);
     return SectionCard(
       title: '提醒',
+      trailing: TextButton(
+        onPressed: () => _add(context, ref),
+        child: const Text('添加提醒'),
+      ),
       child: reminders.isEmpty
           ? Text(
               '暂无提醒',
@@ -1033,18 +1346,66 @@ class _RemindersSection extends StatelessWidget {
                           color: colors.secondaryText,
                         ),
                         const SizedBox(width: AppDimens.space8),
-                        Text(
-                          formatDateTime(reminder.remindAt),
-                          style: TextStyle(
-                              fontSize: 15, color: colors.bodyText),
-                        ),
-                        const SizedBox(width: AppDimens.space8),
-                        Text(
-                          relativeFromNow(reminder.remindAt),
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: colors.secondaryText,
+                        // 点值文本进入编辑（同桌面行点按语义）
+                        Expanded(
+                          child: InkWell(
+                            onTap: () => _edit(context, ref, reminder),
+                            child: Row(
+                              children: [
+                                Flexible(
+                                  child: Text(
+                                    formatDateTime(reminder.remindAt),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                        fontSize: 15,
+                                        color: colors.bodyText),
+                                  ),
+                                ),
+                                const SizedBox(width: AppDimens.space8),
+                                Text(
+                                  relativeFromNow(reminder.remindAt),
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: colors.secondaryText,
+                                  ),
+                                ),
+                                if (repeatMode > 0) ...[
+                                  const SizedBox(width: AppDimens.space8),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: AppDimens.space4 + 2,
+                                      vertical: 2,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      borderRadius: AppShapes.full,
+                                      color: OrbitAccents.todoAccent
+                                          .withValues(alpha: 0.1),
+                                    ),
+                                    child: Text(
+                                      rep.repeatLabel(repeatMode, repeatAfter),
+                                      style: TextStyle(
+                                        fontSize: 10,
+                                        color: OrbitAccents.todoAccent,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
                           ),
+                        ),
+                        // 删除（无确认直删，对齐桌面行为）
+                        IconButton(
+                          visualDensity: VisualDensity.compact,
+                          icon: Icon(Icons.close_rounded,
+                              size: AppDimens.iconSizeSm,
+                              color: colors.secondaryText),
+                          onPressed: () => _mutate(context, ref, () async {
+                            await ref
+                                .read(orbitBridgeProvider)
+                                .todoReminderDelete(reminder.id);
+                          }),
                         ),
                       ],
                     ),
