@@ -191,7 +191,6 @@ export interface TodoTask {
   end_date: number | null;
   repeat_after: number;
   repeat_mode: number;
-  hex_color: string;
   percent_done: number;
   position: number;
   is_favorite: number;
@@ -214,7 +213,6 @@ export interface TodoTaskCreateInput {
   end_date?: number | null;
   repeat_after?: number;
   repeat_mode?: number;
-  hex_color?: string;
   position?: number;
   is_favorite?: number;
 }
@@ -231,7 +229,6 @@ export interface TodoTaskUpdateInput {
   end_date?: number | null;
   repeat_after?: number;
   repeat_mode?: number;
-  hex_color?: string;
   percent_done?: number;
   position?: number;
   is_favorite?: number;

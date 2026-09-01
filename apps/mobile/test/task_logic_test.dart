@@ -36,7 +36,6 @@ TodoTask _task({
     endDate: null,
     repeatAfter: 1,
     repeatMode: 0,
-    hexColor: '',
     percentDone: 0,
     position: position,
     isFavorite: isFavorite,

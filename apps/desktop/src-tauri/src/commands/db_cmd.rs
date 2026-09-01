@@ -22,8 +22,12 @@ use crate::commands::data_dir::resolve_app_data_dir;
 /// 初始化后 manage AppState，并启动事件转发任务。
 #[tauri::command]
 pub async fn db_init_plaintext(app: AppHandle) -> Result<(), String> {
+    // 幂等守卫：同进程同库，重复初始化是无操作。直接按成功返回，
+    // 避免开发模式 React StrictMode 双挂载等重入场景把无害调用当错误
+    // 抛给前端（AppState 重复 manage 会 panic，此处必须拦截）。
+    // 迁移流程（db_migrate_to_*）会先 unmanage 再重开，不受影响。
     if app.try_state::<AppState>().is_some() {
-        return Err("数据库已初始化，请勿重复调用".to_string());
+        return Ok(());
     }
 
     let dir = resolve_app_data_dir(&app)?;
@@ -45,8 +49,10 @@ pub async fn db_init_plaintext(app: AppHandle) -> Result<(), String> {
 /// hex 格式 key 会被转换为 SQLCipher 的 `x'...'` 格式。
 #[tauri::command]
 pub async fn db_init_encrypted(app: AppHandle, db_key_hex: String) -> Result<(), String> {
+    // 幂等守卫：同 db_init_plaintext。key 正确性已由解锁流程
+    // （master_auth_unlock 验密）保证，state 就绪即视为目标库已打开。
     if app.try_state::<AppState>().is_some() {
-        return Err("数据库已初始化，请勿重复调用".to_string());
+        return Ok(());
     }
 
     let dir = resolve_app_data_dir(&app)?;

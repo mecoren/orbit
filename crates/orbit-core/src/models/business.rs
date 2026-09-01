@@ -129,7 +129,6 @@ pub struct TodoTask {
     pub end_date: Option<i64>,
     pub repeat_after: i64,
     pub repeat_mode: i32,
-    pub hex_color: String,
     pub percent_done: f64,
     pub position: f64,
     pub is_favorite: i32,
@@ -155,7 +154,6 @@ pub struct TodoTaskCreateInput {
     pub end_date: Option<i64>,
     pub repeat_after: Option<i64>,
     pub repeat_mode: Option<i32>,
-    pub hex_color: Option<String>,
     pub position: Option<f64>,
     pub is_favorite: Option<i32>,
 }
@@ -224,7 +222,6 @@ pub struct TodoTaskUpdateInput {
     pub end_date: Option<Option<i64>>,
     pub repeat_after: Option<i64>,
     pub repeat_mode: Option<i32>,
-    pub hex_color: Option<String>,
     pub percent_done: Option<f64>,
     pub position: Option<f64>,
     pub is_favorite: Option<i32>,

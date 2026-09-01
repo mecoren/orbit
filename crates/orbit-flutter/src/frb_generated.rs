@@ -27,7 +27,7 @@
 // Section: imports
 
 use flutter_rust_bridge::for_generated::byteorder::{NativeEndian, ReadBytesExt, WriteBytesExt};
-use flutter_rust_bridge::for_generated::{Lifetimeable, Lockable, transform_result_dco};
+use flutter_rust_bridge::for_generated::{transform_result_dco, Lifetimeable, Lockable};
 use flutter_rust_bridge::{Handler, IntoIntoDart};
 
 // Section: boilerplate
@@ -3195,7 +3195,6 @@ impl SseDecode for crate::api::dto::TodoTask {
         let mut var_endDate = <Option<i64>>::sse_decode(deserializer);
         let mut var_repeatAfter = <i64>::sse_decode(deserializer);
         let mut var_repeatMode = <i32>::sse_decode(deserializer);
-        let mut var_hexColor = <String>::sse_decode(deserializer);
         let mut var_percentDone = <f64>::sse_decode(deserializer);
         let mut var_position = <f64>::sse_decode(deserializer);
         let mut var_isFavorite = <i32>::sse_decode(deserializer);
@@ -3219,7 +3218,6 @@ impl SseDecode for crate::api::dto::TodoTask {
             end_date: var_endDate,
             repeat_after: var_repeatAfter,
             repeat_mode: var_repeatMode,
-            hex_color: var_hexColor,
             percent_done: var_percentDone,
             position: var_position,
             is_favorite: var_isFavorite,
@@ -3247,7 +3245,6 @@ impl SseDecode for crate::api::dto::TodoTaskCreateInput {
         let mut var_endDate = <Option<i64>>::sse_decode(deserializer);
         let mut var_repeatAfter = <Option<i64>>::sse_decode(deserializer);
         let mut var_repeatMode = <Option<i32>>::sse_decode(deserializer);
-        let mut var_hexColor = <Option<String>>::sse_decode(deserializer);
         let mut var_position = <Option<f64>>::sse_decode(deserializer);
         let mut var_isFavorite = <Option<i32>>::sse_decode(deserializer);
         return crate::api::dto::TodoTaskCreateInput {
@@ -3263,7 +3260,6 @@ impl SseDecode for crate::api::dto::TodoTaskCreateInput {
             end_date: var_endDate,
             repeat_after: var_repeatAfter,
             repeat_mode: var_repeatMode,
-            hex_color: var_hexColor,
             position: var_position,
             is_favorite: var_isFavorite,
         };
@@ -3287,7 +3283,6 @@ impl SseDecode for crate::api::dto::TodoTaskDetail {
         let mut var_endDate = <Option<i64>>::sse_decode(deserializer);
         let mut var_repeatAfter = <i64>::sse_decode(deserializer);
         let mut var_repeatMode = <i32>::sse_decode(deserializer);
-        let mut var_hexColor = <String>::sse_decode(deserializer);
         let mut var_percentDone = <f64>::sse_decode(deserializer);
         let mut var_position = <f64>::sse_decode(deserializer);
         let mut var_isFavorite = <i32>::sse_decode(deserializer);
@@ -3316,7 +3311,6 @@ impl SseDecode for crate::api::dto::TodoTaskDetail {
             end_date: var_endDate,
             repeat_after: var_repeatAfter,
             repeat_mode: var_repeatMode,
-            hex_color: var_hexColor,
             percent_done: var_percentDone,
             position: var_position,
             is_favorite: var_isFavorite,
@@ -4033,7 +4027,6 @@ impl flutter_rust_bridge::IntoDart for crate::api::dto::TodoTask {
             self.end_date.into_into_dart().into_dart(),
             self.repeat_after.into_into_dart().into_dart(),
             self.repeat_mode.into_into_dart().into_dart(),
-            self.hex_color.into_into_dart().into_dart(),
             self.percent_done.into_into_dart().into_dart(),
             self.position.into_into_dart().into_dart(),
             self.is_favorite.into_into_dart().into_dart(),
@@ -4068,7 +4061,6 @@ impl flutter_rust_bridge::IntoDart for crate::api::dto::TodoTaskCreateInput {
             self.end_date.into_into_dart().into_dart(),
             self.repeat_after.into_into_dart().into_dart(),
             self.repeat_mode.into_into_dart().into_dart(),
-            self.hex_color.into_into_dart().into_dart(),
             self.position.into_into_dart().into_dart(),
             self.is_favorite.into_into_dart().into_dart(),
         ]
@@ -4104,7 +4096,6 @@ impl flutter_rust_bridge::IntoDart for crate::api::dto::TodoTaskDetail {
             self.end_date.into_into_dart().into_dart(),
             self.repeat_after.into_into_dart().into_dart(),
             self.repeat_mode.into_into_dart().into_dart(),
-            self.hex_color.into_into_dart().into_dart(),
             self.percent_done.into_into_dart().into_dart(),
             self.position.into_into_dart().into_dart(),
             self.is_favorite.into_into_dart().into_dart(),
@@ -4687,7 +4678,6 @@ impl SseEncode for crate::api::dto::TodoTask {
         <Option<i64>>::sse_encode(self.end_date, serializer);
         <i64>::sse_encode(self.repeat_after, serializer);
         <i32>::sse_encode(self.repeat_mode, serializer);
-        <String>::sse_encode(self.hex_color, serializer);
         <f64>::sse_encode(self.percent_done, serializer);
         <f64>::sse_encode(self.position, serializer);
         <i32>::sse_encode(self.is_favorite, serializer);
@@ -4714,7 +4704,6 @@ impl SseEncode for crate::api::dto::TodoTaskCreateInput {
         <Option<i64>>::sse_encode(self.end_date, serializer);
         <Option<i64>>::sse_encode(self.repeat_after, serializer);
         <Option<i32>>::sse_encode(self.repeat_mode, serializer);
-        <Option<String>>::sse_encode(self.hex_color, serializer);
         <Option<f64>>::sse_encode(self.position, serializer);
         <Option<i32>>::sse_encode(self.is_favorite, serializer);
     }
@@ -4737,7 +4726,6 @@ impl SseEncode for crate::api::dto::TodoTaskDetail {
         <Option<i64>>::sse_encode(self.end_date, serializer);
         <i64>::sse_encode(self.repeat_after, serializer);
         <i32>::sse_encode(self.repeat_mode, serializer);
-        <String>::sse_encode(self.hex_color, serializer);
         <f64>::sse_encode(self.percent_done, serializer);
         <f64>::sse_encode(self.position, serializer);
         <i32>::sse_encode(self.is_favorite, serializer);
@@ -4832,7 +4820,7 @@ mod io {
     use flutter_rust_bridge::for_generated::byteorder::{
         NativeEndian, ReadBytesExt, WriteBytesExt,
     };
-    use flutter_rust_bridge::for_generated::{Lifetimeable, Lockable, transform_result_dco};
+    use flutter_rust_bridge::for_generated::{transform_result_dco, Lifetimeable, Lockable};
     use flutter_rust_bridge::{Handler, IntoIntoDart};
 
     // Section: boilerplate

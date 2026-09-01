@@ -26,6 +26,7 @@ import { useAppStore } from "@/stores/app-store";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { todoProjectList, todoTaskList, type TodoTask } from "@/lib/tauri";
 import { LS_VIEW_MODE, QUICK_VIEWS, type QuickViewKey } from "../shared/constants";
+import { useTaskLabels } from "../shared/use-task-labels";
 import { filterTasks, sortTasks } from "../shared/task-filters";
 import { ProjectSidebar } from "./project-sidebar";
 import { TaskListView } from "./task-list-view";
@@ -103,6 +104,8 @@ export default function TodoListPage() {
 
   const projects = projectsQuery.data ?? [];
   const tasks = tasksQuery.data ?? [];
+  // 任务→标签映射（列表行/看板卡标签 chips 共用）
+  const taskLabels = useTaskLabels();
 
   // ---- 项目未完成计数聚合（侧栏删除保护判定）----
   const undoneCounts = useMemo(() => {
@@ -219,28 +222,38 @@ export default function TodoListPage() {
 
             {/* 视图切换双联钮 */}
             <div className="flex items-center overflow-hidden rounded-md border">
-              <button
-                type="button"
-                aria-label="列表视图"
-                onClick={() => setViewMode("list")}
-                className={cn(
-                  "flex h-8 w-8 items-center justify-center",
-                  viewMode === "list" ? "bg-primary/10 text-primary" : "hover:bg-accent",
-                )}
-              >
-                <ListTodo size={14} />
-              </button>
-              <button
-                type="button"
-                aria-label="看板视图"
-                onClick={() => setViewMode("kanban")}
-                className={cn(
-                  "flex h-8 w-8 items-center justify-center",
-                  viewMode === "kanban" ? "bg-primary/10 text-primary" : "hover:bg-accent",
-                )}
-              >
-                <LayoutGrid size={14} />
-              </button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    aria-label="列表视图"
+                    onClick={() => setViewMode("list")}
+                    className={cn(
+                      "flex h-8 w-8 items-center justify-center",
+                      viewMode === "list" ? "bg-primary/10 text-primary" : "hover:bg-accent",
+                    )}
+                  >
+                    <ListTodo size={14} />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent>列表视图</TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    aria-label="看板视图"
+                    onClick={() => setViewMode("kanban")}
+                    className={cn(
+                      "flex h-8 w-8 items-center justify-center",
+                      viewMode === "kanban" ? "bg-primary/10 text-primary" : "hover:bg-accent",
+                    )}
+                  >
+                    <LayoutGrid size={14} />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent>看板视图</TooltipContent>
+              </Tooltip>
             </div>
 
             {/* 看板模式专属：分组 Select（w-24） */}
@@ -276,15 +289,20 @@ export default function TodoListPage() {
             </Tooltip>
 
             {/* 标签管理（h-8 w-8 Tag icon） */}
-            <Button
-              variant="outline"
-              size="icon"
-              className="h-8 w-8"
-              aria-label="标签管理"
-              onClick={() => setLabelManagerOpen(true)}
-            >
-              <Tag size={14} />
-            </Button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="h-8 w-8"
+                  aria-label="标签管理"
+                  onClick={() => setLabelManagerOpen(true)}
+                >
+                  <Tag size={14} />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>标签管理</TooltipContent>
+            </Tooltip>
 
             {/* 新增按钮 */}
             <Button
@@ -304,11 +322,17 @@ export default function TodoListPage() {
         {/* 内容区（flex-1 撑满，QuickAddBar 无论有无数据都固定在底部） */}
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
           {viewMode === "kanban" ? (
-            <KanbanView tasks={visibleTasks} projects={projects} groupBy={kanbanGroupBy} />
+            <KanbanView
+              tasks={visibleTasks}
+              projects={projects}
+              groupBy={kanbanGroupBy}
+              labelsByTask={taskLabels}
+            />
           ) : (
             <TaskListView
               tasks={visibleTasks}
               projects={projects}
+              labelsByTask={taskLabels}
               loading={tasksQuery.isLoading}
               error={
                 // 仅"无任何数据"的失败才整块替换;后台 refetch 失败时保留旧数据展示

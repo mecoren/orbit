@@ -98,7 +98,6 @@ class _TodoFormSheet extends ConsumerStatefulWidget {
 class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
   final _titleController = TextEditingController();
   final _descriptionController = TextEditingController();
-  final _colorController = TextEditingController();
   final _intervalController = TextEditingController(text: '1');
   final _formKey = GlobalKey<FormState>();
 
@@ -142,7 +141,6 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
   void dispose() {
     _titleController.dispose();
     _descriptionController.dispose();
-    _colorController.dispose();
     _intervalController.dispose();
     super.dispose();
   }
@@ -167,7 +165,6 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
         _status = task.status;
         _startDate = task.startDate;
         _endDate = task.endDate;
-        _colorController.text = task.hexColor;
         _repeatMode = task.repeatMode;
         _repeatAfter = task.repeatAfter;
         _existingReminder = firstReminder;
@@ -202,8 +199,6 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
     setState(() => _saving = true);
     final title = _titleController.text.trim();
     final description = _descriptionController.text.trim();
-    // 颜色：空=不设置；正则已在 TextFormField validator 拦截非法值
-    final hexColor = _colorController.text.trim();
     final repeatMode = _effectiveRepeatMode;
     final repeatAfter = _effectiveRepeatAfter;
     try {
@@ -220,7 +215,6 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
           endDate: _endDate,
           repeatMode: repeatMode,
           repeatAfter: repeatAfter,
-          hexColor: hexColor.isEmpty ? null : hexColor,
         ));
         // 新建：设置提醒 → 建立提醒实体
         if (_remindAt != null) {
@@ -240,7 +234,6 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
             'end_date': _endDate,
             'repeat_mode': repeatMode,
             'repeat_after': repeatAfter,
-            'hex_color': hexColor.isEmpty ? null : hexColor,
           }),
         );
         // 编辑：提醒按"清空删/变更删旧建新/未动跳过"同步
@@ -424,7 +417,8 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
                             TextFormField(
                               controller: _descriptionController,
                               maxLines: 3,
-                              maxLength: 2000,
+                              // 与桌面端 task-form-sheet description(5000) 统一
+                              maxLength: 5000,
                               style: TextStyle(
                                   fontSize: 15, color: colors.bodyText),
                               decoration: const InputDecoration(
@@ -678,27 +672,6 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
                                 ],
                               ),
                             ],
-                            const SizedBox(height: AppDimens.space16),
-                            // 11. 颜色（#RRGGBB 文本 + 正则校验，桌面 MVP 同口径）
-                            TextFormField(
-                              controller: _colorController,
-                              maxLength: 7,
-                              style: TextStyle(
-                                  fontSize: 15, color: colors.bodyText),
-                              decoration: const InputDecoration(
-                                labelText: '颜色',
-                                hintText: '#3B82F6',
-                                counterText: '',
-                              ),
-                              validator: (v) {
-                                final t = v?.trim() ?? '';
-                                if (t.isEmpty) return null;
-                                return RegExp(r'^#[0-9a-fA-F]{6}$')
-                                        .hasMatch(t)
-                                    ? null
-                                    : '格式应为 #RRGGBB';
-                              },
-                            ),
                           ],
                         ),
                       ),

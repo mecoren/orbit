@@ -501,7 +501,6 @@ class TodoTask {
   final PlatformInt64? endDate;
   final PlatformInt64 repeatAfter;
   final int repeatMode;
-  final String hexColor;
   final double percentDone;
   final double position;
   final int isFavorite;
@@ -526,7 +525,6 @@ class TodoTask {
     this.endDate,
     required this.repeatAfter,
     required this.repeatMode,
-    required this.hexColor,
     required this.percentDone,
     required this.position,
     required this.isFavorite,
@@ -553,7 +551,6 @@ class TodoTask {
       endDate.hashCode ^
       repeatAfter.hashCode ^
       repeatMode.hashCode ^
-      hexColor.hashCode ^
       percentDone.hashCode ^
       position.hashCode ^
       isFavorite.hashCode ^
@@ -582,7 +579,6 @@ class TodoTask {
           endDate == other.endDate &&
           repeatAfter == other.repeatAfter &&
           repeatMode == other.repeatMode &&
-          hexColor == other.hexColor &&
           percentDone == other.percentDone &&
           position == other.position &&
           isFavorite == other.isFavorite &&
@@ -611,7 +607,6 @@ class TodoTaskCreateInput {
   final PlatformInt64? endDate;
   final PlatformInt64? repeatAfter;
   final int? repeatMode;
-  final String? hexColor;
   final double? position;
   final int? isFavorite;
 
@@ -628,7 +623,6 @@ class TodoTaskCreateInput {
     this.endDate,
     this.repeatAfter,
     this.repeatMode,
-    this.hexColor,
     this.position,
     this.isFavorite,
   });
@@ -647,7 +641,6 @@ class TodoTaskCreateInput {
       endDate.hashCode ^
       repeatAfter.hashCode ^
       repeatMode.hashCode ^
-      hexColor.hashCode ^
       position.hashCode ^
       isFavorite.hashCode;
 
@@ -668,7 +661,6 @@ class TodoTaskCreateInput {
           endDate == other.endDate &&
           repeatAfter == other.repeatAfter &&
           repeatMode == other.repeatMode &&
-          hexColor == other.hexColor &&
           position == other.position &&
           isFavorite == other.isFavorite;
 }
@@ -694,7 +686,6 @@ class TodoTaskDetail {
   final PlatformInt64? endDate;
   final PlatformInt64 repeatAfter;
   final int repeatMode;
-  final String hexColor;
   final double percentDone;
   final double position;
   final int isFavorite;
@@ -724,7 +715,6 @@ class TodoTaskDetail {
     this.endDate,
     required this.repeatAfter,
     required this.repeatMode,
-    required this.hexColor,
     required this.percentDone,
     required this.position,
     required this.isFavorite,
@@ -756,7 +746,6 @@ class TodoTaskDetail {
       endDate.hashCode ^
       repeatAfter.hashCode ^
       repeatMode.hashCode ^
-      hexColor.hashCode ^
       percentDone.hashCode ^
       position.hashCode ^
       isFavorite.hashCode ^
@@ -790,7 +779,6 @@ class TodoTaskDetail {
           endDate == other.endDate &&
           repeatAfter == other.repeatAfter &&
           repeatMode == other.repeatMode &&
-          hexColor == other.hexColor &&
           percentDone == other.percentDone &&
           position == other.position &&
           isFavorite == other.isFavorite &&

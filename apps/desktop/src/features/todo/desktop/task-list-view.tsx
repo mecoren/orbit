@@ -38,13 +38,16 @@ import { EmptyState } from "@/components/business/empty-state";
 import { completeTask } from "../shared/task-actions";
 import { isListActivationKey, listNavDirection } from "../shared/list-keyboard";
 import { midpoint } from "../shared/position";
-import { todoTaskUpdate, todoTaskUpdatePosition, type TodoProject, type TodoTask } from "@/lib/tauri";
+import { todoTaskUpdate, todoTaskUpdatePosition, type TodoLabel, type TodoProject, type TodoTask } from "@/lib/tauri";
 import { FAVORITE_COLOR, OVERDUE_COLOR_CLASS, PRIORITY_COLOR } from "../shared/constants";
+import { LabelChips } from "../shared/label-chips";
 import { TaskContextMenu } from "./task-context-menu";
 
 interface TaskListViewProps {
   tasks: TodoTask[];
   projects: TodoProject[];
+  /** 任务→标签映射（list-page 级拉取，行内渲染标签 chips） */
+  labelsByTask: Map<number, TodoLabel[]>;
   loading?: boolean;
   /** 列表查询错误文案；非空时整块渲染 ErrorState */
   error?: string | null;
@@ -80,7 +83,7 @@ const rowsFirstCollision: CollisionDetection = (args) => {
   return rowHits.length > 0 ? rowHits : collisions;
 };
 
-export function TaskListView({ tasks, projects, loading, error, onCreateClick, onOpenDetail }: TaskListViewProps) {
+export function TaskListView({ tasks, projects, labelsByTask, loading, error, onCreateClick, onOpenDetail }: TaskListViewProps) {
   const qc = useQueryClient();
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -228,6 +231,7 @@ export function TaskListView({ tasks, projects, loading, error, onCreateClick, o
                     task={t}
                     index={vi.index}
                     count={tasks.length}
+                    labels={labelsByTask.get(t.id) ?? []}
                     projectName={projectName}
                     due={due}
                     overdue={overdue}
@@ -281,6 +285,7 @@ interface TaskRowProps {
   task: TodoTask;
   index: number;
   count: number;
+  labels: TodoLabel[];
   projectName?: string;
   due: string | null;
   overdue: boolean;
@@ -297,6 +302,7 @@ function TaskRow({
   task: t,
   index,
   count,
+  labels,
   projectName,
   due,
   overdue,
@@ -325,7 +331,7 @@ function TaskRow({
       tabIndex={0}
       aria-label={`${t.done ? "已完成" : "未完成"}任务：${t.title}`}
       className={cn(
-        "group flex cursor-default items-center gap-3 border-b border-border/30 px-4 py-3 hover:bg-accent/30",
+        "group relative flex cursor-default items-center gap-3 border-b border-border/30 px-4 py-3 hover:bg-accent/30",
         "focus-visible:bg-accent/40 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring",
         isOver && "bg-accent/40",
         dragging && "opacity-40",
@@ -348,6 +354,14 @@ function TaskRow({
         onFocusMove(dir);
       }}
     >
+      {/* 优先级色条（行底部 2px，与看板卡顶部色条同语义）；
+          未设优先级（P0）按「低」的灰色显示，保证所有行都有色条 */}
+      <span
+        aria-hidden
+        className="pointer-events-none absolute inset-x-0 bottom-0 h-0.5"
+        style={{ background: PRIORITY_COLOR[t.priority] || PRIORITY_COLOR[1] }}
+      />
+
       {/* 拖拽手柄：hover 显现；点击不冒泡（避免误触打开详情） */}
       <button
         type="button"
@@ -387,19 +401,14 @@ function TaskRow({
         >
           {t.title}
         </div>
-        {(t.priority > 0 || projectName || due) && (
+        {(t.priority > 0 || labels.length > 0 || projectName || due) && (
           <div
             className={cn(
               "mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground",
               overdue && OVERDUE_COLOR_CLASS,
             )}
           >
-            {t.priority > 0 && (
-              <span
-                className="h-1.5 w-1.5 rounded-full"
-                style={{ background: PRIORITY_COLOR[t.priority] }}
-              />
-            )}
+            <LabelChips labels={labels} />
             {projectName && <span>{projectName}</span>}
             {due && (
               <span className="inline-flex items-center gap-0.5">

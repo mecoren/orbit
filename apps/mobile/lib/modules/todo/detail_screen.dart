@@ -494,12 +494,6 @@ class _InfoSection extends ConsumerWidget {
             value: rep.repeatLabel(detail.repeatMode, detail.repeatAfter),
             onClick: () => _editRepeat(context),
           ),
-          _InfoTile(
-            label: '颜色',
-            value: detail.hexColor.isEmpty ? '无' : detail.hexColor,
-            dotColorHex: detail.hexColor.isEmpty ? null : detail.hexColor,
-            onClick: () => _editColor(context),
-          ),
         ],
       ),
     );
@@ -545,45 +539,6 @@ class _InfoSection extends ConsumerWidget {
         onApply: (m, a) => onPatch({'repeat_mode': m, 'repeat_after': a}),
       ),
     );
-  }
-
-  /// 颜色行点击 → 对话框编辑 #RRGGBB（空=清除，正则校验，桌面同口径）
-  Future<void> _editColor(BuildContext context) async {
-    final controller = TextEditingController(text: detail.hexColor);
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('颜色'),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          maxLength: 7,
-          decoration: const InputDecoration(
-            hintText: '#3B82F6',
-            counterText: '',
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: const Text('保存'),
-          ),
-        ],
-      ),
-    );
-    final text = controller.text.trim();
-    controller.dispose();
-    if (ok != true || !context.mounted) return;
-    if (!text.isEmpty && !RegExp(r'^#[0-9a-fA-F]{6}$').hasMatch(text)) {
-      WaitToast.destructive('格式应为 #RRGGBB');
-      return;
-    }
-    if (text == detail.hexColor) return;
-    await onPatch({'hex_color': text.isEmpty ? null : text});
   }
 }
 

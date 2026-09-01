@@ -155,7 +155,6 @@ class MockOrbitBridge implements OrbitBridge {
           'end_date': input.endDate,
           'repeat_after': input.repeatAfter ?? 1,
           'repeat_mode': input.repeatMode ?? 0,
-          'hex_color': input.hexColor ?? '',
           'percent_done': 0,
           'position': input.position ??
               store.tasks.values
@@ -213,7 +212,6 @@ class MockOrbitBridge implements OrbitBridge {
           endDate: base.endDate,
           repeatAfter: base.repeatAfter,
           repeatMode: base.repeatMode,
-          hexColor: base.hexColor,
           percentDone: base.percentDone,
           position: base.position,
           isFavorite: base.isFavorite,

@@ -39,7 +39,6 @@ export function planNextRecurringInstance(task: TodoTask, nowMs: number): NextIn
       end_date: shift(task.end_date),
       repeat_after: task.repeat_after,
       repeat_mode: task.repeat_mode,
-      hex_color: task.hex_color,
       is_favorite: task.is_favorite,
     },
     deltaMs,

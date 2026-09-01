@@ -22,6 +22,8 @@ export type FieldType =
 export interface FieldOption {
   label: string;
   value: string | number;
+  /** 选项语义色点（可选，如优先级 0–5 语义色），渲染在选项文字前 */
+  color?: string;
   /** 是否为默认选项（新增记录时自动选中） */
   isDefault?: boolean;
 }

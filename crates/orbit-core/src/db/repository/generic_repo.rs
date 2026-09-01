@@ -502,9 +502,9 @@ pub async fn create_todo_task(
         "INSERT INTO todo_tasks (
             uuid, title, description, project_id, priority, status, done, done_at,
             due_date, start_date, end_date, repeat_after, repeat_mode,
-            hex_color, percent_done, position, is_favorite,
+            percent_done, position, is_favorite,
             is_deleted, created_at, updated_at, version
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, 0, ?, ?, 1)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, 0, ?, ?, 1)
         RETURNING *",
     )
     .bind(&uuid)
@@ -520,7 +520,6 @@ pub async fn create_todo_task(
     .bind(input.end_date)
     .bind(input.repeat_after.unwrap_or(0))
     .bind(input.repeat_mode.unwrap_or(0))
-    .bind(input.hex_color.as_deref().unwrap_or(""))
     .bind(input.position.unwrap_or(0.0))
     .bind(input.is_favorite.unwrap_or(0))
     .bind(now)
@@ -576,9 +575,6 @@ pub async fn update_todo_task(
     if input.repeat_mode.is_some() {
         sets.push("repeat_mode = ?".into());
     }
-    if input.hex_color.is_some() {
-        sets.push("hex_color = ?".into());
-    }
     if input.percent_done.is_some() {
         sets.push("percent_done = ?".into());
     }
@@ -628,9 +624,6 @@ pub async fn update_todo_task(
         q = q.bind(v);
     }
     if let Some(v) = input.repeat_mode {
-        q = q.bind(v);
-    }
-    if let Some(v) = &input.hex_color {
         q = q.bind(v);
     }
     if let Some(v) = input.percent_done {

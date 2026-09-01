@@ -103,7 +103,6 @@ CREATE TABLE IF NOT EXISTS todo_tasks (
   end_date INTEGER,
   repeat_after INTEGER NOT NULL DEFAULT 0,
   repeat_mode INTEGER NOT NULL DEFAULT 0,
-  hex_color TEXT NOT NULL DEFAULT '',
   percent_done REAL NOT NULL DEFAULT 0,
   position REAL NOT NULL DEFAULT 0,
   is_favorite INTEGER NOT NULL DEFAULT 0,

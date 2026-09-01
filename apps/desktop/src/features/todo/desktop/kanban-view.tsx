@@ -28,10 +28,12 @@ import { useTodoStore } from "@/features/todo/store";
 import {
   todoTaskUpdate,
   todoTaskUpdatePosition,
+  type TodoLabel,
   type TodoProject,
   type TodoTask,
 } from "@/lib/tauri";
 import { FAVORITE_COLOR, PRIORITY_COLOR, STATUS_COLOR, TODO_ACCENT } from "../shared/constants";
+import { LabelChips } from "../shared/label-chips";
 import { completeTask } from "../shared/task-actions";
 import { midpoint } from "../shared/position";
 import { TaskContextMenu } from "./task-context-menu";
@@ -42,6 +44,8 @@ interface KanbanViewProps {
   tasks: TodoTask[];
   projects: TodoProject[];
   groupBy: KanbanGroupBy;
+  /** 任务→标签映射（list-page 级拉取，卡片渲染标签 chips） */
+  labelsByTask: Map<number, TodoLabel[]>;
 }
 
 interface ColumnDef {
@@ -50,7 +54,7 @@ interface ColumnDef {
   color: string;
 }
 
-export function KanbanView({ tasks, projects, groupBy }: KanbanViewProps) {
+export function KanbanView({ tasks, projects, groupBy, labelsByTask }: KanbanViewProps) {
   const qc = useQueryClient();
   const setSelectedTaskId = useTodoStore((s) => s.setSelectedTaskId);
   const [draggingId, setDraggingId] = useState<number | null>(null);
@@ -209,6 +213,7 @@ export function KanbanView({ tasks, projects, groupBy }: KanbanViewProps) {
               column={col}
               tasks={grouped.get(col.key) ?? []}
               projects={projects}
+              labelsByTask={labelsByTask}
               draggingId={draggingId}
               dragEndStamp={dragEndStamp}
               onOpenDetail={(id) => setSelectedTaskId(id)}
@@ -217,7 +222,13 @@ export function KanbanView({ tasks, projects, groupBy }: KanbanViewProps) {
         </div>
 
         <DragOverlay dropAnimation={null}>
-          {draggingTask ? <KanbanCard task={draggingTask} overlay /> : null}
+          {draggingTask ? (
+            <KanbanCard
+              task={draggingTask}
+              labels={labelsByTask.get(draggingTask.id) ?? []}
+              overlay
+            />
+          ) : null}
         </DragOverlay>
       </DndContext>
     </div>
@@ -230,6 +241,7 @@ function KanbanColumn({
   column,
   tasks,
   projects,
+  labelsByTask,
   draggingId,
   dragEndStamp,
   onOpenDetail,
@@ -237,6 +249,7 @@ function KanbanColumn({
   column: ColumnDef;
   tasks: TodoTask[];
   projects: TodoProject[];
+  labelsByTask: Map<number, TodoLabel[]>;
   draggingId: number | null;
   /** 拖拽结束时间戳 ref（点击抑制用） */
   dragEndStamp: React.RefObject<number>;
@@ -275,6 +288,7 @@ function KanbanColumn({
             >
               <KanbanCard
                 task={t}
+                labels={labelsByTask.get(t.id) ?? []}
                 dragging={draggingId === t.id}
                 dragEndStamp={dragEndStamp}
                 onOpenDetail={onOpenDetail}
@@ -291,12 +305,14 @@ function KanbanColumn({
 
 function KanbanCard({
   task,
+  labels,
   dragging,
   overlay,
   dragEndStamp,
   onOpenDetail,
 }: {
   task: TodoTask;
+  labels: TodoLabel[];
   dragging?: boolean;
   overlay?: boolean;
   /** 拖拽结束时间戳 ref（overlay 不需要） */
@@ -332,13 +348,11 @@ function KanbanCard({
         overlay && "cursor-grabbing",
       )}
     >
-      {/* 优先级条 */}
-      {task.priority > 0 && (
-        <div
-          className="mb-2 h-0.5 rounded-full"
-          style={{ background: PRIORITY_COLOR[task.priority] }}
-        />
-      )}
+      {/* 优先级条；未设优先级（P0）按「低」的灰色显示，保证所有卡片都有色条 */}
+      <div
+        className="mb-2 h-0.5 rounded-full"
+        style={{ background: PRIORITY_COLOR[task.priority] || PRIORITY_COLOR[1] }}
+      />
 
       {/* 标题行：完成勾 + 标题 + 星标 */}
       <div className="flex items-start gap-1.5">
@@ -353,6 +367,13 @@ function KanbanCard({
         </span>
         {!!task.is_favorite && <Star size={13} style={{ color: FAVORITE_COLOR }} fill="currentColor" />}
       </div>
+
+      {/* 标签 chips（标签自选色） */}
+      {labels.length > 0 && (
+        <div className="mt-1.5">
+          <LabelChips labels={labels} max={2} />
+        </div>
+      )}
 
       {/* 底部元信息 */}
       {(task.due_date != null || task.percent_done > 0) && (

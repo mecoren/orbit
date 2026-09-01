@@ -1,33 +1,54 @@
 /**
  * TaskFormSheet — 新增/编辑任务表单（04 文档 §3.6 复刻）
  *
- * 包装通用 EntityFormSheet；九字段规格照抄 + 虚拟字段 remind_at：
- * title(必填) / description(5000) / project_id / priority(0–5) / status(pending|doing|done)
- * / due_date / start_date / end_date（提交转毫秒时间戳）/ hex_color(⚖ 正则校验)。
- * remind_at 不是任务列：编辑载入既有提醒回填，提交时按"清除删 / 变更删旧建新"同步。
+ * 包装通用 EntityFormSheet；九字段规格照抄 + 虚拟字段 remind_at + 重复规则：
+ * title(必填) / description(5000) / project_id / priority(0–5, 语义色点) / status(pending|doing|done)
+ * / due_date / start_date / end_date（提交转毫秒时间戳）
+ * / repeat_mode / repeat_after（footerContent 预设 + 自定义 N×单位，与移动端同语义）。
+ * remind_at 不是任务列：新增默认一小时后；编辑载入既有提醒回填，
+ * 提交时按"清除删 / 变更删旧建新"同步。
+ * 新增模式（footerContent）支持标签选择/新建与子任务草稿，创建任务后统一落库关联；
+ * 编辑模式的标签与子任务仍走详情抽屉（task-detail-drawer）。
  */
 import { useEffect, useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
-import { toast } from "sonner";
+import { Tag as TagIcon, X } from "lucide-react";
 
 import { EntityFormSheet } from "@/components/business/entity-form-sheet";
-import type { FieldDef } from "@/lib/form-types";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import type { FieldDef } from "@/lib/form-types";
+import { cn } from "@/lib/utils";
+import {
+  todoLabelCreate,
+  todoLabelList,
   todoReminderCreate,
   todoReminderDelete,
   todoReminderList,
+  todoSubtaskCreate,
   todoTaskCreate,
+  todoTaskLabelCreate,
   todoTaskUpdate,
+  type TodoLabel,
   type TodoProject,
   type TodoReminder,
   type TodoTask,
 } from "@/lib/tauri";
-import { TODO_ACCENT } from "../shared/constants";
+import {
+  REPEAT_MODE,
+  REPEAT_PRESETS,
+  repeatLabel,
+} from "../shared/repeat";
+import { PRIORITY_COLOR, TODO_ACCENT } from "../shared/constants";
 
 const PRIORITY_LABELS = ["无", "低", "中", "高", "紧急", "立即处理"];
-
-/** ⚖ §7-②：hex_color MVP 保留文本 + 正则校验（色板控件记 M6+） */
-const HEX_COLOR_RE = /^#[0-9a-fA-F]{6}$/;
 
 /** ms → DateTimePicker 值格式（YYYY-MM-DDTHH:MM） */
 const tsToInputValue = (ms: number) => format(new Date(ms), "yyyy-MM-dd'T'HH:mm");
@@ -50,7 +71,11 @@ export function buildTaskFields(projects: TodoProject[]): FieldDef[] {
       label: "优先级",
       type: "select",
       defaultValue: 0,
-      options: PRIORITY_LABELS.map((label, value) => ({ label, value })),
+      options: PRIORITY_LABELS.map((label, value) => ({
+        label,
+        value,
+        color: PRIORITY_COLOR[value],
+      })),
     },
     {
       name: "status",
@@ -67,7 +92,6 @@ export function buildTaskFields(projects: TodoProject[]): FieldDef[] {
     { name: "remind_at", label: "提醒时间", type: "datetime" },
     { name: "start_date", label: "开始日期", type: "date" },
     { name: "end_date", label: "结束日期", type: "date" },
-    { name: "hex_color", label: "颜色", type: "text", placeholder: "#3B82F6" },
   ];
 }
 
@@ -76,6 +100,361 @@ function toDateMs(v: unknown): number | null {
   if (typeof v !== "string" || !v) return null;
   const ms = new Date(`${v}T00:00:00`).getTime();
   return Number.isNaN(ms) ? null : ms;
+}
+
+/* ================= 新增模式：标签选择 ================= */
+
+/** 标签选择状态：id 存在 = 关联已有标签；否则 = 提交时新建标签再关联 */
+interface TagSelection {
+  id?: number;
+  title: string;
+  hex_color: string;
+}
+
+const LABEL_RANDOM_COLORS = [
+  "#3B82F6",
+  "#8B5CF6",
+  "#EC4899",
+  "#F59E0B",
+  "#10B981",
+  "#EF4444",
+  "#06B6D4",
+  "#F97316",
+];
+
+function TagsField({
+  value,
+  onChange,
+}: {
+  value: TagSelection[];
+  onChange: (v: TagSelection[]) => void;
+}) {
+  const labelsQuery = useQuery({
+    queryKey: ["todo-label", "list"],
+    queryFn: () => todoLabelList({ page: 1, page_size: 1000 }),
+    staleTime: 60_000,
+  });
+  const allLabels = labelsQuery.data ?? [];
+  const [popoverOpen, setPopoverOpen] = useState(false);
+  const [newTitle, setNewTitle] = useState("");
+
+  const selectedIds = new Set(
+    value.map((t) => t.id).filter((id): id is number => id != null),
+  );
+  const pendingTitles = new Set(
+    value.filter((t) => t.id == null).map((t) => t.title),
+  );
+
+  const toggleExisting = (label: TodoLabel) => {
+    if (selectedIds.has(label.id)) {
+      onChange(value.filter((t) => t.id !== label.id));
+    } else {
+      onChange([
+        ...value,
+        { id: label.id, title: label.title, hex_color: label.hex_color },
+      ]);
+    }
+  };
+
+  // Enter 新建：重名自动归到已有标签；否则作为待创建标签（提交时落库）
+  const addPending = () => {
+    const title = newTitle.trim();
+    if (!title) return;
+    const existing = allLabels.find((l) => l.title === title);
+    if (existing) {
+      if (!selectedIds.has(existing.id)) {
+        onChange([
+          ...value,
+          {
+            id: existing.id,
+            title: existing.title,
+            hex_color: existing.hex_color,
+          },
+        ]);
+      }
+    } else if (!pendingTitles.has(title)) {
+      onChange([
+        ...value,
+        {
+          title,
+          hex_color:
+            LABEL_RANDOM_COLORS[
+              Math.floor(Math.random() * LABEL_RANDOM_COLORS.length)
+            ],
+        },
+      ]);
+    }
+    setNewTitle("");
+  };
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      <Label>
+        <TagIcon className="mr-1.5 inline size-3.5 text-muted-foreground" />
+        标签
+      </Label>
+      <div className="flex flex-wrap items-center gap-1.5">
+        {value.map((t, i) => (
+          <span
+            key={t.id ?? `pending-${t.title}`}
+            className="inline-flex items-center gap-1 rounded-md px-2.5 py-0.5 text-xs font-medium text-white shadow-sm"
+            style={{ background: t.hex_color }}
+          >
+            {t.title}
+            <button
+              type="button"
+              aria-label={`移除标签 ${t.title}`}
+              onClick={() => onChange(value.filter((_, idx) => idx !== i))}
+            >
+              <X size={12} />
+            </button>
+          </span>
+        ))}
+
+        <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>
+          <PopoverTrigger asChild>
+            <Button type="button" variant="outline" size="sm" className="h-7">
+              添加标签
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent align="start" className="w-64 p-0">
+            <div className="max-h-60 overflow-y-auto p-1">
+              {allLabels.length === 0 && (
+                <p className="px-2 py-1.5 text-xs text-muted-foreground">
+                  暂无标签，可在下方输入新建
+                </p>
+              )}
+              {allLabels.map((l) => (
+                <label
+                  key={l.id}
+                  className="flex cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-accent"
+                >
+                  <input
+                    type="checkbox"
+                    checked={selectedIds.has(l.id)}
+                    onChange={() => toggleExisting(l)}
+                    className="accent-primary"
+                  />
+                  <span
+                    className="size-2.5 rounded-sm"
+                    style={{ background: l.hex_color }}
+                  />
+                  <span className="truncate">{l.title}</span>
+                </label>
+              ))}
+            </div>
+            <div className="border-t p-2">
+              <Input
+                value={newTitle}
+                placeholder="新建标签，Enter 添加"
+                className="h-7 text-[13px]"
+                onChange={(e) => setNewTitle(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    addPending();
+                  }
+                }}
+              />
+            </div>
+          </PopoverContent>
+        </Popover>
+      </div>
+    </div>
+  );
+}
+
+/* ================= 新增模式：子任务 ================= */
+
+function SubtasksField({
+  value,
+  onChange,
+}: {
+  value: string[];
+  onChange: (v: string[]) => void;
+}) {
+  const [newTitle, setNewTitle] = useState("");
+
+  const add = () => {
+    const title = newTitle.trim();
+    if (!title || value.includes(title)) return;
+    onChange([...value, title]);
+    setNewTitle("");
+  };
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      <Label>子任务</Label>
+      <div className="space-y-1">
+        {value.map((title, i) => (
+          <div
+            key={`${title}-${i}`}
+            className="group flex items-center gap-2 rounded-md px-1 py-1 hover:bg-accent/30"
+          >
+            <span className="h-4 w-4 shrink-0 rounded-sm border-2 border-muted-foreground/40" />
+            <span className="flex-1 truncate text-[13px]">{title}</span>
+            <button
+              type="button"
+              aria-label="移除子任务"
+              onClick={() => onChange(value.filter((_, idx) => idx !== i))}
+            >
+              <X size={14} className="text-muted-foreground hover:text-destructive" />
+            </button>
+          </div>
+        ))}
+
+        <div className="flex items-center gap-2 pt-1">
+          <Input
+            value={newTitle}
+            placeholder="添加子任务"
+            className="h-7 flex-1 text-[13px]"
+            onChange={(e) => setNewTitle(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                add();
+              }
+            }}
+          />
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            className="h-7"
+            disabled={!newTitle.trim()}
+            onClick={add}
+          >
+            添加
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ================= 新增/编辑模式：重复规则 ================= */
+
+/** 自定义间隔单位（值对应 repeat_mode 1–4，与移动端 RepeatUnit 同语义） */
+const REPEAT_UNITS = [
+  { mode: REPEAT_MODE.DAILY, label: "天" },
+  { mode: REPEAT_MODE.WEEKLY, label: "周" },
+  { mode: REPEAT_MODE.MONTHLY, label: "月" },
+  { mode: REPEAT_MODE.YEARLY, label: "年" },
+] as const;
+
+/**
+ * 重复规则选择：预设 chips 即点即存；「自定义」展开 间隔 N × 单位 面板，
+ * 确定 后派生 repeat_mode/repeat_after（与移动端表单/详情抽屉同语义）。
+ */
+function RepeatField({
+  mode,
+  after,
+  onChange,
+}: {
+  mode: number;
+  after: number;
+  onChange: (mode: number, after: number) => void;
+}) {
+  const [intervalText, setIntervalText] = useState(
+    String(Math.max(1, after || 1)),
+  );
+  const [unit, setUnit] = useState(
+    mode === REPEAT_MODE.NONE ? REPEAT_MODE.DAILY : mode,
+  );
+  const [customOpen, setCustomOpen] = useState(false);
+
+  const isPreset = REPEAT_PRESETS.some(
+    (p) => p.mode === mode && p.after === after,
+  );
+  const custom = mode !== REPEAT_MODE.NONE && !isPreset;
+
+  const pick = (m: number, a: number) => {
+    setIntervalText(String(Math.max(1, a)));
+    setUnit(m === REPEAT_MODE.NONE ? REPEAT_MODE.DAILY : m);
+    setCustomOpen(false);
+    onChange(m, a);
+  };
+
+  const applyCustom = () => {
+    onChange(unit, Math.max(1, Number(intervalText) || 1));
+    setCustomOpen(false);
+  };
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      <Label>重复</Label>
+      <div className="flex flex-wrap items-center gap-1.5">
+        {REPEAT_PRESETS.map((p) => (
+          <button
+            key={p.mode}
+            type="button"
+            onClick={() => pick(p.mode, p.after)}
+            className={cn(
+              "rounded-md border px-2.5 py-1 text-xs",
+              !custom && !customOpen && mode === p.mode
+                ? "border-primary bg-primary/10 font-medium text-primary"
+                : "text-muted-foreground hover:bg-accent",
+            )}
+          >
+            {p.label}
+          </button>
+        ))}
+        <button
+          type="button"
+          onClick={() => setCustomOpen((v) => !v)}
+          className={cn(
+            "rounded-md border px-2.5 py-1 text-xs",
+            custom || customOpen
+              ? "border-primary bg-primary/10 font-medium text-primary"
+              : "text-muted-foreground hover:bg-accent",
+          )}
+        >
+          {custom ? repeatLabel(mode, after) : "自定义"}
+        </button>
+      </div>
+      {customOpen && (
+        <div className="flex flex-wrap items-center gap-1.5">
+          <Input
+            value={intervalText}
+            inputMode="numeric"
+            placeholder="间隔"
+            className="h-7 w-16 text-[13px]"
+            onChange={(e) => setIntervalText(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                applyCustom();
+              }
+            }}
+          />
+          {REPEAT_UNITS.map((u) => (
+            <button
+              key={u.mode}
+              type="button"
+              onClick={() => setUnit(u.mode)}
+              className={cn(
+                "rounded-md border px-2.5 py-1 text-xs",
+                unit === u.mode
+                  ? "border-primary bg-primary/10 font-medium text-primary"
+                  : "text-muted-foreground hover:bg-accent",
+              )}
+            >
+              {u.label}
+            </button>
+          ))}
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            className="h-7"
+            onClick={applyCustom}
+          >
+            确定
+          </Button>
+        </div>
+      )}
+    </div>
+  );
 }
 
 interface TaskFormSheetProps {
@@ -97,6 +476,26 @@ export function TaskFormSheet({
 }: TaskFormSheetProps) {
   // 编辑模式载入该任务既有提醒（取第一条未删除），用于回填与变更比对
   const [existingReminder, setExistingReminder] = useState<TodoReminder | null>(null);
+  // 新增模式：标签选择 / 子任务草稿（编辑模式的标签与子任务走详情抽屉）
+  const [tagSelections, setTagSelections] = useState<TagSelection[]>([]);
+  const [subtaskTitles, setSubtaskTitles] = useState<string[]>([]);
+  // 重复规则（新增/编辑共用 footerContent 编辑）
+  const [repeatMode, setRepeatMode] = useState<number>(REPEAT_MODE.NONE);
+  const [repeatAfter, setRepeatAfter] = useState<number>(0);
+
+  // 打开时初始化：编辑载入既有规则，新增重置为不重复
+  useEffect(() => {
+    if (!open) return;
+    if (task) {
+      setRepeatMode(task.repeat_mode);
+      setRepeatAfter(task.repeat_after);
+    } else {
+      setRepeatMode(REPEAT_MODE.NONE);
+      setRepeatAfter(0);
+      setTagSelections([]);
+      setSubtaskTitles([]);
+    }
+  }, [open, task]);
 
   useEffect(() => {
     if (!open || !task) {
@@ -134,19 +533,16 @@ export function TaskFormSheet({
         remind_at: existingReminder ? tsToInputValue(existingReminder.remind_at) : "",
       };
     }
-    return defaultProjectId != null
-      ? { project_id: String(defaultProjectId), priority: "0", status: "pending" }
-      : undefined;
-  }, [task, defaultProjectId, existingReminder]);
+    return {
+      ...(defaultProjectId != null ? { project_id: String(defaultProjectId) } : {}),
+      priority: "0",
+      status: "pending",
+      // 新增默认提醒：一小时后（依赖 open，每次打开重新计算）
+      remind_at: tsToInputValue(Date.now() + 60 * 60 * 1000),
+    };
+  }, [task, defaultProjectId, existingReminder, open]);
 
   const handleSubmit = async (values: Record<string, unknown>) => {
-    // ⚖ hex_color 正则校验：非法时抛错使 Sheet 保持打开
-    const hex = values.hex_color;
-    if (typeof hex === "string" && hex.trim() && !HEX_COLOR_RE.test(hex.trim())) {
-      toast.error("颜色格式不正确，应为 #RRGGBB");
-      throw new Error("invalid hex_color");
-    }
-
     const payload = {
       title: String(values.title ?? "").trim(),
       description: (values.description as string) || null,
@@ -159,8 +555,8 @@ export function TaskFormSheet({
       due_date: toDateMs(values.due_date),
       start_date: toDateMs(values.start_date),
       end_date: toDateMs(values.end_date),
-      // Input 类型为 string | undefined（空 = 跳过更新语义）
-      hex_color: typeof hex === "string" && hex.trim() ? hex.trim() : undefined,
+      repeat_mode: repeatMode,
+      repeat_after: repeatAfter,
     };
 
     // 提醒时间（values 已过滤 null：undefined = 用户清空或未填）
@@ -182,6 +578,24 @@ export function TaskFormSheet({
       if (remindMs != null && !Number.isNaN(remindMs)) {
         await todoReminderCreate({ task_id: created.id, remind_at: remindMs });
       }
+      // 标签：已有标签直接关联；待新建标签先落库再关联
+      for (const t of tagSelections) {
+        let labelId: number;
+        if (t.id != null) {
+          labelId = t.id;
+        } else {
+          const newLabel = await todoLabelCreate({
+            title: t.title,
+            hex_color: t.hex_color,
+          });
+          labelId = newLabel.id;
+        }
+        await todoTaskLabelCreate({ task_id: created.id, label_id: labelId });
+      }
+      // 子任务：逐条创建（percent_done 由后端按完成度回算）
+      for (const title of subtaskTitles) {
+        await todoSubtaskCreate({ task_id: created.id, title });
+      }
     }
   };
 
@@ -194,6 +608,24 @@ export function TaskFormSheet({
       accent={TODO_ACCENT}
       initialRecord={initialRecord}
       onSubmit={handleSubmit}
+      footerContent={
+        <>
+          <RepeatField
+            mode={repeatMode}
+            after={repeatAfter}
+            onChange={(m, a) => {
+              setRepeatMode(m);
+              setRepeatAfter(a);
+            }}
+          />
+          {!task && (
+            <>
+              <TagsField value={tagSelections} onChange={setTagSelections} />
+              <SubtasksField value={subtaskTitles} onChange={setSubtaskTitles} />
+            </>
+          )}
+        </>
+      }
       submitText={task ? "保存" : "创建"}
     />
   );

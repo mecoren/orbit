@@ -6,7 +6,7 @@
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `poll_once`
+// These functions are ignored because they are not marked as `pub`: `poll_once`, `spawn_on_bridge_runtime`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `from`
 
 /// 订阅数据库变更流（db-change）

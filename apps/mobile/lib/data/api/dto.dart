@@ -109,7 +109,6 @@ class TodoTask {
   final int? endDate;
   final int repeatAfter;
   final int repeatMode;
-  final String hexColor;
   final double percentDone;
   final double position;
   final int isFavorite;
@@ -134,7 +133,6 @@ class TodoTask {
     required this.endDate,
     required this.repeatAfter,
     required this.repeatMode,
-    required this.hexColor,
     required this.percentDone,
     required this.position,
     required this.isFavorite,
@@ -160,7 +158,6 @@ class TodoTask {
         endDate: j['end_date'] as int?,
         repeatAfter: j['repeat_after'] as int,
         repeatMode: j['repeat_mode'] as int,
-        hexColor: j['hex_color'] as String,
         percentDone: (j['percent_done'] as num).toDouble(),
         position: (j['position'] as num).toDouble(),
         isFavorite: j['is_favorite'] as int,
@@ -191,7 +188,6 @@ class TodoTaskCreateInput {
   final int? endDate;
   final int? repeatAfter;
   final int? repeatMode;
-  final String? hexColor;
   final double? position;
   final int? isFavorite;
 
@@ -208,7 +204,6 @@ class TodoTaskCreateInput {
     this.endDate,
     this.repeatAfter,
     this.repeatMode,
-    this.hexColor,
     this.position,
     this.isFavorite,
   });
@@ -529,7 +524,6 @@ class TodoTaskDetail extends TodoTask {
     required super.endDate,
     required super.repeatAfter,
     required super.repeatMode,
-    required super.hexColor,
     required super.percentDone,
     required super.position,
     required super.isFavorite,
@@ -560,7 +554,6 @@ class TodoTaskDetail extends TodoTask {
         endDate: j['end_date'] as int?,
         repeatAfter: j['repeat_after'] as int,
         repeatMode: j['repeat_mode'] as int,
-        hexColor: j['hex_color'] as String,
         percentDone: (j['percent_done'] as num).toDouble(),
         position: (j['position'] as num).toDouble(),
         isFavorite: j['is_favorite'] as int,

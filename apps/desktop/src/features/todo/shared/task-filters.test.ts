@@ -20,7 +20,6 @@ function mk(partial: Partial<TodoTask>): TodoTask {
     end_date: null,
     repeat_after: 0,
     repeat_mode: 0,
-    hex_color: "",
     percent_done: 0,
     position: 0,
     is_favorite: 0,

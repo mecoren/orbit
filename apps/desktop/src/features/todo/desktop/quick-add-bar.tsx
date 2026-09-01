@@ -15,6 +15,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { WaitCalendar } from "@/components/ui/wait-calendar";
 import { DateTimePicker } from "@/components/business/date-picker";
 import { QuickDateMenu } from "@/components/business/quick-date-options";
@@ -44,6 +45,9 @@ export function QuickAddBar({ projects, defaultProjectId }: QuickAddBarProps) {
   /** 截止日期弹层：快捷菜单 ⇄ 完整日历视图（关闭时复位，与表单 DatePicker 同口径） */
   const [dueOpen, setDueOpen] = useState(false);
   const [dueCalendar, setDueCalendar] = useState(false);
+  // 优先级/项目弹层受控：选项点选后自动关闭
+  const [priorityOpen, setPriorityOpen] = useState(false);
+  const [projectOpen, setProjectOpen] = useState(false);
   useEffect(() => {
     if (!dueOpen) setDueCalendar(false);
   }, [dueOpen]);
@@ -194,18 +198,25 @@ export function QuickAddBar({ projects, defaultProjectId }: QuickAddBarProps) {
           <div className="flex shrink-0 items-center gap-0.5">
             {/* 截止日期：快捷选项（今天/明天/下周）⇄ 完整日历，与表单 DatePicker 同构 */}
             <Popover open={dueOpen} onOpenChange={setDueOpen}>
-              <PopoverTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className={cn(
-                    "h-7 w-7",
-                    dueDate && "bg-primary/10 text-primary",
-                  )}
-                >
-                  <Calendar className="size-4" />
-                </Button>
-              </PopoverTrigger>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className={cn(
+                        "h-7 w-7",
+                        dueDate && "bg-primary/10 text-primary",
+                      )}
+                    >
+                      <Calendar className="size-4" />
+                    </Button>
+                  </PopoverTrigger>
+                </TooltipTrigger>
+                <TooltipContent>
+                  {dueDate ? `截止日期：${formatDue(dueDate)}` : "截止日期"}
+                </TooltipContent>
+              </Tooltip>
               {/* 宽度需设上限：DayPicker 表格 w-full+aspect-square 在无界 w-auto 下无法收敛 */}
               <PopoverContent align="end" className="w-auto min-w-[280px] max-w-[320px] p-0">
                 {dueCalendar ? (
@@ -213,7 +224,11 @@ export function QuickAddBar({ projects, defaultProjectId }: QuickAddBarProps) {
                     <WaitCalendar
                       mode="single"
                       selected={dueDate ?? undefined}
-                      onSelect={(d) => setDueDate(d ?? null)}
+                      onSelect={(d) => {
+                        setDueDate(d ?? null);
+                        // 选中具体日期后自动收起（清除按钮保持弹层打开）
+                        if (d) setDueOpen(false);
+                      }}
                     />
                     <div className="mt-2 flex justify-end gap-2 border-t pt-2">
                       {dueDate && (
@@ -227,7 +242,10 @@ export function QuickAddBar({ projects, defaultProjectId }: QuickAddBarProps) {
                   <QuickDateMenu
                     kind="date"
                     value={dueDate ? format(dueDate, "yyyy-MM-dd") : ""}
-                    onSelect={(d) => setDueDate(d)}
+                    onSelect={(d) => {
+                      setDueDate(d);
+                      setDueOpen(false);
+                    }}
                     customLabel="选择日期"
                     onCustom={() => setDueCalendar(true)}
                   />
@@ -237,18 +255,27 @@ export function QuickAddBar({ projects, defaultProjectId }: QuickAddBarProps) {
 
             {/* 提醒时间 */}
             <Popover>
-              <PopoverTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className={cn(
-                    "h-7 w-7",
-                    remindDraft && "bg-primary/10 text-primary",
-                  )}
-                >
-                  <Clock className="size-4" />
-                </Button>
-              </PopoverTrigger>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className={cn(
+                        "h-7 w-7",
+                        remindDraft && "bg-primary/10 text-primary",
+                      )}
+                    >
+                      <Clock className="size-4" />
+                    </Button>
+                  </PopoverTrigger>
+                </TooltipTrigger>
+                <TooltipContent>
+                  {remindDraft
+                    ? `提醒时间：${format(new Date(remindDraft), "M月d日 HH:mm", { locale: zhCN })}`
+                    : "提醒时间"}
+                </TooltipContent>
+              </Tooltip>
               <PopoverContent align="end" className="w-[320px] p-3">
                 <p className="mb-2 text-sm font-medium">提醒时间</p>
                 <DateTimePicker value={remindDraft} onChange={setRemindDraft} />
@@ -263,23 +290,33 @@ export function QuickAddBar({ projects, defaultProjectId }: QuickAddBarProps) {
             </Popover>
 
             {/* 优先级 */}
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-7 w-7"
-                  style={{ color: PRIORITY_COLOR[parsed.priority || priority] || undefined }}
-                >
-                  <Flag className="size-4" />
-                </Button>
-              </PopoverTrigger>
+            <Popover open={priorityOpen} onOpenChange={setPriorityOpen}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7"
+                      style={{ color: PRIORITY_COLOR[parsed.priority || priority] || undefined }}
+                    >
+                      <Flag className="size-4" />
+                    </Button>
+                  </PopoverTrigger>
+                </TooltipTrigger>
+                <TooltipContent>
+                  优先级：{PRIORITY_LABELS[parsed.priority || priority]}
+                </TooltipContent>
+              </Tooltip>
               <PopoverContent align="end" className="w-40 p-1">
                 {PRIORITY_LABELS.map((label, i) => (
                   <button
                     key={i}
                     type="button"
-                    onClick={() => setPriority(i)}
+                    onClick={() => {
+                      setPriority(i);
+                      setPriorityOpen(false);
+                    }}
                     className={cn(
                       "flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-accent",
                       priority === i && "bg-accent font-medium",
@@ -296,16 +333,29 @@ export function QuickAddBar({ projects, defaultProjectId }: QuickAddBarProps) {
             </Popover>
 
             {/* 项目 */}
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button variant="ghost" size="icon" className="h-7 w-7">
-                  <Folder className="size-4" />
-                </Button>
-              </PopoverTrigger>
+            <Popover open={projectOpen} onOpenChange={setProjectOpen}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <PopoverTrigger asChild>
+                    <Button variant="ghost" size="icon" className="h-7 w-7">
+                      <Folder className="size-4" />
+                    </Button>
+                  </PopoverTrigger>
+                </TooltipTrigger>
+                <TooltipContent>
+                  项目：
+                  {effectiveProjectId != null
+                    ? (projects.find((p) => p.id === effectiveProjectId)?.title ?? "未分组")
+                    : "未分组"}
+                </TooltipContent>
+              </Tooltip>
               <PopoverContent align="end" className="w-56 p-1">
                 <button
                   type="button"
-                  onClick={() => setProjectId(null)}
+                  onClick={() => {
+                    setProjectId(null);
+                    setProjectOpen(false);
+                  }}
                   className={cn(
                     "flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-accent",
                     effectiveProjectId === null && "bg-accent font-medium",
@@ -319,7 +369,10 @@ export function QuickAddBar({ projects, defaultProjectId }: QuickAddBarProps) {
                   <button
                     key={p.id}
                     type="button"
-                    onClick={() => setProjectId(p.id)}
+                    onClick={() => {
+                      setProjectId(p.id);
+                      setProjectOpen(false);
+                    }}
                     className={cn(
                       "flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-accent",
                       effectiveProjectId === p.id && "bg-accent font-medium",

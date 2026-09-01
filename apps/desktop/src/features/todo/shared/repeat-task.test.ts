@@ -14,7 +14,7 @@ function mk(partial: Partial<TodoTask>): TodoTask {
     id: 1, uuid: "u", title: "任务", description: null, project_id: null,
     priority: 0, status: "pending", done: 0, done_at: null,
     due_date: null, start_date: null, end_date: null,
-    repeat_after: 1, repeat_mode: 0, hex_color: "", percent_done: 0,
+    repeat_after: 1, repeat_mode: 0, percent_done: 0,
     position: 0, is_favorite: 0, is_deleted: 0,
     created_at: 0, updated_at: 0, deleted_at: null, version: 1,
     ...partial,
@@ -78,12 +78,12 @@ describe("planNextRecurringInstance", () => {
     expect(planNextRecurringInstance(mk({ repeat_mode: REPEAT_MODE.DAILY }), Date.now())).toBeNull();
   });
 
-  it("克隆字段：标题/描述/项目/优先级/颜色/收藏带过去，uuid/id 不带", () => {
+  it("克隆字段：标题/描述/项目/优先级/收藏带过去，uuid/id 不带", () => {
     const plan = planNextRecurringInstance(
       mk({
         repeat_mode: REPEAT_MODE.DAILY, due_date: Date.now() + DAY,
         title: "晨会", description: "站会", project_id: 5, priority: 2,
-        hex_color: "#FF0000", is_favorite: 1,
+        is_favorite: 1,
       }),
       Date.now(),
     )!;
@@ -91,7 +91,6 @@ describe("planNextRecurringInstance", () => {
     expect(plan.input.description).toBe("站会");
     expect(plan.input.project_id).toBe(5);
     expect(plan.input.priority).toBe(2);
-    expect(plan.input.hex_color).toBe("#FF0000");
     expect(plan.input.is_favorite).toBe(1);
     expect("id" in plan.input).toBe(false);
     expect("uuid" in plan.input).toBe(false);
