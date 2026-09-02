@@ -1,5 +1,3 @@
-import 'dart:ui' show FontFeature;
-
 import 'package:flutter/cupertino.dart'
     show CupertinoPicker, CupertinoPickerDefaultSelectionOverlay;
 import 'package:flutter/material.dart';

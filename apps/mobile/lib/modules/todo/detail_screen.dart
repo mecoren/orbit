@@ -559,8 +559,10 @@ class _RepeatEditSheet extends StatefulWidget {
 }
 
 class _RepeatEditSheetState extends State<_RepeatEditSheet> {
-  late int _mode = widget.mode;
-  late int _after = widget.after;
+  // late final：初始化器访问 widget 需要 late；final 保证初始化后只读
+  // （预设档判定用），变更经 onApply 直接上抛
+  late final int _mode = widget.mode;
+  late final int _after = widget.after;
   bool _custom = false;
   final _intervalController = TextEditingController(text: '1');
   rep.RepeatUnit _unit = rep.RepeatUnit.day;
