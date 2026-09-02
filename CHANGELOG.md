@@ -10,6 +10,11 @@
 ### Added
 
 - 仓库规范化：根级 README.md / CHANGELOG.md / clippy.toml（msrv 1.96）/ rustfmt.toml（edition 2024）
+- 移动端云同步设置：设置页「云同步设置」入口 + `/settings/sync` 配置页
+  （WebDAV/S3 引擎、凭据、定时/超时/TLS、测试连接/保存/断开确认、同步密码
+  设置/解锁/锁定）——桥抽象扩展 `syncTestConnection/syncDisconnect/
+  syncCryptoInit/syncCryptoLock`，移动端可在本机完成云同步配置，
+  不再依赖桌面端配置
 
 ### Changed
 
