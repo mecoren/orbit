@@ -49,7 +49,7 @@ const NONCE_LEN: usize = 12;
 /// # 版本演进
 /// - v1（legacy）：`hash` 字段存储 derived_key 本身，文件泄露即可解出 DB Key
 /// - v2（当前）：`verify_hash` 字段存储 SHA-256(derived_key)，derived_key 仅内存存在
-/// `verify_hash = None` 表示 v1 旧文件，首次成功解锁后自动升级为 v2
+///   `verify_hash = None` 表示 v1 旧文件，首次成功解锁后自动升级为 v2
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MasterAuthMeta {
     /// PBKDF2 salt（Base64）

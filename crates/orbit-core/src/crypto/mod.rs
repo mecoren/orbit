@@ -47,15 +47,17 @@ pub fn derive_asset_nonce(hash: &str) -> [u8; 12] {
 
     let mut nonce = [0u8; 12];
     let mut invalid_hex_seen = false;
-    for i in 0..12 {
-        let start = i * 2;
-        let end = start + 2;
-        if end <= padded.len() {
-            let chunk = &padded[start..end];
+    for (i, chunk) in padded.as_bytes().chunks(2).take(12).enumerate() {
+        if chunk.len() == 2 {
             // 检测非 hex 字符：u8::from_str_radix 对非 hex 字符返回 Err，
             // 旧实现 unwrap_or(0) 会将不同非 hex hash 坍缩为相同 nonce，
             // 这里保留 0 填充行为（向后兼容）但记录告警，便于上游排查 content hash 异常
-            nonce[i] = match u8::from_str_radix(chunk, 16) {
+            // chunk 为 2 字节 ASCII hex 片段；非 ASCII 走 Err 分支告警
+            let Ok(text) = std::str::from_utf8(chunk) else {
+                invalid_hex_seen = true;
+                continue;
+            };
+            nonce[i] = match u8::from_str_radix(text, 16) {
                 Ok(b) => b,
                 Err(_) => {
                     invalid_hex_seen = true;

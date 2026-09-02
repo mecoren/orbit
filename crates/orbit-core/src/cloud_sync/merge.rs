@@ -549,7 +549,7 @@ mod tests {
     #[test]
     fn insert_batch_size_is_conservative() {
         // 验证批量大小保守值：50 条 × 15 字段 = 750 参数 < 999（SQLite 默认上限）
-        assert!(INSERT_BATCH_SIZE * 15 < 999);
+        const { assert!(INSERT_BATCH_SIZE * 15 < 999) };
     }
 
     // ========================================================================

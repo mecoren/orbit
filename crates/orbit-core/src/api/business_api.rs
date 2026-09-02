@@ -50,7 +50,7 @@ pub async fn list_todo_projects(
     // 关键词过滤：与 generic_repo::list 保持一致（按 title/description LIKE）
     let keyword_clause = if let Some(kw) = filter.keyword.as_deref() {
         if !kw.is_empty() {
-            format!(" AND (title LIKE ? OR description LIKE ?)")
+            " AND (title LIKE ? OR description LIKE ?)".to_string()
         } else {
             String::new()
         }
@@ -65,11 +65,11 @@ pub async fn list_todo_projects(
     );
 
     let mut q = sqlx::query_as::<_, TodoProject>(&sql);
-    if let Some(kw) = filter.keyword.as_deref() {
-        if !kw.is_empty() {
-            let pattern = format!("%{}%", kw);
-            q = q.bind(pattern.clone()).bind(pattern);
-        }
+    if let Some(kw) = filter.keyword.as_deref()
+        && !kw.is_empty()
+    {
+        let pattern = format!("%{}%", kw);
+        q = q.bind(pattern.clone()).bind(pattern);
     }
     q = q.bind(page_size).bind(offset);
 
@@ -359,7 +359,7 @@ pub async fn list_records_as_json(pool: &SqlitePool, table: &str) -> CoreResult<
     // 白名单已校验，安全拼接表名
     let sql = format!("SELECT * FROM \"{}\" WHERE is_deleted = 0", table);
     let rows = sqlx::query(&sql).fetch_all(pool).await?;
-    let arr: Vec<serde_json::Value> = rows.iter().map(|row| sqlite_row_to_json(row)).collect();
+    let arr: Vec<serde_json::Value> = rows.iter().map(sqlite_row_to_json).collect();
     serde_json::to_string(&arr).map_err(CoreError::from)
 }
 

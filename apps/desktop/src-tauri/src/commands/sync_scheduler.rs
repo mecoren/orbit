@@ -66,17 +66,14 @@ pub fn sync_on_change_watcher_start(app: AppHandle) {
                 return;
             }
             // 防抖窗口：持续到来的事件不断重置等待
-            loop {
-                match tokio::time::timeout(
+            while matches!(
+                tokio::time::timeout(
                     std::time::Duration::from_secs(ON_CHANGE_DEBOUNCE_SECS),
                     rx.recv(),
                 )
-                .await
-                {
-                    Ok(Ok(_)) => continue,
-                    _ => break,
-                }
-            }
+                .await,
+                Ok(Ok(_))
+            ) {}
             run_on_change_sync(&app).await;
         }
     });

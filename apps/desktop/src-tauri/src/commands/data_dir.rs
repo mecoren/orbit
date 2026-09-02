@@ -72,18 +72,17 @@ pub fn resolve_app_data_dir(app: &AppHandle) -> Result<PathBuf, String> {
 
     // 检查覆盖文件
     let override_path = default_dir.join(OVERRIDE_FILE_NAME);
-    if override_path.exists() {
-        if let Ok(content) = std::fs::read_to_string(&override_path) {
-            if let Ok(config) = serde_json::from_str::<DataDirOverride>(&content) {
-                let custom_dir = PathBuf::from(&config.data_dir);
-                // 验证目录存在且是目录
-                if custom_dir.exists() && custom_dir.is_dir() {
-                    return Ok(custom_dir);
-                }
-                // 自定义目录无效，回退到默认
-                eprintln!("自定义数据目录无效，回退到默认: {}", config.data_dir);
-            }
+    if override_path.exists()
+        && let Ok(content) = std::fs::read_to_string(&override_path)
+        && let Ok(config) = serde_json::from_str::<DataDirOverride>(&content)
+    {
+        let custom_dir = PathBuf::from(&config.data_dir);
+        // 验证目录存在且是目录
+        if custom_dir.exists() && custom_dir.is_dir() {
+            return Ok(custom_dir);
         }
+        // 自定义目录无效，回退到默认
+        eprintln!("自定义数据目录无效，回退到默认: {}", config.data_dir);
     }
 
     Ok(default_dir)
@@ -113,16 +112,15 @@ fn resolve_app_data_dir_early() -> Result<PathBuf, String> {
     let default_dir = default_app_data_dir_early()?;
 
     let override_path = default_dir.join(OVERRIDE_FILE_NAME);
-    if override_path.exists() {
-        if let Ok(content) = std::fs::read_to_string(&override_path) {
-            if let Ok(config) = serde_json::from_str::<DataDirOverride>(&content) {
-                let custom_dir = PathBuf::from(&config.data_dir);
-                if custom_dir.exists() && custom_dir.is_dir() {
-                    return Ok(custom_dir);
-                }
-                eprintln!("自定义数据目录无效，回退到默认: {}", config.data_dir);
-            }
+    if override_path.exists()
+        && let Ok(content) = std::fs::read_to_string(&override_path)
+        && let Ok(config) = serde_json::from_str::<DataDirOverride>(&content)
+    {
+        let custom_dir = PathBuf::from(&config.data_dir);
+        if custom_dir.exists() && custom_dir.is_dir() {
+            return Ok(custom_dir);
         }
+        eprintln!("自定义数据目录无效，回退到默认: {}", config.data_dir);
     }
 
     Ok(default_dir)

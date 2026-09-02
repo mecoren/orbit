@@ -65,7 +65,7 @@ pub async fn todo_projects_update_sort_order(
 #[tauri::command]
 pub async fn todo_tasks_kanban_by_project(
     state: State<'_, AppState>,
-) -> Result<Vec<(Option<i64>, Vec<TodoTask>)>, String> {
+) -> Result<Vec<todo_api::KanbanGroup>, String> {
     todo_api::get_todo_tasks_kanban_by_project(&state.pool)
         .await
         .map_err(|e| e.to_string())

@@ -32,10 +32,8 @@ pub fn parse_list_objects_xml(xml: &str, prefix: &str) -> Result<Vec<String>, S3
                 }
             }
             Ok(Event::Text(e)) => {
-                if in_key {
-                    if let Ok(t) = e.unescape() {
-                        current_text.push_str(&t);
-                    }
+                if in_key && let Ok(t) = e.unescape() {
+                    current_text.push_str(&t);
                 }
             }
             Ok(Event::End(e)) => {

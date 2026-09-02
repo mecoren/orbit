@@ -115,8 +115,7 @@ pub async fn push_all(
             current,
             total,
         )
-        .await
-        .map_err(CloudSyncError::from);
+        .await;
         outcomes.push(outcome);
     }
 
@@ -155,6 +154,7 @@ pub async fn push_all(
 ///
 /// 独立完成：加载模块数据 → 计算指纹 → 比对跳过 → 序列化加密上传 → 返回新状态。
 /// 不修改全局 state，将新状态通过 outcome 返回由主流程顺序应用。
+#[allow(clippy::too_many_arguments)] // 单模块推送管道参数，聚合进结构体收益低
 async fn push_single_module(
     db_pool: &SqlitePool,
     data_key: &[u8],
@@ -268,7 +268,7 @@ fn should_skip_push(
 /// - `remote_fp`：Fix Issue 3 — 更新为 `local_fp`（而非保留旧值）
 ///   Push 成功后远端数据已与本地一致，remote_fp 应反映这一事实。
 ///   旧逻辑保留 prev_state.remote_fp 导致下次 should_skip 误判
-///  （state.fp != state.remote_fp，触发不必要的重传或跳过）。
+///   （state.fp != state.remote_fp，触发不必要的重传或跳过）。
 /// - `count`：本次 Push 的记录数
 /// - `pushed_at`：当前时间戳
 /// - `pulled_at`：保留上一次的 Pull 时间
@@ -351,12 +351,9 @@ async fn reconcile_state_with_remote_meta(
     // 3. fp 全部一致 → 下载首个有数据模块的 data 文件验证存在性
     //    检测"说谎的 _meta"场景：旧版本 broken push 仅上传 _meta 未上传模块数据，
     //    导致 _meta 声称模块存在但实际文件缺失。下载首个模块验证，404 则全量重传。
-    let verify_module = SYNC_MODULES.iter().find(|m| {
-        state
-            .modules
-            .get(m.name)
-            .map_or(false, |s| !s.fp.is_empty())
-    });
+    let verify_module = SYNC_MODULES
+        .iter()
+        .find(|m| state.modules.get(m.name).is_some_and(|s| !s.fp.is_empty()));
     if let Some(module_def) = verify_module {
         let data_path = paths::module_data_path(module_def.name);
         match adapter.download(&data_path).await {

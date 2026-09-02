@@ -24,7 +24,7 @@ pub fn calculate_next_backup_at(now_ts: i64, prefs: &BackupPrefs) -> i64 {
         return 0;
     }
 
-    let now = DateTime::<Utc>::from_timestamp(now_ts, 0).unwrap_or_else(|| Utc::now());
+    let now = DateTime::<Utc>::from_timestamp(now_ts, 0).unwrap_or_else(Utc::now);
     let (h, m) = BackupPrefs::parse_schedule_time(&prefs.schedule_time).unwrap_or((3, 0));
 
     let next = match prefs.schedule_type {
@@ -65,7 +65,7 @@ fn next_hourly(now: &DateTime<Utc>, minute: u32) -> DateTime<Utc> {
 
     // 若已过当前小时的 target minute，跳到下一小时的 target minute
     if next <= *now {
-        next = next + chrono::Duration::hours(1);
+        next += chrono::Duration::hours(1);
     }
 
     next
@@ -121,10 +121,10 @@ fn next_weekly(now: &DateTime<Utc>, target_weekday: u32, h: u32, m: u32) -> Date
 fn next_monthly(now: &DateTime<Utc>, target_day: u32, h: u32, m: u32) -> DateTime<Utc> {
     let today_target = build_target_this_month(now, target_day, h, m);
 
-    if let Some(target) = today_target {
-        if target > *now {
-            return target;
-        }
+    if let Some(target) = today_target
+        && target > *now
+    {
+        return target;
     }
 
     // 当前月的目标日已过，取下个月同一天
@@ -136,10 +136,10 @@ fn next_monthly(now: &DateTime<Utc>, target_day: u32, h: u32, m: u32) -> DateTim
 fn next_yearly(now: &DateTime<Utc>, month: u32, day: u32, h: u32, m: u32) -> DateTime<Utc> {
     let this_year_target = build_target_this_year(now, month, day, h, m);
 
-    if let Some(target) = this_year_target {
-        if target > *now {
-            return target;
-        }
+    if let Some(target) = this_year_target
+        && target > *now
+    {
+        return target;
     }
 
     // 今年的目标已过，取明年同月同日

@@ -118,13 +118,14 @@ pub async fn pull_all(
     // 预捕获所有模块的 local_state，避免并行任务借用 state
     // 元组：(模块名, 远端指纹, 远端 updated_at, 本地 state, 模块定义)
     // 使用 owned String 避免引用 global_meta 的生命周期问题
-    let module_entries: Vec<(
+    type ModuleEntry = (
         String,
         String,
         i64,
         Option<ModuleSyncState>,
         Option<&'static SyncModuleDef>,
-    )> = global_meta
+    );
+    let module_entries: Vec<ModuleEntry> = global_meta
         .modules
         .iter()
         .map(|(name, remote_meta)| {
@@ -213,6 +214,7 @@ pub async fn pull_all(
 ///
 /// 独立完成：指纹比对 → 下载数据与墓碑 → 解密 → 合并 → 返回新状态。
 /// 单模块失败返回 `Failed` outcome，不阻塞其他模块。
+#[allow(clippy::too_many_arguments)] // 单模块拉取管道参数，聚合进结构体收益低
 async fn pull_single_module(
     db_pool: &SqlitePool,
     data_key: &[u8],
@@ -231,9 +233,10 @@ async fn pull_single_module(
     builder.pulling(module_name, module_def.display_name, current, total);
 
     // 1. 比对指纹：远端 fp == 本地记录的 remote_fp → 跳过
-    if local_state.as_ref().map_or(false, |s| {
-        s.remote_fp == remote_fp && !s.remote_fp.is_empty()
-    }) {
+    if local_state
+        .as_ref()
+        .is_some_and(|s| s.remote_fp == remote_fp && !s.remote_fp.is_empty())
+    {
         return PullModuleOutcome::Skipped;
     }
 

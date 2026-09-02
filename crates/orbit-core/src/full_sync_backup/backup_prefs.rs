@@ -303,109 +303,133 @@ mod tests {
 
     #[test]
     fn validate_schedule_hourly_valid() {
-        let mut prefs = BackupPrefs::default();
-        prefs.schedule_type = ScheduleType::Hourly;
-        prefs.schedule_minute = 30;
+        let prefs = BackupPrefs {
+            schedule_type: ScheduleType::Hourly,
+            schedule_minute: 30,
+            ..Default::default()
+        };
         assert!(prefs.validate_schedule().is_ok());
     }
 
     #[test]
     fn validate_schedule_hourly_invalid_minute() {
-        let mut prefs = BackupPrefs::default();
-        prefs.schedule_type = ScheduleType::Hourly;
-        prefs.schedule_minute = 60;
+        let prefs = BackupPrefs {
+            schedule_type: ScheduleType::Hourly,
+            schedule_minute: 60,
+            ..Default::default()
+        };
         assert!(prefs.validate_schedule().is_err());
     }
 
     #[test]
     fn validate_schedule_daily_valid() {
-        let mut prefs = BackupPrefs::default();
-        prefs.schedule_type = ScheduleType::Daily;
-        prefs.schedule_time = "12:30".to_string();
+        let prefs = BackupPrefs {
+            schedule_type: ScheduleType::Daily,
+            schedule_time: "12:30".to_string(),
+            ..Default::default()
+        };
         assert!(prefs.validate_schedule().is_ok());
     }
 
     #[test]
     fn validate_schedule_daily_invalid_time_format() {
-        let mut prefs = BackupPrefs::default();
-        prefs.schedule_type = ScheduleType::Daily;
-        prefs.schedule_time = "25:00".to_string();
+        let prefs = BackupPrefs {
+            schedule_type: ScheduleType::Daily,
+            schedule_time: "25:00".to_string(),
+            ..Default::default()
+        };
         assert!(prefs.validate_schedule().is_err());
     }
 
     #[test]
     fn validate_schedule_weekly_valid() {
-        let mut prefs = BackupPrefs::default();
-        prefs.schedule_type = ScheduleType::Weekly;
-        prefs.schedule_time = "10:00".to_string();
-        prefs.schedule_weekday = 3;
+        let prefs = BackupPrefs {
+            schedule_type: ScheduleType::Weekly,
+            schedule_time: "10:00".to_string(),
+            schedule_weekday: 3,
+            ..Default::default()
+        };
         assert!(prefs.validate_schedule().is_ok());
     }
 
     #[test]
     fn validate_schedule_weekly_invalid_weekday() {
-        let mut prefs = BackupPrefs::default();
-        prefs.schedule_type = ScheduleType::Weekly;
-        prefs.schedule_time = "10:00".to_string();
-        prefs.schedule_weekday = 7;
+        let prefs = BackupPrefs {
+            schedule_type: ScheduleType::Weekly,
+            schedule_time: "10:00".to_string(),
+            schedule_weekday: 7,
+            ..Default::default()
+        };
         assert!(prefs.validate_schedule().is_err());
     }
 
     #[test]
     fn validate_schedule_monthly_valid() {
-        let mut prefs = BackupPrefs::default();
-        prefs.schedule_type = ScheduleType::Monthly;
-        prefs.schedule_time = "10:00".to_string();
-        prefs.schedule_day_of_month = 15;
+        let prefs = BackupPrefs {
+            schedule_type: ScheduleType::Monthly,
+            schedule_time: "10:00".to_string(),
+            schedule_day_of_month: 15,
+            ..Default::default()
+        };
         assert!(prefs.validate_schedule().is_ok());
     }
 
     #[test]
     fn validate_schedule_monthly_invalid_day() {
-        let mut prefs = BackupPrefs::default();
-        prefs.schedule_type = ScheduleType::Monthly;
-        prefs.schedule_time = "10:00".to_string();
-        prefs.schedule_day_of_month = 29; // 超出 1-28
+        let prefs = BackupPrefs {
+            schedule_type: ScheduleType::Monthly,
+            schedule_time: "10:00".to_string(),
+            schedule_day_of_month: 29, // 超出 1-28
+            ..Default::default()
+        };
         assert!(prefs.validate_schedule().is_err());
     }
 
     #[test]
     fn validate_schedule_monthly_invalid_day_zero() {
-        let mut prefs = BackupPrefs::default();
-        prefs.schedule_type = ScheduleType::Monthly;
-        prefs.schedule_time = "10:00".to_string();
-        prefs.schedule_day_of_month = 0;
+        let prefs = BackupPrefs {
+            schedule_type: ScheduleType::Monthly,
+            schedule_time: "10:00".to_string(),
+            schedule_day_of_month: 0,
+            ..Default::default()
+        };
         assert!(prefs.validate_schedule().is_err());
     }
 
     #[test]
     fn validate_schedule_yearly_valid() {
-        let mut prefs = BackupPrefs::default();
-        prefs.schedule_type = ScheduleType::Yearly;
-        prefs.schedule_time = "10:00".to_string();
-        prefs.schedule_month = 6;
-        prefs.schedule_day_of_month = 15;
+        let prefs = BackupPrefs {
+            schedule_type: ScheduleType::Yearly,
+            schedule_time: "10:00".to_string(),
+            schedule_month: 6,
+            schedule_day_of_month: 15,
+            ..Default::default()
+        };
         assert!(prefs.validate_schedule().is_ok());
     }
 
     #[test]
     fn validate_schedule_yearly_invalid_month() {
-        let mut prefs = BackupPrefs::default();
-        prefs.schedule_type = ScheduleType::Yearly;
-        prefs.schedule_time = "10:00".to_string();
-        prefs.schedule_month = 13;
-        prefs.schedule_day_of_month = 15;
+        let prefs = BackupPrefs {
+            schedule_type: ScheduleType::Yearly,
+            schedule_time: "10:00".to_string(),
+            schedule_month: 13,
+            schedule_day_of_month: 15,
+            ..Default::default()
+        };
         assert!(prefs.validate_schedule().is_err());
     }
 
     #[test]
     fn save_then_load_prefs_roundtrip() {
         let tmp = TempDir::new().unwrap();
-        let mut prefs = BackupPrefs::default();
-        prefs.local_path = Some("/tmp/backups".to_string());
-        prefs.keep_latest = true;
-        prefs.schedule_type = ScheduleType::Daily;
-        prefs.schedule_time = "12:30".to_string();
+        let prefs = BackupPrefs {
+            local_path: Some("/tmp/backups".to_string()),
+            keep_latest: true,
+            schedule_type: ScheduleType::Daily,
+            schedule_time: "12:30".to_string(),
+            ..Default::default()
+        };
 
         save_prefs(tmp.path(), &prefs).unwrap();
         let loaded = load_prefs(tmp.path()).unwrap();

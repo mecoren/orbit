@@ -427,7 +427,7 @@ pub async fn list_cloud_backups(
     // 仅保留 .waitfullsync 文件
     files.retain(|f| f.name.ends_with(".waitfullsync"));
     // 按最后修改时间倒序（最新在前）
-    files.sort_by(|a, b| b.last_modified.cmp(&a.last_modified));
+    files.sort_by_key(|f| std::cmp::Reverse(f.last_modified));
     Ok(files)
 }
 
@@ -455,21 +455,19 @@ pub async fn download_cloud_backup(
 /// 否则降级到明文 `sync_config.json`。
 fn read_device_name_from_config(app_data_dir: &Path) -> String {
     // 加密存储优先
-    if let Some(storage) = crate::config_enc::get_global_storage() {
-        if let Ok(Some(cfg)) = storage.load::<serde_json::Value>("sync_config") {
-            if let Some(name) = cfg.get("device_name").and_then(|v| v.as_str()) {
-                return name.to_string();
-            }
-        }
+    if let Some(storage) = crate::config_enc::get_global_storage()
+        && let Ok(Some(cfg)) = storage.load::<serde_json::Value>("sync_config")
+        && let Some(name) = cfg.get("device_name").and_then(|v| v.as_str())
+    {
+        return name.to_string();
     }
     // 降级：明文 sync_config.json
     let path = app_data_dir.join("sync_config.json");
-    if let Ok(content) = std::fs::read_to_string(&path) {
-        if let Ok(cfg) = serde_json::from_str::<serde_json::Value>(&content) {
-            if let Some(name) = cfg.get("device_name").and_then(|v| v.as_str()) {
-                return name.to_string();
-            }
-        }
+    if let Ok(content) = std::fs::read_to_string(&path)
+        && let Ok(cfg) = serde_json::from_str::<serde_json::Value>(&content)
+        && let Some(name) = cfg.get("device_name").and_then(|v| v.as_str())
+    {
+        return name.to_string();
     }
     String::new()
 }
@@ -478,6 +476,7 @@ fn read_device_name_from_config(app_data_dir: &Path) -> String {
 ///
 /// 供 `export_full_sync_backup_with_cloud` 在云端阶段和本地阶段分别调用，
 /// 记录 `cloud_full_backup` / `local_full_backup` 两条历史。
+#[allow(clippy::too_many_arguments)] // 与 sync_history_repo::update_status 同列集
 async fn insert_sync_history(
     pool: &SqlitePool,
     sync_type: &str,

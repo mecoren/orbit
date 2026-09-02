@@ -1,13 +1,14 @@
 //! sync — 同步域 FRB 桥接层（移动端 v1 手动同步）
 //!
 //! 把桌面壳三组同步命令一比一移植为 FRB 导出函数，业务全部委托 orbit_core：
-//! - sync_cmd.rs         → [sync_config_get]/[sync_config_save]/[sync_test_connection]
-//! - cloud_sync_cmd.rs   → [cloud_sync_now]/[cloud_sync_push_only]/[cloud_sync_pull_then_push]
-//!                         /[cloud_sync_get_state]/[cloud_sync_is_running]/[sync_disconnect]
-//! - sync_crypto_cmd.rs  → [sync_crypto_status]/[sync_crypto_init]/[sync_crypto_unlock]
-//!                         /[sync_crypto_lock]/[sync_crypto_change_password]
-//!                         /[sync_crypto_export_bundle]/[sync_crypto_import_bundle]
-//!                         /[sync_crypto_restore_session]/[sync_crypto_forget_session]
+//! - sync_cmd.rs        → [sync_config_get]/[sync_config_save]/[sync_test_connection]
+//! - cloud_sync_cmd.rs  → [cloud_sync_now]/[cloud_sync_push_only]/
+//!   [cloud_sync_pull_then_push]/[cloud_sync_get_state]/[cloud_sync_is_running]/
+//!   [sync_disconnect]
+//! - sync_crypto_cmd.rs → [sync_crypto_status]/[sync_crypto_init]/
+//!   [sync_crypto_unlock]/[sync_crypto_lock]/[sync_crypto_change_password]/
+//!   [sync_crypto_export_bundle]/[sync_crypto_import_bundle]/
+//!   [sync_crypto_restore_session]/[sync_crypto_forget_session]
 //!
 //! ## v1 范围（明确不做）
 //! 仅手动触发命令面。桌面端的后台 60s tick 调度器、sync_on_change watcher、
@@ -36,7 +37,7 @@
 //!   与桌面 TS 侧契约一致，Dart DTO 无需镜像 SyncResult。
 //! - 时间戳用 std::time 计算（本 crate 不直接依赖 chrono）。
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use once_cell::sync::Lazy;
 use orbit_core::api::cloud_sync_api;
@@ -108,10 +109,10 @@ fn runtime_engine() -> Result<SyncEngine, String> {
             return Ok(engine.clone());
         }
         let engine = cloud_sync_api::create_engine_noop(pool, rt.crypto.clone(), &base_dir);
-        if rt.crypto.is_unlocked() {
-            if let Some(password) = &rt.session_password {
-                engine.set_sync_password(password.clone());
-            }
+        if rt.crypto.is_unlocked()
+            && let Some(password) = &rt.session_password
+        {
+            engine.set_sync_password(password.clone());
         }
         // 引擎 Clone 共享互斥锁与密码缓存；重复插入以最后写入者为准（幂等语义）
         Ok(rt.engine.insert(engine).clone())
@@ -183,7 +184,7 @@ fn engine_config_of_record(
 }
 
 /// 附件目录（照抄桌面 sync_runtime::attachments_dir；MVP 占位实现）
-fn attachments_dir(dir: &PathBuf) -> String {
+fn attachments_dir(dir: &Path) -> String {
     dir.join("attachments").to_string_lossy().to_string()
 }
 
@@ -410,16 +411,15 @@ pub async fn sync_test_connection(input: SyncConfigInput) -> Result<u32, String>
     // 凭据补齐：留空字段从已存激活配置回填
     let mut username = input.username_str().to_string();
     let mut password = input.password_str().to_string();
-    if username.is_empty() || password.is_empty() {
-        if let Some(saved) = active_config().await? {
-            if saved.protocol.to_lowercase() == engine {
-                if username.is_empty() {
-                    username = saved.device_id.clone();
-                }
-                if password.is_empty() {
-                    password = saved.credential.clone();
-                }
-            }
+    if (username.is_empty() || password.is_empty())
+        && let Some(saved) = active_config().await?
+        && saved.protocol.to_lowercase() == engine
+    {
+        if username.is_empty() {
+            username = saved.device_id.clone();
+        }
+        if password.is_empty() {
+            password = saved.credential.clone();
         }
     }
     if username.is_empty() || password.is_empty() {

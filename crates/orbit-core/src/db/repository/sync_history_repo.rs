@@ -32,6 +32,7 @@ pub async fn insert(
 }
 
 /// 更新同步历史状态（结束时调用）
+#[allow(clippy::too_many_arguments)] // UPDATE 列一一对应，收组反而增加调用样板
 pub async fn update_status(
     pool: &SqlitePool,
     id: i64,

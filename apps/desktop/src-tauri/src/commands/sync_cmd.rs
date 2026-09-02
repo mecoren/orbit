@@ -272,16 +272,15 @@ pub async fn sync_test_connection(app: AppHandle, input: SyncConfigInput) -> Res
     // 凭据补齐：留空字段从已存激活配置回填
     let mut username = input.username.clone();
     let mut password = input.password.clone();
-    if username.is_empty() || password.is_empty() {
-        if let Some(saved) = sync_config_active(&app).await? {
-            if saved.protocol.to_lowercase() == engine {
-                if username.is_empty() {
-                    username = saved.device_id.clone();
-                }
-                if password.is_empty() {
-                    password = saved.credential.clone();
-                }
-            }
+    if (username.is_empty() || password.is_empty())
+        && let Some(saved) = sync_config_active(&app).await?
+        && saved.protocol.to_lowercase() == engine
+    {
+        if username.is_empty() {
+            username = saved.device_id.clone();
+        }
+        if password.is_empty() {
+            password = saved.credential.clone();
         }
     }
     if username.is_empty() || password.is_empty() {

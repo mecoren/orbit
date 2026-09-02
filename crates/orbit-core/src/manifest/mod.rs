@@ -136,7 +136,7 @@ mod tests {
         let mine = manifest("deviceA", vec![("u1", entry(5, false))], 1);
         let theirs = manifest("deviceB", vec![("u1", entry(5, true))], 1);
         let merged = merge_manifests(&mine, &theirs);
-        assert_eq!(merged.entries["u1"].deleted, true);
+        assert!(merged.entries["u1"].deleted);
     }
 
     #[test]
@@ -144,7 +144,7 @@ mod tests {
         let mine = manifest("deviceZ", vec![("u1", entry(5, true))], 1);
         let theirs = manifest("deviceA", vec![("u1", entry(5, false))], 1);
         let merged = merge_manifests(&mine, &theirs);
-        assert_eq!(merged.entries["u1"].deleted, true);
+        assert!(merged.entries["u1"].deleted);
     }
 
     #[test]

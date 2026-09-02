@@ -123,7 +123,7 @@ fn resolve_top_hwnd(app: &tauri::AppHandle) -> Result<(HWND, HWND), String> {
     unsafe {
         loop {
             match GetParent(current) {
-                Ok(parent) if parent.0 != std::ptr::null_mut() => current = parent,
+                Ok(parent) if !parent.0.is_null() => current = parent,
                 _ => break,
             }
         }

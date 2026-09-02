@@ -54,9 +54,10 @@ impl SyncConfigRepo {
             .await?;
         }
 
-        let record = if input.id.is_none() {
-            // 新建
-            sqlx::query_as::<_, SyncConfigRecord>(
+        let record = match input.id {
+            None => {
+                // 新建
+                sqlx::query_as::<_, SyncConfigRecord>(
                 "INSERT INTO sync_configs (
                     protocol, endpoint, bucket, region, path, device_id, credential,
                     encryption_key_id, merge_strategy, sync_mode, max_update_age_hours,
@@ -100,11 +101,11 @@ impl SyncConfigRepo {
             .bind(input.notify_progress)
             .fetch_one(&self.pool)
             .await?
-        } else {
-            // 更新现有记录
-            let id = input.id.unwrap();
-            sqlx::query_as::<_, SyncConfigRecord>(
-                "UPDATE sync_configs SET
+            }
+            Some(id) => {
+                // 更新现有记录
+                sqlx::query_as::<_, SyncConfigRecord>(
+                    "UPDATE sync_configs SET
                     protocol = ?, endpoint = ?, bucket = ?, region = ?, path = ?,
                     device_id = ?, credential = ?, encryption_key_id = ?,
                     merge_strategy = ?, sync_mode = ?, max_update_age_hours = ?,
@@ -116,40 +117,41 @@ impl SyncConfigRepo {
                     notify_progress = ?, updated_at = ?, version = version + 1
                 WHERE id = ?
                 RETURNING *",
-            )
-            .bind(&input.protocol)
-            .bind(&input.endpoint)
-            .bind(&input.bucket)
-            .bind(&input.region)
-            .bind(&input.path)
-            .bind(&input.device_id)
-            .bind(&input.credential)
-            .bind(&input.encryption_key_id)
-            .bind(&input.merge_strategy)
-            .bind(&input.sync_mode)
-            .bind(input.max_update_age_hours)
-            .bind(input.is_encrypted)
-            .bind(input.is_active)
-            .bind(input.is_auto_sync)
-            .bind(input.sync_interval)
-            .bind(input.sync_on_change)
-            .bind(input.concurrent_reqs)
-            .bind(input.timeout)
-            .bind(input.skip_tls_verify)
-            .bind(&input.targets)
-            .bind(input.local_path.as_deref())
-            .bind(&input.schedule_type)
-            .bind(input.schedule_time.as_deref())
-            .bind(input.schedule_weekday)
-            .bind(&input.sync_scope)
-            .bind(input.full_sync_interval)
-            .bind(input.history_keep_count)
-            .bind(input.notify_progress)
-            .bind(now)
-            .bind(id)
-            .fetch_optional(&self.pool)
-            .await?
-            .ok_or_else(|| CoreError::NotFound(format!("sync_config id={}", id)))?
+                )
+                .bind(&input.protocol)
+                .bind(&input.endpoint)
+                .bind(&input.bucket)
+                .bind(&input.region)
+                .bind(&input.path)
+                .bind(&input.device_id)
+                .bind(&input.credential)
+                .bind(&input.encryption_key_id)
+                .bind(&input.merge_strategy)
+                .bind(&input.sync_mode)
+                .bind(input.max_update_age_hours)
+                .bind(input.is_encrypted)
+                .bind(input.is_active)
+                .bind(input.is_auto_sync)
+                .bind(input.sync_interval)
+                .bind(input.sync_on_change)
+                .bind(input.concurrent_reqs)
+                .bind(input.timeout)
+                .bind(input.skip_tls_verify)
+                .bind(&input.targets)
+                .bind(input.local_path.as_deref())
+                .bind(&input.schedule_type)
+                .bind(input.schedule_time.as_deref())
+                .bind(input.schedule_weekday)
+                .bind(&input.sync_scope)
+                .bind(input.full_sync_interval)
+                .bind(input.history_keep_count)
+                .bind(input.notify_progress)
+                .bind(now)
+                .bind(id)
+                .fetch_optional(&self.pool)
+                .await?
+                .ok_or_else(|| CoreError::NotFound(format!("sync_config id={}", id)))?
+            }
         };
 
         Ok(record)

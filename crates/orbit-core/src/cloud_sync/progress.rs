@@ -24,6 +24,7 @@
 //! - `Background`：后台自动同步（scheduler / useSyncOnChange / 导入后自动推送）
 //! - `Manual`：用户手动触发（设置页"立即同步" / 启动页同步）
 //! - `Exit`：退出同步（useExitSync）
+//!
 //! UI 层据此过滤，避免右下角指示器与设置页进度条/退出遮罩重复显示。
 
 use serde::{Deserialize, Serialize};
@@ -34,19 +35,15 @@ use serde::{Deserialize, Serialize};
 /// 桌面端右下角指示器仅响应 `Background`，设置页仅响应 `Manual`，退出遮罩仅响应 `Exit`。
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
+#[derive(Default)]
 pub enum SyncOrigin {
     /// 后台自动同步（scheduler / useSyncOnChange / 导入后自动推送）
     Background,
     /// 用户手动触发（设置页"立即同步" / 启动页同步）
+    #[default]
     Manual,
     /// 退出同步（useExitSync）
     Exit,
-}
-
-impl Default for SyncOrigin {
-    fn default() -> Self {
-        Self::Manual
-    }
 }
 
 /// 同步进度事件

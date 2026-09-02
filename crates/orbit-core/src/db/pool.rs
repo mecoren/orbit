@@ -15,7 +15,7 @@ use crate::error::CoreResult;
 /// # 参数
 /// - `db_path`：数据库文件路径
 /// - `db_key`：主密码派生的数据库密钥（明文 passphrase 或 PRAGMA key 表达式）。
-///             None 则不加密（明文数据库）。
+///   None 则不加密（明文数据库）。
 ///
 /// # 流程
 /// 1. 构建 SQLite 连接选项（WAL 模式 + 外键约束 + 忙等待）

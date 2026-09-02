@@ -258,14 +258,12 @@ impl SyncCryptoService {
     ) -> Result<Vec<u8>, SyncCryptoError> {
         // Fix-10：覆盖守卫——先比对本地 meta，不一致且未确认时拒绝。
         // 放在解密之前可避免"先花 600k 次 PBKDF2 再被拒"的浪费。
-        if !force {
-            if let Ok(Some(local)) =
+        if !force
+            && let Ok(Some(local)) =
                 crate::sync_crypto::meta_store::load_sync_crypto_meta(&self.app_data_dir)
-            {
-                if local != *bundle {
-                    return Err(SyncCryptoError::LocalMetaExists);
-                }
-            }
+            && local != *bundle
+        {
+            return Err(SyncCryptoError::LocalMetaExists);
         }
 
         // 用同步密码 + 云端 salt 派生 master_key

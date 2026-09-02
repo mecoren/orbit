@@ -11,7 +11,7 @@
 //! - 错误通道约定：`[tag] message` 前缀字符串，前端按 tag 路由
 //!   （key_mismatch → 恢复页 / wrong_password → 解锁 / local_meta_exists → 确认覆盖）。
 
-use std::path::PathBuf;
+use std::path::Path;
 use std::sync::{Arc, OnceLock};
 
 #[cfg(desktop)]
@@ -88,10 +88,10 @@ pub fn sync_engine(app: &AppHandle) -> Result<SyncEngine, String> {
     let engine = cloud_sync_api::create_engine(pool, crypto.clone(), &dir, sender);
     // 引擎懒创建晚于解锁的场景（如设置密码后才首次触发云同步命令）：
     // 从钥匙串缓存回填同步密码，否则引擎内"同步前自动备份"会静默跳过
-    if crypto.is_unlocked() {
-        if let Some(password) = read_cached_sync_password() {
-            engine.set_sync_password(password);
-        }
+    if crypto.is_unlocked()
+        && let Some(password) = read_cached_sync_password()
+    {
+        engine.set_sync_password(password);
     }
     Ok(runtime.engine.get_or_init(|| engine).clone())
 }
@@ -294,6 +294,6 @@ pub fn engine_config_of_record(
 }
 
 /// 附件目录占位（MVP：todos has_attachments=false，仅满足引擎签名）
-pub fn attachments_dir(dir: &PathBuf) -> String {
+pub fn attachments_dir(dir: &Path) -> String {
     dir.join("attachments").to_string_lossy().to_string()
 }

@@ -1,9 +1,9 @@
 //! db_cmd - 数据库生命周期命令（Orbit 裁剪版）
 //!
 //! 前端启动流程（03 文档 §四）：
-//!   1. master_auth_has() -> 是否设置主密码
-//!   2a. 未设置 -> db_init_plaintext() 明文库
-//!   2b. 已设置 -> 解锁页 master_auth_unlock(pw) -> db_init_encrypted(db_key_hex)
+//! 1. master_auth_has() -> 是否设置主密码
+//!    2a. 未设置 -> db_init_plaintext() 明文库
+//!    2b. 已设置 -> 解锁页 master_auth_unlock(pw) -> db_init_encrypted(db_key_hex)
 
 use orbit_core::context;
 use orbit_core::db::migrate::{

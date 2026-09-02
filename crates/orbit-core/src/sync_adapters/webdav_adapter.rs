@@ -97,10 +97,10 @@ impl WebDavAdapter {
         }
 
         // 缓存命中：路径已确认存在，直接跳过（避免 PROPFIND 请求）
-        if let Ok(cache) = self.dir_cache.lock() {
-            if cache.contains(clean_path) {
-                return Ok(());
-            }
+        if let Ok(cache) = self.dir_cache.lock()
+            && cache.contains(clean_path)
+        {
+            return Ok(());
         }
 
         // 按层级逐级创建:sync/data → 先创建 sync,再创建 sync/data
@@ -440,10 +440,10 @@ impl SyncAdapter for WebDavAdapter {
     async fn upload(&self, path: &str, data: &[u8]) -> Result<(), SyncError> {
         // 先确保父目录存在,避免 409 AncestorsNotFound
         // (如 path = "sync/data/file.waitsync" → 创建 sync/data 目录)
-        if let Some(parent) = path.rsplit_once('/').map(|(p, _)| p) {
-            if !parent.is_empty() {
-                self.ensure_directory(parent).await?;
-            }
+        if let Some(parent) = path.rsplit_once('/').map(|(p, _)| p)
+            && !parent.is_empty()
+        {
+            self.ensure_directory(parent).await?;
         }
 
         let url = self.build_url(path);

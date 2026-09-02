@@ -215,10 +215,11 @@ pub async fn update_todo_project_sort_order(
     Ok(())
 }
 
+/// 看板分组载荷：projectId（None=未分组）→ 组内任务列表
+pub type KanbanGroup = (Option<i64>, Vec<TodoTask>);
+
 /// 看板视图数据（按项目分组）
-pub async fn get_todo_tasks_kanban_by_project(
-    pool: &SqlitePool,
-) -> CoreResult<Vec<(Option<i64>, Vec<TodoTask>)>> {
+pub async fn get_todo_tasks_kanban_by_project(pool: &SqlitePool) -> CoreResult<Vec<KanbanGroup>> {
     let tasks: Vec<TodoTask> =
         sqlx::query_as("SELECT * FROM todo_tasks WHERE is_deleted = 0 ORDER BY position, id")
             .fetch_all(pool)
@@ -231,7 +232,7 @@ pub async fn get_todo_tasks_kanban_by_project(
         map.entry(t.project_id).or_default().push(t);
     }
     // 按 project_id 排序（None 排最后）
-    let mut result: Vec<(Option<i64>, Vec<TodoTask>)> = map.into_iter().collect();
+    let mut result: Vec<KanbanGroup> = map.into_iter().collect();
     result.sort_by(|a, b| match (a.0, b.0) {
         (Some(a_id), Some(b_id)) => a_id.cmp(&b_id),
         (Some(_), None) => std::cmp::Ordering::Less,
