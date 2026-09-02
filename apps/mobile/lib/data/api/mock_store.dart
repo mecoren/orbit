@@ -17,6 +17,14 @@ class MockStore {
   bool dbReady = false;
   bool syncConfigured = false;
 
+  // 同步域扩展（云同步设置页用）：已存配置的凭据回填源 + 同步密码状态
+  String? lastSyncEngine;
+  String lastSyncUsername = '';
+  String lastSyncPassword = '';
+  bool syncPasswordSet = false;
+  bool syncUnlocked = false;
+  String syncPassword = '';
+
   int get id => nextId++;
 
   /// 合并 patch：键存在即生效，值为 null 表示清空（对齐 `Option<Option<T>>`）

@@ -137,10 +137,23 @@ abstract class OrbitBridge {
   Future<SyncResultJson> cloudSyncNow({String origin = 'manual'});
   Future<bool> cloudSyncIsRunning();
 
+  /// 测试连接（不落盘）：返回云端根目录条目数；用户名/密码留空时
+  /// 从已存激活配置回填（同协议）。错误文案带 [config]/[network] tag。
+  Future<int> syncTestConnection(Map<String, Object?> input);
+
+  /// 断开云同步：仅清除本机连接配置与凭据，不动本地数据与云端文件
+  Future<void> syncDisconnect();
+
   // ── 同步加密（恢复流程用）──
 
   Future<SyncCryptoStatus> syncCryptoStatus();
+
+  /// 首次设置同步密码（生成 Data Key；移动端 remember 仅进程内缓存）
+  Future<void> syncCryptoInit(String password, {bool remember = false});
   Future<void> syncCryptoUnlock(String password, {bool remember = false});
+
+  /// 锁定：清除内存中的 Data Key（下次同步前需解锁）
+  Future<void> syncCryptoLock();
   Future<String> syncCryptoImportBundle(
     SyncCryptoBundle bundle,
     String password, {

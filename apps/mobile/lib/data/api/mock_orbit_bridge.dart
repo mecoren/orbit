@@ -488,6 +488,10 @@ class MockOrbitBridge implements OrbitBridge {
   Future<SyncConfigView> syncConfigSave(Map<String, Object?> input) =>
       _delay(() {
         store.syncConfigured = true;
+        // 凭据回填源（syncTestConnection 留空字段时借用，对齐 Rust 侧语义）
+        store.lastSyncEngine = (input['engine'] as String?) ?? 'webdav';
+        store.lastSyncUsername = (input['username'] as String?) ?? '';
+        store.lastSyncPassword = (input['password'] as String?) ?? '';
         return SyncConfigView(
           id: 1,
           engine: (input['engine'] as String?) ?? 'webdav',
@@ -524,16 +528,71 @@ class MockOrbitBridge implements OrbitBridge {
   @override
   Future<bool> cloudSyncIsRunning() async => false;
 
+  @override
+  Future<int> syncTestConnection(Map<String, Object?> input) => _delay(() {
+        // 对齐 Rust [config] 前置校验：引擎 / 服务器地址 / 凭据
+        final engine = (input['engine'] as String?) ?? '';
+        if (engine != 'webdav' && engine != 's3') {
+          throw Exception('[config] 不支持的引擎类型，仅支持 webdav/s3');
+        }
+        if (((input['endpoint'] as String?) ?? '').trim().isEmpty) {
+          throw Exception('[config] 服务器地址不能为空');
+        }
+        var username = (input['username'] as String?) ?? '';
+        var password = (input['password'] as String?) ?? '';
+        // 留空字段从已存配置回填（同协议才借用，同 Rust 侧语义）
+        if (store.syncConfigured &&
+            (username.isEmpty || password.isEmpty) &&
+            store.lastSyncEngine == engine) {
+          if (username.isEmpty) username = store.lastSyncUsername;
+          if (password.isEmpty) password = store.lastSyncPassword;
+        }
+        if (username.isEmpty || password.isEmpty) {
+          throw Exception('[config] 请填写用户名与密码');
+        }
+        return 3; // 模拟根目录条目数
+      });
+
+  @override
+  Future<void> syncDisconnect() => _delay(() {
+        store.syncConfigured = false;
+        store.lastSyncEngine = null;
+        store.lastSyncUsername = '';
+        store.lastSyncPassword = '';
+      });
+
   // ── 同步加密 ──
 
   @override
-  Future<SyncCryptoStatus> syncCryptoStatus() =>
-      _delay(() => const SyncCryptoStatus(hasPassword: false, isUnlocked: false));
+  Future<SyncCryptoStatus> syncCryptoStatus() => _delay(() => SyncCryptoStatus(
+      hasPassword: store.syncPasswordSet, isUnlocked: store.syncUnlocked));
+
+  @override
+  Future<void> syncCryptoInit(String password, {bool remember = false}) =>
+      _delay(() {
+        if (password.length < 6) {
+          throw Exception('[invalid_input] 同步密码至少 6 位');
+        }
+        store.syncPasswordSet = true;
+        store.syncUnlocked = true;
+        store.syncPassword = password;
+      });
+
+  @override
+  Future<void> syncCryptoLock() => _delay(() {
+        store.syncUnlocked = false;
+      });
 
   @override
   Future<void> syncCryptoUnlock(String password, {bool remember = false}) =>
       _delay(() {
-        throw Exception('[wrong_password] Mock 未配置同步密码');
+        if (!store.syncPasswordSet) {
+          throw Exception('[not_initialized] 未设置同步密码');
+        }
+        if (password != store.syncPassword) {
+          throw Exception('[wrong_password] 同步密码错误');
+        }
+        store.syncUnlocked = true;
       });
 
   @override

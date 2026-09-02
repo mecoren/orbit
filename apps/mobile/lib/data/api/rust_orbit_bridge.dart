@@ -397,6 +397,13 @@ class RustOrbitBridge implements OrbitBridge {
   @override
   Future<bool> cloudSyncIsRunning() => gen_sync.cloudSyncIsRunning();
 
+  @override
+  Future<int> syncTestConnection(Map<String, Object?> input) async =>
+      gen_sync.syncTestConnection(input: _toGenConfigInput(input));
+
+  @override
+  Future<void> syncDisconnect() => gen_sync.syncDisconnect();
+
   // ── 同步加密 ──
 
   @override
@@ -406,8 +413,15 @@ class RustOrbitBridge implements OrbitBridge {
   }
 
   @override
+  Future<void> syncCryptoInit(String password, {bool remember = false}) =>
+      gen_sync.syncCryptoInit(password: password, remember: remember);
+
+  @override
   Future<void> syncCryptoUnlock(String password, {bool remember = false}) =>
       gen_sync.syncCryptoUnlock(password: password, remember: remember);
+
+  @override
+  Future<void> syncCryptoLock() => gen_sync.syncCryptoLock();
 
   @override
   Future<String> syncCryptoImportBundle(SyncCryptoBundle bundle,
