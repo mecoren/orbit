@@ -6,7 +6,7 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_dimens.dart';
 import '../../core/theme/app_shapes.dart';
 import '../../core/theme/orbit_accents.dart';
-import '../../data/api/dto.dart';
+import '../../data/api/dto.dart';import '../../data/api/dto.dart';
 import '../../data/providers/bridge_provider.dart';
 import '../../shared/widgets/liquid_glass_title_bar.dart';
 import '../../shared/widgets/scroll_offset_listenable.dart';
@@ -18,7 +18,7 @@ import '../todo/providers/todo_providers.dart';
 /// 设置页 /settings（移动端任务书三卡结构）
 ///
 /// - 同步卡：引擎摘要（脱敏 endpoint host/bucket）+ 上次同步时间 +
-///   "立即同步"；未配置引擎时禁用并提示"请在桌面端完成配置"；
+///   "立即同步" + "云同步设置"入口行（→ /settings/sync 配置页）；
 /// - 安全卡：只读文案——移动端暂不支持主密码迁移；
 /// - 关于卡：版本 0.1.0 → push /about。
 class SettingsScreen extends ConsumerStatefulWidget {
@@ -112,6 +112,34 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         ),
                       ],
                       const SizedBox(height: AppDimens.space12),
+                      // 云同步设置入口（未配置/已配置均可进入，移动端可本机完成配置）
+                      InkWell(
+                        borderRadius: AppShapes.medium,
+                        onTap: () => context.push('/settings/sync'),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                              vertical: AppDimens.space8),
+                          child: Row(
+                            children: [
+                              Text(
+                                '云同步设置',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w500,
+                                  color: OrbitAccents.themeAccent,
+                                ),
+                              ),
+                              const Spacer(),
+                              Icon(
+                                Icons.chevron_right_rounded,
+                                size: AppDimens.iconSizeMd,
+                                color: colors.secondaryText,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: AppDimens.space4),
                       SizedBox(
                         width: double.infinity,
                         child: FilledButton.icon(

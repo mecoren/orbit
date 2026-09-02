@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'router_keys.dart';
 import '../../modules/settings/about_page.dart';
 import '../../modules/settings/settings_screen.dart';
+import '../../modules/settings/sync_settings_page.dart';
 import '../../modules/todo/detail_screen.dart';
 import '../../modules/todo/sidebar_screen.dart';
 import '../../modules/todo/sub_list_screen.dart';
@@ -73,6 +74,13 @@ final appRouter = GoRouter(
       path: '/settings',
       pageBuilder: (context, state) => pageSlideFromRight(
         const SettingsScreen(),
+        key: state.pageKey,
+      ),
+    ),
+    GoRoute(
+      path: '/settings/sync',
+      pageBuilder: (context, state) => pageSlideFromRight(
+        const SyncSettingsPage(),
         key: state.pageKey,
       ),
     ),
