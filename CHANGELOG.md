@@ -16,6 +16,16 @@
   syncCryptoInit/syncCryptoLock`，移动端可在本机完成云同步配置，
   不再依赖桌面端配置
 
+### Fixed
+
+- 移动端测试套件恢复全绿：时间滚轮选择器用例在 23 点/59 分末项场景
+  滑动方向自适应（ListWheel 无环绕语义）；颜色字段随桌面看板标签方案
+  （97d3eab）移除后同步对齐详情页/表单测试断言
+- CI 门禁存量债务清零：`flutter analyze` 0 issue；Rust fmt 门禁修复
+  97d3eab codegen 引入的 `frb_generated.rs` import 顺序偏差；clippy
+  1.96.1 存量告警 53 处清完（双 workspace `cargo clippy -D warnings`
+  归零），行为零变更（workspace 285 测试 + 移动端 77 + 桌面 67 全过）
+
 ### Changed
 
 - `crates/orbit_core` 更名 `crates/orbit-core`：目录与包名统一 kebab-case，
