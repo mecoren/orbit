@@ -74,7 +74,8 @@ class _SyncSettingsPageState extends ConsumerState<SyncSettingsPage> {
     super.dispose();
   }
 
-  /// 回读激活配置填表单（密码不回显：留空 = 沿用已存凭据）
+  /// 回读激活配置填表单（密码不回显：留空 = 沿用已存凭据）；
+  /// 断开后（配置为 null）连同清空表单控制器，回到全新配置态
   Future<void> _load() async {
     try {
       final c = await ref.read(orbitBridgeProvider).syncConfigGet();
@@ -95,6 +96,19 @@ class _SyncSettingsPageState extends ConsumerState<SyncSettingsPage> {
           _skipTls = c.skipTlsVerify;
           _timeoutController.text =
               c.timeoutSeconds <= 0 ? '30' : '${c.timeoutSeconds}';
+        } else {
+          _engine = 'webdav';
+          _endpointController.clear();
+          _bucketController.clear();
+          _regionController.clear();
+          _usernameController.clear();
+          _passwordController.clear();
+          _basePathController.text = 'orbit';
+          _intervalMin = 60;
+          _autoEnabled = true;
+          _onChange = false;
+          _skipTls = false;
+          _timeoutController.text = '30';
         }
       });
     } catch (_) {
