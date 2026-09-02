@@ -1,4 +1,4 @@
-// 明细页全字段可编辑测试：开始/结束日期、重复、颜色、提醒增改删
+// 明细页全字段可编辑测试：开始/结束日期、重复、提醒增改删
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -50,7 +50,7 @@ void main() {
 
   setUp(() => bridge = MockOrbitBridge());
 
-  testWidgets('信息区：开始日期/结束日期/重复/颜色 四行齐备', (tester) async {
+  testWidgets('信息区：开始日期/结束日期/重复 三行齐备', (tester) async {
     await tester.pumpWidget(_wrap(const DetailScreen(taskId: 5), bridge));
     await _settle(tester);
 
@@ -58,7 +58,8 @@ void main() {
     expect(find.text('开始日期'), findsOneWidget);
     expect(find.text('结束日期'), findsOneWidget);
     expect(find.text('重复'), findsOneWidget);
-    expect(find.text('颜色'), findsOneWidget);
+    // 颜色行已随 97d3eab 移除（桌面改看板标签展示，颜色经项目/标签承载）
+    expect(find.text('颜色'), findsNothing);
   });
 
   testWidgets('重复：弹层选「每天」→ repeat_mode/after 落库', (tester) async {

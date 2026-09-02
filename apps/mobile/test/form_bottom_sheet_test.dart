@@ -1,4 +1,4 @@
-// 新建/编辑表单全量字段测试：字段存在性、重复规则落库、颜色校验、提醒同步语义
+// 新建/编辑表单全量字段测试：字段存在性、重复规则落库、提醒同步语义
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -49,7 +49,7 @@ Future<void> _scrollTo(WidgetTester tester, Finder finder) async {
 }
 
 void main() {
-  testWidgets('表单字段：状态/开始日期/结束日期/提醒时间/重复/颜色齐备', (tester) async {
+  testWidgets('表单字段：状态/开始日期/结束日期/提醒时间/重复齐备', (tester) async {
     await _openForm(tester);
 
     expect(find.text('添加待办'), findsOneWidget);
@@ -72,8 +72,8 @@ void main() {
     expect(find.text('提醒时间'), findsOneWidget);
     await _scrollTo(tester, find.text('重复'));
     expect(find.text('重复'), findsOneWidget);
-    await _scrollTo(tester, find.text('颜色'));
-    expect(find.text('颜色'), findsOneWidget);
+    // 颜色字段已随 97d3eab 移除（桌面改看板标签展示，颜色经项目/标签承载）
+    expect(find.text('颜色'), findsNothing);
   });
 
   testWidgets('日期与提醒卡片：四行齐备 + 截止行内快捷胶囊', (tester) async {
@@ -148,19 +148,8 @@ void main() {
     expect(task.repeatAfter, 1);
   });
 
-  testWidgets('颜色校验：非法 hex 拦截保存并保持抽屉打开', (tester) async {
-    await _openForm(tester);
-
-    await tester.enterText(find.byType(TextFormField).first, '任务B');
-    // 颜色输入在表单末尾，滚到后输入非法值
-    await _scrollTo(tester, find.text('颜色'));
-    await tester.enterText(find.byType(TextFormField).last, '#ZZZZZZ');
-    await tester.tap(find.byIcon(Icons.check_rounded));
-    await tester.pump();
-
-    expect(find.text('格式应为 #RRGGBB'), findsOneWidget);
-    expect(find.text('添加待办'), findsOneWidget);
-  });
+  // 颜色校验用例已随颜色字段移除而删除（97d3eab：桌面看板标签方案，
+  // 任务级颜色不再由表单/详情编辑，hex 校验逻辑随字段一并下线）
 
   testWidgets('日期选择：wait-home 面板（月历+确认/清除）选日回显', (tester) async {
     await _openForm(tester);

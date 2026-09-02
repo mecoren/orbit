@@ -50,7 +50,7 @@ void main() {
     expect(find.byIcon(Icons.remove_rounded), findsNothing);
   });
 
-  testWidgets('小时下拉：点框弹滚轮 → 上滑一格 → 确认落值', (tester) async {
+  testWidgets('小时下拉：点框弹滚轮 → 滑一格 → 确认落值', (tester) async {
     final initialHour = DateTime.now().hour;
     await openPicker(tester);
     expect(hourText(tester), initialHour.toString().padLeft(2, '0'));
@@ -60,17 +60,21 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byType(CupertinoPicker), findsOneWidget);
 
-    // 滚轮上滑一格（itemExtent 44）→ 选中项 +1
-    await tester.drag(find.byType(CupertinoPicker), const Offset(0, -44));
+    // 滚轮滑动方向随边界自适应：ListWheel 无环绕语义——初始在末项（23 点）
+    // 时上滑会被 maxScrollExtent 钳住，改下滑 -1；否则上滑 +1。
+    final atLast = initialHour == 23;
+    await tester.drag(find.byType(CupertinoPicker),
+        Offset(0, atLast ? 44 : -44));
     await tester.pumpAndSettle();
 
-    // 确认弹层（弹层在上层，取 last）→ 数值 +1（模 24）
+    // 确认弹层（弹层在上层，取 last）→ 数值按滑动方向 ±1
     await tester.tap(find.text('确认').last);
     await tester.pumpAndSettle();
-    expect(hourText(tester), ((initialHour + 1) % 24).toString().padLeft(2, '0'));
+    final expected = atLast ? initialHour - 1 : initialHour + 1;
+    expect(hourText(tester), expected.toString().padLeft(2, '0'));
   });
 
-  testWidgets('分钟下拉：点框弹滚轮 → 上滑一格 → 确认落值', (tester) async {
+  testWidgets('分钟下拉：点框弹滚轮 → 滑一格 → 确认落值', (tester) async {
     final initialMinute = DateTime.now().minute;
     await openPicker(tester);
     expect(minuteText(tester), initialMinute.toString().padLeft(2, '0'));
@@ -80,12 +84,15 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byType(CupertinoPicker), findsOneWidget);
 
-    await tester.drag(find.byType(CupertinoPicker), const Offset(0, -44));
+    // 边界自适应（同小时用例）：末项 59 分下滑 -1，否则上滑 +1
+    final atLast = initialMinute == 59;
+    await tester.drag(find.byType(CupertinoPicker),
+        Offset(0, atLast ? 44 : -44));
     await tester.pumpAndSettle();
 
     await tester.tap(find.text('确认').last);
     await tester.pumpAndSettle();
-    expect(
-        minuteText(tester), ((initialMinute + 1) % 60).toString().padLeft(2, '0'));
+    final expected = atLast ? initialMinute - 1 : initialMinute + 1;
+    expect(minuteText(tester), expected.toString().padLeft(2, '0'));
   });
 }
