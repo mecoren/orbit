@@ -40,6 +40,13 @@
   - **#21 窄窗侧栏自适应**：useIsNarrow 接入 ProjectSidebar，断点
     自动折叠 + 手动覆盖持久化；折叠态 12px 图标窄条（hover 提示 +
     未完成计数）；折叠语义提纯 shared/sidebar-collapsed.ts（5 用例）
+- **M4 验收挖出并修复同步上线阻塞 bug**：首同步将模块数据推上云端但
+  `crypto/config` 从不上传（`sync_data_key` 的 Ok(None) 分支缺自动补传决策）
+  → 第二台设备永久 KeyMismatch 无法入环。修复后新增 `m4_sync_e2e` 集成
+  测试锁行为：双实例互推收敛 / 双向编辑收敛 / 墓碑不复活 / 明文配置降级
+  （5.3/5.4 的可自动化段），WebDAV 全序列经本机探针服务器实证
+- 移动端 AndroidManifest 开启 `usesCleartextTraffic`（用户自建局域网
+  `http://` WebDAV 是文档化场景；同步 E2E 测试默认端点 127.0.0.1:8123）
 - 仓库规范化：根级 README.md / CHANGELOG.md / clippy.toml（msrv 1.96）/ rustfmt.toml（edition 2024）
 - 移动端云同步设置：设置页「云同步设置」入口 + `/settings/sync` 配置页
   （WebDAV/S3 引擎、凭据、定时/超时/TLS、测试连接/保存/断开确认、同步密码

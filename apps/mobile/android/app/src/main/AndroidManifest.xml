@@ -4,6 +4,7 @@
          用户拒绝则应用内静默降级为 toast 提示） -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <application
+        android:usesCleartextTraffic="true"
         android:label="orbit"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">

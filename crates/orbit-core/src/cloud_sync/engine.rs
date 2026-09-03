@@ -778,7 +778,34 @@ impl SyncEngine {
                 Ok(())
             }
             Ok(None) => {
-                log::info!("[sync_data_key] 跳过：本地 meta 与云端一致（或云端无 crypto/config）");
+                // 双 404 时 bundle_io 返回 Ok(None)（云端无 crypto/config），
+                // 「本地 meta 与云端一致」不再单独区分——该信号量无法从
+                // bundle_io 传回。此处与 Err(NotFound) 分支同构：本地有
+                // Data Key 且云端无模块数据时安全补传 crypto/config。
+                //
+                // 历史问题（M4 E2E 发现）：首台设备推模块数据但 crypto/config
+                // 从未上传（本分支直通 Ok），第二台设备 KeyMismatch 被永久阻断。
+                // 守卫矩阵与 Err(NotFound) 分支共享（decide_auto_upload_behavior）。
+                log::info!("[sync_data_key] 云端无 crypto/config（bundle_io 双 404）");
+                let local_has_key = self.crypto.get_data_key().is_some();
+                if local_has_key {
+                    let cloud_has_data = self.cloud_has_module_data(raw_adapter, base_path).await;
+                    match decide_auto_upload_behavior(cloud_has_data, local_has_key) {
+                        AutoUploadDecision::Proceed => {
+                            self.auto_upload_crypto_bundle(raw_adapter, base_path).await;
+                        }
+                        AutoUploadDecision::Skip => {
+                            log::info!("[sync_data_key] 本地无 Data Key，跳过自动补传");
+                        }
+                        AutoUploadDecision::Block => {
+                            log::info!(
+                                "[sync_data_key] 守卫触发：云端已有模块数据但缺 crypto/config，\
+                                 拒绝补传本地（可能错误的）Key，返回 KeyMismatch 引导恢复流程"
+                            );
+                            return Err(CloudSyncError::KeyMismatch);
+                        }
+                    }
+                }
                 Ok(())
             }
             Err(e) => {
