@@ -14,6 +14,8 @@
 | M5 | 发布工程 | 五端产物签名/分发就绪 |
 
 > M4 说明：代码完成以 Android 为准（release APK 已产出并通过全量自动化门禁）；iOS 因签名证书/macOS 构建前置延后，真机验收清单见 [superpowers/plans/2026-08-24-m4-device-checklist.md](superpowers/plans/2026-08-24-m4-device-checklist.md)。
+>
+> M5 补记（2026-09-03）：许可证已拍板 **MIT**（仓库根 `LICENSE`；docs/README §一 同步标注）。应用图标/启动屏、隐私声明、签名/公证脚手架与版本机制均已落地，明细见 §二 M5 任务表备注与 `docs/adr/0004-release-engineering.md`。
 
 ## 二、任务分解
 

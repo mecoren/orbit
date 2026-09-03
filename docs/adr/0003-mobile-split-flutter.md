@@ -37,4 +37,5 @@ cmd 引导阶段报"路径找不到"（非编译器错误，与 ADR 0001 工具�
   ~~表单/详情日期选择器~~ ✅（共用 showTodoDatePicker）
 - 表单抽屉 snap 分档吸附（现为固定高度滚动，可后续移植 DraggableScrollableSheet snap）
 - iOS 工程（podspec 已备）与签名验证
-- README 架构图与 docs/02 更新以反映新布局；percent_done 回算命令面
+- ~~README 架构图与 docs/02 更新以反映新布局~~ ✅ 已同步（2026-09-03）；
+  ~~percent_done 回算命令面~~ ✅ 已查证落地（两端各自实现）

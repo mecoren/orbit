@@ -2,6 +2,7 @@
   "name": "orbit-monorepo",
   "private": true,
   "packageManager": "pnpm@11.10.0",
+  "license": "MIT",
   "scripts": {
     "dev": "pnpm --filter orbit dev",
     "build": "pnpm --filter orbit build",

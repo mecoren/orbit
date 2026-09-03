@@ -11,6 +11,14 @@ initThemeOnStartup();
 // 启动时恢复字体设置（字体族 + 字号 + 字重），避免字体闪烁
 initFontSettingsOnStartup();
 
+// 首帧就绪后显示窗口：tauri.conf.json 配 visible:false 隐藏原生空窗，
+// 由前端在主题/字体初始化后主动 show，消除启动瞬间的白屏闪烁。
+// capability 已含 core:default（含 window:allow-show）；非 Tauri 环境
+// （纯浏览器 dev）无 window API，静默跳过。
+void import("@tauri-apps/api/window")
+  .then(({ getCurrentWindow }) => getCurrentWindow().show())
+  .catch(() => {});
+
 // 生产环境屏蔽默认网页右键菜单：应用内自定义右键菜单在组件层已 stopPropagation，
 // 不受此影响；输入类元素保留原生菜单以便复制粘贴。开发环境不屏蔽，便于调试。
 if (!import.meta.env.DEV) {

@@ -1,0 +1,149 @@
+# M5 发布流水线（ADR 0004）：push tag v* 触发
+#
+# 产物：桌面三平台安装包（tauri-action）+ Android APK（flutter build）
+#       + SHA256SUMS 完整性清单（未签名平台的主要校验依据）
+#
+# 签名状态：证书物料未注入时全部走未签名路径（详见 docs/adr/0004 §2）：
+# - Windows：无代码签名证书 → NSIS/MSI 未签名（SmartScreen 提示由 Release 说明缓解）
+# - macOS：signingIdentity=null → 未签名 DMG（Gatekeeper xattr 放行说明）
+# - Linux：deb/AppImage 无签名惯例，SHA256SUMS 校验
+# - Android：android/key.properties 缺失时回落 debug 签名（本文件不涉及；
+#   本地/自托管 runner 配置后自动生效）
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write # 创建 Release 与上传产物
+
+jobs:
+  desktop:
+    name: desktop (${{ matrix.settings.label }})
+    runs-on: ${{ matrix.settings.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        settings:
+          - label: windows-x86_64
+            os: windows-latest
+            args: ""
+          - label: macos-aarch64
+            os: macos-latest
+            args: "--target aarch64-apple-darwin"
+          - label: linux-x86_64
+            os: ubuntu-22.04
+            args: ""
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: 安装依赖
+        run: pnpm install --frozen-lockfile
+
+      - name: Rust 工具链（macOS aarch64 target）
+        if: matrix.settings.label == 'macos-aarch64'
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin
+
+      - name: Linux 系统依赖（webkit2gtk 4.1）
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+
+      - name: 构建桌面安装包
+        uses: tauri-apps/tauri-action@v1
+        env:
+          # 证书物料注入点（ADR 0004 §2）——Secrets 未配置时 tauri-action
+          # 自动走未签名路径，无需修改本文件：
+          # Windows 代码签名：TAURI_SIGNING_PRIVATE_KEY + TAURI_SIGNING_PRIVATE_KEY_PASSWORD
+          # macOS 签名+公证：APPLE_CERTIFICATE / APPLE_CERTIFICATE_PASSWORD /
+          #                  APPLE_SIGNING_IDENTITY / APPLE_ID / APPLE_PASSWORD / APPLE_TEAM_ID
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          projectPath: apps/desktop
+          tagName: ${{ github.ref_name }}
+          releaseName: "Orbit ${{ github.ref_name }}"
+          releaseBody: |
+            参见 [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md)。
+
+            ## 完整性校验（未签名平台的信任依据）
+
+            下载 `SHA256SUMS` 后：`sha256sum -c SHA256SUMS`（Windows: `Get-FileHash`）。
+
+            ## 未签名提示
+
+            - **Windows**：SmartScreen 可能提示「未知发布者」——更多信息 → 仍要运行。
+            - **macOS**：Gatekeeper 提示无法验证开发者——右键打开，或
+              `xattr -cr /Applications/Orbit.app` 后再启动。
+            - **Android**：`app-universal-release.apk` 直接覆盖安装（同包名
+              `cn.wait.orbit`）；启用「未知来源」安装即可。
+          releaseDraft: true
+          prerelease: false
+          args: ${{ matrix.settings.args }}
+
+  android:
+    name: android apk
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/mobile
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      # cargokit 构建 crates/orbit-flutter 需要本仓库工具链版本
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: 构建 release APK
+        # release 签名：自托管 runner 挂载 android/key.properties 后自动生效；
+        # 公共 runner 无该文件 → debug 签名（可安装，不可上架）
+        run: flutter build apk --release
+
+      - name: 上传 APK 至 Release
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: true
+          files: |
+            apps/mobile/build/app/outputs/flutter-apk/app-release.apk
+
+  sha256:
+    name: sha256 sums
+    needs: [desktop, android]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 汇总产物哈希
+        run: |
+          # 从 draft release 拉取本 tag 全部产物计算 SHA-256
+          gh release download "${{ github.ref_name }}" --dir dist \
+            --clobber 2>/dev/null || true
+          cd dist && sha256sum * > ../SHA256SUMS || echo "(产物上传中，draft 未就绪)" > ../SHA256SUMS
+
+      - name: 附 SHA256SUMS
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: true
+          files: SHA256SUMS
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

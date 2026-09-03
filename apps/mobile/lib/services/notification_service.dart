@@ -9,7 +9,9 @@ import '../shared/widgets/wait_toast.dart';
 /// 本地通知服务（Phase 7 平台集成）
 ///
 /// 职责（对齐移动端任务书）：
-/// - 初始化插件：Android 图标用 @mipmap/ic_launcher 替代默认 app_icon；
+/// - 初始化插件：Android 小图标用专用剪影 @drawable/ic_stat_orbit
+///   （白色轨道剪影，M5 品牌图标族；勿用启动器图标——彩图在状态栏
+///   会被系统压成灰块）；
 /// - 请求 POST_NOTIFICATIONS 运行时权限，拒绝则静默降级——
 ///   提醒到期回落应用内 warning toast（[WaitToast] 兜底已存在）；
 /// - [handleReminderDue]：reminderDue 事件即时呈现。zonedSchedule 面向
@@ -42,7 +44,7 @@ class NotificationService {
     _initialized = true;
     try {
       const initSettings = InitializationSettings(
-        android: AndroidInitializationSettings('@mipmap/ic_launcher'),
+        android: AndroidInitializationSettings('@drawable/ic_stat_orbit'),
       );
       await _plugin.initialize(settings: initSettings);
 
@@ -75,6 +77,8 @@ class NotificationService {
       android: AndroidNotificationDetails(
         _channelId,
         _channelName,
+        // 小图标沿用初始化设置（@drawable/ic_stat_orbit）；
+        // 22.x 的 AndroidNotificationDetails 无 channelIcon 参数
         importance: Importance.high,
         priority: Priority.high,
       ),
