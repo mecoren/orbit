@@ -56,8 +56,35 @@ pub fn run() {
             .build(),
     );
 
+    // 全局热键插件（07 #16 快速捕捉）：热键由前端 use-global-quick-add
+    // 注册（Alt+Shift+O：唤起主窗 + 聚焦快速输入栏）
+    #[cfg(desktop)]
+    let builder = builder.plugin(tauri_plugin_global_shortcut::Builder::new().build());
+
+    // 关窗驻留拦截（07 报告 #16 托盘配套）：关闭主窗 = 隐藏驻留托盘，
+    // 退出走托盘菜单；避免中断同步/备份调度器与提醒轮询守护。
+    // tray_close_hint 事件驱动前端首次提示（localStorage 记忆不再骚扰）。
+    #[cfg(desktop)]
+    let builder = builder.on_window_event(|window, event| {
+        use tauri::Emitter as _;
+        if window.label() == "main"
+            && let tauri::WindowEvent::CloseRequested { api, .. } = event
+        {
+            let _ = window.emit("tray-close-hint", ());
+            window.hide().ok();
+            api.prevent_close();
+        }
+    });
+
     builder
         .setup(|_app| {
+            // 系统托盘（07 报告 #16）：菜单=显示主窗/快速新建/退出，
+            // 快速新建经 tray-quick-add 事件由前端聚焦快速输入栏
+            #[cfg(desktop)]
+            if let Err(e) = commands::tray::setup_tray(_app.handle()) {
+                eprintln!("[tray] 托盘初始化失败（不影响主功能）: {e}");
+            }
+
             // Mica 云母材质：绕过 Tauri 原生 windowEffects 在无边框窗口上的局限，
             // 直接在窗口就绪阶段通过 Windows DWM API 设置 DWMSBT_MAINWINDOW。
             // 亮暗切换由前端 use-mica-effect 经 apply_mica/disable_mica 联动。

@@ -26,6 +26,7 @@ import {
   todoTaskLabelCreate,
   type TodoProject,
 } from "@/lib/tauri";
+import { useAppStore } from "@/stores/app-store";
 import { parseQuickInput } from "../shared/parse-quick-input";
 import { PRIORITY_COLOR, TODO_ACCENT } from "../shared/constants";
 
@@ -54,6 +55,16 @@ export function QuickAddBar({ projects, defaultProjectId }: QuickAddBarProps) {
   /** 提醒时间草稿（DateTimePicker 值格式 YYYY-MM-DDTHH:MM；空 = 不提醒） */
   const [remindDraft, setRemindDraft] = useState("");
   const [projectId, setProjectId] = useState<number | null | "default">("default");
+
+  // 托盘「快速新建」意图（07 #16）：壳层 bump → 此处消费聚焦；
+  // 归零防重放（机制同 list-page 的 taskFormIntent 消费）
+  const quickAddIntent = useAppStore((s) => s.quickAddIntent);
+  const consumeQuickAddIntent = useAppStore((s) => s.consumeQuickAddIntent);
+  useEffect(() => {
+    if (quickAddIntent === 0) return;
+    consumeQuickAddIntent();
+    requestAnimationFrame(() => inputRef.current?.focus());
+  }, [quickAddIntent, consumeQuickAddIntent]);
 
   const hasInput = title.trim().length > 0;
   const effectiveProjectId =

@@ -26,11 +26,12 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 orbit-core = { path = "../../../crates/orbit-core" }
 
 # Tauri v2 + 插件（02 文档 §七：notification/window-state/dialog/fs/shell/log）
-tauri = { version = "2", features = ["devtools", "image-png"] }
+tauri = { version = "2", features = ["devtools", "image-png", "tray-icon"] }
 tauri-plugin-shell = "2"
 tauri-plugin-dialog = "2"
 tauri-plugin-fs = "2"
 tauri-plugin-notification = "2"
+tauri-plugin-global-shortcut = "2"
 tauri-plugin-log = "2"
 
 # 序列化

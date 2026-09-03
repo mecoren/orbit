@@ -20,6 +20,14 @@ interface AppState {
   /** 全局搜索对话框开关（Ctrl+K，07 §五-P1#9） */
   searchOpen: boolean;
   setSearchOpen: (open: boolean) => void;
+  /**
+   * 「快速新建」意图计数器（07 §16 托盘菜单）：托盘层（壳）与
+   * QuickAddBar（页面内）跨层传递，机制同 taskFormIntent；
+   * 消费即归零防重放。
+   */
+  quickAddIntent: number;
+  bumpQuickAddIntent: () => void;
+  consumeQuickAddIntent: () => void;
 }
 
 export const useAppStore = create<AppState>((set) => ({
@@ -34,4 +42,7 @@ export const useAppStore = create<AppState>((set) => ({
   consumeViewToggleIntent: () => set({ viewToggleIntent: 0 }),
   searchOpen: false,
   setSearchOpen: (open) => set({ searchOpen: open }),
+  quickAddIntent: 0,
+  bumpQuickAddIntent: () => set((s) => ({ quickAddIntent: s.quickAddIntent + 1 })),
+  consumeQuickAddIntent: () => set({ quickAddIntent: 0 }),
 }));
