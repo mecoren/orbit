@@ -5,6 +5,10 @@
  * （色块 + 名称 + 拖拽手柄，内联新增在列表尾部，右键删除，删除保护双 AlertDialog）。
  * 未分组为虚拟项（id=-1），可拖拽参与项目排序，默认项目第一位，
  * 位置持久化为「前驱项目 id」存 localStorage（LS_UNGROUPED_AFTER）。
+ *
+ * 窄窗折叠（07 报告 #21 接线）：useIsNarrow（<lg=1024）驱动自动折叠，
+ * 用户可手动覆盖并持久化（LS_SIDEBAR_MANUAL_COLLAPSED）；折叠态渲染
+ * 图标窄条（快捷视图 + 项目色点），展开恢复完整三栏。
  */
 import { useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -15,13 +19,15 @@ import {
   SortableContext,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
-import { GripVertical, Inbox, Plus } from "lucide-react";
+import { GripVertical, Inbox, PanelLeftClose, PanelLeftOpen, Plus } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { hideFromQueries, useUndoableDeleteAction } from "@/hooks/use-undoable-delete";
+import { useIsNarrow } from "@/hooks/use-breakpoint";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -39,6 +45,11 @@ import {
   type TodoProject,
 } from "@/lib/tauri";
 import { LS_UNGROUPED_AFTER, QUICK_VIEWS, TODO_ACCENT, type QuickViewKey } from "../shared/constants";
+import {
+  loadSidebarManualCollapsed,
+  resolveSidebarCollapsed,
+  saveSidebarManualCollapsed,
+} from "../shared/sidebar-collapsed";
 import { ProjectContextMenu } from "./task-context-menu";
 
 /** 未分组虚拟 id */
@@ -70,6 +81,18 @@ export function ProjectSidebar({
   const navigate = useNavigate();
   const [adding, setAdding] = useState(false);
   const [newTitle, setNewTitle] = useState("");
+
+  // ---- 折叠态（#21）：断点自动 + 手动覆盖（语义见 shared/sidebar-collapsed）----
+  const isNarrow = useIsNarrow();
+  const [manualCollapsed, setManualCollapsed] = useState<boolean | null>(() =>
+    loadSidebarManualCollapsed(),
+  );
+  const collapsed = resolveSidebarCollapsed({ isNarrow, manual: manualCollapsed });
+  const toggleCollapsed = () => {
+    const next = !collapsed;
+    setManualCollapsed(next);
+    saveSidebarManualCollapsed(next);
+  };
 
   // 删除保护对话框状态：null 关闭；{project, hasUndone} 决定弹哪种
   const [deleteTarget, setDeleteTarget] = useState<{
@@ -157,8 +180,102 @@ export function ProjectSidebar({
     void refetchProjects();
   };
 
+  // ---- 折叠态窄条：快捷视图图标 + 项目色点 + 展开钮（hover 提示补足上下文）----
+  if (collapsed) {
+    return (
+      <div className="flex h-full w-12 shrink-0 flex-col items-center gap-1 border-r border-border bg-card/30 py-3">
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7"
+              aria-label="展开侧栏"
+              onClick={toggleCollapsed}
+            >
+              <PanelLeftOpen className="size-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>展开侧栏</TooltipContent>
+        </Tooltip>
+
+        <div className="mt-1 flex w-full flex-col items-center gap-1">
+          {QUICK_VIEWS.map((v) => {
+            const active = activeQuickView === v.key && !ungroupedActive;
+            return (
+              <Tooltip key={v.key}>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    aria-label={v.label}
+                    onClick={() => onSelectQuickView(v.key)}
+                    className={cn(
+                      "flex h-8 w-8 items-center justify-center rounded-md",
+                      active ? "bg-primary/10" : "hover:bg-accent/50",
+                    )}
+                  >
+                    <v.icon className="size-4" style={active ? { color: v.color } : undefined} />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent>{v.label}</TooltipContent>
+              </Tooltip>
+            );
+          })}
+        </div>
+
+        <div className="mt-2 flex w-full flex-col items-center gap-1">
+          {projects.map((p) => {
+            const active = activeProjectId === p.id && !ungroupedActive;
+            return (
+              <Tooltip key={p.id}>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    aria-label={p.title}
+                    onClick={() => onSelectProject(p.id)}
+                    className={cn(
+                      "flex h-7 w-7 items-center justify-center rounded-md",
+                      active ? "bg-primary/10" : "hover:bg-accent/50",
+                    )}
+                  >
+                    <span
+                      className="h-2.5 w-2.5 rounded-sm"
+                      style={{ background: p.hex_color || TODO_ACCENT }}
+                    />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  {p.title}
+                  {undoneCounts[p.id] ? ` · ${undoneCounts[p.id]}` : ""}
+                </TooltipContent>
+              </Tooltip>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex h-full w-56 shrink-0 flex-col border-r border-border bg-card/30">
+      {/* 展开态头部：折叠钮（#21 手动覆盖入口） */}
+      <div className="flex items-center justify-between px-3 pt-3">
+        <span className="text-xs uppercase tracking-wide text-muted-foreground">视图</span>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-6 w-6"
+              aria-label="折叠侧栏"
+              onClick={toggleCollapsed}
+            >
+              <PanelLeftClose className="size-3.5" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>折叠侧栏</TooltipContent>
+        </Tooltip>
+      </div>
       {/* 快捷入口区 */}
       <div className="space-y-1 p-3">
         {QUICK_VIEWS.map((v) => {
