@@ -39,6 +39,24 @@ class ReminderDueEvent {
   });
 }
 
+/// 明文导出结果（07 报告 #15；FRB plaintext_export.rs 镜像）
+class PlaintextExportResult {
+  /// 文件内容（JSON 文本或 CSV 文本，UTF-8；CSV 带 BOM）
+  final String content;
+
+  /// 各表行数（表名 → 行数）
+  final Map<String, int> tableCounts;
+
+  /// 建议文件名（含时间戳）
+  final String suggestedFilename;
+
+  const PlaintextExportResult({
+    required this.content,
+    required this.tableCounts,
+    required this.suggestedFilename,
+  });
+}
+
 /// Orbit 数据桥抽象（omnipass `OmniBridge` 同款模式）
 ///
 /// 移动端唯一数据入口。UI 层只依赖本抽象：
@@ -143,6 +161,14 @@ abstract class OrbitBridge {
 
   /// 断开云同步：仅清除本机连接配置与凭据，不动本地数据与云端文件
   Future<void> syncDisconnect();
+
+  // ── 明文数据导出（07 报告 #15；PRIVACY.md §七口径）──
+
+  /// 导出全部待办数据为结构化 JSON（默认排除墓碑行）
+  Future<PlaintextExportResult> plaintextExportJson({bool excludeDeleted = true});
+
+  /// 导出任务主视图 CSV（UTF-8 with BOM；默认排除墓碑行）
+  Future<PlaintextExportResult> plaintextExportCsv({bool excludeDeleted = true});
 
   // ── 同步加密（恢复流程用）──
 

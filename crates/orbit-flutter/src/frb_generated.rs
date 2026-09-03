@@ -38,7 +38,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.12.0";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 70073075;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -1121872900;
 
 // Section: executor
 
@@ -604,6 +604,83 @@ fn wire__crate__api__state__orbit_state_initialized_impl(
                         Result::<_, ()>::Ok(crate::api::state::orbit_state_initialized())?;
                     Ok(output_ok)
                 })())
+            }
+        },
+    )
+}
+fn wire__crate__api__plaintext_export__plaintext_export_csv_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "plaintext_export_csv",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_exclude_deleted = <Option<bool>>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| async move {
+                transform_result_sse::<_, String>(
+                    (move || async move {
+                        let output_ok =
+                            crate::api::plaintext_export::plaintext_export_csv(api_exclude_deleted)
+                                .await?;
+                        Ok(output_ok)
+                    })()
+                    .await,
+                )
+            }
+        },
+    )
+}
+fn wire__crate__api__plaintext_export__plaintext_export_json_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "plaintext_export_json",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_exclude_deleted = <Option<bool>>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| async move {
+                transform_result_sse::<_, String>(
+                    (move || async move {
+                        let output_ok = crate::api::plaintext_export::plaintext_export_json(
+                            api_exclude_deleted,
+                        )
+                        .await?;
+                        Ok(output_ok)
+                    })()
+                    .await,
+                )
             }
         },
     )
@@ -2672,6 +2749,20 @@ impl SseDecode for Vec<u8> {
     }
 }
 
+impl SseDecode for Vec<crate::api::plaintext_export::TableCount> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut len_ = <i32>::sse_decode(deserializer);
+        let mut ans_ = Vec::with_capacity(len_ as usize);
+        for idx_ in 0..len_ {
+            ans_.push(<crate::api::plaintext_export::TableCount>::sse_decode(
+                deserializer,
+            ));
+        }
+        return ans_;
+    }
+}
+
 impl SseDecode for Vec<crate::api::dto::TaskLabelWithId> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -2848,6 +2939,21 @@ impl SseDecode for Option<crate::api::sync::SyncConfigView> {
     }
 }
 
+impl SseDecode for crate::api::plaintext_export::PlaintextExportView {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_content = <String>::sse_decode(deserializer);
+        let mut var_tableCounts =
+            <Vec<crate::api::plaintext_export::TableCount>>::sse_decode(deserializer);
+        let mut var_suggestedFilename = <String>::sse_decode(deserializer);
+        return crate::api::plaintext_export::PlaintextExportView {
+            content: var_content,
+            table_counts: var_tableCounts,
+            suggested_filename: var_suggestedFilename,
+        };
+    }
+}
+
 impl SseDecode for crate::api::events::ReminderDueDto {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -2940,6 +3046,18 @@ impl SseDecode for crate::api::sync::SyncCryptoStatus {
         return crate::api::sync::SyncCryptoStatus {
             has_password: var_hasPassword,
             is_unlocked: var_isUnlocked,
+        };
+    }
+}
+
+impl SseDecode for crate::api::plaintext_export::TableCount {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_table = <String>::sse_decode(deserializer);
+        let mut var_count = <usize>::sse_decode(deserializer);
+        return crate::api::plaintext_export::TableCount {
+            table: var_table,
+            count: var_count,
         };
     }
 }
@@ -3427,6 +3545,13 @@ impl SseDecode for () {
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {}
 }
 
+impl SseDecode for usize {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        deserializer.cursor.read_u64::<NativeEndian>().unwrap() as _
+    }
+}
+
 fn pde_ffi_dispatcher_primary_impl(
     func_id: i32,
     port: flutter_rust_bridge::for_generated::MessagePort,
@@ -3459,116 +3584,128 @@ fn pde_ffi_dispatcher_primary_impl(
         16 => {
             wire__crate__api__state__orbit_state_initialized_impl(port, ptr, rust_vec_len, data_len)
         }
-        17 => {
+        17 => wire__crate__api__plaintext_export__plaintext_export_csv_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        18 => wire__crate__api__plaintext_export__plaintext_export_json_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        19 => {
             wire__crate__api__events__start_reminder_poller_impl(port, ptr, rust_vec_len, data_len)
         }
-        18 => {
+        20 => {
             wire__crate__api__events__subscribe_db_changes_impl(port, ptr, rust_vec_len, data_len)
         }
-        19 => wire__crate__api__sync__sync_config_get_impl(port, ptr, rust_vec_len, data_len),
-        20 => wire__crate__api__sync__sync_config_save_impl(port, ptr, rust_vec_len, data_len),
-        21 => wire__crate__api__sync__sync_crypto_change_password_impl(
+        21 => wire__crate__api__sync__sync_config_get_impl(port, ptr, rust_vec_len, data_len),
+        22 => wire__crate__api__sync__sync_config_save_impl(port, ptr, rust_vec_len, data_len),
+        23 => wire__crate__api__sync__sync_crypto_change_password_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        22 => wire__crate__api__sync__sync_crypto_export_bundle_impl(
+        24 => wire__crate__api__sync__sync_crypto_export_bundle_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        23 => wire__crate__api__sync__sync_crypto_forget_session_impl(
+        25 => wire__crate__api__sync__sync_crypto_forget_session_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        24 => wire__crate__api__sync__sync_crypto_import_bundle_impl(
+        26 => wire__crate__api__sync__sync_crypto_import_bundle_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        25 => wire__crate__api__sync__sync_crypto_init_impl(port, ptr, rust_vec_len, data_len),
-        26 => wire__crate__api__sync__sync_crypto_lock_impl(port, ptr, rust_vec_len, data_len),
-        27 => wire__crate__api__sync__sync_crypto_restore_session_impl(
+        27 => wire__crate__api__sync__sync_crypto_init_impl(port, ptr, rust_vec_len, data_len),
+        28 => wire__crate__api__sync__sync_crypto_lock_impl(port, ptr, rust_vec_len, data_len),
+        29 => wire__crate__api__sync__sync_crypto_restore_session_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        28 => wire__crate__api__sync__sync_crypto_status_impl(port, ptr, rust_vec_len, data_len),
-        29 => wire__crate__api__sync__sync_crypto_unlock_impl(port, ptr, rust_vec_len, data_len),
-        30 => wire__crate__api__sync__sync_disconnect_impl(port, ptr, rust_vec_len, data_len),
-        31 => wire__crate__api__sync__sync_test_connection_impl(port, ptr, rust_vec_len, data_len),
-        32 => wire__crate__api__todo__todo_comments_create_impl(port, ptr, rust_vec_len, data_len),
-        33 => wire__crate__api__todo__todo_comments_delete_impl(port, ptr, rust_vec_len, data_len),
-        34 => wire__crate__api__todo__todo_comments_get_impl(port, ptr, rust_vec_len, data_len),
-        35 => wire__crate__api__todo__todo_comments_list_impl(port, ptr, rust_vec_len, data_len),
-        36 => wire__crate__api__todo__todo_labels_create_impl(port, ptr, rust_vec_len, data_len),
-        37 => wire__crate__api__todo__todo_labels_delete_impl(port, ptr, rust_vec_len, data_len),
-        38 => wire__crate__api__todo__todo_labels_list_impl(port, ptr, rust_vec_len, data_len),
-        39 => wire__crate__api__todo__todo_labels_update_impl(port, ptr, rust_vec_len, data_len),
-        40 => wire__crate__api__todo__todo_projects_create_impl(port, ptr, rust_vec_len, data_len),
-        41 => wire__crate__api__todo__todo_projects_delete_impl(port, ptr, rust_vec_len, data_len),
-        42 => wire__crate__api__todo__todo_projects_get_impl(port, ptr, rust_vec_len, data_len),
-        43 => wire__crate__api__todo__todo_projects_list_impl(port, ptr, rust_vec_len, data_len),
-        44 => wire__crate__api__todo__todo_projects_update_impl(port, ptr, rust_vec_len, data_len),
-        45 => wire__crate__api__todo__todo_projects_update_sort_order_impl(
+        30 => wire__crate__api__sync__sync_crypto_status_impl(port, ptr, rust_vec_len, data_len),
+        31 => wire__crate__api__sync__sync_crypto_unlock_impl(port, ptr, rust_vec_len, data_len),
+        32 => wire__crate__api__sync__sync_disconnect_impl(port, ptr, rust_vec_len, data_len),
+        33 => wire__crate__api__sync__sync_test_connection_impl(port, ptr, rust_vec_len, data_len),
+        34 => wire__crate__api__todo__todo_comments_create_impl(port, ptr, rust_vec_len, data_len),
+        35 => wire__crate__api__todo__todo_comments_delete_impl(port, ptr, rust_vec_len, data_len),
+        36 => wire__crate__api__todo__todo_comments_get_impl(port, ptr, rust_vec_len, data_len),
+        37 => wire__crate__api__todo__todo_comments_list_impl(port, ptr, rust_vec_len, data_len),
+        38 => wire__crate__api__todo__todo_labels_create_impl(port, ptr, rust_vec_len, data_len),
+        39 => wire__crate__api__todo__todo_labels_delete_impl(port, ptr, rust_vec_len, data_len),
+        40 => wire__crate__api__todo__todo_labels_list_impl(port, ptr, rust_vec_len, data_len),
+        41 => wire__crate__api__todo__todo_labels_update_impl(port, ptr, rust_vec_len, data_len),
+        42 => wire__crate__api__todo__todo_projects_create_impl(port, ptr, rust_vec_len, data_len),
+        43 => wire__crate__api__todo__todo_projects_delete_impl(port, ptr, rust_vec_len, data_len),
+        44 => wire__crate__api__todo__todo_projects_get_impl(port, ptr, rust_vec_len, data_len),
+        45 => wire__crate__api__todo__todo_projects_list_impl(port, ptr, rust_vec_len, data_len),
+        46 => wire__crate__api__todo__todo_projects_update_impl(port, ptr, rust_vec_len, data_len),
+        47 => wire__crate__api__todo__todo_projects_update_sort_order_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        46 => wire__crate__api__todo__todo_reminders_create_impl(port, ptr, rust_vec_len, data_len),
-        47 => wire__crate__api__todo__todo_reminders_delete_impl(port, ptr, rust_vec_len, data_len),
-        48 => wire__crate__api__todo__todo_reminders_get_impl(port, ptr, rust_vec_len, data_len),
-        49 => wire__crate__api__todo__todo_reminders_list_impl(port, ptr, rust_vec_len, data_len),
-        50 => wire__crate__api__todo__todo_subtasks_create_impl(port, ptr, rust_vec_len, data_len),
-        51 => wire__crate__api__todo__todo_subtasks_delete_impl(port, ptr, rust_vec_len, data_len),
-        52 => wire__crate__api__todo__todo_subtasks_get_impl(port, ptr, rust_vec_len, data_len),
-        53 => wire__crate__api__todo__todo_subtasks_list_impl(port, ptr, rust_vec_len, data_len),
-        54 => wire__crate__api__todo__todo_subtasks_toggle_done_impl(
+        48 => wire__crate__api__todo__todo_reminders_create_impl(port, ptr, rust_vec_len, data_len),
+        49 => wire__crate__api__todo__todo_reminders_delete_impl(port, ptr, rust_vec_len, data_len),
+        50 => wire__crate__api__todo__todo_reminders_get_impl(port, ptr, rust_vec_len, data_len),
+        51 => wire__crate__api__todo__todo_reminders_list_impl(port, ptr, rust_vec_len, data_len),
+        52 => wire__crate__api__todo__todo_subtasks_create_impl(port, ptr, rust_vec_len, data_len),
+        53 => wire__crate__api__todo__todo_subtasks_delete_impl(port, ptr, rust_vec_len, data_len),
+        54 => wire__crate__api__todo__todo_subtasks_get_impl(port, ptr, rust_vec_len, data_len),
+        55 => wire__crate__api__todo__todo_subtasks_list_impl(port, ptr, rust_vec_len, data_len),
+        56 => wire__crate__api__todo__todo_subtasks_toggle_done_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        55 => wire__crate__api__todo__todo_subtasks_update_impl(port, ptr, rust_vec_len, data_len),
-        56 => {
+        57 => wire__crate__api__todo__todo_subtasks_update_impl(port, ptr, rust_vec_len, data_len),
+        58 => {
             wire__crate__api__todo__todo_task_labels_create_impl(port, ptr, rust_vec_len, data_len)
         }
-        57 => {
+        59 => {
             wire__crate__api__todo__todo_task_labels_delete_impl(port, ptr, rust_vec_len, data_len)
         }
-        58 => wire__crate__api__todo__todo_task_labels_list_impl(port, ptr, rust_vec_len, data_len),
-        59 => wire__crate__api__todo__todo_task_relations_create_impl(
+        60 => wire__crate__api__todo__todo_task_labels_list_impl(port, ptr, rust_vec_len, data_len),
+        61 => wire__crate__api__todo__todo_task_relations_create_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        60 => wire__crate__api__todo__todo_task_relations_delete_impl(
+        62 => wire__crate__api__todo__todo_task_relations_delete_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        61 => {
+        63 => {
             wire__crate__api__todo__todo_task_relations_get_impl(port, ptr, rust_vec_len, data_len)
         }
-        62 => {
+        64 => {
             wire__crate__api__todo__todo_task_relations_list_impl(port, ptr, rust_vec_len, data_len)
         }
-        63 => wire__crate__api__todo__todo_tasks_create_impl(port, ptr, rust_vec_len, data_len),
-        64 => wire__crate__api__todo__todo_tasks_delete_impl(port, ptr, rust_vec_len, data_len),
-        65 => wire__crate__api__todo__todo_tasks_get_impl(port, ptr, rust_vec_len, data_len),
-        66 => wire__crate__api__todo__todo_tasks_get_detail_impl(port, ptr, rust_vec_len, data_len),
-        67 => wire__crate__api__todo__todo_tasks_list_impl(port, ptr, rust_vec_len, data_len),
-        68 => wire__crate__api__todo__todo_tasks_update_impl(port, ptr, rust_vec_len, data_len),
-        69 => wire__crate__api__todo__todo_tasks_update_position_impl(
+        65 => wire__crate__api__todo__todo_tasks_create_impl(port, ptr, rust_vec_len, data_len),
+        66 => wire__crate__api__todo__todo_tasks_delete_impl(port, ptr, rust_vec_len, data_len),
+        67 => wire__crate__api__todo__todo_tasks_get_impl(port, ptr, rust_vec_len, data_len),
+        68 => wire__crate__api__todo__todo_tasks_get_detail_impl(port, ptr, rust_vec_len, data_len),
+        69 => wire__crate__api__todo__todo_tasks_list_impl(port, ptr, rust_vec_len, data_len),
+        70 => wire__crate__api__todo__todo_tasks_update_impl(port, ptr, rust_vec_len, data_len),
+        71 => wire__crate__api__todo__todo_tasks_update_position_impl(
             port,
             ptr,
             rust_vec_len,
@@ -3633,6 +3770,28 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::dto::ListFilter>
     for crate::api::dto::ListFilter
 {
     fn into_into_dart(self) -> crate::api::dto::ListFilter {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::plaintext_export::PlaintextExportView {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.content.into_into_dart().into_dart(),
+            self.table_counts.into_into_dart().into_dart(),
+            self.suggested_filename.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::plaintext_export::PlaintextExportView
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::plaintext_export::PlaintextExportView>
+    for crate::api::plaintext_export::PlaintextExportView
+{
+    fn into_into_dart(self) -> crate::api::plaintext_export::PlaintextExportView {
         self
     }
 }
@@ -3741,6 +3900,27 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::sync::SyncCryptoStatus>
     for crate::api::sync::SyncCryptoStatus
 {
     fn into_into_dart(self) -> crate::api::sync::SyncCryptoStatus {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::plaintext_export::TableCount {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.table.into_into_dart().into_dart(),
+            self.count.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::plaintext_export::TableCount
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::plaintext_export::TableCount>
+    for crate::api::plaintext_export::TableCount
+{
+    fn into_into_dart(self) -> crate::api::plaintext_export::TableCount {
         self
     }
 }
@@ -4316,6 +4496,16 @@ impl SseEncode for Vec<u8> {
     }
 }
 
+impl SseEncode for Vec<crate::api::plaintext_export::TableCount> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.len() as _, serializer);
+        for item in self {
+            <crate::api::plaintext_export::TableCount>::sse_encode(item, serializer);
+        }
+    }
+}
+
 impl SseEncode for Vec<crate::api::dto::TaskLabelWithId> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -4466,6 +4656,15 @@ impl SseEncode for Option<crate::api::sync::SyncConfigView> {
     }
 }
 
+impl SseEncode for crate::api::plaintext_export::PlaintextExportView {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <String>::sse_encode(self.content, serializer);
+        <Vec<crate::api::plaintext_export::TableCount>>::sse_encode(self.table_counts, serializer);
+        <String>::sse_encode(self.suggested_filename, serializer);
+    }
+}
+
 impl SseEncode for crate::api::events::ReminderDueDto {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -4519,6 +4718,14 @@ impl SseEncode for crate::api::sync::SyncCryptoStatus {
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <bool>::sse_encode(self.has_password, serializer);
         <bool>::sse_encode(self.is_unlocked, serializer);
+    }
+}
+
+impl SseEncode for crate::api::plaintext_export::TableCount {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <String>::sse_encode(self.table, serializer);
+        <usize>::sse_encode(self.count, serializer);
     }
 }
 
@@ -4807,6 +5014,16 @@ impl SseEncode for u8 {
 impl SseEncode for () {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {}
+}
+
+impl SseEncode for usize {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        serializer
+            .cursor
+            .write_u64::<NativeEndian>(self as _)
+            .unwrap();
+    }
 }
 
 #[cfg(not(target_family = "wasm"))]

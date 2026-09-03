@@ -198,6 +198,9 @@ pub fn run() {
             commands::full_sync_cmd::full_backup_import,
             commands::full_sync_cmd::full_backup_list_local,
             commands::full_sync_cmd::full_backup_device_info,
+            // 明文数据导出（07 报告 #15：JSON 结构化 / CSV 任务视图）
+            commands::plaintext_export_cmd::plaintext_export_json,
+            commands::plaintext_export_cmd::plaintext_export_csv,
             // 定时自动备份偏好（backup_scheduler 守护的数据源）
             commands::backup_scheduler::backup_prefs_get,
             commands::backup_scheduler::backup_prefs_save,

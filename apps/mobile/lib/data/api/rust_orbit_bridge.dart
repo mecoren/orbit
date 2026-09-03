@@ -5,6 +5,7 @@ import 'package:path_provider/path_provider.dart';
 
 import '../../src/rust/api/dto.dart' as gen;
 import '../../src/rust/api/events.dart' as gen_events;
+import '../../src/rust/api/plaintext_export.dart' as gen_export;
 import '../../src/rust/api/sync.dart' as gen_sync;
 import '../../src/rust/api/auth.dart' as gen_auth;
 import '../../src/rust/api/todo.dart' as gen_todo;
@@ -403,6 +404,32 @@ class RustOrbitBridge implements OrbitBridge {
 
   @override
   Future<void> syncDisconnect() => gen_sync.syncDisconnect();
+
+  // ── 明文数据导出（07 报告 #15）──
+
+  @override
+  Future<PlaintextExportResult> plaintextExportJson({bool excludeDeleted = true}) async {
+    final r = await gen_export.plaintextExportJson(excludeDeleted: excludeDeleted);
+    return PlaintextExportResult(
+      content: r.content,
+      tableCounts: {
+        for (final e in r.tableCounts) e.table: e.count.toInt(),
+      },
+      suggestedFilename: r.suggestedFilename,
+    );
+  }
+
+  @override
+  Future<PlaintextExportResult> plaintextExportCsv({bool excludeDeleted = true}) async {
+    final r = await gen_export.plaintextExportCsv(excludeDeleted: excludeDeleted);
+    return PlaintextExportResult(
+      content: r.content,
+      tableCounts: {
+        for (final e in r.tableCounts) e.table: e.count.toInt(),
+      },
+      suggestedFilename: r.suggestedFilename,
+    );
+  }
 
   // ── 同步加密 ──
 

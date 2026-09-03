@@ -9,6 +9,7 @@ pub mod db_cmd;
 pub mod full_sync_cmd;
 pub mod mica_cmd;
 pub mod notification_scheduler;
+pub mod plaintext_export_cmd;
 pub mod sync_cmd;
 pub mod sync_crypto_cmd;
 pub mod sync_runtime;

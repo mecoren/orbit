@@ -561,6 +561,24 @@ class MockOrbitBridge implements OrbitBridge {
         store.lastSyncPassword = '';
       });
 
+  // ── 明文数据导出（07 报告 #15）──
+
+  @override
+  Future<PlaintextExportResult> plaintextExportJson({bool excludeDeleted = true}) =>
+      _delay(() => PlaintextExportResult(
+            content: '{"format":"orbit.plaintext-export","version":1,"mock":true}',
+            tableCounts: {'todo_tasks': store.tasks.length},
+            suggestedFilename: 'orbit-export-mock.json',
+          ));
+
+  @override
+  Future<PlaintextExportResult> plaintextExportCsv({bool excludeDeleted = true}) =>
+      _delay(() => PlaintextExportResult(
+            content: '\u{feff}id,title\n1,mock-task',
+            tableCounts: {'todo_tasks': store.tasks.length},
+            suggestedFilename: 'orbit-export-mock.csv',
+          ));
+
   // ── 同步加密 ──
 
   @override

@@ -6,6 +6,7 @@
 import 'api/auth.dart';
 import 'api/dto.dart';
 import 'api/events.dart';
+import 'api/plaintext_export.dart';
 import 'api/state.dart';
 import 'api/sync.dart';
 import 'api/todo.dart';
@@ -121,6 +122,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   Uint8List dco_decode_list_prim_u_8_strict(dynamic raw);
 
   @protected
+  List<TableCount> dco_decode_list_table_count(dynamic raw);
+
+  @protected
   List<TaskLabelWithId> dco_decode_list_task_label_with_id(dynamic raw);
 
   @protected
@@ -166,6 +170,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   SyncConfigView? dco_decode_opt_box_autoadd_sync_config_view(dynamic raw);
 
   @protected
+  PlaintextExportView dco_decode_plaintext_export_view(dynamic raw);
+
+  @protected
   ReminderDueDto dco_decode_reminder_due_dto(dynamic raw);
 
   @protected
@@ -176,6 +183,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   SyncCryptoStatus dco_decode_sync_crypto_status(dynamic raw);
+
+  @protected
+  TableCount dco_decode_table_count(dynamic raw);
 
   @protected
   TaskLabelWithId dco_decode_task_label_with_id(dynamic raw);
@@ -241,6 +251,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void dco_decode_unit(dynamic raw);
+
+  @protected
+  BigInt dco_decode_usize(dynamic raw);
 
   @protected
   AnyhowException sse_decode_AnyhowException(SseDeserializer deserializer);
@@ -346,6 +359,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   Uint8List sse_decode_list_prim_u_8_strict(SseDeserializer deserializer);
 
   @protected
+  List<TableCount> sse_decode_list_table_count(SseDeserializer deserializer);
+
+  @protected
   List<TaskLabelWithId> sse_decode_list_task_label_with_id(
     SseDeserializer deserializer,
   );
@@ -401,6 +417,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  PlaintextExportView sse_decode_plaintext_export_view(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   ReminderDueDto sse_decode_reminder_due_dto(SseDeserializer deserializer);
 
   @protected
@@ -411,6 +432,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   SyncCryptoStatus sse_decode_sync_crypto_status(SseDeserializer deserializer);
+
+  @protected
+  TableCount sse_decode_table_count(SseDeserializer deserializer);
 
   @protected
   TaskLabelWithId sse_decode_task_label_with_id(SseDeserializer deserializer);
@@ -490,6 +514,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_decode_unit(SseDeserializer deserializer);
+
+  @protected
+  BigInt sse_decode_usize(SseDeserializer deserializer);
 
   @protected
   void sse_encode_AnyhowException(
@@ -618,6 +645,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_list_table_count(
+    List<TableCount> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_list_task_label_with_id(
     List<TaskLabelWithId> self,
     SseSerializer serializer,
@@ -693,6 +726,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_plaintext_export_view(
+    PlaintextExportView self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_reminder_due_dto(
     ReminderDueDto self,
     SseSerializer serializer,
@@ -715,6 +754,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
     SyncCryptoStatus self,
     SseSerializer serializer,
   );
+
+  @protected
+  void sse_encode_table_count(TableCount self, SseSerializer serializer);
 
   @protected
   void sse_encode_task_label_with_id(
@@ -811,6 +853,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_unit(void self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_usize(BigInt self, SseSerializer serializer);
 }
 
 // Section: wire_class

@@ -7,4 +7,5 @@ pub mod business_api;
 pub mod cloud_sync_api;
 pub mod full_sync_backup_api;
 pub mod import_api;
+pub mod plaintext_export_api;
 pub mod todo_api;

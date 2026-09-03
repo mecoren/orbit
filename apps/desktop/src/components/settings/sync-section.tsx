@@ -7,6 +7,8 @@
  * 3. 同步执行卡：立即同步 + 进度事件 + 上次同步时间
  * 4. 自动备份卡：调度频率（core v4 调度器）+ 本地/云端开关 + 上次/下次时间
  * 5. 备份卡：.orsync 导出（可选云端副本）/ 导入恢复 / 本地历史备份列表
+ * 6. 数据导出卡：明文 JSON/CSV（07 报告 #15，与 .orsync 加密包并列；
+ *    未加密明示 + 系统保存对话框，隐私口径见 PRIVACY.md §七）
  *
  * sync-config-changed（保存/断开）→ 重挂连接与执行卡刷新配置视图。
  */
@@ -115,12 +117,13 @@ export function SyncSection() {
 
   return (
     <div className="space-y-6">
-      <SectionHeader title="同步与备份" desc="E2E 加密云同步 · WebDAV / S3 · 全量备份" />
+      <SectionHeader title="同步与备份" desc="E2E 加密云同步 · WebDAV / S3 · 全量备份 · 数据导出" />
       <ConnectionCard key={`conn-${version}`} />
       <SyncPasswordCard />
       <SyncRunCard key={`run-${version}`} />
       <AutoBackupCard />
       <BackupCard />
+      <PlaintextExportCard />
     </div>
   );
 }
@@ -1238,6 +1241,109 @@ function BackupCard() {
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+/* ============================ 6. 数据导出卡（明文） ============================ */
+
+/**
+ * 明文数据导出（07 报告 #15）：与 .orsync 加密备份并列的数据主权通道。
+ *
+ * - JSON：8 张业务表结构化全量（默认排除墓碑行）
+ * - CSV：任务主视图（含项目名/标签聚合列），UTF-8 BOM，Excel 直开
+ *
+ * 保存路径由系统保存对话框选择；导出内容为**未加密明文**，
+ * 卡头文案明示（PRIVACY.md §七口径）。
+ */
+function PlaintextExportCard() {
+  const [busy, setBusy] = useState<"json" | "csv" | null>(null);
+  const [excludeDeleted, setExcludeDeleted] = useState(true);
+
+  const doExport = async (kind: "json" | "csv") => {
+    setBusy(kind);
+    try {
+      const { plaintextExportJson, plaintextExportCsv } = await import("@/lib/tauri");
+      const r =
+        kind === "json"
+          ? await plaintextExportJson(excludeDeleted)
+          : await plaintextExportCsv(excludeDeleted);
+
+      const { save } = await import("@tauri-apps/plugin-dialog");
+      const path = await save({
+        title: "导出明文数据",
+        defaultPath: r.suggested_filename,
+        filters: [
+          kind === "json"
+            ? { name: "JSON 文档", extensions: ["json"] }
+            : { name: "CSV 表格", extensions: ["csv"] },
+        ],
+      });
+      if (!path) return; // 用户取消
+
+      const { writeTextFile } = await import("@tauri-apps/plugin-fs");
+      await writeTextFile(path, r.content);
+
+      const tasks = r.table_counts["todo_tasks"] ?? 0;
+      toast.success(`已导出 ${kind.toUpperCase()}（任务 ${tasks} 条）到：${path}`);
+    } catch (err) {
+      toast.error(errMsg(err));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const confirmExport = (kind: "json" | "csv") => {
+    if (
+      window.confirm(
+        "导出内容为未加密明文，任何拿到该文件的人都能读取。确定继续？",
+      )
+    ) {
+      void doExport(kind);
+    }
+  };
+
+  return (
+    <div className="space-y-3 rounded-lg border p-5">
+      <div className="flex items-center gap-2">
+        <Download className="size-4 text-muted-foreground" />
+        <span className="text-sm font-medium">数据导出（明文）</span>
+      </div>
+      <p className="text-xs text-muted-foreground">
+        将待办数据导出为开放格式：JSON 为 8 张业务表结构化全量，CSV 为任务主视图
+        （含项目名与标签列，Excel 可直接打开）。文件为未加密明文，请妥善保管。
+      </p>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Switch
+            id="export-exclude-deleted"
+            checked={excludeDeleted}
+            onCheckedChange={setExcludeDeleted}
+            aria-label="排除已删除数据开关"
+          />
+          <Label htmlFor="export-exclude-deleted" className="text-xs text-normal">
+            排除已删除数据
+          </Label>
+          <span className="text-xs text-muted-foreground">
+            {excludeDeleted ? "仅导出有效数据" : "包含墓碑行（同步语义）"}
+          </span>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={!!busy}
+            onClick={() => confirmExport("json")}
+          >
+            {busy === "json" ? <Loader2 className="mr-1 size-3 animate-spin" /> : null}
+            导出 JSON
+          </Button>
+          <Button size="sm" variant="outline" disabled={!!busy} onClick={() => confirmExport("csv")}>
+            {busy === "csv" ? <Loader2 className="mr-1 size-3 animate-spin" /> : null}
+            导出 CSV
+          </Button>
+        </div>
+      </div>
     </div>
   );
 }

@@ -619,3 +619,18 @@ export interface AutoBackupFinishedEvent {
   error?: string;
 }
 
+
+// ---------- 明文数据导出（07 报告 #15；PRIVACY.md §七口径） ----------
+export interface PlaintextExportView {
+  content: string;
+  table_counts: Record<string, number>;
+  suggested_filename: string;
+}
+
+/** 导出全部待办数据为结构化 JSON（默认排除墓碑行） */
+export const plaintextExportJson = (excludeDeleted = true) =>
+  invoke<PlaintextExportView>("plaintext_export_json", { excludeDeleted });
+
+/** 导出任务主视图 CSV（UTF-8 with BOM；默认排除墓碑行） */
+export const plaintextExportCsv = (excludeDeleted = true) =>
+  invoke<PlaintextExportView>("plaintext_export_csv", { excludeDeleted });
