@@ -3,6 +3,15 @@
 > 生成于 2026-08-24。可自动化部分已由收尾任务完成并全绿：`cargo check --workspace` / `cargo test -p orbit_core`（284 通过）/ `pnpm test`（39 通过）/ `pnpm typecheck` / `pnpm build` 全部通过；release APK 已产出：
 > `src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release-unsigned.apk`（18.35 MB，未签名）。
 >
+> **2026-09-03 执行准备更新**：workspace 测试现为 291 通过（+6 明文导出）、
+> 移动端 77 通过、桌面 72 通过、`flutter analyze` 0 issue；release APK 产出
+> 命令为 `cd apps/mobile && flutter build apk --release`（产物
+> `apps/mobile/build/app/outputs/flutter-apk/app-release.apk`；release
+> 签名 key.properties 未配置时为 debug 签名，真机覆盖安装可用）。
+> 本清单 20 项**须真机人工执行**——应用图标/启动屏/通知小图标已品牌化
+> （M5），四屏观感走查以最新 APK 为准。全部通过后 M4 Gate 方可勾销，
+> 随后打 `v0.1.0` MVP tag（06 §一 M5；ADR 0004 §3）。
+>
 > 本清单覆盖**必须真机交互**的验收项。执行环境：Android 真机（arm64）安装上述 APK；应用包名 `cn.wait.orbit`；亮/暗色板跟随系统切换各走一轮。每条含操作步骤、预期、规格出处；全部通过后 M4 出口判据（Gate）方可勾销。
 
 ---

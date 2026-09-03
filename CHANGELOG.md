@@ -27,6 +27,19 @@
     （key.properties 读取，缺失回落 debug）；签名/公证决策与证书物料
     清单 ADR `0004-release-engineering.md`
   - README 发布章节（安装与更新 / 版本与变更记录 / 隐私承诺入口）
+- P2 体验功能三连（07 报告 §五-P2）：
+  - **#15 明文数据导出 JSON/CSV**：orbit-core `plaintext_export_api`
+    （JSON 结构化全量 + CSV 任务主视图 UTF-8 BOM/项目标签聚合列，
+    默认排除墓碑行，6 用例 TDD）；桌面命令组 + 设置页「数据导出」卡
+    （未加密明示确认 + 系统保存对话框）；移动端 FRB api + 桥抽象
+    扩展 + 设置页导出卡（应用文档目录 exports/ 落盘）
+  - **#16 桌面托盘 + 全局热键**：系统托盘（显示主窗/快速新建/退出，
+    TrayMenuSpec 规格驱动 + 2 单测）+ 关窗驻留（守护不中断，首次
+    toast 告知）+ 全局热键 Alt+Shift+O 快速捕捉（plugin-global-shortcut，
+    注册失败静默降级）；app-store quickAddIntent 意图机制跨层传递
+  - **#21 窄窗侧栏自适应**：useIsNarrow 接入 ProjectSidebar，断点
+    自动折叠 + 手动覆盖持久化；折叠态 12px 图标窄条（hover 提示 +
+    未完成计数）；折叠语义提纯 shared/sidebar-collapsed.ts（5 用例）
 - 仓库规范化：根级 README.md / CHANGELOG.md / clippy.toml（msrv 1.96）/ rustfmt.toml（edition 2024）
 - 移动端云同步设置：设置页「云同步设置」入口 + `/settings/sync` 配置页
   （WebDAV/S3 引擎、凭据、定时/超时/TLS、测试连接/保存/断开确认、同步密码
