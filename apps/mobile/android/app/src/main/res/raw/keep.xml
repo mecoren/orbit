@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 资源保留清单（AGP resource shrinker/optimize 例外表）：
+     通知小图标 ic_stat_orbit 仅被 Dart 代码字符串引用
+     （AndroidInitializationSettings('@drawable/ic_stat_orbit')），
+     静态引用分析判定"未使用"会将其从 release APK 移除——
+     tools:keep 显式保留（生成器脚本 scripts/generate_icons.py 的产物）。
+     launch_image 已由 styles.xml LaunchTheme 引用，双保险一并保留。 -->
+<resources xmlns:tools="http://schemas.android.com/tools"
+    tools:keep="@drawable/ic_stat_orbit,@mipmap/launch_image,@color/launch_bg" />
