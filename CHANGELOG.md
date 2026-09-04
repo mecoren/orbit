@@ -17,6 +17,10 @@ M4 复验补丁版：发布产物包含两个上线阻塞修复。
   实验定位（shell uid 通 / app uid 拒），aapt2 验证入包。
 - **首同步补传 crypto/config**（bce1904）：第二台设备入环 KeyMismatch 阻塞
   修复（0.1.0 后发现，随本补丁版进入发布产物）。
+- **CI 门禁修复**（c3bb769）：flutter-action 未锁版本，runner 滚动到
+  Flutter 3.47.2 后 dart format 改变 import 分组规则，FRB codegen 的
+  dart 产物与仓库基准不一致，「一致性校验」自 8/26 起持续误报；
+  锁定 flutter-version 3.44.2 后 CI 三个 job 全部转绿。
 
 ## [0.1.0] - 2026-09-03
 
