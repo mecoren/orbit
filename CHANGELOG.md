@@ -5,6 +5,36 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本遵循[语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [Unreleased]
+
+P2 功能双连（07 报告 §五）+ 死代码清理。
+
+### Added
+
+- **#14 日历视图（月/议程两档）**：列表页第三视图 `calendar`——
+  月档 7×6 周格（周一始，今日高亮，格内优先级色点 + 截止时刻 +
+  截断标题，逾期红；超 3 条折叠 `+N` 弹层看全天）；议程档按日期
+  分组滚动列表（sticky 日期头 + 自动滚到今天组）；共用工具栏
+  （今天回位 / 翻月跨年正确）。视图切换钮扩为三联，命令面板
+  「切换视图」同步循环三态，viewMode 持久化键兼容旧值。
+  筛选语义与列表/看板同源（同一 visibleTasks 注入）。
+- **#17 多选批量操作（shift 区间选）**：任务行 hover 勾选框 +
+  shift 区间选择（最近勾选为锚）；选中态下点行 = 切换勾选、拖拽
+  手柄隐藏防误触。底部居中批量工具条：完成/未完成（与单条
+  completeTask 三字段联动口径一致）、收藏/取消收藏、设优先级、
+  移入进行中/移回待办、移动到项目（含目标尾位 position 落位）、
+  删除（复用 5s 可撤销删除语义，整批恢复）。批量写操作提纯
+  `shared/batch-actions.ts`（顺序提交 + 条目失败不中断 + 部分成功
+  warning 口径，4 用例单测）；`PRIORITY_LABELS` 上收 shared/constants
+  与右键菜单共用。
+
+### Removed
+
+- **#22 死代码清理**：`use-entity-list.ts`（0 引用）与
+  `use-confirm-delete.tsx`（0 引用，use-undoable-delete 未用它）删除。
+  07 文档 #22 行同步修正过时描述：`use-breakpoint`（窄窗折叠）与
+  `skeleton`（列表加载态）实为在用，非死代码。
+
 ## [0.1.1] - 2026-09-04
 
 M4 复验补丁版：发布产物包含两个上线阻塞修复。
