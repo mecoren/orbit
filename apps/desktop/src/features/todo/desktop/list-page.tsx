@@ -7,7 +7,7 @@
  * 排序固定 position 升序 → created_at 降序。
  */
 import { useEffect, useMemo, useState } from "react";
-import { LayoutGrid, ListTodo, Plus, Search, Tag } from "lucide-react";
+import { CalendarDays, LayoutGrid, ListTodo, Plus, Search, Tag } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 
 import { cn } from "@/lib/utils";
@@ -33,15 +33,18 @@ import { TaskListView } from "./task-list-view";
 import { QuickAddBar } from "./quick-add-bar";
 import { TaskDetailDrawer } from "./task-detail-drawer";
 import { KanbanView, type KanbanGroupBy } from "./kanban-view";
+import { CalendarView } from "./calendar-view";
 import { TaskFormSheet } from "./task-form-sheet";
 import { LabelManager } from "./label-manager";
 
 type StatusFilter = "all" | "undone" | "pending" | "doing" | "done";
 type PriorityFilter = "all" | "0" | "1" | "2" | "3" | "4" | "5";
+type ViewMode = "list" | "kanban" | "calendar";
 
-/** 视图切换状态持久化（04 §二） */
-function loadViewMode(): "list" | "kanban" {
-  return localStorage.getItem(LS_VIEW_MODE) === "kanban" ? "kanban" : "list";
+/** 视图切换状态持久化（04 §二；07-P2#14 增 calendar 档） */
+function loadViewMode(): ViewMode {
+  const saved = localStorage.getItem(LS_VIEW_MODE);
+  return saved === "kanban" || saved === "calendar" ? saved : "list";
 }
 
 export default function TodoListPage() {
@@ -61,7 +64,7 @@ export default function TodoListPage() {
   const [keyword, setKeyword] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [priorityFilter, setPriorityFilter] = useState<PriorityFilter>("all");
-  const [viewMode, setViewMode] = useState<"list" | "kanban">(loadViewMode);
+  const [viewMode, setViewMode] = useState<ViewMode>(loadViewMode);
   const [kanbanGroupBy, setKanbanGroupBy] = useState<KanbanGroupBy>("project");
 
   // ---- 表单/标签管理状态 ----
@@ -84,7 +87,7 @@ export default function TodoListPage() {
 
   useEffect(() => {
     if (viewToggleIntent === 0) return;
-    setViewMode((m) => (m === "list" ? "kanban" : "list"));
+    setViewMode((m) => (m === "list" ? "kanban" : m === "kanban" ? "calendar" : "list"));
     consumeViewToggleIntent();
   }, [viewToggleIntent, consumeViewToggleIntent]);
 
@@ -220,7 +223,7 @@ export default function TodoListPage() {
               </SelectContent>
             </Select>
 
-            {/* 视图切换双联钮 */}
+            {/* 视图切换三联钮（列表/看板/日历） */}
             <div className="flex items-center overflow-hidden rounded-md border">
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -253,6 +256,22 @@ export default function TodoListPage() {
                   </button>
                 </TooltipTrigger>
                 <TooltipContent>看板视图</TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    aria-label="日历视图"
+                    onClick={() => setViewMode("calendar")}
+                    className={cn(
+                      "flex h-8 w-8 items-center justify-center",
+                      viewMode === "calendar" ? "bg-primary/10 text-primary" : "hover:bg-accent",
+                    )}
+                  >
+                    <CalendarDays size={14} />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent>日历视图</TooltipContent>
               </Tooltip>
             </div>
 
@@ -327,6 +346,16 @@ export default function TodoListPage() {
               projects={projects}
               groupBy={kanbanGroupBy}
               labelsByTask={taskLabels}
+            />
+          ) : viewMode === "calendar" ? (
+            <CalendarView
+              tasks={visibleTasks}
+              projects={projects}
+              labelsByTask={taskLabels}
+              onCreateClick={() => {
+                setEditingTask(null);
+                setFormOpen(true);
+              }}
             />
           ) : (
             <TaskListView

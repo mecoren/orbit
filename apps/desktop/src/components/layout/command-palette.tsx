@@ -111,14 +111,14 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
             <span>切换主题</span>
           </CommandItem>
           <CommandItem
-            value="切换视图 view kanban list 看板 列表"
+            value="切换视图 view kanban calendar list 看板 日历 列表"
             onSelect={() => {
               onOpenChange(false);
               bumpViewToggleIntent();
             }}
           >
             <LayoutGrid className="size-4" />
-            <span>切换列表/看板视图</span>
+            <span>切换列表/看板/日历视图</span>
           </CommandItem>
         </CommandGroup>
         {groupedRoutes.map(([group, items]) => (
