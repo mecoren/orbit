@@ -164,3 +164,7 @@
 （`crates/orbit-core/tests/m4_sync_e2e.rs`）。
 
 全部通过后在 docs/06 里程碑总览勾销 M4 Gate；任何失败项回写本文件备注列并开修复工单。
+
+**真机复验辅助**：接入 arm64 真机后可一键跑 `bash scripts/m4-device-reverify.sh`
+（自动完成设备检测 / v0.1.1 APK 安装与权限核对 / 通知授权态采集 / 滚动录屏 /
+IME inset 采集 / 同步结果快照；4.4 Doze 仍需手动待机一晚）。
