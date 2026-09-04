@@ -17,6 +17,9 @@ export const TODO_ACCENT = "#3B82F6";
 /** 优先级 0–5 语义色（index 空 = 无优先级不显示色点） */
 export const PRIORITY_COLOR = ["", "#6B7280", "#3B82F6", "#F59E0B", "#EF4444", "#DC2626"];
 
+/** 优先级 0–5 中文档位（多选批量工具条 / 右键菜单共用口径） */
+export const PRIORITY_LABELS = ["无", "低", "中", "高", "紧急", "立即处理"];
+
 /** 状态语义色 */
 export const STATUS_COLOR = {
   pending: "#6B7280",

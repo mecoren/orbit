@@ -9,8 +9,11 @@
  * - 键盘可达（P1#8）：行 role=button/tabIndex，Enter/Space 打开详情，j/k 移动焦点。
  * - 拖拽排序（P1#11）：GripVertical 手柄发起（行点击仍是打开详情），
  *   落在某行 → 插其前；落容器空白 → 尾部追加；position 中值写入后失效任务缓存。
+ * - 多选批量（P2#17）：checkbox 或 shift 区间选择；两枚以上弹出批量工具条
+ *   （完成/未完成/收藏/项目移动/删除，项目移动带中值落位）。详情抽屉仍由
+ *   未选中行打开，选中行点击仅切换勾选（与多数竞品一致）。
  */
-import { useRef, useState, type ReactNode } from "react";
+import { useMemo, useRef, useState, type ReactNode } from "react";
 import { formatDistanceToNow } from "date-fns";
 import { zhCN } from "date-fns/locale";
 import { useQueryClient } from "@tanstack/react-query";
@@ -27,19 +30,29 @@ import {
   type DragEndEvent,
   type DragStartEvent,
 } from "@dnd-kit/core";
-import { Clock, GripVertical, Inbox, Plus, Star } from "lucide-react";
+import { Check, Clock, Flag, FolderInput, GripVertical, Inbox, Plus, Star, Trash2, X } from "lucide-react";
 import { useVirtualizer } from "@tanstack/react-virtual";
+import { toast } from "sonner";
 
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { ErrorState } from "@/components/business/error-state";
 import { EmptyState } from "@/components/business/empty-state";
 import { completeTask } from "../shared/task-actions";
 import { isListActivationKey, listNavDirection } from "../shared/list-keyboard";
 import { midpoint } from "../shared/position";
-import { todoTaskUpdate, todoTaskUpdatePosition, type TodoLabel, type TodoProject, type TodoTask } from "@/lib/tauri";
-import { FAVORITE_COLOR, OVERDUE_COLOR_CLASS, PRIORITY_COLOR } from "../shared/constants";
+import { batchUpdateStatus, batchUpdatePriority, batchUpdateFavorite, batchMoveToProject } from "../shared/batch-actions";
+import { useUndoableDeleteAction, hideFromQueries } from "@/hooks/use-undoable-delete";
+import { todoTaskDelete, todoTaskUpdate, todoTaskUpdatePosition, type TodoLabel, type TodoProject, type TodoTask } from "@/lib/tauri";
+import { FAVORITE_COLOR, OVERDUE_COLOR_CLASS, PRIORITY_COLOR, PRIORITY_LABELS } from "../shared/constants";
 import { LabelChips } from "../shared/label-chips";
 import { TaskContextMenu } from "./task-context-menu";
 
@@ -121,6 +134,93 @@ export function TaskListView({ tasks, projects, labelsByTask, loading, error, on
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
   );
+
+  // ---- 多选批量（P2#17）----
+  // anchorId：单击/勾选的最近一行，shift 勾选以它为锚扩区间
+  const [selected, setSelected] = useState<Set<number>>(new Set());
+  const [anchorId, setAnchorId] = useState<number | null>(null);
+  const [batchBusy, setBatchBusy] = useState(false);
+  const [moveToOpen, setMoveToOpen] = useState(false);
+  const [batchMoveTarget, setBatchMoveTarget] = useState<number | null>(null);
+  const [priorityOpen, setPriorityOpen] = useState(false);
+  const [batchPriorityDraft, setBatchPriorityDraft] = useState<number | null>(null);
+  const undoableDelete = useUndoableDeleteAction();
+
+  const selectedTasks = useMemo(
+    () => tasks.filter((t) => selected.has(t.id)),
+    [tasks, selected],
+  );
+
+  /** 单行勾选切换；shift 时以 anchor 为锚做 [min,max] 闭区间选择（不并集，可反复改选） */
+  const toggleSelect = (id: number, shift: boolean) => {
+    if (shift && anchorId != null) {
+      const a = tasks.findIndex((t) => t.id === anchorId);
+      const b = tasks.findIndex((t) => t.id === id);
+      if (a >= 0 && b >= 0) {
+        const [lo, hi] = a < b ? [a, b] : [b, a];
+        setSelected(new Set(tasks.slice(lo, hi + 1).map((t) => t.id)));
+        return;
+      }
+    }
+    setAnchorId(id);
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const clearSelection = () => {
+    setSelected(new Set());
+    setAnchorId(null);
+    setMoveToOpen(false);
+  };
+
+  /** 批量动作执行骨架：跑动作 → 清多选 → 统一失效任务缓存 */
+  const runBatch = async (label: string, action: (sel: TodoTask[]) => Promise<unknown>) => {
+    const sel = selectedTasks;
+    if (sel.length === 0 || batchBusy) return;
+    setBatchBusy(true);
+    try {
+      await action(sel);
+      void qc.invalidateQueries({ queryKey: ["todo_tasks"] });
+      toast.success(`已批量${label} ${sel.length} 条任务`);
+    } catch (e) {
+      console.error("批量操作失败:", e);
+      toast.error(`批量${label}失败，已完成的条目不回滚`);
+    } finally {
+      setBatchBusy(false);
+      clearSelection();
+    }
+  };
+
+  /** 批量删除（P2#17）：分批顺序提交；复用 use-undoable-delete 的
+   *  乐观隐藏 + 5s 撤销窗口语义（隐藏立即生效、超时统一真删）。 */
+  const batchDelete = (sel: TodoTask[]) => {
+    if (sel.length === 0) return;
+    const ids = sel.map((t) => t.id);
+    const shownIds = new Set(ids);
+    for (const t of sel) {
+      undoableDelete({
+        entityLabel: "任务",
+        recordName: t.title,
+        hide: (q) => hideFromQueries<TodoTask>(q, ["todo_tasks"], t.id),
+        commit: async () => {
+          await Promise.all(ids.map((id) => todoTaskDelete(id)));
+          shownIds.clear();
+        },
+      });
+    }
+    // 撤销语义：整批恢复（单槽位撤销 = 恢复全部被隐藏行）
+    void toast.info(`已删除 ${ids.length} 条任务`, {
+      description: "撤销将恢复本次全部删除",
+    });
+    // 撤销按钮由每条 toast 自带；批量场景下点任意一条的撤销都调
+    // invalidateQueries 恢复全部隐藏行（DB 未提交），提交窗口后统一落库。
+    setSelected(new Set());
+    setAnchorId(null);
+  };
 
   const handleDragStart = (e: DragStartEvent) => {
     const id = rowIdOf(e.active.id);
@@ -236,11 +336,18 @@ export function TaskListView({ tasks, projects, labelsByTask, loading, error, on
                     due={due}
                     overdue={overdue}
                     dragging={draggingId === t.id}
+                    selected={selected.has(t.id)}
+                    hasSelection={selected.size > 0}
                     registerRef={(el) => {
                       if (el) rowRefs.current.set(t.id, el);
                       else rowRefs.current.delete(t.id);
                     }}
-                    onActivate={() => onOpenDetail(t.id)}
+                    onActivate={() => {
+                      // 有选择态时，行点击切换勾选（与竞品一致）；否则打开详情
+                      if (selected.size > 0) toggleSelect(t.id, false);
+                      else onOpenDetail(t.id);
+                    }}
+                    onToggleSelect={(shift) => toggleSelect(t.id, shift)}
                     onFocusMove={(dir) => focusRow(vi.index + (dir === "down" ? 1 : -1))}
                     onToggleDone={() => void completeTask(t)}
                     onToggleFavorite={() => toggleFavorite(t)}
@@ -251,6 +358,175 @@ export function TaskListView({ tasks, projects, labelsByTask, loading, error, on
           })}
         </RowContainerDropZone>
       </div>
+
+      {/* 多选批量工具条（P2#17）：≥1 选中时浮现底部居中 */}
+      {selected.size > 0 && (
+        <div
+          role="toolbar"
+          aria-label={`已选中 ${selected.size} 条任务的批量操作`}
+          className="absolute bottom-4 left-1/2 z-20 flex -translate-x-1/2 items-center gap-1.5 rounded-lg border bg-background px-2 py-1.5 shadow-lg"
+        >
+          <span className="px-1 text-sm text-muted-foreground tabular-nums" aria-live="polite">
+            已选 {selected.size} 条
+          </span>
+          <span className="h-4 w-px bg-border" />
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-8"
+            disabled={batchBusy}
+            onClick={() =>
+              void runBatch("标记完成", (sel) =>
+                batchUpdateStatus(
+                  sel,
+                  sel.some((t) => !t.done)
+                    ? { done: 1, done_at: Date.now(), status: "done" }
+                    : { done: 0, done_at: null, status: "pending" },
+                ),
+              )
+            }
+          >
+            <Check size={14} className="mr-1" />
+            {selectedTasks.some((t) => !t.done) ? "标记完成" : "标记未完成"}
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-8"
+            disabled={batchBusy}
+            onClick={() => void runBatch("收藏", (sel) => batchUpdateFavorite(sel, true))}
+          >
+            <Star size={14} className="mr-1" />
+            收藏
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-8"
+            disabled={batchBusy}
+            onClick={() => void runBatch("取消收藏", (sel) => batchUpdateFavorite(sel, false))}
+          >
+            <Star size={14} className="mr-1" />
+            取消收藏
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-8"
+            disabled={batchBusy}
+            onClick={() =>
+              void runBatch("设置优先级", async (sel) => {
+                if (batchPriorityDraft == null) throw new Error("未选择优先级档位");
+                await batchUpdatePriority(sel, batchPriorityDraft);
+              })
+            }
+          >
+            <Flag size={14} className="mr-1" />
+            优先级
+            <Select
+              open={priorityOpen}
+              onOpenChange={setPriorityOpen}
+              value={batchPriorityDraft == null ? undefined : String(batchPriorityDraft)}
+              onValueChange={(v) => setBatchPriorityDraft(Number(v))}
+            >
+              <SelectTrigger
+                size="sm"
+                className="ml-1 h-7 w-20 data-[placeholder]:text-muted-foreground"
+                aria-label="批量优先级"
+                tabIndex={priorityOpen ? 0 : -1}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setPriorityOpen(true);
+                }}
+              >
+                <SelectValue placeholder="选择档位" />
+              </SelectTrigger>
+              <SelectContent>
+                {PRIORITY_LABELS.map((label, p) => (
+                  <SelectItem key={p} value={String(p)}>
+                    {label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-8"
+            disabled={batchBusy}
+            onClick={() => {
+              const allDone = selectedTasks.every((t) => t.done);
+              void runBatch(allDone ? "移回待办" : "移入进行中", (sel) =>
+                batchUpdateStatus(sel, allDone ? { status: "pending" } : { status: "doing" }),
+              );
+            }}
+          >
+            <FolderInput size={14} className="mr-1" />
+            {selectedTasks.every((t) => t.done) ? "移回待办" : "移入进行中"}
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-8"
+            disabled={batchBusy}
+            onClick={() =>
+              void runBatch("移动到项目", async (sel) => {
+                const pid = batchMoveTarget;
+                if (pid == null) throw new Error("未选择目标项目");
+                await batchMoveToProject(sel, pid, tasks);
+              })
+            }
+          >
+            <FolderInput size={14} className="mr-1" />
+            移动到项目
+            <Select
+              open={moveToOpen}
+              onOpenChange={setMoveToOpen}
+              value={batchMoveTarget == null ? undefined : String(batchMoveTarget)}
+              onValueChange={(v) => setBatchMoveTarget(v === "none" ? null : Number(v))}
+            >
+              <SelectTrigger
+                size="sm"
+                className="ml-1 h-7 w-28 data-[placeholder]:text-muted-foreground"
+                aria-label="目标项目"
+                tabIndex={moveToOpen ? 0 : -1}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setMoveToOpen(true);
+                }}
+              >
+                <SelectValue placeholder="选择项目" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">未分组</SelectItem>
+                {projects.map((p) => (
+                  <SelectItem key={p.id} value={String(p.id)}>
+                    {p.title}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-8 text-destructive hover:text-destructive"
+            disabled={batchBusy}
+            onClick={() => {
+              if (batchBusy) return;
+              batchDelete(selectedTasks);
+            }}
+          >
+            <Trash2 size={14} className="mr-1" />
+            删除
+          </Button>
+          <span className="h-4 w-px bg-border" />
+          <Button variant="ghost" size="icon" className="h-8 w-8" aria-label="退出多选" onClick={clearSelection}>
+            <X size={14} />
+          </Button>
+        </div>
+      )}
 
       {/* 拖拽浮层：简化行副本 */}
       <DragOverlay dropAnimation={null}>
@@ -291,8 +567,14 @@ interface TaskRowProps {
   overdue: boolean;
   /** 本行正被拖拽（原始行降透明度，浮层由 DragOverlay 渲染） */
   dragging: boolean;
+  /** 多选态（P2#17） */
+  selected: boolean;
+  /** 任一行被选中时，行点击语义从「打开详情」切换为「切换勾选」 */
+  hasSelection: boolean;
   registerRef: (el: HTMLDivElement | null) => void;
   onActivate: () => void;
+  /** 勾选框点击（shift=true 为区间选锚点扩展） */
+  onToggleSelect: (shift: boolean) => void;
   onFocusMove: (dir: "up" | "down") => void;
   onToggleDone: () => void;
   onToggleFavorite: () => void;
@@ -307,8 +589,11 @@ function TaskRow({
   due,
   overdue,
   dragging,
+  selected,
+  hasSelection,
   registerRef,
   onActivate,
+  onToggleSelect,
   onFocusMove,
   onToggleDone,
   onToggleFavorite,
@@ -335,6 +620,7 @@ function TaskRow({
         "focus-visible:bg-accent/40 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring",
         isOver && "bg-accent/40",
         dragging && "opacity-40",
+        selected && "bg-primary/5 ring-1 ring-inset ring-primary/30",
       )}
       onClick={onActivate}
       onKeyDown={(e) => {
@@ -362,11 +648,37 @@ function TaskRow({
         style={{ background: PRIORITY_COLOR[t.priority] || PRIORITY_COLOR[1] }}
       />
 
+      {/* 多选勾选框（P2#17）：hover 或已有选中时显现；
+          shift 点击 = 以最近一次勾选为锚做区间选择 */}
+      <button
+        type="button"
+        aria-label={selected ? "取消选中" : "选中"}
+        aria-pressed={selected}
+        className={cn(
+          "flex h-5 w-5 shrink-0 items-center justify-center rounded-[4px] border transition-colors",
+          selected
+            ? "border-primary bg-primary text-primary-foreground"
+            : "border-muted-foreground/30 hover:border-primary",
+          hasSelection ? "opacity-100" : "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100",
+        )}
+        onClick={(e) => {
+          e.stopPropagation();
+          onToggleSelect(e.shiftKey);
+        }}
+      >
+        {selected ? (
+          <CheckSvg className="size-3.5" stroke={3} />
+        ) : null}
+      </button>
+
       {/* 拖拽手柄：hover 显现；点击不冒泡（避免误触打开详情） */}
       <button
         type="button"
         aria-label="拖拽排序"
-        className="shrink-0 cursor-grab touch-none text-muted-foreground/40 opacity-0 transition-opacity hover:text-muted-foreground group-hover:opacity-100 active:cursor-grabbing"
+        className={cn(
+          "shrink-0 cursor-grab touch-none text-muted-foreground/40 transition-opacity hover:text-muted-foreground active:cursor-grabbing",
+          hasSelection ? "opacity-0" : "opacity-0 group-hover:opacity-100",
+        )}
         onClick={(e) => e.stopPropagation()}
         {...listeners}
         {...attributes}
@@ -442,15 +754,15 @@ function TaskRow({
   );
 }
 
-/** 完成态白色对勾（04 §3.2：白勾 SVG） */
-function CheckSvg() {
+/** 完成态对勾（04 §3.2：白勾 SVG；多选勾选框复用，参数化尺寸/线宽） */
+function CheckSvg({ className = "m-auto size-3 text-white", stroke = 3 }: { className?: string; stroke?: number }) {
   return (
     <svg
       viewBox="0 0 24 24"
-      className="m-auto size-3 text-white"
+      className={className}
       fill="none"
       stroke="currentColor"
-      strokeWidth={3}
+      strokeWidth={stroke}
     >
       <path d="M20 6L9 17l-5-5" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
