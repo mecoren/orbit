@@ -62,6 +62,10 @@ jobs:
 
       - uses: subosito/flutter-action@v2
         with:
+          # 锁定具体版本：stable 滚动会改变 dart format 的 import 分组规则，
+          # 导致 FRB codegen 的 dart 产物与本地（3.44.2）不一致而误报门禁
+          # （CI 曾因 runner 拿到 3.47.2 在 codegen 一致性步骤持续失败）
+          flutter-version: 3.44.2
           channel: stable
           cache: true
 
