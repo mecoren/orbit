@@ -42,11 +42,17 @@ MVP 发布：M0–M5 全部完成，M4 Gate 通过（模拟器环境双轮走查
   - **#21 窄窗侧栏自适应**：useIsNarrow 接入 ProjectSidebar，断点
     自动折叠 + 手动覆盖持久化；折叠态 12px 图标窄条（hover 提示 +
     未完成计数）；折叠语义提纯 shared/sidebar-collapsed.ts（5 用例）
-- **M4 验收挖出并修复同步上线阻塞 bug**：首同步将模块数据推上云端但
-  `crypto/config` 从不上传（`sync_data_key` 的 Ok(None) 分支缺自动补传决策）
-  → 第二台设备永久 KeyMismatch 无法入环。修复后新增 `m4_sync_e2e` 集成
-  测试锁行为：双实例互推收敛 / 双向编辑收敛 / 墓碑不复活 / 明文配置降级
-  （5.3/5.4 的可自动化段），WebDAV 全序列经本机探针服务器实证
+- **M4 验收挖出并修复同步上线阻塞 bug ×2**：
+  1. 首同步将模块数据推上云端但 `crypto/config` 从不上传（`sync_data_key`
+     的 Ok(None) 分支缺自动补传决策）→ 第二台设备永久 KeyMismatch 无法入环。
+     修复后新增 `m4_sync_e2e` 集成测试锁行为：双实例互推收敛 / 双向编辑
+     收敛 / 墓碑不复活 / 明文配置降级，WebDAV 全序列经本机探针服务器实证
+  2. **release 构建缺失 INTERNET 权限**（Flutter 模板仅在 debug/profile
+     manifest 声明）→ app uid 的 socket 被内核拦截，云同步/云端备份在
+     真机全线静默失败。经「最小 reqwest Android 二进制分 uid 运行」实验
+     定位（shell uid 通 / app uid 拒），main manifest 补声明并以
+     aapt2 dump permissions 验证入包；模拟器实测测试连接恢复
+     （PROPFIND depth=1 请求真实发出）
 - 移动端 AndroidManifest 开启 `usesCleartextTraffic`（用户自建局域网
   `http://` WebDAV 是文档化场景；同步 E2E 测试默认端点 127.0.0.1:8123）
 - 仓库规范化：根级 README.md / CHANGELOG.md / clippy.toml（msrv 1.96）/ rustfmt.toml（edition 2024）

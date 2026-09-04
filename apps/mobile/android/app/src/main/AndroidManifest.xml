@@ -1,4 +1,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- 网络：云同步（WebDAV/S3）、云端备份上传、（M4 验收发现：Flutter 模板
+         仅在 debug/profile manifest 声明 INTERNET，release 构建不声明则
+         app uid 的 socket 被内核 eBPF 拦截——云同步在真机全挂） -->
+    <uses-permission android:name="android.permission.INTERNET"/>
     <!-- Phase 7 本地通知：Android 13+ 通知运行时权限声明（运行期经
          flutter_local_notifications requestNotificationsPermission 请求，
          用户拒绝则应用内静默降级为 toast 提示） -->
