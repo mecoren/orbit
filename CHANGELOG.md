@@ -5,6 +5,19 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本遵循[语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.1.1] - 2026-09-04
+
+M4 复验补丁版：发布产物包含两个上线阻塞修复。
+
+### Fixed
+
+- **release 构建补 INTERNET 权限**（1261ff3）：Flutter 模板仅在
+  debug/profile manifest 声明，release 缺失导致 app uid socket 被内核
+  拦截——云同步/云端备份在真机全线静默失败。经最小 reqwest 二进制分 uid
+  实验定位（shell uid 通 / app uid 拒），aapt2 验证入包。
+- **首同步补传 crypto/config**（bce1904）：第二台设备入环 KeyMismatch 阻塞
+  修复（0.1.0 后发现，随本补丁版进入发布产物）。
+
 ## [0.1.0] - 2026-09-03
 
 MVP 发布：M0–M5 全部完成，M4 Gate 通过（模拟器环境双轮走查 + E2E，真机复核建议见清单），许可证 MIT。
