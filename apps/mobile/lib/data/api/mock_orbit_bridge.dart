@@ -161,6 +161,7 @@ class MockOrbitBridge implements OrbitBridge {
                   .where((e) => e['project_id'] == input.projectId)
                   .length,
           'is_favorite': input.isFavorite ?? 0,
+          'my_day_date': input.myDayDate,
           'is_deleted': 0,
           'created_at': store.now(),
           'updated_at': store.now(),
@@ -215,6 +216,7 @@ class MockOrbitBridge implements OrbitBridge {
           percentDone: base.percentDone,
           position: base.position,
           isFavorite: base.isFavorite,
+          myDayDate: base.myDayDate,
           isDeleted: base.isDeleted,
           createdAt: base.createdAt,
           updatedAt: base.updatedAt,

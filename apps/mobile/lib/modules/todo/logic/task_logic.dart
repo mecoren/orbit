@@ -11,18 +11,19 @@ import '../../../data/api/dto.dart';
 ///   取消一律回 pending 并清空 done_at；
 /// - `shared/time.ts` —— 相对时间分档与 yyyy-MM-dd 格式化。
 ///
-/// 快捷视图六键（docs/05 §4.1 + 移动端任务书顺序）：
-/// 今天 / 本周 / 全部 / 已完成 / 收藏 / 无日期。
+/// 快捷视图七键（docs/05 §4.1 + 07 报告新增「我的一天」置顶）：
+/// 我的一天 / 今天 / 本周 / 全部 / 已完成 / 收藏 / 无日期。
 
 // ---------- 快捷视图定义 ----------
 
 /// 快捷视图 key
-enum QuickViewKey { today, week, all, done, favorite, nodate }
+enum QuickViewKey { myDay, today, week, all, done, favorite, nodate }
 
 /// [QuickViewKey] 的展示元数据（标签 / 语义色，色值对齐 docs/05 §2.2 quickView 板）
 extension QuickViewMeta on QuickViewKey {
   /// 侧栏行文案
   String get label => switch (this) {
+        QuickViewKey.myDay => '我的一天',
         QuickViewKey.today => '今天截止',
         QuickViewKey.week => '本周截止',
         QuickViewKey.all => '全部任务',
@@ -33,6 +34,7 @@ extension QuickViewMeta on QuickViewKey {
 
   /// 语义色（hex 字符串，UI 层经 hexToColor 转换；nodate 取中性灰）
   String get colorHex => switch (this) {
+        QuickViewKey.myDay => '#F59E0B',
         QuickViewKey.today => '#EF4444',
         QuickViewKey.week => '#F59E0B',
         QuickViewKey.all => '#3B82F6',
@@ -43,6 +45,7 @@ extension QuickViewMeta on QuickViewKey {
 
   /// Material Rounded 图标（docs/05 §4.1 图标映射 + nodate 补充）
   IconData get icon => switch (this) {
+        QuickViewKey.myDay => Icons.wb_sunny_rounded,
         QuickViewKey.today => Icons.calendar_today_rounded,
         QuickViewKey.week => Icons.date_range_rounded,
         QuickViewKey.all => Icons.list_alt_rounded,
@@ -101,6 +104,9 @@ List<TodoTask> filterTasks(List<TodoTask> tasks, TaskFilterInput input) {
         );
       case QuickViewKey.favorite:
         list = list.where((t) => t.isStarred);
+      case QuickViewKey.myDay:
+        // 我的一天：只显示今天加入的（昨天加入自动退出视图，数据保留）
+        list = list.where((t) => t.isInMyDay);
       case QuickViewKey.nodate:
         list = list.where((t) => t.dueDate == null);
     }

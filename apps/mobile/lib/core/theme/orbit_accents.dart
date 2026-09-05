@@ -18,4 +18,7 @@ abstract final class OrbitAccents {
 
   /// 收藏黄 / 星标（对应 #FACC15）
   static const Color starYellow = Color(0xFFFACC15);
+
+  /// 我的一天琥珀（07 报告新增项，对应桌面 #F59E0B）
+  static const Color myDayAmber = Color(0xFFF59E0B);
 }

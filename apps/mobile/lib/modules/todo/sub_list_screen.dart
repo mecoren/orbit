@@ -85,6 +85,16 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
         {'is_favorite': task.isStarred ? 0 : 1},
       );
 
+  /// 我的一天：加入今天（本地零点）/ 移出（null）——与桌面同口径
+  void _toggleMyDay(TodoTask task) {
+    final now = DateTime.now();
+    final todayZero = DateTime(now.year, now.month, now.day).millisecondsSinceEpoch;
+    _patchTask(
+      task.id,
+      {'my_day_date': task.isInMyDay ? null : todayZero},
+    );
+  }
+
   Future<void> _deleteTask(TodoTask task) async {
     final destructive = AppColors.ofContext(context).destructive;
     final confirmed = await showDialog<bool>(
@@ -125,6 +135,12 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
           icon: Icons.edit_rounded,
           label: '编辑',
           onTap: () => showTodoFormSheet(context, editingTaskId: task.id),
+        ),
+        MoreActionItem(
+          icon: Icons.wb_sunny_rounded,
+          label: task.isInMyDay ? '移出我的一天' : '加入我的一天',
+          color: OrbitAccents.myDayAmber,
+          onTap: () => _toggleMyDay(task),
         ),
         MoreActionItem(
           icon: Icons.star_rounded,

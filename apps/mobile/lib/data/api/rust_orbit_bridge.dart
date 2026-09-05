@@ -131,6 +131,7 @@ class RustOrbitBridge implements OrbitBridge {
           repeatMode: input.repeatMode,
           position: input.position?.toDouble(),
           isFavorite: input.isFavorite,
+          myDayDate: input.myDayDate,
         ),
       ));
 
@@ -166,6 +167,7 @@ class RustOrbitBridge implements OrbitBridge {
       percentDone: d.percentDone,
       position: d.position,
       isFavorite: d.isFavorite,
+      myDayDate: d.myDayDate,
       isDeleted: d.isDeleted,
       createdAt: d.createdAt,
       updatedAt: d.updatedAt,
@@ -523,6 +525,7 @@ class RustOrbitBridge implements OrbitBridge {
         percentDone: t.percentDone,
         position: t.position,
         isFavorite: t.isFavorite,
+        myDayDate: t.myDayDate,
         isDeleted: t.isDeleted,
         createdAt: t.createdAt,
         updatedAt: t.updatedAt,

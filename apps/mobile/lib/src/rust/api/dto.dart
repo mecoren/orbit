@@ -504,6 +504,7 @@ class TodoTask {
   final double percentDone;
   final double position;
   final int isFavorite;
+  final PlatformInt64? myDayDate;
   final int isDeleted;
   final PlatformInt64 createdAt;
   final PlatformInt64 updatedAt;
@@ -528,6 +529,7 @@ class TodoTask {
     required this.percentDone,
     required this.position,
     required this.isFavorite,
+    this.myDayDate,
     required this.isDeleted,
     required this.createdAt,
     required this.updatedAt,
@@ -554,6 +556,7 @@ class TodoTask {
       percentDone.hashCode ^
       position.hashCode ^
       isFavorite.hashCode ^
+      myDayDate.hashCode ^
       isDeleted.hashCode ^
       createdAt.hashCode ^
       updatedAt.hashCode ^
@@ -582,6 +585,7 @@ class TodoTask {
           percentDone == other.percentDone &&
           position == other.position &&
           isFavorite == other.isFavorite &&
+          myDayDate == other.myDayDate &&
           isDeleted == other.isDeleted &&
           createdAt == other.createdAt &&
           updatedAt == other.updatedAt &&
@@ -609,6 +613,7 @@ class TodoTaskCreateInput {
   final int? repeatMode;
   final double? position;
   final int? isFavorite;
+  final PlatformInt64? myDayDate;
 
   const TodoTaskCreateInput({
     required this.title,
@@ -625,6 +630,7 @@ class TodoTaskCreateInput {
     this.repeatMode,
     this.position,
     this.isFavorite,
+    this.myDayDate,
   });
 
   @override
@@ -642,7 +648,8 @@ class TodoTaskCreateInput {
       repeatAfter.hashCode ^
       repeatMode.hashCode ^
       position.hashCode ^
-      isFavorite.hashCode;
+      isFavorite.hashCode ^
+      myDayDate.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -662,7 +669,8 @@ class TodoTaskCreateInput {
           repeatAfter == other.repeatAfter &&
           repeatMode == other.repeatMode &&
           position == other.position &&
-          isFavorite == other.isFavorite;
+          isFavorite == other.isFavorite &&
+          myDayDate == other.myDayDate;
 }
 
 /// 任务详情聚合：TodoTask 全部字段 + 五张子表 Vec
@@ -689,6 +697,7 @@ class TodoTaskDetail {
   final double percentDone;
   final double position;
   final int isFavorite;
+  final PlatformInt64? myDayDate;
   final int isDeleted;
   final PlatformInt64 createdAt;
   final PlatformInt64 updatedAt;
@@ -718,6 +727,7 @@ class TodoTaskDetail {
     required this.percentDone,
     required this.position,
     required this.isFavorite,
+    this.myDayDate,
     required this.isDeleted,
     required this.createdAt,
     required this.updatedAt,
@@ -749,6 +759,7 @@ class TodoTaskDetail {
       percentDone.hashCode ^
       position.hashCode ^
       isFavorite.hashCode ^
+      myDayDate.hashCode ^
       isDeleted.hashCode ^
       createdAt.hashCode ^
       updatedAt.hashCode ^
@@ -782,6 +793,7 @@ class TodoTaskDetail {
           percentDone == other.percentDone &&
           position == other.position &&
           isFavorite == other.isFavorite &&
+          myDayDate == other.myDayDate &&
           isDeleted == other.isDeleted &&
           createdAt == other.createdAt &&
           updatedAt == other.updatedAt &&

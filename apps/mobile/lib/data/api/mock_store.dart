@@ -105,6 +105,7 @@ class MockStore {
       int done = 0,
       int? dueDate,
       int isFavorite = 0,
+      int? myDayDate,
       String? description,
     }) {
       final t = {
@@ -126,6 +127,7 @@ class MockStore {
         'position':
             tasks.values.where((e) => e['project_id'] == projectId).length,
         'is_favorite': isFavorite,
+        'my_day_date': myDayDate,
         'is_deleted': 0,
         'created_at': now(),
         'updated_at': now(),

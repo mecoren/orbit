@@ -112,6 +112,8 @@ class TodoTask {
   final double percentDone;
   final double position;
   final int isFavorite;
+  /// 我的一天：加入当天本地零点 ms；null = 不在任何一天的 My Day
+  final int? myDayDate;
   final int isDeleted;
   final int createdAt;
   final int updatedAt;
@@ -136,6 +138,7 @@ class TodoTask {
     required this.percentDone,
     required this.position,
     required this.isFavorite,
+    required this.myDayDate,
     required this.isDeleted,
     required this.createdAt,
     required this.updatedAt,
@@ -161,6 +164,7 @@ class TodoTask {
         percentDone: (j['percent_done'] as num).toDouble(),
         position: (j['position'] as num).toDouble(),
         isFavorite: j['is_favorite'] as int,
+        myDayDate: j['my_day_date'] as int?,
         isDeleted: j['is_deleted'] as int,
         createdAt: j['created_at'] as int,
         updatedAt: j['updated_at'] as int,
@@ -173,6 +177,15 @@ class TodoTask {
 
   /// 是否收藏/星标
   bool get isStarred => isFavorite == 1;
+
+  /// 是否在今天加入的「我的一天」（按日判断；昨天加入自动退出，微软 To Do 同款）
+  bool get isInMyDay {
+    final raw = myDayDate;
+    if (raw == null) return false;
+    final today = DateTime.now();
+    final zero = DateTime(today.year, today.month, today.day).millisecondsSinceEpoch;
+    return raw == zero;
+  }
 }
 
 class TodoTaskCreateInput {
@@ -190,6 +203,7 @@ class TodoTaskCreateInput {
   final int? repeatMode;
   final double? position;
   final int? isFavorite;
+  final int? myDayDate;
 
   const TodoTaskCreateInput({
     required this.title,
@@ -206,6 +220,7 @@ class TodoTaskCreateInput {
     this.repeatMode,
     this.position,
     this.isFavorite,
+    this.myDayDate,
   });
 }
 
@@ -527,6 +542,7 @@ class TodoTaskDetail extends TodoTask {
     required super.percentDone,
     required super.position,
     required super.isFavorite,
+    required super.myDayDate,
     required super.isDeleted,
     required super.createdAt,
     required super.updatedAt,
@@ -557,6 +573,7 @@ class TodoTaskDetail extends TodoTask {
         percentDone: (j['percent_done'] as num).toDouble(),
         position: (j['position'] as num).toDouble(),
         isFavorite: j['is_favorite'] as int,
+        myDayDate: j['my_day_date'] as int?,
         isDeleted: j['is_deleted'] as int,
         createdAt: j['created_at'] as int,
         updatedAt: j['updated_at'] as int,

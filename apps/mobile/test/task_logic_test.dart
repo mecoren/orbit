@@ -18,6 +18,7 @@ TodoTask _task({
   int? doneAt,
   int? dueDate,
   int isFavorite = 0,
+  int? myDayDate,
   double position = 0,
   int createdAt = 1000,
 }) {
@@ -39,6 +40,7 @@ TodoTask _task({
     percentDone: 0,
     position: position,
     isFavorite: isFavorite,
+    myDayDate: myDayDate,
     isDeleted: 0,
     createdAt: createdAt,
     updatedAt: createdAt,
@@ -360,6 +362,33 @@ void main() {
       expect(labelPaletteHexes.length, 8);
       expect(labelPaletteHexes.toSet().length, 8);
       expect(labelPaletteHexes[3], '#3B82F6');
+    });
+  });
+
+  group('我的一天（myDay：今天加入命中，昨天/null 不命中）', () {
+    test('myDayDate == 今天零点 命中', () {
+      final tasks = [_task(id: 1, myDayDate: todayStart)];
+      expect(
+        filterTasks(tasks, const TaskFilterInput(quickView: QuickViewKey.myDay))
+            .map((t) => t.id),
+        [1],
+      );
+    });
+
+    test('昨天加入的不命中（次日自动退出视图）', () {
+      final tasks = [_task(id: 1, myDayDate: todayStart - day)];
+      expect(
+        filterTasks(tasks, const TaskFilterInput(quickView: QuickViewKey.myDay)),
+        isEmpty,
+      );
+    });
+
+    test('null（从未加入）不命中', () {
+      final tasks = [_task(id: 1, myDayDate: null)];
+      expect(
+        filterTasks(tasks, const TaskFilterInput(quickView: QuickViewKey.myDay)),
+        isEmpty,
+      );
     });
   });
 }
