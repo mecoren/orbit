@@ -10,6 +10,7 @@
     "tauri": "pnpm --filter orbit tauri",
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test",
+    "e2e": "playwright test",
     "test:rust": "cargo test --workspace",
     "fmt": "cargo fmt --all && cargo fmt --manifest-path apps/desktop/src-tauri/Cargo.toml --all",
     "fmt:check": "cargo fmt --all -- --check && cargo fmt --manifest-path apps/desktop/src-tauri/Cargo.toml --all -- --check",

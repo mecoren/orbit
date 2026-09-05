@@ -34,6 +34,15 @@ jobs:
       - name: 生产构建(纯 web,不含 Tauri)
         run: pnpm --filter orbit build
 
+      # Playwright 冒烟（07 报告 §五-P2#19 尾巴）：纯浏览器 mock IPC 环境，
+      # 免 Rust 工具链/免 Tauri 壳，与上面 web job 同一依赖面。
+      # playwright.config 的 webServer 会自行起 5273 隔离 dev server。
+      - name: 安装 Playwright 浏览器
+        run: npx playwright install --with-deps chromium
+
+      - name: Playwright 冒烟测试
+        run: pnpm e2e
+
   rust-core:
     runs-on: ubuntu-latest
     steps:
