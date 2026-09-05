@@ -7,9 +7,36 @@
 
 ## [Unreleased]
 
-P2 功能双连（07 报告 §五）+ 死代码清理 + P1#7 NLP 补记 + P2#19 冒烟。
+P1 体验能力包补记（#8/#9/#10/#11/#12/#13，8/26 落地未记账）+ P2#19 冒烟接入 CI + **我的一天（My Day）三端落地**（07 报告新增 #23）。
 
 ### Added
+
+- **我的一天 My Day**（07 报告 §五新增 #23，对标微软 To Do 每日聚焦视图）：
+  - 数据层：迁移 `0002_my_day.sql`——todo_tasks 加 `my_day_date` 列
+    （加入当天本地零点 ms；NULL = 不在任何一天的 My Day）+ 部分索引。
+    列随行同步（SYNCABLE_TABLES 白名单内自动路由，旧客户端忽略未知列）。
+    「次日自动清空」是视图侧按日判断（my_day_date == 今天零点），
+    不改数据——昨天加入未完成的任务回到原项目可再次加入，微软 To Do 同款语义
+  - 桌面端：「我的一天」置顶快捷视图（Sunrise 图标，琥珀色）；
+    任务行 hover Sunrise 按钮（今天已加入时常显实心）；右键菜单
+    「加入/移出我的一天」；详情抽屉头部按钮；批量工具条「加入我的一天」；
+    筛选语义与其它快捷视图同源（状态/优先级筛选叠加生效）
+  - 移动端：快捷视图七键（wb_sunny 置顶）+ 任务长按菜单加入/移出；
+    `isInMyDay` 按日 getter；FRB 桥 DTO 镜像（含手工展开的 TodoTaskDetail）
+  - 测试：task-filters my_day 5 用例（今天命中/昨天退出/null 不命中/
+    完成态保留/状态筛选叠加）+ 移动端 3 用例 + smoke e2e 全链用例
+    （行内加入 → 视图出现 → db 断言今天零点 → 移出 → 视图清空）
+- **e2e 冒烟接入 CI**（#19 尾巴）：web job 追加
+  `playwright install chromium` + `pnpm e2e` 步骤——纯浏览器 mock IPC
+  与 web job 同一依赖面，免 Rust 工具链；新增根 `pnpm e2e` script
+
+### 补记（此前落地未记账，07 文档已同步回写 ✅）
+
+- **P1 体验能力包**（8/26 完成，commit 357d4d5…9f65acf）：
+  #8 键盘可达性行 + 命令面板扩容、#9 全局搜索三路聚合、
+  #10 重复任务真引擎（完成时生成下一实例，替代重建 reminder）、
+  #11 列表拖拽排序（中值落位）、#12 移动端 go_router 方向性转场、
+  #13 修改后立即同步（EVENT_BUS 订阅 + 5s 防抖 push_only，60s tick 兜底）
 
 - **#19 Playwright 冒烟主链路**（纯浏览器 e2e，不启 Tauri 壳）：
   `src/test/ipc-mock.ts` 在页面加载时伪造 `__TAURI_INTERNALS__` 接管
