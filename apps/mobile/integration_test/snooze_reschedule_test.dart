@@ -39,7 +39,7 @@ void main() {
     // 模拟 _handleSnoozeResponse 的排程口径：原 20:24 + 10min
     final fireAt = tz.TZDateTime.from(
       DateTime.now().add(const Duration(minutes: 2)),
-      tz.local,
+      tz.UTC,
     );
     var scheduled = false;
     try {
