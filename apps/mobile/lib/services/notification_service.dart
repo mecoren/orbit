@@ -37,6 +37,13 @@ import '../shared/widgets/wait_toast.dart';
 ///
 /// 时区：zonedSchedule 需要 tz.TZDateTime；[ensureInitialized] 初始化
 /// 本地时区，后台 isolate 入口也各自兜底（tz 库默认 UTC）。
+///
+/// AOT 可达性注记（实测教训 2026-09-06）：onSnoozeBackgroundAction 经
+/// native 入口可达，其调用链上的实例方法（_handleSnoozeResponse 等）
+/// 也必须被树摇保留——@pragma('vm:entry-point') 加在**类**上才能覆盖
+/// 实例成员；只标静态方法时 AOT 抛 "To access ... from native code,
+/// it must be annotated"。
+@pragma('vm:entry-point')
 class NotificationService {
   NotificationService._();
 
@@ -313,18 +320,25 @@ class NotificationService {
           notificationDetails: _reminderDetails(payload: payload),
           androidScheduleMode: mode,
         );
+    // 后台 isolate 排程失败曾静默（实测 2026-09-06：确认通知弹出但闹钟
+    // 未注册）——三级回退逐一留痕，排障依据
     try {
       await put(AndroidScheduleMode.alarmClock);
       return true;
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('[NotificationService] alarmClock failed: $e');
+    }
     try {
       await put(AndroidScheduleMode.exactAllowWhileIdle);
       return true;
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('[NotificationService] exact failed: $e');
+    }
     try {
       await put(AndroidScheduleMode.inexactAllowWhileIdle);
       return true;
-    } catch (_) {
+    } catch (e) {
+      debugPrint('[NotificationService] inexact failed: $e');
       return false;
     }
   }
