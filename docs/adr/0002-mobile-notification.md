@@ -145,3 +145,19 @@ tauri-plugin-notification schedule API（该核查随移动端拆分归档失效
   SCHEDULE_EXACT_ALARM 权限引导为可选路径，未授予回落非精确）。
 - 桌面端不在本 ADR 范围：桌面推迟走 sonner toast 自定义卡片
   （reminder-snooze.ts 删旧建新），关窗驻留托盘轮询语义不变。
+
+### 模拟器实测记录（2026-09-05，Pixel 9 Pro XL AVD / API 36）
+
+| # | 命题 | 结果 |
+|---|---|---|
+| 1 | APK 构建（manifest 合并/receiver 注册/脱糖/cargokit） | ✅ aapt2 dump 确认 6 权限 + 3 receiver |
+| 2 | 真机启动链路（BootGate→Rust DB→ReminderScheduler 首排） | ✅ logcat `[ReminderScheduler] 闹钟重排 N 条` |
+| 3 | 精确闹钟授权引导弹窗 | ✅ 系统设置页真实弹出（新代码路径） |
+| 4 | alarmClock 排程 + 系统接受 | ✅ integration_test `pending count=1` |
+| 5 | dbChanges 单播流二次订阅丢失事件 | ❌ 复现 → 已修（BootGate 转发） |
+| 6 | force-stop 后闹钟触发 | ⚠️ **Android 系统语义边界**：force-stop 清除该应用全部 PendingIntent（alarmClock 亦不豁免）——非代码缺陷；重启后 BootReceiver 不恢复 force-stop 清掉的闹钟（插件只恢复 BOOT_COMPLETED 场景），但用户下次打开 App 时全量重排自动补齐 |
+| 7 | 最近任务划掉（用户真实杀后台路径）后闹钟触发 | ⏳ 划掉不清 AlarmManager（AOSP 语义：仅 force-stop 清）——待真机复验（模拟器 pm 服务故障中断） |
+
+遗留真机验收项（下次真机连接时执行）：#7 划掉场景 + 灵动岛形态
+（小米 HyperOS 设备）+ Doze 息屏场景。integration_test 基建已入库
+（apps/mobile/integration_test/reminder_alarm_e2e_test.dart）。

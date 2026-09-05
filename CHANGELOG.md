@@ -12,29 +12,38 @@ P1 体验能力包补记（#8/#9/#10/#11/#12/#13，8/26 落地未记账）+ P2#1
 ### Added
 
 - **提醒功能三端升级**（用户需求：到期可推迟 10 分钟/30 分钟/1 小时；
-  移动端后台可提醒 + 小米灵动岛形态）：
+  移动端后台可提醒 + 小米灵动岛形态）+ **可用性补强轮**（commit 92b5ef5）：
   - **桌面端推迟**：到期 toast 重制为自定义卡片（sonner toast.custom，
     不再自动消失），带三档推迟按钮。删旧建新语义：新 remind_at =
     **原 remind_at + N 分钟**（锚点不漂移）；续排引擎防雪球守卫——
     到期行触发重复续排前若任务已存在其他未来提醒（推迟产物），
-    只清理不克隆，避免「原系列 + 推迟系列」平行滚动。新增
-    `reminder-snooze.ts` 纯逻辑模块 + 6 项单测
+    只清理不克隆，避免「原系列 + 推迟系列」平行滚动。续排删旧失败
+    （行已被并发清理）不再中断建新。新增 `reminder-snooze.ts`
+    纯逻辑模块 + 6 项单测
   - **移动端后台闹钟通道**（ADR 0002 α→β 演进落地）：`ReminderScheduler`
-    启动/dbChanges 防抖 2s 把 DB 未来提醒（join 任务标题）全量重排进
-    系统闹钟（zonedSchedule alarmClock，权限缺省逐级回落
-    exact→inexactAllowWhileIdle）。闹钟由系统 AlarmManager 持有：
-    **退后台/被杀/Doze 均准时触发**，重启由插件 BootReceiver 恢复；
-    到点通知原生构建，不依赖 Dart 进程——修复「后台不提醒」
+    启动/dbChanges 防抖 2s 把 DB 未来提醒（join 任务标题，过滤已完成/
+    已删任务）全量重排进系统闹钟（zonedSchedule alarmClock，权限缺省
+    逐级回落 exact→inexactAllowWhileIdle）。闹钟由系统 AlarmManager
+    持有：**退后台/被杀/Doze 均准时触发**，重启由插件 BootReceiver
+    恢复；到点通知原生构建，不依赖 Dart 进程——修复「后台不提醒」。
+    dbChanges 单播流修复：调度器事件由 BootGate 唯一订阅转发
+    （FRB 二次 listen 静默丢事件，模拟器实测复现修复）
   - **移动端通知推迟**：到期通知带三档推迟 action，后台 isolate 回调
     （@pragma 防 AOT 裁剪，被杀可达）不写 Rust DB：重排系统闹钟 +
     静默确认通知；DB 收敛 = 旧行到期检测系统闹钟面更晚排程（推迟
     产物）→ 静默删行；前台与闹钟同 id show() 覆盖去重，识别失败
     保守放行（宁可重弹不可吞提醒）
+  - **精确闹钟授权引导**：Android 12+ canScheduleExactNotifications
+    为 false 时弹系统「闹钟和提醒」授权页（模拟器实测弹出）；拒绝则
+    非精确闹钟兜底（Doze 下允许系统级延迟，通知仍达）
   - **小米灵动岛（焦点通知）**：category=alarm + Importance.high
     ——闹钟类高优通知在支持机型以灵动岛胶囊呈现
-  - Manifest：RECEIVE_BOOT_COMPLETED / WAKE_LOCK /
-    SCHEDULE_EXACT_ALARM / VIBRATE + 插件三 Receiver（官方 README
-    原样）；移动端 85 测试全绿，真机验收项待 ADR 0002 §五清单执行
+  - **模拟器实测**：APK 构建（6 权限 + 3 receiver 合并✓）、启动链路✓、
+    授权弹窗✓、alarmClock 排程 pending✓；force-stop 清闹钟为 Android
+    系统语义边界（非缺陷，重开 App 全量重排自愈）；integration_test
+    基建入库；真机复验清单见 ADR 0002 §七
+  - Manifest：RECEIVE_BOOT_COMPLETED / WAKE_LOCK / SCHEDULE_EXACT_ALARM /
+    VIBRATE + 插件三 Receiver（官方 README 原样）；移动端 88 测试全绿
 - **标题栏窗口控制键重制**（移植 qraft 同款实现，替换 lucide 内联版）：
   新建 `window-controls.tsx` 组件 + `lib/window.ts` 封装（useMaximized
   钩子订阅 onResized 切换最大化/还原图标）。Win11 规范：命中区 46×32px、
