@@ -1,6 +1,6 @@
 # ADR 0002 — 移动本地通知策略（风险 R2 技术验证）
 
-- **状态**：已采纳（Accepted）
+- **状态**：已采纳（Accepted；2026-09-05 α→β 演进落地，见 §七）
 - **日期**：2026-08-24
 - **关联**：M4 Task 16 / 06 文档 §三 风险 R2、§二 任务 4.7；实施依据 docs/superpowers/plans/2026-08-24-m4-mobile.md「Task 16」
 
@@ -105,3 +105,43 @@ adb logcat -d | Select-String -Pattern "notify|notification"
 2. **α 实测不可接受**：T18 清单 #3/#4 实测显示前台轮询在前台场景也频繁漏触发（WebView 冻结策略收紧等系统行为变化）；
 3. **上游能力演进**：tauri-plugin-notification 后续版本提供 Rust 侧一等 schedule 调度或官方后台提醒模板，使 β 联动成本降至 L 以下；
 4. **顺带改造窗口**：其他任务已必须触碰 reminders 写路径时，可搭车评估 β（避免单独为通知调度开辟回归周期）。
+
+## 七、α→β 演进落地（2026-09-05）
+
+**触发条件：§六-1 兑现**——产品要求移动端提醒在杀进程/退后台后可靠到达（P2 用户需求「移动端在后台不会提示，需要优化」）。实施范围与 §六预设的「四类变更点 cancel+reschedule」略有偏差，记录如下：
+
+### 实施形态（commit fb46661 / 8bd700f / ff26afb）
+
+移动端自 Flutter 拆分（ADR 0003）后已脱离 Tauri 通知栈，β 的载体是
+**flutter_local_notifications 22.3 系统闹钟**而非 §二核查的
+tauri-plugin-notification schedule API（该核查随移动端拆分归档失效）：
+
+1. **调度面**：`ReminderScheduler`（apps/mobile/lib/services/reminder_scheduler.dart）
+   启动 + dbChanges 防抖 2s → DB 全部未来提醒（join 任务标题）全量
+   重排 `zonedSchedule(AndroidScheduleMode.alarmClock)`；无精确闹钟
+   权限逐级回落 exactAllowWhileIdle → inexactAllowWhileIdle。
+   全量重排天然覆盖「四类变更点」——不需要逐点 cancel/reschedule。
+2. **后台可靠性的机制转移**：闹钟由系统 AlarmManager 持有，到点由
+   插件原生 `ScheduledNotificationReceiver` 构建通知展示——Dart
+   进程不存活即弹；重启由 `ScheduledNotificationBootReceiver`
+   （manifest 已声明 BOOT_COMPLETED）自动恢复全部 pending 闹钟。
+3. **推迟操作**：通知带三档推迟 action，点击走插件
+   `onDidReceiveBackgroundNotificationResponse` 后台 isolate 回调
+   （应用被杀可达）。后台不写 Rust DB（FRB 库不可在后台 isolate 重入）：
+   重排系统闹钟 + 静默确认通知；DB 收敛靠前台——旧行到期时
+   `handleReminderDue` 检测系统闹钟面存在更晚排程（推迟产物）即
+   静默删行不弹。
+4. **双通道去重**：α 前台轮询通道保留（双保险），与闹钟通道同 id
+   （taskId 派生）show() 覆盖合并；僵尸识别不可用时保守放行。
+5. **小米灵动岛**：category=alarm + Importance.high 渠道——
+   焦点通知对闹钟类高优通知以灵动岛胶囊呈现（真机表现待 §五清单验收）。
+
+### 决策语义变化
+
+- §四「β 记录为备选」→ **β 已实施**（移动端）；α 前台轮询保留为
+  双保险通道，两者同 id 去重共存。
+- §五真机验收清单**仍然有效**：#3/#4 的预期从「到期静默」改为
+  「闹钟准点弹出（Doze 免疫）」，#1/#2 权限语义不变（新增
+  SCHEDULE_EXACT_ALARM 权限引导为可选路径，未授予回落非精确）。
+- 桌面端不在本 ADR 范围：桌面推迟走 sonner toast 自定义卡片
+  （reminder-snooze.ts 删旧建新），关窗驻留托盘轮询语义不变。

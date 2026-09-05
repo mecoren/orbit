@@ -7,10 +7,34 @@
 
 ## [Unreleased]
 
-P1 体验能力包补记（#8/#9/#10/#11/#12/#13，8/26 落地未记账）+ P2#19 冒烟接入 CI + **我的一天（My Day）三端落地**（07 报告新增 #23）+ 标题栏窗口控制键重制。
+P1 体验能力包补记（#8/#9/#10/#11/#12/#13，8/26 落地未记账）+ P2#19 冒烟接入 CI + **我的一天（My Day）三端落地**（07 报告新增 #23）+ 标题栏窗口控制键重制 + **提醒功能三端升级**（推迟操作 / 后台闹钟 / 灵动岛类别）。
 
 ### Added
 
+- **提醒功能三端升级**（用户需求：到期可推迟 10 分钟/30 分钟/1 小时；
+  移动端后台可提醒 + 小米灵动岛形态）：
+  - **桌面端推迟**：到期 toast 重制为自定义卡片（sonner toast.custom，
+    不再自动消失），带三档推迟按钮。删旧建新语义：新 remind_at =
+    **原 remind_at + N 分钟**（锚点不漂移）；续排引擎防雪球守卫——
+    到期行触发重复续排前若任务已存在其他未来提醒（推迟产物），
+    只清理不克隆，避免「原系列 + 推迟系列」平行滚动。新增
+    `reminder-snooze.ts` 纯逻辑模块 + 6 项单测
+  - **移动端后台闹钟通道**（ADR 0002 α→β 演进落地）：`ReminderScheduler`
+    启动/dbChanges 防抖 2s 把 DB 未来提醒（join 任务标题）全量重排进
+    系统闹钟（zonedSchedule alarmClock，权限缺省逐级回落
+    exact→inexactAllowWhileIdle）。闹钟由系统 AlarmManager 持有：
+    **退后台/被杀/Doze 均准时触发**，重启由插件 BootReceiver 恢复；
+    到点通知原生构建，不依赖 Dart 进程——修复「后台不提醒」
+  - **移动端通知推迟**：到期通知带三档推迟 action，后台 isolate 回调
+    （@pragma 防 AOT 裁剪，被杀可达）不写 Rust DB：重排系统闹钟 +
+    静默确认通知；DB 收敛 = 旧行到期检测系统闹钟面更晚排程（推迟
+    产物）→ 静默删行；前台与闹钟同 id show() 覆盖去重，识别失败
+    保守放行（宁可重弹不可吞提醒）
+  - **小米灵动岛（焦点通知）**：category=alarm + Importance.high
+    ——闹钟类高优通知在支持机型以灵动岛胶囊呈现
+  - Manifest：RECEIVE_BOOT_COMPLETED / WAKE_LOCK /
+    SCHEDULE_EXACT_ALARM / VIBRATE + 插件三 Receiver（官方 README
+    原样）；移动端 85 测试全绿，真机验收项待 ADR 0002 §五清单执行
 - **标题栏窗口控制键重制**（移植 qraft 同款实现，替换 lucide 内联版）：
   新建 `window-controls.tsx` 组件 + `lib/window.ts` 封装（useMaximized
   钩子订阅 onResized 切换最大化/还原图标）。Win11 规范：命中区 46×32px、
