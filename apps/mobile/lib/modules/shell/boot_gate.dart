@@ -94,9 +94,14 @@ class _BootGateState extends ConsumerState<BootGate> {
       invalidateBusinessCaches(ref);
     });
 
-    // 提醒到期 → 本地通知即时呈现（无权限 / 异常时内部回落 warning toast）
+    // 提醒到期 → 本地通知即时呈现（无权限 / 异常时内部回落 warning toast）。
+    // 僵尸清理：后台推迟未写 DB，旧行到期时由 handleReminderDue 判定为
+    // 推迟产物（系统闹钟已有更晚排程）→ 删除该行，DB 与闹钟面收敛。
     _reminderDueSub = bridge.reminderDue.listen(
-      (e) => NotificationService.instance.handleReminderDue(e),
+      (e) => NotificationService.instance.handleReminderDue(
+        e,
+        onZombieCleanup: (reminderId) => bridge.todoReminderDelete(reminderId),
+      ),
     );
   }
 

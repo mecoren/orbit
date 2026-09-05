@@ -66,4 +66,36 @@ void main() {
     expect(NotificationService.snoozeActions[r.actionId], 30);
     expect(r.payload, isNotNull);
   });
+
+  group('僵尸行识别口径（_isSnoozedOut 的 payload 比较复现）', () {
+    // 与 _isSnoozedOut 同口径：pending 闹钟 payload 解析出 remindAt，
+    // 比到期事件行的 remindAt 更晚 → 判定为推迟产物（不弹，清理行）
+    bool snoozedOut(List<(int, String?)> pending, int taskId, int remindAt) {
+      // _alarmId 复现：(taskId % 2^30) + 1
+      final myId = (taskId % (1 << 30)) + 1;
+      for (final (id, payload) in pending) {
+        if (id != myId) continue;
+        final parts = (payload ?? '').split('|');
+        final pendingAt = parts.length > 1 ? int.tryParse(parts[1]) : null;
+        if (pendingAt != null && pendingAt > remindAt) return true;
+      }
+      return false;
+    }
+
+    test('闹钟排程晚于到期行 → 识别为推迟产物', () {
+      final pending = [(123 + 1, '123|1800000000000|买牛奶')];
+      expect(snoozedOut(pending, 123, 1700000000000), isTrue);
+    });
+
+    test('闹钟排程与行同刻（正常到期）→ 不误吞', () {
+      final pending = [(123 + 1, '123|1700000000000|买牛奶')];
+      expect(snoozedOut(pending, 123, 1700000000000), isFalse);
+    });
+
+    test('无 pending 闹钟 / payload 坏 → 保守不吞', () {
+      expect(snoozedOut([], 123, 1700000000000), isFalse);
+      expect(snoozedOut([(124, null)], 123, 1700000000000), isFalse);
+      expect(snoozedOut([(123 + 1, 'x')], 123, 1700000000000), isFalse);
+    });
+  });
 }

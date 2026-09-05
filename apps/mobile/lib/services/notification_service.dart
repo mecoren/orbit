@@ -195,8 +195,25 @@ class NotificationService {
 
   /// 提醒到期事件出口：有权限 → show() 即时系统通知；
   /// 无权限或展示异常 → 维持 warning toast 兜底（文案与原订阅处一致）。
-  Future<void> handleReminderDue(ReminderDueEvent event) async {
+  ///
+  /// 双通道去重：show() 与闹钟到点的原生 notify 同 id（_alarmId(taskId)），
+  /// 后到者覆盖前者——同刻双弹天然合并为一条。
+  /// 推迟产物识别：若本事件的 remind_at 早于该任务当前系统闹钟的排程
+  /// （用户点过推迟、后台未写 DB 的旧行），静默删掉这条僵尸行不弹。
+  Future<void> handleReminderDue(
+    ReminderDueEvent event, {
+    Future<void> Function(int reminderId)? onZombieCleanup,
+  }) async {
     await ensureInitialized();
+    final isSnoozed = await _isSnoozedOut(event.taskId, event.remindAt);
+    if (isSnoozed) {
+      // 推迟产物：新时间闹钟已在系统侧，旧行到期不弹——交给调用方删行
+      //（删行失败静默：下次到期再判一次，不产生循环弹）
+      try {
+        await onZombieCleanup?.call(event.id);
+      } catch (_) {}
+      return;
+    }
     if (!_granted) {
       WaitToast.warning('待办提醒：${event.title}');
       return;
@@ -213,6 +230,23 @@ class NotificationService {
     } catch (_) {
       WaitToast.warning('待办提醒：${event.title}');
     }
+  }
+
+  /// 本行 remindAt 是否已被推迟甩在身后：任务系统闹钟存在比它更晚的
+  /// 排程 → 用户推迟过（payload 解析回 remindAt 比较）。
+  /// pending 列表不可用时保守返回 false（不吞正常提醒）。
+  Future<bool> _isSnoozedOut(int taskId, int remindAt) async {
+    try {
+      final pending = await _plugin.pendingNotificationRequests();
+      final myId = _alarmId(taskId);
+      for (final p in pending) {
+        if (p.id != myId) continue;
+        final parts = (p.payload ?? '').split('|');
+        final pendingAt = parts.length > 1 ? int.tryParse(parts[1]) : null;
+        if (pendingAt != null && pendingAt > remindAt) return true;
+      }
+    } catch (_) {}
+    return false;
   }
 
   // ── 通道 2：后台闹钟全量重排 ──
