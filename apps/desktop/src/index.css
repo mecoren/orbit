@@ -525,3 +525,56 @@
   display: none;
 }
 
+/* ============================================================
+ * 自定义窗口控制按钮（移植自 qraft globals.css 同名实现）
+ * - .window-controls：按钮组容器，高度占满标题栏行
+ * - .window-control：单个按钮，命中区 46×32px（Win11 规范）
+ * - hover 仅背景 alpha 提升（无缩放抖动）；active 加深；
+ *   focus-visible 内缩 2px ring，不溢出标题栏
+ * - .window-control--close:hover 反色警示（--destructive 红底白图标），
+ *   active 再压暗 15%，对齐 Win11 关闭键行为约定
+ * ============================================================ */
+.window-controls {
+  display: flex;
+  height: 100%;
+  flex-shrink: 0;
+}
+
+.window-control {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 46px;
+  height: 32px;
+  border: none;
+  background: transparent;
+  color: var(--foreground);
+  cursor: default;
+  transition: background-color var(--duration-fast) ease-out;
+  -webkit-app-region: no-drag;
+}
+
+.window-control:hover {
+  background: color-mix(in srgb, var(--muted-foreground) 12%, transparent);
+}
+
+.window-control:active {
+  background: color-mix(in srgb, var(--muted-foreground) 20%, transparent);
+}
+
+.window-control:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: -2px;
+}
+
+/* 关闭按钮：hover 反色警示（红底白图标），符合 Win11 行为约定 */
+.window-control--close:hover {
+  background: var(--destructive);
+  color: oklch(0.99 0 0);
+}
+
+.window-control--close:active {
+  background: color-mix(in srgb, var(--destructive) 85%, black);
+  color: oklch(0.99 0 0);
+}
+
