@@ -17,5 +17,8 @@
     "clippy:desktop": "cargo clippy --manifest-path apps/desktop/src-tauri/Cargo.toml --all-targets -- -D warnings",
     "lint:rust": "pnpm fmt:check && pnpm clippy && pnpm clippy:desktop",
     "lint": "pnpm typecheck && pnpm lint:rust"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.62.1"
   }
 }

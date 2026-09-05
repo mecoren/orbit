@@ -4,7 +4,12 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 import App from "./App";
 import { initThemeOnStartup, initFontSettingsOnStartup } from "./lib/theme";
+import { installBrowserIpc } from "./test/ipc-mock";
 import "./index.css";
+
+// 纯浏览器环境（Playwright 冒烟，#19）：伪造 __TAURI_INTERNALS__ 接管
+// invoke/listen（真实 Tauri WebView 已注入 internals 时为 no-op）
+installBrowserIpc();
 
 // 启动时初始化主题：在 React 渲染前应用持久化主题，避免主题闪烁（FOUC）
 initThemeOnStartup();
@@ -39,10 +44,22 @@ const queryClient = new QueryClient({
   },
 });
 
+// Playwright 冒烟环境（#19）关闭 StrictMode：mock IPC 同步 resolve 与
+// React 19 的双调用/批处理组合会让「事件内写命令 → 缓存更新 → 子树提交」
+// 静默丢失（渲染函数执行但不提交 DOM；真 Tauri 的 IPC 异步时序不复现）。
+// StrictMode 是开发期检查工具而非产品语义，仅 e2e 注入此开关，不影响日常开发。
+const strictModeDisabled = import.meta.env.VITE_E2E_NO_STRICT === "1";
+
 ReactDOM.createRoot(document.getElementById("root")!).render(
-  <React.StrictMode>
+  strictModeDisabled ? (
     <QueryClientProvider client={queryClient}>
       <App />
     </QueryClientProvider>
-  </React.StrictMode>,
+  ) : (
+    <React.StrictMode>
+      <QueryClientProvider client={queryClient}>
+        <App />
+      </QueryClientProvider>
+    </React.StrictMode>
+  ),
 );

@@ -20,6 +20,9 @@ export default defineConfig({
   },
   clearScreen: false,
   server: {
+    // 基准端口 5173（与 tauri.conf.json devUrl 对齐）；CLI --port 可覆盖
+    // （Playwright e2e 传 5273 隔离端口，防 reuseExistingServer 连上同机
+    //   其他项目的 dev server）。strictPort 避免端口漂移。
     port: 5173,
     strictPort: true,
     host: host || false,
