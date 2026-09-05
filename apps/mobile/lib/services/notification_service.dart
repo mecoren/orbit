@@ -186,6 +186,17 @@ class NotificationService {
       final android = _plugin.resolvePlatformSpecificImplementation<
           AndroidFlutterLocalNotificationsPlugin>();
       _granted = await android?.requestNotificationsPermission() ?? false;
+      if (_granted) {
+        // Android 12+ 精确闹钟引导（targetSdk 36 下 SCHEDULE_EXACT_ALARM
+        // 不再默认授予）：弹系统「闹钟和提醒」授权页一次；拒绝则
+        // alarmClock/exact 排程回落 inexactAllowWhileIdle（Doze 下允许
+        // 延迟），通知仍会到达——可用性优先，不阻塞。
+        // canScheduleExactNotifications: null = 平台不可达，容忍
+        final canExact = await android?.canScheduleExactNotifications();
+        if (canExact == false) {
+          await android?.requestExactAlarmsPermission();
+        }
+      }
     } catch (_) {
       _granted = false;
     }

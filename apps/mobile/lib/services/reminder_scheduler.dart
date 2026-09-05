@@ -40,16 +40,18 @@ class ReminderScheduler {
   static ReminderScheduler attachOnce(OrbitBridge bridge) {
     _instance ??= ReminderScheduler._(bridge);
     final s = _instance!;
-    s._attach(bridge);
+    if (!s._attached && !s._shutdown) {
+      s._attached = true;
+      s._rescheduleSoon(); // 启动即全量重排（幂等）
+    }
     return s;
   }
 
-  void _attach(OrbitBridge bridge) {
-    if (_attached || _shutdown) return;
-    _attached = true;
-    _rescheduleSoon(); // 启动即全量重排（幂等）
-    // dbChanges：本地写 + 云同步 pull 落库都广播（bridge 侧已合并）
-    bridge.dbChanges.listen((_) => _rescheduleSoon());
+  /// dbChanges 转发口（由 BootGate 的唯一 dbChanges 订阅转发——
+  /// FRB subscribe_db_changes 是 Rust 侧单播闸设计，第二次 listen
+  /// 静默收不到事件，调度器不得自行订阅流）
+  void onDbChange() {
+    _rescheduleSoon();
   }
 
   /// 防抖重排：2s 窗口内多次变更合并一次全量重排
@@ -77,16 +79,21 @@ class ReminderScheduler {
       );
       final enriched = <TodoReminder>[];
       if (reminders.isNotEmpty) {
-        // join 任务标题（闹钟正文/推迟 payload 自包含）
+        // join 任务标题（闹钟正文/推迟 payload 自包含），并过滤不该再
+        // 闹的行：任务已删（软删残留行——级联清理由轮询守护兜底）或
+        // 已完成（P1#10 语义：完成实例不再续排/提醒）
         final tasks =
             await _bridge.todoTaskList(const ListFilter(pageSize: 5000));
-        final titleById = <int, String>{};
+        final taskById = <int, TodoTask>{};
         for (final t in tasks) {
-          titleById[t.id] = t.title;
+          taskById[t.id] = t;
         }
-        enriched.addAll([
-          for (final r in reminders) r.withTitle(titleById[r.taskId]),
-        ]);
+        for (final r in reminders) {
+          if (r.isDeleted != 0) continue;
+          final task = taskById[r.taskId];
+          if (task == null || task.isDeleted != 0 || task.done != 0) continue;
+          enriched.add(r.withTitle(task.title));
+        }
       }
       final n =
           await NotificationService.instance.syncFutureReminders(enriched);

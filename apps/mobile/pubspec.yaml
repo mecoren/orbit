@@ -36,6 +36,9 @@ dependencies:
 dev_dependencies:
   flutter_test:
     sdk: flutter
+  # 真机/模拟器 E2E（P2 提醒升级验收：后台闹钟链路）
+  integration_test:
+    sdk: flutter
   flutter_lints: ^6.0.0
 
 flutter:

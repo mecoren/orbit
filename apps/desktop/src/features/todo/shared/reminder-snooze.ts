@@ -31,8 +31,8 @@ type QueryClientLike = ReturnType<typeof useQueryClient>;
  * 删旧建新推迟一条提醒；失败静默（返回 false），调用方据此回退提示。
  * 成功后失效任务详情缓存，让详情抽屉提醒区块立即显示新时间。
  *
- * 删除失败（重复任务的系列续排已先行删过此行）不阻断推迟——
- * 用户意图是「到点再提醒我一次」，新建行无论如何都要落地；
+ * 删除失败（重复任务的系列续排已先行删过此行，或行已被完成清理）不
+ * 阻断推迟——用户意图是「到点再提醒我一次」，新建行无论如何都要落地；
  * 系列续排的防雪球守卫在 use-todo-reminder-listener 续排路径上，
  * 推迟产物行到期时不会克隆出平行系列。
  */
@@ -48,7 +48,7 @@ export async function snoozeReminder(
     try {
       await todoReminderDelete(reminderId);
     } catch {
-      /* 行已被续排引擎删除则跳过，继续新建 */
+      /* 行已被续排引擎/完成清理删除则跳过，继续新建 */
     }
     await todoReminderCreate({ task_id: taskId, remind_at: nextAt });
     void qc.invalidateQueries({ queryKey: ["todo-task-detail", taskId] });

@@ -74,7 +74,13 @@ export function useTodoReminderListener() {
           const hasOtherFuture = detail.reminders.some(
             (m) => m.id !== r.id && !m.is_deleted && m.remind_at > Date.now(),
           );
-          await todoReminderDelete(r.id);
+          // 删除单独容错：行不存在（用户刚在 toast 上推迟过、或并发清理）
+          // 时抛错不应中断续排——删旧失败仍建新，宁可多提醒不漏提醒
+          try {
+            await todoReminderDelete(r.id);
+          } catch {
+            /* 行已消失：跳过删除 */
+          }
           if (!hasOtherFuture) {
             await todoReminderCreate({ task_id: r.task_id, remind_at: next });
           }

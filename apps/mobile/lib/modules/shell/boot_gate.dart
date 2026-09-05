@@ -37,6 +37,7 @@ class _BootGateState extends ConsumerState<BootGate> {
 
   StreamSubscription<dynamic>? _dbChangesSub;
   StreamSubscription<dynamic>? _reminderDueSub;
+  ReminderScheduler? _scheduler;
 
   @override
   void initState() {
@@ -79,7 +80,7 @@ class _BootGateState extends ConsumerState<BootGate> {
     NotificationService.instance.ensureInitialized();
     // 后台闹钟通道：DB 未来提醒全量重排 + dbChanges 防抖跟随
     //（P2 提醒升级：后台/被杀/重启均由系统闹钟保证提醒）
-    ReminderScheduler.attachOnce(ref.read(orbitBridgeProvider));
+    _scheduler = ReminderScheduler.attachOnce(ref.read(orbitBridgeProvider));
     _subscribeStreams();
     if (mounted) setState(() => _phase = _BootPhase.ready);
   }
@@ -88,21 +89,36 @@ class _BootGateState extends ConsumerState<BootGate> {
   void _subscribeStreams() {
     final bridge = ref.read(orbitBridgeProvider);
 
-    // 本地写操作 → 全量失效业务缓存（列表/详情/配置）
+    // 本地写操作 → 全量失效业务缓存（列表/详情/配置）+ 转发调度器重排
+    // 闹钟（dbChanges 是 FRB 单播流：全 App 唯一订阅在此，二次 listen
+    // 会被 Rust 侧 FORWARDER_STARTED 闸静默丢弃——见 events.rs 注释）
     _dbChangesSub = bridge.dbChanges.listen((_) {
       if (!mounted) return;
       invalidateBusinessCaches(ref);
+      _scheduler?.onDbChange();
     });
 
     // 提醒到期 → 本地通知即时呈现（无权限 / 异常时内部回落 warning toast）。
     // 僵尸清理：后台推迟未写 DB，旧行到期时由 handleReminderDue 判定为
     // 推迟产物（系统闹钟已有更晚排程）→ 删除该行，DB 与闹钟面收敛。
-    _reminderDueSub = bridge.reminderDue.listen(
-      (e) => NotificationService.instance.handleReminderDue(
+    // 完成实例清理（对齐桌面端 P1#10）：任务已完成则不再打扰，删除行。
+    _reminderDueSub = bridge.reminderDue.listen((e) async {
+      try {
+        final task = await bridge.todoTaskGet(e.taskId);
+        if (task.done == 1 || task.isDeleted == 1) {
+          try {
+            await bridge.todoReminderDelete(e.id);
+          } catch (_) {}
+          return;
+        }
+      } catch (_) {
+        /* 任务查询失败：照常提醒（提醒本就带任务标题） */
+      }
+      await NotificationService.instance.handleReminderDue(
         e,
         onZombieCleanup: (reminderId) => bridge.todoReminderDelete(reminderId),
-      ),
-    );
+      );
+    });
   }
 
   @override
