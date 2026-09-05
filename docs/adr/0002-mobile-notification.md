@@ -167,9 +167,15 @@ alarmClock 排程 pending✓、dbChanges 单播流二次订阅丢事件（复现
 | 9 | flutter test 产物陷阱 | ⚠️ `flutter test integration_test` 会把 build/app/outputs/flutter-apk/app-debug.apk **覆盖为 test-harness 变体**（ext.flutter.integrationTest）——此后用该 APK 走 `am start` 永远停在等测试指令，表现酷似「启动卡死」。排查手段：VM service getIsolate 的 extensionRPCs 含 `ext.flutter.integrationTest` 即中招；重跑 `flutter build apk --debug` 覆盖回来即可 |
 | 10 | force-stop 清闹钟 | ⚠️ Android 系统语义（清除应用全部 PendingIntent），非缺陷；用户下次打开 App 全量重排自愈 |
 
-遗留：#8 后台 isolate 排程失败点已做**代码级加固**（commit 9e13f4d：
-去 FlutterTimezone 依赖、TZDateTime 改 UTC 构造——最大嫌疑面整体移除；
-等价 API 实测 alarmClock 排程成功 b7e9605）；灵动岛形态需小米 HyperOS
-真机；划掉最近任务与 `am kill` 同为「进程死+闹钟活」语义（#3 已覆盖
-等价命题）。模拟器长跑后 IME/logd 间歇失活，UI 驱动测试建议短会话
-+干净快照。
+遗留：~~#8 后台 isolate 排程失败点~~ **已闭环（2026-09-06 终验）**：
+sqlite3 预置 DB（任务+22:46 提醒）push 进 App → 启动即 `[ReminderScheduler]
+闹钟重排 1 条` + `Alarm clock: triggerTime=22:46:00`（dumpsys）→ HOME +
+`am kill`（进程死、闹钟活）→ **22:46:00.022 原生 Receiver 弹通知**（logcat）
+→ 点「推迟10分钟」（进程死状态下）→ 后台 isolate 拉起 + 确认通知
+「已推迟 10 分钟」+ **新闹钟 `RTC_WAKEUP triggerTime=22:56:00` 注册**
+（exactAllowReason=permission，Next wake from idle）——后台推迟→
+新闹钟重排的完整闭环实测成立，UTC 构造修复（9e13f4d）生效。
+（此路径同时覆盖：seed 预置 DB 方案可复用为无 IME 环境的测试基建。）
+
+仍需用户侧硬件：灵动岛形态（小米 HyperOS 真机）、Doze 息屏精度。
+模拟器长跑后 IME/logd 间歇失活，UI 驱动测试建议短会话+干净快照。
