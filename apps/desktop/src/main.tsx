@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 import App from "./App";
 import { initThemeOnStartup, initFontSettingsOnStartup } from "./lib/theme";
+import { applyPlatformClass } from "./lib/platform";
 import { installBrowserIpc } from "./test/ipc-mock";
 import "./index.css";
 
@@ -15,6 +16,9 @@ installBrowserIpc();
 initThemeOnStartup();
 // 启动时恢复字体设置（字体族 + 字号 + 字重），避免字体闪烁
 initFontSettingsOnStartup();
+// 平台类挂载：<html> 添加 .platform-{win|mac|linux}——mac 红绿灯让位、
+// Linux 材质 CSS 回退等平台规则依赖此类（须在首帧渲染前生效）
+applyPlatformClass();
 
 // 首帧就绪后显示窗口：tauri.conf.json 配 visible:false 隐藏原生空窗，
 // 由前端在主题/字体初始化后主动 show，消除启动瞬间的白屏闪烁。

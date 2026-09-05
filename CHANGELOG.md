@@ -20,6 +20,18 @@ P1 体验能力包补记（#8/#9/#10/#11/#12/#13，8/26 落地未记账）+ P2#1
   2px ring；关闭键 hover 红底白图标反色警示（`--destructive`，
   active 再压暗 15%），替换原硬编码 `#E81123`。非 Tauri 环境
   （测试/浏览器 mock）安全降级不抛错。
+- **窗口控制三平台分支**（移植 qraft platform.ts，为 mac/Linux 构建铺路）：
+  - 新建 `lib/platform.ts`：UA 运行时检测（isMac/isWindows/isLinux +
+    useCustomWindowControls），main.tsx 启动时在 `<html>` 挂
+    `.platform-{win|mac|linux}` 类
+  - macOS：`WindowControls` 渲染 null 用原生红绿灯；tauri.conf.json
+    加 `titleBarStyle: "Overlay"`（mac 专属字段，无边框下保留红绿灯）；
+    CSS `.platform-mac .title-bar` 左侧留 78px 红绿灯位
+  - Linux：自绘三键同 Windows；无原生 Mica/vibrancy，CSS
+    `backdrop-filter: blur(20px) saturate(125%)` 回退（标题栏 + main，
+    避免透明背景露底）
+  - 平台判定与让位规则已浏览器实测（win 类挂载 + mac 78px padding +
+    linux backdrop 三态）
 
 - **我的一天 My Day**（07 报告 §五新增 #23，对标微软 To Do 每日聚焦视图）：
   - 数据层：迁移 `0002_my_day.sql`——todo_tasks 加 `my_day_date` 列

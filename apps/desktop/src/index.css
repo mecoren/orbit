@@ -578,3 +578,21 @@
   color: oklch(0.99 0 0);
 }
 
+/* ============================================================
+ * 平台规则（lib/platform.ts 在 <html> 挂 .platform-{win|mac|linux}）
+ * - mac：标题栏左侧留 78px 给原生红绿灯（traffic lights）；
+ *   WindowControls 在 mac 下渲染 null，此空位避免红绿灯压住内容
+ * - linux：无原生 Mica/vibrancy 材质，透明背景会露底——用
+ *   backdrop-filter 模拟模糊（qraft 同款回退）；标题栏与主内容
+ *   半透明层共用同一模糊，保持与 Win/Mac 原生效果近似的观感
+ * ============================================================ */
+.platform-mac .title-bar {
+  padding-left: 78px;
+}
+
+.platform-linux .title-bar,
+.platform-linux main {
+  backdrop-filter: blur(20px) saturate(125%);
+  -webkit-backdrop-filter: blur(20px) saturate(125%);
+}
+

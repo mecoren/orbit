@@ -3,9 +3,12 @@
  *
  * 移植自 qraft src/components/ui/window-controls.tsx，适配 orbit：
  * - 无 i18n，文案用中文字面量（qraft zh-CN：最小化/最大化/还原/关闭）
- * - orbit 仅面向 Windows（tauri.conf.json decorations:false），不做
- *   macOS 分支；jsdom/浏览器 mock 下 getCurrentWindow() 降级为空操作
- * - 命中区 46×32px（Win11 规范），hover 仅背景 alpha 提升，无缩放抖动
+ * - 三平台分支（qraft platform.ts 同款）：
+ *   - Windows / Linux：自绘三键，命中区 46×32px（Win11 规范）
+ *   - macOS：渲染 null，使用系统原生红绿灯（标题栏左侧由 CSS
+ *     .platform-mac 规则留出 78px 空位）
+ * - 命中区 hover 仅背景 alpha 提升（无缩放抖动）；active 加深；
+ *   focus-visible 内缩 2px ring，不溢出标题栏
  * - 最大化状态时图标切换为「还原」（前层方块 + 后层 L 形描边，
  *   后层被前层遮挡的部分不绘制，避免交叉线形成"链环"观感）
  *
@@ -17,6 +20,7 @@
 
 import { type JSX } from "react";
 
+import { useCustomWindowControls } from "@/lib/platform";
 import {
   closeMainWindow,
   minimizeWindow,
@@ -94,8 +98,12 @@ function CloseIcon(): JSX.Element {
   );
 }
 
-export function WindowControls(): JSX.Element {
+export function WindowControls(): JSX.Element | null {
   const maximized = useMaximized();
+
+  // macOS 使用原生红绿灯，不渲染自绘按钮
+  // （useMaximized 在分支前调用以满足 hook 规则；mac 下只是空转）
+  if (!useCustomWindowControls) return null;
 
   return (
     <div className="window-controls" data-testid="window-controls">

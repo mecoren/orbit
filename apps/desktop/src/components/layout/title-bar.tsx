@@ -62,7 +62,7 @@ export function TitleBar() {
   return (
     <>
       <div
-        className="relative flex h-9 items-center border-b bg-background/60 dark:bg-background/85"
+        className="title-bar relative flex h-9 items-center border-b bg-background/60 dark:bg-background/85"
         data-tauri-drag-region
         onDoubleClick={() => appWindow.toggleMaximize()}
       >
