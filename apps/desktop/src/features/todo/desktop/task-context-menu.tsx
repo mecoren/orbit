@@ -20,6 +20,7 @@ import {
   FolderOpen,
   MessageSquare,
   Star,
+  Sunrise,
   Tag,
   Trash2,
 } from "lucide-react";
@@ -117,6 +118,11 @@ export function TaskContextMenu({
   const patch = (p: Parameters<typeof todoTaskUpdate>[1]) =>
     todoTaskUpdate(task.id, p).then(refetch);
 
+  // 我的一天「今天」判定：与 task-filters / 行内按钮同口径（本地零点）
+  const myDayToday = new Date();
+  myDayToday.setHours(0, 0, 0, 0);
+  const inMyDay = task.my_day_date === myDayToday.getTime();
+
   const loadLabels = async () => {
     try {
       const [all, links] = await Promise.all([
@@ -185,6 +191,22 @@ export function TaskContextMenu({
                 style={task.is_favorite ? { color: FAVORITE_COLOR } : undefined}
               />
               {task.is_favorite ? "取消收藏" : "收藏"}
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onSelect={() => {
+                close();
+                const today = new Date();
+                today.setHours(0, 0, 0, 0);
+                void patch({
+                  my_day_date: task.my_day_date === today.getTime() ? null : today.getTime(),
+                });
+              }}
+            >
+              <Sunrise
+                size={14}
+                style={{ color: inMyDay ? "#F59E0B" : undefined }}
+              />
+              {inMyDay ? "移出我的一天" : "加入我的一天"}
             </DropdownMenuItem>
 
             <DropdownMenuSeparator />

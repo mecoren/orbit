@@ -23,6 +23,7 @@ function mk(partial: Partial<TodoTask>): TodoTask {
     percent_done: 0,
     position: 0,
     is_favorite: 0,
+    my_day_date: null,
     is_deleted: 0,
     created_at: 0,
     updated_at: 0,
@@ -221,5 +222,45 @@ describe("工具栏筛选门控（桌面等价不变量锁定）", () => {
     ];
     const out = filterTasks(tasks, { ungrouped: true, statusFilter: "done", priorityFilter: 1 });
     expect(out.map((t) => t.id).sort()).toEqual([1, 2]);
+  });
+});
+
+describe("filterTasks - quickView my_day（我的一天）", () => {
+  /** 与 filterTasks 内部同口径的「今天零点」 */
+  const todayStart = () => {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    return d.getTime();
+  };
+
+  it("my_day_date == 今天零点 命中", () => {
+    const tasks = [mk({ id: 1, my_day_date: todayStart() })];
+    expect(filterTasks(tasks, { quickView: "my_day" }).map((t) => t.id)).toEqual([1]);
+  });
+
+  it("昨天加入的（my_day_date = 今天-1d）不命中——次日自动退出视图", () => {
+    const yesterday = todayStart() - 24 * 3600 * 1000;
+    const tasks = [mk({ id: 1, my_day_date: yesterday })];
+    expect(filterTasks(tasks, { quickView: "my_day" })).toEqual([]);
+  });
+
+  it("null（从未加入）不命中", () => {
+    const tasks = [mk({ id: 1, my_day_date: null })];
+    expect(filterTasks(tasks, { quickView: "my_day" })).toEqual([]);
+  });
+
+  it("已完成任务也保留在 My Day 视图（勾选后不消失，取消完成可反复）", () => {
+    const tasks = [mk({ id: 1, my_day_date: todayStart(), done: 1 })];
+    expect(filterTasks(tasks, { quickView: "my_day" }).map((t) => t.id)).toEqual([1]);
+  });
+
+  it("My Day 视图下状态筛选仍生效（与其它快捷视图同口径）", () => {
+    const tasks = [
+      mk({ id: 1, my_day_date: todayStart(), done: 0 }),
+      mk({ id: 2, my_day_date: todayStart(), done: 1 }),
+    ];
+    expect(
+      filterTasks(tasks, { quickView: "my_day", statusFilter: "undone" }).map((t) => t.id),
+    ).toEqual([1]);
   });
 });

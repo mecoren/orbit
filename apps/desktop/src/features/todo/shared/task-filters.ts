@@ -61,6 +61,12 @@ export function filterTasks(tasks: TodoTask[], input: TaskFilterInput): TodoTask
       case "favorite":
         list = list.filter((t) => !!t.is_favorite);
         break;
+      case "my_day":
+        // 我的一天：只显示「今天」加入的（my_day_date == 今天零点）。
+        // 昨天加入未完成的任务自动退出视图（回到原项目可再次加入）——
+        // 与微软 To Do 的 My Day 语义一致，数据不删。
+        list = list.filter((t) => t.my_day_date === todayStart.getTime());
+        break;
       default:
         break;
     }

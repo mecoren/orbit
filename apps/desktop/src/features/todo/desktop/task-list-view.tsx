@@ -30,7 +30,7 @@ import {
   type DragEndEvent,
   type DragStartEvent,
 } from "@dnd-kit/core";
-import { Check, Clock, Flag, FolderInput, GripVertical, Inbox, Plus, Star, Trash2, X } from "lucide-react";
+import { Check, Clock, Flag, FolderInput, GripVertical, Inbox, Plus, Star, Sunrise, Trash2, X } from "lucide-react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { toast } from "sonner";
 
@@ -49,7 +49,7 @@ import { EmptyState } from "@/components/business/empty-state";
 import { completeTask } from "../shared/task-actions";
 import { isListActivationKey, listNavDirection } from "../shared/list-keyboard";
 import { midpoint } from "../shared/position";
-import { batchUpdateStatus, batchUpdatePriority, batchUpdateFavorite, batchMoveToProject } from "../shared/batch-actions";
+import { batchUpdateStatus, batchUpdatePriority, batchUpdateFavorite, batchMoveToProject, batchUpdateMyDay } from "../shared/batch-actions";
 import { useUndoableDeleteAction, hideFromQueries } from "@/hooks/use-undoable-delete";
 import { todoTaskDelete, todoTaskUpdate, todoTaskUpdatePosition, type TodoLabel, type TodoProject, type TodoTask } from "@/lib/tauri";
 import { FAVORITE_COLOR, OVERDUE_COLOR_CLASS, PRIORITY_COLOR, PRIORITY_LABELS } from "../shared/constants";
@@ -300,6 +300,15 @@ export function TaskListView({ tasks, projects, labelsByTask, loading, error, on
   const toggleFavorite = (t: TodoTask) => {
     void todoTaskUpdate(t.id, { is_favorite: t.is_favorite ? 0 : 1 });
   };
+  // 我的一天：加入当天（本地零点）/ 移出（null）。视图按日判断，
+  // 昨天加入的任务今天自动退出视图但数据保留（微软 To Do 同款语义）
+  const toggleMyDay = (t: TodoTask) => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    void todoTaskUpdate(t.id, {
+      my_day_date: t.my_day_date === today.getTime() ? null : today.getTime(),
+    });
+  };
   const draggingTask = draggingId != null ? tasks.find((t) => t.id === draggingId) : undefined;
 
   return (
@@ -351,6 +360,7 @@ export function TaskListView({ tasks, projects, labelsByTask, loading, error, on
                     onFocusMove={(dir) => focusRow(vi.index + (dir === "down" ? 1 : -1))}
                     onToggleDone={() => void completeTask(t)}
                     onToggleFavorite={() => toggleFavorite(t)}
+                    onToggleMyDay={() => toggleMyDay(t)}
                   />
                 </TaskContextMenu>
               </div>
@@ -408,6 +418,16 @@ export function TaskListView({ tasks, projects, labelsByTask, loading, error, on
           >
             <Star size={14} className="mr-1" />
             取消收藏
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-8"
+            disabled={batchBusy}
+            onClick={() => void runBatch("加入我的一天", (sel) => batchUpdateMyDay(sel, true))}
+          >
+            <Sunrise size={14} className="mr-1" />
+            加入我的一天
           </Button>
           <Button
             variant="ghost"
@@ -578,6 +598,7 @@ interface TaskRowProps {
   onFocusMove: (dir: "up" | "down") => void;
   onToggleDone: () => void;
   onToggleFavorite: () => void;
+  onToggleMyDay: () => void;
 }
 
 function TaskRow({
@@ -597,7 +618,11 @@ function TaskRow({
   onFocusMove,
   onToggleDone,
   onToggleFavorite,
+  onToggleMyDay,
 }: TaskRowProps) {
+  const myDayToday = new Date();
+  myDayToday.setHours(0, 0, 0, 0);
+  const inMyDay = t.my_day_date === myDayToday.getTime();
   const { attributes, listeners, setNodeRef: setDragRef } = useDraggable({
     id: `row:${t.id}`,
     // 本行拖拽进行中即禁用拖拽源（浮层副本不再作为拖拽源；边界行禁拖无意义故不处理）
@@ -731,6 +756,23 @@ function TaskRow({
           </div>
         )}
       </div>
+
+      {/* 我的一天：今天已加入时常显（Sunrise 实心），否则 hover 显现 */}
+      <button
+        type="button"
+        aria-label={inMyDay ? "移出我的一天" : "加入我的一天"}
+        className={cn(
+          "shrink-0",
+          inMyDay ? "opacity-100" : "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100",
+        )}
+        style={inMyDay ? { color: "#F59E0B" } : undefined}
+        onClick={(e) => {
+          e.stopPropagation();
+          onToggleMyDay();
+        }}
+      >
+        <Sunrise size={16} fill={inMyDay ? "currentColor" : "none"} />
+      </button>
 
       {/* 星标：hover 显现 */}
       <button

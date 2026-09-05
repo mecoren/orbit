@@ -50,6 +50,17 @@ export function batchUpdateFavorite(tasks: TodoTask[], favorite: boolean): Promi
   return batchUpdate(tasks, () => ({ is_favorite: favorite ? 1 : 0 }), "批量更新收藏");
 }
 
+/** 批量加入/移出我的一天：加入写「今天本地零点」，移出写 null（视图按日判断） */
+export function batchUpdateMyDay(tasks: TodoTask[], join: boolean): Promise<number> {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return batchUpdate(
+    tasks,
+    () => ({ my_day_date: join ? today.getTime() : null }),
+    join ? "批量加入我的一天" : "批量移出我的一天",
+  );
+}
+
 /** 批量移动项目：project_id 变更 + position 置于目标项目现有任务尾位之后
  *  （取中值保证不与既有 position 冲突，03 文档 §一排序口径）。 */
 export async function batchMoveToProject(

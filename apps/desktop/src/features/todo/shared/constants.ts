@@ -8,6 +8,7 @@ import {
   CircleDot,
   ListTodo,
   Star,
+  Sunrise,
   type LucideIcon,
 } from "lucide-react";
 
@@ -31,8 +32,8 @@ export const STATUS_COLOR = {
 export const FAVORITE_COLOR = "#FACC15";
 export const OVERDUE_COLOR_CLASS = "text-destructive";
 
-/** 快捷视图 key */
-export type QuickViewKey = "all" | "undone" | "done" | "today" | "week" | "favorite";
+/** 快捷视图 key（my_day = 我的一天，07 报告新增项，对标微软 To Do） */
+export type QuickViewKey = "all" | "undone" | "done" | "today" | "week" | "favorite" | "my_day";
 
 export interface QuickViewDef {
   key: QuickViewKey;
@@ -41,8 +42,9 @@ export interface QuickViewDef {
   color: string;
 }
 
-/** 六个快捷视图（顺序即侧栏展示顺序） */
+/** 快捷视图（顺序即侧栏展示顺序；「我的一天」置顶——每日聚焦第一入口） */
 export const QUICK_VIEWS: QuickViewDef[] = [
+  { key: "my_day", label: "我的一天", icon: Sunrise, color: "#F59E0B" },
   { key: "all", label: "全部任务", icon: ListTodo, color: "#3B82F6" },
   { key: "undone", label: "未完成", icon: CircleDot, color: "#F59E0B" },
   { key: "done", label: "已完成", icon: CheckCircle2, color: "#22C55E" },

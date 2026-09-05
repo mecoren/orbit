@@ -52,6 +52,7 @@ interface MockTask {
   percent_done: number;
   position: number;
   is_favorite: number;
+  my_day_date: number | null;
   is_deleted: number;
   created_at: number;
   updated_at: number;
@@ -163,6 +164,7 @@ export function seedDefault(db: MockDb) {
     percent_done: 0,
     position: 1000,
     is_favorite: 0,
+    my_day_date: null,
     is_deleted: 0,
     created_at: now,
     updated_at: now,
@@ -268,6 +270,7 @@ const commands: Record<string, (args: any, ctx: Ctx) => unknown> = {
       percent_done: 0,
       position: input.position ?? 100000,
       is_favorite: input.is_favorite ?? 0,
+      my_day_date: input.my_day_date ?? null,
       is_deleted: 0,
       created_at: now,
       updated_at: now,

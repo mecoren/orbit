@@ -69,3 +69,44 @@ test("主链路：快速新建 → 列表出现 → 完成 → 撤销删除恢�
     page.getByRole("button", { name: "已完成任务：冒烟任务-买牛奶" }),
   ).toBeVisible({ timeout: 10_000 });
 });
+
+test("我的一天：行内加入 → 视图筛选 → 次日退出语义（my_day_date 按日判断）", async ({ page }) => {
+  // 侧栏切到「我的一天」视图（QUICK_VIEWS 置顶第一项）
+  await page.getByRole("button", { name: "我的一天" }).first().click();
+  // 空态：无任务
+  await expect(page.getByRole("heading", { name: "我的一天" })).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "未完成任务：既有任务-今天截止" }),
+  ).toHaveCount(0);
+
+  // 切回全部任务，行内「加入我的一天」按钮 hover 显现
+  await page.getByRole("button", { name: "全部任务", exact: true }).first().click();
+  const row = page.getByRole("button", { name: "未完成任务：既有任务-今天截止" });
+  await row.getByRole("button", { name: "加入我的一天" }).click();
+
+  // 回到「我的一天」：任务出现（my_day_date == 今天零点 命中）
+  await page.getByRole("button", { name: "我的一天" }).first().click();
+  await expect(
+    page.getByRole("button", { name: "未完成任务：既有任务-今天截止" }),
+  ).toBeVisible();
+
+  // db 侧验证语义：my_day_date 应为今天零点（非任意真值）——
+  // 昨天的时间戳不会命中视图（次日自动退出），这是微软 To Do 同款语义
+  const myDay = await page.evaluate(() => {
+    const m = (window as any).__orbitMock;
+    const t = m.db.tasks.find((x: any) => x.title === "既有任务-今天截止");
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return { raw: t?.my_day_date, isTodayZero: t?.my_day_date === today.getTime() };
+  });
+  expect(myDay.isTodayZero).toBe(true);
+
+  // 行内「移出我的一天」→ 视图清空
+  await page
+    .getByRole("button", { name: "未完成任务：既有任务-今天截止" })
+    .getByRole("button", { name: "移出我的一天" })
+    .click();
+  await expect(
+    page.getByRole("button", { name: "未完成任务：既有任务-今天截止" }),
+  ).toHaveCount(0);
+});

@@ -20,6 +20,7 @@ import {
   Repeat,
   Send,
   Star,
+  Sunrise,
   Tag as TagIcon,
   Trash2,
   X,
@@ -182,6 +183,9 @@ function TitleRow({
   task: Awaited<ReturnType<typeof todoTaskGetDetail>>;
   onPatch: (patch: Record<string, unknown>) => Promise<void>;
 }) {
+  const myDayToday = new Date();
+  myDayToday.setHours(0, 0, 0, 0);
+  const inMyDay = task.my_day_date === myDayToday.getTime();
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(task.title);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -242,6 +246,22 @@ function TitleRow({
         )}
       </div>
 
+      <Button
+        variant="ghost"
+        size="icon"
+        className="h-8 w-8"
+        aria-label={inMyDay ? "移出我的一天" : "加入我的一天"}
+        style={{ color: inMyDay ? "#F59E0B" : undefined }}
+        onClick={() => {
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
+          void onPatch({
+            my_day_date: task.my_day_date === today.getTime() ? null : today.getTime(),
+          });
+        }}
+      >
+        <Sunrise size={16} fill={inMyDay ? "currentColor" : "none"} />
+      </Button>
       <Button variant="ghost" size="icon" className="h-8 w-8" aria-label="收藏"
         style={{ color: task.is_favorite ? "#FACC15" : undefined }}
         onClick={() => void onPatch({ is_favorite: task.is_favorite ? 0 : 1 })}
