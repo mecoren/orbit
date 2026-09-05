@@ -133,13 +133,15 @@ class NotificationService {
     return '$hh:$mm';
   }
 
-  /// 后台 isolate 自足初始化：tz 库 + 插件（无权限请求，静默失败容忍）
+  /// 后台 isolate 自足初始化：tz 库 + 插件（无权限请求，静默失败容忍）。
+  ///
+  /// 时区注意：**不依赖 FlutterTimezone**——后台 isolate 里插件可能
+  /// 拿不到时区标识；_scheduleAlarm 用 tz.UTC 构造 TZDateTime 即可
+  /// （TZDateTime.from(DateTime.fromMillisecondsSinceEpoch, UTC) 与
+  /// 任意时区产生相同绝对 epoch，alarmClock 只关心绝对时刻；
+  /// 显示用 _clockLabel 走 DateTime 本地构造同样正确）。
   Future<void> _ensureSelfContained() async {
     tzdata.initializeTimeZones();
-    try {
-      final local = await FlutterTimezone.getLocalTimezone();
-      tz.setLocalLocation(tz.getLocation(local.identifier));
-    } catch (_) {}
     // initialize 幂等（engine 已初始化时直接返回）
     try {
       const initSettings = InitializationSettings(
@@ -302,6 +304,10 @@ class NotificationService {
 
   /// 单条系统闹钟排程。alarmClock（闹钟级、Doze 免疫）→ 无精确闹钟权限
   /// 回落 exactAllowWhileIdle → 再失败 inexactAllowWhileIdle（尽力而为）。
+  ///
+  /// TZDateTime 用 tz.UTC 构造：from(absolute DateTime, UTC) 产生的
+  /// 绝对时刻与本地时区完全相同（alarmClock 只看 epoch），从而把
+  /// 「后台 isolate 拿不到本地时区标识」从失败面中整体移除。
   Future<bool> _scheduleAlarm({
     required int id,
     required String title,
@@ -310,7 +316,7 @@ class NotificationService {
     required String payload,
   }) async {
     final scheduled = DateTime.fromMillisecondsSinceEpoch(remindAt);
-    final tzDate = tz.TZDateTime.from(scheduled, tz.local);
+    final tzDate = tz.TZDateTime.from(scheduled, tz.UTC);
     Future<void> put(AndroidScheduleMode mode) => _plugin.zonedSchedule(
           id: id,
           title: title,
