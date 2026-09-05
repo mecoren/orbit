@@ -132,6 +132,9 @@ pub struct TodoTask {
     pub percent_done: f64,
     pub position: f64,
     pub is_favorite: i32,
+    /// My Day「我的一天」：加入当天本地零点 ms；NULL = 不在任何一天的 My Day
+    /// （07 报告新增项，对标微软 To Do；次日自动清空为视图侧按日判断，不改数据）
+    pub my_day_date: Option<i64>,
     pub is_deleted: i32,
     pub created_at: i64,
     pub updated_at: i64,
@@ -156,6 +159,7 @@ pub struct TodoTaskCreateInput {
     pub repeat_mode: Option<i32>,
     pub position: Option<f64>,
     pub is_favorite: Option<i32>,
+    pub my_day_date: Option<i64>,
 }
 
 /// 反序列化 `Option<Option<T>>` 的可空字段。
@@ -225,6 +229,8 @@ pub struct TodoTaskUpdateInput {
     pub percent_done: Option<f64>,
     pub position: Option<f64>,
     pub is_favorite: Option<i32>,
+    #[serde(default, deserialize_with = "nullable::deserialize")]
+    pub my_day_date: Option<Option<i64>>,
 }
 
 // ---------- todo_subtasks ----------

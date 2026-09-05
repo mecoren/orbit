@@ -502,9 +502,9 @@ pub async fn create_todo_task(
         "INSERT INTO todo_tasks (
             uuid, title, description, project_id, priority, status, done, done_at,
             due_date, start_date, end_date, repeat_after, repeat_mode,
-            percent_done, position, is_favorite,
+            percent_done, position, is_favorite, my_day_date,
             is_deleted, created_at, updated_at, version
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, 0, ?, ?, 1)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, 0, ?, ?, 1)
         RETURNING *",
     )
     .bind(&uuid)
@@ -522,6 +522,7 @@ pub async fn create_todo_task(
     .bind(input.repeat_mode.unwrap_or(0))
     .bind(input.position.unwrap_or(0.0))
     .bind(input.is_favorite.unwrap_or(0))
+    .bind(input.my_day_date)
     .bind(now)
     .bind(now)
     .fetch_one(pool)
@@ -584,6 +585,9 @@ pub async fn update_todo_task(
     if input.is_favorite.is_some() {
         sets.push("is_favorite = ?".into());
     }
+    if input.my_day_date.is_some() {
+        sets.push("my_day_date = ?".into());
+    }
 
     let sql = format!(
         "UPDATE todo_tasks SET {} WHERE id = ? RETURNING *",
@@ -633,6 +637,9 @@ pub async fn update_todo_task(
         q = q.bind(v);
     }
     if let Some(v) = input.is_favorite {
+        q = q.bind(v);
+    }
+    if let Some(v) = input.my_day_date {
         q = q.bind(v);
     }
     let row = q

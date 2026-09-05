@@ -137,6 +137,7 @@ pub struct TodoTask {
     pub percent_done: f64,
     pub position: f64,
     pub is_favorite: i32,
+    pub my_day_date: Option<i64>,
     pub is_deleted: i32,
     pub created_at: i64,
     pub updated_at: i64,
@@ -164,6 +165,7 @@ impl From<orbit_core::models::business::TodoTask> for TodoTask {
             percent_done: t.percent_done,
             position: t.position,
             is_favorite: t.is_favorite,
+            my_day_date: t.my_day_date,
             is_deleted: t.is_deleted,
             created_at: t.created_at,
             updated_at: t.updated_at,
@@ -194,6 +196,7 @@ pub struct TodoTaskCreateInput {
     pub repeat_mode: Option<i32>,
     pub position: Option<f64>,
     pub is_favorite: Option<i32>,
+    pub my_day_date: Option<i64>,
 }
 
 impl From<TodoTaskCreateInput> for orbit_core::models::business::TodoTaskCreateInput {
@@ -213,6 +216,7 @@ impl From<TodoTaskCreateInput> for orbit_core::models::business::TodoTaskCreateI
             repeat_mode: i.repeat_mode,
             position: i.position,
             is_favorite: i.is_favorite,
+            my_day_date: i.my_day_date,
         }
     }
 }
@@ -597,6 +601,7 @@ pub struct TodoTaskDetail {
     pub percent_done: f64,
     pub position: f64,
     pub is_favorite: i32,
+    pub my_day_date: Option<i64>,
     pub is_deleted: i32,
     pub created_at: i64,
     pub updated_at: i64,
@@ -630,6 +635,7 @@ impl From<orbit_core::api::todo_api::TodoTaskDetail> for TodoTaskDetail {
             percent_done: d.task.percent_done,
             position: d.task.position,
             is_favorite: d.task.is_favorite,
+            my_day_date: d.task.my_day_date,
             is_deleted: d.task.is_deleted,
             created_at: d.task.created_at,
             updated_at: d.task.updated_at,
