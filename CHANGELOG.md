@@ -7,9 +7,39 @@
 
 ## [Unreleased]
 
-P2 功能双连（07 报告 §五）+ 死代码清理。
+P2 功能双连（07 报告 §五）+ 死代码清理 + P1#7 NLP 补记 + P2#19 冒烟。
 
 ### Added
+
+- **#19 Playwright 冒烟主链路**（纯浏览器 e2e，不启 Tauri 壳）：
+  `src/test/ipc-mock.ts` 在页面加载时伪造 `__TAURI_INTERNALS__` 接管
+  invoke/listen（真实 Tauri WebView 注入 internals 时为 no-op），
+  内存库模拟 Rust 后端——五张表 CRUD + 启动三命令 + kanban/global_search
+  + mica/sync 静默路径，写命令广播 db-change 与真实 EVENT_BUS 链路同构
+  （events 层 invalidateQueries → UI 刷新）。
+  `e2e/smoke.spec.ts` 覆盖主链路：快速新建（NLP 输入栏）→ 列表出现 →
+  行 checkbox 完成 → 右键删除（5s 撤销窗口）→ toast 撤销恢复。
+  排查中沉淀的三个 mock 保真度修正（均为「同步假 IPC 偏离真实异步时序」
+  的还原，对齐 Rust IPC 的 JSON 值语义）：
+  1. 读命令出参深拷贝（`ipcClone`）——活引用会被 react-query 的
+     structuralSharing 判等，`data` 引用恒定，UI 永不刷新；
+  2. 写命令的 db-change 广播推迟到 `setTimeout` 宏任务——同步/微任务
+     广播会被 React 19 离散事件批处理吞掉（子树渲染执行但不提交 DOM），
+     真 Tauri 下 Rust 事件转发天然异步不复现；为此 e2e 环境经
+     `VITE_E2E_NO_STRICT=1` 关闭 StrictMode（开发期检查工具，
+     不影响日常开发与生产行为）；
+  3. 删除后断言用任务行 aria 角色而非裸 `getByText`——删除 toast 文案
+     「已删除任务「…」」含任务名，会污染 toHaveCount(0) 造成永久假红。
+  e2e 用专用端口 5273 起隔离 dev server（`reuseExistingServer` 直连已占
+  端口会跑在同机其他项目的页面上——实测踩过 5173 被 GoNavi 占用）。
+- **#7 NLP 快速输入 v1**（07 报告 §五-P1#7，此前落地未记账）：
+  `parse-quick-input.ts` 纯函数规则引擎（中文优先，大小写仅限拉丁 token）：
+  今天/明天/后天/大后天、周X·星期X·礼拜X（未来最近）、下周X（下周一为
+  首周）、M月d日（今年已过顺延一年）；!1-5 优先级（!6+ 原样保留）；
+  #项目 @标签（标题精确匹配优先 → 首个前缀命中，多标签去重）。所有命中
+  区间互斥——长词先命中保护内部短词（「下周三」中的「周三」不被二次解析），
+  未匹配的 #/@ token 原样保留在标题。桌面 QuickAddBar 接线
+  （占位文案「支持「明天 #项目 @标签 !3」」），17 用例单测。
 
 - **#14 日历视图（月/议程两档）**：列表页第三视图 `calendar`——
   月档 7×6 周格（周一始，今日高亮，格内优先级色点 + 截止时刻 +
