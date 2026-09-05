@@ -167,6 +167,9 @@ alarmClock 排程 pending✓、dbChanges 单播流二次订阅丢事件（复现
 | 9 | flutter test 产物陷阱 | ⚠️ `flutter test integration_test` 会把 build/app/outputs/flutter-apk/app-debug.apk **覆盖为 test-harness 变体**（ext.flutter.integrationTest）——此后用该 APK 走 `am start` 永远停在等测试指令，表现酷似「启动卡死」。排查手段：VM service getIsolate 的 extensionRPCs 含 `ext.flutter.integrationTest` 即中招；重跑 `flutter build apk --debug` 覆盖回来即可 |
 | 10 | force-stop 清闹钟 | ⚠️ Android 系统语义（清除应用全部 PendingIntent），非缺陷；用户下次打开 App 全量重排自愈 |
 
-遗留：#8 后台 isolate 排程失败点复现（已留痕待下次抓取）；灵动岛形态需
-小米 HyperOS 真机；划掉最近任务与 `am kill` 同为「进程死+闹钟活」语义
-（#3 已覆盖等价命题）。
+遗留：#8 后台 isolate 排程失败点已做**代码级加固**（commit 9e13f4d：
+去 FlutterTimezone 依赖、TZDateTime 改 UTC 构造——最大嫌疑面整体移除；
+等价 API 实测 alarmClock 排程成功 b7e9605）；灵动岛形态需小米 HyperOS
+真机；划掉最近任务与 `am kill` 同为「进程死+闹钟活」语义（#3 已覆盖
+等价命题）。模拟器长跑后 IME/logd 间歇失活，UI 驱动测试建议短会话
++干净快照。
