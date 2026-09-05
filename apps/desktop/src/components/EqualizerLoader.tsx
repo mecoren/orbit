@@ -24,12 +24,16 @@ interface EqualizerLoaderProps {
  */
 
 // —— 物理常量 ——
-const GRAVITY = 2800; // 重力加速度 px/s²（干脆利落，不拖沓）
+// 单块腾空周期（s）：T = 2v/g，从起跳到落地的完整时长。调动画速率只改这里。
+const CYCLE = 0.8;
+// 起跳最高点（px）：与原版 87.5px 基本一致，节奏变慢但弹跳高度不变
+const JUMP_HEIGHT = 88;
+// 由周期与高度反解运动学参数：v = 4h/T，g = 2v/T
+const JUMP_VELOCITY = (4 * JUMP_HEIGHT) / CYCLE; // 440 px/s
+const GRAVITY = (2 * JUMP_VELOCITY) / CYCLE; // 1100 px/s²
 const STIFFNESS = 220; // 挤压回弹弹簧刚度（恢复更快，更 Q 弹）
 const DAMPING = 12; // 挤压回弹阻尼（低阻尼保留一点果冻余震）
 const AIR_STRETCH = 0.14; // 空中随速度拉伸的最大比例
-// 起跳初速度（向上，px/s）：v²=2gh → 700²/(2×2800)=87.5px 高
-const JUMP_VELOCITY = 700;
 
 // 方块边长（逻辑 px）与地板位置（逻辑 y）
 const DOT_SIZE = 31;
@@ -38,10 +42,9 @@ const GROUND_Y = 121;
 const DOT_RX = 10;
 
 // 3 个方块的圆心 x 与起跳相位（s）。
-// 单块腾空周期 ≈ 2×700/2800 = 0.5s，相位取 0 / 1/6 / 1/3 周期，
-// 三个方块此起彼伏形成从左到右的连续波浪。
+// 相位取 0 / 1/6 / 1/3 周期，三个方块此起彼伏形成从左到右的连续波浪。
 const CENTERS = [23.5, 81.5, 139.5];
-const DELAYS = [0, 0.5 / 6, 0.5 / 3];
+const DELAYS = [0, CYCLE / 6, CYCLE / 3];
 
 const clamp = (v: number, min: number, max: number) =>
   Math.min(max, Math.max(min, v));
@@ -81,7 +84,7 @@ class Block {
       // 地面碰撞：撞击越猛挤压越扁，落地瞬间立即满弹起跳，节奏永不停顿
       if (this.y + DOT_SIZE >= GROUND_Y && this.vy > 0) {
         this.y = GROUND_Y - DOT_SIZE;
-        this.squash = clamp(this.vy / 2400, 0.12, 0.42);
+        this.squash = clamp((this.vy / JUMP_VELOCITY) * 0.29, 0.12, 0.42);
         this.squashVel = 0;
         this.vy = -JUMP_VELOCITY;
       }
