@@ -7,6 +7,18 @@
          flutter_local_notifications requestNotificationsPermission 请求，
          用户拒绝则应用内静默降级为 toast 提示） -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+    <!-- P2 提醒升级（后台闹钟通道，flutter_local_notifications 16+ 官方
+         要求宿主 manifest 自行声明）：
+         - RECEIVE_BOOT_COMPLETED + WAKE_LOCK：重启/应用更新后由插件
+           ScheduledNotificationBootReceiver 恢复全部 pending 闹钟；
+         - SCHEDULE_EXACT_ALARM：zonedSchedule(alarmClock) 精确闹钟
+           （Android 12+；未授予时代码回落 exactAllowWhileIdle，
+           官方二选一之一，USE_EXACT_ALARM 限日历/闹钟类上架审核）；
+         - VIBRATE：Importance.high 渠道提醒震动。 -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
+    <uses-permission android:name="android.permission.WAKE_LOCK"/>
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM"/>
+    <uses-permission android:name="android.permission.VIBRATE"/>
     <application
         android:usesCleartextTraffic="true"
         android:label="orbit"
@@ -34,6 +46,21 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
+        <!-- flutter_local_notifications：到点触发（系统闹钟唤醒直接弹通知，
+             不依赖 Dart 进程）+ 重启恢复 + 推迟 action 后台派发（官方
+             README §AndroidManifest.xml setup 原样声明；exported 均按
+             官方示例——BootReceiver 收系统广播必须 exported=true，其余
+             false） -->
+        <receiver android:exported="false" android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationReceiver" />
+        <receiver android:exported="false" android:name="com.dexterous.flutterlocalnotifications.ActionBroadcastReceiver" />
+        <receiver android:exported="true" android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationBootReceiver">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED"/>
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED"/>
+                <action android:name="android.intent.action.QUICKBOOT_POWERON"/>
+                <action android:name="com.htc.intent.action.QUICKBOOT_POWERON"/>
+            </intent-filter>
+        </receiver>
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data

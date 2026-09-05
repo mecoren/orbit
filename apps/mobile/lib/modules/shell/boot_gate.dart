@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/theme/orbit_accents.dart';
 import '../../data/providers/bridge_provider.dart';
 import '../../services/notification_service.dart';
+import '../../services/reminder_scheduler.dart';
 import '../todo/providers/todo_providers.dart';
 import '../auth/unlock_page.dart';
 
@@ -76,6 +77,9 @@ class _BootGateState extends ConsumerState<BootGate> {
   void _goReady() {
     // 本地通知插件初始化 + 权限请求（幂等；拒绝则事件回落 toast，静默降级）
     NotificationService.instance.ensureInitialized();
+    // 后台闹钟通道：DB 未来提醒全量重排 + dbChanges 防抖跟随
+    //（P2 提醒升级：后台/被杀/重启均由系统闹钟保证提醒）
+    ReminderScheduler.attachOnce(ref.read(orbitBridgeProvider));
     _subscribeStreams();
     if (mounted) setState(() => _phase = _BootPhase.ready);
   }

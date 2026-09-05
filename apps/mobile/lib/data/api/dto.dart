@@ -483,6 +483,11 @@ class TodoReminder {
   final int? deletedAt;
   final int version;
 
+  /// 关联任务标题（P2 提醒升级：系统闹钟通知正文用）。
+  /// Rust todo_reminders_list 不含任务列——由桥层消费方 join 任务表
+  /// 填充；直取列表时为 null（通知正文回退应用名）。
+  final String? reminderTitle;
+
   const TodoReminder({
     required this.id,
     required this.uuid,
@@ -493,6 +498,7 @@ class TodoReminder {
     required this.updatedAt,
     required this.deletedAt,
     required this.version,
+    this.reminderTitle,
   });
 
   factory TodoReminder.fromJson(Map<String, dynamic> j) => TodoReminder(
@@ -505,6 +511,21 @@ class TodoReminder {
         updatedAt: j['updated_at'] as int,
         deletedAt: j['deleted_at'] as int?,
         version: j['version'] as int,
+        reminderTitle: j['reminder_title'] as String?,
+      );
+
+  /// 携带任务标题的副本（join 后填充用）
+  TodoReminder withTitle(String? title) => TodoReminder(
+        id: id,
+        uuid: uuid,
+        taskId: taskId,
+        remindAt: remindAt,
+        isDeleted: isDeleted,
+        createdAt: createdAt,
+        updatedAt: updatedAt,
+        deletedAt: deletedAt,
+        version: version,
+        reminderTitle: title,
       );
 }
 

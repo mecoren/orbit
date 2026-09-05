@@ -1,25 +1,42 @@
+import 'dart:async';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:timezone/data/latest_all.dart' as tzdata;
 import 'package:timezone/timezone.dart' as tz;
 
+import '../data/api/dto.dart';
 import '../data/api/orbit_bridge.dart';
 import '../shared/widgets/wait_toast.dart';
 
-/// 本地通知服务（Phase 7 平台集成）
+/// 本地通知服务（Phase 7 平台集成；P2 提醒升级全面改版）
 ///
-/// 职责（对齐移动端任务书）：
-/// - 初始化插件：Android 小图标用专用剪影 @drawable/ic_stat_orbit
-///   （白色轨道剪影，M5 品牌图标族；勿用启动器图标——彩图在状态栏
-///   会被系统压成灰块）；
-/// - 请求 POST_NOTIFICATIONS 运行时权限，拒绝则静默降级——
-///   提醒到期回落应用内 warning toast（[WaitToast] 兜底已存在）；
-/// - [handleReminderDue]：reminderDue 事件即时呈现。zonedSchedule 面向
-///   未来排程，事件到达即"已到期"，直接 show() 立即弹出（id=提醒主键，
-///   同 id 重发自动覆盖，不产生叠影）。
+/// 三通道协同（ADR 0002 α→β 演进，触发条件即 docs/adr/0002 §六的
+/// 「后台停摆问题必须解决」）：
 ///
-/// 时区三件套中的 timezone/flutter_timezone 当前仅做本地时区初始化
-/// （为后续定时排程 zonedSchedule 预备），初始化失败不影响 show() 路径。
+/// 1. **前台即时通道**（原状保留）：Rust 20s 轮询 reminderDue 事件到达
+///    → [handleReminderDue] 直接 show()。前台通知文案实时、含任务标题。
+/// 2. **后台闹钟通道**（新增）：[syncFutureReminders] 把全部未来提醒
+///    重排进系统闹钟（zonedSchedule + alarmClock 模式）。闹钟由系统
+///    AlarmManager 持有：应用退后台/被杀/Doze 均准时触发；重启后由
+///    插件 ScheduledNotificationBootReceiver 自动恢复（manifest 已声明
+///    BOOT_COMPLETED）。到点通知由原生 Receiver 直接构建展示——
+///    不依赖 Dart 进程存活，彻底解决「后台不提醒」。
+/// 3. **推迟操作通道**（新增）：通知上的「推迟 10 分钟/30 分钟/1 小时」
+///    action 按钮。payload 携带 taskId|remindAt|title，点击唤醒
+///    [onSnoozeBackgroundAction]（后台 isolate，应用被杀也可达）——
+///    **不写 Rust DB**（后台 isolate 无法重入 FRB 库）：只重排一条新
+///    系统闹钟 + 静默确认通知；DB 的删旧建新由前台启动时
+///    [syncFutureReminders] 以数据库为准收敛（DB 旧行到期弹一次后
+///    自动清掉，不循环——见 _applySnooze 的 remindAt 比较）。
+///
+/// 小米 HyperOS 灵动岛（焦点通知）：category=alarm + Importance.high
+/// 渠道。小米焦点通知对闹钟/来电类高优通知以灵动岛胶囊呈现，
+/// 依据 docs/adr/0002 §五真机验收项「灵动岛形态」。
+///
+/// 时区：zonedSchedule 需要 tz.TZDateTime；[ensureInitialized] 初始化
+/// 本地时区，后台 isolate 入口也各自兜底（tz 库默认 UTC）。
 class NotificationService {
   NotificationService._();
 
@@ -35,8 +52,113 @@ class NotificationService {
   static const _channelId = 'todo_reminder_due';
   static const _channelName = '待办提醒';
 
+  /// 推迟 actionId → 分钟数（前后台回调共用解析）
+  static const snoozeActions = {'snooze_10': 10, 'snooze_30': 30, 'snooze_60': 60};
+
+  /// 通知 id 派生：taskId 域 + 偏移避撞（taskId 正常 ≤ 位数充足；
+  /// % 2^30 后加偏移确保 32 位域内且与确认通知 id 不重叠）
+  static int _alarmId(int taskId) => (taskId % (1 << 30)) + 1;
+  static int _confirmId(int taskId) => (taskId % (1 << 30)) + 1000000000;
+
   /// 权限是否已授予（未初始化 / 被拒均为 false）
   bool get hasPermission => _granted;
+
+  // ── 推迟回调（前台 + 后台 isolate 双入口）──
+
+  /// 后台 isolate 推迟回调（top-level @pragma 防 AOT 裁剪）。
+  /// payload "taskId|remindAt|title"；actionId 即 snoozeActions 键。
+  @pragma('vm:entry-point')
+  static void onSnoozeBackgroundAction(NotificationResponse response) {
+    runZonedGuarded(
+      () => instance._handleSnoozeResponse(response),
+      (e, st) => debugPrint('[NotificationService] bg snooze: $e\n$st'),
+    );
+  }
+
+  /// 前台收到 action 点击（onDidReceiveNotificationResponse）：
+  /// 应用存活时 action 优先走前台回调，逻辑与后台完全一致。
+  void _onForegroundResponse(NotificationResponse response) {
+    final minutes = snoozeActions[response.actionId];
+    if (minutes != null) {
+      runZonedGuarded(
+        () => instance._handleSnoozeResponse(response),
+        (e, st) => debugPrint('[NotificationService] fg snooze: $e\n$st'),
+      );
+    }
+    // 正文点击：autoCancel 已消掉通知，点击本身即拉起应用，无需处理
+  }
+
+  /// 推迟执行体：解析 payload → 重排系统闹钟 + 静默确认通知。
+  /// 全部走插件原生 API（不依赖 FRB/DB），前后台 isolate 皆可运行。
+  Future<void> _handleSnoozeResponse(NotificationResponse response) async {
+    final minutes = snoozeActions[response.actionId];
+    final parts = (response.payload ?? '').split('|');
+    if (minutes == null || parts.length < 3) return;
+    final taskId = int.tryParse(parts[0]);
+    final remindAt = int.tryParse(parts[1]);
+    final title = parts.sublist(2).join('|');
+    if (taskId == null || remindAt == null) return;
+
+    await _ensureSelfContained();
+
+    final nextAt = remindAt + minutes * 60 * 1000;
+    final clock = _clockLabel(nextAt);
+    await _scheduleAlarm(
+      id: _alarmId(taskId),
+      title: '待办提醒',
+      body: title,
+      remindAt: nextAt,
+      payload: '$taskId|$nextAt|$title',
+    );
+    await _plugin.show(
+      id: _confirmId(taskId),
+      title: '已推迟 $minutes 分钟',
+      body: '$title · $clock 再提醒你',
+      notificationDetails: _quietDetails(),
+    );
+  }
+
+  /// 时钟串 HH:mm（本地时区；后台 isolate 与前台共用）
+  static String _clockLabel(int ms) {
+    final t = DateTime.fromMillisecondsSinceEpoch(ms);
+    final hh = t.hour.toString().padLeft(2, '0');
+    final mm = t.minute.toString().padLeft(2, '0');
+    return '$hh:$mm';
+  }
+
+  /// 后台 isolate 自足初始化：tz 库 + 插件（无权限请求，静默失败容忍）
+  Future<void> _ensureSelfContained() async {
+    tzdata.initializeTimeZones();
+    try {
+      final local = await FlutterTimezone.getLocalTimezone();
+      tz.setLocalLocation(tz.getLocation(local.identifier));
+    } catch (_) {}
+    // initialize 幂等（engine 已初始化时直接返回）
+    try {
+      const initSettings = InitializationSettings(
+        android: AndroidInitializationSettings('@drawable/ic_stat_orbit'),
+      );
+      await _plugin.initialize(
+        settings: initSettings,
+        onDidReceiveNotificationResponse: _onForegroundResponse,
+        onDidReceiveBackgroundNotificationResponse: onSnoozeBackgroundAction,
+      );
+    } catch (_) {
+      /* 已初始化或后台受限：容忍，继续 show/schedule */
+    }
+  }
+
+  /// 静默确认通知样式（低调渠道，不震不响）
+  static NotificationDetails _quietDetails() => const NotificationDetails(
+        android: AndroidNotificationDetails(
+          'todo_reminder_info',
+          '提醒反馈',
+          importance: Importance.low,
+          priority: Priority.low,
+        ),
+      );
+
+  // ── 初始化（BootGate 主 isolate）──
 
   /// 初始化插件 + 时区 + 权限请求（幂等，重复调用仅首次生效）
   Future<void> ensureInitialized() async {
@@ -46,9 +168,13 @@ class NotificationService {
       const initSettings = InitializationSettings(
         android: AndroidInitializationSettings('@drawable/ic_stat_orbit'),
       );
-      await _plugin.initialize(settings: initSettings);
+      await _plugin.initialize(
+        settings: initSettings,
+        onDidReceiveNotificationResponse: _onForegroundResponse,
+        onDidReceiveBackgroundNotificationResponse: onSnoozeBackgroundAction,
+      );
 
-      // 时区库初始化（失败静默跳过：当前 show() 路径不依赖时区）
+      // 时区库初始化（zonedSchedule 依赖；失败 fallback UTC 仍可用）
       tzdata.initializeTimeZones();
       try {
         final local = await FlutterTimezone.getLocalTimezone();
@@ -65,6 +191,8 @@ class NotificationService {
     }
   }
 
+  // ── 通道 1：前台即时通知（reminderDue 事件）──
+
   /// 提醒到期事件出口：有权限 → show() 即时系统通知；
   /// 无权限或展示异常 → 维持 warning toast 兜底（文案与原订阅处一致）。
   Future<void> handleReminderDue(ReminderDueEvent event) async {
@@ -73,26 +201,107 @@ class NotificationService {
       WaitToast.warning('待办提醒：${event.title}');
       return;
     }
-    const details = NotificationDetails(
-      android: AndroidNotificationDetails(
-        _channelId,
-        _channelName,
-        // 小图标沿用初始化设置（@drawable/ic_stat_orbit）；
-        // 22.x 的 AndroidNotificationDetails 无 channelIcon 参数
-        importance: Importance.high,
-        priority: Priority.high,
-      ),
-    );
     try {
-      // id=提醒主键：同 id 重发自动覆盖，不产生叠影
       await _plugin.show(
-        id: event.id,
+        id: _alarmId(event.taskId),
         title: '待办提醒',
         body: event.title,
-        notificationDetails: details,
+        notificationDetails: _reminderDetails(
+          payload: '${event.taskId}|${event.remindAt}|${event.title}',
+        ),
       );
     } catch (_) {
       WaitToast.warning('待办提醒：${event.title}');
     }
+  }
+
+  // ── 通道 2：后台闹钟全量重排 ──
+
+  /// 全量重排后台闹钟（启动/提醒数据变更后调用）：
+  /// - cancelAllPendingNotifications 清掉本插件全部 pending 闹钟；
+  /// - 过去时间跳过（DB 里的历史行不该再闹；前台轮询负责 24h 补弹）；
+  /// - 未来提醒逐条 zonedSchedule(alarmClock)。
+  /// 返回排上的条数（测试/日志用）。
+  Future<int> syncFutureReminders(List<TodoReminder> reminders) async {
+    await ensureInitialized();
+    if (!_granted) return 0;
+    try {
+      await _plugin.cancelAllPendingNotifications();
+    } catch (_) {
+      /* 清空失败继续重排：同 id zonedSchedule 覆盖旧闹钟 */
+    }
+    final now = DateTime.now().millisecondsSinceEpoch;
+    var count = 0;
+    for (final r in reminders) {
+      if (r.isDeleted != 0 || r.remindAt <= now) continue;
+      // 标题缺失（任务可能已被删）：仍排闹钟，正文回退应用名
+      final body = r.reminderTitle ?? '待办任务';
+      final ok = await _scheduleAlarm(
+        id: _alarmId(r.taskId),
+        title: '待办提醒',
+        body: body,
+        remindAt: r.remindAt,
+        payload: '${r.taskId}|${r.remindAt}|$body',
+      );
+      if (ok) count++;
+    }
+    return count;
+  }
+
+  /// 单条系统闹钟排程。alarmClock（闹钟级、Doze 免疫）→ 无精确闹钟权限
+  /// 回落 exactAllowWhileIdle → 再失败 inexactAllowWhileIdle（尽力而为）。
+  Future<bool> _scheduleAlarm({
+    required int id,
+    required String title,
+    required String body,
+    required int remindAt,
+    required String payload,
+  }) async {
+    final scheduled = DateTime.fromMillisecondsSinceEpoch(remindAt);
+    final tzDate = tz.TZDateTime.from(scheduled, tz.local);
+    Future<void> put(AndroidScheduleMode mode) => _plugin.zonedSchedule(
+          id: id,
+          title: title,
+          body: body,
+          payload: payload,
+          scheduledDate: tzDate,
+          notificationDetails: _reminderDetails(payload: payload),
+          androidScheduleMode: mode,
+        );
+    try {
+      await put(AndroidScheduleMode.alarmClock);
+      return true;
+    } catch (_) {}
+    try {
+      await put(AndroidScheduleMode.exactAllowWhileIdle);
+      return true;
+    } catch (_) {}
+    try {
+      await put(AndroidScheduleMode.inexactAllowWhileIdle);
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// 提醒通知样式：三个推迟 action + 灵动岛（alarm 类别）高优渠道。
+  /// payload 贯穿 show/zonedSchedule 两条路径（推迟回退解析用）。
+  static NotificationDetails _reminderDetails({required String payload}) {
+    return const NotificationDetails(
+      android: AndroidNotificationDetails(
+        _channelId,
+        _channelName,
+        importance: Importance.high,
+        priority: Priority.high,
+        // 小米 HyperOS 焦点通知（灵动岛）：闹钟类高优通知走灵动岛胶囊
+        category: AndroidNotificationCategory.alarm,
+        autoCancel: true,
+        actions: [
+          AndroidNotificationAction('snooze_10', '推迟10分钟'),
+          AndroidNotificationAction('snooze_30', '推迟30分钟'),
+          AndroidNotificationAction('snooze_60', '推迟1小时'),
+        ],
+      ),
+    );
   }
 }
