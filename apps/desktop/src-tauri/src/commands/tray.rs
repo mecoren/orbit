@@ -40,8 +40,14 @@ pub const TRAY_MENU_SPEC: TrayMenuSpec = TrayMenuSpec {
     ],
 };
 
-/// 退出应用：销毁主窗（绕过驻留拦截）+ app.exit
+/// 退出应用：销毁主窗（绕过驻留拦截）+ app.exit。
+/// 退出前把未来 24h 提醒注册进 Windows 系统 Toast 调度器——
+/// 进程结束后到点由操作系统直接弹（离线提醒，无需进程存活）；
+/// 下次启动时 scheduled_toast::clear_schedule_on_startup 清除，
+/// 防止与运行中的轮询通道双弹。
 pub fn quit_app(app: &AppHandle) {
+    #[cfg(target_os = "windows")]
+    crate::commands::scheduled_toast::schedule_all_on_quit(app);
     if let Some(win) = app.get_webview_window("main") {
         let _ = win.destroy();
     }

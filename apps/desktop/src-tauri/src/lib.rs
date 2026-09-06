@@ -93,6 +93,11 @@ pub fn run() {
                 eprintln!("[mica] dwm apply failed: {e}");
             }
 
+            // 清除上次退出前注册的 Windows 计划通知（离线提醒）：
+            // 运行中由轮询通道接管，防止同一提醒双弹。失败静默（无计划）。
+            #[cfg(target_os = "windows")]
+            commands::scheduled_toast::clear_schedule_on_startup();
+
             // 启动待办提醒轮询守护（每 20s 一轮；DB 就绪后自动工作；
             // 全平台启动——此前误嵌 Mica 失败分支导致成功路径下守护不运行）
             notification_scheduler::todo_reminder_start_poller(_app.handle().clone());
