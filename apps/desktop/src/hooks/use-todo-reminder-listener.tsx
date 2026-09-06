@@ -14,7 +14,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
 import { nextRepeatAt } from "@/features/todo/shared/repeat";
-import { snoozeReminder } from "@/features/todo/shared/reminder-snooze";
+import { snoozeReminder, remindAtClockLabel } from "@/features/todo/shared/reminder-snooze";
 import { ReminderToast } from "@/features/todo/shared/reminder-toast";
 import {
   todoReminderCreate,
@@ -31,19 +31,35 @@ interface ReminderDuePayload {
 
 /** Rust 系统通知推迟完成事件（notify-rust action → 删旧建新后 emit） */
 interface ReminderSnoozedPayload {
+  reminder_id: number;
   task_id: number;
   remind_at: number;
+  title: string;
 }
+
+/** reminder.id → in-app toast id（snoozed 事件到达时按源 id 关对应 toast） */
+const reminderToastIds = new Map<number, number | string>();
 
 export function useTodoReminderListener() {
   const qc = useQueryClient();
   useEffect(() => {
-    // 系统通知（右下角弹窗）点推迟按钮后：Rust 已删旧建新并广播，
-    // 前端失效详情缓存让详情抽屉提醒区块即时刷新
+    // 系统通知（右下角弹窗）点推迟按钮后：Rust 已删旧建新并广播。
+    // 前端三件事：按 reminder_id 关闭对应 in-app toast（duration Infinity
+    // 常驻，不关会一直挂着，且其引用的提醒行已被删——再点它会建出
+    // 平行提醒）+ 弹与站内推迟同款确认 + 失效详情缓存刷新提醒区块
     const unlistenSnoozed = listen<ReminderSnoozedPayload>(
       "todo_reminder:snoozed",
       (event) => {
-        const { task_id } = event.payload;
+        const { reminder_id, task_id, remind_at, title } = event.payload;
+        const toastId = reminderToastIds.get(reminder_id);
+        if (toastId != null) {
+          toast.dismiss(toastId);
+          reminderToastIds.delete(reminder_id);
+        }
+        toast.success(`已推迟到 ${remindAtClockLabel(remind_at)}`, {
+          description: title,
+          duration: 4_000,
+        });
         void qc.invalidateQueries({ queryKey: ["todo-task-detail", task_id] });
       },
     );
@@ -51,16 +67,22 @@ export function useTodoReminderListener() {
       const r = event.payload;
       // toast.custom 支持 jsx 内容（sonner 单 action 按钮装不下三个推迟档）
       toast.custom(
-        (id) => (
-          <ReminderToast
-            title={r.title}
-            remindAt={r.remind_at}
-            onSnooze={(minutes) =>
-              snoozeReminder(r.id, r.task_id, r.remind_at, minutes, qc)
-            }
-            onDone={() => toast.dismiss(id)}
-          />
-        ),
+        (id) => {
+          reminderToastIds.set(r.id, id);
+          return (
+            <ReminderToast
+              title={r.title}
+              remindAt={r.remind_at}
+              onSnooze={(minutes) =>
+                snoozeReminder(r.id, r.task_id, r.remind_at, minutes, qc)
+              }
+              onDone={() => {
+                reminderToastIds.delete(r.id);
+                toast.dismiss(id);
+              }}
+            />
+          );
+        },
         // 不自动消失：推迟/关闭都由按钮驱动；避免超时关闭后用户失去入口
         { duration: Infinity },
       );

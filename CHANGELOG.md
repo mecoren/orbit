@@ -19,6 +19,14 @@ P1 体验能力包补记（#8/#9/#10/#11/#12/#13，8/26 落地未记账）+ P2#1
   emit snoozed 事件前端失效缓存；timeout Never 带按钮通知不自动消失；
   Windows AUMID 用 cn.wait.orbit。新增 toast_actions_manual 手动验收
   测试——Windows 本机实测点击「推迟30分钟」回调精准收到 snooze_30。
+- **系统通知推迟后联动关闭应用内提醒 toast**：双通道并发下（系统通知 +
+  in-app sonner toast 同时弹出，后者 duration Infinity 常驻），在系统通知
+  上点推迟后 in-app toast 会一直挂着——且其引用的提醒行已被删旧建新，
+  再点它会建出第二条平行提醒。修复：snoozed 事件补 reminder_id + title
+  （Rust 侧 title 克隆为 owned 过 thread::spawn 的 'static 约束）；前端
+  维护 reminder.id → toast id 登记表，snoozed 到达时 dismiss 对应 toast
+  并弹与站内推迟同款「已推迟到 HH:mm」确认提示；手动关闭 toast 时同步
+  清登记。cargo check/clippy + tsc + 87 单测全绿。
 - **提醒功能三端升级**（用户需求：到期可推迟 10 分钟/30 分钟/1 小时；
   移动端后台可提醒 + 小米灵动岛形态）+ **可用性补强轮**（commit 92b5ef5）：
   - **桌面端推迟**：到期 toast 重制为自定义卡片（sonner toast.custom，

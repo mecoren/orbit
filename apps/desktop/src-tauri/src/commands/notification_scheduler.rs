@@ -55,11 +55,14 @@ struct ReminderDueEvent {
     remind_at: i64,
 }
 
-/// 推迟完成事件（前端失效 todo-task-detail 缓存用）
+/// 推迟完成事件（前端按 reminder_id 关闭对应 in-app toast +
+/// 失效 todo-task-detail 缓存）
 #[derive(Clone, Serialize)]
 struct ReminderSnoozedEvent {
+    reminder_id: i64,
     task_id: i64,
     remind_at: i64,
+    title: String,
 }
 
 /// 启动待办提醒轮询守护（幂等；lib.rs setup 阶段调用）
@@ -163,7 +166,9 @@ fn notify_system(app: &AppHandle, reminder_id: i64, task_id: i64, title: &str, r
 
     // 每条通知一个阻塞等待线程（wait_for_action 跨平台；通知关闭/超时
     // 回调 "__closed"）。桌面常驻进程模型下线程随通知生命周期结束。
+    // title 先克隆为 owned：spawn 闭包要求 'static，&str 借用逃逸不过检查
     let app = app.clone();
+    let title = title.to_string();
     std::thread::spawn(move || {
         // wait_for_action 消费 handle（FnOnce 回调）；先经 channel 转出
         // action 串，把后续写库留在本线程主体（闭包内不能 async）
@@ -202,12 +207,16 @@ fn notify_system(app: &AppHandle, reminder_id: i64, task_id: i64, title: &str, r
             created.is_ok()
         });
         if done {
-            // 前端失效 todo-task-detail 缓存（详情抽屉提醒区块即时刷新）
+            // 前端两件事：按 reminder_id 关闭对应 in-app toast（duration
+            // Infinity 常驻，不主动关会一直挂着且引用已删行）+ 失效
+            // todo-task-detail 缓存（详情抽屉提醒区块即时刷新）
             let _ = app.emit(
                 "todo_reminder:snoozed",
                 ReminderSnoozedEvent {
+                    reminder_id,
                     task_id,
                     remind_at: next_at,
+                    title,
                 },
             );
         }
