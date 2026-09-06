@@ -74,8 +74,13 @@ export function TitleBar() {
           循迹
         </div>
 
-        {/* 右侧：待办、设置、关于、主题、窗口控制按钮（不响应拖拽，避免点击被吞） */}
-        <div className="ml-auto flex items-center gap-1 pr-0" data-tauri-drag-region={false}>
+        {/* 右侧：待办、设置、关于、主题、窗口控制按钮（不响应拖拽，避免点击被吞）。
+            self-stretch：撑满标题栏全高，让 WindowControls 三键可垂直 stretch
+            铺满（hover 背景贴顶到底无间隙）；其余图标钮靠 items-center 居中 */}
+        <div
+          className="ml-auto flex items-center gap-1 self-stretch pr-0"
+          data-tauri-drag-region={false}
+        >
           <TitleBarIconButton to="/todo" icon={CheckSquare} label="待办" />
           <TitleBarIconButton to="/settings" icon={Settings} label="设置" />
           <TitleBarIconButton to="/about" icon={Info} label="关于" />

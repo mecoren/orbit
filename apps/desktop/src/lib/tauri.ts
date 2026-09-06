@@ -638,3 +638,45 @@ export const plaintextExportJson = (excludeDeleted = true) =>
 /** 导出任务主视图 CSV（UTF-8 with BOM；默认排除墓碑行） */
 export const plaintextExportCsv = (excludeDeleted = true) =>
   invoke<PlaintextExportView>("plaintext_export_csv", { excludeDeleted });
+
+
+// ---------- 节假日数据（日历视图；用户需求：联网更新节假日） ----------
+
+/** 节假日行（cfg_holidays 缓存；date YYYY-MM-DD） */
+export interface HolidayInfo {
+  date: string;
+  year: number;
+  /** true = 放假日；false = 调休补班日（要上班的周末） */
+  is_holiday: boolean;
+  /** 节假日名称（如「春节」「春节前补班」） */
+  name: string;
+}
+
+/** 节假日更新记账（日历工具栏「上次更新」展示用） */
+export interface HolidayMeta {
+  /** 上次成功更新（ms；0 = 从未成功） */
+  last_update_ms: number;
+  /** 上次尝试（ms；0 = 从未尝试） */
+  last_attempt_ms: number;
+  /** 连续失败次数（成功后清零） */
+  failure_count: number;
+  /** 每日固定更新时刻（本地时区小时 0-23；默认 8） */
+  fixed_hour: number;
+}
+
+/** 全部节假日（date 升序；空库回落预置 2026 表，冷启动可用） */
+export const holidaysList = () => invoke<HolidayInfo[]>("holidays_list");
+
+/** 判定某日期：Some(true) 放假 / Some(false) 补班 / null 普通日（按星期） */
+export const holidayIsOn = (date: string) =>
+  invoke<boolean | null>("holiday_is_on", { date });
+
+/** 手动更新（强制拉取；失败抛错误文案，旧缓存保留） */
+export const holidaysUpdate = () => invoke<HolidayMeta>("holidays_update");
+
+/** 更新记账 */
+export const holidayMeta = () => invoke<HolidayMeta>("holiday_meta");
+
+/** 设置每日固定更新时刻（0-23，越界 clamp） */
+export const holidaySetFixedHour = (hour: number) =>
+  invoke<void>("holiday_set_fixed_hour", { hour });

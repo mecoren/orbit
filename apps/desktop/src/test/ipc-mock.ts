@@ -174,6 +174,13 @@ export function seedDefault(db: MockDb) {
   return project;
 }
 
+/** 冒烟用节假日样例（形状对齐 Rust HolidayInfo；2026 年真实数据节选） */
+const MOCK_HOLIDAYS = [
+  { date: "2026-01-01", year: 2026, is_holiday: true, name: "元旦" },
+  { date: "2026-01-04", year: 2026, is_holiday: false, name: "元旦后补班" },
+  { date: "2026-02-17", year: 2026, is_holiday: true, name: "初一" },
+] as const;
+
 // ---------- 命令实现 ----------
 
 const notImplemented = (cmd: string) => {
@@ -457,6 +464,15 @@ const commands: Record<string, (args: any, ctx: Ctx) => unknown> = {
   // ---- 备份/导出（设置页打开才拉取；给空态安全值）----
   backup_prefs_get: () => null,
   full_backup_list_local: () => [],
+
+  // ---- 节假日（日历视图挂载即拉取；空表回落 Rust 侧预置 2026 表，
+  //      浏览器 mock 回给一小段同构数据让徽标链路可走通；更新命令模拟成功）----
+  holidays_list: () => ipcClone(MOCK_HOLIDAYS),
+  holiday_is_on: ({ date }: { date: string }) =>
+    MOCK_HOLIDAYS.find((h) => h.date === date)?.is_holiday ?? null,
+  holidays_update: () => ({ last_update_ms: Date.now(), last_attempt_ms: Date.now(), failure_count: 0, fixed_hour: 8 }),
+  holiday_meta: () => ({ last_update_ms: Date.now(), last_attempt_ms: Date.now(), failure_count: 0, fixed_hour: 8 }),
+  holiday_set_fixed_hour: () => undefined,
 
   // ---- 计数（旧基座命令；保守返回 0）----
   business_count: () => 0,

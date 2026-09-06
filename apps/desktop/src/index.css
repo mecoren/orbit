@@ -527,8 +527,10 @@
 
 /* ============================================================
  * 自定义窗口控制按钮（移植自 qraft globals.css 同名实现）
- * - .window-controls：按钮组容器，高度占满标题栏行
- * - .window-control：单个按钮，命中区 46×32px（Win11 规范）
+ * - .window-controls：按钮组容器，self-stretch 占满标题栏行
+ * - .window-control：单键命中区宽 46px（Win11 规范），高度 stretch
+ *   铺满整个标题栏（36px）——hover 背景贴顶到底无间隙，与
+ *   Win11 原生 caption 按钮行为一致（原生键就是全高的）
  * - hover 仅背景 alpha 提升（无缩放抖动）；active 加深；
  *   focus-visible 内缩 2px ring，不溢出标题栏
  * - .window-control--close:hover 反色警示（--destructive 红底白图标），
@@ -536,7 +538,7 @@
  * ============================================================ */
 .window-controls {
   display: flex;
-  height: 100%;
+  align-self: stretch;
   flex-shrink: 0;
 }
 
@@ -544,8 +546,8 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  align-self: stretch;
   width: 46px;
-  height: 32px;
   border: none;
   background: transparent;
   color: var(--foreground);

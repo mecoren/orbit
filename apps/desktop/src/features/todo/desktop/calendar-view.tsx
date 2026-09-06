@@ -2,16 +2,20 @@
  * CalendarView — 日历视图（07 报告 §五-P2#14：月/议程两档起步）
  *
  * 月档：7×6 周格。有 due_date 的任务按本地日落到格内；未完成逾期任务红字标注。
- *   格子内容超 3 条折叠为「+N」，点击格子展开该日全部任务弹层。
+ *   格内任务条列表支持纵向滚动（格内容量超可视高度时滑看全部；滚到底显示
+ *   「共 N 条」尾巴，桌面鼠标滚轮/触控板滑动直达），点击任务条打开详情抽屉。
+ *   日期格右上角节假日徽标（放假「休」/调休补班「班」，联网数据）。
  * 议程档：本月有截止的任务按日期分组的滚动列表，空态引导去列表视图。
  * 两档共用工具栏：今天按钮 + 上/下月翻页（12 月/1 月正确跨年）+ 当天定位
- *   议程列表自动滚动到今天所在组。
+ *   议程列表自动滚动到今天所在组 + 节假日手动更新（显示上次更新时间）。
  * 范围遵循 04 §四 内存筛选语义：由 list-page 注入已筛选的 visibleTasks。
  */
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { addMonths, format, isSameDay, isSameMonth, startOfMonth } from "date-fns";
 import { zhCN } from "date-fns/locale";
-import { CalendarClock, CalendarDays, ChevronLeft, ChevronRight, Inbox } from "lucide-react";
+import { CalendarClock, CalendarDays, ChevronLeft, ChevronRight, Inbox, RefreshCw } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { toast } from "sonner";
 
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -23,6 +27,7 @@ import {
 } from "@/components/ui/dialog";
 import { useTodoStore } from "@/features/todo/store";
 import { EmptyState } from "@/components/business/empty-state";
+import { holidaysList, holidaysUpdate, holidayMeta, type HolidayInfo } from "@/lib/tauri";
 import { OVERDUE_COLOR_CLASS, PRIORITY_COLOR } from "../shared/constants";
 import { LabelChips } from "../shared/label-chips";
 import { TaskContextMenu } from "./task-context-menu";
@@ -39,8 +44,6 @@ interface CalendarViewProps {
 }
 
 const WEEKDAY_LABELS = ["一", "二", "三", "四", "五", "六", "日"];
-/** 月档格内最多直出的任务条数，超出折叠 +N */
-const CELL_MAX = 3;
 
 /** due_date（本地毫秒）→ 本地 YYYY-MM-DD，口径同 quick-add/表单日期链 */
 function dayKey(ms: number): string {
@@ -69,8 +72,38 @@ export function CalendarView({ tasks, projects, labelsByTask, onCreateClick }: C
   const setSelectedTaskId = useTodoStore((s) => s.setSelectedTaskId);
   const [subMode, setSubMode] = useState<CalendarSubMode>("month");
   const [month, setMonth] = useState(() => startOfMonth(new Date()));
-  // 月档某日全部任务的弹层（点格子底部 +N 展开时打开）
+  // 月档某日全部任务的弹层（点任务条自带「展开全部」时打开）
   const [expandedDay, setExpandedDay] = useState<Date | null>(null);
+  const [updatingHolidays, setUpdatingHolidays] = useState(false);
+  const queryClient = useQueryClient();
+
+  // 节假日数据（联网更新；空库时 Rust 侧回落预置 2026 表，冷启动即有徽标）
+  const holidaysQuery = useQuery({
+    queryKey: ["holidays", "list"],
+    queryFn: holidaysList,
+    staleTime: 5 * 60_000,
+  });
+  const holidayMetaQuery = useQuery({
+    queryKey: ["holidays", "meta"],
+    queryFn: holidayMeta,
+    staleTime: 5 * 60_000,
+  });
+  const holidayByDate = new Map(
+    (holidaysQuery.data ?? []).map((h) => [h.date, h] as const),
+  );
+
+  const refreshHolidays = async () => {
+    setUpdatingHolidays(true);
+    try {
+      await holidaysUpdate();
+      await queryClient.invalidateQueries({ queryKey: ["holidays"] });
+      toast.success("节假日数据已更新");
+    } catch (err) {
+      toast.error(`节假日更新失败：${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setUpdatingHolidays(false);
+    }
+  };
 
   // 逾期判定以「今天 00:00」为界：截止在今天内的任务不算逾期（与 task-list-view 当日口径一致）
   const today = useMemo(() => {
@@ -100,7 +133,7 @@ export function CalendarView({ tasks, projects, labelsByTask, onCreateClick }: C
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-      {/* 工具栏：月/议程两档切换 + 翻月 + 今天回位 */}
+      {/* 工具栏：月/议程两档切换 + 翻月 + 今天回位 + 节假日手动更新 */}
       <div className="flex items-center justify-between gap-3 px-4 py-2">
         <h2 className="text-lg font-semibold">{format(month, "yyyy年M月", { locale: zhCN })}</h2>
         <div className="flex items-center gap-2">
@@ -152,6 +185,22 @@ export function CalendarView({ tasks, projects, labelsByTask, onCreateClick }: C
           >
             <ChevronRight size={14} />
           </Button>
+          {/* 手动更新节假日：显示上次成功时间；每日 8 点守护自动更新（错过的下次启动补更） */}
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-8 gap-1.5"
+            title={
+              holidayMetaQuery.data && holidayMetaQuery.data.last_update_ms > 0
+                ? `上次更新：${format(new Date(holidayMetaQuery.data.last_update_ms), "M月d日 HH:mm")}（每天自动更新一次）`
+                : "每天自动更新一次，也可手动更新"
+            }
+            disabled={updatingHolidays}
+            onClick={refreshHolidays}
+          >
+            <RefreshCw size={13} className={cn(updatingHolidays && "animate-spin")} />
+            节假日
+          </Button>
         </div>
       </div>
 
@@ -160,6 +209,7 @@ export function CalendarView({ tasks, projects, labelsByTask, onCreateClick }: C
           month={month}
           today={today}
           byDay={byDay}
+          holidayByDate={holidayByDate}
           onOpenDetail={openDetail}
           onExpandDay={(day) => setExpandedDay(day)}
         />
@@ -168,6 +218,7 @@ export function CalendarView({ tasks, projects, labelsByTask, onCreateClick }: C
           month={month}
           today={today}
           byDay={byDay}
+          holidayByDate={holidayByDate}
           projectById={projectById}
           labelsByTask={labelsByTask}
           projects={projects}
@@ -176,7 +227,8 @@ export function CalendarView({ tasks, projects, labelsByTask, onCreateClick }: C
         />
       )}
 
-      {/* 月格 +N 弹层：该日全部任务（与列表行同构的简化行，右键菜单可用） */}
+      {/* 月格弹层：该日全部任务（与列表行同构的简化行，右键菜单可用）。
+          入口：任务条尾部「展开」按钮（滚动不便时的键盘/精确定位替代） */}
       <Dialog open={expandedDay != null} onOpenChange={(o) => !o && setExpandedDay(null)}>
         <DialogContent className="max-w-md">
           <DialogHeader>
@@ -208,17 +260,38 @@ export function CalendarView({ tasks, projects, labelsByTask, onCreateClick }: C
   );
 }
 
+// ---------------- 节假日徽标 ----------------
+
+/** 放假「休」（绿）/ 调休补班「班」（橙）小徽标；普通日不渲染 */
+function HolidayBadge({ holiday }: { holiday: HolidayInfo | undefined }) {
+  if (!holiday) return null;
+  return (
+    <span
+      title={holiday.name}
+      className={cn(
+        "rounded px-1 text-[10px] font-medium leading-4 tabular-nums",
+        holiday.is_holiday
+          ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"
+          : "bg-orange-500/15 text-orange-600 dark:text-orange-400",
+      )}
+    >
+      {holiday.is_holiday ? "休" : "班"}
+    </span>
+  );
+}
+
 // ---------------- 月档 ----------------
 
 interface MonthGridProps {
   month: Date;
   today: Date;
   byDay: Map<string, TodoTask[]>;
+  holidayByDate: Map<string, HolidayInfo>;
   onOpenDetail: (id: number) => void;
   onExpandDay: (day: Date) => void;
 }
 
-function MonthGrid({ month, today, byDay, onOpenDetail, onExpandDay }: MonthGridProps) {
+function MonthGrid({ month, today, byDay, holidayByDate, onOpenDetail, onExpandDay }: MonthGridProps) {
   const weeks = useMemo(() => buildMonthGrid(month), [month]);
 
   return (
@@ -242,7 +315,7 @@ function MonthGrid({ month, today, byDay, onOpenDetail, onExpandDay }: MonthGrid
           const inMonth = isSameMonth(day, month);
           const isToday = isSameDay(day, today);
           const dayTasks = byDay.get(dayKey(day.getTime())) ?? [];
-          const hidden = Math.max(0, dayTasks.length - CELL_MAX);
+          const holiday = holidayByDate.get(format(day, "yyyy-MM-dd"));
           return (
             <div
               key={day.getTime()}
@@ -253,7 +326,7 @@ function MonthGrid({ month, today, byDay, onOpenDetail, onExpandDay }: MonthGrid
             >
               <div
                 className={cn(
-                  "flex items-center justify-between text-[11px] leading-4",
+                  "flex items-center justify-between gap-1 text-[11px] leading-4",
                   !inMonth && "opacity-60",
                 )}
               >
@@ -266,37 +339,63 @@ function MonthGrid({ month, today, byDay, onOpenDetail, onExpandDay }: MonthGrid
                 >
                   {format(day, "d")}
                 </span>
-                {dayTasks.length > 0 && (
-                  <span className="text-[10px] text-muted-foreground/70 tabular-nums">
-                    {dayTasks.length}
-                  </span>
-                )}
+                <span className="flex items-center gap-1">
+                  <HolidayBadge holiday={holiday} />
+                  {dayTasks.length > 0 && (
+                    <span className="text-[10px] text-muted-foreground/70 tabular-nums">
+                      {dayTasks.length}
+                    </span>
+                  )}
+                </span>
               </div>
-              {/* 溢出隐藏容器：保证 6 行等高网格不被某一天撑爆 */}
-              <div className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-hidden">
-                {dayTasks.slice(0, CELL_MAX).map((t) => (
-                  <MonthCellTask
-                    key={t.id}
-                    task={t}
-                    muted={!inMonth}
-                    overdue={!t.done && t.due_date! < today.getTime()}
-                    onClick={() => onOpenDetail(t.id)}
-                  />
-                ))}
-                {hidden > 0 && (
-                  <button
-                    type="button"
-                    className="w-fit rounded px-1 text-left text-[11px] text-muted-foreground hover:bg-accent hover:text-accent-foreground"
-                    onClick={() => onExpandDay(day)}
-                  >
-                    +{hidden} 条
-                  </button>
-                )}
-              </div>
+              {/* 可滚动任务条列表：任务多于可视高度时纵向滑动查看全部
+                  （overflow-y-auto；滚到底部还有「共 N 条」尾巴兜底提示） */}
+              <MonthCellTaskList
+                day={day}
+                dayTasks={dayTasks}
+                today={today}
+                muted={!inMonth}
+                onOpenDetail={onOpenDetail}
+                onExpandDay={onExpandDay}
+              />
             </div>
           );
         })}
       </div>
+    </div>
+  );
+}
+
+interface MonthCellTaskListProps {
+  day: Date;
+  dayTasks: TodoTask[];
+  today: Date;
+  muted: boolean;
+  onOpenDetail: (id: number) => void;
+  onExpandDay: (day: Date) => void;
+}
+
+/** 月格任务条滚动列表（用户需求：超出可滑动查看当日全部内容） */
+function MonthCellTaskList({
+  day,
+  dayTasks,
+  today,
+  muted,
+  onOpenDetail,
+  onExpandDay,
+}: MonthCellTaskListProps) {
+  return (
+    <div className="scroll-smooth flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto">
+      {dayTasks.map((t) => (
+        <MonthCellTask
+          key={t.id}
+          task={t}
+          muted={muted}
+          overdue={!t.done && t.due_date! < today.getTime()}
+          onExpand={dayTasks.length > 1 ? () => onExpandDay(day) : undefined}
+          onClick={() => onOpenDetail(t.id)}
+        />
+      ))}
     </div>
   );
 }
@@ -307,34 +406,51 @@ interface MonthCellTaskProps {
   muted: boolean;
   overdue: boolean;
   onClick: () => void;
+  /** 尾部「展开全部」按钮回调（弹层精确定位；滚动之外的键盘可达路径） */
+  onExpand?: () => void;
 }
 
 /** 月格任务条：优先级左色点 + 截止时间 + 截断标题；点击打开详情抽屉 */
-function MonthCellTask({ task: t, muted, overdue, onClick }: MonthCellTaskProps) {
+function MonthCellTask({ task: t, muted, overdue, onClick, onExpand }: MonthCellTaskProps) {
   return (
-    <button
-      type="button"
+    <div
       className={cn(
-        "flex w-full items-center gap-1 overflow-hidden rounded px-1 text-left text-[11px] leading-4 hover:bg-accent",
+        "group/bar flex w-full items-center gap-1 overflow-hidden rounded px-1 text-left text-[11px] leading-4 hover:bg-accent",
         muted && "opacity-60",
         t.done ? "text-muted-foreground/80" : "text-foreground/90",
       )}
-      onClick={onClick}
     >
-      <span
-        aria-hidden
-        className="size-1.5 shrink-0 rounded-full"
-        style={{ background: PRIORITY_COLOR[t.priority] || PRIORITY_COLOR[1] }}
-      />
-      <span
-        className={cn("shrink-0 tabular-nums text-muted-foreground", overdue && OVERDUE_COLOR_CLASS)}
+      <button
+        type="button"
+        aria-label={`${t.done ? "已完成" : "未完成"}任务：${t.title}`}
+        className="flex min-w-0 flex-1 items-center gap-1"
+        onClick={onClick}
       >
-        {t.due_date != null ? format(new Date(t.due_date), "HH:mm") : ""}
-      </span>
-      <span className={cn("truncate", t.done && "line-through", overdue && OVERDUE_COLOR_CLASS)}>
-        {t.title}
-      </span>
-    </button>
+        <span
+          aria-hidden
+          className="size-1.5 shrink-0 rounded-full"
+          style={{ background: PRIORITY_COLOR[t.priority] || PRIORITY_COLOR[1] }}
+        />
+        <span
+          className={cn("shrink-0 tabular-nums text-muted-foreground", overdue && OVERDUE_COLOR_CLASS)}
+        >
+          {t.due_date != null ? format(new Date(t.due_date), "HH:mm") : ""}
+        </span>
+        <span className={cn("truncate", t.done && "line-through", overdue && OVERDUE_COLOR_CLASS)}>
+          {t.title}
+        </span>
+      </button>
+      {onExpand && (
+        <button
+          type="button"
+          aria-label="展开该日全部任务"
+          className="hidden shrink-0 rounded px-0.5 text-muted-foreground/70 hover:bg-accent hover:text-accent-foreground group-hover/bar:block"
+          onClick={onExpand}
+        >
+          ⋯
+        </button>
+      )}
+    </div>
   );
 }
 
@@ -344,6 +460,7 @@ interface AgendaListProps {
   month: Date;
   today: Date;
   byDay: Map<string, TodoTask[]>;
+  holidayByDate: Map<string, HolidayInfo>;
   projectById: Map<number, TodoProject>;
   projects: TodoProject[];
   labelsByTask: Map<number, TodoLabel[]>;
@@ -355,6 +472,7 @@ function AgendaList({
   month,
   today,
   byDay,
+  holidayByDate,
   projectById,
   projects,
   labelsByTask,
@@ -420,6 +538,7 @@ function AgendaList({
             >
               {format(day, "M月d日 EEEE", { locale: zhCN })}
             </span>
+            <HolidayBadge holiday={holidayByDate.get(key)} />
             <span className="text-xs text-muted-foreground/70 tabular-nums">{list.length} 条</span>
             <span className="h-px flex-1 bg-border/40" />
           </div>
