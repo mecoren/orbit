@@ -11,6 +11,14 @@ P1 体验能力包补记（#8/#9/#10/#11/#12/#13，8/26 落地未记账）+ P2#1
 
 ### Added
 
+- **桌面系统通知推迟按钮（三平台）**：右下角系统弹窗（Windows Toast /
+  macOS 通知中心 / Linux XDG 通知）带「推迟10分钟/30分钟/1小时」三键。
+  tauri-plugin-notification desktop 路径不透传 actions，绕开插件直用
+  notify-rust 4.18（三平台 action + wait_for_action 回调全支持）；点击后
+  Rust 侧删旧建新写 DB（锚点=原 remind_at+N，与前端 toast 同语义）+
+  emit snoozed 事件前端失效缓存；timeout Never 带按钮通知不自动消失；
+  Windows AUMID 用 cn.wait.orbit。新增 toast_actions_manual 手动验收
+  测试——Windows 本机实测点击「推迟30分钟」回调精准收到 snooze_30。
 - **提醒功能三端升级**（用户需求：到期可推迟 10 分钟/30 分钟/1 小时；
   移动端后台可提醒 + 小米灵动岛形态）+ **可用性补强轮**（commit 92b5ef5）：
   - **桌面端推迟**：到期 toast 重制为自定义卡片（sonner toast.custom，
