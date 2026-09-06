@@ -788,3 +788,17 @@ class HolidayMeta {
     required this.fixedHour,
   });
 }
+
+/// 回收站元数据（回收站页 + 设置页保留档位；FRB trash.rs 镜像）
+class TrashMeta {
+  /// 保留天数（0 = 永久；默认 30，档位 7/30/90/0）
+  final int retentionDays;
+
+  /// 上次 TTL 自动清理时间（ms；0 = 从未执行）
+  final int lastPurgeMs;
+
+  const TrashMeta({
+    required this.retentionDays,
+    required this.lastPurgeMs,
+  });
+}

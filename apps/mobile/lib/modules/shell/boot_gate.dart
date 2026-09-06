@@ -84,6 +84,9 @@ class _BootGateState extends ConsumerState<BootGate> {
     // 节假日自动更新守护（Rust 60s tick：每日固定时刻一次，
     // 错过时刻本次启动首轮即补更；首装从未成功也在此补拉）
     ref.read(orbitBridgeProvider).startHolidayScheduler();
+    // 回收站 TTL 清理守护（Rust 60s tick：每日最多清一次，
+    // 多日未开时本次启动首轮即补清过期间隔的过期任务）
+    ref.read(orbitBridgeProvider).startTrashScheduler();
     _subscribeStreams();
     if (mounted) setState(() => _phase = _BootPhase.ready);
   }

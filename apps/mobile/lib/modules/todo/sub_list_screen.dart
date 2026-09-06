@@ -101,7 +101,7 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: const Text('删除任务'),
-        content: Text('确定要删除任务「${task.title}」吗？该操作不可撤销。'),
+        content: Text('确定要删除任务「${task.title}」吗？删除后将移入回收站，可在回收站中恢复。'),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(dialogContext).pop(false),

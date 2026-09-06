@@ -11,6 +11,7 @@ import 'api/plaintext_export.dart';
 import 'api/state.dart';
 import 'api/sync.dart';
 import 'api/todo.dart';
+import 'api/trash.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:ffi' as ffi;
@@ -254,7 +255,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  TrashMeta dco_decode_trash_meta(dynamic raw);
+
+  @protected
+  TrashPurgeStats dco_decode_trash_purge_stats(dynamic raw);
+
+  @protected
   int dco_decode_u_32(dynamic raw);
+
+  @protected
+  BigInt dco_decode_u_64(dynamic raw);
 
   @protected
   int dco_decode_u_8(dynamic raw);
@@ -526,7 +536,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  TrashMeta sse_decode_trash_meta(SseDeserializer deserializer);
+
+  @protected
+  TrashPurgeStats sse_decode_trash_purge_stats(SseDeserializer deserializer);
+
+  @protected
   int sse_decode_u_32(SseDeserializer deserializer);
+
+  @protected
+  BigInt sse_decode_u_64(SseDeserializer deserializer);
 
   @protected
   int sse_decode_u_8(SseDeserializer deserializer);
@@ -877,7 +896,19 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_trash_meta(TrashMeta self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_trash_purge_stats(
+    TrashPurgeStats self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_u_32(int self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_u_64(BigInt self, SseSerializer serializer);
 
   @protected
   void sse_encode_u_8(int self, SseSerializer serializer);

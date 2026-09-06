@@ -29,7 +29,6 @@ void main() {
 
     expect(find.text('循迹'), findsOneWidget);
     expect(find.text('快捷视图'), findsOneWidget);
-    expect(find.text('项目'), findsOneWidget);
     // 七个快捷视图行全部可见（07 报告新增「我的一天」置顶）
     expect(find.text('我的一天'), findsOneWidget);
     expect(find.text('今天截止'), findsOneWidget);
@@ -38,13 +37,17 @@ void main() {
     expect(find.text('已完成'), findsOneWidget);
     expect(find.text('收藏'), findsOneWidget);
     expect(find.text('无日期'), findsOneWidget);
-    // 项目种子数据（新增第 7 个快捷视图行后侧栏更高：
+    // 回收站入口行（日历行之下；新增行后 600px 视口装不下「项目」分段头）
+    expect(find.text('日历'), findsOneWidget);
+    expect(find.text('回收站'), findsOneWidget);
+    // 项目种子数据（新增回收站行后侧栏更高：
     // 滚到底再断言尾部的项目段与「未分组」行，避免默认 600px 视口截断）
     await tester.scrollUntilVisible(
       find.text('未分组'),
       200,
       scrollable: find.byType(Scrollable).first,
     );
+    expect(find.text('项目'), findsOneWidget);
     expect(find.text('工作'), findsOneWidget);
     expect(find.text('未分组'), findsOneWidget);
   });

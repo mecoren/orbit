@@ -183,7 +183,13 @@ class MockOrbitBridge implements OrbitBridge {
 
   @override
   Future<void> todoTaskDelete(int id) => _delay(() {
-        store.tasks.remove(id);
+        // 对齐 Rust 软删语义：墓碑行留在库中（回收站可见），不物理删除
+        final t = store.tasks[id] ?? _notFound('task $id');
+        final now = store.now();
+        t['is_deleted'] = 1;
+        t['deleted_at'] = now;
+        t['updated_at'] = now;
+        t['version'] = (t['version'] as int) + 1;
         _emit('todo_tasks');
       });
 
@@ -653,6 +659,78 @@ class MockOrbitBridge implements OrbitBridge {
 
   @override
   Future<void> startHolidayScheduler() async {}
+
+  // ── 回收站 ──
+
+  /// Mock 保留档位（内存态；跨端不持久，测试够用）
+  int _trashRetentionDays = 30;
+
+  List<Map<String, dynamic>> get _trashed => store.tasks.values
+      .where((t) => t['is_deleted'] == 1 && t['deleted_at'] != null)
+      .toList()
+    ..sort((a, b) => (b['deleted_at'] as int).compareTo(a['deleted_at'] as int));
+
+  @override
+  Future<List<TodoTask>> trashTasksList() =>
+      _delay(() => _trashed.map(TodoTask.fromJson).toList());
+
+  @override
+  Future<TodoTask> trashTaskRestore(int id) => _delay(() {
+        final t = store.tasks[id];
+        if (t == null || t['is_deleted'] != 1) {
+          throw Exception('task $id 不在回收站');
+        }
+        final now = store.now();
+        t['is_deleted'] = 0;
+        t['deleted_at'] = null;
+        t['updated_at'] = now;
+        t['version'] = (t['version'] as int) + 1;
+        // 对齐 Rust：原项目已删则落未分组
+        final pid = t['project_id'] as int?;
+        if (pid != null &&
+            !(store.projects[pid]?['is_deleted'] == 0)) {
+          t['project_id'] = null;
+        }
+        _emit('todo_tasks');
+        return TodoTask.fromJson(t);
+      });
+
+  @override
+  Future<void> trashTaskPurge(int id) => _delay(() {
+        final t = store.tasks[id];
+        if (t == null || t['is_deleted'] != 1) {
+          throw Exception('task $id 不在回收站');
+        }
+        store.tasks.remove(id);
+        _emit('todo_tasks');
+      });
+
+  @override
+  Future<int> trashPurgeAll() => _delay(() {
+        final trashed = _trashed;
+        for (final t in trashed) {
+          store.tasks.remove(t['id'] as int);
+        }
+        _emit('todo_tasks');
+        return trashed.length;
+      });
+
+  @override
+  Future<TrashMeta> trashMeta() async => TrashMeta(
+        retentionDays: _trashRetentionDays,
+        lastPurgeMs: 0,
+      );
+
+  @override
+  Future<void> trashSetRetentionDays(int days) async {
+    if (days != 0 && days != 7 && days != 30 && days != 90) {
+      throw Exception('非法保留天数 $days');
+    }
+    _trashRetentionDays = days;
+  }
+
+  @override
+  Future<void> startTrashScheduler() async {}
 
   // ── 事件流 ──
 

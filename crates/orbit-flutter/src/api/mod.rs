@@ -9,6 +9,7 @@
 //! - [sync]：同步配置 / 云同步执行 / 同步加密
 //! - [plaintext_export]：明文数据导出（JSON / CSV，对齐桌面命令面）
 //! - [holiday]：节假日数据（联网更新 + 60s tick 自动调度守护）
+//! - [trash]：回收站（任务软删恢复 + 保留时间 + 60s tick TTL 清理守护）
 //! - [events]：下行事件流 + 提醒轮询守护
 
 pub mod auth;
@@ -19,5 +20,6 @@ pub mod plaintext_export;
 pub mod state;
 pub mod sync;
 pub mod todo;
+pub mod trash;
 
 pub use state::orbit_state_initialized;

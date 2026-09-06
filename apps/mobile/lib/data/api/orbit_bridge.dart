@@ -204,6 +204,30 @@ abstract class OrbitBridge {
   /// 每日固定时刻更新 + 错过时刻下次启动首轮补更）
   Future<void> startHolidayScheduler();
 
+  // ── 回收站（删除的任务可恢复；保留时间可配）──
+
+  /// 回收站任务列表（最近删除排最前）
+  Future<List<TodoTask>> trashTasksList();
+
+  /// 恢复任务（原项目已删则落未分组）
+  Future<TodoTask> trashTaskRestore(int id);
+
+  /// 彻底删除单个回收站任务（不可恢复）
+  Future<void> trashTaskPurge(int id);
+
+  /// 清空回收站，返回删除的任务数
+  Future<int> trashPurgeAll();
+
+  /// 回收站元数据（保留档位 + 上次自动清理时间）
+  Future<TrashMeta> trashMeta();
+
+  /// 设置保留天数（档位 7/30/90/0=永久；默认 30）
+  Future<void> trashSetRetentionDays(int days);
+
+  /// 启动 TTL 自动清理守护（幂等；DB 就绪后由 BootGate 调一次——
+  /// 每日最多清理一次 + 多日未开时启动首轮补清）
+  Future<void> startTrashScheduler();
+
   // ── 事件流（下行通道，替代 Tauri event listen）──
 
   /// 本地写操作事件 → 全量失效业务缓存

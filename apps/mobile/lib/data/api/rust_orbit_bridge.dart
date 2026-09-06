@@ -10,6 +10,7 @@ import '../../src/rust/api/plaintext_export.dart' as gen_export;
 import '../../src/rust/api/sync.dart' as gen_sync;
 import '../../src/rust/api/auth.dart' as gen_auth;
 import '../../src/rust/api/todo.dart' as gen_todo;
+import '../../src/rust/api/trash.dart' as gen_trash;
 import '../../src/rust/frb_generated.dart' show RustLib;
 import 'dto.dart';
 import 'orbit_bridge.dart';
@@ -507,6 +508,41 @@ class RustOrbitBridge implements OrbitBridge {
   @override
   Future<void> startHolidayScheduler() =>
       gen_holiday.startHolidayScheduler();
+
+  // ── 回收站 ──
+
+  @override
+  Future<List<TodoTask>> trashTasksList() async =>
+      (await gen_trash.trashTasksList()).map(_mapTask).toList();
+
+  @override
+  Future<TodoTask> trashTaskRestore(int id) async =>
+      _mapTask(await gen_trash.trashTaskRestore(id: id));
+
+  @override
+  Future<void> trashTaskPurge(int id) =>
+      gen_trash.trashTaskPurge(id: id);
+
+  @override
+  Future<int> trashPurgeAll() async =>
+      (await gen_trash.trashPurgeAll()).toInt();
+
+  @override
+  Future<TrashMeta> trashMeta() async {
+    final m = await gen_trash.trashMeta();
+    return TrashMeta(
+      retentionDays: m.retentionDays,
+      lastPurgeMs: m.lastPurgeMs,
+    );
+  }
+
+  @override
+  Future<void> trashSetRetentionDays(int days) =>
+      gen_trash.trashSetRetentionDays(days: days);
+
+  @override
+  Future<void> startTrashScheduler() =>
+      gen_trash.startTrashScheduler();
 
   // ── 事件流 ──
 

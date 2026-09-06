@@ -64,6 +64,16 @@ final holidayMetaProvider = FutureProvider<HolidayMeta>((ref) async {
   return ref.watch(orbitBridgeProvider).holidayMeta();
 });
 
+/// 回收站任务列表（React queryKey ["trash","tasks"]；最近删除排最前）
+final trashTasksProvider = FutureProvider<List<TodoTask>>((ref) async {
+  return ref.watch(orbitBridgeProvider).trashTasksList();
+});
+
+/// 回收站元数据（回收站页保留期倒计时 + 设置页保留档位）
+final trashMetaProvider = FutureProvider<TrashMeta>((ref) async {
+  return ref.watch(orbitBridgeProvider).trashMeta();
+});
+
 /// 全量失效业务缓存（dbChanges / syncFinished(pulled>0) 时调用）
 void invalidateBusinessCaches(WidgetRef ref) {
   ref.invalidate(todoProjectsProvider);
@@ -71,4 +81,5 @@ void invalidateBusinessCaches(WidgetRef ref) {
   ref.invalidate(todoTasksProvider);
   ref.invalidate(taskDetailProvider);
   ref.invalidate(syncConfigProvider);
+  ref.invalidate(trashTasksProvider);
 }

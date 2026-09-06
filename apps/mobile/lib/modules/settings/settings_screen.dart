@@ -14,6 +14,7 @@ import '../../data/providers/bridge_provider.dart';
 import '../../shared/widgets/liquid_glass_title_bar.dart';
 import '../../shared/widgets/scroll_offset_listenable.dart';
 import '../../shared/widgets/section_card.dart';
+import '../../shared/widgets/select_bottom_sheet.dart';
 import '../../shared/widgets/wait_toast.dart';
 import '../todo/logic/task_logic.dart' show formatDateTime;
 import '../todo/providers/todo_providers.dart';
@@ -112,6 +113,33 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     } finally {
       if (mounted) setState(() => _syncing = false);
     }
+  }
+
+  /// 设置回收站保留档位（7/30/90/永久；本地偏好不同步）
+  Future<void> _pickTrashRetention() async {
+    final bridge = ref.read(orbitBridgeProvider);
+    final current = ref.read(trashMetaProvider).value?.retentionDays ?? 30;
+    await showSelectBottomSheet<int>(
+      context,
+      title: '回收站保留时间',
+      items: const [
+        SelectItem(value: 7, label: '7 天'),
+        SelectItem(value: 30, label: '30 天'),
+        SelectItem(value: 90, label: '90 天'),
+        SelectItem(value: 0, label: '永久'),
+      ],
+      current: current,
+      onSelect: (days) async {
+        if (days == current) return;
+        try {
+          await bridge.trashSetRetentionDays(days);
+          ref.invalidate(trashMetaProvider);
+          WaitToast.success(days == 0 ? '回收站已设为永久保留' : '保留时间已设为 $days 天');
+        } catch (_) {
+          WaitToast.destructive('保存失败');
+        }
+      },
+    );
   }
 
   @override
@@ -216,7 +244,88 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   ),
                 ),
                 const SizedBox(height: AppDimens.space12),
-                // 二、安全卡（只读）
+                // 二、回收站卡（保留时间档位 + 回收站入口）
+                SectionCard(
+                  title: '回收站',
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '删除的任务进入回收站，超过保留时间后自动清除。',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: colors.secondaryText,
+                        ),
+                      ),
+                      const SizedBox(height: AppDimens.space4),
+                      Text(
+                        '保留时间为本机设置，不随云同步。',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: colors.secondaryText.withValues(alpha: 0.7),
+                        ),
+                      ),
+                      const SizedBox(height: AppDimens.space4),
+                      InkWell(
+                        borderRadius: AppShapes.medium,
+                        onTap: _pickTrashRetention,
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                              vertical: AppDimens.space8),
+                          child: Row(
+                            children: [
+                              Text(
+                                '保留时间',
+                                style: TextStyle(
+                                    fontSize: 14, color: colors.bodyText),
+                              ),
+                              const Spacer(),
+                              Text(
+                                _trashRetentionLabel(
+                                    ref.watch(trashMetaProvider).value?.retentionDays),
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  color: OrbitAccents.themeAccent,
+                                ),
+                              ),
+                              Icon(
+                                Icons.chevron_right_rounded,
+                                size: AppDimens.iconSizeMd,
+                                color: colors.secondaryText,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: AppDimens.space4),
+                      InkWell(
+                        borderRadius: AppShapes.medium,
+                        onTap: () => context.push('/todo/trash'),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                              vertical: AppDimens.space8),
+                          child: Row(
+                            children: [
+                              Text(
+                                '查看回收站',
+                                style: TextStyle(
+                                    fontSize: 14, color: colors.bodyText),
+                              ),
+                              const Spacer(),
+                              Icon(
+                                Icons.chevron_right_rounded,
+                                size: AppDimens.iconSizeMd,
+                                color: colors.secondaryText,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: AppDimens.space12),
+                // 三、安全卡（只读）
                 SectionCard(
                   title: '安全',
                   child: Text(
@@ -329,9 +438,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 }
 
+/// 回收站保留档位文案（0 = 永久；缺省 30）
+String _trashRetentionLabel(int? days) {
+  if (days == null || days == 30) return '30 天';
+  return days == 0 ? '永久' : '$days 天';
+}
+
 /// 引擎摘要（脱敏不显示凭据）：webdav → endpoint host；s3 → bucket
-String engineSummary(SyncConfigView config) {
-  if (config.engine == 's3') {
+String engineSummary(SyncConfigView config) {  if (config.engine == 's3') {
     return 'S3 · ${config.bucket.isEmpty ? '-' : config.bucket}';
   }
   var host = '';

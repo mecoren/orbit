@@ -9,6 +9,7 @@ import '../../modules/todo/calendar_screen.dart';
 import '../../modules/todo/detail_screen.dart';
 import '../../modules/todo/sidebar_screen.dart';
 import '../../modules/todo/sub_list_screen.dart';
+import '../../modules/todo/trash_screen.dart';
 
 /// 应用路由（go_router，栈式导航语义，对齐原 React 版 router.mobile.tsx）
 ///
@@ -65,6 +66,13 @@ final appRouter = GoRouter(
       path: '/todo/tasks',
       pageBuilder: (context, state) => pageSlideFromRight(
         SubListScreen(query: SubListScreen.parseQuery(state)),
+        key: state.pageKey,
+      ),
+    ),
+    GoRoute(
+      path: '/todo/trash',
+      pageBuilder: (context, state) => pageSlideFromRight(
+        const TrashScreen(),
         key: state.pageKey,
       ),
     ),
