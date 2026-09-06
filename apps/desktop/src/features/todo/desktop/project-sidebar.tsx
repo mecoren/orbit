@@ -12,7 +12,7 @@
  */
 import { useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { useNavigate } from "react-router";
+import { useLocation, useNavigate } from "react-router";
 import { useSortable } from "@dnd-kit/sortable";
 import { closestCenter, DndContext, type DragEndEvent } from "@dnd-kit/core";
 import {
@@ -79,8 +79,11 @@ export function ProjectSidebar({
 }: ProjectSidebarProps) {
   const qc = useQueryClient();
   const navigate = useNavigate();
+  const location = useLocation();
   const [adding, setAdding] = useState(false);
   const [newTitle, setNewTitle] = useState("");
+  // 回收站面板激活态（/todo/trash；激活时快捷视图/项目/未分组行全部不高亮）
+  const trashActive = location.pathname === "/todo/trash";
 
   // ---- 折叠态（#21）：断点自动 + 手动覆盖（语义见 shared/sidebar-collapsed）----
   const isNarrow = useIsNarrow();
@@ -102,6 +105,10 @@ export function ProjectSidebar({
   } | null>(null);
 
   const refetchProjects = () => qc.invalidateQueries({ queryKey: ["todo-project", "list"] });
+
+  // 回收站面板激活时清空快捷视图/项目/未分组的行高亮（三选一互斥语义的第四态）
+  const effectiveQuickView = trashActive ? null : activeQuickView;
+  const effectiveProjectId = trashActive ? null : activeProjectId;
 
   // ---- 组合排序：未分组（UNGROUPED_ID 占位）+ 项目 ----
   // 未分组位置持久化为「前驱项目 id」（空 = 最前，默认项目第一位）
@@ -201,7 +208,7 @@ export function ProjectSidebar({
 
         <div className="mt-1 flex w-full flex-col items-center gap-1">
           {QUICK_VIEWS.map((v) => {
-            const active = activeQuickView === v.key && !ungroupedActive;
+            const active = effectiveQuickView === v.key && !ungroupedActive;
             return (
               <Tooltip key={v.key}>
                 <TooltipTrigger asChild>
@@ -226,8 +233,11 @@ export function ProjectSidebar({
               <button
                 type="button"
                 aria-label="回收站"
-                onClick={() => navigate("/trash")}
-                className="flex h-8 w-8 items-center justify-center rounded-md hover:bg-accent/50"
+                onClick={() => navigate("/todo/trash")}
+                className={cn(
+                  "flex h-8 w-8 items-center justify-center rounded-md",
+                  trashActive ? "bg-primary/10" : "hover:bg-accent/50",
+                )}
               >
                 <Trash2 className="size-4" />
               </button>
@@ -238,7 +248,7 @@ export function ProjectSidebar({
 
         <div className="mt-2 flex w-full flex-col items-center gap-1">
           {projects.map((p) => {
-            const active = activeProjectId === p.id && !ungroupedActive;
+            const active = effectiveProjectId === p.id && !ungroupedActive;
             return (
               <Tooltip key={p.id}>
                 <TooltipTrigger asChild>
@@ -292,7 +302,7 @@ export function ProjectSidebar({
       {/* 快捷入口区 */}
       <div className="space-y-1 p-3">
         {QUICK_VIEWS.map((v) => {
-          const active = activeQuickView === v.key && !ungroupedActive;
+          const active = effectiveQuickView === v.key && !ungroupedActive;
           return (
             <button
               key={v.key}
@@ -309,11 +319,14 @@ export function ProjectSidebar({
             </button>
           );
         })}
-        {/* 回收站（独立路由页，不参与快捷视图筛选状态机） */}
+        {/* 回收站（壳层嵌套路由面板，不参与快捷视图筛选状态机） */}
         <button
           type="button"
-          onClick={() => navigate("/trash")}
-          className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm hover:bg-accent/50"
+          onClick={() => navigate("/todo/trash")}
+          className={cn(
+            "flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm",
+            trashActive ? "bg-primary/10 font-medium text-primary" : "hover:bg-accent/50",
+          )}
         >
           <Trash2 className="size-4" />
           <span>回收站</span>
@@ -340,7 +353,7 @@ export function ProjectSidebar({
                   id === UNGROUPED_ID ? (
                     <SortableUngroupedRow
                       key={id}
-                      active={ungroupedActive}
+                      active={ungroupedActive && !trashActive}
                       onSelect={onSelectUngrouped}
                     />
                   ) : (
@@ -348,7 +361,7 @@ export function ProjectSidebar({
                       key={id}
                       project={projectById.get(id)!}
                       undoneCount={undoneCounts[id] ?? 0}
-                      active={activeProjectId === id && !ungroupedActive}
+                      active={effectiveProjectId === id && !ungroupedActive}
                       onSelect={() => onSelectProject(id)}
                       onRequestDelete={(hasUndone, undoneCount) => {
                         const project = projectById.get(id);

@@ -82,7 +82,7 @@ export function TitleBar() {
           data-tauri-drag-region={false}
         >
           <TitleBarIconButton to="/todo" icon={CheckSquare} label="待办" />
-          <TitleBarIconButton to="/trash" icon={Trash2} label="回收站" />
+          <TitleBarIconButton to="/todo/trash" icon={Trash2} label="回收站" />
           <TitleBarIconButton to="/settings" icon={Settings} label="设置" />
           <TitleBarIconButton to="/about" icon={Info} label="关于" />
           <ThemeModeToggle />

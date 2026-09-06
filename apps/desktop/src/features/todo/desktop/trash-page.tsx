@@ -1,5 +1,6 @@
 /**
- * 回收站页 —— 已删除任务的恢复 / 彻底删除 / 清空（07 报告 #3 回收站落地）
+ * 回收站面板 —— /todo/trash（07 报告 #3 回收站落地；挂在 TodoShell 内，
+ * 侧栏常驻、任务面板的选中态跨面板保留）
  *
  * 数据 = todo_tasks 墓碑行（is_deleted=1），最近删除排最前。
  * 行为：
@@ -54,7 +55,8 @@ function expiresLabel(task: TodoTask, retentionDays: number): string {
   return `${remain} 天后自动清除`;
 }
 
-export default function TrashPage() {
+/** 回收站面板（TodoShell 嵌套路由 /todo/trash；壳层提供侧栏与弹层） */
+export function TrashPanel() {
   const qc = useQueryClient();
   const [purgeTarget, setPurgeTarget] = useState<TodoTask | null>(null);
   const [purgeAllOpen, setPurgeAllOpen] = useState(false);

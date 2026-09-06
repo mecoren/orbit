@@ -33,14 +33,14 @@ interface RouteItem {
 /** 路由清单（与 sidebar 分组命名一致） */
 const ROUTES: RouteItem[] = [
   { label: "待办", path: "/todo", group: "待办" },
-  { label: "回收站", path: "/trash", group: "待办" },
+  { label: "回收站", path: "/todo/trash", group: "待办" },
   { label: "设置", path: "/settings", group: "系统" },
   { label: "关于", path: "/about", group: "系统" },
 ];
 
 function routeIcon(path: string) {
   if (path === "/todo") return <CheckSquare className="size-4" />;
-  if (path === "/trash") return <Trash2 className="size-4" />;
+  if (path === "/todo/trash") return <Trash2 className="size-4" />;
   if (path === "/settings") return <Settings className="size-4" />;
   if (path === "/about") return <Info className="size-4" />;
   return null;
