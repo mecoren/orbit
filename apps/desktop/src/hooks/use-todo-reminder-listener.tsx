@@ -65,6 +65,11 @@ export function useTodoReminderListener() {
     );
     const unlistenPromise = listen<ReminderDuePayload>("todo_reminder:due", (event) => {
       const r = event.payload;
+      // 窗口隐藏（驻留托盘）期间不弹 in-app toast：系统通知才是后台
+      // 提醒通道；隐藏期弹的 Infinity toast 会在恢复窗口时堆积成
+      // 一片过期卡片（「8 点的提醒 12 点打开还在」的另一半根因）。
+      // WebView 隐藏时 visibilityState=hidden（Win/mac 实测语义）
+      if (document.visibilityState !== "visible") return;
       // toast.custom 支持 jsx 内容（sonner 单 action 按钮装不下三个推迟档）
       toast.custom(
         (id) => {

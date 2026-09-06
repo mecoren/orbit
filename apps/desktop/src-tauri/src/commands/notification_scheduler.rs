@@ -47,6 +47,14 @@ static POLLER_STARTED: std::sync::atomic::AtomicBool = std::sync::atomic::Atomic
 static NOTIFIED_REMINDERS: Lazy<std::sync::Mutex<HashSet<i64>>> =
     Lazy::new(|| std::sync::Mutex::new(HashSet::new()));
 
+/// 启动首轮完成标记：首轮须跳过「历史遗留」过期提醒——
+/// 用户未运行应用期间错过的时间点（如上午 8 点的提醒，中午 12 点才启动）
+/// 不应再弹通知轰炸；只通知「启动前后 5 分钟内到期」的行。
+static FIRST_ROUND_DONE: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// 过期超过此时长的提醒视为历史遗留（启动轮跳过通知，静默记入去重集合）
+const STALE_SKIP_MS: i64 = 5 * 60_000;
+
 #[derive(Clone, Serialize)]
 struct ReminderDueEvent {
     id: i64,
@@ -109,6 +117,16 @@ async fn poll_once(app: &AppHandle) {
             continue;
         }
 
+        // 启动首轮跳过历史遗留：过期超过 STALE_SKIP_MS 的行不再弹通知
+        // （用户没开应用期间错过的时间点，重启后补弹等于轰炸——
+        // 「8 点的提醒 12 点启动还提示」即此）。静默记入去重集合，
+        // 后续轮次也不会再弹；应用运行期间到期的提醒走正常路径。
+        let is_first_round = !FIRST_ROUND_DONE.load(std::sync::atomic::Ordering::SeqCst);
+        if is_first_round && now - remind_at > STALE_SKIP_MS {
+            NOTIFIED_REMINDERS.lock().unwrap().insert(id);
+            continue;
+        }
+
         // ① 系统通知（notify-rust 直发带推迟按钮；失败不阻塞事件通道）
         notify_system(app, id, task_id, &title, remind_at);
 
@@ -126,6 +144,10 @@ async fn poll_once(app: &AppHandle) {
         // ③ 记入去重集合
         NOTIFIED_REMINDERS.lock().unwrap().insert(id);
     }
+
+    // 首轮标记在处理完本轮扫描后置位（无论 DB 是否就绪——未就绪时
+    // poll_once 提前返回不会走到这里，首轮将顺延到 DB 就绪后的第一轮）
+    FIRST_ROUND_DONE.store(true, std::sync::atomic::Ordering::SeqCst);
 }
 
 /// 系统通知直发（notify-rust，绕开 tauri 插件的 actions 缺口）。
