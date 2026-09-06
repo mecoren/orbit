@@ -121,7 +121,9 @@ export function TaskListView({ tasks, projects, labelsByTask, loading, error, on
     requestAnimationFrame(tryFocus);
   };
 
-  // P0 虚拟化：仅渲染可视窗 ± overscan。行高估算 57（py-3×2 + 标题20 + meta16 + 边框）
+  // P0 虚拟化：仅渲染可视窗 ± overscan。行高固定 57px（TaskRow h-[57px]），
+  // 元信息有无不改变行高——固定尺寸让 estimateSize 与实测恒一致，
+  // 消除动态 measure 下滚动/增删行时的高度重排抖动
   const virtualizer = useVirtualizer({
     count: tasks.length,
     getScrollElement: () => scrollRef.current,
@@ -257,7 +259,7 @@ export function TaskListView({ tasks, projects, labelsByTask, loading, error, on
     return (
       <div className="flex-1 divide-y divide-border/30 overflow-y-auto" aria-busy="true">
         {Array.from({ length: 8 }, (_, i) => (
-          <div key={i} className="flex items-center gap-3 px-4 py-3">
+          <div key={i} className="flex h-[57px] items-center gap-3 px-4">
             <Skeleton className="h-5 w-5 shrink-0 rounded-full" />
             <div className="min-w-0 flex-1 space-y-2">
               <Skeleton className="h-4 w-2/5" />
@@ -620,7 +622,7 @@ function TaskRow({
       tabIndex={0}
       aria-label={`${t.done ? "已完成" : "未完成"}任务：${t.title}`}
       className={cn(
-        "group relative flex cursor-default items-center gap-3 border-b border-border/30 px-4 py-3 hover:bg-accent/30",
+        "group relative flex h-[57px] cursor-default items-center gap-3 border-b border-border/30 px-4 hover:bg-accent/30",
         "focus-visible:bg-accent/40 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring",
         isOver && "bg-accent/40",
         dragging && "opacity-40",
@@ -707,8 +709,9 @@ function TaskRow({
         {t.done ? <CheckSvg /> : null}
       </button>
 
-      {/* 标题 + 元信息 */}
-      <div className="min-w-0 flex-1">
+      {/* 标题 + 元信息（行高固定 57px：元信息有无不影响行高，
+          多行内容整体垂直居中；无元信息时标题独占也居中） */}
+      <div className="flex min-w-0 flex-1 flex-col justify-center">
         <div
           className={cn(
             "truncate text-[15px] leading-5",
@@ -717,7 +720,7 @@ function TaskRow({
         >
           {t.title}
         </div>
-        {(t.priority > 0 || labels.length > 0 || projectName || due) && (
+        {(labels.length > 0 || projectName || due) && (
           <div
             className={cn(
               "mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground",
