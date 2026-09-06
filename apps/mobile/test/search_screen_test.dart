@@ -11,7 +11,7 @@ import 'package:orbit/modules/todo/search_screen.dart';
 final _router = GoRouter(
   initialLocation: '/todo/search',
   routes: [
-    GoRoute(path: '/todo/search', builder: (_, __) => const SearchScreen()),
+    GoRoute(path: '/todo/search', builder: (_, _) => const SearchScreen()),
     GoRoute(
       path: '/todo/:id',
       builder: (_, s) => Scaffold(

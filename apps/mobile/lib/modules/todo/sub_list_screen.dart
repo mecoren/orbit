@@ -1,5 +1,6 @@
 ﻿import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/theme/app_colors.dart';
@@ -219,6 +220,7 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
                         onOpen: () => context.push('/todo/${task.id}'),
                         onToggleDone: () => _toggleDone(task),
                         onLongPress: () => _showTaskActions(task),
+                        onDelete: () => _deleteTask(task),
                       );
                     },
                   ),
@@ -267,7 +269,10 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
 }
 
 /// 任务行卡片（docs/05 §4.5）：24px 圆 checkbox + 标题 + 副标题行
-/// （优先级色点 8px + 项目名 + 日期，逾期 #F44336）+ 收藏星标。
+/// （优先级色点 8px + 项目名 + 日期，逾期 #F44436）+ 收藏星标。
+/// 侧滑手势（07 #18）：面板露出操作按钮（TickTick 式）——
+/// 右滑露「完成」（已完成态变「恢复」，行保留不删）、
+/// 左滑露「删除」（既有确认弹窗 + 回收站语义）。
 class TodoTaskTile extends StatelessWidget {
   const TodoTaskTile({
     super.key,
@@ -276,6 +281,7 @@ class TodoTaskTile extends StatelessWidget {
     required this.onLongPress,
     required this.onOpen,
     this.projectTitle,
+    this.onDelete,
   });
 
   final TodoTask task;
@@ -286,6 +292,9 @@ class TodoTaskTile extends StatelessWidget {
   final VoidCallback onLongPress;
   final VoidCallback onOpen;
 
+  /// 右滑「删除」动作回调（null 时隐藏删除面板——搜索页等只读场景复用 Tile）
+  final VoidCallback? onDelete;
+
   @override
   Widget build(BuildContext context) {
     final colors = AppColors.ofContext(context);
@@ -295,10 +304,43 @@ class TodoTaskTile extends StatelessWidget {
         (projectTitle != null && task.projectId != null) ||
         task.dueDate != null;
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(
-          horizontal: AppDimens.space12, vertical: 4),
-      child: Material(
+    return Slidable(
+      // 每行独立 key，避免虚拟化复用时动作面板串行
+      key: ValueKey('slidable-task-${task.id}'),
+      endActionPane: onDelete == null
+          ? null
+          : ActionPane(
+              motion: const BehindMotion(),
+              extentRatio: 0.26,
+              children: [
+                SlidableAction(
+                  onPressed: (_) => onDelete?.call(),
+                  backgroundColor: colors.destructive,
+                  foregroundColor: Colors.white,
+                  icon: Icons.delete_outline_rounded,
+                  label: '删除',
+                  borderRadius: AppShapes.medium,
+                ),
+              ],
+            ),
+      startActionPane: ActionPane(
+        motion: const BehindMotion(),
+        extentRatio: 0.26,
+        children: [
+          SlidableAction(
+            onPressed: (_) => onToggleDone(),
+            backgroundColor: OrbitAccents.todoAccent,
+            foregroundColor: Colors.white,
+            icon: task.isDone ? Icons.undo_rounded : Icons.check_rounded,
+            label: task.isDone ? '恢复' : '完成',
+            borderRadius: AppShapes.medium,
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(
+            horizontal: AppDimens.space12, vertical: 4),
+        child: Material(
         color: colors.surface.withValues(alpha: 0.5),
         borderRadius: AppShapes.medium,
         child: InkWell(
@@ -391,6 +433,7 @@ class TodoTaskTile extends StatelessWidget {
             ),
           ),
         ),
+      ),
       ),
     );
   }
