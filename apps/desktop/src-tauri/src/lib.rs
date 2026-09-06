@@ -256,6 +256,8 @@ pub fn run() {
             commands::trash_cmd::trash_purge_expired,
             commands::trash_cmd::trash_meta,
             commands::trash_cmd::trash_set_retention_days,
+            // 统计仪表盘（backlog #25：总览/热力图/连续天数/分布）
+            commands::stats_cmd::stats_aggregate,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

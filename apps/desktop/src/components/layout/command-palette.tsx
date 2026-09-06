@@ -9,7 +9,7 @@
 import { useMemo } from "react";
 import { useNavigate } from "react-router";
 import { useQuery } from "@tanstack/react-query";
-import { CheckSquare, Clock, Info, LayoutGrid, Plus, Settings, SunMoon, Trash2 } from "lucide-react";
+import { BarChart3, CheckSquare, Clock, Info, LayoutGrid, Plus, Settings, SunMoon, Trash2 } from "lucide-react";
 
 import {
   CommandDialog,
@@ -34,6 +34,7 @@ interface RouteItem {
 const ROUTES: RouteItem[] = [
   { label: "待办", path: "/todo", group: "待办" },
   { label: "回收站", path: "/todo/trash", group: "待办" },
+  { label: "统计", path: "/todo/stats", group: "待办" },
   { label: "设置", path: "/settings", group: "系统" },
   { label: "关于", path: "/about", group: "系统" },
 ];
@@ -41,6 +42,7 @@ const ROUTES: RouteItem[] = [
 function routeIcon(path: string) {
   if (path === "/todo") return <CheckSquare className="size-4" />;
   if (path === "/todo/trash") return <Trash2 className="size-4" />;
+  if (path === "/todo/stats") return <BarChart3 className="size-4" />;
   if (path === "/settings") return <Settings className="size-4" />;
   if (path === "/about") return <Info className="size-4" />;
   return null;

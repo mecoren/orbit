@@ -14,6 +14,7 @@ pub mod notification_scheduler;
 pub mod plaintext_export_cmd;
 #[cfg(target_os = "windows")]
 pub mod scheduled_toast;
+pub mod stats_cmd;
 pub mod sync_cmd;
 pub mod sync_crypto_cmd;
 pub mod sync_runtime;

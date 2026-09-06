@@ -38,7 +38,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.12.0";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 1020388384;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -946230075;
 
 // Section: executor
 
@@ -965,6 +965,42 @@ fn wire__crate__api__trash__start_trash_scheduler_impl(
                     })?;
                     Ok(output_ok)
                 })())
+            }
+        },
+    )
+}
+fn wire__crate__api__stats__stats_aggregate_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "stats_aggregate",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_days = <Option<i64>>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| async move {
+                transform_result_sse::<_, String>(
+                    (move || async move {
+                        let output_ok = crate::api::stats::stats_aggregate(api_days).await?;
+                        Ok(output_ok)
+                    })()
+                    .await,
+                )
             }
         },
     )
@@ -3288,6 +3324,62 @@ impl SseDecode for Vec<u8> {
     }
 }
 
+impl SseDecode for Vec<crate::api::stats::StatsHeatmapCell> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut len_ = <i32>::sse_decode(deserializer);
+        let mut ans_ = Vec::with_capacity(len_ as usize);
+        for idx_ in 0..len_ {
+            ans_.push(<crate::api::stats::StatsHeatmapCell>::sse_decode(
+                deserializer,
+            ));
+        }
+        return ans_;
+    }
+}
+
+impl SseDecode for Vec<crate::api::stats::StatsPriorityRow> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut len_ = <i32>::sse_decode(deserializer);
+        let mut ans_ = Vec::with_capacity(len_ as usize);
+        for idx_ in 0..len_ {
+            ans_.push(<crate::api::stats::StatsPriorityRow>::sse_decode(
+                deserializer,
+            ));
+        }
+        return ans_;
+    }
+}
+
+impl SseDecode for Vec<crate::api::stats::StatsProjectRow> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut len_ = <i32>::sse_decode(deserializer);
+        let mut ans_ = Vec::with_capacity(len_ as usize);
+        for idx_ in 0..len_ {
+            ans_.push(<crate::api::stats::StatsProjectRow>::sse_decode(
+                deserializer,
+            ));
+        }
+        return ans_;
+    }
+}
+
+impl SseDecode for Vec<crate::api::stats::StatsWeekdayRow> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut len_ = <i32>::sse_decode(deserializer);
+        let mut ans_ = Vec::with_capacity(len_ as usize);
+        for idx_ in 0..len_ {
+            ans_.push(<crate::api::stats::StatsWeekdayRow>::sse_decode(
+                deserializer,
+            ));
+        }
+        return ans_;
+    }
+}
+
 impl SseDecode for Vec<crate::api::plaintext_export::TableCount> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -3505,6 +3597,127 @@ impl SseDecode for crate::api::events::ReminderDueDto {
             task_id: var_taskId,
             title: var_title,
             remind_at: var_remindAt,
+        };
+    }
+}
+
+impl SseDecode for crate::api::stats::StatsAggregate {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_overview = <crate::api::stats::StatsOverview>::sse_decode(deserializer);
+        let mut var_heatmap = <crate::api::stats::StatsHeatmap>::sse_decode(deserializer);
+        let mut var_streak = <crate::api::stats::StatsStreak>::sse_decode(deserializer);
+        let mut var_byProject = <Vec<crate::api::stats::StatsProjectRow>>::sse_decode(deserializer);
+        let mut var_byPriority =
+            <Vec<crate::api::stats::StatsPriorityRow>>::sse_decode(deserializer);
+        let mut var_byWeekday = <Vec<crate::api::stats::StatsWeekdayRow>>::sse_decode(deserializer);
+        return crate::api::stats::StatsAggregate {
+            overview: var_overview,
+            heatmap: var_heatmap,
+            streak: var_streak,
+            by_project: var_byProject,
+            by_priority: var_byPriority,
+            by_weekday: var_byWeekday,
+        };
+    }
+}
+
+impl SseDecode for crate::api::stats::StatsHeatmap {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_startDate = <String>::sse_decode(deserializer);
+        let mut var_endDate = <String>::sse_decode(deserializer);
+        let mut var_cells = <Vec<crate::api::stats::StatsHeatmapCell>>::sse_decode(deserializer);
+        return crate::api::stats::StatsHeatmap {
+            start_date: var_startDate,
+            end_date: var_endDate,
+            cells: var_cells,
+        };
+    }
+}
+
+impl SseDecode for crate::api::stats::StatsHeatmapCell {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_date = <String>::sse_decode(deserializer);
+        let mut var_count = <i64>::sse_decode(deserializer);
+        return crate::api::stats::StatsHeatmapCell {
+            date: var_date,
+            count: var_count,
+        };
+    }
+}
+
+impl SseDecode for crate::api::stats::StatsOverview {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_total = <i64>::sse_decode(deserializer);
+        let mut var_pending = <i64>::sse_decode(deserializer);
+        let mut var_done = <i64>::sse_decode(deserializer);
+        let mut var_doneLast7D = <i64>::sse_decode(deserializer);
+        let mut var_doneLast30D = <i64>::sse_decode(deserializer);
+        return crate::api::stats::StatsOverview {
+            total: var_total,
+            pending: var_pending,
+            done: var_done,
+            done_last_7d: var_doneLast7D,
+            done_last_30d: var_doneLast30D,
+        };
+    }
+}
+
+impl SseDecode for crate::api::stats::StatsPriorityRow {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_priority = <i64>::sse_decode(deserializer);
+        let mut var_doneCount = <i64>::sse_decode(deserializer);
+        let mut var_pendingCount = <i64>::sse_decode(deserializer);
+        return crate::api::stats::StatsPriorityRow {
+            priority: var_priority,
+            done_count: var_doneCount,
+            pending_count: var_pendingCount,
+        };
+    }
+}
+
+impl SseDecode for crate::api::stats::StatsProjectRow {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_projectId = <Option<i64>>::sse_decode(deserializer);
+        let mut var_projectTitle = <Option<String>>::sse_decode(deserializer);
+        let mut var_doneCount = <i64>::sse_decode(deserializer);
+        let mut var_pendingCount = <i64>::sse_decode(deserializer);
+        return crate::api::stats::StatsProjectRow {
+            project_id: var_projectId,
+            project_title: var_projectTitle,
+            done_count: var_doneCount,
+            pending_count: var_pendingCount,
+        };
+    }
+}
+
+impl SseDecode for crate::api::stats::StatsStreak {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_current = <i64>::sse_decode(deserializer);
+        let mut var_best = <i64>::sse_decode(deserializer);
+        let mut var_doneToday = <bool>::sse_decode(deserializer);
+        return crate::api::stats::StatsStreak {
+            current: var_current,
+            best: var_best,
+            done_today: var_doneToday,
+        };
+    }
+}
+
+impl SseDecode for crate::api::stats::StatsWeekdayRow {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_weekday = <i64>::sse_decode(deserializer);
+        let mut var_doneCount = <i64>::sse_decode(deserializer);
+        return crate::api::stats::StatsWeekdayRow {
+            weekday: var_weekday,
+            done_count: var_doneCount,
         };
     }
 }
@@ -4196,130 +4409,131 @@ fn pde_ffi_dispatcher_primary_impl(
         26 => {
             wire__crate__api__trash__start_trash_scheduler_impl(port, ptr, rust_vec_len, data_len)
         }
-        27 => {
+        27 => wire__crate__api__stats__stats_aggregate_impl(port, ptr, rust_vec_len, data_len),
+        28 => {
             wire__crate__api__events__subscribe_db_changes_impl(port, ptr, rust_vec_len, data_len)
         }
-        28 => wire__crate__api__sync__sync_config_get_impl(port, ptr, rust_vec_len, data_len),
-        29 => wire__crate__api__sync__sync_config_save_impl(port, ptr, rust_vec_len, data_len),
-        30 => wire__crate__api__sync__sync_crypto_change_password_impl(
+        29 => wire__crate__api__sync__sync_config_get_impl(port, ptr, rust_vec_len, data_len),
+        30 => wire__crate__api__sync__sync_config_save_impl(port, ptr, rust_vec_len, data_len),
+        31 => wire__crate__api__sync__sync_crypto_change_password_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        31 => wire__crate__api__sync__sync_crypto_export_bundle_impl(
+        32 => wire__crate__api__sync__sync_crypto_export_bundle_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        32 => wire__crate__api__sync__sync_crypto_forget_session_impl(
+        33 => wire__crate__api__sync__sync_crypto_forget_session_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        33 => wire__crate__api__sync__sync_crypto_import_bundle_impl(
+        34 => wire__crate__api__sync__sync_crypto_import_bundle_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        34 => wire__crate__api__sync__sync_crypto_init_impl(port, ptr, rust_vec_len, data_len),
-        35 => wire__crate__api__sync__sync_crypto_lock_impl(port, ptr, rust_vec_len, data_len),
-        36 => wire__crate__api__sync__sync_crypto_restore_session_impl(
+        35 => wire__crate__api__sync__sync_crypto_init_impl(port, ptr, rust_vec_len, data_len),
+        36 => wire__crate__api__sync__sync_crypto_lock_impl(port, ptr, rust_vec_len, data_len),
+        37 => wire__crate__api__sync__sync_crypto_restore_session_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        37 => wire__crate__api__sync__sync_crypto_status_impl(port, ptr, rust_vec_len, data_len),
-        38 => wire__crate__api__sync__sync_crypto_unlock_impl(port, ptr, rust_vec_len, data_len),
-        39 => wire__crate__api__sync__sync_disconnect_impl(port, ptr, rust_vec_len, data_len),
-        40 => wire__crate__api__sync__sync_test_connection_impl(port, ptr, rust_vec_len, data_len),
-        41 => wire__crate__api__todo__todo_comments_create_impl(port, ptr, rust_vec_len, data_len),
-        42 => wire__crate__api__todo__todo_comments_delete_impl(port, ptr, rust_vec_len, data_len),
-        43 => wire__crate__api__todo__todo_comments_get_impl(port, ptr, rust_vec_len, data_len),
-        44 => wire__crate__api__todo__todo_comments_list_impl(port, ptr, rust_vec_len, data_len),
-        45 => wire__crate__api__todo__todo_labels_create_impl(port, ptr, rust_vec_len, data_len),
-        46 => wire__crate__api__todo__todo_labels_delete_impl(port, ptr, rust_vec_len, data_len),
-        47 => wire__crate__api__todo__todo_labels_list_impl(port, ptr, rust_vec_len, data_len),
-        48 => wire__crate__api__todo__todo_labels_update_impl(port, ptr, rust_vec_len, data_len),
-        49 => wire__crate__api__todo__todo_projects_create_impl(port, ptr, rust_vec_len, data_len),
-        50 => wire__crate__api__todo__todo_projects_delete_impl(port, ptr, rust_vec_len, data_len),
-        51 => wire__crate__api__todo__todo_projects_get_impl(port, ptr, rust_vec_len, data_len),
-        52 => wire__crate__api__todo__todo_projects_list_impl(port, ptr, rust_vec_len, data_len),
-        53 => wire__crate__api__todo__todo_projects_update_impl(port, ptr, rust_vec_len, data_len),
-        54 => wire__crate__api__todo__todo_projects_update_sort_order_impl(
+        38 => wire__crate__api__sync__sync_crypto_status_impl(port, ptr, rust_vec_len, data_len),
+        39 => wire__crate__api__sync__sync_crypto_unlock_impl(port, ptr, rust_vec_len, data_len),
+        40 => wire__crate__api__sync__sync_disconnect_impl(port, ptr, rust_vec_len, data_len),
+        41 => wire__crate__api__sync__sync_test_connection_impl(port, ptr, rust_vec_len, data_len),
+        42 => wire__crate__api__todo__todo_comments_create_impl(port, ptr, rust_vec_len, data_len),
+        43 => wire__crate__api__todo__todo_comments_delete_impl(port, ptr, rust_vec_len, data_len),
+        44 => wire__crate__api__todo__todo_comments_get_impl(port, ptr, rust_vec_len, data_len),
+        45 => wire__crate__api__todo__todo_comments_list_impl(port, ptr, rust_vec_len, data_len),
+        46 => wire__crate__api__todo__todo_labels_create_impl(port, ptr, rust_vec_len, data_len),
+        47 => wire__crate__api__todo__todo_labels_delete_impl(port, ptr, rust_vec_len, data_len),
+        48 => wire__crate__api__todo__todo_labels_list_impl(port, ptr, rust_vec_len, data_len),
+        49 => wire__crate__api__todo__todo_labels_update_impl(port, ptr, rust_vec_len, data_len),
+        50 => wire__crate__api__todo__todo_projects_create_impl(port, ptr, rust_vec_len, data_len),
+        51 => wire__crate__api__todo__todo_projects_delete_impl(port, ptr, rust_vec_len, data_len),
+        52 => wire__crate__api__todo__todo_projects_get_impl(port, ptr, rust_vec_len, data_len),
+        53 => wire__crate__api__todo__todo_projects_list_impl(port, ptr, rust_vec_len, data_len),
+        54 => wire__crate__api__todo__todo_projects_update_impl(port, ptr, rust_vec_len, data_len),
+        55 => wire__crate__api__todo__todo_projects_update_sort_order_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        55 => wire__crate__api__todo__todo_reminders_create_impl(port, ptr, rust_vec_len, data_len),
-        56 => wire__crate__api__todo__todo_reminders_delete_impl(port, ptr, rust_vec_len, data_len),
-        57 => wire__crate__api__todo__todo_reminders_get_impl(port, ptr, rust_vec_len, data_len),
-        58 => wire__crate__api__todo__todo_reminders_list_impl(port, ptr, rust_vec_len, data_len),
-        59 => wire__crate__api__todo__todo_subtasks_create_impl(port, ptr, rust_vec_len, data_len),
-        60 => wire__crate__api__todo__todo_subtasks_delete_impl(port, ptr, rust_vec_len, data_len),
-        61 => wire__crate__api__todo__todo_subtasks_get_impl(port, ptr, rust_vec_len, data_len),
-        62 => wire__crate__api__todo__todo_subtasks_list_impl(port, ptr, rust_vec_len, data_len),
-        63 => wire__crate__api__todo__todo_subtasks_toggle_done_impl(
+        56 => wire__crate__api__todo__todo_reminders_create_impl(port, ptr, rust_vec_len, data_len),
+        57 => wire__crate__api__todo__todo_reminders_delete_impl(port, ptr, rust_vec_len, data_len),
+        58 => wire__crate__api__todo__todo_reminders_get_impl(port, ptr, rust_vec_len, data_len),
+        59 => wire__crate__api__todo__todo_reminders_list_impl(port, ptr, rust_vec_len, data_len),
+        60 => wire__crate__api__todo__todo_subtasks_create_impl(port, ptr, rust_vec_len, data_len),
+        61 => wire__crate__api__todo__todo_subtasks_delete_impl(port, ptr, rust_vec_len, data_len),
+        62 => wire__crate__api__todo__todo_subtasks_get_impl(port, ptr, rust_vec_len, data_len),
+        63 => wire__crate__api__todo__todo_subtasks_list_impl(port, ptr, rust_vec_len, data_len),
+        64 => wire__crate__api__todo__todo_subtasks_toggle_done_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        64 => wire__crate__api__todo__todo_subtasks_update_impl(port, ptr, rust_vec_len, data_len),
-        65 => {
+        65 => wire__crate__api__todo__todo_subtasks_update_impl(port, ptr, rust_vec_len, data_len),
+        66 => {
             wire__crate__api__todo__todo_task_labels_create_impl(port, ptr, rust_vec_len, data_len)
         }
-        66 => {
+        67 => {
             wire__crate__api__todo__todo_task_labels_delete_impl(port, ptr, rust_vec_len, data_len)
         }
-        67 => wire__crate__api__todo__todo_task_labels_list_impl(port, ptr, rust_vec_len, data_len),
-        68 => wire__crate__api__todo__todo_task_relations_create_impl(
+        68 => wire__crate__api__todo__todo_task_labels_list_impl(port, ptr, rust_vec_len, data_len),
+        69 => wire__crate__api__todo__todo_task_relations_create_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        69 => wire__crate__api__todo__todo_task_relations_delete_impl(
+        70 => wire__crate__api__todo__todo_task_relations_delete_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        70 => {
+        71 => {
             wire__crate__api__todo__todo_task_relations_get_impl(port, ptr, rust_vec_len, data_len)
         }
-        71 => {
+        72 => {
             wire__crate__api__todo__todo_task_relations_list_impl(port, ptr, rust_vec_len, data_len)
         }
-        72 => wire__crate__api__todo__todo_tasks_create_impl(port, ptr, rust_vec_len, data_len),
-        73 => wire__crate__api__todo__todo_tasks_delete_impl(port, ptr, rust_vec_len, data_len),
-        74 => wire__crate__api__todo__todo_tasks_get_impl(port, ptr, rust_vec_len, data_len),
-        75 => wire__crate__api__todo__todo_tasks_get_detail_impl(port, ptr, rust_vec_len, data_len),
-        76 => wire__crate__api__todo__todo_tasks_list_impl(port, ptr, rust_vec_len, data_len),
-        77 => wire__crate__api__todo__todo_tasks_update_impl(port, ptr, rust_vec_len, data_len),
-        78 => wire__crate__api__todo__todo_tasks_update_position_impl(
+        73 => wire__crate__api__todo__todo_tasks_create_impl(port, ptr, rust_vec_len, data_len),
+        74 => wire__crate__api__todo__todo_tasks_delete_impl(port, ptr, rust_vec_len, data_len),
+        75 => wire__crate__api__todo__todo_tasks_get_impl(port, ptr, rust_vec_len, data_len),
+        76 => wire__crate__api__todo__todo_tasks_get_detail_impl(port, ptr, rust_vec_len, data_len),
+        77 => wire__crate__api__todo__todo_tasks_list_impl(port, ptr, rust_vec_len, data_len),
+        78 => wire__crate__api__todo__todo_tasks_update_impl(port, ptr, rust_vec_len, data_len),
+        79 => wire__crate__api__todo__todo_tasks_update_position_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        79 => wire__crate__api__trash__trash_meta_impl(port, ptr, rust_vec_len, data_len),
-        80 => wire__crate__api__trash__trash_purge_all_impl(port, ptr, rust_vec_len, data_len),
-        81 => wire__crate__api__trash__trash_purge_expired_impl(port, ptr, rust_vec_len, data_len),
-        82 => wire__crate__api__trash__trash_set_retention_days_impl(
+        80 => wire__crate__api__trash__trash_meta_impl(port, ptr, rust_vec_len, data_len),
+        81 => wire__crate__api__trash__trash_purge_all_impl(port, ptr, rust_vec_len, data_len),
+        82 => wire__crate__api__trash__trash_purge_expired_impl(port, ptr, rust_vec_len, data_len),
+        83 => wire__crate__api__trash__trash_set_retention_days_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        83 => wire__crate__api__trash__trash_task_purge_impl(port, ptr, rust_vec_len, data_len),
-        84 => wire__crate__api__trash__trash_task_restore_impl(port, ptr, rust_vec_len, data_len),
-        85 => wire__crate__api__trash__trash_tasks_list_impl(port, ptr, rust_vec_len, data_len),
+        84 => wire__crate__api__trash__trash_task_purge_impl(port, ptr, rust_vec_len, data_len),
+        85 => wire__crate__api__trash__trash_task_restore_impl(port, ptr, rust_vec_len, data_len),
+        86 => wire__crate__api__trash__trash_tasks_list_impl(port, ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
@@ -4464,6 +4678,186 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::events::ReminderDueDto>
     for crate::api::events::ReminderDueDto
 {
     fn into_into_dart(self) -> crate::api::events::ReminderDueDto {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::stats::StatsAggregate {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.overview.into_into_dart().into_dart(),
+            self.heatmap.into_into_dart().into_dart(),
+            self.streak.into_into_dart().into_dart(),
+            self.by_project.into_into_dart().into_dart(),
+            self.by_priority.into_into_dart().into_dart(),
+            self.by_weekday.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::stats::StatsAggregate
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::stats::StatsAggregate>
+    for crate::api::stats::StatsAggregate
+{
+    fn into_into_dart(self) -> crate::api::stats::StatsAggregate {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::stats::StatsHeatmap {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.start_date.into_into_dart().into_dart(),
+            self.end_date.into_into_dart().into_dart(),
+            self.cells.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::stats::StatsHeatmap
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::stats::StatsHeatmap>
+    for crate::api::stats::StatsHeatmap
+{
+    fn into_into_dart(self) -> crate::api::stats::StatsHeatmap {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::stats::StatsHeatmapCell {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.date.into_into_dart().into_dart(),
+            self.count.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::stats::StatsHeatmapCell
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::stats::StatsHeatmapCell>
+    for crate::api::stats::StatsHeatmapCell
+{
+    fn into_into_dart(self) -> crate::api::stats::StatsHeatmapCell {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::stats::StatsOverview {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.total.into_into_dart().into_dart(),
+            self.pending.into_into_dart().into_dart(),
+            self.done.into_into_dart().into_dart(),
+            self.done_last_7d.into_into_dart().into_dart(),
+            self.done_last_30d.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::stats::StatsOverview
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::stats::StatsOverview>
+    for crate::api::stats::StatsOverview
+{
+    fn into_into_dart(self) -> crate::api::stats::StatsOverview {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::stats::StatsPriorityRow {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.priority.into_into_dart().into_dart(),
+            self.done_count.into_into_dart().into_dart(),
+            self.pending_count.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::stats::StatsPriorityRow
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::stats::StatsPriorityRow>
+    for crate::api::stats::StatsPriorityRow
+{
+    fn into_into_dart(self) -> crate::api::stats::StatsPriorityRow {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::stats::StatsProjectRow {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.project_id.into_into_dart().into_dart(),
+            self.project_title.into_into_dart().into_dart(),
+            self.done_count.into_into_dart().into_dart(),
+            self.pending_count.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::stats::StatsProjectRow
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::stats::StatsProjectRow>
+    for crate::api::stats::StatsProjectRow
+{
+    fn into_into_dart(self) -> crate::api::stats::StatsProjectRow {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::stats::StatsStreak {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.current.into_into_dart().into_dart(),
+            self.best.into_into_dart().into_dart(),
+            self.done_today.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::stats::StatsStreak
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::stats::StatsStreak>
+    for crate::api::stats::StatsStreak
+{
+    fn into_into_dart(self) -> crate::api::stats::StatsStreak {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::stats::StatsWeekdayRow {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.weekday.into_into_dart().into_dart(),
+            self.done_count.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::stats::StatsWeekdayRow
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::stats::StatsWeekdayRow>
+    for crate::api::stats::StatsWeekdayRow
+{
+    fn into_into_dart(self) -> crate::api::stats::StatsWeekdayRow {
         self
     }
 }
@@ -5218,6 +5612,46 @@ impl SseEncode for Vec<u8> {
     }
 }
 
+impl SseEncode for Vec<crate::api::stats::StatsHeatmapCell> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.len() as _, serializer);
+        for item in self {
+            <crate::api::stats::StatsHeatmapCell>::sse_encode(item, serializer);
+        }
+    }
+}
+
+impl SseEncode for Vec<crate::api::stats::StatsPriorityRow> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.len() as _, serializer);
+        for item in self {
+            <crate::api::stats::StatsPriorityRow>::sse_encode(item, serializer);
+        }
+    }
+}
+
+impl SseEncode for Vec<crate::api::stats::StatsProjectRow> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.len() as _, serializer);
+        for item in self {
+            <crate::api::stats::StatsProjectRow>::sse_encode(item, serializer);
+        }
+    }
+}
+
+impl SseEncode for Vec<crate::api::stats::StatsWeekdayRow> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.len() as _, serializer);
+        for item in self {
+            <crate::api::stats::StatsWeekdayRow>::sse_encode(item, serializer);
+        }
+    }
+}
+
 impl SseEncode for Vec<crate::api::plaintext_export::TableCount> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -5394,6 +5828,82 @@ impl SseEncode for crate::api::events::ReminderDueDto {
         <i64>::sse_encode(self.task_id, serializer);
         <String>::sse_encode(self.title, serializer);
         <i64>::sse_encode(self.remind_at, serializer);
+    }
+}
+
+impl SseEncode for crate::api::stats::StatsAggregate {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <crate::api::stats::StatsOverview>::sse_encode(self.overview, serializer);
+        <crate::api::stats::StatsHeatmap>::sse_encode(self.heatmap, serializer);
+        <crate::api::stats::StatsStreak>::sse_encode(self.streak, serializer);
+        <Vec<crate::api::stats::StatsProjectRow>>::sse_encode(self.by_project, serializer);
+        <Vec<crate::api::stats::StatsPriorityRow>>::sse_encode(self.by_priority, serializer);
+        <Vec<crate::api::stats::StatsWeekdayRow>>::sse_encode(self.by_weekday, serializer);
+    }
+}
+
+impl SseEncode for crate::api::stats::StatsHeatmap {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <String>::sse_encode(self.start_date, serializer);
+        <String>::sse_encode(self.end_date, serializer);
+        <Vec<crate::api::stats::StatsHeatmapCell>>::sse_encode(self.cells, serializer);
+    }
+}
+
+impl SseEncode for crate::api::stats::StatsHeatmapCell {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <String>::sse_encode(self.date, serializer);
+        <i64>::sse_encode(self.count, serializer);
+    }
+}
+
+impl SseEncode for crate::api::stats::StatsOverview {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i64>::sse_encode(self.total, serializer);
+        <i64>::sse_encode(self.pending, serializer);
+        <i64>::sse_encode(self.done, serializer);
+        <i64>::sse_encode(self.done_last_7d, serializer);
+        <i64>::sse_encode(self.done_last_30d, serializer);
+    }
+}
+
+impl SseEncode for crate::api::stats::StatsPriorityRow {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i64>::sse_encode(self.priority, serializer);
+        <i64>::sse_encode(self.done_count, serializer);
+        <i64>::sse_encode(self.pending_count, serializer);
+    }
+}
+
+impl SseEncode for crate::api::stats::StatsProjectRow {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <Option<i64>>::sse_encode(self.project_id, serializer);
+        <Option<String>>::sse_encode(self.project_title, serializer);
+        <i64>::sse_encode(self.done_count, serializer);
+        <i64>::sse_encode(self.pending_count, serializer);
+    }
+}
+
+impl SseEncode for crate::api::stats::StatsStreak {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i64>::sse_encode(self.current, serializer);
+        <i64>::sse_encode(self.best, serializer);
+        <bool>::sse_encode(self.done_today, serializer);
+    }
+}
+
+impl SseEncode for crate::api::stats::StatsWeekdayRow {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i64>::sse_encode(self.weekday, serializer);
+        <i64>::sse_encode(self.done_count, serializer);
     }
 }
 

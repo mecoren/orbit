@@ -11,6 +11,7 @@ import '../../src/rust/api/sync.dart' as gen_sync;
 import '../../src/rust/api/auth.dart' as gen_auth;
 import '../../src/rust/api/todo.dart' as gen_todo;
 import '../../src/rust/api/trash.dart' as gen_trash;
+import '../../src/rust/api/stats.dart' as gen_stats;
 import '../../src/rust/frb_generated.dart' show RustLib;
 import 'dto.dart';
 import 'orbit_bridge.dart';
@@ -543,6 +544,52 @@ class RustOrbitBridge implements OrbitBridge {
   @override
   Future<void> startTrashScheduler() =>
       gen_trash.startTrashScheduler();
+
+  // ── 统计仪表盘（backlog #25）──
+
+  @override
+  Future<StatsAggregate> statsAggregate({int? days}) async {
+    final a = await gen_stats.statsAggregate(days: days);
+    return StatsAggregate(
+      overview: StatsOverview(
+        total: a.overview.total,
+        pending: a.overview.pending,
+        done: a.overview.done,
+        doneLast7d: a.overview.doneLast7D,
+        doneLast30d: a.overview.doneLast30D,
+      ),
+      heatmap: StatsHeatmap(
+        startDate: a.heatmap.startDate,
+        endDate: a.heatmap.endDate,
+        cells: a.heatmap.cells
+            .map((c) => StatsHeatmapCell(date: c.date, count: c.count))
+            .toList(),
+      ),
+      streak: StatsStreak(
+        current: a.streak.current,
+        best: a.streak.best,
+        doneToday: a.streak.doneToday,
+      ),
+      byProject: a.byProject
+          .map((r) => StatsProjectRow(
+                projectId: r.projectId,
+                projectTitle: r.projectTitle,
+                doneCount: r.doneCount,
+                pendingCount: r.pendingCount,
+              ))
+          .toList(),
+      byPriority: a.byPriority
+          .map((r) => StatsPriorityRow(
+                priority: r.priority,
+                doneCount: r.doneCount,
+                pendingCount: r.pendingCount,
+              ))
+          .toList(),
+      byWeekday: a.byWeekday
+          .map((r) => StatsWeekdayRow(weekday: r.weekday, doneCount: r.doneCount))
+          .toList(),
+    );
+  }
 
   // ── 事件流 ──
 

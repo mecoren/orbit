@@ -726,3 +726,55 @@ export const trashMeta = () => invoke<TrashMeta>("trash_meta");
 /** 设置保留天数（档位 7/30/90/0=永久；默认 30） */
 export const trashSetRetentionDays = (days: number) =>
   invoke<void>("trash_set_retention_days", { days });
+
+// ========== stats（backlog #25：统计仪表盘） ==========
+export interface StatsOverview {
+  total: number;
+  pending: number;
+  done: number;
+  done_last_7d: number;
+  done_last_30d: number;
+}
+export interface StatsHeatmapCell {
+  /** 本地日期 YYYY-MM-DD */
+  date: string;
+  count: number;
+}
+export interface StatsHeatmap {
+  start_date: string;
+  end_date: string;
+  cells: StatsHeatmapCell[];
+}
+export interface StatsStreak {
+  current: number;
+  best: number;
+  done_today: boolean;
+}
+export interface StatsProjectRow {
+  project_id: number | null;
+  /** null = 未分组 */
+  project_title: string | null;
+  done_count: number;
+  pending_count: number;
+}
+export interface StatsPriorityRow {
+  priority: number;
+  done_count: number;
+  pending_count: number;
+}
+export interface StatsWeekdayRow {
+  /** 0=周一 … 6=周日 */
+  weekday: number;
+  done_count: number;
+}
+export interface StatsAggregate {
+  overview: StatsOverview;
+  heatmap: StatsHeatmap;
+  streak: StatsStreak;
+  by_project: StatsProjectRow[];
+  by_priority: StatsPriorityRow[];
+  by_weekday: StatsWeekdayRow[];
+}
+/** 统计聚合（days 为热力图窗口天数，35–371 钳制；默认 182=半年） */
+export const statsAggregate = (days?: number) =>
+  invoke<StatsAggregate>("stats_aggregate", { days });

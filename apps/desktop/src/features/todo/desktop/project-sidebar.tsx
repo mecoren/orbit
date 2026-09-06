@@ -19,7 +19,7 @@ import {
   SortableContext,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
-import { GripVertical, Inbox, PanelLeftClose, PanelLeftOpen, Plus, Trash2 } from "lucide-react";
+import { BarChart3, GripVertical, Inbox, PanelLeftClose, PanelLeftOpen, Plus, Trash2 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { hideFromQueries, useUndoableDeleteAction } from "@/hooks/use-undoable-delete";
@@ -82,8 +82,9 @@ export function ProjectSidebar({
   const location = useLocation();
   const [adding, setAdding] = useState(false);
   const [newTitle, setNewTitle] = useState("");
-  // 回收站面板激活态（/todo/trash；激活时快捷视图/项目/未分组行全部不高亮）
+  // 回收站/统计面板激活态（/todo/trash、/todo/stats；激活时快捷视图/项目/未分组行全部不高亮）
   const trashActive = location.pathname === "/todo/trash";
+  const statsActive = location.pathname === "/todo/stats";
 
   // ---- 折叠态（#21）：断点自动 + 手动覆盖（语义见 shared/sidebar-collapsed）----
   const isNarrow = useIsNarrow();
@@ -106,9 +107,9 @@ export function ProjectSidebar({
 
   const refetchProjects = () => qc.invalidateQueries({ queryKey: ["todo-project", "list"] });
 
-  // 回收站面板激活时清空快捷视图/项目/未分组的行高亮（三选一互斥语义的第四态）
-  const effectiveQuickView = trashActive ? null : activeQuickView;
-  const effectiveProjectId = trashActive ? null : activeProjectId;
+  // 回收站/统计面板激活时清空快捷视图/项目/未分组的行高亮（三选一互斥语义的扩展态）
+  const effectiveQuickView = trashActive || statsActive ? null : activeQuickView;
+  const effectiveProjectId = trashActive || statsActive ? null : activeProjectId;
 
   // ---- 组合排序：未分组（UNGROUPED_ID 占位）+ 项目 ----
   // 未分组位置持久化为「前驱项目 id」（空 = 最前，默认项目第一位）
@@ -244,6 +245,22 @@ export function ProjectSidebar({
             </TooltipTrigger>
             <TooltipContent>回收站</TooltipContent>
           </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                aria-label="统计"
+                onClick={() => navigate("/todo/stats")}
+                className={cn(
+                  "flex h-8 w-8 items-center justify-center rounded-md",
+                  statsActive ? "bg-primary/10" : "hover:bg-accent/50",
+                )}
+              >
+                <BarChart3 className="size-4" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent>统计</TooltipContent>
+          </Tooltip>
         </div>
 
         <div className="mt-2 flex w-full flex-col items-center gap-1">
@@ -319,7 +336,7 @@ export function ProjectSidebar({
             </button>
           );
         })}
-        {/* 回收站（壳层嵌套路由面板，不参与快捷视图筛选状态机） */}
+        {/* 回收站/统计（壳层嵌套路由面板，不参与快捷视图筛选状态机） */}
         <button
           type="button"
           onClick={() => navigate("/todo/trash")}
@@ -330,6 +347,17 @@ export function ProjectSidebar({
         >
           <Trash2 className="size-4" />
           <span>回收站</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => navigate("/todo/stats")}
+          className={cn(
+            "flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm",
+            statsActive ? "bg-primary/10 font-medium text-primary" : "hover:bg-accent/50",
+          )}
+        >
+          <BarChart3 className="size-4" />
+          <span>统计</span>
         </button>
       </div>
 
@@ -353,7 +381,7 @@ export function ProjectSidebar({
                   id === UNGROUPED_ID ? (
                     <SortableUngroupedRow
                       key={id}
-                      active={ungroupedActive && !trashActive}
+                      active={ungroupedActive && !trashActive && !statsActive}
                       onSelect={onSelectUngrouped}
                     />
                   ) : (

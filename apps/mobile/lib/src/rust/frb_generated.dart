@@ -9,6 +9,7 @@ import 'api/events.dart';
 import 'api/holiday.dart';
 import 'api/plaintext_export.dart';
 import 'api/state.dart';
+import 'api/stats.dart';
 import 'api/sync.dart';
 import 'api/todo.dart';
 import 'api/trash.dart';
@@ -72,7 +73,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.12.0';
 
   @override
-  int get rustContentHash => 1020388384;
+  int get rustContentHash => -946230075;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -151,6 +152,8 @@ abstract class RustLibApi extends BaseApi {
   Stream<ReminderDueDto> crateApiEventsStartReminderPoller();
 
   Future<void> crateApiTrashStartTrashScheduler();
+
+  Future<StatsAggregate> crateApiStatsStatsAggregate({PlatformInt64? days});
 
   Stream<DbEventDto> crateApiEventsSubscribeDbChanges();
 
@@ -1131,6 +1134,34 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(debugName: "start_trash_scheduler", argNames: []);
 
   @override
+  Future<StatsAggregate> crateApiStatsStatsAggregate({PlatformInt64? days}) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_opt_box_autoadd_i_64(days, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 27,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_stats_aggregate,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiStatsStatsAggregateConstMeta,
+        argValues: [days],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiStatsStatsAggregateConstMeta =>
+      const TaskConstMeta(debugName: "stats_aggregate", argNames: ["days"]);
+
+  @override
   Stream<DbEventDto> crateApiEventsSubscribeDbChanges() {
     final sink = RustStreamSink<DbEventDto>();
     unawaited(
@@ -1142,7 +1173,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             pdeCallFfi(
               generalizedFrbRustBinding,
               serializer,
-              funcId: 27,
+              funcId: 28,
               port: port_,
             );
           },
@@ -1174,7 +1205,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 28,
+            funcId: 29,
             port: port_,
           );
         },
@@ -1204,7 +1235,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 29,
+            funcId: 30,
             port: port_,
           );
         },
@@ -1236,7 +1267,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 30,
+            funcId: 31,
             port: port_,
           );
         },
@@ -1266,7 +1297,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 31,
+            funcId: 32,
             port: port_,
           );
         },
@@ -1293,7 +1324,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 32,
+            funcId: 33,
             port: port_,
           );
         },
@@ -1330,7 +1361,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 33,
+            funcId: 34,
             port: port_,
           );
         },
@@ -1365,7 +1396,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 34,
+            funcId: 35,
             port: port_,
           );
         },
@@ -1394,7 +1425,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 35,
+            funcId: 36,
             port: port_,
           );
         },
@@ -1421,7 +1452,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 36,
+            funcId: 37,
             port: port_,
           );
         },
@@ -1451,7 +1482,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 37,
+            funcId: 38,
             port: port_,
           );
         },
@@ -1483,7 +1514,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 38,
+            funcId: 39,
             port: port_,
           );
         },
@@ -1513,7 +1544,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 39,
+            funcId: 40,
             port: port_,
           );
         },
@@ -1541,7 +1572,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 40,
+            funcId: 41,
             port: port_,
           );
         },
@@ -1574,7 +1605,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 41,
+            funcId: 42,
             port: port_,
           );
         },
@@ -1605,7 +1636,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 42,
+            funcId: 43,
             port: port_,
           );
         },
@@ -1633,7 +1664,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 43,
+            funcId: 44,
             port: port_,
           );
         },
@@ -1663,7 +1694,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 44,
+            funcId: 45,
             port: port_,
           );
         },
@@ -1696,7 +1727,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 45,
+            funcId: 46,
             port: port_,
           );
         },
@@ -1724,7 +1755,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 46,
+            funcId: 47,
             port: port_,
           );
         },
@@ -1754,7 +1785,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 47,
+            funcId: 48,
             port: port_,
           );
         },
@@ -1786,7 +1817,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 48,
+            funcId: 49,
             port: port_,
           );
         },
@@ -1819,7 +1850,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 49,
+            funcId: 50,
             port: port_,
           );
         },
@@ -1850,7 +1881,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 50,
+            funcId: 51,
             port: port_,
           );
         },
@@ -1878,7 +1909,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 51,
+            funcId: 52,
             port: port_,
           );
         },
@@ -1908,7 +1939,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 52,
+            funcId: 53,
             port: port_,
           );
         },
@@ -1943,7 +1974,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 53,
+            funcId: 54,
             port: port_,
           );
         },
@@ -1978,7 +2009,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 54,
+            funcId: 55,
             port: port_,
           );
         },
@@ -2011,7 +2042,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 55,
+            funcId: 56,
             port: port_,
           );
         },
@@ -2042,7 +2073,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 56,
+            funcId: 57,
             port: port_,
           );
         },
@@ -2072,7 +2103,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 57,
+            funcId: 58,
             port: port_,
           );
         },
@@ -2102,7 +2133,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 58,
+            funcId: 59,
             port: port_,
           );
         },
@@ -2135,7 +2166,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 59,
+            funcId: 60,
             port: port_,
           );
         },
@@ -2166,7 +2197,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 60,
+            funcId: 61,
             port: port_,
           );
         },
@@ -2194,7 +2225,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 61,
+            funcId: 62,
             port: port_,
           );
         },
@@ -2224,7 +2255,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 62,
+            funcId: 63,
             port: port_,
           );
         },
@@ -2259,7 +2290,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 63,
+            funcId: 64,
             port: port_,
           );
         },
@@ -2294,7 +2325,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 64,
+            funcId: 65,
             port: port_,
           );
         },
@@ -2330,7 +2361,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 65,
+            funcId: 66,
             port: port_,
           );
         },
@@ -2361,7 +2392,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 66,
+            funcId: 67,
             port: port_,
           );
         },
@@ -2394,7 +2425,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 67,
+            funcId: 68,
             port: port_,
           );
         },
@@ -2430,7 +2461,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 68,
+            funcId: 69,
             port: port_,
           );
         },
@@ -2463,7 +2494,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 69,
+            funcId: 70,
             port: port_,
           );
         },
@@ -2496,7 +2527,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 70,
+            funcId: 71,
             port: port_,
           );
         },
@@ -2529,7 +2560,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 71,
+            funcId: 72,
             port: port_,
           );
         },
@@ -2562,7 +2593,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 72,
+            funcId: 73,
             port: port_,
           );
         },
@@ -2590,7 +2621,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 73,
+            funcId: 74,
             port: port_,
           );
         },
@@ -2618,7 +2649,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 74,
+            funcId: 75,
             port: port_,
           );
         },
@@ -2648,7 +2679,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 75,
+            funcId: 76,
             port: port_,
           );
         },
@@ -2678,7 +2709,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 76,
+            funcId: 77,
             port: port_,
           );
         },
@@ -2710,7 +2741,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 77,
+            funcId: 78,
             port: port_,
           );
         },
@@ -2745,7 +2776,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 78,
+            funcId: 79,
             port: port_,
           );
         },
@@ -2775,7 +2806,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 79,
+            funcId: 80,
             port: port_,
           );
         },
@@ -2802,7 +2833,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 80,
+            funcId: 81,
             port: port_,
           );
         },
@@ -2829,7 +2860,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 81,
+            funcId: 82,
             port: port_,
           );
         },
@@ -2859,7 +2890,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 82,
+            funcId: 83,
             port: port_,
           );
         },
@@ -2890,7 +2921,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 83,
+            funcId: 84,
             port: port_,
           );
         },
@@ -2918,7 +2949,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 84,
+            funcId: 85,
             port: port_,
           );
         },
@@ -2945,7 +2976,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 85,
+            funcId: 86,
             port: port_,
           );
         },
@@ -3190,6 +3221,30 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  List<StatsHeatmapCell> dco_decode_list_stats_heatmap_cell(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_stats_heatmap_cell).toList();
+  }
+
+  @protected
+  List<StatsPriorityRow> dco_decode_list_stats_priority_row(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_stats_priority_row).toList();
+  }
+
+  @protected
+  List<StatsProjectRow> dco_decode_list_stats_project_row(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_stats_project_row).toList();
+  }
+
+  @protected
+  List<StatsWeekdayRow> dco_decode_list_stats_weekday_row(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_stats_weekday_row).toList();
+  }
+
+  @protected
   List<TableCount> dco_decode_list_table_count(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return (raw as List<dynamic>).map(dco_decode_table_count).toList();
@@ -3309,6 +3364,114 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       taskId: dco_decode_i_64(arr[1]),
       title: dco_decode_String(arr[2]),
       remindAt: dco_decode_i_64(arr[3]),
+    );
+  }
+
+  @protected
+  StatsAggregate dco_decode_stats_aggregate(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 6)
+      throw Exception('unexpected arr length: expect 6 but see ${arr.length}');
+    return StatsAggregate(
+      overview: dco_decode_stats_overview(arr[0]),
+      heatmap: dco_decode_stats_heatmap(arr[1]),
+      streak: dco_decode_stats_streak(arr[2]),
+      byProject: dco_decode_list_stats_project_row(arr[3]),
+      byPriority: dco_decode_list_stats_priority_row(arr[4]),
+      byWeekday: dco_decode_list_stats_weekday_row(arr[5]),
+    );
+  }
+
+  @protected
+  StatsHeatmap dco_decode_stats_heatmap(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 3)
+      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
+    return StatsHeatmap(
+      startDate: dco_decode_String(arr[0]),
+      endDate: dco_decode_String(arr[1]),
+      cells: dco_decode_list_stats_heatmap_cell(arr[2]),
+    );
+  }
+
+  @protected
+  StatsHeatmapCell dco_decode_stats_heatmap_cell(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 2)
+      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+    return StatsHeatmapCell(
+      date: dco_decode_String(arr[0]),
+      count: dco_decode_i_64(arr[1]),
+    );
+  }
+
+  @protected
+  StatsOverview dco_decode_stats_overview(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 5)
+      throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
+    return StatsOverview(
+      total: dco_decode_i_64(arr[0]),
+      pending: dco_decode_i_64(arr[1]),
+      done: dco_decode_i_64(arr[2]),
+      doneLast7D: dco_decode_i_64(arr[3]),
+      doneLast30D: dco_decode_i_64(arr[4]),
+    );
+  }
+
+  @protected
+  StatsPriorityRow dco_decode_stats_priority_row(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 3)
+      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
+    return StatsPriorityRow(
+      priority: dco_decode_i_64(arr[0]),
+      doneCount: dco_decode_i_64(arr[1]),
+      pendingCount: dco_decode_i_64(arr[2]),
+    );
+  }
+
+  @protected
+  StatsProjectRow dco_decode_stats_project_row(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 4)
+      throw Exception('unexpected arr length: expect 4 but see ${arr.length}');
+    return StatsProjectRow(
+      projectId: dco_decode_opt_box_autoadd_i_64(arr[0]),
+      projectTitle: dco_decode_opt_String(arr[1]),
+      doneCount: dco_decode_i_64(arr[2]),
+      pendingCount: dco_decode_i_64(arr[3]),
+    );
+  }
+
+  @protected
+  StatsStreak dco_decode_stats_streak(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 3)
+      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
+    return StatsStreak(
+      current: dco_decode_i_64(arr[0]),
+      best: dco_decode_i_64(arr[1]),
+      doneToday: dco_decode_bool(arr[2]),
+    );
+  }
+
+  @protected
+  StatsWeekdayRow dco_decode_stats_weekday_row(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 2)
+      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+    return StatsWeekdayRow(
+      weekday: dco_decode_i_64(arr[0]),
+      doneCount: dco_decode_i_64(arr[1]),
     );
   }
 
@@ -4031,6 +4194,62 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  List<StatsHeatmapCell> sse_decode_list_stats_heatmap_cell(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <StatsHeatmapCell>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_stats_heatmap_cell(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  List<StatsPriorityRow> sse_decode_list_stats_priority_row(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <StatsPriorityRow>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_stats_priority_row(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  List<StatsProjectRow> sse_decode_list_stats_project_row(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <StatsProjectRow>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_stats_project_row(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  List<StatsWeekdayRow> sse_decode_list_stats_weekday_row(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <StatsWeekdayRow>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_stats_weekday_row(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
   List<TableCount> sse_decode_list_table_count(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
 
@@ -4254,6 +4473,112 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       title: var_title,
       remindAt: var_remindAt,
     );
+  }
+
+  @protected
+  StatsAggregate sse_decode_stats_aggregate(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_overview = sse_decode_stats_overview(deserializer);
+    var var_heatmap = sse_decode_stats_heatmap(deserializer);
+    var var_streak = sse_decode_stats_streak(deserializer);
+    var var_byProject = sse_decode_list_stats_project_row(deserializer);
+    var var_byPriority = sse_decode_list_stats_priority_row(deserializer);
+    var var_byWeekday = sse_decode_list_stats_weekday_row(deserializer);
+    return StatsAggregate(
+      overview: var_overview,
+      heatmap: var_heatmap,
+      streak: var_streak,
+      byProject: var_byProject,
+      byPriority: var_byPriority,
+      byWeekday: var_byWeekday,
+    );
+  }
+
+  @protected
+  StatsHeatmap sse_decode_stats_heatmap(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_startDate = sse_decode_String(deserializer);
+    var var_endDate = sse_decode_String(deserializer);
+    var var_cells = sse_decode_list_stats_heatmap_cell(deserializer);
+    return StatsHeatmap(
+      startDate: var_startDate,
+      endDate: var_endDate,
+      cells: var_cells,
+    );
+  }
+
+  @protected
+  StatsHeatmapCell sse_decode_stats_heatmap_cell(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_date = sse_decode_String(deserializer);
+    var var_count = sse_decode_i_64(deserializer);
+    return StatsHeatmapCell(date: var_date, count: var_count);
+  }
+
+  @protected
+  StatsOverview sse_decode_stats_overview(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_total = sse_decode_i_64(deserializer);
+    var var_pending = sse_decode_i_64(deserializer);
+    var var_done = sse_decode_i_64(deserializer);
+    var var_doneLast7D = sse_decode_i_64(deserializer);
+    var var_doneLast30D = sse_decode_i_64(deserializer);
+    return StatsOverview(
+      total: var_total,
+      pending: var_pending,
+      done: var_done,
+      doneLast7D: var_doneLast7D,
+      doneLast30D: var_doneLast30D,
+    );
+  }
+
+  @protected
+  StatsPriorityRow sse_decode_stats_priority_row(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_priority = sse_decode_i_64(deserializer);
+    var var_doneCount = sse_decode_i_64(deserializer);
+    var var_pendingCount = sse_decode_i_64(deserializer);
+    return StatsPriorityRow(
+      priority: var_priority,
+      doneCount: var_doneCount,
+      pendingCount: var_pendingCount,
+    );
+  }
+
+  @protected
+  StatsProjectRow sse_decode_stats_project_row(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_projectId = sse_decode_opt_box_autoadd_i_64(deserializer);
+    var var_projectTitle = sse_decode_opt_String(deserializer);
+    var var_doneCount = sse_decode_i_64(deserializer);
+    var var_pendingCount = sse_decode_i_64(deserializer);
+    return StatsProjectRow(
+      projectId: var_projectId,
+      projectTitle: var_projectTitle,
+      doneCount: var_doneCount,
+      pendingCount: var_pendingCount,
+    );
+  }
+
+  @protected
+  StatsStreak sse_decode_stats_streak(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_current = sse_decode_i_64(deserializer);
+    var var_best = sse_decode_i_64(deserializer);
+    var var_doneToday = sse_decode_bool(deserializer);
+    return StatsStreak(
+      current: var_current,
+      best: var_best,
+      doneToday: var_doneToday,
+    );
+  }
+
+  @protected
+  StatsWeekdayRow sse_decode_stats_weekday_row(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_weekday = sse_decode_i_64(deserializer);
+    var var_doneCount = sse_decode_i_64(deserializer);
+    return StatsWeekdayRow(weekday: var_weekday, doneCount: var_doneCount);
   }
 
   @protected
@@ -5109,6 +5434,54 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_list_stats_heatmap_cell(
+    List<StatsHeatmapCell> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_stats_heatmap_cell(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_stats_priority_row(
+    List<StatsPriorityRow> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_stats_priority_row(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_stats_project_row(
+    List<StatsProjectRow> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_stats_project_row(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_stats_weekday_row(
+    List<StatsWeekdayRow> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_stats_weekday_row(item, serializer);
+    }
+  }
+
+  @protected
   void sse_encode_list_table_count(
     List<TableCount> self,
     SseSerializer serializer,
@@ -5315,6 +5688,89 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_i_64(self.taskId, serializer);
     sse_encode_String(self.title, serializer);
     sse_encode_i_64(self.remindAt, serializer);
+  }
+
+  @protected
+  void sse_encode_stats_aggregate(
+    StatsAggregate self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_stats_overview(self.overview, serializer);
+    sse_encode_stats_heatmap(self.heatmap, serializer);
+    sse_encode_stats_streak(self.streak, serializer);
+    sse_encode_list_stats_project_row(self.byProject, serializer);
+    sse_encode_list_stats_priority_row(self.byPriority, serializer);
+    sse_encode_list_stats_weekday_row(self.byWeekday, serializer);
+  }
+
+  @protected
+  void sse_encode_stats_heatmap(StatsHeatmap self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.startDate, serializer);
+    sse_encode_String(self.endDate, serializer);
+    sse_encode_list_stats_heatmap_cell(self.cells, serializer);
+  }
+
+  @protected
+  void sse_encode_stats_heatmap_cell(
+    StatsHeatmapCell self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.date, serializer);
+    sse_encode_i_64(self.count, serializer);
+  }
+
+  @protected
+  void sse_encode_stats_overview(StatsOverview self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_64(self.total, serializer);
+    sse_encode_i_64(self.pending, serializer);
+    sse_encode_i_64(self.done, serializer);
+    sse_encode_i_64(self.doneLast7D, serializer);
+    sse_encode_i_64(self.doneLast30D, serializer);
+  }
+
+  @protected
+  void sse_encode_stats_priority_row(
+    StatsPriorityRow self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_64(self.priority, serializer);
+    sse_encode_i_64(self.doneCount, serializer);
+    sse_encode_i_64(self.pendingCount, serializer);
+  }
+
+  @protected
+  void sse_encode_stats_project_row(
+    StatsProjectRow self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_opt_box_autoadd_i_64(self.projectId, serializer);
+    sse_encode_opt_String(self.projectTitle, serializer);
+    sse_encode_i_64(self.doneCount, serializer);
+    sse_encode_i_64(self.pendingCount, serializer);
+  }
+
+  @protected
+  void sse_encode_stats_streak(StatsStreak self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_64(self.current, serializer);
+    sse_encode_i_64(self.best, serializer);
+    sse_encode_bool(self.doneToday, serializer);
+  }
+
+  @protected
+  void sse_encode_stats_weekday_row(
+    StatsWeekdayRow self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_64(self.weekday, serializer);
+    sse_encode_i_64(self.doneCount, serializer);
   }
 
   @protected

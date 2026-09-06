@@ -732,6 +732,145 @@ class MockOrbitBridge implements OrbitBridge {
   @override
   Future<void> startTrashScheduler() async {}
 
+  // ── 统计仪表盘（backlog #25；口径对齐 stats_api：done_at 本地日界、仅存活任务）──
+
+  @override
+  Future<StatsAggregate> statsAggregate({int? days}) => _delay(() {
+        final windowDays = (days ?? 182).clamp(35, 371);
+        final live = store.tasks.values
+            .where((t) => t['is_deleted'] == 0)
+            .toList(growable: false);
+        final doneTasks = live
+            .where((t) => t['done'] == 1 && t['done_at'] != null)
+            .toList(growable: false);
+
+        String dayKey(int ms) {
+          final d = DateTime.fromMillisecondsSinceEpoch(ms);
+          return '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+        }
+
+        int idxOf(String key) =>
+            DateTime.parse(key).millisecondsSinceEpoch ~/ 86400000;
+
+        final today = DateTime.now();
+        final todayKey =
+            '${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
+        final tIdx = idxOf(todayKey);
+        final startMs = (today.copyWith(hour: 0, minute: 0, second: 0, millisecond: 0))
+                .millisecondsSinceEpoch -
+            (windowDays - 1) * 86400000;
+
+        final byDay = <String, int>{};
+        for (final t in doneTasks) {
+          final doneAt = t['done_at'] as int;
+          if (doneAt >= startMs) {
+            final k = dayKey(doneAt);
+            byDay[k] = (byDay[k] ?? 0) + 1;
+          }
+        }
+        final cells = <StatsHeatmapCell>[];
+        for (var i = 0; i < windowDays; i++) {
+          final d = DateTime.fromMillisecondsSinceEpoch(startMs + i * 86400000);
+          final k = dayKey(d.millisecondsSinceEpoch);
+          cells.add(StatsHeatmapCell(date: k, count: byDay[k] ?? 0));
+        }
+
+        // streak（断档规则对齐 core compute_streak）
+        final doneIdx = byDay.keys.map(idxOf).toSet();
+        final doneToday = doneIdx.contains(tIdx);
+        var anchor = doneToday ? tIdx : tIdx - 1;
+        var current = 0;
+        while (doneIdx.contains(anchor)) {
+          current++;
+          anchor--;
+        }
+        var best = 0;
+        var run = 0;
+        int? prev;
+        for (final i in doneIdx.toList()..sort()) {
+          run = prev == i - 1 ? run + 1 : 1;
+          if (run > best) best = run;
+          prev = i;
+        }
+
+        int inLast(int n) {
+          final cutoff = tIdx - (n - 1);
+          return doneTasks
+              .where((t) => idxOf(dayKey(t['done_at'] as int)) >= cutoff)
+              .length;
+        }
+
+        final byProjectMap = <Object, StatsProjectRow>{};
+        for (final t in live) {
+          final key = t['project_id'] ?? 'none';
+          final existing = byProjectMap[key];
+          final pid = t['project_id'] as int?;
+          final title = pid != null
+              ? (store.projects[pid]?['title'] as String? ?? '未知项目')
+              : null;
+          final row = existing ??
+              StatsProjectRow(
+                projectId: pid,
+                projectTitle: title,
+                doneCount: 0,
+                pendingCount: 0,
+              );
+          byProjectMap[key] = StatsProjectRow(
+            projectId: row.projectId,
+            projectTitle: row.projectTitle,
+            doneCount: row.doneCount + (t['done'] == 1 ? 1 : 0),
+            pendingCount: row.pendingCount + (t['done'] == 1 ? 0 : 1),
+          );
+        }
+
+        final byPriorityMap = <int, StatsPriorityRow>{};
+        for (final t in live) {
+          final p = t['priority'] as int;
+          final row = byPriorityMap[p] ?? StatsPriorityRow(priority: p, doneCount: 0, pendingCount: 0);
+          byPriorityMap[p] = StatsPriorityRow(
+            priority: p,
+            doneCount: row.doneCount + (t['done'] == 1 ? 1 : 0),
+            pendingCount: row.pendingCount + (t['done'] == 1 ? 0 : 1),
+          );
+        }
+
+        final byWeekday = List.filled(7, 0, growable: false);
+        for (final t in doneTasks) {
+          // 周一=0 基（对齐 Rust num_days_from_monday）
+          byWeekday[(DateTime.fromMillisecondsSinceEpoch(t['done_at'] as int)
+                      .weekday -
+                  1)]++;
+        }
+
+        return StatsAggregate(
+          overview: StatsOverview(
+            total: live.length,
+            pending: live.where((t) => t['done'] == 0).length,
+            done: doneTasks.length,
+            doneLast7d: inLast(7),
+            doneLast30d: inLast(30),
+          ),
+          heatmap: StatsHeatmap(
+            startDate: cells.first.date,
+            endDate: cells.last.date,
+            cells: cells,
+          ),
+          streak: StatsStreak(
+            current: current,
+            best: best,
+            doneToday: doneToday,
+          ),
+          byProject: byProjectMap.values.toList()
+            ..sort((a, b) => b.doneCount.compareTo(a.doneCount)),
+          byPriority: byPriorityMap.values.toList()
+            ..sort((a, b) => a.priority.compareTo(b.priority)),
+          byWeekday: [
+            for (var i = 0; i < 7; i++)
+              StatsWeekdayRow(weekday: i, doneCount: byWeekday[i]),
+          ],
+        );
+      });
+
   // ── 事件流 ──
 
   @override

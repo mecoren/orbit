@@ -17,6 +17,9 @@ const TaskPanel = lazy(() => import("@/features/todo/desktop/task-panel"));
 const TrashPanel = lazy(() =>
   import("@/features/todo/desktop/trash-page").then((m) => ({ default: m.TrashPanel })),
 );
+const StatsPanel = lazy(() =>
+  import("@/features/todo/desktop/stats-page").then((m) => ({ default: m.StatsPanel })),
+);
 const SettingsPage = lazy(() =>
   import("@/pages/settings-page").then((m) => ({ default: m.SettingsPage })),
 );
@@ -48,9 +51,10 @@ const desktopChildren = [
     element: page(<TodoShell />),
     errorElement: <RouteError />,
     children: [
-      // 壳层嵌套：侧栏/选中态/抽屉表单跨面板持久，Outlet 出任务/回收站面板
+      // 壳层嵌套：侧栏/选中态/抽屉表单跨面板持久，Outlet 出任务/回收站/统计面板
       { index: true, element: page(<TaskPanel />), errorElement: <RouteError /> },
       { path: "trash", element: page(<TrashPanel />), errorElement: <RouteError /> },
+      { path: "stats", element: page(<StatsPanel />), errorElement: <RouteError /> },
     ],
   },
   { path: "settings", element: page(<SettingsPage />), errorElement: <RouteError /> },

@@ -228,6 +228,11 @@ abstract class OrbitBridge {
   /// 每日最多清理一次 + 多日未开时启动首轮补清）
   Future<void> startTrashScheduler();
 
+  // ── 统计仪表盘（backlog #25：只读聚合）──
+
+  /// 一次性统计聚合（days 为热力图窗口天数，35-371；null = 182 半年）
+  Future<StatsAggregate> statsAggregate({int? days});
+
   // ── 事件流（下行通道，替代 Tauri event listen）──
 
   /// 本地写操作事件 → 全量失效业务缓存

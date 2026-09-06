@@ -528,6 +528,110 @@ const commands: Record<string, (args: any, ctx: Ctx) => unknown> = {
   trash_meta: () => ({ retention_days: 30, last_purge_ms: 0 }),
   trash_set_retention_days: () => undefined,
 
+  // ---- 统计（backlog #25；对齐 stats_api 口径：done_at 本地日界，仅存活任务；
+  //      浏览器 mock 用端侧 Date 分桶，语义与 Rust chrono Local 一致）----
+  stats_aggregate: (_a: { days?: number }, { db }) => {
+    const days = Math.min(371, Math.max(35, _a.days ?? 182));
+    const live = db.tasks.filter((t) => !t.is_deleted);
+    const doneTasks = live.filter((t) => t.done && t.done_at != null);
+    const dayKey = (ts: number) => {
+      const d = new Date(ts);
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    };
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const startMs = today.getTime() - (days - 1) * 86_400_000;
+    const todayKey = dayKey(today.getTime());
+
+    const byDay = new Map<string, number>();
+    for (const t of doneTasks) {
+      if (t.done_at! >= startMs) {
+        const k = dayKey(t.done_at!);
+        byDay.set(k, (byDay.get(k) ?? 0) + 1);
+      }
+    }
+    const cells: { date: string; count: number }[] = [];
+    for (let i = 0; i < days; i++) {
+      const d = new Date(startMs + i * 86_400_000);
+      const k = dayKey(d.getTime());
+      cells.push({ date: k, count: byDay.get(k) ?? 0 });
+    }
+
+    // streak：today 有 → 从 today 前数；否则从昨天（昨天无 → 0）
+    const idxOf = (k: string) => Math.floor(new Date(`${k}T00:00:00`).getTime() / 86_400_000);
+    const doneIdx = new Set([...byDay.keys()].map(idxOf));
+    const tIdx = idxOf(todayKey);
+    const doneToday = doneIdx.has(tIdx);
+    let anchor = doneToday ? tIdx : tIdx - 1;
+    let current = 0;
+    while (doneIdx.has(anchor)) {
+      current++;
+      anchor--;
+    }
+    let best = 0;
+    let run = 0;
+    let prev: number | null = null;
+    for (const i of [...doneIdx].sort((a, b) => a - b)) {
+      run = prev === i - 1 ? run + 1 : 1;
+      best = Math.max(best, run);
+      prev = i;
+    }
+
+    const inLast = (n: number) => {
+      const cutoff = tIdx - (n - 1);
+      return doneTasks.filter((t) => idxOf(dayKey(t.done_at!)) >= cutoff).length;
+    };
+
+    const byProjectMap = new Map<number | "none", { id: number | null; title: string | null; done: number; pending: number }>();
+    for (const t of live) {
+      const key = t.project_id ?? "none";
+      const row =
+        byProjectMap.get(key) ??
+        {
+          id: t.project_id ?? null,
+          title: t.project_id != null ? db.projects.find((p) => p.id === t.project_id)?.title ?? "未知项目" : null,
+          done: 0,
+          pending: 0,
+        };
+      if (t.done) row.done++;
+      else row.pending++;
+      byProjectMap.set(key, row);
+    }
+
+    const byPriorityMap = new Map<number, { done: number; pending: number }>();
+    for (const t of live) {
+      const row = byPriorityMap.get(t.priority) ?? { done: 0, pending: 0 };
+      if (t.done) row.done++;
+      else row.pending++;
+      byPriorityMap.set(t.priority, row);
+    }
+
+    const byWeekday = Array.from({ length: 7 }, () => 0);
+    for (const t of doneTasks) {
+      // 周一=0 基（对齐 Rust num_days_from_monday）
+      byWeekday[(new Date(t.done_at!).getDay() + 6) % 7]++;
+    }
+
+    return {
+      overview: {
+        total: live.length,
+        pending: live.filter((t) => !t.done).length,
+        done: doneTasks.length,
+        done_last_7d: inLast(7),
+        done_last_30d: inLast(30),
+      },
+      heatmap: { start_date: cells[0].date, end_date: cells[cells.length - 1].date, cells },
+      streak: { current, best, done_today: doneToday },
+      by_project: [...byProjectMap.values()]
+        .map((r) => ({ project_id: r.id, project_title: r.title, done_count: r.done, pending_count: r.pending }))
+        .sort((a, b) => b.done_count - a.done_count),
+      by_priority: [...byPriorityMap.entries()]
+        .map(([priority, r]) => ({ priority, done_count: r.done, pending_count: r.pending }))
+        .sort((a, b) => a.priority - b.priority),
+      by_weekday: byWeekday.map((count, weekday) => ({ weekday, done_count: count })),
+    };
+  },
+
   // ---- 计数（旧基座命令；保守返回 0）----
   business_count: () => 0,
 };

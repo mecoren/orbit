@@ -74,6 +74,11 @@ final trashMetaProvider = FutureProvider<TrashMeta>((ref) async {
   return ref.watch(orbitBridgeProvider).trashMeta();
 });
 
+/// 统计聚合（backlog #25 统计页；family 参数 = 热力图窗口天数）
+final statsProvider = FutureProvider.family<StatsAggregate, int>((ref, days) async {
+  return ref.watch(orbitBridgeProvider).statsAggregate(days: days);
+});
+
 /// 全量失效业务缓存（dbChanges / syncFinished(pulled>0) 时调用）
 void invalidateBusinessCaches(WidgetRef ref) {
   ref.invalidate(todoProjectsProvider);
@@ -82,4 +87,5 @@ void invalidateBusinessCaches(WidgetRef ref) {
   ref.invalidate(taskDetailProvider);
   ref.invalidate(syncConfigProvider);
   ref.invalidate(trashTasksProvider);
+  ref.invalidate(statsProvider);
 }

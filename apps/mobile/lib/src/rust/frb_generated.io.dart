@@ -9,6 +9,7 @@ import 'api/events.dart';
 import 'api/holiday.dart';
 import 'api/plaintext_export.dart';
 import 'api/state.dart';
+import 'api/stats.dart';
 import 'api/sync.dart';
 import 'api/todo.dart';
 import 'api/trash.dart';
@@ -133,6 +134,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   Uint8List dco_decode_list_prim_u_8_strict(dynamic raw);
 
   @protected
+  List<StatsHeatmapCell> dco_decode_list_stats_heatmap_cell(dynamic raw);
+
+  @protected
+  List<StatsPriorityRow> dco_decode_list_stats_priority_row(dynamic raw);
+
+  @protected
+  List<StatsProjectRow> dco_decode_list_stats_project_row(dynamic raw);
+
+  @protected
+  List<StatsWeekdayRow> dco_decode_list_stats_weekday_row(dynamic raw);
+
+  @protected
   List<TableCount> dco_decode_list_table_count(dynamic raw);
 
   @protected
@@ -185,6 +198,30 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   ReminderDueDto dco_decode_reminder_due_dto(dynamic raw);
+
+  @protected
+  StatsAggregate dco_decode_stats_aggregate(dynamic raw);
+
+  @protected
+  StatsHeatmap dco_decode_stats_heatmap(dynamic raw);
+
+  @protected
+  StatsHeatmapCell dco_decode_stats_heatmap_cell(dynamic raw);
+
+  @protected
+  StatsOverview dco_decode_stats_overview(dynamic raw);
+
+  @protected
+  StatsPriorityRow dco_decode_stats_priority_row(dynamic raw);
+
+  @protected
+  StatsProjectRow dco_decode_stats_project_row(dynamic raw);
+
+  @protected
+  StatsStreak dco_decode_stats_streak(dynamic raw);
+
+  @protected
+  StatsWeekdayRow dco_decode_stats_weekday_row(dynamic raw);
 
   @protected
   SyncConfigInput dco_decode_sync_config_input(dynamic raw);
@@ -388,6 +425,26 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   Uint8List sse_decode_list_prim_u_8_strict(SseDeserializer deserializer);
 
   @protected
+  List<StatsHeatmapCell> sse_decode_list_stats_heatmap_cell(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  List<StatsPriorityRow> sse_decode_list_stats_priority_row(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  List<StatsProjectRow> sse_decode_list_stats_project_row(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  List<StatsWeekdayRow> sse_decode_list_stats_weekday_row(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   List<TableCount> sse_decode_list_table_count(SseDeserializer deserializer);
 
   @protected
@@ -452,6 +509,30 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   ReminderDueDto sse_decode_reminder_due_dto(SseDeserializer deserializer);
+
+  @protected
+  StatsAggregate sse_decode_stats_aggregate(SseDeserializer deserializer);
+
+  @protected
+  StatsHeatmap sse_decode_stats_heatmap(SseDeserializer deserializer);
+
+  @protected
+  StatsHeatmapCell sse_decode_stats_heatmap_cell(SseDeserializer deserializer);
+
+  @protected
+  StatsOverview sse_decode_stats_overview(SseDeserializer deserializer);
+
+  @protected
+  StatsPriorityRow sse_decode_stats_priority_row(SseDeserializer deserializer);
+
+  @protected
+  StatsProjectRow sse_decode_stats_project_row(SseDeserializer deserializer);
+
+  @protected
+  StatsStreak sse_decode_stats_streak(SseDeserializer deserializer);
+
+  @protected
+  StatsWeekdayRow sse_decode_stats_weekday_row(SseDeserializer deserializer);
 
   @protected
   SyncConfigInput sse_decode_sync_config_input(SseDeserializer deserializer);
@@ -695,6 +776,30 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_list_stats_heatmap_cell(
+    List<StatsHeatmapCell> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_stats_priority_row(
+    List<StatsPriorityRow> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_stats_project_row(
+    List<StatsProjectRow> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_stats_weekday_row(
+    List<StatsWeekdayRow> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_list_table_count(
     List<TableCount> self,
     SseSerializer serializer,
@@ -784,6 +889,45 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_reminder_due_dto(
     ReminderDueDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_stats_aggregate(
+    StatsAggregate self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_stats_heatmap(StatsHeatmap self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_stats_heatmap_cell(
+    StatsHeatmapCell self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_stats_overview(StatsOverview self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_stats_priority_row(
+    StatsPriorityRow self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_stats_project_row(
+    StatsProjectRow self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_stats_streak(StatsStreak self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_stats_weekday_row(
+    StatsWeekdayRow self,
     SseSerializer serializer,
   );
 

@@ -68,6 +68,8 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
 
   void _openCalendar() => context.push('/todo/calendar');
 
+  void _openStats() => context.push('/todo/stats');
+
   void _openTrash() => context.push('/todo/trash');
 
   void _openProject(TodoProject p) =>
@@ -232,7 +234,9 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
                 _buildQuickViewRow(key, tasks, surfaceHighest),
               // 二、日历（月视图格内待办长条 + 节假日徽标）
               _buildCalendarRow(context),
-              // 三、回收站（已删除任务的恢复入口；计数 = 回收站内任务数）
+              // 三、统计（backlog #25：总览/热力图/streak/分布）
+              _buildStatsRow(context),
+              // 四、回收站（已删除任务的恢复入口；计数 = 回收站内任务数）
               _buildTrashRow(context, surfaceHighest),
               // 四、项目（色块 + 名称 + 未完成计数；长按菜单；右侧把手拖拽重排）
               const SectionHeader(label: '项目'),
@@ -338,6 +342,32 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
         color: colors.secondaryText,
       ),
       onTap: _openCalendar,
+    );
+  }
+
+  /// 统计入口行（backlog #25：总览/热力图/连续天数/分布的专属页面，同日历行模式）
+  Widget _buildStatsRow(BuildContext context) {
+    final colors = AppColors.ofContext(context);
+    return ListTile(
+      leading: Icon(
+        Icons.insights_rounded,
+        size: AppDimens.iconSizeMd,
+        color: OrbitAccents.todoAccent,
+      ),
+      title: Text(
+        '统计',
+        style: TextStyle(
+          fontSize: 16,
+          fontWeight: FontWeight.w500,
+          color: colors.titleText,
+        ),
+      ),
+      trailing: Icon(
+        Icons.chevron_right_rounded,
+        size: AppDimens.iconSizeMd,
+        color: colors.secondaryText,
+      ),
+      onTap: _openStats,
     );
   }
 

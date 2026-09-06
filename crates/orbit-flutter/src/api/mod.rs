@@ -10,6 +10,7 @@
 //! - [plaintext_export]：明文数据导出（JSON / CSV，对齐桌面命令面）
 //! - [holiday]：节假日数据（联网更新 + 60s tick 自动调度守护）
 //! - [trash]：回收站（任务软删恢复 + 保留时间 + 60s tick TTL 清理守护）
+//! - [stats]：统计仪表盘（总览/热力图/连续天数/分布聚合，backlog #25）
 //! - [events]：下行事件流 + 提醒轮询守护
 
 pub mod auth;
@@ -18,6 +19,7 @@ pub mod events;
 pub mod holiday;
 pub mod plaintext_export;
 pub mod state;
+pub mod stats;
 pub mod sync;
 pub mod todo;
 pub mod trash;

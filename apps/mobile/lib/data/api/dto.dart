@@ -802,3 +802,109 @@ class TrashMeta {
     required this.lastPurgeMs,
   });
 }
+
+/// 统计总览卡（backlog #25；FRB stats.rs 镜像）
+class StatsOverview {
+  final int total;
+  final int pending;
+  final int done;
+  final int doneLast7d;
+  final int doneLast30d;
+
+  const StatsOverview({
+    required this.total,
+    required this.pending,
+    required this.done,
+    required this.doneLast7d,
+    required this.doneLast30d,
+  });
+}
+
+/// 热力图单格（本地日期 YYYY-MM-DD）
+class StatsHeatmapCell {
+  final String date;
+  final int count;
+
+  const StatsHeatmapCell({required this.date, required this.count});
+}
+
+/// 热力图数据（窗口首日至今逐日计数，含零完成日）
+class StatsHeatmap {
+  final String startDate;
+  final String endDate;
+  final List<StatsHeatmapCell> cells;
+
+  const StatsHeatmap({
+    required this.startDate,
+    required this.endDate,
+    required this.cells,
+  });
+}
+
+/// 连续完成天数（streak）
+class StatsStreak {
+  final int current;
+  final int best;
+  final bool doneToday;
+
+  const StatsStreak({
+    required this.current,
+    required this.best,
+    required this.doneToday,
+  });
+}
+
+/// 项目分布行（title null = 未分组）
+class StatsProjectRow {
+  final int? projectId;
+  final String? projectTitle;
+  final int doneCount;
+  final int pendingCount;
+
+  const StatsProjectRow({
+    required this.projectId,
+    required this.projectTitle,
+    required this.doneCount,
+    required this.pendingCount,
+  });
+}
+
+/// 优先级分布行（0-4）
+class StatsPriorityRow {
+  final int priority;
+  final int doneCount;
+  final int pendingCount;
+
+  const StatsPriorityRow({
+    required this.priority,
+    required this.doneCount,
+    required this.pendingCount,
+  });
+}
+
+/// 星期分布行（0=周一 … 6=周日）
+class StatsWeekdayRow {
+  final int weekday;
+  final int doneCount;
+
+  const StatsWeekdayRow({required this.weekday, required this.doneCount});
+}
+
+/// 一次性统计聚合（统计页单次调用）
+class StatsAggregate {
+  final StatsOverview overview;
+  final StatsHeatmap heatmap;
+  final StatsStreak streak;
+  final List<StatsProjectRow> byProject;
+  final List<StatsPriorityRow> byPriority;
+  final List<StatsWeekdayRow> byWeekday;
+
+  const StatsAggregate({
+    required this.overview,
+    required this.heatmap,
+    required this.streak,
+    required this.byProject,
+    required this.byPriority,
+    required this.byWeekday,
+  });
+}
