@@ -30,7 +30,7 @@ import {
   type DragEndEvent,
   type DragStartEvent,
 } from "@dnd-kit/core";
-import { Check, Clock, Flag, FolderInput, GripVertical, Inbox, Plus, Star, Sunrise, Trash2, X } from "lucide-react";
+import { Check, CircleCheck, Clock, Flag, FolderInput, GripVertical, Inbox, Plus, Star, StarOff, Sunrise, Trash2, X } from "lucide-react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { toast } from "sonner";
 
@@ -38,12 +38,14 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { ErrorState } from "@/components/business/error-state";
 import { EmptyState } from "@/components/business/empty-state";
 import { completeTask } from "../shared/task-actions";
@@ -52,7 +54,7 @@ import { midpoint } from "../shared/position";
 import { batchUpdateStatus, batchUpdatePriority, batchUpdateFavorite, batchMoveToProject, batchUpdateMyDay } from "../shared/batch-actions";
 import { useUndoableDeleteAction, hideFromQueries } from "@/hooks/use-undoable-delete";
 import { todoTaskDelete, todoTaskUpdate, todoTaskUpdatePosition, type TodoLabel, type TodoProject, type TodoTask } from "@/lib/tauri";
-import { FAVORITE_COLOR, OVERDUE_COLOR_CLASS, PRIORITY_COLOR, PRIORITY_LABELS } from "../shared/constants";
+import { FAVORITE_COLOR, OVERDUE_COLOR_CLASS, PRIORITY_COLOR, PRIORITY_LABELS, TODO_ACCENT } from "../shared/constants";
 import { LabelChips } from "../shared/label-chips";
 import { TaskContextMenu } from "./task-context-menu";
 
@@ -140,16 +142,14 @@ export function TaskListView({ tasks, projects, labelsByTask, loading, error, on
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [anchorId, setAnchorId] = useState<number | null>(null);
   const [batchBusy, setBatchBusy] = useState(false);
-  const [moveToOpen, setMoveToOpen] = useState(false);
-  const [batchMoveTarget, setBatchMoveTarget] = useState<number | null>(null);
-  const [priorityOpen, setPriorityOpen] = useState(false);
-  const [batchPriorityDraft, setBatchPriorityDraft] = useState<number | null>(null);
   const undoableDelete = useUndoableDeleteAction();
 
   const selectedTasks = useMemo(
     () => tasks.filter((t) => selected.has(t.id)),
     [tasks, selected],
   );
+  // 工具条动态文案：全完成→「标记未完成」/「移回待办」，否则按未完成口径处理
+  const allDoneSelected = selectedTasks.length > 0 && selectedTasks.every((t) => t.done);
 
   /** 单行勾选切换；shift 时以 anchor 为锚做 [min,max] 闭区间选择（不并集，可反复改选） */
   const toggleSelect = (id: number, shift: boolean) => {
@@ -174,7 +174,6 @@ export function TaskListView({ tasks, projects, labelsByTask, loading, error, on
   const clearSelection = () => {
     setSelected(new Set());
     setAnchorId(null);
-    setMoveToOpen(false);
   };
 
   /** 批量动作执行骨架：跑动作 → 清多选 → 统一失效任务缓存 */
@@ -369,179 +368,159 @@ export function TaskListView({ tasks, projects, labelsByTask, loading, error, on
         </RowContainerDropZone>
       </div>
 
-      {/* 多选批量工具条（P2#17）：≥1 选中时浮现底部居中 */}
+      {/* 多选批量工具条（P2#17）：≥1 选中时浮现底部居中。
+          排版：计数 + 图标按钮（Tooltip 补语义）+ 分隔线 + 退出；
+          优先级/移动项目走 DropdownMenu（点菜单项即执行，无草稿态），
+          总宽收敛在 ~420px，窄窗口不与列表滚动区打架。 */}
       {selected.size > 0 && (
         <div
           role="toolbar"
           aria-label={`已选中 ${selected.size} 条任务的批量操作`}
-          className="absolute bottom-4 left-1/2 z-20 flex -translate-x-1/2 items-center gap-1.5 rounded-lg border bg-background px-2 py-1.5 shadow-lg"
+          className="absolute bottom-4 left-1/2 z-20 flex -translate-x-1/2 items-center gap-0.5 rounded-lg border bg-background px-2 py-1.5 shadow-lg"
         >
-          <span className="px-1 text-sm text-muted-foreground tabular-nums" aria-live="polite">
+          <span className="px-2 text-sm text-muted-foreground tabular-nums" aria-live="polite">
             已选 {selected.size} 条
           </span>
-          <span className="h-4 w-px bg-border" />
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-8"
-            disabled={batchBusy}
-            onClick={() =>
-              void runBatch("标记完成", (sel) =>
-                batchUpdateStatus(
-                  sel,
-                  sel.some((t) => !t.done)
-                    ? { done: 1, done_at: Date.now(), status: "done" }
-                    : { done: 0, done_at: null, status: "pending" },
-                ),
-              )
-            }
-          >
-            <Check size={14} className="mr-1" />
-            {selectedTasks.some((t) => !t.done) ? "标记完成" : "标记未完成"}
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-8"
-            disabled={batchBusy}
-            onClick={() => void runBatch("收藏", (sel) => batchUpdateFavorite(sel, true))}
-          >
-            <Star size={14} className="mr-1" />
-            收藏
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-8"
-            disabled={batchBusy}
-            onClick={() => void runBatch("取消收藏", (sel) => batchUpdateFavorite(sel, false))}
-          >
-            <Star size={14} className="mr-1" />
-            取消收藏
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-8"
-            disabled={batchBusy}
-            onClick={() => void runBatch("加入我的一天", (sel) => batchUpdateMyDay(sel, true))}
-          >
-            <Sunrise size={14} className="mr-1" />
-            加入我的一天
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-8"
-            disabled={batchBusy}
-            onClick={() =>
-              void runBatch("设置优先级", async (sel) => {
-                if (batchPriorityDraft == null) throw new Error("未选择优先级档位");
-                await batchUpdatePriority(sel, batchPriorityDraft);
-              })
-            }
-          >
-            <Flag size={14} className="mr-1" />
-            优先级
-            <Select
-              open={priorityOpen}
-              onOpenChange={setPriorityOpen}
-              value={batchPriorityDraft == null ? undefined : String(batchPriorityDraft)}
-              onValueChange={(v) => setBatchPriorityDraft(Number(v))}
-            >
-              <SelectTrigger
-                size="sm"
-                className="ml-1 h-7 w-20 data-[placeholder]:text-muted-foreground"
-                aria-label="批量优先级"
-                tabIndex={priorityOpen ? 0 : -1}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setPriorityOpen(true);
+          <span className="mx-1 h-4 w-px bg-border" />
+
+          {/* 批量动作图标按钮：Tooltip 补全语义（纯图标省宽度） */}
+          {(
+            [
+              {
+                label: allDoneSelected ? "标记未完成" : "标记完成",
+                icon: allDoneSelected ? CircleCheck : Check,
+                run: () =>
+                  runBatch("标记完成", (sel) =>
+                    batchUpdateStatus(
+                      sel,
+                      allDoneSelected
+                        ? { done: 0, done_at: null, status: "pending" }
+                        : { done: 1, done_at: Date.now(), status: "done" },
+                    ),
+                  ),
+              },
+              {
+                label: allDoneSelected ? "移回待办" : "移入进行中",
+                icon: FolderInput,
+                run: () =>
+                  runBatch(allDoneSelected ? "移回待办" : "移入进行中", (sel) =>
+                    batchUpdateStatus(sel, allDoneSelected ? { status: "pending" } : { status: "doing" }),
+                  ),
+              },
+              { label: "加入我的一天", icon: Sunrise, run: () => runBatch("加入我的一天", (sel) => batchUpdateMyDay(sel, true)) },
+              { label: "收藏", icon: Star, run: () => runBatch("收藏", (sel) => batchUpdateFavorite(sel, true)) },
+              { label: "取消收藏", icon: StarOff, run: () => runBatch("取消收藏", (sel) => batchUpdateFavorite(sel, false)) },
+            ] as const
+          ).map(({ label, icon: Icon, run }) => (
+            <Tooltip key={label}>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8"
+                  aria-label={label}
+                  disabled={batchBusy}
+                  onClick={() => void run()}
+                >
+                  <Icon size={14} />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>{label}</TooltipContent>
+            </Tooltip>
+          ))}
+
+          {/* 设置优先级：下拉菜单 6 档色点，点选即执行 */}
+          <DropdownMenu>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon" className="h-8 w-8" aria-label="设置优先级" disabled={batchBusy}>
+                    <Flag size={14} />
+                  </Button>
+                </DropdownMenuTrigger>
+              </TooltipTrigger>
+              <TooltipContent>设置优先级</TooltipContent>
+            </Tooltip>
+            <DropdownMenuContent align="center">
+              {PRIORITY_LABELS.map((label, lv) => (
+                <DropdownMenuItem key={lv} onSelect={() => void runBatch("设置优先级", (sel) => batchUpdatePriority(sel, lv))}>
+                  {/* 固定 16px 前缀槽：无优先级留空也占位，保证各行文字对齐（与右键菜单同款式） */}
+                  <span className="flex w-4 shrink-0 items-center justify-center">
+                    {lv > 0 && <span className="h-2 w-2 rounded-full" style={{ backgroundColor: PRIORITY_COLOR[lv] }} />}
+                  </span>
+                  {label}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          {/* 移动到项目：下拉菜单项目色点，点选即执行；未分组作首项 */}
+          <DropdownMenu>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon" className="h-8 w-8" aria-label="移动到项目" disabled={batchBusy}>
+                    <FolderInput size={14} />
+                  </Button>
+                </DropdownMenuTrigger>
+              </TooltipTrigger>
+              <TooltipContent>移动到项目</TooltipContent>
+            </Tooltip>
+            <DropdownMenuContent align="center">
+              {projects.length > 0 && (
+                <>
+                  <DropdownMenuLabel>移动到项目</DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                </>
+              )}
+              <DropdownMenuItem
+                onSelect={() =>
+                  void runBatch("移动到项目", async (sel) => {
+                    await batchMoveToProject(sel, null, tasks);
+                  })
+                }
+              >
+                <span className="flex h-2.5 w-2.5 shrink-0 items-center justify-center">
+                  <Inbox size={12} className="text-muted-foreground" />
+                </span>
+                未分组
+              </DropdownMenuItem>
+              {projects.map((p) => (
+                <DropdownMenuItem
+                  key={p.id}
+                  onSelect={() =>
+                    void runBatch("移动到项目", async (sel) => {
+                      await batchMoveToProject(sel, p.id, tasks);
+                    })
+                  }
+                >
+                  <span className="h-2.5 w-2.5 shrink-0 rounded-sm" style={{ background: p.hex_color || TODO_ACCENT }} />
+                  {p.title}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-destructive hover:text-destructive"
+                aria-label="删除"
+                disabled={batchBusy}
+                onClick={() => {
+                  if (batchBusy) return;
+                  batchDelete(selectedTasks);
                 }}
               >
-                <SelectValue placeholder="选择档位" />
-              </SelectTrigger>
-              <SelectContent>
-                {PRIORITY_LABELS.map((label, p) => (
-                  <SelectItem key={p} value={String(p)}>
-                    {label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-8"
-            disabled={batchBusy}
-            onClick={() => {
-              const allDone = selectedTasks.every((t) => t.done);
-              void runBatch(allDone ? "移回待办" : "移入进行中", (sel) =>
-                batchUpdateStatus(sel, allDone ? { status: "pending" } : { status: "doing" }),
-              );
-            }}
-          >
-            <FolderInput size={14} className="mr-1" />
-            {selectedTasks.every((t) => t.done) ? "移回待办" : "移入进行中"}
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-8"
-            disabled={batchBusy}
-            onClick={() =>
-              void runBatch("移动到项目", async (sel) => {
-                const pid = batchMoveTarget;
-                if (pid == null) throw new Error("未选择目标项目");
-                await batchMoveToProject(sel, pid, tasks);
-              })
-            }
-          >
-            <FolderInput size={14} className="mr-1" />
-            移动到项目
-            <Select
-              open={moveToOpen}
-              onOpenChange={setMoveToOpen}
-              value={batchMoveTarget == null ? undefined : String(batchMoveTarget)}
-              onValueChange={(v) => setBatchMoveTarget(v === "none" ? null : Number(v))}
-            >
-              <SelectTrigger
-                size="sm"
-                className="ml-1 h-7 w-28 data-[placeholder]:text-muted-foreground"
-                aria-label="目标项目"
-                tabIndex={moveToOpen ? 0 : -1}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setMoveToOpen(true);
-                }}
-              >
-                <SelectValue placeholder="选择项目" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">未分组</SelectItem>
-                {projects.map((p) => (
-                  <SelectItem key={p.id} value={String(p.id)}>
-                    {p.title}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-8 text-destructive hover:text-destructive"
-            disabled={batchBusy}
-            onClick={() => {
-              if (batchBusy) return;
-              batchDelete(selectedTasks);
-            }}
-          >
-            <Trash2 size={14} className="mr-1" />
-            删除
-          </Button>
-          <span className="h-4 w-px bg-border" />
+                <Trash2 size={14} />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>删除</TooltipContent>
+          </Tooltip>
+
+          <span className="mx-1 h-4 w-px bg-border" />
           <Button variant="ghost" size="icon" className="h-8 w-8" aria-label="退出多选" onClick={clearSelection}>
             <X size={14} />
           </Button>
