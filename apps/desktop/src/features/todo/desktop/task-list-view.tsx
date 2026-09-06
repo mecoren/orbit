@@ -38,6 +38,16 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -144,6 +154,8 @@ export function TaskListView({ tasks, projects, labelsByTask, loading, error, on
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [anchorId, setAnchorId] = useState<number | null>(null);
   const [batchBusy, setBatchBusy] = useState(false);
+  // 批量删除确认弹窗（多条误删后撤销心智重，删除前须确认）
+  const [confirmBatchDelete, setConfirmBatchDelete] = useState(false);
   const undoableDelete = useUndoableDeleteAction();
 
   const selectedTasks = useMemo(
@@ -513,7 +525,7 @@ export function TaskListView({ tasks, projects, labelsByTask, loading, error, on
                 disabled={batchBusy}
                 onClick={() => {
                   if (batchBusy) return;
-                  batchDelete(selectedTasks);
+                  setConfirmBatchDelete(true);
                 }}
               >
                 <Trash2 size={14} />
@@ -528,6 +540,31 @@ export function TaskListView({ tasks, projects, labelsByTask, loading, error, on
           </Button>
         </div>
       )}
+
+      {/* 批量删除确认：N 条数量入文案（图标按钮重构后误触概率上升，
+          多条删除虽可整批撤销，误删→撤销的心智成本仍高于一次确认） */}
+      <AlertDialog open={confirmBatchDelete} onOpenChange={setConfirmBatchDelete}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>删除 {selectedTasks.length} 条任务</AlertDialogTitle>
+            <AlertDialogDescription>
+              确定要删除已选的 {selectedTasks.length} 条任务吗？删除后 5 秒内可整批撤销。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>取消</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-white hover:bg-destructive/90"
+              onClick={() => {
+                setConfirmBatchDelete(false);
+                batchDelete(selectedTasks);
+              }}
+            >
+              删除
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* 拖拽浮层：简化行副本 */}
       <DragOverlay dropAnimation={null}>

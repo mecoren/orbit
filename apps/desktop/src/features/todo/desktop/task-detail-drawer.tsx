@@ -25,6 +25,7 @@ import {
   Trash2,
   X,
 } from "lucide-react";
+import { toast } from "sonner";
 
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -676,7 +677,10 @@ function SubtasksSection({
             </span>
             <button type="button" aria-label="删除子任务"
               className="opacity-0 group-hover:opacity-100"
-              onClick={async () => { await todoSubtaskDelete(s.id); onChanged(); }}
+              onClick={async () => {
+                await todoSubtaskDelete(s.id); onChanged();
+                toast.success("已删除子任务");
+              }}
             >
               <X size={14} className="text-muted-foreground hover:text-destructive" />
             </button>
@@ -868,7 +872,10 @@ function RemindersSection({
                 </span>
               )}
               <button type="button" aria-label="删除提醒" className="shrink-0 opacity-0 group-hover:opacity-100"
-                onClick={async () => { await todoReminderDelete(r.id); onChanged(); }}
+                onClick={async () => {
+                  await todoReminderDelete(r.id); onChanged();
+                  toast.success("已删除提醒");
+                }}
               >
                 <X size={13} className="text-muted-foreground hover:text-destructive" />
               </button>
@@ -929,7 +936,10 @@ function CommentsSection({
               <p className="min-w-0 flex-1 break-words whitespace-pre-wrap text-[13px]">{c.content}</p>
               <span className="ml-auto shrink-0 text-[11px] text-muted-foreground">{relative(c.created_at)}</span>
               <button type="button" aria-label="删除评论" className="opacity-0 group-hover:opacity-100"
-                onClick={async () => { await todoCommentDelete(c.id); onChanged(); }}
+                onClick={async () => {
+                  await todoCommentDelete(c.id); onChanged();
+                  toast.success("已删除评论");
+                }}
               >
                 <Trash2 size={12} className="text-muted-foreground hover:text-destructive" />
               </button>

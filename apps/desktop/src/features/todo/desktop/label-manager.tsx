@@ -11,6 +11,16 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   Dialog,
   DialogContent,
   DialogHeader,
@@ -36,6 +46,8 @@ export function LabelManager({ open, onOpenChange }: LabelManagerProps) {
   const undoableDelete = useUndoableDeleteAction();
   const [labels, setLabels] = useState<TodoLabel[]>([]);
   const [newTitle, setNewTitle] = useState("");
+  // 删除确认（标签删除会连带解除所有任务关联，悬停误触代价高）
+  const [deleteTarget, setDeleteTarget] = useState<TodoLabel | null>(null);
 
   const refetch = async () => {
     // 拉全量并刷新共享缓存（与抽屉内 LabelAdder 共用 ["todo-label","list"]）
@@ -109,7 +121,7 @@ export function LabelManager({ open, onOpenChange }: LabelManagerProps) {
                   size="icon"
                   className="h-7 w-7 text-destructive"
                   aria-label={`删除标签 ${l.title}`}
-                  onClick={() => void remove(l)}
+                  onClick={() => setDeleteTarget(l)}
                 >
                   <Trash2 size={14} />
                 </Button>
@@ -152,6 +164,33 @@ export function LabelManager({ open, onOpenChange }: LabelManagerProps) {
           </Button>
         </div>
       </DialogContent>
+
+      {/* 删除确认：标签删除连带解除全部任务关联（不可撤销恢复关联），须确认 */}
+      <AlertDialog
+        open={deleteTarget != null}
+        onOpenChange={(o) => !o && setDeleteTarget(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>删除标签</AlertDialogTitle>
+            <AlertDialogDescription className="break-words">
+              确定要删除「{deleteTarget?.title}」吗？所有任务与该标签的关联将一并解除。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>取消</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-white hover:bg-destructive/90"
+              onClick={() => {
+                if (deleteTarget) void remove(deleteTarget);
+                setDeleteTarget(null);
+              }}
+            >
+              删除
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Dialog>
   );
 }
