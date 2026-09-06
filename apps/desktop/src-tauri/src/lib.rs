@@ -107,6 +107,9 @@ pub fn run() {
             commands::sync_scheduler::sync_scheduler_start(_app.handle().clone());
             commands::sync_scheduler::sync_on_change_watcher_start(_app.handle().clone());
 
+            // 节假日自动更新守护（60s tick；每日固定时刻一次，错过启动即补更）
+            commands::holiday_scheduler::holiday_scheduler_start(_app.handle().clone());
+
             // 定时全量备份守护（60s tick；core v4 调度器接线，
             // 钥匙串缓存同步密码作为加密口令，无缓存时静默等待）
             // 桌面专属：依赖钥匙串密码缓存，移动端无持久凭据库
@@ -214,6 +217,12 @@ pub fn run() {
             commands::sync_cmd::sync_config_save,
             commands::sync_cmd::sync_test_connection,
             // M3：云同步执行
+            // 节假日数据（日历视图）
+            commands::holiday_cmd::holidays_list,
+            commands::holiday_cmd::holiday_is_on,
+            commands::holiday_cmd::holidays_update,
+            commands::holiday_cmd::holiday_meta,
+            commands::holiday_cmd::holiday_set_fixed_hour,
             commands::cloud_sync_cmd::cloud_sync_now,
             commands::cloud_sync_cmd::cloud_sync_push_only,
             commands::cloud_sync_cmd::cloud_sync_pull_then_push,

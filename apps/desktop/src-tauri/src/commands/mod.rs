@@ -7,6 +7,8 @@ pub mod crypto_cmd;
 pub mod data_dir;
 pub mod db_cmd;
 pub mod full_sync_cmd;
+pub mod holiday_cmd;
+pub mod holiday_scheduler;
 pub mod mica_cmd;
 pub mod notification_scheduler;
 pub mod plaintext_export_cmd;
