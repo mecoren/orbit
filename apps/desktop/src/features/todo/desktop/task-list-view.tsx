@@ -62,7 +62,7 @@ import { completeTask } from "../shared/task-actions";
 import { isListActivationKey, listNavDirection } from "../shared/list-keyboard";
 import { midpoint } from "../shared/position";
 import { batchUpdateStatus, batchUpdatePriority, batchUpdateFavorite, batchMoveToProject, batchUpdateMyDay } from "../shared/batch-actions";
-import { useUndoableDeleteAction, hideFromQueries } from "@/hooks/use-undoable-delete";
+import { useUndoableDeleteAction, hideManyFromQueries } from "@/hooks/use-undoable-delete";
 import { todoTaskDelete, todoTaskUpdate, todoTaskUpdatePosition, type TodoLabel, type TodoProject, type TodoTask } from "@/lib/tauri";
 import { FAVORITE_COLOR, OVERDUE_COLOR_CLASS, PRIORITY_COLOR, PRIORITY_LABELS, TODO_ACCENT } from "../shared/constants";
 import { LabelChips } from "../shared/label-chips";
@@ -208,29 +208,21 @@ export function TaskListView({ tasks, projects, labelsByTask, loading, error, on
     }
   };
 
-  /** 批量删除（P2#17）：分批顺序提交；复用 use-undoable-delete 的
-   *  乐观隐藏 + 5s 撤销窗口语义（隐藏立即生效、超时统一真删）。 */
+  /** 批量删除（P2#17）：单笔 undoableDelete（一次隐藏全部 + 一次提交全部），
+   *  撤销一键整批恢复。此前实现循环 N 次调用——单槽位 pendingRef 下
+   *  第 i 笔会把第 i-1 笔 flush 立即落库（真删），后续 toast 的撤销按钮
+   *  全部失效（cancel 已 ran 返回 false），「整批恢复」实际只剩最后一笔。 */
   const batchDelete = (sel: TodoTask[]) => {
     if (sel.length === 0) return;
     const ids = sel.map((t) => t.id);
-    const shownIds = new Set(ids);
-    for (const t of sel) {
-      undoableDelete({
-        entityLabel: "任务",
-        recordName: t.title,
-        hide: (q) => hideFromQueries<TodoTask>(q, ["todo_tasks"], t.id),
-        commit: async () => {
-          await Promise.all(ids.map((id) => todoTaskDelete(id)));
-          shownIds.clear();
-        },
-      });
-    }
-    // 撤销语义：整批恢复（单槽位撤销 = 恢复全部被隐藏行）
-    void toast.info(`已删除 ${ids.length} 条任务`, {
-      description: "撤销将恢复本次全部删除",
+    undoableDelete({
+      entityLabel: "任务",
+      count: ids.length,
+      hide: (q) => hideManyFromQueries<TodoTask>(q, ["todo_tasks"], ids),
+      commit: async () => {
+        await Promise.all(ids.map((id) => todoTaskDelete(id)));
+      },
     });
-    // 撤销按钮由每条 toast 自带；批量场景下点任意一条的撤销都调
-    // invalidateQueries 恢复全部隐藏行（DB 未提交），提交窗口后统一落库。
     setSelected(new Set());
     setAnchorId(null);
   };

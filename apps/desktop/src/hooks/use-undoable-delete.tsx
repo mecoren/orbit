@@ -23,9 +23,11 @@ export interface UndoableDeleteInput {
   entityLabel: string;
   /** 记录名（标题等），用于 toast 文案 */
   recordName?: string;
+  /** 批量条数（>1 时文案改「已删除 N 个entityLabel」并说明整批撤销） */
+  count?: number;
   /** 真删除命令（延迟执行；内部已 catch，无需调用方兜底） */
   commit: () => Promise<unknown>;
-  /** 乐观隐藏：从 react-query 数组型缓存中摘除该行 */
+  /** 乐观隐藏：从 react-query 数组型缓存中摘除该行（批量场景一次摘多行） */
   hide: (qc: QueryClient) => void;
 }
 
@@ -37,6 +39,18 @@ export function hideFromQueries<T extends { id: number }>(
 ) {
   qc.setQueriesData<T[]>({ queryKey: keyPrefix }, (old) =>
     old?.some((r) => r.id === id) ? old.filter((r) => r.id !== id) : old,
+  );
+}
+
+/** 批量隐藏：一次摘除多行（批量删除单笔化的配套工具） */
+export function hideManyFromQueries<T extends { id: number }>(
+  qc: QueryClient,
+  keyPrefix: readonly unknown[],
+  ids: number[],
+) {
+  const remove = new Set(ids);
+  qc.setQueriesData<T[]>({ queryKey: keyPrefix }, (old) =>
+    old?.some((r) => remove.has(r.id)) ? old.filter((r) => !remove.has(r.id)) : old,
   );
 }
 
@@ -72,22 +86,29 @@ function useUndoableDeleteImpl() {
       const name = input.recordName != null && input.recordName.length > 30
         ? input.recordName.slice(0, 30) + "…"
         : input.recordName;
-      toastId = toast.success(
-        `已删除${input.entityLabel}${name ? `「${name}」` : ""}`,
-        {
-          duration: UNDO_DELAY_MS,
-          action: {
-            label: "撤销",
-            onClick: () => {
-              if (pendingRef.current?.cancel()) {
-                pendingRef.current = null;
-                void qc.invalidateQueries(); // 恢复被隐藏的行
-                toast.dismiss(toastId);
-              }
-            },
+      // 批量（count>1）：文案「已删除 3 个任务」+ 整批撤销说明
+      const message = input.count != null && input.count > 1
+        ? `已删除 ${input.count} 个${input.entityLabel}`
+        : `已删除${input.entityLabel}${name ? `「${name}」` : ""}`;
+      toastId = toast.success(message, {
+        duration: UNDO_DELAY_MS,
+        action: {
+          label: "撤销",
+          onClick: () => {
+            // cancel false（超时已提交/被后续删除 flush）也 dismiss：
+            // 按钮点击就该有响应，无声无息是坏体验
+            const undone = pendingRef.current?.cancel() ?? false;
+            if (undone) {
+              pendingRef.current = null;
+              void qc.invalidateQueries(); // 恢复被隐藏的行
+            } else if (pendingRef.current == null) {
+              // 已提交：行已真删，告知撤销入口已关闭
+              toast.info("已过撤销窗口，删除已提交");
+            }
+            toast.dismiss(toastId);
           },
         },
-      );
+      });
     },
     [qc],
   );
