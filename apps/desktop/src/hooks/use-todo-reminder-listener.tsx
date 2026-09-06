@@ -29,9 +29,24 @@ interface ReminderDuePayload {
   remind_at: number;
 }
 
+/** Rust 系统通知推迟完成事件（notify-rust action → 删旧建新后 emit） */
+interface ReminderSnoozedPayload {
+  task_id: number;
+  remind_at: number;
+}
+
 export function useTodoReminderListener() {
   const qc = useQueryClient();
   useEffect(() => {
+    // 系统通知（右下角弹窗）点推迟按钮后：Rust 已删旧建新并广播，
+    // 前端失效详情缓存让详情抽屉提醒区块即时刷新
+    const unlistenSnoozed = listen<ReminderSnoozedPayload>(
+      "todo_reminder:snoozed",
+      (event) => {
+        const { task_id } = event.payload;
+        void qc.invalidateQueries({ queryKey: ["todo-task-detail", task_id] });
+      },
+    );
     const unlistenPromise = listen<ReminderDuePayload>("todo_reminder:due", (event) => {
       const r = event.payload;
       // toast.custom 支持 jsx 内容（sonner 单 action 按钮装不下三个推迟档）
@@ -93,6 +108,7 @@ export function useTodoReminderListener() {
     });
     return () => {
       unlistenPromise.then((unlisten) => unlisten());
+      unlistenSnoozed.then((unlisten) => unlisten());
     };
   }, [qc]);
 }

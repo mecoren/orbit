@@ -3096,6 +3096,7 @@ dependencies = [
  "dirs",
  "keyring",
  "log",
+ "notify-rust",
  "once_cell",
  "orbit-core",
  "raw-window-handle",

@@ -53,6 +53,10 @@ once_cell = "1"
 tokio = { version = "1.45", features = ["rt-multi-thread", "macros", "sync", "fs", "io-util"] }
 chrono = { version = "0.4", features = ["serde"] }
 
+# 系统通知直发（P2 提醒升级：tauri 插件 desktop 路径不透传 actions，
+# notify-rust 三平台支持通知按钮 + wait_for_action 回调；版本随插件传递依赖锁定 4.18）
+notify-rust = "4.18"
+
 # M3 安全与同步（base64 编解码 + 主机名；keyring 见下方桌面段）
 base64 = "0.22"
 whoami = "1.5"
