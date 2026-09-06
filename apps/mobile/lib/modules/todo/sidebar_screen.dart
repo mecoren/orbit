@@ -66,6 +66,8 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
 
   void _openView(QuickViewKey key) => context.push('/todo/tasks?view=${key.name}');
 
+  void _openCalendar() => context.push('/todo/calendar');
+
   void _openProject(TodoProject p) =>
       context.push('/todo/tasks?projectId=${p.id}');
 
@@ -226,7 +228,9 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
               const SectionHeader(label: '快捷视图'),
               for (final key in QuickViewKey.values)
                 _buildQuickViewRow(key, tasks, surfaceHighest),
-              // 二、项目（色块 + 名称 + 未完成计数；长按菜单；右侧把手拖拽重排）
+              // 二、日历（月视图格内待办长条 + 节假日徽标）
+              _buildCalendarRow(context),
+              // 三、项目（色块 + 名称 + 未完成计数；长按菜单；右侧把手拖拽重排）
               const SectionHeader(label: '项目'),
               ReorderableListView.builder(
                 shrinkWrap: true,
@@ -304,6 +308,32 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  /// 日历入口行（独立于快捷视图：月历格内待办长条 + 节假日徽标的专属页面）
+  Widget _buildCalendarRow(BuildContext context) {
+    final colors = AppColors.ofContext(context);
+    return ListTile(
+      leading: Icon(
+        Icons.calendar_month_rounded,
+        size: AppDimens.iconSizeMd,
+        color: OrbitAccents.todoAccent,
+      ),
+      title: Text(
+        '日历',
+        style: TextStyle(
+          fontSize: 16,
+          fontWeight: FontWeight.w500,
+          color: colors.titleText,
+        ),
+      ),
+      trailing: Icon(
+        Icons.chevron_right_rounded,
+        size: AppDimens.iconSizeMd,
+        color: colors.secondaryText,
+      ),
+      onTap: _openCalendar,
     );
   }
 

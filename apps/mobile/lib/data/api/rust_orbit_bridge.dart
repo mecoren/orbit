@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:path_provider/path_provider.dart';
 
 import '../../src/rust/api/dto.dart' as gen;
+import '../../src/rust/api/holiday.dart' as gen_holiday;
 import '../../src/rust/api/events.dart' as gen_events;
 import '../../src/rust/api/plaintext_export.dart' as gen_export;
 import '../../src/rust/api/sync.dart' as gen_sync;
@@ -462,6 +463,50 @@ class RustOrbitBridge implements OrbitBridge {
       force: force,
     );
   }
+
+  // ── 节假日 ──
+
+  @override
+  Future<List<HolidayInfo>> holidayList() async {
+    final rows = await gen_holiday.holidayList();
+    return rows
+        .map((h) => HolidayInfo(
+              date: h.date,
+              year: h.year,
+              isHoliday: h.isHoliday,
+              name: h.name,
+            ))
+        .toList();
+  }
+
+  @override
+  Future<bool?> holidayIsOn(String date) => gen_holiday.holidayIsOn(date: date);
+
+  @override
+  Future<HolidayMeta> holidayUpdate() async {
+    final m = await gen_holiday.holidayUpdate();
+    return HolidayMeta(
+      lastUpdateMs: m.lastUpdateMs,
+      lastAttemptMs: m.lastAttemptMs,
+      failureCount: m.failureCount,
+      fixedHour: m.fixedHour,
+    );
+  }
+
+  @override
+  Future<HolidayMeta> holidayMeta() async {
+    final m = await gen_holiday.holidayMeta();
+    return HolidayMeta(
+      lastUpdateMs: m.lastUpdateMs,
+      lastAttemptMs: m.lastAttemptMs,
+      failureCount: m.failureCount,
+      fixedHour: m.fixedHour,
+    );
+  }
+
+  @override
+  Future<void> startHolidayScheduler() =>
+      gen_holiday.startHolidayScheduler();
 
   // ── 事件流 ──
 

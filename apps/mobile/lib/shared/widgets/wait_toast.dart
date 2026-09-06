@@ -51,7 +51,8 @@ class WaitToast {
   }
 
   /// 四个语义快捷入口
-  static void info(String title) => global(title, variant: WaitToastVariant.info);
+  static void info(String title) =>
+      global(title, variant: WaitToastVariant.info);
   static void success(String title) =>
       global(title, variant: WaitToastVariant.success);
   static void warning(String title) =>
@@ -147,47 +148,53 @@ class _ToastViewState extends State<_ToastView>
                     ),
                   ],
                 ),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    // 左竖条（四变体色）
-                    Container(width: 4, color: barColor),
-                    Expanded(
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: AppDimens.space12,
-                          vertical: AppDimens.space12,
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              widget.title,
-                              style: TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w600,
-                                color:
-                                    widget.variant == WaitToastVariant.destructive
-                                        ? colors.destructive
-                                        : colors.titleText,
-                              ),
-                            ),
-                            if (widget.description != null) ...[
-                              const SizedBox(height: AppDimens.space4),
+                // IntrinsicHeight：给 Row(crossAxisAlignment.stretch) 提供
+                // 有界高度——Container 在 Overlay 的 Positioned 下无固有高度，
+                // 裸 stretch 会把无界约束传给子级导致布局断言崩溃
+                child: IntrinsicHeight(
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      // 左竖条（四变体色）
+                      Container(width: 4, color: barColor),
+                      Expanded(
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: AppDimens.space12,
+                            vertical: AppDimens.space12,
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
                               Text(
-                                widget.description!,
+                                widget.title,
                                 style: TextStyle(
-                                  fontSize: 12,
-                                  color: colors.secondaryText,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                  color:
+                                      widget.variant ==
+                                          WaitToastVariant.destructive
+                                      ? colors.destructive
+                                      : colors.titleText,
                                 ),
                               ),
+                              if (widget.description != null) ...[
+                                const SizedBox(height: AppDimens.space4),
+                                Text(
+                                  widget.description!,
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: colors.secondaryText,
+                                  ),
+                                ),
+                              ],
                             ],
-                          ],
+                          ),
                         ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),

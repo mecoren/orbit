@@ -6,6 +6,7 @@
 import 'api/auth.dart';
 import 'api/dto.dart';
 import 'api/events.dart';
+import 'api/holiday.dart';
 import 'api/plaintext_export.dart';
 import 'api/state.dart';
 import 'api/sync.dart';
@@ -110,6 +111,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   double dco_decode_f_64(dynamic raw);
 
   @protected
+  HolidayInfo dco_decode_holiday_info(dynamic raw);
+
+  @protected
+  HolidayMeta dco_decode_holiday_meta(dynamic raw);
+
+  @protected
   int dco_decode_i_32(dynamic raw);
 
   @protected
@@ -117,6 +124,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   ListFilter dco_decode_list_filter(dynamic raw);
+
+  @protected
+  List<HolidayInfo> dco_decode_list_holiday_info(dynamic raw);
 
   @protected
   Uint8List dco_decode_list_prim_u_8_strict(dynamic raw);
@@ -347,6 +357,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   double sse_decode_f_64(SseDeserializer deserializer);
 
   @protected
+  HolidayInfo sse_decode_holiday_info(SseDeserializer deserializer);
+
+  @protected
+  HolidayMeta sse_decode_holiday_meta(SseDeserializer deserializer);
+
+  @protected
   int sse_decode_i_32(SseDeserializer deserializer);
 
   @protected
@@ -354,6 +370,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   ListFilter sse_decode_list_filter(SseDeserializer deserializer);
+
+  @protected
+  List<HolidayInfo> sse_decode_list_holiday_info(SseDeserializer deserializer);
 
   @protected
   Uint8List sse_decode_list_prim_u_8_strict(SseDeserializer deserializer);
@@ -630,6 +649,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_f_64(double self, SseSerializer serializer);
 
   @protected
+  void sse_encode_holiday_info(HolidayInfo self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_holiday_meta(HolidayMeta self, SseSerializer serializer);
+
+  @protected
   void sse_encode_i_32(int self, SseSerializer serializer);
 
   @protected
@@ -637,6 +662,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_list_filter(ListFilter self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_holiday_info(
+    List<HolidayInfo> self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_list_prim_u_8_strict(

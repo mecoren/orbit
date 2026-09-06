@@ -81,6 +81,9 @@ class _BootGateState extends ConsumerState<BootGate> {
     // 后台闹钟通道：DB 未来提醒全量重排 + dbChanges 防抖跟随
     //（P2 提醒升级：后台/被杀/重启均由系统闹钟保证提醒）
     _scheduler = ReminderScheduler.attachOnce(ref.read(orbitBridgeProvider));
+    // 节假日自动更新守护（Rust 60s tick：每日固定时刻一次，
+    // 错过时刻本次启动首轮即补更；首装从未成功也在此补拉）
+    ref.read(orbitBridgeProvider).startHolidayScheduler();
     _subscribeStreams();
     if (mounted) setState(() => _phase = _BootPhase.ready);
   }

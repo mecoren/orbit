@@ -69,7 +69,7 @@ pub trait Clock: Send + Sync {
     /// 当前本地时间
     fn now_local(&self) -> chrono::DateTime<chrono::Local>;
     /// 毫秒时间戳 → 本地 DateTime（无效值回落当前时间）
-    fn from_local_millis(&self, ms: i64) -> chrono::DateTime<chrono::Local>;
+    fn millis_to_local(&self, ms: i64) -> chrono::DateTime<chrono::Local>;
     /// 本地某日 00:00 的毫秒时间戳
     fn local_midnight_ms(&self, d: chrono::DateTime<chrono::Local>) -> i64;
 }
@@ -81,7 +81,7 @@ impl Clock for SystemClock {
     fn now_local(&self) -> chrono::DateTime<chrono::Local> {
         chrono::Local::now()
     }
-    fn from_local_millis(&self, ms: i64) -> chrono::DateTime<chrono::Local> {
+    fn millis_to_local(&self, ms: i64) -> chrono::DateTime<chrono::Local> {
         chrono::Local
             .timestamp_millis_opt(ms)
             .single()
@@ -480,8 +480,8 @@ mod tests {
         fn now_local(&self) -> chrono::DateTime<chrono::Local> {
             self.0
         }
-        fn from_local_millis(&self, ms: i64) -> chrono::DateTime<chrono::Local> {
-            SystemClock.from_local_millis(ms)
+        fn millis_to_local(&self, ms: i64) -> chrono::DateTime<chrono::Local> {
+            SystemClock.millis_to_local(ms)
         }
         fn local_midnight_ms(&self, d: chrono::DateTime<chrono::Local>) -> i64 {
             SystemClock.local_midnight_ms(d)
@@ -579,7 +579,7 @@ mod tests {
         );
         assert_eq!(m.get("2026-01-04").map(|h| h.is_holiday), Some(false)); // 补班
         assert_eq!(m.get("2026-10-01").map(|h| h.is_holiday), Some(true));
-        assert!(m.get("2026-03-15").is_none()); // 普通日不在表
+        assert!(!m.contains_key("2026-03-15")); // 普通日不在表
         assert!(builtin_holidays().iter().all(|h| h.year == 2026));
     }
 

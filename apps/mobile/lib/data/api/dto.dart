@@ -746,3 +746,45 @@ class SyncResultJson {
         errors: (j['errors'] as List).cast<String>(),
       );
 }
+
+
+// ---------- 节假日（cfg_holidays 缓存；用户需求：日历视图联网更新节假日） ----------
+
+/// 节假日行（date YYYY-MM-DD + 放假/补班标记 + 名称）
+class HolidayInfo {
+  final String date;
+  final int year;
+
+  /// true = 放假日；false = 调休补班日（要上班的周末）
+  final bool isHoliday;
+  final String name;
+
+  const HolidayInfo({
+    required this.date,
+    required this.year,
+    required this.isHoliday,
+    required this.name,
+  });
+}
+
+/// 节假日更新记账（上次更新时间/失败次数/固定时刻；日历工具栏展示用）
+class HolidayMeta {
+  /// 上次成功更新（ms；0 = 从未成功）
+  final int lastUpdateMs;
+
+  /// 上次尝试（ms；0 = 从未尝试）
+  final int lastAttemptMs;
+
+  /// 连续失败次数（成功后清零）
+  final int failureCount;
+
+  /// 每日固定更新时刻（本地时区小时 0-23；默认 8）
+  final int fixedHour;
+
+  const HolidayMeta({
+    required this.lastUpdateMs,
+    required this.lastAttemptMs,
+    required this.failureCount,
+    required this.fixedHour,
+  });
+}

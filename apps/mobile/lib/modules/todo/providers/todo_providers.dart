@@ -53,6 +53,17 @@ final syncConfigProvider = FutureProvider<SyncConfigView?>(
   (ref) => ref.watch(orbitBridgeProvider).syncConfigGet(),
 );
 
+/// 节假日全量（日历视图徽标；空库回落 Rust 预置 2026 表，冷启动可用。
+/// 更新由 BootGate 启动的 Rust 守护 + 日历页手动更新触发，成功后 invalidate）
+final holidayProvider = FutureProvider<List<HolidayInfo>>((ref) async {
+  return ref.watch(orbitBridgeProvider).holidayList();
+});
+
+/// 节假日更新记账（日历工具栏「上次更新」展示）
+final holidayMetaProvider = FutureProvider<HolidayMeta>((ref) async {
+  return ref.watch(orbitBridgeProvider).holidayMeta();
+});
+
 /// 全量失效业务缓存（dbChanges / syncFinished(pulled>0) 时调用）
 void invalidateBusinessCaches(WidgetRef ref) {
   ref.invalidate(todoProjectsProvider);

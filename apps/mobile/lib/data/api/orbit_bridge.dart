@@ -186,6 +186,24 @@ abstract class OrbitBridge {
     bool force = false,
   });
 
+  // ── 节假日数据（日历视图联网更新；cfg_holidays 本地缓存）──
+
+  /// 全部节假日（date 升序；空库回落预置 2026 表，冷启动可用）
+  Future<List<HolidayInfo>> holidayList();
+
+  /// 判定某日期：true 放假 / false 调休补班 / null 普通日
+  Future<bool?> holidayIsOn(String date);
+
+  /// 手动更新（强制拉取；失败抛错误文案，旧缓存保留）
+  Future<HolidayMeta> holidayUpdate();
+
+  /// 更新记账（上次成功/尝试、连续失败次数、固定时刻）
+  Future<HolidayMeta> holidayMeta();
+
+  /// 启动自动更新守护（幂等；DB 就绪后由 BootGate 调一次——
+  /// 每日固定时刻更新 + 错过时刻下次启动首轮补更）
+  Future<void> startHolidayScheduler();
+
   // ── 事件流（下行通道，替代 Tauri event listen）──
 
   /// 本地写操作事件 → 全量失效业务缓存

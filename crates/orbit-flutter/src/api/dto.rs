@@ -653,3 +653,52 @@ impl From<orbit_core::api::todo_api::TodoTaskDetail> for TodoTaskDetail {
         }
     }
 }
+
+// ---------- holiday 域（cfg_holidays 缓存镜像；用户需求：日历视图联网更新节假日） ----------
+
+/// 节假日行（core HolidayInfo 过桥镜像；FRB 字段级生成规则见模块注释）
+#[derive(Debug, Clone)]
+pub struct HolidayInfo {
+    /// YYYY-MM-DD
+    pub date: String,
+    pub year: i32,
+    /// true = 放假日；false = 调休补班日（要上班的周末）
+    pub is_holiday: bool,
+    /// 节假日名称（如「春节」「春节前补班」）
+    pub name: String,
+}
+
+impl From<orbit_core::api::holiday_api::HolidayInfo> for HolidayInfo {
+    fn from(h: orbit_core::api::holiday_api::HolidayInfo) -> Self {
+        Self {
+            date: h.date,
+            year: h.year,
+            is_holiday: h.is_holiday,
+            name: h.name,
+        }
+    }
+}
+
+/// 节假日更新记账（上次更新时间/失败次数/固定时刻；日历工具栏展示用）
+#[derive(Debug, Clone)]
+pub struct HolidayMeta {
+    /// 上次成功更新（ms；0 = 从未成功）
+    pub last_update_ms: i64,
+    /// 上次尝试（ms；0 = 从未尝试）
+    pub last_attempt_ms: i64,
+    /// 连续失败次数（成功后清零）
+    pub failure_count: i32,
+    /// 每日固定更新时刻（本地时区小时 0-23；默认 8）
+    pub fixed_hour: u32,
+}
+
+impl From<orbit_core::api::holiday_api::HolidayMeta> for HolidayMeta {
+    fn from(m: orbit_core::api::holiday_api::HolidayMeta) -> Self {
+        Self {
+            last_update_ms: m.last_update_ms,
+            last_attempt_ms: m.last_attempt_ms,
+            failure_count: m.failure_count,
+            fixed_hour: m.fixed_hour,
+        }
+    }
+}

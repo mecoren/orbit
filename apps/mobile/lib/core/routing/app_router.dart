@@ -5,6 +5,7 @@ import 'router_keys.dart';
 import '../../modules/settings/about_page.dart';
 import '../../modules/settings/settings_screen.dart';
 import '../../modules/settings/sync_settings_page.dart';
+import '../../modules/todo/calendar_screen.dart';
 import '../../modules/todo/detail_screen.dart';
 import '../../modules/todo/sidebar_screen.dart';
 import '../../modules/todo/sub_list_screen.dart';
@@ -53,6 +54,13 @@ final appRouter = GoRouter(
       redirect: (_, _) => '/todo',
     ),
     GoRoute(path: '/todo', builder: (context, state) => const SidebarScreen()),
+    GoRoute(
+      path: '/todo/calendar',
+      pageBuilder: (context, state) => pageSlideFromRight(
+        const CalendarScreen(),
+        key: state.pageKey,
+      ),
+    ),
     GoRoute(
       path: '/todo/tasks',
       pageBuilder: (context, state) => pageSlideFromRight(

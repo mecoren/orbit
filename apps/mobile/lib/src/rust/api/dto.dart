@@ -6,7 +6,80 @@
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`
+
+/// 节假日行（core HolidayInfo 过桥镜像；FRB 字段级生成规则见模块注释）
+class HolidayInfo {
+  /// YYYY-MM-DD
+  final String date;
+  final int year;
+
+  /// true = 放假日；false = 调休补班日（要上班的周末）
+  final bool isHoliday;
+
+  /// 节假日名称（如「春节」「春节前补班」）
+  final String name;
+
+  const HolidayInfo({
+    required this.date,
+    required this.year,
+    required this.isHoliday,
+    required this.name,
+  });
+
+  @override
+  int get hashCode =>
+      date.hashCode ^ year.hashCode ^ isHoliday.hashCode ^ name.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is HolidayInfo &&
+          runtimeType == other.runtimeType &&
+          date == other.date &&
+          year == other.year &&
+          isHoliday == other.isHoliday &&
+          name == other.name;
+}
+
+/// 节假日更新记账（上次更新时间/失败次数/固定时刻；日历工具栏展示用）
+class HolidayMeta {
+  /// 上次成功更新（ms；0 = 从未成功）
+  final PlatformInt64 lastUpdateMs;
+
+  /// 上次尝试（ms；0 = 从未尝试）
+  final PlatformInt64 lastAttemptMs;
+
+  /// 连续失败次数（成功后清零）
+  final int failureCount;
+
+  /// 每日固定更新时刻（本地时区小时 0-23；默认 8）
+  final int fixedHour;
+
+  const HolidayMeta({
+    required this.lastUpdateMs,
+    required this.lastAttemptMs,
+    required this.failureCount,
+    required this.fixedHour,
+  });
+
+  @override
+  int get hashCode =>
+      lastUpdateMs.hashCode ^
+      lastAttemptMs.hashCode ^
+      failureCount.hashCode ^
+      fixedHour.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is HolidayMeta &&
+          runtimeType == other.runtimeType &&
+          lastUpdateMs == other.lastUpdateMs &&
+          lastAttemptMs == other.lastAttemptMs &&
+          failureCount == other.failureCount &&
+          fixedHour == other.fixedHour;
+}
 
 /// 通用列表过滤条件（镜像 orbit_core::models::business::ListFilter）
 class ListFilter {

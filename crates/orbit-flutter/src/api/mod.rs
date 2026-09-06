@@ -8,11 +8,13 @@
 //! - [todo]：todo 八表 CRUD + 详情聚合（签名一律使用 [dto] 镜像类型）
 //! - [sync]：同步配置 / 云同步执行 / 同步加密
 //! - [plaintext_export]：明文数据导出（JSON / CSV，对齐桌面命令面）
+//! - [holiday]：节假日数据（联网更新 + 60s tick 自动调度守护）
 //! - [events]：下行事件流 + 提醒轮询守护
 
 pub mod auth;
 pub mod dto;
 pub mod events;
+pub mod holiday;
 pub mod plaintext_export;
 pub mod state;
 pub mod sync;

@@ -72,7 +72,7 @@ const DAY_MS: i64 = 86_400_000;
 /// （"there is no reactor running"）。FRB handler 暴露的 async_runtime 与
 /// async 桥接函数共用同一运行时——sqlx 连接池也创建在该运行时上，
 /// 统一到这里可避免跨运行时使用连接池的问题。
-fn spawn_on_bridge_runtime<F>(future: F)
+pub(crate) fn spawn_on_bridge_runtime<F>(future: F)
 where
     F: std::future::Future + Send + 'static,
     F::Output: Send + 'static,

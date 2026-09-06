@@ -620,6 +620,40 @@ class MockOrbitBridge implements OrbitBridge {
           String password, {bool force = false}) =>
       _delay(() => throw Exception('[not_unlocked] Mock 未实现'));
 
+  // ── 节假日（内存假数据；形状对齐 Rust 预置 2026 表节选）──
+
+  static const _mockHolidays = [
+    HolidayInfo(date: '2026-01-01', year: 2026, isHoliday: true, name: '元旦'),
+    HolidayInfo(date: '2026-01-04', year: 2026, isHoliday: false, name: '元旦后补班'),
+    HolidayInfo(date: '2026-02-17', year: 2026, isHoliday: true, name: '初一'),
+  ];
+
+  @override
+  Future<List<HolidayInfo>> holidayList() async => _mockHolidays;
+
+  @override
+  Future<bool?> holidayIsOn(String date) async =>
+      _mockHolidays.where((h) => h.date == date).firstOrNull?.isHoliday;
+
+  @override
+  Future<HolidayMeta> holidayUpdate() async => const HolidayMeta(
+        lastUpdateMs: 1770000000000,
+        lastAttemptMs: 1770000000000,
+        failureCount: 0,
+        fixedHour: 8,
+      );
+
+  @override
+  Future<HolidayMeta> holidayMeta() async => const HolidayMeta(
+        lastUpdateMs: 1770000000000,
+        lastAttemptMs: 1770000000000,
+        failureCount: 0,
+        fixedHour: 8,
+      );
+
+  @override
+  Future<void> startHolidayScheduler() async {}
+
   // ── 事件流 ──
 
   @override

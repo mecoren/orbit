@@ -47,9 +47,7 @@ pub async fn holidays_update(
 
 /// 更新记账（上次成功/尝试时间、连续失败次数、固定时刻）
 #[tauri::command]
-pub async fn holiday_meta(
-    state: State<'_, AppState>,
-) -> Result<holiday_api::HolidayMeta, String> {
+pub async fn holiday_meta(state: State<'_, AppState>) -> Result<holiday_api::HolidayMeta, String> {
     holiday_api::holiday_meta(&state.pool)
         .await
         .map_err(|e| e.to_string())
@@ -57,10 +55,7 @@ pub async fn holiday_meta(
 
 /// 设置每日固定更新时刻（0-23，越界 clamp）
 #[tauri::command]
-pub async fn holiday_set_fixed_hour(
-    state: State<'_, AppState>,
-    hour: u32,
-) -> Result<(), String> {
+pub async fn holiday_set_fixed_hour(state: State<'_, AppState>, hour: u32) -> Result<(), String> {
     holiday_api::set_holiday_fixed_hour(&state.pool, hour)
         .await
         .map_err(|e| e.to_string())
