@@ -500,7 +500,7 @@ export function ProjectContextMenu({
     <ContextMenuBase
       menu={(close) => (
         <>
-          <DropdownMenuLabel className="px-2 py-1.5 text-xs font-normal text-muted-foreground">
+          <DropdownMenuLabel className="max-w-[240px] truncate px-2 py-1.5 text-xs font-normal text-muted-foreground">
             {projectTitle}
           </DropdownMenuLabel>
           <DropdownMenuSeparator />

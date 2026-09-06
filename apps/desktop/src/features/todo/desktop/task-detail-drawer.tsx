@@ -137,7 +137,7 @@ export function TaskDetailDrawer({ projects }: TaskDetailDrawerProps) {
             <PropertyGrid task={t} projects={projects} onPatch={updateTask} />
             {/* 3. 描述 */}
             {t.description && <SectionBlock icon={AlignLeft} title="描述">
-              <p className="whitespace-pre-wrap text-[13px]">{t.description}</p>
+              <p className="break-words whitespace-pre-wrap text-[13px]">{t.description}</p>
             </SectionBlock>}
             {/* 4. 子任务 */}
             <SubtasksSection taskId={t.id} subtasks={t.subtasks} percentDone={t.percent_done} onChanged={refetchDetail} />
@@ -278,7 +278,7 @@ function TitleRow({
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>删除待办</AlertDialogTitle>
-            <AlertDialogDescription>
+            <AlertDialogDescription className="break-words">
               确定要删除「{task.title}」吗？删除后 5 秒内可撤销。
             </AlertDialogDescription>
           </AlertDialogHeader>
@@ -926,7 +926,7 @@ function CommentsSection({
         {comments.map((c) => (
           <div key={c.id} className="group rounded-lg bg-muted/40 px-3 py-2">
             <div className="flex items-start gap-2">
-              <p className="whitespace-pre-wrap text-[13px]">{c.content}</p>
+              <p className="min-w-0 flex-1 break-words whitespace-pre-wrap text-[13px]">{c.content}</p>
               <span className="ml-auto shrink-0 text-[11px] text-muted-foreground">{relative(c.created_at)}</span>
               <button type="button" aria-label="删除评论" className="opacity-0 group-hover:opacity-100"
                 onClick={async () => { await todoCommentDelete(c.id); onChanged(); }}

@@ -60,7 +60,7 @@ export function ReminderToast({
         <BellRing className="size-5" />
       </div>
       <div className="min-w-0 flex-1">
-        <p className="text-sm font-medium leading-tight">{title}</p>
+        <p className="break-words text-sm font-medium leading-tight">{title}</p>
         <p className="mt-1 text-xs opacity-70">
           待办提醒 ·{" "}
           {new Date(remindAt).toLocaleString("zh-CN", {

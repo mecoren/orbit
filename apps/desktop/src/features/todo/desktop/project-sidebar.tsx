@@ -385,7 +385,7 @@ export function ProjectSidebar({
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>删除项目</AlertDialogTitle>
-            <AlertDialogDescription>
+            <AlertDialogDescription className="break-words">
               确定要删除项目「{deleteTarget?.project.title}」吗？删除后 5 秒内可撤销。
             </AlertDialogDescription>
           </AlertDialogHeader>

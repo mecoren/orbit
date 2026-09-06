@@ -67,8 +67,13 @@ function useUndoableDeleteImpl() {
       pendingRef.current = self;
 
       let toastId: string | number = "";
+      // recordName 截断：超长标题（尤其中间无空格的连续串）整串进 toast
+      // 会撑破气泡宽度，sonner 容器不 break-words
+      const name = input.recordName != null && input.recordName.length > 30
+        ? input.recordName.slice(0, 30) + "…"
+        : input.recordName;
       toastId = toast.success(
-        `已删除${input.entityLabel}${input.recordName ? `「${input.recordName}」` : ""}`,
+        `已删除${input.entityLabel}${name ? `「${name}」` : ""}`,
         {
           duration: UNDO_DELAY_MS,
           action: {

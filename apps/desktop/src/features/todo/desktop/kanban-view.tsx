@@ -359,7 +359,9 @@ function KanbanCard({
         {task.done ? <Check size={14} className="mt-0.5 shrink-0 text-success" /> : null}
         <span
           className={cn(
-            "min-w-0 flex-1 text-sm font-medium leading-5",
+            // break-words：长连续文本（URL/长英文串无空格断点）在卡内强制断行，
+            // 否则整串不换行撑出卡片右缘
+            "min-w-0 flex-1 break-words text-sm font-medium leading-5",
             task.done && "text-muted-foreground line-through",
           )}
         >
