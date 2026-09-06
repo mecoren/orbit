@@ -70,6 +70,40 @@ test("主链路：快速新建 → 列表出现 → 完成 → 撤销删除恢�
   ).toBeVisible({ timeout: 10_000 });
 });
 
+test("回收站：删除入站 → 恢复回列表", async ({ page }) => {
+  // ---- 新建 + 删除（等过 5s 撤销窗口，让墓碑真正落库）----
+  await quickAdd(page, "冒烟任务-回收站验证");
+  await expect(page.getByText("冒烟任务-回收站验证")).toBeVisible();
+  await page.getByText("冒烟任务-回收站验证").click({ button: "right" });
+  await page.getByRole("menuitem", { name: "删除" }).click();
+  const confirm = page.getByRole("button", { name: "删除", exact: true });
+  if (await confirm.isVisible().catch(() => false)) {
+    await confirm.click();
+  }
+  // 撤销窗口 5s：不点撤销，等 toast 自然超时提交（软删落库）
+  await page.waitForTimeout(6000);
+  await expect(
+    page.getByRole("button", { name: "未完成任务：冒烟任务-回收站验证" }),
+  ).toHaveCount(0);
+
+  // ---- 侧栏进回收站：墓碑行可见（含倒计时副标题）----
+  await page.getByRole("button", { name: "回收站" }).first().click();
+  await expect(page.getByRole("heading", { name: "回收站" })).toBeVisible();
+  await expect(page.getByText("冒烟任务-回收站验证")).toBeVisible();
+  await expect(page.getByText(/天后自动清除/)).toBeVisible();
+
+  // ---- 恢复：回列表 + 回收站清空 ----
+  await page.getByRole("button", { name: "恢复" }).first().click();
+  await expect(page.getByText("已恢复")).toBeVisible(); // toast
+  await expect(page.getByText("冒烟任务-回收站验证")).toHaveCount(0); // 回收站空
+
+  // 回列表确认任务回来了
+  await page.getByRole("button", { name: "待办", exact: true }).first().click();
+  await expect(
+    page.getByRole("button", { name: "未完成任务：冒烟任务-回收站验证" }),
+  ).toBeVisible();
+});
+
 test("我的一天：行内加入 → 视图筛选 → 次日退出语义（my_day_date 按日判断）", async ({ page }) => {
   // 侧栏切到「我的一天」视图（QUICK_VIEWS 置顶第一项）
   await page.getByRole("button", { name: "我的一天" }).first().click();
