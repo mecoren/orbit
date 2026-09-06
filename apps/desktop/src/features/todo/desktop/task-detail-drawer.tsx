@@ -280,7 +280,7 @@ function TitleRow({
           <AlertDialogHeader>
             <AlertDialogTitle>删除待办</AlertDialogTitle>
             <AlertDialogDescription className="break-words">
-              确定要删除「{task.title}」吗？删除后 5 秒内可撤销。
+              确定要删除「{task.title}」吗？删除后 5 秒内可撤销，之后将移入回收站。
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

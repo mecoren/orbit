@@ -680,3 +680,49 @@ export const holidayMeta = () => invoke<HolidayMeta>("holiday_meta");
 /** 设置每日固定更新时刻（0-23，越界 clamp） */
 export const holidaySetFixedHour = (hour: number) =>
   invoke<void>("holiday_set_fixed_hour", { hour });
+
+
+// ---------- 回收站（删除的任务可恢复；保留时间可配） ----------
+
+/** TTL 清理执行统计（守护 tick 与手动触发的共用返回） */
+export interface TrashPurgeStats {
+  /** 物理删除的墓碑行数 */
+  purged: number;
+  /** 因同步守卫跳过的行数（删除尚未 push 到云端，清了有复活风险） */
+  guarded: number;
+  /** 本次是否实际执行了清理 */
+  ran: boolean;
+}
+
+/** 回收站元数据（保留档位 + 上次自动清理时间） */
+export interface TrashMeta {
+  /** 保留天数（0 = 永久；默认 30，档位 7/30/90/0） */
+  retention_days: number;
+  /** 上次 TTL 自动清理时间（ms；0 = 从未执行） */
+  last_purge_ms: number;
+}
+
+/** 回收站任务列表（最近删除排最前） */
+export const trashTasksList = () => invoke<TodoTask[]>("trash_tasks_list");
+
+/** 恢复任务（原项目已删则落入未分组） */
+export const trashTaskRestore = (id: number) =>
+  invoke<TodoTask>("trash_task_restore", { id });
+
+/** 彻底删除单个回收站任务（不可恢复） */
+export const trashTaskPurge = (id: number) =>
+  invoke<void>("trash_task_purge", { id });
+
+/** 清空回收站，返回删除的任务数 */
+export const trashPurgeAll = () => invoke<number>("trash_purge_all");
+
+/** TTL 过期清理一次（通常由后台守护触发；也可手动） */
+export const trashPurgeExpired = () =>
+  invoke<TrashPurgeStats>("trash_purge_expired");
+
+/** 回收站元数据 */
+export const trashMeta = () => invoke<TrashMeta>("trash_meta");
+
+/** 设置保留天数（档位 7/30/90/0=永久；默认 30） */
+export const trashSetRetentionDays = (days: number) =>
+  invoke<void>("trash_set_retention_days", { days });

@@ -115,6 +115,9 @@ pub fn run() {
             // 节假日自动更新守护（60s tick；每日固定时刻一次，错过启动即补更）
             commands::holiday_scheduler::holiday_scheduler_start(_app.handle().clone());
 
+            // 回收站 TTL 清理守护（60s tick；每日最多一次，启动首轮即补清）
+            commands::trash_scheduler::trash_scheduler_start(_app.handle().clone());
+
             // 定时全量备份守护（60s tick；core v4 调度器接线，
             // 钥匙串缓存同步密码作为加密口令，无缓存时静默等待）
             // 桌面专属：依赖钥匙串密码缓存，移动端无持久凭据库
@@ -245,6 +248,14 @@ pub fn run() {
             // 定时自动备份偏好（backup_scheduler 守护的数据源）
             commands::backup_scheduler::backup_prefs_get,
             commands::backup_scheduler::backup_prefs_save,
+            // 回收站（任务软删恢复 + 保留时间 + TTL 清理）
+            commands::trash_cmd::trash_tasks_list,
+            commands::trash_cmd::trash_task_restore,
+            commands::trash_cmd::trash_task_purge,
+            commands::trash_cmd::trash_purge_all,
+            commands::trash_cmd::trash_purge_expired,
+            commands::trash_cmd::trash_meta,
+            commands::trash_cmd::trash_set_retention_days,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -254,7 +254,12 @@ const commands: Record<string, (args: any, ctx: Ctx) => unknown> = {
   },
 
   // ---- tasks ----
-  todo_tasks_list: ({ filter }, { db }) => filterByKeyword(db.tasks, filter?.keyword),
+  // 对齐 Rust generic_repo::list 的 WHERE is_deleted = 0（删除走软删，墓碑进回收站）
+  todo_tasks_list: ({ filter }, { db }) =>
+    filterByKeyword(
+      db.tasks.filter((t) => !t.is_deleted),
+      filter?.keyword,
+    ),
   todo_tasks_get: ({ id }, { db }) => ipcClone(db.tasks.find((t) => t.id === id) ?? null),
   todo_tasks_get_by_uuid: ({ uuid: u }, { db }) => ipcClone(db.tasks.find((t) => t.uuid === u) ?? null),
   todo_tasks_create: ({ input }, { db }) => {
@@ -299,12 +304,14 @@ const commands: Record<string, (args: any, ctx: Ctx) => unknown> = {
     t.position = position;
   },
   todo_tasks_delete: ({ id }, { db }) => {
-    const idx = db.tasks.findIndex((t) => t.id === id);
-    if (idx >= 0) db.tasks.splice(idx, 1);
-    // 级联清理挂载关系（对齐 Rust 侧事务语义）
-    db.taskLabels = db.taskLabels.filter((l) => l.task_id !== id);
-    db.reminders = db.reminders.filter((r) => r.task_id !== id);
-    db.comments = db.comments.filter((c) => c.task_id !== id);
+    // 对齐 Rust 软删语义：墓碑行留在库中（回收站可见），挂载关系不动
+    const t = db.tasks.find((x) => x.id === id);
+    if (!t) return;
+    const now = Date.now();
+    t.is_deleted = 1;
+    t.deleted_at = now;
+    t.updated_at = now;
+    t.version += 1;
   },
   todo_tasks_get_detail: ({ id }, { db }) => {
     const t = db.tasks.find((x) => x.id === id);
@@ -474,13 +481,62 @@ const commands: Record<string, (args: any, ctx: Ctx) => unknown> = {
   holiday_meta: () => ({ last_update_ms: Date.now(), last_attempt_ms: Date.now(), failure_count: 0, fixed_hour: 8 }),
   holiday_set_fixed_hour: () => undefined,
 
+  // ---- 回收站（对齐 trash_cmd 软删/恢复/彻底删除语义；TTL 守卫在 mock 中不模拟）----
+  trash_tasks_list: (_a, { db }) =>
+    ipcClone(
+      db.tasks
+        .filter((t) => t.is_deleted && t.deleted_at != null)
+        .sort((a, b) => (b.deleted_at ?? 0) - (a.deleted_at ?? 0)),
+    ),
+  trash_task_restore: ({ id }, { db }) => {
+    const t = db.tasks.find((x) => x.id === id);
+    if (!t || !t.is_deleted) throw new Error(`task ${id} 不在回收站`);
+    const now = Date.now();
+    t.is_deleted = 0;
+    t.deleted_at = null;
+    t.updated_at = now;
+    t.version += 1;
+    // 对齐 Rust：原项目已删则落未分组
+    if (t.project_id != null && !db.projects.some((p) => p.id === t.project_id && !p.is_deleted)) {
+      t.project_id = null;
+    }
+    return ipcClone(t);
+  },
+  trash_task_purge: ({ id }, { db }) => {
+    const idx = db.tasks.findIndex((t) => t.id === id && t.is_deleted);
+    if (idx < 0) throw new Error(`task ${id} 不在回收站`);
+    db.tasks.splice(idx, 1);
+    db.taskLabels = db.taskLabels.filter((l) => l.task_id !== id);
+    db.reminders = db.reminders.filter((r) => r.task_id !== id);
+    db.comments = db.comments.filter((c) => c.task_id !== id);
+  },
+  trash_purge_all: (_a, { db }) => {
+    let n = 0;
+    for (let i = db.tasks.length - 1; i >= 0; i--) {
+      if (db.tasks[i].is_deleted) {
+        const id = db.tasks[i].id;
+        db.taskLabels = db.taskLabels.filter((l) => l.task_id !== id);
+        db.reminders = db.reminders.filter((r) => r.task_id !== id);
+        db.comments = db.comments.filter((c) => c.task_id !== id);
+        db.tasks.splice(i, 1);
+        n++;
+      }
+    }
+    return n;
+  },
+  trash_purge_expired: () => ({ purged: 0, guarded: 0, ran: false }),
+  trash_meta: () => ({ retention_days: 30, last_purge_ms: 0 }),
+  trash_set_retention_days: () => undefined,
+
   // ---- 计数（旧基座命令；保守返回 0）----
   business_count: () => 0,
 };
 
-/** 写类命令完成后应广播 db-change 的判定（对齐 Rust EVENT_BUS 语义） */
+/** 写类命令完成后应广播 db-change 的判定（对齐 Rust EVENT_BUS 语义；
+ *  trash 恢复/彻底删除/清空写后同样要失效列表缓存） */
 const isWriteCommand = (cmd: string) =>
-  /_(create|update|update_position|delete|toggle_done|recalc_percent)$/.test(cmd);
+  /_(create|update|update_position|delete|toggle_done|recalc_percent|restore|purge)$/.test(cmd) ||
+  cmd === "trash_purge_all";
 
 // ---------- 安装 ----------
 

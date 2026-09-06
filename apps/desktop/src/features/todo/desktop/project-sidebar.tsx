@@ -19,7 +19,7 @@ import {
   SortableContext,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
-import { GripVertical, Inbox, PanelLeftClose, PanelLeftOpen, Plus } from "lucide-react";
+import { GripVertical, Inbox, PanelLeftClose, PanelLeftOpen, Plus, Trash2 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { hideFromQueries, useUndoableDeleteAction } from "@/hooks/use-undoable-delete";
@@ -221,6 +221,19 @@ export function ProjectSidebar({
               </Tooltip>
             );
           })}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                aria-label="回收站"
+                onClick={() => navigate("/trash")}
+                className="flex h-8 w-8 items-center justify-center rounded-md hover:bg-accent/50"
+              >
+                <Trash2 className="size-4" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent>回收站</TooltipContent>
+          </Tooltip>
         </div>
 
         <div className="mt-2 flex w-full flex-col items-center gap-1">
@@ -296,6 +309,15 @@ export function ProjectSidebar({
             </button>
           );
         })}
+        {/* 回收站（独立路由页，不参与快捷视图筛选状态机） */}
+        <button
+          type="button"
+          onClick={() => navigate("/trash")}
+          className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm hover:bg-accent/50"
+        >
+          <Trash2 className="size-4" />
+          <span>回收站</span>
+        </button>
       </div>
 
       {/* 项目列表区 */}

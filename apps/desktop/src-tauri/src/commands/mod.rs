@@ -19,4 +19,6 @@ pub mod sync_crypto_cmd;
 pub mod sync_runtime;
 pub mod sync_scheduler;
 pub mod todo_cmd;
+pub mod trash_cmd;
+pub mod trash_scheduler;
 pub mod tray;

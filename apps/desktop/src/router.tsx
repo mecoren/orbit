@@ -13,6 +13,7 @@ import { EqualizerLoader } from "@/components/EqualizerLoader";
 import { RouteError } from "@/components/layout/route-error";
 
 const TodoListPage = lazy(() => import("@/features/todo/desktop/list-page"));
+const TrashPage = lazy(() => import("@/features/todo/desktop/trash-page"));
 const SettingsPage = lazy(() =>
   import("@/pages/settings-page").then((m) => ({ default: m.SettingsPage })),
 );
@@ -40,6 +41,7 @@ function page(node: ReactNode) {
 const desktopChildren = [
   { index: true, element: <Navigate to="/todo" replace /> },
   { path: "todo", element: page(<TodoListPage />), errorElement: <RouteError /> },
+  { path: "trash", element: page(<TrashPage />), errorElement: <RouteError /> },
   { path: "settings", element: page(<SettingsPage />), errorElement: <RouteError /> },
   { path: "about", element: page(<AboutPage />), errorElement: <RouteError /> },
   { path: "sync-recovery", element: page(<SyncRecoveryPage />), errorElement: <RouteError /> },

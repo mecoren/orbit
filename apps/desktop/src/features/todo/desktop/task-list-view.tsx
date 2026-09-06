@@ -540,7 +540,7 @@ export function TaskListView({ tasks, projects, labelsByTask, loading, error, on
           <AlertDialogHeader>
             <AlertDialogTitle>删除 {selectedTasks.length} 条任务</AlertDialogTitle>
             <AlertDialogDescription>
-              确定要删除已选的 {selectedTasks.length} 条任务吗？删除后 5 秒内可整批撤销。
+              确定要删除已选的 {selectedTasks.length} 条任务吗？删除后 5 秒内可整批撤销，之后将移入回收站。
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
