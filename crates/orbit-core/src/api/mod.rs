@@ -10,3 +10,4 @@ pub mod holiday_api;
 pub mod import_api;
 pub mod plaintext_export_api;
 pub mod todo_api;
+pub mod trash_api;
