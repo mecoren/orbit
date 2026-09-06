@@ -101,6 +101,19 @@ interface MockComment {
   is_deleted: number;
 }
 
+export interface MockRelation {
+  id: number;
+  uuid: string;
+  task_id: number;
+  other_task_id: number;
+  relation_type: string;
+  is_deleted: number;
+  created_at: number;
+  updated_at: number;
+  deleted_at: number | null;
+  version: number;
+}
+
 export interface MockDb {
   projects: MockProject[];
   tasks: MockTask[];
@@ -108,6 +121,7 @@ export interface MockDb {
   taskLabels: MockTaskLabel[];
   reminders: MockReminder[];
   comments: MockComment[];
+  relations: MockRelation[];
   seq: number;
 }
 
@@ -122,6 +136,7 @@ function createDb(): MockDb {
     taskLabels: [],
     reminders: [],
     comments: [],
+    relations: [],
     seq: 1,
   };
 }
@@ -315,7 +330,7 @@ const commands: Record<string, (args: any, ctx: Ctx) => unknown> = {
   },
   todo_tasks_get_detail: ({ id }, { db }) => {
     const t = db.tasks.find((x) => x.id === id);
-    if (!t) throw new Error(`task ${id} 不存在`);
+    if (!t) throw new Error(`task ${id} not found`);
     const labels = db.taskLabels
       .filter((l) => l.task_id === id)
       .map((l) => {
@@ -328,13 +343,45 @@ const commands: Record<string, (args: any, ctx: Ctx) => unknown> = {
       subtasks: [],
       labels,
       comments: [...db.comments.filter((c) => c.task_id === id)],
-      relations: [],
+      relations: [...db.relations.filter((r) => r.task_id === id)],
       reminders: [...db.reminders.filter((r) => r.task_id === id)],
     });
   },
 
   // ---- subtasks（详情抽屉八区块之一；冒烟不建子任务，给空实现）----
   todo_subtasks_list: () => [],
+
+  // ---- task_relations（#28：详情抽屉关联区完整命令面）----
+  todo_task_relations_list: (_a, { db }) =>
+    ipcClone(db.relations.filter((r) => !r.is_deleted)),
+  todo_task_relations_create: (
+    { input }: { input: { task_id: number; other_task_id: number; relation_type: string } },
+    { db },
+  ) => {
+    if (db.tasks.every((t) => t.id !== input.other_task_id)) {
+      throw new Error(`task ${input.other_task_id} not found`);
+    }
+    const now = Date.now();
+    const r = {
+      id: db.seq++,
+      uuid: uuid(),
+      task_id: input.task_id,
+      other_task_id: input.other_task_id,
+      relation_type: input.relation_type,
+      is_deleted: 0,
+      created_at: now,
+      updated_at: now,
+      deleted_at: null,
+      version: 1,
+    };
+    db.relations.push(r);
+    return ipcClone(r);
+  },
+  todo_task_relations_delete: ({ id }, { db }) => {
+    const idx = db.relations.findIndex((r) => r.id === id);
+    if (idx < 0) throw new Error(`relation ${id} not found`);
+    db.relations.splice(idx, 1);
+  },
 
   // ---- labels / task_labels ----
   todo_labels_list: (_a, { db }) => ipcClone(db.labels),

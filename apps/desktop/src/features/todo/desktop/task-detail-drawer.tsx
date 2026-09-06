@@ -6,7 +6,7 @@
  * 列表刷新依赖 db-change 全局失效；本抽屉内部经局部 refetch 同步。
  */
 import { useEffect, useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import {
   AlignLeft,
@@ -51,6 +51,7 @@ import { PRIORITY_COLOR, TODO_ACCENT } from "../shared/constants";
 import { REPEAT_MODE, REPEAT_PRESETS, repeatLabel } from "../shared/repeat";
 import { completeTask } from "@/features/todo/shared/task-actions";
 import {
+  globalSearch,
   todoCommentCreate,
   todoCommentDelete,
   todoLabelCreate,
@@ -59,9 +60,12 @@ import {
   todoSubtaskDelete,
   todoSubtaskToggleDone,
   todoTaskDelete,
+  todoTaskGet,
   todoTaskGetDetail,
   todoTaskLabelCreate,
   todoTaskLabelDelete,
+  todoTaskRelationCreate,
+  todoTaskRelationDelete,
   todoReminderCreate,
   todoReminderDelete,
   todoTaskUpdate,
@@ -152,18 +156,12 @@ export function TaskDetailDrawer({ projects }: TaskDetailDrawerProps) {
               repeatAfter={t.repeat_after}
               onChanged={refetchDetail}
             />
-            {/* 7. 关联任务 */}
-            {t.relations.length > 0 && (
-              <SectionBlock icon={Link2} title="关联任务">
-                <div className="flex flex-wrap gap-x-3 gap-y-1">
-                  {t.relations.map((r) => (
-                    <span key={r.id} className="rounded-md bg-accent px-2 py-0.5 text-[11px] text-accent-foreground">
-                      {RELATION_TYPE_LABEL[r.relation_type] ?? r.relation_type} · 任务 #{r.other_task_id}
-                    </span>
-                  ))}
-                </div>
-              </SectionBlock>
-            )}
+            {/* 7. 关联任务（#28：标题显示+跳转/搜索添加/删除） */}
+            <RelationsSection
+              taskId={t.id}
+              relations={t.relations}
+              onChanged={refetchDetail}
+            />
             {/* 8. 评论 */}
             <CommentsSection taskId={t.id} comments={t.comments} onChanged={refetchDetail} />
           </div>
@@ -892,6 +890,144 @@ function RemindersSection({
             </div>
           </div>
         )}
+      </div>
+    </SectionBlock>
+  );
+}
+
+/* ================= 区块 7：关联任务（#28：完整交互） ================= */
+
+function RelationsSection({
+  taskId,
+  relations,
+  onChanged,
+}: {
+  taskId: number;
+  relations: Awaited<ReturnType<typeof todoTaskGetDetail>>["relations"];
+  onChanged: () => void;
+}) {
+  const [keyword, setKeyword] = useState("");
+  const [popoverOpen, setPopoverOpen] = useState(false);
+
+  // 对方任务标题解析：relations 只有 other_task_id，标题经 globalSearch 拿不到
+  // 全量映射，直接 todoTaskGet 单查（行数通常个位数，逐行 useQuery 足够）
+  const titlesQuery = useQueries({
+    queries: relations.map((r) => ({
+      queryKey: ["todo_tasks", "get", r.other_task_id],
+      queryFn: () => todoTaskGet(r.other_task_id),
+      staleTime: 60_000,
+    })),
+  });
+
+  // 添加候选：300ms 防抖搜索；排除自身与已关联
+  const [debounced, setDebounced] = useState("");
+  useEffect(() => {
+    const id = setTimeout(() => setDebounced(keyword.trim()), 300);
+    return () => clearTimeout(id);
+  }, [keyword]);
+  const searchQuery = useQuery({
+    queryKey: ["global-search", debounced],
+    queryFn: () => globalSearch(debounced, 8),
+    enabled: popoverOpen && debounced.length > 0,
+    staleTime: 10_000,
+  });
+  const linkedIds = new Set(relations.map((r) => r.other_task_id));
+  const candidates = (searchQuery.data?.tasks ?? []).filter(
+    (t) => t.id !== taskId && !linkedIds.has(t.id),
+  );
+
+  const addRelation = async (otherId: number) => {
+    await todoTaskRelationCreate({ task_id: taskId, other_task_id: otherId, relation_type: "relates_to" });
+    setPopoverOpen(false);
+    setKeyword("");
+    onChanged();
+  };
+
+  const removeRelation = async (relationId: number) => {
+    await todoTaskRelationDelete(relationId);
+    onChanged();
+  };
+
+  return (
+    <SectionBlock
+      icon={Link2}
+      title="关联任务"
+      trailing={
+        <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">
+          {relations.length}
+        </span>
+      }
+    >
+      <div className="space-y-1">
+        {relations.map((r, i) => {
+          const other = titlesQuery[i]?.data;
+          return (
+            <div key={r.id} className="group flex items-center gap-2 rounded-md px-1 py-1 hover:bg-accent/30">
+              <Link2 size={12} className="shrink-0 text-muted-foreground" />
+              <button
+                type="button"
+                className="min-w-0 flex-1 truncate text-left text-[13px] hover:text-primary"
+                title={other ? `打开「${other.title}」` : `任务 #${r.other_task_id}`}
+                onClick={() => useTodoStore.getState().setSelectedTaskId(r.other_task_id)}
+              >
+                {other ? other.title : `任务 #${r.other_task_id}`}
+                {other?.done ? "（已完成）" : ""}
+              </button>
+              <span className="shrink-0 text-[11px] text-muted-foreground">
+                {RELATION_TYPE_LABEL[r.relation_type] ?? r.relation_type}
+              </span>
+              <button
+                type="button"
+                aria-label="删除关联"
+                className="shrink-0 opacity-0 group-hover:opacity-100"
+                onClick={() => void removeRelation(r.id)}
+              >
+                <Trash2 size={12} className="text-muted-foreground hover:text-destructive" />
+              </button>
+            </div>
+          );
+        })}
+
+        {/* 添加关联：Popover 搜索选择器（复用 globalSearch；空态提示） */}
+        <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>
+          <PopoverTrigger asChild>
+            <button
+              type="button"
+              className="flex w-full items-center gap-2 rounded-md px-1 py-1 text-[13px] text-muted-foreground hover:bg-accent/30 hover:text-foreground"
+            >
+              <span className="grid size-5 place-items-center rounded-full border border-dashed border-muted-foreground/40 text-sm leading-none">+</span>
+              添加关联
+            </button>
+          </PopoverTrigger>
+          <PopoverContent align="start" className="w-72 p-2">
+            <Input
+              value={keyword}
+              autoFocus
+              placeholder="搜索任务标题…"
+              className="h-7 text-[13px]"
+              onChange={(e) => setKeyword(e.target.value)}
+            />
+            <div className="mt-1 max-h-56 space-y-0.5 overflow-y-auto">
+              {debounced.length === 0 && (
+                <p className="px-2 py-1.5 text-[12px] text-muted-foreground">输入关键词搜索任务</p>
+              )}
+              {debounced.length > 0 && candidates.length === 0 && !searchQuery.isFetching && (
+                <p className="px-2 py-1.5 text-[12px] text-muted-foreground">没有可关联的任务</p>
+              )}
+              {candidates.map((t) => (
+                <button
+                  key={t.id}
+                  type="button"
+                  className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-[13px] hover:bg-accent/50"
+                  onClick={() => void addRelation(t.id)}
+                >
+                  <span className="truncate">{t.title}</span>
+                  {t.done ? <span className="ml-auto shrink-0 text-[11px] text-muted-foreground">已完成</span> : null}
+                </button>
+              ))}
+            </div>
+          </PopoverContent>
+        </Popover>
       </div>
     </SectionBlock>
   );
