@@ -871,6 +871,56 @@ class MockOrbitBridge implements OrbitBridge {
         );
       });
 
+  // ── 全局搜索（backlog #26；口径对齐 business_api::search_all：三路 LIKE、软删过滤）──
+
+  @override
+  Future<GlobalSearchResult> globalSearch(String keyword, {int? limit}) =>
+      _delay(() {
+        final kw = keyword.trim();
+        final n = (limit ?? 20) <= 0 ? 20 : (limit ?? 20);
+        if (kw.isEmpty) {
+          return const GlobalSearchResult(tasks: [], projects: [], comments: []);
+        }
+        final pattern = kw.toLowerCase();
+
+        bool hit(Map<String, dynamic> row, List<String> fields) => fields
+            .any((f) => (row[f] as String?)?.toLowerCase().contains(pattern) ?? false);
+
+        final tasks = store.tasks.values
+            .where((t) => t['is_deleted'] == 0 && hit(t, ['title', 'description']))
+            .toList()
+          ..sort((a, b) => (b['updated_at'] as int).compareTo(a['updated_at'] as int));
+        final projects = store.projects.values
+            .where((p) => p['is_deleted'] == 0 && hit(p, ['title', 'description']))
+            .toList()
+          ..sort((a, b) => ((a['sort_order'] as int).compareTo(b['sort_order'] as int)));
+        final comments = store.comments.values
+            .where((c) =>
+                c['is_deleted'] == 0 &&
+                (c['content'] as String? ?? '').toLowerCase().contains(pattern))
+            .toList()
+          ..sort((a, b) => (b['created_at'] as int).compareTo(a['created_at'] as int));
+
+        return GlobalSearchResult(
+          tasks: tasks.take(n).map(TodoTask.fromJson).toList(),
+          projects: projects.take(n).map(TodoProject.fromJson).toList(),
+          comments: comments
+              .take(n)
+              .map((c) {
+                final task = store.tasks[c['task_id'] as int];
+                return CommentSearchHit(
+                  commentId: c['id'] as int,
+                  taskId: c['task_id'] as int,
+                  taskTitle: (task?['title'] as String?) ?? '',
+                  content: c['content'] as String? ?? '',
+                  createdAt: c['created_at'] as int,
+                );
+              })
+              .where((c) => c.taskTitle.isNotEmpty)
+              .toList(),
+        );
+      });
+
   // ── 事件流 ──
 
   @override

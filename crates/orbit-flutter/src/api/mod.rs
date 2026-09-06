@@ -11,6 +11,7 @@
 //! - [holiday]：节假日数据（联网更新 + 60s tick 自动调度守护）
 //! - [trash]：回收站（任务软删恢复 + 保留时间 + 60s tick TTL 清理守护）
 //! - [stats]：统计仪表盘（总览/热力图/连续天数/分布聚合，backlog #25）
+//! - [search]：全局搜索（任务/项目/评论三路聚合，backlog #26）
 //! - [events]：下行事件流 + 提醒轮询守护
 
 pub mod auth;
@@ -18,6 +19,7 @@ pub mod dto;
 pub mod events;
 pub mod holiday;
 pub mod plaintext_export;
+pub mod search;
 pub mod state;
 pub mod stats;
 pub mod sync;

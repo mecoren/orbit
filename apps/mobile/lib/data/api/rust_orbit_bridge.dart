@@ -12,6 +12,7 @@ import '../../src/rust/api/auth.dart' as gen_auth;
 import '../../src/rust/api/todo.dart' as gen_todo;
 import '../../src/rust/api/trash.dart' as gen_trash;
 import '../../src/rust/api/stats.dart' as gen_stats;
+import '../../src/rust/api/search.dart' as gen_search;
 import '../../src/rust/frb_generated.dart' show RustLib;
 import 'dto.dart';
 import 'orbit_bridge.dart';
@@ -587,6 +588,26 @@ class RustOrbitBridge implements OrbitBridge {
           .toList(),
       byWeekday: a.byWeekday
           .map((r) => StatsWeekdayRow(weekday: r.weekday, doneCount: r.doneCount))
+          .toList(),
+    );
+  }
+
+  // ── 全局搜索（backlog #26）──
+
+  @override
+  Future<GlobalSearchResult> globalSearch(String keyword, {int? limit}) async {
+    final r = await gen_search.globalSearch(keyword: keyword, limit: limit);
+    return GlobalSearchResult(
+      tasks: r.tasks.map(_mapTask).toList(),
+      projects: r.projects.map(_mapProject).toList(),
+      comments: r.comments
+          .map((c) => CommentSearchHit(
+                commentId: c.commentId,
+                taskId: c.taskId,
+                taskTitle: c.taskTitle,
+                content: c.content,
+                createdAt: c.createdAt,
+              ))
           .toList(),
     );
   }

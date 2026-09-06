@@ -7,6 +7,7 @@ import '../../modules/settings/settings_screen.dart';
 import '../../modules/settings/sync_settings_page.dart';
 import '../../modules/todo/calendar_screen.dart';
 import '../../modules/todo/detail_screen.dart';
+import '../../modules/todo/search_screen.dart';
 import '../../modules/todo/sidebar_screen.dart';
 import '../../modules/todo/stats_screen.dart';
 import '../../modules/todo/sub_list_screen.dart';
@@ -81,6 +82,13 @@ final appRouter = GoRouter(
       path: '/todo/stats',
       pageBuilder: (context, state) => pageSlideFromRight(
         const StatsScreen(),
+        key: state.pageKey,
+      ),
+    ),
+    GoRoute(
+      path: '/todo/search',
+      pageBuilder: (context, state) => pageSlideFromRight(
+        const SearchScreen(),
         key: state.pageKey,
       ),
     ),

@@ -8,6 +8,7 @@ import 'api/dto.dart';
 import 'api/events.dart';
 import 'api/holiday.dart';
 import 'api/plaintext_export.dart';
+import 'api/search.dart';
 import 'api/state.dart';
 import 'api/stats.dart';
 import 'api/sync.dart';
@@ -107,10 +108,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   dco_decode_box_autoadd_todo_task_relation_create_input(dynamic raw);
 
   @protected
+  CommentSearchHit dco_decode_comment_search_hit(dynamic raw);
+
+  @protected
   DbEventDto dco_decode_db_event_dto(dynamic raw);
 
   @protected
   double dco_decode_f_64(dynamic raw);
+
+  @protected
+  GlobalSearchResult dco_decode_global_search_result(dynamic raw);
 
   @protected
   HolidayInfo dco_decode_holiday_info(dynamic raw);
@@ -123,6 +130,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   PlatformInt64 dco_decode_i_64(dynamic raw);
+
+  @protected
+  List<CommentSearchHit> dco_decode_list_comment_search_hit(dynamic raw);
 
   @protected
   ListFilter dco_decode_list_filter(dynamic raw);
@@ -398,10 +408,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  CommentSearchHit sse_decode_comment_search_hit(SseDeserializer deserializer);
+
+  @protected
   DbEventDto sse_decode_db_event_dto(SseDeserializer deserializer);
 
   @protected
   double sse_decode_f_64(SseDeserializer deserializer);
+
+  @protected
+  GlobalSearchResult sse_decode_global_search_result(
+    SseDeserializer deserializer,
+  );
 
   @protected
   HolidayInfo sse_decode_holiday_info(SseDeserializer deserializer);
@@ -414,6 +432,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   PlatformInt64 sse_decode_i_64(SseDeserializer deserializer);
+
+  @protected
+  List<CommentSearchHit> sse_decode_list_comment_search_hit(
+    SseDeserializer deserializer,
+  );
 
   @protected
   ListFilter sse_decode_list_filter(SseDeserializer deserializer);
@@ -743,10 +766,22 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_comment_search_hit(
+    CommentSearchHit self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_db_event_dto(DbEventDto self, SseSerializer serializer);
 
   @protected
   void sse_encode_f_64(double self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_global_search_result(
+    GlobalSearchResult self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_holiday_info(HolidayInfo self, SseSerializer serializer);
@@ -759,6 +794,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_i_64(PlatformInt64 self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_comment_search_hit(
+    List<CommentSearchHit> self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_list_filter(ListFilter self, SseSerializer serializer);

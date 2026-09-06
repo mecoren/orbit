@@ -114,13 +114,44 @@ List<TodoTask> filterTasks(List<TodoTask> tasks, TaskFilterInput input) {
   return list.toList();
 }
 
-/// 排序固定：position 升序 → created_at 降序（同 position 新任务在前）。
+/// 排序档位（#26 双端排序；manual = position 拖拽顺序，唯一默认档）。
+enum TaskSortKey { manual, due, priority, title, created }
+
+/// 排序（默认 manual：position 升序 → created_at 降序；#26 增四档）。
 /// 返回新列表，不改入参。
-List<TodoTask> sortTasks(List<TodoTask> tasks) {
-  final sorted = [...tasks]..sort((a, b) {
-      if (a.position != b.position) return a.position.compareTo(b.position);
-      return b.createdAt.compareTo(a.createdAt);
-    });
+List<TodoTask> sortTasks(List<TodoTask> tasks, [TaskSortKey key = TaskSortKey.manual]) {
+  final sorted = [...tasks];
+  switch (key) {
+    case TaskSortKey.due:
+      // 无截止沉底，有截止升序（同值落回创建时间降序）
+      sorted.sort((a, b) {
+        if (a.dueDate == null && b.dueDate == null) {
+          return b.createdAt.compareTo(a.createdAt);
+        }
+        if (a.dueDate == null) return 1;
+        if (b.dueDate == null) return -1;
+        final c = a.dueDate!.compareTo(b.dueDate!);
+        return c != 0 ? c : b.createdAt.compareTo(a.createdAt);
+      });
+    case TaskSortKey.priority:
+      // 优先级大者在前（同值落回拖拽顺序）
+      sorted.sort((a, b) {
+        final c = b.priority.compareTo(a.priority);
+        if (c != 0) return c;
+        if (a.position != b.position) return a.position.compareTo(b.position);
+        return b.createdAt.compareTo(a.createdAt);
+      });
+    case TaskSortKey.title:
+      // 中文拼音序（与桌面 localeCompare zh-Hans-CN 同语义）
+      sorted.sort((a, b) => a.title.compareTo(b.title));
+    case TaskSortKey.created:
+      sorted.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    case TaskSortKey.manual:
+      sorted.sort((a, b) {
+        if (a.position != b.position) return a.position.compareTo(b.position);
+        return b.createdAt.compareTo(a.createdAt);
+      });
+  }
   return sorted;
 }
 

@@ -79,6 +79,8 @@ interface TaskListViewProps {
   /** 空态"新建任务"动作回调（由 list-page 注入打开表单） */
   onCreateClick?: () => void;
   onOpenDetail: (id: number) => void;
+  /** 是否允许手动拖拽（仅排序档 manual；#26） */
+  sortable?: boolean;
 }
 
 /** 截止文案：±15 天内相对时间，否则 MM-dd（04 §3.2） */
@@ -108,7 +110,7 @@ const rowsFirstCollision: CollisionDetection = (args) => {
   return rowHits.length > 0 ? rowHits : collisions;
 };
 
-export function TaskListView({ tasks, projects, labelsByTask, loading, error, onCreateClick, onOpenDetail }: TaskListViewProps) {
+export function TaskListView({ tasks, projects, labelsByTask, loading, error, onCreateClick, onOpenDetail, sortable = true }: TaskListViewProps) {
   const qc = useQueryClient();
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -366,6 +368,7 @@ export function TaskListView({ tasks, projects, labelsByTask, loading, error, on
                     onToggleDone={() => void completeTask(t)}
                     onToggleFavorite={() => toggleFavorite(t)}
                     onToggleMyDay={() => toggleMyDay(t)}
+                    sortable={sortable}
                   />
                 </TaskContextMenu>
               </div>
@@ -609,6 +612,8 @@ interface TaskRowProps {
   onToggleDone: () => void;
   onToggleFavorite: () => void;
   onToggleMyDay: () => void;
+  /** 非 manual 排序档（#26）：隐藏拖拽把手、禁用行拖拽（顺序由排序档决定） */
+  sortable: boolean;
 }
 
 function TaskRow({
@@ -629,14 +634,16 @@ function TaskRow({
   onToggleDone,
   onToggleFavorite,
   onToggleMyDay,
+  sortable,
 }: TaskRowProps) {
   const myDayToday = new Date();
   myDayToday.setHours(0, 0, 0, 0);
   const inMyDay = t.my_day_date === myDayToday.getTime();
   const { attributes, listeners, setNodeRef: setDragRef } = useDraggable({
     id: `row:${t.id}`,
-    // 本行拖拽进行中即禁用拖拽源（浮层副本不再作为拖拽源；边界行禁拖无意义故不处理）
-    disabled: dragging,
+    // 本行拖拽进行中即禁用拖拽源（浮层副本不再作为拖拽源；边界行禁拖无意义故不处理）；
+    // 非 manual 排序档下整体禁拖（#26：顺序由排序档决定，拖拽会立即被覆盖）
+    disabled: dragging || !sortable,
   });
   const { setNodeRef: setDropRef, isOver } = useDroppable({ id: `row:${t.id}` });
 
@@ -707,20 +714,23 @@ function TaskRow({
       </button>
 
       {/* 拖拽手柄：hover 显现；点击不冒泡（避免误触打开详情） */}
-      <button
-        type="button"
-        aria-label="拖拽排序"
-        className={cn(
-          "shrink-0 cursor-grab touch-none text-muted-foreground/40 transition-opacity hover:text-muted-foreground active:cursor-grabbing",
-          hasSelection ? "opacity-0" : "opacity-0 group-hover:opacity-100",
-        )}
-        onClick={(e) => e.stopPropagation()}
-        {...listeners}
-        {...attributes}
-        tabIndex={-1}
-      >
-        <GripVertical size={14} />
-      </button>
+      {/* 拖拽把手：仅 manual 排序档显示（#26；拖拽源已禁用时同时隐藏） */}
+      {sortable && (
+        <button
+          type="button"
+          aria-label="拖拽排序"
+          className={cn(
+            "shrink-0 cursor-grab touch-none text-muted-foreground/40 transition-opacity hover:text-muted-foreground active:cursor-grabbing",
+            hasSelection ? "opacity-0" : "opacity-0 group-hover:opacity-100",
+          )}
+          onClick={(e) => e.stopPropagation()}
+          {...listeners}
+          {...attributes}
+          tabIndex={-1}
+        >
+          <GripVertical size={14} />
+        </button>
+      )}
 
       {/* 完成 checkbox：圆环 */}
       <button

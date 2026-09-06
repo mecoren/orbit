@@ -55,6 +55,18 @@ class SubListScreen extends ConsumerStatefulWidget {
 class _SubListScreenState extends ConsumerState<SubListScreen> {
   final _scrollController = ScrollController();
 
+  // 排序档位（#26：会话内存态，退出即回 manual——移动端无手动拖拽，
+  // 该档等价 position 拖拽顺序）
+  TaskSortKey _sortKey = TaskSortKey.manual;
+
+  static const _sortChoices = {
+    TaskSortKey.manual: '拖拽顺序',
+    TaskSortKey.due: '截止时间',
+    TaskSortKey.priority: '优先级',
+    TaskSortKey.title: '标题',
+    TaskSortKey.created: '创建时间',
+  };
+
   @override
   void dispose() {
     _scrollController.dispose();
@@ -164,7 +176,7 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
         ref.watch(todoTasksProvider(const TaskListQuery())).value ?? [];
     final projects = ref.watch(todoProjectsProvider).value ?? [];
 
-    final visible = sortTasks(filterTasks(tasks, widget.query));
+    final visible = sortTasks(filterTasks(tasks, widget.query), _sortKey);
     final projectTitleById = {for (final p in projects) p.id: p.title};
 
     // 动态标题：项目名 / 未分组 / 视图名
@@ -218,6 +230,22 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
             child: LiquidGlassTitleBar(
               title: title,
               scrollOffsetListenable: ScrollOffsetListenable(_scrollController),
+              actions: [
+                // 排序档位菜单（#26；manual = position 拖拽顺序）
+                PopupMenuButton<TaskSortKey>(
+                  initialValue: _sortKey,
+                  onSelected: (k) => setState(() => _sortKey = k),
+                  itemBuilder: (_) => [
+                    for (final e in _sortChoices.entries)
+                      PopupMenuItem(value: e.key, child: Text(e.value)),
+                  ],
+                  icon: Icon(
+                    Icons.sort_rounded,
+                    size: AppDimens.iconSizeMd,
+                    color: AppColors.ofContext(context).titleText,
+                  ),
+                ),
+              ],
             ),
           ),
           // FAB：右下，新建携 defaultProjectId=当前 projectId

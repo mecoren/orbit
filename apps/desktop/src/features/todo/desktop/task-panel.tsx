@@ -24,7 +24,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { type TodoTask } from "@/lib/tauri";
 import { LS_VIEW_MODE, QUICK_VIEWS } from "../shared/constants";
 import { useTaskLabels } from "../shared/use-task-labels";
-import { filterTasks, sortTasks } from "../shared/task-filters";
+import { filterTasks, sortTasks, type TaskSortKey } from "../shared/task-filters";
 import { useTodoShell } from "./todo-shell";
 import { TaskListView } from "./task-list-view";
 import { QuickAddBar } from "./quick-add-bar";
@@ -39,6 +39,16 @@ type ViewMode = "list" | "kanban" | "calendar";
 function loadViewMode(): ViewMode {
   const saved = localStorage.getItem(LS_VIEW_MODE);
   return saved === "kanban" || saved === "calendar" ? saved : "list";
+}
+
+/** 排序档位持久化键（#26：默认 manual = 拖拽顺序） */
+const LS_SORT_KEY = "todo_sort_key";
+
+function loadSortKey(): TaskSortKey {
+  const saved = localStorage.getItem(LS_SORT_KEY);
+  return saved === "due" || saved === "priority" || saved === "title" || saved === "created"
+    ? saved
+    : "manual";
 }
 
 export default function TaskPanel() {
@@ -64,11 +74,16 @@ export default function TaskPanel() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [priorityFilter, setPriorityFilter] = useState<PriorityFilter>("all");
   const [viewMode, setViewMode] = useState<ViewMode>(loadViewMode);
+  const [sortKey, setSortKey] = useState<TaskSortKey>(loadSortKey);
   const [kanbanGroupBy, setKanbanGroupBy] = useState<KanbanGroupBy>("project");
 
   useEffect(() => {
     localStorage.setItem(LS_VIEW_MODE, viewMode);
   }, [viewMode]);
+
+  useEffect(() => {
+    localStorage.setItem(LS_SORT_KEY, sortKey);
+  }, [sortKey]);
 
   useEffect(() => {
     if (viewToggleIntent === 0) return;
@@ -79,7 +94,7 @@ export default function TaskPanel() {
   // 任务→标签映射（列表行/看板卡标签 chips 共用）
   const taskLabels = useTaskLabels();
 
-  // ---- 内存筛选 + 固定排序（共享模块，语义同 04 §四）----
+  // ---- 内存筛选 + 排序（共享模块，语义同 04 §四；排序档位 #26）----
   // keyword 在面板内客户端过滤（全量数据由壳层提供）
   const visibleTasks = useMemo(
     () =>
@@ -99,8 +114,9 @@ export default function TaskPanel() {
             priorityFilter: priorityFilter === "all" ? null : Number(priorityFilter),
           },
         ),
+        sortKey,
       ),
-    [tasks, keyword, quickView, projectId, ungrouped, statusFilter, priorityFilter],
+    [tasks, keyword, quickView, projectId, ungrouped, statusFilter, priorityFilter, sortKey],
   );
 
   // ---- 标题映射（04 §二）----
@@ -159,6 +175,20 @@ export default function TaskPanel() {
               <SelectItem value="3">高</SelectItem>
               <SelectItem value="4">紧急</SelectItem>
               <SelectItem value="5">立即处理</SelectItem>
+            </SelectContent>
+          </Select>
+
+          {/* 排序档位（#26；manual = 拖拽顺序，仅该档显示拖拽把手） */}
+          <Select value={sortKey} onValueChange={(v) => setSortKey(v as TaskSortKey)}>
+            <SelectTrigger className="h-8 w-28" aria-label="排序方式">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="manual">拖拽顺序</SelectItem>
+              <SelectItem value="due">截止时间</SelectItem>
+              <SelectItem value="priority">优先级</SelectItem>
+              <SelectItem value="title">标题</SelectItem>
+              <SelectItem value="created">创建时间</SelectItem>
             </SelectContent>
           </Select>
 
@@ -301,6 +331,8 @@ export default function TaskPanel() {
             labelsByTask={taskLabels}
             loading={tasksLoading}
             error={tasksError}
+            // #26：仅拖拽顺序档显示拖拽把手
+            sortable={sortKey === "manual"}
             onCreateClick={() => {
               openCreateForm();
             }}

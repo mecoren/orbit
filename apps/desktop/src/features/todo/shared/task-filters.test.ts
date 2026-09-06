@@ -205,6 +205,54 @@ describe("sortTasks - position 升序，同 position 按 created_at 降序", () 
   });
 });
 
+describe("sortTasks - 排序档位（#26：due/priority/title/created）", () => {
+  it("due：有截止升序在前，无截止沉底", () => {
+    const out = sortTasks(
+      [
+        mk({ id: 1, due_date: null }),
+        mk({ id: 2, due_date: 300 }),
+        mk({ id: 3, due_date: 100 }),
+        mk({ id: 4, due_date: 200 }),
+      ],
+      "due",
+    );
+    expect(out.map((t) => t.id)).toEqual([3, 4, 2, 1]);
+  });
+
+  it("priority：大者在前，同优先级落回拖拽顺序", () => {
+    const out = sortTasks(
+      [
+        mk({ id: 1, priority: 2, position: 1 }),
+        mk({ id: 2, priority: 5, position: 3 }),
+        mk({ id: 3, priority: 2, position: 0 }),
+      ],
+      "priority",
+    );
+    expect(out.map((t) => t.id)).toEqual([2, 3, 1]);
+  });
+
+  it("title：中文按 locale 拼音序升序", () => {
+    const out = sortTasks(
+      [mk({ id: 1, title: "周会" }), mk({ id: 2, title: "备份" }), mk({ id: 3, title: "吃饭" })],
+      "title",
+    );
+    expect(out.map((t) => t.id)).toEqual([2, 3, 1]);
+  });
+
+  it("created：创建时间降序（最新在前）", () => {
+    const out = sortTasks(
+      [mk({ id: 1, created_at: 100 }), mk({ id: 2, created_at: 300 }), mk({ id: 3, created_at: 200 })],
+      "created",
+    );
+    expect(out.map((t) => t.id)).toEqual([2, 3, 1]);
+  });
+
+  it("manual（缺省）：维持 position 升序语义不变", () => {
+    const out = sortTasks([mk({ id: 3, position: 2 }), mk({ id: 1, position: 1 })], "manual");
+    expect(out.map((t) => t.id)).toEqual([1, 3]);
+  });
+});
+
 describe("工具栏筛选门控（桌面等价不变量锁定）", () => {
   it("projectId 视图下 statusFilter/priorityFilter 不生效", () => {
     const tasks = [

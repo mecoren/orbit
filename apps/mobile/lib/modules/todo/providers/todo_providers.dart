@@ -79,6 +79,13 @@ final statsProvider = FutureProvider.family<StatsAggregate, int>((ref, days) asy
   return ref.watch(orbitBridgeProvider).statsAggregate(days: days);
 });
 
+/// 全局搜索（backlog #26 搜索页；family 参数 = 关键词，防抖后由 UI 层触发）
+final searchProvider = FutureProvider.family<GlobalSearchResult, String>(
+  (ref, keyword) async {
+    return ref.watch(orbitBridgeProvider).globalSearch(keyword);
+  },
+);
+
 /// 全量失效业务缓存（dbChanges / syncFinished(pulled>0) 时调用）
 void invalidateBusinessCaches(WidgetRef ref) {
   ref.invalidate(todoProjectsProvider);

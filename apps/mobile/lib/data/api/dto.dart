@@ -908,3 +908,33 @@ class StatsAggregate {
     required this.byWeekday,
   });
 }
+
+/// 全局搜索评论命中行（backlog #26）
+class CommentSearchHit {
+  final int commentId;
+  final int taskId;
+  final String taskTitle;
+  final String content;
+  final int createdAt;
+
+  const CommentSearchHit({
+    required this.commentId,
+    required this.taskId,
+    required this.taskTitle,
+    required this.content,
+    required this.createdAt,
+  });
+}
+
+/// 全局搜索三路聚合结果（任务/项目/评论；backlog #26）
+class GlobalSearchResult {
+  final List<TodoTask> tasks;
+  final List<TodoProject> projects;
+  final List<CommentSearchHit> comments;
+
+  const GlobalSearchResult({
+    required this.tasks,
+    required this.projects,
+    required this.comments,
+  });
+}

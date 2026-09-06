@@ -233,6 +233,11 @@ abstract class OrbitBridge {
   /// 一次性统计聚合（days 为热力图窗口天数，35-371；null = 182 半年）
   Future<StatsAggregate> statsAggregate({int? days});
 
+  // ── 全局搜索（backlog #26：任务/项目/评论三路聚合）──
+
+  /// 全局搜索（空关键词返回空结果；limit 默认 20）
+  Future<GlobalSearchResult> globalSearch(String keyword, {int? limit});
+
   // ── 事件流（下行通道，替代 Tauri event listen）──
 
   /// 本地写操作事件 → 全量失效业务缓存

@@ -3,12 +3,16 @@
  *
  * 语义（04 §四）：互斥目标 ungrouped > projectId > quickView；
  * 快捷视图与状态/优先级筛选仅在非项目目标下生效；
- * 排序固定 position 升序 → created_at 降序。
+ * 排序默认 position 升序 → created_at 降序（sortKey 可切截止/优先级/标题/创建时间，
+ * 07 backlog #26 双端排序选项；非默认档下手动拖拽排序把手由 UI 隐藏）。
  */
 import { type TodoTask } from "@/lib/tauri";
 import { type QuickViewKey } from "./constants";
 
 export type TaskStatusFilter = "all" | "pending" | "doing" | "done" | "undone";
+
+/** 排序档位（manual = position 拖拽顺序，唯一允许拖拽重排的档位） */
+export type TaskSortKey = "manual" | "due" | "priority" | "title" | "created";
 
 export interface TaskFilterInput {
   quickView?: QuickViewKey | null;
@@ -93,11 +97,38 @@ export function filterTasks(tasks: TodoTask[], input: TaskFilterInput): TodoTask
   return list;
 }
 
-export function sortTasks(tasks: TodoTask[]): TodoTask[] {
-  return [...tasks].sort((a, b) => {
-    const pa = a.position ?? 0;
-    const pb = b.position ?? 0;
-    if (pa !== pb) return pa - pb;
-    return b.created_at - a.created_at;
-  });
+export function sortTasks(tasks: TodoTask[], sortKey: TaskSortKey = "manual"): TodoTask[] {
+  const list = [...tasks];
+  switch (sortKey) {
+    case "due":
+      // 无截止排最后，有截止按时间升序（同值落回创建时间降序）
+      return list.sort((a, b) => {
+        if (a.due_date == null && b.due_date == null) return b.created_at - a.created_at;
+        if (a.due_date == null) return 1;
+        if (b.due_date == null) return -1;
+        if (a.due_date !== b.due_date) return a.due_date - b.due_date;
+        return b.created_at - a.created_at;
+      });
+    case "priority":
+      // 优先级大者排前（同值落回拖拽顺序）
+      return list.sort((a, b) => {
+        if (a.priority !== b.priority) return b.priority - a.priority;
+        const pa = a.position ?? 0;
+        const pb = b.position ?? 0;
+        return pa !== pb ? pa - pb : b.created_at - a.created_at;
+      });
+    case "title":
+      // 标题 localeCompare 升序（中文拼音序）
+      return list.sort((a, b) => a.title.localeCompare(b.title, "zh-Hans-CN"));
+    case "created":
+      // 创建时间降序（最新在前）
+      return list.sort((a, b) => b.created_at - a.created_at);
+    default:
+      return list.sort((a, b) => {
+        const pa = a.position ?? 0;
+        const pb = b.position ?? 0;
+        if (pa !== pb) return pa - pb;
+        return b.created_at - a.created_at;
+      });
+  }
 }
