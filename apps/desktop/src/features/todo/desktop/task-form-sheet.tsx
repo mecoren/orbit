@@ -46,6 +46,7 @@ import {
   REPEAT_PRESETS,
   repeatLabel,
 } from "../shared/repeat";
+import { formatYmd } from "../shared/lunar";
 import { PRIORITY_COLOR, TODO_ACCENT } from "../shared/constants";
 
 const PRIORITY_LABELS = ["无", "低", "中", "高", "紧急", "立即处理"];
@@ -546,6 +547,8 @@ export function TaskFormSheet({
       ...(defaultProjectId != null ? { project_id: String(defaultProjectId) } : {}),
       priority: "0",
       status: "pending",
+      // 新增默认开始日期：今天（跨零点打开也正确，依赖 open 重算）
+      start_date: formatYmd(new Date()),
       // 日历右键预填的截止日期（仅新增模式）
       ...(presetDueDate ? { due_date: presetDueDate } : {}),
       // 新增默认提醒：一小时后（依赖 open，每次打开重新计算）
