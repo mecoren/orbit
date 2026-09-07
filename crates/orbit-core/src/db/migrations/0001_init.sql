@@ -1,12 +1,14 @@
 -- ============================================================================
--- Orbit（循迹）0001_init.sql —— 全新库初始化
--- 注意：v0.1.1 起迁移为增量演进（0002 起），本文件 DDL 不可改动
---（sqlx migrate 校验 checksum，改 0001 会让存量库打开失败）；
--- 结构变更一律新增序号迁移文件（见 0002/0003/0004）。
--- 来源：wait-home wait_core 0001/0003 指定行段平移重组（03 文档 §一/§二）。
--- 内容：sync 基础设施 2 表 + todo 业务 8 表 + cfg 必需 3 表
+-- Orbit（循迹）0001_init.sql —— 全新库初始化（单文件迁移）
+-- 来源：wait-home wait_core 0001/0003 指定行段平移重组（03 文档 §一/§二）；
+--       0002_my_day（my_day_date）、0003_holidays（cfg_holidays/cfg_kv）、
+--       0004_remove_end_date（end_date 删列）已按 2026-09-07 决策并回本文件。
+-- 内容：sync 基础设施 2 表 + todo 业务 8 表 + cfg 必需表 + 节假日缓存 2 表
 --       + 种子（模块行/收件箱/选项，选项用 category_key NOT EXISTS 幂等写法）
 --       + uuid UNIQUE 索引治理段（原 0003 todo 8 表段并入）
+-- 维护约定：结构变更直接改本文件（不考虑增量迁移），改动后需删除本地
+--       库文件重新初始化；已发布版本的存量库升级需删库重初始化，
+--       数据经云同步/备份（.orsync）恢复。
 -- ============================================================================
 
 -- =============================================================================
@@ -103,12 +105,17 @@ CREATE TABLE IF NOT EXISTS todo_tasks (
   done_at INTEGER,
   due_date INTEGER,
   start_date INTEGER,
-  end_date INTEGER,
   repeat_after INTEGER NOT NULL DEFAULT 0,
   repeat_mode INTEGER NOT NULL DEFAULT 0,
   percent_done REAL NOT NULL DEFAULT 0,
   position REAL NOT NULL DEFAULT 0,
   is_favorite INTEGER NOT NULL DEFAULT 0,
+  -- My Day「我的一天」（原 0002_my_day 并入；07 竞品报告 §五新增项，
+  -- 对标微软 To Do 每日聚焦视图）：my_day_date 存「加入当天」的本地零点
+  -- 时间戳（ms）；NULL = 不在任何一天的 My Day。次日「自动清空」是视图
+  -- 侧按日判断（my_day_date == 今天零点），不改数据——与微软 To Do 一致：
+  -- 昨天加入但没完成的任务会回到原项目，可再次「加入我的一天」。
+  my_day_date INTEGER,
   is_deleted INTEGER NOT NULL DEFAULT 0,
   created_at INTEGER NOT NULL DEFAULT 0,
   updated_at INTEGER NOT NULL DEFAULT 0,
@@ -124,6 +131,7 @@ CREATE INDEX IF NOT EXISTS idx_todo_tasks_position ON todo_tasks(is_deleted, pos
 CREATE INDEX IF NOT EXISTS idx_todo_tasks_done ON todo_tasks(done);
 CREATE INDEX IF NOT EXISTS idx_todo_tasks_due_date ON todo_tasks(due_date);
 CREATE INDEX IF NOT EXISTS idx_todo_tasks_is_favorite ON todo_tasks(is_favorite);
+CREATE INDEX IF NOT EXISTS idx_todo_tasks_my_day ON todo_tasks(my_day_date) WHERE my_day_date IS NOT NULL;
 
 -- 待办子任务表
 CREATE TABLE IF NOT EXISTS todo_subtasks (
@@ -266,6 +274,33 @@ CREATE INDEX IF NOT EXISTS idx_cfg_option_items_category_id
   ON cfg_option_items(category_id);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_cfg_option_items_category_value_active
   ON cfg_option_items(category_id, value) WHERE deleted_at IS NULL;
+
+-- 节假日数据层（原 0003_holidays 并入；用户需求：日历视图联网更新节假日，
+-- 定时每天固定时间更新一次 + 手动更新 + 错过更新时间下次开启自动补更）
+--
+-- cfg_holidays：节假日缓存表（只存中国法定节假日的放假/调休补班日；非节假日
+-- 不落行，查不到 = 普通工作日/周末按星期判定）。is_holiday=1 放假、0 调休补班。
+-- 数据源 timor.tech /api/holiday/year/{y}（详见 api/holiday_api.rs）。
+--
+-- cfg_kv：本地 KV 元数据表（节假日更新记账：last_update_ms / last_attempt_ms /
+-- fixed_time / failure_count 等）。两表均为**本地配置缓存**，不进 SYNCABLE_TABLES
+-- 白名单（节假日数据可由各端自行拉取，无需云同步；旧版本客户端同步包中无此表
+-- 亦无影响——行级 _table 路由只分发白名单内的表）。
+CREATE TABLE IF NOT EXISTS cfg_holidays (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  date TEXT NOT NULL,
+  year INTEGER NOT NULL,
+  is_holiday INTEGER NOT NULL,
+  name TEXT NOT NULL DEFAULT '',
+  created_at INTEGER NOT NULL DEFAULT 0
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_cfg_holidays_date ON cfg_holidays(date);
+
+CREATE TABLE IF NOT EXISTS cfg_kv (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL DEFAULT '',
+  updated_at INTEGER NOT NULL DEFAULT 0
+);
 
 -- ============================================================================
 -- 附件元数据表（MVP 不接附件；表结构随库初始化预留）
