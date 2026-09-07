@@ -18,6 +18,31 @@ export default defineConfig({
       "@": path.resolve(import.meta.dirname, "./src"),
     },
   },
+  build: {
+    rollupOptions: {
+      // P0 #2 补齐：vendor 分包——框架/大库独立 chunk，避免被随机打进
+      // 首屏或某个懒页（懒页间共享的依赖若随页各自复制会重复解析）。
+      // Tauri 本地加载无网络成本，但解析/执行时间仍计入冷启动；
+      // vendor 首屏一次加载后跨懒页复用
+      output: {
+        manualChunks(id) {
+          if (!id.includes("node_modules")) return undefined;
+          // react 全家（react/react-dom/scheduler）+ router + react-query
+          if (
+            /[\\/]react[\\/]|[\\/]react-dom[\\/]|[\\/]react-router[\\/]|[\\/]scheduler[\\/]/.test(
+              id,
+            ) ||
+            id.includes("@tanstack" + path.sep + "react-query") ||
+            id.includes("@tanstack/react-query")
+          ) {
+            return "vendor-react";
+          }
+          // 其余依赖统一 vendor（date-fns/lucide/sonner/radix/dnd-kit 等）
+          return "vendor";
+        },
+      },
+    },
+  },
   clearScreen: false,
   server: {
     // 基准端口 5173（与 tauri.conf.json devUrl 对齐）；CLI --port 可覆盖
