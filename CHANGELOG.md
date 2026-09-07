@@ -7,6 +7,12 @@
 
 ## [Unreleased]
 
+### 待办提醒加入任务详情入口(桌面+移动)
+
+- **桌面**:到期提醒自定义 toast(ReminderToast)在推迟三档旁新增「查看任务」按钮(accent 主按钮+ExternalLink 图标)——点击经 §7-③ 规范写 selectedTaskId 打开右侧详情抽屉并导航 /todo,与全局搜索/命令面板同范式;动作收口在 reminder-nav.ts 纯函数(node 单测 3 条)。
+- **移动**:三路点击均可进详情——①前台通知正文点击(onDidReceiveNotificationResponse,actionId 空分支)②应用被杀期间点通知冷启动拉起(BootGate ready 后 consumeLaunchNotification 解析 launch payload,postFrameCallback 兜路由装配时序)③无权限/异常兜底 WaitToast 整卡可点(WaitToast 新增 onTap 回调,带入口的 toast 不自动收起,原无回调行为不变)。服务层经静态 onNotificationTap 回调拿路由(BootGate 注入 rootRouter.push('/todo/:id')),不持有 context;payload 解析复用推迟通道的 taskId|remindAt|title 口径。
+- **测试**:桌面 vitest 116 绿(+3);移动 126 绿(+6,reminder_nav_test:payload 解析口径/WaitToast onTap 行为/路由契约)。docs/04 Toast 行、docs/05 WaitToast 行规格同步。
+
 ### 子任务删除加确认弹窗(桌面/移动)
 
 - 详情里子任务的 X/close 原为直删(仅成功 toast),误触即丢。两端改为确认弹窗:桌面详情抽屉 AlertDialog(destructive 主按钮,与任务/项目删除同形制);移动端 AlertDialog(destructive FilledButton,与评论删除同形制),文案带子任务标题。子任务软删无恢复入口(回收站只收任务行),删除即隐藏——弹窗是唯一防线。随 3ff2427 落地。

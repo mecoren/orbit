@@ -2,13 +2,14 @@
  * ReminderToast —— 到期提醒的自定义 toast 内容（sonner toast.custom）
  *
  * 系统通知只有一条正文无交互入口；此 in-app toast 承载推迟操作
- * （10 分钟 / 30 分钟 / 1 小时，删旧建新语义见 reminder-snooze.ts）。
+ * （10 分钟 / 30 分钟 / 1 小时，删旧建新语义见 reminder-snooze.ts）
+ * 与「查看任务」详情入口（§7-③ selectedTaskId 规范）。
  * 样式对齐 sonner 默认 toast：normal-bg/text/border 令牌 + warning 橙色
  * 图标条，与 sonner.tsx 包装的设计令牌保持一致。
  */
 import { useState } from "react";
 import { toast } from "sonner";
-import { BellRing, X } from "lucide-react";
+import { BellRing, ExternalLink, X } from "lucide-react";
 
 import { SNOOZE_PRESETS, snoozeTargetLabel } from "./reminder-snooze";
 
@@ -17,6 +18,8 @@ export interface ReminderToastProps {
   remindAt: number;
   /** 推迟按钮回调（minutes 档位）；编排与失败提示在组件内完成 */
   onSnooze: (minutes: number) => Promise<boolean>;
+  /** 查看任务按钮回调（打开详情抽屉）；调用后 toast 关闭由组件完成 */
+  onViewTask: () => void;
   onDone: () => void;
 }
 
@@ -24,6 +27,7 @@ export function ReminderToast({
   title,
   remindAt,
   onSnooze,
+  onViewTask,
   onDone,
 }: ReminderToastProps) {
   const [busy, setBusy] = useState(false);
@@ -44,6 +48,12 @@ export function ReminderToast({
     } else {
       toast.error("推迟失败，请稍后重试", { duration: 4_000 });
     }
+  }
+
+  /** 查看任务：打开详情抽屉（§7-③ selectedTaskId 规范，导航 /todo） */
+  function viewTask() {
+    onViewTask();
+    onDone();
   }
 
   return (
@@ -69,6 +79,16 @@ export function ReminderToast({
           })}
         </p>
         <div className="mt-2.5 flex flex-wrap gap-2">
+          <button
+            type="button"
+            data-testid="view-task"
+            title="打开任务详情"
+            onClick={viewTask}
+            className="inline-flex h-7 items-center gap-1 rounded-md bg-accent px-2.5 text-xs font-medium text-accent-foreground transition-colors hover:bg-accent/85"
+          >
+            <ExternalLink className="size-3" />
+            查看任务
+          </button>
           {SNOOZE_PRESETS.map((p) => (
             <button
               key={p.minutes}

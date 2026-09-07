@@ -23,11 +23,13 @@ class WaitToast {
   static OverlayEntry? _active;
   static Timer? _dismissTimer;
 
-  /// 展示一条 toast；[description] 可选副文案
+  /// 展示一条 toast；[description] 可选副文案；[onTap] 可选整卡点击回调
+  ///（提醒 toast 用于跳任务详情；不传时点击仅收起）
   static void global(
     String title, {
     WaitToastVariant variant = WaitToastVariant.info,
     String? description,
+    VoidCallback? onTap,
   }) {
     final overlay = rootNavigatorKey.currentState?.overlay;
     if (overlay == null) return;
@@ -40,6 +42,7 @@ class WaitToast {
         title: title,
         description: description,
         variant: variant,
+        onTap: onTap,
         onDismiss: _remove,
       ),
     );
@@ -47,16 +50,19 @@ class WaitToast {
     overlay.insert(entry);
 
     // 停留 2.6s 后自动收起（动画由 _ToastView 内部退出态承担）
-    _dismissTimer = Timer(const Duration(milliseconds: 2600), _remove);
+    // 带 onTap 时不自动收：入口由点击驱动，避免用户来不及点
+    if (onTap == null) {
+      _dismissTimer = Timer(const Duration(milliseconds: 2600), _remove);
+    }
   }
 
-  /// 四个语义快捷入口
+  /// 四个语义快捷入口（warning 支持 onTap——提醒跳详情场景）
   static void info(String title) =>
       global(title, variant: WaitToastVariant.info);
   static void success(String title) =>
       global(title, variant: WaitToastVariant.success);
-  static void warning(String title) =>
-      global(title, variant: WaitToastVariant.warning);
+  static void warning(String title, {VoidCallback? onTap}) =>
+      global(title, variant: WaitToastVariant.warning, onTap: onTap);
   static void destructive(String title) =>
       global(title, variant: WaitToastVariant.destructive);
 
@@ -83,12 +89,16 @@ class _ToastView extends StatefulWidget {
     required this.description,
     required this.variant,
     required this.onDismiss,
+    this.onTap,
   });
 
   final String title;
   final String? description;
   final WaitToastVariant variant;
   final VoidCallback onDismiss;
+
+  /// 整卡点击回调；null 时点击仅收起（原行为）
+  final VoidCallback? onTap;
 
   @override
   State<_ToastView> createState() => _ToastViewState();
@@ -112,6 +122,14 @@ class _ToastViewState extends State<_ToastView>
     widget.onDismiss();
   }
 
+  /// 点击：有 onTap 先执行再退出（提醒 toast 跳详情）；
+  /// 无 onTap 与原行为一致仅收起。
+  Future<void> _tap() async {
+    final action = widget.onTap;
+    await _exit();
+    action?.call();
+  }
+
   @override
   Widget build(BuildContext context) {
     final brightness = View.of(context).platformDispatcher.platformBrightness;
@@ -130,7 +148,7 @@ class _ToastViewState extends State<_ToastView>
         child: FadeTransition(
           opacity: _controller,
           child: GestureDetector(
-            onTap: _exit,
+            onTap: _tap,
             child: Material(
               color: Colors.transparent,
               child: Container(

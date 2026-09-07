@@ -82,8 +82,10 @@ class NotificationService {
     );
   }
 
-  /// 前台收到 action 点击（onDidReceiveNotificationResponse）：
-  /// 应用存活时 action 优先走前台回调，逻辑与后台完全一致。
+  /// 前台收到通知交互（onDidReceiveNotificationResponse）：
+  /// - 推迟 action：逻辑与后台回调完全一致（重排闹钟 + 确认通知）
+  /// - 正文点击（actionId 空）：autoCancel 已消掉通知，回调 [onNotificationTap]
+  ///   跳任务详情（未注入回调时静默——后台 isolate 初始化路径无 UI 上下文）
   void _onForegroundResponse(NotificationResponse response) {
     final minutes = snoozeActions[response.actionId];
     if (minutes != null) {
@@ -91,9 +93,29 @@ class NotificationService {
         () => instance._handleSnoozeResponse(response),
         (e, st) => debugPrint('[NotificationService] fg snooze: $e\n$st'),
       );
+      return;
     }
-    // 正文点击：autoCancel 已消掉通知，点击本身即拉起应用，无需处理
+    final taskId = taskIdFromPayload(response.payload);
+    if (taskId != null && onNotificationTap != null) {
+      runZonedGuarded(
+        () => onNotificationTap!(taskId),
+        (e, st) => debugPrint('[NotificationService] fg tap: $e\n$st'),
+      );
+    }
   }
+
+  /// payload "taskId|remindAt|title" → taskId；解析失败返回 null。
+  /// 公开静态供测试复现口径（前台/冷启动两路点击共用）。
+  static int? taskIdFromPayload(String? payload) {
+    if (payload == null || payload.isEmpty) return null;
+    return int.tryParse(payload.split('|')[0]);
+  }
+
+  /// 通知正文点击回调（taskId → 跳任务详情）。
+  /// 由 UI 层（BootGate）注入：服务层不持有路由/context。
+  /// 注意仅前台有效——冷启动（应用被杀后点通知拉起）点击不经过
+  /// onDidReceiveNotificationResponse，走 [consumeLaunchPayload]。
+  static Future<void> Function(int taskId)? onNotificationTap;
 
   /// 推迟执行体：解析 payload → 重排系统闹钟 + 静默确认通知。
   /// 全部走插件原生 API（不依赖 FRB/DB），前后台 isolate 皆可运行。
@@ -215,6 +237,7 @@ class NotificationService {
 
   /// 提醒到期事件出口：有权限 → show() 即时系统通知；
   /// 无权限或展示异常 → 维持 warning toast 兜底（文案与原订阅处一致）。
+  /// 兜底 toast 与通知正文点击均挂 [onNotificationTap] 跳任务详情。
   ///
   /// 双通道去重：show() 与闹钟到点的原生 notify 同 id（_alarmId(taskId)），
   /// 后到者覆盖前者——同刻双弹天然合并为一条。
@@ -235,7 +258,9 @@ class NotificationService {
       return;
     }
     if (!_granted) {
-      WaitToast.warning('待办提醒：${event.title}');
+      WaitToast.warning('待办提醒：${event.title}', onTap: () {
+        onNotificationTap?.call(event.taskId);
+      });
       return;
     }
     try {
@@ -248,7 +273,9 @@ class NotificationService {
         ),
       );
     } catch (_) {
-      WaitToast.warning('待办提醒：${event.title}');
+      WaitToast.warning('待办提醒：${event.title}', onTap: () {
+        onNotificationTap?.call(event.taskId);
+      });
     }
   }
 
@@ -300,6 +327,23 @@ class NotificationService {
       if (ok) count++;
     }
     return count;
+  }
+
+  /// 冷启动拉起消费：应用被杀期间点通知正文 → 系统以 launch payload
+  /// 拉起应用（不走 onDidReceiveNotificationResponse）。BootGate ready 后
+  /// 调用一次：解析 launch payload 里的 taskId，有则经 [onNotificationTap]
+  /// 跳任务详情。非提醒拉起（正常图标启动）payload 为空，直接返回。
+  Future<void> consumeLaunchNotification() async {
+    try {
+      final details = await _plugin.getNotificationAppLaunchDetails();
+      final payload = details?.notificationResponse?.payload;
+      final taskId = taskIdFromPayload(payload);
+      if (taskId != null && onNotificationTap != null) {
+        await onNotificationTap!(taskId);
+      }
+    } catch (e) {
+      debugPrint('[NotificationService] launch consume: $e');
+    }
   }
 
   /// 单条系统闹钟排程。alarmClock（闹钟级、Doze 免疫）→ 无精确闹钟权限

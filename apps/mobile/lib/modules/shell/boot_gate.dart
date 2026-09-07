@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/routing/router_keys.dart';
 import '../../core/theme/orbit_accents.dart';
 import '../../data/providers/bridge_provider.dart';
 import '../../services/notification_service.dart';
@@ -78,6 +79,14 @@ class _BootGateState extends ConsumerState<BootGate> {
   void _goReady() {
     // 本地通知插件初始化 + 权限请求（幂等；拒绝则事件回落 toast，静默降级）
     NotificationService.instance.ensureInitialized();
+    // 通知正文点击 → 跳任务详情（服务层经此回调拿到路由，不持有 context）。
+    // rootRouter 由 rootNavigatorKey 装配后可用；MaterialApp.router 尚未
+    // build 时为 null——冷启动拉起已由下方 consumeLaunchNotification 补位。
+    NotificationService.onNotificationTap = (taskId) async {
+      final router = rootRouter;
+      if (router == null) return;
+      await router.push('/todo/$taskId');
+    };
     // 后台闹钟通道：DB 未来提醒全量重排 + dbChanges 防抖跟随
     //（P2 提醒升级：后台/被杀/重启均由系统闹钟保证提醒）
     _scheduler = ReminderScheduler.attachOnce(ref.read(orbitBridgeProvider));
@@ -89,6 +98,11 @@ class _BootGateState extends ConsumerState<BootGate> {
     ref.read(orbitBridgeProvider).startTrashScheduler();
     _subscribeStreams();
     if (mounted) setState(() => _phase = _BootPhase.ready);
+    // 冷启动拉起消费：应用被杀期间点通知 → 等首帧路由装配完成再跳详情
+    //（push 早于 MaterialApp.router build 会丢；微任务兜一拍即可）
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      NotificationService.instance.consumeLaunchNotification();
+    });
   }
 
   /// 桥层事件流监听（ready 后挂载，全生命周期持有）
