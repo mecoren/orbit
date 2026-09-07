@@ -51,33 +51,9 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
 
   // ── 数据 ──
 
-  List<TodoTask> _tasks() =>
-      ref.watch(todoTasksProvider(const TaskListQuery())).value ?? [];
-
   Map<String, HolidayInfo> _holidayByDate() {
     final holidays = ref.watch(holidayProvider).value ?? const <HolidayInfo>[];
     return {for (final h in holidays) h.date: h};
-  }
-
-  /// due_date → 本地 YYYY-MM-DD 聚合（一天遍历；排序 position 升序 →
-  /// created_at 降序，与列表/桌面日历同口径）
-  Map<String, List<TodoTask>> _byDay(List<TodoTask> tasks) {
-    final map = <String, List<TodoTask>>{};
-    for (final t in tasks) {
-      final due = t.dueDate;
-      if (due == null) continue;
-      final d = DateTime.fromMillisecondsSinceEpoch(due);
-      final key =
-          '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
-      (map[key] ??= []).add(t);
-    }
-    for (final list in map.values) {
-      list.sort((a, b) {
-        if (a.position != b.position) return a.position.compareTo(b.position);
-        return b.createdAt.compareTo(a.createdAt);
-      });
-    }
-    return map;
   }
 
   // ── 节假日手动更新 ──
@@ -138,6 +114,9 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
     );
   }
 
+  /// 打开任务详情（稳定方法引用：分组 build 不再逐组创建闭包）
+  void _openTask(int id) => context.push('/todo/$id');
+
   /// 月份标题点击：打开年视图，返回后定位到所选日期
   Future<void> _openYearOverview() async {
     final picked = await YearOverviewPage.push(
@@ -159,7 +138,10 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
   Widget build(BuildContext context) {
     final colors = AppColors.ofContext(context);
     final scheme = Theme.of(context).colorScheme;
-    final byDay = _byDay(_tasks());
+    // 派生聚合（calendarByDayProvider）：选中日等局部 setState 不再触发
+    // 全量重聚合，仅任务数据变化时重算一次
+    final byDay = ref.watch(calendarByDayProvider).value ??
+        const <String, List<TodoTask>>{};
     final holidayByDate = _holidayByDate();
     final now = DateTime.now();
     final todayYmd = _ymd(now);
@@ -168,10 +150,17 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
     // 当月有任务的日期升序分组（下方列表数据源）
     final daysInMonth = DateTime(_month.year, _month.month + 1, 0).day;
     final monthGroups = <({DateTime date, List<TodoTask> items})>[];
+    // 当月圆点颜色表（ymd → 优先级色列表）：一次构建，月历 42 格
+    // eventDotsBuilder 直接查表——避免每格每帧重复 _ymd 拼接 + 列表遍历
+    final monthDots = <String, List<Color>>{};
     for (var d = 1; d <= daysInMonth; d++) {
       final date = DateTime(_month.year, _month.month, d);
-      final items = byDay[_ymd(date)] ?? const <TodoTask>[];
-      if (items.isNotEmpty) monthGroups.add((date: date, items: items));
+      final key = _ymd(date);
+      final items = byDay[key] ?? const <TodoTask>[];
+      if (items.isNotEmpty) {
+        monthGroups.add((date: date, items: items));
+        monthDots[key] = [for (final t in items) _priorityColor(t)];
+      }
     }
     final monthTotal =
         monthGroups.fold<int>(0, (sum, g) => sum + g.items.length);
@@ -253,10 +242,8 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                           e.key: e.value.isHoliday,
                       },
                       subLabelBuilder: ChineseAlmanac.daySubLabel,
-                      eventDotsBuilder: (date) => [
-                        for (final t in byDay[_ymd(date)] ?? const <TodoTask>[])
-                          _priorityColor(t),
-                      ],
+                      eventDotsBuilder: (date) => monthDots[_ymd(date)] ??
+                          const <Color>[],
                     ),
                   ),
                   const SizedBox(height: AppDimens.space4),
@@ -333,7 +320,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                         isSelectedDay: _ymd(group.date) == selectedYmd,
                         isToday: _ymd(group.date) == todayYmd,
                         tasks: group.items,
-                        onOpenTask: (id) => context.push('/todo/$id'),
+                        onOpenTask: _openTask,
                       ),
                 ],
               ),

@@ -48,6 +48,35 @@ final taskDetailProvider = FutureProvider.family<TodoTaskDetail, int>(
   (ref, taskId) => ref.watch(orbitBridgeProvider).todoTaskGetDetail(taskId),
 );
 
+/// due_date → 本地 YYYY-MM-DD 任务聚合（日历视图月历圆点/按日分组共用）。
+///
+/// 从 todoTasksProvider 派生而非在日历 build 里每次重算：点击选中日等
+/// 局部 setState 也会触发 build，全量重聚合 + 逐日排序在千条任务下是
+/// 每帧数万次比较——派生后仅在任务列表数据真正变化时重算一次。
+final calendarByDayProvider = FutureProvider<Map<String, List<TodoTask>>>(
+  (ref) async {
+    // 保持依赖：任务列表刷新时本聚合同步重算
+    final tasks =
+        await ref.watch(todoTasksProvider(const TaskListQuery()).future);
+    final map = <String, List<TodoTask>>{};
+    for (final t in tasks) {
+      final due = t.dueDate;
+      if (due == null) continue;
+      final d = DateTime.fromMillisecondsSinceEpoch(due);
+      final key =
+          '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+      (map[key] ??= []).add(t);
+    }
+    for (final list in map.values) {
+      list.sort((a, b) {
+        if (a.position != b.position) return a.position.compareTo(b.position);
+        return b.createdAt.compareTo(a.createdAt);
+      });
+    }
+    return map;
+  },
+);
+
 /// 同步配置；未配置返回 null（设置页消费）
 final syncConfigProvider = FutureProvider<SyncConfigView?>(
   (ref) => ref.watch(orbitBridgeProvider).syncConfigGet(),
