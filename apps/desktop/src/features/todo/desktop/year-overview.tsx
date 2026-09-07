@@ -5,7 +5,8 @@
  * 适配 orbit 待办日历：
  * - 12 个迷你月历铺满左半区（3 列 × 4 行），行高等分容器、任意窗口不挤压
  * - 头部：大年份（点击返回月视图）+ 干支生肖标签 + 春节/初一下划线图例 + 切年箭头
- * - 标记口径：今天 = 主色实心胶囊 + 白字；春节（正月初一）红下划线；每月初一蓝下划线
+ * - 标记口径：今天 = 主色实心内缩圆角方块（与月视图 inset-0.5 rounded-lg 同形制）+ 白字；
+ *   春节（正月初一）红下划线；每月初一蓝下划线（杠与数字留 bottom-1 间距）
  * - 点击任意日期回到月视图并定位该日
  */
 import { useMemo } from "react";
@@ -183,25 +184,35 @@ function MiniMonth({
               type="button"
               onClick={() => onPick(day)}
               className={cn(
-                "flex items-center justify-center rounded text-[11px] leading-none tabular-nums transition-colors hover:bg-primary/15 hover:text-primary dark:hover:bg-primary/25",
+                "relative flex items-center justify-center rounded text-[11px] leading-none tabular-nums transition-colors hover:bg-primary/15 hover:text-primary dark:hover:bg-primary/25",
                 isToday && "font-bold",
                 !isToday && isWeekend && "text-sky-600 dark:text-sky-400",
               )}
               title={`${month + 1}月${day}日`}
             >
-              <span className="relative">
+              {/* 今天 = 主色实心圆角方块（与月视图同形制：长方形非胶囊）。
+                  年视图日格很扁（行高等分约 17×12），inset-0.5 会随格形
+                  变长条——方块以格子高度为准（h-[85%] aspect-square），
+                  宽随高走，任何窗高下都是饱满方块居中 */}
+              {isToday && (
                 <span
-                  className="rounded-full px-1.5"
-                  style={
-                    isToday ? { backgroundColor: TODAY_BG, color: "#fff" } : undefined
-                  }
-                >
-                  {day}
-                </span>
+                  aria-hidden
+                  className="absolute inset-y-[7.5%] left-1/2 aspect-square h-[85%] -translate-x-1/2 rounded-md"
+                  style={{ backgroundColor: TODAY_BG }}
+                />
+              )}
+              <span
+                className="relative"
+                style={isToday ? { color: "#fff" } : undefined}
+              >
+                {day}
+                {/* 农历杠（春节红/初一蓝）：与数字留 -bottom-1.5 间距
+                    （原 -bottom-0.5 紧贴数字底边视觉粘连；11px 迷你月历
+                    下沉 6px 比例上明显可见） */}
                 {mark != null && (
                   <span
                     className={cn(
-                      "absolute -bottom-0.5 left-1/2 h-[2px] w-3 -translate-x-1/2 rounded",
+                      "absolute -bottom-1.5 left-1/2 h-[2px] w-3 -translate-x-1/2 rounded",
                       mark === "spring" ? "bg-rose-500" : "bg-sky-500",
                     )}
                   />

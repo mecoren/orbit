@@ -397,12 +397,18 @@ class _Day extends StatelessWidget {
         child: Stack(
           alignment: Alignment.center,
           children: [
+            // 今天 = 强调色圆角方块（与月视图日格 BorderRadius.circular(10)
+            // 同形制，非圆形）；农历杠（春节红/初一蓝）与数字留 4px 间距
+            //（原 bottom:1 紧贴数字底边视觉粘连）
             Container(
               width: 24,
               height: 24,
               alignment: Alignment.center,
               decoration: isToday
-                  ? BoxDecoration(color: accent, shape: BoxShape.circle)
+                  ? BoxDecoration(
+                      color: accent,
+                      borderRadius: BorderRadius.circular(7),
+                    )
                   : null,
               child: Text(
                 '${date.day}',
@@ -422,12 +428,15 @@ class _Day extends StatelessWidget {
             if (markColor != null)
               Positioned(
                 bottom: 1,
-                child: Container(
-                  width: 13,
-                  height: 2,
-                  decoration: BoxDecoration(
-                    color: markColor,
-                    borderRadius: BorderRadius.circular(1),
+                child: Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Container(
+                    width: 13,
+                    height: 2,
+                    decoration: BoxDecoration(
+                      color: markColor,
+                      borderRadius: BorderRadius.circular(1),
+                    ),
                   ),
                 ),
               ),
