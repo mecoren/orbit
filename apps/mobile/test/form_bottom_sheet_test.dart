@@ -134,6 +134,34 @@ void main() {
         DateTime(now.year, now.month, now.day).millisecondsSinceEpoch);
   });
 
+  testWidgets('NLP 快速输入：标题 token 实时预览 chips + 保存应用剥离', (tester) async {
+    final bridge = await _openForm(tester);
+
+    // 输入带日期 + 优先级 token 的标题 → 预览 chips 出现
+    await tester.enterText(find.byType(TextFormField).first, '明天开会 !3');
+    await tester.pump();
+
+    // chips：截止（明天日期）+ P3 优先级
+    expect(find.byIcon(Icons.event_rounded), findsOneWidget);
+    expect(find.byIcon(Icons.flag_rounded), findsOneWidget);
+    final tomorrow = DateTime.now().add(const Duration(days: 1));
+    final expectedY =
+        '${tomorrow.year}-${tomorrow.month.toString().padLeft(2, '0')}-${tomorrow.day.toString().padLeft(2, '0')}';
+    expect(find.text('截止 $expectedY'), findsOneWidget);
+
+    // 保存 → 字段应用（due_date=明天零点、priority=3）+ 标题剥离
+    await tester.tap(find.byIcon(Icons.check_rounded));
+    await _settlePastMockLatency(tester);
+
+    final tasks = await tester.runAsync(
+      () => bridge.todoTaskList(const ListFilter()),
+    );
+    final task = tasks!.firstWhere((t) => t.title == '开会');
+    expect(task.priority, 3);
+    final tomorrowZero = DateTime(tomorrow.year, tomorrow.month, tomorrow.day);
+    expect(task.dueDate, tomorrowZero.millisecondsSinceEpoch);
+  });
+
   testWidgets('保存：选择「每天」重复落库 repeat_mode=1/repeat_after=1', (tester) async {
     final bridge = await _openForm(tester);
 

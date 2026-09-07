@@ -13,6 +13,7 @@ import '../../shared/widgets/section_card.dart';
 import '../../shared/widgets/wait_date_picker.dart';
 import '../../shared/widgets/wait_toast.dart';
 // as rep：规避 Flutter widgets 自带 RepeatMode 类名冲突
+import 'logic/parse_quick_input.dart';
 import 'logic/repeat_logic.dart' as rep;
 import 'logic/task_logic.dart'
     show
@@ -124,6 +125,52 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
   bool _loaded = false;
   String? _loadError;
 
+  /// 标题 NLP 实时解析结果（新建态生效；编辑态不启用避免覆盖回填字段）
+  ParsedQuickInput? _titleParse;
+
+  /// 标题输入实时解析（parseQuickInput 同源移植桌面 #7）：
+  /// 命中日期/优先级/项目/标签时在标题下显示预览 chips，保存时应用并剥离
+  void _onTitleChanged(String raw) {
+    if (widget.editingTaskId != null) return; // 编辑态不启用
+    final projects = ref.read(todoProjectsProvider).value ?? [];
+    final labels = ref.read(todoLabelsProvider).value ?? [];
+    final parsed = parseQuickInput(
+      raw,
+      QuickInputContext(
+        projects: [
+          for (final p in projects) QuickInputRef(id: p.id, title: p.title),
+        ],
+        labels: [
+          for (final l in labels) QuickInputRef(id: l.id, title: l.title),
+        ],
+        now: DateTime.now(),
+      ),
+    );
+    // 有任何命中才显示（无命中时清空预览）
+    final hit = parsed.dueDate != null ||
+        parsed.priority > 0 ||
+        parsed.projectId != null ||
+        parsed.labelIds.isNotEmpty;
+    setState(() => _titleParse = hit ? parsed : null);
+  }
+
+  /// 保存时应用标题解析结果：字段填充 + 标题剥离（与桌面 QuickAddBar 同口径）
+  void _applyTitleParse() {
+    final p = _titleParse;
+    if (p == null) return;
+    if (p.dueDate != null) {
+      _dueDate = dateToMidnightMs(p.dueDate!);
+    }
+    if (p.priority > 0) _priority = p.priority;
+    if (p.projectId != null) _projectId = p.projectId;
+    // 标签挂载在任务创建后进行（见 _save 的 _pendingLabelIds）
+    _pendingLabelIds = p.labelIds;
+    _titleController.text = p.title;
+  }
+
+  /// 解析命中的标签 id（保存链消费后清空）
+  List<int> _pendingLabelIds = [];
+
   /// 自定义档位派生 mode：单位 → repeat_mode
   int get _effectiveRepeatMode =>
       _customRepeat ? rep.modeForUnit(_customUnit) : _repeatMode;
@@ -206,6 +253,8 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
   Future<void> _save() async {
     if (_saving || !_formKey.currentState!.validate()) return;
     setState(() => _saving = true);
+    // 应用标题 NLP 解析结果（日期/优先级/项目/标签 + 标题剥离）后再取值
+    _applyTitleParse();
     final title = _titleController.text.trim();
     final description = _descriptionController.text.trim();
     final repeatMode = _effectiveRepeatMode;
@@ -228,6 +277,16 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
         if (_remindAt != null) {
           await syncTaskReminder(bridge, created.id, _remindAt, null);
         }
+        // 新建：NLP 命中的标签挂载
+        for (final labelId in _pendingLabelIds) {
+          try {
+            await bridge.todoTaskLabelCreate(
+                TodoTaskLabelCreateInput(taskId: created.id, labelId: labelId));
+          } catch (_) {
+            // 标签挂载失败不阻断保存（部分成功口径）
+          }
+        }
+        _pendingLabelIds = [];
       } else {
         await bridge.todoTaskUpdate(
           widget.editingTaskId!,
@@ -405,7 +464,7 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
                             AppDimens.gestureInsetFallback / 2,
                           ),
                           children: [
-                            // 1. 标题*
+                            // 1. 标题*（新建态实时 NLP 解析：明天/!3/#项目/@标签）
                             TextFormField(
                               controller: _titleController,
                               maxLength: 200,
@@ -418,7 +477,13 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
                               ),
                               validator: (v) =>
                                   v == null || v.trim().isEmpty ? '请输入标题' : null,
+                              onChanged: _onTitleChanged,
                             ),
+                            // NLP 命中预览 chips（对齐桌面 QuickAddBar 形制）
+                            if (_titleParse != null) ...[
+                              const SizedBox(height: AppDimens.space8),
+                              _TitleParseChips(parse: _titleParse!),
+                            ],
                             const SizedBox(height: AppDimens.space12),
                             // 2. 描述
                             TextFormField(
@@ -867,6 +932,80 @@ class _PriorityDot extends StatelessWidget {
                   size: AppDimens.iconSizeSm, color: colors.secondaryText)
               : null,
         ),
+      ),
+    );
+  }
+}
+
+/// 标题 NLP 命中预览 chips（对齐桌面 QuickAddBar 形制）：
+/// 截止日期 / P1-P5 优先级 / 项目 / 标签数 逐项小胶囊，保存时自动应用
+class _TitleParseChips extends StatelessWidget {
+  const _TitleParseChips({required this.parse});
+
+  final ParsedQuickInput parse;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = AppColors.ofContext(context);
+    return Wrap(
+      spacing: AppDimens.space8,
+      runSpacing: AppDimens.space4,
+      children: [
+        if (parse.dueDate != null)
+          _parseChip(
+            context,
+            icon: Icons.event_rounded,
+            label: '截止 ${formatYmd(parse.dueDate!.millisecondsSinceEpoch)}',
+            color: colors.secondaryText,
+          ),
+        if (parse.priority > 0)
+          _parseChip(
+            context,
+            icon: Icons.flag_rounded,
+            label: 'P${parse.priority} ${priorityLabel(parse.priority)}',
+            color: hexToColor(priorityColorHex(parse.priority)),
+          ),
+        if (parse.projectId != null)
+          _parseChip(
+            context,
+            icon: Icons.folder_rounded,
+            label: '项目已识别',
+            color: colors.secondaryText,
+          ),
+        if (parse.labelIds.isNotEmpty)
+          _parseChip(
+            context,
+            icon: Icons.sell_rounded,
+            label: '标签 ×${parse.labelIds.length}',
+            color: colors.secondaryText,
+          ),
+      ],
+    );
+  }
+
+  Widget _parseChip(
+    BuildContext context, {
+    required IconData icon,
+    required String label,
+    required Color color,
+  }) {
+    final colors = AppColors.ofContext(context);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        borderRadius: AppShapes.full,
+        border: Border.all(color: colors.divider.withValues(alpha: 0.4)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 12, color: color),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: TextStyle(fontSize: 12, color: color),
+          ),
+        ],
       ),
     );
   }
