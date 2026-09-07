@@ -6,8 +6,14 @@ class AppDimens {
   AppDimens._();
 
   // ── 间距（spacing）──
+  /// 极小间隙（徽标与文字间；wait-home 同名）
+  static const double space2 = 2;
+
   /// 极小间隙（图标与文字间）
   static const double space4 = 4;
+
+  /// 小间隙内部细间距（wait-home 同名）
+  static const double space6 = 6;
 
   /// 小间隙
   static const double space8 = 8;

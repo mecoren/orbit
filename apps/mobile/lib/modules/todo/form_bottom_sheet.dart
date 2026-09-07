@@ -48,6 +48,9 @@ Future<void> showTodoFormSheet(
   BuildContext context, {
   int? editingTaskId,
   int? defaultProjectId,
+
+  /// 新建态预填的截止日期毫秒（日历长按日格快捷新增用；编辑态忽略）
+  int? initialDueDate,
 }) {
   return showModalBottomSheet<void>(
     context: context,
@@ -56,6 +59,7 @@ Future<void> showTodoFormSheet(
     builder: (_) => _TodoFormSheet(
       editingTaskId: editingTaskId,
       defaultProjectId: defaultProjectId,
+      initialDueDate: initialDueDate,
     ),
   );
 }
@@ -83,13 +87,17 @@ Future<void> syncTaskReminder(
 }
 
 class _TodoFormSheet extends ConsumerStatefulWidget {
-  const _TodoFormSheet({this.editingTaskId, this.defaultProjectId});
+  const _TodoFormSheet(
+      {this.editingTaskId, this.defaultProjectId, this.initialDueDate});
 
   /// 有值 = 编辑态（异步预填 todoTaskGet）
   final int? editingTaskId;
 
   /// 新建态默认归属项目（子列表项目入口携入）
   final int? defaultProjectId;
+
+  /// 新建态预填的截止日期毫秒（日历长按快捷新增；编辑态忽略）
+  final int? initialDueDate;
 
   @override
   ConsumerState<_TodoFormSheet> createState() => _TodoFormSheetState();
@@ -133,6 +141,7 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
     if (widget.editingTaskId != null) {
       _loadEditing(widget.editingTaskId!);
     } else {
+      _dueDate = widget.initialDueDate;
       _loaded = true;
     }
   }

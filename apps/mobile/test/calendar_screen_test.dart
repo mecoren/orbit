@@ -1,5 +1,6 @@
-// 日历视图组件测试：月格待办长条渲染 + 点击长条进详情 + 节假日徽标 +
-// 侧栏入口 + 手动更新链路（MockOrbitBridge 注入）。
+// 日历视图组件测试（wait-home 风格重构版）：月历农历副标签/任务圆点 +
+// 下方按日分组列表点击进详情 + 休/班徽标 + 长按日格快捷新增（预填截止日）+
+// 年视图入口 + 月导航/今天回位 + 手动更新链路（MockOrbitBridge 注入）。
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -16,7 +17,7 @@ Widget _wrap(Widget child, MockOrbitBridge bridge) => ProviderScope(
     );
 
 /// 极简路由：侧栏 + 日历 + 详情占位页
-/// （点击长条后以「detail:」前缀文本页落地，验证导航目标）
+/// （点击任务卡后以「detail:」前缀文本页落地，验证导航目标）
 late GoRouter _router;
 
 MockOrbitBridge _seededBridge() {
@@ -50,19 +51,26 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  testWidgets('月格渲染：今日格有任务长条，点击长条进入详情页', (tester) async {
+  testWidgets('月历+分组列表：农历副标签渲染，任务卡点击进详情页', (tester) async {
     final bridge = _seededBridge();
     await tester.pumpWidget(_wrap(const SizedBox(), bridge));
     await settle(tester);
 
-    // 种子里「完成移动端重构方案评审」截止在明天（now+1d）——含具体时刻，
-    // 会落在当前月。直接断言该标题长条出现在日历上（可能需滚动到所在格）
-    // 月格含前后月补位：跨越月界时同一日期会在补位格与本月格各出现一次
-    final bar = find.text('完成移动端重构方案评审');
-    expect(bar, findsWidgets);
+    // 月历：农历副标签渲染（数字格下方，如「十九」等农历日名/节气/节日）
+    // 星期表头存在（周一始）
+    expect(find.text('一'), findsOneWidget);
 
-    // 点击该长条 → 详情页出现（长条 onTap = context.push('/todo/:id')）
-    await tester.tap(bar.first);
+    // 种子里「完成移动端重构方案评审」截止在明天（now+1d）——
+    // 落在月历圆点 + 当月分组列表的任务卡（整页滚动布局下滚到可见）
+    final card = find.text('完成移动端重构方案评审');
+    await tester.scrollUntilVisible(
+      card.first,
+      300,
+    );
+    expect(card, findsWidgets);
+
+    // 点击下方列表的任务卡 → 详情页出现
+    await tester.tap(card.first);
     await tester.pumpAndSettle();
     expect(
       find.byWidgetPredicate((w) =>
@@ -71,7 +79,7 @@ void main() {
     );
   });
 
-  testWidgets('节假日徽标：休/班 出现在月格日期行', (tester) async {
+  testWidgets('节假日徽标：休/班 出现在月历格', (tester) async {
     final bridge = _seededBridge();
     await tester.pumpWidget(_wrap(const SizedBox(), bridge));
     await settle(tester);
@@ -91,6 +99,59 @@ void main() {
     // 元旦（01-01 放假）与补班日（01-04）徽标同屏可见
     expect(find.text('休'), findsWidgets);
     expect(find.text('班'), findsWidgets);
+  });
+
+  testWidgets('长按日格：弹出新增表单且截止日期预填为该日', (tester) async {
+    final bridge = _seededBridge();
+    await tester.pumpWidget(_wrap(const SizedBox(), bridge));
+    await settle(tester);
+
+    // 长按今天格（月历 AppMonthCalendar 的日格）
+    final today = DateTime.now();
+    final dayText = find.text('${today.day}').first;
+    await tester.longPress(dayText, warnIfMissed: false);
+    await tester.pumpAndSettle();
+
+    // 新增表单打开（标题「添加待办」）：
+    expect(find.text('添加待办'), findsOneWidget);
+
+    // 预填断言：表单里截止日期行显示今天日期字符串（YYYY-MM-DD）
+    final ymd =
+        '${today.year.toString().padLeft(4, '0')}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
+    expect(find.text(ymd), findsOneWidget);
+  });
+
+  testWidgets('年视图：点月份标题进入，干支生肖 + 迷你月历 + 点日期返回', (tester) async {
+    final bridge = _seededBridge();
+    await tester.pumpWidget(_wrap(const SizedBox(), bridge));
+    await settle(tester);
+
+    // 点月份标题 → 年视图页（干支生肖标签 + 12 迷你月历）
+    await tester.tap(find.textContaining('年').first);
+    await tester.pumpAndSettle();
+    expect(find.byWidgetPredicate(
+      (w) => w is Text && (w.data ?? '').endsWith('年') && (w.data ?? '').length == 4,
+      description: '大年份 2026',
+    ), findsOneWidget);
+    expect(find.text('丙午马年'), findsOneWidget);
+
+    // 12 个迷你月标题齐全
+    for (final m in ['1月', '6月', '12月']) {
+      expect(find.text(m), findsWidgets);
+    }
+
+    // 点 9 月标题（年视图内容超屏，先在年视图页内滚动到可见）→ 返回月历定位。
+    // 年视图页滚动区 = SingleChildScrollView（显式指定，PageView 亦为可滚组件会歧义）
+    final yearScroll = find.descendant(
+      of: find.byWidgetPredicate(
+          (w) => w.runtimeType.toString() == 'YearOverviewPage'),
+      matching: find.byType(Scrollable).first,
+    );
+    await tester.scrollUntilVisible(find.text('9月').first, 200,
+        scrollable: yearScroll);
+    await tester.tap(find.text('9月').first);
+    await tester.pumpAndSettle();
+    expect(find.text('2026年9月'), findsOneWidget);
   });
 
   testWidgets('手动更新：点击刷新按钮 → toast「节假日数据已更新」', (tester) async {
@@ -129,8 +190,8 @@ void main() {
         .data;
     expect(nextTitle, isNot(currentTitle));
 
-    // 点月份标题回今天 → 标题还原
-    await tester.tap(find.text(nextTitle!));
+    // 点「回到今天」按钮 → 标题还原
+    await tester.tap(find.byIcon(Icons.today_rounded));
     await tester.pumpAndSettle();
     expect(
       tester.widget<Text>(find.textContaining('年').first).data,
@@ -138,7 +199,7 @@ void main() {
     );
   });
 
-  testWidgets('侧栏入口：「日历」行渲染于快捷视图与项目之间', (tester) async {
+  testWidgets('侧栏入口：「日历」行渲染并点击进入', (tester) async {
     final bridge = _seededBridge();
     _router = GoRouter(
       navigatorKey: rootNavigatorKey,
@@ -169,9 +230,9 @@ void main() {
     expect(find.byType(CalendarScreen), findsOneWidget);
   });
 
-  testWidgets('超量待办：同日多条任务在格内可纵向滑动查看', (tester) async {
+  testWidgets('超量待办：同日多条任务在下方列表可纵向滑动查看', (tester) async {
     final bridge = _seededBridge();
-    // 直接在 store 造 15 条今天的任务（构造长条列表溢出格高）。
+    // 直接在 store 造 15 条今天的任务（当月分组列表超屏）。
     // 注意 position 必须为 int：mock todoTaskList 排序按 `as int` 强转。
     final now = bridge.store.now();
     for (var i = 0; i < 15; i++) {
@@ -205,17 +266,20 @@ void main() {
     await tester.pumpWidget(_wrap(const SizedBox(), bridge));
     await settle(tester);
 
-    // 断言至少一条压测任务长条可见（渲染成功；月格含补位可能两处出现）
+    // 断言压测任务卡渲染（整页滚动布局下列表在月历下方，滚到可见）
+    await tester.scrollUntilVisible(
+      find.textContaining('压测任务').first,
+      300,
+    );
     expect(find.textContaining('压测任务'), findsWidgets);
 
-    // 在今日格的滚动区域上竖向拖动（格内 ListView 手势），验证滑动查看
-    // 超出可视高度的内容不崩溃且长条仍渲染（有界泵防 pending timer 卡死）
-    final anyBar = find.byWidgetPredicate(
-      (w) => w.runtimeType.toString() == '_TaskBar',
+    // 在整页滚动区上竖向拖动，验证滚动查看不崩溃且卡片仍渲染
+    final anyCard = find.byWidgetPredicate(
+      (w) => w.runtimeType.toString() == '_TaskCard',
     );
-    expect(anyBar, findsWidgets);
-    await tester.drag(anyBar.first, const Offset(0, -60));
+    expect(anyCard, findsWidgets);
+    await tester.drag(find.byType(Scrollable).first, const Offset(0, -300));
     await tester.pump(const Duration(milliseconds: 200));
-    expect(anyBar, findsWidgets);
+    expect(anyCard, findsWidgets);
   });
 }
