@@ -99,10 +99,17 @@ void main() {
       findsOneWidget,
     );
 
-    // 开始/结束/提醒未设值 → 占位「无」×3
+    // 开始日期默认当天 → 值行显示今天；结束/提醒未设值 → 占位「无」×2
+    final today = DateTime.now();
+    final todayYmd =
+        '${today.year.toString().padLeft(4, '0')}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
+    expect(
+      find.descendant(of: find.byType(SectionCard), matching: find.text(todayYmd)),
+      findsOneWidget,
+    );
     expect(
       find.descendant(of: find.byType(SectionCard), matching: find.text('无')),
-      findsNWidgets(3),
+      findsNWidgets(2),
     );
   });
 

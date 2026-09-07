@@ -142,6 +142,8 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
       _loadEditing(widget.editingTaskId!);
     } else {
       _dueDate = widget.initialDueDate;
+      // 新增默认开始日期：今天（本地零点，与桌面表单同口径）
+      _startDate = dateToMidnightMs(DateTime.now());
       _loaded = true;
     }
   }

@@ -115,10 +115,11 @@ void main() {
     // 新增表单打开（标题「添加待办」）：
     expect(find.text('添加待办'), findsOneWidget);
 
-    // 预填断言：表单里截止日期行显示今天日期字符串（YYYY-MM-DD）
+    // 预填断言：截止日期与开始日期都显示今天（长按今天格预填截止 +
+    // 新增默认开始日期=今天，同一天 → 同一字符串出现两次）
     final ymd =
         '${today.year.toString().padLeft(4, '0')}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
-    expect(find.text(ymd), findsOneWidget);
+    expect(find.text(ymd), findsNWidgets(2));
   });
 
   testWidgets('年视图：点月份标题进入，干支生肖 + 迷你月历 + 点日期返回', (tester) async {
