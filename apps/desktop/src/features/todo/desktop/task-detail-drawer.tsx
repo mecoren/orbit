@@ -70,6 +70,7 @@ import {
   todoReminderCreate,
   todoReminderDelete,
   todoTaskUpdate,
+  type TodoSubtask,
 } from "@/lib/tauri";
 
 /** 关联类型中文标签（只读展示） */
@@ -721,6 +722,8 @@ function SubtasksSection({
   onChanged: () => void;
 }) {
   const [newTitle, setNewTitle] = useState("");
+  // 待删子任务（null = 关闭）：删除前确认弹窗，防误触（与任务/评论删除同惯例）
+  const [confirmDelete, setConfirmDelete] = useState<TodoSubtask | null>(null);
   const doneCount = subtasks.filter((s) => s.done).length;
 
   const add = async () => {
@@ -763,10 +766,7 @@ function SubtasksSection({
             </span>
             <button type="button" aria-label="删除子任务"
               className="opacity-0 group-hover:opacity-100"
-              onClick={async () => {
-                await todoSubtaskDelete(s.id); onChanged();
-                toast.success("已删除子任务");
-              }}
+              onClick={() => setConfirmDelete(s)}
             >
               <X size={14} className="text-muted-foreground hover:text-destructive" />
             </button>
@@ -791,6 +791,36 @@ function SubtasksSection({
           <p className="pt-1 text-[11px] text-muted-foreground">完成度自动回算：{Math.round(percentDone)}%</p>
         )}
       </div>
+
+      {/* 删除确认（防误触；子任务软删无恢复入口，删除即隐藏） */}
+      <AlertDialog open={confirmDelete != null} onOpenChange={(o) => !o && setConfirmDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>删除子任务</AlertDialogTitle>
+            <AlertDialogDescription className="break-words">
+              确定要删除「{confirmDelete?.title}」吗？
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>取消</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-white hover:bg-destructive/90"
+              onClick={() => {
+                const target = confirmDelete;
+                setConfirmDelete(null);
+                void (async () => {
+                  if (!target) return;
+                  await todoSubtaskDelete(target.id);
+                  onChanged();
+                  toast.success("已删除子任务");
+                })();
+              }}
+            >
+              删除
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </SectionBlock>
   );
 }

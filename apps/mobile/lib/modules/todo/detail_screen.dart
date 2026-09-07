@@ -860,6 +860,32 @@ class _SubtasksSectionState extends ConsumerState<_SubtasksSection> {
         )));
   }
 
+  /// 删除确认（对齐评论删除惯例：软删无恢复入口，防误触）
+  Future<void> _confirmDelete(TodoSubtask subtask) async {
+    final destructive = AppColors.ofContext(context).destructive;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('删除子任务'),
+        content: Text('确定要删除「${subtask.title}」吗？'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: destructive),
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('删除'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    await _mutate(
+        () => ref.read(orbitBridgeProvider).todoSubtaskDelete(subtask.id));
+  }
+
   @override
   Widget build(BuildContext context) {
     final colors = AppColors.ofContext(context);
@@ -902,15 +928,13 @@ class _SubtasksSectionState extends ConsumerState<_SubtasksSection> {
                       ),
                     ),
                   ),
-                  // close 删除（无确认直删，对齐桌面行为）
+                  // close 删除（确认弹窗防误触，对齐桌面/评论删除惯例）
                   IconButton(
                     visualDensity: VisualDensity.compact,
                     icon: Icon(Icons.close_rounded,
                         size: AppDimens.iconSizeSm,
                         color: colors.secondaryText),
-                    onPressed: () => _mutate(() => ref
-                        .read(orbitBridgeProvider)
-                        .todoSubtaskDelete(subtask.id)),
+                    onPressed: () => _confirmDelete(subtask),
                   ),
                 ],
               ),
