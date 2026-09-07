@@ -62,6 +62,21 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
     }
   }
 
+  /// 完成/取消统一入口：完成走 todoTaskComplete（Rust 单事务推进重复
+  /// 任务下一实例——引擎下沉后与桌面同口径）；取消完成仍走普通 patch
+  Future<void> _toggleDone(TodoTask task) async {
+    final id = widget.taskId;
+    if (id == null || task.isDone) return _patchTask(buildDoneTogglePatch(task));
+    try {
+      await ref.read(orbitBridgeProvider).todoTaskComplete(id);
+      if (!mounted) return;
+      ref.invalidate(todoTasksProvider);
+      ref.invalidate(taskDetailProvider(id));
+    } catch (_) {
+      WaitToast.destructive('完成失败');
+    }
+  }
+
   /// 下半五区（子任务/标签/提醒/关联/评论）增删改统一失效出口
   void _refreshDetail() {
     final id = widget.taskId;
@@ -99,6 +114,7 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
                       detail: detail,
                       scrollController: _scrollController,
                       onPatch: _patchTask,
+                      onToggleDone: _toggleDone,
                       onRefresh: _refreshDetail,
                     ),
                   ),
@@ -148,12 +164,14 @@ class _DetailView extends StatelessWidget {
     required this.detail,
     required this.scrollController,
     required this.onPatch,
+    required this.onToggleDone,
     required this.onRefresh,
   });
 
   final TodoTaskDetail detail;
   final ScrollController scrollController;
   final Future<void> Function(Map<String, Object?> patch) onPatch;
+  final Future<void> Function(TodoTask task) onToggleDone;
   final VoidCallback onRefresh;
 
   @override
@@ -170,7 +188,7 @@ class _DetailView extends StatelessWidget {
       ),
       children: [
         // 八区块固定顺序（docs/05 §4.3）
-        _TitleSection(detail: detail, onPatch: onPatch),
+        _TitleSection(detail: detail, onPatch: onPatch, onToggleDone: onToggleDone),
         const SizedBox(height: AppDimens.space12),
         _InfoSection(detail: detail, onPatch: onPatch),
         const SizedBox(height: AppDimens.space12),
@@ -201,10 +219,15 @@ class _DetailView extends StatelessWidget {
 // ── 一、标题区 ──
 
 class _TitleSection extends StatefulWidget {
-  const _TitleSection({required this.detail, required this.onPatch});
+  const _TitleSection({
+    required this.detail,
+    required this.onPatch,
+    required this.onToggleDone,
+  });
 
   final TodoTaskDetail detail;
   final Future<void> Function(Map<String, Object?> patch) onPatch;
+  final Future<void> Function(TodoTask task) onToggleDone;
 
   @override
   State<_TitleSection> createState() => _TitleSectionState();
@@ -252,7 +275,7 @@ class _TitleSectionState extends State<_TitleSection> {
             checked: task.isDone,
             size: 28,
             checkSize: 18,
-            onToggle: () => widget.onPatch(buildDoneTogglePatch(task)),
+            onToggle: () => widget.onToggleDone(task),
           ),
           const SizedBox(width: AppDimens.space12),
           Expanded(

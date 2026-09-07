@@ -107,6 +107,10 @@ abstract class OrbitBridge {
   Future<void> todoTaskDelete(int id);
   Future<void> todoTaskUpdatePosition(int id, int position);
 
+  /// 统一完成任务：普通标记 / 重复任务单事务推进下一实例
+  /// （引擎下沉 orbit-core，与桌面同一 Rust 入口；返回完成后的任务）
+  Future<TodoTask> todoTaskComplete(int id);
+
   /// 详情聚合：任务 + 子任务 + 标签 + 评论 + 关联 + 提醒
   Future<TodoTaskDetail> todoTaskGetDetail(int id);
 

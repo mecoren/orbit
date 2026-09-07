@@ -145,6 +145,45 @@ test("我的一天：行内加入 → 视图筛选 → 次日退出语义（my_d
   ).toHaveCount(0);
 });
 
+test("重复任务：完成推进下一实例（引擎下沉 todo_tasks_complete 单命令）", async ({ page }) => {
+  // 快加一条任务，mock 内存库直改 repeat 字段为每天重复（表单编辑路径不在此用例范围）
+  await quickAdd(page, "冒烟任务-每天喝水");
+  await expect(page.getByText("冒烟任务-每天喝水")).toBeVisible();
+
+  await page.evaluate(() => {
+    const m = (window as any).__orbitMock;
+    const t = m.db.tasks.find((x: any) => x.title === "冒烟任务-每天喝水");
+    t.repeat_mode = 1; // 每天
+    t.repeat_after = 1;
+    t.due_date = Date.now() + 86400000; // 明天到期（提前完成仍按原排程推进）
+    m.emitDbChange();
+  });
+  await expect(
+    page.getByRole("button", { name: "未完成任务：冒烟任务-每天喝水" }),
+  ).toBeVisible();
+
+  // 完成：单命令单事务——旧实例标记完成 + 下一实例出现
+  const row = page.getByRole("button", { name: "未完成任务：冒烟任务-每天喝水" });
+  await row.getByRole("button", { name: "标记完成" }).click();
+
+  const dbState = await page.evaluate(() => {
+    const m = (window as any).__orbitMock;
+    const rows = m.db.tasks.filter((x: any) => x.title === "冒烟任务-每天喝水");
+    return rows.map((x: any) => ({
+      done: x.done,
+      due_date: x.due_date as number | null,
+      repeat_mode: x.repeat_mode,
+    }));
+  });
+  // 一旧一新：旧实例 done=1；新实例 pending、due 越过 now（快进口径）、规则保留
+  expect(dbState.length).toBe(2);
+  expect(dbState.filter((r) => r.done === 1).length).toBe(1);
+  const next = dbState.find((r) => r.done === 0);
+  expect(next).toBeTruthy();
+  expect(next!.repeat_mode).toBe(1);
+  expect(next!.due_date).toBeGreaterThan(Date.now());
+});
+
 test("日历视图：左右分栏 + 选中定位 + 年视图 + 右键新增预填日期", async ({ page }) => {
   const today = new Date();
 

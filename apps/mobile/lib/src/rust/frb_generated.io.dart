@@ -94,6 +94,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  TodoTask dco_decode_box_autoadd_todo_task(dynamic raw);
+
+  @protected
   TodoTaskCreateInput dco_decode_box_autoadd_todo_task_create_input(
     dynamic raw,
   );
@@ -109,6 +112,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   CommentSearchHit dco_decode_comment_search_hit(dynamic raw);
+
+  @protected
+  CompleteTaskResult dco_decode_complete_task_result(dynamic raw);
 
   @protected
   DbEventDto dco_decode_db_event_dto(dynamic raw);
@@ -202,6 +208,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   SyncConfigView? dco_decode_opt_box_autoadd_sync_config_view(dynamic raw);
+
+  @protected
+  TodoTask? dco_decode_opt_box_autoadd_todo_task(dynamic raw);
 
   @protected
   PlaintextExportView dco_decode_plaintext_export_view(dynamic raw);
@@ -392,6 +401,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  TodoTask sse_decode_box_autoadd_todo_task(SseDeserializer deserializer);
+
+  @protected
   TodoTaskCreateInput sse_decode_box_autoadd_todo_task_create_input(
     SseDeserializer deserializer,
   );
@@ -409,6 +421,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   CommentSearchHit sse_decode_comment_search_hit(SseDeserializer deserializer);
+
+  @protected
+  CompleteTaskResult sse_decode_complete_task_result(
+    SseDeserializer deserializer,
+  );
 
   @protected
   DbEventDto sse_decode_db_event_dto(SseDeserializer deserializer);
@@ -524,6 +541,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   SyncConfigView? sse_decode_opt_box_autoadd_sync_config_view(
     SseDeserializer deserializer,
   );
+
+  @protected
+  TodoTask? sse_decode_opt_box_autoadd_todo_task(SseDeserializer deserializer);
 
   @protected
   PlaintextExportView sse_decode_plaintext_export_view(
@@ -748,6 +768,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_box_autoadd_todo_task(
+    TodoTask self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_box_autoadd_todo_task_create_input(
     TodoTaskCreateInput self,
     SseSerializer serializer,
@@ -768,6 +794,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_comment_search_hit(
     CommentSearchHit self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_complete_task_result(
+    CompleteTaskResult self,
     SseSerializer serializer,
   );
 
@@ -918,6 +950,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_opt_box_autoadd_sync_config_view(
     SyncConfigView? self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_opt_box_autoadd_todo_task(
+    TodoTask? self,
     SseSerializer serializer,
   );
 

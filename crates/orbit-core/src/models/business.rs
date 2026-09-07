@@ -142,7 +142,7 @@ pub struct TodoTask {
 }
 
 /// todo_tasks 创建输入
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct TodoTaskCreateInput {
     pub title: String,
     pub description: Option<String>,

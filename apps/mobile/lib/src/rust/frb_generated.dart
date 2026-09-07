@@ -74,7 +74,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.12.0';
 
   @override
-  int get rustContentHash => -1580799717;
+  int get rustContentHash => -1597174975;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -313,6 +313,10 @@ abstract class RustLibApi extends BaseApi {
 
   Future<List<TodoTaskRelation>> crateApiTodoTodoTaskRelationsList({
     required ListFilter filter,
+  });
+
+  Future<CompleteTaskResult> crateApiTodoTodoTasksComplete({
+    required PlatformInt64 id,
   });
 
   Future<TodoTask> crateApiTodoTodoTasksCreate({
@@ -2654,6 +2658,36 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  Future<CompleteTaskResult> crateApiTodoTodoTasksComplete({
+    required PlatformInt64 id,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_i_64(id, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 75,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_complete_task_result,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiTodoTodoTasksCompleteConstMeta,
+        argValues: [id],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiTodoTodoTasksCompleteConstMeta =>
+      const TaskConstMeta(debugName: "todo_tasks_complete", argNames: ["id"]);
+
+  @override
   Future<TodoTask> crateApiTodoTodoTasksCreate({
     required TodoTaskCreateInput input,
   }) {
@@ -2665,7 +2699,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 75,
+            funcId: 76,
             port: port_,
           );
         },
@@ -2693,7 +2727,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 76,
+            funcId: 77,
             port: port_,
           );
         },
@@ -2721,7 +2755,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 77,
+            funcId: 78,
             port: port_,
           );
         },
@@ -2751,7 +2785,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 78,
+            funcId: 79,
             port: port_,
           );
         },
@@ -2781,7 +2815,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 79,
+            funcId: 80,
             port: port_,
           );
         },
@@ -2813,7 +2847,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 80,
+            funcId: 81,
             port: port_,
           );
         },
@@ -2848,7 +2882,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 81,
+            funcId: 82,
             port: port_,
           );
         },
@@ -2878,7 +2912,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 82,
+            funcId: 83,
             port: port_,
           );
         },
@@ -2905,7 +2939,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 83,
+            funcId: 84,
             port: port_,
           );
         },
@@ -2932,7 +2966,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 84,
+            funcId: 85,
             port: port_,
           );
         },
@@ -2962,7 +2996,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 85,
+            funcId: 86,
             port: port_,
           );
         },
@@ -2993,7 +3027,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 86,
+            funcId: 87,
             port: port_,
           );
         },
@@ -3021,7 +3055,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 87,
+            funcId: 88,
             port: port_,
           );
         },
@@ -3048,7 +3082,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 88,
+            funcId: 89,
             port: port_,
           );
         },
@@ -3183,6 +3217,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  TodoTask dco_decode_box_autoadd_todo_task(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_todo_task(raw);
+  }
+
+  @protected
   TodoTaskCreateInput dco_decode_box_autoadd_todo_task_create_input(
     dynamic raw,
   ) {
@@ -3217,6 +3257,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       taskTitle: dco_decode_String(arr[2]),
       content: dco_decode_String(arr[3]),
       createdAt: dco_decode_i_64(arr[4]),
+    );
+  }
+
+  @protected
+  CompleteTaskResult dco_decode_complete_task_result(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 2)
+      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+    return CompleteTaskResult(
+      task: dco_decode_todo_task(arr[0]),
+      nextInstance: dco_decode_opt_box_autoadd_todo_task(arr[1]),
     );
   }
 
@@ -3444,6 +3496,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   SyncConfigView? dco_decode_opt_box_autoadd_sync_config_view(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw == null ? null : dco_decode_box_autoadd_sync_config_view(raw);
+  }
+
+  @protected
+  TodoTask? dco_decode_opt_box_autoadd_todo_task(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw == null ? null : dco_decode_box_autoadd_todo_task(raw);
   }
 
   @protected
@@ -4174,6 +4232,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  TodoTask sse_decode_box_autoadd_todo_task(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_todo_task(deserializer));
+  }
+
+  @protected
   TodoTaskCreateInput sse_decode_box_autoadd_todo_task_create_input(
     SseDeserializer deserializer,
   ) {
@@ -4213,6 +4277,16 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       content: var_content,
       createdAt: var_createdAt,
     );
+  }
+
+  @protected
+  CompleteTaskResult sse_decode_complete_task_result(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_task = sse_decode_todo_task(deserializer);
+    var var_nextInstance = sse_decode_opt_box_autoadd_todo_task(deserializer);
+    return CompleteTaskResult(task: var_task, nextInstance: var_nextInstance);
   }
 
   @protected
@@ -4590,6 +4664,17 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
     if (sse_decode_bool(deserializer)) {
       return (sse_decode_box_autoadd_sync_config_view(deserializer));
+    } else {
+      return null;
+    }
+  }
+
+  @protected
+  TodoTask? sse_decode_opt_box_autoadd_todo_task(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    if (sse_decode_bool(deserializer)) {
+      return (sse_decode_box_autoadd_todo_task(deserializer));
     } else {
       return null;
     }
@@ -5476,6 +5561,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_box_autoadd_todo_task(
+    TodoTask self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_todo_task(self, serializer);
+  }
+
+  @protected
   void sse_encode_box_autoadd_todo_task_create_input(
     TodoTaskCreateInput self,
     SseSerializer serializer,
@@ -5513,6 +5607,16 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_String(self.taskTitle, serializer);
     sse_encode_String(self.content, serializer);
     sse_encode_i_64(self.createdAt, serializer);
+  }
+
+  @protected
+  void sse_encode_complete_task_result(
+    CompleteTaskResult self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_todo_task(self.task, serializer);
+    sse_encode_opt_box_autoadd_todo_task(self.nextInstance, serializer);
   }
 
   @protected
@@ -5846,6 +5950,19 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_bool(self != null, serializer);
     if (self != null) {
       sse_encode_box_autoadd_sync_config_view(self, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_opt_box_autoadd_todo_task(
+    TodoTask? self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    sse_encode_bool(self != null, serializer);
+    if (self != null) {
+      sse_encode_box_autoadd_todo_task(self, serializer);
     }
   }
 

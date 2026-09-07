@@ -35,7 +35,10 @@ fn pool() -> Result<sqlx::SqlitePool, String> {
 }
 
 /// 全局搜索（任务/项目/评论三路 LIKE；空关键词返回空结果；limit ≤0 → 20）
-pub async fn global_search(keyword: String, limit: Option<i32>) -> Result<GlobalSearchResult, String> {
+pub async fn global_search(
+    keyword: String,
+    limit: Option<i32>,
+) -> Result<GlobalSearchResult, String> {
     let pool = pool()?;
     let r = business_api::search_all(&pool, &keyword, limit.unwrap_or(20))
         .await

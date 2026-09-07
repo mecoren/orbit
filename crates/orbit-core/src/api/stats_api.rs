@@ -118,7 +118,8 @@ fn local_day_index(ts_ms: i64) -> i64 {
         .unwrap_or_else(|| Utc.timestamp_millis_opt(0).single().unwrap())
         .with_timezone(&chrono::Local)
         .ordinal0() as i64
-        + (Utc.timestamp_millis_opt(ts_ms)
+        + (Utc
+            .timestamp_millis_opt(ts_ms)
             .single()
             .unwrap()
             .with_timezone(&chrono::Local)
@@ -157,11 +158,10 @@ pub async fn stats_overview(pool: &SqlitePool) -> CoreResult<StatsOverview> {
 }
 
 async fn fetch_stat_rows(pool: &SqlitePool) -> CoreResult<Vec<TaskStatRow>> {
-    let rows: Vec<TaskStatRow> = sqlx::query_as(
-        "SELECT done, done_at FROM todo_tasks WHERE is_deleted = 0",
-    )
-    .fetch_all(pool)
-    .await?;
+    let rows: Vec<TaskStatRow> =
+        sqlx::query_as("SELECT done, done_at FROM todo_tasks WHERE is_deleted = 0")
+            .fetch_all(pool)
+            .await?;
     Ok(rows)
 }
 
@@ -325,7 +325,8 @@ async fn stats_by_weekday_impl(pool: &SqlitePool) -> CoreResult<Vec<WeekdayDistR
     let mut counts = vec![0i64; 7];
     for r in rows.iter().filter(|r| r.done == 1) {
         if let Some(ts) = r.done_at {
-            let wd = Utc.timestamp_millis_opt(ts)
+            let wd = Utc
+                .timestamp_millis_opt(ts)
                 .single()
                 .unwrap_or_else(|| Utc.timestamp_millis_opt(0).single().unwrap())
                 .with_timezone(&chrono::Local)
@@ -457,7 +458,10 @@ mod tests {
     }
 
     fn last_date_str() -> String {
-        chrono::Local::now().date_naive().format("%Y-%m-%d").to_string()
+        chrono::Local::now()
+            .date_naive()
+            .format("%Y-%m-%d")
+            .to_string()
     }
 
     #[tokio::test]

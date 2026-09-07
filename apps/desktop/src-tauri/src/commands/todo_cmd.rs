@@ -49,6 +49,17 @@ pub async fn todo_tasks_update_position(
         .map_err(|e| e.to_string())
 }
 
+/// 统一完成任务（引擎下沉后三端唯一入口：普通标记 / 重复任务单事务推进下一实例）
+#[tauri::command]
+pub async fn todo_tasks_complete(
+    state: State<'_, AppState>,
+    id: i64,
+) -> Result<todo_api::CompleteTaskResult, String> {
+    todo_api::complete_todo_task(&state.pool, id)
+        .await
+        .map_err(|e| e.to_string())
+}
+
 /// 更新项目排序位置（拖拽排序）
 #[tauri::command]
 pub async fn todo_projects_update_sort_order(

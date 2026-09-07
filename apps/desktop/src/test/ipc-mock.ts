@@ -332,6 +332,75 @@ const commands: Record<string, (args: any, ctx: Ctx) => unknown> = {
     if (!t) throw new Error(`task ${id} 不存在`);
     t.position = position;
   },
+  // 对齐 Rust complete_todo_task：普通任务标记完成；重复任务（repeat_mode>0
+  // 且有 due_date）先克隆下一实例（due 平移一步、子任务复制标题、不复制提醒）
+  // 再标记本实例——与核心单事务语义同构（mock 无事务，但步骤顺序一致）
+  todo_tasks_complete: ({ id }, { db }) => {
+    const t = db.tasks.find((x) => x.id === id);
+    if (!t) throw new Error(`task ${id} 不存在`);
+    if (t.is_deleted) throw new Error(`task ${id} 已在回收站`);
+    const now = Date.now();
+    let next: MockTask | null = null;
+    if (!t.done && t.repeat_mode > 0 && t.due_date != null) {
+      // 快进到 now 之后最近的序列点（与 next_repeat_at 同口径：逐步推进）
+      const stepMs =
+        t.repeat_mode === 1 ? 86_400_000 * t.repeat_after
+        : t.repeat_mode === 2 ? 7 * 86_400_000 * t.repeat_after
+        : null; // 月/年在 e2e mock 走近似：按 30/365 天（冒烟用例不覆盖月年语义）
+      if (stepMs) {
+        let due = t.due_date;
+        let guard = 0;
+        while (due <= now && guard++ < 5000) due += stepMs;
+        next = {
+          id: db.seq++,
+          uuid: uuid(),
+          title: t.title,
+          description: t.description,
+          project_id: t.project_id,
+          priority: t.priority,
+          status: "pending",
+          done: 0,
+          done_at: null,
+          due_date: due,
+          start_date: t.start_date != null ? t.start_date + (due - t.due_date) : null,
+          repeat_after: t.repeat_after,
+          repeat_mode: t.repeat_mode,
+          percent_done: 0,
+          position: 100000,
+          is_favorite: t.is_favorite,
+          my_day_date: null,
+          is_deleted: 0,
+          created_at: now,
+          updated_at: now,
+          deleted_at: null,
+          version: 1,
+        };
+        db.tasks.push(next);
+        for (const s of db.subtasks.filter((s) => s.task_id === id && !s.is_deleted)) {
+          db.subtasks.push({
+            id: db.seq++,
+            uuid: uuid(),
+            task_id: next.id,
+            title: s.title,
+            done: 0,
+            done_at: null,
+            position: s.position,
+            is_deleted: 0,
+            created_at: now,
+            updated_at: now,
+            deleted_at: null,
+            version: 1,
+          });
+        }
+      }
+    }
+    t.done = 1;
+    t.done_at = now;
+    t.status = "done";
+    t.updated_at = now;
+    t.version += 1;
+    return ipcClone({ task: t, next_instance: next });
+  },
   todo_tasks_delete: ({ id }, { db }) => {
     // 对齐 Rust 软删语义：墓碑行留在库中（回收站可见），挂载关系不动
     const t = db.tasks.find((x) => x.id === id);
@@ -760,7 +829,7 @@ const commands: Record<string, (args: any, ctx: Ctx) => unknown> = {
 /** 写类命令完成后应广播 db-change 的判定（对齐 Rust EVENT_BUS 语义；
  *  trash 恢复/彻底删除/清空写后同样要失效列表缓存） */
 const isWriteCommand = (cmd: string) =>
-  /_(create|update|update_position|delete|toggle_done|recalc_percent|restore|purge)$/.test(cmd) ||
+  /_(create|update|update_position|complete|delete|toggle_done|recalc_percent|restore|purge)$/.test(cmd) ||
   cmd === "trash_purge_all";
 
 // ---------- 安装 ----------
@@ -772,6 +841,8 @@ declare global {
     __orbitMock?: {
       db: MockDb;
       seed: () => void;
+      /** 测试直改内存库后手动广播 db-change（同 seed 的刷新通道） */
+      emitDbChange: () => void;
     };
   }
 }
@@ -789,6 +860,7 @@ export function installBrowserIpc() {
       seedDefault(db);
       emitDbChange();
     },
+    emitDbChange,
   };
 
   // transformCallback 注册的回调表：id → cb。

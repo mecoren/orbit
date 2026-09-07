@@ -8,7 +8,10 @@ use sqlx::SqlitePool;
 #[tokio::test]
 async fn end_date_column_removed_and_rows_survive() {
     let pool = SqlitePool::connect("sqlite::memory:").await.unwrap();
-    sqlx::migrate!("./src/db/migrations").run(&pool).await.unwrap();
+    sqlx::migrate!("./src/db/migrations")
+        .run(&pool)
+        .await
+        .unwrap();
 
     let (has_end,): (i64,) = sqlx::query_as(
         "SELECT COUNT(*) FROM pragma_table_info('todo_tasks') WHERE name='end_date'",
@@ -42,12 +45,11 @@ async fn end_date_column_removed_and_rows_survive() {
     .execute(&pool)
     .await
     .unwrap();
-    let (due, start): (Option<i64>, Option<i64>) = sqlx::query_as(
-        "SELECT due_date, start_date FROM todo_tasks WHERE uuid='u1'",
-    )
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let (due, start): (Option<i64>, Option<i64>) =
+        sqlx::query_as("SELECT due_date, start_date FROM todo_tasks WHERE uuid='u1'")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
     assert_eq!(due, Some(1000));
     assert_eq!(start, Some(2000));
 }

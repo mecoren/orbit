@@ -38,10 +38,11 @@ use orbit_core::models::business::{
 // 注：TaskLabelWithId 仅作为 TodoTaskDetail.labels 的元素类型出现，
 // 生成代码经 crate::api::dto 路径引用，无需在此再导出。
 pub use super::dto::{
-    ListFilter, TodoComment, TodoCommentCreateInput, TodoLabel, TodoLabelCreateInput, TodoProject,
-    TodoProjectCreateInput, TodoReminder, TodoReminderCreateInput, TodoSubtask,
-    TodoSubtaskCreateInput, TodoTask, TodoTaskCreateInput, TodoTaskDetail, TodoTaskLabel,
-    TodoTaskLabelCreateInput, TodoTaskRelation, TodoTaskRelationCreateInput,
+    CompleteTaskResult, ListFilter, TodoComment, TodoCommentCreateInput, TodoLabel,
+    TodoLabelCreateInput, TodoProject, TodoProjectCreateInput, TodoReminder,
+    TodoReminderCreateInput, TodoSubtask, TodoSubtaskCreateInput, TodoTask, TodoTaskCreateInput,
+    TodoTaskDetail, TodoTaskLabel, TodoTaskLabelCreateInput, TodoTaskRelation,
+    TodoTaskRelationCreateInput,
 };
 
 fn pool() -> Result<sqlx::SqlitePool, String> {
@@ -163,6 +164,17 @@ pub async fn todo_tasks_update_position(id: i64, position: f64) -> Result<(), St
     todo_api::update_todo_task_position(&pool, id, position)
         .await
         .map_err(|e| e.to_string())
+}
+
+/// 统一完成任务（对应桌面 todo_cmd::todo_tasks_complete；引擎下沉后三端
+/// 唯一完成入口——普通任务标记完成，重复任务单事务创建下一实例（含克隆
+/// 子任务）再标记本实例，移动端由此补齐「完成后推进下一实例」断层）
+pub async fn todo_tasks_complete(id: i64) -> Result<CompleteTaskResult, String> {
+    let pool = pool()?;
+    todo_api::complete_todo_task(&pool, id)
+        .await
+        .map_err(|e| e.to_string())
+        .map(CompleteTaskResult::from)
 }
 
 /// 任务详情聚合（含子任务/标签/评论/关系/提醒，对应桌面 todo_cmd::todo_tasks_get_detail）

@@ -233,11 +233,7 @@ pub async fn purge_todo_task(pool: &SqlitePool, id: i64) -> CoreResult<()> {
         "DELETE FROM todo_reminders WHERE task_id = ?",
         "DELETE FROM todo_tasks WHERE id = ?",
     ] {
-        sqlx::query(sql)
-            .bind(id)
-            .bind(id)
-            .execute(&mut *tx)
-            .await?;
+        sqlx::query(sql).bind(id).bind(id).execute(&mut *tx).await?;
     }
     tx.commit().await?;
 
@@ -331,15 +327,13 @@ pub async fn maybe_purge_expired(pool: &SqlitePool) -> CoreResult<PurgeStats> {
 /// 的行——早于该时间点的删除已上传云端墓碑集；更晚的删除可能尚未 push，
 /// 物理清掉会让云端旧存活数据在 pull 时复活该任务。未启用云同步则无守卫
 /// （无其他设备可复活）。恢复/手动彻底删除不经此函数，不受守卫约束。
-pub async fn purge_todo_tasks_before(
-    pool: &SqlitePool,
-    cutoff_ms: i64,
-) -> CoreResult<(u64, u64)> {
+pub async fn purge_todo_tasks_before(pool: &SqlitePool, cutoff_ms: i64) -> CoreResult<(u64, u64)> {
     let now = chrono::Utc::now().timestamp_millis();
-    let active: Option<(i64,)> =
-        sqlx::query_as::<_, (i64,)>("SELECT id FROM sync_configs WHERE is_active = 1 AND deleted_at IS NULL LIMIT 1")
-            .fetch_optional(pool)
-            .await?;
+    let active: Option<(i64,)> = sqlx::query_as::<_, (i64,)>(
+        "SELECT id FROM sync_configs WHERE is_active = 1 AND deleted_at IS NULL LIMIT 1",
+    )
+    .fetch_optional(pool)
+    .await?;
     // 启用云同步才取守卫时间（成功 push/sync 后记账；含 0 兜底见下）
     let last_pushed_at = match active {
         Some((config_id,)) => sqlx::query_as::<_, (Option<i64>,)>(
@@ -386,11 +380,7 @@ pub async fn purge_todo_tasks_before(
             "DELETE FROM todo_reminders WHERE task_id = ?",
             "DELETE FROM todo_tasks WHERE id = ?",
         ] {
-            sqlx::query(sql)
-                .bind(id)
-                .bind(id)
-                .execute(&mut *tx)
-                .await?;
+            sqlx::query(sql).bind(id).bind(id).execute(&mut *tx).await?;
         }
     }
     tx.commit().await?;
@@ -435,7 +425,9 @@ mod tests {
                 .await
                 .unwrap();
         }
-        generic_repo::get_by_id(pool, "todo_tasks", t.id).await.unwrap()
+        generic_repo::get_by_id(pool, "todo_tasks", t.id)
+            .await
+            .unwrap()
     }
 
     fn input(title: &str) -> TodoTaskCreateInput {
@@ -474,12 +466,11 @@ mod tests {
         assert!(restored.deleted_at.is_none());
         // 回收站空、正常列表 2 条
         assert!(list_trashed_tasks(&pool).await.unwrap().is_empty());
-        let live: Vec<TodoTask> = sqlx::query_as(
-            "SELECT * FROM todo_tasks WHERE is_deleted = 0 ORDER BY id",
-        )
-        .fetch_all(&pool)
-        .await
-        .unwrap();
+        let live: Vec<TodoTask> =
+            sqlx::query_as("SELECT * FROM todo_tasks WHERE is_deleted = 0 ORDER BY id")
+                .fetch_all(&pool)
+                .await
+                .unwrap();
         assert_eq!(live.len(), 2);
     }
 
@@ -510,11 +501,13 @@ mod tests {
     async fn purge_single_removes_row_and_children_completely() {
         let pool = setup_db().await;
         let trashed = seed_trashed(&pool, "带子行", None).await;
-        sqlx::query("INSERT INTO todo_subtasks (uuid, task_id, title) VALUES ('u-sub', ?, '子任务')")
-            .bind(trashed.id)
-            .execute(&pool)
-            .await
-            .unwrap();
+        sqlx::query(
+            "INSERT INTO todo_subtasks (uuid, task_id, title) VALUES ('u-sub', ?, '子任务')",
+        )
+        .bind(trashed.id)
+        .execute(&pool)
+        .await
+        .unwrap();
 
         purge_todo_task(&pool, trashed.id).await.unwrap();
         let (n,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM todo_tasks WHERE id = ?")
@@ -544,10 +537,11 @@ mod tests {
         let n = purge_all_trashed_tasks(&pool).await.unwrap();
         assert_eq!(n, 2);
         assert!(list_trashed_tasks(&pool).await.unwrap().is_empty());
-        let (live,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM todo_tasks WHERE is_deleted = 0")
-            .fetch_one(&pool)
-            .await
-            .unwrap();
+        let (live,): (i64,) =
+            sqlx::query_as("SELECT COUNT(*) FROM todo_tasks WHERE is_deleted = 0")
+                .fetch_one(&pool)
+                .await
+                .unwrap();
         assert_eq!(live, 1);
     }
 

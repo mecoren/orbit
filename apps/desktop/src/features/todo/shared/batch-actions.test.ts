@@ -1,17 +1,19 @@
 /**
- * 批量动作单测（P2#17）
+ * 批量动作单测（P2#17；引擎下沉后完成口径改走 todoTaskComplete）
  *
  * batchUpdate 的核心语义：逐条顺序提交、条目失败不中断、部分失败弹 warning
- * 并返回失败数。todoTaskUpdate 通过 vi.mock("@/lib/tauri") 注入。
+ * 并返回失败数。todoTaskUpdate/todoTaskComplete 通过 vi.mock("@/lib/tauri") 注入。
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { toast } from "sonner";
 
 const updateMock = vi.fn<(id: number, input: unknown) => Promise<unknown>>();
+const completeMock = vi.fn<(id: number) => Promise<unknown>>();
 
 vi.mock("@/lib/tauri", () => ({
   todoTaskUpdate: (id: number, input: unknown) => updateMock(id, input),
   todoTaskUpdatePosition: vi.fn(),
+  todoTaskComplete: (id: number) => completeMock(id),
 }));
 vi.mock("sonner", () => ({
   toast: { warning: vi.fn(), success: vi.fn(), error: vi.fn() },
@@ -49,6 +51,7 @@ function task(id: number, over: Partial<TodoTask> = {}): TodoTask {
 
 beforeEach(() => {
   updateMock.mockReset();
+  completeMock.mockReset();
   vi.mocked(toast.warning).mockClear();
 });
 
@@ -87,10 +90,34 @@ describe("batchUpdate", () => {
 });
 
 describe("batchUpdateStatus", () => {
-  it("完成口径 = done+done_at+status 三字段联动", async () => {
+  it("批量完成走统一完成命令（与单条 completeTask 同一 Rust 入口，重复任务推进下一实例）", async () => {
+    completeMock.mockResolvedValue(undefined);
+    await batchUpdateStatus([task(1), task(2)], { done: 1, done_at: 0, status: "done" });
+    expect(completeMock).toHaveBeenCalledWith(1);
+    expect(completeMock).toHaveBeenCalledWith(2);
+    expect(updateMock).not.toHaveBeenCalled();
+  });
+
+  it("已完成条目跳过（幂等，不重复推进重复实例）", async () => {
+    completeMock.mockResolvedValue(undefined);
+    await batchUpdateStatus([task(1, { done: 1 })], { done: 1, done_at: 0, status: "done" });
+    expect(completeMock).not.toHaveBeenCalled();
+  });
+
+  it("取消完成 / 状态切换仍走普通 update", async () => {
     updateMock.mockResolvedValue(undefined);
-    const now = 1700000000000;
-    await batchUpdateStatus([task(1)], { done: 1, done_at: now, status: "done" });
-    expect(updateMock).toHaveBeenCalledWith(1, { done: 1, done_at: now, status: "done" });
+    await batchUpdateStatus([task(1)], { done: 0, done_at: null, status: "pending" });
+    expect(updateMock).toHaveBeenCalledWith(1, { done: 0, done_at: null, status: "pending" });
+    expect(completeMock).not.toHaveBeenCalled();
+  });
+
+  it("完成失败不中断：收集失败数并弹 warning", async () => {
+    completeMock.mockImplementation(async (id) => {
+      if (id === 2) throw new Error("boom");
+      return undefined;
+    });
+    const failed = await batchUpdateStatus([task(1), task(2), task(3)], { done: 1, done_at: 0, status: "done" });
+    expect(failed).toBe(1);
+    expect(toast.warning).toHaveBeenCalledWith("批量更新状态：3 条中 1 条失败");
   });
 });

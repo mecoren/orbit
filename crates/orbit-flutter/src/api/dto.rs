@@ -648,6 +648,24 @@ impl From<orbit_core::api::todo_api::TodoTaskDetail> for TodoTaskDetail {
     }
 }
 
+/// 统一完成命令结果（镜像 orbit_core::api::todo_api::CompleteTaskResult；
+/// 引擎下沉三端唯一完成入口：普通标记 / 重复任务单事务推进下一实例）
+#[derive(Debug, Clone, Serialize)]
+pub struct CompleteTaskResult {
+    pub task: TodoTask,
+    /// 重复任务推进生成的下一实例（普通任务为 None）
+    pub next_instance: Option<TodoTask>,
+}
+
+impl From<orbit_core::api::todo_api::CompleteTaskResult> for CompleteTaskResult {
+    fn from(r: orbit_core::api::todo_api::CompleteTaskResult) -> Self {
+        Self {
+            task: TodoTask::from(r.task),
+            next_instance: r.next_instance.map(TodoTask::from),
+        }
+    }
+}
+
 // ---------- holiday 域（cfg_holidays 缓存镜像；用户需求：日历视图联网更新节假日） ----------
 
 /// 节假日行（core HolidayInfo 过桥镜像；FRB 字段级生成规则见模块注释）

@@ -90,8 +90,18 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
     }
   }
 
-  void _toggleDone(TodoTask task) =>
-      _patchTask(task.id, buildDoneTogglePatch(task));
+  /// 完成/取消统一入口：完成走 todoTaskComplete（Rust 单事务推进重复
+  /// 任务下一实例——引擎下沉后与桌面同口径）；取消完成仍走普通 patch
+  Future<void> _toggleDone(TodoTask task) async {
+    if (task.isDone) return _patchTask(task.id, buildDoneTogglePatch(task));
+    try {
+      await ref.read(orbitBridgeProvider).todoTaskComplete(task.id);
+      ref.invalidate(todoTasksProvider);
+      ref.invalidate(taskDetailProvider);
+    } catch (_) {
+      WaitToast.destructive('完成失败');
+    }
+  }
 
   void _toggleFavorite(TodoTask task) => _patchTask(
         task.id,

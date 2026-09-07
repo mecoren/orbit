@@ -7,6 +7,7 @@
  */
 import { toast } from "sonner";
 import {
+  todoTaskComplete,
   todoTaskUpdate,
   todoTaskUpdatePosition,
   type TodoTask,
@@ -35,11 +36,28 @@ export async function batchUpdate(
   return failed;
 }
 
-/** 批量完成（done=1+done_at=now+status="done"，与 completeTask 单条口径一致；
- *  重复任务不在此展开下一实例——批量场景保持轻量，用户可对个别重复任务
- *  单条完成触发） */
-export function batchUpdateStatus(tasks: TodoTask[], input: TodoTaskUpdateInput): Promise<number> {
-  return batchUpdate(tasks, () => ({ ...input }), "批量更新状态");
+/** 批量完成：逐条走统一完成命令（与单条 completeTask 同一 Rust 入口，
+ *  重复任务在单事务内推进下一实例——引擎下沉后批量与单条口径一致）；
+ *  取消完成/状态切换仍走普通 update。 */
+export async function batchUpdateStatus(tasks: TodoTask[], input: TodoTaskUpdateInput): Promise<number> {
+  const markingDone = input.done === 1;
+  if (!markingDone) {
+    return batchUpdate(tasks, () => ({ ...input }), "批量更新状态");
+  }
+  let failed = 0;
+  for (const t of tasks) {
+    if (t.done) continue; // 已完成条目跳过（幂等，不重复推进）
+    try {
+      await todoTaskComplete(t.id);
+    } catch (e) {
+      failed++;
+      console.error(`批量完成任务 ${t.id} 失败:`, e);
+    }
+  }
+  if (failed > 0) {
+    toast.warning(`批量更新状态：${tasks.length} 条中 ${failed} 条失败`);
+  }
+  return failed;
 }
 
 export function batchUpdatePriority(tasks: TodoTask[], priority: number): Promise<number> {

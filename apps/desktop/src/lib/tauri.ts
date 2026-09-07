@@ -242,6 +242,13 @@ export const todoTaskDelete = (id: number) => invoke<void>("todo_tasks_delete", 
 export const todoTaskGetByUuid = (uuid: string) => invoke<TodoTask | null>("todo_tasks_get_by_uuid", { uuid });
 export const todoTaskUpdatePosition = (id: number, position: number) => invoke<void>("todo_tasks_update_position", { id, position });
 
+/** 统一完成命令结果（引擎下沉 orbit-core，三端唯一完成入口） */
+export interface CompleteTaskResult {
+  task: TodoTask;
+  next_instance: TodoTask | null;
+}
+export const todoTaskComplete = (id: number) => invoke<CompleteTaskResult>("todo_tasks_complete", { id });
+
 // ========== todo_subtasks ==========
 export interface TodoSubtask {
   id: number;

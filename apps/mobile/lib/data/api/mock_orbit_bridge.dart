@@ -181,6 +181,86 @@ class MockOrbitBridge implements OrbitBridge {
       });
 
   @override
+  Future<TodoTask> todoTaskComplete(int id) => _delay(() {
+        // 对齐 Rust complete_todo_task：普通任务标记完成；重复任务
+        // （repeat_mode>0 且有 due_date）克隆下一实例（due 按天/周步进、
+        // 子任务复制标题、不复制提醒）再标记本实例；已完成任务幂等跳过
+        final t = store.tasks[id] ?? _notFound('task $id');
+        if (t['is_deleted'] == 1) _notFound('task $id 已在回收站');
+        final now = store.now();
+        final repeatMode = (t['repeat_mode'] as int?) ?? 0;
+        final due = t['due_date'] as int?;
+        final done = (t['done'] as int?) ?? 0;
+        if (done == 0 && repeatMode > 0 && due != null) {
+          final after = ((t['repeat_after'] as int?) ?? 1).clamp(1, 1000);
+          final stepMs = switch (repeatMode) {
+            1 => 86400000 * after,
+            2 => 7 * 86400000 * after,
+            3 => 30 * 86400000 * after, // 月近似（mock 无日历语义）
+            4 => 365 * 86400000 * after, // 年近似
+            _ => null,
+          };
+          if (stepMs != null) {
+            var nextDue = due + stepMs;
+            var guard = 0;
+            while (nextDue <= now && guard++ < 5000) {
+              nextDue += stepMs;
+            }
+            final next = {
+              ...store.newEntity('t'),
+              'title': t['title'],
+              'description': t['description'],
+              'project_id': t['project_id'],
+              'priority': t['priority'],
+              'status': 'pending',
+              'done': 0,
+              'done_at': null,
+              'due_date': nextDue,
+              'start_date': t['start_date'] != null
+                  ? (t['start_date'] as int) + (nextDue - due)
+                  : null,
+              'repeat_after': t['repeat_after'],
+              'repeat_mode': repeatMode,
+              'percent_done': 0,
+              'position': 100000,
+              'is_favorite': t['is_favorite'],
+              'my_day_date': null,
+              'is_deleted': 0,
+              'created_at': now,
+              'updated_at': now,
+              'deleted_at': null,
+              'version': 1,
+            };
+            store.tasks[next['id'] as int] = next;
+            for (final s in store.subtasksOf(id)) {
+              final clone = {
+                ...store.newEntity('s'),
+                'task_id': next['id'],
+                'title': s['title'],
+                'done': 0,
+                'done_at': null,
+                'position': s['position'],
+                'is_deleted': 0,
+                'created_at': now,
+                'updated_at': now,
+                'deleted_at': null,
+                'version': 1,
+              };
+              store.subtasks[clone['id'] as int] = clone;
+            }
+            _emit('todo_subtasks');
+          }
+        }
+        t['done'] = 1;
+        t['done_at'] = now;
+        t['status'] = 'done';
+        t['updated_at'] = now;
+        t['version'] = ((t['version'] as int?) ?? 1) + 1;
+        _emit('todo_tasks');
+        return TodoTask.fromJson(t);
+      });
+
+  @override
   Future<void> todoTaskDelete(int id) => _delay(() {
         // 对齐 Rust 软删语义：墓碑行留在库中（回收站可见），不物理删除
         final t = store.tasks[id] ?? _notFound('task $id');
