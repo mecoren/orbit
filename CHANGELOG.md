@@ -7,6 +7,14 @@
 
 ## [Unreleased]
 
+### 性能治理收口:规模化渲染全量虚拟化(桌面/移动)
+
+- **看板列内虚拟化**:`KanbanColumn` 卡片区改 `useVirtualizer`(动态 measureElement)——原裸 map 全量渲染千条任务即万级 DOM;`KanbanColumn`/`KanbanCard` memo 化,打开详情回调稳定引用。
+- **日历三档统一虚拟化**:新增 `VirtualGroupedList` 统一月右栏/年右栏/议程档三处裸 map + ScrollArea——打平为月头/日头/任务行线性序列交给 useVirtualizer,只渲染可视窗 ± overscan;选中日/今天定位改 `scrollToIndex`(虚拟化下目标组节点常不在渲染窗,原 scrollIntoView 失效);`CalendarTaskRow` memo,行内项目名 Map 查找替代逐行线性 find。日期头 sticky 吸附随虚拟化绝对定位改为随内容滚动(唯一体验取舍)。
+- **vendor 分包**:vite manualChunks——react 全家 + react-router + @tanstack/react-query 独立 `vendor-react`(273KB),其余依赖归 `vendor`(479KB);首屏入口 chunk 495KB→63KB,懒页 10–80KB,总量零膨胀(1037KB vs 1036KB)。
+- **移动端日历聚合下沉**:`calendarByDayProvider` 从 todoTasksProvider 派生——due_date→ymd 聚合+排序原在日历屏 build 每次重算(选中日等局部 setState 也触发全量重聚合),派生后仅任务数据变化时重算;当月圆点颜色表一次构建,月历 42 格 eventDotsBuilder 直接查表。
+- 至此 07 报告 §4.3 四项性能风险(全量渲染/memo 缺失/单 bundle/字体)全部清零;桌面 typecheck + vitest 113 + Playwright e2e 4、移动 analyze 0 issue + 120 测试、cargo 321 全绿。
+
 ### 统计分布条着色升级(桌面/移动)
 
 - **项目分布条用项目自选色**:统计接口 `stats_aggregate` 的 `by_project` 行新增 `project_hex_color`(SQL join `todo_projects.hex_color` 一次带出,未分组行 null);桌面 `/todo/stats` 与移动端统计页的项目分布条形完成段按各项目 `hex_color` 着色,空串/缺失回落待办强调色(与侧栏色块口径一致),未分组行回落强调色。
