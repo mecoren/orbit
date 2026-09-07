@@ -553,7 +553,12 @@ function DueDateEditor({
           {value ? format(new Date(value), "yyyy-MM-dd HH:mm") : "设置"}
         </button>
       </PopoverTrigger>
-      <PopoverContent align="end" className="w-auto space-y-2 p-3">
+      {/* 弹层宽度固定 w-72：原实现内嵌自带 Popover 的 DateTimePicker——
+          Popover 套 Popover 的 portal 布局测量异常把弹层撑到接近视口宽
+          （实测 1159px），且其 w-full 触发钮在深色主题下是一整条白底
+          描边块（"显示全白"）；改为内联日历 + 时间数字输入行（与右键
+          菜单设置截止的 Dialog 内同款行）。 */}
+      <PopoverContent align="end" className="w-72 space-y-2 p-3">
         {showPicker ? (
           <>
             <WaitCalendar
@@ -564,7 +569,36 @@ function DueDateEditor({
                 setDraft(d ? `${format(d, "yyyy-MM-dd")}T${prevTime}` : "");
               }}
             />
-            <DateTimePicker value={draft} onChange={setDraft} />
+            <div className="flex items-center gap-2 border-t p-3">
+              <span className="text-xs text-muted-foreground">时间</span>
+              <Input
+                type="number"
+                min={0}
+                max={23}
+                value={draft ? draft.split("T")[1]?.split(":")[0] ?? "09" : "09"}
+                onChange={(e) => {
+                  const v = Math.min(23, Math.max(0, Number(e.target.value) || 0));
+                  const date = draft.split("T")[0] || format(Date.now(), "yyyy-MM-dd");
+                  const m = draft.split("T")[1]?.split(":")[1] ?? "00";
+                  setDraft(`${date}T${String(v).padStart(2, "0")}:${m}`);
+                }}
+                className="h-8 w-16"
+              />
+              <span>:</span>
+              <Input
+                type="number"
+                min={0}
+                max={59}
+                value={draft ? draft.split("T")[1]?.split(":")[1] ?? "00" : "00"}
+                onChange={(e) => {
+                  const v = Math.min(59, Math.max(0, Number(e.target.value) || 0));
+                  const date = draft.split("T")[0] || format(Date.now(), "yyyy-MM-dd");
+                  const h = draft.split("T")[1]?.split(":")[0] ?? "09";
+                  setDraft(`${date}T${h}:${String(v).padStart(2, "0")}`);
+                }}
+                className="h-8 w-16"
+              />
+            </div>
           </>
         ) : (
           <QuickDateMenu
@@ -986,7 +1020,7 @@ function RemindersSection({
       <div className="space-y-1.5">
         {reminders.map((r) =>
           editing?.id === r.id ? (
-            <div key={r.id} className="space-y-1.5 rounded-lg bg-muted/40 p-2">
+            <div key={r.id} className="max-w-xs space-y-1.5 rounded-lg bg-muted/40 p-2">
               <DateTimePicker value={editing.draft} onChange={(v) => setEditing({ ...editing, draft: v })} />
               <div className="flex justify-end gap-1">
                 <Button size="sm" variant="ghost" onClick={() => setEditing(null)}>取消</Button>
@@ -1019,7 +1053,7 @@ function RemindersSection({
         )}
 
         {editing?.id === null && (
-          <div className="space-y-1.5 rounded-lg bg-muted/40 p-2">
+          <div className="max-w-xs space-y-1.5 rounded-lg bg-muted/40 p-2">
             <DateTimePicker value={editing.draft} onChange={(v) => setEditing({ ...editing, draft: v })} />
             <div className="flex justify-end gap-1">
               <Button size="sm" variant="ghost" onClick={() => setEditing(null)}>取消</Button>

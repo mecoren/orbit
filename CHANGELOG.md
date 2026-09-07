@@ -7,6 +7,11 @@
 
 ## [Unreleased]
 
+### 详情截止日期弹层修复(桌面)
+
+- **「选择日期和时间」完整视图此前撑满全屏宽+白底块**:详情抽屉 DueDateEditor 的完整视图内嵌了自带 Popover 的 DateTimePicker——Popover 套 Popover 的 portal 布局测量异常把外层弹层撑到接近视口宽(浏览器实测 1159px),且其 `w-full` 触发按钮在深色主题下渲染为一整条白底描边块。改为内联「日历 + 时/分数字输入行」(与右键菜单设置截止的 Dialog 内同款行),弹层宽度收敛 `w-72`(288px,实测验证),深色主题正常透明底。
+- 提醒区两处内嵌 DateTimePicker 编辑行加 `max-w-xs` 收敛(原触发钮 w-full 在抽屉里拉满整行宽)。docs/04 §3.4 属性网格规格同步。typecheck + vitest 116 + 浏览器几何断言全绿;e2e 因并发工作区 ipc-mock 半成品状态暂无法干净复跑,待其落库后回归。
+
 ### 数据库迁移合并为单文件 0001_init.sql
 
 - **内容**:0002_my_day(my_day_date 列+索引)、0003_holidays(cfg_holidays/cfg_kv 两表)、0004_remove_end_date(删 end_date 列)全部并回 `0001_init.sql`——todo_tasks 表体直接含 my_day_date、不含 end_date,节假日缓存表并入 cfg 段;0002–0004 文件删除,恢复「单文件迁移」维护约定(结构变更直接改 0001,改后删本地库重新初始化)。
