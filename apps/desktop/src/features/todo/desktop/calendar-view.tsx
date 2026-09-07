@@ -190,9 +190,8 @@ export function CalendarView({
       if (list) list.push(t);
       else map.set(key, [t]);
     }
-    for (const list of map.values()) {
-      list.sort((a, b) => a.position - b.position || b.created_at - a.created_at);
-    }
+    // 组内保留父层传入序（task-panel 已按工具栏档位 sortTasks）——
+    // 此处若再按 position 重排，截止/优先级/标题/创建档在日历全部失效
     return map;
   }, [tasks]);
 

@@ -315,6 +315,7 @@ export default function TaskPanel() {
             projects={projects}
             groupBy={kanbanGroupBy}
             labelsByTask={taskLabels}
+            sortKey={sortKey}
           />
         ) : viewMode === "calendar" ? (
           <CalendarView

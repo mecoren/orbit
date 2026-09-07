@@ -5,6 +5,10 @@
  * - 卡片同时挂 useDraggable + useDroppable；PointerSensor distance:5
  * - 拖拽语义：同列落卡片 → 插到目标前；同列空白 → 追加；异列 → 先改归属再排序。
  *   position 一律取中值算法写入（03 文档 §一）。
+ * - 排序（#26）：列内保留父层传入序（task-panel 已按工具栏档位 sortTasks），
+ *   本视图不再 position 重排——否则截止/优先级/标题/创建档在看板全部失效。
+ *   仅 manual 档允许拖拽重排（与列表视图 sortable 口径一致）；跨列移动
+ *   （改归属）任何档位都允许，落位仍走 position 中值。
  */
 import { memo, useCallback, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -35,6 +39,7 @@ import {
 } from "@/lib/tauri";
 import { FAVORITE_COLOR, PRIORITY_COLOR, STATUS_COLOR, TODO_ACCENT } from "../shared/constants";
 import { LabelChips } from "../shared/label-chips";
+import type { TaskSortKey } from "../shared/task-filters";
 import { completeTask } from "../shared/task-actions";
 import { midpoint } from "../shared/position";
 import { TaskContextMenu } from "./task-context-menu";
@@ -47,6 +52,8 @@ interface KanbanViewProps {
   groupBy: KanbanGroupBy;
   /** 任务→标签映射（list-page 级拉取，卡片渲染标签 chips） */
   labelsByTask: Map<number, TodoLabel[]>;
+  /** 工具栏排序档位（#26）：列内沿用传入序；manual 才允许拖拽重排 */
+  sortKey: TaskSortKey;
 }
 
 interface ColumnDef {
@@ -55,7 +62,7 @@ interface ColumnDef {
   color: string;
 }
 
-export function KanbanView({ tasks, projects, groupBy, labelsByTask }: KanbanViewProps) {
+export function KanbanView({ tasks, projects, groupBy, labelsByTask, sortKey }: KanbanViewProps) {
   const qc = useQueryClient();
   const setSelectedTaskId = useTodoStore((s) => s.setSelectedTaskId);
   // memo 友好：打开详情回调恒定引用，列/卡片 props 只随业务数据变化
@@ -67,6 +74,9 @@ export function KanbanView({ tasks, projects, groupBy, labelsByTask }: KanbanVie
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
   );
+  // #26：仅拖拽顺序档允许拖拽重排（列内顺序由排序档决定，拖了也会被
+  // 覆盖）；跨列移动改归属不受档位限制，见 handleDragEnd
+  const sortable = sortKey === "manual";
 
   // ---- 分列 ----
   const columns = useMemo<ColumnDef[]>(() => {
@@ -97,12 +107,8 @@ export function KanbanView({ tasks, projects, groupBy, labelsByTask }: KanbanVie
             : "ungrouped";
       (map.get(key) ?? map.get("ungrouped")!).push(t);
     }
-    for (const list of map.values()) {
-      list.sort((a, b) => {
-        if (a.position !== b.position) return a.position - b.position;
-        return b.created_at - a.created_at;
-      });
-    }
+    // 列内保留父层传入序（工具栏 sortTasks 档位）——此处若再按
+    // position 重排，非拖拽档的排序选择在看板将全部失效
     return map;
   }, [tasks, columns, groupBy]);
 
@@ -156,7 +162,8 @@ export function KanbanView({ tasks, projects, groupBy, labelsByTask }: KanbanVie
     if (overData.startsWith("col:")) {
       const colKey = overData.slice(4);
       if (colKey === draggedCol) {
-        // 同列空白 → 追加到末尾
+        // 同列空白 → 追加到末尾；非拖拽档下同列 position 无意义，不写
+        if (!sortable) return;
         const list = grouped.get(colKey) ?? [];
         const last = list[list.length - 1];
         if (last && last.id !== taskId) await reorder(taskId, last.id, null);
@@ -181,7 +188,9 @@ export function KanbanView({ tasks, projects, groupBy, labelsByTask }: KanbanVie
       // 异列插到目标前
       await reorder(taskId, null, targetId);
     } else {
-      // 同列插到目标前：取目标与前一张卡片的中值
+      // 同列插到目标前：取目标与前一张卡片的中值；
+      // 非拖拽档下顺序由排序档决定，写入立即被覆盖，跳过
+      if (!sortable) return;
       const list = grouped.get(targetCol) ?? [];
       const idx = list.findIndex((t) => t.id === targetId);
       const prev = idx > 0 ? list[idx - 1] : undefined;
@@ -220,6 +229,7 @@ export function KanbanView({ tasks, projects, groupBy, labelsByTask }: KanbanVie
               draggingId={draggingId}
               dragEndStamp={dragEndStamp}
               onOpenDetail={openDetail}
+              sortable={sortable}
             />
           ))}
         </div>
@@ -254,6 +264,7 @@ const KanbanColumn = memo(function KanbanColumn({
   draggingId,
   dragEndStamp,
   onOpenDetail,
+  sortable,
 }: {
   column: ColumnDef;
   tasks: TodoTask[];
@@ -263,6 +274,8 @@ const KanbanColumn = memo(function KanbanColumn({
   /** 拖拽结束时间戳 ref（点击抑制用） */
   dragEndStamp: React.RefObject<number>;
   onOpenDetail: (id: number) => void;
+  /** 仅拖拽顺序档允许拖拽（#26）；跨列移动始终可用 */
+  sortable: boolean;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: `col:${column.key}` });
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -332,6 +345,7 @@ const KanbanColumn = memo(function KanbanColumn({
                       dragging={draggingId === t.id}
                       dragEndStamp={dragEndStamp}
                       onOpenDetail={onOpenDetail}
+                      sortable={sortable}
                     />
                   </TaskContextMenu>
                 </div>
@@ -353,6 +367,7 @@ const KanbanCard = memo(function KanbanCard({
   overlay,
   dragEndStamp,
   onOpenDetail,
+  sortable = true,
 }: {
   task: TodoTask;
   labels: TodoLabel[];
@@ -361,8 +376,10 @@ const KanbanCard = memo(function KanbanCard({
   /** 拖拽结束时间戳 ref（overlay 不需要） */
   dragEndStamp?: React.RefObject<number>;
   onOpenDetail?: (id: number) => void;
+  /** 仅拖拽顺序档可拖（#26）；跨列移动的落点仍注册（droppable 不受影响） */
+  sortable?: boolean;
 }) {
-  const draggable = useDraggable({ id: `task:${task.id}`, disabled: !!overlay });
+  const draggable = useDraggable({ id: `task:${task.id}`, disabled: !!overlay || !sortable });
   const { setNodeRef: setDropRef, isOver } = useDroppable({ id: `task:${task.id}` });
 
   return (
@@ -384,7 +401,8 @@ const KanbanCard = memo(function KanbanCard({
         if (!overlay && !dragging) onOpenDetail?.(task.id);
       }}
       className={cn(
-        "cursor-grab rounded-md border border-border/50 bg-card p-3 shadow-sm hover:shadow-md active:cursor-grabbing",
+        "rounded-md border border-border/50 bg-card p-3 shadow-sm hover:shadow-md",
+        sortable && "cursor-grab active:cursor-grabbing",
         dragging && "opacity-40",
         isOver && !dragging && "ring-2 ring-primary/40",
         overlay && "border-primary/40 shadow-xl",

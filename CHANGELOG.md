@@ -7,6 +7,12 @@
 
 ## [Unreleased]
 
+### 看板/日历视图排序生效修复(桌面)
+
+- **工具栏排序档位此前只对列表视图生效**:看板列内(`grouped`)与日历按日分组(`byDay`)拿到父层 sortTasks 已排序数组后,又各自按 position+created_at 重排覆盖——截止/优先级/标题/创建时间四档在看板和日历完全无效。两处改为保留父层传入序(排序档语义三视图归一)。
+- **看板拖拽按档位收敛(#26 口径)**:仅「拖拽顺序」档允许列内拖拽重排(卡片拖拽源禁用+cursor 还原,同列 position 写入短路——写了也会被排序档覆盖);跨列移动(改归属)任何档位都保留,落位仍走 position 中值。KanbanView 新增 sortKey prop,task-panel 接线。
+- typecheck + vitest 116 + Playwright e2e 4 全绿(e2e 曾因并发 reminder-listener 中间态 useNavigate 在 Router 外调用启动崩溃而全红,系并发会话半成品,其修复恢复后即绿,与本改动无关)。
+
 ### 详情截止日期弹层修复(桌面)
 
 - **「选择日期和时间」完整视图此前撑满全屏宽+白底块**:详情抽屉 DueDateEditor 的完整视图内嵌了自带 Popover 的 DateTimePicker——Popover 套 Popover 的 portal 布局测量异常把外层弹层撑到接近视口宽(浏览器实测 1159px),且其 `w-full` 触发按钮在深色主题下渲染为一整条白底描边块。改为内联「日历 + 时/分数字输入行」(与右键菜单设置截止的 Dialog 内同款行),弹层宽度收敛 `w-72`(288px,实测验证),深色主题正常透明底。
