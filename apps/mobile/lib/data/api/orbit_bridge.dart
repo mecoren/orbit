@@ -57,6 +57,62 @@ class PlaintextExportResult {
   });
 }
 
+/// CSV 导入统计（预览口径 success=待导入条数；执行口径=实际成功条数；
+/// FRB csv_import.rs 的 CsvImportStatsView 镜像）
+class CsvImportStats {
+  final int success;
+  final int skipped;
+  final int failed;
+
+  /// 逐行错误/跳过说明（行号 + 原因）
+  final List<String> notes;
+
+  const CsvImportStats({
+    required this.success,
+    required this.skipped,
+    required this.failed,
+    required this.notes,
+  });
+}
+
+/// CSV 导入预览结果（FRB csv_import.rs 的 CsvImportPreviewView 镜像；
+/// rows 已映射为待创建任务字段）
+class CsvImportPreview {
+  final String preset;
+
+  /// 预览行（最多 previewLimit 条，含跳过标记与原因）
+  final List<CsvImportPreviewRow> rows;
+
+  final CsvImportStats stats;
+
+  const CsvImportPreview({
+    required this.preset,
+    required this.rows,
+    required this.stats,
+  });
+}
+
+/// 一条待导入行预览载荷
+class CsvImportPreviewRow {
+  final int sourceLine;
+  final String? projectTitle;
+  final String title;
+  final int? priority;
+  final bool done;
+  final int? dueDate;
+  final String? skipReason;
+
+  const CsvImportPreviewRow({
+    required this.sourceLine,
+    required this.projectTitle,
+    required this.title,
+    required this.priority,
+    required this.done,
+    required this.dueDate,
+    required this.skipReason,
+  });
+}
+
 /// Orbit 数据桥抽象（omnipass `OmniBridge` 同款模式）
 ///
 /// 移动端唯一数据入口。UI 层只依赖本抽象：
@@ -173,6 +229,14 @@ abstract class OrbitBridge {
 
   /// 导出任务主视图 CSV（UTF-8 with BOM；默认排除墓碑行）
   Future<PlaintextExportResult> plaintextExportCsv({bool excludeDeleted = true});
+
+  // ── CSV 导入（迁移路径：orbit / todoist / ticktick）──
+
+  /// 预览导入（不写库）：解析 + 映射 + 统计
+  Future<CsvImportPreview> csvImportPreview(String content, String preset, int previewLimit);
+
+  /// 执行导入（写库）：项目自动创建、逐行独立成败
+  Future<CsvImportStats> csvImportExecute(String content, String preset);
 
   // ── 同步加密（恢复流程用）──
 

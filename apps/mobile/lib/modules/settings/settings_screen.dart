@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -10,6 +11,8 @@ import '../../core/theme/app_dimens.dart';
 import '../../core/theme/app_shapes.dart';
 import '../../core/theme/orbit_accents.dart';
 import '../../data/api/dto.dart';
+import '../../data/api/orbit_bridge.dart'
+    show CsvImportPreview, CsvImportStats;
 import '../../data/providers/bridge_provider.dart';
 import '../../shared/widgets/liquid_glass_title_bar.dart';
 import '../../shared/widgets/scroll_offset_listenable.dart';
@@ -38,6 +41,20 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
   /// 数据导出进行中的格式（'json' / 'csv'），null 空闲
   String? _exporting;
+
+  /// CSV 导入：选中的预设档（orbit/todoist/ticktick）与文件名
+  String _importPreset = 'orbit';
+  String? _importFileName;
+  String? _importContent;
+
+  /// 导入进行中阶段（'preview' / 'execute'），null 空闲
+  String? _importing;
+
+  /// 预览结果（null = 未预览）
+  CsvImportPreview? _importPreview;
+
+  /// 执行结果统计（null = 未执行）
+  CsvImportStats? _importResult;
 
   @override
   void dispose() {
@@ -89,6 +106,107 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       WaitToast.destructive('导出失败');
     } finally {
       if (mounted) setState(() => _exporting = null);
+    }
+  }
+
+  // ── CSV 导入（迁移路径）：file_picker 选文件 → 预览（不写库）→ 确认执行 ──
+
+  static const _importPresets = {
+    'orbit': 'Orbit 导出格式',
+    'todoist': 'Todoist 模板',
+    'ticktick': 'TickTick 模板',
+  };
+
+  Future<void> _pickImportFile() async {
+    try {
+      final picked = await FilePicker.platform.pickFiles(
+        dialogTitle: '选择要导入的 CSV 文件',
+        type: FileType.custom,
+        allowedExtensions: ['csv', 'txt'],
+        withData: true,
+      );
+      if (picked == null) return; // 用户取消
+      final content = String.fromCharCodes(picked.files.single.bytes ?? []);
+      if (content.trim().isEmpty) {
+        WaitToast.destructive('文件内容为空');
+        return;
+      }
+      setState(() {
+        _importFileName = picked.files.single.name;
+        _importContent = content;
+        _importPreview = null;
+        _importResult = null;
+      });
+    } catch (_) {
+      WaitToast.destructive('读取文件失败');
+    }
+  }
+
+  Future<void> _previewImport() async {
+    final content = _importContent;
+    if (content == null || _importing != null) return;
+    setState(() => _importing = 'preview');
+    try {
+      final preview = await ref
+          .read(orbitBridgeProvider)
+          .csvImportPreview(content, _importPreset, 10);
+      setState(() {
+        _importPreview = preview;
+        _importResult = null;
+      });
+      if (preview.stats.success == 0 && preview.stats.skipped > 0) {
+        WaitToast.destructive('未识别到可导入行，请检查预设档位');
+      }
+    } catch (_) {
+      WaitToast.destructive('预览失败：文件格式无法解析');
+    } finally {
+      if (mounted) setState(() => _importing = null);
+    }
+  }
+
+  Future<void> _executeImport() async {
+    final content = _importContent;
+    if (content == null || _importing != null) return;
+    final preview = _importPreview;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('确认导入'),
+        content: Text(
+          '将导入 ${preview?.stats.success ?? 0} 条任务'
+          '（跳过 ${preview?.stats.skipped ?? 0} 行）。'
+          '项目不存在会自动创建。确定继续？',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('取消')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('导入')),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    setState(() => _importing = 'execute');
+    try {
+      final stats = await ref
+          .read(orbitBridgeProvider)
+          .csvImportExecute(content, _importPreset);
+      invalidateBusinessCaches(ref);
+      setState(() {
+        _importResult = stats;
+        _importPreview = null;
+      });
+      final parts = ['成功 ${stats.success} 条'];
+      if (stats.skipped > 0) parts.add('跳过 ${stats.skipped} 行');
+      if (stats.failed > 0) parts.add('失败 ${stats.failed} 条');
+      if (stats.failed > 0) {
+        WaitToast.destructive('导入完成：${parts.join("，")}');
+      } else {
+        WaitToast.success('导入完成：${parts.join("，")}');
+      }
+    } catch (_) {
+      WaitToast.destructive('导入失败');
+    } finally {
+      if (mounted) setState(() => _importing = null);
     }
   }
 
@@ -382,6 +500,131 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                           ),
                         ],
                       ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: AppDimens.space12),
+                // CSV 导入卡（迁移路径）：与其他应用迁入任务
+                SectionCard(
+                  title: '导入 CSV（迁移）',
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '从其他应用迁入任务：支持 Orbit 导出格式、Todoist 与'
+                        ' TickTick 模板。导入前先预览；项目不存在会自动创建。',
+                        style: TextStyle(fontSize: 12, color: colors.secondaryText),
+                      ),
+                      const SizedBox(height: AppDimens.space12),
+                      // 预设档位选择
+                      Wrap(
+                        spacing: AppDimens.space8,
+                        runSpacing: AppDimens.space8,
+                        children: [
+                          for (final entry in _importPresets.entries)
+                            ChoiceChip(
+                              label: Text(entry.value),
+                              selected: _importPreset == entry.key,
+                              onSelected: _importing != null
+                                  ? null
+                                  : (_) => setState(() {
+                                        _importPreset = entry.key;
+                                        _importPreview = null;
+                                        _importResult = null;
+                                      }),
+                            ),
+                        ],
+                      ),
+                      const SizedBox(height: AppDimens.space12),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              onPressed: _importing != null ? null : _pickImportFile,
+                              icon: const Icon(Icons.upload_file_rounded,
+                                  size: AppDimens.iconSizeSm),
+                              label: Text(
+                                _importFileName ?? '选择文件',
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: AppDimens.space8),
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              onPressed: _importContent == null || _importing != null
+                                  ? null
+                                  : _previewImport,
+                              icon: _importing == 'preview'
+                                  ? SizedBox(
+                                      width: AppDimens.iconSizeSm,
+                                      height: AppDimens.iconSizeSm,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        color: colors.secondaryText,
+                                      ),
+                                    )
+                                  : const Icon(Icons.visibility_rounded,
+                                      size: AppDimens.iconSizeSm),
+                              label: const Text('预览'),
+                            ),
+                          ),
+                        ],
+                      ),
+                      // 执行按钮：预览有待导入行时出现
+                      if (_importPreview != null && _importPreview!.stats.success > 0) ...[
+                        const SizedBox(height: AppDimens.space8),
+                        FilledButton.icon(
+                          onPressed: _importing != null ? null : _executeImport,
+                          icon: _importing == 'execute'
+                              ? SizedBox(
+                                  width: AppDimens.iconSizeSm,
+                                  height: AppDimens.iconSizeSm,
+                                  child: const CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Colors.white,
+                                  ),
+                                )
+                              : const Icon(Icons.download_rounded,
+                                  size: AppDimens.iconSizeSm),
+                          label: Text(
+                              '导入 ${_importPreview!.stats.success} 条任务'),
+                        ),
+                      ],
+                      // 预览结果
+                      if (_importPreview != null) ...[
+                        const SizedBox(height: AppDimens.space8),
+                        Text(
+                          '待导入 ${_importPreview!.stats.success} 条 · '
+                          '跳过 ${_importPreview!.stats.skipped} 行',
+                          style: TextStyle(
+                              fontSize: 12, color: colors.secondaryText),
+                        ),
+                        for (final row in _importPreview!.rows.take(5))
+                          Padding(
+                            padding: const EdgeInsets.only(top: AppDimens.space4),
+                            child: Text(
+                              row.skipReason != null
+                                  ? '· ${row.title.isEmpty ? "（空行）" : row.title} — 跳过：${row.skipReason}'
+                                  : '· ${row.title}'
+                                      '${row.projectTitle != null ? " → ${row.projectTitle}" : ""}'
+                                      '${row.done ? "（已完成）" : ""}',
+                              style: TextStyle(
+                                  fontSize: 12, color: colors.secondaryText),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                      ],
+                      // 执行结果
+                      if (_importResult != null) ...[
+                        const SizedBox(height: AppDimens.space8),
+                        Text(
+                          '导入完成：成功 ${_importResult!.success} 条'
+                          '${_importResult!.skipped > 0 ? " · 跳过 ${_importResult!.skipped} 行" : ""}'
+                          '${_importResult!.failed > 0 ? " · 失败 ${_importResult!.failed} 条" : ""}',
+                          style: TextStyle(fontSize: 12, color: colors.secondaryText),
+                        ),
+                      ],
                     ],
                   ),
                 ),

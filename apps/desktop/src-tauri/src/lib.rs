@@ -246,6 +246,9 @@ pub fn run() {
             // 明文数据导出（07 报告 #15：JSON 结构化 / CSV 任务视图）
             commands::plaintext_export_cmd::plaintext_export_json,
             commands::plaintext_export_cmd::plaintext_export_csv,
+            // CSV 导入（迁移路径：orbit 自有 / Todoist / TickTick）
+            commands::csv_import_cmd::csv_import_preview,
+            commands::csv_import_cmd::csv_import_execute,
             // 定时自动备份偏好（backup_scheduler 守护的数据源）
             commands::backup_scheduler::backup_prefs_get,
             commands::backup_scheduler::backup_prefs_save,

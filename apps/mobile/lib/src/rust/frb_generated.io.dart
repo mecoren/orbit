@@ -4,6 +4,7 @@
 // ignore_for_file: unused_import, unused_element, unnecessary_import, duplicate_ignore, invalid_use_of_internal_member, annotate_overrides, non_constant_identifier_names, curly_braces_in_flow_control_structures, prefer_const_literals_to_create_immutables, unused_field
 
 import 'api/auth.dart';
+import 'api/csv_import.dart';
 import 'api/dto.dart';
 import 'api/events.dart';
 import 'api/holiday.dart';
@@ -111,10 +112,22 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   dco_decode_box_autoadd_todo_task_relation_create_input(dynamic raw);
 
   @protected
+  BigInt dco_decode_box_autoadd_usize(dynamic raw);
+
+  @protected
   CommentSearchHit dco_decode_comment_search_hit(dynamic raw);
 
   @protected
   CompleteTaskResult dco_decode_complete_task_result(dynamic raw);
+
+  @protected
+  CsvImportPreviewView dco_decode_csv_import_preview_view(dynamic raw);
+
+  @protected
+  CsvImportRowView dco_decode_csv_import_row_view(dynamic raw);
+
+  @protected
+  CsvImportStatsView dco_decode_csv_import_stats_view(dynamic raw);
 
   @protected
   DbEventDto dco_decode_db_event_dto(dynamic raw);
@@ -138,7 +151,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   PlatformInt64 dco_decode_i_64(dynamic raw);
 
   @protected
+  List<String> dco_decode_list_String(dynamic raw);
+
+  @protected
   List<CommentSearchHit> dco_decode_list_comment_search_hit(dynamic raw);
+
+  @protected
+  List<CsvImportRowView> dco_decode_list_csv_import_row_view(dynamic raw);
 
   @protected
   ListFilter dco_decode_list_filter(dynamic raw);
@@ -211,6 +230,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   TodoTask? dco_decode_opt_box_autoadd_todo_task(dynamic raw);
+
+  @protected
+  BigInt? dco_decode_opt_box_autoadd_usize(dynamic raw);
 
   @protected
   PlaintextExportView dco_decode_plaintext_export_view(dynamic raw);
@@ -420,10 +442,26 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  BigInt sse_decode_box_autoadd_usize(SseDeserializer deserializer);
+
+  @protected
   CommentSearchHit sse_decode_comment_search_hit(SseDeserializer deserializer);
 
   @protected
   CompleteTaskResult sse_decode_complete_task_result(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  CsvImportPreviewView sse_decode_csv_import_preview_view(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  CsvImportRowView sse_decode_csv_import_row_view(SseDeserializer deserializer);
+
+  @protected
+  CsvImportStatsView sse_decode_csv_import_stats_view(
     SseDeserializer deserializer,
   );
 
@@ -451,7 +489,15 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   PlatformInt64 sse_decode_i_64(SseDeserializer deserializer);
 
   @protected
+  List<String> sse_decode_list_String(SseDeserializer deserializer);
+
+  @protected
   List<CommentSearchHit> sse_decode_list_comment_search_hit(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  List<CsvImportRowView> sse_decode_list_csv_import_row_view(
     SseDeserializer deserializer,
   );
 
@@ -544,6 +590,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   TodoTask? sse_decode_opt_box_autoadd_todo_task(SseDeserializer deserializer);
+
+  @protected
+  BigInt? sse_decode_opt_box_autoadd_usize(SseDeserializer deserializer);
 
   @protected
   PlaintextExportView sse_decode_plaintext_export_view(
@@ -792,6 +841,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_box_autoadd_usize(BigInt self, SseSerializer serializer);
+
+  @protected
   void sse_encode_comment_search_hit(
     CommentSearchHit self,
     SseSerializer serializer,
@@ -800,6 +852,24 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_complete_task_result(
     CompleteTaskResult self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_csv_import_preview_view(
+    CsvImportPreviewView self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_csv_import_row_view(
+    CsvImportRowView self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_csv_import_stats_view(
+    CsvImportStatsView self,
     SseSerializer serializer,
   );
 
@@ -828,8 +898,17 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_i_64(PlatformInt64 self, SseSerializer serializer);
 
   @protected
+  void sse_encode_list_String(List<String> self, SseSerializer serializer);
+
+  @protected
   void sse_encode_list_comment_search_hit(
     List<CommentSearchHit> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_csv_import_row_view(
+    List<CsvImportRowView> self,
     SseSerializer serializer,
   );
 
@@ -958,6 +1037,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
     TodoTask? self,
     SseSerializer serializer,
   );
+
+  @protected
+  void sse_encode_opt_box_autoadd_usize(BigInt? self, SseSerializer serializer);
 
   @protected
   void sse_encode_plaintext_export_view(

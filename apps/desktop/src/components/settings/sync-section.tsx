@@ -29,6 +29,7 @@ import {
   LockOpen,
   RefreshCw,
   ShieldCheck,
+  Upload,
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -76,6 +77,9 @@ import {
   type BackupEntryView,
   type BackupPrefs,
   type BackupScheduleType,
+  type CsvImportPresetKey,
+  type CsvImportPreviewView,
+  type CsvImportStats,
   type SyncConfigView,
   type SyncCryptoStatus,
   type SyncEngineKind,
@@ -117,13 +121,14 @@ export function SyncSection() {
 
   return (
     <div className="space-y-6">
-      <SectionHeader title="同步与备份" desc="E2E 加密云同步 · WebDAV / S3 · 全量备份 · 数据导出" />
+      <SectionHeader title="同步与备份" desc="E2E 加密云同步 · WebDAV / S3 · 全量备份 · 数据导出 · CSV 导入" />
       <ConnectionCard key={`conn-${version}`} />
       <SyncPasswordCard />
       <SyncRunCard key={`run-${version}`} />
       <AutoBackupCard />
       <BackupCard />
       <PlaintextExportCard />
+      <CsvImportCard />
     </div>
   );
 }
@@ -1344,6 +1349,209 @@ function PlaintextExportCard() {
           </Button>
         </div>
       </div>
+    </div>
+  );
+}
+
+/* ============================ 7. CSV 导入卡（迁移路径） ============================ */
+
+/**
+ * CSV 导入（迁移路径）：与明文导出对称的导入方向。
+ *
+ * 三档预设——orbit（自家导出格式，往返一致）/ Todoist / TickTick 模板。
+ * 两段式：选文件 → 预览（映射行 + 统计，不写库）→ 确认执行（项目自动
+ * 创建、逐行独立成败、每行生成新 uuid）。
+ */
+function CsvImportCard() {
+  const queryClient = useQueryClient();
+  const [busy, setBusy] = useState<"preview" | "execute" | null>(null);
+  const [preset, setPreset] = useState<CsvImportPresetKey>("orbit");
+  const [fileName, setFileName] = useState<string | null>(null);
+  const [content, setContent] = useState<string | null>(null);
+  const [preview, setPreview] = useState<CsvImportPreviewView | null>(null);
+  const [result, setResult] = useState<CsvImportStats | null>(null);
+
+  const pickFile = async () => {
+    try {
+      const { open } = await import("@tauri-apps/plugin-dialog");
+      const path = await open({
+        title: "选择要导入的 CSV 文件",
+        multiple: false,
+        filters: [{ name: "CSV 表格", extensions: ["csv", "txt"] }],
+      });
+      if (!path) return; // 用户取消
+      const { readTextFile } = await import("@tauri-apps/plugin-fs");
+      const text = await readTextFile(path);
+      setFileName(path.split(/[\\/]/).pop() ?? String(path));
+      setContent(text);
+      setPreview(null);
+      setResult(null);
+    } catch (err) {
+      toast.error(errMsg(err));
+    }
+  };
+
+  const doPreview = async () => {
+    if (content == null) return;
+    setBusy("preview");
+    try {
+      const { csvImportPreview } = await import("@/lib/tauri");
+      const p = await csvImportPreview(content, preset, 10);
+      setPreview(p);
+      setResult(null);
+      if (p.stats.success === 0 && p.stats.skipped > 0) {
+        toast.warning("未识别到可导入行，请检查预设档位是否匹配文件格式");
+      }
+    } catch (err) {
+      toast.error(errMsg(err));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const doExecute = async () => {
+    if (content == null) return;
+    setBusy("execute");
+    try {
+      const { csvImportExecute } = await import("@/lib/tauri");
+      const stats = await csvImportExecute(content, preset);
+      setResult(stats);
+      setPreview(null);
+      const parts = [`成功 ${stats.success} 条`];
+      if (stats.skipped) parts.push(`跳过 ${stats.skipped} 条`);
+      if (stats.failed) parts.push(`失败 ${stats.failed} 条`);
+      if (stats.failed) toast.warning(`导入完成：${parts.join("，")}`);
+      else toast.success(`导入完成：${parts.join("，")}`);
+      // 写库后失效任务/项目缓存（事件面在真实 Tauri 下也会广播，此处兜底）
+      queryClient.invalidateQueries();
+    } catch (err) {
+      toast.error(errMsg(err));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  return (
+    <div className="space-y-3 rounded-lg border p-5">
+      <div className="flex items-center gap-2">
+        <Upload className="size-4 text-muted-foreground" />
+        <span className="text-sm font-medium">导入 CSV（迁移）</span>
+      </div>
+      <p className="text-xs text-muted-foreground">
+        从其他应用迁入任务：支持 Orbit 自有导出格式（往返一致）、Todoist 与
+        TickTick 模板。导入前先预览映射结果；项目不存在会自动创建，每行独立
+        成败互不阻断。
+      </p>
+      <div className="flex flex-wrap items-center gap-2">
+        <Select
+          value={preset}
+          onValueChange={(v) => {
+            setPreset(v as CsvImportPresetKey);
+            setPreview(null);
+            setResult(null);
+          }}
+        >
+          <SelectTrigger className="h-8 w-36 text-xs" aria-label="导入预设档位">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="orbit">Orbit 导出格式</SelectItem>
+            <SelectItem value="todoist">Todoist 模板</SelectItem>
+            <SelectItem value="ticktick">TickTick 模板</SelectItem>
+          </SelectContent>
+        </Select>
+        <Button size="sm" variant="outline" onClick={() => void pickFile()}>
+          选择文件
+        </Button>
+        {fileName ? (
+          <span className="max-w-56 truncate text-xs text-muted-foreground">{fileName}</span>
+        ) : null}
+        <Button
+          size="sm"
+          disabled={content == null || busy != null}
+          onClick={() => void doPreview()}
+        >
+          {busy === "preview" ? <Loader2 className="mr-1 size-3 animate-spin" /> : null}
+          预览
+        </Button>
+        {preview && preview.stats.success > 0 ? (
+          <Button
+            size="sm"
+            disabled={busy != null}
+            onClick={() =>
+              window.confirm(
+                `将导入 ${preview.stats.success} 条任务（跳过 ${preview.stats.skipped} 行），确定继续？`,
+              ) && void doExecute()
+            }
+          >
+            {busy === "execute" ? <Loader2 className="mr-1 size-3 animate-spin" /> : null}
+            导入
+          </Button>
+        ) : null}
+      </div>
+
+      {preview ? (
+        <div className="space-y-2">
+          <div className="text-xs text-muted-foreground">
+            待导入 {preview.stats.success} 条 · 跳过 {preview.stats.skipped} 行
+            （前 {preview.rows.length} 行预览）
+          </div>
+          <div className="overflow-hidden rounded-md border text-xs">
+            <table className="w-full">
+              <thead className="bg-muted/50 text-muted-foreground">
+                <tr>
+                  <th className="px-2 py-1.5 text-left font-medium">标题</th>
+                  <th className="px-2 py-1.5 text-left font-medium">项目</th>
+                  <th className="px-2 py-1.5 text-left font-medium">截止</th>
+                  <th className="px-2 py-1.5 text-left font-medium">状态</th>
+                </tr>
+              </thead>
+              <tbody>
+                {preview.rows.map((r) => (
+                  <tr key={r.source_line} className="border-t">
+                    <td className="max-w-48 truncate px-2 py-1.5">
+                      {r.input.title}
+                    </td>
+                    <td className="px-2 py-1.5 text-muted-foreground">
+                      {r.project_title ?? "未分组"}
+                    </td>
+                    <td className="px-2 py-1.5 text-muted-foreground">
+                      {r.input.due_date != null ? "有" : "—"}
+                    </td>
+                    <td className="px-2 py-1.5 text-muted-foreground">
+                      {r.skip_reason ? (
+                        <span className="text-destructive">跳过：{r.skip_reason}</span>
+                      ) : r.input.done === 1 ? (
+                        "已完成"
+                      ) : (
+                        "待办"
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ) : null}
+
+      {result ? (
+        <div className="text-xs text-muted-foreground">
+          导入完成：成功 {result.success} 条
+          {result.skipped ? ` · 跳过 ${result.skipped} 行` : ""}
+          {result.failed ? ` · 失败 ${result.failed} 条` : ""}
+          {result.notes.length > 0 ? (
+            <details className="mt-1">
+              <summary className="cursor-pointer">逐行说明（{result.notes.length}）</summary>
+              <ul className="mt-1 list-disc pl-4">
+                {result.notes.slice(0, 20).map((n, i) => (
+                  <li key={i}>{n}</li>
+                ))}
+              </ul>
+            </details>
+          ) : null}
+        </div>
+      ) : null}
     </div>
   );
 }

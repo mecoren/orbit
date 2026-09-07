@@ -15,6 +15,7 @@
 //! - [events]：下行事件流 + 提醒轮询守护
 
 pub mod auth;
+pub mod csv_import;
 pub mod dto;
 pub mod events;
 pub mod holiday;

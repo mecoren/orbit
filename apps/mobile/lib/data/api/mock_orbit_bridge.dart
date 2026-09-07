@@ -665,6 +665,177 @@ class MockOrbitBridge implements OrbitBridge {
             suggestedFilename: 'orbit-export-mock.csv',
           ));
 
+  // ── CSV 导入（lite 解析；与桌面 ipc-mock 同构语义）──
+
+  @override
+  Future<CsvImportPreview> csvImportPreview(
+      String content, String preset, int previewLimit) {
+    return _delay(() {
+      final rows = _parseCsvLite(content);
+      final mapped = rows
+          .skip(1)
+          .map((row) => _mapImportRowLite(preset, rows.first, row))
+          .toList();
+      return CsvImportPreview(
+        preset: preset,
+        rows: mapped.take(previewLimit).toList(),
+        stats: CsvImportStats(
+          success: mapped.where((r) => r.skipReason == null).length,
+          skipped: mapped.where((r) => r.skipReason != null).length,
+          failed: 0,
+          notes: const [],
+        ),
+      );
+    });
+  }
+
+  @override
+  Future<CsvImportStats> csvImportExecute(String content, String preset) {
+    return _delay(() {
+      final rows = _parseCsvLite(content);
+      var success = 0;
+      var skipped = 0;
+      final notes = <String>[];
+      for (final row in rows.skip(1)) {
+        final m = _mapImportRowLite(preset, rows.first, row);
+        if (m.skipReason != null) {
+          skipped++;
+          notes.add('第 ${m.sourceLine} 行跳过：${m.skipReason}');
+          continue;
+        }
+        final now = store.now();
+        final projectId = m.projectTitle != null
+            ? _ensureMockProject(m.projectTitle!)
+            : null;
+        final t = {
+          ...store.newEntity('t'),
+          'title': m.title,
+          'description': null,
+          'project_id': projectId,
+          'priority': m.priority ?? 0,
+          'status': m.done ? 'done' : 'pending',
+          'done': m.done ? 1 : 0,
+          'done_at': m.done ? now : null,
+          'due_date': null,
+          'start_date': null,
+          'repeat_after': 0,
+          'repeat_mode': 0,
+          'percent_done': 0,
+          'position': 100000,
+          'is_favorite': 0,
+          'my_day_date': null,
+          'is_deleted': 0,
+          'created_at': now,
+          'updated_at': now,
+          'deleted_at': null,
+          'version': 1,
+        };
+        store.tasks[t['id'] as int] = t;
+        success++;
+      }
+      _emit('todo_tasks');
+      return CsvImportStats(
+          success: success, skipped: skipped, failed: 0, notes: notes);
+    });
+  }
+
+  /// 按标题找项目，无则创建（对齐 Rust execute_csv_import 项目复用）
+  int _ensureMockProject(String title) {
+    final key = title.trim().toLowerCase();
+    for (final p in store.projects.values) {
+      if ((p['title'] as String).toLowerCase() == key) return p['id'] as int;
+    }
+    final now = store.now();
+    final p = {
+      ...store.newEntity('p'),
+      'title': title.trim(),
+      'description': null,
+      'hex_color': '#3B82F6',
+      'sort_order': 0,
+      'is_deleted': 0,
+      'created_at': now,
+      'updated_at': now,
+      'deleted_at': null,
+      'version': 1,
+    };
+    store.projects[p['id'] as int] = p;
+    return p['id'] as int;
+  }
+
+  /// RFC 4180 关键子集解析（引号转义/逗号切分/跳空行）
+  static List<List<String>> _parseCsvLite(String content) {
+    final rows = <List<String>>[];
+    for (final line
+        in content.replaceFirst('\u{feff}', '').split(RegExp(r'\r?\n'))) {
+      if (line.trim().isEmpty) continue;
+      final fields = <String>[];
+      var cur = StringBuffer();
+      var inQ = false;
+      for (var i = 0; i < line.length; i++) {
+        final c = line[i];
+        if (c == '"') {
+          if (inQ && i + 1 < line.length && line[i + 1] == '"') {
+            cur.write('"');
+            i++;
+          } else {
+            inQ = !inQ;
+          }
+        } else if (c == ',' && !inQ) {
+          fields.add(cur.toString());
+          cur = StringBuffer();
+        } else {
+          cur.write(c);
+        }
+      }
+      fields.add(cur.toString());
+      rows.add(fields);
+    }
+    return rows;
+  }
+
+  /// 三档预设轻量映射（与桌面 ipc-mock 同构）
+  static CsvImportPreviewRow _mapImportRowLite(
+      String preset, List<String> header, List<String> row) {
+    final lower = header.map((h) => h.trim().toLowerCase()).toList();
+    String? cell(String name) {
+      final i = lower.indexOf(name);
+      if (i < 0 || i >= row.length) return null;
+      final v = row[i].trim();
+      return v.isEmpty ? null : v;
+    }
+
+    final line = 2; // 表头后相对行号由调用方需要时再补（mock 预览足够）
+    String? title;
+    String? projectTitle;
+    int? priority;
+    var skip = false;
+    if (preset == 'todoist') {
+      final type = cell('type');
+      if (type != null && type.toLowerCase() != 'task') skip = true;
+      title = cell('content');
+      projectTitle = cell('list name');
+      priority = const {'p1': 4, 'p2': 3, 'p3': 2, 'p4': 1}[cell('priority')?.toLowerCase()];
+    } else if (preset == 'ticktick') {
+      title = cell('summary');
+      projectTitle = cell('list name');
+      priority = const {'高': 3, '中': 2, '低': 1, '无': 0}[cell('priority') ?? ''];
+    } else {
+      title = cell('title');
+      projectTitle = cell('project');
+      priority = const {'低': 1, '中': 2, '高': 3, '紧急': 4, '立即处理': 5}[cell('priority') ?? ''];
+    }
+    final done = (cell('completed date') ?? cell('completed time')) != null;
+    return CsvImportPreviewRow(
+      sourceLine: line,
+      projectTitle: projectTitle,
+      title: title ?? '',
+      priority: priority,
+      done: done,
+      dueDate: null,
+      skipReason: skip ? '非 Task 类型行' : (title == null ? '标题为空' : null),
+    );
+  }
+
   // ── 同步加密 ──
 
   @override

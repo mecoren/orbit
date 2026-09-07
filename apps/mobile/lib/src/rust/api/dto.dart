@@ -6,7 +6,7 @@
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`
 
 /// 统一完成命令结果（镜像 orbit_core::api::todo_api::CompleteTaskResult；
 /// 引擎下沉三端唯一完成入口：普通标记 / 重复任务单事务推进下一实例）
@@ -28,6 +28,101 @@ class CompleteTaskResult {
           runtimeType == other.runtimeType &&
           task == other.task &&
           nextInstance == other.nextInstance;
+}
+
+/// 预览结果：前 N 行预览载荷 + 全量统计
+class CsvImportPreviewView {
+  final String preset;
+  final List<CsvImportRowView> rows;
+  final CsvImportStatsView stats;
+
+  const CsvImportPreviewView({
+    required this.preset,
+    required this.rows,
+    required this.stats,
+  });
+
+  @override
+  int get hashCode => preset.hashCode ^ rows.hashCode ^ stats.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is CsvImportPreviewView &&
+          runtimeType == other.runtimeType &&
+          preset == other.preset &&
+          rows == other.rows &&
+          stats == other.stats;
+}
+
+/// 一条映射后的待导入行（预览载荷）
+class CsvImportRowView {
+  /// 源 CSV 行号（1 起，含表头）
+  final BigInt sourceLine;
+
+  /// 目标项目标题（None = 未分组；执行时按需自动建项目）
+  final String? projectTitle;
+
+  /// 待创建任务字段（部分填充）
+  final TodoTaskCreateInput input;
+
+  /// 跳过原因（Some = 本行不导入）
+  final String? skipReason;
+
+  const CsvImportRowView({
+    required this.sourceLine,
+    this.projectTitle,
+    required this.input,
+    this.skipReason,
+  });
+
+  @override
+  int get hashCode =>
+      sourceLine.hashCode ^
+      projectTitle.hashCode ^
+      input.hashCode ^
+      skipReason.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is CsvImportRowView &&
+          runtimeType == other.runtimeType &&
+          sourceLine == other.sourceLine &&
+          projectTitle == other.projectTitle &&
+          input == other.input &&
+          skipReason == other.skipReason;
+}
+
+/// 导入统计（预览口径 success=待导入条数；执行口径=实际成功条数）
+class CsvImportStatsView {
+  final BigInt success;
+  final BigInt skipped;
+  final BigInt failed;
+
+  /// 逐行错误/跳过说明（行号 + 原因）
+  final List<String> notes;
+
+  const CsvImportStatsView({
+    required this.success,
+    required this.skipped,
+    required this.failed,
+    required this.notes,
+  });
+
+  @override
+  int get hashCode =>
+      success.hashCode ^ skipped.hashCode ^ failed.hashCode ^ notes.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is CsvImportStatsView &&
+          runtimeType == other.runtimeType &&
+          success == other.success &&
+          skipped == other.skipped &&
+          failed == other.failed &&
+          notes == other.notes;
 }
 
 /// 节假日行（core HolidayInfo 过桥镜像；FRB 字段级生成规则见模块注释）

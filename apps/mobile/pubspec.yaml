@@ -23,6 +23,9 @@ dependencies:
   # 应用数据目录（FRB base_dir 参数源）
   path_provider: ^2.1.0
 
+  # 文件选择（CSV 导入迁移路径：选 Todoist/TickTick 导出的 CSV 文件）
+  file_picker: ^10.3.2
+
   # 本地通知三件套（Phase 7 平台集成：提醒到期系统通知，无权限静默降级 toast）
   flutter_local_notifications: ^22.3.0
   timezone: ^0.11.1

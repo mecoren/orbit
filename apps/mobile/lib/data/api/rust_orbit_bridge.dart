@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:path_provider/path_provider.dart';
 
 import '../../src/rust/api/dto.dart' as gen;
+import '../../src/rust/api/csv_import.dart' as gen_import;
 import '../../src/rust/api/holiday.dart' as gen_holiday;
 import '../../src/rust/api/events.dart' as gen_events;
 import '../../src/rust/api/plaintext_export.dart' as gen_export;
@@ -438,6 +439,51 @@ class RustOrbitBridge implements OrbitBridge {
       suggestedFilename: r.suggestedFilename,
     );
   }
+
+  // ── CSV 导入（迁移路径）──
+
+  @override
+  Future<CsvImportPreview> csvImportPreview(
+    String content,
+    String preset,
+    int previewLimit,
+  ) async {
+    final r = await gen_import.csvImportPreview(
+      content: content,
+      preset: preset,
+      previewLimit: BigInt.from(previewLimit),
+    );
+    return CsvImportPreview(
+      preset: r.preset,
+      rows: r.rows
+          .map(
+            (row) => CsvImportPreviewRow(
+              sourceLine: row.sourceLine.toInt(),
+              projectTitle: row.projectTitle,
+              title: row.input.title,
+              priority: row.input.priority?.toInt(),
+              done: (row.input.done ?? 0) == 1,
+              dueDate: row.input.dueDate?.toInt(),
+              skipReason: row.skipReason,
+            ),
+          )
+          .toList(),
+      stats: _mapStats(r.stats),
+    );
+  }
+
+  @override
+  Future<CsvImportStats> csvImportExecute(String content, String preset) async {
+    final r = await gen_import.csvImportExecute(content: content, preset: preset);
+    return _mapStats(r);
+  }
+
+  CsvImportStats _mapStats(gen.CsvImportStatsView s) => CsvImportStats(
+        success: s.success.toInt(),
+        skipped: s.skipped.toInt(),
+        failed: s.failed.toInt(),
+        notes: s.notes,
+      );
 
   // ── 同步加密 ──
 

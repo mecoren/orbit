@@ -666,6 +666,89 @@ impl From<orbit_core::api::todo_api::CompleteTaskResult> for CompleteTaskResult 
     }
 }
 
+// ---------- CSV 导入（迁移路径；镜像 orbit_core::api::csv_import_api） ----------
+
+/// 一条映射后的待导入行（预览载荷）
+#[derive(Debug, Clone, Serialize)]
+pub struct CsvImportRowView {
+    /// 源 CSV 行号（1 起，含表头）
+    pub source_line: usize,
+    /// 目标项目标题（None = 未分组；执行时按需自动建项目）
+    pub project_title: Option<String>,
+    /// 待创建任务字段（部分填充）
+    pub input: TodoTaskCreateInput,
+    /// 跳过原因（Some = 本行不导入）
+    pub skip_reason: Option<String>,
+}
+
+impl From<orbit_core::api::csv_import_api::CsvImportRow> for CsvImportRowView {
+    fn from(r: orbit_core::api::csv_import_api::CsvImportRow) -> Self {
+        // core → dto 方向无既有 From（出参历来只在 todo 域整任务镜像），
+        // 此处逐字段映射（字段清单一致，见上方 TodoTaskCreateInput）
+        let i = r.input;
+        Self {
+            source_line: r.source_line,
+            project_title: r.project_title,
+            input: TodoTaskCreateInput {
+                title: i.title,
+                description: i.description,
+                project_id: i.project_id,
+                priority: i.priority,
+                status: i.status,
+                done: i.done,
+                done_at: i.done_at,
+                due_date: i.due_date,
+                start_date: i.start_date,
+                repeat_after: i.repeat_after,
+                repeat_mode: i.repeat_mode,
+                position: i.position,
+                is_favorite: i.is_favorite,
+                my_day_date: i.my_day_date,
+            },
+            skip_reason: r.skip_reason,
+        }
+    }
+}
+
+/// 导入统计（预览口径 success=待导入条数；执行口径=实际成功条数）
+#[derive(Debug, Clone, Serialize)]
+pub struct CsvImportStatsView {
+    pub success: usize,
+    pub skipped: usize,
+    pub failed: usize,
+    /// 逐行错误/跳过说明（行号 + 原因）
+    pub notes: Vec<String>,
+}
+
+impl From<orbit_core::api::csv_import_api::CsvImportStats> for CsvImportStatsView {
+    fn from(s: orbit_core::api::csv_import_api::CsvImportStats) -> Self {
+        Self {
+            success: s.success,
+            skipped: s.skipped,
+            failed: s.failed,
+            notes: s.notes,
+        }
+    }
+}
+
+/// 预览结果：前 N 行预览载荷 + 全量统计
+#[derive(Debug, Clone, Serialize)]
+pub struct CsvImportPreviewView {
+    pub preset: String,
+    pub rows: Vec<CsvImportRowView>,
+    pub stats: CsvImportStatsView,
+}
+
+impl From<orbit_core::api::csv_import_api::CsvImportPreview> for CsvImportPreviewView {
+    fn from(p: orbit_core::api::csv_import_api::CsvImportPreview) -> Self {
+        Self {
+            preset: p.preset,
+            rows: p.rows.into_iter().map(CsvImportRowView::from).collect(),
+            stats: CsvImportStatsView::from(p.stats),
+        }
+    }
+}
+
 // ---------- holiday 域（cfg_holidays 缓存镜像；用户需求：日历视图联网更新节假日） ----------
 
 /// 节假日行（core HolidayInfo 过桥镜像；FRB 字段级生成规则见模块注释）

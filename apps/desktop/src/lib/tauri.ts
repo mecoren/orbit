@@ -643,6 +643,49 @@ export const plaintextExportJson = (excludeDeleted = true) =>
 export const plaintextExportCsv = (excludeDeleted = true) =>
   invoke<PlaintextExportView>("plaintext_export_csv", { excludeDeleted });
 
+// ---------- CSV 导入（迁移路径：orbit / Todoist / TickTick） ----------
+
+/** CSV 导入预设档位 key（Rust CsvImportPreset::from_key 同口径） */
+export type CsvImportPresetKey = "orbit" | "todoist" | "ticktick";
+
+/** 一条映射后的待导入行（预览载荷；Rust CsvImportRow 镜像） */
+export interface CsvImportRowView {
+  source_line: number;
+  project_title: string | null;
+  input: {
+    title: string;
+    description: string | null;
+    priority: number | null;
+    status: string | null;
+    done: number | null;
+    done_at: number | null;
+    due_date: number | null;
+    start_date: number | null;
+  };
+  skip_reason: string | null;
+}
+
+export interface CsvImportStats {
+  success: number;
+  skipped: number;
+  failed: number;
+  notes: string[];
+}
+
+export interface CsvImportPreviewView {
+  preset: string;
+  rows: CsvImportRowView[];
+  stats: CsvImportStats;
+}
+
+/** 预览导入（不写库）：解析 + 映射 + 统计 */
+export const csvImportPreview = (content: string, preset: CsvImportPresetKey, previewLimit = 20) =>
+  invoke<CsvImportPreviewView>("csv_import_preview", { content, preset, previewLimit });
+
+/** 执行导入（写库）：项目自动创建、逐行独立成败 */
+export const csvImportExecute = (content: string, preset: CsvImportPresetKey) =>
+  invoke<CsvImportStats>("csv_import_execute", { content, preset });
+
 
 // ---------- 节假日数据（日历视图；用户需求：联网更新节假日） ----------
 

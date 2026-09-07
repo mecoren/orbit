@@ -824,12 +824,192 @@ const commands: Record<string, (args: any, ctx: Ctx) => unknown> = {
 
   // ---- 计数（旧基座命令；保守返回 0）----
   business_count: () => 0,
+
+  // ---- CSV 导入（设置页迁移卡；冒烟不覆盖设置页，mock 提供
+  //      与 Rust csv_import_api 同构的最小语义：title/content/summary
+  //      列识别 + 空标题跳过 + 项目列自动建项目）----
+  csv_import_preview: ({ content, preset, previewLimit }: { content: string; preset: string; previewLimit?: number }) => {
+    const rows = parseCsvLite(content);
+    const mapped = rows.slice(1).map((row, i) => mapImportRowLite(preset, rows[0], row, i + 2));
+    const stats = {
+      success: mapped.filter((r) => !r.skip_reason).length,
+      skipped: mapped.filter((r) => r.skip_reason).length,
+      failed: 0,
+      notes: [],
+    };
+    return { preset, rows: mapped.slice(0, previewLimit ?? 20), stats };
+  },
+  csv_import_execute: ({ content, preset }: { content: string; preset: string }, { db }: Ctx) => {
+    const rows = parseCsvLite(content);
+    const mapped = rows.slice(1).map((row, i) => mapImportRowLite(preset, rows[0], row, i + 2));
+    const stats = { success: 0, skipped: 0, failed: 0, notes: [] as string[] };
+    for (const r of mapped) {
+      if (r.skip_reason) {
+        stats.skipped++;
+        stats.notes.push(`第 ${r.source_line} 行跳过：${r.skip_reason}`);
+        continue;
+      }
+      const now = Date.now();
+      const t: MockTask = {
+        id: db.seq++,
+        uuid: uuid(),
+        title: r.input.title,
+        description: r.input.description,
+        project_id: r.project_title
+          ? ensureMockProject(db, r.project_title)
+          : null,
+        priority: r.input.priority ?? 0,
+        status: r.input.status ?? (r.input.done === 1 ? "done" : "pending"),
+        done: r.input.done ?? 0,
+        done_at: r.input.done_at ?? null,
+        due_date: r.input.due_date ?? null,
+        start_date: r.input.start_date ?? null,
+        repeat_after: 0,
+        repeat_mode: 0,
+        percent_done: 0,
+        position: 100000,
+        is_favorite: 0,
+        my_day_date: null,
+        is_deleted: 0,
+        created_at: now,
+        updated_at: now,
+        deleted_at: null,
+        version: 1,
+      };
+      db.tasks.push(t);
+      stats.success++;
+    }
+    return stats;
+  },
 };
+
+/** CSV 轻量解析（RFC 4180 关键子集：引号转义/逗号切分/跳空行；换行在字段内不支持） */
+function parseCsvLite(content: string): string[][] {
+  const rows: string[][] = [];
+  for (const line of content.replace(/^\u{feff}/u, "").split(/\r?\n/)) {
+    if (!line.trim()) continue;
+    const fields: string[] = [];
+    let cur = "";
+    let inQ = false;
+    for (let i = 0; i < line.length; i++) {
+      const c = line[i];
+      if (c === '"') {
+        if (inQ && line[i + 1] === '"') {
+          cur += '"';
+          i++;
+        } else inQ = !inQ;
+      } else if (c === "," && !inQ) {
+        fields.push(cur);
+        cur = "";
+      } else cur += c;
+    }
+    fields.push(cur);
+    rows.push(fields);
+  }
+  return rows;
+}
+
+/** 三档预设轻量映射（与 Rust map_csv_rows 同构；仅设置页交互用） */
+function mapImportRowLite(
+  preset: string,
+  header: string[],
+  row: string[],
+  sourceLine: number,
+): {
+  source_line: number;
+  project_title: string | null;
+  input: {
+    title: string;
+    description: string | null;
+    priority: number | null;
+    status: string | null;
+    done: number | null;
+    done_at: number | null;
+    due_date: number | null;
+    start_date: number | null;
+  };
+  skip_reason: string | null;
+} {
+  const idx = (name: string) => header.findIndex((h) => h.trim().toLowerCase() === name);
+  const cellOf = (name: string) => {
+    const i = idx(name);
+    const v = i >= 0 ? (row[i] ?? "").trim() : "";
+    return v || null;
+  };
+  let title: string | null = null;
+  let projectTitle: string | null = null;
+  let priority: number | null = null;
+  if (preset === "todoist") {
+    if (cellOf("type") && cellOf("type")!.toLowerCase() !== "task") {
+      return {
+        source_line: sourceLine, project_title: null,
+        input: { title: "", description: null, priority: null, status: null, done: null, done_at: null, due_date: null, start_date: null },
+        skip_reason: `非 Task 类型行（type=${cellOf("type")}）`,
+      };
+    }
+    title = cellOf("content");
+    projectTitle = cellOf("list name");
+    priority = { p1: 4, p2: 3, p3: 2, p4: 1 }[cellOf("priority")?.toLowerCase() ?? ""] ?? null;
+  } else if (preset === "ticktick") {
+    title = cellOf("summary");
+    projectTitle = cellOf("list name");
+    priority = { 高: 3, 中: 2, 低: 1, 无: 0 }[cellOf("priority") ?? ""] ?? null;
+  } else {
+    title = cellOf("title");
+    projectTitle = cellOf("project");
+    priority = { 低: 1, 中: 2, 高: 3, 紧急: 4, 立即处理: 5 }[cellOf("priority") ?? ""] ?? null;
+  }
+  if (!title) {
+    return {
+      source_line: sourceLine, project_title: null,
+      input: { title: "", description: null, priority: null, status: null, done: null, done_at: null, due_date: null, start_date: null },
+      skip_reason: "标题为空",
+    };
+  }
+  const doneAt = cellOf("completed date") ?? cellOf("completed time");
+  return {
+    source_line: sourceLine,
+    project_title: projectTitle,
+    input: {
+      title,
+      description: cellOf("description") ?? cellOf("note"),
+      priority,
+      status: null,
+      done: doneAt ? 1 : 0,
+      done_at: null, // mock 不做日期解析；完成态按有值即记
+      due_date: null,
+      start_date: null,
+    },
+    skip_reason: null,
+  };
+}
+
+/** 按标题找项目，无则自动创建（对齐 Rust execute_csv_import 项目复用） */
+function ensureMockProject(db: MockDb, title: string): number {
+  const existing = db.projects.find((p) => p.title.toLowerCase() === title.trim().toLowerCase());
+  if (existing) return existing.id;
+  const now = Date.now();
+  const p: MockProject = {
+    id: db.seq++,
+    uuid: uuid(),
+    title: title.trim(),
+    description: null,
+    hex_color: "#3B82F6",
+    sort_order: 0,
+    is_deleted: 0,
+    created_at: now,
+    updated_at: now,
+    deleted_at: null,
+    version: 1,
+  };
+  db.projects.push(p);
+  return p.id;
+}
 
 /** 写类命令完成后应广播 db-change 的判定（对齐 Rust EVENT_BUS 语义；
  *  trash 恢复/彻底删除/清空写后同样要失效列表缓存） */
 const isWriteCommand = (cmd: string) =>
-  /_(create|update|update_position|complete|delete|toggle_done|recalc_percent|restore|purge)$/.test(cmd) ||
+  /_(create|update|update_position|complete|delete|toggle_done|recalc_percent|restore|purge|execute)$/.test(cmd) ||
   cmd === "trash_purge_all";
 
 // ---------- 安装 ----------
