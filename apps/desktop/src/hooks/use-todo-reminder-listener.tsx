@@ -10,10 +10,10 @@
  */
 import { useEffect } from "react";
 import { listen } from "@tauri-apps/api/event";
-import { useNavigate } from "react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
+import { router } from "@/router";
 import { nextRepeatAt } from "@/features/todo/shared/repeat";
 import { snoozeReminder, remindAtClockLabel } from "@/features/todo/shared/reminder-snooze";
 import { ReminderToast } from "@/features/todo/shared/reminder-toast";
@@ -44,7 +44,6 @@ const reminderToastIds = new Map<number, number | string>();
 
 export function useTodoReminderListener() {
   const qc = useQueryClient();
-  const navigate = useNavigate();
   useEffect(() => {
     // 系统通知（右下角弹窗）点推迟按钮后：Rust 已删旧建新并广播。
     // 前端三件事：按 reminder_id 关闭对应 in-app toast（duration Infinity
@@ -86,9 +85,11 @@ export function useTodoReminderListener() {
               }
               onViewTask={() => {
                 // §7-③：与全局搜索/命令面板同范式——写 selectedTaskId 打开
-                // 详情抽屉（跨面板常驻），navigate 保证回到 /todo 基座
+                // 详情抽屉（跨面板常驻）。本 hook 挂在 ReadyShell
+                // （RouterProvider 外），不能 useNavigate——直接用 router
+                // 单例实例导航（等效 imperative navigate("/todo")）
                 const dest = openTaskFromReminder(r.task_id);
-                navigate(dest);
+                void router.navigate(dest);
               }}
               onDone={() => {
                 reminderToastIds.delete(r.id);
@@ -146,5 +147,5 @@ export function useTodoReminderListener() {
       unlistenPromise.then((unlisten) => unlisten());
       unlistenSnoozed.then((unlisten) => unlisten());
     };
-  }, [qc, navigate]);
+  }, [qc]);
 }

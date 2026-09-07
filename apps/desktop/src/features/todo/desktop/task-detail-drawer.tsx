@@ -49,6 +49,7 @@ import { WaitCalendar } from "@/components/ui/wait-calendar";
 import { useTodoStore } from "@/features/todo/store";
 import { hideFromQueries, useUndoableDeleteAction } from "@/hooks/use-undoable-delete";
 import { PRIORITY_COLOR, TODO_ACCENT } from "../shared/constants";
+import { ConfirmPopover } from "../shared/confirm-popover";
 import { REPEAT_MODE, REPEAT_PRESETS, repeatLabel } from "../shared/repeat";
 import { completeTask } from "@/features/todo/shared/task-actions";
 import {
@@ -70,6 +71,7 @@ import {
   todoReminderCreate,
   todoReminderDelete,
   todoTaskUpdate,
+  type TodoComment,
   type TodoSubtask,
 } from "@/lib/tauri";
 
@@ -529,13 +531,24 @@ function DueDateEditor({
   const [draft, setDraft] = useState("");
   // 快捷菜单 ⇄ 完整日历+时间视图；关闭弹层时复位
   const [showPicker, setShowPicker] = useState(false);
+  // 清除二次确认（Popover 内不宜再套 Popover——qraft 同款嵌套测量异常；
+  // 首点「清除」变红显示「确认清除？」，3 秒内再点执行，超时/关闭弹层复位）
+  const [confirmClear, setConfirmClear] = useState(false);
 
   useEffect(() => {
     if (open) {
       setDraft(value ? format(new Date(value), "yyyy-MM-dd'T'HH:mm") : "");
       setShowPicker(false);
+      setConfirmClear(false);
     }
   }, [open, value]);
+
+  // 弹层开着时保持确认窗口的 3 秒超时复位
+  useEffect(() => {
+    if (!confirmClear || !open) return;
+    const id = setTimeout(() => setConfirmClear(false), 3000);
+    return () => clearTimeout(id);
+  }, [confirmClear, open]);
 
   const commit = () => {
     if (!draft) onChange(null);
@@ -544,6 +557,17 @@ function DueDateEditor({
       if (!Number.isNaN(ms)) onChange(ms);
     }
     setOpen(false);
+  };
+
+  const clearDue = () => {
+    if (!confirmClear) {
+      setConfirmClear(true);
+      return;
+    }
+    onChange(null);
+    setOpen(false);
+    setConfirmClear(false);
+    toast.success("已清除截止日期");
   };
 
   return (
@@ -616,8 +640,12 @@ function DueDateEditor({
         )}
         <div className="flex justify-end gap-2 border-t pt-2">
           {value != null && (
-            <Button size="sm" variant="link" onClick={() => { onChange(null); setOpen(false); }}>
-              清除
+            <Button
+              size="sm"
+              variant={confirmClear ? "destructive" : "link"}
+              onClick={clearDue}
+            >
+              {confirmClear ? "确认清除？" : "清除"}
             </Button>
           )}
           <Button size="sm" variant="outline" onClick={() => setOpen(false)}>取消</Button>
@@ -780,74 +808,48 @@ function SubtasksSection({
     >
       <div className="space-y-1">
         {subtasks.map((s) => (
-          <Popover
+          <ConfirmPopover
             key={s.id}
             open={confirmDelete?.id === s.id}
             onOpenChange={(o) => { if (!o) setConfirmDelete(null); }}
+            title="删除子任务"
+            description={`确定要删除「${s.title}」吗？删除后无法恢复。`}
+            onConfirm={() => {
+              const target = s;
+              void (async () => {
+                await todoSubtaskDelete(target.id);
+                onChanged();
+                toast.success("已删除子任务");
+              })();
+            }}
           >
-            {/* 确认框锚定目标子任务行下方（qraft tab 删除同款，替代居中弹窗） */}
-            <PopoverTrigger asChild>
-              <div className="group flex items-center gap-2 rounded-md px-1 py-1 hover:bg-accent/30">
-                <button
-                  type="button"
-                  aria-label={s.done ? "标记未完成" : "标记完成"}
-                  className={cn(
-                    "flex h-4 w-4 shrink-0 items-center justify-center rounded-sm border-2",
-                    s.done ? "border-primary bg-primary text-white" : "border-muted-foreground/40",
-                  )}
-                  onClick={async () => {
-                    await todoSubtaskToggleDone(s.id, !s.done);
-                    onChanged();
-                  }}
-                >
-                  {s.done ? <Check className="size-2.5" /> : null}
-                </button>
-                <span className={cn("flex-1 truncate text-[13px]", s.done && "text-muted-foreground line-through")}>
-                  {s.title}
-                </span>
-                <button type="button" aria-label="删除子任务"
-                  className="opacity-0 group-hover:opacity-100"
-                  onClick={() => setConfirmDelete(s)}
-                >
-                  <X size={14} className="text-muted-foreground hover:text-destructive" />
-                </button>
-              </div>
-            </PopoverTrigger>
-            <PopoverContent align="end" side="bottom" className="w-56 p-3">
-              <p className="text-xs font-semibold">删除子任务</p>
-              <p className="mt-1 break-words text-[10px] text-muted-foreground">
-                确定要删除「{s.title}」吗？删除后无法恢复。
-              </p>
-              <div className="mt-2.5 flex justify-end gap-1">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="h-7 px-2.5 text-xs"
-                  onClick={() => setConfirmDelete(null)}
-                >
-                  取消
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="h-7 px-2.5 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive"
-                  onClick={() => {
-                    const target = s;
-                    setConfirmDelete(null);
-                    void (async () => {
-                      await todoSubtaskDelete(target.id);
-                      onChanged();
-                      toast.success("已删除子任务");
-                    })();
-                  }}
-                >
-                  删除
-                </Button>
-              </div>
-            </PopoverContent>
-          </Popover>
+            {/* 触发行（确认框锚定行下方，qraft tab 删除同款） */}
+            <div className="group flex items-center gap-2 rounded-md px-1 py-1 hover:bg-accent/30">
+              <button
+                type="button"
+                aria-label={s.done ? "标记未完成" : "标记完成"}
+                className={cn(
+                  "flex h-4 w-4 shrink-0 items-center justify-center rounded-sm border-2",
+                  s.done ? "border-primary bg-primary text-white" : "border-muted-foreground/40",
+                )}
+                onClick={async () => {
+                  await todoSubtaskToggleDone(s.id, !s.done);
+                  onChanged();
+                }}
+              >
+                {s.done ? <Check className="size-2.5" /> : null}
+              </button>
+              <span className={cn("flex-1 truncate text-[13px]", s.done && "text-muted-foreground line-through")}>
+                {s.title}
+              </span>
+              <button type="button" aria-label="删除子任务"
+                className="opacity-0 group-hover:opacity-100"
+                onClick={() => setConfirmDelete(s)}
+              >
+                <X size={14} className="text-muted-foreground hover:text-destructive" />
+              </button>
+            </div>
+          </ConfirmPopover>
         ))}
 
         {/* 内联添加框 */}
@@ -989,6 +991,8 @@ function RemindersSection({
 }) {
   // 编辑态：{reminderId, draft}——编辑=删旧建新（04 §3.4）
   const [editing, setEditing] = useState<{ id: number | null; draft: string } | null>(null);
+  // 待删提醒（null = 关闭）：行内确认弹框（qraft tab 删除同款）
+  const [confirmDelete, setConfirmDelete] = useState<Awaited<ReturnType<typeof todoTaskGetDetail>>["reminders"][number] | null>(null);
 
   const commitNew = async () => {
     if (!editing?.draft) { setEditing(null); return; }
@@ -1028,27 +1032,39 @@ function RemindersSection({
               </div>
             </div>
           ) : (
-            <div key={r.id} className="group flex items-center gap-2 rounded-lg bg-muted/40 px-3 py-2 text-[13px]">
-              <Bell size={13} className="shrink-0 text-muted-foreground" />
-              <button type="button" className="flex-1 truncate text-left hover:text-primary"
-                onClick={() => setEditing({ id: r.id, draft: fmt(r.remind_at) })}
-              >
-                {fmt(r.remind_at)}
-              </button>
-              {repeatMode > 0 && (
-                <span className="shrink-0 rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] text-primary">
-                  {repeatLabel(repeatMode, repeatAfter)}
-                </span>
-              )}
-              <button type="button" aria-label="删除提醒" className="shrink-0 opacity-0 group-hover:opacity-100"
-                onClick={async () => {
-                  await todoReminderDelete(r.id); onChanged();
+            <ConfirmPopover
+              open={confirmDelete?.id === r.id}
+              onOpenChange={(o) => { if (!o) setConfirmDelete(null); }}
+              title="删除提醒"
+              description={`确定要删除 ${fmt(r.remind_at)} 的提醒吗？删除后该时间不再通知。`}
+              onConfirm={() => {
+                const target = r;
+                void (async () => {
+                  await todoReminderDelete(target.id);
+                  onChanged();
                   toast.success("已删除提醒");
-                }}
-              >
-                <X size={13} className="text-muted-foreground hover:text-destructive" />
-              </button>
-            </div>
+                })();
+              }}
+            >
+              <div className="group flex items-center gap-2 rounded-lg bg-muted/40 px-3 py-2 text-[13px]">
+                <Bell size={13} className="shrink-0 text-muted-foreground" />
+                <button type="button" className="flex-1 truncate text-left hover:text-primary"
+                  onClick={() => setEditing({ id: r.id, draft: fmt(r.remind_at) })}
+                >
+                  {fmt(r.remind_at)}
+                </button>
+                {repeatMode > 0 && (
+                  <span className="shrink-0 rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] text-primary">
+                    {repeatLabel(repeatMode, repeatAfter)}
+                  </span>
+                )}
+                <button type="button" aria-label="删除提醒" className="shrink-0 opacity-0 group-hover:opacity-100"
+                  onClick={() => setConfirmDelete(r)}
+                >
+                  <X size={13} className="text-muted-foreground hover:text-destructive" />
+                </button>
+              </div>
+            </ConfirmPopover>
           ),
         )}
 
@@ -1079,6 +1095,8 @@ function RelationsSection({
 }) {
   const [keyword, setKeyword] = useState("");
   const [popoverOpen, setPopoverOpen] = useState(false);
+  // 待删关联（null = 关闭）：行内确认弹框（qraft tab 删除同款）
+  const [confirmDelete, setConfirmDelete] = useState<Awaited<ReturnType<typeof todoTaskGetDetail>>["relations"][number] | null>(null);
 
   // 对方任务标题解析：relations 只有 other_task_id，标题经 globalSearch 拿不到
   // 全量映射，直接 todoTaskGet 单查（行数通常个位数，逐行 useQuery 足够）
@@ -1114,11 +1132,6 @@ function RelationsSection({
     onChanged();
   };
 
-  const removeRelation = async (relationId: number) => {
-    await todoTaskRelationDelete(relationId);
-    onChanged();
-  };
-
   return (
     <SectionBlock
       icon={Link2}
@@ -1133,29 +1146,44 @@ function RelationsSection({
         {relations.map((r, i) => {
           const other = titlesQuery[i]?.data;
           return (
-            <div key={r.id} className="group flex items-center gap-2 rounded-md px-1 py-1 hover:bg-accent/30">
-              <Link2 size={12} className="shrink-0 text-muted-foreground" />
-              <button
-                type="button"
-                className="min-w-0 flex-1 truncate text-left text-[13px] hover:text-primary"
-                title={other ? `打开「${other.title}」` : `任务 #${r.other_task_id}`}
-                onClick={() => useTodoStore.getState().setSelectedTaskId(r.other_task_id)}
-              >
-                {other ? other.title : `任务 #${r.other_task_id}`}
-                {other?.done ? "（已完成）" : ""}
-              </button>
-              <span className="shrink-0 text-[11px] text-muted-foreground">
-                {RELATION_TYPE_LABEL[r.relation_type] ?? r.relation_type}
-              </span>
-              <button
-                type="button"
-                aria-label="删除关联"
-                className="shrink-0 opacity-0 group-hover:opacity-100"
-                onClick={() => void removeRelation(r.id)}
-              >
+            <ConfirmPopover
+              key={r.id}
+              open={confirmDelete?.id === r.id}
+              onOpenChange={(o) => { if (!o) setConfirmDelete(null); }}
+              title="删除关联"
+              description={`确定要移除与「${other ? other.title : `任务 #${r.other_task_id}`}」的关联吗？双方都会解除。`}
+              onConfirm={() => {
+                const target = r;
+                void (async () => {
+                  await todoTaskRelationDelete(target.id);
+                  onChanged();
+                })();
+              }}
+            >
+              <div className="group flex items-center gap-2 rounded-md px-1 py-1 hover:bg-accent/30">
+                <Link2 size={12} className="shrink-0 text-muted-foreground" />
+                <button
+                  type="button"
+                  className="min-w-0 flex-1 truncate text-left text-[13px] hover:text-primary"
+                  title={other ? `打开「${other.title}」` : `任务 #${r.other_task_id}`}
+                  onClick={() => useTodoStore.getState().setSelectedTaskId(r.other_task_id)}
+                >
+                  {other ? other.title : `任务 #${r.other_task_id}`}
+                  {other?.done ? "（已完成）" : ""}
+                </button>
+                <span className="shrink-0 text-[11px] text-muted-foreground">
+                  {RELATION_TYPE_LABEL[r.relation_type] ?? r.relation_type}
+                </span>
+                <button
+                  type="button"
+                  aria-label="删除关联"
+                  className="shrink-0 opacity-0 group-hover:opacity-100"
+                  onClick={() => setConfirmDelete(r)}
+                >
                 <Trash2 size={12} className="text-muted-foreground hover:text-destructive" />
               </button>
-            </div>
+              </div>
+            </ConfirmPopover>
           );
         })}
 
@@ -1216,6 +1244,8 @@ function CommentsSection({
   onChanged: () => void;
 }) {
   const [draft, setDraft] = useState("");
+  // 待删评论（null = 关闭）：行内确认弹框（qraft tab 删除同款）
+  const [confirmDelete, setConfirmDelete] = useState<TodoComment | null>(null);
 
   const submit = async () => {
     const v = draft.trim();
@@ -1238,20 +1268,33 @@ function CommentsSection({
     <SectionBlock icon={Send} title="评论">
       <div className="space-y-2">
         {comments.map((c) => (
-          <div key={c.id} className="group rounded-lg bg-muted/40 px-3 py-2">
-            <div className="flex items-start gap-2">
-              <p className="min-w-0 flex-1 break-words whitespace-pre-wrap text-[13px]">{c.content}</p>
-              <span className="ml-auto shrink-0 text-[11px] text-muted-foreground">{relative(c.created_at)}</span>
-              <button type="button" aria-label="删除评论" className="opacity-0 group-hover:opacity-100"
-                onClick={async () => {
-                  await todoCommentDelete(c.id); onChanged();
-                  toast.success("已删除评论");
-                }}
-              >
-                <Trash2 size={12} className="text-muted-foreground hover:text-destructive" />
-              </button>
+          <ConfirmPopover
+            key={c.id}
+            open={confirmDelete?.id === c.id}
+            onOpenChange={(o) => { if (!o) setConfirmDelete(null); }}
+            title="删除评论"
+            description={`确定要删除「${c.content.slice(0, 20)}${c.content.length > 20 ? "…" : ""}」吗？删除后无法恢复。`}
+            onConfirm={() => {
+              const target = c;
+              void (async () => {
+                await todoCommentDelete(target.id);
+                onChanged();
+                toast.success("已删除评论");
+              })();
+            }}
+          >
+            <div className="group rounded-lg bg-muted/40 px-3 py-2">
+              <div className="flex items-start gap-2">
+                <p className="min-w-0 flex-1 break-words whitespace-pre-wrap text-[13px]">{c.content}</p>
+                <span className="ml-auto shrink-0 text-[11px] text-muted-foreground">{relative(c.created_at)}</span>
+                <button type="button" aria-label="删除评论" className="opacity-0 group-hover:opacity-100"
+                  onClick={() => setConfirmDelete(c)}
+                >
+                  <Trash2 size={12} className="text-muted-foreground hover:text-destructive" />
+                </button>
+              </div>
             </div>
-          </div>
+          </ConfirmPopover>
         ))}
 
         <div className="flex items-center gap-2 pt-1">
