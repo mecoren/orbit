@@ -5,6 +5,7 @@
 -- 且与用户实际理解的「截止日期」（due_date，唯一日期主轴）语义混淆。
 -- 产品决策（2026-09-07）：移除该字段，任务只保留 截止/开始 两个日期。
 -- 已设值用户的 end_date 数据随本迁移丢弃；导入导出全链路同步收窄。
--- schema 前向兼容：todo_tasks 列随行同步（LWW，行级 _table 路由），
--- 同版本双端一起发布，无新旧混跑场景。
+-- schema 前向兼容：todo_tasks 行随行同步（LWW，行级 _table 路由），
+-- 落库前按目标表列集过滤（merge.rs/import_type_validator 未知列跳过），
+-- 旧版本客户端上行携带 end_date 的行在新库自动丢弃该列，不报错。
 ALTER TABLE todo_tasks DROP COLUMN end_date;

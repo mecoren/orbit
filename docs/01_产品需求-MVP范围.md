@@ -37,7 +37,7 @@
 | 提醒：多提醒时间 + 轮询通知 + toast 兜底 | notification_scheduler 规格见 03 文档 §5 | ✅ |
 | 关联任务（只读展示 6 种关系类型） | RELATION_TYPE_LABEL | ✅ 只读 |
 | 优先级 0–5 / 状态 pending-doing-done | cfg_option_items 种子 | ✅ |
-| 截止/开始/结束日期 + 自有日历选择器 | WaitCalendar + DateTimePicker | ✅ |
+| 截止/开始日期 + 自有日历选择器 | WaitCalendar + DateTimePicker | ✅（end_date 已于 2026-09-07 移除） |
 
 ### 3.2 组织视图（两端）
 
