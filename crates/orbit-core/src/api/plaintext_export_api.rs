@@ -108,7 +108,6 @@ const CSV_COLUMNS: &[&str] = &[
     "done_at",
     "due_date",
     "start_date",
-    "end_date",
     "percent_done",
     "description",
     "created_at",
@@ -178,7 +177,6 @@ pub async fn export_plaintext_csv(
         let done_at: Option<i64> = row.get("done_at");
         let due_date: Option<i64> = row.get("due_date");
         let start_date: Option<i64> = row.get("start_date");
-        let end_date: Option<i64> = row.get("end_date");
         let percent_done: f64 = row.get("percent_done");
         let description: Option<String> = row.get("description");
         let created_at: i64 = row.get("created_at");
@@ -204,7 +202,6 @@ pub async fn export_plaintext_csv(
             done_at.map(|v| v.to_string()).unwrap_or_default(),
             due_date.map(|v| v.to_string()).unwrap_or_default(),
             start_date.map(|v| v.to_string()).unwrap_or_default(),
-            end_date.map(|v| v.to_string()).unwrap_or_default(),
             percent_done.to_string(),
             description.unwrap_or_default(),
             created_at.to_string(),
@@ -343,7 +340,7 @@ mod tests {
             .next()
             .unwrap();
         assert!(first_line.contains("id,title,project,labels"));
-        assert!(first_line.contains("due_date,start_date,end_date"));
+        assert!(first_line.contains("due_date,start_date"));
         assert!(first_line.contains(",description,created_at"));
         // 数据行：项目名聚合 + 标签分号聚合
         let data_line = content.lines().nth(1).unwrap();

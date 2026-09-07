@@ -501,10 +501,10 @@ pub async fn create_todo_task(
     let row = sqlx::query_as::<_, TodoTask>(
         "INSERT INTO todo_tasks (
             uuid, title, description, project_id, priority, status, done, done_at,
-            due_date, start_date, end_date, repeat_after, repeat_mode,
+            due_date, start_date, repeat_after, repeat_mode,
             percent_done, position, is_favorite, my_day_date,
             is_deleted, created_at, updated_at, version
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, 0, ?, ?, 1)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, 0, ?, ?, 1)
         RETURNING *",
     )
     .bind(&uuid)
@@ -517,7 +517,6 @@ pub async fn create_todo_task(
     .bind(input.done_at)
     .bind(input.due_date)
     .bind(input.start_date)
-    .bind(input.end_date)
     .bind(input.repeat_after.unwrap_or(0))
     .bind(input.repeat_mode.unwrap_or(0))
     .bind(input.position.unwrap_or(0.0))
@@ -566,9 +565,6 @@ pub async fn update_todo_task(
     }
     if input.start_date.is_some() {
         sets.push("start_date = ?".into());
-    }
-    if input.end_date.is_some() {
-        sets.push("end_date = ?".into());
     }
     if input.repeat_after.is_some() {
         sets.push("repeat_after = ?".into());
@@ -619,9 +615,6 @@ pub async fn update_todo_task(
         q = q.bind(v);
     }
     if let Some(v) = input.start_date {
-        q = q.bind(v);
-    }
-    if let Some(v) = input.end_date {
         q = q.bind(v);
     }
     if let Some(v) = input.repeat_after {

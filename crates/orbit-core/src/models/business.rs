@@ -126,7 +126,6 @@ pub struct TodoTask {
     pub done_at: Option<i64>,
     pub due_date: Option<i64>,
     pub start_date: Option<i64>,
-    pub end_date: Option<i64>,
     pub repeat_after: i64,
     pub repeat_mode: i32,
     pub percent_done: f64,
@@ -154,7 +153,6 @@ pub struct TodoTaskCreateInput {
     pub done_at: Option<i64>,
     pub due_date: Option<i64>,
     pub start_date: Option<i64>,
-    pub end_date: Option<i64>,
     pub repeat_after: Option<i64>,
     pub repeat_mode: Option<i32>,
     pub position: Option<f64>,
@@ -222,8 +220,6 @@ pub struct TodoTaskUpdateInput {
     pub due_date: Option<Option<i64>>,
     #[serde(default, deserialize_with = "nullable::deserialize")]
     pub start_date: Option<Option<i64>>,
-    #[serde(default, deserialize_with = "nullable::deserialize")]
-    pub end_date: Option<Option<i64>>,
     pub repeat_after: Option<i64>,
     pub repeat_mode: Option<i32>,
     pub percent_done: Option<f64>,

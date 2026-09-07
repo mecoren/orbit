@@ -449,7 +449,6 @@ mod tests {
             done_at: None,
             due_date: None,
             start_date: None,
-            end_date: None,
             repeat_after: None,
             repeat_mode: None,
             position: None,

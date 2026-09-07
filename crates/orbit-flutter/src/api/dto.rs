@@ -131,7 +131,6 @@ pub struct TodoTask {
     pub done_at: Option<i64>,
     pub due_date: Option<i64>,
     pub start_date: Option<i64>,
-    pub end_date: Option<i64>,
     pub repeat_after: i64,
     pub repeat_mode: i32,
     pub percent_done: f64,
@@ -159,7 +158,6 @@ impl From<orbit_core::models::business::TodoTask> for TodoTask {
             done_at: t.done_at,
             due_date: t.due_date,
             start_date: t.start_date,
-            end_date: t.end_date,
             repeat_after: t.repeat_after,
             repeat_mode: t.repeat_mode,
             percent_done: t.percent_done,
@@ -178,7 +176,7 @@ impl From<orbit_core::models::business::TodoTask> for TodoTask {
 /// 任务创建输入（镜像 TodoTaskCreateInput；均为普通 Option<T>/T 字段）
 ///
 /// 注：core 的 `TodoTaskUpdateInput` 才含 `Option<Option<T>>` 可空列
-/// （project_id/done_at/due_date/start_date/end_date 等），不在此镜像，
+/// （project_id/done_at/due_date/start_date 等），不在此镜像，
 /// 走 patch_json 路径。
 #[derive(Debug, Clone, Serialize)]
 pub struct TodoTaskCreateInput {
@@ -191,7 +189,6 @@ pub struct TodoTaskCreateInput {
     pub done_at: Option<i64>,
     pub due_date: Option<i64>,
     pub start_date: Option<i64>,
-    pub end_date: Option<i64>,
     pub repeat_after: Option<i64>,
     pub repeat_mode: Option<i32>,
     pub position: Option<f64>,
@@ -211,7 +208,6 @@ impl From<TodoTaskCreateInput> for orbit_core::models::business::TodoTaskCreateI
             done_at: i.done_at,
             due_date: i.due_date,
             start_date: i.start_date,
-            end_date: i.end_date,
             repeat_after: i.repeat_after,
             repeat_mode: i.repeat_mode,
             position: i.position,
@@ -595,7 +591,6 @@ pub struct TodoTaskDetail {
     pub done_at: Option<i64>,
     pub due_date: Option<i64>,
     pub start_date: Option<i64>,
-    pub end_date: Option<i64>,
     pub repeat_after: i64,
     pub repeat_mode: i32,
     pub percent_done: f64,
@@ -629,7 +624,6 @@ impl From<orbit_core::api::todo_api::TodoTaskDetail> for TodoTaskDetail {
             done_at: d.task.done_at,
             due_date: d.task.due_date,
             start_date: d.task.start_date,
-            end_date: d.task.end_date,
             repeat_after: d.task.repeat_after,
             repeat_mode: d.task.repeat_mode,
             percent_done: d.task.percent_done,

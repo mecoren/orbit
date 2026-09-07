@@ -1,0 +1,10 @@
+-- 移除 todo_tasks.end_date（结束日期）。
+--
+-- 背景：end_date 与 start_date 成对，是 0001 建库时从 Vikunja API 模型平移的
+-- 「任务执行区间终点」，但在排序/筛选/逾期/日历/提醒/统计中零消费，
+-- 且与用户实际理解的「截止日期」（due_date，唯一日期主轴）语义混淆。
+-- 产品决策（2026-09-07）：移除该字段，任务只保留 截止/开始 两个日期。
+-- 已设值用户的 end_date 数据随本迁移丢弃；导入导出全链路同步收窄。
+-- schema 前向兼容：todo_tasks 列随行同步（LWW，行级 _table 路由），
+-- 同版本双端一起发布，无新旧混跑场景。
+ALTER TABLE todo_tasks DROP COLUMN end_date;

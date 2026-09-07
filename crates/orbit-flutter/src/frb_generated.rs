@@ -4182,7 +4182,6 @@ impl SseDecode for crate::api::dto::TodoTask {
         let mut var_doneAt = <Option<i64>>::sse_decode(deserializer);
         let mut var_dueDate = <Option<i64>>::sse_decode(deserializer);
         let mut var_startDate = <Option<i64>>::sse_decode(deserializer);
-        let mut var_endDate = <Option<i64>>::sse_decode(deserializer);
         let mut var_repeatAfter = <i64>::sse_decode(deserializer);
         let mut var_repeatMode = <i32>::sse_decode(deserializer);
         let mut var_percentDone = <f64>::sse_decode(deserializer);
@@ -4206,7 +4205,6 @@ impl SseDecode for crate::api::dto::TodoTask {
             done_at: var_doneAt,
             due_date: var_dueDate,
             start_date: var_startDate,
-            end_date: var_endDate,
             repeat_after: var_repeatAfter,
             repeat_mode: var_repeatMode,
             percent_done: var_percentDone,
@@ -4234,7 +4232,6 @@ impl SseDecode for crate::api::dto::TodoTaskCreateInput {
         let mut var_doneAt = <Option<i64>>::sse_decode(deserializer);
         let mut var_dueDate = <Option<i64>>::sse_decode(deserializer);
         let mut var_startDate = <Option<i64>>::sse_decode(deserializer);
-        let mut var_endDate = <Option<i64>>::sse_decode(deserializer);
         let mut var_repeatAfter = <Option<i64>>::sse_decode(deserializer);
         let mut var_repeatMode = <Option<i32>>::sse_decode(deserializer);
         let mut var_position = <Option<f64>>::sse_decode(deserializer);
@@ -4250,7 +4247,6 @@ impl SseDecode for crate::api::dto::TodoTaskCreateInput {
             done_at: var_doneAt,
             due_date: var_dueDate,
             start_date: var_startDate,
-            end_date: var_endDate,
             repeat_after: var_repeatAfter,
             repeat_mode: var_repeatMode,
             position: var_position,
@@ -4274,7 +4270,6 @@ impl SseDecode for crate::api::dto::TodoTaskDetail {
         let mut var_doneAt = <Option<i64>>::sse_decode(deserializer);
         let mut var_dueDate = <Option<i64>>::sse_decode(deserializer);
         let mut var_startDate = <Option<i64>>::sse_decode(deserializer);
-        let mut var_endDate = <Option<i64>>::sse_decode(deserializer);
         let mut var_repeatAfter = <i64>::sse_decode(deserializer);
         let mut var_repeatMode = <i32>::sse_decode(deserializer);
         let mut var_percentDone = <f64>::sse_decode(deserializer);
@@ -4303,7 +4298,6 @@ impl SseDecode for crate::api::dto::TodoTaskDetail {
             done_at: var_doneAt,
             due_date: var_dueDate,
             start_date: var_startDate,
-            end_date: var_endDate,
             repeat_after: var_repeatAfter,
             repeat_mode: var_repeatMode,
             percent_done: var_percentDone,
@@ -5421,7 +5415,6 @@ impl flutter_rust_bridge::IntoDart for crate::api::dto::TodoTask {
             self.done_at.into_into_dart().into_dart(),
             self.due_date.into_into_dart().into_dart(),
             self.start_date.into_into_dart().into_dart(),
-            self.end_date.into_into_dart().into_dart(),
             self.repeat_after.into_into_dart().into_dart(),
             self.repeat_mode.into_into_dart().into_dart(),
             self.percent_done.into_into_dart().into_dart(),
@@ -5456,7 +5449,6 @@ impl flutter_rust_bridge::IntoDart for crate::api::dto::TodoTaskCreateInput {
             self.done_at.into_into_dart().into_dart(),
             self.due_date.into_into_dart().into_dart(),
             self.start_date.into_into_dart().into_dart(),
-            self.end_date.into_into_dart().into_dart(),
             self.repeat_after.into_into_dart().into_dart(),
             self.repeat_mode.into_into_dart().into_dart(),
             self.position.into_into_dart().into_dart(),
@@ -5492,7 +5484,6 @@ impl flutter_rust_bridge::IntoDart for crate::api::dto::TodoTaskDetail {
             self.done_at.into_into_dart().into_dart(),
             self.due_date.into_into_dart().into_dart(),
             self.start_date.into_into_dart().into_dart(),
-            self.end_date.into_into_dart().into_dart(),
             self.repeat_after.into_into_dart().into_dart(),
             self.repeat_mode.into_into_dart().into_dart(),
             self.percent_done.into_into_dart().into_dart(),
@@ -6319,7 +6310,6 @@ impl SseEncode for crate::api::dto::TodoTask {
         <Option<i64>>::sse_encode(self.done_at, serializer);
         <Option<i64>>::sse_encode(self.due_date, serializer);
         <Option<i64>>::sse_encode(self.start_date, serializer);
-        <Option<i64>>::sse_encode(self.end_date, serializer);
         <i64>::sse_encode(self.repeat_after, serializer);
         <i32>::sse_encode(self.repeat_mode, serializer);
         <f64>::sse_encode(self.percent_done, serializer);
@@ -6346,7 +6336,6 @@ impl SseEncode for crate::api::dto::TodoTaskCreateInput {
         <Option<i64>>::sse_encode(self.done_at, serializer);
         <Option<i64>>::sse_encode(self.due_date, serializer);
         <Option<i64>>::sse_encode(self.start_date, serializer);
-        <Option<i64>>::sse_encode(self.end_date, serializer);
         <Option<i64>>::sse_encode(self.repeat_after, serializer);
         <Option<i32>>::sse_encode(self.repeat_mode, serializer);
         <Option<f64>>::sse_encode(self.position, serializer);
@@ -6369,7 +6358,6 @@ impl SseEncode for crate::api::dto::TodoTaskDetail {
         <Option<i64>>::sse_encode(self.done_at, serializer);
         <Option<i64>>::sse_encode(self.due_date, serializer);
         <Option<i64>>::sse_encode(self.start_date, serializer);
-        <Option<i64>>::sse_encode(self.end_date, serializer);
         <i64>::sse_encode(self.repeat_after, serializer);
         <i32>::sse_encode(self.repeat_mode, serializer);
         <f64>::sse_encode(self.percent_done, serializer);

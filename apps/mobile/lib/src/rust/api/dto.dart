@@ -571,7 +571,6 @@ class TodoTask {
   final PlatformInt64? doneAt;
   final PlatformInt64? dueDate;
   final PlatformInt64? startDate;
-  final PlatformInt64? endDate;
   final PlatformInt64 repeatAfter;
   final int repeatMode;
   final double percentDone;
@@ -596,7 +595,6 @@ class TodoTask {
     this.doneAt,
     this.dueDate,
     this.startDate,
-    this.endDate,
     required this.repeatAfter,
     required this.repeatMode,
     required this.percentDone,
@@ -623,7 +621,6 @@ class TodoTask {
       doneAt.hashCode ^
       dueDate.hashCode ^
       startDate.hashCode ^
-      endDate.hashCode ^
       repeatAfter.hashCode ^
       repeatMode.hashCode ^
       percentDone.hashCode ^
@@ -652,7 +649,6 @@ class TodoTask {
           doneAt == other.doneAt &&
           dueDate == other.dueDate &&
           startDate == other.startDate &&
-          endDate == other.endDate &&
           repeatAfter == other.repeatAfter &&
           repeatMode == other.repeatMode &&
           percentDone == other.percentDone &&
@@ -669,7 +665,7 @@ class TodoTask {
 /// 任务创建输入（镜像 TodoTaskCreateInput；均为普通 Option<T>/T 字段）
 ///
 /// 注：core 的 `TodoTaskUpdateInput` 才含 `Option<Option<T>>` 可空列
-/// （project_id/done_at/due_date/start_date/end_date 等），不在此镜像，
+/// （project_id/done_at/due_date/start_date 等），不在此镜像，
 /// 走 patch_json 路径。
 class TodoTaskCreateInput {
   final String title;
@@ -681,7 +677,6 @@ class TodoTaskCreateInput {
   final PlatformInt64? doneAt;
   final PlatformInt64? dueDate;
   final PlatformInt64? startDate;
-  final PlatformInt64? endDate;
   final PlatformInt64? repeatAfter;
   final int? repeatMode;
   final double? position;
@@ -698,7 +693,6 @@ class TodoTaskCreateInput {
     this.doneAt,
     this.dueDate,
     this.startDate,
-    this.endDate,
     this.repeatAfter,
     this.repeatMode,
     this.position,
@@ -717,7 +711,6 @@ class TodoTaskCreateInput {
       doneAt.hashCode ^
       dueDate.hashCode ^
       startDate.hashCode ^
-      endDate.hashCode ^
       repeatAfter.hashCode ^
       repeatMode.hashCode ^
       position.hashCode ^
@@ -738,7 +731,6 @@ class TodoTaskCreateInput {
           doneAt == other.doneAt &&
           dueDate == other.dueDate &&
           startDate == other.startDate &&
-          endDate == other.endDate &&
           repeatAfter == other.repeatAfter &&
           repeatMode == other.repeatMode &&
           position == other.position &&
@@ -764,7 +756,6 @@ class TodoTaskDetail {
   final PlatformInt64? doneAt;
   final PlatformInt64? dueDate;
   final PlatformInt64? startDate;
-  final PlatformInt64? endDate;
   final PlatformInt64 repeatAfter;
   final int repeatMode;
   final double percentDone;
@@ -794,7 +785,6 @@ class TodoTaskDetail {
     this.doneAt,
     this.dueDate,
     this.startDate,
-    this.endDate,
     required this.repeatAfter,
     required this.repeatMode,
     required this.percentDone,
@@ -826,7 +816,6 @@ class TodoTaskDetail {
       doneAt.hashCode ^
       dueDate.hashCode ^
       startDate.hashCode ^
-      endDate.hashCode ^
       repeatAfter.hashCode ^
       repeatMode.hashCode ^
       percentDone.hashCode ^
@@ -860,7 +849,6 @@ class TodoTaskDetail {
           doneAt == other.doneAt &&
           dueDate == other.dueDate &&
           startDate == other.startDate &&
-          endDate == other.endDate &&
           repeatAfter == other.repeatAfter &&
           repeatMode == other.repeatMode &&
           percentDone == other.percentDone &&
