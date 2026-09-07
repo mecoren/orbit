@@ -13,11 +13,12 @@
 - Android 通知小图标：drawable-*/ic_stat_orbit.png（白色剪影，API 21+ 语义）
 - 设计源文件：docs/adr/assets/orbit-icon-master.png
 
-设计（源：scripts/PixPin_2026-09-07_20-16-46.png 经轮廓提取/简化/平滑）：
+设计（源：scripts/PixPin_2026-09-07_20-16-46.png 经 scripts/extract_icon_shapes.py
+高斯平滑重阈值去手绘波纹 + 轮廓简化；部件 IoU 0.99+）：
 深色 squircle 底 + 卫星绕行星构图——左上月牙形行星、左下扫至右上的
-变宽轨道弧（末端卫星球）、中部小彗星；主体蓝 #3974F7。形状数据固化在
-scripts/icon_shapes.json（归一化 0..1 坐标 + 层级 z），参数改动请同步
-更新本文件顶部注释与 0004 ADR。
+变宽轨道弧（末端卫星球）、中部小彗星；主体蓝 #3974F7。形状数据固化
+在 scripts/icon_shapes.json（{canvas, bbox, shapes}，bbox+宽高比数据
+驱动渲染），参数改动请同步更新本文件顶部注释与 0004 ADR。
 """
 
 from __future__ import annotations
@@ -55,16 +56,17 @@ NOTIFICATION_DENSITIES = {
 }
 
 
-def load_shapes() -> list[dict]:
-    """载入形状数据并归一化到 0..1（源 364×325 画布的内容 bbox）。"""
-    shapes = json.loads(SHAPES_PATH.read_text())
-    x0, y0, x1, y1 = 30, 23, 334, 294  # 源内容 bbox（提取时实测）
-    for s in shapes:
-        s["pts"] = [[(p[0] - x0) / (x1 - x0), (p[1] - y0) / (y1 - y0)] for p in s["pts"]]
-    return shapes
+def load_shapes() -> tuple[list[dict], float]:
+    """载入形状数据并归一化到 0..1；返回 (shapes, 内容宽高比 w/h)。"""
+    doc = json.loads(SHAPES_PATH.read_text())
+    x0, y0, x1, y1 = doc["bbox"]
+    for s in doc["shapes"]:
+        s["pts"] = [[(p[0] - x0) / (x1 - x0), (p[1] - y0) / (y1 - y0)]
+                    for p in s["pts"]]
+    return doc["shapes"], (x1 - x0) / (y1 - y0)
 
 
-SHAPES = load_shapes()
+SHAPES, CONTENT_AR = load_shapes()
 # 渲染顺序（z 从低到高）：轨道弧 -> 彗星 -> 卫星球 -> 月牙（行星压在弧尾根上）
 ORDER = [0, 1, 2, 3]
 
@@ -76,25 +78,27 @@ def _draw_squircle(d: ImageDraw.ImageDraw, ss: int, radius_ratio: float = CORNER
         d.rectangle([0, 0, ss, ss], fill=BG)
 
 
+def _place(pts: list, ss: int) -> list:
+    """归一化坐标 -> 画布像素：PAD 边距内按宽高比铺放并整体居中。"""
+    m = ss * PAD
+    span = ss - 2 * m
+    span_y = span / CONTENT_AR
+    my = (ss - span_y) / 2
+    return [(m + px * span, my + py * span_y) for px, py in pts]
+
+
+def _draw_subject(d: ImageDraw.ImageDraw, ss: int, fill) -> None:
+    for i in ORDER:
+        d.polygon(_place(SHAPES[i]["pts"], ss), fill=fill)
+
+
 def render_master(size: int) -> Image.Image:
-    """主图标：深色 squircle + 蓝主体（4x 超采样栅格化后 LANCZOS 缩到目标）。"""
-    ss = 1024  # 固定超采样母版，保证任意尺寸一致性
+    """主图标：深色 squircle + 蓝主体（固定 1024 母版缩放，保证尺寸间一致）。"""
+    ss = 1024
     im = Image.new("RGBA", (ss, ss), (0, 0, 0, 0))
     d = ImageDraw.Draw(im)
     _draw_squircle(d, ss)
-
-    # 主体：PAD 边距内按归一化坐标铺形状
-    m = ss * PAD
-    span = ss - 2 * m
-    # 垂直居中：源内容宽高比 305:272 ≈ 1.12，span 高度按比例缩减
-    ar = 305 / 272
-    span_y = span / ar
-    my = (ss - span_y) / 2
-    for i in ORDER:
-        s = SHAPES[i]
-        poly = [(m + px * span, my + py * span_y) for px, py in s["pts"]]
-        d.polygon(poly, fill=BLUE)
-
+    _draw_subject(d, ss, BLUE)
     return im.resize((size, size), Image.LANCZOS)
 
 
@@ -104,15 +108,7 @@ def render_launch(size: int) -> Image.Image:
     im = Image.new("RGBA", (ss, ss), (0, 0, 0, 0))
     d = ImageDraw.Draw(im)
     _draw_squircle(d, ss, radius_ratio=0)
-    m = ss * PAD
-    span = ss - 2 * m
-    ar = 305 / 272
-    span_y = span / ar
-    my = (ss - span_y) / 2
-    for i in ORDER:
-        s = SHAPES[i]
-        poly = [(m + px * span, my + py * span_y) for px, py in s["pts"]]
-        d.polygon(poly, fill=BLUE)
+    _draw_subject(d, ss, BLUE)
     return im.resize((size, size), Image.LANCZOS)
 
 
@@ -121,15 +117,7 @@ def render_notification_silhouette(size: int) -> Image.Image:
     ss = 512
     im = Image.new("RGBA", (ss, ss), (0, 0, 0, 0))
     d = ImageDraw.Draw(im)
-    m = ss * PAD
-    span = ss - 2 * m
-    ar = 305 / 272
-    span_y = span / ar
-    my = (ss - span_y) / 2
-    for i in ORDER:
-        s = SHAPES[i]
-        poly = [(m + px * span, my + py * span_y) for px, py in s["pts"]]
-        d.polygon(poly, fill=(255, 255, 255, 255))
+    _draw_subject(d, ss, (255, 255, 255, 255))
     return im.resize((size, size), Image.LANCZOS)
 
 
@@ -182,8 +170,9 @@ def self_check(master: Image.Image, notif: Image.Image) -> None:
     ball = min(SHAPES, key=lambda s: s["area"])  # 最小部件 = 卫星球
     bx = [p[0] for p in ball["pts"]]; by = [p[1] for p in ball["pts"]]
     cx, cy = sum(bx) / len(bx), sum(by) / len(by)
-    m, span = 0.10, 0.80
-    span_y = span / (305 / 272)
+    m = PAD
+    span = 1 - 2 * PAD
+    span_y = span / CONTENT_AR
     my = (1 - span_y) / 2
     x, y = int((m + cx * span) * w), int((my + cy * span_y) * h)
     r, g, b, al = px[x, y]
