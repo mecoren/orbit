@@ -663,6 +663,7 @@ function VirtualGroupedList({
   const virtualizer = useVirtualizer({
     count: flat.length,
     getScrollElement: () => scrollRef.current,
+    // 初值仅影响首帧测量前的高度估计（行高 48 + 行间 gap 4 + 日期头 ~36）
     estimateSize: (i) => (flat[i].kind === "day" ? 92 : 30),
     overscan: 10,
     getItemKey: (i) => flat[i].key,
@@ -837,7 +838,10 @@ interface CalendarTaskRowProps {
 }
 
 /** 右栏/议程/弹层任务行：优先级左色条 + 标题 + 标签/项目元信息 + 截止时刻（逾期红）。
- *  memo：勾选其他任务（todo_tasks 数组换引用）时未变行跳过 reconcile */
+ *  memo：勾选其他任务（todo_tasks 数组换引用）时未变行跳过 reconcile。
+ *  行高固定 h-12：有无标签/项目名的行等高——原实现元信息行无条件渲染
+ *  （空 div 也占 mt-0.5+text-xs 一行），无元信息行矮一截、分组内参差；
+ *  现改为元信息有内容才渲染 + 内容垂直居中，外层 flex 恒高 48px */
 const CalendarTaskRow = memo(function CalendarTaskRow({
   task: t,
   labels,
@@ -845,12 +849,13 @@ const CalendarTaskRow = memo(function CalendarTaskRow({
   onActivate,
   overdue = false,
 }: CalendarTaskRowProps) {
+  const hasMeta = labels.length > 0 || projectName != null;
   return (
     <div
       role="button"
       tabIndex={0}
       aria-label={`${t.done ? "已完成" : "未完成"}任务：${t.title}`}
-      className="group relative flex cursor-default items-center gap-2.5 rounded-md border border-border/40 px-3 py-2 hover:bg-accent/30 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring"
+      className="group relative flex h-12 cursor-default items-center gap-2.5 rounded-md border border-border/40 px-3 hover:bg-accent/30 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring"
       onClick={onActivate}
       onKeyDown={(e) => {
         if (e.nativeEvent.isComposing) return;
@@ -869,7 +874,7 @@ const CalendarTaskRow = memo(function CalendarTaskRow({
           style={{ background: PRIORITY_COLOR[t.priority] }}
         />
       )}
-      <div className="min-w-0 flex-1">
+      <div className="flex min-w-0 flex-1 flex-col justify-center">
         <div
           className={cn(
             "truncate text-sm leading-5",
@@ -878,10 +883,12 @@ const CalendarTaskRow = memo(function CalendarTaskRow({
         >
           {t.title}
         </div>
-        <div className="mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground">
-          <LabelChips labels={labels} />
-          {projectName && <span>{projectName}</span>}
-        </div>
+        {hasMeta && (
+          <div className="flex items-center gap-1.5 text-xs leading-4 text-muted-foreground">
+            <LabelChips labels={labels} />
+            {projectName && <span>{projectName}</span>}
+          </div>
+        )}
       </div>
       <span
         className={cn(
