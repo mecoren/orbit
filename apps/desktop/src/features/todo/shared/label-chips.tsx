@@ -1,9 +1,10 @@
 /**
- * LabelChips — 任务标签迷你 chip（列表行 / 看板卡共用）
+ * LabelChips — 任务标签迷你条目（列表行 / 看板卡 / 日历行共用）
  *
- * 颜色分配：chip 文字/边框/底色均取标签自选色 hex_color
- * （新建标签 8 色板随机、标签管理器十色板），底色/边框加透明度派生，
- * 与详情抽屉标签区同语义。超 max 折叠为 +N。
+ * 形式：左色点（hex_color）+ 右标签名（常规 muted 文字）——
+ * 原彩字描边淡底胶囊与元信息行其余 muted 元素抢视觉，且与
+ * 优先级圆点口径不统一；改为点色即可分辨、文字回归安静层级。
+ * 超 max 折叠为 +N。
  */
 import type { TodoLabel } from "@/lib/tauri";
 import { cn } from "@/lib/utils";
@@ -32,14 +33,16 @@ export function LabelChips({
           <span
             key={l.id}
             title={l.title}
-            className="inline-flex max-w-[72px] items-center truncate rounded border px-1 text-[10px] leading-4"
-            style={{
-              color: hex,
-              borderColor: `${hex}59`,
-              background: `${hex}1A`,
-            }}
+            className="inline-flex min-w-0 items-center gap-1"
           >
-            {l.title}
+            <span
+              aria-hidden
+              className="size-1.5 shrink-0 rounded-full"
+              style={{ background: hex }}
+            />
+            <span className="max-w-[72px] truncate text-[10px] text-muted-foreground">
+              {l.title}
+            </span>
           </span>
         );
       })}
