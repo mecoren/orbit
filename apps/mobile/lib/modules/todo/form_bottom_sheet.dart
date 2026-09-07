@@ -114,7 +114,6 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
   int? _dueDate;
   String _status = 'pending';
   int? _startDate;
-  int? _endDate;
   int? _remindAt;
   TodoReminder? _existingReminder;
   int _repeatMode = rep.RepeatMode.none;
@@ -175,7 +174,6 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
         _dueDate = task.dueDate;
         _status = task.status;
         _startDate = task.startDate;
-        _endDate = task.endDate;
         _repeatMode = task.repeatMode;
         _repeatAfter = task.repeatAfter;
         _existingReminder = firstReminder;
@@ -223,7 +221,6 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
           status: _status,
           dueDate: _dueDate,
           startDate: _startDate,
-          endDate: _endDate,
           repeatMode: repeatMode,
           repeatAfter: repeatAfter,
         ));
@@ -242,7 +239,6 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
             'status': _status,
             'due_date': _dueDate,
             'start_date': _startDate,
-            'end_date': _endDate,
             'repeat_mode': repeatMode,
             'repeat_after': repeatAfter,
           }),
@@ -587,23 +583,6 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
                                         ? null
                                         : () =>
                                             setState(() => _startDate = null),
-                                  ),
-                                  _tileDivider(colors),
-                                  _FormDateTile(
-                                    icon: Icons.stop_circle_outlined,
-                                    label: '结束日期',
-                                    value: _endDate != null
-                                        ? formatYmd(_endDate!)
-                                        : null,
-                                    onTap: () => _pickDateField(
-                                      current: _endDate,
-                                      onPicked: (ms) =>
-                                          setState(() => _endDate = ms),
-                                    ),
-                                    onClear: _endDate == null
-                                        ? null
-                                        : () =>
-                                            setState(() => _endDate = null),
                                   ),
                                   _tileDivider(colors),
                                   // 提醒时间（虚拟字段：提交时同步 todo_reminders）

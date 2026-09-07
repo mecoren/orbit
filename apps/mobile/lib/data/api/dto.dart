@@ -106,7 +106,6 @@ class TodoTask {
   final int? doneAt;
   final int? dueDate;
   final int? startDate;
-  final int? endDate;
   final int repeatAfter;
   final int repeatMode;
   final double percentDone;
@@ -132,7 +131,6 @@ class TodoTask {
     required this.doneAt,
     required this.dueDate,
     required this.startDate,
-    required this.endDate,
     required this.repeatAfter,
     required this.repeatMode,
     required this.percentDone,
@@ -158,7 +156,6 @@ class TodoTask {
         doneAt: j['done_at'] as int?,
         dueDate: j['due_date'] as int?,
         startDate: j['start_date'] as int?,
-        endDate: j['end_date'] as int?,
         repeatAfter: j['repeat_after'] as int,
         repeatMode: j['repeat_mode'] as int,
         percentDone: (j['percent_done'] as num).toDouble(),
@@ -198,7 +195,6 @@ class TodoTaskCreateInput {
   final int? doneAt;
   final int? dueDate;
   final int? startDate;
-  final int? endDate;
   final int? repeatAfter;
   final int? repeatMode;
   final double? position;
@@ -215,7 +211,6 @@ class TodoTaskCreateInput {
     this.doneAt,
     this.dueDate,
     this.startDate,
-    this.endDate,
     this.repeatAfter,
     this.repeatMode,
     this.position,
@@ -557,7 +552,6 @@ class TodoTaskDetail extends TodoTask {
     required super.doneAt,
     required super.dueDate,
     required super.startDate,
-    required super.endDate,
     required super.repeatAfter,
     required super.repeatMode,
     required super.percentDone,
@@ -588,7 +582,6 @@ class TodoTaskDetail extends TodoTask {
         doneAt: j['done_at'] as int?,
         dueDate: j['due_date'] as int?,
         startDate: j['start_date'] as int?,
-        endDate: j['end_date'] as int?,
         repeatAfter: j['repeat_after'] as int,
         repeatMode: j['repeat_mode'] as int,
         percentDone: (j['percent_done'] as num).toDouble(),

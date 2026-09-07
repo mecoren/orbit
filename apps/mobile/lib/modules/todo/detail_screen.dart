@@ -481,15 +481,6 @@ class _InfoSection extends ConsumerWidget {
                 : () => onPatch(const {'start_date': null}),
           ),
           _InfoTile(
-            label: '结束日期',
-            value: detail.endDate != null ? formatYmd(detail.endDate!) : '无',
-            onClick: () => _pickDateField(context,
-                current: detail.endDate, key: 'end_date'),
-            onClear: detail.endDate == null
-                ? null
-                : () => onPatch(const {'end_date': null}),
-          ),
-          _InfoTile(
             label: '重复',
             value: rep.repeatLabel(detail.repeatMode, detail.repeatAfter),
             onClick: () => _editRepeat(context),
@@ -511,7 +502,7 @@ class _InfoSection extends ConsumerWidget {
     await onPatch({'due_date': dateToMidnightMs(picked)});
   }
 
-  /// 开始/结束日期行点击：与截止日期同一选择器，按 patch key 落库
+  /// 开始日期行点击：与截止日期同一选择器，按 patch key 落库
   Future<void> _pickDateField(
     BuildContext context, {
     required int? current,
@@ -689,7 +680,7 @@ class _DescriptionSectionState extends State<_DescriptionSection> {
     return SectionCard(
       title: '描述',
       trailing: TextButton(
-        onPressed: () => _editDescription(context),
+        onPressed: () => _openEditor(context),
         child: const Text('编辑'),
       ),
       child: Text(
@@ -705,37 +696,119 @@ class _DescriptionSectionState extends State<_DescriptionSection> {
     );
   }
 
-  /// 编辑对话框 textarea → patch（trim 空写 null 清空语义）
-  Future<void> _editDescription(BuildContext context) async {
-    final controller =
-        TextEditingController(text: widget.detail.description ?? '');
-    final ok = await showDialog<bool>(
+  /// 编辑弹层改底部抽屉（原 AlertDialog maxLines:5 固定 5 行，长描述
+  /// 看不全且点遮罩即关丢草稿；抽屉 70% 高 + 误触 barrier 不关闭）
+  void _openEditor(BuildContext context) {
+    showModalBottomSheet<void>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('编辑描述'),
-        content: TextField(
-          controller: controller,
-          maxLines: 5,
-          autofocus: true,
-          decoration: const InputDecoration(hintText: '请输入描述'),
+      isScrollControlled: true,
+      backgroundColor: AppColors.ofContext(context).popup,
+      shape: bottomSheetTopShape,
+      builder: (_) => _DescriptionEditSheet(
+        initial: widget.detail.description ?? '',
+        onApply: (text) => widget.onPatch(
+          {'description': text.isEmpty ? null : text},
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: const Text('保存'),
-          ),
-        ],
       ),
     );
-    final text = controller.text.trim();
-    controller.dispose();
-    if (ok != true || !context.mounted) return;
-    if (text == (widget.detail.description?.trim() ?? '')) return;
-    await widget.onPatch({'description': text.isEmpty ? null : text});
+  }
+}
+
+/// 描述编辑抽屉：多行输入自适应高度（70% 屏高上限）+ 保存/取消
+class _DescriptionEditSheet extends StatefulWidget {
+  const _DescriptionEditSheet({
+    required this.initial,
+    required this.onApply,
+  });
+
+  final String initial;
+  final void Function(String text) onApply;
+
+  @override
+  State<_DescriptionEditSheet> createState() => _DescriptionEditSheetState();
+}
+
+class _DescriptionEditSheetState extends State<_DescriptionEditSheet> {
+  late final TextEditingController _controller =
+      TextEditingController(text: widget.initial);
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _save() {
+    final text = _controller.text.trim();
+    if (text == (widget.initial.trim())) {
+      Navigator.of(context).pop();
+      return;
+    }
+    widget.onApply(text);
+    Navigator.of(context).pop();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = AppColors.ofContext(context);
+    return Padding(
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).viewInsets.bottom,
+      ),
+      child: SafeArea(
+        top: false,
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.of(context).size.height * 0.7,
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(AppDimens.space16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  '编辑描述',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: colors.titleText,
+                  ),
+                ),
+                const SizedBox(height: AppDimens.space12),
+                TextField(
+                  controller: _controller,
+                  maxLines: null,
+                  minLines: 6,
+                  maxLength: 5000,
+                  autofocus: true,
+                  style: TextStyle(fontSize: 15, color: colors.bodyText),
+                  decoration: const InputDecoration(
+                    hintText: '请输入描述',
+                    counterText: '',
+                  ),
+                ),
+                const SizedBox(height: AppDimens.space12),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    TextButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      child: const Text('取消'),
+                    ),
+                    const SizedBox(width: AppDimens.space8),
+                    FilledButton(
+                      onPressed: _save,
+                      child: const Text('保存'),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }
 

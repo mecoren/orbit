@@ -250,7 +250,6 @@ void main() {
         'done_at': null,
         'due_date': now + i * 60000, // 今天，分钟级递增
         'start_date': null,
-        'end_date': null,
         'repeat_after': 1,
         'repeat_mode': 0,
         'percent_done': 0,

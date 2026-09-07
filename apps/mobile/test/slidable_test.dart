@@ -35,7 +35,6 @@ TodoTask _task({required int done}) => TodoTask(
       doneAt: done == 1 ? 1700000000000 : null,
       dueDate: null,
       startDate: null,
-      endDate: null,
       repeatAfter: 0,
       repeatMode: 0,
       percentDone: 0.0,

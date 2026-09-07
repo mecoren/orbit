@@ -34,7 +34,6 @@ TodoTask _task({
     doneAt: doneAt,
     dueDate: dueDate,
     startDate: null,
-    endDate: null,
     repeatAfter: 1,
     repeatMode: 0,
     percentDone: 0,

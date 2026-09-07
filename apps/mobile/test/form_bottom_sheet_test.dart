@@ -49,7 +49,7 @@ Future<void> _scrollTo(WidgetTester tester, Finder finder) async {
 }
 
 void main() {
-  testWidgets('表单字段：状态/开始日期/结束日期/提醒时间/重复齐备', (tester) async {
+  testWidgets('表单字段：状态/开始日期/提醒时间/重复齐备', (tester) async {
     await _openForm(tester);
 
     expect(find.text('添加待办'), findsOneWidget);
@@ -66,8 +66,8 @@ void main() {
     // 下方字段需滚动到可视区再断言
     await _scrollTo(tester, find.text('开始日期'));
     expect(find.text('开始日期'), findsOneWidget);
-    await _scrollTo(tester, find.text('结束日期'));
-    expect(find.text('结束日期'), findsOneWidget);
+    // 结束日期行已移除（end_date 字段随 0004 迁移删除，日期口径=截止/开始）
+    expect(find.text('结束日期'), findsNothing);
     await _scrollTo(tester, find.text('提醒时间'));
     expect(find.text('提醒时间'), findsOneWidget);
     await _scrollTo(tester, find.text('重复'));
@@ -76,7 +76,7 @@ void main() {
     expect(find.text('颜色'), findsNothing);
   });
 
-  testWidgets('日期与提醒卡片：四行齐备 + 截止行内快捷胶囊', (tester) async {
+  testWidgets('日期与提醒卡片：截止/开始/提醒行齐备 + 截止行内快捷胶囊', (tester) async {
     await _openForm(tester);
 
     await _scrollTo(tester, find.text('日期与提醒'));
@@ -99,7 +99,7 @@ void main() {
       findsOneWidget,
     );
 
-    // 开始日期默认当天 → 值行显示今天；结束/提醒未设值 → 占位「无」×2
+    // 开始日期默认当天 → 值行显示今天；结束日期已移除，提醒未设值 → 占位「无」
     final today = DateTime.now();
     final todayYmd =
         '${today.year.toString().padLeft(4, '0')}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
@@ -109,7 +109,7 @@ void main() {
     );
     expect(
       find.descendant(of: find.byType(SectionCard), matching: find.text('无')),
-      findsNWidgets(2),
+      findsOneWidget,
     );
   });
 

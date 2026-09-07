@@ -119,7 +119,6 @@ class MockStore {
         'done_at': done == 1 ? now() : null,
         'due_date': dueDate,
         'start_date': null,
-        'end_date': null,
         'repeat_after': 1,
         'repeat_mode': 0,
         'hex_color': '',
