@@ -6,8 +6,9 @@
  * - 拖拽语义：同列落卡片 → 插到目标前；同列空白 → 追加；异列 → 先改归属再排序。
  *   position 一律取中值算法写入（03 文档 §一）。
  */
-import { useMemo, useRef, useState } from "react";
+import { memo, useCallback, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import {
   DndContext,
   DragOverlay,
@@ -57,6 +58,8 @@ interface ColumnDef {
 export function KanbanView({ tasks, projects, groupBy, labelsByTask }: KanbanViewProps) {
   const qc = useQueryClient();
   const setSelectedTaskId = useTodoStore((s) => s.setSelectedTaskId);
+  // memo 友好：打开详情回调恒定引用，列/卡片 props 只随业务数据变化
+  const openDetail = useCallback((id: number) => setSelectedTaskId(id), [setSelectedTaskId]);
   const [draggingId, setDraggingId] = useState<number | null>(null);
   // 拖拽刚结束的时间戳：抑制 dragend 后误触发的卡片 click（打开详情）
   const dragEndStamp = useRef(0);
@@ -216,7 +219,7 @@ export function KanbanView({ tasks, projects, groupBy, labelsByTask }: KanbanVie
               labelsByTask={labelsByTask}
               draggingId={draggingId}
               dragEndStamp={dragEndStamp}
-              onOpenDetail={(id) => setSelectedTaskId(id)}
+              onOpenDetail={openDetail}
             />
           ))}
         </div>
@@ -237,7 +240,13 @@ export function KanbanView({ tasks, projects, groupBy, labelsByTask }: KanbanVie
 
 /* ================= 列 ================= */
 
-function KanbanColumn({
+/**
+ * 列内卡片虚拟化（P0 #5 看板补齐）：useVirtualizer 只挂可视窗 ± overscan。
+ * 卡高随标题/标签行数浮动，故走动态 measureElement + 常量初值；
+ * dnd-kit 拖拽用 transform 定位（视觉层）不动 DOM 流，与绝对定位
+ * 行容器不冲突——dnd-kit 内部 transform 映射目标非布局盒。
+ */
+const KanbanColumn = memo(function KanbanColumn({
   column,
   tasks,
   projects,
@@ -256,6 +265,14 @@ function KanbanColumn({
   onOpenDetail: (id: number) => void;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: `col:${column.key}` });
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const virtualizer = useVirtualizer({
+    count: tasks.length,
+    getScrollElement: () => scrollRef.current,
+    estimateSize: () => 76,
+    overscan: 6,
+    getItemKey: (i) => tasks[i].id,
+  });
 
   return (
     <div
@@ -271,39 +288,65 @@ function KanbanColumn({
         <span className="text-xs text-muted-foreground">{tasks.length}</span>
       </div>
 
-      {/* 卡片区：flex+gap 控制卡片间距。不可用 space-y——卡片被 ContextMenuBase 的
-          display:contents 包裹层与 fixed 哨兵隔开，margin 落在无盒子元素上不生效 */}
-      <div ref={setNodeRef} className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto p-2">
+      {/* 卡片区：虚拟化行容器（绝对定位行 + gap 以 padding 计入 estimate 初值）。
+          原 flex+gap 控制间距的说明已随虚拟化失效——间距改由行容器的 margin 承担 */}
+      <div
+        ref={(node) => {
+          setNodeRef(node);
+          // 同一 node 双注册：droppable 区 + 虚拟化滚动容器
+          scrollRef.current = node;
+        }}
+        className="flex min-h-0 flex-1 flex-col overflow-y-auto p-2"
+      >
         {tasks.length === 0 ? (
           <div className="flex h-20 items-center justify-center text-xs text-muted-foreground/40">
             拖拽任务到此处
           </div>
         ) : (
-          tasks.map((t) => (
-            <TaskContextMenu
-              key={t.id}
-              task={t}
-              projects={projects}
-              onOpenDetail={() => onOpenDetail(t.id)}
-            >
-              <KanbanCard
-                task={t}
-                labels={labelsByTask.get(t.id) ?? []}
-                dragging={draggingId === t.id}
-                dragEndStamp={dragEndStamp}
-                onOpenDetail={onOpenDetail}
-              />
-            </TaskContextMenu>
-          ))
+          <div
+            style={{ height: virtualizer.getTotalSize(), position: "relative", width: "100%" }}
+          >
+            {virtualizer.getVirtualItems().map((vi) => {
+              const t = tasks[vi.index];
+              return (
+                <div
+                  key={t.id}
+                  data-index={vi.index}
+                  ref={virtualizer.measureElement}
+                  style={{
+                    position: "absolute",
+                    top: vi.start,
+                    left: 0,
+                    width: "100%",
+                    paddingBottom: 4,
+                  }}
+                >
+                  <TaskContextMenu
+                    task={t}
+                    projects={projects}
+                    onOpenDetail={() => onOpenDetail(t.id)}
+                  >
+                    <KanbanCard
+                      task={t}
+                      labels={labelsByTask.get(t.id) ?? []}
+                      dragging={draggingId === t.id}
+                      dragEndStamp={dragEndStamp}
+                      onOpenDetail={onOpenDetail}
+                    />
+                  </TaskContextMenu>
+                </div>
+              );
+            })}
+          </div>
         )}
       </div>
     </div>
   );
-}
+});
 
 /* ================= 卡片 ================= */
 
-function KanbanCard({
+const KanbanCard = memo(function KanbanCard({
   task,
   labels,
   dragging,
@@ -391,7 +434,7 @@ function KanbanCard({
       )}
     </div>
   );
-}
+});
 
 /** overlay 场景无需 droppable/draggable 注册 */
 function setNodeRefNull(_node: HTMLElement | null) {}
