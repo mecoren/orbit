@@ -144,3 +144,69 @@ test("我的一天：行内加入 → 视图筛选 → 次日退出语义（my_d
     page.getByRole("button", { name: "未完成任务：既有任务-今天截止" }),
   ).toHaveCount(0);
 });
+
+test("日历视图：左右分栏 + 选中定位 + 年视图 + 右键新增预填日期", async ({ page }) => {
+  const today = new Date();
+
+  // ---- 切到日历视图（工具栏三联钮） ----
+  await page.getByRole("button", { name: "日历视图" }).click();
+
+  // 左半区月历：默认选中今天 → 右栏显示当月任务分组（seed 的今天截止任务）
+  await expect(page.getByText("月的任务", { exact: false })).toBeVisible();
+  await expect(page.getByText("既有任务-今天截止")).toBeVisible();
+  // 右栏选中日分组行有「今天」徽标（seed 任务截止今天）
+  await expect(page.getByText("今天", { exact: true }).first()).toBeVisible();
+
+  // ---- 农历副标签可见（今天格下方有农历日名/节气/节日之一） ----
+  // 月历星期表头存在（周一起始）
+  await expect(page.getByText("一", { exact: true }).first()).toBeVisible();
+
+  // ---- 点击月历另一天：右栏滚动定位（选中日切换不报错即可） ----
+  // 工具栏标题（h2）显示本月；右栏标题（h3）带「月的任务」后缀
+  await expect(
+    page.getByRole("heading", { name: `${today.getFullYear()}年${today.getMonth() + 1}月`, exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: `${today.getFullYear()}年${today.getMonth() + 1}月的任务` }),
+  ).toBeVisible();
+
+  // ---- 年视图：点「年」档 → 12 个迷你月历 + 干支生肖 ----
+  await page.getByRole("button", { name: "年" }).click();
+  await expect(page.getByText(/(鼠|牛|虎|兔|龙|蛇|马|羊|猴|鸡|狗|猪)年/)).toBeVisible();
+  await expect(page.getByText("年的任务", { exact: false })).toBeVisible();
+  // 迷你月历标题 1-12 月齐全
+  for (const m of ["1月", "2月", "3月", "10月", "11月", "12月"]) {
+    await expect(page.getByRole("button", { name: m, exact: true })).toBeVisible();
+  }
+
+  // 年视图点击某天 → 回月视图并定位（点 1 月标题）
+  await page.getByRole("button", { name: "1月", exact: true }).click();
+  await expect(
+    page.getByRole("button", { name: "月", exact: true }),
+  ).toBeVisible(); // 工具栏回到月档
+
+  // ---- 右键日格：直接弹新增表单并预填该日截止日期 ----
+  // 右键今天格（右栏「今天」徽标所在的日期分组对应今天）
+  const ymd = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+  // 月历日格是按钮：右键数字「今天日期」
+  await page
+    .getByRole("button", { name: String(today.getDate()) })
+    .first()
+    .click({ button: "right" });
+  // 新增表单打开且截止日期已预填为该日
+  await expect(page.getByRole("dialog")).toBeVisible();
+  const dueInput = page.locator("button", { hasText: ymd }).first();
+  await expect(dueInput).toBeVisible();
+
+  // 填标题提交 → 任务出现在右栏列表
+  const dlg = page.getByRole("dialog");
+  const titleInput = dlg.locator("input").first();
+  await titleInput.fill("日历右键任务");
+  await dlg.getByRole("button", { name: "创建" }).click();
+  await expect(page.getByText("日历右键任务")).toBeVisible({ timeout: 10_000 });
+
+  // ---- 议程档回归：先回今天（年视图点 1 月把视图切到了 1 月，议程按当月分组） ----
+  await page.getByRole("button", { name: "回到今天" }).click();
+  await page.getByRole("button", { name: "议程" }).click();
+  await expect(page.getByText("既有任务-今天截止")).toBeVisible();
+});

@@ -66,6 +66,7 @@ export default function TaskPanel() {
     tasksLoading,
     tasksError,
     openCreateForm,
+    openCreateFormOnDate,
     setLabelManagerOpen,
   } = useTodoShell();
 
@@ -323,6 +324,7 @@ export default function TaskPanel() {
             onCreateClick={() => {
               openCreateForm();
             }}
+            onAddOnDate={openCreateFormOnDate}
           />
         ) : (
           <TaskListView

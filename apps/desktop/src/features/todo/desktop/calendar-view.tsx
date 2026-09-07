@@ -1,24 +1,41 @@
 /**
- * CalendarView — 日历视图（07 报告 §五-P2#14：月/议程两档起步）
+ * CalendarView — 日历视图（wait-home 重要日期风格重构）
  *
- * 月档：7×6 周格。有 due_date 的任务按本地日落到格内；未完成逾期任务红字标注。
- *   格内任务条列表支持纵向滚动（格内容量超可视高度时滑看全部；滚到底显示
- *   「共 N 条」尾巴，桌面鼠标滚轮/触控板滑动直达），点击任务条打开详情抽屉。
- *   日期格右上角节假日徽标（放假「休」/调休补班「班」，联网数据）。
- * 议程档：本月有截止的任务按日期分组的滚动列表，空态引导去列表视图。
- * 两档共用工具栏：今天按钮 + 上/下月翻页（12 月/1 月正确跨年）+ 当天定位
- *   议程列表自动滚动到今天所在组 + 节假日手动更新（显示上次更新时间）。
+ * 左右分栏（参考 wait-home important-date/calendar-view）：
+ * - 左半区：月历（Days Matter 风格：内缩色块 + 休/班徽标 + 农历副标签 + 任务圆点）
+ *   或年视图（点击月份标题切换；12 个迷你月历 + 干支生肖 + 春节/初一下划线）
+ * - 右半区：当前范围的任务列表（月模式按日分组、选中日高亮并滚动定位；
+ *   年模式按月分节）；点击任务行打开详情抽屉
+ * - 议程档保留（#24）：整月按日分组的滚动列表 + 右键菜单，与分栏布局互斥切换
+ *
+ * 交互：
+ * - 左键日格 = 选中该日（右栏滚动定位）；右键日格 = 直接打开新增表单并预填该日
+ * - 任务在格内只渲染优先级色圆点（≤4 个 + "+N"），标题移入右侧列表防撑高
+ * - 今天按钮回位（含切回月模式）；节假日手动更新（显示上次更新时间，
+ *   每日 8 点守护自动更新 + 錯过补更，数据层在 orbit-core holiday_api）
+ *
  * 范围遵循 04 §四 内存筛选语义：由 list-page 注入已筛选的 visibleTasks。
  */
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { addMonths, format, isSameDay, isSameMonth, startOfMonth } from "date-fns";
+import { format, isSameDay } from "date-fns";
 import { zhCN } from "date-fns/locale";
-import { CalendarClock, CalendarDays, ChevronLeft, ChevronRight, Inbox, RefreshCw } from "lucide-react";
+import {
+  CalendarClock,
+  CalendarDays,
+  CalendarRange,
+  CalendarX,
+  Inbox,
+  LocateFixed,
+  Loader2,
+  RefreshCw,
+} from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { cn } from "@/lib/utils";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Dialog,
   DialogContent,
@@ -27,13 +44,20 @@ import {
 } from "@/components/ui/dialog";
 import { useTodoStore } from "@/features/todo/store";
 import { EmptyState } from "@/components/business/empty-state";
+import {
+  MonthCalendar,
+  type HolidayMark,
+} from "@/components/business/month-calendar";
+import { daySubLabel } from "../shared/almanac";
+import { formatYmd } from "../shared/lunar";
 import { holidaysList, holidaysUpdate, holidayMeta, type HolidayInfo } from "@/lib/tauri";
 import { OVERDUE_COLOR_CLASS, PRIORITY_COLOR } from "../shared/constants";
 import { LabelChips } from "../shared/label-chips";
 import { TaskContextMenu } from "./task-context-menu";
+import { YearOverviewPanel } from "./year-overview";
 import type { TodoLabel, TodoProject, TodoTask } from "@/lib/tauri";
 
-export type CalendarSubMode = "month" | "agenda";
+export type CalendarSubMode = "month" | "year" | "agenda";
 
 interface CalendarViewProps {
   tasks: TodoTask[];
@@ -41,9 +65,14 @@ interface CalendarViewProps {
   labelsByTask: Map<number, TodoLabel[]>;
   /** 空「新建任务」动作回调（议程空态引导，由 list-page 注入打开表单） */
   onCreateClick?: () => void;
+  /** 右击某天：以该日为截止日期快捷新增（由壳层注入打开表单并预填） */
+  onAddOnDate?: (date: string) => void;
 }
 
-const WEEKDAY_LABELS = ["一", "二", "三", "四", "五", "六", "日"];
+/** 左右分栏：窄窗口退化为上下堆叠（参考 wait-home SPLIT_LAYOUT） */
+const SPLIT_LAYOUT = "flex h-full min-h-0 flex-col gap-3 xl:flex-row";
+const LEFT_PANE = "flex min-h-0 flex-1 flex-col xl:flex-none xl:basis-1/2";
+const RIGHT_PANE = "flex min-h-0 flex-1 flex-col rounded-xl border bg-card/40";
 
 /** due_date（本地毫秒）→ 本地 YYYY-MM-DD，口径同 quick-add/表单日期链 */
 function dayKey(ms: number): string {
@@ -52,27 +81,54 @@ function dayKey(ms: number): string {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 }
 
-/** 月档 7×6 网格：以周一为首（zhCN + weekStartsOn 既有口径）铺满当月视图 */
-function buildMonthGrid(month: Date): Date[][] {
-  const first = startOfMonth(month);
-  // 周一为一周起点：offset = (weekday+6)%7（周日=0 → 6）
-  const offset = (first.getDay() + 6) % 7;
-  const gridStart = new Date(first);
-  gridStart.setDate(first.getDate() - offset);
-  return Array.from({ length: 6 }, (_, w) =>
-    Array.from({ length: 7 }, (_, d) => {
-      const day = new Date(gridStart);
-      day.setDate(gridStart.getDate() + w * 7 + d);
-      return day;
-    }),
-  );
+function startOfDay(d: Date): Date {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
 }
 
-export function CalendarView({ tasks, projects, labelsByTask, onCreateClick }: CalendarViewProps) {
+/** 选中日距今天的口语化天数 */
+function relativeLabel(date: Date): string {
+  const diff = Math.round(
+    (startOfDay(date).getTime() - startOfDay(new Date()).getTime()) / 86400000,
+  );
+  if (diff === 0) return "今天";
+  return diff > 0 ? `${diff}天后` : `${-diff}天前`;
+}
+
+/** 范围内某天的中文日期标签（如 "9月6日"） */
+function dayLabel(date: Date): string {
+  return `${date.getMonth() + 1}月${date.getDate()}日`;
+}
+
+/** 右栏按日分组（月模式 / 年模式节内） */
+interface DayGroup {
+  key: string;
+  date: Date;
+  tasks: TodoTask[];
+}
+
+/** 右栏按月分节（年模式） */
+interface YearSection {
+  key: string;
+  month: number;
+  groups: DayGroup[];
+}
+
+export function CalendarView({
+  tasks,
+  projects,
+  labelsByTask,
+  onCreateClick,
+  onAddOnDate,
+}: CalendarViewProps) {
   const setSelectedTaskId = useTodoStore((s) => s.setSelectedTaskId);
   const [subMode, setSubMode] = useState<CalendarSubMode>("month");
-  const [month, setMonth] = useState(() => startOfMonth(new Date()));
-  // 月档某日全部任务的弹层（点任务条自带「展开全部」时打开）
+  const [viewYear, setViewYear] = useState(() => new Date().getFullYear());
+  const [viewMonth, setViewMonth] = useState(() => new Date().getMonth());
+  /** 进入视图默认选中今天（右栏即当天的任务列表） */
+  const [selected, setSelected] = useState<Date>(() => startOfDay(new Date()));
+  /** 年模式下独立管理的年份（切回月历时同步为 viewYear） */
+  const [yearPaneYear, setYearPaneYear] = useState(() => new Date().getFullYear());
+  // 月模式某日全部任务的弹层（点圆点行「展开」按钮打开）
   const [expandedDay, setExpandedDay] = useState<Date | null>(null);
   const [updatingHolidays, setUpdatingHolidays] = useState(false);
   const queryClient = useQueryClient();
@@ -91,6 +147,13 @@ export function CalendarView({ tasks, projects, labelsByTask, onCreateClick }: C
   const holidayByDate = new Map(
     (holidaysQuery.data ?? []).map((h) => [h.date, h] as const),
   );
+  const holidayMarks = useMemo(() => {
+    const record: Record<string, HolidayMark> = {};
+    for (const [date, h] of holidayByDate) {
+      record[date] = { isOffDay: h.is_holiday, name: h.name };
+    }
+    return record;
+  }, [holidaysQuery.data]);
 
   const refreshHolidays = async () => {
     setUpdatingHolidays(true);
@@ -112,7 +175,7 @@ export function CalendarView({ tasks, projects, labelsByTask, onCreateClick }: C
     return d;
   }, []);
 
-  /** due_date → 本地日聚合（一次遍历，两档共用） */
+  /** due_date → 本地日聚合（一次遍历，三档共用） */
   const byDay = useMemo(() => {
     const map = new Map<string, TodoTask[]>();
     for (const t of tasks) {
@@ -131,11 +194,104 @@ export function CalendarView({ tasks, projects, labelsByTask, onCreateClick }: C
   const projectById = useMemo(() => new Map(projects.map((p) => [p.id, p])), [projects]);
   const openDetail = (id: number) => setSelectedTaskId(id);
 
+  // ---- 右栏列表数据：月模式 = 当前月按日分组；年模式 = 当年按月分节 ----
+  const listGroups = useMemo<DayGroup[] | YearSection[]>(() => {
+    const buildDayGroups = (year: number, month: number): DayGroup[] => {
+      const prefix = `${year}-${String(month + 1).padStart(2, "0")}`;
+      return [...byDay.entries()]
+        .filter(([key]) => key.startsWith(prefix))
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([key, list]) => ({
+          key,
+          tasks: list,
+          date: new Date(`${key}T00:00:00`),
+        }));
+    };
+
+    if (subMode !== "year") {
+      return buildDayGroups(viewYear, viewMonth);
+    }
+    const sections: YearSection[] = [];
+    for (let m = 0; m < 12; m++) {
+      const groups = buildDayGroups(yearPaneYear, m);
+      if (groups.length > 0) sections.push({ key: `m-${m}`, month: m, groups });
+    }
+    return sections;
+  }, [subMode, byDay, viewYear, viewMonth, yearPaneYear]);
+
+  /** 右栏条目总数 */
+  const listTotal = useMemo(() => {
+    if (subMode !== "year") {
+      return (listGroups as DayGroup[]).reduce((sum, g) => sum + g.tasks.length, 0);
+    }
+    return (listGroups as YearSection[]).reduce(
+      (sum, s) => sum + s.groups.reduce((g, d) => g + d.tasks.length, 0),
+      0,
+    );
+  }, [listGroups, subMode]);
+
+  /** 选中日变化时滚动定位到对应分组（月模式） */
+  const groupRefs = useRef(new Map<string, HTMLDivElement>());
+  useEffect(() => {
+    if (subMode !== "month") return;
+    const node = groupRefs.current.get(formatYmd(selected));
+    if (node) {
+      node.scrollIntoView({ block: "nearest" });
+    }
+  }, [selected, subMode]);
+
+  const goToday = () => {
+    const now = startOfDay(new Date());
+    setViewYear(now.getFullYear());
+    setViewMonth(now.getMonth());
+    setSelected(now);
+    setSubMode("month");
+  };
+
+  /** 头部动作：回到今天 + 刷新节假日（月/年模式共用，参考 wait-home headerActions） */
+  const headerActions = (
+    <>
+      <Button
+        variant="ghost"
+        size="icon"
+        className="size-8 text-muted-foreground"
+        onClick={goToday}
+        aria-label="回到今天"
+        title="回到今天"
+      >
+        <LocateFixed className="size-4" />
+      </Button>
+      <Button
+        variant="ghost"
+        size="icon"
+        className="size-8 text-muted-foreground"
+        onClick={refreshHolidays}
+        disabled={updatingHolidays}
+        aria-label="更新节假日数据"
+        title={
+          holidayMetaQuery.data && holidayMetaQuery.data.last_update_ms > 0
+            ? `上次更新：${format(new Date(holidayMetaQuery.data.last_update_ms), "M月d日 HH:mm")}（每天自动更新一次，也可手动更新）`
+            : "每天自动更新一次，也可手动更新"
+        }
+      >
+        {updatingHolidays ? (
+          <Loader2 className="size-4 animate-spin" />
+        ) : (
+          <RefreshCw className="size-4" />
+        )}
+      </Button>
+    </>
+  );
+
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-      {/* 工具栏：月/议程两档切换 + 翻月 + 今天回位 + 节假日手动更新 */}
+      {/* 工具栏：月/年/议程三档切换 + 节假日手动更新（议程档） */}
       <div className="flex items-center justify-between gap-3 px-4 py-2">
-        <h2 className="text-lg font-semibold">{format(month, "yyyy年M月", { locale: zhCN })}</h2>
+        <h2 className="text-lg font-semibold">
+          {subMode === "year"
+            ? `${yearPaneYear}年`
+            : format(new Date(viewYear, viewMonth), "yyyy年M月", { locale: zhCN })}
+        </h2>
         <div className="flex items-center gap-2">
           <div className="flex items-center overflow-hidden rounded-md border">
             <Button
@@ -152,6 +308,19 @@ export function CalendarView({ tasks, projects, labelsByTask, onCreateClick }: C
               variant="ghost"
               size="sm"
               className="h-8 gap-1.5 rounded-none"
+              aria-pressed={subMode === "year"}
+              onClick={() => {
+                setYearPaneYear(viewYear);
+                setSubMode("year");
+              }}
+            >
+              <CalendarRange size={14} />
+              年
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8 gap-1.5 rounded-none"
               aria-pressed={subMode === "agenda"}
               onClick={() => setSubMode("agenda")}
             >
@@ -159,76 +328,219 @@ export function CalendarView({ tasks, projects, labelsByTask, onCreateClick }: C
               议程
             </Button>
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-8"
-            onClick={() => setMonth(startOfMonth(new Date()))}
-          >
-            今天
-          </Button>
-          <Button
-            variant="outline"
-            size="icon"
-            className="h-8 w-8"
-            aria-label="上个月"
-            onClick={() => setMonth((m) => addMonths(m, -1))}
-          >
-            <ChevronLeft size={14} />
-          </Button>
-          <Button
-            variant="outline"
-            size="icon"
-            className="h-8 w-8"
-            aria-label="下个月"
-            onClick={() => setMonth((m) => addMonths(m, 1))}
-          >
-            <ChevronRight size={14} />
-          </Button>
-          {/* 手动更新节假日：显示上次成功时间；每日 8 点守护自动更新（错过的下次启动补更） */}
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-8 gap-1.5"
-            title={
-              holidayMetaQuery.data && holidayMetaQuery.data.last_update_ms > 0
-                ? `上次更新：${format(new Date(holidayMetaQuery.data.last_update_ms), "M月d日 HH:mm")}（每天自动更新一次）`
-                : "每天自动更新一次，也可手动更新"
-            }
-            disabled={updatingHolidays}
-            onClick={refreshHolidays}
-          >
-            <RefreshCw size={13} className={cn(updatingHolidays && "animate-spin")} />
-            节假日
-          </Button>
+          {subMode === "agenda" && (
+            <>
+              <Button variant="outline" size="sm" className="h-8" onClick={goToday}>
+                今天
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8 gap-1.5"
+                title={
+                  holidayMetaQuery.data && holidayMetaQuery.data.last_update_ms > 0
+                    ? `上次更新：${format(new Date(holidayMetaQuery.data.last_update_ms), "M月d日 HH:mm")}（每天自动更新一次）`
+                    : "每天自动更新一次，也可手动更新"
+                }
+                disabled={updatingHolidays}
+                onClick={refreshHolidays}
+              >
+                <RefreshCw size={13} className={cn(updatingHolidays && "animate-spin")} />
+                节假日
+              </Button>
+            </>
+          )}
         </div>
       </div>
 
       {subMode === "month" ? (
-        <MonthGrid
-          month={month}
-          today={today}
-          byDay={byDay}
-          holidayByDate={holidayByDate}
-          onOpenDetail={openDetail}
-          onExpandDay={(day) => setExpandedDay(day)}
-        />
+        <div className={SPLIT_LAYOUT}>
+          {/* ===== 左半区：月历 ===== */}
+          <div className={LEFT_PANE}>
+            <MonthCalendar
+              size="lg"
+              fillHeight
+              year={viewYear}
+              month={viewMonth}
+              onMonthChange={(y, m) => {
+                setViewYear(y);
+                setViewMonth(m);
+              }}
+              selected={selected}
+              onDayClick={setSelected}
+              onDayContextMenu={(e, date) => {
+                e.preventDefault();
+                e.stopPropagation();
+                onAddOnDate?.(formatYmd(date));
+              }}
+              onTitleClick={() => {
+                setYearPaneYear(viewYear);
+                setSubMode("year");
+              }}
+              headerSubtitle={
+                <span className="mt-2 text-xs text-muted-foreground">
+                  {relativeLabel(selected)}
+                </span>
+              }
+              headerActions={headerActions}
+              holidays={holidayMarks}
+              subLabel={(date) => daySubLabel(date)}
+              dayChips={(date) => {
+                const dayTasks = byDay.get(formatYmd(date)) ?? [];
+                if (dayTasks.length === 0) return null;
+                const visibleDots = dayTasks.slice(0, 4);
+                const overflow = dayTasks.length - visibleDots.length;
+                return (
+                  <span className="flex w-full flex-wrap items-center justify-center gap-1 px-0.5">
+                    {visibleDots.map((t) => (
+                      <span
+                        key={t.id}
+                        className="size-1.5 shrink-0 rounded-full"
+                        style={{ backgroundColor: PRIORITY_COLOR[t.priority] || PRIORITY_COLOR[1] }}
+                      />
+                    ))}
+                    {overflow > 0 && (
+                      <span className="text-[10px] leading-none text-muted-foreground">
+                        +{overflow}
+                      </span>
+                    )}
+                  </span>
+                );
+              }}
+            />
+          </div>
+
+          {/* ===== 右半区：当前月的任务列表（按日分组，选中日高亮定位） ===== */}
+          <div className={RIGHT_PANE}>
+            <div className="flex shrink-0 items-center gap-2 border-b px-4 py-3">
+              <h3 className="text-sm font-semibold">
+                {viewYear}年{viewMonth + 1}月的任务
+              </h3>
+              <Badge variant="secondary">{listTotal} 条</Badge>
+              {listTotal > 0 && (
+                <span className="text-xs text-muted-foreground">点击日历日期可定位</span>
+              )}
+            </div>
+            {listTotal === 0 ? (
+              <div className="flex flex-1 flex-col items-center justify-center gap-2 p-6 text-center">
+                <span className="flex size-12 items-center justify-center rounded-full bg-muted">
+                  <CalendarX className="size-6 text-muted-foreground" />
+                </span>
+                <p className="text-sm font-medium">本月没有带截止日期的任务</p>
+                <p className="text-xs text-muted-foreground">
+                  切换月份，或右键日历日期快速新增
+                </p>
+              </div>
+            ) : (
+              <ScrollArea className="min-h-0 flex-1">
+                <div className="flex flex-col gap-1 p-2">
+                  {(listGroups as DayGroup[]).map((group) => (
+                    <DayGroupBlock
+                      key={group.key}
+                      group={group}
+                      today={today}
+                      isSelectedDay={isSameDay(group.date, selected)}
+                      registerRef={(node) => {
+                        if (node) groupRefs.current.set(group.key, node);
+                        else groupRefs.current.delete(group.key);
+                      }}
+                      projects={projects}
+                      labelsByTask={labelsByTask}
+                      onOpenDetail={openDetail}
+                    />
+                  ))}
+                </div>
+              </ScrollArea>
+            )}
+          </div>
+        </div>
+      ) : subMode === "year" ? (
+        <div className={SPLIT_LAYOUT}>
+          {/* ===== 左半区：年视图（12 个迷你月历） ===== */}
+          <div className={LEFT_PANE}>
+            <YearOverviewPanel
+              year={yearPaneYear}
+              onBack={() => setSubMode("month")}
+              onSelect={(date) => {
+                // 点击年视图某天：回到月历并定位该日
+                setViewYear(date.getFullYear());
+                setViewMonth(date.getMonth());
+                setSelected(startOfDay(date));
+                setSubMode("month");
+              }}
+              onPickMonth={(m) => {
+                setViewYear(yearPaneYear);
+                setViewMonth(m);
+                setSelected(new Date(yearPaneYear, m, 1));
+                setSubMode("month");
+              }}
+              onYearChange={(y) => {
+                setYearPaneYear(y);
+                setViewYear(y);
+              }}
+            />
+          </div>
+
+          {/* ===== 右半区：当年的任务列表（按月分节） ===== */}
+          <div className={RIGHT_PANE}>
+            <div className="flex shrink-0 items-center gap-2 border-b px-4 py-3">
+              <h3 className="text-sm font-semibold">{yearPaneYear}年的任务</h3>
+              <Badge variant="secondary">{listTotal} 条</Badge>
+            </div>
+            {listTotal === 0 ? (
+              <div className="flex flex-1 flex-col items-center justify-center gap-2 p-6 text-center">
+                <span className="flex size-12 items-center justify-center rounded-full bg-muted">
+                  <CalendarX className="size-6 text-muted-foreground" />
+                </span>
+                <p className="text-sm font-medium">本年没有带截止日期的任务</p>
+                <p className="text-xs text-muted-foreground">切换年份，或右键日历日期快速新增</p>
+              </div>
+            ) : (
+              <ScrollArea className="min-h-0 flex-1">
+                <div className="flex flex-col gap-1 p-2">
+                  {(listGroups as YearSection[]).map((section) => (
+                    <div key={section.key}>
+                      <div className="sticky top-0 z-10 -mx-2 mb-1 flex items-center gap-2 bg-card/95 px-4 py-1.5 backdrop-blur">
+                        <span className="text-xs font-bold text-primary">
+                          {section.month + 1}月
+                        </span>
+                        <span className="h-px flex-1 bg-border" />
+                      </div>
+                      {section.groups.map((group) => (
+                        <DayGroupBlock
+                          key={group.key}
+                          group={group}
+                          today={today}
+                          isSelectedDay={false}
+                          registerRef={() => {}}
+                          projects={projects}
+                          labelsByTask={labelsByTask}
+                          onOpenDetail={openDetail}
+                        />
+                      ))}
+                    </div>
+                  ))}
+                </div>
+              </ScrollArea>
+            )}
+          </div>
+        </div>
       ) : (
         <AgendaList
-          month={month}
+          month={new Date(viewYear, viewMonth)}
           today={today}
           byDay={byDay}
           holidayByDate={holidayByDate}
           projectById={projectById}
-          labelsByTask={labelsByTask}
           projects={projects}
+          labelsByTask={labelsByTask}
           onOpenDetail={openDetail}
           onCreateClick={onCreateClick}
         />
       )}
 
-      {/* 月格弹层：该日全部任务（与列表行同构的简化行，右键菜单可用）。
-          入口：任务条尾部「展开」按钮（滚动不便时的键盘/精确定位替代） */}
+      {/* 月模式弹层：该日全部任务（与列表行同构的简化行，右键菜单可用）。
+          入口：任务圆点行尾部「展开」按钮（滚动不便时的键盘/精确定位替代） */}
       <Dialog open={expandedDay != null} onOpenChange={(o) => !o && setExpandedDay(null)}>
         <DialogContent className="max-w-md">
           <DialogHeader>
@@ -260,7 +572,7 @@ export function CalendarView({ tasks, projects, labelsByTask, onCreateClick }: C
   );
 }
 
-// ---------------- 节假日徽标 ----------------
+// ---------------- 节假日徽标（议程档沿用旧样式口径） ----------------
 
 /** 放假「休」（绿）/ 调休补班「班」（橙）小徽标；普通日不渲染 */
 function HolidayBadge({ holiday }: { holiday: HolidayInfo | undefined }) {
@@ -280,176 +592,67 @@ function HolidayBadge({ holiday }: { holiday: HolidayInfo | undefined }) {
   );
 }
 
-// ---------------- 月档 ----------------
+// ---------------- 右栏按日分组块 ----------------
 
-interface MonthGridProps {
-  month: Date;
+/** 右栏单个按日分组块（日期头 + 任务行；选中日整行高亮） */
+function DayGroupBlock({
+  group,
+  today,
+  isSelectedDay,
+  registerRef,
+  projects,
+  labelsByTask,
+  onOpenDetail,
+}: {
+  group: DayGroup;
   today: Date;
-  byDay: Map<string, TodoTask[]>;
-  holidayByDate: Map<string, HolidayInfo>;
+  isSelectedDay: boolean;
+  registerRef: (node: HTMLDivElement | null) => void;
+  projects: TodoProject[];
+  labelsByTask: Map<number, TodoLabel[]>;
   onOpenDetail: (id: number) => void;
-  onExpandDay: (day: Date) => void;
-}
-
-function MonthGrid({ month, today, byDay, holidayByDate, onOpenDetail, onExpandDay }: MonthGridProps) {
-  const weeks = useMemo(() => buildMonthGrid(month), [month]);
+}) {
+  const isToday = isSameDay(group.date, today);
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col px-4 pb-3">
-      {/* 星期表头（周一始） */}
-      <div className="grid grid-cols-7 border-b">
-        {WEEKDAY_LABELS.map((w, i) => (
-          <div
-            key={w}
-            className={cn(
-              "py-1.5 text-center text-xs text-muted-foreground",
-              i >= 5 && "text-muted-foreground/80",
-            )}
+    <div ref={registerRef}>
+      <div
+        className={cn(
+          "flex items-center gap-2 rounded-lg px-3 py-1.5",
+          isSelectedDay && "bg-primary/10",
+        )}
+      >
+        <span className={cn("text-sm font-semibold", isToday && "text-primary")}>
+          {dayLabel(group.date)}
+        </span>
+        <span className="text-xs text-muted-foreground">
+          {format(group.date, "EEEE", { locale: zhCN })}
+        </span>
+        <span className="text-xs text-muted-foreground">{relativeLabel(group.date)}</span>
+        {isToday && (
+          <Badge variant="outline" className="h-5 text-[10px] text-primary">
+            今天
+          </Badge>
+        )}
+      </div>
+      <div className="flex flex-col gap-1.5">
+        {group.tasks.map((t) => (
+          <TaskContextMenu
+            key={t.id}
+            task={t}
+            projects={projects}
+            onOpenDetail={() => onOpenDetail(t.id)}
           >
-            {w}
-          </div>
+            <CalendarTaskRow
+              task={t}
+              labels={labelsByTask.get(t.id) ?? []}
+              projectName={t.project_id != null ? projects.find((p) => p.id === t.project_id)?.title : undefined}
+              onActivate={() => onOpenDetail(t.id)}
+              overdue={!t.done && t.due_date! < today.getTime()}
+            />
+          </TaskContextMenu>
         ))}
       </div>
-      <div className="grid min-h-0 flex-1 grid-cols-7 grid-rows-6 border-b border-l">
-        {weeks.flat().map((day) => {
-          const inMonth = isSameMonth(day, month);
-          const isToday = isSameDay(day, today);
-          const dayTasks = byDay.get(dayKey(day.getTime())) ?? [];
-          const holiday = holidayByDate.get(format(day, "yyyy-MM-dd"));
-          return (
-            <div
-              key={day.getTime()}
-              className={cn(
-                "flex min-h-0 flex-col gap-0.5 overflow-hidden border-r border-t p-1",
-                !inMonth && "bg-accent/20 text-muted-foreground",
-              )}
-            >
-              <div
-                className={cn(
-                  "flex items-center justify-between gap-1 text-[11px] leading-4",
-                  !inMonth && "opacity-60",
-                )}
-              >
-                <span
-                  className={cn(
-                    "min-w-5 rounded px-1 tabular-nums",
-                    isToday &&
-                      "bg-primary font-semibold text-primary-foreground",
-                  )}
-                >
-                  {format(day, "d")}
-                </span>
-                <span className="flex items-center gap-1">
-                  <HolidayBadge holiday={holiday} />
-                  {dayTasks.length > 0 && (
-                    <span className="text-[10px] text-muted-foreground/70 tabular-nums">
-                      {dayTasks.length}
-                    </span>
-                  )}
-                </span>
-              </div>
-              {/* 可滚动任务条列表：任务多于可视高度时纵向滑动查看全部
-                  （overflow-y-auto；滚到底部还有「共 N 条」尾巴兜底提示） */}
-              <MonthCellTaskList
-                day={day}
-                dayTasks={dayTasks}
-                today={today}
-                muted={!inMonth}
-                onOpenDetail={onOpenDetail}
-                onExpandDay={onExpandDay}
-              />
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-interface MonthCellTaskListProps {
-  day: Date;
-  dayTasks: TodoTask[];
-  today: Date;
-  muted: boolean;
-  onOpenDetail: (id: number) => void;
-  onExpandDay: (day: Date) => void;
-}
-
-/** 月格任务条滚动列表（用户需求：超出可滑动查看当日全部内容） */
-function MonthCellTaskList({
-  day,
-  dayTasks,
-  today,
-  muted,
-  onOpenDetail,
-  onExpandDay,
-}: MonthCellTaskListProps) {
-  return (
-    <div className="scroll-smooth flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto">
-      {dayTasks.map((t) => (
-        <MonthCellTask
-          key={t.id}
-          task={t}
-          muted={muted}
-          overdue={!t.done && t.due_date! < today.getTime()}
-          onExpand={dayTasks.length > 1 ? () => onExpandDay(day) : undefined}
-          onClick={() => onOpenDetail(t.id)}
-        />
-      ))}
-    </div>
-  );
-}
-
-interface MonthCellTaskProps {
-  task: TodoTask;
-  /** 非本月格降透明度 */
-  muted: boolean;
-  overdue: boolean;
-  onClick: () => void;
-  /** 尾部「展开全部」按钮回调（弹层精确定位；滚动之外的键盘可达路径） */
-  onExpand?: () => void;
-}
-
-/** 月格任务条：优先级左色点 + 截止时间 + 截断标题；点击打开详情抽屉 */
-function MonthCellTask({ task: t, muted, overdue, onClick, onExpand }: MonthCellTaskProps) {
-  return (
-    <div
-      className={cn(
-        "group/bar flex w-full items-center gap-1 overflow-hidden rounded px-1 text-left text-[11px] leading-4 hover:bg-accent",
-        muted && "opacity-60",
-        t.done ? "text-muted-foreground/80" : "text-foreground/90",
-      )}
-    >
-      <button
-        type="button"
-        aria-label={`${t.done ? "已完成" : "未完成"}任务：${t.title}`}
-        className="flex min-w-0 flex-1 items-center gap-1"
-        onClick={onClick}
-      >
-        <span
-          aria-hidden
-          className="size-1.5 shrink-0 rounded-full"
-          style={{ background: PRIORITY_COLOR[t.priority] || PRIORITY_COLOR[1] }}
-        />
-        <span
-          className={cn("shrink-0 tabular-nums text-muted-foreground", overdue && OVERDUE_COLOR_CLASS)}
-        >
-          {t.due_date != null ? format(new Date(t.due_date), "HH:mm") : ""}
-        </span>
-        <span className={cn("truncate", t.done && "line-through", overdue && OVERDUE_COLOR_CLASS)}>
-          {t.title}
-        </span>
-      </button>
-      {onExpand && (
-        <button
-          type="button"
-          aria-label="展开该日全部任务"
-          className="hidden shrink-0 rounded px-0.5 text-muted-foreground/70 hover:bg-accent hover:text-accent-foreground group-hover/bar:block"
-          onClick={onExpand}
-        >
-          ⋯
-        </button>
-      )}
     </div>
   );
 }
@@ -576,7 +779,7 @@ interface CalendarTaskRowProps {
   overdue?: boolean;
 }
 
-/** 议程/弹层任务行：优先级左色条 + 标题 + 标签/项目元信息 + 截止时刻（逾期红） */
+/** 右栏/议程/弹层任务行：优先级左色条 + 标题 + 标签/项目元信息 + 截止时刻（逾期红） */
 function CalendarTaskRow({
   task: t,
   labels,

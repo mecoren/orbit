@@ -59,6 +59,8 @@ interface TodoShellContextValue {
   editingTask: TodoTask | null;
   setEditingTask: (t: TodoTask | null) => void;
   openCreateForm: () => void;
+  /** 以指定截止日期打开新增表单（日历视图右键日格快捷新增） */
+  openCreateFormOnDate: (dueDate: string) => void;
   labelManagerOpen: boolean;
   setLabelManagerOpen: (open: boolean) => void;
 }
@@ -84,6 +86,8 @@ export default function TodoShell() {
   // ---- 表单/标签管理状态（壳层持久，面板触发）----
   const [formOpen, setFormOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<TodoTask | null>(null);
+  // 新增表单预填的截止日期（日历右键日格注入；空 = 不预填）
+  const [presetDueDate, setPresetDueDate] = useState<string | null>(null);
   const [labelManagerOpen, setLabelManagerOpen] = useState(false);
 
   // 壳层命令面板的动作意图（07 §五-P1#8）：消费即归零（评审 C1）——
@@ -161,6 +165,12 @@ export default function TodoShell() {
     setEditingTask,
     openCreateForm: () => {
       setEditingTask(null);
+      setPresetDueDate(null);
+      setFormOpen(true);
+    },
+    openCreateFormOnDate: (dueDate: string) => {
+      setEditingTask(null);
+      setPresetDueDate(dueDate);
       setFormOpen(true);
     },
     labelManagerOpen,
@@ -191,13 +201,14 @@ export default function TodoShell() {
           {/* 右侧详情抽屉（store 驱动，§7-③；跨面板常驻） */}
           <TaskDetailDrawer projects={projects} />
 
-          {/* 新增/编辑九字段表单（04 §3.6） */}
+          {/* 新增/编辑九字段表单（04 §3.6）；presetDueDate = 日历右键预填截止日期 */}
           <TaskFormSheet
             open={formOpen}
             onOpenChange={setFormOpen}
             task={editingTask}
             projects={projects}
             defaultProjectId={ctx.activeProjectId}
+            presetDueDate={editingTask ? null : presetDueDate}
           />
 
           {/* 标签管理器十色板（04 §3.8） */}

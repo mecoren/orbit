@@ -465,6 +465,8 @@ interface TaskFormSheetProps {
   projects: TodoProject[];
   /** 新增时的默认项目（当前选中项目，04 §3.6） */
   defaultProjectId?: number | null;
+  /** 新增时预填的截止日期（YYYY-MM-DD；日历视图右键日格快捷新增用） */
+  presetDueDate?: string | null;
 }
 
 export function TaskFormSheet({
@@ -473,6 +475,7 @@ export function TaskFormSheet({
   task,
   projects,
   defaultProjectId,
+  presetDueDate,
 }: TaskFormSheetProps) {
   // 编辑模式载入该任务既有提醒（取第一条未删除），用于回填与变更比对
   const [existingReminder, setExistingReminder] = useState<TodoReminder | null>(null);
@@ -537,10 +540,12 @@ export function TaskFormSheet({
       ...(defaultProjectId != null ? { project_id: String(defaultProjectId) } : {}),
       priority: "0",
       status: "pending",
+      // 日历右键预填的截止日期（仅新增模式）
+      ...(presetDueDate ? { due_date: presetDueDate } : {}),
       // 新增默认提醒：一小时后（依赖 open，每次打开重新计算）
       remind_at: tsToInputValue(Date.now() + 60 * 60 * 1000),
     };
-  }, [task, defaultProjectId, existingReminder, open]);
+  }, [task, defaultProjectId, existingReminder, open, presetDueDate]);
 
   const handleSubmit = async (values: Record<string, unknown>) => {
     const payload = {
