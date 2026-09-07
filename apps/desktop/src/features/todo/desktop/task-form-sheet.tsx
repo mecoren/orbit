@@ -3,7 +3,7 @@
  *
  * 包装通用 EntityFormSheet；九字段规格照抄 + 虚拟字段 remind_at + 重复规则：
  * title(必填) / description(5000) / project_id / priority(0–5, 语义色点) / status(pending|doing|done)
- * / due_date / start_date / end_date（提交转毫秒时间戳）
+ * / due_date / start_date（提交转毫秒时间戳）
  * / repeat_mode / repeat_after（footerContent 预设 + 自定义 N×单位，与移动端同语义）。
  * remind_at 不是任务列：新增默认一小时后；编辑载入既有提醒回填，
  * 提交时按"清除删 / 变更删旧建新"同步。
@@ -92,7 +92,6 @@ export function buildTaskFields(projects: TodoProject[]): FieldDef[] {
     { name: "due_date", label: "截止日期", type: "date" },
     { name: "remind_at", label: "提醒时间", type: "datetime" },
     { name: "start_date", label: "开始日期", type: "date" },
-    { name: "end_date", label: "结束日期", type: "date" },
   ];
 }
 
@@ -568,7 +567,6 @@ export function TaskFormSheet({
       status: String(values.status ?? "pending"),
       due_date: toDateMs(values.due_date),
       start_date: toDateMs(values.start_date),
-      end_date: toDateMs(values.end_date),
       repeat_mode: repeatMode,
       repeat_after: repeatAfter,
     };

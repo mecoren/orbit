@@ -36,7 +36,6 @@ export function planNextRecurringInstance(task: TodoTask, nowMs: number): NextIn
       done_at: null,
       due_date: nextDue,
       start_date: shift(task.start_date),
-      end_date: shift(task.end_date),
       repeat_after: task.repeat_after,
       repeat_mode: task.repeat_mode,
       is_favorite: task.is_favorite,

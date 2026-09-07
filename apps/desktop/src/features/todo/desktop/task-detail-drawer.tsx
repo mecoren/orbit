@@ -30,6 +30,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
@@ -140,10 +141,8 @@ export function TaskDetailDrawer({ projects }: TaskDetailDrawerProps) {
             <TitleRow task={t} onPatch={updateTask} />
             {/* 2. 属性网格 */}
             <PropertyGrid task={t} projects={projects} onPatch={updateTask} />
-            {/* 3. 描述 */}
-            {t.description && <SectionBlock icon={AlignLeft} title="描述">
-              <p className="break-words whitespace-pre-wrap text-[13px]">{t.description}</p>
-            </SectionBlock>}
+            {/* 3. 描述（点击行内编辑；空描述也渲染区块作编辑入口） */}
+            <DescriptionSection task={t} onPatch={updateTask} />
             {/* 4. 子任务 */}
             <SubtasksSection taskId={t.id} subtasks={t.subtasks} percentDone={t.percent_done} onChanged={refetchDetail} />
             {/* 5. 标签 */}
@@ -616,6 +615,95 @@ function SectionBlock({
       </div>
       {children}
     </div>
+  );
+}
+
+/* ================= 区块 3：描述（行内编辑） ================= */
+
+/** 展示态点击进入编辑（textarea 自适应高度）；保存语义与表单一致：
+ *  trim 空写 null（清空描述）；Esc 取消还原。原实现为条件渲染的只读 <p>，
+ *  空描述时区块整体消失——详情页无任何描述编辑入口，只能绕道表单。 */
+function DescriptionSection({
+  task,
+  onPatch,
+}: {
+  task: Awaited<ReturnType<typeof todoTaskGetDetail>>;
+  onPatch: (patch: Record<string, unknown>) => Promise<void>;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(task.description ?? "");
+
+  useEffect(() => {
+    setDraft(task.description ?? "");
+    setEditing(false);
+  }, [task.id, task.description]);
+
+  const commit = async () => {
+    const v = draft.trim();
+    if (v !== (task.description?.trim() ?? "")) {
+      await onPatch({ description: v || null });
+    }
+    setEditing(false);
+  };
+
+  if (editing) {
+    return (
+      <SectionBlock icon={AlignLeft} title="描述">
+        <Textarea
+          autoFocus
+          value={draft}
+          maxLength={5000}
+          onChange={(e) => setDraft(e.target.value)}
+          // 桌面多行文本惯例：Enter 换行、Ctrl/Cmd+Enter 提交；失焦兜底保存
+          onKeyDown={(e) => {
+            if (e.key === "Escape") {
+              e.preventDefault();
+              setDraft(task.description ?? "");
+              setEditing(false);
+            } else if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+              e.preventDefault();
+              void commit();
+            }
+          }}
+          onBlur={() => void commit()}
+          className="min-h-[80px] text-[13px]"
+        />
+        <div className="mt-1 flex items-center justify-between">
+          <span className="text-[11px] text-muted-foreground">Ctrl+Enter 保存 · Esc 取消</span>
+          <span className="text-[11px] tabular-nums text-muted-foreground/70">{draft.length}/5000</span>
+        </div>
+      </SectionBlock>
+    );
+  }
+
+  return (
+    <SectionBlock icon={AlignLeft} title="描述">
+      {task.description ? (
+        <p
+          role="button"
+          tabIndex={0}
+          aria-label="点击编辑描述"
+          className="break-words whitespace-pre-wrap rounded-md text-[13px] transition-colors hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring"
+          onClick={() => setEditing(true)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              setEditing(true);
+            }
+          }}
+        >
+          {task.description}
+        </p>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setEditing(true)}
+          className="text-[13px] text-muted-foreground/50 transition-colors hover:text-muted-foreground"
+        >
+          + 添加描述
+        </button>
+      )}
+    </SectionBlock>
   );
 }
 

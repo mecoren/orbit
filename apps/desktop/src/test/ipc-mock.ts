@@ -46,7 +46,6 @@ interface MockTask {
   done_at: number | null;
   due_date: number | null;
   start_date: number | null;
-  end_date: number | null;
   repeat_after: number;
   repeat_mode: number;
   percent_done: number;
@@ -173,7 +172,6 @@ export function seedDefault(db: MockDb) {
     done_at: null,
     due_date: today.getTime(),
     start_date: null,
-    end_date: null,
     repeat_after: 0,
     repeat_mode: 0,
     percent_done: 0,
@@ -291,7 +289,6 @@ const commands: Record<string, (args: any, ctx: Ctx) => unknown> = {
       done_at: input.done_at ?? null,
       due_date: input.due_date ?? null,
       start_date: input.start_date ?? null,
-      end_date: input.end_date ?? null,
       repeat_after: input.repeat_after ?? 0,
       repeat_mode: input.repeat_mode ?? 0,
       percent_done: 0,

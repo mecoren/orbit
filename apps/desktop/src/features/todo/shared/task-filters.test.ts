@@ -17,7 +17,6 @@ function mk(partial: Partial<TodoTask>): TodoTask {
     done_at: null,
     due_date: null,
     start_date: null,
-    end_date: null,
     repeat_after: 0,
     repeat_mode: 0,
     percent_done: 0,

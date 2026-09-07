@@ -188,7 +188,6 @@ export interface TodoTask {
   done_at: number | null;
   due_date: number | null;
   start_date: number | null;
-  end_date: number | null;
   repeat_after: number;
   repeat_mode: number;
   percent_done: number;
@@ -212,7 +211,6 @@ export interface TodoTaskCreateInput {
   done_at?: number | null;
   due_date?: number | null;
   start_date?: number | null;
-  end_date?: number | null;
   repeat_after?: number;
   repeat_mode?: number;
   position?: number;
@@ -229,7 +227,6 @@ export interface TodoTaskUpdateInput {
   done_at?: number | null;
   due_date?: number | null;
   start_date?: number | null;
-  end_date?: number | null;
   repeat_after?: number;
   repeat_mode?: number;
   percent_done?: number;

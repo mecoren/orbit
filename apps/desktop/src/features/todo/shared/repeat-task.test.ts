@@ -13,7 +13,7 @@ function mk(partial: Partial<TodoTask>): TodoTask {
   return {
     id: 1, uuid: "u", title: "任务", description: null, project_id: null,
     priority: 0, status: "pending", done: 0, done_at: null,
-    due_date: null, start_date: null, end_date: null,
+    due_date: null, start_date: null,
     repeat_after: 1, repeat_mode: 0, percent_done: 0,
     position: 0, is_favorite: 0, my_day_date: null, is_deleted: 0,
     created_at: 0, updated_at: 0, deleted_at: null, version: 1,
