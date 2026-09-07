@@ -753,11 +753,17 @@ function LabelsSection({
       <div className="flex flex-wrap items-center gap-1.5">
         {labels.map((l) => (
           <span key={l.task_label_id}
-            className="inline-flex items-center gap-1 rounded-md px-2.5 py-0.5 text-xs font-medium text-white shadow-sm"
-            style={{ background: l.hex_color }}
+            className="inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5 text-xs text-muted-foreground"
           >
+            {/* 色点+标签名：与列表行 LabelChips 同形制（点=颜色信号） */}
+            <span
+              aria-hidden
+              className="size-2 shrink-0 rounded-full"
+              style={{ background: l.hex_color }}
+            />
             {l.title}
             <button type="button" aria-label={`移除标签 ${l.title}`}
+              className="text-muted-foreground/60 hover:text-foreground"
               onClick={async () => { await todoTaskLabelDelete(l.task_label_id); onChanged(); }}
             >
               <X size={12} />

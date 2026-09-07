@@ -197,13 +197,19 @@ function TagsField({
         {value.map((t, i) => (
           <span
             key={t.id ?? `pending-${t.title}`}
-            className="inline-flex items-center gap-1 rounded-md px-2.5 py-0.5 text-xs font-medium text-white shadow-sm"
-            style={{ background: t.hex_color }}
+            className="inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5 text-xs text-muted-foreground"
           >
+            {/* 色点+标签名：与列表行 LabelChips 同形制（点=颜色信号） */}
+            <span
+              aria-hidden
+              className="size-2 shrink-0 rounded-full"
+              style={{ background: t.hex_color }}
+            />
             {t.title}
             <button
               type="button"
               aria-label={`移除标签 ${t.title}`}
+              className="text-muted-foreground/60 hover:text-foreground"
               onClick={() => onChange(value.filter((_, idx) => idx !== i))}
             >
               <X size={12} />

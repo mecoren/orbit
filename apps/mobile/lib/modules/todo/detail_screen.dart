@@ -901,6 +901,7 @@ class _LabelsSection extends StatelessWidget {
         spacing: AppDimens.space8,
         runSpacing: AppDimens.space8,
         children: [
+          // 色点+标签名（与列表优先级圆点/桌面 LabelChips 同形制：点=颜色信号）
           for (final label in detail.labels)
             Container(
               padding: const EdgeInsets.symmetric(
@@ -910,15 +911,29 @@ class _LabelsSection extends StatelessWidget {
               decoration: BoxDecoration(
                 borderRadius: AppShapes.small,
                 border: Border.all(
-                  color: hexToColor(label.hexColor).withValues(alpha: 0.3),
+                  color: colors.divider.withValues(alpha: 0.3),
                 ),
               ),
-              child: Text(
-                label.title,
-                style: TextStyle(
-                  fontSize: 13,
-                  color: hexToColor(label.hexColor),
-                ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: AppDimens.colorDotSize - 2,
+                    height: AppDimens.colorDotSize - 2,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: hexToColor(label.hexColor),
+                    ),
+                  ),
+                  const SizedBox(width: AppDimens.space8),
+                  Text(
+                    label.title,
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: colors.bodyText,
+                    ),
+                  ),
+                ],
               ),
             ),
           if (detail.labels.isEmpty)
