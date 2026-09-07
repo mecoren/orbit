@@ -2,7 +2,7 @@
  * TaskListView — 任务列表行（04 文档 §3.2 复刻）
  *
  * 行规格：圆形 checkbox（done 联动 status/done_at）+ 标题（划线）+
- * 元信息行（优先级色点/项目名/截止时间，逾期整段红）+ hover 星标。
+ * 元信息行（标签/项目名/截止时间，逾期整段红）+ 优先级左缘竖条（P1–P5）+ hover 星标。
  * P1 增强：
  * - 虚拟化（P0）：仅渲染可视窗 ± overscan；绝对定位行必须用 top 定位，
  *   transform 会成为 fixed 后代（ContextMenuBase 哨兵）的 containing block。
@@ -682,13 +682,16 @@ function TaskRow({
         onFocusMove(dir);
       }}
     >
-      {/* 优先级色条（行底部 2px，与看板卡顶部色条同语义）；
-          未设优先级（P0）按「低」的灰色显示，保证所有行都有色条 */}
-      <span
-        aria-hidden
-        className="pointer-events-none absolute inset-x-0 bottom-0 h-0.5"
-        style={{ background: PRIORITY_COLOR[t.priority] || PRIORITY_COLOR[1] }}
-      />
+      {/* 优先级左缘竖条（与日历右栏任务行同形制）：P1–P5 着色，
+          未设优先级（P0）不渲染——与移动端列表/详情抽屉口径一致，
+          灰条不携带信息只会制造噪音 */}
+      {t.priority > 0 && (
+        <span
+          aria-hidden
+          className="pointer-events-none absolute inset-y-1.5 left-0 w-1 rounded-full"
+          style={{ background: PRIORITY_COLOR[t.priority] }}
+        />
+      )}
 
       {/* 多选勾选框（P2#17）：hover 或已有选中时显现；
           shift 点击 = 以最近一次勾选为锚做区间选择 */}

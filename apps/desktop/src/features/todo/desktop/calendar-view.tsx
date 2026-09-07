@@ -69,10 +69,15 @@ interface CalendarViewProps {
   onAddOnDate?: (date: string) => void;
 }
 
-/** 左右分栏：窄窗口退化为上下堆叠（参考 wait-home SPLIT_LAYOUT） */
+/** 左右分栏：窄窗口退化为上下堆叠（参考 wait-home SPLIT_LAYOUT）
+ *  左半区加 px-5 与右栏卡片对齐节奏；月历/年视图内容 max-w-3xl 水平居中，
+ *  大窗口下不贴左缘、不无限拉宽（6 列日格约 700px 为最佳可读宽度） */
 const SPLIT_LAYOUT = "flex h-full min-h-0 flex-col gap-3 xl:flex-row";
-const LEFT_PANE = "flex min-h-0 flex-1 flex-col xl:flex-none xl:basis-1/2";
+const LEFT_PANE = "flex min-h-0 flex-1 flex-col px-4 xl:flex-none xl:basis-1/2 xl:px-5";
 const RIGHT_PANE = "flex min-h-0 flex-1 flex-col rounded-xl border bg-card/40";
+/** 左半区内容宽度约束：flex-1 占满高度（fillHeight 月历需要确定高度容器），
+ *  max-w-3xl + mx-auto 水平居中——月历 lg 尺寸 7 列 + 年视图 3 列的最佳宽度 */
+const LEFT_CONTENT = "mx-auto min-h-0 w-full max-w-3xl flex-1";
 
 /** due_date（本地毫秒）→ 本地 YYYY-MM-DD，口径同 quick-add/表单日期链 */
 function dayKey(ms: number): string {
@@ -354,26 +359,27 @@ export function CalendarView({
         <div className={SPLIT_LAYOUT}>
           {/* ===== 左半区：月历 ===== */}
           <div className={LEFT_PANE}>
-            <MonthCalendar
-              size="lg"
-              fillHeight
-              year={viewYear}
-              month={viewMonth}
-              onMonthChange={(y, m) => {
-                setViewYear(y);
-                setViewMonth(m);
-              }}
-              selected={selected}
-              onDayClick={setSelected}
-              onDayContextMenu={(e, date) => {
-                e.preventDefault();
-                e.stopPropagation();
-                onAddOnDate?.(formatYmd(date));
-              }}
-              onTitleClick={() => {
-                setYearPaneYear(viewYear);
-                setSubMode("year");
-              }}
+            <div className={LEFT_CONTENT}>
+              <MonthCalendar
+                size="lg"
+                fillHeight
+                year={viewYear}
+                month={viewMonth}
+                onMonthChange={(y, m) => {
+                  setViewYear(y);
+                  setViewMonth(m);
+                }}
+                selected={selected}
+                onDayClick={setSelected}
+                onDayContextMenu={(e, date) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  onAddOnDate?.(formatYmd(date));
+                }}
+                onTitleClick={() => {
+                  setYearPaneYear(viewYear);
+                  setSubMode("year");
+                }}
               headerSubtitle={
                 <span className="mt-2 text-xs text-muted-foreground">
                   {relativeLabel(selected)}
@@ -385,15 +391,18 @@ export function CalendarView({
               dayChips={(date) => {
                 const dayTasks = byDay.get(formatYmd(date)) ?? [];
                 if (dayTasks.length === 0) return null;
-                const visibleDots = dayTasks.slice(0, 4);
-                const overflow = dayTasks.length - visibleDots.length;
+                // 优先级圆点仅 P1–P5 着色；P0 灰点不携带信息，行/卡/点统一隐藏口径
+                const prioTasks = dayTasks.filter((t) => t.priority > 0);
+                if (prioTasks.length === 0) return null;
+                const visibleDots = prioTasks.slice(0, 4);
+                const overflow = prioTasks.length - visibleDots.length;
                 return (
                   <span className="flex w-full flex-wrap items-center justify-center gap-1 px-0.5">
                     {visibleDots.map((t) => (
                       <span
                         key={t.id}
                         className="size-1.5 shrink-0 rounded-full"
-                        style={{ backgroundColor: PRIORITY_COLOR[t.priority] || PRIORITY_COLOR[1] }}
+                        style={{ backgroundColor: PRIORITY_COLOR[t.priority] }}
                       />
                     ))}
                     {overflow > 0 && (
@@ -404,7 +413,8 @@ export function CalendarView({
                   </span>
                 );
               }}
-            />
+              />
+            </div>
           </div>
 
           {/* ===== 右半区：当前月的任务列表（按日分组，选中日高亮定位） ===== */}
@@ -446,27 +456,29 @@ export function CalendarView({
         <div className={SPLIT_LAYOUT}>
           {/* ===== 左半区：年视图（12 个迷你月历） ===== */}
           <div className={LEFT_PANE}>
-            <YearOverviewPanel
-              year={yearPaneYear}
-              onBack={() => setSubMode("month")}
-              onSelect={(date) => {
-                // 点击年视图某天：回到月历并定位该日
-                setViewYear(date.getFullYear());
-                setViewMonth(date.getMonth());
-                setSelected(startOfDay(date));
-                setSubMode("month");
-              }}
-              onPickMonth={(m) => {
-                setViewYear(yearPaneYear);
-                setViewMonth(m);
-                setSelected(new Date(yearPaneYear, m, 1));
-                setSubMode("month");
-              }}
-              onYearChange={(y) => {
-                setYearPaneYear(y);
-                setViewYear(y);
-              }}
-            />
+            <div className={LEFT_CONTENT}>
+              <YearOverviewPanel
+                year={yearPaneYear}
+                onBack={() => setSubMode("month")}
+                onSelect={(date) => {
+                  // 点击年视图某天：回到月历并定位该日
+                  setViewYear(date.getFullYear());
+                  setViewMonth(date.getMonth());
+                  setSelected(startOfDay(date));
+                  setSubMode("month");
+                }}
+                onPickMonth={(m) => {
+                  setViewYear(yearPaneYear);
+                  setViewMonth(m);
+                  setSelected(new Date(yearPaneYear, m, 1));
+                  setSubMode("month");
+                }}
+                onYearChange={(y) => {
+                  setYearPaneYear(y);
+                  setViewYear(y);
+                }}
+              />
+            </div>
           </div>
 
           {/* ===== 右半区：当年的任务列表（按月分节） ===== */}
@@ -849,11 +861,15 @@ const CalendarTaskRow = memo(function CalendarTaskRow({
         }
       }}
     >
-      <span
-        aria-hidden
-        className="absolute inset-y-1 left-0 w-1 rounded-full"
-        style={{ background: PRIORITY_COLOR[t.priority] || PRIORITY_COLOR[1] }}
-      />
+      {/* 优先级左缘竖条：P1–P5 着色；未设优先级（P0）不渲染，
+          与列表行/看板卡口径统一（灰色兜底不携带信息） */}
+      {t.priority > 0 && (
+        <span
+          aria-hidden
+          className="absolute inset-y-1 left-0 w-1 rounded-full"
+          style={{ background: PRIORITY_COLOR[t.priority] }}
+        />
+      )}
       <div className="min-w-0 flex-1">
         <div
           className={cn(
