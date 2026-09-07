@@ -7,6 +7,11 @@
 
 ## [Unreleased]
 
+### 子任务删除确认改为行内 Popover(桌面)
+
+- 桌面详情抽屉的子任务删除确认从居中 AlertDialog 改为**锚定目标行下方的 Popover**(w-56 小框:标题+带子任务名的说明+取消/删除按钮),与 qraft 编辑器 tab 关闭确认同形制——确认框出现在操作对象旁而非屏幕中央,视觉关联更直接;每行独立受控,点外部/Esc 视为取消。随 7937d7c 落地。
+- ipc-mock 补子任务全命令面(create/toggle_done 按 Rust 口径回算父任务 percent_done/delete 软删+detail 返回真实 subtasks;原 mock 恒空数组),为子任务相关 e2e 铺路。
+
 ### 待办提醒加入任务详情入口(桌面+移动)
 
 - **桌面**:到期提醒自定义 toast(ReminderToast)在推迟三档旁新增「查看任务」按钮(accent 主按钮+ExternalLink 图标)——点击经 §7-③ 规范写 selectedTaskId 打开右侧详情抽屉并导航 /todo,与全局搜索/命令面板同范式;动作收口在 reminder-nav.ts 纯函数(node 单测 3 条)。
