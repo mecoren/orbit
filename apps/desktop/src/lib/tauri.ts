@@ -754,6 +754,8 @@ export interface StatsProjectRow {
   project_id: number | null;
   /** null = 未分组 */
   project_title: string | null;
+  /** 项目自选色（null = 未分组；空串/缺失回落待办强调色） */
+  project_hex_color: string | null;
   done_count: number;
   pending_count: number;
 }

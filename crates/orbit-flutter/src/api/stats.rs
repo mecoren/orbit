@@ -55,6 +55,7 @@ pub struct StatsStreak {
 pub struct StatsProjectRow {
     pub project_id: Option<i64>,
     pub project_title: Option<String>,
+    pub project_hex_color: Option<String>,
     pub done_count: i64,
     pub pending_count: i64,
 }
@@ -119,6 +120,7 @@ impl From<stats_api::StatsAggregate> for StatsAggregate {
                 .map(|r| StatsProjectRow {
                     project_id: r.project_id,
                     project_title: r.project_title,
+                    project_hex_color: r.project_hex_color,
                     done_count: r.done_count,
                     pending_count: r.pending_count,
                 })

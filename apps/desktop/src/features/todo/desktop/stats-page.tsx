@@ -17,7 +17,7 @@ import { EqualizerLoader } from "@/components/EqualizerLoader";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 import { statsAggregate, type StatsAggregate } from "@/lib/tauri";
-import { PRIORITY_LABELS, TODO_ACCENT } from "@/features/todo/shared/constants";
+import { PRIORITY_COLOR, PRIORITY_LABELS, TODO_ACCENT } from "@/features/todo/shared/constants";
 
 /** 热力图窗口档位（天） */
 const WINDOW_CHOICES = [
@@ -288,7 +288,7 @@ export function StatsPanel() {
                   done={r.done_count}
                   pending={r.pending_count}
                   max={maxProject}
-                  color={TODO_ACCENT}
+                  color={r.project_hex_color || TODO_ACCENT}
                 />
               ))}
             </div>
@@ -305,7 +305,7 @@ export function StatsPanel() {
                   done={r.done_count}
                   pending={r.pending_count}
                   max={maxPriority}
-                  color={TODO_ACCENT}
+                  color={PRIORITY_COLOR[r.priority] || PRIORITY_COLOR[1]}
                 />
               ))}
             </div>

@@ -858,12 +858,14 @@ class StatsStreak {
 class StatsProjectRow {
   final int? projectId;
   final String? projectTitle;
+  final String? projectHexColor;
   final int doneCount;
   final int pendingCount;
 
   const StatsProjectRow({
     required this.projectId,
     required this.projectTitle,
+    this.projectHexColor,
     required this.doneCount,
     required this.pendingCount,
   });

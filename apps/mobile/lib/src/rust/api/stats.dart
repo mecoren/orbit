@@ -163,12 +163,14 @@ class StatsPriorityRow {
 class StatsProjectRow {
   final PlatformInt64? projectId;
   final String? projectTitle;
+  final String? projectHexColor;
   final PlatformInt64 doneCount;
   final PlatformInt64 pendingCount;
 
   const StatsProjectRow({
     this.projectId,
     this.projectTitle,
+    this.projectHexColor,
     required this.doneCount,
     required this.pendingCount,
   });
@@ -177,6 +179,7 @@ class StatsProjectRow {
   int get hashCode =>
       projectId.hashCode ^
       projectTitle.hashCode ^
+      projectHexColor.hashCode ^
       doneCount.hashCode ^
       pendingCount.hashCode;
 
@@ -187,6 +190,7 @@ class StatsProjectRow {
           runtimeType == other.runtimeType &&
           projectId == other.projectId &&
           projectTitle == other.projectTitle &&
+          projectHexColor == other.projectHexColor &&
           doneCount == other.doneCount &&
           pendingCount == other.pendingCount;
 }

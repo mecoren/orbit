@@ -5,8 +5,10 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_dimens.dart';
 import '../../core/theme/orbit_accents.dart';
 import '../../data/api/dto.dart';
+import '../../shared/utils/hex_color.dart';
 import '../../shared/widgets/liquid_glass_title_bar.dart';
 import '../../shared/widgets/scroll_offset_listenable.dart';
+import 'logic/task_logic.dart';
 import 'providers/todo_providers.dart';
 
 /// 统计页 /todo/stats（backlog #25：统计仪表盘，对标 TickTick 成就页）
@@ -68,21 +70,42 @@ class _StatsScreenState extends ConsumerState<StatsScreen> {
                         title: '项目分布',
                         rows: [
                           for (final r in stats.byProject)
-                            (r.projectTitle ?? '未分组', r.doneCount, r.pendingCount),
+                            (
+                              r.projectTitle ?? '未分组',
+                              r.doneCount,
+                              r.pendingCount,
+                              hexToColor(r.projectHexColor,
+                                  fallback: OrbitAccents.todoAccent),
+                            ),
                         ],
                       ),
                       _DistSection(
                         title: '优先级分布',
                         rows: [
                           for (final r in stats.byPriority)
-                            (_priorityLabel(r.priority), r.doneCount, r.pendingCount),
+                            (
+                              _priorityLabel(r.priority),
+                              r.doneCount,
+                              r.pendingCount,
+                              hexToColor(
+                                priorityColorHex(r.priority).isEmpty
+                                    ? '#D1D5DB'
+                                    : priorityColorHex(r.priority),
+                                fallback: const Color(0xFFD1D5DB),
+                              ),
+                            ),
                         ],
                       ),
                       _DistSection(
                         title: '星期分布（已完成）',
                         rows: [
                           for (final r in stats.byWeekday)
-                            (_weekdayLabel(r.weekday), r.doneCount, 0),
+                            (
+                              _weekdayLabel(r.weekday),
+                              r.doneCount,
+                              0,
+                              OrbitAccents.todoAccent,
+                            ),
                         ],
                       ),
                     ],
@@ -373,12 +396,13 @@ class _HeatmapCard extends StatelessWidget {
   }
 }
 
-/// 分布卡（label + 双段条形：完成段强调色 / 未完成段弱化）
+/// 分布卡（label + 双段条形：完成段行色 / 未完成段弱化；行色按来源取
+/// 项目自选色 / 优先级语义色 / 待办强调色）
 class _DistSection extends StatelessWidget {
   const _DistSection({required this.title, required this.rows});
 
   final String title;
-  final List<(String, int, int)> rows;
+  final List<(String, int, int, Color)> rows;
 
   @override
   Widget build(BuildContext context) {
@@ -413,7 +437,7 @@ class _DistSection extends StatelessWidget {
               ),
             )
           else
-            for (final (label, done, pending) in visible)
+            for (final (label, done, pending, color) in visible)
               Padding(
                 padding: const EdgeInsets.only(top: AppDimens.space8),
                 child: Column(
@@ -449,7 +473,7 @@ class _DistSection extends StatelessWidget {
                             if (done > 0)
                               Flexible(
                                 flex: done,
-                                child: Container(color: OrbitAccents.todoAccent),
+                                child: Container(color: color),
                               ),
                             if (pending > 0)
                               Flexible(

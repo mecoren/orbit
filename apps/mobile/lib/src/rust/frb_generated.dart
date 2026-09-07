@@ -3546,13 +3546,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   StatsProjectRow dco_decode_stats_project_row(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 4)
-      throw Exception('unexpected arr length: expect 4 but see ${arr.length}');
+    if (arr.length != 5)
+      throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
     return StatsProjectRow(
       projectId: dco_decode_opt_box_autoadd_i_64(arr[0]),
       projectTitle: dco_decode_opt_String(arr[1]),
-      doneCount: dco_decode_i_64(arr[2]),
-      pendingCount: dco_decode_i_64(arr[3]),
+      projectHexColor: dco_decode_opt_String(arr[2]),
+      doneCount: dco_decode_i_64(arr[3]),
+      pendingCount: dco_decode_i_64(arr[4]),
     );
   }
 
@@ -4702,11 +4703,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_projectId = sse_decode_opt_box_autoadd_i_64(deserializer);
     var var_projectTitle = sse_decode_opt_String(deserializer);
+    var var_projectHexColor = sse_decode_opt_String(deserializer);
     var var_doneCount = sse_decode_i_64(deserializer);
     var var_pendingCount = sse_decode_i_64(deserializer);
     return StatsProjectRow(
       projectId: var_projectId,
       projectTitle: var_projectTitle,
+      projectHexColor: var_projectHexColor,
       doneCount: var_doneCount,
       pendingCount: var_pendingCount,
     );
@@ -5939,6 +5942,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_opt_box_autoadd_i_64(self.projectId, serializer);
     sse_encode_opt_String(self.projectTitle, serializer);
+    sse_encode_opt_String(self.projectHexColor, serializer);
     sse_encode_i_64(self.doneCount, serializer);
     sse_encode_i_64(self.pendingCount, serializer);
   }

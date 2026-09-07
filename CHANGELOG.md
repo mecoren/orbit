@@ -7,6 +7,12 @@
 
 ## [Unreleased]
 
+### 统计分布条着色升级(桌面/移动)
+
+- **项目分布条用项目自选色**:统计接口 `stats_aggregate` 的 `by_project` 行新增 `project_hex_color`(SQL join `todo_projects.hex_color` 一次带出,未分组行 null);桌面 `/todo/stats` 与移动端统计页的项目分布条形完成段按各项目 `hex_color` 着色,空串/缺失回落待办强调色(与侧栏色块口径一致),未分组行回落强调色。
+- **优先级分布条用优先级语义色**:完成段按 P1–P5 语义色(低灰/中蓝/高橙/紧急红/立即深红)着色,P0「无」用灰点色,与详情抽屉/表单优先级色板口径一致。
+- 星期分布保持待办强调色不变。三端口径统一:Rust core join 取色 + FRB `stats.rs` 镜像 + 桌面 `tauri.ts`/`ipc-mock` + 移动端 DTO/mock 同步补字段;新增 Rust 单测 `by_project_carries_project_hex_color`(自建带色项目 + 未分组行不带色),桌面 vitest 113 / 移动 flutter test 120 / cargo test 321 全绿。
+
 ### 日历视图(wait-home 风格重构,桌面/Web)
 
 - **左右分栏布局**:左侧月历/年视图 + 右侧当前范围任务列表(月模式按日分组、选中日高亮并滚动定位;年模式按月分节;窄窗口自动退化为上下堆叠)。

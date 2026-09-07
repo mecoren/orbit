@@ -805,19 +805,21 @@ class MockOrbitBridge implements OrbitBridge {
           final key = t['project_id'] ?? 'none';
           final existing = byProjectMap[key];
           final pid = t['project_id'] as int?;
-          final title = pid != null
-              ? (store.projects[pid]?['title'] as String? ?? '未知项目')
-              : null;
+          final project = pid != null ? store.projects[pid] : null;
+          final title =
+              project != null ? (project['title'] as String? ?? '未知项目') : null;
           final row = existing ??
               StatsProjectRow(
                 projectId: pid,
                 projectTitle: title,
+                projectHexColor: project?['hex_color'] as String?,
                 doneCount: 0,
                 pendingCount: 0,
               );
           byProjectMap[key] = StatsProjectRow(
             projectId: row.projectId,
             projectTitle: row.projectTitle,
+            projectHexColor: row.projectHexColor,
             doneCount: row.doneCount + (t['done'] == 1 ? 1 : 0),
             pendingCount: row.pendingCount + (t['done'] == 1 ? 0 : 1),
           );

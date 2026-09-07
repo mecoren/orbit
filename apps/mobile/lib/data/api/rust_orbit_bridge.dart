@@ -575,6 +575,7 @@ class RustOrbitBridge implements OrbitBridge {
           .map((r) => StatsProjectRow(
                 projectId: r.projectId,
                 projectTitle: r.projectTitle,
+                projectHexColor: r.projectHexColor,
                 doneCount: r.doneCount,
                 pendingCount: r.pendingCount,
               ))

@@ -73,6 +73,8 @@ pub struct ProjectDistRow {
     pub project_id: Option<i64>,
     /// 项目名（未分组时 None，前端显示「未分组」）
     pub project_title: Option<String>,
+    /// 项目自选色（未分组时 None；前端条形图按此着色，空串回落待办强调色）
+    pub project_hex_color: Option<String>,
     /// 已完成任务数
     pub done_count: i64,
     /// 未完成任务数
@@ -272,27 +274,25 @@ async fn stats_streak_impl(pool: &SqlitePool) -> CoreResult<StreakData> {
 }
 
 async fn stats_by_project_impl(pool: &SqlitePool) -> CoreResult<Vec<ProjectDistRow>> {
-    let rows: Vec<(Option<i64>, String, i64, i64)> = sqlx::query_as(
+    let rows: Vec<(Option<i64>, String, String, i64, i64)> = sqlx::query_as(
         "SELECT t.project_id, \
                 CASE WHEN t.project_id IS NULL THEN '' ELSE p.title END, \
+                CASE WHEN t.project_id IS NULL THEN '' ELSE p.hex_color END, \
                 SUM(CASE WHEN t.done = 1 THEN 1 ELSE 0 END), \
                 SUM(CASE WHEN t.done = 0 THEN 1 ELSE 0 END) \
          FROM todo_tasks t LEFT JOIN todo_projects p ON t.project_id = p.id \
          WHERE t.is_deleted = 0 \
          GROUP BY t.project_id \
-         ORDER BY 3 DESC",
+         ORDER BY 4 DESC",
     )
     .fetch_all(pool)
     .await?;
     Ok(rows
         .into_iter()
-        .map(|(pid, title, done, pending)| ProjectDistRow {
+        .map(|(pid, title, hex, done, pending)| ProjectDistRow {
             project_id: pid,
-            project_title: if pid.is_some() {
-                Some(title)
-            } else {
-                None
-            },
+            project_title: if pid.is_some() { Some(title) } else { None },
+            project_hex_color: if pid.is_some() { Some(hex) } else { None },
             done_count: done,
             pending_count: pending,
         })
@@ -366,6 +366,7 @@ pub struct StatsAggregate {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::api::business_api;
     use crate::api::business_api::create_todo_task;
     use crate::models::business::TodoTaskCreateInput;
 
@@ -503,6 +504,37 @@ mod tests {
         let w = stats_by_weekday_impl(&pool).await.unwrap();
         assert_eq!(w.len(), 7);
         assert_eq!(w.iter().map(|r| r.done_count).sum::<i64>(), 2, "2 条已完成");
+    }
+
+    #[tokio::test]
+    async fn by_project_carries_project_hex_color() {
+        let pool = setup_db().await;
+        // 自建项目带自选色；未分组行无色（前端自定中性色）
+        let proj = business_api::create_todo_project(
+            &pool,
+            &crate::models::business::TodoProjectCreateInput {
+                title: "工作".to_string(),
+                description: None,
+                hex_color: Some("#2DB87A".to_string()),
+                sort_order: None,
+            },
+        )
+        .await
+        .unwrap();
+
+        let mut inp = input("t1");
+        inp.project_id = Some(proj.id);
+        inp.done = Some(1);
+        inp.done_at = Some(now_ms());
+        create_todo_task(&pool, &inp).await.unwrap();
+        seed_pending(&pool, "u1", 0).await;
+
+        let rows = stats_by_project_impl(&pool).await.unwrap();
+        let grouped = rows.iter().find(|r| r.project_id == Some(proj.id)).unwrap();
+        assert_eq!(grouped.project_title.as_deref(), Some("工作"));
+        assert_eq!(grouped.project_hex_color.as_deref(), Some("#2DB87A"));
+        let ungrouped = rows.iter().find(|r| r.project_id.is_none()).unwrap();
+        assert!(ungrouped.project_hex_color.is_none(), "未分组行不带色");
     }
 
     #[tokio::test]

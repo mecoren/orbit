@@ -3803,11 +3803,13 @@ impl SseDecode for crate::api::stats::StatsProjectRow {
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_projectId = <Option<i64>>::sse_decode(deserializer);
         let mut var_projectTitle = <Option<String>>::sse_decode(deserializer);
+        let mut var_projectHexColor = <Option<String>>::sse_decode(deserializer);
         let mut var_doneCount = <i64>::sse_decode(deserializer);
         let mut var_pendingCount = <i64>::sse_decode(deserializer);
         return crate::api::stats::StatsProjectRow {
             project_id: var_projectId,
             project_title: var_projectTitle,
+            project_hex_color: var_projectHexColor,
             done_count: var_doneCount,
             pending_count: var_pendingCount,
         };
@@ -4972,6 +4974,7 @@ impl flutter_rust_bridge::IntoDart for crate::api::stats::StatsProjectRow {
         [
             self.project_id.into_into_dart().into_dart(),
             self.project_title.into_into_dart().into_dart(),
+            self.project_hex_color.into_into_dart().into_dart(),
             self.done_count.into_into_dart().into_dart(),
             self.pending_count.into_into_dart().into_dart(),
         ]
@@ -6086,6 +6089,7 @@ impl SseEncode for crate::api::stats::StatsProjectRow {
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <Option<i64>>::sse_encode(self.project_id, serializer);
         <Option<String>>::sse_encode(self.project_title, serializer);
+        <Option<String>>::sse_encode(self.project_hex_color, serializer);
         <i64>::sse_encode(self.done_count, serializer);
         <i64>::sse_encode(self.pending_count, serializer);
     }
