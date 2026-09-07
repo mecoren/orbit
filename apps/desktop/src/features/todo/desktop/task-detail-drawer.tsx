@@ -17,6 +17,7 @@ import {
   FolderOpen,
   Link2,
   ListChecks,
+  Plus,
   Repeat,
   Send,
   Star,
@@ -1194,7 +1195,10 @@ function RelationsSection({
               type="button"
               className="flex w-full items-center gap-2 rounded-md px-1 py-1 text-[13px] text-muted-foreground hover:bg-accent/30 hover:text-foreground"
             >
-              <span className="grid size-5 place-items-center rounded-full border border-dashed border-muted-foreground/40 text-sm leading-none">+</span>
+              {/* SVG 图标替代文本 +（字符在行框内天然不居中，且比基线偏高）；size-3=12px 居中于 size-5 虚线圈 */}
+              <span className="grid size-5 shrink-0 place-items-center rounded-full border border-dashed border-muted-foreground/40">
+                <Plus className="size-3" />
+              </span>
               添加关联
             </button>
           </PopoverTrigger>
