@@ -81,6 +81,21 @@ interface MockTaskLabel {
   version: number;
 }
 
+interface MockSubtask {
+  id: number;
+  uuid: string;
+  task_id: number;
+  title: string;
+  done: number;
+  done_at: number | null;
+  position: number;
+  is_deleted: number;
+  created_at: number;
+  updated_at: number;
+  deleted_at: number | null;
+  version: number;
+}
+
 interface MockReminder {
   id: number;
   task_id: number;
@@ -118,6 +133,7 @@ export interface MockDb {
   tasks: MockTask[];
   labels: MockLabel[];
   taskLabels: MockTaskLabel[];
+  subtasks: MockSubtask[];
   reminders: MockReminder[];
   comments: MockComment[];
   relations: MockRelation[];
@@ -133,6 +149,7 @@ function createDb(): MockDb {
     tasks: [],
     labels: [],
     taskLabels: [],
+    subtasks: [],
     reminders: [],
     comments: [],
     relations: [],
@@ -337,7 +354,7 @@ const commands: Record<string, (args: any, ctx: Ctx) => unknown> = {
       .filter(Boolean);
     return ipcClone({
       ...t,
-      subtasks: [],
+      subtasks: [...db.subtasks.filter((s) => s.task_id === id && !s.is_deleted)],
       labels,
       comments: [...db.comments.filter((c) => c.task_id === id)],
       relations: [...db.relations.filter((r) => r.task_id === id)],
@@ -345,8 +362,67 @@ const commands: Record<string, (args: any, ctx: Ctx) => unknown> = {
     });
   },
 
-  // ---- subtasks（详情抽屉八区块之一；冒烟不建子任务，给空实现）----
-  todo_subtasks_list: () => [],
+  // ---- subtasks（详情抽屉八区块之一；删除确认 Popover e2e 用）----
+  todo_subtasks_list: (_a, { db }) =>
+    ipcClone(db.subtasks.filter((s) => !s.is_deleted)),
+  todo_subtasks_create: (
+    { input }: { input: { task_id: number; title: string } },
+    { db },
+  ) => {
+    if (db.tasks.every((t) => t.id !== input.task_id)) {
+      throw new Error(`task ${input.task_id} not found`);
+    }
+    const now = Date.now();
+    const row: MockSubtask = {
+      id: db.seq++,
+      uuid: uuid(),
+      task_id: input.task_id,
+      title: input.title,
+      done: 0,
+      done_at: null,
+      position: db.subtasks.filter((s) => s.task_id === input.task_id).length,
+      is_deleted: 0,
+      created_at: now,
+      updated_at: now,
+      deleted_at: null,
+      version: 1,
+    };
+    db.subtasks.push(row);
+    return ipcClone(row);
+  },
+  // 对齐 Rust toggle_todo_subtask_done：翻完成后按完成度回算父任务 percent_done
+  todo_subtasks_toggle_done: ({ id, done }, { db }) => {
+    const s = db.subtasks.find((x) => x.id === id);
+    if (!s) throw new Error(`subtask ${id} 不存在`);
+    const now = Date.now();
+    s.done = done ? 1 : 0;
+    s.done_at = done ? now : null;
+    s.updated_at = now;
+    s.version += 1;
+    const live = db.subtasks.filter((x) => x.task_id === s.task_id && !x.is_deleted);
+    const doneCount = live.filter((x) => x.done === 1).length;
+    const task = db.tasks.find((t) => t.id === s.task_id);
+    if (task) {
+      task.percent_done = live.length === 0 ? 0 : (doneCount / live.length) * 100;
+      task.updated_at = now;
+    }
+  },
+  todo_subtasks_delete: ({ id }, { db }) => {
+    const s = db.subtasks.find((x) => x.id === id);
+    if (!s) return;
+    const now = Date.now();
+    s.is_deleted = 1;
+    s.deleted_at = now;
+    s.updated_at = now;
+    s.version += 1;
+    const live = db.subtasks.filter((x) => x.task_id === s.task_id && !x.is_deleted);
+    const doneCount = live.filter((x) => x.done === 1).length;
+    const task = db.tasks.find((t) => t.id === s.task_id);
+    if (task) {
+      task.percent_done = live.length === 0 ? 0 : (doneCount / live.length) * 100;
+      task.updated_at = now;
+    }
+  },
 
   // ---- task_relations（#28：详情抽屉关联区完整命令面）----
   todo_task_relations_list: (_a, { db }) =>

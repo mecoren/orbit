@@ -746,31 +746,74 @@ function SubtasksSection({
     >
       <div className="space-y-1">
         {subtasks.map((s) => (
-          <div key={s.id} className="group flex items-center gap-2 rounded-md px-1 py-1 hover:bg-accent/30">
-            <button
-              type="button"
-              aria-label={s.done ? "标记未完成" : "标记完成"}
-              className={cn(
-                "flex h-4 w-4 shrink-0 items-center justify-center rounded-sm border-2",
-                s.done ? "border-primary bg-primary text-white" : "border-muted-foreground/40",
-              )}
-              onClick={async () => {
-                await todoSubtaskToggleDone(s.id, !s.done);
-                onChanged();
-              }}
-            >
-              {s.done ? <Check className="size-2.5" /> : null}
-            </button>
-            <span className={cn("flex-1 truncate text-[13px]", s.done && "text-muted-foreground line-through")}>
-              {s.title}
-            </span>
-            <button type="button" aria-label="删除子任务"
-              className="opacity-0 group-hover:opacity-100"
-              onClick={() => setConfirmDelete(s)}
-            >
-              <X size={14} className="text-muted-foreground hover:text-destructive" />
-            </button>
-          </div>
+          <Popover
+            key={s.id}
+            open={confirmDelete?.id === s.id}
+            onOpenChange={(o) => { if (!o) setConfirmDelete(null); }}
+          >
+            {/* 确认框锚定目标子任务行下方（qraft tab 删除同款，替代居中弹窗） */}
+            <PopoverTrigger asChild>
+              <div className="group flex items-center gap-2 rounded-md px-1 py-1 hover:bg-accent/30">
+                <button
+                  type="button"
+                  aria-label={s.done ? "标记未完成" : "标记完成"}
+                  className={cn(
+                    "flex h-4 w-4 shrink-0 items-center justify-center rounded-sm border-2",
+                    s.done ? "border-primary bg-primary text-white" : "border-muted-foreground/40",
+                  )}
+                  onClick={async () => {
+                    await todoSubtaskToggleDone(s.id, !s.done);
+                    onChanged();
+                  }}
+                >
+                  {s.done ? <Check className="size-2.5" /> : null}
+                </button>
+                <span className={cn("flex-1 truncate text-[13px]", s.done && "text-muted-foreground line-through")}>
+                  {s.title}
+                </span>
+                <button type="button" aria-label="删除子任务"
+                  className="opacity-0 group-hover:opacity-100"
+                  onClick={() => setConfirmDelete(s)}
+                >
+                  <X size={14} className="text-muted-foreground hover:text-destructive" />
+                </button>
+              </div>
+            </PopoverTrigger>
+            <PopoverContent align="end" side="bottom" className="w-56 p-3">
+              <p className="text-xs font-semibold">删除子任务</p>
+              <p className="mt-1 break-words text-[10px] text-muted-foreground">
+                确定要删除「{s.title}」吗？删除后无法恢复。
+              </p>
+              <div className="mt-2.5 flex justify-end gap-1">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-7 px-2.5 text-xs"
+                  onClick={() => setConfirmDelete(null)}
+                >
+                  取消
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 px-2.5 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive"
+                  onClick={() => {
+                    const target = s;
+                    setConfirmDelete(null);
+                    void (async () => {
+                      await todoSubtaskDelete(target.id);
+                      onChanged();
+                      toast.success("已删除子任务");
+                    })();
+                  }}
+                >
+                  删除
+                </Button>
+              </div>
+            </PopoverContent>
+          </Popover>
         ))}
 
         {/* 内联添加框 */}
@@ -791,36 +834,6 @@ function SubtasksSection({
           <p className="pt-1 text-[11px] text-muted-foreground">完成度自动回算：{Math.round(percentDone)}%</p>
         )}
       </div>
-
-      {/* 删除确认（防误触；子任务软删无恢复入口，删除即隐藏） */}
-      <AlertDialog open={confirmDelete != null} onOpenChange={(o) => !o && setConfirmDelete(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>删除子任务</AlertDialogTitle>
-            <AlertDialogDescription className="break-words">
-              确定要删除「{confirmDelete?.title}」吗？
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>取消</AlertDialogCancel>
-            <AlertDialogAction
-              className="bg-destructive text-white hover:bg-destructive/90"
-              onClick={() => {
-                const target = confirmDelete;
-                setConfirmDelete(null);
-                void (async () => {
-                  if (!target) return;
-                  await todoSubtaskDelete(target.id);
-                  onChanged();
-                  toast.success("已删除子任务");
-                })();
-              }}
-            >
-              删除
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </SectionBlock>
   );
 }
