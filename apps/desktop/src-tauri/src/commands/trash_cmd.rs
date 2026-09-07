@@ -72,10 +72,7 @@ pub async fn trash_meta(state: State<'_, AppState>) -> Result<trash_api::TrashMe
 
 /// 设置保留天数（合法档位 7/30/90/0=永久；默认 30）
 #[tauri::command]
-pub async fn trash_set_retention_days(
-    state: State<'_, AppState>,
-    days: i64,
-) -> Result<(), String> {
+pub async fn trash_set_retention_days(state: State<'_, AppState>, days: i64) -> Result<(), String> {
     trash_api::set_trash_retention_days(&state.pool, days)
         .await
         .map_err(|e| e.to_string())

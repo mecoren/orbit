@@ -7,9 +7,7 @@
 //! 文件内容读取由前端经 tauri-plugin-fs（打开对话框选文件后 readTextFile）
 //! 完成，本命令只收文本内容；三档预设 orbit / todoist / ticktick。
 
-use orbit_core::api::csv_import_api::{
-    self, CsvImportPreview, CsvImportStats,
-};
+use orbit_core::api::csv_import_api::{self, CsvImportPreview, CsvImportStats};
 use tauri::Manager;
 
 use crate::AppState;
