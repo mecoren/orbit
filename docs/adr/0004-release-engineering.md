@@ -14,24 +14,34 @@ MVP 发布（06 文档 §二 M5）要求五端产物签名/分发就绪。现状
 
 ## 决策
 
-### 1. 图标/启动屏（已完成，产物入库）
+### 1. 图标/启动屏（2026-09-07 换版，产物入库）
 
-- 品牌设计：深色 squircle 底（#1A1A21）+ 蓝青渐变椭圆轨道
-  （accent #4E8CFF → #5EDBE7）+ 白色中心点/卫星点（「循迹」语义）。
+- 品牌设计（v2，用户提供源图重构）：深色 squircle 底（#1A1A21）+
+  **卫星绕行星构图**——左上月牙形行星、左下扫至右上的变宽轨道弧
+  （末端卫星球）、中部小彗星；主体蓝 #3974F7。源图
+  `scripts/PixPin_2026-09-07_20-16-46.png` 经 cv2 轮廓提取 →
+  RDP 简化 + Chaikin 平滑去抗锯齿抖动 → 归一化形状数据固化于
+  `scripts/icon_shapes.json`（整体 IoU 0.89，差异 100% 落在 ±4px
+  边缘带内）；重绘 1024 母版后 LANCZOS 出全族，小尺寸结构保留
+  经连通域验证（48px 四部件完整、32px 两部件、16px 单块仍含
+  月牙+弧轮廓）。
+- v1（渐变椭圆轨道 + 白色中心/卫星点）已被上述构图替换；设计变更
+  仅动 `icon_shapes.json`（源图重提）或脚本参数，重跑即全族再生成。
 - 全族由 `scripts/generate_icons.py`（Pillow，含生成后自检）一次产出：
   - 桌面 `apps/desktop/src-tauri/icons/`：PNG 全尺寸族 + `icon.ico`
     （7 尺寸）+ `icon.icns`（ic07–ic10，Pillow 手写 ICNS 容器，无需
     macOS iconutil）+ Windows Store Square 族；
+  - 桌面关于页 `apps/desktop/public/app-icon.png`（256，透明底同主图）；
   - Android `mipmap-*/ic_launcher.png`（48–192 五密度）；
-  - 通知小图标 `drawable-*/ic_stat_orbit.png`（白色剪影，缺口轨道造型，
+  - 通知小图标 `drawable-*/ic_stat_orbit.png`（主体白色剪影，
     API 21+ alpha 语义），`notification_service.dart` 已接线（初始化
     小图标 + 文档注明 22.x 无 channelIcon 参数）。
-- Android 启动屏：`launch_background.xml`（含 -v21）改为品牌深色底
-  `@color/launch_bg` + 居中 `@mipmap/launch_image`，亮暗共用深色底
-  （避免启动瞬间明暗跳变）；桌面窗口 `visible:false` + 前端就绪后
-  `getCurrentWindow().show()`（main.tsx），消除原生空窗白闪。
-- 源图：`docs/adr/assets/orbit-icon-master.png`（1024px）；参数改动
-  重跑脚本即可全族再生成。
+- Android 启动屏：`launch_background.xml`（含 -v21）品牌深色底
+  `@color/launch_bg` + 居中 `@mipmap/launch_image`（xxxhdpi 512，
+  全出血无圆角版），亮暗共用深色底（避免启动瞬间明暗跳变）；桌面
+  窗口 `visible:false` + 前端就绪后 `getCurrentWindow().show()`
+  （main.tsx），消除原生空窗白闪。
+- 源图：`docs/adr/assets/orbit-icon-master.png`（1024px）。
 
 ### 2. 签名矩阵
 
