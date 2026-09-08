@@ -30,7 +30,8 @@ import {
   type DragEndEvent,
   type DragStartEvent,
 } from "@dnd-kit/core";
-import { Check, CircleCheck, Clock, Flag, FolderInput, GripVertical, Inbox, Plus, Star, StarOff, Sunrise, Trash2, X } from "lucide-react";
+import {
+  ListChecks, Check, CircleCheck, Clock, Flag, FolderInput, GripVertical, Inbox, Plus, Star, StarOff, Sunrise, Trash2, X } from "lucide-react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { toast } from "sonner";
 
@@ -760,7 +761,7 @@ function TaskRow({
         >
           {t.title}
         </div>
-        {(labels.length > 0 || project || due) && (
+        {(labels.length > 0 || project != null || due || t.percent_done > 0) && (
           <div
             className={cn(
               "mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground",
@@ -780,6 +781,14 @@ function TaskRow({
               <span className="inline-flex items-center gap-0.5">
                 <Clock size={11} />
                 {due}
+              </span>
+            )}
+            {/* 子任务进度（MS To Do Steps 计数同款体验；percent_done 由后端
+                子任务勾选自动回算，0 = 无子任务或不适用不显示） */}
+            {t.percent_done > 0 && t.percent_done < 100 && (
+              <span className="inline-flex items-center gap-0.5 tabular-nums">
+                <ListChecks size={11} />
+                {Math.round(t.percent_done)}%
               </span>
             )}
           </div>
