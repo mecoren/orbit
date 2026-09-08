@@ -57,6 +57,33 @@ int modeForUnit(RepeatUnit unit) => switch (unit) {
       RepeatUnit.year => RepeatMode.yearly,
     };
 
+/// 星期几短名（bit0=周一 … bit6=周日；与 Rust weekday_bit 对齐）
+const weekdayNames = ['一', '二', '三', '四', '五', '六', '日'];
+
+/// #34 重复规则中文标签（扩展字段可选：星期几/结束/when done）
+String repeatLabelExt(
+  int mode,
+  int after, {
+  int weekdays = 0,
+  int endType = 0,
+  int endParam = 0,
+  int fromDone = 0,
+}) {
+  var base = repeatLabel(mode, after);
+  if (mode == RepeatMode.weekly && weekdays != 0) {
+    final parts = [
+      for (var i = 0; i < 7; i++)
+        if ((weekdays & (1 << i)) != 0) weekdayNames[i],
+    ].join();
+    base = after == 1 ? '每周$parts' : '每 $after 周$parts';
+  }
+  final suffix = <String>[
+    if (fromDone == 1) '按完成日',
+    if (endType == 2 && endParam > 0) '剩 $endParam 次',
+  ];
+  return suffix.isEmpty ? base : '$base（${suffix.join('，')}）';
+}
+
 /// 规则中文标签（与桌面端 repeatLabel 同口径，徽标/表单回显共用）
 String repeatLabel(int mode, int after) {
   final n = after <= 0 ? 1 : after;

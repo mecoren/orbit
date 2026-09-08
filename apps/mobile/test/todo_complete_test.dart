@@ -83,4 +83,76 @@ void main() {
       await expectLater(bridge.todoTaskComplete(t.id), throwsException);
     });
   });
+
+  group('#34 重复规则扩展（when done / 结束次数 / 字段克隆）', () {
+    test('when done：完成日锚定推进一个完整周期', () async {
+      final bridge = MockOrbitBridge();
+      // due 定在远过去：默认快进口径会把 next 推到 now 之后最近的序列点；
+      // when-done 口径 = 完成时刻 + 7 天。两种口径都 > now，但 when-done
+      // 的 next 与完成时刻的差恒为 7 天（快进口径差 < 7 天）。
+      final due = DateTime(2020, 1, 6).millisecondsSinceEpoch; // 周一
+      final t = await bridge.todoTaskCreate(TodoTaskCreateInput(
+        title: '理发',
+        dueDate: due,
+        repeatMode: 2,
+        repeatAfter: 1,
+        repeatFromDone: 1,
+      ));
+      final beforeComplete = DateTime.now().millisecondsSinceEpoch;
+      final done = await bridge.todoTaskComplete(t.id);
+      expect(done.isDone, isTrue);
+      final list = await bridge.todoTaskList(const ListFilter());
+      final next = list.firstWhere((x) => !x.isDone && x.title == '理发');
+      // 下一实例 due 在 [完成时刻, 完成时刻+7天] 窗口内且距完成 < 7 天 + 时钟容差
+      final deltaFromNow = next.dueDate! - beforeComplete;
+      expect(deltaFromNow, greaterThan(6 * 86400000),
+          reason: 'when done 必须顺延一个完整周期（≥6 天）');
+      expect(deltaFromNow, lessThan(7 * 86400000 + 60000),
+          reason: 'when done 顺延恰好一个周期（容差 1 分钟）');
+      expect(next.repeatFromDone, 1, reason: '规则字段随克隆');
+    });
+
+    test('结束次数：param 递减，1 时序列终结', () async {
+      final bridge = MockOrbitBridge();
+      final due = DateTime(2026, 9, 1).millisecondsSinceEpoch;
+      final t = await bridge.todoTaskCreate(TodoTaskCreateInput(
+        title: '三次课程',
+        dueDate: due,
+        repeatMode: 1,
+        repeatAfter: 1,
+        repeatEndType: 2,
+        repeatEndParam: 3,
+      ));
+      // 第一次完成 → 剩 2 次
+      await bridge.todoTaskComplete(t.id);
+      var list = await bridge.todoTaskList(const ListFilter());
+      var next = list.firstWhere((x) => !x.isDone && x.title == '三次课程');
+      expect(next.repeatEndParam, 2, reason: '次数随推进递减');
+      // 第二次 → 剩 1；第三次完成后终结（param=1 时不再克隆）
+      await bridge.todoTaskComplete(next.id);
+      list = await bridge.todoTaskList(const ListFilter());
+      next = list.firstWhere((x) => !x.isDone && x.title == '三次课程');
+      expect(next.repeatEndParam, 1);
+      await bridge.todoTaskComplete(next.id);
+      list = await bridge.todoTaskList(const ListFilter());
+      expect(list.where((x) => !x.isDone && x.title == '三次课程').length, 0,
+          reason: '次数耗尽后序列终结');
+    });
+
+    test('星期几掩码字段随克隆保留', () async {
+      final bridge = MockOrbitBridge();
+      final due = DateTime(2026, 9, 1).millisecondsSinceEpoch; // 周二
+      final t = await bridge.todoTaskCreate(TodoTaskCreateInput(
+        title: '健身',
+        dueDate: due,
+        repeatMode: 2,
+        repeatAfter: 1,
+        repeatWeekdays: 21, // 一/三/五（bit0+2+4）
+      ));
+      await bridge.todoTaskComplete(t.id);
+      final list = await bridge.todoTaskList(const ListFilter());
+      final next = list.firstWhere((x) => !x.isDone && x.title == '健身');
+      expect(next.repeatWeekdays, 21, reason: '掩码随克隆保留');
+    });
+  });
 }

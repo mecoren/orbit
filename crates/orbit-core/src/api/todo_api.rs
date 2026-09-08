@@ -319,11 +319,60 @@ fn last_day_of_month(year: i32, month: u32) -> u32 {
         .day()
 }
 
+/// 结束条件类型（todo_tasks.repeat_end_type 列语义一致）
+pub const REPEAT_END_NEVER: i32 = 0;
+pub const REPEAT_END_ON_DATE: i32 = 1;
+pub const REPEAT_END_AFTER_COUNT: i32 = 2;
+
+/// 星期几位掩码：bit0=周一 … bit6=周日（chrono weekday() 周一=0）
+pub fn weekday_bit(d: &chrono::DateTime<chrono::Local>) -> u32 {
+    1u32 << (d.weekday().num_days_from_monday())
+}
+
 /// base 的下一次发生时间（> from）；无规则或快进超限（>5000 步）返回 None。
 /// 天/周为固定毫秒跨度；月/年走日历语义（见 advance_calendar_months）。
 /// 快进上限按天约 13 年，防异常数据死循环（与桌面端 nextRepeatAt 一致）。
 pub fn next_repeat_at(base_ms: i64, mode: i32, after: i64, from_ms: i64) -> Option<i64> {
+    next_repeat_at_ex(base_ms, mode, after, 0, from_ms)
+}
+
+/// next_repeat_at 扩展版（#34 重复规则升级）：
+///
+/// `weekdays` 位掩码（bit0=周一…bit6=周日，仅 WEEKLY 且非 0 生效）：
+/// 多选星期几时序列语义变为"在掩码内的星期几之间推进"——每次从当前点
+/// 前进到下一个命中掩码的日期（跨周自然回绕；间隔 N 周 = 掩码命中的
+/// 跨度按 7 天滚动，与 Tasks.org/MS To Do 的 weekly+daysOfWeek 对齐）。
+/// 0 = 未指定，回落旧语义（每 N 周的同一星期几）。
+///
+/// 快进上限语义不变：掩码空转（如掩码=0 的防御）在 5000 步内必命中或返回 None。
+pub fn next_repeat_at_ex(
+    base_ms: i64,
+    mode: i32,
+    after: i64,
+    weekdays: i32,
+    from_ms: i64,
+) -> Option<i64> {
     if mode == REPEAT_MODE_NONE {
+        return None;
+    }
+    if mode == REPEAT_MODE_WEEKLY && weekdays != 0 {
+        // 掩码序列语义（对齐 Tasks.org/MS Graph weekly+daysOfWeek）：
+        // 候选日 D 满足 ①weekday(D) ∈ 掩码 ②周序号(D) ≡ 周序号(锚点) (mod N)。
+        // 周序号 = floor(本地日序号 / 7)，锚定自然周对齐；N=1 时即"每周的这几个天"。
+        // 逐日扫描最坏 7N 天/步，5000 步上限内覆盖正常间隔。
+        let mask = weekdays as u32;
+        let n = after.max(1) as i64;
+        let mut next = chrono::Local.timestamp_millis_opt(base_ms).single()?;
+        let anchor_week = (next.num_days_from_ce() / 7) as i64;
+        for _ in 0..5000i64 * n {
+            if next.timestamp_millis() > from_ms
+                && (mask & weekday_bit(&next)) != 0
+                && (((next.num_days_from_ce() / 7) as i64) - anchor_week) % n == 0
+            {
+                return Some(next.timestamp_millis());
+            }
+            next += chrono::Duration::days(1);
+        }
         return None;
     }
     let step = after.max(1) as u32;
@@ -363,7 +412,48 @@ pub fn plan_next_recurring_instance(task: &TodoTask, now_ms: i64) -> Option<Next
         return None;
     }
     let due = task.due_date.unwrap();
-    let next_due = next_repeat_at(due, task.repeat_mode, task.repeat_after, now_ms)?;
+
+    // 结束条件判定（#34）：到期日已越过结束日 → 序列终结，不再生成下一实例；
+    // 按次数：param 存剩余次数，本次完成后剩余 0 → 终结（次数语义 = param 减在
+    // 每次推进中，count-1=1 时本次是最后一次）。
+    if task.repeat_end_type == REPEAT_END_ON_DATE {
+        let end_at = task.repeat_end_param;
+        if next_candidate_would_exceed(due, end_at) {
+            return None;
+        }
+    } else if task.repeat_end_type == REPEAT_END_AFTER_COUNT {
+        // param=1 表示本次完成后序列终结（剩余最后一次）；0/负值防御性终结
+        if task.repeat_end_param <= 1 {
+            return None;
+        }
+    }
+
+    // when done 语义（#34）：from_done=1 时序列锚点从原 due 平移到完成时刻
+    // （理发式：迟到三周完成，下次仍在完成后一个完整间隔）；
+    // 默认 0 锚定原 due——提前完成不改节奏、逾期快进越过 now（旧语义不变）
+    let anchor = if task.repeat_from_done != 0 {
+        now_ms
+    } else {
+        due
+    };
+    let next_due = if task.repeat_from_done != 0 {
+        // 完成日锚定：从 now 起推进一个完整步长（掩码星期几在 now 之后命中的
+        // 下一个符合周序号对齐的候选），不复用快进（快进会吞掉"完整间隔"）
+        next_full_step_from(
+            anchor,
+            task.repeat_mode,
+            task.repeat_after,
+            task.repeat_weekdays,
+        )
+    } else {
+        next_repeat_at_ex(
+            due,
+            task.repeat_mode,
+            task.repeat_after,
+            task.repeat_weekdays,
+            now_ms,
+        )
+    }?;
     let delta_ms = next_due - due;
     let shift = |ms: Option<i64>| ms.map(|v| v + delta_ms);
     Some(NextInstancePlan {
@@ -379,12 +469,61 @@ pub fn plan_next_recurring_instance(task: &TodoTask, now_ms: i64) -> Option<Next
             start_date: shift(task.start_date),
             repeat_after: Some(task.repeat_after),
             repeat_mode: Some(task.repeat_mode),
+            // 重复规则扩展字段随克隆（同一序列语义延续）
+            repeat_weekdays: Some(task.repeat_weekdays),
+            repeat_end_type: Some(task.repeat_end_type),
+            // 次数型：下一实例剩余次数 -1（本次已消耗一次）
+            repeat_end_param: Some(if task.repeat_end_type == REPEAT_END_AFTER_COUNT {
+                task.repeat_end_param - 1
+            } else {
+                task.repeat_end_param
+            }),
+            repeat_from_done: Some(task.repeat_from_done),
             position: None,
             is_favorite: Some(task.is_favorite),
             my_day_date: None,
         },
         delta_ms,
     })
+}
+
+/// 结束日判定：due 当天未越过结束日即仍可推进一次（下次 due 可能仍 ≤ 结束日）
+/// 下次推进后再由下一次完成时的本判定收口
+fn next_candidate_would_exceed(due_ms: i64, end_ms: i64) -> bool {
+    due_ms > end_ms
+}
+
+/// when done 语义的完整步长推进：从 from 起推进一个完整间隔（不快进）
+///
+/// 无掩码：DAILY/WEEKLY/MONTHLY/YEARLY 按日历语义加一个步长；
+/// 掩码星期几：从 from 起逐日扫描下一个命中掩码且周序号对齐的日期
+/// （首候选即可——完整间隔语义下 from 本身不计入）。
+fn next_full_step_from(from_ms: i64, mode: i32, after: i64, weekdays: i32) -> Option<i64> {
+    if mode == REPEAT_MODE_WEEKLY && weekdays != 0 {
+        let mask = weekdays as u32;
+        let n = after.max(1) as i64;
+        let mut next = chrono::Local.timestamp_millis_opt(from_ms).single()?;
+        let anchor_week = (next.num_days_from_ce() / 7) as i64;
+        for _ in 0..5000i64 * n {
+            next += chrono::Duration::days(1);
+            if (mask & weekday_bit(&next)) != 0
+                && (((next.num_days_from_ce() / 7) as i64) - anchor_week) % n == 0
+            {
+                return Some(next.timestamp_millis());
+            }
+        }
+        return None;
+    }
+    let step = after.max(1) as u32;
+    let mut next = chrono::Local.timestamp_millis_opt(from_ms).single()?;
+    match mode {
+        REPEAT_MODE_DAILY => next += chrono::Duration::days(step as i64),
+        REPEAT_MODE_WEEKLY => next += chrono::Duration::days(7 * step as i64),
+        REPEAT_MODE_MONTHLY => advance_calendar_months(&mut next, step as i32),
+        REPEAT_MODE_YEARLY => advance_calendar_months(&mut next, 12 * step as i32),
+        _ => return None,
+    }
+    Some(next.timestamp_millis())
 }
 
 /// 待克隆到新实例的子任务：过滤软删、position 升序、完成态不带走
@@ -453,9 +592,10 @@ pub async fn complete_todo_task(pool: &SqlitePool, id: i64) -> CoreResult<Comple
             "INSERT INTO todo_tasks (
                 uuid, title, description, project_id, priority, status, done, done_at,
                 due_date, start_date, repeat_after, repeat_mode,
+                repeat_weekdays, repeat_end_type, repeat_end_param, repeat_from_done,
                 percent_done, position, is_favorite, my_day_date,
                 is_deleted, created_at, updated_at, version
-            ) VALUES (?, ?, ?, ?, ?, 'pending', 0, NULL, ?, ?, ?, ?, 0, 0, ?, ?, 0, ?, ?, 1)
+            ) VALUES (?, ?, ?, ?, ?, 'pending', 0, NULL, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?, 0, ?, ?, 1)
             RETURNING *",
         )
         .bind(&new_uuid)
@@ -467,6 +607,10 @@ pub async fn complete_todo_task(pool: &SqlitePool, id: i64) -> CoreResult<Comple
         .bind(i.start_date)
         .bind(i.repeat_after.unwrap_or(0))
         .bind(i.repeat_mode.unwrap_or(0))
+        .bind(i.repeat_weekdays.unwrap_or(0))
+        .bind(i.repeat_end_type.unwrap_or(0))
+        .bind(i.repeat_end_param.unwrap_or(0))
+        .bind(i.repeat_from_done.unwrap_or(0))
         .bind(i.is_favorite.unwrap_or(0))
         .bind(i.my_day_date)
         .bind(now)
@@ -581,6 +725,221 @@ mod repeat_tests {
             .timestamp_millis()
     }
 
+    // ---------- #34 重复规则扩展：星期几掩码 / when done / 结束条件 ----------
+
+    fn weekday_of(ms: i64) -> &'static str {
+        let d = chrono::Local.timestamp_millis_opt(ms).single().unwrap();
+        match d.weekday() {
+            chrono::Weekday::Mon => "一",
+            chrono::Weekday::Tue => "二",
+            chrono::Weekday::Wed => "三",
+            chrono::Weekday::Thu => "四",
+            chrono::Weekday::Fri => "五",
+            chrono::Weekday::Sat => "六",
+            chrono::Weekday::Sun => "日",
+        }
+    }
+
+    #[test]
+    fn weekdays_mask_monday_wednesday_friday() {
+        // 2026-08-27 是周四；掩码 bit0|bit2|bit4 = 一/三/五（0b10101 = 21）
+        let base = date_2026_08_27();
+        // 旧语义（无掩码）：每周 → 9/3（周四）
+        let plain = next_repeat_at(base, REPEAT_MODE_WEEKLY, 1, base).unwrap();
+        assert_eq!(weekday_of(plain), "四");
+        // 掩码语义：下一个命中 一/三/五 的日期（从周四起 → 周五 8/28）
+        let masked = next_repeat_at_ex(base, REPEAT_MODE_WEEKLY, 1, 0b10101, base).unwrap();
+        assert_eq!(weekday_of(masked), "五");
+        // 快进口径：now=9/7（周一，掩码内）但序列点须严格 > now →
+        // 跳过当天，命中下一个掩码日周三 9/9（与无掩码版本的 > from 语义一致）
+        let now_late = base + DAY * 11; // 9/7 周一
+        let late = next_repeat_at_ex(base, REPEAT_MODE_WEEKLY, 1, 0b10101, now_late).unwrap();
+        assert_eq!(weekday_of(late), "三");
+        // now 落在掩码外（9/8 周二）→ 同样命中周三 9/9
+        let late2 =
+            next_repeat_at_ex(base, REPEAT_MODE_WEEKLY, 1, 0b10101, now_late + DAY).unwrap();
+        assert_eq!(weekday_of(late2), "三");
+    }
+
+    #[test]
+    fn weekdays_mask_every_two_weeks_alignment() {
+        // 每两周 + 周三（bit2=4）：周序号 ≡ 锚点周 (mod 2)——
+        // 中间那周的周三必须跳过
+        let base = date_2026_08_27(); // 周四
+        let n = next_repeat_at_ex(base, REPEAT_MODE_WEEKLY, 2, 0b100, base).unwrap();
+        assert_eq!(weekday_of(n), "三");
+        // 下一个候选：+14 天的周三（8/27 所在周的下一个周三 = 9/2，
+        // 但 +2 周对齐要隔一周 → 9/9？逐日扫描：8/26 的周三（锚点周内、<=from 跳过），
+        // 9/2 周三（周序号差 1，非 2 的倍数 → 不命中），9/9 周三（差 2 → 命中）
+        let n2 = next_repeat_at_ex(n, REPEAT_MODE_WEEKLY, 2, 0b100, n).unwrap();
+        let gap_days = (n2 - n) / DAY;
+        assert_eq!(gap_days, 14, "每两周掩码推进必须整两周");
+        assert_eq!(weekday_of(n2), "三");
+    }
+
+    #[test]
+    fn when_done_anchors_full_step_from_completion() {
+        // 理发式：每周任务迟到 20 天完成 → 下一实例 = 完成日 + 7 天（非快进口径）
+        let due = date_2026_08_27();
+        let task = TodoTask {
+            id: 1,
+            uuid: "u".into(),
+            title: "理发".into(),
+            description: None,
+            project_id: None,
+            priority: 0,
+            status: "pending".into(),
+            done: 0,
+            done_at: None,
+            due_date: Some(due),
+            start_date: None,
+            repeat_after: 1,
+            repeat_mode: REPEAT_MODE_WEEKLY,
+            repeat_weekdays: 0,
+            repeat_end_type: 0,
+            repeat_end_param: 0,
+            repeat_from_done: 1,
+            percent_done: 0.0,
+            position: 0.0,
+            is_favorite: 0,
+            my_day_date: None,
+            is_deleted: 0,
+            created_at: 0,
+            updated_at: 0,
+            deleted_at: None,
+            version: 1,
+        };
+        let now = due + DAY * 20;
+        let plan = plan_next_recurring_instance(&task, now).unwrap();
+        // when done：完整一步 = 完成日 + 7 天（旧语义快进会到 now 之后最近的周四，
+        // 即 now+6；两口径同为未来但 when done 不吃快进）
+        assert_eq!(plan.input.due_date, Some(now + DAY * 7));
+        // 规则扩展字段随克隆
+        assert_eq!(plan.input.repeat_from_done, Some(1));
+    }
+
+    #[test]
+    fn when_done_weekdays_mask_next_masked_day_after_completion() {
+        // when done + 掩码：完成日起下一个掩码内的星期几
+        let due = date_2026_08_27(); // 周四
+        let mut task = TodoTask {
+            id: 1,
+            uuid: "u".into(),
+            title: "健身".into(),
+            description: None,
+            project_id: None,
+            priority: 0,
+            status: "pending".into(),
+            done: 0,
+            done_at: None,
+            due_date: Some(due),
+            start_date: None,
+            repeat_after: 1,
+            repeat_mode: REPEAT_MODE_WEEKLY,
+            repeat_weekdays: 0b10101, // 一/三/五
+            repeat_end_type: 0,
+            repeat_end_param: 0,
+            repeat_from_done: 1,
+            percent_done: 0.0,
+            position: 0.0,
+            is_favorite: 0,
+            my_day_date: None,
+            is_deleted: 0,
+            created_at: 0,
+            updated_at: 0,
+            deleted_at: None,
+            version: 1,
+        };
+        // 周六完成（8/29 是周六）→ 下一个一是 8/31
+        let now = due + DAY * 2;
+        let plan = plan_next_recurring_instance(&task, now).unwrap();
+        assert_eq!(weekday_of(plan.input.due_date.unwrap()), "一");
+        // 掩码随克隆
+        assert_eq!(plan.input.repeat_weekdays, Some(0b10101));
+        let _ = &mut task;
+    }
+
+    #[test]
+    fn end_on_date_terminates_sequence() {
+        let due = date_2026_08_27();
+        // 结束日 = due + 3 天：due 未越过 → 可再推进一次；下一实例 due（+7 天）
+        // 已超结束日 → 下次完成时终结
+        let task = TodoTask {
+            id: 1,
+            uuid: "u".into(),
+            title: "短期".into(),
+            description: None,
+            project_id: None,
+            priority: 0,
+            status: "pending".into(),
+            done: 0,
+            done_at: None,
+            due_date: Some(due),
+            start_date: None,
+            repeat_after: 1,
+            repeat_mode: REPEAT_MODE_DAILY,
+            repeat_weekdays: 0,
+            repeat_end_type: REPEAT_END_ON_DATE,
+            repeat_end_param: due + DAY * 3,
+            repeat_from_done: 0,
+            percent_done: 0.0,
+            position: 0.0,
+            is_favorite: 0,
+            my_day_date: None,
+            is_deleted: 0,
+            created_at: 0,
+            updated_at: 0,
+            deleted_at: None,
+            version: 1,
+        };
+        let plan = plan_next_recurring_instance(&task, due).unwrap();
+        assert_eq!(plan.input.due_date, Some(due + DAY));
+        // 已越过结束日 → 终结
+        let mut overdue = task.clone();
+        overdue.due_date = Some(due + DAY * 10);
+        assert!(plan_next_recurring_instance(&overdue, due + DAY * 10).is_none());
+    }
+
+    #[test]
+    fn end_after_count_decrements_and_terminates() {
+        let due = date_2026_08_27();
+        let task = TodoTask {
+            id: 1,
+            uuid: "u".into(),
+            title: "三次".into(),
+            description: None,
+            project_id: None,
+            priority: 0,
+            status: "pending".into(),
+            done: 0,
+            done_at: None,
+            due_date: Some(due),
+            start_date: None,
+            repeat_after: 1,
+            repeat_mode: REPEAT_MODE_DAILY,
+            repeat_weekdays: 0,
+            repeat_end_type: REPEAT_END_AFTER_COUNT,
+            repeat_end_param: 3,
+            repeat_from_done: 0,
+            percent_done: 0.0,
+            position: 0.0,
+            is_favorite: 0,
+            my_day_date: None,
+            is_deleted: 0,
+            created_at: 0,
+            updated_at: 0,
+            deleted_at: None,
+            version: 1,
+        };
+        // 3 → 2（还有下一实例）
+        let p1 = plan_next_recurring_instance(&task, due).unwrap();
+        assert_eq!(p1.input.repeat_end_param, Some(2));
+        // param=1：本次完成后终结
+        let mut last = task.clone();
+        last.repeat_end_param = 1;
+        assert!(plan_next_recurring_instance(&last, due).is_none());
+    }
+
     // ---------- next_repeat_at / plan_next_recurring_instance 纯函数 ----------
 
     #[test]
@@ -673,6 +1032,10 @@ mod repeat_tests {
             start_date: None,
             repeat_after: 1,
             repeat_mode: 0,
+            repeat_weekdays: 0,
+            repeat_end_type: 0,
+            repeat_end_param: 0,
+            repeat_from_done: 0,
             percent_done: 0.0,
             position: 0.0,
             is_favorite: 0,
@@ -706,6 +1069,10 @@ mod repeat_tests {
             start_date: Some(due - DAY),
             repeat_after: 1,
             repeat_mode: REPEAT_MODE_DAILY,
+            repeat_weekdays: 0,
+            repeat_end_type: 0,
+            repeat_end_param: 0,
+            repeat_from_done: 0,
             percent_done: 0.0,
             position: 0.0,
             is_favorite: 1,
@@ -796,6 +1163,10 @@ mod repeat_tests {
                 title: "每周任务".into(),
                 due_date: Some(due),
                 repeat_mode: Some(REPEAT_MODE_WEEKLY),
+                repeat_weekdays: None,
+                repeat_end_type: None,
+                repeat_end_param: None,
+                repeat_from_done: None,
                 repeat_after: Some(1),
                 ..Default::default()
             },
@@ -857,6 +1228,10 @@ mod repeat_tests {
                 title: "重复任务".into(),
                 due_date: Some(date_2026_08_27()),
                 repeat_mode: Some(REPEAT_MODE_DAILY),
+                repeat_weekdays: None,
+                repeat_end_type: None,
+                repeat_end_param: None,
+                repeat_from_done: None,
                 repeat_after: Some(1),
                 ..Default::default()
             },

@@ -154,6 +154,10 @@ class MockOrbitBridge implements OrbitBridge {
           'start_date': input.startDate,
           'repeat_after': input.repeatAfter ?? 1,
           'repeat_mode': input.repeatMode ?? 0,
+          'repeat_weekdays': input.repeatWeekdays ?? 0,
+          'repeat_end_type': input.repeatEndType ?? 0,
+          'repeat_end_param': input.repeatEndParam ?? 0,
+          'repeat_from_done': input.repeatFromDone ?? 0,
           'percent_done': 0,
           'position': input.position ??
               store.tasks.values
@@ -191,7 +195,11 @@ class MockOrbitBridge implements OrbitBridge {
         final repeatMode = (t['repeat_mode'] as int?) ?? 0;
         final due = t['due_date'] as int?;
         final done = (t['done'] as int?) ?? 0;
-        if (done == 0 && repeatMode > 0 && due != null) {
+        // #34 结束条件：次数型 param<=1 → 序列终结，不再克隆（对齐 Rust）
+        final endType = (t['repeat_end_type'] as int?) ?? 0;
+        final endParam = (t['repeat_end_param'] as int?) ?? 0;
+        final endTerminated = endType == 2 && endParam <= 1;
+        if (done == 0 && repeatMode > 0 && due != null && !endTerminated) {
           final after = ((t['repeat_after'] as int?) ?? 1).clamp(1, 1000);
           final stepMs = switch (repeatMode) {
             1 => 86400000 * after,
@@ -201,10 +209,19 @@ class MockOrbitBridge implements OrbitBridge {
             _ => null,
           };
           if (stepMs != null) {
-            var nextDue = due + stepMs;
-            var guard = 0;
-            while (nextDue <= now && guard++ < 5000) {
-              nextDue += stepMs;
+            final fromDone = (t['repeat_from_done'] as int?) ?? 0;
+            final int nextDue;
+            if (fromDone == 1) {
+              // when done：完成日锚定 + 一个完整步长（不吃快进）
+              nextDue = now + stepMs;
+            } else {
+              // 默认：锚定原 due 快进到 now 之后最近的序列点
+              var candidate = due + stepMs;
+              var guard = 0;
+              while (candidate <= now && guard++ < 5000) {
+                candidate += stepMs;
+              }
+              nextDue = candidate;
             }
             final next = {
               ...store.newEntity('t'),
@@ -221,6 +238,12 @@ class MockOrbitBridge implements OrbitBridge {
                   : null,
               'repeat_after': t['repeat_after'],
               'repeat_mode': repeatMode,
+              'repeat_weekdays': t['repeat_weekdays'],
+              'repeat_end_type': t['repeat_end_type'],
+              'repeat_end_param': t['repeat_end_type'] == 2
+                  ? ((t['repeat_end_param'] as int?) ?? 0) - 1
+                  : t['repeat_end_param'],
+              'repeat_from_done': t['repeat_from_done'],
               'percent_done': 0,
               'position': 100000,
               'is_favorite': t['is_favorite'],
@@ -297,6 +320,10 @@ class MockOrbitBridge implements OrbitBridge {
           startDate: base.startDate,
           repeatAfter: base.repeatAfter,
           repeatMode: base.repeatMode,
+          repeatWeekdays: base.repeatWeekdays,
+          repeatEndType: base.repeatEndType,
+          repeatEndParam: base.repeatEndParam,
+          repeatFromDone: base.repeatFromDone,
           percentDone: base.percentDone,
           position: base.position,
           isFavorite: base.isFavorite,

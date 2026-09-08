@@ -207,6 +207,10 @@ class _DetailView extends StatelessWidget {
           reminders: detail.reminders,
           repeatMode: detail.repeatMode,
           repeatAfter: detail.repeatAfter,
+          repeatWeekdays: detail.repeatWeekdays,
+          repeatEndType: detail.repeatEndType,
+          repeatEndParam: detail.repeatEndParam,
+          repeatFromDone: detail.repeatFromDone,
           onChanged: onRefresh,
         ),
         if (detail.relations.isNotEmpty) ...[
@@ -509,7 +513,14 @@ class _InfoSection extends ConsumerWidget {
           ),
           _InfoTile(
             label: '重复',
-            value: rep.repeatLabel(detail.repeatMode, detail.repeatAfter),
+            value: rep.repeatLabelExt(
+              detail.repeatMode,
+              detail.repeatAfter,
+              weekdays: detail.repeatWeekdays,
+              endType: detail.repeatEndType,
+              endParam: detail.repeatEndParam,
+              fromDone: detail.repeatFromDone,
+            ),
             onClick: () => _editRepeat(context),
           ),
         ],
@@ -1340,15 +1351,23 @@ class _RemindersSection extends ConsumerWidget {
     required this.reminders,
     required this.repeatMode,
     required this.repeatAfter,
+    required this.repeatWeekdays,
+    required this.repeatEndType,
+    required this.repeatEndParam,
+    required this.repeatFromDone,
     required this.onChanged,
   });
 
   final int taskId;
   final List<TodoReminder> reminders;
 
-  /// 任务重复规则（>0 时提醒行显示规则徽标，对齐桌面）
+  /// 任务重复规则（>0 时提醒行显示规则徽标，对齐桌面；#34 扩展字段完整显示）
   final int repeatMode;
   final int repeatAfter;
+  final int repeatWeekdays;
+  final int repeatEndType;
+  final int repeatEndParam;
+  final int repeatFromDone;
 
   final VoidCallback onChanged;
 
@@ -1479,7 +1498,14 @@ class _RemindersSection extends ConsumerWidget {
                                           .withValues(alpha: 0.1),
                                     ),
                                     child: Text(
-                                      rep.repeatLabel(repeatMode, repeatAfter),
+                                      rep.repeatLabelExt(
+                                        repeatMode,
+                                        repeatAfter,
+                                        weekdays: repeatWeekdays,
+                                        endType: repeatEndType,
+                                        endParam: repeatEndParam,
+                                        fromDone: repeatFromDone,
+                                      ),
                                       style: TextStyle(
                                         fontSize: 10,
                                         color: OrbitAccents.todoAccent,

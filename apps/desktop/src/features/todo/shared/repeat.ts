@@ -22,21 +22,63 @@ export const REPEAT_PRESETS = [
   { mode: REPEAT_MODE.YEARLY, after: 1, label: "每年" },
 ] as const;
 
-/** 规则中文标签（徽标 / 属性行共用） */
-export function repeatLabel(mode: number, after: number): string {
+/** 星期几位掩码 chips（bit0=周一 … bit6=周日；与 Rust weekday_bit 对齐） */
+export const WEEKDAY_CHIPS = [
+  { bit: 1, label: "一" },
+  { bit: 2, label: "二" },
+  { bit: 4, label: "三" },
+  { bit: 8, label: "四" },
+  { bit: 16, label: "五" },
+  { bit: 32, label: "六" },
+  { bit: 64, label: "日" },
+] as const;
+
+/** 星期几位掩码 → 「周一三五」式短标签 */
+export function weekdayMaskLabel(mask: number): string {
+  if (mask === 0) return "";
+  const names = ["一", "二", "三", "四", "五", "六", "日"];
+  const parts: string[] = [];
+  for (let i = 0; i < 7; i++) {
+    if ((mask & (1 << i)) !== 0) parts.push(names[i]);
+  }
+  return parts.join("");
+}
+
+/** 规则中文标签（徽标 / 属性行共用；#34 扩展字段可选） */
+export function repeatLabel(
+  mode: number,
+  after: number,
+  ext?: { weekdays?: number; endType?: number; endParam?: number; fromDone?: number },
+): string {
   const n = Math.max(1, after || 1);
+  let base: string;
   switch (mode) {
     case REPEAT_MODE.DAILY:
-      return n === 1 ? "每天" : `每 ${n} 天`;
-    case REPEAT_MODE.WEEKLY:
-      return n === 1 ? "每周" : `每 ${n} 周`;
+      base = n === 1 ? "每天" : `每 ${n} 天`;
+      break;
+    case REPEAT_MODE.WEEKLY: {
+      const wd = ext?.weekdays ?? 0;
+      if (wd !== 0) {
+        base = n === 1 ? `每周${weekdayMaskLabel(wd)}` : `每 ${n} 周${weekdayMaskLabel(wd)}`;
+      } else {
+        base = n === 1 ? "每周" : `每 ${n} 周`;
+      }
+      break;
+    }
     case REPEAT_MODE.MONTHLY:
-      return n === 1 ? "每月" : `每 ${n} 个月`;
+      base = n === 1 ? "每月" : `每 ${n} 个月`;
+      break;
     case REPEAT_MODE.YEARLY:
-      return n === 1 ? "每年" : `每 ${n} 年`;
+      base = n === 1 ? "每年" : `每 ${n} 年`;
+      break;
     default:
       return "不重复";
   }
+  const suffix: string[] = [];
+  if (ext?.fromDone) suffix.push("按完成日");
+  if (ext?.endType === 2 && ext.endParam && ext.endParam > 0) suffix.push(`剩 ${ext.endParam} 次`);
+  if (ext?.endType === 1 && ext.endParam) suffix.push(`至 ${new Date(ext.endParam).toLocaleDateString()}`);
+  return suffix.length > 0 ? `${base}（${suffix.join("，")}）` : base;
 }
 
 /**

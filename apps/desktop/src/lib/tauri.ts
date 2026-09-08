@@ -190,6 +190,14 @@ export interface TodoTask {
   start_date: number | null;
   repeat_after: number;
   repeat_mode: number;
+  /** #34 重复规则扩展：星期几位掩码 bit0=周一…bit6=周日（仅周档生效） */
+  repeat_weekdays: number;
+  /** 结束条件 0=永不 1=按日期 2=按次数 */
+  repeat_end_type: number;
+  /** 结束参数：日期型=结束日 ms / 次数型=剩余次数 */
+  repeat_end_param: number;
+  /** when done：0=锚定原 due 推进 1=按完成日推进 */
+  repeat_from_done: number;
   percent_done: number;
   position: number;
   is_favorite: number;
@@ -213,6 +221,10 @@ export interface TodoTaskCreateInput {
   start_date?: number | null;
   repeat_after?: number;
   repeat_mode?: number;
+  repeat_weekdays?: number;
+  repeat_end_type?: number;
+  repeat_end_param?: number;
+  repeat_from_done?: number;
   position?: number;
   is_favorite?: number;
   my_day_date?: number | null;
@@ -229,6 +241,10 @@ export interface TodoTaskUpdateInput {
   start_date?: number | null;
   repeat_after?: number;
   repeat_mode?: number;
+  repeat_weekdays?: number;
+  repeat_end_type?: number;
+  repeat_end_param?: number;
+  repeat_from_done?: number;
   percent_done?: number;
   position?: number;
   is_favorite?: number;

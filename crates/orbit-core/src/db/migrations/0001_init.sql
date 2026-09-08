@@ -107,6 +107,17 @@ CREATE TABLE IF NOT EXISTS todo_tasks (
   start_date INTEGER,
   repeat_after INTEGER NOT NULL DEFAULT 0,
   repeat_mode INTEGER NOT NULL DEFAULT 0,
+  -- 重复规则扩展（07 竞品矩阵批次 #34，四款参考产品全有）：
+  -- repeat_weekdays：星期几位掩码（bit0=周一 … bit6=周日；仅 WEEKLY 生效，
+  --   0 = 未指定回落旧语义"每 N 周的今天"；多选时 due 推进到掩码内的下一个星期几）
+  -- repeat_end_type：结束条件 0=永不 1=按日期 2=按次数
+  -- repeat_end_param：日期型=结束日 ms 时间戳 / 次数型=剩余次数
+  -- repeat_from_done：0=锚定原 due 推进（默认，节奏恒定）
+  --   1=when done 按完成日推进（理发式：迟到三周完成，下次仍四周后）
+  repeat_weekdays INTEGER NOT NULL DEFAULT 0,
+  repeat_end_type INTEGER NOT NULL DEFAULT 0,
+  repeat_end_param INTEGER NOT NULL DEFAULT 0,
+  repeat_from_done INTEGER NOT NULL DEFAULT 0,
   percent_done REAL NOT NULL DEFAULT 0,
   position REAL NOT NULL DEFAULT 0,
   is_favorite INTEGER NOT NULL DEFAULT 0,

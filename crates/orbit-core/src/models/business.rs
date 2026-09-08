@@ -128,6 +128,14 @@ pub struct TodoTask {
     pub start_date: Option<i64>,
     pub repeat_after: i64,
     pub repeat_mode: i32,
+    /// 重复规则扩展（#34）：星期几位掩码（bit0=周一…bit6=周日；仅 WEEKLY 生效）
+    pub repeat_weekdays: i32,
+    /// 结束条件 0=永不 1=按日期 2=按次数
+    pub repeat_end_type: i32,
+    /// 结束参数：日期型=结束日 ms / 次数型=剩余次数
+    pub repeat_end_param: i64,
+    /// when done 语义：0=锚定原 due 推进 1=按完成日推进
+    pub repeat_from_done: i32,
     pub percent_done: f64,
     pub position: f64,
     pub is_favorite: i32,
@@ -155,6 +163,14 @@ pub struct TodoTaskCreateInput {
     pub start_date: Option<i64>,
     pub repeat_after: Option<i64>,
     pub repeat_mode: Option<i32>,
+    #[serde(default)]
+    pub repeat_weekdays: Option<i32>,
+    #[serde(default)]
+    pub repeat_end_type: Option<i32>,
+    #[serde(default)]
+    pub repeat_end_param: Option<i64>,
+    #[serde(default)]
+    pub repeat_from_done: Option<i32>,
     pub position: Option<f64>,
     pub is_favorite: Option<i32>,
     pub my_day_date: Option<i64>,
@@ -222,6 +238,14 @@ pub struct TodoTaskUpdateInput {
     pub start_date: Option<Option<i64>>,
     pub repeat_after: Option<i64>,
     pub repeat_mode: Option<i32>,
+    #[serde(default)]
+    pub repeat_weekdays: Option<i32>,
+    #[serde(default)]
+    pub repeat_end_type: Option<i32>,
+    #[serde(default)]
+    pub repeat_end_param: Option<i64>,
+    #[serde(default)]
+    pub repeat_from_done: Option<i32>,
     pub percent_done: Option<f64>,
     pub position: Option<f64>,
     pub is_favorite: Option<i32>,

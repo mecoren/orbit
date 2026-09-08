@@ -56,7 +56,7 @@ import { useTodoStore } from "@/features/todo/store";
 import { hideFromQueries, useUndoableDeleteAction } from "@/hooks/use-undoable-delete";
 import { PRIORITY_COLOR, TODO_ACCENT } from "../shared/constants";
 import { ConfirmPopover } from "../shared/confirm-popover";
-import { REPEAT_MODE, REPEAT_PRESETS, repeatLabel } from "../shared/repeat";
+import { REPEAT_MODE, REPEAT_PRESETS, WEEKDAY_CHIPS, repeatLabel } from "../shared/repeat";
 import { completeTask } from "@/features/todo/shared/task-actions";
 import {
   globalSearch,
@@ -168,6 +168,10 @@ export function TaskDetailDrawer({ projects }: TaskDetailDrawerProps) {
                   reminders={t.reminders}
                   repeatMode={t.repeat_mode}
                   repeatAfter={t.repeat_after}
+                  repeatWeekdays={t.repeat_weekdays}
+                  repeatEndType={t.repeat_end_type}
+                  repeatEndParam={t.repeat_end_param}
+                  repeatFromDone={t.repeat_from_done}
                   onChanged={refetchDetail}
                 />
                 <RelationsSection
@@ -466,7 +470,20 @@ function PropertyGrid({
         <RepeatEditor
           mode={task.repeat_mode}
           after={task.repeat_after}
-          onChange={(m, a) => void onPatch({ repeat_mode: m, repeat_after: a })}
+          weekdays={task.repeat_weekdays}
+          endType={task.repeat_end_type}
+          endParam={task.repeat_end_param}
+          fromDone={task.repeat_from_done}
+          onChange={(v) =>
+            void onPatch({
+              repeat_mode: v.mode,
+              repeat_after: v.after,
+              repeat_weekdays: v.mode === REPEAT_MODE.WEEKLY ? v.weekdays : 0,
+              repeat_end_type: v.endType,
+              repeat_end_param: v.endParam,
+              repeat_from_done: v.fromDone,
+            })
+          }
         />
       </InfoRow>
     </div>
@@ -579,17 +596,74 @@ function StartDateEditor({
 function RepeatEditor({
   mode,
   after,
+  weekdays,
+  endType,
+  endParam,
+  fromDone,
   onChange,
 }: {
   mode: number;
   after: number;
-  onChange: (mode: number, after: number) => void;
+  weekdays: number;
+  endType: number;
+  endParam: number;
+  fromDone: number;
+  onChange: (v: {
+    mode: number;
+    after: number;
+    weekdays: number;
+    endType: number;
+    endParam: number;
+    fromDone: number;
+  }) => void;
 }) {
   const [open, setOpen] = useState(false);
   const [customDays, setCustomDays] = useState("3");
+  // 扩展规则编辑态（打开时从任务初始化）
+  const [weekdayMask, setWeekdayMask] = useState(weekdays);
+  const [endOption, setEndOption] = useState(endType);
+  const [endText, setEndText] = useState(
+    endType === 2 ? String(Math.max(1, endParam || 1)) : "",
+  );
+  const [endDate, setEndDate] = useState(
+    endType === 1 && endParam > 0 ? new Date(endParam).toISOString().slice(0, 10) : "",
+  );
+  const [whenDone, setWhenDone] = useState(fromDone);
+
+  // 打开时同步外部值（外部 task 切换场景）
+  useEffect(() => {
+    if (open) return;
+    setWeekdayMask(weekdays);
+    setEndOption(endType);
+    setEndText(endType === 2 ? String(Math.max(1, endParam || 1)) : "");
+    setEndDate(endType === 1 && endParam > 0 ? new Date(endParam).toISOString().slice(0, 10) : "");
+    setWhenDone(fromDone);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, after, weekdays, endType, endParam, fromDone, open]);
+
+  const applyExt = (m: number, a: number) => {
+    let param = 0;
+    if (endOption === 2) param = Math.max(1, Number(endText) || 1);
+    if (endOption === 1 && endDate) param = new Date(`${endDate}T23:59:59`).getTime();
+    onChange({
+      mode: m,
+      after: a,
+      weekdays: m === REPEAT_MODE.WEEKLY ? weekdayMask : 0,
+      endType: endOption,
+      endParam: param,
+      fromDone: whenDone,
+    });
+    setOpen(false);
+  };
 
   const pick = (m: number, a: number) => {
-    onChange(m, a);
+    // 预设 = 基础语义：清扩展态并应用
+    setWeekdayMask(0);
+    setEndOption(0);
+    setEndText("");
+    setEndDate("");
+    setWhenDone(0);
+    onChange({ mode: m, after: a, weekdays: 0, endType: 0, endParam: 0, fromDone: 0 });
     setOpen(false);
   };
 
@@ -597,10 +671,12 @@ function RepeatEditor({
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <button type="button" className="truncate font-medium hover:text-primary">
-          {mode === REPEAT_MODE.NONE ? "不重复" : repeatLabel(mode, after)}
+          {mode === REPEAT_MODE.NONE
+            ? "不重复"
+            : repeatLabel(mode, after, { weekdays, endType, endParam, fromDone })}
         </button>
       </PopoverTrigger>
-      <PopoverContent align="end" className="w-44 p-1">
+      <PopoverContent align="end" className="w-64 p-1">
         {REPEAT_PRESETS.map((p) => (
           <button key={p.mode} type="button"
             className={cn("flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-accent",
@@ -629,14 +705,82 @@ function RepeatEditor({
             onChange={(e) => setCustomDays(e.target.value)}
             className="h-6 w-14 px-1.5 text-xs"
             onKeyDown={(e) => {
-              if (e.key === "Enter") pick(REPEAT_MODE.DAILY, Math.max(1, Number(customDays) || 1));
+              if (e.key === "Enter") applyExt(REPEAT_MODE.DAILY, Math.max(1, Number(customDays) || 1));
             }}
           />
           <span className="shrink-0 text-xs text-muted-foreground">天</span>
           <Button size="sm" variant="ghost" className="ml-auto h-6 px-2 text-xs"
-            onClick={() => pick(REPEAT_MODE.DAILY, Math.max(1, Number(customDays) || 1))}
+            onClick={() => applyExt(REPEAT_MODE.DAILY, Math.max(1, Number(customDays) || 1))}
           >
             确定
+          </Button>
+        </div>
+
+        {/* #34 扩展规则：星期几 / 结束条件 / when done */}
+        <div className="mt-1 space-y-1.5 border-t px-2 py-1.5">
+          <div className="flex flex-wrap items-center gap-1">
+            <span className="text-[11px] text-muted-foreground">星期几</span>
+            {WEEKDAY_CHIPS.map((d) => (
+              <button
+                key={d.bit}
+                type="button"
+                aria-label={`星期${d.label}`}
+                onClick={() => setWeekdayMask((m) => m ^ d.bit)}
+                className={cn(
+                  "size-6 rounded-md border text-[11px]",
+                  (weekdayMask & d.bit) !== 0
+                    ? "border-primary bg-primary/10 font-medium text-primary"
+                    : "text-muted-foreground hover:bg-accent",
+                )}
+              >
+                {d.label}
+              </button>
+            ))}
+          </div>
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="text-[11px] text-muted-foreground">结束</span>
+            {[{ t: 0, l: "永不" }, { t: 2, l: "次数" }, { t: 1, l: "日期" }].map((o) => (
+              <button key={o.t} type="button"
+                onClick={() => setEndOption(o.t)}
+                className={cn(
+                  "rounded-md border px-2 py-0.5 text-[11px]",
+                  endOption === o.t
+                    ? "border-primary bg-primary/10 font-medium text-primary"
+                    : "text-muted-foreground hover:bg-accent",
+                )}
+              >
+                {o.l}
+              </button>
+            ))}
+            {endOption === 2 && (
+              <Input value={endText} inputMode="numeric" placeholder="次数"
+                className="h-6 w-14 px-1.5 text-xs"
+                onChange={(e) => setEndText(e.target.value)} />
+            )}
+            {endOption === 1 && (
+              <Input type="date" value={endDate} className="h-6 w-28 px-1.5 text-xs"
+                onChange={(e) => setEndDate(e.target.value)} />
+            )}
+          </div>
+          <div className="flex items-center gap-1.5">
+            <button type="button"
+              onClick={() => setWhenDone((v) => (v ? 0 : 1))}
+              className={cn(
+                "rounded-md border px-2 py-0.5 text-[11px]",
+                whenDone
+                  ? "border-primary bg-primary/10 font-medium text-primary"
+                  : "text-muted-foreground hover:bg-accent",
+              )}
+              title="默认按原定日期推进（节奏恒定）；勾选后按实际完成日推进（迟到完成，下次顺延一个完整周期）"
+            >
+              按完成日推进
+            </button>
+          </div>
+          <Button size="sm" variant="outline" className="h-6 w-full text-xs"
+            disabled={mode === REPEAT_MODE.NONE}
+            onClick={() => applyExt(mode, Math.max(1, after || 1))}
+          >
+            应用扩展规则
           </Button>
         </div>
       </PopoverContent>
@@ -1108,6 +1252,10 @@ function RemindersSection({
   reminders,
   repeatMode,
   repeatAfter,
+  repeatWeekdays,
+  repeatEndType,
+  repeatEndParam,
+  repeatFromDone,
   onChanged,
 }: {
   taskId: number;
@@ -1115,6 +1263,11 @@ function RemindersSection({
   /** 任务重复规则（>0 时提醒行显示徽标；触发后由监听器自动排下一次） */
   repeatMode: number;
   repeatAfter: number;
+  /** #34 重复规则扩展（徽标完整显示用） */
+  repeatWeekdays: number;
+  repeatEndType: number;
+  repeatEndParam: number;
+  repeatFromDone: number;
   onChanged: () => void;
 }) {
   // 编辑态：{reminderId, draft}——编辑=删旧建新（04 §3.4）
@@ -1183,7 +1336,12 @@ function RemindersSection({
                 </button>
                 {repeatMode > 0 && (
                   <span className="shrink-0 rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] text-primary">
-                    {repeatLabel(repeatMode, repeatAfter)}
+                    {repeatLabel(repeatMode, repeatAfter, {
+                      weekdays: repeatWeekdays,
+                      endType: repeatEndType,
+                      endParam: repeatEndParam,
+                      fromDone: repeatFromDone,
+                    })}
                   </span>
                 )}
                 <button type="button" aria-label="删除提醒" className="shrink-0 opacity-0 group-hover:opacity-100"

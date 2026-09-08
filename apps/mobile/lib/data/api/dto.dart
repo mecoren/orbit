@@ -108,6 +108,14 @@ class TodoTask {
   final int? startDate;
   final int repeatAfter;
   final int repeatMode;
+  /// #34 重复规则扩展：星期几位掩码 bit0=周一…bit6=周日（仅周档生效）
+  final int repeatWeekdays;
+  /// 结束条件 0=永不 1=按日期 2=按次数
+  final int repeatEndType;
+  /// 结束参数：日期型=结束日 ms / 次数型=剩余次数
+  final int repeatEndParam;
+  /// when done：0=锚定原 due 推进 1=按完成日推进
+  final int repeatFromDone;
   final double percentDone;
   final double position;
   final int isFavorite;
@@ -133,6 +141,10 @@ class TodoTask {
     required this.startDate,
     required this.repeatAfter,
     required this.repeatMode,
+    required this.repeatWeekdays,
+    required this.repeatEndType,
+    required this.repeatEndParam,
+    required this.repeatFromDone,
     required this.percentDone,
     required this.position,
     required this.isFavorite,
@@ -158,6 +170,10 @@ class TodoTask {
         startDate: j['start_date'] as int?,
         repeatAfter: j['repeat_after'] as int,
         repeatMode: j['repeat_mode'] as int,
+        repeatWeekdays: (j['repeat_weekdays'] as int?) ?? 0,
+        repeatEndType: (j['repeat_end_type'] as int?) ?? 0,
+        repeatEndParam: (j['repeat_end_param'] as int?) ?? 0,
+        repeatFromDone: (j['repeat_from_done'] as int?) ?? 0,
         percentDone: (j['percent_done'] as num).toDouble(),
         position: (j['position'] as num).toDouble(),
         isFavorite: j['is_favorite'] as int,
@@ -197,6 +213,10 @@ class TodoTaskCreateInput {
   final int? startDate;
   final int? repeatAfter;
   final int? repeatMode;
+  final int? repeatWeekdays;
+  final int? repeatEndType;
+  final int? repeatEndParam;
+  final int? repeatFromDone;
   final double? position;
   final int? isFavorite;
   final int? myDayDate;
@@ -213,6 +233,10 @@ class TodoTaskCreateInput {
     this.startDate,
     this.repeatAfter,
     this.repeatMode,
+    this.repeatWeekdays,
+    this.repeatEndType,
+    this.repeatEndParam,
+    this.repeatFromDone,
     this.position,
     this.isFavorite,
     this.myDayDate,
@@ -554,6 +578,10 @@ class TodoTaskDetail extends TodoTask {
     required super.startDate,
     required super.repeatAfter,
     required super.repeatMode,
+    required super.repeatWeekdays,
+    required super.repeatEndType,
+    required super.repeatEndParam,
+    required super.repeatFromDone,
     required super.percentDone,
     required super.position,
     required super.isFavorite,
@@ -584,6 +612,10 @@ class TodoTaskDetail extends TodoTask {
         startDate: j['start_date'] as int?,
         repeatAfter: j['repeat_after'] as int,
         repeatMode: j['repeat_mode'] as int,
+        repeatWeekdays: (j['repeat_weekdays'] as int?) ?? 0,
+        repeatEndType: (j['repeat_end_type'] as int?) ?? 0,
+        repeatEndParam: (j['repeat_end_param'] as int?) ?? 0,
+        repeatFromDone: (j['repeat_from_done'] as int?) ?? 0,
         percentDone: (j['percent_done'] as num).toDouble(),
         position: (j['position'] as num).toDouble(),
         isFavorite: j['is_favorite'] as int,

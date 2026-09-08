@@ -44,6 +44,7 @@ import {
 import {
   REPEAT_MODE,
   REPEAT_PRESETS,
+  WEEKDAY_CHIPS,
   repeatLabel,
 } from "../shared/repeat";
 import { formatYmd } from "../shared/lunar";
@@ -348,18 +349,41 @@ const REPEAT_UNITS = [
   { mode: REPEAT_MODE.YEARLY, label: "年" },
 ] as const;
 
+/** 结束条件选项（与 Rust REPEAT_END_* 常量对齐） */
+const REPEAT_END_OPTIONS = [
+  { type: 0, label: "永不" },
+  { type: 2, label: "次数" },
+  { type: 1, label: "日期" },
+] as const;
+
 /**
- * 重复规则选择：预设 chips 即点即存；「自定义」展开 间隔 N × 单位 面板，
- * 确定 后派生 repeat_mode/repeat_after（与移动端表单/详情抽屉同语义）。
+ * 重复规则选择：预设 chips 即点即存；「自定义」展开 间隔 N × 单位 面板
+ * （周档可勾选星期几、结束条件 永不/次数/日期、when done 推进口径），
+ * 确定 后派生 repeat_mode/repeat_after/扩展字段（#34 重复规则升级）。
  */
 function RepeatField({
   mode,
   after,
+  weekdays,
+  endType,
+  endParam,
+  fromDone,
   onChange,
 }: {
   mode: number;
   after: number;
-  onChange: (mode: number, after: number) => void;
+  weekdays: number;
+  endType: number;
+  endParam: number;
+  fromDone: number;
+  onChange: (v: {
+    mode: number;
+    after: number;
+    weekdays: number;
+    endType: number;
+    endParam: number;
+    fromDone: number;
+  }) => void;
 }) {
   const [intervalText, setIntervalText] = useState(
     String(Math.max(1, after || 1)),
@@ -368,22 +392,59 @@ function RepeatField({
     mode === REPEAT_MODE.NONE ? REPEAT_MODE.DAILY : mode,
   );
   const [customOpen, setCustomOpen] = useState(false);
-
-  const isPreset = REPEAT_PRESETS.some(
-    (p) => p.mode === mode && p.after === after,
+  // 扩展规则的编辑态（customOpen 展开面板时初始化一次；预设路径不触碰）
+  const [weekdayMask, setWeekdayMask] = useState(weekdays);
+  const [endOption, setEndOption] = useState(endType);
+  const [endText, setEndText] = useState(
+    endType === 2 ? String(Math.max(1, endParam || 1)) : "",
   );
+  const [endDate, setEndDate] = useState(
+    endType === 1 && endParam > 0
+      ? new Date(endParam).toISOString().slice(0, 10)
+      : "",
+  );
+  const [whenDone, setWhenDone] = useState(fromDone);
+
+  const isPreset =
+    REPEAT_PRESETS.some((p) => p.mode === mode && p.after === after) &&
+    weekdays === 0 &&
+    endType === 0 &&
+    fromDone === 0;
   const custom = mode !== REPEAT_MODE.NONE && !isPreset;
 
   const pick = (m: number, a: number) => {
     setIntervalText(String(Math.max(1, a)));
     setUnit(m === REPEAT_MODE.NONE ? REPEAT_MODE.DAILY : m);
     setCustomOpen(false);
-    onChange(m, a);
+    // 预设 = 基础语义：清扩展字段
+    setWeekdayMask(0);
+    setEndOption(0);
+    setEndText("");
+    setEndDate("");
+    setWhenDone(0);
+    onChange({ mode: m, after: a, weekdays: 0, endType: 0, endParam: 0, fromDone: 0 });
   };
 
   const applyCustom = () => {
-    onChange(unit, Math.max(1, Number(intervalText) || 1));
+    const n = Math.max(1, Number(intervalText) || 1);
+    let param = 0;
+    if (endOption === 2) param = Math.max(1, Number(endText) || 1);
+    if (endOption === 1 && endDate) {
+      param = new Date(`${endDate}T23:59:59`).getTime();
+    }
+    onChange({
+      mode: unit,
+      after: n,
+      weekdays: unit === REPEAT_MODE.WEEKLY ? weekdayMask : 0,
+      endType: endOption,
+      endParam: param,
+      fromDone: whenDone,
+    });
     setCustomOpen(false);
+  };
+
+  const toggleWeekday = (bit: number) => {
+    setWeekdayMask((m) => m ^ bit);
   };
 
   return (
@@ -419,40 +480,121 @@ function RepeatField({
         </button>
       </div>
       {customOpen && (
-        <div className="flex flex-wrap items-center gap-1.5">
-          <Input
-            value={intervalText}
-            inputMode="numeric"
-            placeholder="间隔"
-            className="h-7 w-16 text-[13px]"
-            onChange={(e) => setIntervalText(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                applyCustom();
-              }
-            }}
-          />
-          {REPEAT_UNITS.map((u) => (
+        <div className="flex flex-col gap-1.5 rounded-md border border-border/60 bg-muted/20 p-2">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <Input
+              value={intervalText}
+              inputMode="numeric"
+              placeholder="间隔"
+              className="h-7 w-16 text-[13px]"
+              onChange={(e) => setIntervalText(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                }
+              }}
+            />
+            {REPEAT_UNITS.map((u) => (
+              <button
+                key={u.mode}
+                type="button"
+                onClick={() => setUnit(u.mode)}
+                className={cn(
+                  "rounded-md border px-2.5 py-1 text-xs",
+                  unit === u.mode
+                    ? "border-primary bg-primary/10 font-medium text-primary"
+                    : "text-muted-foreground hover:bg-accent",
+                )}
+              >
+                {u.label}
+              </button>
+            ))}
+          </div>
+          {unit === REPEAT_MODE.WEEKLY && (
+            <div className="flex flex-wrap items-center gap-1">
+              <span className="text-[11px] text-muted-foreground">星期几</span>
+              {WEEKDAY_CHIPS.map((d) => (
+                <button
+                  key={d.bit}
+                  type="button"
+                  aria-label={`星期${d.label}`}
+                  onClick={() => toggleWeekday(d.bit)}
+                  className={cn(
+                    "size-6 rounded-md border text-[11px]",
+                    (weekdayMask & d.bit) !== 0
+                      ? "border-primary bg-primary/10 font-medium text-primary"
+                      : "text-muted-foreground hover:bg-accent",
+                  )}
+                >
+                  {d.label}
+                </button>
+              ))}
+              {weekdayMask !== 0 && (
+                <span className="text-[11px] text-muted-foreground">
+                  （周档 N 周 + 多选星期几）
+                </span>
+              )}
+            </div>
+          )}
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="text-[11px] text-muted-foreground">结束</span>
+            {REPEAT_END_OPTIONS.map((o) => (
+              <button
+                key={o.type}
+                type="button"
+                onClick={() => setEndOption(o.type)}
+                className={cn(
+                  "rounded-md border px-2 py-0.5 text-[11px]",
+                  endOption === o.type
+                    ? "border-primary bg-primary/10 font-medium text-primary"
+                    : "text-muted-foreground hover:bg-accent",
+                )}
+              >
+                {o.label}
+              </button>
+            ))}
+            {endOption === 2 && (
+              <Input
+                value={endText}
+                inputMode="numeric"
+                placeholder="次数"
+                className="h-7 w-16 text-xs"
+                onChange={(e) => setEndText(e.target.value)}
+              />
+            )}
+            {endOption === 1 && (
+              <Input
+                type="date"
+                value={endDate}
+                className="h-7 w-32 text-xs"
+                onChange={(e) => setEndDate(e.target.value)}
+              />
+            )}
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="text-[11px] text-muted-foreground">完成后</span>
             <button
-              key={u.mode}
               type="button"
-              onClick={() => setUnit(u.mode)}
+              onClick={() => setWhenDone((v) => (v ? 0 : 1))}
               className={cn(
-                "rounded-md border px-2.5 py-1 text-xs",
-                unit === u.mode
+                "rounded-md border px-2 py-0.5 text-[11px]",
+                whenDone
                   ? "border-primary bg-primary/10 font-medium text-primary"
                   : "text-muted-foreground hover:bg-accent",
               )}
+              title="默认按原定日期推进（节奏恒定）；勾选后按实际完成日推进（迟到完成，下次顺延一个完整周期）"
             >
-              {u.label}
+              按完成日推进
             </button>
-          ))}
+            <span className="text-[11px] text-muted-foreground">
+              {whenDone ? "下次 = 完成后一个完整周期" : "下次 = 按原排程节奏"}
+            </span>
+          </div>
           <Button
             type="button"
             size="sm"
             variant="ghost"
-            className="h-7"
+            className="h-7 self-start"
             onClick={applyCustom}
           >
             确定
@@ -488,9 +630,13 @@ export function TaskFormSheet({
   // 新增模式：标签选择 / 子任务草稿（编辑模式的标签与子任务走详情抽屉）
   const [tagSelections, setTagSelections] = useState<TagSelection[]>([]);
   const [subtaskTitles, setSubtaskTitles] = useState<string[]>([]);
-  // 重复规则（新增/编辑共用 footerContent 编辑）
+  // 重复规则（新增/编辑共用 footerContent 编辑；#34 扩展字段）
   const [repeatMode, setRepeatMode] = useState<number>(REPEAT_MODE.NONE);
   const [repeatAfter, setRepeatAfter] = useState<number>(0);
+  const [repeatWeekdays, setRepeatWeekdays] = useState<number>(0);
+  const [repeatEndType, setRepeatEndType] = useState<number>(0);
+  const [repeatEndParam, setRepeatEndParam] = useState<number>(0);
+  const [repeatFromDone, setRepeatFromDone] = useState<number>(0);
 
   // 打开时初始化：编辑载入既有规则，新增重置为不重复
   useEffect(() => {
@@ -498,9 +644,17 @@ export function TaskFormSheet({
     if (task) {
       setRepeatMode(task.repeat_mode);
       setRepeatAfter(task.repeat_after);
+      setRepeatWeekdays(task.repeat_weekdays ?? 0);
+      setRepeatEndType(task.repeat_end_type ?? 0);
+      setRepeatEndParam(task.repeat_end_param ?? 0);
+      setRepeatFromDone(task.repeat_from_done ?? 0);
     } else {
       setRepeatMode(REPEAT_MODE.NONE);
       setRepeatAfter(0);
+      setRepeatWeekdays(0);
+      setRepeatEndType(0);
+      setRepeatEndParam(0);
+      setRepeatFromDone(0);
       setTagSelections([]);
       setSubtaskTitles([]);
     }
@@ -569,6 +723,10 @@ export function TaskFormSheet({
       start_date: toDateMs(values.start_date),
       repeat_mode: repeatMode,
       repeat_after: repeatAfter,
+      repeat_weekdays: repeatMode === REPEAT_MODE.WEEKLY ? repeatWeekdays : 0,
+      repeat_end_type: repeatEndType,
+      repeat_end_param: repeatEndParam,
+      repeat_from_done: repeatFromDone,
     };
 
     // 提醒时间（values 已过滤 null：undefined = 用户清空或未填）
@@ -625,9 +783,17 @@ export function TaskFormSheet({
           <RepeatField
             mode={repeatMode}
             after={repeatAfter}
-            onChange={(m, a) => {
-              setRepeatMode(m);
-              setRepeatAfter(a);
+            weekdays={repeatWeekdays}
+            endType={repeatEndType}
+            endParam={repeatEndParam}
+            fromDone={repeatFromDone}
+            onChange={(v) => {
+              setRepeatMode(v.mode);
+              setRepeatAfter(v.after);
+              setRepeatWeekdays(v.weekdays);
+              setRepeatEndType(v.endType);
+              setRepeatEndParam(v.endParam);
+              setRepeatFromDone(v.fromDone);
             }}
           />
           {!task && (

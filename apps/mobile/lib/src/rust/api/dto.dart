@@ -735,6 +735,12 @@ class TodoTask {
   final PlatformInt64? startDate;
   final PlatformInt64 repeatAfter;
   final int repeatMode;
+
+  /// #34 重复规则扩展（与 orbit-core TodoTask 同名列镜像）
+  final int repeatWeekdays;
+  final int repeatEndType;
+  final PlatformInt64 repeatEndParam;
+  final int repeatFromDone;
   final double percentDone;
   final double position;
   final int isFavorite;
@@ -759,6 +765,10 @@ class TodoTask {
     this.startDate,
     required this.repeatAfter,
     required this.repeatMode,
+    required this.repeatWeekdays,
+    required this.repeatEndType,
+    required this.repeatEndParam,
+    required this.repeatFromDone,
     required this.percentDone,
     required this.position,
     required this.isFavorite,
@@ -785,6 +795,10 @@ class TodoTask {
       startDate.hashCode ^
       repeatAfter.hashCode ^
       repeatMode.hashCode ^
+      repeatWeekdays.hashCode ^
+      repeatEndType.hashCode ^
+      repeatEndParam.hashCode ^
+      repeatFromDone.hashCode ^
       percentDone.hashCode ^
       position.hashCode ^
       isFavorite.hashCode ^
@@ -813,6 +827,10 @@ class TodoTask {
           startDate == other.startDate &&
           repeatAfter == other.repeatAfter &&
           repeatMode == other.repeatMode &&
+          repeatWeekdays == other.repeatWeekdays &&
+          repeatEndType == other.repeatEndType &&
+          repeatEndParam == other.repeatEndParam &&
+          repeatFromDone == other.repeatFromDone &&
           percentDone == other.percentDone &&
           position == other.position &&
           isFavorite == other.isFavorite &&
@@ -841,6 +859,10 @@ class TodoTaskCreateInput {
   final PlatformInt64? startDate;
   final PlatformInt64? repeatAfter;
   final int? repeatMode;
+  final int? repeatWeekdays;
+  final int? repeatEndType;
+  final PlatformInt64? repeatEndParam;
+  final int? repeatFromDone;
   final double? position;
   final int? isFavorite;
   final PlatformInt64? myDayDate;
@@ -857,6 +879,10 @@ class TodoTaskCreateInput {
     this.startDate,
     this.repeatAfter,
     this.repeatMode,
+    this.repeatWeekdays,
+    this.repeatEndType,
+    this.repeatEndParam,
+    this.repeatFromDone,
     this.position,
     this.isFavorite,
     this.myDayDate,
@@ -875,6 +901,10 @@ class TodoTaskCreateInput {
       startDate.hashCode ^
       repeatAfter.hashCode ^
       repeatMode.hashCode ^
+      repeatWeekdays.hashCode ^
+      repeatEndType.hashCode ^
+      repeatEndParam.hashCode ^
+      repeatFromDone.hashCode ^
       position.hashCode ^
       isFavorite.hashCode ^
       myDayDate.hashCode;
@@ -895,6 +925,10 @@ class TodoTaskCreateInput {
           startDate == other.startDate &&
           repeatAfter == other.repeatAfter &&
           repeatMode == other.repeatMode &&
+          repeatWeekdays == other.repeatWeekdays &&
+          repeatEndType == other.repeatEndType &&
+          repeatEndParam == other.repeatEndParam &&
+          repeatFromDone == other.repeatFromDone &&
           position == other.position &&
           isFavorite == other.isFavorite &&
           myDayDate == other.myDayDate;
@@ -920,6 +954,12 @@ class TodoTaskDetail {
   final PlatformInt64? startDate;
   final PlatformInt64 repeatAfter;
   final int repeatMode;
+
+  /// #34 重复规则扩展（与 orbit-core TodoTask 同名列镜像）
+  final int repeatWeekdays;
+  final int repeatEndType;
+  final PlatformInt64 repeatEndParam;
+  final int repeatFromDone;
   final double percentDone;
   final double position;
   final int isFavorite;
@@ -949,6 +989,10 @@ class TodoTaskDetail {
     this.startDate,
     required this.repeatAfter,
     required this.repeatMode,
+    required this.repeatWeekdays,
+    required this.repeatEndType,
+    required this.repeatEndParam,
+    required this.repeatFromDone,
     required this.percentDone,
     required this.position,
     required this.isFavorite,
@@ -980,6 +1024,10 @@ class TodoTaskDetail {
       startDate.hashCode ^
       repeatAfter.hashCode ^
       repeatMode.hashCode ^
+      repeatWeekdays.hashCode ^
+      repeatEndType.hashCode ^
+      repeatEndParam.hashCode ^
+      repeatFromDone.hashCode ^
       percentDone.hashCode ^
       position.hashCode ^
       isFavorite.hashCode ^
@@ -1013,6 +1061,10 @@ class TodoTaskDetail {
           startDate == other.startDate &&
           repeatAfter == other.repeatAfter &&
           repeatMode == other.repeatMode &&
+          repeatWeekdays == other.repeatWeekdays &&
+          repeatEndType == other.repeatEndType &&
+          repeatEndParam == other.repeatEndParam &&
+          repeatFromDone == other.repeatFromDone &&
           percentDone == other.percentDone &&
           position == other.position &&
           isFavorite == other.isFavorite &&

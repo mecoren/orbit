@@ -502,9 +502,10 @@ pub async fn create_todo_task(
         "INSERT INTO todo_tasks (
             uuid, title, description, project_id, priority, status, done, done_at,
             due_date, start_date, repeat_after, repeat_mode,
+            repeat_weekdays, repeat_end_type, repeat_end_param, repeat_from_done,
             percent_done, position, is_favorite, my_day_date,
             is_deleted, created_at, updated_at, version
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, 0, ?, ?, 1)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, 0, ?, ?, 1)
         RETURNING *",
     )
     .bind(&uuid)
@@ -519,6 +520,10 @@ pub async fn create_todo_task(
     .bind(input.start_date)
     .bind(input.repeat_after.unwrap_or(0))
     .bind(input.repeat_mode.unwrap_or(0))
+    .bind(input.repeat_weekdays.unwrap_or(0))
+    .bind(input.repeat_end_type.unwrap_or(0))
+    .bind(input.repeat_end_param.unwrap_or(0))
+    .bind(input.repeat_from_done.unwrap_or(0))
     .bind(input.position.unwrap_or(0.0))
     .bind(input.is_favorite.unwrap_or(0))
     .bind(input.my_day_date)
@@ -572,6 +577,18 @@ pub async fn update_todo_task(
     if input.repeat_mode.is_some() {
         sets.push("repeat_mode = ?".into());
     }
+    if input.repeat_weekdays.is_some() {
+        sets.push("repeat_weekdays = ?".into());
+    }
+    if input.repeat_end_type.is_some() {
+        sets.push("repeat_end_type = ?".into());
+    }
+    if input.repeat_end_param.is_some() {
+        sets.push("repeat_end_param = ?".into());
+    }
+    if input.repeat_from_done.is_some() {
+        sets.push("repeat_from_done = ?".into());
+    }
     if input.percent_done.is_some() {
         sets.push("percent_done = ?".into());
     }
@@ -621,6 +638,18 @@ pub async fn update_todo_task(
         q = q.bind(v);
     }
     if let Some(v) = input.repeat_mode {
+        q = q.bind(v);
+    }
+    if let Some(v) = input.repeat_weekdays {
+        q = q.bind(v);
+    }
+    if let Some(v) = input.repeat_end_type {
+        q = q.bind(v);
+    }
+    if let Some(v) = input.repeat_end_param {
+        q = q.bind(v);
+    }
+    if let Some(v) = input.repeat_from_done {
         q = q.bind(v);
     }
     if let Some(v) = input.percent_done {

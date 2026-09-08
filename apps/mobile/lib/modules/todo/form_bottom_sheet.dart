@@ -121,6 +121,12 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
   int _repeatAfter = 1;
   bool _customRepeat = false;
   rep.RepeatUnit _customUnit = rep.RepeatUnit.day;
+  // #34 重复规则扩展：星期几掩码（bit0=周一…bit6=周日）+ 结束条件 + when done
+  int _repeatWeekdays = 0;
+  int _repeatEndType = 0;
+  String _repeatEndText = '';
+  int _repeatEndParam = 0;
+  bool _repeatFromDone = false;
   bool _saving = false;
   bool _loaded = false;
   String? _loadError;
@@ -176,9 +182,20 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
       _customRepeat ? rep.modeForUnit(_customUnit) : _repeatMode;
 
   /// 自定义档位派生 after：间隔输入（解析失败按 1 兜底）
+  /// 扩展区判定用的当前 mode（自定义面板的单位换算与保存口径一致）
+  int get repeatModeForExt => _customRepeat
+      ? rep.modeForUnit(_customUnit)
+      : _repeatMode;
+
   int get _effectiveRepeatAfter => _customRepeat
       ? (int.tryParse(_intervalController.text.trim()) ?? 1)
       : _repeatAfter;
+
+  /// 结束参数：次数型取输入（≥1 防呆），日期型由 UI 不启用（移动端首版次数/永不二选，
+  /// 日期型走桌面端完整编辑器；保持桥面完整语义）
+  int get _effectiveRepeatEndParam => _repeatEndType == 2
+      ? (int.tryParse(_repeatEndText.trim()) ?? 0)
+      : _repeatEndParam;
 
   @override
   void initState() {
@@ -222,6 +239,13 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
         _status = task.status;
         _startDate = task.startDate;
         _repeatMode = task.repeatMode;
+      _repeatWeekdays = task.repeatWeekdays;
+      _repeatEndType = task.repeatEndType;
+      _repeatEndParam = task.repeatEndParam;
+      _repeatFromDone = task.repeatFromDone == 1;
+      _repeatEndText = _repeatEndType == 2
+          ? (task.repeatEndParam > 0 ? task.repeatEndParam.toString() : '')
+          : '';
         _repeatAfter = task.repeatAfter;
         _existingReminder = firstReminder;
         _remindAt = firstReminder?.remindAt;
@@ -272,6 +296,10 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
           startDate: _startDate,
           repeatMode: repeatMode,
           repeatAfter: repeatAfter,
+          repeatWeekdays: repeatMode == rep.RepeatMode.weekly ? _repeatWeekdays : 0,
+          repeatEndType: _repeatEndType,
+          repeatEndParam: _effectiveRepeatEndParam,
+          repeatFromDone: _repeatFromDone ? 1 : 0,
         ));
         // 新建：设置提醒 → 建立提醒实体
         if (_remindAt != null) {
@@ -300,6 +328,11 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
             'start_date': _startDate,
             'repeat_mode': repeatMode,
             'repeat_after': repeatAfter,
+            'repeat_weekdays':
+                repeatMode == rep.RepeatMode.weekly ? _repeatWeekdays : 0,
+            'repeat_end_type': _repeatEndType,
+            'repeat_end_param': _effectiveRepeatEndParam,
+            'repeat_from_done': _repeatFromDone ? 1 : 0,
           }),
         );
         // 编辑：提醒按"清空删/变更删旧建新/未动跳过"同步
@@ -725,6 +758,64 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
                                           setState(() => _customUnit = unit),
                                     ),
                                 ],
+                              ),
+                            ],
+                            // #34 扩展规则：星期几（周档）/ 结束次数 / when done
+                            if (repeatModeForExt != rep.RepeatMode.none) ...[
+                              const SizedBox(height: AppDimens.space8),
+                              if (repeatModeForExt == rep.RepeatMode.weekly)
+                                Wrap(
+                                  spacing: AppDimens.space8,
+                                  runSpacing: AppDimens.space8,
+                                  children: [
+                                    for (final (i, name) in rep.weekdayNames
+                                        .indexed)
+                                      FilterChip(
+                                        label: Text(name),
+                                        selected:
+                                            (_repeatWeekdays & (1 << i)) != 0,
+                                        onSelected: (_) => setState(() =>
+                                            _repeatWeekdays ^= 1 << i),
+                                      ),
+                                  ],
+                                ),
+                              const SizedBox(height: AppDimens.space8),
+                              Row(
+                                children: [
+                                  const Text('结束后重复终止',
+                                      style: TextStyle(fontSize: 13)),
+                                  const SizedBox(width: AppDimens.space8),
+                                  SizedBox(
+                                    width: 72,
+                                    child: TextFormField(
+                                      initialValue: _repeatEndText,
+                                      keyboardType: TextInputType.number,
+                                      style: TextStyle(
+                                          fontSize: 15,
+                                          color: colors.bodyText),
+                                      decoration: const InputDecoration(
+                                        labelText: '次数',
+                                        counterText: '',
+                                      ),
+                                      onChanged: (v) => setState(() {
+                                        _repeatEndText = v;
+                                        _repeatEndType = 2;
+                                      }),
+                                    ),
+                                  ),
+                                  const SizedBox(width: AppDimens.space8),
+                                  Text('次（留空 = 永不）',
+                                      style: TextStyle(
+                                          fontSize: 12,
+                                          color: colors.secondaryText)),
+                                ],
+                              ),
+                              const SizedBox(height: AppDimens.space8),
+                              FilterChip(
+                                label: const Text('按完成日推进（下次顺延一个完整周期）'),
+                                selected: _repeatFromDone,
+                                onSelected: (_) => setState(
+                                    () => _repeatFromDone = !_repeatFromDone),
                               ),
                             ],
                           ],

@@ -7,6 +7,16 @@
 
 ## [Unreleased]
 
+### 重复任务规则升级：星期几 / 结束条件 / when done（竞品矩阵批次 #34）
+
+四款参考产品（Tasks.org/MS To Do/Obsidian Tasks/Super Productivity）全有的最大规则缺口补齐。向后兼容：新字段默认值 = 旧语义不变（现有重复任务行为零变化）。
+
+- **数据模型**：`todo_tasks` 增四列——`repeat_weekdays`（星期几位掩码 bit0=周一…bit6=周日，仅周档生效）、`repeat_end_type`（0=永不 1=按日期 2=按次数）+ `repeat_end_param`（日期型=结束日 ms/次数型=剩余次数，随克隆递减）、`repeat_from_done`（when done 语义）。存量库升级=删库重初始化（既有口径）。
+- **引擎（orbit-core）**：`next_repeat_at_ex` 掩码序列——候选日须 ①weekday ∈ 掩码 ②周序号 ≡ 锚点周 (mod N)（对齐 Tasks.org/MS Graph weekly+daysOfWeek；每 N 周的中周跳过）；`plan_next_recurring_instance` 增结束条件判定（次数 param≤1 终结/日期越过即终结）+ when done 锚点切换（`next_full_step_from`：完成日 + 完整步长不吃快进——理发式迟到三周完成，下次仍一个完整周期后）+ 扩展字段随克隆。6 个引擎用例（掩码单周/双周对齐/when done/掩码+when done/日期终结/次数递减终结），370→376 全绿。
+- **桌面**：表单与详情抽屉 RepeatField/RepeatEditor 升级——自定义面板展开扩展区（周档星期几 7 chips、结束条件 永不/次数/日期、when done 开关）；`repeatLabel` 支持扩展（「每周一三五（按完成日，剩 2 次）」式徽标）；提醒徽标/属性行完整显示。
+- **移动端**：dto/桥/mock 全链路镜像（FRB codegen）；表单自定义面板加星期几 FilterChips + 结束次数输入 + when done chip；详情徽标 `repeatLabelExt`；mock complete 补 when-done 分支（完成日锚定不吃快进）+ 次数终结守卫，桥契约 3 用例随迁（when done 周期断言/次数递减终结/掩码克隆）。
+- 门禁：Rust 376 / 桌面 typecheck + vitest 127 / 移动 analyze 0 + 160 全绿。
+
 ### 右键「添加评论」弹窗打开即聚焦输入框
 
 - **根因**：Dialog 常驻渲染、靠 `open` 切换显隐，React `autoFocus` 只在组件挂载时生效一次，错过弹窗打开时机；Radix Dialog 默认把焦点交给弹层内首个可聚焦元素（右上角关闭钮）——所以每次开弹窗都要先点一下输入框。

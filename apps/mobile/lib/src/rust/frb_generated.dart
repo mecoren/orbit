@@ -4258,8 +4258,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   TodoTask dco_decode_todo_task(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 22)
-      throw Exception('unexpected arr length: expect 22 but see ${arr.length}');
+    if (arr.length != 26)
+      throw Exception('unexpected arr length: expect 26 but see ${arr.length}');
     return TodoTask(
       id: dco_decode_i_64(arr[0]),
       uuid: dco_decode_String(arr[1]),
@@ -4274,15 +4274,19 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       startDate: dco_decode_opt_box_autoadd_i_64(arr[10]),
       repeatAfter: dco_decode_i_64(arr[11]),
       repeatMode: dco_decode_i_32(arr[12]),
-      percentDone: dco_decode_f_64(arr[13]),
-      position: dco_decode_f_64(arr[14]),
-      isFavorite: dco_decode_i_32(arr[15]),
-      myDayDate: dco_decode_opt_box_autoadd_i_64(arr[16]),
-      isDeleted: dco_decode_i_32(arr[17]),
-      createdAt: dco_decode_i_64(arr[18]),
-      updatedAt: dco_decode_i_64(arr[19]),
-      deletedAt: dco_decode_opt_box_autoadd_i_64(arr[20]),
-      version: dco_decode_i_32(arr[21]),
+      repeatWeekdays: dco_decode_i_32(arr[13]),
+      repeatEndType: dco_decode_i_32(arr[14]),
+      repeatEndParam: dco_decode_i_64(arr[15]),
+      repeatFromDone: dco_decode_i_32(arr[16]),
+      percentDone: dco_decode_f_64(arr[17]),
+      position: dco_decode_f_64(arr[18]),
+      isFavorite: dco_decode_i_32(arr[19]),
+      myDayDate: dco_decode_opt_box_autoadd_i_64(arr[20]),
+      isDeleted: dco_decode_i_32(arr[21]),
+      createdAt: dco_decode_i_64(arr[22]),
+      updatedAt: dco_decode_i_64(arr[23]),
+      deletedAt: dco_decode_opt_box_autoadd_i_64(arr[24]),
+      version: dco_decode_i_32(arr[25]),
     );
   }
 
@@ -4290,8 +4294,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   TodoTaskCreateInput dco_decode_todo_task_create_input(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 14)
-      throw Exception('unexpected arr length: expect 14 but see ${arr.length}');
+    if (arr.length != 18)
+      throw Exception('unexpected arr length: expect 18 but see ${arr.length}');
     return TodoTaskCreateInput(
       title: dco_decode_String(arr[0]),
       description: dco_decode_opt_String(arr[1]),
@@ -4304,9 +4308,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       startDate: dco_decode_opt_box_autoadd_i_64(arr[8]),
       repeatAfter: dco_decode_opt_box_autoadd_i_64(arr[9]),
       repeatMode: dco_decode_opt_box_autoadd_i_32(arr[10]),
-      position: dco_decode_opt_box_autoadd_f_64(arr[11]),
-      isFavorite: dco_decode_opt_box_autoadd_i_32(arr[12]),
-      myDayDate: dco_decode_opt_box_autoadd_i_64(arr[13]),
+      repeatWeekdays: dco_decode_opt_box_autoadd_i_32(arr[11]),
+      repeatEndType: dco_decode_opt_box_autoadd_i_32(arr[12]),
+      repeatEndParam: dco_decode_opt_box_autoadd_i_64(arr[13]),
+      repeatFromDone: dco_decode_opt_box_autoadd_i_32(arr[14]),
+      position: dco_decode_opt_box_autoadd_f_64(arr[15]),
+      isFavorite: dco_decode_opt_box_autoadd_i_32(arr[16]),
+      myDayDate: dco_decode_opt_box_autoadd_i_64(arr[17]),
     );
   }
 
@@ -4314,8 +4322,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   TodoTaskDetail dco_decode_todo_task_detail(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 27)
-      throw Exception('unexpected arr length: expect 27 but see ${arr.length}');
+    if (arr.length != 31)
+      throw Exception('unexpected arr length: expect 31 but see ${arr.length}');
     return TodoTaskDetail(
       id: dco_decode_i_64(arr[0]),
       uuid: dco_decode_String(arr[1]),
@@ -4330,20 +4338,24 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       startDate: dco_decode_opt_box_autoadd_i_64(arr[10]),
       repeatAfter: dco_decode_i_64(arr[11]),
       repeatMode: dco_decode_i_32(arr[12]),
-      percentDone: dco_decode_f_64(arr[13]),
-      position: dco_decode_f_64(arr[14]),
-      isFavorite: dco_decode_i_32(arr[15]),
-      myDayDate: dco_decode_opt_box_autoadd_i_64(arr[16]),
-      isDeleted: dco_decode_i_32(arr[17]),
-      createdAt: dco_decode_i_64(arr[18]),
-      updatedAt: dco_decode_i_64(arr[19]),
-      deletedAt: dco_decode_opt_box_autoadd_i_64(arr[20]),
-      version: dco_decode_i_32(arr[21]),
-      subtasks: dco_decode_list_todo_subtask(arr[22]),
-      labels: dco_decode_list_task_label_with_id(arr[23]),
-      comments: dco_decode_list_todo_comment(arr[24]),
-      relations: dco_decode_list_todo_task_relation(arr[25]),
-      reminders: dco_decode_list_todo_reminder(arr[26]),
+      repeatWeekdays: dco_decode_i_32(arr[13]),
+      repeatEndType: dco_decode_i_32(arr[14]),
+      repeatEndParam: dco_decode_i_64(arr[15]),
+      repeatFromDone: dco_decode_i_32(arr[16]),
+      percentDone: dco_decode_f_64(arr[17]),
+      position: dco_decode_f_64(arr[18]),
+      isFavorite: dco_decode_i_32(arr[19]),
+      myDayDate: dco_decode_opt_box_autoadd_i_64(arr[20]),
+      isDeleted: dco_decode_i_32(arr[21]),
+      createdAt: dco_decode_i_64(arr[22]),
+      updatedAt: dco_decode_i_64(arr[23]),
+      deletedAt: dco_decode_opt_box_autoadd_i_64(arr[24]),
+      version: dco_decode_i_32(arr[25]),
+      subtasks: dco_decode_list_todo_subtask(arr[26]),
+      labels: dco_decode_list_task_label_with_id(arr[27]),
+      comments: dco_decode_list_todo_comment(arr[28]),
+      relations: dco_decode_list_todo_task_relation(arr[29]),
+      reminders: dco_decode_list_todo_reminder(arr[30]),
     );
   }
 
@@ -5640,6 +5652,10 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_startDate = sse_decode_opt_box_autoadd_i_64(deserializer);
     var var_repeatAfter = sse_decode_i_64(deserializer);
     var var_repeatMode = sse_decode_i_32(deserializer);
+    var var_repeatWeekdays = sse_decode_i_32(deserializer);
+    var var_repeatEndType = sse_decode_i_32(deserializer);
+    var var_repeatEndParam = sse_decode_i_64(deserializer);
+    var var_repeatFromDone = sse_decode_i_32(deserializer);
     var var_percentDone = sse_decode_f_64(deserializer);
     var var_position = sse_decode_f_64(deserializer);
     var var_isFavorite = sse_decode_i_32(deserializer);
@@ -5663,6 +5679,10 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       startDate: var_startDate,
       repeatAfter: var_repeatAfter,
       repeatMode: var_repeatMode,
+      repeatWeekdays: var_repeatWeekdays,
+      repeatEndType: var_repeatEndType,
+      repeatEndParam: var_repeatEndParam,
+      repeatFromDone: var_repeatFromDone,
       percentDone: var_percentDone,
       position: var_position,
       isFavorite: var_isFavorite,
@@ -5691,6 +5711,10 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_startDate = sse_decode_opt_box_autoadd_i_64(deserializer);
     var var_repeatAfter = sse_decode_opt_box_autoadd_i_64(deserializer);
     var var_repeatMode = sse_decode_opt_box_autoadd_i_32(deserializer);
+    var var_repeatWeekdays = sse_decode_opt_box_autoadd_i_32(deserializer);
+    var var_repeatEndType = sse_decode_opt_box_autoadd_i_32(deserializer);
+    var var_repeatEndParam = sse_decode_opt_box_autoadd_i_64(deserializer);
+    var var_repeatFromDone = sse_decode_opt_box_autoadd_i_32(deserializer);
     var var_position = sse_decode_opt_box_autoadd_f_64(deserializer);
     var var_isFavorite = sse_decode_opt_box_autoadd_i_32(deserializer);
     var var_myDayDate = sse_decode_opt_box_autoadd_i_64(deserializer);
@@ -5706,6 +5730,10 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       startDate: var_startDate,
       repeatAfter: var_repeatAfter,
       repeatMode: var_repeatMode,
+      repeatWeekdays: var_repeatWeekdays,
+      repeatEndType: var_repeatEndType,
+      repeatEndParam: var_repeatEndParam,
+      repeatFromDone: var_repeatFromDone,
       position: var_position,
       isFavorite: var_isFavorite,
       myDayDate: var_myDayDate,
@@ -5728,6 +5756,10 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_startDate = sse_decode_opt_box_autoadd_i_64(deserializer);
     var var_repeatAfter = sse_decode_i_64(deserializer);
     var var_repeatMode = sse_decode_i_32(deserializer);
+    var var_repeatWeekdays = sse_decode_i_32(deserializer);
+    var var_repeatEndType = sse_decode_i_32(deserializer);
+    var var_repeatEndParam = sse_decode_i_64(deserializer);
+    var var_repeatFromDone = sse_decode_i_32(deserializer);
     var var_percentDone = sse_decode_f_64(deserializer);
     var var_position = sse_decode_f_64(deserializer);
     var var_isFavorite = sse_decode_i_32(deserializer);
@@ -5756,6 +5788,10 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       startDate: var_startDate,
       repeatAfter: var_repeatAfter,
       repeatMode: var_repeatMode,
+      repeatWeekdays: var_repeatWeekdays,
+      repeatEndType: var_repeatEndType,
+      repeatEndParam: var_repeatEndParam,
+      repeatFromDone: var_repeatFromDone,
       percentDone: var_percentDone,
       position: var_position,
       isFavorite: var_isFavorite,
@@ -6905,6 +6941,10 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_opt_box_autoadd_i_64(self.startDate, serializer);
     sse_encode_i_64(self.repeatAfter, serializer);
     sse_encode_i_32(self.repeatMode, serializer);
+    sse_encode_i_32(self.repeatWeekdays, serializer);
+    sse_encode_i_32(self.repeatEndType, serializer);
+    sse_encode_i_64(self.repeatEndParam, serializer);
+    sse_encode_i_32(self.repeatFromDone, serializer);
     sse_encode_f_64(self.percentDone, serializer);
     sse_encode_f_64(self.position, serializer);
     sse_encode_i_32(self.isFavorite, serializer);
@@ -6933,6 +6973,10 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_opt_box_autoadd_i_64(self.startDate, serializer);
     sse_encode_opt_box_autoadd_i_64(self.repeatAfter, serializer);
     sse_encode_opt_box_autoadd_i_32(self.repeatMode, serializer);
+    sse_encode_opt_box_autoadd_i_32(self.repeatWeekdays, serializer);
+    sse_encode_opt_box_autoadd_i_32(self.repeatEndType, serializer);
+    sse_encode_opt_box_autoadd_i_64(self.repeatEndParam, serializer);
+    sse_encode_opt_box_autoadd_i_32(self.repeatFromDone, serializer);
     sse_encode_opt_box_autoadd_f_64(self.position, serializer);
     sse_encode_opt_box_autoadd_i_32(self.isFavorite, serializer);
     sse_encode_opt_box_autoadd_i_64(self.myDayDate, serializer);
@@ -6957,6 +7001,10 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_opt_box_autoadd_i_64(self.startDate, serializer);
     sse_encode_i_64(self.repeatAfter, serializer);
     sse_encode_i_32(self.repeatMode, serializer);
+    sse_encode_i_32(self.repeatWeekdays, serializer);
+    sse_encode_i_32(self.repeatEndType, serializer);
+    sse_encode_i_64(self.repeatEndParam, serializer);
+    sse_encode_i_32(self.repeatFromDone, serializer);
     sse_encode_f_64(self.percentDone, serializer);
     sse_encode_f_64(self.position, serializer);
     sse_encode_i_32(self.isFavorite, serializer);
