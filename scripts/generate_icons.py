@@ -13,12 +13,13 @@
 - Android 通知小图标：drawable-*/ic_stat_orbit.png（白色剪影，API 21+ 语义）
 - 设计源文件：docs/adr/assets/orbit-icon-master.png
 
-设计 v4（源：scripts/icon-asset-2026-09-08.png，AI 生图已带透明通道）：
-深色 squircle 底 + 蓝色圆环轨道（缺口上嵌卫星球、彗星从中心越环）+ 双层
-glow 光晕；主体蓝 #2B6EF7。资产为栅格合成（环圆度实测 ±2px、蓝色 std<3，
-无需重描）；glow 淡蓝白渐变保留。内容对齐：solid bbox 占画布 80%，
-glow 允许越出 PAD（淡出自然）。参数改动请同步更新本文件顶部注释与
-0004 ADR。
+设计 v4.1（源：scripts/icon-asset-2026-09-08.png，AI 生图已带透明通道）：
+蓝色正圆环（缺口嵌卫星球、彗星从中心越环）+ 双层 glow 光晕；主体蓝
+#2B6EF7。资产为栅格合成（环圆度实测 ±2px、蓝色 std<3，无需重描）；
+**全族透明底**（用户口径「扣成透明背景」）——无底板，深色底由宿主环境
+提供；Android 启动屏的深色由 launch_background.xml 的 launch_bg 提供。
+内容对齐：solid bbox 占画布 80%，glow 越出 PAD 自然淡出。参数改动请
+同步更新本文件顶部注释与 0004 ADR。
 """
 
 from __future__ import annotations
@@ -32,8 +33,6 @@ REPO = Path(__file__).resolve().parent.parent
 ASSET_PATH = Path(__file__).resolve().parent / "icon-asset-2026-09-08.png"
 
 # ---- 设计参数（与 docs/adr/0004 §图标一致）----
-BG = (26, 26, 33, 255)  # squircle 底色（深空色 #1A1A21，与启动屏 launch_bg 同源）
-CORNER = 0.2237  # squircle 圆角率（Material，22.37%）
 PAD = 0.10  # solid 主体边距（相对画布；glow 越出边距自然淡出）
 # 资产内 solid 内容 bbox（icon-asset-2026-09-08.png 941×961 实测）
 SOLID_BBOX = (43, 100, 864, 830)  # x0, y0, x1, y1（含端点）
@@ -93,23 +92,20 @@ def _solid_silhouette(size: int) -> Image.Image:
 
 
 def render_master(size: int) -> Image.Image:
-    """主图标：深色 squircle + 资产合成（固定 1024 母版缩放）。"""
+    """主图标：透明底 + 资产直放（固定 1024 母版缩放）。
+
+    用户口径「扣成透明背景」——无任何底色/底板，图标即资产本身；
+    深色底由各宿主环境提供（桌面任务栏/Android 桌面/关于页背景）。
+    """
     ss = 1024
     im = Image.new("RGBA", (ss, ss), (0, 0, 0, 0))
-    d = ImageDraw.Draw(im)
-    d.rounded_rectangle([0, 0, ss, ss], radius=int(ss * CORNER), fill=BG)
     _place_asset(im, ss)
     return im.resize((size, size), Image.LANCZOS)
 
 
 def render_launch(size: int) -> Image.Image:
-    """Android 启动屏图：无圆角全出血深色底（launch_background 平铺场景）。"""
-    ss = 1024
-    im = Image.new("RGBA", (ss, ss), (0, 0, 0, 0))
-    d = ImageDraw.Draw(im)
-    d.rectangle([0, 0, ss, ss], fill=BG)
-    _place_asset(im, ss)
-    return im.resize((size, size), Image.LANCZOS)
+    """Android 启动屏图：透明底（launch_background.xml 的 launch_bg 提供深色）。"""
+    return render_master(size)
 
 
 def render_notification_silhouette(size: int) -> Image.Image:
@@ -172,18 +168,15 @@ def write_ico(sizes: list[int], path: Path) -> None:
 
 
 def self_check(master: Image.Image, notif: Image.Image) -> None:
-    """生成后自检：深底存在、主体蓝覆盖、四角透明、通知图纯白、glow 不贴边。"""
+    """生成后自检：底透明、主体蓝覆盖、通知图纯白。"""
     px = master.load()
     w, h = master.size
-    # 1) 四角透明（squircle 圆角外）
-    for x, y in [(2, 2), (w - 3, 2), (2, h - 3), (w - 3, h - 3)]:
-        if px[x, y][3] > 40:
-            raise RuntimeError(f"自检失败：圆角外不透明 ({x},{y})")
-    # 2) 深底存在（左右上角内侧远离主体处）
-    for x, y in [(int(w * 0.05), int(h * 0.30)), (int(w * 0.95), int(h * 0.10))]:
+    # 1) 底透明（四角 + 上下左右边缘中点，均应无背景板）
+    for x, y in [(2, 2), (w - 3, 2), (2, h - 3), (w - 3, h - 3),
+                 (w // 2, 2), (w // 2, h - 3), (2, h // 2), (w - 3, h // 2)]:
         r, g, b, al = px[x, y]
-        if abs(r - BG[0]) > 14 or abs(g - BG[1]) > 14 or abs(b - BG[2]) > 14 or al < 240:
-            raise RuntimeError(f"自检失败：底色异常 ({x},{y}) -> ({r},{g},{b},{al})")
+        if al > 30:
+            raise RuntimeError(f"自检失败：底不透明 ({x},{y}) -> ({r},{g},{b},{al})")
     # 3) 主体蓝存在（环带实测绘于 512 图：r≈143..210，取中带 r=0.34w）
     cx = cy = w / 2
     rr = w * 0.34  # 环带中段（512 图实测 solid 峰区 143..251）
