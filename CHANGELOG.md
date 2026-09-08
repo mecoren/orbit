@@ -7,6 +7,12 @@
 
 ## [Unreleased]
 
+### 右键「添加评论」弹窗打开即聚焦输入框
+
+- **根因**：Dialog 常驻渲染、靠 `open` 切换显隐，React `autoFocus` 只在组件挂载时生效一次，错过弹窗打开时机；Radix Dialog 默认把焦点交给弹层内首个可聚焦元素（右上角关闭钮）——所以每次开弹窗都要先点一下输入框。
+- **修复**：接管 Radix 的 `onOpenAutoFocus` 事件——`preventDefault` 默认焦点流，用 ref 手动聚焦评论 `Textarea`；打开即可直接打字。
+- **测试**：e2e 新增用例（右键 → 添加评论 → 断言输入框 `toBeFocused` → 打字保存 → mock 库落库），stash 验证修复前真红（旧实现焦在关闭钮）；全量 e2e 9 用例通过。
+
 ### 详情抽屉交互修复：子任务超长标题悬浮提示 + 标题栏固定不随滚动
 
 - **子任务 tooltip**：子任务标题超长被 truncate 截断后无任何方式看全文；给标题 span 补原生 `title` 属性，hover 即显完整内容（与日历节假日、关联任务行的原生 title 惯例同款，轻量不引 Tooltip 依赖）。

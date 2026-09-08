@@ -34,6 +34,26 @@ test.beforeEach(async ({ page }) => {
   await freshApp(page);
 });
 
+test("右键添加评论：弹窗打开即聚焦输入框（2026-09-08 修复）", async ({ page }) => {
+  // 右键任务行 → 添加评论 → Dialog 打开
+  await page.getByText("既有任务-今天截止").click({ button: "right" });
+  await page.getByRole("menuitem", { name: "添加评论" }).click();
+  const textarea = page.getByPlaceholder("输入评论...");
+  await expect(textarea).toBeVisible();
+  // 焦点断言：打开后光标在输入框（旧实现 autoFocus 错过 open 时机，焦到关闭钮）
+  await expect(textarea).toBeFocused();
+  // 聚焦即可直接打字提交（回车行为不在此断言，聚焦即体验目标）
+  await textarea.fill("聚焦验证评论");
+  await page.getByRole("button", { name: "保存", exact: true }).click();
+  // 弹窗关闭 + 评论落库（评论展示在详情抽屉，这里断 mock 库终态）
+  await expect(page.getByPlaceholder("输入评论...")).not.toBeVisible();
+  const saved = await page.evaluate(() => {
+    const m = (window as any).__orbitMock;
+    return m.db.comments.some((c: any) => c.content === "聚焦验证评论");
+  });
+  expect(saved).toBe(true);
+});
+
 test("主链路：快速新建 → 列表出现 → 完成 → 撤销删除恢复", async ({ page }) => {
   // ---- 新建（QuickAddBar Enter 提交）----
   await quickAdd(page, "冒烟任务-买牛奶");

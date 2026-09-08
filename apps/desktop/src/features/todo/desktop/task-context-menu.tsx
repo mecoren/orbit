@@ -7,7 +7,7 @@
  *           添加评论(Dialog,Textarea) / ─ / 删除
  * 项目菜单：项目名标题头 + 删除项目（destructive；删除保护由父级弹窗处理）
  */
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import {
@@ -112,6 +112,8 @@ export function TaskContextMenu({
   const [reminderError, setReminderError] = useState<string | null>(null);
   const [commentOpen, setCommentOpen] = useState(false);
   const [commentDraft, setCommentDraft] = useState("");
+  // 评论输入框：Dialog onOpenAutoFocus 接管聚焦（autoFocus 错过 open 时机）
+  const commentTextareaRef = useRef<HTMLTextAreaElement>(null);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const undoableDelete = useUndoableDeleteAction();
 
@@ -422,13 +424,22 @@ export function TaskContextMenu({
 
       {/* 添加评论（max-w-sm + Textarea） */}
       <Dialog open={commentOpen} onOpenChange={setCommentOpen}>
-        <DialogContent className="max-w-sm">
+        {/* 打开即聚焦输入框：Dialog 常驻渲染、open 切换显隐，React autoFocus
+            只在挂载时生效会错过打开时机，且 Radix 默认把焦点给首个可聚焦元素
+            （关闭钮）——onOpenAutoFocus 接管， preventDefault 后手动聚焦 */}
+        <DialogContent
+          className="max-w-sm"
+          onOpenAutoFocus={(e) => {
+            e.preventDefault();
+            commentTextareaRef.current?.focus();
+          }}
+        >
           <DialogHeader>
             <DialogTitle>添加评论 · {task.title}</DialogTitle>
           </DialogHeader>
           <Textarea
+            ref={commentTextareaRef}
             rows={4}
-            autoFocus
             value={commentDraft}
             placeholder="输入评论..."
             onChange={(e) => setCommentDraft(e.target.value)}
