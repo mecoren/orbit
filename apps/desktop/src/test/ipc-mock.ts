@@ -149,6 +149,7 @@ export interface MockDb {
   comments: MockComment[];
   relations: MockRelation[];
   attachments: MockAttachmentLink[];
+  savedFilters: { id: number; uuid: string; name: string; conditions: string; sort_order: number }[];
   seq: number;
 }
 
@@ -166,6 +167,7 @@ function createDb(): MockDb {
     comments: [],
     relations: [],
     attachments: [],
+    savedFilters: [],
     seq: 1,
   };
 }
@@ -884,6 +886,39 @@ const commands: Record<string, (args: any, ctx: Ctx) => unknown> = {
     if (idx >= 0) db.attachments.splice(idx, 1);
   },
   attachments_gc: () => 0,
+
+  // ---- 保存的筛选器（#35；条件 JSON 白名单键同 Rust）----
+  saved_filters_list: (_a: unknown, { db }: Ctx) => ipcClone(db.savedFilters),
+  saved_filter_create: (
+    { input }: { input: { name: string; conditions: string; sort_order?: number } },
+    { db }: Ctx,
+  ) => {
+    if (!input.name.trim()) throw new Error("筛选器名称不能为空");
+    const row = {
+      id: db.seq++,
+      uuid: `sf-${db.seq}`,
+      name: input.name,
+      conditions: input.conditions,
+      sort_order: input.sort_order ?? Date.now(),
+    };
+    db.savedFilters.push(row);
+    return ipcClone(row);
+  },
+  saved_filter_update: (
+    { id, input }: { id: number; input: { name?: string; conditions?: string; sort_order?: number } },
+    { db }: Ctx,
+  ) => {
+    const row = db.savedFilters.find((f) => f.id === id);
+    if (!row) throw new Error(`saved_filter ${id} not found`);
+    if (input.name != null) row.name = input.name;
+    if (input.conditions != null) row.conditions = input.conditions;
+    if (input.sort_order != null) row.sort_order = input.sort_order;
+    return ipcClone(row);
+  },
+  saved_filter_delete: ({ id }: { id: number }, { db }: Ctx) => {
+    const idx = db.savedFilters.findIndex((f) => f.id === id);
+    if (idx >= 0) db.savedFilters.splice(idx, 1);
+  },
 
   // ---- CSV 导入（设置页迁移卡；冒烟不覆盖设置页，mock 提供
   //      与 Rust csv_import_api 同构的最小语义：title/content/summary

@@ -874,3 +874,34 @@ export const taskAttachmentRead = (hash: string) =>
 export const taskAttachmentRemove = (linkId: number) =>
   invoke<void>("task_attachment_remove", { linkId });
 export const attachmentsGc = () => invoke<number>("attachments_gc");
+
+// ========== saved_filters（保存的筛选器：#35）==========
+export interface TodoSavedFilter {
+  id: number;
+  uuid: string;
+  name: string;
+  /** 条件 JSON：{status?, priority_min?, project_ids?, label_ids?, due_within_days?, due_overdue?, favorite_only?} */
+  conditions: string;
+  sort_order: number;
+  is_deleted: number;
+  created_at: number;
+  updated_at: number;
+  deleted_at: number | null;
+  version: number;
+}
+export interface TodoSavedFilterCreateInput {
+  name: string;
+  conditions: string;
+  sort_order?: number;
+}
+export interface TodoSavedFilterUpdateInput {
+  name?: string;
+  conditions?: string;
+  sort_order?: number;
+}
+export const savedFiltersList = () => invoke<TodoSavedFilter[]>("saved_filters_list");
+export const savedFilterCreate = (input: TodoSavedFilterCreateInput) =>
+  invoke<TodoSavedFilter>("saved_filter_create", { input });
+export const savedFilterUpdate = (id: number, input: TodoSavedFilterUpdateInput) =>
+  invoke<TodoSavedFilter>("saved_filter_update", { id, input });
+export const savedFilterDelete = (id: number) => invoke<void>("saved_filter_delete", { id });

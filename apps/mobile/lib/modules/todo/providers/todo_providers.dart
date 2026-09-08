@@ -125,3 +125,8 @@ void invalidateBusinessCaches(WidgetRef ref) {
   ref.invalidate(trashTasksProvider);
   ref.invalidate(statsProvider);
 }
+
+/// 保存的筛选器列表（#35）
+final savedFiltersProvider = FutureProvider<List<TodoSavedFilter>>(
+  (ref) => ref.watch(orbitBridgeProvider).savedFiltersList(),
+);

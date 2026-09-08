@@ -22,6 +22,7 @@ pub mod dto;
 pub mod events;
 pub mod holiday;
 pub mod plaintext_export;
+pub mod saved_filter;
 pub mod search;
 pub mod state;
 pub mod stats;

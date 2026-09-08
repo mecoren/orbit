@@ -415,6 +415,39 @@ pub struct TodoTaskAttachment {
     pub version: i32,
 }
 
+// ---------- todo_saved_filters（保存的筛选器，#35）----------
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+pub struct TodoSavedFilter {
+    pub id: i64,
+    pub uuid: String,
+    pub name: String,
+    /// 条件 JSON：{status?, priority_min?, project_ids?, label_ids?,
+    /// due_within_days?, due_overdue?, favorite_only?}——缺键 = 不过滤
+    pub conditions: String,
+    pub sort_order: i64,
+    pub is_deleted: i32,
+    pub created_at: i64,
+    pub updated_at: i64,
+    pub deleted_at: Option<i64>,
+    pub version: i32,
+}
+
+/// todo_saved_filters 创建输入
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TodoSavedFilterCreateInput {
+    pub name: String,
+    pub conditions: String,
+    pub sort_order: Option<i64>,
+}
+
+/// todo_saved_filters 更新输入
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TodoSavedFilterUpdateInput {
+    pub name: Option<String>,
+    pub conditions: Option<String>,
+    pub sort_order: Option<i64>,
+}
+
 // ---------- sys_attachments（PK: hash）----------
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
 pub struct Attachment {

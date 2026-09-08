@@ -379,3 +379,31 @@ test("附件：详情抽屉区块渲染 + 列表/移除链路（mock 命令面�
   const remaining = await page.evaluate(() => (window as any).__orbitMock.db.attachments.length);
   expect(remaining).toBe(0);
 });
+
+test("保存的筛选器：创建 → 侧栏分组 → 点击过滤 → 删除（#35）", async ({ page }) => {
+  // 经 mock 直改内存库（真实链路 = 弹层名称/条件 JSON → saved_filter_create 同构）
+  await page.evaluate(() => {
+    const m = (window as any).__orbitMock;
+    m.db.savedFilters.push({
+      id: m.db.seq++,
+      uuid: "sf-e2e-1",
+      name: "本周紧急",
+      conditions: '{"priority_min":4,"due_within_days":7}',
+      sort_order: 1,
+    });
+    m.emitDbChange();
+  });
+  // 侧栏分组渲染（行内 button 与 aria-label 继承行名，用 first 严格定位行）
+  const filterRow = page.getByRole("button", { name: "本周紧急" }).first();
+  await expect(filterRow).toBeVisible({ timeout: 5_000 });
+  await filterRow.click();
+  // 标题切换为筛选器名（面板消费 activeSavedFilter）
+  await expect(page.getByRole("heading", { name: "本周紧急" })).toBeVisible();
+
+  // 删除：hover 行 → 删除按钮
+  await filterRow.hover();
+  await page.getByRole("button", { name: "删除筛选器 本周紧急" }).click();
+  await expect(page.getByRole("button", { name: "本周紧急" })).toHaveCount(0, {
+    timeout: 5_000,
+  });
+});

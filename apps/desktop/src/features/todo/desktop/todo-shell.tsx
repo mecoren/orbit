@@ -16,12 +16,18 @@
  * 2026-09-08 修复：此前 state 静默变化、界面无反应）。
  */
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Outlet, useLocation, useNavigate } from "react-router";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { UndoableDeleteProvider } from "@/hooks/use-undoable-delete";
 import { useAppStore } from "@/stores/app-store";
 import {
+  savedFilterCreate,
+  savedFilterDelete,
+  savedFiltersList,
   todoProjectList,
   todoTaskList,
   type TodoProject,
@@ -39,13 +45,16 @@ import { LabelManager } from "./label-manager";
  * （面板间通信面很小，Context 比提全局 store 轻量；TodoShell 内单 Provider。）
  */
 interface TodoShellContextValue {
-  // ---- 选中态三选一互斥（04 §二；跨面板保留）----
+  // ---- 选中态四选一互斥（04 §二；跨面板保留；#35 增筛选器）----
   quickView: QuickViewKey;
   projectId: number | null;
   ungrouped: boolean;
+  /** 保存的筛选器选中 id（#35；null = 未选中筛选器） */
+  savedFilterId: number | null;
   onSelectQuickView: (key: QuickViewKey) => void;
   onSelectProject: (id: number) => void;
   onSelectUngrouped: () => void;
+  onSelectSavedFilter: (id: number) => void;
   /** 选中项目 id（表单默认项目用；null = 无选中/未分组） */
   activeProjectId: number | null;
 
@@ -88,6 +97,8 @@ export default function TodoShell() {
   const [quickView, setQuickView] = useState<QuickViewKey>("all");
   const [projectId, setProjectId] = useState<number | null>(null);
   const [ungrouped, setUngrouped] = useState(false);
+  // #35：保存的筛选器选中态（与三选一互斥）
+  const [savedFilterId, setSavedFilterId] = useState<number | null>(null);
 
   // ---- 表单/标签管理状态（壳层持久，面板触发）----
   const [formOpen, setFormOpen] = useState(false);
@@ -121,6 +132,41 @@ export default function TodoShell() {
 
   const projects = projectsQuery.data ?? [];
   const tasks = tasksQuery.data ?? [];
+
+  // #35 保存的筛选器（db-change 自动失效；侧栏分组 + 面板过滤共用）
+  const savedFiltersQuery = useQuery({
+    queryKey: ["saved-filters", "list"],
+    queryFn: () => savedFiltersList(),
+    staleTime: 2 * 60 * 1000,
+    placeholderData: (prev) => prev,
+  });
+  const savedFilters = savedFiltersQuery.data ?? [];
+  const queryClient = useQueryClient();
+  const invalidateFilters = () =>
+    queryClient.invalidateQueries({ queryKey: ["saved-filters"] });
+  // 新建入口由面板触发（把当前工具栏筛选存为命名视图——面板传条件 JSON）：
+  // 壳层挂载弹层与提交，条件经 appStore 意图通道传递过重，这里走简单回调注册
+  const [savedFilterDraft, setSavedFilterDraft] = useState<{
+    name: string;
+    conditions: string;
+  } | null>(null);
+  const handleCreateSavedFilter = async () => {
+    if (!savedFilterDraft) return;
+    try {
+      await savedFilterCreate({
+        name: savedFilterDraft.name,
+        conditions: savedFilterDraft.conditions,
+      });
+      invalidateFilters();
+    } finally {
+      setSavedFilterDraft(null);
+    }
+  };
+  const handleDeleteSavedFilter = async (id: number) => {
+    await savedFilterDelete(id);
+    if (savedFilterId === id) setSavedFilterId(null);
+    invalidateFilters();
+  };
   // 仅"无任何数据"的失败才整块替换；后台 refetch 失败时保留旧数据展示
   // （placeholderData 语义），避免瞬时 IPC 失败清掉可见列表
   const tasksError =
@@ -151,19 +197,29 @@ export default function TodoShell() {
     quickView,
     projectId,
     ungrouped,
+    savedFilterId,
     onSelectQuickView: (key) => {
       selectInPanel();
       setUngrouped(false);
       setProjectId(null);
+      setSavedFilterId(null);
       setQuickView(key);
     },
+    onSelectSavedFilter: (id) => {
+      selectInPanel();
+      setUngrouped(false);
+      setProjectId(null);
+      setSavedFilterId(id);
+    },
     onSelectProject: (id) => {
+      setSavedFilterId(null);
       selectInPanel();
       setUngrouped(false);
       setQuickView("all");
       setProjectId(id);
     },
     onSelectUngrouped: () => {
+      setSavedFilterId(null);
       selectInPanel();
       setUngrouped(true);
       setProjectId(null);
@@ -200,12 +256,17 @@ export default function TodoShell() {
           <ProjectSidebar
             projects={projects}
             undoneCounts={undoneCounts}
-            activeQuickView={projectId == null && !ungrouped ? quickView : null}
+            activeQuickView={projectId == null && !ungrouped && savedFilterId == null ? quickView : null}
             activeProjectId={projectId}
             ungroupedActive={ungrouped}
+            savedFilters={savedFilters}
+            activeSavedFilterId={savedFilterId}
             onSelectQuickView={ctx.onSelectQuickView}
             onSelectProject={ctx.onSelectProject}
             onSelectUngrouped={ctx.onSelectUngrouped}
+            onSelectSavedFilter={ctx.onSelectSavedFilter}
+            onCreateSavedFilter={() => setSavedFilterDraft({ name: "", conditions: "{}" })}
+            onDeleteSavedFilter={handleDeleteSavedFilter}
           />
 
           {/* 中间区：路由出口（任务面板 / 回收站面板） */}
@@ -225,6 +286,45 @@ export default function TodoShell() {
             defaultProjectId={ctx.activeProjectId}
             presetDueDate={editingTask ? null : presetDueDate}
           />
+
+          {/* #35 新建筛选器弹层（名称 + 条件 JSON） */}
+          <Dialog
+            open={savedFilterDraft != null}
+            onOpenChange={(o) => !o && setSavedFilterDraft(null)}
+          >
+            <DialogContent className="max-w-sm">
+              <DialogHeader>
+                <DialogTitle>保存筛选器</DialogTitle>
+              </DialogHeader>
+              <Input
+                autoFocus
+                placeholder="筛选器名称（如：本周 P0）"
+                value={savedFilterDraft?.name ?? ""}
+                onChange={(e) =>
+                  setSavedFilterDraft((d) => (d ? { ...d, name: e.target.value } : d))
+                }
+              />
+              <Input
+                placeholder='条件 JSON（如 {"priority_min":4,"due_within_days":7}）'
+                className="font-mono text-xs"
+                value={savedFilterDraft?.conditions ?? "{}"}
+                onChange={(e) =>
+                  setSavedFilterDraft((d) => (d ? { ...d, conditions: e.target.value } : d))
+                }
+              />
+              <DialogFooter>
+                <Button variant="ghost" onClick={() => setSavedFilterDraft(null)}>
+                  取消
+                </Button>
+                <Button
+                  disabled={!savedFilterDraft?.name.trim()}
+                  onClick={() => void handleCreateSavedFilter()}
+                >
+                  保存
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
 
           {/* 标签管理器十色板（04 §3.8） */}
           <LabelManager open={labelManagerOpen} onOpenChange={setLabelManagerOpen} />

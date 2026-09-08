@@ -30,6 +30,12 @@ class SidebarScreen extends ConsumerStatefulWidget {
   ConsumerState<SidebarScreen> createState() => _SidebarScreenState();
 }
 
+/// 项目 10 色预设板（#36；与桌面端 project-sidebar PROJECT_COLORS 同序列）
+const List<String> _projectColorPalette = [
+  '#EF4444', '#F59E0B', '#22C55E', '#3B82F6', '#8B5CF6',
+  '#EC4899', '#14B8A6', '#F97316', '#6366F1', '#6B7280',
+];
+
 class _SidebarScreenState extends ConsumerState<SidebarScreen> {
   final _scrollController = ScrollController();
 
@@ -120,12 +126,16 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
     );
   }
 
-  Future<void> _editProject(TodoProject project) async {
-    final controller = TextEditingController(text: project.title);
+  /// 新建项目（#36）：名称输入 + 默认色按现有项目数轮换预设板
+  Future<void> _addProject() async {
+    final projects = _projects();
+    final defaultColor =
+        _projectColorPalette[projects.length % _projectColorPalette.length];
+    final controller = TextEditingController();
     final title = await showDialog<String>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('编辑项目'),
+        title: const Text('新建项目'),
         content: TextField(
           controller: controller,
           autofocus: true,
@@ -140,19 +150,99 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
           FilledButton(
             onPressed: () =>
                 Navigator.of(dialogContext).pop(controller.text.trim()),
-            child: const Text('保存'),
+            child: const Text('创建'),
           ),
         ],
       ),
     );
-    final newTitle = title;
     controller.dispose();
+    final newTitle = title;
     if (!mounted || newTitle == null || newTitle.isEmpty) return;
-    if (newTitle == project.title) return;
     try {
-      await ref
-          .read(orbitBridgeProvider)
-          .todoProjectUpdate(project.id, encodePatch({'title': newTitle}));
+      await ref.read(orbitBridgeProvider).todoProjectCreate(
+          TodoProjectCreateInput(title: newTitle, hexColor: defaultColor));
+      ref.invalidate(todoProjectsProvider);
+      WaitToast.success('项目已创建');
+    } catch (_) {
+      WaitToast.destructive('创建失败');
+    }
+  }
+
+  Future<void> _editProject(TodoProject project) async {
+    final dialogColors = AppColors.ofContext(context);
+    final controller = TextEditingController(text: project.title);
+    // #36：色板当前选中（初始 = 项目现色，无色回退默认蓝）
+    var selectedColor =
+        project.hexColor.isNotEmpty ? project.hexColor : '#3B82F6';
+    final result = await showDialog<(String, String)?>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) => AlertDialog(
+          title: const Text('编辑项目'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              TextField(
+                controller: controller,
+                autofocus: true,
+                maxLength: 50,
+                decoration: const InputDecoration(labelText: '项目名称'),
+              ),
+              const SizedBox(height: AppDimens.space8),
+              // 10 色预设板（#36；与桌面端 ProjectEditDialog 同序列）
+              Wrap(
+                spacing: AppDimens.space8,
+                runSpacing: AppDimens.space8,
+                children: [
+                  for (final hex in _projectColorPalette)
+                    GestureDetector(
+                      onTap: () => setDialogState(() => selectedColor = hex),
+                      child: Container(
+                        width: 32,
+                        height: 32,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: hexToColor(hex),
+                          border: Border.all(
+                            color: selectedColor.toLowerCase() == hex.toLowerCase()
+                                ? dialogColors.titleText
+                                : Colors.transparent,
+                            width: 2.5,
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('取消'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext)
+                  .pop((controller.text.trim(), selectedColor)),
+              child: const Text('保存'),
+            ),
+          ],
+        ),
+      ),
+    );
+    controller.dispose();
+    final saved = result;
+    if (!mounted || saved == null) return;
+    final (newTitle, newColor) = saved;
+    if (newTitle.isEmpty) return;
+    if (newTitle == project.title && newColor == project.hexColor) return;
+    try {
+      await ref.read(orbitBridgeProvider).todoProjectUpdate(project.id,
+          encodePatch({
+            if (newTitle != project.title) 'title': newTitle,
+            if (newColor != project.hexColor) 'hex_color': newColor,
+          }));
       ref.invalidate(todoProjectsProvider);
     } catch (_) {
       WaitToast.destructive('保存失败');
@@ -240,7 +330,9 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
               _buildStatsRow(context),
               // 四、搜索（backlog #26：任务/项目/评论三路聚合）
               _buildSearchRow(context),
-              // 五、回收站（已删除任务的恢复入口；计数 = 回收站内任务数）
+              // 五、筛选器（#35：保存的组合条件命名视图）
+              _buildSavedFiltersRow(context),
+              // 六、回收站（已删除任务的恢复入口；计数 = 回收站内任务数）
               _buildTrashRow(context, surfaceHighest),
               // 四、项目（色块 + 名称 + 未完成计数；长按菜单；右侧把手拖拽重排）
               const SectionHeader(label: '项目'),
@@ -256,6 +348,23 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
                   index,
                 ),
                 onReorderItem: _reorderProjects,
+              ),
+              // 新建项目（#36：移动端此前无创建项目入口）
+              ListTile(
+                leading: Icon(
+                  Icons.add_rounded,
+                  size: AppDimens.iconSizeMd,
+                  color: colors.secondaryText,
+                ),
+                title: Text(
+                  '新建项目',
+                  style: TextStyle(
+                    fontSize: 15,
+                    color: colors.secondaryText,
+                  ),
+                ),
+                dense: true,
+                onTap: _addProject,
               ),
               // 三、未分组
               ListTile(
@@ -372,6 +481,32 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
         color: colors.secondaryText,
       ),
       onTap: _openStats,
+    );
+  }
+
+  /// 保存的筛选器入口行（#35：Apple Smart List 同款，独立路由页）
+  Widget _buildSavedFiltersRow(BuildContext context) {
+    final colors = AppColors.ofContext(context);
+    return ListTile(
+      leading: Icon(
+        Icons.filter_alt_rounded,
+        size: AppDimens.iconSizeMd,
+        color: OrbitAccents.todoAccent,
+      ),
+      title: Text(
+        '筛选器',
+        style: TextStyle(
+          fontSize: 16,
+          fontWeight: FontWeight.w500,
+          color: colors.titleText,
+        ),
+      ),
+      trailing: Icon(
+        Icons.chevron_right_rounded,
+        size: AppDimens.iconSizeMd,
+        color: colors.secondaryText,
+      ),
+      onTap: () => context.push('/todo/saved-filters'),
     );
   }
 

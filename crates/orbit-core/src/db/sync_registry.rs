@@ -17,6 +17,8 @@ pub const SYNCABLE_TABLES: &[&str] = &[
     // 任务-附件关联（07 排查报告后续批次：附件功能）；附件二进制走
     // assets/{hash}.waitsync 内容寻址通道（cloud_sync/attachments.rs），不进表同步
     "todo_task_attachments",
+    // 保存的筛选器（#35）：用户内容随库同步（对标 Apple Smart List）
+    "todo_saved_filters",
 ];
 
 /// 全量备份包（.orsync）遍历导出的业务表白名单

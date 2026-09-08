@@ -267,6 +267,24 @@ CREATE INDEX IF NOT EXISTS idx_todo_task_attachments_uuid ON todo_task_attachmen
 CREATE INDEX IF NOT EXISTS idx_todo_task_attachments_task_id ON todo_task_attachments(task_id);
 CREATE INDEX IF NOT EXISTS idx_todo_task_attachments_hash ON todo_task_attachments(hash);
 
+-- 保存的筛选器（07 竞品矩阵批次 #35；对标 Apple Smart List / Tasks.org
+-- 可保存过滤器 / Obsidian Presets 四款参考产品全有）
+-- conditions 为 JSON：{status, priority_min, project_ids, label_ids, due_within_days,
+-- due_overdue, favorite_only}——查询侧按存在键过滤，缺键 = 不过滤
+CREATE TABLE IF NOT EXISTS todo_saved_filters (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  uuid TEXT NOT NULL DEFAULT '',
+  name TEXT NOT NULL DEFAULT '',
+  conditions TEXT NOT NULL DEFAULT '{}',
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  is_deleted INTEGER NOT NULL DEFAULT 0,
+  created_at INTEGER NOT NULL DEFAULT 0,
+  updated_at INTEGER NOT NULL DEFAULT 0,
+  deleted_at INTEGER,
+  version INTEGER NOT NULL DEFAULT 1
+);
+CREATE INDEX IF NOT EXISTS idx_todo_saved_filters_uuid ON todo_saved_filters(uuid);
+
 CREATE TABLE IF NOT EXISTS cfg_option_categories (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   category_key TEXT NOT NULL DEFAULT '',

@@ -253,6 +253,18 @@ abstract class OrbitBridge {
   /// 卸下附件（软删关联，孤儿二进制由 GC 清）
   Future<void> taskAttachmentRemove(int linkId);
 
+  // ── 保存的筛选器（#35：Apple Smart List 同款）──
+
+  /// 列出全部保存的筛选器
+  Future<List<TodoSavedFilter>> savedFiltersList();
+
+  /// 创建保存的筛选器（条件 JSON 白名单键校验在后端）
+  Future<TodoSavedFilter> savedFilterCreate(
+      String name, String conditions);
+
+  /// 删除保存的筛选器（软删）
+  Future<void> savedFilterDelete(int id);
+
   // ── 同步加密（恢复流程用）──
 
   Future<SyncCryptoStatus> syncCryptoStatus();

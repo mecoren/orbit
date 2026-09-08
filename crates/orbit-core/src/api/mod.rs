@@ -11,6 +11,7 @@ pub mod full_sync_backup_api;
 pub mod holiday_api;
 pub mod import_api;
 pub mod plaintext_export_api;
+pub mod saved_filter_api;
 pub mod stats_api;
 pub mod todo_api;
 pub mod trash_api;

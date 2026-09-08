@@ -1,5 +1,7 @@
 import 'dart:convert';
 
+import 'dto.dart';
+
 /// Mock 内存存储：实体以 JSON Map 形式保存（形状 = Rust serde 序列化产物），
 /// 更新按"缺省键=跳过、null=清空"合并——与真实桥走同一语义。
 class MockStore {
@@ -12,6 +14,7 @@ class MockStore {
   final relations = <int, Map<String, dynamic>>{};
   final reminders = <int, Map<String, dynamic>>{};
   final attachments = <int, Map<String, dynamic>>{}; // linkId -> 附件关联行
+  final savedFilters = <TodoSavedFilter>[]; // #35 保存的筛选器
 
   var nextId = 1;
   bool masterAuthSet = false;

@@ -24,7 +24,10 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { type TodoTask } from "@/lib/tauri";
 import { LS_VIEW_MODE, QUICK_VIEWS } from "../shared/constants";
 import { useTaskLabels } from "../shared/use-task-labels";
+import { useQuery } from "@tanstack/react-query";
 import { filterTasks, sortTasks, type TaskSortKey } from "../shared/task-filters";
+import { applySavedFilter } from "../shared/saved-filter";
+import { savedFiltersList } from "@/lib/tauri";
 import { useTodoShell } from "./todo-shell";
 import { TaskListView } from "./task-list-view";
 import { QuickAddBar } from "./quick-add-bar";
@@ -61,6 +64,7 @@ export default function TaskPanel() {
     quickView,
     projectId,
     ungrouped,
+    savedFilterId,
     projects,
     tasks,
     tasksLoading,
@@ -97,36 +101,75 @@ export default function TaskPanel() {
 
   // ---- 内存筛选 + 排序（共享模块，语义同 04 §四；排序档位 #26）----
   // keyword 在面板内客户端过滤（全量数据由壳层提供）
-  const visibleTasks = useMemo(
-    () =>
-      sortTasks(
-        filterTasks(
-          (tasks as TodoTask[]).filter((t) =>
-            keyword
-              ? t.title.toLowerCase().includes(keyword.toLowerCase()) ||
-                (t.description ?? "").toLowerCase().includes(keyword.toLowerCase())
-              : true,
-          ),
-          {
-            quickView,
-            projectId,
-            ungrouped,
-            statusFilter,
-            priorityFilter: priorityFilter === "all" ? null : Number(priorityFilter),
-          },
+  // #35：选中的保存筛选器（db-change 自动失效）
+  const savedFiltersQuery = useQuery({
+    queryKey: ["saved-filters", "list"],
+    queryFn: () => savedFiltersList(),
+    staleTime: 2 * 60 * 1000,
+    placeholderData: (prev) => prev,
+  });
+  const activeSavedFilter = (savedFiltersQuery.data ?? []).find((f) => f.id === savedFilterId);
+
+  const visibleTasks = useMemo(() => {
+    // 保存筛选器选中时：优先走条件应用（快捷视图/项目/工具栏筛选不叠加——
+    // 筛选器即完整视图语义，keyword 仍作为本地搜索叠加）
+    if (activeSavedFilter) {
+      const labelIndex: Record<number, number[]> = {};
+      for (const [tid, labels] of taskLabels) {
+        labelIndex[tid] = labels.map((l) => l.id);
+      }
+      const filtered = applySavedFilter(
+        (tasks as TodoTask[]).filter((t) =>
+          keyword
+            ? t.title.toLowerCase().includes(keyword.toLowerCase()) ||
+              (t.description ?? "").toLowerCase().includes(keyword.toLowerCase())
+            : true,
         ),
-        sortKey,
+        activeSavedFilter.conditions,
+        labelIndex,
+      );
+      return sortTasks(filtered, sortKey);
+    }
+    return sortTasks(
+      filterTasks(
+        (tasks as TodoTask[]).filter((t) =>
+          keyword
+            ? t.title.toLowerCase().includes(keyword.toLowerCase()) ||
+              (t.description ?? "").toLowerCase().includes(keyword.toLowerCase())
+            : true,
+        ),
+        {
+          quickView,
+          projectId,
+          ungrouped,
+          statusFilter,
+          priorityFilter: priorityFilter === "all" ? null : Number(priorityFilter),
+        },
       ),
-    [tasks, keyword, quickView, projectId, ungrouped, statusFilter, priorityFilter, sortKey],
-  );
+      sortKey,
+    );
+  }, [
+    tasks,
+    keyword,
+    quickView,
+    projectId,
+    ungrouped,
+    statusFilter,
+    priorityFilter,
+    sortKey,
+    activeSavedFilter,
+    taskLabels,
+  ]);
 
   // ---- 标题映射（04 §二）----
   const activeQuickDef = QUICK_VIEWS.find((v) => v.key === quickView);
-  const title = ungrouped
-    ? "未分组"
-    : projectId != null
-      ? (projects.find((p) => p.id === projectId)?.title ?? "项目")
-      : (activeQuickDef?.label ?? "全部任务");
+  const title = activeSavedFilter
+    ? activeSavedFilter.name
+    : ungrouped
+      ? "未分组"
+      : projectId != null
+        ? (projects.find((p) => p.id === projectId)?.title ?? "项目")
+        : (activeQuickDef?.label ?? "全部任务");
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">

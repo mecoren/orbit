@@ -50,6 +50,8 @@ pub const SYNC_MODULES: &[SyncModuleDef] = &[SyncModuleDef {
         "todo_reminders",
         // 任务-附件关联：随 todos 模块同步；附件二进制走 assets/ 内容寻址通道
         "todo_task_attachments",
+        // 保存的筛选器（#35）：用户内容
+        "todo_saved_filters",
     ],
     // 附件功能落地（01 文档 §3.3 attachments/ 预留兑现）：todo_task_attachments
     // 的 hash 列即内容寻址 sha256，GC 与同步对账据此收集引用集

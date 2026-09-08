@@ -995,3 +995,19 @@ String humanFileSize(int bytes) {
   if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
   return '${(bytes / 1024 / 1024).toStringAsFixed(1)} MB';
 }
+
+/// 保存的筛选器（#35；镜像桌面 TodoSavedFilter）
+class TodoSavedFilter {
+  final int id;
+  final String uuid;
+  final String name;
+  /// 条件 JSON：{status?, priority_min?, project_ids?, label_ids?, due_within_days?, due_overdue?, favorite_only?}
+  final String conditions;
+
+  const TodoSavedFilter({
+    required this.id,
+    required this.uuid,
+    required this.name,
+    required this.conditions,
+  });
+}

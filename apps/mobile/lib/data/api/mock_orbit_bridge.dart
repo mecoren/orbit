@@ -647,6 +647,35 @@ class MockOrbitBridge implements OrbitBridge {
     });
   }
 
+  // ── 保存的筛选器（#35；与桌面 ipc-mock 同构语义）──
+
+  @override
+  Future<List<TodoSavedFilter>> savedFiltersList() {
+    return _delay(() => List<TodoSavedFilter>.from(store.savedFilters));
+  }
+
+  @override
+  Future<TodoSavedFilter> savedFilterCreate(String name, String conditions) {
+    return _delay(() {
+      if (name.trim().isEmpty) throw Exception('筛选器名称不能为空');
+      final row = TodoSavedFilter(
+        id: store.id,
+        uuid: 'sf-${DateTime.now().millisecondsSinceEpoch}',
+        name: name,
+        conditions: conditions,
+      );
+      store.savedFilters.add(row);
+      return row;
+    });
+  }
+
+  @override
+  Future<void> savedFilterDelete(int id) {
+    return _delay(() {
+      store.savedFilters.removeWhere((f) => f.id == id);
+    });
+  }
+
   TaskAttachmentView _mapMockAttachment(Map<String, dynamic> a) =>
       TaskAttachmentView(
         linkId: a['link_id'] as int,

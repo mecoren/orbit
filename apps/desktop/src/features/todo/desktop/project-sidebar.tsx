@@ -19,7 +19,7 @@ import {
   SortableContext,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
-import { BarChart3, GripVertical, Inbox, PanelLeftClose, PanelLeftOpen, Plus, Trash2 } from "lucide-react";
+import { BarChart3, Filter, GripVertical, Inbox, PanelLeftClose, PanelLeftOpen, Plus, Trash2 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { hideFromQueries, useUndoableDeleteAction } from "@/hooks/use-undoable-delete";
@@ -39,8 +39,16 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   todoProjectCreate,
   todoProjectDelete,
+  todoProjectUpdate,
   todoProjectUpdateSortOrder,
   type TodoProject,
 } from "@/lib/tauri";
@@ -55,6 +63,12 @@ import { ProjectContextMenu } from "./task-context-menu";
 /** 未分组虚拟 id */
 export const UNGROUPED_ID = -1;
 
+/** 项目 10 色预设板（#36；与标签管理器 PRESET_COLORS 同一序列，默认第 4 色） */
+const PROJECT_COLORS = [
+  "#EF4444", "#F59E0B", "#22C55E", "#3B82F6", "#8B5CF6",
+  "#EC4899", "#14B8A6", "#F97316", "#6366F1", "#6B7280",
+];
+
 interface ProjectSidebarProps {
   projects: TodoProject[];
   /** 项目 id → 未完成任务数（由父级从任务全量数据聚合，删除保护判定用） */
@@ -62,9 +76,16 @@ interface ProjectSidebarProps {
   activeQuickView: QuickViewKey | null;
   activeProjectId: number | null;
   ungroupedActive: boolean;
+  /** #35：保存的筛选器（侧栏分组渲染） */
+  savedFilters: { id: number; name: string }[];
+  activeSavedFilterId: number | null;
   onSelectQuickView: (key: QuickViewKey) => void;
   onSelectProject: (id: number) => void;
   onSelectUngrouped: () => void;
+  onSelectSavedFilter: (id: number) => void;
+  /** #35：新建筛选器（把当前面板的工具栏筛选存为命名视图） */
+  onCreateSavedFilter: () => void;
+  onDeleteSavedFilter: (id: number) => void;
 }
 
 export function ProjectSidebar({
@@ -73,9 +94,14 @@ export function ProjectSidebar({
   activeQuickView,
   activeProjectId,
   ungroupedActive,
+  savedFilters,
+  activeSavedFilterId,
   onSelectQuickView,
   onSelectProject,
   onSelectUngrouped,
+  onSelectSavedFilter,
+  onCreateSavedFilter,
+  onDeleteSavedFilter,
 }: ProjectSidebarProps) {
   const qc = useQueryClient();
   const navigate = useNavigate();
@@ -104,6 +130,9 @@ export function ProjectSidebar({
     hasUndone: boolean;
     undoneCount?: number;
   } | null>(null);
+
+  // 编辑项目对话框状态（#36 重命名 + 改色）：null 关闭
+  const [editTarget, setEditTarget] = useState<TodoProject | null>(null);
 
   const refetchProjects = () => qc.invalidateQueries({ queryKey: ["todo-project", "list"] });
 
@@ -135,7 +164,9 @@ export function ProjectSidebar({
       return;
     }
     try {
-      await todoProjectCreate({ title });
+      // #36：新建项目默认色按现有项目数轮换预设板（用户可右键改色）
+      const nextColor = PROJECT_COLORS[projects.length % PROJECT_COLORS.length];
+      await todoProjectCreate({ title, hex_color: nextColor });
       await refetchProjects();
     } finally {
       setNewTitle("");
@@ -229,6 +260,32 @@ export function ProjectSidebar({
               </Tooltip>
             );
           })}
+          <Tooltip>
+
+            <TooltipTrigger asChild>
+
+              <button
+
+                type="button"
+
+                aria-label="保存当前筛选"
+
+                className="flex h-8 w-8 items-center justify-center rounded-md hover:bg-accent/50"
+
+                onClick={onCreateSavedFilter}
+
+              >
+
+                <Filter className="size-4" />
+
+              </button>
+
+            </TooltipTrigger>
+
+            <TooltipContent>保存当前筛选</TooltipContent>
+
+          </Tooltip>
+
           <Tooltip>
             <TooltipTrigger asChild>
               <button
@@ -361,6 +418,46 @@ export function ProjectSidebar({
         </button>
       </div>
 
+      {/* #35 保存的筛选器（Apple Smart List 同款；空列表不渲染分组） */}
+      {savedFilters.length > 0 && (
+        <div className="px-3">
+          <div className="flex items-center justify-between py-1">
+            <span className="text-xs uppercase tracking-wide text-muted-foreground">筛选器</span>
+          </div>
+          <div className="space-y-0.5">
+            {savedFilters.map((f) => {
+              const active = activeSavedFilterId === f.id && !trashActive && !statsActive;
+              return (
+                <div
+                  key={f.id}
+                  className={cn(
+                    "group flex w-full items-center gap-2 rounded-md px-3 py-1.5 text-sm",
+                    active ? "bg-primary/10 font-medium text-primary" : "hover:bg-accent/50",
+                  )}
+                >
+                  <Filter className="size-3.5 shrink-0 text-muted-foreground" />
+                  <button
+                    type="button"
+                    className="min-w-0 flex-1 truncate text-left"
+                    onClick={() => onSelectSavedFilter(f.id)}
+                  >
+                    {f.name}
+                  </button>
+                  <button
+                    type="button"
+                    aria-label={`删除筛选器 ${f.name}`}
+                    className="shrink-0 opacity-0 group-hover:opacity-100"
+                    onClick={() => onDeleteSavedFilter(f.id)}
+                  >
+                    <Trash2 className="size-3 text-muted-foreground hover:text-destructive" />
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* 项目列表区 */}
       <div className="flex min-h-0 flex-1 flex-col px-3 pb-3">
         <div className="flex items-center justify-between py-1">
@@ -394,6 +491,10 @@ export function ProjectSidebar({
                       onRequestDelete={(hasUndone, undoneCount) => {
                         const project = projectById.get(id);
                         if (project) setDeleteTarget({ project, hasUndone, undoneCount });
+                      }}
+                      onRequestEdit={() => {
+                        const project = projectById.get(id);
+                        if (project) setEditTarget(project);
                       }}
                     />
                   ),
@@ -463,7 +564,99 @@ export function ProjectSidebar({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* 编辑项目（#36）：重命名 + 10 色板改色；点确定一次提交 */}
+      <ProjectEditDialog
+        project={editTarget}
+        onClose={() => setEditTarget(null)}
+        onSaved={() => void refetchProjects()}
+      />
     </div>
+  );
+}
+
+/** 编辑项目对话框：名称 Input + 10 色预设板；保存 = todoProjectUpdate(title, hex_color) */
+function ProjectEditDialog({
+  project,
+  onClose,
+  onSaved,
+}: {
+  project: TodoProject | null;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [title, setTitle] = useState("");
+  const [color, setColor] = useState("");
+  // 打开时装载当前项目值（key 重挂载或 open 翻转均可正确初始化）
+  const [loadedFor, setLoadedFor] = useState<number | null>(null);
+  if (project != null && loadedFor !== project.id) {
+    setLoadedFor(project.id);
+    setTitle(project.title);
+    setColor(project.hex_color || PROJECT_COLORS[3]);
+  }
+
+  if (project == null) return null;
+
+  const save = async () => {
+    const t = title.trim();
+    if (!t) return;
+    try {
+      await todoProjectUpdate(project.id, {
+        title: t !== project.title ? t : undefined,
+        hex_color: color !== project.hex_color ? color : undefined,
+      });
+      onSaved();
+    } finally {
+      onClose();
+    }
+  };
+
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle>编辑项目</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4">
+          <Input
+            autoFocus
+            value={title}
+            maxLength={50}
+            placeholder="项目名称"
+            onChange={(e) => setTitle(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") void save();
+            }}
+          />
+          {/* 10 色板（与标签管理器同形制）：当前色描边圈出 */}
+          <div className="flex flex-wrap items-center gap-1.5">
+            {PROJECT_COLORS.map((c) => (
+              <button
+                key={c}
+                type="button"
+                aria-label={`设为 ${c}`}
+                onClick={() => setColor(c)}
+                className={cn(
+                  "size-6 rounded-full border-2 transition-transform hover:scale-110",
+                  color.toLowerCase() === c.toLowerCase()
+                    ? "border-foreground"
+                    : "border-transparent",
+                )}
+                style={{ background: c }}
+              />
+            ))}
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>
+            取消
+          </Button>
+          <Button disabled={!title.trim()} onClick={() => void save()}>
+            保存
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -514,6 +707,7 @@ function SortableProjectRow({
   active,
   onSelect,
   onRequestDelete,
+  onRequestEdit,
 }: {
   project: TodoProject;
   undoneCount: number;
@@ -521,6 +715,8 @@ function SortableProjectRow({
   onSelect: () => void;
   /** 上报删除请求；hasUndone 决定弹窗类型（保护 / 确认） */
   onRequestDelete: (hasUndone: boolean, undoneCount: number) => void;
+  /** 上报编辑请求（重命名/改色；#36） */
+  onRequestEdit: () => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition } = useSortable({
     id: project.id,
@@ -540,10 +736,11 @@ function SortableProjectRow({
         {...listeners}
         className="w-3 cursor-grab text-muted-foreground/30 opacity-0 group-hover:opacity-100"
       />
-      {/* 右键菜单：标题头 + 删除项目（保护弹窗由父级处理） */}
+      {/* 右键菜单：标题头 + 编辑项目（重命名/改色）+ 删除（保护弹窗由父级处理） */}
       <ProjectContextMenu
-        projectTitle={project.title}
+        project={project}
         onRequestDelete={() => onRequestDelete(undoneCount > 0, undoneCount)}
+        onRequestEdit={onRequestEdit}
       >
         <button
           type="button"

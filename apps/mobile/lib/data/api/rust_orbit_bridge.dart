@@ -6,6 +6,7 @@ import 'package:path_provider/path_provider.dart';
 import '../../src/rust/api/dto.dart' as gen;
 import '../../src/rust/api/csv_import.dart' as gen_import;
 import '../../src/rust/api/asset.dart' as gen_asset;
+import '../../src/rust/api/saved_filter.dart' as gen_sf;
 import '../../src/rust/api/holiday.dart' as gen_holiday;
 import '../../src/rust/api/events.dart' as gen_events;
 import '../../src/rust/api/plaintext_export.dart' as gen_export;
@@ -523,6 +524,42 @@ class RustOrbitBridge implements OrbitBridge {
   @override
   Future<void> taskAttachmentRemove(int linkId) =>
       gen_asset.taskAttachmentRemove(linkId: linkId);
+
+  // ── 保存的筛选器（#35）──
+
+  @override
+  Future<List<TodoSavedFilter>> savedFiltersList() async {
+    final rows = await gen_sf.savedFiltersList();
+    return rows
+        .map((r) => TodoSavedFilter(
+              id: r.id.toInt(),
+              uuid: r.uuid,
+              name: r.name,
+              conditions: r.conditions,
+            ))
+        .toList();
+  }
+
+  @override
+  Future<TodoSavedFilter> savedFilterCreate(String name, String conditions) async {
+    final r = await gen_sf.savedFilterCreate(
+      input: gen.TodoSavedFilterCreateInput(
+        name: name,
+        conditions: conditions,
+        sortOrder: null,
+      ),
+    );
+    return TodoSavedFilter(
+      id: r.id.toInt(),
+      uuid: r.uuid,
+      name: r.name,
+      conditions: r.conditions,
+    );
+  }
+
+  @override
+  Future<void> savedFilterDelete(int id) =>
+      gen_sf.savedFilterDelete(id: id);
 
   TaskAttachmentView _mapAttachment(gen.TaskAttachmentView r) => TaskAttachmentView(
         linkId: r.linkId.toInt(),

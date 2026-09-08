@@ -853,3 +853,40 @@ impl From<orbit_core::api::asset_api::TaskAttachmentView> for TaskAttachmentView
         }
     }
 }
+
+// ---------- todo_saved_filters（保存的筛选器，#35）----------
+#[derive(Debug, Clone, Serialize)]
+pub struct TodoSavedFilter {
+    pub id: i64,
+    pub uuid: String,
+    pub name: String,
+    /// 条件 JSON：{status?, priority_min?, project_ids?, label_ids?, due_within_days?, due_overdue?, favorite_only?}
+    pub conditions: String,
+    pub sort_order: i64,
+}
+
+impl From<orbit_core::models::business::TodoSavedFilter> for TodoSavedFilter {
+    fn from(f: orbit_core::models::business::TodoSavedFilter) -> Self {
+        Self {
+            id: f.id,
+            uuid: f.uuid,
+            name: f.name,
+            conditions: f.conditions,
+            sort_order: f.sort_order,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct TodoSavedFilterCreateInput {
+    pub name: String,
+    pub conditions: String,
+    pub sort_order: Option<i64>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct TodoSavedFilterUpdateInput {
+    pub name: Option<String>,
+    pub conditions: Option<String>,
+    pub sort_order: Option<i64>,
+}

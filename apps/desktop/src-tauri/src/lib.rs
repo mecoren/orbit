@@ -262,6 +262,11 @@ pub fn run() {
             commands::trash_cmd::trash_set_retention_days,
             // 统计仪表盘（backlog #25：总览/热力图/连续天数/分布）
             commands::stats_cmd::stats_aggregate,
+            // 保存的筛选器（#35：Apple Smart List 同款可保存组合条件视图）
+            commands::saved_filter_cmd::saved_filters_list,
+            commands::saved_filter_cmd::saved_filter_create,
+            commands::saved_filter_cmd::saved_filter_update,
+            commands::saved_filter_cmd::saved_filter_delete,
             // 任务附件（上传/列表/读取/卸下 + 本地 GC）
             commands::asset_cmd::task_attachment_add,
             commands::asset_cmd::task_attachments_list,
