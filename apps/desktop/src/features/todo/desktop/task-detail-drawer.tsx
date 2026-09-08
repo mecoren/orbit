@@ -57,6 +57,7 @@ import { useTodoStore } from "@/features/todo/store";
 import { hideFromQueries, useUndoableDeleteAction } from "@/hooks/use-undoable-delete";
 import { PRIORITY_COLOR, TODO_ACCENT } from "../shared/constants";
 import { ConfirmPopover } from "../shared/confirm-popover";
+import { renderMarkdown } from "../shared/markdown-lite";
 import { REPEAT_MODE, REPEAT_PRESETS, WEEKDAY_CHIPS, repeatLabel } from "../shared/repeat";
 import { completeTask } from "@/features/todo/shared/task-actions";
 import {
@@ -1034,11 +1035,12 @@ function DescriptionSection({
   return (
     <SectionBlock icon={AlignLeft} title="描述">
       {task.description ? (
-        <p
+        <div
           role="button"
           tabIndex={0}
           aria-label="点击编辑描述"
-          className="break-words whitespace-pre-wrap rounded-md text-[13px] transition-colors hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring"
+          title="点击编辑（支持 Markdown：# 标题 / **粗体** / *斜体* / `代码` / [链接](url) / - 列表）"
+          className="space-y-0.5 break-words rounded-md text-[13px] transition-colors hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring"
           onClick={() => setEditing(true)}
           onKeyDown={(e) => {
             if (e.key === "Enter" || e.key === " ") {
@@ -1047,8 +1049,8 @@ function DescriptionSection({
             }
           }}
         >
-          {task.description}
-        </p>
+          {renderMarkdown(task.description)}
+        </div>
       ) : (
         <button
           type="button"
