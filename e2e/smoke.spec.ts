@@ -268,6 +268,40 @@ test("日历视图：左右分栏 + 选中定位 + 年视图 + 右键新增预�
   await expect(page.getByText("既有任务-今天截止")).toBeVisible();
 });
 
+test("详情属性：开始日期可见/可改可清除 + 完成时间展示（2026-09-08 补断层）", async ({ page }) => {
+  // 任务行点击打开详情抽屉
+  const row = page.getByRole("button", { name: "未完成任务：既有任务-今天截止" });
+  await row.click();
+  await expect(page.getByRole("dialog")).toBeVisible();
+
+  // ---- 开始日期行存在且可编辑（此前桌面详情是唯一断层：表单可设、详情失明）----
+  await expect(page.getByText("开始日期", { exact: true })).toBeVisible();
+
+  // 经 mock 直写 start_date（零点 ms），db-change 后抽屉值区显示 yyyy-MM-dd
+  const startMs = await page.evaluate(() => {
+    const m = (window as any).__orbitMock;
+    const t = m.db.tasks.find((x: any) => x.title === "既有任务-今天截止");
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    t.start_date = d.getTime();
+    m.emitDbChange();
+    return t.start_date;
+  });
+  // 本地时区格式化（toISOString 是 UTC，本地零点会差一天）
+  const sd = new Date(startMs);
+  const ymd = `${sd.getFullYear()}-${String(sd.getMonth() + 1).padStart(2, "0")}-${String(sd.getDate()).padStart(2, "0")}`;
+  await expect(page.getByText(ymd, { exact: true })).toBeVisible({ timeout: 5_000 });
+
+  // ---- 完成任务 → done_at 写入 → 完成时间行显示（此前 done_at 无处可看）----
+  // 详情抽屉标题行的完成圆钮（常驻可点，不依赖列表行 hover）
+  await page.getByRole("button", { name: "标记完成" }).first().click();
+  await expect(page.getByRole("button", { name: "标记未完成" }).first()).toBeVisible();
+  // done_at 由 completeTask 链路写入；详情抽屉常驻，值区应显示 yyyy-MM-dd HH:mm
+  await expect(
+    page.getByText(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/, { exact: false }).first(),
+  ).toBeVisible({ timeout: 5_000 });
+});
+
 test("附件：详情抽屉区块渲染 + 列表/移除链路（mock 命令面）", async ({ page }) => {
   // 任务行点击打开详情抽屉
   const row = page.getByRole("button", { name: "未完成任务：既有任务-今天截止" });

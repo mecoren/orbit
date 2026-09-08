@@ -444,9 +444,19 @@ function PropertyGrid({
         <DueDateEditor value={task.due_date} onChange={(ms) => void onPatch({ due_date: ms })} />
       </InfoRow>
 
+      {/* 开始日期（纯日期，零点语义；与移动端详情「截止→开始」相邻同款） */}
+      <InfoRow icon={CircleStop} label="开始日期">
+        <StartDateEditor value={task.start_date} onChange={(ms) => void onPatch({ start_date: ms })} />
+      </InfoRow>
+
       {/* 完成进度：仅 >0 显示，占位保持对齐（04 §3.4） */}
       <InfoRow icon={ListChecks} label="进度">
         {task.percent_done > 0 ? `${Math.round(task.percent_done)}%` : null}
+      </InfoRow>
+
+      {/* 完成时间：done_at 仅完成任务可见（未完成为空占位保持对齐） */}
+      <InfoRow icon={Check} label="完成时间">
+        {task.done_at != null ? format(task.done_at, "yyyy-MM-dd HH:mm") : null}
       </InfoRow>
 
       {/* 重复规则（repeat_after/repeat_mode；提醒触发后前端排下一次） */}
@@ -458,6 +468,108 @@ function PropertyGrid({
         />
       </InfoRow>
     </div>
+  );
+}
+
+/**
+ * 开始日期编辑器：快捷项（今天/明天/下周）⇄ 纯日历，即改即存。
+ * 与 DueDateEditor 的差异：start_date 是日期级字段（惯例存本地零点，
+ * 无时刻语义）——无时分输入行，选中即提交零点 ms，显示 yyyy-MM-dd。
+ * 清除为二次确认（与截止日期同款交互）。
+ */
+function StartDateEditor({
+  value,
+  onChange,
+}: {
+  value: number | null;
+  onChange: (ms: number | null) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [draft, setOpenDraft] = useState("");
+  const [confirmClear, setConfirmClear] = useState(false);
+
+  const toYm = (ms: number) => format(new Date(ms), "yyyy-MM-dd");
+
+  useEffect(() => {
+    if (open) setConfirmClear(false);
+  }, [open]);
+
+  useEffect(() => {
+    if (!confirmClear || !open) return;
+    const id = setTimeout(() => setConfirmClear(false), 3000);
+    return () => clearTimeout(id);
+  }, [confirmClear, open]);
+
+  const commit = (ymd: string) => {
+    if (!ymd) onChange(null);
+    else {
+      const ms = new Date(`${ymd}T00:00:00`).getTime();
+      if (!Number.isNaN(ms)) onChange(ms);
+    }
+    setOpen(false);
+  };
+
+  const clearStart = () => {
+    if (!confirmClear) {
+      setConfirmClear(true);
+      return;
+    }
+    onChange(null);
+    setOpen(false);
+    setConfirmClear(false);
+    toast.success("已清除开始日期");
+  };
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button type="button" className="truncate font-medium hover:text-primary">
+          {value ? toYm(value) : "设置"}
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-64 space-y-2 p-3">
+        {draft ? (
+          <>
+            <WaitCalendar
+              mode="single"
+              selected={draft ? new Date(`${draft}T00:00:00`) : undefined}
+              onSelect={(d) => setOpenDraft(d ? format(d, "yyyy-MM-dd") : "")}
+            />
+            <div className="flex justify-end gap-2 border-t pt-2">
+              <Button size="sm" variant="outline" onClick={() => setOpenDraft("")}>
+                返回
+              </Button>
+              <Button size="sm" onClick={() => commit(draft)}>确定</Button>
+            </div>
+          </>
+        ) : (
+          <QuickDateMenu
+            kind="date"
+            value={value ? toYm(value) : undefined}
+            onSelect={(d) => {
+              onChange(new Date(`${format(d, "yyyy-MM-dd")}T00:00:00`).getTime());
+              setOpen(false);
+            }}
+            customLabel="选择日期"
+            onCustom={() => setOpenDraft(value ? toYm(value) : format(Date.now(), "yyyy-MM-dd"))}
+          />
+        )}
+        {draft ? null : (
+          <div className="flex justify-end gap-2 border-t pt-2">
+            {value != null && (
+              <Button
+                size="sm"
+                variant={confirmClear ? "destructive" : "link"}
+                onClick={clearStart}
+              >
+                {confirmClear ? "确认清除？" : "清除"}
+              </Button>
+            )}
+            <Button size="sm" variant="outline" onClick={() => setOpen(false)}>取消</Button>
+          </div>
+        )}
+      </PopoverContent>
+    </Popover>
   );
 }
 
