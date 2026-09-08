@@ -13,7 +13,7 @@
 - Android 通知小图标：drawable-*/ic_stat_orbit.png（白色剪影，API 21+ 语义）
 - 设计源文件：docs/adr/assets/orbit-icon-master.png
 
-设计 v4.1（源：scripts/icon-asset-2026-09-08.png，AI 生图已带透明通道）：
+设计 v5（源：scripts/icon-asset-2026-09-08b.png，AI 生图带透明通道）：
 蓝色正圆环（缺口嵌卫星球、彗星从中心越环）+ 双层 glow 光晕；主体蓝
 #2B6EF7。资产为栅格合成（环圆度实测 ±2px、蓝色 std<3，无需重描）；
 **全族透明底**（用户口径「扣成透明背景」）——无底板，深色底由宿主环境
@@ -30,12 +30,12 @@ from pathlib import Path
 from PIL import Image, ImageDraw
 
 REPO = Path(__file__).resolve().parent.parent
-ASSET_PATH = Path(__file__).resolve().parent / "icon-asset-2026-09-08.png"
+ASSET_PATH = Path(__file__).resolve().parent / "icon-asset-2026-09-08b.png"
 
 # ---- 设计参数（与 docs/adr/0004 §图标一致）----
 PAD = 0.10  # solid 主体边距（相对画布；glow 越出边距自然淡出）
-# 资产内 solid 内容 bbox（icon-asset-2026-09-08.png 941×961 实测）
-SOLID_BBOX = (43, 100, 864, 830)  # x0, y0, x1, y1（含端点）
+# 资产内 solid 内容 bbox（icon-asset-2026-09-08b.png 920×816 实测）
+SOLID_BBOX = (1, 3, 915, 814)  # x0, y0, x1, y1（含端点）
 
 # Android 密度族：mipmap 名 -> 边长 px
 ANDROID_DENSITIES = {

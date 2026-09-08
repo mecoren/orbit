@@ -14,24 +14,28 @@ MVP 发布（06 文档 §二 M5）要求五端产物签名/分发就绪。现状
 
 ## 决策
 
-### 1. 图标/启动屏（2026-09-08 v4 换版，产物入库）
+### 1. 图标/启动屏（2026-09-08 v5 换版，产物入库）
 
-- 品牌设计（v4.1，现行）：**透明底 + AI 生图「圆环轨道」构图**——蓝色
-  正圆环（#2B6EF7，缺口处嵌带拖尾的卫星球）、彗星从中心向右上越环、
-  双层淡蓝白 glow 光晕。全族无底板（用户口径「扣成透明背景」）：桌面
-  任务栏/Android 桌面/深色关于页背景由宿主提供；Android 启动屏深色由
-  `launch_background.xml` 的 `launch_bg` 承载，图标层透明直贴。
-  - 源图：`scripts/icon-source-2026-09-08.png`（1254²，ChatGPT 生图
-    自带透明通道）。质量实测后**直接栅格使用、不重描**：主环外缘
-    圆度 ±2px（0.6%）、主体蓝 std<3、glow 四象限对称且无散噪
-    （al≥40 单一连通域），v2「描摹带波纹」教训不适用于此高质量源。
-  - 资产管线：最大连通域去散点（剔 3px 噪）→ 裁主体紧框 941×961
-    固化 `scripts/icon-asset-2026-09-08.png`；`generate_icons.py` 以
-    solid bbox（画布 80%，PAD=0.10）对齐缩放 alpha 合成，glow 越出
-    PAD 自然淡出；通知剪影取 alpha>128 二值化（剪影按 solid 紧框铺放）。
+- 品牌设计（v5，现行）：**透明底 + AI 生图「圆环轨道」构图（加强版）**
+  ——加粗正圆环（#246CF6，环带宽 ~165px、内嵌带拖尾的卫星球）、左上
+  月牙形行星（被环咬出缺口）、彗星自中心越环、环内柔光 glow。全族无
+  底板（用户口径「扣成透明背景」）：桌面任务栏/Android 桌面/关于页
+  背景由宿主提供；Android 启动屏深色由 `launch_background.xml` 的
+  `launch_bg` 承载，图标层透明直贴。
+  - 源图：`scripts/icon-source-2026-09-08b.png`（1254²，ChatGPT 生图
+    自带透明通道）。质量实测后**直接栅格使用、不重描**：主环外缘段内
+    圆度 ±1px（左右长轴椭圆 rx 364 / ry 347，段内 std≤1.2）、主体蓝
+    std<3 纯色、glow 99.7% 集中环内、al≥15 主域单连通（散噪共
+    ~250px 剔除）。
+  - 资产管线：最大连通域去散点 → 裁主体紧框 920×816 固化
+    `scripts/icon-asset-2026-09-08b.png`（solid 915×812 几乎填满，
+    glow 仅边缘 23..44px 柔边）；`generate_icons.py` 以 solid bbox
+    （画布 80%，PAD=0.10）对齐缩放 alpha 合成；通知剪影取 alpha>128
+    二值化（剪影按 solid 紧框铺放）。
   - 历史版本：v1 渐变椭圆轨道 → v2 手绘描摹（`icon_shapes.json`，
-    波纹被否）→ v3 高斯平滑重阈值（`extract_icon_shapes.py`）→ v4
-    现行。v2/v3 脚本与形状数据仍入库（换源图可复用）。
+    波纹被否）→ v3 高斯平滑重阈值（`extract_icon_shapes.py`）→
+    v4/v4.1 AI 生图圆环+透明底（`icon-asset-2026-09-08.png`）→ v5
+    现行。v2/v3 脚本与 v4 资产仍入库（换源图可复用）。
 - 全族由 `scripts/generate_icons.py`（Pillow，含生成后自检）一次产出：
   - 桌面 `apps/desktop/src-tauri/icons/`：PNG 全尺寸族 + `icon.ico`
     （7 尺寸）+ `icon.icns`（ic07–ic10，Pillow 手写 ICNS 容器，无需
