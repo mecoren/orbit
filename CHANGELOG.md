@@ -7,6 +7,26 @@
 
 ## [Unreleased]
 
+### 保存的筛选器三端落地（竞品矩阵批次 #35）
+
+对标 Apple Smart List / Tasks.org 可保存过滤器 / Obsidian Presets（四款参考产品全有）：把常用组合条件存为命名视图，侧栏直达。
+
+- **数据模型**：`todo_saved_filters` 表——条件为 JSON 文本，键白名单（status/priority_min/project_ids/label_ids/due_within_days/due_overdue/favorite_only），创建/更新时校验防任意 JSON 进库；入 `SYNCABLE_TABLES` 第 10 表随 todos 模块同步（用户内容，跨设备随库走）。
+- **orbit-core `saved_filter_api`**：list/create/update/delete（软删走同步墓碑）；4 个内存库用例（roundtrip/坏键拒绝/坏 JSON 拒绝/空名拒绝）。
+- **桌面**：壳层第四选中态 `savedFilterId`（与快捷视图/项目/未分组四态互斥）；侧栏「筛选器」分组（hover 删除）；新建弹层（名称 + 条件 JSON）；`applySavedFilter` 纯函数条件应用（缺键不过滤 AND 组合、损坏 JSON 防御性放行），面板标题随筛选器名切换；7 个单测锁语义。
+- **移动端**：FRB 镜像 + 桥面三方法（list/create/delete）；`/todo/saved-filters` 页（列表 + 行展开即时预览命中任务 + 新建 Dialog + 长按删除）；侧栏「筛选器」入口行；mock 桥同构语义，2 个契约用例。
+- **e2e**：筛选器链路（创建 → 侧栏渲染 → 点击切换过滤 → 删除消失）。
+- 门禁：Rust 380 / 桌面 typecheck + vitest 134 + e2e 10 / 移动 analyze + 162 全绿。
+
+### 项目颜色：侧栏圆点 + 全展示位项目名着色（#36）
+
+`todo_projects.hex_color` 建库即有但全程无消费方、项目全是一个蓝色。本批把颜色落到所有展示位，并补齐编辑入口。侧边栏保持圆点/色块形制不变，其余位置项目名直接按项目色渲染。
+
+- **桌面展示位换色**：列表行元信息、日历右栏/弹层任务行、表单「所属项目」下拉（`FieldOption` 增 `textColor`，选中值随 Radix SelectValue 回显同色）、快速添加 NLP 预览 chip、详情抽屉项目值 + 选择 Popover、右键「更换项目」菜单、批量「移动到项目」、看板项目列头（原统一 TODO_ACCENT，现用项目自身色）、统计项目分布 label、全局搜索项目行——项目名一律按 `hex_color` 着字，空串回退 `TODO_ACCENT`。
+- **桌面编辑入口**：项目右键菜单增「编辑项目」（重命名 + 10 色预设板，与标签管理器同序列）；新建项目默认色按项目数轮换 10 色板。
+- **移动端**：列表行副标题项目名着色（`TodoTaskTile` 增 `projectColorHex`）、详情项目值着色（`_InfoTile` 增 `valueColor`）、表单下拉项目名着字（去色块）；长按「编辑」对话框加同款 10 色板；侧栏补「新建项目」入口（此前移动端无创建项目的地方）。
+- **测试**：移动 widget 3 用例（项目名着色/空色回退/未分组不渲染）；桌面 vitest 134、Rust 380 回归全绿（本批无 schema/后端变更）。
+
 ### 重复任务规则升级：星期几 / 结束条件 / when done（竞品矩阵批次 #34）
 
 四款参考产品（Tasks.org/MS To Do/Obsidian Tasks/Super Productivity）全有的最大规则缺口补齐。向后兼容：新字段默认值 = 旧语义不变（现有重复任务行为零变化）。
