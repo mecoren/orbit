@@ -332,7 +332,7 @@ export function TaskListView({ tasks, projects, labelsByTask, loading, error, on
             const t = tasks[vi.index];
             const overdue = !!t.due_date && !t.done && t.due_date < Date.now();
             const due = dueText(t.due_date);
-            const projectName = t.project_id != null ? projectById.get(t.project_id)?.title : undefined;
+            const project = t.project_id != null ? projectById.get(t.project_id) : undefined;
             return (
               // 绝对定位行容器：divide-y 在脱离文档流的兄弟间不生效，改每行自带 border-b。
               // 用 top 而非 transform 定位（见文件头注释）
@@ -348,7 +348,7 @@ export function TaskListView({ tasks, projects, labelsByTask, loading, error, on
                     index={vi.index}
                     count={tasks.length}
                     labels={labelsByTask.get(t.id) ?? []}
-                    projectName={projectName}
+                    project={project}
                     due={due}
                     overdue={overdue}
                     dragging={draggingId === t.id}
@@ -503,8 +503,9 @@ export function TaskListView({ tasks, projects, labelsByTask, loading, error, on
                     })
                   }
                 >
-                  <span className="h-2.5 w-2.5 shrink-0 rounded-sm" style={{ background: p.hex_color || TODO_ACCENT }} />
-                  {p.title}
+                  <span className="truncate" style={{ color: p.hex_color || TODO_ACCENT }}>
+                    {p.title}
+                  </span>
                 </DropdownMenuItem>
               ))}
             </DropdownMenuContent>
@@ -595,7 +596,7 @@ interface TaskRowProps {
   index: number;
   count: number;
   labels: TodoLabel[];
-  projectName?: string;
+  project?: TodoProject;
   due: string | null;
   overdue: boolean;
   /** 本行正被拖拽（原始行降透明度，浮层由 DragOverlay 渲染） */
@@ -621,7 +622,7 @@ function TaskRow({
   index,
   count,
   labels,
-  projectName,
+  project,
   due,
   overdue,
   dragging,
@@ -759,7 +760,7 @@ function TaskRow({
         >
           {t.title}
         </div>
-        {(labels.length > 0 || projectName || due) && (
+        {(labels.length > 0 || project || due) && (
           <div
             className={cn(
               "mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground",
@@ -767,7 +768,14 @@ function TaskRow({
             )}
           >
             <LabelChips labels={labels} />
-            {projectName && <span>{projectName}</span>}
+            {project && (
+              <span
+                className="truncate"
+                style={{ color: project.hex_color || TODO_ACCENT }}
+              >
+                {project.title}
+              </span>
+            )}
             {due && (
               <span className="inline-flex items-center gap-0.5">
                 <Clock size={11} />

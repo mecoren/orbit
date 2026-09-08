@@ -67,12 +67,15 @@ function DistBar({
   pending,
   max,
   color,
+  labelColor,
 }: {
   label: string;
   done: number;
   pending: number;
   max: number;
   color: string;
+  /** label 文字色（项目分布按项目色着字；其余卡缺省默认色） */
+  labelColor?: string;
 }) {
   const total = done + pending;
   if (total <= 0) return null;
@@ -81,7 +84,9 @@ function DistBar({
   return (
     <div className="space-y-1">
       <div className="flex items-baseline justify-between text-xs">
-        <span className="min-w-0 truncate">{label}</span>
+        <span className="min-w-0 truncate" style={labelColor ? { color: labelColor } : undefined}>
+          {label}
+        </span>
         <span className="shrink-0 tabular-nums text-muted-foreground">
           {done} / {total}
         </span>
@@ -289,6 +294,7 @@ export function StatsPanel() {
                   pending={r.pending_count}
                   max={maxProject}
                   color={r.project_hex_color || TODO_ACCENT}
+                  labelColor={r.project_id != null ? r.project_hex_color || TODO_ACCENT : undefined}
                 />
               ))}
             </div>

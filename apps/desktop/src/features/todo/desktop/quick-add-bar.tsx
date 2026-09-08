@@ -165,7 +165,10 @@ export function QuickAddBar({ projects, defaultProjectId }: QuickAddBarProps) {
             </span>
           )}
           {parsed.projectId != null && (
-            <span className="inline-flex items-center gap-1 rounded-sm bg-primary/10 px-1.5 py-0.5 text-primary">
+            <span
+              className="inline-flex items-center gap-1 rounded-sm bg-primary/10 px-1.5 py-0.5"
+              style={{ color: projects.find((pr) => pr.id === parsed.projectId)?.hex_color || TODO_ACCENT }}
+            >
               <Folder className="size-3" />
               {projects.find((pr) => pr.id === parsed.projectId)?.title}
             </span>
@@ -389,11 +392,10 @@ export function QuickAddBar({ projects, defaultProjectId }: QuickAddBarProps) {
                       effectiveProjectId === p.id && "bg-accent font-medium",
                     )}
                   >
-                    <span
-                      className="h-3 w-3 shrink-0 rounded-sm"
-                      style={{ background: p.hex_color || TODO_ACCENT }}
-                    />
-                    <span className="truncate">{p.title}</span>
+                    {/* #36：项目名按项目色着字（与其他展示位统一），去色点 */}
+                    <span className="truncate" style={{ color: p.hex_color || TODO_ACCENT }}>
+                      {p.title}
+                    </span>
                   </button>
                 ))}
               </PopoverContent>

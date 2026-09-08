@@ -426,7 +426,10 @@ function FieldRenderer({
           <SelectContent>
             {field.options?.map((opt) => (
               <SelectItem key={String(opt.value)} value={String(opt.value)}>
-                <span className="flex items-center gap-2">
+                <span
+                  className="flex items-center gap-2"
+                  style={opt.textColor ? { color: opt.textColor } : undefined}
+                >
                   {opt.color && (
                     <span
                       className="size-2.5 shrink-0 rounded-full"

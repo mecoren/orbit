@@ -65,7 +65,12 @@ export function buildTaskFields(projects: TodoProject[]): FieldDef[] {
       type: "select",
       options: [
         { label: "未分组", value: "" },
-        ...projects.map((p) => ({ label: p.title, value: String(p.id) })),
+        // 项目名按项目色直接着色（#36；侧边栏圆点口径外的展示位）
+        ...projects.map((p) => ({
+          label: p.title,
+          value: String(p.id),
+          textColor: p.hex_color || TODO_ACCENT,
+        })),
       ],
     },
     {

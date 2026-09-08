@@ -558,21 +558,16 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
                                     child: Row(
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
-                                        Container(
-                                          width: AppDimens.colorDotSize,
-                                          height: AppDimens.colorDotSize,
-                                          decoration: BoxDecoration(
-                                            color: hexToColor(project.hexColor,
-                                                fallback:
-                                                    OrbitAccents.todoAccent),
-                                            borderRadius: AppShapes.of(4),
-                                          ),
-                                        ),
-                                        const SizedBox(width: AppDimens.space8),
+                                        // #36：项目名按项目色着字（去色块）
                                         Text(
                                           project.title,
                                           maxLines: 1,
                                           overflow: TextOverflow.ellipsis,
+                                          style: TextStyle(
+                                            color: hexToColor(project.hexColor,
+                                                fallback:
+                                                    OrbitAccents.todoAccent),
+                                          ),
                                         ),
                                       ],
                                     ),

@@ -188,11 +188,12 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
     final projects = ref.watch(todoProjectsProvider).value ?? [];
 
     final visible = sortTasks(filterTasks(tasks, widget.query), _sortKey);
-    final projectTitleById = {for (final p in projects) p.id: p.title};
+    final projectById = {for (final p in projects) p.id: p};
 
     // 动态标题：项目名 / 未分组 / 视图名
     final title = switch (widget.query) {
-      TaskFilterInput(projectId: final id?) => projectTitleById[id] ?? '项目',
+      TaskFilterInput(projectId: final id?) =>
+          projectById[id]?.title ?? '项目',
       TaskFilterInput(ungrouped: true) => '未分组',
       _ => widget.query.quickView?.label ?? '任务',
     };
@@ -222,11 +223,12 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
                     itemCount: visible.length,
                     itemBuilder: (context, index) {
                       final task = visible[index];
+                      final project =
+                          task.projectId != null ? projectById[task.projectId] : null;
                       return TodoTaskTile(
                         task: task,
-                        projectTitle: task.projectId != null
-                            ? projectTitleById[task.projectId]
-                            : null,
+                        projectTitle: project?.title,
+                        projectColorHex: project?.hexColor,
                         onOpen: () => context.push('/todo/${task.id}'),
                         onToggleDone: () => _toggleDone(task),
                         onLongPress: () => _showTaskActions(task),
@@ -291,6 +293,7 @@ class TodoTaskTile extends StatelessWidget {
     required this.onLongPress,
     required this.onOpen,
     this.projectTitle,
+    this.projectColorHex,
     this.onDelete,
   });
 
@@ -298,6 +301,9 @@ class TodoTaskTile extends StatelessWidget {
 
   /// 副标题项目名；无项目（未分组）不渲染该段
   final String? projectTitle;
+
+  /// 项目名着色 hex（#36：项目名按项目色渲染；空串回退次要文本色）
+  final String? projectColorHex;
   final VoidCallback onToggleDone;
   final VoidCallback onLongPress;
   final VoidCallback onOpen;
@@ -407,7 +413,12 @@ class TodoTaskTile extends StatelessWidget {
                                   projectTitle!,
                                   style: TextStyle(
                                     fontSize: 12,
-                                    color: colors.secondaryText,
+                                    // #36：项目名按项目色着字（无色回退次要色）
+                                    color: (projectColorHex != null &&
+                                            projectColorHex!.isNotEmpty)
+                                        ? hexToColor(projectColorHex!,
+                                            fallback: colors.secondaryText)
+                                        : colors.secondaryText,
                                   ),
                                 ),
                               // 日期段：逾期 #F44336

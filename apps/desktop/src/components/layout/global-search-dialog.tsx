@@ -101,7 +101,9 @@ export function GlobalSearchDialog({ open, onOpenChange }: GlobalSearchDialogPro
                   className="size-4 shrink-0"
                   style={{ color: p.hex_color || undefined }}
                 />
-                <span className="truncate">{p.title}</span>
+                <span className="truncate" style={{ color: p.hex_color || undefined }}>
+                  {p.title}
+                </span>
               </CommandItem>
             ))}
           </CommandGroup>

@@ -51,7 +51,7 @@ import {
 import { daySubLabel } from "../shared/almanac";
 import { formatYmd } from "../shared/lunar";
 import { holidaysList, holidaysUpdate, holidayMeta, type HolidayInfo } from "@/lib/tauri";
-import { OVERDUE_COLOR_CLASS, PRIORITY_COLOR } from "../shared/constants";
+import { OVERDUE_COLOR_CLASS, PRIORITY_COLOR, TODO_ACCENT } from "../shared/constants";
 import { LabelChips } from "../shared/label-chips";
 import { TaskContextMenu } from "./task-context-menu";
 import { YearOverviewPanel } from "./year-overview";
@@ -554,7 +554,7 @@ export function CalendarView({
                   <CalendarTaskRow
                     task={t}
                     labels={labelsByTask.get(t.id) ?? []}
-                    projectName={t.project_id != null ? projectById.get(t.project_id)?.title : undefined}
+                    project={t.project_id != null ? projectById.get(t.project_id) : undefined}
                     onActivate={() => openDetail(t.id)}
                   />
                 </TaskContextMenu>
@@ -814,7 +814,7 @@ function DayGroupBlock({
             <CalendarTaskRow
               task={t}
               labels={labelsByTask.get(t.id) ?? []}
-              projectName={t.project_id != null ? projectById.get(t.project_id)?.title : undefined}
+              project={t.project_id != null ? projectById.get(t.project_id) : undefined}
               onActivate={() => onOpenDetail(t.id)}
               overdue={!t.done && t.due_date! < today.getTime()}
             />
@@ -830,7 +830,7 @@ function DayGroupBlock({
 interface CalendarTaskRowProps {
   task: TodoTask;
   labels: TodoLabel[];
-  projectName?: string;
+  project?: TodoProject;
   onActivate: () => void;
   overdue?: boolean;
 }
@@ -843,11 +843,11 @@ interface CalendarTaskRowProps {
 const CalendarTaskRow = memo(function CalendarTaskRow({
   task: t,
   labels,
-  projectName,
+  project,
   onActivate,
   overdue = false,
 }: CalendarTaskRowProps) {
-  const hasMeta = labels.length > 0 || projectName != null;
+  const hasMeta = labels.length > 0 || project != null;
   return (
     <div
       role="button"
@@ -881,7 +881,11 @@ const CalendarTaskRow = memo(function CalendarTaskRow({
         {hasMeta && (
           <div className="flex items-center gap-1.5 text-xs leading-4 text-muted-foreground">
             <LabelChips labels={labels} />
-            {projectName && <span>{projectName}</span>}
+            {project && (
+              <span className="truncate" style={{ color: project.hex_color || TODO_ACCENT }}>
+                {project.title}
+              </span>
+            )}
           </div>
         )}
       </div>

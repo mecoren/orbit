@@ -5,7 +5,7 @@
  *           设置优先级▸(6档) / 修改标签▸(勾选切换) / 更换项目▸ /
  *           设置截止时间(Dialog) / 设置提醒(Dialog) /
  *           添加评论(Dialog,Textarea) / ─ / 删除
- * 项目菜单：项目名标题头 + 删除项目（destructive；删除保护由父级弹窗处理）
+ * 项目菜单：项目名标题头 + 编辑项目（重命名/改色，#36）+ 删除项目（destructive；删除保护由父级弹窗处理）
  */
 import { useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -19,6 +19,7 @@ import {
   Folder,
   FolderOpen,
   MessageSquare,
+  Pencil,
   Star,
   Sunrise,
   Tag,
@@ -301,13 +302,10 @@ export function TaskContextMenu({
                     )}
                     onSelect={() => { close(); void patch({ project_id: p.id }); }}
                   >
-                    <span className="flex w-4 shrink-0 items-center justify-center">
-                      <span
-                        className="h-2.5 w-2.5 rounded-sm"
-                        style={{ background: p.hex_color || TODO_ACCENT }}
-                      />
+                    {/* #36：项目名按项目色着字（与其他选择位统一），去色点 */}
+                    <span className="truncate" style={{ color: p.hex_color || TODO_ACCENT }}>
+                      {p.title}
                     </span>
-                    {p.title}
                   </DropdownMenuItem>
                 ))}
               </DropdownMenuSubContent>
@@ -495,14 +493,16 @@ export function TaskContextMenu({
 /* ================= 项目菜单 ================= */
 
 export function ProjectContextMenu({
-  projectTitle,
+  project,
   onRequestDelete,
+  onRequestEdit,
   children,
 }: {
-  /** 菜单顶部标题头（wait-home：项目名灰字行） */
-  projectTitle: string;
+  project: TodoProject;
   /** 上报删除请求；删除保护（未完成任务拦截）由父级弹窗处理 */
   onRequestDelete: () => void;
+  /** 上报编辑请求（重命名/改色）；对话框由父级统一渲染 */
+  onRequestEdit: () => void;
   children: React.ReactNode;
 }) {
   return (
@@ -510,9 +510,15 @@ export function ProjectContextMenu({
       menu={(close) => (
         <>
           <DropdownMenuLabel className="max-w-[240px] truncate px-2 py-1.5 text-xs font-normal text-muted-foreground">
-            {projectTitle}
+            {project.title}
           </DropdownMenuLabel>
           <DropdownMenuSeparator />
+          <DropdownMenuItem
+            onSelect={() => { close(); onRequestEdit(); }}
+          >
+            <Pencil size={14} />
+            编辑项目
+          </DropdownMenuItem>
           <DropdownMenuItem
             variant="destructive"
             onSelect={() => { close(); onRequestDelete(); }}

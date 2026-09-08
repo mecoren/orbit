@@ -88,8 +88,9 @@ export function KanbanView({ tasks, projects, groupBy, labelsByTask, sortKey }: 
       ];
     }
     const byKey = new Map<string, ColumnDef>();
+    // #36：项目列头用项目自身颜色（原来统一 TODO_ACCENT）
     for (const p of [...projects].sort((a, b) => a.title.localeCompare(b.title))) {
-      byKey.set(String(p.id), { key: String(p.id), title: p.title, color: TODO_ACCENT });
+      byKey.set(String(p.id), { key: String(p.id), title: p.title, color: p.hex_color || TODO_ACCENT });
     }
     byKey.set("ungrouped", { key: "ungrouped", title: "未分组", color: TODO_ACCENT });
     return [...byKey.values()];

@@ -24,6 +24,8 @@ export interface FieldOption {
   value: string | number;
   /** 选项语义色点（可选，如优先级 0–5 语义色），渲染在选项文字前 */
   color?: string;
+  /** 选项文字直接着色（可选，如项目名按项目色渲染；优先于 color 色点） */
+  textColor?: string;
   /** 是否为默认选项（新增记录时自动选中） */
   isDefault?: boolean;
 }

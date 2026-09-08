@@ -330,6 +330,7 @@ class _InfoTile extends StatelessWidget {
   const _InfoTile({
     required this.label,
     required this.value,
+    this.valueColor,
     this.dotColorHex,
     this.onClick,
     this.onClear,
@@ -337,6 +338,9 @@ class _InfoTile extends StatelessWidget {
 
   final String label;
   final String value;
+
+  /// 值文字直接着色（#36 项目名按项目色；null 用默认 bodyText）
+  final Color? valueColor;
 
   /// 值前 10×10 色点 hex（空串不渲染）
   final String? dotColorHex;
@@ -376,7 +380,10 @@ class _InfoTile extends StatelessWidget {
                   value,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(fontSize: 15, color: colors.bodyText),
+                  style: TextStyle(
+                    fontSize: 15,
+                    color: valueColor ?? colors.bodyText,
+                  ),
                 ),
               ),
             ],
@@ -419,10 +426,11 @@ class _InfoSection extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final projects = ref.watch(todoProjectsProvider).value ?? [];
-    final projectTitle = detail.projectId == null
-        ? '未分组'
-        : (projects.where((p) => p.id == detail.projectId).firstOrNull?.title ??
-            '未分组');
+    final colors = AppColors.ofContext(context);
+    final project = detail.projectId == null
+        ? null
+        : projects.where((p) => p.id == detail.projectId).firstOrNull;
+    final projectTitle = project?.title ?? '未分组';
 
     return SectionCard(
       title: '信息',
@@ -475,6 +483,10 @@ class _InfoSection extends ConsumerWidget {
           _InfoTile(
             label: '项目',
             value: projectTitle,
+            // #36：项目名按项目色着字（侧边栏圆点口径外的展示位）
+            valueColor: project != null
+                ? hexToColor(project.hexColor, fallback: colors.bodyText)
+                : null,
             onClick: () => showSelectBottomSheet<String>(
               context,
               title: '项目',

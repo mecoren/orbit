@@ -418,12 +418,18 @@ function PropertyGrid({
       <InfoRow icon={FolderOpen} label="项目">
         <Popover>
           <PopoverTrigger asChild>
-            <button type="button" className="truncate font-medium hover:text-primary">
+            {/* #36：项目名按项目色着字（未分组保持默认前景色） */}
+            <button
+              type="button"
+              className="truncate font-medium hover:text-primary"
+              style={project ? { color: project.hex_color || TODO_ACCENT } : undefined}
+            >
               {project?.title ?? "未分组"}
             </button>
           </PopoverTrigger>
           <PopoverContent align="start" className="w-56 p-1">
-            <button type="button"
+            <button
+              type="button"
               className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-accent"
               onClick={() => void onPatch({ project_id: null })}
             >
@@ -437,8 +443,7 @@ function PropertyGrid({
                   task.project_id === p.id && "bg-accent font-medium")}
                 onClick={() => void onPatch({ project_id: p.id })}
               >
-                <span className="h-3 w-3 shrink-0 rounded-sm" style={{ background: p.hex_color || TODO_ACCENT }} />
-                <span className="truncate">{p.title}</span>
+                <span className="truncate" style={{ color: p.hex_color || TODO_ACCENT }}>{p.title}</span>
               </button>
             ))}
           </PopoverContent>
