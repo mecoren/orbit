@@ -7,6 +7,17 @@
 
 ## [Unreleased]
 
+### 任务附件三端落地（内容寻址 + E2E 同步；竞品矩阵批次 #33）
+
+11 款对标竞品 9 款标配的最大功能缺口补齐（MS To Do 25MB/Apple 照片扫描/Vikunja 内联预览）。`sys_attachments` 表与 `assets/` 内容寻址同步通道 0001 全预留，本批兑付。
+
+- **数据模型（分层设计）**：`todo_task_attachments` 关联表（uuid/软删/版本列齐全，入 `SYNCABLE_TABLES` 白名单第 9 表，随 todos 模块同步"哪个任务挂了哪个 hash"）；`sys_attachments` 保持本地账本（不进白名单——pull 侧 `ensure_local_cached` upsert 兜底，P0-8 修复后新设备不再每轮全量重下）；附件二进制走 `assets/{hash}.waitsync` 既有内容寻址通道（AES-256-GCM 加密，4 路并发）；`SYNC_MODULES.has_attachments` 开关打开（01 文档 §3.3 预留兑现）。存量库升级=删库重初始化（既有口径）。
+- **orbit-core `asset_api`**：`add_task_attachment`（sha256 内容寻址 → `fs_util::write_atomic` 原子落盘 → upsert 账本 → 关联幂等：同任务同 hash 返回同一 link 不计上限）+ 上限守卫（单任务 20 个 × 单文件 50MB）+ EVENT_BUS 事件（on-change push 自动触发）；`get_task_attachments`（join 账本带 `is_local_cached`——云端有本机未拉回时 UI 置灰）；`read_task_attachment`（未缓存 NotFound 引导等待同步）；`remove_task_attachment`（软删关联）+ `gc_local_attachments`（无引用 hash 清文件+账本行；**云端对象不删**——多设备引用计数不可靠，宁可多留不误删，由 push/pull 自然对账）。7 个内存库集成用例（幂等/跨任务去重/GC 保活/上限/超限/未缓存）。
+- **桌面**：详情抽屉区块 9「附件」——dialog 选文件 → fs 读 bytes → 命令上传；行显示文件名/大小（待同步徽标）/hover 删除（ConfirmPopover 同评论形制）；打开走 mime 分流（图片 blob 新窗口预览，其余落缓存目录系统程序打开）；react-query db-change 通道自动刷新。tauri 五命令注册。
+- **移动端**：FRB 镜像 `asset.rs` 五函数（附件目录=base_dir/attachments 与 sync.rs 同源）+ dto 镜像；详情页区块 9（file_picker 添加 + SectionCard 列表 + 图片全屏预览 Dialog + 删除确认 AlertDialog，未缓存置灰 +「待同步」徽标）；桥契约测试 5 用例。
+- **e2e**：桌面 Playwright 附件链路（区块渲染/列表刷新/移除弹层确认/mock 终态）；ipc-mock 同构语义（djb2 内容指纹幂等 + isWriteCommand 正则扩 `add|remove`）。
+- 门禁：Rust 370（+7 附件）/ 桌面 vitest 122 + e2e 6 / 移动 analyze 0 + 157 全绿。
+
 ### 侧边栏导航失灵修复（回收站/统计面板下点其他菜单无反应）
 
 - **根因**：侧边栏快捷视图/项目/未分组的点击只改壳层 React state 不跳路由，而回收站/统计是嵌套路由面板（`/todo/trash`、`/todo/stats`）——路由停在这两处时中间区渲染的是 TrashPanel/StatsPanel，TaskPanel 未挂载，此时点侧边栏其他菜单 state 静默变化、URL 与界面毫无反应；必须点右上角「待办」（真 `navigate("/todo")`）重新挂载 TaskPanel 才能恢复。

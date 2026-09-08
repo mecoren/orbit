@@ -11,6 +11,7 @@ class MockStore {
   final comments = <int, Map<String, dynamic>>{};
   final relations = <int, Map<String, dynamic>>{};
   final reminders = <int, Map<String, dynamic>>{};
+  final attachments = <int, Map<String, dynamic>>{}; // linkId -> 附件关联行
 
   var nextId = 1;
   bool masterAuthSet = false;

@@ -3,6 +3,7 @@
 
 // ignore_for_file: unused_import, unused_element, unnecessary_import, duplicate_ignore, invalid_use_of_internal_member, annotate_overrides, non_constant_identifier_names, curly_braces_in_flow_control_structures, prefer_const_literals_to_create_immutables, unused_field
 
+import 'api/asset.dart';
 import 'api/auth.dart';
 import 'api/csv_import.dart';
 import 'api/dto.dart';
@@ -166,6 +167,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<HolidayInfo> dco_decode_list_holiday_info(dynamic raw);
 
   @protected
+  List<int> dco_decode_list_prim_u_8_loose(dynamic raw);
+
+  @protected
   Uint8List dco_decode_list_prim_u_8_strict(dynamic raw);
 
   @protected
@@ -182,6 +186,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<TableCount> dco_decode_list_table_count(dynamic raw);
+
+  @protected
+  List<TaskAttachmentView> dco_decode_list_task_attachment_view(dynamic raw);
 
   @protected
   List<TaskLabelWithId> dco_decode_list_task_label_with_id(dynamic raw);
@@ -275,6 +282,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   TableCount dco_decode_table_count(dynamic raw);
+
+  @protected
+  TaskAttachmentView dco_decode_task_attachment_view(dynamic raw);
 
   @protected
   TaskLabelWithId dco_decode_task_label_with_id(dynamic raw);
@@ -508,6 +518,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<HolidayInfo> sse_decode_list_holiday_info(SseDeserializer deserializer);
 
   @protected
+  List<int> sse_decode_list_prim_u_8_loose(SseDeserializer deserializer);
+
+  @protected
   Uint8List sse_decode_list_prim_u_8_strict(SseDeserializer deserializer);
 
   @protected
@@ -532,6 +545,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<TableCount> sse_decode_list_table_count(SseDeserializer deserializer);
+
+  @protected
+  List<TaskAttachmentView> sse_decode_list_task_attachment_view(
+    SseDeserializer deserializer,
+  );
 
   @protected
   List<TaskLabelWithId> sse_decode_list_task_label_with_id(
@@ -637,6 +655,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   TableCount sse_decode_table_count(SseDeserializer deserializer);
+
+  @protected
+  TaskAttachmentView sse_decode_task_attachment_view(
+    SseDeserializer deserializer,
+  );
 
   @protected
   TaskLabelWithId sse_decode_task_label_with_id(SseDeserializer deserializer);
@@ -922,6 +945,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_list_prim_u_8_loose(List<int> self, SseSerializer serializer);
+
+  @protected
   void sse_encode_list_prim_u_8_strict(
     Uint8List self,
     SseSerializer serializer,
@@ -954,6 +980,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_list_table_count(
     List<TableCount> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_task_attachment_view(
+    List<TaskAttachmentView> self,
     SseSerializer serializer,
   );
 
@@ -1112,6 +1144,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_table_count(TableCount self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_task_attachment_view(
+    TaskAttachmentView self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_task_label_with_id(

@@ -6,6 +6,7 @@
 //! - [dto]：todo 域过桥类型的本地镜像（外部 crate 类型会被 FRB 降级 opaque，
 //!   见 dto.rs 模块注释）
 //! - [todo]：todo 八表 CRUD + 详情聚合（签名一律使用 [dto] 镜像类型）
+//! - [asset]：任务附件（内容寻址上传/列表/读取/卸下 + 本地 GC）
 //! - [sync]：同步配置 / 云同步执行 / 同步加密
 //! - [plaintext_export]：明文数据导出（JSON / CSV，对齐桌面命令面）
 //! - [holiday]：节假日数据（联网更新 + 60s tick 自动调度守护）
@@ -14,6 +15,7 @@
 //! - [search]：全局搜索（任务/项目/评论三路聚合，backlog #26）
 //! - [events]：下行事件流 + 提醒轮询守护
 
+pub mod asset;
 pub mod auth;
 pub mod csv_import;
 pub mod dto;

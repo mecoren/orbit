@@ -262,6 +262,12 @@ pub fn run() {
             commands::trash_cmd::trash_set_retention_days,
             // 统计仪表盘（backlog #25：总览/热力图/连续天数/分布）
             commands::stats_cmd::stats_aggregate,
+            // 任务附件（上传/列表/读取/卸下 + 本地 GC）
+            commands::asset_cmd::task_attachment_add,
+            commands::asset_cmd::task_attachments_list,
+            commands::asset_cmd::task_attachment_read,
+            commands::asset_cmd::task_attachment_remove,
+            commands::asset_cmd::attachments_gc,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

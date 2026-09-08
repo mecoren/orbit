@@ -933,3 +933,33 @@ class GlobalSearchResult {
     required this.comments,
   });
 }
+
+/// 任务附件视图（07 排查报告后续批次：内容寻址；镜像桌面 TaskAttachmentView）
+class TaskAttachmentView {
+  final int linkId;
+  final String linkUuid;
+  final String hash;
+  final String originalName;
+  final String mimeType;
+  final int sizeBytes;
+
+  /// 0 = 尚未从云端拉回（本机无文件），打开入口置灰
+  final int isLocalCached;
+
+  const TaskAttachmentView({
+    required this.linkId,
+    required this.linkUuid,
+    required this.hash,
+    required this.originalName,
+    required this.mimeType,
+    required this.sizeBytes,
+    required this.isLocalCached,
+  });
+}
+
+/// 人类可读大小（移动端附件行展示；与桌面 humanSize 同口径）
+String humanFileSize(int bytes) {
+  if (bytes < 1024) return '$bytes B';
+  if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
+  return '${(bytes / 1024 / 1024).toStringAsFixed(1)} MB';
+}

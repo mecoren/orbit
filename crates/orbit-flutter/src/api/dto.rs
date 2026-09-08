@@ -797,3 +797,29 @@ impl From<orbit_core::api::holiday_api::HolidayMeta> for HolidayMeta {
         }
     }
 }
+
+// ---------- 任务附件（07 排查报告后续批次：附件功能；镜像桌面 TaskAttachmentView）----------
+pub struct TaskAttachmentView {
+    pub link_id: i64,
+    pub link_uuid: String,
+    pub hash: String,
+    pub original_name: String,
+    pub mime_type: String,
+    pub size_bytes: i64,
+    /// 0 = 尚未从云端拉回（云端有但本机未下载），UI 置灰打开入口
+    pub is_local_cached: i32,
+}
+
+impl From<orbit_core::api::asset_api::TaskAttachmentView> for TaskAttachmentView {
+    fn from(v: orbit_core::api::asset_api::TaskAttachmentView) -> Self {
+        Self {
+            link_id: v.link_id,
+            link_uuid: v.link_uuid,
+            hash: v.hash,
+            original_name: v.original_name,
+            mime_type: v.mime_type,
+            size_bytes: v.size_bytes,
+            is_local_cached: v.is_local_cached,
+        }
+    }
+}

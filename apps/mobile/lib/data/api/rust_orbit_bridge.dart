@@ -5,6 +5,7 @@ import 'package:path_provider/path_provider.dart';
 
 import '../../src/rust/api/dto.dart' as gen;
 import '../../src/rust/api/csv_import.dart' as gen_import;
+import '../../src/rust/api/asset.dart' as gen_asset;
 import '../../src/rust/api/holiday.dart' as gen_holiday;
 import '../../src/rust/api/events.dart' as gen_events;
 import '../../src/rust/api/plaintext_export.dart' as gen_export;
@@ -483,6 +484,46 @@ class RustOrbitBridge implements OrbitBridge {
         skipped: s.skipped.toInt(),
         failed: s.failed.toInt(),
         notes: s.notes,
+      );
+
+  // ── 任务附件（内容寻址）──
+
+  @override
+  Future<TaskAttachmentView> taskAttachmentAdd(
+      int taskId, String fileName, String mimeType, List<int> data) async {
+    final r = await gen_asset.taskAttachmentAdd(
+      taskId: taskId,
+      fileName: fileName,
+      mimeType: mimeType,
+      data: data,
+    );
+    return _mapAttachment(r);
+  }
+
+  @override
+  Future<List<TaskAttachmentView>> taskAttachmentsList(int taskId) async {
+    final rows = await gen_asset.taskAttachmentsList(taskId: taskId);
+    return rows.map(_mapAttachment).toList();
+  }
+
+  @override
+  Future<List<int>> taskAttachmentRead(String hash) async {
+    final bytes = await gen_asset.taskAttachmentRead(hash: hash);
+    return bytes.toList();
+  }
+
+  @override
+  Future<void> taskAttachmentRemove(int linkId) =>
+      gen_asset.taskAttachmentRemove(linkId: linkId);
+
+  TaskAttachmentView _mapAttachment(gen.TaskAttachmentView r) => TaskAttachmentView(
+        linkId: r.linkId.toInt(),
+        linkUuid: r.linkUuid,
+        hash: r.hash,
+        originalName: r.originalName,
+        mimeType: r.mimeType,
+        sizeBytes: r.sizeBytes.toInt(),
+        isLocalCached: r.isLocalCached.toInt(),
       );
 
   // ── 同步加密 ──

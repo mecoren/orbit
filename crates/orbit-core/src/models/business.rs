@@ -377,6 +377,20 @@ pub struct TodoReminderCreateInput {
     pub remind_at: i64,
 }
 
+// ---------- todo_task_attachments（任务-附件关联，引用 sys_attachments.hash）----------
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+pub struct TodoTaskAttachment {
+    pub id: i64,
+    pub uuid: String,
+    pub task_id: i64,
+    pub hash: String,
+    pub is_deleted: i32,
+    pub created_at: i64,
+    pub updated_at: i64,
+    pub deleted_at: Option<i64>,
+    pub version: i32,
+}
+
 // ---------- sys_attachments（PK: hash）----------
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
 pub struct Attachment {
@@ -387,7 +401,8 @@ pub struct Attachment {
     pub local_path: Option<String>,
     pub is_uploaded: i32,
     pub is_local_cached: i32,
-    pub created_at: String,
+    /// 创建时间（ms 时间戳；迁移 0001 原为 TEXT 属笔误，随附件功能落地对齐 i64）
+    pub created_at: i64,
 }
 
 // ---------- sync_history ----------

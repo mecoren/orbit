@@ -238,6 +238,21 @@ abstract class OrbitBridge {
   /// 执行导入（写库）：项目自动创建、逐行独立成败
   Future<CsvImportStats> csvImportExecute(String content, String preset);
 
+  // ── 任务附件（内容寻址：上传/列表/读取/卸下）──
+
+  /// 上传并挂载附件（bytes 由 file_picker 读得；单任务 20 个/单文件 50MB）
+  Future<TaskAttachmentView> taskAttachmentAdd(
+      int taskId, String fileName, String mimeType, List<int> data);
+
+  /// 任务附件列表（含 isLocalCached 状态）
+  Future<List<TaskAttachmentView>> taskAttachmentsList(int taskId);
+
+  /// 读取附件本地字节（未缓存时抛 NotFound）
+  Future<List<int>> taskAttachmentRead(String hash);
+
+  /// 卸下附件（软删关联，孤儿二进制由 GC 清）
+  Future<void> taskAttachmentRemove(int linkId);
+
   // ── 同步加密（恢复流程用）──
 
   Future<SyncCryptoStatus> syncCryptoStatus();

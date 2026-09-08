@@ -547,6 +547,90 @@ class MockOrbitBridge implements OrbitBridge {
         _emit('todo_reminders');
       });
 
+  // ── 任务附件（内容寻址；与桌面 ipc-mock 同构语义）──
+
+  @override
+  Future<TaskAttachmentView> taskAttachmentAdd(
+      int taskId, String fileName, String mimeType, List<int> data) {
+    return _delay(() {
+      if (data.isEmpty) throw Exception('附件内容为空');
+      if (data.length > 50 * 1024 * 1024) throw Exception('附件超过单文件上限 50MB');
+      final task = store.tasks[taskId];
+      if (task == null) throw Exception('task $taskId not found');
+      // 简化内容指纹（djb2）保证同内容同键，幂等去重
+      var h = 5381;
+      for (final b in data) {
+        h = ((h << 5) + h + b) & 0x7fffffff;
+      }
+      final hash = h.toRadixString(16).padLeft(8, '0');
+      final dup = store.attachments.values
+          .where((a) => a['task_id'] == taskId && a['hash'] == hash)
+          .toList();
+      if (dup.isNotEmpty) return _mapMockAttachment(dup.first);
+      if (store.attachments.values
+              .where((a) => a['task_id'] == taskId)
+              .length >=
+          20) {
+        throw Exception('单任务附件数已达上限 20');
+      }
+      final link = {
+        'link_id': store.id,
+        'link_uuid': 'att-${DateTime.now().millisecondsSinceEpoch}',
+        'task_id': taskId,
+        'hash': hash,
+        'original_name': fileName,
+        'mime_type': mimeType,
+        'size_bytes': data.length,
+        'is_local_cached': 1,
+      };
+      store.attachments[link['link_id'] as int] = link;
+      return _mapMockAttachment(link);
+    });
+  }
+
+  @override
+  Future<List<TaskAttachmentView>> taskAttachmentsList(int taskId) {
+    return _delay(() {
+      return store.attachments.values
+          .where((a) => a['task_id'] == taskId)
+          .map(_mapMockAttachment)
+          .toList()
+        ..sort((a, b) => a.linkId.compareTo(b.linkId));
+    });
+  }
+
+  @override
+  Future<List<int>> taskAttachmentRead(String hash) {
+    return _delay(() {
+      final row = store.attachments.values.firstWhere(
+        (a) => a['hash'] == hash,
+        orElse: () => throw Exception('附件 $hash 不存在'),
+      );
+      if ((row['is_local_cached'] as int) == 0) {
+        throw Exception('附件尚未从云端同步到本机');
+      }
+      return <int>[];
+    });
+  }
+
+  @override
+  Future<void> taskAttachmentRemove(int linkId) {
+    return _delay(() {
+      store.attachments.remove(linkId);
+    });
+  }
+
+  TaskAttachmentView _mapMockAttachment(Map<String, dynamic> a) =>
+      TaskAttachmentView(
+        linkId: a['link_id'] as int,
+        linkUuid: a['link_uuid'] as String,
+        hash: a['hash'] as String,
+        originalName: a['original_name'] as String,
+        mimeType: a['mime_type'] as String,
+        sizeBytes: a['size_bytes'] as int,
+        isLocalCached: a['is_local_cached'] as int,
+      );
+
   // ── 同步配置与执行 ──
 
   @override

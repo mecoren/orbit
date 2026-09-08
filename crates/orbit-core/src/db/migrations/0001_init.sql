@@ -236,6 +236,26 @@ CREATE INDEX IF NOT EXISTS idx_todo_reminders_task_id ON todo_reminders(task_id)
 CREATE INDEX IF NOT EXISTS idx_todo_reminders_remind_at ON todo_reminders(remind_at);
 CREATE INDEX IF NOT EXISTS idx_todo_reminders_uuid ON todo_reminders(uuid);
 
+-- 任务-附件关联表（07 排查报告后续批次：任务附件功能）
+-- 引用 sys_attachments 的内容寻址 hash（不复制行）：
+-- 附件二进制走 assets/{hash}.waitsync 内容寻址通道（cloud_sync/attachments.rs），
+-- 本表只同步「哪个任务挂了哪个 hash」的关联关系，随 todos 模块同步。
+CREATE TABLE IF NOT EXISTS todo_task_attachments (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  uuid TEXT NOT NULL DEFAULT '',
+  task_id INTEGER NOT NULL,
+  hash TEXT NOT NULL,
+  is_deleted INTEGER NOT NULL DEFAULT 0,
+  created_at INTEGER NOT NULL DEFAULT 0,
+  updated_at INTEGER NOT NULL DEFAULT 0,
+  deleted_at INTEGER,
+  version INTEGER NOT NULL DEFAULT 1,
+  FOREIGN KEY (task_id) REFERENCES todo_tasks(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_todo_task_attachments_uuid ON todo_task_attachments(uuid);
+CREATE INDEX IF NOT EXISTS idx_todo_task_attachments_task_id ON todo_task_attachments(task_id);
+CREATE INDEX IF NOT EXISTS idx_todo_task_attachments_hash ON todo_task_attachments(hash);
+
 CREATE TABLE IF NOT EXISTS cfg_option_categories (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   category_key TEXT NOT NULL DEFAULT '',
@@ -315,7 +335,7 @@ CREATE TABLE IF NOT EXISTS sys_attachments (
   local_path TEXT,
   is_uploaded INTEGER NOT NULL DEFAULT 0,
   is_local_cached INTEGER NOT NULL DEFAULT 0,
-  created_at TEXT NOT NULL DEFAULT ''
+  created_at INTEGER NOT NULL DEFAULT 0
 );
 -- ============================================================================
 -- 种子数据

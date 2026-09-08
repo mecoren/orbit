@@ -6,7 +6,7 @@
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`
 
 /// 统一完成命令结果（镜像 orbit_core::api::todo_api::CompleteTaskResult；
 /// 引擎下沉三端唯一完成入口：普通标记 / 重复任务单事务推进下一实例）
@@ -217,6 +217,51 @@ class ListFilter {
           keyword == other.keyword &&
           page == other.page &&
           pageSize == other.pageSize;
+}
+
+class TaskAttachmentView {
+  final PlatformInt64 linkId;
+  final String linkUuid;
+  final String hash;
+  final String originalName;
+  final String mimeType;
+  final PlatformInt64 sizeBytes;
+
+  /// 0 = 尚未从云端拉回（云端有但本机未下载），UI 置灰打开入口
+  final int isLocalCached;
+
+  const TaskAttachmentView({
+    required this.linkId,
+    required this.linkUuid,
+    required this.hash,
+    required this.originalName,
+    required this.mimeType,
+    required this.sizeBytes,
+    required this.isLocalCached,
+  });
+
+  @override
+  int get hashCode =>
+      linkId.hashCode ^
+      linkUuid.hashCode ^
+      hash.hashCode ^
+      originalName.hashCode ^
+      mimeType.hashCode ^
+      sizeBytes.hashCode ^
+      isLocalCached.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is TaskAttachmentView &&
+          runtimeType == other.runtimeType &&
+          linkId == other.linkId &&
+          linkUuid == other.linkUuid &&
+          hash == other.hash &&
+          originalName == other.originalName &&
+          mimeType == other.mimeType &&
+          sizeBytes == other.sizeBytes &&
+          isLocalCached == other.isLocalCached;
 }
 
 /// 任务详情中的标签：TodoLabel 全部字段 + task_label_id

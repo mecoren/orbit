@@ -128,6 +128,17 @@ export interface MockRelation {
   version: number;
 }
 
+export interface MockAttachmentLink {
+  link_id: number;
+  link_uuid: string;
+  task_id: number;
+  hash: string;
+  original_name: string;
+  mime_type: string;
+  size_bytes: number;
+  is_local_cached: number;
+}
+
 export interface MockDb {
   projects: MockProject[];
   tasks: MockTask[];
@@ -137,6 +148,7 @@ export interface MockDb {
   reminders: MockReminder[];
   comments: MockComment[];
   relations: MockRelation[];
+  attachments: MockAttachmentLink[];
   seq: number;
 }
 
@@ -153,6 +165,7 @@ function createDb(): MockDb {
     reminders: [],
     comments: [],
     relations: [],
+    attachments: [],
     seq: 1,
   };
 }
@@ -825,6 +838,53 @@ const commands: Record<string, (args: any, ctx: Ctx) => unknown> = {
   // ---- 计数（旧基座命令；保守返回 0）----
   business_count: () => 0,
 
+  // ---- 任务附件（详情抽屉区块 9；内存模拟内容寻址：hash 简化为内容指纹）----
+  task_attachment_add: (
+    { taskId, fileName, mimeType, data }: { taskId: number; fileName: string; mimeType: string; data: number[] },
+    { db }: Ctx,
+  ) => {
+    const t = db.tasks.find((x) => x.id === taskId && !x.is_deleted);
+    if (!t) throw new Error(`task ${taskId} not found`);
+    if (!data?.length) throw new Error("附件内容为空");
+    if (data.length > 50 * 1024 * 1024) throw new Error("附件超过单文件上限 50MB");
+    // 简化 hash：非加密用途，仅保证同内容同键（djb2）
+    let h = 5381;
+    for (const b of data) h = ((h << 5) + h + b) >>> 0;
+    const hash = h.toString(16).padStart(8, "0");
+    const existing = db.attachments.find(
+      (a) => a.task_id === taskId && a.hash === hash,
+    );
+    if (existing) return ipcClone(existing);
+    if (db.attachments.filter((a) => a.task_id === taskId).length >= 20) {
+      throw new Error("单任务附件数已达上限 20");
+    }
+    const link: MockAttachmentLink = {
+      link_id: db.seq++,
+      link_uuid: uuid(),
+      task_id: taskId,
+      hash,
+      original_name: fileName,
+      mime_type: mimeType,
+      size_bytes: data.length,
+      is_local_cached: 1,
+    };
+    db.attachments.push(link);
+    return ipcClone(link);
+  },
+  task_attachments_list: ({ taskId }: { taskId: number }, { db }: Ctx) =>
+    ipcClone(db.attachments.filter((a) => a.task_id === taskId)),
+  task_attachment_read: ({ hash }: { hash: string }, { db }: Ctx) => {
+    const meta = db.attachments.find((a) => a.hash === hash);
+    if (!meta) throw new Error(`附件 ${hash} 不存在`);
+    if (meta.is_local_cached === 0) throw new Error("附件尚未从云端同步到本机");
+    return [];
+  },
+  task_attachment_remove: ({ linkId }: { linkId: number }, { db }: Ctx) => {
+    const idx = db.attachments.findIndex((a) => a.link_id === linkId);
+    if (idx >= 0) db.attachments.splice(idx, 1);
+  },
+  attachments_gc: () => 0,
+
   // ---- CSV 导入（设置页迁移卡；冒烟不覆盖设置页，mock 提供
   //      与 Rust csv_import_api 同构的最小语义：title/content/summary
   //      列识别 + 空标题跳过 + 项目列自动建项目）----
@@ -1009,7 +1069,7 @@ function ensureMockProject(db: MockDb, title: string): number {
 /** 写类命令完成后应广播 db-change 的判定（对齐 Rust EVENT_BUS 语义；
  *  trash 恢复/彻底删除/清空写后同样要失效列表缓存） */
 const isWriteCommand = (cmd: string) =>
-  /_(create|update|update_position|complete|delete|toggle_done|recalc_percent|restore|purge|execute)$/.test(cmd) ||
+  /_(create|update|update_position|complete|delete|toggle_done|recalc_percent|restore|purge|execute|add|remove)$/.test(cmd) ||
   cmd === "trash_purge_all";
 
 // ---------- 安装 ----------

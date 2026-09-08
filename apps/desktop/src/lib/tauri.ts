@@ -827,3 +827,34 @@ export interface StatsAggregate {
 /** 统计聚合（days 为热力图窗口天数，35–371 钳制；默认 182=半年） */
 export const statsAggregate = (days?: number) =>
   invoke<StatsAggregate>("stats_aggregate", { days });
+
+// ========== task_attachments（任务附件：07 排查报告后续批次）==========
+export interface TaskAttachmentView {
+  link_id: number;
+  link_uuid: string;
+  hash: string;
+  original_name: string;
+  mime_type: string;
+  size_bytes: number;
+  /** 0 = 尚未从云端拉回，暂不可打开 */
+  is_local_cached: number;
+}
+export const taskAttachmentAdd = (
+  taskId: number,
+  fileName: string,
+  mimeType: string,
+  data: number[],
+) =>
+  invoke<TaskAttachmentView>("task_attachment_add", {
+    taskId,
+    fileName,
+    mimeType,
+    data,
+  });
+export const taskAttachmentsList = (taskId: number) =>
+  invoke<TaskAttachmentView[]>("task_attachments_list", { taskId });
+export const taskAttachmentRead = (hash: string) =>
+  invoke<number[]>("task_attachment_read", { hash });
+export const taskAttachmentRemove = (linkId: number) =>
+  invoke<void>("task_attachment_remove", { linkId });
+export const attachmentsGc = () => invoke<number>("attachments_gc");

@@ -1,6 +1,10 @@
+import 'dart:io';
+
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:path_provider/path_provider.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_dimens.dart';
@@ -211,6 +215,8 @@ class _DetailView extends StatelessWidget {
         ],
         const SizedBox(height: AppDimens.space12),
         _CommentsSection(detail: detail, onChanged: onRefresh),
+        const SizedBox(height: AppDimens.space12),
+        _AttachmentsSection(taskId: detail.id),
       ],
     );
   }
@@ -1702,6 +1708,245 @@ class _CommentsSectionState extends ConsumerState<_CommentsSection> {
           ),
         ],
       ),
+    );
+  }
+}
+
+// ── 九、附件（file_picker 添加 + 内容寻址列表 + 删除确认）──
+
+class _AttachmentsSection extends ConsumerStatefulWidget {
+  const _AttachmentsSection({required this.taskId});
+
+  final int taskId;
+
+  @override
+  ConsumerState<_AttachmentsSection> createState() =>
+      _AttachmentsSectionState();
+}
+
+class _AttachmentsSectionState extends ConsumerState<_AttachmentsSection> {
+  List<TaskAttachmentView>? _attachments;
+  bool _busy = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    try {
+      final list =
+          await ref.read(orbitBridgeProvider).taskAttachmentsList(widget.taskId);
+      if (mounted) setState(() => _attachments = list);
+    } catch (_) {
+      if (mounted) setState(() => _attachments = []);
+    }
+  }
+
+  Future<void> _add() async {
+    if (_busy) return;
+    final result = await FilePicker.platform.pickFiles(allowMultiple: false);
+    final path = result?.files.single.path;
+    if (path == null) return;
+    final name = result!.files.single.name;
+
+    setState(() => _busy = true);
+    try {
+      final bytes = await File(path).readAsBytes();
+      await ref.read(orbitBridgeProvider).taskAttachmentAdd(
+            widget.taskId,
+            name,
+            _mimeFromName(name),
+            bytes,
+          );
+      await _load();
+    } catch (e) {
+      if (mounted) WaitToast.destructive('附件上传失败');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  String _mimeFromName(String name) {
+    final ext = name.split('.').last.toLowerCase();
+    const map = {
+      'png': 'image/png', 'jpg': 'image/jpeg', 'jpeg': 'image/jpeg',
+      'gif': 'image/gif', 'webp': 'image/webp', 'pdf': 'application/pdf',
+      'txt': 'text/plain', 'md': 'text/markdown', 'csv': 'text/csv',
+      'json': 'application/json', 'zip': 'application/zip',
+      'mp3': 'audio/mpeg', 'mp4': 'video/mp4',
+    };
+    return map[ext] ?? 'application/octet-stream';
+  }
+
+  Future<void> _open(TaskAttachmentView att) async {
+    if (att.isLocalCached == 0) {
+      WaitToast.info('附件尚未从云端同步到本机，稍后自动拉取');
+      return;
+    }
+    try {
+      final bytes =
+          await ref.read(orbitBridgeProvider).taskAttachmentRead(att.hash);
+      final dir = await getTemporaryDirectory();
+      final target = File(
+          '${dir.path}/orbit-att-${att.hash}${_extOf(att.originalName)}');
+      await target.writeAsBytes(bytes);
+      if (!mounted) return;
+      if (att.mimeType.startsWith('image/')) {
+        // 图片：应用内全屏预览（无第三方打开器依赖）
+        await showDialog<void>(
+          context: context,
+          builder: (dialogContext) => Dialog(
+            backgroundColor: Colors.transparent,
+            insetPadding: const EdgeInsets.all(16),
+            child: GestureDetector(
+              onTap: () => Navigator.of(dialogContext).pop(),
+              child: Image.file(target, fit: BoxFit.contain),
+            ),
+          ),
+        );
+      } else {
+        // 非图片类型：写入临时目录后引导（Android 用户可经文件管理器取用；
+        // 引入系统打开器属新依赖，本批不扩）
+        WaitToast.info('已保存到缓存目录：${target.path}');
+      }
+    } catch (_) {
+      if (mounted) WaitToast.destructive('打开附件失败');
+    }
+  }
+
+  String _extOf(String name) {
+    final parts = name.split('.');
+    return parts.length > 1 ? '.${parts.last}' : '';
+  }
+
+  Future<void> _remove(TaskAttachmentView att) async {
+    final destructive = AppColors.ofContext(context).destructive;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('移除附件'),
+        content: Text('确定要移除「${att.originalName}」吗？仅解除与任务的关联。'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: destructive),
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('移除'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    try {
+      await ref.read(orbitBridgeProvider).taskAttachmentRemove(att.linkId);
+      await _load();
+    } catch (_) {
+      if (mounted) WaitToast.destructive('操作失败');
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = AppColors.ofContext(context);
+    final list = _attachments;
+
+    return SectionCard(
+      title: '附件',
+      trailing: _busy
+          ? const SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          : IconButton(
+              icon: const Icon(Icons.add),
+              iconSize: 18,
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(),
+              onPressed: _add,
+            ),
+      child: list == null
+          ? const SizedBox(height: 16)
+          : list.isEmpty
+              ? Text(
+                  '点击 + 选择文件添加附件（单任务 20 个，单文件 50MB）',
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: colors.secondaryText.withValues(alpha: 0.5),
+                  ),
+                )
+              : Column(
+                  children: [
+                    for (final att in list)
+                      Container(
+                        width: double.infinity,
+                        margin: const EdgeInsets.only(bottom: AppDimens.space8),
+                        padding: const EdgeInsets.all(AppDimens.space8 + 2),
+                        decoration: BoxDecoration(
+                          color: colors.surfaceSecondary,
+                          borderRadius: AppShapes.small,
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              att.isLocalCached == 0
+                                  ? Icons.cloud_download_outlined
+                                  : Icons.description_outlined,
+                              size: 18,
+                              color: colors.secondaryText,
+                            ),
+                            const SizedBox(width: AppDimens.space8),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    att.originalName,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      color: colors.bodyText,
+                                    ),
+                                  ),
+                                  Text(
+                                    att.isLocalCached == 0
+                                        ? '待同步'
+                                        : humanFileSize(att.sizeBytes),
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: colors.secondaryText,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            GestureDetector(
+                              onTap: () => _open(att),
+                              child: const Icon(
+                                Icons.open_in_new_rounded,
+                                size: 18,
+                              ),
+                            ),
+                            const SizedBox(width: AppDimens.space8),
+                            GestureDetector(
+                              onTap: () => _remove(att),
+                              child: Icon(
+                                Icons.delete_outline_rounded,
+                                size: 18,
+                                color: colors.secondaryText,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                  ],
+                ),
     );
   }
 }

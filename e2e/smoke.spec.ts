@@ -267,3 +267,46 @@ test("日历视图：左右分栏 + 选中定位 + 年视图 + 右键新增预�
   await page.getByRole("button", { name: "议程" }).click();
   await expect(page.getByText("既有任务-今天截止")).toBeVisible();
 });
+
+test("附件：详情抽屉区块渲染 + 列表/移除链路（mock 命令面）", async ({ page }) => {
+  // 任务行点击打开详情抽屉
+  const row = page.getByRole("button", { name: "未完成任务：既有任务-今天截止" });
+  await row.click();
+  // 抽屉八区块滚动可见：标题输入在抽屉顶部
+  await expect(page.getByRole("dialog")).toBeVisible();
+
+  // 经 mock 直挂附件（真实链路 = fs 读文件 → task_attachment_add 同构语义），
+  // emitDbChange 后抽屉区块 9 重渲染列表
+  await page.evaluate(() => {
+    const m = (window as any).__orbitMock;
+    const t = m.db.tasks.find((x: any) => x.title === "既有任务-今天截止");
+    const link = {
+      link_id: m.db.seq++,
+      link_uuid: "att-e2e-1",
+      task_id: t.id,
+      hash: "e2ehash01",
+      original_name: "验收报告.pdf",
+      mime_type: "application/pdf",
+      size_bytes: 2048,
+      is_local_cached: 1,
+    };
+    m.db.attachments.push(link);
+    m.emitDbChange();
+  });
+  await expect(page.getByText("验收报告.pdf")).toBeVisible({ timeout: 5_000 });
+  // 大小人类可读（2.0 KB）
+  await expect(page.getByText("2.0 KB")).toBeVisible();
+
+  // 移除：hover 行 → 移除按钮 → ConfirmPopover 确认
+  const attRow = page.getByText("验收报告.pdf");
+  await attRow.hover();
+  await page.getByRole("button", { name: "移除附件" }).click();
+  // ConfirmPopover 弹层（标题「移除附件」→ 段落说明 → 删除按钮），
+  // 与标题行的 aria-label「删除」按钮同名，用弹层说明文案锚定作用域
+  const popover = page.getByText("仅解除与任务的关联", { exact: false }).locator("..");
+  await popover.getByRole("button", { name: "删除", exact: true }).click();
+  await expect(page.getByText("验收报告.pdf")).not.toBeVisible({ timeout: 5_000 });
+  // mock 库终态：附件关联已删
+  const remaining = await page.evaluate(() => (window as any).__orbitMock.db.attachments.length);
+  expect(remaining).toBe(0);
+});

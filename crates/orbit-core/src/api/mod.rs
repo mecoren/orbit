@@ -3,6 +3,7 @@
 //! 组合 repository + sync + crypto，暴露给薄壳（src-tauri commands）调用。
 //! 函数签名约定：首个参数为 `pool: &SqlitePool`（由 AppState 注入）。
 
+pub mod asset_api;
 pub mod business_api;
 pub mod cloud_sync_api;
 pub mod csv_import_api;

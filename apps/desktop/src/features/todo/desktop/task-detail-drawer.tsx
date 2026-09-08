@@ -13,10 +13,14 @@ import {
   Bell,
   Calendar,
   Check,
+  ExternalLink,
+  File as FileIcon,
   Flag,
   FolderOpen,
   Link2,
   ListChecks,
+  Loader2,
+  Paperclip,
   Plus,
   Repeat,
   Send,
@@ -55,6 +59,10 @@ import { REPEAT_MODE, REPEAT_PRESETS, repeatLabel } from "../shared/repeat";
 import { completeTask } from "@/features/todo/shared/task-actions";
 import {
   globalSearch,
+  taskAttachmentAdd,
+  taskAttachmentRemove,
+  taskAttachmentsList,
+  type TaskAttachmentView,
   todoCommentCreate,
   todoCommentDelete,
   todoLabelCreate,
@@ -167,6 +175,8 @@ export function TaskDetailDrawer({ projects }: TaskDetailDrawerProps) {
             />
             {/* 8. 评论 */}
             <CommentsSection taskId={t.id} comments={t.comments} onChanged={refetchDetail} />
+            {/* 9. 附件（07 排查报告后续批次：内容寻址上传/预览/卸下） */}
+            <AttachmentsSection taskId={t.id} />
           </div>
         ) : (
           <div className="px-6 py-10 text-sm text-muted-foreground">加载中…</div>
@@ -1313,6 +1323,151 @@ function CommentsSection({
             <Send size={14} className="text-primary" />
           </Button>
         </div>
+      </div>
+    </SectionBlock>
+  );
+}
+
+/* ================= 区块 9：附件 ================= */
+
+/** 常见扩展名 → mime 映射（fs 插件不返回 mime，按扩展名推断；未知回落 octet-stream） */
+const MIME_BY_EXT: Record<string, string> = {
+  png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif",
+  webp: "image/webp", svg: "image/svg+xml", bmp: "image/bmp", ico: "image/x-icon",
+  pdf: "application/pdf", txt: "text/plain", md: "text/markdown", csv: "text/csv",
+  json: "application/json", xml: "application/xml", zip: "application/zip",
+  mp3: "audio/mpeg", wav: "audio/wav", mp4: "video/mp4", webm: "video/webm",
+  doc: "application/msword", docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  xls: "application/vnd.ms-excel", xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+};
+
+function mimeFromFileName(name: string): string {
+  const ext = name.split(".").pop()?.toLowerCase() ?? "";
+  return MIME_BY_EXT[ext] ?? "application/octet-stream";
+}
+
+function humanSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function AttachmentsSection({ taskId }: { taskId: number }) {
+  const [busy, setBusy] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState<TaskAttachmentView | null>(null);
+  // 走 react-query：db-change 全局失效后自动重拉（与其他区块同通道；
+  // 局部 useState + useEffect 不吃失效事件，mock 直改/真实跨设备同步后不刷新）
+  const { data: attachments = [], refetch } = useQuery({
+    queryKey: ["task-attachments", taskId],
+    queryFn: () => taskAttachmentsList(taskId),
+  });
+
+  const handleAdd = async () => {
+    if (busy) return;
+    const { open } = await import("@tauri-apps/plugin-dialog");
+    const selected = await open({ multiple: false });
+    if (!selected || typeof selected !== "string") return;
+
+    setBusy(true);
+    try {
+      const { readFile } = await import("@tauri-apps/plugin-fs");
+      const data = Array.from(await readFile(selected));
+      const fileName = selected.split(/[\/]/).pop() ?? "附件";
+      await taskAttachmentAdd(taskId, fileName, mimeFromFileName(fileName), data);
+      await refetch();
+      toast.success(`已添加附件「${fileName}」`);
+    } catch (e) {
+      toast.error(`附件上传失败：${e}`);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleOpen = async (att: TaskAttachmentView) => {
+    if (att.is_local_cached === 0) {
+      toast.info("附件尚未从云端同步到本机，稍后自动拉取");
+      return;
+    }
+    try {
+      const { taskAttachmentRead } = await import("@/lib/tauri");
+      const bytes = await taskAttachmentRead(att.hash);
+      // 图片：blob 新窗口预览；其他类型：落临时文件走系统默认程序打开
+      if (att.mime_type.startsWith("image/")) {
+        const buf = new Uint8Array(bytes);
+        const blob = new Blob([buf], { type: att.mime_type });
+        window.open(URL.createObjectURL(blob), "_blank", "noopener");
+      } else {
+        const { writeFile } = await import("@tauri-apps/plugin-fs");
+        const ext = att.original_name.split(".").pop() ?? "";
+        const { appCacheDir, join } = await import("@tauri-apps/api/path");
+        const dir = await appCacheDir();
+        const target = await join(dir, `orbit-preview-${att.hash.slice(0, 12)}${ext ? "." + ext : ""}`);
+        await writeFile(target, new Uint8Array(bytes));
+        const { open: openPath } = await import("@tauri-apps/plugin-shell");
+        await openPath(target);
+      }
+    } catch (e) {
+      toast.error(`打开附件失败：${e}`);
+    }
+  };
+
+  return (
+    <SectionBlock
+      icon={Paperclip}
+      title="附件"
+      trailing={
+        <button
+          type="button"
+          aria-label="添加附件"
+          disabled={busy}
+          className="text-muted-foreground hover:text-foreground disabled:opacity-50"
+          onClick={() => void handleAdd()}
+        >
+          {busy ? <Loader2 size={13} className="animate-spin" /> : <Plus size={13} />}
+        </button>
+      }
+    >
+      <div className="space-y-2">
+        {attachments.map((a) => (
+          <ConfirmPopover
+            key={a.link_id}
+            open={confirmDelete?.link_id === a.link_id}
+            onOpenChange={(o) => { if (!o) setConfirmDelete(null); }}
+            title="移除附件"
+            description={`确定要移除「${a.original_name}」吗？仅解除与任务的关联。`}
+            onConfirm={() => {
+              const target = a;
+              void (async () => {
+                await taskAttachmentRemove(target.link_id);
+                await refetch();
+                toast.success("已移除附件");
+              })();
+            }}
+          >
+            <div
+              className="group flex cursor-pointer items-center gap-2 rounded-lg bg-muted/40 px-3 py-2"
+              onClick={() => void handleOpen(a)}
+            >
+              <FileIcon size={14} className="shrink-0 text-muted-foreground" />
+              <span className="min-w-0 flex-1 truncate text-[13px]">{a.original_name}</span>
+              <span className="shrink-0 text-[11px] text-muted-foreground">
+                {a.is_local_cached === 0 ? "待同步" : humanSize(a.size_bytes)}
+              </span>
+              <button
+                type="button"
+                aria-label="移除附件"
+                className="opacity-0 group-hover:opacity-100"
+                onClick={(e) => { e.stopPropagation(); setConfirmDelete(a); }}
+              >
+                <Trash2 size={12} className="text-muted-foreground hover:text-destructive" />
+              </button>
+              <ExternalLink size={12} className="shrink-0 text-muted-foreground opacity-0 group-hover:opacity-100" />
+            </div>
+          </ConfirmPopover>
+        ))}
+        {attachments.length === 0 && (
+          <p className="text-[12px] text-muted-foreground">点击 + 选择文件添加附件（单任务 20 个，单文件 50MB）。</p>
+        )}
       </div>
     </SectionBlock>
   );
