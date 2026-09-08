@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Orbit 品牌图标生成器（M5.1；2026-09-07 换用户提供的卫星绕行图）。
+"""Orbit 品牌图标生成器（M5.1；2026-09-08 换 AI 生图「圆环轨道」版）。
 
 用法（仓库根）：python scripts/generate_icons.py
 
@@ -13,30 +13,30 @@
 - Android 通知小图标：drawable-*/ic_stat_orbit.png（白色剪影，API 21+ 语义）
 - 设计源文件：docs/adr/assets/orbit-icon-master.png
 
-设计（源：scripts/PixPin_2026-09-07_20-16-46.png 经 scripts/extract_icon_shapes.py
-高斯平滑重阈值去手绘波纹 + 轮廓简化；部件 IoU 0.99+）：
-深色 squircle 底 + 卫星绕行星构图——左上月牙形行星、左下扫至右上的
-变宽轨道弧（末端卫星球）、中部小彗星；主体蓝 #3974F7。形状数据固化
-在 scripts/icon_shapes.json（{canvas, bbox, shapes}，bbox+宽高比数据
-驱动渲染），参数改动请同步更新本文件顶部注释与 0004 ADR。
+设计 v4（源：scripts/icon-asset-2026-09-08.png，AI 生图已带透明通道）：
+深色 squircle 底 + 蓝色圆环轨道（缺口上嵌卫星球、彗星从中心越环）+ 双层
+glow 光晕；主体蓝 #2B6EF7。资产为栅格合成（环圆度实测 ±2px、蓝色 std<3，
+无需重描）；glow 淡蓝白渐变保留。内容对齐：solid bbox 占画布 80%，
+glow 允许越出 PAD（淡出自然）。参数改动请同步更新本文件顶部注释与
+0004 ADR。
 """
 
 from __future__ import annotations
 
-import json
 import struct
 from pathlib import Path
 
 from PIL import Image, ImageDraw
 
 REPO = Path(__file__).resolve().parent.parent
-SHAPES_PATH = Path(__file__).resolve().parent / "icon_shapes.json"
+ASSET_PATH = Path(__file__).resolve().parent / "icon-asset-2026-09-08.png"
 
 # ---- 设计参数（与 docs/adr/0004 §图标一致）----
 BG = (26, 26, 33, 255)  # squircle 底色（深空色 #1A1A21，与启动屏 launch_bg 同源）
-BLUE = (57, 116, 247, 255)  # 主体蓝 #3974F7（源自用户图实测均值）
 CORNER = 0.2237  # squircle 圆角率（Material，22.37%）
-PAD = 0.10  # 主体内容边距（相对画布）
+PAD = 0.10  # solid 主体边距（相对画布；glow 越出边距自然淡出）
+# 资产内 solid 内容 bbox（icon-asset-2026-09-08.png 941×961 实测）
+SOLID_BBOX = (43, 100, 864, 830)  # x0, y0, x1, y1（含端点）
 
 # Android 密度族：mipmap 名 -> 边长 px
 ANDROID_DENSITIES = {
@@ -55,74 +55,92 @@ NOTIFICATION_DENSITIES = {
     "drawable-xxxhdpi": 96,
 }
 
-
-def load_shapes() -> tuple[list[dict], float]:
-    """载入形状数据并归一化到 0..1；返回 (shapes, 内容宽高比 w/h)。"""
-    doc = json.loads(SHAPES_PATH.read_text())
-    x0, y0, x1, y1 = doc["bbox"]
-    for s in doc["shapes"]:
-        s["pts"] = [[(p[0] - x0) / (x1 - x0), (p[1] - y0) / (y1 - y0)]
-                    for p in s["pts"]]
-    return doc["shapes"], (x1 - x0) / (y1 - y0)
+ASSET = Image.open(ASSET_PATH).convert("RGBA")
 
 
-SHAPES, CONTENT_AR = load_shapes()
-# 渲染顺序（z 从低到高）：轨道弧 -> 彗星 -> 卫星球 -> 月牙（行星压在弧尾根上）
-ORDER = [0, 1, 2, 3]
+def _place_asset(im: Image.Image, ss: int) -> None:
+    """资产 solid bbox 按 PAD 对齐缩放贴入 ss×ss 画布（glow 可越出）。"""
+    sx0, sy0, sx1, sy1 = SOLID_BBOX
+    content_w = sx1 - sx0 + 1
+    content_h = sy1 - sy0 + 1
+    scale = (ss - 2 * ss * PAD) / content_w
+    dw = round(ASSET.width * scale)
+    dh = round(ASSET.height * scale)
+    resized = ASSET.resize((dw, dh), Image.LANCZOS)
+    # solid bbox 中心对画布中心
+    cx_a = (sx0 + sx1) / 2 * scale
+    cy_a = (sy0 + sy1) / 2 * scale
+    x = round(ss / 2 - cx_a)
+    y = round(ss / 2 - cy_a)
+    im.alpha_composite(resized, (x, y))
 
 
-def _draw_squircle(d: ImageDraw.ImageDraw, ss: int, radius_ratio: float = CORNER) -> None:
-    if radius_ratio > 0:
-        d.rounded_rectangle([0, 0, ss, ss], radius=int(ss * radius_ratio), fill=BG)
-    else:
-        d.rectangle([0, 0, ss, ss], fill=BG)
-
-
-def _place(pts: list, ss: int) -> list:
-    """归一化坐标 -> 画布像素：PAD 边距内按宽高比铺放并整体居中。"""
-    m = ss * PAD
-    span = ss - 2 * m
-    span_y = span / CONTENT_AR
-    my = (ss - span_y) / 2
-    return [(m + px * span, my + py * span_y) for px, py in pts]
-
-
-def _draw_subject(d: ImageDraw.ImageDraw, ss: int, fill) -> None:
-    for i in ORDER:
-        d.polygon(_place(SHAPES[i]["pts"], ss), fill=fill)
+def _solid_silhouette(size: int) -> Image.Image:
+    """资产不透明主体（alpha>128）二值剪影，白色，供通知图/自检。"""
+    ss = 512
+    m = Image.new("L", ss, 0)
+    a = ASSET.resize((ss, ss), Image.LANCZOS)
+    px = a.load()
+    d = ImageDraw.Draw(m)
+    for y in range(ss):
+        for x in range(ss):
+            if px[x, y][3] > 128:
+                d.point((x, y), fill=255)
+    white = Image.new("RGBA", (ss, ss), (0, 0, 0, 0))
+    white.putalpha(m)
+    return Image.merge("RGBA", (m, m, m, white.split()[3])).resize(
+        (size, size), Image.LANCZOS)
 
 
 def render_master(size: int) -> Image.Image:
-    """主图标：深色 squircle + 蓝主体（固定 1024 母版缩放，保证尺寸间一致）。"""
+    """主图标：深色 squircle + 资产合成（固定 1024 母版缩放）。"""
     ss = 1024
     im = Image.new("RGBA", (ss, ss), (0, 0, 0, 0))
     d = ImageDraw.Draw(im)
-    _draw_squircle(d, ss)
-    _draw_subject(d, ss, BLUE)
+    d.rounded_rectangle([0, 0, ss, ss], radius=int(ss * CORNER), fill=BG)
+    _place_asset(im, ss)
     return im.resize((size, size), Image.LANCZOS)
 
 
 def render_launch(size: int) -> Image.Image:
-    """Android 启动屏图：无圆角全出血深色底（launch_background 平铺场景），主体同主图。"""
+    """Android 启动屏图：无圆角全出血深色底（launch_background 平铺场景）。"""
     ss = 1024
     im = Image.new("RGBA", (ss, ss), (0, 0, 0, 0))
     d = ImageDraw.Draw(im)
-    _draw_squircle(d, ss, radius_ratio=0)
-    _draw_subject(d, ss, BLUE)
+    d.rectangle([0, 0, ss, ss], fill=BG)
+    _place_asset(im, ss)
     return im.resize((size, size), Image.LANCZOS)
 
 
 def render_notification_silhouette(size: int) -> Image.Image:
-    """通知小图标：纯白主体剪影（透明底），Android 5.0+ alpha 通道语义。"""
+    """通知小图标：主体白色剪影（透明底），Android 5.0+ alpha 通道语义。
+
+    以 solid 层的外接紧框（非含 glow 的全资产框）铺放，保证小尺寸主体占比。
+    """
     ss = 512
-    im = Image.new("RGBA", (ss, ss), (0, 0, 0, 0))
-    d = ImageDraw.Draw(im)
-    _draw_subject(d, ss, (255, 255, 255, 255))
-    return im.resize((size, size), Image.LANCZOS)
+    sx0, sy0, sx1, sy1 = SOLID_BBOX
+    scale = (ss - 2 * ss * PAD) / (sx1 - sx0 + 1)
+    dw = round(ASSET.width * scale)
+    dh = round(ASSET.height * scale)
+    resized = ASSET.resize((dw, dh), Image.LANCZOS)
+    cx_a = (sx0 + sx1) / 2 * scale
+    cy_a = (sy0 + sy1) / 2 * scale
+    x = round(ss / 2 - cx_a)
+    y = round(ss / 2 - cy_a)
+    canvas = Image.new("L", (ss, ss), 0)
+    canvas.paste(resized.split()[3].point(lambda v: 255 if v > 128 else 0), (x, y))
+    white = Image.new("RGBA", (ss, ss), (0, 0, 0, 0))
+    px = canvas.load()
+    d = ImageDraw.Draw(white)
+    for yy in range(ss):
+        for xx in range(ss):
+            if px[xx, yy] > 0:
+                d.point((xx, yy), fill=(255, 255, 255, 255))
+    return white.resize((size, size), Image.LANCZOS)
 
 
 def write_icns(images: list[Image.Image], path: Path) -> None:
-    """手写 Apple ICNS 宯器（无需系统 iconutil，跨平台可复现）。"""
+    """手写 Apple ICNS 容器（无需系统 iconutil，跨平台可复现）。"""
     entries = []
     for im in images:
         size = im.size[0]
@@ -154,30 +172,32 @@ def write_ico(sizes: list[int], path: Path) -> None:
 
 
 def self_check(master: Image.Image, notif: Image.Image) -> None:
-    """生成后自检：深底存在、主体蓝覆盖、四角透明、通知图纯白。"""
+    """生成后自检：深底存在、主体蓝覆盖、四角透明、通知图纯白、glow 不贴边。"""
     px = master.load()
     w, h = master.size
     # 1) 四角透明（squircle 圆角外）
     for x, y in [(2, 2), (w - 3, 2), (2, h - 3), (w - 3, h - 3)]:
         if px[x, y][3] > 40:
             raise RuntimeError(f"自检失败：圆角外不透明 ({x},{y})")
-    # 2) 深底存在（采样远离主体带）
-    for x, y in [(w // 2, int(h * 0.02)), (int(w * 0.02), h // 2)]:
+    # 2) 深底存在（左右上角内侧远离主体处）
+    for x, y in [(int(w * 0.05), int(h * 0.30)), (int(w * 0.95), int(h * 0.10))]:
         r, g, b, al = px[x, y]
-        if abs(r - BG[0]) > 12 or abs(g - BG[1]) > 12 or abs(b - BG[2]) > 12 or al < 240:
+        if abs(r - BG[0]) > 14 or abs(g - BG[1]) > 14 or abs(b - BG[2]) > 14 or al < 240:
             raise RuntimeError(f"自检失败：底色异常 ({x},{y}) -> ({r},{g},{b},{al})")
-    # 3) 主体蓝存在（卫星球中心区域，归一化位置从形状数据推导）
-    ball = min(SHAPES, key=lambda s: s["area"])  # 最小部件 = 卫星球
-    bx = [p[0] for p in ball["pts"]]; by = [p[1] for p in ball["pts"]]
-    cx, cy = sum(bx) / len(bx), sum(by) / len(by)
-    m = PAD
-    span = 1 - 2 * PAD
-    span_y = span / CONTENT_AR
-    my = (1 - span_y) / 2
-    x, y = int((m + cx * span) * w), int((my + cy * span_y) * h)
-    r, g, b, al = px[x, y]
-    if abs(r - 57) > 25 or abs(g - 116) > 25 or abs(b - 247) > 25 or al < 240:
-        raise RuntimeError(f"自检失败：卫星球中心非主体蓝 ({x},{y}) -> ({r},{g},{b},{al})")
+    # 3) 主体蓝存在（环带实测绘于 512 图：r≈143..210，取中带 r=0.34w）
+    cx = cy = w / 2
+    rr = w * 0.34  # 环带中段（512 图实测 solid 峰区 143..251）
+    hits = 0
+    import math
+    for deg in range(0, 360, 30):
+        x = int(cx + rr * math.cos(math.radians(deg)))
+        y = int(cy + rr * math.sin(math.radians(deg)))
+        if 0 <= x < w and 0 <= y < h:
+            r, g, b, al = px[x, y]
+            if al > 200 and b - r > 60:
+                hits += 1
+    if hits < 6:
+        raise RuntimeError(f"自检失败：环带蓝色采样命中不足（{hits}/12）")
     # 4) 通知小图标：只允许白色与透明
     npx = notif.load()
     for x in range(0, notif.size[0], 2):
