@@ -409,11 +409,10 @@ const KanbanCard = memo(function KanbanCard({
         overlay && "cursor-grabbing",
       )}
     >
-      {/* 优先级条（卡片顶部 2px）：P1–P5 着色；未设优先级（P0）透明占位
-          保持卡片内容高度一致——隐藏口径与列表/移动端统一 */}
+      {/* 优先级条（卡片顶部 2px）：六档全显——P0「无」浅灰 #D1D5DB 也参与 */}
       <div
         className="mb-2 h-0.5 rounded-full"
-        style={{ background: PRIORITY_COLOR[task.priority] || "transparent" }}
+        style={{ background: PRIORITY_COLOR[task.priority] }}
       />
 
       {/* 标题行：完成勾 + 标题 + 星标 */}

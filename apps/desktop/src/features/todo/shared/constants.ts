@@ -15,8 +15,8 @@ import {
 /** 模块强调色（硬编码 #3B82F6，不走 cfg 动态读取 —— 04 §5.1 决策） */
 export const TODO_ACCENT = "#3B82F6";
 
-/** 优先级 0–5 语义色（index 空 = 无优先级不显示色点） */
-export const PRIORITY_COLOR = ["", "#6B7280", "#3B82F6", "#F59E0B", "#EF4444", "#DC2626"];
+/** 优先级 0–5 语义色（P0「无」浅灰 #D1D5DB——列表竖条/看板条/选择器/统计图全部同色） */
+export const PRIORITY_COLOR = ["#D1D5DB", "#6B7280", "#3B82F6", "#F59E0B", "#EF4444", "#DC2626"];
 
 /** 优先级 0–5 中文档位（多选批量工具条 / 右键菜单共用口径） */
 export const PRIORITY_LABELS = ["无", "低", "中", "高", "紧急", "立即处理"];

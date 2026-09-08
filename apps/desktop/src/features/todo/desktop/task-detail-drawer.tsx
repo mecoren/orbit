@@ -365,7 +365,7 @@ function PropertyGrid({
                   task.priority === i && "bg-accent font-medium")}
                 onClick={() => void onPatch({ priority: i })}
               >
-                <span className="size-2 rounded-full" style={{ background: i === 0 ? "#D1D5DB" : PRIORITY_COLOR[i] }} />
+                <span className="size-2 rounded-full" style={{ background: PRIORITY_COLOR[i] }} />
                 {label}
               </button>
             ))}

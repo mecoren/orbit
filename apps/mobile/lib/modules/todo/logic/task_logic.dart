@@ -299,14 +299,15 @@ bool isOverdue(TodoTask task) {
   return task.dueDate! < todayStart;
 }
 
-/// 优先级 0–5 语义色 hex（index 0 = 无优先级不显色点；docs/05 §2.2 priority 板）
+/// 优先级 0–5 语义色 hex（P0「无」浅灰 #D1D5DB——列表/日历/选择器/统计图全部同色；docs/05 §2.2 priority 板）
 String priorityColorHex(int priority) => switch (priority) {
+      0 => '#D1D5DB',
       1 => '#6B7280',
       2 => '#3B82F6',
       3 => '#F59E0B',
       4 => '#EF4444',
       5 => '#DC2626',
-      _ => '',
+      _ => '#D1D5DB',
     };
 
 /// 优先级 0–5 文案（P0 显"无"）

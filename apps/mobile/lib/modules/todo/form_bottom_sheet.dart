@@ -892,7 +892,7 @@ class _QuickCapsule extends StatelessWidget {
   }
 }
 
-/// 优先级色点（32px 圆；P0 无色用灰描边占位，选中 3px accent 环）
+/// 优先级色点（32px 圆，六档全显——P0「无」浅灰实心点；选中 3px accent 环）
 class _PriorityDot extends StatelessWidget {
   const _PriorityDot({
     required this.index,
@@ -906,8 +906,6 @@ class _PriorityDot extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = AppColors.ofContext(context);
-    final hex = priorityColorHex(index);
     return Tooltip(
       message: 'P$index ${priorityLabel(index)}',
       child: GestureDetector(
@@ -917,20 +915,14 @@ class _PriorityDot extends StatelessWidget {
           height: 32,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            color: hex.isEmpty ? Colors.transparent : hexToColor(hex),
+            color: hexToColor(priorityColorHex(index)),
             border: Border.all(
               width: selected ? 3 : 1,
               color: selected
                   ? OrbitAccents.themeAccent
-                  : hex.isEmpty
-                      ? colors.divider.withValues(alpha: 0.6)
-                      : Colors.transparent,
+                  : Colors.transparent,
             ),
           ),
-          child: hex.isEmpty
-              ? Icon(Icons.block_rounded,
-                  size: AppDimens.iconSizeSm, color: colors.secondaryText)
-              : null,
         ),
       ),
     );

@@ -309,7 +309,7 @@ export function QuickAddBar({ projects, defaultProjectId }: QuickAddBarProps) {
                       variant="ghost"
                       size="icon"
                       className="h-7 w-7"
-                      style={{ color: PRIORITY_COLOR[parsed.priority || priority] || undefined }}
+                      style={{ color: PRIORITY_COLOR[parsed.priority || priority] }}
                     >
                       <Flag className="size-4" />
                     </Button>
@@ -335,7 +335,7 @@ export function QuickAddBar({ projects, defaultProjectId }: QuickAddBarProps) {
                   >
                     <span
                       className="size-2 rounded-full"
-                      style={{ background: i === 0 ? "#D1D5DB" : PRIORITY_COLOR[i] }}
+                      style={{ background: PRIORITY_COLOR[i] }}
                     />
                     {label}
                   </button>

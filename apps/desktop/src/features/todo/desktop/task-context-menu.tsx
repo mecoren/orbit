@@ -225,14 +225,12 @@ export function TaskContextMenu({
                     className={cn(task.priority === lv && "font-medium text-accent-foreground")}
                     onSelect={() => { close(); void patch({ priority: lv }); }}
                   >
-                    {/* 固定 16px 前缀槽：无优先级留空也占位，保证各行文字对齐 */}
+                    {/* 16px 前缀槽 + 色点（含 P0「无」浅灰点），保证各行文字对齐 */}
                     <span className="flex w-4 shrink-0 items-center justify-center">
-                      {lv > 0 && (
-                        <span
-                          className="h-2 w-2 rounded-full"
-                          style={{ backgroundColor: PRIORITY_COLOR[lv] }}
-                        />
-                      )}
+                      <span
+                        className="h-2 w-2 rounded-full"
+                        style={{ backgroundColor: PRIORITY_COLOR[lv] }}
+                      />
                     </span>
                     {label}
                   </DropdownMenuItem>

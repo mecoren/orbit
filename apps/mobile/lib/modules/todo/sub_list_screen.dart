@@ -310,9 +310,6 @@ class TodoTaskTile extends StatelessWidget {
     final colors = AppColors.ofContext(context);
     final priorityHex = priorityColorHex(task.priority);
     final overdue = isOverdue(task);
-    final hasSubtitle = priorityHex.isNotEmpty ||
-        (projectTitle != null && task.projectId != null) ||
-        task.dueDate != null;
 
     return Slidable(
       // 每行独立 key，避免虚拟化复用时动作面板串行
@@ -387,24 +384,23 @@ class TodoTaskTile extends StatelessWidget {
                               task.isDone ? TextDecoration.lineThrough : null,
                         ),
                       ),
-                      if (hasSubtitle)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 2),
-                          child: Wrap(
+                      // 副标题恒渲染：优先级色点六档全显（P0「无」浅灰也参与）
+                      Padding(
+                        padding: const EdgeInsets.only(top: 2),
+                        child: Wrap(
                             spacing: AppDimens.space4,
                             runSpacing: 2,
                             crossAxisAlignment: WrapCrossAlignment.center,
                             children: [
-                              // 8px 优先级色点
-                              if (priorityHex.isNotEmpty)
-                                Container(
-                                  width: 8,
-                                  height: 8,
-                                  decoration: BoxDecoration(
-                                    shape: BoxShape.circle,
-                                    color: hexToColor(priorityHex),
-                                  ),
+                              // 8px 优先级色点（六档全显，含 P0 浅灰）
+                              Container(
+                                width: 8,
+                                height: 8,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: hexToColor(priorityHex),
                                 ),
+                              ),
                               if (projectTitle != null &&
                                   task.projectId != null)
                                 Text(

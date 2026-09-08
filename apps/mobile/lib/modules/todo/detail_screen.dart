@@ -425,15 +425,13 @@ class _InfoSection extends ConsumerWidget {
             onClick: () => showSelectBottomSheet<int>(
               context,
               title: '优先级',
-              // 六档 P0–P5；P0「无」用灰点（桌面同款）
+              // 六档 P0–P5 全带色点（P0「无」浅灰 #D1D5DB，与列表/日历同源）
               items: [
                 for (var i = 0; i <= 5; i++)
                   SelectItem(
                     value: i,
                     label: priorityLabel(i),
-                    colorDot: hexToColor(priorityColorHex(i).isEmpty
-                        ? '#D1D5DB'
-                        : priorityColorHex(i)),
+                    colorDot: hexToColor(priorityColorHex(i)),
                   ),
               ],
               current: detail.priority,

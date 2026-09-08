@@ -305,7 +305,7 @@ export function StatsPanel() {
                   done={r.done_count}
                   pending={r.pending_count}
                   max={maxPriority}
-                  color={PRIORITY_COLOR[r.priority] || PRIORITY_COLOR[1]}
+                  color={PRIORITY_COLOR[r.priority] || PRIORITY_COLOR[0]}
                 />
               ))}
             </div>

@@ -87,12 +87,7 @@ class _StatsScreenState extends ConsumerState<StatsScreen> {
                               _priorityLabel(r.priority),
                               r.doneCount,
                               r.pendingCount,
-                              hexToColor(
-                                priorityColorHex(r.priority).isEmpty
-                                    ? '#D1D5DB'
-                                    : priorityColorHex(r.priority),
-                                fallback: const Color(0xFFD1D5DB),
-                              ),
+                              hexToColor(priorityColorHex(r.priority)),
                             ),
                         ],
                       ),
@@ -151,7 +146,7 @@ class _StatsScreenState extends ConsumerState<StatsScreen> {
   }
 
   static String _priorityLabel(int p) {
-    const labels = ['无', '低', '中', '高', '紧急'];
+    const labels = ['无', '低', '中', '高', '紧急', '立即处理'];
     return p >= 0 && p < labels.length ? labels[p] : 'P$p';
   }
 

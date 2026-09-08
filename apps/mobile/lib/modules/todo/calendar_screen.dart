@@ -372,12 +372,8 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
     );
   }
 
-  /// 任务优先级色（圆点用；空优先级用半透明灰）
-  Color _priorityColor(TodoTask t) {
-    final hex = priorityColorHex(t.priority);
-    if (hex.isEmpty) return Colors.grey.withValues(alpha: 0.4);
-    return hexToColor(hex);
-  }
+  /// 任务优先级色（圆点用；P0「无」浅灰 #D1D5DB，六档全显）
+  Color _priorityColor(TodoTask t) => hexToColor(priorityColorHex(t.priority));
 }
 
 /// 下方列表的按日分组块（对齐桌面右栏 DayGroupBlock）：
@@ -536,9 +532,7 @@ class _TaskCard extends StatelessWidget {
               width: 8,
               height: 8,
               decoration: BoxDecoration(
-                color: hex.isEmpty
-                    ? colors.secondaryText.withValues(alpha: 0.4)
-                    : hexToColor(hex),
+                color: hexToColor(hex),
                 shape: BoxShape.circle,
               ),
             ),

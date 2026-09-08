@@ -453,9 +453,9 @@ export function TaskListView({ tasks, projects, labelsByTask, loading, error, on
             <DropdownMenuContent align="center">
               {PRIORITY_LABELS.map((label, lv) => (
                 <DropdownMenuItem key={lv} onSelect={() => void runBatch("设置优先级", (sel) => batchUpdatePriority(sel, lv))}>
-                  {/* 固定 16px 前缀槽：无优先级留空也占位，保证各行文字对齐（与右键菜单同款式） */}
+                  {/* 16px 前缀槽 + 色点（含 P0「无」浅灰点），各行文字对齐（与右键菜单同款式） */}
                   <span className="flex w-4 shrink-0 items-center justify-center">
-                    {lv > 0 && <span className="h-2 w-2 rounded-full" style={{ backgroundColor: PRIORITY_COLOR[lv] }} />}
+                    <span className="h-2 w-2 rounded-full" style={{ backgroundColor: PRIORITY_COLOR[lv] }} />
                   </span>
                   {label}
                 </DropdownMenuItem>
@@ -682,16 +682,13 @@ function TaskRow({
         onFocusMove(dir);
       }}
     >
-      {/* 优先级左缘竖条（与日历右栏任务行同形制）：P1–P5 着色，
-          未设优先级（P0）不渲染——与移动端列表/详情抽屉口径一致，
-          灰条不携带信息只会制造噪音 */}
-      {t.priority > 0 && (
-        <span
-          aria-hidden
-          className="pointer-events-none absolute inset-y-1.5 left-0 w-1 rounded-full"
-          style={{ background: PRIORITY_COLOR[t.priority] }}
-        />
-      )}
+      {/* 优先级左缘竖条（与日历右栏任务行同形制）：六档全显——
+          P0「无」浅灰 #D1D5DB 也参与，选择有颜色、列表可见颜色一致 */}
+      <span
+        aria-hidden
+        className="pointer-events-none absolute inset-y-1.5 left-0 w-1 rounded-full"
+        style={{ background: PRIORITY_COLOR[t.priority] }}
+      />
 
       {/* 多选勾选框（P2#17）：hover 或已有选中时显现；
           shift 点击 = 以最近一次勾选为锚做区间选择 */}

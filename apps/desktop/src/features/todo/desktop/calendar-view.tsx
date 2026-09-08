@@ -390,11 +390,9 @@ export function CalendarView({
               dayChips={(date) => {
                 const dayTasks = byDay.get(formatYmd(date)) ?? [];
                 if (dayTasks.length === 0) return null;
-                // 优先级圆点仅 P1–P5 着色；P0 灰点不携带信息，行/卡/点统一隐藏口径
-                const prioTasks = dayTasks.filter((t) => t.priority > 0);
-                if (prioTasks.length === 0) return null;
-                const visibleDots = prioTasks.slice(0, 4);
-                const overflow = prioTasks.length - visibleDots.length;
+                // 优先级圆点六档全显（含 P0「无」浅灰）；最多 4 点 + 溢出计数
+                const visibleDots = dayTasks.slice(0, 4);
+                const overflow = dayTasks.length - visibleDots.length;
                 return (
                   <span className="flex w-full flex-wrap items-center justify-center gap-1 px-0.5">
                     {visibleDots.map((t) => (
@@ -865,15 +863,12 @@ const CalendarTaskRow = memo(function CalendarTaskRow({
         }
       }}
     >
-      {/* 优先级左缘竖条：P1–P5 着色；未设优先级（P0）不渲染，
-          与列表行/看板卡口径统一（灰色兜底不携带信息） */}
-      {t.priority > 0 && (
-        <span
-          aria-hidden
-          className="absolute inset-y-1 left-0 w-1 rounded-full"
-          style={{ background: PRIORITY_COLOR[t.priority] }}
-        />
-      )}
+      {/* 优先级左缘竖条：六档全显（含 P0「无」浅灰），与列表行/看板卡口径统一 */}
+      <span
+        aria-hidden
+        className="absolute inset-y-1 left-0 w-1 rounded-full"
+        style={{ background: PRIORITY_COLOR[t.priority] }}
+      />
       <div className="flex min-w-0 flex-1 flex-col justify-center">
         <div
           className={cn(

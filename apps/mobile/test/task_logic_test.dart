@@ -228,8 +228,8 @@ void main() {
       expect(isOverdue(_task(id: 1, dueDate: todayStart + day)), isFalse);
     });
 
-    test('priorityColor 六档映射，P0 无色', () {
-      expect(priorityColorHex(0), isEmpty);
+    test('priorityColor 六档映射，P0「无」浅灰也有色', () {
+      expect(priorityColorHex(0), '#D1D5DB');
       expect(priorityColorHex(1), '#6B7280');
       expect(priorityColorHex(2), '#3B82F6');
       expect(priorityColorHex(3), '#F59E0B');
