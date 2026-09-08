@@ -9,6 +9,7 @@ import { useEffect, useState } from "react";
 import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import {
+  Copy,
   AlignLeft,
   Bell,
   Calendar,
@@ -59,6 +60,7 @@ import { ConfirmPopover } from "../shared/confirm-popover";
 import { REPEAT_MODE, REPEAT_PRESETS, WEEKDAY_CHIPS, repeatLabel } from "../shared/repeat";
 import { completeTask } from "@/features/todo/shared/task-actions";
 import {
+  todoTaskDuplicate,
   globalSearch,
   taskAttachmentAdd,
   taskAttachmentRemove,
@@ -285,6 +287,22 @@ function TitleRow({
         onClick={() => void onPatch({ is_favorite: task.is_favorite ? 0 : 1 })}
       >
         <Star size={16} fill={task.is_favorite ? "currentColor" : "none"} />
+      </Button>
+      <Button variant="ghost" size="icon" className="h-8 w-8" aria-label="复制任务"
+        title="复制任务（克隆字段与子任务）"
+        onClick={() => {
+          void (async () => {
+            try {
+              const copy = await todoTaskDuplicate(task.id);
+              toast.success(`已复制为「${copy.title}」`);
+              setSelectedTaskId(copy.id);
+            } catch (e) {
+              toast.error(`复制失败：${e}`);
+            }
+          })();
+        }}
+      >
+        <Copy size={16} />
       </Button>
       <Button variant="ghost" size="icon" className="text-destructive h-8 w-8" aria-label="删除"
         onClick={() => setConfirmDelete(true)}

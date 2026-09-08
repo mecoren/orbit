@@ -60,6 +60,17 @@ pub async fn todo_tasks_complete(
         .map_err(|e| e.to_string())
 }
 
+/// 一键复制任务（#37 小而美批次：克隆字段+子任务，完成态/社交字段重置）
+#[tauri::command]
+pub async fn todo_tasks_duplicate(
+    state: State<'_, AppState>,
+    id: i64,
+) -> Result<TodoTask, String> {
+    todo_api::duplicate_todo_task(&state.pool, id)
+        .await
+        .map_err(|e| e.to_string())
+}
+
 /// 更新项目排序位置（拖拽排序）
 #[tauri::command]
 pub async fn todo_projects_update_sort_order(

@@ -11,6 +11,7 @@ import { useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import {
+  Copy,
   Calendar,
   Check,
   Clock,
@@ -59,6 +60,7 @@ import {
 import { ContextMenuBase } from "./context-menu";
 import { hideFromQueries, useUndoableDeleteAction } from "@/hooks/use-undoable-delete";
 import {
+  todoTaskDuplicate,
   todoCommentCreate,
   todoLabelList,
   todoReminderCreate,
@@ -210,6 +212,23 @@ export function TaskContextMenu({
                 style={{ color: inMyDay ? "#F59E0B" : undefined }}
               />
               {inMyDay ? "移出我的一天" : "加入我的一天"}
+            </DropdownMenuItem>
+
+            <DropdownMenuItem
+              onSelect={() => {
+                close();
+                void (async () => {
+                  try {
+                    const copy = await todoTaskDuplicate(task.id);
+                    toast.success(`已复制为「${copy.title}」`);
+                  } catch (e) {
+                    toast.error(`复制失败：${e}`);
+                  }
+                })();
+              }}
+            >
+              <Copy size={14} />
+              复制任务
             </DropdownMenuItem>
 
             <DropdownMenuSeparator />

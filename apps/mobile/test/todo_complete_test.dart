@@ -139,6 +139,38 @@ void main() {
           reason: '次数耗尽后序列终结');
     });
 
+    test('#37 复制：克隆字段+子任务标题，完成态与社交字段重置', () async {
+      final bridge = MockOrbitBridge();
+      final src = await bridge.todoTaskCreate(TodoTaskCreateInput(
+        title: '周报模板',
+        description: '模板内容',
+        priority: 3,
+        dueDate: DateTime(2026, 9, 10).millisecondsSinceEpoch,
+        repeatMode: 1,
+        repeatAfter: 1,
+        isFavorite: 1,
+      ));
+      await bridge.todoSubtaskCreate(
+          TodoSubtaskCreateInput(taskId: src.id, title: '步骤一'));
+      // 已完成再复制（验证完成态重置）
+      await bridge.todoTaskComplete(src.id);
+
+      final copy = await bridge.todoTaskDuplicate(src.id);
+      expect(copy.title, '周报模板（副本）');
+      expect(copy.description, '模板内容');
+      expect(copy.priority, 3);
+      expect(copy.dueDate, src.dueDate);
+      expect(copy.repeatMode, 1);
+      expect(copy.isStarred, isTrue);
+      expect(copy.isDone, isFalse, reason: '新实例完成态必须重置');
+
+      final subs = await bridge.todoSubtaskList(const ListFilter());
+      final copySubs = subs.where((s) => s.taskId == copy.id).toList();
+      expect(copySubs.length, 1);
+      expect(copySubs.first.title, '步骤一');
+      expect(copySubs.first.done, 0);
+    });
+
     test('星期几掩码字段随克隆保留', () async {
       final bridge = MockOrbitBridge();
       final due = DateTime(2026, 9, 1).millisecondsSinceEpoch; // 周二

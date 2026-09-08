@@ -205,6 +205,11 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
           onTap: () => _toggleFavorite(task),
         ),
         MoreActionItem(
+          icon: Icons.copy_rounded,
+          label: '复制任务',
+          onTap: () => _duplicateTask(task),
+        ),
+        MoreActionItem(
           icon: Icons.delete_outline_rounded,
           label: '删除',
           color: OrbitAccents.overdueRed,
@@ -212,6 +217,16 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
         ),
       ],
     );
+  }
+
+  // #37 复制任务：克隆后 toast + 刷新
+  Future<void> _duplicateTask(TodoTask task) async {
+    try {
+      final copy = await ref.read(orbitBridgeProvider).todoTaskDuplicate(task.id);
+      if (mounted) WaitToast.success('已复制为「${copy.title}」');
+    } catch (_) {
+      if (mounted) WaitToast.destructive('复制失败');
+    }
   }
 
   @override

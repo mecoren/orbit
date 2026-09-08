@@ -167,6 +167,9 @@ abstract class OrbitBridge {
   /// （引擎下沉 orbit-core，与桌面同一 Rust 入口；返回完成后的任务）
   Future<TodoTask> todoTaskComplete(int id);
 
+  /// 一键复制任务（#37：克隆字段+子任务，副本标题后缀）
+  Future<TodoTask> todoTaskDuplicate(int id);
+
   /// 详情聚合：任务 + 子任务 + 标签 + 评论 + 关联 + 提醒
   Future<TodoTaskDetail> todoTaskGetDetail(int id);
 

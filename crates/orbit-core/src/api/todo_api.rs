@@ -1278,3 +1278,162 @@ mod repeat_tests {
         assert_eq!(input.title, "");
     }
 }
+
+// ============================================================================
+// 任务一键复制（#37 小而美批次；Vikunja Duplicate / SP+Focalboard Ctrl+D 同款）
+// ============================================================================
+
+/// 复制任务：克隆标题/描述/项目/优先级/状态/截止/开始/收藏/重复规则/子任务（标题+顺序，完成态重置）；
+/// 不复制提醒/标签/评论/关联/My Day（新实例是独立内容，社交性字段不带走）。
+/// 新 position 追加到原任务之后（同项目内紧邻原任务的复制体可感知）。
+pub async fn duplicate_todo_task(pool: &SqlitePool, id: i64) -> CoreResult<TodoTask> {
+    let src: TodoTask = generic_repo::get_by_id(pool, "todo_tasks", id).await?;
+    let subtasks: Vec<TodoSubtask> = sqlx::query_as(
+        "SELECT * FROM todo_subtasks WHERE task_id = ? AND is_deleted = 0 ORDER BY position, id",
+    )
+    .bind(id)
+    .fetch_all(pool)
+    .await?;
+
+    let now = chrono::Utc::now().timestamp_millis();
+    let new_uuid = uuid::Uuid::new_v4().to_string();
+    // position 落在原任务后 +1（列表手动排序下复制体紧邻原任务）
+    let new_position = src.position + 1.0;
+
+    let mut tx = pool.begin().await?;
+    let created: TodoTask = sqlx::query_as(
+        "INSERT INTO todo_tasks (
+            uuid, title, description, project_id, priority, status, done, done_at,
+            due_date, start_date, repeat_after, repeat_mode,
+            repeat_weekdays, repeat_end_type, repeat_end_param, repeat_from_done,
+            percent_done, position, is_favorite, my_day_date,
+            is_deleted, created_at, updated_at, version
+        ) VALUES (?, ?, ?, ?, ?, 'pending', 0, NULL, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, NULL, 0, ?, ?, 1)
+        RETURNING *",
+    )
+    .bind(&new_uuid)
+    .bind(format!("{}（副本）", src.title))
+    .bind(src.description.as_deref())
+    .bind(src.project_id)
+    .bind(src.priority)
+    .bind(src.due_date)
+    .bind(src.start_date)
+    .bind(src.repeat_after)
+    .bind(src.repeat_mode)
+    .bind(src.repeat_weekdays)
+    .bind(src.repeat_end_type)
+    .bind(src.repeat_end_param)
+    .bind(src.repeat_from_done)
+    .bind(new_position)
+    .bind(src.is_favorite)
+    .bind(now)
+    .bind(now)
+    .fetch_one(&mut *tx)
+    .await?;
+    for s in &subtasks {
+        let sub_uuid = uuid::Uuid::new_v4().to_string();
+        sqlx::query(
+            "INSERT INTO todo_subtasks (uuid, task_id, title, done, done_at, position, is_deleted, created_at, updated_at, version)
+             VALUES (?, ?, ?, 0, NULL, ?, 0, ?, ?, 1)",
+        )
+        .bind(&sub_uuid)
+        .bind(created.id)
+        .bind(&s.title)
+        .bind(s.position)
+        .bind(now)
+        .bind(now)
+        .execute(&mut *tx)
+        .await?;
+    }
+    tx.commit().await?;
+
+    emit_todo_event(
+        "todo_tasks",
+        created.id,
+        &created.uuid,
+        DbOp::Insert,
+        now,
+        "",
+    );
+    Ok(created)
+}
+
+#[cfg(test)]
+mod duplicate_tests {
+    use super::*;
+    use crate::api::business_api::{create_todo_subtask, create_todo_task};
+    use crate::models::business::{TodoSubtaskCreateInput, TodoTaskCreateInput};
+
+    async fn setup_db() -> SqlitePool {
+        let pool = sqlx::SqlitePool::connect("sqlite::memory:").await.unwrap();
+        sqlx::migrate!("./src/db/migrations")
+            .run(&pool)
+            .await
+            .unwrap();
+        pool
+    }
+
+    #[tokio::test]
+    async fn duplicate_clones_fields_and_subtasks_resets_done() {
+        let pool = setup_db().await;
+        let src = create_todo_task(
+            &pool,
+            &TodoTaskCreateInput {
+                title: "周报".into(),
+                description: Some("模板内容".into()),
+                project_id: None,
+                priority: Some(3),
+                status: None,
+                done: None,
+                done_at: None,
+                due_date: Some(1_800_000_000_000),
+                start_date: None,
+                repeat_after: Some(1),
+                repeat_mode: Some(1),
+                repeat_weekdays: None,
+                repeat_end_type: None,
+                repeat_end_param: None,
+                repeat_from_done: None,
+                position: None,
+                is_favorite: Some(1),
+                my_day_date: None,
+            },
+        )
+        .await
+        .unwrap();
+        create_todo_subtask(
+            &pool,
+            &TodoSubtaskCreateInput {
+                task_id: src.id,
+                title: "步骤一".into(),
+                position: None,
+            },
+        )
+        .await
+        .unwrap();
+
+        let copy = duplicate_todo_task(&pool, src.id).await.unwrap();
+        // 标题加副本后缀；其余内容字段克隆
+        assert_eq!(copy.title, "周报（副本）");
+        assert_eq!(copy.description.as_deref(), Some("模板内容"));
+        assert_eq!(copy.priority, 3);
+        assert_eq!(copy.due_date, src.due_date);
+        assert_eq!(copy.repeat_mode, 1);
+        assert_eq!(copy.is_favorite, 1);
+        // 新实例未完成、独立 uuid、position 紧邻原任务
+        assert_eq!(copy.done, 0);
+        assert_ne!(copy.uuid, src.uuid);
+        assert!((copy.position - src.position - 1.0).abs() < 1e-9);
+
+        // 子任务复制标题（完成态重置；新 task_id）
+        let subs: Vec<TodoSubtask> =
+            sqlx::query_as("SELECT * FROM todo_subtasks WHERE task_id = ? AND is_deleted = 0")
+                .bind(copy.id)
+                .fetch_all(&pool)
+                .await
+                .unwrap();
+        assert_eq!(subs.len(), 1);
+        assert_eq!(subs[0].title, "步骤一");
+        assert_eq!(subs[0].done, 0);
+    }
+}

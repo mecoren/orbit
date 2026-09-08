@@ -844,6 +844,10 @@ export interface StatsAggregate {
 export const statsAggregate = (days?: number) =>
   invoke<StatsAggregate>("stats_aggregate", { days });
 
+/** 一键复制任务（#37：克隆字段+子任务，副本标题后缀） */
+export const todoTaskDuplicate = (id: number) =>
+  invoke<TodoTask>("todo_tasks_duplicate", { id });
+
 // ========== task_attachments（任务附件：07 排查报告后续批次）==========
 export interface TaskAttachmentView {
   link_id: number;

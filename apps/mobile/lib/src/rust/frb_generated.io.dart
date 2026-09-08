@@ -10,6 +10,7 @@ import 'api/dto.dart';
 import 'api/events.dart';
 import 'api/holiday.dart';
 import 'api/plaintext_export.dart';
+import 'api/saved_filter.dart';
 import 'api/search.dart';
 import 'api/state.dart';
 import 'api/stats.dart';
@@ -89,6 +90,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   TodoReminderCreateInput dco_decode_box_autoadd_todo_reminder_create_input(
     dynamic raw,
   );
+
+  @protected
+  TodoSavedFilterCreateInput
+  dco_decode_box_autoadd_todo_saved_filter_create_input(dynamic raw);
+
+  @protected
+  TodoSavedFilterUpdateInput
+  dco_decode_box_autoadd_todo_saved_filter_update_input(dynamic raw);
 
   @protected
   TodoSubtaskCreateInput dco_decode_box_autoadd_todo_subtask_create_input(
@@ -206,6 +215,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<TodoReminder> dco_decode_list_todo_reminder(dynamic raw);
 
   @protected
+  List<TodoSavedFilter> dco_decode_list_todo_saved_filter(dynamic raw);
+
+  @protected
   List<TodoSubtask> dco_decode_list_todo_subtask(dynamic raw);
 
   @protected
@@ -312,6 +324,19 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   TodoReminderCreateInput dco_decode_todo_reminder_create_input(dynamic raw);
+
+  @protected
+  TodoSavedFilter dco_decode_todo_saved_filter(dynamic raw);
+
+  @protected
+  TodoSavedFilterCreateInput dco_decode_todo_saved_filter_create_input(
+    dynamic raw,
+  );
+
+  @protected
+  TodoSavedFilterUpdateInput dco_decode_todo_saved_filter_update_input(
+    dynamic raw,
+  );
 
   @protected
   TodoSubtask dco_decode_todo_subtask(dynamic raw);
@@ -424,6 +449,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   TodoReminderCreateInput sse_decode_box_autoadd_todo_reminder_create_input(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  TodoSavedFilterCreateInput
+  sse_decode_box_autoadd_todo_saved_filter_create_input(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  TodoSavedFilterUpdateInput
+  sse_decode_box_autoadd_todo_saved_filter_update_input(
     SseDeserializer deserializer,
   );
 
@@ -571,6 +608,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  List<TodoSavedFilter> sse_decode_list_todo_saved_filter(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   List<TodoSubtask> sse_decode_list_todo_subtask(SseDeserializer deserializer);
 
   @protected
@@ -693,6 +735,19 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   TodoReminderCreateInput sse_decode_todo_reminder_create_input(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  TodoSavedFilter sse_decode_todo_saved_filter(SseDeserializer deserializer);
+
+  @protected
+  TodoSavedFilterCreateInput sse_decode_todo_saved_filter_create_input(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  TodoSavedFilterUpdateInput sse_decode_todo_saved_filter_update_input(
     SseDeserializer deserializer,
   );
 
@@ -830,6 +885,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_box_autoadd_todo_reminder_create_input(
     TodoReminderCreateInput self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_box_autoadd_todo_saved_filter_create_input(
+    TodoSavedFilterCreateInput self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_box_autoadd_todo_saved_filter_update_input(
+    TodoSavedFilterUpdateInput self,
     SseSerializer serializer,
   );
 
@@ -1020,6 +1087,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_list_todo_saved_filter(
+    List<TodoSavedFilter> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_list_todo_subtask(
     List<TodoSubtask> self,
     SseSerializer serializer,
@@ -1190,6 +1263,24 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_todo_reminder_create_input(
     TodoReminderCreateInput self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_todo_saved_filter(
+    TodoSavedFilter self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_todo_saved_filter_create_input(
+    TodoSavedFilterCreateInput self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_todo_saved_filter_update_input(
+    TodoSavedFilterUpdateInput self,
     SseSerializer serializer,
   );
 

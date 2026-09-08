@@ -184,6 +184,7 @@ class MockOrbitBridge implements OrbitBridge {
         return TodoTask.fromJson(t);
       });
 
+
   @override
   Future<TodoTask> todoTaskComplete(int id) => _delay(() {
         // 对齐 Rust complete_todo_task：普通任务标记完成；重复任务
@@ -284,6 +285,58 @@ class MockOrbitBridge implements OrbitBridge {
       });
 
   @override
+  Future<TodoTask> todoTaskDuplicate(int id) => _delay(() {
+        final t = store.tasks[id] ?? _notFound('task $id');
+        final now = store.now();
+        final copy = {
+          ...store.newEntity('t'),
+          'title': '${t['title']}（副本）',
+          'description': t['description'],
+          'project_id': t['project_id'],
+          'priority': t['priority'],
+          'status': 'pending',
+          'done': 0,
+          'done_at': null,
+          'due_date': t['due_date'],
+          'start_date': t['start_date'],
+          'repeat_after': t['repeat_after'],
+          'repeat_mode': t['repeat_mode'],
+          'repeat_weekdays': t['repeat_weekdays'],
+          'repeat_end_type': t['repeat_end_type'],
+          'repeat_end_param': t['repeat_end_param'],
+          'repeat_from_done': t['repeat_from_done'],
+          'percent_done': 0,
+          'position': (t['position'] as num) + 1.0,
+          'is_favorite': t['is_favorite'],
+          'my_day_date': null,
+          'is_deleted': 0,
+          'created_at': now,
+          'updated_at': now,
+          'deleted_at': null,
+          'version': 1,
+        };
+        store.tasks[copy['id'] as int] = copy;
+        // 子任务复制标题（完成态重置）
+        for (final s in store.subtasksOf(id)) {
+          store.subtasks[store.id] = {
+            ...store.newEntity('s'),
+            'task_id': copy['id'],
+            'title': s['title'],
+            'done': 0,
+            'done_at': null,
+            'position': s['position'],
+            'is_deleted': 0,
+            'created_at': now,
+            'updated_at': now,
+            'deleted_at': null,
+            'version': 1,
+          };
+        }
+        _emit('todo_tasks');
+        return TodoTask.fromJson(copy);
+      });
+
+@override
   Future<void> todoTaskDelete(int id) => _delay(() {
         // 对齐 Rust 软删语义：墓碑行留在库中（回收站可见），不物理删除
         final t = store.tasks[id] ?? _notFound('task $id');

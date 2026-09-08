@@ -6,7 +6,7 @@
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`
 
 /// 统一完成命令结果（镜像 orbit_core::api::todo_api::CompleteTaskResult；
 /// 引擎下沉三端唯一完成入口：普通标记 / 重复任务单事务推进下一实例）
@@ -629,6 +629,91 @@ class TodoReminderCreateInput {
           runtimeType == other.runtimeType &&
           taskId == other.taskId &&
           remindAt == other.remindAt;
+}
+
+class TodoSavedFilter {
+  final PlatformInt64 id;
+  final String uuid;
+  final String name;
+
+  /// 条件 JSON：{status?, priority_min?, project_ids?, label_ids?, due_within_days?, due_overdue?, favorite_only?}
+  final String conditions;
+  final PlatformInt64 sortOrder;
+
+  const TodoSavedFilter({
+    required this.id,
+    required this.uuid,
+    required this.name,
+    required this.conditions,
+    required this.sortOrder,
+  });
+
+  @override
+  int get hashCode =>
+      id.hashCode ^
+      uuid.hashCode ^
+      name.hashCode ^
+      conditions.hashCode ^
+      sortOrder.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is TodoSavedFilter &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          uuid == other.uuid &&
+          name == other.name &&
+          conditions == other.conditions &&
+          sortOrder == other.sortOrder;
+}
+
+class TodoSavedFilterCreateInput {
+  final String name;
+  final String conditions;
+  final PlatformInt64? sortOrder;
+
+  const TodoSavedFilterCreateInput({
+    required this.name,
+    required this.conditions,
+    this.sortOrder,
+  });
+
+  @override
+  int get hashCode => name.hashCode ^ conditions.hashCode ^ sortOrder.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is TodoSavedFilterCreateInput &&
+          runtimeType == other.runtimeType &&
+          name == other.name &&
+          conditions == other.conditions &&
+          sortOrder == other.sortOrder;
+}
+
+class TodoSavedFilterUpdateInput {
+  final String? name;
+  final String? conditions;
+  final PlatformInt64? sortOrder;
+
+  const TodoSavedFilterUpdateInput({
+    this.name,
+    this.conditions,
+    this.sortOrder,
+  });
+
+  @override
+  int get hashCode => name.hashCode ^ conditions.hashCode ^ sortOrder.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is TodoSavedFilterUpdateInput &&
+          runtimeType == other.runtimeType &&
+          name == other.name &&
+          conditions == other.conditions &&
+          sortOrder == other.sortOrder;
 }
 
 /// 子任务（镜像 orbit_core::models::business::TodoSubtask）

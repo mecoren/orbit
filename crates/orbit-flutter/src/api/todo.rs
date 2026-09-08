@@ -177,6 +177,17 @@ pub async fn todo_tasks_complete(id: i64) -> Result<CompleteTaskResult, String> 
         .map(CompleteTaskResult::from)
 }
 
+/// 一键复制任务（#37 小而美批次；对应桌面 todo_cmd::todo_tasks_duplicate）——
+/// 克隆字段+子任务（标题+顺序），完成态/提醒/标签/评论/关联/My Day 重置，
+/// position 紧邻原任务，标题「（副本）」后缀
+pub async fn todo_tasks_duplicate(id: i64) -> Result<super::dto::TodoTask, String> {
+    let pool = pool()?;
+    todo_api::duplicate_todo_task(&pool, id)
+        .await
+        .map_err(|e| e.to_string())
+        .map(super::dto::TodoTask::from)
+}
+
 /// 任务详情聚合（含子任务/标签/评论/关系/提醒，对应桌面 todo_cmd::todo_tasks_get_detail）
 pub async fn todo_tasks_get_detail(id: i64) -> Result<TodoTaskDetail, String> {
     let pool = pool()?;

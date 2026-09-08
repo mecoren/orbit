@@ -154,6 +154,10 @@ class RustOrbitBridge implements OrbitBridge {
       _mapTask((await gen_todo.todoTasksComplete(id: id)).task);
 
   @override
+  Future<TodoTask> todoTaskDuplicate(int id) async =>
+      _mapTask(await gen_todo.todoTasksDuplicate(id: id));
+
+  @override
   Future<void> todoTaskDelete(int id) => gen_todo.todoTasksDelete(id: id);
 
   @override

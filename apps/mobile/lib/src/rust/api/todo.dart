@@ -85,6 +85,12 @@ Future<void> todoTasksUpdatePosition({
 Future<CompleteTaskResult> todoTasksComplete({required PlatformInt64 id}) =>
     RustLib.instance.api.crateApiTodoTodoTasksComplete(id: id);
 
+/// 一键复制任务（#37 小而美批次；对应桌面 todo_cmd::todo_tasks_duplicate）——
+/// 克隆字段+子任务（标题+顺序），完成态/提醒/标签/评论/关联/My Day 重置，
+/// position 紧邻原任务，标题「（副本）」后缀
+Future<TodoTask> todoTasksDuplicate({required PlatformInt64 id}) =>
+    RustLib.instance.api.crateApiTodoTodoTasksDuplicate(id: id);
+
 /// 任务详情聚合（含子任务/标签/评论/关系/提醒，对应桌面 todo_cmd::todo_tasks_get_detail）
 Future<TodoTaskDetail> todoTasksGetDetail({required PlatformInt64 id}) =>
     RustLib.instance.api.crateApiTodoTodoTasksGetDetail(id: id);
