@@ -7,6 +7,12 @@
 
 ## [Unreleased]
 
+### 侧边栏导航失灵修复（回收站/统计面板下点其他菜单无反应）
+
+- **根因**：侧边栏快捷视图/项目/未分组的点击只改壳层 React state 不跳路由，而回收站/统计是嵌套路由面板（`/todo/trash`、`/todo/stats`）——路由停在这两处时中间区渲染的是 TrashPanel/StatsPanel，TaskPanel 未挂载，此时点侧边栏其他菜单 state 静默变化、URL 与界面毫无反应；必须点右上角「待办」（真 `navigate("/todo")`）重新挂载 TaskPanel 才能恢复。
+- **修复**：壳层三个选中回调（`onSelectQuickView/onSelectProject/onSelectUngrouped`）补 `selectInPanel` 兜底——当前路由非 `/todo` 时先 `navigate("/todo")` 再应用选中态；判定逻辑抽纯函数 `sidebar-nav.ts`（`needsTodoIndexNav`）。移动端无此问题（侧栏每项都是真实 `context.push` 路由跳转）。
+- **测试**：`sidebar-nav.test.ts` 5 用例锁口径；e2e 新增「导航回归」用例（回收站下点「我的一天」、统计下点「全部任务」应直接回任务面板且视图真正应用），stash 验证修复前真红、修复后绿；全量 e2e 7 用例通过。
+
 ### 优先级「无」档全程着色（P0 浅灰转正，六档全显）
 
 - **口径反转**：此前优先级「无」（P0）在多数展示位被隐藏或跳过渲染（列表左缘竖条不画、看板顶条透明占位、日历月格圆点被过滤、表单/右键菜单/批量工具条无色点），只有详情/快加选择器给了临时灰点。现 **P0 转正浅灰 `#D1D5DB`** 进正式色表，与「低」的 `#6B7280` 明度可区分；所有展示位与选择位六档全显，选择什么颜色、列表就见什么颜色。

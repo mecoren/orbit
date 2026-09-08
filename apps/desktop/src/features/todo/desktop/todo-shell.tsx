@@ -11,9 +11,12 @@
  * 详情抽屉、新建/编辑表单、撤销 Provider、标签管理器）与数据查询
  * （项目/任务全量，两端面板共用）；面板只管自己的中间区内容。
  * 选中态放壳层 → 从任务面板进回收站再返回，筛选状态原样保留。
+ * 选中入口（快捷视图/项目/未分组）点击只改壳层 state，仅 TaskPanel 消费；
+ * 停在 trash/stats 子面板时点击须先导航回 /todo（selectInPanel 兜底，
+ * 2026-09-08 修复：此前 state 静默变化、界面无反应）。
  */
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
-import { Outlet } from "react-router";
+import { Outlet, useLocation, useNavigate } from "react-router";
 import { useQuery } from "@tanstack/react-query";
 
 import { UndoableDeleteProvider } from "@/hooks/use-undoable-delete";
@@ -25,6 +28,7 @@ import {
   type TodoTask,
 } from "@/lib/tauri";
 import { type QuickViewKey } from "../shared/constants";
+import { needsTodoIndexNav, TODO_INDEX_PATH } from "../shared/sidebar-nav";
 import { ProjectSidebar } from "./project-sidebar";
 import { TaskDetailDrawer } from "./task-detail-drawer";
 import { TaskFormSheet } from "./task-form-sheet";
@@ -77,6 +81,8 @@ export function useTodoShell() {
 export default function TodoShell() {
   const taskFormIntent = useAppStore((s) => s.taskFormIntent);
   const consumeTaskFormIntent = useAppStore((s) => s.consumeTaskFormIntent);
+  const navigate = useNavigate();
+  const { pathname } = useLocation();
 
   // ---- 选中态三选一互斥（04 §二）----
   const [quickView, setQuickView] = useState<QuickViewKey>("all");
@@ -135,21 +141,30 @@ export default function TodoShell() {
     return map;
   }, [tasks]);
 
+  // 选中入口点击改的是壳层 state，只有 TaskPanel（/todo index）消费它；
+  // 停在 trash/stats 子面板时须先导航回 /todo，否则点击静默无反应
+  // （2026-09-08 用户报告：回收站/统计下点侧边栏菜单失灵）
+  const selectInPanel = () => {
+    if (needsTodoIndexNav(pathname)) navigate(TODO_INDEX_PATH);
+  };
   const ctx: TodoShellContextValue = {
     quickView,
     projectId,
     ungrouped,
     onSelectQuickView: (key) => {
+      selectInPanel();
       setUngrouped(false);
       setProjectId(null);
       setQuickView(key);
     },
     onSelectProject: (id) => {
+      selectInPanel();
       setUngrouped(false);
       setQuickView("all");
       setProjectId(id);
     },
     onSelectUngrouped: () => {
+      selectInPanel();
       setUngrouped(true);
       setProjectId(null);
       setQuickView("all");

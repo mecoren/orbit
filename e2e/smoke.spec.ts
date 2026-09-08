@@ -104,6 +104,24 @@ test("回收站：删除入站 → 恢复回列表", async ({ page }) => {
   ).toBeVisible();
 });
 
+test("导航回归：回收站/统计面板下点侧边栏菜单直接回任务面板（2026-09-08 修复）", async ({ page }) => {
+  // ---- 进回收站后点「我的一天」：应直接回任务面板并应用该视图 ----
+  await page.getByRole("button", { name: "回收站" }).first().click();
+  await expect(page.getByRole("heading", { name: "回收站" })).toBeVisible();
+  await page.getByRole("button", { name: "我的一天" }).first().click();
+  await expect(page.getByRole("heading", { name: "我的一天" })).toBeVisible();
+
+  // ---- 进统计后点「全部任务」：同样直接回任务面板 ----
+  await page.getByRole("button", { name: "统计" }).first().click();
+  await expect(page.getByRole("heading", { name: "统计" })).toBeVisible();
+  await page.getByRole("button", { name: "全部任务", exact: true }).first().click();
+  await expect(page.getByRole("heading", { name: "全部任务" })).toBeVisible();
+  // 全部任务下 seed 行可见（确认不是空壳，视图状态真正应用了）
+  await expect(
+    page.getByRole("button", { name: "未完成任务：既有任务-今天截止" }),
+  ).toBeVisible();
+});
+
 test("我的一天：行内加入 → 视图筛选 → 次日退出语义（my_day_date 按日判断）", async ({ page }) => {
   // 侧栏切到「我的一天」视图（QUICK_VIEWS 置顶第一项）
   await page.getByRole("button", { name: "我的一天" }).first().click();
