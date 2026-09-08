@@ -57,12 +57,12 @@ NOTIFICATION_DENSITIES = {
 ASSET = Image.open(ASSET_PATH).convert("RGBA")
 
 
-def _place_asset(im: Image.Image, ss: int) -> None:
-    """资产 solid bbox 按 PAD 对齐缩放贴入 ss×ss 画布（glow 可越出）。"""
+def _place_asset(im: Image.Image, ss: int, pad: float = PAD) -> None:
+    """资产 solid bbox 按边距对齐缩放贴入 ss×ss 画布（glow 可越出）。"""
     sx0, sy0, sx1, sy1 = SOLID_BBOX
     content_w = sx1 - sx0 + 1
     content_h = sy1 - sy0 + 1
-    scale = (ss - 2 * ss * PAD) / content_w
+    scale = (ss - 2 * ss * pad) / content_w
     dw = round(ASSET.width * scale)
     dh = round(ASSET.height * scale)
     resized = ASSET.resize((dw, dh), Image.LANCZOS)
@@ -72,6 +72,27 @@ def _place_asset(im: Image.Image, ss: int) -> None:
     x = round(ss / 2 - cx_a)
     y = round(ss / 2 - cy_a)
     im.alpha_composite(resized, (x, y))
+
+
+def _steepen_alpha(im: Image.Image, lo: float, hi: float) -> Image.Image:
+    """alpha 通道 [lo,hi]→[0,255] 线性重映射（陡化），消除小尺寸下的抗锯齿灰雾。"""
+    import numpy as np
+
+    a = np.array(im)
+    al = a[:, :, 3].astype(float)
+    a[:, :, 3] = np.clip((al - lo) / (hi - lo) * 255, 0, 255).astype(np.uint8)
+    return Image.fromarray(a)
+
+
+# 小尺寸特调档（任务栏/标题栏显示区）：主体放大 + 去光晕灰雾。
+# 动机：全构图在 ≤24px 下环带仅 ~2px 且中间调 23%（半透明灰雾），
+# 在任务栏上显示为模糊发灰；放大主体 + alpha 陡化后环带加粗、边缘干净。
+SMALL_TIERS = {
+    16: (0.05, (160, 235)),
+    20: (0.05, (160, 235)),
+    24: (0.06, (150, 240)),
+    32: (0.08, (140, 245)),
+}
 
 
 def _solid_silhouette(size: int) -> Image.Image:
@@ -96,7 +117,16 @@ def render_master(size: int) -> Image.Image:
 
     用户口径「扣成透明背景」——无任何底色/底板，图标即资产本身；
     深色底由各宿主环境提供（桌面任务栏/Android 桌面/关于页背景）。
+    ≤32px 走 SMALL_TIERS 特调档（主体放大 + alpha 陡化去灰雾），
+    其余尺寸全构图。
     """
+    if size in SMALL_TIERS:
+        pad, (lo, hi) = SMALL_TIERS[size]
+        ss = 1024
+        im = Image.new("RGBA", (ss, ss), (0, 0, 0, 0))
+        _place_asset(im, ss, pad)
+        im = _steepen_alpha(im, lo, hi)
+        return im.resize((size, size), Image.LANCZOS)
     ss = 1024
     im = Image.new("RGBA", (ss, ss), (0, 0, 0, 0))
     _place_asset(im, ss)
@@ -162,9 +192,34 @@ def write_icns(images: list[Image.Image], path: Path) -> None:
 
 
 def write_ico(sizes: list[int], path: Path) -> None:
-    render_master(max(sizes)).save(
-        path, format="ICO", sizes=[(s, s) for s in sizes]
-    )
+    """手写多槽 ICO 容器（Pillow sizes 参数不支持 20px 等槽且为二次缩放）。
+
+    槽位覆盖 Windows DPI 缩放取值：16/20/24/32/40/48/64/96/128/256
+    （任务栏 96/125/150/200% 分别取 16-20/20-24/24-32/32-40）。
+    每槽从 render_master 独立渲染（小尺寸走特调档），避免从 256 二次缩小。
+    """
+    from io import BytesIO
+
+    entries = []
+    imgs = []
+    for s in sizes:
+        im = render_master(s)
+        buf = BytesIO()
+        im.save(buf, "PNG")
+        imgs.append((s, buf.getvalue()))
+
+    # ICONDIR 头：reserved(2)=0, type(2)=1, count(2)
+    n = len(imgs)
+    header = struct.pack("<HHH", 0, 1, n)
+    dir_entries = b""
+    offset = 6 + 16 * n
+    for s, data in imgs:
+        w = 0 if s >= 256 else s
+        dir_entries += struct.pack(
+            "<BBBBHHII", w, w, 0, 0, 1, 32, len(data), offset)
+        offset += len(data)
+    with open(path, "wb") as f:
+        f.write(header + dir_entries + b"".join(d for _, d in imgs))
 
 
 def self_check(master: Image.Image, notif: Image.Image) -> None:
@@ -216,7 +271,7 @@ def main() -> None:
     ):
         render_master(size).save(icons / f"Square{size}x{size}Logo.png")
     render_master(50).save(icons / "StoreLogo.png")
-    write_ico([16, 24, 32, 48, 64, 128, 256], icons / "icon.ico")
+    write_ico([16, 20, 24, 32, 40, 48, 64, 96, 128, 256], icons / "icon.ico")
     write_icns(
         [render_master(s) for s in (16, 32, 64, 128, 256, 512, 1024)],
         icons / "icon.icns",

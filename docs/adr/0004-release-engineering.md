@@ -32,13 +32,20 @@ MVP 发布（06 文档 §二 M5）要求五端产物签名/分发就绪。现状
     glow 仅边缘 23..44px 柔边）；`generate_icons.py` 以 solid bbox
     （画布 80%，PAD=0.10）对齐缩放 alpha 合成；通知剪影取 alpha>128
     二值化（剪影按 solid 紧框铺放）。
+  - 小尺寸特调（2026-09-08，任务栏模糊反馈）：≤32px 走 SMALL_TIERS
+    分档（16/20: PAD 0.05 + alpha [160,235]→[0,255] 陡化；24: 0.06/
+    [150,240]；32: 0.08/[140,245]）——全构图在小尺寸下环带仅 ~2px 且
+    半透明灰雾 21-28%，任务栏显示发灰模糊；特调后实蓝像素 +28%、
+    32px 灰雾降至 13.8%。ICO 改手写多槽容器（Pillow sizes 不支持
+    20px 槽且为二次缩放）：16/20/24/32/40/48/64/96/128/256 十槽，
+    覆盖任务栏 96-200% DPI 取值，每槽独立从母版渲染。
   - 历史版本：v1 渐变椭圆轨道 → v2 手绘描摹（`icon_shapes.json`，
     波纹被否）→ v3 高斯平滑重阈值（`extract_icon_shapes.py`）→
     v4/v4.1 AI 生图圆环+透明底（`icon-asset-2026-09-08.png`）→ v5
     现行。v2/v3 脚本与 v4 资产仍入库（换源图可复用）。
 - 全族由 `scripts/generate_icons.py`（Pillow，含生成后自检）一次产出：
   - 桌面 `apps/desktop/src-tauri/icons/`：PNG 全尺寸族 + `icon.ico`
-    （7 尺寸）+ `icon.icns`（ic07–ic10，Pillow 手写 ICNS 容器，无需
+    （10 槽含 DPI 缩放档，手写容器）+ `icon.icns`（ic07–ic10，Pillow 手写 ICNS 容器，无需
     macOS iconutil）+ Windows Store Square 族；
   - 桌面关于页 `apps/desktop/public/app-icon.png`（256，透明底同主图）；
   - Android `mipmap-*/ic_launcher.png`（48–192 五密度）；
