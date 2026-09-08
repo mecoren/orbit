@@ -300,6 +300,21 @@ test("详情属性：开始日期可见/可改可清除 + 完成时间展示（2
   await expect(
     page.getByText(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/, { exact: false }).first(),
   ).toBeVisible({ timeout: 5_000 });
+
+  // ---- 标题栏固定（2026-09-08）：内容滚到底后标题行仍在抽屉视口顶部 ----
+  const drawer = page.getByRole("dialog");
+  await drawer.evaluate((el) => {
+    // 找内容滚动容器（头部之外的 overflow-y-auto 子元素）滚到底
+    const scroller = el.querySelector(".overflow-y-auto");
+    if (scroller) scroller.scrollTop = scroller.scrollHeight;
+  });
+  const titleEl = drawer.locator("h2", { hasText: "既有任务-今天截止" });
+  await expect(titleEl).toBeVisible();
+  const inViewport = await titleEl.evaluate((el: HTMLElement) => {
+    const rect = el.getBoundingClientRect();
+    return rect.top >= 0 && rect.bottom <= window.innerHeight;
+  });
+  expect(inViewport).toBe(true);
 });
 
 test("附件：详情抽屉区块渲染 + 列表/移除链路（mock 命令面）", async ({ page }) => {

@@ -13,6 +13,7 @@ import {
   Bell,
   Calendar,
   Check,
+  CircleStop,
   ExternalLink,
   File as FileIcon,
   Flag,
@@ -146,38 +147,39 @@ export function TaskDetailDrawer({ projects }: TaskDetailDrawerProps) {
 
   return (
     <Sheet open={open} onOpenChange={(o) => !o && setSelectedTaskId(null)}>
-      <SheetContent className="w-full max-w-xl overflow-y-auto sm:max-w-xl">
+      {/* 头部固定 + 内容区独立滚动：SheetContent 去 overflow-y-auto，
+          标题行（完成钮/标题/日出/星标/删除）常驻不随内容滚走 */}
+      <SheetContent className="flex w-full max-w-xl flex-col gap-0 p-0 sm:max-w-xl">
         {t ? (
-          <div className="flex flex-col gap-4 px-6 pb-8 pt-8">
-            {/* 1. 标题行 */}
-            <TitleRow task={t} onPatch={updateTask} />
-            {/* 2. 属性网格 */}
-            <PropertyGrid task={t} projects={projects} onPatch={updateTask} />
-            {/* 3. 描述（点击行内编辑；空描述也渲染区块作编辑入口） */}
-            <DescriptionSection task={t} onPatch={updateTask} />
-            {/* 4. 子任务 */}
-            <SubtasksSection taskId={t.id} subtasks={t.subtasks} percentDone={t.percent_done} onChanged={refetchDetail} />
-            {/* 5. 标签 */}
-            <LabelsSection taskId={t.id} labels={t.labels} onChanged={refetchDetail} />
-            {/* 6. 提醒 */}
-            <RemindersSection
-              taskId={t.id}
-              reminders={t.reminders}
-              repeatMode={t.repeat_mode}
-              repeatAfter={t.repeat_after}
-              onChanged={refetchDetail}
-            />
-            {/* 7. 关联任务（#28：标题显示+跳转/搜索添加/删除） */}
-            <RelationsSection
-              taskId={t.id}
-              relations={t.relations}
-              onChanged={refetchDetail}
-            />
-            {/* 8. 评论 */}
-            <CommentsSection taskId={t.id} comments={t.comments} onChanged={refetchDetail} />
-            {/* 9. 附件（07 排查报告后续批次：内容寻址上传/预览/卸下） */}
-            <AttachmentsSection taskId={t.id} />
-          </div>
+          <>
+            {/* 1. 标题行（固定头部；右侧留出关闭钮 44px 防遮挡） */}
+            <div className="shrink-0 px-6 pt-8">
+              <TitleRow task={t} onPatch={updateTask} />
+            </div>
+            {/* 2-9. 其余区块：独立滚动 */}
+            <div className="min-h-0 flex-1 overflow-y-auto">
+              <div className="flex flex-col gap-4 px-6 pb-8 pt-4">
+                <PropertyGrid task={t} projects={projects} onPatch={updateTask} />
+                <DescriptionSection task={t} onPatch={updateTask} />
+                <SubtasksSection taskId={t.id} subtasks={t.subtasks} percentDone={t.percent_done} onChanged={refetchDetail} />
+                <LabelsSection taskId={t.id} labels={t.labels} onChanged={refetchDetail} />
+                <RemindersSection
+                  taskId={t.id}
+                  reminders={t.reminders}
+                  repeatMode={t.repeat_mode}
+                  repeatAfter={t.repeat_after}
+                  onChanged={refetchDetail}
+                />
+                <RelationsSection
+                  taskId={t.id}
+                  relations={t.relations}
+                  onChanged={refetchDetail}
+                />
+                <CommentsSection taskId={t.id} comments={t.comments} onChanged={refetchDetail} />
+                <AttachmentsSection taskId={t.id} />
+              </div>
+            </div>
+          </>
         ) : (
           <div className="px-6 py-10 text-sm text-muted-foreground">加载中…</div>
         )}
@@ -962,7 +964,10 @@ function SubtasksSection({
               >
                 {s.done ? <Check className="size-2.5" /> : null}
               </button>
-              <span className={cn("flex-1 truncate text-[13px]", s.done && "text-muted-foreground line-through")}>
+              <span
+                className={cn("flex-1 truncate text-[13px]", s.done && "text-muted-foreground line-through")}
+                title={s.title}
+              >
                 {s.title}
               </span>
               <button type="button" aria-label="删除子任务"
