@@ -110,12 +110,25 @@ pub async fn merge_items(
     let local_map = load_local_uuid_map(db_pool, module_def).await?;
 
     // 2. 按表分组远端 items（每个表独立处理）
+    // P0-9：`_table` 路由白名单校验——远端 data.waitsync 中的 _table 可指向
+    // 任意本地表（sync_configs/cfg_kv/sys_attachments 等非同步表），越过同步
+    // 白名单写凭据/配置。读取侧（db_loader.rs）已做白名单，写入侧此处对齐：
+    // 不在 module_def.tables 中的表名直接拒绝（视为数据损坏，跳过合并）。
     let mut items_by_table: HashMap<&str, Vec<&serde_json::Value>> = HashMap::new();
     for item in remote_items {
         let table = item
             .get("_table")
             .and_then(|v| v.as_str())
             .unwrap_or(module_def.primary_table());
+        if !module_def.tables.contains(&table) {
+            return Err(CloudSyncError::Merge {
+                message: format!(
+                    "远端数据包含非白名单表 `{table}`（模块 {} 允许: {:?}），\
+                     疑似数据被篡改或版本不兼容，已中止该模块合并",
+                    module_def.name, module_def.tables
+                ),
+            });
+        }
         items_by_table.entry(table).or_default().push(item);
     }
 
@@ -829,6 +842,52 @@ mod tests {
             let result = merge_items(&pool, &PROJECTS, &items, &[]).await.unwrap();
             assert_eq!(result.inserted, 1);
             assert_eq!(row_count(&pool, "brand-new").await, 1);
+        }
+
+        /// P0-9：`_table` 指向非白名单表必须整体拒绝合并
+        /// 远端 data.waitsync 的 _table 可指向 sync_configs/cfg_kv/sys_attachments
+        /// 等非同步表（凭据/配置），越过同步白名单写入。读取侧（db_loader）已校验，
+        /// 写入侧此前漏了——远端被篡改或 Data Key 泄露时可写任意表。
+        #[tokio::test]
+        async fn table_not_in_module_whitelist_rejected() {
+            let pool = setup_pool().await;
+            let items = vec![serde_json::json!({
+                "_table": "sync_configs", "uuid": "evil",
+                "endpoint": "https://attacker.example", "updated_at": 999, "version": 1
+            })];
+            let result = merge_items(&pool, &PROJECTS, &items, &[]).await;
+
+            assert!(result.is_err(), "非白名单表必须整体拒绝，不得部分合并");
+            let err_msg = result.unwrap_err().to_string();
+            assert!(
+                err_msg.contains("sync_configs"),
+                "错误信息应指明表名: {err_msg}"
+            );
+            // 确认未写入任何行（表本身在测试库不存在，写入会报错——此处防御性验证）
+        }
+
+        /// P0-9 回归：白名单内的表正常合并
+        #[tokio::test]
+        async fn table_in_whitelist_merges_normally() {
+            let pool = setup_pool().await;
+            let items = vec![serde_json::json!({
+                "_table": "todo_projects", "uuid": "ok-1",
+                "title": "legit", "is_deleted": 0, "updated_at": 100, "version": 1
+            })];
+            let result = merge_items(&pool, &PROJECTS, &items, &[]).await.unwrap();
+            assert_eq!(result.inserted, 1);
+        }
+
+        /// P0-9 回归：缺省 `_table`（无该字段）回落主表，行为不变
+        #[tokio::test]
+        async fn missing_table_field_falls_back_to_primary() {
+            let pool = setup_pool().await;
+            let items = vec![serde_json::json!({
+                "uuid": "no-table-field",
+                "title": "legacy-item", "is_deleted": 0, "updated_at": 100, "version": 1
+            })];
+            let result = merge_items(&pool, &PROJECTS, &items, &[]).await.unwrap();
+            assert_eq!(result.inserted, 1, "无 _table 字段应回落主表正常合并");
         }
 
         async fn load_map(pool: &SqlitePool) -> HashMap<String, LocalRecordState> {

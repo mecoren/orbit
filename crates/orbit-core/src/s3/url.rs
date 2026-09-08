@@ -112,3 +112,47 @@ pub fn build_canonical_query(params: &[(String, String)]) -> String {
         .collect::<Vec<_>>()
         .join("&")
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ========================================================================
+    // infer_service（P0-4）：OSS 签名 service 必须返回 "oss"
+    // 硬编码 "s3" 时 OSS 的 V4 credential scope 不匹配 → 全部请求 403
+    // ========================================================================
+
+    #[test]
+    fn infer_service_oss_domain() {
+        assert_eq!(infer_service("https://oss-cn-shenzhen.aliyuncs.com"), "oss");
+        assert_eq!(
+            infer_service("https://OSS-CN-HANGZHOU.ALIYUNCS.COM"),
+            "oss",
+            "域名大小写不敏感"
+        );
+    }
+
+    #[test]
+    fn infer_service_aws_and_minio() {
+        assert_eq!(infer_service("https://s3.us-west-2.amazonaws.com"), "s3");
+        assert_eq!(infer_service("https://minio.example.com"), "s3");
+    }
+
+    // ========================================================================
+    // build_canonical_query：分页参数（continuation-token）按 key 排序 + URL 编码
+    // ========================================================================
+
+    #[test]
+    fn canonical_query_sorts_and_encodes() {
+        let q = build_canonical_query(&[
+            ("prefix".to_string(), "assets/".to_string()),
+            ("list-type".to_string(), "2".to_string()),
+            ("continuation-token".to_string(), "a b+c/1=".to_string()),
+        ]);
+        // 按 key 字典序：continuation-token < list-type < prefix
+        assert_eq!(
+            q,
+            "continuation-token=a%20b%2Bc%2F1%3D&list-type=2&prefix=assets%2F"
+        );
+    }
+}

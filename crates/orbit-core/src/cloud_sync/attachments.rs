@@ -44,6 +44,19 @@ pub struct AttachmentSyncResult {
     pub errors: Vec<String>,
 }
 
+/// 常数时间字符串比较（长度不等时按较长串比较，避免提前返回泄露前缀信息）
+fn constant_time_eq(a: &str, b: &str) -> bool {
+    let (a, b) = (a.as_bytes(), b.as_bytes());
+    let max = a.len().max(b.len());
+    let mut diff: u8 = (a.len() ^ b.len()) as u8;
+    for i in 0..max {
+        let x = a.get(i).copied().unwrap_or(0);
+        let y = b.get(i).copied().unwrap_or(0);
+        diff |= x ^ y;
+    }
+    diff == 0
+}
+
 /// Push 附件：上传本地有但云端无的附件
 ///
 /// `attachments_dir` 是本地附件文件目录（与 `asset_api::write_local_file` 使用同一目录）。
@@ -255,11 +268,39 @@ pub async fn sync_attachments_pull(
                     let decrypted = decrypt_payload(&encrypted, data_key)
                         .map_err(|e| format!("解密附件 {} 失败: {}", hash, e))?;
 
-                    // 5c. 保存到本地文件
+                    // 5c. 校验内容哈希与文件名（即 sha256）一致
+                    // 文件名即 hash 是内容寻址约定：损坏/被篡改的内容会被"哈希背书"，
+                    // 后续所有按 hash 取文件的场景（含上传去重）都建立在内容与名字
+                    // 一致的假设上，这里在落盘前校验，不一致视为损坏直接失败。
+                    let actual = crate::crypto::sha256::sha256_hex(&decrypted);
+                    if !constant_time_eq(&actual, hash.as_str()) {
+                        return Err(format!(
+                            "附件 {} 内容哈希校验失败（实际 {}），疑似传输损坏，已丢弃",
+                            hash, actual
+                        ));
+                    }
+
+                    // 5d. 原子落盘（P0-8）
+                    // 下载中途崩溃留半截文件会被后续同步当作"已缓存"（文件名即 hash，
+                    // 内容寻址天然幂等），损坏内容无法自愈。tmp+rename 保证要么完整
+                    // 写入、要么不存在，与 orbit-core 其他落盘路径（fs_util::write_atomic）
+                    // 同口径；附件目录无 fs_util 依赖，此处内联实现等价逻辑。
                     let file_path = Path::new(attachments_dir).join(&hash);
-                    tokio::fs::write(&file_path, &decrypted)
+                    let tmp_path = Path::new(attachments_dir).join(format!(
+                        "{}.tmp-{}",
+                        hash,
+                        std::process::id()
+                    ));
+                    tokio::fs::write(&tmp_path, &decrypted)
                         .await
                         .map_err(|e| format!("保存附件 {} 失败: {}", hash, e))?;
+                    // Windows 上目标已存在时 rename 失败，先删目标再重命名
+                    if tokio::fs::rename(&tmp_path, &file_path).await.is_err() {
+                        tokio::fs::remove_file(&file_path).await.ok();
+                        tokio::fs::rename(&tmp_path, &file_path)
+                            .await
+                            .map_err(|e| format!("附件 {} 原子落盘失败: {}", hash, e))?;
+                    }
 
                     Ok(file_path.to_string_lossy().to_string())
                 }
@@ -285,7 +326,10 @@ pub async fn sync_attachments_pull(
     for (hash, outcome) in outcomes {
         match outcome {
             Ok(local_path) => {
-                let _ = attachment_repo::mark_local_cached(db_pool, &hash, &local_path).await;
+                // P0-8：ensure 而非 mark——sys_attachments 不在同步白名单，
+                // 新设备/删库后本地无记录，仅 UPDATE 会永远 affected=0，
+                // 差集永不为空导致每轮全量重下
+                let _ = attachment_repo::ensure_local_cached(db_pool, &hash, &local_path).await;
                 result.downloaded += 1;
             }
             Err(e) => {

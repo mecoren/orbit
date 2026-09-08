@@ -68,6 +68,36 @@ pub async fn mark_local_cached(pool: &SqlitePool, hash: &str, local_path: &str) 
     Ok(())
 }
 
+/// 标记附件已本地缓存，记录不存在时插入占位行（P0-8）
+///
+/// 附件 pull 从云端 hash 列表差集下载，但 `sys_attachments` 表不在同步白名单
+/// （03 文档 §六），新设备/删库后本地无记录——旧的 `mark_local_cached` 仅
+/// UPDATE，affected rows = 0，记录永远缺失，导致每轮同步差集永不为空、
+/// 全部附件反复重下。此方法在 UPDATE 未命中时插入占位行（原始文件名/mime
+/// 未知，用 hash 占位；is_uploaded=1 因云端已存在该对象）。
+pub async fn ensure_local_cached(
+    pool: &SqlitePool,
+    hash: &str,
+    local_path: &str,
+) -> CoreResult<()> {
+    let now = chrono::Utc::now().timestamp_millis();
+    sqlx::query(
+        "INSERT INTO sys_attachments (hash, original_name, mime_type, size_bytes, local_path,
+                                  is_uploaded, is_local_cached, created_at)
+         VALUES (?, ?, 'application/octet-stream', 0, ?, 1, 1, ?)
+         ON CONFLICT(hash) DO UPDATE SET
+            is_local_cached = 1,
+            local_path = excluded.local_path",
+    )
+    .bind(hash)
+    .bind(hash)
+    .bind(local_path)
+    .bind(now)
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
 /// 检查附件是否已本地缓存
 pub async fn is_local_cached(pool: &SqlitePool, hash: &str) -> CoreResult<bool> {
     let row: (i32,) = sqlx::query_as("SELECT is_local_cached FROM sys_attachments WHERE hash = ?")

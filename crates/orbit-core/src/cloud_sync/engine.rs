@@ -23,11 +23,12 @@ use tokio::sync::Mutex;
 
 use crate::cloud_sync::attachments::{sync_attachments_pull, sync_attachments_push};
 use crate::cloud_sync::error::CloudSyncError;
+use crate::cloud_sync::paths;
 use crate::cloud_sync::progress::{NoopProgressSender, ProgressSender, SyncOrigin, SyncProgress};
 use crate::cloud_sync::pull::pull_all;
 use crate::cloud_sync::push::push_all;
 use crate::cloud_sync::state::{SyncState, SyncStateStore};
-use crate::sync_adapters::traits::{RemoteFile, SyncAdapter};
+use crate::sync_adapters::traits::SyncAdapter;
 use crate::sync_crypto::SyncCryptoService;
 
 /// 同步结果汇总
@@ -369,6 +370,7 @@ impl SyncEngine {
         result.errors.extend(pull_result.errors);
 
         // 2. Push（业务级网络重试）：合并后的本地数据上传云端
+        // P0-6：Pull 失败的模块本地仍是旧快照，跳过其 push 防陈旧数据覆盖云端
         let push_result = self
             .with_retry("push_all", 3, || {
                 push_all(
@@ -379,6 +381,7 @@ impl SyncEngine {
                     self.progress_sender.as_ref(),
                     origin,
                     device_id,
+                    &pull_result.failed_modules,
                 )
             })
             .await?;
@@ -483,6 +486,8 @@ impl SyncEngine {
             self.progress_sender.as_ref(),
             origin,
             device_id,
+            // push_only 无 Pull 阶段，无失败模块可跳过
+            &[],
         )
         .await?;
         result.pushed_modules = push_result.pushed_modules;
@@ -603,6 +608,7 @@ impl SyncEngine {
         result.errors.extend(att_pull.errors);
 
         // 3. Push 数据（合并后可能有新指纹需要推送，业务级网络重试）
+        // P0-6：Pull 失败的模块本地仍是旧快照，跳过其 push 防陈旧数据覆盖云端
         let push_result = self
             .with_retry("push_all", 3, || {
                 push_all(
@@ -613,6 +619,7 @@ impl SyncEngine {
                     self.progress_sender.as_ref(),
                     origin,
                     device_id,
+                    &pull_result.failed_modules,
                 )
             })
             .await?;
@@ -918,46 +925,45 @@ impl SyncEngine {
     /// - 云端无模块数据（首次同步、云端被清空）→ 安全补传本地 bundle
     /// - 云端已有模块数据 → 阻断补传，避免本地错 Key 覆盖云端正确 Key
     ///
-    /// **路径过滤**：仅匹配 `modules/{name}/data.waitsync` 路径，
-    /// 显式排除非模块数据的 .waitsync 文件：
-    /// - `_meta.waitsync`（全局索引，非业务数据）
-    /// - `assets/{hash}.waitsync`（附件，加密 Key 可能不同于模块数据 Key）
-    /// - `modules/{name}/meta.waitsync`（模块元数据，可能在 data 前先上传）
+    /// **实现方式（P0-2 修复）**：对每个模块的 `data.waitsync` 逐一做 GET 探测，
+    /// 下载成功即存在。不再依赖 `list_files` 的返回路径形态——WebDAV 下
+    /// Depth:1 只列一级子项且 name 是 basename，旧的 `is_module_data_path`
+    /// 路径匹配在 WebDAV 上恒 false，导致防污染守卫完全失效
+    /// （云端已有 Key A 数据时本地 Key B 的 crypto/config 仍被自动上传覆盖）。
+    /// 直接探测对两种适配器行为一致，且只多一次请求（404 立即失败）。
     ///
-    /// `list_files` 返回错误（网络故障等）时无法确认云端状态，
-    /// 宽松返回 `false`（不阻断），让原容错流程继续。
+    /// 探测错误（网络故障等）时无法确认云端状态，宽松返回 `false`（不阻断），
+    /// 让原容错流程继续。
     async fn cloud_has_module_data(&self, raw_adapter: &dyn SyncAdapter, base_path: &str) -> bool {
-        match raw_adapter.list_files(base_path).await {
-            Ok(files) => {
-                // 仅匹配 `modules/{name}/data.waitsync`：真正的模块业务数据
-                // 排除 _meta.waitsync / assets/*.waitsync / modules/{name}/meta.waitsync
-                let module_data_files: Vec<&RemoteFile> = files
-                    .iter()
-                    .filter(|f| is_module_data_path(&f.name))
-                    .collect();
-                let has = !module_data_files.is_empty();
-                log::info!(
-                    "[sync_data_key] 云端文件探测（base_path={}）：list_files 返回 {} 个 .waitsync，\
-                     其中模块数据文件 {} 个，has_module_data={}",
-                    base_path,
-                    files.len(),
-                    module_data_files.len(),
-                    has
-                );
-                has
-            }
-            Err(e) => {
-                // fail-closed：list_files 出错时无法确认云端状态，保守视为"有模块数据"。
-                // 这样 decide_auto_upload_behavior 走 Block 分支，避免在云端实际有数据时
-                // 覆盖 crypto/config 造成全设备 [key_mismatch] 不可逆污染。
-                // 代价：网络抖动时自动补传被阻断，但下次同步成功即恢复，远优于数据污染。
-                log::warn!(
-                    "[sync_data_key] 云端文件探测失败，fail-closed 视为有模块数据（阻断自动补传）: {}",
-                    e
-                );
-                true
+        for module in crate::cloud_sync::modules::SYNC_MODULES {
+            let path = join_base_path(base_path, &paths::module_data_path(module.name));
+            match raw_adapter.download(&path).await {
+                Ok(_) => {
+                    log::info!(
+                        "[sync_data_key] 云端探测：{} 下载成功，判定存在模块数据",
+                        path
+                    );
+                    return true;
+                }
+                Err(e) if e.is_not_found() => {
+                    // 404：该模块无数据，继续探测下一个
+                }
+                Err(e) => {
+                    // fail-closed：探测出错时无法确认云端状态，保守视为"有模块数据"。
+                    // 这样 decide_auto_upload_behavior 走 Block 分支，避免在云端实际
+                    // 有数据时覆盖 crypto/config 造成全设备 [key_mismatch] 不可逆污染。
+                    // 代价：网络抖动时自动补传被阻断，但下次同步成功即恢复。
+                    log::warn!(
+                        "[sync_data_key] 云端探测 {} 失败，fail-closed 视为有模块数据（阻断自动补传）: {}",
+                        path,
+                        e
+                    );
+                    return true;
+                }
             }
         }
+        log::info!("[sync_data_key] 云端探测：所有模块 data.waitsync 均 404，判定无模块数据");
+        false
     }
 
     /// 自动上传本地 crypto bundle 到云端（容错修复）
@@ -1131,9 +1137,10 @@ pub(crate) fn data_key_fingerprint(key: &[u8]) -> String {
 
 /// 判断云端路径是否为模块数据文件（`modules/{name}/data.waitsync`）
 ///
-/// 用于 `cloud_has_module_data` 精确判定云端是否已有业务数据，
-/// 排除 `_meta.waitsync` / `assets/*.waitsync` / `modules/{name}/meta.waitsync` 等非模块数据文件。
-/// 允许 base_path 前缀（如 `wait-sync/user1/modules/movies/data.waitsync`）。
+/// **P0-2 修复后已无调用方**（`cloud_has_module_data` 改为直接 GET 探测，
+/// 不再依赖 list_files 返回的路径形态）。保留纯函数与测试供未来恢复
+/// 路径匹配语义时参考。
+#[allow(dead_code)]
 fn is_module_data_path(name: &str) -> bool {
     // 路径分段中必须包含 "modules" 段，且以 /data.waitsync 结尾
     name.split('/').any(|seg| seg == "modules") && name.ends_with("/data.waitsync")

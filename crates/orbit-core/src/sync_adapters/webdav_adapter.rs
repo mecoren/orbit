@@ -333,9 +333,13 @@ impl SyncAdapter for WebDavAdapter {
         headers.insert("Depth", "1".parse().unwrap());
         headers.insert("Content-Type", "application/xml".parse().unwrap());
 
+        // 请求 resourcetype 以识别目录条目（RFC 4918 标准）：目录若不被过滤，
+        // 其尾斜杠 href 会使 basename 提取退化为整条 URL 混入文件列表，
+        // 污染 cloud_has_module_data 探测与附件 diff（见 07 排查报告 P0-1）。
         let propfind_body = r#"<?xml version="1.0" encoding="utf-8"?>
 <d:propfind xmlns:d="DAV:">
   <d:prop>
+    <d:resourcetype/>
     <d:getcontentlength/>
     <d:getlastmodified/>
   </d:prop>
@@ -396,9 +400,12 @@ impl SyncAdapter for WebDavAdapter {
                     .and_then(|s| chrono::DateTime::parse_from_rfc2822(s).ok())
                     .map(|dt| dt.timestamp())
                     .unwrap_or(0);
-                // 优先使用 display_name，否则从 href 提取 basename
+                // 优先使用 display_name，否则从 href 提取 basename。
+                // 先剥尾斜杠再取最后一段：目录条目的 href 以 "/" 结尾，
+                // rsplit 会取到空串；直接回退整条 URL 会把目录当文件混入列表
                 let name = e.display_name.unwrap_or_else(|| {
                     e.href
+                        .trim_end_matches('/')
                         .rsplit('/')
                         .next()
                         .filter(|s| !s.is_empty())
@@ -541,6 +548,7 @@ impl SyncAdapter for WebDavAdapter {
         let propfind_body = r#"<?xml version="1.0" encoding="utf-8"?>
 <d:propfind xmlns:d="DAV:">
   <d:prop>
+    <d:resourcetype/>
     <d:getcontentlength/>
     <d:getlastmodified/>
   </d:prop>
@@ -585,6 +593,7 @@ impl SyncAdapter for WebDavAdapter {
         })?;
 
         // 提取 hash：跳过目录本身（is_collection），从 display_name 或 href 提取文件名。
+        // href 先剥尾斜杠（目录条目防御：rsplit 对尾斜杠取到空串）。
         // 新版本文件名为 {hash}.waitsync，需剥离 .waitsync 后缀以保持接口契约。
         // 旧版本文件名为 {hash}（无后缀），保持原样。两者去重后返回。
         let mut hashes: Vec<String> = entries

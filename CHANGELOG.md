@@ -7,6 +7,17 @@
 
 ## [Unreleased]
 
+### 同步数据安全 P0 批修（排查报告 10 项全清）
+
+同步功能系统性排查（docs/同步功能系统性排查报告-2026-09-07.md）发现的 10 项数据丢失/污染/不可用级 P0 全部修复落地，orbit-core 363 单测全绿（新增 12 个回归用例）。P1 中危项待后续批次。
+
+- **WebDAV 链路（P0-1/P0-2）**：PROPFIND 解析器此前只认微软私有 `<iscollection>1</iscollection>`，RFC 4918 标准的 `<D:resourcetype><D:collection/></D:resourcetype>` 空元素对不产生文本、`is_collection` 在坚果云/Nextcloud/群晖等所有主流服务器上恒 false——目录条目混入文件列表且 basename 退化为整条 URL。修复：解析器在 Start/Empty 事件识别 `collection` 子元素（含自闭合与裸元素形态）；两处 PROPFIND body 请求 `resourcetype`；basename 提取先剥尾斜杠。KeyMismatch 防污染守卫不再依赖 `list_files` 的路径形态契约（WebDAV 下恒失效），改为对每个模块 `data.waitsync` 直接 GET 探测，两适配器行为一致——云端已有 Key A 数据时本地错 Key B 的 crypto/config 不再被自动补传覆盖（此前会污染全部设备且不可恢复）。
+- **S3 链路（P0-3/P0-4/P0-10）**：ListObjectsV2 循环携带 `continuation-token` 直到结束（此前 >1000 对象静默截断——pull 拉不到、push 误判云端缺文件全量重传），解析器提取 `NextContinuationToken`，防御上限 1000 页；签名 service 名接入既有 `infer_service`（此前硬编码 "s3" 导致阿里云 OSS V4 scope 不匹配、全部请求 403）；`validate_config` 补 region 空值拦截（漏填同样全 403 且错误是裸 XML 难以定位）；列举 prefix 统一带尾斜杠，消除 `wait` 前缀命中 `wait2/`、`waitfoo/` 的跨目录污染。
+- **引擎数据流（P0-5/P0-6/P0-7）**：①删库重装守卫——本地空库但残留 `sync_state.json` 记录 count>0 时阻断 Push 并引导走恢复流程（此前会上传空 items+空墓碑覆盖云端），复核全 8 表合计防误触；②Pull 失败模块集随 `PullResult.failed_modules` 返回，`push_all` 对其跳过（此前单模块 pull 网络失败后继续 push，陈旧数据覆盖其他设备刚推的新数据）；③模块上传顺序改为先 meta（含墓碑）后 data——中断窗口从「漏删不可感知」变为「多删一次」，reconcile 下轮兜底（两段完全原子性属容器格式演进）。
+- **附件同步（P0-8）**：落盘改 tmp+rename 原子写（Windows 目标存在先删再改名）；解密后校验内容 sha256 与文件名一致才落盘（内容寻址约定防损坏被哈希背书）；DB 记录改 `ensure_local_cached` upsert——`sys_attachments` 不在同步白名单，新设备/删库后旧 `mark_local_cached` 仅 UPDATE 永远 affected=0，差集永不为空导致每轮全量重下。
+- **merge 白名单（P0-9）**：远端 data.waitsync 的 `_table` 路由此前可指向任意本地表（sync_configs/凭据等），越过同步白名单写非同步表；现校验 ∈ `module_def.tables` 否则整体拒绝合并（与读取侧 db_loader 白名单对齐）。
+- 测试：propfind 5 用例（标准/自闭合/微软私有/跨条目泄漏/无前缀形态）、S3 分页游标/`infer_service`/canonical query、merge 白名单 3 用例、region 校验 2 用例。
+
 ### 重复任务推进引擎下沉 orbit-core（三端统一完成入口单事务化）
 
 - **修复移动端核心断层**：重复任务此前仅桌面有推进引擎（完成时克隆下一实例），移动端勾选完成直接丢排程。引擎（`plan_next_recurring_instance` / `next_repeat_at` / `subtasks_to_clone`）自桌面 TS 下沉 Rust，语义逐字对齐：锚定原 due 推进（提前完成不改节奏、长期逾期快进越过 now）、月/年日历截断（1/31→2/28→3/28 链式不回弹、闰日 2024-02-29→2025-02-28）、5000 步快进上限、子任务只克隆标题完成态重置、不复制提醒。

@@ -63,6 +63,10 @@ enum PushModuleOutcome {
 /// `device_id` 用于写入 GlobalMeta，便于多设备诊断。
 /// `origin` 标识事件来源（Background/Manual/Exit），用于 UI 层过滤重复显示。
 ///
+/// `skip_modules`：本轮须跳过 push 的模块名（P0-6）。Pull 阶段失败的模块
+/// 本地数据仍是旧快照，若不跳过，reconcile 会发现 fp 不一致并用陈旧数据
+/// 重传覆盖云端新数据。
+///
 /// ## 实现说明
 /// - 串行 Push：15 个模块顺序执行，避免并发 MKCOL 同一目录触发 WebDAV 503
 /// - 批量 state 保存：循环结束后一次性写入 `sync_state.json`，避免每模块都写文件
@@ -74,6 +78,7 @@ pub async fn push_all(
     progress_sender: &dyn ProgressSender,
     origin: SyncOrigin,
     device_id: &str,
+    skip_modules: &[String],
 ) -> Result<PushResult, CloudSyncError> {
     let mut state = state_store.load()?;
     let data_key = crypto.get_data_key().ok_or(CloudSyncError::CryptoLocked)?;
@@ -89,11 +94,45 @@ pub async fn push_all(
     let total = SYNC_MODULES.len() as u32;
     builder.starting(total);
 
-    // 预捕获所有模块的 prev_state
+    // 预捕获所有模块的 prev_state（P0-6：跳过本轮 pull 失败的模块）
     let prev_states: Vec<(SyncModuleDef, Option<ModuleSyncState>)> = SYNC_MODULES
         .iter()
+        .filter(|m| !skip_modules.iter().any(|s| s == m.name))
         .map(|m| (*m, state.modules.get(m.name).cloned()))
         .collect();
+    if !skip_modules.is_empty() {
+        log::info!(
+            "[push_all] 跳过本轮 Pull 失败的模块（防陈旧数据覆盖云端）: {:?}",
+            skip_modules
+        );
+    }
+
+    // P0-5 守卫：删库重初始化场景下 sync_state.json 残留旧 state
+    // （state 文件与 DB 文件分离存放，删库不会带上）——本地空库但 state.count > 0
+    // 时，Pull 全模块 Skip（remote_fp 与云端一致）、Push 侧 prev_state 存在且
+    // 本地空指纹 ≠ state.fp → 不跳过 → 上传空 items + 空墓碑覆盖云端。
+    // 空数据覆盖守卫：阻断并要求用户走恢复流程，而非静默清空云端。
+    for module_def in SYNC_MODULES {
+        if skip_modules.iter().any(|s| s == module_def.name) {
+            continue;
+        }
+        let prev = state.modules.get(module_def.name);
+        let local_count = load_module_items(db_pool, module_def).await?.len();
+        if local_count == 0
+            && prev.is_some_and(|s| s.count > 0)
+            && local_items_look_empty(db_pool, module_def).await?
+        {
+            let msg = format!(
+                "本地数据库为空但同步状态记录有 {} 条数据（模块 {}）——\
+                 疑似删库重装后残留 sync_state.json，已阻断 Push 以防空数据覆盖云端。\
+                 请在设置中使用「从云端恢复」或删除同步状态后重试",
+                prev.map(|s| s.count).unwrap_or(0),
+                module_def.name
+            );
+            log::warn!("[push_all] P0-5 空数据覆盖守卫触发：{}", msg);
+            return Err(CloudSyncError::State { message: msg });
+        }
+    }
 
     // 串行 Push：每个模块独立完成 加载→指纹比对→序列化加密→上传 → 返回 outcome。
     // 注：原 buffer_unordered(8) 并行实现在 WebDAV 上触发并发 MKCOL 同一目录，
@@ -150,6 +189,32 @@ pub async fn push_all(
     Ok(result)
 }
 
+/// 判定模块全部关联表是否真实为空（P0-5 空数据覆盖守卫的复核）
+///
+/// `load_module_items` 返回主表+关联表联合行，单表偶然为空不足以判定
+/// "删库"；这里对模块全部 tables 逐一 COUNT，全部为 0 才认定为空库。
+/// 避免用户真实清空某一类数据（如删光所有标签）时误触守卫阻断同步。
+async fn local_items_look_empty(
+    db_pool: &SqlitePool,
+    module_def: &SyncModuleDef,
+) -> Result<bool, CloudSyncError> {
+    for table in module_def.tables {
+        let count: (i64,) = sqlx::query_as(&format!(
+            "SELECT COUNT(*) FROM {} WHERE is_deleted = 0",
+            table
+        ))
+        .fetch_one(db_pool)
+        .await
+        .map_err(|e| CloudSyncError::Database {
+            message: format!("统计表 {} 行数失败: {}", table, e),
+        })?;
+        if count.0 > 0 {
+            return Ok(false);
+        }
+    }
+    Ok(true)
+}
+
 /// 处理单个模块的 Push（并行任务单元）
 ///
 /// 独立完成：加载模块数据 → 计算指纹 → 比对跳过 → 序列化加密上传 → 返回新状态。
@@ -181,7 +246,7 @@ async fn push_single_module(
         return Ok(PushModuleOutcome::Skipped);
     }
 
-    // 4. 序列化 + 加密 + 上传 data.waitsync
+    // 4. 序列化 + 加密
     let module_data = ModuleData {
         module: module_def.name.to_string(),
         items,
@@ -190,7 +255,6 @@ async fn push_single_module(
     let data_json = serde_json::to_vec(&module_data)?;
     let encrypted_data = encrypt_payload(&data_json, data_key)?;
     let data_path = paths::module_data_path(module_def.name);
-    adapter.upload(&data_path, &encrypted_data).await?;
 
     // 5. 构造墓碑集（FR-2.4：无上限，含 deleted_at 时间戳）
     let tombstone_pairs = load_all_tombstones(db_pool, module_def).await?;
@@ -199,7 +263,6 @@ async fn push_single_module(
         .map(|(uuid, deleted_at)| TombstoneEntry::new(uuid, deleted_at))
         .collect();
 
-    // 6. 序列化 + 加密 + 上传 meta.waitsync
     let module_meta = ModuleMetaEntry {
         fp: local_fp.clone(),
         count: module_data.items.len() as u64,
@@ -209,7 +272,17 @@ async fn push_single_module(
     let meta_json = serde_json::to_vec(&module_meta)?;
     let encrypted_meta = encrypt_payload(&meta_json, data_key)?;
     let meta_path = paths::module_meta_path(module_def.name);
+
+    // 6. 上传：先 meta（含墓碑）后 data（P0-7 顺序修复）
+    //
+    // 旧顺序（先 data 后 meta）的中断窗口产生"新 data + 旧 meta"：
+    // 新 data 已不含被删行、旧 meta 缺新墓碑——其他设备 pull 时既不应用删除、
+    // data 里也没有该行，已删记录在云端视角"复活存活"（漏删，不可恢复感知）。
+    // 先传 meta 后传 data 的中断窗口是"新 meta + 旧 data"：pull 会应用墓碑
+    // 删除本地行，data 里的旧行最多被多删一次（多删不漏删），且下轮 push
+    // reconcile 兜底重传。两段上传的完全原子性属容器格式演进，此处先修顺序。
     adapter.upload(&meta_path, &encrypted_meta).await?;
+    adapter.upload(&data_path, &encrypted_data).await?;
 
     // 7. 构造新状态（委托纯函数，便于单元测试）
     let new_state = build_pushed_state(

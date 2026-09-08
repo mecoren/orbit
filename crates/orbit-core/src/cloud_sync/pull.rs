@@ -39,6 +39,12 @@ pub struct PullResult {
     pub skipped_modules: u32,
     /// 收集的错误（不阻塞整体流程）
     pub errors: Vec<String>,
+    /// 本轮 Pull 失败的模块名集合（P0-6）
+    ///
+    /// pull 失败的模块本地数据仍是旧快照，若不传给 push 侧跳过，
+    /// reconcile 会发现 fp 不一致并用陈旧数据重传覆盖云端新数据
+    /// （设备 B 刚推的新数据被设备 A 的旧数据覆盖，B 若不再同步则永久丢失）。
+    pub failed_modules: Vec<String>,
 }
 
 /// 单个模块 Pull 任务的结果（用于并行任务返回，主流程顺序应用 state）
@@ -56,8 +62,8 @@ enum PullModuleOutcome {
         new_state: ModuleSyncState,
         changed_records: u64,
     },
-    /// 单模块错误（不阻塞整体流程，收集到 errors）
-    Failed(String),
+    /// 单模块错误（不阻塞整体流程，收集到 errors；module 供 push 侧跳过，P0-6）
+    Failed { module: String, message: String },
 }
 
 /// 执行全量 Pull：从云端拉取模块数据并合并
@@ -152,7 +158,10 @@ pub async fn pull_all(
         let current = idx as u32 + 1;
         // 未知模块：直接返回 Failed（不阻塞其他模块）
         let outcome = match module_def {
-            None => PullModuleOutcome::Failed(format!("未知模块: {}", name)),
+            None => PullModuleOutcome::Failed {
+                module: name.clone(),
+                message: format!("未知模块: {}", name),
+            },
             Some(module_def) => {
                 pull_single_module(
                     db_pool,
@@ -193,8 +202,11 @@ pub async fn pull_all(
                 result.pulled_modules += 1;
                 changed_records += module_changed_records;
             }
-            PullModuleOutcome::Failed(msg) => {
-                result.errors.push(msg);
+            PullModuleOutcome::Failed { module, message } => {
+                result.errors.push(message);
+                // P0-6：失败模块名随 PullResult 返回，供 sync_now/pull_then_push
+                // 跳过对应模块的 push，防止陈旧数据覆盖云端新数据
+                result.failed_modules.push(module);
             }
         }
     }
@@ -261,20 +273,29 @@ async fn pull_single_module(
                     new_state,
                 };
             }
-            return PullModuleOutcome::Failed(format!("下载 {} 失败: {}", data_path, e));
+            return PullModuleOutcome::Failed {
+                module: module_name.to_string(),
+                message: format!("下载 {} 失败: {}", data_path, e),
+            };
         }
     };
 
     let decrypted_data = match decrypt_payload(&data_bytes, data_key) {
         Ok(d) => d,
         Err(e) => {
-            return PullModuleOutcome::Failed(format!("解密 {} 失败: {}", data_path, e));
+            return PullModuleOutcome::Failed {
+                module: module_name.to_string(),
+                message: format!("解密 {} 失败: {}", data_path, e),
+            };
         }
     };
     let module_data: ModuleData = match serde_json::from_slice(&decrypted_data) {
         Ok(d) => d,
         Err(e) => {
-            return PullModuleOutcome::Failed(format!("解析 {} 失败: {}", data_path, e));
+            return PullModuleOutcome::Failed {
+                module: module_name.to_string(),
+                message: format!("解析 {} 失败: {}", data_path, e),
+            };
         }
     };
 
@@ -307,10 +328,13 @@ async fn pull_single_module(
                 }
             }
             Err(e) => {
-                return PullModuleOutcome::Failed(format!(
-                    "获取 {} 失败（解密或网络错误），已跳过该模块合并以防删除丢失: {}",
-                    meta_path, e
-                ));
+                return PullModuleOutcome::Failed {
+                    module: module_name.to_string(),
+                    message: format!(
+                        "获取 {} 失败（解密或网络错误），已跳过该模块合并以防删除丢失: {}",
+                        meta_path, e
+                    ),
+                };
             }
         };
 
@@ -335,7 +359,10 @@ async fn pull_single_module(
             merge.inserted + merge.updated + merge.deleted
         }
         Err(e) => {
-            return PullModuleOutcome::Failed(format!("合并 {} 失败: {}", module_name, e));
+            return PullModuleOutcome::Failed {
+                module: module_name.to_string(),
+                message: format!("合并 {} 失败: {}", module_name, e),
+            };
         }
     };
 
@@ -346,10 +373,10 @@ async fn pull_single_module(
             if changed_records > 0 {
                 builder.local_data_applied(changed_records);
             }
-            return PullModuleOutcome::Failed(format!(
-                "合并后重新加载 {} 失败: {}",
-                module_name, e
-            ));
+            return PullModuleOutcome::Failed {
+                module: module_name.to_string(),
+                message: format!("合并后重新加载 {} 失败: {}", module_name, e),
+            };
         }
     };
     let local_fp = match crate::cloud_sync::compute_fingerprint(&refreshed_items) {
@@ -358,10 +385,10 @@ async fn pull_single_module(
             if changed_records > 0 {
                 builder.local_data_applied(changed_records);
             }
-            return PullModuleOutcome::Failed(format!(
-                "合并后计算 {} 指纹失败: {}",
-                module_name, e
-            ));
+            return PullModuleOutcome::Failed {
+                module: module_name.to_string(),
+                message: format!("合并后计算 {} 指纹失败: {}", module_name, e),
+            };
         }
     };
 

@@ -89,6 +89,15 @@ pub fn validate_config(config: &SyncConfig) -> Result<(), SyncError> {
             message: "S3 bucket 不能为空".to_string(),
         });
     }
+    // region 参与 SigV4 credential scope，漏填时所有签名请求必然 403，
+    // 且错误是裸 XML 难以自助定位——配置阶段拦截给出可读提示（07 排查报告 P0-4）
+    if config.adapter_type == "s3" && config.region.trim().is_empty() {
+        return Err(SyncError::Config {
+            field: "region".to_string(),
+            message: "S3 region 不能为空（如 us-east-1 / cn-shenzhen / minio 默认 us-east-1）"
+                .to_string(),
+        });
+    }
     Ok(())
 }
 
@@ -169,5 +178,20 @@ mod tests {
         // WebDAV 不需要 bucket，空值应通过校验
         let cfg = valid_webdav_config();
         assert!(validate_config(&cfg).is_ok());
+    }
+
+    #[test]
+    fn validate_config_rejects_empty_region_for_s3() {
+        // P0-4：region 参与 SigV4 credential scope，漏填时所有签名请求必然 403，
+        // 配置阶段拦截（错误信息可读）优于运行期裸 XML 403
+        let mut cfg = valid_s3_config();
+        cfg.region = String::new();
+        let err = validate_config(&cfg).unwrap_err();
+        assert!(matches!(err, SyncError::Config { field, .. } if field == "region"));
+
+        // 仅空白同样拒绝
+        let mut cfg = valid_s3_config();
+        cfg.region = "  ".to_string();
+        assert!(validate_config(&cfg).is_err());
     }
 }

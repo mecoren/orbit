@@ -2,7 +2,7 @@ use async_trait::async_trait;
 use reqwest::header::HeaderMap;
 
 use crate::s3::{
-    build_url, format_amz_date, format_date_stamp, get_signature_key, hmac_sha256,
+    build_url, format_amz_date, format_date_stamp, get_signature_key, hmac_sha256, infer_service,
     parse_list_objects_xml, sha256_hex,
 };
 use crate::sync::error::SyncError;
@@ -59,6 +59,9 @@ impl S3Adapter {
     /// 从完整请求 URL 解析 host / canonical_uri / canonical_querystring，
     /// 天然兼容 virtual-hosted-style 与 path-style（与移动端 `_signS3Request` 行为一致），
     /// 避免硬编码 URL 风格导致阿里云 OSS 等仅支持 virtual-hosted-style 的服务签名不匹配。
+    ///
+    /// 签名 service 名按 endpoint 推断（P0-4）：阿里云 OSS 的 V4 credential scope
+    /// 要求 `{date}/{region}/oss/aws4_request`，硬编码 "s3" 会导致 OSS 全部请求 403。
     fn sign_request(
         &self,
         method: &str,
@@ -100,11 +103,14 @@ impl S3Adapter {
             payload_hash
         );
 
+        // credential scope 的 service 按域名推断：OSS 用 "oss"，其余用 "s3"（P0-4）
+        let service = infer_service(&self.config.endpoint);
         let string_to_sign = format!(
-            "AWS4-HMAC-SHA256\n{}\n{}/{}/s3/aws4_request\n{}",
+            "AWS4-HMAC-SHA256\n{}\n{}/{}/{}/aws4_request\n{}",
             amz_date,
             date_stamp,
             self.config.region,
+            service,
             sha256_hex(canonical_request.as_bytes())
         );
 
@@ -112,7 +118,7 @@ impl S3Adapter {
             &self.config.secret_key,
             &date_stamp,
             &self.config.region,
-            "s3",
+            &service,
         );
         let signature = hmac_sha256(&signing_key, string_to_sign.as_bytes());
         let signature_hex = signature
@@ -136,8 +142,9 @@ impl S3Adapter {
         headers.insert(
             "Authorization",
             format!(
-                "AWS4-HMAC-SHA256 Credential={}/{}/{}/s3/aws4_request, SignedHeaders={}, Signature={}",
-                self.config.access_key, date_stamp, self.config.region, signed_headers, signature_hex
+                "AWS4-HMAC-SHA256 Credential={}/{}/{}/{}/aws4_request, SignedHeaders={}, Signature={}",
+                self.config.access_key, date_stamp, self.config.region, service, signed_headers,
+                signature_hex
             )
             .parse()
             .map_err(|_| SyncError::Auth {
@@ -146,6 +153,61 @@ impl S3Adapter {
         );
 
         Ok(headers)
+    }
+
+    /// 分页列举指定 prefix 下的全部对象 key（P0-3）
+    ///
+    /// ListObjectsV2 单页默认最多 1000 条；循环携带 `continuation-token`
+    /// 直到响应无 `NextContinuationToken`，避免大桶静默截断
+    /// （pull 拉不到第 1001 个附件、push 误判云端缺文件全量重传）。
+    /// 防御上限 1000 页（100 万对象）防异常服务器死循环。
+    async fn list_all_keys_paginated(&self, prefix: &str) -> Result<Vec<String>, SyncError> {
+        // prefix 统一带尾斜杠（P0-10）：S3 prefix 是字符串前缀匹配，
+        // `wait` 会同时命中 `wait2/...`、`waitfoo/...` 造成跨目录污染；
+        // 解析端剥离按 `{prefix}/`，两端必须同口径
+        let prefix_with_slash = if prefix.is_empty() || prefix.ends_with('/') {
+            prefix.to_string()
+        } else {
+            format!("{}/", prefix)
+        };
+
+        let mut keys = Vec::new();
+        let mut continuation_token: Option<String> = None;
+        for _ in 0..1000 {
+            let mut query: Vec<(String, String)> = vec![
+                ("list-type".to_string(), "2".to_string()),
+                ("prefix".to_string(), prefix_with_slash.clone()),
+            ];
+            if let Some(token) = &continuation_token {
+                query.push(("continuation-token".to_string(), token.clone()));
+            }
+            let list_url = build_url(
+                &self.config.endpoint,
+                &self.config.bucket,
+                "",
+                self.config.use_path_style,
+                &query,
+            );
+            let headers = self.sign_request("GET", &list_url, &sha256_hex(b""))?;
+            let response_bytes = self.http.get_with_retry(&list_url, headers).await?;
+            let xml = String::from_utf8_lossy(&response_bytes).to_string();
+
+            let page = parse_list_objects_xml(&xml, &prefix_with_slash).map_err(|e| {
+                SyncError::Network {
+                    message: format!("解析 ListObjects XML 失败: {e}"),
+                    retryable: false,
+                }
+            })?;
+            keys.extend(page.keys);
+            match page.next_token {
+                Some(token) => continuation_token = Some(token),
+                None => return Ok(keys),
+            }
+        }
+        Err(SyncError::Network {
+            message: "ListObjectsV2 分页超过 1000 页仍未结束，中止以防异常服务器死循环".to_string(),
+            retryable: false,
+        })
     }
 }
 
@@ -161,26 +223,8 @@ impl SyncAdapter for S3Adapter {
     }
 
     async fn list_all_files(&self, base_path: &str) -> Result<Vec<RemoteFile>, SyncError> {
-        let list_url = build_url(
-            &self.config.endpoint,
-            &self.config.bucket,
-            "",
-            self.config.use_path_style,
-            &[
-                ("list-type".to_string(), "2".to_string()),
-                ("prefix".to_string(), base_path.to_string()),
-            ],
-        );
-
-        let headers = self.sign_request("GET", &list_url, &sha256_hex(b""))?;
-
-        let response_bytes = self.http.get_with_retry(&list_url, headers).await?;
-        let xml = String::from_utf8_lossy(&response_bytes).to_string();
-
-        let keys = parse_list_objects_xml(&xml, base_path).map_err(|e| SyncError::Network {
-            message: format!("解析 ListObjects XML 失败: {e}"),
-            retryable: false,
-        })?;
+        // 分页列举（P0-3）：>1000 对象不再静默截断
+        let keys = self.list_all_keys_paginated(base_path).await?;
 
         // 将 key 列表转为 RemoteFile（不过滤后缀，调用方自行过滤）
         // lamport_version 无法从 ListObjects 响应获取（.waitsync 是二进制包，
@@ -294,27 +338,8 @@ impl SyncAdapter for S3Adapter {
     }
 
     async fn list_assets(&self) -> Result<Vec<String>, SyncError> {
-        let prefix = "assets/";
-        let list_url = build_url(
-            &self.config.endpoint,
-            &self.config.bucket,
-            "",
-            self.config.use_path_style,
-            &[
-                ("list-type".to_string(), "2".to_string()),
-                ("prefix".to_string(), prefix.to_string()),
-            ],
-        );
-
-        let headers = self.sign_request("GET", &list_url, &sha256_hex(b""))?;
-
-        let response_bytes = self.http.get_with_retry(&list_url, headers).await?;
-        let xml = String::from_utf8_lossy(&response_bytes).to_string();
-
-        let keys = parse_list_objects_xml(&xml, prefix).map_err(|e| SyncError::Network {
-            message: format!("解析 ListObjects XML 失败: {e}"),
-            retryable: false,
-        })?;
+        // 分页列举（P0-3）：附件超过 1000 个不再静默截断
+        let keys = self.list_all_keys_paginated("assets/").await?;
 
         // 新版本文件名为 {hash}.waitsync，需剥离 .waitsync 后缀以保持接口契约。
         // 旧版本文件名为 {hash}（无后缀），保持原样。两者去重后返回。
