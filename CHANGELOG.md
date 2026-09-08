@@ -7,6 +7,16 @@
 
 ## [Unreleased]
 
+### 移动端任务列表长按拖拽重排（#37）
+
+桌面端列表 04 文档起就有 hover 拖拽把手排序，移动端「拖拽顺序」档（manual，默认档）却只能看不能拖——本批补齐触屏重排。
+
+- **列表形态切换**：manual 档用 `ReorderableListView.builder`（`buildDefaultDragHandles:false` + 行尾 `ReorderableDragStartListener` 把手，侧栏项目行同款形制）；其余排序档保持普通 `ListView`（顺序由排序键决定，拖了也会被覆盖——与桌面 `sortable={sortKey==="manual"}` 同口径），把手不渲染。
+- **落库口径**：拖拽落位取相邻两条 `position` 的中值写库（新纯函数 `midpointPosition`：prev 缺省 0 / next 缺省 100000，与桌面 `shared/position.ts` midpoint 逐字同源），`todoTaskUpdatePosition` 落库后 invalidate 以服务端权威顺序刷新；失败 toast + 回原序。f64 中值精度在落库时取整。
+- **长按语义无冲突**：长按弹操作菜单（编辑/星标/删除）保留不变；拖拽由行尾把手专用手势触发，与 Slidable 左右滑按轴向正交。
+- **坑**：ReorderableListView ↔ ListView 切换排序档时新旧树同帧交替，共用单 ScrollController 触发 "attached to multiple scroll views" 断言——双控制器分体（`_reorderScrollController` / `_listScrollController`），标题栏 listenable 按档取用。
+- **测试**：纯函数 8 用例（reorderItems 语义插入位/越界防御 + midpointPosition 五口径含连拖精度）；widget 3 用例（manual 档把手渲染/切档无把手/拖拽落位中值 >50000 断言端到端）；全量移动 177 绿。
+
 ### 项目颜色：侧栏圆点 + 全展示位项目名着色（#36）
 
 `todo_projects.hex_color` 建库即有但全程无消费方、项目全是一个蓝色。本批把颜色落到所有展示位，并补齐编辑入口。侧边栏保持圆点/色块形制不变，其余位置项目名直接按项目色渲染。

@@ -26,7 +26,8 @@ import 'providers/todo_providers.dart';
 /// 入口三参数互斥：projectId > ungrouped > view（task_logic 同款优先级）。
 /// 列表消费共享 filterTasks/sortTasks；空态文案按入口映射；
 /// 右下 GlassFab 新建（携 defaultProjectId）；Tile 长按弹操作菜单
-/// （编辑 / 星标切换 / 删除确认）。
+/// （编辑 / 星标切换 / 删除确认）；manual 档行尾拖拽把手长按拖拽重排
+/// （#37，position midpoint 落库与桌面同口径）。
 class SubListScreen extends ConsumerStatefulWidget {
   const SubListScreen({super.key, required this.query});
 
@@ -54,10 +55,14 @@ class SubListScreen extends ConsumerStatefulWidget {
 }
 
 class _SubListScreenState extends ConsumerState<SubListScreen> {
-  final _scrollController = ScrollController();
+  // 两个滚动控制器分列两档列表形态（#37）：ReorderableListView 与普通
+  // ListView 切换排序档时新旧树同帧交替，共用单控制器会触发
+  // "attached to multiple scroll views" 断言——分体即各自最多一挂载。
+  final _reorderScrollController = ScrollController();
+  final _listScrollController = ScrollController();
 
-  // 排序档位（#26：会话内存态，退出即回 manual——移动端无手动拖拽，
-  // 该档等价 position 拖拽顺序）
+  // 排序档位（#26：会话内存态，退出即回 manual；#37 manual 档下行
+  // 长按拖拽把手重排 + midpoint 落库）
   TaskSortKey _sortKey = TaskSortKey.manual;
 
   static const _sortChoices = {
@@ -70,7 +75,8 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
 
   @override
   void dispose() {
-    _scrollController.dispose();
+    _reorderScrollController.dispose();
+    _listScrollController.dispose();
     super.dispose();
   }
 
@@ -147,6 +153,33 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
     }
   }
 
+  // ── 长按拖拽重排（#37；仅 manual 档）──
+
+  /// 拖拽落位：以语义插入位的相邻两条 position 取中值落库（midpointPosition
+  /// 纯函数与桌面 midpoint 同口径：前缺省 0、后缺省 100000），完成后
+  /// invalidate 以服务端权威顺序刷新；拖拽期间行序由 ReorderableListView
+  /// 自管，落库失败 invalidate 兜底回原序。
+  Future<void> _reorderTasks(int oldIndex, int newIndex) async {
+    final tasks = ref.watch(todoTasksProvider(const TaskListQuery())).value ??
+        const <TodoTask>[];
+    final visible = sortTasks(filterTasks(tasks, widget.query), _sortKey);
+    final reordered = reorderItems(visible, oldIndex, newIndex);
+    final dragged = reordered[newIndex];
+    final prevPos = newIndex > 0 ? reordered[newIndex - 1].position : null;
+    final nextPos =
+        newIndex + 1 < reordered.length ? reordered[newIndex + 1].position : null;
+    final mid = midpointPosition(prevPos, nextPos);
+    try {
+      await ref
+          .read(orbitBridgeProvider)
+          .todoTaskUpdatePosition(dragged.id, mid.round());
+    } catch (_) {
+      WaitToast.destructive('排序失败');
+    } finally {
+      ref.invalidate(todoTasksProvider);
+    }
+  }
+
   // ── Tile 长按菜单（编辑 / 星标切换 / 删除确认）──
 
   void _showTaskActions(TodoTask task) {
@@ -198,52 +231,103 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
       _ => widget.query.quickView?.label ?? '任务',
     };
     final emptyMessage = emptyMessageFor(widget.query);
+    final colors = AppColors.ofContext(context);
+    // 长按拖拽（#37）：仅 manual 档（拖拽顺序档）启用重排；其余档
+    // 顺序由排序键决定，拖了也会被覆盖（与桌面 sortable 同口径）
+    final reorderable = _sortKey == TaskSortKey.manual;
+
+    final listPadding = EdgeInsets.only(
+      top: MediaQuery.of(context).padding.top +
+          LiquidGlassTitleBar.rowHeight +
+          AppDimens.space8,
+      bottom: AppDimens.gestureInsetFallback + AppDimens.space32,
+    );
+
+    Widget buildTile(TodoTask task, {required Widget? dragHandle}) {
+      final project =
+          task.projectId != null ? projectById[task.projectId] : null;
+      return TodoTaskTile(
+        task: task,
+        projectTitle: project?.title,
+        projectColorHex: project?.hexColor,
+        onOpen: () => context.push('/todo/${task.id}'),
+        onToggleDone: () => _toggleDone(task),
+        onLongPress: () => _showTaskActions(task),
+        onDelete: () => _deleteTask(task),
+        dragHandle: dragHandle,
+      );
+    }
+
+    final Widget list = visible.isEmpty
+        ? Padding(
+            padding: EdgeInsets.only(
+              top: MediaQuery.of(context).padding.top +
+                  LiquidGlassTitleBar.rowHeight,
+            ),
+            child: EmptyState(message: emptyMessage),
+          )
+        : reorderable
+            ? ReorderableListView.builder(
+                key: const ValueKey('reorderable-task-list'),
+                scrollController: _reorderScrollController,
+                padding: listPadding,
+                buildDefaultDragHandles: false,
+                itemCount: visible.length,
+                onReorderItem: (oldIndex, newIndex) =>
+                    _reorderTasks(oldIndex, newIndex),
+                proxyDecorator: (child, index, animation) => AnimatedBuilder(
+                  animation: animation,
+                  builder: (context, child) {
+                    final elevated = Curves.easeOut.transform(
+                      Tween<double>(begin: 0, end: 1).evaluate(animation),
+                    );
+                    return Material(
+                      elevation: 6 * elevated,
+                      borderRadius: AppShapes.medium,
+                      color: Colors.transparent,
+                      child: child,
+                    );
+                  },
+                  child: child,
+                ),
+                itemBuilder: (context, index) {
+                  final task = visible[index];
+                  return ReorderableDragStartListener(
+                    key: ValueKey('reorder-task-${task.id}'),
+                    index: index,
+                    child: buildTile(
+                      task,
+                      dragHandle: Icon(
+                        Icons.drag_handle_rounded,
+                        size: AppDimens.iconSizeMd,
+                        color: colors.secondaryText,
+                      ),
+                    ),
+                  );
+                },
+              )
+            : ListView.builder(
+                controller: _listScrollController,
+                padding: listPadding,
+                itemCount: visible.length,
+                itemBuilder: (context, index) =>
+                    buildTile(visible[index], dragHandle: null),
+              );
 
     return Scaffold(
       body: Stack(
         children: [
-          Positioned.fill(
-            child: visible.isEmpty
-                ? Padding(
-                    padding: EdgeInsets.only(
-                      top: MediaQuery.of(context).padding.top +
-                          LiquidGlassTitleBar.rowHeight,
-                    ),
-                    child: EmptyState(message: emptyMessage),
-                  )
-                : ListView.builder(
-                    controller: _scrollController,
-                    padding: EdgeInsets.only(
-                      top: MediaQuery.of(context).padding.top +
-                          LiquidGlassTitleBar.rowHeight +
-                          AppDimens.space8,
-                      bottom:
-                          AppDimens.gestureInsetFallback + AppDimens.space32,
-                    ),
-                    itemCount: visible.length,
-                    itemBuilder: (context, index) {
-                      final task = visible[index];
-                      final project =
-                          task.projectId != null ? projectById[task.projectId] : null;
-                      return TodoTaskTile(
-                        task: task,
-                        projectTitle: project?.title,
-                        projectColorHex: project?.hexColor,
-                        onOpen: () => context.push('/todo/${task.id}'),
-                        onToggleDone: () => _toggleDone(task),
-                        onLongPress: () => _showTaskActions(task),
-                        onDelete: () => _deleteTask(task),
-                      );
-                    },
-                  ),
-          ),
+          Positioned.fill(child: list),
           Positioned(
             top: 0,
             left: 0,
             right: 0,
             child: LiquidGlassTitleBar(
               title: title,
-              scrollOffsetListenable: ScrollOffsetListenable(_scrollController),
+              // 跟随当前档位的活跃列表控制器（#37 双控制器分体后按档取用）
+              scrollOffsetListenable: ScrollOffsetListenable(
+                reorderable ? _reorderScrollController : _listScrollController,
+              ),
               actions: [
                 // 排序档位菜单（#26；manual = position 拖拽顺序）
                 PopupMenuButton<TaskSortKey>(
@@ -295,6 +379,7 @@ class TodoTaskTile extends StatelessWidget {
     this.projectTitle,
     this.projectColorHex,
     this.onDelete,
+    this.dragHandle,
   });
 
   final TodoTask task;
@@ -310,6 +395,10 @@ class TodoTaskTile extends StatelessWidget {
 
   /// 右滑「删除」动作回调（null 时隐藏删除面板——搜索页等只读场景复用 Tile）
   final VoidCallback? onDelete;
+
+  /// 长按拖拽把手（#37；侧栏项目行同款形制）：ReorderableDragStartListener
+  /// 包装的拖拽图标，点击/长按启动重排；null（非 manual 档/只读场景）不渲染
+  final Widget? dragHandle;
 
   @override
   Widget build(BuildContext context) {
@@ -445,6 +534,11 @@ class TodoTaskTile extends StatelessWidget {
                     size: AppDimens.iconSizeLg,
                     color: OrbitAccents.starYellow,
                   ),
+                ],
+                // 拖拽把手（#37）：仅 manual 档渲染（传入方已 ReorderableDragStartListener 包装）
+                if (dragHandle != null) ...[
+                  const SizedBox(width: AppDimens.space8),
+                  dragHandle!,
                 ],
               ],
             ),

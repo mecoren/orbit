@@ -193,6 +193,12 @@ List<T> reorderItems<T>(List<T> items, int oldIndex, int newIndex) {
   return reordered;
 }
 
+/// position 取中值（#37 拖拽落位；与桌面 shared/position.ts midpoint 同口径）：
+/// 落库行新位次的相邻两条 position 取中值——prev 缺省视为 0（插到最前）、
+/// next 缺省视为 100000（插到最后），保持 f64 中值精度到落库时再取整。
+double midpointPosition(double? prev, double? next) =>
+    ((prev ?? 0) + (next ?? 100000)) / 2;
+
 // ---------- 标签勾选 diff（详情页标签编辑 Phase 7） ----------
 
 /// 固定 8 色板（新建标签选色用；对齐桌面端 PRESET_COLORS，
