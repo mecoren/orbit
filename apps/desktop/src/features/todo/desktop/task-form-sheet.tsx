@@ -569,7 +569,9 @@ function RepeatField({
               />
             )}
             {endOption === 1 && (
-              <div className="w-32">
+              // 日期档独占一行：弹出的日历层较宽，128px 触发钮夹在
+              // chips 行内会让弹层定位局促（上弹横跨面板），全宽行更稳
+              <div className="w-full">
                 <DatePicker
                   value={endDate}
                   onChange={setEndDate}

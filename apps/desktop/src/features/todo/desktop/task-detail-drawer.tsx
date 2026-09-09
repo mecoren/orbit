@@ -705,45 +705,71 @@ function RepeatEditor({
             : repeatLabel(mode, after, { weekdays, endType, endParam, fromDone })}
         </button>
       </PopoverTrigger>
-      <PopoverContent align="end" className="w-64 p-1">
-        {REPEAT_PRESETS.map((p) => (
-          <button key={p.mode} type="button"
-            className={cn("flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-accent",
-              mode === p.mode && after === p.after && "bg-accent font-medium")}
-            onClick={() => pick(p.mode, p.after)}
-          >
-            {p.label}
-            {mode === p.mode && after === p.after && <Check size={13} className="ml-auto text-primary" />}
-          </button>
-        ))}
-        <div className="my-1 border-t" />
-        <button type="button"
-          className={cn("flex w-full items-center rounded-sm px-2 py-1.5 text-sm hover:bg-accent",
-            mode === REPEAT_MODE.NONE && "bg-accent font-medium")}
-          onClick={() => pick(REPEAT_MODE.NONE, 0)}
-        >
-          不重复
-          {mode === REPEAT_MODE.NONE && <Check size={13} className="ml-auto text-primary" />}
-        </button>
-        <div className="flex items-center gap-1.5 px-2 py-1.5">
-          <span className="shrink-0 text-xs text-muted-foreground">每</span>
-          <Input
-            type="number"
-            min={1}
-            value={customDays}
-            onChange={(e) => setCustomDays(e.target.value)}
-            className="h-6 w-14 px-1.5 text-xs"
-            onKeyDown={(e) => {
-              if (e.key === "Enter") applyExt(REPEAT_MODE.DAILY, Math.max(1, Number(customDays) || 1));
-            }}
-          />
-          <span className="shrink-0 text-xs text-muted-foreground">天</span>
-          <Button size="sm" variant="ghost" className="ml-auto h-6 px-2 text-xs"
-            onClick={() => applyExt(REPEAT_MODE.DAILY, Math.max(1, Number(customDays) || 1))}
-          >
-            确定
-          </Button>
-        </div>
+      {/* 日历展开态独占弹层（w-72=288px 容纳日历 ~286px）：只渲染日历 +
+          返回钮——原面板内容全高 675px，弹层 bottom 出视口（800px）100px；
+          隐藏其余内容后日历态 ~330px 内敛，且横向 286>254 的溢出同步消除 */}
+      <PopoverContent align="end" className="w-72 p-1">
+        {endDateCalendar ? (
+          <>
+            <div className="p-1">
+              <WaitCalendar
+                mode="single"
+                selected={endDate ? new Date(`${endDate}T00:00:00`) : undefined}
+                onSelect={(d) => {
+                  setEndDate(d ? format(d, "yyyy-MM-dd") : "");
+                  setEndDateCalendar(false);
+                }}
+              />
+            </div>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-6 w-full text-xs"
+              onClick={() => setEndDateCalendar(false)}
+            >
+              返回
+            </Button>
+          </>
+        ) : (
+          <>
+            {REPEAT_PRESETS.map((p) => (
+              <button key={p.mode} type="button"
+                className={cn("flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-accent",
+                  mode === p.mode && after === p.after && "bg-accent font-medium")}
+                onClick={() => pick(p.mode, p.after)}
+              >
+                {p.label}
+                {mode === p.mode && after === p.after && <Check size={13} className="ml-auto text-primary" />}
+              </button>
+            ))}
+            <div className="my-1 border-t" />
+            <button type="button"
+              className={cn("flex w-full items-center rounded-sm px-2 py-1.5 text-sm hover:bg-accent",
+                mode === REPEAT_MODE.NONE && "bg-accent font-medium")}
+              onClick={() => pick(REPEAT_MODE.NONE, 0)}
+            >
+              不重复
+              {mode === REPEAT_MODE.NONE && <Check size={13} className="ml-auto text-primary" />}
+            </button>
+            <div className="flex items-center gap-1.5 px-2 py-1.5">
+              <span className="shrink-0 text-xs text-muted-foreground">每</span>
+              <Input
+                type="number"
+                min={1}
+                value={customDays}
+                onChange={(e) => setCustomDays(e.target.value)}
+                className="h-6 w-14 px-1.5 text-xs"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") applyExt(REPEAT_MODE.DAILY, Math.max(1, Number(customDays) || 1));
+                }}
+              />
+              <span className="shrink-0 text-xs text-muted-foreground">天</span>
+              <Button size="sm" variant="ghost" className="ml-auto h-6 px-2 text-xs"
+                onClick={() => applyExt(REPEAT_MODE.DAILY, Math.max(1, Number(customDays) || 1))}
+              >
+                确定
+              </Button>
+            </div>
 
         {/* #34 扩展规则：星期几 / 结束条件 / when done */}
         <div className="mt-1 space-y-1.5 border-t px-2 py-1.5">
@@ -786,41 +812,21 @@ function RepeatEditor({
                 className="h-6 w-14 px-1.5 text-xs"
                 onChange={(e) => setEndText(e.target.value)} />
             )}
-            {endOption === 1 &&
-              (endDateCalendar ? (
-                <div className="w-full space-y-1.5">
-                  <WaitCalendar
-                    mode="single"
-                    selected={endDate ? new Date(`${endDate}T00:00:00`) : undefined}
-                    onSelect={(d) => {
-                      setEndDate(d ? format(d, "yyyy-MM-dd") : "");
-                      setEndDateCalendar(false);
-                    }}
-                  />
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="h-6 w-full text-xs"
-                    onClick={() => setEndDateCalendar(false)}
-                  >
-                    取消
-                  </Button>
-                </div>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => setEndDateCalendar(true)}
-                  className={cn(
-                    "flex items-center gap-1 rounded-md border px-2 py-0.5 text-[11px]",
-                    endDate
-                      ? "text-foreground"
-                      : "text-muted-foreground hover:bg-accent",
-                  )}
-                >
-                  <Calendar className="size-3" />
-                  {endDate || "选择日期"}
-                </button>
-              ))}
+            {endOption === 1 && (
+              <button
+                type="button"
+                onClick={() => setEndDateCalendar(true)}
+                className={cn(
+                  "flex items-center gap-1 rounded-md border px-2 py-0.5 text-[11px]",
+                  endDate
+                    ? "text-foreground"
+                    : "text-muted-foreground hover:bg-accent",
+                )}
+              >
+                <Calendar className="size-3" />
+                {endDate || "选择日期"}
+              </button>
+            )}
           </div>
           <div className="flex items-center gap-1.5">
             <button type="button"
@@ -842,7 +848,9 @@ function RepeatEditor({
           >
             应用扩展规则
           </Button>
-        </div>
+          </div>
+          </>
+        )}
       </PopoverContent>
     </Popover>
   );
