@@ -31,6 +31,7 @@ import {
   Tag as TagIcon,
   Trash2,
   X,
+  BellRing,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -169,6 +170,7 @@ export function TaskDetailDrawer({ projects }: TaskDetailDrawerProps) {
                 <RemindersSection
                   taskId={t.id}
                   reminders={t.reminders}
+                  taskDone={!!t.done}
                   repeatMode={t.repeat_mode}
                   repeatAfter={t.repeat_after}
                   repeatWeekdays={t.repeat_weekdays}
@@ -1319,6 +1321,7 @@ function LabelsSection({
 function RemindersSection({
   taskId,
   reminders,
+  taskDone,
   repeatMode,
   repeatAfter,
   repeatWeekdays,
@@ -1329,6 +1332,8 @@ function RemindersSection({
 }: {
   taskId: number;
   reminders: Awaited<ReturnType<typeof todoTaskGetDetail>>["reminders"];
+  /** 完成实例不再红警（与行内徽标同口径；过期提醒按普通 muted 展示） */
+  taskDone: boolean;
   /** 任务重复规则（>0 时提醒行显示徽标；触发后由监听器自动排下一次） */
   repeatMode: number;
   repeatAfter: number;
@@ -1397,8 +1402,22 @@ function RemindersSection({
               }}
             >
               <div className="group flex items-center gap-2 rounded-lg bg-muted/40 px-3 py-2 text-[13px]">
-                <Bell size={13} className="shrink-0 text-muted-foreground" />
-                <button type="button" className="flex-1 truncate text-left hover:text-primary"
+                {(() => {
+                  // 双态图标：未来=Bell muted；到期且任务未完成=BellRing 红色警示
+                  // （与列表行/看板卡/日历行的 ReminderChip 同口径）
+                  const fired = !taskDone && r.remind_at <= Date.now();
+                  return fired ? (
+                    <BellRing size={13} className="shrink-0 animate-pulse text-destructive" aria-label="提醒已到期" />
+                  ) : (
+                    <Bell size={13} className="shrink-0 text-muted-foreground" aria-hidden />
+                  );
+                })()}
+                <button
+                  type="button"
+                  className={cn(
+                    "flex-1 truncate text-left hover:text-primary",
+                    !taskDone && r.remind_at <= Date.now() && "text-destructive",
+                  )}
                   onClick={() => setEditing({ id: r.id, draft: fmt(r.remind_at) })}
                 >
                   {fmt(r.remind_at)}

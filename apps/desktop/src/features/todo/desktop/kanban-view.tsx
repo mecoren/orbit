@@ -39,6 +39,8 @@ import {
 } from "@/lib/tauri";
 import { FAVORITE_COLOR, PRIORITY_COLOR, STATUS_COLOR, TODO_ACCENT } from "../shared/constants";
 import { LabelChips } from "../shared/label-chips";
+import { ReminderChip } from "../shared/reminder-chip";
+import { displayReminder, type DisplayReminder, type TaskReminderMeta } from "../shared/reminder-meta";
 import type { TaskSortKey } from "../shared/task-filters";
 import { completeTask } from "../shared/task-actions";
 import { midpoint } from "../shared/position";
@@ -52,6 +54,8 @@ interface KanbanViewProps {
   groupBy: KanbanGroupBy;
   /** 任务→标签映射（list-page 级拉取，卡片渲染标签 chips） */
   labelsByTask: Map<number, TodoLabel[]>;
+  /** 任务→提醒映射（TaskPanel 级拉取，卡片渲染提醒徽标） */
+  remindersByTask: Map<number, TaskReminderMeta[]>;
   /** 工具栏排序档位（#26）：列内沿用传入序；manual 才允许拖拽重排 */
   sortKey: TaskSortKey;
 }
@@ -62,7 +66,7 @@ interface ColumnDef {
   color: string;
 }
 
-export function KanbanView({ tasks, projects, groupBy, labelsByTask, sortKey }: KanbanViewProps) {
+export function KanbanView({ tasks, projects, groupBy, labelsByTask, remindersByTask, sortKey }: KanbanViewProps) {
   const qc = useQueryClient();
   const setSelectedTaskId = useTodoStore((s) => s.setSelectedTaskId);
   // memo 友好：打开详情回调恒定引用，列/卡片 props 只随业务数据变化
@@ -227,6 +231,7 @@ export function KanbanView({ tasks, projects, groupBy, labelsByTask, sortKey }: 
               tasks={grouped.get(col.key) ?? []}
               projects={projects}
               labelsByTask={labelsByTask}
+              remindersByTask={remindersByTask}
               draggingId={draggingId}
               dragEndStamp={dragEndStamp}
               onOpenDetail={openDetail}
@@ -240,6 +245,7 @@ export function KanbanView({ tasks, projects, groupBy, labelsByTask, sortKey }: 
             <KanbanCard
               task={draggingTask}
               labels={labelsByTask.get(draggingTask.id) ?? []}
+              reminder={displayReminder(remindersByTask.get(draggingTask.id) ?? [], Date.now(), !!draggingTask.done)}
               overlay
             />
           ) : null}
@@ -262,6 +268,7 @@ const KanbanColumn = memo(function KanbanColumn({
   tasks,
   projects,
   labelsByTask,
+  remindersByTask,
   draggingId,
   dragEndStamp,
   onOpenDetail,
@@ -271,6 +278,7 @@ const KanbanColumn = memo(function KanbanColumn({
   tasks: TodoTask[];
   projects: TodoProject[];
   labelsByTask: Map<number, TodoLabel[]>;
+  remindersByTask: Map<number, TaskReminderMeta[]>;
   draggingId: number | null;
   /** 拖拽结束时间戳 ref（点击抑制用） */
   dragEndStamp: React.RefObject<number>;
@@ -343,6 +351,7 @@ const KanbanColumn = memo(function KanbanColumn({
                     <KanbanCard
                       task={t}
                       labels={labelsByTask.get(t.id) ?? []}
+                      reminder={displayReminder(remindersByTask.get(t.id) ?? [], Date.now(), !!t.done)}
                       dragging={draggingId === t.id}
                       dragEndStamp={dragEndStamp}
                       onOpenDetail={onOpenDetail}
@@ -364,6 +373,7 @@ const KanbanColumn = memo(function KanbanColumn({
 const KanbanCard = memo(function KanbanCard({
   task,
   labels,
+  reminder,
   dragging,
   overlay,
   dragEndStamp,
@@ -372,6 +382,8 @@ const KanbanCard = memo(function KanbanCard({
 }: {
   task: TodoTask;
   labels: TodoLabel[];
+  /** 行内提醒徽标数据（displayReminder 产物；null = 无存活提醒行） */
+  reminder: DisplayReminder | null;
   dragging?: boolean;
   overlay?: boolean;
   /** 拖拽结束时间戳 ref（overlay 不需要） */
@@ -440,7 +452,7 @@ const KanbanCard = memo(function KanbanCard({
       )}
 
       {/* 底部元信息 */}
-      {(task.due_date != null || task.percent_done > 0) && (
+      {(task.due_date != null || reminder != null || task.percent_done > 0) && (
         <div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
           {task.due_date != null && (
             <span className="inline-flex items-center gap-1">
@@ -448,6 +460,7 @@ const KanbanCard = memo(function KanbanCard({
               {format(new Date(task.due_date), "MM-dd")}
             </span>
           )}
+          <ReminderChip reminder={reminder} />
           {task.percent_done > 0 && <span>{Math.round(task.percent_done)}%</span>}
         </div>
       )}

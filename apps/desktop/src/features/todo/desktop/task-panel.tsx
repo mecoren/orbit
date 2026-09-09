@@ -24,6 +24,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { type TodoTask } from "@/lib/tauri";
 import { LS_VIEW_MODE, QUICK_VIEWS } from "../shared/constants";
 import { useTaskLabels } from "../shared/use-task-labels";
+import { useTaskReminders } from "../shared/use-task-reminders";
 import { useQuery } from "@tanstack/react-query";
 import { filterTasks, sortTasks, type TaskSortKey } from "../shared/task-filters";
 import { applySavedFilter } from "../shared/saved-filter";
@@ -98,6 +99,8 @@ export default function TaskPanel() {
 
   // 任务→标签映射（列表行/看板卡标签 chips 共用）
   const taskLabels = useTaskLabels();
+  // 任务→提醒映射（列表行/看板卡/日历行提醒徽标共用；db-change 失效同口径）
+  const taskReminders = useTaskReminders();
 
   // ---- 内存筛选 + 排序（共享模块，语义同 04 §四；排序档位 #26）----
   // keyword 在面板内客户端过滤（全量数据由壳层提供）
@@ -358,6 +361,7 @@ export default function TaskPanel() {
             projects={projects}
             groupBy={kanbanGroupBy}
             labelsByTask={taskLabels}
+            remindersByTask={taskReminders}
             sortKey={sortKey}
           />
         ) : viewMode === "calendar" ? (
@@ -365,6 +369,7 @@ export default function TaskPanel() {
             tasks={visibleTasks}
             projects={projects}
             labelsByTask={taskLabels}
+            remindersByTask={taskReminders}
             onCreateClick={() => {
               openCreateForm();
             }}
@@ -375,6 +380,7 @@ export default function TaskPanel() {
             tasks={visibleTasks}
             projects={projects}
             labelsByTask={taskLabels}
+            remindersByTask={taskReminders}
             loading={tasksLoading}
             error={tasksError}
             // #26：仅拖拽顺序档显示拖拽把手

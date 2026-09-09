@@ -67,6 +67,8 @@ import { useUndoableDeleteAction, hideManyFromQueries } from "@/hooks/use-undoab
 import { todoTaskDelete, todoTaskUpdate, todoTaskUpdatePosition, type TodoLabel, type TodoProject, type TodoTask } from "@/lib/tauri";
 import { FAVORITE_COLOR, OVERDUE_COLOR_CLASS, PRIORITY_COLOR, PRIORITY_LABELS, TODO_ACCENT } from "../shared/constants";
 import { LabelChips } from "../shared/label-chips";
+import { ReminderChip } from "../shared/reminder-chip";
+import { displayReminder, type DisplayReminder, type TaskReminderMeta } from "../shared/reminder-meta";
 import { TaskContextMenu } from "./task-context-menu";
 
 interface TaskListViewProps {
@@ -74,6 +76,8 @@ interface TaskListViewProps {
   projects: TodoProject[];
   /** 任务→标签映射（list-page 级拉取，行内渲染标签 chips） */
   labelsByTask: Map<number, TodoLabel[]>;
+  /** 任务→提醒映射（TaskPanel 级拉取，行内渲染提醒徽标） */
+  remindersByTask: Map<number, TaskReminderMeta[]>;
   loading?: boolean;
   /** 列表查询错误文案；非空时整块渲染 ErrorState */
   error?: string | null;
@@ -111,7 +115,7 @@ const rowsFirstCollision: CollisionDetection = (args) => {
   return rowHits.length > 0 ? rowHits : collisions;
 };
 
-export function TaskListView({ tasks, projects, labelsByTask, loading, error, onCreateClick, onOpenDetail, sortable = true }: TaskListViewProps) {
+export function TaskListView({ tasks, projects, labelsByTask, remindersByTask, loading, error, onCreateClick, onOpenDetail, sortable = true }: TaskListViewProps) {
   const qc = useQueryClient();
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -334,6 +338,7 @@ export function TaskListView({ tasks, projects, labelsByTask, loading, error, on
             const overdue = !!t.due_date && !t.done && t.due_date < Date.now();
             const due = dueText(t.due_date);
             const project = t.project_id != null ? projectById.get(t.project_id) : undefined;
+            const reminder = displayReminder(remindersByTask.get(t.id) ?? [], Date.now(), !!t.done);
             return (
               // 绝对定位行容器：divide-y 在脱离文档流的兄弟间不生效，改每行自带 border-b。
               // 用 top 而非 transform 定位（见文件头注释）
@@ -352,6 +357,7 @@ export function TaskListView({ tasks, projects, labelsByTask, loading, error, on
                     project={project}
                     due={due}
                     overdue={overdue}
+                    reminder={reminder}
                     dragging={draggingId === t.id}
                     selected={selected.has(t.id)}
                     hasSelection={selected.size > 0}
@@ -600,6 +606,8 @@ interface TaskRowProps {
   project?: TodoProject;
   due: string | null;
   overdue: boolean;
+  /** 行内提醒徽标数据（displayReminder 产物；null = 无存活提醒行） */
+  reminder: DisplayReminder | null;
   /** 本行正被拖拽（原始行降透明度，浮层由 DragOverlay 渲染） */
   dragging: boolean;
   /** 多选态（P2#17） */
@@ -626,6 +634,7 @@ function TaskRow({
   project,
   due,
   overdue,
+  reminder,
   dragging,
   selected,
   hasSelection,
@@ -761,7 +770,7 @@ function TaskRow({
         >
           {t.title}
         </div>
-        {(labels.length > 0 || project != null || due || t.percent_done > 0) && (
+        {(labels.length > 0 || project != null || due || reminder != null || t.percent_done > 0) && (
           <div
             className={cn(
               "mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground",
@@ -777,6 +786,8 @@ function TaskRow({
                 {project.title}
               </span>
             )}
+            {/* 行内提醒徽标（详情抽屉同款双态：未来=Bell / 到期未完=BellRing 红） */}
+            <ReminderChip reminder={reminder} />
             {due && (
               <span className="inline-flex items-center gap-0.5">
                 <Clock size={11} />

@@ -53,6 +53,8 @@ import { formatYmd } from "../shared/lunar";
 import { holidaysList, holidaysUpdate, holidayMeta, type HolidayInfo } from "@/lib/tauri";
 import { OVERDUE_COLOR_CLASS, PRIORITY_COLOR, TODO_ACCENT } from "../shared/constants";
 import { LabelChips } from "../shared/label-chips";
+import { ReminderChip } from "../shared/reminder-chip";
+import { displayReminder, type DisplayReminder, type TaskReminderMeta } from "../shared/reminder-meta";
 import { TaskContextMenu } from "./task-context-menu";
 import { YearOverviewPanel } from "./year-overview";
 import type { TodoLabel, TodoProject, TodoTask } from "@/lib/tauri";
@@ -63,6 +65,8 @@ interface CalendarViewProps {
   tasks: TodoTask[];
   projects: TodoProject[];
   labelsByTask: Map<number, TodoLabel[]>;
+  /** 任务→提醒映射（TaskPanel 级拉取，行内渲染提醒徽标） */
+  remindersByTask: Map<number, TaskReminderMeta[]>;
   /** 空「新建任务」动作回调（议程空态引导，由 list-page 注入打开表单） */
   onCreateClick?: () => void;
   /** 右击某天：以该日为截止日期快捷新增（由壳层注入打开表单并预填） */
@@ -122,6 +126,7 @@ export function CalendarView({
   tasks,
   projects,
   labelsByTask,
+  remindersByTask,
   onCreateClick,
   onAddOnDate,
 }: CalendarViewProps) {
@@ -459,6 +464,7 @@ export function CalendarView({
                 projects={projects}
                 projectById={projectById}
                 labelsByTask={labelsByTask}
+                remindersByTask={remindersByTask}
                 onOpenDetail={openDetail}
               />
             )}
@@ -514,6 +520,7 @@ export function CalendarView({
                 projects={projects}
                 projectById={projectById}
                 labelsByTask={labelsByTask}
+                remindersByTask={remindersByTask}
                 onOpenDetail={openDetail}
               />
             )}
@@ -544,6 +551,7 @@ export function CalendarView({
           projects={projects}
           projectById={projectById}
           labelsByTask={labelsByTask}
+          remindersByTask={remindersByTask}
           onOpenDetail={openDetail}
         />
       )}
@@ -570,6 +578,7 @@ export function CalendarView({
                     task={t}
                     labels={labelsByTask.get(t.id) ?? []}
                     project={t.project_id != null ? projectById.get(t.project_id) : undefined}
+                    reminder={displayReminder(remindersByTask.get(t.id) ?? [], Date.now(), !!t.done)}
                     onActivate={() => openDetail(t.id)}
                   />
                 </TaskContextMenu>
@@ -626,6 +635,8 @@ interface VirtualGroupedListProps {
   projects: TodoProject[];
   projectById: Map<number, TodoProject>;
   labelsByTask: Map<number, TodoLabel[]>;
+  /** 任务→提醒映射（行内提醒徽标） */
+  remindersByTask: Map<number, TaskReminderMeta[]>;
   onOpenDetail: (id: number) => void;
 }
 
@@ -651,6 +662,7 @@ function VirtualGroupedList({
   projects,
   projectById,
   labelsByTask,
+  remindersByTask,
   onOpenDetail,
 }: VirtualGroupedListProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -740,6 +752,7 @@ function VirtualGroupedList({
                   projects={projects}
                   projectById={projectById}
                   labelsByTask={labelsByTask}
+                  remindersByTask={remindersByTask}
                   onOpenDetail={onOpenDetail}
                 />
               )}
@@ -762,6 +775,7 @@ function DayGroupBlock({
   projects,
   projectById,
   labelsByTask,
+  remindersByTask,
   onOpenDetail,
 }: {
   group: DayGroup;
@@ -773,6 +787,8 @@ function DayGroupBlock({
   projects: TodoProject[];
   projectById: Map<number, TodoProject>;
   labelsByTask: Map<number, TodoLabel[]>;
+  /** 任务→提醒映射（行内提醒徽标） */
+  remindersByTask: Map<number, TaskReminderMeta[]>;
   onOpenDetail: (id: number) => void;
 }) {
   const isToday = isSameDay(group.date, today);
@@ -832,6 +848,7 @@ function DayGroupBlock({
               project={t.project_id != null ? projectById.get(t.project_id) : undefined}
               onActivate={() => onOpenDetail(t.id)}
               overdue={!t.done && t.due_date! < today.getTime()}
+              reminder={displayReminder(remindersByTask.get(t.id) ?? [], Date.now(), !!t.done)}
             />
           </TaskContextMenu>
         ))}
@@ -848,6 +865,8 @@ interface CalendarTaskRowProps {
   project?: TodoProject;
   onActivate: () => void;
   overdue?: boolean;
+  /** 行内提醒徽标数据（displayReminder 产物；null = 无存活提醒行） */
+  reminder?: DisplayReminder | null;
 }
 
 /** 右栏/议程/弹层任务行：优先级左色条 + 标题 + 标签/项目元信息 + 截止时刻（逾期红）。
@@ -861,8 +880,9 @@ const CalendarTaskRow = memo(function CalendarTaskRow({
   project,
   onActivate,
   overdue = false,
+  reminder = null,
 }: CalendarTaskRowProps) {
-  const hasMeta = labels.length > 0 || project != null;
+  const hasMeta = labels.length > 0 || project != null || reminder != null;
   return (
     <div
       role="button"
@@ -901,6 +921,7 @@ const CalendarTaskRow = memo(function CalendarTaskRow({
                 {project.title}
               </span>
             )}
+            <ReminderChip reminder={reminder} />
           </div>
         )}
       </div>
