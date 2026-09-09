@@ -393,17 +393,32 @@ export function CalendarView({
                 // 优先级圆点六档全显（含 P0「无」浅灰）；最多 4 点 + 溢出计数
                 const visibleDots = dayTasks.slice(0, 4);
                 const overflow = dayTasks.length - visibleDots.length;
+                // 今日格整块主色底：+N 与日期数字/副标签同口径用白字，
+                // muted-foreground 灰字在主色底上对比度不足看不清
+                const isToday = formatYmd(date) === formatYmd(startOfDay(new Date()));
                 return (
                   <span className="flex w-full flex-wrap items-center justify-center gap-1 px-0.5">
                     {visibleDots.map((t) => (
                       <span
                         key={t.id}
                         className="size-1.5 shrink-0 rounded-full"
-                        style={{ backgroundColor: PRIORITY_COLOR[t.priority] }}
+                        style={{
+                          backgroundColor: PRIORITY_COLOR[t.priority],
+                          // 今日格主色底上圆点加半透明白描边防隐没
+                          //（浅灰 P0 点在主色底几乎不可见），其余格子不加
+                          ...(isToday && {
+                            boxShadow: "0 0 0 1px rgba(255,255,255,0.45)",
+                          }),
+                        }}
                       />
                     ))}
                     {overflow > 0 && (
-                      <span className="text-[10px] leading-none text-muted-foreground">
+                      <span
+                        className={cn(
+                          "text-[10px] leading-none",
+                          isToday ? "text-white/90" : "text-muted-foreground",
+                        )}
+                      >
                         +{overflow}
                       </span>
                     )}
