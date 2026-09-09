@@ -7,6 +7,15 @@
 
 ## [Unreleased]
 
+### 0001 迁移全字段中文备注——随 sqlite_master 落库
+
+本地库字段此前在 GUI 工具（DB Browser/DBeaver 等）打开就是裸列名看不懂；SQLite 无 MySQL 式列 COMMENT 元数据，但建表 DDL 原文（含 `--` 注释）会随库文件存进 `sqlite_master`——把备注写进建表语句，任何工具打开库即见。
+
+- **覆盖**：0001_init.sql 14 张表（sync 2 + todo 10 + cfg 4 + sys 1 + 表内 17 个 CREATE）全部业务字段行尾中文备注（192 处）：枚举取值（priority 六档 / status 三态 / relation_type 六种 / sync_type / 调度谱系）、同步语义（updated_at=LWW 主依据、version=同毫秒平局裁决、deleted_at=墓碑口径）、外键去向（→ 哪张表 + ON DELETE 行为）、单位（ms/分钟/小时/天）。口径全部取自现有权威材料（03 文档 §一/§八、repo 文档注释、桌面端标签映射），不发明语义；语义复杂处保留原块注释（repeat_* 四件套、my_day_date）不重复加注。
+- **验证**：python sqlite3 内存库跑全量 DDL+种子+治理段一次通过 + 17/17 表注释落 `sqlite_master` 断言；Rust 390 单测 + end_date_migration_check（sqlx::migrate! 真实跑注释后迁移）全绿（m4 WebDAV e2e 环境依赖失败非回归，既有口径）。
+- **代价（既有约定内）**：sqlx 迁移 checksum 变更，存量库启动报 checksum mismatch，须删库重初始化（与 end_date 移除同一路径，数据经云同步/备份恢复）；文件头维护约定补「新增/变更字段须同步补写行尾备注」。
+- 门禁：Rust 390 全绿。
+
 ### 小而美批次四连（并发会话 WIP 收编 + ④ 补完）
 
 竞品矩阵收尾的四件轻量改进，①②③ 为并发会话半成品收编（收编前全量门禁核验），④ 本批补完 Dart 侧后落地。

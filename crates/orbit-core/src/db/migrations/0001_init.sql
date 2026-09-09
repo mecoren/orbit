@@ -9,6 +9,8 @@
 -- 维护约定：结构变更直接改本文件（不考虑增量迁移），改动后需删除本地
 --       库文件重新初始化；已发布版本的存量库升级需删库重初始化，
 --       数据经云同步/备份（.orsync）恢复。
+--       字段备注为建表语句行尾 -- 注释，随 DDL 原样落库 sqlite_master
+--       （GUI 工具打开库即见）；新增/变更字段须同步补写行尾备注。
 -- ============================================================================
 
 -- =============================================================================
@@ -17,55 +19,55 @@
 
 -- 同步历史记录
 CREATE TABLE IF NOT EXISTS sync_history (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  sync_type TEXT NOT NULL DEFAULT '',
-  status TEXT NOT NULL DEFAULT '',
-  started_at INTEGER NOT NULL DEFAULT 0,
-  finished_at INTEGER,
-  pulled_count INTEGER NOT NULL DEFAULT 0,
-  pushed_count INTEGER NOT NULL DEFAULT 0,
-  conflict_count INTEGER NOT NULL DEFAULT 0,
-  error_message TEXT
+  id INTEGER PRIMARY KEY AUTOINCREMENT,  -- 主键
+  sync_type TEXT NOT NULL DEFAULT '',  -- 同步类型：full | incremental | pull_only | push_only
+  status TEXT NOT NULL DEFAULT '',  -- 状态：running 进行中 | success 成功 | failed 失败 | cancelled 取消
+  started_at INTEGER NOT NULL DEFAULT 0,  -- 开始时间（ms 时间戳）
+  finished_at INTEGER,  -- 结束时间（ms）；NULL = 尚未结束
+  pulled_count INTEGER NOT NULL DEFAULT 0,  -- 本次拉取行数
+  pushed_count INTEGER NOT NULL DEFAULT 0,  -- 本次推送行数
+  conflict_count INTEGER NOT NULL DEFAULT 0,  -- 本次冲突行数（LWW 裁决次数）
+  error_message TEXT  -- 失败原因（成功为 NULL）
 );
 
 -- 同步配置表（含 V3 周期同步字段）
 CREATE TABLE IF NOT EXISTS sync_configs (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    protocol TEXT NOT NULL,
-    endpoint TEXT NOT NULL,
-    bucket TEXT NOT NULL DEFAULT '',
-    region TEXT NOT NULL DEFAULT '',
-    path TEXT NOT NULL DEFAULT '',
-    device_id TEXT NOT NULL,
-    credential TEXT NOT NULL DEFAULT '',
-    encryption_key_id TEXT NOT NULL DEFAULT '',
-    merge_strategy TEXT NOT NULL DEFAULT 'last_write_wins',
-    sync_mode TEXT NOT NULL DEFAULT 'full',
-    max_update_age_hours INTEGER NOT NULL DEFAULT 720,
-    is_encrypted INTEGER NOT NULL DEFAULT 1,
-    is_active INTEGER NOT NULL DEFAULT 0,
-    is_auto_sync INTEGER NOT NULL DEFAULT 0,
-    sync_interval INTEGER NOT NULL DEFAULT 30,
-    sync_on_change INTEGER NOT NULL DEFAULT 0,
-    concurrent_reqs INTEGER NOT NULL DEFAULT 1,
-    timeout INTEGER NOT NULL DEFAULT 60,
-    skip_tls_verify INTEGER NOT NULL DEFAULT 0,
-    last_synced_at INTEGER,
-    last_gc_at INTEGER,
-    created_at INTEGER NOT NULL,
-    updated_at INTEGER NOT NULL,
-    deleted_at INTEGER,
-    version INTEGER NOT NULL DEFAULT 1,
+    id INTEGER PRIMARY KEY AUTOINCREMENT,  -- 主键
+    protocol TEXT NOT NULL,  -- 协议类型：webdav | s3（引擎按此分发适配器）
+    endpoint TEXT NOT NULL,  -- 服务器地址（URL）
+    bucket TEXT NOT NULL DEFAULT '',  -- S3 存储桶（WebDAV 为空）
+    region TEXT NOT NULL DEFAULT '',  -- S3 地域（OSS/MinIO 签名用；WebDAV 为空）
+    path TEXT NOT NULL DEFAULT '',  -- 远端 base_path（orbit/ 同步根下的子路径）
+    device_id TEXT NOT NULL,  -- 设备标识：WebDAV 用户名 / S3 access_key（移动端复用为凭据）
+    credential TEXT NOT NULL DEFAULT '',  -- 凭据：WebDAV 密码 / S3 secret_key（存证不回显）
+    encryption_key_id TEXT NOT NULL DEFAULT '',  -- E2E 同步密钥 id（当前实现恒空串：密钥体系走 crypto/config 通道）
+    merge_strategy TEXT NOT NULL DEFAULT 'last_write_wins',  -- 合并策略：last_write_wins（LWW 唯一实现；写侧填 lww 同义）
+    sync_mode TEXT NOT NULL DEFAULT 'full',  -- 同步模式（写侧恒 two_way；协议字段 0x02 Incremental 预留未用）
+    max_update_age_hours INTEGER NOT NULL DEFAULT 720,  -- 远端更新最大容忍时限（小时，0=不限；当前两端写 0）
+    is_encrypted INTEGER NOT NULL DEFAULT 1,  -- 云同步 E2E 加密开关：0 关 1 开（默认 1）
+    is_active INTEGER NOT NULL DEFAULT 0,  -- 激活标记：同库仅一档配置激活（互斥由仓储层保证）
+    is_auto_sync INTEGER NOT NULL DEFAULT 0,  -- 自动同步总开关：0 关 1 开（60s tick 判据之一）
+    sync_interval INTEGER NOT NULL DEFAULT 30,  -- 定时同步间隔（分钟，0=关；tick 判据：距上次 ≥ interval）
+    sync_on_change INTEGER NOT NULL DEFAULT 0,  -- 数据变更即同步开关：0 关 1 开
+    concurrent_reqs INTEGER NOT NULL DEFAULT 1,  -- 并发请求数（Pull buffer_unordered 并行度，两端写 8）
+    timeout INTEGER NOT NULL DEFAULT 60,  -- 请求超时（秒，0=默认 30s）
+    skip_tls_verify INTEGER NOT NULL DEFAULT 0,  -- 跳过 TLS 证书校验（自签名场景）：0 关 1 开
+    last_synced_at INTEGER,  -- 上次同步成功时间（ms，调度判据）；NULL = 从未同步
+    last_gc_at INTEGER,  -- 上次云空间垃圾回收时间（ms）；预留字段暂无写入方
+    created_at INTEGER NOT NULL,  -- 创建时间（ms 时间戳）
+    updated_at INTEGER NOT NULL,  -- 更新时间（ms）——同步 LWW 合并的主依据
+    deleted_at INTEGER,  -- 软删时间（ms，墓碑）；NULL = 未删
+    version INTEGER NOT NULL DEFAULT 1,  -- 乐观锁版本号，每次写 +1；LWW 同毫秒平局时的大者胜
     -- V3 周期同步字段
-    targets TEXT NOT NULL DEFAULT '["local"]',
-    local_path TEXT,
-    schedule_type TEXT NOT NULL DEFAULT 'off',
-    schedule_time TEXT,
-    schedule_weekday INTEGER,
-    sync_scope TEXT NOT NULL DEFAULT 'auto',
-    full_sync_interval INTEGER NOT NULL DEFAULT 7,
-    history_keep_count INTEGER NOT NULL DEFAULT 5,
-    notify_progress INTEGER NOT NULL DEFAULT 1
+    targets TEXT NOT NULL DEFAULT '["local"]',  -- V3 周期同步：目标模块（JSON 数组字符串；两端实际写 ["local"]/"todo"）
+    local_path TEXT,  -- V3：本地备份目录（None 回退 app_data_dir/backups/）；NULL = 默认
+    schedule_type TEXT NOT NULL DEFAULT 'off',  -- V3：调度类型（V3 谱系 off/interval/daily…；当前两端写 off/interval）
+    schedule_time TEXT,  -- V3：调度时刻 HH:mm（daily+ 档用）；NULL = 未设置
+    schedule_weekday INTEGER,  -- V3：周几 0=周日…6=周六（weekly 档用）；NULL = 未设置
+    sync_scope TEXT NOT NULL DEFAULT 'auto',  -- V3：同步范围（当前两端写 all）
+    full_sync_interval INTEGER NOT NULL DEFAULT 7,  -- V3：全量同步间隔（天，0=每次全量）；当前两端写 0
+    history_keep_count INTEGER NOT NULL DEFAULT 5,  -- V3：sync_history 保留条数（TTL 清理阈值）
+    notify_progress INTEGER NOT NULL DEFAULT 1  -- V3：同步进度通知开关：0 关 1 开（默认 1）
 );
 
 CREATE INDEX IF NOT EXISTS idx_sync_configs_is_active ON sync_configs(is_active);
@@ -76,17 +78,17 @@ CREATE INDEX IF NOT EXISTS idx_sync_configs_is_active ON sync_configs(is_active)
 
 -- 待办项目表
 CREATE TABLE IF NOT EXISTS todo_projects (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  uuid TEXT NOT NULL DEFAULT '',
-  title TEXT NOT NULL DEFAULT '',
-  description TEXT,
-  hex_color TEXT NOT NULL DEFAULT '#3B82F6',
-  sort_order REAL NOT NULL DEFAULT 0,
-  is_deleted INTEGER NOT NULL DEFAULT 0,
-  created_at INTEGER NOT NULL DEFAULT 0,
-  updated_at INTEGER NOT NULL DEFAULT 0,
-  deleted_at INTEGER,
-  version INTEGER NOT NULL DEFAULT 1
+  id INTEGER PRIMARY KEY AUTOINCREMENT,  -- 主键（本地自增，非同步键）
+  uuid TEXT NOT NULL DEFAULT '',  -- 同步主键：跨设备行标识，UNIQUE 索引兜底防僵尸行复活
+  title TEXT NOT NULL DEFAULT '',  -- 名称
+  description TEXT,  -- 描述（可空）
+  hex_color TEXT NOT NULL DEFAULT '#3B82F6',  -- 颜色（#RRGGBB，默认蓝 #3B82F6；侧栏圆点+项目名着色）
+  sort_order REAL NOT NULL DEFAULT 0,  -- 侧栏排序键（拖拽取中值）
+  is_deleted INTEGER NOT NULL DEFAULT 0,  -- 软删标记：0 活 1 已删（回收站/墓碑，物理清除走 TTL）
+  created_at INTEGER NOT NULL DEFAULT 0,  -- 创建时间（ms 时间戳）
+  updated_at INTEGER NOT NULL DEFAULT 0,  -- 更新时间（ms）——同步 LWW 合并的主依据
+  deleted_at INTEGER,  -- 软删时间（ms，墓碑）；NULL = 未删
+  version INTEGER NOT NULL DEFAULT 1  -- 乐观锁版本号，每次写更新 +1；LWW 同毫秒平局时的大者胜
 );
 CREATE INDEX IF NOT EXISTS idx_todo_projects_is_deleted ON todo_projects(is_deleted);
 CREATE INDEX IF NOT EXISTS idx_todo_projects_uuid ON todo_projects(uuid);
@@ -94,19 +96,19 @@ CREATE INDEX IF NOT EXISTS idx_todo_projects_sort ON todo_projects(is_deleted, s
 
 -- 待办任务表
 CREATE TABLE IF NOT EXISTS todo_tasks (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  uuid TEXT NOT NULL DEFAULT '',
-  title TEXT NOT NULL DEFAULT '',
-  description TEXT,
-  project_id INTEGER,
-  priority INTEGER NOT NULL DEFAULT 0,
-  status TEXT NOT NULL DEFAULT 'pending',
-  done INTEGER NOT NULL DEFAULT 0,
-  done_at INTEGER,
-  due_date INTEGER,
-  start_date INTEGER,
-  repeat_after INTEGER NOT NULL DEFAULT 0,
-  repeat_mode INTEGER NOT NULL DEFAULT 0,
+  id INTEGER PRIMARY KEY AUTOINCREMENT,  -- 主键（本地自增，非同步键）
+  uuid TEXT NOT NULL DEFAULT '',  -- 同步主键：跨设备行标识，UNIQUE 索引兜底防僵尸行复活
+  title TEXT NOT NULL DEFAULT '',  -- 名称
+  description TEXT,  -- 描述（可空）
+  project_id INTEGER,  -- 所属项目 id → todo_projects.id（ON DELETE SET NULL：删项目不删任务）
+  priority INTEGER NOT NULL DEFAULT 0,  -- 优先级：0 无 / 1 低 / 2 中 / 3 高 / 4 紧急 / 5 立即处理
+  status TEXT NOT NULL DEFAULT 'pending',  -- 状态：pending 待办 | doing 进行中 | done 已完成（done 时 done/done_at 联动写入）
+  done INTEGER NOT NULL DEFAULT 0,  -- 完成标记：0 未完成 1 已完成（与 status=done 联动）
+  done_at INTEGER,  -- 完成时间（ms）；NULL = 未完成
+  due_date INTEGER,  -- 截止日期（ms 时间戳）；NULL = 无
+  start_date INTEGER,  -- 开始日期（ms 时间戳）；NULL = 无
+  repeat_after INTEGER NOT NULL DEFAULT 0,  -- 重复间隔数（≥1；0 = 不重复，配合 repeat_mode）
+  repeat_mode INTEGER NOT NULL DEFAULT 0,  -- 重复模式：0 不重复 / 1 按天 / 2 按周 / 3 按月 / 4 按年
   -- 重复规则扩展（07 竞品矩阵批次 #34，四款参考产品全有）：
   -- repeat_weekdays：星期几位掩码（bit0=周一 … bit6=周日；仅 WEEKLY 生效，
   --   0 = 未指定回落旧语义"每 N 周的今天"；多选时 due 推进到掩码内的下一个星期几）
@@ -118,20 +120,20 @@ CREATE TABLE IF NOT EXISTS todo_tasks (
   repeat_end_type INTEGER NOT NULL DEFAULT 0,
   repeat_end_param INTEGER NOT NULL DEFAULT 0,
   repeat_from_done INTEGER NOT NULL DEFAULT 0,
-  percent_done REAL NOT NULL DEFAULT 0,
-  position REAL NOT NULL DEFAULT 0,
-  is_favorite INTEGER NOT NULL DEFAULT 0,
+  percent_done REAL NOT NULL DEFAULT 0,  -- 完成百分比 0–100：由后端按子任务勾选自动回算，无手动滑块
+  position REAL NOT NULL DEFAULT 0,  -- 列表/看板排序键：拖拽取中值 ((prev??0)+(next??100000))/2
+  is_favorite INTEGER NOT NULL DEFAULT 0,  -- 收藏标记：0 普通 1 收藏（星标）
   -- My Day「我的一天」（原 0002_my_day 并入；07 竞品报告 §五新增项，
   -- 对标微软 To Do 每日聚焦视图）：my_day_date 存「加入当天」的本地零点
   -- 时间戳（ms）；NULL = 不在任何一天的 My Day。次日「自动清空」是视图
   -- 侧按日判断（my_day_date == 今天零点），不改数据——与微软 To Do 一致：
   -- 昨天加入但没完成的任务会回到原项目，可再次「加入我的一天」。
   my_day_date INTEGER,
-  is_deleted INTEGER NOT NULL DEFAULT 0,
-  created_at INTEGER NOT NULL DEFAULT 0,
-  updated_at INTEGER NOT NULL DEFAULT 0,
-  deleted_at INTEGER,
-  version INTEGER NOT NULL DEFAULT 1,
+  is_deleted INTEGER NOT NULL DEFAULT 0,  -- 软删标记：0 活 1 已删（回收站/墓碑，物理清除走 TTL）
+  created_at INTEGER NOT NULL DEFAULT 0,  -- 创建时间（ms 时间戳）
+  updated_at INTEGER NOT NULL DEFAULT 0,  -- 更新时间（ms）——同步 LWW 合并的主依据
+  deleted_at INTEGER,  -- 软删时间（ms，墓碑）；NULL = 未删
+  version INTEGER NOT NULL DEFAULT 1,  -- 乐观锁版本号，每次写更新 +1；LWW 同毫秒平局时的大者胜
   FOREIGN KEY (project_id) REFERENCES todo_projects(id) ON DELETE SET NULL
 );
 CREATE INDEX IF NOT EXISTS idx_todo_tasks_is_deleted ON todo_tasks(is_deleted);
@@ -146,18 +148,18 @@ CREATE INDEX IF NOT EXISTS idx_todo_tasks_my_day ON todo_tasks(my_day_date) WHER
 
 -- 待办子任务表
 CREATE TABLE IF NOT EXISTS todo_subtasks (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  uuid TEXT NOT NULL DEFAULT '',
-  task_id INTEGER NOT NULL,
-  title TEXT NOT NULL DEFAULT '',
-  done INTEGER NOT NULL DEFAULT 0,
-  done_at INTEGER,
-  position REAL NOT NULL DEFAULT 0,
-  is_deleted INTEGER NOT NULL DEFAULT 0,
-  created_at INTEGER NOT NULL DEFAULT 0,
-  updated_at INTEGER NOT NULL DEFAULT 0,
-  deleted_at INTEGER,
-  version INTEGER NOT NULL DEFAULT 1,
+  id INTEGER PRIMARY KEY AUTOINCREMENT,  -- 主键（本地自增，非同步键）
+  uuid TEXT NOT NULL DEFAULT '',  -- 同步主键：跨设备行标识，UNIQUE 索引兜底防僵尸行复活
+  task_id INTEGER NOT NULL,  -- 所属任务 id → todo_tasks.id（ON DELETE CASCADE）
+  title TEXT NOT NULL DEFAULT '',  -- 名称
+  done INTEGER NOT NULL DEFAULT 0,  -- 完成标记：0 未完成 1 已完成
+  done_at INTEGER,  -- 完成时间（ms）；NULL = 未完成
+  position REAL NOT NULL DEFAULT 0,  -- 排序键：手动档拖拽取中值
+  is_deleted INTEGER NOT NULL DEFAULT 0,  -- 软删标记：0 活 1 已删（回收站/墓碑，物理清除走 TTL）
+  created_at INTEGER NOT NULL DEFAULT 0,  -- 创建时间（ms 时间戳）
+  updated_at INTEGER NOT NULL DEFAULT 0,  -- 更新时间（ms）——同步 LWW 合并的主依据
+  deleted_at INTEGER,  -- 软删时间（ms，墓碑）；NULL = 未删
+  version INTEGER NOT NULL DEFAULT 1,  -- 乐观锁版本号，每次写更新 +1；LWW 同毫秒平局时的大者胜
   FOREIGN KEY (task_id) REFERENCES todo_tasks(id) ON DELETE CASCADE
 );
 CREATE INDEX IF NOT EXISTS idx_todo_subtasks_task_id ON todo_subtasks(task_id);
@@ -165,29 +167,29 @@ CREATE INDEX IF NOT EXISTS idx_todo_subtasks_uuid ON todo_subtasks(uuid);
 
 -- 待办标签表
 CREATE TABLE IF NOT EXISTS todo_labels (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  uuid TEXT NOT NULL DEFAULT '',
-  title TEXT NOT NULL DEFAULT '',
-  hex_color TEXT NOT NULL DEFAULT '#6B7280',
-  is_deleted INTEGER NOT NULL DEFAULT 0,
-  created_at INTEGER NOT NULL DEFAULT 0,
-  updated_at INTEGER NOT NULL DEFAULT 0,
-  deleted_at INTEGER,
-  version INTEGER NOT NULL DEFAULT 1
+  id INTEGER PRIMARY KEY AUTOINCREMENT,  -- 主键（本地自增，非同步键）
+  uuid TEXT NOT NULL DEFAULT '',  -- 同步主键：跨设备行标识，UNIQUE 索引兜底防僵尸行复活
+  title TEXT NOT NULL DEFAULT '',  -- 名称
+  hex_color TEXT NOT NULL DEFAULT '#6B7280',  -- 颜色（#RRGGBB，默认灰 #6B7280；列表行标签色点）
+  is_deleted INTEGER NOT NULL DEFAULT 0,  -- 软删标记：0 活 1 已删（回收站/墓碑，物理清除走 TTL）
+  created_at INTEGER NOT NULL DEFAULT 0,  -- 创建时间（ms 时间戳）
+  updated_at INTEGER NOT NULL DEFAULT 0,  -- 更新时间（ms）——同步 LWW 合并的主依据
+  deleted_at INTEGER,  -- 软删时间（ms，墓碑）；NULL = 未删
+  version INTEGER NOT NULL DEFAULT 1  -- 乐观锁版本号，每次写更新 +1；LWW 同毫秒平局时的大者胜
 );
 CREATE INDEX IF NOT EXISTS idx_todo_labels_uuid ON todo_labels(uuid);
 
 -- 任务-标签关联表
 CREATE TABLE IF NOT EXISTS todo_task_labels (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  uuid TEXT NOT NULL DEFAULT '',
-  task_id INTEGER NOT NULL,
-  label_id INTEGER NOT NULL,
-  is_deleted INTEGER NOT NULL DEFAULT 0,
-  created_at INTEGER NOT NULL DEFAULT 0,
-  updated_at INTEGER NOT NULL DEFAULT 0,
-  deleted_at INTEGER,
-  version INTEGER NOT NULL DEFAULT 1,
+  id INTEGER PRIMARY KEY AUTOINCREMENT,  -- 主键（本地自增，非同步键）
+  uuid TEXT NOT NULL DEFAULT '',  -- 同步主键：跨设备行标识，UNIQUE 索引兜底防僵尸行复活
+  task_id INTEGER NOT NULL,  -- 任务 id → todo_tasks.id（ON DELETE CASCADE）
+  label_id INTEGER NOT NULL,  -- 标签 id → todo_labels.id（ON DELETE CASCADE）
+  is_deleted INTEGER NOT NULL DEFAULT 0,  -- 软删标记：0 活 1 已删（回收站/墓碑，物理清除走 TTL）
+  created_at INTEGER NOT NULL DEFAULT 0,  -- 创建时间（ms 时间戳）
+  updated_at INTEGER NOT NULL DEFAULT 0,  -- 更新时间（ms）——同步 LWW 合并的主依据
+  deleted_at INTEGER,  -- 软删时间（ms，墓碑）；NULL = 未删
+  version INTEGER NOT NULL DEFAULT 1,  -- 乐观锁版本号，每次写更新 +1；LWW 同毫秒平局时的大者胜
   FOREIGN KEY (task_id) REFERENCES todo_tasks(id) ON DELETE CASCADE,
   FOREIGN KEY (label_id) REFERENCES todo_labels(id) ON DELETE CASCADE
 );
@@ -197,15 +199,15 @@ CREATE INDEX IF NOT EXISTS idx_todo_task_labels_label_id ON todo_task_labels(lab
 
 -- 任务评论表
 CREATE TABLE IF NOT EXISTS todo_comments (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  uuid TEXT NOT NULL DEFAULT '',
-  task_id INTEGER NOT NULL,
-  content TEXT NOT NULL DEFAULT '',
-  is_deleted INTEGER NOT NULL DEFAULT 0,
-  created_at INTEGER NOT NULL DEFAULT 0,
-  updated_at INTEGER NOT NULL DEFAULT 0,
-  deleted_at INTEGER,
-  version INTEGER NOT NULL DEFAULT 1,
+  id INTEGER PRIMARY KEY AUTOINCREMENT,  -- 主键（本地自增，非同步键）
+  uuid TEXT NOT NULL DEFAULT '',  -- 同步主键：跨设备行标识，UNIQUE 索引兜底防僵尸行复活
+  task_id INTEGER NOT NULL,  -- 任务 id → todo_tasks.id（ON DELETE CASCADE）
+  content TEXT NOT NULL DEFAULT '',  -- 评论正文
+  is_deleted INTEGER NOT NULL DEFAULT 0,  -- 软删标记：0 活 1 已删（回收站/墓碑，物理清除走 TTL）
+  created_at INTEGER NOT NULL DEFAULT 0,  -- 创建时间（ms 时间戳）
+  updated_at INTEGER NOT NULL DEFAULT 0,  -- 更新时间（ms）——同步 LWW 合并的主依据
+  deleted_at INTEGER,  -- 软删时间（ms，墓碑）；NULL = 未删
+  version INTEGER NOT NULL DEFAULT 1,  -- 乐观锁版本号，每次写更新 +1；LWW 同毫秒平局时的大者胜
   FOREIGN KEY (task_id) REFERENCES todo_tasks(id) ON DELETE CASCADE
 );
 CREATE INDEX IF NOT EXISTS idx_todo_comments_task_id ON todo_comments(task_id);
@@ -213,16 +215,16 @@ CREATE INDEX IF NOT EXISTS idx_todo_comments_uuid ON todo_comments(uuid);
 
 -- 任务关系表
 CREATE TABLE IF NOT EXISTS todo_task_relations (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  uuid TEXT NOT NULL DEFAULT '',
-  task_id INTEGER NOT NULL,
-  other_task_id INTEGER NOT NULL,
-  relation_type TEXT NOT NULL DEFAULT 'related',
-  is_deleted INTEGER NOT NULL DEFAULT 0,
-  created_at INTEGER NOT NULL DEFAULT 0,
-  updated_at INTEGER NOT NULL DEFAULT 0,
-  deleted_at INTEGER,
-  version INTEGER NOT NULL DEFAULT 1,
+  id INTEGER PRIMARY KEY AUTOINCREMENT,  -- 主键（本地自增，非同步键）
+  uuid TEXT NOT NULL DEFAULT '',  -- 同步主键：跨设备行标识，UNIQUE 索引兜底防僵尸行复活
+  task_id INTEGER NOT NULL,  -- 本任务 id → todo_tasks.id（ON DELETE CASCADE）
+  other_task_id INTEGER NOT NULL,  -- 对方任务 id → todo_tasks.id（ON DELETE CASCADE）
+  relation_type TEXT NOT NULL DEFAULT 'related',  -- 关系类型：subtask 子任务 / blocks 阻塞 / blocked_by 被阻塞 / relates_to 关联 / duplicates 重复于 / duplicated_by 重复项
+  is_deleted INTEGER NOT NULL DEFAULT 0,  -- 软删标记：0 活 1 已删（回收站/墓碑，物理清除走 TTL）
+  created_at INTEGER NOT NULL DEFAULT 0,  -- 创建时间（ms 时间戳）
+  updated_at INTEGER NOT NULL DEFAULT 0,  -- 更新时间（ms）——同步 LWW 合并的主依据
+  deleted_at INTEGER,  -- 软删时间（ms，墓碑）；NULL = 未删
+  version INTEGER NOT NULL DEFAULT 1,  -- 乐观锁版本号，每次写更新 +1；LWW 同毫秒平局时的大者胜
   FOREIGN KEY (task_id) REFERENCES todo_tasks(id) ON DELETE CASCADE,
   FOREIGN KEY (other_task_id) REFERENCES todo_tasks(id) ON DELETE CASCADE
 );
@@ -232,15 +234,15 @@ CREATE INDEX IF NOT EXISTS idx_todo_task_relations_other_task_id ON todo_task_re
 
 -- 任务提醒表
 CREATE TABLE IF NOT EXISTS todo_reminders (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  uuid TEXT NOT NULL DEFAULT '',
-  task_id INTEGER NOT NULL,
-  remind_at INTEGER NOT NULL,
-  is_deleted INTEGER NOT NULL DEFAULT 0,
-  created_at INTEGER NOT NULL DEFAULT 0,
-  updated_at INTEGER NOT NULL DEFAULT 0,
-  deleted_at INTEGER,
-  version INTEGER NOT NULL DEFAULT 1,
+  id INTEGER PRIMARY KEY AUTOINCREMENT,  -- 主键（本地自增，非同步键）
+  uuid TEXT NOT NULL DEFAULT '',  -- 同步主键：跨设备行标识，UNIQUE 索引兜底防僵尸行复活
+  task_id INTEGER NOT NULL,  -- 任务 id → todo_tasks.id（ON DELETE CASCADE）
+  remind_at INTEGER NOT NULL,  -- 提醒触发时间（ms）；轮询扫描窗口：已到且 ≤24h
+  is_deleted INTEGER NOT NULL DEFAULT 0,  -- 软删标记：0 活 1 已删（回收站/墓碑，物理清除走 TTL）
+  created_at INTEGER NOT NULL DEFAULT 0,  -- 创建时间（ms 时间戳）
+  updated_at INTEGER NOT NULL DEFAULT 0,  -- 更新时间（ms）——同步 LWW 合并的主依据
+  deleted_at INTEGER,  -- 软删时间（ms，墓碑）；NULL = 未删
+  version INTEGER NOT NULL DEFAULT 1,  -- 乐观锁版本号，每次写更新 +1；LWW 同毫秒平局时的大者胜
   FOREIGN KEY (task_id) REFERENCES todo_tasks(id) ON DELETE CASCADE
 );
 CREATE INDEX IF NOT EXISTS idx_todo_reminders_task_id ON todo_reminders(task_id);
@@ -252,15 +254,15 @@ CREATE INDEX IF NOT EXISTS idx_todo_reminders_uuid ON todo_reminders(uuid);
 -- 附件二进制走 assets/{hash}.waitsync 内容寻址通道（cloud_sync/attachments.rs），
 -- 本表只同步「哪个任务挂了哪个 hash」的关联关系，随 todos 模块同步。
 CREATE TABLE IF NOT EXISTS todo_task_attachments (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  uuid TEXT NOT NULL DEFAULT '',
-  task_id INTEGER NOT NULL,
-  hash TEXT NOT NULL,
-  is_deleted INTEGER NOT NULL DEFAULT 0,
-  created_at INTEGER NOT NULL DEFAULT 0,
-  updated_at INTEGER NOT NULL DEFAULT 0,
-  deleted_at INTEGER,
-  version INTEGER NOT NULL DEFAULT 1,
+  id INTEGER PRIMARY KEY AUTOINCREMENT,  -- 主键（本地自增，非同步键）
+  uuid TEXT NOT NULL DEFAULT '',  -- 同步主键：跨设备行标识，UNIQUE 索引兜底防僵尸行复活
+  task_id INTEGER NOT NULL,  -- 任务 id → todo_tasks.id（ON DELETE CASCADE）
+  hash TEXT NOT NULL,  -- 附件内容寻址 hash → sys_attachments.hash（不复制行）
+  is_deleted INTEGER NOT NULL DEFAULT 0,  -- 软删标记：0 活 1 已删（回收站/墓碑，物理清除走 TTL）
+  created_at INTEGER NOT NULL DEFAULT 0,  -- 创建时间（ms 时间戳）
+  updated_at INTEGER NOT NULL DEFAULT 0,  -- 更新时间（ms）——同步 LWW 合并的主依据
+  deleted_at INTEGER,  -- 软删时间（ms，墓碑）；NULL = 未删
+  version INTEGER NOT NULL DEFAULT 1,  -- 乐观锁版本号，每次写更新 +1；LWW 同毫秒平局时的大者胜
   FOREIGN KEY (task_id) REFERENCES todo_tasks(id) ON DELETE CASCADE
 );
 CREATE INDEX IF NOT EXISTS idx_todo_task_attachments_uuid ON todo_task_attachments(uuid);
@@ -272,30 +274,30 @@ CREATE INDEX IF NOT EXISTS idx_todo_task_attachments_hash ON todo_task_attachmen
 -- conditions 为 JSON：{status, priority_min, project_ids, label_ids, due_within_days,
 -- due_overdue, favorite_only}——查询侧按存在键过滤，缺键 = 不过滤
 CREATE TABLE IF NOT EXISTS todo_saved_filters (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  uuid TEXT NOT NULL DEFAULT '',
-  name TEXT NOT NULL DEFAULT '',
-  conditions TEXT NOT NULL DEFAULT '{}',
-  sort_order INTEGER NOT NULL DEFAULT 0,
-  is_deleted INTEGER NOT NULL DEFAULT 0,
-  created_at INTEGER NOT NULL DEFAULT 0,
-  updated_at INTEGER NOT NULL DEFAULT 0,
-  deleted_at INTEGER,
-  version INTEGER NOT NULL DEFAULT 1
+  id INTEGER PRIMARY KEY AUTOINCREMENT,  -- 主键（本地自增，非同步键）
+  uuid TEXT NOT NULL DEFAULT '',  -- 同步主键：跨设备行标识，UNIQUE 索引兜底防僵尸行复活
+  name TEXT NOT NULL DEFAULT '',  -- 筛选器名称（侧栏显示）
+  conditions TEXT NOT NULL DEFAULT '{}',  -- 条件 JSON：{status, priority_min, project_ids, label_ids, due_within_days, due_overdue, favorite_only}——按存在键过滤，缺键 = 不过滤
+  sort_order INTEGER NOT NULL DEFAULT 0,  -- 侧栏排序键
+  is_deleted INTEGER NOT NULL DEFAULT 0,  -- 软删标记：0 活 1 已删（回收站/墓碑，物理清除走 TTL）
+  created_at INTEGER NOT NULL DEFAULT 0,  -- 创建时间（ms 时间戳）
+  updated_at INTEGER NOT NULL DEFAULT 0,  -- 更新时间（ms）——同步 LWW 合并的主依据
+  deleted_at INTEGER,  -- 软删时间（ms，墓碑）；NULL = 未删
+  version INTEGER NOT NULL DEFAULT 1  -- 乐观锁版本号，每次写更新 +1；LWW 同毫秒平局时的大者胜
 );
 CREATE INDEX IF NOT EXISTS idx_todo_saved_filters_uuid ON todo_saved_filters(uuid);
 
 CREATE TABLE IF NOT EXISTS cfg_option_categories (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  category_key TEXT NOT NULL DEFAULT '',
-  label TEXT NOT NULL DEFAULT '',
-  description TEXT NOT NULL DEFAULT '',
-  is_active INTEGER NOT NULL DEFAULT 1,
-  sort_order INTEGER NOT NULL DEFAULT 0,
-  is_deleted INTEGER NOT NULL DEFAULT 0,
-  created_at INTEGER NOT NULL DEFAULT 0,
-  updated_at INTEGER NOT NULL DEFAULT 0,
-  deleted_at INTEGER
+  id INTEGER PRIMARY KEY AUTOINCREMENT,  -- 主键（本地自增，非同步键）
+  category_key TEXT NOT NULL DEFAULT '',  -- 分组键（如 todo_priority / todo_status；唯一索引兜底）
+  label TEXT NOT NULL DEFAULT '',  -- 分组显示名（如「优先级」）
+  description TEXT NOT NULL DEFAULT '',  -- 分组说明
+  is_active INTEGER NOT NULL DEFAULT 1,  -- 启用标记：0 停用 1 启用
+  sort_order INTEGER NOT NULL DEFAULT 0,  -- 分组排序键
+  is_deleted INTEGER NOT NULL DEFAULT 0,  -- 软删标记：0 活 1 已删（回收站/墓碑，物理清除走 TTL）
+  created_at INTEGER NOT NULL DEFAULT 0,  -- 创建时间（ms 时间戳）
+  updated_at INTEGER NOT NULL DEFAULT 0,  -- 更新时间（ms）——同步 LWW 合并的主依据
+  deleted_at INTEGER  -- 软删时间（ms，墓碑）；NULL = 未删
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_cfg_option_categories_key_active
@@ -304,18 +306,18 @@ CREATE INDEX IF NOT EXISTS idx_cfg_option_categories_is_active
   ON cfg_option_categories(is_active);
 
 CREATE TABLE IF NOT EXISTS cfg_option_items (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  category_id INTEGER NOT NULL,
-  value TEXT NOT NULL DEFAULT '',
-  label TEXT NOT NULL DEFAULT '',
-  sort_order INTEGER NOT NULL DEFAULT 0,
-  is_default INTEGER NOT NULL DEFAULT 0,
-  is_active INTEGER NOT NULL DEFAULT 1,
-  color TEXT NOT NULL DEFAULT '',
-  is_deleted INTEGER NOT NULL DEFAULT 0,
-  created_at INTEGER NOT NULL DEFAULT 0,
-  updated_at INTEGER NOT NULL DEFAULT 0,
-  deleted_at INTEGER,
+  id INTEGER PRIMARY KEY AUTOINCREMENT,  -- 主键（本地自增，非同步键）
+  category_id INTEGER NOT NULL,  -- 所属分组 id → cfg_option_categories.id
+  value TEXT NOT NULL DEFAULT '',  -- 选项存值（如 high / pending；业务实际引用此类字符串）
+  label TEXT NOT NULL DEFAULT '',  -- 选项显示名（如「高」「待办」）
+  sort_order INTEGER NOT NULL DEFAULT 0,  -- 组内排序键
+  is_default INTEGER NOT NULL DEFAULT 0,  -- 默认选中标记：0 否 1 是（如优先级默认 medium）
+  is_active INTEGER NOT NULL DEFAULT 1,  -- 启用标记：0 停用 1 启用
+  color TEXT NOT NULL DEFAULT '',  -- 选项色（可空；未消费）
+  is_deleted INTEGER NOT NULL DEFAULT 0,  -- 软删标记：0 活 1 已删（回收站/墓碑，物理清除走 TTL）
+  created_at INTEGER NOT NULL DEFAULT 0,  -- 创建时间（ms 时间戳）
+  updated_at INTEGER NOT NULL DEFAULT 0,  -- 更新时间（ms）——同步 LWW 合并的主依据
+  deleted_at INTEGER,  -- 软删时间（ms，墓碑）；NULL = 未删
   FOREIGN KEY (category_id) REFERENCES cfg_option_categories(id)
 );
 
@@ -336,19 +338,19 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_cfg_option_items_category_value_active
 -- 白名单（节假日数据可由各端自行拉取，无需云同步；旧版本客户端同步包中无此表
 -- 亦无影响——行级 _table 路由只分发白名单内的表）。
 CREATE TABLE IF NOT EXISTS cfg_holidays (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  date TEXT NOT NULL,
-  year INTEGER NOT NULL,
-  is_holiday INTEGER NOT NULL,
-  name TEXT NOT NULL DEFAULT '',
-  created_at INTEGER NOT NULL DEFAULT 0
+  id INTEGER PRIMARY KEY AUTOINCREMENT,  -- 主键
+  date TEXT NOT NULL,  -- 日期（YYYY-MM-DD；UNIQUE）
+  year INTEGER NOT NULL,  -- 年份（定时更新/补更的按年记账维度）
+  is_holiday INTEGER NOT NULL,  -- 1 放假 0 调休补班（非节假日不落行）
+  name TEXT NOT NULL DEFAULT '',  -- 节假日名称（如「国庆节」）
+  created_at INTEGER NOT NULL DEFAULT 0  -- 写入时间（ms；每年节假日批量刷新时按年重写）
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_cfg_holidays_date ON cfg_holidays(date);
 
 CREATE TABLE IF NOT EXISTS cfg_kv (
-  key TEXT PRIMARY KEY,
-  value TEXT NOT NULL DEFAULT '',
-  updated_at INTEGER NOT NULL DEFAULT 0
+  key TEXT PRIMARY KEY,  -- 键（主键）
+  value TEXT NOT NULL DEFAULT '',  -- 值（JSON/字符串）
+  updated_at INTEGER NOT NULL DEFAULT 0  -- 更新时间（ms）
 );
 
 -- ============================================================================
@@ -357,14 +359,14 @@ CREATE TABLE IF NOT EXISTS cfg_kv (
 
 -- 附件元数据表（PK: hash）
 CREATE TABLE IF NOT EXISTS sys_attachments (
-  hash TEXT PRIMARY KEY,
-  original_name TEXT NOT NULL DEFAULT '',
-  mime_type TEXT NOT NULL DEFAULT '',
-  size_bytes INTEGER NOT NULL DEFAULT 0,
-  local_path TEXT,
-  is_uploaded INTEGER NOT NULL DEFAULT 0,
-  is_local_cached INTEGER NOT NULL DEFAULT 0,
-  created_at INTEGER NOT NULL DEFAULT 0
+  hash TEXT PRIMARY KEY,  -- 内容寻址主键：附件二进制的 sha256（同 hash 复用即去重）
+  original_name TEXT NOT NULL DEFAULT '',  -- 原始文件名
+  mime_type TEXT NOT NULL DEFAULT '',  -- MIME 类型（如 image/png）
+  size_bytes INTEGER NOT NULL DEFAULT 0,  -- 文件字节数
+  local_path TEXT,  -- 本地缓存路径（assets/{hash}）；NULL = 未缓存
+  is_uploaded INTEGER NOT NULL DEFAULT 0,  -- 已上传标记：0 否 1 是
+  is_local_cached INTEGER NOT NULL DEFAULT 0,  -- 本地缓存标记：0 否 1 是
+  created_at INTEGER NOT NULL DEFAULT 0  -- 入库时间（ms）
 );
 -- ============================================================================
 -- 种子数据
