@@ -7,6 +7,17 @@
 
 ## [Unreleased]
 
+### B5 通知「完成」按钮——前台直完、后台横幅提示（与推迟同构）
+
+提醒通知上的 action 此前只有推迟三档（推迟10分钟/30分钟/1小时），任务完成后仍要进 app 勾选。本批在通知 action 首位加「完成」按钮（TickTick/MS To Do 标配）。
+
+- **前台路径**（进程存活）：`_onForegroundResponse` 命中 complete → cancel 原通知 + 经 BootGate 注入的 `onCompleteAction` 直调桥 `todoTaskComplete`——dbChanges 事件自然失效业务缓存 + 调度器重排闹钟，完成实例的提醒行由引擎软删（2090473 口径）。
+- **后台路径**（进程被杀）：与推迟通道完全同构——后台 isolate 无法重入 FRB 库，不写 DB；cancel 原通知 + 静默渠道确认横幅「已标记完成，打开应用后生效」；DB 落地由用户打开应用后自然完成。
+- **后台入口统一分发器**：`onSnoozeBackgroundAction` 更名 `onBackgroundAction`（@pragma vm:entry-point 保留），内部分发 snooze/complete 二路；两处 initialize 注册同步更新。
+- 通知 id 三段互斥域：闹钟域 `alarmIdFor` / 确认域 `confirmIdFor` / 待完成横幅域 `pendingCompleteIdFor`（确认域 +500000000），原私有 `_alarmId/_confirmId` 公开化供测试锁定口径。
+- 测试：notification_complete_test 3 用例（action 集合互斥/id 三段互斥/payload 解析）；定向 18 用例全绿（trash_test 两例超时属并发会话移动端回收站可撤销 WIP 的半成品，非本批文件）。
+
+
 ### B3 剪贴板截图 Ctrl+V 直粘附件——DOM paste 零依赖方案
 
 附件此前只能经文件选择器添加，截屏工作流（截图→粘贴）断链，需先落盘再翻文件。本批打通：详情抽屉打开时**Ctrl+V 直接把剪贴板位图存为该任务附件**（Todoist/TickTick 桌面标配）。

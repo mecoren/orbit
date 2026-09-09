@@ -127,6 +127,15 @@ class _BootGateState extends ConsumerState<BootGate>
       if (router == null) return;
       await router.push('/todo/$taskId');
     };
+    // B5 通知「完成」action：前台直调桥完成任务（dbChanges 事件自然
+    // 失效业务缓存 + 调度器重排闹钟——完成实例提醒行由引擎软删）。
+    NotificationService.onCompleteAction = (taskId) async {
+      try {
+        await ref.read(orbitBridgeProvider).todoTaskComplete(taskId);
+      } catch (e) {
+        debugPrint('[BootGate] notification complete failed: $e');
+      }
+    };
     // 后台闹钟通道：DB 未来提醒全量重排 + dbChanges 防抖跟随
     //（P2 提醒升级：后台/被杀/重启均由系统闹钟保证提醒）
     _scheduler = ReminderScheduler.attachOnce(ref.read(orbitBridgeProvider));

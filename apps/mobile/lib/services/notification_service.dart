@@ -30,6 +30,12 @@ import '../shared/widgets/wait_toast.dart';
 ///    系统闹钟 + 静默确认通知；DB 的删旧建新由前台启动时
 ///    [syncFutureReminders] 以数据库为准收敛（DB 旧行到期弹一次后
 ///    自动清掉，不循环——见 _applySnooze 的 remindAt 比较）。
+/// 4. **完成操作通道**（B5，2026-09-09）：通知上的「完成」action 按钮
+///    （首位）。前台（进程存活）经 [onCompleteAction] 回调直调桥
+///    todoTaskComplete（dbChanges 自然失效缓存+重排闹钟）；后台
+///    （进程被杀）与推迟同构——不写 Rust DB，只 cancel 原通知 +
+///    静默渠道确认横幅「已标记完成，打开应用后生效」，DB 落地由用户
+///    打开应用后自然完成（下次重排时任务已完成则引擎已软删提醒行）。
 ///
 /// 小米 HyperOS 灵动岛（焦点通知）：category=alarm + Importance.high
 /// 渠道。小米焦点通知对闹钟/来电类高优通知以灵动岛胶囊呈现，
@@ -62,24 +68,43 @@ class NotificationService {
   /// 推迟 actionId → 分钟数（前后台回调共用解析）
   static const snoozeActions = {'snooze_10': 10, 'snooze_30': 30, 'snooze_60': 60};
 
+  /// 完成 actionId 集合（B5；与推迟集合互斥，前后台回调共用解析）
+  static const completeActions = {'complete'};
+
   /// 通知 id 派生：taskId 域 + 偏移避撞（taskId 正常 ≤ 位数充足；
-  /// % 2^30 后加偏移确保 32 位域内且与确认通知 id 不重叠）
-  static int _alarmId(int taskId) => (taskId % (1 << 30)) + 1;
-  static int _confirmId(int taskId) => (taskId % (1 << 30)) + 1000000000;
+  /// % 2^30 后加偏移确保 32 位域内且与确认通知 id 不重叠）。
+  /// 公开静态供测试锁定口径（B5：三段互斥域）。
+  static int alarmIdFor(int taskId) => (taskId % (1 << 30)) + 1;
+  static int confirmIdFor(int taskId) => (taskId % (1 << 30)) + 1000000000;
+
+  /// 完成（后台路径）确认横幅 id：确认域再 +500000000，与闹钟/确认域互斥
+  static int pendingCompleteIdFor(int taskId) =>
+      (taskId % (1 << 30)) + 1000000000 + 500000000;
 
   /// 权限是否已授予（未初始化 / 被拒均为 false）
   bool get hasPermission => _granted;
 
   // ── 推迟回调（前台 + 后台 isolate 双入口）──
 
-  /// 后台 isolate 推迟回调（top-level @pragma 防 AOT 裁剪）。
-  /// payload "taskId|remindAt|title"；actionId 即 snoozeActions 键。
+  /// 后台 isolate 通知 action 回调（top-level @pragma 防 AOT 裁剪）。
+  /// payload "taskId|remindAt|title"；统一分发：snooze / complete 二路。
   @pragma('vm:entry-point')
-  static void onSnoozeBackgroundAction(NotificationResponse response) {
+  static void onBackgroundAction(NotificationResponse response) {
     runZonedGuarded(
-      () => instance._handleSnoozeResponse(response),
-      (e, st) => debugPrint('[NotificationService] bg snooze: $e\n$st'),
+      () => instance._handleBackgroundAction(response),
+      (e, st) => debugPrint('[NotificationService] bg action: $e\n$st'),
     );
+  }
+
+  /// 后台 action 分发体：推迟 → 重排闹钟；完成 → cancel 原通知 + 确认横幅
+  Future<void> _handleBackgroundAction(NotificationResponse response) async {
+    if (snoozeActions.containsKey(response.actionId)) {
+      await _handleSnoozeResponse(response);
+      return;
+    }
+    if (completeActions.contains(response.actionId)) {
+      await _handleCompleteResponse(response);
+    }
   }
 
   /// 前台收到通知交互（onDidReceiveNotificationResponse）：
@@ -93,6 +118,20 @@ class NotificationService {
         () => instance._handleSnoozeResponse(response),
         (e, st) => debugPrint('[NotificationService] fg snooze: $e\n$st'),
       );
+      return;
+    }
+    // B5 完成 action：前台进程活着 → 回调直完（BootGate 注入桥调用）
+    if (completeActions.contains(response.actionId)) {
+      final completeTaskId = taskIdFromPayload(response.payload);
+      if (completeTaskId != null) {
+        runZonedGuarded(
+          () async {
+            await _plugin.cancel(id: alarmIdFor(completeTaskId));
+            await onCompleteAction?.call(completeTaskId);
+          },
+          (e, st) => debugPrint('[NotificationService] fg complete: $e\n$st'),
+        );
+      }
       return;
     }
     final taskId = taskIdFromPayload(response.payload);
@@ -117,6 +156,11 @@ class NotificationService {
   /// onDidReceiveNotificationResponse，走 [consumeLaunchPayload]。
   static Future<void> Function(int taskId)? onNotificationTap;
 
+  /// 通知「完成」action 回调（B5）：前台进程存活时经此直调桥完成任务。
+  /// 由 UI 层（BootGate）注入（与 onNotificationTap 同构：服务层不持桥）。
+  /// 后台 isolate 不可达（FRB 不可重入）——后台路径只做 UI 层处置。
+  static Future<void> Function(int taskId)? onCompleteAction;
+
   /// 推迟执行体：解析 payload → 重排系统闹钟 + 静默确认通知。
   /// 全部走插件原生 API（不依赖 FRB/DB），前后台 isolate 皆可运行。
   Future<void> _handleSnoozeResponse(NotificationResponse response) async {
@@ -133,18 +177,45 @@ class NotificationService {
     final nextAt = remindAt + minutes * 60 * 1000;
     final clock = _clockLabel(nextAt);
     await _scheduleAlarm(
-      id: _alarmId(taskId),
+      id: alarmIdFor(taskId),
       title: '待办提醒',
       body: title,
       remindAt: nextAt,
       payload: '$taskId|$nextAt|$title',
     );
     await _plugin.show(
-      id: _confirmId(taskId),
+      id: confirmIdFor(taskId),
       title: '已推迟 $minutes 分钟',
       body: '$title · $clock 再提醒你',
       notificationDetails: _quietDetails(),
     );
+  }
+
+  /// 完成执行体（后台路径）：cancel 原通知 + 静默确认横幅。
+  /// 全部走插件原生 API（不依赖 FRB/DB），与推迟通道同构——后台
+  /// isolate 无法写 Rust DB，DB 落地由用户打开应用后自然完成。
+  Future<void> _handleCompleteResponse(NotificationResponse response) async {
+    final taskId = taskIdFromPayload(response.payload);
+    if (taskId == null) return;
+    final title = _payloadTitle(response.payload);
+    await _ensureSelfContained();
+    try {
+      await _plugin.cancel(id: alarmIdFor(taskId));
+    } catch (_) {}
+    try {
+      await _plugin.show(
+        id: pendingCompleteIdFor(taskId),
+        title: '待办完成',
+        body: '$title 已标记完成，打开应用后生效',
+        notificationDetails: _quietDetails(),
+      );
+    } catch (_) {}
+  }
+
+  /// payload 第三段起的任务标题（与推迟解析同容错：缺失回退占位）
+  static String _payloadTitle(String? payload) {
+    final parts = (payload ?? '').split('|');
+    return parts.length >= 3 ? parts.sublist(2).join('|') : '待办任务';
   }
 
   /// 时钟串 HH:mm（本地时区；后台 isolate 与前台共用）
@@ -172,7 +243,7 @@ class NotificationService {
       await _plugin.initialize(
         settings: initSettings,
         onDidReceiveNotificationResponse: _onForegroundResponse,
-        onDidReceiveBackgroundNotificationResponse: onSnoozeBackgroundAction,
+        onDidReceiveBackgroundNotificationResponse: onBackgroundAction,
       );
     } catch (_) {
       /* 已初始化或后台受限：容忍，继续 show/schedule */
@@ -202,7 +273,7 @@ class NotificationService {
       await _plugin.initialize(
         settings: initSettings,
         onDidReceiveNotificationResponse: _onForegroundResponse,
-        onDidReceiveBackgroundNotificationResponse: onSnoozeBackgroundAction,
+        onDidReceiveBackgroundNotificationResponse: onBackgroundAction,
       );
 
       // 时区库初始化（zonedSchedule 依赖；失败 fallback UTC 仍可用）
@@ -239,7 +310,7 @@ class NotificationService {
   /// 无权限或展示异常 → 维持 warning toast 兜底（文案与原订阅处一致）。
   /// 兜底 toast 与通知正文点击均挂 [onNotificationTap] 跳任务详情。
   ///
-  /// 双通道去重：show() 与闹钟到点的原生 notify 同 id（_alarmId(taskId)），
+  /// 双通道去重：show() 与闹钟到点的原生 notify 同 id（alarmIdFor(taskId)），
   /// 后到者覆盖前者——同刻双弹天然合并为一条。
   /// 推迟产物识别：若本事件的 remind_at 早于该任务当前系统闹钟的排程
   /// （用户点过推迟、后台未写 DB 的旧行），静默删掉这条僵尸行不弹。
@@ -265,7 +336,7 @@ class NotificationService {
     }
     try {
       await _plugin.show(
-        id: _alarmId(event.taskId),
+        id: alarmIdFor(event.taskId),
         title: '待办提醒',
         body: event.title,
         notificationDetails: _reminderDetails(
@@ -285,7 +356,7 @@ class NotificationService {
   Future<bool> _isSnoozedOut(int taskId, int remindAt) async {
     try {
       final pending = await _plugin.pendingNotificationRequests();
-      final myId = _alarmId(taskId);
+      final myId = alarmIdFor(taskId);
       for (final p in pending) {
         if (p.id != myId) continue;
         final parts = (p.payload ?? '').split('|');
@@ -318,7 +389,7 @@ class NotificationService {
       // 标题缺失（任务可能已被删）：仍排闹钟，正文回退应用名
       final body = r.reminderTitle ?? '待办任务';
       final ok = await _scheduleAlarm(
-        id: _alarmId(r.taskId),
+        id: alarmIdFor(r.taskId),
         title: '待办提醒',
         body: body,
         remindAt: r.remindAt,
@@ -406,6 +477,7 @@ class NotificationService {
         category: AndroidNotificationCategory.alarm,
         autoCancel: true,
         actions: [
+          AndroidNotificationAction('complete', '完成'),
           AndroidNotificationAction('snooze_10', '推迟10分钟'),
           AndroidNotificationAction('snooze_30', '推迟30分钟'),
           AndroidNotificationAction('snooze_60', '推迟1小时'),
