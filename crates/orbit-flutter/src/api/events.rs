@@ -112,8 +112,9 @@ pub fn subscribe_db_changes(sink: StreamSink<DbEventDto>) {
 
 /// 启动待办提醒轮询守护（幂等；Dart 在 DB 就绪后调用一次）
 ///
-/// 扫描口径与桌面一致：
-/// `WHERE is_deleted=0 AND remind_at <= now AND now - remind_at <= 24h`
+/// 扫描与到期处置口径统一下沉 orbit-core（list_due_reminders +
+/// advance_fired_reminder）：`WHERE is_deleted=0 AND remind_at <= now
+/// AND now - remind_at <= 24h` 且任务未完成/未删（P1#10）
 pub fn start_reminder_poller(sink: StreamSink<ReminderDueDto>) {
     if POLLER_STARTED.swap(true, std::sync::atomic::Ordering::SeqCst) {
         return;
@@ -131,34 +132,32 @@ async fn poll_once(sink: &StreamSink<ReminderDueDto>) {
         return; // DB 未就绪，静默跳过
     };
 
+    // 到期扫描口径统一下沉 orbit-core（list_due_reminders）：任务未完成/
+    // 未删过滤（P1#10：完成实例不再提醒）+ 24h 补扫窗口——与桌面
+    // notification_scheduler 同源，双端口径由引擎测试锁定
     let now = chrono::Utc::now().timestamp_millis();
-    let rows = sqlx::query_as::<_, (i64, i64, String, i64)>(
-        "SELECT r.id, r.task_id, t.title, r.remind_at \
-         FROM todo_reminders r \
-         JOIN todo_tasks t ON t.id = r.task_id \
-         WHERE r.is_deleted = 0 AND r.remind_at <= ?1 AND ?1 - r.remind_at <= ?2 \
-         ORDER BY r.remind_at ASC LIMIT ?3",
-    )
-    .bind(now)
-    .bind(DAY_MS)
-    .bind(BATCH_LIMIT)
-    .fetch_all(&pool)
-    .await;
+    let rows = orbit_core::api::todo_api::list_due_reminders(&pool, now, DAY_MS, BATCH_LIMIT).await;
 
     let Ok(rows) = rows else { return };
 
-    for (id, task_id, title, remind_at) in rows {
+    for row in rows {
         // 去重：进程内存活期
-        if NOTIFIED_REMINDERS.lock().unwrap().contains(&id) {
+        if NOTIFIED_REMINDERS.lock().unwrap().contains(&row.id) {
             continue;
         }
 
         let _ = sink.add(ReminderDueDto {
-            id,
-            task_id,
-            title,
-            remind_at,
+            id: row.id,
+            task_id: row.task_id,
+            title: row.title.clone(),
+            remind_at: row.remind_at,
         });
-        NOTIFIED_REMINDERS.lock().unwrap().insert(id);
+
+        // 到期处置下沉引擎（advance_fired_reminder，与桌面同源）：重复任务
+        // 删旧建新续排（防雪球守卫在引擎内）；非重复/已完成行清理。失败
+        // 静默——下一轮 20s 轮询幂等重扫兜底
+        let _ = orbit_core::api::todo_api::advance_fired_reminder(&pool, &row).await;
+
+        NOTIFIED_REMINDERS.lock().unwrap().insert(row.id);
     }
 }

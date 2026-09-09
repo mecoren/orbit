@@ -2,8 +2,10 @@
 //!
 //! 桌面端 tauri-plugin-notification 的 show() 不支持定时触发，采用常驻轮询：
 //! - 立即扫一次 + 每 20s 一轮（01 文档 DoD：20s 轮询窗口内触发率 100%）
-//! - ⚖ 专用 SQL（弃用 ListFilter::default()，修复 page_size=20 漏扫隐患）：
-//!   `WHERE is_deleted=0 AND remind_at <= now AND now - remind_at <= 24h`
+//! - ⚖ 扫描与到期处置口径统一下沉 orbit-core（list_due_reminders +
+//!   advance_fired_reminder）：20s 窗口 / 24h 补扫 / 任务未完成未删过滤
+//!   （P1#10）/ 重复任务到期删旧建新续排（防雪球守卫在引擎内）——
+//!   移动端 events.rs 轮询同源，双端口径由引擎测试锁定
 //! - 去重集合进程内存活期，超期 24h 以上陈旧提醒不补弹
 //! - 触发双通道：系统通知（notify-rust 直发，带推迟按钮，P2 升级）
 //!   + emit "todo_reminder:due"（前端 toast 兜底，亦带推迟按钮）
@@ -94,24 +96,16 @@ async fn poll_once(app: &AppHandle) {
     };
     let pool = state.pool.clone();
 
-    // 专用 SQL：JOIN 任务标题；仅扫「已到期且未超期 24h」的未删除提醒
+    // 到期扫描口径统一下沉 orbit-core（list_due_reminders）：20s 窗口 +
+    // 24h 补扫 + 任务未完成/未删过滤（P1#10：完成实例不再提醒——完成命令
+    // 已软删其行，此处过滤兜历史遗留与云同步落库的僵尸行）
     let now = chrono::Utc::now().timestamp_millis();
-    let rows = sqlx::query_as::<_, (i64, i64, String, i64)>(
-        "SELECT r.id, r.task_id, t.title, r.remind_at \
-         FROM todo_reminders r \
-         JOIN todo_tasks t ON t.id = r.task_id \
-         WHERE r.is_deleted = 0 AND r.remind_at <= ?1 AND ?1 - r.remind_at <= ?2 \
-         ORDER BY r.remind_at ASC LIMIT ?3",
-    )
-    .bind(now)
-    .bind(DAY_MS)
-    .bind(BATCH_LIMIT)
-    .fetch_all(&pool)
-    .await;
+    let rows = orbit_core::api::todo_api::list_due_reminders(&pool, now, DAY_MS, BATCH_LIMIT).await;
 
     let Ok(rows) = rows else { return };
 
-    for (id, task_id, title, remind_at) in rows {
+    for row in &rows {
+        let id = row.id;
         // 去重：进程内存活期
         if NOTIFIED_REMINDERS.lock().unwrap().contains(&id) {
             continue;
@@ -122,26 +116,34 @@ async fn poll_once(app: &AppHandle) {
         // 「8 点的提醒 12 点启动还提示」即此）。静默记入去重集合，
         // 后续轮次也不会再弹；应用运行期间到期的提醒走正常路径。
         let is_first_round = !FIRST_ROUND_DONE.load(std::sync::atomic::Ordering::SeqCst);
-        if is_first_round && now - remind_at > STALE_SKIP_MS {
+        if is_first_round && now - row.remind_at > STALE_SKIP_MS {
             NOTIFIED_REMINDERS.lock().unwrap().insert(id);
             continue;
         }
 
         // ① 系统通知（notify-rust 直发带推迟按钮；失败不阻塞事件通道）
-        notify_system(app, id, task_id, &title, remind_at);
+        notify_system(app, id, row.task_id, &row.title, row.remind_at);
 
         // ② 无论成功与否 emit 事件 → 前端 sonner toast 兜底
         let _ = app.emit(
             "todo_reminder:due",
             ReminderDueEvent {
                 id,
-                task_id,
-                title,
-                remind_at,
+                task_id: row.task_id,
+                title: row.title.clone(),
+                remind_at: row.remind_at,
             },
         );
 
-        // ③ 记入去重集合
+        // ③ 到期处置下沉引擎（原前端续排逻辑）：重复任务删旧建新排下一次
+        //    （防雪球守卫在引擎内）；非重复/已完成行清理。窗口隐藏时照常
+        let pool = pool.clone();
+        let row = row.clone();
+        tauri::async_runtime::spawn(async move {
+            let _ = orbit_core::api::todo_api::advance_fired_reminder(&pool, &row).await;
+        });
+
+        // ④ 记入去重集合
         NOTIFIED_REMINDERS.lock().unwrap().insert(id);
     }
 

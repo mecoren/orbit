@@ -5,6 +5,10 @@
  * toast 展示（含推迟 10 分钟 / 30 分钟 / 1 小时操作，删旧建新语义见
  * reminder-snooze.ts）；系统通知失败时此通道保证用户必达。
  *
+ * 到期处置（重复任务续排/僵尸清理）已下沉 Rust 轮询守护
+ * （orbit-core advance_fired_reminder，窗口隐藏也照常执行），
+ * 本 hook 只负责呈现，不再操作 todo_reminders 数据。
+ *
  * 桌面端无运行时通知权限概念（移动端已拆分为 Flutter 应用，
  * 其权限流程由 apps/mobile 自行实现）。
  */
@@ -14,15 +18,9 @@ import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
 import { router } from "@/router";
-import { nextRepeatAt } from "@/features/todo/shared/repeat";
-import { snoozeReminder, remindAtClockLabel } from "@/features/todo/shared/reminder-snooze";
+import { remindAtClockLabel, snoozeReminder } from "@/features/todo/shared/reminder-snooze";
 import { ReminderToast } from "@/features/todo/shared/reminder-toast";
 import { openTaskFromReminder } from "@/features/todo/shared/reminder-nav";
-import {
-  todoReminderCreate,
-  todoReminderDelete,
-  todoTaskGetDetail,
-} from "@/lib/tauri";
 
 interface ReminderDuePayload {
   id: number;
@@ -101,47 +99,8 @@ export function useTodoReminderListener() {
         // 不自动消失：推迟/关闭都由按钮驱动；避免超时关闭后用户失去入口
         { duration: Infinity },
       );
-      // 重复提醒：任务带 repeat 规则时删旧建新排下一次（失败不影响本次提醒）。
-      // 防雪球守卫：到期行触发续排前若任务已存在其他未来提醒（推迟产物或
-      // 用户手排的），说明本行不再是唯一排程——只清理不克隆，避免
-      // 「原系列 + 推迟系列」平行滚动；同时续排锚点固定为 r.remind_at
-      // 原始系列时间，不受推迟漂移影响。
-      void (async () => {
-        try {
-          const detail = await todoTaskGetDetail(r.task_id);
-          const task = detail;
-          if (task.done) {
-            // P1#10：真引擎接管后，已完成实例不再续排提醒；
-            // 顺手清理该僵尸提醒行，避免 24h 窗口内（含重启后）对归档实例再响一次
-            try {
-              await todoReminderDelete(r.id);
-              void qc.invalidateQueries({ queryKey: ["todo-task-detail", r.task_id] });
-            } catch {
-              /* 清理失败静默 */
-            }
-            return;
-          }
-          const next = nextRepeatAt(r.remind_at, task.repeat_mode, task.repeat_after, Date.now());
-          if (next == null) return;
-          const hasOtherFuture = detail.reminders.some(
-            (m) => m.id !== r.id && !m.is_deleted && m.remind_at > Date.now(),
-          );
-          // 删除单独容错：行不存在（用户刚在 toast 上推迟过、或并发清理）
-          // 时抛错不应中断续排——删旧失败仍建新，宁可多提醒不漏提醒
-          try {
-            await todoReminderDelete(r.id);
-          } catch {
-            /* 行已消失：跳过删除 */
-          }
-          if (!hasOtherFuture) {
-            await todoReminderCreate({ task_id: r.task_id, remind_at: next });
-          }
-          void qc.invalidateQueries({ queryKey: ["todo-task-detail", r.task_id] });
-        } catch {
-          /* 重复调度失败静默 */
-        }
-      })();
-      // 提醒触发不改变数据，无需失效查询
+      // 到期处置（重复任务续排/已完成实例清理）由 Rust 轮询守护在 emit
+      // 前后异步执行（orbit-core advance_fired_reminder），本监听器只呈现
     });
     return () => {
       unlistenPromise.then((unlisten) => unlisten());

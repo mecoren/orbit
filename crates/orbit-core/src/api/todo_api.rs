@@ -583,6 +583,24 @@ pub async fn complete_todo_task(pool: &SqlitePool, id: i64) -> CoreResult<Comple
         }
     };
 
+    // 本实例的存活提醒行：完成实例不再提醒（P1#10）——软删原行，
+    // 重复任务的行平移 delta 后克隆到下一实例（系列提醒随实例延续，
+    // 「不复制提醒」的旧口径废除）。事件在事务提交后统一发射（下方）。
+    let old_reminders: Vec<TodoReminder> =
+        sqlx::query_as("SELECT * FROM todo_reminders WHERE task_id = ? AND is_deleted = 0")
+            .bind(id)
+            .fetch_all(pool)
+            .await?;
+    let new_reminder_ats: Vec<i64> = match &plan {
+        None => Vec::new(),
+        Some(plan) => old_reminders
+            .iter()
+            .map(|r| r.remind_at + plan.delta_ms)
+            .collect(),
+    };
+    // 事务内写、提交后发的事件队列（todo_reminders 增删为本命令新增发射点）
+    let mut pending_events: Vec<(String, i64, String, DbOp)> = Vec::new();
+
     let mut tx = pool.begin().await?;
     let mut next_instance: Option<TodoTask> = None;
     if let Some(plan) = &plan {
@@ -632,7 +650,47 @@ pub async fn complete_todo_task(pool: &SqlitePool, id: i64) -> CoreResult<Comple
             .execute(&mut *tx)
             .await?;
         }
+        // 提醒行平移克隆到下一实例（与 due/start 同 delta；锚点口径一致）。
+        // 事件先收集，事务提交后统一发射（提交前发射会让消费者读到未提交数据）
+        for remind_at in &new_reminder_ats {
+            let rem_uuid = uuid::Uuid::new_v4().to_string();
+            let created_reminder: TodoReminder = sqlx::query_as(
+                "INSERT INTO todo_reminders (uuid, task_id, remind_at, is_deleted, created_at, updated_at, version)
+                 VALUES (?, ?, ?, 0, ?, ?, 1) RETURNING *",
+            )
+            .bind(&rem_uuid)
+            .bind(created.id)
+            .bind(*remind_at)
+            .bind(now)
+            .bind(now)
+            .fetch_one(&mut *tx)
+            .await?;
+            pending_events.push((
+                "todo_reminders".to_string(),
+                created_reminder.id,
+                created_reminder.uuid.clone(),
+                DbOp::Insert,
+            ));
+        }
         next_instance = Some(created);
+    }
+
+    // 完成实例的存活提醒行软删（同事务；事件同样延后到提交后）
+    for r in &old_reminders {
+        sqlx::query(
+            "UPDATE todo_reminders SET is_deleted = 1, deleted_at = ?, updated_at = ?, version = version + 1 WHERE id = ?",
+        )
+        .bind(now)
+        .bind(now)
+        .bind(r.id)
+        .execute(&mut *tx)
+        .await?;
+        pending_events.push((
+            "todo_reminders".to_string(),
+            r.id,
+            r.uuid.clone(),
+            DbOp::Delete,
+        ));
     }
 
     let done_task: TodoTask = sqlx::query_as(
@@ -675,6 +733,9 @@ pub async fn complete_todo_task(pool: &SqlitePool, id: i64) -> CoreResult<Comple
         now,
         &device_id,
     );
+    for (table, record_id, record_uuid, op) in pending_events {
+        emit_todo_event(&table, record_id, &record_uuid, op, now, &device_id);
+    }
 
     Ok(CompleteTaskResult {
         task: done_task,
@@ -703,9 +764,12 @@ fn emit_todo_event(table: &str, id: i64, uuid: &str, op: DbOp, timestamp: i64, d
 mod repeat_tests {
     use super::*;
     use crate::api::business_api::{create_todo_subtask, create_todo_task};
+    use crate::db::repository::generic_repo::create_todo_reminder;
+    use crate::models::business::TodoReminderCreateInput;
     use crate::models::business::TodoTaskCreateInput;
 
     const DAY: i64 = 86_400_000;
+    const HOUR: i64 = 3_600_000;
 
     async fn setup_db() -> SqlitePool {
         let pool = sqlx::SqlitePool::connect("sqlite::memory:").await.unwrap();
@@ -723,6 +787,18 @@ mod repeat_tests {
             .single()
             .unwrap()
             .timestamp_millis()
+    }
+
+    /// 近端锚点：今天本地零点往前 N 天。complete_* 集成用例的 due 锚点
+    /// 必须相对真实时间取（固定历史日期会在真实时间越过序列点后触发
+    /// 逾期快进翻倍步进，期望值随日历漂移——测试炸弹）
+    fn local_midnight_days_ago(days_ago: i64) -> i64 {
+        let now = chrono::Local::now();
+        let midnight = chrono::Local
+            .with_ymd_and_hms(now.year(), now.month(), now.day(), 0, 0, 0)
+            .single()
+            .unwrap();
+        midnight.timestamp_millis() - days_ago * DAY
     }
 
     // ---------- #34 重复规则扩展：星期几掩码 / when done / 结束条件 ----------
@@ -1156,7 +1232,7 @@ mod repeat_tests {
     #[tokio::test]
     async fn complete_recurring_creates_next_instance_with_cloned_subtasks() {
         let pool = setup_db().await;
-        let due = date_2026_08_27() + 7 * DAY;
+        let due = local_midnight_days_ago(1) + 7 * DAY;
         let t = create_todo_task(
             &pool,
             &TodoTaskCreateInput {
@@ -1226,7 +1302,7 @@ mod repeat_tests {
             &pool,
             &TodoTaskCreateInput {
                 title: "重复任务".into(),
-                due_date: Some(date_2026_08_27()),
+                due_date: Some(local_midnight_days_ago(1)),
                 repeat_mode: Some(REPEAT_MODE_DAILY),
                 repeat_weekdays: None,
                 repeat_end_type: None,
@@ -1269,6 +1345,143 @@ mod repeat_tests {
             .await
             .unwrap();
         assert!(complete_todo_task(&pool, t.id).await.is_err());
+    }
+
+    // ---------- 完成时提醒行处置（P1#10 修复：完成实例不再提醒） ----------
+
+    /// 本实例的存活提醒行（详情/克隆共用口径：is_deleted=0）
+    async fn live_reminders(pool: &SqlitePool, task_id: i64) -> Vec<TodoReminder> {
+        sqlx::query_as(
+            "SELECT * FROM todo_reminders WHERE task_id = ? AND is_deleted = 0 ORDER BY remind_at, id",
+        )
+        .bind(task_id)
+        .fetch_all(pool)
+        .await
+        .unwrap()
+    }
+
+    #[tokio::test]
+    async fn complete_plain_task_soft_deletes_live_reminders() {
+        let pool = setup_db().await;
+        let t = create_todo_task(
+            &pool,
+            &TodoTaskCreateInput {
+                title: "带提醒的普通任务".into(),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+        create_todo_reminder(
+            &pool,
+            &TodoReminderCreateInput {
+                task_id: t.id,
+                remind_at: chrono::Utc::now().timestamp_millis() + HOUR,
+            },
+        )
+        .await
+        .unwrap();
+
+        let result = complete_todo_task(&pool, t.id).await.unwrap();
+        assert_eq!(result.task.done, 1);
+        // 完成实例不再提醒：行软删（保留可审计，恢复任务不会复活已过期提醒）
+        assert!(
+            live_reminders(&pool, t.id).await.is_empty(),
+            "完成实例的存活提醒行应被软删"
+        );
+        let soft_deleted: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM todo_reminders WHERE task_id = ? AND is_deleted = 1",
+        )
+        .bind(t.id)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_eq!(soft_deleted, 1, "行应软删而非物理删除");
+    }
+
+    #[tokio::test]
+    async fn complete_recurring_shifts_reminders_to_next_instance_by_delta() {
+        let pool = setup_db().await;
+        // 昨天零点 due：真实时间未越过序列点，delta 恒 = 一个步长（7 天）
+        let due = local_midnight_days_ago(1);
+        let t = create_todo_task(
+            &pool,
+            &TodoTaskCreateInput {
+                title: "每周任务".into(),
+                due_date: Some(due),
+                repeat_mode: Some(REPEAT_MODE_WEEKLY),
+                repeat_weekdays: None,
+                repeat_end_type: None,
+                repeat_end_param: None,
+                repeat_from_done: None,
+                repeat_after: Some(1),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+        // due 前一天的 9 点提醒（提醒时间先于 due 的常态场景）
+        let remind_at = due - DAY + 9 * HOUR;
+        create_todo_reminder(
+            &pool,
+            &TodoReminderCreateInput {
+                task_id: t.id,
+                remind_at,
+            },
+        )
+        .await
+        .unwrap();
+
+        let result = complete_todo_task(&pool, t.id).await.unwrap();
+        let next = result.next_instance.expect("应生成下一实例");
+        // 本实例行软删；下一实例按 delta 平移得到新行（系列提醒延续）
+        assert!(
+            live_reminders(&pool, t.id).await.is_empty(),
+            "完成实例的提醒行应软删"
+        );
+        let next_rows = live_reminders(&pool, next.id).await;
+        assert_eq!(next_rows.len(), 1, "下一实例应有一条平移后的提醒行");
+        assert_eq!(next_rows[0].remind_at, remind_at + 7 * DAY);
+    }
+
+    #[tokio::test]
+    async fn complete_idempotent_second_run_keeps_next_instance_reminders() {
+        let pool = setup_db().await;
+        let t = create_todo_task(
+            &pool,
+            &TodoTaskCreateInput {
+                title: "重复任务".into(),
+                due_date: Some(local_midnight_days_ago(1)),
+                repeat_mode: Some(REPEAT_MODE_DAILY),
+                repeat_weekdays: None,
+                repeat_end_type: None,
+                repeat_end_param: None,
+                repeat_from_done: None,
+                repeat_after: Some(1),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+        create_todo_reminder(
+            &pool,
+            &TodoReminderCreateInput {
+                task_id: t.id,
+                remind_at: local_midnight_days_ago(1) - HOUR,
+            },
+        )
+        .await
+        .unwrap();
+
+        let first = complete_todo_task(&pool, t.id).await.unwrap();
+        let next = first.next_instance.unwrap();
+        // 已完成任务的重复完成：幂等，不重复推进——下一实例的提醒行不被二次复制
+        let _ = complete_todo_task(&pool, t.id).await.unwrap();
+        assert_eq!(
+            live_reminders(&pool, next.id).await.len(),
+            1,
+            "幂等完成不应再复制提醒行"
+        );
     }
 
     #[test]
@@ -1435,5 +1648,491 @@ mod duplicate_tests {
         assert_eq!(subs.len(), 1);
         assert_eq!(subs[0].title, "步骤一");
         assert_eq!(subs[0].done, 0);
+    }
+}
+
+// ============================================================================
+// 提醒轮询共享口径（桌面 notification_scheduler + 移动 events 双端复用）
+// ============================================================================
+
+/// 到期提醒行（轮询扫描口径统一提取）：
+/// `is_deleted=0 AND remind_at <= now AND now - remind_at <= 24h`，
+/// 且**任务未完成、未进回收站**（P1#10 修复：已完成实例不再提醒——
+/// 完成命令已软删其提醒行，此处过滤兜住历史遗留与云同步落库的僵尸行）。
+///
+/// limit 传批次上限（防陈旧堆积一次性轰炸，调用方各自常量）。
+pub async fn list_due_reminders(
+    pool: &SqlitePool,
+    now_ms: i64,
+    window_ms: i64,
+    limit: i64,
+) -> CoreResult<Vec<DueReminderRow>> {
+    let rows = sqlx::query_as::<_, DueReminderRow>(
+        "SELECT r.id, r.task_id, t.title, r.remind_at \
+         FROM todo_reminders r \
+         JOIN todo_tasks t ON t.id = r.task_id \
+         WHERE r.is_deleted = 0 AND t.is_deleted = 0 AND t.done = 0 \
+           AND r.remind_at <= ?1 AND ?1 - r.remind_at <= ?2 \
+         ORDER BY r.remind_at ASC LIMIT ?3",
+    )
+    .bind(now_ms)
+    .bind(window_ms)
+    .bind(limit)
+    .fetch_all(pool)
+    .await?;
+    Ok(rows)
+}
+
+/// 到期提醒行（id/标题/时刻——两壳通知通道的最小载荷）
+#[derive(Debug, Clone, sqlx::FromRow, Serialize, Deserialize)]
+pub struct DueReminderRow {
+    pub id: i64,
+    pub task_id: i64,
+    pub title: String,
+    pub remind_at: i64,
+}
+
+/// 到期后的提醒处置（原桌面端前端 JS 续排逻辑下沉引擎，窗口隐藏也照常）：
+///
+/// - 重复任务：删旧建新排下一次（锚点 = 原 remind_at 快进越过 now，不漂移）；
+/// - 防雪球守卫：任务已存在**其他**未来提醒（推迟产物或用户手排）时只清理
+///   不克隆，避免「原系列 + 推迟系列」平行滚动；
+/// - 非重复任务 / 已删任务：只清理不续排；
+/// - 全部软删/新建语义与前端 snooze 相同（todo_reminders 无 update 路径）。
+///
+/// 返回值仅供调试/日志，失败由调用方决定是否静默。
+pub async fn advance_fired_reminder(
+    pool: &SqlitePool,
+    reminder: &DueReminderRow,
+) -> CoreResult<bool> {
+    let now = chrono::Utc::now().timestamp_millis();
+
+    // 行已消失（并发清理/用户手删）：软删幂等跳过（软删 UPDATE 无行不报错）
+    let task: Option<TodoTask> = sqlx::query_as("SELECT * FROM todo_tasks WHERE id = ?")
+        .bind(reminder.task_id)
+        .fetch_optional(pool)
+        .await?;
+    let Some(task) = task else {
+        return Ok(false);
+    };
+
+    // 续排判定：任务存活且未完成、带重复规则、能算出下一次
+    let next = if task.is_deleted == 0 && task.done == 0 {
+        next_repeat_at_ex(
+            reminder.remind_at,
+            task.repeat_mode,
+            task.repeat_after,
+            task.repeat_weekdays,
+            now,
+        )
+    } else {
+        None
+    };
+
+    // 软删原行（删旧；行不存在时 UPDATE 静默无操作——调用方轮询幂等重扫）
+    let row: Option<TodoReminder> =
+        sqlx::query_as("SELECT * FROM todo_reminders WHERE id = ? AND is_deleted = 0")
+            .bind(reminder.id)
+            .fetch_optional(pool)
+            .await?;
+    if let Some(row) = row {
+        soft_delete_reminder_row(pool, &row, now).await?;
+    }
+
+    let Some(next) = next else {
+        return Ok(false); // 非重复/已完成/已删：只清理不续排
+    };
+
+    // 防雪球：本行不再是唯一排程时只清理不克隆
+    let has_other_future: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM todo_reminders \
+         WHERE task_id = ? AND is_deleted = 0 AND remind_at > ? AND id != ?",
+    )
+    .bind(reminder.task_id)
+    .bind(now)
+    .bind(reminder.id)
+    .fetch_one(pool)
+    .await?;
+    if has_other_future > 0 {
+        return Ok(false);
+    }
+
+    generic_repo::create_todo_reminder(
+        pool,
+        &TodoReminderCreateInput {
+            task_id: reminder.task_id,
+            remind_at: next,
+        },
+    )
+    .await?;
+    Ok(true)
+}
+
+/// 软删单条提醒行 + Delete 事件（todo_api 本模块内联写法；与
+/// generic_repo::soft_delete_by_id 同构——该函数按表名拼接 SQL，
+/// 这里直接绑定免 format）
+async fn soft_delete_reminder_row(
+    pool: &SqlitePool,
+    row: &TodoReminder,
+    now_ms: i64,
+) -> CoreResult<()> {
+    sqlx::query(
+        "UPDATE todo_reminders SET is_deleted = 1, deleted_at = ?, updated_at = ?, version = version + 1 WHERE id = ?",
+    )
+    .bind(now_ms)
+    .bind(now_ms)
+    .bind(row.id)
+    .execute(pool)
+    .await?;
+    let device_id = generic_repo::current_device_id();
+    EVENT_BUS.emit(DbEvent::delete(
+        "todo_reminders",
+        row.id,
+        &row.uuid,
+        &device_id,
+    ));
+    Ok(())
+}
+
+#[cfg(test)]
+mod reminder_poll_tests {
+    use super::*;
+    use crate::api::business_api::create_todo_task;
+    use crate::db::repository::generic_repo::create_todo_reminder;
+    use crate::models::business::{TodoReminderCreateInput, TodoTaskCreateInput};
+
+    const DAY: i64 = 86_400_000;
+    const HOUR: i64 = 3_600_000;
+    const DAY_WINDOW: i64 = DAY;
+
+    async fn setup_db() -> SqlitePool {
+        let pool = sqlx::SqlitePool::connect("sqlite::memory:").await.unwrap();
+        sqlx::migrate!("./src/db/migrations")
+            .run(&pool)
+            .await
+            .unwrap();
+        pool
+    }
+
+    async fn live_reminders(pool: &SqlitePool, task_id: i64) -> Vec<TodoReminder> {
+        sqlx::query_as(
+            "SELECT * FROM todo_reminders WHERE task_id = ? AND is_deleted = 0 ORDER BY remind_at, id",
+        )
+        .bind(task_id)
+        .fetch_all(pool)
+        .await
+        .unwrap()
+    }
+
+    async fn due_rows(pool: &SqlitePool, now: i64) -> Vec<DueReminderRow> {
+        list_due_reminders(pool, now, DAY_WINDOW, 100)
+            .await
+            .unwrap()
+    }
+
+    // ---------- list_due_reminders：过滤口径 ----------
+
+    #[tokio::test]
+    async fn due_query_excludes_done_and_trashed_tasks() {
+        let pool = setup_db().await;
+        let now = chrono::Utc::now().timestamp_millis();
+
+        let live = create_todo_task(
+            &pool,
+            &TodoTaskCreateInput {
+                title: "正常".into(),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+        let done = create_todo_task(
+            &pool,
+            &TodoTaskCreateInput {
+                title: "已完成".into(),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+        let trashed = create_todo_task(
+            &pool,
+            &TodoTaskCreateInput {
+                title: "回收站".into(),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+        for t in [&live, &done, &trashed] {
+            create_todo_reminder(
+                &pool,
+                &TodoReminderCreateInput {
+                    task_id: t.id,
+                    remind_at: now - HOUR,
+                },
+            )
+            .await
+            .unwrap();
+        }
+        sqlx::query("UPDATE todo_tasks SET done = 1 WHERE id = ?")
+            .bind(done.id)
+            .execute(&pool)
+            .await
+            .unwrap();
+        sqlx::query("UPDATE todo_tasks SET is_deleted = 1 WHERE id = ?")
+            .bind(trashed.id)
+            .execute(&pool)
+            .await
+            .unwrap();
+
+        let rows = due_rows(&pool, now).await;
+        let ids: Vec<i64> = rows.iter().map(|r| r.task_id).collect();
+        assert_eq!(ids, vec![live.id], "已完成/回收站任务的提醒不应到期触发");
+    }
+
+    #[tokio::test]
+    async fn due_query_respects_window_and_future_rows() {
+        let pool = setup_db().await;
+        let now = chrono::Utc::now().timestamp_millis();
+
+        let past_window = create_todo_task(
+            &pool,
+            &TodoTaskCreateInput {
+                title: "超24h".into(),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+        let future = create_todo_task(
+            &pool,
+            &TodoTaskCreateInput {
+                title: "未来".into(),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+        let due = create_todo_task(
+            &pool,
+            &TodoTaskCreateInput {
+                title: "到期".into(),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+        create_todo_reminder(
+            &pool,
+            &TodoReminderCreateInput {
+                task_id: past_window.id,
+                remind_at: now - DAY - HOUR,
+            },
+        )
+        .await
+        .unwrap();
+        create_todo_reminder(
+            &pool,
+            &TodoReminderCreateInput {
+                task_id: future.id,
+                remind_at: now + HOUR,
+            },
+        )
+        .await
+        .unwrap();
+        create_todo_reminder(
+            &pool,
+            &TodoReminderCreateInput {
+                task_id: due.id,
+                remind_at: now - HOUR,
+            },
+        )
+        .await
+        .unwrap();
+
+        let rows = due_rows(&pool, now).await;
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].task_id, due.id);
+    }
+
+    // ---------- advance_fired_reminder：续排/清理语义 ----------
+
+    fn due_row_of(r: &TodoReminder, title: &str) -> DueReminderRow {
+        DueReminderRow {
+            id: r.id,
+            task_id: r.task_id,
+            title: title.into(),
+            remind_at: r.remind_at,
+        }
+    }
+
+    #[tokio::test]
+    async fn advance_recurring_task_rolls_next_in_series() {
+        let pool = setup_db().await;
+        let t = create_todo_task(
+            &pool,
+            &TodoTaskCreateInput {
+                title: "每日任务".into(),
+                due_date: Some(chrono::Utc::now().timestamp_millis()),
+                repeat_mode: Some(REPEAT_MODE_DAILY),
+                repeat_weekdays: None,
+                repeat_end_type: None,
+                repeat_end_param: None,
+                repeat_from_done: None,
+                repeat_after: Some(1),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+        let now = chrono::Utc::now().timestamp_millis();
+        create_todo_reminder(
+            &pool,
+            &TodoReminderCreateInput {
+                task_id: t.id,
+                remind_at: now - HOUR,
+            },
+        )
+        .await
+        .unwrap();
+        let fired = live_reminders(&pool, t.id).await.remove(0);
+
+        let rolled = advance_fired_reminder(&pool, &due_row_of(&fired, "每日任务"))
+            .await
+            .unwrap();
+        assert!(rolled, "重复任务到期应续排");
+        let rows = live_reminders(&pool, t.id).await;
+        assert_eq!(rows.len(), 1, "删旧建新：仍只有一条存活行");
+        assert!(rows[0].remind_at > now, "新行应在未来");
+        assert_eq!(
+            rows[0].remind_at,
+            fired.remind_at + DAY,
+            "锚点=原 remind_at 推进一档"
+        );
+    }
+
+    #[tokio::test]
+    async fn advance_plain_task_only_cleans() {
+        let pool = setup_db().await;
+        let t = create_todo_task(
+            &pool,
+            &TodoTaskCreateInput {
+                title: "普通任务".into(),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+        let now = chrono::Utc::now().timestamp_millis();
+        create_todo_reminder(
+            &pool,
+            &TodoReminderCreateInput {
+                task_id: t.id,
+                remind_at: now - HOUR,
+            },
+        )
+        .await
+        .unwrap();
+        let fired = live_reminders(&pool, t.id).await.remove(0);
+
+        let rolled = advance_fired_reminder(&pool, &due_row_of(&fired, "普通任务"))
+            .await
+            .unwrap();
+        assert!(!rolled, "非重复任务只清理不续排");
+        assert!(live_reminders(&pool, t.id).await.is_empty(), "原行应软删");
+    }
+
+    #[tokio::test]
+    async fn advance_skips_clone_when_other_future_exists() {
+        let pool = setup_db().await;
+        let t = create_todo_task(
+            &pool,
+            &TodoTaskCreateInput {
+                title: "重复任务".into(),
+                due_date: Some(chrono::Utc::now().timestamp_millis()),
+                repeat_mode: Some(REPEAT_MODE_DAILY),
+                repeat_weekdays: None,
+                repeat_end_type: None,
+                repeat_end_param: None,
+                repeat_from_done: None,
+                repeat_after: Some(1),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+        let now = chrono::Utc::now().timestamp_millis();
+        create_todo_reminder(
+            &pool,
+            &TodoReminderCreateInput {
+                task_id: t.id,
+                remind_at: now - HOUR,
+            },
+        )
+        .await
+        .unwrap();
+        // 用户手排的另一条未来提醒（推迟产物同型）
+        create_todo_reminder(
+            &pool,
+            &TodoReminderCreateInput {
+                task_id: t.id,
+                remind_at: now + 2 * HOUR,
+            },
+        )
+        .await
+        .unwrap();
+        let fired = live_reminders(&pool, t.id).await.remove(0);
+
+        let rolled = advance_fired_reminder(&pool, &due_row_of(&fired, "重复任务"))
+            .await
+            .unwrap();
+        assert!(!rolled, "防雪球：存在其他未来提醒时只清理不克隆");
+        let rows = live_reminders(&pool, t.id).await;
+        assert_eq!(rows.len(), 1, "只剩用户手排的未来行");
+        assert_eq!(rows[0].remind_at, now + 2 * HOUR);
+    }
+
+    #[tokio::test]
+    async fn advance_done_task_only_cleans() {
+        let pool = setup_db().await;
+        let t = create_todo_task(
+            &pool,
+            &TodoTaskCreateInput {
+                title: "已完成重复任务".into(),
+                due_date: Some(chrono::Utc::now().timestamp_millis()),
+                repeat_mode: Some(REPEAT_MODE_DAILY),
+                repeat_weekdays: None,
+                repeat_end_type: None,
+                repeat_end_param: None,
+                repeat_from_done: None,
+                repeat_after: Some(1),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+        let now = chrono::Utc::now().timestamp_millis();
+        create_todo_reminder(
+            &pool,
+            &TodoReminderCreateInput {
+                task_id: t.id,
+                remind_at: now - HOUR,
+            },
+        )
+        .await
+        .unwrap();
+        sqlx::query("UPDATE todo_tasks SET done = 1 WHERE id = ?")
+            .bind(t.id)
+            .execute(&pool)
+            .await
+            .unwrap();
+        let fired = live_reminders(&pool, t.id).await.remove(0);
+
+        let rolled = advance_fired_reminder(&pool, &due_row_of(&fired, "已完成重复任务"))
+            .await
+            .unwrap();
+        assert!(!rolled, "已完成任务不续排（P1#10）");
+        assert!(live_reminders(&pool, t.id).await.is_empty(), "僵尸行清理");
     }
 }
