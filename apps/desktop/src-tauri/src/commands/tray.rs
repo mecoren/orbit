@@ -100,18 +100,69 @@ fn downscale_rgba(src: &tauri::image::Image<'_>, target: u32) -> tauri::image::I
     tauri::image::Image::new_owned(out, target, target)
 }
 
+/// 紧致裁剪：返回 solid 主体（alpha>阈值）的外接框 (x0,y0,x1,y1)（含端点）。
+/// 全透明图返回 None（调用方直用源图，避免空区域除零）。
+fn solid_bbox(rgba: &[u8], w: u32, h: u32) -> Option<(u32, u32, u32, u32)> {
+    let a_at = |x: u32, y: u32| rgba[((y * w + x) * 4 + 3) as usize];
+    let mut x0 = w;
+    let mut y0 = h;
+    let mut x1 = 0u32;
+    let mut y1 = 0u32;
+    for y in 0..h {
+        for x in 0..w {
+            if a_at(x, y) > 128 {
+                x0 = x0.min(x);
+                y0 = y0.min(y);
+                x1 = x1.max(x);
+                y1 = y1.max(y);
+            }
+        }
+    }
+    if x1 < x0 || y1 < y0 {
+        None
+    } else {
+        Some((x0, y0, x1, y1))
+    }
+}
+
+/// 从源图裁出紧致子图（solid bbox）成独立 Image。
+/// 源图自带 10% 内容边距（generate_icons PAD，全尺寸展示位的视觉规范），
+/// 托盘 16px 下内容仅 ~12.8px 显小——裁掉边距让主体撑满方格（视觉放大
+/// ~25%），仅托盘位使用，不碰全尺寸资产的留白口径。
+fn crop_to_content(src: &tauri::image::Image<'_>) -> tauri::image::Image<'static> {
+    let (sw, sh) = (src.width(), src.height());
+    let rgba = src.rgba();
+    if let Some((x0, y0, x1, y1)) = solid_bbox(rgba, sw, sh) {
+        let cw = x1 - x0 + 1;
+        let ch = y1 - y0 + 1;
+        let mut out = vec![0u8; (cw * ch * 4) as usize];
+        for y in 0..ch {
+            let src_off = (((y0 + y) * sw + x0) * 4) as usize;
+            let dst_off = ((y * cw) * 4) as usize;
+            out[dst_off..dst_off + (cw * 4) as usize]
+                .copy_from_slice(&rgba[src_off..src_off + (cw * 4) as usize]);
+        }
+        tauri::image::Image::new_owned(out, cw, ch)
+    } else {
+        tauri::image::Image::to_owned(src.clone())
+    }
+}
+
 /// 系统托盘图标位图：Windows 下按 shell 小图标标准尺寸（SM_CXSMICON，
-/// 100% 缩放 16px、随 DPI 走 20/24px+）从 default_window_icon 下采样生成。
+/// 100% 缩放 16px、随 DPI 走 20/24px+）从 default_window_icon 生成。
+/// 先紧致裁剪（crop_to_content：去 10% 设计边距）再盒式下采样——
+/// 主体撑满托盘方格（视觉放大约 25%）。
 ///
 /// 为什么不复用 default_window_icon（256px）：tray-icon 的 Windows 实现
 /// 原样按位图尺寸 CreateIcon，shell 随后把 256px HICON 低质量拉伸到
 /// ~16px 显示（模糊）；窗口图标则需要大位图供任务栏清晰缩放——两者
 /// 尺寸诉求相反，故托盘持独立小图（2026-09-09 任务栏/托盘先后糊的根因）。
 fn tray_icon_bitmap(app: &AppHandle) -> Option<tauri::image::Image<'static>> {
-    // default_window_icon() 借 app（&Image<'a>），clone 后经 downscale_rgba
-    // 产出独立 'static 位图（源借用当场结束）。
+    // default_window_icon() 借 app（&Image<'a>），先裁剪产出独立 'static
+    // 位图（源借用当场结束）。
     let src = app.default_window_icon()?;
-    // 托盘显示尺寸：非 Windows 无 shell 度量差异，直用源图尺寸
+    let content = crop_to_content(src);
+    // 托盘显示尺寸：非 Windows 无 shell 度量差异，直用内容图尺寸
     #[cfg(target_os = "windows")]
     let target = {
         use windows::Win32::UI::WindowsAndMessaging::{GetSystemMetrics, SM_CXSMICON};
@@ -119,8 +170,8 @@ fn tray_icon_bitmap(app: &AppHandle) -> Option<tauri::image::Image<'static>> {
         if m > 0 { m as u32 } else { 16 }
     };
     #[cfg(not(target_os = "windows"))]
-    let target = src.width();
-    Some(downscale_rgba(src, target))
+    let target = content.width();
+    Some(downscale_rgba(&content, target))
 }
 
 /// 初始化系统托盘（桌面专属；setup 阶段调用一次）
@@ -259,5 +310,53 @@ mod tests {
         let out = downscale_rgba(&src, 2);
         assert_eq!((out.width(), out.height()), (2, 2));
         assert!(out.rgba().chunks_exact(4).all(|p| p[0] == 200 && p[3] == 255));
+    }
+
+    /// 紧致裁剪：带透明边距的源图裁后四周无全透明行/列（主体撑满）
+    #[test]
+    fn crop_to_content_trims_margin() {
+        // 6x6：中心 4x4 实心红，四周 1px 透明边距
+        let mut rgba = vec![0u8; 6 * 6 * 4];
+        for y in 1..5 {
+            for x in 1..5 {
+                let i = (y * 6 + x) * 4;
+                rgba[i] = 255;
+                rgba[i + 3] = 255;
+            }
+        }
+        let src = tauri::image::Image::new_owned(rgba, 6, 6);
+        let out = crop_to_content(&src);
+        assert_eq!((out.width(), out.height()), (4, 4));
+        // 首尾行列均含不透明像素（无留白）
+        let o = out.rgba();
+        let has_opaque = |range: std::ops::Range<usize>| {
+            range.step_by(4).any(|i| o[i + 3] == 255)
+        };
+        assert!(has_opaque(0..4 * 4), "首行有主体");
+        assert!(has_opaque(3 * 4 * 4..4 * 4 * 4), "末行有主体");
+        // 左右列
+        assert!((0..4).any(|r| o[r * 4 * 4 + 3] == 255), "首列有主体");
+        assert!((0..4).any(|r| o[r * 4 * 4 + 3 * 4 + 3] == 255), "末列有主体");
+    }
+
+    /// 紧致裁剪：全透明图防御（不 panic，直返源尺寸）
+    #[test]
+    fn crop_to_content_all_transparent_fallback() {
+        let src = tauri::image::Image::new_owned(vec![0u8; 3 * 3 * 4], 3, 3);
+        let out = crop_to_content(&src);
+        assert_eq!((out.width(), out.height()), (3, 3));
+    }
+
+    /// 紧致裁剪：bbox 对角坐标正确（含端点）
+    #[test]
+    fn solid_bbox_coordinates() {
+        // 4x4：仅 (1,2) 与 (2,2) 两像素不透明
+        let mut rgba = vec![0u8; 4 * 4 * 4];
+        for x in 1..3 {
+            let i = (2 * 4 + x) * 4;
+            rgba[i + 3] = 255;
+        }
+        assert_eq!(solid_bbox(&rgba, 4, 4), Some((1, 2, 2, 2)));
+        assert_eq!(solid_bbox(&[0u8; 4 * 4 * 4], 4, 4), None);
     }
 }
