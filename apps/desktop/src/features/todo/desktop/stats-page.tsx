@@ -91,7 +91,7 @@ function DistBar({
           {done} / {total}
         </span>
       </div>
-      {/* 双段条：完成段语义色，未完成段 muted；双零宽段不渲染 */}
+      {/* 双段条：完成段实色，未完成段同色 25% 弱化——条形全程对应行色；双零宽段不渲染 */}
       <div className="flex h-1.5 w-full gap-0.5 overflow-hidden rounded-full bg-muted/50">
         {done > 0 && (
           <div
@@ -101,8 +101,8 @@ function DistBar({
         )}
         {pending > 0 && (
           <div
-            className="h-full rounded-full bg-muted-foreground/25"
-            style={{ width: `${pendingPct}%` }}
+            className="h-full rounded-full"
+            style={{ width: `${pendingPct}%`, background: color, opacity: 0.25 }}
           />
         )}
       </div>

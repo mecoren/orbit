@@ -6,7 +6,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:orbit/data/api/mock_orbit_bridge.dart';
 import 'package:orbit/data/providers/bridge_provider.dart';
+import 'package:orbit/modules/todo/logic/task_logic.dart';
 import 'package:orbit/modules/todo/stats_screen.dart';
+import 'package:orbit/shared/utils/hex_color.dart';
 
 Widget _wrap(Widget child, MockOrbitBridge bridge) => ProviderScope(
       overrides: [orbitBridgeProvider.overrideWithValue(bridge)],
@@ -53,5 +55,17 @@ void main() {
     expect(find.text('项目分布'), findsOneWidget);
     expect(find.text('优先级分布'), findsOneWidget);
     expect(find.text('星期分布（已完成）'), findsOneWidget);
+
+    // 分布条颜色口径：完成段实色 + 未完成段同色 25% 弱化（2026-09-09 增强）
+    // —— mock 种子「生活」项目 #2DB87A 仅 1 条未完成任务，只有弱化段；
+    // 优先级「高」(3→#F59E0B) 同样只有未完成段；两处反向锁定弱化段=同色而非固定灰。
+    final bars = tester
+        .widgetList<Container>(find.byType(Container))
+        .map((c) => c.color)
+        .toSet();
+    final lifeColor = hexToColor('#2DB87A').withValues(alpha: 0.25);
+    expect(bars, contains(lifeColor));
+    final highPrio = hexToColor(priorityColorHex(3)).withValues(alpha: 0.25);
+    expect(bars, contains(highPrio));
   });
 }

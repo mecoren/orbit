@@ -391,8 +391,8 @@ class _HeatmapCard extends StatelessWidget {
   }
 }
 
-/// 分布卡（label + 双段条形：完成段行色 / 未完成段弱化；行色按来源取
-/// 项目自选色 / 优先级语义色 / 待办强调色）
+/// 分布卡（label + 双段条形：完成段行色实心 / 未完成段同色 25% 弱化；
+/// 行色按来源取项目自选色 / 优先级语义色 / 待办强调色）
 class _DistSection extends StatelessWidget {
   const _DistSection({required this.title, required this.rows});
 
@@ -474,7 +474,7 @@ class _DistSection extends StatelessWidget {
                               Flexible(
                                 flex: pending,
                                 child: Container(
-                                  color: colors.secondaryText.withValues(alpha: 0.25),
+                                  color: color.withValues(alpha: 0.25),
                                 ),
                               ),
                           ],
