@@ -6,7 +6,7 @@
  * 选中态经 useTodoShell 取用——从回收站面板切回来时筛选原样保留。
  */
 import { useEffect, useMemo, useState } from "react";
-import { CalendarDays, LayoutGrid, ListTodo, Search, Tag } from "lucide-react";
+import { CalendarDays, LayoutGrid, ListTodo, Search, Table2, Tag } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -34,15 +34,16 @@ import { TaskListView } from "./task-list-view";
 import { QuickAddBar } from "./quick-add-bar";
 import { KanbanView, type KanbanGroupBy } from "./kanban-view";
 import { CalendarView } from "./calendar-view";
+import TaskTableView from "./task-table-view";
 
 type StatusFilter = "all" | "undone" | "pending" | "doing" | "done";
 type PriorityFilter = "all" | "0" | "1" | "2" | "3" | "4" | "5";
-type ViewMode = "list" | "kanban" | "calendar";
+type ViewMode = "list" | "kanban" | "calendar" | "table";
 
 /** 视图切换状态持久化（04 §二；07-P2#14 增 calendar 档） */
 function loadViewMode(): ViewMode {
   const saved = localStorage.getItem(LS_VIEW_MODE);
-  return saved === "kanban" || saved === "calendar" ? saved : "list";
+  return saved === "kanban" || saved === "calendar" || saved === "table" ? saved : "list";
 }
 
 /** 排序档位持久化键（#26：默认 manual = 拖拽顺序） */
@@ -239,7 +240,7 @@ export default function TaskPanel() {
             </SelectContent>
           </Select>
 
-          {/* 视图切换三联钮（列表/看板/日历） */}
+          {/* 视图切换四联钮（列表/看板/日历/表格） */}
           <div className="flex items-center overflow-hidden rounded-md border">
             <Tooltip>
               <TooltipTrigger asChild>
@@ -288,6 +289,22 @@ export default function TaskPanel() {
                 </button>
               </TooltipTrigger>
               <TooltipContent>日历视图</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  aria-label="表格视图"
+                  onClick={() => setViewMode("table")}
+                  className={cn(
+                    "flex h-8 w-8 items-center justify-center",
+                    viewMode === "table" ? "bg-primary/10 text-primary" : "hover:bg-accent",
+                  )}
+                >
+                  <Table2 size={14} />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent>表格视图</TooltipContent>
             </Tooltip>
           </div>
 
@@ -374,6 +391,14 @@ export default function TaskPanel() {
               openCreateForm();
             }}
             onAddOnDate={openCreateFormOnDate}
+          />
+        ) : viewMode === "table" ? (
+          <TaskTableView
+            tasks={visibleTasks}
+            projects={projects}
+            labelsByTask={taskLabels}
+            remindersByTask={taskReminders}
+            onOpenDetail={(id) => setSelectedTaskId(id)}
           />
         ) : (
           <TaskListView

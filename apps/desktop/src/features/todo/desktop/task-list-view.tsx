@@ -848,7 +848,7 @@ function TaskRow({
 }
 
 /** 完成态对勾（04 §3.2：白勾 SVG；多选勾选框复用，参数化尺寸/线宽） */
-function CheckSvg({ className = "m-auto size-3 text-white", stroke = 3 }: { className?: string; stroke?: number }) {
+export function CheckSvg({ className = "m-auto size-3 text-white", stroke = 3 }: { className?: string; stroke?: number }) {
   return (
     <svg
       viewBox="0 0 24 24"
