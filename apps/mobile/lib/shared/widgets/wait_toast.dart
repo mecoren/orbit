@@ -24,12 +24,16 @@ class WaitToast {
   static Timer? _dismissTimer;
 
   /// 展示一条 toast；[description] 可选副文案；[onTap] 可选整卡点击回调
-  ///（提醒 toast 用于跳任务详情；不传时点击仅收起）
+  ///（提醒 toast 用于跳任务详情；不传时点击仅收起）；
+  /// [actionLabel]/[onAction] 可选右侧动作按钮（撤销删除等场景——
+  /// 带动作按钮时不自动收起，由动作完成时机或手动点击控制）
   static void global(
     String title, {
     WaitToastVariant variant = WaitToastVariant.info,
     String? description,
     VoidCallback? onTap,
+    String? actionLabel,
+    VoidCallback? onAction,
   }) {
     final overlay = rootNavigatorKey.currentState?.overlay;
     if (overlay == null) return;
@@ -43,6 +47,8 @@ class WaitToast {
         description: description,
         variant: variant,
         onTap: onTap,
+        actionLabel: actionLabel,
+        onAction: onAction,
         onDismiss: _remove,
       ),
     );
@@ -50,8 +56,8 @@ class WaitToast {
     overlay.insert(entry);
 
     // 停留 2.6s 后自动收起（动画由 _ToastView 内部退出态承担）
-    // 带 onTap 时不自动收：入口由点击驱动，避免用户来不及点
-    if (onTap == null) {
+    // 带 onTap/action 时不自动收：入口由点击驱动，避免用户来不及点
+    if (onTap == null && onAction == null) {
       _dismissTimer = Timer(const Duration(milliseconds: 2600), _remove);
     }
   }
@@ -90,6 +96,8 @@ class _ToastView extends StatefulWidget {
     required this.variant,
     required this.onDismiss,
     this.onTap,
+    this.actionLabel,
+    this.onAction,
   });
 
   final String title;
@@ -99,6 +107,10 @@ class _ToastView extends StatefulWidget {
 
   /// 整卡点击回调；null 时点击仅收起（原行为）
   final VoidCallback? onTap;
+
+  /// 右侧动作按钮文案与回调（撤销等；两者须成对提供）
+  final String? actionLabel;
+  final VoidCallback? onAction;
 
   @override
   State<_ToastView> createState() => _ToastViewState();
@@ -123,9 +135,16 @@ class _ToastViewState extends State<_ToastView>
   }
 
   /// 点击：有 onTap 先执行再退出（提醒 toast 跳详情）；
-  /// 无 onTap 与原行为一致仅收起。
+  /// 无 onTap 与原行为一致仅收起
   Future<void> _tap() async {
     final action = widget.onTap;
+    await _exit();
+    action?.call();
+  }
+
+  /// 动作按钮：先收条再执行回调（撤销删除后 toast 无须停留）
+  Future<void> _runAction() async {
+    final action = widget.onAction;
     await _exit();
     action?.call();
   }
@@ -192,9 +211,9 @@ class _ToastViewState extends State<_ToastView>
                                   fontWeight: FontWeight.w600,
                                   color:
                                       widget.variant ==
-                                          WaitToastVariant.destructive
-                                      ? colors.destructive
-                                      : colors.titleText,
+                                              WaitToastVariant.destructive
+                                          ? colors.destructive
+                                          : colors.titleText,
                                 ),
                               ),
                               if (widget.description != null) ...[
@@ -211,6 +230,30 @@ class _ToastViewState extends State<_ToastView>
                           ),
                         ),
                       ),
+                      // 右侧动作按钮（撤销等；点击收条并执行回调）
+                      if (widget.actionLabel != null && widget.onAction != null)
+                        Padding(
+                          padding:
+                              const EdgeInsets.only(right: AppDimens.space8),
+                          child: TextButton(
+                            onPressed: _runAction,
+                            style: TextButton.styleFrom(
+                              foregroundColor: colors.accent,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: AppDimens.space8,
+                              ),
+                              minimumSize: const Size(0, 36),
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            ),
+                            child: Text(
+                              widget.actionLabel!,
+                              style: const TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ),
                     ],
                   ),
                 ),

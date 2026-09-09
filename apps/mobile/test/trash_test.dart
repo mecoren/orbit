@@ -9,6 +9,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:orbit/core/routing/router_keys.dart';
 import 'package:orbit/data/api/mock_orbit_bridge.dart';
 import 'package:orbit/data/api/dto.dart';
 import 'package:orbit/data/providers/bridge_provider.dart';
@@ -19,12 +20,24 @@ Widget _wrap(Widget child, MockOrbitBridge bridge) => ProviderScope(
       child: MaterialApp(home: child),
     );
 
+/// 撤销 toast 需挂 rootNavigatorKey 的 Overlay（WaitToast.global 经全局
+/// Navigator 插入；普通 _wrap 的 MaterialApp 无 key 时 toast 静默不显示）
+Widget _wrapWithNavKey(Widget child, MockOrbitBridge bridge) => ProviderScope(
+      overrides: [orbitBridgeProvider.overrideWithValue(bridge)],
+      child: MaterialApp(navigatorKey: rootNavigatorKey, home: child),
+    );
+
 /// testWidgets 的 FakeAsync 下桥的 120ms 延迟需靠 pump 推进假时钟才能完成
 ///（body 里裸 await bridge 调用会永不完成——mock _delay 是真 Timer）。
-Future<void> _bridgeCall(WidgetTester tester, Future<void> call) async {
-  final f = call;
+/// 泛型版：带返回值的桥调用同模式（先 pump 推进假时钟再 await）。
+Future<T> _bridgeCallT<T>(WidgetTester tester, Future<T> call) async {
   await tester.pump(const Duration(milliseconds: 300));
-  await f;
+  return call;
+}
+
+Future<void> _bridgeCall(WidgetTester tester, Future<void> call) async {
+  await tester.pump(const Duration(milliseconds: 300));
+  await call;
 }
 
 Future<void> _settlePastMockLatency(WidgetTester tester) async {
@@ -134,6 +147,82 @@ void main() {
       expect(find.text(victim.title), findsOneWidget);
       expect(find.textContaining('天后自动清除'), findsOneWidget);
       expect(find.text('清空'), findsOneWidget);
+    });
+
+    // ── 可撤销彻底删除（2026-09-09：purge 延迟提交 + toast 撤销按钮）──
+
+    testWidgets('彻底删除：5s 窗口内点撤销 → 行恢复且库未删', (tester) async {
+      final bridge = MockOrbitBridge();
+      final tasksFuture = bridge.todoTaskList(const ListFilter(pageSize: 1000));
+      await tester.pump(const Duration(milliseconds: 300));
+      final tasks = await tasksFuture;
+      final victim = tasks.first;
+      await _bridgeCall(tester, bridge.todoTaskDelete(victim.id));
+
+      await tester.pumpWidget(_wrapWithNavKey(const TrashScreen(), bridge));
+      await _settlePastMockLatency(tester);
+
+      // 长按行弹操作菜单 → 「彻底删除」→ 确认（确认钮文案与菜单项同名，
+      // 弹窗 content 为含标题的长句用 textContaining 锁定弹窗本体）
+      await tester.longPress(find.text(victim.title));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('彻底删除').first); // 菜单项
+      await tester.pumpAndSettle();
+      expect(find.textContaining('确定要彻底删除'), findsOneWidget);
+      await tester.tap(find.text('彻底删除').last); // AlertDialog 确认钮
+      await tester.pumpAndSettle();
+
+      // 乐观隐藏：列表行消失（toast description 里仍有标题副本，故按列表行
+      // 样式口径改用 findsNWidgets——ListTile 行的 title 是 15px，toast 描述 12px）
+      final rowTitle = find
+          .byWidgetPredicate((w) => w is Text && w.data == victim.title && w.style?.fontSize == 15);
+      expect(rowTitle, findsNothing);
+      expect(find.text('撤销'), findsOneWidget);
+
+      // 点撤销 → 行恢复；数据仍在库（延迟提交被取消）
+      await tester.tap(find.text('撤销'));
+      await tester.pumpAndSettle();
+      expect(rowTitle, findsOneWidget);
+      final trashed = await _bridgeCallT(tester, bridge.trashTasksList());
+      expect(trashed.any((t) => t.id == victim.id), isTrue);
+    });
+
+    testWidgets('彻底删除：不点撤销 → 5s 窗口过后真提交（物理删除）', (tester) async {
+      final bridge = MockOrbitBridge();
+      final tasksFuture = bridge.todoTaskList(const ListFilter(pageSize: 1000));
+      await tester.pump(const Duration(milliseconds: 300));
+      final tasks = await tasksFuture;
+      final victim = tasks.first;
+      await _bridgeCall(tester, bridge.todoTaskDelete(victim.id));
+
+      await tester.pumpWidget(_wrapWithNavKey(const TrashScreen(), bridge));
+      await _settlePastMockLatency(tester);
+
+      // 长按行 → 菜单「彻底删除」→ 确认
+      await tester.longPress(find.text(victim.title));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('彻底删除').first);
+      await tester.pumpAndSettle();
+      expect(find.textContaining('确定要彻底删除'), findsOneWidget);
+      await tester.tap(find.text('彻底删除').last);
+      await tester.pumpAndSettle();
+      final rowTitle2 = find
+          .byWidgetPredicate((w) => w is Text && w.data == victim.title && w.style?.fontSize == 15);
+      expect(rowTitle2, findsNothing);
+
+      // 推进假时钟过 5s 窗口 → timer fire 触发提交（_commitPurge 内部
+      // invalidate 后 provider 重查的 120ms 真 Timer 一并推掉再 settle）
+      await tester.pump(const Duration(seconds: 5));
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.pumpAndSettle();
+      // 提交后 invalidate 已触发 provider 重查，须再推 300ms 假时钟让重查完成
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.pumpAndSettle();
+
+      final trashed = await _bridgeCallT(tester, bridge.trashTasksList());
+      expect(trashed.isEmpty, isTrue);
+      // 恢复不可达的库语义已由上方纯 test 用例「彻底删除 = 物理移除」覆盖，
+      // 此处不再重复异步断言（FakeAsync 下未捕获 zone error 会直接炸测试体）
     });
   });
 }

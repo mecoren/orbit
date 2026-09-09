@@ -91,6 +91,7 @@ test("主链路：快速新建 → 列表出现 → 完成 → 撤销删除恢�
 });
 
 test("回收站：删除入站 → 恢复回列表", async ({ page }) => {
+  test.setTimeout(60_000); // 两段 5s 撤销窗口硬等待，全量并行负载下 30s 预算吃紧
   // ---- 新建 + 删除（等过 5s 撤销窗口，让墓碑真正落库）----
   await quickAdd(page, "冒烟任务-回收站验证");
   await expect(page.getByText("冒烟任务-回收站验证")).toBeVisible();
@@ -124,6 +125,39 @@ test("回收站：删除入站 → 恢复回列表", async ({ page }) => {
   await expect(
     page.getByRole("button", { name: "未完成任务：冒烟任务-回收站验证" }),
   ).toBeVisible();
+});
+
+test("回收站：彻底删除可撤销（2026-09-09 purge 接入延迟提交）", async ({ page }) => {
+  test.setTimeout(60_000); // 两段 5s 撤销窗口硬等待，全量并行负载下 30s 预算吃紧
+  // ---- 新建 + 删除（等过 5s 撤销窗口，让墓碑真正落库）----
+  await quickAdd(page, "冒烟任务-彻底删除验证");
+  await expect(page.getByText("冒烟任务-彻底删除验证")).toBeVisible();
+  await page.getByText("冒烟任务-彻底删除验证").click({ button: "right" });
+  await page.getByRole("menuitem", { name: "删除" }).click();
+  const confirm = page.getByRole("button", { name: "删除", exact: true });
+  if (await confirm.isVisible().catch(() => false)) {
+    await confirm.click();
+  }
+  await page.waitForTimeout(6000);
+
+  // ---- 进回收站 → 彻底删除 → 5s 窗口内撤销 → 行回归 ----
+  await page.getByRole("button", { name: "回收站" }).first().click();
+  await expect(page.getByText("冒烟任务-彻底删除验证")).toBeVisible();
+  await page.getByRole("button", { name: "彻底删除" }).first().click(); // 行尾图标钮
+  await page.getByRole("button", { name: "彻底删除", exact: true }).click(); // AlertDialog 确认
+  await expect(page.getByText("已删除任务「冒烟任务-彻底删除验证」")).toBeVisible(); // 撤销 toast
+  await page.getByRole("button", { name: "撤销" }).click();
+  // 撤销后行回归（exact 匹配行内标题——toast 文案「已删除任务「…」」是超串不撞）
+  await expect(
+    page.getByText("冒烟任务-彻底删除验证", { exact: true }),
+  ).toBeVisible();
+
+  // ---- 再彻底删除一次：不撤销 → 落库 → 空态 ----
+  await page.getByRole("button", { name: "彻底删除" }).first().click();
+  await page.getByRole("button", { name: "彻底删除", exact: true }).click();
+  await page.waitForTimeout(6000); // 撤销窗口 5s + 余量
+  await expect(page.getByText("冒烟任务-彻底删除验证")).toHaveCount(0);
+  await expect(page.getByText("回收站是空的")).toBeVisible();
 });
 
 test("导航回归：回收站/统计面板下点侧边栏菜单直接回任务面板（2026-09-08 修复）", async ({ page }) => {

@@ -19,6 +19,10 @@ import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/business/empty-state";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
+  hideFromQueries,
+  useUndoableDeleteAction,
+} from "@/hooks/use-undoable-delete";
+import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -93,23 +97,39 @@ export function TrashPanel() {
     onError: (e) => toast.error(String(e)),
   });
 
-  const purgeMutation = useMutation({
-    mutationFn: (id: number) => trashTaskPurge(id),
-    onSuccess: () => {
-      toast.success("已彻底删除");
-      invalidate();
-    },
-    onError: (e) => toast.error(String(e)),
-  });
+  // 彻底删除/清空走可撤销删除（P0#3 同款延迟提交）：purge 是物理 DELETE，
+  // 撤销只能在提交前拦截——乐观隐藏行 + 5s 撤销窗口后才真正落库。
+  const undoableDelete = useUndoableDeleteAction();
 
-  const purgeAllMutation = useMutation({
-    mutationFn: trashPurgeAll,
-    onSuccess: (n) => {
-      toast.success(`已清空回收站（${n} 个任务）`);
-      invalidate();
-    },
-    onError: (e) => toast.error(String(e)),
-  });
+  // 彻底删除（可撤销）：乐观摘除回收站缓存行，5s 内点撤销恢复
+  const confirmPurge = (t: TodoTask) => {
+    setPurgeTarget(null);
+    undoableDelete({
+      entityLabel: "任务",
+      recordName: t.title,
+      hide: (qc) => hideFromQueries<TodoTask>(qc, ["trash", "tasks"], t.id),
+      commit: async () => {
+        await trashTaskPurge(t.id);
+      },
+    });
+  };
+
+  // 清空回收站（可撤销，整批单笔）：一次隐藏全部墓碑 + 一次提交，
+  // 撤销一键整批恢复（批量删除同款单槽位口径——逐条循环会互相 flush 落库）
+  const confirmPurgeAll = () => {
+    setPurgeAllOpen(false);
+    const ids = tasks.map((t) => t.id);
+    undoableDelete({
+      entityLabel: "任务",
+      count: ids.length,
+      hide: (qc) => {
+        for (const id of ids) hideFromQueries<TodoTask>(qc, ["trash", "tasks"], id);
+      },
+      commit: async () => {
+        await trashPurgeAll();
+      },
+    });
+  };
 
   return (
     <div className="flex h-full flex-col">
@@ -126,7 +146,7 @@ export function TrashPanel() {
           variant="outline"
           size="sm"
           className="h-8"
-          disabled={tasks.length === 0 || purgeAllMutation.isPending}
+          disabled={tasks.length === 0}
           onClick={() => setPurgeAllOpen(true)}
         >
           <Trash2 size={14} className="mr-1" />
@@ -185,7 +205,7 @@ export function TrashPanel() {
                       <Trash2 className="size-4" />
                     </Button>
                   </TooltipTrigger>
-                  <TooltipContent>彻底删除（不可恢复）</TooltipContent>
+                  <TooltipContent>彻底删除（5 秒内可撤销）</TooltipContent>
                 </Tooltip>
               </div>
             ))}
@@ -202,8 +222,8 @@ export function TrashPanel() {
           <AlertDialogHeader>
             <AlertDialogTitle>彻底删除任务</AlertDialogTitle>
             <AlertDialogDescription className="break-words">
-              确定要彻底删除「{purgeTarget?.title}」吗？此操作不可恢复，任务及其子任务、
-              评论、提醒将一并被清除。
+              确定要彻底删除「{purgeTarget?.title}」吗？任务及其子任务、评论、提醒将一并被清除，
+              删除后 5 秒内可撤销。
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -211,8 +231,7 @@ export function TrashPanel() {
             <AlertDialogAction
               className="bg-destructive text-white hover:bg-destructive/90"
               onClick={() => {
-                if (purgeTarget) purgeMutation.mutate(purgeTarget.id);
-                setPurgeTarget(null);
+                if (purgeTarget) confirmPurge(purgeTarget);
               }}
             >
               彻底删除
@@ -227,17 +246,14 @@ export function TrashPanel() {
           <AlertDialogHeader>
             <AlertDialogTitle>清空回收站</AlertDialogTitle>
             <AlertDialogDescription>
-              确定要清空回收站中的 {tasks.length} 个任务吗？此操作不可恢复。
+              确定要清空回收站中的 {tasks.length} 个任务吗？删除后 5 秒内可整批撤销。
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>取消</AlertDialogCancel>
             <AlertDialogAction
               className="bg-destructive text-white hover:bg-destructive/90"
-              onClick={() => {
-                purgeAllMutation.mutate();
-                setPurgeAllOpen(false);
-              }}
+              onClick={() => confirmPurgeAll()}
             >
               清空
             </AlertDialogAction>
