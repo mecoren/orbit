@@ -262,14 +262,21 @@ test("日历视图：左右分栏 + 选中定位 + 年视图 + 右键新增预�
     page.getByRole("button", { name: "月", exact: true }),
   ).toBeVisible(); // 工具栏回到月档
 
+  // ---- 议程档回归：先回今天（年视图点 1 月把视图切到了 1 月，议程按当月分组） ----
+  await page.getByRole("button", { name: "回到今天" }).click();
+  await expect(
+    page.getByRole("heading", {
+      name: `${today.getFullYear()}年${today.getMonth() + 1}月`,
+      exact: true,
+    }),
+  ).toBeVisible(); // 月视图回到本月
+
   // ---- 右键日格：直接弹新增表单并预填该日截止日期 ----
-  // 右键今天格（右栏「今天」徽标所在的日期分组对应今天）
+  // 右键今天格；日格带 aria-label=YYYY-MM-DD（月历组件统一口径），
+  // 不能用数字 name 定位——getByRole name 是子串匹配，「9」会先命中
+  // 工具栏「9月」标题按钮（今日日期数字与月份标题撞车的日期敏感假红）
   const ymd = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
-  // 月历日格是按钮：右键数字「今天日期」
-  await page
-    .getByRole("button", { name: String(today.getDate()) })
-    .first()
-    .click({ button: "right" });
+  await page.locator(`[aria-label="${ymd}"]`).click({ button: "right" });
   // 新增表单打开且截止日期已预填为该日
   await expect(page.getByRole("dialog")).toBeVisible();
   const dueInput = page.locator("button", { hasText: ymd }).first();
@@ -282,7 +289,7 @@ test("日历视图：左右分栏 + 选中定位 + 年视图 + 右键新增预�
   await dlg.getByRole("button", { name: "创建" }).click();
   await expect(page.getByText("日历右键任务")).toBeVisible({ timeout: 10_000 });
 
-  // ---- 议程档回归：先回今天（年视图点 1 月把视图切到了 1 月，议程按当月分组） ----
+  // ---- 议程档回归：先回今天再切议程（议程按当月分组，今天格在当前月） ----
   await page.getByRole("button", { name: "回到今天" }).click();
   await page.getByRole("button", { name: "议程" }).click();
   await expect(page.getByText("既有任务-今天截止")).toBeVisible();

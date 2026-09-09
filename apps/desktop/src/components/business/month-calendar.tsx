@@ -289,6 +289,7 @@ export function MonthCalendar({
             <button
               key={`${ymd}-${i}`}
               type="button"
+              aria-label={ymd}
               onClick={() => onDayClick?.(startOfDay(date))}
               onContextMenu={
                 onDayContextMenu
