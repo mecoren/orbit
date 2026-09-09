@@ -18,6 +18,7 @@ import 'logic/repeat_logic.dart' as rep;
 import 'logic/task_logic.dart'
     show
         QuickViewKey,
+        atViewDueHour,
         dateToMidnightMs,
         formatDateTime,
         formatYmd,
@@ -302,13 +303,17 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
         //（表单跨零点长开时 myDayDate 不落昨天）。dueDate 用户手动清空时
         // 不回注视图默认（_dueDate 预填后可被用户删掉，此时尊重显式选择）。
         final viewDefaults = quickViewCreateDefaults(widget.quickView);
+        // 今日/本周视图内截止时刻归一 18:00（用户口径）：各日期来源
+        // （NLP 词/快捷胶囊/日历）均只表达日期、无时刻位，统一落 18 点
+        final inDueView = widget.quickView == QuickViewKey.today ||
+            widget.quickView == QuickViewKey.week;
         final created = await bridge.todoTaskCreate(TodoTaskCreateInput(
           title: title,
           description: description.isEmpty ? null : description,
           projectId: _projectId,
           priority: _priority,
           status: _status,
-          dueDate: _dueDate,
+          dueDate: inDueView && _dueDate != null ? atViewDueHour(_dueDate!) : _dueDate,
           startDate: _startDate,
           repeatMode: repeatMode,
           repeatAfter: repeatAfter,

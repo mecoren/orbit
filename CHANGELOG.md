@@ -31,10 +31,10 @@
 
 ### 视图内新增自动带视图标记——我的一天/今日/本周/收藏四视图新建即归属
 
-在快捷视图内新建任务，此前提交的是「裸任务」（不带任何视图口径），创建后不满足过滤条件、从当前视图**立刻消失**，用户得再去手动加标记。本批对齐项目视图 `defaultProjectId` 的既有注入链路：**视图内新建自动带本视图标记**，注入优先级 NLP 显式值 > 手动选择 > 视图默认，提交/保存瞬间重算（跨零点不落昨天）。四视图口径：我的一天静默附加 `my_day_date=今天零点`；今天截止预填 `due_date=今天`（表单字段可见可改）；本周截止预填 `due_date=当周周五`（周六/周日给周日，周一起始周）；收藏静默附加 `is_favorite=1`。三个新建入口全覆盖：桌面 QuickAddBar 快加栏、桌面九字段表单、移动端 FAB 表单；**编辑态一律不受影响**（仅创建分支注入）。
+在快捷视图内新建任务，此前提交的是「裸任务」（不带任何视图口径），创建后不满足过滤条件、从当前视图**立刻消失**，用户得再去手动加标记。本批对齐项目视图 `defaultProjectId` 的既有注入链路：**视图内新建自动带本视图标记**，注入优先级 NLP 显式值 > 手动选择 > 视图默认，提交/保存瞬间重算（跨零点不落昨天）。四视图口径：我的一天静默附加 `my_day_date=今天零点`；今天截止预填 `due_date=今天 18:00`；本周截止预填 `due_date=当周周五 18:00`（周六/周日给周日 18:00，周一起始周）；收藏静默附加 `is_favorite=1`。**今日/本周视图内创建的截止时刻一律归一当日 18:00**（2026-09-09 口径修订）——NLP 日期词/手动选择/视图默认各来源均只表达日期、无时刻位，经 `atViewDueHour` 统一落 18 点。三个新建入口全覆盖：桌面 QuickAddBar 快加栏、桌面九字段表单、移动端 FAB 表单；**编辑态一律不受影响**（仅创建分支注入）。
 
-- 实现为共享纯函数 `quickViewCreateDefaults` + `weekDefaultDueMs`（桌面 `view-create-defaults.ts` / 移动 `task_logic.dart` 双端同源）；core 零改动——`TodoTaskCreateInput` 早已支持 `my_day_date`/`is_favorite`/`due_date`，全链透传。
-- 测试：桌面 vitest 12 用例（周五锚点边界/四视图矩阵/跨零点重算）+ 移动纯函数 8 + widget 4（我的一天 myDayDate 落库/收藏 isFavorite/今日预填/无视图回归保护）+ e2e 2（QuickAddBar 视图内新建留在视图 + db 落 my_day_date 断言、收藏表单链路）。
+- 实现为共享纯函数 `quickViewCreateDefaults` + `weekDefaultDueMs` + `atViewDueHour`（桌面 `view-create-defaults.ts` / 移动 `task_logic.dart` 双端同源）；core 零改动——`TodoTaskCreateInput` 早已支持 `my_day_date`/`is_favorite`/`due_date`，全链透传。
+- 测试：桌面 vitest 14 用例（18 点归一幂等/周五锚点边界/四视图矩阵/跨零点重算）+ 移动纯函数 9 + widget 4（我的一天 myDayDate 落库/收藏 isFavorite/今日预填 18 点/无视图回归保护）+ e2e 3（QuickAddBar 视图内新建留在视图 + db 落 my_day_date 断言、收藏表单链路、今日视图默认与 NLP 双路 18:00）。
 
 ### A5 通用撤销——Ctrl+Z 全操作可撤销（完成切换/批量全接入）
 

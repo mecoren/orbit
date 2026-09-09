@@ -224,6 +224,42 @@ test("视图内新增自动带视图标记（#39）：我的一天 QuickAddBar �
   expect(both.hasDue).toBe(true);
 });
 
+test("视图内新增自动带视图标记（#39）：今日截止视图新建 → db 落今天 18:00", async ({ page }) => {
+  // 进入今天截止视图
+  await page.getByRole("button", { name: "今天截止" }).first().click();
+  await expect(page.getByRole("heading", { name: "今天截止" })).toBeVisible();
+
+  // 视图内 QuickAddBar 新建（无日期词）：due_date = 视图默认（今天 18:00）
+  await quickAdd(page, "视图标记任务-今日18点");
+  await expect(
+    page.getByRole("button", { name: "未完成任务：视图标记任务-今日18点" }),
+  ).toBeVisible();
+
+  const due = await page.evaluate(() => {
+    const m = (window as any).__orbitMock;
+    const t = m.db.tasks.find((x: any) => x.title === "视图标记任务-今日18点");
+    const today = new Date();
+    return {
+      raw: t?.due_date,
+      at18: t?.due_date === new Date(today.getFullYear(), today.getMonth(), today.getDate(), 18).getTime(),
+    };
+  });
+  expect(due.at18).toBe(true);
+
+  // NLP 显式日期同样归一 18 点：输入「明天」→ 明天 18:00（而非解析器默认零点）
+  await quickAdd(page, "视图标记任务-明日18点 明天");
+  const due2 = await page.evaluate(() => {
+    const m = (window as any).__orbitMock;
+    const t = m.db.tasks.find((x: any) => x.title === "视图标记任务-明日18点");
+    const tmr = new Date();
+    tmr.setDate(tmr.getDate() + 1);
+    return {
+      at18: t?.due_date === new Date(tmr.getFullYear(), tmr.getMonth(), tmr.getDate(), 18).getTime(),
+    };
+  });
+  expect(due2.at18).toBe(true);
+});
+
 test("视图内新增自动带视图标记（#39）：收藏视图表单新建 → db 落 is_favorite=1", async ({ page }) => {
   // 进入收藏视图
   await page.getByRole("button", { name: "收藏" }).first().click();

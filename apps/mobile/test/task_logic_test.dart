@@ -401,20 +401,30 @@ group('视图创建默认值（quickViewCreateDefaults + weekDefaultDueMs）', (
   DateTime d(int m, int day, [int h = 10, int min = 30]) => DateTime(2026, m, day, h, min);
   int zero(int m, int day) =>
       DateTime(2026, m, day).millisecondsSinceEpoch;
+  int at18(int m, int day) =>
+      DateTime(2026, m, day, 18).millisecondsSinceEpoch;
 
-  test('本周默认截止：周一/周三/周五 → 当周周五', () {
-    expect(weekDefaultDueMs(d(9, 7)), zero(9, 11)); // 周一
-    expect(weekDefaultDueMs(d(9, 9)), zero(9, 11)); // 周三
-    expect(weekDefaultDueMs(d(9, 11, 23, 59)), zero(9, 11)); // 周五深夜仍算周五
+  test('atViewDueHour：任意时刻归一当日 18:00（保留日期、幂等）', () {
+    expect(atViewDueHour(DateTime(2026, 9, 9, 0, 0).millisecondsSinceEpoch),
+        at18(9, 9));
+    expect(atViewDueHour(DateTime(2026, 9, 9, 23, 59).millisecondsSinceEpoch),
+        at18(9, 9));
+    expect(atViewDueHour(at18(9, 9)), at18(9, 9));
   });
 
-  test('本周默认截止：周六/周日 → 周日', () {
-    expect(weekDefaultDueMs(d(9, 12)), zero(9, 13));
-    expect(weekDefaultDueMs(d(9, 13)), zero(9, 13));
+  test('本周默认截止：周一/周三/周五 → 当周周五 18:00', () {
+    expect(weekDefaultDueMs(d(9, 7)), at18(9, 11)); // 周一
+    expect(weekDefaultDueMs(d(9, 9)), at18(9, 11)); // 周三
+    expect(weekDefaultDueMs(d(9, 11, 23, 59)), at18(9, 11)); // 周五深夜仍算周五
   });
 
-  test('本周默认截止：跨月边界 周三 09-30 → 周五 10-02', () {
-    expect(weekDefaultDueMs(d(9, 30)), zero(10, 2));
+  test('本周默认截止：周六/周日 → 周日 18:00', () {
+    expect(weekDefaultDueMs(d(9, 12)), at18(9, 13));
+    expect(weekDefaultDueMs(d(9, 13)), at18(9, 13));
+  });
+
+  test('本周默认截止：跨月边界 周三 09-30 → 周五 10-02 18:00', () {
+    expect(weekDefaultDueMs(d(9, 30)), at18(10, 2));
   });
 
   test('我的一天 → myDayMs=今天零点；无 dueMs/favorite', () {
@@ -424,14 +434,14 @@ group('视图创建默认值（quickViewCreateDefaults + weekDefaultDueMs）', (
     expect(r.favorite, isNull);
   });
 
-  test('今天截止 → dueMs=今天零点', () {
+  test('今天截止 → dueMs=今天 18:00', () {
     final r = quickViewCreateDefaults(QuickViewKey.today, d(9, 9));
-    expect(r.dueMs, zero(9, 9));
+    expect(r.dueMs, at18(9, 9));
   });
 
-  test('本周截止 → dueMs=当周周五', () {
+  test('本周截止 → dueMs=当周周五 18:00', () {
     final r = quickViewCreateDefaults(QuickViewKey.week, d(9, 9));
-    expect(r.dueMs, zero(9, 11));
+    expect(r.dueMs, at18(9, 11));
   });
 
   test('收藏 → favorite=1', () {

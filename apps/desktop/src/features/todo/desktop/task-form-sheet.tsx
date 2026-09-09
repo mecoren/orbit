@@ -49,7 +49,7 @@ import {
   repeatLabel,
 } from "../shared/repeat";
 import { formatYmd } from "../shared/lunar";
-import { quickViewCreateDefaults } from "../shared/view-create-defaults";
+import { atViewDueHour, quickViewCreateDefaults } from "../shared/view-create-defaults";
 import { PRIORITY_COLOR, TODO_ACCENT } from "../shared/constants";
 
 const PRIORITY_LABELS = ["无", "低", "中", "高", "紧急", "立即处理"];
@@ -767,10 +767,15 @@ export function TaskFormSheet({
     } else {
       // 视图标记静默附加（#39）：我的一天/收藏视图下新建自动带标记
       //（表单无对应字段，用户取消可在列表行 Sunrise/星标一键解除）；
-      // 提交瞬间重算（表单跨零点长开时 my_day_date 不落昨天）
+      // 提交瞬间重算（表单跨零点长开时 my_day_date 不落昨天）。
+      // 今日/本周视图内截止时刻归一 18:00（用户口径）：表单日期字段为
+      // 纯日期型（落零点），视图内填的日期统一挪到 18 点
       const viewDefaults = quickViewCreateDefaults(quickView);
+      const inDueView = quickView === "today" || quickView === "week";
       const created = await todoTaskCreate({
         ...payload,
+        ...(inDueView &&
+          payload.due_date != null && { due_date: atViewDueHour(payload.due_date) }),
         ...(viewDefaults.myDayMs != null && { my_day_date: viewDefaults.myDayMs }),
         ...(viewDefaults.favorite != null && { is_favorite: viewDefaults.favorite }),
       });

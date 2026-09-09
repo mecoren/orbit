@@ -28,7 +28,10 @@ import {
 } from "@/lib/tauri";
 import { useAppStore } from "@/stores/app-store";
 import { parseQuickInput } from "../shared/parse-quick-input";
-import { quickViewCreateDefaults } from "../shared/view-create-defaults";
+import {
+  atViewDueHour,
+  quickViewCreateDefaults,
+} from "../shared/view-create-defaults";
 import { PRIORITY_COLOR, TODO_ACCENT, type QuickViewKey } from "../shared/constants";
 
 const PRIORITY_LABELS = ["无", "低", "中", "高", "紧急", "立即处理"];
@@ -115,17 +118,19 @@ export function QuickAddBar({ projects, defaultProjectId, quickView }: QuickAddB
     const t = p.title.trim();
     if (!t) return;
     // 视图标记注入（#39）：提交瞬间重算默认值（跨零点不落昨天）；
-    // NLP 显式值 > 手动 Popover 选择 > 本视图默认
+    // NLP 显式值 > 手动 Popover 选择 > 本视图默认。
+    // 今日/本周视图内截止时刻归一 18:00（用户口径）：三个日期来源
+    // （NLP 词/Popover/视图默认）均只表达日期、无时刻位，统一落 18 点
     const viewDefaults = quickViewCreateDefaults(quickView);
+    const inDueView = quickView === "today" || quickView === "week";
+    const resolvedDue =
+      p.dueDate?.getTime() ?? dueDate?.getTime() ?? viewDefaults.dueMs ?? null;
     try {
       const created = await todoTaskCreate({
         title: t,
         priority: p.priority || priority,
-        due_date: p.dueDate
-          ? p.dueDate.getTime()
-          : dueDate
-            ? dueDate.getTime()
-            : (viewDefaults.dueMs ?? null),
+        due_date:
+          inDueView && resolvedDue != null ? atViewDueHour(resolvedDue) : resolvedDue,
         project_id: p.projectId ?? effectiveProjectId,
         ...(viewDefaults.myDayMs != null && { my_day_date: viewDefaults.myDayMs }),
         ...(viewDefaults.favorite != null && { is_favorite: viewDefaults.favorite }),

@@ -331,7 +331,7 @@ void main() {
     expect(task.isFavorite, 1);
   });
 
-  testWidgets('今日截止视图新建 → 截止日期预填今天零点', (tester) async {
+  testWidgets('今日截止视图新建 → 截止预填今天 18:00（#39 时刻口径）', (tester) async {
     final bridge = await openFormInView(tester, QuickViewKey.today);
 
     await tester.enterText(find.byType(TextFormField).first, '今日截止快建任务');
@@ -345,7 +345,7 @@ void main() {
     final now = DateTime.now();
     expect(
       task.dueDate,
-      DateTime(now.year, now.month, now.day).millisecondsSinceEpoch,
+      DateTime(now.year, now.month, now.day, 18).millisecondsSinceEpoch,
     );
   });
 

@@ -356,15 +356,25 @@ String emptyMessageFor(TaskFilterInput input) {
 
 // ---------- 视图内新增自动带视图标记（#39，2026-09-09）----------
 
-/// 本周默认截止：当周周五零点；今天已过周五（周六/周日）→ 周日零点。
+/// 视图默认截止时刻：18:00（用户口径 2026-09-09 修订；与桌面 atViewDueHour 同源）
+const int viewDueHour = 18;
+
+/// 时间戳移到当日 18:00（保留日期、替换时刻；本地时区）
+int atViewDueHour(int ms) {
+  final d = DateTime.fromMillisecondsSinceEpoch(ms);
+  return DateTime(d.year, d.month, d.day, viewDueHour).millisecondsSinceEpoch;
+}
+
+/// 本周默认截止：当周周五 18:00；周末（周六/周日）→ 周日 18:00。
 /// 周一起始周（与日历网格一致）。与桌面 view-create-defaults.ts 同源。
 int weekDefaultDueMs([DateTime? now]) {
   final n = now ?? DateTime.now();
   final zero = DateTime(n.year, n.month, n.day);
   final monday = zero.subtract(Duration(days: (zero.weekday - 1) % 7));
-  final friday = monday.add(const Duration(days: 4));
-  if (!zero.isAfter(friday)) return friday.millisecondsSinceEpoch;
-  return monday.add(const Duration(days: 6)).millisecondsSinceEpoch;
+  // 周内（周一~周五）锚当周周五；周末锚周日
+  final dayOffset = zero.weekday >= 1 && zero.weekday <= 5 ? 4 : 6;
+  return atViewDueHour(
+      monday.add(Duration(days: dayOffset)).millisecondsSinceEpoch);
 }
 
 /// 视图创建默认值（快捷视图内新建自动带本视图标记，防止任务创建后
@@ -395,7 +405,7 @@ QuickViewCreateDefaults quickViewCreateDefaults(
     case QuickViewKey.myDay:
       return QuickViewCreateDefaults(myDayMs: midnight);
     case QuickViewKey.today:
-      return QuickViewCreateDefaults(dueMs: midnight);
+      return QuickViewCreateDefaults(dueMs: atViewDueHour(midnight));
     case QuickViewKey.week:
       return QuickViewCreateDefaults(dueMs: weekDefaultDueMs(n));
     case QuickViewKey.favorite:
