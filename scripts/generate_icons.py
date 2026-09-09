@@ -197,12 +197,16 @@ def write_ico(sizes: list[int], path: Path) -> None:
     槽位覆盖 Windows DPI 缩放取值：16/20/24/32/40/48/64/96/128/256
     （任务栏 96/125/150/200% 分别取 16-20/20-24/24-32/32-40）。
     每槽从 render_master 独立渲染（小尺寸走特调档），避免从 256 二次缩小。
+    **槽位降序写入（256 首位）**：tauri-codegen 的 new_ico 取 entries()[0]
+    作为 default_window_icon（窗口/托盘共用位图）——首帧必须是最大档，
+    否则任务栏把 16px 位图拉伸到 24-32px 显示为糊（托盘 1:1 反而清晰，
+    2026-09-09 用户报告「任务栏糊托盘清」的根因）。
     """
     from io import BytesIO
 
     entries = []
     imgs = []
-    for s in sizes:
+    for s in sorted(sizes, reverse=True):
         im = render_master(s)
         buf = BytesIO()
         im.save(buf, "PNG")
