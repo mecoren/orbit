@@ -28,7 +28,8 @@ import {
 } from "@/lib/tauri";
 import { useAppStore } from "@/stores/app-store";
 import { parseQuickInput } from "../shared/parse-quick-input";
-import { PRIORITY_COLOR, TODO_ACCENT } from "../shared/constants";
+import { quickViewCreateDefaults } from "../shared/view-create-defaults";
+import { PRIORITY_COLOR, TODO_ACCENT, type QuickViewKey } from "../shared/constants";
 
 const PRIORITY_LABELS = ["无", "低", "中", "高", "紧急", "立即处理"];
 
@@ -36,9 +37,11 @@ interface QuickAddBarProps {
   projects: TodoProject[];
   /** 当前选中项目（新建任务默认归属；快捷视图下为 undefined） */
   defaultProjectId?: number | null;
+  /** 当前选中的快捷视图（#39：视图内新建自动带本视图标记；项目/未分组/筛选器下为 null） */
+  quickView?: QuickViewKey | null;
 }
 
-export function QuickAddBar({ projects, defaultProjectId }: QuickAddBarProps) {
+export function QuickAddBar({ projects, defaultProjectId, quickView }: QuickAddBarProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [title, setTitle] = useState("");
   const [priority, setPriority] = useState(0);
@@ -111,12 +114,21 @@ export function QuickAddBar({ projects, defaultProjectId }: QuickAddBarProps) {
     });
     const t = p.title.trim();
     if (!t) return;
+    // 视图标记注入（#39）：提交瞬间重算默认值（跨零点不落昨天）；
+    // NLP 显式值 > 手动 Popover 选择 > 本视图默认
+    const viewDefaults = quickViewCreateDefaults(quickView);
     try {
       const created = await todoTaskCreate({
         title: t,
         priority: p.priority || priority,
-        due_date: p.dueDate ? p.dueDate.getTime() : dueDate ? dueDate.getTime() : null,
+        due_date: p.dueDate
+          ? p.dueDate.getTime()
+          : dueDate
+            ? dueDate.getTime()
+            : (viewDefaults.dueMs ?? null),
         project_id: p.projectId ?? effectiveProjectId,
+        ...(viewDefaults.myDayMs != null && { my_day_date: viewDefaults.myDayMs }),
+        ...(viewDefaults.favorite != null && { is_favorite: viewDefaults.favorite }),
       });
       // 标签挂载：单个失败不阻断任务本身
       for (const labelId of p.labelIds) {

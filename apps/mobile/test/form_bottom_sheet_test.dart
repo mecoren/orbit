@@ -6,6 +6,7 @@ import 'package:orbit/data/api/dto.dart';
 import 'package:orbit/data/api/mock_orbit_bridge.dart';
 import 'package:orbit/data/providers/bridge_provider.dart';
 import 'package:orbit/modules/todo/form_bottom_sheet.dart';
+import 'package:orbit/modules/todo/logic/task_logic.dart' show QuickViewKey;
 import 'package:orbit/modules/todo/sidebar_screen.dart';
 import 'package:orbit/shared/widgets/section_card.dart';
 
@@ -266,5 +267,102 @@ void main() {
       final r = await firstReminderOf(taskId);
       expect(r!.id, old.id);
     });
+  });
+
+  // ---------- 视图内新增自动带视图标记（#39）----------
+
+  /// 以指定快捷视图直接打开表单（模拟子列表 FAB 携 quickView 入口）
+  Future<MockOrbitBridge> openFormInView(
+    WidgetTester tester,
+    QuickViewKey view,
+  ) async {
+    final bridge = MockOrbitBridge();
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [orbitBridgeProvider.overrideWithValue(bridge)],
+        child: MaterialApp(
+          home: Builder(
+            builder: (context) => Scaffold(
+              body: Center(
+                child: IconButton(
+                  icon: const Icon(Icons.add_rounded),
+                  onPressed: () => showTodoFormSheet(context, quickView: view),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.byIcon(Icons.add_rounded));
+    await tester.pumpAndSettle();
+    return bridge;
+  }
+
+  testWidgets('我的一天视图新建 → myDayDate=今天零点静默附加', (tester) async {
+    final bridge = await openFormInView(tester, QuickViewKey.myDay);
+
+    await tester.enterText(find.byType(TextFormField).first, '我的一天快建任务');
+    await tester.tap(find.byIcon(Icons.check_rounded));
+    await _settlePastMockLatency(tester);
+
+    final tasks = await tester.runAsync(
+      () => bridge.todoTaskList(const ListFilter()),
+    );
+    final task = tasks!.firstWhere((t) => t.title == '我的一天快建任务');
+    final now = DateTime.now();
+    expect(
+      task.myDayDate,
+      DateTime(now.year, now.month, now.day).millisecondsSinceEpoch,
+    );
+  });
+
+  testWidgets('收藏视图新建 → isFavorite=1 静默附加', (tester) async {
+    final bridge = await openFormInView(tester, QuickViewKey.favorite);
+
+    await tester.enterText(find.byType(TextFormField).first, '收藏快建任务');
+    await tester.tap(find.byIcon(Icons.check_rounded));
+    await _settlePastMockLatency(tester);
+
+    final tasks = await tester.runAsync(
+      () => bridge.todoTaskList(const ListFilter()),
+    );
+    final task = tasks!.firstWhere((t) => t.title == '收藏快建任务');
+    expect(task.isFavorite, 1);
+  });
+
+  testWidgets('今日截止视图新建 → 截止日期预填今天零点', (tester) async {
+    final bridge = await openFormInView(tester, QuickViewKey.today);
+
+    await tester.enterText(find.byType(TextFormField).first, '今日截止快建任务');
+    await tester.tap(find.byIcon(Icons.check_rounded));
+    await _settlePastMockLatency(tester);
+
+    final tasks = await tester.runAsync(
+      () => bridge.todoTaskList(const ListFilter()),
+    );
+    final task = tasks!.firstWhere((t) => t.title == '今日截止快建任务');
+    final now = DateTime.now();
+    expect(
+      task.dueDate,
+      DateTime(now.year, now.month, now.day).millisecondsSinceEpoch,
+    );
+  });
+
+  testWidgets('无视图入口新建 → 不带任何标记（回归保护）', (tester) async {
+    final bridge = await _openForm(tester); // 侧栏 FAB：quickView=null
+
+    await tester.enterText(find.byType(TextFormField).first, '普通快建任务');
+    await tester.tap(find.byIcon(Icons.check_rounded));
+    await _settlePastMockLatency(tester);
+
+    final tasks = await tester.runAsync(
+      () => bridge.todoTaskList(const ListFilter()),
+    );
+    final task = tasks!.firstWhere((t) => t.title == '普通快建任务');
+    expect(task.myDayDate, isNull);
+    expect(task.isFavorite, 0);
+    // 截止无预填（表单默认无截止；NLP 未命中日期词）
+    expect(task.dueDate, isNull);
   });
 }

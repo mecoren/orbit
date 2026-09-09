@@ -49,6 +49,7 @@ import {
   repeatLabel,
 } from "../shared/repeat";
 import { formatYmd } from "../shared/lunar";
+import { quickViewCreateDefaults } from "../shared/view-create-defaults";
 import { PRIORITY_COLOR, TODO_ACCENT } from "../shared/constants";
 
 const PRIORITY_LABELS = ["无", "低", "中", "高", "紧急", "立即处理"];
@@ -626,6 +627,8 @@ interface TaskFormSheetProps {
   defaultProjectId?: number | null;
   /** 新增时预填的截止日期（YYYY-MM-DD；日历视图右键日格快捷新增用） */
   presetDueDate?: string | null;
+  /** 当前选中的快捷视图（#39：视图内新建自动带本视图标记；仅新增模式消费，编辑不受影响） */
+  quickView?: import("../shared/constants").QuickViewKey | null;
 }
 
 export function TaskFormSheet({
@@ -635,6 +638,7 @@ export function TaskFormSheet({
   projects,
   defaultProjectId,
   presetDueDate,
+  quickView,
 }: TaskFormSheetProps) {
   // 编辑模式载入该任务既有提醒（取第一条未删除），用于回填与变更比对
   const [existingReminder, setExistingReminder] = useState<TodoReminder | null>(null);
@@ -707,18 +711,24 @@ export function TaskFormSheet({
         remind_at: existingReminder ? tsToInputValue(existingReminder.remind_at) : "",
       };
     }
+    // 视图默认截止（#39）：今日/本周视图预填表单字段（可见可改；依赖 open 每次打开重算）
+    const viewDefaults = quickViewCreateDefaults(quickView);
     return {
       ...(defaultProjectId != null ? { project_id: String(defaultProjectId) } : {}),
       priority: "0",
       status: "pending",
       // 新增默认开始日期：今天（跨零点打开也正确，依赖 open 重算）
       start_date: formatYmd(new Date()),
-      // 日历右键预填的截止日期（仅新增模式）
-      ...(presetDueDate ? { due_date: presetDueDate } : {}),
+      // 截止日期预填优先级：日历右键 > 视图默认（today/week）> 无
+      ...(presetDueDate
+        ? { due_date: presetDueDate }
+        : viewDefaults.dueMs != null
+          ? { due_date: formatYmd(new Date(viewDefaults.dueMs)) }
+          : {}),
       // 新增默认提醒：一小时后（依赖 open，每次打开重新计算）
       remind_at: tsToInputValue(Date.now() + 60 * 60 * 1000),
     };
-  }, [task, defaultProjectId, existingReminder, open, presetDueDate]);
+  }, [task, defaultProjectId, existingReminder, open, presetDueDate, quickView]);
 
   const handleSubmit = async (values: Record<string, unknown>) => {
     const payload = {
@@ -755,7 +765,15 @@ export function TaskFormSheet({
         await todoReminderCreate({ task_id: task.id, remind_at: remindMs });
       }
     } else {
-      const created = await todoTaskCreate(payload);
+      // 视图标记静默附加（#39）：我的一天/收藏视图下新建自动带标记
+      //（表单无对应字段，用户取消可在列表行 Sunrise/星标一键解除）；
+      // 提交瞬间重算（表单跨零点长开时 my_day_date 不落昨天）
+      const viewDefaults = quickViewCreateDefaults(quickView);
+      const created = await todoTaskCreate({
+        ...payload,
+        ...(viewDefaults.myDayMs != null && { my_day_date: viewDefaults.myDayMs }),
+        ...(viewDefaults.favorite != null && { is_favorite: viewDefaults.favorite }),
+      });
       if (remindMs != null && !Number.isNaN(remindMs)) {
         await todoReminderCreate({ task_id: created.id, remind_at: remindMs });
       }

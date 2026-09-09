@@ -277,7 +277,8 @@ export default function TodoShell() {
           {/* 右侧详情抽屉（store 驱动，§7-③；跨面板常驻） */}
           <TaskDetailDrawer projects={projects} />
 
-          {/* 新增/编辑九字段表单（04 §3.6）；presetDueDate = 日历右键预填截止日期 */}
+          {/* 新增/编辑九字段表单（04 §3.6）；presetDueDate = 日历右键预填截止日期；
+              quickView = 当前选中快捷视图（#39 视图内新建自动带标记；仅创建分支消费） */}
           <TaskFormSheet
             open={formOpen}
             onOpenChange={setFormOpen}
@@ -285,6 +286,9 @@ export default function TodoShell() {
             projects={projects}
             defaultProjectId={ctx.activeProjectId}
             presetDueDate={editingTask ? null : presetDueDate}
+            quickView={
+              projectId == null && !ungrouped && savedFilterId == null ? quickView : null
+            }
           />
 
           {/* #35 新建筛选器弹层（名称 + 条件 JSON） */}

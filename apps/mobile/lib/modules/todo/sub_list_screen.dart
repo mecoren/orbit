@@ -361,7 +361,8 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
               ],
             ),
           ),
-          // FAB：右下，新建携 defaultProjectId=当前 projectId
+          // FAB：右下，新建携 defaultProjectId=当前 projectId；
+          // 快捷视图入口携 view（#39 视图内新建自动带标记）
           Positioned(
             right: AppDimens.space16,
             bottom: AppDimens.gestureInsetFallback + AppDimens.space16,
@@ -370,6 +371,7 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
               onPressed: () => showTodoFormSheet(
                 context,
                 defaultProjectId: widget.query.projectId,
+                quickView: widget.query.quickView,
               ),
             ),
           ),

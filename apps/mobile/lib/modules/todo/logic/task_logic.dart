@@ -353,3 +353,54 @@ String emptyMessageFor(TaskFilterInput input) {
     _ => '暂无任务',
   };
 }
+
+// ---------- 视图内新增自动带视图标记（#39，2026-09-09）----------
+
+/// 本周默认截止：当周周五零点；今天已过周五（周六/周日）→ 周日零点。
+/// 周一起始周（与日历网格一致）。与桌面 view-create-defaults.ts 同源。
+int weekDefaultDueMs([DateTime? now]) {
+  final n = now ?? DateTime.now();
+  final zero = DateTime(n.year, n.month, n.day);
+  final monday = zero.subtract(Duration(days: (zero.weekday - 1) % 7));
+  final friday = monday.add(const Duration(days: 4));
+  if (!zero.isAfter(friday)) return friday.millisecondsSinceEpoch;
+  return monday.add(const Duration(days: 6)).millisecondsSinceEpoch;
+}
+
+/// 视图创建默认值（快捷视图内新建自动带本视图标记，防止任务创建后
+/// 不满足过滤条件从当前视图「立刻消失」）。
+/// 注入优先级：NLP 显式值（明天/#项目）> 手动选择 > 本视图默认；
+/// 仅创建分支生效，编辑态不受影响。
+class QuickViewCreateDefaults {
+  /// 预填的截止日期（today/week 视图；表单字段可见可改）
+  final int? dueMs;
+
+  /// 静默附加的我的一天标记（my_day 视图）
+  final int? myDayMs;
+
+  /// 静默附加的收藏标记（favorite 视图）
+  final int? favorite;
+
+  const QuickViewCreateDefaults({this.dueMs, this.myDayMs, this.favorite});
+}
+
+QuickViewCreateDefaults quickViewCreateDefaults(
+  QuickViewKey? view, [
+  DateTime? now,
+]) {
+  if (view == null) return const QuickViewCreateDefaults();
+  final n = now ?? DateTime.now();
+  final midnight = DateTime(n.year, n.month, n.day).millisecondsSinceEpoch;
+  switch (view) {
+    case QuickViewKey.myDay:
+      return QuickViewCreateDefaults(myDayMs: midnight);
+    case QuickViewKey.today:
+      return QuickViewCreateDefaults(dueMs: midnight);
+    case QuickViewKey.week:
+      return QuickViewCreateDefaults(dueMs: weekDefaultDueMs(n));
+    case QuickViewKey.favorite:
+      return const QuickViewCreateDefaults(favorite: 1);
+    default:
+      return const QuickViewCreateDefaults();
+  }
+}

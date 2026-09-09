@@ -393,10 +393,13 @@ export default function TaskPanel() {
         )}
       </div>
 
-      {/* 底部快速输入栏 */}
+      {/* 底部快速输入栏；快捷视图选中时携视图标记注入（#39） */}
       <QuickAddBar
         projects={projects}
         defaultProjectId={projectId != null && !ungrouped ? projectId : null}
+        quickView={
+          projectId == null && !ungrouped && savedFilterId == null ? quickView : null
+        }
       />
     </div>
   );

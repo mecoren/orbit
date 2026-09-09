@@ -185,6 +185,68 @@ test("我的一天：行内加入 → 视图筛选 → 次日退出语义（my_d
   ).toHaveCount(0);
 });
 
+test("视图内新增自动带视图标记（#39）：我的一天 QuickAddBar 新建留在视图 + db 落 my_day_date", async ({ page }) => {
+  // 进入我的一天视图（此刻为空）
+  await page.getByRole("button", { name: "我的一天" }).first().click();
+  await expect(page.getByRole("heading", { name: "我的一天" })).toBeVisible();
+
+  // 视图内 QuickAddBar 新建：任务应留在视图（my_day_date 命中今天零点）
+  await quickAdd(page, "视图标记任务-我的一天");
+  await expect(
+    page.getByRole("button", { name: "未完成任务：视图标记任务-我的一天" }),
+  ).toBeVisible();
+
+  // db 侧验证：my_day_date = 今天零点（非任意真值）
+  const myDay = await page.evaluate(() => {
+    const m = (window as any).__orbitMock;
+    const t = m.db.tasks.find((x: any) => x.title === "视图标记任务-我的一天");
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return { raw: t?.my_day_date, isTodayZero: t?.my_day_date === today.getTime() };
+  });
+  expect(myDay.isTodayZero).toBe(true);
+
+  // NLP 显式日期优先于视图默认：输入「明天」→ my_day_date 仍附加，
+  // 视图语义不变（我的一天按 my_day_date 判断，与 due 无关）；
+  // NLP 会把「明天」从标题剥离，落库标题为「视图标记任务-显式日期」
+  await quickAdd(page, "视图标记任务-显式日期 明天");
+  await expect(
+    page.getByRole("button", { name: "未完成任务：视图标记任务-显式日期" }),
+  ).toBeVisible();
+  const both = await page.evaluate(() => {
+    const m = (window as any).__orbitMock;
+    const t = m.db.tasks.find((x: any) => x.title === "视图标记任务-显式日期");
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return { myDayOk: t?.my_day_date === today.getTime(), hasDue: !!t?.due_date };
+  });
+  expect(both.myDayOk).toBe(true);
+  expect(both.hasDue).toBe(true);
+});
+
+test("视图内新增自动带视图标记（#39）：收藏视图表单新建 → db 落 is_favorite=1", async ({ page }) => {
+  // 进入收藏视图
+  await page.getByRole("button", { name: "收藏" }).first().click();
+  await expect(page.getByRole("heading", { name: "收藏" })).toBeVisible();
+
+  // 工具栏「新增」按钮打开九字段表单（视图标记静默附加链路）
+  await page.getByRole("button", { name: "新增" }).click();
+  const dlg = page.getByRole("dialog");
+  await dlg.locator("input").first().fill("视图标记任务-收藏");
+  await dlg.getByRole("button", { name: "创建" }).click();
+
+  // 任务落在收藏视图 + db 落 is_favorite=1
+  await expect(
+    page.getByRole("button", { name: "未完成任务：视图标记任务-收藏" }),
+  ).toBeVisible();
+  const fav = await page.evaluate(() => {
+    const m = (window as any).__orbitMock;
+    const t = m.db.tasks.find((x: any) => x.title === "视图标记任务-收藏");
+    return t?.is_favorite;
+  });
+  expect(fav).toBe(1);
+});
+
 test("重复任务：完成推进下一实例（引擎下沉 todo_tasks_complete 单命令）", async ({ page }) => {
   // 快加一条任务，mock 内存库直改 repeat 字段为每天重复（表单编辑路径不在此用例范围）
   await quickAdd(page, "冒烟任务-每天喝水");

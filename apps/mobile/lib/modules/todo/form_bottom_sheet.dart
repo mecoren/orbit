@@ -17,11 +17,13 @@ import 'logic/parse_quick_input.dart';
 import 'logic/repeat_logic.dart' as rep;
 import 'logic/task_logic.dart'
     show
+        QuickViewKey,
         dateToMidnightMs,
         formatDateTime,
         formatYmd,
         priorityColorHex,
-        priorityLabel;
+        priorityLabel,
+        quickViewCreateDefaults;
 import 'providers/todo_providers.dart';
 
 /// 截止日期选择器（表单抽屉"自定义"与详情页截止日期行共用）
@@ -52,6 +54,9 @@ Future<void> showTodoFormSheet(
 
   /// 新建态预填的截止日期毫秒（日历长按日格快捷新增用；编辑态忽略）
   int? initialDueDate,
+
+  /// 当前选中的快捷视图（#39：视图内新建自动带本视图标记；仅新建态消费）
+  QuickViewKey? quickView,
 }) {
   return showModalBottomSheet<void>(
     context: context,
@@ -61,6 +66,7 @@ Future<void> showTodoFormSheet(
       editingTaskId: editingTaskId,
       defaultProjectId: defaultProjectId,
       initialDueDate: initialDueDate,
+      quickView: quickView,
     ),
   );
 }
@@ -89,7 +95,7 @@ Future<void> syncTaskReminder(
 
 class _TodoFormSheet extends ConsumerStatefulWidget {
   const _TodoFormSheet(
-      {this.editingTaskId, this.defaultProjectId, this.initialDueDate});
+      {this.editingTaskId, this.defaultProjectId, this.initialDueDate, this.quickView});
 
   /// 有值 = 编辑态（异步预填 todoTaskGet）
   final int? editingTaskId;
@@ -99,6 +105,9 @@ class _TodoFormSheet extends ConsumerStatefulWidget {
 
   /// 新建态预填的截止日期毫秒（日历长按快捷新增；编辑态忽略）
   final int? initialDueDate;
+
+  /// 当前选中的快捷视图（#39：视图内新建自动带本视图标记；仅新建态消费）
+  final QuickViewKey? quickView;
 
   @override
   ConsumerState<_TodoFormSheet> createState() => _TodoFormSheetState();
@@ -204,7 +213,9 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
     if (widget.editingTaskId != null) {
       _loadEditing(widget.editingTaskId!);
     } else {
-      _dueDate = widget.initialDueDate;
+      // 截止日期预填优先级：日历长按 > 视图默认（today/week，#38）> 无
+      final viewDefaults = quickViewCreateDefaults(widget.quickView);
+      _dueDate = widget.initialDueDate ?? viewDefaults.dueMs;
       // 新增默认开始日期：今天（本地零点，与桌面表单同口径）
       _startDate = dateToMidnightMs(DateTime.now());
       _loaded = true;
@@ -286,6 +297,11 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
     try {
       final bridge = ref.read(orbitBridgeProvider);
       if (widget.editingTaskId == null) {
+        // 视图标记静默附加（#39）：我的一天/收藏视图下新建自动带标记
+        //（表单无对应字段，用户取消可长按菜单一键解除）；保存瞬间重算
+        //（表单跨零点长开时 myDayDate 不落昨天）。dueDate 用户手动清空时
+        // 不回注视图默认（_dueDate 预填后可被用户删掉，此时尊重显式选择）。
+        final viewDefaults = quickViewCreateDefaults(widget.quickView);
         final created = await bridge.todoTaskCreate(TodoTaskCreateInput(
           title: title,
           description: description.isEmpty ? null : description,
@@ -300,6 +316,8 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
           repeatEndType: _repeatEndType,
           repeatEndParam: _effectiveRepeatEndParam,
           repeatFromDone: _repeatFromDone ? 1 : 0,
+          myDayDate: viewDefaults.myDayMs,
+          isFavorite: viewDefaults.favorite,
         ));
         // 新建：设置提醒 → 建立提醒实体
         if (_remindAt != null) {
