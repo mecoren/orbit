@@ -6,6 +6,7 @@ import '../../core/theme/app_dimens.dart';
 import '../../core/theme/orbit_accents.dart';
 import '../../data/api/dto.dart';
 import '../../shared/utils/hex_color.dart';
+import '../../shared/widgets/empty_state.dart';
 import '../../shared/widgets/liquid_glass_title_bar.dart';
 import '../../shared/widgets/scroll_offset_listenable.dart';
 import 'logic/task_logic.dart';
@@ -51,7 +52,20 @@ class _StatsScreenState extends ConsumerState<StatsScreen> {
           Positioned.fill(
             child: stats == null
                 ? const Center(child: CircularProgressIndicator())
-                : ListView(
+                : stats.overview.total == 0
+                    ? Padding(
+                        // 空态对齐 trash_screen / SubListScreen 模式：
+                        // 让出状态栏 + 标题栏后在剩余视口内垂直居中
+                        padding: EdgeInsets.only(
+                          top: MediaQuery.of(context).padding.top +
+                              LiquidGlassTitleBar.rowHeight,
+                        ),
+                        child: const EmptyState(
+                          message: '暂无统计数据，创建并完成一些任务后这里会展示完成情况',
+                          icon: Icons.insights_rounded,
+                        ),
+                      )
+                    : ListView(
                     controller: _scrollController,
                     padding: EdgeInsets.only(
                       top: MediaQuery.of(context).padding.top +

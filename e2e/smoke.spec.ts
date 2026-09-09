@@ -116,6 +116,8 @@ test("回收站：删除入站 → 恢复回列表", async ({ page }) => {
   await page.getByRole("button", { name: "恢复" }).first().click();
   await expect(page.getByText("已恢复")).toBeVisible(); // toast
   await expect(page.getByText("冒烟任务-回收站验证")).toHaveCount(0); // 回收站空
+  // 空态居中布局（2026-09-09：移出 ScrollArea 修复顶对齐）
+  await expect(page.getByText("回收站是空的")).toBeVisible();
 
   // 回列表确认任务回来了
   await page.getByRole("button", { name: "待办", exact: true }).first().click();

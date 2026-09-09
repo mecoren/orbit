@@ -16,6 +16,7 @@ import { toast } from "sonner";
 import { ArchiveRestore, Inbox, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/business/empty-state";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   AlertDialog,
@@ -133,15 +134,18 @@ export function TrashPanel() {
         </Button>
       </div>
 
-      {/* 列表区 */}
-      <ScrollArea className="min-h-0 flex-1">
-        {tasks.length === 0 ? (
-          <div className="flex h-full flex-col items-center justify-center gap-2 text-muted-foreground">
-            <Inbox className="size-10 opacity-40" />
-            <p className="text-sm">回收站是空的</p>
-            <p className="text-xs">删除的任务会先进入这里，过期后自动清除</p>
-          </div>
-        ) : (
+      {/* 列表区：空态在 ScrollArea 外普通容器里垂直居中（ScrollArea 内 h-full
+          解析不到视口高度会顶对齐，对齐 TaskListView/CalendarView 空态口径） */}
+      {tasks.length === 0 ? (
+        <div className="flex min-h-0 flex-1 items-center justify-center overflow-y-auto">
+          <EmptyState
+            icon={Inbox}
+            title="回收站是空的"
+            hint="删除的任务会先进入这里，过期后自动清除"
+          />
+        </div>
+      ) : (
+        <ScrollArea className="min-h-0 flex-1">
           <div className="mx-auto max-w-2xl space-y-0.5 p-4">
             {tasks.map((t) => (
               <div
@@ -186,8 +190,8 @@ export function TrashPanel() {
               </div>
             ))}
           </div>
-        )}
-      </ScrollArea>
+        </ScrollArea>
+      )}
 
       {/* 彻底删除确认 */}
       <AlertDialog

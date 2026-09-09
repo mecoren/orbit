@@ -68,4 +68,17 @@ void main() {
     final highPrio = hexToColor(priorityColorHex(3)).withValues(alpha: 0.25);
     expect(bars, contains(highPrio));
   });
+
+  testWidgets('统计页空态：无任务时页面级空态替代报表（2026-09-09）', (tester) async {
+    final bridge = MockOrbitBridge();
+    // 清空种子任务：mock 的 statsAggregate 按 store 现算，total 必为 0
+    bridge.store.tasks.clear();
+    await tester.pumpWidget(_wrap(const StatsScreen(), bridge));
+    await _settle(tester);
+
+    expect(find.text('统计'), findsOneWidget); // 标题栏仍在
+    expect(find.textContaining('暂无统计数据'), findsOneWidget);
+    expect(find.text('总任务'), findsNothing); // 零值报表不再渲染
+    expect(find.text('完成热力图'), findsNothing);
+  });
 }

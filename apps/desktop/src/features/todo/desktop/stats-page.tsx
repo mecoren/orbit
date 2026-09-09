@@ -11,8 +11,9 @@
  */
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Flame } from "lucide-react";
+import { BarChart3, Flame } from "lucide-react";
 
+import { EmptyState } from "@/components/business/empty-state";
 import { EqualizerLoader } from "@/components/EqualizerLoader";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
@@ -189,6 +190,17 @@ export function StatsPanel() {
         </div>
       </div>
 
+      {/* 空态：total=0 时以页面级空态替换整块报表（普通容器垂直居中，
+          对齐 TaskListView 空态口径；仅有一堆 0 值卡片会全部顶对齐堆叠） */}
+      {o.total === 0 ? (
+        <div className="flex min-h-0 flex-1 items-center justify-center overflow-y-auto">
+          <EmptyState
+            icon={BarChart3}
+            title="暂无统计数据"
+            hint="创建并完成一些任务后，这里会展示你的完成情况"
+          />
+        </div>
+      ) : (
       <ScrollArea className="min-h-0 flex-1">
         <div className="mx-auto max-w-3xl space-y-6 p-4">
           {/* 总览 + streak */}
@@ -332,6 +344,7 @@ export function StatsPanel() {
           </div>
         </div>
       </ScrollArea>
+      )}
     </div>
   );
 }
