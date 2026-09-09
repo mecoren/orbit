@@ -34,3 +34,6 @@ Thumbs.db
 # AI 会话工作目录（计划草稿等本地临时物）
 .zcode/
 test-results/
+
+# 同步修复验证产物（临时库/截图/基线 JSON，7MB+ 不入库）
+.sync-test/
