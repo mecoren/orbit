@@ -8,12 +8,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { toast } from "sonner";
 
 const updateMock = vi.fn<(id: number, input: unknown) => Promise<unknown>>();
-const completeMock = vi.fn<(id: number) => Promise<unknown>>();
+const completeMock = vi.fn<(id: number) => Promise<{ task: unknown; next_instance: unknown }>>();
+const deleteMock = vi.fn<(id: number) => Promise<void>>();
 
 vi.mock("@/lib/tauri", () => ({
   todoTaskUpdate: (id: number, input: unknown) => updateMock(id, input),
   todoTaskUpdatePosition: vi.fn(),
   todoTaskComplete: (id: number) => completeMock(id),
+  todoTaskDelete: (id: number) => deleteMock(id),
 }));
 vi.mock("sonner", () => ({
   toast: { warning: vi.fn(), success: vi.fn(), error: vi.fn() },
@@ -52,6 +54,9 @@ function task(id: number, over: Partial<TodoTask> = {}): TodoTask {
 beforeEach(() => {
   updateMock.mockReset();
   completeMock.mockReset();
+  deleteMock.mockReset();
+  // 引擎完成命令默认返回「无下一实例」（undo 注册读取 next_instance）
+  completeMock.mockResolvedValue({ task: null, next_instance: null });
   vi.mocked(toast.warning).mockClear();
 });
 
@@ -91,7 +96,7 @@ describe("batchUpdate", () => {
 
 describe("batchUpdateStatus", () => {
   it("批量完成走统一完成命令（与单条 completeTask 同一 Rust 入口，重复任务推进下一实例）", async () => {
-    completeMock.mockResolvedValue(undefined);
+    completeMock.mockResolvedValue({ task: null, next_instance: null });
     await batchUpdateStatus([task(1), task(2)], { done: 1, done_at: 0, status: "done" });
     expect(completeMock).toHaveBeenCalledWith(1);
     expect(completeMock).toHaveBeenCalledWith(2);
@@ -99,7 +104,7 @@ describe("batchUpdateStatus", () => {
   });
 
   it("已完成条目跳过（幂等，不重复推进重复实例）", async () => {
-    completeMock.mockResolvedValue(undefined);
+    completeMock.mockResolvedValue({ task: null, next_instance: null });
     await batchUpdateStatus([task(1, { done: 1 })], { done: 1, done_at: 0, status: "done" });
     expect(completeMock).not.toHaveBeenCalled();
   });
@@ -114,7 +119,7 @@ describe("batchUpdateStatus", () => {
   it("完成失败不中断：收集失败数并弹 warning", async () => {
     completeMock.mockImplementation(async (id) => {
       if (id === 2) throw new Error("boom");
-      return undefined;
+      return { task: null, next_instance: null };
     });
     const failed = await batchUpdateStatus([task(1), task(2), task(3)], { done: 1, done_at: 0, status: "done" });
     expect(failed).toBe(1);

@@ -11,9 +11,11 @@
  */
 import {
   todoTaskComplete,
+  todoTaskDelete,
   todoTaskUpdate,
   type TodoTask,
 } from "@/lib/tauri";
+import { pushUndo } from "./undo-bridge";
 
 /** 同一任务的完成编排进行中守卫（双击/连点只生效一次） */
 const completing = new Set<number>();
@@ -23,11 +25,25 @@ export async function completeTask(task: TodoTask): Promise<void> {
   // 取消完成
   if (task.done) {
     await todoTaskUpdate(task.id, { done: 0, done_at: null, status: "pending" });
+    pushUndo({
+      label: "取消完成",
+      undo: async () => {
+        await todoTaskUpdate(task.id, { done: 1, done_at: task.done_at, status: "done" });
+      },
+    });
     return;
   }
   completing.add(task.id);
   try {
-    await todoTaskComplete(task.id);
+    const res = await todoTaskComplete(task.id);
+    pushUndo({
+      label: "完成任务",
+      undo: async () => {
+        await todoTaskUpdate(task.id, { done: 0, done_at: null, status: "pending" });
+        // 重复任务完成时引擎克隆了下一实例——撤销时软删克隆，恢复完成前状态
+        if (res.next_instance) await todoTaskDelete(res.next_instance.id);
+      },
+    });
   } finally {
     completing.delete(task.id);
   }

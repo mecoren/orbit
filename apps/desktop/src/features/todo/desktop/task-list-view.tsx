@@ -205,7 +205,9 @@ export function TaskListView({ tasks, projects, labelsByTask, remindersByTask, l
     try {
       await action(sel);
       void qc.invalidateQueries({ queryKey: ["todo_tasks"] });
-      toast.success(`已批量${label} ${sel.length} 条任务`);
+      toast.success(`已批量${label} ${sel.length} 条任务`, {
+        description: "Ctrl+Z 可撤销",
+      });
     } catch (e) {
       console.error("批量操作失败:", e);
       toast.error(`批量${label}失败，已完成的条目不回滚`);

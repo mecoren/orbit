@@ -10,6 +10,7 @@ import { SyncIndicator } from "@/components/layout/sync-indicator";
 import { useDbInvalidation, useSyncInvalidation } from "@/lib/events";
 import { useTodoReminderListener } from "@/hooks/use-todo-reminder-listener";
 import { useStartupSync } from "@/hooks/use-startup-sync";
+import { UndoStackProvider } from "@/hooks/use-undo-stack";
 import {
   dbInitEncrypted,
   dbInitPlaintext,
@@ -48,7 +49,10 @@ function ReadyShell() {
 
   return (
     <TooltipProvider>
-      <RouterProvider router={router} />
+      {/* A5：通用撤销栈（Ctrl+Z）——在 Router 内外层皆可，此处包住全部页面 */}
+      <UndoStackProvider>
+        <RouterProvider router={router} />
+      </UndoStackProvider>
       {/* sonner：top-right（04 文档 §六 Toast 规格）。
           不开 richColors：对齐 shadcn 示例观感——popover 卡片底 + 彩色类型图标 */}
       <Toaster position="top-right" />

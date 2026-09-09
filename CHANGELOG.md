@@ -7,6 +7,18 @@
 
 ## [Unreleased]
 
+### A5 通用撤销——Ctrl+Z 全操作可撤销（完成切换/批量全接入）
+
+此前撤销仅删除场景有 5 秒 toast 撤销（use-undoable-delete），完成/批量操作一旦执行无法回退。本批落地通用撤销栈：**Ctrl+Z（macOS ⌘Z）全局快捷键**，覆盖任务完成/取消完成切换与全部批量操作（状态/优先级/收藏/我的一天/移动项目）。参照 Todoist/TickTick 全操作可撤销口径。
+
+- **撤销栈核心（`shared/undo-stack.ts`）**：30 槽位单栈只撤不复（无 redo，YAGNI）；undo 回调经 UndoOutcome 联合类型上抛成败语义，失败弹 error toast 不炸栈；`isUndoShortcut`/`undoToastText` 纯函数（ctrl/cmd+z 命中、shift 组合属 redo 语义不命中）。
+- **Provider + 快捷键（`hooks/use-undo-stack.tsx`）**：ReadyShell 挂 UndoStackProvider；Ctrl+Z 监听焦点守卫——焦点位于 input/textarea/contenteditable 时让位浏览器原生撤销；撤销成功全量失效 react-query（与 db-change 同口径）+ sonner「已撤销：xxx（N 条）」。
+- **非 React 模块入栈注册点（`shared/undo-bridge.ts`）**：task-actions/batch-actions 经模块级 pusher 注入（Provider 挂载时注册、卸载置空），node 测试与未挂载场景 no-op。
+- **接入面**：单条完成撤销=恢复 undone+软删引擎克隆的下一实例（重复任务完成前状态完整恢复）；取消完成撤销=恢复 done；批量六函数全部注册 undo（闭包捕获旧值快照恢复原字段；批量移动项目恢复 project_id+position 双字段；批量完成收集克隆 id 撤销时软删）；部分失败只注册成功条目。
+- 批量 toast 提示语补「Ctrl+Z 可撤销」description。
+- 测试：undo-stack 7 用例 + undo-bridge 3 用例；batch-actions 既有用例 mock 补 todoTaskDelete 与完成命令返回形状（next_instance 读取）。门禁：tsc 0 + vitest 172 全绿。
+
+
 ### 空状态布局对齐「我的一天」——回收站居中修复 + 统计页补页面级空态
 
 回收站空态此前贴在工具栏下方（视觉上「太上」），与「我的一天」列表空态的居中口径不一致；统计页则没有页面级空状态，无任务时是一堆 0 值卡片顶对齐堆叠。本批统一三处口径。
