@@ -7,6 +7,16 @@
 
 ## [Unreleased]
 
+### B3 剪贴板截图 Ctrl+V 直粘附件——DOM paste 零依赖方案
+
+附件此前只能经文件选择器添加，截屏工作流（截图→粘贴）断链，需先落盘再翻文件。本批打通：详情抽屉打开时**Ctrl+V 直接把剪贴板位图存为该任务附件**（Todoist/TickTick 桌面标配）。
+
+- **零依赖**：不装 tauri-plugin-clipboard-manager——Tauri webview 的 paste 事件自带 `clipboardData.files`（截图位图是真 File 对象），配合既有 `taskAttachmentAdd(taskId, name, mime, bytes)` bytes 通道（hash 由 Rust 内容寻址计算）零新增插件/权限。
+- **新 hook `use-paste-attachment.ts`**：window 级 paste 监听挂在详情抽屉附件区（范围决策：全局粘进"选中任务"错粘风险高）；焦点守卫——焦点在 input/textarea/contenteditable 时让位原生粘贴；busy 守卫防连粘重复；`extractImageFromPaste`（多文件取首个 image/*、纯文本 null、截图空 name 时间戳生成「粘贴图片_yyyyMMdd_HHmmss.png」）与 `pastedImageName`（jpeg→jpg、未知 mime 回退 png）为纯函数。
+- 附件区块底部常驻提示「支持 Ctrl+V 直接粘贴截图」。
+- 测试：5 用例（提取/命名/边界）；门禁 tsc 0 + vitest 182 全绿。
+
+
 ### B1 表格视图——ViewMode 第四态，六列概览 + 多选批量 + 键盘导航
 
 视图切换此前仅列表/看板/日历三态，批量整理与全字段一览要逐条展开抽屉。本批补齐 Vikunja 四视图口径的**表格视图**：完成/标题/项目/标签/截止/优先级六列一屏概览，行内直接勾选完成、收藏、我的一天，逾期红字与优先级竖条与列表行同形制。

@@ -56,6 +56,7 @@ import { QuickDateMenu } from "@/components/business/quick-date-options";
 import { WaitCalendar } from "@/components/ui/wait-calendar";
 import { useTodoStore } from "@/features/todo/store";
 import { hideFromQueries, useUndoableDeleteAction } from "@/hooks/use-undoable-delete";
+import { usePasteAttachment } from "@/hooks/use-paste-attachment";
 import { PRIORITY_COLOR, TODO_ACCENT } from "../shared/constants";
 import { ConfirmPopover } from "../shared/confirm-popover";
 import { renderMarkdown } from "../shared/markdown-lite";
@@ -1716,6 +1717,8 @@ function humanSize(bytes: number): string {
 }
 
 function AttachmentsSection({ taskId }: { taskId: number }) {
+  // B3：剪贴板截图 Ctrl+V 直粘为附件（零依赖，DOM paste 读 clipboardData.files）
+  usePasteAttachment(taskId);
   const [busy, setBusy] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<TaskAttachmentView | null>(null);
   // 走 react-query：db-change 全局失效后自动重拉（与其他区块同通道；
@@ -1831,6 +1834,7 @@ function AttachmentsSection({ taskId }: { taskId: number }) {
         {attachments.length === 0 && (
           <p className="text-[12px] text-muted-foreground">点击 + 选择文件添加附件（单任务 20 个，单文件 50MB）。</p>
         )}
+        <p className="text-[11px] text-muted-foreground/60">支持 Ctrl+V 直接粘贴截图</p>
       </div>
     </SectionBlock>
   );
