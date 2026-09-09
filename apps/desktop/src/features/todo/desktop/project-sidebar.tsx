@@ -2,13 +2,14 @@
  * ProjectSidebar — 项目侧栏（04 文档 §3.1 复刻）
  *
  * 结构：快捷入口区（6 视图，选中才显示语义色图标）+ 项目列表区
- * （色块 + 名称 + 拖拽手柄，内联新增在列表尾部，右键删除，删除保护双 AlertDialog）。
+ * （Folder 图标按项目色染色 + 名称 + 拖拽手柄，内联新增在列表尾部，
+ * 右键删除，删除保护双 AlertDialog）。
  * 未分组为虚拟项（id=-1），可拖拽参与项目排序，默认项目第一位，
  * 位置持久化为「前驱项目 id」存 localStorage（LS_UNGROUPED_AFTER）。
  *
  * 窄窗折叠（07 报告 #21 接线）：useIsNarrow（<lg=1024）驱动自动折叠，
  * 用户可手动覆盖并持久化（LS_SIDEBAR_MANUAL_COLLAPSED）；折叠态渲染
- * 图标窄条（快捷视图 + 项目色点），展开恢复完整三栏。
+ * 图标窄条（快捷视图 + 项目 Folder 图标按项目色染色），展开恢复完整三栏。
  */
 import { useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -19,7 +20,7 @@ import {
   SortableContext,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
-import { BarChart3, Filter, GripVertical, Inbox, PanelLeftClose, PanelLeftOpen, Plus, Trash2 } from "lucide-react";
+import { BarChart3, Filter, Folder, GripVertical, Inbox, PanelLeftClose, PanelLeftOpen, Plus, Trash2 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { hideFromQueries, useUndoableDeleteAction } from "@/hooks/use-undoable-delete";
@@ -335,9 +336,9 @@ export function ProjectSidebar({
                       active ? "bg-primary/10" : "hover:bg-accent/50",
                     )}
                   >
-                    <span
-                      className="h-2.5 w-2.5 rounded-sm"
-                      style={{ background: p.hex_color || TODO_ACCENT }}
+                    <Folder
+                      className="h-4 w-4"
+                      style={{ color: p.hex_color || TODO_ACCENT }}
                     />
                   </button>
                 </TooltipTrigger>
@@ -747,9 +748,9 @@ function SortableProjectRow({
           onClick={onSelect}
           className="flex min-w-0 flex-1 items-center gap-2 text-left"
         >
-          <span
-            className="h-2.5 w-2.5 shrink-0 rounded-sm"
-            style={{ background: project.hex_color || TODO_ACCENT }}
+          <Folder
+            className="h-4 w-4 shrink-0"
+            style={{ color: project.hex_color || TODO_ACCENT }}
           />
           <span className="truncate">{project.title}</span>
         </button>

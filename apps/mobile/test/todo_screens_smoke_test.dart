@@ -51,6 +51,16 @@ void main() {
     expect(find.text('项目'), findsOneWidget);
     expect(find.text('工作'), findsOneWidget);
     expect(find.text('未分组'), findsOneWidget);
+
+    // 项目行固定 folder 图标按项目色染色（2026-09-09）：种子「工作」#4E8CFF
+    // —— 项目行是 InkWell+Row，Icon 与项目名是 Row 的兄弟节点；
+    // 以整行 InkWell 为锚取其下 Icon（首列即项目图标，尾列是拖拽把手）。
+    final workRows = find.ancestor(of: find.text('工作'), matching: find.byType(InkWell));
+    final rowIcons = tester.widgetList<Icon>(
+      find.descendant(of: workRows, matching: find.byType(Icon)),
+    );
+    final folder = rowIcons.firstWhere((i) => i.icon == Icons.folder_rounded);
+    expect(folder.color, const Color(0xFF4E8CFF));
   });
 
   testWidgets('侧栏首屏：FAB 点击弹出"添加待办"底部抽屉', (tester) async {

@@ -625,15 +625,12 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
         ),
         child: Row(
           children: [
-            // 12×12 圆角色块（hex_color||强调色）
-            Container(
-              width: AppDimens.colorDotSize,
-              height: AppDimens.colorDotSize,
-              decoration: BoxDecoration(
-                color: hexToColor(project.hexColor,
-                    fallback: OrbitAccents.todoAccent),
-                borderRadius: AppShapes.of(4),
-              ),
+            // 项目固定图标（folder_rounded）按项目自选色染色，无色回退强调色
+            Icon(
+              Icons.folder_rounded,
+              size: AppDimens.iconSizeMd,
+              color: hexToColor(project.hexColor,
+                  fallback: OrbitAccents.todoAccent),
             ),
             const SizedBox(width: AppDimens.space12),
             Expanded(
