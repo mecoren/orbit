@@ -15,6 +15,8 @@ interface DatePickerProps {
   disabled?: boolean;
   /** 弹层首选快捷选项（今天/明天/下周）；false 直接展示日历（如年月精度复合选择器） */
   quick?: boolean;
+  /** 触发钮附加类（行内小尺寸场景，如 h-7 px-2 text-xs） */
+  className?: string;
 }
 
 export function DatePicker({
@@ -23,6 +25,7 @@ export function DatePicker({
   placeholder = "选择日期",
   disabled,
   quick = true,
+  className,
 }: DatePickerProps) {
   const [open, setOpen] = useState(false);
   // 快捷菜单 ⇄ 完整日历视图切换；关闭弹层时复位为快捷视图
@@ -55,7 +58,8 @@ export function DatePicker({
             className={cn(
               "w-full justify-start text-left font-normal",
               value && "pr-8",
-              !value && "text-muted-foreground"
+              !value && "text-muted-foreground",
+              className,
             )}
           >
             <CalendarIcon className="size-4" />

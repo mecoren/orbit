@@ -653,6 +653,10 @@ function RepeatEditor({
     endType === 1 && endParam > 0 ? new Date(endParam).toISOString().slice(0, 10) : "",
   );
   const [whenDone, setWhenDone] = useState(fromDone);
+  // 结束=日期档的内联日历开关：Popover 内禁嵌自带 Popover 的 DatePicker
+  //（portal 套 portal 布局测量异常，同 DueDateEditor 的教训），此处
+  // 内联项目日历 WaitCalendar 两段式切换
+  const [endDateCalendar, setEndDateCalendar] = useState(false);
 
   // 打开时同步外部值（外部 task 切换场景）
   useEffect(() => {
@@ -662,6 +666,7 @@ function RepeatEditor({
     setEndText(endType === 2 ? String(Math.max(1, endParam || 1)) : "");
     setEndDate(endType === 1 && endParam > 0 ? new Date(endParam).toISOString().slice(0, 10) : "");
     setWhenDone(fromDone);
+    setEndDateCalendar(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode, after, weekdays, endType, endParam, fromDone, open]);
 
@@ -781,10 +786,41 @@ function RepeatEditor({
                 className="h-6 w-14 px-1.5 text-xs"
                 onChange={(e) => setEndText(e.target.value)} />
             )}
-            {endOption === 1 && (
-              <Input type="date" value={endDate} className="h-6 w-28 px-1.5 text-xs"
-                onChange={(e) => setEndDate(e.target.value)} />
-            )}
+            {endOption === 1 &&
+              (endDateCalendar ? (
+                <div className="w-full space-y-1.5">
+                  <WaitCalendar
+                    mode="single"
+                    selected={endDate ? new Date(`${endDate}T00:00:00`) : undefined}
+                    onSelect={(d) => {
+                      setEndDate(d ? format(d, "yyyy-MM-dd") : "");
+                      setEndDateCalendar(false);
+                    }}
+                  />
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-6 w-full text-xs"
+                    onClick={() => setEndDateCalendar(false)}
+                  >
+                    取消
+                  </Button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setEndDateCalendar(true)}
+                  className={cn(
+                    "flex items-center gap-1 rounded-md border px-2 py-0.5 text-[11px]",
+                    endDate
+                      ? "text-foreground"
+                      : "text-muted-foreground hover:bg-accent",
+                  )}
+                >
+                  <Calendar className="size-3" />
+                  {endDate || "选择日期"}
+                </button>
+              ))}
           </div>
           <div className="flex items-center gap-1.5">
             <button type="button"

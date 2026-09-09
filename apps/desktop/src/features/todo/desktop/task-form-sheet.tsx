@@ -16,6 +16,7 @@ import { format } from "date-fns";
 import { Tag as TagIcon, X } from "lucide-react";
 
 import { EntityFormSheet } from "@/components/business/entity-form-sheet";
+import { DatePicker } from "@/components/business/date-picker";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -568,12 +569,15 @@ function RepeatField({
               />
             )}
             {endOption === 1 && (
-              <Input
-                type="date"
-                value={endDate}
-                className="h-7 w-32 text-xs"
-                onChange={(e) => setEndDate(e.target.value)}
-              />
+              <div className="w-32">
+                <DatePicker
+                  value={endDate}
+                  onChange={setEndDate}
+                  placeholder="结束日期"
+                  quick={false}
+                  className="h-7 px-2 text-xs"
+                />
+              </div>
             )}
           </div>
           <div className="flex items-center gap-1.5">
