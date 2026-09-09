@@ -63,9 +63,70 @@ pub fn show_main_window(app: &AppHandle) {
     }
 }
 
+/// 盒式下采样（区域平均）：每输出像素聚合 (sw/target)² 源像素，
+/// 保真优于 shell 双线性拉伸；alpha 同步平均保持抗锯齿边缘。
+fn downscale_rgba(src: &tauri::image::Image<'_>, target: u32) -> tauri::image::Image<'static> {
+    let (sw, sh) = (src.width(), src.height());
+    if target == sw && target == sh {
+        return tauri::image::Image::to_owned(src.clone());
+    }
+    let rgba = src.rgba();
+    let scale = sw as f64 / target as f64;
+    let mut out = vec![0u8; (target as usize) * (target as usize) * 4];
+    for ty in 0..target {
+        for tx in 0..target {
+            let x0 = (tx as f64 * scale).floor() as u32;
+            let y0 = (ty as f64 * scale).floor() as u32;
+            let x1 = (((tx + 1) as f64 * scale).ceil() as u32).min(sw);
+            let y1 = (((ty + 1) as f64 * scale).ceil() as u32).min(sh);
+            let (mut r, mut g, mut b, mut a, mut n) = (0u32, 0u32, 0u32, 0u32, 0u32);
+            for y in y0..y1 {
+                for x in x0..x1 {
+                    let i = ((y * sw + x) * 4) as usize;
+                    r += rgba[i] as u32;
+                    g += rgba[i + 1] as u32;
+                    b += rgba[i + 2] as u32;
+                    a += rgba[i + 3] as u32;
+                    n += 1;
+                }
+            }
+            let o = ((ty * target + tx) * 4) as usize;
+            out[o] = (r / n.max(1)) as u8;
+            out[o + 1] = (g / n.max(1)) as u8;
+            out[o + 2] = (b / n.max(1)) as u8;
+            out[o + 3] = (a / n.max(1)) as u8;
+        }
+    }
+    tauri::image::Image::new_owned(out, target, target)
+}
+
+/// 系统托盘图标位图：Windows 下按 shell 小图标标准尺寸（SM_CXSMICON，
+/// 100% 缩放 16px、随 DPI 走 20/24px+）从 default_window_icon 下采样生成。
+///
+/// 为什么不复用 default_window_icon（256px）：tray-icon 的 Windows 实现
+/// 原样按位图尺寸 CreateIcon，shell 随后把 256px HICON 低质量拉伸到
+/// ~16px 显示（模糊）；窗口图标则需要大位图供任务栏清晰缩放——两者
+/// 尺寸诉求相反，故托盘持独立小图（2026-09-09 任务栏/托盘先后糊的根因）。
+fn tray_icon_bitmap(app: &AppHandle) -> Option<tauri::image::Image<'static>> {
+    // default_window_icon() 借 app（&Image<'a>），clone 后经 downscale_rgba
+    // 产出独立 'static 位图（源借用当场结束）。
+    let src = app.default_window_icon()?;
+    // 托盘显示尺寸：非 Windows 无 shell 度量差异，直用源图尺寸
+    #[cfg(target_os = "windows")]
+    let target = {
+        use windows::Win32::UI::WindowsAndMessaging::{GetSystemMetrics, SM_CXSMICON};
+        let m = unsafe { GetSystemMetrics(SM_CXSMICON) };
+        if m > 0 { m as u32 } else { 16 }
+    };
+    #[cfg(not(target_os = "windows"))]
+    let target = src.width();
+    Some(downscale_rgba(src, target))
+}
+
 /// 初始化系统托盘（桌面专属；setup 阶段调用一次）
 ///
-/// 图标复用应用图标（tauri.conf 的 bundle icon 首个 PNG）。
+/// 图标：托盘持精确 shell 小图标尺寸的独立位图（见 tray_icon_bitmap）；
+/// 窗口图标仍是 default_window_icon 256px（任务栏清晰缩放）。
 /// 菜单项点击经 on_menu_event 分发：show/quit 直处理，
 /// quick_add 转发 `tray-quick-add` 事件给前端。
 pub fn setup_tray(app: &AppHandle) -> tauri::Result<()> {
@@ -81,8 +142,9 @@ pub fn setup_tray(app: &AppHandle) -> tauri::Result<()> {
         .collect();
     let menu = Menu::with_items(app, &item_refs)?;
 
+    let tray_img = tray_icon_bitmap(app).expect("default_window_icon 未配置（tauri.conf bundle.icon）");
     let mut builder = TrayIconBuilder::with_id("orbit-tray")
-        .icon(app.default_window_icon().cloned().unwrap().clone())
+        .icon(tray_img)
         .menu(&menu)
         .show_menu_on_left_click(false)
         .on_menu_event(|app, event| match event.id().as_ref() {
@@ -143,5 +205,59 @@ mod tests {
     #[test]
     fn tray_event_name_stable() {
         assert_eq!(TRAY_QUICK_ADD_EVENT, "tray-quick-add");
+    }
+
+    /// 盒式下采样：输出尺寸精确 = 目标尺寸
+    #[test]
+    fn downscale_output_dimensions() {
+        // 4x4 纯色 → 2x2
+        let src = tauri::image::Image::new_owned(vec![255u8; 4 * 4 * 4], 4, 4);
+        let out = downscale_rgba(&src, 2);
+        assert_eq!((out.width(), out.height()), (2, 2));
+        // 同尺寸直通
+        let out = downscale_rgba(&src, 4);
+        assert_eq!((out.width(), out.height()), (4, 4));
+    }
+
+    /// 盒式下采样：区域平均正确（2x2 混合色块 → 1x1 均值）
+    #[test]
+    fn downscale_box_average() {
+        // 左半红 (255,0,0) 右半蓝 (0,0,255)，缩 2→1 后应为 (127,0,127)
+        let mut rgba = vec![0u8; 2 * 2 * 4];
+        for i in 0..4 {
+            let red = i % 2 == 0;
+            rgba[i * 4] = if red { 255 } else { 0 };
+            rgba[i * 4 + 2] = if red { 0 } else { 255 };
+            rgba[i * 4 + 3] = 255;
+        }
+        let src = tauri::image::Image::new_owned(rgba, 2, 2);
+        let out = downscale_rgba(&src, 1);
+        let px = out.rgba();
+        assert_eq!(&px[..3], &[127, 0, 127]);
+        assert_eq!(px[3], 255);
+    }
+
+    /// 盒式下采样：透明区域保持全透明（alpha 同步平均，不残留灰底）
+    #[test]
+    fn downscale_preserves_transparency() {
+        // 4x4 全透明 → 2x2 输出 alpha 应为 0
+        let src = tauri::image::Image::new_owned(vec![0u8; 4 * 4 * 4], 4, 4);
+        let out = downscale_rgba(&src, 2);
+        assert!(out.rgba().iter().skip(3).step_by(4).all(|a| *a == 0));
+    }
+
+    /// 非整倍缩放（256→16，scale=16 整除；换 5→2 覆盖 ceil/floor 边界）
+    #[test]
+    fn downscale_non_integer_scale() {
+        // 5px 宽度缩到 2px：像素盒 0-2.5/2.5-5 → 输出聚合 3+2 源列，不越界
+        let mut rgba = vec![0u8; 5 * 5 * 4];
+        for px in rgba.chunks_exact_mut(4) {
+            px[0] = 200;
+            px[3] = 255;
+        }
+        let src = tauri::image::Image::new_owned(rgba, 5, 5);
+        let out = downscale_rgba(&src, 2);
+        assert_eq!((out.width(), out.height()), (2, 2));
+        assert!(out.rgba().chunks_exact(4).all(|p| p[0] == 200 && p[3] == 255));
     }
 }
