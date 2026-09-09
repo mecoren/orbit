@@ -45,6 +45,12 @@
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
+            <!-- 小而美批次④ 分享接收：系统分享面板出现 Orbit（纯文本） -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <data android:mimeType="text/plain"/>
+            </intent-filter>
         </activity>
         <!-- flutter_local_notifications：到点触发（系统闹钟唤醒直接弹通知，
              不依赖 Dart 进程）+ 重启恢复 + 推迟 action 后台派发（官方

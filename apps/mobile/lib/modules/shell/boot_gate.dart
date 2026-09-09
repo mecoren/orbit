@@ -6,8 +6,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/routing/router_keys.dart';
 import '../../core/theme/orbit_accents.dart';
 import '../../data/providers/bridge_provider.dart';
+import '../../services/device_id.dart';
 import '../../services/notification_service.dart';
 import '../../services/reminder_scheduler.dart';
+import '../../services/share_receiver.dart';
 import '../todo/providers/todo_providers.dart';
 import '../auth/unlock_page.dart';
 
@@ -21,6 +23,8 @@ import '../auth/unlock_page.dart';
 ///   注：云同步结果经 cloudSyncNow 返回值直达（ADR 0003），无 sync-finished 流。
 ///   bootstrap 失败回落解锁页仅针对"已设密码需解锁"场景；
 ///   未设密码时初始化异常也回落解锁页属历史兜底，真实错误经日志暴露。
+///   ready 后挂 WidgetsBindingObserver：AppLifecycleState.resumed 时
+///   轮询分享接收（Android「分享到」热运行 onNewIntent 的一路）。
 class BootGate extends ConsumerStatefulWidget {
   const BootGate({super.key, required this.child});
 
@@ -33,7 +37,8 @@ class BootGate extends ConsumerStatefulWidget {
 
 enum _BootPhase { booting, unlock, ready }
 
-class _BootGateState extends ConsumerState<BootGate> {
+class _BootGateState extends ConsumerState<BootGate>
+    with WidgetsBindingObserver {
   _BootPhase _phase = _BootPhase.booting;
 
   StreamSubscription<dynamic>? _dbChangesSub;
@@ -43,14 +48,25 @@ class _BootGateState extends ConsumerState<BootGate> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _bootstrap();
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _dbChangesSub?.cancel();
     _reminderDueSub?.cancel();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && _phase == _BootPhase.ready) {
+      // 热运行分享：Android onNewIntent 已把文本存原生侧待取，
+      // 回到前台轮询取走（冷启动一路在 _goReady 首查）
+      ShareReceiver.consume(ref);
+    }
   }
 
   Future<void> _bootstrap() async {
@@ -61,6 +77,7 @@ class _BootGateState extends ConsumerState<BootGate> {
         return;
       }
       await bridge.dbInitPlaintext();
+      _ensureDeviceId(bridge);
       _goReady();
     } catch (e, st) {
       // 初始化失败：回退解锁态让用户重试（明文库场景下重试即重跑流程）。
@@ -73,7 +90,30 @@ class _BootGateState extends ConsumerState<BootGate> {
   Future<void> _onUnlocked(String dbKeyHex) async {
     final bridge = ref.read(orbitBridgeProvider);
     await bridge.dbInitEncrypted(dbKeyHex);
+    _ensureDeviceId(bridge);
     _goReady();
+  }
+
+  /// 设备 ID 接线（对齐桌面 ensureDeviceId）：DB 初始化后必须
+  /// dbSetDeviceId 写入 Rust OnceCell——generic_repo 的 device_id
+  /// 自动填充与同步引擎 validate_config 均依赖此值，缺失则云同步在
+  /// 移动端必然报「device_id 不能为空」。持久化在应用支持目录
+  /// device_id.txt（清库不清除）；失败静默不阻断启动（桌面同口径）。
+  ///
+  /// 不 await：path_provider 的 platform channel 在 fake_async 测试
+  /// zone 里永不 resolve（探针实证）——await 会把 bootstrap 挂死，
+  /// pumpAndSettle 超时。真机毫秒级 IO，启动后用户进入云同步设置前
+  /// 必然完成，无实用竞态。
+  void _ensureDeviceId(dynamic bridge) {
+    DeviceIdStore.ensure().then((id) async {
+      try {
+        await bridge.dbSetDeviceId(id);
+      } catch (e) {
+        debugPrint('[BootGate] dbSetDeviceId failed: $e');
+      }
+    }).catchError((e) {
+      debugPrint('[BootGate] device id setup failed: $e');
+    });
   }
 
   void _goReady() {
@@ -102,6 +142,9 @@ class _BootGateState extends ConsumerState<BootGate> {
     //（push 早于 MaterialApp.router build 会丢；微任务兜一拍即可）
     WidgetsBinding.instance.addPostFrameCallback((_) {
       NotificationService.instance.consumeLaunchNotification();
+      // 分享冷启动一路：onCreate intent 携带 EXTRA_TEXT 已存原生侧，
+      // 路由就绪后取走建任务（toast 需 Overlay，早于此无渲染面）
+      ShareReceiver.consume(ref);
     });
   }
 

@@ -7,6 +7,19 @@
 
 ## [Unreleased]
 
+### 小而美批次四连（并发会话 WIP 收编 + ④ 补完）
+
+竞品矩阵收尾的四件轻量改进，①②③ 为并发会话半成品收编（收编前全量门禁核验），④ 本批补完 Dart 侧后落地。
+
+- **① 列表行子任务进度百分比**（`e127118`）：`percent_done` 由后端按子任务勾选自动回算，0=无子任务不显示、100=已整卡完成不显示；仅中间态显示（MS To Do Steps 同款），ListChecks 图标与标签/项目/日期同元信息行。
+- **② 一键复制任务三端落地**（`2e510e3`）：orbit-core `duplicate_todo_task`——克隆标题/描述/项目/优先级/状态/截止/开始/收藏/重复规则全部扩展字段，子任务复制标题+顺序完成态重置；不复制提醒/标签/评论/关联/My Day（社交性字段独立）；position 紧邻原任务之后，标题「（副本）」后缀；桌面右键菜单+详情抽屉复制钮（成功后跳转新副本），移动长按菜单「复制任务」。Rust 用例并入 381。
+- **③ 描述只读态轻量 Markdown 渲染**（`680a10c`）：零依赖纯函数子集——# 标题/粗体/斜体/行内代码/链接/无序列表/任务列表字符原样保留/换行；刻意不做完整 CommonMark（描述是短文本场，react-markdown 全家 ~100KB 不划算）；点击编辑交互不变。本批补 10 用例测试（块级 5 + 行内 5，`markdown-lite.test.ts`）。
+- **④ Android 分享接收**（本批）：其他 App「分享到」纯文本直接建任务。原生层 MainActivity 经 MethodChannel("orbit/share") 暴露 `takeSharedText`（冷启动 intent + 热运行 onNewIntent 两路都存原生 pendingText，取走即清幂等）；Dart 侧 `ShareReceiver` 在 `AppLifecycleState.resumed` + 冷启动 postFrame 两路轮询消费，过 NLP 短语法解析（与快加栏同源）——命中日期/优先级/项目/标签自动应用并剥离，项目/标签 ctx 用库内既有数据，标签挂载失败不阻断；Manifest 加 `ACTION_SEND text/plain` intent-filter。移动 3 用例（NLP 全命中/纯文本原样/极端剥离回退）。
+- **移动端 device_id 接线修复**（随④收编的半成品）：`DeviceIdStore`（应用支持目录 `device_id.txt` 持久化，清库不清除）+ BootGate 两路 init 后 `dbSetDeviceId` 写入 Rust OnceCell——此前移动端完全缺失该接线，generic_repo 的 device_id 自动填充与同步引擎 `validate_config` 依赖此值，云同步在移动端必然报「device_id 不能为空」失败。坑：path_provider 的 platform channel 在 fake_async 测试 zone 永不 resolve（探针实证 3s 假时钟无完成也无 error）——await 会挂死 bootstrap 致 pumpAndSettle 超时，改 fire-and-forget（真机毫秒级 IO 无实用竞态）。
+- **编号勘误**：原生层/组件注释曾把分享接收与 Markdown 误标 #37（#37 为拖拽重排），统一改「小而美批次」。
+- **e2e 日期敏感假红修复（随手收口）**：日历用例右键今天格用 `getByRole(name: 日期数字)` 定位——getByRole 的 name 是子串匹配，「9」先命中工具栏「9月」标题按钮（日期数字与月份标题撞车的当天才触发，9/7 全绿 9/9 红的根源）；月历日格统一补 `aria-label=YYYY-MM-DD`（屏幕阅读器可访问性顺带受益），用例改 `[aria-label]` 精确定位 + 右键前先「回到今天」（年视图点 1 月后视图在 1 月，今天格不存在）。在 f812b76 复验确认为既有缺陷非本批回归。
+- 门禁：Rust 381 / 桌面 tsc 0 + vitest 144 + e2e 10 / 移动 analyze 0 + 180 全绿（m4 WebDAV e2e 环境依赖失败非回归，既有口径）。
+
 ### 移动端任务列表长按拖拽重排（#37）
 
 桌面端列表 04 文档起就有 hover 拖拽把手排序，移动端「拖拽顺序」档（manual，默认档）却只能看不能拖——本批补齐触屏重排。
@@ -36,15 +49,6 @@
 - **移动端**：FRB 镜像 + 桥面三方法（list/create/delete）；`/todo/saved-filters` 页（列表 + 行展开即时预览命中任务 + 新建 Dialog + 长按删除）；侧栏「筛选器」入口行；mock 桥同构语义，2 个契约用例。
 - **e2e**：筛选器链路（创建 → 侧栏渲染 → 点击切换过滤 → 删除消失）。
 - 门禁：Rust 380 / 桌面 typecheck + vitest 134 + e2e 10 / 移动 analyze + 162 全绿。
-
-### 项目颜色：侧栏圆点 + 全展示位项目名着色（#36）
-
-`todo_projects.hex_color` 建库即有但全程无消费方、项目全是一个蓝色。本批把颜色落到所有展示位，并补齐编辑入口。侧边栏保持圆点/色块形制不变，其余位置项目名直接按项目色渲染。
-
-- **桌面展示位换色**：列表行元信息、日历右栏/弹层任务行、表单「所属项目」下拉（`FieldOption` 增 `textColor`，选中值随 Radix SelectValue 回显同色）、快速添加 NLP 预览 chip、详情抽屉项目值 + 选择 Popover、右键「更换项目」菜单、批量「移动到项目」、看板项目列头（原统一 TODO_ACCENT，现用项目自身色）、统计项目分布 label、全局搜索项目行——项目名一律按 `hex_color` 着字，空串回退 `TODO_ACCENT`。
-- **桌面编辑入口**：项目右键菜单增「编辑项目」（重命名 + 10 色预设板，与标签管理器同序列）；新建项目默认色按项目数轮换 10 色板。
-- **移动端**：列表行副标题项目名着色（`TodoTaskTile` 增 `projectColorHex`）、详情项目值着色（`_InfoTile` 增 `valueColor`）、表单下拉项目名着字（去色块）；长按「编辑」对话框加同款 10 色板；侧栏补「新建项目」入口（此前移动端无创建项目的地方）。
-- **测试**：移动 widget 3 用例（项目名着色/空色回退/未分组不渲染）；桌面 vitest 134、Rust 380 回归全绿（本批无 schema/后端变更）。
 
 ### 重复任务规则升级：星期几 / 结束条件 / when done（竞品矩阵批次 #34）
 
