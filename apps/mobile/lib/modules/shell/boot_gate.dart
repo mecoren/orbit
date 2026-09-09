@@ -5,11 +5,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/routing/router_keys.dart';
 import '../../core/theme/orbit_accents.dart';
+import '../../data/api/dto.dart';
 import '../../data/providers/bridge_provider.dart';
 import '../../services/device_id.dart';
+import '../../services/badge_service.dart';
 import '../../services/notification_service.dart';
 import '../../services/reminder_scheduler.dart';
 import '../../services/share_receiver.dart';
+import '../todo/logic/badge_count.dart';
 import '../todo/providers/todo_providers.dart';
 import '../auth/unlock_page.dart';
 
@@ -44,6 +47,8 @@ class _BootGateState extends ConsumerState<BootGate>
   StreamSubscription<dynamic>? _dbChangesSub;
   StreamSubscription<dynamic>? _reminderDueSub;
   ReminderScheduler? _scheduler;
+  // B6 图标角标：注入式服务（ROM 异常全吞）；listen/resumed 双口刷新
+  final BadgeService _badge = BadgeService();
 
   @override
   void initState() {
@@ -66,6 +71,24 @@ class _BootGateState extends ConsumerState<BootGate>
       // 热运行分享：Android onNewIntent 已把文本存原生侧待取，
       // 回到前台轮询取走（冷启动一路在 _goReady 首查）
       ShareReceiver.consume(ref);
+      // B6 角标重算：隔夜挂后台后「今天」口径漂移，resumed 即刷新
+      _refreshBadge();
+    }
+  }
+
+  /// B6 角标刷新：当前缓存任务集算「今天截止或已逾期」未完成数。
+  /// 缓存未就绪时静默跳过——_subscribeStreams 的 listen 会在数据
+  /// 到达后补刷。
+  Future<void> _refreshBadge() async {
+    try {
+      final bridge = ref.read(orbitBridgeProvider);
+      final tasks = await bridge.todoTaskList(
+        ListFilter(keyword: '', pageSize: 10000),
+      );
+      if (!mounted) return;
+      await _badge.update(dueTodayOrOverdueCount(tasks));
+    } catch (e) {
+      debugPrint('[BootGate] badge refresh failed: $e');
     }
   }
 
@@ -169,6 +192,10 @@ class _BootGateState extends ConsumerState<BootGate>
       invalidateBusinessCaches(ref);
       _scheduler?.onDbChange();
     });
+
+    // B6 图标角标数据口：dbChanges 失效后经 provider 重拉新值刷角标
+    //（ref.listen 仅限 build 期——异步流程用 manualRead 模式）。
+    _refreshBadge();
 
     // 提醒到期 → 本地通知即时呈现（无权限 / 异常时内部回落 warning toast）。
     // 僵尸清理：后台推迟未写 DB，旧行到期时由 handleReminderDue 判定为

@@ -7,6 +7,16 @@
 
 ## [Unreleased]
 
+### B6 Android 图标角标——今日+逾期未完成数，双口刷新
+
+应用图标此前无未完成数角标，一屏外任务存在感缺失（TickTick/MS To Do 有）。本批落地：启动器图标显示「今天截止或已逾期」的未完成任务数。
+
+- **计数口径 `badge_count.dart`**：`dueTodayOrOverdueCount`（今天截止 + 已逾期、未完成）——逾期未完成仍是"今天要做的事"，比纯"今天截止"快捷视图更贴近实际；跨零点由 resumed 口自然校正。
+- **`badge_service.dart` 注入式**：默认实现走 flutter_app_badger（count<=0 → removeBadge 显式清零）；厂商 ROM 兼容由 ShortcutBadger 内部处理，任何异常全吞（角标属锦上添花绝不炸主流程）；包已标 discontinued，注入口留换实现后路（自写 MethodChannel + ShortcutBadger）。
+- **BootGate 双口刷新**：`_goReady` 尾 + dbChanges 回调（本地写/同步拉取后）经 `_refreshBadge` 重拉任务集算数；`didChangeAppLifecycleState resumed` 重算——`ref.listen` 仅限 build 期，异步流程用直拉模式。
+- 测试：badge_test 8 用例（计数四态 + 空列表 + 服务透传/清零/吞错）；门禁 analyze 0 + 定向 26 用例全绿。真机厂商 ROM 角标形态为手动验收遗留项（小米/华为/三星各家支持度不一）。
+
+
 ### B5 通知「完成」按钮——前台直完、后台横幅提示（与推迟同构）
 
 提醒通知上的 action 此前只有推迟三档（推迟10分钟/30分钟/1小时），任务完成后仍要进 app 勾选。本批在通知 action 首位加「完成」按钮（TickTick/MS To Do 标配）。
