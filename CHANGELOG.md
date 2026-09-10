@@ -7,6 +7,24 @@
 
 ## [Unreleased]
 
+### 通知历史中心——提醒呈现轨迹可回看（#5）
+
+桌面 Windows Toast 一旦错过或清掉就无处回看（Todoist 有专门通知页对照）。本批落地只读本地日志通道：
+
+- **core**：`notification_log` 表（0001 单文件迁移；kind 类型 reminder_due/snooze/complete/boot_skip + 任务标题快照——任务后续被删仍可读 + payload JSON）——**只读本地表不进 SYNCABLE_TABLES**（各端各自记录呈现轨迹，跨端混看无意义，口径同统计表）；`notification_log_api`（log 记录-不 emit 事件 / list 倒序分页 kind 过滤 / clear / prune 30 天 TTL）+3 单测。
+- **写入点**（桌面 scheduler）：提醒到期呈现处（emit 前 spawn 落库，失败静默不阻塞主链）+ 系统通知推迟 action 成功处（snooze_until 快照）。
+- **桌面 UI**：设置页「通知历史」分类（倒序列表 + kind 图标徽标 + 当日/跨日时间展示 + 清空）；ipc-mock 种子三条同构。
+- **验证**：cargo 428（+3）/ vitest 207 / tsc 0 / e2e 14 全绿。
+
+### ICS 日历导出三端落地——VTODO 日历供日历软件导入/订阅（#4）
+
+local-first 用户的任务常要"输出"到系统日历/其他日历软件订阅：写 .ics 纯导出零账号依赖，与「数据主权」叙事一致；本项目已有节假日+日历视图，数据现成。任务用 RFC 5545 `VTODO`（非 VEVENT——完成/优先级语义只有 VTODO 承载；Google Calendar 显示为任务，Apple 日历导入为提醒事项）：
+
+- **core**：`ics_export_api`——全任务映射（标题/描述 RFC 5545 转义 / 优先级 9 级映射（任务 5 档→ics 1-5）/ 截止 DUE 带本地 VTIMEZONE 保证跨时区不漂移 / COMPLETED+STATUS 完成态 / 项目名→CATEGORIES / UID=uuid@orbit 稳定标识）；只读导出不 emit 不进白名单（同明文导出口径）+4 单测。
+- **桌面**：设置页数据导出卡「导出日历」按钮（保存对话框 filters .ics）。
+- **移动**：FRB 桥（counts 用 `Vec<IcsTableCount>` 规避 BTreeMap 过桥差异）+ 设置页导出卡「导出日历（ICS）」按钮（文档目录 exports/ 落盘）。
+- **验证**：cargo 425（+4）/ vitest 207 / flutter 243 全绿。
+
 ### Android 桌面小组件 + 快捷设置磁贴——不进 app 勾任务（#3 存在感链条补全）
 
 TickTick/MS To Do 的待办 widget 是安卓用户高频入口，与本应用已落地的角标计数、通知完成按钮同属「存在感」链条，唯独 widget 空白。本批三端全链落地（home_widget 0.9.4 数据面 + 自写原生交互层）：
