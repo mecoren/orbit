@@ -16,6 +16,7 @@ import { SyncSection } from "@/components/settings/sync-section";
 import { ThemeSection } from "@/components/settings/theme-section";
 import { TodoSection } from "@/components/settings/todo-section";
 import { ShortcutsSection } from "@/components/settings/shortcuts-section";
+import { TemplatesSection } from "@/components/settings/templates-section";
 
 export function SettingsPage() {
   const [active, setActive] = useState<SettingsCategoryKey>("security");
@@ -56,6 +57,7 @@ export function SettingsPage() {
             {active === "theme" && <ThemeSection />}
             {active === "todo" && <TodoSection />}
             {active === "shortcuts" && <ShortcutsSection />}
+            {active === "templates" && <TemplatesSection />}
           </div>
         </div>
       </div>

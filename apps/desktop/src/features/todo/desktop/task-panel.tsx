@@ -6,11 +6,17 @@
  * 选中态经 useTodoShell 取用——从回收站面板切回来时筛选原样保留。
  */
 import { useEffect, useMemo, useState } from "react";
-import { CalendarDays, LayoutGrid, ListTodo, Search, Table2, Tag } from "lucide-react";
+import { CalendarDays, CopyPlus, LayoutGrid, ListTodo, Search, Table2, Tag } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   Select,
   SelectContent,
@@ -73,6 +79,8 @@ export default function TaskPanel() {
     tasksError,
     openCreateForm,
     openCreateFormOnDate,
+    openCreateFormFromTemplate,
+    templates,
     setLabelManagerOpen,
   } = useTodoShell();
 
@@ -367,6 +375,24 @@ export default function TaskPanel() {
             <ListTodo size={14} className="mr-1" />
             新增
           </Button>
+          {/* 从模板新建（有模板才显示；套用 = payload 预填表单） */}
+          {templates.length > 0 && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" className="h-8" aria-label="从模板新建">
+                  <CopyPlus size={14} className="mr-1" />
+                  模板
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                {templates.map((t) => (
+                  <DropdownMenuItem key={t.id} onClick={() => openCreateFormFromTemplate(t.id)}>
+                    {t.name}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
         </div>
       </div>
 

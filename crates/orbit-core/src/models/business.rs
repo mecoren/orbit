@@ -448,6 +448,40 @@ pub struct TodoSavedFilterUpdateInput {
     pub sort_order: Option<i64>,
 }
 
+// ---------- todo_templates（任务模板）----------
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+pub struct TodoTemplate {
+    pub id: i64,
+    pub uuid: String,
+    pub name: String,
+    /// 模板内容 JSON：{title?, notes?, priority?, due_offset_days?,
+    /// subtasks?: [string]}——套用时按存在键预填，缺键 = 不预填。
+    /// 自包含设计：不引用项目/标签实体 id（跨设备不稳定）
+    pub payload: String,
+    pub sort_order: i64,
+    pub is_deleted: i32,
+    pub created_at: i64,
+    pub updated_at: i64,
+    pub deleted_at: Option<i64>,
+    pub version: i32,
+}
+
+/// todo_templates 创建输入
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TodoTemplateCreateInput {
+    pub name: String,
+    pub payload: String,
+    pub sort_order: Option<i64>,
+}
+
+/// todo_templates 更新输入
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TodoTemplateUpdateInput {
+    pub name: Option<String>,
+    pub payload: Option<String>,
+    pub sort_order: Option<i64>,
+}
+
 // ---------- sys_attachments（PK: hash）----------
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
 pub struct Attachment {

@@ -890,3 +890,40 @@ pub struct TodoSavedFilterUpdateInput {
     pub conditions: Option<String>,
     pub sort_order: Option<i64>,
 }
+
+// ---------- todo_templates（任务模板）----------
+#[derive(Debug, Clone, Serialize)]
+pub struct TodoTemplate {
+    pub id: i64,
+    pub uuid: String,
+    pub name: String,
+    /// 模板内容 JSON：{title?, notes?, priority?, due_offset_days?, subtasks?}——套用时按存在键预填
+    pub payload: String,
+    pub sort_order: i64,
+}
+
+impl From<orbit_core::models::business::TodoTemplate> for TodoTemplate {
+    fn from(t: orbit_core::models::business::TodoTemplate) -> Self {
+        Self {
+            id: t.id,
+            uuid: t.uuid,
+            name: t.name,
+            payload: t.payload,
+            sort_order: t.sort_order,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct TodoTemplateCreateInput {
+    pub name: String,
+    pub payload: String,
+    pub sort_order: Option<i64>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct TodoTemplateUpdateInput {
+    pub name: Option<String>,
+    pub payload: Option<String>,
+    pub sort_order: Option<i64>,
+}

@@ -49,6 +49,7 @@ import {
   repeatLabel,
 } from "../shared/repeat";
 import { formatYmd } from "../shared/lunar";
+import { templateDueDate } from "../shared/template-apply";
 import { atViewDueHour, quickViewCreateDefaults } from "../shared/view-create-defaults";
 import { PRIORITY_COLOR, TODO_ACCENT } from "../shared/constants";
 
@@ -629,6 +630,8 @@ interface TaskFormSheetProps {
   presetDueDate?: string | null;
   /** 当前选中的快捷视图（#39：视图内新建自动带本视图标记；仅新增模式消费，编辑不受影响） */
   quickView?: import("../shared/constants").QuickViewKey | null;
+  /** 任务模板预填（套用模板时传入；优先级：模板 > 日历右键 > 视图默认） */
+  presetTemplate?: import("../shared/template-apply").TemplatePayload | null;
 }
 
 export function TaskFormSheet({
@@ -639,6 +642,7 @@ export function TaskFormSheet({
   defaultProjectId,
   presetDueDate,
   quickView,
+  presetTemplate,
 }: TaskFormSheetProps) {
   // 编辑模式载入该任务既有提醒（取第一条未删除），用于回填与变更比对
   const [existingReminder, setExistingReminder] = useState<TodoReminder | null>(null);
@@ -671,9 +675,10 @@ export function TaskFormSheet({
       setRepeatEndParam(0);
       setRepeatFromDone(0);
       setTagSelections([]);
-      setSubtaskTitles([]);
+      // 模板子任务预填（套用模板 > 空白新建）；标题留空由用户补
+      setSubtaskTitles(presetTemplate?.subtasks ?? []);
     }
-  }, [open, task]);
+  }, [open, task, presetTemplate]);
 
   useEffect(() => {
     if (!open || !task) {
@@ -713,22 +718,28 @@ export function TaskFormSheet({
     }
     // 视图默认截止（#39）：今日/本周视图预填表单字段（可见可改；依赖 open 每次打开重算）
     const viewDefaults = quickViewCreateDefaults(quickView);
+    // 模板预填（套用模板）：显式选择语义最强，优先级 模板 > 日历右键 > 视图默认
+    const tpl = presetTemplate ?? null;
     return {
       ...(defaultProjectId != null ? { project_id: String(defaultProjectId) } : {}),
-      priority: "0",
+      ...(tpl?.title ? { title: tpl.title } : {}),
+      ...(tpl?.notes != null ? { description: tpl.notes } : {}),
+      priority: tpl?.priority != null ? String(tpl.priority) : "0",
       status: "pending",
       // 新增默认开始日期：今天（跨零点打开也正确，依赖 open 重算）
       start_date: formatYmd(new Date()),
-      // 截止日期预填优先级：日历右键 > 视图默认（today/week）> 无
-      ...(presetDueDate
-        ? { due_date: presetDueDate }
-        : viewDefaults.dueMs != null
-          ? { due_date: formatYmd(new Date(viewDefaults.dueMs)) }
-          : {}),
+      // 截止日期预填优先级：模板 > 日历右键 > 视图默认（today/week）> 无
+      ...(tpl?.due_offset_days != null
+        ? { due_date: templateDueDate(tpl.due_offset_days) }
+        : presetDueDate
+          ? { due_date: presetDueDate }
+          : viewDefaults.dueMs != null
+            ? { due_date: formatYmd(new Date(viewDefaults.dueMs)) }
+            : {}),
       // 新增默认提醒：一小时后（依赖 open，每次打开重新计算）
       remind_at: tsToInputValue(Date.now() + 60 * 60 * 1000),
     };
-  }, [task, defaultProjectId, existingReminder, open, presetDueDate, quickView]);
+  }, [task, defaultProjectId, existingReminder, open, presetDueDate, quickView, presetTemplate]);
 
   const handleSubmit = async (values: Record<string, unknown>) => {
     const payload = {

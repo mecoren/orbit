@@ -6,13 +6,14 @@
 pub mod asset_api;
 pub mod business_api;
 pub mod cloud_sync_api;
-pub mod db_maintenance_api;
 pub mod csv_import_api;
+pub mod db_maintenance_api;
 pub mod full_sync_backup_api;
 pub mod holiday_api;
 pub mod import_api;
 pub mod plaintext_export_api;
 pub mod saved_filter_api;
 pub mod stats_api;
+pub mod template_api;
 pub mod todo_api;
 pub mod trash_api;

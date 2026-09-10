@@ -7,6 +7,16 @@
 
 ## [Unreleased]
 
+### 任务模板三端落地——第 11 张同步表（周报/报销单/差旅清单免从零搭）
+
+竞品矩阵高价值缺口榜首：全仓 template 零命中，MS To Do 步骤列表/Vikunja Templates/Snippets 全有。周报、报销单、差旅检查清单这类多字段任务每次从零搭建（标题+子任务+提醒+标签）。本批作为第 11 张同步表落地（附件第 9、筛选器第 10 的链路成熟可复制）：
+
+- **core**（0001 迁移单文件策略）：`todo_templates` 表（name + payload JSON + 软删三件套 + uuid UNIQUE 索引）；`template_api.rs` CRUD（payload 白名单键校验 title/notes/priority/due_offset_days/subtasks + subtasks 必须字符串数组，防任意 JSON 进库）；SYNCABLE_TABLES + SYNC_MODULES 双白名单同步收录（`modules_match_syncable_tables_exactly` 不变量断言把两处锁死）；写路径 emit db-change。
+- **设计口径**：payload 自包含（不引用项目/标签实体 id——跨设备 id 不稳定，同步语义才稳定）；套用 = 前端按存在键预填表单（纯 UI 行为，不过 IPC）。
+- **桌面**：任务面板头部「模板」下拉（有模板才显示）→ 套用打开表单预填标题/描述/优先级/截止偏移（模板 > 日历右键 > 视图默认的合并顺序）+ 子任务草稿整组灌入；设置页「任务模板」分类（新建/编辑五字段弹窗 + 删除，payload 摘要一行展示）；`template-apply.ts` 纯函数单测 7 例。
+- **移动**：FAB 长按弹模板选择 bottom sheet → `showTodoFormSheet` 新增 `presetTemplate` 参数预填四字段，保存后逐条建子任务（部分成功口径同标签挂载）；`template_apply.dart` 纯函数单测 7 例；GlassFab/AlphaIndication 补 `onLongPress`。
+- **验证**：cargo test 416 全绿（模板 API 5 新例 + 不变量断言）；vitest 207 全绿（+11）；flutter test 239 全绿（+7）；浏览器目检全链（种子模板 → 面板下拉 → 套用 → 表单标题/优先级/截止+3 天/三子任务全预填 → 设置页管理分区渲染）；e2e 冒烟 14 过。
+
 ### 数据库维护一键化 + 内存治理三连——WAL/VACUUM/附件 GC 落地双端设置页
 
 对标 SQLite 长期运行维护最佳实践（浏览器/Signal 同款 `PRAGMA optimize` + 定期 VACUUM 路径），本批把只读维护从「用户不可达」变为设置页一键操作，同时治理三处实打实的内存/磁盘问题：

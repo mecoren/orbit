@@ -1,6 +1,6 @@
 //! 同步/备份/导入白名单注册表 —— 唯一权威来源（03 文档 §六）
 //!
-//! todo 单模块：9 张 todo 业务表。
+//! todo 单模块：11 张 todo 业务表。
 //! 改动此文件时必须同步核对 `cloud_sync::modules` 的 SYNC_MODULES 定义与测试断言。
 //! （本文件替代 wait-home 中散落在 business_api / db_loader / import_api 的各自为政的常量。）
 
@@ -19,6 +19,8 @@ pub const SYNCABLE_TABLES: &[&str] = &[
     "todo_task_attachments",
     // 保存的筛选器（#35）：用户内容随库同步（对标 Apple Smart List）
     "todo_saved_filters",
+    // 任务模板：用户内容随库同步（对标 Vikunja Templates / MS To Do 步骤列表）
+    "todo_templates",
 ];
 
 /// 全量备份包（.orsync）遍历导出的业务表白名单

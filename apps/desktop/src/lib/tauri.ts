@@ -941,3 +941,34 @@ export const savedFilterCreate = (input: TodoSavedFilterCreateInput) =>
 export const savedFilterUpdate = (id: number, input: TodoSavedFilterUpdateInput) =>
   invoke<TodoSavedFilter>("saved_filter_update", { id, input });
 export const savedFilterDelete = (id: number) => invoke<void>("saved_filter_delete", { id });
+
+// ========== templates（任务模板：竞品矩阵高价值缺口）==========
+export interface TodoTemplate {
+  id: number;
+  uuid: string;
+  name: string;
+  /** 模板内容 JSON：{title?, notes?, priority?, due_offset_days?, subtasks?}——套用时按存在键预填 */
+  payload: string;
+  sort_order: number;
+  is_deleted: number;
+  created_at: number;
+  updated_at: number;
+  deleted_at: number | null;
+  version: number;
+}
+export interface TodoTemplateCreateInput {
+  name: string;
+  payload: string;
+  sort_order?: number;
+}
+export interface TodoTemplateUpdateInput {
+  name?: string;
+  payload?: string;
+  sort_order?: number;
+}
+export const templatesList = () => invoke<TodoTemplate[]>("templates_list");
+export const templateCreate = (input: TodoTemplateCreateInput) =>
+  invoke<TodoTemplate>("template_create", { input });
+export const templateUpdate = (id: number, input: TodoTemplateUpdateInput) =>
+  invoke<TodoTemplate>("template_update", { id, input });
+export const templateDelete = (id: number) => invoke<void>("template_delete", { id });

@@ -7,14 +7,16 @@
 //! - [dto]：todo 域过桥类型的本地镜像（外部 crate 类型会被 FRB 降级 opaque，
 //!   见 dto.rs 模块注释）
 //! - [todo]：todo 八表 CRUD + 详情聚合（签名一律使用 [dto] 镜像类型）
-//! - [maintenance]：数据库维护（WAL checkpoint / 附件 GC / 查询统计 / VACUUM）
 //! - [asset]：任务附件（内容寻址上传/列表/读取/卸下 + 本地 GC）
+//! - [maintenance]：数据库维护（WAL checkpoint / 附件 GC / 查询统计 / VACUUM）
 //! - [sync]：同步配置 / 云同步执行 / 同步加密
 //! - [plaintext_export]：明文数据导出（JSON / CSV，对齐桌面命令面）
 //! - [holiday]：节假日数据（联网更新 + 60s tick 自动调度守护）
 //! - [trash]：回收站（任务软删恢复 + 保留时间 + 60s tick TTL 清理守护）
 //! - [stats]：统计仪表盘（总览/热力图/连续天数/分布聚合，backlog #25）
 //! - [search]：全局搜索（任务/项目/评论三路聚合，backlog #26）
+//! - [saved_filter]：保存的筛选器（可复用组合条件视图，backlog #35）
+//! - [template]：任务模板（多字段任务骨架可复用，竞品矩阵高价值缺口）
 //! - [events]：下行事件流 + 提醒轮询守护
 
 pub mod asset;
@@ -24,13 +26,14 @@ pub mod csv_import;
 pub mod dto;
 pub mod events;
 pub mod holiday;
-pub mod plaintext_export;
 pub mod maintenance;
+pub mod plaintext_export;
 pub mod saved_filter;
 pub mod search;
 pub mod state;
 pub mod stats;
 pub mod sync;
+pub mod template;
 pub mod todo;
 pub mod trash;
 

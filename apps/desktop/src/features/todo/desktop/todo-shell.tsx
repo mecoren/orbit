@@ -28,11 +28,13 @@ import {
   savedFilterCreate,
   savedFilterDelete,
   savedFiltersList,
+  templatesList,
   todoProjectList,
   todoTaskList,
   type TodoProject,
   type TodoTask,
 } from "@/lib/tauri";
+import { parseTemplatePayload } from "../shared/template-apply";
 import { type QuickViewKey } from "../shared/constants";
 import { needsTodoIndexNav, TODO_INDEX_PATH } from "../shared/sidebar-nav";
 import { ProjectSidebar } from "./project-sidebar";
@@ -74,6 +76,10 @@ interface TodoShellContextValue {
   openCreateForm: () => void;
   /** 以指定截止日期打开新增表单（日历视图右键日格快捷新增） */
   openCreateFormOnDate: (dueDate: string) => void;
+  /** 套用模板打开新增表单（任务模板：payload 按存在键预填） */
+  openCreateFormFromTemplate: (templateId: number) => void;
+  /** 任务模板列表（面板入口展示；空列表时入口隐藏） */
+  templates: import("@/lib/tauri").TodoTemplate[];
   labelManagerOpen: boolean;
   setLabelManagerOpen: (open: boolean) => void;
 }
@@ -106,6 +112,8 @@ export default function TodoShell() {
   // 新增表单预填的截止日期（日历右键日格注入；空 = 不预填）
   const [presetDueDate, setPresetDueDate] = useState<string | null>(null);
   const [labelManagerOpen, setLabelManagerOpen] = useState(false);
+  // 任务模板预填（套用模板打开表单时注入；关闭表单后清空）
+  const [presetTemplate, setPresetTemplate] = useState<import("../shared/template-apply").TemplatePayload | null>(null);
 
   // 壳层命令面板的动作意图（07 §五-P1#8）：消费即归零（评审 C1）——
   // 防止历史意图在页面重挂载时被重放；0 视为无待处理意图
@@ -141,6 +149,14 @@ export default function TodoShell() {
     placeholderData: (prev) => prev,
   });
   const savedFilters = savedFiltersQuery.data ?? [];
+  // 任务模板（db-change 自动失效；面板入口与套用共用）
+  const templatesQuery = useQuery({
+    queryKey: ["templates", "list"],
+    queryFn: () => templatesList(),
+    staleTime: 2 * 60 * 1000,
+    placeholderData: (prev) => prev,
+  });
+  const templates = templatesQuery.data ?? [];
   const queryClient = useQueryClient();
   const invalidateFilters = () =>
     queryClient.invalidateQueries({ queryKey: ["saved-filters"] });
@@ -237,13 +253,23 @@ export default function TodoShell() {
     openCreateForm: () => {
       setEditingTask(null);
       setPresetDueDate(null);
+      setPresetTemplate(null);
       setFormOpen(true);
     },
     openCreateFormOnDate: (dueDate: string) => {
       setEditingTask(null);
       setPresetDueDate(dueDate);
+      setPresetTemplate(null);
       setFormOpen(true);
     },
+    openCreateFormFromTemplate: (templateId: number) => {
+      const tpl = templates.find((t) => t.id === templateId);
+      setEditingTask(null);
+      setPresetDueDate(null);
+      setPresetTemplate(tpl ? parseTemplatePayload(tpl.payload) : null);
+      setFormOpen(true);
+    },
+    templates,
     labelManagerOpen,
     setLabelManagerOpen,
   };
@@ -286,6 +312,7 @@ export default function TodoShell() {
             projects={projects}
             defaultProjectId={ctx.activeProjectId}
             presetDueDate={editingTask ? null : presetDueDate}
+            presetTemplate={editingTask ? null : presetTemplate}
             quickView={
               projectId == null && !ungrouped && savedFilterId == null ? quickView : null
             }

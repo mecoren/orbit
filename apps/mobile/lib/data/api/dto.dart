@@ -1018,3 +1018,19 @@ class TodoSavedFilter {
     required this.conditions,
   });
 }
+
+/// 任务模板（竞品矩阵高价值缺口；镜像桌面 TodoTemplate）
+class TodoTemplate {
+  final int id;
+  final String uuid;
+  final String name;
+  /// 模板内容 JSON：{title?, notes?, priority?, due_offset_days?, subtasks?}——套用时按存在键预填
+  final String payload;
+
+  const TodoTemplate({
+    required this.id,
+    required this.uuid,
+    required this.name,
+    required this.payload,
+  });
+}

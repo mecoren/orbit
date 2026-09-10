@@ -335,6 +335,17 @@ abstract class OrbitBridge {
   /// 删除保存的筛选器（软删）
   Future<void> savedFilterDelete(int id);
 
+  // ── 任务模板（竞品矩阵高价值缺口：Vikunja Templates 同款）──
+
+  /// 列出全部任务模板
+  Future<List<TodoTemplate>> templatesList();
+
+  /// 创建任务模板（payload JSON 白名单键校验在后端）
+  Future<TodoTemplate> templateCreate(String name, String payload);
+
+  /// 删除任务模板（软删）
+  Future<void> templateDelete(int id);
+
   // ── 同步加密（恢复流程用）──
 
   Future<SyncCryptoStatus> syncCryptoStatus();

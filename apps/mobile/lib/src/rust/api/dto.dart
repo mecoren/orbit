@@ -6,7 +6,7 @@
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`
 
 /// 统一完成命令结果（镜像 orbit_core::api::todo_api::CompleteTaskResult；
 /// 引擎下沉三端唯一完成入口：普通标记 / 重复任务单事务推进下一实例）
@@ -1317,4 +1317,85 @@ class TodoTaskRelationCreateInput {
           taskId == other.taskId &&
           otherTaskId == other.otherTaskId &&
           relationType == other.relationType;
+}
+
+class TodoTemplate {
+  final PlatformInt64 id;
+  final String uuid;
+  final String name;
+
+  /// 模板内容 JSON：{title?, notes?, priority?, due_offset_days?, subtasks?}——套用时按存在键预填
+  final String payload;
+  final PlatformInt64 sortOrder;
+
+  const TodoTemplate({
+    required this.id,
+    required this.uuid,
+    required this.name,
+    required this.payload,
+    required this.sortOrder,
+  });
+
+  @override
+  int get hashCode =>
+      id.hashCode ^
+      uuid.hashCode ^
+      name.hashCode ^
+      payload.hashCode ^
+      sortOrder.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is TodoTemplate &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          uuid == other.uuid &&
+          name == other.name &&
+          payload == other.payload &&
+          sortOrder == other.sortOrder;
+}
+
+class TodoTemplateCreateInput {
+  final String name;
+  final String payload;
+  final PlatformInt64? sortOrder;
+
+  const TodoTemplateCreateInput({
+    required this.name,
+    required this.payload,
+    this.sortOrder,
+  });
+
+  @override
+  int get hashCode => name.hashCode ^ payload.hashCode ^ sortOrder.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is TodoTemplateCreateInput &&
+          runtimeType == other.runtimeType &&
+          name == other.name &&
+          payload == other.payload &&
+          sortOrder == other.sortOrder;
+}
+
+class TodoTemplateUpdateInput {
+  final String? name;
+  final String? payload;
+  final PlatformInt64? sortOrder;
+
+  const TodoTemplateUpdateInput({this.name, this.payload, this.sortOrder});
+
+  @override
+  int get hashCode => name.hashCode ^ payload.hashCode ^ sortOrder.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is TodoTemplateUpdateInput &&
+          runtimeType == other.runtimeType &&
+          name == other.name &&
+          payload == other.payload &&
+          sortOrder == other.sortOrder;
 }

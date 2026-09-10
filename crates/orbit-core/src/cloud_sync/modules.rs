@@ -5,7 +5,7 @@
 //!
 //! 与 `db::sync_registry` 的关系：
 //! - SYNCABLE_TABLES / FULL_BACKUP_TABLES / IMPORTABLE_TABLES 是表级白名单（唯一权威来源）
-//! - SYNC_MODULES 是增量同步的模块视图；todos 模块覆盖全部 8 张可同步表
+//! - SYNC_MODULES 是增量同步的模块视图；todos 模块覆盖全部 11 张可同步表
 
 /// 同步模块定义
 ///
@@ -52,6 +52,8 @@ pub const SYNC_MODULES: &[SyncModuleDef] = &[SyncModuleDef {
         "todo_task_attachments",
         // 保存的筛选器（#35）：用户内容
         "todo_saved_filters",
+        // 任务模板：用户内容（对标 Vikunja Templates / MS To Do 步骤列表）
+        "todo_templates",
     ],
     // 附件功能落地（01 文档 §3.3 attachments/ 预留兑现）：todo_task_attachments
     // 的 hash 列即内容寻址 sha256，GC 与同步对账据此收集引用集

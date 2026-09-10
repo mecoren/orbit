@@ -17,6 +17,7 @@ class AlphaIndication extends StatefulWidget {
     super.key,
     required this.onTap,
     required this.child,
+    this.onLongPress,
     this.enabled = true,
     this.borderRadius,
     this.pressedAlpha = 0.30,
@@ -26,6 +27,9 @@ class AlphaIndication extends StatefulWidget {
 
   /// 点击回调。为 null 且 [enabled] 为 true 时仍可显示按压反馈但不触发回调。
   final VoidCallback? onTap;
+
+  /// 长按回调（可空；GlassFab 长按弹模板选择等次级入口用）
+  final VoidCallback? onLongPress;
 
   /// 子组件
   final Widget child;
@@ -98,6 +102,7 @@ class _AlphaIndicationState extends State<AlphaIndication> {
         onTapUp: (_) => _setPressed(false),
         onTapCancel: () => _setPressed(false),
         onTap: widget.enabled ? widget.onTap : null,
+        onLongPress: widget.enabled ? widget.onLongPress : null,
         child: Focus(
           onFocusChange: _setFocused,
           child: MouseRegion(

@@ -7,10 +7,11 @@ import '../../src/rust/api/dto.dart' as gen;
 import '../../src/rust/api/csv_import.dart' as gen_import;
 import '../../src/rust/api/asset.dart' as gen_asset;
 import '../../src/rust/api/saved_filter.dart' as gen_sf;
+import '../../src/rust/api/template.dart' as gen_tpl;
 import '../../src/rust/api/holiday.dart' as gen_holiday;
 import '../../src/rust/api/events.dart' as gen_events;
-import '../../src/rust/api/plaintext_export.dart' as gen_export;
 import '../../src/rust/api/maintenance.dart' as gen_maintenance;
+import '../../src/rust/api/plaintext_export.dart' as gen_export;
 import '../../src/rust/api/sync.dart' as gen_sync;
 import '../../src/rust/api/auth.dart' as gen_auth;
 import '../../src/rust/api/biometric.dart' as gen_bio;
@@ -555,7 +556,6 @@ class RustOrbitBridge implements OrbitBridge {
   Future<void> taskAttachmentRemove(int linkId) =>
       gen_asset.taskAttachmentRemove(linkId: linkId);
 
-  // ── 保存的筛选器（#35）──
   // ── 数据库维护（性能批次）──
 
   @override
@@ -571,6 +571,7 @@ class RustOrbitBridge implements OrbitBridge {
     );
   }
 
+  // ── 保存的筛选器（#35）──
 
   @override
   Future<List<TodoSavedFilter>> savedFiltersList() async {
@@ -605,6 +606,42 @@ class RustOrbitBridge implements OrbitBridge {
   @override
   Future<void> savedFilterDelete(int id) =>
       gen_sf.savedFilterDelete(id: id);
+
+  // ── 任务模板（竞品矩阵高价值缺口）──
+
+  @override
+  Future<List<TodoTemplate>> templatesList() async {
+    final rows = await gen_tpl.templatesList();
+    return rows
+        .map((r) => TodoTemplate(
+              id: r.id.toInt(),
+              uuid: r.uuid,
+              name: r.name,
+              payload: r.payload,
+            ))
+        .toList();
+  }
+
+  @override
+  Future<TodoTemplate> templateCreate(String name, String payload) async {
+    final r = await gen_tpl.templateCreate(
+      input: gen.TodoTemplateCreateInput(
+        name: name,
+        payload: payload,
+        sortOrder: null,
+      ),
+    );
+    return TodoTemplate(
+      id: r.id.toInt(),
+      uuid: r.uuid,
+      name: r.name,
+      payload: r.payload,
+    );
+  }
+
+  @override
+  Future<void> templateDelete(int id) =>
+      gen_tpl.templateDelete(id: id);
 
   TaskAttachmentView _mapAttachment(gen.TaskAttachmentView r) => TaskAttachmentView(
         linkId: r.linkId.toInt(),

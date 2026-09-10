@@ -18,6 +18,8 @@ import '../../shared/widgets/more_actions_sheet.dart';
 import '../../shared/widgets/scroll_offset_listenable.dart';
 import '../../shared/widgets/wait_toast.dart';
 import 'form_bottom_sheet.dart';
+import '../../shared/widgets/more_actions_sheet.dart' show bottomSheetTopShape;
+import 'logic/template_apply.dart';
 import 'logic/task_logic.dart';
 import 'providers/todo_providers.dart';
 
@@ -78,6 +80,53 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
     _reorderScrollController.dispose();
     _listScrollController.dispose();
     super.dispose();
+  }
+
+  /// 长按 FAB：拉模板列表弹选择，选中后 payload 预填新建表单
+  ///（模板选择是低频入口，长按避免与点击新建抢占；无模板静默无反应）
+  Future<void> _pickTemplateAndCreate() async {
+    try {
+      final templates =
+          await ref.read(orbitBridgeProvider).templatesList();
+      if (!mounted || templates.isEmpty) return;
+      final colors = AppColors.ofContext(context);
+      final tpl = await showModalBottomSheet<TodoTemplate>(
+        context: context,
+        backgroundColor: colors.popup,
+        shape: bottomSheetTopShape,
+        builder: (ctx) => SafeArea(
+          child: ListView(
+            shrinkWrap: true,
+            children: [
+              Padding(
+                padding: const EdgeInsets.all(AppDimens.space16),
+                child: Text('从模板新建',
+                    style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                        color: colors.titleText)),
+              ),
+              for (final t in templates)
+                ListTile(
+                  title: Text(t.name,
+                      style:
+                          TextStyle(fontSize: 14, color: colors.bodyText)),
+                  onTap: () => Navigator.pop(ctx, t),
+                ),
+            ],
+          ),
+        ),
+      );
+      if (tpl == null || !mounted) return;
+      await showTodoFormSheet(
+        context,
+        defaultProjectId: widget.query.projectId,
+        quickView: widget.query.quickView,
+        presetTemplate: parseTemplatePayload(tpl.payload),
+      );
+    } catch (_) {
+      /* 模板拉取失败：静默（长按入口可选，不炸主流程） */
+    }
   }
 
   // ── 写操作（await bridge 后 invalidate）──
@@ -430,6 +479,8 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
                 defaultProjectId: widget.query.projectId,
                 quickView: widget.query.quickView,
               ),
+              // 长按 = 从模板新建（有模板才有此入口；选择后 payload 预填表单）
+              onLongPress: _pickTemplateAndCreate,
             ),
           ),
         ],

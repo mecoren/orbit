@@ -20,11 +20,15 @@ class GlassFab extends StatelessWidget {
     super.key,
     required this.onPressed,
     required this.accentColor,
+    this.onLongPress,
     this.icon = Icons.add_rounded,
   });
 
   /// 点击回调
   final VoidCallback onPressed;
+
+  /// 长按回调（可空；无长按语义的调用点不传即无长按）
+  final VoidCallback? onLongPress;
 
   /// 强调色（图标颜色）
   final Color accentColor;
@@ -48,6 +52,7 @@ class GlassFab extends StatelessWidget {
           ),
           child: AlphaIndication(
             onTap: onPressed,
+            onLongPress: onLongPress,
             borderRadius: _GlassFabDefaults.shape,
             child: Container(
               decoration: BoxDecoration(

@@ -287,6 +287,25 @@ CREATE TABLE IF NOT EXISTS todo_saved_filters (
 );
 CREATE INDEX IF NOT EXISTS idx_todo_saved_filters_uuid ON todo_saved_filters(uuid);
 
+-- 任务模板（竞品矩阵高价值缺口；对标 MS To Do 步骤列表可复用 / Vikunja Templates /
+-- Snippets：周报、报销单、差旅检查清单等多字段任务免从零搭建）
+-- payload 为 JSON：{title?, notes?, priority?, due_offset_days?, subtasks?: [string]}
+-- 套用 = 按 payload 预填任务表单（前端行为）；模板本体仅存字段，不引用项目/标签实体
+-- （跨设备实体 id 不稳定，模板内容自包含保证同步语义稳定）
+CREATE TABLE IF NOT EXISTS todo_templates (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,  -- 主键（本地自增，非同步键）
+  uuid TEXT NOT NULL DEFAULT '',  -- 同步主键：跨设备行标识，UNIQUE 索引兜底防僵尸行复活
+  name TEXT NOT NULL DEFAULT '',  -- 模板名称（模板选择列表显示）
+  payload TEXT NOT NULL DEFAULT '{}',  -- 模板内容 JSON：{title?, notes?, priority?, due_offset_days?, subtasks?}——套用时按存在键预填，缺键 = 不预填
+  sort_order INTEGER NOT NULL DEFAULT 0,  -- 模板列表排序键
+  is_deleted INTEGER NOT NULL DEFAULT 0,  -- 软删标记：0 活 1 已删（回收站/墓碑，物理清除走 TTL）
+  created_at INTEGER NOT NULL DEFAULT 0,  -- 创建时间（ms 时间戳）
+  updated_at INTEGER NOT NULL DEFAULT 0,  -- 更新时间（ms）——同步 LWW 合并的主依据
+  deleted_at INTEGER,  -- 软删时间（ms，墓碑）；NULL = 未删
+  version INTEGER NOT NULL DEFAULT 1  -- 乐观锁版本号，每次写更新 +1；LWW 同毫秒平局时的大者胜
+);
+CREATE INDEX IF NOT EXISTS idx_todo_templates_uuid ON todo_templates(uuid);
+
 CREATE TABLE IF NOT EXISTS cfg_option_categories (
   id INTEGER PRIMARY KEY AUTOINCREMENT,  -- 主键（本地自增，非同步键）
   category_key TEXT NOT NULL DEFAULT '',  -- 分组键（如 todo_priority / todo_status；唯一索引兜底）

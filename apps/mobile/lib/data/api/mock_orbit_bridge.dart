@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 
@@ -785,6 +786,62 @@ class MockOrbitBridge implements OrbitBridge {
   Future<void> savedFilterDelete(int id) {
     return _delay(() {
       store.savedFilters.removeWhere((f) => f.id == id);
+    });
+  }
+
+  // ── 任务模板（与 Rust template_api 同构最小语义）──
+
+  static const _templatePayloadKeys = [
+    'title',
+    'notes',
+    'priority',
+    'due_offset_days',
+    'subtasks',
+  ];
+
+  /// payload 白名单校验（与 Rust ALLOWED_PAYLOAD_KEYS 同口径）
+  static void _validateTemplatePayload(String payload) {
+    final dynamic parsed = jsonDecode(payload);
+    if (parsed is! Map<String, dynamic>) {
+      throw Exception('模板内容必须是 JSON 对象');
+    }
+    for (final key in parsed.keys) {
+      if (!_templatePayloadKeys.contains(key)) {
+        throw Exception('模板内容含未知键 $key');
+      }
+    }
+    final subtasks = parsed['subtasks'];
+    if (subtasks != null &&
+        (subtasks is! List || subtasks.any((x) => x is! String))) {
+      throw Exception('subtasks 必须是字符串数组');
+    }
+  }
+
+  @override
+  Future<List<TodoTemplate>> templatesList() {
+    return _delay(() => List<TodoTemplate>.from(store.templates));
+  }
+
+  @override
+  Future<TodoTemplate> templateCreate(String name, String payload) {
+    return _delay(() {
+      if (name.trim().isEmpty) throw Exception('模板名称不能为空');
+      _validateTemplatePayload(payload);
+      final row = TodoTemplate(
+        id: store.id,
+        uuid: 'tpl-${DateTime.now().millisecondsSinceEpoch}',
+        name: name,
+        payload: payload,
+      );
+      store.templates.add(row);
+      return row;
+    });
+  }
+
+  @override
+  Future<void> templateDelete(int id) {
+    return _delay(() {
+      store.templates.removeWhere((t) => t.id == id);
     });
   }
 

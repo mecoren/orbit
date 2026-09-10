@@ -271,14 +271,19 @@ pub fn run() {
             commands::saved_filter_cmd::saved_filter_create,
             commands::saved_filter_cmd::saved_filter_update,
             commands::saved_filter_cmd::saved_filter_delete,
+            // 任务模板（竞品矩阵高价值缺口：Vikunja Templates 同款可复用任务骨架）
+            commands::template_cmd::templates_list,
+            commands::template_cmd::template_create,
+            commands::template_cmd::template_update,
+            commands::template_cmd::template_delete,
             // 任务附件（上传/列表/读取/卸下 + 本地 GC）
             commands::asset_cmd::task_attachment_add,
             commands::asset_cmd::task_attachments_list,
             commands::asset_cmd::task_attachment_read,
             commands::asset_cmd::task_attachment_remove,
+            commands::asset_cmd::attachments_gc,
             // 数据库维护（WAL checkpoint / 附件 GC / 查询统计 / VACUUM）
             commands::db_maintenance_cmd::db_maintenance,
-            commands::asset_cmd::attachments_gc,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

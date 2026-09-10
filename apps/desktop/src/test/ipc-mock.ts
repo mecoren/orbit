@@ -150,6 +150,7 @@ export interface MockDb {
   relations: MockRelation[];
   attachments: MockAttachmentLink[];
   savedFilters: { id: number; uuid: string; name: string; conditions: string; sort_order: number }[];
+  templates: { id: number; uuid: string; name: string; payload: string; sort_order: number }[];
   seq: number;
 }
 
@@ -168,6 +169,7 @@ function createDb(): MockDb {
     relations: [],
     attachments: [],
     savedFilters: [],
+    templates: [],
     seq: 1,
   };
 }
@@ -260,6 +262,32 @@ function filterByKeyword<T extends { title: string; description: string | null }
 }
 
 /** 冒烟主链路所需的命令集（未列出的命令走 notImplemented） */
+/** 模板 payload 白名单校验（与 Rust ALLOWED_PAYLOAD_KEYS 同口径） */
+const TEMPLATE_PAYLOAD_KEYS = ["title", "notes", "priority", "due_offset_days", "subtasks"];
+function validateTemplatePayload(payload: string): void {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(payload);
+  } catch {
+    throw new Error("模板内容不是合法 JSON");
+  }
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+    throw new Error("模板内容必须是 JSON 对象");
+  }
+  for (const key of Object.keys(parsed)) {
+    if (!TEMPLATE_PAYLOAD_KEYS.includes(key)) {
+      throw new Error(`模板内容含未知键 ${key}`);
+    }
+  }
+  const subtasks = (parsed as Record<string, unknown>).subtasks;
+  if (
+    subtasks != null &&
+    (!Array.isArray(subtasks) || subtasks.some((x) => typeof x !== "string"))
+  ) {
+    throw new Error("subtasks 必须是字符串数组");
+  }
+}
+
 const commands: Record<string, (args: any, ctx: Ctx) => unknown> = {
   // ---- 启动链（App.tsx：master_auth_has=false → db_init_plaintext）----
   master_auth_has: () => false,
@@ -946,6 +974,42 @@ const commands: Record<string, (args: any, ctx: Ctx) => unknown> = {
   saved_filter_delete: ({ id }: { id: number }, { db }: Ctx) => {
     const idx = db.savedFilters.findIndex((f) => f.id === id);
     if (idx >= 0) db.savedFilters.splice(idx, 1);
+  },
+
+  // ---- 任务模板（与 Rust template_api 同构最小语义：白名单键校验 + 软删幂等）----
+  templates_list: (_a: unknown, { db }: Ctx) => ipcClone(db.templates),
+  template_create: (
+    { input }: { input: { name: string; payload: string; sort_order?: number } },
+    { db }: Ctx,
+  ) => {
+    if (!input.name.trim()) throw new Error("模板名称不能为空");
+    validateTemplatePayload(input.payload);
+    const row = {
+      id: db.seq++,
+      uuid: `tpl-${db.seq}`,
+      name: input.name,
+      payload: input.payload,
+      sort_order: input.sort_order ?? Date.now(),
+    };
+    db.templates.push(row);
+    return ipcClone(row);
+  },
+  template_update: (
+    { id, input }: { id: number; input: { name?: string; payload?: string; sort_order?: number } },
+    { db }: Ctx,
+  ) => {
+    const row = db.templates.find((t) => t.id === id);
+    if (!row) throw new Error(`template ${id} not found`);
+    if (input.name != null && !input.name.trim()) throw new Error("模板名称不能为空");
+    if (input.payload != null) validateTemplatePayload(input.payload);
+    if (input.name != null) row.name = input.name;
+    if (input.payload != null) row.payload = input.payload;
+    if (input.sort_order != null) row.sort_order = input.sort_order;
+    return ipcClone(row);
+  },
+  template_delete: ({ id }: { id: number }, { db }: Ctx) => {
+    const idx = db.templates.findIndex((t) => t.id === id);
+    if (idx >= 0) db.templates.splice(idx, 1);
   },
 
   // ---- CSV 导入（设置页迁移卡；冒烟不覆盖设置页，mock 提供

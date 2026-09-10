@@ -15,6 +15,7 @@ class MockStore {
   final reminders = <int, Map<String, dynamic>>{};
   final attachments = <int, Map<String, dynamic>>{}; // linkId -> 附件关联行
   final savedFilters = <TodoSavedFilter>[]; // #35 保存的筛选器
+  final templates = <TodoTemplate>[]; // 任务模板（竞品矩阵高价值缺口）
 
   var nextId = 1;
   bool masterAuthSet = false;

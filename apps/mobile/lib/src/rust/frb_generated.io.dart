@@ -10,12 +10,14 @@ import 'api/csv_import.dart';
 import 'api/dto.dart';
 import 'api/events.dart';
 import 'api/holiday.dart';
+import 'api/maintenance.dart';
 import 'api/plaintext_export.dart';
 import 'api/saved_filter.dart';
 import 'api/search.dart';
 import 'api/state.dart';
 import 'api/stats.dart';
 import 'api/sync.dart';
+import 'api/template.dart';
 import 'api/todo.dart';
 import 'api/trash.dart';
 import 'dart:async';
@@ -126,6 +128,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   dco_decode_box_autoadd_todo_task_relation_create_input(dynamic raw);
 
   @protected
+  TodoTemplateCreateInput dco_decode_box_autoadd_todo_template_create_input(
+    dynamic raw,
+  );
+
+  @protected
+  TodoTemplateUpdateInput dco_decode_box_autoadd_todo_template_update_input(
+    dynamic raw,
+  );
+
+  @protected
   BigInt dco_decode_box_autoadd_usize(dynamic raw);
 
   @protected
@@ -145,6 +157,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   DbEventDto dco_decode_db_event_dto(dynamic raw);
+
+  @protected
+  DbMaintenanceView dco_decode_db_maintenance_view(dynamic raw);
 
   @protected
   double dco_decode_f_64(dynamic raw);
@@ -235,6 +250,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<TodoTaskRelation> dco_decode_list_todo_task_relation(dynamic raw);
+
+  @protected
+  List<TodoTemplate> dco_decode_list_todo_template(dynamic raw);
 
   @protected
   String? dco_decode_opt_String(dynamic raw);
@@ -375,6 +393,15 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  TodoTemplate dco_decode_todo_template(dynamic raw);
+
+  @protected
+  TodoTemplateCreateInput dco_decode_todo_template_create_input(dynamic raw);
+
+  @protected
+  TodoTemplateUpdateInput dco_decode_todo_template_update_input(dynamic raw);
+
+  @protected
   TrashMeta dco_decode_trash_meta(dynamic raw);
 
   @protected
@@ -501,6 +528,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  TodoTemplateCreateInput sse_decode_box_autoadd_todo_template_create_input(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  TodoTemplateUpdateInput sse_decode_box_autoadd_todo_template_update_input(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   BigInt sse_decode_box_autoadd_usize(SseDeserializer deserializer);
 
   @protected
@@ -526,6 +563,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   DbEventDto sse_decode_db_event_dto(SseDeserializer deserializer);
+
+  @protected
+  DbMaintenanceView sse_decode_db_maintenance_view(
+    SseDeserializer deserializer,
+  );
 
   @protected
   double sse_decode_f_64(SseDeserializer deserializer);
@@ -640,6 +682,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<TodoTaskRelation> sse_decode_list_todo_task_relation(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  List<TodoTemplate> sse_decode_list_todo_template(
     SseDeserializer deserializer,
   );
 
@@ -802,6 +849,19 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  TodoTemplate sse_decode_todo_template(SseDeserializer deserializer);
+
+  @protected
+  TodoTemplateCreateInput sse_decode_todo_template_create_input(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  TodoTemplateUpdateInput sse_decode_todo_template_update_input(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   TrashMeta sse_decode_trash_meta(SseDeserializer deserializer);
 
   @protected
@@ -952,6 +1012,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_box_autoadd_todo_template_create_input(
+    TodoTemplateCreateInput self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_box_autoadd_todo_template_update_input(
+    TodoTemplateUpdateInput self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_box_autoadd_usize(BigInt self, SseSerializer serializer);
 
   @protected
@@ -986,6 +1058,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_db_event_dto(DbEventDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_db_maintenance_view(
+    DbMaintenanceView self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_f_64(double self, SseSerializer serializer);
@@ -1137,6 +1215,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_list_todo_task_relation(
     List<TodoTaskRelation> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_todo_template(
+    List<TodoTemplate> self,
     SseSerializer serializer,
   );
 
@@ -1353,6 +1437,21 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_todo_task_relation_create_input(
     TodoTaskRelationCreateInput self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_todo_template(TodoTemplate self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_todo_template_create_input(
+    TodoTemplateCreateInput self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_todo_template_update_input(
+    TodoTemplateUpdateInput self,
     SseSerializer serializer,
   );
 

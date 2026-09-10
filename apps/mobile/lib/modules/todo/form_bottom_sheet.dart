@@ -15,6 +15,7 @@ import '../../shared/widgets/wait_toast.dart';
 // as rep：规避 Flutter widgets 自带 RepeatMode 类名冲突
 import 'logic/parse_quick_input.dart';
 import 'logic/repeat_logic.dart' as rep;
+import 'logic/template_apply.dart';
 import 'logic/task_logic.dart'
     show
         QuickViewKey,
@@ -58,6 +59,9 @@ Future<void> showTodoFormSheet(
 
   /// 当前选中的快捷视图（#39：视图内新建自动带本视图标记；仅新建态消费）
   QuickViewKey? quickView,
+
+  /// 任务模板预填（套用模板时传入；优先级：模板 > 日历长按 > 视图默认）
+  TemplatePayload? presetTemplate,
 }) {
   return showModalBottomSheet<void>(
     context: context,
@@ -68,6 +72,7 @@ Future<void> showTodoFormSheet(
       defaultProjectId: defaultProjectId,
       initialDueDate: initialDueDate,
       quickView: quickView,
+      presetTemplate: presetTemplate,
     ),
   );
 }
@@ -96,7 +101,11 @@ Future<void> syncTaskReminder(
 
 class _TodoFormSheet extends ConsumerStatefulWidget {
   const _TodoFormSheet(
-      {this.editingTaskId, this.defaultProjectId, this.initialDueDate, this.quickView});
+      {this.editingTaskId,
+      this.defaultProjectId,
+      this.initialDueDate,
+      this.quickView,
+      this.presetTemplate});
 
   /// 有值 = 编辑态（异步预填 todoTaskGet）
   final int? editingTaskId;
@@ -109,6 +118,9 @@ class _TodoFormSheet extends ConsumerStatefulWidget {
 
   /// 当前选中的快捷视图（#39：视图内新建自动带本视图标记；仅新建态消费）
   final QuickViewKey? quickView;
+
+  /// 任务模板预填（新建态消费；编辑态忽略）
+  final TemplatePayload? presetTemplate;
 
   @override
   ConsumerState<_TodoFormSheet> createState() => _TodoFormSheetState();
@@ -214,9 +226,18 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
     if (widget.editingTaskId != null) {
       _loadEditing(widget.editingTaskId!);
     } else {
-      // 截止日期预填优先级：日历长按 > 视图默认（today/week，#38）> 无
+      // 截止日期预填优先级：模板 > 日历长按 > 视图默认（today/week）> 无
+      //（模板是用户显式选择，语义最强）
+      final tpl = widget.presetTemplate;
       final viewDefaults = quickViewCreateDefaults(widget.quickView);
-      _dueDate = widget.initialDueDate ?? viewDefaults.dueMs;
+      if (tpl?.dueOffsetDays != null) {
+        _dueDate = templateDueDateMs(tpl!.dueOffsetDays!);
+      } else {
+        _dueDate = widget.initialDueDate ?? viewDefaults.dueMs;
+      }
+      if (tpl?.title != null) _titleController.text = tpl!.title!;
+      if (tpl?.notes != null) _descriptionController.text = tpl!.notes!;
+      if (tpl?.priority != null) _priority = tpl!.priority!;
       // 新增默认开始日期：今天（本地零点，与桌面表单同口径）
       _startDate = dateToMidnightMs(DateTime.now());
       _loaded = true;
@@ -338,6 +359,15 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
           }
         }
         _pendingLabelIds = [];
+        // 新建：模板子任务逐条建立（percent_done 由后端按完成度回算；
+        // 单条失败不阻断——部分成功口径与标签挂载一致）
+        final tplSubs = widget.presetTemplate?.subtasks ?? const <String>[];
+        for (final title in tplSubs) {
+          try {
+            await bridge.todoSubtaskCreate(
+                TodoSubtaskCreateInput(taskId: created.id, title: title));
+          } catch (_) {}
+        }
       } else {
         await bridge.todoTaskUpdate(
           widget.editingTaskId!,
