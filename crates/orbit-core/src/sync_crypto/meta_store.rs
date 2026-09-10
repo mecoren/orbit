@@ -33,6 +33,16 @@ pub struct SyncCryptoMeta {
     pub data_key_nonce: String,
     /// PBKDF2 迭代次数
     pub iterations: u32,
+    /// 密钥派生方案版本（v2 确定性派生标记）
+    ///
+    /// - 缺省（None）= v1：Data Key 随机生成，用同步密码派生的 master_key 包装存储
+    /// - Some("v2") = v2：Data Key 由同步密码确定性派生（同密码跨设备同 Key），
+    ///   encrypted_data_key 仍为密码包装（作为 unlock 验证子），但真实 Key 以
+    ///   派生结果为准
+    ///
+    /// 未知值按 v1 处理（向后兼容：未来 v3 发布时旧版本不会误读）。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub key_derivation: Option<String>,
 }
 
 impl SyncCryptoMeta {
@@ -145,12 +155,13 @@ mod tests {
         assert!(!has_sync_crypto(dir));
         assert!(load_sync_crypto_meta(dir).unwrap().is_none());
 
-        // 构造并保存
+        // 构造并保存（v1 历史格式：无 key_derivation 字段）
         let meta = SyncCryptoMeta {
             salt: "dGVzdA==".to_string(),
             encrypted_data_key: "ZW5jcnlwdGVk".to_string(),
             data_key_nonce: "bm9uY2U=".to_string(),
             iterations: 200_000,
+            key_derivation: None,
         };
         save_sync_crypto_meta(dir, &meta).unwrap();
         assert!(has_sync_crypto(dir));
@@ -169,8 +180,56 @@ mod tests {
     }
 
     #[test]
+    fn v2_meta_serialization_omits_none_field() {
+        // v1 meta 序列化不含 key_derivation 字段（skip_serializing_if），
+        // 保证新版本写的 v1 格式与历史文件字节级兼容
+        let meta = SyncCryptoMeta {
+            salt: "dGVzdA==".to_string(),
+            encrypted_data_key: "ZW5jcnlwdGVk".to_string(),
+            data_key_nonce: "bm9uY2U=".to_string(),
+            iterations: 600_000,
+            key_derivation: None,
+        };
+        let json = serde_json::to_string(&meta).unwrap();
+        assert!(!json.contains("key_derivation"));
+    }
+
+    #[test]
     fn clear_sync_crypto_meta_is_idempotent() {
         let tmp = TempDir::new().unwrap();
         clear_sync_crypto_meta(tmp.path()).unwrap();
+    }
+
+    #[test]
+    fn v1_meta_without_key_derivation_field_parses_as_v1() {
+        // v1 存量文件没有 key_derivation 字段，反序列化必须成功且视为 v1
+        let tmp = TempDir::new().unwrap();
+        let v1_json = r#"{
+            "salt": "dGVzdA==",
+            "encrypted_data_key": "ZW5jcnlwdGVk",
+            "data_key_nonce": "bm9uY2U=",
+            "iterations": 200000
+        }"#;
+        std::fs::write(sync_crypto_meta_path(tmp.path()), v1_json).unwrap();
+
+        let meta = load_sync_crypto_meta(tmp.path()).unwrap().unwrap();
+        assert_eq!(meta.key_derivation, None, "v1 存量 meta 必须解析为 None");
+        assert_eq!(meta.iterations, 200_000);
+    }
+
+    #[test]
+    fn v2_meta_roundtrip_preserves_key_derivation() {
+        let tmp = TempDir::new().unwrap();
+        let meta = SyncCryptoMeta {
+            salt: "dGVzdA==".to_string(),
+            encrypted_data_key: "ZW5jcnlwdGVk".to_string(),
+            data_key_nonce: "bm9uY2U=".to_string(),
+            iterations: 600_000,
+            key_derivation: Some("v2".to_string()),
+        };
+        save_sync_crypto_meta(tmp.path(), &meta).unwrap();
+
+        let loaded = load_sync_crypto_meta(tmp.path()).unwrap().unwrap();
+        assert_eq!(loaded.key_derivation.as_deref(), Some("v2"));
     }
 }

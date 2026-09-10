@@ -290,6 +290,40 @@ pub async fn is_running(engine: &SyncEngine) -> bool {
     engine.is_running().await
 }
 
+// ============================================================================
+// rekey 全量重传（v2 改密 / v1→v2 迁移 / KeyMismatch 恢复共用）
+// ============================================================================
+
+/// 用引擎当前内存中的 Data Key 重加密覆盖云端全部数据
+///
+/// 调用前置：`crypto` 已切换/解锁到目标 Key（引擎在锁内自校验，未解锁返回
+/// `CryptoLocked`）。三个场景：
+/// - v2 改密：云端旧密码 Key 密文全部失效，重传后其他设备输入新密码即可同步
+/// - v1→v2 迁移：随机 Key → 确定性 Key，重传后其他设备同密码自动对齐
+/// - KeyMismatch 恢复「以本机为准」：放弃解不开的云端数据（见恢复页）
+///
+/// **危险操作**：远端数据被有意覆盖且不做 Pull 合并，调用方必须用户确认后调用。
+pub async fn rekey_cloud(
+    engine: &SyncEngine,
+    config: &SyncConfig,
+    origin: SyncOrigin,
+    device_id: &str,
+    attachments_dir: &str,
+) -> Result<SyncResult, CloudSyncError> {
+    let raw_adapter = create_raw_adapter(config)?;
+    let adapter = create_base_path_adapter(config)?;
+    engine
+        .rekey_cloud_reencrypt(
+            &adapter,
+            &*raw_adapter,
+            &config.base_path,
+            origin,
+            device_id,
+            attachments_dir,
+        )
+        .await
+}
+
 /// 将 SyncResult 序列化为 JSON 字符串（供 FRB/Tauri 桥接返回）
 pub fn result_to_json(result: &SyncResult) -> Result<String, CloudSyncError> {
     serde_json::to_string(result).map_err(|e| CloudSyncError::Serialize {

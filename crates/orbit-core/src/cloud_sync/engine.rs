@@ -667,6 +667,145 @@ impl SyncEngine {
         format!("data_key_fp={}, has_password={}", dk_fp, has_password,)
     }
 
+    /// rekey 全量重传：用当前内存中的 Data Key 重加密并覆盖云端全部数据
+    ///
+    /// 三个场景共用（调用前 Data Key 必须已在内存中切换为新 Key）：
+    /// - v2 改密（change_sync_password 后）：云端旧密码 Key 密文全部失效
+    /// - v1→v2 迁移：确定性 Key 替换随机 Key
+    /// - KeyMismatch 恢复「以本机为准」：放弃解不开的云端数据
+    ///
+    /// 步骤：
+    /// 1. 清空 sync_state.json（所有模块失去 prev_state，push_all 必然全量重传，
+    ///    且 P0-5 空数据覆盖守卫的 prev.is_some 条件不再成立）
+    /// 2. push_all 全模块用新 Key 加密上传（含 global _meta）
+    /// 3. 附件 is_uploaded 全部清零 → 重加密重传
+    /// 4. 上传新 crypto/config 到云端（其他设备据此感知新 Key）
+    ///
+    /// **不做 Pull**：rekey 的语义就是「本机为准」，远端数据被有意覆盖。
+    /// 附件重传依赖本地缓存（is_local_cached=1 的行会从本地文件读取）；
+    /// 本地已删（仅存云端）的旧密文附件在 rekey 后不可恢复，这是
+    /// 「以本机为准」的固有代价，调用方（UI）必须向用户明示。
+    pub async fn rekey_cloud_reencrypt(
+        &self,
+        adapter: &dyn SyncAdapter,
+        raw_adapter: &dyn SyncAdapter,
+        base_path: &str,
+        origin: SyncOrigin,
+        device_id: &str,
+        attachments_dir: &str,
+    ) -> Result<SyncResult, CloudSyncError> {
+        let r = self
+            .rekey_cloud_reencrypt_inner(
+                adapter,
+                raw_adapter,
+                base_path,
+                origin,
+                device_id,
+                attachments_dir,
+            )
+            .await;
+        self.emit_error_on_failure(origin, &r);
+        r
+    }
+
+    async fn rekey_cloud_reencrypt_inner(
+        &self,
+        adapter: &dyn SyncAdapter,
+        raw_adapter: &dyn SyncAdapter,
+        base_path: &str,
+        origin: SyncOrigin,
+        device_id: &str,
+        attachments_dir: &str,
+    ) -> Result<SyncResult, CloudSyncError> {
+        let _guard = match self.acquire_lock().await? {
+            Some(g) => g,
+            None => {
+                return Err(CloudSyncError::AlreadyRunning);
+            }
+        };
+
+        let start = std::time::Instant::now();
+        let mut result = SyncResult::default();
+
+        // 前置：Data Key 必须在内存（调用方已切换/解锁）
+        let data_key = self
+            .crypto
+            .get_data_key()
+            .ok_or(CloudSyncError::CryptoLocked)?;
+        log::info!(
+            "[rekey] 开始全量重传（Data Key 指纹: {}）",
+            data_key_fingerprint(&data_key)
+        );
+
+        // 1. 清空本地指纹账本：让 push_all 走全量而非增量
+        self.state_store.clear()?;
+        log::info!("[rekey] 已清空 sync_state.json（全模块强制重传）");
+
+        // 2. 全模块 Push（新 Key 加密）
+        // skip_modules 为空：rekey 场景没有前置 Pull，不存在"Pull 失败模块"
+        let push_result = push_all(
+            &self.db_pool,
+            &self.crypto,
+            &self.state_store,
+            adapter,
+            self.progress_sender.as_ref(),
+            origin,
+            device_id,
+            &[],
+        )
+        .await?;
+        result.pushed_modules = push_result.pushed_modules;
+
+        // 3. 附件：清零 is_uploaded 触发全量重传（本地缓存部分）
+        let reset_count =
+            crate::db::repository::attachment_repo::mark_all_unuploaded(&self.db_pool)
+                .await
+                .map_err(|e| CloudSyncError::Database {
+                    message: format!("重置附件上传标记失败: {}", e),
+                })?;
+        log::info!("[rekey] 附件 is_uploaded 清零 {} 条，开始重传", reset_count);
+
+        let att_push = sync_attachments_push(
+            &self.db_pool,
+            &self.crypto,
+            adapter,
+            self.progress_sender.as_ref(),
+            origin,
+            attachments_dir,
+        )
+        .await?;
+        result.uploaded_attachments = att_push.uploaded;
+        result.errors.extend(att_push.errors);
+
+        // 4. 上传新 crypto/config（其他设备据此发现 Key 已换）
+        let bundle = self.crypto.export_crypto_bundle()?;
+        crate::sync_crypto::bundle_io::upload_crypto_bundle_with_base_path(
+            raw_adapter,
+            base_path,
+            &bundle,
+        )
+        .await?;
+        log::info!("[rekey] 已上传新 crypto/config 到 {{base_path}}/crypto/config");
+
+        result.duration_ms = start.elapsed().as_millis() as u64;
+        self.progress_sender.send(SyncProgress::Done {
+            origin,
+            duration_ms: result.duration_ms,
+            pushed_modules: result.pushed_modules,
+            pulled_modules: 0,
+            uploaded_attachments: result.uploaded_attachments,
+            downloaded_attachments: 0,
+        });
+
+        log::info!(
+            "[rekey] 全量重传完成：{} 模块、{} 附件、耗时 {}ms",
+            result.pushed_modules,
+            result.uploaded_attachments,
+            result.duration_ms
+        );
+        Ok(result)
+    }
+
     /// 获取互斥锁
     ///
     /// 返回 `Ok(Some(guard))` 表示获取成功，`Ok(None)` 表示已有同步在运行。
@@ -762,6 +901,25 @@ impl SyncEngine {
             .map(|k| data_key_fingerprint(&k))
             .unwrap_or_else(|| "<none>".to_string());
         log::info!("[sync_data_key] 开始同步，当前 Data Key 指纹: {}", pre_fp);
+
+        // v2 确定性密钥：本地 meta 为 v2 时，本机 Key 由密码派生，密码正确则
+        // Key 必然正确。云端 crypto/config 仅用于一致性核对——不一致说明
+        // 云端数据由**另一个密码**加密（或云端 config 陈旧），导入云端 bundle
+        // 无意义（同密码必派生同 Key，不一致的 config 解开也只会得到异密码 Key，
+        // 与本机密码矛盾）。跳过导入，交由探针判定本机 Key 能否解云端数据。
+        let local_meta_is_v2 =
+            crate::sync_crypto::meta_store::load_sync_crypto_meta(self.crypto.app_data_dir())
+                .ok()
+                .flatten()
+                .is_some_and(|m| {
+                    m.key_derivation.as_deref()
+                        == Some(crate::sync_crypto::service::KEY_DERIVATION_V2)
+                });
+
+        if local_meta_is_v2 {
+            log::info!("[sync_data_key] v2 确定性密钥：跳过云端 bundle 导入，由探针校验一致性");
+            return Ok(());
+        }
 
         match crate::sync_crypto::bundle_io::download_and_import_crypto_bundle_with_base_path(
             raw_adapter,
@@ -1607,6 +1765,118 @@ mod tests {
             data_key_fingerprint(&key_a),
             data_key_fingerprint(&key_b),
             "不同 Key 指纹应不同（否则日志无法区分）"
+        );
+    }
+
+    // ========================================================================
+    // v2 确定性密钥：sync_data_key_from_cloud 的 v2 分支
+    //
+    // 本地 meta 为 v2 时跳过云端 bundle 导入（同密码必同 Key，导入无意义），
+    // 由外层探针校验本机 Key 与云端数据一致性。
+    // ========================================================================
+
+    #[test]
+    fn v2_derivation_same_password_same_key_across_services() {
+        // 引擎视角的核心不变量：两个不同 app_data_dir 的 SyncCryptoService，
+        // 同密码 init 后内存中的 Data Key 完全一致——多设备「密码即 Key」
+        let tmp_a = tempfile::TempDir::new().unwrap();
+        let svc_a = crate::sync_crypto::SyncCryptoService::new(tmp_a.path());
+        let key_a = svc_a.init("pw").unwrap();
+
+        let tmp_b = tempfile::TempDir::new().unwrap();
+        let svc_b = crate::sync_crypto::SyncCryptoService::new(tmp_b.path());
+        let key_b = svc_b.init("pw").unwrap();
+
+        assert_eq!(key_a, key_b);
+        assert_eq!(
+            data_key_fingerprint(&key_a),
+            data_key_fingerprint(&key_b),
+            "同密码跨设备指纹必须一致（探针/日志可观测）"
+        );
+    }
+
+    #[tokio::test]
+    async fn probe_passes_for_v2_cross_device_same_password() {
+        // v2 多设备场景模拟：设备 A 用密码 P 加密 global_meta 上传云端，
+        // 设备 B 同密码 P init → 探针必须通过（v1 下这是 KeyMismatch 高发场景）
+        let tmp_a = tempfile::TempDir::new().unwrap();
+        let svc_a = crate::sync_crypto::SyncCryptoService::new(tmp_a.path());
+        let key_a = svc_a.init("shared").unwrap();
+
+        let encrypted_meta = encrypt_payload(b"{}", &key_a).unwrap();
+        let adapter = ProbeMockAdapter::new().with_file("_meta.waitsync", encrypted_meta);
+
+        let tmp_b = tempfile::TempDir::new().unwrap();
+        let svc_b = crate::sync_crypto::SyncCryptoService::new(tmp_b.path());
+        let key_b = svc_b.init("shared").unwrap();
+
+        let result = probe_data_key_with_global_meta(&adapter, "", &key_b).await;
+        assert!(
+            result.is_ok(),
+            "v2 同密码跨设备探针必须通过（KeyMismatch 分叉态已结构性消灭），实际: {:?}",
+            result
+        );
+    }
+
+    #[tokio::test]
+    async fn probe_still_detects_cross_password_in_v2() {
+        // v2 下 KeyMismatch 仅剩一种真实成因：云端数据是**另一个密码**加密的
+        //（如用户在另一台设备改用了不同密码重新初始化）
+        let tmp_a = tempfile::TempDir::new().unwrap();
+        let svc_a = crate::sync_crypto::SyncCryptoService::new(tmp_a.path());
+        let key_a = svc_a.init("password_one").unwrap();
+
+        let encrypted_meta = encrypt_payload(b"{}", &key_a).unwrap();
+        let adapter = ProbeMockAdapter::new().with_file("_meta.waitsync", encrypted_meta);
+
+        let tmp_b = tempfile::TempDir::new().unwrap();
+        let svc_b = crate::sync_crypto::SyncCryptoService::new(tmp_b.path());
+        let key_b = svc_b.init("password_two").unwrap();
+
+        let result = probe_data_key_with_global_meta(&adapter, "", &key_b).await;
+        assert!(
+            matches!(result, Err(CloudSyncError::KeyMismatch)),
+            "跨密码场景探针仍须报 KeyMismatch（引导恢复流程），实际: {:?}",
+            result
+        );
+    }
+
+    // ========================================================================
+    // rekey_cloud_reencrypt：全量重传编排
+    //
+    // 关键行为：未解锁时必须拒绝且不动云端（前置分支测试）。
+    // 完整链路（清 state → 全模块 push → 附件重传 → 上传 config）依赖
+    // SqlitePool 与 15 模块表，由 m4 e2e 与 push_all/attachments 既有测试覆盖。
+    // ========================================================================
+
+    #[tokio::test]
+    async fn rekey_requires_unlocked_key() {
+        // 未解锁（内存无 Key）必须立即失败，不得动云端任何数据
+        let pool = sqlx::SqlitePool::connect(":memory:").await.unwrap();
+        let tmp = tempfile::TempDir::new().unwrap();
+        let crypto = crate::sync_crypto::SyncCryptoService::new(tmp.path());
+        let engine = SyncEngine::new_noop_progress(pool, crypto, tmp.path());
+
+        let adapter = ProbeMockAdapter::new();
+        let result = engine
+            .rekey_cloud_reencrypt(
+                &adapter,
+                &adapter,
+                "",
+                SyncOrigin::Manual,
+                "device-1",
+                "/tmp/attachments",
+            )
+            .await;
+        assert!(
+            matches!(result, Err(CloudSyncError::CryptoLocked)),
+            "未解锁时 rekey 必须拒绝执行（防误操作），实际: {:?}",
+            result
+        );
+        // 不得有任何上传发生
+        assert!(
+            adapter.upload_calls.lock().unwrap().is_empty(),
+            "rekey 被拒时不得产生云端写入"
         );
     }
 }

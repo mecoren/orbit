@@ -77,6 +77,22 @@ async fn two_instance_convergence_over_webdav() {
 
     let sync_password = "m4-sync-pass-123456";
 
+    // 前置清理：删除上次运行残留的 base_path 内容（_meta / crypto / modules）。
+    // 不清理的话，上次运行留下的密文（可能来自旧密钥方案/不同密码的失败运行）
+    // 会让本次首推直接 KeyMismatch——e2e 必须从已知空态起步。
+    {
+        let cleanup_cfg = sync_config(&endpoint, "cleanup");
+        let adapter =
+            orbit_core::sync::engine::create_adapter(&cleanup_cfg).expect("构造清理适配器");
+        for leftover in ["_meta.waitsync", "crypto/config", "crypto", "modules"] {
+            let path = format!("{}/{}", cleanup_cfg.base_path, leftover);
+            match adapter.delete(&path).await {
+                Ok(()) => println!("[e2e-cleanup] 已删除残留 {path}"),
+                Err(e) => println!("[e2e-cleanup] {path} 不存在或删除失败（忽略）: {e}"),
+            }
+        }
+    }
+
     // ── 实例 A：init + 建任务 + push ──
     let (pool_a, dir_a) = setup_db("device-a").await;
     let crypto_a = SyncCryptoService::new(&dir_a);

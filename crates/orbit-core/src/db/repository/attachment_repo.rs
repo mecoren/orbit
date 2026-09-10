@@ -58,6 +58,18 @@ pub async fn mark_uploaded(pool: &SqlitePool, hash: &str) -> CoreResult<()> {
     Ok(())
 }
 
+/// 全部附件重置为未上传（rekey 全量重传场景）
+///
+/// Data Key 更换（v2 改密 / v1→v2 迁移 / 以本机为准恢复）后，云端旧密文
+/// 附件已不可用，必须用新 Key 重加密重传。将 is_uploaded 全部清零后，
+/// `sync_attachments_push` 的 get_unuploaded 会重取全部本地缓存附件重传。
+pub async fn mark_all_unuploaded(pool: &SqlitePool) -> CoreResult<u64> {
+    let result = sqlx::query("UPDATE sys_attachments SET is_uploaded = 0")
+        .execute(pool)
+        .await?;
+    Ok(result.rows_affected())
+}
+
 /// 标记附件已本地缓存
 pub async fn mark_local_cached(pool: &SqlitePool, hash: &str, local_path: &str) -> CoreResult<()> {
     sqlx::query("UPDATE sys_attachments SET is_local_cached = 1, local_path = ? WHERE hash = ?")
