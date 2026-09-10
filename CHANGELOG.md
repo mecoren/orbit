@@ -7,6 +7,14 @@
 
 ## [Unreleased]
 
+### KeyMismatch 恢复引导失效修复——错误 tag 双层方括号 `[[key_mismatch]]` 致前端正则失配
+
+用户报告设置页「立即同步」仍弹原始 `[[key_mismatch]] Data Key 与云端密文不匹配…` 报错，没有跳恢复页。根因：`CloudSyncError::category_tag()` 返回的 tag 自带方括号（`"[key_mismatch]"`），双端桥层 `format!("[{}] …")` 又包一层，产出 `[[key_mismatch]]`；前端 `syncErrorTag` 正则 `^\[(\w+)\]` 遇双括号失配返回 null——设置页 `key_mismatch → navigate("/sync-recovery")` 引导分支永不触发，KeyMismatch 退化成裸报错（后台 `sync-key-mismatch` 事件链路正常，仅手动同步受影响）。
+
+- **core**：`category_tag()` 返回纯 tag（`key_mismatch`/`password`/`database`/`network`/`other`，不带括号），桥层统一由 `format!("[{}] …")` 加括号——单层 `[tag] message` 格式全链一致；error.rs 四个单测断言同步修正。
+- **影响面**：桌面 `cloud_sync_cmd.rs` err_tagged、移动 `orbit-flutter/api/sync.rs` 三处 category_tag 拼接点全部自然修正（无需改调用方）；移动端错误处理用 `contains` 子串匹配本就不受双括号影响，桌面正则解析恢复匹配。
+- **验证**：cargo test 409 全绿 + 双壳 cargo check/tsc 0；node 复刻正则对比——修复格式解析出 `key_mismatch`、旧双层格式解析 null（即用户遇到的失效路径）。
+
 ### 悬浮提示统一主题色底白字——热力图 tooltip 不再灰白（双端口径）
 
 用户反馈统计页热力图悬浮提示不是项目蓝。排查发现桌面热力图的手搓 Portal tooltip 用了 `bg-popover`（弹层灰白色），而全项目 shadcn `TooltipContent` 原语一直是 `bg-primary`（主题蓝底白字）——热力图是唯一偏离；移动端热力图/表单优先级的原生 `Tooltip` 也走 Flutter 默认黑灰底。本批统一悬浮提示口径并写入 AGENTS.md：

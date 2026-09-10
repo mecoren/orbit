@@ -206,22 +206,25 @@ impl CloudSyncError {
 
     /// 错误分类标签（用于桥接层向前端传递分类信息）
     ///
-    /// 返回 `[password]`/`[key_mismatch]`/`[database]`/`[network]`/`[other]` 之一，
-    /// 前端通过字符串前缀匹配解析错误类型，决定重试/跳转/阻塞行为。
+    /// 返回 `password`/`key_mismatch`/`database`/`network`/`other` 之一——纯 tag
+    /// 不带方括号，桥层 `format!("[{}] …")` 统一加括号。曾因 tag 自带括号被
+    /// 桥层再包一层产出 `[[key_mismatch]]`，前端 `^\[(\w+)\]` 正则失配导致
+    /// KeyMismatch 恢复引导失效（2026-09-10 修复）。前端通过字符串前缀匹配
+    /// 解析错误类型，决定重试/跳转/阻塞行为。
     ///
-    /// `[key_mismatch]` 优先级高于 `[password]`：本地已解锁但解密云端密文失败
+    /// `key_mismatch` 优先级高于 `password`：本地已解锁但解密云端密文失败
     /// 必须走恢复流程，而非引导用户重输密码（重输只会循环回同一错误）。
     pub fn category_tag(&self) -> &'static str {
         if self.is_key_mismatch_error() {
-            "[key_mismatch]"
+            "key_mismatch"
         } else if self.is_password_error() {
-            "[password]"
+            "password"
         } else if self.is_database_error() {
-            "[database]"
+            "database"
         } else if self.is_network_error() {
-            "[network]"
+            "network"
         } else {
-            "[other]"
+            "other"
         }
     }
 }
@@ -245,7 +248,7 @@ mod tests {
     #[test]
     fn key_mismatch_category_tag_is_key_mismatch() {
         let err = CloudSyncError::KeyMismatch;
-        assert_eq!(err.category_tag(), "[key_mismatch]");
+        assert_eq!(err.category_tag(), "key_mismatch");
     }
 
     #[test]
@@ -254,7 +257,7 @@ mod tests {
         let err = CloudSyncError::CryptoLocked;
         assert!(err.is_password_error());
         assert!(!err.is_key_mismatch_error());
-        assert_eq!(err.category_tag(), "[password]");
+        assert_eq!(err.category_tag(), "password");
     }
 
     #[test]
@@ -264,7 +267,7 @@ mod tests {
             message: "zstd 失败".to_string(),
         };
         assert!(err.is_password_error());
-        assert_eq!(err.category_tag(), "[password]");
+        assert_eq!(err.category_tag(), "password");
     }
 
     #[test]
@@ -272,7 +275,7 @@ mod tests {
         let err = CloudSyncError::Database {
             message: "sqlite".to_string(),
         };
-        assert_eq!(err.category_tag(), "[database]");
+        assert_eq!(err.category_tag(), "database");
     }
 
     #[test]
@@ -280,6 +283,6 @@ mod tests {
         let err = CloudSyncError::Adapter {
             message: "conn".to_string(),
         };
-        assert_eq!(err.category_tag(), "[network]");
+        assert_eq!(err.category_tag(), "network");
     }
 }
