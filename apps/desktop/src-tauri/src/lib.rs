@@ -250,6 +250,11 @@ pub fn run() {
             // 明文数据导出（07 报告 #15：JSON 结构化 / CSV 任务视图）
             commands::plaintext_export_cmd::plaintext_export_json,
             commands::plaintext_export_cmd::plaintext_export_csv,
+            // ICS 日历导出（#4：VTODO 日历，日历软件导入/订阅）
+            commands::ics_export_cmd::ics_export,
+            // 通知历史（#5：呈现轨迹回看）
+            commands::notification_log_cmd::notification_log_list,
+            commands::notification_log_cmd::notification_log_clear,
             // CSV 导入（迁移路径：orbit 自有 / Todoist / TickTick）
             commands::csv_import_cmd::csv_import_preview,
             commands::csv_import_cmd::csv_import_execute,

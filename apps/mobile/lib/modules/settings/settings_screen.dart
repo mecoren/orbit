@@ -60,7 +60,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   /// 小组件：数据面首刷完成中
   bool _widgetBusy = false;
 
-  /// 数据导出进行中的格式（'json' / 'csv'），null 空闲
+  /// 数据导出进行中的格式（'json' / 'csv' / 'ics'），null 空闲
   String? _exporting;
 
   /// CSV 导入：选中的预设档（orbit/todoist/ticktick）与文件名
@@ -96,6 +96,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   /// 卡头文案明示（PRIVACY.md §七口径）。
   Future<void> _exportData(String kind) async {
     if (_exporting != null) return;
+    // ICS：日历订阅用途的独立处理链（导出到外部日历软件本就是目的；
+    // 不走明文确认弹窗——日历文件语义上就是给外部消费的）
+    if (kind == 'ics') return _exportIcs();
     // 二次确认：明示未加密属性
     final confirmed = await showDialog<bool>(
       context: context,
@@ -152,6 +155,29 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       WaitToast.destructive('维护失败');
     } finally {
       if (mounted) setState(() => _maintaining = false);
+    }
+  }
+
+  /// ICS 日历导出（#4）：VTODO 日历 → 应用文档目录 exports/ → toast 告知路径
+  Future<void> _exportIcs() async {
+    setState(() => _exporting = 'ics');
+    try {
+      final result = await ref.read(orbitBridgeProvider).icsExport();
+      final docs = await getApplicationDocumentsDirectory();
+      final exportsDir = Directory('${docs.path}${Platform.pathSeparator}exports');
+      await exportsDir.create(recursive: true);
+      final file = File(
+        '${exportsDir.path}${Platform.pathSeparator}${result.suggestedFilename}',
+      );
+      await file.writeAsString(result.content, flush: true);
+      final tasks = result.tableCounts
+          .firstWhere((c) => c.table == 'todo_tasks', orElse: () => IcsTableCount(table: '', count: 0))
+          .count;
+      WaitToast.success('已导出日历文件（任务 $tasks 条）到 ${file.path}');
+    } catch (_) {
+      WaitToast.destructive('导出日历失败');
+    } finally {
+      if (mounted) setState(() => _exporting = null);
     }
   }
 
@@ -606,7 +632,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       Text(
                         '将待办数据导出为开放格式（未加密明文，请妥善保管）：'
                         'JSON 为 8 张业务表结构化全量；CSV 为任务主视图，'
-                        'Excel 可直接打开。文件保存到应用文档目录。',
+                        'Excel 可直接打开；ICS 为标准日历文件，任务以'
+                        ' VTODO 输出、可导入系统日历或其他日历软件。'
+                        '文件保存到应用文档目录。',
                         style: TextStyle(
                           fontSize: 12,
                           color: colors.secondaryText,
@@ -643,6 +671,25 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                             ),
                           ),
                         ],
+                      ),
+                      const SizedBox(height: AppDimens.space8),
+                      SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton.icon(
+                          onPressed: _exporting != null ? null : () => _exportData('ics'),
+                          icon: _exporting == 'ics'
+                              ? SizedBox(
+                                  width: AppDimens.iconSizeSm,
+                                  height: AppDimens.iconSizeSm,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: colors.secondaryText,
+                                  ),
+                                )
+                              : const Icon(Icons.calendar_month_rounded,
+                                  size: AppDimens.iconSizeSm),
+                          label: const Text('导出日历（ICS）'),
+                        ),
                       ),
                     ],
                   ),

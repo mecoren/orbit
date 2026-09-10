@@ -935,6 +935,33 @@ const commands: Record<string, (args: any, ctx: Ctx) => unknown> = {
   },
   attachments_gc: () => 0,
   // ---- 数据库维护（性能批次；内存 mock 库无碎片，各步返回零值）----
+  // ---- ICS 日历导出（#4；内存 mock 最小语义：头 + 每任务一个 VTODO 段）----
+  // ---- 通知历史（#5；内存 mock 最小语义：种子三条 + 倒序/过滤/清空）----
+  notification_log_list: (
+    { kind, limit }: { kind?: string | null; limit?: number },
+    { db }: Ctx,
+  ) => {
+    let rows = db.notificationLog.slice();
+    if (kind) rows = rows.filter((r) => r.kind === kind);
+    return ipcClone(rows.slice(0, limit ?? 50));
+  },
+  notification_log_clear: (_a: unknown, { db }: Ctx) => {
+    const n = db.notificationLog.length;
+    db.notificationLog.length = 0;
+    return n;
+  },
+  ics_export: (_a: unknown, { db }: Ctx): { content: string; table_counts: Record<string, number>; suggested_filename: string } => {
+    const tasks = Object.values(db.tasks).filter((t) => (t as { is_deleted?: number }).is_deleted === 0) as Array<{ id: number; title: string }>;
+    const content =
+      "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//Orbit//TODO ICS Export//CN\r\n" +
+      tasks.map((t) => `BEGIN:VTODO\r\nUID:${t.id}@orbit\r\nSUMMARY:${t.title}\r\nEND:VTODO\r\n`).join("") +
+      "END:VCALENDAR\r\n";
+    return {
+      content,
+      table_counts: { todo_tasks: tasks.length },
+      suggested_filename: "orbit_mock.ics",
+    };
+  },
   db_maintenance: (): { wal_bytes_after_checkpoint: number; attachments_cleaned: number; freelist_before: number; freelist_after: number; pages_reclaimed: number } => ({
     wal_bytes_after_checkpoint: 0,
     attachments_cleaned: 0,

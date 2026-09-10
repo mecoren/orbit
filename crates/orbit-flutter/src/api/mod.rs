@@ -18,6 +18,7 @@
 //! - [saved_filter]：保存的筛选器（可复用组合条件视图，backlog #35）
 //! - [template]：任务模板（多字段任务骨架可复用，竞品矩阵高价值缺口）
 //! - [widget]：Android 桌面小组件数据口（快照查询 + 勾选落库，#3）
+//! - [ics_export]：ICS 日历导出（VTODO 日历，#4）
 //! - [events]：下行事件流 + 提醒轮询守护
 
 pub mod asset;
@@ -27,6 +28,7 @@ pub mod csv_import;
 pub mod dto;
 pub mod events;
 pub mod holiday;
+pub mod ics_export;
 pub mod maintenance;
 pub mod plaintext_export;
 pub mod saved_filter;

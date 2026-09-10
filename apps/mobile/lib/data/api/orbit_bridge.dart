@@ -354,6 +354,11 @@ abstract class OrbitBridge {
   /// 小组件勾选切换（done=1 完成 / 0 取消；完成复用 complete 全语义）
   Future<void> widgetTodoToggle(int id, int done);
 
+  // ── ICS 日历导出（#4：VTODO 日历，日历软件导入/订阅）──
+
+  /// 导出全部任务为 ICS；返回内容与统计
+  Future<IcsExportView> icsExport();
+
   // ── 同步加密（恢复流程用）──
 
   Future<SyncCryptoStatus> syncCryptoStatus();

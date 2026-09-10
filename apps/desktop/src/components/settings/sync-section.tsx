@@ -1269,12 +1269,13 @@ function BackupCard() {
  * 卡头文案明示（PRIVACY.md §七口径）。
  */
 function PlaintextExportCard() {
-  const [busy, setBusy] = useState<"json" | "csv" | null>(null);
+  const [busy, setBusy] = useState<"json" | "csv" | "ics" | null>(null);
   const [excludeDeleted, setExcludeDeleted] = useState(true);
 
-  const doExport = async (kind: "json" | "csv") => {
+  const doExport = async (kind: "json" | "csv" | "ics") => {
     setBusy(kind);
     try {
+      if (kind === "ics") return doIcsExport();
       const { plaintextExportJson, plaintextExportCsv } = await import("@/lib/tauri");
       const r =
         kind === "json"
@@ -1305,6 +1306,30 @@ function PlaintextExportCard() {
     }
   };
 
+  /** ICS 导出（#4）：VTODO 日历——系统日历/其他日历软件导入或订阅；
+   *  独立处理链（不经 excludeDeleted：日历侧无墓碑概念） */
+  const doIcsExport = async () => {
+    try {
+      const { icsExport } = await import("@/lib/tauri");
+      const r = await icsExport();
+      const { save } = await import("@tauri-apps/plugin-dialog");
+      const path = await save({
+        title: "导出日历文件",
+        defaultPath: r.suggested_filename,
+        filters: [{ name: "iCalendar 日历", extensions: ["ics"] }],
+      });
+      if (!path) return; // 用户取消
+      const { writeTextFile } = await import("@tauri-apps/plugin-fs");
+      await writeTextFile(path, r.content);
+      const tasks = r.table_counts["todo_tasks"] ?? 0;
+      toast.success(`已导出 ICS 日历（任务 ${tasks} 条）到：${path}`);
+    } catch (err) {
+      toast.error(errMsg(err));
+    } finally {
+      setBusy(null);
+    }
+  };
+
   const confirmExport = (kind: "json" | "csv") => {
     if (
       window.confirm(
@@ -1323,7 +1348,8 @@ function PlaintextExportCard() {
       </div>
       <p className="text-xs text-muted-foreground">
         将待办数据导出为开放格式：JSON 为 8 张业务表结构化全量，CSV 为任务主视图
-        （含项目名与标签列，Excel 可直接打开）。文件为未加密明文，请妥善保管。
+        （含项目名与标签列，Excel 可直接打开），ICS 为标准日历文件（任务以
+        VTODO 输出，可导入系统日历或其他日历软件）。文件为未加密明文，请妥善保管。
       </p>
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
@@ -1353,6 +1379,18 @@ function PlaintextExportCard() {
           <Button size="sm" variant="outline" disabled={!!busy} onClick={() => confirmExport("csv")}>
             {busy === "csv" ? <Loader2 className="mr-1 size-3 animate-spin" /> : null}
             导出 CSV
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={!!busy}
+            onClick={() => {
+              setBusy("ics");
+              void doIcsExport();
+            }}
+          >
+            {busy === "ics" ? <Loader2 className="mr-1 size-3 animate-spin" /> : null}
+            导出日历
           </Button>
         </div>
       </div>

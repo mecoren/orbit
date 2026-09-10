@@ -942,6 +942,28 @@ export const savedFilterUpdate = (id: number, input: TodoSavedFilterUpdateInput)
   invoke<TodoSavedFilter>("saved_filter_update", { id, input });
 export const savedFilterDelete = (id: number) => invoke<void>("saved_filter_delete", { id });
 
+// ========== ICS 日历导出（#4：VTODO 日历，日历软件导入/订阅）==========
+export interface IcsExportResult {
+  content: string;
+  table_counts: Record<string, number>;
+  suggested_filename: string;
+}
+export const icsExport = () => invoke<IcsExportResult>("ics_export");
+
+// ========== 通知历史（#5：呈现轨迹回看；只读本地表不进同步）==========
+export interface NotificationLogRow {
+  id: number;
+  kind: string; // reminder_due / snooze / complete / boot_skip
+  task_id: number | null;
+  task_title: string;
+  reminder_id: number | null;
+  payload: string;
+  created_at: number;
+}
+export const notificationLogList = (kind?: string, limit?: number) =>
+  invoke<NotificationLogRow[]>("notification_log_list", { kind: kind ?? null, limit: limit ?? null });
+export const notificationLogClear = () => invoke<number>("notification_log_clear");
+
 // ========== templates（任务模板：竞品矩阵高价值缺口）==========
 export interface TodoTemplate {
   id: number;

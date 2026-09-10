@@ -9,6 +9,7 @@ import '../../src/rust/api/asset.dart' as gen_asset;
 import '../../src/rust/api/saved_filter.dart' as gen_sf;
 import '../../src/rust/api/template.dart' as gen_tpl;
 import '../../src/rust/api/widget.dart' as gen_widget;
+import '../../src/rust/api/ics_export.dart' as gen_ics;
 import '../../src/rust/api/holiday.dart' as gen_holiday;
 import '../../src/rust/api/events.dart' as gen_events;
 import '../../src/rust/api/maintenance.dart' as gen_maintenance;
@@ -663,6 +664,20 @@ class RustOrbitBridge implements OrbitBridge {
   @override
   Future<void> widgetTodoToggle(int id, int done) =>
       gen_widget.widgetTodoToggle(id: id, done: done);
+
+  // ── ICS 日历导出（#4）──
+
+  @override
+  Future<IcsExportView> icsExport() async {
+    final r = await gen_ics.icsExport();
+    return IcsExportView(
+      content: r.content,
+      tableCounts: r.tableCounts
+          .map((c) => IcsTableCount(table: c.table, count: c.count.toInt()))
+          .toList(),
+      suggestedFilename: r.suggestedFilename,
+    );
+  }
 
   TaskAttachmentView _mapAttachment(gen.TaskAttachmentView r) => TaskAttachmentView(
         linkId: r.linkId.toInt(),

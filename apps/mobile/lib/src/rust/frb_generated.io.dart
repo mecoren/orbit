@@ -10,6 +10,7 @@ import 'api/csv_import.dart';
 import 'api/dto.dart';
 import 'api/events.dart';
 import 'api/holiday.dart';
+import 'api/ics_export.dart';
 import 'api/maintenance.dart';
 import 'api/plaintext_export.dart';
 import 'api/saved_filter.dart';
@@ -181,6 +182,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   PlatformInt64 dco_decode_i_64(dynamic raw);
 
   @protected
+  IcsExportView dco_decode_ics_export_view(dynamic raw);
+
+  @protected
+  IcsTableCount dco_decode_ics_table_count(dynamic raw);
+
+  @protected
   List<String> dco_decode_list_String(dynamic raw);
 
   @protected
@@ -194,6 +201,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<HolidayInfo> dco_decode_list_holiday_info(dynamic raw);
+
+  @protected
+  List<IcsTableCount> dco_decode_list_ics_table_count(dynamic raw);
 
   @protected
   Int64List dco_decode_list_prim_i_64_strict(dynamic raw);
@@ -597,6 +607,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   PlatformInt64 sse_decode_i_64(SseDeserializer deserializer);
 
   @protected
+  IcsExportView sse_decode_ics_export_view(SseDeserializer deserializer);
+
+  @protected
+  IcsTableCount sse_decode_ics_table_count(SseDeserializer deserializer);
+
+  @protected
   List<String> sse_decode_list_String(SseDeserializer deserializer);
 
   @protected
@@ -614,6 +630,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<HolidayInfo> sse_decode_list_holiday_info(SseDeserializer deserializer);
+
+  @protected
+  List<IcsTableCount> sse_decode_list_ics_table_count(
+    SseDeserializer deserializer,
+  );
 
   @protected
   Int64List sse_decode_list_prim_i_64_strict(SseDeserializer deserializer);
@@ -1102,6 +1123,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_i_64(PlatformInt64 self, SseSerializer serializer);
 
   @protected
+  void sse_encode_ics_export_view(IcsExportView self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_ics_table_count(IcsTableCount self, SseSerializer serializer);
+
+  @protected
   void sse_encode_list_String(List<String> self, SseSerializer serializer);
 
   @protected
@@ -1122,6 +1149,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_list_holiday_info(
     List<HolidayInfo> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_ics_table_count(
+    List<IcsTableCount> self,
     SseSerializer serializer,
   );
 

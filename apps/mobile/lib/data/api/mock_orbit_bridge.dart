@@ -886,6 +886,28 @@ class MockOrbitBridge implements OrbitBridge {
         _emit('todo_tasks');
       });
 
+  // ── ICS 日历导出（#4；与 Rust export_ics 同构最小语义）──
+
+  @override
+  Future<IcsExportView> icsExport() => _delay(() {
+        final tasks = store.tasks.values
+            .where((t) => t['is_deleted'] == 0)
+            .toList();
+        final content = StringBuffer()
+          ..write('BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//Orbit//TODO ICS Export//CN\r\n');
+        for (final t in tasks) {
+          content.write('BEGIN:VTODO\r\nUID:${t['uuid']}@orbit\r\nSUMMARY:${t['title']}\r\nEND:VTODO\r\n');
+        }
+        content.write('END:VCALENDAR\r\n');
+        return IcsExportView(
+          content: content.toString(),
+          tableCounts: [
+            IcsTableCount(table: 'todo_tasks', count: tasks.length),
+          ],
+          suggestedFilename: 'orbit_mock.ics',
+        );
+      });
+
   TaskAttachmentView _mapMockAttachment(Map<String, dynamic> a) =>
       TaskAttachmentView(
         linkId: a['link_id'] as int,

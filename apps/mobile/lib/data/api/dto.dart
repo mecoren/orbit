@@ -1035,6 +1035,27 @@ class TodoTemplate {
   });
 }
 
+/// ICS 日历导出结果（#4；FRB ics_export.rs 镜像）
+class IcsExportView {
+  final String content;
+  final List<IcsTableCount> tableCounts;
+  final String suggestedFilename;
+
+  const IcsExportView({
+    required this.content,
+    required this.tableCounts,
+    required this.suggestedFilename,
+  });
+}
+
+/// ICS 导出表计数项（FRB IcsTableCount 镜像）
+class IcsTableCount {
+  final String table;
+  final int count;
+
+  const IcsTableCount({required this.table, required this.count});
+}
+
 /// Android 桌面小组件任务行（#3；FRB widget.rs 镜像，RemoteViews 最小字段集）
 class WidgetTodoItem {
   final int id;
