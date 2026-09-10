@@ -6,6 +6,7 @@
 pub mod asset_api;
 pub mod business_api;
 pub mod cloud_sync_api;
+pub mod db_maintenance_api;
 pub mod csv_import_api;
 pub mod full_sync_backup_api;
 pub mod holiday_api;

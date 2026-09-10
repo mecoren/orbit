@@ -39,6 +39,32 @@ class ReminderDueEvent {
   });
 }
 
+/// 数据库维护结果（性能批次；FRB maintenance.rs 镜像）
+class DbMaintenanceResult {
+  /// WAL checkpoint 后 -wal 文件剩余大小（字节）
+  final int walBytesAfterCheckpoint;
+
+  /// 附件 GC 清理的孤立文件数
+  final int attachmentsCleaned;
+
+  /// VACUUM 前空闲页数（碎片页）
+  final int freelistBefore;
+
+  /// VACUUM 后空闲页数（应为 0）
+  final int freelistAfter;
+
+  /// VACUUM 实际回收的页数
+  final int pagesReclaimed;
+
+  const DbMaintenanceResult({
+    required this.walBytesAfterCheckpoint,
+    required this.attachmentsCleaned,
+    required this.freelistBefore,
+    required this.freelistAfter,
+    required this.pagesReclaimed,
+  });
+}
+
 /// 明文导出结果（07 报告 #15；FRB plaintext_export.rs 镜像）
 class PlaintextExportResult {
   /// 文件内容（JSON 文本或 CSV 文本，UTF-8；CSV 带 BOM）
@@ -290,6 +316,12 @@ abstract class OrbitBridge {
 
   /// 卸下附件（软删关联，孤儿二进制由 GC 清）
   Future<void> taskAttachmentRemove(int linkId);
+
+  // ── 数据库维护（性能批次：WAL checkpoint / 附件 GC / 查询统计 / VACUUM）──
+
+  /// 一键数据库维护：回收 WAL 日志与磁盘碎片、清理无引用附件、更新查询统计。
+  /// 只读维护路径：不触发 db-change、不触碰同步数据。
+  Future<DbMaintenanceResult> dbMaintenance();
 
   // ── 保存的筛选器（#35：Apple Smart List 同款）──
 

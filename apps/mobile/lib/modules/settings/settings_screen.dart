@@ -12,7 +12,7 @@ import '../../core/theme/app_shapes.dart';
 import '../../core/theme/orbit_accents.dart';
 import '../../data/api/dto.dart';
 import '../../data/api/orbit_bridge.dart'
-    show CsvImportPreview, CsvImportStats;
+    show CsvImportPreview, CsvImportStats, DbMaintenanceResult;
 import '../../data/providers/biometric_provider.dart';
 import '../../data/providers/bridge_provider.dart';
 import '../../shared/widgets/liquid_glass_title_bar.dart';
@@ -42,6 +42,12 @@ class SettingsScreen extends ConsumerStatefulWidget {
 class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   final _scrollController = ScrollController();
   bool _syncing = false;
+
+  /// 数据库维护进行中（性能批次；防重复点击）
+  bool _maintaining = false;
+
+  /// 上次维护量化结果（null = 未执行过）
+  DbMaintenanceResult? _maintenanceResult;
 
   /// 生物识别：硬件可用性（null=探测中）与启用状态（null=未启用/未知）
   bool? _bioAvailable;
@@ -123,6 +129,25 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       WaitToast.destructive('导出失败');
     } finally {
       if (mounted) setState(() => _exporting = null);
+    }
+  }
+
+  // ── 数据库维护（性能批次）：WAL checkpoint / 附件 GC / 查询统计 / VACUUM ──
+
+  /// 一键维护：回收 WAL 日志与磁盘碎片、清理无引用附件、更新查询统计。
+  /// 只读维护（不触发 db-change、不触碰同步数据），量化结果就地展示。
+  Future<void> _runMaintenance() async {
+    if (_maintaining) return;
+    setState(() => _maintaining = true);
+    try {
+      final bridge = ref.read(orbitBridgeProvider);
+      final r = await bridge.dbMaintenance();
+      if (mounted) setState(() => _maintenanceResult = r);
+      WaitToast.success('数据库维护完成');
+    } catch (_) {
+      WaitToast.destructive('维护失败');
+    } finally {
+      if (mounted) setState(() => _maintaining = false);
     }
   }
 
@@ -611,6 +636,55 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                             ),
                           ),
                         ],
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: AppDimens.space12),
+                // 数据库维护卡（性能批次）：一键 WAL checkpoint / 附件 GC /
+                // 查询统计 / VACUUM，量化结果就地展示
+                SectionCard(
+                  title: '数据库维护',
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '一键优化本地数据库：回收 WAL 日志与磁盘碎片、清理无引用'
+                        '附件文件、更新查询统计（列表/搜索提速）。不改动任何'
+                        '数据与同步状态，建议偶发卡顿时手动执行。',
+                        style: TextStyle(fontSize: 12, color: colors.secondaryText),
+                      ),
+                      const SizedBox(height: AppDimens.space12),
+                      if (_maintenanceResult != null)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: AppDimens.space12),
+                          child: Text(
+                            '回收碎片页 ${_maintenanceResult!.pagesReclaimed} ·'
+                            ' 附件清理 ${_maintenanceResult!.attachmentsCleaned} ·'
+                            ' WAL 残留 ${_maintenanceResult!.walBytesAfterCheckpoint} B',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: colors.secondaryText,
+                            ),
+                          ),
+                        ),
+                      SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton.icon(
+                          onPressed: _maintaining ? null : _runMaintenance,
+                          icon: _maintaining
+                              ? SizedBox(
+                                  width: AppDimens.iconSizeSm,
+                                  height: AppDimens.iconSizeSm,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: colors.secondaryText,
+                                  ),
+                                )
+                              : const Icon(Icons.build_circle_outlined,
+                                  size: AppDimens.iconSizeSm),
+                          label: const Text('立即维护'),
+                        ),
                       ),
                     ],
                   ),

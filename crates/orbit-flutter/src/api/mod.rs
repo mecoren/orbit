@@ -7,6 +7,7 @@
 //! - [dto]：todo 域过桥类型的本地镜像（外部 crate 类型会被 FRB 降级 opaque，
 //!   见 dto.rs 模块注释）
 //! - [todo]：todo 八表 CRUD + 详情聚合（签名一律使用 [dto] 镜像类型）
+//! - [maintenance]：数据库维护（WAL checkpoint / 附件 GC / 查询统计 / VACUUM）
 //! - [asset]：任务附件（内容寻址上传/列表/读取/卸下 + 本地 GC）
 //! - [sync]：同步配置 / 云同步执行 / 同步加密
 //! - [plaintext_export]：明文数据导出（JSON / CSV，对齐桌面命令面）
@@ -24,6 +25,7 @@ pub mod dto;
 pub mod events;
 pub mod holiday;
 pub mod plaintext_export;
+pub mod maintenance;
 pub mod saved_filter;
 pub mod search;
 pub mod state;

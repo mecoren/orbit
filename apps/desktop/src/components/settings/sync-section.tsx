@@ -129,6 +129,7 @@ export function SyncSection() {
       <BackupCard />
       <PlaintextExportCard />
       <CsvImportCard />
+      <DbMaintenanceCard />
     </div>
   );
 }
@@ -1558,6 +1559,64 @@ function CsvImportCard() {
           ) : null}
         </div>
       ) : null}
+    </div>
+  );
+}
+
+/* ============================ 8. 数据库维护卡（性能批次） ============================ */
+
+/**
+ * 一键数据库维护（性能批次）：WAL checkpoint 回收日志 → 附件 GC 清孤儿文件
+ * → PRAGMA optimize 更新查询统计 → VACUUM 整库重写回收碎片页。
+ *
+ * 只读维护：不产生 db-change（列表缓存不受影响）、不触碰同步数据。
+ * 建议低频手动触发（大库 VACUUM 秒级耗时），量化结果就地展示。
+ */
+function DbMaintenanceCard() {
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<
+    import("@/lib/tauri").DbMaintenanceResult | null
+  >(null);
+
+  const runMaintenance = async () => {
+    setBusy(true);
+    setResult(null);
+    try {
+      const { dbMaintenance } = await import("@/lib/tauri");
+      const r = await dbMaintenance();
+      setResult(r);
+      toast.success("数据库维护完成");
+    } catch (err) {
+      toast.error(errMsg(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="space-y-3 rounded-lg border p-5">
+      <div className="flex items-center gap-2">
+        <DatabaseBackup className="size-4 text-muted-foreground" />
+        <span className="text-sm font-medium">数据库维护</span>
+      </div>
+      <p className="text-xs text-muted-foreground">
+        一键优化本地数据库：回收 WAL 日志与磁盘碎片、清理无引用附件文件、
+        更新查询统计（列表/搜索提速）。不改动任何数据与同步状态，建议偶发卡顿时手动执行。
+      </p>
+      <div className="flex items-center justify-between">
+        {result ? (
+          <span className="text-xs text-muted-foreground">
+            回收碎片页 {result.pages_reclaimed} · 附件清理 {result.attachments_cleaned} ·
+            WAL 残留 {formatBytes(result.wal_bytes_after_checkpoint)}
+          </span>
+        ) : (
+          <span className="text-xs text-muted-foreground">上次维护结果将在此显示</span>
+        )}
+        <Button size="sm" variant="outline" disabled={busy} onClick={() => void runMaintenance()}>
+          {busy ? <Loader2 className="mr-1 size-3 animate-spin" /> : null}
+          立即维护
+        </Button>
+      </div>
     </div>
   );
 }

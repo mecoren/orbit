@@ -276,6 +276,8 @@ pub fn run() {
             commands::asset_cmd::task_attachments_list,
             commands::asset_cmd::task_attachment_read,
             commands::asset_cmd::task_attachment_remove,
+            // 数据库维护（WAL checkpoint / 附件 GC / 查询统计 / VACUUM）
+            commands::db_maintenance_cmd::db_maintenance,
             commands::asset_cmd::attachments_gc,
         ])
         .run(tauri::generate_context!())

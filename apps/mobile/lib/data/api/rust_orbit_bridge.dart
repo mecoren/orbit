@@ -10,6 +10,7 @@ import '../../src/rust/api/saved_filter.dart' as gen_sf;
 import '../../src/rust/api/holiday.dart' as gen_holiday;
 import '../../src/rust/api/events.dart' as gen_events;
 import '../../src/rust/api/plaintext_export.dart' as gen_export;
+import '../../src/rust/api/maintenance.dart' as gen_maintenance;
 import '../../src/rust/api/sync.dart' as gen_sync;
 import '../../src/rust/api/auth.dart' as gen_auth;
 import '../../src/rust/api/biometric.dart' as gen_bio;
@@ -555,6 +556,21 @@ class RustOrbitBridge implements OrbitBridge {
       gen_asset.taskAttachmentRemove(linkId: linkId);
 
   // ── 保存的筛选器（#35）──
+  // ── 数据库维护（性能批次）──
+
+  @override
+  Future<DbMaintenanceResult> dbMaintenance() async {
+    // PlatformInt64 在 Web 语义是 BigInt，逐个 .toInt() 归一（架构约定）
+    final r = await gen_maintenance.dbMaintenance();
+    return DbMaintenanceResult(
+      walBytesAfterCheckpoint: r.walBytesAfterCheckpoint.toInt(),
+      attachmentsCleaned: r.attachmentsCleaned,
+      freelistBefore: r.freelistBefore.toInt(),
+      freelistAfter: r.freelistAfter.toInt(),
+      pagesReclaimed: r.pagesReclaimed.toInt(),
+    );
+  }
+
 
   @override
   Future<List<TodoSavedFilter>> savedFiltersList() async {

@@ -906,6 +906,14 @@ const commands: Record<string, (args: any, ctx: Ctx) => unknown> = {
     if (idx >= 0) db.attachments.splice(idx, 1);
   },
   attachments_gc: () => 0,
+  // ---- 数据库维护（性能批次；内存 mock 库无碎片，各步返回零值）----
+  db_maintenance: (): { wal_bytes_after_checkpoint: number; attachments_cleaned: number; freelist_before: number; freelist_after: number; pages_reclaimed: number } => ({
+    wal_bytes_after_checkpoint: 0,
+    attachments_cleaned: 0,
+    freelist_before: 0,
+    freelist_after: 0,
+    pages_reclaimed: 0,
+  }),
 
   // ---- 保存的筛选器（#35；条件 JSON 白名单键同 Rust）----
   saved_filters_list: (_a: unknown, { db }: Ctx) => ipcClone(db.savedFilters),

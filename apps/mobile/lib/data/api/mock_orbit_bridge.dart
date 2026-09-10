@@ -746,6 +746,19 @@ class MockOrbitBridge implements OrbitBridge {
     });
   }
 
+  // ── 数据库维护（性能批次；内存 mock 库无碎片，各步返回零值）──
+
+  @override
+  Future<DbMaintenanceResult> dbMaintenance() {
+    return _delay(() => const DbMaintenanceResult(
+          walBytesAfterCheckpoint: 0,
+          attachmentsCleaned: 0,
+          freelistBefore: 0,
+          freelistAfter: 0,
+          pagesReclaimed: 0,
+        ));
+  }
+
   // ── 保存的筛选器（#35；与桌面 ipc-mock 同构语义）──
 
   @override

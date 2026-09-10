@@ -895,6 +895,22 @@ export const taskAttachmentRemove = (linkId: number) =>
   invoke<void>("task_attachment_remove", { linkId });
 export const attachmentsGc = () => invoke<number>("attachments_gc");
 
+// ========== 数据库维护（性能批次：WAL checkpoint / 附件 GC / 查询统计 / VACUUM）==========
+export interface DbMaintenanceResult {
+  /** WAL checkpoint 后 -wal 文件剩余大小（字节） */
+  wal_bytes_after_checkpoint: number;
+  /** 附件 GC 清理的孤立文件数 */
+  attachments_cleaned: number;
+  /** VACUUM 前空闲页数（碎片页） */
+  freelist_before: number;
+  /** VACUUM 后空闲页数（应为 0） */
+  freelist_after: number;
+  /** VACUUM 实际回收的页数 */
+  pages_reclaimed: number;
+}
+/** 一键数据库维护：WAL checkpoint → 附件 GC → PRAGMA optimize → VACUUM */
+export const dbMaintenance = () => invoke<DbMaintenanceResult>("db_maintenance");
+
 // ========== saved_filters（保存的筛选器：#35）==========
 export interface TodoSavedFilter {
   id: number;

@@ -7,6 +7,7 @@ pub mod cloud_sync_cmd;
 pub mod crypto_cmd;
 pub mod csv_import_cmd;
 pub mod data_dir;
+pub mod db_maintenance_cmd;
 pub mod db_cmd;
 pub mod full_sync_cmd;
 pub mod holiday_cmd;
