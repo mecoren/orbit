@@ -151,6 +151,7 @@ export interface MockDb {
   attachments: MockAttachmentLink[];
   savedFilters: { id: number; uuid: string; name: string; conditions: string; sort_order: number }[];
   templates: { id: number; uuid: string; name: string; payload: string; sort_order: number }[];
+  notificationLog: { id: number; kind: string; task_id: number | null; task_title: string; reminder_id: number | null; payload: string; created_at: number }[];
   seq: number;
 }
 
@@ -170,6 +171,11 @@ function createDb(): MockDb {
     attachments: [],
     savedFilters: [],
     templates: [],
+    notificationLog: [
+      { id: 1, kind: "reminder_due", task_id: 1, task_title: "回复合作方邮件（逾期）", reminder_id: 1, payload: "{\"remind_at\":1757400000000}", created_at: Date.now() - 3_600_000 },
+      { id: 2, kind: "snooze", task_id: 1, task_title: "回复合作方邮件（逾期）", reminder_id: 1, payload: "{\"snooze_until\":1757403600000}", created_at: Date.now() - 3_500_000 },
+      { id: 3, kind: "reminder_due", task_id: 2, task_title: "完成移动端重构方案评审", reminder_id: 2, payload: "{\"remind_at\":1757410000000}", created_at: Date.now() - 1_800_000 },
+    ],
     seq: 1,
   };
 }

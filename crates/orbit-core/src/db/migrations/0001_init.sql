@@ -377,6 +377,23 @@ CREATE TABLE IF NOT EXISTS cfg_kv (
 -- ============================================================================
 
 -- 附件元数据表（PK: hash）
+-- 通知历史（#5 通知历史中心；Todoist 同款专门通知页）
+-- 桌面 Windows Toast / 移动端系统通知一旦错过或清掉即无处回看——本表
+-- 记录提醒到期呈现轨迹（reminder 到期/通知 action），供设置页回看。
+-- **只读本地日志表**：不进 SYNCABLE_TABLES 白名单（各端各自记录各自的
+-- 呈现轨迹，跨端混看无意义），口径同统计类聚合表。
+CREATE TABLE IF NOT EXISTS notification_log (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,  -- 主键（本地自增）
+  kind TEXT NOT NULL DEFAULT '',  -- 记录类型：reminder_due=提醒到期 / snooze=推迟 / complete=通知上完成 / boot_skip=启动跳过（防补弹轰炸的静默跳过也留痕）
+  task_id INTEGER,  -- 关联任务 id（可空——任务可能后续被删）
+  task_title TEXT NOT NULL DEFAULT '',  -- 任务标题快照（删除后仍可读）
+  reminder_id INTEGER,  -- 关联提醒行 id（可空——完成 action 无提醒行）
+  payload TEXT NOT NULL DEFAULT '{}',  -- 附加 JSON：{remind_at, snooze_until, source} 等快照
+  created_at INTEGER NOT NULL DEFAULT 0  -- 记录时间（ms；查询按其倒序）
+);
+CREATE INDEX IF NOT EXISTS idx_notification_log_created ON notification_log(created_at);
+CREATE INDEX IF NOT EXISTS idx_notification_log_task ON notification_log(task_id);
+
 CREATE TABLE IF NOT EXISTS sys_attachments (
   hash TEXT PRIMARY KEY,  -- 内容寻址主键：附件二进制的 sha256（同 hash 复用即去重）
   original_name TEXT NOT NULL DEFAULT '',  -- 原始文件名

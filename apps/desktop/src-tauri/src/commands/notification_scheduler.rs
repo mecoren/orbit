@@ -121,6 +121,25 @@ async fn poll_once(app: &AppHandle) {
             continue;
         }
 
+        // ⓪ 通知历史留痕（#5：呈现轨迹入 notification_log；失败静默——
+        //    日志链路不阻塞主提醒流程）
+        {
+            let pool = pool.clone();
+            let (task_id, title, remind_at, rid) =
+                (row.task_id, row.title.clone(), row.remind_at, row.id);
+            tauri::async_runtime::spawn(async move {
+                let _ = orbit_core::api::notification_log_api::log_notification(
+                    &pool,
+                    "reminder_due",
+                    Some(task_id),
+                    &title,
+                    Some(rid),
+                    &format!(r#"{{"remind_at":{remind_at}}}"#),
+                )
+                .await;
+            });
+        }
+
         // ① 系统通知（notify-rust 直发带推迟按钮；失败不阻塞事件通道）
         notify_system(app, id, row.task_id, &row.title, row.remind_at);
 
@@ -231,6 +250,24 @@ fn notify_system(app: &AppHandle, reminder_id: i64, task_id: i64, title: &str, r
             created.is_ok()
         });
         if done {
+            // 通知历史留痕（#5：推迟动作；失败静默）
+            {
+                let app2 = app.clone();
+                let title2 = title.clone();
+                tauri::async_runtime::spawn(async move {
+                    if let Some(state) = app2.try_state::<AppState>() {
+                        let _ = orbit_core::api::notification_log_api::log_notification(
+                            &state.pool,
+                            "snooze",
+                            Some(task_id),
+                            &title2,
+                            Some(reminder_id),
+                            &format!(r#"{{"snooze_until":{next_at}}}"#),
+                        )
+                        .await;
+                    }
+                });
+            }
             // 前端两件事：按 reminder_id 关闭对应 in-app toast（duration
             // Infinity 常驻，不主动关会一直挂着且引用已删行）+ 失效
             // todo-task-detail 缓存（详情抽屉提醒区块即时刷新）
