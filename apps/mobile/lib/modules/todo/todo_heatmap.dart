@@ -32,8 +32,9 @@ class TodoHeatmap extends StatelessWidget {
 
   final ValueChanged<int> onYearChange;
 
-  /// 单元格尺寸（dp）——12dp 让完整一年在移动端可横向滚动（wait-home 同款）
-  static const double _cellSize = 12;
+  /// 单元格尺寸（dp）——14dp 与桌面 max-w-5xl 视觉口径一致（2026-09-10
+  /// 用户反馈"框太小挤"后从 12dp 调大；完整一年仍可横向滚动）
+  static const double _cellSize = 14;
 
   /// 单元格间距（dp）
   static const double _cellGap = 3;
@@ -252,20 +253,33 @@ class TodoHeatmap extends StatelessWidget {
     );
   }
 
-  /// 星期标签列（周一 / 周三 / 周五），与网格行精确对齐
+  /// 星期标签列：与网格行同构的 7 槽（行 = 格 + 尾距），槽内垂直居中——
+  /// 固定 spacer 结构会让标签逐级下沉（wait-home 原版缺陷），标签必须
+  /// 与对应网格行的垂直中心严格对齐
   Widget _buildWeekdayLabels(AppColorSet colors) {
-    return SizedBox(
-      width: _weekdayLabelWidth,
-      height: 7 * _cellStep - _cellGap,
-      child: Column(
-        children: [
-          _buildWeekdayLabel('周一', colors),
-          const SizedBox(height: _cellStep),
-          _buildWeekdayLabel('周三', colors),
-          const SizedBox(height: _cellStep),
-          _buildWeekdayLabel('周五', colors),
+    Widget slot(String text) => SizedBox(
+          width: _weekdayLabelWidth,
+          height: _cellSize,
+          child: Align(
+            alignment: Alignment.centerRight,
+            child: Text(
+              text,
+              style: TextStyle(
+                fontSize: 9,
+                fontWeight: FontWeight.w500,
+                color: colors.secondaryText,
+              ),
+            ),
+          ),
+        );
+    const empty = SizedBox(width: _weekdayLabelWidth, height: _cellSize);
+    return Column(
+      children: [
+        for (var i = 0; i < 7; i++) ...[
+          if (i > 0) const SizedBox(height: _cellGap),
+          i == 0 ? slot('周一') : i == 2 ? slot('周三') : i == 4 ? slot('周五') : empty,
         ],
-      ),
+      ],
     );
   }
 
@@ -358,24 +372,6 @@ class TodoHeatmap extends StatelessWidget {
       level = 4;
     }
     return OrbitAccents.todoAccent.withValues(alpha: _alphas[level - 1]);
-  }
-
-  Widget _buildWeekdayLabel(String text, AppColorSet colors) {
-    return SizedBox(
-      width: _weekdayLabelWidth,
-      height: _cellSize,
-      child: Align(
-        alignment: Alignment.centerRight,
-        child: Text(
-          text,
-          style: TextStyle(
-            fontSize: 9,
-            fontWeight: FontWeight.w500,
-            color: colors.secondaryText,
-          ),
-        ),
-      ),
-    );
   }
 
   /// 图例：少 → 5 个色块（空 + 4 档）→ 多

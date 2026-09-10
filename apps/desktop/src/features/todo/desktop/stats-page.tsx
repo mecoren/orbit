@@ -135,7 +135,7 @@ export function StatsPanel() {
         </div>
       ) : (
       <ScrollArea className="min-h-0 flex-1">
-        <div className="mx-auto max-w-3xl space-y-6 p-4">
+        <div className="mx-auto max-w-5xl space-y-6 p-4">
           {/* 总览 + streak */}
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
             {[

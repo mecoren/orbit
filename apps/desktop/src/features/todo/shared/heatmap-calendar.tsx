@@ -5,11 +5,12 @@
  * - 当前年 = 滚动 365 天（跨年覆盖去年同日至今）；历史年 = 完整年；
  * - 4 档色阶走待办强调色 alpha 22/45/68/90%（锚定 max≥4 分档，纯函数见
  *   shared/heatmap.ts，双端口径一致）；
- * - 布局：顶部月份标签、左侧 周一/周三/周五、右侧竖排年份按钮、底部 少/多 图例；
- * - 格宽随容器自适应（ResizeObserver，最小 8px 撑满可用宽度）；
- * - 悬停 tooltip 用 Portal 渲染到 body，脱离卡片溢出裁剪（wait-home 同款）。
+ * - 布局：顶部月份标签、左侧 周一/周三/周五（7 槽与网格行精确对位）、
+ *   右侧竖排年份按钮、底部 少/多 图例；
+ * - 固定格宽 12px + 整块横向滚动兜底（窄容器不压缩观感，与移动端同构）；
+ * - 悬停 tooltip 用 Portal 渲染到 body，脱离卡片 overflow 裁剪（wait-home 同款）。
  */
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 
 import { Button } from "@/components/ui/button";
@@ -29,11 +30,10 @@ interface HeatmapCalendarProps {
   onYearChange: (year: number) => void;
 }
 
-const CELL_SIZE = 10;
+const CELL_SIZE = 12;
 const CELL_GAP = 2;
 const WEEKDAY_LABEL_WIDTH = 30;
 const MONTH_LABEL_HEIGHT = 18;
-const MIN_CELL_SIZE = 8;
 // shadcn Button size="sm" + w-14（56px）视觉宽度（wait-home 同款）
 const YEAR_PILL_WIDTH = 56;
 
@@ -44,33 +44,17 @@ export function HeatmapCalendar({ cells, year, years, onYearChange }: HeatmapCal
   const [hovered, setHovered] = useState<
     { day: string; value: number; rect: DOMRect } | null
   >(null);
-  // 容器元素与宽度：动态计算单元格尺寸以撑满可用宽度
-  const [containerEl, setContainerEl] = useState<HTMLDivElement | null>(null);
-  const [containerWidth, setContainerWidth] = useState(0);
-
-  useEffect(() => {
-    if (!containerEl) return;
-    const observer = new ResizeObserver((entries) => {
-      for (const entry of entries) {
-        setContainerWidth(entry.contentRect.width);
-      }
-    });
-    observer.observe(containerEl);
-    return () => observer.disconnect();
-  }, [containerEl]);
 
   const { cells: dayCells, monthLabels, totalColumns } = useMemo(() => {
     const counts = new Map(cells.map((c) => [c.date, c.count]));
     return layoutHeatmap(counts, year);
   }, [cells, year]);
 
-  // 动态格宽：撑满年份栏之外的可用宽度；未测量时回退默认 10px
-  const dynamicCellSize = useMemo(() => {
-    if (containerWidth === 0 || totalColumns <= 0) return CELL_SIZE;
-    const available = containerWidth - WEEKDAY_LABEL_WIDTH - CELL_GAP;
-    const computed = (available - (totalColumns - 1) * CELL_GAP) / totalColumns;
-    return Math.max(MIN_CELL_SIZE, computed);
-  }, [containerWidth, totalColumns]);
+  // 固定格宽 12px + 整块横向滚动兜底：此前 ResizeObserver 动态算宽在 flex
+  // minWidth 反撑场景下首帧测量偏小（992px 可用只铺出 10px 格），且窄容器
+  // 时格被压到 8px 观感过挤（2026-09-10 用户反馈"框太小"）。宽屏不满铺
+  // 右侧留白、窄窗横滚，与移动端 14dp 同构口径
+  const dynamicCellSize = CELL_SIZE;
 
   const gridWidth = totalColumns * (dynamicCellSize + CELL_GAP) - CELL_GAP;
   const gridHeight = 7 * (dynamicCellSize + CELL_GAP) - CELL_GAP;
@@ -84,9 +68,8 @@ export function HeatmapCalendar({ cells, year, years, onYearChange }: HeatmapCal
 
   return (
     <>
-      <div className="flex items-start gap-3">
-      <div ref={setContainerEl} className="min-w-0 flex-1" style={{ minWidth: 0 }}>
-        <div style={{ minWidth: WEEKDAY_LABEL_WIDTH + CELL_GAP + gridWidth }}>
+      <div className="flex items-start gap-3 overflow-x-auto pb-1 [scrollbar-width:thin]">
+      <div className="shrink-0" style={{ minWidth: WEEKDAY_LABEL_WIDTH + CELL_GAP + gridWidth }}>
           {/* 月份标签行 */}
           <div
             className="flex"
@@ -114,17 +97,27 @@ export function HeatmapCalendar({ cells, year, years, onYearChange }: HeatmapCal
 
           {/* 网格主体：星期标签 + 格阵 */}
           <div className="flex">
+            {/* 行标与网格行同构的 7 槽精确对位（周一槽/周三槽/周五槽各占一行高，
+                其余槽留空）——justify-between 会把「周三」中心压到周四行中心，
+                格小时错位明显 */}
             <div
-              className="flex flex-col justify-between text-[10px] font-medium text-muted-foreground"
+              className="grid text-[10px] font-medium text-muted-foreground"
               style={{
                 width: WEEKDAY_LABEL_WIDTH,
                 height: gridHeight,
                 marginRight: CELL_GAP,
+                gridTemplateRows: `repeat(7, ${dynamicCellSize}px)`,
+                gap: CELL_GAP,
               }}
             >
-              <span className="leading-[12px]">周一</span>
-              <span className="leading-[12px]">周三</span>
-              <span className="leading-[12px]">周五</span>
+              {["周一", "", "周三", "", "周五", "", ""].map((label, i) => (
+                <div
+                  key={i}
+                  className="flex items-center justify-end pr-0.5 leading-none"
+                >
+                  {label}
+                </div>
+              ))}
             </div>
 
             {/* 每格显式 gridColumn/gridRow，避免顺序填格错位 */}
@@ -163,7 +156,6 @@ export function HeatmapCalendar({ cells, year, years, onYearChange }: HeatmapCal
             </div>
           </div>
         </div>
-      </div>
 
       {/* 右侧年份按钮（outline + 选中态 border-primary/bg-primary/5） */}
       <div
@@ -204,15 +196,15 @@ export function HeatmapCalendar({ cells, year, years, onYearChange }: HeatmapCal
         <div className="flex items-center" style={{ gap: CELL_GAP }}>
           <div
             className="rounded-[2px]"
-            style={{ width: 10, height: 10, backgroundColor: "var(--muted)" }}
+            style={{ width: CELL_SIZE, height: CELL_SIZE, backgroundColor: "var(--muted)" }}
           />
           {HEAT_ALPHAS.slice(1).map((alpha, i) => (
             <div
               key={i}
               className="rounded-[2px]"
               style={{
-                width: 10,
-                height: 10,
+                width: CELL_SIZE,
+                height: CELL_SIZE,
                 backgroundColor: `color-mix(in srgb, ${TODO_ACCENT} ${alpha * 100}%, transparent)`,
               }}
             />
