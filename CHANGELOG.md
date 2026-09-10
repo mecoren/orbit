@@ -7,6 +7,15 @@
 
 ## [Unreleased]
 
+### 桌面快捷键帮助面板——? 呼出速查 + 设置页常驻入口
+
+全仓审计高价值缺口：j/k 导航、Ctrl+Z 撤销、Ctrl+P/K、Shift 区间多选等一大批快捷键已落地但零 discoverability（设置页四卡无任何说明区、title-bar 只有代码注释），新用户无从知晓，快捷键等于白做。Todoist/Things 3 同款 ? 呼出帮助惯例，本批一次补齐：
+
+- **常量表单一口径源**：`features/todo/shared/shortcut-help.ts`——全局（Ctrl+P 命令面板 / Ctrl+K 全局搜索 / Ctrl+Z 撤销 / ? 帮助）+ 任务列表（j/k 移焦点、Enter/Space 开详情、Shift+点击区间多选）+ 任务详情（Ctrl+Enter 提交评论、Esc 关闭）三组 11 条；`isHelpShortcut` 判定纯函数（Shift+/ 命中、Ctrl/Cmd 组合不劫持、纯 / 不命中防输入框误触）。
+- **呼出链路**：TitleBar 全局 keydown 补 ? 分支（输入框/文本域聚焦豁免——正文打问号不误弹）→ app-store `shortcutHelpOpen` → AppShell 平级挂载 ShortcutHelpDialog（Radix Dialog + kbd 键位徽章；复合键 Ctrl+P 拆分为 Ctrl + P 徽章组渲染）。
+- **设置页入口**：左导航第五分类「快捷键」（Keyboard 图标）+ ShortcutsSection 分区渲染同常量表——改键位只改一处，两入口永不漂移。
+- **验证**：vitest 新增 7 用例（分组结构 / 键位唯一性 / isHelpShortcut 三类边界）全量 196 绿；浏览器目检 ? 呼出（三组 + 15 徽章 + 复合键完整）、Esc 关闭、设置页分区渲染（10 徽章）；e2e 冒烟 14 全过。
+
 ### 移动端生物识别解锁落地——指纹代替主密码解锁加密库（半成品收编）
 
 全仓审计发现 `orbit-core/src/crypto/biometric.rs` 自初始提交就有完整实现（`biometric_unlock_db_key` 带四组单测，文件头连 Dart 侧密钥链结构都设计好了），但全仓零消费点——pubspec 无 local_auth/flutter_secure_storage、unlock_page 纯密码输入，「地基已打、房子没盖」。Tasks.org/TickTick/MS To Do 移动端全有指纹解锁，与本项目 SQLCipher 加密本地库卖点天然契合。本批纯移动端接线（core 加解密函数零改动）三端链路一次落地：
