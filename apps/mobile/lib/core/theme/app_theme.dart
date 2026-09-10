@@ -151,6 +151,19 @@ ThemeData buildAppTheme({required Brightness brightness}) {
         borderRadius: AppShapes.of(10),
       ),
     ),
+    // 悬浮提示统一主题色底白字（对齐桌面 ui/tooltip.tsx 原语 bg-primary 口径；
+    // 热力图/表单优先级等原生 Tooltip 不再走默认灰底）
+    tooltipTheme: TooltipThemeData(
+      decoration: BoxDecoration(
+        color: accent,
+        borderRadius: AppShapes.of(8),
+      ),
+      textStyle: textTheme.bodySmall?.copyWith(
+        color: Colors.white,
+        fontSize: 12,
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+    ),
     chipTheme: ChipThemeData(
       shape: const RoundedRectangleBorder(
         borderRadius: AppShapes.large,

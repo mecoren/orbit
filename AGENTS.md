@@ -14,6 +14,7 @@ Orbit（循迹）是本地优先的跨平台任务管理应用：待办（项目
 - **日期分桶按本地时区日界**：毫秒时间戳在 Rust 侧用 chrono::Local 换算本地日期后再分桶（`local_day_index`），前端 Date/Dart 本地语义对齐；不要在 SQL 里按 UTC 天分组。
 - **迁移文件单文件策略**：DDL 只在 `orbit-core/src/db/migrations/`，现役仅 `0001_init.sql`（多轮并回）；新增字段在 0001 内补行尾中文注释（DDL 注释随 sqlite_master 落库，GUI 可见），存量库升级口径 = 删库重初始化。
 - **双强调色体系勿混用**：待办模块色 `TODO_ACCENT = #3B82F6`（checkbox/选中态/图表）与全局主题色 `themeAccent = #4E8CFF`（GlassFab/Spinner）两个 Context 并存（docs/05 §2.1）。
+- **悬浮提示统一主题色底白字**：桌面所有 tooltip 对齐 `ui/tooltip.tsx` 原语口径 `bg-primary text-primary-foreground`（手搓 Portal 提示也不得用 `bg-popover` 灰白弹层色——2026-09-10 热力图曾踩坑）；移动端原生 `Tooltip` 由 `app_theme.dart` 全局 `tooltipTheme` 统一（强调色底白字），不逐处覆写。
 - **滚动条全项目标准**：桌面全局 `index.css` 定义 `::-webkit-scrollbar` 10px 透明轨道主题色圆角滑块，原生 `overflow-auto` 容器自动继承——**禁设 `scrollbar-width` 非 auto 值**（会禁用 webkit 自定义退化为系统原生条）；需隐藏的用三件套 `scrollbar-width:none + -ms-overflow-style:none + ::-webkit-scrollbar display:none`。移动端全局 `ScrollbarThemeData`（app_theme.dart）只对显式 Scrollbar 生效，`SingleChildScrollView` 惯例不挂。
 - **无 prettier 约定**：仓库不配 prettier，`npx prettier` 现跑会重排整文件产生巨型噪音 diff；已跑坏的用 `git checkout HEAD --` 恢复后手工重放。
 - **文档同步链**：完成 07 竞品报告任一编号 backlog 项时——07 文档对应行划线补 `✅ 已完成（日期+一句话要点）`、CHANGELOG Unreleased 补条目、文档内过时描述随代码一并修正（07 是 backlog 唯一状态源）。

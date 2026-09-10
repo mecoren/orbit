@@ -8,7 +8,8 @@
  * - 布局：顶部月份标签、左侧 周一/周三/周五（7 槽与网格行精确对位）、
  *   右侧竖排年份按钮、底部 少/多 图例；
  * - 固定格宽 12px + 整块横向滚动兜底（窄容器不压缩观感，与移动端同构）；
- * - 悬停 tooltip 用 Portal 渲染到 body，脱离卡片 overflow 裁剪（wait-home 同款）。
+ * - 悬停 tooltip 用 Portal 渲染到 body，脱离卡片 overflow 裁剪（wait-home 同款）；
+ *   底色走 bg-primary 对齐 ui/tooltip.tsx 原语（全项目悬浮提示统一主题色底白字）。
  */
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
@@ -249,12 +250,13 @@ export function HeatmapCalendar({ cells, year, years, onYearChange }: HeatmapCal
         <span>多</span>
       </div>
 
-      {/* 悬停 tooltip：Portal 渲染到 body，避免卡片 overflow 裁剪 */}
+      {/* 悬停 tooltip：Portal 渲染到 body，避免卡片 overflow 裁剪；
+          bg-primary 白字对齐 ui/tooltip.tsx 原语口径（全项目悬浮提示统一主题色底） */}
       {hovered &&
         typeof document !== "undefined" &&
         createPortal(
           <div
-            className="pointer-events-none fixed z-50 rounded-md border bg-popover px-2 py-1 text-xs text-popover-foreground shadow-md"
+            className="pointer-events-none fixed z-50 rounded-md bg-primary px-2 py-1 text-xs text-primary-foreground shadow-md"
             style={{ left: hovered.rect.right + 8, top: hovered.rect.top }}
           >
             <div>{hovered.day}</div>
