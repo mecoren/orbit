@@ -8,16 +8,27 @@
  * 1. 常规：输入「加密云端的那台设备使用的密码」→ 同密码必然同 Key，
  *    解锁后「立即同步」即可完成对账
  * 2. 兜底：以本机为准——放弃解不开的云端数据，用本机 Key 全量重加密覆盖
- *    （cloud_sync_rekey；本机没有的数据将丢失，UI 明示）
+ *    （cloud_sync_rekey；本机没有的数据将丢失，UI 明示）。确认弹层带 5 秒
+ *    强制冷静期倒计时（确认钮倒计时走完才可点，防误触）。
  *
  * v1（随机 Key）存量设备额外显示「升级到 v2」迁移入口——升级后同密码
  * 跨设备自动同 Key，此类不一致从根源上不再发生。
  */
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 import { toast } from "sonner";
 import { AlertTriangle, ArrowLeft, FileWarning, KeyRound, RefreshCw } from "lucide-react";
 
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -28,11 +39,17 @@ import {
   syncCryptoUpgradeV2,
 } from "@/lib/tauri";
 
+/** rekey 确认钮强制冷静期（秒）：危险操作防误触，倒计时走完才可确认 */
+const REKEY_HOLD_SECONDS = 5;
+
 export function SyncRecoveryPage() {
   const navigate = useNavigate();
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [isV1, setIsV1] = useState(false);
+  const [rekeyConfirmOpen, setRekeyConfirmOpen] = useState(false);
+  const [rekeyCountdown, setRekeyCountdown] = useState(REKEY_HOLD_SECONDS);
+  const countdownTimer = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // 探测本机密钥方案版本：v1 存量设备才显示迁移入口
   useEffect(() => {
@@ -49,6 +66,31 @@ export function SyncRecoveryPage() {
       cancelled = true;
     };
   }, []);
+
+  // 确认弹层开启期间跑 5 秒倒计时：确认钮禁用直到走完（强制冷静期）；
+  // 关闭/卸载即停表复位，再次打开从头计
+  useEffect(() => {
+    if (!rekeyConfirmOpen) {
+      if (countdownTimer.current) clearInterval(countdownTimer.current);
+      countdownTimer.current = null;
+      setRekeyCountdown(REKEY_HOLD_SECONDS);
+      return;
+    }
+    countdownTimer.current = setInterval(() => {
+      setRekeyCountdown((n) => {
+        if (n <= 1 && countdownTimer.current) {
+          clearInterval(countdownTimer.current);
+          countdownTimer.current = null;
+          return 0;
+        }
+        return n - 1;
+      });
+    }, 1000);
+    return () => {
+      if (countdownTimer.current) clearInterval(countdownTimer.current);
+      countdownTimer.current = null;
+    };
+  }, [rekeyConfirmOpen]);
 
   /** 路径 1：输入加密云端的同步密码解锁 */
   const handleUnlock = async () => {
@@ -68,18 +110,8 @@ export function SyncRecoveryPage() {
     }
   };
 
-  /** 路径 2：以本机为准，全量重加密覆盖云端 */
+  /** 路径 2：以本机为准，全量重加密覆盖云端（5 秒冷静期后才可确认） */
   const handleRekey = async () => {
-    if (
-      !window.confirm(
-        "以本机为准将用当前设备的数据密钥重加密并覆盖云端全部数据。\n" +
-          "· 云端现有数据（含本机没有的记录）将被本机数据替换\n" +
-          "· 本地已删除、仅存云端的附件将永久丢失\n" +
-          "· 其他设备需输入本机当前同步密码后重新同步\n\n确定继续？",
-      )
-    ) {
-      return;
-    }
     setBusy(true);
     try {
       const result = await cloudSyncRekey();
@@ -170,11 +202,42 @@ export function SyncRecoveryPage() {
           忘记云端密码或云端数据已无需保留时使用：用本机当前数据密钥重加密并
           <strong>覆盖</strong>云端全部数据。本机没有的数据将丢失。
         </p>
-        <Button size="sm" variant="destructive" disabled={busy} onClick={() => void handleRekey()}>
+        <Button
+          size="sm"
+          variant="destructive"
+          disabled={busy}
+          onClick={() => setRekeyConfirmOpen(true)}
+        >
           <RefreshCw className="mr-1 size-4" />
           以本机为准重置云端
         </Button>
       </div>
+
+      {/* 重置确认：确认钮 5 秒倒计时内禁用（强制冷静期，防误触） */}
+      <AlertDialog open={rekeyConfirmOpen} onOpenChange={setRekeyConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>以本机为准重置云端</AlertDialogTitle>
+            <AlertDialogDescription className="break-words">
+              将用当前设备的数据密钥重加密并
+              <strong className="text-destructive">覆盖云端全部数据</strong>：
+              云端现有数据（含本机没有的记录）将被本机数据替换，仅存云端的记录与附件将
+              <strong className="text-destructive">永久丢失</strong>；其他设备需输入本机当前同步密码后重新同步。
+              此操作不可撤销，请确认云端数据已无需保留。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>取消</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-white hover:bg-destructive/90"
+              disabled={rekeyCountdown > 0 || busy}
+              onClick={() => void handleRekey()}
+            >
+              {rekeyCountdown > 0 ? `请阅读后果（${rekeyCountdown}s）` : "确认重置云端"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* v1 迁移（仅存量 v1 设备显示） */}
       {isV1 && (

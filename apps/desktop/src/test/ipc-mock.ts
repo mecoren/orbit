@@ -671,6 +671,8 @@ const commands: Record<string, (args: any, ctx: Ctx) => unknown> = {
   cloud_sync_is_running: () => false,
   cloud_sync_get_state: () => JSON.stringify({ phase: "idle" }),
   sync_crypto_status: () => JSON.stringify({ locked: true }),
+  // 恢复页挂载即探测密钥方案版本（v1 才显示迁移入口）；mock 回 v2 走主路径
+  sync_crypto_meta_version: () => JSON.stringify({ version: "v2" }),
 
   // ---- 备份/导出（设置页打开才拉取；给空态安全值）----
   backup_prefs_get: () => null,
