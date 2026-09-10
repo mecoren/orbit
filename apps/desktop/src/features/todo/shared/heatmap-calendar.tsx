@@ -96,7 +96,9 @@ export function HeatmapCalendar({ cells, year, years, onYearChange }: HeatmapCal
 
   return (
     <>
-      <div ref={setBlockEl} className="w-full overflow-x-auto pb-1 [scrollbar-width:thin]">
+      {/* 滚动条走全局 index.css 标准（10px 透明轨道主题色圆角滑块）；
+          不可设 scrollbar-width——非 auto 值会禁用 webkit 自定义退化为系统原生条 */}
+      <div ref={setBlockEl} className="w-full overflow-x-auto pb-1">
       {/* 子项全部 shrink-0：行宽自然 = 内容宽，窄卡片时溢出由外层横滚承接 */}
       <div className="flex items-start" style={{ gap: FLEX_GAP }}>
       <div className="shrink-0" style={{ width: WEEKDAY_LABEL_WIDTH + CELL_GAP + gridWidth }}>
@@ -187,7 +189,10 @@ export function HeatmapCalendar({ cells, year, years, onYearChange }: HeatmapCal
           </div>
         </div>
 
-      {/* 右侧年份按钮（outline + 选中态 border-primary/bg-primary/5） */}
+      {/* 右侧年份按钮（outline + 选中态 border-primary/bg-primary/5）。
+          隐藏滚动条三件套对齐全局 index.css 的 ScrollArea viewport 同款写法
+          （scrollbar-width:none + display:none 双通道，目标均为隐藏，
+          与全项目口径一致） */}
       <div
         className="flex shrink-0 flex-col items-stretch gap-1 overflow-y-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
         style={{
