@@ -605,7 +605,7 @@ class _SyncCryptoCardState extends ConsumerState<_SyncCryptoCard> {
               children: [
                 if (!status.hasPassword) ...[
                   Text(
-                    '未设置。设置后生成随机 Data Key 加密所有上传数据；跨设备请使用相同同步密码。',
+                    '未设置。设置后所有上传数据以该密码端到端加密；同一密码在任何设备派生同一把密钥，跨设备只需输入相同密码。',
                     style: TextStyle(fontSize: 12, color: colors.secondaryText),
                   ),
                   const SizedBox(height: AppDimens.space12),

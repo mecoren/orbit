@@ -605,6 +605,16 @@ class RustOrbitBridge implements OrbitBridge {
     );
   }
 
+  @override
+  Future<String?> syncCryptoMetaVersion() => gen_sync.syncCryptoMetaVersion();
+
+  @override
+  Future<void> syncCryptoUpgradeV2(String password) =>
+      gen_sync.syncCryptoUpgradeV2(syncPassword: password);
+
+  @override
+  Future<String> cloudSyncRekey() => gen_sync.cloudSyncRekey();
+
   // ── 节假日 ──
 
   @override

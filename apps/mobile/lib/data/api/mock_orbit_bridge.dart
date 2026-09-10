@@ -1068,6 +1068,18 @@ class MockOrbitBridge implements OrbitBridge {
           String password, {bool force = false}) =>
       _delay(() => throw Exception('[not_unlocked] Mock 未实现'));
 
+  @override
+  Future<String?> syncCryptoMetaVersion() =>
+      _delay(() => store.syncPasswordSet ? 'v2' : null);
+
+  @override
+  Future<void> syncCryptoUpgradeV2(String password) =>
+      _delay(() => throw Exception('[not_unlocked] Mock 未实现'));
+
+  @override
+  Future<String> cloudSyncRekey() =>
+      _delay(() => throw Exception('[not_unlocked] Mock 未实现'));
+
   // ── 节假日（内存假数据；形状对齐 Rust 预置 2026 表节选）──
 
   static const _mockHolidays = [

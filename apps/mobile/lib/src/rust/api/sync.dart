@@ -76,6 +76,26 @@ Future<void> syncDisconnect() =>
 Future<SyncCryptoStatus> syncCryptoStatus() =>
     RustLib.instance.api.crateApiSyncSyncCryptoStatus();
 
+/// 本机密钥方案版本（"v1" | "v2"；未设置密码返回 null）
+///
+/// 对齐桌面 `sync_crypto_meta_version`；设置页/恢复页据此显示 v1→v2 迁移入口。
+Future<String?> syncCryptoMetaVersion() =>
+    RustLib.instance.api.crateApiSyncSyncCryptoMetaVersion();
+
+/// v1 → v2 密钥方案迁移（同密码确定性派生 + 云端全量重传；UI 二次确认后调用）
+///
+/// 对齐桌面 `sync_crypto_upgrade_v2`。迁移后所有设备输入同一密码即可同步。
+Future<void> syncCryptoUpgradeV2({required String syncPassword}) => RustLib
+    .instance
+    .api
+    .crateApiSyncSyncCryptoUpgradeV2(syncPassword: syncPassword);
+
+/// rekey 全量重传：用当前 Data Key 重加密覆盖云端（恢复「以本机为准」）
+///
+/// 对齐桌面 `cloud_sync_rekey`。危险操作，UI 必须二次确认后调用。
+Future<String> cloudSyncRekey() =>
+    RustLib.instance.api.crateApiSyncCloudSyncRekey();
+
 /// 首次设置同步密码（生成 Data Key 并持久化 meta；成功即解锁）
 ///
 /// 对齐桌面 `sync_crypto_init`。`remember` 仅保留参数面对齐：移动端无系统
@@ -105,9 +125,11 @@ Future<void> syncCryptoUnlock({
 Future<void> syncCryptoLock() =>
     RustLib.instance.api.crateApiSyncSyncCryptoLock();
 
-/// 修改同步密码（只换包装不换 Data Key）
+/// 修改同步密码
 ///
-/// 对齐桌面 `sync_crypto_change_password`。
+/// 对齐桌面 `sync_crypto_change_password`。v2 密钥方案下改密即换 Key，
+/// 命令内部编排云端全量重传（rekey），失败回滚本机密码；无激活云同步配置时
+/// v2 改密报错（重传无处执行）。
 Future<void> syncCryptoChangePassword({
   required String oldPassword,
   required String newPassword,

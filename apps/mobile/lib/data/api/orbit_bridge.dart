@@ -272,7 +272,7 @@ abstract class OrbitBridge {
 
   Future<SyncCryptoStatus> syncCryptoStatus();
 
-  /// 首次设置同步密码（生成 Data Key；移动端 remember 仅进程内缓存）
+  /// 首次设置同步密码（v2：同密码跨设备派生同一 Key；移动端 remember 仅进程内缓存）
   Future<void> syncCryptoInit(String password, {bool remember = false});
   Future<void> syncCryptoUnlock(String password, {bool remember = false});
 
@@ -283,6 +283,15 @@ abstract class OrbitBridge {
     String password, {
     bool force = false,
   });
+
+  /// 本机密钥方案版本（"v1" | "v2"；未设置密码为 null）
+  Future<String?> syncCryptoMetaVersion();
+
+  /// v1→v2 迁移：同密码确定性派生 + 云端全量重传（危险操作，UI 二次确认）
+  Future<void> syncCryptoUpgradeV2(String password);
+
+  /// 以本机为准重置云端：当前 Data Key 全量重加密覆盖（危险操作，UI 二次确认）
+  Future<String> cloudSyncRekey();
 
   // ── 节假日数据（日历视图联网更新；cfg_holidays 本地缓存）──
 

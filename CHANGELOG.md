@@ -7,6 +7,28 @@
 
 ## [Unreleased]
 
+### 悬浮提示统一主题色底白字——热力图 tooltip 不再灰白（双端口径）
+
+用户反馈统计页热力图悬浮提示不是项目蓝。排查发现桌面热力图的手搓 Portal tooltip 用了 `bg-popover`（弹层灰白色），而全项目 shadcn `TooltipContent` 原语一直是 `bg-primary`（主题蓝底白字）——热力图是唯一偏离；移动端热力图/表单优先级的原生 `Tooltip` 也走 Flutter 默认黑灰底。本批统一悬浮提示口径并写入 AGENTS.md：
+
+- **桌面**：`heatmap-calendar.tsx` Portal tooltip 改 `bg-primary text-primary-foreground`（去掉 border，对齐 `ui/tooltip.tsx` 原语）；Playwright 实机断言 tooltip 计算样式 `oklch(0.55 0.22 264)` 蓝底 + `oklch(0.99 0 0)` 白字。
+- **移动端**：`app_theme.dart` 新增全局 `tooltipTheme`（主题强调色底白字、圆角 8、12px 字），热力图与表单优先级按钮两处原生 Tooltip 一并统一，无需逐处覆写。
+- **AGENTS.md**：快速原则新增「悬浮提示统一主题色底白字」条目，桌面原语口径 + 移动端全局 tooltipTheme 单一口径，防后续新视图再踩 bg-popover 坑。
+- **验证**：tsc 0 错误；vitest 189 全绿；flutter analyze 本批 0 新增（badge_test 既有 warning 非本批）；移动 stats 测试 3 绿含热力图用例。
+
+### 同步密钥方案 v2——Data Key 由密码确定性派生，KeyMismatch 分叉态结构性消灭
+
+后台自动同步报「Data Key 与云端密文不匹配：本地已解锁但解密云端数据失败（重输密码无效）」，根因是 v1 密钥模型：Data Key 随机生成、靠云端 crypto/config 分发——两台设备各自 init 生成两把 Key，云端数据被 A 加密而本机持 B，密码正确也无济于事。本批对齐 SiYuan 密码派生模型（同密码跨设备必然同 Key），三端落地 v2 方案 + v1 存量兼容 + 恢复路径补全：
+
+- **v2 派生（`derive_data_key_v2`）**：`salt = PBKDF2(密码, "orbit-sync-v2-salt", 1)`、`data_key = PBKDF2(密码, salt|"orbit-sync-v2-key", 600k)`——密码即 Key，PBKDF2-HMAC-SHA256 600k 与 v1 强度一致。meta 新增 `key_derivation: "v2"` 标记（serde 兼容：v1 存量文件无此字段按 v1 读）；`encrypted_data_key` 字段保留为「验证子」——unlock 时解包装验密码 + 重派生比对双重校验，防 meta 篡改后静默换 Key。
+- **v1 全兼容**：unlock/init_with_data_key/rotate_key/改密按 meta 版本分路，v1 存量设备行为不变（老云端数据继续可解）；v2 下 rotate_key 语义自相矛盾改为拒绝（换 Key=换密码）。
+- **v2 改密即换 Key**：`change_sync_password` 写 v2 meta 并切换内存 Key；桌面/移动命令层编排「改密 → rekey 全量重传 → 失败回滚本机密码」，用户一次操作完成，其他设备输入新密码即可同步。
+- **rekey 全量重传原语（`rekey_cloud_reencrypt`）**：清空 sync_state（全模块强制重传）→ push_all 新 Key 加密 → 附件 `is_uploaded` 清零重传（新增 `mark_all_unuploaded`）→ 上传新 crypto/config。v2 改密、v1→v2 迁移、KeyMismatch 恢复三场景共用；锁内执行 + 未解锁拒绝（不动云端）。
+- **引擎 v2 分支**：本地 meta 为 v2 时跳过云端 bundle 导入（同密码必同 Key，导入无意义），一致性由既有解密探针校验——v2 下 KeyMismatch 仅剩「云端数据是另一个密码加密」一种真实成因，恢复页语义随之改写。
+- **恢复页重构**：路径 1「输入加密云端的那台设备的密码」（同密码必然同 Key）；路径 2「以本机为准重置云端」（`cloud_sync_rekey`，红色危险操作，明示本机没有的数据将丢失——单设备用户此前无任何自救出口，本批补上）；v1 设备额外显示「升级到 v2」迁移入口（`sync_crypto_upgrade_v2`）。v1 时代的「导入 bundle 文件」路径移除（确定性 Key 下跨设备只需密码本身）。
+- **e2e 加前置清理**：m4 双实例收敛用例此前不清理 base_path 残留，上次运行密文会让下次首推 KeyMismatch（本批开发中实际踩到）；现在每轮从已知空态起步。
+- **测试**：sync_crypto 30（跨实例同密码同 Key/篡改检测/改密换 Key/v1 兼容/迁移幂等）、engine 28（v2 双设备探针通过/跨密码仍报 KeyMismatch/rekey 未解锁拒绝）、m4 e2e 双实例收敛在真实 WebDAV 验证 v2 端到端（B 同密码 init 后不依赖 config 导入即收敛）；桌面 vitest 189 全绿；移动 208 全绿。
+
 ### 完成热力图重构——对齐 wait-home 活动热力图（按年视图 + 年份切换）
 
 统计页热力图此前是 35/182/371 天窗口档位 + 绝对计数分桶（1/2-3/4-6/≥7 五档），与 wait-home 的活动热力图（GitHub 贡献图式按年视图）观感差异明显。本批全面重构对齐，双端显示效果一致：

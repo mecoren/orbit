@@ -48,6 +48,7 @@ use orbit_core::cloud_sync::state::SyncStateStore;
 use orbit_core::context;
 use orbit_core::db::repository::sync_config_repo::SyncConfigRepo;
 use orbit_core::models::sync_config::{SyncConfigRecord, SyncConfigSaveInput};
+use orbit_core::sync_crypto::KEY_DERIVATION_V2;
 use orbit_core::sync_crypto::SyncCryptoService;
 use orbit_core::sync_crypto::error::SyncCryptoError;
 use orbit_core::sync_crypto::meta_store::SyncCryptoMeta;
@@ -607,6 +608,88 @@ pub async fn sync_crypto_status() -> Result<SyncCryptoStatus, String> {
     })
 }
 
+/// 本机密钥方案版本（"v1" | "v2"；未设置密码返回 null）
+///
+/// 对齐桌面 `sync_crypto_meta_version`；设置页/恢复页据此显示 v1→v2 迁移入口。
+pub async fn sync_crypto_meta_version() -> Result<Option<String>, String> {
+    let svc = runtime_crypto()?;
+    svc.meta_version().map_err(err_tagged_crypto)
+}
+
+/// v1 → v2 密钥方案迁移（同密码确定性派生 + 云端全量重传；UI 二次确认后调用）
+///
+/// 对齐桌面 `sync_crypto_upgrade_v2`。迁移后所有设备输入同一密码即可同步。
+pub async fn sync_crypto_upgrade_v2(sync_password: String) -> Result<(), String> {
+    let svc = runtime_crypto()?;
+    if !svc.has_sync_password() {
+        return Err("[not_initialized] 尚未设置同步密码".to_string());
+    }
+    let record = active_config()
+        .await?
+        .ok_or_else(|| "[config] 迁移需要重传云端数据：尚未配置云同步".to_string())?;
+    let config = engine_config_of_record(&record)
+        .ok_or_else(|| "[config] 迁移需要重传云端数据：当前为本地同步配置".to_string())?;
+
+    svc.upgrade_to_v2(&sync_password)
+        .map_err(err_tagged_crypto)?;
+    attach_password_to_runtime(&sync_password);
+
+    let engine = runtime_engine()?;
+    let base_dir = with_state(|s| Ok(s.base_dir.clone()))?;
+    let attachments = attachments_dir(&base_dir);
+    let device_id = context::get_device_id().unwrap_or_default().to_string();
+
+    match cloud_sync_api::rekey_cloud(
+        &engine,
+        &config,
+        SyncOrigin::Manual,
+        &device_id,
+        &attachments,
+    )
+    .await
+    {
+        Ok(_) => Ok(()),
+        Err(e) => Err(format!(
+            "[{}] 本机已升级 v2，但云端全量重传失败：下次「立即同步」将自动重试；\
+             其他设备在此期间请勿同步",
+            e.category_tag(),
+        )),
+    }
+}
+
+/// rekey 全量重传：用当前 Data Key 重加密覆盖云端（恢复「以本机为准」）
+///
+/// 对齐桌面 `cloud_sync_rekey`。危险操作，UI 必须二次确认后调用。
+pub async fn cloud_sync_rekey() -> Result<String, String> {
+    let record = active_config()
+        .await?
+        .ok_or_else(|| "[config] 尚未配置同步，请先在设置中填写连接信息".to_string())?;
+    let config = engine_config_of_record(&record)
+        .ok_or_else(|| "[config] 当前为本地同步配置，不参与云同步".to_string())?;
+
+    let crypto = runtime_crypto()?;
+    if !crypto.is_unlocked() {
+        return Err("[not_unlocked] 同步加密未解锁，请先输入同步密码".to_string());
+    }
+
+    let engine = runtime_engine()?;
+    let base_dir = with_state(|s| Ok(s.base_dir.clone()))?;
+    let attachments = attachments_dir(&base_dir);
+    let device_id = context::get_device_id().unwrap_or_default().to_string();
+
+    let result = cloud_sync_api::rekey_cloud(
+        &engine,
+        &config,
+        SyncOrigin::Manual,
+        &device_id,
+        &attachments,
+    )
+    .await
+    .map_err(err_tagged_cloud)?;
+
+    cloud_sync_api::result_to_json(&result).map_err(err_tagged_cloud)
+}
+
 /// 首次设置同步密码（生成 Data Key 并持久化 meta；成功即解锁）
 ///
 /// 对齐桌面 `sync_crypto_init`。`remember` 仅保留参数面对齐：移动端无系统
@@ -640,17 +723,67 @@ pub async fn sync_crypto_lock() -> Result<(), String> {
     Ok(())
 }
 
-/// 修改同步密码（只换包装不换 Data Key）
+/// 修改同步密码
 ///
-/// 对齐桌面 `sync_crypto_change_password`。
+/// 对齐桌面 `sync_crypto_change_password`。v2 密钥方案下改密即换 Key，
+/// 命令内部编排云端全量重传（rekey），失败回滚本机密码；无激活云同步配置时
+/// v2 改密报错（重传无处执行）。
 pub async fn sync_crypto_change_password(
     old_password: String,
     new_password: String,
 ) -> Result<(), String> {
     let svc = runtime_crypto()?;
+    let is_v2 = svc
+        .meta_version()
+        .map(|v| v.as_deref() == Some(KEY_DERIVATION_V2))
+        .map_err(err_tagged_crypto)?
+        && svc.has_sync_password();
+
+    // v1：只换包装（Key 不变），与桌面命令一致
+    if !is_v2 {
+        svc.change_sync_password(&old_password, &new_password)
+            .map_err(err_tagged_crypto)?;
+        attach_password_to_runtime(&new_password);
+        return Ok(());
+    }
+
+    // v2：改密 → rekey 全量重传 → 失败回滚
+    let record = active_config()
+        .await?
+        .ok_or_else(|| "[config] v2 改密需要重传云端数据：尚未配置云同步".to_string())?;
+    let config = engine_config_of_record(&record)
+        .ok_or_else(|| "[config] v2 改密需要重传云端数据：当前为本地同步配置".to_string())?;
+
     svc.change_sync_password(&old_password, &new_password)
         .map_err(err_tagged_crypto)?;
     attach_password_to_runtime(&new_password);
+
+    let engine = runtime_engine()?;
+    let base_dir = with_state(|s| Ok(s.base_dir.clone()))?;
+    let attachments = attachments_dir(&base_dir);
+    let device_id = context::get_device_id().unwrap_or_default().to_string();
+
+    if let Err(e) = cloud_sync_api::rekey_cloud(
+        &engine,
+        &config,
+        SyncOrigin::Manual,
+        &device_id,
+        &attachments,
+    )
+    .await
+    {
+        // 回滚本机密码（恢复旧 Key 与云端一致）
+        if let Err(rb) = svc.change_sync_password(&new_password, &old_password) {
+            eprintln!("[sync-crypto] v2 改密回滚失败: {rb}");
+        } else {
+            attach_password_to_runtime(&old_password);
+        }
+        return Err(format!(
+            "[{}] v2 改密后全量重传失败，已回滚本机密码：{}",
+            e.category_tag(),
+            e
+        ));
+    }
     Ok(())
 }
 
