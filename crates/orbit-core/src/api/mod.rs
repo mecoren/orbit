@@ -17,3 +17,4 @@ pub mod stats_api;
 pub mod template_api;
 pub mod todo_api;
 pub mod trash_api;
+pub mod widget_api;

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 优先级竖条底（颜色由代码 setTintList 换六档）；默认中灰 P0 -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <solid android:color="#D1D5DB" />
+    <corners android:radius="2dp" />
+</shape>

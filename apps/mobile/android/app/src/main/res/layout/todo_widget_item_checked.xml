@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  小组件任务行：勾选圆环 + 标题（截断单行）。
+  勾选圆环 selector（checked 填充强调色/空环）与 app 内 checkbox 视觉同语言。
+  优先级竖条用代码 setInt 换色（背景是纯色 shape，颜色 = PRIORITY_COLOR 六档）。
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="48dp"
+    android:orientation="horizontal"
+    android:gravity="center_vertical"
+    android:paddingStart="4dp"
+    android:paddingEnd="4dp">
+
+    <ImageView
+        android:id="@+id/item_priority_bar"
+        android:layout_width="3dp"
+        android:layout_height="32dp"
+        android:layout_marginEnd="10dp"
+        android:src="@drawable/widget_priority_bar" />
+
+    <ImageView
+        android:id="@+id/item_check"
+        android:layout_width="26dp"
+        android:layout_height="26dp"
+        android:src="@drawable/widget_check_filled"
+        android:contentDescription="@string/widget_check_desc" />
+
+    <TextView
+        android:id="@+id/item_title"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:layout_marginStart="10dp"
+        android:singleLine="true"
+        android:ellipsize="end"
+        android:textColor="?android:attr/textColorPrimary"
+        android:textSize="14sp" />
+
+</LinearLayout>

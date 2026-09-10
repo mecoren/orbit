@@ -190,14 +190,6 @@ packages:
     description: flutter
     source: sdk
     version: "0.0.0"
-  flutter_app_badger:
-    dependency: "direct main"
-    description:
-      name: flutter_app_badger
-      sha256: "64d4a279bab862ed28850431b9b446b9820aaae0bf363322d51077419f930fa8"
-      url: "https://pub.dev"
-    source: hosted
-    version: "1.5.0"
   flutter_driver:
     dependency: transitive
     description: flutter
@@ -378,6 +370,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "17.5.0"
+  home_widget:
+    dependency: "direct main"
+    description:
+      name: home_widget
+      sha256: b8d377e6a5aacc65193170addf252cce7868fa621b740cdd7b517a233871c185
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.9.4"
   hooks:
     dependency: transitive
     description:

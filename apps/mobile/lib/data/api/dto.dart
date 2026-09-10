@@ -1034,3 +1034,20 @@ class TodoTemplate {
     required this.payload,
   });
 }
+
+/// Android 桌面小组件任务行（#3；FRB widget.rs 镜像，RemoteViews 最小字段集）
+class WidgetTodoItem {
+  final int id;
+  final String uuid;
+  final String title;
+  final int priority;
+  final int done;
+
+  const WidgetTodoItem({
+    required this.id,
+    required this.uuid,
+    required this.title,
+    required this.priority,
+    required this.done,
+  });
+}

@@ -7,7 +7,9 @@ import '../../core/routing/router_keys.dart';
 import '../../core/theme/orbit_accents.dart';
 import '../../data/api/dto.dart';
 import '../../data/providers/bridge_provider.dart';
+import '../../data/providers/todo_widget_provider.dart';
 import '../../services/device_id.dart';
+import '../../services/todo_widget_service.dart';
 import '../../services/badge_service.dart';
 import '../../services/notification_service.dart';
 import '../../services/reminder_scheduler.dart';
@@ -49,6 +51,9 @@ class _BootGateState extends ConsumerState<BootGate>
   ReminderScheduler? _scheduler;
   // B6 图标角标：注入式服务（ROM 异常全吞）；listen/resumed 双口刷新
   final BadgeService _badge = BadgeService();
+  // 小组件快照（#3）：与角标同款双口刷新（ready + dbChanges）；
+  // 平台插件异常在服务内全吞
+  late final TodoWidgetService _widget = ref.read(todoWidgetServiceProvider);
 
   @override
   void initState() {
@@ -62,6 +67,7 @@ class _BootGateState extends ConsumerState<BootGate>
     WidgetsBinding.instance.removeObserver(this);
     _dbChangesSub?.cancel();
     _reminderDueSub?.cancel();
+    _widget.detach();
     super.dispose();
   }
 
@@ -73,6 +79,8 @@ class _BootGateState extends ConsumerState<BootGate>
       ShareReceiver.consume(ref);
       // B6 角标重算：隔夜挂后台后「今天」口径漂移，resumed 即刷新
       _refreshBadge();
+      // 小组件快照同口径重算（隔夜口径漂移；#3）
+      _widget.refresh();
     }
   }
 
@@ -168,6 +176,14 @@ class _BootGateState extends ConsumerState<BootGate>
     // 回收站 TTL 清理守护（Rust 60s tick：每日最多清一次，
     // 多日未开时本次启动首轮即补清过期间隔的过期任务）
     ref.read(orbitBridgeProvider).startTrashScheduler();
+    // 小组件勾选通道挂载 + 首刷快照（#3：通知完成回调同款位置——ready 后
+    // 引擎稳定，原生积压队列可冲刷）
+    _widget.attach(onOpenTask: (taskId) async {
+      final router = rootRouter;
+      if (router == null) return;
+      await router.push('/todo/$taskId');
+    });
+    _widget.refresh();
     _subscribeStreams();
     if (mounted) setState(() => _phase = _BootPhase.ready);
     // 冷启动拉起消费：应用被杀期间点通知 → 等首帧路由装配完成再跳详情
@@ -196,6 +212,9 @@ class _BootGateState extends ConsumerState<BootGate>
     // B6 图标角标数据口：dbChanges 失效后经 provider 重拉新值刷角标
     //（ref.listen 仅限 build 期——异步流程用 manualRead 模式）。
     _refreshBadge();
+
+    // 小组件快照（#3）：与角标同一失效链——dbChanges 后重拉今日口径
+    _widget.refresh();
 
     // 提醒到期 → 本地通知即时呈现（无权限 / 异常时内部回落 warning toast）。
     // 僵尸清理：后台推迟未写 DB，旧行到期时由 handleReminderDue 判定为

@@ -346,6 +346,14 @@ abstract class OrbitBridge {
   /// 删除任务模板（软删）
   Future<void> templateDelete(int id);
 
+  // ── Android 桌面小组件（#3：快照查询 + 勾选落库）──
+
+  /// 拉小组件快照：今天截止或已逾期的未完成任务（优先级降序）
+  Future<List<WidgetTodoItem>> widgetTodoQuery(int limit);
+
+  /// 小组件勾选切换（done=1 完成 / 0 取消；完成复用 complete 全语义）
+  Future<void> widgetTodoToggle(int id, int done);
+
   // ── 同步加密（恢复流程用）──
 
   Future<SyncCryptoStatus> syncCryptoStatus();

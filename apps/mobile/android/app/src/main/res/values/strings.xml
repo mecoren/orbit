@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 小组件文案（#3）；tile 标签在 manifest 内联字符串（tile label 需静态资源引用时同样在此维护） -->
+<resources>
+    <string name="app_name">循迹</string>
+    <string name="widget_header_title">循迹 · 今日待办</string>
+    <string name="widget_empty_text">今天没有截止或逾期的任务</string>
+    <string name="widget_check_desc">勾选任务</string>
+    <string name="widget_tile_label">今日待办</string>
+    <string name="widget_tile_desc">查看今天截止或逾期的任务</string>
+</resources>

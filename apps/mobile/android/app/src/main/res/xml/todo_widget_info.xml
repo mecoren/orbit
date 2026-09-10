@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  待办小组件元数据（#3）：
+  - 2×2 起步（minWidth 110dp ≈ 2 格；resize 支持到 4×3 覆盖列表场景）；
+  - previewImage 用启动图标占位（无专门预览图资源；不阻塞功能）；
+  - widgetCategory home_screen（锁屏 widget 已废弃不声明）；
+  - updatePeriodMillis 0：数据面由 Dart 写入后主动 updateWidget（B6 角标
+    同款刷新时机），不做系统轮询省电。
+-->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:minWidth="110dp"
+    android:minHeight="110dp"
+    android:targetCellWidth="2"
+    android:targetCellHeight="2"
+    android:maxResizeWidth="250dp"
+    android:maxResizeHeight="180dp"
+    android:resizeMode="horizontal|vertical"
+    android:widgetCategory="home_screen"
+    android:initialLayout="@layout/todo_widget"
+    android:previewLayout="@layout/todo_widget"
+    android:updatePeriodMillis="0"
+    android:description="@string/widget_tile_desc" />

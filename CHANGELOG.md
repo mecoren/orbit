@@ -7,6 +7,16 @@
 
 ## [Unreleased]
 
+### Android 桌面小组件 + 快捷设置磁贴——不进 app 勾任务（#3 存在感链条补全）
+
+TickTick/MS To Do 的待办 widget 是安卓用户高频入口，与本应用已落地的角标计数、通知完成按钮同属「存在感」链条，唯独 widget 空白。本批三端全链落地（home_widget 0.9.4 数据面 + 自写原生交互层）：
+
+- **Rust 核心**（`orbit-core/api/widget_api.rs`）：`widget_todo_query` 快照查询——今天截止或已逾期的未完成任务（与 B6 角标 `dueTodayOrOverdueCount` 同口径）按优先级降序取前 N 条（clamp ≤10）；`widget_todo_toggle` 勾选落库——完成复用 `complete_todo_task` 全语义（重复任务推进下一实例 + 提醒行平移），取消完成是反悔场景：普通任务裸 UPDATE 复位三件套，重复任务静默不动（完成时下一实例已克隆，取消放大成克隆连锁不可接受）。5 组单测（今日口径过滤/limit 截断/勾选双向/重复反悔幂等/NotFound）。
+- **Android 原生层**（5 个 Kotlin 文件 + 资源）：`TodoWidgetProvider`（继承 home_widget HomeWidgetProvider 拿数据面；RemoteViews 列表 + 勾选模板广播 + 标题打开 app）；`TodoWidgetViewsService`（数据面 N 行展开，勾选视觉 = checked/unchecked 两份布局选一——RemoteViews 无跨进程 setChecked）；`TodoWidgetToggleReceiver` → `TodoWidgetHost`（勾选转发中枢：引擎存活 MethodChannel 直发，被杀则积压队列下次 attach 冲刷 + 拉起 Activity）；`TodoTileService` 快捷设置磁贴（副标题实时计数与 widget 共用同一数据面快照，API 34+ 一键添加反射兜底）；布局/drawable/strings 双主题资源 + widget_info（2×2 起步可调 4×3）。
+- **Dart 侧**：`TodoWidgetService`（HomeWidgetApi 注入式包装——快照写入 `widget.items.N.*` + header.count、勾选 MethodChannel 监听、点击流路由；全异常吞不炸主流程）；BootGate 三口接线（ready attach+首刷 / dbChanges 重刷 / resumed 重算——与角标同款刷新链）+ 设置页「桌面小组件」卡（手动刷新 + 磁贴一键添加 + 引导文案）。
+- **顺手修复（构建链断裂）**：`flutter_app_badger`（discontinued，compileSdk 29）在 AGP 9 + Java 17 工具链下无法编译——`flutter build apk` 本仓自引入角标功能以来首次真正跑通即暴露。角标替换为自写 `BadgeChannel` 原生实现（小米/华为/OPPO 主流 ROM 广播协议核心子集，ShortcutBadger 同款机制），BadgeService 注入口设计兑现（`badge_test` 零改动全过）。root gradle 补 AGP 9 迁移期 namespace 注入（无 namespace 老插件从 manifest package 属性回填）。
+- **验证**：`flutter build apk --debug` 成功（原生层全链编译）；cargo 421 全绿（+5）；flutter 243 全绿（+4）；analyze 0 新增。遗留：真机验收（模拟器无桌面 widget 交互面）。
+
 ### 任务模板三端落地——第 11 张同步表（周报/报销单/差旅清单免从零搭）
 
 竞品矩阵高价值缺口榜首：全仓 template 零命中，MS To Do 步骤列表/Vikunja Templates/Snippets 全有。周报、报销单、差旅检查清单这类多字段任务每次从零搭建（标题+子任务+提醒+标签）。本批作为第 11 张同步表落地（附件第 9、筛选器第 10 的链路成熟可复制）：

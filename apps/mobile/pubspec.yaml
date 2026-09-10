@@ -42,7 +42,10 @@ dependencies:
   rust_lib_orbit:
     path: rust_builder
   flutter_slidable: ^4.0.3
-  flutter_app_badger: ^1.5.0
+
+  # Android 桌面小组件（#3 存在感链条）：widget 数据快照写入 + 添加引导；
+  # 勾选/磁贴交互走原生广播直写 SQLite（无 isolate 依赖，见 TodoWidgetProvider）
+  home_widget: ^0.9.3
 
 dev_dependencies:
   flutter_test:

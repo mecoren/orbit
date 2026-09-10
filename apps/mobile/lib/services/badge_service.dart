@@ -1,4 +1,4 @@
-import 'package:flutter_app_badger/flutter_app_badger.dart';
+import 'package:flutter/services.dart';
 
 /// B6 Android 图标角标服务（注入式：测试/换实现无痛）。
 ///
@@ -8,17 +8,20 @@ import 'package:flutter_app_badger/flutter_app_badger.dart';
 /// 注入口留好了换实现的后路（自写 MethodChannel + ShortcutBadger）。
 class BadgeService {
   BadgeService({Future<void> Function(int count)? setBadge})
-      : _setBadge = setBadge ?? _pluginSetBadge;
+      : _setBadge = setBadge ?? _channelSetBadge;
 
   final Future<void> Function(int count) _setBadge;
 
-  /// 默认实现：插件通道（count<=0 走 removeBadge 显式清零）
-  static Future<void> _pluginSetBadge(int count) async {
+  /// 原生通道（BadgeChannel：厂商 ROM 广播；替代 discontinued 插件
+  /// ——其 compileSdk 29 与 AGP 9 硬不兼容，且注入口设计本就为此）
+  static const _channel = MethodChannel('orbit/badge');
+
+  static Future<void> _channelSetBadge(int count) async {
     if (count <= 0) {
-      await FlutterAppBadger.removeBadge();
+      await _channel.invokeMethod<void>('removeBadge');
       return;
     }
-    await FlutterAppBadger.updateBadgeCount(count);
+    await _channel.invokeMethod<void>('updateBadge', count);
   }
 
   /// 更新角标；ROM 不支持等异常静默吞掉

@@ -20,6 +20,7 @@ import 'api/sync.dart';
 import 'api/template.dart';
 import 'api/todo.dart';
 import 'api/trash.dart';
+import 'api/widget.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'frb_generated.dart';
@@ -80,7 +81,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.12.0';
 
   @override
-  int get rustContentHash => 1304972743;
+  int get rustContentHash => 359329068;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -449,6 +450,15 @@ abstract class RustLibApi extends BaseApi {
   Future<TodoTask> crateApiTrashTrashTaskRestore({required PlatformInt64 id});
 
   Future<List<TodoTask>> crateApiTrashTrashTasksList();
+
+  Future<List<WidgetTodoItem>> crateApiWidgetWidgetTodoQuery({
+    required PlatformInt64 limit,
+  });
+
+  Future<void> crateApiWidgetWidgetTodoToggle({
+    required PlatformInt64 id,
+    required int done,
+  });
 }
 
 class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
@@ -3921,6 +3931,71 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   TaskConstMeta get kCrateApiTrashTrashTasksListConstMeta =>
       const TaskConstMeta(debugName: "trash_tasks_list", argNames: []);
 
+  @override
+  Future<List<WidgetTodoItem>> crateApiWidgetWidgetTodoQuery({
+    required PlatformInt64 limit,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_i_64(limit, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 113,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_list_widget_todo_item,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiWidgetWidgetTodoQueryConstMeta,
+        argValues: [limit],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiWidgetWidgetTodoQueryConstMeta =>
+      const TaskConstMeta(debugName: "widget_todo_query", argNames: ["limit"]);
+
+  @override
+  Future<void> crateApiWidgetWidgetTodoToggle({
+    required PlatformInt64 id,
+    required int done,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_i_64(id, serializer);
+          sse_encode_i_32(done, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 114,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiWidgetWidgetTodoToggleConstMeta,
+        argValues: [id, done],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiWidgetWidgetTodoToggleConstMeta =>
+      const TaskConstMeta(
+        debugName: "widget_todo_toggle",
+        argNames: ["id", "done"],
+      );
+
   @protected
   AnyhowException dco_decode_AnyhowException(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
@@ -4428,6 +4503,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   List<TodoTemplate> dco_decode_list_todo_template(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return (raw as List<dynamic>).map(dco_decode_todo_template).toList();
+  }
+
+  @protected
+  List<WidgetTodoItem> dco_decode_list_widget_todo_item(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_widget_todo_item).toList();
   }
 
   @protected
@@ -5201,6 +5282,21 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  WidgetTodoItem dco_decode_widget_todo_item(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 5)
+      throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
+    return WidgetTodoItem(
+      id: dco_decode_i_64(arr[0]),
+      uuid: dco_decode_String(arr[1]),
+      title: dco_decode_String(arr[2]),
+      priority: dco_decode_i_32(arr[3]),
+      done: dco_decode_i_32(arr[4]),
+    );
+  }
+
+  @protected
   AnyhowException sse_decode_AnyhowException(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var inner = sse_decode_String(deserializer);
@@ -5893,6 +5989,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var ans_ = <TodoTemplate>[];
     for (var idx_ = 0; idx_ < len_; ++idx_) {
       ans_.add(sse_decode_todo_template(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  List<WidgetTodoItem> sse_decode_list_widget_todo_item(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <WidgetTodoItem>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_widget_todo_item(deserializer));
     }
     return ans_;
   }
@@ -6859,6 +6969,23 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  WidgetTodoItem sse_decode_widget_todo_item(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_id = sse_decode_i_64(deserializer);
+    var var_uuid = sse_decode_String(deserializer);
+    var var_title = sse_decode_String(deserializer);
+    var var_priority = sse_decode_i_32(deserializer);
+    var var_done = sse_decode_i_32(deserializer);
+    return WidgetTodoItem(
+      id: var_id,
+      uuid: var_uuid,
+      title: var_title,
+      priority: var_priority,
+      done: var_done,
+    );
+  }
+
+  @protected
   void sse_encode_AnyhowException(
     AnyhowException self,
     SseSerializer serializer,
@@ -7516,6 +7643,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_i_32(self.length, serializer);
     for (final item in self) {
       sse_encode_todo_template(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_widget_todo_item(
+    List<WidgetTodoItem> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_widget_todo_item(item, serializer);
     }
   }
 
@@ -8204,5 +8343,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   void sse_encode_usize(BigInt self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     serializer.buffer.putBigUint64(self);
+  }
+
+  @protected
+  void sse_encode_widget_todo_item(
+    WidgetTodoItem self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_64(self.id, serializer);
+    sse_encode_String(self.uuid, serializer);
+    sse_encode_String(self.title, serializer);
+    sse_encode_i_32(self.priority, serializer);
+    sse_encode_i_32(self.done, serializer);
   }
 }

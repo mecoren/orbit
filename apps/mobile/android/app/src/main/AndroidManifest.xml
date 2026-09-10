@@ -71,6 +71,36 @@
                 <action android:name="com.htc.intent.action.QUICKBOOT_POWERON"/>
             </intent-filter>
         </receiver>
+        <!-- Android 桌面小组件（#3 存在感链条；TickTick/MS To Do 同款入口）：
+             APPWIDGET_UPDATE 系统广播必须 exported=true；数据面由
+             home_widget SharedPreferences 提供（Dart TodoWidgetService 写入） -->
+        <receiver android:exported="true" android:name=".TodoWidgetProvider">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE"/>
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/todo_widget_info"/>
+        </receiver>
+        <!-- 小组件勾选广播（模板 PendingIntent 目标；exported=false 仅本应用
+             RemoteViews 可触发） -->
+        <receiver android:exported="false" android:name=".TodoWidgetToggleReceiver"/>
+        <!-- 小组件列表数据工厂（RemoteViewsService 跨进程装配行视图） -->
+        <service
+            android:exported="false"
+            android:name=".TodoWidgetViewsService"
+            android:permission="android.permission.BIND_REMOTEVIEWS"/>
+        <!-- 快捷设置磁贴（#3）：副标题实时计数与小组件共用同一数据面快照 -->
+        <service
+            android:exported="true"
+            android:name=".TodoTileService"
+            android:icon="@drawable/widget_check_filled"
+            android:label="@string/widget_tile_label"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE"/>
+            </intent-filter>
+        </service>
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data

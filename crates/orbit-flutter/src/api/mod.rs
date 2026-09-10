@@ -17,6 +17,7 @@
 //! - [search]：全局搜索（任务/项目/评论三路聚合，backlog #26）
 //! - [saved_filter]：保存的筛选器（可复用组合条件视图，backlog #35）
 //! - [template]：任务模板（多字段任务骨架可复用，竞品矩阵高价值缺口）
+//! - [widget]：Android 桌面小组件数据口（快照查询 + 勾选落库，#3）
 //! - [events]：下行事件流 + 提醒轮询守护
 
 pub mod asset;
@@ -36,5 +37,6 @@ pub mod sync;
 pub mod template;
 pub mod todo;
 pub mod trash;
+pub mod widget;
 
 pub use state::orbit_state_initialized;

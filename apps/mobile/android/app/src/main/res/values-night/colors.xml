@@ -2,4 +2,8 @@
 <!-- Orbit 品牌色资源（M5.1）：夜间同值（深色底双主题共用） -->
 <resources>
     <color name="launch_bg">#FF1A1A21</color>
+    <!-- 小组件（#3）：暗色卡片底（深空品牌面），强调同亮色 -->
+    <color name="widget_bg_color">#FF23232B</color>
+    <color name="widget_accent">#FF4E8CFF</color>
+    <color name="widget_ring">#FF6B7280</color>
 </resources>

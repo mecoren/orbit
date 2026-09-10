@@ -845,6 +845,47 @@ class MockOrbitBridge implements OrbitBridge {
     });
   }
 
+  // ── Android 桌面小组件（#3；与 badge_count 同口径的 mock 实现）──
+
+  @override
+  Future<List<WidgetTodoItem>> widgetTodoQuery(int limit) => _delay(() {
+        final endOfToday =
+            DateTime.now().millisecondsSinceEpoch + 24 * 3600 * 1000;
+        final rows = store.tasks.values
+            .where((t) =>
+                t['is_deleted'] == 0 &&
+                t['done'] == 0 &&
+                t['due_date'] != null &&
+                (t['due_date'] as int) < endOfToday)
+            .toList()
+          ..sort((a, b) {
+            final p = (b['priority'] as int).compareTo(a['priority'] as int);
+            return p != 0
+                ? p
+                : (a['due_date'] as int).compareTo(b['due_date'] as int);
+          });
+        return rows.take(limit).map((t) {
+          final id = t['id'] as int;
+          return WidgetTodoItem(
+            id: id,
+            uuid: (t['uuid'] as String?) ?? 'w-$id',
+            title: t['title'] as String,
+            priority: t['priority'] as int,
+            done: t['done'] as int,
+          );
+        }).toList();
+      });
+
+  @override
+  Future<void> widgetTodoToggle(int id, int done) => _delay(() {
+        final t = store.tasks[id];
+        if (t == null) throw Exception('[not_found] task $id not found');
+        t['done'] = done;
+        t['done_at'] = done == 1 ? store.now() : null;
+        t['status'] = done == 1 ? 'done' : 'pending';
+        _emit('todo_tasks');
+      });
+
   TaskAttachmentView _mapMockAttachment(Map<String, dynamic> a) =>
       TaskAttachmentView(
         linkId: a['link_id'] as int,

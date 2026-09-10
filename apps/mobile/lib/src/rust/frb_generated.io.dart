@@ -20,6 +20,7 @@ import 'api/sync.dart';
 import 'api/template.dart';
 import 'api/todo.dart';
 import 'api/trash.dart';
+import 'api/widget.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:ffi' as ffi;
@@ -255,6 +256,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<TodoTemplate> dco_decode_list_todo_template(dynamic raw);
 
   @protected
+  List<WidgetTodoItem> dco_decode_list_widget_todo_item(dynamic raw);
+
+  @protected
   String? dco_decode_opt_String(dynamic raw);
 
   @protected
@@ -421,6 +425,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   BigInt dco_decode_usize(dynamic raw);
+
+  @protected
+  WidgetTodoItem dco_decode_widget_todo_item(dynamic raw);
 
   @protected
   AnyhowException sse_decode_AnyhowException(SseDeserializer deserializer);
@@ -691,6 +698,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  List<WidgetTodoItem> sse_decode_list_widget_todo_item(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   String? sse_decode_opt_String(SseDeserializer deserializer);
 
   @protected
@@ -881,6 +893,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   BigInt sse_decode_usize(SseDeserializer deserializer);
+
+  @protected
+  WidgetTodoItem sse_decode_widget_todo_item(SseDeserializer deserializer);
 
   @protected
   void sse_encode_AnyhowException(
@@ -1225,6 +1240,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_list_widget_todo_item(
+    List<WidgetTodoItem> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_opt_String(String? self, SseSerializer serializer);
 
   @protected
@@ -1478,6 +1499,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_usize(BigInt self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_widget_todo_item(
+    WidgetTodoItem self,
+    SseSerializer serializer,
+  );
 }
 
 // Section: wire_class

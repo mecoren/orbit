@@ -8,6 +8,7 @@ import '../../src/rust/api/csv_import.dart' as gen_import;
 import '../../src/rust/api/asset.dart' as gen_asset;
 import '../../src/rust/api/saved_filter.dart' as gen_sf;
 import '../../src/rust/api/template.dart' as gen_tpl;
+import '../../src/rust/api/widget.dart' as gen_widget;
 import '../../src/rust/api/holiday.dart' as gen_holiday;
 import '../../src/rust/api/events.dart' as gen_events;
 import '../../src/rust/api/maintenance.dart' as gen_maintenance;
@@ -642,6 +643,26 @@ class RustOrbitBridge implements OrbitBridge {
   @override
   Future<void> templateDelete(int id) =>
       gen_tpl.templateDelete(id: id);
+
+  // ── Android 桌面小组件（#3）──
+
+  @override
+  Future<List<WidgetTodoItem>> widgetTodoQuery(int limit) async {
+    final rows = await gen_widget.widgetTodoQuery(limit: limit);
+    return rows
+        .map((r) => WidgetTodoItem(
+              id: r.id.toInt(),
+              uuid: r.uuid,
+              title: r.title,
+              priority: r.priority,
+              done: r.done,
+            ))
+        .toList();
+  }
+
+  @override
+  Future<void> widgetTodoToggle(int id, int done) =>
+      gen_widget.widgetTodoToggle(id: id, done: done);
 
   TaskAttachmentView _mapAttachment(gen.TaskAttachmentView r) => TaskAttachmentView(
         linkId: r.linkId.toInt(),

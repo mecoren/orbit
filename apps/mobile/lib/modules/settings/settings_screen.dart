@@ -14,6 +14,7 @@ import '../../data/api/dto.dart';
 import '../../data/api/orbit_bridge.dart'
     show CsvImportPreview, CsvImportStats, DbMaintenanceResult;
 import '../../data/providers/biometric_provider.dart';
+import '../../data/providers/todo_widget_provider.dart';
 import '../../data/providers/bridge_provider.dart';
 import '../../shared/widgets/liquid_glass_title_bar.dart';
 import '../../shared/widgets/scroll_offset_listenable.dart';
@@ -55,6 +56,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
   /// 生物识别开关交互中（防重复点击）
   bool _bioBusy = false;
+
+  /// 小组件：数据面首刷完成中
+  bool _widgetBusy = false;
 
   /// 数据导出进行中的格式（'json' / 'csv'），null 空闲
   String? _exporting;
@@ -590,6 +594,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   child: _buildSecurityCard(context),
                 ),
                 const SizedBox(height: AppDimens.space12),
+                // 小组件卡（#3）：Android 桌面小组件与快捷设置磁贴引导
+                if (Platform.isAndroid) _buildWidgetCard(context),
+                const SizedBox(height: AppDimens.space12),
                 // 数据导出卡（07 报告 #15）：明文 JSON/CSV，保存到应用文档目录
                 SectionCard(
                   title: '数据导出（明文）',
@@ -865,6 +872,79 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       ),
     );
   }
+  /// 小组件卡：快照立即刷新 + 添加磁贴（API 33+）引导
+  Widget _buildWidgetCard(BuildContext context) {
+    final colors = AppColors.ofContext(context);
+    return SectionCard(
+      title: '桌面小组件',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '在桌面添加「循迹」小组件，不进应用即可勾掉今天截止或逾期的任务；'
+            '勾选与完成语义一致（重复任务自动推进下一实例）。',
+            style: TextStyle(fontSize: 12, color: colors.secondaryText),
+          ),
+          const SizedBox(height: AppDimens.space12),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: _widgetBusy ? null : _widgetRefresh,
+                  icon: _widgetBusy
+                      ? SizedBox(
+                          width: AppDimens.iconSizeSm,
+                          height: AppDimens.iconSizeSm,
+                          child: CircularProgressIndicator(
+                              strokeWidth: 2, color: colors.secondaryText),
+                        )
+                      : const Icon(Icons.widgets_rounded,
+                          size: AppDimens.iconSizeSm),
+                  label: const Text('刷新小组件'),
+                ),
+              ),
+              const SizedBox(width: AppDimens.space8),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: _pinTile,
+                  icon: const Icon(Icons.apps_rounded,
+                      size: AppDimens.iconSizeSm),
+                  label: const Text('添加快捷磁贴'),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppDimens.space4),
+          Text(
+            '小组件：桌面长按空白处 → 小工具 → 循迹。磁贴：下拉快捷设置面板'
+            '编辑磁贴中添加「今日待办」（Android 13+ 支持一键添加）。',
+            style: TextStyle(
+              fontSize: 12,
+              color: colors.secondaryText.withValues(alpha: 0.7),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// 小组件快照手动刷新（平时 ready/dbChanges 自动刷；此钮为即时校验口）
+  Future<void> _widgetRefresh() async {
+    if (_widgetBusy) return;
+    setState(() => _widgetBusy = true);
+    try {
+      await ref.read(todoWidgetServiceProvider).refresh();
+      if (mounted) WaitToast.success('小组件已刷新');
+    } finally {
+      if (mounted) setState(() => _widgetBusy = false);
+    }
+  }
+
+  /// 请求系统添加磁贴（API 33+ 一键引导；低版本原生静默回落文案引导）
+  Future<void> _pinTile() async {
+    await ref.read(todoWidgetServiceProvider).requestPinTile();
+  }
+
   /// 安全卡内容：指纹硬件可用 → 指纹解锁开关；否则只读提示
   ///（探测中空白占位避免闪烁；开关翻转动画期 _bioBusy 防重复触发）
   Widget _buildSecurityCard(BuildContext context) {

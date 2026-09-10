@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 已勾选填充圆（强调色；列表快照内已完成行极少出现——取消完成路径） -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="oval">
+    <solid android:color="@color/widget_accent" />
+</shape>

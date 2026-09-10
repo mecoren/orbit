@@ -2,4 +2,8 @@
 <!-- Orbit 品牌色资源（M5.1）：启动屏底色，与应用深空品牌底一致 -->
 <resources>
     <color name="launch_bg">#FF1A1A21</color>
+    <!-- 小组件（#3）：亮色卡片底 / 强调 / 勾选环，与移动端浅色主题对齐 -->
+    <color name="widget_bg_color">#F2F3F7</color>
+    <color name="widget_accent">#FF4E8CFF</color>
+    <color name="widget_ring">#FF9CA3AF</color>
 </resources>

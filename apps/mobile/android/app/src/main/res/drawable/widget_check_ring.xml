@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 未勾选空环（2dp 描边；完成态见 widget_check_filled） -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="oval">
+    <solid android:color="#00000000" />
+    <stroke android:width="2dp" android:color="@color/widget_ring" />
+</shape>
