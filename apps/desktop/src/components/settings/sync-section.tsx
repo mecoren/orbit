@@ -522,7 +522,8 @@ function SyncPasswordCard() {
     setBusy(true);
     try {
       await syncCryptoChangePassword(oldPw, newPw);
-      toast.success("同步密码已修改");
+      // v2 密钥方案下改密即换 Key：命令内部已编排云端全量重传
+      toast.success("同步密码已修改（云端数据已用新密钥重传，其他设备请用新密码同步）");
       setChangeOpen(false);
       setOldPw("");
       setNewPw("");
@@ -548,7 +549,8 @@ function SyncPasswordCard() {
       {status !== null && !status.has_password && (
         <>
           <p className="text-xs text-muted-foreground">
-            未设置。设置后生成随机 Data Key 加密所有上传数据；跨设备请使用相同同步密码。
+            未设置。设置后所有上传数据将以该密码端到端加密；同一密码在任何设备
+            派生同一把密钥，跨设备只需输入相同密码。
           </p>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
@@ -663,6 +665,10 @@ function SyncPasswordCard() {
 
       {changeOpen && (
         <div className="space-y-3 rounded-md border bg-muted/20 p-3">
+          <p className="text-xs text-muted-foreground">
+            v2 密钥方案下修改密码会更换数据密钥，云端数据将自动用新密钥全量重传
+            （数据量较大时耗时稍长）；其他设备此后请使用新密码。
+          </p>
           <div className="grid grid-cols-2 gap-3">
             <Input
               type="password"

@@ -212,6 +212,7 @@ pub fn run() {
             mica_cmd::mica_diagnostics,
             // M3 安全与同步：同步密码 / Data Key
             commands::sync_crypto_cmd::sync_crypto_status,
+            commands::sync_crypto_cmd::sync_crypto_meta_version,
             commands::sync_crypto_cmd::sync_crypto_init,
             commands::sync_crypto_cmd::sync_crypto_unlock,
             commands::sync_crypto_cmd::sync_crypto_lock,
@@ -222,6 +223,7 @@ pub fn run() {
             commands::sync_crypto_cmd::sync_crypto_import_bundle,
             commands::sync_crypto_cmd::sync_crypto_restore_session,
             commands::sync_crypto_cmd::sync_crypto_forget_session,
+            commands::sync_crypto_cmd::sync_crypto_upgrade_v2,
             // M3：连接配置
             commands::sync_cmd::sync_config_get,
             commands::sync_cmd::sync_config_save,
@@ -238,6 +240,7 @@ pub fn run() {
             commands::cloud_sync_cmd::cloud_sync_pull_then_push,
             commands::cloud_sync_cmd::cloud_sync_get_state,
             commands::cloud_sync_cmd::cloud_sync_is_running,
+            commands::cloud_sync_cmd::cloud_sync_rekey,
             commands::cloud_sync_cmd::sync_disconnect,
             // M3：全量备份
             commands::full_sync_cmd::full_backup_export,

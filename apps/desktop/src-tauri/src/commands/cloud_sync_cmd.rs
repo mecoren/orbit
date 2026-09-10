@@ -106,6 +106,45 @@ pub async fn cloud_sync_pull_then_push(app: AppHandle, origin: String) -> Result
     run_sync(&app, parse_origin(&origin), SyncAction::PullThenPush).await
 }
 
+/// rekey 全量重传：用当前 Data Key 重加密覆盖云端（恢复页「以本机为准」）
+///
+/// 危险操作，UI 必须二次确认后调用。v2 改密与 v1→v2 迁移场景由
+/// `sync_crypto_change_password` 内部编排，不经此命令。
+#[tauri::command]
+pub async fn cloud_sync_rekey(app: AppHandle) -> Result<String, String> {
+    let record = sync_runtime::get_active_config(&app)
+        .await?
+        .ok_or_else(|| "[config] 尚未配置同步，请先在设置中填写连接信息".to_string())?;
+    let config = sync_runtime::engine_config_of_record(&record)
+        .ok_or_else(|| "[config] 当前为本地同步配置，不参与云同步".to_string())?;
+
+    let engine = sync_runtime::sync_engine(&app)?;
+    let crypto = sync_runtime::sync_crypto(&app)?;
+    if !crypto.is_unlocked() {
+        return Err("[not_unlocked] 同步加密未解锁，请先输入同步密码".to_string());
+    }
+
+    let dir = resolve_app_data_dir(&app)?;
+    let attachments = sync_runtime::attachments_dir(&dir);
+    let device_id = orbit_core::context::get_device_id()
+        .unwrap_or_default()
+        .to_string();
+
+    let result = cloud_sync_api::rekey_cloud(
+        &engine,
+        &config,
+        SyncOrigin::Manual,
+        &device_id,
+        &attachments,
+    )
+    .await
+    .map_err(err_tagged)?;
+
+    app.emit("sync-finished", &result)
+        .map_err(|e| format!("[other] 事件发送失败: {e}"))?;
+    cloud_sync_api::result_to_json(&result).map_err(err_tagged)
+}
+
 /// 本地同步状态账本（sync_state.json；指纹元数据，不含业务数据）
 #[tauri::command]
 pub async fn cloud_sync_get_state(app: AppHandle) -> Result<String, String> {

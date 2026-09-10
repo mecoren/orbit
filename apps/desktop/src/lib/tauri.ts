@@ -469,11 +469,15 @@ export interface SyncCryptoBundle {
 }
 
 export const syncCryptoStatus = () => invoke<SyncCryptoStatus>("sync_crypto_status");
+/** 本机密钥方案版本（"v1" | "v2"；未设置密码为 null） */
+export const syncCryptoMetaVersion = () =>
+  invoke<{ version: string | null }>("sync_crypto_meta_version");
 export const syncCryptoInit = (password: string, remember: boolean) =>
   invoke<void>("sync_crypto_init", { password, remember });
 export const syncCryptoUnlock = (password: string, remember: boolean) =>
   invoke<void>("sync_crypto_unlock", { password, remember });
 export const syncCryptoLock = () => invoke<void>("sync_crypto_lock");
+/** v2 下改密会触发云端全量重传（命令内部编排），失败自动回滚本机密码 */
 export const syncCryptoChangePassword = (oldPassword: string, newPassword: string) =>
   invoke<void>("sync_crypto_change_password", { oldPassword, newPassword });
 // 注：不提供 rotate_key 命令——多设备同步场景下轮换 Data Key 会令其他设备
@@ -485,6 +489,9 @@ export const syncCryptoImportBundle = (bundle: SyncCryptoBundle, password: strin
 /** 启动静默恢复会话（钥匙串缓存密码） */
 export const syncCryptoRestoreSession = () => invoke<boolean>("sync_crypto_restore_session");
 export const syncCryptoForgetSession = () => invoke<void>("sync_crypto_forget_session");
+/** v1→v2 密钥方案迁移（同密码确定性派生 + 云端全量重传；UI 二次确认后调用） */
+export const syncCryptoUpgradeV2 = (syncPassword: string) =>
+  invoke<void>("sync_crypto_upgrade_v2", { syncPassword });
 
 // ---------- 连接配置（sync_cmd） ----------
 
@@ -555,6 +562,11 @@ export const cloudSyncPullThenPush = (origin: "manual" | "background" | "exit" =
 export const cloudSyncGetState = () =>
   invoke<string>("cloud_sync_get_state").then((s) => JSON.parse(s));
 export const cloudSyncIsRunning = () => invoke<boolean>("cloud_sync_is_running");
+/**
+ * rekey 全量重传：以本机为准，用当前 Data Key 重加密覆盖云端全部数据。
+ * 危险操作（恢复页「以本机为准」），UI 二次确认后调用。
+ */
+export const cloudSyncRekey = () => invoke<string>("cloud_sync_rekey").then(parseResult);
 export const syncDisconnect = () => invoke<void>("sync_disconnect");
 
 // ---------- 全量备份 .orsync（full_sync_cmd） ----------
