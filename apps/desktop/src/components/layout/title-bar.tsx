@@ -4,6 +4,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { CheckSquare, Info, Settings, Trash2 } from "lucide-react";
 
 import { useAppStore } from "@/stores/app-store";
+import { isHelpShortcut } from "@/features/todo/shared/shortcut-help";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { ThemeModeToggle } from "@/components/theme-mode-toggle";
@@ -42,22 +43,31 @@ export function TitleBar() {
   const appWindow = getCurrentWindow();
   const toggleCommand = useAppStore((s) => s.toggleCommand);
   const setSearchOpen = useAppStore((s) => s.setSearchOpen);
+  const setShortcutHelpOpen = useAppStore((s) => s.setShortcutHelpOpen);
 
-  // 全局快捷键：Ctrl/Cmd+P 命令面板；Ctrl/Cmd+K 全局搜索
+  // 全局快捷键：Ctrl/Cmd+P 命令面板；Ctrl/Cmd+K 全局搜索；? 帮助面板
+  //（? 为 Shift+/ 组合；输入框/文本域聚焦时豁免——正文打问号不弹帮助）
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (!(e.ctrlKey || e.metaKey)) return;
-      if (e.key === "p") {
-        e.preventDefault();
-        toggleCommand();
-      } else if (e.key === "k") {
-        e.preventDefault();
-        setSearchOpen(true);
+      if (e.ctrlKey || e.metaKey) {
+        if (e.key === "p") {
+          e.preventDefault();
+          toggleCommand();
+        } else if (e.key === "k") {
+          e.preventDefault();
+          setSearchOpen(true);
+        }
+        return;
       }
+      if (!isHelpShortcut(e)) return;
+      const target = e.target as HTMLElement | null;
+      if (target?.closest("input, textarea, [contenteditable=true]")) return;
+      e.preventDefault();
+      setShortcutHelpOpen(true);
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [toggleCommand, setSearchOpen]);
+  }, [toggleCommand, setSearchOpen, setShortcutHelpOpen]);
 
   return (
     <>

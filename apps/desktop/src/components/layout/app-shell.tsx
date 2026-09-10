@@ -18,6 +18,7 @@ import { toast } from "sonner";
 import { TitleBar } from "@/components/layout/title-bar";
 import { CommandPalette } from "@/components/layout/command-palette";
 import { GlobalSearchDialog } from "@/components/layout/global-search-dialog";
+import { ShortcutHelpDialog } from "@/components/layout/shortcut-help-dialog";
 import { useAppStore } from "@/stores/app-store";
 import { useMicaEffect } from "@/hooks/use-mica-effect";
 import { useGlobalQuickAdd } from "@/hooks/use-global-quick-add";
@@ -29,6 +30,8 @@ export function AppShell() {
   const setCommandOpen = useAppStore((s) => s.setCommandOpen);
   const searchOpen = useAppStore((s) => s.searchOpen);
   const setSearchOpen = useAppStore((s) => s.setSearchOpen);
+  const shortcutHelpOpen = useAppStore((s) => s.shortcutHelpOpen);
+  const setShortcutHelpOpen = useAppStore((s) => s.setShortcutHelpOpen);
   const bumpQuickAddIntent = useAppStore((s) => s.bumpQuickAddIntent);
   useMicaEffect();
   // 全局快速捕捉热键（07 #16：Alt+Shift+O 唤起 + 聚焦快速输入）
@@ -72,6 +75,8 @@ export function AppShell() {
       <CommandPalette open={commandOpen} onOpenChange={setCommandOpen} />
       {/* 全局搜索（Ctrl+K，07 §五-P1#9）：与命令面板平级的壳层入口 */}
       <GlobalSearchDialog open={searchOpen} onOpenChange={setSearchOpen} />
+      {/* 快捷键帮助面板（? 呼出）：同壳层平级入口 */}
+      <ShortcutHelpDialog open={shortcutHelpOpen} onOpenChange={setShortcutHelpOpen} />
     </div>
   );
 }
