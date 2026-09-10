@@ -192,7 +192,7 @@ abstract class RustLibApi extends BaseApi {
 
   Future<void> crateApiTrashStartTrashScheduler();
 
-  Future<StatsAggregate> crateApiStatsStatsAggregate({PlatformInt64? days});
+  Future<StatsAggregate> crateApiStatsStatsAggregate({PlatformInt64? year});
 
   Stream<DbEventDto> crateApiEventsSubscribeDbChanges();
 
@@ -1490,12 +1490,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(debugName: "start_trash_scheduler", argNames: []);
 
   @override
-  Future<StatsAggregate> crateApiStatsStatsAggregate({PlatformInt64? days}) {
+  Future<StatsAggregate> crateApiStatsStatsAggregate({PlatformInt64? year}) {
     return handler.executeNormal(
       NormalTask(
         callFfi: (port_) {
           final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_opt_box_autoadd_i_64(days, serializer);
+          sse_encode_opt_box_autoadd_i_64(year, serializer);
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
@@ -1508,14 +1508,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeErrorData: sse_decode_String,
         ),
         constMeta: kCrateApiStatsStatsAggregateConstMeta,
-        argValues: [days],
+        argValues: [year],
         apiImpl: this,
       ),
     );
   }
 
   TaskConstMeta get kCrateApiStatsStatsAggregateConstMeta =>
-      const TaskConstMeta(debugName: "stats_aggregate", argNames: ["days"]);
+      const TaskConstMeta(debugName: "stats_aggregate", argNames: ["year"]);
 
   @override
   Stream<DbEventDto> crateApiEventsSubscribeDbChanges() {
@@ -3890,6 +3890,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  Int64List dco_decode_list_prim_i_64_strict(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dcoDecodeInt64List(raw);
+  }
+
+  @protected
   List<int> dco_decode_list_prim_u_8_loose(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw as List<int>;
@@ -4076,8 +4082,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   StatsAggregate dco_decode_stats_aggregate(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 6)
-      throw Exception('unexpected arr length: expect 6 but see ${arr.length}');
+    if (arr.length != 7)
+      throw Exception('unexpected arr length: expect 7 but see ${arr.length}');
     return StatsAggregate(
       overview: dco_decode_stats_overview(arr[0]),
       heatmap: dco_decode_stats_heatmap(arr[1]),
@@ -4085,6 +4091,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       byProject: dco_decode_list_stats_project_row(arr[3]),
       byPriority: dco_decode_list_stats_priority_row(arr[4]),
       byWeekday: dco_decode_list_stats_weekday_row(arr[5]),
+      availableYears: dco_decode_list_prim_i_64_strict(arr[6]),
     );
   }
 
@@ -4092,12 +4099,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   StatsHeatmap dco_decode_stats_heatmap(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 3)
-      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
+    if (arr.length != 4)
+      throw Exception('unexpected arr length: expect 4 but see ${arr.length}');
     return StatsHeatmap(
-      startDate: dco_decode_String(arr[0]),
-      endDate: dco_decode_String(arr[1]),
-      cells: dco_decode_list_stats_heatmap_cell(arr[2]),
+      year: dco_decode_i_64(arr[0]),
+      startDate: dco_decode_String(arr[1]),
+      endDate: dco_decode_String(arr[2]),
+      cells: dco_decode_list_stats_heatmap_cell(arr[3]),
     );
   }
 
@@ -5125,6 +5133,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  Int64List sse_decode_list_prim_i_64_strict(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var len_ = sse_decode_i_32(deserializer);
+    return deserializer.buffer.getInt64List(len_);
+  }
+
+  @protected
   List<int> sse_decode_list_prim_u_8_loose(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var len_ = sse_decode_i_32(deserializer);
@@ -5479,6 +5494,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_byProject = sse_decode_list_stats_project_row(deserializer);
     var var_byPriority = sse_decode_list_stats_priority_row(deserializer);
     var var_byWeekday = sse_decode_list_stats_weekday_row(deserializer);
+    var var_availableYears = sse_decode_list_prim_i_64_strict(deserializer);
     return StatsAggregate(
       overview: var_overview,
       heatmap: var_heatmap,
@@ -5486,16 +5502,19 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       byProject: var_byProject,
       byPriority: var_byPriority,
       byWeekday: var_byWeekday,
+      availableYears: var_availableYears,
     );
   }
 
   @protected
   StatsHeatmap sse_decode_stats_heatmap(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_year = sse_decode_i_64(deserializer);
     var var_startDate = sse_decode_String(deserializer);
     var var_endDate = sse_decode_String(deserializer);
     var var_cells = sse_decode_list_stats_heatmap_cell(deserializer);
     return StatsHeatmap(
+      year: var_year,
       startDate: var_startDate,
       endDate: var_endDate,
       cells: var_cells,
@@ -6644,6 +6663,16 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_list_prim_i_64_strict(
+    Int64List self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    serializer.buffer.putInt64List(self);
+  }
+
+  @protected
   void sse_encode_list_prim_u_8_loose(
     List<int> self,
     SseSerializer serializer,
@@ -6984,11 +7013,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_list_stats_project_row(self.byProject, serializer);
     sse_encode_list_stats_priority_row(self.byPriority, serializer);
     sse_encode_list_stats_weekday_row(self.byWeekday, serializer);
+    sse_encode_list_prim_i_64_strict(self.availableYears, serializer);
   }
 
   @protected
   void sse_encode_stats_heatmap(StatsHeatmap self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_64(self.year, serializer);
     sse_encode_String(self.startDate, serializer);
     sse_encode_String(self.endDate, serializer);
     sse_encode_list_stats_heatmap_cell(self.cells, serializer);

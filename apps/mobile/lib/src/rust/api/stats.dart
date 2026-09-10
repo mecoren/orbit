@@ -9,9 +9,9 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 // These functions are ignored because they are not marked as `pub`: `pool`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`
 
-/// 统计聚合（days 为热力图窗口天数，35–371 钳制；None = 182 半年）
-Future<StatsAggregate> statsAggregate({PlatformInt64? days}) =>
-    RustLib.instance.api.crateApiStatsStatsAggregate(days: days);
+/// 统计聚合（year 为热力图年份；None = 当前年滚动 365 天窗口）
+Future<StatsAggregate> statsAggregate({PlatformInt64? year}) =>
+    RustLib.instance.api.crateApiStatsStatsAggregate(year: year);
 
 /// 一次性聚合结果（镜像 core StatsAggregate）
 class StatsAggregate {
@@ -22,6 +22,9 @@ class StatsAggregate {
   final List<StatsPriorityRow> byPriority;
   final List<StatsWeekdayRow> byWeekday;
 
+  /// 热力图可选年份（升序；有完成记录的年份，空则 [当前年]）
+  final Int64List availableYears;
+
   const StatsAggregate({
     required this.overview,
     required this.heatmap,
@@ -29,6 +32,7 @@ class StatsAggregate {
     required this.byProject,
     required this.byPriority,
     required this.byWeekday,
+    required this.availableYears,
   });
 
   @override
@@ -38,7 +42,8 @@ class StatsAggregate {
       streak.hashCode ^
       byProject.hashCode ^
       byPriority.hashCode ^
-      byWeekday.hashCode;
+      byWeekday.hashCode ^
+      availableYears.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -50,29 +55,34 @@ class StatsAggregate {
           streak == other.streak &&
           byProject == other.byProject &&
           byPriority == other.byPriority &&
-          byWeekday == other.byWeekday;
+          byWeekday == other.byWeekday &&
+          availableYears == other.availableYears;
 }
 
-/// 热力图数据（镜像 core HeatmapData）
+/// 热力图数据（镜像 core HeatmapData；year 回显 + 按年窗口）
 class StatsHeatmap {
+  final PlatformInt64 year;
   final String startDate;
   final String endDate;
   final List<StatsHeatmapCell> cells;
 
   const StatsHeatmap({
+    required this.year,
     required this.startDate,
     required this.endDate,
     required this.cells,
   });
 
   @override
-  int get hashCode => startDate.hashCode ^ endDate.hashCode ^ cells.hashCode;
+  int get hashCode =>
+      year.hashCode ^ startDate.hashCode ^ endDate.hashCode ^ cells.hashCode;
 
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       other is StatsHeatmap &&
           runtimeType == other.runtimeType &&
+          year == other.year &&
           startDate == other.startDate &&
           endDate == other.endDate &&
           cells == other.cells;

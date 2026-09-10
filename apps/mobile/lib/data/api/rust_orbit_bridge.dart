@@ -687,8 +687,8 @@ class RustOrbitBridge implements OrbitBridge {
   // ── 统计仪表盘（backlog #25）──
 
   @override
-  Future<StatsAggregate> statsAggregate({int? days}) async {
-    final a = await gen_stats.statsAggregate(days: days);
+  Future<StatsAggregate> statsAggregate({int? year}) async {
+    final a = await gen_stats.statsAggregate(year: year);
     return StatsAggregate(
       overview: StatsOverview(
         total: a.overview.total,
@@ -698,6 +698,7 @@ class RustOrbitBridge implements OrbitBridge {
         doneLast30d: a.overview.doneLast30D,
       ),
       heatmap: StatsHeatmap(
+        year: a.heatmap.year,
         startDate: a.heatmap.startDate,
         endDate: a.heatmap.endDate,
         cells: a.heatmap.cells
@@ -728,6 +729,8 @@ class RustOrbitBridge implements OrbitBridge {
       byWeekday: a.byWeekday
           .map((r) => StatsWeekdayRow(weekday: r.weekday, doneCount: r.doneCount))
           .toList(),
+      // PlatformInt64 在 IO 后端为 int / Web 后端为 BigInt——逐个 toInt 归一
+      availableYears: a.availableYears.map((e) => e.toInt()).toList(),
     );
   }
 

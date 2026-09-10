@@ -328,8 +328,9 @@ abstract class OrbitBridge {
 
   // ── 统计仪表盘（backlog #25：只读聚合）──
 
-  /// 一次性统计聚合（days 为热力图窗口天数，35-371；null = 182 半年）
-  Future<StatsAggregate> statsAggregate({int? days});
+  /// 一次性统计聚合（year 为热力图年份；null = 当前年滚动 365 天窗口，
+  /// 2026-09-10 对齐 wait-home——当前年滚动 365 天、历史年完整年）
+  Future<StatsAggregate> statsAggregate({int? year});
 
   // ── 全局搜索（backlog #26：任务/项目/评论三路聚合）──
 

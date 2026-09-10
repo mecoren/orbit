@@ -103,9 +103,10 @@ final trashMetaProvider = FutureProvider<TrashMeta>((ref) async {
   return ref.watch(orbitBridgeProvider).trashMeta();
 });
 
-/// 统计聚合（backlog #25 统计页；family 参数 = 热力图窗口天数）
-final statsProvider = FutureProvider.family<StatsAggregate, int>((ref, days) async {
-  return ref.watch(orbitBridgeProvider).statsAggregate(days: days);
+/// 统计聚合（backlog #25 统计页；family 参数 = 热力图年份，
+/// 2026-09-10 对齐 wait-home：当前年滚动 365 天、历史年完整年）
+final statsProvider = FutureProvider.family<StatsAggregate, int>((ref, year) async {
+  return ref.watch(orbitBridgeProvider).statsAggregate(year: year);
 });
 
 /// 全局搜索（backlog #26 搜索页；family 参数 = 关键词，防抖后由 UI 层触发）

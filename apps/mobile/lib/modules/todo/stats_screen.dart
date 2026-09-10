@@ -11,12 +11,14 @@ import '../../shared/widgets/liquid_glass_title_bar.dart';
 import '../../shared/widgets/scroll_offset_listenable.dart';
 import 'logic/task_logic.dart';
 import 'providers/todo_providers.dart';
+import 'todo_heatmap.dart';
 
 /// 统计页 /todo/stats（backlog #25：统计仪表盘，对标 TickTick 成就页）
 ///
 /// 数据 = bridge.statsAggregate 一次性聚合（只读）：
 /// - 总览五卡 + streak 行；
-/// - 热力图（窗口档位 35/182/371 自绘，周一为行首）；
+/// - 热力图（2026-09-10 对齐 wait-home：按年视图 + 右侧年份按钮 +
+///   月份标签/Portal 同款 tooltip/少多图例，组件见 todo_heatmap.dart）；
 /// - 项目 / 优先级 / 星期三分布卡（纯 Row 条形，不引图表库）。
 class StatsScreen extends ConsumerStatefulWidget {
   const StatsScreen({super.key});
@@ -27,13 +29,7 @@ class StatsScreen extends ConsumerStatefulWidget {
 
 class _StatsScreenState extends ConsumerState<StatsScreen> {
   final _scrollController = ScrollController();
-  int _windowDays = 182;
-
-  static const _windowChoices = [
-    (35, '近 5 周'),
-    (182, '近半年'),
-    (371, '近一年'),
-  ];
+  late int _year = DateTime.now().year;
 
   @override
   void dispose() {
@@ -43,8 +39,17 @@ class _StatsScreenState extends ConsumerState<StatsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final stats = ref.watch(statsProvider(_windowDays)).value;
-    final colors = AppColors.ofContext(context);
+    final stats = ref.watch(statsProvider(_year)).value;
+
+    // 年份列表到达后校正选中：初始当前年若不在可选列表（无完成记录回退口径），
+    // 切到列表最新年，避免停在"只有空格"的年份
+    if (stats != null &&
+        stats.availableYears.isNotEmpty &&
+        !stats.availableYears.contains(_year)) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) setState(() => _year = stats.availableYears.last);
+      });
+    }
 
     return Scaffold(
       body: Stack(
@@ -78,7 +83,11 @@ class _StatsScreenState extends ConsumerState<StatsScreen> {
                       const SizedBox(height: AppDimens.space12),
                       _StreakCard(streak: stats.streak),
                       const SizedBox(height: AppDimens.space12),
-                      _HeatmapCard(heatmap: stats.heatmap),
+                      _HeatmapCard(
+                        stats: stats,
+                        year: _year,
+                        onYearChange: (y) => setState(() => _year = y),
+                      ),
                       const SizedBox(height: AppDimens.space12),
                       _DistSection(
                         title: '项目分布',
@@ -127,31 +136,6 @@ class _StatsScreenState extends ConsumerState<StatsScreen> {
             child: LiquidGlassTitleBar(
               title: '统计',
               scrollOffsetListenable: ScrollOffsetListenable(_scrollController),
-              actions: [
-                PopupMenuButton<int>(
-                  initialValue: _windowDays,
-                  onSelected: (d) => setState(() => _windowDays = d),
-                  itemBuilder: (_) => [
-                    for (final (d, label) in _windowChoices)
-                      PopupMenuItem(value: d, child: Text(label)),
-                  ],
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: AppDimens.space8,
-                      vertical: AppDimens.space4,
-                    ),
-                    child: Text(
-                      _windowChoices
-                          .firstWhere((w) => w.$1 == _windowDays)
-                          .$2,
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: colors.titleText,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
             ),
           ),
         ],
@@ -287,63 +271,23 @@ class _StreakCard extends StatelessWidget {
   }
 }
 
-/// 热力图卡（横滚：列 = 周，行 = 周一..周日；5 档色阶待办强调色）
+/// 热力图卡（标题行带年份/完成数副标题；主体 = todo_heatmap.dart 组件）
 class _HeatmapCard extends StatelessWidget {
-  const _HeatmapCard({required this.heatmap});
+  const _HeatmapCard({
+    required this.stats,
+    required this.year,
+    required this.onYearChange,
+  });
 
-  final StatsHeatmap heatmap;
-
-  /// count → 色阶档（与桌面同口径：0 / 1 / 2-3 / 4-6 / ≥7）
-  static int _level(int count) {
-    if (count <= 0) return 0;
-    if (count == 1) return 1;
-    if (count <= 3) return 2;
-    if (count <= 6) return 3;
-    return 4;
-  }
-
-  static const _alphas = [0.0, 0.30, 0.55, 0.80, 1.0];
+  final StatsAggregate stats;
+  final int year;
+  final ValueChanged<int> onYearChange;
 
   @override
   Widget build(BuildContext context) {
     final colors = AppColors.ofContext(context);
-    const cellSize = 11.0;
-    const gap = 3.0;
-    const weekdays = ['一', '二', '三', '四', '五', '六', '日'];
-
-    // 周日历分列：首格补前置空格对齐周一
-    final cells = heatmap.cells;
-    if (cells.isEmpty) return const SizedBox.shrink();
-    final first = DateTime.parse('${cells.first.date}T00:00:00');
-    final pad = (first.weekday - 1) % 7;
-    final padded = [
-      ...List.filled(pad, null),
-      ...cells,
-    ];
-    final weeks = [
-      for (var i = 0; i < padded.length; i += 7)
-        padded.sublist(i, (i + 7).clamp(0, padded.length)),
-    ];
-
-    final dayLabels = Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        for (var i = 0; i < 7; i++)
-          Padding(
-            padding: const EdgeInsets.only(bottom: gap),
-            child: SizedBox(
-              width: 12,
-              height: cellSize,
-              child: Center(
-                child: Text(
-                  weekdays[i],
-                  style: TextStyle(fontSize: 9, color: colors.secondaryText),
-                ),
-              ),
-            ),
-          ),
-      ],
-    );
+    final heatTotal =
+        stats.heatmap.cells.fold<int>(0, (s, c) => s + c.count);
 
     return Container(
       padding: const EdgeInsets.all(AppDimens.space16),
@@ -355,49 +299,32 @@ class _HeatmapCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            '完成热力图',
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-              color: colors.titleText,
-            ),
+          Row(
+            children: [
+              Text(
+                '完成热力图',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: colors.titleText,
+                ),
+              ),
+              const SizedBox(width: AppDimens.space8),
+              Text(
+                '$year 年 · $heatTotal 个完成',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: colors.secondaryText,
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: AppDimens.space12),
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                dayLabels,
-                const SizedBox(width: gap),
-                for (final week in weeks)
-                  Padding(
-                    padding: const EdgeInsets.only(right: gap),
-                    child: Column(
-                      children: [
-                        for (var i = 0; i < week.length; i++)
-                          Padding(
-                            padding: const EdgeInsets.only(bottom: gap),
-                            child: week[i] == null
-                                ? const SizedBox(width: cellSize, height: cellSize)
-                                : Container(
-                                    width: cellSize,
-                                    height: cellSize,
-                                    decoration: BoxDecoration(
-                                      borderRadius: BorderRadius.circular(3),
-                                      color: _level(week[i]!.count) == 0
-                                          ? colors.divider.withValues(alpha: 0.25)
-                                          : OrbitAccents.todoAccent.withValues(
-                                              alpha: _alphas[_level(week[i]!.count)]),
-                                    ),
-                                  ),
-                          ),
-                      ],
-                    ),
-                  ),
-              ],
-            ),
+          TodoHeatmap(
+            heatmap: stats.heatmap,
+            availableYears: stats.availableYears,
+            year: year,
+            onYearChange: onYearChange,
           ),
         ],
       ),

@@ -17,8 +17,9 @@ Stream<DbEventDto> subscribeDbChanges() =>
 
 /// 启动待办提醒轮询守护（幂等；Dart 在 DB 就绪后调用一次）
 ///
-/// 扫描口径与桌面一致：
-/// `WHERE is_deleted=0 AND remind_at <= now AND now - remind_at <= 24h`
+/// 扫描与到期处置口径统一下沉 orbit-core（list_due_reminders +
+/// advance_fired_reminder）：`WHERE is_deleted=0 AND remind_at <= now
+/// AND now - remind_at <= 24h` 且任务未完成/未删（P1#10）
 Stream<ReminderDueDto> startReminderPoller() =>
     RustLib.instance.api.crateApiEventsStartReminderPoller();
 

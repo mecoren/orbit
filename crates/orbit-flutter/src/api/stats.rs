@@ -2,6 +2,8 @@
 //!
 //! 与桌面壳命令一一对应（业务全部在 orbit_core::api::stats_api）：
 //! - stats_aggregate → 桌面 stats_aggregate：一次性返回全部统计卡片。
+//!   2026-09-10 热力图改按年聚合（当前年滚动 365 天/历史年完整年）+
+//!   available_years 年份列表，对齐 wait-home 活动热力图。
 //!
 //! DTO 镜像模式：本模块本地 DTO（StatsAggregate 及子结构，同 [super::trash]
 //! 的 TrashMeta 规则——Rust core 的 Serialize 结构不直接暴露给 FRB，桥层
@@ -34,9 +36,10 @@ pub struct StatsHeatmapCell {
     pub count: i64,
 }
 
-/// 热力图数据（镜像 core HeatmapData）
+/// 热力图数据（镜像 core HeatmapData；year 回显 + 按年窗口）
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct StatsHeatmap {
+    pub year: i64,
     pub start_date: String,
     pub end_date: String,
     pub cells: Vec<StatsHeatmapCell>,
@@ -84,6 +87,8 @@ pub struct StatsAggregate {
     pub by_project: Vec<StatsProjectRow>,
     pub by_priority: Vec<StatsPriorityRow>,
     pub by_weekday: Vec<StatsWeekdayRow>,
+    /// 热力图可选年份（升序；有完成记录的年份，空则 [当前年]）
+    pub available_years: Vec<i64>,
 }
 
 impl From<stats_api::StatsAggregate> for StatsAggregate {
@@ -97,6 +102,7 @@ impl From<stats_api::StatsAggregate> for StatsAggregate {
                 done_last_30d: a.overview.done_last_30d,
             },
             heatmap: StatsHeatmap {
+                year: a.heatmap.year,
                 start_date: a.heatmap.start_date,
                 end_date: a.heatmap.end_date,
                 cells: a
@@ -142,14 +148,15 @@ impl From<stats_api::StatsAggregate> for StatsAggregate {
                     done_count: r.done_count,
                 })
                 .collect(),
+            available_years: a.available_years,
         }
     }
 }
 
-/// 统计聚合（days 为热力图窗口天数，35–371 钳制；None = 182 半年）
-pub async fn stats_aggregate(days: Option<i64>) -> Result<StatsAggregate, String> {
+/// 统计聚合（year 为热力图年份；None = 当前年滚动 365 天窗口）
+pub async fn stats_aggregate(year: Option<i64>) -> Result<StatsAggregate, String> {
     let pool = pool()?;
-    stats_api::aggregate(&pool, days.unwrap_or(182))
+    stats_api::aggregate(&pool, year)
         .await
         .map(Into::into)
         .map_err(|e| e.to_string())

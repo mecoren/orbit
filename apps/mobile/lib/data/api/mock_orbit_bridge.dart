@@ -1174,11 +1174,12 @@ class MockOrbitBridge implements OrbitBridge {
   @override
   Future<void> startTrashScheduler() async {}
 
-  // ── 统计仪表盘（backlog #25；口径对齐 stats_api：done_at 本地日界、仅存活任务）──
+  // ── 统计仪表盘（backlog #25；口径对齐 stats_api：done_at 本地日界、仅存活任务；
+  //      2026-09-10 热力图改按年——当前年滚动 365 天、历史年完整年）──
 
   @override
-  Future<StatsAggregate> statsAggregate({int? days}) => _delay(() {
-        final windowDays = (days ?? 182).clamp(35, 371);
+  Future<StatsAggregate> statsAggregate({int? year}) => _delay(() {
+        final selectedYear = year ?? DateTime.now().year;
         final live = store.tasks.values
             .where((t) => t['is_deleted'] == 0)
             .toList(growable: false);
@@ -1198,24 +1199,42 @@ class MockOrbitBridge implements OrbitBridge {
         final todayKey =
             '${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
         final tIdx = idxOf(todayKey);
-        final startMs = (today.copyWith(hour: 0, minute: 0, second: 0, millisecond: 0))
-                .millisecondsSinceEpoch -
-            (windowDays - 1) * 86400000;
+        // 年份窗口：当前年 = 滚动 365 天（今天往前 364 天到今天）；历史年 = 1/1 ~ 12/31
+        final DateTime from;
+        final DateTime to;
+        if (selectedYear == today.year) {
+          final t0 = today.copyWith(
+              hour: 0, minute: 0, second: 0, millisecond: 0, microsecond: 0);
+          from = t0.subtract(const Duration(days: 364));
+          to = t0;
+        } else {
+          from = DateTime(selectedYear, 1, 1);
+          to = DateTime(selectedYear, 12, 31);
+        }
+        final startMs = from.millisecondsSinceEpoch;
+        final endMs = to.millisecondsSinceEpoch + 86400000 - 1;
 
         final byDay = <String, int>{};
         for (final t in doneTasks) {
           final doneAt = t['done_at'] as int;
-          if (doneAt >= startMs) {
+          if (doneAt >= startMs && doneAt <= endMs) {
             final k = dayKey(doneAt);
             byDay[k] = (byDay[k] ?? 0) + 1;
           }
         }
         final cells = <StatsHeatmapCell>[];
-        for (var i = 0; i < windowDays; i++) {
-          final d = DateTime.fromMillisecondsSinceEpoch(startMs + i * 86400000);
-          final k = dayKey(d.millisecondsSinceEpoch);
+        for (var ms = startMs; ms <= endMs; ms += 86400000) {
+          final k = dayKey(ms);
           cells.add(StatsHeatmapCell(date: k, count: byDay[k] ?? 0));
         }
+
+        // 可选年份：全部完成记录的年份（不看窗口）；无完成记录回退 [当前年]
+        final availableYears = <int>{
+          for (final t in doneTasks)
+            DateTime.fromMillisecondsSinceEpoch(t['done_at'] as int).year,
+          if (doneTasks.isEmpty) today.year,
+        }.toList()
+          ..sort();
 
         // streak（断档规则对齐 core compute_streak）
         final doneIdx = byDay.keys.map(idxOf).toSet();
@@ -1295,6 +1314,7 @@ class MockOrbitBridge implements OrbitBridge {
             doneLast30d: inLast(30),
           ),
           heatmap: StatsHeatmap(
+            year: selectedYear,
             startDate: cells.first.date,
             endDate: cells.last.date,
             cells: cells,
@@ -1312,6 +1332,7 @@ class MockOrbitBridge implements OrbitBridge {
             for (var i = 0; i < 7; i++)
               StatsWeekdayRow(weekday: i, doneCount: byWeekday[i]),
           ],
+          availableYears: availableYears,
         );
       });
 

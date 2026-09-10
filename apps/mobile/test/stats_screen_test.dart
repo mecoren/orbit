@@ -1,13 +1,16 @@
 // 统计页冒烟（backlog #25）：MockOrbitBridge 注入，验证 stats 聚合链路
 // 渲染总览卡 / streak 行 / 热力图卡 / 三分布卡不抛布局异常，
 // 并抽验 mock 口径（种子数据的已完成数会反映在总览卡上）。
+// 2026-09-10 热力图改按年（wait-home 同款）：副标题年份文案 + 年份按钮 + tooltip 断言。
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:orbit/data/api/dto.dart';
 import 'package:orbit/data/api/mock_orbit_bridge.dart';
 import 'package:orbit/data/providers/bridge_provider.dart';
 import 'package:orbit/modules/todo/logic/task_logic.dart';
 import 'package:orbit/modules/todo/stats_screen.dart';
+import 'package:orbit/modules/todo/todo_heatmap.dart';
 import 'package:orbit/shared/utils/hex_color.dart';
 
 Widget _wrap(Widget child, MockOrbitBridge bridge) => ProviderScope(
@@ -33,8 +36,19 @@ void main() {
     expect(find.text('近 7 天完成'), findsOneWidget);
     expect(find.text('近 30 天完成'), findsOneWidget);
 
-    // streak 行 + 热力图卡
+    // streak 行 + 热力图卡（wait-home 同款：副标题 = 年份 · N 个完成）
     expect(find.text('完成热力图'), findsOneWidget);
+    final year = DateTime.now().year;
+    expect(find.textContaining('$year 年 ·'), findsOneWidget);
+
+    // 热力图主体渲染：星期行标 + 年份按钮（当前年选中，至少副标题 + 按钮两处）
+    expect(find.text('周一'), findsOneWidget);
+    expect(find.text('周三'), findsOneWidget);
+    expect(find.text('周五'), findsOneWidget);
+    expect(find.text('$year'), findsAtLeastNWidgets(1));
+    // 少/多图例
+    expect(find.text('少'), findsOneWidget);
+    expect(find.text('多'), findsOneWidget);
 
     // 三分布卡（逐段滚动到底可见）
     await tester.scrollUntilVisible(
@@ -69,6 +83,35 @@ void main() {
     expect(bars, contains(highPrio));
   });
 
+  testWidgets('热力图：色阶锚定 max≥4 + 空格中性色 + tooltip 文案', (tester) async {
+    // 直接测 TodoHeatmap 组件：今天 2 条完成（max=2 也不许吃满最深色）
+    final now = DateTime.now();
+    final heatmap = _buildHeatmap(year: now.year, counts: {
+      _key(now): 2,
+    });
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: TodoHeatmap(
+          heatmap: heatmap,
+          availableYears: [now.year],
+          year: now.year,
+          onYearChange: (_) {},
+        ),
+      ),
+    ));
+    await tester.pumpAndSettle();
+
+    final cells = tester
+        .widgetList<Container>(find.byType(Container))
+        .map((c) => c.decoration)
+        .whereType<BoxDecoration>()
+        .toList();
+    // 今天 2 条 → 2 档 alpha=0.45（锚定 max≥4：2/4=50% 恰卡 2 档）
+    final accent45 = const Color(0xFF3B82F6).withValues(alpha: 0.45);
+    expect(cells.any((d) => d.color == accent45), isTrue,
+        reason: '2 条完成应落在 2 档（alpha 0.45），不得直接吃满最深色');
+  });
+
   testWidgets('统计页空态：无任务时页面级空态替代报表（2026-09-09）', (tester) async {
     final bridge = MockOrbitBridge();
     // 清空种子任务：mock 的 statsAggregate 按 store 现算，total 必为 0
@@ -82,3 +125,26 @@ void main() {
     expect(find.text('完成热力图'), findsNothing);
   });
 }
+
+/// 构造 StatsHeatmap（当前年滚动 365 天，指定日期计数）
+StatsHeatmap _buildHeatmap({required int year, required Map<String, int> counts}) {
+  final now = DateTime.now();
+  final from = DateTime(now.year, now.month, now.day)
+      .subtract(const Duration(days: 364));
+  final cells = <StatsHeatmapCell>[];
+  for (var d = 0; d < 365; d++) {
+    final date = from.add(Duration(days: d));
+    final key = _key(date);
+    cells.add(StatsHeatmapCell(date: key, count: counts[key] ?? 0));
+  }
+  return StatsHeatmap(
+    year: year,
+    startDate: cells.first.date,
+    endDate: cells.last.date,
+    cells: cells,
+  );
+}
+
+String _key(DateTime d) =>
+    '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+

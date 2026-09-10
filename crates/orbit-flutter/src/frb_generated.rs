@@ -27,7 +27,7 @@
 // Section: imports
 
 use flutter_rust_bridge::for_generated::byteorder::{NativeEndian, ReadBytesExt, WriteBytesExt};
-use flutter_rust_bridge::for_generated::{Lifetimeable, Lockable, transform_result_dco};
+use flutter_rust_bridge::for_generated::{transform_result_dco, Lifetimeable, Lockable};
 use flutter_rust_bridge::{Handler, IntoIntoDart};
 
 // Section: boilerplate
@@ -1329,12 +1329,12 @@ fn wire__crate__api__stats__stats_aggregate_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
-            let api_days = <Option<i64>>::sse_decode(&mut deserializer);
+            let api_year = <Option<i64>>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
                 transform_result_sse::<_, String>(
                     (move || async move {
-                        let output_ok = crate::api::stats::stats_aggregate(api_days).await?;
+                        let output_ok = crate::api::stats::stats_aggregate(api_year).await?;
                         Ok(output_ok)
                     })()
                     .await,
@@ -4008,6 +4008,18 @@ impl SseDecode for Vec<crate::api::dto::HolidayInfo> {
     }
 }
 
+impl SseDecode for Vec<i64> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut len_ = <i32>::sse_decode(deserializer);
+        let mut ans_ = Vec::with_capacity(len_ as usize);
+        for idx_ in 0..len_ {
+            ans_.push(<i64>::sse_decode(deserializer));
+        }
+        return ans_;
+    }
+}
+
 impl SseDecode for Vec<u8> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -4355,6 +4367,7 @@ impl SseDecode for crate::api::stats::StatsAggregate {
         let mut var_byPriority =
             <Vec<crate::api::stats::StatsPriorityRow>>::sse_decode(deserializer);
         let mut var_byWeekday = <Vec<crate::api::stats::StatsWeekdayRow>>::sse_decode(deserializer);
+        let mut var_availableYears = <Vec<i64>>::sse_decode(deserializer);
         return crate::api::stats::StatsAggregate {
             overview: var_overview,
             heatmap: var_heatmap,
@@ -4362,6 +4375,7 @@ impl SseDecode for crate::api::stats::StatsAggregate {
             by_project: var_byProject,
             by_priority: var_byPriority,
             by_weekday: var_byWeekday,
+            available_years: var_availableYears,
         };
     }
 }
@@ -4369,10 +4383,12 @@ impl SseDecode for crate::api::stats::StatsAggregate {
 impl SseDecode for crate::api::stats::StatsHeatmap {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_year = <i64>::sse_decode(deserializer);
         let mut var_startDate = <String>::sse_decode(deserializer);
         let mut var_endDate = <String>::sse_decode(deserializer);
         let mut var_cells = <Vec<crate::api::stats::StatsHeatmapCell>>::sse_decode(deserializer);
         return crate::api::stats::StatsHeatmap {
+            year: var_year,
             start_date: var_startDate,
             end_date: var_endDate,
             cells: var_cells,
@@ -5706,6 +5722,7 @@ impl flutter_rust_bridge::IntoDart for crate::api::stats::StatsAggregate {
             self.by_project.into_into_dart().into_dart(),
             self.by_priority.into_into_dart().into_dart(),
             self.by_weekday.into_into_dart().into_dart(),
+            self.available_years.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -5725,6 +5742,7 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::stats::StatsAggregate>
 impl flutter_rust_bridge::IntoDart for crate::api::stats::StatsHeatmap {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
+            self.year.into_into_dart().into_dart(),
             self.start_date.into_into_dart().into_dart(),
             self.end_date.into_into_dart().into_dart(),
             self.cells.into_into_dart().into_dart(),
@@ -6808,6 +6826,16 @@ impl SseEncode for Vec<crate::api::dto::HolidayInfo> {
     }
 }
 
+impl SseEncode for Vec<i64> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.len() as _, serializer);
+        for item in self {
+            <i64>::sse_encode(item, serializer);
+        }
+    }
+}
+
 impl SseEncode for Vec<u8> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -7086,12 +7114,14 @@ impl SseEncode for crate::api::stats::StatsAggregate {
         <Vec<crate::api::stats::StatsProjectRow>>::sse_encode(self.by_project, serializer);
         <Vec<crate::api::stats::StatsPriorityRow>>::sse_encode(self.by_priority, serializer);
         <Vec<crate::api::stats::StatsWeekdayRow>>::sse_encode(self.by_weekday, serializer);
+        <Vec<i64>>::sse_encode(self.available_years, serializer);
     }
 }
 
 impl SseEncode for crate::api::stats::StatsHeatmap {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i64>::sse_encode(self.year, serializer);
         <String>::sse_encode(self.start_date, serializer);
         <String>::sse_encode(self.end_date, serializer);
         <Vec<crate::api::stats::StatsHeatmapCell>>::sse_encode(self.cells, serializer);
@@ -7594,7 +7624,7 @@ mod io {
     use flutter_rust_bridge::for_generated::byteorder::{
         NativeEndian, ReadBytesExt, WriteBytesExt,
     };
-    use flutter_rust_bridge::for_generated::{Lifetimeable, Lockable, transform_result_dco};
+    use flutter_rust_bridge::for_generated::{transform_result_dco, Lifetimeable, Lockable};
     use flutter_rust_bridge::{Handler, IntoIntoDart};
 
     // Section: boilerplate

@@ -853,13 +853,16 @@ class StatsHeatmapCell {
   const StatsHeatmapCell({required this.date, required this.count});
 }
 
-/// 热力图数据（窗口首日至今逐日计数，含零完成日）
+/// 热力图数据（按年窗口逐日计数，含零完成日；2026-09-10 对齐 wait-home）
 class StatsHeatmap {
+  /// 热力图年份（入参回显）
+  final int year;
   final String startDate;
   final String endDate;
   final List<StatsHeatmapCell> cells;
 
   const StatsHeatmap({
+    required this.year,
     required this.startDate,
     required this.endDate,
     required this.cells,
@@ -926,6 +929,9 @@ class StatsAggregate {
   final List<StatsPriorityRow> byPriority;
   final List<StatsWeekdayRow> byWeekday;
 
+  /// 热力图可选年份（升序；有完成记录的年份，空则 [当前年]）
+  final List<int> availableYears;
+
   const StatsAggregate({
     required this.overview,
     required this.heatmap,
@@ -933,6 +939,7 @@ class StatsAggregate {
     required this.byProject,
     required this.byPriority,
     required this.byWeekday,
+    required this.availableYears,
   });
 }
 

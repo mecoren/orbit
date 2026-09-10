@@ -733,9 +733,10 @@ const commands: Record<string, (args: any, ctx: Ctx) => unknown> = {
   trash_set_retention_days: () => undefined,
 
   // ---- 统计（backlog #25；对齐 stats_api 口径：done_at 本地日界，仅存活任务；
-  //      浏览器 mock 用端侧 Date 分桶，语义与 Rust chrono Local 一致）----
-  stats_aggregate: (_a: { days?: number }, { db }) => {
-    const days = Math.min(371, Math.max(35, _a.days ?? 182));
+  //      浏览器 mock 用端侧 Date 分桶，语义与 Rust chrono Local 一致；
+  //      2026-09-10 热力图改按年：当前年滚动 365 天、历史年完整年 + available_years）----
+  stats_aggregate: (_a: { year?: number }, { db }) => {
+    const year = _a.year ?? new Date().getFullYear();
     const live = db.tasks.filter((t) => !t.is_deleted);
     const doneTasks = live.filter((t) => t.done && t.done_at != null);
     const dayKey = (ts: number) => {
@@ -744,20 +745,30 @@ const commands: Record<string, (args: any, ctx: Ctx) => unknown> = {
     };
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    const startMs = today.getTime() - (days - 1) * 86_400_000;
+    // 年份窗口：当前年 = 今天往前 364 天（滚动 365）；历史年 = 1/1 ~ 12/31
+    const from = (() => {
+      if (year === today.getFullYear()) {
+        const f = new Date(today);
+        f.setDate(f.getDate() - 364);
+        return f;
+      }
+      return new Date(year, 0, 1);
+    })();
+    const to = year === today.getFullYear() ? today : new Date(year, 11, 31);
+    const startMs = from.getTime();
+    const endMs = to.getTime() + 86_400_000 - 1;
     const todayKey = dayKey(today.getTime());
 
     const byDay = new Map<string, number>();
     for (const t of doneTasks) {
-      if (t.done_at! >= startMs) {
+      if (t.done_at! >= startMs && t.done_at! <= endMs) {
         const k = dayKey(t.done_at!);
         byDay.set(k, (byDay.get(k) ?? 0) + 1);
       }
     }
     const cells: { date: string; count: number }[] = [];
-    for (let i = 0; i < days; i++) {
-      const d = new Date(startMs + i * 86_400_000);
-      const k = dayKey(d.getTime());
+    for (let ms = startMs; ms <= endMs; ms += 86_400_000) {
+      const k = dayKey(ms);
       cells.push({ date: k, count: byDay.get(k) ?? 0 });
     }
 
@@ -825,7 +836,7 @@ const commands: Record<string, (args: any, ctx: Ctx) => unknown> = {
         done_last_7d: inLast(7),
         done_last_30d: inLast(30),
       },
-      heatmap: { start_date: cells[0].date, end_date: cells[cells.length - 1].date, cells },
+      heatmap: { year, start_date: cells[0].date, end_date: cells[cells.length - 1].date, cells },
       streak: { current, best, done_today: doneToday },
       by_project: [...byProjectMap.values()]
         .map((r) => ({ project_id: r.id, project_title: r.title, project_hex_color: r.hex, done_count: r.done, pending_count: r.pending }))
@@ -834,6 +845,13 @@ const commands: Record<string, (args: any, ctx: Ctx) => unknown> = {
         .map(([priority, r]) => ({ priority, done_count: r.done, pending_count: r.pending }))
         .sort((a, b) => a.priority - b.priority),
       by_weekday: byWeekday.map((count, weekday) => ({ weekday, done_count: count })),
+      // 可选年份：全部完成记录的年份（不看窗口）；无完成记录回退 [当前年]
+      available_years: (() => {
+        const ys = new Set<number>();
+        for (const t of doneTasks) ys.add(new Date(t.done_at!).getFullYear());
+        if (ys.size === 0) ys.add(new Date().getFullYear());
+        return [...ys].sort((a, b) => a - b);
+      })(),
     };
   },
 

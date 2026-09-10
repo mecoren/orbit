@@ -6,8 +6,14 @@
 //!（chrono::Local，与前端 date-fns / Dart 本地日期语义一致）。日界换算在
 //! Rust 侧完成后，SQL 仅按天数值 GROUP BY——单机单时区，无需参数化时区。
 //!
+//! 热力图按**年**聚合（2026-09-10 对齐 wait-home 活动热力图）：
+//! - 当前年 = 滚动 365 天（今天往前 364 天到今天，跨年覆盖去年同日至今）；
+//! - 历史年 = 完整 1 月 1 日 ~ 12 月 31 日；
+//! - `available_years` 汇总有完成记录的年份（升序去重，空则回退 [当前年]），
+//!   供 UI 右侧年份 pill 列表。
+//!
 //! 一次性聚合（overview / heatmap / streak / by_project / by_priority /
-//! by_weekday 六路一次往返），单次 UI 渲染一调用即可。
+//! by_weekday / available_years 七路一次往返），单次 UI 渲染一调用即可。
 
 use chrono::{Datelike, TimeZone, Utc};
 use serde::Serialize;
@@ -43,12 +49,14 @@ pub struct HeatmapCell {
     pub count: i64,
 }
 
-/// 热力图数据：窗口首日至今的逐日计数（含零完成日，前端直接铺格）
+/// 热力图数据：按年逐日计数（含零完成日，前端直接铺格）
 #[derive(Debug, Clone, Serialize)]
 pub struct HeatmapData {
-    /// 窗口首日（含）
+    /// 热力图年份（UI 传入的 year 原样回显）
+    pub year: i64,
+    /// 年份窗口首日（含）：当前年 = 今天往前 364 天；历史年 = {year}-01-01
     pub start_date: String,
-    /// 今天（含）
+    /// 窗口末日（含）：当前年 = 今天；历史年 = {year}-12-31
     pub end_date: String,
     pub cells: Vec<HeatmapCell>,
 }
@@ -111,36 +119,36 @@ const DAY_MS: i64 = 86_400_000;
 // 时间工具（本地时区日界）
 // ============================================================================
 
-/// 本地日期序号（days since epoch）——streak/窗口运算的整数域
+/// 本地日期序号（days since epoch）——streak/窗口运算的整数域。
+/// 2026-09-10 修正：原 ordinal0 + year*366 拼接在跨年边界不单调（12-31 与
+/// 次年 1-1 相差 366-365 不等，滚动窗口起点直接暴露 366 格错位），
+/// 换 num_days_from_ce 单调换算（chrono 内置历法，与 day_index_to_date 对偶）。
 fn local_day_index(ts_ms: i64) -> i64 {
-    Utc.timestamp_millis_opt(ts_ms)
+    let local = Utc
+        .timestamp_millis_opt(ts_ms)
         .single()
         .unwrap_or_else(|| Utc.timestamp_millis_opt(0).single().unwrap())
-        .with_timezone(&chrono::Local)
-        .ordinal0() as i64
-        + (Utc
-            .timestamp_millis_opt(ts_ms)
-            .single()
-            .unwrap()
-            .with_timezone(&chrono::Local)
-            .year() as i64)
-            * 366
+        .with_timezone(&chrono::Local);
+    local.num_days_from_ce() as i64 - 719_163 // 1970-01-01 起 0 基
 }
 
 // ============================================================================
 // 聚合实现
 // ============================================================================
 
-/// 一次性聚合入口（UI 单次调用拿到全部卡片）
-pub async fn aggregate(pool: &SqlitePool, days: i64) -> CoreResult<StatsAggregate> {
-    let days = days.clamp(35, 371);
+/// 一次性聚合入口（UI 单次调用拿到全部卡片；year 为热力图年份，None = 当前年）
+pub async fn aggregate(pool: &SqlitePool, year: Option<i64>) -> CoreResult<StatsAggregate> {
+    // 年份钳制到有意义的区间（避免离谱输入拉爆铺格循环）
+    let current_year = chrono::Local::now().year() as i64;
+    let year = year.unwrap_or(current_year).clamp(1900, 9999);
 
     let overview = stats_overview_impl(pool).await?;
-    let heatmap = stats_heatmap_impl(pool, days).await?;
+    let heatmap = stats_heatmap_impl(pool, year).await?;
     let streak = stats_streak_impl(pool).await?;
     let by_project = stats_by_project_impl(pool).await?;
     let by_priority = stats_by_priority_impl(pool).await?;
     let by_weekday = stats_by_weekday_impl(pool).await?;
+    let available_years = stats_available_years_impl(pool).await?;
 
     Ok(StatsAggregate {
         overview,
@@ -149,6 +157,7 @@ pub async fn aggregate(pool: &SqlitePool, days: i64) -> CoreResult<StatsAggregat
         by_project,
         by_priority,
         by_weekday,
+        available_years,
     })
 }
 
@@ -191,42 +200,86 @@ async fn stats_overview_impl(pool: &SqlitePool) -> CoreResult<StatsOverview> {
     })
 }
 
-async fn stats_heatmap_impl(pool: &SqlitePool, days: i64) -> CoreResult<HeatmapData> {
+/// 热力图年份窗口（本地日期）：当前年 = 滚动 365 天（今天往前 364 天到今天，
+/// 跨年覆盖去年同日至今，与 wait-home 活动热力图同口径）；历史年 = 完整年
+fn heatmap_year_range(year: i64) -> (chrono::NaiveDate, chrono::NaiveDate) {
+    let today_local = chrono::Local::now().date_naive();
+    if year == today_local.year() as i64 {
+        (today_local - chrono::Duration::days(364), today_local)
+    } else {
+        (
+            chrono::NaiveDate::from_ymd_opt(year as i32, 1, 1).unwrap(),
+            chrono::NaiveDate::from_ymd_opt(year as i32, 12, 31).unwrap(),
+        )
+    }
+}
+
+/// 天序号（days since epoch）→ 本地日期（窗口铺格用）
+fn day_index_to_date(idx: i64) -> chrono::NaiveDate {
+    chrono::NaiveDate::from_num_days_from_ce_opt(idx as i32 + 719_163)
+        .unwrap_or_else(|| chrono::NaiveDate::from_ymd_opt(1970, 1, 1).unwrap())
+}
+
+async fn stats_heatmap_impl(pool: &SqlitePool, year: i64) -> CoreResult<HeatmapData> {
     let rows = fetch_stat_rows(pool).await?;
 
-    // 窗口：今天往回 days-1 天（含今天共 days 格）
-    let today_idx = local_day_index(now_ms());
-    let start_idx = today_idx - (days - 1);
+    let (from, to) = heatmap_year_range(year);
+    // 逐日铺格：日期序号整除即本地日界（chrono NaiveDate 全程本地语义，
+    // 与 done_at 毫秒 → 本地日 index 的 local_day_index 口径一致）
+    let start_idx = local_day_index(from.and_hms_opt(0, 0, 0).unwrap().and_utc().timestamp_millis());
+    let end_idx = local_day_index(to.and_hms_opt(0, 0, 0).unwrap().and_utc().timestamp_millis());
 
     let mut counts: std::collections::HashMap<i64, i64> = std::collections::HashMap::new();
     for r in rows.iter().filter(|r| r.done == 1) {
         if let Some(ts) = r.done_at {
             let idx = local_day_index(ts);
-            if idx >= start_idx && idx <= today_idx {
+            if idx >= start_idx && idx <= end_idx {
                 *counts.entry(idx).or_insert(0) += 1;
             }
         }
     }
 
-    // day index → YYYY-MM-DD：基准用今天的本地日期逐日回退（chrono NaiveDate 支持
-    // signed_days_offset，窗口最长 371 天不会溢出）
-    let today_local = chrono::Local::now().date_naive();
-    let cells: Vec<HeatmapCell> = (0..days)
+    let total_days = (end_idx - start_idx + 1) as usize;
+    let cells: Vec<HeatmapCell> = (0..total_days)
         .map(|offset| {
-            let d = today_local - chrono::Duration::days(days - 1 - offset);
-            let idx = start_idx + offset;
+            let idx = start_idx + offset as i64;
             HeatmapCell {
-                date: d.format("%Y-%m-%d").to_string(),
+                date: day_index_to_date(idx).format("%Y-%m-%d").to_string(),
                 count: counts.get(&idx).copied().unwrap_or(0),
             }
         })
         .collect();
 
     Ok(HeatmapData {
+        year,
         start_date: cells.first().map(|c| c.date.clone()).unwrap_or_default(),
         end_date: cells.last().map(|c| c.date.clone()).unwrap_or_default(),
         cells,
     })
+}
+
+/// 可选年份：汇总全部完成记录的年份（升序去重；无任何完成记录回退 [当前年]）。
+/// 只按 done_at 聚合（与热力图同口径），不看创建时间——补录的历史完成也该能切到。
+async fn stats_available_years_impl(pool: &SqlitePool) -> CoreResult<Vec<i64>> {
+    let rows = fetch_stat_rows(pool).await?;
+    let current_year = chrono::Local::now().year() as i64;
+    let mut years: std::collections::BTreeSet<i64> = rows
+        .iter()
+        .filter(|r| r.done == 1)
+        .filter_map(|r| r.done_at)
+        .map(|ts| {
+            Utc.timestamp_millis_opt(ts)
+                .single()
+                .unwrap_or_else(|| Utc.timestamp_millis_opt(0).single().unwrap())
+                .with_timezone(&chrono::Local)
+                .year() as i64
+        })
+        .filter(|&y| (1900..=current_year).contains(&y))
+        .collect();
+    if years.is_empty() {
+        years.insert(current_year);
+    }
+    Ok(years.into_iter().collect())
 }
 
 /// streak 双值计算（纯函数，单测注入固定日集）
@@ -358,6 +411,8 @@ pub struct StatsAggregate {
     pub by_project: Vec<ProjectDistRow>,
     pub by_priority: Vec<PriorityDistRow>,
     pub by_weekday: Vec<WeekdayDistRow>,
+    /// 热力图可选年份（升序；有完成记录的年份，空则 [当前年]）
+    pub available_years: Vec<i64>,
 }
 
 // ============================================================================
@@ -445,20 +500,66 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn heatmap_spans_every_day_including_zero_days() {
+    async fn heatmap_current_year_rolling_window_and_history_year() {
         let pool = setup_db().await;
         let now = now_ms();
         seed_done(&pool, "t", now, 0).await;
         seed_done(&pool, "y", now - DAY_MS, 0).await;
         seed_done(&pool, "y2", now - DAY_MS, 0).await;
 
-        let h = stats_heatmap_impl(&pool, 35).await.unwrap();
-        assert_eq!(h.cells.len(), 35);
+        // 当前年（不传 year）：滚动 365 天窗口
+        let h = stats_heatmap_impl(&pool, chrono::Local::now().year() as i64)
+            .await
+            .unwrap();
+        assert_eq!(h.cells.len(), 365, "当前年 = 滚动 365 天");
         let last = h.cells.last().unwrap();
         assert_eq!(last.count, 1, "今天 1 条");
-        assert_eq!(h.cells[33].count, 2, "昨天 2 条");
-        assert!(h.cells.iter().any(|c| c.count == 0), "应有零完成日");
+        assert_eq!(h.cells[363].count, 2, "昨天 2 条");
         assert_eq!(h.end_date, last_date_str());
+
+        // 历史年：完整 1/1 ~ 12/31，共 365/366 格；去年同日之后无今天的数据
+        let last_year = chrono::Local::now().year() as i64 - 1;
+        let h2 = stats_heatmap_impl(&pool, last_year).await.unwrap();
+        let expected_days =
+            (chrono::NaiveDate::from_ymd_opt(last_year as i32, 12, 31).unwrap()
+                - chrono::NaiveDate::from_ymd_opt(last_year as i32, 1, 1).unwrap())
+            .num_days() as usize
+                + 1;
+        assert_eq!(h2.cells.len(), expected_days);
+        assert_eq!(h2.start_date, format!("{last_year}-01-01"));
+        assert_eq!(h2.end_date, format!("{last_year}-12-31"));
+        // 去年完成（今天-1d 与今天都不落在去年窗口的尾部 = 全 0 除非跨年窗口）
+        assert!(h2.cells.iter().all(|c| c.date.starts_with(&format!("{last_year}-"))));
+    }
+
+    #[tokio::test]
+    async fn available_years_collects_done_years_and_fallback() {
+        let pool = setup_db().await;
+        // 无完成记录 → [当前年]
+        let empty = stats_available_years_impl(&pool).await.unwrap();
+        assert_eq!(empty, vec![chrono::Local::now().year() as i64]);
+
+        // 今天 + 去年各一条完成 → 两年都可选（按 done_at，不看创建时间）
+        let now = now_ms();
+        seed_done(&pool, "t", now, 0).await;
+        let last_year = chrono::Local::now().year() as i64 - 1;
+        let last_year_ms = chrono::NaiveDate::from_ymd_opt(last_year as i32, 6, 1)
+            .unwrap()
+            .and_hms_opt(12, 0, 0)
+            .unwrap()
+            .and_utc()
+            .timestamp_millis();
+        seed_done(&pool, "old", last_year_ms, 0).await;
+
+        let years = stats_available_years_impl(&pool).await.unwrap();
+        assert!(years.contains(&last_year));
+        assert!(years.contains(&(chrono::Local::now().year() as i64)));
+        // 升序
+        assert_eq!(years, {
+            let mut v = years.clone();
+            v.sort_unstable();
+            v
+        });
     }
 
     fn last_date_str() -> String {
@@ -548,12 +649,14 @@ mod tests {
     async fn aggregate_returns_all_sections() {
         let pool = setup_db().await;
         seed_done(&pool, "x", now_ms(), 0).await;
-        let agg = aggregate(&pool, 53).await.unwrap();
+        let agg = aggregate(&pool, None).await.unwrap();
         assert_eq!(agg.overview.total, 1);
-        assert_eq!(agg.heatmap.cells.len(), 53);
+        assert_eq!(agg.heatmap.cells.len(), 365, "默认当前年 = 滚动 365 天");
+        assert_eq!(agg.heatmap.year, chrono::Local::now().year() as i64);
         assert!(agg.streak.done_today);
         assert!(!agg.by_priority.is_empty());
         assert_eq!(agg.by_weekday.len(), 7);
+        assert!(!agg.available_years.is_empty());
     }
 }
 

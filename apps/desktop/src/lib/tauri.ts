@@ -804,6 +804,8 @@ export interface StatsHeatmapCell {
   count: number;
 }
 export interface StatsHeatmap {
+  /** 热力图年份（入参回显） */
+  year: number;
   start_date: string;
   end_date: string;
   cells: StatsHeatmapCell[];
@@ -839,10 +841,12 @@ export interface StatsAggregate {
   by_project: StatsProjectRow[];
   by_priority: StatsPriorityRow[];
   by_weekday: StatsWeekdayRow[];
+  /** 热力图可选年份（升序；有完成记录的年份，空则 [当前年]） */
+  available_years: number[];
 }
-/** 统计聚合（days 为热力图窗口天数，35–371 钳制；默认 182=半年） */
-export const statsAggregate = (days?: number) =>
-  invoke<StatsAggregate>("stats_aggregate", { days });
+/** 统计聚合（year 为热力图年份；缺省当前年 = 滚动 365 天窗口） */
+export const statsAggregate = (year?: number) =>
+  invoke<StatsAggregate>("stats_aggregate", { year });
 
 /** 一键复制任务（#37：克隆字段+子任务，副本标题后缀） */
 export const todoTaskDuplicate = (id: number) =>
