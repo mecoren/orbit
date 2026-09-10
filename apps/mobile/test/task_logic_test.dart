@@ -459,4 +459,41 @@ group('视图创建默认值（quickViewCreateDefaults + weekDefaultDueMs）', (
     }
   });
 });
+// ---------- 逾期置顶分组（性能批次，与桌面 groupOverdueFirst 同口径）----------
+
+group('groupOverdueFirst 逾期置顶分组', () {
+  const now = 1700000000000;
+
+  test('未完成且截止已过 → overdue；其余（无截止/未到期/已完成）→ rest', () {
+    final g = groupOverdueFirst([
+      _task(id: 1, dueDate: now - 1000),
+      _task(id: 2),
+      _task(id: 3, dueDate: now + 1000),
+      _task(id: 4, done: 1, dueDate: now - 1000),
+    ], now);
+    expect(g.overdue.map((t) => t.id), [1]);
+    expect(g.rest.map((t) => t.id), [2, 3, 4]);
+  });
+
+  test('无逾期任务 → overdue 空且 rest 保序', () {
+    final g = groupOverdueFirst([_task(id: 1), _task(id: 2)], now);
+    expect(g.overdue, isEmpty);
+    expect(g.rest.map((t) => t.id), [1, 2]);
+  });
+
+  test('dueDate 恰等于 now 不算逾期（未过口径，左开右闭）', () {
+    final g = groupOverdueFirst([_task(id: 1, dueDate: now)], now);
+    expect(g.overdue, isEmpty);
+    expect(g.rest.map((t) => t.id), [1]);
+  });
+
+  test('组内保持原相对顺序（不重排）', () {
+    final g = groupOverdueFirst([
+      _task(id: 3, dueDate: now - 3000),
+      _task(id: 1, dueDate: now - 1000),
+      _task(id: 2, dueDate: now - 2000),
+    ], now);
+    expect(g.overdue.map((t) => t.id), [3, 1, 2]);
+  });
+});
 }

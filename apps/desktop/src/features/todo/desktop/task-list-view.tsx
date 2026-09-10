@@ -31,7 +31,7 @@ import {
   type DragStartEvent,
 } from "@dnd-kit/core";
 import {
-  ListChecks, Check, CircleCheck, Clock, Flag, FolderInput, GripVertical, Inbox, Plus, Star, StarOff, Sunrise, Trash2, X } from "lucide-react";
+  ListChecks, Check, CircleCheck, Clock, Flag, FolderInput, GripVertical, Inbox, Plus, Star, StarOff, Sunrise, Trash2, TriangleAlert, X } from "lucide-react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { toast } from "sonner";
 
@@ -60,6 +60,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { ErrorState } from "@/components/business/error-state";
 import { EmptyState } from "@/components/business/empty-state";
 import { completeTask } from "../shared/task-actions";
+import { groupOverdueFirst } from "../shared/task-filters";
 import { isListActivationKey, listNavDirection } from "../shared/list-keyboard";
 import { midpoint } from "../shared/position";
 import { batchUpdateStatus, batchUpdatePriority, batchUpdateFavorite, batchMoveToProject, batchUpdateMyDay } from "../shared/batch-actions";
@@ -138,15 +139,21 @@ export function TaskListView({ tasks, projects, labelsByTask, remindersByTask, l
     requestAnimationFrame(tryFocus);
   };
 
+  // 逾期置顶分组（性能批次 UX 优化）：未完成且已过截止的任务划入「逾期」
+  // 区置顶展示；无逾期时 overdue 空、rest 即全量——虚拟化数据源统一用
+  // rest，拖拽/键盘索引语义不受影响（dnd 落位走 tasks 原数组 findIndex）。
+  const now = Date.now();
+  const { overdue: overdueTasks, rest } = useMemo(() => groupOverdueFirst(tasks, now), [tasks, now]);
+
   // P0 虚拟化：仅渲染可视窗 ± overscan。行高固定 57px（TaskRow h-[57px]），
   // 元信息有无不改变行高——固定尺寸让 estimateSize 与实测恒一致，
   // 消除动态 measure 下滚动/增删行时的高度重排抖动
   const virtualizer = useVirtualizer({
-    count: tasks.length,
+    count: rest.length,
     getScrollElement: () => scrollRef.current,
     estimateSize: () => 57,
     overscan: 8,
-    getItemKey: (i) => tasks[i].id,
+    getItemKey: (i) => rest[i].id,
   });
 
   // 拖拽（P1#11）：PointerSensor distance:6 —— 小位移不算拖拽，保证行点击；
@@ -325,6 +332,54 @@ export function TaskListView({ tasks, projects, labelsByTask, remindersByTask, l
   };
   const draggingTask = draggingId != null ? tasks.find((t) => t.id === draggingId) : undefined;
 
+  const renderRow = (t: TodoTask, vi: { index: number; start: number }) => {
+    const overdue = !!t.due_date && !t.done && t.due_date < Date.now();
+    const due = dueText(t.due_date);
+    const project = t.project_id != null ? projectById.get(t.project_id) : undefined;
+    const reminder = displayReminder(remindersByTask.get(t.id) ?? [], Date.now(), !!t.done);
+    return (
+      // 绝对定位行容器：divide-y 在脱离文档流的兄弟间不生效，改每行自带 border-b。
+      // 用 top 而非 transform 定位（见文件头注释）
+      <div
+        key={t.id}
+        data-index={vi.index}
+        ref={virtualizer.measureElement}
+        style={{ position: "absolute", top: vi.start, left: 0, width: "100%" }}
+      >
+        <TaskContextMenu task={t} projects={projects} onOpenDetail={() => onOpenDetail(t.id)}>
+          <TaskRow
+            task={t}
+            index={vi.index}
+            count={tasks.length}
+            labels={labelsByTask.get(t.id) ?? []}
+            project={project}
+            due={due}
+            overdue={overdue}
+            reminder={reminder}
+            dragging={draggingId === t.id}
+            selected={selected.has(t.id)}
+            hasSelection={selected.size > 0}
+            registerRef={(el) => {
+              if (el) rowRefs.current.set(t.id, el);
+              else rowRefs.current.delete(t.id);
+            }}
+            onActivate={() => {
+              // 有选择态时，行点击切换勾选（与竞品一致）；否则打开详情
+              if (selected.size > 0) toggleSelect(t.id, false);
+              else onOpenDetail(t.id);
+            }}
+            onToggleSelect={(shift) => toggleSelect(t.id, shift)}
+            onFocusMove={(dir) => focusRow(vi.index + (dir === "down" ? 1 : -1))}
+            onToggleDone={() => void completeTask(t)}
+            onToggleFavorite={() => toggleFavorite(t)}
+            onToggleMyDay={() => toggleMyDay(t)}
+            sortable={sortable}
+          />
+        </TaskContextMenu>
+      </div>
+    );
+  };
+
   return (
     <DndContext
       sensors={sensors}
@@ -334,55 +389,50 @@ export function TaskListView({ tasks, projects, labelsByTask, remindersByTask, l
       onDragCancel={() => setDraggingId(null)}
     >
       <div ref={scrollRef} className="flex-1 overflow-y-auto">
+        {/* 逾期置顶区（非虚拟化：逾期集天然有限，行数≈视图内未完成逾期项） */}
+        {overdueTasks.length > 0 && (
+          <div className="border-b border-border/30 bg-destructive/5">
+            <div className="flex items-center gap-1.5 px-4 py-1.5">
+              <TriangleAlert className="size-3.5 text-destructive" />
+              <span className="text-xs font-medium text-destructive">
+                逾期 · {overdueTasks.length}
+              </span>
+            </div>
+            {overdueTasks.map((t) => (
+              <TaskContextMenu key={`od-${t.id}`} task={t} projects={projects} onOpenDetail={() => onOpenDetail(t.id)}>
+                <TaskRow
+                  task={t}
+                  index={-1}
+                  count={tasks.length}
+                  labels={labelsByTask.get(t.id) ?? []}
+                  project={t.project_id != null ? projectById.get(t.project_id) : undefined}
+                  due={dueText(t.due_date)}
+                  overdue={true}
+                  reminder={displayReminder(remindersByTask.get(t.id) ?? [], Date.now(), !!t.done)}
+                  dragging={draggingId === t.id}
+                  selected={selected.has(t.id)}
+                  hasSelection={selected.size > 0}
+                  registerRef={(el) => {
+                    if (el) rowRefs.current.set(t.id, el);
+                    else rowRefs.current.delete(t.id);
+                  }}
+                  onActivate={() => {
+                    if (selected.size > 0) toggleSelect(t.id, false);
+                    else onOpenDetail(t.id);
+                  }}
+                  onToggleSelect={(shift) => toggleSelect(t.id, shift)}
+                  onFocusMove={() => {}}
+                  onToggleDone={() => void completeTask(t)}
+                  onToggleFavorite={() => toggleFavorite(t)}
+                  onToggleMyDay={() => toggleMyDay(t)}
+                  sortable={false}
+                />
+              </TaskContextMenu>
+            ))}
+          </div>
+        )}
         <RowContainerDropZone totalSize={virtualizer.getTotalSize()}>
-          {virtualizer.getVirtualItems().map((vi) => {
-            const t = tasks[vi.index];
-            const overdue = !!t.due_date && !t.done && t.due_date < Date.now();
-            const due = dueText(t.due_date);
-            const project = t.project_id != null ? projectById.get(t.project_id) : undefined;
-            const reminder = displayReminder(remindersByTask.get(t.id) ?? [], Date.now(), !!t.done);
-            return (
-              // 绝对定位行容器：divide-y 在脱离文档流的兄弟间不生效，改每行自带 border-b。
-              // 用 top 而非 transform 定位（见文件头注释）
-              <div
-                key={t.id}
-                data-index={vi.index}
-                ref={virtualizer.measureElement}
-                style={{ position: "absolute", top: vi.start, left: 0, width: "100%" }}
-              >
-                <TaskContextMenu task={t} projects={projects} onOpenDetail={() => onOpenDetail(t.id)}>
-                  <TaskRow
-                    task={t}
-                    index={vi.index}
-                    count={tasks.length}
-                    labels={labelsByTask.get(t.id) ?? []}
-                    project={project}
-                    due={due}
-                    overdue={overdue}
-                    reminder={reminder}
-                    dragging={draggingId === t.id}
-                    selected={selected.has(t.id)}
-                    hasSelection={selected.size > 0}
-                    registerRef={(el) => {
-                      if (el) rowRefs.current.set(t.id, el);
-                      else rowRefs.current.delete(t.id);
-                    }}
-                    onActivate={() => {
-                      // 有选择态时，行点击切换勾选（与竞品一致）；否则打开详情
-                      if (selected.size > 0) toggleSelect(t.id, false);
-                      else onOpenDetail(t.id);
-                    }}
-                    onToggleSelect={(shift) => toggleSelect(t.id, shift)}
-                    onFocusMove={(dir) => focusRow(vi.index + (dir === "down" ? 1 : -1))}
-                    onToggleDone={() => void completeTask(t)}
-                    onToggleFavorite={() => toggleFavorite(t)}
-                    onToggleMyDay={() => toggleMyDay(t)}
-                    sortable={sortable}
-                  />
-                </TaskContextMenu>
-              </div>
-            );
-          })}
+          {virtualizer.getVirtualItems().map((vi) => renderRow(rest[vi.index], vi))}
         </RowContainerDropZone>
       </div>
 

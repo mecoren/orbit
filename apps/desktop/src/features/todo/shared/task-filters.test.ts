@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { type TodoTask } from "@/lib/tauri";
-import { filterTasks, sortTasks } from "./task-filters";
+import { filterTasks, groupOverdueFirst, sortTasks } from "./task-filters";
 
 /** 补齐 TodoTask 全部必填字段的工厂 */
 function mk(partial: Partial<TodoTask>): TodoTask {
@@ -313,5 +313,45 @@ describe("filterTasks - quickView my_day（我的一天）", () => {
     expect(
       filterTasks(tasks, { quickView: "my_day", statusFilter: "undone" }).map((t) => t.id),
     ).toEqual([1]);
+  });
+});
+
+describe("groupOverdueFirst 逾期置顶分组", () => {
+  const NOW = 1_700_000_000_000;
+
+  it("未完成且截止已过 → 逾期区；其余（无截止/未到期/已完成）→ rest 区", () => {
+    const tasks = [
+      mk({ id: 1, done: 0, due_date: NOW - 1000 }),
+      mk({ id: 2, done: 0, due_date: null }),
+      mk({ id: 3, done: 0, due_date: NOW + 1000 }),
+      mk({ id: 4, done: 1, due_date: NOW - 1000 }),
+    ];
+    const g = groupOverdueFirst(tasks, NOW);
+    expect(g.overdue.map((t) => t.id)).toEqual([1]);
+    expect(g.rest.map((t) => t.id)).toEqual([2, 3, 4]);
+  });
+
+  it("无逾期任务时 overdue 为空、rest 为全量原序", () => {
+    const tasks = [mk({ id: 1 }), mk({ id: 2 })];
+    const g = groupOverdueFirst(tasks, NOW);
+    expect(g.overdue).toEqual([]);
+    expect(g.rest.map((t) => t.id)).toEqual([1, 2]);
+  });
+
+  it("due_date 恰等于 now 不算逾期（未过日界口径，左开右闭）", () => {
+    const tasks = [mk({ id: 1, done: 0, due_date: NOW })];
+    const g = groupOverdueFirst(tasks, NOW);
+    expect(g.overdue).toEqual([]);
+    expect(g.rest.map((t) => t.id)).toEqual([1]);
+  });
+
+  it("分组保持原相对顺序（逾期区内部顺序不重排）", () => {
+    const tasks = [
+      mk({ id: 3, done: 0, due_date: NOW - 3000 }),
+      mk({ id: 1, done: 0, due_date: NOW - 1000 }),
+      mk({ id: 2, done: 0, due_date: NOW - 2000 }),
+    ];
+    const g = groupOverdueFirst(tasks, NOW);
+    expect(g.overdue.map((t) => t.id)).toEqual([3, 1, 2]);
   });
 });

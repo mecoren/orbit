@@ -155,6 +155,34 @@ List<TodoTask> sortTasks(List<TodoTask> tasks, [TaskSortKey key = TaskSortKey.ma
   return sorted;
 }
 
+/// 逾期置顶分组结果（性能批次 UX 优化，与桌面 groupOverdueFirst 同口径）
+class OverdueGroups {
+  /// 未完成且截止已过（置顶展示）
+  final List<TodoTask> overdue;
+
+  /// 其余任务（无截止/未到期/已完成）
+  final List<TodoTask> rest;
+
+  const OverdueGroups({required this.overdue, required this.rest});
+}
+
+/// 逾期置顶分组：未完成且 dueDate < now 的任务划入「逾期」区，
+/// 其余落 rest 区——Todoist/MS To Do 同款信息层级。
+/// 仅判定展示拆分，不重排组内顺序（拖拽 position 语义不受影响）。
+OverdueGroups groupOverdueFirst(List<TodoTask> tasks, [int? nowMs]) {
+  final now = nowMs ?? DateTime.now().millisecondsSinceEpoch;
+  final overdue = <TodoTask>[];
+  final rest = <TodoTask>[];
+  for (final t in tasks) {
+    if (!t.isDone && t.dueDate != null && t.dueDate! < now) {
+      overdue.add(t);
+    } else {
+      rest.add(t);
+    }
+  }
+  return OverdueGroups(overdue: overdue, rest: rest);
+}
+
 // ---------- 写操作 patch 构造 ----------
 
 /// 勾选/取消勾选 → todoTaskUpdate 的增量 patch：

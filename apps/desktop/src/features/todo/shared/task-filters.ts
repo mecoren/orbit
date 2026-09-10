@@ -132,3 +132,26 @@ export function sortTasks(tasks: TodoTask[], sortKey: TaskSortKey = "manual"): T
       });
   }
 }
+
+/**
+ * 逾期置顶分组（性能批次 UX 优化）：未完成且截止时间已过的任务
+ * 划入「逾期」区置顶展示，其余落「其余任务」区——Todoist/MS To Do
+ * 同款信息层级，逾期项永远先被看见。
+ *
+ * 判定口径与 task-list-view 行内 overdue 一致：due_date < now 且 !done。
+ * 仅在存在逾期任务时分组（无逾期时 second 为全量、避免空区块噪音）；
+ * 拖拽重排语义不受影响（逾期区/普通区各自内部维持原顺序，跨区拖拽
+ * 依旧按 position 中值落位——dnd 事件照常走 tasks 原数组索引）。
+ */
+export function groupOverdueFirst(
+  tasks: TodoTask[],
+  now = Date.now(),
+): { overdue: TodoTask[]; rest: TodoTask[] } {
+  const overdue: TodoTask[] = [];
+  const rest: TodoTask[] = [];
+  for (const t of tasks) {
+    if (!t.done && t.due_date != null && t.due_date < now) overdue.push(t);
+    else rest.push(t);
+  }
+  return { overdue, rest };
+}

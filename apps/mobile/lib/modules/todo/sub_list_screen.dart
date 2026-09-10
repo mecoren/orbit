@@ -238,6 +238,10 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
     final visible = sortTasks(filterTasks(tasks, widget.query), _sortKey);
     final projectById = {for (final p in projects) p.id: p};
 
+    // 逾期置顶分组（性能批次 UX 优化，与桌面同口径）：逾期行渲染在列表
+    // 顶部的红调区块，其余照旧——长按拖拽语义不受影响（重排仍走原序数组）
+    final overdueGroups = groupOverdueFirst(visible);
+
     // 动态标题：项目名 / 未分组 / 视图名
     final title = switch (widget.query) {
       TaskFilterInput(projectId: final id?) =>
@@ -324,9 +328,62 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
             : ListView.builder(
                 controller: _listScrollController,
                 padding: listPadding,
-                itemCount: visible.length,
-                itemBuilder: (context, index) =>
-                    buildTile(visible[index], dragHandle: null),
+                // 逾期置顶（非重排档）：逾期行 + 区块头算作前置 item，
+                // 后接 rest 任务行——单一 builder 保持懒加载，不额外组 chunk
+                itemCount: overdueGroups.overdue.isNotEmpty
+                    ? overdueGroups.overdue.length + 1 + overdueGroups.rest.length
+                    : overdueGroups.rest.length,
+                itemBuilder: (context, index) {
+                  final od = overdueGroups.overdue;
+                  if (od.isNotEmpty && index == od.length) {
+                    // 逾期区尾部即为「其余」分隔（区块头随首行渲染在 index 0 前，
+                    // 见下方 header 判定）；此处渲染 rest 区标题行
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(
+                          vertical: AppDimens.space4),
+                      child: Text(
+                        '  其余任务',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: colors.secondaryText,
+                        ),
+                      ),
+                    );
+                  }
+                  final isOverdueZone = od.isNotEmpty && index <= od.length;
+                  if (od.isNotEmpty && index == 0) {
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.symmetric(
+                              vertical: AppDimens.space4),
+                          child: Row(
+                            children: [
+                              Icon(Icons.warning_amber_rounded,
+                                  size: AppDimens.iconSizeSm,
+                                  color: colors.destructive),
+                              const SizedBox(width: AppDimens.space4),
+                              Text(
+                                '逾期 · ${od.length}',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: colors.destructive,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        buildTile(od[0], dragHandle: null),
+                      ],
+                    );
+                  }
+                  final task = isOverdueZone
+                      ? od[index - 1]
+                      : overdueGroups.rest[index - od.length - 1];
+                  return buildTile(task, dragHandle: null);
+                },
               );
 
     return Scaffold(
