@@ -6,6 +6,7 @@
 
 use base64::{Engine, engine::general_purpose::STANDARD as BASE64};
 use orbit_core::cloud_sync::engine::SyncEngine;
+use orbit_core::cloud_sync::progress::SyncOrigin;
 use orbit_core::sync_crypto::error::SyncCryptoError;
 use orbit_core::sync_crypto::meta_store::SyncCryptoMeta;
 use tauri::{AppHandle, Manager};
@@ -117,7 +118,7 @@ pub async fn sync_crypto_change_password(
     // v2 判定需在改密前读取 meta
     let is_v2 = svc
         .meta_version()
-        .map(|v| v == orbit_core::sync_crypto::KEY_DERIVATION_V2)
+        .map(|v| v.as_deref() == Some(orbit_core::sync_crypto::KEY_DERIVATION_V2))
         .unwrap_or(false);
 
     // v1：本机改包装即可（Key 不变）
@@ -193,7 +194,7 @@ pub async fn sync_crypto_upgrade_v2(app: AppHandle, sync_password: String) -> Re
 
     if svc
         .meta_version()
-        .map(|v| v == orbit_core::sync_crypto::KEY_DERIVATION_V2)
+        .map(|v| v.as_deref() == Some(orbit_core::sync_crypto::KEY_DERIVATION_V2))
         .unwrap_or(false)
     {
         return Err("[sync_crypto] 当前已是 v2 密钥方案，无需迁移".to_string());
