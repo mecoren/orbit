@@ -5,6 +5,7 @@
 
 import 'api/asset.dart';
 import 'api/auth.dart';
+import 'api/biometric.dart';
 import 'api/csv_import.dart';
 import 'api/dto.dart';
 import 'api/events.dart';
@@ -46,6 +47,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   String dco_decode_String(dynamic raw);
+
+  @protected
+  BiometricSecretBundle dco_decode_biometric_secret_bundle(dynamic raw);
 
   @protected
   bool dco_decode_bool(dynamic raw);
@@ -406,6 +410,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   String sse_decode_String(SseDeserializer deserializer);
+
+  @protected
+  BiometricSecretBundle sse_decode_biometric_secret_bundle(
+    SseDeserializer deserializer,
+  );
 
   @protected
   bool sse_decode_bool(SseDeserializer deserializer);
@@ -833,6 +842,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_String(String self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_biometric_secret_bundle(
+    BiometricSecretBundle self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_bool(bool self, SseSerializer serializer);

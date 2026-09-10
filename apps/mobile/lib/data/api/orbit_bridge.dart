@@ -113,6 +113,25 @@ class CsvImportPreviewRow {
   });
 }
 
+/// biometric 密钥链三件套（Base64 standard；FRB biometric.rs 镜像，
+/// 存储于 flutter_secure_storage，加解密编排下沉 Rust）
+class BiometricSecretBundle {
+  /// AES-256-GCM(Biometric Key, DB Key, nonce) 密文
+  final String encryptedDbKeyBio;
+
+  /// 32 字节随机 Biometric Key
+  final String biometricKey;
+
+  /// 12 字节随机 nonce
+  final String nonce;
+
+  const BiometricSecretBundle({
+    required this.encryptedDbKeyBio,
+    required this.biometricKey,
+    required this.nonce,
+  });
+}
+
 /// Orbit 数据桥抽象（omnipass `OmniBridge` 同款模式）
 ///
 /// 移动端唯一数据入口。UI 层只依赖本抽象：
@@ -137,6 +156,22 @@ abstract class OrbitBridge {
 
   /// 仅验证主密码（敏感操作二次确认）
   Future<bool> masterAuthVerify(String password);
+
+  // ── 生物识别解锁（密钥链在 Secure Storage，加解密在 Rust）──
+
+  /// 生成 biometric 密钥链三件套（Base64），供写入 Secure Storage
+  ///
+  /// 调用前提：当前会话已解锁（持有 db_key_hex）且刚通过指纹认证。
+  Future<BiometricSecretBundle> biometricSetup(String dbKeyHex);
+
+  /// 指纹认证通过后的解密：三件套 → db_key_hex（与 masterAuthUnlock
+  /// 同契约；DB 初始化仍走 dbInitEncrypted 单一路径，BootGate 汇合）
+  ///
+  /// 密钥链损坏抛 `[biometric_failed]`（UI 引导回密码路径或关闭重开开关）。
+  Future<String> biometricUnlock(BiometricSecretBundle bundle);
+
+  /// 关闭前密码确认（防误触）；Rust 仅验证，删除三件套由 Secure Storage 层完成
+  Future<void> biometricDisable(String password);
 
   // ── DB 生命周期 ──
 

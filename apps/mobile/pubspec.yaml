@@ -31,6 +31,12 @@ dependencies:
   timezone: ^0.11.1
   flutter_timezone: ^5.1.0
 
+  # 生物识别解锁三件套：指纹闸门（local_auth，要求宿主 Activity 为
+  # FragmentActivity）+ 密钥链存储（flutter_secure_storage，Android
+  # Keystore 加密；存 encrypted_db_key_bio/biometric_key/nonce 三键）
+  local_auth: ^3.0.0
+  flutter_secure_storage: ^10.0.0-beta.4
+
   # ── FRB 桥接（cargokit FFI 插件壳，构建 crates/orbit-flutter）──
   flutter_rust_bridge: 2.12.0
   rust_lib_orbit:

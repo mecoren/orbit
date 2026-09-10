@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
+
 import 'dto.dart';
 import 'mock_store.dart';
 import 'orbit_bridge.dart';
@@ -51,6 +53,50 @@ class MockOrbitBridge implements OrbitBridge {
 
   @override
   Future<bool> masterAuthVerify(String password) async => true;
+
+  // ── 生物识别解锁（mock：密钥链编排在内存，闭环可跑通）──
+
+  /// 内存密钥链（biometricSetup 写入 / biometricUnlock 读出校验）
+  BiometricSecretBundle? _bioBundle;
+
+  /// 测试预置口：直接放三件套（绕过 async setup，widget 测试秒装）
+  @visibleForTesting
+  set bioBundleForTest(BiometricSecretBundle? bundle) => _bioBundle = bundle;
+
+  @override
+  Future<BiometricSecretBundle> biometricSetup(String dbKeyHex) => _delay(() {
+        if (dbKeyHex.length != 64) {
+          throw Exception('[invalid_input] DB Key hex 长度非法');
+        }
+        return _bioBundle = BiometricSecretBundle(
+          encryptedDbKeyBio: 'mock:${dbKeyHex.hashCode}',
+          biometricKey: 'mock-biometric-key',
+          nonce: 'mock-nonce',
+        );
+      });
+
+  @override
+  Future<String> biometricUnlock(BiometricSecretBundle bundle) => _delay(() {
+        if (!store.masterAuthSet) {
+          throw Exception('[not_initialized] 未设置主密码');
+        }
+        final saved = _bioBundle;
+        if (saved == null ||
+            saved.encryptedDbKeyBio != bundle.encryptedDbKeyBio ||
+            saved.biometricKey != bundle.biometricKey ||
+            saved.nonce != bundle.nonce) {
+          throw Exception('[biometric_failed] 生物识别解锁失败（密钥数据可能已损坏）');
+        }
+        return 'a' * 64;
+      });
+
+  @override
+  Future<void> biometricDisable(String password) => _delay(() {
+        if (password.isEmpty) {
+          throw Exception('[wrong_password] 主密码错误');
+        }
+        _bioBundle = null;
+      });
 
   // ── DB 生命周期 ──
 

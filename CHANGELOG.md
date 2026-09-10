@@ -7,6 +7,17 @@
 
 ## [Unreleased]
 
+### 移动端生物识别解锁落地——指纹代替主密码解锁加密库（半成品收编）
+
+全仓审计发现 `orbit-core/src/crypto/biometric.rs` 自初始提交就有完整实现（`biometric_unlock_db_key` 带四组单测，文件头连 Dart 侧密钥链结构都设计好了），但全仓零消费点——pubspec 无 local_auth/flutter_secure_storage、unlock_page 纯密码输入，「地基已打、房子没盖」。Tasks.org/TickTick/MS To Do 移动端全有指纹解锁，与本项目 SQLCipher 加密本地库卖点天然契合。本批纯移动端接线（core 加解密函数零改动）三端链路一次落地：
+
+- **Rust 桥**（orbit-flutter 新 `api/biometric.rs`，消费既有 core 函数）：`biometric_setup(db_key_hex)` 生成密钥链三件套（32B 随机 Biometric Key AES-256-GCM 加密 DB Key，Base64 供 Dart 落 Secure Storage）；`biometric_unlock` 三件套解出 db_key_hex——对齐 masterAuthUnlock 契约不直通 DB 初始化，与密码路径在 BootGate 汇合保持单一路径；`biometric_disable(password)` 关闭前主密码验证（verify_master_auth，防误触）。
+- **Dart 侧**：`BiometricService`（注入式 gate/store 分层，local_auth 指纹闸门 `biometricOnly: true` + flutter_secure_storage 三键存取，编排全在服务层）；OrbitBridge 抽象/RustOrbitBridge/MockOrbitBridge 三处同口径补方法（mock 闭环可测）。
+- **UI**：UnlockPage 已启用且硬件可用时展示「指纹解锁」按钮（点击走闸门+解密→同 onUnlocked 回调；密钥链损坏 `[biometric_failed]` 展示错误回落密码路径）；设置页安全卡由只读文案升级为指纹开关（开启=密码确认弹窗→闸门→落键；关闭=密码确认→删键；无指纹硬件回退只读提示）。
+- **平台接线**：MainActivity 改继承 `FlutterFragmentActivity`（local_auth BiometricPrompt 硬性要求）+ manifest 声明 USE_BIOMETRIC；local_auth 3.0.2 / flutter_secure_storage 10.3.2。
+- **边界**：密钥链仅存本机 Secure Storage 不进云同步（设备各自启用）；改密不换 DB Key（v2 方案）无需重置三件套；主密码重置另生新 DB Key 时解锁必败，UI 引导密码路径重开。
+- **验证**：cargo test 409 全绿 + FRB codegen 一致性过门禁；flutter analyze 0 新增问题；新增 20 用例全绿（桥/服务单测 14 + UnlockPage 指纹入口 3 + 设置页开关 3）+ 全量 228 例全过。
+
 ### KeyMismatch 恢复引导失效修复——错误 tag 双层方括号 `[[key_mismatch]]` 致前端正则失配
 
 用户报告设置页「立即同步」仍弹原始 `[[key_mismatch]] Data Key 与云端密文不匹配…` 报错，没有跳恢复页。根因：`CloudSyncError::category_tag()` 返回的 tag 自带方括号（`"[key_mismatch]"`），双端桥层 `format!("[{}] …")` 又包一层，产出 `[[key_mismatch]]`；前端 `syncErrorTag` 正则 `^\[(\w+)\]` 遇双括号失配返回 null——设置页 `key_mismatch → navigate("/sync-recovery")` 引导分支永不触发，KeyMismatch 退化成裸报错（后台 `sync-key-mismatch` 事件链路正常，仅手动同步受影响）。

@@ -1,10 +1,18 @@
 package cn.wait.orbit
 
 import android.content.Intent
-import io.flutter.embedding.android.FlutterActivity
+import io.flutter.embedding.android.FlutterFragmentActivity
 import io.flutter.embedding.engine.FlutterEngine
 
-class MainActivity : FlutterActivity() {
+/**
+ * 宿主 Activity。
+ *
+ * 继承 FlutterFragmentActivity（而非 FlutterActivity）：local_auth 的
+ * Android 实现（BiometricPrompt）要求宿主为 FragmentActivity，否则
+ * authenticate() 抛 "BiometricPrompt requires FragmentActivity" ——
+ * 官方 README §Android integration 明确要求此改动。
+ */
+class MainActivity : FlutterFragmentActivity() {
     /** 小而美批次④ 分享接收：其他 App「分享到」文本。冷启动（onNewIntent 之前
      *  intent 即携带 EXTRA_TEXT）与热运行（onNewIntent）两路都经
      *  MethodChannel("orbit/share") 回吐给 Dart 侧建任务。 */

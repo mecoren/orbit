@@ -3,6 +3,7 @@
 //! 模块划分与桌面命令域一一对应：
 //! - [state]：全局状态单例（无 Tauri Manager 的替代方案）
 //! - [auth]：主密码认证 + DB 生命周期
+//! - [biometric]：生物识别解锁（密钥链加解密编排，指纹闸门在 Dart 侧 local_auth）
 //! - [dto]：todo 域过桥类型的本地镜像（外部 crate 类型会被 FRB 降级 opaque，
 //!   见 dto.rs 模块注释）
 //! - [todo]：todo 八表 CRUD + 详情聚合（签名一律使用 [dto] 镜像类型）
@@ -17,6 +18,7 @@
 
 pub mod asset;
 pub mod auth;
+pub mod biometric;
 pub mod csv_import;
 pub mod dto;
 pub mod events;

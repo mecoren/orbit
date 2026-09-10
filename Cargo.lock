@@ -1467,6 +1467,7 @@ dependencies = [
 name = "orbit-flutter"
 version = "0.1.1"
 dependencies = [
+ "base64",
  "chrono",
  "flutter_rust_bridge",
  "log",

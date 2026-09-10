@@ -19,6 +19,10 @@
     <uses-permission android:name="android.permission.WAKE_LOCK"/>
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM"/>
     <uses-permission android:name="android.permission.VIBRATE"/>
+    <!-- 生物识别解锁（指纹闸门 local_auth）：BiometricPrompt 运行时
+         权限声明（API 28+ 系统对话框；API 23-27 由插件回落
+         FingerprintManager 兼容路径，不需要此权限） -->
+    <uses-permission android:name="android.permission.USE_BIOMETRIC"/>
     <application
         android:usesCleartextTraffic="true"
         android:label="orbit"

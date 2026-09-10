@@ -13,6 +13,7 @@ import '../../core/theme/orbit_accents.dart';
 import '../../data/api/dto.dart';
 import '../../data/api/orbit_bridge.dart'
     show CsvImportPreview, CsvImportStats;
+import '../../data/providers/biometric_provider.dart';
 import '../../data/providers/bridge_provider.dart';
 import '../../shared/widgets/liquid_glass_title_bar.dart';
 import '../../shared/widgets/scroll_offset_listenable.dart';
@@ -22,12 +23,15 @@ import '../../shared/widgets/wait_toast.dart';
 import '../todo/logic/task_logic.dart' show formatDateTime;
 import '../todo/providers/todo_providers.dart';
 
-/// 设置页 /settings（移动端任务书三卡结构）
+/// 设置页 /settings（移动端任务书卡片结构）
 ///
 /// - 同步卡：引擎摘要（脱敏 endpoint host/bucket）+ 上次同步时间 +
 ///   "立即同步" + "云同步设置"入口行（→ /settings/sync 配置页）；
-/// - 安全卡：只读文案——移动端暂不支持主密码迁移；
-/// - 关于卡：版本 0.1.0 → push /about。
+/// - 回收站卡：保留时间档位 + 回收站入口；
+/// - 安全卡：指纹解锁开关（密码确认 + 指纹闸门两段式；无指纹硬件
+///   回退只读提示）+ 桌面端迁移说明；
+/// - 数据导出/CSV 导入卡（07 报告 #15）；
+/// - 关于卡：版本 → push /about。
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
 
@@ -38,6 +42,13 @@ class SettingsScreen extends ConsumerStatefulWidget {
 class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   final _scrollController = ScrollController();
   bool _syncing = false;
+
+  /// 生物识别：硬件可用性（null=探测中）与启用状态（null=未启用/未知）
+  bool? _bioAvailable;
+  bool? _bioEnabled;
+
+  /// 生物识别开关交互中（防重复点击）
+  bool _bioBusy = false;
 
   /// 数据导出进行中的格式（'json' / 'csv'），null 空闲
   String? _exporting;
@@ -55,6 +66,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
   /// 执行结果统计（null = 未执行）
   CsvImportStats? _importResult;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadBioState();
+  }
 
   @override
   void dispose() {
@@ -260,6 +277,105 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     );
   }
 
+  /// 生物识别状态探测（build 期一次；开关翻转后手动 setState 刷新）
+  Future<void> _loadBioState() async {
+    final service = ref.read(biometricServiceProvider);
+    final available = await service.isAvailable();
+    if (!mounted) return;
+    if (!available) {
+      setState(() => _bioAvailable = false);
+      return;
+    }
+    final enabled = await service.isEnabled();
+    if (mounted) {
+      setState(() {
+        _bioAvailable = true;
+        _bioEnabled = enabled;
+      });
+    }
+  }
+
+  /// 主密码确认弹窗（生物识别开关两向共用；返回输入的密码或 null 取消）
+  Future<String?> _askPassword(String title, String hint) {
+    final controller = TextEditingController();
+    return showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(title),
+        content: TextField(
+          controller: controller,
+          obscureText: true,
+          autofocus: true,
+          decoration: InputDecoration(labelText: '主密码', hintText: hint),
+          onSubmitted: (_) => Navigator.pop(ctx, controller.text),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, controller.text),
+            child: const Text('确认'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// 开启生物识别：密码确认（Rust 验证拿 db_key_hex）→ 指纹闸门 → 落键
+  ///
+  /// 密码错误/指纹取消均中断，不落任何键；成功 toast 提示。
+  Future<void> _bioEnable() async {
+    if (_bioBusy) return;
+    final password = await _askPassword('开启指纹解锁', '请输入主密码确认');
+    if (password == null || password.isEmpty) return;
+    setState(() => _bioBusy = true);
+    try {
+      final bridge = ref.read(orbitBridgeProvider);
+      // 先验证密码再解锁取 key：解锁本身即可校验密码，错误即中断
+      final dbKeyHex = await bridge.masterAuthUnlock(password);
+      final service = ref.read(biometricServiceProvider);
+      final ok = await service.enable(dbKeyHex);
+      if (!mounted) return;
+      if (ok) {
+        setState(() => _bioEnabled = true);
+        WaitToast.success('已开启指纹解锁');
+      }
+      // ok=false：用户取消指纹，静默返回（开关不翻转）
+    } catch (e) {
+      if (mounted) WaitToast.destructive(_bioErrMsg(e));
+    } finally {
+      if (mounted) setState(() => _bioBusy = false);
+    }
+  }
+
+  /// 关闭生物识别：密码确认（Rust biometricDisable 验证）→ 删三键
+  Future<void> _bioDisable() async {
+    if (_bioBusy) return;
+    final password = await _askPassword('关闭指纹解锁', '请输入主密码确认');
+    if (password == null || password.isEmpty) return;
+    setState(() => _bioBusy = true);
+    try {
+      await ref.read(biometricServiceProvider).disable(password);
+      if (!mounted) return;
+      setState(() => _bioEnabled = false);
+      WaitToast.success('已关闭指纹解锁');
+    } catch (e) {
+      if (mounted) WaitToast.destructive(_bioErrMsg(e));
+    } finally {
+      if (mounted) setState(() => _bioBusy = false);
+    }
+  }
+
+  /// 桥错误 → 用户文案（与 UnlockPage.errMsg 同口径）
+  static String _bioErrMsg(Object e) {
+    var msg = e.toString();
+    msg = msg.replaceFirst(RegExp(r'^Exception:\s*'), '');
+    msg = msg.replaceAll(RegExp(r'^\[[^\]]*\]\s*'), '');
+    return msg.isEmpty ? '操作失败' : msg;
+  }
+
   @override
   Widget build(BuildContext context) {
     final colors = AppColors.ofContext(context);
@@ -443,14 +559,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   ),
                 ),
                 const SizedBox(height: AppDimens.space12),
-                // 三、安全卡（只读）
+                // 三、安全卡：生物识别开关（无指纹硬件回退只读提示）
                 SectionCard(
                   title: '安全',
-                  child: Text(
-                    '移动端暂不支持主密码迁移，相关操作请在桌面端完成。',
-                    style:
-                        TextStyle(fontSize: 13, color: colors.secondaryText),
-                  ),
+                  child: _buildSecurityCard(context),
                 ),
                 const SizedBox(height: AppDimens.space12),
                 // 数据导出卡（07 报告 #15）：明文 JSON/CSV，保存到应用文档目录
@@ -679,11 +791,52 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       ),
     );
   }
+  /// 安全卡内容：指纹硬件可用 → 指纹解锁开关；否则只读提示
+  ///（探测中空白占位避免闪烁；开关翻转动画期 _bioBusy 防重复触发）
+  Widget _buildSecurityCard(BuildContext context) {
+    final colors = AppColors.ofContext(context);
+    if (_bioAvailable == null) {
+      return const SizedBox(height: 20);
+    }
+    if (_bioAvailable != true) {
+      return Text(
+        '本机未检测到指纹硬件，无法开启指纹解锁；主密码相关操作请在桌面端完成。',
+        style: TextStyle(fontSize: 13, color: colors.secondaryText),
+      );
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                '指纹解锁',
+                style: TextStyle(fontSize: 14, color: colors.bodyText),
+              ),
+            ),
+            Switch(
+              value: _bioEnabled == true,
+              onChanged: (_bioBusy || _bioEnabled == null)
+                  ? null
+                  : (v) => v ? _bioEnable() : _bioDisable(),
+            ),
+          ],
+        ),
+        const SizedBox(height: AppDimens.space4),
+        Text(
+          _bioEnabled == true
+              ? '开启后可在解锁页用指纹代替主密码（密钥链存于系统安全存储，不离开本机）。'
+              : '用指纹代替主密码解锁加密库；密钥链存于系统安全存储，不参与云同步。主密码修改/迁移仍请在桌面端完成。',
+          style: TextStyle(fontSize: 12, color: colors.secondaryText),
+        ),
+      ],
+    );
+  }
 }
 
 /// 回收站保留档位文案（0 = 永久；缺省 30）
-String _trashRetentionLabel(int? days) {
-  if (days == null || days == 30) return '30 天';
+String _trashRetentionLabel(int? days) {  if (days == null || days == 30) return '30 天';
   return days == 0 ? '永久' : '$days 天';
 }
 

@@ -226,8 +226,18 @@ async fn stats_heatmap_impl(pool: &SqlitePool, year: i64) -> CoreResult<HeatmapD
     let (from, to) = heatmap_year_range(year);
     // 逐日铺格：日期序号整除即本地日界（chrono NaiveDate 全程本地语义，
     // 与 done_at 毫秒 → 本地日 index 的 local_day_index 口径一致）
-    let start_idx = local_day_index(from.and_hms_opt(0, 0, 0).unwrap().and_utc().timestamp_millis());
-    let end_idx = local_day_index(to.and_hms_opt(0, 0, 0).unwrap().and_utc().timestamp_millis());
+    let start_idx = local_day_index(
+        from.and_hms_opt(0, 0, 0)
+            .unwrap()
+            .and_utc()
+            .timestamp_millis(),
+    );
+    let end_idx = local_day_index(
+        to.and_hms_opt(0, 0, 0)
+            .unwrap()
+            .and_utc()
+            .timestamp_millis(),
+    );
 
     let mut counts: std::collections::HashMap<i64, i64> = std::collections::HashMap::new();
     for r in rows.iter().filter(|r| r.done == 1) {
@@ -520,16 +530,19 @@ mod tests {
         // 历史年：完整 1/1 ~ 12/31，共 365/366 格；去年同日之后无今天的数据
         let last_year = chrono::Local::now().year() as i64 - 1;
         let h2 = stats_heatmap_impl(&pool, last_year).await.unwrap();
-        let expected_days =
-            (chrono::NaiveDate::from_ymd_opt(last_year as i32, 12, 31).unwrap()
-                - chrono::NaiveDate::from_ymd_opt(last_year as i32, 1, 1).unwrap())
-            .num_days() as usize
-                + 1;
+        let expected_days = (chrono::NaiveDate::from_ymd_opt(last_year as i32, 12, 31).unwrap()
+            - chrono::NaiveDate::from_ymd_opt(last_year as i32, 1, 1).unwrap())
+        .num_days() as usize
+            + 1;
         assert_eq!(h2.cells.len(), expected_days);
         assert_eq!(h2.start_date, format!("{last_year}-01-01"));
         assert_eq!(h2.end_date, format!("{last_year}-12-31"));
         // 去年完成（今天-1d 与今天都不落在去年窗口的尾部 = 全 0 除非跨年窗口）
-        assert!(h2.cells.iter().all(|c| c.date.starts_with(&format!("{last_year}-"))));
+        assert!(
+            h2.cells
+                .iter()
+                .all(|c| c.date.starts_with(&format!("{last_year}-")))
+        );
     }
 
     #[tokio::test]

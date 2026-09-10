@@ -12,6 +12,7 @@ import '../../src/rust/api/events.dart' as gen_events;
 import '../../src/rust/api/plaintext_export.dart' as gen_export;
 import '../../src/rust/api/sync.dart' as gen_sync;
 import '../../src/rust/api/auth.dart' as gen_auth;
+import '../../src/rust/api/biometric.dart' as gen_bio;
 import '../../src/rust/api/todo.dart' as gen_todo;
 import '../../src/rust/api/trash.dart' as gen_trash;
 import '../../src/rust/api/stats.dart' as gen_stats;
@@ -55,6 +56,30 @@ class RustOrbitBridge implements OrbitBridge {
   @override
   Future<bool> masterAuthVerify(String password) async =>
       gen_auth.masterAuthVerify(baseDir: await _dir(), password: password);
+
+  // ── 生物识别解锁（三件套经 Secure Storage，此处仅密钥编排）──
+
+  @override
+  Future<BiometricSecretBundle> biometricSetup(String dbKeyHex) async {
+    final b = await gen_bio.biometricSetup(dbKeyHex: dbKeyHex);
+    return BiometricSecretBundle(
+      encryptedDbKeyBio: b.encryptedDbKeyBio,
+      biometricKey: b.biometricKey,
+      nonce: b.nonce,
+    );
+  }
+
+  @override
+  Future<String> biometricUnlock(BiometricSecretBundle bundle) =>
+      gen_bio.biometricUnlock(
+        encryptedDbKeyBioBase64: bundle.encryptedDbKeyBio,
+        biometricKeyBase64: bundle.biometricKey,
+        nonceBase64: bundle.nonce,
+      );
+
+  @override
+  Future<void> biometricDisable(String password) async =>
+      gen_bio.biometricDisable(baseDir: await _dir(), password: password);
 
   // ── DB 生命周期 ──
 

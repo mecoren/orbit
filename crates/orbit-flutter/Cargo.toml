@@ -32,6 +32,9 @@ chrono.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 
+# biometric 密钥链三件套 Base64 编码（core::crypto::biometric 同口径）
+base64.workspace = true
+
 # 数据库（守护任务直查 SQL 用）
 sqlx.workspace = true
 
