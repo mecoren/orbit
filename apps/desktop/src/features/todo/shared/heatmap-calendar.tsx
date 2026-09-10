@@ -10,7 +10,7 @@
  * - 固定格宽 12px + 整块横向滚动兜底（窄容器不压缩观感，与移动端同构）；
  * - 悬停 tooltip 用 Portal 渲染到 body，脱离卡片 overflow 裁剪（wait-home 同款）。
  */
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 
 import { Button } from "@/components/ui/button";
@@ -30,12 +30,15 @@ interface HeatmapCalendarProps {
   onYearChange: (year: number) => void;
 }
 
+/** 格宽下限（px）：动态算宽低于此值时改走横向滚动，不压缩观感 */
 const CELL_SIZE = 12;
 const CELL_GAP = 2;
 const WEEKDAY_LABEL_WIDTH = 30;
 const MONTH_LABEL_HEIGHT = 18;
 // shadcn Button size="sm" + w-14（56px）视觉宽度（wait-home 同款）
 const YEAR_PILL_WIDTH = 56;
+/** 年份栏与热力图主体之间的 flex 间距（px） */
+const FLEX_GAP = 12;
 
 /** 4 档色阶 alpha（0 档 = muted 空格；与 wait-home 22/45/68/90% 一致） */
 const HEAT_ALPHAS = [0, 0.22, 0.45, 0.68, 0.9] as const;
@@ -44,17 +47,42 @@ export function HeatmapCalendar({ cells, year, years, onYearChange }: HeatmapCal
   const [hovered, setHovered] = useState<
     { day: string; value: number; rect: DOMRect } | null
   >(null);
+  // 卡片内容宽（热力图块最外层）：唯一被测量者，且不依赖子内容反撑——
+  // 热力图内部全部 shrink-0，宽度只由 flex 布局分配决定，规避
+  // 「观察的容器被 minWidth 反撑→测量值掺入旧格宽」的自引用。
+  // 双通道测量：ResizeObserver（容器尺寸变化）+ 窗口 resize 兜底
+  // （overflow 滚动容器首帧 contentRect 偶发窄值上报）
+  const [blockEl, setBlockEl] = useState<HTMLDivElement | null>(null);
+  const [blockWidth, setBlockWidth] = useState(0);
+
+  useEffect(() => {
+    if (!blockEl) return;
+    const measure = () => setBlockWidth(blockEl.clientWidth);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(blockEl);
+    window.addEventListener("resize", measure);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", measure);
+    };
+  }, [blockEl]);
 
   const { cells: dayCells, monthLabels, totalColumns } = useMemo(() => {
     const counts = new Map(cells.map((c) => [c.date, c.count]));
     return layoutHeatmap(counts, year);
   }, [cells, year]);
 
-  // 固定格宽 12px + 整块横向滚动兜底：此前 ResizeObserver 动态算宽在 flex
-  // minWidth 反撑场景下首帧测量偏小（992px 可用只铺出 10px 格），且窄容器
-  // 时格被压到 8px 观感过挤（2026-09-10 用户反馈"框太小"）。宽屏不满铺
-  // 右侧留白、窄窗横滚，与移动端 14dp 同构口径
-  const dynamicCellSize = CELL_SIZE;
+  // 动态格宽：撑满年份栏之外的可用宽度（最小 12px，不够时横向滚动）。
+  // blockWidth 未测量时回退默认 12px（首帧），测量到达后重铺；
+  // 向下取整保证合计宽度 ≤ 可用宽度（ceil 会差 1~Npx 触发无谓横滚）
+  const dynamicCellSize = useMemo(() => {
+    if (blockWidth === 0 || totalColumns <= 0) return CELL_SIZE;
+    const available =
+      blockWidth - YEAR_PILL_WIDTH - FLEX_GAP - WEEKDAY_LABEL_WIDTH - CELL_GAP;
+    const computed = (available - (totalColumns - 1) * CELL_GAP) / totalColumns;
+    return Math.max(CELL_SIZE, Math.floor(computed));
+  }, [blockWidth, totalColumns]);
 
   const gridWidth = totalColumns * (dynamicCellSize + CELL_GAP) - CELL_GAP;
   const gridHeight = 7 * (dynamicCellSize + CELL_GAP) - CELL_GAP;
@@ -68,8 +96,10 @@ export function HeatmapCalendar({ cells, year, years, onYearChange }: HeatmapCal
 
   return (
     <>
-      <div className="flex items-start gap-3 overflow-x-auto pb-1 [scrollbar-width:thin]">
-      <div className="shrink-0" style={{ minWidth: WEEKDAY_LABEL_WIDTH + CELL_GAP + gridWidth }}>
+      <div ref={setBlockEl} className="w-full overflow-x-auto pb-1 [scrollbar-width:thin]">
+      {/* 子项全部 shrink-0：行宽自然 = 内容宽，窄卡片时溢出由外层横滚承接 */}
+      <div className="flex items-start" style={{ gap: FLEX_GAP }}>
+      <div className="shrink-0" style={{ width: WEEKDAY_LABEL_WIDTH + CELL_GAP + gridWidth }}>
           {/* 月份标签行 */}
           <div
             className="flex"
@@ -189,6 +219,7 @@ export function HeatmapCalendar({ cells, year, years, onYearChange }: HeatmapCal
         })}
       </div>
       </div>
+      </div>
 
       {/* 图例：5 段色块（空 + 4 档）紧贴形成色带，对齐 GitHub 风格 */}
       <div className="mt-3 flex items-center justify-end gap-1.5 text-[10px] text-muted-foreground">
@@ -196,15 +227,15 @@ export function HeatmapCalendar({ cells, year, years, onYearChange }: HeatmapCal
         <div className="flex items-center" style={{ gap: CELL_GAP }}>
           <div
             className="rounded-[2px]"
-            style={{ width: CELL_SIZE, height: CELL_SIZE, backgroundColor: "var(--muted)" }}
+            style={{ width: dynamicCellSize, height: dynamicCellSize, backgroundColor: "var(--muted)" }}
           />
           {HEAT_ALPHAS.slice(1).map((alpha, i) => (
             <div
               key={i}
               className="rounded-[2px]"
               style={{
-                width: CELL_SIZE,
-                height: CELL_SIZE,
+                width: dynamicCellSize,
+                height: dynamicCellSize,
                 backgroundColor: `color-mix(in srgb, ${TODO_ACCENT} ${alpha * 100}%, transparent)`,
               }}
             />
