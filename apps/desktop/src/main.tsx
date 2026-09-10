@@ -43,6 +43,10 @@ const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       staleTime: 1000 * 30,
+      // 非活跃查询 10 分钟后整体卸载（含缓存数据）：视图切换频繁的
+      // task-panel 各 key（搜索/排序/筛选组合）不会无限累积驻留内存；
+      // 活跃观察者不受影响，重进视图自动重拉（staleTime 30s 内秒回）。
+      gcTime: 1000 * 60 * 10,
       refetchOnWindowFocus: false,
     },
   },

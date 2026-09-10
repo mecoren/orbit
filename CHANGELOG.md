@@ -7,6 +7,24 @@
 
 ## [Unreleased]
 
+### 数据库维护一键化 + 内存治理三连——WAL/VACUUM/附件 GC 落地双端设置页
+
+对标 SQLite 长期运行维护最佳实践（浏览器/Signal 同款 `PRAGMA optimize` + 定期 VACUUM 路径），本批把只读维护从「用户不可达」变为设置页一键操作，同时治理三处实打实的内存/磁盘问题：
+
+- **`db_maintenance` 一键维护命令**（orbit-core 新 `api/db_maintenance_api.rs`）：WAL checkpoint（`wal_checkpoint(TRUNCATE)` 截断 -wal）→ 附件 GC（复用 `gc_local_attachments` 清孤立文件）→ `PRAGMA optimize`（analysis_limit 采样更新查询计划统计，排序/筛选查询提速）→ VACUUM（整库重写回收软删/编辑留下的碎片页）；返回量化结果（空闲页前后对比/回收页数/附件清理数）。只读维护：不 emit db-change、不进同步白名单（与统计类 API 同口径）。桌面 `db_maintenance_cmd` 命令 + 设置页「数据库维护」卡（结果就地展示）；移动端 FRB `maintenance.rs` 镜像 + 桥三件套同口径 + 设置页维护卡；Rust 单测（碎片制造→VACUUM 归零→数据不丢）。
+- **修复 PRAGMA 只进首连接的潜伏 bug**：`pool.rs` 原实现池建好后对池执行 `PRAGMA key`/`foreign_keys`——sqlx 池是惰性建连接的，该写法只命中第一条连接。SQLCipher 库在并发场景下取到第二条未解密连接会读出密文（潜在数据损坏级 bug），外键约束同理全程只对首连接生效。改为经 `SqliteConnectOptions::pragma()` 注入（sqlx 保证每条连接建立时逐条执行、key 最先），新增并发取满池连接逐条断言 foreign_keys/cache_size 的单测。
+- **连接池收紧 10→6 + page cache 显式封顶**：同步 push/pull 早已串行化（WebDAV 并发 MKCOL 503 两轮踩坑后收敛），池 10 是过时口径；每连接 `cache_size` 显式封 8MB（默认下大查询会逐连接膨胀到几十 MB 不归还），多连接内存占用从「不可预期」变为「6 × ≤8MB 封顶」。
+- **桌面 React Query 非活跃查询 gcTime 10 分钟**：视图切换产生的查询缓存（搜索/排序/筛选组合 key）不再无限累积驻留内存，staleTime 30s 内重进视图秒回不受影响。
+- **验证**：cargo test 全量绿（新增 2 用例：池 PRAGMA 逐连接 + 维护流程）；桌面 typecheck/vitest 200 绿（ipc-mock 同口径补零值实现）；flutter analyze 0 新增 + 全量 228 绿（mock 桥零值同口径）。
+
+### 列表逾期置顶分组——未完成逾期任务永远先被看见（双端）
+
+Todoist/MS To Do 信息层级惯例：逾期任务是最高优先级信息，混在长列表里等于不可见。本批双端列表视图落地「逾期」置顶区块：
+
+- **桌面**：`task-list-view` 顶部渲染红调「逾期 · N」区块头 + 逾期行（非虚拟化、量有限），其余任务照旧虚拟化渲染（数据源换 rest，行内红字/`OVERDUE_COLOR_CLASS` 语义保持）；无逾期时零视觉噪音（不渲染区块）。共享纯函数 `groupOverdueFirst` + 4 用例（分组判定/边界等于 now 不算/组内保序）。
+- **移动端**：`task_logic.dart` 同口径 `groupOverdueFirst` + 4 用例；`sub_list_screen` 非重排档 ListView 单 builder 前置逾期行 + 区块头 + 「其余任务」分隔行（保持懒加载），重排档（manual 拖拽语义）维持原列表不分组。
+- 判定口径与行内 overdue 一致：`due_date < now && !done`；分组纯展示拆分，拖拽 position 落位与键盘导航语义不受影响。
+
 ### 桌面快捷键帮助面板——? 呼出速查 + 设置页常驻入口
 
 全仓审计高价值缺口：j/k 导航、Ctrl+Z 撤销、Ctrl+P/K、Shift 区间多选等一大批快捷键已落地但零 discoverability（设置页四卡无任何说明区、title-bar 只有代码注释），新用户无从知晓，快捷键等于白做。Todoist/Things 3 同款 ? 呼出帮助惯例，本批一次补齐：
