@@ -46,6 +46,8 @@ pub const TRAY_MENU_SPEC: TrayMenuSpec = TrayMenuSpec {
 /// 下次启动时 scheduled_toast::clear_schedule_on_startup 清除，
 /// 防止与运行中的轮询通道双弹。
 pub fn quit_app(app: &AppHandle) {
+    // 告知 ExitRequested 拦截器这是真退出（窗口回收的销毁不置此标志）
+    crate::commands::window_recycler::mark_quitting();
     #[cfg(target_os = "windows")]
     crate::commands::scheduled_toast::schedule_all_on_quit(app);
     if let Some(win) = app.get_webview_window("main") {

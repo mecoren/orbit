@@ -54,3 +54,27 @@ Tauri emit 是「喊话」不是「留言」：窗口销毁期间守护 emit 的
 - **备选否决**：`--max-old-space-size` 类 V8 限额治标且可能 OOM；前端
   路由 lazy 化仅省 JS 堆零头；换栈（Flutter 130MB / Dioxus）重写 25k
   行不值（既有探查结论）。
+
+## 六、实施勘误与实测结论（2026-09-11 落地轮）
+
+- **tauri 默认退出行为的坑**：窗口回收销毁最后一窗时，tauri 事件循环
+  会发出 `ExitRequested`（默认接受）——首个实现实测中 destroy 成功但
+  **进程随之退出**，四个后台守护全灭，与托盘驻留的产品语义直接冲突。
+  修复：`App::run` 回调里拦截 `ExitRequested`，非真退出态一律
+  `prevent_exit()`；托盘菜单「退出」经 `quit_app` 先置 `mark_quitting`
+  原子标志放行。此为托盘驻留应用的标准模式，但也说明「销毁主窗」比
+  听起来更接近一次应用退出的边界。
+- **实测数据**（debug 构建 + dev 前端，隔离数据目录，探针日志逐环断言）：
+  关窗 WM_CLOSE → `CloseRequested` 拦截 → hide + 档位 Low + 排程 →
+  300s tick → destroy Ok → 进程存活（prevent_exit 生效）→
+  orbit 专属 WebView2 子进程 **5→0** → 宿主单进程 53MB 工作集 /
+  10MB 提交（优化前整树 300+MB，达成本档预期）。
+- **构建口径坑**：裸 `cargo build --release` 编出的二进制走
+  `devUrl`（tauri 的 dev/prod 判定由 tauri CLI 注入，非 cargo profile
+  决定），内嵌前端不可用、窗口不显示——release 端到端验证必须走
+  `tauri build`。
+- **遗留人工验收项**：托盘单击/托盘菜单/全局热键「触发重建」的最后一
+  跳无法自动化验证（SendInput/mouse_event 注入对 Win11 Shell 托盘的
+  命中不可达；真实键盘流可注册但 handler 触发链未观察到）。Rust 侧
+  逻辑已逐环探针断言（hotkey fallback register Ok、show_or_create
+  分支就绪），待人工点一次托盘收口。

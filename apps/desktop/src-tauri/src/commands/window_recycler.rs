@@ -9,9 +9,9 @@
 //!    - 窗口已被回收 → 按 tauri.conf 窗口配置重建 + Mica 重应用 +
 //!      意图补发（销毁期间托盘/热键的快速新建请求经 PENDING_QUICK_ADD
 //!      标志转交重建后的前端）。
-//!    托盘单击/菜单、全局热键（前端 invoke）共用本入口，替代此前
-//!    「窗口 API 直接 show」的三处散落实现（热键路径原本无法处理窗口
-//!    不存在的场景）。
+//!    - 托盘单击/菜单、全局热键（前端 invoke）共用本入口，替代此前
+//!      「窗口 API 直接 show」的三处散落实现（热键路径原本无法处理窗口
+//!      不存在的场景）。
 //!
 //! 2. 隐藏驻留超时销毁 `schedule_recycle_on_hide` / `cancel_recycle_on_show`：
 //!    - 关窗隐藏即排程；超时（RECYCLE_AFTER_SECS）窗口仍未显示 → 物理销毁
@@ -48,6 +48,18 @@ static PENDING_QUICK_ADD: AtomicBool = AtomicBool::new(false);
 
 /// 回收排程是否已挂起（防重复排程；窗口销毁/显示都会清）
 static RECYCLE_SCHEDULED: AtomicBool = AtomicBool::new(false);
+
+/// 真退出标志（托盘 quit_app 置位）：区分「窗口回收销毁引发的
+/// ExitRequested」（须阻止退出）与用户主动退出（须放行）
+static QUITTING: AtomicBool = AtomicBool::new(false);
+
+pub fn mark_quitting() {
+    QUITTING.store(true, Ordering::SeqCst);
+}
+
+pub fn is_quitting() -> bool {
+    QUITTING.load(Ordering::SeqCst)
+}
 
 /// 销毁期间的快速新建热键兜底：窗口销毁 → 前端 useGlobalQuickAdd 随之
 /// 消亡，热键 Alt+Shift+O 无人响应——由壳层 Rust 侧注册兜底 handler

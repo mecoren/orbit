@@ -66,21 +66,24 @@ pub fn run() {
     // tray_close_hint 事件驱动前端首次提示（localStorage 记忆不再骚扰）。
     // 隐藏即降 WebView2 内存档位 Low + 排程超时回收（唤起取消，见
     // webview_low_power / window_recycler）。
-    #[cfg(desktop)]
-    let builder = builder.on_window_event(|window, event| {
-        use tauri::Emitter as _;
-        if window.label() == "main"
-            && let tauri::WindowEvent::CloseRequested { api, .. } = event
-        {
-            let _ = window.emit("tray-close-hint", ());
-            window.hide().ok();
-            commands::webview_low_power::set_memory_usage_level(window.app_handle(), true);
-            commands::window_recycler::schedule_recycle_on_hide(window.app_handle());
-            api.prevent_close();
-        }
-    });
-
+    // ExitRequested 拦截：窗口回收销毁最后一窗时 tauri 默认请求退出，
+    // 须阻止（进程留守护）；真退出走托盘 quit_app（mark_quitting 放行）。
     builder
+        .on_window_event(|window, event| {
+            #[cfg(desktop)]
+            {
+                use tauri::Emitter as _;
+                if window.label() == "main"
+                    && let tauri::WindowEvent::CloseRequested { api, .. } = event
+                {
+                    let _ = window.emit("tray-close-hint", ());
+                    window.hide().ok();
+                    commands::webview_low_power::set_memory_usage_level(window.app_handle(), true);
+                    commands::window_recycler::schedule_recycle_on_hide(window.app_handle());
+                    api.prevent_close();
+                }
+            }
+        })
         .setup(|_app| {
             // 系统托盘（07 报告 #16）：菜单=显示主窗/快速新建/退出，
             // 快速新建经 tray-quick-add 事件由前端聚焦快速输入栏
@@ -298,6 +301,17 @@ pub fn run() {
             // 主窗唤起（全局热键；窗口被超时回收后走重建路径）
             commands::window_recycler::show_main_window_cmd,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|_app, event| {
+            // 托盘驻留 + 窗口回收：最后一窗被销毁时 tauri 默认请求退出，
+            // 须阻止（进程要留守护）；真退出走托盘 quit_app（mark_quitting
+            // 放行）或系统终止。
+            #[cfg(desktop)]
+            if let tauri::RunEvent::ExitRequested { api, .. } = event
+                && !commands::window_recycler::is_quitting()
+            {
+                api.prevent_exit();
+            }
+        });
 }

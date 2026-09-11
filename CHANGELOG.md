@@ -16,6 +16,8 @@
 - **③ 超时回收**：隐藏 5 分钟未唤起即销毁主窗（四守护在 Rust 宿主继续跑），常驻回落 ~40MB；托盘/热键唤起按 tauri.conf 重建（window-state 恢复位置尺寸 + Mica 重应用 + 前端冷启动）。
 - **隐性成本闭环**（事件不排队，逐通道兜底）：重建=冷启动自愈 sync-progress/db-change（useStartupSync 重跑补同步）+ key_mismatch 重新捕获导航恢复页；销毁期快速新建请求经 pending 标志补发（托盘菜单/热键同语义）；销毁期热键由壳层 Rust 兜底接管 Alt+Shift+O。
 - **唤起统一收口**：托盘菜单/单击、全局热键三处散落的「显示主窗」合并为 `show_or_create_main_window`（窗口在→显示，不在→重建）；热键改走 `show_main_window_cmd` 命令（前端窗口 API 在销毁态无兜底）。
+- **回收销毁后进程保活**（实测发现的连带 bug）：tauri 默认「最后一窗 Destroyed → 请求退出」，窗口回收会杀掉全部守护——`App::run` 回调拦截 `ExitRequested` 非退出态一律 `prevent_exit()`；托盘真退出经 `mark_quitting` 标志放行。实测：300s 回收 destroy Ok 后进程存活、WebView2 树归零、宿主仅 53MB 工作集 / 10MB 提交（优化前整树 300+MB）。
+- **验证**：壳层 15 单测（+2）/ tsc 0 / vitest 207 / e2e 14 全绿。遗留：托盘单击/热键触发重建属人工验收项（自动化注入对 Shell 托盘不可达）；release 端到端复测须走 `tauri build`（裸 `cargo build --release` 编入 devUrl，系 Tauri dev/prod 由 CLI 注入决定）。
 
 ### 通知历史中心——提醒呈现轨迹可回看（#5）
 
