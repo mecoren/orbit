@@ -242,6 +242,8 @@ pub fn run() {
             commands::cloud_sync_cmd::cloud_sync_now,
             commands::cloud_sync_cmd::cloud_sync_push_only,
             commands::cloud_sync_cmd::cloud_sync_pull_then_push,
+            // 增量同步历史（P1-17：设置页同步历史卡数据源）
+            commands::cloud_sync_cmd::cloud_sync_history,
             commands::cloud_sync_cmd::cloud_sync_get_state,
             commands::cloud_sync_cmd::cloud_sync_is_running,
             commands::cloud_sync_cmd::cloud_sync_rekey,

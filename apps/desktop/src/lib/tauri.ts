@@ -569,6 +569,25 @@ export const cloudSyncIsRunning = () => invoke<boolean>("cloud_sync_is_running")
 export const cloudSyncRekey = () => invoke<string>("cloud_sync_rekey").then(parseResult);
 export const syncDisconnect = () => invoke<void>("sync_disconnect");
 
+// ---------- 增量同步历史（P1-17：设置页同步历史卡） ----------
+
+export interface SyncHistoryEntry {
+  id: number;
+  sync_type: string;
+  status: string;
+  started_at: number;
+  finished_at: number | null;
+  pulled_count: number;
+  pushed_count: number;
+  conflict_count: number;
+  error_message: string | null;
+}
+
+export type SyncHistoryScope = "all" | "incremental" | "push_only" | "pull_only";
+
+export const cloudSyncHistory = (scope: SyncHistoryScope = "all", limit = 50) =>
+  invoke<SyncHistoryEntry[]>("cloud_sync_history", { scope, limit });
+
 // ---------- 全量备份 .orsync（full_sync_cmd） ----------
 
 export interface ExportResult {
@@ -650,6 +669,7 @@ export const backupPrefsSave = (prefs: BackupPrefs) =>
 export interface AutoBackupFinishedEvent {
   ok: boolean;
   local_path?: string | null;
+  local_error?: string | null;
   cloud_uploaded?: boolean;
   cloud_error?: string | null;
   error?: string;

@@ -106,6 +106,26 @@ pub async fn cloud_sync_pull_then_push(app: AppHandle, origin: String) -> Result
     run_sync(&app, parse_origin(&origin), SyncAction::PullThenPush).await
 }
 
+/// 查询增量同步历史（P1-17：sync_history 表只读展示）
+///
+/// `scope`：all | incremental | push_only | pull_only（口径见 core API 文档）；
+/// 只读聚合不 emit 事件；limit 由前端夹紧。
+#[tauri::command]
+pub async fn cloud_sync_history(
+    app: AppHandle,
+    scope: String,
+    limit: i64,
+) -> Result<Vec<orbit_core::models::business::SyncHistory>, String> {
+    let pool = app
+        .state::<crate::AppState>()
+        .pool
+        .clone();
+    let limit = limit.clamp(1, 200);
+    cloud_sync_api::incremental_history(&pool, &scope, limit)
+        .await
+        .map_err(err_tagged)
+}
+
 /// rekey 全量重传：用当前 Data Key 重加密覆盖云端（恢复页「以本机为准」）
 ///
 /// 危险操作，UI 必须二次确认后调用。v2 改密与 v1→v2 迁移场景由

@@ -20,7 +20,9 @@ use async_trait::async_trait;
 use sqlx::SqlitePool;
 
 use crate::cloud_sync::SyncResult;
-use crate::cloud_sync::engine::SyncEngine;
+use crate::cloud_sync::engine::{
+    SYNC_TYPE_PULL_THEN_PUSH, SYNC_TYPE_PUSH_ONLY, SYNC_TYPE_SYNC_NOW, SyncEngine,
+};
 use crate::cloud_sync::error::CloudSyncError;
 use crate::cloud_sync::progress::{ProgressSender, SyncOrigin};
 use crate::cloud_sync::state::SyncState;
@@ -336,6 +338,41 @@ pub fn state_to_json(state: &SyncState) -> Result<String, CloudSyncError> {
     serde_json::to_string(state).map_err(|e| CloudSyncError::Serialize {
         message: e.to_string(),
     })
+}
+
+// ============================================================================
+// 同步历史查询（sync_history 表只读聚合——不 emit 事件、不进同步白名单）
+// ============================================================================
+
+/// 查询增量同步历史（P1-17 展示面）
+///
+/// `scope` 口径：
+/// - "incremental"：完整同步（定时/手动「立即同步」触发）
+/// - "push_only"：修改后即时推送
+/// - "pull_only"：启动先拉后推
+/// - "all"：以上三类合并（不包含全量备份类型）
+///
+/// 按开始时间倒序返回最近 `limit` 条。
+pub async fn incremental_history(
+    pool: &SqlitePool,
+    scope: &str,
+    limit: i64,
+) -> Result<Vec<crate::models::business::SyncHistory>, CloudSyncError> {
+    let types: Vec<&str> = match scope {
+        "incremental" => vec![SYNC_TYPE_SYNC_NOW],
+        "push_only" => vec![SYNC_TYPE_PUSH_ONLY],
+        "pull_only" => vec![SYNC_TYPE_PULL_THEN_PUSH],
+        _ => vec![
+            SYNC_TYPE_SYNC_NOW,
+            SYNC_TYPE_PUSH_ONLY,
+            SYNC_TYPE_PULL_THEN_PUSH,
+        ],
+    };
+    crate::db::repository::sync_history_repo::get_recent_by_types(pool, &types, limit)
+        .await
+        .map_err(|e| CloudSyncError::Database {
+            message: e.to_string(),
+        })
 }
 
 #[cfg(test)]

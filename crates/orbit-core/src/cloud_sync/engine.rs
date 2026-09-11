@@ -28,8 +28,68 @@ use crate::cloud_sync::progress::{NoopProgressSender, ProgressSender, SyncOrigin
 use crate::cloud_sync::pull::pull_all;
 use crate::cloud_sync::push::push_all;
 use crate::cloud_sync::state::{SyncState, SyncStateStore};
+use crate::db::repository::sync_history_repo;
 use crate::sync_adapters::traits::SyncAdapter;
 use crate::sync_crypto::SyncCryptoService;
+
+/// 历史记录上限：增量同步类型各保留 50 条（insert 后 prune，超出删除最旧）
+///
+/// 全量备份类型（cloud_full_backup / local_full_backup）由
+/// full_sync_backup_api 按 `history_keep_count` 偏好独立清理，此处不触碰。
+const INCREMENTAL_HISTORY_KEEP: i64 = 50;
+
+/// 增量同步类型常量（sync_history.sync_type 口径，api 层查询共用）
+pub const SYNC_TYPE_SYNC_NOW: &str = "incremental";
+pub const SYNC_TYPE_PUSH_ONLY: &str = "push_only";
+pub const SYNC_TYPE_PULL_THEN_PUSH: &str = "pull_only";
+
+/// 写一条增量同步历史（P1-17：增量同步此前零历史，成功率/耗时不可度量）
+///
+/// 口径：
+/// - `skipped`（防重入跳过）**不记录**——未执行的同步不是历史
+/// - 拉取/推送计数映射：模块数 + 附件数合并计入
+///   （pushed = pushed_modules + uploaded_attachments，行级计数引擎不产出）
+/// - `errors` 非空按 failed 记（整体 Ok 但模块级有错属于"部分失败"）
+/// - 历史写入失败静默（`let _`）——观测数据不得阻塞同步主链
+async fn record_incremental_history(
+    pool: &SqlitePool,
+    sync_type: &str,
+    result: &Result<SyncResult, CloudSyncError>,
+) {
+    // Ok(skipped) 是防重入跳过：没有真正执行，不产生历史
+    if let Ok(r) = result {
+        if r.skipped {
+            return;
+        }
+    }
+    let now_ms = chrono::Utc::now().timestamp_millis();
+    let (status, pulled, pushed, error) = match result {
+        Ok(r) => {
+            let pulled = r.pulled_modules as i64 + r.downloaded_attachments as i64;
+            let pushed = r.pushed_modules as i64 + r.uploaded_attachments as i64;
+            let status = if r.errors.is_empty() { "success" } else { "failed" };
+            let error = r.errors.first().map(|e| e.to_string());
+            (status, pulled, pushed, error)
+        }
+        Err(e) => ("failed", 0, 0, Some(e.to_string())),
+    };
+    let Ok(id) = sync_history_repo::insert(pool, sync_type, status, now_ms).await else {
+        return;
+    };
+    let _ = sync_history_repo::update_status(
+        pool,
+        id,
+        status,
+        now_ms,
+        pulled,
+        pushed,
+        0,
+        error.as_deref(),
+    )
+    .await;
+    // 清理同类型最旧历史，防表无限增长
+    let _ = sync_history_repo::prune_by_type(pool, sync_type, INCREMENTAL_HISTORY_KEEP).await;
+}
 
 /// 同步结果汇总
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -325,6 +385,7 @@ impl SyncEngine {
                 attachments_dir,
             )
             .await;
+        record_incremental_history(&self.db_pool, SYNC_TYPE_SYNC_NOW, &r).await;
         self.emit_error_on_failure(origin, &r);
         r
     }
@@ -451,6 +512,7 @@ impl SyncEngine {
                 attachments_dir,
             )
             .await;
+        record_incremental_history(&self.db_pool, SYNC_TYPE_PUSH_ONLY, &r).await;
         self.emit_error_on_failure(origin, &r);
         r
     }
@@ -550,6 +612,7 @@ impl SyncEngine {
                 attachments_dir,
             )
             .await;
+        record_incremental_history(&self.db_pool, SYNC_TYPE_PULL_THEN_PUSH, &r).await;
         self.emit_error_on_failure(origin, &r);
         r
     }
@@ -1877,6 +1940,122 @@ mod tests {
         assert!(
             adapter.upload_calls.lock().unwrap().is_empty(),
             "rekey 被拒时不得产生云端写入"
+        );
+    }
+
+    // ========================================================================
+    // record_incremental_history：增量同步历史（P1-17）
+    // ========================================================================
+
+    /// 构造带迁移内存库的引擎（历史写入直连 sync_history 表）
+    async fn history_engine() -> SyncEngine {
+        let pool = sqlx::SqlitePool::connect("sqlite::memory:").await.unwrap();
+        sqlx::migrate!("./src/db/migrations").run(&pool).await.unwrap();
+        let tmp = tempfile::TempDir::new().unwrap();
+        let crypto = crate::sync_crypto::SyncCryptoService::new(tmp.path());
+        SyncEngine::new_noop_progress(pool, crypto, tmp.path())
+    }
+
+    fn ok_result(errors: Vec<String>) -> SyncResult {
+        SyncResult {
+            pushed_modules: 2,
+            pulled_modules: 3,
+            uploaded_attachments: 1,
+            downloaded_attachments: 4,
+            duration_ms: 120,
+            skipped: false,
+            errors,
+        }
+    }
+
+    #[tokio::test]
+    async fn history_records_success_with_counts() {
+        let engine = history_engine().await;
+        let r = Ok(ok_result(vec![]));
+        record_incremental_history(&engine.db_pool, SYNC_TYPE_SYNC_NOW, &r).await;
+
+        let rows =
+            sync_history_repo::get_recent_by_types(&engine.db_pool, &["incremental"], 10)
+                .await
+                .unwrap();
+        assert_eq!(rows.len(), 1);
+        let h = &rows[0];
+        assert_eq!(h.status, "success");
+        assert_eq!(h.pulled_count, 7, "拉取计数 = 模块 3 + 附件 4");
+        assert_eq!(h.pushed_count, 3, "推送计数 = 模块 2 + 附件 1");
+        assert!(h.error_message.is_none());
+    }
+
+    #[tokio::test]
+    async fn history_records_module_errors_as_failed() {
+        let engine = history_engine().await;
+        let r = Ok(ok_result(vec!["todos 模块上传失败".to_string()]));
+        record_incremental_history(&engine.db_pool, SYNC_TYPE_PUSH_ONLY, &r).await;
+
+        let rows = sync_history_repo::get_recent_by_types(&engine.db_pool, &["push_only"], 10)
+            .await
+            .unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].status, "failed", "模块级有错按失败记");
+        assert!(rows[0].error_message.as_ref().unwrap().contains("todos"));
+    }
+
+    #[tokio::test]
+    async fn history_records_engine_error_as_failed() {
+        let engine = history_engine().await;
+        let r = Err::<SyncResult, _>(CloudSyncError::Adapter {
+            message: "连接超时".to_string(),
+        });
+        record_incremental_history(&engine.db_pool, SYNC_TYPE_PULL_THEN_PUSH, &r).await;
+
+        let rows =
+            sync_history_repo::get_recent_by_types(&engine.db_pool, &["pull_only"], 10)
+                .await
+                .unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].status, "failed");
+        assert!(rows[0].error_message.as_ref().unwrap().contains("连接超时"));
+    }
+
+    #[tokio::test]
+    async fn history_skips_when_sync_was_skipped() {
+        let engine = history_engine().await;
+        let r = Ok(SyncResult::skipped());
+        record_incremental_history(&engine.db_pool, SYNC_TYPE_SYNC_NOW, &r).await;
+
+        let rows =
+            sync_history_repo::get_recent_by_types(&engine.db_pool, &["incremental"], 10)
+                .await
+                .unwrap();
+        assert!(rows.is_empty(), "防重入跳过不是一次同步，不得记历史");
+    }
+
+    #[tokio::test]
+    async fn history_prunes_beyond_keep_limit() {
+        let engine = history_engine().await;
+        // 直接灌 55 条超出保留上限 50
+        for i in 0..55 {
+            let id = sync_history_repo::insert(
+                &engine.db_pool,
+                SYNC_TYPE_SYNC_NOW,
+                "success",
+                1000 + i,
+            )
+            .await
+            .unwrap();
+            sync_history_repo::update_status(&engine.db_pool, id, "success", 1000 + i, 0, 0, 0, None)
+                .await
+                .unwrap();
+        }
+        let r = Ok(ok_result(vec![]));
+        record_incremental_history(&engine.db_pool, SYNC_TYPE_SYNC_NOW, &r).await;
+
+        assert_eq!(
+            sync_history_repo::count_by_type(&engine.db_pool, "incremental")
+                .await
+                .unwrap(),
+            50,
+            "写入后同类型历史须裁剪到保留上限"
         );
     }
 }

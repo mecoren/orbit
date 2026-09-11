@@ -106,14 +106,32 @@ async fn tick(app: &AppHandle) {
 
     match result {
         Ok(r) => {
-            let _ = full_sync_backup_api::update_scheduler_state_after_trigger(&dir, now_ts).await;
+            // 本地写入失败（磁盘满等）不算成功：不推进 last_backup_at
+            //（next 照常推进避免风暴），emit ok:false 供前端警示——
+            // P1-15 修复：原实现不检查 local_error 即报 ok:true，用户静默丢备份
+            let local_failed = prefs.local_backup_enabled && r.local_error.is_some();
+            if local_failed {
+                eprintln!(
+                    "[backup-scheduler] 定时备份本地写入失败: {}",
+                    r.local_error.as_deref().unwrap_or("未知")
+                );
+                if let Ok(mut p) = full_sync_backup_api::get_backup_prefs(&dir).await {
+                    p.next_backup_at = calculate_next_backup_at(now_ts, &p);
+                    let _ = save_prefs(&dir, &p);
+                }
+            } else {
+                let _ = full_sync_backup_api::update_scheduler_state_after_trigger(&dir, now_ts)
+                    .await;
+            }
             let _ = app.emit(
                 "auto-backup-finished",
                 json!({
-                    "ok": true,
+                    "ok": !local_failed,
                     "local_path": r.local_path,
+                    "local_error": r.local_error,
                     "cloud_uploaded": r.cloud_uploaded,
                     "cloud_error": r.cloud_error,
+                    "error": if local_failed { r.local_error.clone() } else { None },
                 }),
             );
         }

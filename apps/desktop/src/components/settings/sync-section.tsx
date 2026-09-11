@@ -5,6 +5,7 @@
  * 1. 连接卡：WebDAV/S3 引擎切换 + 表单 + 测试连接/保存/断开
  * 2. 同步密码卡（E2E）：未设置 → 设置；已设置 → 解锁/锁定/修改 + 密钥包导出
  * 3. 同步执行卡：立即同步 + 进度事件 + 上次同步时间
+ * 3b. 同步历史卡（P1-17）：增量同步成败/耗时/计数可回看（sync_history 表）
  * 4. 自动备份卡：调度频率（core v4 调度器）+ 本地/云端开关 + 上次/下次时间
  * 5. 备份卡：.orsync 导出（可选云端副本）/ 导入恢复 / 本地历史备份列表
  * 6. 数据导出卡：明文 JSON/CSV（07 报告 #15，与 .orsync 加密包并列；
@@ -19,6 +20,7 @@ import { listen } from "@tauri-apps/api/event";
 import { toast } from "sonner";
 import {
   CalendarClock,
+  ChevronDown,
   CloudUpload,
   DatabaseBackup,
   Download,
@@ -57,6 +59,7 @@ import { Switch } from "@/components/ui/switch";
 import {
   backupPrefsGet,
   backupPrefsSave,
+  cloudSyncHistory,
   cloudSyncNow,
   fullBackupExport,
   fullBackupImport,
@@ -83,6 +86,7 @@ import {
   type SyncConfigView,
   type SyncCryptoStatus,
   type SyncEngineKind,
+  type SyncHistoryEntry,
 } from "@/lib/tauri";
 
 function SectionHeader({ title, desc }: { title: string; desc: string }) {
@@ -125,6 +129,7 @@ export function SyncSection() {
       <ConnectionCard key={`conn-${version}`} />
       <SyncPasswordCard />
       <SyncRunCard key={`run-${version}`} />
+      <SyncHistoryCard />
       <AutoBackupCard />
       <BackupCard />
       <PlaintextExportCard />
@@ -794,6 +799,108 @@ function SyncRunCard() {
   );
 }
 
+/* ============================ 3b. 同步历史卡（P1-17） ============================ */
+
+/** sync_type → 展示名（口径见 core cloud_sync_api::incremental_history） */
+const SYNC_TYPE_LABELS: Record<string, string> = {
+  incremental: "完整同步",
+  push_only: "即时推送",
+  pull_only: "启动同步",
+};
+
+function SyncHistoryCard() {
+  const [open, setOpen] = useState(false);
+  const [entries, setEntries] = useState<SyncHistoryEntry[] | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  const load = () => {
+    setLoading(true);
+    cloudSyncHistory("all", 50)
+      .then(setEntries)
+      .catch(() => setEntries([]))
+      .finally(() => setLoading(false));
+  };
+
+  // 展开才拉取；同步完成后刷新（打开状态下增量更新）
+  useEffect(() => {
+    if (open && entries === null) load();
+  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    const unlisten = listen("sync-finished", () => {
+      if (open) load();
+    });
+    return () => {
+      unlisten.then((fn) => fn());
+    };
+  }, [open]);
+
+  return (
+    <div className="rounded-lg border">
+      <button
+        type="button"
+        className="flex w-full items-center gap-4 p-5 text-left"
+        aria-expanded={open}
+        onClick={() => setOpen((v) => !v)}
+      >
+        <History className="size-4 shrink-0 text-muted-foreground" />
+        <p className="min-w-0 flex-1 text-sm font-medium">
+          同步历史
+          {entries !== null && (
+            <span className="ml-2 text-xs text-muted-foreground">
+              最近 {entries.length} 次增量同步
+            </span>
+          )}
+        </p>
+        <ChevronDown
+          className={cn("size-4 shrink-0 text-muted-foreground transition-transform", open && "rotate-180")}
+        />
+      </button>
+      {open && (
+        <div className="max-h-72 space-y-1 overflow-auto border-t p-3">
+          {loading && entries === null && (
+            <p className="py-4 text-center text-xs text-muted-foreground">加载中…</p>
+          )}
+          {entries !== null && entries.length === 0 && (
+            <p className="py-4 text-center text-xs text-muted-foreground">
+              暂无同步记录——首次同步后此处可回看每次成败与耗时
+            </p>
+          )}
+          {entries?.map((h) => (
+            <div key={h.id} className="flex items-center gap-3 rounded-md px-2 py-1.5 hover:bg-muted/50">
+              <span
+                className={cn(
+                  "size-1.5 shrink-0 rounded-full",
+                  h.status === "success" ? "bg-emerald-500" : "bg-destructive",
+                )}
+                aria-label={h.status === "success" ? "成功" : "失败"}
+              />
+              <span className="w-16 shrink-0 text-xs text-muted-foreground">
+                {SYNC_TYPE_LABELS[h.sync_type] ?? h.sync_type}
+              </span>
+              <span className="min-w-0 flex-1 truncate text-xs">
+                {new Date(h.started_at).toLocaleString()}
+                {h.finished_at != null && h.finished_at > h.started_at && (
+                  <span className="ml-2 text-muted-foreground">
+                    耗时 {((h.finished_at - h.started_at) / 1000).toFixed(1)}s
+                  </span>
+                )}
+              </span>
+              <span className="shrink-0 text-xs text-muted-foreground">
+                拉 {h.pulled_count} / 推 {h.pushed_count}
+              </span>
+              {h.error_message && (
+                <span className="max-w-40 shrink-0 truncate text-xs text-destructive" title={h.error_message}>
+                  {h.error_message}
+                </span>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ============================ 4. 自动备份卡 ============================ */
 
 const SCHEDULE_LABELS: Record<BackupScheduleType, string> = {
@@ -830,13 +937,21 @@ function AutoBackupCard() {
         toast.warning(`自动备份失败：${p.error ?? "未知错误"}`);
         return;
       }
+      // 本地写入失败（磁盘满等）不得报成功——P1-15 假成功口径修复
+      if (p.local_error) {
+        toast.warning(`自动备份本地写入失败：${p.local_error}`);
+        if (p.cloud_error) toast.warning(`云端副本上传失败：${p.cloud_error}`);
+        return;
+      }
       if (p.local_path) {
         const name = p.local_path.split(/[\\/]/).pop();
         toast.success(`自动备份完成：${name ?? ""}`);
-      } else {
+      } else if (p.cloud_uploaded) {
         toast.success("自动备份完成（仅云端）");
+      } else {
+        // 本地关闭且云端未成功：无任何副本落盘，按失败提示
+        toast.warning(`自动备份未产生副本：${p.cloud_error ?? "云端未配置或未启用"}`);
       }
-      if (p.cloud_error) toast.warning(`云端副本上传失败：${p.cloud_error}`);
     });
     return () => {
       unlisten.then((fn) => fn());

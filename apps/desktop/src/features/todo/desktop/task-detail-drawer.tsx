@@ -1761,7 +1761,16 @@ function AttachmentsSection({ taskId }: { taskId: number }) {
       if (att.mime_type.startsWith("image/")) {
         const buf = new Uint8Array(bytes);
         const blob = new Blob([buf], { type: att.mime_type });
-        window.open(URL.createObjectURL(blob), "_blank", "noopener");
+        const url = URL.createObjectURL(blob);
+        const opened = window.open(url, "_blank", "noopener");
+        // blob URL 引用留在本页进程内（不 revoke 则整份图片字节泄漏）；
+        // 窗口已拿到引用后即可释放，弹窗被拦时也兜底释放
+        if (opened) {
+          opened.addEventListener("load", () => URL.revokeObjectURL(url), { once: true });
+          setTimeout(() => URL.revokeObjectURL(url), 60_000);
+        } else {
+          URL.revokeObjectURL(url);
+        }
       } else {
         const { writeFile } = await import("@tauri-apps/plugin-fs");
         const ext = att.original_name.split(".").pop() ?? "";

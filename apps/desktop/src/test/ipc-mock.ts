@@ -704,6 +704,18 @@ const commands: Record<string, (args: any, ctx: Ctx) => unknown> = {
   sync_config_get: () => null,
   cloud_sync_is_running: () => false,
   cloud_sync_get_state: () => JSON.stringify({ phase: "idle" }),
+  // 增量同步历史（P1-17）：种三条同构（成功/失败/推送），设置页历史卡可渲染
+  cloud_sync_history: ({ scope, limit }: { scope: string; limit: number }) => {
+    const now = Date.now();
+    const seed = [
+      { id: 3, sync_type: "push_only", status: "success", started_at: now - 3_600_000, finished_at: now - 3_600_000 + 2_400, pulled_count: 0, pushed_count: 2, conflict_count: 0, error_message: null },
+      { id: 2, sync_type: "incremental", status: "failed", started_at: now - 7_200_000, finished_at: now - 7_200_000 + 9_800, pulled_count: 0, pushed_count: 0, conflict_count: 0, error_message: "todos 模块上传失败：连接超时" },
+      { id: 1, sync_type: "incremental", status: "success", started_at: now - 86_400_000, finished_at: now - 86_400_000 + 5_100, pulled_count: 3, pushed_count: 1, conflict_count: 0, error_message: null },
+    ];
+    return ipcClone(
+      seed.filter((h) => scope === "all" || h.sync_type === scope).slice(0, limit),
+    );
+  },
   sync_crypto_status: () => JSON.stringify({ locked: true }),
   // 恢复页挂载即探测密钥方案版本（v1 才显示迁移入口）；mock 回 v2 走主路径
   sync_crypto_meta_version: () => JSON.stringify({ version: "v2" }),
