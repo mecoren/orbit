@@ -307,6 +307,7 @@ function FieldRenderer({
           value={(value as string) ?? ""}
           maxLength={field.maxLength}
           onChange={(e) => onChange(e.target.value)}
+          className="min-h-[80px] max-h-64 field-sizing-content"
         />
       );
 

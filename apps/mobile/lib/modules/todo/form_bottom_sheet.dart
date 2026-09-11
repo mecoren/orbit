@@ -571,10 +571,12 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
                               _TitleParseChips(parse: _titleParse!),
                             ],
                             const SizedBox(height: AppDimens.space12),
-                            // 2. 描述
+                            // 2. 描述：默认 3 行起随内容长高，封顶 8 行后内部滚动
+                            // （minLines+maxLines 而非固定行数——与桌面端 min-h/max-h 口径一致）
                             TextFormField(
                               controller: _descriptionController,
-                              maxLines: 3,
+                              minLines: 3,
+                              maxLines: 8,
                               // 与桌面端 task-form-sheet description(5000) 统一
                               maxLength: 5000,
                               style: TextStyle(
