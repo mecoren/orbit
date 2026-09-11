@@ -74,11 +74,10 @@ import {
   type TodoTask,
   type TodoTaskLabel,
 } from "@/lib/tauri";
-import { PRIORITY_COLOR, FAVORITE_COLOR, TODO_ACCENT } from "../shared/constants";
+import { PRIORITY_COLOR, FAVORITE_COLOR, TODO_ACCENT, PRIORITY_LABELS, MY_DAY_COLOR } from "../shared/constants";
 import { todayStartMs, toggleMyDayValue } from "../shared/task-filters";
 import { completeTask } from "../shared/task-actions";
 
-const PRIORITY_LABELS = ["无", "低", "中", "高", "紧急", "立即处理"];
 
 /** ms → DateTimePicker 值格式（YYYY-MM-DDTHH:MM） */
 const tsToInputValue = (ms: number) => format(new Date(ms), "yyyy-MM-dd'T'HH:mm");
@@ -204,7 +203,7 @@ export function TaskContextMenu({
             >
               <Sunrise
                 size={14}
-                style={{ color: inMyDay ? "#F59E0B" : undefined }}
+                style={{ color: inMyDay ? MY_DAY_COLOR : undefined }}
               />
               {inMyDay ? "移出我的一天" : "加入我的一天"}
             </DropdownMenuItem>

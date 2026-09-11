@@ -28,13 +28,9 @@ import {
 } from "@/components/ui/dialog";
 import { todoLabelCreate, todoLabelDelete, todoLabelList, todoLabelUpdate } from "@/lib/tauri";
 import type { TodoLabel } from "@/lib/tauri";
+import { PRESET_10 } from "../shared/constants";
 import { hideFromQueries, useUndoableDeleteAction } from "@/hooks/use-undoable-delete";
 
-/** 10 色预设色板（04 §3.8，默认选中第 4 色 #3B82F6） */
-const PRESET_COLORS = [
-  "#EF4444", "#F59E0B", "#22C55E", "#3B82F6", "#8B5CF6",
-  "#EC4899", "#14B8A6", "#F97316", "#6366F1", "#6B7280",
-];
 
 interface LabelManagerProps {
   open: boolean;
@@ -68,7 +64,7 @@ export function LabelManager({ open, onOpenChange }: LabelManagerProps) {
   const add = async () => {
     const title = newTitle.trim();
     if (!title) return;
-    await todoLabelCreate({ title, hex_color: PRESET_COLORS[3] });
+    await todoLabelCreate({ title, hex_color: PRESET_10[3] });
     setNewTitle("");
     void refetch();
   };
@@ -129,7 +125,7 @@ export function LabelManager({ open, onOpenChange }: LabelManagerProps) {
 
               {/* 10 色板：编辑态展开 */}
               <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                {PRESET_COLORS.map((c) => (
+                {PRESET_10.map((c) => (
                   <button
                     key={c}
                     type="button"

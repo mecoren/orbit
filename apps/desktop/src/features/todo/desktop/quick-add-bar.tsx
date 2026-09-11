@@ -6,7 +6,7 @@
  * 提醒时间为独立实体：任务创建成功后追加 todo_reminders_create。
  */
 import { useEffect, useMemo, useRef, useState } from "react";
-import { format } from "date-fns";
+import { format, parse } from "date-fns";
 import { zhCN } from "date-fns/locale";
 import { useQuery } from "@tanstack/react-query";
 import { Calendar, CalendarPlus, Clock, Flag, Folder, Plus, Tag } from "lucide-react";
@@ -17,7 +17,6 @@ import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { WaitCalendar } from "@/components/ui/wait-calendar";
-import { DateTimePicker } from "@/components/business/date-picker";
 import { QuickDateMenu } from "@/components/business/quick-date-options";
 import {
   todoLabelList,
@@ -32,9 +31,8 @@ import {
   atViewDueHour,
   quickViewCreateDefaults,
 } from "../shared/view-create-defaults";
-import { PRIORITY_COLOR, TODO_ACCENT, type QuickViewKey } from "../shared/constants";
+import { PRIORITY_COLOR, TODO_ACCENT, type QuickViewKey, PRIORITY_LABELS } from "../shared/constants";
 
-const PRIORITY_LABELS = ["无", "低", "中", "高", "紧急", "立即处理"];
 
 interface QuickAddBarProps {
   projects: TodoProject[];
@@ -52,12 +50,18 @@ export function QuickAddBar({ projects, defaultProjectId, quickView }: QuickAddB
   /** 截止日期弹层：快捷菜单 ⇄ 完整日历视图（关闭时复位，与表单 DatePicker 同口径） */
   const [dueOpen, setDueOpen] = useState(false);
   const [dueCalendar, setDueCalendar] = useState(false);
+  /** 提醒弹层同款两段式（quick 菜单 ⇄ 日历+时分）——PopoverContent 内
+   *  禁嵌自带 Popover 控件（Radix 焦点陷阱，drawer 已踩过 portal 套
+   *  portal 测量异常），故不用 DateTimePicker 而是内联同款结构 */
+  const [remindOpen, setRemindOpen] = useState(false);
+  const [remindCalendar, setRemindCalendar] = useState(false);
   // 优先级/项目弹层受控：选项点选后自动关闭
   const [priorityOpen, setPriorityOpen] = useState(false);
   const [projectOpen, setProjectOpen] = useState(false);
   useEffect(() => {
     if (!dueOpen) setDueCalendar(false);
-  }, [dueOpen]);
+    if (!remindOpen) setRemindCalendar(false);
+  }, [dueOpen, remindOpen]);
   /** 提醒时间草稿（DateTimePicker 值格式 YYYY-MM-DDTHH:MM；空 = 不提醒） */
   const [remindDraft, setRemindDraft] = useState("");
   const [projectId, setProjectId] = useState<number | null | "default">("default");
@@ -285,7 +289,7 @@ export function QuickAddBar({ projects, defaultProjectId, quickView }: QuickAddB
             </Popover>
 
             {/* 提醒时间 */}
-            <Popover>
+            <Popover open={remindOpen} onOpenChange={setRemindOpen}>
               <Tooltip>
                 <TooltipTrigger asChild>
                   <PopoverTrigger asChild>
@@ -308,8 +312,68 @@ export function QuickAddBar({ projects, defaultProjectId, quickView }: QuickAddB
                 </TooltipContent>
               </Tooltip>
               <PopoverContent align="end" className="w-[320px] p-3">
-                <p className="mb-2 text-sm font-medium">提醒时间</p>
-                <DateTimePicker value={remindDraft} onChange={setRemindDraft} />
+                {remindCalendar ? (
+                  <div>
+                    <p className="mb-2 text-sm font-medium">提醒时间</p>
+                    <WaitCalendar
+                      mode="single"
+                      selected={
+                        remindDraft
+                          ? parse(remindDraft.slice(0, 10), "yyyy-MM-dd", new Date())
+                          : undefined
+                      }
+                      onSelect={(d) => {
+                        if (d) {
+                          const datePart = format(d, "yyyy-MM-dd");
+                          const prev = remindDraft || format(new Date(), "yyyy-MM-dd'T'HH:mm");
+                          const timePart = prev.slice(11) || "09:00";
+                          setRemindDraft(`${datePart}T${timePart}`);
+                        }
+                      }}
+                    />
+                    <div className="mt-2 flex items-center gap-2 border-t pt-2">
+                      <span className="text-xs text-muted-foreground">时间</span>
+                      <Input
+                        type="number"
+                        min={0}
+                        max={23}
+                        value={remindDraft ? remindDraft.slice(11, 13) : "9"}
+                        onChange={(e) => {
+                          const v = Math.min(23, Math.max(0, Number(e.target.value) || 0));
+                          const datePart = remindDraft?.slice(0, 10) || format(new Date(), "yyyy-MM-dd");
+                          const m = remindDraft?.slice(14, 16) || "00";
+                          setRemindDraft(`${datePart}T${String(v).padStart(2, "0")}:${m}`);
+                        }}
+                        className="h-8 w-16"
+                      />
+                      <span>:</span>
+                      <Input
+                        type="number"
+                        min={0}
+                        max={59}
+                        value={remindDraft ? remindDraft.slice(14, 16) : "00"}
+                        onChange={(e) => {
+                          const v = Math.min(59, Math.max(0, Number(e.target.value) || 0));
+                          const datePart = remindDraft?.slice(0, 10) || format(new Date(), "yyyy-MM-dd");
+                          const h = remindDraft?.slice(11, 13) || "09";
+                          setRemindDraft(`${datePart}T${h}:${String(v).padStart(2, "0")}`);
+                        }}
+                        className="h-8 w-16"
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  <QuickDateMenu
+                    kind="datetime"
+                    value={remindDraft}
+                    onSelect={(d) => {
+                      setRemindDraft(format(d, "yyyy-MM-dd'T'HH:mm"));
+                      setRemindOpen(false);
+                    }}
+                    customLabel="选择日期和时间"
+                    onCustom={() => setRemindCalendar(true)}
+                  />
+                )}
                 <div className="mt-2 flex justify-end gap-2 border-t pt-2">
                   {remindDraft && (
                     <Button variant="link" size="sm" onClick={() => setRemindDraft("")}>

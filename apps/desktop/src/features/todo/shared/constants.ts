@@ -35,6 +35,13 @@ export const OVERDUE_COLOR_CLASS = "text-destructive";
 /** 「我的一天」日出高亮色（列表/表格/详情/右键菜单四处同口径，04 §5.2） */
 export const MY_DAY_COLOR = "#F59E0B";
 
+/** 10 色预设色板（04 §3.8 标签管理器与项目颜色共用同序列；新建标签随机
+ *  色池同源——此前 drawer/form-sheet 各持一份 8 色池且内容不一致，收编） */
+export const PRESET_10 = [
+  "#EF4444", "#F59E0B", "#22C55E", "#3B82F6", "#8B5CF6",
+  "#EC4899", "#14B8A6", "#F97316", "#6366F1", "#6B7280",
+];
+
 /** 快捷视图 key（my_day = 我的一天，07 报告新增项，对标微软 To Do） */
 export type QuickViewKey = "all" | "undone" | "done" | "today" | "week" | "favorite" | "my_day";
 

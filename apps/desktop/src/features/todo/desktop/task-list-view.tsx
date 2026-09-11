@@ -66,7 +66,7 @@ import { midpoint } from "../shared/position";
 import { batchUpdateStatus, batchUpdatePriority, batchUpdateFavorite, batchMoveToProject, batchUpdateMyDay } from "../shared/batch-actions";
 import { useUndoableDeleteAction, hideManyFromQueries } from "@/hooks/use-undoable-delete";
 import { todoTaskDelete, todoTaskUpdate, todoTaskUpdatePosition, type TodoLabel, type TodoProject, type TodoTask } from "@/lib/tauri";
-import { FAVORITE_COLOR, OVERDUE_COLOR_CLASS, PRIORITY_COLOR, PRIORITY_LABELS, TODO_ACCENT } from "../shared/constants";
+import { FAVORITE_COLOR, OVERDUE_COLOR_CLASS, PRIORITY_COLOR, PRIORITY_LABELS, TODO_ACCENT, MY_DAY_COLOR } from "../shared/constants";
 import { LabelChips } from "../shared/label-chips";
 import { ReminderChip } from "../shared/reminder-chip";
 import { displayReminder, type DisplayReminder, type TaskReminderMeta } from "../shared/reminder-meta";
@@ -867,7 +867,7 @@ const TaskRow = memo(function TaskRow({
           "shrink-0",
           inMyDay ? "opacity-100" : "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100",
         )}
-        style={inMyDay ? { color: "#F59E0B" } : undefined}
+        style={inMyDay ? { color: MY_DAY_COLOR } : undefined}
         onClick={(e) => {
           e.stopPropagation();
           onToggleMyDay();

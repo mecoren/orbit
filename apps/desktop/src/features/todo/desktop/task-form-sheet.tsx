@@ -51,9 +51,8 @@ import {
 import { formatYmd } from "../shared/lunar";
 import { templateDueDate } from "../shared/template-apply";
 import { atViewDueHour, quickViewCreateDefaults } from "../shared/view-create-defaults";
-import { PRIORITY_COLOR, TODO_ACCENT } from "../shared/constants";
+import { PRIORITY_COLOR, TODO_ACCENT, PRIORITY_LABELS, PRESET_10 } from "../shared/constants";
 
-const PRIORITY_LABELS = ["无", "低", "中", "高", "紧急", "立即处理"];
 
 /** ms → DateTimePicker 值格式（YYYY-MM-DDTHH:MM） */
 const tsToInputValue = (ms: number) => format(new Date(ms), "yyyy-MM-dd'T'HH:mm");
@@ -120,16 +119,6 @@ interface TagSelection {
   hex_color: string;
 }
 
-const LABEL_RANDOM_COLORS = [
-  "#3B82F6",
-  "#8B5CF6",
-  "#EC4899",
-  "#F59E0B",
-  "#10B981",
-  "#EF4444",
-  "#06B6D4",
-  "#F97316",
-];
 
 function TagsField({
   value,
@@ -187,8 +176,8 @@ function TagsField({
         {
           title,
           hex_color:
-            LABEL_RANDOM_COLORS[
-              Math.floor(Math.random() * LABEL_RANDOM_COLORS.length)
+            PRESET_10[
+              Math.floor(Math.random() * PRESET_10.length)
             ],
         },
       ]);

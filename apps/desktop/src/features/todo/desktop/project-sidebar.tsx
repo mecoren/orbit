@@ -53,7 +53,7 @@ import {
   todoProjectUpdateSortOrder,
   type TodoProject,
 } from "@/lib/tauri";
-import { LS_UNGROUPED_AFTER, QUICK_VIEWS, TODO_ACCENT, type QuickViewKey } from "../shared/constants";
+import { LS_UNGROUPED_AFTER, QUICK_VIEWS, TODO_ACCENT, type QuickViewKey, PRESET_10 } from "../shared/constants";
 import {
   loadSidebarManualCollapsed,
   resolveSidebarCollapsed,
@@ -64,11 +64,6 @@ import { ProjectContextMenu } from "./task-context-menu";
 /** 未分组虚拟 id */
 export const UNGROUPED_ID = -1;
 
-/** 项目 10 色预设板（#36；与标签管理器 PRESET_COLORS 同一序列，默认第 4 色） */
-const PROJECT_COLORS = [
-  "#EF4444", "#F59E0B", "#22C55E", "#3B82F6", "#8B5CF6",
-  "#EC4899", "#14B8A6", "#F97316", "#6366F1", "#6B7280",
-];
 
 interface ProjectSidebarProps {
   projects: TodoProject[];
@@ -166,7 +161,7 @@ export function ProjectSidebar({
     }
     try {
       // #36：新建项目默认色按现有项目数轮换预设板（用户可右键改色）
-      const nextColor = PROJECT_COLORS[projects.length % PROJECT_COLORS.length];
+      const nextColor = PRESET_10[projects.length % PRESET_10.length];
       await todoProjectCreate({ title, hex_color: nextColor });
       await refetchProjects();
     } finally {
@@ -593,7 +588,7 @@ function ProjectEditDialog({
   if (project != null && loadedFor !== project.id) {
     setLoadedFor(project.id);
     setTitle(project.title);
-    setColor(project.hex_color || PROJECT_COLORS[3]);
+    setColor(project.hex_color || PRESET_10[3]);
   }
 
   if (project == null) return null;
@@ -631,7 +626,7 @@ function ProjectEditDialog({
           />
           {/* 10 色板（与标签管理器同形制）：当前色描边圈出 */}
           <div className="flex flex-wrap items-center gap-1.5">
-            {PROJECT_COLORS.map((c) => (
+            {PRESET_10.map((c) => (
               <button
                 key={c}
                 type="button"

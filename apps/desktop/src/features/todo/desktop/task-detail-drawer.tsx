@@ -61,7 +61,7 @@ import { WaitCalendar } from "@/components/ui/wait-calendar";
 import { useTodoStore } from "@/features/todo/store";
 import { hideFromQueries, useUndoableDeleteAction } from "@/hooks/use-undoable-delete";
 import { usePasteAttachment } from "@/hooks/use-paste-attachment";
-import { PRIORITY_COLOR, TODO_ACCENT } from "../shared/constants";
+import { PRIORITY_COLOR, TODO_ACCENT, PRIORITY_LABELS, STATUS_COLOR, MY_DAY_COLOR, PRESET_10 } from "../shared/constants";
 import { todayStartMs, toggleMyDayValue } from "../shared/task-filters";
 import { ConfirmPopover } from "../shared/confirm-popover";
 import { renderMarkdown } from "../shared/markdown-lite";
@@ -105,18 +105,12 @@ const RELATION_TYPE_LABEL: Record<string, string> = {
   duplicated_by: "重复项",
 };
 
-/** LabelAdder 新建随机色池（04 §3.8） */
-const RANDOM_COLORS = [
-  "#ef4444", "#f97316", "#eab308", "#22c55e",
-  "#06b6d4", "#3b82f6", "#8b5cf6", "#ec4899",
-];
-
-const PRIORITY_LABELS = ["无", "低", "中", "高", "紧急", "立即处理"];
+// 状态三档从 STATUS_COLOR 组装（单口径；此前值与 constants 重复两份）
 const STATUS_ITEMS = [
-  { key: "pending", label: "待办", color: "#6B7280" },
-  { key: "doing", label: "进行中", color: "#3B82F6" },
-  { key: "done", label: "已完成", color: "#22C55E" },
-];
+  { key: "pending", label: "待办", color: STATUS_COLOR.pending },
+  { key: "doing", label: "进行中", color: STATUS_COLOR.doing },
+  { key: "done", label: "已完成", color: STATUS_COLOR.done },
+] as const;
 
 interface ProjectOption {
   id: number;
@@ -278,7 +272,7 @@ function TitleRow({
         size="icon"
         className="h-8 w-8"
         aria-label={inMyDay ? "移出我的一天" : "加入我的一天"}
-        style={{ color: inMyDay ? "#F59E0B" : undefined }}
+        style={{ color: inMyDay ? MY_DAY_COLOR : undefined }}
         onClick={() => {
           void onPatch({ my_day_date: toggleMyDayValue(task.my_day_date) });
         }}
@@ -1253,7 +1247,7 @@ function SubtasksSection({
                 {s.title}
               </span>
               <button type="button" aria-label="删除子任务"
-                className="opacity-0 group-hover:opacity-100"
+                className="opacity-0 group-hover:opacity-100 group-focus-within:opacity-100"
                 onClick={() => setConfirmDelete(s)}
               >
                 <X size={14} className="text-muted-foreground hover:text-destructive" />
@@ -1316,7 +1310,7 @@ function LabelsSection({
   const createAndMount = async () => {
     const v = newTitle.trim();
     if (!v) return;
-    const color = RANDOM_COLORS[Math.floor(Math.random() * RANDOM_COLORS.length)];
+    const color = PRESET_10[Math.floor(Math.random() * PRESET_10.length)];
     const created = await todoLabelCreate({ title: v, hex_color: color });
     await todoTaskLabelCreate({ task_id: taskId, label_id: created.id });
     setNewTitle("");
@@ -1499,7 +1493,7 @@ function RemindersSection({
                     })}
                   </span>
                 )}
-                <button type="button" aria-label="删除提醒" className="shrink-0 opacity-0 group-hover:opacity-100"
+                <button type="button" aria-label="删除提醒" className="shrink-0 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100"
                   onClick={() => setConfirmDelete(r)}
                 >
                   <X size={13} className="text-muted-foreground hover:text-destructive" />
@@ -1618,7 +1612,7 @@ function RelationsSection({
                 <button
                   type="button"
                   aria-label="删除关联"
-                  className="shrink-0 opacity-0 group-hover:opacity-100"
+                  className="shrink-0 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100"
                   onClick={() => setConfirmDelete(r)}
                 >
                 <Trash2 size={12} className="text-muted-foreground hover:text-destructive" />
@@ -1731,7 +1725,7 @@ function CommentsSection({
               <div className="flex items-start gap-2">
                 <p className="min-w-0 flex-1 break-words whitespace-pre-wrap text-[13px]">{c.content}</p>
                 <span className="ml-auto shrink-0 text-[11px] text-muted-foreground">{relative(c.created_at)}</span>
-                <button type="button" aria-label="删除评论" className="opacity-0 group-hover:opacity-100"
+                <button type="button" aria-label="删除评论" className="opacity-0 group-hover:opacity-100 group-focus-within:opacity-100"
                   onClick={() => setConfirmDelete(c)}
                 >
                   <Trash2 size={12} className="text-muted-foreground hover:text-destructive" />
@@ -1897,12 +1891,12 @@ function AttachmentsSection({ taskId }: { taskId: number }) {
               <button
                 type="button"
                 aria-label="移除附件"
-                className="opacity-0 group-hover:opacity-100"
+                className="opacity-0 group-hover:opacity-100 group-focus-within:opacity-100"
                 onClick={(e) => { e.stopPropagation(); setConfirmDelete(a); }}
               >
                 <Trash2 size={12} className="text-muted-foreground hover:text-destructive" />
               </button>
-              <ExternalLink size={12} className="shrink-0 text-muted-foreground opacity-0 group-hover:opacity-100" />
+              <ExternalLink size={12} className="shrink-0 text-muted-foreground opacity-0 group-hover:opacity-100 group-focus-within:opacity-100" />
             </div>
           </ConfirmPopover>
         ))}
