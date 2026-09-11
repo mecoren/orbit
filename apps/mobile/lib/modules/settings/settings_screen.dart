@@ -298,11 +298,37 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             ? '已有同步任务在进行中'
             : '同步完成：推送 ${result.pushedModules} / 拉取 ${result.pulledModules} 模块',
       );
-    } catch (_) {
-      WaitToast.destructive('同步失败');
+    } catch (e) {
+      // P1-20：不再吞错误 tag——key_mismatch 是「本地密钥与云端密文不匹配」，
+      // 重输密码无效，须走密钥包导入恢复；其余错误展示可读原因
+      final msg = e.toString();
+      if (msg.contains('key_mismatch')) {
+        WaitToast.global(
+          '同步密钥与云端数据不匹配',
+          variant: WaitToastVariant.destructive,
+          description: '本机密钥解不开云端密文，重输密码无效',
+          actionLabel: '去恢复',
+          onAction: () => context.push('/settings/sync'),
+        );
+        return;
+      }
+      WaitToast.destructive(
+        msg.contains('wrong_password')
+            ? '同步密码错误，请重新解锁'
+            : msg.contains('CryptoLocked')
+                ? '同步密码未解锁，请先在云同步设置中解锁'
+                : '同步失败：${_shortErr(msg)}',
+      );
     } finally {
       if (mounted) setState(() => _syncing = false);
     }
+  }
+
+  /// 桥层错误文案压缩展示（去掉前缀标签与堆栈噪音，保留主体）
+  static String _shortErr(String raw) {
+    final m = RegExp(r'^\[(\w+)\]\s*(.*)$').firstMatch(raw.trim());
+    final body = (m?.group(2) ?? raw).trim();
+    return body.isEmpty ? '未知错误' : (body.length > 60 ? '${body.substring(0, 60)}…' : body);
   }
 
   /// 设置回收站保留档位（7/30/90/永久；本地偏好不同步）

@@ -1,3 +1,7 @@
+import 'dart:convert';
+import 'dart:io';
+
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -493,8 +497,10 @@ class _SyncSettingsPageState extends ConsumerState<SyncSettingsPage> {
 
 /// 同步密码卡（E2E 加密密钥管理，对齐桌面 SyncPasswordCard 核心面）
 ///
-/// v1 移动端口径：设置（init）/解锁（unlock）/锁定（lock）；
-/// 修改密码与密钥包导出为桌面专属（恢复流已有 importBundle 入口）。
+/// 移动端口径：设置（init）/解锁（unlock）/锁定（lock）+
+/// 密钥包导入恢复（P1-20：换机/key_mismatch 场景——桌面导出的
+/// .orbitkey JSON 导入后即持有 Data Key，配合密码解锁可解云端密文；
+/// 修改密码与密钥包导出仍为桌面专属）。
 class _SyncCryptoCard extends ConsumerStatefulWidget {
   const _SyncCryptoCard();
 
@@ -588,6 +594,69 @@ class _SyncCryptoCardState extends ConsumerState<_SyncCryptoCard> {
       // 锁定失败静默（桌面同语义）
     }
     await _refresh();
+  }
+
+  /// 导入密钥包恢复（P1-20）：桌面「导出密钥包」产出的 JSON 文件
+  /// （salt + encrypted_data_key + data_key_nonce + iterations），
+  /// 配合当初设置的同步密码导入本机——换机/key_mismatch 后的恢复路径。
+  Future<void> _importBundle() async {
+    if (_busy) return;
+    final result = await FilePicker.platform.pickFiles(
+      allowMultiple: false,
+      type: FileType.custom,
+      allowedExtensions: const ['json', 'orbitkey', 'txt'],
+    );
+    final path = result?.files.single.path;
+    if (path == null) return;
+    // FilePicker 弹系统选择器是 async gap，回来时页面可能已销毁
+    if (!mounted) return;
+    setState(() => _busy = true);
+    final pwController = TextEditingController();
+    try {
+      // 两段式：先读文件校验结构，再问密码（避免密码输完才发现文件坏了）
+      final raw = await File(path).readAsString();
+      final j = jsonDecode(raw);
+      if (j is! Map<String, dynamic> ||
+          j['salt'] == null ||
+          j['encrypted_data_key'] == null) {
+        WaitToast.destructive('不是有效的密钥包文件（缺少 salt / encrypted_data_key 字段）');
+        return;
+      }
+      final bundle = SyncCryptoBundle.fromJson(j);
+      // readAsString 是 async gap，showDialog 前页面可能已销毁
+      if (!mounted) return;
+      final pw = await showDialog<String>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('输入该密钥包的同步密码'),
+          content: TextField(
+            controller: pwController,
+            obscureText: true,
+            autofocus: true,
+            decoration: const InputDecoration(
+                labelText: '同步密码', hintText: '导出密钥包时使用的密码'),
+          ),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(ctx), child: const Text('取消')),
+            FilledButton(
+                onPressed: () => Navigator.pop(ctx, pwController.text),
+                child: const Text('导入')),
+          ],
+        ),
+      );
+      if (pw == null || pw.isEmpty) return;
+      await ref
+          .read(orbitBridgeProvider)
+          .syncCryptoImportBundle(bundle, pw, force: true);
+      WaitToast.success('密钥包已导入，请用同一密码解锁后同步');
+      await _refresh();
+    } catch (e) {
+      WaitToast.destructive('导入失败：${_errMsg(e)}');
+    } finally {
+      pwController.dispose();
+      if (mounted) setState(() => _busy = false);
+    }
   }
 
   @override
@@ -706,6 +775,14 @@ class _SyncCryptoCardState extends ConsumerState<_SyncCryptoCard> {
                   Text(
                     '移动端不缓存同步密码，应用重启后需重新输入解锁。',
                     style: TextStyle(fontSize: 12, color: colors.secondaryText),
+                  ),
+                  const SizedBox(height: AppDimens.space8),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton(
+                      onPressed: _busy ? null : _importBundle,
+                      child: const Text('导入密钥包恢复（换机 / 密钥不匹配）'),
+                    ),
                   ),
                 ],
               ],
