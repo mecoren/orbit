@@ -27,6 +27,7 @@
 - **移动端角标读缓存（M3-mobile）**：BootGate 直拉全量任务 IPC 与 provider 缓存完全重复（db-change 双份万行过桥）——改读 todoTasksProvider 缓存值。
 - 顺修：calendar-view 死键 invalidate（count/nav-data 无消费方）；测试代码 lint 清零（flutter analyze No issues）；orbit-core 未用导入清理（两 workspace cargo check --all-targets 零警告）。
 - **验证**：vitest 231（+12）/ Rust 440 / Flutter 249（+4）/ e2e 14 / flutter analyze+tsc+cargo check 全零告警；浏览器目检关键链（看板 Enter 开详情/勾选落库、提醒弹层两段式、失效链刷新、my_day 移出）全过。
+- **指标体系与量化实测**（报告 §五，工具入库 perf-metrics/ 可复现）：冷启动 ~1.5s（pre/post 噪声带内持平）；万级任务滚动 60fps（中位/p95 帧间隔均 16ms）+ 勾选 ~250ms + 看板切换 <50ms；内存 pre/post 持平（优化消除的是冗余计算非驻留数据）——Tauri 全树 390MB 空闲 / Chromium 万级 423MB→操作峰 758MB / JS heap 169MB；对标口径沿用 09-10/11（Tauri vs Chrome vs Flutter），真机 IPC 失效链收益（估算单次勾选省 150-250ms）列验收遗留。
 
 ### Windows 通知身份修复——AUMID 注册 DisplayName=Orbit + 图标对齐
 
