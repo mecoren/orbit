@@ -27,8 +27,10 @@ use crate::AppState;
 /// 超出的下次启动重排——长期提醒注册进系统调度器意义有限且占槽位）
 pub const SCHEDULE_WINDOW_MS: i64 = 86_400_000;
 
-/// 计划通知的 AUMID（与 notify-rust 直发通道同口径，通知按来源归组）
-const SCHEDULED_TOAST_APP_ID: &str = "cn.wait.orbit";
+/// 计划通知的 AUMID（与 notify-rust 直发通道同口径，通知按来源归组；
+/// 单一真相源在 aumid_registry——那里注册 DisplayName/IconUri 身份）
+#[cfg(target_os = "windows")]
+const SCHEDULED_TOAST_APP_ID: &str = crate::commands::aumid_registry::APP_ID;
 
 /// Unix epoch ms → WinRT DateTime（1601 元年起 100ns 刻度）。
 /// 纯函数便于单测（11644473600000 = 1970-1601 的 ms 差）。

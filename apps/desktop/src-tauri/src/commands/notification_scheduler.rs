@@ -181,11 +181,12 @@ fn notify_system(app: &AppHandle, reminder_id: i64, task_id: i64, title: &str, r
 
     let mut n = notify_rust::Notification::new();
     // Windows 侧 app_id 决定通知来源显示名与激活路由；用包标识
-    // cn.wait.orbit（正式安装后的 AUMID）。macOS/Linux 由 notify-rust
-    // 内部处理（appname 对 mac 是静默 no-op）。
+    // cn.wait.orbit（正式安装后的 AUMID，单一真相源在 aumid_registry）。
+    // macOS/Linux 由 notify-rust 内部处理（appname 对 mac 是静默 no-op）。
     #[cfg(target_os = "windows")]
     {
-        n.app_id("cn.wait.orbit");
+        use crate::commands::aumid_registry::APP_ID;
+        n.app_id(APP_ID);
     }
     #[cfg(not(target_os = "windows"))]
     {
