@@ -83,6 +83,8 @@ interface CalendarViewProps {
   onCreateClick?: () => void;
   /** 右击某天：以该日为截止日期快捷新增（由壳层注入打开表单并预填） */
   onAddOnDate?: (date: string) => void;
+  /** 加载态（H3）：查询进行中右栏不闪空态 */
+  loading?: boolean;
 }
 
 /** 左右分栏：窄窗口退化为上下堆叠（参考 wait-home SPLIT_LAYOUT）。
@@ -140,6 +142,7 @@ export function CalendarView({
   remindersByTask,
   onCreateClick,
   onAddOnDate,
+  loading,
 }: CalendarViewProps) {
   const setSelectedTaskId = useTodoStore((s) => s.setSelectedTaskId);
   const [subMode, setSubMode] = useState<CalendarSubMode>("month");
@@ -479,7 +482,14 @@ export function CalendarView({
                 <span className="text-xs text-muted-foreground">点击日历日期可定位</span>
               )}
             </div>
-            {listTotal === 0 ? (
+            {loading && listTotal === 0 ? (
+              // 加载态与列表视图同口径（H3）：查询进行中不闪「本月没有…」空态
+              <div aria-busy className="flex min-h-0 flex-1 flex-col gap-2 p-4" data-testid="calendar-loading">
+                {Array.from({ length: 6 }, (_, i) => (
+                  <div key={i} className="h-12 animate-pulse rounded bg-muted" />
+                ))}
+              </div>
+            ) : listTotal === 0 ? (
               <div className="flex flex-1 flex-col items-center justify-center gap-2 p-6 text-center">
                 <span className="flex size-12 items-center justify-center rounded-full bg-muted">
                   <CalendarX className="size-6 text-muted-foreground" />
@@ -539,7 +549,14 @@ export function CalendarView({
               <h3 className="text-sm font-semibold">{yearPaneYear}年的任务</h3>
               <Badge variant="secondary">{listTotal} 条</Badge>
             </div>
-            {listTotal === 0 ? (
+            {loading && listTotal === 0 ? (
+              // 同月模式（H3）：年模式右栏加载骨架
+              <div aria-busy className="flex min-h-0 flex-1 flex-col gap-2 p-4" data-testid="calendar-loading">
+                {Array.from({ length: 6 }, (_, i) => (
+                  <div key={i} className="h-12 animate-pulse rounded bg-muted" />
+                ))}
+              </div>
+            ) : listTotal === 0 ? (
               <div className="flex flex-1 flex-col items-center justify-center gap-2 p-6 text-center">
                 <span className="flex size-12 items-center justify-center rounded-full bg-muted">
                   <CalendarX className="size-6 text-muted-foreground" />

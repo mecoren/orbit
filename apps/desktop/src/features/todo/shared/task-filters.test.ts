@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { type TodoTask } from "@/lib/tauri";
-import { filterTasks, groupOverdueFirst, sortTasks } from "./task-filters";
+import { filterTasks, groupOverdueFirst, sortTasks, todayStartMs, toggleMyDayValue } from "./task-filters";
 
 /** 补齐 TodoTask 全部必填字段的工厂 */
 function mk(partial: Partial<TodoTask>): TodoTask {
@@ -313,6 +313,34 @@ describe("filterTasks - quickView my_day（我的一天）", () => {
     expect(
       filterTasks(tasks, { quickView: "my_day", statusFilter: "undone" }).map((t) => t.id),
     ).toEqual([1]);
+  });
+});
+
+describe("todayStartMs / toggleMyDayValue 我的一天零点口径", () => {
+  // 固定基准：2026-09-11 15:30 本地时区——零点=当日 00:00
+  const base = new Date(2026, 8, 11, 15, 30, 0, 0);
+  const zeroPoint = new Date(2026, 8, 11, 0, 0, 0, 0).getTime();
+
+  it("todayStartMs 取本地零点（含时分秒时刻归零）", () => {
+    expect(todayStartMs(base)).toBe(zeroPoint);
+  });
+
+  it("toggleMyDayValue：未加入 → 写今天零点（加入）", () => {
+    expect(toggleMyDayValue(null, base)).toBe(zeroPoint);
+  });
+
+  it("toggleMyDayValue：已加入（== 今天零点）→ null（移出）", () => {
+    expect(toggleMyDayValue(zeroPoint, base)).toBeNull();
+  });
+
+  it("toggleMyDayValue：昨天加入 → 仍写今天零点（次日加入新的一天）", () => {
+    const yesterday = new Date(2026, 8, 10, 0, 0, 0, 0).getTime();
+    expect(toggleMyDayValue(yesterday, base)).toBe(zeroPoint);
+  });
+
+  it("toggleMyDayValue：拒绝非零点残留值（Date.now() 类脏数据不匹配判定，重新对齐零点）", () => {
+    const dirty = new Date(2026, 8, 11, 15, 30, 0, 0).getTime();
+    expect(toggleMyDayValue(dirty, base)).toBe(zeroPoint);
   });
 });
 

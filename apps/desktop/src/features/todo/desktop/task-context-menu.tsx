@@ -75,6 +75,7 @@ import {
   type TodoTaskLabel,
 } from "@/lib/tauri";
 import { PRIORITY_COLOR, FAVORITE_COLOR, TODO_ACCENT } from "../shared/constants";
+import { todayStartMs, toggleMyDayValue } from "../shared/task-filters";
 import { completeTask } from "../shared/task-actions";
 
 const PRIORITY_LABELS = ["无", "低", "中", "高", "紧急", "立即处理"];
@@ -124,9 +125,7 @@ export function TaskContextMenu({
     todoTaskUpdate(task.id, p).then(refetch);
 
   // 我的一天「今天」判定：与 task-filters / 行内按钮同口径（本地零点）
-  const myDayToday = new Date();
-  myDayToday.setHours(0, 0, 0, 0);
-  const inMyDay = task.my_day_date === myDayToday.getTime();
+  const inMyDay = task.my_day_date === todayStartMs();
 
   const loadLabels = async () => {
     try {
@@ -200,11 +199,7 @@ export function TaskContextMenu({
             <DropdownMenuItem
               onSelect={() => {
                 close();
-                const today = new Date();
-                today.setHours(0, 0, 0, 0);
-                void patch({
-                  my_day_date: task.my_day_date === today.getTime() ? null : today.getTime(),
-                });
+                void patch({ my_day_date: toggleMyDayValue(task.my_day_date) });
               }}
             >
               <Sunrise

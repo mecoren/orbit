@@ -26,7 +26,7 @@ import {
   type DragStartEvent,
 } from "@dnd-kit/core";
 import { format } from "date-fns";
-import { Calendar, Check, Star } from "lucide-react";
+import { Calendar, Star } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { useTodoStore } from "@/features/todo/store";
@@ -41,10 +41,12 @@ import { FAVORITE_COLOR, PRIORITY_COLOR, STATUS_COLOR, TODO_ACCENT } from "../sh
 import { LabelChips } from "../shared/label-chips";
 import { ReminderChip } from "../shared/reminder-chip";
 import { displayReminder, type DisplayReminder, type TaskReminderMeta } from "../shared/reminder-meta";
+import { isListActivationKey } from "../shared/list-keyboard";
 import type { TaskSortKey } from "../shared/task-filters";
 import { completeTask } from "../shared/task-actions";
 import { midpoint } from "../shared/position";
 import { TaskContextMenu } from "./task-context-menu";
+import { CheckSvg } from "./task-list-view";
 
 export type KanbanGroupBy = "project" | "status";
 
@@ -58,6 +60,8 @@ interface KanbanViewProps {
   remindersByTask: Map<number, TaskReminderMeta[]>;
   /** 工具栏排序档位（#26）：列内沿用传入序；manual 才允许拖拽重排 */
   sortKey: TaskSortKey;
+  /** 加载态（H3）：查询进行中列内不闪「拖拽任务到此处」空态 */
+  loading?: boolean;
 }
 
 interface ColumnDef {
@@ -66,7 +70,7 @@ interface ColumnDef {
   color: string;
 }
 
-export function KanbanView({ tasks, projects, groupBy, labelsByTask, remindersByTask, sortKey }: KanbanViewProps) {
+export function KanbanView({ tasks, projects, groupBy, labelsByTask, remindersByTask, sortKey, loading }: KanbanViewProps) {
   const qc = useQueryClient();
   const setSelectedTaskId = useTodoStore((s) => s.setSelectedTaskId);
   // memo 友好：打开详情回调恒定引用，列/卡片 props 只随业务数据变化
@@ -209,6 +213,26 @@ export function KanbanView({ tasks, projects, groupBy, labelsByTask, remindersBy
     groupBy === "status" ? t.status : t.project_id != null ? String(t.project_id) : "ungrouped";
 
   const draggingTask = draggingId != null ? tasks.find((t) => t.id === draggingId) : undefined;
+
+  // 加载态与列表视图同口径（H3）：查询进行中不闪列内「拖拽任务到此处」
+  if (loading && tasks.length === 0) {
+    return (
+      <div aria-busy className="flex min-h-0 flex-1 gap-4 overflow-hidden p-4" data-testid="kanban-loading">
+        {Array.from({ length: 4 }, (_, i) => (
+          <div key={i} className="w-72 shrink-0 animate-pulse rounded-lg border border-border/50 bg-muted/20">
+            <div className="space-y-2 border-b px-3 py-2">
+              <div className="h-4 w-24 rounded bg-muted" />
+            </div>
+            <div className="space-y-2 p-2">
+              {Array.from({ length: 3 }, (_, j) => (
+                <div key={j} className="h-[60px] rounded-md bg-muted" />
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  }
 
   return (
     <div
@@ -408,13 +432,26 @@ const KanbanCard = memo(function KanbanCard({
       {...(overlay ? {} : draggable.attributes)}
       {...(overlay ? {} : draggable.listeners)}
       style={{ touchAction: "none" }}
+      role="button"
+      tabIndex={overlay ? -1 : 0}
+      aria-label={`${task.done ? "已完成" : "未完成"}任务：${task.title}`}
       onClick={() => {
         // 拖拽松手后的 click 不视为点击打开详情
         if (dragEndStamp && Date.now() - dragEndStamp.current < 250) return;
         if (!overlay && !dragging) onOpenDetail?.(task.id);
       }}
+      onKeyDown={(e) => {
+        // 键盘可达（H4，与列表/表格行同口径）：焦点在卡片容器时
+        // Enter/Space 打开详情；焦点已在内层控件上则保留其原生行为
+        if (e.nativeEvent.isComposing) return;
+        if (e.target === e.currentTarget && isListActivationKey(e.key)) {
+          e.preventDefault();
+          if (!overlay && !dragging) onOpenDetail?.(task.id);
+        }
+      }}
       className={cn(
-        "rounded-md border border-border/50 bg-card p-3 shadow-sm hover:shadow-md",
+        "group rounded-md border border-border/50 bg-card p-3 shadow-sm hover:shadow-md",
+        "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
         sortable && "cursor-grab active:cursor-grabbing",
         dragging && "opacity-40",
         isOver && !dragging && "ring-2 ring-primary/40",
@@ -430,7 +467,24 @@ const KanbanCard = memo(function KanbanCard({
 
       {/* 标题行：完成勾 + 标题 + 星标 */}
       <div className="flex items-start gap-1.5">
-        {task.done ? <Check size={14} className="mt-0.5 shrink-0 text-success" /> : null}
+        {/* 完成 checkbox（M5，与列表/表格同款圆环）：卡片正面直接入口，
+            不必右键菜单绕一圈 */}
+        <button
+          type="button"
+          aria-label={task.done ? "标记未完成" : "标记完成"}
+          className={cn(
+            "mt-0.5 h-5 w-5 shrink-0 rounded-full border-2 transition-colors",
+            task.done
+              ? "border-primary bg-primary"
+              : "border-muted-foreground/30 hover:border-primary",
+          )}
+          onClick={(e) => {
+            e.stopPropagation();
+            void completeTask(task);
+          }}
+        >
+          {task.done ? <CheckSvg /> : null}
+        </button>
         <span
           className={cn(
             // break-words：长连续文本（URL/长英文串无空格断点）在卡内强制断行，

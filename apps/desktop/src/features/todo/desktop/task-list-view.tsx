@@ -60,7 +60,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { ErrorState } from "@/components/business/error-state";
 import { EmptyState } from "@/components/business/empty-state";
 import { completeTask } from "../shared/task-actions";
-import { groupOverdueFirst } from "../shared/task-filters";
+import { groupOverdueFirst, todayStartMs, toggleMyDayValue } from "../shared/task-filters";
 import { isListActivationKey, listNavDirection } from "../shared/list-keyboard";
 import { midpoint } from "../shared/position";
 import { batchUpdateStatus, batchUpdatePriority, batchUpdateFavorite, batchMoveToProject, batchUpdateMyDay } from "../shared/batch-actions";
@@ -324,11 +324,7 @@ export function TaskListView({ tasks, projects, labelsByTask, remindersByTask, l
   // 我的一天：加入当天（本地零点）/ 移出（null）。视图按日判断，
   // 昨天加入的任务今天自动退出视图但数据保留（微软 To Do 同款语义）
   const toggleMyDay = (t: TodoTask) => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    void todoTaskUpdate(t.id, {
-      my_day_date: t.my_day_date === today.getTime() ? null : today.getTime(),
-    });
+    void todoTaskUpdate(t.id, { my_day_date: toggleMyDayValue(t.my_day_date) });
   };
   const draggingTask = draggingId != null ? tasks.find((t) => t.id === draggingId) : undefined;
 
@@ -699,9 +695,7 @@ function TaskRow({
   onToggleMyDay,
   sortable,
 }: TaskRowProps) {
-  const myDayToday = new Date();
-  myDayToday.setHours(0, 0, 0, 0);
-  const inMyDay = t.my_day_date === myDayToday.getTime();
+  const inMyDay = t.my_day_date === todayStartMs();
   const { attributes, listeners, setNodeRef: setDragRef } = useDraggable({
     id: `row:${t.id}`,
     // 本行拖拽进行中即禁用拖拽源（浮层副本不再作为拖拽源；边界行禁拖无意义故不处理）；

@@ -32,6 +32,9 @@ export const STATUS_COLOR = {
 export const FAVORITE_COLOR = "#FACC15";
 export const OVERDUE_COLOR_CLASS = "text-destructive";
 
+/** 「我的一天」日出高亮色（列表/表格/详情/右键菜单四处同口径，04 §5.2） */
+export const MY_DAY_COLOR = "#F59E0B";
+
 /** 快捷视图 key（my_day = 我的一天，07 报告新增项，对标微软 To Do） */
 export type QuickViewKey = "all" | "undone" | "done" | "today" | "week" | "favorite" | "my_day";
 
@@ -44,7 +47,7 @@ export interface QuickViewDef {
 
 /** 快捷视图（顺序即侧栏展示顺序；「我的一天」置顶——每日聚焦第一入口） */
 export const QUICK_VIEWS: QuickViewDef[] = [
-  { key: "my_day", label: "我的一天", icon: Sunrise, color: "#F59E0B" },
+  { key: "my_day", label: "我的一天", icon: Sunrise, color: MY_DAY_COLOR },
   { key: "all", label: "全部任务", icon: ListTodo, color: "#3B82F6" },
   { key: "undone", label: "未完成", icon: CircleDot, color: "#F59E0B" },
   { key: "done", label: "已完成", icon: CheckCircle2, color: "#22C55E" },

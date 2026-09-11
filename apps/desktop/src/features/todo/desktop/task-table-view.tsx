@@ -31,11 +31,14 @@ import {
 import { completeTask } from "../shared/task-actions";
 import { useUndoableDeleteAction, hideManyFromQueries } from "@/hooks/use-undoable-delete";
 import { listNavDirection, isListActivationKey } from "../shared/list-keyboard";
+import { todayStartMs, toggleMyDayValue } from "../shared/task-filters";
+import { EmptyState } from "@/components/business/empty-state";
 import { LabelChips } from "../shared/label-chips";
 import { ReminderChip } from "../shared/reminder-chip";
 import { displayReminder } from "../shared/reminder-meta";
 import {
   FAVORITE_COLOR,
+  MY_DAY_COLOR,
   OVERDUE_COLOR_CLASS,
   PRIORITY_COLOR,
   PRIORITY_LABELS,
@@ -50,6 +53,9 @@ export interface TaskTableViewProps {
   labelsByTask: Map<number, TodoLabel[]>;
   remindersByTask: Map<number, TaskReminderMeta[]>;
   onOpenDetail: (id: number) => void;
+  /** 列表同款加载/错误态通道（H3：查询进行中不闪「暂无任务」空态） */
+  loading?: boolean;
+  error?: string | null;
 }
 
 export interface TableColumn {
@@ -91,6 +97,8 @@ export default function TaskTableView({
   labelsByTask,
   remindersByTask,
   onOpenDetail,
+  loading,
+  error,
 }: TaskTableViewProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const qc = useQueryClient();
@@ -177,12 +185,25 @@ export default function TaskTableView({
     clearSelection();
   };
 
-  if (tasks.length === 0) {
+  // 加载/错误/空态与列表视图同口径（骨架行 + EmptyState，不闪「暂无任务」）
+  if (loading && tasks.length === 0) {
     return (
-      <div className="flex flex-1 items-center justify-center p-8 text-sm text-muted-foreground">
-        暂无任务
+      <div aria-busy className="flex min-h-0 flex-1 flex-col gap-1 p-4" data-testid="table-loading">
+        {Array.from({ length: 8 }, (_, i) => (
+          <div key={i} className="h-12 animate-pulse rounded bg-muted" />
+        ))}
       </div>
     );
+  }
+  if (error && tasks.length === 0) {
+    return (
+      <div className="flex flex-1 items-center justify-center p-8 text-sm text-destructive">
+        {error}
+      </div>
+    );
+  }
+  if (tasks.length === 0) {
+    return <EmptyState title="暂无任务" className="flex-1" />;
   }
 
   const gridStyle = { gridTemplateColumns: gridTemplateOf(TABLE_COLUMNS) };
@@ -297,11 +318,7 @@ export default function TaskTableView({
               Date.now(),
               !!t.done,
             );
-            const inMyDay = (() => {
-              const today = new Date();
-              today.setHours(0, 0, 0, 0);
-              return t.my_day_date === today.getTime();
-            })();
+            const inMyDay = t.my_day_date === todayStartMs();
             return (
               <div
                 key={t.id}
@@ -418,10 +435,13 @@ export default function TaskTableView({
                           ? "opacity-100"
                           : "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100",
                       )}
-                      style={inMyDay ? { color: "#F59E0B" } : undefined}
+                      style={inMyDay ? { color: MY_DAY_COLOR } : undefined}
                       onClick={(e) => {
                         e.stopPropagation();
-                        void todoTaskUpdate(t.id, { my_day_date: inMyDay ? null : Date.now() });
+                        // 写入口径与列表/详情/右键菜单一致：本地零点（toggleMyDayValue 单口径）
+                        void todoTaskUpdate(t.id, {
+                          my_day_date: toggleMyDayValue(t.my_day_date),
+                        });
                       }}
                     >
                       <Sunrise size={14} fill={inMyDay ? "currentColor" : "none"} />

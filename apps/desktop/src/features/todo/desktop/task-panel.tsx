@@ -406,6 +406,7 @@ export default function TaskPanel() {
             labelsByTask={taskLabels}
             remindersByTask={taskReminders}
             sortKey={sortKey}
+            loading={tasksLoading}
           />
         ) : viewMode === "calendar" ? (
           <CalendarView
@@ -413,6 +414,7 @@ export default function TaskPanel() {
             projects={projects}
             labelsByTask={taskLabels}
             remindersByTask={taskReminders}
+            loading={tasksLoading}
             onCreateClick={() => {
               openCreateForm();
             }}
@@ -424,6 +426,8 @@ export default function TaskPanel() {
             projects={projects}
             labelsByTask={taskLabels}
             remindersByTask={taskReminders}
+            loading={tasksLoading}
+            error={tasksError}
             onOpenDetail={(id) => setSelectedTaskId(id)}
           />
         ) : (

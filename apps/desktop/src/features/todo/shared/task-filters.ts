@@ -23,6 +23,21 @@ export interface TaskFilterInput {
   priorityFilter?: number | null;
 }
 
+/** 「今天」本地零点毫秒（我的一天判定/写入单一口径：
+ *  列表/表格/详情/右键菜单/本文件过滤共五处，收编防口径漂移） */
+export function todayStartMs(now = new Date()): number {
+  const d = new Date(now);
+  d.setHours(0, 0, 0, 0);
+  return d.getTime();
+}
+
+/** 我的一天切换写值：在「我的一天」→ 移出（null），否则 → 加入（今天零点）。
+ *  判定基准与写入值同口径，杜绝「写入 Date.now() 当天即失效且无法移出」类 bug */
+export function toggleMyDayValue(myDayDate: number | null, now = new Date()): number | null {
+  const today = todayStartMs(now);
+  return myDayDate === today ? null : today;
+}
+
 export function filterTasks(tasks: TodoTask[], input: TaskFilterInput): TodoTask[] {
   const {
     quickView = null,

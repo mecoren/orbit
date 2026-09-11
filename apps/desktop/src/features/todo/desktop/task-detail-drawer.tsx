@@ -62,6 +62,7 @@ import { useTodoStore } from "@/features/todo/store";
 import { hideFromQueries, useUndoableDeleteAction } from "@/hooks/use-undoable-delete";
 import { usePasteAttachment } from "@/hooks/use-paste-attachment";
 import { PRIORITY_COLOR, TODO_ACCENT } from "../shared/constants";
+import { todayStartMs, toggleMyDayValue } from "../shared/task-filters";
 import { ConfirmPopover } from "../shared/confirm-popover";
 import { renderMarkdown } from "../shared/markdown-lite";
 import { REPEAT_MODE, REPEAT_PRESETS, WEEKDAY_CHIPS, repeatLabel } from "../shared/repeat";
@@ -211,9 +212,7 @@ function TitleRow({
   task: Awaited<ReturnType<typeof todoTaskGetDetail>>;
   onPatch: (patch: Record<string, unknown>) => Promise<void>;
 }) {
-  const myDayToday = new Date();
-  myDayToday.setHours(0, 0, 0, 0);
-  const inMyDay = task.my_day_date === myDayToday.getTime();
+  const inMyDay = task.my_day_date === todayStartMs();
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(task.title);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -281,11 +280,7 @@ function TitleRow({
         aria-label={inMyDay ? "移出我的一天" : "加入我的一天"}
         style={{ color: inMyDay ? "#F59E0B" : undefined }}
         onClick={() => {
-          const today = new Date();
-          today.setHours(0, 0, 0, 0);
-          void onPatch({
-            my_day_date: task.my_day_date === today.getTime() ? null : today.getTime(),
-          });
+          void onPatch({ my_day_date: toggleMyDayValue(task.my_day_date) });
         }}
       >
         <Sunrise size={16} fill={inMyDay ? "currentColor" : "none"} />
