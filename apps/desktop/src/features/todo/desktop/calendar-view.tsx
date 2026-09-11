@@ -85,11 +85,10 @@ interface CalendarViewProps {
   onAddOnDate?: (date: string) => void;
 }
 
-/** 左右分栏：窄窗口退化为上下堆叠（参考 wait-home SPLIT_LAYOUT）
- *  左半区加 px-5 与右栏卡片对齐节奏；月历/年视图内容 max-w-3xl 水平居中，
- *  大窗口下不贴左缘、不无限拉宽（6 列日格约 700px 为最佳可读宽度） */
+/** 左右分栏：窄窗口退化为上下堆叠（参考 wait-home SPLIT_LAYOUT）。
+ *  右/下留白在 CalendarView 根层统一补（三档共用），左半区只保留左侧内距 */
 const SPLIT_LAYOUT = "flex h-full min-h-0 flex-col gap-3 xl:flex-row";
-const LEFT_PANE = "flex min-h-0 flex-1 flex-col px-4 xl:flex-none xl:basis-1/2 xl:px-5";
+const LEFT_PANE = "flex min-h-0 flex-1 flex-col pl-4 xl:flex-none xl:basis-1/2 xl:pl-5";
 const RIGHT_PANE = "flex min-h-0 flex-1 flex-col rounded-xl border bg-card/40";
 /** 左半区内容宽度约束：flex-1 占满高度（fillHeight 月历需要确定高度容器），
  *  max-w-3xl + mx-auto 水平居中——月历 lg 尺寸 7 列 + 年视图 3 列的最佳宽度 */
@@ -347,8 +346,11 @@ export function CalendarView({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+      {/* 三档共用的右/下留白容器：议程档无 SPLIT_LAYOUT 的 pr/pb——
+          在此层统一补齐，月/年分栏与议程列表右/下边距同口径（外层 Outlet 无 padding） */}
+      <div className="flex min-h-0 flex-1 flex-col pr-4 pb-3 xl:pr-5">
       {/* 工具栏：月/年/议程三档切换 + 节假日手动更新（议程档） */}
-      <div className="flex items-center justify-between gap-3 px-4 py-2">
+      <div className="flex shrink-0 items-center justify-between gap-3 px-4 py-2">
         <h2 className="text-lg font-semibold">
           {subMode === "year"
             ? `${yearPaneYear}年`
@@ -587,6 +589,7 @@ export function CalendarView({
           onOpenDetail={openDetail}
         />
       )}
+      </div>
 
       {/* 月模式弹层：该日全部任务（与列表行同构的简化行，右键菜单可用）。
           入口：任务圆点行尾部「展开」按钮（滚动不便时的键盘/精确定位替代） */}
