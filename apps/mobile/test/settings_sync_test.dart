@@ -86,7 +86,7 @@ void main() {
     expect(find.text('导入密钥包恢复（换机 / 密钥不匹配）'), findsOneWidget);
     expect(find.text('同步密码（端到端加密）'), findsOneWidget);
     expect(find.text('已锁定'), findsOneWidget);
-  });;
+  });
 
   // P1-20：立即同步 key_mismatch 错误不再被吞——toast 引导去恢复入口
   testWidgets('sync now surfaces key mismatch with recovery action',

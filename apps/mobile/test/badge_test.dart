@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter_test/flutter_test.dart';
 import 'package:orbit/data/api/dto.dart';
 import 'package:orbit/modules/todo/logic/badge_count.dart';
