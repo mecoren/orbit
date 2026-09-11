@@ -1290,10 +1290,13 @@ export function installBrowserIpc() {
   function emitDbChange() {
     const entry = eventListeners.get("db-change");
     if (entry) {
+      // 对齐 Tauri 真实契约（event.js listener.rs emit_js_script）：
+      // handler 收到 {event, payload} 包装，不是裸 payload——此前 mock
+      // 直传裸对象，消费方 evt.payload 解构在 mock 下为 undefined
       entry.cb({
-        table: "mock",
-        op: "mock",
-        timestamp: Date.now(),
+        event: "db-change",
+        id: entry.id,
+        payload: { table: "mock", op: "mock", timestamp: Date.now() },
       });
     }
   }

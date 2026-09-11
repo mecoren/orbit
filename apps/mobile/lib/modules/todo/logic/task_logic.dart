@@ -115,6 +115,70 @@ List<TodoTask> filterTasks(List<TodoTask> tasks, TaskFilterInput input) {
 }
 
 /// 排序档位（#26 双端排序；manual = position 拖拽顺序，唯一默认档）。
+/// 侧栏计数聚合（单遍扫描出全部视图未完成数 + 项目未完成 Map）。
+/// 此前侧栏每个快捷视图行各跑一遍 filterTasks（7 遍全量 + 7 次
+/// DateTime.now()），万任务下每次 build 8+ 遍遍历；此函数一遍完成。
+/// 口径与 filterTasks 完全一致（today/week 时间窗、myDay 零点判定）。
+SidebarCounts computeSidebarCounts(
+  List<TodoTask> tasks, {
+  DateTime? now,
+}) {
+  final n = now ?? DateTime.now();
+  final todayStart = DateTime(n.year, n.month, n.day).millisecondsSinceEpoch;
+  final todayEnd = todayStart + 86400000;
+  final weekEnd = todayEnd + 6 * 86400000;
+
+  var all = 0, done = 0, today = 0, week = 0, favorite = 0, myDay = 0, nodate = 0;
+  final byProject = <int, int>{};
+
+  for (final t in tasks) {
+    final undone = !t.isDone;
+    if (undone) {
+      all++;
+      if (t.projectId != null) {
+        byProject[t.projectId!] = (byProject[t.projectId!] ?? 0) + 1;
+      }
+    } else {
+      done++;
+    }
+    if (t.isDone) continue;
+
+    if (t.dueDate != null) {
+      if (t.dueDate! >= todayStart && t.dueDate! < todayEnd) today++;
+      if (t.dueDate! >= todayStart && t.dueDate! < weekEnd) week++;
+    } else {
+      nodate++;
+    }
+    if (t.isStarred) favorite++;
+    if (t.isInMyDay) myDay++;
+  }
+
+  return SidebarCounts(
+    quickView: {
+      QuickViewKey.all: all,
+      QuickViewKey.done: done,
+      QuickViewKey.today: today,
+      QuickViewKey.week: week,
+      QuickViewKey.favorite: favorite,
+      QuickViewKey.myDay: myDay,
+      QuickViewKey.nodate: nodate,
+    },
+    undoneByProject: byProject,
+  );
+}
+
+/// 单遍计数结果（quickView 含 done 视图的已完成数——badge 口径）
+class SidebarCounts {
+  const SidebarCounts({required this.quickView, required this.undoneByProject});
+
+  /// 各快捷视图计数（all/today/week/favorite/myDay/nodate = 未完成数，
+  /// done 视图 = 已完成数）
+  final Map<QuickViewKey, int> quickView;
+
+  /// 各项目未完成数
+  final Map<int, int> undoneByProject;
+}
+
 enum TaskSortKey { manual, due, priority, title, created }
 
 /// 排序（默认 manual：position 升序 → created_at 降序；#26 增四档）。

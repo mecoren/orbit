@@ -53,20 +53,16 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
   List<TodoTask> _tasks() =>
       ref.watch(todoTasksProvider(const TaskListQuery())).value ?? const [];
 
-  /// 视图未完成计数（badge 展示口径：该视图下未完成任务数）
-  int _undoneCount(List<TodoTask> tasks, TaskFilterInput input) =>
-      filterTasks(tasks, input).where((t) => !t.isDone).length;
+  /// 侧栏计数单遍聚合（此前每个快捷视图行各跑一遍 filterTasks——
+  /// 7 遍全量 + 7 次 DateTime.now()，万任务下 build 一次 8+ 遍遍历）
+  SidebarCounts _counts(List<TodoTask> tasks) => computeSidebarCounts(tasks);
 
-  /// 各项目未完成计数（全量任务单遍聚合）
-  Map<int, int> _undoneByProject(List<TodoTask> tasks) {
-    final map = <int, int>{};
-    for (final t in tasks) {
-      if (!t.isDone && t.projectId != null) {
-        map[t.projectId!] = (map[t.projectId!] ?? 0) + 1;
-      }
-    }
-    return map;
-  }
+  /// 视图计数（badge 口径：all/today/… 未完成数；done 视图已完成数）
+  int _undoneCount(SidebarCounts counts, QuickViewKey key) =>
+      counts.quickView[key] ?? 0;
+
+  /// 各项目未完成计数（单遍产物）
+  Map<int, int> _undoneByProject(SidebarCounts counts) => counts.undoneByProject;
 
   // ── 导航 ──
 
@@ -304,7 +300,8 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
     final colors = AppColors.ofContext(context);
     final tasks = _tasks();
     final projects = _projects();
-    final undoneByProject = _undoneByProject(tasks);
+    final counts = _counts(tasks);
+    final undoneByProject = _undoneByProject(counts);
     final surfaceHighest =
         Theme.of(context).colorScheme.surfaceContainerHighest;
 
@@ -323,7 +320,7 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
               // 一、快捷视图（六行 ListTile：图标 quickView 色 + 标题 + 计数 badge + chevron）
               const SectionHeader(label: '快捷视图'),
               for (final key in QuickViewKey.values)
-                _buildQuickViewRow(key, tasks, surfaceHighest),
+                _buildQuickViewRow(key, counts, surfaceHighest),
               // 二、日历（月视图格内待办长条 + 节假日徽标）
               _buildCalendarRow(context),
               // 三、统计（backlog #25：总览/热力图/streak/分布）
@@ -385,8 +382,9 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     CountBadge.wrap(
-                      n: _undoneCount(
-                          tasks, const TaskFilterInput(ungrouped: true)),
+                      n: counts.quickView[QuickViewKey.all]! -
+                          counts.undoneByProject.values
+                              .reduce((a, b) => a + b),
                       background: surfaceHighest,
                     ),
                     Icon(
@@ -571,12 +569,11 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
 
   Widget _buildQuickViewRow(
     QuickViewKey key,
-    List<TodoTask> tasks,
+    SidebarCounts counts,
     Color surfaceHighest,
   ) {
     final colors = AppColors.ofContext(context);
-    final input = TaskFilterInput(quickView: key);
-    final undone = _undoneCount(tasks, input);
+    final undone = _undoneCount(counts, key);
     return ListTile(
       leading: Icon(
         key.icon,

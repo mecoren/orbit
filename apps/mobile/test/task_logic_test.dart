@@ -495,5 +495,59 @@ group('groupOverdueFirst 逾期置顶分组', () {
     ], now);
     expect(g.overdue.map((t) => t.id), [3, 1, 2]);
   });
+
+// ── 侧栏单遍计数聚合（口径与 filterTasks 一致性对照）──
+group('computeSidebarCounts 单遍计数', () {
+  final n = DateTime.now();
+  final todayStart = DateTime(n.year, n.month, n.day).millisecondsSinceEpoch;
+  const day = 86400000;
+
+  test('各视图计数与逐视图 filterTasks 结果一致（口径锁定）', () {
+    final tasks = [
+      _task(id: 1, dueDate: todayStart + 3600000, isFavorite: 1),
+      _task(id: 2, dueDate: todayStart + 2 * day, myDayDate: todayStart),
+      _task(id: 3, projectId: 7),
+      _task(id: 4, done: 1, doneAt: todayStart, status: 'done'),
+      _task(id: 5, dueDate: todayStart - day), // 逾期但在本周窗外
+      _task(id: 6),
+    ];
+    final counts = computeSidebarCounts(tasks);
+
+    for (final key in QuickViewKey.values) {
+      final filtered = filterTasks(
+          tasks, TaskFilterInput(quickView: key));
+      final expected = key == QuickViewKey.done
+          ? filtered.length
+          : filtered.where((t) => !t.isDone).length;
+      expect(counts.quickView[key], expected,
+          reason: '$key 视图计数与 filterTasks 漂移');
+    }
+  });
+
+  test('项目未完成计数与单遍聚合一致', () {
+    final tasks = [
+      _task(id: 1, projectId: 7),
+      _task(id: 2, projectId: 7),
+      _task(id: 3, projectId: 9, done: 1, doneAt: 1, status: 'done'),
+      _task(id: 4),
+    ];
+    final counts = computeSidebarCounts(tasks);
+    expect(counts.undoneByProject, {7: 2});
+  });
+
+  test('空任务列表 → 全零计数 + 空项目 Map', () {
+    final counts = computeSidebarCounts(const []);
+    expect(counts.quickView.values.every((v) => v == 0), isTrue);
+    expect(counts.undoneByProject, isEmpty);
+  });
+
+  test('today 窗口尾界与 nodate 口径（无截止才算 nodate）', () {
+    final todayDue = _task(id: 1, dueDate: todayStart); // 恰零点 = 今天
+    final noDue = _task(id: 2);
+    final counts = computeSidebarCounts([todayDue, noDue]);
+    expect(counts.quickView[QuickViewKey.today], 1);
+    expect(counts.quickView[QuickViewKey.nodate], 1);
+  });
+});
 });
 }

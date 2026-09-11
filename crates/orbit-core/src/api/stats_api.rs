@@ -142,13 +142,17 @@ pub async fn aggregate(pool: &SqlitePool, year: Option<i64>) -> CoreResult<Stats
     let current_year = chrono::Local::now().year() as i64;
     let year = year.unwrap_or(current_year).clamp(1900, 9999);
 
-    let overview = stats_overview_impl(pool).await?;
-    let heatmap = stats_heatmap_impl(pool, year).await?;
-    let streak = stats_streak_impl(pool).await?;
+    // 五路 impl 共享同一份全表行——此前各自 fetch_stat_rows 拉 5 遍
+    // （万任务下统计页一次点击 = 5 次全表行解码）；by_project/by_priority
+    // 是独立 SQL（带 join），不受影响
+    let rows = fetch_stat_rows(pool).await?;
+    let overview = stats_overview_impl(&rows).await?;
+    let heatmap = stats_heatmap_impl(&rows, year).await?;
+    let streak = stats_streak_impl(&rows).await?;
     let by_project = stats_by_project_impl(pool).await?;
     let by_priority = stats_by_priority_impl(pool).await?;
-    let by_weekday = stats_by_weekday_impl(pool).await?;
-    let available_years = stats_available_years_impl(pool).await?;
+    let by_weekday = stats_by_weekday_impl(&rows).await?;
+    let available_years = stats_available_years_impl(&rows).await?;
 
     Ok(StatsAggregate {
         overview,
@@ -163,7 +167,8 @@ pub async fn aggregate(pool: &SqlitePool, year: Option<i64>) -> CoreResult<Stats
 
 /// 单任务行最小投影（仅供本模块测试构造，功能代码走一次性聚合）
 pub async fn stats_overview(pool: &SqlitePool) -> CoreResult<StatsOverview> {
-    stats_overview_impl(pool).await
+    let rows = fetch_stat_rows(pool).await?;
+    stats_overview_impl(&rows).await
 }
 
 async fn fetch_stat_rows(pool: &SqlitePool) -> CoreResult<Vec<TaskStatRow>> {
@@ -174,8 +179,7 @@ async fn fetch_stat_rows(pool: &SqlitePool) -> CoreResult<Vec<TaskStatRow>> {
     Ok(rows)
 }
 
-async fn stats_overview_impl(pool: &SqlitePool) -> CoreResult<StatsOverview> {
-    let rows = fetch_stat_rows(pool).await?;
+async fn stats_overview_impl(rows: &[TaskStatRow]) -> CoreResult<StatsOverview> {
     let total = rows.len() as i64;
     let done = rows.iter().filter(|r| r.done == 1).count() as i64;
     let pending = total - done;
@@ -220,8 +224,7 @@ fn day_index_to_date(idx: i64) -> chrono::NaiveDate {
         .unwrap_or_else(|| chrono::NaiveDate::from_ymd_opt(1970, 1, 1).unwrap())
 }
 
-async fn stats_heatmap_impl(pool: &SqlitePool, year: i64) -> CoreResult<HeatmapData> {
-    let rows = fetch_stat_rows(pool).await?;
+async fn stats_heatmap_impl(rows: &[TaskStatRow], year: i64) -> CoreResult<HeatmapData> {
 
     let (from, to) = heatmap_year_range(year);
     // 逐日铺格：日期序号整除即本地日界（chrono NaiveDate 全程本地语义，
@@ -270,8 +273,7 @@ async fn stats_heatmap_impl(pool: &SqlitePool, year: i64) -> CoreResult<HeatmapD
 
 /// 可选年份：汇总全部完成记录的年份（升序去重；无任何完成记录回退 [当前年]）。
 /// 只按 done_at 聚合（与热力图同口径），不看创建时间——补录的历史完成也该能切到。
-async fn stats_available_years_impl(pool: &SqlitePool) -> CoreResult<Vec<i64>> {
-    let rows = fetch_stat_rows(pool).await?;
+async fn stats_available_years_impl(rows: &[TaskStatRow]) -> CoreResult<Vec<i64>> {
     let current_year = chrono::Local::now().year() as i64;
     let mut years: std::collections::BTreeSet<i64> = rows
         .iter()
@@ -324,8 +326,7 @@ fn compute_streak(done_indices: &std::collections::HashSet<i64>, today_idx: i64)
     }
 }
 
-async fn stats_streak_impl(pool: &SqlitePool) -> CoreResult<StreakData> {
-    let rows = fetch_stat_rows(pool).await?;
+async fn stats_streak_impl(rows: &[TaskStatRow]) -> CoreResult<StreakData> {
     let today_idx = local_day_index(now_ms());
     let done_indices: std::collections::HashSet<i64> = rows
         .iter()
@@ -382,9 +383,10 @@ async fn stats_by_priority_impl(pool: &SqlitePool) -> CoreResult<Vec<PriorityDis
         .collect())
 }
 
-async fn stats_by_weekday_impl(pool: &SqlitePool) -> CoreResult<Vec<WeekdayDistRow>> {
+async fn stats_by_weekday_impl(
+    rows: &[TaskStatRow],
+) -> CoreResult<Vec<WeekdayDistRow>> {
     // 星期分桶在 Rust 侧做（SQLite 无本地时区日界概念）
-    let rows = fetch_stat_rows(pool).await?;
     let mut counts = vec![0i64; 7];
     for r in rows.iter().filter(|r| r.done == 1) {
         if let Some(ts) = r.done_at {
@@ -501,7 +503,8 @@ mod tests {
         seed_pending(&pool, "p1", 0).await;
         seed_pending(&pool, "p2", 1).await;
 
-        let o = stats_overview_impl(&pool).await.unwrap();
+        let rows = fetch_stat_rows(&pool).await.unwrap();
+        let o = stats_overview_impl(&rows).await.unwrap();
         assert_eq!(o.total, 12);
         assert_eq!(o.done, 10);
         assert_eq!(o.pending, 2);
@@ -518,7 +521,8 @@ mod tests {
         seed_done(&pool, "y2", now - DAY_MS, 0).await;
 
         // 当前年（不传 year）：滚动 365 天窗口
-        let h = stats_heatmap_impl(&pool, chrono::Local::now().year() as i64)
+        let rows = fetch_stat_rows(&pool).await.unwrap();
+        let h = stats_heatmap_impl(&rows, chrono::Local::now().year() as i64)
             .await
             .unwrap();
         assert_eq!(h.cells.len(), 365, "当前年 = 滚动 365 天");
@@ -529,7 +533,7 @@ mod tests {
 
         // 历史年：完整 1/1 ~ 12/31，共 365/366 格；去年同日之后无今天的数据
         let last_year = chrono::Local::now().year() as i64 - 1;
-        let h2 = stats_heatmap_impl(&pool, last_year).await.unwrap();
+        let h2 = stats_heatmap_impl(&rows, last_year).await.unwrap();
         let expected_days = (chrono::NaiveDate::from_ymd_opt(last_year as i32, 12, 31).unwrap()
             - chrono::NaiveDate::from_ymd_opt(last_year as i32, 1, 1).unwrap())
         .num_days() as usize
@@ -549,7 +553,8 @@ mod tests {
     async fn available_years_collects_done_years_and_fallback() {
         let pool = setup_db().await;
         // 无完成记录 → [当前年]
-        let empty = stats_available_years_impl(&pool).await.unwrap();
+        let rows = fetch_stat_rows(&pool).await.unwrap();
+        let empty = stats_available_years_impl(&rows).await.unwrap();
         assert_eq!(empty, vec![chrono::Local::now().year() as i64]);
 
         // 今天 + 去年各一条完成 → 两年都可选（按 done_at，不看创建时间）
@@ -564,7 +569,9 @@ mod tests {
             .timestamp_millis();
         seed_done(&pool, "old", last_year_ms, 0).await;
 
-        let years = stats_available_years_impl(&pool).await.unwrap();
+        // seed 后重拉行快照（上面的 rows 是空库时拉的）
+        let rows = fetch_stat_rows(&pool).await.unwrap();
+        let years = stats_available_years_impl(&rows).await.unwrap();
         assert!(years.contains(&last_year));
         assert!(years.contains(&(chrono::Local::now().year() as i64)));
         // 升序
@@ -592,7 +599,8 @@ mod tests {
         }
         seed_done(&pool, "old", now - 10 * DAY_MS, 0).await;
 
-        let s = stats_streak_impl(&pool).await.unwrap();
+        let rows = fetch_stat_rows(&pool).await.unwrap();
+        let s = stats_streak_impl(&rows).await.unwrap();
         assert!(s.done_today);
         assert_eq!(s.current, 3);
         assert_eq!(s.best, 3);
@@ -605,7 +613,8 @@ mod tests {
         // 只有 10 天前的完成
         seed_done(&pool, "old", now - 10 * DAY_MS, 0).await;
 
-        let s = stats_streak_impl(&pool).await.unwrap();
+        let rows = fetch_stat_rows(&pool).await.unwrap();
+        let s = stats_streak_impl(&rows).await.unwrap();
         assert!(!s.done_today);
         assert_eq!(s.current, 0, "昨天无完成，当前连续为 0");
     }
@@ -622,7 +631,8 @@ mod tests {
         assert!(p.iter().any(|r| r.priority == 3 && r.done_count == 2));
         assert!(p.iter().any(|r| r.priority == 0 && r.pending_count == 1));
 
-        let w = stats_by_weekday_impl(&pool).await.unwrap();
+        let rows = fetch_stat_rows(&pool).await.unwrap();
+        let w = stats_by_weekday_impl(&rows).await.unwrap();
         assert_eq!(w.len(), 7);
         assert_eq!(w.iter().map(|r| r.done_count).sum::<i64>(), 2, "2 条已完成");
     }

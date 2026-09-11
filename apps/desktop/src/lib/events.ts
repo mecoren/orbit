@@ -2,15 +2,16 @@
  * events — 响应式数据流桥
  *
  * 1. "db-change"：Rust EVENT_BUS 转发的本地写操作事件，使 react-query 缓存失效。
+ *    按事件 table 精确失效（db-invalidation.ts 映射表）——写一条任务不再
+ *    全量重拉 9+ 路查询（含三路万行列表）；未知表回退全量（宁多拉不漏刷）。
  * 2. "sync-finished"：云同步完成后的事件。云端拉取的合并写入不走 EVENT_BUS
  *    （无 db-change），须在此按 pulled_modules 失效缓存，否则界面不刷新。
- *
- * 当前采用粗粒度全量失效（M1 补遗）；后续可按 event.table 映射到具体
- * queryKey 实现细粒度失效（对齐 wait-home dashboard-query-invalidation 模式）。
  */
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect } from "react";
 import { listen } from "@tauri-apps/api/event";
+
+import { invalidateByTable } from "./db-invalidation";
 
 /** Rust DbEvent 载荷（snake_case 直传） */
 export interface DbChangeEvent {
@@ -33,8 +34,11 @@ export interface SyncFinishedEvent {
 export function useDbInvalidation() {
   const qc = useQueryClient();
   useEffect(() => {
-    const unlistenPromise = listen<DbChangeEvent>("db-change", () => {
-      void qc.invalidateQueries();
+    const unlistenPromise = listen<DbChangeEvent>("db-change", (evt) => {
+      // mock 桥（浏览器/e2e）发的 table="mock"，走全量回退
+      if (invalidateByTable(qc, evt.payload.table) === null) {
+        void qc.invalidateQueries();
+      }
     });
     return () => {
       unlistenPromise.then((unlisten) => unlisten());

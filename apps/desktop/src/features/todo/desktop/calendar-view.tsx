@@ -190,8 +190,6 @@ export function CalendarView({
       await todoTaskUpdate(taskId, { due_date: nextDue });
       void queryClient.invalidateQueries({ queryKey: ["todo_tasks"] });
       void queryClient.invalidateQueries({ queryKey: ["todo-task-detail"] });
-      void queryClient.invalidateQueries({ queryKey: ["count"] });
-      void queryClient.invalidateQueries({ queryKey: ["nav-data"] });
       toast.success(
         `「${task.title.slice(0, 20)}」已改期至 ${formatYmd(target)}`,
         { description: task.due_date != null ? "原截止时刻已保留" : undefined },

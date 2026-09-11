@@ -13,7 +13,7 @@
  *   （完成/未完成/收藏/项目移动/删除，项目移动带中值落位）。详情抽屉仍由
  *   未选中行打开，选中行点击仅切换勾选（与多数竞品一致）。
  */
-import { useMemo, useRef, useState, type ReactNode } from "react";
+import { memo, useMemo, useRef, useState, type ReactNode } from "react";
 import { formatDistanceToNow } from "date-fns";
 import { zhCN } from "date-fns/locale";
 import { useQueryClient } from "@tanstack/react-query";
@@ -142,8 +142,12 @@ export function TaskListView({ tasks, projects, labelsByTask, remindersByTask, l
   // 逾期置顶分组（性能批次 UX 优化）：未完成且已过截止的任务划入「逾期」
   // 区置顶展示；无逾期时 overdue 空、rest 即全量——虚拟化数据源统一用
   // rest，拖拽/键盘索引语义不受影响（dnd 落位走 tasks 原数组 findIndex）。
-  const now = Date.now();
-  const { overdue: overdueTasks, rest } = useMemo(() => groupOverdueFirst(tasks, now), [tasks, now]);
+  // 时间基准随数据变（跨零点拉新数据即换）——不能每渲染帧重建 now，
+  // 否则 useMemo 失效：拖拽/选中态每次 set 都全量重跑分组
+  const { overdue: overdueTasks, rest } = useMemo(
+    () => groupOverdueFirst(tasks, Date.now()),
+    [tasks],
+  );
 
   // P0 虚拟化：仅渲染可视窗 ± overscan。行高固定 57px（TaskRow h-[57px]），
   // 元信息有无不改变行高——固定尺寸让 estimateSize 与实测恒一致，
@@ -329,10 +333,13 @@ export function TaskListView({ tasks, projects, labelsByTask, remindersByTask, l
   const draggingTask = draggingId != null ? tasks.find((t) => t.id === draggingId) : undefined;
 
   const renderRow = (t: TodoTask, vi: { index: number; start: number }) => {
-    const overdue = !!t.due_date && !t.done && t.due_date < Date.now();
+    // 每帧一次 nowMs 供行内 overdue/reminder 判定（此前每行 2 次 Date.now()，
+    // 虚拟窗 ~25 行 = 50 次分配/帧）
+    const nowMs = Date.now();
+    const overdue = !!t.due_date && !t.done && t.due_date < nowMs;
     const due = dueText(t.due_date);
     const project = t.project_id != null ? projectById.get(t.project_id) : undefined;
-    const reminder = displayReminder(remindersByTask.get(t.id) ?? [], Date.now(), !!t.done);
+    const reminder = displayReminder(remindersByTask.get(t.id) ?? [], nowMs, !!t.done);
     return (
       // 绝对定位行容器：divide-y 在脱离文档流的兄弟间不生效，改每行自带 border-b。
       // 用 top 而非 transform 定位（见文件头注释）
@@ -674,7 +681,7 @@ interface TaskRowProps {
   sortable: boolean;
 }
 
-function TaskRow({
+const TaskRow = memo(function TaskRow({
   task: t,
   index,
   count,
@@ -888,6 +895,28 @@ function TaskRow({
         <Star size={16} fill={t.is_favorite ? "currentColor" : "none"} />
       </button>
     </div>
+  );
+}, taskRowPropsEqual);
+
+/**
+ * TaskRow memo 比较器：忽略函数 props（registerRef/onToggle 等内联箭头
+ * 每次渲染新引用，默认浅比较必然击穿）；业务字段全量比较——拖拽态
+ * （dragging）、选中态（selected/hasSelection）、数据态变化精确重渲染。
+ */
+function taskRowPropsEqual(prev: TaskRowProps, next: TaskRowProps): boolean {
+  return (
+    prev.task === next.task &&
+    prev.index === next.index &&
+    prev.count === next.count &&
+    prev.labels === next.labels &&
+    prev.project === next.project &&
+    prev.due === next.due &&
+    prev.overdue === next.overdue &&
+    prev.reminder === next.reminder &&
+    prev.dragging === next.dragging &&
+    prev.selected === next.selected &&
+    prev.hasSelection === next.hasSelection &&
+    prev.sortable === next.sortable
   );
 }
 
