@@ -50,7 +50,10 @@ where
     } else {
         filter.page_size
     } as i32;
-    let offset = (filter.page.saturating_sub(1)).saturating_mul(filter.page_size) as i32;
+    // offset 须用规范化后的 page_size（此前用原始 filter.page_size：
+    // page_size=0 的默认 20 档第 2 页起 offset 恒 0，所有页都返第一页数据）
+    let offset =
+        (filter.page.saturating_sub(1)).saturating_mul(page_size.max(1) as u32) as i32;
 
     // 拼接 keyword 过滤子句：仅在 keyword 非空且表有可搜索字段时生效
     let keyword_clause = build_keyword_clause(table, filter.keyword.as_deref());

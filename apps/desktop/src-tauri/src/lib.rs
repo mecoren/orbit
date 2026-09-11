@@ -100,16 +100,20 @@ pub fn run() {
                 eprintln!("[mica] dwm apply failed: {e}");
             }
 
-            // Windows Toast 通知身份注册（AUMID DisplayName=Orbit + 图标）：
-            // 未注册时通知横幅回退显示进程名（dev 态 orbit-desktop）+ 进程
-            // 图标缓存。失败静默——只影响横幅显示身份，不阻断启动链。
+            // Windows Toast 通知身份注册（AUMID DisplayName=Orbit + 图标）+
+            // 清除上次退出前的计划通知：都是首窗显示后才可能被消费的通道
+            // （AUMID 含 PNG 编码写盘+注册表写、清理是 WinRT COM 遍历——
+            // 合计几十 ms 同步 IO），丢后台线程不挡 setup 返回（首帧关键
+            // 路径）；两者均无需在任何 UI 前完成，失败本就静默。
             #[cfg(target_os = "windows")]
-            commands::aumid_registry::register_aumid_identity(_app.handle());
-
-            // 清除上次退出前注册的 Windows 计划通知（离线提醒）：
-            // 运行中由轮询通道接管，防止同一提醒双弹。失败静默（无计划）。
-            #[cfg(target_os = "windows")]
-            commands::scheduled_toast::clear_schedule_on_startup();
+            {
+                let handle = _app.handle().clone();
+                std::thread::spawn(move || {
+                    commands::aumid_registry::register_aumid_identity(&handle);
+                    // 清除计划通知（运行中由轮询通道接管，防双弹）
+                    commands::scheduled_toast::clear_schedule_on_startup();
+                });
+            }
 
             // 启动待办提醒轮询守护（每 20s 一轮；DB 就绪后自动工作；
             // 全平台启动——此前误嵌 Mica 失败分支导致成功路径下守护不运行）

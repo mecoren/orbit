@@ -145,6 +145,8 @@ CREATE INDEX IF NOT EXISTS idx_todo_tasks_done ON todo_tasks(done);
 CREATE INDEX IF NOT EXISTS idx_todo_tasks_due_date ON todo_tasks(due_date);
 CREATE INDEX IF NOT EXISTS idx_todo_tasks_is_favorite ON todo_tasks(is_favorite);
 CREATE INDEX IF NOT EXISTS idx_todo_tasks_my_day ON todo_tasks(my_day_date) WHERE my_day_date IS NOT NULL;
+-- 回收站墓碑过滤+排序（list_trashed 的 is_deleted+deleted_at DESC 与 TTL purge 的 deleted_at 谓词共用）
+CREATE INDEX IF NOT EXISTS idx_todo_tasks_trash ON todo_tasks(is_deleted, deleted_at DESC);
 
 -- 待办子任务表
 CREATE TABLE IF NOT EXISTS todo_subtasks (

@@ -347,51 +347,80 @@ pub async fn purge_todo_tasks_before(pool: &SqlitePool, cutoff_ms: i64) -> CoreR
         None => 0,
     };
 
-    // 候选：已过期墓碑。启用同步但从未成功 push（last_pushed_at=0）→ 全部守卫跳过
-    let candidates: Vec<TodoTask> = sqlx::query_as::<_, TodoTask>(
-        "SELECT * FROM todo_tasks \
-         WHERE is_deleted = 1 AND deleted_at IS NOT NULL AND deleted_at < ?",
+    // 候选：已过期墓碑。守卫并入 SQL：放行条件 deleted_at < last_pushed_at
+    // （删除早于上次成功推送 → 云端已确认，物理清安全）；last_pushed_at=0
+    // （从未推送）钳到 1 → 任何 deleted_at >= 1 恒被守卫跳过；未启用同步
+    // → floor 取 i64::MAX 放行条件恒真。只取 id/uuid 投影，不再整行物化
+    // （候选行含 description 大字符串列，批量期开销无谓）
+    let guard_floor = match active.is_some() {
+        true => last_pushed_at.max(1),
+        false => i64::MAX,
+    };
+    let candidates: Vec<(i64, String)> = sqlx::query_as::<_, (i64, String)>(
+        "SELECT id, uuid FROM todo_tasks WHERE is_deleted = 1 AND deleted_at IS NOT NULL AND deleted_at < ? AND deleted_at < ?",
     )
     .bind(cutoff_ms)
+    .bind(guard_floor)
     .fetch_all(pool)
     .await?;
-
-    let mut to_purge: Vec<i64> = Vec::new();
-    let mut guarded: u64 = 0;
-    for t in &candidates {
-        let deleted_at = t.deleted_at.unwrap_or(0);
-        if active.is_some() && (deleted_at >= last_pushed_at || last_pushed_at == 0) {
-            guarded += 1; // 删除尚未确认上传云端，物理清有复活风险
+    if candidates.is_empty() {
+        let guarded = if active.is_some() {
+            count_guarded(pool, cutoff_ms, last_pushed_at).await?
         } else {
-            to_purge.push(t.id);
-        }
-    }
-    if to_purge.is_empty() {
+            0
+        };
         return Ok((0, guarded));
     }
 
+    // 集合式删除：同一圈定条件一条子查询，6 类行各一条 DELETE（此前逐行
+    // 6 条 × N 行 = 百行 600 条语句；同文件 purge_all_trashed_tasks 同款）
+    let purge_scope =
+        "is_deleted = 1 AND deleted_at IS NOT NULL AND deleted_at < ? AND deleted_at < ?";
     let mut tx = pool.begin().await?;
-    for id in &to_purge {
-        for sql in [
-            "DELETE FROM todo_subtasks WHERE task_id = ?",
-            "DELETE FROM todo_task_labels WHERE task_id = ?",
-            "DELETE FROM todo_comments WHERE task_id = ?",
-            "DELETE FROM todo_task_relations WHERE task_id = ? OR other_task_id = ?",
-            "DELETE FROM todo_reminders WHERE task_id = ?",
-            "DELETE FROM todo_tasks WHERE id = ?",
-        ] {
-            sqlx::query(sql).bind(id).bind(id).execute(&mut *tx).await?;
+    for sql in [
+        format!("DELETE FROM todo_subtasks WHERE task_id IN (SELECT id FROM todo_tasks WHERE {purge_scope})"),
+        format!("DELETE FROM todo_task_labels WHERE task_id IN (SELECT id FROM todo_tasks WHERE {purge_scope})"),
+        format!("DELETE FROM todo_comments WHERE task_id IN (SELECT id FROM todo_tasks WHERE {purge_scope})"),
+        format!(
+            "DELETE FROM todo_task_relations WHERE task_id IN (SELECT id FROM todo_tasks WHERE {purge_scope}) OR other_task_id IN (SELECT id FROM todo_tasks WHERE {purge_scope})"
+        ),
+        format!("DELETE FROM todo_reminders WHERE task_id IN (SELECT id FROM todo_tasks WHERE {purge_scope})"),
+        // 本体最后删（子表子查询依赖它圈定范围）
+        format!("DELETE FROM todo_tasks WHERE {purge_scope}"),
+    ] {
+        // 每条语句两个圈定参数；relations 语句双子查询需 4 个
+        let params = if sql.matches('?').count() == 4 { 4 } else { 2 };
+        let mut q = sqlx::query(&sql);
+        for _ in 0..params / 2 {
+            q = q.bind(cutoff_ms).bind(guard_floor);
         }
+        q.execute(&mut *tx).await?;
     }
     tx.commit().await?;
 
     let device_id = generic_repo::current_device_id();
-    for t in candidates.iter().filter(|t| to_purge.contains(&t.id)) {
-        EVENT_BUS.emit(DbEvent::delete("todo_tasks", t.id, &t.uuid, &device_id));
+    for (id, uuid) in &candidates {
+        EVENT_BUS.emit(DbEvent::delete("todo_tasks", *id, uuid, &device_id));
     }
-    // 启用同步且实际清了行 → 顺带把守卫基准提前（下次不必重扫已守卫的行）
+    let guarded = if active.is_some() {
+        count_guarded(pool, cutoff_ms, last_pushed_at).await?
+    } else {
+        0
+    };
     let _ = now; // now 保留给调用方记账（maybe_purge_expired 写 KV_LAST_PURGE_MS）
-    Ok((to_purge.len() as u64, guarded))
+    Ok((candidates.len() as u64, guarded))
+}
+
+/// 守卫计数：cutoff 内但因未确认上云而跳过物理清的墓碑行数
+async fn count_guarded(pool: &SqlitePool, cutoff_ms: i64, last_pushed_at: i64) -> CoreResult<u64> {
+    let (n,): (i64,) = sqlx::query_as(
+        "SELECT COUNT(*) FROM todo_tasks WHERE is_deleted = 1 AND deleted_at IS NOT NULL AND deleted_at < ? AND deleted_at >= ?",
+    )
+    .bind(cutoff_ms)
+    .bind(last_pushed_at.max(1))
+    .fetch_one(pool)
+    .await?;
+    Ok(n.max(0) as u64)
 }
 
 // ============================================================================

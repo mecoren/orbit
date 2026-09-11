@@ -382,9 +382,11 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     CountBadge.wrap(
+                      // 未分组未完成 = 全部未完成 − 有项目未完成之和
+                      //（fold 带初值 0，空项目 Map 不崩——reduce 空集 No element）
                       n: counts.quickView[QuickViewKey.all]! -
                           counts.undoneByProject.values
-                              .reduce((a, b) => a + b),
+                              .fold(0, (a, b) => a + b),
                       background: surfaceHighest,
                     ),
                     Icon(

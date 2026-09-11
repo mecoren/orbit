@@ -5,7 +5,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/routing/router_keys.dart';
 import '../../core/theme/orbit_accents.dart';
-import '../../data/api/dto.dart';
 import '../../data/providers/bridge_provider.dart';
 import '../../data/providers/todo_widget_provider.dart';
 import '../../services/device_id.dart';
@@ -84,16 +83,16 @@ class _BootGateState extends ConsumerState<BootGate>
     }
   }
 
-  /// B6 角标刷新：当前缓存任务集算「今天截止或已逾期」未完成数。
-  /// 缓存未就绪时静默跳过——_subscribeStreams 的 listen 会在数据
-  /// 到达后补刷。
+  /// B6 角标刷新：读 todoTasksProvider 缓存值算「今天截止或已逾期」
+  /// 未完成数。此前直拉 bridge.todoTaskList 全量 IPC——与 provider 缓存
+  /// 完全重复（一次 db-change = provider 重拉一遍 + 角标直拉一遍 = 双份
+  /// 万行过桥）；改读缓存未就绪时静默跳过，_subscribeStreams 的 listen
+  /// 会在数据到达后补刷。
   Future<void> _refreshBadge() async {
     try {
-      final bridge = ref.read(orbitBridgeProvider);
-      final tasks = await bridge.todoTaskList(
-        ListFilter(keyword: '', pageSize: 10000),
-      );
-      if (!mounted) return;
+      final tasks =
+          ref.read(todoTasksProvider(const TaskListQuery())).value;
+      if (!mounted || tasks == null) return;
       await _badge.update(dueTodayOrOverdueCount(tasks));
     } catch (e) {
       debugPrint('[BootGate] badge refresh failed: $e');
