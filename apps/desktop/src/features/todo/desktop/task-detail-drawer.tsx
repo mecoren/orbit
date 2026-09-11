@@ -5,7 +5,7 @@
  * 数据源 todo_tasks_get_detail 五合一；变更即改即存，
  * 列表刷新依赖 db-change 全局失效；本抽屉内部经局部 refetch 同步。
  */
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import {
@@ -41,6 +41,10 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  getDescPreviewDelayMs,
+  getDescPreviewEnabled,
+} from "../shared/desc-preview-pref";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -1069,7 +1073,7 @@ function DescriptionSection({
             }
           }}
           onBlur={() => void commit()}
-          className="min-h-[80px] text-[13px]"
+          className="min-h-[80px] max-h-64 field-sizing-content text-[13px]"
         />
         <div className="mt-1 flex items-center justify-between">
           <span className="text-[11px] text-muted-foreground">Ctrl+Enter 保存 · Esc 取消</span>
@@ -1082,22 +1086,24 @@ function DescriptionSection({
   return (
     <SectionBlock icon={AlignLeft} title="描述">
       {task.description ? (
-        <div
-          role="button"
-          tabIndex={0}
-          aria-label="点击编辑描述"
-          title="点击编辑（支持 Markdown：# 标题 / **粗体** / *斜体* / `代码` / [链接](url) / - 列表）"
-          className="space-y-0.5 break-words rounded-md text-[13px] transition-colors hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring"
-          onClick={() => setEditing(true)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" || e.key === " ") {
-              e.preventDefault();
-              setEditing(true);
-            }
-          }}
-        >
-          {renderMarkdown(task.description)}
-        </div>
+        <DescriptionPreviewHover content={renderMarkdown(task.description)}>
+          <div
+            role="button"
+            tabIndex={0}
+            aria-label="点击编辑描述"
+            title="点击编辑（支持 Markdown：# 标题 / **粗体** / *斜体* / `代码` / [链接](url) / - 列表）"
+            className="max-h-64 space-y-0.5 overflow-y-auto break-words rounded-md text-[13px] transition-colors hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring"
+            onClick={() => setEditing(true)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                setEditing(true);
+              }
+            }}
+          >
+            {renderMarkdown(task.description)}
+          </div>
+        </DescriptionPreviewHover>
       ) : (
         <button
           type="button"
@@ -1108,6 +1114,68 @@ function DescriptionSection({
         </button>
       )}
     </SectionBlock>
+  );
+}
+
+/**
+ * 描述展示态悬浮预览：内容被 max-h 截断（scrollHeight > clientHeight）且
+ * 设置开启时，鼠标停留满设定时长弹全量预览浮层（防呆延迟避免滑过即闪）。
+ * 浮层高度也封顶（视口 60%），超长仍可滚动读全。延迟内移开即取消。
+ *
+ * 悬浮探测用 pointerover/pointerout（React 委托链上比 mouseenter/leave
+ * 更先派发、且 mouseenter 不冒泡在部分嵌入视图收不到——IAB 实测坑）；
+ * pointerout 后浮层仍开着时由 Popover 自身交互区维持，移出即关。
+ */
+function DescriptionPreviewHover({ children, content }: { children: React.ReactNode; content: React.ReactNode }) {
+  const boxRef = useRef<HTMLDivElement>(null);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const timerRef = useRef<number | null>(null);
+
+  // 内容/尺寸变化后重判是否溢出（描述变化由子树重渲驱动本 effect）。
+  // 溢出发生在带 max-h 的内层描述节点上——wrapper 自身不滚，须量 firstChild。
+  const previewable = useRef(false);
+  useEffect(() => {
+    const el = boxRef.current?.firstElementChild as HTMLElement | null | undefined;
+    previewable.current = !!el && el.scrollHeight > el.clientHeight + 1;
+  });
+
+  const openTimer = () => {
+    if (!previewable.current || !getDescPreviewEnabled()) return;
+    timerRef.current = window.setTimeout(() => setPreviewOpen(true), getDescPreviewDelayMs());
+  };
+  const closeTimer = () => {
+    if (timerRef.current != null) {
+      window.clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
+  };
+  useEffect(() => closeTimer, []);
+
+  return (
+    <Popover open={previewOpen} onOpenChange={setPreviewOpen}>
+      <PopoverTrigger asChild>
+        <div
+          ref={boxRef}
+          onPointerOver={openTimer}
+          onPointerOut={() => {
+            closeTimer();
+            setPreviewOpen(false);
+          }}
+        >
+          {children}
+        </div>
+      </PopoverTrigger>
+      <PopoverContent
+        side="right"
+        align="start"
+        // 预览浮层与描述区留距，避免盖住原文导致阅读错位
+        sideOffset={8}
+        onOpenAutoFocus={(e) => e.preventDefault()}
+        className="max-h-[60vh] w-100 overflow-y-auto p-3 text-[13px] leading-relaxed"
+      >
+        <div className="space-y-0.5 break-words">{content}</div>
+      </PopoverContent>
+    </Popover>
   );
 }
 

@@ -57,3 +57,7 @@ export const QUICK_VIEWS: QuickViewDef[] = [
 export const LS_VIEW_MODE = "todo_view_mode";
 /** 未分组虚拟项位置持久化键（04 §3.1） */
 export const LS_UNGROUPED_AFTER = "todo_sidebar_ungrouped_after";
+/** 详情页描述悬浮预览开关（本机设置，默认开） */
+export const LS_DESC_PREVIEW_ENABLED = "desc_preview_enabled";
+/** 详情页描述悬浮预览延迟毫秒（默认 800） */
+export const LS_DESC_PREVIEW_DELAY = "desc_preview_delay";
