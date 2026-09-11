@@ -26,7 +26,9 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 orbit-core = { path = "../../../crates/orbit-core" }
 
 # Tauri v2 + 插件（02 文档 §七：notification/window-state/dialog/fs/shell/log）
-tauri = { version = "2", features = ["devtools", "image-png", "tray-icon"] }
+# devtools 特性不启用：wry 在 debug 构建恒开 devtools（cfg(debug_assertions)），
+# 仅 release 需要；发版口径不给用户开 F12（避免暴露 SQLCipher 数据流）。
+tauri = { version = "2", features = ["image-png", "tray-icon"] }
 tauri-plugin-shell = "2"
 tauri-plugin-dialog = "2"
 tauri-plugin-fs = "2"
