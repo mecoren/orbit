@@ -7,6 +7,27 @@
 
 ## [Unreleased]
 
+### 全栈性能与 UI/UX 系统性优化批次（探查报告全清账）
+
+双维只读探查（性能 15 项 + UI/UX 18 项，报告入 docs/性能与UX系统性优化报告-2026-09-12.md）后按性价比四批落地：
+
+- **表格视图「我的一天」零点 bug（H2 真 bug）**：按钮写入 `Date.now()`（含时分秒），零点严格相等判定立即失配——图标不亮且移出分支永不触发。五处内联判定/写值收编 shared 纯函数 `todayStartMs`/`toggleMyDayValue` 单一口径，+5 单测（含脏数据对齐回归）。
+- **db-change 表级失效（最大放大器）**：此前每条写事件全量 invalidateQueries——勾选一条任务 = 9+ 路查询标脏重拉（含三路万行级全量）。新增 `lib/db-invalidation.ts` 按事件 table 精确失效（11 张同步表全覆盖 + todo_tasks 联动详情/搜索/统计/回收站派生键），未知表回退全量宁多拉不漏刷，+7 单测。顺修 mock 事件契约（真实 Tauri handler 收 `{event,payload}` 包装，mock 直传裸对象）。
+- **stats_aggregate 五次全表扫 → 单次**：overview/heatmap/streak/weekday/available_years 五 impl 各自拉同一全表；万任务下统计页一次点击 5 遍行解码 → aggregate 单次拉取传引用。
+- **列表视图渲染三修复**：分组 useMemo 的 now 每渲染帧重建致全量重跑（拖拽/选中态 set 全触发）→ 数据变更才换基准；renderRow 每行 2 次 Date.now() 外提；TaskRow 包 memo + 自定义比较器（忽略内联箭头函数 props，业务字段精确比较）。
+- **移动端侧栏单遍计数**：7 个快捷视图行各跑一遍 filterTasks（8+ 遍全量遍历/次 build）→ `computeSidebarCounts` 一遍出全部计数 + 项目 Map，+4 单测对照 filterTasks 口径锁定。
+- **快加提醒弹层去 Popover 嵌套（H1）**：PopoverContent 内嵌 DateTimePicker（自身即 Popover）——portal 套 portal 同 drawer 已踩过的坑复发；照 DueDateEditor 两段式重写（QuickDateMenu ⇄ 内联日历+时分输入）。
+- **三视图加载态补齐（H3）**：表格/看板/日历查询进行中误闪空态（「暂无任务/拖拽任务到此处/本月没有…」）——task-panel 统一下传 loading，三视图骨架行 + 表格空态换 EmptyState 组件。
+- **看板键盘可达 + 勾选入口（H4/M5）**：卡片补 role/tabIndex/Enter 激活（对齐列表/表格行）；正面加同款圆环 checkbox 直调 completeTask。
+- **常量单口径收敛（M1）**：PRIORITY_LABELS 四副本/STATUS_ITEMS 硬编码三色/两份相同 10 色板/两份不一致的标签随机色池/我的一天色三处内联，全部收 constants.ts 单源（`MY_DAY_COLOR`/`PRESET_10`）。
+- **详情抽屉焦点可见（M3）**：子任务/提醒/关联/评论/附件五行内删除钮补 `group-focus-within`——Tab 聚焦不再隐形。
+- **回收站集合式清理 + 墓碑索引（R2/R3）**：TTL purge 从「整行物化 + 每行 6 条 DELETE」改守卫并入 SQL + 6 条集合 DELETE（IN 子查询）；0001 迁移补 `idx_todo_tasks_trash(is_deleted, deleted_at DESC)`（回收站列表与 purge 谓词共用）。
+- **generic_repo 分页 offset bug（R5）**：page_size=0 默认 20 档第 2 页起 offset 恒 0 返第一页数据——改用规范化后 page_size。
+- **桌面启动链去阻塞（D1）**：AUMID 注册（PNG 编码+注册表）与计划通知清理（WinRT 遍历）从 setup 首帧关键路径挪后台线程。
+- **移动端角标读缓存（M3-mobile）**：BootGate 直拉全量任务 IPC 与 provider 缓存完全重复（db-change 双份万行过桥）——改读 todoTasksProvider 缓存值。
+- 顺修：calendar-view 死键 invalidate（count/nav-data 无消费方）；测试代码 lint 清零（flutter analyze No issues）；orbit-core 未用导入清理（两 workspace cargo check --all-targets 零警告）。
+- **验证**：vitest 231（+12）/ Rust 440 / Flutter 249（+4）/ e2e 14 / flutter analyze+tsc+cargo check 全零告警；浏览器目检关键链（看板 Enter 开详情/勾选落库、提醒弹层两段式、失效链刷新、my_day 移出）全过。
+
 ### Windows 通知身份修复——AUMID 注册 DisplayName=Orbit + 图标对齐
 
 - Windows Toast 通知（提醒轮询直发 + 退出计划 Toast）横幅此前显示进程名 `orbit-desktop` + 旧进程图标缓存。根因：两条通道都以 AUMID `cn.wait.orbit` 发通知，但该 AUMID 从未在 `HKCU\Software\Classes\AppUserModelId` 注册身份——通知平台查不到 DisplayName/IconUri 时回退显示发起进程名及其图标（dev 态 exe 名即 orbit-desktop）；`productName` 本就是 Orbit，名字问题全部出在这条缺失的注册链。
