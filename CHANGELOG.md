@@ -7,6 +7,13 @@
 
 ## [Unreleased]
 
+### Windows 通知身份修复——AUMID 注册 DisplayName=Orbit + 图标对齐
+
+- Windows Toast 通知（提醒轮询直发 + 退出计划 Toast）横幅此前显示进程名 `orbit-desktop` + 旧进程图标缓存。根因：两条通道都以 AUMID `cn.wait.orbit` 发通知，但该 AUMID 从未在 `HKCU\Software\Classes\AppUserModelId` 注册身份——通知平台查不到 DisplayName/IconUri 时回退显示发起进程名及其图标（dev 态 exe 名即 orbit-desktop）；`productName` 本就是 Orbit，名字问题全部出在这条缺失的注册链。
+- 新增启动钩子 `aumid_registry`：setup 阶段幂等写 `DisplayName="Orbit"` + `IconUri=file:///…/cache/app-icon-notification.png`；图标源用 tauri `default_window_icon`（exe 内嵌 icon.ico 首帧，45a9f50 后为 256px v5.1 高清帧）编码 PNG 到数据目录 cache/——dev/安装态同源，通知图标永远与任务栏/托盘当前版本一致，每次启动全量重写无旧缓存。
+- Cargo 包名 `orbit-desktop` 是内部 crate 名不进用户可见面，保持不动（改名会牵动嵌套 workspace/gen/schemas/锁文件）。
+- 验证：模块单测 2 条（探针键注册表真实写入/幂等覆盖 + 键路径与 AUMID 同口径断言）；实机探针 toast 归属 `cn.wait.orbit` 落通知平台库、注册表身份就位（Windows 渲染横幅身份的官方数据源）。
+
 ### 详情开始日期弹层宽度修复
 
 - 详情抽屉开始日期编辑弹层原 `w-64`（256px）装不下内联日历标题行（月份 72px + 年份 112px 下拉 + 两侧翻月钮，内容宽 ~286px）——展开「选择日期」日历向右溢出弹层边界。对齐 DueDateEditor 既有口径改 `w-72`（288px）；浏览器目检几何断言：日历表格右缘 980 < 弹层右缘 981，溢出清零。

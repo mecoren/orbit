@@ -83,6 +83,10 @@ windows = { version = "0.61", features = [
     "Data_Xml_Dom",
     "UI_Notifications",
 ] }
+# AUMID 通知身份注册（Toast 横幅 DisplayName/IconUri 落 HKCU 注册表）
+windows-registry = "0.6"
+# 通知图标 PNG 编码（default_window_icon RGBA → IconUri 文件；传递依赖树已存在，此处显式声明直接使用）
+image = { version = "0.25", default-features = false, features = ["png"] }
 # 获取窗口 HWND 设置 Mica（版本与 Tauri 内部 raw-window-handle 对齐）
 raw-window-handle = "0.6"
 # WebView2 内存档位（驻留降 Low）：ICoreWebView2_19 直调，版本随 wry 传递依赖锁定

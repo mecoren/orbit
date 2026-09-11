@@ -100,6 +100,12 @@ pub fn run() {
                 eprintln!("[mica] dwm apply failed: {e}");
             }
 
+            // Windows Toast 通知身份注册（AUMID DisplayName=Orbit + 图标）：
+            // 未注册时通知横幅回退显示进程名（dev 态 orbit-desktop）+ 进程
+            // 图标缓存。失败静默——只影响横幅显示身份，不阻断启动链。
+            #[cfg(target_os = "windows")]
+            commands::aumid_registry::register_aumid_identity(_app.handle());
+
             // 清除上次退出前注册的 Windows 计划通知（离线提醒）：
             // 运行中由轮询通道接管，防止同一提醒双弹。失败静默（无计划）。
             #[cfg(target_os = "windows")]

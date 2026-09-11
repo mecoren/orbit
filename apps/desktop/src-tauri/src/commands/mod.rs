@@ -1,5 +1,7 @@
 //! Tauri command 模块：每个业务域一个文件，薄壳包装 orbit_core::api。
 
+#[cfg(target_os = "windows")]
+pub mod aumid_registry;
 pub mod asset_cmd;
 pub mod backup_scheduler;
 pub mod business_cmd;
