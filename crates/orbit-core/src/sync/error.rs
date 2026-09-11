@@ -124,6 +124,29 @@ impl SyncError {
             }),
         }
     }
+
+    /// HEAD 存在性探测的状态码判定（P1-2，供 S3/WebDAV `asset_exists` 共用）
+    ///
+    /// 历史问题：适配器对 HEAD 非 2xx 一律返回 `Ok(false)`——403/429/500
+    /// 与 404 不区分，权限错被当「附件不存在」触发重复上传，限流被掩盖。
+    ///
+    /// 判定规则：
+    /// - 2xx：存在
+    /// - 404：不存在（幂等语义；WebDAV 坚果云 409 同为「路径不存在」）
+    /// - 409：不存在（WebDAV 语义；S3 场景不会出现）
+    /// - 5xx：可重试网络错误
+    /// - 401/403/429 等：透传分类错误（Auth / 其他），**不得静默当不存在**
+    pub fn classify_head_status(status: u16) -> Result<bool, Self> {
+        match status {
+            200..=299 => Ok(true),
+            404 | 409 => Ok(false),
+            s if (500..=599).contains(&s) => Err(SyncError::Network {
+                message: format!("HEAD 探测失败: HTTP {s}"),
+                retryable: true,
+            }),
+            s => Err(SyncError::from_http_status(s, "")),
+        }
+    }
 }
 
 impl From<crate::sync_bundle::SyncBundleError> for SyncError {
@@ -194,5 +217,45 @@ mod tests {
 
         let server = SyncError::check_delete_status(500).unwrap_err();
         assert!(server.is_retryable(), "5xx 应标记可重试");
+    }
+
+    // ========================================================================
+    // P1-2: HEAD 存在性探测状态码判定
+    // ========================================================================
+
+    #[test]
+    fn head_status_2xx_means_exists() {
+        assert_eq!(SyncError::classify_head_status(200).unwrap(), true);
+        assert_eq!(SyncError::classify_head_status(204).unwrap(), true);
+    }
+
+    #[test]
+    fn head_status_404_and_409_mean_absent() {
+        assert_eq!(SyncError::classify_head_status(404).unwrap(), false);
+        assert_eq!(SyncError::classify_head_status(409).unwrap(), false);
+    }
+
+    #[test]
+    fn head_status_auth_errors_are_not_absent() {
+        // 403/401 是权限问题——静默当「不存在」会触发重复上传
+        let forbidden = SyncError::classify_head_status(403).unwrap_err();
+        assert!(matches!(forbidden, SyncError::Auth { .. }));
+        assert!(matches!(
+            SyncError::classify_head_status(401).unwrap_err(),
+            SyncError::Auth { .. }
+        ));
+    }
+
+    #[test]
+    fn head_status_5xx_is_retryable_error() {
+        let server = SyncError::classify_head_status(503).unwrap_err();
+        assert!(server.is_retryable(), "5xx HEAD 失败应可重试");
+    }
+
+    #[test]
+    fn head_status_429_is_reported_not_absent() {
+        // 429 限流不得静默当「不存在」
+        let limited = SyncError::classify_head_status(429).unwrap_err();
+        assert!(!limited.is_not_found(), "429 不得判为不存在");
     }
 }

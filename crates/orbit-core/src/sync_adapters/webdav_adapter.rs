@@ -498,7 +498,9 @@ impl SyncAdapter for WebDavAdapter {
     }
 
     async fn asset_exists(&self, hash: &str) -> Result<bool, SyncError> {
-        // 检查新路径；若 404 再检查旧路径（迁移期间可能两份都存在或仅旧路径存在）
+        // 检查新路径；若 404/409 再检查旧路径（迁移期间可能两份都存在或仅旧路径存在）。
+        // P1-2：HEAD 非 2xx 不再一律当「不存在」——403/500 透传错误，
+        // 只有 404/409 才回退旧路径（与 S3 适配器同口径）
         let new_path = format!("assets/{hash}.waitsync");
         let new_url = self.build_url(&new_path);
         let headers = self.auth_headers();
@@ -515,11 +517,12 @@ impl SyncAdapter for WebDavAdapter {
                 retryable: false,
             })?;
 
-        if result.status().is_success() {
-            return Ok(true);
+        match SyncError::classify_head_status(result.status().as_u16())? {
+            true => return Ok(true),
+            false => {}
         }
 
-        // 新路径不存在，回退检查旧路径
+        // 新路径不存在（404/409），回退检查旧路径
         let legacy_path = format!("assets/{hash}");
         let legacy_url = self.build_url(&legacy_path);
         let headers = self.auth_headers();
@@ -535,7 +538,7 @@ impl SyncAdapter for WebDavAdapter {
                 retryable: false,
             })?;
 
-        Ok(result.status().is_success())
+        SyncError::classify_head_status(result.status().as_u16())
     }
 
     async fn list_assets(&self) -> Result<Vec<String>, SyncError> {

@@ -296,7 +296,9 @@ impl SyncAdapter for S3Adapter {
     }
 
     async fn asset_exists(&self, hash: &str) -> Result<bool, SyncError> {
-        // 检查新路径；若不存在再检查旧路径（迁移期间可能两份都存在或仅旧路径存在）
+        // 检查新路径；若不存在再检查旧路径（迁移期间可能两份都存在或仅旧路径存在）。
+        // P1-2：HEAD 非 2xx 不再一律当「不存在」——403/500 透传错误，
+        // 只有 404/409 才回退旧路径判定（权限错触发重复上传的历史问题）
         let new_path = format!("assets/{hash}.waitsync");
         let new_url = self.build_object_url(&new_path);
         let new_headers = self.sign_request("HEAD", &new_url, &sha256_hex(b""))?;
@@ -313,11 +315,12 @@ impl SyncAdapter for S3Adapter {
                 retryable: false,
             })?;
 
-        if result.status().is_success() {
-            return Ok(true);
+        match SyncError::classify_head_status(result.status().as_u16())? {
+            true => return Ok(true),
+            false => {}
         }
 
-        // 新路径不存在，回退检查旧路径
+        // 新路径不存在（404/409），回退检查旧路径
         let legacy_path = format!("assets/{hash}");
         let legacy_url = self.build_object_url(&legacy_path);
         let legacy_headers = self.sign_request("HEAD", &legacy_url, &sha256_hex(b""))?;
@@ -334,7 +337,7 @@ impl SyncAdapter for S3Adapter {
                 retryable: false,
             })?;
 
-        Ok(result.status().is_success())
+        SyncError::classify_head_status(result.status().as_u16())
     }
 
     async fn list_assets(&self) -> Result<Vec<String>, SyncError> {
