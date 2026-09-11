@@ -54,13 +54,10 @@ pub fn quit_app(app: &AppHandle) {
     app.exit(0);
 }
 
-/// 显示并聚焦主窗（最小化态恢复）
+/// 显示并聚焦主窗（托盘/热键唤起统一走 window_recycler：
+/// 窗口在则显示，被超时回收销毁则重建——此处不再直操作窗口）
 pub fn show_main_window(app: &AppHandle) {
-    if let Some(win) = app.get_webview_window("main") {
-        let _ = win.show();
-        let _ = win.unminimize();
-        let _ = win.set_focus();
-    }
+    crate::commands::window_recycler::show_or_create_main_window(app);
 }
 
 /// 盒式下采样（区域平均）：每输出像素聚合 (sw/target)² 源像素，
@@ -193,7 +190,8 @@ pub fn setup_tray(app: &AppHandle) -> tauri::Result<()> {
         .collect();
     let menu = Menu::with_items(app, &item_refs)?;
 
-    let tray_img = tray_icon_bitmap(app).expect("default_window_icon 未配置（tauri.conf bundle.icon）");
+    let tray_img =
+        tray_icon_bitmap(app).expect("default_window_icon 未配置（tauri.conf bundle.icon）");
     let mut builder = TrayIconBuilder::with_id("orbit-tray")
         .icon(tray_img)
         .menu(&menu)
@@ -201,7 +199,13 @@ pub fn setup_tray(app: &AppHandle) -> tauri::Result<()> {
         .on_menu_event(|app, event| match event.id().as_ref() {
             MENU_ITEM_SHOW => show_main_window(app),
             MENU_ITEM_QUICK_ADD => {
-                let _ = app.emit(TRAY_QUICK_ADD_EVENT, TrayQuickAddPayload {});
+                // 窗口被回收期间无监听者：记标志由重建后补发（消费方同事件路径）
+                if app.get_webview_window("main").is_none() {
+                    crate::commands::window_recycler::mark_pending_quick_add();
+                    show_main_window(app);
+                } else {
+                    let _ = app.emit(TRAY_QUICK_ADD_EVENT, TrayQuickAddPayload {});
+                }
             }
             MENU_ITEM_QUIT => quit_app(app),
             _ => {}
@@ -309,7 +313,11 @@ mod tests {
         let src = tauri::image::Image::new_owned(rgba, 5, 5);
         let out = downscale_rgba(&src, 2);
         assert_eq!((out.width(), out.height()), (2, 2));
-        assert!(out.rgba().chunks_exact(4).all(|p| p[0] == 200 && p[3] == 255));
+        assert!(
+            out.rgba()
+                .chunks_exact(4)
+                .all(|p| p[0] == 200 && p[3] == 255)
+        );
     }
 
     /// 紧致裁剪：带透明边距的源图裁后四周无全透明行/列（主体撑满）
@@ -329,14 +337,15 @@ mod tests {
         assert_eq!((out.width(), out.height()), (4, 4));
         // 首尾行列均含不透明像素（无留白）
         let o = out.rgba();
-        let has_opaque = |range: std::ops::Range<usize>| {
-            range.step_by(4).any(|i| o[i + 3] == 255)
-        };
+        let has_opaque = |range: std::ops::Range<usize>| range.step_by(4).any(|i| o[i + 3] == 255);
         assert!(has_opaque(0..4 * 4), "首行有主体");
         assert!(has_opaque(3 * 4 * 4..4 * 4 * 4), "末行有主体");
         // 左右列
         assert!((0..4).any(|r| o[r * 4 * 4 + 3] == 255), "首列有主体");
-        assert!((0..4).any(|r| o[r * 4 * 4 + 3 * 4 + 3] == 255), "末列有主体");
+        assert!(
+            (0..4).any(|r| o[r * 4 * 4 + 3 * 4 + 3] == 255),
+            "末列有主体"
+        );
     }
 
     /// 紧致裁剪：全透明图防御（不 panic，直返源尺寸）

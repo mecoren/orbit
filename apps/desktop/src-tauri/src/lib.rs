@@ -64,6 +64,8 @@ pub fn run() {
     // 关窗驻留拦截（07 报告 #16 托盘配套）：关闭主窗 = 隐藏驻留托盘，
     // 退出走托盘菜单；避免中断同步/备份调度器与提醒轮询守护。
     // tray_close_hint 事件驱动前端首次提示（localStorage 记忆不再骚扰）。
+    // 隐藏即降 WebView2 内存档位 Low + 排程超时回收（唤起取消，见
+    // webview_low_power / window_recycler）。
     #[cfg(desktop)]
     let builder = builder.on_window_event(|window, event| {
         use tauri::Emitter as _;
@@ -72,6 +74,8 @@ pub fn run() {
         {
             let _ = window.emit("tray-close-hint", ());
             window.hide().ok();
+            commands::webview_low_power::set_memory_usage_level(window.app_handle(), true);
+            commands::window_recycler::schedule_recycle_on_hide(window.app_handle());
             api.prevent_close();
         }
     });
@@ -289,6 +293,8 @@ pub fn run() {
             commands::asset_cmd::attachments_gc,
             // 数据库维护（WAL checkpoint / 附件 GC / 查询统计 / VACUUM）
             commands::db_maintenance_cmd::db_maintenance,
+            // 主窗唤起（全局热键；窗口被超时回收后走重建路径）
+            commands::window_recycler::show_main_window_cmd,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

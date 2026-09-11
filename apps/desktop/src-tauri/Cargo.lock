@@ -3113,8 +3113,10 @@ dependencies = [
  "tauri-plugin-shell",
  "tauri-plugin-window-state",
  "tokio",
+ "webview2-com-sys",
  "whoami",
  "windows",
+ "windows-core 0.61.2",
 ]
 
 [[package]]

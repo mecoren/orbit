@@ -6,11 +6,13 @@
  *
  * - 热键在壳层 AppShell 挂载时注册一次，卸载时注销；
  * - 注册失败（热键被占用/权限拒绝）静默降级：托盘菜单仍可快速新建；
- * - 窗口显示逻辑用 Tauri window API（getCurrentWindow().show() + setFocus），
- *   不依赖 React 状态——热键回调运行时窗口可能处于隐藏驻留态。
+ * - 唤起走 show_main_window_cmd 命令而非前端窗口 API：驻留超时回收
+ *   会销毁主窗，getCurrentWindow() 在窗口销毁后无兜底（销毁期热键
+ *   由壳层 Rust 侧 global_hotkey_fallback 兜底，重建后此 hook 重新注册）。
  */
 import { useEffect } from "react";
 
+import { showMainWindow } from "@/lib/tauri";
 import { useAppStore } from "@/stores/app-store";
 
 /** 全局捕捉热键（Alt+Shift+O：避开常用应用热键与输入法） */
@@ -27,16 +29,8 @@ export function useGlobalQuickAdd() {
       try {
         const plugin = await import("@tauri-apps/plugin-global-shortcut");
         await plugin.register(QUICK_ADD_SHORTCUT, async () => {
-          // 唤起主窗（隐藏驻留态 → 显示 + 聚焦），再触发快速新建
-          try {
-            const { getCurrentWindow } = await import("@tauri-apps/api/window");
-            const win = getCurrentWindow();
-            await win.show();
-            await win.unminimize();
-            await win.setFocus();
-          } catch {
-            // 窗口 API 不可用时仅触发意图（非 Tauri 环境不会走到这里）
-          }
+          // 唤起主窗（隐藏驻留 → 显示聚焦；被回收 → 重建），再触发快速新建
+          await showMainWindow().catch(() => {});
           bumpQuickAddIntent();
         });
         unregister = () => void plugin.unregister(QUICK_ADD_SHORTCUT);

@@ -7,6 +7,16 @@
 
 ## [Unreleased]
 
+### 桌面驻留内存优化——隐藏降档 + 超时回收 WebView（ADR 0006）
+
+实测托盘驻留期间 WebView2 整树 ~330MB 提交内存纯闲置且隐藏后不裁剪（Chromium 平台行为）。本批两层回收：
+
+- **① release 摘 devtools**：Cargo features 去掉 devtools（debug 构建恒开不受影响），发版口径不再给用户开 F12（避免暴露 SQLCipher 数据流）。
+- **② 隐藏降档**：关窗隐藏即调 `ICoreWebView2_19::SetMemoryUsageTargetLevel(Low)`（WebView2 ≥114），唤起恢复 Normal——几分钟内驻留即时生效，JS 不暂停、事件仍可达。
+- **③ 超时回收**：隐藏 5 分钟未唤起即销毁主窗（四守护在 Rust 宿主继续跑），常驻回落 ~40MB；托盘/热键唤起按 tauri.conf 重建（window-state 恢复位置尺寸 + Mica 重应用 + 前端冷启动）。
+- **隐性成本闭环**（事件不排队，逐通道兜底）：重建=冷启动自愈 sync-progress/db-change（useStartupSync 重跑补同步）+ key_mismatch 重新捕获导航恢复页；销毁期快速新建请求经 pending 标志补发（托盘菜单/热键同语义）；销毁期热键由壳层 Rust 兜底接管 Alt+Shift+O。
+- **唤起统一收口**：托盘菜单/单击、全局热键三处散落的「显示主窗」合并为 `show_or_create_main_window`（窗口在→显示，不在→重建）；热键改走 `show_main_window_cmd` 命令（前端窗口 API 在销毁态无兜底）。
+
 ### 通知历史中心——提醒呈现轨迹可回看（#5）
 
 桌面 Windows Toast 一旦错过或清掉就无处回看（Todoist 有专门通知页对照）。本批落地只读本地日志通道：

@@ -911,6 +911,14 @@ export interface DbMaintenanceResult {
 /** 一键数据库维护：WAL checkpoint → 附件 GC → PRAGMA optimize → VACUUM */
 export const dbMaintenance = () => invoke<DbMaintenanceResult>("db_maintenance");
 
+// ========== 主窗唤起（托盘驻留内存优化：窗口可能被超时回收）==========
+/**
+ * 唤起主窗：窗口在（隐藏驻留态）则显示聚焦；已被超时回收销毁则按
+ * tauri.conf 配置重建。前端 getCurrentWindow().show() 在窗口销毁后
+ * 无兜底，全局热键等「窗口可能不在」的路径必须走本命令。
+ */
+export const showMainWindow = () => invoke<void>("show_main_window_cmd");
+
 // ========== saved_filters（保存的筛选器：#35）==========
 export interface TodoSavedFilter {
   id: number;
