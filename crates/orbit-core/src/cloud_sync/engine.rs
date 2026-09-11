@@ -67,7 +67,11 @@ async fn record_incremental_history(
         Ok(r) => {
             let pulled = r.pulled_modules as i64 + r.downloaded_attachments as i64;
             let pushed = r.pushed_modules as i64 + r.uploaded_attachments as i64;
-            let status = if r.errors.is_empty() { "success" } else { "failed" };
+            let status = if r.errors.is_empty() {
+                "success"
+            } else {
+                "failed"
+            };
             let error = r.errors.first().map(|e| e.to_string());
             (status, pulled, pushed, error)
         }
@@ -1950,7 +1954,10 @@ mod tests {
     /// 构造带迁移内存库的引擎（历史写入直连 sync_history 表）
     async fn history_engine() -> SyncEngine {
         let pool = sqlx::SqlitePool::connect("sqlite::memory:").await.unwrap();
-        sqlx::migrate!("./src/db/migrations").run(&pool).await.unwrap();
+        sqlx::migrate!("./src/db/migrations")
+            .run(&pool)
+            .await
+            .unwrap();
         let tmp = tempfile::TempDir::new().unwrap();
         let crypto = crate::sync_crypto::SyncCryptoService::new(tmp.path());
         SyncEngine::new_noop_progress(pool, crypto, tmp.path())
@@ -1974,10 +1981,9 @@ mod tests {
         let r = Ok(ok_result(vec![]));
         record_incremental_history(&engine.db_pool, SYNC_TYPE_SYNC_NOW, &r).await;
 
-        let rows =
-            sync_history_repo::get_recent_by_types(&engine.db_pool, &["incremental"], 10)
-                .await
-                .unwrap();
+        let rows = sync_history_repo::get_recent_by_types(&engine.db_pool, &["incremental"], 10)
+            .await
+            .unwrap();
         assert_eq!(rows.len(), 1);
         let h = &rows[0];
         assert_eq!(h.status, "success");
@@ -2008,10 +2014,9 @@ mod tests {
         });
         record_incremental_history(&engine.db_pool, SYNC_TYPE_PULL_THEN_PUSH, &r).await;
 
-        let rows =
-            sync_history_repo::get_recent_by_types(&engine.db_pool, &["pull_only"], 10)
-                .await
-                .unwrap();
+        let rows = sync_history_repo::get_recent_by_types(&engine.db_pool, &["pull_only"], 10)
+            .await
+            .unwrap();
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0].status, "failed");
         assert!(rows[0].error_message.as_ref().unwrap().contains("连接超时"));
@@ -2023,10 +2028,9 @@ mod tests {
         let r = Ok(SyncResult::skipped());
         record_incremental_history(&engine.db_pool, SYNC_TYPE_SYNC_NOW, &r).await;
 
-        let rows =
-            sync_history_repo::get_recent_by_types(&engine.db_pool, &["incremental"], 10)
-                .await
-                .unwrap();
+        let rows = sync_history_repo::get_recent_by_types(&engine.db_pool, &["incremental"], 10)
+            .await
+            .unwrap();
         assert!(rows.is_empty(), "防重入跳过不是一次同步，不得记历史");
     }
 
@@ -2035,17 +2039,22 @@ mod tests {
         let engine = history_engine().await;
         // 直接灌 55 条超出保留上限 50
         for i in 0..55 {
-            let id = sync_history_repo::insert(
+            let id =
+                sync_history_repo::insert(&engine.db_pool, SYNC_TYPE_SYNC_NOW, "success", 1000 + i)
+                    .await
+                    .unwrap();
+            sync_history_repo::update_status(
                 &engine.db_pool,
-                SYNC_TYPE_SYNC_NOW,
+                id,
                 "success",
                 1000 + i,
+                0,
+                0,
+                0,
+                None,
             )
             .await
             .unwrap();
-            sync_history_repo::update_status(&engine.db_pool, id, "success", 1000 + i, 0, 0, 0, None)
-                .await
-                .unwrap();
         }
         let r = Ok(ok_result(vec![]));
         record_incremental_history(&engine.db_pool, SYNC_TYPE_SYNC_NOW, &r).await;

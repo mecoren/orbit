@@ -21,6 +21,17 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import { format, isSameDay } from "date-fns";
 import { zhCN } from "date-fns/locale";
 import {
+  DndContext,
+  PointerSensor,
+  pointerWithin,
+  useDraggable,
+  useDroppable,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+  type DragStartEvent,
+} from "@dnd-kit/core";
+import {
   CalendarClock,
   CalendarDays,
   CalendarRange,
@@ -50,7 +61,8 @@ import {
 } from "@/components/business/month-calendar";
 import { daySubLabel } from "../shared/almanac";
 import { formatYmd } from "../shared/lunar";
-import { holidaysList, holidaysUpdate, holidayMeta, type HolidayInfo } from "@/lib/tauri";
+import { rescheduleDue } from "../shared/reschedule-due";
+import { holidaysList, holidaysUpdate, holidayMeta, todoTaskUpdate, type HolidayInfo } from "@/lib/tauri";
 import { OVERDUE_COLOR_CLASS, PRIORITY_COLOR, TODO_ACCENT } from "../shared/constants";
 import { LabelChips } from "../shared/label-chips";
 import { ReminderChip } from "../shared/reminder-chip";
@@ -142,6 +154,50 @@ export function CalendarView({
   const [expandedDay, setExpandedDay] = useState<Date | null>(null);
   const [updatingHolidays, setUpdatingHolidays] = useState(false);
   const queryClient = useQueryClient();
+
+  // ---- 月格拖拽改期（Todoist/Things 标配交互）：圆点为拖拽源，日格为落点 ----
+  // PointerSensor distance:5（04 §3.3 同看板：位移 5px 内不算拖拽，保证点击）
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+  );
+  const [draggingTaskId, setDraggingTaskId] = useState<number | null>(null);
+
+  const handleDragStart = (e: DragStartEvent) => {
+    // 拖拽源 id 形如 "dot:<taskId>"
+    const raw = String(e.active.id);
+    setDraggingTaskId(raw.startsWith("dot:") ? Number(raw.slice(4)) : null);
+  };
+
+  const handleDragEnd = async (e: DragEndEvent) => {
+    setDraggingTaskId(null);
+    const { active, over } = e;
+    if (!over) return;
+    const raw = String(active.id);
+    if (!raw.startsWith("dot:")) return;
+    const taskId = Number(raw.slice(4));
+    const task = tasks.find((t) => t.id === taskId);
+    if (!task) return;
+    const overRaw = String(over.id);
+    if (!overRaw.startsWith("day:")) return;
+    const target = new Date(Number(overRaw.slice(4)));
+    if (Number.isNaN(target.getTime())) return;
+
+    const nextDue = rescheduleDue(task.due_date, target);
+    if (nextDue == null) return; // 同日落回原处，无变化
+    try {
+      await todoTaskUpdate(taskId, { due_date: nextDue });
+      void queryClient.invalidateQueries({ queryKey: ["todo_tasks"] });
+      void queryClient.invalidateQueries({ queryKey: ["todo-task-detail"] });
+      void queryClient.invalidateQueries({ queryKey: ["count"] });
+      void queryClient.invalidateQueries({ queryKey: ["nav-data"] });
+      toast.success(
+        `「${task.title.slice(0, 20)}」已改期至 ${formatYmd(target)}`,
+        { description: task.due_date != null ? "原截止时刻已保留" : undefined },
+      );
+    } catch (err) {
+      toast.error(`改期失败：${err instanceof Error ? err.message : String(err)}`);
+    }
+  };
 
   // 节假日数据（联网更新；空库时 Rust 侧回落预置 2026 表，冷启动即有徽标）
   const holidaysQuery = useQuery({
@@ -361,9 +417,15 @@ export function CalendarView({
 
       {subMode === "month" ? (
         <div className={SPLIT_LAYOUT}>
-          {/* ===== 左半区：月历 ===== */}
+          {/* ===== 左半区：月历（拖拽改期 DndContext 只包月历——右栏行拖拽无目标语义） ===== */}
           <div className={LEFT_PANE}>
             <div className={LEFT_CONTENT}>
+              <DndContext
+                sensors={sensors}
+                collisionDetection={pointerWithin}
+                onDragStart={handleDragStart}
+                onDragEnd={(e) => void handleDragEnd(e)}
+              >
               <MonthCalendar
                 size="lg"
                 fillHeight
@@ -392,45 +454,15 @@ export function CalendarView({
               headerActions={headerActions}
               holidays={holidayMarks}
               subLabel={(date) => daySubLabel(date)}
-              dayChips={(date) => {
-                const dayTasks = byDay.get(formatYmd(date)) ?? [];
-                if (dayTasks.length === 0) return null;
-                // 优先级圆点六档全显（含 P0「无」浅灰）；最多 4 点 + 溢出计数
-                const visibleDots = dayTasks.slice(0, 4);
-                const overflow = dayTasks.length - visibleDots.length;
-                // 今日格整块主色底：+N 与日期数字/副标签同口径用白字，
-                // muted-foreground 灰字在主色底上对比度不足看不清
-                const isToday = formatYmd(date) === formatYmd(startOfDay(new Date()));
-                return (
-                  <span className="flex w-full flex-wrap items-center justify-center gap-1 px-0.5">
-                    {visibleDots.map((t) => (
-                      <span
-                        key={t.id}
-                        className="size-1.5 shrink-0 rounded-full"
-                        style={{
-                          backgroundColor: PRIORITY_COLOR[t.priority],
-                          // 今日格主色底上圆点加半透明白描边防隐没
-                          //（浅灰 P0 点在主色底几乎不可见），其余格子不加
-                          ...(isToday && {
-                            boxShadow: "0 0 0 1px rgba(255,255,255,0.45)",
-                          }),
-                        }}
-                      />
-                    ))}
-                    {overflow > 0 && (
-                      <span
-                        className={cn(
-                          "text-[10px] leading-none",
-                          isToday ? "text-white/90" : "text-muted-foreground",
-                        )}
-                      >
-                        +{overflow}
-                      </span>
-                    )}
-                  </span>
-                );
-              }}
+              dayChips={(date) => (
+                <DayDotsDropZone
+                  date={date}
+                  dayTasks={byDay.get(formatYmd(date)) ?? []}
+                  draggingId={draggingTaskId}
+                />
+              )}
               />
+              </DndContext>
             </div>
           </div>
 
@@ -587,6 +619,87 @@ export function CalendarView({
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+// ---------------- 月格拖拽改期（圆点 draggable + 日格 droppable） ----------------
+
+/** 单个任务圆点（拖拽源）。拖拽中本体半透明，视觉反馈靠 cursor 即可——
+ *  圆点仅 6px 无 DragOverlay 必要，dnd-kit 默认 transform 跟随指针。 */
+function DraggableDot({
+  task,
+  isToday,
+  dimmed,
+}: {
+  task: TodoTask;
+  isToday: boolean;
+  dimmed: boolean;
+}) {
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+    id: `dot:${task.id}`,
+  });
+  return (
+    <span
+      ref={setNodeRef}
+      {...attributes}
+      {...listeners}
+      className="size-1.5 shrink-0 cursor-grab rounded-full active:cursor-grabbing"
+      style={{
+        backgroundColor: PRIORITY_COLOR[task.priority],
+        ...(isToday && { boxShadow: "0 0 0 1px rgba(255,255,255,0.45)" }),
+        ...(dimmed && { opacity: 0.35 }),
+        ...(isDragging && { opacity: 0.6, scale: "1.4" }),
+      }}
+      title={`拖到其他日期可改期：${task.title}`}
+    />
+  );
+}
+
+/** 日格圆点行（拖拽目标）。原实现无任务日返回 null；拖改期需要空格也能接，
+ *  故恒返回 droppable 容器行（原视觉：≤4 点 + "+N"，今日格白字）。 */
+function DayDotsDropZone({
+  date,
+  dayTasks,
+  draggingId,
+}: {
+  date: Date;
+  dayTasks: TodoTask[];
+  draggingId: number | null;
+}) {
+  const ymd = formatYmd(date);
+  const { setNodeRef, isOver } = useDroppable({ id: `day:${date.getTime()}` });
+  const isToday = ymd === formatYmd(startOfDay(new Date()));
+  const visibleDots = dayTasks.slice(0, 4);
+  const overflow = dayTasks.length - visibleDots.length;
+  // 拖拽悬停高亮：主色描边环提示可落点（MonthCalendar 日格是 button，
+  // 无法透传 className，落点反馈渲染在本行上）
+  return (
+    <span
+      ref={setNodeRef}
+      className={cn(
+        "flex h-4 w-full flex-wrap items-center justify-center gap-1 rounded px-0.5 transition-shadow",
+        isOver && "ring-2 ring-primary/70 ring-offset-1",
+      )}
+    >
+      {visibleDots.map((t) => (
+        <DraggableDot
+          key={t.id}
+          task={t}
+          isToday={isToday}
+          dimmed={draggingId != null && draggingId === t.id}
+        />
+      ))}
+      {overflow > 0 && (
+        <span
+          className={cn(
+            "text-[10px] leading-none",
+            isToday ? "text-white/90" : "text-muted-foreground",
+          )}
+        >
+          +{overflow}
+        </span>
+      )}
+    </span>
   );
 }
 

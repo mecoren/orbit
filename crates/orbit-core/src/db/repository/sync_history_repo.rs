@@ -169,7 +169,10 @@ mod tests {
 
     async fn memory_pool() -> SqlitePool {
         let pool = sqlx::SqlitePool::connect("sqlite::memory:").await.unwrap();
-        sqlx::migrate!("./src/db/migrations").run(&pool).await.unwrap();
+        sqlx::migrate!("./src/db/migrations")
+            .run(&pool)
+            .await
+            .unwrap();
         pool
     }
 
@@ -219,7 +222,18 @@ mod tests {
     async fn get_recent_by_types_empty_is_noop() {
         let pool = memory_pool().await;
         seed(&pool).await;
-        assert!(get_recent_by_types(&pool, &[], 10).await.unwrap().is_empty());
-        assert_eq!(get_recent_by_types(&pool, &["incremental"], 10).await.unwrap().len(), 2);
+        assert!(
+            get_recent_by_types(&pool, &[], 10)
+                .await
+                .unwrap()
+                .is_empty()
+        );
+        assert_eq!(
+            get_recent_by_types(&pool, &["incremental"], 10)
+                .await
+                .unwrap()
+                .len(),
+            2
+        );
     }
 }
