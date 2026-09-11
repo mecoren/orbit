@@ -577,7 +577,10 @@ function StartDateEditor({
           {value ? toYm(value) : "设置"}
         </button>
       </PopoverTrigger>
-      <PopoverContent align="end" className="w-64 space-y-2 p-3">
+      {/* 弹层宽度对齐 DueDateEditor 的 w-72（288px）：日历 caption 行
+          （月份 72px + 年份 112px 下拉 + 两侧翻月钮与 px-9 让位）内容宽
+          ~286px，w-64 装不下导致日历向右溢出弹层边界。 */}
+      <PopoverContent align="end" className="w-72 space-y-2 p-3">
         {draft ? (
           <>
             <WaitCalendar
