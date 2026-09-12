@@ -1889,7 +1889,7 @@ function AttachmentsSection({ taskId }: { taskId: number }) {
               className="group flex cursor-pointer items-center gap-2 rounded-lg bg-muted/40 px-3 py-2"
               onClick={() => void handleOpen(a)}
             >
-              <FileIcon size={14} className="shrink-0 text-muted-foreground" />
+              <AttachmentThumb attachment={a} />
               <span className="min-w-0 flex-1 truncate text-[13px]">{a.original_name}</span>
               <span className="shrink-0 text-[11px] text-muted-foreground">
                 {a.is_local_cached === 0 ? "待同步" : humanSize(a.size_bytes)}
@@ -2015,4 +2015,54 @@ function ActivitySection({ taskId }: { taskId: number }) {
       </div>
     </SectionBlock>
   );
+}
+
+// ============================================================================
+// 附件行缩略图（批7b 轻量版）：图片附件行内 32px 预览
+// ============================================================================
+
+/**
+ * 图片附件行内缩略图——行级 32px 预览替代纯文件图标（非图片附件仍图标）。
+ * 解码内存由浏览器按渲染尺寸管理（24px 渲染需求远小于原图，Chromium
+ * 自动降采样解码）；blob URL 卸载即 revoke 防字节驻留。
+ */
+function AttachmentThumb({ attachment }: { attachment: TaskAttachmentView }) {
+  const [url, setUrl] = useState<string | null>(null);
+  const isImage = attachment.mime_type.startsWith("image/") && attachment.is_local_cached === 1;
+
+  useEffect(() => {
+    if (!isImage) return;
+    let alive = true;
+    let created: string | null = null;
+    void (async () => {
+      try {
+        const { taskAttachmentRead } = await import("@/lib/tauri");
+        const bytes = await taskAttachmentRead(attachment.hash);
+        created = URL.createObjectURL(new Blob([new Uint8Array(bytes)], { type: attachment.mime_type }));
+        if (alive) setUrl(created);
+        else if (created) URL.revokeObjectURL(created);
+      } catch {
+        // 读取失败退回图标（缩略图是增强不是关键路径）
+      }
+    })();
+    return () => {
+      alive = false;
+      if (created) URL.revokeObjectURL(created);
+    };
+  }, [isImage, attachment.hash, attachment.mime_type]);
+
+  if (!isImage) {
+    return <FileIcon size={14} className="shrink-0 text-muted-foreground" />;
+  }
+  if (url) {
+    return (
+      <img
+        src={url}
+        alt=""
+        aria-hidden
+        className="h-8 w-8 shrink-0 rounded object-cover"
+      />
+    );
+  }
+  return <FileIcon size={14} className="h-8 w-8 shrink-0 text-muted-foreground" />;
 }

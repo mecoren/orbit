@@ -7,6 +7,11 @@
 
 ## [Unreleased]
 
+### 附件行缩略图（批 7b 轻量版）：图片附件行内 32px 预览
+
+- `AttachmentThumb`：图片附件行内 32px blob 预览替代纯文件图标（非图片仍图标）——解码内存由浏览器按渲染尺寸自动降采样管理（24px 渲染需求远小于原图），卸载即 revoke 防字节驻留；读取失败静默退回图标（缩略图是增强非关键路径）。重缩略图生成方案（image crate 服务端降采样缓存）评估后不做——单人口径下成本收益倒挂，内存大头已由批 4 lightbox/cacheWidth 解决。
+- 验证：tsc 零错 / vitest 252 / e2e 18 全绿；目检缩略图 32px img 渲染通过。
+
 ### FTS5 全文索引：搜索从 LIKE 全表扫升级为短语级全文检索
 
 批 7a（探针报告 F8 落地）——前期实证先行：运行时探针证实 bundled sqlite 带 FTS5 但 **unicode61 分词器丢弃 CJK token**（单字都不命中），中文搜索必须 **trigram 分词器**（3-gram 短语精确命中）——这一分词事实是方案根基，python sqlite 3.49 对照验证。
