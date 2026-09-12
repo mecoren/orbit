@@ -47,6 +47,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   Dialog,
   DialogContent,
@@ -313,35 +314,39 @@ export function CalendarView({
   /** 头部动作：回到今天 + 刷新节假日（月/年模式共用，参考 wait-home headerActions） */
   const headerActions = (
     <>
-      <Button
-        variant="ghost"
-        size="icon"
-        className="size-8 text-muted-foreground"
-        onClick={goToday}
-        aria-label="回到今天"
-        title="回到今天"
-      >
-        <LocateFixed className="size-4" />
-      </Button>
-      <Button
-        variant="ghost"
-        size="icon"
-        className="size-8 text-muted-foreground"
-        onClick={refreshHolidays}
-        disabled={updatingHolidays}
-        aria-label="更新节假日数据"
-        title={
-          holidayMetaQuery.data && holidayMetaQuery.data.last_update_ms > 0
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="size-8 text-muted-foreground"
+            onClick={goToday}
+            aria-label="回到今天"
+          >
+            <LocateFixed className="size-4" />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>回到今天</TooltipContent>
+      </Tooltip>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="size-8 text-muted-foreground"
+            onClick={refreshHolidays}
+            disabled={updatingHolidays}
+            aria-label="更新节假日数据"
+          >
+            {updatingHolidays ? <Loader2 className="size-4 animate-spin" /> : <RefreshCw className="size-4" />}
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>
+          {holidayMetaQuery.data && holidayMetaQuery.data.last_update_ms > 0
             ? `上次更新：${format(new Date(holidayMetaQuery.data.last_update_ms), "M月d日 HH:mm")}（每天自动更新一次，也可手动更新）`
-            : "每天自动更新一次，也可手动更新"
-        }
-      >
-        {updatingHolidays ? (
-          <Loader2 className="size-4 animate-spin" />
-        ) : (
-          <RefreshCw className="size-4" />
-        )}
-      </Button>
+            : "每天自动更新一次，也可手动更新"}
+        </TooltipContent>
+      </Tooltip>
     </>
   );
 
@@ -398,21 +403,25 @@ export function CalendarView({
               <Button variant="outline" size="sm" className="h-8" onClick={goToday}>
                 今天
               </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-8 gap-1.5"
-                title={
-                  holidayMetaQuery.data && holidayMetaQuery.data.last_update_ms > 0
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-8 gap-1.5"
+                    disabled={updatingHolidays}
+                    onClick={refreshHolidays}
+                  >
+                    <RefreshCw size={13} className={cn(updatingHolidays && "animate-spin")} />
+                    节假日
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  {holidayMetaQuery.data && holidayMetaQuery.data.last_update_ms > 0
                     ? `上次更新：${format(new Date(holidayMetaQuery.data.last_update_ms), "M月d日 HH:mm")}（每天自动更新一次）`
-                    : "每天自动更新一次，也可手动更新"
-                }
-                disabled={updatingHolidays}
-                onClick={refreshHolidays}
-              >
-                <RefreshCw size={13} className={cn(updatingHolidays && "animate-spin")} />
-                节假日
-              </Button>
+                    : "每天自动更新一次，也可手动更新"}
+                </TooltipContent>
+              </Tooltip>
             </>
           )}
         </div>
@@ -711,7 +720,9 @@ function DayDotsDropZone({
         <span
           className={cn(
             "text-[10px] leading-none",
-            isToday ? "text-white/90" : "text-muted-foreground",
+            // 主色底内容用主题前景 token（自定义浅色 accent 下硬编码
+            // 白字对比度不足——性能报告 M6 修复）
+            isToday ? "text-primary-foreground/90" : "text-muted-foreground",
           )}
         >
           +{overflow}

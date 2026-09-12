@@ -13,6 +13,7 @@ import { useMemo } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { lunarYearLabel, solarToLunar } from "@/features/todo/shared/almanac";
 import { formatYmd } from "@/features/todo/shared/lunar";
@@ -53,18 +54,22 @@ export function YearOverviewPanel({
     <div className={cn("flex h-full min-h-0 flex-col", className)}>
       {/* 头部：大年份（点击返回月视图）+ 干支/图例 + 切年（与月历头部同节奏） */}
       <div className="mb-1 flex items-center gap-2">
-        <span
-          className="text-3xl font-extrabold leading-none tracking-tight"
-          role="button"
-          tabIndex={0}
-          onClick={onBack}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") onBack();
-          }}
-          title="点击返回月视图"
-        >
-          {year}
-        </span>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span
+              className="text-3xl font-extrabold leading-none tracking-tight"
+              role="button"
+              tabIndex={0}
+              onClick={onBack}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") onBack();
+              }}
+            >
+              {year}
+            </span>
+          </TooltipTrigger>
+          <TooltipContent>点击返回月视图</TooltipContent>
+        </Tooltip>
         <span className="flex flex-col gap-1 text-[11px] leading-none text-muted-foreground">
           <span>{lunarYearLabel(year)}</span>
           <span className="flex items-center gap-2.5">
