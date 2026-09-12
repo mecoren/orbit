@@ -1832,7 +1832,12 @@ class _AttachmentsSectionState extends ConsumerState<_AttachmentsSection> {
       await target.writeAsBytes(bytes);
       if (!mounted) return;
       if (att.mimeType.startsWith('image/')) {
-        // 图片：应用内全屏预览（无第三方打开器依赖）
+        // 图片：应用内全屏预览（无第三方打开器依赖）。
+        // cacheWidth 降采样解码（F4 内存优化）：4K 照片按屏宽 3x 像素解码，
+        // 不再原图全尺寸进纹理——单图 ~4000x3000 解码内存从 ~45MB 降到 ~8MB
+        final dpr = MediaQuery.devicePixelRatioOf(context);
+        final screenWidth = MediaQuery.sizeOf(context).width;
+        final cacheWidth = (screenWidth * dpr).round();
         await showDialog<void>(
           context: context,
           builder: (dialogContext) => Dialog(
@@ -1840,7 +1845,11 @@ class _AttachmentsSectionState extends ConsumerState<_AttachmentsSection> {
             insetPadding: const EdgeInsets.all(16),
             child: GestureDetector(
               onTap: () => Navigator.of(dialogContext).pop(),
-              child: Image.file(target, fit: BoxFit.contain),
+              child: Image.file(
+                target,
+                fit: BoxFit.contain,
+                cacheWidth: cacheWidth,
+              ),
             ),
           ),
         );

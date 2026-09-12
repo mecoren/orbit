@@ -23,19 +23,11 @@ import {
 import { useTodoStore } from "@/features/todo/store";
 import { globalSearch } from "@/lib/tauri";
 
+import { useDebouncedValue } from "@/features/todo/shared/use-debounced-value";
+
 interface GlobalSearchDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-}
-
-/** 输入防抖：停止击键 delayMs 后才更新 */
-function useDebouncedValue(value: string, delayMs: number): string {
-  const [debounced, setDebounced] = useState(value);
-  useEffect(() => {
-    const id = setTimeout(() => setDebounced(value), delayMs);
-    return () => clearTimeout(id);
-  }, [value, delayMs]);
-  return debounced;
 }
 
 export function GlobalSearchDialog({ open, onOpenChange }: GlobalSearchDialogProps) {

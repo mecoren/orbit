@@ -55,6 +55,12 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { DateTimePicker } from "@/components/business/date-picker";
 import { QuickDateMenu } from "@/components/business/quick-date-options";
 import { WaitCalendar } from "@/components/ui/wait-calendar";
@@ -1781,6 +1787,8 @@ function AttachmentsSection({ taskId }: { taskId: number }) {
   usePasteAttachment(taskId);
   const [busy, setBusy] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<TaskAttachmentView | null>(null);
+  // 图片附件应用内预览（F4 lightbox）：url 为 blob 引用，关闭时 revoke 防字节泄漏
+  const [lightbox, setLightbox] = useState<{ url: string; name: string } | null>(null);
   // 走 react-query：db-change 全局失效后自动重拉（与其他区块同通道；
   // 局部 useState + useEffect 不吃失效事件，mock 直改/真实跨设备同步后不刷新）
   const { data: attachments = [], refetch } = useQuery({
@@ -1817,20 +1825,12 @@ function AttachmentsSection({ taskId }: { taskId: number }) {
     try {
       const { taskAttachmentRead } = await import("@/lib/tauri");
       const bytes = await taskAttachmentRead(att.hash);
-      // 图片：blob 新窗口预览；其他类型：落临时文件走系统默认程序打开
+      // 图片：应用内 lightbox 预览（2026-09-12 F4——新窗口裸图体验断裂，
+      //  且 blob 新窗被弹窗拦截时静默失败）；其他类型：落临时文件走系统默认程序
       if (att.mime_type.startsWith("image/")) {
         const buf = new Uint8Array(bytes);
         const blob = new Blob([buf], { type: att.mime_type });
-        const url = URL.createObjectURL(blob);
-        const opened = window.open(url, "_blank", "noopener");
-        // blob URL 引用留在本页进程内（不 revoke 则整份图片字节泄漏）；
-        // 窗口已拿到引用后即可释放，弹窗被拦时也兜底释放
-        if (opened) {
-          opened.addEventListener("load", () => URL.revokeObjectURL(url), { once: true });
-          setTimeout(() => URL.revokeObjectURL(url), 60_000);
-        } else {
-          URL.revokeObjectURL(url);
-        }
+        setLightbox({ url: URL.createObjectURL(blob), name: att.original_name });
       } else {
         const { writeFile } = await import("@tauri-apps/plugin-fs");
         const ext = att.original_name.split(".").pop() ?? "";
@@ -1905,6 +1905,38 @@ function AttachmentsSection({ taskId }: { taskId: number }) {
         )}
         <p className="text-[11px] text-muted-foreground/60">支持 Ctrl+V 直接粘贴截图</p>
       </div>
+
+      {/* 图片附件应用内预览（F4 lightbox）：点图片行触发；Esc/点遮罩关闭。
+          blob URL 关闭即 revoke（不 revoke 则整份图片字节驻留内存）。 */}
+      <Dialog
+        open={lightbox != null}
+        onOpenChange={(o) => {
+          if (o) return;
+          if (lightbox) URL.revokeObjectURL(lightbox.url);
+          setLightbox(null);
+        }}
+      >
+        <DialogContent
+          className="max-w-fit border-none bg-black/90 p-0 sm:max-w-fit [&>button]:text-white/70 [&>button]:hover:text-white"
+          aria-describedby={undefined}
+        >
+          <DialogHeader className="sr-only">
+            <DialogTitle>图片预览：{lightbox?.name}</DialogTitle>
+          </DialogHeader>
+          {lightbox && (
+            <figure className="max-h-[85vh] max-w-[90vw]">
+              <img
+                src={lightbox.url}
+                alt={lightbox.name}
+                className="max-h-[78vh] max-w-[90vw] rounded-lg object-contain"
+              />
+              <figcaption className="mt-2 truncate text-center text-xs text-white/70">
+                {lightbox.name}
+              </figcaption>
+            </figure>
+          )}
+        </DialogContent>
+      </Dialog>
     </SectionBlock>
   );
 }

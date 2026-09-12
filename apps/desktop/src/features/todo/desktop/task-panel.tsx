@@ -40,6 +40,7 @@ import { TaskListView } from "./task-list-view";
 import { LogbookView } from "./logbook-view";
 import { QuickAddBar } from "./quick-add-bar";
 import { toolbarToForm, buildConditions } from "../shared/saved-filter-builder";
+import { useDebouncedValue } from "../shared/use-debounced-value";
 import { KanbanView, type KanbanGroupBy } from "./kanban-view";
 import { CalendarView } from "./calendar-view";
 import TaskTableView from "./task-table-view";
@@ -96,6 +97,9 @@ export default function TaskPanel() {
 
   // ---- 工具栏状态（面板私有，不跨面板保留）----
   const [keyword, setKeyword] = useState("");
+  // 搜索防抖（200ms，与全局搜索 250ms 同族）：输入期不再每键全量
+  // filterTasks 重跑（万任务下一键一遍分组+排序），停止击键才过滤
+  const debouncedKeyword = useDebouncedValue(keyword.trim(), 200);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [priorityFilter, setPriorityFilter] = useState<PriorityFilter>("all");
   const [viewMode, setViewMode] = useState<ViewMode>(loadViewMode);
@@ -151,9 +155,9 @@ export default function TaskPanel() {
       }
       const filtered = applySavedFilter(
         (tasks as TodoTask[]).filter((t) =>
-          keyword
-            ? t.title.toLowerCase().includes(keyword.toLowerCase()) ||
-              (t.description ?? "").toLowerCase().includes(keyword.toLowerCase())
+          debouncedKeyword
+            ? t.title.toLowerCase().includes(debouncedKeyword.toLowerCase()) ||
+              (t.description ?? "").toLowerCase().includes(debouncedKeyword.toLowerCase())
             : true,
         ),
         activeSavedFilter.conditions,
@@ -164,9 +168,9 @@ export default function TaskPanel() {
     return sortTasks(
       filterTasks(
         (tasks as TodoTask[]).filter((t) =>
-          keyword
-            ? t.title.toLowerCase().includes(keyword.toLowerCase()) ||
-              (t.description ?? "").toLowerCase().includes(keyword.toLowerCase())
+          debouncedKeyword
+            ? t.title.toLowerCase().includes(debouncedKeyword.toLowerCase()) ||
+              (t.description ?? "").toLowerCase().includes(debouncedKeyword.toLowerCase())
             : true,
         ),
         {
@@ -182,7 +186,7 @@ export default function TaskPanel() {
     );
   }, [
     tasks,
-    keyword,
+    debouncedKeyword,
     quickView,
     projectId,
     ungrouped,

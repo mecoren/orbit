@@ -7,6 +7,13 @@
 
 ## [Unreleased]
 
+### 搜索防抖收编 + 附件应用内图片预览（桌面 lightbox + 移动降采样）
+
+- **工具栏搜索防抖（200ms）**：此前每击键全量 filterTasks 重跑（万任务下一键一遍过滤+分组+排序）；防抖 hook 从全局搜索对话框局部实现收编 `shared/use-debounced-value.ts` 共用（全局搜索 250ms 口径不变）。
+- **桌面图片附件 lightbox**：点击图片附件从「window.open 新窗口裸图」（体验断裂、弹窗被拦时静默失败）改为应用内全屏预览 Dialog（黑底 contain + 文件名说明 + Esc/遮罩关闭）；关闭即 revokeObjectURL 防整份图片字节驻留。
+- **移动端图片附件降采样解码**：`Image.file` 补 `cacheWidth`（屏宽 × devicePixelRatio）——4K 照片不再原图全尺寸解码进纹理，单图解码内存 ~45MB → ~8MB 量级。
+- 验证：tsc 零错 / vitest 252 / flutter analyze 零告警 / Flutter 256 / e2e 17 全绿；浏览器目检 lightbox 开合（点图片附件 → 预览 Dialog + img 渲染 → Esc 关闭）全过。
+
 ### 筛选器可视化构建器：裸 JSON 手填退役 + 工具栏「存为视图」一键固化
 
 对标 Todoist Filters 的创建体验（#35 落地时条件是裸 JSON 手填框，本批补齐最后一段）：
