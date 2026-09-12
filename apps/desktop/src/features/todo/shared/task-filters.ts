@@ -21,6 +21,9 @@ export interface TaskFilterInput {
   keyword?: string | null; // title+description 大小写不敏感包含
   statusFilter?: TaskStatusFilter;
   priorityFilter?: number | null;
+  /** 隐藏已完成（Logbook 治理）：true 时剔除 done 任务；
+   *  quickView=done / statusFilter=done 已完成语义下不生效（要看完成集就明确去 done 入口） */
+  hideDone?: boolean;
 }
 
 /** 「今天」本地零点毫秒（我的一天判定/写入单一口径：
@@ -46,6 +49,7 @@ export function filterTasks(tasks: TodoTask[], input: TaskFilterInput): TodoTask
     keyword = null,
     statusFilter = "all",
     priorityFilter = null,
+    hideDone = false,
   } = input;
 
   let list = tasks;
@@ -98,6 +102,12 @@ export function filterTasks(tasks: TodoTask[], input: TaskFilterInput): TodoTask
     if (priorityFilter != null) {
       list = list.filter((t) => t.priority === priorityFilter);
     }
+  }
+
+  // 隐藏已完成（Logbook 治理）：done 快捷视图 / done 状态筛选是明确要看完成集的入口，
+  // 此处不剔除（否则开关会把它们清成永久空列表）
+  if (hideDone && quickView !== "done" && statusFilter !== "done") {
+    list = list.filter((t) => !t.done);
   }
 
   const kw = keyword?.trim().toLowerCase() ?? "";
@@ -169,4 +179,44 @@ export function groupOverdueFirst(
     else rest.push(t);
   }
   return { overdue, rest };
+}
+
+/** Logbook 按完成日分组单元（Things Logbook：完成历史按日聚合回看） */
+export interface DoneDayGroup {
+  /** 本地 YYYY-MM-DD */
+  key: string;
+  date: Date;
+  tasks: TodoTask[];
+}
+
+/**
+ * 已完成任务按完成日（done_at 本地日）倒序分组——Logbook 视图数据源
+ * （Things Logbook 同款「完成历史」语义：最近的成就排最前）。
+ *
+ * 分组口径：done_at 归本地自然日（本地时区日界，与统计热力图一致）；
+ * done_at 缺失的脏行兜底落 created_at 日、再缺失落传入的 fallbackToday。
+ * 组间倒序（今天在最上）；组内按 done_at 倒序（同日晚完成的排前）。
+ */
+export function groupDoneByDay(
+  tasks: TodoTask[],
+  fallbackToday = new Date(),
+): DoneDayGroup[] {
+  const byKey = new Map<string, DoneDayGroup>();
+  for (const t of tasks) {
+    const ts = t.done_at ?? t.created_at ?? fallbackToday.getTime();
+    const d = new Date(ts);
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    let g = byKey.get(key);
+    if (!g) {
+      g = { key, date: new Date(d.getFullYear(), d.getMonth(), d.getDate()), tasks: [] };
+      byKey.set(key, g);
+    }
+    g.tasks.push(t);
+  }
+  const groups = [...byKey.values()];
+  groups.sort((a, b) => b.date.getTime() - a.date.getTime());
+  for (const g of groups) {
+    g.tasks.sort((a, b) => (b.done_at ?? b.created_at ?? 0) - (a.done_at ?? a.created_at ?? 0));
+  }
+  return groups;
 }

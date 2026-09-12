@@ -6,7 +6,7 @@
  * 选中态经 useTodoShell 取用——从回收站面板切回来时筛选原样保留。
  */
 import { useEffect, useMemo, useState } from "react";
-import { CalendarDays, CopyPlus, LayoutGrid, ListTodo, Search, Table2, Tag } from "lucide-react";
+import { CalendarDays, CopyPlus, EyeOff, LayoutGrid, ListTodo, Search, Table2, Tag } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -28,7 +28,7 @@ import { useTodoStore } from "@/features/todo/store";
 import { useAppStore } from "@/stores/app-store";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { type TodoTask } from "@/lib/tauri";
-import { LS_VIEW_MODE, QUICK_VIEWS } from "../shared/constants";
+import { LS_HIDE_DONE, LS_VIEW_MODE, QUICK_VIEWS } from "../shared/constants";
 import { useTaskLabels } from "../shared/use-task-labels";
 import { useTaskReminders } from "../shared/use-task-reminders";
 import { useQuery } from "@tanstack/react-query";
@@ -37,6 +37,7 @@ import { applySavedFilter } from "../shared/saved-filter";
 import { savedFiltersList } from "@/lib/tauri";
 import { useTodoShell } from "./todo-shell";
 import { TaskListView } from "./task-list-view";
+import { LogbookView } from "./logbook-view";
 import { QuickAddBar } from "./quick-add-bar";
 import { KanbanView, type KanbanGroupBy } from "./kanban-view";
 import { CalendarView } from "./calendar-view";
@@ -54,6 +55,13 @@ function loadViewMode(): ViewMode {
 
 /** 排序档位持久化键（#26：默认 manual = 拖拽顺序） */
 const LS_SORT_KEY = "todo_sort_key";
+
+/** 隐藏已完成开关持久化读取：未存过 = 默认开（Logbook 治理新默认，
+ *  存量用户首次升级后完成行不再平铺在默认列表——明确入口在侧栏「已完成」） */
+function loadHideDone(): boolean {
+  const saved = localStorage.getItem(LS_HIDE_DONE);
+  return saved !== "0";
+}
 
 function loadSortKey(): TaskSortKey {
   const saved = localStorage.getItem(LS_SORT_KEY);
@@ -91,6 +99,7 @@ export default function TaskPanel() {
   const [viewMode, setViewMode] = useState<ViewMode>(loadViewMode);
   const [sortKey, setSortKey] = useState<TaskSortKey>(loadSortKey);
   const [kanbanGroupBy, setKanbanGroupBy] = useState<KanbanGroupBy>("project");
+  const [hideDone, setHideDone] = useState<boolean>(loadHideDone);
 
   useEffect(() => {
     localStorage.setItem(LS_VIEW_MODE, viewMode);
@@ -99,6 +108,10 @@ export default function TaskPanel() {
   useEffect(() => {
     localStorage.setItem(LS_SORT_KEY, sortKey);
   }, [sortKey]);
+
+  useEffect(() => {
+    localStorage.setItem(LS_HIDE_DONE, hideDone ? "1" : "0");
+  }, [hideDone]);
 
   useEffect(() => {
     if (viewToggleIntent === 0) return;
@@ -121,6 +134,10 @@ export default function TaskPanel() {
     placeholderData: (prev) => prev,
   });
   const activeSavedFilter = (savedFiltersQuery.data ?? []).find((f) => f.id === savedFilterId);
+
+  // done 快捷视图 + 列表档 → LogbookView 接管（隐藏开关在 done 视图不剔除，
+  // 下方 filterTasks 已保证）；其余视图照旧走列表/看板/日历/表格
+  const isLogbook = quickView === "done" && projectId == null && !ungrouped && savedFilterId == null;
 
   const visibleTasks = useMemo(() => {
     // 保存筛选器选中时：优先走条件应用（快捷视图/项目/工具栏筛选不叠加——
@@ -156,6 +173,7 @@ export default function TaskPanel() {
           ungrouped,
           statusFilter,
           priorityFilter: priorityFilter === "all" ? null : Number(priorityFilter),
+          hideDone,
         },
       ),
       sortKey,
@@ -171,6 +189,7 @@ export default function TaskPanel() {
     sortKey,
     activeSavedFilter,
     taskLabels,
+    hideDone,
   ]);
 
   // ---- 标题映射（04 §二）----
@@ -215,6 +234,27 @@ export default function TaskPanel() {
               <SelectItem value="done">已完成</SelectItem>
             </SelectContent>
           </Select>
+
+          {/* 隐藏已完成开关（Logbook 治理）：done 视图/已完成状态筛选下置灰
+              （要看完成集的明确入口，开关无意义）；完成历史看侧栏「已完成」 */}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant={hideDone ? "secondary" : "ghost"}
+                size="icon"
+                className="h-8 w-8"
+                aria-label={hideDone ? "显示已完成任务" : "隐藏已完成任务"}
+                aria-pressed={hideDone}
+                disabled={isLogbook || statusFilter === "done"}
+                onClick={() => setHideDone((v) => !v)}
+              >
+                <EyeOff size={14} className={cn(!hideDone && "opacity-40")} />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              {hideDone ? "已完成已隐藏，点击显示" : "点击隐藏已完成任务"}
+            </TooltipContent>
+          </Tooltip>
 
           <Select
             value={priorityFilter}
@@ -398,7 +438,16 @@ export default function TaskPanel() {
 
       {/* 内容区（flex-1 撑满，QuickAddBar 无论有无数据都固定在底部） */}
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-        {viewMode === "kanban" ? (
+        {isLogbook && viewMode === "list" ? (
+          <LogbookView
+            tasks={visibleTasks}
+            projects={projects}
+            projectById={new Map(projects.map((p) => [p.id, p]))}
+            labelsByTask={taskLabels}
+            loading={tasksLoading}
+            onOpenDetail={(id) => setSelectedTaskId(id)}
+          />
+        ) : viewMode === "kanban" ? (
           <KanbanView
             tasks={visibleTasks}
             projects={projects}

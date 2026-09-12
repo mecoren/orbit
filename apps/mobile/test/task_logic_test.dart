@@ -495,6 +495,7 @@ group('groupOverdueFirst 逾期置顶分组', () {
     ], now);
     expect(g.overdue.map((t) => t.id), [3, 1, 2]);
   });
+});
 
 // ── 侧栏单遍计数聚合（口径与 filterTasks 一致性对照）──
 group('computeSidebarCounts 单遍计数', () {
@@ -549,5 +550,70 @@ group('computeSidebarCounts 单遍计数', () {
     expect(counts.quickView[QuickViewKey.nodate], 1);
   });
 });
-});
+
+// ---------- Logbook 治理：隐藏已完成 + 完成日分组（2026-09-12）----------
+
+  group('filterTasks hideDone 隐藏已完成（Logbook 治理）', () {
+    test('hideDone 剔除已完成任务', () {
+      final tasks = [
+        _task(id: 1),
+        _task(id: 2, done: 1, doneAt: 100, status: 'done'),
+      ];
+      final out = filterTasks(tasks, const TaskFilterInput(), hideDone: true);
+      expect(out.map((t) => t.id), [1]);
+    });
+
+    test('hideDone 缺省不隐藏（现行为不变）', () {
+      final tasks = [_task(id: 1, done: 1, doneAt: 100, status: 'done')];
+      final out = filterTasks(tasks, const TaskFilterInput());
+      expect(out.map((t) => t.id), [1]);
+    });
+
+    test('done 视图下 hideDone 不生效（完成集入口）', () {
+      final tasks = [_task(id: 1, done: 1, doneAt: 100, status: 'done')];
+      final out = filterTasks(
+          tasks, const TaskFilterInput(quickView: QuickViewKey.done),
+          hideDone: true);
+      expect(out.map((t) => t.id), [1]);
+    });
+
+    test('项目视图下 hideDone 同样生效', () {
+      final tasks = [
+        _task(id: 1, projectId: 5),
+        _task(id: 2, projectId: 5, done: 1, doneAt: 100, status: 'done'),
+      ];
+      final out = filterTasks(
+          tasks, const TaskFilterInput(projectId: 5),
+          hideDone: true);
+      expect(out.map((t) => t.id), [1]);
+    });
+  });
+
+  group('groupDoneByDay 完成日分组（Logbook 数据源）', () {
+    test('按完成日倒序分组、组内完成时刻倒序', () {
+      final d10 = DateTime(2026, 9, 10);
+      final d12 = DateTime(2026, 9, 12);
+      final tasks = [
+        _task(id: 1, done: 1, doneAt: d10.add(const Duration(hours: 9)).millisecondsSinceEpoch),
+        _task(id: 2, done: 1, doneAt: d12.add(const Duration(hours: 20)).millisecondsSinceEpoch),
+        _task(id: 3, done: 1, doneAt: d12.add(const Duration(hours: 8)).millisecondsSinceEpoch),
+      ];
+      final groups = groupDoneByDay(tasks);
+      expect(groups.map((g) => g.key), ['2026-09-12', '2026-09-10']);
+      expect(groups.first.tasks.map((t) => t.id), [2, 3]);
+    });
+
+    test('doneAt 缺失兜底落 createdAt 日', () {
+      final d10 = DateTime(2026, 9, 10, 15);
+      final tasks = [
+        _task(id: 1, done: 1, doneAt: null, createdAt: d10.millisecondsSinceEpoch),
+      ];
+      final groups = groupDoneByDay(tasks);
+      expect(groups.single.key, '2026-09-10');
+    });
+
+    test('空集返回空', () {
+      expect(groupDoneByDay(const []), isEmpty);
+    });
+  });
 }

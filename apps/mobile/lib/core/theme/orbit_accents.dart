@@ -21,4 +21,7 @@ abstract final class OrbitAccents {
 
   /// 我的一天琥珀（07 报告新增项，对应桌面 #F59E0B）
   static const Color myDayAmber = Color(0xFFF59E0B);
+
+  /// 完成绿（对应桌面 STATUS_COLOR.done = #22C55E；Logbook 完成日头图标用）
+  static const Color doneGreen = Color(0xFF22C55E);
 }

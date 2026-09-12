@@ -66,6 +66,11 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
   // 长按拖拽把手重排 + midpoint 落库）
   TaskSortKey _sortKey = TaskSortKey.manual;
 
+  // 隐藏已完成（Logbook 治理）：与桌面同默认开；会话内存态（与 _sortKey
+  // 同模式先例——视图态不跨页持久，退出即回默认）。done 视图下不参与
+  // 过滤（完成集入口），开关图标同步置灰
+  bool _hideDone = true;
+
   static const _sortChoices = {
     TaskSortKey.manual: '拖拽顺序',
     TaskSortKey.due: '截止时间',
@@ -207,10 +212,14 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
   /// 纯函数与桌面 midpoint 同口径：前缺省 0、后缺省 100000），完成后
   /// invalidate 以服务端权威顺序刷新；拖拽期间行序由 ReorderableListView
   /// 自管，落库失败 invalidate 兜底回原序。
+  ///
+  /// 落位邻居必须与 build 的 visible 同口径（含 hideDone 过滤）——
+  /// 否则 UI 行数与计算索引错位，中值取到错误的相邻行。
   Future<void> _reorderTasks(int oldIndex, int newIndex) async {
     final tasks = ref.watch(todoTasksProvider(const TaskListQuery())).value ??
         const <TodoTask>[];
-    final visible = sortTasks(filterTasks(tasks, widget.query), _sortKey);
+    final visible = sortTasks(
+        filterTasks(tasks, widget.query, hideDone: _hideDone), _sortKey);
     final reordered = reorderItems(visible, oldIndex, newIndex);
     final dragged = reordered[newIndex];
     final prevPos = newIndex > 0 ? reordered[newIndex - 1].position : null;
@@ -283,12 +292,22 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
         ref.watch(todoTasksProvider(const TaskListQuery())).value ?? [];
     final projects = ref.watch(todoProjectsProvider).value ?? [];
 
-    final visible = sortTasks(filterTasks(tasks, widget.query), _sortKey);
+    // done 快捷视图 → Logbook 分组态（按完成日倒序，与桌面同口径）；
+    // 隐藏开关不参与（完成集入口）。其余视图照旧平铺 + 逾期置顶
+    final isLogbook = widget.query.quickView == QuickViewKey.done;
+
+    final visible = isLogbook
+        ? filterTasks(tasks, widget.query)
+        : sortTasks(
+            filterTasks(tasks, widget.query, hideDone: _hideDone), _sortKey);
     final projectById = {for (final p in projects) p.id: p};
 
     // 逾期置顶分组（性能批次 UX 优化，与桌面同口径）：逾期行渲染在列表
     // 顶部的红调区块，其余照旧——长按拖拽语义不受影响（重排仍走原序数组）
     final overdueGroups = groupOverdueFirst(visible);
+
+    // Logbook 分组（done 视图）：按完成日倒序，组内完成时刻倒序
+    final doneGroups = isLogbook ? groupDoneByDay(visible) : <DoneDayGroup>[];
 
     // 动态标题：项目名 / 未分组 / 视图名
     final title = switch (widget.query) {
@@ -333,7 +352,13 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
             ),
             child: EmptyState(message: emptyMessage),
           )
-        : reorderable
+        : isLogbook
+            ? _LogbookList(
+                groups: doneGroups,
+                padding: listPadding,
+                buildTile: buildTile,
+              )
+            : reorderable
             ? ReorderableListView.builder(
                 key: const ValueKey('reorderable-task-list'),
                 scrollController: _reorderScrollController,
@@ -449,6 +474,23 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
                 reorderable ? _reorderScrollController : _listScrollController,
               ),
               actions: [
+                // 隐藏已完成开关（Logbook 治理，默认开；done 视图置灰——
+                // 完成集入口开关无意义）。图标态：隐藏=实心可见性，显示=划线
+                IconButton(
+                  onPressed: isLogbook
+                      ? null
+                      : () => setState(() => _hideDone = !_hideDone),
+                  tooltip: _hideDone ? '显示已完成任务' : '隐藏已完成任务',
+                  icon: Icon(
+                    _hideDone
+                        ? Icons.visibility_off_outlined
+                        : Icons.visibility_outlined,
+                    size: AppDimens.iconSizeMd,
+                    color: isLogbook
+                        ? colors.titleText.withValues(alpha: 0.3)
+                        : colors.titleText,
+                  ),
+                ),
                 // 排序档位菜单（#26；manual = position 拖拽顺序）
                 PopupMenuButton<TaskSortKey>(
                   initialValue: _sortKey,
@@ -671,5 +713,88 @@ class TodoTaskTile extends StatelessWidget {
       ),
       ),
     );
+  }
+}
+
+/// Logbook 分组列表（done 视图专用）：完成日头 + 任务行打平进单一
+/// ListView.builder 保持懒加载（手法同上方逾期置顶分组——区块头
+/// 随该组首行一起渲染，不额外组 chunk）
+class _LogbookList extends StatelessWidget {
+  final List<DoneDayGroup> groups;
+  final EdgeInsets padding;
+  final Widget Function(TodoTask task, {required Widget? dragHandle}) buildTile;
+
+  const _LogbookList({
+    required this.groups,
+    required this.padding,
+    required this.buildTile,
+  });
+
+  static const _weekdayNames = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = AppColors.ofContext(context);
+    final now = DateTime.now();
+    final todayKey = _dayKeyOf(now);
+    // 打平：每项 = 组头（随首行渲染）或任务行
+    final flat = <({DoneDayGroup g, TodoTask? task, bool isHead})>[];
+    for (final g in groups) {
+      for (var i = 0; i < g.tasks.length; i++) {
+        flat.add((g: g, task: g.tasks[i], isHead: i == 0));
+      }
+    }
+    return ListView.builder(
+      controller: ScrollController(),
+      padding: padding,
+      itemCount: flat.length,
+      itemBuilder: (context, index) {
+        final item = flat[index];
+        if (!item.isHead) return buildTile(item.task!, dragHandle: null);
+        final g = item.g;
+        final isToday = g.key == todayKey;
+        final label = isToday
+            ? '今天'
+            : '${g.date.month}月${g.date.day}日 ${_weekdayNames[g.date.weekday - 1]}';
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: AppDimens.space4),
+              child: Row(
+                children: [
+                  Icon(Icons.check_circle_outline_rounded,
+                      size: AppDimens.iconSizeSm,
+                      color: OrbitAccents.doneGreen),
+                  const SizedBox(width: AppDimens.space4),
+                  Text(
+                    label,
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: isToday ? OrbitAccents.todoAccent : colors.secondaryText,
+                    ),
+                  ),
+                  const SizedBox(width: AppDimens.space4),
+                  Text(
+                    '${g.tasks.length} 条',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: colors.secondaryText.withValues(alpha: 0.7),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            buildTile(item.task!, dragHandle: null),
+          ],
+        );
+      },
+    );
+  }
+
+  static String _dayKeyOf(DateTime d) {
+    String p2(int n) => n.toString().padLeft(2, '0');
+    return '${d.year}-${p2(d.month)}-${p2(d.day)}';
   }
 }

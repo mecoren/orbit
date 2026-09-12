@@ -1005,7 +1005,7 @@ interface CalendarTaskRowProps {
  *  行高固定 h-12：有无标签/项目名的行等高——原实现元信息行无条件渲染
  *  （空 div 也占 mt-0.5+text-xs 一行），无元信息行矮一截、分组内参差；
  *  现改为元信息有内容才渲染 + 内容垂直居中，外层 flex 恒高 48px */
-const CalendarTaskRow = memo(function CalendarTaskRow({
+export const CalendarTaskRow = memo(function CalendarTaskRow({
   task: t,
   labels,
   project,

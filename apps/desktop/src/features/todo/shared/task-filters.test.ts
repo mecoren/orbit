@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { type TodoTask } from "@/lib/tauri";
-import { filterTasks, groupOverdueFirst, sortTasks, todayStartMs, toggleMyDayValue } from "./task-filters";
+import { filterTasks, groupDoneByDay, groupOverdueFirst, sortTasks, todayStartMs, toggleMyDayValue } from "./task-filters";
 
 /** 补齐 TodoTask 全部必填字段的工厂 */
 function mk(partial: Partial<TodoTask>): TodoTask {
@@ -381,5 +381,86 @@ describe("groupOverdueFirst 逾期置顶分组", () => {
     ];
     const g = groupOverdueFirst(tasks, NOW);
     expect(g.overdue.map((t) => t.id)).toEqual([3, 1, 2]);
+  });
+});
+
+describe("filterTasks - hideDone 隐藏已完成（Logbook 治理）", () => {
+  it("hideDone 剔除 done 任务，未完成保留", () => {
+    const tasks = [
+      mk({ id: 1, done: 0 }),
+      mk({ id: 2, done: 1, done_at: T0 + 1000 }),
+      mk({ id: 3, done: 0, status: "doing" }),
+    ];
+    const out = filterTasks(tasks, { hideDone: true });
+    expect(out.map((t) => t.id)).toEqual([1, 3]);
+  });
+
+  it("默认不隐藏（hideDone 缺省 = 现行为不变）", () => {
+    const tasks = [mk({ id: 1, done: 1, done_at: T0 })];
+    const out = filterTasks(tasks, {});
+    expect(out.map((t) => t.id)).toEqual([1]);
+  });
+
+  it("quickView=done 下 hideDone 不生效（完成集入口，否则开关清成空列表）", () => {
+    const tasks = [mk({ id: 1, done: 1, done_at: T0 })];
+    const out = filterTasks(tasks, { quickView: "done", hideDone: true });
+    expect(out.map((t) => t.id)).toEqual([1]);
+  });
+
+  it("statusFilter=done 下 hideDone 不生效（明确要看完成集的筛选档）", () => {
+    const tasks = [mk({ id: 1, done: 1, done_at: T0 })];
+    const out = filterTasks(tasks, { statusFilter: "done", hideDone: true });
+    expect(out.map((t) => t.id)).toEqual([1]);
+  });
+
+  it("hideDone 在项目视图下同样生效（项目内完成行也隐藏）", () => {
+    const tasks = [
+      mk({ id: 1, project_id: 5, done: 0 }),
+      mk({ id: 2, project_id: 5, done: 1, done_at: T0 }),
+    ];
+    const out = filterTasks(tasks, { projectId: 5, hideDone: true });
+    expect(out.map((t) => t.id)).toEqual([1]);
+  });
+});
+
+describe("groupDoneByDay 完成日分组（Logbook 数据源）", () => {
+  // 固定时区安全基准：本地 2026-09-10 / 09-12（避免跨时区 CI 漂移用本地构造）
+  const d10 = new Date(2026, 8, 10);
+  const d12 = new Date(2026, 8, 12);
+  const ms10 = (h: number) => new Date(2026, 8, 10, h).getTime();
+  const ms12 = (h: number) => new Date(2026, 8, 12, h).getTime();
+
+  it("按 done_at 本地日分组，组间倒序（最近完成日在最前）", () => {
+    const tasks = [
+      mk({ id: 1, done_at: ms10(9) }),
+      mk({ id: 2, done_at: ms12(20) }),
+      mk({ id: 3, done_at: ms12(8) }),
+    ];
+    const groups = groupDoneByDay(tasks, d12);
+    expect(groups.map((g) => g.key)).toEqual(["2026-09-12", "2026-09-10"]);
+    expect(groups[0].tasks.map((t) => t.id)).toEqual([2, 3]);
+  });
+
+  it("组内按完成时刻倒序（同日晚完成的排前）", () => {
+    const tasks = [
+      mk({ id: 1, done_at: ms12(9) }),
+      mk({ id: 2, done_at: ms12(21) }),
+    ];
+    const groups = groupDoneByDay(tasks, d12);
+    expect(groups[0].tasks.map((t) => t.id)).toEqual([2, 1]);
+  });
+
+  it("done_at 缺失的脏行兜底落 created_at 日", () => {
+    const tasks = [
+      mk({ id: 1, done_at: null, created_at: ms10(15) }),
+      mk({ id: 2, done_at: ms12(10) }),
+    ];
+    const groups = groupDoneByDay(tasks, d12);
+    expect(groups.map((g) => g.key)).toEqual(["2026-09-12", "2026-09-10"]);
+    expect(groups[1].tasks.map((t) => t.id)).toEqual([1]);
+  });
+
+  it("空集返回空数组", () => {
+    expect(groupDoneByDay([], d12)).toEqual([]);
   });
 });

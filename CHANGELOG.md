@@ -7,6 +7,17 @@
 
 ## [Unreleased]
 
+### 已完成任务治理（Logbook）：默认隐藏已完成 + 完成历史按日分组回看
+
+对标 Things 3 Logbook 的完成治理双能力，三端落地（桌面+移动同口径）：
+
+- **隐藏已完成开关（默认开）**：此前已完成任务在默认列表无限期平铺（划线条目长期淹没列表），只能手动切筛选消化。工具栏/标题栏新增开关（桌面 EyeOff 图标钮 + localStorage `todo_hide_done` 持久化，移动 IconButton 会话态）；`quickView=done` 完成集入口与 `statusFilter=done` 筛选档下不参与过滤（否则开关会把完成视图清成永久空列表），开关同步置灰。
+- **Logbook 完成历史视图**：侧栏「已完成」在列表档升级为按完成日（done_at 本地日界）倒序分组的完成历史——最近的成就排最前，组内按完成时刻倒序；组头带完成绿图标 + 日期/星期 + 条数（「今天」高亮主色底）。桌面新视图 `logbook-view.tsx`（复用 CalendarTaskRow 行 + 日历 VirtualGroupedList 同款打平虚拟化），移动端 `_LogbookList`（单一 ListView.builder 懒加载，区块头随组首行渲染）；分组纯函数 `groupDoneByDay` 双端同口径（done_at 缺失兜底落 created_at 日）。
+- **移动端拖拽落位同口径修复（真 bug 顺修）**：`_reorderTasks` 落位邻居重算 `filterTasks` 未带 `hideDone`——UI 行数（隐藏后）与计算索引（全量）错位，中值取到错误相邻行（隐藏开关引入后任何拖拽都会错位）；统一传 `_hideDone` 与 build 同口径。
+- 移动端补 `OrbitAccents.doneGreen`（#22C55E，对齐桌面 STATUS_COLOR.done；完成日头图标用）。
+- 测试：桌面 filterTasks hideDone 5 用例 + groupDoneByDay 4 用例；移动端 7 用例；e2e +1（Logbook 分组回看全链）；顺修 task_logic_test 历史嵌套错位（computeSidebarCounts 组意外嵌在 groupOverdueFirst 组内）。
+- 验证：tsc 零错 / vitest 240 / flutter analyze 零告警 / Flutter 256 / e2e 15 全绿；浏览器目检（隐藏默认生效、开关往返切换、Logbook 分组渲染、行 48px/优先级条/划线态、done 视图开关置灰）全过。
+
 ### 全栈性能与 UI/UX 系统性优化批次（探查报告全清账）
 
 双维只读探查（性能 15 项 + UI/UX 18 项，报告入 docs/性能与UX系统性优化报告-2026-09-12.md）后按性价比四批落地：

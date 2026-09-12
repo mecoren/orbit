@@ -66,8 +66,11 @@ class TaskFilterInput {
   const TaskFilterInput({this.quickView, this.projectId, this.ungrouped = false});
 }
 
-/// 按输入过滤任务（互斥语义见 [TaskFilterInput]；时间窗口为本地时区自然日）
-List<TodoTask> filterTasks(List<TodoTask> tasks, TaskFilterInput input) {
+/// 按输入过滤任务（互斥语义见 [TaskFilterInput]；时间窗口为本地时区自然日）。
+/// [hideDone]：隐藏已完成（Logbook 治理）；quickView=done 完成
+/// 集入口下不参与过滤（否则开关把完成视图清成永久空列表）
+List<TodoTask> filterTasks(List<TodoTask> tasks, TaskFilterInput input,
+    {bool hideDone = false}) {
   final now = DateTime.now();
   final todayStart =
       DateTime(now.year, now.month, now.day).millisecondsSinceEpoch;
@@ -111,7 +114,53 @@ List<TodoTask> filterTasks(List<TodoTask> tasks, TaskFilterInput input) {
         list = list.where((t) => t.dueDate == null);
     }
   }
+  // 隐藏已完成（Logbook 治理）：done 快捷视图是完成集的明确入口，不剔除
+  if (hideDone && input.quickView != QuickViewKey.done) {
+    list = list.where((t) => !t.isDone);
+  }
   return list.toList();
+}
+
+/// Logbook 完成日分组单元（对标 Things 3 Logbook：完成历史按日聚合）
+class DoneDayGroup {
+  /// 本地 YYYY-MM-DD
+  final String key;
+  final DateTime date;
+  final List<TodoTask> tasks;
+
+  DoneDayGroup({required this.key, required this.date, required this.tasks});
+}
+
+String _dayKey(DateTime d) {
+  String p2(int n) => n.toString().padLeft(2, '0');
+  return '${d.year}-${p2(d.month)}-${p2(d.day)}';
+}
+
+/// 已完成任务按完成日（doneAt 本地日）倒序分组——Logbook 视图数据源
+/// （与桌面 groupDoneByDay 同口径：组间倒序最近的在前，组内按完成时刻倒序；
+/// doneAt 缺失的脏行兜底落 createdAt 日）
+List<DoneDayGroup> groupDoneByDay(List<TodoTask> tasks) {
+  final byKey = <String, DoneDayGroup>{};
+  for (final t in tasks) {
+    final ts = t.doneAt ?? t.createdAt;
+    final d = DateTime.fromMillisecondsSinceEpoch(ts);
+    final key = _dayKey(d);
+    byKey.putIfAbsent(
+      key,
+      () => DoneDayGroup(
+        key: key,
+        date: DateTime(d.year, d.month, d.day),
+        tasks: [],
+      ),
+    ).tasks.add(t);
+  }
+  final groups = byKey.values.toList()
+    ..sort((a, b) => b.date.compareTo(a.date));
+  for (final g in groups) {
+    g.tasks.sort((a, b) => (b.doneAt ?? b.createdAt)
+        .compareTo(a.doneAt ?? a.createdAt));
+  }
+  return groups;
 }
 
 /// 排序档位（#26 双端排序；manual = position 拖拽顺序，唯一默认档）。

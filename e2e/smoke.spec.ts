@@ -30,6 +30,12 @@ async function quickAdd(page: Page, title: string) {
   await bar.press("Enter");
 }
 
+/** 切换「隐藏已完成」开关（Logbook 治理，默认开）：完成后断言完成行
+ *  可见前须先显示（hidden 状态下完成行从列表消失属预期行为） */
+async function showDoneTasks(page: Page) {
+  await page.getByRole("button", { name: "显示已完成任务" }).click();
+}
+
 test.beforeEach(async ({ page }) => {
   await freshApp(page);
 });
@@ -62,6 +68,8 @@ test("主链路：快速新建 → 列表出现 → 完成 → 撤销删除恢�
   // ---- 完成（行 checkbox）----
   const row = page.getByRole("button", { name: "未完成任务：冒烟任务-买牛奶" });
   await row.getByRole("button", { name: "标记完成" }).click();
+  // Logbook 治理默认隐藏已完成：先显示完成行再断言
+  await showDoneTasks(page);
   await expect(
     page.getByRole("button", { name: "已完成任务：冒烟任务-买牛奶" }),
   ).toBeVisible();
@@ -85,6 +93,7 @@ test("主链路：快速新建 → 列表出现 → 完成 → 撤销删除恢�
 
   // ---- 撤销（sonner toast 的「撤销」按钮，5s 窗口内）----
   await page.getByRole("button", { name: "撤销" }).first().click();
+  // 撤销恢复的是「已完成」行；开关在删除前已切到显示（上面 showDoneTasks）
   await expect(
     page.getByRole("button", { name: "已完成任务：冒烟任务-买牛奶" }),
   ).toBeVisible({ timeout: 10_000 });
@@ -547,4 +556,62 @@ test("保存的筛选器：创建 → 侧栏分组 → 点击过滤 → 删除�
   await expect(page.getByRole("button", { name: "本周紧急" })).toHaveCount(0, {
     timeout: 5_000,
   });
+});
+
+test("Logbook：侧栏已完成按完成日分组回看（2026-09-12 完成治理）", async ({ page }) => {
+  // seed 直改内存库：两条不同完成日的 done 任务（真实链路 = 完成写路径同构）
+  await page.evaluate(() => {
+    const m = (window as any).__orbitMock;
+    const now = Date.now();
+    const day = 86400000;
+    const mk = (title: string, doneAt: number, position: number) => {
+      m.db.tasks.push({
+        id: m.db.seq++,
+        uuid: `lb-${position}`,
+        title,
+        description: null,
+        project_id: null,
+        priority: 0,
+        status: "done",
+        done: 1,
+        done_at: doneAt,
+        due_date: null,
+        start_date: null,
+        repeat_after: 0,
+        repeat_mode: 0,
+        percent_done: 0,
+        position,
+        is_favorite: 0,
+        my_day_date: null,
+        is_deleted: 0,
+        created_at: doneAt,
+        updated_at: doneAt,
+        deleted_at: null,
+        version: 1,
+      });
+    };
+    // 今天 15:00 完成 + 3 天前 11:00 完成（本地日界口径）
+    const today = new Date();
+    today.setHours(15, 0, 0, 0);
+    mk("完成记录-今天完成甲", today.getTime(), 10);
+    mk("完成记录-三天前完成乙", today.getTime() - 3 * day + 11 * 3600000, 11);
+    m.emitDbChange();
+  });
+
+  // 侧栏点「已完成」快捷视图 → LogbookView 接管（列表档）
+  await page.getByRole("button", { name: "已完成" }).first().click();
+  await expect(page.getByRole("heading", { name: "已完成" })).toBeVisible();
+
+  // 按完成日倒序分组：今天组在前、三天前组在后；日头带条数
+  await expect(page.getByText("完成记录-今天完成甲")).toBeVisible();
+  await expect(page.getByText("完成记录-三天前完成乙")).toBeVisible();
+  const todayHead = page.getByText("今天", { exact: true }).first();
+  await expect(todayHead).toBeVisible();
+  await expect(page.getByText("1 条").first()).toBeVisible();
+
+  // 划线完成态 + 行点击打开详情（CalendarTaskRow 复用行）
+  const row = page.getByRole("button", { name: "已完成任务：完成记录-今天完成甲" });
+  await expect(row).toBeVisible();
+  await row.click();
+  await expect(page.getByRole("dialog")).toBeVisible();
 });
