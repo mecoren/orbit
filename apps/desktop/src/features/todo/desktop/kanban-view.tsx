@@ -26,10 +26,30 @@ import {
   type DragStartEvent,
 } from "@dnd-kit/core";
 import { format } from "date-fns";
-import { Calendar, Star } from "lucide-react";
+import { toast } from "sonner";
+import {
+  Calendar,
+  Check,
+  CircleCheck,
+  Flag,
+  FolderInput,
+  Star,
+  StarOff,
+  Sunrise,
+  X,
+} from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { useTodoStore } from "@/features/todo/store";
+import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   todoTaskUpdate,
   todoTaskUpdatePosition,
@@ -37,13 +57,20 @@ import {
   type TodoProject,
   type TodoTask,
 } from "@/lib/tauri";
-import { FAVORITE_COLOR, PRIORITY_COLOR, STATUS_COLOR, TODO_ACCENT } from "../shared/constants";
+import { FAVORITE_COLOR, PRIORITY_COLOR, PRIORITY_LABELS, STATUS_COLOR, TODO_ACCENT } from "../shared/constants";
 import { LabelChips } from "../shared/label-chips";
 import { ReminderChip } from "../shared/reminder-chip";
 import { displayReminder, type DisplayReminder, type TaskReminderMeta } from "../shared/reminder-meta";
 import { isListActivationKey } from "../shared/list-keyboard";
 import type { TaskSortKey } from "../shared/task-filters";
 import { completeTask } from "../shared/task-actions";
+import {
+  batchSetDueDate,
+  batchUpdateFavorite,
+  batchUpdateMyDay,
+  batchUpdatePriority,
+  batchUpdateStatus,
+} from "../shared/batch-actions";
 import { midpoint } from "../shared/position";
 import { TaskContextMenu } from "./task-context-menu";
 import { CheckSvg } from "./task-list-view";
@@ -78,6 +105,41 @@ export function KanbanView({ tasks, projects, groupBy, labelsByTask, remindersBy
   const [draggingId, setDraggingId] = useState<number | null>(null);
   // 拖拽刚结束的时间戳：抑制 dragend 后误触发的卡片 click（打开详情）
   const dragEndStamp = useRef(0);
+
+  // ---- 多选批量（与列表视图同语义；x 键切选中、选中态下点击卡片 = 切勾选）----
+  const [selected, setSelected] = useState<Set<number>>(new Set());
+  const [batchBusy, setBatchBusy] = useState(false);
+  const selectedTasks = useMemo(() => tasks.filter((t) => selected.has(t.id)), [tasks, selected]);
+  const allDoneSelected = selectedTasks.length > 0 && selectedTasks.every((t) => t.done);
+
+  const toggleSelect = useCallback((id: number) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const runBatch = useCallback(
+    async (label: string, action: (sel: TodoTask[]) => Promise<unknown>) => {
+      const sel = selectedTasks;
+      if (sel.length === 0 || batchBusy) return;
+      setBatchBusy(true);
+      try {
+        await action(sel);
+        void qc.invalidateQueries({ queryKey: ["todo_tasks"] });
+        toast.success(`已批量${label} ${sel.length} 条任务`, { description: "Ctrl+Z 可撤销" });
+      } catch (e) {
+        console.error("批量操作失败:", e);
+        toast.error(`批量${label}失败，已完成的条目不回滚`);
+      } finally {
+        setBatchBusy(false);
+        setSelected(new Set());
+      }
+    },
+    [selectedTasks, batchBusy, qc],
+  );
   // PointerSensor distance:5（04 §3.3：位移 5px 内不算拖拽，保证点击）
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -237,7 +299,7 @@ export function KanbanView({ tasks, projects, groupBy, labelsByTask, remindersBy
   return (
     <div
       className={cn(
-        "min-h-0 flex-1",
+        "relative min-h-0 flex-1",
         draggingId != null ? "overflow-x-hidden" : "overflow-x-auto",
       )}
     >
@@ -260,9 +322,117 @@ export function KanbanView({ tasks, projects, groupBy, labelsByTask, remindersBy
               dragEndStamp={dragEndStamp}
               onOpenDetail={openDetail}
               sortable={sortable}
+              selected={selected}
+              hasSelection={selected.size > 0}
+              onToggleSelect={toggleSelect}
+              onClearSelection={() => setSelected(new Set())}
             />
           ))}
         </div>
+
+        {/* 多选批量工具条（与列表视图同款浮动形制；不含移动项目——
+            看板拖拽本身就是移动入口，工具条里再放一次反而冗余） */}
+        {selected.size > 0 && (
+          <div
+            role="toolbar"
+            aria-label={`已选中 ${selected.size} 条任务的批量操作`}
+            className="absolute bottom-4 left-1/2 z-20 flex -translate-x-1/2 items-center gap-0.5 rounded-lg border bg-background px-2 py-1.5 shadow-lg"
+          >
+            <span className="px-2 text-sm text-muted-foreground tabular-nums" aria-live="polite">
+              已选 {selected.size} 条
+            </span>
+            <span className="mx-1 h-4 w-px bg-border" />
+            {(
+              [
+                {
+                  label: allDoneSelected ? "标记未完成" : "标记完成",
+                  icon: allDoneSelected ? CircleCheck : Check,
+                  run: () =>
+                    runBatch("标记完成", (sel) =>
+                      batchUpdateStatus(
+                        sel,
+                        allDoneSelected
+                          ? { done: 0, done_at: null, status: "pending" }
+                          : { done: 1, done_at: Date.now(), status: "done" },
+                      ),
+                    ),
+                },
+                {
+                  label: allDoneSelected ? "移回待办" : "移入进行中",
+                  icon: FolderInput,
+                  run: () =>
+                    runBatch(allDoneSelected ? "移回待办" : "移入进行中", (sel) =>
+                      batchUpdateStatus(sel, allDoneSelected ? { status: "pending" } : { status: "doing" }),
+                    ),
+                },
+                { label: "加入我的一天", icon: Sunrise, run: () => runBatch("加入我的一天", (sel) => batchUpdateMyDay(sel, true)) },
+                { label: "收藏", icon: Star, run: () => runBatch("收藏", (sel) => batchUpdateFavorite(sel, true)) },
+                { label: "取消收藏", icon: StarOff, run: () => runBatch("取消收藏", (sel) => batchUpdateFavorite(sel, false)) },
+              ] as const
+            ).map(({ label, icon: Icon, run }) => (
+              <Tooltip key={label}>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8"
+                    aria-label={label}
+                    disabled={batchBusy}
+                    onClick={() => void run()}
+                  >
+                    <Icon size={14} />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>{label}</TooltipContent>
+              </Tooltip>
+            ))}
+            <DropdownMenu>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="icon" className="h-8 w-8" aria-label="批量改期" disabled={batchBusy}>
+                      <Calendar size={14} />
+                    </Button>
+                  </DropdownMenuTrigger>
+                </TooltipTrigger>
+                <TooltipContent>批量改期</TooltipContent>
+              </Tooltip>
+              <DropdownMenuContent align="center">
+                <DropdownMenuItem onSelect={() => void runBatch("改期到今天", (sel) => batchSetDueDate(sel, "today"))}>今天</DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => void runBatch("改期到明天", (sel) => batchSetDueDate(sel, "tomorrow"))}>明天</DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => void runBatch("改期到下周一", (sel) => batchSetDueDate(sel, "next_monday"))}>下周一</DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onSelect={() => void runBatch("清除截止", (sel) => batchSetDueDate(sel, "clear"))}>清除截止</DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <DropdownMenu>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="icon" className="h-8 w-8" aria-label="设置优先级" disabled={batchBusy}>
+                      <Flag size={14} />
+                    </Button>
+                  </DropdownMenuTrigger>
+                </TooltipTrigger>
+                <TooltipContent>设置优先级</TooltipContent>
+              </Tooltip>
+              <DropdownMenuContent align="center">
+                {PRIORITY_LABELS.map((label, lv) => (
+                  <DropdownMenuItem key={lv} onSelect={() => void runBatch("设置优先级", (sel) => batchUpdatePriority(sel, lv))}>
+                    <span className="flex w-4 shrink-0 items-center justify-center">
+                      <span className="h-2 w-2 rounded-full" style={{ backgroundColor: PRIORITY_COLOR[lv] }} />
+                    </span>
+                    {label}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <span className="mx-1 h-4 w-px bg-border" />
+            <Button variant="ghost" size="icon" className="h-8 w-8" aria-label="退出多选" onClick={() => setSelected(new Set())}>
+              <X size={14} />
+            </Button>
+          </div>
+        )}
 
         <DragOverlay dropAnimation={null}>
           {draggingTask ? (
@@ -297,6 +467,10 @@ const KanbanColumn = memo(function KanbanColumn({
   dragEndStamp,
   onOpenDetail,
   sortable,
+  selected,
+  hasSelection,
+  onToggleSelect,
+  onClearSelection,
 }: {
   column: ColumnDef;
   tasks: TodoTask[];
@@ -309,6 +483,12 @@ const KanbanColumn = memo(function KanbanColumn({
   onOpenDetail: (id: number) => void;
   /** 仅拖拽顺序档允许拖拽（#26）；跨列移动始终可用 */
   sortable: boolean;
+  /** 多选态（P2 扩展：看板对齐列表/表格） */
+  selected: Set<number>;
+  hasSelection: boolean;
+  onToggleSelect: (id: number) => void;
+  /** Escape 退选全部（选中态下；透传卡片） */
+  onClearSelection: () => void;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: `col:${column.key}` });
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -380,6 +560,10 @@ const KanbanColumn = memo(function KanbanColumn({
                       dragEndStamp={dragEndStamp}
                       onOpenDetail={onOpenDetail}
                       sortable={sortable}
+                      selected={selected.has(t.id)}
+                      hasSelection={hasSelection}
+                      onToggleSelect={onToggleSelect}
+                      onClearSelection={onClearSelection}
                     />
                   </TaskContextMenu>
                 </div>
@@ -402,7 +586,11 @@ const KanbanCard = memo(function KanbanCard({
   overlay,
   dragEndStamp,
   onOpenDetail,
+  onToggleSelect,
+  onClearSelection,
   sortable = true,
+  selected = false,
+  hasSelection = false,
 }: {
   task: TodoTask;
   labels: TodoLabel[];
@@ -413,8 +601,15 @@ const KanbanCard = memo(function KanbanCard({
   /** 拖拽结束时间戳 ref（overlay 不需要） */
   dragEndStamp?: React.RefObject<number>;
   onOpenDetail?: (id: number) => void;
+  /** 多选勾选切换（P2 扩展；overlay 卡片不传） */
+  onToggleSelect?: (id: number) => void;
+  /** Escape 退选全部（选中态下） */
+  onClearSelection?: () => void;
   /** 仅拖拽顺序档可拖（#26）；跨列移动的落点仍注册（droppable 不受影响） */
   sortable?: boolean;
+  selected?: boolean;
+  /** 任一卡片被选中时，卡片点击语义切换为「切换勾选」（与列表行一致） */
+  hasSelection?: boolean;
 }) {
   const draggable = useDraggable({ id: `task:${task.id}`, disabled: !!overlay || !sortable });
   const { setNodeRef: setDropRef, isOver } = useDroppable({ id: `task:${task.id}` });
@@ -438,15 +633,31 @@ const KanbanCard = memo(function KanbanCard({
       onClick={() => {
         // 拖拽松手后的 click 不视为点击打开详情
         if (dragEndStamp && Date.now() - dragEndStamp.current < 250) return;
-        if (!overlay && !dragging) onOpenDetail?.(task.id);
+        if (overlay || dragging) return;
+        // 有选择态时点击 = 切换勾选（与列表行/竞品一致）；否则打开详情
+        if (hasSelection) onToggleSelect?.(task.id);
+        else onOpenDetail?.(task.id);
       }}
       onKeyDown={(e) => {
         // 键盘可达（H4，与列表/表格行同口径）：焦点在卡片容器时
-        // Enter/Space 打开详情；焦点已在内层控件上则保留其原生行为
+        // Enter/Space 打开详情；焦点已在内层控件上则保留其原生行为。
+        // x 键切选中（Linear 同款）；Escape 在选中态下退选全部
         if (e.nativeEvent.isComposing) return;
-        if (e.target === e.currentTarget && isListActivationKey(e.key)) {
+        if (e.target !== e.currentTarget) return;
+        if (isListActivationKey(e.key)) {
           e.preventDefault();
-          if (!overlay && !dragging) onOpenDetail?.(task.id);
+          if (overlay || dragging) return;
+          if (hasSelection) onToggleSelect?.(task.id);
+          else onOpenDetail?.(task.id);
+          return;
+        }
+        if (e.key === "x" || e.key === "X") {
+          e.preventDefault();
+          onToggleSelect?.(task.id);
+        }
+        if (e.key === "Escape" && hasSelection) {
+          e.preventDefault();
+          onClearSelection?.();
         }
       }}
       className={cn(
@@ -457,6 +668,7 @@ const KanbanCard = memo(function KanbanCard({
         isOver && !dragging && "ring-2 ring-primary/40",
         overlay && "border-primary/40 shadow-xl",
         overlay && "cursor-grabbing",
+        selected && "bg-primary/5 ring-1 ring-inset ring-primary/40",
       )}
     >
       {/* 优先级条（卡片顶部 2px）：六档全显——P0「无」浅灰 #D1D5DB 也参与 */}
@@ -465,8 +677,31 @@ const KanbanCard = memo(function KanbanCard({
         style={{ background: PRIORITY_COLOR[task.priority] }}
       />
 
-      {/* 标题行：完成勾 + 标题 + 星标 */}
+      {/* 标题行：选中勾 + 完成勾 + 标题 + 星标 */}
       <div className="flex items-start gap-1.5">
+        {/* 多选勾选圈（P2 扩展）：hover / 选中态显现；点选切换 */}
+        {!overlay && (
+          <button
+            type="button"
+            aria-label={selected ? "取消选中" : "选中任务"}
+            aria-checked={selected}
+            role="checkbox"
+            className={cn(
+              "mt-0.5 h-5 w-5 shrink-0 rounded border-2 transition-colors",
+              selected
+                ? "border-primary bg-primary"
+                : "border-muted-foreground/30 opacity-0 hover:opacity-100 focus-visible:opacity-100",
+              (hasSelection || selected) && "opacity-100",
+              "group-hover:opacity-100 focus-visible:outline-none",
+            )}
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleSelect?.(task.id);
+            }}
+          >
+            {selected ? <CheckSvg /> : null}
+          </button>
+        )}
         {/* 完成 checkbox（M5，与列表/表格同款圆环）：卡片正面直接入口，
             不必右键菜单绕一圈 */}
         <button

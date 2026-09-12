@@ -424,8 +424,7 @@ describe("filterTasks - hideDone 隐藏已完成（Logbook 治理）", () => {
 });
 
 describe("groupDoneByDay 完成日分组（Logbook 数据源）", () => {
-  // 固定时区安全基准：本地 2026-09-10 / 09-12（避免跨时区 CI 漂移用本地构造）
-  const d10 = new Date(2026, 8, 10);
+  // 固定时区安全基准：本地 2026-09-12（避免跨时区 CI 漂移用本地构造）
   const d12 = new Date(2026, 8, 12);
   const ms10 = (h: number) => new Date(2026, 8, 10, h).getTime();
   const ms12 = (h: number) => new Date(2026, 8, 12, h).getTime();

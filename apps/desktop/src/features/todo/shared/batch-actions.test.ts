@@ -21,7 +21,7 @@ vi.mock("sonner", () => ({
   toast: { warning: vi.fn(), success: vi.fn(), error: vi.fn() },
 }));
 
-import { batchUpdate, batchUpdateStatus } from "./batch-actions";
+import { batchDuePresetDate, batchSetDueDate, batchUpdate, batchUpdateStatus } from "./batch-actions";
 import type { TodoTask } from "@/lib/tauri";
 
 function task(id: number, over: Partial<TodoTask> = {}): TodoTask {
@@ -124,5 +124,60 @@ describe("batchUpdateStatus", () => {
     const failed = await batchUpdateStatus([task(1), task(2), task(3)], { done: 1, done_at: 0, status: "done" });
     expect(failed).toBe(1);
     expect(toast.warning).toHaveBeenCalledWith("批量更新状态：3 条中 1 条失败");
+  });
+});
+
+describe("batchDuePresetDate", () => {
+  it("today/tomorrow/clear 档位输出（clear = null）", () => {
+    const now = new Date(2026, 8, 12, 15, 30); // 周六
+    expect(batchDuePresetDate("today", now)?.getDate()).toBe(12);
+    expect(batchDuePresetDate("tomorrow", now)?.getDate()).toBe(13);
+    expect(batchDuePresetDate("clear", now)).toBeNull();
+  });
+
+  it("next_monday：周一~周日都锚下一周一（周一起始周）", () => {
+    // 周六（2026-09-12）→ 下周一 09-14；周一（09-07）→ 下周一 09-14
+    expect(batchDuePresetDate("next_monday", new Date(2026, 8, 12))?.getDate()).toBe(14);
+    expect(batchDuePresetDate("next_monday", new Date(2026, 8, 7))?.getDate()).toBe(14);
+  });
+});
+
+describe("batchSetDueDate", () => {
+  it("按档位换日期：保留原时分秒（rescheduleDue 同口径）", async () => {
+    updateMock.mockResolvedValue(undefined);
+    // 原截止 2026-09-01 14:30；tomorrow 档以运行时今天为基准 → 明天 14:30
+    const due = new Date(2026, 8, 1, 14, 30).getTime();
+    await batchSetDueDate([task(1, { due_date: due })], "tomorrow");
+    const expected = (() => {
+      const now = new Date();
+      const t = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+      t.setHours(14, 30, 0, 0);
+      return t.getTime();
+    })();
+    expect(updateMock).toHaveBeenCalledWith(1, { due_date: expected });
+  });
+
+  it("clear 档写 null 清除截止；已无截止条目幂等跳过", async () => {
+    updateMock.mockResolvedValue(undefined);
+    await batchSetDueDate([task(1, { due_date: 100 }), task(2, { due_date: null })], "clear");
+    expect(updateMock).toHaveBeenCalledTimes(1);
+    expect(updateMock).toHaveBeenCalledWith(1, { due_date: null });
+  });
+
+  it("同日档位无变化跳过写库", async () => {
+    updateMock.mockResolvedValue(undefined);
+    const today = new Date();
+    today.setHours(18, 0, 0, 0);
+    await batchSetDueDate([task(1, { due_date: today.getTime() })], "today");
+    expect(updateMock).not.toHaveBeenCalled();
+  });
+
+  it("条目失败不中断并弹 warning", async () => {
+    updateMock.mockImplementation(async (id) => {
+      if (id === 1) throw new Error("boom");
+    });
+    const failed = await batchSetDueDate([task(1), task(2)], "tomorrow");
+    expect(failed).toBe(1);
+    expect(toast.warning).toHaveBeenCalledWith("批量改期：2 条中 1 条失败");
   });
 });

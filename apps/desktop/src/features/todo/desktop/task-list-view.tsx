@@ -31,7 +31,7 @@ import {
   type DragStartEvent,
 } from "@dnd-kit/core";
 import {
-  ListChecks, Check, CircleCheck, Clock, Flag, FolderInput, GripVertical, Inbox, Plus, Star, StarOff, Sunrise, Trash2, TriangleAlert, X } from "lucide-react";
+  ListChecks, Check, CircleCheck, CalendarClock, Clock, Flag, FolderInput, GripVertical, Inbox, Plus, Star, StarOff, Sunrise, Trash2, TriangleAlert, X } from "lucide-react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { toast } from "sonner";
 
@@ -63,7 +63,7 @@ import { completeTask } from "../shared/task-actions";
 import { groupOverdueFirst, todayStartMs, toggleMyDayValue } from "../shared/task-filters";
 import { isListActivationKey, listNavDirection } from "../shared/list-keyboard";
 import { midpoint } from "../shared/position";
-import { batchUpdateStatus, batchUpdatePriority, batchUpdateFavorite, batchMoveToProject, batchUpdateMyDay } from "../shared/batch-actions";
+import { batchSetDueDate, batchUpdateStatus, batchUpdatePriority, batchUpdateFavorite, batchMoveToProject, batchUpdateMyDay } from "../shared/batch-actions";
 import { useUndoableDeleteAction, hideManyFromQueries } from "@/hooks/use-undoable-delete";
 import { todoTaskDelete, todoTaskUpdate, todoTaskUpdatePosition, type TodoLabel, type TodoProject, type TodoTask } from "@/lib/tauri";
 import { FAVORITE_COLOR, OVERDUE_COLOR_CLASS, PRIORITY_COLOR, PRIORITY_LABELS, TODO_ACCENT, MY_DAY_COLOR } from "../shared/constants";
@@ -372,6 +372,7 @@ export function TaskListView({ tasks, projects, labelsByTask, remindersByTask, l
               else onOpenDetail(t.id);
             }}
             onToggleSelect={(shift) => toggleSelect(t.id, shift)}
+            onClearSelection={clearSelection}
             onFocusMove={(dir) => focusRow(vi.index + (dir === "down" ? 1 : -1))}
             onToggleDone={() => void completeTask(t)}
             onToggleFavorite={() => toggleFavorite(t)}
@@ -424,6 +425,7 @@ export function TaskListView({ tasks, projects, labelsByTask, remindersByTask, l
                     else onOpenDetail(t.id);
                   }}
                   onToggleSelect={(shift) => toggleSelect(t.id, shift)}
+                  onClearSelection={clearSelection}
                   onFocusMove={() => {}}
                   onToggleDone={() => void completeTask(t)}
                   onToggleFavorite={() => toggleFavorite(t)}
@@ -522,6 +524,27 @@ export function TaskListView({ tasks, projects, labelsByTask, remindersByTask, l
                   {label}
                 </DropdownMenuItem>
               ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          {/* 批量改期：档位点选即执行（rescheduleDue 同口径换日期） */}
+          <DropdownMenu>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon" className="h-8 w-8" aria-label="批量改期" disabled={batchBusy}>
+                    <CalendarClock size={14} />
+                  </Button>
+                </DropdownMenuTrigger>
+              </TooltipTrigger>
+              <TooltipContent>批量改期</TooltipContent>
+            </Tooltip>
+            <DropdownMenuContent align="center">
+              <DropdownMenuItem onSelect={() => void runBatch("改期到今天", (sel) => batchSetDueDate(sel, "today"))}>今天</DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => void runBatch("改期到明天", (sel) => batchSetDueDate(sel, "tomorrow"))}>明天</DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => void runBatch("改期到下周一", (sel) => batchSetDueDate(sel, "next_monday"))}>下周一</DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onSelect={() => void runBatch("清除截止", (sel) => batchSetDueDate(sel, "clear"))}>清除截止</DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
 
@@ -673,6 +696,8 @@ interface TaskRowProps {
   onActivate: () => void;
   /** 勾选框点击（shift=true 为区间选锚点扩展） */
   onToggleSelect: (shift: boolean) => void;
+  /** Esc 选中态退选全部 */
+  onClearSelection: () => void;
   onFocusMove: (dir: "up" | "down") => void;
   onToggleDone: () => void;
   onToggleFavorite: () => void;
@@ -696,6 +721,7 @@ const TaskRow = memo(function TaskRow({
   registerRef,
   onActivate,
   onToggleSelect,
+  onClearSelection,
   onFocusMove,
   onToggleDone,
   onToggleFavorite,
@@ -731,6 +757,17 @@ const TaskRow = memo(function TaskRow({
       onClick={onActivate}
       onKeyDown={(e) => {
         if (e.nativeEvent.isComposing) return; // IME 组合期不响应
+        // x 键切选中（Linear 同款，P2 批量扩展）；Escape 选中态退选全部
+        if (e.target === e.currentTarget && (e.key === "x" || e.key === "X")) {
+          e.preventDefault();
+          onToggleSelect(false);
+          return;
+        }
+        if (e.target === e.currentTarget && e.key === "Escape" && hasSelection) {
+          e.preventDefault();
+          onClearSelection();
+          return;
+        }
         // 评审 C1 修复（与 Task 3 落地版一致）：焦点在内层控件上时保留其原生
         // Enter/Space 点击；仅当焦点在本行容器时才拦截为打开详情。j/k 冒泡可用。
         if (e.target === e.currentTarget && isListActivationKey(e.key)) {

@@ -23,6 +23,7 @@ import {
 } from "@/lib/tauri";
 import {
   batchMoveToProject,
+  batchSetDueDate,
   batchUpdateFavorite,
   batchUpdateMyDay,
   batchUpdatePriority,
@@ -245,6 +246,25 @@ export default function TaskTableView({
           >
             设为高优先级
           </button>
+          <select
+            aria-label="批量改期"
+            className="rounded bg-transparent px-2 py-1 text-sm hover:bg-accent"
+            defaultValue=""
+            onChange={(e) => {
+              const preset = e.target.value as "today" | "tomorrow" | "next_monday" | "clear";
+              if (!preset) return;
+              e.target.value = "";
+              void runBatch("批量改期", (sel) => batchSetDueDate(sel, preset));
+            }}
+          >
+            <option value="" disabled>
+              改期…
+            </option>
+            <option value="today">改到今天</option>
+            <option value="tomorrow">改到明天</option>
+            <option value="next_monday">改到下周一</option>
+            <option value="clear">清除截止</option>
+          </select>
           <button
             type="button"
             className="rounded px-2 py-1 hover:bg-accent"
@@ -343,6 +363,17 @@ export default function TaskTableView({
                   onClick={() => onOpenDetail(t.id)}
                   onKeyDown={(e) => {
                     if (e.nativeEvent.isComposing) return;
+                    // x 键切选中（Linear 同款，三视图一致）；Esc 选中态退选全部
+                    if (e.target === e.currentTarget && (e.key === "x" || e.key === "X")) {
+                      e.preventDefault();
+                      toggleSelect(t.id, false);
+                      return;
+                    }
+                    if (e.target === e.currentTarget && e.key === "Escape" && selected.size > 0) {
+                      e.preventDefault();
+                      clearSelection();
+                      return;
+                    }
                     if (e.target === e.currentTarget && isListActivationKey(e.key)) {
                       e.preventDefault();
                       onOpenDetail(t.id);

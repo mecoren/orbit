@@ -615,3 +615,74 @@ test("Logbook：侧栏已完成按完成日分组回看（2026-09-12 完成治�
   await row.click();
   await expect(page.getByRole("dialog")).toBeVisible();
 });
+
+test("看板多选批量：勾选卡片 → 工具条 → 批量改期落库（2026-09-12 P2 扩展）", async ({ page }) => {
+  // seed 两条未完成任务
+  await page.evaluate(() => {
+    const m = (window as any).__orbitMock;
+    const mk = (title: string, position: number) => {
+      m.db.tasks.push({
+        id: m.db.seq++,
+        uuid: `kb-${position}`,
+        title,
+        description: null,
+        project_id: null,
+        priority: 2,
+        status: "pending",
+        done: 0,
+        done_at: null,
+        due_date: null,
+        start_date: null,
+        repeat_after: 0,
+        repeat_mode: 0,
+        percent_done: 0,
+        position,
+        is_favorite: 0,
+        my_day_date: null,
+        is_deleted: 0,
+        created_at: Date.now(),
+        updated_at: Date.now(),
+        deleted_at: null,
+        version: 1,
+      });
+    };
+    mk("看板批量-甲", 40);
+    mk("看板批量-乙", 41);
+    m.emitDbChange();
+  });
+  // 切看板视图
+  await page.getByRole("button", { name: "看板视图" }).click();
+  await expect(page.getByText("看板批量-甲")).toBeVisible();
+
+  // 勾选两张卡的多选圈 → 工具条浮现
+  const cardA = page.getByRole("button", { name: "未完成任务：看板批量-甲" });
+  const cardB = page.getByRole("button", { name: "未完成任务：看板批量-乙" });
+  await cardA.getByRole("checkbox", { name: "选中任务" }).click();
+  await cardB.getByRole("checkbox", { name: "选中任务" }).click();
+  await expect(page.getByText("已选 2 条")).toBeVisible();
+
+  // 批量改期 → 明天（rescheduleDue 口径：无截止 → 明天 18:00）
+  await page.getByRole("button", { name: "批量改期" }).click();
+  await page.getByRole("menuitem", { name: "明天" }).click();
+  await expect(page.getByText("已批量改期到明天 2 条任务")).toBeVisible({ timeout: 5_000 });
+
+  // 落库终态：两条 due_date 都为明天 18:00（本地日界）
+  const dues = await page.evaluate(() => {
+    const m = (window as any).__orbitMock;
+    return m.db.tasks
+      .filter((t: any) => t.title.startsWith("看板批量-"))
+      .map((t: any) => t.due_date);
+  });
+  const now = new Date();
+  const tomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 18, 0, 0, 0);
+  expect(dues).toHaveLength(2);
+  for (const d of dues) expect(d).toBe(tomorrow.getTime());
+
+  // x 键选中 + Esc 退选（键盘批量口径）
+  const cardC = page.getByRole("button", { name: "未完成任务：既有任务-今天截止" });
+  await cardC.focus();
+  await page.keyboard.press("x");
+  await expect(page.getByText("已选 1 条")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.getByText("已选 1 条")).toHaveCount(0);
+});

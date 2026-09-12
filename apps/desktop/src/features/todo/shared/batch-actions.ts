@@ -15,6 +15,7 @@ import {
   type TodoTaskUpdateInput,
 } from "@/lib/tauri";
 import { midpoint } from "./position";
+import { rescheduleDue } from "./reschedule-due";
 import { pushUndo } from "./undo-bridge";
 
 /** 逐条更新；返回失败条数。部分成功弹 warning（措辞由调用方语境补足） */
@@ -178,4 +179,66 @@ export async function batchMoveToProject(
       },
     });
   }
+}
+
+/** 批量改期目标档位（多选工具条下拉点选即执行；对齐 Linear 批量整理口径） */
+export type BatchDuePreset = "today" | "tomorrow" | "next_monday" | "clear";
+
+/** 档位 → 目标日（本地时区；clear 传 null 清除截止） */
+export function batchDuePresetDate(preset: BatchDuePreset, now = new Date()): Date | null {
+  const day = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  switch (preset) {
+    case "today":
+      return day;
+    case "tomorrow":
+      return new Date(day.getTime() + 24 * 3600_000);
+    case "next_monday": {
+      // 周一起始周（与周视图同口径）：周一~周日都锚下一周一
+      const offset = (8 - day.getDay()) % 7 || 7;
+      return new Date(day.getTime() + offset * 24 * 3600_000);
+    }
+    case "clear":
+      return null;
+  }
+}
+
+/** 批量改期：按档位换日期。时间语义对齐 rescheduleDue——原截止保留
+ *  时分秒（零点/无截止 → 18:00 归一口径）；clear 档写 null 清除截止。
+ *  撤销：恢复原 due_date。 */
+export async function batchSetDueDate(tasks: TodoTask[], preset: BatchDuePreset): Promise<number> {
+  const target = batchDuePresetDate(preset);
+  let failed = 0;
+  const changed: TodoTask[] = [];
+  const newDueById = new Map<number, number | null>();
+  for (const t of tasks) {
+    let next: number | null;
+    if (target == null) {
+      if (t.due_date == null) continue; // 已无截止，幂等跳过
+      next = null;
+    } else {
+      next = rescheduleDue(t.due_date, target);
+      if (next == null) continue; // 同日档位无变化，跳过写库
+    }
+    try {
+      await todoTaskUpdate(t.id, { due_date: next });
+      changed.push(t);
+      newDueById.set(t.id, next);
+    } catch (e) {
+      failed++;
+      console.error(`批量改期任务 ${t.id} 失败:`, e);
+    }
+  }
+  if (failed > 0) {
+    toast.warning(`批量改期：${tasks.length} 条中 ${failed} 条失败`);
+  }
+  if (changed.length > 0) {
+    pushUndo({
+      label: "批量改期",
+      count: changed.length,
+      undo: async () => {
+        await Promise.allSettled(changed.map((t) => todoTaskUpdate(t.id, { due_date: t.due_date })));
+      },
+    });
+  }
+  return failed;
 }

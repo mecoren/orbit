@@ -41,9 +41,11 @@ export const SHORTCUT_GROUPS: ShortcutGroup[] = [
   {
     title: "任务列表",
     entries: [
-      { keys: "j / ↓", action: "下移焦点（列表 / 表格视图）" },
-      { keys: "k / ↑", action: "上移焦点（列表 / 表格视图）" },
+      { keys: "j / ↓", action: "下移焦点（列表 / 看板 / 表格视图）" },
+      { keys: "k / ↑", action: "上移焦点（列表 / 看板 / 表格视图）" },
       { keys: "Enter / Space", action: "打开焦点任务详情" },
+      { keys: "x", action: "选中 / 取消选中焦点行或卡片（批量操作）" },
+      { keys: "Esc（多选中）", action: "退出多选（清空全部选中）" },
       { keys: "Shift+点击勾选框", action: "以上一次勾选为锚做区间多选" },
     ],
   },
