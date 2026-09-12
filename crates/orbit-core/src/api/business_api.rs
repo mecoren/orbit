@@ -507,9 +507,13 @@ pub struct GlobalSearchResult {
     pub comments: Vec<CommentSearchHit>,
 }
 
-/// 全局搜索：复用 generic_repo 同款 %kw% LIKE 口径，各表限 top limit 条。
-/// 评论经 JOIN todo_tasks 带出任务标题；任务按 updated_at DESC、
-/// 项目按 sort_order ASC（与各自列表页排序一致，保证命中顺序符合直觉）。
+/// 全局搜索（2026-09-12 批7 FTS 升级）：
+/// - 主路径：查询词 ≥3 字符（trigram 最小语素）走 FTS5 MATCH——索引检索
+///   替代 LIKE 全表扫；结果按 kind 分流 join 回源表（软删行已被触发器
+///   摘除索引，join 侧再带 is_deleted = 0 双保险）。子任务命中归并到
+///   主任务（task_id 列已在索引里）。
+/// - 兜底：短词（1-2 字符，trigram 不可用）或 FTS 查询异常（如引号语法）
+///   回退原三路 LIKE——中文两字词（如「评审」）是高频查询，兜底必须保。
 pub async fn search_all(
     pool: &SqlitePool,
     keyword: &str,
@@ -519,8 +523,134 @@ pub async fn search_all(
     if kw.is_empty() {
         return Ok(GlobalSearchResult::default());
     }
-    let pattern = format!("%{}%", kw);
     let limit = if limit <= 0 { 20 } else { limit };
+
+    // trigram 最小 3 字符（ASCII 字母数按 char_indices 计——中文 1 字 = 1 字符）
+    let use_fts = kw.chars().count() >= 3;
+
+    if use_fts {
+        if let Ok(r) = search_all_fts(pool, kw, limit).await {
+            return Ok(r);
+        }
+        // FTS 异常（语法字符/索引损坏）静默降级 LIKE——搜索永不因索引失败而不可用
+    }
+
+    search_all_like(pool, kw, limit).await
+}
+
+/// FTS 主路径：MATCH 命中 → 按 kind 分流回源表。
+/// MATCH 词做引号包裹的短语查询（精确子串语义，避免 OR 分词噪声）。
+async fn search_all_fts(
+    pool: &SqlitePool,
+    kw: &str,
+    limit: i32,
+) -> CoreResult<GlobalSearchResult> {
+    // 短语转义：查询词内的双引号移除（trigram 短语语法的合法输入）
+    let phrase = format!("\"{}\"", kw.replace('"', ""));
+
+    // kind ∈ {task, subtask, comment, project} 的命中行（外部内容表无 rowid 稳定序，
+    // bm25() 排序取相关度）
+    let hits: Vec<(String, i64)> = sqlx::query_as(
+        "SELECT kind, ref_id FROM fts_todo WHERE fts_todo MATCH ? ORDER BY bm25(fts_todo) LIMIT ?",
+    )
+    .bind(&phrase)
+    .bind(limit * 4) // 四源分摊上限（每路 limit 条的理论上限内截断）
+    .fetch_all(pool)
+    .await?;
+
+    let mut task_ids: Vec<i64> = Vec::new();
+    let mut project_ids: Vec<i64> = Vec::new();
+    let mut comment_ids: Vec<i64> = Vec::new();
+    for (kind, ref_id) in &hits {
+        match kind.as_str() {
+            "task" => task_ids.push(*ref_id),
+            "subtask" => {
+                // 子任务命中归并主任务：task_id 在索引行上（ref_id 是子任务行 id）
+                let tid: Option<i64> = sqlx::query_scalar(
+                    "SELECT task_id FROM fts_todo WHERE kind = 'subtask' AND ref_id = ?",
+                )
+                .bind(ref_id)
+                .fetch_optional(pool)
+                .await?;
+                if let Some(tid) = tid {
+                    task_ids.push(tid);
+                }
+            }
+            "comment" => comment_ids.push(*ref_id),
+            "project" => project_ids.push(*ref_id),
+            _ => {}
+        }
+    }
+    task_ids.dedup();
+    project_ids.dedup();
+    comment_ids.dedup();
+    task_ids.truncate(limit as usize);
+    project_ids.truncate(limit as usize);
+    comment_ids.truncate(limit as usize);
+
+    let tasks = if task_ids.is_empty() {
+        Vec::new()
+    } else {
+        let placeholders = vec!["?"; task_ids.len()].join(",");
+        let sql = format!(
+            "SELECT * FROM todo_tasks WHERE is_deleted = 0 AND id IN ({placeholders}) \
+             ORDER BY updated_at DESC"
+        );
+        let mut q = sqlx::query_as::<_, TodoTask>(&sql);
+        for id in &task_ids {
+            q = q.bind(id);
+        }
+        q.fetch_all(pool).await?
+    };
+
+    let projects = if project_ids.is_empty() {
+        Vec::new()
+    } else {
+        let placeholders = vec!["?"; project_ids.len()].join(",");
+        let sql = format!(
+            "SELECT * FROM todo_projects WHERE is_deleted = 0 AND id IN ({placeholders}) \
+             ORDER BY sort_order ASC, id ASC"
+        );
+        let mut q = sqlx::query_as::<_, TodoProject>(&sql);
+        for id in &project_ids {
+            q = q.bind(id);
+        }
+        q.fetch_all(pool).await?
+    };
+
+    let comments = if comment_ids.is_empty() {
+        Vec::new()
+    } else {
+        let placeholders = vec!["?"; comment_ids.len()].join(",");
+        let sql = format!(
+            "SELECT c.id AS comment_id, c.task_id AS task_id, \
+                    t.title AS task_title, c.content AS content, c.created_at AS created_at \
+             FROM todo_comments c \
+             JOIN todo_tasks t ON t.id = c.task_id AND t.is_deleted = 0 \
+             WHERE c.is_deleted = 0 AND c.id IN ({placeholders}) \
+             ORDER BY c.created_at DESC"
+        );
+        let mut q = sqlx::query_as::<_, CommentSearchHit>(&sql);
+        for id in &comment_ids {
+            q = q.bind(id);
+        }
+        q.fetch_all(pool).await?
+    };
+
+    Ok(GlobalSearchResult {
+        tasks,
+        projects,
+        comments,
+    })
+}
+
+/// LIKE 兜底路径（原三路实现原样保留——短词与 FTS 异常的最终保障）
+async fn search_all_like(
+    pool: &SqlitePool,
+    kw: &str,
+    limit: i32,
+) -> CoreResult<GlobalSearchResult> {
+    let pattern = format!("%{}%", kw);
 
     let tasks = sqlx::query_as::<_, TodoTask>(
         "SELECT * FROM todo_tasks \
@@ -567,6 +697,127 @@ pub async fn search_all(
 #[cfg(test)]
 mod global_search_tests {
     use super::*;
+
+    // ---------- FTS5 升级集成测试（2026-09-12 批7）----------
+
+    async fn fts_setup_db() -> SqlitePool {
+        let pool = sqlx::SqlitePool::connect("sqlite::memory:").await.unwrap();
+        sqlx::migrate!("./src/db/migrations")
+            .run(&pool)
+            .await
+            .unwrap();
+        pool
+    }
+
+    /// 中文短语（≥3 字）走 FTS MATCH 命中任务标题
+    #[tokio::test]
+    async fn fts_chinese_phrase_hits_task_title() {
+        let pool = fts_setup_db().await;
+        create_todo_task(
+            &pool,
+            &TodoTaskCreateInput {
+                title: "完成移动端重构方案评审".into(),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+        create_todo_task(
+            &pool,
+            &TodoTaskCreateInput {
+                title: "无关任务".into(),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+
+        let r = search_all(&pool, "移动端重构", 20).await.unwrap();
+        assert_eq!(r.tasks.len(), 1);
+        assert_eq!(r.tasks[0].title, "完成移动端重构方案评审");
+    }
+
+    /// 短词（<3 字符）回退 LIKE：中文两字词仍可搜
+    #[tokio::test]
+    async fn short_keyword_falls_back_to_like() {
+        let pool = fts_setup_db().await;
+        create_todo_task(
+            &pool,
+            &TodoTaskCreateInput {
+                title: "评审会议纪要".into(),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+        let r = search_all(&pool, "评审", 20).await.unwrap();
+        assert_eq!(r.tasks.len(), 1);
+    }
+
+    /// 子任务命中归并到主任务
+    #[tokio::test]
+    async fn subtask_hit_merges_into_main_task() {
+        let pool = fts_setup_db().await;
+        let t = create_todo_task(
+            &pool,
+            &TodoTaskCreateInput {
+                title: "主任务标题不含关键词".into(),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+        let s = create_todo_subtask(
+            &pool,
+            &TodoSubtaskCreateInput {
+                task_id: t.id,
+                title: "整理移动端重构清单".into(),
+                position: None,
+            },
+        )
+        .await
+        .unwrap();
+        let _ = s;
+
+        let r = search_all(&pool, "移动端重构清单", 20).await.unwrap();
+        assert!(r.tasks.iter().any(|x| x.id == t.id), "子任务命中应归并主任务");
+    }
+
+    /// 软删任务从索引摘除（回收站行不参与搜索）
+    #[tokio::test]
+    async fn soft_deleted_task_dropped_from_index() {
+        let pool = fts_setup_db().await;
+        let t = create_todo_task(
+            &pool,
+            &TodoTaskCreateInput {
+                title: "待删除的移动端重构任务".into(),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+        delete_todo_task(&pool, t.id).await.unwrap();
+        let r = search_all(&pool, "移动端重构", 20).await.unwrap();
+        assert!(r.tasks.is_empty());
+    }
+
+    /// 描述正文 FTS 命中 + 评论正文命中
+    #[tokio::test]
+    async fn description_and_comment_hits() {
+        let pool = fts_setup_db().await;
+        create_todo_task(
+            &pool,
+            &TodoTaskCreateInput {
+                title: "普通标题".into(),
+                description: Some("正文包含采购露营物资细节".into()),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+        let r = search_all(&pool, "露营物资细节", 20).await.unwrap();
+        assert_eq!(r.tasks.len(), 1);
+    }
 
     /// serde 往返：字段保持 snake_case（前端 typed invoke 依赖该形状）
     #[test]

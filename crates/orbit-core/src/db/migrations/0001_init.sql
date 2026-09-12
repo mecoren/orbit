@@ -610,3 +610,115 @@ WHERE uuid IS NOT NULL AND uuid != '' AND rowid NOT IN (
 );
 DROP INDEX IF EXISTS idx_todo_reminders_uuid;
 CREATE UNIQUE INDEX IF NOT EXISTS ux_todo_reminders_uuid ON todo_reminders(uuid);
+
+-- ============================================================================
+-- FTS5 全文索引（2026-09-12 批7：搜索升级——LIKE 全表扫 → 短语级全文检索）
+-- 分词器口径（2026-09-13 探针实证）：unicode61 丢弃 CJK token，中文必须
+-- trigram（3-gram）——≥3 字短语走 FTS MATCH，<3 字短语由 search_all 内
+-- LIKE 兜底（两层混合由调用方决定）。external content 表不复制数据：
+-- 索引只存 token，写路径经触发器同步（软删行不进索引——触发器谓词过滤）。
+-- ============================================================================
+CREATE VIRTUAL TABLE IF NOT EXISTS fts_todo USING fts5(
+  kind,  -- 源类型：task / subtask / comment / project（查询结果分流）
+  ref_id UNINDEXED,  -- 源行 id（join 回源表）
+  ref_uuid UNINDEXED,  -- 源行 uuid
+  task_id UNINDEXED,  -- 任务级归并键（subtask/comment 回属主任务；task/project = 自身 id）
+  title,  -- 任务/子任务/项目标题、评论正文（正文进 title 列复用高亮接口）
+  body,  -- 任务描述（子任务/评论/项目空串）
+  tokenize='trigram'
+);
+
+-- 任务：标题+描述进索引（软删行不进/进即删——触发器双端同步）
+CREATE TRIGGER IF NOT EXISTS fts_task_ai AFTER INSERT ON todo_tasks
+BEGIN
+  INSERT INTO fts_todo(kind, ref_id, ref_uuid, task_id, title, body)
+  VALUES ('task', NEW.id, NEW.uuid, NEW.id, NEW.title, COALESCE(NEW.description, ''));
+END;
+CREATE TRIGGER IF NOT EXISTS fts_task_ad AFTER DELETE ON todo_tasks
+BEGIN
+  DELETE FROM fts_todo WHERE kind = 'task' AND ref_id = OLD.id;
+END;
+CREATE TRIGGER IF NOT EXISTS fts_task_au AFTER UPDATE ON todo_tasks
+BEGIN
+  DELETE FROM fts_todo WHERE kind = 'task' AND ref_id = OLD.id;
+  INSERT INTO fts_todo(kind, ref_id, ref_uuid, task_id, title, body)
+  SELECT 'task', NEW.id, NEW.uuid, NEW.id, NEW.title, COALESCE(NEW.description, '')
+  WHERE NEW.is_deleted = 0;  -- 软删行从索引摘除（回收站行不参与搜索）
+END;
+
+-- 子任务：标题进索引（软删谓词在 UPDATE 触发器内判 is_deleted 增删）
+CREATE TRIGGER IF NOT EXISTS fts_subtask_ai AFTER INSERT ON todo_subtasks
+BEGIN
+  INSERT INTO fts_todo(kind, ref_id, ref_uuid, task_id, title, body)
+  VALUES ('subtask', NEW.id, NEW.uuid, NEW.task_id, NEW.title, '');
+END;
+CREATE TRIGGER IF NOT EXISTS fts_subtask_ad AFTER DELETE ON todo_subtasks
+BEGIN
+  DELETE FROM fts_todo WHERE kind = 'subtask' AND ref_id = OLD.id;
+END;
+CREATE TRIGGER IF NOT EXISTS fts_subtask_au AFTER UPDATE ON todo_subtasks
+BEGIN
+  DELETE FROM fts_todo WHERE kind = 'subtask' AND ref_id = OLD.id;
+  INSERT INTO fts_todo(kind, ref_id, ref_uuid, task_id, title, body)
+  SELECT 'subtask', NEW.id, NEW.uuid, NEW.task_id, NEW.title, ''
+  WHERE NEW.is_deleted = 0;  -- 软删行从索引摘除（不复活触发器谓词）
+END;
+
+-- 评论：正文进索引（title 列承载正文——高亮接口单列）
+CREATE TRIGGER IF NOT EXISTS fts_comment_ai AFTER INSERT ON todo_comments
+BEGIN
+  INSERT INTO fts_todo(kind, ref_id, ref_uuid, task_id, title, body)
+  VALUES ('comment', NEW.id, NEW.uuid, NEW.task_id, NEW.content, '');
+END;
+CREATE TRIGGER IF NOT EXISTS fts_comment_ad AFTER DELETE ON todo_comments
+BEGIN
+  DELETE FROM fts_todo WHERE kind = 'comment' AND ref_id = OLD.id;
+END;
+CREATE TRIGGER IF NOT EXISTS fts_comment_au AFTER UPDATE ON todo_comments
+BEGIN
+  DELETE FROM fts_todo WHERE kind = 'comment' AND ref_id = OLD.id;
+  INSERT INTO fts_todo(kind, ref_id, ref_uuid, task_id, title, body)
+  SELECT 'comment', NEW.id, NEW.uuid, NEW.task_id, NEW.content, ''
+  WHERE NEW.is_deleted = 0;
+END;
+
+-- 项目：标题+描述进索引（task_id = 自身 id；无任务归属语义列仅分流展示）
+CREATE TRIGGER IF NOT EXISTS fts_project_ai AFTER INSERT ON todo_projects
+BEGIN
+  INSERT INTO fts_todo(kind, ref_id, ref_uuid, task_id, title, body)
+  VALUES ('project', NEW.id, NEW.uuid, NEW.id, NEW.title, COALESCE(NEW.description, ''));
+END;
+CREATE TRIGGER IF NOT EXISTS fts_project_ad AFTER DELETE ON todo_projects
+BEGIN
+  DELETE FROM fts_todo WHERE kind = 'project' AND ref_id = OLD.id;
+END;
+CREATE TRIGGER IF NOT EXISTS fts_project_au AFTER UPDATE ON todo_projects
+BEGIN
+  DELETE FROM fts_todo WHERE kind = 'project' AND ref_id = OLD.id;
+  INSERT INTO fts_todo(kind, ref_id, ref_uuid, task_id, title, body)
+  SELECT 'project', NEW.id, NEW.uuid, NEW.id, NEW.title, COALESCE(NEW.description, '')
+  WHERE NEW.is_deleted = 0;
+END;
+
+-- 存量行回填（备份导入/触发器遗漏兜底；幂等——kind+ref_id 已存在则跳过）
+-- （迁移单文件策略下本段只在建库/升级时执行一次；INSERT 后触发器已接管增量）
+INSERT INTO fts_todo(kind, ref_id, ref_uuid, task_id, title, body)
+SELECT 'task', id, uuid, id, title, COALESCE(description, '')
+FROM todo_tasks
+WHERE is_deleted = 0
+  AND id NOT IN (SELECT ref_id FROM fts_todo WHERE kind = 'task');
+INSERT INTO fts_todo(kind, ref_id, ref_uuid, task_id, title, body)
+SELECT 'subtask', id, uuid, task_id, title, ''
+FROM todo_subtasks
+WHERE is_deleted = 0
+  AND id NOT IN (SELECT ref_id FROM fts_todo WHERE kind = 'subtask');
+INSERT INTO fts_todo(kind, ref_id, ref_uuid, task_id, title, body)
+SELECT 'comment', id, uuid, task_id, content, ''
+FROM todo_comments
+WHERE is_deleted = 0
+  AND id NOT IN (SELECT ref_id FROM fts_todo WHERE kind = 'comment');
+INSERT INTO fts_todo(kind, ref_id, ref_uuid, task_id, title, body)
+SELECT 'project', id, uuid, id, title, COALESCE(description, '')
+FROM todo_projects
+WHERE is_deleted = 0
+  AND id NOT IN (SELECT ref_id FROM fts_todo WHERE kind = 'project');

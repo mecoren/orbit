@@ -7,6 +7,15 @@
 
 ## [Unreleased]
 
+### FTS5 全文索引：搜索从 LIKE 全表扫升级为短语级全文检索
+
+批 7a（探针报告 F8 落地）——前期实证先行：运行时探针证实 bundled sqlite 带 FTS5 但 **unicode61 分词器丢弃 CJK token**（单字都不命中），中文搜索必须 **trigram 分词器**（3-gram 短语精确命中）——这一分词事实是方案根基，python sqlite 3.49 对照验证。
+
+- **索引层**：0001 迁移新增 `fts_todo` external-content FTS5 虚表（trigram 分词；kind/ref_id/ref_uuid/task_id UNINDEXED + title/body 索引列），12 个触发器同步四源（任务标题+描述 / 子任务标题 / 评论正文 / 项目标题+描述），软删行经 UPDATE 触发器谓词从索引摘除（回收站行不参与搜索）；存量行幂等回填四段（备份导入兜底）。**FTS 虚表不可建普通索引**（迁移实证，rank 排序天然小结果集无需二级索引）。
+- **查询层**：`search_all` 双路径——查询词 ≥3 字符走 MATCH 短语查询（bm25 相关度排序，子任务命中归并主任务，四源分流 join 回源表带软删双保险）；短词（中文两字高频如「评审」）与 FTS 异常静默降级原三路 LIKE——**搜索永不因索引失败而不可用**。返回结构不变（双端零改动）。
+- 顺修触发器 SQL 语义坑：AFTER DELETE 集合删除下 `NEW` 不可用必须 `OLD`（trash purge 集合式 DELETE 路径实测暴露）。
+- 测试：FTS 探针 1（能力守卫）+ 搜索集成 6（中文短语命中/短词兜底/子任务归并/软删摘除/描述正文命中/评论命中）；Rust 458（WebDAV 环境用例已知非回归）/ vitest 252 / e2e 18 全绿。
+
 ### 任务活动日志（F6）：操作轨迹三端可回看——对标 Todoist Activity log 的免费差异化
 
 Todoist 把活动日志当 Pro 卖点（免费版仅 1 周），本地应用零成本提供完整历史：
