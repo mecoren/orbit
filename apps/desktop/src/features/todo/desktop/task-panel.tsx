@@ -6,7 +6,7 @@
  * 选中态经 useTodoShell 取用——从回收站面板切回来时筛选原样保留。
  */
 import { useEffect, useMemo, useState } from "react";
-import { CalendarDays, CopyPlus, EyeOff, LayoutGrid, ListTodo, Search, Table2, Tag } from "lucide-react";
+import { BookmarkPlus, CalendarDays, CopyPlus, EyeOff, LayoutGrid, ListTodo, Search, Table2, Tag } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -39,6 +39,7 @@ import { useTodoShell } from "./todo-shell";
 import { TaskListView } from "./task-list-view";
 import { LogbookView } from "./logbook-view";
 import { QuickAddBar } from "./quick-add-bar";
+import { toolbarToForm, buildConditions } from "../shared/saved-filter-builder";
 import { KanbanView, type KanbanGroupBy } from "./kanban-view";
 import { CalendarView } from "./calendar-view";
 import TaskTableView from "./task-table-view";
@@ -90,6 +91,7 @@ export default function TaskPanel() {
     openCreateFormFromTemplate,
     templates,
     setLabelManagerOpen,
+    createSavedFilterWith,
   } = useTodoShell();
 
   // ---- 工具栏状态（面板私有，不跨面板保留）----
@@ -254,6 +256,33 @@ export default function TaskPanel() {
             <TooltipContent>
               {hideDone ? "已完成已隐藏，点击显示" : "点击隐藏已完成任务"}
             </TooltipContent>
+          </Tooltip>
+
+          {/* 存为视图（F3）：把当前工具栏筛选一键固化为保存筛选器；
+              undone 档无白名单键（构建器内自动丢弃），其余档位原样预填 */}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8"
+                aria-label="存为视图"
+                onClick={() =>
+                  createSavedFilterWith(
+                    buildConditions(
+                      toolbarToForm({
+                        statusFilter,
+                        priorityFilter: priorityFilter === "all" ? null : Number(priorityFilter),
+                        favoriteOnly: quickView === "favorite",
+                      }),
+                    ),
+                  )
+                }
+              >
+                <BookmarkPlus size={14} />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>把当前筛选存为视图</TooltipContent>
           </Tooltip>
 
           <Select

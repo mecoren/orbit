@@ -16,9 +16,6 @@
  * 2026-09-08 修复：此前 state 静默变化、界面无反应）。
  */
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Outlet, useLocation, useNavigate } from "react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
@@ -29,6 +26,7 @@ import {
   savedFilterDelete,
   savedFiltersList,
   templatesList,
+  todoLabelList,
   todoProjectList,
   todoTaskList,
   type TodoProject,
@@ -41,6 +39,7 @@ import { ProjectSidebar } from "./project-sidebar";
 import { TaskDetailDrawer } from "./task-detail-drawer";
 import { TaskFormSheet } from "./task-form-sheet";
 import { LabelManager } from "./label-manager";
+import { SavedFilterDialog } from "./saved-filter-dialog";
 
 /**
  * 壳层上下文：任务面板与回收站面板共享的选中态与查询数据。
@@ -82,6 +81,8 @@ interface TodoShellContextValue {
   templates: import("@/lib/tauri").TodoTemplate[];
   labelManagerOpen: boolean;
   setLabelManagerOpen: (open: boolean) => void;
+  /** 新建保存筛选器（F3：面板「存为视图」传工具栏筛选预填条件 JSON） */
+  createSavedFilterWith: (conditions: string) => void;
 }
 
 const TodoShellContext = createContext<TodoShellContextValue | null>(null);
@@ -160,22 +161,22 @@ export default function TodoShell() {
   const queryClient = useQueryClient();
   const invalidateFilters = () =>
     queryClient.invalidateQueries({ queryKey: ["saved-filters"] });
+  // F3：标签列表（筛选器构建器的标签维度；与 use-task-labels 同 key 共缓存）
+  const labelsQuery = useQuery({
+    queryKey: ["todo-label", "list"],
+    queryFn: () => todoLabelList({ page: 1, page_size: 1000 }),
+    staleTime: 2 * 60 * 1000,
+    placeholderData: (prev) => prev,
+  });
   // 新建入口由面板触发（把当前工具栏筛选存为命名视图——面板传条件 JSON）：
-  // 壳层挂载弹层与提交，条件经 appStore 意图通道传递过重，这里走简单回调注册
-  const [savedFilterDraft, setSavedFilterDraft] = useState<{
-    name: string;
-    conditions: string;
-  } | null>(null);
-  const handleCreateSavedFilter = async () => {
-    if (!savedFilterDraft) return;
+  // 壳层挂载弹层与提交；F3 升级可视化构建器（裸 JSON 手填退役）
+  const [savedFilterDraftConditions, setSavedFilterDraftConditions] = useState<string | null>(null);
+  const handleCreateSavedFilter = async (name: string, conditions: string) => {
     try {
-      await savedFilterCreate({
-        name: savedFilterDraft.name,
-        conditions: savedFilterDraft.conditions,
-      });
+      await savedFilterCreate({ name, conditions });
       invalidateFilters();
     } finally {
-      setSavedFilterDraft(null);
+      setSavedFilterDraftConditions(null);
     }
   };
   const handleDeleteSavedFilter = async (id: number) => {
@@ -272,6 +273,7 @@ export default function TodoShell() {
     templates,
     labelManagerOpen,
     setLabelManagerOpen,
+    createSavedFilterWith: (conditions: string) => setSavedFilterDraftConditions(conditions),
   };
 
   return (
@@ -291,7 +293,7 @@ export default function TodoShell() {
             onSelectProject={ctx.onSelectProject}
             onSelectUngrouped={ctx.onSelectUngrouped}
             onSelectSavedFilter={ctx.onSelectSavedFilter}
-            onCreateSavedFilter={() => setSavedFilterDraft({ name: "", conditions: "{}" })}
+            onCreateSavedFilter={() => setSavedFilterDraftConditions("{}")}
             onDeleteSavedFilter={handleDeleteSavedFilter}
           />
 
@@ -318,44 +320,15 @@ export default function TodoShell() {
             }
           />
 
-          {/* #35 新建筛选器弹层（名称 + 条件 JSON） */}
-          <Dialog
-            open={savedFilterDraft != null}
-            onOpenChange={(o) => !o && setSavedFilterDraft(null)}
-          >
-            <DialogContent className="max-w-sm">
-              <DialogHeader>
-                <DialogTitle>保存筛选器</DialogTitle>
-              </DialogHeader>
-              <Input
-                autoFocus
-                placeholder="筛选器名称（如：本周 P0）"
-                value={savedFilterDraft?.name ?? ""}
-                onChange={(e) =>
-                  setSavedFilterDraft((d) => (d ? { ...d, name: e.target.value } : d))
-                }
-              />
-              <Input
-                placeholder='条件 JSON（如 {"priority_min":4,"due_within_days":7}）'
-                className="font-mono text-xs"
-                value={savedFilterDraft?.conditions ?? "{}"}
-                onChange={(e) =>
-                  setSavedFilterDraft((d) => (d ? { ...d, conditions: e.target.value } : d))
-                }
-              />
-              <DialogFooter>
-                <Button variant="ghost" onClick={() => setSavedFilterDraft(null)}>
-                  取消
-                </Button>
-                <Button
-                  disabled={!savedFilterDraft?.name.trim()}
-                  onClick={() => void handleCreateSavedFilter()}
-                >
-                  保存
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
+          {/* #35 新建筛选器弹层（F3：可视化构建器，裸 JSON 手填退役） */}
+          <SavedFilterDialog
+            open={savedFilterDraftConditions != null}
+            initialConditions={savedFilterDraftConditions ?? "{}"}
+            projects={projects}
+            labels={labelsQuery.data ?? []}
+            onCancel={() => setSavedFilterDraftConditions(null)}
+            onSubmit={(name, conditions) => void handleCreateSavedFilter(name, conditions)}
+          />
 
           {/* 标签管理器十色板（04 §3.8） */}
           <LabelManager open={labelManagerOpen} onOpenChange={setLabelManagerOpen} />

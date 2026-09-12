@@ -686,3 +686,35 @@ test("看板多选批量：勾选卡片 → 工具条 → 批量改期落库（2
   await page.keyboard.press("Escape");
   await expect(page.getByText("已选 1 条")).toHaveCount(0);
 });
+
+test("筛选器可视化构建器：pill 选条件 → 保存落库 → 侧栏生效（2026-09-12 F3）", async ({ page }) => {
+  // 工具栏「存为视图」入口（当前工具栏筛选预填）→ 构建器弹层（不再有条件 JSON 手填框）
+  await page.locator('button[aria-label="存为视图"]').click();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByText("任意状态")).toBeVisible();
+  await expect(dialog.getByText("已逾期")).toBeVisible();
+
+  // pill 交互：点「7 天内」再点「已逾期」→ 互斥清天数（保存后条件只剩 overdue）
+  await dialog.getByRole("button", { name: "7 天内" }).click();
+  await dialog.getByRole("button", { name: "已逾期" }).click();
+  await dialog.getByRole("button", { name: "仅收藏" }).click();
+  // 再点一次仅收藏取消（验证 toggle）——条件应只剩 due_overdue
+  await dialog.getByRole("button", { name: "仅收藏" }).click();
+  await dialog.getByPlaceholder("名称（如：本周紧急）").fill("构建器冒烟切片");
+  await dialog.getByRole("button", { name: "保存", exact: true }).click();
+  await expect(dialog).not.toBeVisible({ timeout: 5_000 });
+
+  // 落库终态：仅 due_overdue 键（互斥 + toggle 均正确）
+  const saved = await page.evaluate(() => {
+    const m = (window as any).__orbitMock;
+    return m.db.savedFilters.find((f: any) => f.name === "构建器冒烟切片")?.conditions;
+  });
+  expect(saved).toBe('{"due_overdue":true}');
+
+  // 侧栏分组渲染 + 点击过滤
+  const row = page.getByRole("button", { name: "构建器冒烟切片" }).first();
+  await expect(row).toBeVisible({ timeout: 5_000 });
+  await row.click();
+  await expect(page.getByRole("heading", { name: "构建器冒烟切片" })).toBeVisible();
+});
