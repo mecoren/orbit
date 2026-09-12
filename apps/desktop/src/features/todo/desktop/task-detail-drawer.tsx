@@ -19,6 +19,7 @@ import {
   File as FileIcon,
   Flag,
   FolderOpen,
+  History,
   Link2,
   ListChecks,
   Loader2,
@@ -97,6 +98,7 @@ import {
   todoReminderCreate,
   todoReminderDelete,
   todoTaskUpdate,
+  taskActivityList,
   type TodoComment,
   type TodoSubtask,
 } from "@/lib/tauri";
@@ -195,6 +197,7 @@ export function TaskDetailDrawer({ projects }: TaskDetailDrawerProps) {
                 />
                 <CommentsSection taskId={t.id} comments={t.comments} onChanged={refetchDetail} />
                 <AttachmentsSection taskId={t.id} />
+                <ActivitySection taskId={t.id} />
               </div>
             </div>
           </>
@@ -1940,6 +1943,76 @@ function AttachmentsSection({ taskId }: { taskId: number }) {
           )}
         </DialogContent>
       </Dialog>
+    </SectionBlock>
+  );
+}
+
+// ============================================================================
+// 活动历史区块（F6，2026-09-12）：任务操作轨迹回看（Todoist Activity log）
+// ============================================================================
+
+/** action → 中文动作文案（update 的 detail.fields 附加在括号里） */
+const ACTIVITY_ACTION_LABELS: Record<string, string> = {
+  create: "创建了任务",
+  update: "更新",
+  complete: "标记为完成",
+  uncomplete: "恢复为未完成",
+  delete: "移入回收站",
+  restore: "从回收站恢复",
+};
+
+/** update detail 里的字段名 → 中文（与属性行文案对齐；未映射字段原样展示） */
+const ACTIVITY_FIELD_LABELS: Record<string, string> = {
+  title: "标题",
+  description: "描述",
+  project_id: "所属项目",
+  priority: "优先级",
+  status: "状态",
+  done: "完成标记",
+  done_at: "完成时间",
+  due_date: "截止日期",
+  start_date: "开始日期",
+  percent_done: "进度",
+  position: "顺序",
+  is_favorite: "收藏",
+  my_day_date: "我的一天",
+};
+
+function ActivitySection({ taskId }: { taskId: number }) {
+  const { data: rows = [] } = useQuery({
+    queryKey: ["task-activity", taskId],
+    queryFn: () => taskActivityList(taskId, 30),
+    staleTime: 30_000,
+  });
+
+  const describe = (action: string, detail: string): string => {
+    const base = ACTIVITY_ACTION_LABELS[action] ?? action;
+    if (action !== "update") return base;
+    try {
+      const fields = (JSON.parse(detail) as { fields?: string[] }).fields ?? [];
+      if (fields.length === 0) return base;
+      const names = fields.map((f) => ACTIVITY_FIELD_LABELS[f] ?? f).join("、");
+      return `${base}（${names}）`;
+    } catch {
+      return base;
+    }
+  };
+
+  return (
+    <SectionBlock icon={History} title="历史">
+      <div className="space-y-1.5">
+        {rows.map((r) => (
+          <div key={r.id} className="flex items-baseline gap-2 text-[12px]">
+            <span className="shrink-0 tabular-nums text-muted-foreground/70">
+              {format(new Date(r.created_at), "MM-dd HH:mm")}
+            </span>
+            <span className="text-muted-foreground">{describe(r.action, r.detail)}</span>
+          </div>
+        ))}
+        {rows.length === 0 && (
+          <p className="text-[12px] text-muted-foreground">暂无操作记录。</p>
+        )}
+      </div>
     </SectionBlock>
   );
 }

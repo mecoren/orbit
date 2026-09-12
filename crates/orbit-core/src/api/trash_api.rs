@@ -209,6 +209,15 @@ pub async fn restore_todo_task(pool: &SqlitePool, id: i64) -> CoreResult<TodoTas
         device_id: generic_repo::current_device_id(),
         timestamp: now,
     });
+    // 活动日志（F6）：回收站恢复是显式动作，独立埋点
+    let _ = crate::api::activity_log_api::log_activity(
+        pool,
+        restored.id,
+        &restored.title,
+        "restore",
+        "{}",
+    )
+    .await;
     Ok(restored)
 }
 

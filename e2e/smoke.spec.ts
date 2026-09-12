@@ -718,3 +718,27 @@ test("筛选器可视化构建器：pill 选条件 → 保存落库 → 侧栏�
   await row.click();
   await expect(page.getByRole("heading", { name: "构建器冒烟切片" })).toBeVisible();
 });
+
+test("活动日志：写路径埋点 → 详情抽屉历史区块回看（2026-09-12 F6）", async ({ page }) => {
+  // 快加一条任务（create 埋点）
+  await quickAdd(page, "活动日志目检");
+  await expect(page.getByText("活动日志目检")).toBeVisible();
+  // 经 mock invoke 通道走真实命令链：update 优先级（update 埋点）+ 完成（complete 埋点）
+  await page.evaluate(async () => {
+    const m = (window as any).__orbitMock;
+    const id = m.db.tasks.find((t: any) => t.title === "活动日志目检").id;
+    const inv = (window as any).__TAURI_INTERNALS__.invoke;
+    await inv("todo_tasks_update", { id, input: { priority: 4 } });
+    await inv("todo_tasks_complete", { id });
+    m.emitDbChange();
+  });
+  // 显示已完成 → 点行开详情 → 历史区块回看轨迹
+  await showDoneTasks(page);
+  const row = page.getByRole("button", { name: "已完成任务：活动日志目检" });
+  await row.click();
+  const drawer = page.getByRole("dialog");
+  await expect(drawer).toBeVisible();
+  await expect(drawer.getByText("历史")).toBeVisible();
+  await expect(drawer.getByText("标记为完成")).toBeVisible();
+  await expect(drawer.getByText(/更新（优先级）/)).toBeVisible();
+});

@@ -8,6 +8,7 @@ pub use crate::db::sync_registry::FULL_BACKUP_TABLES;
 use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
 
+use crate::api::activity_log_api;
 use crate::db::repository::generic_repo;
 use crate::db::repository::import_type_validator::normalize_import_fields;
 use crate::error::{CoreError, CoreResult};
@@ -107,18 +108,78 @@ pub async fn create_todo_task(
     pool: &SqlitePool,
     input: &TodoTaskCreateInput,
 ) -> CoreResult<TodoTask> {
-    generic_repo::create_todo_task(pool, input).await
+    let t = generic_repo::create_todo_task(pool, input).await?;
+    // 活动日志（F6）：失败不阻断主流程（轨迹缺失可接受，写路径必须成功）
+    let _ = activity_log_api::log_activity(pool, t.id, &t.title, "create", "{}").await;
+    Ok(t)
 }
 pub async fn update_todo_task(
     pool: &SqlitePool,
     id: i64,
     input: &TodoTaskUpdateInput,
 ) -> CoreResult<TodoTask> {
-    generic_repo::update_todo_task(pool, id, input).await
+    let before: TodoTask = generic_repo::get_by_id(pool, "todo_tasks", id).await?;
+    let t = generic_repo::update_todo_task(pool, id, input).await?;
+    // 活动日志（F6）：记录实际发生变化的字段集（比较前后行——
+    // 前端部分更新的 Option 语义下未命中字段的 UPDATE 不产生 diff）
+    let fields = changed_task_fields(&before, &t);
+    if !fields.is_empty() {
+        let detail = serde_json::json!({ "fields": fields }).to_string();
+        let _ = activity_log_api::log_activity(pool, t.id, &t.title, "update", &detail).await;
+    }
+    Ok(t)
 }
 pub async fn delete_todo_task(pool: &SqlitePool, id: i64) -> CoreResult<()> {
     let t: TodoTask = generic_repo::get_by_id(pool, "todo_tasks", id).await?;
-    generic_repo::soft_delete_by_id(pool, "todo_tasks", id, &t.uuid).await
+    generic_repo::soft_delete_by_id(pool, "todo_tasks", id, &t.uuid).await?;
+    let _ = activity_log_api::log_activity(pool, t.id, &t.title, "delete", "{}").await;
+    Ok(())
+}
+
+/// 比较任务前后行，返回发生变化的字段名集（活动日志 detail 用；
+/// 顺序与 TodoTask 字段声明序一致，测试锁定）
+fn changed_task_fields(before: &TodoTask, after: &TodoTask) -> Vec<&'static str> {
+    let mut fields = Vec::new();
+    if before.title != after.title {
+        fields.push("title");
+    }
+    if before.description != after.description {
+        fields.push("description");
+    }
+    if before.project_id != after.project_id {
+        fields.push("project_id");
+    }
+    if before.priority != after.priority {
+        fields.push("priority");
+    }
+    if before.status != after.status {
+        fields.push("status");
+    }
+    if before.done != after.done {
+        fields.push("done");
+    }
+    if before.done_at != after.done_at {
+        fields.push("done_at");
+    }
+    if before.due_date != after.due_date {
+        fields.push("due_date");
+    }
+    if before.start_date != after.start_date {
+        fields.push("start_date");
+    }
+    if before.percent_done != after.percent_done {
+        fields.push("percent_done");
+    }
+    if before.position != after.position {
+        fields.push("position");
+    }
+    if before.is_favorite != after.is_favorite {
+        fields.push("is_favorite");
+    }
+    if before.my_day_date != after.my_day_date {
+        fields.push("my_day_date");
+    }
+    fields
 }
 
 // ---------- todo_subtasks ----------

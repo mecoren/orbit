@@ -737,6 +737,19 @@ pub async fn complete_todo_task(pool: &SqlitePool, id: i64) -> CoreResult<Comple
         emit_todo_event(&table, record_id, &record_uuid, op, now, &device_id);
     }
 
+    // 活动日志（F6）：完成动作独立于 update 埋点（complete 是显式语义）；
+    // 幂等完成（已 done 再点）不重复记
+    if task.done != 1 {
+        let _ = crate::api::activity_log_api::log_activity(
+            pool,
+            done_task.id,
+            &done_task.title,
+            "complete",
+            "{}",
+        )
+        .await;
+    }
+
     Ok(CompleteTaskResult {
         task: done_task,
         next_instance,
@@ -1797,7 +1810,7 @@ async fn soft_delete_reminder_row(
 #[cfg(test)]
 mod reminder_poll_tests {
     use super::*;
-    use crate::api::business_api::{create_todo_project, create_todo_task, list_todo_tasks};
+    use crate::api::business_api::create_todo_task;
     use crate::db::repository::generic_repo::create_todo_reminder;
     use crate::models::business::{TodoReminderCreateInput, TodoTaskCreateInput};
 

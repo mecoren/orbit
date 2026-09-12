@@ -292,6 +292,7 @@ pub fn run() {
             // ICS 日历导出（#4：VTODO 日历，日历软件导入/订阅）
             commands::ics_export_cmd::ics_export,
             // 通知历史（#5：呈现轨迹回看）
+            commands::activity_log_cmd::task_activity_list,
             commands::notification_log_cmd::notification_log_list,
             commands::notification_log_cmd::notification_log_clear,
             // CSV 导入（迁移路径：orbit 自有 / Todoist / TickTick）

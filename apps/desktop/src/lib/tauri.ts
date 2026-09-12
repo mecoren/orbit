@@ -1000,6 +1000,20 @@ export const notificationLogList = (kind?: string, limit?: number) =>
   invoke<NotificationLogRow[]>("notification_log_list", { kind: kind ?? null, limit: limit ?? null });
 export const notificationLogClear = () => invoke<number>("notification_log_clear");
 
+// ========== 任务活动日志（F6：操作轨迹回看；只读本地表不进同步）==========
+export interface ActivityLogRow {
+  id: number;
+  task_id: number | null;
+  task_title: string;
+  /** create / update / complete / uncomplete / delete / restore */
+  action: string;
+  /** 附加 JSON：{"fields":[变更字段名,…]}（update）/ {}（其他） */
+  detail: string;
+  created_at: number;
+}
+export const taskActivityList = (taskId: number, limit?: number) =>
+  invoke<ActivityLogRow[]>("task_activity_list", { taskId, limit: limit ?? null });
+
 // ========== templates（任务模板：竞品矩阵高价值缺口）==========
 export interface TodoTemplate {
   id: number;

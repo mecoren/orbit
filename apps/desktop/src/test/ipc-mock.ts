@@ -152,6 +152,7 @@ export interface MockDb {
   savedFilters: { id: number; uuid: string; name: string; conditions: string; sort_order: number }[];
   templates: { id: number; uuid: string; name: string; payload: string; sort_order: number }[];
   notificationLog: { id: number; kind: string; task_id: number | null; task_title: string; reminder_id: number | null; payload: string; created_at: number }[];
+  activityLog: { id: number; task_id: number | null; task_title: string; action: string; detail: string; created_at: number }[];
   seq: number;
 }
 
@@ -176,6 +177,7 @@ function createDb(): MockDb {
       { id: 2, kind: "snooze", task_id: 1, task_title: "回复合作方邮件（逾期）", reminder_id: 1, payload: "{\"snooze_until\":1757403600000}", created_at: Date.now() - 3_500_000 },
       { id: 3, kind: "reminder_due", task_id: 2, task_title: "完成移动端重构方案评审", reminder_id: 2, payload: "{\"remind_at\":1757410000000}", created_at: Date.now() - 1_800_000 },
     ],
+    activityLog: [],
     seq: 1,
   };
 }
@@ -244,6 +246,24 @@ type Ctx = { db: MockDb };
 
 /** IPC 值语义克隆：读命令出参与 db 内部活引用彻底隔离（见 filterByKeyword 注释） */
 const ipcClone = <T>(v: T): T => JSON.parse(JSON.stringify(v));
+
+/** 活动日志埋点（F6；与 Rust activity_log_api::log_activity 同口径） */
+function logActivity(
+  db: MockDb,
+  taskId: number,
+  taskTitle: string,
+  action: string,
+  detail: string,
+) {
+  db.activityLog.push({
+    id: db.seq++,
+    task_id: taskId,
+    task_title: taskTitle,
+    action,
+    detail,
+    created_at: Date.now(),
+  });
+}
 
 /** keyword 过滤（title/description 大小写不敏感包含，对齐后端列表语义）。
  *  返回值必须与 db 内部完全【引用隔离】——真实 Tauri IPC 每次 JSON 序列化
@@ -375,12 +395,23 @@ const commands: Record<string, (args: any, ctx: Ctx) => unknown> = {
       version: 1,
     };
     db.tasks.push(t);
+    // 活动日志埋点（F6，与 Rust 写路径同口径）
+    logActivity(db, t.id, t.title, "create", "{}");
     return ipcClone(t);
   },
   todo_tasks_update: ({ id, input }, { db }) => {
     const t = db.tasks.find((x) => x.id === id);
     if (!t) throw new Error(`task ${id} 不存在`);
+    const before = { ...t } as Record<string, unknown>;
     Object.assign(t, input, { updated_at: Date.now(), version: t.version + 1 });
+    // 活动日志埋点（F6）：记录实际变化字段集（与 changed_task_fields 同口径）
+    const after = t as unknown as Record<string, unknown>;
+    const fields = Object.keys(input).filter((k) => {
+      return before[k] !== after[k] && k !== "updated_at" && k !== "version";
+    });
+    if (fields.length > 0) {
+      logActivity(db, t.id, t.title, "update", JSON.stringify({ fields }));
+    }
     return ipcClone(t);
   },
   todo_tasks_update_position: ({ id, position }, { db }) => {
@@ -455,6 +486,8 @@ const commands: Record<string, (args: any, ctx: Ctx) => unknown> = {
     t.status = "done";
     t.updated_at = now;
     t.version += 1;
+    // 活动日志埋点（F6，与 Rust complete 埋点同口径）
+    logActivity(db, t.id, t.title, "complete", "{}");
     return ipcClone({ task: t, next_instance: next });
   },
   todo_tasks_delete: ({ id }, { db }) => {
@@ -466,6 +499,7 @@ const commands: Record<string, (args: any, ctx: Ctx) => unknown> = {
     t.deleted_at = now;
     t.updated_at = now;
     t.version += 1;
+    logActivity(db, t.id, t.title, "delete", "{}");
   },
   todo_tasks_get_detail: ({ id }, { db }) => {
     const t = db.tasks.find((x) => x.id === id);
@@ -974,6 +1008,17 @@ const commands: Record<string, (args: any, ctx: Ctx) => unknown> = {
     const n = db.notificationLog.length;
     db.notificationLog.length = 0;
     return n;
+  },
+  // ---- 任务活动日志（F6；单任务倒序 + detail JSON 透传）----
+  task_activity_list: (
+    { taskId, limit }: { taskId: number; limit?: number },
+    { db }: Ctx,
+  ) => {
+    const rows = db.activityLog
+      .filter((r) => r.task_id === taskId)
+      .sort((a, b) => b.created_at - a.created_at || b.id - a.id)
+      .slice(0, limit ?? 30);
+    return ipcClone(rows);
   },
   ics_export: (_a: unknown, { db }: Ctx): { content: string; table_counts: Record<string, number>; suggested_filename: string } => {
     const tasks = Object.values(db.tasks).filter((t) => (t as { is_deleted?: number }).is_deleted === 0) as Array<{ id: number; title: string }>;

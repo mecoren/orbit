@@ -7,6 +7,16 @@
 
 ## [Unreleased]
 
+### 任务活动日志（F6）：操作轨迹三端可回看——对标 Todoist Activity log 的免费差异化
+
+Todoist 把活动日志当 Pro 卖点（免费版仅 1 周），本地应用零成本提供完整历史：
+
+- **数据层**：0001 迁移新增 `todo_activity_log`（task_id + 标题快照 + action + detail JSON + created_at 双索引）；**本地只读轨迹不进 SYNCABLE_TABLES**（口径同 notification_log——同步要结果态而非过程，跨设备合并无意义）。
+- **写路径埋点**（core 层内嵌，失败不阻断主流程）：create/update/complete/uncomplete/delete/restore 六动作；update 记**实际变化字段集**（前后行比较 changed_task_fields，未命中字段的空更新不产生噪音轨迹）；complete 幂等重击不重复记。
+- **查询与展示**：`task_activity_list` 命令（单任务倒序 limit 30）→ 详情抽屉第九区块「历史」（History 图标 + MM-dd HH:mm + 中文动作文案，update 括注变更字段中文名）。
+- mock 同口径埋点（create/update/complete/delete）+ 查询命令；`prune_old` TTL 清理预留 db_maintenance 接线。
+- 测试：activity_log API +2（写入倒序/任务隔离 + TTL 清理）；e2e +1（快加→改优先级→完成→详情历史区「标记为完成」「更新（优先级）」全链）；全量 cargo 452（+12）/ vitest 252 / e2e 18 全绿（WebDAV 环境用例已知非回归）。
+
 ### 性能与内存双批：谓词下推 SQL + WebView2 内存参数 + 缓存分层
 
 探查报告「另立项」池中最大的两项（F4/F5 驻留数据 + F8 之外的内存手段）本批落地：

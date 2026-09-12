@@ -396,6 +396,20 @@ CREATE TABLE IF NOT EXISTS notification_log (
 CREATE INDEX IF NOT EXISTS idx_notification_log_created ON notification_log(created_at);
 CREATE INDEX IF NOT EXISTS idx_notification_log_task ON notification_log(task_id);
 
+-- 任务操作活动日志（2026-09-12 F6：对标 Todoist Activity log / Things 历史区）
+-- 本地只读轨迹：各端各自记录，不进 SYNCABLE_TABLES（口径同 notification_log）；
+-- 任务删除后仍可读（title 快照 + detail JSON 存变更字段集）
+CREATE TABLE IF NOT EXISTS todo_activity_log (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,  -- 主键（本地自增）
+  task_id INTEGER,  -- 关联任务 id（可空——任务可能后续进回收站/彻底删除）
+  task_title TEXT NOT NULL DEFAULT '',  -- 任务标题快照（删除后仍可读）
+  action TEXT NOT NULL DEFAULT '',  -- 操作类型：create=创建 / update=字段变更 / complete=完成 / uncomplete=恢复未完成 / delete=删除(软删入回收站) / restore=从回收站恢复
+  detail TEXT NOT NULL DEFAULT '{}',  -- 附加 JSON：{fields:[变更字段名], from, to} 等（update 记变更字段集）
+  created_at INTEGER NOT NULL DEFAULT 0  -- 记录时间（ms；查询按其倒序）
+);
+CREATE INDEX IF NOT EXISTS idx_todo_activity_log_created ON todo_activity_log(created_at);
+CREATE INDEX IF NOT EXISTS idx_todo_activity_log_task ON todo_activity_log(task_id);
+
 CREATE TABLE IF NOT EXISTS sys_attachments (
   hash TEXT PRIMARY KEY,  -- 内容寻址主键：附件二进制的 sha256（同 hash 复用即去重）
   original_name TEXT NOT NULL DEFAULT '',  -- 原始文件名

@@ -16,6 +16,7 @@ pub mod holiday_cmd;
 pub mod holiday_scheduler;
 pub mod ics_export_cmd;
 pub mod mica_cmd;
+pub mod activity_log_cmd;
 pub mod notification_log_cmd;
 pub mod notification_scheduler;
 pub mod plaintext_export_cmd;
