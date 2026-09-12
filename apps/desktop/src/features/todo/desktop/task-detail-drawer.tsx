@@ -138,6 +138,9 @@ export function TaskDetailDrawer({ projects }: TaskDetailDrawerProps) {
     queryKey: ["todo-task-detail", selectedTaskId],
     queryFn: () => todoTaskGetDetail(selectedTaskId!),
     enabled: open,
+    // 缓存分层（F5）：详情单条查询 5min 未观察即卸载——全局 gcTime 10min
+    // 面向列表级 key，抽屉逐条打开过的历史详情无理由驻留到 10 分钟
+    gcTime: 5 * 60_000,
   });
   const t = detailQuery.data;
 

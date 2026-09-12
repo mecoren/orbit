@@ -1797,7 +1797,7 @@ async fn soft_delete_reminder_row(
 #[cfg(test)]
 mod reminder_poll_tests {
     use super::*;
-    use crate::api::business_api::create_todo_task;
+    use crate::api::business_api::{create_todo_project, create_todo_task, list_todo_tasks};
     use crate::db::repository::generic_repo::create_todo_reminder;
     use crate::models::business::{TodoReminderCreateInput, TodoTaskCreateInput};
 
@@ -2134,5 +2134,194 @@ mod reminder_poll_tests {
             .unwrap();
         assert!(!rolled, "已完成任务不续排（P1#10）");
         assert!(live_reminders(&pool, t.id).await.is_empty(), "僵尸行清理");
+    }
+}
+
+// ============================================================================
+// 谓词下推 SQL 集成测试（2026-09-12 F5：ListFilter 六键 → list_todo_tasks）
+// ============================================================================
+
+#[cfg(test)]
+mod predicate_pushdown_tests {
+    use super::*;
+    use crate::api::business_api::{create_todo_project, create_todo_task, list_todo_tasks};
+    use crate::models::business::TodoTaskCreateInput;
+
+    async fn setup_db() -> SqlitePool {
+        let pool = sqlx::SqlitePool::connect("sqlite::memory:").await.unwrap();
+        sqlx::migrate!("./src/db/migrations")
+            .run(&pool)
+            .await
+            .unwrap();
+        pool
+    }
+
+    /// 建一条任务（快捷参数）；返回 id
+    async fn mk(
+        pool: &SqlitePool,
+        title: &str,
+        f: impl FnOnce(&mut TodoTaskCreateInput),
+    ) -> i64 {
+        let mut input = TodoTaskCreateInput {
+            title: title.into(),
+            ..Default::default()
+        };
+        f(&mut input);
+        create_todo_task(pool, &input).await.unwrap().id
+    }
+
+    #[tokio::test]
+    async fn done_predicate_filters_sql_side() {
+        let pool = setup_db().await;
+        let a = mk(&pool, "未完成甲", |_| {}).await;
+        mk(&pool, "已完成乙", |i| {
+            i.done = Some(1);
+            i.status = Some("done".into());
+        })
+        .await;
+
+        // done=false：SQL 侧只返未完成
+        let undone = list_todo_tasks(
+            &pool,
+            &ListFilter {
+                done: Some(false),
+                page_size: 100,
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(undone.len(), 1);
+        assert_eq!(undone[0].id, a);
+
+        // done=true：只返已完成
+        let done = list_todo_tasks(
+            &pool,
+            &ListFilter {
+                done: Some(true),
+                page_size: 100,
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(done.len(), 1);
+        assert_eq!(done[0].title, "已完成乙");
+
+        // 无谓词：全量
+        let all = list_todo_tasks(
+            &pool,
+            &ListFilter {
+                page_size: 100,
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(all.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn status_priority_project_predicates() {
+        let pool = setup_db().await;
+        let _ = mk(&pool, "低优", |i| i.priority = Some(1)).await;
+        let _ = mk(&pool, "高优进行中", |i| {
+            i.priority = Some(4);
+            i.status = Some("doing".into());
+        })
+        .await;
+        let p = create_todo_project(
+            &pool,
+            &TodoProjectCreateInput {
+                title: "项目甲".into(),
+                description: None,
+                hex_color: None,
+                sort_order: None,
+            },
+        )
+        .await
+        .unwrap();
+        let in_proj = mk(&pool, "项目内高优", |i| {
+            i.project_id = Some(p.id);
+            i.priority = Some(3);
+        })
+        .await;
+
+        // status=doing + priority_min=3 → 只剩「高优进行中」
+        let both = list_todo_tasks(
+            &pool,
+            &ListFilter {
+                status: Some("doing".into()),
+                priority_min: Some(3),
+                page_size: 100,
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(both.len(), 1);
+        assert_eq!(both[0].title, "高优进行中");
+
+        // project_id → 只剩项目内任务
+        let by_proj = list_todo_tasks(
+            &pool,
+            &ListFilter {
+                project_id: Some(p.id),
+                page_size: 100,
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(by_proj.len(), 1);
+        assert_eq!(by_proj[0].id, in_proj);
+    }
+
+    #[tokio::test]
+    async fn favorite_and_my_day_predicates() {
+        let pool = setup_db().await;
+        let fav = mk(&pool, "星标任务", |i| i.is_favorite = Some(1)).await;
+        let zero = 1_789_142_400_000_i64; // 任意零点（调用方算好传入）
+        let my_day = mk(&pool, "我的一天任务", |i| i.my_day_date = Some(zero)).await;
+        mk(&pool, "普通任务", |_| {}).await;
+
+        let favs = list_todo_tasks(
+            &pool,
+            &ListFilter {
+                favorite_only: Some(true),
+                page_size: 100,
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(favs.len(), 1);
+        assert_eq!(favs[0].id, fav);
+
+        let today = list_todo_tasks(
+            &pool,
+            &ListFilter {
+                my_day_today: Some(zero),
+                page_size: 100,
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(today.len(), 1);
+        assert_eq!(today[0].id, my_day);
+
+        // 我的一天窗口外零点不命中（视图语义：昨天加入自动退出）
+        let none = list_todo_tasks(
+            &pool,
+            &ListFilter {
+                my_day_today: Some(zero + 86_400_000),
+                page_size: 100,
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+        assert!(none.is_empty());
     }
 }

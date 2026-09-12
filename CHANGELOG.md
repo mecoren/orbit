@@ -7,6 +7,16 @@
 
 ## [Unreleased]
 
+### 性能与内存双批：谓词下推 SQL + WebView2 内存参数 + 缓存分层
+
+探查报告「另立项」池中最大的两项（F4/F5 驻留数据 + F8 之外的内存手段）本批落地：
+
+- **谓词下推 SQL（F5 主项）**：`ListFilter` 扩展六谓词键（done/status/priority_min/project_id/favorite_only/my_day_today），`generic_repo::list` 仅 `todo_tasks` 消费拼接（其他表忽略零开销）——status 文本绑定独立通道（TEXT 列不可绑 INTEGER）。壳层主查询按选中态传谓词（未完成/已完成/收藏/我的一天/项目视图各自下推），替代「万行全量拉取 + 前端过滤」的 IPC 与驻留大头；queryKey 含谓词对象，db-change 表级前缀失效天然命中。FRB DTO 镜像六键同步（codegen 产物入库）。mock `todo_tasks_list` 同口径谓词过滤。
+- **WebView2 内存参数（M3）**：Windows 侧启动注入 `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS`（`--js-flags=--max-old-space-size=512` 老生代上限促 GC 压实——09-10 实测 WebView2 隐藏驻留不裁内存堆无界膨胀；`--disk-cache-size=50MB` 附件预览缓存封顶）；已有外部覆盖不强写，Rust 2024 set_var unsafe 语义注明单线程前提。
+- **缓存分层（M4）**：详情单条查询 gcTime 10min → 5min（列表级键才配 10min，抽屉历史详情无理由驻留）。
+- 测试：谓词子句纯函数 +5、内存库集成 +3（done 双向/status+priority+project 组合/favorite+my_day 零点窗口）；全链 vitest 252 / e2e 17 / Flutter 256 / cargo 448（WebDAV 环境依赖用例既有已知非回归）/ analyze+tsc+cargo check 全零告警；浏览器目检：五视图谓词精确过滤、勾选完成→视图消失→失效链刷新→隐藏开关联动全过。
+- 收益口径：未完成/收藏/我的一天视图的 IPC 从万行级降到结果集行数（真机估算单次失效重拉省 50-80ms×N），JS heap 驻留随视图收窄同步下降；真机量化验收沿用 perf-metrics 工具复测。
+
 ### 搜索防抖收编 + 附件应用内图片预览（桌面 lightbox + 移动降采样）
 
 - **工具栏搜索防抖（200ms）**：此前每击键全量 filterTasks 重跑（万任务下一键一遍过滤+分组+排序）；防抖 hook 从全局搜索对话框局部实现收编 `shared/use-debounced-value.ts` 共用（全局搜索 250ms 口径不变）。

@@ -16,6 +16,14 @@ export interface ListFilter {
   keyword?: string | null;
   page: number;
   page_size: number;
+  /** 谓词下推（F5，仅 todo_tasks 消费；语义对齐 filterTasks） */
+  done?: boolean | null;
+  status?: string | null;
+  priority_min?: number | null;
+  project_id?: number | null;
+  favorite_only?: boolean | null;
+  /** 我的一天零点毫秒（调用方算好本地零点传入） */
+  my_day_today?: number | null;
 }
 
 // ---------- 通用业务 ----------

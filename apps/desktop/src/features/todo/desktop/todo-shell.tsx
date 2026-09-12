@@ -132,9 +132,46 @@ export default function TodoShell() {
     staleTime: 2 * 60 * 1000,
     placeholderData: (prev) => prev,
   });
+
+  // ---- 主任务查询：谓词下推（F5）----
+  // 把选中态（快捷视图/项目/我的一天）映射成 ListFilter 谓词下推 SQL，
+  // 替代「万行全量拉取 + 前端过滤」的驻留大头：
+  // - quickView=undone → done=false；done → done=true（Logbook 数据源）
+  // - quickView=favorite → favorite_only；my_day → my_day_today=今天零点
+  // - projectId → project_id 等值（ungrouped 无对应谓词，保留全量拉取由
+  //   前端过滤——NULL 语义 SQL 端可表达但「未分组」是低频视图，先不扩）
+  // 工具栏状态/优先级筛选仍在前端 filterTasks（面板私有态不进壳层查询键，
+  // 避免每改一档筛选触发一次全量 IPC）。
+  const todayZero = useMemo(() => {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    return d.getTime();
+  }, []);
+  const taskPredicate = useMemo(() => {
+    if (projectId != null) return { project_id: projectId };
+    switch (quickView) {
+      case "undone":
+        return { done: false };
+      case "done":
+        return { done: true };
+      case "favorite":
+        return { favorite_only: true };
+      case "my_day":
+        return { my_day_today: todayZero };
+      default:
+        return {};
+    }
+  }, [quickView, projectId, todayZero]);
+
   const tasksQuery = useQuery({
-    queryKey: ["todo_tasks", ""],
-    queryFn: () => todoTaskList({ keyword: "", page: 1, page_size: 10000 }),
+    queryKey: ["todo_tasks", "", taskPredicate],
+    queryFn: () =>
+      todoTaskList({
+        keyword: "",
+        page: 1,
+        page_size: 10000,
+        ...taskPredicate,
+      }),
     staleTime: 2 * 60 * 1000,
     placeholderData: (prev) => prev,
   });

@@ -198,16 +198,42 @@ class HolidayMeta {
           fixedHour == other.fixedHour;
 }
 
-/// 通用列表过滤条件（镜像 orbit_core::models::business::ListFilter）
+/// 通用列表过滤条件（镜像 orbit_core::models::business::ListFilter；
+/// 谓词下推六键仅 todo_tasks 消费，见 core 侧注释）
 class ListFilter {
   final String? keyword;
   final int page;
   final int pageSize;
+  final bool? done;
+  final String? status;
+  final int? priorityMin;
+  final PlatformInt64? projectId;
+  final bool? favoriteOnly;
+  final PlatformInt64? myDayToday;
 
-  const ListFilter({this.keyword, required this.page, required this.pageSize});
+  const ListFilter({
+    this.keyword,
+    required this.page,
+    required this.pageSize,
+    this.done,
+    this.status,
+    this.priorityMin,
+    this.projectId,
+    this.favoriteOnly,
+    this.myDayToday,
+  });
 
   @override
-  int get hashCode => keyword.hashCode ^ page.hashCode ^ pageSize.hashCode;
+  int get hashCode =>
+      keyword.hashCode ^
+      page.hashCode ^
+      pageSize.hashCode ^
+      done.hashCode ^
+      status.hashCode ^
+      priorityMin.hashCode ^
+      projectId.hashCode ^
+      favoriteOnly.hashCode ^
+      myDayToday.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -216,7 +242,13 @@ class ListFilter {
           runtimeType == other.runtimeType &&
           keyword == other.keyword &&
           page == other.page &&
-          pageSize == other.pageSize;
+          pageSize == other.pageSize &&
+          done == other.done &&
+          status == other.status &&
+          priorityMin == other.priorityMin &&
+          projectId == other.projectId &&
+          favoriteOnly == other.favoriteOnly &&
+          myDayToday == other.myDayToday;
 }
 
 class TaskAttachmentView {

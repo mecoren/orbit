@@ -41,6 +41,26 @@ impl AppState {
 // 移动端已拆分为独立 Flutter 应用（apps/mobile），本壳仅服务桌面，
 // 不再声明 tauri::mobile_entry_point。
 pub fn run() {
+    // WebView2 内存参数（2026-09-12 F5/M3，Windows）：
+    // - --js-flags=--max-old-space-size=512：V8 老生代上限 512MB——万级任务
+    //   驻留数据下默认堆无界增长后 WebView2 不主动裁剪（09-10 实测隐藏
+    //   75s 不降反升）；设上限促 GC 压实，防长驻会话堆缓慢膨胀。
+    // - --disk-cache-size=52428800：磁盘缓存 50MB 封顶，防附件/图片
+    //   预览撑大 cache 目录。
+    // 仅 Windows WebView2 生效（macOS WKWebView / Linux webkitgtk 忽略），
+    // 须在 webview 创建前设置，故放 run() 最前。
+    #[cfg(target_os = "windows")]
+    {
+        const ARGS: &str =
+            "--js-flags=--max-old-space-size=512 --disk-cache-size=52428800";
+        // 已有外部覆盖（调试场景）时不强写。set_var 在 Rust 2024 是 unsafe：
+        // 安全前提 = run() 由 main 单线程进入、此时尚无其他线程存活
+        // （Tauri runtime/守护线程都在 builder.run 之后才起）。
+        if std::env::var_os("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS").is_none() {
+            unsafe { std::env::set_var("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS", ARGS) };
+        }
+    }
+
     // 通用插件：双端无条件注册
     let builder = tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())

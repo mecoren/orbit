@@ -378,13 +378,21 @@ pub async fn purge_todo_tasks_before(pool: &SqlitePool, cutoff_ms: i64) -> CoreR
         "is_deleted = 1 AND deleted_at IS NOT NULL AND deleted_at < ? AND deleted_at < ?";
     let mut tx = pool.begin().await?;
     for sql in [
-        format!("DELETE FROM todo_subtasks WHERE task_id IN (SELECT id FROM todo_tasks WHERE {purge_scope})"),
-        format!("DELETE FROM todo_task_labels WHERE task_id IN (SELECT id FROM todo_tasks WHERE {purge_scope})"),
-        format!("DELETE FROM todo_comments WHERE task_id IN (SELECT id FROM todo_tasks WHERE {purge_scope})"),
+        format!(
+            "DELETE FROM todo_subtasks WHERE task_id IN (SELECT id FROM todo_tasks WHERE {purge_scope})"
+        ),
+        format!(
+            "DELETE FROM todo_task_labels WHERE task_id IN (SELECT id FROM todo_tasks WHERE {purge_scope})"
+        ),
+        format!(
+            "DELETE FROM todo_comments WHERE task_id IN (SELECT id FROM todo_tasks WHERE {purge_scope})"
+        ),
         format!(
             "DELETE FROM todo_task_relations WHERE task_id IN (SELECT id FROM todo_tasks WHERE {purge_scope}) OR other_task_id IN (SELECT id FROM todo_tasks WHERE {purge_scope})"
         ),
-        format!("DELETE FROM todo_reminders WHERE task_id IN (SELECT id FROM todo_tasks WHERE {purge_scope})"),
+        format!(
+            "DELETE FROM todo_reminders WHERE task_id IN (SELECT id FROM todo_tasks WHERE {purge_scope})"
+        ),
         // 本体最后删（子表子查询依赖它圈定范围）
         format!("DELETE FROM todo_tasks WHERE {purge_scope}"),
     ] {

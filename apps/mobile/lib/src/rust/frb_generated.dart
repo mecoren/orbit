@@ -4425,12 +4425,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   ListFilter dco_decode_list_filter(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 3)
-      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
+    if (arr.length != 9)
+      throw Exception('unexpected arr length: expect 9 but see ${arr.length}');
     return ListFilter(
       keyword: dco_decode_opt_String(arr[0]),
       page: dco_decode_u_32(arr[1]),
       pageSize: dco_decode_u_32(arr[2]),
+      done: dco_decode_opt_box_autoadd_bool(arr[3]),
+      status: dco_decode_opt_String(arr[4]),
+      priorityMin: dco_decode_opt_box_autoadd_i_32(arr[5]),
+      projectId: dco_decode_opt_box_autoadd_i_64(arr[6]),
+      favoriteOnly: dco_decode_opt_box_autoadd_bool(arr[7]),
+      myDayToday: dco_decode_opt_box_autoadd_i_64(arr[8]),
     );
   }
 
@@ -5809,10 +5815,22 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_keyword = sse_decode_opt_String(deserializer);
     var var_page = sse_decode_u_32(deserializer);
     var var_pageSize = sse_decode_u_32(deserializer);
+    var var_done = sse_decode_opt_box_autoadd_bool(deserializer);
+    var var_status = sse_decode_opt_String(deserializer);
+    var var_priorityMin = sse_decode_opt_box_autoadd_i_32(deserializer);
+    var var_projectId = sse_decode_opt_box_autoadd_i_64(deserializer);
+    var var_favoriteOnly = sse_decode_opt_box_autoadd_bool(deserializer);
+    var var_myDayToday = sse_decode_opt_box_autoadd_i_64(deserializer);
     return ListFilter(
       keyword: var_keyword,
       page: var_page,
       pageSize: var_pageSize,
+      done: var_done,
+      status: var_status,
+      priorityMin: var_priorityMin,
+      projectId: var_projectId,
+      favoriteOnly: var_favoriteOnly,
+      myDayToday: var_myDayToday,
     );
   }
 
@@ -7513,6 +7531,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_opt_String(self.keyword, serializer);
     sse_encode_u_32(self.page, serializer);
     sse_encode_u_32(self.pageSize, serializer);
+    sse_encode_opt_box_autoadd_bool(self.done, serializer);
+    sse_encode_opt_String(self.status, serializer);
+    sse_encode_opt_box_autoadd_i_32(self.priorityMin, serializer);
+    sse_encode_opt_box_autoadd_i_64(self.projectId, serializer);
+    sse_encode_opt_box_autoadd_bool(self.favoriteOnly, serializer);
+    sse_encode_opt_box_autoadd_i_64(self.myDayToday, serializer);
   }
 
   @protected

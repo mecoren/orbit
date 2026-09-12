@@ -4552,10 +4552,22 @@ impl SseDecode for crate::api::dto::ListFilter {
         let mut var_keyword = <Option<String>>::sse_decode(deserializer);
         let mut var_page = <u32>::sse_decode(deserializer);
         let mut var_pageSize = <u32>::sse_decode(deserializer);
+        let mut var_done = <Option<bool>>::sse_decode(deserializer);
+        let mut var_status = <Option<String>>::sse_decode(deserializer);
+        let mut var_priorityMin = <Option<i32>>::sse_decode(deserializer);
+        let mut var_projectId = <Option<i64>>::sse_decode(deserializer);
+        let mut var_favoriteOnly = <Option<bool>>::sse_decode(deserializer);
+        let mut var_myDayToday = <Option<i64>>::sse_decode(deserializer);
         return crate::api::dto::ListFilter {
             keyword: var_keyword,
             page: var_page,
             page_size: var_pageSize,
+            done: var_done,
+            status: var_status,
+            priority_min: var_priorityMin,
+            project_id: var_projectId,
+            favorite_only: var_favoriteOnly,
+            my_day_today: var_myDayToday,
         };
     }
 }
@@ -6432,6 +6444,12 @@ impl flutter_rust_bridge::IntoDart for crate::api::dto::ListFilter {
             self.keyword.into_into_dart().into_dart(),
             self.page.into_into_dart().into_dart(),
             self.page_size.into_into_dart().into_dart(),
+            self.done.into_into_dart().into_dart(),
+            self.status.into_into_dart().into_dart(),
+            self.priority_min.into_into_dart().into_dart(),
+            self.project_id.into_into_dart().into_dart(),
+            self.favorite_only.into_into_dart().into_dart(),
+            self.my_day_today.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -7716,6 +7734,12 @@ impl SseEncode for crate::api::dto::ListFilter {
         <Option<String>>::sse_encode(self.keyword, serializer);
         <u32>::sse_encode(self.page, serializer);
         <u32>::sse_encode(self.page_size, serializer);
+        <Option<bool>>::sse_encode(self.done, serializer);
+        <Option<String>>::sse_encode(self.status, serializer);
+        <Option<i32>>::sse_encode(self.priority_min, serializer);
+        <Option<i64>>::sse_encode(self.project_id, serializer);
+        <Option<bool>>::sse_encode(self.favorite_only, serializer);
+        <Option<i64>>::sse_encode(self.my_day_today, serializer);
     }
 }
 

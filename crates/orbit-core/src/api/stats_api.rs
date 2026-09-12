@@ -225,7 +225,6 @@ fn day_index_to_date(idx: i64) -> chrono::NaiveDate {
 }
 
 async fn stats_heatmap_impl(rows: &[TaskStatRow], year: i64) -> CoreResult<HeatmapData> {
-
     let (from, to) = heatmap_year_range(year);
     // 逐日铺格：日期序号整除即本地日界（chrono NaiveDate 全程本地语义，
     // 与 done_at 毫秒 → 本地日 index 的 local_day_index 口径一致）
@@ -383,9 +382,7 @@ async fn stats_by_priority_impl(pool: &SqlitePool) -> CoreResult<Vec<PriorityDis
         .collect())
 }
 
-async fn stats_by_weekday_impl(
-    rows: &[TaskStatRow],
-) -> CoreResult<Vec<WeekdayDistRow>> {
+async fn stats_by_weekday_impl(rows: &[TaskStatRow]) -> CoreResult<Vec<WeekdayDistRow>> {
     // 星期分桶在 Rust 侧做（SQLite 无本地时区日界概念）
     let mut counts = vec![0i64; 7];
     for r in rows.iter().filter(|r| r.done == 1) {

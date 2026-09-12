@@ -70,12 +70,30 @@ impl<'de> Deserialize<'de> for FlexibleI64 {
 
 // ========== 通用过滤条件 ==========
 
-/// 通用列表过滤条件（所有业务表共用）
+/// 通用列表过滤条件（所有业务表共用）。
+///
+/// 谓词下推（2026-09-12 F5）：`done`/`status`/`priority_min`/`project_id`/
+/// `favorite_only`/`my_day_today` 仅 `todo_tasks` 表消费（其他表忽略），
+/// 语义与前端 `shared/task-filters.ts` 的 filterTasks 对齐——面板主查询
+/// 把视图/工具栏筛选下推到 SQL，替代万行全量拉取后内存过滤。
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ListFilter {
     pub keyword: Option<String>,
     pub page: u32,
     pub page_size: u32,
+    /// 完成态过滤：Some(true)=仅已完成，Some(false)=仅未完成，None=不过滤
+    pub done: Option<bool>,
+    /// 状态等值（pending/doing/done）
+    pub status: Option<String>,
+    /// 优先级下限（priority >= 此值）
+    pub priority_min: Option<i32>,
+    /// 项目 id 等值（软删行已由基线谓词排除）
+    pub project_id: Option<i64>,
+    /// 仅收藏（is_favorite = 1）
+    pub favorite_only: Option<bool>,
+    /// 我的一天：仅 my_day_date = 今天本地零点（调用方算好零点传入；
+    /// Rust 侧不做本地日界换算以免时区口径分裂）
+    pub my_day_today: Option<i64>,
 }
 
 // ---------- todo_projects ----------

@@ -333,12 +333,19 @@ const commands: Record<string, (args: any, ctx: Ctx) => unknown> = {
   },
 
   // ---- tasks ----
-  // 对齐 Rust generic_repo::list 的 WHERE is_deleted = 0（删除走软删，墓碑进回收站）
-  todo_tasks_list: ({ filter }, { db }) =>
-    filterByKeyword(
-      db.tasks.filter((t) => !t.is_deleted),
-      filter?.keyword,
-    ),
+  // 对齐 Rust generic_repo::list 的 WHERE is_deleted = 0（删除走软删，墓碑进回收站）。
+  // 谓词下推（F5）：六键与 Rust build_task_predicate_clause 同口径（仅本命令消费）
+  todo_tasks_list: ({ filter }, { db }) => {
+    let rows = db.tasks.filter((t) => !t.is_deleted);
+    if (filter?.done === true) rows = rows.filter((t) => t.done === 1);
+    if (filter?.done === false) rows = rows.filter((t) => t.done !== 1);
+    if (filter?.status != null) rows = rows.filter((t) => t.status === filter.status);
+    if (filter?.priority_min != null) rows = rows.filter((t) => t.priority >= filter.priority_min);
+    if (filter?.project_id != null) rows = rows.filter((t) => t.project_id === filter.project_id);
+    if (filter?.favorite_only === true) rows = rows.filter((t) => t.is_favorite === 1);
+    if (filter?.my_day_today != null) rows = rows.filter((t) => t.my_day_date === filter.my_day_today);
+    return filterByKeyword(rows, filter?.keyword);
+  },
   todo_tasks_get: ({ id }, { db }) => ipcClone(db.tasks.find((t) => t.id === id) ?? null),
   todo_tasks_get_by_uuid: ({ uuid: u }, { db }) => ipcClone(db.tasks.find((t) => t.uuid === u) ?? null),
   todo_tasks_create: ({ input }, { db }) => {

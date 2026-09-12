@@ -26,12 +26,19 @@ use serde::Serialize;
 // 通用过滤条件
 // =============================================================================
 
-/// 通用列表过滤条件（镜像 orbit_core::models::business::ListFilter）
+/// 通用列表过滤条件（镜像 orbit_core::models::business::ListFilter；
+/// 谓词下推六键仅 todo_tasks 消费，见 core 侧注释）
 #[derive(Debug, Clone, Serialize)]
 pub struct ListFilter {
     pub keyword: Option<String>,
     pub page: u32,
     pub page_size: u32,
+    pub done: Option<bool>,
+    pub status: Option<String>,
+    pub priority_min: Option<i32>,
+    pub project_id: Option<i64>,
+    pub favorite_only: Option<bool>,
+    pub my_day_today: Option<i64>,
 }
 
 impl From<orbit_core::models::business::ListFilter> for ListFilter {
@@ -40,6 +47,12 @@ impl From<orbit_core::models::business::ListFilter> for ListFilter {
             keyword: f.keyword,
             page: f.page,
             page_size: f.page_size,
+            done: f.done,
+            status: f.status,
+            priority_min: f.priority_min,
+            project_id: f.project_id,
+            favorite_only: f.favorite_only,
+            my_day_today: f.my_day_today,
         }
     }
 }
@@ -50,6 +63,12 @@ impl From<ListFilter> for orbit_core::models::business::ListFilter {
             keyword: f.keyword,
             page: f.page,
             page_size: f.page_size,
+            done: f.done,
+            status: f.status,
+            priority_min: f.priority_min,
+            project_id: f.project_id,
+            favorite_only: f.favorite_only,
+            my_day_today: f.my_day_today,
         }
     }
 }

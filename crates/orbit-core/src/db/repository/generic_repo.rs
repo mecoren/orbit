@@ -37,9 +37,13 @@ pub(crate) fn current_device_id() -> String {
 
 /// 泛型分页列表查询：SELECT * FROM {table} WHERE is_deleted=0
 ///     [AND (field1 LIKE ? OR field2 LIKE ? ...)]
+///     [AND todo_tasks 谓词下推子句（done/status/priority_min/project_id/
+///      favorite_only/my_day_today）]
 ///     ORDER BY updated_at DESC LIMIT ? OFFSET ?
 ///
 /// 当 filter.keyword 非空时，按 [searchable_fields] 返回的字段白名单拼接 LIKE OR 子句。
+/// 谓词字段仅 todo_tasks 表消费（其他表结构无这些列，忽略不报错——
+/// 调用方混用属契约错误，但基线是不静默丢数据所以选择忽略）。
 /// 调用方需保证 T: sqlx::FromRow 且表结构匹配。
 pub async fn list<T>(pool: &SqlitePool, table: &str, filter: &ListFilter) -> CoreResult<Vec<T>>
 where
@@ -52,20 +56,28 @@ where
     } as i32;
     // offset 须用规范化后的 page_size（此前用原始 filter.page_size：
     // page_size=0 的默认 20 档第 2 页起 offset 恒 0，所有页都返第一页数据）
-    let offset =
-        (filter.page.saturating_sub(1)).saturating_mul(page_size.max(1) as u32) as i32;
+    let offset = (filter.page.saturating_sub(1)).saturating_mul(page_size.max(1) as u32) as i32;
 
     // 拼接 keyword 过滤子句：仅在 keyword 非空且表有可搜索字段时生效
     let keyword_clause = build_keyword_clause(table, filter.keyword.as_deref());
+    // 谓词下推子句（仅 todo_tasks；占位符按声明顺序绑定）
+    let predicate_clause = build_task_predicate_clause(table, filter);
 
     let sql = format!(
-        "SELECT * FROM {} WHERE is_deleted = 0{} ORDER BY updated_at DESC LIMIT ? OFFSET ?",
-        table, keyword_clause.clause,
+        "SELECT * FROM {} WHERE is_deleted = 0{}{} ORDER BY updated_at DESC LIMIT ? OFFSET ?",
+        table, keyword_clause.clause, predicate_clause.clause,
     );
 
     let mut q = sqlx::query_as::<_, T>(&sql);
     // 绑定 keyword 参数（每个可搜索字段绑定一次 %keyword%）
     for value in keyword_clause.bindings {
+        q = q.bind(value);
+    }
+    // 绑定谓词参数：status 文本先（子句中占位符在数值谓词前），后数值按声明序
+    if let Some(status) = predicate_clause.status_binding {
+        q = q.bind(status);
+    }
+    for value in predicate_clause.bindings {
         q = q.bind(value);
     }
     q = q.bind(page_size);
@@ -81,6 +93,63 @@ struct KeywordClause {
     clause: String,
     /// 绑定参数值列表（每个字段一个 "%keyword%" 字符串）
     bindings: Vec<String>,
+}
+
+/// 谓词下推子句构造结果（2026-09-12 F5，仅 todo_tasks 消费）
+struct TaskPredicateClause {
+    /// SQL 子句文本（如 " AND done = 0 AND priority >= ?"），无谓词时为空串
+    clause: String,
+    /// 数值绑定（与子句占位符声明顺序一致；status 文本绑定单列）
+    bindings: Vec<i64>,
+    /// status 文本绑定（单独通道——TEXT 列绑 INTEGER 在 SQLite 比较不命中）
+    status_binding: Option<String>,
+}
+
+/// 拼接 todo_tasks 的谓词下推子句（其他表返回空——结构上没有这些列）。
+/// 语义对齐前端 filterTasks：done/status/priority_min/project_id/
+/// favorite_only/my_day_today（零点值由调用方传入）。
+fn build_task_predicate_clause(table: &str, filter: &ListFilter) -> TaskPredicateClause {
+    if table != "todo_tasks" {
+        return TaskPredicateClause {
+            clause: String::new(),
+            bindings: Vec::new(),
+            status_binding: None,
+        };
+    }
+    let mut clause = String::new();
+    let mut bindings = Vec::new();
+    let mut status_binding = None;
+    if let Some(done) = filter.done {
+        clause.push_str(if done {
+            " AND done = 1"
+        } else {
+            " AND done = 0"
+        });
+    }
+    if let Some(status) = filter.status.clone() {
+        clause.push_str(" AND status = ?");
+        status_binding = Some(status);
+    }
+    if let Some(min) = filter.priority_min {
+        clause.push_str(" AND priority >= ?");
+        bindings.push(min as i64);
+    }
+    if let Some(pid) = filter.project_id {
+        clause.push_str(" AND project_id = ?");
+        bindings.push(pid);
+    }
+    if filter.favorite_only == Some(true) {
+        clause.push_str(" AND is_favorite = 1");
+    }
+    if let Some(zero) = filter.my_day_today {
+        clause.push_str(" AND my_day_date = ?");
+        bindings.push(zero);
+    }
+    TaskPredicateClause {
+        clause,
+        bindings,
+        status_binding,
+    }
 }
 
 /// 返回指定业务表的可搜索字符串字段白名单
@@ -1280,5 +1349,87 @@ mod tests {
         for binding in &clause.bindings {
             assert_eq!(binding, "%abc%");
         }
+    }
+}
+
+// ============================================================================
+// 谓词下推子句纯函数单测（2026-09-12 F5；SQL 语义集成见 todo_api tests）
+// ============================================================================
+
+#[cfg(test)]
+mod task_predicate_tests {
+    use super::{build_task_predicate_clause, ListFilter};
+
+    fn filter_with(p: impl FnOnce(&mut ListFilter)) -> ListFilter {
+        let mut f = ListFilter::default();
+        p(&mut f);
+        f
+    }
+
+    /// 非任务表忽略全部谓词（空子句空绑定）
+    #[test]
+    fn predicate_ignored_for_non_task_tables() {
+        let c = build_task_predicate_clause(
+            "todo_projects",
+            &filter_with(|f| {
+                f.done = Some(false);
+                f.priority_min = Some(3);
+            }),
+        );
+        assert!(c.clause.is_empty());
+        assert!(c.bindings.is_empty() && c.status_binding.is_none());
+    }
+
+    /// done=false → done = 0 字面量（无绑定参数）
+    #[test]
+    fn done_false_is_literal_clause() {
+        let c = build_task_predicate_clause(
+            "todo_tasks",
+            &filter_with(|f| {
+                f.done = Some(false);
+            }),
+        );
+        assert_eq!(c.clause, " AND done = 0");
+        assert!(c.bindings.is_empty());
+    }
+
+    /// status 文本绑定单通道（TEXT 列不可绑 INTEGER）
+    #[test]
+    fn status_binds_text_separately() {
+        let c = build_task_predicate_clause(
+            "todo_tasks",
+            &filter_with(|f| {
+                f.status = Some("doing".into());
+                f.priority_min = Some(4);
+            }),
+        );
+        assert!(c.clause.contains(" AND status = ? AND priority >= ?"));
+        assert_eq!(c.status_binding.as_deref(), Some("doing"));
+        // 数值绑定序 = 子句声明序（priority_min 在 status 后声明）
+        assert_eq!(c.bindings, vec![4]);
+    }
+
+    /// project_id / my_day_today / favorite_only 组合
+    #[test]
+    fn combined_numeric_predicates() {
+        let zero = 1_789_142_400_000_i64;
+        let c = build_task_predicate_clause(
+            "todo_tasks",
+            &filter_with(|f| {
+                f.project_id = Some(7);
+                f.favorite_only = Some(true);
+                f.my_day_today = Some(zero);
+            }),
+        );
+        assert!(c.clause.contains(" AND project_id = ? AND is_favorite = 1 AND my_day_date = ?"));
+        assert_eq!(c.bindings, vec![7, zero]);
+        assert!(c.status_binding.is_none());
+    }
+
+    /// 空谓词 → 空子句（基线查询零开销）
+    #[test]
+    fn no_predicates_yields_empty_clause() {
+        let c = build_task_predicate_clause("todo_tasks", &ListFilter::default());
+        assert!(c.clause.is_empty());
     }
 }
