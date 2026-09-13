@@ -99,7 +99,7 @@ async fn run_on_change_sync(app: &AppHandle) {
     let Ok(engine) = sync_runtime::sync_engine(app) else {
         return;
     };
-    if cloud_sync_api::is_running(&engine).await {
+    if cloud_sync_api::is_running(&engine) {
         return; // 全量同步进行中，无需重复推
     }
     let Some(config) = sync_runtime::engine_config_of_record(&record) else {
@@ -161,7 +161,7 @@ async fn tick(app: &AppHandle) {
     let Ok(engine) = sync_runtime::sync_engine(app) else {
         return;
     };
-    if cloud_sync_api::is_running(&engine).await {
+    if cloud_sync_api::is_running(&engine) {
         return;
     }
     LAST_AUTO_SYNC_MS.store(now_ms, Ordering::Relaxed);

@@ -324,9 +324,20 @@ impl SyncEngine {
     }
 
     /// 检查同步是否正在运行
-    pub async fn is_running(&self) -> bool {
-        let guard = self.sync_lock.lock().await;
-        guard.is_some()
+    ///
+    /// S5（2026-09-13 探查，基线 P1-10）：try_lock 探测而非 lock().await
+    /// 阻塞等待——原实现让调度器的「忙则跳过」实为「忙则挂起排队」，
+    /// 限流长退避（锁最长持有 210s）期间 tick 任务全部挂起。
+    ///
+    /// 判定方向：同步进行中锁被 `SyncGuard` 持有 → try_lock 失败 → true；
+    /// 空闲时锁可获取（`SyncGuard::drop` 已将内部值重置为 None）→ false。
+    /// 历史版 `lock().await + guard.is_some()` 因 drop 重置内部值恒返回
+    /// false，等价于探测永远失效。
+    pub fn is_running(&self) -> bool {
+        match self.sync_lock.try_lock() {
+            Ok(guard) => guard.is_some(),
+            Err(_) => true,
+        }
     }
 
     /// 执行完整同步（Pull → Push + 附件）
@@ -1381,6 +1392,43 @@ mod tests {
         assert!(r.skipped);
         assert_eq!(r.pushed_modules, 0);
         assert_eq!(r.pulled_modules, 0);
+    }
+
+    // ========================================================================
+    // S5（2026-09-13 探查，基线 P1-10）：is_running 探测语义
+    //
+    // 历史版 `lock().await + guard.is_some()` 恒返回 false（drop 已重置
+    // 内部值），探测永远失效；且 lock().await 阻塞排队让调度器「忙则跳过」
+    // 语义失真。修复后必须满足：空闲=false / 锁被 SyncGuard 持有=true /
+    // 探测本身不等待（try_lock 立即返回）。
+    // ========================================================================
+
+    /// 空闲引擎：无同步运行 → false
+    #[tokio::test]
+    async fn s5_is_running_false_when_idle() {
+        let engine = history_engine().await;
+        assert!(!engine.is_running(), "空闲引擎应返回 false");
+    }
+
+    /// 锁被持有（同步进行中）→ true；释放后恢复 false
+    ///
+    /// 走生产持有路径 `acquire_lock`（SyncGuard：drop 先重置内部值再放锁），
+    /// 不用裸 try_lock_owned——其 drop 不重置内部值，非生产路径。
+    #[tokio::test]
+    async fn s5_is_running_true_while_lock_held() {
+        let engine = history_engine().await;
+        {
+            let guard = engine
+                .acquire_lock()
+                .await
+                .expect("空闲引擎应成功获取锁")
+                .expect("无并发持有者时不应返回跳过");
+            // 持有期间：try_lock 失败 → is_running 必须为 true
+            assert!(engine.is_running(), "锁被持有时应返回 true");
+            drop(guard);
+        }
+        // SyncGuard::drop 语义：内部值重置为 None + 锁释放
+        assert!(!engine.is_running(), "锁释放后应恢复 false");
     }
 
     // ========================================================================

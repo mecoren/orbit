@@ -177,7 +177,7 @@ pub async fn cloud_sync_get_state(app: AppHandle) -> Result<String, String> {
 #[tauri::command]
 pub async fn cloud_sync_is_running(app: AppHandle) -> Result<bool, String> {
     let engine = sync_runtime::sync_engine(&app)?;
-    Ok(cloud_sync_api::is_running(&engine).await)
+    Ok(cloud_sync_api::is_running(&engine))
 }
 
 /// 断开云同步：软删激活配置 + 清空本地指纹账本（下次配置后触发全量重推）
