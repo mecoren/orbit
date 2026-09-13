@@ -7,6 +7,13 @@
 
 ## [Unreleased]
 
+### 桌面系统通知正文点击路由：点通知直达任务详情
+
+- **此前断点**：Windows 系统通知点击正文后啥也不发生（`__closed` 统一丢弃，正文点击与关闭不可区分）——移动端 `onNotificationTap` 冷启动路由早已有，桌面是能力缺口。对标 MS To Do/TickTick 标配交互。
+- **修复**：notify-rust `wait_for_action`（只回 action 串，正文点击与关闭混为 `__closed`）→ `wait_for_response`（`NotificationResponse` 三态区分：`Default`=正文点击 / `Action(key)`=按钮 / `Closed`=关闭）。正文点击路径：`show_or_create_main_window` 唤起主窗（window_recycler 统一入口，隐藏驻留态 show + 已回收态重建两分支全覆盖）→ 延迟 2s emit `todo_reminder:open`（对齐 PENDING_QUICK_ADD 补发口径，保证冷启动监听挂载后才到达）→ 前端写 `selectedTaskId` 打开详情抽屉（与 in-app toast 的「查看任务」同范式）。
+- 关闭/超时（`Closed`）不处理——`Timeout::Never` 下主要是用户主动关横幅；macOS 内联回复（`Reply`）未启用，防御性忽略。
+- 验证：cargo check 零错 / tsc 零错 / vitest 252 全绿；真机通知点击路径属 OS 交互，冒烟由 e2e 链路覆盖（18 用例无回归）。
+
 ### 任务描述 Markdown 渲染移动端对齐（桌面已有同源能力补齐）
 
 - **移动端描述区 Markdown 渲染**：桌面详情抽屉展示态早已走 `markdown-lite` 渲染（标题/粗体/斜体/行内代码/链接/列表），移动详情页此前是裸 `Text` 原文显示——本批补齐双端口径。`logic/markdown_lite.dart` 同源移植（逐字对齐桌面解析语义：`code`/`**bold**`/`*italic*`/`[text](url)` 逐字符扫描、不成对标记原样保留、`- [ ]` 任务列表残留按原文渲染）；链接点击跳系统浏览器（`url_launcher` 官方第一方插件，平台桥接非 UI 库，不违反「UI 自绘不引库」惯例）；recognizer 生命周期由 StatefulWidget 宿主管理（纯函数层不持有 TapGestureRecognizer）。

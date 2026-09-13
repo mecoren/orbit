@@ -16,9 +16,15 @@
 //!   直用 notify-rust 4.18（三平台 action 支持矩阵见其 README：
 //!   Linux XDG ✔ / macOS NSUser ✔(labels) / macOS UNUser ✔ / Windows ✔）。
 //! - show() 返回 NotificationHandle；每条通知 spawn 一个阻塞线程
-//!   wait_for_action（跨平台 API），收到 snooze action 后：
-//!   ① 删旧建新写 DB（orbit-core business_api，桌面环境直写）；
-//!   ② emit "todo_reminder:snoozed" → 前端失效详情缓存。
+//!   wait_for_response（跨平台 API，比 wait_for_action 多区分「正文点击
+//!   Default」与「关闭 Closed」两个事件），收到：
+//!   · snooze action → ① 删旧建新写 DB（orbit-core business_api，桌面
+//!     环境直写）；② emit "todo_reminder:snoozed" → 前端失效详情缓存。
+//!   · 正文点击（Default）→ 通知点击路由：唤起主窗（window_recycler
+//!     统一入口，含隐藏驻留/已回收两态）+ emit "todo_reminder:open" →
+//!     前端写 selectedTaskId 打开任务详情抽屉（对齐移动端 onNotificationTap
+//!     冷启动路由的桌面版）。
+//!   · 关闭（Closed）→ 不处理（Timeout::Never 下主要是用户主动关掉）。
 //! - 推迟语义与前端 toast 相同：新 remind_at = 原 remind_at + N 分钟
 //!   （锚点不漂移）。
 //! - Windows app_id 用进程 AUMID cn.wait.orbit；开发态（未安装）Toast
@@ -72,6 +78,13 @@ struct ReminderSnoozedEvent {
     reminder_id: i64,
     task_id: i64,
     remind_at: i64,
+    title: String,
+}
+
+/// 通知正文点击路由事件（前端写 selectedTaskId 打开任务详情抽屉）
+#[derive(Clone, Serialize)]
+struct ReminderOpenEvent {
+    task_id: i64,
     title: String,
 }
 
@@ -208,79 +221,115 @@ fn notify_system(app: &AppHandle, reminder_id: i64, task_id: i64, title: &str, r
     let handle = n.show();
     let Ok(handle) = handle else { return };
 
-    // 每条通知一个阻塞等待线程（wait_for_action 跨平台；通知关闭/超时
-    // 回调 "__closed"）。桌面常驻进程模型下线程随通知生命周期结束。
-    // title 先克隆为 owned：spawn 闭包要求 'static，&str 借用逃逸不过检查
+    // 每条通知一个阻塞等待线程（wait_for_response 跨平台；正文点击=
+    // Default、按钮=Action(key)、关闭/超时=Closed）。桌面常驻进程模型下
+    // 线程随通知生命周期结束。title 先克隆为 owned：spawn 闭包要求
+    // 'static，&str 借用逃逸不过检查
     let app = app.clone();
     let title = title.to_string();
     std::thread::spawn(move || {
-        // wait_for_action 消费 handle（FnOnce 回调）；先经 channel 转出
-        // action 串，把后续写库留在本线程主体（闭包内不能 async）
-        let (tx, rx) = std::sync::mpsc::channel::<String>();
-        handle.wait_for_action(move |a| {
-            let _ = tx.send(a.to_string());
-        });
-        let Ok(action) = rx.recv() else { return };
-        let Some(minutes) = SNOOZE_ACTIONS
-            .iter()
-            .find(|(id, _)| *id == action)
-            .map(|(_, m)| *m)
-        else {
-            return; // "__closed"（正文点击/关闭/超时）或未知 action：不处理
-        };
-        let next_at = remind_at + minutes * 60_000;
-        // 删旧建新（business_api 软删 + 新建；锚点=原 remind_at）。
-        // 失败静默：系统通知已消失，前端 toast 兜底通道仍在。
-        let done = tauri::async_runtime::block_on(async {
-            let Some(state) = app.try_state::<AppState>() else {
-                return false;
-            };
-            let pool = state.pool.clone();
-            let del = orbit_core::api::business_api::delete_todo_reminder(&pool, reminder_id).await;
-            if del.is_err() {
-                return false;
-            }
-            let created = orbit_core::api::business_api::create_todo_reminder(
-                &pool,
-                &orbit_core::models::business::TodoReminderCreateInput {
-                    task_id,
-                    remind_at: next_at,
-                },
-            )
-            .await;
-            created.is_ok()
-        });
-        if done {
-            // 通知历史留痕（#5：推迟动作；失败静默）
-            {
-                let app2 = app.clone();
-                let title2 = title.clone();
-                tauri::async_runtime::spawn(async move {
-                    if let Some(state) = app2.try_state::<AppState>() {
-                        let _ = orbit_core::api::notification_log_api::log_notification(
-                            &state.pool,
-                            "snooze",
-                            Some(task_id),
-                            &title2,
-                            Some(reminder_id),
-                            &format!(r#"{{"snooze_until":{next_at}}}"#),
-                        )
-                        .await;
-                    }
+        // wait_for_response 消费 handle（ResponseHandler FnOnce 回调）；
+        // 先经 channel 转出响应，把后续写库/唤起留在本线程主体（闭包内
+        // 不能 async）
+        let (tx, rx) = std::sync::mpsc::channel::<notify_rust::NotificationResponse>();
+        if handle
+            .wait_for_response(move |r: &notify_rust::NotificationResponse| {
+                let _ = tx.send(r.clone());
+            })
+            .is_err()
+        {
+            return;
+        }
+        let Ok(response) = rx.recv() else { return };
+        match response {
+            // 正文点击 → 通知点击路由：唤起主窗（含隐藏驻留态 show 与
+            // 已回收态重建两分支——window_recycler 统一入口）+ emit 打开
+            // 详情事件。重建场景下事件晚于监听挂载到达是常态（冷启动链
+            // app-shell 挂载需时），故 emit 前固定延迟对齐 PENDING_QUICK_ADD
+            // 的 2s 补发口径；窗口本就在的常态路径 2s 延迟可感知但不丢
+            // 路由（用户点完通知的视觉预期是窗口出现，详情抽屉稍后弹出）
+            notify_rust::NotificationResponse::Default => {
+                crate::commands::window_recycler::show_or_create_main_window(&app);
+                let app = app.clone();
+                std::thread::spawn(move || {
+                    std::thread::sleep(std::time::Duration::from_secs(2));
+                    let _ = app.emit(
+                        "todo_reminder:open",
+                        ReminderOpenEvent {
+                            task_id,
+                            title: title.clone(),
+                        },
+                    );
                 });
             }
-            // 前端两件事：按 reminder_id 关闭对应 in-app toast（duration
-            // Infinity 常驻，不主动关会一直挂着且引用已删行）+ 失效
-            // todo-task-detail 缓存（详情抽屉提醒区块即时刷新）
-            let _ = app.emit(
-                "todo_reminder:snoozed",
-                ReminderSnoozedEvent {
-                    reminder_id,
-                    task_id,
-                    remind_at: next_at,
-                    title,
-                },
-            );
+            // 推迟按钮 → 删旧建新（语义不变）
+            notify_rust::NotificationResponse::Action(action) => {
+                let Some(minutes) = SNOOZE_ACTIONS
+                    .iter()
+                    .find(|(id, _)| *id == action)
+                    .map(|(_, m)| *m)
+                else {
+                    return; // 未知 action：不处理
+                };
+                let next_at = remind_at + minutes * 60_000;
+                // 删旧建新（business_api 软删 + 新建；锚点=原 remind_at）。
+                // 失败静默：系统通知已消失，前端 toast 兜底通道仍在。
+                let done = tauri::async_runtime::block_on(async {
+                    let Some(state) = app.try_state::<AppState>() else {
+                        return false;
+                    };
+                    let pool = state.pool.clone();
+                    let del = orbit_core::api::business_api::delete_todo_reminder(&pool, reminder_id).await;
+                    if del.is_err() {
+                        return false;
+                    }
+                    let created = orbit_core::api::business_api::create_todo_reminder(
+                        &pool,
+                        &orbit_core::models::business::TodoReminderCreateInput {
+                            task_id,
+                            remind_at: next_at,
+                        },
+                    )
+                    .await;
+                    created.is_ok()
+                });
+                if done {
+                    // 通知历史留痕（#5：推迟动作；失败静默）
+                    {
+                        let app2 = app.clone();
+                        let title2 = title.clone();
+                        tauri::async_runtime::spawn(async move {
+                            if let Some(state) = app2.try_state::<AppState>() {
+                                let _ = orbit_core::api::notification_log_api::log_notification(
+                                    &state.pool,
+                                    "snooze",
+                                    Some(task_id),
+                                    &title2,
+                                    Some(reminder_id),
+                                    &format!(r#"{{"snooze_until":{next_at}}}"#),
+                                )
+                                .await;
+                            }
+                        });
+                    }
+                    // 前端两件事：按 reminder_id 关闭对应 in-app toast（duration
+                    // Infinity 常驻，不主动关会一直挂着且引用已删行）+ 失效
+                    // todo-task-detail 缓存（详情抽屉提醒区块即时刷新）
+                    let _ = app.emit(
+                        "todo_reminder:snoozed",
+                        ReminderSnoozedEvent {
+                            reminder_id,
+                            task_id,
+                            remind_at: next_at,
+                            title,
+                        },
+                    );
+                }
+            }
+            // 关闭/超时/其他（Closed/Reply）：不处理——Timeout::Never 下
+            // Closed 主要是用户主动关掉横幅；macOS 内联回复 Reply 本项目
+            // 未启用，防御性忽略
+            _ => {}
         }
     });
 }

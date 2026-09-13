@@ -37,6 +37,12 @@ interface ReminderSnoozedPayload {
   title: string;
 }
 
+/** 系统通知正文点击路由事件（Rust 唤起主窗后 emit） */
+interface ReminderOpenPayload {
+  task_id: number;
+  title: string;
+}
+
 /** reminder.id → in-app toast id（snoozed 事件到达时按源 id 关对应 toast） */
 const reminderToastIds = new Map<number, number | string>();
 
@@ -102,9 +108,17 @@ export function useTodoReminderListener() {
       // 到期处置（重复任务续排/已完成实例清理）由 Rust 轮询守护在 emit
       // 前后异步执行（orbit-core advance_fired_reminder），本监听器只呈现
     });
+    // 系统通知正文点击 → 打开任务详情抽屉（Rust 已唤起主窗；窗口隐藏/
+    // 回收态由 Rust show_or_create 兜底，事件延迟 2s 到达保证监听已挂载）
+    const unlistenOpen = listen<ReminderOpenPayload>("todo_reminder:open", (event) => {
+      const { task_id } = event.payload;
+      const dest = openTaskFromReminder(task_id);
+      void router.navigate(dest);
+    });
     return () => {
       unlistenPromise.then((unlisten) => unlisten());
       unlistenSnoozed.then((unlisten) => unlisten());
+      unlistenOpen.then((unlisten) => unlisten());
     };
   }, [qc]);
 }
