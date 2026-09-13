@@ -7,6 +7,15 @@
 
 ## [Unreleased]
 
+### 云同步专项修复：探查报告 S1-S13 三批落地（14 项）
+
+docs/同步功能专项探查报告-2026-09-13.md 59 项问题中的 14 项按批次修复（批 A P0+高杠杆 / 批 B 可靠性 / 批 C 调度与一致性），每项带定向回归测试：
+
+- **批 A（P0 三连 + 两小修）**：S1 附件云端命名三套口径统一为 `assets/{hash}.waitsync`（存量 `.waitsync` 对象的死循环「每轮重复下载→哈希校验失败」消除，双路径回退迁移兼容）；S2 S3/WebDAV endpoint 规范化接线（无 scheme 的 MinIO 形态不再误报认证错误）；S3 备份文件名消毒增补 `#`/`%`/空格/控制字符；S5 is_running 改 try_lock 探测并修正恒 false 方向 bug（原实现阻塞排队 + 探测失效双坑）；S10 tauri-plugin-log 注册（引擎诊断日志不再全量丢弃，stdout + app_log.log）。
+- **批 B（错误结构化六连）**：S6+S19 SyncError/CloudSyncError 增 `RateLimited`/`Auth` 类型变体，弃 contains("429") 字符串嗅探（"4291 bytes" 巧合子串不再触发 120s 白等）；with_retry 认证错误首错即返（密钥配错每轮白等 ~14s → 0s）；S7 附件同步包入业务级 with_retry + 空列表防御；S9 mark_uploaded 吞错收敛可观测；S11 WebDAV PROPFIND 错误走统一状态码框架（5xx 恢复可重试、限流可识别、401/403 归认证）；S12 DELETE/HEAD 传输错误可重试。
+- **批 C（调度与一致性）**：S13 定时同步账本持久化（重启不再每启必全量同步；失败保留快速重试窗口）；S8 push 模块间错误隔离（单模块失败不再中断附件等后续阶段；rekey 路径例外硬失败防新旧 Key 混合态）。
+- 验证：cargo 478（WebDAV 环境用例已知非回归）/ clippy 警告与基线持平 / tsc 零错 / vitest 252 / e2e 18 / flutter analyze+test 256 全绿；报告 §六验证矩阵已回填。
+
 ### UI 细节清理（性能报告 M2/M6/L3 收尾）
 
 - **日历/年视图 title 手搓提示换 tooltip 原语**（M2）：回到今天/更新节假日（月/年档两处）+ 年视图大年份点击返回——三组按钮统一 `bg-primary` 主题色底白字原语口径（原生 title 灰白系统弹层不再混用）；议程档空态标题与拖拽圆点 title 保留（前者是组件 prop 非手搓、后者非 hover 目标场景）。
