@@ -37,6 +37,17 @@ pub async fn todo_subtasks_toggle_done(
         .map_err(|e| e.to_string())
 }
 
+/// 子任务转独立任务（单事务：软删子任务行 + 承接父任务上下文建新任务）
+#[tauri::command]
+pub async fn todo_subtasks_promote(
+    state: State<'_, AppState>,
+    subtask_id: i64,
+) -> Result<TodoTask, String> {
+    todo_api::promote_todo_subtask(&state.pool, subtask_id)
+        .await
+        .map_err(|e| e.to_string())
+}
+
 /// 更新任务排序位置（拖拽排序）
 #[tauri::command]
 pub async fn todo_tasks_update_position(

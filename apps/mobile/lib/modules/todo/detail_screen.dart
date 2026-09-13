@@ -946,6 +946,18 @@ class _SubtasksSectionState extends ConsumerState<_SubtasksSection> {
         () => ref.read(orbitBridgeProvider).todoSubtaskDelete(subtask.id));
   }
 
+  /// 子任务转独立任务（承接父任务 project/priority/due 上下文；
+  /// MS To Do Steps→Task 同款语义）
+  Future<void> _promote(TodoSubtask subtask) async {
+    try {
+      await ref.read(orbitBridgeProvider).todoSubtaskPromote(subtask.id);
+      widget.onChanged();
+      WaitToast.success('已转为独立任务');
+    } catch (_) {
+      WaitToast.destructive('转换失败');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final colors = AppColors.ofContext(context);
@@ -987,6 +999,15 @@ class _SubtasksSectionState extends ConsumerState<_SubtasksSection> {
                             : null,
                       ),
                     ),
+                  ),
+                  // 转独立任务（承接父任务上下文；对齐桌面行尾入口）
+                  IconButton(
+                    visualDensity: VisualDensity.compact,
+                    tooltip: '转为独立任务',
+                    icon: Icon(Icons.open_in_new_rounded,
+                        size: AppDimens.iconSizeSm,
+                        color: colors.secondaryText),
+                    onPressed: () => _promote(subtask),
                   ),
                   // close 删除（确认弹窗防误触，对齐桌面/评论删除惯例）
                   IconButton(

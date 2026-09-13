@@ -15,6 +15,7 @@ import {
   Calendar,
   Check,
   CircleStop,
+  CornerUpRight,
   ExternalLink,
   File as FileIcon,
   Flag,
@@ -65,6 +66,7 @@ import {
 import { DateTimePicker } from "@/components/business/date-picker";
 import { QuickDateMenu } from "@/components/business/quick-date-options";
 import { WaitCalendar } from "@/components/ui/wait-calendar";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useTodoStore } from "@/features/todo/store";
 import { hideFromQueries, useUndoableDeleteAction } from "@/hooks/use-undoable-delete";
 import { usePasteAttachment } from "@/hooks/use-paste-attachment";
@@ -87,6 +89,7 @@ import {
   todoLabelList,
   todoSubtaskCreate,
   todoSubtaskDelete,
+  todoSubtaskPromote,
   todoSubtaskToggleDone,
   todoTaskDelete,
   todoTaskGet,
@@ -1258,6 +1261,33 @@ function SubtasksSection({
               >
                 {s.title}
               </span>
+              {/* 转独立任务（MS To Do Steps→Task 同款；承接父任务项目/
+                  优先级/截止上下文，详见 todo_api::promote_todo_subtask） */}
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    aria-label={`转为独立任务 ${s.title}`}
+                    className="opacity-0 group-hover:opacity-100 group-focus-within:opacity-100"
+                    onClick={() => {
+                      void (async () => {
+                        try {
+                          await todoSubtaskPromote(s.id);
+                          onChanged();
+                          toast.success("已转为独立任务", {
+                            description: "承接了本任务的项目/优先级/截止日期",
+                          });
+                        } catch {
+                          toast.error("转换失败");
+                        }
+                      })();
+                    }}
+                  >
+                    <CornerUpRight size={14} className="text-muted-foreground hover:text-foreground" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent>转为独立任务</TooltipContent>
+              </Tooltip>
               <button type="button" aria-label="删除子任务"
                 className="opacity-0 group-hover:opacity-100 group-focus-within:opacity-100"
                 onClick={() => setConfirmDelete(s)}

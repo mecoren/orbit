@@ -7,6 +7,14 @@
 
 ## [Unreleased]
 
+### 子任务转独立任务三端落地
+
+- **对标 MS To Do「Steps→Task」/Things 移出语义**：子任务长大了要独立跟踪（提醒/日期/优先级）是 GTD 高频场景，此前只能删子任务再手动重建任务。
+- **引擎单事务**（`promote_todo_subtask`）：软删子任务行 + 克隆建新任务**承接父任务上下文**（project_id/priority/due_date/start_date——用户少补字段）+ 尾位 position 落位（同列表项目/批量移动同口径）；完成态子任务转出保留 done/done_at/status='done'（完成事实不丢失）；percent_done 随软删重算；事件提交后发射三路（子任务 Delete/父任务 Update/新任务 Insert）；活动日志 from:subtask 埋点。
+- **三端 UI**：桌面详情抽屉子任务行「转为独立任务」按钮（CornerUpRight 图标，group-hover 显现 + tooltip 主题色底白字）；移动详情页行尾 open_in_new 图标钮；失败 toast 兜底。
+- **桥链**：Tauri `todo_subtasks_promote` + FRB `todo_subtasks_promote`（codegen 入库）+ 桌面 ipc-mock / MockOrbitBridge 同口径（承接字段/percent 重算/完成态保留）。
+- 测试：Rust 引擎 4（上下文承接/完成态保留/percent 重算 50→0/尾位落位）+ mock 桥契约 3；cargo 486 / vitest 252 / flutter 274 / e2e 18 / analyze 零警告全绿。
+
 ### 项目归档三端落地
 
 - **对标 Tasks.org/Vikunja/Todoist 全标配**：项目一多侧栏不可收拾的核心痛点，此前唯一的出路是删除（连带保护弹窗与撤销窗口）。归档 = 从默认视图收起（非软删）。

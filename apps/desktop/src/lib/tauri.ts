@@ -310,6 +310,8 @@ export const todoSubtaskCreate = (input: TodoSubtaskCreateInput) => invoke<TodoS
 export const todoSubtaskUpdate = (id: number, input: TodoSubtaskUpdateInput) => invoke<TodoSubtask>("todo_subtasks_update", { id, input });
 export const todoSubtaskDelete = (id: number) => invoke<void>("todo_subtasks_delete", { id });
 export const todoSubtaskToggleDone = (subtaskId: number, done: boolean) => invoke<void>("todo_subtasks_toggle_done", { subtaskId, done });
+/** 子任务转独立任务（承接父任务 project/priority/due 上下文；返回新任务） */
+export const todoSubtaskPromote = (subtaskId: number) => invoke<TodoTask>("todo_subtasks_promote", { subtaskId });
 
 // ========== todo_labels ==========
 export interface TodoLabel {

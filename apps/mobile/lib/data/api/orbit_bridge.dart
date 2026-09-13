@@ -246,6 +246,9 @@ abstract class OrbitBridge {
   Future<void> todoSubtaskDelete(int id);
   Future<void> todoSubtaskToggleDone(int subtaskId, bool done);
 
+  /// 子任务转独立任务（承接父任务 project/priority/due 上下文；返回新任务）
+  Future<TodoTask> todoSubtaskPromote(int subtaskId);
+
   // ── todo_labels / todo_task_labels ──
 
   Future<List<TodoLabel>> todoLabelList(ListFilter filter);

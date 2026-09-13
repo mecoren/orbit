@@ -542,6 +542,60 @@ class MockOrbitBridge implements OrbitBridge {
         _emit('todo_subtasks');
       });
 
+  @override
+  Future<TodoTask> todoSubtaskPromote(int subtaskId) => _delay(() {
+        // 对齐 Rust promote_todo_subtask：软删行 + 承接父任务 project/
+        // priority/due 建尾位新任务 + percent 重算
+        final s = store.subtasks[subtaskId] ?? _notFound('subtask $subtaskId');
+        final parent = store.tasks[s['task_id'] as int] ??
+            _notFound('task ${s['task_id']}');
+        final now = store.now();
+        s['is_deleted'] = 1;
+        s['deleted_at'] = now;
+        s['updated_at'] = now;
+        final sibling = store.tasks.values.where((t) =>
+            t['is_deleted'] == 0 &&
+            (t['project_id'] as int?) == (parent['project_id'] as int?));
+        final maxPos = sibling.fold<double>(
+            -1.0, (m, t) => (t['position'] as num?) != null
+                ? ((t['position'] as num).toDouble() > m
+                    ? (t['position'] as num).toDouble()
+                    : m)
+                : m);
+        final t = {
+          ...store.newEntity('t'),
+          'title': s['title'],
+          'description': null,
+          'project_id': parent['project_id'],
+          'priority': parent['priority'],
+          'status': s['done'] == 1 ? 'done' : 'pending',
+          'done': s['done'],
+          'done_at': s['done_at'],
+          'due_date': parent['due_date'],
+          'start_date': parent['start_date'],
+          'repeat_after': 0,
+          'repeat_mode': 0,
+          'repeat_weekdays': 0,
+          'repeat_end_type': 0,
+          'repeat_end_param': 0,
+          'repeat_from_done': 0,
+          'percent_done': 0,
+          'position': maxPos + 1,
+          'is_favorite': 0,
+          'my_day_date': null,
+          'is_deleted': 0,
+          'created_at': now,
+          'updated_at': now,
+          'deleted_at': null,
+          'version': 1,
+        };
+        store.tasks[t['id'] as int] = t;
+        store.recalcPercent(parent['id'] as int);
+        _emit('todo_subtasks');
+        _emit('todo_tasks');
+        return TodoTask.fromJson(t);
+      });
+
   // ── todo_labels / task_labels ──
 
   @override

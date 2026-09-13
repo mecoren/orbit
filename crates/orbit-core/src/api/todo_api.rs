@@ -130,6 +130,114 @@ pub async fn toggle_todo_subtask_done(
     Ok(())
 }
 
+/// 子任务转独立任务（单事务；MS To Do Steps→Task 同款语义）：
+/// 软删原子任务行 + 克隆建新任务承接父任务上下文（project_id/priority/
+/// due_date——子任务长大了要独立跟踪的 GTD 高频场景，用户少补字段）。
+/// percent_done 随软删重算；新任务 position 取父任务列表尾部（不复用
+/// 子任务 position 域，避免与任务排序键混淆）。
+pub async fn promote_todo_subtask(pool: &SqlitePool, subtask_id: i64) -> CoreResult<TodoTask> {
+    let sub: TodoSubtask = generic_repo::get_by_id(pool, "todo_subtasks", subtask_id).await?;
+    if sub.is_deleted == 1 {
+        return Err(CoreError::Other(format!(
+            "子任务 id={subtask_id} 已在回收站，无法转换"
+        )));
+    }
+    let parent: TodoTask = generic_repo::get_by_id(pool, "todo_tasks", sub.task_id).await?;
+    let now = chrono::Utc::now().timestamp_millis();
+
+    let mut tx = pool.begin().await?;
+    // 1. 软删子任务行
+    sqlx::query(
+        "UPDATE todo_subtasks SET is_deleted = 1, deleted_at = ?, updated_at = ?, version = version + 1 WHERE id = ?",
+    )
+    .bind(now)
+    .bind(now)
+    .bind(subtask_id)
+    .execute(&mut *tx)
+    .await?;
+
+    // 2. 尾位 position（同列表项目/批量移动同口径：最大值 + 1，空表兜底 0）
+    let max_pos: f64 = sqlx::query_scalar(
+        "SELECT COALESCE(MAX(position), -1.0) FROM todo_tasks \
+         WHERE project_id IS ? AND is_deleted = 0",
+    )
+    .bind(parent.project_id)
+    .fetch_one(&mut *tx)
+    .await?;
+
+    // 3. 克隆建新任务：承接父任务的 project/priority/due；完成态子任务
+    //    转出后 done=1 保留完成事实（与 done_at 一并迁移）
+    let new_uuid = uuid::Uuid::new_v4().to_string();
+    let created: TodoTask = sqlx::query_as(
+        "INSERT INTO todo_tasks (
+            uuid, title, description, project_id, priority, status, done, done_at,
+            due_date, start_date, repeat_after, repeat_mode,
+            percent_done, position, is_favorite, my_day_date,
+            is_deleted, created_at, updated_at, version
+        ) VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, 0, 0, 0, ?, 0, NULL, 0, ?, ?, 1)
+         RETURNING *",
+    )
+    .bind(&new_uuid)
+    .bind(&sub.title)
+    .bind(parent.project_id)
+    .bind(parent.priority)
+    .bind(if sub.done == 1 { "done" } else { "pending" })
+    .bind(sub.done)
+    .bind(sub.done_at)
+    .bind(parent.due_date)
+    .bind(parent.start_date)
+    .bind(max_pos + 1.0)
+    .bind(now)
+    .bind(now)
+    .fetch_one(&mut *tx)
+    .await?;
+
+    tx.commit().await?;
+
+    // 4. 事件（提交后发）：子任务 Delete + 父任务 Update（percent_done 变化）
+    //    + 新任务 Insert
+    let device_id = generic_repo::current_device_id();
+    emit_todo_event(
+        "todo_subtasks",
+        sub.id,
+        &sub.uuid,
+        DbOp::Delete,
+        now,
+        &device_id,
+    );
+    emit_todo_event(
+        "todo_tasks",
+        parent.id,
+        &parent.uuid,
+        DbOp::Update,
+        now,
+        &device_id,
+    );
+    emit_todo_event(
+        "todo_tasks",
+        created.id,
+        &created.uuid,
+        DbOp::Insert,
+        now,
+        &device_id,
+    );
+
+    // 5. 父任务 percent_done 重算（软删行不进分母）
+    recalc_task_percent_done(pool, parent.id).await?;
+
+    // 活动日志（F6 同款埋点：显式语义动作）
+    let _ = crate::api::activity_log_api::log_activity(
+        pool,
+        created.id,
+        &created.title,
+        "create",
+        &format!(r#"{{"from":"subtask","parent_id":{}}}"#, parent.id),
+    )
+    .await;
+
+    Ok(created)
+}
+
 /// 重算任务进度（已完成子任务数 / 总子任务数 * 100）
 pub async fn recalc_task_percent_done(pool: &SqlitePool, task_id: i64) -> CoreResult<()> {
     let now = chrono::Utc::now().timestamp_millis();
@@ -772,6 +880,187 @@ fn emit_todo_event(table: &str, id: i64, uuid: &str, op: DbOp, timestamp: i64, d
 // ============================================================================
 // 单元测试（引擎纯函数 + complete_todo_task 事务语义；桌面端 repeat-task.test.ts 语义随迁）
 // ============================================================================
+
+/// 子任务转独立任务（promote_todo_subtask）引擎测试
+#[cfg(test)]
+mod promote_subtask_tests {
+    use super::*;
+    use crate::api::business_api::{create_todo_subtask, create_todo_task, list_todo_tasks};
+    use crate::models::business::{ListFilter, TodoSubtaskCreateInput, TodoTaskCreateInput};
+
+    async fn setup_db() -> SqlitePool {
+        let pool = sqlx::SqlitePool::connect("sqlite::memory:").await.unwrap();
+        sqlx::migrate!("./src/db/migrations")
+            .run(&pool)
+            .await
+            .unwrap();
+        pool
+    }
+
+    fn all_filter() -> ListFilter {
+        ListFilter {
+            page_size: 10_000,
+            ..Default::default()
+        }
+    }
+
+    #[tokio::test]
+    async fn promote_creates_task_with_parent_context() {
+        let pool = setup_db().await;
+        let parent = create_todo_task(
+            &pool,
+            &TodoTaskCreateInput {
+                title: "父任务".into(),
+                project_id: Some(1),
+                priority: Some(3),
+                due_date: Some(1_700_000_000_000),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+        let sub = create_todo_subtask(
+            &pool,
+            &TodoSubtaskCreateInput {
+                task_id: parent.id,
+                title: "独立成长的子任务".into(),
+                position: None,
+            },
+        )
+        .await
+        .unwrap();
+
+        let created = promote_todo_subtask(&pool, sub.id).await.unwrap();
+        assert_eq!(created.title, "独立成长的子任务");
+        assert_eq!(created.project_id, Some(1));
+        assert_eq!(created.priority, 3);
+        assert_eq!(created.due_date, Some(1_700_000_000_000));
+        assert_eq!(created.done, 0);
+        assert_eq!(created.status, "pending");
+
+        // 子任务行已软删（is_deleted=1）且不再出现在父任务子任务列表
+        let sub_after: TodoSubtask = generic_repo::get_by_id(&pool, "todo_subtasks", sub.id)
+            .await
+            .unwrap();
+        assert_eq!(sub_after.is_deleted, 1);
+    }
+
+    #[tokio::test]
+    async fn promote_done_subtask_keeps_done_state() {
+        let pool = setup_db().await;
+        let parent = create_todo_task(
+            &pool,
+            &TodoTaskCreateInput {
+                title: "父".into(),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+        let sub = create_todo_subtask(
+            &pool,
+            &TodoSubtaskCreateInput {
+                task_id: parent.id,
+                title: "已完成的子任务".into(),
+                position: None,
+            },
+        )
+        .await
+        .unwrap();
+        toggle_todo_subtask_done(&pool, sub.id, true).await.unwrap();
+
+        let created = promote_todo_subtask(&pool, sub.id).await.unwrap();
+        assert_eq!(created.done, 1);
+        assert_eq!(created.status, "done");
+        assert!(created.done_at.is_some());
+    }
+
+    #[tokio::test]
+    async fn promote_recalls_parent_percent() {
+        let pool = setup_db().await;
+        let parent = create_todo_task(
+            &pool,
+            &TodoTaskCreateInput {
+                title: "进度父".into(),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+        let s1 = create_todo_subtask(
+            &pool,
+            &TodoSubtaskCreateInput {
+                task_id: parent.id,
+                title: "甲".into(),
+                position: None,
+            },
+        )
+        .await
+        .unwrap();
+        let _s2 = create_todo_subtask(
+            &pool,
+            &TodoSubtaskCreateInput {
+                task_id: parent.id,
+                title: "乙".into(),
+                position: None,
+            },
+        )
+        .await
+        .unwrap();
+        toggle_todo_subtask_done(&pool, s1.id, true).await.unwrap();
+
+        let parent_before: TodoTask = generic_repo::get_by_id(&pool, "todo_tasks", parent.id)
+            .await
+            .unwrap();
+        assert_eq!(parent_before.percent_done, 50.0);
+
+        // 转走「甲」后只剩「乙」，percent 重算为 0
+        let _ = promote_todo_subtask(&pool, s1.id).await.unwrap();
+        let parent_after: TodoTask = generic_repo::get_by_id(&pool, "todo_tasks", parent.id)
+            .await
+            .unwrap();
+        assert_eq!(parent_after.percent_done, 0.0);
+    }
+
+    #[tokio::test]
+    async fn promote_appends_tail_position() {
+        let pool = setup_db().await;
+        let t1 = create_todo_task(
+            &pool,
+            &TodoTaskCreateInput {
+                title: "现有任务".into(),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+        let parent = create_todo_task(
+            &pool,
+            &TodoTaskCreateInput {
+                title: "父".into(),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+        let sub = create_todo_subtask(
+            &pool,
+            &TodoSubtaskCreateInput {
+                task_id: parent.id,
+                title: "尾位验证".into(),
+                position: None,
+            },
+        )
+        .await
+        .unwrap();
+
+        let created = promote_todo_subtask(&pool, sub.id).await.unwrap();
+        assert!(created.position > t1.position);
+        // 新任务出现在默认聚合里
+        let all = list_todo_tasks(&pool, &all_filter()).await.unwrap();
+        assert!(all.iter().any(|t| t.id == created.id));
+    }
+}
 
 #[cfg(test)]
 mod repeat_tests {

@@ -250,6 +250,7 @@ pub fn run() {
             // todo_cmd 复杂查询（7 组）
             todo_cmd::todo_tasks_get_detail,
             todo_cmd::todo_subtasks_toggle_done,
+            todo_cmd::todo_subtasks_promote,
             todo_cmd::todo_tasks_update_position,
             todo_cmd::todo_projects_update_sort_order,
             todo_cmd::todo_tasks_kanban_by_project,

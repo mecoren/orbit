@@ -278,6 +278,10 @@ class RustOrbitBridge implements OrbitBridge {
   Future<void> todoSubtaskToggleDone(int subtaskId, bool done) =>
       gen_todo.todoSubtasksToggleDone(subtaskId: subtaskId, done: done);
 
+  @override
+  Future<TodoTask> todoSubtaskPromote(int subtaskId) async =>
+      _mapTask(await gen_todo.todoSubtasksPromote(subtaskId: subtaskId));
+
   // ── todo_labels / task_labels ──
 
   @override

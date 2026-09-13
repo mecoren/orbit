@@ -598,6 +598,53 @@ const commands: Record<string, (args: any, ctx: Ctx) => unknown> = {
       task.updated_at = now;
     }
   },
+  // 子任务转独立任务（对齐 Rust promote_todo_subtask：软删行 + 承接父任务
+  // project/priority/due 建尾位新任务；percent_done 随软删重算）
+  todo_subtasks_promote: ({ id }, { db }) => {
+    const s = db.subtasks.find((x) => x.id === id);
+    if (!s) throw new Error(`subtask ${id} 不存在`);
+    const parent = db.tasks.find((t) => t.id === s.task_id);
+    if (!parent) throw new Error(`task ${s.task_id} 不存在`);
+    const now = Date.now();
+    s.is_deleted = 1;
+    s.deleted_at = now;
+    s.updated_at = now;
+    s.version += 1;
+    const live = db.subtasks.filter((x) => x.task_id === s.task_id && !x.is_deleted);
+    const doneCount = live.filter((x) => x.done === 1).length;
+    parent.percent_done = live.length === 0 ? 0 : (doneCount / live.length) * 100;
+    parent.updated_at = now;
+    const sibling = db.tasks.filter(
+      (t) => !t.is_deleted && (t.project_id ?? null) === (parent.project_id ?? null),
+    );
+    const maxPos = sibling.reduce((m, t) => Math.max(m, t.position), -1);
+    const t: MockTask = {
+      id: db.seq++,
+      uuid: uuid(),
+      title: s.title,
+      description: null,
+      project_id: parent.project_id,
+      priority: parent.priority,
+      status: s.done === 1 ? "done" : "pending",
+      done: s.done,
+      done_at: s.done_at,
+      due_date: parent.due_date,
+      start_date: parent.start_date,
+      repeat_after: 0,
+      repeat_mode: 0,
+      percent_done: 0,
+      position: maxPos + 1,
+      is_favorite: 0,
+      my_day_date: null,
+      is_deleted: 0,
+      created_at: now,
+      updated_at: now,
+      deleted_at: null,
+      version: 1,
+    };
+    db.tasks.push(t);
+    return ipcClone(t);
+  },
 
   // ---- task_relations（#28：详情抽屉关联区完整命令面）----
   todo_task_relations_list: (_a, { db }) =>

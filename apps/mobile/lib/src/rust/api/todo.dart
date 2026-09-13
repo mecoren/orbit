@@ -137,6 +137,11 @@ Future<void> todoSubtasksToggleDone({
   done: done,
 );
 
+/// 子任务转独立任务（对应桌面 todo_cmd::todo_subtasks_promote；单事务：
+/// 软删子任务行 + 承接父任务 project/priority/due 上下文建尾位新任务）
+Future<TodoTask> todoSubtasksPromote({required PlatformInt64 subtaskId}) =>
+    RustLib.instance.api.crateApiTodoTodoSubtasksPromote(subtaskId: subtaskId);
+
 /// 列出标签（对应桌面 todo_labels_list）
 Future<List<TodoLabel>> todoLabelsList({required ListFilter filter}) =>
     RustLib.instance.api.crateApiTodoTodoLabelsList(filter: filter);

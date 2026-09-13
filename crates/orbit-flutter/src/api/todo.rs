@@ -267,6 +267,16 @@ pub async fn todo_subtasks_toggle_done(subtask_id: i64, done: bool) -> Result<()
         .map_err(|e| e.to_string())
 }
 
+/// 子任务转独立任务（对应桌面 todo_cmd::todo_subtasks_promote；单事务：
+/// 软删子任务行 + 承接父任务 project/priority/due 上下文建尾位新任务）
+pub async fn todo_subtasks_promote(subtask_id: i64) -> Result<TodoTask, String> {
+    let pool = pool()?;
+    let created = todo_api::promote_todo_subtask(&pool, subtask_id)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(TodoTask::from(created))
+}
+
 // =============================================================================
 // todo_labels
 // =============================================================================
