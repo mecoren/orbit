@@ -462,6 +462,8 @@ impl SyncEngine {
             })
             .await?;
         result.pushed_modules = push_result.pushed_modules;
+        // S8：push 模块间错误隔离后失败信息经 errors 透传（对齐 pull 侧口径）
+        result.errors.extend(push_result.errors);
 
         // 3. 附件同步：先 Pull 附件（下载远端新增），再 Push 附件（上传本地新增）
         // S7（2026-09-13 探查，基线 P1-23）：附件流程包入 with_retry——此前仅在
@@ -576,6 +578,8 @@ impl SyncEngine {
         )
         .await?;
         result.pushed_modules = push_result.pushed_modules;
+        // S8：模块间错误隔离后的失败信息透传
+        result.errors.extend(push_result.errors);
 
         // Push 附件（S7：包入 with_retry，与 sync_now/pull_then_push 同口径）
         let att_push = self
@@ -716,6 +720,8 @@ impl SyncEngine {
             })
             .await?;
         result.pushed_modules = push_result.pushed_modules;
+        // S8：模块间错误隔离后的失败信息透传（对齐 pull 侧口径）
+        result.errors.extend(push_result.errors);
 
         // 4. Push 附件（S7：包入 with_retry）
         let att_push = self
@@ -850,6 +856,17 @@ impl SyncEngine {
         )
         .await?;
         result.pushed_modules = push_result.pushed_modules;
+        // S8 联动：rekey 语义是「以本机为准全量重加密重传」——任何模块失败
+        // 都会留下「新 Key 模块 + 旧 Key 模块」的混合态密文（他端解不开
+        // 旧 Key 模块），此处必须硬失败中断 rekey，不走模块间隔离的宽松路径
+        if push_result.failed_modules > 0 {
+            return Err(CloudSyncError::Other {
+                message: format!(
+                    "rekey 全量重传有 {} 个模块失败，中断以防云端新旧 Key 混合态: {:?}",
+                    push_result.failed_modules, push_result.errors
+                ),
+            });
+        }
 
         // 3. 附件：清零 is_uploaded 触发全量重传（本地缓存部分）
         let reset_count =

@@ -45,6 +45,10 @@ pub struct PushResult {
     pub pushed_modules: u32,
     /// 跳过的模块数（指纹未变）
     pub skipped_modules: u32,
+    /// 失败的模块数（S8：模块间错误隔离——失败不中断后续模块）
+    pub failed_modules: u32,
+    /// 失败模块的错误信息（与 failed_modules 一一对应）
+    pub errors: Vec<String>,
 }
 
 /// 单个模块 Push 任务的结果（用于并行任务返回，主流程顺序应用 state）
@@ -159,13 +163,24 @@ pub async fn push_all(
     }
 
     // 顺序应用 outcomes 到 state 和 result
+    // S8（2026-09-13 探查）：模块间错误隔离——单模块失败不中断后续已成功
+    // 模块的 state 应用与 _meta 上传（此前 `?` 中断使第 N 模块失败时，
+    // 前面已上传成功的模块 state 不落地、_meta 不上传：云端「部分新
+    // 部分旧」，他端 fp 未变全部跳过拉取；本机下轮 reconcile 判 fp
+    // 不一致全量重传）。失败模块的 state 不应用（保留旧 prev_state，
+    // 下轮指纹比对自然重试该模块），对齐 pull.rs 的错误隔离范式。
     let mut result = PushResult::default();
     for outcome in outcomes {
-        match outcome? {
-            PushModuleOutcome::Skipped => result.skipped_modules += 1,
-            PushModuleOutcome::Pushed { name, new_state } => {
+        match outcome {
+            Ok(PushModuleOutcome::Skipped) => result.skipped_modules += 1,
+            Ok(PushModuleOutcome::Pushed { name, new_state }) => {
                 state.set_module(&name, new_state);
                 result.pushed_modules += 1;
+            }
+            Err(e) => {
+                result.failed_modules += 1;
+                result.errors.push(e.to_string());
+                log::info!("[push_all] 单模块 push 失败（隔离不中断）: {}", e);
             }
         }
     }
@@ -494,6 +509,121 @@ mod tests {
             pulled_at: 0,
             pushed_at: 0,
         }
+    }
+
+    // ========================================================================
+    // S8（2026-09-13 探查）：push 模块间错误隔离
+    //
+    // 此前 outcomes 循环里 `?` 中断：第 N 模块失败时，前面已成功上传的
+    // 模块 state 不应用、_meta 不上传——云端「部分新部分旧」，他端 fp
+    // 未变全部跳过拉取；本机下轮 reconcile 判 fp 不一致全量重传。
+    // 隔离后：失败模块错误进 PushResult.errors/failed_modules，成功模块
+    // 正常应用 state + _meta 上传。rekey 路径除外（混合 Key 态防护，
+    // 在 engine.rs 硬失败）。
+    // ========================================================================
+
+    /// 单模块失败隔离：上传第一个模块的 meta 时注入失败，验证后续模块
+    /// 不受影响、失败计数与 errors 收集正确
+    #[tokio::test]
+    async fn s8_push_all_isolates_module_failure() {
+        use crate::cloud_sync::progress::NoopProgressSender;
+        use crate::sync_adapters::traits::SyncAdapter;
+        use std::sync::atomic::{AtomicU32, Ordering as AtomicOrdering};
+
+        let pool = sqlx::SqlitePool::connect("sqlite::memory:").await.unwrap();
+        sqlx::migrate!("./src/db/migrations").run(&pool).await.unwrap();
+        // 插入一行项目数据——空库会触发 should_skip_push 的
+        // 「首次同步 + 本地空数据 → 跳过」守卫，全部模块不上传
+        sqlx::query(
+            "INSERT INTO todo_projects (uuid, title, created_at, updated_at) \
+             VALUES ('test-uuid-1', '测试项目', 1, 1)",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        let tmp = tempfile::TempDir::new().unwrap();
+        let crypto = crate::sync_crypto::SyncCryptoService::new(tmp.path());
+        // push 需要 Data Key：init_with_data_key 注入固定 32 字节 Key
+        crypto
+            .init_with_data_key("test-password", &[7u8; 32])
+            .expect("注入测试 Data Key");
+        let state_store = crate::cloud_sync::state::SyncStateStore::new(tmp.path());
+
+        /// 失败注入 mock：首次 upload（todos 模块的 meta）返回错误，其余成功
+        struct FailFirstAdapter {
+            upload_count: AtomicU32,
+        }
+
+        #[async_trait::async_trait]
+        impl SyncAdapter for FailFirstAdapter {
+            async fn list_files(&self, _: &str) -> Result<Vec<crate::sync_adapters::traits::RemoteFile>, crate::sync::error::SyncError> {
+                Ok(Vec::new())
+            }
+            async fn list_all_files(&self, _: &str) -> Result<Vec<crate::sync_adapters::traits::RemoteFile>, crate::sync::error::SyncError> {
+                Ok(Vec::new())
+            }
+            async fn download(&self, _: &str) -> Result<Vec<u8>, crate::sync::error::SyncError> {
+                Err(crate::sync::error::SyncError::NotFound {
+                    message: "无".to_string(),
+                })
+            }
+            async fn upload(&self, _path: &str, _data: &[u8]) -> Result<(), crate::sync::error::SyncError> {
+                let n = self.upload_count.fetch_add(1, AtomicOrdering::SeqCst);
+                if n == 0 {
+                    // todos 模块的 meta 上传失败（注入点）
+                    return Err(crate::sync::error::SyncError::Network {
+                        message: "注入失败：首个上传".to_string(),
+                        retryable: true,
+                    });
+                }
+                Ok(())
+            }
+            async fn delete(&self, _: &str) -> Result<(), crate::sync::error::SyncError> {
+                Ok(())
+            }
+            async fn upload_asset(&self, _: &str, _: &[u8]) -> Result<(), crate::sync::error::SyncError> {
+                Ok(())
+            }
+            async fn download_asset(&self, _: &str) -> Result<Vec<u8>, crate::sync::error::SyncError> {
+                Err(crate::sync::error::SyncError::NotFound {
+                    message: "无".to_string(),
+                })
+            }
+            async fn asset_exists(&self, _: &str) -> Result<bool, crate::sync::error::SyncError> {
+                Ok(false)
+            }
+            async fn list_assets(&self) -> Result<Vec<String>, crate::sync::error::SyncError> {
+                Ok(Vec::new())
+            }
+        }
+
+        let adapter = FailFirstAdapter {
+            upload_count: AtomicU32::new(0),
+        };
+
+        let result = push_all(
+            &pool,
+            &crypto,
+            &state_store,
+            &adapter,
+            &NoopProgressSender,
+            crate::cloud_sync::progress::SyncOrigin::Manual,
+            "test-device",
+            &[],
+        )
+        .await
+        .expect("模块间错误隔离后 push_all 不得整体失败");
+
+        // 注：当前 MVP 为单模块（todos）——断言聚焦隔离语义本身：
+        // ① 单模块失败 push_all 不再整体 Err（调用方附件等后续阶段可继续）
+        // ② 失败计数与 errors 收集正确
+        // 多模块扩展后，本测试自然覆盖「后续模块继续上传」（upload_count 递增）
+        assert!(result.failed_modules >= 1, "首个模块失败应被计入");
+        assert!(
+            !result.errors.is_empty(),
+            "失败模块错误信息必须收集进 errors"
+        );
+        assert_eq!(result.pushed_modules, 0, "注入失败的模块不得计为已推送");
     }
 
     // ========================================================================
