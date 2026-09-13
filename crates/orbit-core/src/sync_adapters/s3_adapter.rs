@@ -269,7 +269,9 @@ impl SyncAdapter for S3Adapter {
             .await
             .map_err(|e| SyncError::Network {
                 message: format!("DELETE 请求失败: {e}"),
-                retryable: false,
+                // S12：传输层失败（连接中断/超时）是瞬态，标可重试——
+                // 此前 retryable:false 让业务级 with_retry 直接放弃
+                retryable: true,
             })?;
 
         // Fix-03：校验状态码，403/500 等失败不得静默成功
@@ -312,7 +314,7 @@ impl SyncAdapter for S3Adapter {
             .await
             .map_err(|e| SyncError::Network {
                 message: format!("HEAD 请求失败: {e}"),
-                retryable: false,
+                retryable: true,
             })?;
 
         match SyncError::classify_head_status(result.status().as_u16())? {
@@ -334,7 +336,7 @@ impl SyncAdapter for S3Adapter {
             .await
             .map_err(|e| SyncError::Network {
                 message: format!("HEAD 请求失败: {e}"),
-                retryable: false,
+                retryable: true,
             })?;
 
         SyncError::classify_head_status(result.status().as_u16())

@@ -97,12 +97,29 @@ pub async fn sync_attachments_push(
         }
     };
 
+    // S7（2026-09-13 探查）：空列表防御——本地有未上传附件但云端列表为空，
+    // 大概率是 list 探测异常（部分服务对空 prefix 返回空而非 404），
+    // 而非真的"云端无附件"（真被清空时 reconcile 已触发全量重传）。
+    // 直接上传会产生 N 个对象的全量风暴，在限流服务上雪崩。防御性跳过本轮。
+    if cloud_hashes.is_empty() {
+        result
+            .errors
+            .push("云端附件列表为空但本地存在未上传附件，疑似探测异常，本轮跳过附件上传".to_string());
+        return Ok(result);
+    }
+
     // 3. 分离"云端已存在"（仅修正标记）与"待上传"两组
     let mut to_upload = Vec::new();
     for attachment in unuploaded {
         if cloud_hashes.contains(&attachment.hash) {
             // 标记为已上传（本地状态与云端不一致，修正）
-            let _ = attachment_repo::mark_uploaded(db_pool, &attachment.hash).await;
+            // S9：吞错收敛——DB 标记失败记入 errors 可见（此前 let _ = 静默，
+            // 标记持续失败时每轮重复走修正分支且不可观测）
+            if let Err(e) = attachment_repo::mark_uploaded(db_pool, &attachment.hash).await {
+                result
+                    .errors
+                    .push(format!("标记附件 {} 为已上传失败: {}", attachment.hash, e));
+            }
             result.skipped += 1;
         } else {
             to_upload.push(attachment);
@@ -175,7 +192,14 @@ pub async fn sync_attachments_push(
     for (hash, outcome) in outcomes {
         match outcome {
             Ok(()) => {
-                let _ = attachment_repo::mark_uploaded(db_pool, &hash).await;
+                // S9：吞错收敛——上传成功但 DB 标记失败时，附件实际已在云端，
+                // 下轮会走"云端已存在→修正标记"分支自愈；错误记入 errors
+                // 保证可观测（此前 let _ = 静默，用户无感知每轮重复上传）
+                if let Err(e) = attachment_repo::mark_uploaded(db_pool, &hash).await {
+                    result
+                        .errors
+                        .push(format!("标记附件 {} 为已上传失败: {}", hash, e));
+                }
                 result.uploaded += 1;
             }
             Err(e) => {

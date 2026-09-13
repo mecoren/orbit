@@ -38,6 +38,16 @@ pub enum SyncError {
     /// 现由适配器按状态码构造本变体，`is_not_found()` 基于类型判断。
     #[error("资源不存在(404): {message}")]
     NotFound { message: String },
+
+    /// 限流（HTTP 429，或坚果云等服务的 503 限流响应）。
+    ///
+    /// S6（2026-09-13 探查，基线 P1-5）：历史实现靠消息 contains("429") /
+    /// "BlockedTemporarily" 字符串嗅探判定限流——任何错误消息含 "429" 子串
+    /// （如 "size 4291 bytes"）都会触发 30/60/120s 长退避。现由适配器按
+    /// 状态码 + 限流标识构造本变体，`is_rate_limited()` 基于类型判断；
+    /// `from_http_status` 内联判定 429 与「503 + 限流体」两种形态。
+    #[error("请求被限流(429): {message}")]
+    RateLimited { message: String },
 }
 
 impl SyncError {
@@ -52,23 +62,35 @@ impl SyncError {
         )
     }
 
-    /// 是否为限流错误（429 或包含限流标识的 503）
+    /// 是否为限流错误（S6：类型判断，替代 contains("429") 字符串嗅探）
     ///
-    /// 坚果云等 WebDAV 服务在请求过频时返回 503 + "BlockedTemporarily" /
-    /// "Too many requests"。此类错误需要更长退避（30/60/120 秒），
-    /// 而非默认的 2/4/8 秒，否则会加剧限流。
+    /// 限流需要更长退避（30/60/120 秒）而非默认 2/4/8 秒，否则加剧限流。
+    /// 现判定 = `RateLimited` 变体（由适配器按状态码构造）；
+    /// 兼容期保留对历史 `Network` 错误消息的嗅探（旧调用方手工构造的
+    /// 限流错误未经过适配器），但嗅探仅在状态码标识后进行。
     pub fn is_rate_limited(&self) -> bool {
-        let msg = self.to_string();
-        // 429 Too Many Requests 是标准限流状态码
-        if msg.contains("429") {
+        if matches!(self, SyncError::RateLimited { .. }) {
             return true;
         }
-        // 坚果云等服务的 503 限流标识
-        msg.contains("BlockedTemporarily")
+        // 兼容：适配器之外手工构造的历史限流错误（无类型信息）——
+        // 用与之前一致的标识匹配，但加上 "HTTP 429" 前缀锚点，
+        // "size 4291 bytes" 这类巧合子串不再误判
+        let msg = self.to_string();
+        msg.contains("认证失败(429)")
+            || msg.contains("HTTP 429")
+            || msg.contains("BlockedTemporarily")
             || msg.contains("Too many requests")
             || msg.contains("too many requests")
             || msg.contains("rate limit")
             || msg.contains("Rate limit")
+    }
+
+    /// 是否为认证类错误（401/403）——重试无意义（凭据不会自动变对）
+    ///
+    /// S6：`with_retry` 对认证错误立即返回，不再白等 2/4/8s×3 重试
+    /// （密钥配错的用户每轮同步白等 ~14s）。
+    pub fn is_auth_error(&self) -> bool {
+        matches!(self, SyncError::Auth { .. })
     }
 
     /// 是否为「资源不存在」（404）错误
@@ -80,6 +102,9 @@ impl SyncError {
     }
 
     /// 根据HTTP状态码构造对应错误
+    ///
+    /// S6/S19：429 与「503 + 限流体」构造类型化 `RateLimited` 变体
+    /// （替代调用方 contains 嗅探）；其余分类不变。
     pub fn from_http_status(status: u16, body: &str) -> Self {
         match status {
             401 | 403 => SyncError::Auth {
@@ -88,10 +113,27 @@ impl SyncError {
             404 => SyncError::NotFound {
                 message: body.to_string(),
             },
-            500..=599 => SyncError::Network {
-                message: format!("服务器错误({status}): {body}"),
-                retryable: true,
+            429 => SyncError::RateLimited {
+                message: body.to_string(),
             },
+            500..=599 => {
+                // 坚果云等 WebDAV 服务限流时返回 503 + "BlockedTemporarily" /
+                // "Too many requests" 体——与过载的 503 同码不同因，
+                // 限流形态需要长退避、过载形态短退避即可
+                let limited = body.contains("BlockedTemporarily")
+                    || body.to_lowercase().contains("too many requests")
+                    || body.to_lowercase().contains("rate limit");
+                if status == 503 && limited {
+                    SyncError::RateLimited {
+                        message: format!("服务器限流({status}): {body}"),
+                    }
+                } else {
+                    SyncError::Network {
+                        message: format!("服务器错误({status}): {body}"),
+                        retryable: true,
+                    }
+                }
+            }
             _ => SyncError::Network {
                 message: format!("HTTP {status}: {body}"),
                 retryable: false,
@@ -140,6 +182,9 @@ impl SyncError {
         match status {
             200..=299 => Ok(true),
             404 | 409 => Ok(false),
+            429 => Err(SyncError::RateLimited {
+                message: "HEAD 探测被限流".to_string(),
+            }),
             s if (500..=599).contains(&s) => Err(SyncError::Network {
                 message: format!("HEAD 探测失败: HTTP {s}"),
                 retryable: true,
@@ -257,5 +302,60 @@ mod tests {
         // 429 限流不得静默当「不存在」
         let limited = SyncError::classify_head_status(429).unwrap_err();
         assert!(!limited.is_not_found(), "429 不得判为不存在");
+        assert!(limited.is_rate_limited(), "429 HEAD 应构造 RateLimited 变体");
+    }
+
+    // ========================================================================
+    // S6/S19（2026-09-13 探查，基线 P1-5）：限流错误结构化
+    //
+    // 历史实现 contains("429") 字符串嗅探——"size 4291 bytes" 这类巧合
+    // 子串触发 30/60/120s 长退避；503+限流体（坚果云）与服务端过载 5xx
+    // 不区分。现由 from_http_status 按状态码构造 RateLimited 变体。
+    // ========================================================================
+
+    #[test]
+    fn http_429_maps_to_rate_limited_variant() {
+        let err = SyncError::from_http_status(429, "Too Many Requests");
+        assert!(
+            matches!(err, SyncError::RateLimited { .. }),
+            "429 必须映射为 RateLimited 变体"
+        );
+        assert!(err.is_rate_limited());
+        assert!(!err.is_not_found(), "429 不得误判为不存在");
+        assert!(!err.is_auth_error());
+    }
+
+    #[test]
+    fn jianguoyun_503_rate_limit_body_maps_to_rate_limited() {
+        // 坚果云 503 + BlockedTemporarily 体：限流而非过载
+        let err = SyncError::from_http_status(503, "BlockedTemporarily: too many requests");
+        assert!(
+            matches!(err, SyncError::RateLimited { .. }),
+            "503+限流体必须构造 RateLimited（需长退避）"
+        );
+    }
+
+    #[test]
+    fn plain_503_overload_stays_network_retryable() {
+        // 普通过载 503（无限流标识）：保持可重试 Network，短退避
+        let err = SyncError::from_http_status(503, "Service Temporarily Unavailable");
+        assert!(matches!(err, SyncError::Network { .. }));
+        assert!(err.is_retryable(), "过载 503 应保持可重试");
+        assert!(!err.is_rate_limited());
+    }
+
+    #[test]
+    fn message_containing_429_substring_no_longer_triggers_rate_limit() {
+        // 巧合子串回归：响应体含 "429" 数字不再误判限流
+        let err = SyncError::from_http_status(500, "object size 4291 bytes");
+        assert!(!err.is_rate_limited(), "500 + 体含 429 子串不得判为限流");
+    }
+
+    #[test]
+    fn auth_error_detected_by_type_for_retry_exclusion() {
+        // S6：with_retry 用类型判断排除认证错误
+        assert!(SyncError::from_http_status(403, "forbidden").is_auth_error());
+        assert!(SyncError::from_http_status(401, "unauthorized").is_auth_error());
+        assert!(!SyncError::from_http_status(500, "x").is_auth_error());
     }
 }

@@ -375,11 +375,13 @@ impl SyncAdapter for WebDavAdapter {
         if status == 404 {
             return Ok(Vec::new());
         }
+        // S11（2026-09-13 探查，基线 P1-1）：非 2xx 错误走统一状态码框架
+        // from_http_status——此前手写 Network{retryable:false} 让 5xx 不可
+        // 重试（与统一框架相反）、body 丢弃（限流标识不可识别）、401/403
+        // 被归为 Network 误导排障方向。
         if !response.status().is_success() && status != 207 {
-            return Err(SyncError::Network {
-                message: format!("PROPFIND 失败: {}", response.status()),
-                retryable: false,
-            });
+            let body = response.text().await.unwrap_or_default();
+            return Err(SyncError::from_http_status(status, &body));
         }
 
         let xml = response.text().await.map_err(|e| SyncError::Network {
@@ -441,6 +443,11 @@ impl SyncAdapter for WebDavAdapter {
             Err(SyncError::Network { message, retryable }) => {
                 // 坚果云在父目录不存在时对 GET 返回 409 AncestorsNotFound，
                 // 这与 MKCOL 的 409 语义不同，应视为资源不存在而非网络错误。
+                // S19（2026-09-13 探查）：409 数字判断保留（from_http_status 的
+                // 兜底分支将非 2xx/4xx 归 Network 且消息带 "HTTP 409" 状态码
+                // 锚点——适配器对 GET 无法拿到原始 status，此嗅探有锚点、非
+                // 裸子串），AncestorsNotFound 体特征一并校验防 409 其他语义
+                // （如 MKCOL 冲突）误判。
                 if message.contains("HTTP 409") && message.contains("AncestorsNotFound") {
                     Err(SyncError::NotFound {
                         message: format!("资源不存在(409): {message}"),
@@ -480,7 +487,8 @@ impl SyncAdapter for WebDavAdapter {
             .await
             .map_err(|e| SyncError::Network {
                 message: format!("DELETE 请求失败: {e}"),
-                retryable: false,
+                // S12：传输层失败是瞬态，标可重试（同 S3 侧口径）
+                retryable: true,
             })?;
 
         // Fix-03：校验状态码，403/500 等失败不得静默成功
@@ -523,7 +531,7 @@ impl SyncAdapter for WebDavAdapter {
             .await
             .map_err(|e| SyncError::Network {
                 message: format!("HEAD 请求失败: {e}"),
-                retryable: false,
+                retryable: true,
             })?;
 
         match SyncError::classify_head_status(result.status().as_u16())? {
@@ -544,7 +552,7 @@ impl SyncAdapter for WebDavAdapter {
             .await
             .map_err(|e| SyncError::Network {
                 message: format!("HEAD 请求失败: {e}"),
-                retryable: false,
+                retryable: true,
             })?;
 
         SyncError::classify_head_status(result.status().as_u16())
@@ -587,11 +595,10 @@ impl SyncAdapter for WebDavAdapter {
         if status == 404 {
             return Ok(Vec::new());
         }
+        // S11：非 2xx 错误走统一框架（同 list_all_files）
         if !response.status().is_success() && status != 207 {
-            return Err(SyncError::Network {
-                message: format!("PROPFIND 失败: {}", response.status()),
-                retryable: false,
-            });
+            let body = response.text().await.unwrap_or_default();
+            return Err(SyncError::from_http_status(status, &body));
         }
 
         let xml = response.text().await.map_err(|e| SyncError::Network {

@@ -464,27 +464,35 @@ impl SyncEngine {
         result.pushed_modules = push_result.pushed_modules;
 
         // 3. 附件同步：先 Pull 附件（下载远端新增），再 Push 附件（上传本地新增）
-        let att_pull = sync_attachments_pull(
-            &self.db_pool,
-            &self.crypto,
-            adapter,
-            self.progress_sender.as_ref(),
-            origin,
-            attachments_dir,
-        )
-        .await?;
+        // S7（2026-09-13 探查，基线 P1-23）：附件流程包入 with_retry——此前仅在
+        // 模块数据两侧有业务级长退避，附件遇限流/瞬态错误只有 HTTP 级 3 次短退避。
+        let att_pull = self
+            .with_retry("attachments_pull", 3, || {
+                sync_attachments_pull(
+                    &self.db_pool,
+                    &self.crypto,
+                    adapter,
+                    self.progress_sender.as_ref(),
+                    origin,
+                    attachments_dir,
+                )
+            })
+            .await?;
         result.downloaded_attachments = att_pull.downloaded;
         result.errors.extend(att_pull.errors);
 
-        let att_push = sync_attachments_push(
-            &self.db_pool,
-            &self.crypto,
-            adapter,
-            self.progress_sender.as_ref(),
-            origin,
-            attachments_dir,
-        )
-        .await?;
+        let att_push = self
+            .with_retry("attachments_push", 3, || {
+                sync_attachments_push(
+                    &self.db_pool,
+                    &self.crypto,
+                    adapter,
+                    self.progress_sender.as_ref(),
+                    origin,
+                    attachments_dir,
+                )
+            })
+            .await?;
         result.uploaded_attachments = att_push.uploaded;
         result.errors.extend(att_push.errors);
 
@@ -569,16 +577,19 @@ impl SyncEngine {
         .await?;
         result.pushed_modules = push_result.pushed_modules;
 
-        // Push 附件
-        let att_push = sync_attachments_push(
-            &self.db_pool,
-            &self.crypto,
-            adapter,
-            self.progress_sender.as_ref(),
-            origin,
-            attachments_dir,
-        )
-        .await?;
+        // Push 附件（S7：包入 with_retry，与 sync_now/pull_then_push 同口径）
+        let att_push = self
+            .with_retry("attachments_push", 3, || {
+                sync_attachments_push(
+                    &self.db_pool,
+                    &self.crypto,
+                    adapter,
+                    self.progress_sender.as_ref(),
+                    origin,
+                    attachments_dir,
+                )
+            })
+            .await?;
         result.uploaded_attachments = att_push.uploaded;
         result.errors.extend(att_push.errors);
 
@@ -672,16 +683,19 @@ impl SyncEngine {
         result.pulled_modules = pull_result.pulled_modules;
         result.errors.extend(pull_result.errors);
 
-        // 2. Pull 附件
-        let att_pull = sync_attachments_pull(
-            &self.db_pool,
-            &self.crypto,
-            adapter,
-            self.progress_sender.as_ref(),
-            origin,
-            attachments_dir,
-        )
-        .await?;
+        // 2. Pull 附件（S7：包入 with_retry，与模块数据同口径）
+        let att_pull = self
+            .with_retry("attachments_pull", 3, || {
+                sync_attachments_pull(
+                    &self.db_pool,
+                    &self.crypto,
+                    adapter,
+                    self.progress_sender.as_ref(),
+                    origin,
+                    attachments_dir,
+                )
+            })
+            .await?;
         result.downloaded_attachments = att_pull.downloaded;
         result.errors.extend(att_pull.errors);
 
@@ -703,16 +717,19 @@ impl SyncEngine {
             .await?;
         result.pushed_modules = push_result.pushed_modules;
 
-        // 4. Push 附件
-        let att_push = sync_attachments_push(
-            &self.db_pool,
-            &self.crypto,
-            adapter,
-            self.progress_sender.as_ref(),
-            origin,
-            attachments_dir,
-        )
-        .await?;
+        // 4. Push 附件（S7：包入 with_retry）
+        let att_push = self
+            .with_retry("attachments_push", 3, || {
+                sync_attachments_push(
+                    &self.db_pool,
+                    &self.crypto,
+                    adapter,
+                    self.progress_sender.as_ref(),
+                    origin,
+                    attachments_dir,
+                )
+            })
+            .await?;
         result.uploaded_attachments = att_push.uploaded;
         result.errors.extend(att_push.errors);
 
@@ -1297,12 +1314,15 @@ impl SyncEngine {
 
     /// 带重试的同步执行（功能⑤：业务级网络重试）
     ///
-    /// 仅对网络错误（`is_network_error() == true`）重试，其他错误立即返回。
+    /// 仅对网络错误（`is_network_error() == true`）与限流错误重试，
+    /// 其他错误（认证/加密/数据库等）立即返回——S6（2026-09-13 探查，
+    /// 基线 P1-5）：认证错误此前随网络类整体重试，密钥配错的用户每轮
+    /// 白等 2/4/8s×3 共 ~14s 后必然以同一错误失败。
     /// 重试策略：最多 `max_retries` 次，间隔 2/4/8 秒指数退避。
     ///
-    /// 限流场景专用退避：识别 429 / 坚果云 "BlockedTemporarily" / "Too many requests"
-    /// 等限流错误后，使用 30/60/120 秒长退避，避免加剧限流。
-    /// 坚果云免费账户有严格请求频率限制（~1 req/s），短退避会触发持续 503。
+    /// 限流场景专用退避：类型化 `RateLimited`（适配器按 429/坚果云 503
+    /// 限流体构造）或历史文案兼容识别，使用 30/60/120 秒长退避，避免
+    /// 加剧限流。坚果云免费账户有严格请求频率限制（~1 req/s）。
     ///
     /// 重试期间互斥锁仍持有：`SyncGuard` 在 `with_retry` 返回后才 Drop，
     /// 重试期间锁不释放，其他同步请求被跳过。
@@ -1323,7 +1343,9 @@ impl SyncEngine {
             match operation().await {
                 Ok(v) => return Ok(v),
                 Err(e) => {
-                    if !e.is_network_error() || attempt == max_retries {
+                    let retryable = (e.is_network_error() || e.is_rate_limited())
+                        && !e.is_auth_error();
+                    if !retryable || attempt == max_retries {
                         return Err(e);
                     }
                     // 限流错误使用更长退避，避免加剧限流
@@ -2009,6 +2031,87 @@ mod tests {
         let tmp = tempfile::TempDir::new().unwrap();
         let crypto = crate::sync_crypto::SyncCryptoService::new(tmp.path());
         SyncEngine::new_noop_progress(pool, crypto, tmp.path())
+    }
+
+    // ========================================================================
+    // S6（2026-09-13 探查，基线 P1-5）：with_retry 错误分类重试
+    //
+    // 认证错误立即返回（重试无意义，密钥不会自动变对——历史每轮白等
+    // 2/4/8s×3）；限流错误走长退避重试；网络错误正常短退避重试。
+    // 测试用计数闭包验证调用次数，不实际 sleep（首错即返回的路径无等待）。
+    // ========================================================================
+
+    #[tokio::test]
+    async fn s6_with_retry_returns_auth_error_immediately() {
+        let engine = history_engine().await;
+        let calls = std::sync::Arc::new(std::sync::atomic::AtomicU32::new(0));
+        let calls_c = calls.clone();
+        let result: Result<(), CloudSyncError> = engine
+            .with_retry("test_auth", 3, move || {
+                let calls = calls_c.clone();
+                async move {
+                    calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                    Err::<(), CloudSyncError>(CloudSyncError::Auth {
+                        message: "认证失败(403): forbidden".to_string(),
+                    })
+                }
+            })
+            .await;
+        assert!(result.unwrap_err().is_auth_error());
+        assert_eq!(
+            calls.load(std::sync::atomic::Ordering::SeqCst),
+            1,
+            "认证错误必须首错即返回，不得重试"
+        );
+    }
+
+    /// 限流错误必须进入重试循环（长退避 30/60/120s）。
+    /// pool/crypto 构造在真实时钟下完成（paused clock 中 pool 连接获取会
+    /// PoolTimedOut），with_retry 段在独立 paused runtime 中执行——
+    /// tokio::time::sleep 即时推进，长退避序列不真实等待。
+    #[tokio::test]
+    async fn s6_with_retry_retries_rate_limited_network_error() {
+        let pool = sqlx::SqlitePool::connect(":memory:").await.unwrap();
+        let tmp = tempfile::TempDir::new().unwrap();
+        let crypto = crate::sync_crypto::SyncCryptoService::new(tmp.path());
+        let engine = SyncEngine::new_noop_progress(pool, crypto, tmp.path());
+
+        let calls = std::sync::Arc::new(std::sync::atomic::AtomicU32::new(0));
+        let calls_c = calls.clone();
+        // 限流归类非 network 但必须重试（长退避路径）：首两次限流、第三次成功
+        let paused = tokio::task::spawn_blocking(move || {
+            let rt = tokio::runtime::Builder::new_current_thread()
+                .enable_time()
+                .start_paused(true)
+                .build()
+                .unwrap();
+            rt.block_on(async move {
+                engine
+                    .with_retry("test_rate_limit", 3, move || {
+                        let calls = calls_c.clone();
+                        async move {
+                            let n = calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                            if n < 2 {
+                                Err(CloudSyncError::RateLimited {
+                                    message: "Too Many Requests".to_string(),
+                                })
+                            } else {
+                                Ok(())
+                            }
+                        }
+                    })
+                    .await
+            })
+        })
+        .await
+        .unwrap();
+
+        assert!(paused.is_ok(), "限流错误应被重试直至成功: {:?}", paused.err());
+        assert_eq!(
+            calls.load(std::sync::atomic::Ordering::SeqCst),
+            3,
+            "限流错误必须进入重试循环"
+        );
     }
 
     fn ok_result(errors: Vec<String>) -> SyncResult {

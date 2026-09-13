@@ -16,6 +16,11 @@ rust-version.workspace = true
 name = "orbit_core"
 crate-type = ["rlib", "staticlib", "cdylib"]
 
+# 仅测试用：paused clock（tokio::time::sleep 即时推进）验证长退避重试逻辑，
+# 不进生产依赖面
+[dev-dependencies]
+tokio = { workspace = true, features = ["test-util"] }
+
 [dependencies]
 # 异步运行时
 tokio.workspace = true

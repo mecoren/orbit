@@ -18,6 +18,22 @@ pub enum CloudSyncError {
     #[error("适配器错误: {message}")]
     Adapter { message: String },
 
+    /// 认证错误（HTTP 401/403）：凭据不正确或权限不足。
+    ///
+    /// S6（2026-09-13 探查，基线 P1-5）：此前 SyncError::Auth 被折叠进
+    /// `Adapter`（文案保留"认证错误"但丢失类型），with_retry 对网络类
+    /// 整体重试——密钥配错时每轮白等 2/4/8s×3 重试后仍失败。保留类型
+    /// 让 with_retry 按类型排除认证错误立即返回，UI 也能按 tag 引导。
+    #[error("认证错误: {message}")]
+    Auth { message: String },
+
+    /// 限流（429 / 坚果云 503 限流响应）：需 30/60/120s 长退避。
+    ///
+    /// S6：与 SyncError::RateLimited 对应，从适配器类型化透传，
+    /// 替代消息 contains("429") 嗅探。
+    #[error("请求被限流: {message}")]
+    RateLimited { message: String },
+
     /// 远端资源不存在（HTTP 404 / 坚果云 409 AncestorsNotFound）。
     ///
     /// Fix-09：适配器层已按状态码构造类型化错误，此处保留类型穿透，
@@ -75,6 +91,12 @@ impl From<crate::sync::error::SyncError> for CloudSyncError {
             // Fix-09：保留「资源不存在」类型，供上层 404 分支判断
             crate::sync::error::SyncError::NotFound { message } => {
                 CloudSyncError::NotFound { message }
+            }
+            // S6：认证/限流类型透传——with_retry 按类型排除认证错误、
+            // 限流走长退避；不再依赖消息文案判定
+            crate::sync::error::SyncError::Auth { message } => CloudSyncError::Auth { message },
+            crate::sync::error::SyncError::RateLimited { message } => {
+                CloudSyncError::RateLimited { message }
             }
             other => CloudSyncError::Adapter {
                 message: other.to_string(),
@@ -167,6 +189,10 @@ impl CloudSyncError {
     ///
     /// 包括：适配器连接失败、远端文件缺失等。
     /// UI 层应重试（指数退避），重试耗尽后提供"离线进入"选项。
+    ///
+    /// S6：认证（Auth）与限流（RateLimited）不再归入——认证错误重试
+    /// 无意义（应引导用户改配置），限流单独走 `is_rate_limited` 长退避
+    /// 分支；归入 network 会让 with_retry 对两者都做短退避重试。
     pub fn is_network_error(&self) -> bool {
         matches!(
             self,
@@ -178,20 +204,31 @@ impl CloudSyncError {
 
     /// 是否为限流错误（429 或坚果云等服务的 503 限流）
     ///
+    /// S6：优先类型判断（`RateLimited` 变体，适配器按状态码构造）；
+    /// 兼容 `Adapter` 内嵌历史文案（429/BlockedTemporarily 等非适配器
+    /// 构造路径），嗅探加 "HTTP 429" 状态码锚点防巧合子串。
     /// 限流错误需要更长退避（30/60/120 秒），而非默认的 2/4/8 秒。
     /// 识别限流后 `with_retry` 使用专用退避策略，避免加剧限流。
     pub fn is_rate_limited(&self) -> bool {
-        let msg = self.to_string();
-        // 429 Too Many Requests 是标准限流状态码
-        if msg.contains("429") {
+        if matches!(self, CloudSyncError::RateLimited { .. }) {
             return true;
         }
-        // 坚果云等服务的 503 限流标识
-        msg.contains("BlockedTemporarily")
+        let msg = self.to_string();
+        msg.contains("HTTP 429")
+            || msg.contains("认证失败(429)")
+            || msg.contains("BlockedTemporarily")
             || msg.contains("Too many requests")
             || msg.contains("too many requests")
             || msg.contains("rate limit")
             || msg.contains("Rate limit")
+    }
+
+    /// 是否为认证错误（凭据/权限问题，重试无意义）
+    ///
+    /// S6（基线 P1-5）：`with_retry` 对认证错误立即返回不重试——
+    /// 密钥配错时每轮同步白等 2/4/8s×3 共 ~14s 才失败，纯属浪费。
+    pub fn is_auth_error(&self) -> bool {
+        matches!(self, CloudSyncError::Auth { .. })
     }
 
     /// 是否为 Data Key 不匹配错误（应跳转恢复页，而非解锁页）
@@ -221,6 +258,13 @@ impl CloudSyncError {
             "password"
         } else if self.is_database_error() {
             "database"
+        } else if self.is_auth_error() {
+            // S6：认证错误单独归类——引导用户检查凭据/权限而非泛化网络重试
+            "auth"
+        } else if self.is_rate_limited() {
+            // 限流归类 network（可重试），长退避由 with_retry 的
+            // is_rate_limited 分支处理；tag 供 UI 展示具体原因
+            "rate_limited"
         } else if self.is_network_error() {
             "network"
         } else {
@@ -284,5 +328,52 @@ mod tests {
             message: "conn".to_string(),
         };
         assert_eq!(err.category_tag(), "network");
+    }
+
+    // ========================================================================
+    // S6（2026-09-13 探查，基线 P1-5）：Auth/RateLimited 类型透传
+    // ========================================================================
+
+    #[test]
+    fn sync_error_auth_passes_through_as_auth_variant() {
+        let err: CloudSyncError = crate::sync::error::SyncError::Auth {
+            message: "认证失败(403): forbidden".to_string(),
+        }
+        .into();
+        assert!(err.is_auth_error());
+        assert!(!err.is_network_error(), "认证错误不得归入网络类（否则 with_retry 白等重试）");
+        assert_eq!(err.category_tag(), "auth");
+    }
+
+    #[test]
+    fn sync_error_rate_limited_passes_through() {
+        let err: CloudSyncError = crate::sync::error::SyncError::RateLimited {
+            message: "Too Many Requests".to_string(),
+        }
+        .into();
+        assert!(err.is_rate_limited(), "类型化限流必须被识别");
+        assert!(
+            !err.is_network_error(),
+            "限流不得归入普通网络类（长退避分支依赖 is_rate_limited 单独判定）"
+        );
+        assert_eq!(err.category_tag(), "rate_limited");
+    }
+
+    #[test]
+    fn adapter_error_with_legacy_429_text_still_detected() {
+        // 兼容：非适配器构造的 Adapter 错误内嵌历史限流文案仍可识别
+        let err = CloudSyncError::Adapter {
+            message: "HTTP 429: Too Many Requests".to_string(),
+        };
+        assert!(err.is_rate_limited());
+    }
+
+    #[test]
+    fn adapter_error_with_4291_substring_not_rate_limited() {
+        // 回归：巧含 "429" 子串不再误判限流（不再触发 120s 白等）
+        let err = CloudSyncError::Adapter {
+            message: "object size 4291 bytes".to_string(),
+        };
+        assert!(!err.is_rate_limited());
     }
 }
