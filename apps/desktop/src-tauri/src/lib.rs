@@ -66,7 +66,22 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
-        .plugin(tauri_plugin_notification::init());
+        .plugin(tauri_plugin_notification::init())
+        // 日志插件（S10，2026-09-13 探查）：依赖早已声明但从未注册——
+        // orbit-core 引擎全部 log::info!（探针/rekey/with_retry 重试记录）
+        // 此前无处输出，同步失败零引擎侧日志可查。
+        // targets=stdout+logdir：dev 可见 + 用户报障可取 app_log.log。
+        .plugin(
+            tauri_plugin_log::Builder::new()
+                .targets([
+                    tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Stdout),
+                    tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::LogDir {
+                        file_name: Some("app_log".into()),
+                    }),
+                ])
+                .level(log::LevelFilter::Info)
+                .build(),
+        );
 
     // 桌面专属插件：window-state（窗口状态文件跟随数据目录，数据目录迁移后不丢）
     #[cfg(desktop)]
