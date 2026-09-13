@@ -23,6 +23,7 @@ import '../../shared/widgets/wait_date_picker.dart';
 import '../../shared/widgets/wait_toast.dart';
 import 'form_bottom_sheet.dart' show showTodoDatePicker, syncTaskReminder;
 // as rep：规避 Flutter widgets 自带 RepeatMode 类名冲突
+import 'logic/markdown_lite.dart';
 import 'logic/repeat_logic.dart' as rep;
 import 'logic/task_logic.dart';
 import 'providers/todo_providers.dart';
@@ -727,22 +728,31 @@ class _DescriptionSectionState extends State<_DescriptionSection> {
   Widget build(BuildContext context) {
     final colors = AppColors.ofContext(context);
     final description = widget.detail.description;
+    // 展示态走 Markdown 渲染（与桌面详情抽屉同源口径：标题/粗体/斜体/
+    // 行内代码/链接/列表；原文编辑入口在「编辑」按钮的底部抽屉，不受影响）
     return SectionCard(
       title: '描述',
       trailing: TextButton(
         onPressed: () => _openEditor(context),
         child: const Text('编辑'),
       ),
-      child: Text(
-        description ?? '暂无描述',
-        style: TextStyle(
-          fontSize: 15,
-          height: 1.5,
-          color: description == null
-              ? colors.secondaryText.withValues(alpha: 0.5)
-              : colors.bodyText,
-        ),
-      ),
+      child: description != null
+          ? Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: buildMarkdownWidgets(
+                description,
+                bodyColor: colors.bodyText,
+                accentColor: OrbitAccents.themeAccent,
+              ),
+            )
+          : Text(
+              '暂无描述',
+              style: TextStyle(
+                fontSize: 15,
+                height: 1.5,
+                color: colors.secondaryText.withValues(alpha: 0.5),
+              ),
+            ),
     );
   }
 

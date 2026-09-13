@@ -47,6 +47,10 @@ dependencies:
   # 勾选/磁贴交互走原生广播直写 SQLite（无 isolate 依赖，见 TodoWidgetProvider）
   home_widget: ^0.9.3
 
+  # Markdown 描述链接点击跳系统浏览器（官方第一方插件，平台桥接非 UI 库；
+  # 与 file_picker/local_auth 同类，不违反「UI 自绘不引库」惯例）
+  url_launcher: ^6.3.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

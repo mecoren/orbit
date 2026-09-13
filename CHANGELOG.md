@@ -7,6 +7,12 @@
 
 ## [Unreleased]
 
+### 任务描述 Markdown 渲染移动端对齐（桌面已有同源能力补齐）
+
+- **移动端描述区 Markdown 渲染**：桌面详情抽屉展示态早已走 `markdown-lite` 渲染（标题/粗体/斜体/行内代码/链接/列表），移动详情页此前是裸 `Text` 原文显示——本批补齐双端口径。`logic/markdown_lite.dart` 同源移植（逐字对齐桌面解析语义：`code`/`**bold**`/`*italic*`/`[text](url)` 逐字符扫描、不成对标记原样保留、`- [ ]` 任务列表残留按原文渲染）；链接点击跳系统浏览器（`url_launcher` 官方第一方插件，平台桥接非 UI 库，不违反「UI 自绘不引库」惯例）；recognizer 生命周期由 StatefulWidget 宿主管理（纯函数层不持有 TapGestureRecognizer）。
+- 编辑入口不变（底部抽屉原文编辑），展示态渲染不影响编辑语义。
+- 测试：`markdown_lite_test.dart` 12 用例（行内 5 对齐桌面用例 + 块级 5 + widget 冒烟 2；Text.rich 已知坑断言走类型+谓词）；`flutter analyze` 零警告；全量 268 绿（+12）。
+
 ### 云同步专项修复：探查报告 S1-S13 三批落地（14 项）
 
 docs/同步功能专项探查报告-2026-09-13.md 59 项问题中的 14 项按批次修复（批 A P0+高杠杆 / 批 B 可靠性 / 批 C 调度与一致性），每项带定向回归测试：
