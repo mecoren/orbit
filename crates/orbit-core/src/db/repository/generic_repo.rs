@@ -35,7 +35,16 @@ pub(crate) fn current_device_id() -> String {
 // 泛型 list/get/soft_delete（适用于所有有 is_deleted + id 的表）
 // =============================================================================
 
-/// 泛型分页列表查询：SELECT * FROM {table} WHERE is_deleted=0
+/// todo_tasks 列表通道的裁剪列清单（批2）：全列减 `description`，该列以
+/// `NULL AS description` 占位保持行形状（FromRow/DTO 不变）。字段顺序
+/// 与 0001 迁移列序一致（可读性；SQLite 按名绑定）。
+const LIST_COLUMNS_TASKS_PRUNED: &str = "id, uuid, title, NULL AS description, \
+    project_id, priority, status, done, done_at, due_date, start_date, \
+    repeat_after, repeat_mode, repeat_weekdays, repeat_end_type, repeat_end_param, \
+    repeat_from_done, percent_done, position, is_favorite, my_day_date, \
+    is_deleted, created_at, updated_at, deleted_at, version";
+
+/// 泛型分页列表查询：SELECT <列> FROM {table} WHERE is_deleted=0
 ///     [AND (field1 LIKE ? OR field2 LIKE ? ...)]
 ///     [AND todo_tasks 谓词下推子句（done/status/priority_min/project_id/
 ///      favorite_only/my_day_today）]
@@ -45,6 +54,13 @@ pub(crate) fn current_device_id() -> String {
 /// 谓词字段仅 todo_tasks 表消费（其他表结构无这些列，忽略不报错——
 /// 调用方混用属契约错误，但基线是不静默丢数据所以选择忽略）。
 /// 调用方需保证 T: sqlx::FromRow 且表结构匹配。
+///
+/// todo_tasks 列裁剪（批2）：keyword 为空时 description 列以 `NULL AS description`
+/// 占位不传输——万级列表场景实测 description 占 IPC 序列化体积 47%（1KB/行），
+/// 而列表/看板/日历/表格四视图与移动列表均零消费，仅 keyword 本地过滤依赖它
+/// （keyword 非空时 SQL LIKE 已按 title+description 过滤，保留全列语义保序）。
+/// DTO 形状不变（前端 `description ?? null` 兜底既有），详情 get_todo_task_detail
+/// 单条保持全列。
 pub async fn list<T>(pool: &SqlitePool, table: &str, filter: &ListFilter) -> CoreResult<Vec<T>>
 where
     T: for<'r> sqlx::FromRow<'r, sqlx::sqlite::SqliteRow> + Send + Unpin,
@@ -71,10 +87,16 @@ where
     } else {
         ""
     };
+    // 列裁剪（批2）：无 keyword 的 todo_tasks 列表不传 description 大列
+    let select_expr = if table == "todo_tasks" && keyword_clause.clause.is_empty() {
+        LIST_COLUMNS_TASKS_PRUNED
+    } else {
+        "*"
+    };
 
     let sql = format!(
-        "SELECT * FROM {} WHERE is_deleted = 0{}{}{} ORDER BY updated_at DESC LIMIT ? OFFSET ?",
-        table, keyword_clause.clause, predicate_clause.clause, archived_exclude_clause,
+        "SELECT {} FROM {} WHERE is_deleted = 0{}{}{} ORDER BY updated_at DESC LIMIT ? OFFSET ?",
+        select_expr, table, keyword_clause.clause, predicate_clause.clause, archived_exclude_clause,
     );
 
     let mut q = sqlx::query_as::<_, T>(&sql);
@@ -1449,5 +1471,106 @@ mod task_predicate_tests {
     fn no_predicates_yields_empty_clause() {
         let c = build_task_predicate_clause("todo_tasks", &ListFilter::default());
         assert!(c.clause.is_empty());
+    }
+}
+
+/// 列裁剪集成测试（批2）：todo_tasks 列表通道 keyword 空时 description
+/// 不传输（NULL 占位），keyword 非空时保留全列（SQL LIKE 依赖）；
+/// get_by_id 单条保持全列。
+#[cfg(test)]
+mod column_prune_tests {
+    use super::*;
+    use crate::models::business::{ListFilter, TodoTask, TodoTaskCreateInput};
+    use crate::api::business_api::create_todo_task;
+
+    async fn setup_db() -> sqlx::SqlitePool {
+        let pool = sqlx::SqlitePool::connect("sqlite::memory:").await.unwrap();
+        sqlx::migrate!("./src/db/migrations")
+            .run(&pool)
+            .await
+            .unwrap();
+        pool
+    }
+
+    fn all_tasks() -> ListFilter {
+        ListFilter {
+            page_size: 10_000,
+            ..Default::default()
+        }
+    }
+
+    #[tokio::test]
+    async fn list_without_keyword_prunes_description() {
+        let pool = setup_db().await;
+        create_todo_task(
+            &pool,
+            &TodoTaskCreateInput {
+                title: "带描述的任务".into(),
+                description: Some("很长的描述文本".into()),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+
+        let rows: Vec<TodoTask> = list(&pool, "todo_tasks", &all_tasks()).await.unwrap();
+        assert_eq!(rows.len(), 1);
+        // 裁剪：列表通道 description 为 NULL（形状在、值不传）
+        assert_eq!(rows[0].description, None);
+        // 其余字段全量（含非默认值字段防白名单漏列）
+        assert_eq!(rows[0].title, "带描述的任务");
+    }
+
+    #[tokio::test]
+    async fn list_with_keyword_keeps_description() {
+        let pool = setup_db().await;
+        create_todo_task(
+            &pool,
+            &TodoTaskCreateInput {
+                title: "标题甲".into(),
+                description: Some("描述含关键词采购".into()),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+
+        let mut f = all_tasks();
+        f.keyword = Some("采购".into());
+        let rows: Vec<TodoTask> = list(&pool, "todo_tasks", &f).await.unwrap();
+        // keyword 命中 description → 行返回且 description 全列保留
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].description.as_deref(), Some("描述含关键词采购"));
+    }
+
+    #[tokio::test]
+    async fn get_by_id_keeps_full_columns() {
+        let pool = setup_db().await;
+        let created = create_todo_task(
+            &pool,
+            &TodoTaskCreateInput {
+                title: "详情任务".into(),
+                description: Some("详情应有完整描述".into()),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+
+        let row: TodoTask = get_by_id(&pool, "todo_tasks", created.id).await.unwrap();
+        assert_eq!(row.description.as_deref(), Some("详情应有完整描述"));
+    }
+
+    /// 非任务表不受裁剪影响（全列直通）
+    #[tokio::test]
+    async fn other_tables_keep_select_star() {
+        let pool = setup_db().await;
+        // todo_projects 列表走 list() 但不该套任务白名单（列不匹配会 FromRow 报错）
+        // 断言改为可执行即白名单未误套：若误套 LIST_COLUMNS_TASKS_PRUNED，
+        // todo_projects 行缺 hex_color/sort_order 列 FromRow 会直接报错
+        let _rows: Vec<crate::models::business::TodoProject> =
+            list(&pool, "todo_projects", &ListFilter::default())
+                .await
+                .unwrap();
     }
 }

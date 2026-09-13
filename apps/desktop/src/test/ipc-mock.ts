@@ -368,6 +368,9 @@ const commands: Record<string, (args: any, ctx: Ctx) => unknown> = {
   // 谓词下推（F5）：六键与 Rust build_task_predicate_clause 同口径（仅本命令消费）
   todo_tasks_list: ({ filter }, { db }) => {
     let rows = db.tasks.filter((t) => !t.is_deleted);
+    // 列裁剪（批2 对齐 Rust）：keyword 空时 description 不传输（NULL 占位
+    // 保形状）；keyword 非空保留全列（SQL LIKE 依赖）
+    const pruneDesc = !filter?.keyword?.trim();
     // 归档项目任务排除（聚合视图；project_id 谓词=用户主动选中该归档项目时放行）
     if (filter?.project_id == null) {
       const archivedIds = new Set(db.projects.filter((p) => p.is_archived && !p.is_deleted).map((p) => p.id));
@@ -380,7 +383,10 @@ const commands: Record<string, (args: any, ctx: Ctx) => unknown> = {
     if (filter?.project_id != null) rows = rows.filter((t) => t.project_id === filter.project_id);
     if (filter?.favorite_only === true) rows = rows.filter((t) => t.is_favorite === 1);
     if (filter?.my_day_today != null) rows = rows.filter((t) => t.my_day_date === filter.my_day_today);
-    return filterByKeyword(rows, filter?.keyword);
+    const keyworded = filterByKeyword(rows, filter?.keyword);
+    return pruneDesc
+      ? keyworded.map((t) => ({ ...t, description: null }))
+      : keyworded;
   },
   todo_tasks_get: ({ id }, { db }) => ipcClone(db.tasks.find((t) => t.id === id) ?? null),
   todo_tasks_get_by_uuid: ({ uuid: u }, { db }) => ipcClone(db.tasks.find((t) => t.uuid === u) ?? null),

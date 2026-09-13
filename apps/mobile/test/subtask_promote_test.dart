@@ -37,7 +37,7 @@ void main() {
         .todoTaskCreate(TodoTaskCreateInput(title: '进度父'));
     final s1 = await bridge.todoSubtaskCreate(
         TodoSubtaskCreateInput(taskId: parent.id, title: '甲'));
-    final _s2 = await bridge.todoSubtaskCreate(
+    await bridge.todoSubtaskCreate(
         TodoSubtaskCreateInput(taskId: parent.id, title: '乙'));
     await bridge.todoSubtaskToggleDone(s1.id, true);
 

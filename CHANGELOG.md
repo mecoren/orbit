@@ -7,6 +7,13 @@
 
 ## [Unreleased]
 
+### 列表通道列裁剪：万级场景 IPC 传输体积 -47%（批2 性能/内存）
+
+- **`generic_repo::list` 的 todo_tasks 通道**：keyword 为空时 description 大列以 `NULL AS description` 占位不传输——DTO 形状不变（前端 `?? null` 兜底既有），详情 `get_todo_task_detail` 单条保持全列；keyword 非空时保留全列（SQL LIKE 已按 title+description 过滤，本地二次过滤语义保序）。消费面核实：列表/看板/日历/表格四视图、移动列表、任务复制全部零消费 description，唯一消费点 keyword 本地过滤已由保留条件覆盖。
+- **量化实测**（perf-metrics/column-prune.mjs 入库，万级任务 × 1KB description 数据集）：`todo_tasks_list` 命令线缆体积 **7,248,787B → 3,848,787B（-47%）**，payload description 字节 3.4MB → 0；列表渲染 355 行不变（主路径无损）。真实 Tauri 下每次列表查询的 IPC 序列化/反序列化与 JS heap 常驻同步减量。
+- mock 同口径：桌面 ipc-mock + 移动 MockOrbitBridge 的 todo_tasks_list 同条件裁剪（keyword 空=description null），双端测试与真机语义不分叉。
+- 测试：Rust 集成 4（无 keyword 裁剪/有 keyword 保留/get_by_id 全列/非任务表不受影响）+ cargo 490 / vitest 252 / e2e 18 / flutter 274 全绿。
+
 ### 应用内更新（07 backlog #20，最后一项清零）
 
 - **tauri-plugin-updater + plugin-process**：设置页新「关于与更新」分类——手动「检查更新」→「下载并安装」→ relaunch 重启三段式；**不自动检查**（本地优先应用的更新时机归用户掌控）。插件模块动态 import（mock IPC 环境无 updater 通道，静态导入会在页面加载即抛错——动态导入把失败收敛到点击路径的 try/catch 兜底文案）。

@@ -191,7 +191,14 @@ class MockOrbitBridge implements OrbitBridge {
             .toList()
           ..sort((a, b) =>
               (a['position'] as int).compareTo(b['position'] as int));
-        return list.map(TodoTask.fromJson).toList();
+        // 列裁剪（批2 对齐 Rust generic_repo）：keyword 空时 description
+        // 不传输（null 占位）；keyword 非空保留全列（SQL LIKE 依赖）
+        final keyword = filter.keyword?.trim();
+        final pruneDesc = keyword == null || keyword.isEmpty;
+        return list
+            .map((t) => pruneDesc ? {...t, 'description': null} : t)
+            .map(TodoTask.fromJson)
+            .toList();
       });
 
   @override
