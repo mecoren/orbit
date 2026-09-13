@@ -350,6 +350,8 @@ impl SyncAdapter for S3Adapter {
             .into_iter()
             .map(|k| k.strip_suffix(".waitsync").unwrap_or(&k).to_string())
             .collect();
+        // S30：dedup 只去相邻重复，先排序保证同名（.waitsync 与裸 hash）全去
+        hashes.sort();
         hashes.dedup();
         Ok(hashes)
     }

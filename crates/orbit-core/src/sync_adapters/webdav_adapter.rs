@@ -69,8 +69,17 @@ impl WebDavAdapter {
     }
 
     /// 构建完整的 WebDAV URL
+    ///
+    /// S2（2026-09-13 探查）：server_url 无 scheme 时补 https://（与 S3
+    /// build_url 的 normalize 同口径）——无 scheme URL 会让 reqwest 请求
+    /// 构造直接失败且错误归类误导排障。
     fn build_url(&self, path: &str) -> String {
-        let base = self.config.server_url.trim_end_matches('/');
+        let trimmed = self.config.server_url.trim();
+        let base = if trimmed.starts_with("http://") || trimmed.starts_with("https://") {
+            trimmed.trim_end_matches('/').to_string()
+        } else {
+            format!("https://{}", trimmed).trim_end_matches('/').to_string()
+        };
         if path.starts_with('/') {
             format!("{}{}", base, path)
         } else {
@@ -618,6 +627,8 @@ impl SyncAdapter for WebDavAdapter {
                 name.strip_suffix(".waitsync").unwrap_or(&name).to_string()
             })
             .collect();
+        // S30：dedup 只去相邻重复，先排序保证同名（.waitsync 与裸 hash）全去
+        hashes.sort();
         hashes.dedup();
         Ok(hashes)
     }
