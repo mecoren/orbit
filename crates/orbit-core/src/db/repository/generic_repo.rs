@@ -62,10 +62,19 @@ where
     let keyword_clause = build_keyword_clause(table, filter.keyword.as_deref());
     // 谓词下推子句（仅 todo_tasks；占位符按声明顺序绑定）
     let predicate_clause = build_task_predicate_clause(table, filter);
+    // 归档项目任务排除（仅 todo_tasks 的聚合视图；project_id 谓词 =
+    // 用户主动选中该归档项目时放行——归档区点击进项目视图仍可读任务，
+    // 对齐「归档=从默认列表收起，不是软删」语义）
+    let archived_exclude_clause = if table == "todo_tasks" && filter.project_id.is_none() {
+        " AND (project_id IS NULL OR project_id NOT IN \
+           (SELECT id FROM todo_projects WHERE is_deleted = 0 AND is_archived = 1))"
+    } else {
+        ""
+    };
 
     let sql = format!(
-        "SELECT * FROM {} WHERE is_deleted = 0{}{} ORDER BY updated_at DESC LIMIT ? OFFSET ?",
-        table, keyword_clause.clause, predicate_clause.clause,
+        "SELECT * FROM {} WHERE is_deleted = 0{}{}{} ORDER BY updated_at DESC LIMIT ? OFFSET ?",
+        table, keyword_clause.clause, predicate_clause.clause, archived_exclude_clause,
     );
 
     let mut q = sqlx::query_as::<_, T>(&sql);
@@ -532,6 +541,9 @@ pub async fn update_todo_project(
     if input.sort_order.is_some() {
         sets.push("sort_order = ?".into());
     }
+    if input.is_archived.is_some() {
+        sets.push("is_archived = ?".into());
+    }
 
     let sql = format!(
         "UPDATE todo_projects SET {} WHERE id = ? RETURNING *",
@@ -548,6 +560,9 @@ pub async fn update_todo_project(
         q = q.bind(v);
     }
     if let Some(v) = input.sort_order {
+        q = q.bind(v);
+    }
+    if let Some(v) = input.is_archived {
         q = q.bind(v);
     }
     let row = q
@@ -1358,7 +1373,7 @@ mod tests {
 
 #[cfg(test)]
 mod task_predicate_tests {
-    use super::{build_task_predicate_clause, ListFilter};
+    use super::{ListFilter, build_task_predicate_clause};
 
     fn filter_with(p: impl FnOnce(&mut ListFilter)) -> ListFilter {
         let mut f = ListFilter::default();
@@ -1421,7 +1436,10 @@ mod task_predicate_tests {
                 f.my_day_today = Some(zero);
             }),
         );
-        assert!(c.clause.contains(" AND project_id = ? AND is_favorite = 1 AND my_day_date = ?"));
+        assert!(
+            c.clause
+                .contains(" AND project_id = ? AND is_favorite = 1 AND my_day_date = ?")
+        );
         assert_eq!(c.bindings, vec![7, zero]);
         assert!(c.status_binding.is_none());
     }

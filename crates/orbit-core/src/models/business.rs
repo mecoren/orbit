@@ -105,6 +105,7 @@ pub struct TodoProject {
     pub description: Option<String>,
     pub hex_color: String,
     pub sort_order: f64,
+    pub is_archived: i32,
     pub is_deleted: i32,
     pub created_at: i64,
     pub updated_at: i64,
@@ -128,6 +129,8 @@ pub struct TodoProjectUpdateInput {
     pub description: Option<Option<String>>,
     pub hex_color: Option<String>,
     pub sort_order: Option<f64>,
+    /// 归档切换：Some(1)=归档（侧栏折叠区+不进默认任务列表），Some(0)=恢复
+    pub is_archived: Option<i32>,
 }
 
 // ---------- todo_tasks ----------

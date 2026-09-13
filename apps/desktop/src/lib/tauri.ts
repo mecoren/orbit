@@ -157,6 +157,7 @@ export interface TodoProject {
   description: string | null;
   hex_color: string;
   sort_order: number;
+  is_archived: number;
   is_deleted: number;
   created_at: number;
   updated_at: number;
@@ -174,6 +175,8 @@ export interface TodoProjectUpdateInput {
   description?: string | null;
   hex_color?: string;
   sort_order?: number;
+  /** 归档切换：1=归档（默认列表收起）0=恢复 */
+  is_archived?: number;
 }
 export const todoProjectList = (filter: ListFilter) => invoke<TodoProject[]>("todo_projects_list", { filter });
 export const todoProjectGet = (id: number) => invoke<TodoProject>("todo_projects_get", { id });
@@ -182,6 +185,8 @@ export const todoProjectUpdate = (id: number, input: TodoProjectUpdateInput) => 
 export const todoProjectDelete = (id: number) => invoke<void>("todo_projects_delete", { id });
 export const todoProjectGetByUuid = (uuid: string) => invoke<TodoProject | null>("todo_projects_get_by_uuid", { uuid });
 export const todoProjectUpdateSortOrder = (id: number, sortOrder: number) => invoke<void>("todo_projects_update_sort_order", { id, sortOrder });
+/** 归档项目列表（侧栏「已归档」折叠区数据源） */
+export const todoProjectListArchived = () => invoke<TodoProject[]>("todo_projects_list_archived");
 
 // ========== todo_tasks ==========
 export interface TodoTask {

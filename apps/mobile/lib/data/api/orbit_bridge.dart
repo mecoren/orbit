@@ -209,6 +209,10 @@ abstract class OrbitBridge {
   // ── todo_projects ──
 
   Future<List<TodoProject>> todoProjectList(ListFilter filter);
+
+  /// 归档项目列表（侧栏归档区；归档切换走 todoProjectUpdate 的
+  /// patchJson {"is_archived":0|1}，与桌面同口径无独立命令）
+  Future<List<TodoProject>> todoProjectListArchived();
   Future<TodoProject> todoProjectGet(int id);
   Future<TodoProject> todoProjectCreate(TodoProjectCreateInput input);
   Future<TodoProject> todoProjectUpdate(int id, String patchJson);

@@ -53,10 +53,21 @@ fn pool() -> Result<sqlx::SqlitePool, String> {
 // todo_projects
 // =============================================================================
 
-/// 列出项目（对应桌面 todo_projects_list）
+/// 列出项目（对应桌面 todo_projects_list；默认排除已归档项目）
 pub async fn todo_projects_list(filter: ListFilter) -> Result<Vec<TodoProject>, String> {
     let pool = pool()?;
     let items = business_api::list_todo_projects(&pool, &filter.into())
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(items.into_iter().map(TodoProject::from).collect())
+}
+
+/// 归档项目列表（对应桌面 todo_projects_list_archived；侧栏归档区数据源。
+/// 归档/取消归档走 todo_projects_update 的 patch_json {"is_archived":0|1}，
+/// 无独立切换命令——与桌面 is_archived 谓词同口径）
+pub async fn todo_projects_list_archived() -> Result<Vec<TodoProject>, String> {
+    let pool = pool()?;
+    let items = business_api::list_archived_todo_projects(&pool)
         .await
         .map_err(|e| e.to_string())?;
     Ok(items.into_iter().map(TodoProject::from).collect())

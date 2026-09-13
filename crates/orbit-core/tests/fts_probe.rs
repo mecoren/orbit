@@ -16,10 +16,11 @@ async fn fts5_runtime_probe() {
         .execute(&pool)
         .await
         .unwrap();
-    let hit: (i64,) = sqlx::query_as("SELECT count(*) FROM fts_probe WHERE fts_probe MATCH 'hello'")
-        .fetch_one(&pool)
-        .await
-        .unwrap();
+    let hit: (i64,) =
+        sqlx::query_as("SELECT count(*) FROM fts_probe WHERE fts_probe MATCH 'hello'")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
     assert_eq!(hit.0, 1);
     // 关键事实（2026-09-13 python sqlite 3.49 对照诊断）：
     // unicode61 分词器对 CJK 直接丢弃 token——单字「世」也不命中！
@@ -29,7 +30,10 @@ async fn fts5_runtime_probe() {
         .fetch_one(&pool)
         .await
         .unwrap();
-    assert_eq!(zh.0, 0, "unicode61 竟命中了 CJK——分词器行为与本批认知不符，重审方案");
+    assert_eq!(
+        zh.0, 0,
+        "unicode61 竟命中了 CJK——分词器行为与本批认知不符，重审方案"
+    );
     // trigram 分词器能力探针（SQLite 3.34+；未编入则此查询报错）
     let tri = sqlx::query(
         "CREATE VIRTUAL TABLE IF NOT EXISTS fts_tri USING fts5(content, tokenize='trigram')",
@@ -41,10 +45,11 @@ async fn fts5_runtime_probe() {
             .execute(&pool)
             .await
             .unwrap();
-        let zh2: (i64,) = sqlx::query_as("SELECT count(*) FROM fts_tri WHERE fts_tri MATCH '移动端'")
-            .fetch_one(&pool)
-            .await
-            .unwrap();
+        let zh2: (i64,) =
+            sqlx::query_as("SELECT count(*) FROM fts_tri WHERE fts_tri MATCH '移动端'")
+                .fetch_one(&pool)
+                .await
+                .unwrap();
         assert_eq!(zh2.0, 1, "trigram 已编入但中文短语未命中");
     }
     // trigram 不可用时探针不算失败（英文 LIKE/FTS 仍可用；中文走 LIKE 路线）

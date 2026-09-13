@@ -203,6 +203,7 @@ pub fn run() {
             business_cmd::todo_projects_get,
             business_cmd::todo_projects_create,
             business_cmd::todo_projects_update,
+            business_cmd::todo_projects_list_archived,
             business_cmd::todo_projects_delete,
             business_cmd::todo_projects_get_by_uuid,
             // todo_tasks

@@ -84,6 +84,7 @@ CREATE TABLE IF NOT EXISTS todo_projects (
   description TEXT,  -- 描述（可空）
   hex_color TEXT NOT NULL DEFAULT '#3B82F6',  -- 颜色（#RRGGBB，默认蓝 #3B82F6；侧栏圆点+项目名着色）
   sort_order REAL NOT NULL DEFAULT 0,  -- 侧栏排序键（拖拽取中值）
+  is_archived INTEGER NOT NULL DEFAULT 0,  -- 项目归档标记：0 活跃 1 已归档（侧栏折叠区，不进默认列表/看板/统计；任务可搜索可进详情；软删语义独立互不影响）
   is_deleted INTEGER NOT NULL DEFAULT 0,  -- 软删标记：0 活 1 已删（回收站/墓碑，物理清除走 TTL）
   created_at INTEGER NOT NULL DEFAULT 0,  -- 创建时间（ms 时间戳）
   updated_at INTEGER NOT NULL DEFAULT 0,  -- 更新时间（ms）——同步 LWW 合并的主依据

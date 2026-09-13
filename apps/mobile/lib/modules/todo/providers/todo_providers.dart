@@ -16,6 +16,14 @@ final todoProjectsProvider = FutureProvider<List<TodoProject>>((ref) async {
   return bridge.todoProjectList(const ListFilter(pageSize: 1000));
 });
 
+/// 归档项目列表（React queryKey ["todo-project","archived"] 对齐；
+/// 侧栏归档区数据源，归档切换后双失效刷新）
+final todoArchivedProjectsProvider =
+    FutureProvider<List<TodoProject>>((ref) async {
+  final bridge = ref.watch(orbitBridgeProvider);
+  return bridge.todoProjectListArchived();
+});
+
 /// 标签列表（React queryKey ["todo-label","list"]；详情页标签编辑弹层消费）
 final todoLabelsProvider = FutureProvider<List<TodoLabel>>((ref) async {
   final bridge = ref.watch(orbitBridgeProvider);

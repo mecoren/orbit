@@ -11,6 +11,7 @@ import { useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import {
+  Archive,
   Copy,
   Calendar,
   Check,
@@ -509,6 +510,7 @@ export function ProjectContextMenu({
   project,
   onRequestDelete,
   onRequestEdit,
+  onRequestArchive,
   children,
 }: {
   project: TodoProject;
@@ -516,6 +518,8 @@ export function ProjectContextMenu({
   onRequestDelete: () => void;
   /** 上报编辑请求（重命名/改色）；对话框由父级统一渲染 */
   onRequestEdit: () => void;
+  /** 上报归档/取消归档请求（is_archived 翻转由父级按 project.is_archived 判定） */
+  onRequestArchive: () => void;
   children: React.ReactNode;
 }) {
   return (
@@ -531,6 +535,12 @@ export function ProjectContextMenu({
           >
             <Pencil size={14} />
             编辑项目
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            onSelect={() => { close(); onRequestArchive(); }}
+          >
+            <Archive size={14} />
+            {project.is_archived ? "取消归档" : "归档项目"}
           </DropdownMenuItem>
           <DropdownMenuItem
             variant="destructive"

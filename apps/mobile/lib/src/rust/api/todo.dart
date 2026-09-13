@@ -9,9 +9,15 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
 // These functions are ignored because they are not marked as `pub`: `pool`
 
-/// 列出项目（对应桌面 todo_projects_list）
+/// 列出项目（对应桌面 todo_projects_list；默认排除已归档项目）
 Future<List<TodoProject>> todoProjectsList({required ListFilter filter}) =>
     RustLib.instance.api.crateApiTodoTodoProjectsList(filter: filter);
+
+/// 归档项目列表（对应桌面 todo_projects_list_archived；侧栏归档区数据源。
+/// 归档/取消归档走 todo_projects_update 的 patch_json {"is_archived":0|1}，
+/// 无独立切换命令——与桌面 is_archived 谓词同口径）
+Future<List<TodoProject>> todoProjectsListArchived() =>
+    RustLib.instance.api.crateApiTodoTodoProjectsListArchived();
 
 /// 获取单个项目（对应桌面 todo_projects_get）
 Future<TodoProject> todoProjectsGet({required PlatformInt64 id}) =>

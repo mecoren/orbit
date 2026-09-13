@@ -111,6 +111,10 @@ class RustOrbitBridge implements OrbitBridge {
           .toList();
 
   @override
+  Future<List<TodoProject>> todoProjectListArchived() async =>
+      (await gen_todo.todoProjectsListArchived()).map(_mapProject).toList();
+
+  @override
   Future<TodoProject> todoProjectGet(int id) async =>
       _mapProject(await gen_todo.todoProjectsGet(id: id));
 
@@ -915,6 +919,7 @@ class RustOrbitBridge implements OrbitBridge {
         description: p.description,
         hexColor: p.hexColor,
         sortOrder: p.sortOrder,
+        isArchived: p.isArchived,
         isDeleted: p.isDeleted,
         createdAt: p.createdAt,
         updatedAt: p.updatedAt,

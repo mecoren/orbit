@@ -12,7 +12,7 @@
  * 图标窄条（快捷视图 + 项目 Folder 图标按项目色染色），展开恢复完整三栏。
  */
 import { useMemo, useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocation, useNavigate } from "react-router";
 import { useSortable } from "@dnd-kit/sortable";
 import { closestCenter, DndContext, type DragEndEvent } from "@dnd-kit/core";
@@ -20,7 +20,7 @@ import {
   SortableContext,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
-import { BarChart3, Filter, Folder, GripVertical, Inbox, PanelLeftClose, PanelLeftOpen, Plus, Trash2 } from "lucide-react";
+import { Archive, ArchiveRestore, BarChart3, ChevronDown, ChevronRight, Filter, Folder, GripVertical, Inbox, PanelLeftClose, PanelLeftOpen, Plus, Trash2 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { hideFromQueries, useUndoableDeleteAction } from "@/hooks/use-undoable-delete";
@@ -49,6 +49,7 @@ import {
 import {
   todoProjectCreate,
   todoProjectDelete,
+  todoProjectListArchived,
   todoProjectUpdate,
   todoProjectUpdateSortOrder,
   type TodoProject,
@@ -129,6 +130,29 @@ export function ProjectSidebar({
 
   // 编辑项目对话框状态（#36 重命名 + 改色）：null 关闭
   const [editTarget, setEditTarget] = useState<TodoProject | null>(null);
+
+  // ---- 归档区（展开态项目列表尾部折叠组）----
+  // 归档列表独立 queryKey：db-change 表级失效只命中 ["todo-project"] 前缀,
+  // 归档切换经 refetchProjects + refetchArchived 双失效
+  const [archivedOpen, setArchivedOpen] = useState(false);
+  const { data: archivedProjects = [] } = useQuery({
+    queryKey: ["todo-project", "archived"],
+    queryFn: () => todoProjectListArchived(),
+    staleTime: 2 * 60 * 1000,
+  });
+  const refetchArchived = () =>
+    qc.invalidateQueries({ queryKey: ["todo-project", "archived"] });
+
+  /** 归档切换：is_archived 翻转；当前视图正选中该归档项目时跳走 /todo
+   * （归档项目不进默认任务聚合，视图留着会看到空列表误导） */
+  const toggleArchive = async (project: TodoProject) => {
+    await todoProjectUpdate(project.id, {
+      is_archived: project.is_archived ? 0 : 1,
+    });
+    if (project.is_archived === 0 && activeProjectId === project.id) navigate("/todo");
+    await refetchProjects();
+    await refetchArchived();
+  };
 
   const refetchProjects = () => qc.invalidateQueries({ queryKey: ["todo-project", "list"] });
 
@@ -492,6 +516,10 @@ export function ProjectSidebar({
                         const project = projectById.get(id);
                         if (project) setEditTarget(project);
                       }}
+                      onRequestArchive={() => {
+                        const project = projectById.get(id);
+                        if (project) void toggleArchive(project);
+                      }}
                     />
                   ),
                 )}
@@ -513,6 +541,68 @@ export function ProjectSidebar({
                       }
                     }}
                   />
+                )}
+
+                {/* 归档区（有归档项目才渲染；行可点击进项目视图读任务，
+                    右键取消归档回主区；非拖拽语义，不在 SortableContext 内） */}
+                {archivedProjects.length > 0 && (
+                  <div className="mt-1">
+                    <button
+                      type="button"
+                      aria-expanded={archivedOpen}
+                      onClick={() => setArchivedOpen((v) => !v)}
+                      className="flex w-full items-center gap-2 rounded-md px-3 py-1.5 text-sm text-muted-foreground hover:bg-accent/50"
+                    >
+                      {archivedOpen ? (
+                        <ChevronDown className="size-3.5" />
+                      ) : (
+                        <ChevronRight className="size-3.5" />
+                      )}
+                      <Archive className="size-3.5" />
+                      <span>已归档</span>
+                      <span className="text-xs tabular-nums">{archivedProjects.length}</span>
+                    </button>
+                    {archivedOpen && (
+                      <div className="space-y-0.5 pl-2">
+                        {archivedProjects.map((p) => (
+                          <div
+                            key={p.id}
+                            className={cn(
+                              "group flex w-full items-center gap-2 rounded-md px-3 py-1.5 text-sm",
+                              effectiveProjectId === p.id
+                                ? "bg-primary/10 font-medium text-primary"
+                                : "hover:bg-accent/50",
+                            )}
+                          >
+                            <Folder
+                              className="h-4 w-4 shrink-0"
+                              style={{ color: p.hex_color || TODO_ACCENT }}
+                            />
+                            <button
+                              type="button"
+                              className="min-w-0 flex-1 truncate text-left text-muted-foreground"
+                              onClick={() => onSelectProject(p.id)}
+                            >
+                              {p.title}
+                            </button>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <button
+                                  type="button"
+                                  aria-label={`取消归档 ${p.title}`}
+                                  className="shrink-0 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100"
+                                  onClick={() => void toggleArchive(p)}
+                                >
+                                  <ArchiveRestore className="size-3 text-muted-foreground hover:text-foreground" />
+                                </button>
+                              </TooltipTrigger>
+                              <TooltipContent>取消归档</TooltipContent>
+                            </Tooltip>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 )}
               </div>
             </SortableContext>
@@ -704,6 +794,7 @@ function SortableProjectRow({
   onSelect,
   onRequestDelete,
   onRequestEdit,
+  onRequestArchive,
 }: {
   project: TodoProject;
   undoneCount: number;
@@ -713,6 +804,8 @@ function SortableProjectRow({
   onRequestDelete: (hasUndone: boolean, undoneCount: number) => void;
   /** 上报编辑请求（重命名/改色；#36） */
   onRequestEdit: () => void;
+  /** 上报归档请求（本批新增；is_archived 翻转由父级 toggleArchive 处理） */
+  onRequestArchive: () => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition } = useSortable({
     id: project.id,
@@ -732,11 +825,12 @@ function SortableProjectRow({
         {...listeners}
         className="w-3 cursor-grab text-muted-foreground/30 opacity-0 group-hover:opacity-100"
       />
-      {/* 右键菜单：标题头 + 编辑项目（重命名/改色）+ 删除（保护弹窗由父级处理） */}
+      {/* 右键菜单：标题头 + 编辑项目（重命名/改色）+ 归档 + 删除（保护弹窗由父级处理） */}
       <ProjectContextMenu
         project={project}
         onRequestDelete={() => onRequestDelete(undoneCount > 0, undoneCount)}
         onRequestEdit={onRequestEdit}
+        onRequestArchive={onRequestArchive}
       >
         <button
           type="button"

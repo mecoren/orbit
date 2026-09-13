@@ -2170,11 +2170,7 @@ mod predicate_pushdown_tests {
     }
 
     /// 建一条任务（快捷参数）；返回 id
-    async fn mk(
-        pool: &SqlitePool,
-        title: &str,
-        f: impl FnOnce(&mut TodoTaskCreateInput),
-    ) -> i64 {
+    async fn mk(pool: &SqlitePool, title: &str, f: impl FnOnce(&mut TodoTaskCreateInput)) -> i64 {
         let mut input = TodoTaskCreateInput {
             title: title.into(),
             ..Default::default()

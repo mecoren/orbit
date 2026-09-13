@@ -98,11 +98,15 @@ mod tests {
     #[tokio::test]
     async fn log_and_list_roundtrip() {
         let pool = setup_db().await;
-        log_activity(&pool, 1, "任务甲", "create", "{}").await.unwrap();
+        log_activity(&pool, 1, "任务甲", "create", "{}")
+            .await
+            .unwrap();
         log_activity(&pool, 1, "任务甲", "update", r#"{"fields":["priority"]}"#)
             .await
             .unwrap();
-        log_activity(&pool, 2, "任务乙", "create", "{}").await.unwrap();
+        log_activity(&pool, 2, "任务乙", "create", "{}")
+            .await
+            .unwrap();
 
         let rows = list_task_activity(&pool, 1, None).await.unwrap();
         assert_eq!(rows.len(), 2);
@@ -120,7 +124,9 @@ mod tests {
     #[tokio::test]
     async fn prune_removes_old_rows() {
         let pool = setup_db().await;
-        log_activity(&pool, 1, "旧任务", "create", "{}").await.unwrap();
+        log_activity(&pool, 1, "旧任务", "create", "{}")
+            .await
+            .unwrap();
         // 手写一条 40 天前的过期行
         let old = chrono::Utc::now().timestamp_millis() - 40 * 86_400_000;
         sqlx::query(

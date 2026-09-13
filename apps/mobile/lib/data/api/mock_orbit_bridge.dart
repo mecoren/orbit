@@ -117,11 +117,22 @@ class MockOrbitBridge implements OrbitBridge {
 
   @override
   Future<List<TodoProject>> todoProjectList(ListFilter filter) => _delay(() {
+        // 默认排除已归档（对齐 Rust list_todo_projects 的 is_archived=0 谓词）
         final list = store.projects.values
-            .where((p) => p['is_deleted'] == 0)
+            .where((p) => p['is_deleted'] == 0 && (p['is_archived'] ?? 0) == 0)
             .toList()
           ..sort((a, b) =>
               (a['sort_order'] as int).compareTo(b['sort_order'] as int));
+        return list.map(TodoProject.fromJson).toList();
+      });
+
+  @override
+  Future<List<TodoProject>> todoProjectListArchived() => _delay(() {
+        final list = store.projects.values
+            .where((p) =>
+                p['is_deleted'] == 0 && (p['is_archived'] ?? 0) == 1)
+            .toList()
+          ..sort((a, b) => (b['updated_at'] as int).compareTo(a['updated_at'] as int));
         return list.map(TodoProject.fromJson).toList();
       });
 
@@ -138,6 +149,7 @@ class MockOrbitBridge implements OrbitBridge {
           'description': input.description,
           'hex_color': input.hexColor ?? '#4E8CFF',
           'sort_order': input.sortOrder ?? store.projects.length,
+          'is_archived': 0,
           'is_deleted': 0,
           'created_at': store.now(),
           'updated_at': store.now(),

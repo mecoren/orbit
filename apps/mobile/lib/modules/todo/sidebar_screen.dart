@@ -50,6 +50,10 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
   List<TodoProject> _projects() =>
       ref.watch(todoProjectsProvider).value ?? const [];
 
+  /// 归档项目（侧栏归档区；与主列表独立 provider）
+  List<TodoProject> _archivedProjects() =>
+      ref.watch(todoArchivedProjectsProvider).value ?? const [];
+
   List<TodoTask> _tasks() =>
       ref.watch(todoTasksProvider(const TaskListQuery())).value ?? const [];
 
@@ -100,7 +104,7 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
     ref.invalidate(todoProjectsProvider);
   }
 
-  // ── 项目长按菜单（编辑 / 删除保护流）──
+  // ── 项目长按菜单（编辑 / 归档 / 删除保护流）──
 
   void _showProjectActions(TodoProject project, int undoneCount) {
     showMoreActionsSheet(
@@ -113,6 +117,11 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
           onTap: () => _editProject(project),
         ),
         MoreActionItem(
+          icon: Icons.archive_outlined,
+          label: project.isArchived == 1 ? '取消归档' : '归档项目',
+          onTap: () => _toggleArchive(project),
+        ),
+        MoreActionItem(
           icon: Icons.delete_outline_rounded,
           label: '删除',
           color: OrbitAccents.overdueRed,
@@ -120,6 +129,22 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
         ),
       ],
     );
+  }
+
+  /// 归档切换（桌面右键同口径）：is_archived 翻转经 patchJson；
+  /// 双失效（主列表 + 归档区）
+  Future<void> _toggleArchive(TodoProject project) async {
+    final next = project.isArchived == 1 ? 0 : 1;
+    try {
+      await ref
+          .read(orbitBridgeProvider)
+          .todoProjectUpdate(project.id, '{"is_archived":$next}');
+      ref.invalidate(todoProjectsProvider);
+      ref.invalidate(todoArchivedProjectsProvider);
+      WaitToast.success(next == 1 ? '项目已归档' : '已恢复到项目列表');
+    } catch (_) {
+      WaitToast.destructive('操作失败');
+    }
   }
 
   /// 新建项目（#36）：名称输入 + 默认色按现有项目数轮换预设板
@@ -363,6 +388,35 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
                 dense: true,
                 onTap: _addProject,
               ),
+              // 归档项目区（有归档才渲染；行点击进项目视图读任务，
+              // 行尾恢复钮取消归档——长按菜单同款入口兜底）
+              if (_archivedProjects().isNotEmpty) ...[
+                const SectionHeader(label: '已归档'),
+                ..._archivedProjects().map(
+                  (p) => ListTile(
+                    leading: Icon(
+                      Icons.folder_rounded,
+                      size: AppDimens.iconSizeMd,
+                      color: p.hexColor.isNotEmpty
+                          ? hexToColor(p.hexColor)
+                          : OrbitAccents.todoAccent,
+                    ),
+                    title: Text(
+                      p.title,
+                      style: TextStyle(
+                        fontSize: 15,
+                        color: colors.secondaryText,
+                      ),
+                    ),
+                    dense: true,
+                    trailing: TextButton(
+                      onPressed: () => _toggleArchive(p),
+                      child: const Text('恢复'),
+                    ),
+                    onTap: () => context.push('/todo/tasks?projectId=${p.id}'),
+                  ),
+                ),
+              ],
               // 三、未分组
               ListTile(
                 leading: Icon(

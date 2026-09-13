@@ -34,6 +34,7 @@ use crate::models::business::*;
 ///
 /// 不走 generic_repo::list（统一按 updated_at DESC），因为项目列表的展示顺序
 /// 由用户拖拽结果决定（sort_order 字段），updated_at 排序会让新建/重排后的项目跳到最前。
+/// 默认排除已归档项目（is_archived=1）——归档区入口走 list_archived_todo_projects。
 pub async fn list_todo_projects(
     pool: &SqlitePool,
     filter: &ListFilter,
@@ -60,7 +61,7 @@ pub async fn list_todo_projects(
     };
 
     let sql = format!(
-        "SELECT * FROM todo_projects WHERE is_deleted = 0{} \
+        "SELECT * FROM todo_projects WHERE is_deleted = 0 AND is_archived = 0{} \
          ORDER BY sort_order ASC, id ASC LIMIT ? OFFSET ?",
         keyword_clause
     );
@@ -75,6 +76,18 @@ pub async fn list_todo_projects(
     q = q.bind(page_size).bind(offset);
 
     Ok(q.fetch_all(pool).await?)
+}
+
+/// 归档项目列表（is_archived=1，按归档时间倒序——最近归档在前）。
+/// 侧栏「已归档」折叠区数据源；任务本身仍可经搜索/详情直达。
+pub async fn list_archived_todo_projects(pool: &SqlitePool) -> CoreResult<Vec<TodoProject>> {
+    let rows = sqlx::query_as::<_, TodoProject>(
+        "SELECT * FROM todo_projects WHERE is_deleted = 0 AND is_archived = 1 \
+         ORDER BY updated_at DESC, id DESC",
+    )
+    .fetch_all(pool)
+    .await?;
+    Ok(rows)
 }
 pub async fn get_todo_project(pool: &SqlitePool, id: i64) -> CoreResult<TodoProject> {
     generic_repo::get_by_id(pool, "todo_projects", id).await
@@ -540,11 +553,7 @@ pub async fn search_all(
 
 /// FTS 主路径：MATCH 命中 → 按 kind 分流回源表。
 /// MATCH 词做引号包裹的短语查询（精确子串语义，避免 OR 分词噪声）。
-async fn search_all_fts(
-    pool: &SqlitePool,
-    kw: &str,
-    limit: i32,
-) -> CoreResult<GlobalSearchResult> {
+async fn search_all_fts(pool: &SqlitePool, kw: &str, limit: i32) -> CoreResult<GlobalSearchResult> {
     // 短语转义：查询词内的双引号移除（trigram 短语语法的合法输入）
     let phrase = format!("\"{}\"", kw.replace('"', ""));
 
@@ -780,7 +789,10 @@ mod global_search_tests {
         let _ = s;
 
         let r = search_all(&pool, "移动端重构清单", 20).await.unwrap();
-        assert!(r.tasks.iter().any(|x| x.id == t.id), "子任务命中应归并主任务");
+        assert!(
+            r.tasks.iter().any(|x| x.id == t.id),
+            "子任务命中应归并主任务"
+        );
     }
 
     /// 软删任务从索引摘除（回收站行不参与搜索）
@@ -839,5 +851,220 @@ mod global_search_tests {
         assert_eq!(v["comments"][0]["comment_id"], 1);
         assert_eq!(v["comments"][0]["task_title"], "写周报");
         assert_eq!(v["comments"][0]["created_at"], 3);
+    }
+}
+
+/// 项目归档三端口径回归（2026-09-13）：归档=从默认列表收起（非软删）——
+/// 项目列表/默认任务聚合排除；项目视图（project_id 谓词）放行可读；
+/// 归档列表独立入口；恢复归零。
+#[cfg(test)]
+mod project_archive_tests {
+    use super::*;
+    use crate::db::repository::generic_repo;
+
+    async fn setup_db() -> SqlitePool {
+        let pool = sqlx::SqlitePool::connect("sqlite::memory:").await.unwrap();
+        sqlx::migrate!("./src/db/migrations")
+            .run(&pool)
+            .await
+            .unwrap();
+        pool
+    }
+
+    fn all_tasks_filter() -> ListFilter {
+        ListFilter {
+            page_size: 10_000,
+            ..Default::default()
+        }
+    }
+
+    #[tokio::test]
+    async fn archived_project_excluded_from_default_list() {
+        let pool = setup_db().await;
+        let p = create_todo_project(
+            &pool,
+            &TodoProjectCreateInput {
+                title: "旧项目".into(),
+                description: None,
+                hex_color: None,
+                sort_order: None,
+            },
+        )
+        .await
+        .unwrap();
+
+        // 归档前在列
+        let before = list_todo_projects(&pool, &all_tasks_filter())
+            .await
+            .unwrap();
+        assert!(before.iter().any(|x| x.id == p.id));
+
+        update_todo_project(
+            &pool,
+            p.id,
+            &TodoProjectUpdateInput {
+                title: None,
+                description: None,
+                hex_color: None,
+                sort_order: None,
+                is_archived: Some(1),
+            },
+        )
+        .await
+        .unwrap();
+
+        // 归档后退出默认列表 + 进归档列表
+        let after = list_todo_projects(&pool, &all_tasks_filter())
+            .await
+            .unwrap();
+        assert!(!after.iter().any(|x| x.id == p.id));
+        let archived = list_archived_todo_projects(&pool).await.unwrap();
+        assert!(archived.iter().any(|x| x.id == p.id && x.is_archived == 1));
+    }
+
+    #[tokio::test]
+    async fn archived_project_tasks_hidden_from_aggregate_but_readable_in_project_view() {
+        let pool = setup_db().await;
+        let p = create_todo_project(
+            &pool,
+            &TodoProjectCreateInput {
+                title: "归档项".into(),
+                description: None,
+                hex_color: None,
+                sort_order: None,
+            },
+        )
+        .await
+        .unwrap();
+        let in_archived = create_todo_task(
+            &pool,
+            &TodoTaskCreateInput {
+                title: "归档项目内的任务".into(),
+                project_id: Some(p.id),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+        let ungrouped = create_todo_task(
+            &pool,
+            &TodoTaskCreateInput {
+                title: "未分组任务".into(),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+
+        update_todo_project(
+            &pool,
+            p.id,
+            &TodoProjectUpdateInput {
+                title: None,
+                description: None,
+                hex_color: None,
+                sort_order: None,
+                is_archived: Some(1),
+            },
+        )
+        .await
+        .unwrap();
+
+        // 默认聚合：归档项目任务排除，未分组保留
+        let agg = list_todo_tasks(&pool, &all_tasks_filter()).await.unwrap();
+        assert!(!agg.iter().any(|t| t.id == in_archived.id));
+        assert!(agg.iter().any(|t| t.id == ungrouped.id));
+
+        // 项目视图（project_id 谓词）：放行——归档区点进项目仍可读任务
+        let mut view_filter = all_tasks_filter();
+        view_filter.project_id = Some(p.id);
+        let view = list_todo_tasks(&pool, &view_filter).await.unwrap();
+        assert!(view.iter().any(|t| t.id == in_archived.id));
+    }
+
+    #[tokio::test]
+    async fn unarchive_restores_project_to_default_list() {
+        let pool = setup_db().await;
+        let p = create_todo_project(
+            &pool,
+            &TodoProjectCreateInput {
+                title: "再启用的项目".into(),
+                description: None,
+                hex_color: None,
+                sort_order: None,
+            },
+        )
+        .await
+        .unwrap();
+        update_todo_project(
+            &pool,
+            p.id,
+            &TodoProjectUpdateInput {
+                title: None,
+                description: None,
+                hex_color: None,
+                sort_order: None,
+                is_archived: Some(1),
+            },
+        )
+        .await
+        .unwrap();
+        update_todo_project(
+            &pool,
+            p.id,
+            &TodoProjectUpdateInput {
+                title: None,
+                description: None,
+                hex_color: None,
+                sort_order: None,
+                is_archived: Some(0),
+            },
+        )
+        .await
+        .unwrap();
+
+        let list = list_todo_projects(&pool, &all_tasks_filter())
+            .await
+            .unwrap();
+        assert!(list.iter().any(|x| x.id == p.id && x.is_archived == 0));
+        let archived = list_archived_todo_projects(&pool).await.unwrap();
+        assert!(archived.is_empty());
+    }
+
+    /// 归档与软删独立互不干扰：归档项目走软删后，归档列表也不显示（墓碑优先）
+    #[tokio::test]
+    async fn soft_delete_wins_over_archive() {
+        let pool = setup_db().await;
+        let p = create_todo_project(
+            &pool,
+            &TodoProjectCreateInput {
+                title: "归档后又删除".into(),
+                description: None,
+                hex_color: None,
+                sort_order: None,
+            },
+        )
+        .await
+        .unwrap();
+        update_todo_project(
+            &pool,
+            p.id,
+            &TodoProjectUpdateInput {
+                title: None,
+                description: None,
+                hex_color: None,
+                sort_order: None,
+                is_archived: Some(1),
+            },
+        )
+        .await
+        .unwrap();
+        delete_todo_project(&pool, p.id).await.unwrap();
+
+        let archived = list_archived_todo_projects(&pool).await.unwrap();
+        assert!(archived.is_empty());
+        let _ = generic_repo::get_by_id::<TodoProject>(&pool, "todo_projects", p.id)
+            .await
+            .is_err();
     }
 }

@@ -27,6 +27,7 @@ interface MockProject {
   description: string | null;
   hex_color: string;
   sort_order: number;
+  is_archived: number;
   is_deleted: number;
   created_at: number;
   updated_at: number;
@@ -192,6 +193,7 @@ export function seedDefault(db: MockDb) {
     description: null,
     hex_color: "#3B82F6",
     sort_order: 0,
+    is_archived: 0,
     is_deleted: 0,
     created_at: now,
     updated_at: now,
@@ -321,7 +323,15 @@ const commands: Record<string, (args: any, ctx: Ctx) => unknown> = {
   db_set_device_id: () => undefined,
 
   // ---- projects ----
-  todo_projects_list: (_a, { db }) => ipcClone(db.projects),
+  // 对齐 Rust list_todo_projects：默认排除已归档（is_archived=1）
+  todo_projects_list: (_a, { db }) => ipcClone(db.projects.filter((p) => !p.is_archived)),
+  // 归档项目列表（is_archived=1，最近归档在前——对齐 Rust updated_at DESC）
+  todo_projects_list_archived: (_a, { db }) =>
+    ipcClone(
+      db.projects
+        .filter((p) => p.is_archived && !p.is_deleted)
+        .sort((a, b) => b.updated_at - a.updated_at),
+    ),
   todo_projects_get: ({ id }, { db }) => ipcClone(db.projects.find((p) => p.id === id) ?? null),
   todo_projects_create: ({ input }, { db }) => {
     const now = Date.now();
@@ -332,6 +342,7 @@ const commands: Record<string, (args: any, ctx: Ctx) => unknown> = {
       description: input.description ?? null,
       hex_color: input.hex_color ?? "#3B82F6",
       sort_order: input.sort_order ?? 0,
+      is_archived: 0,
       is_deleted: 0,
       created_at: now,
       updated_at: now,
@@ -357,6 +368,11 @@ const commands: Record<string, (args: any, ctx: Ctx) => unknown> = {
   // 谓词下推（F5）：六键与 Rust build_task_predicate_clause 同口径（仅本命令消费）
   todo_tasks_list: ({ filter }, { db }) => {
     let rows = db.tasks.filter((t) => !t.is_deleted);
+    // 归档项目任务排除（聚合视图；project_id 谓词=用户主动选中该归档项目时放行）
+    if (filter?.project_id == null) {
+      const archivedIds = new Set(db.projects.filter((p) => p.is_archived && !p.is_deleted).map((p) => p.id));
+      rows = rows.filter((t) => t.project_id == null || !archivedIds.has(t.project_id));
+    }
     if (filter?.done === true) rows = rows.filter((t) => t.done === 1);
     if (filter?.done === false) rows = rows.filter((t) => t.done !== 1);
     if (filter?.status != null) rows = rows.filter((t) => t.status === filter.status);
@@ -1282,6 +1298,7 @@ function ensureMockProject(db: MockDb, title: string): number {
     description: null,
     hex_color: "#3B82F6",
     sort_order: 0,
+    is_archived: 0,
     is_deleted: 0,
     created_at: now,
     updated_at: now,

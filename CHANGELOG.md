@@ -7,6 +7,14 @@
 
 ## [Unreleased]
 
+### 项目归档三端落地
+
+- **对标 Tasks.org/Vikunja/Todoist 全标配**：项目一多侧栏不可收拾的核心痛点，此前唯一的出路是删除（连带保护弹窗与撤销窗口）。归档 = 从默认视图收起（非软删）。
+- **数据层**：`todo_projects.is_archived` 列（0001 迁移补行尾中文注释；随既有白名单表行级同步，LWW 天然携带，sync_registry 零改动）。`list_todo_projects` 默认排除归档；新增 `list_archived_todo_projects`（updated_at DESC 最近归档在前）；`TodoProjectUpdateInput.is_archived` 三态字段（patch_json 直通）。**任务列表聚合视图排除归档项目任务（SQL `NOT IN` 子查询，未分组不受影响）；project_id 谓词（用户主动点进归档项目）放行——归档区点进项目仍可读任务**。归档项目任务保留在统计（历史完成数据是事实，归档不改写成就感数据）。墓碑优先：归档项目走软删后归档列表也不再显示。
+- **三端 UI**：桌面右键菜单「归档项目/取消归档」+ 侧栏「已归档」折叠区（计数徽标、行点击进项目视图、行尾 ArchiveRestore 恢复钮 group-hover 显现）；移动长按菜单「归档项目」+ 侧栏「已归档」区（行尾「恢复」TextButton）；归档当前选中项目时自动跳回 /todo 防空视图误导。
+- **桥链**：Tauri `todo_projects_list_archived` 命令 + FRB `todo_projects_list_archived` 镜像（codegen 产物入库）+ 手写 dto.dart `isArchived`（缺省回退 0 兼容旧 JSON）+ MockOrbitBridge/桌面 ipc-mock 同口径（含任务聚合排除谓词）。
+- 测试：Rust 4 用例（归档排除/聚合隐藏+项目视图放行/恢复归零/软删优先）+ mock 桥契约 3 + 桌面 vitest 252 / e2e 18 / flutter analyze 零警告 + 271 全绿；浏览器目检四步链路（右键归档→主列表收起→归档区展开→行内恢复回位）全过。cargo fmt 顺带收编 activity_log_api.rs 等三文件历史 rustfmt 欠账。
+
 ### 桌面系统通知正文点击路由：点通知直达任务详情
 
 - **此前断点**：Windows 系统通知点击正文后啥也不发生（`__closed` 统一丢弃，正文点击与关闭不可区分）——移动端 `onNotificationTap` 冷启动路由早已有，桌面是能力缺口。对标 MS To Do/TickTick 标配交互。

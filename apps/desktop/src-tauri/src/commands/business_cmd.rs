@@ -53,6 +53,15 @@ pub async fn todo_projects_update(
         .await
         .map_err(|e| e.to_string())
 }
+/// 归档项目列表（侧栏「已归档」折叠区数据源；与 list 互斥的 is_archived=1 子集）
+#[tauri::command]
+pub async fn todo_projects_list_archived(
+    state: State<'_, AppState>,
+) -> Result<Vec<TodoProject>, String> {
+    business_api::list_archived_todo_projects(&state.pool)
+        .await
+        .map_err(|e| e.to_string())
+}
 
 // ---------- todo_tasks ----------
 #[tauri::command]

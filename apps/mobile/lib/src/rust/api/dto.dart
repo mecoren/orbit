@@ -507,6 +507,7 @@ class TodoProject {
   final String? description;
   final String hexColor;
   final double sortOrder;
+  final int isArchived;
   final int isDeleted;
   final PlatformInt64 createdAt;
   final PlatformInt64 updatedAt;
@@ -520,6 +521,7 @@ class TodoProject {
     this.description,
     required this.hexColor,
     required this.sortOrder,
+    required this.isArchived,
     required this.isDeleted,
     required this.createdAt,
     required this.updatedAt,
@@ -535,6 +537,7 @@ class TodoProject {
       description.hashCode ^
       hexColor.hashCode ^
       sortOrder.hashCode ^
+      isArchived.hashCode ^
       isDeleted.hashCode ^
       createdAt.hashCode ^
       updatedAt.hashCode ^
@@ -552,6 +555,7 @@ class TodoProject {
           description == other.description &&
           hexColor == other.hexColor &&
           sortOrder == other.sortOrder &&
+          isArchived == other.isArchived &&
           isDeleted == other.isDeleted &&
           createdAt == other.createdAt &&
           updatedAt == other.updatedAt &&

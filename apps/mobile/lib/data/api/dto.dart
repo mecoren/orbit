@@ -43,6 +43,8 @@ class TodoProject {
   final String? description;
   final String hexColor;
   final double sortOrder;
+  /// 项目归档标记：0 活跃 1 已归档（默认列表排除，侧栏归档区）
+  final int isArchived;
   final int isDeleted;
   final int createdAt;
   final int updatedAt;
@@ -56,6 +58,7 @@ class TodoProject {
     required this.description,
     required this.hexColor,
     required this.sortOrder,
+    required this.isArchived,
     required this.isDeleted,
     required this.createdAt,
     required this.updatedAt,
@@ -70,6 +73,7 @@ class TodoProject {
         description: j['description'] as String?,
         hexColor: j['hex_color'] as String,
         sortOrder: (j['sort_order'] as num).toDouble(),
+        isArchived: (j['is_archived'] as int?) ?? 0,
         isDeleted: j['is_deleted'] as int,
         createdAt: j['created_at'] as int,
         updatedAt: j['updated_at'] as int,
