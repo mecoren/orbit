@@ -3,12 +3,15 @@
 //! 60s tick 轮询（与 wait-home 桌面版口径一致）：
 //! - DB 未就绪 / 未配置 / 总开关关 / interval=0 → 静默跳过
 //! - 同步加密未解锁 → 跳过（CryptoLocked 语义前置）
-//! - `距上次自动同步 ≥ sync_interval 分钟` 才触发（LAST_AUTO_SYNC_MS 单调记账）
+//! - `距上次自动同步 ≥ sync_interval 分钟` 才触发（S13：账本持久化——
+//!   上次同步时间读 DB `sync_configs.last_synced_at`，此前进程内静态
+//!   重启归零导致频繁重启用户每启必跑完整同步；成功后由 tick 回写，
+//!   失败不回写保留下轮快速重试窗口）
 //! - 引擎忙（is_running）→ 本轮跳过，下轮再试
 //! - 触发即调 cloud_sync_api::sync_now(Background)；进度经 TauriProgressSender
 //!   emit("sync-progress") 推送；key_mismatch 时 emit("sync-key-mismatch") 引导恢复页
 
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use tauri::{AppHandle, Emitter, Manager};
 
@@ -25,8 +28,6 @@ use crate::commands::sync_runtime;
 const TICK_SECS: u64 = 60;
 
 static SCHEDULER_STARTED: AtomicBool = AtomicBool::new(false);
-/// 上次自动同步时间戳（ms；0 = 从未同步过 → 立即满足间隔条件）
-static LAST_AUTO_SYNC_MS: AtomicU64 = AtomicU64::new(0);
 
 /// 启动定时同步守护（幂等；lib.rs setup 阶段调用）
 pub fn sync_scheduler_start(app: AppHandle) {
@@ -151,20 +152,21 @@ async fn tick(app: &AppHandle) {
     }
 
     // 间隔判据：now - last >= interval 分钟
-    let now_ms = chrono::Utc::now().timestamp_millis() as u64;
-    let last = LAST_AUTO_SYNC_MS.load(Ordering::Relaxed);
-    if last != 0 && now_ms.saturating_sub(last) < (record.sync_interval as u64) * 60_000 {
+    // S13：账本持久化——读 DB last_synced_at 而非进程内静态（重启归零的
+    // 每启必同步已消除）；last 为 NULL（从未同步过）时立即满足触发首轮
+    let now_ms = chrono::Utc::now().timestamp_millis();
+    let last = record.last_synced_at.unwrap_or(0);
+    if last != 0 && now_ms.saturating_sub(last) < (record.sync_interval as i64) * 60_000 {
         return;
     }
 
-    // 引擎忙 → 下轮再试（不推进 LAST 时间戳）
+    // 引擎忙 → 下轮再试（不推进账本时间戳）
     let Ok(engine) = sync_runtime::sync_engine(app) else {
         return;
     };
     if cloud_sync_api::is_running(&engine) {
         return;
     }
-    LAST_AUTO_SYNC_MS.store(now_ms, Ordering::Relaxed);
 
     // 组装并后台执行
     let Some(config) = sync_runtime::engine_config_of_record(&record) else {
@@ -187,9 +189,12 @@ async fn tick(app: &AppHandle) {
     match result {
         Ok(r) => {
             if !r.skipped {
+                // S13：成功后才推进账本（此前在 sync_now 之前就写静态时间戳，
+                // 失败后也要等满一个 interval 才有重试窗口）；skipped（并发
+                // 跳过）不推进，让真正的执行者负责回写
                 let pool = state.pool.clone();
                 let _ = SyncConfigRepo::new(pool)
-                    .update_last_synced_at(record.id, now_ms as i64)
+                    .update_last_synced_at(record.id, now_ms)
                     .await;
             }
         }
