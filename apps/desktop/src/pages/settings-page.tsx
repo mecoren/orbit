@@ -18,6 +18,7 @@ import { TodoSection } from "@/components/settings/todo-section";
 import { ShortcutsSection } from "@/components/settings/shortcuts-section";
 import { TemplatesSection } from "@/components/settings/templates-section";
 import { NotificationHistorySection } from "@/components/settings/notification-history-section";
+import { UpdaterSection } from "@/components/settings/updater-section";
 
 export function SettingsPage() {
   const [active, setActive] = useState<SettingsCategoryKey>("security");
@@ -60,6 +61,7 @@ export function SettingsPage() {
             {active === "shortcuts" && <ShortcutsSection />}
             {active === "templates" && <TemplatesSection />}
             {active === "notifications" && <NotificationHistorySection />}
+            {active === "updater" && <UpdaterSection />}
           </div>
         </div>
       </div>

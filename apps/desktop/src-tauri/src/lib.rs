@@ -95,6 +95,18 @@ pub fn run() {
     #[cfg(desktop)]
     let builder = builder.plugin(tauri_plugin_global_shortcut::Builder::new().build());
 
+    // 应用内更新（07 backlog #20，tauri-plugin-updater）：检查/下载/安装
+    // 由前端设置页驱动（updater-section）；endpoint 走 GitHub Releases 的
+    // latest.json（release.yml createUpdaterArtifacts 产出）。签名密钥未
+    // 注入时产物不签名——更新包安装会被 updater 校验拒绝，设置页检查
+    // 更新将提示未配置（ADR 0004「物料未注入走未签名路径」口径）。
+    #[cfg(desktop)]
+    let builder = builder.plugin(tauri_plugin_updater::Builder::new().build());
+
+    // process 插件（updater 配套）：安装完成后 relaunch 重启进新版本
+    #[cfg(desktop)]
+    let builder = builder.plugin(tauri_plugin_process::init());
+
     // 关窗驻留拦截（07 报告 #16 托盘配套）：关闭主窗 = 隐藏驻留托盘，
     // 退出走托盘菜单；避免中断同步/备份调度器与提醒轮询守护。
     // tray_close_hint 事件驱动前端首次提示（localStorage 记忆不再骚扰）。

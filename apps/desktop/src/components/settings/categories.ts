@@ -1,7 +1,7 @@
 /**
  * 设置页导航分类模型（对齐 wait-home：左导航 + 右内容布局）
  */
-import { Bell, CloudUpload, FileStack, Keyboard, ListTodo, Palette, Shield, type LucideIcon } from "lucide-react";
+import { Bell, CloudUpload, FileStack, Keyboard, ListTodo, Palette, RefreshCw, Shield, type LucideIcon } from "lucide-react";
 
 export interface CategoryItem {
   key: string;
@@ -18,6 +18,7 @@ export const settingsCategories: CategoryItem[] = [
   { key: "shortcuts", label: "快捷键", icon: Keyboard },
   { key: "templates", label: "任务模板", icon: FileStack },
   { key: "notifications", label: "通知历史", icon: Bell },
+  { key: "updater", label: "关于与更新", icon: RefreshCw },
 ];
 
 export type SettingsCategoryKey = (typeof settingsCategories)[number]["key"];

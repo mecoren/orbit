@@ -7,6 +7,14 @@
 
 ## [Unreleased]
 
+### 应用内更新（07 backlog #20，最后一项清零）
+
+- **tauri-plugin-updater + plugin-process**：设置页新「关于与更新」分类——手动「检查更新」→「下载并安装」→ relaunch 重启三段式；**不自动检查**（本地优先应用的更新时机归用户掌控）。插件模块动态 import（mock IPC 环境无 updater 通道，静态导入会在页面加载即抛错——动态导入把失败收敛到点击路径的 try/catch 兜底文案）。
+- **endpoint**：`tauri.conf.json` 指向 GitHub Releases `latest.json`（mecoren/orbit）；`release.yml` 开 `includeUpdaterJson`——桌面三平台构建产出 latest.json + .sig 签名清单，updater 检查链路对齐 tauri-action 标准。
+- **签名边界**（ADR 0004 口径）：`TAURI_SIGNING_PRIVATE_KEY` 未注入时产物不签名，latest.json 签名字段为空——应用内安装校验会失败（设置页文案明示此边界），Release 页手动下载 + SHA256SUMS 校验路径不受影响；密钥注入后应用内更新自动生效，零代码改动。
+- capabilities 补 `updater:default/check/download/install` + `process:allow-restart`。
+- 门禁：cargo check / tsc 零错 / vitest 252 / e2e 18 全绿（updater 点击链路属真实网络+签名环境，mock 冒烟只覆盖分区渲染）。07 backlog 47 项至此全部完成。
+
 ### 子任务转独立任务三端落地
 
 - **对标 MS To Do「Steps→Task」/Things 移出语义**：子任务长大了要独立跟踪（提醒/日期/优先级）是 GTD 高频场景，此前只能删子任务再手动重建任务。

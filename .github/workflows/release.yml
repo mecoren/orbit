@@ -74,6 +74,12 @@ jobs:
           projectPath: apps/desktop
           tagName: ${{ github.ref_name }}
           releaseName: "Orbit ${{ github.ref_name }}"
+          # updater 产物（07 backlog #20）：Windows NSIS/MSI 附 .sig 签名 +
+          # macOS app.tar.gz + latest.json 清单——tauri-plugin-updater 设置页
+          # 「检查更新」消费 latest.json。TAURI_SIGNING_PRIVATE_KEY 未注入时
+          # 仍产出 latest.json 但签名字段为空（安装校验将失败，Release 页
+          # 手动下载路径不受影响——ADR 0004 未签名路径口径）
+          includeUpdaterJson: true
           releaseBody: |
             参见 [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md)。
 
