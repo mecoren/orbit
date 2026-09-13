@@ -16,11 +16,15 @@ pub const FILE_PREFIX: &str = "backup";
 /// 设备码文件名安全化：将 `[\\/:*?"<>|]` 替换为下划线
 ///
 /// 参考 legado `normalizeFileName` 实现。
+/// S3（2026-09-13 探查）：增补 `#`/`%`/空格/控制字符——文件名会拼进云端
+/// URL：`#` 被解析为 fragment 起点（URL 截断）、`%` 形成非法转义、
+/// 空格依赖隐式编码，三者在 S3/WebDAV 的请求路径与签名间制造错位。
 pub fn sanitize_device_id(device_id: &str) -> String {
     device_id
         .chars()
         .map(|c| match c {
-            '\\' | '/' | ':' | '*' | '?' | '"' | '<' | '>' | '|' => '_',
+            '\\' | '/' | ':' | '*' | '?' | '"' | '<' | '>' | '|' | '#' | '%' | ' ' => '_',
+            c if c.is_control() => '_',
             other => other,
         })
         .collect()
@@ -132,6 +136,15 @@ mod tests {
         let input = r#"a\b/c:d*e?f"g<h>i|j"#;
         let result = sanitize_device_id(input);
         assert_eq!(result, "a_b_c_d_e_f_g_h_i_j");
+    }
+
+    /// S3：URL 危险字符与控制字符消毒（# / % / 空格 / 控制字符）
+    #[test]
+    fn sanitize_device_id_replaces_url_unsafe_chars() {
+        assert_eq!(sanitize_device_id("dev#1"), "dev_1");
+        assert_eq!(sanitize_device_id("50%off"), "50_off");
+        assert_eq!(sanitize_device_id("my pc"), "my_pc");
+        assert_eq!(sanitize_device_id("a\u{0000}b"), "a_b");
     }
 
     // ===== generate_backup_filename_with_name 测试 =====
