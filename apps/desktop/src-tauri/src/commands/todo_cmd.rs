@@ -4,7 +4,6 @@
 //! - 任务详情（含子任务/标签/评论/关系/提醒）
 //! - 子任务完成切换
 //! - 任务/项目排序位置更新（拖拽）
-//! - 看板视图数据
 
 use orbit_core::api::business_api;
 use orbit_core::api::business_api::GlobalSearchResult;
@@ -90,26 +89,6 @@ pub async fn todo_projects_update_sort_order(
     sort_order: f64,
 ) -> Result<(), String> {
     todo_api::update_todo_project_sort_order(&state.pool, id, sort_order)
-        .await
-        .map_err(|e| e.to_string())
-}
-
-/// 看板视图数据（按项目分组）
-#[tauri::command]
-pub async fn todo_tasks_kanban_by_project(
-    state: State<'_, AppState>,
-) -> Result<Vec<todo_api::KanbanGroup>, String> {
-    todo_api::get_todo_tasks_kanban_by_project(&state.pool)
-        .await
-        .map_err(|e| e.to_string())
-}
-
-/// 看板视图数据（按状态分组）
-#[tauri::command]
-pub async fn todo_tasks_kanban_by_status(
-    state: State<'_, AppState>,
-) -> Result<Vec<(String, Vec<TodoTask>)>, String> {
-    todo_api::get_todo_tasks_kanban_by_status(&state.pool)
         .await
         .map_err(|e| e.to_string())
 }

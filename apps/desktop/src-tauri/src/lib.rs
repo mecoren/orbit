@@ -265,8 +265,6 @@ pub fn run() {
             todo_cmd::todo_subtasks_promote,
             todo_cmd::todo_tasks_update_position,
             todo_cmd::todo_projects_update_sort_order,
-            todo_cmd::todo_tasks_kanban_by_project,
-            todo_cmd::todo_tasks_kanban_by_status,
             todo_cmd::todo_tasks_recalc_percent,
             todo_cmd::todo_tasks_complete,
             todo_cmd::todo_tasks_duplicate,

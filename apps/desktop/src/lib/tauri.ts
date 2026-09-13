@@ -453,8 +453,6 @@ export interface TodoTaskDetail extends TodoTask {
   reminders: TodoReminder[];
 }
 export const todoTaskGetDetail = (id: number) => invoke<TodoTaskDetail>("todo_tasks_get_detail", { id });
-export const todoTasksKanbanByProject = () => invoke<[number | null, TodoTask[]][]>("todo_tasks_kanban_by_project", {});
-export const todoTasksKanbanByStatus = () => invoke<[string, TodoTask[]][]>("todo_tasks_kanban_by_status", {});
 export const todoTaskRecalcPercent = (taskId: number) => invoke<void>("todo_tasks_recalc_percent", { taskId });
 
 // ========== M3 安全与同步 ==========

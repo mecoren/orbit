@@ -784,23 +784,6 @@ const commands: Record<string, (args: any, ctx: Ctx) => unknown> = {
       projects: kw ? db.projects.filter((p) => p.title.toLowerCase().includes(kw)) : [],
     };
   },
-  todo_tasks_kanban_by_project: (_a, { db }) => {
-    const byProject = new Map<number | null, MockTask[]>();
-    for (const t of db.tasks) {
-      if (!byProject.has(t.project_id)) byProject.set(t.project_id, []);
-      byProject.get(t.project_id)!.push(t);
-    }
-    return [...byProject.entries()];
-  },
-  todo_tasks_kanban_by_status: (_a, { db }) => {
-    const byStatus = new Map<string, MockTask[]>();
-    for (const t of db.tasks) {
-      if (!byStatus.has(t.status)) byStatus.set(t.status, []);
-      byStatus.get(t.status)!.push(t);
-    }
-    return [...byStatus.entries()];
-  },
-
   // ---- Mica（use-mica-effect 挂载即调；浏览器返回不支持）----
   mica_diagnostics: () => ({
     platform: "browser",

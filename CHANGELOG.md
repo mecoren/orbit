@@ -7,6 +7,10 @@
 
 ## [Unreleased]
 
+### 闲置看板聚合 API 移除（批4 清理，性能报告 R7）
+
+- `get_todo_tasks_kanban_by_project` / `get_todo_tasks_kanban_by_status` 六层全链移除：core 引擎两函数 + `KanbanGroup` 类型 + Tauri 两命令 + invoke_handler 注册 + tauri.ts 封装 + ipc-mock 两 mock——性能报告 R7 识别的纯闲置面（前端看板走本地分组，两命令自落地起零调用方），-57 行死代码。
+
 ### 列表通道列裁剪：万级场景 IPC 传输体积 -47%（批2 性能/内存）
 
 - **`generic_repo::list` 的 todo_tasks 通道**：keyword 为空时 description 大列以 `NULL AS description` 占位不传输——DTO 形状不变（前端 `?? null` 兜底既有），详情 `get_todo_task_detail` 单条保持全列；keyword 非空时保留全列（SQL LIKE 已按 title+description 过滤，本地二次过滤语义保序）。消费面核实：列表/看板/日历/表格四视图、移动列表、任务复制全部零消费 description，唯一消费点 keyword 本地过滤已由保留条件覆盖。

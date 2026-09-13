@@ -324,63 +324,6 @@ pub async fn update_todo_project_sort_order(
     Ok(())
 }
 
-/// 看板分组载荷：projectId（None=未分组）→ 组内任务列表
-pub type KanbanGroup = (Option<i64>, Vec<TodoTask>);
-
-/// 看板视图数据（按项目分组）
-pub async fn get_todo_tasks_kanban_by_project(pool: &SqlitePool) -> CoreResult<Vec<KanbanGroup>> {
-    let tasks: Vec<TodoTask> =
-        sqlx::query_as("SELECT * FROM todo_tasks WHERE is_deleted = 0 ORDER BY position, id")
-            .fetch_all(pool)
-            .await?;
-
-    // 按 project_id 分组（None 表示未分组）
-    let mut map: std::collections::HashMap<Option<i64>, Vec<TodoTask>> =
-        std::collections::HashMap::new();
-    for t in tasks {
-        map.entry(t.project_id).or_default().push(t);
-    }
-    // 按 project_id 排序（None 排最后）
-    let mut result: Vec<KanbanGroup> = map.into_iter().collect();
-    result.sort_by(|a, b| match (a.0, b.0) {
-        (Some(a_id), Some(b_id)) => a_id.cmp(&b_id),
-        (Some(_), None) => std::cmp::Ordering::Less,
-        (None, Some(_)) => std::cmp::Ordering::Greater,
-        (None, None) => std::cmp::Ordering::Equal,
-    });
-    Ok(result)
-}
-
-/// 看板视图数据（按状态分组）
-pub async fn get_todo_tasks_kanban_by_status(
-    pool: &SqlitePool,
-) -> CoreResult<Vec<(String, Vec<TodoTask>)>> {
-    let tasks: Vec<TodoTask> =
-        sqlx::query_as("SELECT * FROM todo_tasks WHERE is_deleted = 0 ORDER BY position, id")
-            .fetch_all(pool)
-            .await?;
-
-    // 按 status 分组
-    let mut map: std::collections::HashMap<String, Vec<TodoTask>> =
-        std::collections::HashMap::new();
-    for t in tasks {
-        map.entry(t.status.clone()).or_default().push(t);
-    }
-    // 按 pending → doing → done 顺序排列
-    let order = ["pending", "doing", "done"];
-    let mut result: Vec<(String, Vec<TodoTask>)> = Vec::new();
-    for s in &order {
-        if let Some(tasks) = map.remove(*s) {
-            result.push((s.to_string(), tasks));
-        }
-    }
-    // 其他状态追加到末尾
-    for (status, tasks) in map {
-        result.push((status, tasks));
-    }
-    Ok(result)
-}
-
 // ============================================================================
 // 重复任务推进引擎（三端统一，07 报告 §五-P1#10 引擎下沉）
 // ============================================================================
