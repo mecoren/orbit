@@ -77,6 +77,11 @@ pub fn build_url(
     use_path_style: bool,
     query_params: &[(String, String)],
 ) -> String {
+    // S2（2026-09-13 探查）：此前 normalize_endpoint 是死代码——无 scheme
+    // 输入（minio.example.com:9000）拼出无 scheme 的最终 URL，签名层
+    // Url::parse 失败被误报「认证错误」；尾斜杠产生 //bucket 双斜杠。
+    // build_url 自我规范化（补 scheme + 去尾斜杠），注释假设自此成立。
+    let endpoint = &normalize_endpoint(endpoint);
     let uri = url::Url::parse(endpoint).unwrap_or_else(|_| {
         // 不可能触发，normalize_endpoint 保证 scheme 存在
         url::Url::parse(&format!("https://{}", endpoint)).unwrap()
@@ -154,5 +159,74 @@ mod tests {
             q,
             "continuation-token=a%20b%2Bc%2F1%3D&list-type=2&prefix=assets%2F"
         );
+    }
+
+    // ========================================================================
+    // S2：endpoint 规范化接线——build_url 必须对任意输入形态产出可解析 URL
+    // 历史 bug：normalize_endpoint 是死代码，无 scheme 输入拼出无 scheme URL，
+    // 签名层 Url::parse 失败被误报「认证错误」
+    // ========================================================================
+
+    #[test]
+    fn build_url_normalizes_schemeless_endpoint() {
+        // 最常见的自建 MinIO 配置形态：无 scheme 带端口
+        let url = build_url(
+            "minio.example.com:9000",
+            "mybucket",
+            "assets/abc.waitsync",
+            true,
+            &[],
+        );
+        assert_eq!(url, "https://minio.example.com:9000/mybucket/assets/abc.waitsync");
+    }
+
+    #[test]
+    fn build_url_normalizes_trailing_slash() {
+        // 尾斜杠不得产生 //bucket 双斜杠
+        let url = build_url(
+            "https://minio.example.com:9000/",
+            "mybucket",
+            "data.waitsync",
+            true,
+            &[],
+        );
+        assert_eq!(url, "https://minio.example.com:9000/mybucket/data.waitsync");
+    }
+
+    #[test]
+    fn build_url_preserves_explicit_scheme() {
+        // 显式 http:// 不得被改写为 https（局域网 MinIO 常用 http）
+        let url = build_url(
+            "http://192.168.1.10:9000",
+            "b",
+            "k",
+            true,
+            &[],
+        );
+        assert_eq!(url, "http://192.168.1.10:9000/b/k");
+    }
+
+    #[test]
+    fn build_url_virtual_hosted_style_untouched() {
+        // 带 scheme 的标准 virtual-hosted-style 输入保持原有行为
+        let url = build_url(
+            "https://oss-cn-shenzhen.aliyuncs.com",
+            "mybucket",
+            "modules/todo/data.waitsync",
+            false,
+            &[],
+        );
+        assert_eq!(
+            url,
+            "https://mybucket.oss-cn-shenzhen.aliyuncs.com/modules/todo/data.waitsync"
+        );
+    }
+
+    #[test]
+    fn build_url_whitespace_only_endpoint_falls_back_to_https() {
+        // 全空白输入：normalize 后为 "https://"，parse 失败走兜底分支
+        // 兜底保证产出带 scheme 的 URL（scheme 恒存在，签名层不再失败）
+        let url = build_url("   ", "b", "k", true, &[]);
+        assert!(url.starts_with("https://"), "兜底也必须带 scheme: {url}");
     }
 }
