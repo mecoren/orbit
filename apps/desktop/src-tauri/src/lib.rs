@@ -51,8 +51,7 @@ pub fn run() {
     // 须在 webview 创建前设置，故放 run() 最前。
     #[cfg(target_os = "windows")]
     {
-        const ARGS: &str =
-            "--js-flags=--max-old-space-size=512 --disk-cache-size=52428800";
+        const ARGS: &str = "--js-flags=--max-old-space-size=512 --disk-cache-size=52428800";
         // 已有外部覆盖（调试场景）时不强写。set_var 在 Rust 2024 是 unsafe：
         // 安全前提 = run() 由 main 单线程进入、此时尚无其他线程存活
         // （Tauri runtime/守护线程都在 builder.run 之后才起）。

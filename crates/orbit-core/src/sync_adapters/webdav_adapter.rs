@@ -78,7 +78,9 @@ impl WebDavAdapter {
         let base = if trimmed.starts_with("http://") || trimmed.starts_with("https://") {
             trimmed.trim_end_matches('/').to_string()
         } else {
-            format!("https://{}", trimmed).trim_end_matches('/').to_string()
+            format!("https://{}", trimmed)
+                .trim_end_matches('/')
+                .to_string()
         };
         if path.starts_with('/') {
             format!("{}{}", base, path)

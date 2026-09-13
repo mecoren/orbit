@@ -552,7 +552,13 @@ mod tests {
         assert_eq!(data, b"def-data");
 
         // download_asset：两路径皆无 → NotFound 透传
-        assert!(adapter.download_asset("zzz").await.unwrap_err().is_not_found());
+        assert!(
+            adapter
+                .download_asset("zzz")
+                .await
+                .unwrap_err()
+                .is_not_found()
+        );
 
         // upload_asset：统一写新命名（不再产生第三种口径）
         adapter.upload_asset("new1", b"x").await.unwrap();

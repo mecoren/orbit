@@ -102,9 +102,9 @@ pub async fn sync_attachments_push(
     // 而非真的"云端无附件"（真被清空时 reconcile 已触发全量重传）。
     // 直接上传会产生 N 个对象的全量风暴，在限流服务上雪崩。防御性跳过本轮。
     if cloud_hashes.is_empty() {
-        result
-            .errors
-            .push("云端附件列表为空但本地存在未上传附件，疑似探测异常，本轮跳过附件上传".to_string());
+        result.errors.push(
+            "云端附件列表为空但本地存在未上传附件，疑似探测异常，本轮跳过附件上传".to_string(),
+        );
         return Ok(result);
     }
 

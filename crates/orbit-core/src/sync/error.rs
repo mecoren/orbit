@@ -302,7 +302,10 @@ mod tests {
         // 429 限流不得静默当「不存在」
         let limited = SyncError::classify_head_status(429).unwrap_err();
         assert!(!limited.is_not_found(), "429 不得判为不存在");
-        assert!(limited.is_rate_limited(), "429 HEAD 应构造 RateLimited 变体");
+        assert!(
+            limited.is_rate_limited(),
+            "429 HEAD 应构造 RateLimited 变体"
+        );
     }
 
     // ========================================================================

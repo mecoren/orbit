@@ -341,7 +341,10 @@ mod tests {
         }
         .into();
         assert!(err.is_auth_error());
-        assert!(!err.is_network_error(), "认证错误不得归入网络类（否则 with_retry 白等重试）");
+        assert!(
+            !err.is_network_error(),
+            "认证错误不得归入网络类（否则 with_retry 白等重试）"
+        );
         assert_eq!(err.category_tag(), "auth");
     }
 

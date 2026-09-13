@@ -177,7 +177,10 @@ mod tests {
             true,
             &[],
         );
-        assert_eq!(url, "https://minio.example.com:9000/mybucket/assets/abc.waitsync");
+        assert_eq!(
+            url,
+            "https://minio.example.com:9000/mybucket/assets/abc.waitsync"
+        );
     }
 
     #[test]
@@ -196,13 +199,7 @@ mod tests {
     #[test]
     fn build_url_preserves_explicit_scheme() {
         // 显式 http:// 不得被改写为 https（局域网 MinIO 常用 http）
-        let url = build_url(
-            "http://192.168.1.10:9000",
-            "b",
-            "k",
-            true,
-            &[],
-        );
+        let url = build_url("http://192.168.1.10:9000", "b", "k", true, &[]);
         assert_eq!(url, "http://192.168.1.10:9000/b/k");
     }
 

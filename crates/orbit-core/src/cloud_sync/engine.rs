@@ -1360,8 +1360,8 @@ impl SyncEngine {
             match operation().await {
                 Ok(v) => return Ok(v),
                 Err(e) => {
-                    let retryable = (e.is_network_error() || e.is_rate_limited())
-                        && !e.is_auth_error();
+                    let retryable =
+                        (e.is_network_error() || e.is_rate_limited()) && !e.is_auth_error();
                     if !retryable || attempt == max_retries {
                         return Err(e);
                     }
@@ -2123,7 +2123,11 @@ mod tests {
         .await
         .unwrap();
 
-        assert!(paused.is_ok(), "限流错误应被重试直至成功: {:?}", paused.err());
+        assert!(
+            paused.is_ok(),
+            "限流错误应被重试直至成功: {:?}",
+            paused.err()
+        );
         assert_eq!(
             calls.load(std::sync::atomic::Ordering::SeqCst),
             3,

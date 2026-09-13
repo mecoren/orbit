@@ -531,7 +531,10 @@ mod tests {
         use std::sync::atomic::{AtomicU32, Ordering as AtomicOrdering};
 
         let pool = sqlx::SqlitePool::connect("sqlite::memory:").await.unwrap();
-        sqlx::migrate!("./src/db/migrations").run(&pool).await.unwrap();
+        sqlx::migrate!("./src/db/migrations")
+            .run(&pool)
+            .await
+            .unwrap();
         // 插入一行项目数据——空库会触发 should_skip_push 的
         // 「首次同步 + 本地空数据 → 跳过」守卫，全部模块不上传
         sqlx::query(
@@ -556,10 +559,18 @@ mod tests {
 
         #[async_trait::async_trait]
         impl SyncAdapter for FailFirstAdapter {
-            async fn list_files(&self, _: &str) -> Result<Vec<crate::sync_adapters::traits::RemoteFile>, crate::sync::error::SyncError> {
+            async fn list_files(
+                &self,
+                _: &str,
+            ) -> Result<Vec<crate::sync_adapters::traits::RemoteFile>, crate::sync::error::SyncError>
+            {
                 Ok(Vec::new())
             }
-            async fn list_all_files(&self, _: &str) -> Result<Vec<crate::sync_adapters::traits::RemoteFile>, crate::sync::error::SyncError> {
+            async fn list_all_files(
+                &self,
+                _: &str,
+            ) -> Result<Vec<crate::sync_adapters::traits::RemoteFile>, crate::sync::error::SyncError>
+            {
                 Ok(Vec::new())
             }
             async fn download(&self, _: &str) -> Result<Vec<u8>, crate::sync::error::SyncError> {
@@ -567,7 +578,11 @@ mod tests {
                     message: "无".to_string(),
                 })
             }
-            async fn upload(&self, _path: &str, _data: &[u8]) -> Result<(), crate::sync::error::SyncError> {
+            async fn upload(
+                &self,
+                _path: &str,
+                _data: &[u8],
+            ) -> Result<(), crate::sync::error::SyncError> {
                 let n = self.upload_count.fetch_add(1, AtomicOrdering::SeqCst);
                 if n == 0 {
                     // todos 模块的 meta 上传失败（注入点）
@@ -581,10 +596,17 @@ mod tests {
             async fn delete(&self, _: &str) -> Result<(), crate::sync::error::SyncError> {
                 Ok(())
             }
-            async fn upload_asset(&self, _: &str, _: &[u8]) -> Result<(), crate::sync::error::SyncError> {
+            async fn upload_asset(
+                &self,
+                _: &str,
+                _: &[u8],
+            ) -> Result<(), crate::sync::error::SyncError> {
                 Ok(())
             }
-            async fn download_asset(&self, _: &str) -> Result<Vec<u8>, crate::sync::error::SyncError> {
+            async fn download_asset(
+                &self,
+                _: &str,
+            ) -> Result<Vec<u8>, crate::sync::error::SyncError> {
                 Err(crate::sync::error::SyncError::NotFound {
                     message: "无".to_string(),
                 })
