@@ -7,6 +7,16 @@
 
 ## [Unreleased]
 
+### 同步域第三轮全面审查与优化（六连修复，审查报告入库）
+
+- **附件首传死锁修复（P0）**：S7 空列表防御未区分「列表探测异常」与「云端真的没有附件」——首台设备从零同步时 assets/ 目录不存在（list 404→空列表），附件上传每轮被误判跳过、永久死锁。增补存在性探测三分叉：抽首个未上传附件 asset_exists 探测，云端真实存在→维持防御拦截；404 确认不存在→真空云放行上传（首传/清空后重传）；探测出错→保守跳过待下轮。
+- **pull 漏拉窗口封堵（S17）**：push 中断可产生「新 data + 旧 _meta」，他端 remote_fp 与旧 fp 相等即永久跳过、新数据漏拉。`should_skip_pull` 提纯函数：fp 一致时若 `_meta.updated_at` 晚于本地 `pulled_at` 强制走下载分支；updated_at=0 保持旧格式跳过语义。
+- **附件 GC↔pull 对打架循环终结（S31）**：本端 GC 删除无引用附件后，云端孤儿被 pull 朴素差集拉回→插占位行→下轮 GC 又删→无限循环。pull 差集增补活跃引用过滤（仅拉回仍有存活任务引用的附件，孤儿留云端）；占位行记录真实 size_bytes（此前恒 0）；登记吞错收敛进 errors。
+- **rekey 中断一致性（S32）**：附件 is_uploaded 清零提前到任何云端写入之前——原顺序下 push 中断后重试 rekey 附件不重传，云端留「新 Key 模块+旧 Key 附件」混合态；现在无论中断多少次重试必然收敛到全量重传。
+- **push 空库守卫性能优化**：P0-5 守卫原实现全量加载模块行取 len() 再 COUNT 复核（每轮 push 三次加载同一模块），改为逐表 COUNT 判空——万行级模块每轮省两次全量扫描+一次全量物化。
+- **同步域死代码/陈旧文档清理（S33 等）**：删除零调用方的 `upload_attachment`/`download_attachment`；修正引用不存在的 `RemoteFile.path` 字段的文档；cloud_sync mod.rs 头注释对齐单模块/attachments 路径现状。
+- 定向测试 12 项新增（附件空列表三分叉 4 + pull 真值表 4 + 附件差集过滤 3 + 探针 1）；全链回归：cargo 505 / clippy 基线持平 / tsc / vitest 252 / e2e 18 / flutter analyze+test 274 全绿（m4 WebDAV 环境依赖失败为已知非回归）。报告：docs/同步功能全面审查与优化报告-2026-09-14.md。
+
 ### 闲置看板聚合 API 移除（批4 清理，性能报告 R7）
 
 - `get_todo_tasks_kanban_by_project` / `get_todo_tasks_kanban_by_status` 六层全链移除：core 引擎两函数 + `KanbanGroup` 类型 + Tauri 两命令 + invoke_handler 注册 + tauri.ts 封装 + ipc-mock 两 mock——性能报告 R7 识别的纯闲置面（前端看板走本地分组，两命令自落地起零调用方），-57 行死代码。
