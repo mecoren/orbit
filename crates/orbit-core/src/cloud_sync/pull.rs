@@ -244,10 +244,10 @@ async fn pull_single_module(
     let builder = ProgressBuilder::new(progress_sender, origin);
     builder.pulling(module_name, module_def.display_name, current, total);
 
-    // 1. 比对指纹：远端 fp == 本地记录的 remote_fp → 跳过
+    // 1. 比对指纹：远端 fp == 本地记录的 remote_fp → 跳过（委托纯函数，便于单测）
     if local_state
         .as_ref()
-        .is_some_and(|s| s.remote_fp == remote_fp && !s.remote_fp.is_empty())
+        .is_some_and(|s| should_skip_pull(s, remote_fp, remote_updated_at))
     {
         return PullModuleOutcome::Skipped;
     }
@@ -407,6 +407,26 @@ async fn pull_single_module(
     }
 }
 
+/// 判断单个模块 Pull 是否应跳过（纯函数，便于真值表单测）
+///
+/// 主条件（增量跳过）：本地记录的 remote_fp 与远端 fp 一致且非空。
+///
+/// S17 二级校验（2026-09-14 审查）：push 侧中断窗口可产生「新 data +
+/// 旧 _meta」的云端状态——_meta 里的 fp 是旧值，本端 remote_fp 与之
+/// 相等即跳过，漏拉新 data。以 `_meta.updated_at` 兜底：全局索引更新
+/// 时间晚于本地上次 Pull 记录（pulled_at），说明远端发生过本端未见的
+/// 写入（含中断重传、其他设备覆盖 _meta），不跳过、强制走下载分支。
+/// `remote_updated_at > 0` 排除旧版本/异常数据写 0 导致的每轮强制拉取。
+fn should_skip_pull(
+    local: &ModuleSyncState,
+    remote_fp: &str,
+    remote_updated_at: i64,
+) -> bool {
+    local.remote_fp == remote_fp
+        && !local.remote_fp.is_empty()
+        && !(remote_updated_at > local.pulled_at && remote_updated_at > 0)
+}
+
 /// 下载并解密模块 meta.waitsync
 async fn download_and_decrypt_meta(
     adapter: &dyn SyncAdapter,
@@ -430,4 +450,57 @@ pub async fn download_attachment(
     let encrypted = adapter.download_asset(hash).await?;
     let decrypted = decrypt_payload(&encrypted, data_key)?;
     Ok(decrypted)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn state(remote_fp: &str, pulled_at: i64) -> ModuleSyncState {
+        ModuleSyncState {
+            fp: "fp-local".to_string(),
+            remote_fp: remote_fp.to_string(),
+            count: 1,
+            pulled_at,
+            pushed_at: 0,
+        }
+    }
+
+    // ========================================================================
+    // should_skip_pull 真值表：S17 漏拉窗口二级校验
+    //
+    // 漏拉场景：对端 push 中断留下「新 data + 旧 _meta」（_meta.fp 是旧值
+    // 但 updated_at 已刷新），本端 remote_fp 与旧 fp 相等——无二级校验时
+    // 永久跳过，新 data 漏拉。
+    // ========================================================================
+
+    #[test]
+    fn skip_when_fp_matches_and_no_newer_remote_write() {
+        // 常规增量：fp 一致 + 远端 updated_at 不晚于本地拉取时间 → 跳过
+        assert!(should_skip_pull(&state("fp-a", 200), "fp-a", 100));
+        assert!(should_skip_pull(&state("fp-a", 200), "fp-a", 200));
+    }
+
+    #[test]
+    fn force_pull_when_meta_updated_after_last_pull() {
+        // S17 核心：fp 一致但 _meta.updated_at 晚于本地 pulled_at → 不跳过
+        //（对端 push 中断后重传：fp 恰好回到相同值但全局索引更新过）
+        assert!(
+            !should_skip_pull(&state("fp-a", 100), "fp-a", 300),
+            "updated_at 晚于上次拉取时必须强制走下载分支"
+        );
+    }
+
+    #[test]
+    fn zero_remote_updated_at_keeps_legacy_skip() {
+        // 旧版本/异常数据 updated_at=0：不能每轮强制拉取（保持原跳过语义）
+        assert!(should_skip_pull(&state("fp-a", 100), "fp-a", 0));
+    }
+
+    #[test]
+    fn fp_mismatch_or_empty_never_skips() {
+        // fp 不一致 → 拉取；remote_fp 空（从未拉过）→ 拉取
+        assert!(!should_skip_pull(&state("fp-a", 100), "fp-b", 50));
+        assert!(!should_skip_pull(&state("", 100), "fp-a", 50));
+    }
 }
