@@ -473,7 +473,37 @@ impl SyncAdapter for WebDavAdapter {
 
         let url = self.build_url(path);
         let headers = self.auth_headers();
-        self.http.put_with_retry(&url, headers, data.to_vec()).await
+        let first = self
+            .http
+            .put_with_retry(&url, headers.clone(), data.to_vec())
+            .await;
+
+        // S29（2026-09-14 审查）：dir_cache 失效处理——云端目录被外部删除后，
+        // 缓存仍认为目录存在（ensure_directory 直接跳过 MKCOL），PUT 持续 409
+        // 直至进程重启。409（AncestorsNotFound，父目录缺失语义）时清空缓存、
+        // 重建目录链后重试一次；非 409 错误原样透传。
+        // 识别口径与 download 一致：from_http_status 兜底分支的消息带 "HTTP 409"
+        // 状态码锚点 + AncestorsNotFound 体特征（适配器对 PUT 同样拿不到原始
+        // status，此嗅探有状态码锚点，非裸子串）。
+        match first {
+            Err(e)
+                if e.to_string().contains("HTTP 409")
+                    && e.to_string().contains("AncestorsNotFound") =>
+            {
+                log::info!("[webdav] PUT 409 AncestorsNotFound：清空目录缓存并重建后重试 {path}");
+                if let Ok(mut cache) = self.dir_cache.lock() {
+                    cache.clear();
+                }
+                if let Some(parent) = path.rsplit_once('/').map(|(p, _)| p)
+                    && !parent.is_empty()
+                {
+                    self.ensure_directory(parent).await?;
+                }
+                let headers = self.auth_headers();
+                self.http.put_with_retry(&url, headers, data.to_vec()).await
+            }
+            other => other,
+        }
     }
 
     async fn delete(&self, path: &str) -> Result<(), SyncError> {
@@ -641,4 +671,61 @@ impl SyncAdapter for WebDavAdapter {
         hashes.dedup();
         Ok(hashes)
     }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ========================================================================
+    // parent_url：MKCOL 409 递归建目录的父路径解析（纯函数）
+    // ========================================================================
+
+    #[test]
+    fn parent_url_strips_last_segment() {
+        assert_eq!(
+            WebDavAdapter::parent_url("https://host/dav/myfolder/sync"),
+            Some("https://host/dav/myfolder".to_string())
+        );
+    }
+
+    #[test]
+    fn parent_url_root_level_returns_host() {
+        // 只剩一级路径 → 父目录是 host 根
+        assert_eq!(
+            WebDavAdapter::parent_url("https://host/dav"),
+            Some("https://host".to_string())
+        );
+    }
+
+    #[test]
+    fn parent_url_host_only_returns_none() {
+        // 已到 host 根，无法再向上
+        assert_eq!(WebDavAdapter::parent_url("https://host"), None);
+    }
+
+    #[test]
+    fn parent_url_ignores_query_and_fragment() {
+        assert_eq!(
+            WebDavAdapter::parent_url("https://host/a/b?x=1#frag"),
+            Some("https://host/a".to_string())
+        );
+    }
+
+    #[test]
+    fn parent_url_trims_trailing_slash_first() {
+        // 尾斜杠先剥再取父级，不得取到空段
+        assert_eq!(
+            WebDavAdapter::parent_url("https://host/a/b/"),
+            Some("https://host/a".to_string())
+        );
+    }
+
+    // ========================================================================
+    // S29：dir_cache 失效——PUT 409 AncestorsNotFound 时清缓存重建
+    //
+    // 端到端验证需真实 WebDAV 服务器（m4 集成测试职责，本机无环境为已知
+    // 边界）；此处覆盖其依赖的父路径解析纯函数，重试编排逻辑由 m4 与
+    // 既有 upload 路径回归。
+    // ========================================================================
 }
