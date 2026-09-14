@@ -15,7 +15,8 @@
 - **rekey 中断一致性（S32）**：附件 is_uploaded 清零提前到任何云端写入之前——原顺序下 push 中断后重试 rekey 附件不重传，云端留「新 Key 模块+旧 Key 附件」混合态；现在无论中断多少次重试必然收敛到全量重传。
 - **push 空库守卫性能优化**：P0-5 守卫原实现全量加载模块行取 len() 再 COUNT 复核（每轮 push 三次加载同一模块），改为逐表 COUNT 判空——万行级模块每轮省两次全量扫描+一次全量物化。
 - **同步域死代码/陈旧文档清理（S33 等）**：删除零调用方的 `upload_attachment`/`download_attachment`；修正引用不存在的 `RemoteFile.path` 字段的文档；cloud_sync mod.rs 头注释对齐单模块/attachments 路径现状。
-- 定向测试 12 项新增（附件空列表三分叉 4 + pull 真值表 4 + 附件差集过滤 3 + 探针 1）；全链回归：cargo 505 / clippy 基线持平 / tsc / vitest 252 / e2e 18 / flutter analyze+test 274 全绿（m4 WebDAV 环境依赖失败为已知非回归）。报告：docs/同步功能全面审查与优化报告-2026-09-14.md。
+- **收尾批次三连**：① 冲突裁决计数全链透传（S28 半项）——merge LWW 双向裁决与复活裁决计入 MergeResult.conflicts → SyncResult → sync_history 落库 → 桌面同步历史卡「冲突 N」展示，多设备并发编辑不再静默；② WebDAV PUT 409 时清空 dir_cache 重建目录重试（S29）——云端目录被外部删除后自愈，不再持续 409 直至重启；③ 移除 infer_region 死代码并释放 regex 依赖（S35）——全 workspace 核实零使用，减一处编译依赖。
+- 定向测试 19 项新增（附件空列表三分叉 4 + pull 真值表 4 + 附件差集过滤 3 + 探针 1 + merge 冲突计数 2 + parent_url 5）；全链回归：cargo 512 / clippy 基线持平 / tsc / vitest 252 / e2e 18 / flutter analyze+test 274 全绿（m4 WebDAV 环境依赖失败为已知非回归）。报告：docs/同步功能全面审查与优化报告-2026-09-14.md。
 
 ### 闲置看板聚合 API 移除（批4 清理，性能报告 R7）
 
