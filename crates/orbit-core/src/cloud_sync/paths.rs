@@ -12,7 +12,12 @@
 //! _meta.waitsync                         # 全局索引
 //! modules/{name}/data.waitsync           # 模块数据
 //! modules/{name}/meta.waitsync           # 模块元数据
-//! assets/{hash}.waitsync                 # 附件
+//! assets/{hash}.waitsync                 # 附件（< 8MiB 密文单对象）
+//! assets_parts/{hash}/head.json         # 附件分片清单（S4，仅 WebDAV：
+//!                                        #   ≥ 8MiB 密文分片形态；S3 走原生
+//!                                        #   multipart，Complete 后对象仍落
+//!                                        #   assets/{hash}.waitsync 原路径）
+//! assets_parts/{hash}/{index:06}.bin     # 附件密文分片（5MiB/片）
 //! ```
 
 /// 加密元数据路径（保持不变，无扩展名）
