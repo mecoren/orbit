@@ -87,22 +87,28 @@ pub async fn mark_local_cached(pool: &SqlitePool, hash: &str, local_path: &str) 
 /// UPDATE，affected rows = 0，记录永远缺失，导致每轮同步差集永不为空、
 /// 全部附件反复重下。此方法在 UPDATE 未命中时插入占位行（原始文件名/mime
 /// 未知，用 hash 占位；is_uploaded=1 因云端已存在该对象）。
+///
+/// `size_bytes` 为下载解密后的实际字节数（2026-09-14 修正：此前占位行恒
+/// 写 0，UI 展示与上限校验失真）。冲突路径（本地行已存在）不回写 size，
+/// 保留本地已有的真实元数据（original_name/mime_type 仅存于本地账本）。
 pub async fn ensure_local_cached(
     pool: &SqlitePool,
     hash: &str,
     local_path: &str,
+    size_bytes: i64,
 ) -> CoreResult<()> {
     let now = chrono::Utc::now().timestamp_millis();
     sqlx::query(
         "INSERT INTO sys_attachments (hash, original_name, mime_type, size_bytes, local_path,
                                   is_uploaded, is_local_cached, created_at)
-         VALUES (?, ?, 'application/octet-stream', 0, ?, 1, 1, ?)
+         VALUES (?, ?, 'application/octet-stream', ?, ?, 1, 1, ?)
          ON CONFLICT(hash) DO UPDATE SET
             is_local_cached = 1,
             local_path = excluded.local_path",
     )
     .bind(hash)
     .bind(hash)
+    .bind(size_bytes)
     .bind(local_path)
     .bind(now)
     .execute(pool)
@@ -142,6 +148,21 @@ pub async fn get_unuploaded(pool: &SqlitePool) -> CoreResult<Vec<Attachment>> {
     .fetch_all(pool)
     .await?;
     Ok(items)
+}
+
+/// 查询仍被存活任务引用的附件 hash 集合（S31：pull 差集的活跃引用过滤）
+///
+/// 云端孤儿附件（本端 GC 已删、但其他设备视角仍挂载的对象）在本端无任何
+/// 任务引用——拉回它们只会重插占位行、耗磁盘与流量，且下一轮 GC 又删、
+/// 再下一轮 pull 又拉回，形成「GC ↔ pull」对打架循环。pull 差集只保留
+/// 本端有活跃引用的 hash，无引用的云端对象留在云端等真正需要时再拉。
+pub async fn get_active_referenced_hashes(pool: &SqlitePool) -> CoreResult<Vec<String>> {
+    let rows: Vec<(String,)> = sqlx::query_as(
+        "SELECT DISTINCT hash FROM todo_task_attachments WHERE is_deleted = 0",
+    )
+    .fetch_all(pool)
+    .await?;
+    Ok(rows.into_iter().map(|(h,)| h).collect())
 }
 
 /// 按 hash 删除单个附件记录

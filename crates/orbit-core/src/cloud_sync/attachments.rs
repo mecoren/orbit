@@ -291,10 +291,25 @@ pub async fn sync_attachments_pull(
         })?;
     let local_set: HashSet<String> = local_cached.into_iter().map(|a| a.hash).collect();
 
-    // 3. 差集 = 云端有 - 本地有
+    // 2.5 活跃引用集合（S31：GC ↔ pull 对打架循环修复，2026-09-14 审查）
+    //
+    // 云端孤儿附件（本端 GC 删除无引用附件后，其他设备视角仍挂载的对象）
+    // 若按「云端有 - 本地无」朴素差集拉回：下载 → 插占位行 → 下轮 GC 又删
+    // → 再下轮 pull 又拉回，无限循环耗磁盘与流量。差集只保留本端仍有
+    // 存活任务引用的 hash——真正被任务挂载的附件（含关联行刚从 pull 合并
+    // 进来的新引用）一定会被拉回，孤儿留在云端不下载。
+    let active_refs: HashSet<String> = attachment_repo::get_active_referenced_hashes(db_pool)
+        .await
+        .map_err(|e| CloudSyncError::Database {
+            message: format!("查询附件活跃引用失败: {}", e),
+        })?
+        .into_iter()
+        .collect();
+
+    // 3. 差集 = 云端有 - 本地有 - 无引用
     let to_download: Vec<String> = cloud_hashes
         .iter()
-        .filter(|h| !local_set.contains(*h))
+        .filter(|h| !local_set.contains(*h) && active_refs.contains(*h))
         .cloned()
         .collect();
 
@@ -316,12 +331,13 @@ pub async fn sync_attachments_pull(
 
     // 5. 并发下载（NFR-5.5：4 路并发）
     // 下载/解密/落盘全流程并行，DB 标记回主流程串行执行。
-    let outcomes: Vec<(String, Result<String, String>)> = stream::iter(to_download)
+    let outcomes: Vec<(String, Result<(String, i64), String>, i64)> = stream::iter(to_download)
         .map(|hash| {
             let data_key = &data_key;
             let done_counter = &done_counter;
             async move {
-                let outcome: Result<String, String> = async {
+                // 返回 (本地路径, 实际字节数)——size 供占位行登记（S31 修正）
+                let outcome: Result<(String, i64), String> = async {
                     // 5a. 下载
                     let encrypted = adapter
                         .download_asset(&hash)
@@ -366,11 +382,11 @@ pub async fn sync_attachments_pull(
                             .map_err(|e| format!("附件 {} 原子落盘失败: {}", hash, e))?;
                     }
 
-                    Ok(file_path.to_string_lossy().to_string())
+                    Ok((file_path.to_string_lossy().to_string(), decrypted.len() as i64))
                 }
                 .await;
 
-                // 5d. 按完成序发送进度
+                // 5e. 按完成序发送进度
                 let current = done_counter.fetch_add(1, Ordering::SeqCst) + 1;
                 progress_sender.send(SyncProgress::Attachments {
                     origin,
@@ -379,7 +395,8 @@ pub async fn sync_attachments_pull(
                     total,
                 });
 
-                (hash, outcome)
+                let size = outcome.as_ref().map_or(0, |(_, s)| *s);
+                (hash, outcome, size)
             }
         })
         .buffer_unordered(4)
@@ -387,13 +404,21 @@ pub async fn sync_attachments_pull(
         .await;
 
     // 6. 汇总结果 + 更新 sys_attachments 记录（串行落库）
-    for (hash, outcome) in outcomes {
+    for (hash, outcome, size) in outcomes {
         match outcome {
-            Ok(local_path) => {
+            Ok((local_path, _)) => {
                 // P0-8：ensure 而非 mark——sys_attachments 不在同步白名单，
                 // 新设备/删库后本地无记录，仅 UPDATE 会永远 affected=0，
                 // 差集永不为空导致每轮全量重下
-                let _ = attachment_repo::ensure_local_cached(db_pool, &hash, &local_path).await;
+                if let Err(e) =
+                    attachment_repo::ensure_local_cached(db_pool, &hash, &local_path, size).await
+                {
+                    // S9 口径：吞错收敛——DB 写入失败必须可观测（此前 let _ =
+                    // 静默，每轮重复下载且用户无感知）
+                    result
+                        .errors
+                        .push(format!("登记附件 {} 本地缓存失败: {}", hash, e));
+                }
                 result.downloaded += 1;
             }
             Err(e) => {
@@ -718,4 +743,238 @@ mod tests {
             .expect("行存在");
         assert_eq!(marked.is_uploaded, 1);
     }
+    // ========================================================================
+    // S31（2026-09-14 审查）：pull 差集的活跃引用过滤 + 占位行真实 size
+    //
+    // 历史 bug：本端 GC 删除无引用附件后，云端孤儿对象仍在 assets/——
+    // pull 朴素差集（云端有 - 本地无）把孤儿拉回 → 插占位行 → 下轮 GC
+    // 又删 → 再下轮又拉回，无限循环耗磁盘与流量。
+    // 修复后：差集 = 云端有 - 本地无 - 无存活任务引用。
+    // ========================================================================
+
+    /// Pull 测试 mock：hash → 密文映射（用真实 encrypt_payload 保证解密链路）
+    struct PullMockAdapter {
+        files: std::collections::HashMap<String, Vec<u8>>,
+    }
+
+    #[async_trait::async_trait]
+    impl SyncAdapter for PullMockAdapter {
+        async fn list_files(
+            &self,
+            _: &str,
+        ) -> Result<Vec<crate::sync_adapters::traits::RemoteFile>, crate::sync::error::SyncError>
+        {
+            Ok(Vec::new())
+        }
+        async fn list_all_files(
+            &self,
+            _: &str,
+        ) -> Result<Vec<crate::sync_adapters::traits::RemoteFile>, crate::sync::error::SyncError>
+        {
+            Ok(Vec::new())
+        }
+        async fn download(
+            &self,
+            _: &str,
+        ) -> Result<Vec<u8>, crate::sync::error::SyncError> {
+            Err(crate::sync::error::SyncError::NotFound {
+                message: "无".to_string(),
+            })
+        }
+        async fn upload(
+            &self,
+            _: &str,
+            _: &[u8],
+        ) -> Result<(), crate::sync::error::SyncError> {
+            Ok(())
+        }
+        async fn delete(&self, _: &str) -> Result<(), crate::sync::error::SyncError> {
+            Ok(())
+        }
+        async fn upload_asset(
+            &self,
+            _: &str,
+            _: &[u8],
+        ) -> Result<(), crate::sync::error::SyncError> {
+            Ok(())
+        }
+        async fn download_asset(
+            &self,
+            hash: &str,
+        ) -> Result<Vec<u8>, crate::sync::error::SyncError> {
+            match self.files.get(hash) {
+                Some(d) => Ok(d.clone()),
+                None => Err(crate::sync::error::SyncError::NotFound {
+                    message: "无".to_string(),
+                }),
+            }
+        }
+        async fn asset_exists(
+            &self,
+            _: &str,
+        ) -> Result<bool, crate::sync::error::SyncError> {
+            Ok(false)
+        }
+        async fn list_assets(&self) -> Result<Vec<String>, crate::sync::error::SyncError> {
+            Ok(self.files.keys().cloned().collect())
+        }
+    }
+
+    /// 构造 pull 环境：空账本（模拟 GC 后/新设备）+ 云端两个附件
+    ///（referenced 被任务挂载，orphan 无任何引用）
+    ///
+    /// 返回 (pool, crypto, tmp, adapter, referenced_hash, orphan_hash)
+    async fn pull_env() -> (
+        SqlitePool,
+        crate::sync_crypto::SyncCryptoService,
+        tempfile::TempDir,
+        PullMockAdapter,
+        String,
+        String,
+    ) {
+        let pool = sqlx::SqlitePool::connect("sqlite::memory:").await.unwrap();
+        sqlx::migrate!("./src/db/migrations")
+            .run(&pool)
+            .await
+            .unwrap();
+        let tmp = tempfile::TempDir::new().unwrap();
+        let crypto = crate::sync_crypto::SyncCryptoService::new(tmp.path());
+        crypto
+            .init_with_data_key("pw", &[9u8; 32])
+            .expect("注入测试 Data Key");
+
+        // 云端附件：referenced（8 字节）/ orphan（4 字节），密文走真实加密链路
+        let referenced_plain = b"referenced-content".to_vec();
+        let orphan_plain = b"orphan".to_vec();
+        let hash_r = crate::crypto::sha256::sha256_hex(&referenced_plain);
+        let hash_o = crate::crypto::sha256::sha256_hex(&orphan_plain);
+        let mut files = std::collections::HashMap::new();
+        files.insert(
+            hash_r.clone(),
+            encrypt_payload(&referenced_plain, &[9u8; 32]).unwrap(),
+        );
+        files.insert(
+            hash_o.clone(),
+            encrypt_payload(&orphan_plain, &[9u8; 32]).unwrap(),
+        );
+        let adapter = PullMockAdapter { files };
+
+        // 任务 + 关联：仅挂载 referenced
+        sqlx::query(
+            "INSERT INTO todo_tasks (uuid, title, created_at, updated_at) VALUES ('t1', 'T', 1, 1)",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        sqlx::query(
+            "INSERT INTO todo_task_attachments (uuid, task_id, hash, is_deleted, created_at, updated_at, version)
+             VALUES ('link-1', 1, ?, 0, 1, 1, 1)",
+        )
+        .bind(&hash_r)
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        (pool, crypto, tmp, adapter, hash_r, hash_o)
+    }
+
+    /// 场景 ①：有引用的附件正常拉回，且占位行记录真实 size_bytes
+    #[tokio::test]
+    async fn pull_downloads_referenced_attachment_with_real_size() {
+        let (pool, crypto, tmp, adapter, hash_r, _hash_o) = pull_env().await;
+        let att_dir = tmp.path().join("att");
+        std::fs::create_dir_all(&att_dir).unwrap();
+
+        let r = sync_attachments_pull(
+            &pool,
+            &crypto,
+            &adapter,
+            &crate::cloud_sync::progress::NoopProgressSender,
+            crate::cloud_sync::progress::SyncOrigin::Manual,
+            &att_dir.to_string_lossy(),
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(r.downloaded, 1, "仅被引用的附件被下载");
+        let row = attachment_repo::get_by_hash(&pool, &hash_r)
+            .await
+            .unwrap()
+            .expect("占位行必须登记");
+        assert_eq!(
+            row.size_bytes,
+            "referenced-content".len() as i64,
+            "占位行 size_bytes 必须是真实字节数（此前恒 0）"
+        );
+        assert_eq!(row.is_local_cached, 1);
+    }
+
+    /// 场景 ②：无引用的云端孤儿不下载（GC ↔ pull 打架循环修复的核心断言）
+    #[tokio::test]
+    async fn pull_skips_orphan_attachment_without_reference() {
+        let (pool, crypto, tmp, adapter, _hash_r, hash_o) = pull_env().await;
+        let att_dir = tmp.path().join("att");
+        std::fs::create_dir_all(&att_dir).unwrap();
+
+        let r = sync_attachments_pull(
+            &pool,
+            &crypto,
+            &adapter,
+            &crate::cloud_sync::progress::NoopProgressSender,
+            crate::cloud_sync::progress::SyncOrigin::Manual,
+            &att_dir.to_string_lossy(),
+        )
+        .await
+        .unwrap();
+
+        // orphan 未被下载（downloaded 只计 referenced），也不产生占位行
+        assert!(!att_dir.join(&hash_o).exists(), "孤儿附件不得落盘");
+        assert!(
+            attachment_repo::get_by_hash(&pool, &hash_o)
+                .await
+                .unwrap()
+                .is_none(),
+            "孤儿附件不得重插占位行（GC 后 pull 不得拉回）"
+        );
+    }
+
+    /// 场景 ③（回归）：关联行经 pull 合并刚到达时，该轮附件 pull 即可拉回
+    ///
+    /// 差集过滤依赖的关联表（todo_task_attachments）本身随 todos 模块同步——
+    /// 同轮 sync 中模块合并先于附件 pull（sync_now/pull_then_push 顺序），
+    /// 新引用先落地再过滤，新设备附件不漏。
+    #[tokio::test]
+    async fn pull_downloads_attachment_whose_link_arrived_same_round() {
+        let (pool, crypto, tmp, adapter, hash_r, _hash_o) = pull_env().await;
+        let att_dir = tmp.path().join("att");
+        std::fs::create_dir_all(&att_dir).unwrap();
+
+        // 再挂一个任务引用到第二个 hash（模拟模块合并刚写入的新关联行）
+        sqlx::query(
+            "INSERT INTO todo_task_attachments (uuid, task_id, hash, is_deleted, created_at, updated_at, version)
+             VALUES ('link-2', 1, ?, 0, 1, 1, 1)",
+        )
+        .bind(&hash_r)
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        let r = sync_attachments_pull(
+            &pool,
+            &crypto,
+            &adapter,
+            &crate::cloud_sync::progress::NoopProgressSender,
+            crate::cloud_sync::progress::SyncOrigin::Manual,
+            &att_dir.to_string_lossy(),
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(r.downloaded, 1);
+        assert!(attachment_repo::get_by_hash(&pool, &hash_r)
+            .await
+            .unwrap()
+            .is_some());
+    }
 }
+
