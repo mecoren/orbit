@@ -7,6 +7,13 @@
 
 ## [Unreleased]
 
+### 桌面体验与性能四连优化（附件拖放/Markdown 增强/索引前缀化/壳 profile 修复）
+
+- **附件区拖放文件直添**：详情抽屉附件区支持拖放文件（Todoist/Things/MS To Do 桌面标配）——拖放与 Ctrl+V 粘贴截图共用 bytes 通道（hash Rust 内容寻址），零新增插件/权限；Files 类型守卫让位文本拖放；多文件逐个走既有 20×50MB 守卫。单测 5→7。
+- **描述 Markdown 子集增强**：补有序列表（1. 与中文顿号 1、）、引用块（>）、删除线（~~）——零依赖原则不变；单测 10→13 + react-dom/server 离屏渲染断言 3 项（Playwright 本会话沙箱 ::1 出站拦截环境性不可用，离屏断言等价验证渲染管线）。
+- **任务表索引前缀化**：done/due_date/is_favorite 三条单列索引替换为 (is_deleted, 列) 组合索引——任务查询（列表/搜索/统计/到期提醒/角标）恒带软删基线谓词，单列索引无法整段命中；同时删单列索引减少写放大与索引页驻留内存。全链核实无裸列查询方。cargo 528 全绿。
+- **桌面壳 release profile 修复**：apps/desktop/src-tauri 为嵌套独立 workspace，根 Cargo.toml 的 [profile.release]（lto/strip/codegen-units=1）对它不生效——此前桌面 release 构建一直在用 Cargo 默认配置（16 codegen units、无 LTO、带符号表）。补齐同口径 profile，release 二进制体积与运行内存同步受益（对齐 ADR 0006 方向）；cargo check --release 全依赖图验证通过。
+
 ### 同步域第三轮全面审查与优化（六连修复，审查报告入库）
 
 - **附件首传死锁修复（P0）**：S7 空列表防御未区分「列表探测异常」与「云端真的没有附件」——首台设备从零同步时 assets/ 目录不存在（list 404→空列表），附件上传每轮被误判跳过、永久死锁。增补存在性探测三分叉：抽首个未上传附件 asset_exists 探测，云端真实存在→维持防御拦截；404 确认不存在→真空云放行上传（首传/清空后重传）；探测出错→保守跳过待下轮。
