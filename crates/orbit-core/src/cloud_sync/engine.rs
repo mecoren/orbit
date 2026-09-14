@@ -842,7 +842,23 @@ impl SyncEngine {
         self.state_store.clear()?;
         log::info!("[rekey] 已清空 sync_state.json（全模块强制重传）");
 
-        // 2. 全模块 Push（新 Key 加密）
+        // 2. 附件标记先清零（S32 顺序修正，2026-09-14 审查）
+        //
+        // 原顺序是「push_all → mark_all_unuploaded → 附件重传」：push_all
+        // 硬失败中断时附件 is_uploaded 仍为 1，用户重试 rekey 后
+        // sync_attachments_push 的 get_unuploaded 不含这些附件——云端
+        // 留下「新 Key 模块 + 旧 Key 附件」混合态（其他设备解不开旧 Key
+        // 附件且永不再重传）。清零提前到任何云端写入之前：重试 rekey 必然
+        // 重新收集全部本地缓存附件，中断多少次都收敛到全量重传。
+        let reset_count =
+            crate::db::repository::attachment_repo::mark_all_unuploaded(&self.db_pool)
+                .await
+                .map_err(|e| CloudSyncError::Database {
+                    message: format!("重置附件上传标记失败: {}", e),
+                })?;
+        log::info!("[rekey] 附件 is_uploaded 清零 {} 条（先于任何云端写入）", reset_count);
+
+        // 3. 全模块 Push（新 Key 加密）
         // skip_modules 为空：rekey 场景没有前置 Pull，不存在"Pull 失败模块"
         let push_result = push_all(
             &self.db_pool,
@@ -868,15 +884,7 @@ impl SyncEngine {
             });
         }
 
-        // 3. 附件：清零 is_uploaded 触发全量重传（本地缓存部分）
-        let reset_count =
-            crate::db::repository::attachment_repo::mark_all_unuploaded(&self.db_pool)
-                .await
-                .map_err(|e| CloudSyncError::Database {
-                    message: format!("重置附件上传标记失败: {}", e),
-                })?;
-        log::info!("[rekey] 附件 is_uploaded 清零 {} 条，开始重传", reset_count);
-
+        // 4. 附件重传（标记已在步骤 2 清零）
         let att_push = sync_attachments_push(
             &self.db_pool,
             &self.crypto,
