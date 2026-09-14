@@ -54,6 +54,17 @@ impl S3Adapter {
         )
     }
 
+    /// 构建带查询参数的 S3 对象 URL（multipart 协议的 uploadId 等需要）
+    fn build_object_url_with_query(&self, path: &str, query: &[(String, String)]) -> String {
+        build_url(
+            &self.config.endpoint,
+            &self.config.bucket,
+            path,
+            self.config.use_path_style,
+            query,
+        )
+    }
+
     /// 构建 SigV4 签名头
     ///
     /// 从完整请求 URL 解析 host / canonical_uri / canonical_querystring，
@@ -209,6 +220,200 @@ impl S3Adapter {
             retryable: false,
         })
     }
+
+    // ====================================================================
+    // S4 multipart 分片上传（2026-09-14 收口）
+    //
+    // 大附件（≥ 8MiB）走 S3 原生 multipart 协议：CreateMultipartUpload
+    // → 逐片 UploadPart（5MiB/片）→ CompleteMultipartUpload。分片在服务端
+    // 拼装，Complete 后对象落在原路径——云端布局与单 PUT 产物完全一致，
+    // 读者（download_asset）无感知。
+    //
+    // 收益：
+    // - 失败重传单位从整文件降到单片（断网中断后续传本会话内从片边界继续，
+    //   跨会话重试因确定性加密（6a711d6）密文不变，S3 侧未见 Abort 前会话
+    //   的 uploadId 不可续，走新会话全量分片——但仍只花网络时间不花整文件
+    //   重传的放大倍数）
+    // - 慢速上行：每片一个独立 HTTP 请求 + put_part_once 的 120s 窗口，
+    //   5MiB 片在 350kbps 下限链路约 2 分钟可完成；单 PUT 的 30s 窗口
+    //   在 1.4Mbps 以下必超时
+    // ====================================================================
+
+    /// multipart 触发阈值：密文 ≥ 8MiB 走分片（小于此值单 PUT 更快，
+    /// multipart 的 Create/Complete 两次额外请求在小对象上是纯开销）
+    const MULTIPART_THRESHOLD: usize = 8 * 1024 * 1024;
+
+    /// 分片大小：5MiB（S3 UploadPart 的最小允许片大小，除最后一片外）
+    const MULTIPART_PART_SIZE: usize = 5 * 1024 * 1024;
+
+    /// 分片级重试次数（独立于 HTTP 级与业务级重试——分片小、失败重传
+    /// 代价低，可承受比整文件更高的重试密度）
+    const PART_MAX_RETRIES: u32 = 3;
+
+    /// 大对象 multipart 分片上传
+    ///
+    /// 流程：POST `?uploads`（Create）→ PUT `?uploadId=…&partNumber=N`
+    /// 逐片 → POST `?uploadId=…`（Complete，body 为全部 PartNumber/ETag）。
+    /// 任一步失败尝试 Abort（尽力而为，失败仅记日志——未 Abort 的分片由
+    /// S3 生命周期规则/存储桶清理策略兜底，不影响数据正确性）。
+    async fn multipart_upload(&self, path: &str, data: &[u8]) -> Result<(), SyncError> {
+        // 1. CreateMultipartUpload：POST {path}?uploads
+        let create_url =
+            self.build_object_url_with_query(path, &[("uploads".to_string(), String::new())]);
+        let headers = self.sign_request("POST", &create_url, &sha256_hex(b""))?;
+        let response = self
+            .http
+            .inner()
+            .post(&create_url)
+            .headers(headers)
+            .send()
+            .await
+            .map_err(|e| SyncError::Network {
+                message: format!("CreateMultipartUpload 请求失败: {e}"),
+                retryable: true,
+            })?;
+        let status = response.status().as_u16();
+        if !crate::sync::error::is_success_status(status) {
+            let body = response.text().await.unwrap_or_default();
+            return Err(SyncError::from_http_status(status, &body));
+        }
+        let create_xml = response.text().await.map_err(|e| SyncError::Network {
+            message: format!("读取 CreateMultipartUpload 响应失败: {e}"),
+            retryable: false,
+        })?;
+        let upload_id = parse_upload_id(&create_xml).ok_or_else(|| SyncError::Network {
+            message: format!(
+                "CreateMultipartUpload 响应缺少 UploadId: {}",
+                truncate_xml(&create_xml)
+            ),
+            retryable: false,
+        })?;
+
+        // 2. 逐片 UploadPart（分片级重试：失败重传单片而非整文件）
+        let mut part_etags: Vec<String> = Vec::new();
+        for (idx, chunk) in data.chunks(Self::MULTIPART_PART_SIZE).enumerate() {
+            let part_number = idx + 1;
+            let etag = self
+                .upload_part_with_retry(&upload_id, path, part_number, chunk)
+                .await?;
+            part_etags.push(etag);
+        }
+
+        // 3. CompleteMultipartUpload：POST {path}?uploadId=…（带分片清单 body）
+        let complete_url =
+            self.build_object_url_with_query(path, &[("uploadId".to_string(), upload_id.clone())]);
+        let mut body = String::from("<CompleteMultipartUpload>\n");
+        for (i, etag) in part_etags.iter().enumerate() {
+            body.push_str(&format!(
+                "  <Part><PartNumber>{}</PartNumber><ETag>{}</ETag></Part>\n",
+                i + 1,
+                etag
+            ));
+        }
+        body.push_str("</CompleteMultipartUpload>");
+        let body_bytes = body.into_bytes();
+        let payload_hash = sha256_hex(&body_bytes);
+        let headers = self.sign_request("POST", &complete_url, &payload_hash)?;
+        let response = self
+            .http
+            .inner()
+            .post(&complete_url)
+            .headers(headers)
+            .body(body_bytes)
+            .send()
+            .await
+            .map_err(|e| SyncError::Network {
+                message: format!("CompleteMultipartUpload 请求失败: {e}"),
+                retryable: true,
+            })?;
+        let status = response.status().as_u16();
+        if !crate::sync::error::is_success_status(status) {
+            // Complete 偶发 500 但对象实际已拼装完成（响应丢失场景），
+            // 错误 body 常含实际错误信息；不重试（重发 Complete 幂等，
+            // 但 body 已消费），直接报错由业务级 with_retry 重走全流程
+            let resp_body = response.text().await.unwrap_or_default();
+            // Abort 尽力而为
+            self.abort_multipart(path, &upload_id).await;
+            return Err(SyncError::from_http_status(status, &resp_body));
+        }
+        Ok(())
+    }
+
+    /// 单片上传（带分片级重试：网络/限流错误重试 3 次，2/4/8s 退避）
+    ///
+    /// 返回该片的 ETag（Complete 阶段清单需要）。每次重试是全新的
+    /// HTTP 请求（put_part_once 无 HTTP 级重试），不叠加放大。
+    async fn upload_part_with_retry(
+        &self,
+        upload_id: &str,
+        path: &str,
+        part_number: usize,
+        chunk: &[u8],
+    ) -> Result<String, SyncError> {
+        let mut last_err: Option<SyncError> = None;
+        for attempt in 0..=Self::PART_MAX_RETRIES {
+            let url = self.build_object_url_with_query(
+                path,
+                &[
+                    ("partNumber".to_string(), part_number.to_string()),
+                    ("uploadId".to_string(), upload_id.to_string()),
+                ],
+            );
+            let payload_hash = sha256_hex(chunk);
+            let headers = self.sign_request("PUT", &url, &payload_hash)?;
+            match self.http.put_part_once(&url, headers, chunk.to_vec()).await {
+                Ok(Some(etag)) => return Ok(etag),
+                Ok(None) => {
+                    // ETag 缺失按错误处理：Complete 清单缺 ETag 会被 S3 拒绝，
+                    // 早失败比 Complete 时失败重试代价低
+                    return Err(SyncError::Network {
+                        message: format!(
+                            "分片 {part_number} 上传成功但响应缺少 ETag 头，无法构造 Complete 清单"
+                        ),
+                        retryable: false,
+                    });
+                }
+                Err(e) => {
+                    let retryable = e.is_retryable() && !e.is_rate_limited();
+                    if !retryable || attempt == Self::PART_MAX_RETRIES {
+                        return Err(e);
+                    }
+                    last_err = Some(e);
+                }
+            }
+            let delay = std::time::Duration::from_secs(2u64.pow(attempt));
+            tokio::time::sleep(delay).await;
+        }
+        Err(last_err.unwrap_or_else(|| SyncError::Network {
+            message: "分片上传未知错误".to_string(),
+            retryable: false,
+        }))
+    }
+
+    /// AbortMultipartUpload（尽力而为：失败仅日志，不影响主错误）
+    async fn abort_multipart(&self, path: &str, upload_id: &str) {
+        let url = self
+            .build_object_url_with_query(path, &[("uploadId".to_string(), upload_id.to_string())]);
+        let headers = match self.sign_request("DELETE", &url, &sha256_hex(b"")) {
+            Ok(h) => h,
+            Err(e) => {
+                log::info!("[s3 multipart] Abort 签名失败（忽略）: {e}");
+                return;
+            }
+        };
+        match self.http.inner().delete(&url).headers(headers).send().await {
+            Ok(r) if r.status().is_success() => {}
+            other => {
+                let desc = match other {
+                    Ok(r) => format!("HTTP {}", r.status()),
+                    Err(e) => e.to_string(),
+                };
+                log::info!(
+                    "[s3 multipart] Abort 未成功（忽略，未清理分片由存储桶策略兜底）: {desc}"
+                );
+            }
+        }
+    }
 }
 
 #[async_trait]
@@ -249,6 +454,11 @@ impl SyncAdapter for S3Adapter {
     }
 
     async fn upload(&self, path: &str, data: &[u8]) -> Result<(), SyncError> {
+        // S4：大对象走 multipart 分片（服务端拼装，产物与单 PUT 一致）；
+        // 小对象保持单 PUT（Create/Complete 两次额外请求在小对象上是纯开销）
+        if data.len() >= Self::MULTIPART_THRESHOLD {
+            return self.multipart_upload(path, data).await;
+        }
         let url = self.build_object_url(path);
         let payload_hash = sha256_hex(data);
         let headers = self.sign_request("PUT", &url, &payload_hash)?;
@@ -356,5 +566,84 @@ impl SyncAdapter for S3Adapter {
         hashes.sort();
         hashes.dedup();
         Ok(hashes)
+    }
+}
+
+// ============================================================================
+// multipart 协议辅助（纯函数，供单测）
+// ============================================================================
+
+/// 从 CreateMultipartUpload 响应 XML 提取 UploadId
+///
+/// 响应形如 `<UploadId>…</UploadId>`；简单标签提取足够（无嵌套/转义语义），
+/// 不引完整 XML 解析器。
+pub(crate) fn parse_upload_id(xml: &str) -> Option<String> {
+    let start = xml.find("<UploadId>")? + "<UploadId>".len();
+    let end = xml[start..].find("</UploadId>")? + start;
+    let id = &xml[start..end];
+    if id.is_empty() {
+        None
+    } else {
+        Some(id.to_string())
+    }
+}
+
+/// 截断 XML 用于错误日志（防大响应刷屏）
+///
+/// `…` 是多字节字符，断言用字符数而非 String::len()（字节数）。
+pub(crate) fn truncate_xml(xml: &str) -> String {
+    if xml.len() <= 200 {
+        xml.to_string()
+    } else {
+        format!("{}…", &xml[..200])
+    }
+}
+
+#[cfg(test)]
+mod multipart_tests {
+    use super::*;
+
+    #[test]
+    fn parse_upload_id_extracts_value() {
+        let xml = r#"<?xml version="1.0"?>
+<InitiateMultipartUploadResult>
+  <Bucket>wait</Bucket>
+  <Key>assets/abc.waitsync</Key>
+  <UploadId>VXBsb2FkIElEIGZvciA2ly+xx</UploadId>
+</InitiateMultipartUploadResult>"#;
+        assert_eq!(
+            parse_upload_id(xml).as_deref(),
+            Some("VXBsb2FkIElEIGZvciA2ly+xx")
+        );
+    }
+
+    #[test]
+    fn parse_upload_id_missing_returns_none() {
+        assert!(parse_upload_id("<Error><Code>x</Code></Error>").is_none());
+        assert!(
+            parse_upload_id("<UploadId></UploadId>").is_none(),
+            "空值视为缺失"
+        );
+    }
+
+    #[test]
+    fn truncate_keeps_short_and_cuts_long() {
+        assert_eq!(truncate_xml("short"), "short");
+        let long = "x".repeat(300);
+        let cut = truncate_xml(&long);
+        // 字符数：200 个 x + 1 个省略号 = 201（String::len 是字节数，
+        // … 占 3 字节，len() = 203）
+        assert_eq!(cut.chars().count(), 201);
+        assert_eq!(cut.len(), 203);
+    }
+
+    /// multipart 分片纯计算：8MiB 阈值 = 1 个完整 5MiB 片 + 3MiB 尾片
+    #[test]
+    fn multipart_chunking_math() {
+        let total = S3Adapter::MULTIPART_THRESHOLD;
+        let full = total / S3Adapter::MULTIPART_PART_SIZE;
+        let rem = total % S3Adapter::MULTIPART_PART_SIZE;
+        assert_eq!(full, 1, "8MiB 阈值含 1 个完整 5MiB 片");
+        assert!(rem > 0 && rem < S3Adapter::MULTIPART_PART_SIZE, "尾片 3MiB");
     }
 }

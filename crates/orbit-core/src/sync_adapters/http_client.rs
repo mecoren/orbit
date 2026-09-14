@@ -166,6 +166,48 @@ impl HttpClient {
             retryable: false,
         }))
     }
+
+    /// 单次 PUT（无 HTTP 级重试、120s 总超时长窗口），返回响应 ETag
+    ///
+    /// S4 multipart 分片上传专用（2026-09-14）：分片级重试由调用方
+    /// （`upload_part_with_retry` 循环）控制，避免 HTTP 级 3 次短退避与
+    /// 分片级重试叠加成 9 次放大风暴；120s 总超时窗口给慢速上行足够
+    /// 余量——5MiB 分片在 350kbps 下限链路传输约 2 分钟，30s 通用窗口
+    /// 会在传输中途掐断健康连接。用 per-request `RequestBuilder::timeout`
+    /// 覆盖客户端默认读超时（读超时不覆盖发送阶段，见 HttpClient::new 注释）。
+    ///
+    /// ETag 缺失返回 `Ok(None)`：绝大多数 S3 兼容实现都回 ETag 头，
+    /// 拿不到时由调用方决定缺 ETag 的 Complete 是否可行。
+    pub async fn put_part_once(
+        &self,
+        url: &str,
+        headers: reqwest::header::HeaderMap,
+        body: Vec<u8>,
+    ) -> Result<Option<String>, SyncError> {
+        let response = self
+            .client
+            .put(url)
+            .timeout(Duration::from_secs(120))
+            .headers(headers)
+            .body(body)
+            .send()
+            .await
+            .map_err(|e| SyncError::Network {
+                message: format!("分片 PUT 请求失败: {e}"),
+                retryable: true,
+            })?;
+        if !response.status().is_success() {
+            let status = response.status();
+            let resp_body = response.text().await.unwrap_or_default();
+            return Err(SyncError::from_http_status(status.as_u16(), &resp_body));
+        }
+        let etag = response
+            .headers()
+            .get("ETag")
+            .and_then(|v| v.to_str().ok())
+            .map(|s| s.trim_matches('"').to_string());
+        Ok(etag)
+    }
 }
 
 #[cfg(test)]

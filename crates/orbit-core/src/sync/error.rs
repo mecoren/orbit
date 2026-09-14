@@ -194,6 +194,14 @@ impl SyncError {
     }
 }
 
+/// HTTP 状态码是否成功（2xx）——multipart 协议各步的状态检查用
+///
+/// 独立函数而非 `SyncError` 方法：调用点只有状态码没有错误体分类需求，
+/// 与 reqwest `StatusCode::is_success` 语义一致。
+pub fn is_success_status(status: u16) -> bool {
+    (200..=299).contains(&status)
+}
+
 impl From<crate::sync_bundle::SyncBundleError> for SyncError {
     fn from(err: crate::sync_bundle::SyncBundleError) -> Self {
         SyncError::Bundle {
