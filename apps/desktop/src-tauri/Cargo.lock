@@ -3134,7 +3134,6 @@ dependencies = [
  "pbkdf2",
  "quick-xml 0.36.2",
  "rand 0.8.8",
- "regex",
  "reqwest 0.12.28",
  "serde",
  "serde_json",
