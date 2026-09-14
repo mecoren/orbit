@@ -12,39 +12,6 @@ pub fn normalize_endpoint(endpoint: &str) -> String {
     s
 }
 
-/// 从 endpoint 推断 S3 region
-pub fn infer_region(endpoint: &str) -> String {
-    let lower = endpoint.to_lowercase();
-    // 阿里云 OSS: oss-cn-shenzhen.aliyuncs.com → cn-shenzhen
-    if let Some(caps) = regex::Regex::new(r"oss-([a-z0-9-]+)\.aliyuncs\.com")
-        .ok()
-        .and_then(|re| re.captures(&lower))
-        && let Some(m) = caps.get(1)
-    {
-        return m.as_str().to_string();
-    }
-    // AWS 中国: s3.cn-north-1.amazonaws.com.cn → cn-north-1
-    if let Some(caps) = regex::Regex::new(r"s3\.([a-z0-9-]+)\.amazonaws\.com\.cn")
-        .ok()
-        .and_then(|re| re.captures(&lower))
-        && let Some(m) = caps.get(1)
-    {
-        return m.as_str().to_string();
-    }
-    // AWS 标准: s3.us-west-2.amazonaws.com → us-west-2
-    if let Some(caps) = regex::Regex::new(r"s3\.([a-z0-9-]+)\.amazonaws\.com")
-        .ok()
-        .and_then(|re| re.captures(&lower))
-        && let Some(m) = caps.get(1)
-    {
-        return m.as_str().to_string();
-    }
-    if lower.contains("amazonaws.com") {
-        return "us-east-1".to_string();
-    }
-    "us-east-1".to_string()
-}
-
 /// 判断是否应使用 path-style（Path-Style）访问
 ///
 /// - AWS 官方域名（amazonaws.com）与阿里云 OSS 默认域名（aliyuncs.com）

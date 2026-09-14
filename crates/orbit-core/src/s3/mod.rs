@@ -7,6 +7,5 @@ pub use error::S3Error;
 pub use list_objects::parse_list_objects_xml;
 pub use signing::{format_amz_date, format_date_stamp, get_signature_key, hmac_sha256, sha256_hex};
 pub use url::{
-    build_canonical_query, build_url, infer_region, infer_service, infer_use_path_style,
-    normalize_endpoint,
+    build_canonical_query, build_url, infer_service, infer_use_path_style, normalize_endpoint,
 };
