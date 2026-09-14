@@ -84,6 +84,26 @@ describe("renderMarkdown 块级", () => {
     expect(texts(out)).toEqual(["[ ] 未完成", "[x] 已完成"]);
   });
 
+  it("有序列表：数字点行聚合为单个 ol 多个 li（含中文顿号形态）", () => {
+    const out = renderMarkdown("1. 第一步\n2. 第二步\n10. 第十步");
+    const ol = findEl(out, "ol");
+    expect(ol).toBeDefined();
+    expect((ol!.props as { className?: string }).className).toContain("list-decimal");
+    expect(texts(out)).toEqual(["第一步", "第二步", "第十步"]);
+    // 有序与无序不互相吞并
+    const mixed = renderMarkdown("- 无序项\n1. 有序项");
+    expect(findEl(mixed, "ul")).toBeDefined();
+    expect(findEl(mixed, "ol")).toBeDefined();
+  });
+
+  it("引用块：> 前缀连续行聚合为 blockquote，普通行结束块", () => {
+    const out = renderMarkdown("> 引用第一行\n> 引用第二行\n普通段");
+    const bq = findEl(out, "blockquote");
+    expect(bq).toBeDefined();
+    expect((bq!.props as { className?: string }).className).toContain("border-l-2");
+    expect(texts(out)).toEqual(["引用第一行", "引用第二行", "普通段"]);
+  });
+
   it("空行渲染为段距 div", () => {
     const out = renderMarkdown("上\n\n下");
     expect(findEl(out, "div")).toBeDefined();
@@ -107,6 +127,14 @@ describe("renderMarkdown 行内", () => {
   it("斜体 *x* 渲染 em；单个 * 不成对按原文", () => {
     expect(findEl(renderMarkdown("*斜体*"), "em")).toBeDefined();
     expect(texts(renderMarkdown("3 * 4 = 12"))).toEqual(["3 * 4 = 12"]);
+  });
+
+  it("删除线 ~~x~~ 渲染 del；未闭合双波浪线按原文", () => {
+    const out = renderMarkdown("~~废弃方案~~");
+    const del = findEl(out, "del");
+    expect(del).toBeDefined();
+    expect(texts(out)).toEqual(["废弃方案"]);
+    expect(texts(renderMarkdown("~~未闭合"))).toEqual(["~~未闭合"]);
   });
 
   it("链接 [text](url) 渲染 a 且 href/target 正确", () => {
