@@ -116,15 +116,18 @@ pub async fn push_all(
     // 时，Pull 全模块 Skip（remote_fp 与云端一致）、Push 侧 prev_state 存在且
     // 本地空指纹 ≠ state.fp → 不跳过 → 上传空 items + 空墓碑覆盖云端。
     // 空数据覆盖守卫：阻断并要求用户走恢复流程，而非静默清空云端。
+    //
+    // 性能口径（2026-09-14 审查）：守卫用逐表 COUNT 判空，不再经
+    // load_module_items 加载全量行——此前该守卫把模块所有行拉进内存只为
+    // 取 len()，空库触发条件时又用 COUNT 复核，push_single_module 稍后
+    // 第三次加载同一模块；万行级模块每轮 push 多两次全量扫描 + 一次全量
+    // 物化。COUNT 主键索引扫描即可判空，语义等价（都统计 is_deleted = 0）。
     for module_def in SYNC_MODULES {
         if skip_modules.iter().any(|s| s == module_def.name) {
             continue;
         }
         let prev = state.modules.get(module_def.name);
-        let local_count = load_module_items(db_pool, module_def).await?.len();
-        if local_count == 0
-            && prev.is_some_and(|s| s.count > 0)
-            && local_items_look_empty(db_pool, module_def).await?
+        if prev.is_some_and(|s| s.count > 0) && local_items_look_empty(db_pool, module_def).await?
         {
             let msg = format!(
                 "本地数据库为空但同步状态记录有 {} 条数据（模块 {}）——\
