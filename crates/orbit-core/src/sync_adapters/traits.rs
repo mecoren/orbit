@@ -29,7 +29,7 @@ pub trait SyncAdapter: Send + Sync {
     /// v7: 列出远程目录下的所有文件（不过滤后缀）
     ///
     /// 与 `list_files` 的区别：不做 `.waitsync` 后缀过滤，返回目录下所有文件。
-    /// 供 `list_cloud_backups` 列出 `.waitfullsync` 备份文件使用。
+    /// 供备份列举（`.waitfullsync` 备份文件）等需要非同步后缀的场景使用。
     /// 默认实现返回空 Vec（向后兼容），各 adapter 应覆盖此方法。
     async fn list_all_files(&self, _base_path: &str) -> Result<Vec<RemoteFile>, SyncError> {
         Ok(Vec::new())

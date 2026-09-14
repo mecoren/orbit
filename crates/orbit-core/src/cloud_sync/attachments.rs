@@ -382,7 +382,10 @@ pub async fn sync_attachments_pull(
                             .map_err(|e| format!("附件 {} 原子落盘失败: {}", hash, e))?;
                     }
 
-                    Ok((file_path.to_string_lossy().to_string(), decrypted.len() as i64))
+                    Ok((
+                        file_path.to_string_lossy().to_string(),
+                        decrypted.len() as i64,
+                    ))
                 }
                 .await;
 
@@ -510,19 +513,12 @@ mod tests {
         {
             Ok(Vec::new())
         }
-        async fn download(
-            &self,
-            _: &str,
-        ) -> Result<Vec<u8>, crate::sync::error::SyncError> {
+        async fn download(&self, _: &str) -> Result<Vec<u8>, crate::sync::error::SyncError> {
             Err(crate::sync::error::SyncError::NotFound {
                 message: "无".to_string(),
             })
         }
-        async fn upload(
-            &self,
-            _: &str,
-            _: &[u8],
-        ) -> Result<(), crate::sync::error::SyncError> {
+        async fn upload(&self, _: &str, _: &[u8]) -> Result<(), crate::sync::error::SyncError> {
             Ok(())
         }
         async fn delete(&self, _: &str) -> Result<(), crate::sync::error::SyncError> {
@@ -536,18 +532,12 @@ mod tests {
             self.uploads.lock().unwrap().push(hash.to_string());
             Ok(())
         }
-        async fn download_asset(
-            &self,
-            _: &str,
-        ) -> Result<Vec<u8>, crate::sync::error::SyncError> {
+        async fn download_asset(&self, _: &str) -> Result<Vec<u8>, crate::sync::error::SyncError> {
             Err(crate::sync::error::SyncError::NotFound {
                 message: "无".to_string(),
             })
         }
-        async fn asset_exists(
-            &self,
-            _: &str,
-        ) -> Result<bool, crate::sync::error::SyncError> {
+        async fn asset_exists(&self, _: &str) -> Result<bool, crate::sync::error::SyncError> {
             match &self.exists_result {
                 Some(Ok(v)) => Ok(*v),
                 Some(Err(m)) => Err(crate::sync::error::SyncError::Network {
@@ -563,7 +553,11 @@ mod tests {
     }
 
     /// 构造带迁移内存库 + 两条未上传附件的测试环境
-    async fn att_sync_env() -> (SqlitePool, crate::sync_crypto::SyncCryptoService, tempfile::TempDir) {
+    async fn att_sync_env() -> (
+        SqlitePool,
+        crate::sync_crypto::SyncCryptoService,
+        tempfile::TempDir,
+    ) {
         let pool = sqlx::SqlitePool::connect("sqlite::memory:").await.unwrap();
         sqlx::migrate!("./src/db/migrations")
             .run(&pool)
@@ -601,10 +595,7 @@ mod tests {
     }
 
     fn att_dir(tmp: &tempfile::TempDir) -> String {
-        tmp.path()
-            .join("att")
-            .to_string_lossy()
-            .to_string()
+        tmp.path().join("att").to_string_lossy().to_string()
     }
 
     /// 场景 ①：云端列表为空 + 探测确认不存在（首台设备首传）→ 必须放行上传
@@ -633,16 +624,8 @@ mod tests {
             r.uploaded, 2,
             "首传场景（探测确认云端无附件）必须放行全部上传，不得死锁"
         );
-        assert!(
-            r.errors.is_empty(),
-            "放行路径不应记录错误: {:?}",
-            r.errors
-        );
-        assert_eq!(
-            uploads.lock().unwrap().len(),
-            2,
-            "两个附件都必须实际上传"
-        );
+        assert!(r.errors.is_empty(), "放行路径不应记录错误: {:?}", r.errors);
+        assert_eq!(uploads.lock().unwrap().len(), 2, "两个附件都必须实际上传");
     }
 
     /// 场景 ②：云端列表为空 + 探测发现附件实际存在（列表不可信）→ 防御拦截
@@ -773,19 +756,12 @@ mod tests {
         {
             Ok(Vec::new())
         }
-        async fn download(
-            &self,
-            _: &str,
-        ) -> Result<Vec<u8>, crate::sync::error::SyncError> {
+        async fn download(&self, _: &str) -> Result<Vec<u8>, crate::sync::error::SyncError> {
             Err(crate::sync::error::SyncError::NotFound {
                 message: "无".to_string(),
             })
         }
-        async fn upload(
-            &self,
-            _: &str,
-            _: &[u8],
-        ) -> Result<(), crate::sync::error::SyncError> {
+        async fn upload(&self, _: &str, _: &[u8]) -> Result<(), crate::sync::error::SyncError> {
             Ok(())
         }
         async fn delete(&self, _: &str) -> Result<(), crate::sync::error::SyncError> {
@@ -809,10 +785,7 @@ mod tests {
                 }),
             }
         }
-        async fn asset_exists(
-            &self,
-            _: &str,
-        ) -> Result<bool, crate::sync::error::SyncError> {
+        async fn asset_exists(&self, _: &str) -> Result<bool, crate::sync::error::SyncError> {
             Ok(false)
         }
         async fn list_assets(&self) -> Result<Vec<String>, crate::sync::error::SyncError> {
@@ -971,10 +944,11 @@ mod tests {
         .unwrap();
 
         assert_eq!(r.downloaded, 1);
-        assert!(attachment_repo::get_by_hash(&pool, &hash_r)
-            .await
-            .unwrap()
-            .is_some());
+        assert!(
+            attachment_repo::get_by_hash(&pool, &hash_r)
+                .await
+                .unwrap()
+                .is_some()
+        );
     }
 }
-

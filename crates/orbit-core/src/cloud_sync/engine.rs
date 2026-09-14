@@ -856,7 +856,10 @@ impl SyncEngine {
                 .map_err(|e| CloudSyncError::Database {
                     message: format!("重置附件上传标记失败: {}", e),
                 })?;
-        log::info!("[rekey] 附件 is_uploaded 清零 {} 条（先于任何云端写入）", reset_count);
+        log::info!(
+            "[rekey] 附件 is_uploaded 清零 {} 条（先于任何云端写入）",
+            reset_count
+        );
 
         // 3. 全模块 Push（新 Key 加密）
         // skip_modules 为空：rekey 场景没有前置 Pull，不存在"Pull 失败模块"

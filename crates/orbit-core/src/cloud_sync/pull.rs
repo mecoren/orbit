@@ -417,11 +417,7 @@ async fn pull_single_module(
 /// 时间晚于本地上次 Pull 记录（pulled_at），说明远端发生过本端未见的
 /// 写入（含中断重传、其他设备覆盖 _meta），不跳过、强制走下载分支。
 /// `remote_updated_at > 0` 排除旧版本/异常数据写 0 导致的每轮强制拉取。
-fn should_skip_pull(
-    local: &ModuleSyncState,
-    remote_fp: &str,
-    remote_updated_at: i64,
-) -> bool {
+fn should_skip_pull(local: &ModuleSyncState, remote_fp: &str, remote_updated_at: i64) -> bool {
     local.remote_fp == remote_fp
         && !local.remote_fp.is_empty()
         && !(remote_updated_at > local.pulled_at && remote_updated_at > 0)
@@ -437,19 +433,6 @@ async fn download_and_decrypt_meta(
     let decrypted = decrypt_payload(&bytes, data_key)?;
     let meta: ModuleMetaEntry = serde_json::from_slice(&decrypted)?;
     Ok(meta)
-}
-
-/// 下载单个附件（供 attachments 模块调用）
-///
-/// 下载后用 Data Key 解密返回明文。
-pub async fn download_attachment(
-    adapter: &dyn SyncAdapter,
-    data_key: &[u8],
-    hash: &str,
-) -> Result<Vec<u8>, CloudSyncError> {
-    let encrypted = adapter.download_asset(hash).await?;
-    let decrypted = decrypt_payload(&encrypted, data_key)?;
-    Ok(decrypted)
 }
 
 #[cfg(test)]

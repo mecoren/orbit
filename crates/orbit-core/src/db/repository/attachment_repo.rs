@@ -157,11 +157,10 @@ pub async fn get_unuploaded(pool: &SqlitePool) -> CoreResult<Vec<Attachment>> {
 /// 再下一轮 pull 又拉回，形成「GC ↔ pull」对打架循环。pull 差集只保留
 /// 本端有活跃引用的 hash，无引用的云端对象留在云端等真正需要时再拉。
 pub async fn get_active_referenced_hashes(pool: &SqlitePool) -> CoreResult<Vec<String>> {
-    let rows: Vec<(String,)> = sqlx::query_as(
-        "SELECT DISTINCT hash FROM todo_task_attachments WHERE is_deleted = 0",
-    )
-    .fetch_all(pool)
-    .await?;
+    let rows: Vec<(String,)> =
+        sqlx::query_as("SELECT DISTINCT hash FROM todo_task_attachments WHERE is_deleted = 0")
+            .fetch_all(pool)
+            .await?;
     Ok(rows.into_iter().map(|(h,)| h).collect())
 }
 

@@ -433,7 +433,8 @@ pub async fn list_cloud_backups(
 
 /// v7: 从云端下载指定备份文件
 ///
-/// `cloud_path` 为云端绝对路径（来自 list_cloud_backups 返回的 RemoteFile.path）。
+/// `cloud_path` 为云端完整对象路径（如 `{base_path}/backups/xxx.waitfullsync`；
+/// 调用方从 list_cloud_backups 返回的条目 name 自行拼装）。
 /// 返回文件字节内容，供 peek_manifest / import 使用。
 pub async fn download_cloud_backup(
     adapter: &dyn SyncAdapter,

@@ -127,8 +127,7 @@ pub async fn push_all(
             continue;
         }
         let prev = state.modules.get(module_def.name);
-        if prev.is_some_and(|s| s.count > 0) && local_items_look_empty(db_pool, module_def).await?
-        {
+        if prev.is_some_and(|s| s.count > 0) && local_items_look_empty(db_pool, module_def).await? {
             let msg = format!(
                 "本地数据库为空但同步状态记录有 {} 条数据（模块 {}）——\
                  疑似删库重装后残留 sync_state.json，已阻断 Push 以防空数据覆盖云端。\
@@ -483,20 +482,6 @@ fn build_global_meta(state: &SyncState, device_id: &str) -> GlobalMeta {
         );
     }
     meta
-}
-
-/// 上传单个附件（供 attachments 模块调用）
-///
-/// 附件用同一 Data Key 加密后上传到 `assets/<hash>.waitsync`（由 adapter 内部构造路径）。
-pub async fn upload_attachment(
-    adapter: &dyn SyncAdapter,
-    data_key: &[u8],
-    hash: &str,
-    data: &[u8],
-) -> Result<(), CloudSyncError> {
-    let encrypted = encrypt_payload(data, data_key)?;
-    adapter.upload_asset(hash, &encrypted).await?;
-    Ok(())
 }
 
 #[cfg(test)]
