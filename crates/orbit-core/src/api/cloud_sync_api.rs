@@ -417,6 +417,7 @@ mod tests {
             pulled_modules: 2,
             uploaded_attachments: 1,
             downloaded_attachments: 0,
+            conflicts: 0,
             duration_ms: 500,
             skipped: false,
             errors: vec![],

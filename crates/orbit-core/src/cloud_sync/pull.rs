@@ -37,6 +37,8 @@ pub struct PullResult {
     pub pulled_modules: u32,
     /// 跳过的模块数
     pub skipped_modules: u32,
+    /// 冲突裁决数合计（S28：merge LWW/复活裁决计数透传，此前恒 0 不可见）
+    pub conflicts: u64,
     /// 收集的错误（不阻塞整体流程）
     pub errors: Vec<String>,
     /// 本轮 Pull 失败的模块名集合（P0-6）
@@ -61,6 +63,8 @@ enum PullModuleOutcome {
         name: String,
         new_state: ModuleSyncState,
         changed_records: u64,
+        /// 该模块 merge 的冲突裁决数（S28 透传）
+        conflicts: u64,
     },
     /// 单模块错误（不阻塞整体流程，收集到 errors；module 供 push 侧跳过，P0-6）
     Failed { module: String, message: String },
@@ -197,10 +201,12 @@ pub async fn pull_all(
                 name,
                 new_state,
                 changed_records: module_changed_records,
+                conflicts: module_conflicts,
             } => {
                 state.set_module(&name, new_state);
                 result.pulled_modules += 1;
                 changed_records += module_changed_records;
+                result.conflicts += module_conflicts;
             }
             PullModuleOutcome::Failed { module, message } => {
                 result.errors.push(message);
@@ -347,7 +353,7 @@ async fn pull_single_module(
     )
     .await;
 
-    let changed_records = match merge_result {
+    let (changed_records, module_conflicts) = match merge_result {
         Ok(merge) => {
             builder.merging(
                 module_name,
@@ -356,7 +362,10 @@ async fn pull_single_module(
                 merge.updated,
                 merge.deleted,
             );
-            merge.inserted + merge.updated + merge.deleted
+            (
+                merge.inserted + merge.updated + merge.deleted,
+                merge.conflicts,
+            )
         }
         Err(e) => {
             return PullModuleOutcome::Failed {
@@ -404,6 +413,7 @@ async fn pull_single_module(
         name: module_name.to_string(),
         new_state,
         changed_records,
+        conflicts: module_conflicts,
     }
 }
 

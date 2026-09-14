@@ -92,6 +92,9 @@ pub struct MergeResult {
     pub deleted: u64,
     /// 跳过记录数（本地更新时间更大或相等）
     pub skipped: u64,
+    /// 冲突裁决数（S28：两端同 uuid 都有更新的记录数——LWW 平局 version
+    /// 裁决 + 本地胜出跳过 + 复活裁决的合计，此前恒 0 无可观测性）
+    pub conflicts: u64,
     /// 错误信息（不阻塞整体流程）
     pub errors: Vec<String>,
 }
@@ -141,6 +144,7 @@ pub async fn merge_items(
                 result.inserted += table_result.inserted;
                 result.updated += table_result.updated;
                 result.skipped += table_result.skipped;
+                result.conflicts += table_result.conflicts;
                 result.errors.extend(table_result.errors);
             }
             Err(e) => {
@@ -217,6 +221,9 @@ async fn merge_table_items(
         // 2. 本地存活 → 常规 LWW
         // 3. 本地为墓碑 → 复活裁决：远端存活记录的 updated_at 不早于本地删除时间才复活，
         //    否则删除仍胜出（跳过）。绝不允许走到 INSERT——那会产生重复 uuid 行。
+        //
+        // S28：本地存活分支的两端都有更新（LWW Update / 本地胜出 Skip）与复活
+        // 裁决都计入 conflicts——这些记录发生了真实的冲突裁决，此前恒 0 不可见。
         match local_map.get(&uuid) {
             None => {
                 to_insert.push(obj);
@@ -234,6 +241,7 @@ async fn merge_table_items(
                     LwwDecision::Update => {
                         // 远端胜出（updated_at 更大，或平局时 version 更高）→ UPDATE
                         let uuid_ref = obj.get("uuid").and_then(|v| v.as_str()).unwrap_or("");
+                        result.conflicts += 1;
                         // 平局裁决时输出 warn 日志，便于排查（非平局的正常 Update 不打日志）
                         if remote_updated == local.updated_at {
                             log::warn!(
@@ -256,6 +264,9 @@ async fn merge_table_items(
                                 table,
                                 uuid
                             );
+                        } else {
+                            // 本地胜出的真实冲突（远端也有更新但败出）
+                            result.conflicts += 1;
                         }
                         result.skipped += 1;
                     }
@@ -263,6 +274,7 @@ async fn merge_table_items(
             }
             Some(local) => {
                 // 复活裁决（FR-2.6 口径）：deleted_at=0（极旧格式）视为可复活
+                result.conflicts += 1;
                 if remote_updated >= local.deleted_at || local.deleted_at == 0 {
                     log::info!(
                         "[merge] 复活裁决：表 {} uuid={} 远端更新时间 {} ≥ 本地删除时间 {}，\
@@ -784,6 +796,69 @@ mod tests {
             let result2 = merge_items(&pool, &PROJECTS, &items2, &[]).await.unwrap();
             assert_eq!(result2.updated, 1, "远端较新应更新");
             assert_eq!(row_count(&pool, "r3").await, 1);
+        }
+
+        /// S28：冲突裁决计数——LWW 双向裁决与复活裁决都计入 conflicts，
+        /// 同数据（updated_at/version 全等）不计入；新增记录不计入
+        #[tokio::test]
+        async fn conflicts_counts_real_lww_adjudications_only() {
+            let pool = setup_pool().await;
+            insert_row(&pool, "c1", "same", 0, 0, 100).await;
+
+            // 同数据平局（updated_at 与 version 均相等）→ 跳过但不计冲突
+            let same = vec![serde_json::json!({
+                "_table": "todo_projects", "uuid": "c1", "title": "same",
+                "is_deleted": 0, "updated_at": 100, "version": 1
+            })];
+            let r1 = merge_items(&pool, &PROJECTS, &same, &[]).await.unwrap();
+            assert_eq!(r1.skipped, 1);
+            assert_eq!(r1.conflicts, 0, "同数据全等平局不是冲突");
+
+            // 本地胜出（远端有更新但较旧）→ 跳过且计冲突
+            let local_wins = vec![serde_json::json!({
+                "_table": "todo_projects", "uuid": "c1", "title": "stale-remote",
+                "is_deleted": 0, "updated_at": 90, "version": 9
+            })];
+            let r2 = merge_items(&pool, &PROJECTS, &local_wins, &[])
+                .await
+                .unwrap();
+            assert_eq!(r2.skipped, 1);
+            assert_eq!(r2.conflicts, 1, "两端都有更新、本地胜出必须计冲突");
+
+            // 远端胜出（updated_at 更大）→ 更新且计冲突
+            let remote_wins = vec![serde_json::json!({
+                "_table": "todo_projects", "uuid": "c1", "title": "fresh-remote",
+                "is_deleted": 0, "updated_at": 200, "version": 1
+            })];
+            let r3 = merge_items(&pool, &PROJECTS, &remote_wins, &[])
+                .await
+                .unwrap();
+            assert_eq!(r3.updated, 1);
+            assert_eq!(r3.conflicts, 1, "远端胜出的覆盖更新必须计冲突");
+
+            // 全新记录（本地无 uuid）→ 插入不计冲突
+            let fresh = vec![serde_json::json!({
+                "_table": "todo_projects", "uuid": "c-new", "title": "brand-new",
+                "is_deleted": 0, "updated_at": 300, "version": 1
+            })];
+            let r4 = merge_items(&pool, &PROJECTS, &fresh, &[]).await.unwrap();
+            assert_eq!(r4.inserted, 1);
+            assert_eq!(r4.conflicts, 0, "单端新增不是冲突");
+        }
+
+        /// S28 回归：复活裁决计入 conflicts（删除 vs 编辑的真实冲突）
+        #[tokio::test]
+        async fn conflicts_counts_resurrection_adjudication() {
+            let pool = setup_pool().await;
+            // 本地墓碑（删除时间 300）+ 远端存活（更新 200，早于删除 → 删除胜）
+            insert_row(&pool, "c2", "deleted-local", 1, 300, 300).await;
+            let items = vec![serde_json::json!({
+                "_table": "todo_projects", "uuid": "c2", "title": "remote-alive",
+                "is_deleted": 0, "deleted_at": 0, "updated_at": 200, "version": 1
+            })];
+            let result = merge_items(&pool, &PROJECTS, &items, &[]).await.unwrap();
+            assert_eq!(result.skipped, 1, "删除胜出保持墓碑");
+            assert_eq!(result.conflicts, 1, "复活裁决是删除vs编辑冲突，必须计数");
         }
 
         /// Fix-02 核心场景：应用墓碑后 deleted_at/updated_at 必须等于墓碑自身删除时间，

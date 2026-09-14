@@ -887,6 +887,8 @@ function SyncHistoryCard() {
               </span>
               <span className="shrink-0 text-xs text-muted-foreground">
                 拉 {h.pulled_count} / 推 {h.pushed_count}
+                {/* S28：冲突裁决数——多设备并发编辑被 LWW 裁决的记录数 */}
+                {h.conflict_count > 0 && ` / 冲突 ${h.conflict_count}`}
               </span>
               {h.error_message && (
                 <span className="max-w-40 shrink-0 truncate text-xs text-destructive" title={h.error_message}>

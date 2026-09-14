@@ -803,7 +803,7 @@ const commands: Record<string, (args: any, ctx: Ctx) => unknown> = {
     const seed = [
       { id: 3, sync_type: "push_only", status: "success", started_at: now - 3_600_000, finished_at: now - 3_600_000 + 2_400, pulled_count: 0, pushed_count: 2, conflict_count: 0, error_message: null },
       { id: 2, sync_type: "incremental", status: "failed", started_at: now - 7_200_000, finished_at: now - 7_200_000 + 9_800, pulled_count: 0, pushed_count: 0, conflict_count: 0, error_message: "todos 模块上传失败：连接超时" },
-      { id: 1, sync_type: "incremental", status: "success", started_at: now - 86_400_000, finished_at: now - 86_400_000 + 5_100, pulled_count: 3, pushed_count: 1, conflict_count: 0, error_message: null },
+      { id: 1, sync_type: "incremental", status: "success", started_at: now - 86_400_000, finished_at: now - 86_400_000 + 5_100, pulled_count: 3, pushed_count: 1, conflict_count: 2, error_message: null },
     ];
     return ipcClone(
       seed.filter((h) => scope === "all" || h.sync_type === scope).slice(0, limit),

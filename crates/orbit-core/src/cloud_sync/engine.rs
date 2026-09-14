@@ -63,7 +63,7 @@ async fn record_incremental_history(
         }
     }
     let now_ms = chrono::Utc::now().timestamp_millis();
-    let (status, pulled, pushed, error) = match result {
+    let (status, pulled, pushed, conflicts, error) = match result {
         Ok(r) => {
             let pulled = r.pulled_modules as i64 + r.downloaded_attachments as i64;
             let pushed = r.pushed_modules as i64 + r.uploaded_attachments as i64;
@@ -73,9 +73,9 @@ async fn record_incremental_history(
                 "failed"
             };
             let error = r.errors.first().map(|e| e.to_string());
-            (status, pulled, pushed, error)
+            (status, pulled, pushed, r.conflicts as i64, error)
         }
-        Err(e) => ("failed", 0, 0, Some(e.to_string())),
+        Err(e) => ("failed", 0, 0, 0, Some(e.to_string())),
     };
     let Ok(id) = sync_history_repo::insert(pool, sync_type, status, now_ms).await else {
         return;
@@ -87,7 +87,7 @@ async fn record_incremental_history(
         now_ms,
         pulled,
         pushed,
-        0,
+        conflicts,
         error.as_deref(),
     )
     .await;
@@ -106,6 +106,8 @@ pub struct SyncResult {
     pub uploaded_attachments: u32,
     /// 下载的附件数
     pub downloaded_attachments: u32,
+    /// 冲突裁决数（S28：merge LWW/复活裁决计数透传，多设备并发编辑的可见度）
+    pub conflicts: u64,
     /// 耗时（毫秒）
     pub duration_ms: u64,
     /// 是否因已有同步在运行而跳过
@@ -443,6 +445,8 @@ impl SyncEngine {
             })
             .await?;
         result.pulled_modules = pull_result.pulled_modules;
+        // S28：冲突裁决计数透传（merge → PullResult → SyncResult → 历史落库）
+        result.conflicts += pull_result.conflicts;
         result.errors.extend(pull_result.errors);
 
         // 2. Push（业务级网络重试）：合并后的本地数据上传云端
@@ -685,6 +689,8 @@ impl SyncEngine {
             })
             .await?;
         result.pulled_modules = pull_result.pulled_modules;
+        // S28：冲突裁决计数透传（merge → PullResult → SyncResult → 历史落库）
+        result.conflicts += pull_result.conflicts;
         result.errors.extend(pull_result.errors);
 
         // 2. Pull 附件（S7：包入 with_retry，与模块数据同口径）
@@ -1547,6 +1553,7 @@ mod tests {
             pulled_modules: 2,
             uploaded_attachments: 5,
             downloaded_attachments: 1,
+            conflicts: 2,
             duration_ms: 1234,
             skipped: false,
             errors: vec!["module x failed".to_string()],
@@ -2152,6 +2159,7 @@ mod tests {
             pulled_modules: 3,
             uploaded_attachments: 1,
             downloaded_attachments: 4,
+            conflicts: 5,
             duration_ms: 120,
             skipped: false,
             errors,
@@ -2172,6 +2180,7 @@ mod tests {
         assert_eq!(h.status, "success");
         assert_eq!(h.pulled_count, 7, "拉取计数 = 模块 3 + 附件 4");
         assert_eq!(h.pushed_count, 3, "推送计数 = 模块 2 + 附件 1");
+        assert_eq!(h.conflict_count, 5, "S28：冲突裁决数必须落库（此前恒 0）");
         assert!(h.error_message.is_none());
     }
 
