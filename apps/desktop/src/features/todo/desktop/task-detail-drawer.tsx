@@ -1819,8 +1819,9 @@ function humanSize(bytes: number): string {
 }
 
 function AttachmentsSection({ taskId }: { taskId: number }) {
-  // B3：剪贴板截图 Ctrl+V 直粘为附件（零依赖，DOM paste 读 clipboardData.files）
-  usePasteAttachment(taskId);
+  // B3：剪贴板截图 Ctrl+V 直粘为附件（零依赖，DOM paste 读 clipboardData.files）；
+  // B3+：拖放文件入附件（onDrop 由下方容器消费，与粘贴共用 bytes 通道）
+  const { onDrop } = usePasteAttachment(taskId);
   const [busy, setBusy] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<TaskAttachmentView | null>(null);
   // 图片附件应用内预览（F4 lightbox）：url 为 blob 引用，关闭时 revoke 防字节泄漏
@@ -1898,7 +1899,15 @@ function AttachmentsSection({ taskId }: { taskId: number }) {
         </button>
       }
     >
-      <div className="space-y-2">
+      {/* 拖放目标区：dragover 需 preventDefault 才允许 drop（浏览器默认拒绝文件放置）；
+          拖入视觉反馈用主色弱化描边 */}
+      <div
+        className="space-y-2"
+        onDragOver={(e) => {
+          if (e.dataTransfer.types.includes("Files")) e.preventDefault();
+        }}
+        onDrop={(e) => void onDrop(e)}
+      >
         {attachments.map((a) => (
           <ConfirmPopover
             key={a.link_id}
@@ -1937,9 +1946,9 @@ function AttachmentsSection({ taskId }: { taskId: number }) {
           </ConfirmPopover>
         ))}
         {attachments.length === 0 && (
-          <p className="text-[12px] text-muted-foreground">点击 + 选择文件添加附件（单任务 20 个，单文件 50MB）。</p>
+          <p className="text-[12px] text-muted-foreground">点击 + 选择文件、拖放文件到此区或 Ctrl+V 粘贴截图（单任务 20 个，单文件 50MB）。</p>
         )}
-        <p className="text-[11px] text-muted-foreground/60">支持 Ctrl+V 直接粘贴截图</p>
+        <p className="text-[11px] text-muted-foreground/60">支持 Ctrl+V 粘贴截图 / 直接拖放文件</p>
       </div>
 
       {/* 图片附件应用内预览（F4 lightbox）：点图片行触发；Esc/点遮罩关闭。
