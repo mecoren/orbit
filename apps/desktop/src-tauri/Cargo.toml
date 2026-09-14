@@ -102,3 +102,14 @@ log = "0.4"
 [lints.rust]
 # desktop cfg 由 tauri-build 注入；显式登记避免依赖其自动 emit 行为
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(mobile)', 'cfg(desktop)'] }
+
+# 与根 Cargo.toml [profile.release] 同口径——本 crate 是嵌套独立 workspace，
+# 根 workspace 的 profile 对它不生效（2026-09-14 前桌面 release 一直在用
+# Cargo 默认配置：16 codegen units、无 LTO、带符号表，体积/内存双输）。
+# panic=abort 与 Tauri 兼容（壳层无 catch_unwind 依赖）。
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+strip = true
+panic = "abort"
