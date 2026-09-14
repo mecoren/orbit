@@ -142,9 +142,13 @@ CREATE INDEX IF NOT EXISTS idx_todo_tasks_updated_at ON todo_tasks(updated_at DE
 CREATE INDEX IF NOT EXISTS idx_todo_tasks_uuid ON todo_tasks(uuid);
 CREATE INDEX IF NOT EXISTS idx_todo_tasks_project ON todo_tasks(project_id, is_deleted);
 CREATE INDEX IF NOT EXISTS idx_todo_tasks_position ON todo_tasks(is_deleted, position);
-CREATE INDEX IF NOT EXISTS idx_todo_tasks_done ON todo_tasks(done);
-CREATE INDEX IF NOT EXISTS idx_todo_tasks_due_date ON todo_tasks(due_date);
-CREATE INDEX IF NOT EXISTS idx_todo_tasks_is_favorite ON todo_tasks(is_favorite);
+-- done/due_date/is_favorite 组合索引（2026-09-14 内存批次）：任务查询恒带
+-- is_deleted=0 基线谓词（列表/搜索/统计/到期提醒全链核实），原 done/due_date/
+-- is_favorite 三条无前缀单列索引在软删谓词下无法整段命中，本条合并替换
+-- （原单列索引删除——减少写放大与索引页驻留内存；全库恒软删基线，无裸列查询方）
+CREATE INDEX IF NOT EXISTS idx_todo_tasks_alive_done ON todo_tasks(is_deleted, done);
+CREATE INDEX IF NOT EXISTS idx_todo_tasks_alive_due ON todo_tasks(is_deleted, due_date);
+CREATE INDEX IF NOT EXISTS idx_todo_tasks_alive_favorite ON todo_tasks(is_deleted, is_favorite);
 CREATE INDEX IF NOT EXISTS idx_todo_tasks_my_day ON todo_tasks(my_day_date) WHERE my_day_date IS NOT NULL;
 -- 回收站墓碑过滤+排序（list_trashed 的 is_deleted+deleted_at DESC 与 TTL purge 的 deleted_at 谓词共用）
 CREATE INDEX IF NOT EXISTS idx_todo_tasks_trash ON todo_tasks(is_deleted, deleted_at DESC);
