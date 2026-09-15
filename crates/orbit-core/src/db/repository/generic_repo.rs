@@ -1480,8 +1480,8 @@ mod task_predicate_tests {
 #[cfg(test)]
 mod column_prune_tests {
     use super::*;
-    use crate::models::business::{ListFilter, TodoTask, TodoTaskCreateInput};
     use crate::api::business_api::create_todo_task;
+    use crate::models::business::{ListFilter, TodoTask, TodoTaskCreateInput};
 
     async fn setup_db() -> sqlx::SqlitePool {
         let pool = sqlx::SqlitePool::connect("sqlite::memory:").await.unwrap();
