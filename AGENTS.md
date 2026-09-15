@@ -125,6 +125,7 @@ pnpm bump:check           # 只校验一致性（零写入，CI/本地通用）
   4. 本地跑通 CI 等价检查：`pnpm typecheck` / `pnpm test` / `pnpm e2e` / `pnpm lint:rust`（`src/test/release-consistency.test.ts` 会把「版本与日志漂移」直接判红）；
   5. **不主动提交**：保持工作区交用户确认；提交用 `chore(release): 版本 X.Y.Z`；
   6. 打 tag `vX.Y.Z` 并推送（`git push origin main --tags`）—— **tag 名必须等于清单版本**（`release.yml` 的 audit job 强校验），推送即公开 Release。
+  - **tag 漂移重定（白名单外动作，谨慎）**：若远端已存在同名 `vX.Y.Z` 却指向别的提交（常见根因：并行会话版本漂移，旧会话已先推过 tag），`git push --tags` 会被远端拒收。正确顺序：① `git push origin :refs/tags/vX.Y.Z` 删远端旧 tag → ② `git tag -f vX.Y.Z <commit>` 移动本地 tag 到正确提交 → ③ `git push origin refs/tags/vX.Y.Z` 重推。删/移远端 tag 属公开动作，先确认无下游依赖（如已发布的 GitHub Release）再执行。
 - **发布流水线口径**（`.github/workflows/release.yml`）：tag 触发全链路；`workflow_dispatch` 的 `dry_run` 默认 true（只构建不发布，发版前先预演一次）。`latest.json` 由 `publish-updater-manifest` **单点合成**（矩阵并发读改写会撞 PATCH 竞态，故 `includeUpdaterJson` 恒 false）；`createUpdaterArtifacts: true` 下缺 `Secrets.TAURI_SIGNING_PRIVATE_KEY` 会直接失败（刻意保护），audit job 会提前给出配置指引。
 - **应用内更新**：手动检查（设置 → 关于与更新），**不做自动轮询**（本地优先，更新时机归用户）；endpoint 取 GitHub Releases 的 `latest.json`。改动更新链路（endpoint / pubkey / 清单平台键 / 安装方式）必须同步本文件与 `docs/08`。
 - **密钥轮换**：换 updater 密钥会让**已安装旧版本拒绝升级**（`pubkey` 变更），须先发一版带新公钥的常规更新再轮换；私钥丢失等价于全部用户重装。
