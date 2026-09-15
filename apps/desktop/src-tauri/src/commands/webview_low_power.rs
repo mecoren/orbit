@@ -16,6 +16,7 @@
 //! controller/environment），走 controller.CoreWebView2() → cast 同构。
 
 use tauri::AppHandle;
+#[cfg(target_os = "windows")]
 use tauri::Manager as _;
 
 #[cfg(target_os = "windows")]

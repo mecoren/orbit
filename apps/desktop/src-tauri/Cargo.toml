@@ -37,6 +37,8 @@ tauri-plugin-global-shortcut = "2"
 tauri-plugin-log = "2"
 tauri-plugin-updater = "2"
 tauri-plugin-process = "2"
+# 日志级别配置（tauri-plugin-log Builder 使用 log::LevelFilter）
+log = "0.4"
 
 # 序列化
 serde = { version = "1", features = ["derive"] }
@@ -95,9 +97,6 @@ raw-window-handle = "0.6"
 webview2-com-sys = "0.38"
 # COM 接口 cast trait（Interface）；版本与 windows 0.61 同族对齐
 windows-core = "0.61"
-
-# 日志级别配置（tauri-plugin-log Builder 使用 log::LevelFilter）
-log = "0.4"
 
 [lints.rust]
 # desktop cfg 由 tauri-build 注入；显式登记避免依赖其自动 emit 行为
