@@ -515,6 +515,9 @@ pub struct Attachment {
     pub is_local_cached: i32,
     /// 创建时间（ms 时间戳；迁移 0001 原为 TEXT 属笔误，随附件功能落地对齐 i64）
     pub created_at: i64,
+    /// 最近访问时间（ms；磁盘缓存 LRU 逐出的排序键——内容寻址文件不可变，
+    /// 入库与读取都视为一次访问）
+    pub last_accessed_at: i64,
 }
 
 // ---------- sync_history ----------

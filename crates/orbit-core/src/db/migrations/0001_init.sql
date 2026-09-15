@@ -423,7 +423,8 @@ CREATE TABLE IF NOT EXISTS sys_attachments (
   local_path TEXT,  -- 本地缓存路径（assets/{hash}）；NULL = 未缓存
   is_uploaded INTEGER NOT NULL DEFAULT 0,  -- 已上传标记：0 否 1 是
   is_local_cached INTEGER NOT NULL DEFAULT 0,  -- 本地缓存标记：0 否 1 是
-  created_at INTEGER NOT NULL DEFAULT 0  -- 入库时间（ms）
+  created_at INTEGER NOT NULL DEFAULT 0,  -- 入库时间（ms）
+  last_accessed_at INTEGER NOT NULL DEFAULT 0  -- 最近访问时间（ms；LRU 逐出排序键，内容寻址不可变故入库/读即访问）
 );
 -- ============================================================================
 -- 种子数据

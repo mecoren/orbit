@@ -8,11 +8,23 @@
 //! 流程：
 //! - `add_task_attachment`：算 hash → 原子落盘 → upsert sys_attachments →
 //!   建任务关联（已挂载同 hash 则幂等返回）→ emit 事件（触发 on-change push）
+//!   → 超出磁盘缓存上限时 LRU 逐出最久未访问的已上传附件
 //! - `get_task_attachments`：关联 join 元数据（原始文件名/mime/大小）
-//! - `read_task_attachment`：读本地文件字节（详情页预览/另存用）
+//! - `read_task_attachment`：读本地文件字节（详情页预览/另存用；读取即
+//!   刷新 last_accessed_at，LRU 新鲜度依据）
 //! - `remove_task_attachment`：软删关联；无任何任务引用的 hash 触发本地 GC
 //!   （删文件 + 删账本行；云端对象留给下次同步的 push 侧自然对账，不做
 //!   云端删除——多设备引用计数不可靠，宁可多留不误删）
+//!
+//! 磁盘缓存上限 + LRU（多设备安全口径）：
+//! - 上限 `MAX_CACHE_BYTES`（2GB）：挂载新附件后超出即逐出「本地已缓存且
+//!   已上传云端」中最久未访问者（is_uploaded=0 的 pending 源绝不逐出，
+//!   删了会让每轮 push 读不到文件持续报错）；
+//! - 逐出只删本地文件 + 清 is_local_cached 标志，**账本行保留**——pull
+//!   差集按 is_local_cached=0 判定缺失，有活跃引用的附件下次同步自然重拉，
+//!   云端视角与未逐出完全一致；
+//! - 有活跃任务引用的附件同样参与逐出（引用的是 hash 不是文件，重拉即
+//!   恢复；保持上限硬约束的语义简单性）。
 
 use sqlx::SqlitePool;
 
@@ -40,6 +52,8 @@ pub struct TaskAttachmentView {
 /// 附件上限（单任务 20 个 × 单文件 50MB，与 01 文档数据安全口径对齐 MS To Do 的 25MB 略放宽）
 pub const MAX_ATTACHMENTS_PER_TASK: usize = 20;
 pub const MAX_ATTACHMENT_BYTES: i64 = 50 * 1024 * 1024;
+/// 附件磁盘缓存总上限（2GB：20 任务档日常远够；超出走 LRU 逐出重拉兜底）
+pub const MAX_ATTACHMENT_CACHE_BYTES: i64 = 2 * 1024 * 1024 * 1024;
 
 /// 上传并挂载附件到任务
 ///
@@ -97,6 +111,7 @@ pub async fn add_task_attachment(
             is_uploaded: 0,
             is_local_cached: 1,
             created_at: now,
+            last_accessed_at: now,
         },
     )
     .await?;
@@ -144,6 +159,8 @@ pub async fn add_task_attachment(
                 DbOp::Insert,
                 now,
             );
+            // 新挂载落盘后检查磁盘缓存总上限（幂等路径无新增字节不触发）
+            enforce_attachment_cache_limit(pool, attachments_dir).await?;
             (link_id.0, link_uuid)
         }
     };
@@ -213,7 +230,11 @@ pub async fn read_task_attachment(
         ));
     }
     let path = std::path::Path::new(attachments_dir).join(hash);
-    std::fs::read(&path).map_err(|e| CoreError::Other(format!("读取附件失败: {}", e)))
+    let bytes =
+        std::fs::read(&path).map_err(|e| CoreError::Other(format!("读取附件失败: {}", e)))?;
+    // 读取即访问：刷新 LRU 新鲜度（不 await 失败也无关紧要——仅排序键失真）
+    let _ = attachment_repo::touch_last_accessed(pool, hash).await;
+    Ok(bytes)
 }
 
 /// 卸下任务附件（软删关联行）
@@ -246,6 +267,48 @@ pub async fn remove_task_attachment(pool: &SqlitePool, link_id: i64) -> CoreResu
     Ok(())
 }
 
+/// 磁盘缓存上限执行：超出 MAX_ATTACHMENT_CACHE_BYTES 时 LRU 逐出
+///
+/// 逐出对象 = 本地已缓存且已上传云端（is_uploaded=1）中最久未访问者；
+/// 只删文件 + 清 is_local_cached（账本行保留，pull 差集自然重拉）。
+/// 全部候选逐完仍超限（如大量未上传附件挤占）时静默容忍——未上传的
+/// pending 源受保护优先于上限，等下轮上传后再收。
+/// 返回逐出个数。
+pub async fn enforce_attachment_cache_limit(
+    pool: &SqlitePool,
+    attachments_dir: &str,
+) -> CoreResult<usize> {
+    evict_over_limit(pool, attachments_dir, MAX_ATTACHMENT_CACHE_BYTES).await
+}
+
+/// 上限执行核心（带参档：测试注小上限，产品路径走 2GB 常量）
+async fn evict_over_limit(
+    pool: &SqlitePool,
+    attachments_dir: &str,
+    max_bytes: i64,
+) -> CoreResult<usize> {
+    let total = attachment_repo::cached_total_bytes(pool).await?;
+    if total <= max_bytes {
+        return Ok(0);
+    }
+    let overflow = total - max_bytes;
+    let candidates = attachment_repo::get_lru_evictable(pool, overflow).await?;
+    let mut evicted = 0;
+    for att in candidates {
+        attachment_repo::evict_local_cache(pool, attachments_dir, &att.hash).await?;
+        evicted += 1;
+    }
+    if evicted > 0 {
+        log::info!(
+            "[attachments] 磁盘缓存 {}MB 超上限 {}MB，LRU 逐出 {} 个已上传附件",
+            total / 1024 / 1024,
+            max_bytes / 1024 / 1024,
+            evicted
+        );
+    }
+    Ok(evicted)
+}
+
 /// 本地附件 GC：清理无任何任务引用的附件文件与账本行
 ///
 /// 返回清理数量。多设备安全：本机判定"无引用"只代表本机视角，
@@ -262,7 +325,7 @@ pub async fn gc_local_attachments(pool: &SqlitePool, attachments_dir: &str) -> C
     // 2. 遍历账本行，无引用的删文件 + 删行
     let all: Vec<Attachment> = sqlx::query_as(
         "SELECT hash, original_name, mime_type, size_bytes, local_path,
-                is_uploaded, is_local_cached, created_at
+                is_uploaded, is_local_cached, created_at, last_accessed_at
          FROM sys_attachments",
     )
     .fetch_all(pool)
@@ -496,5 +559,112 @@ mod tests {
             .unwrap();
         let err = read_task_attachment(&pool, &dir, &view.hash).await;
         assert!(err.is_err(), "未缓存附件应返回 NotFound 引导等待同步");
+    }
+
+    // ---------- 磁盘缓存上限 + LRU 逐出（多设备安全口径）----------
+
+    /// 造一个已缓存附件并手工指定 is_uploaded / last_accessed_at（测试注入）
+    async fn seed_attachment(
+        pool: &SqlitePool,
+        dir: &str,
+        tag: &str,
+        bytes: &[u8],
+        uploaded: i32,
+        accessed_at: i64,
+    ) -> String {
+        let hash = crate::crypto::sha256::sha256_hex(bytes);
+        let path = std::path::Path::new(dir).join(&hash);
+        crate::fs_util::write_atomic(&path, bytes).unwrap();
+        attachment_repo::upsert(
+            pool,
+            &Attachment {
+                hash: hash.clone(),
+                original_name: format!("{}.bin", tag),
+                mime_type: "application/octet-stream".to_string(),
+                size_bytes: bytes.len() as i64,
+                local_path: Some(path.to_string_lossy().to_string()),
+                is_uploaded: uploaded,
+                is_local_cached: 1,
+                created_at: accessed_at,
+                last_accessed_at: accessed_at,
+            },
+        )
+        .await
+        .unwrap();
+        hash
+    }
+
+    #[tokio::test]
+    async fn lru_evicts_oldest_uploaded_keeps_pending_and_ledger() {
+        let pool = setup_db().await;
+        let dir = tmp_dir("lru");
+        // 三个已上传附件（访问时间 old < mid < new）+ 一个未上传 pending 源
+        let old = seed_attachment(&pool, &dir, "old", &[1u8; 40], 1, 1_000).await;
+        let mid = seed_attachment(&pool, &dir, "mid", &[2u8; 30], 1, 2_000).await;
+        let new = seed_attachment(&pool, &dir, "new", &[3u8; 20], 1, 3_000).await;
+        let pending = seed_attachment(&pool, &dir, "pending", &[4u8; 10], 0, 4_000).await;
+        // 总 100B，上限 50B：需逐出 ≥50B 的已上传附件 → old(40)+mid(30) 被逐，
+        // new(20) 留下后总 30B ≤ 50B；pending(10) 受保护不动
+        let evicted = evict_over_limit(&pool, &dir, 50).await.unwrap();
+        assert_eq!(evicted, 2, "最久未访问的 old+mid 应被逐出");
+        assert!(
+            !std::path::Path::new(&dir).join(&old).exists()
+                && !std::path::Path::new(&dir).join(&mid).exists(),
+            "被逐出的本地文件应删除"
+        );
+        assert!(
+            std::path::Path::new(&dir).join(&new).exists(),
+            "最近访问的 new 应保留"
+        );
+        assert!(
+            std::path::Path::new(&dir).join(&pending).exists(),
+            "未上传的 pending 源绝不逐出（云端唯一副本）"
+        );
+        // 账本行保留（多设备安全：元数据不丢，pull 差集可自然重拉）
+        for h in [&old, &mid] {
+            let row: (i32,) =
+                sqlx::query_as("SELECT is_local_cached FROM sys_attachments WHERE hash = ?")
+                    .bind(h)
+                    .fetch_one(&pool)
+                    .await
+                    .unwrap();
+            assert_eq!(row.0, 0, "逐出后账本行保留且缓存标志清零");
+        }
+        let total = attachment_repo::cached_total_bytes(&pool).await.unwrap();
+        assert_eq!(total, 30, "逐出后缓存总量 = new(20)+pending(10)");
+    }
+
+    #[tokio::test]
+    async fn read_refreshes_lru_order() {
+        let pool = setup_db().await;
+        let dir = tmp_dir("lru-touch");
+        let stale = seed_attachment(&pool, &dir, "stale", &[1u8; 40], 1, 1_000).await;
+        let fresh = seed_attachment(&pool, &dir, "fresh", &[2u8; 20], 1, 2_000).await;
+        // 读 stale 抬访问时间到当前——它从最旧变最新
+        read_task_attachment(&pool, &dir, &stale).await.unwrap();
+        // 总 60B 上限 50B：应逐 fresh（20B）而非刚读过的 stale
+        let evicted = evict_over_limit(&pool, &dir, 50).await.unwrap();
+        assert_eq!(evicted, 1);
+        assert!(
+            !std::path::Path::new(&dir).join(&fresh).exists(),
+            "最久未访问的 fresh 应被逐出"
+        );
+        assert!(
+            std::path::Path::new(&dir).join(&stale).exists(),
+            "刚读取过的 stale 应因 touch 幸存"
+        );
+    }
+
+    #[tokio::test]
+    async fn under_limit_is_noop() {
+        let pool = setup_db().await;
+        let dir = tmp_dir("lru-noop");
+        seed_attachment(&pool, &dir, "a", &[1u8; 30], 1, 1_000).await;
+        let evicted = evict_over_limit(&pool, &dir, 100).await.unwrap();
+        assert_eq!(evicted, 0, "未超上限不逐出");
+        assert_eq!(
+            attachment_repo::cached_total_bytes(&pool).await.unwrap(),
+            30
+        );
     }
 }

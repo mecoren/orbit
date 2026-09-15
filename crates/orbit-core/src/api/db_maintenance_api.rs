@@ -72,6 +72,10 @@ pub async fn db_maintenance(
     // 2. 附件 GC：清理无任何任务引用的孤儿文件（上次 GC 错过/同步残留）
     let attachments_cleaned = asset_api::gc_local_attachments(pool, attachments_dir).await?;
 
+    // 2.5 附件磁盘缓存上限：超 2GB 时 LRU 逐出已上传附件（只删本地文件，
+    // 账本保留可重拉；多设备安全口径见 asset_api 模块文档）
+    asset_api::enforce_attachment_cache_limit(pool, attachments_dir).await?;
+
     // 3. 更新查询计划统计（ANALYZE 采样）——排序/筛选查询提速
     sqlx::query("PRAGMA optimize").execute(pool).await?;
 

@@ -460,6 +460,7 @@ mod tests {
                 is_uploaded: 0,
                 is_local_cached: 1,
                 created_at: 1,
+                last_accessed_at: 1,
             },
             Attachment {
                 hash: "h2".to_string(),
@@ -470,6 +471,7 @@ mod tests {
                 is_uploaded: 0,
                 is_local_cached: 1,
                 created_at: 2,
+                last_accessed_at: 2,
             },
         ];
         assert_eq!(to_upload_probe(&atts), Some("h1"));
@@ -576,6 +578,7 @@ mod tests {
                     is_uploaded: 0,
                     is_local_cached: 1,
                     created_at: 1,
+                    last_accessed_at: 1,
                 },
             )
             .await

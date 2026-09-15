@@ -5,14 +5,14 @@
 
 use sqlx::SqlitePool;
 
-use crate::error::CoreResult;
+use crate::error::{CoreError, CoreResult};
 use crate::models::business::Attachment;
 
 /// 根据 hash 查询单个附件
 pub async fn get_by_hash(pool: &SqlitePool, hash: &str) -> CoreResult<Option<Attachment>> {
     let item = sqlx::query_as::<_, Attachment>(
         "SELECT hash, original_name, mime_type, size_bytes, local_path,
-                is_uploaded, is_local_cached, created_at
+                is_uploaded, is_local_cached, created_at, last_accessed_at
          FROM sys_attachments WHERE hash = ?",
     )
     .bind(hash)
@@ -22,11 +22,14 @@ pub async fn get_by_hash(pool: &SqlitePool, hash: &str) -> CoreResult<Option<Att
 }
 
 /// 插入或更新附件（以 hash 为冲突键）
+///
+/// 冲突路径的 last_accessed_at 取新旧较大值——重挂载同 hash 不把既有
+/// 附件的 LRU 新鲜度倒退回 created_at。
 pub async fn upsert(pool: &SqlitePool, a: &Attachment) -> CoreResult<()> {
     sqlx::query(
         "INSERT INTO sys_attachments (hash, original_name, mime_type, size_bytes, local_path,
-                                  is_uploaded, is_local_cached, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                                  is_uploaded, is_local_cached, created_at, last_accessed_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(hash) DO UPDATE SET
             original_name = excluded.original_name,
             mime_type = excluded.mime_type,
@@ -34,7 +37,8 @@ pub async fn upsert(pool: &SqlitePool, a: &Attachment) -> CoreResult<()> {
             local_path = excluded.local_path,
             is_uploaded = excluded.is_uploaded,
             is_local_cached = excluded.is_local_cached,
-            created_at = excluded.created_at",
+            created_at = excluded.created_at,
+            last_accessed_at = MAX(sys_attachments.last_accessed_at, excluded.last_accessed_at)",
     )
     .bind(&a.hash)
     .bind(&a.original_name)
@@ -43,7 +47,8 @@ pub async fn upsert(pool: &SqlitePool, a: &Attachment) -> CoreResult<()> {
     .bind(&a.local_path)
     .bind(a.is_uploaded)
     .bind(a.is_local_cached)
-    .bind(&a.created_at)
+    .bind(a.created_at)
+    .bind(a.last_accessed_at)
     .execute(pool)
     .await?;
     Ok(())
@@ -100,16 +105,19 @@ pub async fn ensure_local_cached(
     let now = chrono::Utc::now().timestamp_millis();
     sqlx::query(
         "INSERT INTO sys_attachments (hash, original_name, mime_type, size_bytes, local_path,
-                                  is_uploaded, is_local_cached, created_at)
-         VALUES (?, ?, 'application/octet-stream', ?, ?, 1, 1, ?)
+                                  is_uploaded, is_local_cached, created_at, last_accessed_at)
+         VALUES (?, ?, 'application/octet-stream', ?, ?, 1, 1, ?, ?)
          ON CONFLICT(hash) DO UPDATE SET
             is_local_cached = 1,
-            local_path = excluded.local_path",
+            local_path = excluded.local_path,
+            last_accessed_at = ?",
     )
     .bind(hash)
     .bind(hash)
     .bind(size_bytes)
     .bind(local_path)
+    .bind(now)
+    .bind(now)
     .bind(now)
     .execute(pool)
     .await?;
@@ -130,7 +138,7 @@ pub async fn is_local_cached(pool: &SqlitePool, hash: &str) -> CoreResult<bool> 
 pub async fn get_all_local_cached(pool: &SqlitePool) -> CoreResult<Vec<Attachment>> {
     let items = sqlx::query_as::<_, Attachment>(
         "SELECT hash, original_name, mime_type, size_bytes, local_path,
-                is_uploaded, is_local_cached, created_at
+                is_uploaded, is_local_cached, created_at, last_accessed_at
          FROM sys_attachments WHERE is_local_cached = 1",
     )
     .fetch_all(pool)
@@ -142,7 +150,7 @@ pub async fn get_all_local_cached(pool: &SqlitePool) -> CoreResult<Vec<Attachmen
 pub async fn get_unuploaded(pool: &SqlitePool) -> CoreResult<Vec<Attachment>> {
     let items = sqlx::query_as::<_, Attachment>(
         "SELECT hash, original_name, mime_type, size_bytes, local_path,
-                is_uploaded, is_local_cached, created_at
+                is_uploaded, is_local_cached, created_at, last_accessed_at
          FROM sys_attachments WHERE is_uploaded = 0",
     )
     .fetch_all(pool)
@@ -190,7 +198,7 @@ pub async fn get_by_hashes(pool: &SqlitePool, hashes: &[String]) -> CoreResult<V
     let placeholders: Vec<&str> = hashes.iter().map(|_| "?").collect();
     let sql = format!(
         "SELECT hash, original_name, mime_type, size_bytes, local_path,
-                is_uploaded, is_local_cached, created_at
+                is_uploaded, is_local_cached, created_at, last_accessed_at
          FROM sys_attachments WHERE hash IN ({})",
         placeholders.join(", ")
     );
@@ -226,4 +234,77 @@ pub async fn delete_orphans(pool: &SqlitePool, active_hashes: &[String]) -> Core
         }
     }
     Ok(())
+}
+
+// ---------- 磁盘缓存上限 + LRU 逐出（多设备安全口径）----------
+
+/// 刷新附件最近访问时间（读取/挂载时调用；LRU 排序键）
+pub async fn touch_last_accessed(pool: &SqlitePool, hash: &str) -> CoreResult<()> {
+    let now = chrono::Utc::now().timestamp_millis();
+    sqlx::query("UPDATE sys_attachments SET last_accessed_at = ? WHERE hash = ?")
+        .bind(now)
+        .bind(hash)
+        .execute(pool)
+        .await?;
+    Ok(())
+}
+
+/// 本地已缓存附件的总占用（字节；is_local_cached=1 的 size_bytes 求和）
+pub async fn cached_total_bytes(pool: &SqlitePool) -> CoreResult<i64> {
+    let (total,): (i64,) = sqlx::query_as(
+        "SELECT COALESCE(SUM(size_bytes), 0) FROM sys_attachments WHERE is_local_cached = 1",
+    )
+    .fetch_one(pool)
+    .await?;
+    Ok(total)
+}
+
+/// LRU 逐出候选：按最久未访问优先，返回本地已缓存且**已上传云端**的附件
+///
+/// 只逐出 `is_uploaded = 1` 的行——文件删了下一轮 push 不受影响（get_unuploaded
+/// 按 is_uploaded 取集合，不读已删文件）；且保留账本行本身，pull 差集按
+/// 「本地无缓存（is_local_cached=0）」判定会自然重拉有活跃引用的附件。
+/// 未上传的（is_uploaded=0）绝不逐出：文件是云端唯一副本的 pending 源，
+/// 删了会让每轮 push 读不到文件持续报错。
+pub async fn get_lru_evictable(pool: &SqlitePool, limit_bytes: i64) -> CoreResult<Vec<Attachment>> {
+    let items = sqlx::query_as::<_, Attachment>(
+        "SELECT hash, original_name, mime_type, size_bytes, local_path,
+                is_uploaded, is_local_cached, created_at, last_accessed_at
+         FROM sys_attachments
+         WHERE is_local_cached = 1 AND is_uploaded = 1
+         ORDER BY last_accessed_at ASC",
+    )
+    .fetch_all(pool)
+    .await?;
+    // 只取到能凑出 limit_bytes 的最久未访问前缀（调用方按序逐出）
+    let mut out = Vec::new();
+    let mut acc = 0i64;
+    for item in items {
+        if acc >= limit_bytes {
+            break;
+        }
+        acc += item.size_bytes;
+        out.push(item);
+    }
+    Ok(out)
+}
+
+/// 逐出本地缓存：清 is_local_cached 标志 + 删本地文件（账本行保留）
+///
+/// 返回是否成功删掉本地文件（文件已缺失不视为错误）。
+pub async fn evict_local_cache(
+    pool: &SqlitePool,
+    attachments_dir: &str,
+    hash: &str,
+) -> CoreResult<bool> {
+    sqlx::query("UPDATE sys_attachments SET is_local_cached = 0 WHERE hash = ?")
+        .bind(hash)
+        .execute(pool)
+        .await?;
+    let path = std::path::Path::new(attachments_dir).join(hash);
+    match std::fs::remove_file(&path) {
+        Ok(()) => Ok(true),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(false),
+        Err(e) => Err(CoreError::Other(format!("删除附件缓存文件失败: {}", e))),
+    }
 }
