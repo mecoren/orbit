@@ -74,7 +74,13 @@ import { PRIORITY_COLOR, TODO_ACCENT, PRIORITY_LABELS, STATUS_COLOR, MY_DAY_COLO
 import { todayStartMs, toggleMyDayValue } from "../shared/task-filters";
 import { ConfirmPopover } from "../shared/confirm-popover";
 import { renderMarkdown } from "../shared/markdown-lite";
-import { REPEAT_MODE, REPEAT_PRESETS, WEEKDAY_CHIPS, repeatLabel } from "../shared/repeat";
+import {
+  REPEAT_MODE,
+  REPEAT_PRESETS,
+  WEEKDAY_CHIPS,
+  nextRepeatLabel,
+  repeatLabel,
+} from "../shared/repeat";
 import { completeTask } from "@/features/todo/shared/task-actions";
 import {
   todoTaskDuplicate,
@@ -509,6 +515,7 @@ function PropertyGrid({
           endType={task.repeat_end_type}
           endParam={task.repeat_end_param}
           fromDone={task.repeat_from_done}
+          dueMs={task.due_date}
           onChange={(v) =>
             void onPatch({
               repeat_mode: v.mode,
@@ -638,6 +645,7 @@ function RepeatEditor({
   endType,
   endParam,
   fromDone,
+  dueMs,
   onChange,
 }: {
   mode: number;
@@ -646,6 +654,7 @@ function RepeatEditor({
   endType: number;
   endParam: number;
   fromDone: number;
+  dueMs: number | null;
   onChange: (v: {
     mode: number;
     after: number;
@@ -711,14 +720,15 @@ function RepeatEditor({
   };
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <button type="button" className="truncate font-medium hover:text-primary">
-          {mode === REPEAT_MODE.NONE
-            ? "不重复"
-            : repeatLabel(mode, after, { weekdays, endType, endParam, fromDone })}
-        </button>
-      </PopoverTrigger>
+    <div className="flex min-w-0 items-center gap-1.5">
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <button type="button" className="truncate font-medium hover:text-primary">
+            {mode === REPEAT_MODE.NONE
+              ? "不重复"
+              : repeatLabel(mode, after, { weekdays, endType, endParam, fromDone })}
+          </button>
+        </PopoverTrigger>
       {/* 日历展开态独占弹层（w-72=288px 容纳日历 ~286px）：只渲染日历 +
           返回钮——原面板内容全高 675px，弹层 bottom 出视口（800px）100px；
           隐藏其余内容后日历态 ~330px 内敛，且横向 286>254 的溢出同步消除 */}
@@ -866,7 +876,15 @@ function RepeatEditor({
           </>
         )}
       </PopoverContent>
-    </Popover>
+      </Popover>
+      {/* 下次具体日期预览（Things 口径）：规则生效且有截止日期时展示，
+          锚点 = 任务当前 due_date（与完成引擎同源） */}
+      {nextRepeatLabel(mode, after, dueMs, Date.now(), fromDone) && (
+        <span className="shrink-0 rounded-md bg-primary/10 px-1.5 py-0.5 text-[11px] font-medium text-primary">
+          下次 {nextRepeatLabel(mode, after, dueMs, Date.now(), fromDone)}
+        </span>
+      )}
+    </div>
   );
 }
 

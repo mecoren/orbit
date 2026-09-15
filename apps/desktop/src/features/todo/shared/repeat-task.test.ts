@@ -3,7 +3,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { TodoSubtask, TodoTask } from "@/lib/tauri";
-import { nextRepeatAt, REPEAT_MODE } from "./repeat";
+import { nextRepeatAt, nextRepeatLabel, REPEAT_MODE } from "./repeat";
 import { planNextRecurringInstance, subtasksToClone } from "./repeat-task";
 
 const DAY = 86_400_000;
@@ -129,5 +129,34 @@ describe("nextRepeatAt · 月末截断回归（评审 I3，锁定 repeat.ts 修�
     const mar = nextRepeatAt(feb, REPEAT_MODE.MONTHLY, 1, feb)!;
     expect(new Date(mar).getMonth()).toBe(2);
     expect(new Date(mar).getDate()).toBe(28);
+  });
+});
+
+describe("nextRepeatLabel · 下次日期预览（批次①：Things 口径具体日期）", () => {
+  // 固定时区无关锚点：本地构造（Date 用本地时区，测试环境无碍）
+  const anchor = new Date(2026, 8, 14).getTime(); // 2026-09-14（周一）
+
+  it("无规则 / 无锚点返回 null（调用方不渲染徽标）", () => {
+    expect(nextRepeatLabel(REPEAT_MODE.NONE, 1, anchor, Date.now())).toBeNull();
+    expect(nextRepeatLabel(REPEAT_MODE.DAILY, 1, null, Date.now())).toBeNull();
+  });
+
+  it("节奏档：due 在未来时下次 = due + 1 周期（提前完成不改节奏）", () => {
+    const now = new Date(2026, 8, 12).getTime(); // 周六，due 还没到
+    expect(nextRepeatLabel(REPEAT_MODE.DAILY, 1, anchor, now)).toBe("9月15日（周二）");
+    expect(nextRepeatLabel(REPEAT_MODE.WEEKLY, 1, anchor, now)).toBe("9月21日（周一）");
+  });
+
+  it("节奏档：due 已过期时从锚点快进到未来最近序列点", () => {
+    const now = new Date(2026, 8, 20).getTime(); // due 过期 6 天
+    expect(nextRepeatLabel(REPEAT_MODE.DAILY, 1, anchor, now)).toBe("9月21日（周一）");
+  });
+
+  it("按完成日档：锚点抬到 now，下次 = now 之后一个完整周期", () => {
+    const now = new Date(2026, 8, 18, 10).getTime(); // 周五上午完成
+    expect(nextRepeatLabel(REPEAT_MODE.WEEKLY, 1, anchor, now, 1)).toBe("9月25日（周五）");
+    // due 尚未到来时也以完成时刻起算（fromDone 语义优先）
+    const early = new Date(2026, 8, 12).getTime();
+    expect(nextRepeatLabel(REPEAT_MODE.DAILY, 3, anchor, early, 1)).toBe("9月17日（周四）");
   });
 });

@@ -46,6 +46,7 @@ import {
   REPEAT_MODE,
   REPEAT_PRESETS,
   WEEKDAY_CHIPS,
+  nextRepeatLabel,
   repeatLabel,
 } from "../shared/repeat";
 import { formatYmd } from "../shared/lunar";
@@ -357,6 +358,8 @@ const REPEAT_END_OPTIONS = [
  * 重复规则选择：预设 chips 即点即存；「自定义」展开 间隔 N × 单位 面板
  * （周档可勾选星期几、结束条件 永不/次数/日期、when done 推进口径），
  * 确定 后派生 repeat_mode/repeat_after/扩展字段（#34 重复规则升级）。
+ * dueAnchor（表单当前截止日期毫秒值）供「下次：M月d日」具体日期预览——
+ * 无截止日期时预览退隐（nextRepeatLabel 返回 null 不渲染）。
  */
 function RepeatField({
   mode,
@@ -365,6 +368,7 @@ function RepeatField({
   endType,
   endParam,
   fromDone,
+  dueAnchorMs,
   onChange,
 }: {
   mode: number;
@@ -373,6 +377,7 @@ function RepeatField({
   endType: number;
   endParam: number;
   fromDone: number;
+  dueAnchorMs: number | null;
   onChange: (v: {
     mode: number;
     after: number;
@@ -444,6 +449,9 @@ function RepeatField({
     setWeekdayMask((m) => m ^ bit);
   };
 
+  // 下次具体日期预览（Things 口径）：规则生效且截止日期已填时展示
+  const nextLabel = nextRepeatLabel(mode, after, dueAnchorMs, Date.now(), fromDone);
+
   return (
     <div className="flex flex-col gap-1.5">
       <Label>重复</Label>
@@ -475,6 +483,11 @@ function RepeatField({
         >
           {custom ? repeatLabel(mode, after) : "自定义"}
         </button>
+        {nextLabel && (
+          <span className="rounded-md bg-primary/10 px-2 py-1 text-[11px] font-medium text-primary">
+            下次 {nextLabel}
+          </span>
+        )}
       </div>
       {customOpen && (
         <div className="flex flex-col gap-1.5 rounded-md border border-border/60 bg-muted/20 p-2">
@@ -645,6 +658,8 @@ export function TaskFormSheet({
   const [repeatEndType, setRepeatEndType] = useState<number>(0);
   const [repeatEndParam, setRepeatEndParam] = useState<number>(0);
   const [repeatFromDone, setRepeatFromDone] = useState<number>(0);
+  // 表单内截止日期跟踪（「下次日期」预览锚点；随 due_date 字段编辑实时更新）
+  const [dueAnchorMs, setDueAnchorMs] = useState<number | null>(null);
 
   // 打开时初始化：编辑载入既有规则，新增重置为不重复
   useEffect(() => {
@@ -821,6 +836,7 @@ export function TaskFormSheet({
             endType={repeatEndType}
             endParam={repeatEndParam}
             fromDone={repeatFromDone}
+            dueAnchorMs={dueAnchorMs}
             onChange={(v) => {
               setRepeatMode(v.mode);
               setRepeatAfter(v.after);
@@ -839,6 +855,7 @@ export function TaskFormSheet({
         </>
       }
       submitText={task ? "保存" : "创建"}
+      onValuesChange={(values) => setDueAnchorMs(toDateMs(values.due_date))}
     />
   );
 }

@@ -88,6 +88,12 @@ interface EntityFormSheetProps {
     node: ReactNode | ((value: unknown) => ReactNode);
   };
   /**
+   * 表单值变更回调（初始装载与每次 setField 均通知）。
+   * 供 footerContent 区域需要响应表单字段值的场景
+   * （如重复规则预览锚定截止日期——编辑既有记录时初始值也须可见）。
+   */
+  onValuesChange?: (values: FormValues) => void;
+  /**
    * 分区标题强调色。传入时分区标题文字使用此色，不传则回退到默认前景色。
    */
   accent?: string;
@@ -107,21 +113,31 @@ export function EntityFormSheet({
   insertAfter,
   fieldAction,
   accent,
+  onValuesChange,
 }: EntityFormSheetProps) {
   const [values, setValues] = useState<FormValues>({});
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // 打开时或 initialRecord 变化时重置表单
+  // 打开时或 initialRecord 变化时重置表单（装载值也走 onValuesChange，
+  // 让 footerContent 预览类区域在编辑既有记录时拿到初始锚点）
   useEffect(() => {
     if (open) {
-      setValues(extractInitialValues(fields, initialRecord));
+      const initial = extractInitialValues(fields, initialRecord);
+      setValues(initial);
+      onValuesChange?.(initial);
       setError(null);
     }
+    // onValuesChange 由调用方行内传入（每渲染新引用），只按表单生命周期触发
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, initialRecord, fields]);
 
   const setField = (name: string, value: unknown) => {
-    setValues((prev) => ({ ...prev, [name]: value }));
+    setValues((prev) => {
+      const next = { ...prev, [name]: value };
+      onValuesChange?.(next);
+      return next;
+    });
   };
 
   // 归一化 insertAfter：兼容单个对象或数组

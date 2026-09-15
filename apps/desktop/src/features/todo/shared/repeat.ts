@@ -82,6 +82,38 @@ export function repeatLabel(
 }
 
 /**
+ * 「下次：M月d日（周X）」预览标签（表单 RepeatField / 详情 RepeatEditor 共用，
+ * 对齐 Things 3 配规则即见具体日期的口径——用户配完规则即可见下次到底哪天）。
+ * 锚点语义与完成引擎一致：fromDone=0 按原 due 锚点推进（节奏恒定，提前
+ * 完成不改变节奏）；fromDone=1 按完成时刻推进（下一实例 = 完成后一个完整
+ * 周期）。无规则 / 无锚点日期 / 快进超限返回 null（调用方不渲染徽标）。
+ */
+export function nextRepeatLabel(
+  mode: number,
+  after: number,
+  anchorMs: number | null,
+  fromMs: number,
+  fromDone?: number,
+): string | null {
+  if (mode === REPEAT_MODE.NONE || anchorMs == null) return null;
+  // 节奏档：从 due 锚点快进到 now 之后（与完成引擎同一 nextRepeatAt 调用形态）
+  if (!fromDone) {
+    const next = nextRepeatAt(anchorMs, mode, after, Math.max(anchorMs, fromMs));
+    return next == null ? null : formatCnDate(next);
+  }
+  // 按完成日档：锚点抬到当前时刻（>= now），下一实例 = 完成后一个完整周期
+  const next = nextRepeatAt(Math.max(anchorMs, fromMs), mode, after, fromMs);
+  return next == null ? null : formatCnDate(next);
+}
+
+/** 毫秒时间戳 →「M月d日（周X）」中文短日期 */
+function formatCnDate(ms: number): string {
+  const d = new Date(ms);
+  const wd = "一二三四五六日"[d.getDay() === 0 ? 6 : d.getDay() - 1];
+  return `${d.getMonth() + 1}月${d.getDate()}日（周${wd}）`;
+}
+
+/**
  * base 的下一次发生时间（> from）；无规则或快进超限返回 null。
  * 天/周为固定毫秒数；月/年走日历语义（日号超过目标月天数时截断到月末，
  * 如 1/31 → 2/28，避免 setMonth 溢出滚入下下月）。
