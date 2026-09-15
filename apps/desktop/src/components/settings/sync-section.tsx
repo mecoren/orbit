@@ -1756,12 +1756,14 @@ function DbMaintenanceCard() {
       </div>
       <p className="text-xs text-muted-foreground">
         一键优化本地数据库：回收 WAL 日志与磁盘碎片、清理无引用附件文件、
+        收敛附件缓存上限、清理过期日志（30 天前通知/活动记录）、
         更新查询统计（列表/搜索提速）。不改动任何数据与同步状态，建议偶发卡顿时手动执行。
       </p>
       <div className="flex items-center justify-between">
         {result ? (
           <span className="text-xs text-muted-foreground">
             回收碎片页 {result.pages_reclaimed} · 附件清理 {result.attachments_cleaned} ·
+            日志清理 {result.log_rows_pruned} ·
             WAL 残留 {formatBytes(result.wal_bytes_after_checkpoint)}
           </span>
         ) : (

@@ -1084,9 +1084,10 @@ const commands: Record<string, (args: any, ctx: Ctx) => unknown> = {
       suggested_filename: "orbit_mock.ics",
     };
   },
-  db_maintenance: (): { wal_bytes_after_checkpoint: number; attachments_cleaned: number; freelist_before: number; freelist_after: number; pages_reclaimed: number } => ({
+  db_maintenance: (): { wal_bytes_after_checkpoint: number; attachments_cleaned: number; log_rows_pruned: number; freelist_before: number; freelist_after: number; pages_reclaimed: number } => ({
     wal_bytes_after_checkpoint: 0,
     attachments_cleaned: 0,
+    log_rows_pruned: 0,
     freelist_before: 0,
     freelist_after: 0,
     pages_reclaimed: 0,

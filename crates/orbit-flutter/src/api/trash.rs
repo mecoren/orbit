@@ -92,6 +92,15 @@ async fn tick_once() {
     if let Err(e) = trash_api::maybe_purge_expired(&pool).await {
         eprintln!("[trash-scheduler] TTL 清理失败（下轮重试）: {e}");
     }
+    // 日志表 TTL（30 天；本地轨迹不进同步白名单，只进不出会持续涨表——
+    // 桌面 trash_scheduler 同口径接线）
+    const LOG_TTL_DAYS: i64 = 30;
+    if let Err(e) = orbit_core::api::notification_log_api::prune_old(&pool, LOG_TTL_DAYS).await {
+        eprintln!("[trash-scheduler] 通知日志 TTL 清理失败（下轮重试）: {e}");
+    }
+    if let Err(e) = orbit_core::api::activity_log_api::prune_old(&pool, LOG_TTL_DAYS).await {
+        eprintln!("[trash-scheduler] 活动日志 TTL 清理失败（下轮重试）: {e}");
+    }
 }
 
 // ── FRB 导出 ──

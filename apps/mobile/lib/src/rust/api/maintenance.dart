@@ -8,7 +8,7 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `fmt`, `from`
 
-/// 一键数据库维护：WAL checkpoint → 附件 GC → PRAGMA optimize → VACUUM
+/// 一键数据库维护：WAL checkpoint → 附件 GC → 附件缓存上限 → 日志 TTL → PRAGMA optimize → VACUUM
 Future<DbMaintenanceView> dbMaintenance() =>
     RustLib.instance.api.crateApiMaintenanceDbMaintenance();
 
@@ -20,6 +20,9 @@ class DbMaintenanceView {
 
   /// 附件 GC 清理的孤立文件数
   final int attachmentsCleaned;
+
+  /// 日志 TTL 清理的行数（通知历史 + 活动日志，30 天口径）
+  final int logRowsPruned;
 
   /// VACUUM 前空闲页数（碎片页）
   final PlatformInt64 freelistBefore;
@@ -33,6 +36,7 @@ class DbMaintenanceView {
   const DbMaintenanceView({
     required this.walBytesAfterCheckpoint,
     required this.attachmentsCleaned,
+    required this.logRowsPruned,
     required this.freelistBefore,
     required this.freelistAfter,
     required this.pagesReclaimed,
@@ -42,6 +46,7 @@ class DbMaintenanceView {
   int get hashCode =>
       walBytesAfterCheckpoint.hashCode ^
       attachmentsCleaned.hashCode ^
+      logRowsPruned.hashCode ^
       freelistBefore.hashCode ^
       freelistAfter.hashCode ^
       pagesReclaimed.hashCode;
@@ -53,6 +58,7 @@ class DbMaintenanceView {
           runtimeType == other.runtimeType &&
           walBytesAfterCheckpoint == other.walBytesAfterCheckpoint &&
           attachmentsCleaned == other.attachmentsCleaned &&
+          logRowsPruned == other.logRowsPruned &&
           freelistBefore == other.freelistBefore &&
           freelistAfter == other.freelistAfter &&
           pagesReclaimed == other.pagesReclaimed;

@@ -6,9 +6,13 @@
 //!
 //! 口径：
 //! - `db_maintenance`：一条命令跑完全套维护，返回各步量化结果；
-//!   顺序 = WAL checkpoint → 附件 GC → `PRAGMA optimize` → `VACUUM`。
+//!   顺序 = WAL checkpoint → 附件 GC → 附件缓存上限（LRU）→ 日志表
+//!   TTL prune → `PRAGMA optimize` → `VACUUM`。
 //!   checkpoint 在前：把 WAL 帧回写主文件，VACUUM 才能真正回收磁盘空间
 //!   （否则已 checkpoint 的页仍留在 -wal 里，主文件膨胀照旧）。
+//! - 日志表 TTL：notification_log / todo_activity_log 各自 30 天
+//!   （物理 DELETE——两表为本地轨迹无软删语义，且不在同步白名单，
+//!   云端视角零影响；表只进不出会持续拖慢列表查询与 VACUUM）。
 //! - VACUUM 前后 `freelist_count` 对比即碎片回收量（页数）；重写整库
 //!   耗时与库体积成正比，本地应用秒级可接受，故不做 incremental_vacuum
 //!   分档（auto_vacuum 未开启，回档需整库重写）。
@@ -20,6 +24,9 @@ use sqlx::SqlitePool;
 use crate::api::asset_api;
 use crate::error::CoreResult;
 
+/// 日志表 TTL 保留天数（30 天，与 notification_log 模块头口径一致）
+pub const LOG_TTL_DAYS: i64 = 30;
+
 /// 维护结果视图（双端设置页展示用）
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct DbMaintenanceResult {
@@ -28,6 +35,8 @@ pub struct DbMaintenanceResult {
     pub wal_bytes_after_checkpoint: i64,
     /// 附件 GC 清理的孤立文件数
     pub attachments_cleaned: usize,
+    /// 日志 TTL 清理的行数（notification_log + todo_activity_log）
+    pub log_rows_pruned: u64,
     /// VACUUM 前空闲页数（碎片页）
     pub freelist_before: i64,
     /// VACUUM 后空闲页数（应为 0）
@@ -76,6 +85,13 @@ pub async fn db_maintenance(
     // 账本保留可重拉；多设备安全口径见 asset_api 模块文档）
     asset_api::enforce_attachment_cache_limit(pool, attachments_dir).await?;
 
+    // 2.6 日志表 TTL：30 天前的通知/活动日志物理删除（两表本地轨迹不进
+    // 同步白名单；表只进不出会持续涨表拖慢查询与 VACUUM）
+    let notification_pruned =
+        crate::api::notification_log_api::prune_old(pool, LOG_TTL_DAYS).await?;
+    let activity_pruned = crate::api::activity_log_api::prune_old(pool, LOG_TTL_DAYS).await?;
+    let log_rows_pruned = notification_pruned + activity_pruned;
+
     // 3. 更新查询计划统计（ANALYZE 采样）——排序/筛选查询提速
     sqlx::query("PRAGMA optimize").execute(pool).await?;
 
@@ -87,6 +103,7 @@ pub async fn db_maintenance(
     Ok(DbMaintenanceResult {
         wal_bytes_after_checkpoint,
         attachments_cleaned,
+        log_rows_pruned,
         freelist_before,
         freelist_after,
         pages_reclaimed: (freelist_before - freelist_after).max(0),
@@ -155,5 +172,78 @@ mod tests {
                 .await
                 .unwrap();
         assert_eq!(title, "锚点项目");
+    }
+
+    /// 日志表 TTL 接线：30 天前的通知/活动日志在维护中物理删除，30 天内保留
+    #[tokio::test]
+    async fn maintenance_prunes_stale_log_rows() {
+        let pool = setup_db().await;
+        let old_ms = chrono::Utc::now().timestamp_millis() - (LOG_TTL_DAYS + 1) * 86_400_000;
+        let now_ms = chrono::Utc::now().timestamp_millis();
+
+        // 过期 + 新鲜各一条（两表同口径；直接手插控制 created_at）
+        sqlx::query(
+            "INSERT INTO notification_log (kind, task_id, task_title, reminder_id, payload, created_at)
+             VALUES ('reminder_due', 1, '旧通知', 1, '{}', ?)",
+        )
+        .bind(old_ms)
+        .execute(&pool)
+        .await
+        .unwrap();
+        sqlx::query(
+            "INSERT INTO notification_log (kind, task_id, task_title, reminder_id, payload, created_at)
+             VALUES ('reminder_due', 1, '新通知', 1, '{}', ?)",
+        )
+        .bind(now_ms)
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        sqlx::query(
+            "INSERT INTO todo_activity_log (task_id, task_title, action, detail, created_at)
+             VALUES (1, '旧活动', 'create', '{}', ?)",
+        )
+        .bind(old_ms)
+        .execute(&pool)
+        .await
+        .unwrap();
+        sqlx::query(
+            "INSERT INTO todo_activity_log (task_id, task_title, action, detail, created_at)
+             VALUES (1, '新活动', 'update', '{}', ?)",
+        )
+        .bind(now_ms)
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        let tmp = tempfile::tempdir().unwrap();
+        let r = db_maintenance(&pool, tmp.path().to_str().unwrap())
+            .await
+            .unwrap();
+        assert_eq!(r.log_rows_pruned, 2, "过期通知+过期活动各一行");
+
+        let (n_old,): (i64,) =
+            sqlx::query_as("SELECT COUNT(*) FROM notification_log WHERE task_title = '旧通知'")
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        let (n_new,): (i64,) =
+            sqlx::query_as("SELECT COUNT(*) FROM notification_log WHERE task_title = '新通知'")
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        assert_eq!((n_old, n_new), (0, 1), "过期通知删、新鲜通知留");
+
+        let (a_old,): (i64,) =
+            sqlx::query_as("SELECT COUNT(*) FROM todo_activity_log WHERE action = 'create'")
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        let (a_new,): (i64,) =
+            sqlx::query_as("SELECT COUNT(*) FROM todo_activity_log WHERE action = 'update'")
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        assert_eq!((a_old, a_new), (0, 1), "过期活动删、新鲜活动留");
     }
 }

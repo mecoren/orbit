@@ -4377,14 +4377,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   DbMaintenanceView dco_decode_db_maintenance_view(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 5)
-      throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
+    if (arr.length != 6)
+      throw Exception('unexpected arr length: expect 6 but see ${arr.length}');
     return DbMaintenanceView(
       walBytesAfterCheckpoint: dco_decode_i_64(arr[0]),
       attachmentsCleaned: dco_decode_i_32(arr[1]),
-      freelistBefore: dco_decode_i_64(arr[2]),
-      freelistAfter: dco_decode_i_64(arr[3]),
-      pagesReclaimed: dco_decode_i_64(arr[4]),
+      logRowsPruned: dco_decode_i_32(arr[2]),
+      freelistBefore: dco_decode_i_64(arr[3]),
+      freelistAfter: dco_decode_i_64(arr[4]),
+      pagesReclaimed: dco_decode_i_64(arr[5]),
     );
   }
 
@@ -5743,12 +5744,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_walBytesAfterCheckpoint = sse_decode_i_64(deserializer);
     var var_attachmentsCleaned = sse_decode_i_32(deserializer);
+    var var_logRowsPruned = sse_decode_i_32(deserializer);
     var var_freelistBefore = sse_decode_i_64(deserializer);
     var var_freelistAfter = sse_decode_i_64(deserializer);
     var var_pagesReclaimed = sse_decode_i_64(deserializer);
     return DbMaintenanceView(
       walBytesAfterCheckpoint: var_walBytesAfterCheckpoint,
       attachmentsCleaned: var_attachmentsCleaned,
+      logRowsPruned: var_logRowsPruned,
       freelistBefore: var_freelistBefore,
       freelistAfter: var_freelistAfter,
       pagesReclaimed: var_pagesReclaimed,
@@ -7491,6 +7494,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_i_64(self.walBytesAfterCheckpoint, serializer);
     sse_encode_i_32(self.attachmentsCleaned, serializer);
+    sse_encode_i_32(self.logRowsPruned, serializer);
     sse_encode_i_64(self.freelistBefore, serializer);
     sse_encode_i_64(self.freelistAfter, serializer);
     sse_encode_i_64(self.pagesReclaimed, serializer);

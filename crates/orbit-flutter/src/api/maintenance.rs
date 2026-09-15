@@ -18,6 +18,8 @@ pub struct DbMaintenanceView {
     pub wal_bytes_after_checkpoint: i64,
     /// 附件 GC 清理的孤立文件数
     pub attachments_cleaned: i32,
+    /// 日志 TTL 清理的行数（通知历史 + 活动日志，30 天口径）
+    pub log_rows_pruned: i32,
     /// VACUUM 前空闲页数（碎片页）
     pub freelist_before: i64,
     /// VACUUM 后空闲页数（应为 0）
@@ -31,6 +33,7 @@ impl From<CoreResultView> for DbMaintenanceView {
         DbMaintenanceView {
             wal_bytes_after_checkpoint: r.wal_bytes_after_checkpoint,
             attachments_cleaned: r.attachments_cleaned as i32,
+            log_rows_pruned: r.log_rows_pruned as i32,
             freelist_before: r.freelist_before,
             freelist_after: r.freelist_after,
             pages_reclaimed: r.pages_reclaimed,
@@ -38,7 +41,7 @@ impl From<CoreResultView> for DbMaintenanceView {
     }
 }
 
-/// 一键数据库维护：WAL checkpoint → 附件 GC → PRAGMA optimize → VACUUM
+/// 一键数据库维护：WAL checkpoint → 附件 GC → 附件缓存上限 → 日志 TTL → PRAGMA optimize → VACUUM
 pub async fn db_maintenance() -> Result<DbMaintenanceView, String> {
     let (pool, base_dir) = with_state(|s| Ok((s.pool.clone(), s.base_dir.clone())))?;
     let dir = base_dir.join("attachments").to_string_lossy().to_string();

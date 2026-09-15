@@ -6,13 +6,21 @@
 //!   过期墓碑受同步守卫（仅清已 push 到云端的删除，见 trash_api 模块头）；
 //! - 清理失败静默（下一轮 tick 重试），成功无需提示（后台行为）；
 //! - 启动即扫一轮：应用长时间未开时，打开即补清过期间隔的过期任务。
+//!
+//! 日志表 TTL（2026-09-15 接线）：notification_log / todo_activity_log
+//! 30 天前记录同 tick 物理删除——两表是本地轨迹（不进同步白名单），
+//! 只进不出会持续涨表拖慢查询与 VACUUM；core prune_old 30 天口径
+//! 与本守护「过期清退」语义同档，命中 0 行的 DELETE 开销可忽略。
 
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use tauri::AppHandle;
 use tauri::Manager;
 
-use orbit_core::api::trash_api;
+use orbit_core::api::{
+    activity_log_api, notification_log_api,
+    trash_api::{self},
+};
 
 use crate::AppState;
 
@@ -40,5 +48,13 @@ async fn tick(app: &AppHandle) {
     };
     if let Err(e) = trash_api::maybe_purge_expired(&state.pool).await {
         eprintln!("[trash-scheduler] TTL 清理失败（下轮重试）: {e}");
+    }
+    // 日志表 TTL（30 天；notification/activity 两模块的 prune_old 已带测试）
+    const LOG_TTL_DAYS: i64 = 30;
+    if let Err(e) = notification_log_api::prune_old(&state.pool, LOG_TTL_DAYS).await {
+        eprintln!("[trash-scheduler] 通知日志 TTL 清理失败（下轮重试）: {e}");
+    }
+    if let Err(e) = activity_log_api::prune_old(&state.pool, LOG_TTL_DAYS).await {
+        eprintln!("[trash-scheduler] 活动日志 TTL 清理失败（下轮重试）: {e}");
     }
 }

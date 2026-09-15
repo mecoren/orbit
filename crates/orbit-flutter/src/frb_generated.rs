@@ -4470,12 +4470,14 @@ impl SseDecode for crate::api::maintenance::DbMaintenanceView {
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_walBytesAfterCheckpoint = <i64>::sse_decode(deserializer);
         let mut var_attachmentsCleaned = <i32>::sse_decode(deserializer);
+        let mut var_logRowsPruned = <i32>::sse_decode(deserializer);
         let mut var_freelistBefore = <i64>::sse_decode(deserializer);
         let mut var_freelistAfter = <i64>::sse_decode(deserializer);
         let mut var_pagesReclaimed = <i64>::sse_decode(deserializer);
         return crate::api::maintenance::DbMaintenanceView {
             wal_bytes_after_checkpoint: var_walBytesAfterCheckpoint,
             attachments_cleaned: var_attachmentsCleaned,
+            log_rows_pruned: var_logRowsPruned,
             freelist_before: var_freelistBefore,
             freelist_after: var_freelistAfter,
             pages_reclaimed: var_pagesReclaimed,
@@ -6395,6 +6397,7 @@ impl flutter_rust_bridge::IntoDart for crate::api::maintenance::DbMaintenanceVie
         [
             self.wal_bytes_after_checkpoint.into_into_dart().into_dart(),
             self.attachments_cleaned.into_into_dart().into_dart(),
+            self.log_rows_pruned.into_into_dart().into_dart(),
             self.freelist_before.into_into_dart().into_dart(),
             self.freelist_after.into_into_dart().into_dart(),
             self.pages_reclaimed.into_into_dart().into_dart(),
@@ -7707,6 +7710,7 @@ impl SseEncode for crate::api::maintenance::DbMaintenanceView {
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <i64>::sse_encode(self.wal_bytes_after_checkpoint, serializer);
         <i32>::sse_encode(self.attachments_cleaned, serializer);
+        <i32>::sse_encode(self.log_rows_pruned, serializer);
         <i64>::sse_encode(self.freelist_before, serializer);
         <i64>::sse_encode(self.freelist_after, serializer);
         <i64>::sse_encode(self.pages_reclaimed, serializer);
