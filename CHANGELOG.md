@@ -7,6 +7,12 @@
 
 ## [Unreleased]
 
+### 候选缺口三批收口（重复预览/附件缓存上限/日志 TTL）
+
+- **重复规则下次日期具体日预览（Things 口径）**：表单 RepeatField 与详情抽屉 RepeatEditor 配规则即见「下次 M月d日（周X）」徽标——nextRepeatLabel 纯函数与完成引擎同锚点语义（按 due 节奏档恒定推进 / 按完成日档从完成时刻起算），无截止日期或无规则时退隐；EntityFormSheet 新增 onValuesChange 回调（装载与每次编辑均通知），编辑既有记录初始锚点即预览。单测 +5（节奏档未来/逾期快进/按完成日推进/无规则退隐）。
+- **附件磁盘缓存 2GB 上限 + LRU 逐出（多设备安全口径）**：sys_attachments 补 last_accessed_at 排序键（入库与读取均 touch，upsert 冲突取新旧较大值防新鲜度倒退）；超限逐出「本地已缓存且已上传云端」中最久未访问者——is_uploaded=0 的 pending 源绝不逐出（云端唯一副本，删了会让每轮 push 持续报错）；逐出只删本地文件+清缓存标志，**账本行保留**（pull 差集按缓存标志判缺失自然重拉，云端视角与未逐出一致，不与 S31 活跃引用过滤打架）。挂载新附件尾部 + db_maintenance 维护 2.5 步双触发。Rust +3 测试（小上限逐出保 pending 保账本 / 读取改变逐出顺序 / 未超限 noop），全 workspace 534 绿。
+- **日志表 30 天 TTL 接线双端守护**：排查发现 notification_log/todo_activity_log 的 prune_old 在 core 有实现有测试但双端壳零桥接零调度——每条提醒/每次任务操作各记一行，只进不出持续涨表拖慢查询与 VACUUM。双端守护同 60s tick 接线（桌面 trash_scheduler tick + 移动 FRB start_trash_scheduler）；db_maintenance 编排同步接入并新增 log_rows_pruned 结果字段（双端 DTO 镜像链全改 + FRB codegen）；两表本地轨迹不进同步白名单，物理删除云端零影响。Rust +1 测试，全链 535 绿 + vitest 261 + flutter 274。
+
 ### 桌面体验与性能四连优化（附件拖放/Markdown 增强/索引前缀化/壳 profile 修复）
 
 - **附件区拖放文件直添**：详情抽屉附件区支持拖放文件（Todoist/Things/MS To Do 桌面标配）——拖放与 Ctrl+V 粘贴截图共用 bytes 通道（hash Rust 内容寻址），零新增插件/权限；Files 类型守卫让位文本拖放；多文件逐个走既有 20×50MB 守卫。单测 5→7。
