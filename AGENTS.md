@@ -18,6 +18,7 @@ Orbit（循迹）是本地优先的跨平台任务管理应用：待办（项目
 - **滚动条全项目标准**：桌面全局 `index.css` 定义 `::-webkit-scrollbar` 10px 透明轨道主题色圆角滑块，原生 `overflow-auto` 容器自动继承——**禁设 `scrollbar-width` 非 auto 值**（会禁用 webkit 自定义退化为系统原生条）；需隐藏的用三件套 `scrollbar-width:none + -ms-overflow-style:none + ::-webkit-scrollbar display:none`。移动端全局 `ScrollbarThemeData`（app_theme.dart）只对显式 Scrollbar 生效，`SingleChildScrollView` 惯例不挂。
 - **无 prettier 约定**：仓库不配 prettier，`npx prettier` 现跑会重排整文件产生巨型噪音 diff；已跑坏的用 `git checkout HEAD --` 恢复后手工重放。
 - **文档同步链**：完成 07 竞品报告任一编号 backlog 项时——07 文档对应行划线补 `✅ 已完成（日期+一句话要点）`、CHANGELOG Unreleased 补条目、文档内过时描述随代码一并修正（07 是 backlog 唯一状态源）。
+- **版本发版走流程而非改数字**：版本真值只在 `apps/desktop/package.json`，同步走 `pnpm bump`；「改版本号」请求按下方[版本发布与更新流程](#版本发布与更新流程改版本号时自动执行)全流程执行（脚本 + 两份更新日志 + 守护测试绿），详见 `docs/08_发布与更新流程.md`。
 - **尊重并发会话**：同一仓库常有并行会话 WIP；暂存区改动可能被并发 commit 带走或清空，收尾必须核对 HEAD 归属；不回滚非本批改动。
 
 ## 技术栈
@@ -103,11 +104,30 @@ flutter analyze
 flutter test
 flutter test test/xxx_test.dart          # 定向用例
 # vitest 必须在 apps/desktop 内跑（根目录跑会因路径解析假红）
+
+# 发版（详见 docs/08_发布与更新流程.md）
+pnpm bump 0.2.0           # 升版：写源 + 同步五处清单 + 两个 Cargo.lock
+pnpm bump:check           # 只校验一致性（零写入，CI/本地通用）
 ```
 
 - CI（`.github/workflows/ci.yml`）三 job：web（typecheck+vitest+build+e2e）/ rust-core（cargo check --workspace --all-targets）/ flutter-mobile（FRB codegen 一致性 + analyze + test）。提交前本地跑通同等检查。
 - e2e/Playwright 专用端口 **5273**（非 vite 默认 5173，防撞其他项目 dev server）；strictPort 双保险。
-- 版本号三处同步发布时 bump：`apps/desktop/src-tauri/tauri.conf.json`、`apps/mobile/pubspec.yaml`、根 `Cargo.toml [workspace.package]`。
+
+## 版本发布与更新流程（改版本号时自动执行）
+
+用户说「改版本号 / 升版本 / bump 到 X.Y.Z / 发版」时，按下列顺序**完整执行**，不是只改数字。流程权威文档 `docs/08_发布与更新流程.md`（优化蓝本 = qraft 的发布流程），签名矩阵见 `docs/adr/0004-release-engineering.md`。
+
+- **版本单一来源**：只在 `apps/desktop/package.json#version` 维护真值，其余四处 + 两个 `Cargo.lock` 一律由 `scripts/bump-version.mjs` 写入，**不要手改**；前端版本靠 `vite.config.ts` 构建期注入的 `__APP_VERSION__`（关于页等不得硬编码版本号）。
+- **发版六步**：
+  1. `pnpm bump X.Y.Z`（同步 `tauri.conf.json` / 桌面壳 `Cargo.toml [package]` / 根 `Cargo.toml [workspace.package]` / `pubspec.yaml`（`+build` 自增）/ 两个 lock），确认输出 `VERSION_SYNC_OK`；
+  2. 提炼变更：`git log v<上一 tag>..HEAD --oneline`，按功能合并同类提交，忽略 docs/chore/style 噪声；
+  3. **两份更新日志同一次提交写完**：`CHANGELOG.md`（`[Unreleased]` 段改为 `## [X.Y.Z] - YYYY-MM-DD`）+ `apps/desktop/src/lib/changelog.ts`（`CHANGELOG_VERSIONS` 头部插入同版本条目）。只写一处 → 应用内关于页永久缺版本（qraft 0.2.7 的历史事故）；
+  4. 本地跑通 CI 等价检查：`pnpm typecheck` / `pnpm test` / `pnpm e2e` / `pnpm lint:rust`（`src/test/release-consistency.test.ts` 会把「版本与日志漂移」直接判红）；
+  5. **不主动提交**：保持工作区交用户确认；提交用 `chore(release): 版本 X.Y.Z`；
+  6. 打 tag `vX.Y.Z` 并推送（`git push origin main --tags`）—— **tag 名必须等于清单版本**（`release.yml` 的 audit job 强校验），推送即公开 Release。
+- **发布流水线口径**（`.github/workflows/release.yml`）：tag 触发全链路；`workflow_dispatch` 的 `dry_run` 默认 true（只构建不发布，发版前先预演一次）。`latest.json` 由 `publish-updater-manifest` **单点合成**（矩阵并发读改写会撞 PATCH 竞态，故 `includeUpdaterJson` 恒 false）；`createUpdaterArtifacts: true` 下缺 `Secrets.TAURI_SIGNING_PRIVATE_KEY` 会直接失败（刻意保护），audit job 会提前给出配置指引。
+- **应用内更新**：手动检查（设置 → 关于与更新），**不做自动轮询**（本地优先，更新时机归用户）；endpoint 取 GitHub Releases 的 `latest.json`。改动更新链路（endpoint / pubkey / 清单平台键 / 安装方式）必须同步本文件与 `docs/08`。
+- **密钥轮换**：换 updater 密钥会让**已安装旧版本拒绝升级**（`pubkey` 变更），须先发一版带新公钥的常规更新再轮换；私钥丢失等价于全部用户重装。
 
 ## Rust 约定（orbit-core / orbit-flutter）
 
@@ -171,4 +191,4 @@ flutter test test/xxx_test.dart          # 定向用例
 - React 19：<https://react.dev/reference/react>
 - Tailwind CSS v4：<https://tailwindcss.com/docs>
 - flutter_rust_bridge：<https://fzyzcjy.github.io/flutter_rust_bridge/>
-- 项目内权威文档：`docs/01-07`（产品/架构/数据/UI 规格/backlog）、`docs/adr/0001-0005`（SQLCipher/通知/双端拆分/发布工程/回收站边界）
+- 项目内权威文档：`docs/01-08`（产品/架构/数据/UI 规格/backlog/发布与更新流程）、`docs/adr/0001-0006`（SQLCipher/通知/双端拆分/发布工程/回收站边界/桌面驻留内存）

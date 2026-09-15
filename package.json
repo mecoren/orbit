@@ -12,6 +12,8 @@
     "test": "pnpm -r test",
     "e2e": "playwright test",
     "test:rust": "cargo test --workspace",
+    "bump": "node scripts/bump-version.mjs",
+    "bump:check": "node scripts/bump-version.mjs --check",
     "fmt": "cargo fmt --all && cargo fmt --manifest-path apps/desktop/src-tauri/Cargo.toml --all",
     "fmt:check": "cargo fmt --all -- --check && cargo fmt --manifest-path apps/desktop/src-tauri/Cargo.toml --all -- --check",
     "clippy": "cargo clippy --workspace --all-targets -- -D warnings",

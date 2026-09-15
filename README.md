@@ -54,15 +54,21 @@ flutter_rust_bridge_codegen generate \
 
 - **安装包**：桌面 NSIS/MSI、DMG、deb/AppImage，Android APK——发布渠道
   为 GitHub Releases（打 tag 后归档）。
-- **更新方式**：MVP 阶段**手动下载覆盖安装**（各桌面安装器与 Android
-  `cn.wait.orbit` 覆盖安装均自带升级语义，本地数据目录不受影响）；
-  自动更新（updater/Play 渠道）延后至 M6+ 评估（docs/02 §六）。
+- **更新方式**：
+  - 桌面：应用内 **设置 → 关于与更新 → 检查更新**（`tauri-plugin-updater`
+    读取本仓库 Release 的 `latest.json`，发现新版本后下载 → 校验签名 →
+    安装 → 重启）。按本地优先口径**不自动轮询**，更新时机归用户掌控；
+  - 移动端：APK 覆盖安装（同包名 `cn.wait.orbit`，本地数据目录不受影响）；
+  - 任何安装包均可从 Release 页手动下载，未签名平台以 `SHA256SUMS` 校验。
 - **版本与变更记录**：版本号语义化（semver），每版本变更见
-  [CHANGELOG.md](CHANGELOG.md)；版本单点为三处发布配置
-  （`apps/desktop/src-tauri/tauri.conf.json`、`apps/mobile/pubspec.yaml`、
-  根 `Cargo.toml [workspace.package]`），发版时同步 bump。
-- **签名**：正式签名/公证流程与证书清单见
-  [docs/adr/0004-release-engineering.md](docs/adr/0004-release-engineering.md)。
+  [CHANGELOG.md](CHANGELOG.md) 与应用内「关于 → 更新日志」（同源双写）。
+  版本**唯一数据源**为 `apps/desktop/package.json#version`，其余清单
+  （`tauri.conf.json`、两处 `Cargo.toml`、`pubspec.yaml`、两个 `Cargo.lock`）
+  由 `pnpm bump X.Y.Z` 同步，禁止手改；`pnpm bump:check` 校验一致性。
+- **签名与发布流程**：签名矩阵与证书清单见
+  [docs/adr/0004-release-engineering.md](docs/adr/0004-release-engineering.md)；
+  触发条件、流水线作业、密钥轮换与异常处置见
+  [docs/08_发布与更新流程.md](docs/08_发布与更新流程.md)。
 
 ## 隐私
 

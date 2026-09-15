@@ -2,8 +2,8 @@
  * 关于页 —— 四分区完整实现（对齐 wait-home AboutPage）
  *
  * 左导航：应用信息 / 更新日志 / 开源许可 / 开源组件。
- * - 应用信息：图标 + 名称 + 版本徽标 + 信息行（数据库模式实时读取）
- * - 更新日志：本地 CHANGELOG 数据 + Accordion（分类徽标）
+ * - 应用信息：图标 + 名称 + 版本徽标 + 信息行（版本号取构建期注入，数据库模式实时读取）
+ * - 更新日志：src/lib/changelog.ts 数据 + Accordion（分类徽标）
  * - 开源许可：名称 / 许可证 / 主页 行列表
  * - 开源组件：前端依赖（npm）/ Rust 依赖（crates.io）双 Tab Accordion
  */
@@ -26,10 +26,11 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
+import { CHANGELOG_VERSIONS, type ChangeEntry } from "@/lib/changelog";
 import { masterAuthHas } from "@/lib/tauri";
 
-/** 与 package.json / tauri.conf.json / Cargo.toml 保持一致 */
-const APP_VERSION = "0.1.0";
+/** 构建期注入（源：apps/desktop/package.json#version），不再手写以防清单漂移 */
+const APP_VERSION = __APP_VERSION__;
 
 type AboutCategory = "info" | "changelog" | "licenses" | "components";
 
@@ -90,56 +91,8 @@ function InfoSection() {
 
 /* ================= 更新日志 ================= */
 
-interface ChangelogEntry {
-  category: "feature" | "fix" | "refactor" | "chore";
-  description: string;
-}
-
-interface ChangelogVersion {
-  version: string;
-  date: string;
-  summary: string;
-  changes: ChangelogEntry[];
-}
-
-/** 版本迭代记录（新版本发布时在数组头部追加） */
-const CHANGELOG: ChangelogVersion[] = [
-  {
-    version: "0.1.0",
-    date: "2026-08-23",
-    summary: "MVP 首个版本：待办全功能、本地加密与桌面端复刻",
-    changes: [
-      {
-        category: "feature",
-        description:
-          "任务管理全功能：列表 / 看板双视图、子任务、标签、评论、任务关联、截止时间与提醒",
-      },
-      {
-        category: "feature",
-        description: "项目分组、六个快捷视图、侧栏拖拽排序与右键菜单全套操作",
-      },
-      {
-        category: "feature",
-        description: "SQLCipher 本地加密与主密码体系（设置 / 解锁 / 修改 / 清除）",
-      },
-      {
-        category: "feature",
-        description: "六套颜色主题（含自定义强调色）与字号字重档位缩放",
-      },
-      {
-        category: "feature",
-        description: "Windows Mica 云母材质、系统通知提醒轮询守护",
-      },
-      {
-        category: "refactor",
-        description: "orbit_core Rust 核心复用，typed invoke 层与 react-query 数据链路重建",
-      },
-    ],
-  },
-];
-
 const CHANGE_CATEGORY_STYLE: Record<
-  ChangelogEntry["category"],
+  ChangeEntry["category"],
   { label: string; variant: "default" | "destructive" | "secondary" | "outline" }
 > = {
   feature: { label: "新增", variant: "default" },
@@ -153,11 +106,11 @@ function ChangelogSection() {
     <div className="space-y-4">
       <h2 className="text-base font-semibold">更新日志</h2>
       <p className="text-sm text-muted-foreground">
-        版本迭代记录（共 {CHANGELOG.length} 个版本）
+        版本迭代记录（共 {CHANGELOG_VERSIONS.length} 个版本）
       </p>
 
-      <Accordion type="single" defaultValue={CHANGELOG[0]?.version} collapsible>
-        {CHANGELOG.map((log) => (
+      <Accordion type="single" defaultValue={CHANGELOG_VERSIONS[0]?.version} collapsible>
+        {CHANGELOG_VERSIONS.map((log) => (
           <AccordionItem key={log.version} value={log.version}>
             <AccordionTrigger>
               <span className="flex items-baseline gap-2">

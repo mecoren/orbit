@@ -11,9 +11,11 @@ import { expect, test, type Page } from "@playwright/test";
 /** 每用例独立内存库：刷新页面即重置（mock db 在模块加载时创建） */
 async function freshApp(page: Page) {
   await page.goto("/");
-  // 启动门控：checking（EqualizerLoader）→ 明文免密 → ready
+  // 启动门控：checking（EqualizerLoader）→ 明文免密 → ready。
+  // 30s 预算：默认 8 worker 并行时首个请求要等 Vite 冷编译整个模块图（15s 曾致
+  // 前若干用例整批超时假红；单 worker 复验全绿，见 AGENTS「测试假红归因三板斧」）。
   await expect(page.getByRole("heading", { name: "全部任务" })).toBeVisible({
-    timeout: 15_000,
+    timeout: 30_000,
   });
   // seed 直写内存库后 mock 广播 db-change → invalidateQueries → 列表刷新
   await page.evaluate(() => {

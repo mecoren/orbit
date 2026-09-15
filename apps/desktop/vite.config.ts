@@ -1,4 +1,5 @@
 import { defineConfig } from "vite";
+import { readFileSync } from "node:fs";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import path from "path";
@@ -6,7 +7,13 @@ import path from "path";
 // Orbit 前端 Vite 配置
 // - 固定端口 5173（与 tauri.conf.json devUrl 对齐，strictPort 避免端口漂移）
 // - @ 别名指向 src/
+// - __APP_VERSION__ 构建期注入：版本唯一数据源 = 本包 package.json#version
+//   （其余清单由 scripts/bump-version.mjs 同步），前端不再硬编码版本号
 const host = process.env.TAURI_DEV_HOST;
+
+const appVersion = JSON.parse(
+  readFileSync(path.resolve(import.meta.dirname, "./package.json"), "utf8"),
+).version as string;
 
 export default defineConfig({
   plugins: [
@@ -44,13 +51,20 @@ export default defineConfig({
     },
   },
   clearScreen: false,
+  define: {
+    __APP_VERSION__: JSON.stringify(appVersion),
+  },
   server: {
     // 基准端口 5173（与 tauri.conf.json devUrl 对齐）；CLI --port 可覆盖
     // （Playwright e2e 传 5273 隔离端口，防 reuseExistingServer 连上同机
     //   其他项目的 dev server）。strictPort 避免端口漂移。
     port: 5173,
     strictPort: true,
-    host: host || false,
+    // 默认绑定 IPv4 回环 127.0.0.1，与 tauri.conf.json 的 devUrl 显式对齐：
+    // 规避 Windows 下 localhost 优先解析 IPv6(::1) 而 Vite 仅监听 IPv4，
+    // 导致 Tauri 一直 "Waiting for your frontend dev server" 的坑。
+    // 跨设备调试（如真机）通过 TAURI_DEV_HOST 指定局域网 IP，并同步改 devUrl。
+    host: host || "127.0.0.1",
     hmr: host
       ? { protocol: "ws", host, port: 5174 }
       : undefined,

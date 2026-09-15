@@ -67,33 +67,57 @@ MVP 发布（06 文档 §二 M5）要求五端产物签名/分发就绪。现状
 | macOS | **不签名不公证发布 MVP**（ad-hoc 签名仅本机构建）；Gatekeeper 提示 xattr 处理说明写入 Release 模板 | Apple Developer ID（$99/年）到位后：`signingIdentity` 填 "Developer ID Application: …" + `APPLE_ID/APASSWORD/TEAM_ID` 公证三件套 + `tauri.conf.json` `entitlements` |
 | Linux | deb/AppImage 无签名惯例（仓库/镜像分发），CI 产出即发布；校验哈希随 Release 附 `SHA256SUMS` | — |
 | Android | release 签名密钥**已留配置位**：`android/key.properties`（gitignore）+ `build.gradle.kts` signingConfigs 读取；未配置时回落 debug 签名（开发装真机可覆盖安装） | 生成正式 keystore：`keytool -genkey -v -keystore orbit-release.jks -keyalg RSA -keysize 2048 -validity 10000 -alias orbit`，写入 key.properties |
-| 安装包完整性（ updater 备用） | tauri 自身 artifacts 签名密钥（`tauri signer generate`）暂不生成——M5 无 updater，M6+ 启用时再建 | 与 updater 决策合并评估 |
+| 安装包完整性（ updater） | **已落地（2026-09-15 修订）**：`tauri signer generate` 生成 minisign 密钥对，公钥入 `tauri.conf.json` 的 `plugins.updater.pubkey`，私钥入 Secrets；`bundle.createUpdaterArtifacts: true` 使每个平台产出 `.sig`，由 `publish-updater-manifest` 合成 `latest.json` | 私钥已生成（Secrets 待用户配置）；轮换会让旧客户端拒升级，口径见 `docs/08` §3.6 |
 
 > 原则：**没有证书物料的环节一律明示「未签名」并给出用户侧校验/放行指引**，
 > 不静默伪装已签名。证书到位后仅改配置/环境变量，无需动流程。
 
-### 3. 分发与版本机制
+### 3. 分发与版本机制（2026-09-15 修订：版本单点口径改为「唯一数据源 + 脚本同步」）
 
-- 分发：GitHub Releases。触发：push tag `v*`。
-- 版本单点三处（发版 checklist 同步 bump）：
+- 分发：GitHub Releases。触发：push tag `v*`；发版前可用
+  `workflow_dispatch(dry_run)` 预演（详见 `docs/08_发布与更新流程.md`）。
+- **版本收敛（2026-09-15）**：历史 `v0.1.0` / `v0.1.1` 两个 tag 的全部工作内容
+  并入单一 **0.1.0** 条目（`CHANGELOG.md` 与应用内更新日志同源双写），清单各处
+  统一为 `0.1.0`。
+- **版本唯一数据源**：`apps/desktop/package.json#version`。其余五处由
+  `scripts/bump-version.mjs`（`pnpm bump X.Y.Z`）同步，**不手改**：
   `apps/desktop/src-tauri/tauri.conf.json#version`、
-  `apps/mobile/pubspec.yaml#version`、根 `Cargo.toml [workspace.package]`。
-  MVP 维持 0.1.0；MVP tag 定为 `v0.1.0`（真机清单通过后打）。
-- 更新日志：`CHANGELOG.md`（Keep a Changelog 1.1.0 + semver），发版时将
-  `[Unreleased]` 段落改为版本号段并归档；Android 端 pubspec 版本
-  `major.minor.patch+build` 中 build 号每次发版 +1。
+  `apps/desktop/src-tauri/Cargo.toml [package]`、
+  根 `Cargo.toml [workspace.package]`、`apps/mobile/pubspec.yaml#version`、
+  以及两个 `Cargo.lock` 的本地包版本行（漏改会让 `cargo --locked` 失败）。
+  前端版本经 `vite.config.ts` 构建期注入 `__APP_VERSION__`，源码不硬编码。
+  修订动因：2026-09-15 发现 `apps/desktop/package.json`（0.1.0）与其余处
+  （0.1.1）已实际漂移、关于页版本徽标停在 0.1.0——手工三处同步不可持续。
+- 一致性由 `pnpm bump:check`（发版门禁）与
+  `apps/desktop/src/test/release-consistency.test.ts`（回归护栏）双向守护。
+- 更新日志**两份同源双写**：`CHANGELOG.md`（Keep a Changelog 1.1.0 + semver，
+  发版时把 `[Unreleased]` 改为版本段并归档）+ `apps/desktop/src/lib/changelog.ts`
+  （应用内「关于 → 更新日志」），同一次提交写完；Android 端 pubspec 版本
+  `major.minor.patch+build` 中 build 号每次发版 +1（由脚本自增）。
 
-### 4. Release CI 脚手架
+### 4. Release CI 脚手架（2026-09-15 修订：作业拆分与更新清单单点化）
 
-`.github/workflows/release.yml`：push tag `v*` 触发——
+`.github/workflows/release.yml`：push tag `v*` 触发（`workflow_dispatch` 可预演）——
 
-1. 桌面矩阵（windows/msvc → NSIS+MSI；macos-aarch64 → DMG；ubuntu →
-   deb+AppImage），tauri-action 打包，产物上传 Release；
-2. Android APK（ubuntu，java 17 + flutter stable，`flutter build apk`，
-   cargokit 内构建 orbit-flutter；release 签名就绪后自动生效）；
-3. `sha256sum` 汇总 `SHA256SUMS` 附 Release（未签名产物的主要完整性依据）。
-4. 证书类环境变量未注入时全部走未签名路径并打 `unsigned` 标注，
-   Release 模板注明校验方式。
+1. **`audit` 发版前置门禁**（廉价 job 先失败）：`pnpm bump:check` 版本一致性、
+   tag 名 = 清单版本、updater 签名私钥就位、`cargo audit`×2 lock + `pnpm audit`
+   （观察期不拦截，转硬拦截条件见 `docs/08` §6）；
+2. 桌面矩阵（windows/msvc → NSIS+MSI；macos-aarch64 → DMG；ubuntu →
+   deb+AppImage）tauri-action 打包并创建**公开** Release（草稿态会让
+   `latest.json` 的 `latest/download` 地址 404），产物与 `.sig` 由本平台上传；
+   `includeUpdaterJson: false`——全平台清单改由第 4 步单点合成（矩阵并发
+   读改写 manifest 会撞 PATCH 竞态）；
+3. Android APK（java 17 + flutter，cargokit 构建 orbit-flutter；release 签名
+   就绪后自动生效）只构建传 artifact，上传 Release 交给第 5 步，避免与
+   tauri-action 抢建 Release 造成草稿化；
+4. `publish-updater-manifest`：读各平台 `.sig` 合成唯一 `latest.json`
+   （平台键含安装方式后缀 + 基础键双写，写法依据 tauri-plugin-updater 的
+   查找顺序），临时名 → 删旧 → 改名三步上传（崩溃安全、可重跑）；
+5. `publish-extras`：上传 APK 并汇总 `SHA256SUMS`（未签名产物的主要完整性
+   依据，覆盖含 APK 与 `latest.json` 在内的全部资产）。
+6. 证书类环境变量未注入时全部走未签名路径并打 `unsigned` 标注，
+   Release 模板注明校验方式；但 **updater 签名私钥必填**
+   （`bundle.createUpdaterArtifacts: true` 下缺失即构建失败，刻意保护）。
 
 ## 后果
 
@@ -102,10 +126,16 @@ MVP 发布（06 文档 §二 M5）要求五端产物签名/分发就绪。现状
 - 负面/已知让步：Windows SmartScreen / macOS Gatekeeper 首次运行提示
   需用户手动放行（Release 说明缓解）；Android 正式签名前不可上架商店。
 - 遗留：MVP tag（v0.1.0）待 M4 真机清单全过后打（06 §一 M5 Gate）。
+- 修订（2026-09-15）：版本单点与 Release 作业拆分口径见 §3/§4 修订段，
+  完整流程（触发条件/步骤/角色/异常处置）以 `docs/08_发布与更新流程.md` 为准。
 
 ## 证书物料 TODO（用户操作项）
 
 - [ ] Windows：决定是否购买 OV 代码签名证书（否 → 维持哈希校验过渡）
 - [ ] macOS：Apple Developer Program 账号（$99/年）→ Developer ID 证书
 - [ ] Android：`keytool` 生成 release keystore + `android/key.properties`
-- [ ] （M6+）tauri artifacts 签名密钥 + updater 公钥
+- [x] tauri artifacts 签名密钥 + updater 公钥 —— 2026-09-13 落地（07 #20）：
+  `plugins.updater.pubkey` 入库、`release.yml` 开 `includeUpdaterJson`；
+  2026-09-15 进一步开 `bundle.createUpdaterArtifacts` 并把清单合成单点化。
+  私钥需在 repo Secrets 配置（`TAURI_SIGNING_PRIVATE_KEY[_PASSWORD]`），
+  轮换口径见 `docs/08` §3.6
