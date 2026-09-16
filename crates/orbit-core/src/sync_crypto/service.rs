@@ -77,6 +77,10 @@ pub struct SyncCryptoService {
     app_data_dir: PathBuf,
     /// 运行时 Data Key，未解锁时为 None
     data_key: Arc<RwLock<Option<Vec<u8>>>>,
+    /// 运行时缓存的同步密码原始字符串（解锁后驻留），供全量备份等需要
+    /// 「密码字符串级 PBKDF2」的功能复用——备份加密用的是密码本身而非
+    /// Data Key（见 full_sync_backup::encoder），故必须缓存密码而非仅派生 Key。
+    unlocked_password: Arc<RwLock<Option<String>>>,
 }
 
 impl SyncCryptoService {
@@ -85,6 +89,7 @@ impl SyncCryptoService {
         Self {
             app_data_dir: app_data_dir.to_path_buf(),
             data_key: Arc::new(RwLock::new(None)),
+            unlocked_password: Arc::new(RwLock::new(None)),
         }
     }
 
@@ -156,6 +161,7 @@ impl SyncCryptoService {
 
         let (_, data_key) = derive_data_key_v2(sync_password)?;
         self.set_data_key(data_key.clone());
+        self.cache_password(sync_password);
         Ok(data_key)
     }
 
@@ -187,6 +193,7 @@ impl SyncCryptoService {
 
         let (_, data_key) = derive_data_key_v2(sync_password)?;
         self.set_data_key(data_key.clone());
+        self.cache_password(sync_password);
         Ok(data_key)
     }
 
@@ -233,6 +240,7 @@ impl SyncCryptoService {
         })?;
 
         self.set_data_key(data_key.to_vec());
+        self.cache_password(sync_password);
         Ok(())
     }
 
@@ -264,6 +272,7 @@ impl SyncCryptoService {
         }
 
         self.set_data_key(data_key.clone());
+        self.cache_password(sync_password);
         Ok(data_key)
     }
 
@@ -294,6 +303,21 @@ impl SyncCryptoService {
         if let Ok(mut guard) = self.data_key.write() {
             *guard = None;
         }
+        if let Ok(mut guard) = self.unlocked_password.write() {
+            *guard = None;
+        }
+    }
+
+    /// 解锁态下缓存同步密码原始字符串（供全量备份等密码级 PBKDF2 复用）
+    fn cache_password(&self, password: &str) {
+        if let Ok(mut guard) = self.unlocked_password.write() {
+            *guard = Some(password.to_string());
+        }
+    }
+
+    /// 读取解锁态缓存的同步密码原始字符串（未解锁返回 None）
+    pub fn get_unlocked_password(&self) -> Option<String> {
+        self.unlocked_password.read().ok().and_then(|g| g.clone())
     }
 
     /// 修改同步密码
@@ -338,6 +362,9 @@ impl SyncCryptoService {
             self.set_data_key(data_key);
         }
 
+        // 改密成功后缓存新密码（v1 同样更新缓存，供备份复用）
+        self.cache_password(new_password);
+
         Ok(())
     }
 
@@ -347,7 +374,7 @@ impl SyncCryptoService {
     /// 「随机换 Key」与确定性语义矛盾——轮换等价于换密码（change_sync_password），
     /// 且同样需要 rekey 全量重传。v2 meta 调用返回错误。
     ///
-    /// 注意：轮换后旧 Data Key 加密的云端 .waitsync 将无法解密，
+    /// 注意：轮换后旧 Data Key 加密的云端 .orsync 将无法解密，
     /// 需配合全量重新上传。
     pub fn rotate_key(&self, sync_password: &str) -> Result<Vec<u8>, SyncCryptoError> {
         let meta = load_sync_crypto_meta(&self.app_data_dir)
@@ -560,6 +587,39 @@ mod tests {
 
         let unlocked = svc.unlock("sync_pw_123").unwrap();
         assert_eq!(unlocked, data_key, "解锁的 Data Key 必须与初始一致");
+    }
+
+    #[test]
+    fn unlocked_password_cached_until_lock() {
+        // 全量备份依赖解锁态缓存的密码字符串做密码级 PBKDF2，
+        // 锁定时必须一并清除，防止残留明文。
+        let (svc, _tmp) = make_service();
+
+        svc.init("sync_pw_123").unwrap();
+        assert_eq!(
+            svc.get_unlocked_password().as_deref(),
+            Some("sync_pw_123"),
+            "init 成功即解锁，应缓存密码"
+        );
+
+        svc.lock();
+        assert_eq!(
+            svc.get_unlocked_password(),
+            None,
+            "lock 必须清除缓存的密码字符串"
+        );
+
+        svc.unlock("sync_pw_123").unwrap();
+        assert_eq!(
+            svc.get_unlocked_password().as_deref(),
+            Some("sync_pw_123"),
+            "再次解锁后应重新缓存密码"
+        );
+
+        // 解锁失败不更新缓存（保持清空态）
+        svc.lock();
+        let _ = svc.unlock("wrong_pw");
+        assert_eq!(svc.get_unlocked_password(), None, "解锁失败不得污染缓存");
     }
 
     #[test]

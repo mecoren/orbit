@@ -601,7 +601,7 @@ export type SyncHistoryScope = "all" | "incremental" | "push_only" | "pull_only"
 export const cloudSyncHistory = (scope: SyncHistoryScope = "all", limit = 50) =>
   invoke<SyncHistoryEntry[]>("cloud_sync_history", { scope, limit });
 
-// ---------- 全量备份 .orsync（full_sync_cmd） ----------
+// ---------- 全量备份 .orfullsync（full_sync_cmd，兼容遗留 .waitfullsync/.orsync） ----------
 
 export interface ExportResult {
   file_path: string;
@@ -626,19 +626,29 @@ export interface BackupEntryView {
   size_bytes: number;
 }
 
-export const fullBackupExport = (password: string, uploadCloud: boolean) =>
-  invoke<ExportResult>("full_backup_export", { password, uploadCloud });
-export const fullBackupImport = (
-  path: string,
-  password: string,
-  ignoreSchemaMismatch: boolean,
-) =>
+export const fullBackupExport = (uploadCloud: boolean) =>
+  invoke<ExportResult>("full_backup_export", { uploadCloud });
+export const fullBackupImport = (path: string, ignoreSchemaMismatch: boolean) =>
   invoke<ImportResult>("full_backup_import", {
     path,
-    password,
     ignoreSchemaMismatch,
   });
 export const fullBackupListLocal = () => invoke<BackupEntryView[]>("full_backup_list_local");
+
+/** 云端备份条目（备份恢复选源列表） */
+export interface CloudBackupEntryView {
+  name: string;
+  cloud_path: string;
+  size_bytes: number;
+  modified_at: number;
+}
+
+export const fullBackupListCloud = () => invoke<CloudBackupEntryView[]>("full_backup_list_cloud");
+export const fullBackupRestoreCloud = (cloudPath: string, ignoreSchemaMismatch: boolean) =>
+  invoke<ImportResult>("full_backup_restore_cloud", {
+    cloudPath,
+    ignoreSchemaMismatch,
+  });
 
 // ---------- 定时自动备份（backup_scheduler） ----------
 

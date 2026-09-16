@@ -4,8 +4,8 @@
 //! 提供 Tauri / FRB 可直接调用的 async API。
 //!
 //! 主要功能：
-//! - `export_full_sync_backup`：导出全量备份到本地文件
-//! - `import_full_sync_backup`：从 .waitfullsync 文件全量覆盖恢复
+//! - `export_full_sync_backup`：导出全量备份到本地文件（默认 `.orfullsync`）
+//! - `import_full_sync_backup`：从 `.orfullsync` 文件全量覆盖恢复（兼容遗留 `.waitfullsync` / `.orsync`）
 //! - `peek_full_sync_manifest`：读取备份清单（不解密整个 ZIP）
 //! - `list_backups` / `delete_backup` / `keep_latest_backup`：备份文件管理
 //! - `get_backup_prefs` / `save_backup_prefs`：偏好设置
@@ -78,75 +78,68 @@ pub struct SchemaVersion {
     pub version: i64,
 }
 
-/// 导出全量同步备份到本地文件（不触发云端上传）
+/// 备份触发来源（融合后唯一导出入口按此分支应用开关约束）
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum BackupOrigin {
+    /// 定时自动备份（受 backup_prefs local/cloud 开关约束）
+    Auto,
+    /// 手动立即备份（不受 backup_prefs 开关约束）
+    Manual,
+}
+
+/// 导出全量同步备份（融合后的唯一入口）
 ///
-/// 两阶段开关取自备份偏好（`local_backup_enabled` / `cloud_backup_enabled`，
-/// 均关时返回错误）。供同步前自动备份等"偏好驱动"场景使用；
-/// 如需同时上传到云端，请使用 [`export_full_sync_backup_with_cloud`]。
+/// 融合自动备份与手动全量备份：
+/// - `origin=Auto`：受备份偏好开关约束（云/本地均关时返回错误）；供定时调度守护使用。
+/// - `origin=Manual`：不受开关约束（即时导出，始终尝试写入本地，`upload_cloud` 时额外上传）
+/// - 密码来源：复用调用方传入的已解锁 `SyncCryptoService`（桌面/移动各持自身的共享单例），
+///   不再手动传入密码。调用方须先 `unlock`，未解锁返回可读错误。
 pub async fn export_full_sync_backup(
     pool: &SqlitePool,
     app_data_dir: &Path,
-    sync_password: &str,
-) -> FullSyncBackupResult<ExportResult> {
-    let prefs = load_prefs(app_data_dir)?;
-    ensure_any_switch_enabled(&prefs)?;
-    export_full_sync_backup_inner(
-        pool,
-        app_data_dir,
-        sync_password,
-        None,
-        prefs.local_backup_enabled,
-        prefs.cloud_backup_enabled,
-    )
-    .await
-}
-
-/// 导出全量同步备份到本地文件，并可选上传到云端
-///
-/// 与 [`export_full_sync_backup`] 相同的偏好开关门控；差异仅在可携带云端配置
-/// （仍受 `cloud_backup_enabled` 门控）。供定时自动备份守护使用。
-pub async fn export_full_sync_backup_with_cloud(
-    pool: &SqlitePool,
-    app_data_dir: &Path,
-    sync_password: &str,
-    cloud_config: Option<EngineSyncConfig>,
-) -> FullSyncBackupResult<ExportResult> {
-    let prefs = load_prefs(app_data_dir)?;
-    ensure_any_switch_enabled(&prefs)?;
-    export_full_sync_backup_inner(
-        pool,
-        app_data_dir,
-        sync_password,
-        cloud_config,
-        prefs.local_backup_enabled,
-        prefs.cloud_backup_enabled,
-    )
-    .await
-}
-
-/// 手动导出全量备份（不受备份偏好开关约束）
-///
-/// 用户在 UI 显式点击导出时调用：
-/// - 始终尝试写入本地 backups 目录
-/// - `upload_cloud=true` 且提供 `cloud_config` 时额外上传云端副本
-///
-/// `local_path` / `keep_latest` 等目录偏好仍然生效。
-pub async fn export_full_sync_backup_manual(
-    pool: &SqlitePool,
-    app_data_dir: &Path,
-    sync_password: &str,
+    svc: &SyncCryptoService,
+    origin: BackupOrigin,
     cloud_config: Option<EngineSyncConfig>,
     upload_cloud: bool,
 ) -> FullSyncBackupResult<ExportResult> {
+    let (local_enabled, cloud_enabled) = match origin {
+        BackupOrigin::Auto => {
+            let prefs = load_prefs(app_data_dir)?;
+            ensure_any_switch_enabled(&prefs)?;
+            (prefs.local_backup_enabled, prefs.cloud_backup_enabled)
+        }
+        BackupOrigin::Manual => (true, upload_cloud),
+    };
+
+    // 复用调用方已解锁态的缓存同步密码（未解锁返回清晰错误）
+    ensure_unlocked(svc)?;
+    let sync_password = svc
+        .get_unlocked_password()
+        .ok_or_else(|| FullSyncBackupError::InvalidState("同步密码未解锁".to_string()))?;
+
     export_full_sync_backup_inner(
         pool,
         app_data_dir,
-        sync_password,
+        &sync_password,
         cloud_config,
-        true,
-        upload_cloud,
+        local_enabled,
+        cloud_enabled,
     )
     .await
+}
+
+/// 前置校验：同步加密已解锁
+///
+/// 全量备份使用「已解锁态缓存的原始同步密码」做密码级 PBKDF2（见 encoder），
+/// 因此导出/导入前必须要求 `SyncCryptoService` 处于解锁状态，未解锁返回可读错误。
+fn ensure_unlocked(svc: &SyncCryptoService) -> FullSyncBackupResult<()> {
+    if svc.is_unlocked() {
+        Ok(())
+    } else {
+        Err(FullSyncBackupError::InvalidState(
+            "执行全量备份前请先解锁同步密码".to_string(),
+        ))
+    }
 }
 
 /// 偏好驱动导出的前置校验：云端与本地开关均为关闭时拒绝执行
@@ -186,12 +179,9 @@ async fn export_full_sync_backup_inner(
     local_enabled: bool,
     cloud_enabled: bool,
 ) -> FullSyncBackupResult<ExportResult> {
-    // 1. 校验同步密码
-    let svc = SyncCryptoService::new(app_data_dir);
-    svc.unlock(sync_password)?;
-    svc.lock();
-
-    // 2. 读取 device_id / device_name
+    // 1. 读取 device_id / device_name
+    //    （解锁校验与密码读取由上层 export_full_sync_backup 完成，
+    //     内层仅消费已解锁态缓存的原始密码做编码）
     let device_id = context::get_device_id().unwrap_or_default().to_string();
     let device_name = read_device_name_from_config(app_data_dir);
 
@@ -390,10 +380,10 @@ pub async fn get_active_cloud_config_from_db(
 
 /// 将备份字节直接上传到云端
 ///
-/// 云端路径为 `{base_path}/backups/{filename}`，与同步包 `{base_path}/*.waitsync` 区分存放。
+/// 云端路径为 `{base_path}/backups/{filename}`，与同步包 `{base_path}/*.orsync` 区分存放。
 /// 上传失败返回错误，不阻塞本地备份已成功的事实。
 ///
-/// 供 `export_full_sync_backup_with_cloud` 在「云端 → 本地」两阶段流程中复用编码字节，
+/// 供 `export_full_sync_backup` 在「云端 → 本地」两阶段流程中复用编码字节，
 /// 避免先写本地文件再读取的开销。
 pub async fn upload_backup_bytes(
     adapter: &dyn SyncAdapter,
@@ -409,23 +399,29 @@ pub async fn upload_backup_bytes(
     Ok(cloud_path)
 }
 
-/// v7: 列出云端备份目录下所有 .waitfullsync 文件
+/// v7: 列出云端备份目录下所有 `.orfullsync` 文件（兼容遗留 `.waitfullsync` / `.orsync`）
 ///
-/// 云端路径为 `{base_path}/backups/`，与同步包 `{base_path}/*.waitsync` 区分存放。
-/// 仅返回文件名以 `.waitfullsync` 结尾的条目，按最后修改时间倒序排列。
+/// 云端路径为 `{base_path}/backups/`，与同步包 `{base_path}/*.orsync` 区分存放。
+/// 仅返回备份扩展名结尾的条目，按最后修改时间倒序排列。
 /// RemoteFile 的 name 字段为相对 `{base_path}/backups/` 的文件名。
 pub async fn list_cloud_backups(
     adapter: &dyn SyncAdapter,
     base_path: &str,
 ) -> FullSyncBackupResult<Vec<RemoteFile>> {
+    use crate::full_sync_backup::backup_naming::{FILE_EXTENSION, LEGACY_FILE_EXTENSIONS};
     let cloud_dir = format!("{}/backups", base_path.trim_end_matches('/'));
-    // v7: 必须使用 list_all_files，list_files 会过滤掉 .waitfullsync 后缀
+    // v7: 必须使用 list_all_files，list_files 会过滤掉备份后缀
     let mut files = adapter
         .list_all_files(&cloud_dir)
         .await
         .map_err(|e| FullSyncBackupError::Other(format!("列出云端备份失败: {}", e)))?;
-    // 仅保留 .waitfullsync 文件
-    files.retain(|f| f.name.ends_with(".waitfullsync"));
+    // 仅保留备份文件（默认 .orfullsync，兼容遗留扩展名）
+    files.retain(|f| {
+        f.name.ends_with(FILE_EXTENSION)
+            || LEGACY_FILE_EXTENSIONS
+                .iter()
+                .any(|ext| f.name.ends_with(ext))
+    });
     // 按最后修改时间倒序（最新在前）
     files.sort_by_key(|f| std::cmp::Reverse(f.last_modified));
     Ok(files)
@@ -433,7 +429,7 @@ pub async fn list_cloud_backups(
 
 /// v7: 从云端下载指定备份文件
 ///
-/// `cloud_path` 为云端完整对象路径（如 `{base_path}/backups/xxx.waitfullsync`；
+/// `cloud_path` 为云端完整对象路径（如 `{base_path}/backups/xxx.orfullsync`；
 /// 调用方从 list_cloud_backups 返回的条目 name 自行拼装）。
 /// 返回文件字节内容，供 peek_manifest / import 使用。
 pub async fn download_cloud_backup(
@@ -475,7 +471,7 @@ fn read_device_name_from_config(app_data_dir: &Path) -> String {
 
 /// 内部便捷函数：插入一条同步历史并立即更新状态
 ///
-/// 供 `export_full_sync_backup_with_cloud` 在云端阶段和本地阶段分别调用，
+/// 供 `export_full_sync_backup` 在云端阶段和本地阶段分别调用，
 /// 记录 `cloud_full_backup` / `local_full_backup` 两条历史。
 #[allow(clippy::too_many_arguments)] // 与 sync_history_repo::update_status 同列集
 async fn insert_sync_history(
@@ -498,7 +494,7 @@ async fn insert_sync_history(
     Ok(())
 }
 
-/// 从 .waitfullsync 文件全量覆盖恢复
+/// 从 `.orfullsync` 文件全量覆盖恢复（兼容遗留 `.waitfullsync`）
 ///
 /// 流程：
 /// 1. 读取文件字节
@@ -515,12 +511,18 @@ async fn insert_sync_history(
 /// - 在事务中执行，支持全量覆盖恢复的原子性
 pub async fn import_full_sync_backup(
     pool: &SqlitePool,
-    sync_password: &str,
+    svc: &SyncCryptoService,
     bytes: &[u8],
     ignore_schema_mismatch: bool,
 ) -> FullSyncBackupResult<ImportResult> {
+    // 复用调用方已解锁态的缓存同步密码（未解锁返回清晰错误）
+    ensure_unlocked(svc)?;
+    let sync_password = svc
+        .get_unlocked_password()
+        .ok_or_else(|| FullSyncBackupError::InvalidState("同步密码未解锁".to_string()))?;
+
     // 1. 解码（密码错误立即返回，不进入清空阶段）
-    let decoded = decode_backup(bytes, sync_password)?;
+    let decoded = decode_backup(bytes, &sync_password)?;
 
     // 2. 校验 manifest format_version
     decoded.manifest.validate_format_version()?;
@@ -673,15 +675,20 @@ async fn insert_record_raw_in_tx(
 ///
 /// 注意：当前实现仍调用 decode_backup（需要密码才能解密），
 /// 因为 manifest 在加密的 ZIP 内部，无法不解密直接读取。
+/// 密码复用已解锁态缓存的同步密码，未解锁时返回错误。
 pub async fn peek_full_sync_manifest(
+    svc: &SyncCryptoService,
     bytes: &[u8],
-    sync_password: &str,
 ) -> FullSyncBackupResult<BackupManifest> {
-    let decoded = decode_backup(bytes, sync_password)?;
+    ensure_unlocked(svc)?;
+    let sync_password = svc
+        .get_unlocked_password()
+        .ok_or_else(|| FullSyncBackupError::InvalidState("同步密码未解锁".to_string()))?;
+    let decoded = decode_backup(bytes, &sync_password)?;
     Ok(decoded.manifest)
 }
 
-/// 列出备份目录下的所有 .waitfullsync 文件
+/// 列出备份目录下的所有 `.orfullsync` 文件（兼容遗留扩展名）
 pub async fn list_backups(app_data_dir: &Path) -> FullSyncBackupResult<Vec<BackupEntry>> {
     let prefs = load_prefs(app_data_dir)?;
     let backup_dir = resolve_backup_dir(app_data_dir, prefs.local_path.as_deref());

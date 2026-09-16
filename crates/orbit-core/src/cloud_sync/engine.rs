@@ -214,16 +214,34 @@ pub(crate) async fn probe_data_key_with_global_meta(
     use crate::cloud_sync::crypto_io::decrypt_payload;
     use crate::cloud_sync::paths;
 
-    let path = join_base_path(base_path, paths::GLOBAL_META_PATH);
-
-    let bytes = match raw_adapter.download(&path).await {
-        Ok(b) => b,
-        Err(e) => {
-            if e.is_not_found() {
-                log::info!("[probe] 云端无 global_meta（404），跳过探针");
+    // 读侧兼容：默认 `_meta.orsync` 优先，404 回退遗留 `_meta.waitsync`
+    let mut last_err: Option<crate::sync::error::SyncError> = None;
+    let mut bytes_opt: Option<Vec<u8>> = None;
+    for candidate in [
+        paths::GLOBAL_META_PATH,
+        paths::LEGACY_GLOBAL_META_PATH,
+    ] {
+        let path = join_base_path(base_path, candidate);
+        match raw_adapter.download(&path).await {
+            Ok(b) => {
+                bytes_opt = Some(b);
+                break;
+            }
+            Err(e) if e.is_not_found() => {
+                last_err = Some(e);
+                continue;
+            }
+            Err(e) => {
+                log::info!("[probe] 下载 global_meta 失败（宽松跳过）: {}", e);
                 return Ok(());
             }
-            log::info!("[probe] 下载 global_meta 失败（宽松跳过）: {}", e);
+        }
+    }
+    let bytes = match bytes_opt {
+        Some(b) => b,
+        None => {
+            let _ = last_err;
+            log::info!("[probe] 云端无 global_meta（404），跳过探针");
             return Ok(());
         }
     };
@@ -1206,13 +1224,13 @@ impl SyncEngine {
         }
     }
 
-    /// 探测云端是否存在模块数据（`modules/*/data.waitsync`）
+    /// 探测云端是否存在模块数据（`modules/*/data.orsync`，兼容遗留 `data.waitsync`）
     ///
     /// 用于 `sync_data_key_from_cloud` 的 404/WrongPassword 容错分支决策：
     /// - 云端无模块数据（首次同步、云端被清空）→ 安全补传本地 bundle
     /// - 云端已有模块数据 → 阻断补传，避免本地错 Key 覆盖云端正确 Key
     ///
-    /// **实现方式（P0-2 修复）**：对每个模块的 `data.waitsync` 逐一做 GET 探测，
+    /// **实现方式（P0-2 修复）**：对每个模块的 `data.orsync` 逐一做 GET 探测，
     /// 下载成功即存在。不再依赖 `list_files` 的返回路径形态——WebDAV 下
     /// Depth:1 只列一级子项且 name 是 basename，旧的 `is_module_data_path`
     /// 路径匹配在 WebDAV 上恒 false，导致防污染守卫完全失效
@@ -1223,33 +1241,39 @@ impl SyncEngine {
     /// 让原容错流程继续。
     async fn cloud_has_module_data(&self, raw_adapter: &dyn SyncAdapter, base_path: &str) -> bool {
         for module in crate::cloud_sync::modules::SYNC_MODULES {
-            let path = join_base_path(base_path, &paths::module_data_path(module.name));
-            match raw_adapter.download(&path).await {
-                Ok(_) => {
-                    log::info!(
-                        "[sync_data_key] 云端探测：{} 下载成功，判定存在模块数据",
-                        path
-                    );
-                    return true;
-                }
-                Err(e) if e.is_not_found() => {
-                    // 404：该模块无数据，继续探测下一个
-                }
-                Err(e) => {
-                    // fail-closed：探测出错时无法确认云端状态，保守视为"有模块数据"。
-                    // 这样 decide_auto_upload_behavior 走 Block 分支，避免在云端实际
-                    // 有数据时覆盖 crypto/config 造成全设备 [key_mismatch] 不可逆污染。
-                    // 代价：网络抖动时自动补传被阻断，但下次同步成功即恢复。
-                    log::warn!(
-                        "[sync_data_key] 云端探测 {} 失败，fail-closed 视为有模块数据（阻断自动补传）: {}",
-                        path,
-                        e
-                    );
-                    return true;
+            // 读侧兼容：默认路径 404 时回退遗留路径
+            for candidate in [
+                paths::module_data_path(module.name),
+                paths::legacy_module_data_path(module.name),
+            ] {
+                let path = join_base_path(base_path, &candidate);
+                match raw_adapter.download(&path).await {
+                    Ok(_) => {
+                        log::info!(
+                            "[sync_data_key] 云端探测：{} 下载成功，判定存在模块数据",
+                            path
+                        );
+                        return true;
+                    }
+                    Err(e) if e.is_not_found() => {
+                        // 404：该路径无数据，继续试下一候选 / 下一模块
+                    }
+                    Err(e) => {
+                        // fail-closed：探测出错时无法确认云端状态，保守视为"有模块数据"。
+                        // 这样 decide_auto_upload_behavior 走 Block 分支，避免在云端实际
+                        // 有数据时覆盖 crypto/config 造成全设备 [key_mismatch] 不可逆污染。
+                        // 代价：网络抖动时自动补传被阻断，但下次同步成功即恢复。
+                        log::warn!(
+                            "[sync_data_key] 云端探测 {} 失败，fail-closed 视为有模块数据（阻断自动补传）: {}",
+                            path,
+                            e
+                        );
+                        return true;
+                    }
                 }
             }
         }
-        log::info!("[sync_data_key] 云端探测：所有模块 data.waitsync 均 404，判定无模块数据");
+        log::info!("[sync_data_key] 云端探测：所有模块 data.orsync 均 404，判定无模块数据");
         false
     }
 
@@ -1301,26 +1325,25 @@ impl SyncEngine {
     /// 宽松模式：备份失败不阻塞同步，仅记录到 `result.errors`。
     /// 仅在 `sync_password` 已缓存时执行；为 `None` 时跳过备份。
     ///
-    /// 需求2：备份开关均关闭（默认）时跳过，避免每次同步产生 InvalidState 错误。
-    /// 用户开启云端或本地备份开关后，同步前自动备份才会执行。
+    /// 需求2：同步前备份按「本地备份开关」判定，不传 cloud_config（仅本地写入）。
+    /// 默认本地备份关闭故跳过；用户开启 local_backup_enabled 后，每次同步前自动写本地副本。
     ///
     /// 调用时机：`sync_now`/`pull_then_push` 的 `acquire_lock` 成功后、
     /// 首个 push/pull 之前。`push_only`（修改后立即同步）不调用本方法
     /// （频率高，备份开销大）。
     async fn backup_before_sync(&self, result: &mut SyncResult) {
-        let password = match self.get_sync_password() {
-            Some(p) => p,
-            None => {
-                log::info!("[backup_before_sync] 跳过：sync_password 未缓存");
-                return;
-            }
-        };
+        // 同步密码未缓存时跳过前置备份（未解锁场景；解锁态校验由
+        // export_full_sync_backup 内部 ensure_unlocked 兜底）
+        if self.get_sync_password().is_none() {
+            log::info!("[backup_before_sync] 跳过：sync_password 未缓存");
+            return;
+        }
 
-        // 需求2：检查备份开关，两者皆关闭时跳过（默认状态，不记录错误）
+        // 需求2：仅本地开关开启时执行（同步前备份为本地安全副本）
         match crate::api::full_sync_backup_api::get_backup_prefs(&self.app_data_dir).await {
             Ok(prefs) => {
-                if !prefs.cloud_backup_enabled && !prefs.local_backup_enabled {
-                    log::info!("[backup_before_sync] 跳过：云端与本地备份开关均关闭");
+                if !prefs.local_backup_enabled {
+                    log::info!("[backup_before_sync] 跳过：本地备份开关未开启");
                     return;
                 }
             }
@@ -1330,10 +1353,16 @@ impl SyncEngine {
             }
         }
 
+        // 同步前自动备份：origin=Auto 受备份偏好开关约束。
+        // 不传 cloud_config（同步前前置备份保持本地为主，历史行为仅本地写入）。
+        // 复用 self.crypto（与桌面单例共享 Arc）已解锁态缓存的同步密码，避免重建实例丢解锁态。
         let backup_result = crate::api::full_sync_backup_api::export_full_sync_backup(
             &self.db_pool,
             &self.app_data_dir,
-            &password,
+            &self.crypto,
+            crate::api::full_sync_backup_api::BackupOrigin::Auto,
+            None,
+            false,
         )
         .await;
 
@@ -1427,15 +1456,16 @@ pub(crate) fn data_key_fingerprint(key: &[u8]) -> String {
     hash[..8].to_string()
 }
 
-/// 判断云端路径是否为模块数据文件（`modules/{name}/data.waitsync`）
+/// 判断云端路径是否为模块数据文件（`modules/{name}/data.orsync`，兼容遗留 `data.waitsync`）
 ///
 /// **P0-2 修复后已无调用方**（`cloud_has_module_data` 改为直接 GET 探测，
 /// 不再依赖 list_files 返回的路径形态）。保留纯函数与测试供未来恢复
 /// 路径匹配语义时参考。
 #[allow(dead_code)]
 fn is_module_data_path(name: &str) -> bool {
-    // 路径分段中必须包含 "modules" 段，且以 /data.waitsync 结尾
-    name.split('/').any(|seg| seg == "modules") && name.ends_with("/data.waitsync")
+    // 路径分段中必须包含 "modules" 段，且以 /data.orsync 或 /data.waitsync 结尾
+    name.split('/').any(|seg| seg == "modules")
+        && (name.ends_with("/data.orsync") || name.ends_with("/data.waitsync"))
 }
 
 #[cfg(test)]
@@ -1490,48 +1520,50 @@ mod tests {
     // ========================================================================
     // is_module_data_path: cloud_has_module_data 的路径过滤逻辑
     //
-    // 修复点：list_files 已过滤 .waitsync，但其中仍含 _meta.waitsync /
-    // assets/*.waitsync / modules/{name}/meta.waitsync 等非模块数据文件，
+    // 修复点：list_files 已过滤同步后缀，但其中仍含 _meta.orsync /
+    // assets/*.orsync / modules/{name}/meta.orsync 等非模块数据文件，
     // 会导致 cloud_has_module_data 误判为 true → 阻断安全的 fallback init。
-    // 仅 modules/{name}/data.waitsync 才视为真正的模块业务数据。
+    // 仅 modules/{name}/data.orsync（兼容 data.waitsync）才视为真正的模块业务数据。
     // ========================================================================
 
     #[test]
     fn is_module_data_path_matches_modules_data_waitsync() {
+        assert!(is_module_data_path("modules/movies/data.orsync"));
+        assert!(is_module_data_path("modules/games/data.orsync"));
+        // 遗留后缀读侧兼容
         assert!(is_module_data_path("modules/movies/data.waitsync"));
-        assert!(is_module_data_path("modules/games/data.waitsync"));
         // 带 base_path 前缀
         assert!(is_module_data_path(
-            "wait-sync/user1/modules/movies/data.waitsync"
+            "wait-sync/user1/modules/movies/data.orsync"
         ));
     }
 
     #[test]
     fn is_module_data_path_rejects_non_module_data_files() {
         // 全局索引（非模块数据）
-        assert!(!is_module_data_path("_meta.waitsync"));
-        assert!(!is_module_data_path("wait-sync/user1/_meta.waitsync"));
+        assert!(!is_module_data_path("_meta.orsync"));
+        assert!(!is_module_data_path("wait-sync/user1/_meta.orsync"));
         // 附件（非模块数据，加密 Key 可能不同）
-        assert!(!is_module_data_path("assets/abc123.waitsync"));
+        assert!(!is_module_data_path("assets/abc123.orsync"));
         assert!(!is_module_data_path(
-            "wait-sync/user1/assets/abc123.waitsync"
+            "wait-sync/user1/assets/abc123.orsync"
         ));
         // 模块元数据（不是 data）
-        assert!(!is_module_data_path("modules/movies/meta.waitsync"));
-        // crypto/config（无 .waitsync 后缀，理论上 list_files 不会返回）
+        assert!(!is_module_data_path("modules/movies/meta.orsync"));
+        // crypto/config（无同步后缀，理论上 list_files 不会返回）
         assert!(!is_module_data_path("crypto/config"));
         assert!(!is_module_data_path("wait-sync/user1/crypto/config"));
-        // 不以 data.waitsync 结尾
+        // 不以 data.orsync 结尾
         assert!(!is_module_data_path("modules/movies/data.bak"));
     }
 
     #[test]
     fn is_module_data_path_rejects_pathological_lookalikes() {
         // 防止误匹配 "xmodules" / "modules_x" 等前缀/后缀变体
-        assert!(!is_module_data_path("xmodules/foo/data.waitsync"));
-        assert!(!is_module_data_path("modules_x/foo/data.waitsync"));
+        assert!(!is_module_data_path("xmodules/foo/data.orsync"));
+        assert!(!is_module_data_path("modules_x/foo/data.orsync"));
         // 路径段中必须严格等于 "modules"
-        assert!(!is_module_data_path("mymodules/foo/data.waitsync"));
+        assert!(!is_module_data_path("mymodules/foo/data.orsync"));
     }
 
     #[test]
@@ -1829,11 +1861,11 @@ mod tests {
 
     #[tokio::test]
     async fn probe_returns_ok_when_global_meta_decrypts_successfully() {
-        // 场景：云端 _meta.waitsync 用 Key A 加密，本地 Data Key = Key A
-        // 期望：探针返回 Ok(())
+        // 场景：云端 _meta.orsync 用 Key A 加密，本地 Data Key = Key A
+        // 期望：探针返回 Ok(())（探针首探默认路径 _meta.orsync）
         let key = test_data_key(0x42);
         let encrypted_meta = encrypt_payload(b"{}", &key).unwrap();
-        let adapter = ProbeMockAdapter::new().with_file("_meta.waitsync", encrypted_meta);
+        let adapter = ProbeMockAdapter::new().with_file("_meta.orsync", encrypted_meta);
 
         let result = probe_data_key_with_global_meta(&adapter, "", &key).await;
         assert!(
@@ -1845,12 +1877,12 @@ mod tests {
 
     #[tokio::test]
     async fn probe_returns_key_mismatch_when_decryption_fails() {
-        // 关键场景：云端 _meta.waitsync 用 Key A 加密，本地 Data Key = Key B
+        // 关键场景：云端 _meta.orsync 用 Key A 加密，本地 Data Key = Key B
         // 期望：探针返回 Err(KeyMismatch)，UI 走恢复流程而非解锁页
         let cloud_key = test_data_key(0x42);
         let local_key = test_data_key(0x99);
         let encrypted_meta = encrypt_payload(b"{}", &cloud_key).unwrap();
-        let adapter = ProbeMockAdapter::new().with_file("_meta.waitsync", encrypted_meta);
+        let adapter = ProbeMockAdapter::new().with_file("_meta.orsync", encrypted_meta);
 
         let result = probe_data_key_with_global_meta(&adapter, "", &local_key).await;
         assert!(
@@ -1873,13 +1905,13 @@ mod tests {
 
     #[tokio::test]
     async fn probe_uses_base_path_prefix_when_downloading() {
-        // 场景：base_path 非空，_meta.waitsync 应从 {base_path}/_meta.waitsync 下载
+        // 场景：base_path 非空，_meta.orsync 应从 {base_path}/_meta.orsync 下载
         // 期望：探针用拼接后的路径下载
         let key = test_data_key(0x42);
         let encrypted_meta = encrypt_payload(b"{}", &key).unwrap();
         // 文件放在 base_path 之下
         let adapter =
-            ProbeMockAdapter::new().with_file("wait-sync/user1/_meta.waitsync", encrypted_meta);
+            ProbeMockAdapter::new().with_file("wait-sync/user1/_meta.orsync", encrypted_meta);
 
         let result = probe_data_key_with_global_meta(&adapter, "wait-sync/user1", &key).await;
         assert!(result.is_ok(), "base_path 非空时探针应正确拼接路径并下载");
@@ -1976,7 +2008,7 @@ mod tests {
         let key_a = svc_a.init("shared").unwrap();
 
         let encrypted_meta = encrypt_payload(b"{}", &key_a).unwrap();
-        let adapter = ProbeMockAdapter::new().with_file("_meta.waitsync", encrypted_meta);
+        let adapter = ProbeMockAdapter::new().with_file("_meta.orsync", encrypted_meta);
 
         let tmp_b = tempfile::TempDir::new().unwrap();
         let svc_b = crate::sync_crypto::SyncCryptoService::new(tmp_b.path());
@@ -1999,7 +2031,7 @@ mod tests {
         let key_a = svc_a.init("password_one").unwrap();
 
         let encrypted_meta = encrypt_payload(b"{}", &key_a).unwrap();
-        let adapter = ProbeMockAdapter::new().with_file("_meta.waitsync", encrypted_meta);
+        let adapter = ProbeMockAdapter::new().with_file("_meta.orsync", encrypted_meta);
 
         let tmp_b = tempfile::TempDir::new().unwrap();
         let svc_b = crate::sync_crypto::SyncCryptoService::new(tmp_b.path());

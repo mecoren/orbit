@@ -55,17 +55,17 @@ pub struct BackupPrefs {
     #[serde(default)]
     pub keep_latest: bool,
 
-    /// 云端备份开关（默认 false）
+    /// 云端备份开关（默认 true）
     ///
-    /// 关闭时即使存在激活的云端同步配置，也不会上传备份文件到云端。
-    /// 用户需显式开启才会执行云端上传阶段。
+    /// 默认以云端为准：开启时备份会上传副本到云端；关闭则跳过云端上传阶段。
+    /// 本地写入改由显式「导出本地备份」动作承担（见 local_backup_enabled）。
     #[serde(default)]
     pub cloud_backup_enabled: bool,
 
     /// 本地备份开关（默认 false）
     ///
-    /// 关闭时不写入本地 `.waitfullsync` 文件。
-    /// 用户需显式开启才会执行本地写入阶段。
+    /// 关闭时不写入本地 `.orfullsync` 文件。本地落盘以显式导出动作为主，
+    /// 用户或调用方可单独开启此开关以在自动备份时也写本地。
     #[serde(default)]
     pub local_backup_enabled: bool,
 
@@ -107,7 +107,7 @@ impl Default for BackupPrefs {
         Self {
             local_path: None,
             keep_latest: false,
-            cloud_backup_enabled: false,
+            cloud_backup_enabled: true,
             local_backup_enabled: false,
             schedule_type: ScheduleType::Off,
             schedule_time: default_schedule_time(),
@@ -274,6 +274,9 @@ mod tests {
         assert_eq!(prefs.schedule_type, ScheduleType::Off);
         assert!(!prefs.keep_latest);
         assert!(prefs.local_path.is_none());
+        // 默认以云端为准：云开关开、本地区域关；定时仍为 Off（需用户显式开启）
+        assert!(prefs.cloud_backup_enabled);
+        assert!(!prefs.local_backup_enabled);
         assert_eq!(prefs.schedule_time, "03:00");
         assert_eq!(prefs.schedule_day_of_month, 1);
         assert_eq!(prefs.schedule_month, 1);

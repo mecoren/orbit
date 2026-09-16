@@ -311,6 +311,8 @@ pub fn run() {
             commands::full_sync_cmd::full_backup_export,
             commands::full_sync_cmd::full_backup_import,
             commands::full_sync_cmd::full_backup_list_local,
+            commands::full_sync_cmd::full_backup_list_cloud,
+            commands::full_sync_cmd::full_backup_restore_cloud,
             commands::full_sync_cmd::full_backup_device_info,
             // 明文数据导出（07 报告 #15：JSON 结构化 / CSV 任务视图）
             commands::plaintext_export_cmd::plaintext_export_json,

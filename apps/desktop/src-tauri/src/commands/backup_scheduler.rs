@@ -4,9 +4,8 @@
 //! - DB 未就绪 / schedule_type=off → 静默跳过
 //! - next_backup_at 未初始化（0）→ 计算并持久化后本轮跳过
 //! - now < next_backup_at → 跳过；RUNNING 原子锁防重入
-//! - 钥匙串无缓存同步密码 → 跳过且不推进 next_backup_at
-//!   （用户解锁后下一轮自动补跑错过的备份）
-//! - 触发：export_full_sync_backup_with_cloud（受偏好本地/云端开关控制）；
+//! - 触发：export_full_sync_backup（origin=Auto，受偏好本地/云端开关控制）；
+//!   密码复用进程级已解锁 SyncCryptoService（未解锁时导出返回可读错误）；
 //!   成功 → update_scheduler_state_after_trigger 推进 last/next；
 //!   失败 → 仅推进 next（last 保留"最近一次成功"语义）
 //! - 结果均 emit("auto-backup-finished", payload) 供设置页刷新与提示
@@ -81,13 +80,9 @@ async fn tick(app: &AppHandle) {
         return;
     }
 
-    // 无缓存同步密码：无法加密备份包，跳过（不推进时间，解锁后补跑）
-    let Some(password) = sync_runtime::read_cached_sync_password() else {
-        RUNNING.store(false, Ordering::SeqCst);
-        return;
-    };
-
     // 云端配置按开关取用；未配置云同步时 None（云端阶段静默跳过）
+    // 密码不再由本守护获取：复用 SyncCryptoService 已解锁态缓存
+    //（未解锁时 export_full_sync_backup 内部 ensure_unlocked 返回可读错误）
     let cloud_config = if prefs.cloud_backup_enabled {
         full_sync_backup_api::get_active_cloud_config_from_db(&state.pool)
             .await
@@ -96,11 +91,20 @@ async fn tick(app: &AppHandle) {
         None
     };
 
-    let result = full_sync_backup_api::export_full_sync_backup_with_cloud(
+    // origin=Auto 受偏好开关约束（cloud_enabled 屏蔽 cloud_config 生效）；
+    // upload_cloud 仅对 Manual 有意义，Auto 分支忽略，置 true 表达上传意图。
+    // svc 复用进程级已解锁单例（含缓存的同步密码）；未解锁时内部返回可读错误。
+    let Ok(svc) = sync_runtime::sync_crypto(app) else {
+        RUNNING.store(false, Ordering::SeqCst);
+        return;
+    };
+    let result = full_sync_backup_api::export_full_sync_backup(
         &state.pool,
         &dir,
-        &password,
+        &svc,
+        full_sync_backup_api::BackupOrigin::Auto,
         cloud_config,
+        true,
     )
     .await;
 

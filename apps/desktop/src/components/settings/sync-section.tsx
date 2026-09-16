@@ -7,8 +7,8 @@
  * 3. 同步执行卡：立即同步 + 进度事件 + 上次同步时间
  * 3b. 同步历史卡（P1-17）：增量同步成败/耗时/计数可回看（sync_history 表）
  * 4. 自动备份卡：调度频率（core v4 调度器）+ 本地/云端开关 + 上次/下次时间
- * 5. 备份卡：.orsync 导出（可选云端副本）/ 导入恢复 / 本地历史备份列表
- * 6. 数据导出卡：明文 JSON/CSV（07 报告 #15，与 .orsync 加密包并列；
+ * 5. 备份卡：.orfullsync 导出（可选云端副本）/ 导入恢复 / 本地历史备份列表
+ * 6. 数据导出卡：明文 JSON/CSV（07 报告 #15，与 .orfullsync 加密包并列；
  *    未加密明示 + 系统保存对话框，隐私口径见 PRIVACY.md §七）
  *
  * sync-config-changed（保存/断开）→ 重挂连接与执行卡刷新配置视图。
@@ -21,6 +21,7 @@ import { toast } from "sonner";
 import {
   CalendarClock,
   ChevronDown,
+  Cloud,
   CloudUpload,
   DatabaseBackup,
   Download,
@@ -64,6 +65,8 @@ import {
   fullBackupExport,
   fullBackupImport,
   fullBackupListLocal,
+  fullBackupListCloud,
+  fullBackupRestoreCloud,
   syncConfigGet,
   syncConfigSave,
   syncCryptoChangePassword,
@@ -80,6 +83,7 @@ import {
   type BackupEntryView,
   type BackupPrefs,
   type BackupScheduleType,
+  type CloudBackupEntryView,
   type CsvImportPresetKey,
   type CsvImportPreviewView,
   type CsvImportStats,
@@ -1198,16 +1202,22 @@ function AutoBackupCard() {
 /* ============================ 5. 备份卡 ============================ */
 
 function BackupCard() {
-  const [pw, setPw] = useState("");
   const [busy, setBusy] = useState<"export" | "import" | null>(null);
-  const [cloudCopy, setCloudCopy] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [history, setHistory] = useState<BackupEntryView[] | null>(null);
+  const [cloudOpen, setCloudOpen] = useState(false);
+  const [cloudList, setCloudList] = useState<CloudBackupEntryView[] | null>(null);
 
   const loadHistory = () => {
     fullBackupListLocal()
       .then(setHistory)
       .catch(() => setHistory([]));
+  };
+
+  const loadCloud = () => {
+    fullBackupListCloud()
+      .then(setCloudList)
+      .catch(() => setCloudList([]));
   };
 
   // 首次展开时懒加载；导出成功后由 handleExport 调 loadHistory 刷新
@@ -1225,14 +1235,15 @@ function BackupCard() {
     };
   }, []);
 
-  const handleExport = async () => {
+  // 云端为准的默认导出；本地导出为显式独立动作（恒写本地，不受本地开关约束）
+  const runExport = async (cloud: boolean) => {
     setBusy("export");
     try {
-      const r = await fullBackupExport(pw, cloudCopy);
+      const r = await fullBackupExport(cloud);
       if (r.local_path) {
         const name = r.local_path.split(/[\\/]/).pop();
-        toast.success(`已导出：${name ?? r.local_path}`);
-        if (r.cloud_error) toast.warning(`云端副本上传失败：${r.cloud_error}`);
+        toast.success(cloud ? `已备份到云端 + 本地：${name ?? r.local_path}` : `已导出本地：${name ?? r.local_path}`);
+        if (cloud && r.cloud_error) toast.warning(`云端副本上传失败：${r.cloud_error}`);
       } else {
         toast.error(r.local_error ?? "导出失败");
       }
@@ -1243,11 +1254,13 @@ function BackupCard() {
       setBusy(null);
     }
   };
+  const handleExportCloud = () => runExport(true);
+  const handleExportLocal = () => runExport(false);
 
-  const doImport = async (path: string, password: string, ignoreSchemaMismatch: boolean) => {
+  const doImport = async (path: string, ignoreSchemaMismatch: boolean) => {
     setBusy("import");
     try {
-      const r = await fullBackupImport(path, password, ignoreSchemaMismatch);
+      const r = await fullBackupImport(path, ignoreSchemaMismatch);
       toast.success(
         `导入完成：成功 ${r.success_count} 条${r.error_count ? `，失败 ${r.error_count} 条` : ""}`,
       );
@@ -1255,7 +1268,7 @@ function BackupCard() {
       // schema 版本不一致 → 提示后以忽略版本差异重试
       if (/schema/i.test(String(err)) && !ignoreSchemaMismatch) {
         if (window.confirm("备份的 schema 版本与当前应用不同，可能存在兼容风险。仍要导入？")) {
-          return doImport(path, password, true);
+          return doImport(path, true);
         }
         return;
       }
@@ -1268,7 +1281,9 @@ function BackupCard() {
   const handleImportFile = async () => {
     const { open } = await import("@tauri-apps/plugin-dialog");
     const selected = await open({
-      filters: [{ name: "Orbit 备份", extensions: ["orsync", "waitfullsync"] }],
+      filters: [
+        { name: "Orbit 备份", extensions: ["orfullsync", "waitfullsync", "orsync"] },
+      ],
       multiple: false,
     });
     if (!selected || typeof selected !== "string") return;
@@ -1276,70 +1291,130 @@ function BackupCard() {
       "导入将用备份内容完全覆盖当前全部待办数据。确定继续？",
     );
     if (!confirmed) return;
-    await doImport(selected, pw, false);
+    await doImport(selected, false);
   };
 
   const handleRestoreEntry = async (entry: BackupEntryView) => {
     if (!window.confirm(`从「${entry.filename}」恢复将完全覆盖当前全部待办数据。确定继续？`)) {
       return;
     }
-    await doImport(entry.file_path, pw, false);
+    await doImport(entry.file_path, false);
+  };
+
+  const handleRestoreCloud = async (entry: CloudBackupEntryView) => {
+    if (!window.confirm(`从「${entry.name}」恢复将完全覆盖当前全部待办数据。确定继续？`)) {
+      return;
+    }
+    try {
+      setBusy("import");
+      const r = await fullBackupRestoreCloud(entry.cloud_path, false);
+      toast.success(
+        `云端恢复完成：成功 ${r.success_count} 条${r.error_count ? `，失败 ${r.error_count} 条` : ""}`,
+      );
+    } catch (err) {
+      if (/schema/i.test(String(err))) {
+        if (window.confirm("备份的 schema 版本与当前应用不同，可能存在兼容风险。仍要恢复？")) {
+          try {
+            await fullBackupRestoreCloud(entry.cloud_path, true);
+            toast.success("云端恢复完成");
+          } catch (e) {
+            toast.error(errMsg(e));
+          }
+        }
+        return;
+      }
+      toast.error(errMsg(err));
+    } finally {
+      setBusy(null);
+    }
   };
 
   return (
     <div className="space-y-3 rounded-lg border p-5">
       <div className="flex items-center gap-2">
         <DatabaseBackup className="size-4 text-muted-foreground" />
-        <span className="text-sm font-medium">全量备份（.orsync）</span>
+        <span className="text-sm font-medium">全量备份（.orfullsync）</span>
       </div>
       <p className="text-xs text-muted-foreground">
-        导出包含全部待办表数据的加密备份包（AES-256-GCM）；导入为全量覆盖恢复，请先确认备份密码。
+        导出包含全部待办表数据的加密备份包（AES-256-GCM）；口令取自已解锁的同步密码，
+        无需另行输入。恢复可从本地文件、本地历史或云端副本选源。
       </p>
-      <div className="flex items-center gap-2">
-        <Input
-          type="password"
-          placeholder="同步密码（备份加密口令）"
-          className="h-8 flex-1"
-          value={pw}
-          onChange={(e) => setPw(e.target.value)}
-        />
-        <Button size="sm" variant="outline" disabled={!!busy || !pw} onClick={() => void handleExport()}>
+      <div className="flex flex-wrap items-center gap-2">
+        <Button size="sm" variant="outline" disabled={!!busy} onClick={() => void handleExportCloud()}>
           {busy === "export" ? <Loader2 className="mr-1 size-3 animate-spin" /> : null}
-          导出
+          <CloudUpload className="mr-1 size-3" />
+          备份到云端
         </Button>
-        <Button size="sm" variant="outline" disabled={!!busy || !pw} onClick={() => void handleImportFile()}>
+        <Button size="sm" variant="outline" disabled={!!busy} onClick={() => void handleExportLocal()}>
+          {busy === "export" ? <Loader2 className="mr-1 size-3 animate-spin" /> : null}
+          导出本地备份
+        </Button>
+        <Button size="sm" variant="outline" disabled={!!busy} onClick={() => void handleImportFile()}>
           {busy === "import" ? <Loader2 className="mr-1 size-3 animate-spin" /> : null}
-          导入恢复
+          导入本地文件
         </Button>
       </div>
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Switch
-            id="backup-cloud-copy"
-            checked={cloudCopy}
-            onCheckedChange={setCloudCopy}
-            aria-label="上传云端副本开关"
-          />
-          <Label htmlFor="backup-cloud-copy" className="text-xs font-normal">
-            导出后同时上传云端副本
-          </Label>
-          <span className="text-xs text-muted-foreground">
-            {cloudCopy ? "需已配置云同步并解锁" : "仅保存到本地 backups 目录"}
-          </span>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-[11px] text-muted-foreground">
+          默认以云端为准：备份上传到云端副本；需要写入本地 backups 目录时点「导出本地备份」。
+        </p>
+        <div className="flex items-center gap-1">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 text-xs text-muted-foreground"
+            onClick={() => {
+              if (!cloudOpen && cloudList === null) loadCloud();
+              setCloudOpen((v) => !v);
+            }}
+          >
+            <Cloud className="mr-1 size-3" />
+            云端副本{cloudList ? `（${cloudList.length}）` : ""}
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 text-xs text-muted-foreground"
+            onClick={() => {
+              if (!historyOpen && history === null) loadHistory();
+              setHistoryOpen((v) => !v);
+            }}
+          >
+            <History className="mr-1 size-3" />
+            历史备份{history ? `（${history.length}）` : ""}
+          </Button>
         </div>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="h-7 text-xs text-muted-foreground"
-          onClick={() => {
-            if (!historyOpen && history === null) loadHistory();
-            setHistoryOpen((v) => !v);
-          }}
-        >
-          <History className="mr-1 size-3" />
-          历史备份{history ? `（${history.length}）` : ""}
-        </Button>
       </div>
+
+      {cloudOpen && (
+        <div className="space-y-1 rounded-md border bg-muted/20 p-2">
+          {cloudList === null && (
+            <p className="px-1 py-0.5 text-xs text-muted-foreground">加载中…</p>
+          )}
+          {cloudList !== null && cloudList.length === 0 && (
+            <p className="px-1 py-0.5 text-xs text-muted-foreground">云端暂无备份副本</p>
+          )}
+          {cloudList?.map((e) => (
+            <div key={e.cloud_path} className="flex items-center gap-2 rounded px-1 py-0.5 hover:bg-accent/40">
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-xs font-medium">{e.name}</p>
+                <p className="text-[11px] text-muted-foreground">
+                  {new Date(e.modified_at * 1000).toLocaleString()} · {formatBytes(e.size_bytes)}
+                </p>
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 text-xs"
+                disabled={!!busy}
+                onClick={() => void handleRestoreCloud(e)}
+              >
+                恢复
+              </Button>
+            </div>
+          ))}
+        </div>
+      )}
 
       {historyOpen && (
         <div className="space-y-1 rounded-md border bg-muted/20 p-2">
@@ -1361,7 +1436,7 @@ function BackupCard() {
                 variant="ghost"
                 size="sm"
                 className="h-7 text-xs"
-                disabled={!!busy || !pw}
+                disabled={!!busy}
                 onClick={() => void handleRestoreEntry(e)}
               >
                 恢复
@@ -1377,7 +1452,7 @@ function BackupCard() {
 /* ============================ 6. 数据导出卡（明文） ============================ */
 
 /**
- * 明文数据导出（07 报告 #15）：与 .orsync 加密备份并列的数据主权通道。
+ * 明文数据导出（07 报告 #15）：与 .orfullsync 加密备份并列的数据主权通道。
  *
  * - JSON：8 张业务表结构化全量（默认排除墓碑行）
  * - CSV：任务主视图（含项目名/标签聚合列），UTF-8 BOM，Excel 直开
