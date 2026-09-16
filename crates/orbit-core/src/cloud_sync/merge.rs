@@ -113,7 +113,7 @@ pub async fn merge_items(
     let local_map = load_local_uuid_map(db_pool, module_def).await?;
 
     // 2. 按表分组远端 items（每个表独立处理）
-    // P0-9：`_table` 路由白名单校验——远端 data.waitsync 中的 _table 可指向
+    // P0-9：`_table` 路由白名单校验——远端 data.orsync 中的 _table 可指向
     // 任意本地表（sync_configs/cfg_kv/sys_attachments 等非同步表），越过同步
     // 白名单写凭据/配置。读取侧（db_loader.rs）已做白名单，写入侧此处对齐：
     // 不在 module_def.tables 中的表名直接拒绝（视为数据损坏，跳过合并）。
@@ -920,7 +920,7 @@ mod tests {
         }
 
         /// P0-9：`_table` 指向非白名单表必须整体拒绝合并
-        /// 远端 data.waitsync 的 _table 可指向 sync_configs/cfg_kv/sys_attachments
+        /// 远端 data.orsync 的 _table 可指向 sync_configs/cfg_kv/sys_attachments
         /// 等非同步表（凭据/配置），越过同步白名单写入。读取侧（db_loader）已校验，
         /// 写入侧此前漏了——远端被篡改或 Data Key 泄露时可写任意表。
         #[tokio::test]

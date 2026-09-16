@@ -6,13 +6,14 @@
 //!
 //! ## payload 格式
 //! ```text
-//! [magic(4)="WSZS")[version(1)=0x01][nonce(12)][ciphertext+tag(16)]
+//! [magic(4)="OSZS")[version(1)=0x01][nonce(12)][ciphertext+tag(16)]
 //! ```
 //! 其中明文先经 zstd level=3 压缩再 AES-256-GCM 加密。
 //! 几百 K JSON 压缩后通常 30-50K，传输时间从 ~1s 降至 ~50ms。
+//! 遗留 magic `"WSZS"` 仅读侧兼容（解包接受），写侧一律 `"OSZS"`。
 //!
 //! 与 `sync_crypto::bundle_io` 和 `full_sync_backup::encoder` 的加密格式保持独立：
-//! - 全量备份用 `.waitfullsync` 容器（含 magic header + 多文件 ZIP）
+//! - 全量备份用 `.orfullsync` 容器（含 magic header + 多文件 ZIP）
 //! - 云端同步用本模块的 nonce 前置格式（裸 payload，适配 S3/WebDAV 直传）
 
 use crate::cloud_sync::error::CloudSyncError;
@@ -25,8 +26,11 @@ const NONCE_LEN: usize = 12;
 /// Data Key 长度（字节，32 = AES-256）
 const DATA_KEY_LEN: usize = 32;
 
-/// payload magic header：ASCII "WSZS"（Wait Sync Zstd）
-const MAGIC_V2: &[u8; 4] = b"WSZS";
+/// payload magic header：ASCII "OSZS"（Orbit Sync Zstd，默认格式）
+const MAGIC_V2: &[u8; 4] = b"OSZS";
+
+/// 遗留 payload magic：ASCII "WSZS"（读侧兼容，不再写入）
+const LEGACY_MAGIC_V2: &[u8; 4] = b"WSZS";
 
 /// payload 版本号
 const VERSION_V2: u8 = 0x01;
@@ -112,7 +116,8 @@ pub fn decrypt_payload(payload: &[u8], data_key: &[u8]) -> Result<Vec<u8>, Cloud
         return Err(CloudSyncError::PayloadTooShort);
     }
     // 校验 magic header 与版本号，不匹配则视为格式错误
-    if &payload[..4] != MAGIC_V2 || payload[4] != VERSION_V2 {
+    // 读侧兼容：新 "OSZS" 与遗留 "WSZS" 均接受，写侧一律 "OSZS"
+    if (&payload[..4] != MAGIC_V2 && &payload[..4] != LEGACY_MAGIC_V2) || payload[4] != VERSION_V2 {
         return Err(CloudSyncError::Crypto {
             message: format!(
                 "payload 格式不匹配：期望 magic={:?} version={}，实际 magic={:?} version={}",
@@ -236,8 +241,19 @@ mod deterministic_nonce_tests {
         let dec = decrypt_payload(&enc, &key).unwrap();
         assert_eq!(dec, plain);
         // 格式断言：magic + version 0x01 不变（新旧密文互通）
-        assert_eq!(&enc[..4], b"WSZS");
+        assert_eq!(&enc[..4], b"OSZS");
         assert_eq!(enc[4], VERSION_V2);
+    }
+
+    /// 遗留 magic "WSZS" 读侧兼容：旧密文仍可解开
+    #[test]
+    fn legacy_wszs_payload_still_decrypts() {
+        let key = [5u8; 32];
+        let enc = encrypt_payload(b"legacy-compat", &key).unwrap();
+        let mut legacy = enc.clone();
+        legacy[0..4].copy_from_slice(b"WSZS");
+        let dec = decrypt_payload(&legacy, &key).unwrap();
+        assert_eq!(dec, b"legacy-compat");
     }
 
     /// 空 payload 路径不回归（模块数据里存在空 items 的合法场景）

@@ -4,7 +4,7 @@
 //! - 按模块做模块级指纹（sha256 of canonical JSON）增量上传（Orbit MVP 单模块 todos，
 //!   覆盖全部可同步业务表，见 modules.rs 与 db::sync_registry 的不变量测试）
 //! - Pull 时按 `uuid` 做 item 级 LWW（Last-Writer-Wins）合并
-//! - 附件走 `assets/<sha256>.waitsync` 内容寻址去重，全部用 Data Key AES-256-GCM 加密
+//! - 附件走 `assets/<sha256>.orsync` 内容寻址去重，全部用 Data Key AES-256-GCM 加密
 //!
 //! 模块分层：
 //! ```text

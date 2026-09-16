@@ -6,10 +6,10 @@
 //! ## Pull 流程
 //! 1. 加载本地同步状态
 //! 2. 获取已解锁的 Data Key
-//! 3. 下载并解密 `_meta.waitsync`
+//! 3. 下载并解密 `_meta.orsync`（兼容遗留 `_meta.waitsync`）
 //! 4. 遍历远端模块元数据：
 //!    - 与本地记录的 remote_fp 比对，相同则跳过
-//!    - 变化则下载 `data.waitsync` + `meta.waitsync`，解密
+//!    - 变化则下载 `data.orsync` + `meta.orsync`（兼容遗留 `.waitsync`），解密
 //!    - 调用 merge_items 做 item 级 LWW 合并
 //!    - 更新本地状态
 //! 5. 附件同步（调用 attachments 模块，M1.11 实现）
@@ -98,27 +98,38 @@ pub async fn pull_all(
         crate::cloud_sync::engine::data_key_fingerprint(&data_key)
     );
 
-    // 1. 下载并解密 _meta.waitsync
-    //    首次同步时远端尚无 _meta.waitsync（404），降级为空的全局元数据，
+    // 1. 下载并解密 _meta（默认 .orsync，404 回退遗留 .waitsync）
+    //    首次同步时远端尚无 _meta（404），降级为空的全局元数据，
     //    允许首次同步继续执行（Push 已上传本地数据，Pull 无远端变更可合并）。
-    let global_meta = match adapter.download(paths::GLOBAL_META_PATH).await {
-        Ok(meta_bytes) => {
+    let meta_bytes_opt = match adapter.download(paths::GLOBAL_META_PATH).await {
+        Ok(b) => Some(b),
+        Err(e) if paths::is_not_found_error(&e) => {
+            match adapter.download(paths::LEGACY_GLOBAL_META_PATH).await {
+                Ok(b) => Some(b),
+                Err(e2) if paths::is_not_found_error(&e2) => None,
+                Err(e2) => {
+                    return Err(CloudSyncError::RemoteMissing(format!(
+                        "下载 {} 失败: {}",
+                        paths::LEGACY_GLOBAL_META_PATH,
+                        e2
+                    )));
+                }
+            }
+        }
+        Err(e) => {
+            return Err(CloudSyncError::RemoteMissing(format!(
+                "下载 {} 失败: {}",
+                paths::GLOBAL_META_PATH,
+                e
+            )));
+        }
+    };
+    let global_meta = match meta_bytes_opt {
+        Some(meta_bytes) => {
             let decrypted_meta = decrypt_payload(&meta_bytes, &data_key)?;
             serde_json::from_slice::<GlobalMeta>(&decrypted_meta)?
         }
-        Err(e) => {
-            // 404 视为空远端（首次同步），其他错误向上传播
-            if paths::is_not_found_error(&e) {
-                // device_id 此处仅用于诊断，空串即可
-                GlobalMeta::empty("")
-            } else {
-                return Err(CloudSyncError::RemoteMissing(format!(
-                    "下载 {} 失败: {}",
-                    paths::GLOBAL_META_PATH,
-                    e
-                )));
-            }
-        }
+        None => GlobalMeta::empty(""),
     };
 
     let builder = ProgressBuilder::new(progress_sender, origin);
@@ -258,27 +269,42 @@ async fn pull_single_module(
         return PullModuleOutcome::Skipped;
     }
 
-    // 2. 下载并解密 data.waitsync
+    // 2. 下载并解密 data（默认 .orsync，404 回退遗留 .waitsync）
     //    404 降级：远端无此模块数据 → 更新 remote_fp 避免重复尝试，视为跳过
-    let data_path = paths::module_data_path(module_name);
-    let data_bytes = match adapter.download(&data_path).await {
-        Ok(bytes) => bytes,
-        Err(e) => {
-            if paths::is_not_found_error(&e) {
-                // 远端无此模块数据，更新 remote_fp 避免重复尝试
-                let fp = local_state.as_ref().map_or(String::new(), |s| s.fp.clone());
-                let new_state = ModuleSyncState {
-                    fp,
-                    remote_fp: remote_fp.to_string(),
-                    count: local_state.as_ref().map_or(0, |s| s.count),
-                    pulled_at: now_ms(),
-                    pushed_at: local_state.as_ref().map_or(0, |s| s.pushed_at),
-                };
-                return PullModuleOutcome::RemoteEmpty {
-                    name: module_name.to_string(),
-                    new_state,
-                };
+    let (data_path, data_bytes) = match adapter
+        .download(&paths::module_data_path(module_name))
+        .await
+    {
+        Ok(bytes) => (paths::module_data_path(module_name), bytes),
+        Err(e) if paths::is_not_found_error(&e) => {
+            let legacy_path = paths::legacy_module_data_path(module_name);
+            match adapter.download(&legacy_path).await {
+                Ok(bytes) => (legacy_path, bytes),
+                Err(e2) if paths::is_not_found_error(&e2) => {
+                    // 远端无此模块数据，更新 remote_fp 避免重复尝试
+                    let fp = local_state.as_ref().map_or(String::new(), |s| s.fp.clone());
+                    let new_state = ModuleSyncState {
+                        fp,
+                        remote_fp: remote_fp.to_string(),
+                        count: local_state.as_ref().map_or(0, |s| s.count),
+                        pulled_at: now_ms(),
+                        pushed_at: local_state.as_ref().map_or(0, |s| s.pushed_at),
+                    };
+                    return PullModuleOutcome::RemoteEmpty {
+                        name: module_name.to_string(),
+                        new_state,
+                    };
+                }
+                Err(e2) => {
+                    return PullModuleOutcome::Failed {
+                        module: module_name.to_string(),
+                        message: format!("下载 {} 失败: {}", legacy_path, e2),
+                    };
+                }
             }
+        }
+        Err(e) => {
+            let data_path = paths::module_data_path(module_name);
             return PullModuleOutcome::Failed {
                 module: module_name.to_string(),
                 message: format!("下载 {} 失败: {}", data_path, e),
@@ -305,7 +331,7 @@ async fn pull_single_module(
         }
     };
 
-    // 3. 下载并解密 meta.waitsync（获取墓碑集）
+    // 3. 下载并解密 meta（默认 .orsync，404 回退遗留 .waitsync，获取墓碑集）
     //
     // Fix-05 区分三种情况：
     // - 成功：正常携带墓碑集合并；
@@ -318,7 +344,7 @@ async fn pull_single_module(
     //   （数据更新了但删除丢失）。上层 with_retry 会对网络类错误自动重试。
     let meta_path = paths::module_meta_path(module_name);
     let module_meta: ModuleMetaEntry =
-        match download_and_decrypt_meta(adapter, &meta_path, data_key).await {
+        match download_and_decrypt_meta_with_fallback(adapter, module_name, data_key).await {
             Ok(m) => m,
             Err(e @ CloudSyncError::NotFound { .. }) => {
                 log::info!(
@@ -433,13 +459,24 @@ fn should_skip_pull(local: &ModuleSyncState, remote_fp: &str, remote_updated_at:
         && !(remote_updated_at > local.pulled_at && remote_updated_at > 0)
 }
 
-/// 下载并解密模块 meta.waitsync
-async fn download_and_decrypt_meta(
+/// 下载并解密模块 meta（默认 .orsync，404 回退遗留 .waitsync）
+async fn download_and_decrypt_meta_with_fallback(
     adapter: &dyn SyncAdapter,
-    path: &str,
+    module_name: &str,
     data_key: &[u8],
 ) -> Result<ModuleMetaEntry, CloudSyncError> {
-    let bytes = adapter.download(path).await.map_err(CloudSyncError::from)?;
+    let primary = paths::module_meta_path(module_name);
+    let bytes = match adapter.download(&primary).await {
+        Ok(b) => b,
+        Err(e) if paths::is_not_found_error(&e) => {
+            let legacy = paths::legacy_module_meta_path(module_name);
+            adapter
+                .download(&legacy)
+                .await
+                .map_err(CloudSyncError::from)?
+        }
+        Err(e) => return Err(CloudSyncError::from(e)),
+    };
     let decrypted = decrypt_payload(&bytes, data_key)?;
     let meta: ModuleMetaEntry = serde_json::from_slice(&decrypted)?;
     Ok(meta)

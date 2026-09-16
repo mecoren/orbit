@@ -20,7 +20,7 @@ pub struct BundleContent {
     pub assets: BTreeMap<String, Vec<u8>>,
 }
 
-/// .waitsync 打包参数
+/// .orsync 打包参数（遗留 .waitsync 读侧兼容）
 pub struct CreateBundleParams {
     pub mode: BundleMode,
     /// 表名 → JSONL 字符串
@@ -35,7 +35,7 @@ pub struct CreateBundleParams {
     pub master_key: Vec<u8>,
 }
 
-/// 创建 .waitsync 包
+/// 创建 .orsync 包
 ///
 /// 流程：
 /// 1. 构建 manifest JSON
@@ -148,7 +148,7 @@ fn build_zip(
     Ok(cursor.into_inner())
 }
 
-/// 解包 .waitsync 文件
+/// 解包 .orsync 文件（兼容遗留 .waitsync）
 pub fn extract_bundle(
     bundle_bytes: &[u8],
     master_key: &[u8],

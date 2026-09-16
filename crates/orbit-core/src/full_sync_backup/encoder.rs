@@ -2,7 +2,7 @@
 //!
 //! 将 manifest + 业务表 JSON + schema_version 打包为 ZIP 字节流，
 //! 然后用 PBKDF2 派生 master_key，AES-256-GCM 加密 ZIP 字节流，
-//! 最后拼接为 `.waitfullsync` 容器格式。
+//! 最后拼接为 `.orfullsync` 容器格式。
 //!
 //! 全内存操作，不向磁盘写中间文件，避免敏感数据残留。
 
@@ -34,7 +34,7 @@ pub struct EncodeParams<'a> {
 /// 编码结果
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EncodeResult {
-    /// 完整的 .waitfullsync 字节流
+    /// 完整的 .orfullsync 字节流
     pub bytes: Vec<u8>,
     /// 文件总大小（字节）
     pub size: usize,
@@ -164,8 +164,8 @@ mod tests {
         assert!(result.size > 36, "编码结果应至少包含 36 字节头");
         assert_eq!(result.bytes.len(), result.size);
 
-        // magic 应为 "WFS1"
-        assert_eq!(&result.bytes[0..4], b"WFS1");
+        // magic 应为 "OFS1"
+        assert_eq!(&result.bytes[0..4], b"OFS1");
     }
 
     #[test]

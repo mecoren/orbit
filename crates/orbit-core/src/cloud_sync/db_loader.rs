@@ -69,7 +69,7 @@ pub async fn load_module_items(
 ///
 /// FR-2.4：从所有可同步表查询 `is_deleted = 1` 的记录，返回 (uuid, deleted_at) 对。
 /// deleted_at 优先取业务表的 deleted_at 列（软删除时间），为 NULL/0 时回退到 updated_at。
-/// 不再限制 N 条上限，所有历史删除均上传到云端 meta.waitsync。
+/// 不再限制 N 条上限，所有历史删除均上传到云端 meta.orsync。
 pub async fn load_all_tombstones(
     pool: &SqlitePool,
     module_def: &SyncModuleDef,

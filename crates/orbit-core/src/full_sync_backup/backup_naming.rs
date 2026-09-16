@@ -1,14 +1,18 @@
 //! backup_naming — 备份命名规范（v3 新增，参考 legado `Backup.kt::getNowZipFileName`）
 //!
-//! 命名格式：`backup{yyyy-MM-dd}-{设备码}.waitfullsync`
+//! 命名格式：`backup{yyyy-MM-dd}-{设备码}.orfullsync`（默认全量格式）
 //! - 日期部分：取自系统当前日期，格式 `yyyy-MM-dd`
 //! - 设备码部分：取自 `sync_config.device_id`，文件名安全化（替换 `[\\/:*?"<>|]` 为下划线）
-//! - 设备码为空时退化为 `backup{yyyy-MM-dd}.waitfullsync`
+//! - 设备码为空时退化为 `backup{yyyy-MM-dd}.orfullsync`
+//! - 读侧兼容：`.waitfullsync` / `.orsync` 遗留备份仍可列举与导入
 
 use chrono::{DateTime, Utc};
 
-/// 文件扩展名
-pub const FILE_EXTENSION: &str = ".waitfullsync";
+/// 文件扩展名（默认全量格式）
+pub const FILE_EXTENSION: &str = ".orfullsync";
+
+/// 遗留备份扩展名（读侧兼容，不再写入）
+pub const LEGACY_FILE_EXTENSIONS: &[&str] = &[".waitfullsync", ".orsync"];
 
 /// 文件名前缀
 pub const FILE_PREFIX: &str = "backup";
@@ -30,9 +34,9 @@ pub fn sanitize_device_id(device_id: &str) -> String {
         .collect()
 }
 
-/// 生成备份文件名：`backup{yyyy-MM-dd}-{设备码}.waitfullsync`
+/// 生成备份文件名：`backup{yyyy-MM-dd}-{设备码}.orfullsync`
 ///
-/// 设备码为空时退化为 `backup{yyyy-MM-dd}.waitfullsync`
+/// 设备码为空时退化为 `backup{yyyy-MM-dd}.orfullsync`
 pub fn generate_backup_filename(device_id: &str, now: DateTime<Utc>) -> String {
     let date = now.format("%Y-%m-%d").to_string();
     let sanitized = sanitize_device_id(device_id);
@@ -46,10 +50,10 @@ pub fn generate_backup_filename(device_id: &str, now: DateTime<Utc>) -> String {
 
 /// 生成备份文件名：优先使用 device_name，为空时回退 device_id
 ///
-/// 格式：`backup{yyyy-MM-dd}-{name}.waitfullsync`
+/// 格式：`backup{yyyy-MM-dd}-{name}.orfullsync`
 /// - device_name 非空（去除首尾空白后）时使用 device_name
 /// - device_name 为空时回退到 device_id
-/// - 两者均为空时退化为 `backup{yyyy-MM-dd}.waitfullsync`
+/// - 两者均为空时退化为 `backup{yyyy-MM-dd}.orfullsync`
 ///
 /// 文件名安全化复用 [`sanitize_device_id`]，将 `[\\/:*?"<>|]` 替换为下划线。
 pub fn generate_backup_filename_with_name(
@@ -72,11 +76,20 @@ pub fn generate_backup_filename_with_name(
     }
 }
 
-/// 判断文件名是否符合 `backup*.waitfullsync` 命名规范
+/// 判断文件名是否符合 `backup*.orfullsync` 命名规范（读侧兼容遗留扩展名）
 pub fn is_backup_filename(filename: &str) -> bool {
-    filename.starts_with(FILE_PREFIX)
-        && filename.ends_with(FILE_EXTENSION)
-        && filename.len() > FILE_PREFIX.len() + FILE_EXTENSION.len()
+    if !filename.starts_with(FILE_PREFIX) {
+        return false;
+    }
+    let ext_ok = filename.ends_with(FILE_EXTENSION)
+        || LEGACY_FILE_EXTENSIONS
+            .iter()
+            .any(|ext| filename.ends_with(ext));
+    if !ext_ok {
+        return false;
+    }
+    // 最短合法形如 `backup2026-07-20.orfullsync`：前缀 + 日期 + 扩展名
+    filename.len() > FILE_PREFIX.len() + FILE_EXTENSION.len()
 }
 
 #[cfg(test)]
@@ -94,14 +107,14 @@ mod tests {
     fn filename_with_device_id() {
         let now = now_at("2026-07-20");
         let name = generate_backup_filename("a1b2c3d4e5f6g7h8", now);
-        assert_eq!(name, "backup2026-07-20-a1b2c3d4e5f6g7h8.waitfullsync");
+        assert_eq!(name, "backup2026-07-20-a1b2c3d4e5f6g7h8.orfullsync");
     }
 
     #[test]
     fn filename_without_device_id() {
         let now = now_at("2026-07-20");
         let name = generate_backup_filename("", now);
-        assert_eq!(name, "backup2026-07-20.waitfullsync");
+        assert_eq!(name, "backup2026-07-20.orfullsync");
     }
 
     #[test]
@@ -109,21 +122,28 @@ mod tests {
         let now = now_at("2026-07-20");
         // 设备码包含 Windows 文件名非法字符
         let name = generate_backup_filename("dev:1/2\\3", now);
-        assert_eq!(name, "backup2026-07-20-dev_1_2_3.waitfullsync");
+        assert_eq!(name, "backup2026-07-20-dev_1_2_3.orfullsync");
     }
 
     #[test]
     fn is_backup_filename_valid() {
+        assert!(is_backup_filename("backup2026-07-20-abc.orfullsync"));
+        assert!(is_backup_filename("backup2026-07-20.orfullsync"));
+    }
+
+    #[test]
+    fn is_backup_filename_accepts_legacy_extensions() {
+        // 遗留备份读侧兼容：.waitfullsync / .orsync 仍可列举与导入
         assert!(is_backup_filename("backup2026-07-20-abc.waitfullsync"));
-        assert!(is_backup_filename("backup2026-07-20.waitfullsync"));
+        assert!(is_backup_filename("backup2026-07-20.orsync"));
     }
 
     #[test]
     fn is_backup_filename_rejects_non_backup() {
         assert!(!is_backup_filename("data.zip"));
-        assert!(!is_backup_filename("backup.waitfullsync")); // 仅前缀+扩展名，无日期
+        assert!(!is_backup_filename("backup.orfullsync")); // 仅前缀+扩展名，无日期
         assert!(!is_backup_filename("backup2026-07-20.zip")); // 错误扩展名
-        assert!(!is_backup_filename("restore2026-07-20.waitfullsync")); // 错误前缀
+        assert!(!is_backup_filename("restore2026-07-20.orfullsync")); // 错误前缀
     }
 
     #[test]
@@ -153,14 +173,14 @@ mod tests {
     fn filename_with_name_prefers_device_name() {
         let now = now_at("2026-07-20");
         let name = generate_backup_filename_with_name("zhangsan", "a1b2c3d4", now);
-        assert_eq!(name, "backup2026-07-20-zhangsan.waitfullsync");
+        assert_eq!(name, "backup2026-07-20-zhangsan.orfullsync");
     }
 
     #[test]
     fn filename_with_empty_name_uses_device_id() {
         let now = now_at("2026-07-20");
         let name = generate_backup_filename_with_name("", "a1b2c3d4", now);
-        assert_eq!(name, "backup2026-07-20-a1b2c3d4.waitfullsync");
+        assert_eq!(name, "backup2026-07-20-a1b2c3d4.orfullsync");
     }
 
     #[test]
@@ -168,14 +188,14 @@ mod tests {
         let now = now_at("2026-07-20");
         // device_name 仅含空白时回退 device_id
         let name = generate_backup_filename_with_name("   ", "a1b2c3d4", now);
-        assert_eq!(name, "backup2026-07-20-a1b2c3d4.waitfullsync");
+        assert_eq!(name, "backup2026-07-20-a1b2c3d4.orfullsync");
     }
 
     #[test]
     fn filename_with_both_empty_degrades_to_date_only() {
         let now = now_at("2026-07-20");
         let name = generate_backup_filename_with_name("", "", now);
-        assert_eq!(name, "backup2026-07-20.waitfullsync");
+        assert_eq!(name, "backup2026-07-20.orfullsync");
     }
 
     #[test]
@@ -183,6 +203,6 @@ mod tests {
         let now = now_at("2026-07-20");
         // device_name 含 Windows 文件名非法字符，应被替换为下划线
         let name = generate_backup_filename_with_name("dev:1/2\\3", "abc", now);
-        assert_eq!(name, "backup2026-07-20-dev_1_2_3.waitfullsync");
+        assert_eq!(name, "backup2026-07-20-dev_1_2_3.orfullsync");
     }
 }

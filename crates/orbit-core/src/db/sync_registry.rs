@@ -15,7 +15,7 @@ pub const SYNCABLE_TABLES: &[&str] = &[
     "todo_task_relations",
     "todo_reminders",
     // 任务-附件关联（07 排查报告后续批次：附件功能）；附件二进制走
-    // assets/{hash}.waitsync 内容寻址通道（cloud_sync/attachments.rs），不进表同步
+    // assets/{hash}.orsync 内容寻址通道（cloud_sync/attachments.rs），不进表同步
     "todo_task_attachments",
     // 保存的筛选器（#35）：用户内容随库同步（对标 Apple Smart List）
     "todo_saved_filters",
@@ -23,7 +23,7 @@ pub const SYNCABLE_TABLES: &[&str] = &[
     "todo_templates",
 ];
 
-/// 全量备份包（.orsync）遍历导出的业务表白名单
+/// 全量备份包（.orfullsync）遍历导出的业务表白名单
 pub const FULL_BACKUP_TABLES: &[&str] = SYNCABLE_TABLES;
 
 /// 备份导入白名单 —— 已补齐 wait-home 版缺口（B 类小改）：

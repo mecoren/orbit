@@ -419,11 +419,11 @@ impl S3Adapter {
 #[async_trait]
 impl SyncAdapter for S3Adapter {
     async fn list_files(&self, base_path: &str) -> Result<Vec<RemoteFile>, SyncError> {
-        // v7: 复用 list_all_files，再过滤 .waitsync 后缀（保持原契约）
+        // v7: 复用 list_all_files，再过滤同步后缀（默认 .orsync，兼容遗留 .waitsync）
         let all = self.list_all_files(base_path).await?;
         Ok(all
             .into_iter()
-            .filter(|f| f.name.ends_with(".waitsync"))
+            .filter(|f| crate::cloud_sync::paths::is_sync_payload_name(&f.name))
             .collect())
     }
 
@@ -489,29 +489,36 @@ impl SyncAdapter for S3Adapter {
     }
 
     async fn upload_asset(&self, hash: &str, data: &[u8]) -> Result<(), SyncError> {
-        // 新版本统一上传到 assets/{hash}.waitsync
-        let path = format!("assets/{hash}.waitsync");
+        // 默认统一上传到 assets/{hash}.orsync
+        let path = crate::cloud_sync::paths::asset_path(hash);
         self.upload(&path, data).await
     }
 
     async fn download_asset(&self, hash: &str) -> Result<Vec<u8>, SyncError> {
-        // 双读回退：先试 .waitsync 新路径，404 再回退无扩展名旧路径
-        let new_path = format!("assets/{hash}.waitsync");
+        // 三读回退：.orsync → .waitsync → 裸 hash（迁移兼容）
+        let new_path = crate::cloud_sync::paths::asset_path(hash);
         match self.download(&new_path).await {
             Ok(data) => Ok(data),
             Err(e) if e.is_not_found() => {
-                let legacy_path = format!("assets/{hash}");
-                self.download(&legacy_path).await
+                let legacy_path = crate::cloud_sync::paths::legacy_asset_path(hash);
+                match self.download(&legacy_path).await {
+                    Ok(data) => Ok(data),
+                    Err(e2) if e2.is_not_found() => {
+                        let bare_path = format!("assets/{hash}");
+                        self.download(&bare_path).await
+                    }
+                    Err(e2) => Err(e2),
+                }
             }
             Err(e) => Err(e),
         }
     }
 
     async fn asset_exists(&self, hash: &str) -> Result<bool, SyncError> {
-        // 检查新路径；若不存在再检查旧路径（迁移期间可能两份都存在或仅旧路径存在）。
+        // 检查新路径；若不存在再检查旧路径（迁移期间可能多份并存）。
         // P1-2：HEAD 非 2xx 不再一律当「不存在」——403/500 透传错误，
         // 只有 404/409 才回退旧路径判定（权限错触发重复上传的历史问题）
-        let new_path = format!("assets/{hash}.waitsync");
+        let new_path = crate::cloud_sync::paths::asset_path(hash);
         let new_url = self.build_object_url(&new_path);
         let new_headers = self.sign_request("HEAD", &new_url, &sha256_hex(b""))?;
 
@@ -532,37 +539,44 @@ impl SyncAdapter for S3Adapter {
             false => {}
         }
 
-        // 新路径不存在（404/409），回退检查旧路径
-        let legacy_path = format!("assets/{hash}");
-        let legacy_url = self.build_object_url(&legacy_path);
-        let legacy_headers = self.sign_request("HEAD", &legacy_url, &sha256_hex(b""))?;
+        // 新路径不存在（404/409），回退检查遗留路径（.waitsync → 裸 hash）
+        for legacy_path in [
+            crate::cloud_sync::paths::legacy_asset_path(hash),
+            format!("assets/{hash}"),
+        ] {
+            let legacy_url = self.build_object_url(&legacy_path);
+            let legacy_headers = self.sign_request("HEAD", &legacy_url, &sha256_hex(b""))?;
 
-        let result = self
-            .http
-            .inner()
-            .head(&legacy_url)
-            .headers(legacy_headers)
-            .send()
-            .await
-            .map_err(|e| SyncError::Network {
-                message: format!("HEAD 请求失败: {e}"),
-                retryable: true,
-            })?;
+            let result = self
+                .http
+                .inner()
+                .head(&legacy_url)
+                .headers(legacy_headers)
+                .send()
+                .await
+                .map_err(|e| SyncError::Network {
+                    message: format!("HEAD 请求失败: {e}"),
+                    retryable: true,
+                })?;
 
-        SyncError::classify_head_status(result.status().as_u16())
+            if SyncError::classify_head_status(result.status().as_u16())? {
+                return Ok(true);
+            }
+        }
+        Ok(false)
     }
 
     async fn list_assets(&self) -> Result<Vec<String>, SyncError> {
         // 分页列举（P0-3）：附件超过 1000 个不再静默截断
         let keys = self.list_all_keys_paginated("assets/").await?;
 
-        // 新版本文件名为 {hash}.waitsync，需剥离 .waitsync 后缀以保持接口契约。
-        // 旧版本文件名为 {hash}（无后缀），保持原样。两者去重后返回。
+        // 新版本文件名为 {hash}.orsync，需剥离同步后缀以保持接口契约。
+        // 遗留 {hash}.waitsync / 裸 {hash} 同口径剥离。去重后返回。
         let mut hashes: Vec<String> = keys
             .into_iter()
-            .map(|k| k.strip_suffix(".waitsync").unwrap_or(&k).to_string())
+            .map(|k| crate::cloud_sync::paths::strip_sync_extension(&k).to_string())
             .collect();
-        // S30：dedup 只去相邻重复，先排序保证同名（.waitsync 与裸 hash）全去
+        // S30：dedup 只去相邻重复，先排序保证同名（多后缀并存）全去
         hashes.sort();
         hashes.dedup();
         Ok(hashes)
@@ -608,7 +622,7 @@ mod multipart_tests {
         let xml = r#"<?xml version="1.0"?>
 <InitiateMultipartUploadResult>
   <Bucket>wait</Bucket>
-  <Key>assets/abc.waitsync</Key>
+  <Key>assets/abc.orsync</Key>
   <UploadId>VXBsb2FkIElEIGZvciA2ly+xx</UploadId>
 </InitiateMultipartUploadResult>"#;
         assert_eq!(

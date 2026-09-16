@@ -180,10 +180,10 @@ mod tests {
   <Name>b</Name><Prefix>sync/</Prefix><KeyCount>1</KeyCount>
   <IsTruncated>true</IsTruncated>
   <NextContinuationToken>1ueGcxLPRx1Tr/XYExHnhbYLgveDs2J2mDAiLvXgggg</NextContinuationToken>
-  <Contents><Key>sync/a.waitsync</Key></Contents>
+  <Contents><Key>sync/a.orsync</Key></Contents>
 </ListBucketResult>"#;
         let page = parse_list_objects_xml(xml, "sync").unwrap();
-        assert_eq!(page.keys, vec!["a.waitsync"]);
+        assert_eq!(page.keys, vec!["a.orsync"]);
         assert_eq!(
             page.next_token.as_deref(),
             Some("1ueGcxLPRx1Tr/XYExHnhbYLgveDs2J2mDAiLvXgggg")

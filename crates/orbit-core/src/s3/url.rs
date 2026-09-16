@@ -140,13 +140,13 @@ mod tests {
         let url = build_url(
             "minio.example.com:9000",
             "mybucket",
-            "assets/abc.waitsync",
+            "assets/abc.orsync",
             true,
             &[],
         );
         assert_eq!(
             url,
-            "https://minio.example.com:9000/mybucket/assets/abc.waitsync"
+            "https://minio.example.com:9000/mybucket/assets/abc.orsync"
         );
     }
 
@@ -156,11 +156,11 @@ mod tests {
         let url = build_url(
             "https://minio.example.com:9000/",
             "mybucket",
-            "data.waitsync",
+            "data.orsync",
             true,
             &[],
         );
-        assert_eq!(url, "https://minio.example.com:9000/mybucket/data.waitsync");
+        assert_eq!(url, "https://minio.example.com:9000/mybucket/data.orsync");
     }
 
     #[test]
@@ -176,13 +176,13 @@ mod tests {
         let url = build_url(
             "https://oss-cn-shenzhen.aliyuncs.com",
             "mybucket",
-            "modules/todo/data.waitsync",
+            "modules/todo/data.orsync",
             false,
             &[],
         );
         assert_eq!(
             url,
-            "https://mybucket.oss-cn-shenzhen.aliyuncs.com/modules/todo/data.waitsync"
+            "https://mybucket.oss-cn-shenzhen.aliyuncs.com/modules/todo/data.orsync"
         );
     }
 

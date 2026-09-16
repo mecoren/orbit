@@ -35,7 +35,7 @@ pub fn get_device_id() -> Result<&'static str, String> {
 /// 同时保留人类可读性与跨设备唯一性，用于：
 /// - 全量备份文件名（`backup_naming::generate_backup_filename_with_name` 优先使用）
 /// - 备份 manifest 元数据（`BackupManifest.device_name`）
-/// - .waitsync 包 manifest（`source_device_name`）
+/// - .orsync 包 manifest（`source_device_name`）
 ///
 /// **不参与**冲突检测、Lamport 版本、同步日志（这些只用 `device_id`）。
 ///

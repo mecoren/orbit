@@ -2,10 +2,12 @@ use serde::{Deserialize, Serialize};
 
 use super::error::SyncBundleError;
 
-/// .waitsync 文件头大小（字节）
+/// .orsync 文件头大小（字节）
 pub const HEADER_SIZE: usize = 52;
-/// magic 值 "WSYN"（0x5753594E）
-pub const MAGIC_VALUE: u32 = 0x5753594E;
+/// magic 值 "OSYN"（0x4F53594E，默认格式）
+pub const MAGIC_VALUE: u32 = 0x4F53594E;
+/// 遗留 magic 值 "WSYN"（0x5753594E，读侧兼容）
+pub const LEGACY_MAGIC_VALUE: u32 = 0x5753594E;
 
 /// 同步包模式
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -33,7 +35,7 @@ impl BundleMode {
     }
 }
 
-/// .waitsync 文件头结构
+/// .orsync 文件头结构（遗留 .waitsync 读侧兼容）
 ///
 /// 字段偏移与 Dart `SyncBundleHeader` 完全一致：
 /// 偏移  长度  字段
@@ -90,7 +92,7 @@ pub fn parse_header(data: &[u8]) -> Result<SyncBundleHeader, SyncBundleError> {
         });
     }
     let magic = u32::from_be_bytes([data[0], data[1], data[2], data[3]]);
-    if magic != MAGIC_VALUE {
+    if magic != MAGIC_VALUE && magic != LEGACY_MAGIC_VALUE {
         return Err(SyncBundleError {
             message: format!(
                 "Invalid magic: expected 0x{:X}, got 0x{:X}",

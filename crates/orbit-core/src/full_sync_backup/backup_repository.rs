@@ -1,7 +1,7 @@
 //! backup_repository — 备份目录扫描/列表/删除/仅保留最新（v3 新增）
 //!
 //! 参考 legado `AppConfig.backupPath` + `AppConfig.onlyLatestBackup` 实现：
-//! - 扫描备份目录下的 `backup*.waitfullsync` 文件
+//! - 扫描备份目录下的 `backup*.orfullsync` 文件（兼容遗留 `.waitfullsync` / `.orsync`）
 //! - 按文件名倒序排列（最新在前）
 //! - 提供"仅保留最新"策略实现
 
@@ -40,7 +40,7 @@ pub fn resolve_backup_dir(app_data_dir: &Path, local_path: Option<&str>) -> Path
     app_data_dir.join(DEFAULT_BACKUP_DIR_NAME)
 }
 
-/// 列出备份目录下的所有 `backup*.waitfullsync` 文件
+/// 列出备份目录下的所有 `backup*.orfullsync` 文件（兼容遗留扩展名）
 ///
 /// 按文件名倒序排列（最新日期在前，参考 legado AlphanumComparator + reversed）
 pub fn list_backups(backup_dir: &Path) -> FullSyncBackupResult<Vec<BackupEntry>> {
@@ -99,7 +99,7 @@ pub fn delete_backup(file_path: &Path) -> FullSyncBackupResult<()> {
     Ok(())
 }
 
-/// 仅保留最新备份：删除 `keep_file` 之外的所有 `backup*.waitfullsync` 文件
+/// 仅保留最新备份：删除 `keep_file` 之外的所有 `backup*.orfullsync` 文件（兼容遗留扩展名）
 ///
 /// 返回被删除的文件路径列表
 pub fn keep_latest_backup(
@@ -113,7 +113,7 @@ pub fn keep_latest_backup(
         if entry.file_path == keep_file {
             continue;
         }
-        // 仅删除符合 backup*.waitfullsync 命名规范的文件（双重检查）
+        // 仅删除符合 backup*.orfullsync 命名规范的文件（双重检查，兼容遗留扩展名）
         if !is_backup_filename(&entry.filename) {
             continue;
         }

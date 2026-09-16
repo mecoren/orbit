@@ -1,6 +1,6 @@
 //! full_sync_backup — 全量同步备份模块（v3 新增，v4 扩展调度）
 //!
-//! 提供 `.waitfullsync` 全量备份格式的核心实现：
+//! 提供 `.orfullsync` 全量备份格式的核心实现（遗留 `.waitfullsync` / `.orsync` 读侧兼容）：
 //! - 二进制容器读写（`container`）
 //! - 备份命名规范（`backup_naming`）
 //! - 备份清单（`manifest`）
@@ -25,7 +25,8 @@ pub mod manifest;
 pub mod scheduler;
 
 pub use backup_naming::{
-    FILE_EXTENSION, FILE_PREFIX, generate_backup_filename, is_backup_filename, sanitize_device_id,
+    FILE_EXTENSION, FILE_PREFIX, LEGACY_FILE_EXTENSIONS, generate_backup_filename,
+    is_backup_filename, sanitize_device_id,
 };
 pub use backup_prefs::{
     BackupPrefs, PREFS_FILENAME, ScheduleType, load_prefs, prefs_path, save_prefs,
@@ -35,7 +36,8 @@ pub use backup_repository::{
 };
 pub use container::{
     FullSyncHeader, HEADER_SIZE as CONTAINER_HEADER_SIZE, ITERATIONS as CONTAINER_ITERATIONS,
-    MAGIC as CONTAINER_MAGIC, NONCE_LEN, SALT_LEN, build_container, parse_container,
+    LEGACY_MAGIC as CONTAINER_LEGACY_MAGIC, MAGIC as CONTAINER_MAGIC, NONCE_LEN, SALT_LEN,
+    build_container, parse_container,
 };
 pub use decoder::{DecodedBackup, decode_backup};
 pub use encoder::{EncodeParams, EncodeResult, encode_backup};

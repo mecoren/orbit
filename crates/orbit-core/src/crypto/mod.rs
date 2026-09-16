@@ -69,7 +69,7 @@ pub fn derive_asset_nonce(hash: &str) -> [u8; 12] {
     if invalid_hex_seen {
         log::warn!(
             "[derive_asset_nonce] hash 含非 hex 字符（前 24 字符: {:?}），\
-             nonce 可能发生坍缩导致 GCM nonce 复用风险。建议迁移该资产到 .waitsync 新格式",
+             nonce 可能发生坍缩导致 GCM nonce 复用风险。建议迁移该资产到 .orsync 新格式",
             &padded
         );
     }

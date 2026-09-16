@@ -444,12 +444,16 @@ impl WebDavAdapter {
         self.upload(&head_path, &head_json).await?;
 
         // 4. 删除旧单对象（rekey 对账）：rekey 重传场景旧 Key 密文仍在
-        //    assets/{hash}.waitsync / assets/{hash}，读侧回退顺序
-        //    （.waitsync → 裸 hash → 分片）会先命中旧密文解密失败——
+        //    assets/{hash}.orsync / .waitsync / 裸 hash，读侧回退顺序
+        //    （.orsync → .waitsync → 裸 hash → 分片）会先命中旧密文解密失败——
         //    分片就位后必须清掉旧单对象。404（本就无旧对象，大附件
         //    首传走分片）忽略；其余失败透传（留旧对象 = 他端解密报错，
         //    不如本轮失败重试）
-        for legacy in [format!("assets/{hash}.waitsync"), format!("assets/{hash}")] {
+        for legacy in [
+            crate::cloud_sync::paths::asset_path(hash),
+            crate::cloud_sync::paths::legacy_asset_path(hash),
+            format!("assets/{hash}"),
+        ] {
             if let Err(e) = self.delete(&legacy).await
                 && !e.is_not_found()
             {
@@ -613,11 +617,11 @@ impl WebDavAdapter {
 #[async_trait]
 impl SyncAdapter for WebDavAdapter {
     async fn list_files(&self, base_path: &str) -> Result<Vec<RemoteFile>, SyncError> {
-        // v7: 复用 list_all_files，再过滤 .waitsync 后缀（保持原契约）
+        // v7: 复用 list_all_files，再过滤同步后缀（默认 .orsync，兼容遗留 .waitsync）
         let all = self.list_all_files(base_path).await?;
         Ok(all
             .into_iter()
-            .filter(|f| f.name.ends_with(".waitsync"))
+            .filter(|f| crate::cloud_sync::paths::is_sync_payload_name(&f.name))
             .collect())
     }
 
@@ -822,23 +826,32 @@ impl SyncAdapter for WebDavAdapter {
     }
 
     async fn upload_asset(&self, hash: &str, data: &[u8]) -> Result<(), SyncError> {
-        // 新版本统一上传到 assets/{hash}.waitsync
-        let path = format!("assets/{hash}.waitsync");
+        // 默认统一上传到 assets/{hash}.orsync
+        let path = crate::cloud_sync::paths::asset_path(hash);
         self.upload(&path, data).await
     }
 
     async fn download_asset(&self, hash: &str) -> Result<Vec<u8>, SyncError> {
-        // 三段回退：.waitsync 单对象 → 裸 hash 旧命名 → assets_parts 分片拼装
-        // （S4：大附件的分片形态）。前两者 404 后才查分片清单，清单存在
+        // 四段回退：.orsync → .waitsync → 裸 hash → assets_parts 分片拼装
+        // （S4：大附件的分片形态）。前三者 404 后才查分片清单，清单存在
         // 即拼装（清单只在全部片就位后写入，半成品目录无清单不可读）
-        let new_path = format!("assets/{hash}.waitsync");
+        let new_path = crate::cloud_sync::paths::asset_path(hash);
         match self.download(&new_path).await {
             Ok(data) => Ok(data),
             Err(e) if e.is_not_found() => {
-                let legacy_path = format!("assets/{hash}");
+                let legacy_path = crate::cloud_sync::paths::legacy_asset_path(hash);
                 match self.download(&legacy_path).await {
                     Ok(data) => Ok(data),
-                    Err(e2) if e2.is_not_found() => self.download_asset_parts(hash).await,
+                    Err(e2) if e2.is_not_found() => {
+                        let bare_path = format!("assets/{hash}");
+                        match self.download(&bare_path).await {
+                            Ok(data) => Ok(data),
+                            Err(e3) if e3.is_not_found() => {
+                                self.download_asset_parts(hash).await
+                            }
+                            Err(e3) => Err(e3),
+                        }
+                    }
                     Err(e2) => Err(e2),
                 }
             }
@@ -847,10 +860,10 @@ impl SyncAdapter for WebDavAdapter {
     }
 
     async fn asset_exists(&self, hash: &str) -> Result<bool, SyncError> {
-        // 检查新路径；若 404/409 再检查旧路径（迁移期间可能两份都存在或仅旧路径存在）。
+        // 检查新路径；若 404/409 再检查遗留路径（迁移期间可能多份并存）。
         // P1-2：HEAD 非 2xx 不再一律当「不存在」——403/500 透传错误，
         // 只有 404/409 才回退旧路径（与 S3 适配器同口径）
-        let new_path = format!("assets/{hash}.waitsync");
+        let new_path = crate::cloud_sync::paths::asset_path(hash);
         let new_url = self.build_url(&new_path);
         let headers = self.auth_headers();
 
@@ -870,32 +883,35 @@ impl SyncAdapter for WebDavAdapter {
             return Ok(true);
         }
 
-        // 新路径不存在（404/409），回退检查旧路径
-        let legacy_path = format!("assets/{hash}");
-        let legacy_url = self.build_url(&legacy_path);
-        let headers = self.auth_headers();
-        let result = self
-            .http
-            .inner()
-            .head(&legacy_url)
-            .headers(headers)
-            .send()
-            .await
-            .map_err(|e| SyncError::Network {
-                message: format!("HEAD 请求失败: {e}"),
-                retryable: true,
-            })?;
-
-        match SyncError::classify_head_status(result.status().as_u16())? {
-            true => Ok(true),
-            // S4：大附件的分片形态——单对象两路径都 404 后查分片清单。
-            // 不查清单会误判「不存在」：push 差集每轮把分片附件当缺失
-            // 空跑重传（幂等但浪费），首传探测三分叉也会误放行
-            false => self
-                .remote_file_size(&Self::parts_head_path(hash))
+        // 新路径不存在（404/409），回退检查遗留路径（.waitsync → 裸 hash）
+        for legacy_path in [
+            crate::cloud_sync::paths::legacy_asset_path(hash),
+            format!("assets/{hash}"),
+        ] {
+            let legacy_url = self.build_url(&legacy_path);
+            let headers = self.auth_headers();
+            let result = self
+                .http
+                .inner()
+                .head(&legacy_url)
+                .headers(headers)
+                .send()
                 .await
-                .map(|s| s.is_some()),
+                .map_err(|e| SyncError::Network {
+                    message: format!("HEAD 请求失败: {e}"),
+                    retryable: true,
+                })?;
+
+            if SyncError::classify_head_status(result.status().as_u16())? {
+                return Ok(true);
+            }
         }
+        // S4：大附件的分片形态——单对象三路径都 404 后查分片清单。
+        // 不查清单会误判「不存在」：push 差集每轮把分片附件当缺失
+        // 空跑重传（幂等但浪费），首传探测三分叉也会误放行
+        self.remote_file_size(&Self::parts_head_path(hash))
+            .await
+            .map(|s| s.is_some())
     }
 
     async fn list_assets(&self) -> Result<Vec<String>, SyncError> {
@@ -953,8 +969,8 @@ impl SyncAdapter for WebDavAdapter {
 
         // 提取 hash：跳过目录本身（is_collection），从 display_name 或 href 提取文件名。
         // href 先剥尾斜杠（目录条目防御：rsplit 对尾斜杠取到空串）。
-        // 新版本文件名为 {hash}.waitsync，需剥离 .waitsync 后缀以保持接口契约。
-        // 旧版本文件名为 {hash}（无后缀），保持原样。两者去重后返回。
+        // 默认文件名为 {hash}.orsync，需剥离同步后缀以保持接口契约。
+        // 遗留 {hash}.waitsync / 裸 {hash} 同口径剥离。去重后返回。
         let mut hashes: Vec<String> = entries
             .into_iter()
             .filter(|e| !e.is_collection)
@@ -969,10 +985,7 @@ impl SyncAdapter for WebDavAdapter {
                 })
             })
             .filter(|s| !s.is_empty())
-            .map(|name| {
-                // 剥离 .waitsync 后缀（新版本文件名）
-                name.strip_suffix(".waitsync").unwrap_or(&name).to_string()
-            })
+            .map(|name| crate::cloud_sync::paths::strip_sync_extension(&name).to_string())
             .collect();
 
         // S4：并集分片目录（assets_parts/{hash}/ 一级子目录名即 hash）——
@@ -985,7 +998,7 @@ impl SyncAdapter for WebDavAdapter {
             }
         }
 
-        // S30：dedup 只去相邻重复，先排序保证同名（.waitsync 与裸 hash）全去
+        // S30：dedup 只去相邻重复，先排序保证同名（多后缀并存）全去
         hashes.sort();
         hashes.dedup();
         Ok(hashes)
@@ -994,12 +1007,13 @@ impl SyncAdapter for WebDavAdapter {
 
 /// 从附件对象路径提取内容哈希（S4 分片分派用）
 ///
-/// 识别 `assets/{hash}.waitsync`（新命名）与 `assets/{hash}`（旧命名）；
+/// 识别 `assets/{hash}.orsync`（默认）与 `assets/{hash}.waitsync` /
+/// `assets/{hash}`（遗留）；
 /// 其余路径（模块数据、crypto/config 等）返回 None——`upload` 的 S4
 /// 分片分派只对附件大对象生效，模块数据零变化。
 fn asset_hash_from_path(path: &str) -> Option<String> {
     let name = path.rsplit('/').next()?;
-    let hash = name.strip_suffix(".waitsync").unwrap_or(name);
+    let hash = crate::cloud_sync::paths::strip_sync_extension(name);
     if path.starts_with("assets/") && !hash.is_empty() {
         Some(hash.to_string())
     } else {
@@ -1074,13 +1088,17 @@ mod tests {
 #[test]
 fn asset_hash_from_path_new_naming() {
     assert_eq!(
-        asset_hash_from_path("assets/abc123.waitsync").as_deref(),
+        asset_hash_from_path("assets/abc123.orsync").as_deref(),
         Some("abc123")
     );
 }
 
 #[test]
 fn asset_hash_from_path_legacy_naming() {
+    assert_eq!(
+        asset_hash_from_path("assets/abc123.waitsync").as_deref(),
+        Some("abc123")
+    );
     assert_eq!(
         asset_hash_from_path("assets/abc123").as_deref(),
         Some("abc123")
@@ -1090,15 +1108,18 @@ fn asset_hash_from_path_legacy_naming() {
 #[test]
 fn asset_hash_from_path_rejects_non_asset() {
     // 模块数据路径（同名文件在 modules/ 下）不得误判为附件
+    assert!(asset_hash_from_path("modules/todos/data.orsync").is_none());
     assert!(asset_hash_from_path("modules/todos/data.waitsync").is_none());
     assert!(asset_hash_from_path("crypto/config").is_none());
+    assert!(asset_hash_from_path("_meta.orsync").is_none());
     assert!(asset_hash_from_path("_meta.waitsync").is_none());
     // 带 base_path 的完整形态：assets/ 必须是路径段而非前缀子串
-    assert!(asset_hash_from_path("wait/assets/abc.waitsync").is_none());
+    assert!(asset_hash_from_path("wait/assets/abc.orsync").is_none());
 }
 
 #[test]
 fn asset_hash_from_path_rejects_empty_hash() {
+    assert!(asset_hash_from_path("assets/.orsync").is_none());
     assert!(asset_hash_from_path("assets/.waitsync").is_none());
 }
 

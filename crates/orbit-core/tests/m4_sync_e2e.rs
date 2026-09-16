@@ -84,7 +84,13 @@ async fn two_instance_convergence_over_webdav() {
         let cleanup_cfg = sync_config(&endpoint, "cleanup");
         let adapter =
             orbit_core::sync::engine::create_adapter(&cleanup_cfg).expect("构造清理适配器");
-        for leftover in ["_meta.waitsync", "crypto/config", "crypto", "modules"] {
+        for leftover in [
+            "_meta.orsync",
+            "_meta.waitsync",
+            "crypto/config",
+            "crypto",
+            "modules",
+        ] {
             let path = format!("{}/{}", cleanup_cfg.base_path, leftover);
             match adapter.delete(&path).await {
                 Ok(()) => println!("[e2e-cleanup] 已删除残留 {path}"),

@@ -1,6 +1,6 @@
 //! decoder — AES-256-GCM 解密 + ZIP 解压
 //!
-//! 解码 `.waitfullsync` 文件：
+//! 解码 `.orfullsync` 文件（兼容遗留 `.waitfullsync`）：
 //! 1. 解析 36 字节头部（magic + salt + nonce + iterations）
 //! 2. PBKDF2 派生 master_key
 //! 3. AES-256-GCM 解密密文（GCM tag 验证失败即密码错误）
@@ -28,9 +28,9 @@ pub struct DecodedBackup {
     pub schema_version_json: String,
 }
 
-/// 解码 `.waitfullsync` 字节流
+/// 解码 `.orfullsync` 字节流（兼容遗留 `.waitfullsync`）
 ///
-/// 输入：完整的 .waitfullsync 文件字节 + 同步密码
+/// 输入：完整的 .orfullsync 文件字节 + 同步密码
 /// 输出：解码后的 manifest + table_data + schema_version_json
 ///
 /// 失败场景：

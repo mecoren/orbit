@@ -6,23 +6,24 @@
 //! ## Push 流程
 //! 1. 加载本地同步状态
 //! 2. 获取已解锁的 Data Key
-//! 3. 探测远端 `_meta.waitsync` 修正本地 state（`reconcile_state_with_remote_meta`）：
+//! 3. 探测远端 `_meta.orsync` 修正本地 state（`reconcile_state_with_remote_meta`）：
 //!    - 远端 `_meta` 404 → 清空所有模块 `remote_fp`，触发全量 push
 //!    - 远端 `_meta` 存在但模块 `fp` 与本地 `remote_fp` 不一致 → 清空该模块 `remote_fp`
 //!    - 修正后 `should_skip` 失效，确保远端被外部清空/修改时本地能重新上传
+//!    - 读侧兼容遗留 `_meta.waitsync`
 //! 4. 遍历每个模块：
 //!    - 加载模块所有未删除记录
 //!    - 计算本地指纹
 //!    - 与上次 Push 的指纹比对，相同则跳过
-//!    - 变化则序列化 → 加密 → 上传 `data.waitsync` + `meta.waitsync`
+//!    - 变化则序列化 → 加密 → 上传 `data.orsync` + `meta.orsync`
 //!    - 更新本地状态
-//! 5. 上传全局 `_meta.waitsync`
+//! 5. 上传全局 `_meta.orsync`
 //! 6. 附件同步（调用 attachments 模块，M1.11 实现）
 //!
 //! ## 云端路径
-//! - `modules/{name}/data.waitsync`：模块数据（加密）
-//! - `modules/{name}/meta.waitsync`：模块元数据（加密）
-//! - `_meta.waitsync`：全局索引（加密）
+//! - `modules/{name}/data.orsync`：模块数据（加密）
+//! - `modules/{name}/meta.orsync`：模块元数据（加密）
+//! - `_meta.orsync`：全局索引（加密）
 //! - `crypto/config`：加密元数据（无扩展名，由 sync_crypto::bundle_io 管理）
 
 use sqlx::SqlitePool;
@@ -87,7 +88,7 @@ pub async fn push_all(
     let mut state = state_store.load()?;
     let data_key = crypto.get_data_key().ok_or(CloudSyncError::CryptoLocked)?;
 
-    // Push 前探测远端 _meta.waitsync，感知"远端被外部清空或修改"场景：
+    // Push 前探测远端 _meta.orsync，感知"远端被外部清空或修改"场景：
     // - 远端 _meta 404 → 清空所有模块 remote_fp，触发全量 push（修复"删除云端后不同步"bug）
     // - 远端 _meta 存在但模块 fp 与本地 remote_fp 不一致 → 清空该模块 remote_fp，触发该模块 push
     // - 远端 _meta 存在且 fp 一致 → 保持原 should_skip 跳过逻辑
@@ -187,7 +188,7 @@ pub async fn push_all(
         }
     }
 
-    // 上传全局 _meta.waitsync（仅当至少一个模块实际 push 时）
+    // 上传全局 _meta.orsync（仅当至少一个模块实际 push 时）
     //    避免所有模块被跳过时仍上传 _meta，产生"说谎的 _meta"（声称模块存在但
     //    实际模块数据文件未上传）。reconcile 的文件存在性校验依赖此不变量。
     if result.pushed_modules > 0 {
@@ -377,21 +378,22 @@ fn build_pushed_state(
     }
 }
 
-/// Push 前根据远端 `_meta.waitsync` 探测结果修正本地 state
+/// Push 前根据远端 `_meta.orsync` 探测结果修正本地 state
 ///
 /// 用于感知"远端被外部清空或修改"场景，避免本地数据未变时跳过上传导致云端持续为空：
-/// - 远端 `_meta.waitsync` 404 → 远端被清空，
+/// - 远端 `_meta` 404 → 远端被清空，
 ///   清空所有模块的 `remote_fp`，触发全量 push。
 /// - 远端 `_meta` 存在 → 对每个本地记录的模块，比对远端 `_meta` 中对应模块的 `fp`
 ///   与本地 `state.remote_fp`：
 ///   - 不一致或远端无此模块 → 清空该模块 `remote_fp`，触发该模块 push。
 ///   - 一致 → 进入步骤 3 文件存在性校验。
-/// - 步骤 3：fp 全部一致时，下载首个有数据模块的 `data.waitsync` 验证存在性。
+/// - 步骤 3：fp 全部一致时，下载首个有数据模块的 `data.orsync` 验证存在性。
 ///   - 404 → 远端存在"说谎的 _meta"（旧版本 broken push 仅上传 _meta 未上传模块数据），
 ///     清空所有模块 `remote_fp`，触发全量 push。
-///   - 存在 → 远端数据完整，保持原 `should_skip` 跳过逻辑生效。
+///   - 存在 → 远端数据完整，保持原 `should_skip` 跳过逻辑生效.
+/// 读侧兼容遗留 `_meta.waitsync` / `data.waitsync`。
 ///
-/// 非 404 错误（网络/认证等）直接向上传播，不触发修正。
+/// 非 404 错误（网络/认证等）直接向上传播，不触发修正.
 ///
 /// 返回 `true` 表示触发了任何 state 修正（用于诊断日志）。
 async fn reconcile_state_with_remote_meta(
@@ -399,13 +401,24 @@ async fn reconcile_state_with_remote_meta(
     data_key: &[u8],
     state: &mut SyncState,
 ) -> Result<bool, CloudSyncError> {
-    // 1. 下载远端 _meta.waitsync
-    let remote_meta = match adapter.download(paths::GLOBAL_META_PATH).await {
-        Ok(meta_bytes) => {
+    // 1. 下载远端 _meta（默认 .orsync，404 回退遗留 .waitsync）
+    let meta_bytes = match adapter.download(paths::GLOBAL_META_PATH).await {
+        Ok(b) => Some(b),
+        Err(e) if paths::is_not_found_error(&e) => {
+            match adapter.download(paths::LEGACY_GLOBAL_META_PATH).await {
+                Ok(b) => Some(b),
+                Err(e2) if paths::is_not_found_error(&e2) => None,
+                Err(e2) => return Err(CloudSyncError::from(e2)),
+            }
+        }
+        Err(e) => return Err(CloudSyncError::from(e)),
+    };
+    let remote_meta = match meta_bytes {
+        Some(meta_bytes) => {
             let decrypted = decrypt_payload(&meta_bytes, data_key)?;
             serde_json::from_slice::<GlobalMeta>(&decrypted)?
         }
-        Err(e) if paths::is_not_found_error(&e) => {
+        None => {
             // 远端被外部清空：清空所有模块的 remote_fp，触发全量 push。
             // 保留 fp（本地指纹）不变，仅清空 remote_fp 让 should_skip 失效。
             let changed = state.modules.values().any(|m| !m.remote_fp.is_empty());
@@ -416,7 +429,6 @@ async fn reconcile_state_with_remote_meta(
             }
             return Ok(changed);
         }
-        Err(e) => return Err(CloudSyncError::from(e)),
     };
 
     // 2. 远端 _meta 存在：逐模块比对远端 fp 与本地 state.remote_fp
@@ -445,21 +457,34 @@ async fn reconcile_state_with_remote_meta(
         .iter()
         .find(|m| state.modules.get(m.name).is_some_and(|s| !s.fp.is_empty()));
     if let Some(module_def) = verify_module {
-        let data_path = paths::module_data_path(module_def.name);
-        match adapter.download(&data_path).await {
-            Ok(_bytes) => {
-                // 模块数据文件存在 → 远端完整，信任 _meta（丢弃下载内容）
+        // 默认 data.orsync，404 回退遗留 data.waitsync
+        let mut found = false;
+        let mut last_not_found = false;
+        for data_path in [
+            paths::module_data_path(module_def.name),
+            paths::legacy_module_data_path(module_def.name),
+        ] {
+            match adapter.download(&data_path).await {
+                Ok(_bytes) => {
+                    // 模块数据文件存在 → 远端完整，信任 _meta（丢弃下载内容）
+                    found = true;
+                    break;
+                }
+                Err(e) if paths::is_not_found_error(&e) => {
+                    last_not_found = true;
+                    continue;
+                }
+                Err(e) => return Err(CloudSyncError::from(e)),
             }
-            Err(e) if paths::is_not_found_error(&e) => {
-                // 模块数据文件缺失 → 远端破损（说谎的 _meta）→ 清空所有 remote_fp 触发全量 push
-                for (_, m) in state.modules.iter_mut() {
-                    if !m.remote_fp.is_empty() {
-                        m.remote_fp.clear();
-                        changed = true;
-                    }
+        }
+        if !found && last_not_found {
+            // 模块数据文件缺失 → 远端破损（说谎的 _meta）→ 清空所有 remote_fp 触发全量 push
+            for (_, m) in state.modules.iter_mut() {
+                if !m.remote_fp.is_empty() {
+                    m.remote_fp.clear();
+                    changed = true;
                 }
             }
-            Err(e) => return Err(CloudSyncError::from(e)),
         }
     }
     Ok(changed)

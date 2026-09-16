@@ -1,10 +1,9 @@
-//! 单文件迁移（0001_init.sql）schema 回归：end_date 列不存在、
+//! 基线（0001_init.sql，已冻结）schema 回归：end_date 列不存在、
 //! my_day_date/holiday 表存在、任务行含 start/due 正常读写。
-//! （0002/0003/0004 已并入 0001——2026-09-07 决策恢复单文件迁移。）
 
 use sqlx::SqlitePool;
 
-/// 全量迁移（0001→0004）后：end_date 列不存在，任务行含 start/due 正常读写
+/// 基线迁移后：end_date 列不存在，任务行含 start/due 正常读写
 #[tokio::test]
 async fn end_date_column_removed_and_rows_survive() {
     let pool = SqlitePool::connect("sqlite::memory:").await.unwrap();

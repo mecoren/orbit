@@ -1,9 +1,9 @@
-//! container — .waitfullsync 二进制容器读写
+//! container — .orfullsync 二进制容器读写
 //!
 //! 文件格式（共 36 字节头部 + 变长密文）：
 //! ```text
 //! 偏移  长度  字段              说明
-//! 0     4     magic             "WFS1"（Wait Full Sync v1）
+//! 0     4     magic             "OFS1"（Orbit Full Sync v1，默认格式；遗留 "WFS1" 读侧兼容）
 //! 4     16    salt              PBKDF2 盐（每次备份随机生成）
 //! 20    12    nonce             AES-GCM nonce（每次备份随机生成）
 //! 32    4     iterations        PBKDF2 迭代次数（BE u32，当前为 200000）
@@ -12,11 +12,14 @@
 
 use crate::full_sync_backup::error::{FullSyncBackupError, FullSyncBackupResult};
 
-/// .waitfullsync 文件头大小（字节）
+/// .orfullsync 文件头大小（字节）
 pub const HEADER_SIZE: usize = 36;
 
-/// magic 值 "WFS1"
-pub const MAGIC: [u8; 4] = *b"WFS1";
+/// magic 值 "OFS1"（默认格式）
+pub const MAGIC: [u8; 4] = *b"OFS1";
+
+/// 遗留 magic 值 "WFS1"（读侧兼容，不再写入）
+pub const LEGACY_MAGIC: [u8; 4] = *b"WFS1";
 
 /// PBKDF2 迭代次数（与 sync_crypto::service::ITERATIONS 一致）
 pub const ITERATIONS: u32 = 200_000;
@@ -27,7 +30,7 @@ pub const SALT_LEN: usize = 16;
 /// Nonce 长度（字节）
 pub const NONCE_LEN: usize = 12;
 
-/// 解析后的 .waitfullsync 文件头
+/// 解析后的 .orfullsync 文件头
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FullSyncHeader {
     pub salt: [u8; SALT_LEN],
@@ -35,7 +38,7 @@ pub struct FullSyncHeader {
     pub iterations: u32,
 }
 
-/// 拼接完整的 .waitfullsync 字节流
+/// 拼接完整的 .orfullsync 字节流
 ///
 /// 输入：salt(16B) + nonce(12B) + iterations + ciphertext（含末尾 16B GCM tag）
 /// 输出：[magic(4B)][salt(16B)][nonce(12B)][iterations BE u32(4B)][ciphertext]
@@ -61,7 +64,7 @@ pub fn parse_container(data: &[u8]) -> FullSyncBackupResult<(FullSyncHeader, &[u
     }
 
     let magic = [data[0], data[1], data[2], data[3]];
-    if magic != MAGIC {
+    if magic != MAGIC && magic != LEGACY_MAGIC {
         return Err(FullSyncBackupError::MagicMismatch {
             expected: MAGIC,
             got: magic,

@@ -12,7 +12,7 @@ Orbit（循迹）是本地优先的跨平台任务管理应用：待办（项目
 - **只读聚合不进同步白名单**：统计类新表/新读路径不改 `sync_registry.rs`；新增可同步表必须同步更新 SYNCABLE_TABLES + modules.rs 计数断言。
 - **软删语义**：业务表全带 `uuid`（同步主键，UNIQUE 索引防僵尸行复活）/`is_deleted`/`version`/毫秒时间戳三件套；删除一律软删墓碑进回收站，物理 DELETE 只存在于回收站 purge 路径（ADR 0005 延迟提交边界）。
 - **日期分桶按本地时区日界**：毫秒时间戳在 Rust 侧用 chrono::Local 换算本地日期后再分桶（`local_day_index`），前端 Date/Dart 本地语义对齐；不要在 SQL 里按 UTC 天分组。
-- **迁移文件单文件策略**：DDL 只在 `orbit-core/src/db/migrations/`，现役仅 `0001_init.sql`（多轮并回）；新增字段在 0001 内补行尾中文注释（DDL 注释随 sqlite_master 落库，GUI 可见），存量库升级口径 = 删库重初始化。
+- **迁移文件增量策略**：DDL 只在 `orbit-core/src/db/migrations/`，`0001_init.sql` 为冻结基线永不改；新增结构默认追加 `NNNN_xxx.sql`（sqlx 按文件名顺序执行，老库只跑新增文件，不删库）。加列必须带 `DEFAULT`，加表/加索引用 `IF NOT EXISTS`，破坏性变更走重建表；未发布的多文件可合并为一个，已发布文件永不改/删。新字段补行尾中文注释（DDL 注释随 sqlite_master 落库，GUI 可见），存量库升级靠增量迁移原地完成（仅大版本基线重建才走删库+云同步/`.orsync`恢复）。
 - **双强调色体系勿混用**：待办模块色 `TODO_ACCENT = #3B82F6`（checkbox/选中态/图表）与全局主题色 `themeAccent = #4E8CFF`（GlassFab/Spinner）两个 Context 并存（docs/05 §2.1）。
 - **悬浮提示统一主题色底白字**：桌面所有 tooltip 对齐 `ui/tooltip.tsx` 原语口径 `bg-primary text-primary-foreground`（手搓 Portal 提示也不得用 `bg-popover` 灰白弹层色——2026-09-10 热力图曾踩坑）；移动端原生 `Tooltip` 由 `app_theme.dart` 全局 `tooltipTheme` 统一（强调色底白字），不逐处覆写。
 - **滚动条全项目标准**：桌面全局 `index.css` 定义 `::-webkit-scrollbar` 10px 透明轨道主题色圆角滑块，原生 `overflow-auto` 容器自动继承——**禁设 `scrollbar-width` 非 auto 值**（会禁用 webkit 自定义退化为系统原生条）；需隐藏的用三件套 `scrollbar-width:none + -ms-overflow-style:none + ::-webkit-scrollbar display:none`。移动端全局 `ScrollbarThemeData`（app_theme.dart）只对显式 Scrollbar 生效，`SingleChildScrollView` 惯例不挂。
@@ -184,7 +184,7 @@ pnpm bump:check           # 只校验一致性（零写入，CI/本地通用）
 - 不做超出当前需求的抽象、兼容垫片或提前优化；复刻优先（复刻蓝本行为，不激进重构）。
 - 改 UI 后必须实机/浏览器操作验证主路径与边界，不只靠类型检查；几何类改动补 evaluate 断言（中心坐标逐像素对齐）。
 - 测试假红归因三板斧：先跑定向单用例分离环境因素（WebDAV/日期敏感/并发 WIP）→ 纯调用排除 UI 层 → `_boot` 探针归因冷启动。
-- 新增数据库字段：0001 迁移补行尾中文注释 + 内存库 `executescript` 验证 + 双端 DTO 镜像链全改（core Serialize → FRB 桥 → dto.dart → mock）。
+- 新增数据库字段：新增 `NNNN_xxx.sql`（加列带 `DEFAULT`、行尾中文注释）+ 内存库 `executescript` 验证 + 双端 DTO 镜像链全改（core Serialize → FRB 桥 → dto.dart → mock）。
 
 ## 外部文档
 

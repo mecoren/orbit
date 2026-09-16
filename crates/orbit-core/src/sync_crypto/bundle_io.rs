@@ -17,7 +17,7 @@
 //!   3. 旧路径读取成功后自动迁移到新路径（上传到新路径 + 删除旧路径）
 //!
 //! 路径常量 `CRYPTO_CONFIG_PATH` 集中管理在 `cloud_sync::paths`，本模块 re-export
-//! 以保持调用方兼容。该路径保持无扩展名（用户明确要求），不随 .waitsync 迁移改动。
+//! 以保持调用方兼容。该路径保持无扩展名（用户明确要求），不随 .orsync 迁移改动。
 
 use crate::sync_adapters::traits::SyncAdapter;
 use crate::sync_crypto::error::SyncCryptoError;

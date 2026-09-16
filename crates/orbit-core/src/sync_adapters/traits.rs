@@ -23,13 +23,13 @@ pub struct RemoteFile {
 /// 同步适配器 trait — S3 和 WebDAV 的统一接口
 #[async_trait]
 pub trait SyncAdapter: Send + Sync {
-    /// 列出远程目录下的 .waitsync 文件
+    /// 列出远程目录下的 `.orsync` 文件（兼容遗留 `.waitsync`）
     async fn list_files(&self, base_path: &str) -> Result<Vec<RemoteFile>, SyncError>;
 
     /// v7: 列出远程目录下的所有文件（不过滤后缀）
     ///
-    /// 与 `list_files` 的区别：不做 `.waitsync` 后缀过滤，返回目录下所有文件。
-    /// 供备份列举（`.waitfullsync` 备份文件）等需要非同步后缀的场景使用。
+    /// 与 `list_files` 的区别：不做 `.orsync` 后缀过滤，返回目录下所有文件。
+    /// 供备份列举（`.orfullsync` 备份文件）等需要非同步后缀的场景使用。
     /// 默认实现返回空 Vec（向后兼容），各 adapter 应覆盖此方法。
     async fn list_all_files(&self, _base_path: &str) -> Result<Vec<RemoteFile>, SyncError> {
         Ok(Vec::new())

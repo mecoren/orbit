@@ -153,10 +153,10 @@ mod tests {
     </d:propstat>
   </d:response>
   <d:response>
-    <d:href>/dav/wait-home/_meta.waitsync</d:href>
+    <d:href>/dav/wait-home/_meta.orsync</d:href>
     <d:propstat>
       <d:prop>
-        <d:displayname>_meta.waitsync</d:displayname>
+        <d:displayname>_meta.orsync</d:displayname>
         <d:resourcetype/>
         <d:getcontentlength>1024</d:getcontentlength>
         <d:getlastmodified>Mon, 07 Sep 2026 12:00:00 GMT</d:getlastmodified>
@@ -175,7 +175,7 @@ mod tests {
         assert!(entries[1].is_collection, "子目录必须是 collection");
         // 文件条目不是 collection
         assert!(!entries[2].is_collection);
-        assert_eq!(entries[2].href, "/dav/wait-home/_meta.waitsync");
+        assert_eq!(entries[2].href, "/dav/wait-home/_meta.orsync");
         assert_eq!(entries[2].content_length, Some(1024));
     }
 

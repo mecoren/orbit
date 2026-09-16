@@ -76,7 +76,7 @@ wait-home                          Orbit
 | Rust 核心包名 | `orbit_core` |
 | 历史 crate 名 | 存量文档中的 `flutter-plugin-orbit` 为历史名（现 `crates/orbit-flutter`），不回改 |
 | 数据库文件 | `orbit.db` |
-| 全量备份包后缀 | `.orsync`（格式同 `.waitsync`，magic 改为 `"ORSN"`） |
-| 同步载荷 magic | `"OSZS"`（沿用 wait-home 的 `"WSZS"` 格式骨架，仅换 Orbit 标识） |
+| 全量备份包后缀 | `.orfullsync`（格式同 `.waitfullsync`，容器 magic 改为 `"OFS1"`；读侧兼容 `.waitfullsync` / `.orsync`） |
+| 日常同步载荷后缀 | `.orsync`（默认格式，沿用 wait-home 骨架，载荷 magic 为 `"OSYN"`；读侧兼容 `.waitsync`） |
 | 钥匙串 service | `orbit.sync-crypto` |
 | 云端路径根 | `{base_path}/orbit/` |
