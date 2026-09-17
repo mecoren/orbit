@@ -25,6 +25,7 @@ pub mod saved_filter_cmd;
 pub mod scheduled_toast;
 pub mod stats_cmd;
 pub mod sync_cmd;
+pub mod sync_conflict_cmd;
 pub mod sync_crypto_cmd;
 pub mod sync_runtime;
 pub mod sync_scheduler;

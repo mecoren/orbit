@@ -13,6 +13,7 @@ import {
 } from "@/components/settings/categories";
 import { SecuritySection } from "@/components/settings/security-section";
 import { SyncSection } from "@/components/settings/sync-section";
+import { SyncConflictSection } from "@/components/settings/sync-conflict-section";
 import { ThemeSection } from "@/components/settings/theme-section";
 import { TodoSection } from "@/components/settings/todo-section";
 import { ShortcutsSection } from "@/components/settings/shortcuts-section";
@@ -56,6 +57,7 @@ export function SettingsPage() {
           <div className="mx-auto max-w-2xl p-6">
             {active === "security" && <SecuritySection />}
             {active === "sync" && <SyncSection />}
+            {active === "conflicts" && <SyncConflictSection />}
             {active === "theme" && <ThemeSection />}
             {active === "todo" && <TodoSection />}
             {active === "shortcuts" && <ShortcutsSection />}

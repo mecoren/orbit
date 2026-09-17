@@ -309,6 +309,12 @@ pub fn run() {
             commands::cloud_sync_cmd::cloud_sync_is_running,
             commands::cloud_sync_cmd::cloud_sync_rekey,
             commands::cloud_sync_cmd::sync_disconnect,
+            // 冲突败方副本（03 文档 §八 遗留项：查看 / 恢复 / 忽略 / 清空）
+            commands::sync_conflict_cmd::sync_conflict_list,
+            commands::sync_conflict_cmd::sync_conflict_count,
+            commands::sync_conflict_cmd::sync_conflict_restore,
+            commands::sync_conflict_cmd::sync_conflict_dismiss,
+            commands::sync_conflict_cmd::sync_conflict_clear,
             // M3：全量备份
             commands::full_sync_cmd::full_backup_export,
             commands::full_sync_cmd::full_backup_import,

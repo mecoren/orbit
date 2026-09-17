@@ -315,6 +315,67 @@ const mockSyncConfig = () => ({
   last_synced_at: syncState.lastSyncedAt,
 });
 
+// ---------- 冲突败方副本造态（03 文档 §八 遗留项） ----------
+
+/** 内存冲突副本表（形状与 lib/tauri.ts SyncConflictEntry 一致） */
+interface MockConflict {
+  id: number;
+  table_name: string;
+  record_uuid: string;
+  record_title: string;
+  decision: string;
+  loser_side: string;
+  winner_side: string;
+  loser_payload: string;
+  winner_payload: string;
+  loser_updated_at: number;
+  winner_updated_at: number;
+  resolution: string;
+  created_at: number;
+  resolved_at: number;
+}
+
+/** 两条造态：① 本地被远端覆盖 ② 远端被本地丢弃（覆盖「查看 + 恢复」两条主路径） */
+function createMockConflicts(): MockConflict[] {
+  const now = Date.now();
+  return [
+    {
+      id: 2,
+      table_name: "todo_tasks",
+      record_uuid: "conflict-task-2",
+      record_title: "写周报",
+      decision: "lww",
+      loser_side: "local",
+      winner_side: "remote",
+      loser_payload: JSON.stringify({ title: "写周报", priority: 1, status: "pending" }),
+      winner_payload: JSON.stringify({ title: "写周报（本周）", priority: 3, status: "doing" }),
+      loser_updated_at: now - 5_400_000,
+      winner_updated_at: now - 3_600_000,
+      resolution: "unresolved",
+      created_at: now - 3_500_000,
+      resolved_at: 0,
+    },
+    {
+      id: 1,
+      table_name: "todo_projects",
+      record_uuid: "conflict-project-1",
+      record_title: "季度目标",
+      decision: "tie_version",
+      loser_side: "remote",
+      winner_side: "local",
+      loser_payload: JSON.stringify({ title: "季度目标", hex_color: "#EF4444" }),
+      winner_payload: JSON.stringify({ title: "季度目标", hex_color: "#3B82F6" }),
+      loser_updated_at: now - 90_000_000,
+      winner_updated_at: now - 90_000_000,
+      resolution: "unresolved",
+      created_at: now - 89_000_000,
+      resolved_at: 0,
+    },
+  ];
+}
+
+const mockConflicts = createMockConflicts();
+
 // ---------- 命令实现 ----------
 
 const notImplemented = (cmd: string) => {
@@ -927,6 +988,41 @@ const commands: Record<string, (args: any, ctx: Ctx) => unknown> = {
     return ipcClone(
       seed.filter((h) => scope === "all" || h.sync_type === scope).slice(0, limit),
     );
+  },
+  // 冲突败方副本（03 §八）：内存表造两条，restore/dismiss/clear 直改内存
+  sync_conflict_list: (
+    { resolution, limit, offset }: { resolution: string | null; limit: number; offset: number },
+  ) =>
+    ipcClone(
+      mockConflicts
+        .filter((c) => !resolution || c.resolution === resolution)
+        .sort((a, b) => b.created_at - a.created_at)
+        .slice(offset ?? 0, (offset ?? 0) + (limit ?? 100)),
+    ),
+  sync_conflict_count: ({ resolution }: { resolution: string | null }) =>
+    mockConflicts.filter((c) => !resolution || c.resolution === resolution).length,
+  // 恢复：真实实现会把败方内容写回业务表；mock 只标记 resolved（业务行改写不在
+  // 浏览器 mock 的目标范围），并借 isWriteCommand 的 restore 后缀触发 db-change
+  sync_conflict_restore: ({ id }: { id: number }) => {
+    const c = mockConflicts.find((x) => x.id === id);
+    if (!c) throw new Error(`sync_conflict ${id} 不存在`);
+    c.resolution = "restored";
+    c.resolved_at = Date.now();
+    return id;
+  },
+  sync_conflict_dismiss: ({ id }: { id: number }) => {
+    const c = mockConflicts.find((x) => x.id === id);
+    if (!c) throw new Error(`sync_conflict ${id} 不存在`);
+    c.resolution = "dismissed";
+    c.resolved_at = Date.now();
+    return undefined;
+  },
+  sync_conflict_clear: ({ resolution }: { resolution: string | null }) => {
+    const keep = resolution ? mockConflicts.filter((c) => c.resolution !== resolution) : [];
+    const removed = mockConflicts.length - keep.length;
+    mockConflicts.length = 0;
+    mockConflicts.push(...keep);
+    return removed;
   },
   // 字段口径与真实命令一致（has_password / is_unlocked；此前 mock 回 { locked }
   // 与双端契约不符）；造态下随 syncState 变化

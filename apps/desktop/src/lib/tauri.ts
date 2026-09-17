@@ -613,6 +613,48 @@ export type SyncHistoryScope = "all" | "incremental" | "push_only" | "pull_only"
 export const cloudSyncHistory = (scope: SyncHistoryScope = "all", limit = 50) =>
   invoke<SyncHistoryEntry[]>("cloud_sync_history", { scope, limit });
 
+// ---------- 冲突败方副本（03 文档 §八 遗留项：查看 / 恢复 / 忽略 / 清空） ----------
+
+/** 冲突败方副本记录（payload 为整行字段快照 JSON 字符串） */
+export interface SyncConflictEntry {
+  id: number;
+  table_name: string;
+  record_uuid: string;
+  record_title: string;
+  /** lww 时间戳裁决 / tie_version 同毫秒按 version 裁决 */
+  decision: string;
+  loser_side: "local" | "remote" | string;
+  winner_side: "local" | "remote" | string;
+  loser_payload: string;
+  winner_payload: string;
+  loser_updated_at: number;
+  winner_updated_at: number;
+  /** unresolved 未处理 / restored 已恢复 / dismissed 已忽略 */
+  resolution: string;
+  created_at: number;
+  resolved_at: number;
+}
+
+export type SyncConflictResolution = "unresolved" | "restored" | "dismissed";
+
+export const syncConflictList = (
+  resolution: SyncConflictResolution | null = "unresolved",
+  limit = 100,
+  offset = 0,
+) => invoke<SyncConflictEntry[]>("sync_conflict_list", { resolution, limit, offset });
+
+/** 待处理冲突数（设置页角标） */
+export const syncConflictCount = (resolution: SyncConflictResolution | null = "unresolved") =>
+  invoke<number>("sync_conflict_count", { resolution });
+
+export const syncConflictRestore = (id: number) =>
+  invoke<number>("sync_conflict_restore", { id });
+
+export const syncConflictDismiss = (id: number) => invoke<void>("sync_conflict_dismiss", { id });
+
+export const syncConflictClear = (resolution: SyncConflictResolution | null = null) =>
+  invoke<number>("sync_conflict_clear", { resolution });
+
 // ---------- 全量备份 .orfullsync（full_sync_cmd，兼容遗留 .waitfullsync/.orsync） ----------
 
 export interface ExportResult {
