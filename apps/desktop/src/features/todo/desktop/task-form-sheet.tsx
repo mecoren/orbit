@@ -5,7 +5,7 @@
  * title(必填) / description(5000) / project_id / priority(0–5, 语义色点) / status(pending|doing|done)
  * / due_date / start_date（提交转毫秒时间戳）
  * / repeat_mode / repeat_after（footerContent 预设 + 自定义 N×单位，与移动端同语义）。
- * remind_at 不是任务列：新增默认一小时后；编辑载入既有提醒回填，
+ * remind_at 不是任务列：新增默认留空（不提醒）；编辑载入既有提醒回填，
  * 提交时按"清除删 / 变更删旧建新"同步。
  * 新增模式（footerContent）支持标签选择/新建与子任务草稿，创建任务后统一落库关联；
  * 编辑模式的标签与子任务仍走详情抽屉（task-detail-drawer）。
@@ -740,8 +740,8 @@ export function TaskFormSheet({
           : viewDefaults.dueMs != null
             ? { due_date: formatYmd(new Date(viewDefaults.dueMs)) }
             : {}),
-      // 新增默认提醒：一小时后（依赖 open，每次打开重新计算）
-      remind_at: tsToInputValue(Date.now() + 60 * 60 * 1000),
+      // 新增默认不提醒：留空由用户按需填写（曾默认一小时后，用户反馈打扰）
+      remind_at: "",
     };
   }, [task, defaultProjectId, existingReminder, open, presetDueDate, quickView, presetTemplate]);
 
