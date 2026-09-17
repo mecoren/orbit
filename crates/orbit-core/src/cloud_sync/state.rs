@@ -1,18 +1,19 @@
-//! state — 本地同步状态持久化
+//! state — 本地同步账本（`sync_state.json`）
 //!
-//! 管理 `sync_state.json`，记录每个模块的本地指纹、远端指纹、记录数、时间戳。
-//! 用于 Push/Pull 时跳过未变化的模块，实现增量同步。
+//! ## 账本内容与用途
+//! - `manifest_epoch`：上次成功同步后远端清单的 epoch（pull 的快速跳过判据）
+//! - `remote_tables` / `remote_tombstones`：上次同步后远端**桶索引快照**
+//!   （表 → 桶键 → 指纹）。pull 据此只下载「远端指纹与快照不同」的桶；
+//!   没有这份快照就只能每次全量下载，差量无从谈起。
+//! - `last_synced_at`：上次同步完成时间（调度器与 UI 展示）
 //!
-//! 文件布局：
-//! ```text
-//! {app_data_dir}/sync_state.json
-//! ```
+//! 快照是**纯缓存**：丢失只损失一次增量能力（退化为完整下载一轮），
+//! 不涉及业务数据；而 push 侧的差量基准始终是实时读取的远端清单，
+//! 不依赖本地快照，因此不会出现「本地账本漂移导致云端被误覆盖」。
 //!
-//! ## 字段语义
-//! - `fp`：本地计算的指纹（compute_fingerprint），Push 成功后更新
-//! - `remote_fp`：远端拉取的指纹（GlobalMeta.modules[name].fp），Pull 成功后更新
-//! - Push 跳过条件：`fp == 上次 Push 后的 fp`（业务数据未变）
-//! - Pull 跳过条件：`remote_fp == 上次 Pull 后的 remote_fp`（远端数据未变）
+//! ## 与 v1 的区别
+//! v1 用 `fp` / `remote_fp` 双指纹描述「整个模块」，粒度粗且双真相源易漂移；
+//! v2 快照精确到分桶，且只描述**远端**状态（本地状态由实时扫描得到）。
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -21,82 +22,115 @@ use serde::{Deserialize, Serialize};
 
 use crate::cloud_sync::error::CloudSyncError;
 
-/// 同步状态文件名
+/// 同步账本文件名
 const STATE_FILE_NAME: &str = "sync_state.json";
 
-/// 全局同步状态
+/// 本地同步账本
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct SyncState {
     /// 最后一次同步完成时间（Unix 毫秒）
     pub last_synced_at: i64,
     /// 当前设备 ID
     pub device_id: String,
-    /// 各模块同步状态（key = 模块名）
-    pub modules: BTreeMap<String, ModuleSyncState>,
-}
-
-/// 单个模块的同步状态
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
-pub struct ModuleSyncState {
-    /// 本地指纹（上次 Push 时计算的 sha256）
-    pub fp: String,
-    /// 远端指纹（上次 Pull 时从 GlobalMeta 获取的 sha256）
-    pub remote_fp: String,
-    /// 记录数（不含软删除）
-    pub count: u64,
-    /// 上次 Pull 时间（Unix 毫秒）
-    pub pulled_at: i64,
-    /// 上次 Push 时间（Unix 毫秒）
-    pub pushed_at: i64,
+    /// 上次成功同步后远端清单的 epoch（0 = 从未成功同步）
+    pub manifest_epoch: u64,
+    /// 远端数据桶索引快照：表 → 桶号 → 指纹
+    #[serde(default)]
+    pub remote_tables: BTreeMap<String, BTreeMap<u32, String>>,
+    /// 远端墓碑桶索引快照：表 → 桶键（YYYY-MM）→ 指纹
+    #[serde(default)]
+    pub remote_tombstones: BTreeMap<String, BTreeMap<String, String>>,
 }
 
 impl SyncState {
-    /// 构造空状态（首次同步场景）
+    /// 构造空账本（首次同步场景）
     pub fn empty(device_id: &str) -> Self {
         Self {
             last_synced_at: 0,
             device_id: device_id.to_string(),
-            modules: BTreeMap::new(),
+            manifest_epoch: 0,
+            remote_tables: BTreeMap::new(),
+            remote_tombstones: BTreeMap::new(),
         }
     }
 
-    /// 获取指定模块的状态，不存在则返回默认值
-    pub fn module(&self, name: &str) -> ModuleSyncState {
-        self.modules.get(name).cloned().unwrap_or_default()
+    /// 上次所见远端数据桶指纹（无记录返回 None）
+    pub fn remote_chunk_fp(&self, table: &str, bucket: u32) -> Option<&str> {
+        self.remote_tables
+            .get(table)
+            .and_then(|m| m.get(&bucket))
+            .map(|s| s.as_str())
     }
 
-    /// 更新模块状态并写入文件（便利方法）
-    pub fn set_module(&mut self, name: &str, state: ModuleSyncState) {
-        self.modules.insert(name.to_string(), state);
+    /// 用清单刷新「远端桶索引快照」与 epoch
+    ///
+    /// push/pull 结束时调用：此后本地记录的远端状态与清单一致，下轮
+    /// pull 才能准确判断「哪些桶是远端新增/变更」。
+    pub fn update_from_manifest(&mut self, manifest: &crate::cloud_sync::meta::ManifestV2) {
+        self.manifest_epoch = manifest.epoch;
+        self.remote_tables = manifest
+            .tables
+            .iter()
+            .map(|(table, idx)| {
+                (
+                    table.clone(),
+                    idx.chunks
+                        .iter()
+                        .map(|(bucket, r)| (*bucket, r.fp.clone()))
+                        .collect(),
+                )
+            })
+            .collect();
+        self.remote_tombstones = manifest
+            .tombstones
+            .iter()
+            .map(|(table, idx)| {
+                (
+                    table.clone(),
+                    idx.buckets
+                        .iter()
+                        .map(|(bucket, r)| (bucket.clone(), r.fp.clone()))
+                        .collect(),
+                )
+            })
+            .collect();
+    }
+
+    /// 上次所见远端墓碑桶指纹（无记录返回 None）
+    pub fn remote_tombstone_fp(&self, table: &str, bucket: &str) -> Option<&str> {
+        self.remote_tombstones
+            .get(table)
+            .and_then(|m| m.get(bucket))
+            .map(|s| s.as_str())
     }
 }
 
-/// 本地状态存储器
+/// 本地账本存储器
 ///
-/// 封装 `sync_state.json` 的读写操作。无缓存，每次读写都直接操作文件
-/// （同步频率低，文件几 KB，无需内存缓存）。
+/// 封装 `sync_state.json` 的读写。无缓存，每次读写直接操作文件
+/// （同步频率低、文件仅数百字节，无需内存缓存）。
 #[derive(Debug, Clone)]
 pub struct SyncStateStore {
     app_data_dir: PathBuf,
 }
 
 impl SyncStateStore {
-    /// 创建状态存储器
+    /// 创建账本存储器
     pub fn new(app_data_dir: &Path) -> Self {
         Self {
             app_data_dir: app_data_dir.to_path_buf(),
         }
     }
 
-    /// 状态文件路径
+    /// 账本文件路径
     pub fn path(&self) -> PathBuf {
         self.app_data_dir.join(STATE_FILE_NAME)
     }
 
-    /// 加载状态
+    /// 加载账本
     ///
-    /// 文件不存在或解析失败时返回空状态（回退到首次同步模式，记录 warning 日志）。
-    /// 解析失败时先隔离损坏文件（Fix-04 留证），避免被下次保存静默覆盖。
+    /// 文件不存在返回空账本；解析失败先隔离损坏文件（留证）再返回错误，
+    /// 由调用方决定是否降级为全量比对。
     pub fn load(&self) -> Result<SyncState, CloudSyncError> {
         let path = self.path();
         if !path.exists() {
@@ -108,27 +142,24 @@ impl SyncStateStore {
         match serde_json::from_str::<SyncState>(&content) {
             Ok(state) => Ok(state),
             Err(e) => {
-                // 损坏留证：sync_state 损坏仅损失增量跳过能力（回退全量同步），
-                // 但留证有助于诊断"为什么突然全量重传"
                 let quarantined =
                     crate::fs_util::quarantine_corrupt_file(&path).unwrap_or_else(|_| path.clone());
                 log::warn!(
-                    "[state] sync_state.json 损坏已隔离至 {:?}，将回退到首次同步模式: {}",
+                    "[state] sync_state.json 损坏已隔离至 {:?}，将退化为完整比对: {}",
                     quarantined,
                     e
                 );
                 Err(CloudSyncError::State {
-                    message: format!("解析 sync_state.json 失败（回退到首次同步）: {e}"),
+                    message: format!("解析 sync_state.json 失败（退化为完整比对）: {e}"),
                 })
             }
         }
     }
 
-    /// 保存状态（原子写，Fix-04）
+    /// 保存账本（原子写）
     pub fn save(&self, state: &SyncState) -> Result<(), CloudSyncError> {
-        let path = self.path();
         let content = serde_json::to_string_pretty(state)?;
-        crate::fs_util::write_atomic(&path, content.as_bytes()).map_err(|e| {
+        crate::fs_util::write_atomic(&self.path(), content.as_bytes()).map_err(|e| {
             CloudSyncError::State {
                 message: format!("写入 sync_state.json 失败: {e}"),
             }
@@ -136,14 +167,7 @@ impl SyncStateStore {
         Ok(())
     }
 
-    /// 更新单个模块状态并立即持久化
-    pub fn update_module(&self, name: &str, update: ModuleSyncState) -> Result<(), CloudSyncError> {
-        let mut state = self.load()?;
-        state.set_module(name, update);
-        self.save(&state)
-    }
-
-    /// 清除状态（用于重置同步）
+    /// 清除账本（用于断开同步 / rekey 强制全量重传）
     pub fn clear(&self) -> Result<(), CloudSyncError> {
         let path = self.path();
         if path.exists() {
@@ -170,7 +194,7 @@ mod tests {
         let (store, _tmp) = make_store();
         let state = store.load().unwrap();
         assert_eq!(state.last_synced_at, 0);
-        assert!(state.modules.is_empty());
+        assert_eq!(state.manifest_epoch, 0);
     }
 
     #[test]
@@ -178,82 +202,33 @@ mod tests {
         let (store, _tmp) = make_store();
         let mut state = SyncState::empty("device-001");
         state.last_synced_at = 12345;
-        state.set_module(
-            "movies",
-            ModuleSyncState {
-                fp: "fp123".to_string(),
-                remote_fp: "rfp456".to_string(),
-                count: 10,
-                pulled_at: 100,
-                pushed_at: 200,
-            },
-        );
-
+        state.manifest_epoch = 7;
         store.save(&state).unwrap();
-        let loaded = store.load().unwrap();
 
+        let loaded = store.load().unwrap();
         assert_eq!(loaded.last_synced_at, 12345);
         assert_eq!(loaded.device_id, "device-001");
-        let m = loaded.module("movies");
-        assert_eq!(m.fp, "fp123");
-        assert_eq!(m.remote_fp, "rfp456");
-        assert_eq!(m.count, 10);
+        assert_eq!(loaded.manifest_epoch, 7);
     }
 
     #[test]
-    fn update_module_persists_immediately() {
-        let (store, _tmp) = make_store();
-        // 初始为空
-        assert!(store.load().unwrap().modules.is_empty());
-
-        // 更新单个模块
-        store
-            .update_module(
-                "todos",
-                ModuleSyncState {
-                    fp: "todos_fp".to_string(),
-                    count: 5,
-                    pushed_at: 999,
-                    ..Default::default()
-                },
-            )
-            .unwrap();
-
-        // 重新加载验证
-        let loaded = store.load().unwrap();
-        let m = loaded.module("todos");
-        assert_eq!(m.fp, "todos_fp");
-        assert_eq!(m.count, 5);
-        assert_eq!(m.pushed_at, 999);
-    }
-
-    #[test]
-    fn clear_removes_file() {
+    fn clear_removes_file_and_is_idempotent() {
         let (store, _tmp) = make_store();
         store.save(&SyncState::empty("d")).unwrap();
         assert!(store.path().exists());
-
         store.clear().unwrap();
         assert!(!store.path().exists());
-
-        // 清除不存在的文件不报错
         store.clear().unwrap();
     }
 
     #[test]
-    fn corrupted_file_returns_error() {
+    fn corrupted_file_returns_error_after_quarantine() {
         let (store, _tmp) = make_store();
         std::fs::write(store.path(), "{ invalid json").unwrap();
         let result = store.load();
         assert!(matches!(result, Err(CloudSyncError::State { .. })));
-    }
-
-    #[test]
-    fn module_returns_default_when_missing() {
-        let state = SyncState::empty("d");
-        let m = state.module("nonexistent");
-        assert!(m.fp.is_empty());
-        assert_eq!(m.count, 0);
+        // 损坏文件已隔离（原路径不再持有坏内容）
+        assert!(!store.path().exists() || store.load().is_ok());
     }
 
     #[test]

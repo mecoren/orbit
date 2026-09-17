@@ -1,300 +1,273 @@
-//! meta — 云端元数据结构
+//! meta — 云端 v2 清单（唯一真相源）与墓碑结构
 //!
-//! 定义云端 `_meta.json`、`modules/<name>/meta.json`、`modules/<name>/data.json`
-//! 三种文件的 JSON 结构。所有文件在传输前经 `crypto_io::encrypt_payload` 加密。
+//! ## 为什么是「单一清单」
+//! v1 有双真相源：全局 `_meta.orsync`（模块指纹）与 `modules/{name}/meta.orsync`
+//! （模块指纹 + 墓碑）。两者任一侧更新失败即产生"说谎的清单"，push 侧不得不
+//! 用「下载整个模块数据只为验证文件存在」这类补偿逻辑兜底。
 //!
-//! ## 云端目录结构
-//! ```text
-//! {base_path}/
-//! ├── _meta.json                      # GlobalMeta（加密）
-//! ├── crypto/
-//! │   └── config                      # Data Key bundle（不加密，由 sync_crypto 管理）
-//! ├── modules/
-//! │   ├── movies/
-//! │   │   ├── data.json               # ModuleData（加密）
-//! │   │   └── meta.json               # ModuleMeta（加密）
-//! │   └── ...（15 个模块）
-//! └── media/
-//!     └── <sha256>                    # 附件（加密）
-//! ```
+//! v2 只有一份 [`ManifestV2`]（`v2/manifest.orsync`），承载：
+//! - `epoch`：乐观并发版本号（写入前置条件，见 push 的 CAS）
+//! - `tables`：表名 → 分桶索引（桶号 → 指纹/行数/字节数）
+//! - `tombstones`：表名 → 墓碑分桶索引（月份键 → 指纹/条数/最大删除时间）
+//! - `devices`：设备 → 同步检查点（墓碑回收水位线依据）
+//!
+//! ## 载荷加密
+//! 所有云端文件（manifest 与各分桶）在传输前经
+//! [`crate::cloud_sync::crypto_io::encrypt_payload`] 用 Data Key 加密。
 
 use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 
-/// 全局元数据（对应云端 `_meta.json`，加密后上传）
-///
-/// 索引所有模块的指纹、记录数、墓碑集。Pull 时先下载此文件决定哪些模块需要拉取。
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct GlobalMeta {
-    /// 元数据格式版本（当前为 1）
-    pub version: u32,
-    /// 最后上传设备 ID（用于诊断，不参与合并决策）
-    pub device_id: String,
-    /// 最后上传时间（Unix 毫秒）
-    pub updated_at: i64,
-    /// 模块元数据映射（key = 模块名，如 "movies"）
-    pub modules: BTreeMap<String, ModuleMetaEntry>,
+/// 当前云端布局版本（未来协议演进判别依据）
+pub const LAYOUT_VERSION: u32 = 2;
+
+/// 单个数据分桶的索引条目
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ChunkRef {
+    /// 分桶 canonical JSON 的 sha256（排除 updated_at/id）
+    pub fp: String,
+    /// 桶内记录数（未软删）
+    pub count: u64,
+    /// 桶明文序列化字节数（供大小策略与预估）
+    pub size: u64,
 }
 
-impl GlobalMeta {
-    /// 构造空的全局元数据（首次同步场景）
+/// 单张表的分桶索引（桶号 → 分桶条目）
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
+pub struct TableIndex {
+    pub chunks: BTreeMap<u32, ChunkRef>,
+}
+
+impl TableIndex {
+    /// 该表是否无任何数据分桶
+    pub fn is_empty(&self) -> bool {
+        self.chunks.is_empty()
+    }
+}
+
+/// 单个墓碑分桶的索引条目
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct TombstoneBucketRef {
+    /// 分桶 canonical JSON 的 sha256
+    pub fp: String,
+    /// 桶内墓碑条数
+    pub count: u64,
+    /// 桶内最大删除时间（Unix 毫秒；回收判据）
+    pub max_deleted_at: i64,
+}
+
+/// 单张表的墓碑分桶索引（月份键 → 分桶条目）
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
+pub struct TombstoneIndex {
+    pub buckets: BTreeMap<String, TombstoneBucketRef>,
+}
+
+impl TombstoneIndex {
+    /// 该表是否无墓碑分桶
+    pub fn is_empty(&self) -> bool {
+        self.buckets.is_empty()
+    }
+}
+
+/// 设备同步检查点（墓碑安全回收的水位线依据）
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct DeviceCheckpoint {
+    /// 该设备最后一次成功同步的本地时间（Unix 毫秒）
+    pub last_synced_at: i64,
+}
+
+/// 云端唯一真相源清单
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ManifestV2 {
+    /// 布局版本（当前 [`LAYOUT_VERSION`]）
+    pub layout_version: u32,
+    /// 乐观并发版本号：每次成功写入 +1，写入前须匹配读到的值
+    pub epoch: u64,
+    /// 最后写入设备（诊断用，不参与裁决）
+    pub device_id: String,
+    /// 最后写入时间（Unix 毫秒）
+    pub updated_at: i64,
+    /// 表名 → 数据分桶索引
+    pub tables: BTreeMap<String, TableIndex>,
+    /// 表名 → 墓碑分桶索引
+    pub tombstones: BTreeMap<String, TombstoneIndex>,
+    /// 设备 → 同步检查点
+    pub devices: BTreeMap<String, DeviceCheckpoint>,
+}
+
+impl ManifestV2 {
+    /// 构造空清单（首次同步场景）
     pub fn empty(device_id: &str) -> Self {
         Self {
-            version: 1,
+            layout_version: LAYOUT_VERSION,
+            epoch: 0,
             device_id: device_id.to_string(),
             updated_at: 0,
-            modules: BTreeMap::new(),
+            tables: BTreeMap::new(),
+            tombstones: BTreeMap::new(),
+            devices: BTreeMap::new(),
         }
     }
 
-    /// 获取指定模块的元数据
-    pub fn module(&self, name: &str) -> Option<&ModuleMetaEntry> {
-        self.modules.get(name)
+    /// 取某表的分桶索引（缺失视为空）
+    pub fn table(&self, name: &str) -> Option<&TableIndex> {
+        self.tables.get(name)
+    }
+
+    /// 取某表的墓碑分桶索引（缺失视为空）
+    pub fn tombstone_index(&self, name: &str) -> Option<&TombstoneIndex> {
+        self.tombstones.get(name)
+    }
+
+    /// 墓碑回收水位线（Unix 毫秒）
+    ///
+    /// 取所有设备检查点的**最小值**：只有早于「最落后设备上次成功同步时间」
+    /// 的墓碑才确定已被所有设备看到，可以安全回收。
+    ///
+    /// 保守策略：设备数 < 2（单设备或尚未登记）返回 0，即**不回收**——
+    /// 单设备场景没有"其他设备需要看到墓碑"的约束，但新设备加入时仍需要
+    /// 完整墓碑来判断删除；宁可不回收也不冒复活风险。
+    pub fn tombstone_watermark(&self) -> i64 {
+        if self.devices.len() < 2 {
+            return 0;
+        }
+        self.devices
+            .values()
+            .map(|c| c.last_synced_at)
+            .min()
+            .unwrap_or(0)
+    }
+
+    /// 登记/更新本机检查点
+    pub fn touch_device(&mut self, device_id: &str, last_synced_at: i64) {
+        self.devices.insert(
+            device_id.to_string(),
+            DeviceCheckpoint { last_synced_at },
+        );
     }
 }
 
-/// 墓碑条目（兼容旧格式 Vec<String> 与新格式 {uuid, deleted_at}）
+/// 墓碑条目（uuid + 原始删除时间）
 ///
-/// 旧格式（无时间戳）：JSON 字符串 `"uuid-abc"`，反序列化为 `deleted_at=0`
-/// 新格式（带时间戳）：JSON 对象 `{"uuid":"uuid-abc","deleted_at":1700000000000}`
-///
-/// `deleted_at=0` 的旧格式墓碑在 pull 时不参与时间戳裁决（直接删除，向后兼容）。
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(untagged)]
-pub enum TombstoneEntry {
-    /// 新格式：uuid + 删除时间戳
-    WithTimestamp { uuid: String, deleted_at: i64 },
-    /// 旧格式：仅 uuid（向后兼容，deleted_at 视为 0）
-    Legacy(String),
+/// 删除时间参与「删除 vs 编辑」裁决（`merge::apply_tombstones`），
+/// 必须保留删除发生时的原始时间戳，不能写成同步时刻。
+/// 开发阶段无历史数据，v1 的「纯字符串旧格式（deleted_at=0）」兼容已移除。
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct TombstoneEntry {
+    /// 记录 uuid
+    pub uuid: String,
+    /// 软删除时间（Unix 毫秒）
+    pub deleted_at: i64,
 }
 
 impl TombstoneEntry {
-    /// 获取 uuid
-    pub fn uuid(&self) -> &str {
-        match self {
-            TombstoneEntry::WithTimestamp { uuid, .. } => uuid,
-            TombstoneEntry::Legacy(uuid) => uuid,
-        }
-    }
-
-    /// 获取删除时间戳（旧格式返回 0，不参与时间戳裁决）
-    pub fn deleted_at(&self) -> i64 {
-        match self {
-            TombstoneEntry::WithTimestamp { deleted_at, .. } => *deleted_at,
-            TombstoneEntry::Legacy(_) => 0,
-        }
-    }
-
-    /// 构造带时间戳的新格式墓碑
     pub fn new(uuid: String, deleted_at: i64) -> Self {
-        TombstoneEntry::WithTimestamp { uuid, deleted_at }
+        Self { uuid, deleted_at }
+    }
+
+    pub fn uuid(&self) -> &str {
+        &self.uuid
+    }
+
+    pub fn deleted_at(&self) -> i64 {
+        self.deleted_at
     }
 }
 
-/// 模块元数据条目（GlobalMeta.modules 的 value 类型，也是 modules/<name>/meta.json 的内容）
+/// 墓碑分桶载荷（加密后写入 `v2/tombstones/{table}/{YYYY-MM}.orsync`）
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ModuleMetaEntry {
-    /// 模块指纹（sha256 hex）
-    pub fp: String,
-    /// 记录数（不含软删除）
-    pub count: u64,
-    /// 墓碑集（所有软删除记录，无上限；含 deleted_at 时间戳用于删除vs编辑冲突裁决）
-    pub deleted_ids: Vec<TombstoneEntry>,
-    /// 最后更新时间（Unix 毫秒）
-    pub updated_at: i64,
+pub struct TombstoneBucketPayload {
+    /// 表名
+    pub table: String,
+    /// 分桶键（本地时区 `YYYY-MM`）
+    pub bucket: String,
+    /// 墓碑条目
+    pub tombstones: Vec<TombstoneEntry>,
 }
-
-impl ModuleMetaEntry {
-    /// 构造空条目（指纹为空字符串，触发首次全量同步）
-    pub fn empty() -> Self {
-        Self {
-            fp: String::new(),
-            count: 0,
-            deleted_ids: Vec::new(),
-            updated_at: 0,
-        }
-    }
-}
-
-/// 模块数据（对应云端 `modules/<name>/data.json`，加密后上传）
-///
-/// `items` 是该模块所有未删除记录的 JSON 数组，每条记录含 `uuid` 和 `updated_at`
-/// 用于 item 级 LWW 合并。
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ModuleData {
-    /// 模块名（如 "movies"）
-    pub module: String,
-    /// 记录数组（每条是原始 DB 行的 JSON 表示）
-    pub items: Vec<serde_json::Value>,
-    /// 导出时间（Unix 毫秒）
-    pub exported_at: i64,
-}
-
-impl ModuleData {
-    /// 构造空模块数据
-    pub fn empty(module: &str) -> Self {
-        Self {
-            module: module.to_string(),
-            items: Vec::new(),
-            exported_at: 0,
-        }
-    }
-}
-
-// 墓碑集最大容量（已废弃：墓碑不再有上限，所有软删除记录均上传）
-// 保留常量名供迁移参考，实际不再使用。
-// pub const MAX_DELETED_IDS: usize = 500;
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use serde_json::json;
 
     #[test]
-    fn global_meta_empty_has_no_modules() {
-        let meta = GlobalMeta::empty("device-001");
-        assert_eq!(meta.version, 1);
-        assert_eq!(meta.device_id, "device-001");
-        assert!(meta.modules.is_empty());
-        assert_eq!(meta.updated_at, 0);
+    fn empty_manifest_has_layout_v2_and_zero_epoch() {
+        let m = ManifestV2::empty("dev-1");
+        assert_eq!(m.layout_version, LAYOUT_VERSION);
+        assert_eq!(m.epoch, 0);
+        assert!(m.tables.is_empty());
+        assert!(m.tombstones.is_empty());
+        assert!(m.devices.is_empty());
     }
 
     #[test]
-    fn global_meta_module_lookup() {
-        let mut meta = GlobalMeta::empty("device-001");
-        meta.modules.insert(
-            "movies".to_string(),
-            ModuleMetaEntry {
-                fp: "abc123".to_string(),
-                count: 10,
-                deleted_ids: vec![TombstoneEntry::Legacy("uuid-old".to_string())],
-                updated_at: 1000,
+    fn watermark_requires_two_devices() {
+        let mut m = ManifestV2::empty("dev-1");
+        m.touch_device("dev-1", 100);
+        assert_eq!(m.tombstone_watermark(), 0, "单设备不得回收墓碑");
+    }
+
+    #[test]
+    fn watermark_is_min_of_devices() {
+        let mut m = ManifestV2::empty("dev-1");
+        m.touch_device("dev-1", 900);
+        m.touch_device("dev-2", 300);
+        m.touch_device("dev-3", 600);
+        assert_eq!(m.tombstone_watermark(), 300);
+    }
+
+    #[test]
+    fn table_index_lookup_defaults_missing() {
+        let m = ManifestV2::empty("d");
+        assert!(m.table("todo_tasks").is_none());
+        assert!(m.tombstone_index("todo_tasks").is_none());
+    }
+
+    #[test]
+    fn manifest_serializes_with_stable_btreemap_order() {
+        let mut m = ManifestV2::empty("d");
+        m.tables.insert(
+            "todo_tasks".to_string(),
+            TableIndex {
+                chunks: BTreeMap::from([(
+                    3,
+                    ChunkRef {
+                        fp: "fp3".to_string(),
+                        count: 1,
+                        size: 10,
+                    },
+                )]),
             },
         );
-
-        let m = meta.module("movies").unwrap();
-        assert_eq!(m.fp, "abc123");
-        assert_eq!(m.count, 10);
-        assert_eq!(m.deleted_ids.len(), 1);
-    }
-
-    #[test]
-    fn global_meta_module_lookup_missing() {
-        let meta = GlobalMeta::empty("device-001");
-        assert!(meta.module("nonexistent").is_none());
-    }
-
-    #[test]
-    fn module_meta_empty_has_empty_fp() {
-        let m = ModuleMetaEntry::empty();
-        assert!(m.fp.is_empty());
-        assert_eq!(m.count, 0);
-        assert!(m.deleted_ids.is_empty());
-    }
-
-    #[test]
-    fn module_data_empty_has_no_items() {
-        let d = ModuleData::empty("books");
-        assert_eq!(d.module, "books");
-        assert!(d.items.is_empty());
-    }
-
-    #[test]
-    fn global_meta_serializes_to_json() {
-        let mut meta = GlobalMeta::empty("device-001");
-        meta.modules.insert(
-            "todos".to_string(),
-            ModuleMetaEntry {
-                fp: "fp123".to_string(),
-                count: 5,
-                deleted_ids: vec![
-                    TombstoneEntry::new("u1".to_string(), 100),
-                    TombstoneEntry::new("u2".to_string(), 200),
-                ],
-                updated_at: 12345,
-            },
-        );
-
-        let json = serde_json::to_string(&meta).unwrap();
-        let parsed: GlobalMeta = serde_json::from_str(&json).unwrap();
-        assert_eq!(parsed.device_id, "device-001");
-        assert_eq!(parsed.module("todos").unwrap().count, 5);
-    }
-
-    #[test]
-    fn module_data_serializes_with_items() {
-        let data = ModuleData {
-            module: "movies".to_string(),
-            items: vec![
-                json!({"uuid": "m1", "title": "Movie 1", "updated_at": 100}),
-                json!({"uuid": "m2", "title": "Movie 2", "updated_at": 200}),
-            ],
-            exported_at: 12345,
-        };
-
-        let json = serde_json::to_string(&data).unwrap();
-        let parsed: ModuleData = serde_json::from_str(&json).unwrap();
-        assert_eq!(parsed.items.len(), 2);
-        assert_eq!(
-            parsed.items[0].get("uuid").and_then(|v| v.as_str()),
-            Some("m1")
-        );
-    }
-
-    #[test]
-    fn btreemap_keys_are_sorted_in_json() {
-        // BTreeMap 保证序列化时 key 按字典序，确保指纹一致性
-        let mut meta = GlobalMeta::empty("d");
-        meta.modules
-            .insert("zebra".to_string(), ModuleMetaEntry::empty());
-        meta.modules
-            .insert("apple".to_string(), ModuleMetaEntry::empty());
-        meta.modules
-            .insert("mango".to_string(), ModuleMetaEntry::empty());
-
-        let json = serde_json::to_string(&meta).unwrap();
-        let apple_pos = json.find("apple").unwrap();
-        let mango_pos = json.find("mango").unwrap();
-        let zebra_pos = json.find("zebra").unwrap();
-        assert!(apple_pos < mango_pos);
-        assert!(mango_pos < zebra_pos);
-    }
-
-    #[test]
-    fn tombstone_entry_serializes_new_format_with_timestamp() {
-        let entry = TombstoneEntry::new("uuid-abc".to_string(), 1_700_000_000_000);
-        let json = serde_json::to_string(&entry).unwrap();
-        assert!(json.contains("uuid"));
-        assert!(json.contains("deleted_at"));
-        assert!(json.contains("1700000000000"));
-    }
-
-    #[test]
-    fn tombstone_entry_deserializes_legacy_string_format() {
-        // 旧格式：纯字符串 "uuid-abc"
-        let json = serde_json::json!("uuid-abc").to_string();
-        let entry: TombstoneEntry = serde_json::from_str(&json).unwrap();
-        assert_eq!(entry.uuid(), "uuid-abc");
-        assert_eq!(entry.deleted_at(), 0, "旧格式 deleted_at 应为 0");
-        assert!(matches!(entry, TombstoneEntry::Legacy(_)));
-    }
-
-    #[test]
-    fn tombstone_entry_deserializes_new_object_format() {
-        let json = r#"{"uuid":"uuid-xyz","deleted_at":1700000000000}"#;
-        let entry: TombstoneEntry = serde_json::from_str(json).unwrap();
-        assert_eq!(entry.uuid(), "uuid-xyz");
-        assert_eq!(entry.deleted_at(), 1_700_000_000_000);
-        assert!(matches!(entry, TombstoneEntry::WithTimestamp { .. }));
+        m.tables.insert("todo_projects".to_string(), TableIndex::default());
+        let json = serde_json::to_string(&m).unwrap();
+        let p1 = json.find("todo_projects").unwrap();
+        let p2 = json.find("todo_tasks").unwrap();
+        assert!(p1 < p2, "BTreeMap 保证 key 字典序，序列化须确定性");
+        let parsed: ManifestV2 = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed.tables.len(), 2);
     }
 
     #[test]
     fn tombstone_entry_roundtrip_preserves_timestamp() {
-        let entry = TombstoneEntry::new("uuid-roundtrip".to_string(), 1_234_567_890_000);
-        let json = serde_json::to_string(&entry).unwrap();
+        let e = TombstoneEntry::new("u1".to_string(), 1_700_000_000_000);
+        let json = serde_json::to_string(&e).unwrap();
+        assert!(json.contains("deleted_at"));
         let parsed: TombstoneEntry = serde_json::from_str(&json).unwrap();
-        assert_eq!(parsed.uuid(), entry.uuid());
-        assert_eq!(parsed.deleted_at(), entry.deleted_at());
+        assert_eq!(parsed.uuid(), "u1");
+        assert_eq!(parsed.deleted_at(), 1_700_000_000_000);
+    }
+
+    #[test]
+    fn tombstone_bucket_payload_roundtrip() {
+        let p = TombstoneBucketPayload {
+            table: "todo_tasks".to_string(),
+            bucket: "2026-09".to_string(),
+            tombstones: vec![TombstoneEntry::new("u1".to_string(), 10)],
+        };
+        let bytes = serde_json::to_vec(&p).unwrap();
+        let parsed: TombstoneBucketPayload = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(parsed.bucket, "2026-09");
+        assert_eq!(parsed.tombstones.len(), 1);
     }
 }

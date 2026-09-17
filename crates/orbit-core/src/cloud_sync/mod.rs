@@ -1,37 +1,58 @@
-//! cloud_sync — 云端增量同步引擎
+//! cloud_sync — 云端 v2 差量同步引擎
 //!
-//! 在现有同步基础设施（`SyncAdapter` + `SyncCryptoService`）之上实现模块级增量同步：
-//! - 按模块做模块级指纹（sha256 of canonical JSON）增量上传（Orbit MVP 单模块 todos，
-//!   覆盖全部可同步业务表，见 modules.rs 与 db::sync_registry 的不变量测试）
-//! - Pull 时按 `uuid` 做 item 级 LWW（Last-Writer-Wins）合并
-//! - 附件走 `assets/<sha256>.orsync` 内容寻址去重，全部用 Data Key AES-256-GCM 加密
+//! ## v2 是什么
+//! v1 是「模块级整包快照」：11 张表压成一个 `data.orsync`，任意一行改动都要
+//! 重传整个模块；全局 `_meta.orsync` 与模块 `meta.orsync` 双真相源，任一侧
+//! 写入中断就产生"说谎的清单"，push 侧不得不写一堆补偿逻辑。
 //!
-//! 模块分层：
+//! v2 改为「表级分桶 + 单一清单 + 版本前置」：
+//! - 数据按表切分为稳定哈希分桶（[`chunk`]），只上传/下载变化的桶
+//! - 云端只有一份 [`meta::ManifestV2`]（`v2/manifest.orsync`）承载
+//!   `epoch` + 桶索引 + 墓碑水位线，是唯一真相源
+//! - 清单写入带前置条件（`If-Match` / `If-None-Match`），配合写后回读校验，
+//!   多设备并发写从"静默覆盖"变为"可检测冲突并自动收敛"（[`push`]）
+//! - 墓碑按本地时区月份分桶（[`meta::TombstoneBucketPayload`]），
+//!   按设备水位线安全回收（[`gc`]）
+//!
+//! ## 云端布局
+//! ```text
+//! {base_path}/
+//! ├─ crypto/config                           # 加密元数据（跨设备分发 Data Key）
+//! ├─ v2/manifest.orsync                      # 唯一真相源（加密）
+//! ├─ v2/tables/{table}/{bucket:02}.orsync    # 表级分桶（加密）
+//! ├─ v2/tombstones/{table}/{YYYY-MM}.orsync  # 墓碑分桶（加密）
+//! └─ assets/{hash}.orsync                    # 附件内容寻址（≥8MiB 走分片续传）
+//! ```
+//!
+//! ## 模块分层
 //! ```text
 //! cloud_sync/
 //! ├── mod.rs          本文件：模块导出
-//! ├── engine.rs       SyncEngine 主结构：三模式编排 + 互斥锁 + with_retry（M1.12）
-//! ├── error.rs        CloudSyncError
-//! ├── modules.rs      SyncModuleDef 静态注册表
-//! ├── fingerprint.rs  canonical JSON + sha256 指纹（M1.3）
-//! ├── crypto_io.rs    encrypt_payload / decrypt_payload（M1.4）
-//! ├── meta.rs         GlobalMeta / ModuleMeta 读写（M1.5）
-//! ├── state.rs        SyncStateStore（sync_state.json）（M1.6）
-//! ├── progress.rs     SyncProgress 事件 + ProgressSender（M1.7）
-//! ├── push.rs         push_all() 流程（M1.8）
-//! ├── pull.rs         pull_all() 流程（M1.9）
-//! ├── merge.rs        merge_items() LWW 合并 + 墓碑应用（M1.10）
-//! └── attachments.rs  附件同步（push/pull，4 路并发）（M1.11）
+//! ├── chunk.rs        分桶切分与指纹（稳定哈希分桶）
+//! ├── meta.rs         ManifestV2 / 桶索引 / 墓碑结构
+//! ├── state.rs        本地账本（epoch + 远端桶索引快照）
+//! ├── engine.rs       SyncEngine 编排：三模式 + 互斥锁 + 重试
+//! ├── push.rs         差量上传 + 清单 CAS
+//! ├── pull.rs         清单驱动差量下载 + 合并
+//! ├── merge.rs        单表 LWW 合并 + 墓碑裁决
+//! ├── gc.rs          墓碑水位线回收 + 孤儿分桶清理
+//! ├── db_loader.rs    按表加载（数据 / uuid 映射 / 墓碑分桶）
+//! ├── fingerprint.rs  canonical JSON + sha256 指纹
+//! ├── crypto_io.rs    encrypt_payload / decrypt_payload
+//! ├── paths.rs        v2 路径构造
+//! ├── progress.rs     SyncProgress 事件
+//! ├── attachments.rs 附件同步（内容寻址 + 分片）
+//! └── modules.rs      同步模块注册表（与白名单一致性断言）
 //! ```
-//!
-//! 设计参考：BeeCount 的 webdav/s3 模块级同步（transactions_sync_manager.dart）。
 
 pub mod attachments;
+pub mod chunk;
 pub mod crypto_io;
 pub mod db_loader;
 pub mod engine;
 pub mod error;
 pub mod fingerprint;
+pub mod gc;
 pub mod merge;
 pub mod meta;
 pub mod modules;
@@ -42,14 +63,23 @@ pub mod push;
 pub mod state;
 
 pub use attachments::{AttachmentSyncResult, sync_attachments_pull, sync_attachments_push};
+pub use chunk::{
+    ChunkPayload, TABLE_BUCKET_COUNT, TableChunk, bucket_of_uuid, split_table_items,
+};
 pub use crypto_io::{decrypt_payload, encrypt_payload};
 pub use engine::{SyncEngine, SyncResult};
 pub use error::CloudSyncError;
 pub use fingerprint::compute_fingerprint;
-pub use merge::{MergeResult, merge_items};
-pub use meta::{GlobalMeta, ModuleData, ModuleMetaEntry, TombstoneEntry};
+pub use gc::{
+    GcResult, collect_garbage, delete_expired_buckets, prune_expired_tombstones,
+};
+pub use merge::{MergeResult, merge_table_items};
+pub use meta::{
+    ChunkRef, LAYOUT_VERSION, ManifestV2, TableIndex, TombstoneBucketRef, TombstoneEntry,
+    TombstoneIndex,
+};
 pub use modules::{SYNC_MODULES, SyncModuleDef, find_module};
 pub use progress::{NoopProgressSender, ProgressSender, SyncProgress};
 pub use pull::{PullResult, pull_all};
 pub use push::{PushResult, push_all};
-pub use state::{ModuleSyncState, SyncState, SyncStateStore};
+pub use state::{SyncState, SyncStateStore};

@@ -6,8 +6,8 @@
 //!
 //! 模块分层：
 //! - 统一错误/上下文：error / context
-//! - 基础能力域：crypto / config_enc / webdav / s3 / fs_util / manifest
-//! - 同步域：sync_adapters / sync_bundle / sync_crypto / cloud_sync / full_sync_backup
+//! - 基础能力域：crypto / config_enc / webdav / s3 / fs_util
+//! - 同步域：sync_adapters / sync_crypto / cloud_sync / full_sync_backup
 //! - 数据访问域：db / models
 //! - 业务编排层：api
 
@@ -19,16 +19,14 @@ pub mod error;
 pub mod config_enc;
 pub mod crypto;
 pub mod fs_util;
-pub mod manifest;
 pub mod s3;
 pub mod webdav;
 
-// 同步域（v1 适配器构造/配置校验 + 云同步管线 + .orsync 打包 + 密钥派生 + 全量备份）
+// 同步域（适配器构造/配置校验 + 云同步 v2 管线 + 密钥派生 + 全量备份）
 pub mod cloud_sync;
 pub mod full_sync_backup;
 pub mod sync;
 pub mod sync_adapters;
-pub mod sync_bundle;
 pub mod sync_crypto;
 
 // 横切关注点

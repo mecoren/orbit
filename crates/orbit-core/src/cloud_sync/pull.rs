@@ -1,83 +1,57 @@
-//! pull — 模块级增量下载与合并流程
+//! pull — v2 清单驱动的差量下载与合并
 //!
-//! 从云端拉取模块数据，按指纹增量下载变化的模块，并交给 merge 模块做 item 级合并。
-//! 所有云端文件均用 Data Key AES-256-GCM 解密。
+//! ## 流程
+//! 1. 读远端清单；不存在说明云端尚未有数据 → 直接返回（首次同步前置）
+//! 2. `epoch` 与本地账本一致 → 无任何远端变更，跳过（零分桶流量）
+//! 3. 逐表：比对「远端桶指纹」与本地账本快照，**只下载变化的桶**；
+//!    墓碑分桶同理；随后按表合并（LWW + 复活裁决）
+//! 4. 用远端清单刷新本地账本快照（epoch + 桶索引）
 //!
-//! ## Pull 流程
-//! 1. 加载本地同步状态
-//! 2. 获取已解锁的 Data Key
-//! 3. 下载并解密 `_meta.orsync`（兼容遗留 `_meta.waitsync`）
-//! 4. 遍历远端模块元数据：
-//!    - 与本地记录的 remote_fp 比对，相同则跳过
-//!    - 变化则下载 `data.orsync` + `meta.orsync`（兼容遗留 `.waitsync`），解密
-//!    - 调用 merge_items 做 item 级 LWW 合并
-//!    - 更新本地状态
-//! 5. 附件同步（调用 attachments 模块，M1.11 实现）
+//! ## 为什么串行
+//! 合并是 SQLite 写事务（单连接池写串行），下载并发只会把压力推给
+//! 后续写锁等待；且 WebDAV（坚果云约 1 req/s）对并发请求敏感。差量后
+//! 单轮待下载分桶数已从「全库」降到「变化桶」，串行开销可接受。
 //!
 //! ## 错误隔离
-//! 单个模块下载/合并失败不阻塞其他模块，错误收集到 `errors` 列表。
+//! 单表失败只记入 `failed_modules`（push 侧据此跳过该表，防止本地旧快照
+//! 覆盖云端新数据），不影响其他表。
 
 use sqlx::SqlitePool;
 
+use crate::cloud_sync::chunk::ChunkPayload;
 use crate::cloud_sync::crypto_io::decrypt_payload;
-use crate::cloud_sync::db_loader::{load_module_items, now_ms};
+use crate::cloud_sync::db_loader::now_ms;
 use crate::cloud_sync::error::CloudSyncError;
-use crate::cloud_sync::meta::{GlobalMeta, ModuleData, ModuleMetaEntry};
-use crate::cloud_sync::modules::{SYNC_MODULES, SyncModuleDef};
+use crate::cloud_sync::meta::{ManifestV2, TombstoneBucketPayload, TombstoneEntry};
 use crate::cloud_sync::paths;
 use crate::cloud_sync::progress::{ProgressBuilder, ProgressSender, SyncOrigin};
-use crate::cloud_sync::state::{ModuleSyncState, SyncStateStore};
+use crate::cloud_sync::state::{SyncState, SyncStateStore};
+use crate::db::sync_registry::SYNCABLE_TABLES;
 use crate::sync_adapters::traits::SyncAdapter;
 use crate::sync_crypto::SyncCryptoService;
 
 /// Pull 执行结果
 #[derive(Debug, Clone, Default)]
 pub struct PullResult {
-    /// 实际拉取的模块数（远端指纹变化的模块）
+    /// 实际拉取的模块数（有桶被下载即 1，保持 UI 计数语义）
     pub pulled_modules: u32,
-    /// 跳过的模块数
+    /// 跳过的模块数（远端无变更 / epoch 未变）
     pub skipped_modules: u32,
-    /// 冲突裁决数合计（S28：merge LWW/复活裁决计数透传，此前恒 0 不可见）
+    /// 冲突裁决数合计
     pub conflicts: u64,
     /// 收集的错误（不阻塞整体流程）
     pub errors: Vec<String>,
-    /// 本轮 Pull 失败的模块名集合（P0-6）
-    ///
-    /// pull 失败的模块本地数据仍是旧快照，若不传给 push 侧跳过，
-    /// reconcile 会发现 fp 不一致并用陈旧数据重传覆盖云端新数据
-    /// （设备 B 刚推的新数据被设备 A 的旧数据覆盖，B 若不再同步则永久丢失）。
+    /// 本轮 Pull 失败的表名（push 侧据此跳过，防陈旧覆盖）
     pub failed_modules: Vec<String>,
+    /// 下载的数据分桶数
+    pub downloaded_chunks: u32,
+    /// 跳过的数据分桶数（指纹未变）
+    pub skipped_chunks: u32,
+    /// 下载的墓碑分桶数
+    pub downloaded_tombstones: u32,
 }
 
-/// 单个模块 Pull 任务的结果（用于并行任务返回，主流程顺序应用 state）
-enum PullModuleOutcome {
-    /// 指纹未变，跳过
-    Skipped,
-    /// 远端无此模块数据（404），更新 remote_fp 避免重复尝试
-    RemoteEmpty {
-        name: String,
-        new_state: ModuleSyncState,
-    },
-    /// 成功拉取并合并
-    Pulled {
-        name: String,
-        new_state: ModuleSyncState,
-        changed_records: u64,
-        /// 该模块 merge 的冲突裁决数（S28 透传）
-        conflicts: u64,
-    },
-    /// 单模块错误（不阻塞整体流程，收集到 errors；module 供 push 侧跳过，P0-6）
-    Failed { module: String, message: String },
-}
-
-/// 执行全量 Pull：从云端拉取模块数据并合并
-///
-/// `origin` 标识事件来源（Background/Manual/Exit），用于 UI 层过滤重复显示。
-///
-/// ## 性能优化（2026-07-25 P0）
-/// - 模块级并行：15 个模块通过 `buffer_unordered(8)` 并发下载与合并
-/// - 批量 state 保存：循环结束后一次性写入 `sync_state.json`
-/// - 错误隔离：单模块失败返回 `Failed` outcome，不阻塞其他模块
+/// 执行差量 Pull
 pub async fn pull_all(
     db_pool: &SqlitePool,
     crypto: &SyncCryptoService,
@@ -86,451 +60,530 @@ pub async fn pull_all(
     progress_sender: &dyn ProgressSender,
     origin: SyncOrigin,
 ) -> Result<PullResult, CloudSyncError> {
-    let mut state = state_store.load()?;
-    let data_key = crypto.get_data_key().ok_or_else(|| {
-        // 诊断日志：Data Key 为 None，说明 crypto 实例未 unlock
-        // 这通常意味着 sync_crypto_unlock 未被调用，或 unlock 后 Data Key 被清除
-        log::info!("[pull_all] Data Key 为 None：crypto 实例未解锁，返回 CryptoLocked");
-        CloudSyncError::CryptoLocked
-    })?;
-    log::info!(
-        "[pull_all] 获取 Data Key 成功，指纹: {}",
-        crate::cloud_sync::engine::data_key_fingerprint(&data_key)
-    );
-
-    // 1. 下载并解密 _meta（默认 .orsync，404 回退遗留 .waitsync）
-    //    首次同步时远端尚无 _meta（404），降级为空的全局元数据，
-    //    允许首次同步继续执行（Push 已上传本地数据，Pull 无远端变更可合并）。
-    let meta_bytes_opt = match adapter.download(paths::GLOBAL_META_PATH).await {
-        Ok(b) => Some(b),
-        Err(e) if paths::is_not_found_error(&e) => {
-            match adapter.download(paths::LEGACY_GLOBAL_META_PATH).await {
-                Ok(b) => Some(b),
-                Err(e2) if paths::is_not_found_error(&e2) => None,
-                Err(e2) => {
-                    return Err(CloudSyncError::RemoteMissing(format!(
-                        "下载 {} 失败: {}",
-                        paths::LEGACY_GLOBAL_META_PATH,
-                        e2
-                    )));
-                }
-            }
-        }
+    let mut state = match state_store.load() {
+        Ok(s) => s,
         Err(e) => {
-            return Err(CloudSyncError::RemoteMissing(format!(
-                "下载 {} 失败: {}",
-                paths::GLOBAL_META_PATH,
-                e
-            )));
+            log::warn!("[pull] 本地账本不可用，将完整比对远端分桶: {e}");
+            SyncState::default()
         }
     };
-    let global_meta = match meta_bytes_opt {
-        Some(meta_bytes) => {
-            let decrypted_meta = decrypt_payload(&meta_bytes, &data_key)?;
-            serde_json::from_slice::<GlobalMeta>(&decrypted_meta)?
+    let data_key = crypto.get_data_key().ok_or(CloudSyncError::CryptoLocked)?;
+
+    // 1. 读远端清单
+    let manifest = match adapter.download_with_token(paths::MANIFEST_PATH).await? {
+        None => {
+            log::info!("[pull] 云端无清单（首次同步/云端为空），跳过拉取");
+            let mut next = state.clone();
+            next.last_synced_at = now_ms();
+            next.manifest_epoch = 0;
+            next.remote_tables.clear();
+            next.remote_tombstones.clear();
+            state_store.save(&next)?;
+            return Ok(PullResult {
+                skipped_modules: 1,
+                ..Default::default()
+            });
         }
-        None => GlobalMeta::empty(""),
+        Some((bytes, _)) => {
+            let plain = decrypt_payload(&bytes, &data_key)?;
+            let m: ManifestV2 = serde_json::from_slice(&plain)?;
+            if m.layout_version != crate::cloud_sync::meta::LAYOUT_VERSION {
+                return Err(CloudSyncError::Other {
+                    message: format!(
+                        "云端清单布局版本 {} 不受支持（当前 {}）",
+                        m.layout_version,
+                        crate::cloud_sync::meta::LAYOUT_VERSION
+                    ),
+                });
+            }
+            m
+        }
     };
+
+    // 2. epoch 快速跳过
+    if manifest.epoch > 0 && manifest.epoch == state.manifest_epoch {
+        log::info!("[pull] 清单 epoch 未变（{}），跳过", manifest.epoch);
+        state.last_synced_at = now_ms();
+        state_store.save(&state)?;
+        return Ok(PullResult {
+            skipped_modules: 1,
+            ..Default::default()
+        });
+    }
 
     let builder = ProgressBuilder::new(progress_sender, origin);
-    let total = global_meta.modules.len() as u32;
-    builder.starting(total);
+    // 表集合 = 有数据分桶的表 ∪ 有墓碑分桶的表。
+    // 数据被删光的表只剩墓碑，若只遍历 tables 会漏掉删除传播。
+    let mut table_names: std::collections::BTreeSet<&String> = manifest.tables.keys().collect();
+    table_names.extend(manifest.tombstones.keys());
+    let tables: Vec<&String> = table_names.into_iter().collect();
+    builder.starting(tables.len() as u32);
 
-    // 预捕获所有模块的 local_state，避免并行任务借用 state
-    // 元组：(模块名, 远端指纹, 远端 updated_at, 本地 state, 模块定义)
-    // 使用 owned String 避免引用 global_meta 的生命周期问题
-    type ModuleEntry = (
-        String,
-        String,
-        i64,
-        Option<ModuleSyncState>,
-        Option<&'static SyncModuleDef>,
-    );
-    let module_entries: Vec<ModuleEntry> = global_meta
-        .modules
-        .iter()
-        .map(|(name, remote_meta)| {
-            let module_def = SYNC_MODULES.iter().find(|m| m.name == name.as_str());
-            let local_state = state.modules.get(name).cloned();
-            (
-                name.clone(),
-                remote_meta.fp.clone(),
-                remote_meta.updated_at,
-                local_state,
-                module_def,
-            )
-        })
-        .collect();
-
-    // 串行 Pull：每个模块独立完成 下载→解密→合并→返回新状态，
-    // 不修改全局 state，由主流程在所有任务完成后顺序应用。
-    // 注：原 buffer_unordered 并行实现在 Tauri 命令上下文中触发
-    // `&dyn ProgressSender` 的 Send 约束 HRTB 推断失败，回退为串行。
-    let mut outcomes: Vec<PullModuleOutcome> = Vec::with_capacity(module_entries.len());
-    for (idx, (name, remote_fp, remote_updated_at, local_state, module_def)) in
-        module_entries.into_iter().enumerate()
-    {
-        let current = idx as u32 + 1;
-        // 未知模块：直接返回 Failed（不阻塞其他模块）
-        let outcome = match module_def {
-            None => PullModuleOutcome::Failed {
-                module: name.clone(),
-                message: format!("未知模块: {}", name),
-            },
-            Some(module_def) => {
-                pull_single_module(
-                    db_pool,
-                    &data_key,
-                    adapter,
-                    progress_sender,
-                    origin,
-                    module_def,
-                    &name,
-                    &remote_fp,
-                    remote_updated_at,
-                    local_state,
-                    current,
-                    total,
-                )
-                .await
-            }
-        };
-        outcomes.push(outcome);
-    }
-
-    // 顺序应用 outcomes 到 state 和 result
     let mut result = PullResult::default();
-    let mut changed_records = 0;
-    for outcome in outcomes {
-        match outcome {
-            PullModuleOutcome::Skipped => result.skipped_modules += 1,
-            PullModuleOutcome::RemoteEmpty { name, new_state } => {
-                state.set_module(&name, new_state);
-                result.skipped_modules += 1;
+    let mut changed_records_total = 0u64;
+
+    for (idx, table) in tables.iter().enumerate() {
+        let table: &str = table;
+        builder.pulling("todos", "待办数据", idx as u32 + 1, tables.len() as u32);
+
+        match pull_single_table(db_pool, &data_key, adapter, &state, &manifest, table).await {
+            Ok(outcome) => {
+                result.downloaded_chunks += outcome.downloaded_chunks;
+                result.skipped_chunks += outcome.skipped_chunks;
+                result.downloaded_tombstones += outcome.downloaded_tombstones;
+                result.conflicts += outcome.merge.conflicts;
+                changed_records_total +=
+                    outcome.merge.inserted + outcome.merge.updated + outcome.merge.deleted;
+                result.errors.extend(outcome.merge.errors);
+                if outcome.downloaded_chunks > 0 || outcome.downloaded_tombstones > 0 {
+                    result.pulled_modules = 1;
+                }
+                builder.merging(
+                    "todos",
+                    "待办数据",
+                    outcome.merge.inserted,
+                    outcome.merge.updated,
+                    outcome.merge.deleted,
+                );
             }
-            PullModuleOutcome::Pulled {
-                name,
-                new_state,
-                changed_records: module_changed_records,
-                conflicts: module_conflicts,
-            } => {
-                state.set_module(&name, new_state);
-                result.pulled_modules += 1;
-                changed_records += module_changed_records;
-                result.conflicts += module_conflicts;
-            }
-            PullModuleOutcome::Failed { module, message } => {
-                result.errors.push(message);
-                // P0-6：失败模块名随 PullResult 返回，供 sync_now/pull_then_push
-                // 跳过对应模块的 push，防止陈旧数据覆盖云端新数据
-                result.failed_modules.push(module);
+            Err(e) => {
+                log::info!("[pull] 表 {table} 拉取失败（隔离不中断）: {e}");
+                result.errors.push(format!("表 {table} 拉取失败: {e}"));
+                result.failed_modules.push(table.to_string());
             }
         }
     }
 
-    if changed_records > 0 {
-        builder.local_data_applied(changed_records);
+    if changed_records_total > 0 {
+        builder.local_data_applied(changed_records_total);
     }
 
-    // 批量保存 state（循环结束后一次性写入，避免每模块都写文件）
-    state.last_synced_at = now_ms();
-    state_store.save(&state)?;
+    // 3. 失败表存在时：不推进 epoch（下轮完整重试这些表），但成功表的
+    //    快照已由 update_from_manifest 统一刷新——因此这里仍刷新整体快照，
+    //    失败表的桶指纹保持旧值（下轮会重新下载）。
+    let mut next = state.clone();
+    next.last_synced_at = now_ms();
+    next.update_from_manifest(&manifest);
+    // 失败表回滚快照到最后一次成功状态（强制下轮重试）
+    for table in &result.failed_modules {
+        if let Some(prev) = state.remote_tables.get(table) {
+            next.remote_tables.insert(table.clone(), prev.clone());
+        } else {
+            next.remote_tables.remove(table);
+        }
+        if let Some(prev) = state.remote_tombstones.get(table) {
+            next.remote_tombstones.insert(table.clone(), prev.clone());
+        } else {
+            next.remote_tombstones.remove(table);
+        }
+    }
+    state_store.save(&next)?;
 
     Ok(result)
 }
 
-/// 处理单个模块的 Pull（并行任务单元）
-///
-/// 独立完成：指纹比对 → 下载数据与墓碑 → 解密 → 合并 → 返回新状态。
-/// 单模块失败返回 `Failed` outcome，不阻塞其他模块。
-#[allow(clippy::too_many_arguments)] // 单模块拉取管道参数，聚合进结构体收益低
-async fn pull_single_module(
+/// 单表拉取结果
+struct TablePullOutcome {
+    merge: crate::cloud_sync::merge::MergeResult,
+    downloaded_chunks: u32,
+    skipped_chunks: u32,
+    downloaded_tombstones: u32,
+}
+
+/// 单表差量下载与合并
+async fn pull_single_table(
     db_pool: &SqlitePool,
     data_key: &[u8],
     adapter: &dyn SyncAdapter,
-    progress_sender: &dyn ProgressSender,
-    origin: SyncOrigin,
-    module_def: &SyncModuleDef,
-    module_name: &str,
-    remote_fp: &str,
-    remote_updated_at: i64,
-    local_state: Option<ModuleSyncState>,
-    current: u32,
-    total: u32,
-) -> PullModuleOutcome {
-    let builder = ProgressBuilder::new(progress_sender, origin);
-    builder.pulling(module_name, module_def.display_name, current, total);
-
-    // 1. 比对指纹：远端 fp == 本地记录的 remote_fp → 跳过（委托纯函数，便于单测）
-    if local_state
-        .as_ref()
-        .is_some_and(|s| should_skip_pull(s, remote_fp, remote_updated_at))
-    {
-        return PullModuleOutcome::Skipped;
+    state: &SyncState,
+    manifest: &ManifestV2,
+    table: &str,
+) -> Result<TablePullOutcome, CloudSyncError> {
+    if !SYNCABLE_TABLES.contains(&table) {
+        return Err(CloudSyncError::UnknownModule(format!(
+            "远端清单包含非白名单表 `{table}`，疑似数据被篡改或版本不兼容"
+        )));
     }
 
-    // 2. 下载并解密 data（默认 .orsync，404 回退遗留 .waitsync）
-    //    404 降级：远端无此模块数据 → 更新 remote_fp 避免重复尝试，视为跳过
-    let (data_path, data_bytes) = match adapter
-        .download(&paths::module_data_path(module_name))
-        .await
-    {
-        Ok(bytes) => (paths::module_data_path(module_name), bytes),
-        Err(e) if paths::is_not_found_error(&e) => {
-            let legacy_path = paths::legacy_module_data_path(module_name);
-            match adapter.download(&legacy_path).await {
-                Ok(bytes) => (legacy_path, bytes),
-                Err(e2) if paths::is_not_found_error(&e2) => {
-                    // 远端无此模块数据，更新 remote_fp 避免重复尝试
-                    let fp = local_state.as_ref().map_or(String::new(), |s| s.fp.clone());
-                    let new_state = ModuleSyncState {
-                        fp,
-                        remote_fp: remote_fp.to_string(),
-                        count: local_state.as_ref().map_or(0, |s| s.count),
-                        pulled_at: now_ms(),
-                        pushed_at: local_state.as_ref().map_or(0, |s| s.pushed_at),
-                    };
-                    return PullModuleOutcome::RemoteEmpty {
-                        name: module_name.to_string(),
-                        new_state,
-                    };
-                }
-                Err(e2) => {
-                    return PullModuleOutcome::Failed {
-                        module: module_name.to_string(),
-                        message: format!("下载 {} 失败: {}", legacy_path, e2),
-                    };
-                }
-            }
-        }
-        Err(e) => {
-            let data_path = paths::module_data_path(module_name);
-            return PullModuleOutcome::Failed {
-                module: module_name.to_string(),
-                message: format!("下载 {} 失败: {}", data_path, e),
-            };
-        }
-    };
+    let mut items: Vec<serde_json::Value> = Vec::new();
+    let mut downloaded_chunks = 0u32;
+    let mut skipped_chunks = 0u32;
 
-    let decrypted_data = match decrypt_payload(&data_bytes, data_key) {
-        Ok(d) => d,
-        Err(e) => {
-            return PullModuleOutcome::Failed {
-                module: module_name.to_string(),
-                message: format!("解密 {} 失败: {}", data_path, e),
-            };
-        }
-    };
-    let module_data: ModuleData = match serde_json::from_slice(&decrypted_data) {
-        Ok(d) => d,
-        Err(e) => {
-            return PullModuleOutcome::Failed {
-                module: module_name.to_string(),
-                message: format!("解析 {} 失败: {}", data_path, e),
-            };
-        }
-    };
-
-    // 3. 下载并解密 meta（默认 .orsync，404 回退遗留 .waitsync，获取墓碑集）
-    //
-    // Fix-05 区分三种情况：
-    // - 成功：正常携带墓碑集合并；
-    // - 404（NotFound）：旧版本数据可能没有 meta 文件 → 以空墓碑降级继续（兼容），
-    //   记录 info 日志便于诊断"远端删除未传播"类问题；
-    // - 其他错误（解密失败 = Data Key 不一致 / 网络故障）：**整体跳过该模块合并**
-    //   并返回 Failed。历史问题：旧实现一律静默降级为空墓碑继续合并，
-    //   导致远端删除永远无法传播到本地、本地已删记录被复活后又随 push 回传覆盖云端，
-    //   且用户全程无感知。在 merge 之前返回 Failed 可避免"半合并"状态
-    //   （数据更新了但删除丢失）。上层 with_retry 会对网络类错误自动重试。
-    let meta_path = paths::module_meta_path(module_name);
-    let module_meta: ModuleMetaEntry =
-        match download_and_decrypt_meta_with_fallback(adapter, module_name, data_key).await {
-            Ok(m) => m,
-            Err(e @ CloudSyncError::NotFound { .. }) => {
-                log::info!(
-                    "[pull] {} 不存在（404，旧格式数据），以空墓碑集继续合并",
-                    meta_path
-                );
-                let _ = e;
-                ModuleMetaEntry {
-                    fp: remote_fp.to_string(),
-                    count: module_data.items.len() as u64,
-                    deleted_ids: Vec::new(),
-                    updated_at: remote_updated_at,
-                }
+    if let Some(index) = manifest.table(table) {
+        for (bucket, chunk_ref) in &index.chunks {
+            if state.remote_chunk_fp(table, *bucket) == Some(chunk_ref.fp.as_str()) {
+                skipped_chunks += 1;
+                continue;
             }
-            Err(e) => {
-                return PullModuleOutcome::Failed {
-                    module: module_name.to_string(),
+            let path = paths::table_bucket_path(table, *bucket);
+            let bytes = adapter.download(&path).await?;
+            let plain = decrypt_payload(&bytes, data_key)?;
+            let payload: ChunkPayload = serde_json::from_slice(&plain)?;
+            if payload.table != table || payload.bucket != *bucket {
+                return Err(CloudSyncError::Merge {
                     message: format!(
-                        "获取 {} 失败（解密或网络错误），已跳过该模块合并以防删除丢失: {}",
-                        meta_path, e
+                        "分桶内容与路径不一致（路径 {table}/{bucket}，载荷 {}/{}）",
+                        payload.table, payload.bucket
                     ),
-                };
+                });
             }
-        };
-
-    // 4. item 级合并（调用 merge 模块）
-    let merge_result = crate::cloud_sync::merge::merge_items(
-        db_pool,
-        module_def,
-        &module_data.items,
-        &module_meta.deleted_ids,
-    )
-    .await;
-
-    let (changed_records, module_conflicts) = match merge_result {
-        Ok(merge) => {
-            builder.merging(
-                module_name,
-                module_def.display_name,
-                merge.inserted,
-                merge.updated,
-                merge.deleted,
-            );
-            (
-                merge.inserted + merge.updated + merge.deleted,
-                merge.conflicts,
-            )
+            items.extend(payload.items);
+            downloaded_chunks += 1;
         }
-        Err(e) => {
-            return PullModuleOutcome::Failed {
-                module: module_name.to_string(),
-                message: format!("合并 {} 失败: {}", module_name, e),
-            };
-        }
-    };
-
-    // 5. 合并后重新计算本地指纹（反映合并后的数据状态）
-    let refreshed_items = match load_module_items(db_pool, module_def).await {
-        Ok(items) => items,
-        Err(e) => {
-            if changed_records > 0 {
-                builder.local_data_applied(changed_records);
-            }
-            return PullModuleOutcome::Failed {
-                module: module_name.to_string(),
-                message: format!("合并后重新加载 {} 失败: {}", module_name, e),
-            };
-        }
-    };
-    let local_fp = match crate::cloud_sync::compute_fingerprint(&refreshed_items) {
-        Ok(fp) => fp,
-        Err(e) => {
-            if changed_records > 0 {
-                builder.local_data_applied(changed_records);
-            }
-            return PullModuleOutcome::Failed {
-                module: module_name.to_string(),
-                message: format!("合并后计算 {} 指纹失败: {}", module_name, e),
-            };
-        }
-    };
-
-    let new_state = ModuleSyncState {
-        fp: local_fp,
-        remote_fp: remote_fp.to_string(),
-        count: refreshed_items.len() as u64,
-        pulled_at: now_ms(),
-        pushed_at: local_state.as_ref().map_or(0, |s| s.pushed_at),
-    };
-
-    PullModuleOutcome::Pulled {
-        name: module_name.to_string(),
-        new_state,
-        changed_records,
-        conflicts: module_conflicts,
     }
-}
 
-/// 判断单个模块 Pull 是否应跳过（纯函数，便于真值表单测）
-///
-/// 主条件（增量跳过）：本地记录的 remote_fp 与远端 fp 一致且非空。
-///
-/// S17 二级校验（2026-09-14 审查）：push 侧中断窗口可产生「新 data +
-/// 旧 _meta」的云端状态——_meta 里的 fp 是旧值，本端 remote_fp 与之
-/// 相等即跳过，漏拉新 data。以 `_meta.updated_at` 兜底：全局索引更新
-/// 时间晚于本地上次 Pull 记录（pulled_at），说明远端发生过本端未见的
-/// 写入（含中断重传、其他设备覆盖 _meta），不跳过、强制走下载分支。
-/// `remote_updated_at > 0` 排除旧版本/异常数据写 0 导致的每轮强制拉取。
-fn should_skip_pull(local: &ModuleSyncState, remote_fp: &str, remote_updated_at: i64) -> bool {
-    local.remote_fp == remote_fp
-        && !local.remote_fp.is_empty()
-        && !(remote_updated_at > local.pulled_at && remote_updated_at > 0)
-}
-
-/// 下载并解密模块 meta（默认 .orsync，404 回退遗留 .waitsync）
-async fn download_and_decrypt_meta_with_fallback(
-    adapter: &dyn SyncAdapter,
-    module_name: &str,
-    data_key: &[u8],
-) -> Result<ModuleMetaEntry, CloudSyncError> {
-    let primary = paths::module_meta_path(module_name);
-    let bytes = match adapter.download(&primary).await {
-        Ok(b) => b,
-        Err(e) if paths::is_not_found_error(&e) => {
-            let legacy = paths::legacy_module_meta_path(module_name);
-            adapter
-                .download(&legacy)
-                .await
-                .map_err(CloudSyncError::from)?
+    let mut tombstones: Vec<TombstoneEntry> = Vec::new();
+    let mut downloaded_tombstones = 0u32;
+    if let Some(index) = manifest.tombstone_index(table) {
+        for (bucket, entry) in &index.buckets {
+            if state.remote_tombstone_fp(table, bucket) == Some(entry.fp.as_str()) {
+                continue;
+            }
+            let path = paths::tombstone_bucket_path(table, bucket);
+            let bytes = adapter.download(&path).await?;
+            let plain = decrypt_payload(&bytes, data_key)?;
+            let payload: TombstoneBucketPayload = serde_json::from_slice(&plain)?;
+            if payload.table != table || payload.bucket != *bucket {
+                return Err(CloudSyncError::Merge {
+                    message: format!(
+                        "墓碑分桶内容与路径不一致（路径 {table}/{bucket}）"
+                    ),
+                });
+            }
+            tombstones.extend(payload.tombstones);
+            downloaded_tombstones += 1;
         }
-        Err(e) => return Err(CloudSyncError::from(e)),
-    };
-    let decrypted = decrypt_payload(&bytes, data_key)?;
-    let meta: ModuleMetaEntry = serde_json::from_slice(&decrypted)?;
-    Ok(meta)
+    }
+
+    let merge =
+        crate::cloud_sync::merge::merge_table_items(db_pool, table, &items, &tombstones).await?;
+
+    Ok(TablePullOutcome {
+        merge,
+        downloaded_chunks,
+        skipped_chunks,
+        downloaded_tombstones,
+    })
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::cloud_sync::chunk::split_table_items;
+    use crate::cloud_sync::crypto_io::encrypt_payload;
+    use crate::cloud_sync::meta::{ChunkRef, TableIndex};
+    use crate::cloud_sync::progress::NoopProgressSender;
+    use crate::sync::error::SyncError;
+    use crate::sync_adapters::traits::RemoteFile;
+    use async_trait::async_trait;
+    use std::collections::HashMap;
+    use std::sync::Mutex;
 
-    fn state(remote_fp: &str, pulled_at: i64) -> ModuleSyncState {
-        ModuleSyncState {
-            fp: "fp-local".to_string(),
-            remote_fp: remote_fp.to_string(),
-            count: 1,
-            pulled_at,
-            pushed_at: 0,
+    struct MemAdapter {
+        files: Mutex<HashMap<String, Vec<u8>>>,
+        downloads: Mutex<Vec<String>>,
+    }
+
+    impl MemAdapter {
+        fn new() -> Self {
+            Self {
+                files: Mutex::new(HashMap::new()),
+                downloads: Mutex::new(Vec::new()),
+            }
+        }
+        fn put(&self, path: &str, data: Vec<u8>) {
+            self.files.lock().unwrap().insert(path.to_string(), data);
         }
     }
 
-    // ========================================================================
-    // should_skip_pull 真值表：S17 漏拉窗口二级校验
-    //
-    // 漏拉场景：对端 push 中断留下「新 data + 旧 _meta」（_meta.fp 是旧值
-    // 但 updated_at 已刷新），本端 remote_fp 与旧 fp 相等——无二级校验时
-    // 永久跳过，新 data 漏拉。
-    // ========================================================================
-
-    #[test]
-    fn skip_when_fp_matches_and_no_newer_remote_write() {
-        // 常规增量：fp 一致 + 远端 updated_at 不晚于本地拉取时间 → 跳过
-        assert!(should_skip_pull(&state("fp-a", 200), "fp-a", 100));
-        assert!(should_skip_pull(&state("fp-a", 200), "fp-a", 200));
+    #[async_trait]
+    impl SyncAdapter for MemAdapter {
+        async fn list_files(&self, _: &str) -> Result<Vec<RemoteFile>, SyncError> {
+            Ok(Vec::new())
+        }
+        async fn download(&self, path: &str) -> Result<Vec<u8>, SyncError> {
+            self.downloads.lock().unwrap().push(path.to_string());
+            self.files
+                .lock()
+                .unwrap()
+                .get(path)
+                .cloned()
+                .ok_or_else(|| SyncError::NotFound {
+                    message: path.to_string(),
+                })
+        }
+        async fn upload(&self, path: &str, data: &[u8]) -> Result<(), SyncError> {
+            self.put(path, data.to_vec());
+            Ok(())
+        }
+        async fn delete(&self, _: &str) -> Result<(), SyncError> {
+            Ok(())
+        }
+        async fn upload_asset(&self, _: &str, _: &[u8]) -> Result<(), SyncError> {
+            Ok(())
+        }
+        async fn download_asset(&self, _: &str) -> Result<Vec<u8>, SyncError> {
+            Err(SyncError::NotFound {
+                message: "无".to_string(),
+            })
+        }
+        async fn asset_exists(&self, _: &str) -> Result<bool, SyncError> {
+            Ok(false)
+        }
+        async fn download_with_token(
+            &self,
+            path: &str,
+        ) -> Result<Option<(Vec<u8>, Option<String>)>, SyncError> {
+            // 读清单不记入 downloads（避免"零下载"断言被清单读取干扰）
+            Ok(self.files.lock().unwrap().get(path).cloned().map(|b| (b, None)))
+        }
+        async fn list_assets(&self) -> Result<Vec<String>, SyncError> {
+            Ok(Vec::new())
+        }
     }
 
-    #[test]
-    fn force_pull_when_meta_updated_after_last_pull() {
-        // S17 核心：fp 一致但 _meta.updated_at 晚于本地 pulled_at → 不跳过
-        //（对端 push 中断后重传：fp 恰好回到相同值但全局索引更新过）
+    const KEY: [u8; 32] = [9u8; 32];
+
+    async fn env() -> (
+        SqlitePool,
+        SyncCryptoService,
+        SyncStateStore,
+        tempfile::TempDir,
+    ) {
+        let pool = sqlx::SqlitePool::connect("sqlite::memory:").await.unwrap();
+        sqlx::migrate!("./src/db/migrations").run(&pool).await.unwrap();
+        let tmp = tempfile::TempDir::new().unwrap();
+        let crypto = SyncCryptoService::new(tmp.path());
+        crypto.init_with_data_key("pw", &KEY).unwrap();
+        let store = SyncStateStore::new(tmp.path());
+        (pool, crypto, store, tmp)
+    }
+
+    /// 构造「远端含一行 todo_projects」的云端环境
+    fn seed_remote(adapter: &MemAdapter, uuid: &str, title: &str, updated_at: i64) -> ManifestV2 {
+        let mut manifest = ManifestV2::empty("dev-2");
+        manifest.epoch = 3;
+
+        let items = vec![serde_json::json!({
+            "uuid": uuid, "title": title, "is_deleted": 0, "deleted_at": 0,
+            "updated_at": updated_at, "version": 1
+        })];
+        let chunks = split_table_items("todo_projects", items);
+        let mut index = TableIndex::default();
+        for chunk in &chunks {
+            let bytes = chunk.to_payload_bytes().unwrap();
+            adapter.put(
+                &paths::table_bucket_path("todo_projects", chunk.bucket),
+                encrypt_payload(&bytes, &KEY).unwrap(),
+            );
+            index.chunks.insert(
+                chunk.bucket,
+                ChunkRef {
+                    fp: chunk.fingerprint().unwrap(),
+                    count: chunk.items.len() as u64,
+                    size: bytes.len() as u64,
+                },
+            );
+        }
+        manifest.tables.insert("todo_projects".to_string(), index);
+
+        let payload = encrypt_payload(&serde_json::to_vec(&manifest).unwrap(), &KEY).unwrap();
+        adapter.put(paths::MANIFEST_PATH, payload);
+        manifest
+    }
+
+    #[tokio::test]
+    async fn first_pull_downloads_and_merges() {
+        let (pool, crypto, store, _tmp) = env().await;
+        let adapter = MemAdapter::new();
+        seed_remote(&adapter, "remote-1", "来自他端", 100);
+
+        let result = pull_all(
+            &pool,
+            &crypto,
+            &store,
+            &adapter,
+            &NoopProgressSender,
+            SyncOrigin::Manual,
+        )
+        .await
+        .unwrap();
+
+        assert!(result.downloaded_chunks >= 1);
+        let (title,): (String,) =
+            sqlx::query_as("SELECT title FROM todo_projects WHERE uuid='remote-1'")
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        assert_eq!(title, "来自他端");
+
+        // 账本已记录远端快照
+        let state = store.load().unwrap();
+        assert_eq!(state.manifest_epoch, 3);
+        assert!(state.remote_chunk_fp("todo_projects", 0).is_some() || !state.remote_tables.is_empty());
+    }
+
+    #[tokio::test]
+    async fn second_pull_with_same_epoch_downloads_nothing() {
+        let (pool, crypto, store, _tmp) = env().await;
+        let adapter = MemAdapter::new();
+        seed_remote(&adapter, "remote-1", "A", 100);
+
+        pull_all(
+            &pool,
+            &crypto,
+            &store,
+            &adapter,
+            &NoopProgressSender,
+            SyncOrigin::Manual,
+        )
+        .await
+        .unwrap();
+
+        adapter.downloads.lock().unwrap().clear();
+        let result = pull_all(
+            &pool,
+            &crypto,
+            &store,
+            &adapter,
+            &NoopProgressSender,
+            SyncOrigin::Manual,
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(result.skipped_modules, 1, "epoch 未变必须跳过");
         assert!(
-            !should_skip_pull(&state("fp-a", 100), "fp-a", 300),
-            "updated_at 晚于上次拉取时必须强制走下载分支"
+            adapter.downloads.lock().unwrap().is_empty(),
+            "epoch 未变不得产生任何下载"
         );
     }
 
-    #[test]
-    fn zero_remote_updated_at_keeps_legacy_skip() {
-        // 旧版本/异常数据 updated_at=0：不能每轮强制拉取（保持原跳过语义）
-        assert!(should_skip_pull(&state("fp-a", 100), "fp-a", 0));
+    #[tokio::test]
+    async fn epoch_change_but_same_bucket_fp_downloads_nothing() {
+        let (pool, crypto, store, _tmp) = env().await;
+        let adapter = MemAdapter::new();
+        let mut manifest = seed_remote(&adapter, "remote-1", "A", 100);
+
+        pull_all(
+            &pool,
+            &crypto,
+            &store,
+            &adapter,
+            &NoopProgressSender,
+            SyncOrigin::Manual,
+        )
+        .await
+        .unwrap();
+
+        // 他端只推进了 epoch（例如上传了别的表），本项目桶未变
+        manifest.epoch = 5;
+        let payload = encrypt_payload(&serde_json::to_vec(&manifest).unwrap(), &KEY).unwrap();
+        adapter.put(paths::MANIFEST_PATH, payload);
+
+        adapter.downloads.lock().unwrap().clear();
+        let result = pull_all(
+            &pool,
+            &crypto,
+            &store,
+            &adapter,
+            &NoopProgressSender,
+            SyncOrigin::Manual,
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(result.downloaded_chunks, 0, "桶指纹未变不得下载");
+        assert!(result.skipped_chunks >= 1);
     }
 
-    #[test]
-    fn fp_mismatch_or_empty_never_skips() {
-        // fp 不一致 → 拉取；remote_fp 空（从未拉过）→ 拉取
-        assert!(!should_skip_pull(&state("fp-a", 100), "fp-b", 50));
-        assert!(!should_skip_pull(&state("", 100), "fp-a", 50));
+    #[tokio::test]
+    async fn missing_manifest_is_noop() {
+        let (pool, crypto, store, _tmp) = env().await;
+        let adapter = MemAdapter::new();
+
+        let result = pull_all(
+            &pool,
+            &crypto,
+            &store,
+            &adapter,
+            &NoopProgressSender,
+            SyncOrigin::Manual,
+        )
+        .await
+        .unwrap();
+        assert_eq!(result.pulled_modules, 0);
+        assert_eq!(result.skipped_modules, 1);
+    }
+
+    #[tokio::test]
+    async fn tombstone_bucket_propagates_delete() {
+        let (pool, crypto, store, _tmp) = env().await;
+        // 本地先有一行
+        sqlx::query(
+            "INSERT INTO todo_projects (uuid, title, is_deleted, deleted_at, created_at, updated_at, version)
+             VALUES ('victim','V',0,0,1,50,1)",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        let adapter = MemAdapter::new();
+        let mut manifest = ManifestV2::empty("dev-2");
+        manifest.epoch = 7;
+        // 远端墓碑：删除时间 100 > 本地更新时间 50 → 删除胜出
+        let tombstones = vec![TombstoneEntry::new("victim".to_string(), 100)];
+        let bucket = crate::cloud_sync::db_loader::local_month_key(100);
+        let payload = TombstoneBucketPayload {
+            table: "todo_projects".to_string(),
+            bucket: bucket.clone(),
+            tombstones: tombstones.clone(),
+        };
+        let bytes = serde_json::to_vec(&payload).unwrap();
+        adapter.put(
+            &paths::tombstone_bucket_path("todo_projects", &bucket),
+            encrypt_payload(&bytes, &KEY).unwrap(),
+        );
+        let fp = crate::cloud_sync::compute_fingerprint(
+            &tombstones
+                .iter()
+                .map(|t| serde_json::json!({"uuid": t.uuid, "deleted_at": t.deleted_at}))
+                .collect::<Vec<_>>(),
+        )
+        .unwrap();
+        manifest.tombstones.insert(
+            "todo_projects".to_string(),
+            crate::cloud_sync::meta::TombstoneIndex {
+                buckets: std::collections::BTreeMap::from([(
+                    bucket.clone(),
+                    crate::cloud_sync::meta::TombstoneBucketRef {
+                        fp,
+                        count: 1,
+                        max_deleted_at: 100,
+                    },
+                )]),
+            },
+        );
+        let mbytes = encrypt_payload(&serde_json::to_vec(&manifest).unwrap(), &KEY).unwrap();
+        adapter.put(paths::MANIFEST_PATH, mbytes);
+
+        pull_all(
+            &pool,
+            &crypto,
+            &store,
+            &adapter,
+            &NoopProgressSender,
+            SyncOrigin::Manual,
+        )
+        .await
+        .unwrap();
+
+        let (is_deleted, deleted_at): (i64, i64) =
+            sqlx::query_as("SELECT is_deleted, deleted_at FROM todo_projects WHERE uuid='victim'")
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        assert_eq!(is_deleted, 1, "远端墓碑必须传播为本地软删");
+        assert_eq!(deleted_at, 100, "删除时间必须保留原始值");
     }
 }

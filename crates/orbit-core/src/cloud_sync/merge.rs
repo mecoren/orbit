@@ -1,32 +1,33 @@
-//! merge — item 级 LWW 合并 + 墓碑应用
+//! merge — 单表 item 级 LWW 合并 + 墓碑应用
 //!
-//! Pull 时对下载的模块数据做 item 级合并，保证多设备各自新增的记录都不丢失。
+//! Pull 时对下载的分桶数据做 item 级合并，保证多设备各自新增的记录都不丢失。
+//! v2 的合并单元是「一张表」：表路由由 pull 侧按分桶载荷的 `table` 字段给出
+//! 并已做白名单校验，本模块不再依赖 `_table` 字段或模块定义。
 //!
 //! ## 合并规则
 //! - 远端有、本地无（按 uuid） → INSERT（保留远端原始字段）
 //! - 本地有、远端无 → 保留（多设备新增不丢）
 //! - 两端都有 → `updated_at` 较大者胜（LWW）；`updated_at` 相等时用 `version`
 //!   次级裁决（高者胜），杜绝同毫秒平局导致的两端分歧与振荡（FR-3）
-//! - 墓碑集中的 uuid → 本地软删除
+//! - 墓碑集中的 uuid → 本地软删除（带时间戳裁决删除 vs 编辑）
 //!
 //! ## 事务保证
-//! 整个合并操作在单个事务内，按固定顺序处理，保证原子性。
-//! 单条记录失败不阻塞整体，错误收集到 MergeResult.errors。
+//! 单表内「批量 INSERT + 逐条 UPDATE」在单个事务内（原子）；
+//! 墓碑应用是紧随其后的另一个事务。单条记录失败不阻塞整体，
+//! 错误收集到 `MergeResult.errors`。
 //!
-//! ## 性能优化（2026-07-25 P0）
+//! ## 性能优化
 //! - INSERT 批量化：分批 50 条构造 `INSERT INTO t (cols) VALUES (?),(?),...`，
 //!   5000 条记录从 ~500ms 降至 ~20ms
-//! - 墓碑 UPDATE 批量化：`UPDATE t SET is_deleted=1 WHERE uuid IN (?,?...)`，
-//!   500 墓碑 × 3 表从 1500 次 SQL 降至 3 次
+//! - 墓碑逐条 UPDATE（绑定各自删除时间，v1 的批量写法会丢时间戳，见 Fix-02）
 
 use std::collections::HashMap;
 
 use sqlx::SqlitePool;
 
-use crate::cloud_sync::db_loader::{LocalRecordState, load_local_uuid_map};
+use crate::cloud_sync::db_loader::{LocalRecordState, load_table_uuid_map};
 use crate::cloud_sync::error::CloudSyncError;
 use crate::cloud_sync::meta::TombstoneEntry;
-use crate::cloud_sync::modules::SyncModuleDef;
 use crate::db::repository::generic_repo::{push_json_value, validate_column_name};
 use crate::db::repository::import_type_validator::{
     ColumnMeta, load_table_columns, normalize_value,
@@ -99,70 +100,61 @@ pub struct MergeResult {
     pub errors: Vec<String>,
 }
 
-/// item 级 LWW 合并
+/// 单表 item 级 LWW 合并（v2 合并单元）
 ///
-/// 遍历远端 items，按 `_table` 字段路由到对应表，按 uuid 做 UPSERT。
-/// 墓碑集中的 uuid 执行软删除（FR-2.6：带时间戳裁决删除vs编辑冲突）。
-pub async fn merge_items(
+/// v2 的表路由由调用方（pull）完成并已做白名单校验（远端分桶载荷的
+/// `table` 字段必须落在 `SYNCABLE_TABLES` 内），因此本函数只处理一张表，
+/// 不再需要 `_table` 字段与跨表分组——同时也消除了"跨表同 uuid 互相覆盖"
+/// 的隐患（v1 用 uuid 做全模块 map key）。
+///
+/// 墓碑集中的 uuid 执行软删除（FR-2.6：带时间戳裁决删除 vs 编辑）。
+pub async fn merge_table_items(
     db_pool: &SqlitePool,
-    module_def: &SyncModuleDef,
+    table: &str,
     remote_items: &[serde_json::Value],
     tombstones: &[TombstoneEntry],
 ) -> Result<MergeResult, CloudSyncError> {
-    // 1. 加载本地 uuid → updated_at 映射
-    let local_map = load_local_uuid_map(db_pool, module_def).await?;
-
-    // 2. 按表分组远端 items（每个表独立处理）
-    // P0-9：`_table` 路由白名单校验——远端 data.orsync 中的 _table 可指向
-    // 任意本地表（sync_configs/cfg_kv/sys_attachments 等非同步表），越过同步
-    // 白名单写凭据/配置。读取侧（db_loader.rs）已做白名单，写入侧此处对齐：
-    // 不在 module_def.tables 中的表名直接拒绝（视为数据损坏，跳过合并）。
-    let mut items_by_table: HashMap<&str, Vec<&serde_json::Value>> = HashMap::new();
-    for item in remote_items {
-        let table = item
-            .get("_table")
-            .and_then(|v| v.as_str())
-            .unwrap_or(module_def.primary_table());
-        if !module_def.tables.contains(&table) {
-            return Err(CloudSyncError::Merge {
-                message: format!(
-                    "远端数据包含非白名单表 `{table}`（模块 {} 允许: {:?}），\
-                     疑似数据被篡改或版本不兼容，已中止该模块合并",
-                    module_def.name, module_def.tables
-                ),
-            });
-        }
-        items_by_table.entry(table).or_default().push(item);
-    }
+    // 1. 加载本地（含软删）uuid → 裁决状态映射
+    let local_map = load_table_uuid_map(db_pool, table).await?;
+    // 列元数据必须在事务外读取：事务持有连接后再从池取连接，
+    // 在单连接池（测试用 `max_connections(1)`）下会互相等待直至超时
+    let columns =
+        load_table_columns(db_pool, table)
+            .await
+            .map_err(|e| CloudSyncError::Database {
+                message: format!("加载表 {table} 列元数据失败: {e}"),
+            })?;
 
     let mut result = MergeResult::default();
+    let refs: Vec<&serde_json::Value> = remote_items.iter().collect();
 
-    // 3. 逐表处理（每个表一个事务，错误隔离）
-    for (table, items) in &items_by_table {
-        match merge_table_items(db_pool, table, items, &local_map).await {
-            Ok(table_result) => {
-                result.inserted += table_result.inserted;
-                result.updated += table_result.updated;
-                result.skipped += table_result.skipped;
-                result.conflicts += table_result.conflicts;
-                result.errors.extend(table_result.errors);
-            }
-            Err(e) => {
-                result.errors.push(format!("表 {} 合并失败: {}", table, e));
-            }
-        }
-    }
+    // 2. 单事务：数据合并 + 墓碑应用必须原子。此前两者各持一个事务，
+    //    中断会留下「数据已合并、删除未应用」的半合并状态——其他设备
+    //    在窗口内会观察到已删记录仍存活。
+    let mut tx = db_pool.begin().await?;
 
-    // 4. 应用墓碑集（软删除，FR-2.6：带时间戳裁决）
-    match apply_tombstones(db_pool, module_def, tombstones, &local_map).await {
-        Ok(count) => {
-            result.deleted = count;
+    match merge_single_table_in_tx(&mut tx, table, &refs, &local_map, &columns).await {
+        Ok(table_result) => {
+            result.inserted += table_result.inserted;
+            result.updated += table_result.updated;
+            result.skipped += table_result.skipped;
+            result.conflicts += table_result.conflicts;
+            result.errors.extend(table_result.errors);
         }
         Err(e) => {
-            result.errors.push(format!("墓碑应用失败: {}", e));
+            // 合并本身失败：整体回滚（含墓碑），保证该表不出现半合并
+            let _ = tx.rollback().await;
+            result.errors.push(format!("表 {table} 合并失败: {e}"));
+            return Ok(result);
         }
     }
 
+    match apply_tombstones_in_tx(&mut tx, table, tombstones, &local_map).await {
+        Ok(count) => result.deleted = count,
+        Err(e) => result.errors.push(format!("墓碑应用失败: {e}")),
+    }
+
+    tx.commit().await?;
     Ok(result)
 }
 
@@ -172,19 +164,13 @@ pub async fn merge_items(
 /// - INSERT 分批 50 条，构造 `INSERT INTO t (cols) VALUES (?),(?),...` 单次执行
 /// - UPDATE 保持单条（每条记录字段集可能不同，CASE WHEN 复杂度过高）
 /// - 整个操作在单个事务内，保证原子性
-async fn merge_table_items(
-    db_pool: &SqlitePool,
+async fn merge_single_table_in_tx(
+    tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
     table: &str,
     items: &[&serde_json::Value],
     local_map: &HashMap<String, LocalRecordState>,
+    columns: &HashMap<String, ColumnMeta>,
 ) -> Result<MergeResult, CloudSyncError> {
-    let columns =
-        load_table_columns(db_pool, table)
-            .await
-            .map_err(|e| CloudSyncError::Database {
-                message: format!("加载表 {} 列元数据失败: {}", table, e),
-            })?;
-
     let mut result = MergeResult::default();
 
     // 1. 分类：待 INSERT 和待 UPDATE
@@ -301,15 +287,14 @@ async fn merge_table_items(
         }
     }
 
-    // 2. 单事务包裹批量 INSERT 与逐条 UPDATE，保证原子性
-    // 之前拆为两个独立事务，崩溃会留下半合并状态（已 INSERT 但未 UPDATE），
-    // 虽然下次指纹校验可补偿，但破坏了"单表合并原子性"契约，故合并为单事务。
-    let mut tx = db_pool.begin().await?;
-    result.inserted += batch_insert(&mut tx, table, &to_insert, &columns).await?;
+    // 2. 批量 INSERT + 逐条 UPDATE —— 事务由调用方持有并统一提交
+    //    （同一表的「数据合并」与「墓碑应用」必须在同一事务内完成，
+    //    否则中断会留下"数据已合并、删除未应用"的半合并状态）
+    result.inserted += batch_insert(&mut *tx, table, &to_insert, columns).await?;
 
-    // 3. 逐条 UPDATE（在同一事务中）
+    // 3. 逐条 UPDATE（同一事务）
     for (uuid, obj) in &to_update {
-        match update_record_in_tx(&mut tx, table, obj, uuid, &columns).await {
+        match update_record_in_tx(&mut *tx, table, obj, uuid, columns).await {
             Ok(()) => result.updated += 1,
             Err(e) => {
                 result
@@ -318,7 +303,6 @@ async fn merge_table_items(
             }
         }
     }
-    tx.commit().await?;
 
     Ok(result)
 }
@@ -488,9 +472,9 @@ async fn update_record_in_tx(
 ///
 /// 性能说明：单条 UPDATE 在 SQLite 本地为 µs 级，墓碑量级通常数百条，
 /// 事务内循环总开销可忽略；sqlx 按连接缓存 prepared statement。
-async fn apply_tombstones(
-    db_pool: &SqlitePool,
-    module_def: &SyncModuleDef,
+async fn apply_tombstones_in_tx(
+    tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
+    table: &str,
     tombstones: &[TombstoneEntry],
     local_map: &HashMap<String, LocalRecordState>,
 ) -> Result<u64, CloudSyncError> {
@@ -523,37 +507,30 @@ async fn apply_tombstones(
     let mut deleted_count = 0u64;
     let now = crate::cloud_sync::db_loader::now_ms();
 
-    // 单事务包裹所有表的所有条目
-    let mut tx = db_pool.begin().await?;
-
-    // 逐表逐条 UPDATE：绑定墓碑自身删除时间，杜绝时间戳漂移
-    for table in module_def.tables {
-        for (uuid, tombstone_deleted_at) in &to_delete {
-            // 旧格式墓碑（无时间戳）保留旧的 now() 兜底；正常路径用原始删除时间
-            let ts = if *tombstone_deleted_at == 0 {
-                now
-            } else {
-                *tombstone_deleted_at
-            };
-            let sql = format!(
-                "UPDATE \"{}\" SET is_deleted = 1, deleted_at = ?, updated_at = ? \
-                 WHERE uuid = ? AND is_deleted = 0",
-                table
-            );
-            let result = sqlx::query(&sql)
-                .bind(ts)
-                .bind(ts)
-                .bind(uuid)
-                .execute(&mut *tx)
-                .await
-                .map_err(|e| CloudSyncError::Database {
-                    message: format!("软删除表 {} 失败: {}", table, e),
-                })?;
-            deleted_count += result.rows_affected();
-        }
+    // 逐条 UPDATE（事务由调用方持有）：绑定墓碑自身删除时间，杜绝时间戳漂移
+    for (uuid, tombstone_deleted_at) in &to_delete {
+        // 病态数据（deleted_at=0）保留 now() 兜底；正常路径用原始删除时间
+        let ts = if *tombstone_deleted_at == 0 {
+            now
+        } else {
+            *tombstone_deleted_at
+        };
+        let sql = format!(
+            "UPDATE \"{table}\" SET is_deleted = 1, deleted_at = ?, updated_at = ? \
+             WHERE uuid = ? AND is_deleted = 0"
+        );
+        let result = sqlx::query(&sql)
+            .bind(ts)
+            .bind(ts)
+            .bind(uuid)
+            .execute(&mut **tx)
+            .await
+            .map_err(|e| CloudSyncError::Database {
+                message: format!("软删除表 {table} 失败: {e}"),
+            })?;
+        deleted_count += result.rows_affected();
     }
 
-    tx.commit().await?;
     Ok(deleted_count)
 }
 
@@ -654,15 +631,7 @@ mod tests {
     mod db_tests {
         use super::*;
         use crate::cloud_sync::meta::TombstoneEntry;
-        use crate::cloud_sync::modules::SyncModuleDef;
         use sqlx::SqlitePool;
-
-        const PROJECTS: SyncModuleDef = SyncModuleDef {
-            name: "todos",
-            display_name: "影视数据",
-            tables: &["todo_projects"],
-            has_attachments: false,
-        };
 
         async fn setup_pool() -> SqlitePool {
             let pool = sqlx::sqlite::SqlitePoolOptions::new()
@@ -747,7 +716,7 @@ mod tests {
                 "_table": "todo_projects", "uuid": "r1", "title": "edited-on-b",
                 "is_deleted": 0, "deleted_at": 0, "updated_at": 200, "version": 2
             })];
-            let result = merge_items(&pool, &PROJECTS, &items, &[]).await.unwrap();
+            let result = merge_table_items(&pool, "todo_projects", &items, &[]).await.unwrap();
 
             assert_eq!(result.updated, 1, "复活必须走 UPDATE 路径");
             assert_eq!(result.inserted, 0, "绝不允许 INSERT 产生重复行");
@@ -768,7 +737,7 @@ mod tests {
                 "_table": "todo_projects", "uuid": "r2", "title": "stale-alive",
                 "is_deleted": 0, "deleted_at": 0, "updated_at": 200, "version": 1
             })];
-            let result = merge_items(&pool, &PROJECTS, &items, &[]).await.unwrap();
+            let result = merge_table_items(&pool, "todo_projects", &items, &[]).await.unwrap();
 
             assert_eq!(result.skipped, 1);
             assert_eq!(result.inserted + result.updated, 0);
@@ -786,14 +755,14 @@ mod tests {
                 "_table": "todo_projects", "uuid": "r3", "title": "remote-older",
                 "is_deleted": 0, "updated_at": 400, "version": 9
             })];
-            let result = merge_items(&pool, &PROJECTS, &items, &[]).await.unwrap();
+            let result = merge_table_items(&pool, "todo_projects", &items, &[]).await.unwrap();
             assert_eq!(result.skipped, 1, "本地较新应跳过");
 
             let items2 = vec![serde_json::json!({
                 "_table": "todo_projects", "uuid": "r3", "title": "remote-newer",
                 "is_deleted": 0, "updated_at": 600, "version": 1
             })];
-            let result2 = merge_items(&pool, &PROJECTS, &items2, &[]).await.unwrap();
+            let result2 = merge_table_items(&pool, "todo_projects", &items2, &[]).await.unwrap();
             assert_eq!(result2.updated, 1, "远端较新应更新");
             assert_eq!(row_count(&pool, "r3").await, 1);
         }
@@ -810,7 +779,7 @@ mod tests {
                 "_table": "todo_projects", "uuid": "c1", "title": "same",
                 "is_deleted": 0, "updated_at": 100, "version": 1
             })];
-            let r1 = merge_items(&pool, &PROJECTS, &same, &[]).await.unwrap();
+            let r1 = merge_table_items(&pool, "todo_projects", &same, &[]).await.unwrap();
             assert_eq!(r1.skipped, 1);
             assert_eq!(r1.conflicts, 0, "同数据全等平局不是冲突");
 
@@ -819,7 +788,7 @@ mod tests {
                 "_table": "todo_projects", "uuid": "c1", "title": "stale-remote",
                 "is_deleted": 0, "updated_at": 90, "version": 9
             })];
-            let r2 = merge_items(&pool, &PROJECTS, &local_wins, &[])
+            let r2 = merge_table_items(&pool, "todo_projects", &local_wins, &[])
                 .await
                 .unwrap();
             assert_eq!(r2.skipped, 1);
@@ -830,7 +799,7 @@ mod tests {
                 "_table": "todo_projects", "uuid": "c1", "title": "fresh-remote",
                 "is_deleted": 0, "updated_at": 200, "version": 1
             })];
-            let r3 = merge_items(&pool, &PROJECTS, &remote_wins, &[])
+            let r3 = merge_table_items(&pool, "todo_projects", &remote_wins, &[])
                 .await
                 .unwrap();
             assert_eq!(r3.updated, 1);
@@ -841,7 +810,7 @@ mod tests {
                 "_table": "todo_projects", "uuid": "c-new", "title": "brand-new",
                 "is_deleted": 0, "updated_at": 300, "version": 1
             })];
-            let r4 = merge_items(&pool, &PROJECTS, &fresh, &[]).await.unwrap();
+            let r4 = merge_table_items(&pool, "todo_projects", &fresh, &[]).await.unwrap();
             assert_eq!(r4.inserted, 1);
             assert_eq!(r4.conflicts, 0, "单端新增不是冲突");
         }
@@ -856,7 +825,7 @@ mod tests {
                 "_table": "todo_projects", "uuid": "c2", "title": "remote-alive",
                 "is_deleted": 0, "deleted_at": 0, "updated_at": 200, "version": 1
             })];
-            let result = merge_items(&pool, &PROJECTS, &items, &[]).await.unwrap();
+            let result = merge_table_items(&pool, "todo_projects", &items, &[]).await.unwrap();
             assert_eq!(result.skipped, 1, "删除胜出保持墓碑");
             assert_eq!(result.conflicts, 1, "复活裁决是删除vs编辑冲突，必须计数");
         }
@@ -874,9 +843,13 @@ mod tests {
                 .as_millis() as i64;
 
             let tombstones = vec![TombstoneEntry::new("r4".to_string(), 100)];
-            let deleted = apply_tombstones(&pool, &PROJECTS, &tombstones, &load_map(&pool).await)
+            // 先在事务外读映射：单连接池下事务持连接时再查询会死锁
+            let map = load_map(&pool).await;
+            let mut tx = pool.begin().await.unwrap();
+            let deleted = apply_tombstones_in_tx(&mut tx, "todo_projects", &tombstones, &map)
                 .await
                 .unwrap();
+            tx.commit().await.unwrap();
 
             assert_eq!(deleted, 1);
             let row = get_row(&pool, "r4").await.unwrap();
@@ -896,9 +869,13 @@ mod tests {
             insert_row(&pool, "r5", "edited-after-delete", 0, 0, 500).await;
 
             let tombstones = vec![TombstoneEntry::new("r5".to_string(), 100)];
-            let deleted = apply_tombstones(&pool, &PROJECTS, &tombstones, &load_map(&pool).await)
+            // 先在事务外读映射：单连接池下事务持连接时再查询会死锁
+            let map = load_map(&pool).await;
+            let mut tx = pool.begin().await.unwrap();
+            let deleted = apply_tombstones_in_tx(&mut tx, "todo_projects", &tombstones, &map)
                 .await
                 .unwrap();
+            tx.commit().await.unwrap();
 
             assert_eq!(deleted, 0, "编辑(500) > 删除(100) 应跳过");
             let row = get_row(&pool, "r5").await.unwrap();
@@ -914,23 +891,25 @@ mod tests {
                 "title": "from-other-device",
                 "is_deleted": 0, "updated_at": 100, "version": 1
             })];
-            let result = merge_items(&pool, &PROJECTS, &items, &[]).await.unwrap();
+            let result = merge_table_items(&pool, "todo_projects", &items, &[]).await.unwrap();
             assert_eq!(result.inserted, 1);
             assert_eq!(row_count(&pool, "brand-new").await, 1);
         }
 
-        /// P0-9：`_table` 指向非白名单表必须整体拒绝合并
-        /// 远端 data.orsync 的 _table 可指向 sync_configs/cfg_kv/sys_attachments
-        /// 等非同步表（凭据/配置），越过同步白名单写入。读取侧（db_loader）已校验，
-        /// 写入侧此前漏了——远端被篡改或 Data Key 泄露时可写任意表。
+        /// 非白名单表必须整体拒绝合并
+        ///
+        /// 远端分桶载荷的 `table` 字段可作为攻击面（指向 sync_configs /
+        /// cfg_kv 等非同步表写入凭据/配置）。pull 侧已校验白名单，merge 侧
+        /// 通过 `load_table_uuid_map` 的白名单校验再次兜底——两层都在，
+        /// 任一层被绕过都不会写坏非同步表。
         #[tokio::test]
-        async fn table_not_in_module_whitelist_rejected() {
+        async fn table_not_in_whitelist_rejected() {
             let pool = setup_pool().await;
             let items = vec![serde_json::json!({
                 "_table": "sync_configs", "uuid": "evil",
                 "endpoint": "https://attacker.example", "updated_at": 999, "version": 1
             })];
-            let result = merge_items(&pool, &PROJECTS, &items, &[]).await;
+            let result = merge_table_items(&pool, "sync_configs", &items, &[]).await;
 
             assert!(result.is_err(), "非白名单表必须整体拒绝，不得部分合并");
             let err_msg = result.unwrap_err().to_string();
@@ -949,24 +928,24 @@ mod tests {
                 "_table": "todo_projects", "uuid": "ok-1",
                 "title": "legit", "is_deleted": 0, "updated_at": 100, "version": 1
             })];
-            let result = merge_items(&pool, &PROJECTS, &items, &[]).await.unwrap();
+            let result = merge_table_items(&pool, "todo_projects", &items, &[]).await.unwrap();
             assert_eq!(result.inserted, 1);
         }
 
-        /// P0-9 回归：缺省 `_table`（无该字段）回落主表，行为不变
+        /// v2 回归：记录不含 `_table` 字段也能正常合并（表路由由调用方给出）
         #[tokio::test]
-        async fn missing_table_field_falls_back_to_primary() {
+        async fn record_without_table_field_merges_by_called_table() {
             let pool = setup_pool().await;
             let items = vec![serde_json::json!({
                 "uuid": "no-table-field",
                 "title": "legacy-item", "is_deleted": 0, "updated_at": 100, "version": 1
             })];
-            let result = merge_items(&pool, &PROJECTS, &items, &[]).await.unwrap();
-            assert_eq!(result.inserted, 1, "无 _table 字段应回落主表正常合并");
+            let result = merge_table_items(&pool, "todo_projects", &items, &[]).await.unwrap();
+            assert_eq!(result.inserted, 1, "表路由由调用方给出，与记录字段无关");
         }
 
         async fn load_map(pool: &SqlitePool) -> HashMap<String, LocalRecordState> {
-            crate::cloud_sync::db_loader::load_local_uuid_map(pool, &PROJECTS)
+            crate::cloud_sync::db_loader::load_table_uuid_map(pool, "todo_projects")
                 .await
                 .unwrap()
         }

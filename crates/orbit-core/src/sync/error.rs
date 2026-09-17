@@ -202,13 +202,8 @@ pub fn is_success_status(status: u16) -> bool {
     (200..=299).contains(&status)
 }
 
-impl From<crate::sync_bundle::SyncBundleError> for SyncError {
-    fn from(err: crate::sync_bundle::SyncBundleError) -> Self {
-        SyncError::Bundle {
-            message: err.message,
-        }
-    }
-}
+// 注：v1 的 `sync_bundle` 模块（52 字节 `OSYN` 容器）已随 v2 存储结构重构删除，
+// 其到本错误类型的 `From` 转换一并移除。
 
 #[cfg(test)]
 mod tests {

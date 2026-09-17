@@ -192,21 +192,21 @@ fn join_base_path(base_path: &str, file_path: &str) -> String {
     }
 }
 
-/// Data Key 解密探针：用本地 Data Key 尝试解密云端 global_meta
+/// Data Key 解密探针：用本地 Data Key 尝试解密云端 v2 清单
 ///
 /// 在 `sync_data_key_from_cloud` 所有正常完成路径返回前调用，提前发现
 /// "本地 Data Key 与云端加密数据不匹配"问题，避免进入 pull 流水后才报错。
 ///
 /// # 返回值
-/// - `Ok(())`：探针通过（Data Key 匹配），或云端无 global_meta（首次同步，跳过），
+/// - `Ok(())`：探针通过（Data Key 匹配），或云端无清单（首次同步，跳过），
 ///   或下载失败但非 404（宽松跳过，让 pull 自然报错）
-/// - `Err(KeyMismatch)`：Data Key 与云端 global_meta 密文不匹配，必须走恢复流程
+/// - `Err(KeyMismatch)`：Data Key 与云端清单密文不匹配，必须走恢复流程
 ///
 /// # 设计原则
-/// - 404 视为"云端无 global_meta"（首次同步），跳过探针返回 Ok
+/// - 404 视为"云端无清单"（首次同步），跳过探针返回 Ok
 /// - 其他下载错误（网络故障等）宽松跳过，不阻塞同步
 /// - 解密失败严格返回 KeyMismatch，让 UI 立即跳恢复页（而非跳解锁页）
-pub(crate) async fn probe_data_key_with_global_meta(
+pub(crate) async fn probe_data_key_with_manifest(
     raw_adapter: &dyn SyncAdapter,
     base_path: &str,
     data_key: &[u8],
@@ -214,48 +214,26 @@ pub(crate) async fn probe_data_key_with_global_meta(
     use crate::cloud_sync::crypto_io::decrypt_payload;
     use crate::cloud_sync::paths;
 
-    // 读侧兼容：默认 `_meta.orsync` 优先，404 回退遗留 `_meta.waitsync`
-    let mut last_err: Option<crate::sync::error::SyncError> = None;
-    let mut bytes_opt: Option<Vec<u8>> = None;
-    for candidate in [
-        paths::GLOBAL_META_PATH,
-        paths::LEGACY_GLOBAL_META_PATH,
-    ] {
-        let path = join_base_path(base_path, candidate);
-        match raw_adapter.download(&path).await {
-            Ok(b) => {
-                bytes_opt = Some(b);
-                break;
-            }
-            Err(e) if e.is_not_found() => {
-                last_err = Some(e);
-                continue;
-            }
-            Err(e) => {
-                log::info!("[probe] 下载 global_meta 失败（宽松跳过）: {}", e);
-                return Ok(());
-            }
+    let path = join_base_path(base_path, paths::MANIFEST_PATH);
+    let bytes = match raw_adapter.download(&path).await {
+        Ok(b) => b,
+        Err(e) if e.is_not_found() => {
+            log::info!("[probe] 云端无清单（404），跳过探针");
+            return Ok(());
         }
-    }
-    let bytes = match bytes_opt {
-        Some(b) => b,
-        None => {
-            let _ = last_err;
-            log::info!("[probe] 云端无 global_meta（404），跳过探针");
+        Err(e) => {
+            log::info!("[probe] 下载清单失败（宽松跳过）: {e}");
             return Ok(());
         }
     };
 
     match decrypt_payload(&bytes, data_key) {
         Ok(_) => {
-            log::info!("[probe] Data Key 解密探针成功：本地 Key 与云端 global_meta 匹配");
+            log::info!("[probe] Data Key 解密探针成功：本地 Key 与云端清单匹配");
             Ok(())
         }
         Err(e) => {
-            log::info!(
-                "[probe] Data Key 解密探针失败：本地 Key 与云端 global_meta 不匹配 ({})",
-                e
-            );
+            log::info!("[probe] Data Key 解密探针失败：本地 Key 与云端清单不匹配 ({e})");
             // 显式忽略 e（已是 KeyMismatch）：探针语义独立于 decrypt_payload 实现细节
             Err(CloudSyncError::KeyMismatch)
         }
@@ -357,6 +335,24 @@ impl SyncEngine {
         match self.sync_lock.try_lock() {
             Ok(guard) => guard.is_some(),
             Err(_) => true,
+        }
+    }
+
+    /// 等待引擎空闲（供强制同步使用）
+    ///
+    /// `max_wait_ms` 内每 200ms 探测一次；超时返回 `false`（调用方据此
+    /// 决定"跳过一次"还是"仍要尝试"——强制同步语义下通常直接尝试，
+    /// 由 `acquire_lock` 判定）。
+    pub async fn wait_idle(&self, max_wait_ms: u64) -> bool {
+        let deadline = std::time::Instant::now() + Duration::from_millis(max_wait_ms);
+        loop {
+            if !self.is_running() {
+                return true;
+            }
+            if std::time::Instant::now() >= deadline {
+                return false;
+            }
+            tokio::time::sleep(Duration::from_millis(200)).await;
         }
     }
 
@@ -1014,14 +1010,14 @@ impl SyncEngine {
         self.sync_data_key_from_cloud_inner(raw_adapter, base_path, result)
             .await?;
 
-        // 解密探针：所有正常完成路径都验证 Data Key 与云端 global_meta 匹配
+        // 解密探针：所有正常完成路径都验证 Data Key 与云端清单匹配
         //
         // 即使本地 meta 与云端 crypto/config 一致（Ok(None) 路径），仍需探针：
-        // 极端场景下云端 crypto/config 可能与云端模块数据用的 Key 不一致
+        // 极端场景下云端 crypto/config 可能与云端数据用的 Key 不一致
         // （历史污染、人工修改等），探针能提前发现并快速失败，避免进入 pull
         // 流水后才报 KeyMismatch。
         if let Some(data_key) = self.crypto.get_data_key() {
-            probe_data_key_with_global_meta(raw_adapter, base_path, &data_key).await?;
+            probe_data_key_with_manifest(raw_adapter, base_path, &data_key).await?;
         }
         Ok(())
     }
@@ -1224,57 +1220,30 @@ impl SyncEngine {
         }
     }
 
-    /// 探测云端是否存在模块数据（`modules/*/data.orsync`，兼容遗留 `data.waitsync`）
+    /// 探测云端是否已有同步数据（v2：清单存在即视为有数据）
     ///
     /// 用于 `sync_data_key_from_cloud` 的 404/WrongPassword 容错分支决策：
-    /// - 云端无模块数据（首次同步、云端被清空）→ 安全补传本地 bundle
-    /// - 云端已有模块数据 → 阻断补传，避免本地错 Key 覆盖云端正确 Key
+    /// - 云端无数据（首次同步、云端被清空）→ 安全补传本地 bundle
+    /// - 云端已有数据 → 阻断补传，避免本地错 Key 覆盖云端正确 Key
     ///
-    /// **实现方式（P0-2 修复）**：对每个模块的 `data.orsync` 逐一做 GET 探测，
-    /// 下载成功即存在。不再依赖 `list_files` 的返回路径形态——WebDAV 下
-    /// Depth:1 只列一级子项且 name 是 basename，旧的 `is_module_data_path`
-    /// 路径匹配在 WebDAV 上恒 false，导致防污染守卫完全失效
-    /// （云端已有 Key A 数据时本地 Key B 的 crypto/config 仍被自动上传覆盖）。
-    /// 直接探测对两种适配器行为一致，且只多一次请求（404 立即失败）。
-    ///
-    /// 探测错误（网络故障等）时无法确认云端状态，宽松返回 `false`（不阻断），
-    /// 让原容错流程继续。
+    /// **实现方式**：对 `v2/manifest.orsync` 做一次 HEAD/存在性探测
+    /// （不再是 v1 的"逐模块 GET 整个 data 文件"，v2 清单是数据的唯一入口，
+    /// 判断它存不存在就够了）。探测错误（网络故障等）fail-closed 视为有数据，
+    /// 避免云端实际有数据时覆盖 crypto/config 造成全设备 KeyMismatch 污染。
     async fn cloud_has_module_data(&self, raw_adapter: &dyn SyncAdapter, base_path: &str) -> bool {
-        for module in crate::cloud_sync::modules::SYNC_MODULES {
-            // 读侧兼容：默认路径 404 时回退遗留路径
-            for candidate in [
-                paths::module_data_path(module.name),
-                paths::legacy_module_data_path(module.name),
-            ] {
-                let path = join_base_path(base_path, &candidate);
-                match raw_adapter.download(&path).await {
-                    Ok(_) => {
-                        log::info!(
-                            "[sync_data_key] 云端探测：{} 下载成功，判定存在模块数据",
-                            path
-                        );
-                        return true;
-                    }
-                    Err(e) if e.is_not_found() => {
-                        // 404：该路径无数据，继续试下一候选 / 下一模块
-                    }
-                    Err(e) => {
-                        // fail-closed：探测出错时无法确认云端状态，保守视为"有模块数据"。
-                        // 这样 decide_auto_upload_behavior 走 Block 分支，避免在云端实际
-                        // 有数据时覆盖 crypto/config 造成全设备 [key_mismatch] 不可逆污染。
-                        // 代价：网络抖动时自动补传被阻断，但下次同步成功即恢复。
-                        log::warn!(
-                            "[sync_data_key] 云端探测 {} 失败，fail-closed 视为有模块数据（阻断自动补传）: {}",
-                            path,
-                            e
-                        );
-                        return true;
-                    }
-                }
+        let path = join_base_path(base_path, paths::MANIFEST_PATH);
+        match raw_adapter.exists(&path).await {
+            Ok(exists) => {
+                log::info!("[sync_data_key] 云端探测：{path} 存在={exists}");
+                exists
+            }
+            Err(e) => {
+                log::warn!(
+                    "[sync_data_key] 云端探测 {path} 失败，fail-closed 视为有数据（阻断自动补传）: {e}"
+                );
+                true
             }
         }
-        log::info!("[sync_data_key] 云端探测：所有模块 data.orsync 均 404，判定无模块数据");
-        false
     }
 
     /// 自动上传本地 crypto bundle 到云端（容错修复）
@@ -1456,18 +1425,6 @@ pub(crate) fn data_key_fingerprint(key: &[u8]) -> String {
     hash[..8].to_string()
 }
 
-/// 判断云端路径是否为模块数据文件（`modules/{name}/data.orsync`，兼容遗留 `data.waitsync`）
-///
-/// **P0-2 修复后已无调用方**（`cloud_has_module_data` 改为直接 GET 探测，
-/// 不再依赖 list_files 返回的路径形态）。保留纯函数与测试供未来恢复
-/// 路径匹配语义时参考。
-#[allow(dead_code)]
-fn is_module_data_path(name: &str) -> bool {
-    // 路径分段中必须包含 "modules" 段，且以 /data.orsync 或 /data.waitsync 结尾
-    name.split('/').any(|seg| seg == "modules")
-        && (name.ends_with("/data.orsync") || name.ends_with("/data.waitsync"))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1518,53 +1475,12 @@ mod tests {
     }
 
     // ========================================================================
-    // is_module_data_path: cloud_has_module_data 的路径过滤逻辑
+    // v2：云端"是否有数据"的判据收敛为「清单是否存在」
     //
-    // 修复点：list_files 已过滤同步后缀，但其中仍含 _meta.orsync /
-    // assets/*.orsync / modules/{name}/meta.orsync 等非模块数据文件，
-    // 会导致 cloud_has_module_data 误判为 true → 阻断安全的 fallback init。
-    // 仅 modules/{name}/data.orsync（兼容 data.waitsync）才视为真正的模块业务数据。
+    // v1 需要逐模块探测 data 文件（并为路径形态/后缀写了多个纯函数与用例）；
+    // v2 清单是数据唯一入口，判据收敛为一次存在性探测，相关路径匹配函数与
+    // 用例一并移除（P3 减熵）。
     // ========================================================================
-
-    #[test]
-    fn is_module_data_path_matches_modules_data_waitsync() {
-        assert!(is_module_data_path("modules/movies/data.orsync"));
-        assert!(is_module_data_path("modules/games/data.orsync"));
-        // 遗留后缀读侧兼容
-        assert!(is_module_data_path("modules/movies/data.waitsync"));
-        // 带 base_path 前缀
-        assert!(is_module_data_path(
-            "wait-sync/user1/modules/movies/data.orsync"
-        ));
-    }
-
-    #[test]
-    fn is_module_data_path_rejects_non_module_data_files() {
-        // 全局索引（非模块数据）
-        assert!(!is_module_data_path("_meta.orsync"));
-        assert!(!is_module_data_path("wait-sync/user1/_meta.orsync"));
-        // 附件（非模块数据，加密 Key 可能不同）
-        assert!(!is_module_data_path("assets/abc123.orsync"));
-        assert!(!is_module_data_path(
-            "wait-sync/user1/assets/abc123.orsync"
-        ));
-        // 模块元数据（不是 data）
-        assert!(!is_module_data_path("modules/movies/meta.orsync"));
-        // crypto/config（无同步后缀，理论上 list_files 不会返回）
-        assert!(!is_module_data_path("crypto/config"));
-        assert!(!is_module_data_path("wait-sync/user1/crypto/config"));
-        // 不以 data.orsync 结尾
-        assert!(!is_module_data_path("modules/movies/data.bak"));
-    }
-
-    #[test]
-    fn is_module_data_path_rejects_pathological_lookalikes() {
-        // 防止误匹配 "xmodules" / "modules_x" 等前缀/后缀变体
-        assert!(!is_module_data_path("xmodules/foo/data.orsync"));
-        assert!(!is_module_data_path("modules_x/foo/data.orsync"));
-        // 路径段中必须严格等于 "modules"
-        assert!(!is_module_data_path("mymodules/foo/data.orsync"));
-    }
 
     #[test]
     fn sync_result_default_all_zero() {
@@ -1865,9 +1781,9 @@ mod tests {
         // 期望：探针返回 Ok(())（探针首探默认路径 _meta.orsync）
         let key = test_data_key(0x42);
         let encrypted_meta = encrypt_payload(b"{}", &key).unwrap();
-        let adapter = ProbeMockAdapter::new().with_file("_meta.orsync", encrypted_meta);
+        let adapter = ProbeMockAdapter::new().with_file("v2/manifest.orsync", encrypted_meta);
 
-        let result = probe_data_key_with_global_meta(&adapter, "", &key).await;
+        let result = probe_data_key_with_manifest(&adapter, "", &key).await;
         assert!(
             result.is_ok(),
             "Key 匹配时探针应返回 Ok，实际: {:?}",
@@ -1882,9 +1798,9 @@ mod tests {
         let cloud_key = test_data_key(0x42);
         let local_key = test_data_key(0x99);
         let encrypted_meta = encrypt_payload(b"{}", &cloud_key).unwrap();
-        let adapter = ProbeMockAdapter::new().with_file("_meta.orsync", encrypted_meta);
+        let adapter = ProbeMockAdapter::new().with_file("v2/manifest.orsync", encrypted_meta);
 
-        let result = probe_data_key_with_global_meta(&adapter, "", &local_key).await;
+        let result = probe_data_key_with_manifest(&adapter, "", &local_key).await;
         assert!(
             matches!(result, Err(CloudSyncError::KeyMismatch)),
             "Key 不匹配时探针应返回 KeyMismatch，实际: {:?}",
@@ -1899,7 +1815,7 @@ mod tests {
         let key = test_data_key(0x42);
         let adapter = ProbeMockAdapter::new(); // 无文件
 
-        let result = probe_data_key_with_global_meta(&adapter, "", &key).await;
+        let result = probe_data_key_with_manifest(&adapter, "", &key).await;
         assert!(result.is_ok(), "云端无 global_meta 时探针应跳过返回 Ok");
     }
 
@@ -1911,9 +1827,9 @@ mod tests {
         let encrypted_meta = encrypt_payload(b"{}", &key).unwrap();
         // 文件放在 base_path 之下
         let adapter =
-            ProbeMockAdapter::new().with_file("wait-sync/user1/_meta.orsync", encrypted_meta);
+            ProbeMockAdapter::new().with_file("wait-sync/user1/v2/manifest.orsync", encrypted_meta);
 
-        let result = probe_data_key_with_global_meta(&adapter, "wait-sync/user1", &key).await;
+        let result = probe_data_key_with_manifest(&adapter, "wait-sync/user1", &key).await;
         assert!(result.is_ok(), "base_path 非空时探针应正确拼接路径并下载");
     }
 
@@ -2008,13 +1924,13 @@ mod tests {
         let key_a = svc_a.init("shared").unwrap();
 
         let encrypted_meta = encrypt_payload(b"{}", &key_a).unwrap();
-        let adapter = ProbeMockAdapter::new().with_file("_meta.orsync", encrypted_meta);
+        let adapter = ProbeMockAdapter::new().with_file("v2/manifest.orsync", encrypted_meta);
 
         let tmp_b = tempfile::TempDir::new().unwrap();
         let svc_b = crate::sync_crypto::SyncCryptoService::new(tmp_b.path());
         let key_b = svc_b.init("shared").unwrap();
 
-        let result = probe_data_key_with_global_meta(&adapter, "", &key_b).await;
+        let result = probe_data_key_with_manifest(&adapter, "", &key_b).await;
         assert!(
             result.is_ok(),
             "v2 同密码跨设备探针必须通过（KeyMismatch 分叉态已结构性消灭），实际: {:?}",
@@ -2031,13 +1947,13 @@ mod tests {
         let key_a = svc_a.init("password_one").unwrap();
 
         let encrypted_meta = encrypt_payload(b"{}", &key_a).unwrap();
-        let adapter = ProbeMockAdapter::new().with_file("_meta.orsync", encrypted_meta);
+        let adapter = ProbeMockAdapter::new().with_file("v2/manifest.orsync", encrypted_meta);
 
         let tmp_b = tempfile::TempDir::new().unwrap();
         let svc_b = crate::sync_crypto::SyncCryptoService::new(tmp_b.path());
         let key_b = svc_b.init("password_two").unwrap();
 
-        let result = probe_data_key_with_global_meta(&adapter, "", &key_b).await;
+        let result = probe_data_key_with_manifest(&adapter, "", &key_b).await;
         assert!(
             matches!(result, Err(CloudSyncError::KeyMismatch)),
             "跨密码场景探针仍须报 KeyMismatch（引导恢复流程），实际: {:?}",

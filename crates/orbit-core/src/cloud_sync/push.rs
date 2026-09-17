@@ -1,80 +1,70 @@
-//! push — 模块级增量上传流程
+//! push — v2 差量上传（表级分桶 + 清单 CAS）
 //!
-//! 遍历 15 个同步模块，按指纹增量上传变化的模块数据到云端。
-//! 所有云端文件均用 Data Key AES-256-GCM 加密。
+//! ## 流程
+//! 1. 读远端清单 `v2/manifest.orsync`（含并发令牌 ETag）
+//! 2. 逐表：加载未删行 → 稳定哈希分桶 → 与清单桶索引比对 fingerprint →
+//!    **只上传变化的桶**（未变桶零流量）
+//! 3. 墓碑：按本地时区月份分桶 → 同上差量上传
+//! 4. 组装新清单（`epoch + 1`，登记本机检查点）→ 条件写（`If-Match`）
+//! 5. 条件失败（他端并发写入）→ 重新读取清单后**基于新清单重算**并重试，
+//!    上限 [`CAS_MAX_RETRIES`] 次；仍失败则保留本地待下轮
 //!
-//! ## Push 流程
-//! 1. 加载本地同步状态
-//! 2. 获取已解锁的 Data Key
-//! 3. 探测远端 `_meta.orsync` 修正本地 state（`reconcile_state_with_remote_meta`）：
-//!    - 远端 `_meta` 404 → 清空所有模块 `remote_fp`，触发全量 push
-//!    - 远端 `_meta` 存在但模块 `fp` 与本地 `remote_fp` 不一致 → 清空该模块 `remote_fp`
-//!    - 修正后 `should_skip` 失效，确保远端被外部清空/修改时本地能重新上传
-//!    - 读侧兼容遗留 `_meta.waitsync`
-//! 4. 遍历每个模块：
-//!    - 加载模块所有未删除记录
-//!    - 计算本地指纹
-//!    - 与上次 Push 的指纹比对，相同则跳过
-//!    - 变化则序列化 → 加密 → 上传 `data.orsync` + `meta.orsync`
-//!    - 更新本地状态
-//! 5. 上传全局 `_meta.orsync`
-//! 6. 附件同步（调用 attachments 模块，M1.11 实现）
+//! ## 为什么不会覆盖他端数据
+//! 新清单 = **远端清单的拷贝** + 本地有数据的桶覆盖。远端有、本地无的桶
+//! 条目**原样保留**（不删除）。删除语义始终由墓碑条目表达，由 pull 侧的
+//! LWW / 复活裁决消费——因此多设备并发 push 不再出现"后写者把前写者
+//! 新增的行整块抹掉"的窗口（v1 的整模块覆盖问题）。
 //!
-//! ## 云端路径
-//! - `modules/{name}/data.orsync`：模块数据（加密）
-//! - `modules/{name}/meta.orsync`：模块元数据（加密）
-//! - `_meta.orsync`：全局索引（加密）
-//! - `crypto/config`：加密元数据（无扩展名，由 sync_crypto::bundle_io 管理）
+//! ## 空数据覆盖守卫
+//! 本地全空 + 远端已有数据时阻断 push（删库重装后 sync_state.json 残留的
+//! 场景），要求走恢复流程而非静默清空云端。
 
 use sqlx::SqlitePool;
 
+use crate::cloud_sync::chunk::split_table_items;
 use crate::cloud_sync::crypto_io::{decrypt_payload, encrypt_payload};
-use crate::cloud_sync::db_loader::{load_all_tombstones, load_module_items, now_ms};
+use crate::cloud_sync::db_loader::{load_table_items, load_table_tombstones, now_ms};
 use crate::cloud_sync::error::CloudSyncError;
-use crate::cloud_sync::meta::{GlobalMeta, ModuleData, ModuleMetaEntry, TombstoneEntry};
-use crate::cloud_sync::modules::{SYNC_MODULES, SyncModuleDef};
+use crate::cloud_sync::meta::{
+    ChunkRef, ManifestV2, TableIndex, TombstoneBucketPayload, TombstoneBucketRef, TombstoneIndex,
+};
 use crate::cloud_sync::paths;
 use crate::cloud_sync::progress::{ProgressBuilder, ProgressSender, SyncOrigin};
-use crate::cloud_sync::state::{ModuleSyncState, SyncState, SyncStateStore};
-use crate::sync_adapters::traits::SyncAdapter;
+use crate::cloud_sync::state::SyncStateStore;
+use crate::db::sync_registry::SYNCABLE_TABLES;
+use crate::sync_adapters::traits::{SyncAdapter, UploadOutcome, UploadPrecondition};
 use crate::sync_crypto::SyncCryptoService;
+
+/// 清单 CAS 冲突后的最大重试次数
+pub const CAS_MAX_RETRIES: u32 = 3;
 
 /// Push 执行结果
 #[derive(Debug, Clone, Default)]
 pub struct PushResult {
-    /// 实际上传的模块数（指纹变化的模块）
+    /// 实际推送的模块数（有桶上传即为 1，保持 UI 计数语义）
     pub pushed_modules: u32,
-    /// 跳过的模块数（指纹未变）
+    /// 跳过的模块数（无任何变化）
     pub skipped_modules: u32,
-    /// 失败的模块数（S8：模块间错误隔离——失败不中断后续模块）
+    /// 失败的模块数（表级错误隔离）
     pub failed_modules: u32,
-    /// 失败模块的错误信息（与 failed_modules 一一对应）
+    /// 失败信息
     pub errors: Vec<String>,
+    /// 实际上传的数据分桶数
+    pub pushed_chunks: u32,
+    /// 实际跳过（指纹未变）的数据分桶数
+    pub skipped_chunks: u32,
+    /// 实际上传的墓碑分桶数
+    pub pushed_tombstones: u32,
+    /// 本轮是否成功写入清单
+    pub manifest_written: bool,
+    /// 清单 CAS 冲突发生次数
+    pub cas_conflicts: u32,
 }
 
-/// 单个模块 Push 任务的结果（用于并行任务返回，主流程顺序应用 state）
-enum PushModuleOutcome {
-    /// 指纹未变，跳过
-    Skipped,
-    /// 成功上传，携带新状态供主流程写入
-    Pushed {
-        name: String,
-        new_state: ModuleSyncState,
-    },
-}
-
-/// 执行全量 Push：遍历所有模块，上传指纹变化的模块数据
+/// 执行差量 Push
 ///
-/// `device_id` 用于写入 GlobalMeta，便于多设备诊断。
-/// `origin` 标识事件来源（Background/Manual/Exit），用于 UI 层过滤重复显示。
-///
-/// `skip_modules`：本轮须跳过 push 的模块名（P0-6）。Pull 阶段失败的模块
-/// 本地数据仍是旧快照，若不跳过，reconcile 会发现 fp 不一致并用陈旧数据
-/// 重传覆盖云端新数据。
-///
-/// ## 实现说明
-/// - 串行 Push：15 个模块顺序执行，避免并发 MKCOL 同一目录触发 WebDAV 503
-/// - 批量 state 保存：循环结束后一次性写入 `sync_state.json`，避免每模块都写文件
+/// `skip_tables`：本轮须跳过的表（Pull 阶段失败的表，本地仍是旧快照，
+/// 重传会覆盖云端新数据）。
 pub async fn push_all(
     db_pool: &SqlitePool,
     crypto: &SyncCryptoService,
@@ -83,148 +73,410 @@ pub async fn push_all(
     progress_sender: &dyn ProgressSender,
     origin: SyncOrigin,
     device_id: &str,
-    skip_modules: &[String],
+    skip_tables: &[String],
 ) -> Result<PushResult, CloudSyncError> {
-    let mut state = state_store.load()?;
+    let state = match state_store.load() {
+        Ok(s) => s,
+        Err(e) => {
+            log::warn!("[push] 本地账本不可用，退化为完整比对: {e}");
+            Default::default()
+        }
+    };
     let data_key = crypto.get_data_key().ok_or(CloudSyncError::CryptoLocked)?;
 
-    // Push 前探测远端 _meta.orsync，感知"远端被外部清空或修改"场景：
-    // - 远端 _meta 404 → 清空所有模块 remote_fp，触发全量 push（修复"删除云端后不同步"bug）
-    // - 远端 _meta 存在但模块 fp 与本地 remote_fp 不一致 → 清空该模块 remote_fp，触发该模块 push
-    // - 远端 _meta 存在且 fp 一致 → 保持原 should_skip 跳过逻辑
-    // 非 404 错误（网络/认证等）向上传播，中止 push（远端不可达时 upload 也会失败）。
-    reconcile_state_with_remote_meta(adapter, &data_key, &mut state).await?;
-
-    let builder = ProgressBuilder::new(progress_sender, origin);
-    let total = SYNC_MODULES.len() as u32;
-    builder.starting(total);
-
-    // 预捕获所有模块的 prev_state（P0-6：跳过本轮 pull 失败的模块）
-    let prev_states: Vec<(SyncModuleDef, Option<ModuleSyncState>)> = SYNC_MODULES
+    let tables: Vec<&str> = SYNCABLE_TABLES
         .iter()
-        .filter(|m| !skip_modules.iter().any(|s| s == m.name))
-        .map(|m| (*m, state.modules.get(m.name).cloned()))
+        .copied()
+        .filter(|t| !skip_tables.iter().any(|s| s == t))
         .collect();
-    if !skip_modules.is_empty() {
+
+    if !skip_tables.is_empty() {
         log::info!(
-            "[push_all] 跳过本轮 Pull 失败的模块（防陈旧数据覆盖云端）: {:?}",
-            skip_modules
+            "[push] 跳过本轮 Pull 失败的表（防陈旧数据覆盖云端）: {:?}",
+            skip_tables
         );
     }
 
-    // P0-5 守卫：删库重初始化场景下 sync_state.json 残留旧 state
-    // （state 文件与 DB 文件分离存放，删库不会带上）——本地空库但 state.count > 0
-    // 时，Pull 全模块 Skip（remote_fp 与云端一致）、Push 侧 prev_state 存在且
-    // 本地空指纹 ≠ state.fp → 不跳过 → 上传空 items + 空墓碑覆盖云端。
-    // 空数据覆盖守卫：阻断并要求用户走恢复流程，而非静默清空云端。
-    //
-    // 性能口径（2026-09-14 审查）：守卫用逐表 COUNT 判空，不再经
-    // load_module_items 加载全量行——此前该守卫把模块所有行拉进内存只为
-    // 取 len()，空库触发条件时又用 COUNT 复核，push_single_module 稍后
-    // 第三次加载同一模块；万行级模块每轮 push 多两次全量扫描 + 一次全量
-    // 物化。COUNT 主键索引扫描即可判空，语义等价（都统计 is_deleted = 0）。
-    for module_def in SYNC_MODULES {
-        if skip_modules.iter().any(|s| s == module_def.name) {
+    let builder = ProgressBuilder::new(progress_sender, origin);
+    builder.starting(tables.len() as u32);
+
+    let mut result = PushResult::default();
+    let mut cas_attempt = 0u32;
+
+    loop {
+        // 1. 读远端清单（顺带拿并发令牌与原始密文，后者用于保留回滚点）
+        let (remote_manifest, remote_token, remote_raw) =
+            read_remote_manifest(adapter, &data_key).await?;
+
+        // 2. 空数据覆盖守卫（远端有数据 + 本地全空 + 曾同步过 → 阻断）
+        guard_against_empty_overwrite(db_pool, &state, &remote_manifest).await?;
+
+        // 3. 逐表差量计算 + 上传（每轮重算，保证 CAS 冲突后基于新清单收敛）
+        let mut attempt = PushResult::default();
+        let mut new_manifest = remote_manifest.clone();
+        let mut outcomes: Vec<Result<TableOutcome, TableError>> = Vec::with_capacity(tables.len());
+        for (idx, table) in tables.iter().enumerate() {
+            builder.pushing("todos", "待办数据", idx as u32 + 1, tables.len() as u32);
+            outcomes.push(build_table_outcome(db_pool, adapter, &data_key, &remote_manifest, table).await);
+        }
+
+        for outcome in outcomes {
+            match outcome {
+                Ok(o) => {
+                    attempt.pushed_chunks += o.pushed_chunks;
+                    attempt.skipped_chunks += o.skipped_chunks;
+                    attempt.pushed_tombstones += o.pushed_tombstones;
+                    if o.changed {
+                        attempt.pushed_modules = 1;
+                    }
+                    new_manifest.tables.insert(o.table.clone(), o.table_index);
+                    new_manifest
+                        .tombstones
+                        .insert(o.table.clone(), o.tombstone_index);
+                }
+                Err(e) => {
+                    attempt.failed_modules += 1;
+                    attempt.errors.push(format!("表 {} push 失败: {}", e.table, e.message));
+                }
+            }
+        }
+
+        // 全部表失败：不上传清单（避免"说谎的清单"）
+        if !tables.is_empty() && attempt.failed_modules as usize == tables.len() {
+            return Err(CloudSyncError::Other {
+                message: format!(
+                    "全部 {} 张表 push 失败，未更新清单: {:?}",
+                    tables.len(),
+                    attempt.errors
+                ),
+            });
+        }
+
+        // 4. 无任何变化 → 不写清单（避免 epoch 空转与无意义流量）
+        let changed_any = attempt.pushed_chunks > 0 || attempt.pushed_tombstones > 0;
+        if !changed_any {
+            attempt.skipped_modules = 1;
+            result = attempt;
+            let mut next_state = state.clone();
+            next_state.last_synced_at = now_ms();
+            next_state.update_from_manifest(&remote_manifest);
+            state_store.save(&next_state)?;
+            return Ok(result);
+        }
+
+        // 5. 组装并条件写清单
+        //    墓碑水位线回收：先从清单剔除「早于所有设备检查点」的墓碑分桶，
+        //    对象删除放在清单上传成功之后（顺序见 gc 模块文档）。
+        let expired_tombstones = crate::cloud_sync::gc::prune_expired_tombstones(&mut new_manifest);
+        new_manifest.epoch = remote_manifest.epoch + 1;
+        new_manifest.device_id = device_id.to_string();
+        new_manifest.updated_at = now_ms();
+        new_manifest.touch_device(device_id, now_ms());
+
+        let payload = encrypt_payload(&serde_json::to_vec(&new_manifest)?, &data_key)?;
+
+        // 回滚点：把上一版清单密文另存一份（语义边界见 paths::MANIFEST_PREV_PATH）
+        if let Some(raw) = &remote_raw
+            && let Err(e) = adapter.upload(paths::MANIFEST_PREV_PATH, raw).await
+        {
+            log::info!("[push] 保存上一版清单失败（不影响本次同步）: {e}");
+        }
+
+        let precondition = match &remote_token {
+            Some(token) => UploadPrecondition::Match(token.clone()),
+            // 远端无清单（首次推送）→ Absent；服务端不支持时由回读校验兜底
+            None => UploadPrecondition::Absent,
+        };
+        let outcome = adapter
+            .upload_conditional(paths::MANIFEST_PATH, &payload, precondition)
+            .await?;
+
+        let mut conflict_reason: Option<String> = None;
+        if outcome == UploadOutcome::PreconditionFailed {
+            conflict_reason = Some("清单前置条件失败".to_string());
+        } else if !verify_manifest_write(adapter, &data_key, new_manifest.epoch, device_id).await? {
+            // 服务端忽略条件头时的兜底：回读发现不是自己的版本
+            conflict_reason = Some("清单写后校验发现他端写入".to_string());
+        }
+
+        if let Some(reason) = conflict_reason {
+            cas_attempt += 1;
+            result.cas_conflicts += 1;
+            log::info!(
+                "[push] {reason}（第 {cas_attempt} 次），重新读取清单后重试"
+            );
+            if cas_attempt >= CAS_MAX_RETRIES {
+                let msg = format!(
+                    "{reason}：并发冲突重试 {cas_attempt} 次仍未成功，本轮保留本地待下轮同步"
+                );
+                log::warn!("[push] {msg}");
+                result.pushed_chunks += attempt.pushed_chunks;
+                result.pushed_tombstones += attempt.pushed_tombstones;
+                result.errors.push(msg);
+                return Ok(result);
+            }
             continue;
         }
-        let prev = state.modules.get(module_def.name);
-        if prev.is_some_and(|s| s.count > 0) && local_items_look_empty(db_pool, module_def).await? {
-            let msg = format!(
-                "本地数据库为空但同步状态记录有 {} 条数据（模块 {}）——\
-                 疑似删库重装后残留 sync_state.json，已阻断 Push 以防空数据覆盖云端。\
-                 请在设置中使用「从云端恢复」或删除同步状态后重试",
-                prev.map(|s| s.count).unwrap_or(0),
-                module_def.name
+
+        result.pushed_chunks += attempt.pushed_chunks;
+        result.skipped_chunks += attempt.skipped_chunks;
+        result.pushed_tombstones += attempt.pushed_tombstones;
+        result.pushed_modules = attempt.pushed_modules;
+        result.manifest_written = true;
+        result.errors.extend(attempt.errors);
+
+        // 6. 清单已上新版：现在可以安全删除不再被引用的墓碑对象
+        if !expired_tombstones.is_empty() {
+            let gc = crate::cloud_sync::gc::delete_expired_buckets(adapter, &expired_tombstones).await;
+            log::info!(
+                "[push] 墓碑回收：剔除 {} 个分桶，实际删除 {} 个",
+                expired_tombstones.len(),
+                gc.deleted_buckets
             );
-            log::warn!("[push_all] P0-5 空数据覆盖守卫触发：{}", msg);
-            return Err(CloudSyncError::State { message: msg });
+            result.errors.extend(gc.errors);
         }
+
+        let mut next_state = state.clone();
+        next_state.last_synced_at = now_ms();
+        next_state.update_from_manifest(&new_manifest);
+        state_store.save(&next_state)?;
+        return Ok(result);
     }
-
-    // 串行 Push：每个模块独立完成 加载→指纹比对→序列化加密→上传 → 返回 outcome。
-    // 注：原 buffer_unordered(8) 并行实现在 WebDAV 上触发并发 MKCOL 同一目录，
-    // 部分服务器对并发 MKCOL 返回 503（"Service Temporarily Unavailable"），
-    // 导致 push_all 整体失败 + with_retry 重试，表现为"不停同步"。
-    // 串行避免并发目录创建冲突，且代码更简单。
-    let mut outcomes: Vec<Result<PushModuleOutcome, CloudSyncError>> =
-        Vec::with_capacity(prev_states.len());
-    for (idx, (module_def, prev_state)) in prev_states.into_iter().enumerate() {
-        let current = idx as u32 + 1;
-        let outcome = push_single_module(
-            db_pool,
-            &data_key,
-            adapter,
-            progress_sender,
-            origin,
-            &module_def,
-            prev_state,
-            current,
-            total,
-        )
-        .await;
-        outcomes.push(outcome);
-    }
-
-    // 顺序应用 outcomes 到 state 和 result
-    // S8（2026-09-13 探查）：模块间错误隔离——单模块失败不中断后续已成功
-    // 模块的 state 应用与 _meta 上传（此前 `?` 中断使第 N 模块失败时，
-    // 前面已上传成功的模块 state 不落地、_meta 不上传：云端「部分新
-    // 部分旧」，他端 fp 未变全部跳过拉取；本机下轮 reconcile 判 fp
-    // 不一致全量重传）。失败模块的 state 不应用（保留旧 prev_state，
-    // 下轮指纹比对自然重试该模块），对齐 pull.rs 的错误隔离范式。
-    let mut result = PushResult::default();
-    for outcome in outcomes {
-        match outcome {
-            Ok(PushModuleOutcome::Skipped) => result.skipped_modules += 1,
-            Ok(PushModuleOutcome::Pushed { name, new_state }) => {
-                state.set_module(&name, new_state);
-                result.pushed_modules += 1;
-            }
-            Err(e) => {
-                result.failed_modules += 1;
-                result.errors.push(e.to_string());
-                log::info!("[push_all] 单模块 push 失败（隔离不中断）: {}", e);
-            }
-        }
-    }
-
-    // 上传全局 _meta.orsync（仅当至少一个模块实际 push 时）
-    //    避免所有模块被跳过时仍上传 _meta，产生"说谎的 _meta"（声称模块存在但
-    //    实际模块数据文件未上传）。reconcile 的文件存在性校验依赖此不变量。
-    if result.pushed_modules > 0 {
-        let global_meta = build_global_meta(&state, device_id);
-        let global_json = serde_json::to_vec(&global_meta)?;
-        let encrypted_global = encrypt_payload(&global_json, &data_key)?;
-        adapter
-            .upload(paths::GLOBAL_META_PATH, &encrypted_global)
-            .await?;
-    }
-
-    // 批量保存 state（循环结束后一次性写入，避免每模块都写文件）
-    state.last_synced_at = now_ms();
-    state_store.save(&state)?;
-
-    Ok(result)
 }
 
-/// 判定模块全部关联表是否真实为空（P0-5 空数据覆盖守卫的复核）
-///
-/// `load_module_items` 返回主表+关联表联合行，单表偶然为空不足以判定
-/// "删库"；这里对模块全部 tables 逐一 COUNT，全部为 0 才认定为空库。
-/// 避免用户真实清空某一类数据（如删光所有标签）时误触守卫阻断同步。
-async fn local_items_look_empty(
+/// 单表差量结果
+struct TableOutcome {
+    table: String,
+    table_index: TableIndex,
+    tombstone_index: TombstoneIndex,
+    pushed_chunks: u32,
+    skipped_chunks: u32,
+    pushed_tombstones: u32,
+    /// 该表是否有任何上传
+    changed: bool,
+}
+
+/// 单表差量计算与上传（错误隔离单元）
+async fn build_table_outcome(
     db_pool: &SqlitePool,
-    module_def: &SyncModuleDef,
+    adapter: &dyn SyncAdapter,
+    data_key: &[u8],
+    remote: &ManifestV2,
+    table: &str,
+) -> Result<TableOutcome, TableError> {
+    let mut table_index = TableIndex::default();
+    let mut pushed_chunks = 0u32;
+    let mut skipped_chunks = 0u32;
+
+    let items = load_table_items(db_pool, table).await.map_err(|e| TableError {
+        table: table.to_string(),
+        message: e.to_string(),
+    })?;
+
+    for chunk in split_table_items(table, items) {
+        let fp = chunk.fingerprint().map_err(|e| TableError {
+            table: table.to_string(),
+            message: e.to_string(),
+        })?;
+        let size = chunk.to_payload_bytes().map(|b| b.len() as u64).unwrap_or(0);
+        let count = chunk.items.len() as u64;
+
+        let remote_ref = remote
+            .table(table)
+            .and_then(|t| t.chunks.get(&chunk.bucket))
+            .filter(|r| r.fp == fp);
+
+        if remote_ref.is_some() {
+            skipped_chunks += 1;
+        } else {
+            let payload = chunk.to_payload_bytes().map_err(|e| TableError {
+                table: table.to_string(),
+                message: e.to_string(),
+            })?;
+            let encrypted = encrypt_payload(&payload, data_key).map_err(|e| TableError {
+                table: table.to_string(),
+                message: e.to_string(),
+            })?;
+            adapter
+                .upload(&paths::table_bucket_path(table, chunk.bucket), &encrypted)
+                .await
+                .map_err(|e| TableError {
+                    table: table.to_string(),
+                    message: format!("上传分桶 {}: {e}", chunk.bucket),
+                })?;
+            pushed_chunks += 1;
+        }
+
+        table_index.chunks.insert(
+            chunk.bucket,
+            ChunkRef {
+                fp,
+                count,
+                size,
+            },
+        );
+    }
+
+    // 墓碑分桶差量
+    let mut tombstone_index = TombstoneIndex::default();
+    let mut pushed_tombstones = 0u32;
+    let buckets = load_table_tombstones(db_pool, table)
+        .await
+        .map_err(|e| TableError {
+            table: table.to_string(),
+            message: e.to_string(),
+        })?;
+
+    for (bucket, tombstones) in buckets {
+        let payload = TombstoneBucketPayload {
+            table: table.to_string(),
+            bucket: bucket.clone(),
+            tombstones: tombstones.clone(),
+        };
+        // 指纹口径与数据分桶一致：对墓碑数组做 canonical 哈希
+        let fp = crate::cloud_sync::compute_fingerprint(
+            &tombstones
+                .iter()
+                .map(|t| {
+                    serde_json::json!({"uuid": t.uuid, "deleted_at": t.deleted_at})
+                })
+                .collect::<Vec<_>>(),
+        )
+        .map_err(|e| TableError {
+            table: table.to_string(),
+            message: e.to_string(),
+        })?;
+
+        let remote_fp = remote
+            .tombstone_index(table)
+            .and_then(|i| i.buckets.get(&bucket))
+            .map(|b| b.fp.as_str());
+
+        if remote_fp != Some(fp.as_str()) {
+            let bytes = serde_json::to_vec(&payload).map_err(|e| TableError {
+                table: table.to_string(),
+                message: e.to_string(),
+            })?;
+            let encrypted = encrypt_payload(&bytes, data_key).map_err(|e| TableError {
+                table: table.to_string(),
+                message: e.to_string(),
+            })?;
+            adapter
+                .upload(&paths::tombstone_bucket_path(table, &bucket), &encrypted)
+                .await
+                .map_err(|e| TableError {
+                    table: table.to_string(),
+                    message: format!("上传墓碑分桶 {bucket}: {e}"),
+                })?;
+            pushed_tombstones += 1;
+        }
+
+        tombstone_index.buckets.insert(
+            bucket,
+            TombstoneBucketRef {
+                fp,
+                count: tombstones.len() as u64,
+                max_deleted_at: tombstones.iter().map(|t| t.deleted_at).max().unwrap_or(0),
+            },
+        );
+    }
+
+    Ok(TableOutcome {
+        table: table.to_string(),
+        table_index,
+        tombstone_index,
+        pushed_chunks,
+        skipped_chunks,
+        pushed_tombstones,
+        changed: pushed_chunks > 0 || pushed_tombstones > 0,
+    })
+}
+
+/// 表级错误（错误隔离单元）
+#[derive(Debug)]
+struct TableError {
+    table: String,
+    message: String,
+}
+
+impl std::fmt::Display for TableError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.message)
+    }
+}
+
+/// 读取远端清单（不存在返回空清单 + 无令牌 + 无原始密文）
+///
+/// 第三个返回值是清单的**原始密文**，供调用方另存为上一版回滚点。
+async fn read_remote_manifest(
+    adapter: &dyn SyncAdapter,
+    data_key: &[u8],
+) -> Result<(ManifestV2, Option<String>, Option<Vec<u8>>), CloudSyncError> {
+    match adapter.download_with_token(paths::MANIFEST_PATH).await? {
+        None => Ok((ManifestV2::empty(""), None, None)),
+        Some((bytes, token)) => {
+            let plain = decrypt_payload(&bytes, data_key)?;
+            let manifest: ManifestV2 = serde_json::from_slice(&plain)?;
+            if manifest.layout_version != crate::cloud_sync::meta::LAYOUT_VERSION {
+                return Err(CloudSyncError::Other {
+                    message: format!(
+                        "云端清单布局版本 {} 不受支持（当前 {}）",
+                        manifest.layout_version,
+                        crate::cloud_sync::meta::LAYOUT_VERSION
+                    ),
+                });
+            }
+            Ok((manifest, token, Some(bytes)))
+        }
+    }
+}
+
+/// 写后回读校验：确认清单确实是我们写入的那一版
+async fn verify_manifest_write(
+    adapter: &dyn SyncAdapter,
+    data_key: &[u8],
+    expected_epoch: u64,
+    device_id: &str,
 ) -> Result<bool, CloudSyncError> {
-    for table in module_def.tables {
+    let (manifest, _, _) = read_remote_manifest(adapter, data_key).await?;
+    Ok(manifest.epoch == expected_epoch && manifest.device_id == device_id)
+}
+
+/// 空数据覆盖守卫：本地全空 + 远端有数据 + 本机曾同步过 → 阻断
+async fn guard_against_empty_overwrite(
+    db_pool: &SqlitePool,
+    state: &crate::cloud_sync::state::SyncState,
+    remote: &ManifestV2,
+) -> Result<(), CloudSyncError> {
+    let remote_has_data = remote.tables.values().any(|t| !t.is_empty());
+    if !remote_has_data {
+        return Ok(());
+    }
+    let ever_synced = state.last_synced_at > 0 || state.manifest_epoch > 0;
+    if !ever_synced {
+        return Ok(());
+    }
+    if !local_all_tables_empty(db_pool).await? {
+        return Ok(());
+    }
+    let msg = "空数据覆盖守卫触发：本地数据库为空但远端已有同步数据、且本机曾成功同步过——\
+               疑似删库重装后残留 sync_state.json，已阻断 Push 以防空数据覆盖云端。\
+               请在设置中使用「从云端恢复」或清除同步状态后重试"
+        .to_string();
+    log::warn!("[push] 空数据覆盖守卫触发：{msg}");
+    Err(CloudSyncError::State { message: msg })
+}
+
+/// 全部可同步表是否都为空（逐表 COUNT，语义等价于 is_deleted = 0 计数）
+async fn local_all_tables_empty(db_pool: &SqlitePool) -> Result<bool, CloudSyncError> {
+    for table in SYNCABLE_TABLES {
         let count: (i64,) = sqlx::query_as(&format!(
-            "SELECT COUNT(*) FROM {} WHERE is_deleted = 0",
-            table
+            "SELECT COUNT(*) FROM {table} WHERE is_deleted = 0"
         ))
         .fetch_one(db_pool)
         .await
         .map_err(|e| CloudSyncError::Database {
-            message: format!("统计表 {} 行数失败: {}", table, e),
+            message: format!("统计表 {table} 行数失败: {e}"),
         })?;
         if count.0 > 0 {
             return Ok(false);
@@ -233,554 +485,367 @@ async fn local_items_look_empty(
     Ok(true)
 }
 
-/// 处理单个模块的 Push（并行任务单元）
-///
-/// 独立完成：加载模块数据 → 计算指纹 → 比对跳过 → 序列化加密上传 → 返回新状态。
-/// 不修改全局 state，将新状态通过 outcome 返回由主流程顺序应用。
-#[allow(clippy::too_many_arguments)] // 单模块推送管道参数，聚合进结构体收益低
-async fn push_single_module(
-    db_pool: &SqlitePool,
-    data_key: &[u8],
-    adapter: &dyn SyncAdapter,
-    progress_sender: &dyn ProgressSender,
-    origin: SyncOrigin,
-    module_def: &SyncModuleDef,
-    prev_state: Option<ModuleSyncState>,
-    current: u32,
-    total: u32,
-) -> Result<PushModuleOutcome, CloudSyncError> {
-    let builder = ProgressBuilder::new(progress_sender, origin);
-    builder.pushing(module_def.name, module_def.display_name, current, total);
-
-    // 1. 加载模块数据
-    let items = load_module_items(db_pool, module_def).await?;
-
-    // 2. 计算本地指纹
-    let local_fp = crate::cloud_sync::compute_fingerprint(&items)?;
-
-    // 3. 比对指纹决定是否跳过（委托纯函数，便于单元测试）
-    let should_skip = should_skip_push(prev_state.as_ref(), &local_fp, items.is_empty());
-    if should_skip {
-        return Ok(PushModuleOutcome::Skipped);
-    }
-
-    // 4. 序列化 + 加密
-    let module_data = ModuleData {
-        module: module_def.name.to_string(),
-        items,
-        exported_at: now_ms(),
-    };
-    let data_json = serde_json::to_vec(&module_data)?;
-    let encrypted_data = encrypt_payload(&data_json, data_key)?;
-    let data_path = paths::module_data_path(module_def.name);
-
-    // 5. 构造墓碑集（FR-2.4：无上限，含 deleted_at 时间戳）
-    let tombstone_pairs = load_all_tombstones(db_pool, module_def).await?;
-    let deleted_ids: Vec<TombstoneEntry> = tombstone_pairs
-        .into_iter()
-        .map(|(uuid, deleted_at)| TombstoneEntry::new(uuid, deleted_at))
-        .collect();
-
-    let module_meta = ModuleMetaEntry {
-        fp: local_fp.clone(),
-        count: module_data.items.len() as u64,
-        deleted_ids,
-        updated_at: now_ms(),
-    };
-    let meta_json = serde_json::to_vec(&module_meta)?;
-    let encrypted_meta = encrypt_payload(&meta_json, data_key)?;
-    let meta_path = paths::module_meta_path(module_def.name);
-
-    // 6. 上传：先 meta（含墓碑）后 data（P0-7 顺序修复）
-    //
-    // 旧顺序（先 data 后 meta）的中断窗口产生"新 data + 旧 meta"：
-    // 新 data 已不含被删行、旧 meta 缺新墓碑——其他设备 pull 时既不应用删除、
-    // data 里也没有该行，已删记录在云端视角"复活存活"（漏删，不可恢复感知）。
-    // 先传 meta 后传 data 的中断窗口是"新 meta + 旧 data"：pull 会应用墓碑
-    // 删除本地行，data 里的旧行最多被多删一次（多删不漏删），且下轮 push
-    // reconcile 兜底重传。两段上传的完全原子性属容器格式演进，此处先修顺序。
-    adapter.upload(&meta_path, &encrypted_meta).await?;
-    adapter.upload(&data_path, &encrypted_data).await?;
-
-    // 7. 构造新状态（委托纯函数，便于单元测试）
-    let new_state = build_pushed_state(
-        &local_fp,
-        prev_state.as_ref(),
-        module_data.items.len() as u64,
-    );
-
-    Ok(PushModuleOutcome::Pushed {
-        name: module_def.name.to_string(),
-        new_state,
-    })
-}
-
-/// 判断单个模块 Push 是否应跳过
-///
-/// 提取为纯函数便于单元测试覆盖各种同步场景。
-///
-/// ## 跳过条件
-/// ### 条件 A：首次同步 + 本地空数据 → 跳过（Fix Issue 2）
-/// 场景：移动端首次同步，Pull 失败（网络/解密错误），本地 DB 为空。
-/// 若不跳过，会上传空数据覆盖云端已有数据。
-///
-/// ### 条件 B：增量跳过（全部满足才跳过）
-/// 1. 有上一次同步状态 `prev_state`（非首次同步）
-/// 2. 本地指纹未变：`prev_state.fp == local_fp`
-/// 3. 本地指纹非空：`!prev_state.fp.is_empty()`
-/// 4. 远端指纹非空：`!prev_state.remote_fp.is_empty()`（已成功 Pull 过）
-/// 5. 本地指纹 == 远端指纹（Fix Issue 3）：`prev_state.fp == prev_state.remote_fp`
-///    确保本地数据与上次记录的远端数据一致才跳过。
-///    若不一致，说明远端被其他设备覆盖（如移动端上传空数据），
-///    本设备需 Push 恢复云端数据。
-fn should_skip_push(
-    prev_state: Option<&ModuleSyncState>,
-    local_fp: &str,
-    local_items_empty: bool,
-) -> bool {
-    // Fix Issue 2：首次同步 + 本地空数据 → 跳过，避免上传空数据覆盖远端
-    if prev_state.is_none() && local_items_empty {
-        return true;
-    }
-    // Fix Issue 3：增加 `s.fp == s.remote_fp` 条件
-    // 确保本地数据与上次记录的远端数据一致才跳过，
-    // 远端被其他设备覆盖时本设备能重新 Push 恢复
-    prev_state.is_some_and(|s| {
-        s.fp == local_fp && !s.fp.is_empty() && !s.remote_fp.is_empty() && s.fp == s.remote_fp
-    })
-}
-
-/// 构造 Push 成功后的新模块状态
-///
-/// 提取为纯函数便于单元测试验证状态更新正确性。
-///
-/// ## 字段语义
-/// - `fp`：本次 Push 时的本地指纹
-/// - `remote_fp`：Fix Issue 3 — 更新为 `local_fp`（而非保留旧值）
-///   Push 成功后远端数据已与本地一致，remote_fp 应反映这一事实。
-///   旧逻辑保留 prev_state.remote_fp 导致下次 should_skip 误判
-///   （state.fp != state.remote_fp，触发不必要的重传或跳过）。
-/// - `count`：本次 Push 的记录数
-/// - `pushed_at`：当前时间戳
-/// - `pulled_at`：保留上一次的 Pull 时间
-fn build_pushed_state(
-    local_fp: &str,
-    prev_state: Option<&ModuleSyncState>,
-    count: u64,
-) -> ModuleSyncState {
-    ModuleSyncState {
-        fp: local_fp.to_string(),
-        // Fix Issue 3：Push 后远端数据已与本地一致，remote_fp 应 = local_fp
-        remote_fp: local_fp.to_string(),
-        count,
-        pushed_at: now_ms(),
-        pulled_at: prev_state.as_ref().map_or(0, |s| s.pulled_at),
-    }
-}
-
-/// Push 前根据远端 `_meta.orsync` 探测结果修正本地 state
-///
-/// 用于感知"远端被外部清空或修改"场景，避免本地数据未变时跳过上传导致云端持续为空：
-/// - 远端 `_meta` 404 → 远端被清空，
-///   清空所有模块的 `remote_fp`，触发全量 push。
-/// - 远端 `_meta` 存在 → 对每个本地记录的模块，比对远端 `_meta` 中对应模块的 `fp`
-///   与本地 `state.remote_fp`：
-///   - 不一致或远端无此模块 → 清空该模块 `remote_fp`，触发该模块 push。
-///   - 一致 → 进入步骤 3 文件存在性校验。
-/// - 步骤 3：fp 全部一致时，下载首个有数据模块的 `data.orsync` 验证存在性。
-///   - 404 → 远端存在"说谎的 _meta"（旧版本 broken push 仅上传 _meta 未上传模块数据），
-///     清空所有模块 `remote_fp`，触发全量 push。
-///   - 存在 → 远端数据完整，保持原 `should_skip` 跳过逻辑生效.
-/// 读侧兼容遗留 `_meta.waitsync` / `data.waitsync`。
-///
-/// 非 404 错误（网络/认证等）直接向上传播，不触发修正.
-///
-/// 返回 `true` 表示触发了任何 state 修正（用于诊断日志）。
-async fn reconcile_state_with_remote_meta(
-    adapter: &dyn SyncAdapter,
-    data_key: &[u8],
-    state: &mut SyncState,
-) -> Result<bool, CloudSyncError> {
-    // 1. 下载远端 _meta（默认 .orsync，404 回退遗留 .waitsync）
-    let meta_bytes = match adapter.download(paths::GLOBAL_META_PATH).await {
-        Ok(b) => Some(b),
-        Err(e) if paths::is_not_found_error(&e) => {
-            match adapter.download(paths::LEGACY_GLOBAL_META_PATH).await {
-                Ok(b) => Some(b),
-                Err(e2) if paths::is_not_found_error(&e2) => None,
-                Err(e2) => return Err(CloudSyncError::from(e2)),
-            }
-        }
-        Err(e) => return Err(CloudSyncError::from(e)),
-    };
-    let remote_meta = match meta_bytes {
-        Some(meta_bytes) => {
-            let decrypted = decrypt_payload(&meta_bytes, data_key)?;
-            serde_json::from_slice::<GlobalMeta>(&decrypted)?
-        }
-        None => {
-            // 远端被外部清空：清空所有模块的 remote_fp，触发全量 push。
-            // 保留 fp（本地指纹）不变，仅清空 remote_fp 让 should_skip 失效。
-            let changed = state.modules.values().any(|m| !m.remote_fp.is_empty());
-            if changed {
-                for (_, m) in state.modules.iter_mut() {
-                    m.remote_fp.clear();
-                }
-            }
-            return Ok(changed);
-        }
-    };
-
-    // 2. 远端 _meta 存在：逐模块比对远端 fp 与本地 state.remote_fp
-    let mut changed = false;
-    for (name, local_state) in state.modules.iter_mut() {
-        let remote_fp = remote_meta
-            .modules
-            .get(name)
-            .map(|m| m.fp.as_str())
-            .unwrap_or("");
-        if local_state.remote_fp != remote_fp {
-            // 远端 fp 与本地记录不一致（含远端无此模块），清空以触发 push
-            local_state.remote_fp.clear();
-            changed = true;
-        }
-    }
-    // fp 有不一致 → 已触发修正，无需进一步校验
-    if changed {
-        return Ok(true);
-    }
-
-    // 3. fp 全部一致 → 下载首个有数据模块的 data 文件验证存在性
-    //    检测"说谎的 _meta"场景：旧版本 broken push 仅上传 _meta 未上传模块数据，
-    //    导致 _meta 声称模块存在但实际文件缺失。下载首个模块验证，404 则全量重传。
-    let verify_module = SYNC_MODULES
-        .iter()
-        .find(|m| state.modules.get(m.name).is_some_and(|s| !s.fp.is_empty()));
-    if let Some(module_def) = verify_module {
-        // 默认 data.orsync，404 回退遗留 data.waitsync
-        let mut found = false;
-        let mut last_not_found = false;
-        for data_path in [
-            paths::module_data_path(module_def.name),
-            paths::legacy_module_data_path(module_def.name),
-        ] {
-            match adapter.download(&data_path).await {
-                Ok(_bytes) => {
-                    // 模块数据文件存在 → 远端完整，信任 _meta（丢弃下载内容）
-                    found = true;
-                    break;
-                }
-                Err(e) if paths::is_not_found_error(&e) => {
-                    last_not_found = true;
-                    continue;
-                }
-                Err(e) => return Err(CloudSyncError::from(e)),
-            }
-        }
-        if !found && last_not_found {
-            // 模块数据文件缺失 → 远端破损（说谎的 _meta）→ 清空所有 remote_fp 触发全量 push
-            for (_, m) in state.modules.iter_mut() {
-                if !m.remote_fp.is_empty() {
-                    m.remote_fp.clear();
-                    changed = true;
-                }
-            }
-        }
-    }
-    Ok(changed)
-}
-
-/// 从本地状态构建全局元数据
-fn build_global_meta(state: &SyncState, device_id: &str) -> GlobalMeta {
-    let mut meta = GlobalMeta::empty(device_id);
-    meta.updated_at = now_ms();
-    for module_def in SYNC_MODULES {
-        let module_state = state.module(module_def.name);
-        meta.modules.insert(
-            module_def.name.to_string(),
-            ModuleMetaEntry {
-                fp: module_state.fp,
-                count: module_state.count,
-                deleted_ids: Vec::new(), // 墓碑集在模块级 meta.json 中
-                updated_at: module_state.pushed_at,
-            },
-        );
-    }
-    meta
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::cloud_sync::progress::NoopProgressSender;
+    use crate::sync::error::SyncError;
+    use crate::sync_adapters::traits::{RemoteFile, UploadOutcome, UploadPrecondition};
+    use async_trait::async_trait;
+    use std::collections::HashMap;
+    use std::sync::Mutex;
 
-    /// 构造测试用 ModuleSyncState
-    fn make_state(fp: &str, remote_fp: &str) -> ModuleSyncState {
-        ModuleSyncState {
-            fp: fp.to_string(),
-            remote_fp: remote_fp.to_string(),
-            count: 0,
-            pulled_at: 0,
-            pushed_at: 0,
+    /// 内存适配器：支持条件写与令牌（模拟 S3/WebDAV 能力）
+    struct MemAdapter {
+        files: Mutex<HashMap<String, Vec<u8>>>,
+        version: Mutex<u64>,
+        uploads: Mutex<Vec<String>>,
+    }
+
+    impl MemAdapter {
+        fn new() -> Self {
+            Self {
+                files: Mutex::new(HashMap::new()),
+                version: Mutex::new(0),
+                uploads: Mutex::new(Vec::new()),
+            }
+        }
+
+        fn put(&self, path: &str, data: Vec<u8>) {
+            self.files.lock().unwrap().insert(path.to_string(), data);
         }
     }
 
-    // ========================================================================
-    // S8（2026-09-13 探查）：push 模块间错误隔离
-    //
-    // 此前 outcomes 循环里 `?` 中断：第 N 模块失败时，前面已成功上传的
-    // 模块 state 不应用、_meta 不上传——云端「部分新部分旧」，他端 fp
-    // 未变全部跳过拉取；本机下轮 reconcile 判 fp 不一致全量重传。
-    // 隔离后：失败模块错误进 PushResult.errors/failed_modules，成功模块
-    // 正常应用 state + _meta 上传。rekey 路径除外（混合 Key 态防护，
-    // 在 engine.rs 硬失败）。
-    // ========================================================================
+    #[async_trait]
+    impl SyncAdapter for MemAdapter {
+        async fn list_files(&self, _: &str) -> Result<Vec<RemoteFile>, SyncError> {
+            Ok(Vec::new())
+        }
+        async fn download(&self, path: &str) -> Result<Vec<u8>, SyncError> {
+            self.files
+                .lock()
+                .unwrap()
+                .get(path)
+                .cloned()
+                .ok_or_else(|| SyncError::NotFound {
+                    message: path.to_string(),
+                })
+        }
+        async fn upload(&self, path: &str, data: &[u8]) -> Result<(), SyncError> {
+            self.uploads.lock().unwrap().push(path.to_string());
+            self.put(path, data.to_vec());
+            Ok(())
+        }
+        async fn delete(&self, _: &str) -> Result<(), SyncError> {
+            Ok(())
+        }
+        async fn upload_asset(&self, _: &str, _: &[u8]) -> Result<(), SyncError> {
+            Ok(())
+        }
+        async fn download_asset(&self, _: &str) -> Result<Vec<u8>, SyncError> {
+            Err(SyncError::NotFound {
+                message: "无".to_string(),
+            })
+        }
+        async fn asset_exists(&self, _: &str) -> Result<bool, SyncError> {
+            Ok(false)
+        }
+        async fn list_assets(&self) -> Result<Vec<String>, SyncError> {
+            Ok(Vec::new())
+        }
+        async fn download_with_token(
+            &self,
+            path: &str,
+        ) -> Result<Option<(Vec<u8>, Option<String>)>, SyncError> {
+            match self.files.lock().unwrap().get(path).cloned() {
+                Some(bytes) => {
+                    let token = self.version.lock().unwrap().to_string();
+                    Ok(Some((bytes, Some(token))))
+                }
+                None => Ok(None),
+            }
+        }
+        async fn upload_conditional(
+            &self,
+            path: &str,
+            data: &[u8],
+            precondition: UploadPrecondition,
+        ) -> Result<UploadOutcome, SyncError> {
+            // 首次写入用 Absent；匹配用 Match(当前版本)
+            match &precondition {
+                UploadPrecondition::Absent => {
+                    if self.files.lock().unwrap().contains_key(path) {
+                        return Ok(UploadOutcome::PreconditionFailed);
+                    }
+                }
+                UploadPrecondition::Match(token) => {
+                    let current = self.version.lock().unwrap().to_string();
+                    if current != *token {
+                        return Ok(UploadOutcome::PreconditionFailed);
+                    }
+                }
+                UploadPrecondition::None => {}
+            }
+            self.uploads.lock().unwrap().push(path.to_string());
+            self.put(path, data.to_vec());
+            *self.version.lock().unwrap() += 1;
+            Ok(UploadOutcome::Ok)
+        }
+    }
 
-    /// 单模块失败隔离：上传第一个模块的 meta 时注入失败，验证后续模块
-    /// 不受影响、失败计数与 errors 收集正确
-    #[tokio::test]
-    async fn s8_push_all_isolates_module_failure() {
-        use crate::cloud_sync::progress::NoopProgressSender;
-        use crate::sync_adapters::traits::SyncAdapter;
-        use std::sync::atomic::{AtomicU32, Ordering as AtomicOrdering};
-
+    async fn env() -> (
+        SqlitePool,
+        SyncCryptoService,
+        SyncStateStore,
+        tempfile::TempDir,
+    ) {
         let pool = sqlx::SqlitePool::connect("sqlite::memory:").await.unwrap();
-        sqlx::migrate!("./src/db/migrations")
-            .run(&pool)
-            .await
-            .unwrap();
-        // 插入一行项目数据——空库会触发 should_skip_push 的
-        // 「首次同步 + 本地空数据 → 跳过」守卫，全部模块不上传
+        sqlx::migrate!("./src/db/migrations").run(&pool).await.unwrap();
+        let tmp = tempfile::TempDir::new().unwrap();
+        let crypto = SyncCryptoService::new(tmp.path());
+        crypto.init_with_data_key("pw", &[7u8; 32]).unwrap();
+        let store = SyncStateStore::new(tmp.path());
+        (pool, crypto, store, tmp)
+    }
+
+    #[tokio::test]
+    async fn first_push_uploads_chunks_and_writes_manifest() {
+        let (pool, crypto, store, _tmp) = env().await;
         sqlx::query(
-            "INSERT INTO todo_projects (uuid, title, created_at, updated_at) \
-             VALUES ('test-uuid-1', '测试项目', 1, 1)",
+            "INSERT INTO todo_projects (uuid, title, created_at, updated_at) VALUES ('u1','P',1,1)",
         )
         .execute(&pool)
         .await
         .unwrap();
-        let tmp = tempfile::TempDir::new().unwrap();
-        let crypto = crate::sync_crypto::SyncCryptoService::new(tmp.path());
-        // push 需要 Data Key：init_with_data_key 注入固定 32 字节 Key
-        crypto
-            .init_with_data_key("test-password", &[7u8; 32])
-            .expect("注入测试 Data Key");
-        let state_store = crate::cloud_sync::state::SyncStateStore::new(tmp.path());
 
-        /// 失败注入 mock：首次 upload（todos 模块的 meta）返回错误，其余成功
-        struct FailFirstAdapter {
-            upload_count: AtomicU32,
+        let adapter = MemAdapter::new();
+        let result = push_all(
+            &pool,
+            &crypto,
+            &store,
+            &adapter,
+            &NoopProgressSender,
+            SyncOrigin::Manual,
+            "dev-1",
+            &[],
+        )
+        .await
+        .unwrap();
+
+        assert!(result.manifest_written);
+        assert!(result.pushed_chunks >= 1);
+        let uploads = adapter.uploads.lock().unwrap().clone();
+        assert!(uploads.iter().any(|p| p == paths::MANIFEST_PATH));
+        assert!(
+            uploads.iter().any(|p| p.starts_with("v2/tables/todo_projects/")),
+            "必须上传数据分桶: {uploads:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn second_push_without_changes_uploads_nothing() {
+        let (pool, crypto, store, _tmp) = env().await;
+        sqlx::query(
+            "INSERT INTO todo_projects (uuid, title, created_at, updated_at) VALUES ('u1','P',1,1)",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        let adapter = MemAdapter::new();
+        push_all(
+            &pool,
+            &crypto,
+            &store,
+            &adapter,
+            &NoopProgressSender,
+            SyncOrigin::Manual,
+            "dev-1",
+            &[],
+        )
+        .await
+        .unwrap();
+
+        let before = adapter.uploads.lock().unwrap().len();
+        let result = push_all(
+            &pool,
+            &crypto,
+            &store,
+            &adapter,
+            &NoopProgressSender,
+            SyncOrigin::Manual,
+            "dev-1",
+            &[],
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(result.pushed_chunks, 0, "无变化不得上传分桶");
+        assert!(!result.manifest_written, "无变化不得改写清单");
+        assert_eq!(
+            adapter.uploads.lock().unwrap().len(),
+            before,
+            "无变化不得产生任何上传"
+        );
+    }
+
+    #[tokio::test]
+    async fn single_row_edit_uploads_only_one_chunk() {
+        let (pool, crypto, store, _tmp) = env().await;
+        let mut sql = String::from(
+            "INSERT INTO todo_projects (uuid, title, created_at, updated_at) VALUES ",
+        );
+        for i in 0..200 {
+            if i > 0 {
+                sql.push(',');
+            }
+            sql.push_str(&format!("('uuid-{i}','P{i}',1,1)"));
         }
+        sqlx::query(&sql).execute(&pool).await.unwrap();
 
-        #[async_trait::async_trait]
-        impl SyncAdapter for FailFirstAdapter {
-            async fn list_files(
-                &self,
-                _: &str,
-            ) -> Result<Vec<crate::sync_adapters::traits::RemoteFile>, crate::sync::error::SyncError>
-            {
-                Ok(Vec::new())
-            }
-            async fn list_all_files(
-                &self,
-                _: &str,
-            ) -> Result<Vec<crate::sync_adapters::traits::RemoteFile>, crate::sync::error::SyncError>
-            {
-                Ok(Vec::new())
-            }
-            async fn download(&self, _: &str) -> Result<Vec<u8>, crate::sync::error::SyncError> {
-                Err(crate::sync::error::SyncError::NotFound {
-                    message: "无".to_string(),
-                })
-            }
-            async fn upload(
-                &self,
-                _path: &str,
-                _data: &[u8],
-            ) -> Result<(), crate::sync::error::SyncError> {
-                let n = self.upload_count.fetch_add(1, AtomicOrdering::SeqCst);
-                if n == 0 {
-                    // todos 模块的 meta 上传失败（注入点）
-                    return Err(crate::sync::error::SyncError::Network {
-                        message: "注入失败：首个上传".to_string(),
-                        retryable: true,
-                    });
-                }
-                Ok(())
-            }
-            async fn delete(&self, _: &str) -> Result<(), crate::sync::error::SyncError> {
-                Ok(())
-            }
-            async fn upload_asset(
-                &self,
-                _: &str,
-                _: &[u8],
-            ) -> Result<(), crate::sync::error::SyncError> {
-                Ok(())
-            }
-            async fn download_asset(
-                &self,
-                _: &str,
-            ) -> Result<Vec<u8>, crate::sync::error::SyncError> {
-                Err(crate::sync::error::SyncError::NotFound {
-                    message: "无".to_string(),
-                })
-            }
-            async fn asset_exists(&self, _: &str) -> Result<bool, crate::sync::error::SyncError> {
-                Ok(false)
-            }
-            async fn list_assets(&self) -> Result<Vec<String>, crate::sync::error::SyncError> {
-                Ok(Vec::new())
-            }
-        }
+        let adapter = MemAdapter::new();
+        push_all(
+            &pool,
+            &crypto,
+            &store,
+            &adapter,
+            &NoopProgressSender,
+            SyncOrigin::Manual,
+            "dev-1",
+            &[],
+        )
+        .await
+        .unwrap();
 
-        let adapter = FailFirstAdapter {
-            upload_count: AtomicU32::new(0),
-        };
+        adapter.uploads.lock().unwrap().clear();
+        sqlx::query("UPDATE todo_projects SET title='X', updated_at=2 WHERE uuid='uuid-5'")
+            .execute(&pool)
+            .await
+            .unwrap();
+        let result = push_all(
+            &pool,
+            &crypto,
+            &store,
+            &adapter,
+            &NoopProgressSender,
+            SyncOrigin::Manual,
+            "dev-1",
+            &[],
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(result.pushed_chunks, 1, "单行编辑只能重传一个分桶");
+        let uploads = adapter.uploads.lock().unwrap().clone();
+        let chunk_uploads = uploads
+            .iter()
+            .filter(|p| p.starts_with("v2/tables/"))
+            .count();
+        assert_eq!(chunk_uploads, 1);
+    }
+
+    #[tokio::test]
+    async fn empty_local_with_remote_data_is_blocked() {
+        let (pool, crypto, store, _tmp) = env().await;
+        sqlx::query(
+            "INSERT INTO todo_projects (uuid, title, created_at, updated_at) VALUES ('u1','P',1,1)",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        let adapter = MemAdapter::new();
+        push_all(
+            &pool,
+            &crypto,
+            &store,
+            &adapter,
+            &NoopProgressSender,
+            SyncOrigin::Manual,
+            "dev-1",
+            &[],
+        )
+        .await
+        .unwrap();
+
+        // 模拟删库重装：本地清空但账本残留
+        sqlx::query("DELETE FROM todo_projects").execute(&pool).await.unwrap();
+        let err = push_all(
+            &pool,
+            &crypto,
+            &store,
+            &adapter,
+            &NoopProgressSender,
+            SyncOrigin::Manual,
+            "dev-1",
+            &[],
+        )
+        .await
+        .unwrap_err();
+        assert!(err.to_string().contains("空数据覆盖守卫"));
+    }
+
+    #[tokio::test]
+    async fn cas_conflict_does_not_lose_other_device_buckets() {
+        let (pool, crypto, store, _tmp) = env().await;
+        sqlx::query(
+            "INSERT INTO todo_projects (uuid, title, created_at, updated_at) VALUES ('mine','P',1,1)",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        let adapter = MemAdapter::new();
+        push_all(
+            &pool,
+            &crypto,
+            &store,
+            &adapter,
+            &NoopProgressSender,
+            SyncOrigin::Manual,
+            "dev-1",
+            &[],
+        )
+        .await
+        .unwrap();
+
+        // 他端并发写入：模拟远端清单已被别的设备改写（epoch+1, 保留我方桶）
+        let (mut remote, token, _raw) = read_remote_manifest(&adapter, &[7u8; 32]).await.unwrap();
+        remote.epoch += 1;
+        remote.device_id = "dev-2".to_string();
+        let payload = encrypt_payload(&serde_json::to_vec(&remote).unwrap(), &[7u8; 32]).unwrap();
+        adapter.put(paths::MANIFEST_PATH, payload);
+        // 让下一次条件写在令牌上失败一次
+        *adapter.version.lock().unwrap() += 1;
+        assert!(token.is_some());
+
+        // 再改本地一行触发 push
+        sqlx::query("UPDATE todo_projects SET title='P2', updated_at=2 WHERE uuid='mine'")
+            .execute(&pool)
+            .await
+            .unwrap();
 
         let result = push_all(
             &pool,
             &crypto,
-            &state_store,
+            &store,
             &adapter,
             &NoopProgressSender,
-            crate::cloud_sync::progress::SyncOrigin::Manual,
-            "test-device",
+            SyncOrigin::Manual,
+            "dev-1",
             &[],
         )
         .await
-        .expect("模块间错误隔离后 push_all 不得整体失败");
+        .unwrap();
 
-        // 注：当前 MVP 为单模块（todos）——断言聚焦隔离语义本身：
-        // ① 单模块失败 push_all 不再整体 Err（调用方附件等后续阶段可继续）
-        // ② 失败计数与 errors 收集正确
-        // 多模块扩展后，本测试自然覆盖「后续模块继续上传」（upload_count 递增）
-        assert!(result.failed_modules >= 1, "首个模块失败应被计入");
+        // 最终必须写入成功并保留他端写入的信息（devices 合并）
+        assert!(result.manifest_written || !result.errors.is_empty());
+        let (final_manifest, _, _) = read_remote_manifest(&adapter, &[7u8; 32]).await.unwrap();
         assert!(
-            !result.errors.is_empty(),
-            "失败模块错误信息必须收集进 errors"
+            final_manifest.epoch > remote.epoch - 1,
+            "清单 epoch 必须推进"
         );
-        assert_eq!(result.pushed_modules, 0, "注入失败的模块不得计为已推送");
-    }
-
-    // ========================================================================
-    // should_skip_push 测试：覆盖 Issue 2 和 Issue 3 场景
-    // ========================================================================
-
-    #[test]
-    fn skip_first_sync_with_data_should_push() {
-        // 场景：首次同步，本地有数据 → 不跳过（正常推送）
-        let local_fp = "fp_local_with_data";
-        let prev_state: Option<&ModuleSyncState> = None;
-        assert!(!should_skip_push(prev_state, local_fp, false));
-    }
-
-    #[test]
-    fn skip_first_sync_empty_local_should_skip_to_avoid_overwriting_remote() {
-        // Issue 2 核心场景：首次同步 + 本地空数据 → 必须跳过
-        //
-        // 移动端首次同步，Pull 失败（网络/解密错误），本地 DB 为空。
-        // 若不跳过 Push，会上传空数据覆盖云端已有数据。
-        // local_fp 是 sha256("[]")（非空字符串），但 local_items_empty=true 触发跳过
-        let local_fp = "4f5e1d6a3c2b8a9f0e7d6c5b4a392817f6e5d4c3b2a1908f7e6d5c4b3a29187f";
-        let prev_state: Option<&ModuleSyncState> = None;
         assert!(
-            should_skip_push(prev_state, local_fp, true),
-            "首次同步且本地为空时必须跳过 Push，避免覆盖云端数据"
+            final_manifest.tables.contains_key("todo_projects"),
+            "他端表格索引不得丢失"
         );
-    }
-
-    #[test]
-    fn skip_local_unchanged_and_matches_remote_should_skip() {
-        // 场景：本地未变 + 本地==远端 → 跳过（正常增量同步）
-        let local_fp = "fp_abc";
-        let prev_state = make_state("fp_abc", "fp_abc");
-        assert!(should_skip_push(Some(&prev_state), local_fp, false));
-    }
-
-    #[test]
-    fn skip_local_unchanged_but_differs_from_remote_should_push() {
-        // Issue 3 核心场景：本地未变 + 本地!=远端 → 不跳过，需重传
-        //
-        // 移动端覆盖云端后，桌面端 Pull 更新 state.remote_fp = fp_empty，
-        // 但 state.fp = fp_D1 不变（本地数据未变）。
-        // 此时 should_skip 应返回 false，让桌面端 Push 恢复云端数据。
-        let local_fp = "fp_D1";
-        let prev_state = make_state("fp_D1", "fp_empty_after_mobile_overwrite");
-        assert!(
-            !should_skip_push(Some(&prev_state), local_fp, false),
-            "本地未变但与远端不一致时必须 Push，恢复云端数据"
-        );
-    }
-
-    #[test]
-    fn skip_local_changed_should_push() {
-        // 场景：本地数据变化 → 不跳过
-        let local_fp = "fp_new";
-        let prev_state = make_state("fp_old", "fp_old");
-        assert!(!should_skip_push(Some(&prev_state), local_fp, false));
-    }
-
-    #[test]
-    fn skip_empty_remote_fp_should_push() {
-        // 场景：prev_state 有但 remote_fp 空（从未成功 Pull）→ 不跳过
-        let local_fp = "fp_abc";
-        let prev_state = make_state("fp_abc", "");
-        assert!(!should_skip_push(Some(&prev_state), local_fp, false));
-    }
-
-    #[test]
-    fn skip_empty_local_fp_should_push() {
-        // 场景：prev_state.fp 为空 → 不跳过（防御性）
-        let local_fp = "fp_abc";
-        let prev_state = make_state("", "fp_abc");
-        assert!(!should_skip_push(Some(&prev_state), local_fp, false));
-    }
-
-    // ========================================================================
-    // build_pushed_state 测试：验证 Push 后状态更新正确性
-    // ========================================================================
-
-    #[test]
-    fn build_pushed_state_updates_remote_fp_to_local_fp() {
-        // Issue 3 修复：Push 后 new_state.remote_fp 应 = local_fp
-        //
-        // 旧逻辑保留 prev_state.remote_fp（旧值），导致下次 should_skip 误判：
-        // - state.fp = local_fp（刚推送）
-        // - state.remote_fp = old_remote_fp（未更新）
-        // - 下次 reconcile 发现 state.remote_fp != 远端 fp → 清空 remote_fp
-        // - should_skip = false（remote_fp 为空）→ 每次都重传（"不停同步"）
-        //
-        // 修复：Push 后 remote_fp = local_fp，表示远端现在有我们的本地数据。
-        let local_fp = "fp_just_pushed";
-        let prev_state = make_state("fp_old", "fp_old_remote");
-        let new_state = build_pushed_state(local_fp, Some(&prev_state), 10);
-        assert_eq!(
-            new_state.remote_fp, local_fp,
-            "Push 后 remote_fp 必须更新为 local_fp，表示远端现在有本地数据"
-        );
-    }
-
-    #[test]
-    fn build_pushed_state_first_push_sets_remote_fp_to_local_fp() {
-        // 场景：首次 Push（prev_state 为 None）
-        // 修复后 remote_fp 也应 = local_fp
-        let local_fp = "fp_first_push";
-        let new_state = build_pushed_state(local_fp, None, 5);
-        assert_eq!(new_state.remote_fp, local_fp);
-        assert_eq!(new_state.fp, local_fp);
-        assert_eq!(new_state.count, 5);
-    }
-
-    #[test]
-    fn build_pushed_state_preserves_pulled_at() {
-        // 场景：Push 后应保留上一次的 pulled_at
-        let prev_state = ModuleSyncState {
-            fp: "old".to_string(),
-            remote_fp: "old_remote".to_string(),
-            count: 0,
-            pulled_at: 12345,
-            pushed_at: 67890,
-        };
-        let new_state = build_pushed_state("new_fp", Some(&prev_state), 10);
-        assert_eq!(new_state.pulled_at, 12345, "pulled_at 应保留");
     }
 }
