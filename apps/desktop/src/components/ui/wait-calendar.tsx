@@ -16,11 +16,14 @@ import { WaitVirtualizedSelect } from "@/components/ui/wait-virtualized-select";
 
 export type WaitCalendarProps = React.ComponentProps<typeof DayPicker>;
 
-// 左右切换按钮的统一样式：绝对定位在 caption 容器内的左右两侧，
-// 垂直居中（top-1/2 -translate-y-1/2），绝不会落到日期网格上。
+// 左右切换按钮的统一样式：随 caption 行流式排布（shrink-0 不被下拉挤压）。
+// 旧实现用 absolute left-1/right-1 定位、中间靠 px-9 让位，其固定内容宽
+// （36+72+4+112+36=260px）超出 w-72 弹层内的可用宽（弹层 p-3 12 + 日历 p-3.5 14
+// = 26px，仅剩 236px）→ 居中溢出后两侧翻月钮压到月/年下拉上（2026-09-17 详情
+// 抽屉截图：左钮压住「9月」、右钮被弹层右边裁切）。改为纯 flex 行后任意容器宽度自适应。
 const navButtonClass = cn(
   buttonVariants({ variant: "outline" }),
-  "size-7 bg-transparent p-0 opacity-70 hover:opacity-100 absolute top-1/2 -translate-y-1/2 z-10"
+  "size-7 shrink-0 bg-transparent p-0 opacity-70 hover:opacity-100"
 );
 
 // 月 / 年选项列表：1900–2100 共 201 个年份，纯静态。提到模块级只构造一次，
@@ -47,11 +50,13 @@ const yearSelectOptions = YEAR_OPTIONS.map((y) => ({
   label: `${y}年`,
 }));
 
-// 自定义 caption：自带 relative 容器，prev/next 按钮作为其子元素绝对定位，
-// 因此定位上下文明确为 caption 本身，不会再与下方日期重叠。
+// 自定义 caption：单行四段流式布局「‹ 月 年 ›」，靠 justify-between 让翻月钮贴两侧、
+// 月/年下拉居中；两端钮 shrink-0，年份下拉 min-w-0 可收缩，故容器窄到 236px 也不溢出。
 // 中间同时提供「月 / 年」下拉选择：月份用 shadcn Select（与影视媒体类型同款），
 // 年份用可复用的虚拟滚动下拉 WaitVirtualizedSelect（同款动画/主题，但只渲染可视区年份）。
-function CaptionWithNav({ calendarMonth, className, ...rest }: any) {
+// 两个下拉收窄左右内边距（px-2）以给年月文本留足空间（sm 档默认 px-3）。
+function CaptionWithNav({ calendarMonth, className, displayIndex: _drop, ...rest }: any) {
+  void _drop; // day-picker 内部 prop（周序号），不落 DOM：透传会触发 React 未知 prop 警告
   const { goToMonth, previousMonth, nextMonth } = useDayPicker();
   const current = calendarMonth.date as Date;
   const year = current.getFullYear();
@@ -62,7 +67,7 @@ function CaptionWithNav({ calendarMonth, className, ...rest }: any) {
 
   return (
     <div
-      className={cn("relative flex items-center justify-center gap-1 pt-1", className)}
+      className={cn("flex items-center justify-between gap-1 pt-1", className)}
       {...rest}
     >
       <button
@@ -70,16 +75,20 @@ function CaptionWithNav({ calendarMonth, className, ...rest }: any) {
         aria-label="上个月"
         disabled={!previousMonth}
         onClick={() => previousMonth && goToMonth(previousMonth)}
-        className={cn(navButtonClass, "left-1")}
+        className={navButtonClass}
       >
         <ChevronLeft className="size-4" />
       </button>
-      <div className="flex items-center gap-1 px-9">
+      <div className="flex min-w-0 items-center gap-1">
         <Select
           value={String(month)}
           onValueChange={(v) => changeMonth(Number(v))}
         >
-          <SelectTrigger size="sm" className="w-[72px]" aria-label="选择月份">
+          <SelectTrigger
+            size="sm"
+            className="w-16 shrink-0 px-2"
+            aria-label="选择月份"
+          >
             <SelectValue />
           </SelectTrigger>
           <SelectContent>{monthItems}</SelectContent>
@@ -89,7 +98,7 @@ function CaptionWithNav({ calendarMonth, className, ...rest }: any) {
           onValueChange={(v) => changeYear(Number(v))}
           options={yearSelectOptions}
           size="sm"
-          className="w-[112px]"
+          className="w-[100px] min-w-0 px-2"
           contentWidth={128}
           viewportHeight={256}
           ariaLabel="选择年份"
@@ -100,7 +109,7 @@ function CaptionWithNav({ calendarMonth, className, ...rest }: any) {
         aria-label="下个月"
         disabled={!nextMonth}
         onClick={() => nextMonth && goToMonth(nextMonth)}
-        className={cn(navButtonClass, "right-1")}
+        className={navButtonClass}
       >
         <ChevronRight className="size-4" />
       </button>
@@ -122,10 +131,15 @@ export function WaitCalendar({
       hideNavigation
       className={cn("p-3.5", className)}
       classNames={{
-        months: "flex flex-col sm:flex-row gap-5",
+        // 单月固定纵排：全仓库调用方均为单月；sm:flex-row 会让 month 变成
+        // 内容撑宽的 flex item（caption 月 72 + 年 112 + px-9 共 260px），
+        // 在 w-72 日期弹层里把日期网格向右顶出边界（左 26px / 右溢出）。
+        // 若将来有多月并排需求，调用方用 classNames.months 覆写即可。
+        months: "flex flex-col gap-5",
         month: "flex flex-col gap-4.5",
-        month_caption: "flex justify-center pt-1 relative items-center w-full",
-        caption_label: "text-[15px] font-medium px-9",
+        // 只留定位/宽度：flex 行与对齐由 CaptionWithNav 自管（避免并存的
+        // justify-center 与 justify-between 靠类名顺序决胜负）
+        month_caption: "relative w-full",
         month_grid: "w-full border-collapse table-fixed",
         weekdays: "w-full",
         weekday:
