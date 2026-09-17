@@ -1039,6 +1039,50 @@ class TodoTemplate {
   });
 }
 
+/// 冲突败方副本（03 文档 §八 遗留项；镜像桌面 SyncConflictEntry）
+///
+/// 纯本地表（不随云同步、不进备份）：多端并发改同一记录时把败方整行快照留档，
+/// 供设置页查看差异并「恢复为败方版本」。payload 为整行字段快照 JSON 字符串。
+class SyncConflict {
+  final int id;
+  final String tableName;
+  final String recordUuid;
+  final String recordTitle;
+
+  /// lww 时间戳裁决 / tie_version 同毫秒按 version 裁决
+  final String decision;
+
+  /// 败方归属：local 本地被覆盖 / remote 远端被丢弃
+  final String loserSide;
+  final String winnerSide;
+  final String loserPayload;
+  final String winnerPayload;
+  final int loserUpdatedAt;
+  final int winnerUpdatedAt;
+
+  /// unresolved 未处理 / restored 已恢复 / dismissed 已忽略
+  final String resolution;
+  final int createdAt;
+  final int resolvedAt;
+
+  const SyncConflict({
+    required this.id,
+    required this.tableName,
+    required this.recordUuid,
+    required this.recordTitle,
+    required this.decision,
+    required this.loserSide,
+    required this.winnerSide,
+    required this.loserPayload,
+    required this.winnerPayload,
+    required this.loserUpdatedAt,
+    required this.winnerUpdatedAt,
+    required this.resolution,
+    required this.createdAt,
+    required this.resolvedAt,
+  });
+}
+
 /// ICS 日历导出结果（#4；FRB ics_export.rs 镜像）
 class IcsExportView {
   final String content;

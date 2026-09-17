@@ -342,6 +342,24 @@ abstract class OrbitBridge {
   /// 删除保存的筛选器（软删）
   Future<void> savedFilterDelete(int id);
 
+  // ── 冲突败方副本（03 文档 §八 遗留项：查看 / 恢复 / 忽略 / 清空）──
+
+  /// 列出冲突记录（[resolution] 为 null 时返回全部；按时间倒序分页）
+  Future<List<SyncConflict>> syncConflictList(
+      String? resolution, int limit, int offset);
+
+  /// 统计冲突记录数（传 'unresolved' 只要待处理）
+  Future<int> syncConflictCount(String? resolution);
+
+  /// 恢复某条冲突的败方内容（发起一次新的本地写入，返回被写回的原行 id）
+  Future<int> syncConflictRestore(int id);
+
+  /// 忽略某条冲突（不改业务数据）
+  Future<void> syncConflictDismiss(int id);
+
+  /// 清空冲突记录（[resolution] 为 null 时清全部），返回删除条数
+  Future<int> syncConflictClear(String? resolution);
+
   // ── 任务模板（竞品矩阵高价值缺口：Vikunja Templates 同款）──
 
   /// 列出全部任务模板

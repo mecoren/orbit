@@ -948,3 +948,47 @@ pub struct TodoTemplateUpdateInput {
     pub payload: Option<String>,
     pub sort_order: Option<i64>,
 }
+
+// ---------- sync_conflicts（冲突败方副本，03 文档 §八 遗留项）----------
+/// 冲突败方副本（纯本地表，不随云同步；两个 payload 为整行字段快照 JSON 字符串）
+#[derive(Debug, Clone, Serialize)]
+pub struct SyncConflict {
+    pub id: i64,
+    pub table_name: String,
+    pub record_uuid: String,
+    pub record_title: String,
+    /// lww 时间戳裁决 / tie_version 同毫秒按 version 裁决
+    pub decision: String,
+    /// 败方归属：local 本地被覆盖 / remote 远端被丢弃
+    pub loser_side: String,
+    pub winner_side: String,
+    pub loser_payload: String,
+    pub winner_payload: String,
+    pub loser_updated_at: i64,
+    pub winner_updated_at: i64,
+    /// unresolved 未处理 / restored 已恢复 / dismissed 已忽略
+    pub resolution: String,
+    pub created_at: i64,
+    pub resolved_at: i64,
+}
+
+impl From<orbit_core::api::sync_conflict_api::SyncConflict> for SyncConflict {
+    fn from(c: orbit_core::api::sync_conflict_api::SyncConflict) -> Self {
+        Self {
+            id: c.id,
+            table_name: c.table_name,
+            record_uuid: c.record_uuid,
+            record_title: c.record_title,
+            decision: c.decision,
+            loser_side: c.loser_side,
+            winner_side: c.winner_side,
+            loser_payload: c.loser_payload,
+            winner_payload: c.winner_payload,
+            loser_updated_at: c.loser_updated_at,
+            winner_updated_at: c.winner_updated_at,
+            resolution: c.resolution,
+            created_at: c.created_at,
+            resolved_at: c.resolved_at,
+        }
+    }
+}

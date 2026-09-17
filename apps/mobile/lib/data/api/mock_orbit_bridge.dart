@@ -862,6 +862,83 @@ class MockOrbitBridge implements OrbitBridge {
     });
   }
 
+  // ── 冲突败方副本（03 §八；与桌面 ipc-mock 同构语义）──
+
+  @override
+  Future<List<SyncConflict>> syncConflictList(
+      String? resolution, int limit, int offset) {
+    return _delay(() {
+      final rows = store.conflicts
+          .where((c) => resolution == null || c['resolution'] == resolution)
+          .toList()
+        ..sort((a, b) =>
+            (b['created_at'] as int).compareTo(a['created_at'] as int));
+      return rows
+          .skip(offset)
+          .take(limit)
+          .map(_toSyncConflict)
+          .toList();
+    });
+  }
+
+  @override
+  Future<int> syncConflictCount(String? resolution) {
+    return _delay(() => store.conflicts
+        .where((c) => resolution == null || c['resolution'] == resolution)
+        .length);
+  }
+
+  @override
+  Future<int> syncConflictRestore(int id) {
+    return _delay(() {
+      final row = store.conflicts.firstWhere((c) => c['id'] == id,
+          orElse: () => throw Exception('冲突记录 $id 不存在'));
+      row['resolution'] = 'restored';
+      row['resolved_at'] = store.now();
+      return row['id'] as int;
+    });
+  }
+
+  @override
+  Future<void> syncConflictDismiss(int id) {
+    return _delay(() {
+      final row = store.conflicts.firstWhere((c) => c['id'] == id,
+          orElse: () => throw Exception('冲突记录 $id 不存在'));
+      row['resolution'] = 'dismissed';
+      row['resolved_at'] = store.now();
+    });
+  }
+
+  @override
+  Future<int> syncConflictClear(String? resolution) {
+    return _delay(() {
+      final before = store.conflicts.length;
+      if (resolution == null) {
+        store.conflicts.clear();
+      } else {
+        store.conflicts.removeWhere((c) => c['resolution'] == resolution);
+      }
+      return before - store.conflicts.length;
+    });
+  }
+
+  SyncConflict _toSyncConflict(Map<String, dynamic> c) => SyncConflict(
+        id: c['id'] as int,
+        tableName: c['table_name'] as String,
+        recordUuid: c['record_uuid'] as String,
+        recordTitle: c['record_title'] as String,
+        decision: c['decision'] as String,
+        loserSide: c['loser_side'] as String,
+        winnerSide: c['winner_side'] as String,
+        loserPayload: c['loser_payload'] as String,
+        winnerPayload: c['winner_payload'] as String,
+        loserUpdatedAt: c['loser_updated_at'] as int,
+        winnerUpdatedAt: c['winner_updated_at'] as int,
+        resolution: c['resolution'] as String,
+        createdAt: c['created_at'] as int,
+        resolvedAt: c['resolved_at'] as int,
+      );
+
   // ── 任务模板（与 Rust template_api 同构最小语义）──
 
   static const _templatePayloadKeys = [

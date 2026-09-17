@@ -84,6 +84,10 @@ void main() {
     expect(switchFinder, findsOneWidget);
 
     // 开关当前关（value=false）→ 点开 → 弹密码确认
+    // （同步卡新增「冲突记录」入口行后开关落到首屏之下：先上滚再点；
+    //  不用 ensureVisible——贴顶会被 LiquidGlassTitleBar 浮层遮住点不中）
+    await tester.drag(find.byType(ListView).first, const Offset(0, -140));
+    await tester.pumpAndSettle();
     await tester.tap(switchFinder);
     await tester.pumpAndSettle();
     expect(find.text('开启指纹解锁'), findsOneWidget);
@@ -122,6 +126,9 @@ void main() {
     final switchFinder = find.byType(Switch);
     expect(tester.widget<Switch>(switchFinder).value, true);
 
+    // 同「打开开关」：先上滚再点（同步卡新增入口行后首屏放不下）
+    await tester.drag(find.byType(ListView).first, const Offset(0, -140));
+    await tester.pumpAndSettle();
     await tester.tap(switchFinder);
     await tester.pumpAndSettle();
     expect(find.text('关闭指纹解锁'), findsOneWidget);

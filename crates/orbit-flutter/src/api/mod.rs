@@ -19,6 +19,7 @@
 //! - [template]：任务模板（多字段任务骨架可复用，竞品矩阵高价值缺口）
 //! - [widget]：Android 桌面小组件数据口（快照查询 + 勾选落库，#3）
 //! - [ics_export]：ICS 日历导出（VTODO 日历，#4）
+//! - [sync_conflict]：冲突败方副本（查看 / 恢复 / 忽略 / 清空，03 文档 §八）
 //! - [events]：下行事件流 + 提醒轮询守护
 
 pub mod asset;
@@ -36,6 +37,7 @@ pub mod search;
 pub mod state;
 pub mod stats;
 pub mod sync;
+pub mod sync_conflict;
 pub mod template;
 pub mod todo;
 pub mod trash;

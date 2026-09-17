@@ -16,6 +16,8 @@ class MockStore {
   final attachments = <int, Map<String, dynamic>>{}; // linkId -> 附件关联行
   final savedFilters = <TodoSavedFilter>[]; // #35 保存的筛选器
   final templates = <TodoTemplate>[]; // 任务模板（竞品矩阵高价值缺口）
+  // 冲突败方副本（03 §八）：JSON Map 形状 = Rust serde 产物，处置状态就地改写
+  final conflicts = <Map<String, dynamic>>[];
 
   var nextId = 1;
   bool masterAuthSet = false;
@@ -219,5 +221,41 @@ class MockStore {
       'version': 1,
     };
     reminders[r['id'] as int] = r;
+
+    // 冲突败方副本造态（03 §八）：两条覆盖「本地被覆盖 / 远端被丢弃」两条主路径
+    conflicts.addAll([
+      {
+        ...newEntity('cf'),
+        'table_name': 'todo_tasks',
+        'record_uuid': t1['uuid'],
+        'record_title': t1['title'],
+        'decision': 'lww',
+        'loser_side': 'local',
+        'winner_side': 'remote',
+        'loser_payload': jsonEncode({'title': t1['title'], 'priority': 1}),
+        'winner_payload': jsonEncode({'title': t1['title'], 'priority': 3}),
+        'loser_updated_at': now() - 5400000,
+        'winner_updated_at': now() - 3600000,
+        'resolution': 'unresolved',
+        'created_at': now() - 3500000,
+        'resolved_at': 0,
+      },
+      {
+        ...newEntity('cf'),
+        'table_name': 'todo_projects',
+        'record_uuid': work['uuid'],
+        'record_title': work['title'],
+        'decision': 'tie_version',
+        'loser_side': 'remote',
+        'winner_side': 'local',
+        'loser_payload': jsonEncode({'title': work['title'], 'hex_color': '#EF4444'}),
+        'winner_payload': jsonEncode({'title': work['title'], 'hex_color': '#4E8CFF'}),
+        'loser_updated_at': now() - 90000000,
+        'winner_updated_at': now() - 90000000,
+        'resolution': 'unresolved',
+        'created_at': now() - 89000000,
+        'resolved_at': 0,
+      },
+    ]);
   }
 }

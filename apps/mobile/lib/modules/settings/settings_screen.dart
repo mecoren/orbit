@@ -77,10 +77,27 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   /// 执行结果统计（null = 未执行）
   CsvImportStats? _importResult;
 
+  /// 待处理冲突数（03 §八 冲突败方副本；缓存 future 防 build 抖动）
+  Future<int> _conflictPending = Future<int>.value(0);
+
   @override
   void initState() {
     super.initState();
     _loadBioState();
+    _conflictPending = _fetchConflictPending();
+  }
+
+  /// 待处理冲突数查询（桥不可用时静默回落 0，不阻断设置页渲染）
+  Future<int> _fetchConflictPending() => ref
+      .read(orbitBridgeProvider)
+      .syncConflictCount('unresolved')
+      .catchError((Object _) => 0);
+
+  /// 刷新待处理冲突数（从冲突记录页返回时调用）
+  void _refreshConflictPending() {
+    setState(() {
+      _conflictPending = _fetchConflictPending();
+    });
   }
 
   @override
@@ -524,6 +541,62 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                   fontWeight: FontWeight.w500,
                                   color: OrbitAccents.themeAccent,
                                 ),
+                              ),
+                              const Spacer(),
+                              Icon(
+                                Icons.chevron_right_rounded,
+                                size: AppDimens.iconSizeMd,
+                                color: colors.secondaryText,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: AppDimens.space4),
+                      // 冲突记录入口（03 §八）：待处理数 > 0 时显示角标
+                      InkWell(
+                        borderRadius: AppShapes.medium,
+                        onTap: () async {
+                          await context.push('/settings/conflicts');
+                          _refreshConflictPending();
+                        },
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                              vertical: AppDimens.space8),
+                          child: Row(
+                            children: [
+                              Text(
+                                '冲突记录',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w500,
+                                  color: OrbitAccents.themeAccent,
+                                ),
+                              ),
+                              const SizedBox(width: AppDimens.space8),
+                              FutureBuilder<int>(
+                                future: _conflictPending,
+                                builder: (context, snap) {
+                                  final n = snap.data ?? 0;
+                                  if (n <= 0) return const SizedBox.shrink();
+                                  return Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: AppDimens.space6,
+                                        vertical: 1),
+                                    decoration: BoxDecoration(
+                                      color: colors.warning
+                                          .withValues(alpha: 0.18),
+                                      borderRadius: AppShapes.small,
+                                    ),
+                                    child: Text(
+                                      '待处理 $n',
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        color: colors.warning,
+                                      ),
+                                    ),
+                                  );
+                                },
                               ),
                               const Spacer(),
                               Icon(

@@ -6,7 +6,7 @@
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`
 
 /// 统一完成命令结果（镜像 orbit_core::api::todo_api::CompleteTaskResult；
 /// 引擎下沉三端唯一完成入口：普通标记 / 重复任务单事务推进下一实例）
@@ -249,6 +249,84 @@ class ListFilter {
           projectId == other.projectId &&
           favoriteOnly == other.favoriteOnly &&
           myDayToday == other.myDayToday;
+}
+
+/// 冲突败方副本（纯本地表，不随云同步；两个 payload 为整行字段快照 JSON 字符串）
+class SyncConflict {
+  final PlatformInt64 id;
+  final String tableName;
+  final String recordUuid;
+  final String recordTitle;
+
+  /// lww 时间戳裁决 / tie_version 同毫秒按 version 裁决
+  final String decision;
+
+  /// 败方归属：local 本地被覆盖 / remote 远端被丢弃
+  final String loserSide;
+  final String winnerSide;
+  final String loserPayload;
+  final String winnerPayload;
+  final PlatformInt64 loserUpdatedAt;
+  final PlatformInt64 winnerUpdatedAt;
+
+  /// unresolved 未处理 / restored 已恢复 / dismissed 已忽略
+  final String resolution;
+  final PlatformInt64 createdAt;
+  final PlatformInt64 resolvedAt;
+
+  const SyncConflict({
+    required this.id,
+    required this.tableName,
+    required this.recordUuid,
+    required this.recordTitle,
+    required this.decision,
+    required this.loserSide,
+    required this.winnerSide,
+    required this.loserPayload,
+    required this.winnerPayload,
+    required this.loserUpdatedAt,
+    required this.winnerUpdatedAt,
+    required this.resolution,
+    required this.createdAt,
+    required this.resolvedAt,
+  });
+
+  @override
+  int get hashCode =>
+      id.hashCode ^
+      tableName.hashCode ^
+      recordUuid.hashCode ^
+      recordTitle.hashCode ^
+      decision.hashCode ^
+      loserSide.hashCode ^
+      winnerSide.hashCode ^
+      loserPayload.hashCode ^
+      winnerPayload.hashCode ^
+      loserUpdatedAt.hashCode ^
+      winnerUpdatedAt.hashCode ^
+      resolution.hashCode ^
+      createdAt.hashCode ^
+      resolvedAt.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is SyncConflict &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          tableName == other.tableName &&
+          recordUuid == other.recordUuid &&
+          recordTitle == other.recordTitle &&
+          decision == other.decision &&
+          loserSide == other.loserSide &&
+          winnerSide == other.winnerSide &&
+          loserPayload == other.loserPayload &&
+          winnerPayload == other.winnerPayload &&
+          loserUpdatedAt == other.loserUpdatedAt &&
+          winnerUpdatedAt == other.winnerUpdatedAt &&
+          resolution == other.resolution &&
+          createdAt == other.createdAt &&
+          resolvedAt == other.resolvedAt;
 }
 
 class TaskAttachmentView {

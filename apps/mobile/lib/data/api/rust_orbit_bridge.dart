@@ -7,6 +7,7 @@ import '../../src/rust/api/dto.dart' as gen;
 import '../../src/rust/api/csv_import.dart' as gen_import;
 import '../../src/rust/api/asset.dart' as gen_asset;
 import '../../src/rust/api/saved_filter.dart' as gen_sf;
+import '../../src/rust/api/sync_conflict.dart' as gen_sc;
 import '../../src/rust/api/template.dart' as gen_tpl;
 import '../../src/rust/api/widget.dart' as gen_widget;
 import '../../src/rust/api/ics_export.dart' as gen_ics;
@@ -616,6 +617,53 @@ class RustOrbitBridge implements OrbitBridge {
   @override
   Future<void> savedFilterDelete(int id) =>
       gen_sf.savedFilterDelete(id: id);
+
+  // ── 冲突败方副本（03 文档 §八 遗留项）──
+
+  @override
+  Future<List<SyncConflict>> syncConflictList(
+      String? resolution, int limit, int offset) async {
+    final rows = await gen_sc.syncConflictList(
+      resolution: resolution,
+      limit: limit,
+      offset: offset,
+    );
+    return rows.map(_toSyncConflict).toList();
+  }
+
+  @override
+  Future<int> syncConflictCount(String? resolution) async =>
+      (await gen_sc.syncConflictCount(resolution: resolution)).toInt();
+
+  @override
+  Future<int> syncConflictRestore(int id) async =>
+      (await gen_sc.syncConflictRestore(id: id)).toInt();
+
+  @override
+  Future<void> syncConflictDismiss(int id) =>
+      gen_sc.syncConflictDismiss(id: id);
+
+  @override
+  Future<int> syncConflictClear(String? resolution) async =>
+      (await gen_sc.syncConflictClear(resolution: resolution)).toInt();
+
+  /// FRB 生成类型 → 领域 DTO（PlatformInt64 逐个 toInt，见平台约定）
+  SyncConflict _toSyncConflict(gen.SyncConflict c) => SyncConflict(
+        id: c.id.toInt(),
+        tableName: c.tableName,
+        recordUuid: c.recordUuid,
+        recordTitle: c.recordTitle,
+        decision: c.decision,
+        loserSide: c.loserSide,
+        winnerSide: c.winnerSide,
+        loserPayload: c.loserPayload,
+        winnerPayload: c.winnerPayload,
+        loserUpdatedAt: c.loserUpdatedAt.toInt(),
+        winnerUpdatedAt: c.winnerUpdatedAt.toInt(),
+        resolution: c.resolution,
+        createdAt: c.createdAt.toInt(),
+        resolvedAt: c.resolvedAt.toInt(),
+      );
 
   // ── 任务模板（竞品矩阵高价值缺口）──
 

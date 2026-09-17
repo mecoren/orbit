@@ -18,6 +18,7 @@ import 'api/search.dart';
 import 'api/state.dart';
 import 'api/stats.dart';
 import 'api/sync.dart';
+import 'api/sync_conflict.dart';
 import 'api/template.dart';
 import 'api/todo.dart';
 import 'api/trash.dart';
@@ -227,6 +228,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<StatsWeekdayRow> dco_decode_list_stats_weekday_row(dynamic raw);
 
   @protected
+  List<SyncConflict> dco_decode_list_sync_conflict(dynamic raw);
+
+  @protected
   List<TableCount> dco_decode_list_table_count(dynamic raw);
 
   @protected
@@ -327,6 +331,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   SyncConfigView dco_decode_sync_config_view(dynamic raw);
+
+  @protected
+  SyncConflict dco_decode_sync_conflict(dynamic raw);
 
   @protected
   SyncCryptoStatus dco_decode_sync_crypto_status(dynamic raw);
@@ -666,6 +673,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  List<SyncConflict> sse_decode_list_sync_conflict(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   List<TableCount> sse_decode_list_table_count(SseDeserializer deserializer);
 
   @protected
@@ -786,6 +798,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   SyncConfigView sse_decode_sync_config_view(SseDeserializer deserializer);
+
+  @protected
+  SyncConflict sse_decode_sync_conflict(SseDeserializer deserializer);
 
   @protected
   SyncCryptoStatus sse_decode_sync_crypto_status(SseDeserializer deserializer);
@@ -1198,6 +1213,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_list_sync_conflict(
+    List<SyncConflict> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_list_table_count(
     List<TableCount> self,
     SseSerializer serializer,
@@ -1373,6 +1394,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
     SyncConfigView self,
     SseSerializer serializer,
   );
+
+  @protected
+  void sse_encode_sync_conflict(SyncConflict self, SseSerializer serializer);
 
   @protected
   void sse_encode_sync_crypto_status(
