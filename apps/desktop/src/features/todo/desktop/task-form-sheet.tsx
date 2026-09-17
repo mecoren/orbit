@@ -238,7 +238,7 @@ function TagsField({
                     type="checkbox"
                     checked={selectedIds.has(l.id)}
                     onChange={() => toggleExisting(l)}
-                    className="accent-primary"
+                    className="size-4 shrink-0 accent-primary"
                   />
                   <span
                     className="size-2.5 rounded-sm"

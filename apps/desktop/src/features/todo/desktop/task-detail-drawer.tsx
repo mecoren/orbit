@@ -1405,7 +1405,7 @@ function LabelsSection({
                     type="checkbox"
                     checked={mountedIds.has(l.id)}
                     onChange={() => void toggleMount(l.id)}
-                    className="accent-primary"
+                    className="size-4 shrink-0 accent-primary"
                   />
                   <span className="size-2.5 rounded-sm" style={{ background: l.hex_color }} />
                   <span className="truncate">{l.title}</span>
