@@ -78,7 +78,7 @@ pub async fn create_template(
         return Err(CoreError::Other("模板名称不能为空".into()));
     }
     validate_payload(&input.payload)?;
-    let now = chrono::Utc::now().timestamp_millis();
+    let now = crate::db::clock::next_ms();
     let uuid = uuid::Uuid::new_v4().to_string();
     let sort = input.sort_order.unwrap_or(now);
     let row: TodoTemplate = sqlx::query_as(
@@ -111,7 +111,7 @@ pub async fn update_template(
     if let Some(p) = &input.payload {
         validate_payload(p)?;
     }
-    let now = chrono::Utc::now().timestamp_millis();
+    let now = crate::db::clock::next_ms();
     let mut sets: Vec<String> = vec!["updated_at = ?".into(), "version = version + 1".into()];
     if input.name.is_some() {
         sets.push("name = ?".into());
@@ -147,7 +147,7 @@ pub async fn update_template(
 
 /// 删除模板（软删，随同步白名单走墓碑）
 pub async fn delete_template(pool: &SqlitePool, id: i64) -> CoreResult<()> {
-    let now = chrono::Utc::now().timestamp_millis();
+    let now = crate::db::clock::next_ms();
     let row: Option<(i64, String)> =
         sqlx::query_as("SELECT id, uuid FROM todo_templates WHERE id = ? AND is_deleted = 0")
             .bind(id)

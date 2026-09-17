@@ -184,7 +184,7 @@ pub async fn bulk_import_records_from_values(
     // 6. 开启事务（1 次 commit 替代逐条隐式事务，性能提升 10-100x）
     //    SQLite 默认 ON CONFLICT ABORT：单条 INSERT 失败仅回滚该语句，事务继续
     let mut tx = pool.begin().await?;
-    let now = chrono::Utc::now().timestamp_millis();
+    let now = crate::db::clock::next_ms();
 
     let mut success: u64 = 0;
     let mut skip: u64 = 0;

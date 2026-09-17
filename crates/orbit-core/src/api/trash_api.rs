@@ -185,7 +185,7 @@ pub async fn restore_todo_task(pool: &SqlitePool, id: i64) -> CoreResult<TodoTas
         t.project_id
     };
 
-    let now = chrono::Utc::now().timestamp_millis();
+    let now = crate::db::clock::next_ms();
     let restored: TodoTask = sqlx::query_as(
         "UPDATE todo_tasks \
          SET is_deleted = 0, deleted_at = NULL, project_id = ?, \

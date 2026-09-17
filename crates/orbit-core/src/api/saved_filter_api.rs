@@ -76,7 +76,7 @@ pub async fn create_saved_filter(
         return Err(CoreError::Other("筛选器名称不能为空".into()));
     }
     validate_conditions(&input.conditions)?;
-    let now = chrono::Utc::now().timestamp_millis();
+    let now = crate::db::clock::next_ms();
     let uuid = uuid::Uuid::new_v4().to_string();
     let sort = input.sort_order.unwrap_or(now);
     let row: TodoSavedFilter = sqlx::query_as(
@@ -109,7 +109,7 @@ pub async fn update_saved_filter(
     if let Some(c) = &input.conditions {
         validate_conditions(c)?;
     }
-    let now = chrono::Utc::now().timestamp_millis();
+    let now = crate::db::clock::next_ms();
     let mut sets: Vec<String> = vec!["updated_at = ?".into(), "version = version + 1".into()];
     if input.name.is_some() {
         sets.push("name = ?".into());
@@ -145,7 +145,7 @@ pub async fn update_saved_filter(
 
 /// 删除保存的筛选器（软删，随同步白名单走墓碑）
 pub async fn delete_saved_filter(pool: &SqlitePool, id: i64) -> CoreResult<()> {
-    let now = chrono::Utc::now().timestamp_millis();
+    let now = crate::db::clock::next_ms();
     let row: Option<(i64, String)> =
         sqlx::query_as("SELECT id, uuid FROM todo_saved_filters WHERE id = ? AND is_deleted = 0")
             .bind(id)

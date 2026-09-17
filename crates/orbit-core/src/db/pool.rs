@@ -60,6 +60,9 @@ pub async fn init_pool(db_path: &Path, db_key: Option<&str>) -> CoreResult<Sqlit
     // 运行迁移（嵌入 src/db/migrations/ 目录的 .sql 文件）
     sqlx::migrate!("./src/db/migrations").run(&pool).await?;
 
+    // 恢复逻辑时钟（慢表重启后不得让时间戳回落到墙上时钟，见 db/clock.rs）
+    crate::db::clock::load(&pool).await?;
+
     Ok(pool)
 }
 

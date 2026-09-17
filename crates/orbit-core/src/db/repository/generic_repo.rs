@@ -492,7 +492,7 @@ pub async fn soft_delete_by_id(
     id: i64,
     record_uuid: &str,
 ) -> CoreResult<()> {
-    let now = chrono::Utc::now().timestamp_millis();
+    let now = crate::db::clock::next_ms();
     let device_id = current_device_id();
 
     let sql = format!(
@@ -523,7 +523,7 @@ pub async fn create_todo_project(
     pool: &SqlitePool,
     input: &TodoProjectCreateInput,
 ) -> CoreResult<TodoProject> {
-    let now = chrono::Utc::now().timestamp_millis();
+    let now = crate::db::clock::next_ms();
     let uuid = uuid::Uuid::new_v4().to_string();
 
     let row = sqlx::query_as::<_, TodoProject>(
@@ -549,7 +549,7 @@ pub async fn update_todo_project(
     id: i64,
     input: &TodoProjectUpdateInput,
 ) -> CoreResult<TodoProject> {
-    let now = chrono::Utc::now().timestamp_millis();
+    let now = crate::db::clock::next_ms();
     let mut sets: Vec<String> = vec!["updated_at = ?".into(), "version = version + 1".into()];
     if input.title.is_some() {
         sets.push("title = ?".into());
@@ -604,7 +604,7 @@ pub async fn create_todo_task(
     pool: &SqlitePool,
     input: &TodoTaskCreateInput,
 ) -> CoreResult<TodoTask> {
-    let now = chrono::Utc::now().timestamp_millis();
+    let now = crate::db::clock::next_ms();
     let uuid = uuid::Uuid::new_v4().to_string();
 
     let row = sqlx::query_as::<_, TodoTask>(
@@ -651,7 +651,7 @@ pub async fn update_todo_task(
     id: i64,
     input: &TodoTaskUpdateInput,
 ) -> CoreResult<TodoTask> {
-    let now = chrono::Utc::now().timestamp_millis();
+    let now = crate::db::clock::next_ms();
     let mut sets: Vec<String> = vec!["updated_at = ?".into(), "version = version + 1".into()];
     if input.title.is_some() {
         sets.push("title = ?".into());
@@ -789,7 +789,7 @@ pub async fn create_todo_subtask(
     pool: &SqlitePool,
     input: &TodoSubtaskCreateInput,
 ) -> CoreResult<TodoSubtask> {
-    let now = chrono::Utc::now().timestamp_millis();
+    let now = crate::db::clock::next_ms();
     let uuid = uuid::Uuid::new_v4().to_string();
     let row = sqlx::query_as::<_, TodoSubtask>(
         "INSERT INTO todo_subtasks (uuid, task_id, title, done, done_at, position, is_deleted, created_at, updated_at, version)
@@ -807,7 +807,7 @@ pub async fn update_todo_subtask(
     id: i64,
     input: &TodoSubtaskUpdateInput,
 ) -> CoreResult<TodoSubtask> {
-    let now = chrono::Utc::now().timestamp_millis();
+    let now = crate::db::clock::next_ms();
     let mut sets: Vec<String> = vec!["updated_at = ?".into(), "version = version + 1".into()];
     if input.title.is_some() {
         sets.push("title = ?".into());
@@ -853,7 +853,7 @@ pub async fn create_todo_label(
     pool: &SqlitePool,
     input: &TodoLabelCreateInput,
 ) -> CoreResult<TodoLabel> {
-    let now = chrono::Utc::now().timestamp_millis();
+    let now = crate::db::clock::next_ms();
     let uuid = uuid::Uuid::new_v4().to_string();
     let row = sqlx::query_as::<_, TodoLabel>(
         "INSERT INTO todo_labels (uuid, title, hex_color, is_deleted, created_at, updated_at, version)
@@ -871,7 +871,7 @@ pub async fn update_todo_label(
     id: i64,
     input: &TodoLabelUpdateInput,
 ) -> CoreResult<TodoLabel> {
-    let now = chrono::Utc::now().timestamp_millis();
+    let now = crate::db::clock::next_ms();
     let mut sets: Vec<String> = vec!["updated_at = ?".into(), "version = version + 1".into()];
     if input.title.is_some() {
         sets.push("title = ?".into());
@@ -905,7 +905,7 @@ pub async fn create_todo_task_label(
     pool: &SqlitePool,
     input: &TodoTaskLabelCreateInput,
 ) -> CoreResult<TodoTaskLabel> {
-    let now = chrono::Utc::now().timestamp_millis();
+    let now = crate::db::clock::next_ms();
     let uuid = uuid::Uuid::new_v4().to_string();
     let row = sqlx::query_as::<_, TodoTaskLabel>(
         "INSERT INTO todo_task_labels (uuid, task_id, label_id, is_deleted, created_at, updated_at, version)
@@ -923,7 +923,7 @@ pub async fn create_todo_comment(
     pool: &SqlitePool,
     input: &TodoCommentCreateInput,
 ) -> CoreResult<TodoComment> {
-    let now = chrono::Utc::now().timestamp_millis();
+    let now = crate::db::clock::next_ms();
     let uuid = uuid::Uuid::new_v4().to_string();
     let row = sqlx::query_as::<_, TodoComment>(
         "INSERT INTO todo_comments (uuid, task_id, content, is_deleted, created_at, updated_at, version)
@@ -941,7 +941,7 @@ pub async fn create_todo_task_relation(
     pool: &SqlitePool,
     input: &TodoTaskRelationCreateInput,
 ) -> CoreResult<TodoTaskRelation> {
-    let now = chrono::Utc::now().timestamp_millis();
+    let now = crate::db::clock::next_ms();
     let uuid = uuid::Uuid::new_v4().to_string();
     let row = sqlx::query_as::<_, TodoTaskRelation>(
         "INSERT INTO todo_task_relations (uuid, task_id, other_task_id, relation_type, is_deleted, created_at, updated_at, version)
@@ -959,7 +959,7 @@ pub async fn create_todo_reminder(
     pool: &SqlitePool,
     input: &TodoReminderCreateInput,
 ) -> CoreResult<TodoReminder> {
-    let now = chrono::Utc::now().timestamp_millis();
+    let now = crate::db::clock::next_ms();
     let uuid = uuid::Uuid::new_v4().to_string();
     let row = sqlx::query_as::<_, TodoReminder>(
         "INSERT INTO todo_reminders (uuid, task_id, remind_at, is_deleted, created_at, updated_at, version)
@@ -1039,7 +1039,7 @@ pub async fn create_record_by_json<T>(
 where
     T: for<'r> sqlx::FromRow<'r, sqlx::sqlite::SqliteRow> + Send + Unpin + serde::Serialize,
 {
-    let now = chrono::Utc::now().timestamp_millis();
+    let now = crate::db::clock::next_ms();
     let new_uuid = uuid::Uuid::new_v4().to_string();
 
     let mut q: sqlx::QueryBuilder<'_, sqlx::Sqlite> = sqlx::QueryBuilder::new("INSERT INTO ");
@@ -1084,7 +1084,7 @@ pub async fn create_record_by_json_void(
     table: &str,
     fields: &serde_json::Map<String, serde_json::Value>,
 ) -> CoreResult<()> {
-    let now = chrono::Utc::now().timestamp_millis();
+    let now = crate::db::clock::next_ms();
     let new_uuid = uuid::Uuid::new_v4().to_string();
 
     let mut q: sqlx::QueryBuilder<'_, sqlx::Sqlite> = sqlx::QueryBuilder::new("INSERT INTO ");
@@ -1131,7 +1131,7 @@ pub async fn update_record_by_json<T>(
 where
     T: for<'r> sqlx::FromRow<'r, sqlx::sqlite::SqliteRow> + Send + Unpin + serde::Serialize,
 {
-    let now = chrono::Utc::now().timestamp_millis();
+    let now = crate::db::clock::next_ms();
 
     let mut q: sqlx::QueryBuilder<'_, sqlx::Sqlite> = sqlx::QueryBuilder::new("UPDATE ");
     q.push(table);
@@ -1172,7 +1172,7 @@ pub async fn update_record_by_json_void(
     id: i64,
     fields: &serde_json::Map<String, serde_json::Value>,
 ) -> CoreResult<()> {
-    let now = chrono::Utc::now().timestamp_millis();
+    let now = crate::db::clock::next_ms();
 
     let mut q: sqlx::QueryBuilder<'_, sqlx::Sqlite> = sqlx::QueryBuilder::new("UPDATE ");
     q.push(table);
@@ -1227,7 +1227,7 @@ pub async fn create_record_by_json_b<T>(
 where
     T: for<'r> sqlx::FromRow<'r, sqlx::sqlite::SqliteRow> + Send + Unpin,
 {
-    let now = chrono::Utc::now().timestamp_millis();
+    let now = crate::db::clock::next_ms();
     let new_uuid = if include_uuid {
         Some(uuid::Uuid::new_v4().to_string())
     } else {
@@ -1282,7 +1282,7 @@ pub async fn update_record_by_json_b<T>(
 where
     T: for<'r> sqlx::FromRow<'r, sqlx::sqlite::SqliteRow> + Send + Unpin,
 {
-    let now = chrono::Utc::now().timestamp_millis();
+    let now = crate::db::clock::next_ms();
     let mut q: sqlx::QueryBuilder<'_, sqlx::Sqlite> = sqlx::QueryBuilder::new("UPDATE ");
     q.push(table);
     q.push(" SET updated_at = ");

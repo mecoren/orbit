@@ -88,7 +88,7 @@ pub async fn add_task_attachment(
     }
 
     let hash = crate::crypto::sha256::sha256_hex(data);
-    let now = chrono::Utc::now().timestamp_millis();
+    let now = crate::db::clock::next_ms();
 
     // 1. 原子落盘（已存在同 hash 内容寻址文件则跳过——幂等）
     std::fs::create_dir_all(attachments_dir)
@@ -243,7 +243,7 @@ pub async fn read_task_attachment(
 /// 交给 push/pull 的自然 diff。本地 GC（无引用的 hash 清文件+账本）由
 /// `gc_local_attachments` 在合适的时机（如同步完成后/启动时）调用。
 pub async fn remove_task_attachment(pool: &SqlitePool, link_id: i64) -> CoreResult<()> {
-    let now = chrono::Utc::now().timestamp_millis();
+    let now = crate::db::clock::next_ms();
     let link: Option<(i64, String)> = sqlx::query_as(
         "SELECT id, uuid FROM todo_task_attachments WHERE id = ? AND is_deleted = 0",
     )

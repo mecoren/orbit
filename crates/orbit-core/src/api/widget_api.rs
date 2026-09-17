@@ -90,7 +90,7 @@ pub async fn widget_todo_toggle(pool: &SqlitePool, id: i64, done: i32) -> CoreRe
     if task.repeat_mode != 0 {
         return Ok(());
     }
-    let now = chrono::Utc::now().timestamp_millis();
+    let now = crate::db::clock::next_ms();
     sqlx::query(
         "UPDATE todo_tasks SET done = 0, done_at = NULL, status = 'pending', updated_at = ?, version = version + 1
          WHERE id = ?",
@@ -126,7 +126,7 @@ mod tests {
 
     /// 直插一条任务（绕过 create 输入面，精准控制 due/priority；due=None 存 NULL）
     async fn seed(pool: &SqlitePool, title: &str, due: Option<i64>, priority: i32) -> i64 {
-        let now = chrono::Utc::now().timestamp_millis();
+        let now = crate::db::clock::next_ms();
         let row: TodoTask = sqlx::query_as(
             "INSERT INTO todo_tasks (uuid, title, priority, status, done, due_date, repeat_mode, is_deleted, created_at, updated_at, version)
              VALUES (?, ?, ?, 'pending', 0, ?, 0, 0, ?, ?, 1) RETURNING *",

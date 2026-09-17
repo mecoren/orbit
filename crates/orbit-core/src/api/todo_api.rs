@@ -104,7 +104,7 @@ pub async fn toggle_todo_subtask_done(
     subtask_id: i64,
     done: bool,
 ) -> CoreResult<()> {
-    let now = chrono::Utc::now().timestamp_millis();
+    let now = crate::db::clock::next_ms();
     let done_val: i32 = if done { 1 } else { 0 };
     let done_at: Option<i64> = if done { Some(now) } else { None };
 
@@ -143,7 +143,7 @@ pub async fn promote_todo_subtask(pool: &SqlitePool, subtask_id: i64) -> CoreRes
         )));
     }
     let parent: TodoTask = generic_repo::get_by_id(pool, "todo_tasks", sub.task_id).await?;
-    let now = chrono::Utc::now().timestamp_millis();
+    let now = crate::db::clock::next_ms();
 
     let mut tx = pool.begin().await?;
     // 1. 软删子任务行
@@ -240,7 +240,7 @@ pub async fn promote_todo_subtask(pool: &SqlitePool, subtask_id: i64) -> CoreRes
 
 /// 重算任务进度（已完成子任务数 / 总子任务数 * 100）
 pub async fn recalc_task_percent_done(pool: &SqlitePool, task_id: i64) -> CoreResult<()> {
-    let now = chrono::Utc::now().timestamp_millis();
+    let now = crate::db::clock::next_ms();
     let total: i64 = sqlx::query_scalar(
         "SELECT COUNT(*) FROM todo_subtasks WHERE task_id = ? AND is_deleted = 0",
     )
@@ -274,7 +274,7 @@ pub async fn update_todo_task_position(
     id: i64,
     position: f64,
 ) -> CoreResult<()> {
-    let now = chrono::Utc::now().timestamp_millis();
+    let now = crate::db::clock::next_ms();
     sqlx::query(
         "UPDATE todo_tasks SET position = ?, updated_at = ?, version = version + 1 WHERE id = ?",
     )
@@ -305,7 +305,7 @@ pub async fn update_todo_project_sort_order(
     id: i64,
     sort_order: f64,
 ) -> CoreResult<()> {
-    let now = chrono::Utc::now().timestamp_millis();
+    let now = crate::db::clock::next_ms();
     sqlx::query("UPDATE todo_projects SET sort_order = ?, updated_at = ?, version = version + 1 WHERE id = ?")
         .bind(sort_order).bind(now).bind(id)
         .execute(pool).await?;
@@ -615,7 +615,7 @@ pub async fn complete_todo_task(pool: &SqlitePool, id: i64) -> CoreResult<Comple
             "任务 id={id} 已在回收站，无法完成"
         )));
     }
-    let now = chrono::Utc::now().timestamp_millis();
+    let now = crate::db::clock::next_ms();
 
     let plan = if task.done == 1 {
         None // 已完成任务的重复完成是幂等动作（评审 I2），不再推进
@@ -1753,7 +1753,7 @@ pub async fn duplicate_todo_task(pool: &SqlitePool, id: i64) -> CoreResult<TodoT
     .fetch_all(pool)
     .await?;
 
-    let now = chrono::Utc::now().timestamp_millis();
+    let now = crate::db::clock::next_ms();
     let new_uuid = uuid::Uuid::new_v4().to_string();
     // position 落在原任务后 +1（列表手动排序下复制体紧邻原任务）
     let new_position = src.position + 1.0;
@@ -1950,7 +1950,7 @@ pub async fn advance_fired_reminder(
     pool: &SqlitePool,
     reminder: &DueReminderRow,
 ) -> CoreResult<bool> {
-    let now = chrono::Utc::now().timestamp_millis();
+    let now = crate::db::clock::next_ms();
 
     // 行已消失（并发清理/用户手删）：软删幂等跳过（软删 UPDATE 无行不报错）
     let task: Option<TodoTask> = sqlx::query_as("SELECT * FROM todo_tasks WHERE id = ?")

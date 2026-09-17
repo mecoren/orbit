@@ -8,7 +8,9 @@
 //!   新增结构一律追加 NNNN_xxx.sql，老库只跑新增文件不删库；未发布的
 //!   多文件可合并，已发布永不改/删）
 //! - sync_registry.rs：同步/备份/导入白名单唯一权威来源（03 文档 §六）
+//! - clock.rs：单调逻辑时钟（HLC 折叠实现），业务写路径时间戳唯一来源
 
+pub mod clock;
 pub mod lifecycle;
 pub mod migrate;
 pub mod pool;
