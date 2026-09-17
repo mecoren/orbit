@@ -688,6 +688,154 @@ pub async fn peek_full_sync_manifest(
     Ok(decoded.manifest)
 }
 
+/// 恢复预览抽样条数：确认框内展示备份中的前 N 条存活任务
+pub const BACKUP_PREVIEW_SAMPLE: usize = 10;
+
+/// 备份中的单条任务预览（恢复确认框展示用，只取展示字段）
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PreviewTask {
+    pub title: String,
+    pub status: String,
+    pub done: bool,
+    pub due_date: Option<i64>,
+    pub priority: i64,
+    /// 所属项目名（同备份内 todo_projects 按 project_id 解析；解析不到为 None）
+    pub project: Option<String>,
+    pub is_deleted: bool,
+}
+
+/// 备份内任务统计（恢复决策用：存活/已完成/墓碑一目了然）
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TaskPreviewStats {
+    pub total: usize,
+    pub alive: usize,
+    pub done: usize,
+    pub deleted: usize,
+}
+
+/// 备份恢复预览：清单统计 + 前 N 条任务抽样 + 版本比对
+///
+/// 只读不写库，供恢复确认框展示「恢复前先看清备份里有什么」。
+/// `pool` 仅用于读取当前库 schema 版本做 mismatch 预判，不读业务表。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BackupPreview {
+    pub manifest: BackupManifest,
+    /// 前 N 条存活任务（按备份存储顺序，跳过墓碑行）
+    pub sample_tasks: Vec<PreviewTask>,
+    pub task_stats: TaskPreviewStats,
+    /// 备份 schema_version 与当前库不一致时为 true（恢复会走强制二次确认）
+    pub schema_mismatch: bool,
+    pub current_schema_version: i64,
+}
+
+/// 读取备份恢复预览（解密 + 抽样，不写库）
+///
+/// 失败场景与 import 一致：未解锁 / 密码不对（备份由其他密码加密）直接返回，
+/// 调用方（Tauri 命令）透传可读错误给前端展示。
+pub async fn peek_backup_preview(
+    pool: &SqlitePool,
+    svc: &SyncCryptoService,
+    bytes: &[u8],
+) -> FullSyncBackupResult<BackupPreview> {
+    ensure_unlocked(svc)?;
+    let sync_password = svc
+        .get_unlocked_password()
+        .ok_or_else(|| FullSyncBackupError::InvalidState("同步密码未解锁".to_string()))?;
+    let decoded = decode_backup(bytes, &sync_password)?;
+    let (sample_tasks, task_stats) =
+        extract_task_preview(&decoded.table_data, BACKUP_PREVIEW_SAMPLE);
+    let current_schema_version = query_schema_version(pool).await?;
+    let schema_mismatch = decoded.manifest.schema_version != current_schema_version;
+    Ok(BackupPreview {
+        manifest: decoded.manifest,
+        sample_tasks,
+        task_stats,
+        schema_mismatch,
+        current_schema_version,
+    })
+}
+
+/// 从解码后的表数据抽取任务预览（纯函数：全量统计 + 前 N 条存活抽样）
+///
+/// 防御性解析：单行字段缺失回落默认值，整表解析失败按空表处理（统计为零），
+/// 不阻断 manifest 统计展示。
+fn extract_task_preview(
+    table_data: &BTreeMap<String, String>,
+    sample_limit: usize,
+) -> (Vec<PreviewTask>, TaskPreviewStats) {
+    use std::collections::HashMap;
+
+    // 同备份内项目 id → 名称（备份保留原始 id，同一包内可直接关联）
+    let mut project_names: HashMap<i64, String> = HashMap::new();
+    if let Some(projects_json) = table_data.get("todo_projects")
+        && let Ok(projects) = serde_json::from_str::<Vec<serde_json::Value>>(projects_json)
+    {
+        for p in &projects {
+            if let (Some(id), Some(title)) = (
+                p.get("id").and_then(|v| v.as_i64()),
+                p.get("title").and_then(|v| v.as_str()),
+            ) {
+                project_names.insert(id, title.to_string());
+            }
+        }
+    }
+
+    let mut stats = TaskPreviewStats {
+        total: 0,
+        alive: 0,
+        done: 0,
+        deleted: 0,
+    };
+    let mut samples = Vec::new();
+
+    let tasks: Vec<serde_json::Value> = table_data
+        .get("todo_tasks")
+        .and_then(|json| serde_json::from_str(json).ok())
+        .unwrap_or_default();
+
+    for t in &tasks {
+        let is_deleted = t.get("is_deleted").and_then(|v| v.as_i64()).unwrap_or(0) == 1;
+        let done = t.get("done").and_then(|v| v.as_i64()).unwrap_or(0) == 1
+            || t.get("status").and_then(|v| v.as_str()) == Some("done");
+        stats.total += 1;
+        if is_deleted {
+            stats.deleted += 1;
+            continue;
+        }
+        stats.alive += 1;
+        if done {
+            stats.done += 1;
+        }
+        if samples.len() >= sample_limit {
+            continue;
+        }
+        let project = t
+            .get("project_id")
+            .and_then(|v| v.as_i64())
+            .and_then(|id| project_names.get(&id).cloned());
+        samples.push(PreviewTask {
+            title: t
+                .get("title")
+                .and_then(|v| v.as_str())
+                .filter(|s| !s.is_empty())
+                .unwrap_or("（无标题）")
+                .to_string(),
+            status: t
+                .get("status")
+                .and_then(|v| v.as_str())
+                .unwrap_or("pending")
+                .to_string(),
+            done,
+            due_date: t.get("due_date").and_then(|v| v.as_i64()),
+            priority: t.get("priority").and_then(|v| v.as_i64()).unwrap_or(0),
+            project,
+            is_deleted,
+        });
+    }
+
+    (samples, stats)
+}
+
 /// 列出备份目录下的所有 `.orfullsync` 文件（兼容遗留扩展名）
 pub async fn list_backups(app_data_dir: &Path) -> FullSyncBackupResult<Vec<BackupEntry>> {
     let prefs = load_prefs(app_data_dir)?;
@@ -771,4 +919,169 @@ pub async fn query_schema_version(pool: &SqlitePool) -> FullSyncBackupResult<i64
                 FullSyncBackupError::Other(format!("查询 schema_migrations 失败: {}", e))
             })?;
     Ok(row.0.unwrap_or(0))
+}
+
+// ============================================================================
+// 恢复预览单测
+// ============================================================================
+
+#[cfg(test)]
+mod preview_tests {
+    use super::*;
+    use crate::api::business_api::{create_todo_project, create_todo_task, delete_todo_task};
+    use crate::models::business::{TodoProjectCreateInput, TodoTaskCreateInput};
+
+    async fn setup_db() -> SqlitePool {
+        let pool = sqlx::SqlitePool::connect("sqlite::memory:").await.unwrap();
+        sqlx::migrate!("./src/db/migrations")
+            .run(&pool)
+            .await
+            .unwrap();
+        pool
+    }
+
+    fn task_input(title: &str) -> TodoTaskCreateInput {
+        TodoTaskCreateInput {
+            title: title.to_string(),
+            ..Default::default()
+        }
+    }
+
+    /// 抽样只取存活任务：12 条中 1 条墓碑 → 样本 10 条封顶，统计 12/11/2/1
+    #[test]
+    fn extract_task_preview_skips_tombstones_and_caps_sample() {
+        let mut table_data = BTreeMap::new();
+        table_data.insert(
+            "todo_projects".to_string(),
+            r#"[{"id":7,"title":"工作"}]"#.to_string(),
+        );
+        let mut rows = Vec::new();
+        for i in 0..12 {
+            let done = if i < 2 { 1 } else { 0 };
+            let deleted = if i == 11 { 1 } else { 0 };
+            rows.push(format!(
+                r#"{{"id":{},"title":"任务{}","status":"{}","done":{},"is_deleted":{},"priority":2,"project_id":7}}"#,
+                i + 1,
+                i + 1,
+                if done == 1 { "done" } else { "pending" },
+                done,
+                deleted,
+            ));
+        }
+        table_data.insert("todo_tasks".to_string(), format!("[{}]", rows.join(",")));
+
+        let (samples, stats) = extract_task_preview(&table_data, BACKUP_PREVIEW_SAMPLE);
+
+        assert_eq!(stats.total, 12);
+        assert_eq!(stats.deleted, 1);
+        assert_eq!(stats.alive, 11);
+        assert_eq!(stats.done, 2);
+        assert_eq!(samples.len(), 10);
+        assert!(samples.iter().all(|s| !s.is_deleted));
+        assert_eq!(samples[0].title, "任务1");
+        assert_eq!(samples[0].project.as_deref(), Some("工作"));
+        assert!(samples[0].done);
+    }
+
+    /// 缺字段回落默认值：空标题→（无标题），缺 status→pending，整表坏 JSON→空统计
+    #[test]
+    fn extract_task_preview_defensive_defaults() {
+        let mut table_data = BTreeMap::new();
+        table_data.insert(
+            "todo_tasks".to_string(),
+            r#"[{"id":1,"title":"","project_id":999}]"#.to_string(),
+        );
+        let (samples, stats) = extract_task_preview(&table_data, BACKUP_PREVIEW_SAMPLE);
+        assert_eq!(stats.total, 1);
+        assert_eq!(stats.alive, 1);
+        assert_eq!(samples.len(), 1);
+        assert_eq!(samples[0].title, "（无标题）");
+        assert_eq!(samples[0].status, "pending");
+        assert_eq!(samples[0].project, None);
+
+        let mut broken = BTreeMap::new();
+        broken.insert("todo_tasks".to_string(), "not-json".to_string());
+        let (samples, stats) = extract_task_preview(&broken, BACKUP_PREVIEW_SAMPLE);
+        assert!(samples.is_empty());
+        assert_eq!(stats.total, 0);
+    }
+
+    /// 端到端：建库 12 任务（含 1 墓碑 2 完成）→ 导出 → 预览不断言写库
+    ///
+    /// 导出口径只收录存活行（manifest table_counts 注释：未删除记录数），
+    /// 故预览统计为 total 11 / deleted 0 / alive 11 / done 2。
+    #[tokio::test]
+    async fn peek_backup_preview_roundtrip() {
+        let pool = setup_db().await;
+        let tmp = tempfile::TempDir::new().unwrap();
+        let svc = SyncCryptoService::new(tmp.path());
+        svc.init("preview-pw-123").unwrap();
+
+        let project = create_todo_project(
+            &pool,
+            &TodoProjectCreateInput {
+                title: "工作".to_string(),
+                description: None,
+                hex_color: None,
+                sort_order: None,
+            },
+        )
+        .await
+        .unwrap();
+        for i in 0..12 {
+            let done = if i < 2 { Some(1) } else { None };
+            let status = if i < 2 {
+                Some("done".to_string())
+            } else {
+                None
+            };
+            let t = create_todo_task(
+                &pool,
+                &TodoTaskCreateInput {
+                    title: format!("任务{}", i + 1),
+                    project_id: Some(project.id),
+                    done,
+                    status,
+                    ..task_input("")
+                },
+            )
+            .await
+            .unwrap();
+            if i == 11 {
+                delete_todo_task(&pool, t.id).await.unwrap();
+            }
+        }
+
+        let exported =
+            export_full_sync_backup(&pool, tmp.path(), &svc, BackupOrigin::Manual, None, false)
+                .await
+                .unwrap();
+        let bytes = std::fs::read(&exported.file_path).unwrap();
+
+        let preview = peek_backup_preview(&pool, &svc, &bytes).await.unwrap();
+        assert_eq!(preview.task_stats.total, 11);
+        assert_eq!(preview.task_stats.deleted, 0);
+        assert_eq!(preview.task_stats.alive, 11);
+        assert_eq!(preview.task_stats.done, 2);
+        assert_eq!(preview.sample_tasks.len(), 10);
+        assert_eq!(preview.sample_tasks[0].project.as_deref(), Some("工作"));
+        assert!(!preview.schema_mismatch);
+        assert_eq!(
+            preview.current_schema_version,
+            preview.manifest.schema_version
+        );
+        assert_eq!(preview.manifest.table_counts.get("todo_tasks"), Some(&11));
+    }
+
+    /// 未解锁时预览直接拒绝（不触碰解密）
+    #[tokio::test]
+    async fn peek_backup_preview_requires_unlock() {
+        let pool = setup_db().await;
+        let tmp = tempfile::TempDir::new().unwrap();
+        let svc = SyncCryptoService::new(tmp.path());
+        let err = peek_backup_preview(&pool, &svc, b"whatever")
+            .await
+            .unwrap_err();
+        assert!(err.to_string().contains("解锁"));
+    }
 }

@@ -37,6 +37,8 @@ import {
 
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { DangerousConfirmDialog } from "@/components/ui/dangerous-confirm-dialog";
+import { BackupPreviewBody, type BackupPreviewState } from "./backup-preview-body";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -66,6 +68,8 @@ import {
   fullBackupImport,
   fullBackupListLocal,
   fullBackupListCloud,
+  fullBackupPeekCloud,
+  fullBackupPeekLocal,
   fullBackupRestoreCloud,
   syncConfigGet,
   syncConfigSave,
@@ -449,6 +453,10 @@ function SyncPasswordCard() {
   const [changeOpen, setChangeOpen] = useState(false);
   const [oldPw, setOldPw] = useState("");
   const [newPw, setNewPw] = useState("");
+  // 修改密码二次确认（v2 下改密即换 Key 并全量重传云端，不可撤销，走时停）
+  const [changeConfirmOpen, setChangeConfirmOpen] = useState(false);
+  // 忘记密码缓存二次确认（普通确认即可：不断同步，只清钥匙串缓存）
+  const [forgetOpen, setForgetOpen] = useState(false);
 
   const refresh = () => {
     syncCryptoStatus().then(setStatus).catch(() => {});
@@ -517,12 +525,10 @@ function SyncPasswordCard() {
   };
 
   const handleForgetSession = async () => {
-    if (!window.confirm("将清除系统钥匙串中缓存的同步密码，下次启动需手动输入解锁。确定？")) {
-      return;
-    }
     try {
       await syncCryptoForgetSession();
       toast.success("已清除本机密码缓存（当前会话仍保持解锁）");
+      setForgetOpen(false);
     } catch (err) {
       toast.error(errMsg(err));
     }
@@ -534,6 +540,7 @@ function SyncPasswordCard() {
       await syncCryptoChangePassword(oldPw, newPw);
       // v2 密钥方案下改密即换 Key：命令内部已编排云端全量重传
       toast.success("同步密码已修改（云端数据已用新密钥重传，其他设备请用新密码同步）");
+      setChangeConfirmOpen(false);
       setChangeOpen(false);
       setOldPw("");
       setNewPw("");
@@ -666,7 +673,7 @@ function SyncPasswordCard() {
             variant="ghost"
             size="sm"
             className="h-7 text-xs text-muted-foreground"
-            onClick={() => void handleForgetSession()}
+            onClick={() => setForgetOpen(true)}
           >
             忘记此设备的同步密码缓存
           </Button>
@@ -697,13 +704,53 @@ function SyncPasswordCard() {
             <Button size="sm" variant="ghost" onClick={() => setChangeOpen(false)}>
               取消
             </Button>
-            <Button size="sm" disabled={busy || !oldPw || newPw.length < 6} onClick={() => void handleChange()}>
-              {busy ? <Loader2 className="mr-1 size-3 animate-spin" /> : null}
+            <Button
+              size="sm"
+              disabled={busy || !oldPw || newPw.length < 6}
+              onClick={() => setChangeConfirmOpen(true)}
+            >
               确认修改
             </Button>
           </div>
         </div>
       )}
+
+      {/* 忘记密码缓存确认：普通确认（不断同步，只清钥匙串缓存） */}
+      <AlertDialog open={forgetOpen} onOpenChange={setForgetOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>忘记此设备的同步密码缓存</AlertDialogTitle>
+            <AlertDialogDescription>
+              将清除系统钥匙串中缓存的同步密码，下次启动需手动输入解锁。
+              当前会话仍保持解锁，本地数据与云端文件均不受影响。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>取消</AlertDialogCancel>
+            <AlertDialogAction onClick={() => void handleForgetSession()}>
+              确认
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* 修改密码确认：换钥 + 云端全量重传不可撤销，确认钮 5 秒时停 */}
+      <DangerousConfirmDialog
+        open={changeConfirmOpen}
+        onOpenChange={setChangeConfirmOpen}
+        title="修改同步密码"
+        description={
+          <>
+            修改密码将更换数据密钥并
+            <strong className="text-destructive">用新密钥全量重传云端数据</strong>：
+            传完之前请勿在其他设备同步，其他设备此后须用新密码。
+            若旧设备仍用旧密码同步，可能造成云端数据混乱。
+          </>
+        }
+        confirmLabel="确认修改"
+        busy={busy}
+        onConfirm={() => void handleChange()}
+      />
     </div>
   );
 }
@@ -1208,6 +1255,59 @@ function BackupCard() {
   const [cloudOpen, setCloudOpen] = useState(false);
   const [cloudList, setCloudList] = useState<CloudBackupEntryView[] | null>(null);
 
+  /**
+   * 待确认的恢复目标（五秒时停弹层确认后才执行）：
+   * - file：文件选择器选中的本地备份路径
+   * - local：本地历史备份条目
+   * - cloud：云端副本条目
+   * 全量恢复会完全覆盖当前全部待办数据，不可撤销，故统一强制冷静期。
+   */
+  const [pendingRestore, setPendingRestore] = useState<
+    | { kind: "file"; path: string; label: string }
+    | { kind: "local"; entry: BackupEntryView }
+    | { kind: "cloud"; entry: CloudBackupEntryView }
+    | null
+  >(null);
+  /** schema 不一致时的强制恢复二次确认（忽略版本差异更危险，同走时停） */
+  const [pendingSchemaForce, setPendingSchemaForce] = useState<
+    | { kind: "local"; path: string; label: string }
+    | { kind: "cloud"; entry: CloudBackupEntryView }
+    | null
+  >(null);
+  /**
+   * 恢复预览三态（确认框 body 展示）：
+   * 弹层打开即解密读取（与 5 秒倒计时并行，不阻塞时停）；
+   * loading / error / ready，失败不阻塞确认（预览仅供决策参考）。
+   */
+  const [previewState, setPreviewState] = useState<BackupPreviewState>({ status: "loading" });
+
+  // 待确认目标变化 → 重置并拉取预览（本地读文件 / 云端先下载）
+  useEffect(() => {
+    if (pendingRestore == null) {
+      setPreviewState({ status: "loading" });
+      return;
+    }
+    let cancelled = false;
+    setPreviewState({ status: "loading" });
+    const load =
+      pendingRestore.kind === "cloud"
+        ? fullBackupPeekCloud(pendingRestore.entry.cloud_path)
+        : fullBackupPeekLocal(
+            pendingRestore.kind === "file" ? pendingRestore.path : pendingRestore.entry.file_path,
+          );
+    load.then(
+      (preview) => {
+        if (!cancelled) setPreviewState({ status: "ready", preview });
+      },
+      (err) => {
+        if (!cancelled) setPreviewState({ status: "error", message: errMsg(err) });
+      },
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [pendingRestore]);
+
   const loadHistory = () => {
     fullBackupListLocal()
       .then(setHistory)
@@ -1265,11 +1365,10 @@ function BackupCard() {
         `导入完成：成功 ${r.success_count} 条${r.error_count ? `，失败 ${r.error_count} 条` : ""}`,
       );
     } catch (err) {
-      // schema 版本不一致 → 提示后以忽略版本差异重试
+      // schema 版本不一致 → 时停二次确认后以忽略版本差异重试
       if (/schema/i.test(String(err)) && !ignoreSchemaMismatch) {
-        if (window.confirm("备份的 schema 版本与当前应用不同，可能存在兼容风险。仍要导入？")) {
-          return doImport(path, true);
-        }
+        const name = path.split(/[\\/]/).pop() ?? path;
+        setPendingSchemaForce({ kind: "local", path, label: name });
         return;
       }
       toast.error(errMsg(err));
@@ -1287,40 +1386,37 @@ function BackupCard() {
       multiple: false,
     });
     if (!selected || typeof selected !== "string") return;
-    const confirmed = window.confirm(
-      "导入将用备份内容完全覆盖当前全部待办数据。确定继续？",
-    );
-    if (!confirmed) return;
-    await doImport(selected, false);
+    const name = selected.split(/[\\/]/).pop() ?? selected;
+    setPendingRestore({ kind: "file", path: selected, label: name });
   };
 
-  const handleRestoreEntry = async (entry: BackupEntryView) => {
-    if (!window.confirm(`从「${entry.filename}」恢复将完全覆盖当前全部待办数据。确定继续？`)) {
-      return;
-    }
-    await doImport(entry.file_path, false);
+  const handleRestoreEntry = (entry: BackupEntryView) => {
+    setPendingRestore({ kind: "local", entry });
   };
 
-  const handleRestoreCloud = async (entry: CloudBackupEntryView) => {
-    if (!window.confirm(`从「${entry.name}」恢复将完全覆盖当前全部待办数据。确定继续？`)) {
+  /** 时停确认后执行本地恢复（含文件导入与本地历史） */
+  const confirmPendingRestore = async () => {
+    const pending = pendingRestore;
+    setPendingRestore(null);
+    if (!pending) return;
+    if (pending.kind === "cloud") {
+      await doRestoreCloud(pending.entry, false);
       return;
     }
+    const path = pending.kind === "file" ? pending.path : pending.entry.file_path;
+    await doImport(path, false);
+  };
+
+  const doRestoreCloud = async (entry: CloudBackupEntryView, ignoreSchemaMismatch: boolean) => {
     try {
       setBusy("import");
-      const r = await fullBackupRestoreCloud(entry.cloud_path, false);
+      const r = await fullBackupRestoreCloud(entry.cloud_path, ignoreSchemaMismatch);
       toast.success(
         `云端恢复完成：成功 ${r.success_count} 条${r.error_count ? `，失败 ${r.error_count} 条` : ""}`,
       );
     } catch (err) {
-      if (/schema/i.test(String(err))) {
-        if (window.confirm("备份的 schema 版本与当前应用不同，可能存在兼容风险。仍要恢复？")) {
-          try {
-            await fullBackupRestoreCloud(entry.cloud_path, true);
-            toast.success("云端恢复完成");
-          } catch (e) {
-            toast.error(errMsg(e));
-          }
-        }
+      if (/schema/i.test(String(err)) && !ignoreSchemaMismatch) {
+        setPendingSchemaForce({ kind: "cloud", entry });
         return;
       }
       toast.error(errMsg(err));
@@ -1328,6 +1424,31 @@ function BackupCard() {
       setBusy(null);
     }
   };
+
+  const handleRestoreCloud = (entry: CloudBackupEntryView) => {
+    setPendingRestore({ kind: "cloud", entry });
+  };
+
+  /** 时停确认后执行忽略版本差异的强制恢复 */
+  const confirmSchemaForce = async () => {
+    const pending = pendingSchemaForce;
+    setPendingSchemaForce(null);
+    if (!pending) return;
+    if (pending.kind === "cloud") {
+      await doRestoreCloud(pending.entry, true);
+      return;
+    }
+    await doImport(pending.path, true);
+  };
+
+  const pendingLabel =
+    pendingRestore == null
+      ? ""
+      : pendingRestore.kind === "file"
+        ? pendingRestore.label
+        : pendingRestore.kind === "local"
+          ? pendingRestore.entry.filename
+          : pendingRestore.entry.name;
 
   return (
     <div className="space-y-3 rounded-lg border p-5">
@@ -1437,7 +1558,7 @@ function BackupCard() {
                 size="sm"
                 className="h-7 text-xs"
                 disabled={!!busy}
-                onClick={() => void handleRestoreEntry(e)}
+                onClick={() => handleRestoreEntry(e)}
               >
                 恢复
               </Button>
@@ -1445,6 +1566,47 @@ function BackupCard() {
           ))}
         </div>
       )}
+
+      {/* 全量恢复确认：先看预览（前 10 条 + 统计）再确认，确认钮 5 秒时停防误触 */}
+      <DangerousConfirmDialog
+        open={pendingRestore != null}
+        onOpenChange={(o) => !o && setPendingRestore(null)}
+        title="从备份恢复全部数据"
+        description={
+          <>
+            将用备份「{pendingLabel}」的内容
+            <strong className="text-destructive">完全覆盖当前全部待办数据</strong>：
+            当前新增或修改后尚未备份的内容将
+            <strong className="text-destructive">永久丢失</strong>，此操作不可撤销。
+            请先核对下方备份预览，确认选对来源。
+          </>
+        }
+        body={<BackupPreviewBody state={previewState} />}
+        contentClassName="sm:max-w-xl"
+        confirmLabel="确认恢复"
+        busy={busy != null}
+        onConfirm={() => void confirmPendingRestore()}
+      />
+
+      {/* schema 不一致强制恢复：忽略版本差异风险更高，同走时停 */}
+      <DangerousConfirmDialog
+        open={pendingSchemaForce != null}
+        onOpenChange={(o) => !o && setPendingSchemaForce(null)}
+        title="版本不一致仍要恢复"
+        description={
+          <>
+            备份「
+            {pendingSchemaForce?.kind === "cloud"
+              ? pendingSchemaForce.entry.name
+              : (pendingSchemaForce?.label ?? "")}
+            」的 schema 版本与当前应用不同，忽略差异强制恢复可能导致部分字段丢失或展示异常。
+            建议先升级应用到最新版本；仍要继续请等待倒计时结束。
+          </>
+        }
+        confirmLabel="仍要恢复"
+        busy={busy != null}
+        onConfirm={() => void confirmSchemaForce()}
+      />
     </div>
   );
 }
@@ -1463,6 +1625,8 @@ function BackupCard() {
 function PlaintextExportCard() {
   const [busy, setBusy] = useState<"json" | "csv" | "ics" | null>(null);
   const [excludeDeleted, setExcludeDeleted] = useState(true);
+  // 明文导出二次确认：未加密隐私风险，普通确认即可（无数据覆盖）
+  const [pendingKind, setPendingKind] = useState<"json" | "csv" | null>(null);
 
   const doExport = async (kind: "json" | "csv" | "ics") => {
     setBusy(kind);
@@ -1523,13 +1687,7 @@ function PlaintextExportCard() {
   };
 
   const confirmExport = (kind: "json" | "csv") => {
-    if (
-      window.confirm(
-        "导出内容为未加密明文，任何拿到该文件的人都能读取。确定继续？",
-      )
-    ) {
-      void doExport(kind);
-    }
+    setPendingKind(kind);
   };
 
   return (
@@ -1586,6 +1744,30 @@ function PlaintextExportCard() {
           </Button>
         </div>
       </div>
+
+      {/* 明文导出确认：未加密隐私风险提示（普通确认，无需时停） */}
+      <AlertDialog open={pendingKind != null} onOpenChange={(o) => !o && setPendingKind(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>导出明文数据</AlertDialogTitle>
+            <AlertDialogDescription>
+              导出内容为未加密明文，任何拿到该文件的人都能读取。请妥善保管导出文件。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>取消</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                const kind = pendingKind;
+                setPendingKind(null);
+                if (kind) void doExport(kind);
+              }}
+            >
+              继续导出
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
@@ -1607,6 +1789,8 @@ function CsvImportCard() {
   const [content, setContent] = useState<string | null>(null);
   const [preview, setPreview] = useState<CsvImportPreviewView | null>(null);
   const [result, setResult] = useState<CsvImportStats | null>(null);
+  // 导入执行二次确认：批量写库（普通确认即可，增量写入非覆盖）
+  const [importConfirmOpen, setImportConfirmOpen] = useState(false);
 
   const pickFile = async () => {
     try {
@@ -1715,17 +1899,37 @@ function CsvImportCard() {
           <Button
             size="sm"
             disabled={busy != null}
-            onClick={() =>
-              window.confirm(
-                `将导入 ${preview.stats.success} 条任务（跳过 ${preview.stats.skipped} 行），确定继续？`,
-              ) && void doExecute()
-            }
+            onClick={() => setImportConfirmOpen(true)}
           >
             {busy === "execute" ? <Loader2 className="mr-1 size-3 animate-spin" /> : null}
             导入
           </Button>
         ) : null}
       </div>
+
+      {/* 导入执行确认：批量写库前核对条数（普通确认，无需时停） */}
+      <AlertDialog open={importConfirmOpen} onOpenChange={setImportConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>确认导入</AlertDialogTitle>
+            <AlertDialogDescription>
+              将导入 {preview?.stats.success ?? 0} 条任务（跳过 {preview?.stats.skipped ?? 0}{" "}
+              行），项目不存在会自动创建。确定继续？
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>取消</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                setImportConfirmOpen(false);
+                void doExecute();
+              }}
+            >
+              导入
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {preview ? (
         <div className="space-y-2">

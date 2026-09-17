@@ -650,6 +650,51 @@ export const fullBackupRestoreCloud = (cloudPath: string, ignoreSchemaMismatch: 
     ignoreSchemaMismatch,
   });
 
+/** 备份清单（恢复预览元信息；时间戳为 Unix 秒） */
+export interface BackupManifestView {
+  format_version: number;
+  created_at: string;
+  created_at_ts: number;
+  app_version: string;
+  device_id: string;
+  device_name: string | null;
+  schema_version: number;
+  table_counts: Record<string, number>;
+}
+
+/** 备份中的单条任务预览 */
+export interface PreviewTaskView {
+  title: string;
+  status: string;
+  done: boolean;
+  due_date: number | null;
+  priority: number;
+  project: string | null;
+  is_deleted: boolean;
+}
+
+/** 备份内任务统计 */
+export interface TaskPreviewStatsView {
+  total: number;
+  alive: number;
+  done: number;
+  deleted: number;
+}
+
+/** 备份恢复预览（只读：解密 + 抽样，不写库） */
+export interface BackupPreviewView {
+  manifest: BackupManifestView;
+  sample_tasks: PreviewTaskView[];
+  task_stats: TaskPreviewStatsView;
+  schema_mismatch: boolean;
+  current_schema_version: number;
+}
+
+export const fullBackupPeekLocal = (path: string) =>
+  invoke<BackupPreviewView>("full_backup_peek_local", { path });
+export const fullBackupPeekCloud = (cloudPath: string) =>
+  invoke<BackupPreviewView>("full_backup_peek_cloud", { cloudPath });
+
 // ---------- 定时自动备份（backup_scheduler） ----------
 
 export type BackupScheduleType =

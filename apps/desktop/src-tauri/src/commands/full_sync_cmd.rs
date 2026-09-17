@@ -7,7 +7,7 @@
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager};
 
-use orbit_core::api::full_sync_backup_api::{self, ExportResult, ImportResult};
+use orbit_core::api::full_sync_backup_api::{self, BackupPreview, ExportResult, ImportResult};
 use orbit_core::context;
 
 use crate::AppState;
@@ -182,6 +182,60 @@ pub async fn full_backup_restore_cloud(
         serde_json::json!({ "table": "*", "kind": "import" }),
     );
     Ok(result)
+}
+
+/// 读取备份恢复预览（本地文件）：解密 + 前 10 条任务抽样 + 统计，不写库
+///
+/// 恢复确认框在用户点「恢复」后先调此命令展示备份内容，确认后才走
+/// `full_backup_import` 真正覆盖。未解锁 / 密码不对直接返回可读错误。
+#[tauri::command]
+pub async fn full_backup_peek_local(
+    app: AppHandle,
+    path: String,
+) -> Result<BackupPreview, String> {
+    let pool = app
+        .try_state::<AppState>()
+        .ok_or_else(|| "[database] 数据库未初始化".to_string())?
+        .pool
+        .clone();
+    let svc = sync_runtime::sync_crypto(&app)?;
+
+    let bytes = std::fs::read(&path).map_err(|e| format!("[backup] 读取文件失败: {e}"))?;
+
+    full_sync_backup_api::peek_backup_preview(&pool, &svc, &bytes)
+        .await
+        .map_err(|e| format!("[backup] 预览失败: {e}"))
+}
+
+/// 读取备份恢复预览（云端副本）：先下载字节，再走与本地一致的预览路径
+///
+/// `cloud_path` 为 list_cloud_backups 返回的完整云端对象路径。不写库。
+#[tauri::command]
+pub async fn full_backup_peek_cloud(
+    app: AppHandle,
+    cloud_path: String,
+) -> Result<BackupPreview, String> {
+    let pool = app
+        .try_state::<AppState>()
+        .ok_or_else(|| "[database] 数据库未初始化".to_string())?
+        .pool
+        .clone();
+    let svc = sync_runtime::sync_crypto(&app)?;
+
+    let config = full_sync_backup_api::get_active_cloud_config_from_db(&pool)
+        .await
+        .map_err(|e| format!("[other] {e}"))?
+        .ok_or_else(|| "[config] 尚未配置云同步，无法读取云端备份".to_string())?;
+
+    let adapter = orbit_core::sync::engine::create_adapter(&config)
+        .map_err(|e| format!("[backup] 创建云适配器失败: {e}"))?;
+    let bytes = full_sync_backup_api::download_cloud_backup(&*adapter, &cloud_path)
+        .await
+        .map_err(|e| format!("[backup] 下载云端备份失败: {e}"))?;
+
+    full_sync_backup_api::peek_backup_preview(&pool, &svc, &bytes)
+        .await
+        .map_err(|e| format!("[backup] 预览失败: {e}"))
 }
 
 /// 列出本地 backups 目录的历史备份（按文件名倒序，最新在前）

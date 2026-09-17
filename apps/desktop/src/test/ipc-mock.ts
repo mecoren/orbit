@@ -238,6 +238,43 @@ const MOCK_HOLIDAYS = [
   { date: "2026-02-17", year: 2026, is_holiday: true, name: "初一" },
 ] as const;
 
+/** 恢复预览样例（形状对齐 Rust BackupPreview；确认框 ready 分支可渲染） */
+const MOCK_BACKUP_PREVIEW = {
+  manifest: {
+    format_version: 1,
+    created_at: "2026-09-17T00:00:00+00:00",
+    created_at_ts: 1758067200,
+    app_version: "0.1.0",
+    device_id: "mock-device",
+    device_name: "Mock 设备",
+    schema_version: 1,
+    table_counts: { todo_projects: 1, todo_tasks: 2 },
+  },
+  sample_tasks: [
+    {
+      title: "示例任务一",
+      status: "pending",
+      done: false,
+      due_date: null,
+      priority: 0,
+      project: "示例项目",
+      is_deleted: false,
+    },
+    {
+      title: "示例任务二",
+      status: "done",
+      done: true,
+      due_date: null,
+      priority: 3,
+      project: null,
+      is_deleted: false,
+    },
+  ],
+  task_stats: { total: 2, alive: 2, done: 1, deleted: 0 },
+  schema_mismatch: false,
+  current_schema_version: 1,
+};
+
 // ---------- 命令实现 ----------
 
 const notImplemented = (cmd: string) => {
@@ -816,6 +853,9 @@ const commands: Record<string, (args: any, ctx: Ctx) => unknown> = {
   // ---- 备份/导出（设置页打开才拉取；给空态安全值）----
   backup_prefs_get: () => null,
   full_backup_list_local: () => [],
+  // 恢复预览（确认框打开才拉取；mock 回固定同构体，走 ready 分支）
+  full_backup_peek_local: () => ipcClone(MOCK_BACKUP_PREVIEW),
+  full_backup_peek_cloud: () => ipcClone(MOCK_BACKUP_PREVIEW),
 
   // ---- 节假日（日历视图挂载即拉取；空表回落 Rust 侧预置 2026 表，
   //      浏览器 mock 回给一小段同构数据让徽标链路可走通；更新命令模拟成功）----

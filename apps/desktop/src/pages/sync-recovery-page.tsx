@@ -14,22 +14,13 @@
  * v1（随机 Key）存量设备额外显示「升级到 v2」迁移入口——升级后同密码
  * 跨设备自动同 Key，此类不一致从根源上不再发生。
  */
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
 import { toast } from "sonner";
 import { AlertTriangle, ArrowLeft, FileWarning, KeyRound, RefreshCw } from "lucide-react";
 
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
+import { DangerousConfirmDialog } from "@/components/ui/dangerous-confirm-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -39,17 +30,14 @@ import {
   syncCryptoUpgradeV2,
 } from "@/lib/tauri";
 
-/** rekey 确认钮强制冷静期（秒）：危险操作防误触，倒计时走完才可确认 */
-const REKEY_HOLD_SECONDS = 5;
-
 export function SyncRecoveryPage() {
   const navigate = useNavigate();
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [isV1, setIsV1] = useState(false);
   const [rekeyConfirmOpen, setRekeyConfirmOpen] = useState(false);
-  const [rekeyCountdown, setRekeyCountdown] = useState(REKEY_HOLD_SECONDS);
-  const countdownTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+  // v1 升级同样全量重传云端（换钥覆盖），同走五秒时停
+  const [upgradeConfirmOpen, setUpgradeConfirmOpen] = useState(false);
 
   // 探测本机密钥方案版本：v1 存量设备才显示迁移入口
   useEffect(() => {
@@ -66,31 +54,6 @@ export function SyncRecoveryPage() {
       cancelled = true;
     };
   }, []);
-
-  // 确认弹层开启期间跑 5 秒倒计时：确认钮禁用直到走完（强制冷静期）；
-  // 关闭/卸载即停表复位，再次打开从头计
-  useEffect(() => {
-    if (!rekeyConfirmOpen) {
-      if (countdownTimer.current) clearInterval(countdownTimer.current);
-      countdownTimer.current = null;
-      setRekeyCountdown(REKEY_HOLD_SECONDS);
-      return;
-    }
-    countdownTimer.current = setInterval(() => {
-      setRekeyCountdown((n) => {
-        if (n <= 1 && countdownTimer.current) {
-          clearInterval(countdownTimer.current);
-          countdownTimer.current = null;
-          return 0;
-        }
-        return n - 1;
-      });
-    }, 1000);
-    return () => {
-      if (countdownTimer.current) clearInterval(countdownTimer.current);
-      countdownTimer.current = null;
-    };
-  }, [rekeyConfirmOpen]);
 
   /** 路径 1：输入加密云端的同步密码解锁 */
   const handleUnlock = async () => {
@@ -128,18 +91,11 @@ export function SyncRecoveryPage() {
 
   /** v1 存量设备迁移到 v2（同密码确定性派生 + 云端全量重传） */
   const handleUpgradeV2 = async () => {
-    if (
-      !window.confirm(
-        "升级到 v2 密钥方案：同一同步密码在任何设备都派生同一把数据密钥，\n" +
-          "不再需要密钥包分发。升级会立即用新密钥全量重传云端数据，期间请勿在其他设备同步。\n\n确定继续？",
-      )
-    ) {
-      return;
-    }
     setBusy(true);
     try {
       await syncCryptoUpgradeV2(password);
       toast.success("已升级 v2 并完成云端重传。其他设备输入相同密码即可同步");
+      setUpgradeConfirmOpen(false);
       navigate("/settings");
     } catch (err) {
       toast.error(String(err));
@@ -213,33 +169,26 @@ export function SyncRecoveryPage() {
         </Button>
       </div>
 
-      {/* 重置确认：确认钮 5 秒倒计时内禁用（强制冷静期，防误触） */}
-      <AlertDialog open={rekeyConfirmOpen} onOpenChange={setRekeyConfirmOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>以本机为准重置云端</AlertDialogTitle>
-            <AlertDialogDescription className="break-words">
-              将用当前设备的数据密钥重加密并
-              <strong className="text-destructive">覆盖云端全部数据</strong>：
-              云端现有数据（含本机没有的记录）将被本机数据替换，仅存云端的记录与附件将
-              <strong className="text-destructive">永久丢失</strong>；其他设备需输入本机当前同步密码后重新同步。
-              此操作不可撤销，请确认云端数据已无需保留。
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>取消</AlertDialogCancel>
-            <AlertDialogAction
-              className="bg-destructive text-white hover:bg-destructive/90"
-              disabled={rekeyCountdown > 0 || busy}
-              onClick={() => void handleRekey()}
-            >
-              {rekeyCountdown > 0 ? `请阅读后果（${rekeyCountdown}s）` : "确认重置云端"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {/* 重置确认：确认钮 5 秒时停内禁用（强制冷静期，防误触） */}
+      <DangerousConfirmDialog
+        open={rekeyConfirmOpen}
+        onOpenChange={setRekeyConfirmOpen}
+        title="以本机为准重置云端"
+        description={
+          <>
+            将用当前设备的数据密钥重加密并
+            <strong className="text-destructive">覆盖云端全部数据</strong>：
+            云端现有数据（含本机没有的记录）将被本机数据替换，仅存云端的记录与附件将
+            <strong className="text-destructive">永久丢失</strong>；其他设备需输入本机当前同步密码后重新同步。
+            此操作不可撤销，请确认云端数据已无需保留。
+          </>
+        }
+        confirmLabel="确认重置云端"
+        busy={busy}
+        onConfirm={() => void handleRekey()}
+      />
 
-      {/* v1 迁移（仅存量 v1 设备显示） */}
+      {/* v1 迁移（仅存量 v1 设备显示）：升级即换钥全量重传，同走时停 */}
       {isV1 && (
         <div className="space-y-2 rounded-lg border p-4">
           <div className="flex items-center gap-2 text-sm font-medium">
@@ -254,12 +203,29 @@ export function SyncRecoveryPage() {
             size="sm"
             variant="outline"
             disabled={busy || !password}
-            onClick={() => void handleUpgradeV2()}
+            onClick={() => setUpgradeConfirmOpen(true)}
           >
             升级到 v2
           </Button>
         </div>
       )}
+
+      <DangerousConfirmDialog
+        open={upgradeConfirmOpen}
+        onOpenChange={setUpgradeConfirmOpen}
+        title="升级密钥方案到 v2"
+        description={
+          <>
+            升级后同一同步密码在任何设备都派生同一把数据密钥，不再需要密钥包分发。
+            升级会立即用新密钥
+            <strong className="text-destructive">全量重传云端数据</strong>，
+            期间请勿在其他设备同步。此操作不可撤销。
+          </>
+        }
+        confirmLabel="确认升级"
+        busy={busy}
+        onConfirm={() => void handleUpgradeV2()}
+      />
 
       <Button variant="ghost" className="self-start" onClick={() => navigate(-1)}>
         <ArrowLeft className="mr-1 size-4" />

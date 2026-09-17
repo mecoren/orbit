@@ -5,11 +5,22 @@
  * （提醒到期 / 推迟 / 完成），数据源 notification_log（只读本地表，
  * 各端各自记录，不随云同步）。列表倒序 + kind 徽标 + 清空。
  */
+import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Bell, BellRing, CheckCircle2, Clock4, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { notificationLogClear, notificationLogList } from "@/lib/tauri";
 
 function SectionHeader({ title, desc }: { title: string; desc: string }) {
@@ -49,6 +60,8 @@ function fmtTime(ms: number): string {
 
 export function NotificationHistorySection() {
   const queryClient = useQueryClient();
+  // 清空二次确认：物理删除本地通知记录（普通确认即可，非同步数据）
+  const [clearOpen, setClearOpen] = useState(false);
   const { data: rows = [] } = useQuery({
     queryKey: ["notification-log", "list"],
     queryFn: () => notificationLogList(undefined, 100),
@@ -77,12 +90,38 @@ export function NotificationHistorySection() {
           variant="outline"
           size="sm"
           disabled={rows.length === 0 || clearMutation.isPending}
-          onClick={() => clearMutation.mutate()}
+          onClick={() => setClearOpen(true)}
         >
           <Trash2 className="mr-1 size-3.5" />
           清空
         </Button>
       </div>
+
+      {/* 清空确认：物理删除全部本地通知记录，不可撤销（普通确认） */}
+      <AlertDialog open={clearOpen} onOpenChange={setClearOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>清空通知历史</AlertDialogTitle>
+            <AlertDialogDescription>
+              将删除全部 {rows.length} 条本地通知记录，此操作不可撤销。
+              记录仅存于本机，不影响任务数据与云同步。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>取消</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-white hover:bg-destructive/90"
+              disabled={clearMutation.isPending}
+              onClick={() => {
+                setClearOpen(false);
+                clearMutation.mutate();
+              }}
+            >
+              确认清空
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <div className="rounded-lg border border-border/60">
         {rows.length === 0 ? (
