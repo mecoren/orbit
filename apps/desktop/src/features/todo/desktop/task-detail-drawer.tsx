@@ -721,7 +721,9 @@ function RepeatEditor({
   };
 
   return (
-    <div className="flex min-w-0 items-center gap-1.5">
+    // 右对齐：InfoRow 值区靠 text-right 对齐纯文本，flex 容器默认 justify-start
+    // 会把触发钮顶到左侧（截图里「不重复」偏左），加 justify-end 与其他行同口径
+    <div className="flex min-w-0 items-center justify-end gap-1.5">
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
           <button type="button" className="truncate font-medium hover:text-primary">
