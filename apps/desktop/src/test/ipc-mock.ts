@@ -275,6 +275,46 @@ const MOCK_BACKUP_PREVIEW = {
   current_schema_version: 1,
 };
 
+// ---------- 云同步造态（#19 冒烟 / 目检） ----------
+
+/**
+ * 同步造态开关：默认「未配置」——与真实环境未配置时启动同步静默跳过的路径一致。
+ * 验证左上角云图标（SyncStatusButton）的待命/同步中/成功/失败态时：
+ *   1. 先在 localStorage 写入 `orbit.mock.sync-state`（模块级状态过不了刷新）；
+ *   2. reload 后经 `window.__orbitMock.emitSyncProgress/emitSyncFinished` 推事件。
+ */
+const SYNC_STATE_KEY = "orbit.mock.sync-state";
+
+function loadSyncState() {
+  const defaults = { configured: false, unlocked: false, lastSyncedAt: null as number | null };
+  try {
+    const raw = localStorage.getItem(SYNC_STATE_KEY);
+    return raw ? { ...defaults, ...(JSON.parse(raw) as Partial<typeof defaults>) } : defaults;
+  } catch {
+    return defaults;
+  }
+}
+
+const syncState = loadSyncState();
+
+/** 造态下的激活配置体（字段与 lib/tauri.ts SyncConfigView 对齐） */
+const mockSyncConfig = () => ({
+  id: 1,
+  engine: "webdav",
+  endpoint: "https://dav.example.com/dav",
+  bucket: "",
+  region: "",
+  username: "demo",
+  password_set: true,
+  base_path: "orbit",
+  interval_minutes: 60,
+  auto_sync_enabled: true,
+  sync_on_change: false,
+  skip_tls_verify: false,
+  timeout_seconds: 30,
+  last_synced_at: syncState.lastSyncedAt,
+});
+
 // ---------- 命令实现 ----------
 
 const notImplemented = (cmd: string) => {
@@ -830,8 +870,19 @@ const commands: Record<string, (args: any, ctx: Ctx) => unknown> = {
   apply_mica: () => undefined,
   disable_mica: () => undefined,
 
-  // ---- 同步链（use-startup-sync / SyncIndicator；「未配置」走静默路径）----
-  sync_config_get: () => null,
+  // ---- 同步链（use-startup-sync / SyncStatusButton；「未配置」走静默路径）----
+  sync_config_get: () => (syncState.configured ? ipcClone(mockSyncConfig()) : null),
+  // 立即同步：真实返回 SyncResult JSON 字符串（lib/tauri.ts 侧 parseResult）
+  cloud_sync_now: () =>
+    JSON.stringify({
+      pushed_modules: 1,
+      pulled_modules: 0,
+      uploaded_attachments: 0,
+      downloaded_attachments: 0,
+      duration_ms: 320,
+      skipped: false,
+      errors: [],
+    }),
   cloud_sync_is_running: () => false,
   cloud_sync_get_state: () => JSON.stringify({ phase: "idle" }),
   // 增量同步历史（P1-17）：种三条同构（成功/失败/推送），设置页历史卡可渲染
@@ -846,7 +897,12 @@ const commands: Record<string, (args: any, ctx: Ctx) => unknown> = {
       seed.filter((h) => scope === "all" || h.sync_type === scope).slice(0, limit),
     );
   },
-  sync_crypto_status: () => JSON.stringify({ locked: true }),
+  // 字段口径与真实命令一致（has_password / is_unlocked；此前 mock 回 { locked }
+  // 与双端契约不符）；造态下随 syncState 变化
+  sync_crypto_status: () => ({
+    has_password: syncState.configured,
+    is_unlocked: syncState.unlocked,
+  }),
   // 恢复页挂载即探测密钥方案版本（v1 才显示迁移入口）；mock 回 v2 走主路径
   sync_crypto_meta_version: () => JSON.stringify({ version: "v2" }),
 
@@ -1403,6 +1459,12 @@ declare global {
       seed: () => void;
       /** 测试直改内存库后手动广播 db-change（同 seed 的刷新通道） */
       emitDbChange: () => void;
+      /** 云同步造态开关（改后需手动推事件或重挂组件生效） */
+      syncState: { configured: boolean; unlocked: boolean; lastSyncedAt: number | null };
+      /** 手动推同步进度事件（真实环境由 Rust TauriProgressSender 推送） */
+      emitSyncProgress: (payload: unknown) => void;
+      /** 手动推同步完成事件 */
+      emitSyncFinished: (payload: unknown) => void;
     };
   }
 }
@@ -1421,6 +1483,9 @@ export function installBrowserIpc() {
       emitDbChange();
     },
     emitDbChange,
+    syncState,
+    emitSyncProgress: (payload: unknown) => emitEvent("sync-progress", payload),
+    emitSyncFinished: (payload: unknown) => emitEvent("sync-finished", payload),
   };
 
   // transformCallback 注册的回调表：id → cb。
@@ -1428,23 +1493,24 @@ export function installBrowserIpc() {
   // mock 的 plugin:event|listen 拿到 id 后按事件名分组保存。
   const callbacks = new Map<number, Function>();
   let callbackSeq = 1;
-  // 事件名 → { id, cb }（同一事件只保留最后一个 listener——冒烟场景
-  // 同名事件总是单订阅（db-change 由 events 层集中注册一次））
-  const eventListeners = new Map<string, { id: number; cb: Function }>();
+  // 事件名 → 订阅者列表（多订阅：同一事件可能被多个组件监听，
+  // 如 sync-finished 同时被 ReadyShell 失效层与标题栏云图标监听；
+  // 早期实现只保留最后一个 listener，会让先注册者静默收不到事件）
+  const eventListeners = new Map<string, Array<{ id: number; cb: Function }>>();
 
-  /** 模拟 Rust EVENT_BUS 的 db-change 广播：写命令后触发 events 层失效 */
-  function emitDbChange() {
-    const entry = eventListeners.get("db-change");
-    if (entry) {
+  /** 事件广播（模拟 Rust 侧 emit；同步进度等造态事件也走此处） */
+  function emitEvent(event: string, payload: unknown) {
+    for (const entry of eventListeners.get(event) ?? []) {
       // 对齐 Tauri 真实契约（event.js listener.rs emit_js_script）：
       // handler 收到 {event, payload} 包装，不是裸 payload——此前 mock
       // 直传裸对象，消费方 evt.payload 解构在 mock 下为 undefined
-      entry.cb({
-        event: "db-change",
-        id: entry.id,
-        payload: { table: "mock", op: "mock", timestamp: Date.now() },
-      });
+      entry.cb({ event, id: entry.id, payload });
     }
+  }
+
+  /** 模拟 Rust EVENT_BUS 的 db-change 广播：写命令后触发 events 层失效 */
+  function emitDbChange() {
+    emitEvent("db-change", { table: "mock", op: "mock", timestamp: Date.now() });
   }
 
   const internals = {
@@ -1453,10 +1519,25 @@ export function installBrowserIpc() {
       if (cmd === "plugin:event|listen") {
         const { event, handler } = args as { event: string; handler: number };
         const cb = callbacks.get(handler);
-        if (cb) eventListeners.set(event, { id: handler, cb });
+        if (cb) {
+          const list = eventListeners.get(event) ?? [];
+          list.push({ id: handler, cb });
+          eventListeners.set(event, list);
+        }
         return Promise.resolve(handler);
       }
-      if (cmd === "plugin:event|unlisten") return Promise.resolve();
+      // 退订按 eventId 摘除（真实 event.js 契约）：不摘会让 StrictMode
+      // 双挂载残留旧订阅，同一事件派发两次（toast/失效链重复触发）
+      if (cmd === "plugin:event|unlisten") {
+        const { event, eventId } = args as { event: string; eventId?: number };
+        const list = eventListeners.get(event);
+        if (list) {
+          const kept = list.filter((l) => l.id !== eventId);
+          if (kept.length) eventListeners.set(event, kept);
+          else eventListeners.delete(event);
+        }
+        return Promise.resolve();
+      }
 
       // ---- 业务命令 ----
       const impl = commands[cmd];

@@ -380,6 +380,8 @@
   --transition-duration-slow: var(--duration-slow);
   /* 鈹€鈹€ 娣″叆鍔ㄧ敾锛堜緵 sync-overlay 绛夌洿鎺ユ寕杞界粍浠朵娇鐢級鈹€鈹€ */
   --animate-fade-in: fade-in var(--duration-base) ease-out;
+  /* 同步成功对勾徽标一次性回弹（云图标 SyncStatusButton 用） */
+  --animate-sync-pop: sync-pop var(--duration-base) cubic-bezier(0.34, 1.2, 0.64, 1);
 }
 
 @keyframes accordion-down {
@@ -406,6 +408,22 @@
   }
   to {
     opacity: 1;
+  }
+}
+
+/* 同步成功对勾：scale 回弹（自绘，不用 tailwindcss-animate——其 keyframes 在 v4 下会覆盖定位类） */
+@keyframes sync-pop {
+  0% {
+    opacity: 0;
+    transform: scale(0.4);
+  }
+  60% {
+    opacity: 1;
+    transform: scale(1.15);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
   }
 }
 

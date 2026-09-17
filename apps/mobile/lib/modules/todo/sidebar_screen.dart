@@ -13,6 +13,7 @@ import '../../shared/widgets/glass_fab.dart';
 import '../../shared/widgets/liquid_glass_title_bar.dart';
 import '../../shared/widgets/more_actions_sheet.dart';
 import '../../shared/widgets/scroll_offset_listenable.dart';
+import '../../shared/widgets/sync_status_button.dart';
 import '../../shared/widgets/wait_toast.dart';
 import 'form_bottom_sheet.dart';
 import 'logic/task_logic.dart';
@@ -462,6 +463,8 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
               title: '循迹',
               showMenu: false,
               showBack: false,
+              // 左端云同步图标（未配置/未解锁直达配置页；就绪弹信息面板）
+              leading: const SyncStatusButton(),
               scrollOffsetListenable: ScrollOffsetListenable(_scrollController),
               actions: [
                 IconButton(

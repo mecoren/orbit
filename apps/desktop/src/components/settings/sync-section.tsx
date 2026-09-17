@@ -781,7 +781,7 @@ function SyncRunCard() {
     };
   }, []);
 
-  // 手动同步进度（origin=manual；background 由全局 SyncIndicator 展示）
+  // 手动同步进度（origin=manual；background 由标题栏左上角云图标展示）
   useEffect(() => {
     const unlisten = listen<{
       phase: string;

@@ -6,7 +6,6 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { Toaster } from "@/components/ui/sonner";
 import { EqualizerLoader } from "@/components/EqualizerLoader";
 import { UnlockPage } from "@/pages/unlock-page";
-import { SyncIndicator } from "@/components/layout/sync-indicator";
 import { useDbInvalidation, useSyncInvalidation } from "@/lib/events";
 import { useTodoReminderListener } from "@/hooks/use-todo-reminder-listener";
 import { useStartupSync } from "@/hooks/use-startup-sync";
@@ -56,8 +55,6 @@ function ReadyShell() {
       {/* sonner：top-right（04 文档 §六 Toast 规格）。
           不开 richColors：对齐 shadcn 示例观感——popover 卡片底 + 彩色类型图标 */}
       <Toaster position="top-right" />
-      {/* M3：后台自动同步悬浮指示器（仅响应 origin=background） */}
-      <SyncIndicator />
     </TooltipProvider>
   );
 }

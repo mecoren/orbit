@@ -8,6 +8,7 @@ import { isHelpShortcut } from "@/features/todo/shared/shortcut-help";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { ThemeModeToggle } from "@/components/theme-mode-toggle";
+import { SyncStatusButton } from "@/components/layout/sync-status-button";
 import { WindowControls } from "@/components/ui/window-controls";
 
 /** 标题栏右上功能图标（设置 / 关于；原壳侧栏底部入口迁移至此） */
@@ -76,6 +77,12 @@ export function TitleBar() {
         data-tauri-drag-region
         onDoubleClick={() => appWindow.toggleMaximize()}
       >
+        {/* 左侧：云同步状态图标（03 文档 §八）——脱离拖拽区，
+            否则点击会被 data-tauri-drag-region / 双击最大化吞掉 */}
+        <div className="flex items-center pl-1" data-tauri-drag-region={false}>
+          <SyncStatusButton />
+        </div>
+
         {/* 中部：居中标题（可拖拽）—— 应用显示名「循迹」（README 命名约定） */}
         <div
           className="absolute left-1/2 -translate-x-1/2 select-none text-sm font-medium"

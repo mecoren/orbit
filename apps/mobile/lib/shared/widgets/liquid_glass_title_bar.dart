@@ -10,7 +10,7 @@ import 'gradient_backdrop_filter.dart';
 /// （56px 单行；React 版 liquid-glass-title-bar.tsx 同构）：
 ///
 /// ```
-/// [返回/菜单键] [标题] ... [actions 插槽] [功能键(可选)]
+/// [返回/菜单键 | leading 插槽] [标题] ... [actions 插槽] [功能键(可选)]
 /// ```
 ///
 /// 玻璃配方（三件套）：
@@ -32,6 +32,7 @@ class LiquidGlassTitleBar extends StatelessWidget
     // 标题
     this.title,
     this.titleWidget,
+    this.leading,
     // 功能区
     this.actionsIcon,
     this.onActionsTap,
@@ -56,6 +57,10 @@ class LiquidGlassTitleBar extends StatelessWidget
   final bool showBack;
   final bool showMenu;
   final Widget? backIcon;
+
+  /// 左侧自定义插槽（仅 [showBack] / [showMenu] 均为 false 时生效；
+  /// 返回/菜单键优先，避免插槽顶掉既有导航键）。首页云同步图标用。
+  final Widget? leading;
 
   // ===== 标题 =====
   final String? title;
@@ -205,7 +210,7 @@ class LiquidGlassTitleBar extends StatelessWidget
         onPressed: onBack ?? () => Navigator.of(context).maybePop(),
       );
     }
-    return null;
+    return leading;
   }
 
   Widget _buildTitle(ColorScheme colorScheme) {
