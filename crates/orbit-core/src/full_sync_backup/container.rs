@@ -21,8 +21,16 @@ pub const MAGIC: [u8; 4] = *b"OFS1";
 /// 遗留 magic 值 "WFS1"（读侧兼容，不再写入）
 pub const LEGACY_MAGIC: [u8; 4] = *b"WFS1";
 
-/// PBKDF2 迭代次数（与 sync_crypto::service::ITERATIONS 一致）
-pub const ITERATIONS: u32 = 200_000;
+/// PBKDF2 迭代次数（与同步链路共用同一常量，保证强度一致）
+///
+/// 历史问题：此处曾硬编码 `200_000` 且注释自称"与 sync_crypto 一致"，
+/// 而同步链路实际是 `600_000`——备份包成了强度只有 1/3 的离线爆破目标
+/// （备份包通常还会被上传到云端）。现直接引用 `sync_crypto::service::ITERATIONS`，
+/// 单一来源杜绝再次漂移。
+///
+/// 读侧从容器头读 iterations，因此旧包（200k）仍能正常解密；新写入一律
+/// 使用当前常量。
+pub const ITERATIONS: u32 = crate::sync_crypto::service::ITERATIONS;
 
 /// Salt 长度（字节）
 pub const SALT_LEN: usize = 16;

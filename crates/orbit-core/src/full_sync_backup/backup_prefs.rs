@@ -44,6 +44,11 @@ fn one() -> u32 {
     1
 }
 
+/// serde 默认值 true（本地备份开关默认开启）
+fn default_true() -> bool {
+    true
+}
+
 /// 备份偏好设置
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct BackupPrefs {
@@ -62,11 +67,12 @@ pub struct BackupPrefs {
     #[serde(default)]
     pub cloud_backup_enabled: bool,
 
-    /// 本地备份开关（默认 false）
+    /// 本地备份开关（默认 true）
     ///
-    /// 关闭时不写入本地 `.orfullsync` 文件。本地落盘以显式导出动作为主，
-    /// 用户或调用方可单独开启此开关以在自动备份时也写本地。
-    #[serde(default)]
+    /// 开启时「同步前自动备份」会写一份本地 `.orfullsync` 安全副本——
+    /// 云同步是覆盖式写入，误同步/空数据覆盖等事故需要本地快照兜底，
+    /// 因此默认开启；用户可在设置中关闭以节省磁盘。
+    #[serde(default = "default_true")]
     pub local_backup_enabled: bool,
 
     /// v4 新增：调度类型
@@ -108,7 +114,7 @@ impl Default for BackupPrefs {
             local_path: None,
             keep_latest: false,
             cloud_backup_enabled: true,
-            local_backup_enabled: false,
+            local_backup_enabled: true,
             schedule_type: ScheduleType::Off,
             schedule_time: default_schedule_time(),
             schedule_minute: 0,
@@ -274,9 +280,10 @@ mod tests {
         assert_eq!(prefs.schedule_type, ScheduleType::Off);
         assert!(!prefs.keep_latest);
         assert!(prefs.local_path.is_none());
-        // 默认以云端为准：云开关开、本地区域关；定时仍为 Off（需用户显式开启）
+        // 默认以云端为准：云开关开；本地安全副本默认开（同步前自动备份兜底）；
+        // 定时仍为 Off（需用户显式开启）
         assert!(prefs.cloud_backup_enabled);
-        assert!(!prefs.local_backup_enabled);
+        assert!(prefs.local_backup_enabled);
         assert_eq!(prefs.schedule_time, "03:00");
         assert_eq!(prefs.schedule_day_of_month, 1);
         assert_eq!(prefs.schedule_month, 1);
