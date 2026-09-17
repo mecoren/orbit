@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from "react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { TimeHMSelect } from "@/components/business/time-hm-select";
 import { WaitCalendar } from "@/components/ui/wait-calendar";
 import { QuickDateMenu } from "@/components/business/quick-date-options";
 import { CalendarIcon, ChevronLeft, ChevronRight, X } from "lucide-react";
@@ -216,28 +216,12 @@ export function DateTimePicker({
             <WaitCalendar mode="single" selected={selectedDate} onSelect={handleSelect} />
             <div className="flex items-center gap-2 border-t p-3">
               <span className="text-xs text-muted-foreground">时间</span>
-              <Input
-                type="number"
-                min={0}
-                max={23}
-                value={hourPart}
-                onChange={(e) => {
-                  const v = Math.min(23, Math.max(0, Number(e.target.value) || 0));
-                  updateValue(datePart, String(v), minutePart);
-                }}
-                className="h-8 w-16"
-              />
-              <span>:</span>
-              <Input
-                type="number"
-                min={0}
-                max={59}
-                value={minutePart}
-                onChange={(e) => {
-                  const v = Math.min(59, Math.max(0, Number(e.target.value) || 0));
-                  updateValue(datePart, hourPart, String(v));
-                }}
-                className="h-8 w-16"
+              {/* 手输 + 下拉二合一（内联列表无 portal，可驻 PopoverContent 内） */}
+              <TimeHMSelect
+                hour={hourPart.padStart(2, "0")}
+                minute={minutePart.padStart(2, "0")}
+                onHourChange={(h) => updateValue(datePart, h, minutePart.padStart(2, "0"))}
+                onMinuteChange={(m) => updateValue(datePart, hourPart.padStart(2, "0"), m)}
               />
             </div>
           </>

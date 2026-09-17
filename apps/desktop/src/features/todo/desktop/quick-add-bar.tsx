@@ -17,6 +17,7 @@ import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { WaitCalendar } from "@/components/ui/wait-calendar";
+import { TimeHMSelect } from "@/components/business/time-hm-select";
 import { QuickDateMenu } from "@/components/business/quick-date-options";
 import {
   todoLabelList,
@@ -296,6 +297,7 @@ export function QuickAddBar({ projects, defaultProjectId, quickView }: QuickAddB
                     <Button
                       variant="ghost"
                       size="icon"
+                      aria-label="提醒时间"
                       className={cn(
                         "h-7 w-7",
                         remindDraft && "bg-primary/10 text-primary",
@@ -333,32 +335,22 @@ export function QuickAddBar({ projects, defaultProjectId, quickView }: QuickAddB
                     />
                     <div className="mt-2 flex items-center gap-2 border-t pt-2">
                       <span className="text-xs text-muted-foreground">时间</span>
-                      <Input
-                        type="number"
-                        min={0}
-                        max={23}
-                        value={remindDraft ? remindDraft.slice(11, 13) : "9"}
-                        onChange={(e) => {
-                          const v = Math.min(23, Math.max(0, Number(e.target.value) || 0));
-                          const datePart = remindDraft?.slice(0, 10) || format(new Date(), "yyyy-MM-dd");
+                      {/* 手输 + 下拉二合一（内联列表无 portal，可驻 PopoverContent 内） */}
+                      <TimeHMSelect
+                        hour={(remindDraft ? remindDraft.slice(11, 13) : "09").padStart(2, "0")}
+                        minute={(remindDraft ? remindDraft.slice(14, 16) : "00").padStart(2, "0")}
+                        onHourChange={(h) => {
+                          const datePart =
+                            remindDraft?.slice(0, 10) || format(new Date(), "yyyy-MM-dd");
                           const m = remindDraft?.slice(14, 16) || "00";
-                          setRemindDraft(`${datePart}T${String(v).padStart(2, "0")}:${m}`);
+                          setRemindDraft(`${datePart}T${h}:${m}`);
                         }}
-                        className="h-8 w-16"
-                      />
-                      <span>:</span>
-                      <Input
-                        type="number"
-                        min={0}
-                        max={59}
-                        value={remindDraft ? remindDraft.slice(14, 16) : "00"}
-                        onChange={(e) => {
-                          const v = Math.min(59, Math.max(0, Number(e.target.value) || 0));
-                          const datePart = remindDraft?.slice(0, 10) || format(new Date(), "yyyy-MM-dd");
+                        onMinuteChange={(m) => {
+                          const datePart =
+                            remindDraft?.slice(0, 10) || format(new Date(), "yyyy-MM-dd");
                           const h = remindDraft?.slice(11, 13) || "09";
-                          setRemindDraft(`${datePart}T${h}:${String(v).padStart(2, "0")}`);
+                          setRemindDraft(`${datePart}T${h}:${m}`);
                         }}
-                        className="h-8 w-16"
                       />
                     </div>
                   </div>

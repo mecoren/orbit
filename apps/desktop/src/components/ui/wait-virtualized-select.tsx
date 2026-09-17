@@ -2,6 +2,7 @@ import * as React from "react";
 import * as PopoverPrimitive from "@radix-ui/react-popover";
 import { Check, ChevronDown } from "lucide-react";
 
+import { attachManualWheelScroll } from "@/lib/manual-wheel-scroll";
 import { cn } from "@/lib/utils";
 
 export interface WaitVirtualizedSelectOption {
@@ -113,24 +114,28 @@ export function WaitVirtualizedSelect({
     }
   }, [active, itemHeight]);
 
-  // 滚轮滚动：日期选择器嵌在 Radix Dialog/Sheet 内，其 react-remove-scroll 会在
-  // document 级拦截 wheel 并 preventDefault，导致弹层内无法用滚轮原生滚动（只能拖
-  // 滚动条）。这里在滚动容器上挂一个非被动、捕获阶段的 wheel 监听：preventDefault
-  // 阻断原生滚动、stopPropagation 阻止事件冒泡到 Dialog 的 RemoveScroll，再手动
-  // 滚动；随后 onScroll 触发并驱动可视窗口重渲染。这样既不依赖 RemoveScroll 放行，
-  // 也不会出现「原生 + 手动」双重滚动。
+  // 滚轮滚动：日期选择器常嵌在 Radix Dialog/Sheet（抽屉）内，其
+  // react-remove-scroll 在 document 捕获阶段拦截 wheel 并阻断传播——
+  // 挂在滚动容器元素上的捕获监听根本收不到事件（实测 scrollTop 纹丝不动），
+  // 故改挂 window 捕获（先于 document 触发），目标落在列表内才手动滚动；
+  // 随后 onScroll 触发并驱动可视窗口重渲染。详见 manual-wheel-scroll。
   React.useEffect(() => {
     if (!open) return;
-    const el = scrollRef.current;
-    if (!el) return;
-    const onWheel = (e: Event) => {
-      e.preventDefault();
-      const we = e as WheelEvent;
-      el.scrollTop += we.deltaY;
-      e.stopPropagation();
+    // Radix Presence 让 Content 子树晚于 open 提交一拍才挂载（effect 跑时
+    // scrollRef 恒为 null），故推迟到 rAF（Presence 的挂载提交恒在首帧绘制
+    // 前完成）再取节点挂载；卸载/关闭时解绑。
+    let detach: (() => void) | null = null;
+    let cancelled = false;
+    const raf = requestAnimationFrame(() => {
+      if (cancelled) return;
+      const el = scrollRef.current;
+      if (el) detach = attachManualWheelScroll(el);
+    });
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(raf);
+      detach?.();
     };
-    el.addEventListener("wheel", onWheel, { capture: true, passive: false });
-    return () => el.removeEventListener("wheel", onWheel, { capture: true });
   }, [open]);
 
   const commit = React.useCallback(

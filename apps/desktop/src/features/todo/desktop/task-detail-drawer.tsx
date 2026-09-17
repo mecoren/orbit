@@ -64,6 +64,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { DateTimePicker } from "@/components/business/date-picker";
+import { TimeHMSelect } from "@/components/business/time-hm-select";
 import { QuickDateMenu } from "@/components/business/quick-date-options";
 import { WaitCalendar } from "@/components/ui/wait-calendar";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -964,32 +965,20 @@ function DueDateEditor({
             />
             <div className="flex items-center gap-2 border-t p-3">
               <span className="text-xs text-muted-foreground">时间</span>
-              <Input
-                type="number"
-                min={0}
-                max={23}
-                value={draft ? draft.split("T")[1]?.split(":")[0] ?? "09" : "09"}
-                onChange={(e) => {
-                  const v = Math.min(23, Math.max(0, Number(e.target.value) || 0));
+              {/* 手输 + 下拉二合一（内联列表无 portal，可驻 PopoverContent 内） */}
+              <TimeHMSelect
+                hour={(draft ? draft.split("T")[1]?.split(":")[0] ?? "09" : "09").padStart(2, "0")}
+                minute={(draft ? draft.split("T")[1]?.split(":")[1] ?? "00" : "00").padStart(2, "0")}
+                onHourChange={(h) => {
                   const date = draft.split("T")[0] || format(Date.now(), "yyyy-MM-dd");
                   const m = draft.split("T")[1]?.split(":")[1] ?? "00";
-                  setDraft(`${date}T${String(v).padStart(2, "0")}:${m}`);
+                  setDraft(`${date}T${h}:${m}`);
                 }}
-                className="h-8 w-16"
-              />
-              <span>:</span>
-              <Input
-                type="number"
-                min={0}
-                max={59}
-                value={draft ? draft.split("T")[1]?.split(":")[1] ?? "00" : "00"}
-                onChange={(e) => {
-                  const v = Math.min(59, Math.max(0, Number(e.target.value) || 0));
+                onMinuteChange={(m) => {
                   const date = draft.split("T")[0] || format(Date.now(), "yyyy-MM-dd");
                   const h = draft.split("T")[1]?.split(":")[0] ?? "09";
-                  setDraft(`${date}T${h}:${String(v).padStart(2, "0")}`);
+                  setDraft(`${date}T${h}:${m}`);
                 }}
-                className="h-8 w-16"
               />
             </div>
           </>

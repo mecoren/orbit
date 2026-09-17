@@ -40,6 +40,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { DangerousConfirmDialog } from "@/components/ui/dangerous-confirm-dialog";
 import { BackupPreviewBody, type BackupPreviewState } from "./backup-preview-body";
+import { TimeHMSelect as SharedTimeHMSelect } from "@/components/business/time-hm-select";
 import { formatBackupSize, formatBackupTime } from "./backup-list-format";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -969,6 +970,33 @@ const SCHEDULE_LABELS: Record<BackupScheduleType, string> = {
 
 const WEEKDAY_LABELS = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"];
 
+/**
+ * 时:分二段选择器（项目自有样式，替换原生 `<input type="time">`）。
+ *
+ * 原生 time 输入的下拉面板走浏览器/OS 原生渲染（截图里的灰白双列），
+ * 不跟主题 token（bg-popover/border/primary）与全局 10px 滚动条，
+ * 深浅主题下割裂。底层走共享 `TimeHMSelect`（手输 + 内联下拉二合一，
+ * 见 components/business/time-hm-select.tsx），本函数只做 "HH:MM"
+ * 字符串与时/分后缀外观的薄适配（调用点与 core 值格式不变）。
+ */
+function TimeHMSelect({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const [rawH, rawM] = (value || "03:00").split(":");
+  const hh = (rawH ?? "03").padStart(2, "0");
+  const mm = (rawM ?? "00").padStart(2, "0");
+
+  return (
+    <SharedTimeHMSelect
+      hour={hh}
+      minute={mm}
+      hourSuffix="时"
+      minuteSuffix="分"
+      hourInputId="backup-hour"
+      onHourChange={(h) => onChange(`${h}:${mm}`)}
+      onMinuteChange={(m) => onChange(`${hh}:${m}`)}
+    />
+  );
+}
+
 function formatTsSecs(ts: number): string | null {
   return ts > 0 ? new Date(ts * 1000).toLocaleString() : null;
 }
@@ -1081,7 +1109,7 @@ function AutoBackupCard() {
       {/* 调度时刻（按类型显示对应字段；core 以 UTC 计算） */}
       {st !== "off" && (
         <div className="grid grid-cols-[80px_1fr] items-center gap-3">
-          <Label htmlFor="backup-time">时刻</Label>
+          <Label htmlFor="backup-hour">时刻</Label>
           <div className="flex flex-wrap items-center gap-2">
             {st === "hourly" && (
               <>
@@ -1174,11 +1202,9 @@ function AutoBackupCard() {
               </>
             )}
             {st !== "hourly" && (
-              <Input
-                type="time"
-                className="h-8 w-32"
+              <TimeHMSelect
                 value={prefs.schedule_time}
-                onChange={(e) => patch({ schedule_time: e.target.value || "03:00" })}
+                onChange={(v) => patch({ schedule_time: v })}
               />
             )}
           </div>
