@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect } from "react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
 import { TimeHMSelect } from "@/components/business/time-hm-select";
-import { WaitCalendar } from "@/components/ui/wait-calendar";
+import { PickerCalendar } from "@/components/business/picker-calendar";
 import { QuickDateMenu } from "@/components/business/quick-date-options";
 import { CalendarIcon, ChevronLeft, ChevronRight, X } from "lucide-react";
 import { format, parse, isValid } from "date-fns";
@@ -84,7 +84,7 @@ export function DatePicker({
         )}
       </div>
       <PopoverContent
-        className="w-auto min-w-[var(--radix-popover-trigger-width)] max-w-[320px] p-0"
+        className="w-auto min-w-[var(--radix-popover-trigger-width)] p-0"
         align="start"
       >
         {quick && !showCalendar ? (
@@ -99,7 +99,9 @@ export function DatePicker({
             onCustom={() => setShowCalendar(true)}
           />
         ) : (
-          <WaitCalendar mode="single" selected={selectedDate} onSelect={handleSelect} />
+          <div className="p-3">
+            <PickerCalendar selected={selectedDate} onSelect={handleSelect} />
+          </div>
         )}
       </PopoverContent>
     </Popover>
@@ -197,7 +199,7 @@ export function DateTimePicker({
         )}
       </div>
       <PopoverContent
-        className="w-auto min-w-[var(--radix-popover-trigger-width)] max-w-[320px] p-0"
+        className="w-auto min-w-[var(--radix-popover-trigger-width)] p-0"
         align="start"
       >
         {quick && !showCalendar ? (
@@ -213,7 +215,9 @@ export function DateTimePicker({
           />
         ) : (
           <>
-            <WaitCalendar mode="single" selected={selectedDate} onSelect={handleSelect} />
+            <div className="p-3 pb-0">
+              <PickerCalendar selected={selectedDate} onSelect={handleSelect} />
+            </div>
             <div className="flex items-center gap-2 border-t p-3">
               <span className="text-xs text-muted-foreground">时间</span>
               {/* 手输 + 下拉二合一（内联列表无 portal，可驻 PopoverContent 内） */}

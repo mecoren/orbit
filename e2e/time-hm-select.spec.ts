@@ -78,7 +78,7 @@ test("快捷新增提醒：下拉点选 + 手输提交/钳制/空回退", async 
   await hour.press("Tab");
   await expect(hour).toHaveValue("23");
 
-  // 几何：时间行不撑破 320px 弹层（右端下拉钮不横向溢出）
+  // 几何：时间行不撑破弹层（右端下拉钮不横向溢出）
   const fits = await page
     .getByRole("button", { name: "分钟下拉选择" })
     .evaluate((el) => {
@@ -180,11 +180,11 @@ test("抽屉截止时间：下拉改分 + 手输改时 + 确定落库", async ({
     const content = hourEl
       ?.closest("[data-radix-popper-content-wrapper]")
       ?.querySelector(":scope > div");
-    const table = content?.querySelector("table");
-    if (!content || !table) return null;
+    const grid = content?.querySelector('[data-testid="month-calendar-grid"]');
+    if (!content || !grid) return null;
     const cs = getComputedStyle(content);
     const cb = content.getBoundingClientRect();
-    const tb = table.getBoundingClientRect();
+    const tb = grid.getBoundingClientRect();
     return {
       left: tb.left - cb.left - parseFloat(cs.paddingLeft),
       right: cb.right - parseFloat(cs.paddingRight) - tb.right,

@@ -66,7 +66,7 @@ import {
 import { DateTimePicker } from "@/components/business/date-picker";
 import { TimeHMSelect } from "@/components/business/time-hm-select";
 import { QuickDateMenu } from "@/components/business/quick-date-options";
-import { WaitCalendar } from "@/components/ui/wait-calendar";
+import { PickerCalendar } from "@/components/business/picker-calendar";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useTodoStore } from "@/features/todo/store";
 import { hideFromQueries, useUndoableDeleteAction } from "@/hooks/use-undoable-delete";
@@ -589,16 +589,14 @@ function StartDateEditor({
           {value ? toYm(value) : "设置"}
         </button>
       </PopoverTrigger>
-      {/* 弹层宽度对齐 DueDateEditor 的 w-72（288px）：日历 caption 行
-          （月份 72px + 年份 112px 下拉 + 两侧翻月钮与 px-9 让位）内容宽
-          ~286px，w-64 装不下导致日历向右溢出弹层边界。 */}
-      <PopoverContent align="end" className="w-72 space-y-2 p-3">
+      {/* 弹层宽度交给内容（选择器月历固定 368px + p-3 内边距，与日历视图同款
+          农历副标签需 ~49px 格宽才不截断），故不再固定 w-72 */}
+      <PopoverContent align="end" className="w-auto space-y-2 p-3">
         {draft ? (
           <>
-            <WaitCalendar
-              mode="single"
+            <PickerCalendar
               selected={draft ? new Date(`${draft}T00:00:00`) : undefined}
-              onSelect={(d) => setOpenDraft(d ? format(d, "yyyy-MM-dd") : "")}
+              onSelect={(d) => setOpenDraft(format(d, "yyyy-MM-dd"))}
             />
             <div className="flex justify-end gap-2 border-t pt-2">
               <Button size="sm" variant="outline" onClick={() => setOpenDraft("")}>
@@ -679,7 +677,7 @@ function RepeatEditor({
   const [whenDone, setWhenDone] = useState(fromDone);
   // 结束=日期档的内联日历开关：Popover 内禁嵌自带 Popover 的 DatePicker
   //（portal 套 portal 布局测量异常，同 DueDateEditor 的教训），此处
-  // 内联项目日历 WaitCalendar 两段式切换
+  // 内联项目日历 PickerCalendar 两段式切换
   const [endDateCalendar, setEndDateCalendar] = useState(false);
 
   // 打开时同步外部值（外部 task 切换场景）
@@ -732,18 +730,16 @@ function RepeatEditor({
               : repeatLabel(mode, after, { weekdays, endType, endParam, fromDone })}
           </button>
         </PopoverTrigger>
-      {/* 日历展开态独占弹层（w-72=288px 容纳日历 ~286px）：只渲染日历 +
-          返回钮——原面板内容全高 675px，弹层 bottom 出视口（800px）100px；
-          隐藏其余内容后日历态 ~330px 内敛，且横向 286>254 的溢出同步消除 */}
-      <PopoverContent align="end" className="w-72 p-1">
+      {/* 日历展开态独占弹层：只渲染日历 + 返回钮——原面板内容全高 675px，
+          弹层 bottom 出视口（800px）100px；隐藏其余内容后日历态内敛 */}
+      <PopoverContent align="end" className="w-auto p-1">
         {endDateCalendar ? (
           <>
             <div className="p-1">
-              <WaitCalendar
-                mode="single"
+              <PickerCalendar
                 selected={endDate ? new Date(`${endDate}T00:00:00`) : undefined}
                 onSelect={(d) => {
-                  setEndDate(d ? format(d, "yyyy-MM-dd") : "");
+                  setEndDate(format(d, "yyyy-MM-dd"));
                   setEndDateCalendar(false);
                 }}
               />
@@ -954,15 +950,14 @@ function DueDateEditor({
           （实测 1159px），且其 w-full 触发钮在深色主题下是一整条白底
           描边块（"显示全白"）；改为内联日历 + 时间数字输入行（与右键
           菜单设置截止的 Dialog 内同款行）。 */}
-      <PopoverContent align="end" className="w-72 space-y-2 p-3">
+      <PopoverContent align="end" className="w-auto space-y-2 p-3">
         {showPicker ? (
           <>
-            <WaitCalendar
-              mode="single"
+            <PickerCalendar
               selected={draft ? new Date(draft.replace(" ", "T")) : undefined}
               onSelect={(d) => {
                 const prevTime = draft.split("T")[1] ?? "09:00";
-                setDraft(d ? `${format(d, "yyyy-MM-dd")}T${prevTime}` : "");
+                setDraft(`${format(d, "yyyy-MM-dd")}T${prevTime}`);
               }}
             />
             <div className="flex items-center gap-2 border-t p-3">

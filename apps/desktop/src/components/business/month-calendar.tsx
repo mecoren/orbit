@@ -112,7 +112,8 @@ const SIZE_SPECS: Record<MonthCalendarSize, SizeSpec> = {
     navBtn: "size-7",
     title: "text-xl font-bold tracking-tight",
     grid: "grid-cols-7 gap-1",
-    badge: "size-3 -right-2 -top-1.5 text-[7px]",
+    // 徽标与 lg 同口径贴日格右上角（原负偏移会越出格子压到相邻日）
+    badge: "right-0.5 top-0.5 size-3 text-[7px]",
   },
   sm: {
     cell: "h-8 rounded-md",
@@ -256,6 +257,7 @@ export function MonthCalendar({
       {/* 日期网格：fillHeight 下行高由容器分配（6 行等分剩余高度），
           整体底边与父容器对齐 */}
       <div
+        data-testid="month-calendar-grid"
         className={cn(
           "grid",
           spec.grid,

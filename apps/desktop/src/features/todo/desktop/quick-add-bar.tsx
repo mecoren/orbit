@@ -16,7 +16,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { WaitCalendar } from "@/components/ui/wait-calendar";
+import { PickerCalendar } from "@/components/business/picker-calendar";
 import { TimeHMSelect } from "@/components/business/time-hm-select";
 import { QuickDateMenu } from "@/components/business/quick-date-options";
 import {
@@ -253,17 +253,16 @@ export function QuickAddBar({ projects, defaultProjectId, quickView }: QuickAddB
                   {dueDate ? `截止日期：${formatDue(dueDate)}` : "截止日期"}
                 </TooltipContent>
               </Tooltip>
-              {/* 宽度需设上限：DayPicker 表格 w-full+aspect-square 在无界 w-auto 下无法收敛 */}
-              <PopoverContent align="end" className="w-auto min-w-[280px] max-w-[320px] p-0">
+              {/* 宽度交给内容：选择器月历固定 368px（农历副标签需 ~49px 格宽不截断） */}
+              <PopoverContent align="end" className="w-auto p-0">
                 {dueCalendar ? (
                   <div className="p-3">
-                    <WaitCalendar
-                      mode="single"
+                    <PickerCalendar
                       selected={dueDate ?? undefined}
                       onSelect={(d) => {
-                        setDueDate(d ?? null);
+                        setDueDate(d);
                         // 选中具体日期后自动收起（清除按钮保持弹层打开）
-                        if (d) setDueOpen(false);
+                        setDueOpen(false);
                       }}
                     />
                     <div className="mt-2 flex justify-end gap-2 border-t pt-2">
@@ -313,24 +312,21 @@ export function QuickAddBar({ projects, defaultProjectId, quickView }: QuickAddB
                     : "提醒时间"}
                 </TooltipContent>
               </Tooltip>
-              <PopoverContent align="end" className="w-[320px] p-3">
+              <PopoverContent align="end" className="w-auto p-3">
                 {remindCalendar ? (
                   <div>
                     <p className="mb-2 text-sm font-medium">提醒时间</p>
-                    <WaitCalendar
-                      mode="single"
+                    <PickerCalendar
                       selected={
                         remindDraft
                           ? parse(remindDraft.slice(0, 10), "yyyy-MM-dd", new Date())
                           : undefined
                       }
                       onSelect={(d) => {
-                        if (d) {
-                          const datePart = format(d, "yyyy-MM-dd");
-                          const prev = remindDraft || format(new Date(), "yyyy-MM-dd'T'HH:mm");
-                          const timePart = prev.slice(11) || "09:00";
-                          setRemindDraft(`${datePart}T${timePart}`);
-                        }
+                        const datePart = format(d, "yyyy-MM-dd");
+                        const prev = remindDraft || format(new Date(), "yyyy-MM-dd'T'HH:mm");
+                        const timePart = prev.slice(11) || "09:00";
+                        setRemindDraft(`${datePart}T${timePart}`);
                       }}
                     />
                     <div className="mt-2 flex items-center gap-2 border-t pt-2">

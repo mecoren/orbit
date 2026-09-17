@@ -241,7 +241,6 @@ const OSS_FRONTEND: OpenSourceComponent[] = [
   { name: "cmdk", version: "^1.1.1", source: "frontend", description: "命令面板原语（⌘K 快速入口）", license: "MIT", repository: "https://github.com/pacocoursey/cmdk", homepage: "https://cmdk.paco.me" },
   { name: "sonner", version: "^2.0.7", source: "frontend", description: "Toast 通知组件", license: "MIT", repository: "https://github.com/emilkowalski/sonner" },
   { name: "date-fns", version: "^4.4.0", source: "frontend", description: "现代 JavaScript 日期工具库", license: "MIT", repository: "https://github.com/date-fns/date-fns", homepage: "https://date-fns.org" },
-  { name: "react-day-picker", version: "^9.14.0", source: "frontend", description: "React 日期选择器组件", license: "MIT", repository: "https://github.com/gpbl/react-day-picker", homepage: "https://daypicker.dev" },
   { name: "class-variance-authority", version: "^0.7.0", source: "frontend", description: "组件变体样式管理（cva）", license: "Apache-2.0", repository: "https://github.com/joe-bell/cva" },
   { name: "clsx", version: "^2.1.1", source: "frontend", description: "className 条件拼接工具", license: "MIT", repository: "https://github.com/lukeed/clsx" },
   { name: "tailwind-merge", version: "^2.5.0", source: "frontend", description: "Tailwind 类名冲突合并", license: "MIT", repository: "https://github.com/dcastil/tailwind-merge" },

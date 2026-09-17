@@ -63,7 +63,8 @@ import {
 import { daySubLabel } from "../shared/almanac";
 import { formatYmd } from "../shared/lunar";
 import { rescheduleDue } from "../shared/reschedule-due";
-import { holidaysList, holidaysUpdate, holidayMeta, todoTaskUpdate, type HolidayInfo } from "@/lib/tauri";
+import { useHolidayMarks } from "../shared/use-holiday-marks";
+import { holidaysUpdate, holidayMeta, todoTaskUpdate } from "@/lib/tauri";
 import { OVERDUE_COLOR_CLASS, PRIORITY_COLOR, TODO_ACCENT } from "../shared/constants";
 import { LabelChips } from "../shared/label-chips";
 import { ReminderChip } from "../shared/reminder-chip";
@@ -201,26 +202,13 @@ export function CalendarView({
   };
 
   // 节假日数据（联网更新；空库时 Rust 侧回落预置 2026 表，冷启动即有徽标）
-  const holidaysQuery = useQuery({
-    queryKey: ["holidays", "list"],
-    queryFn: holidaysList,
-    staleTime: 5 * 60_000,
-  });
+  // marks 与日期选择器共用同一份缓存（shared/use-holiday-marks）
+  const holidayMarks = useHolidayMarks();
   const holidayMetaQuery = useQuery({
     queryKey: ["holidays", "meta"],
     queryFn: holidayMeta,
     staleTime: 5 * 60_000,
   });
-  const holidayByDate = new Map(
-    (holidaysQuery.data ?? []).map((h) => [h.date, h] as const),
-  );
-  const holidayMarks = useMemo(() => {
-    const record: Record<string, HolidayMark> = {};
-    for (const [date, h] of holidayByDate) {
-      record[date] = { isOffDay: h.is_holiday, name: h.name };
-    }
-    return record;
-  }, [holidaysQuery.data]);
 
   const refreshHolidays = async () => {
     setUpdatingHolidays(true);
@@ -605,7 +593,7 @@ export function CalendarView({
           groups={listGroups as DayGroup[]}
           today={today}
           scrollToToday
-          holidayByDate={holidayByDate}
+          holidayMarks={holidayMarks}
           projects={projects}
           projectById={projectById}
           labelsByTask={labelsByTask}
@@ -735,19 +723,19 @@ function DayDotsDropZone({
 // ---------------- 节假日徽标（议程档沿用旧样式口径） ----------------
 
 /** 放假「休」（绿）/ 调休补班「班」（橙）小徽标；普通日不渲染 */
-function HolidayBadge({ holiday }: { holiday: HolidayInfo | undefined }) {
+function HolidayBadge({ holiday }: { holiday: HolidayMark | undefined }) {
   if (!holiday) return null;
   return (
     <span
       title={holiday.name}
       className={cn(
         "rounded px-1 text-[10px] font-medium leading-4 tabular-nums",
-        holiday.is_holiday
+        holiday.isOffDay
           ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"
           : "bg-orange-500/15 text-orange-600 dark:text-orange-400",
       )}
     >
-      {holiday.is_holiday ? "休" : "班"}
+      {holiday.isOffDay ? "休" : "班"}
     </span>
   );
 }
@@ -772,8 +760,8 @@ interface VirtualGroupedListProps {
   scrollToKey?: string;
   /** 议程档自动滚到今天：true 时挂载后滚到今天/最近未来组（一次性） */
   scrollToToday?: boolean;
-  /** 议程档日期头是否带节假日徽标 */
-  holidayByDate?: Map<string, HolidayInfo>;
+  /** 议程档日期头是否带节假日徽标（与月历共用同一份 marks） */
+  holidayMarks?: Record<string, HolidayMark>;
   projects: TodoProject[];
   projectById: Map<number, TodoProject>;
   labelsByTask: Map<number, TodoLabel[]>;
@@ -800,7 +788,7 @@ function VirtualGroupedList({
   selectedDay,
   scrollToKey,
   scrollToToday,
-  holidayByDate,
+  holidayMarks,
   projects,
   projectById,
   labelsByTask,
@@ -889,8 +877,8 @@ function VirtualGroupedList({
                   group={item.group}
                   today={today}
                   isSelectedDay={selectedDay != null && isSameDay(item.group.date, selectedDay)}
-                  showHolidayBadge={holidayByDate != null}
-                  holiday={holidayByDate?.get(item.group.key)}
+                  showHolidayBadge={holidayMarks != null}
+                  holiday={holidayMarks?.[item.group.key]}
                   projects={projects}
                   projectById={projectById}
                   labelsByTask={labelsByTask}
@@ -925,7 +913,7 @@ function DayGroupBlock({
   isSelectedDay: boolean;
   /** true = 议程档日期头样式（带徽标/条数分隔线） */
   showHolidayBadge: boolean;
-  holiday?: HolidayInfo;
+  holiday?: HolidayMark;
   projects: TodoProject[];
   projectById: Map<number, TodoProject>;
   labelsByTask: Map<number, TodoLabel[]>;
