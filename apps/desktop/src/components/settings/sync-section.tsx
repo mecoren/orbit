@@ -25,6 +25,7 @@ import {
   CloudUpload,
   DatabaseBackup,
   Download,
+  HardDrive,
   History,
   KeyRound,
   Loader2,
@@ -39,6 +40,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { DangerousConfirmDialog } from "@/components/ui/dangerous-confirm-dialog";
 import { BackupPreviewBody, type BackupPreviewState } from "./backup-preview-body";
+import { formatBackupSize, formatBackupTime } from "./backup-list-format";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -1508,7 +1510,15 @@ function BackupCard() {
       </div>
 
       {cloudOpen && (
-        <div className="space-y-1 rounded-md border bg-muted/20 p-2">
+        <div className="space-y-1 rounded-md border border-sky-500/25 bg-sky-500/[0.04] p-2">
+          <div className="flex items-center gap-1.5 px-1 pt-0.5 pb-1">
+            <Cloud className="size-3.5 text-sky-600 dark:text-sky-400" />
+            <span className="text-xs font-medium">云端副本</span>
+            <span className="rounded-full bg-sky-500/15 px-1.5 py-px text-[10px] text-sky-700 dark:text-sky-300">
+              云端
+            </span>
+            <span className="ml-auto text-[11px] text-muted-foreground">云端 backups 目录</span>
+          </div>
           {cloudList === null && (
             <p className="px-1 py-0.5 text-xs text-muted-foreground">加载中…</p>
           )}
@@ -1517,10 +1527,11 @@ function BackupCard() {
           )}
           {cloudList?.map((e) => (
             <div key={e.cloud_path} className="flex items-center gap-2 rounded px-1 py-0.5 hover:bg-accent/40">
+              <Cloud className="size-3.5 shrink-0 text-sky-600/70 dark:text-sky-400/70" />
               <div className="min-w-0 flex-1">
                 <p className="truncate text-xs font-medium">{e.name}</p>
                 <p className="text-[11px] text-muted-foreground">
-                  {new Date(e.modified_at * 1000).toLocaleString()} · {formatBytes(e.size_bytes)}
+                  {formatBackupTime(e.modified_at)} · {formatBackupSize(e.size_bytes)}
                 </p>
               </div>
               <Button
@@ -1539,6 +1550,14 @@ function BackupCard() {
 
       {historyOpen && (
         <div className="space-y-1 rounded-md border bg-muted/20 p-2">
+          <div className="flex items-center gap-1.5 px-1 pt-0.5 pb-1">
+            <HardDrive className="size-3.5 text-muted-foreground" />
+            <span className="text-xs font-medium">本地历史</span>
+            <span className="rounded-full bg-muted px-1.5 py-px text-[10px] text-muted-foreground">
+              本地
+            </span>
+            <span className="ml-auto text-[11px] text-muted-foreground">本地 backups 目录</span>
+          </div>
           {history === null && (
             <p className="px-1 py-0.5 text-xs text-muted-foreground">加载中…</p>
           )}
@@ -1547,10 +1566,11 @@ function BackupCard() {
           )}
           {history?.map((e) => (
             <div key={e.file_path} className="flex items-center gap-2 rounded px-1 py-0.5 hover:bg-accent/40">
+              <HardDrive className="size-3.5 shrink-0 text-muted-foreground/70" />
               <div className="min-w-0 flex-1">
                 <p className="truncate text-xs font-medium">{e.filename}</p>
                 <p className="text-[11px] text-muted-foreground">
-                  {new Date(e.modified_at * 1000).toLocaleString()} · {formatBytes(e.size_bytes)}
+                  {formatBackupTime(e.modified_at)} · {formatBackupSize(e.size_bytes)}
                 </p>
               </div>
               <Button
