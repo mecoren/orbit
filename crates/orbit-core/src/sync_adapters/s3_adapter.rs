@@ -7,7 +7,7 @@ use crate::s3::{
 };
 use crate::sync::error::SyncError;
 use crate::sync_adapters::http_client::HttpClient;
-use crate::sync_adapters::traits::{RemoteFile, SyncAdapter};
+use crate::sync_adapters::traits::{RemoteFile, SyncAdapter, UploadOutcome, UploadPrecondition};
 
 /// S3 同步适配器配置
 pub struct S3Config {
@@ -495,75 +495,13 @@ impl SyncAdapter for S3Adapter {
     }
 
     async fn download_asset(&self, hash: &str) -> Result<Vec<u8>, SyncError> {
-        // 三读回退：.orsync → .waitsync → 裸 hash（迁移兼容）
-        let new_path = crate::cloud_sync::paths::asset_path(hash);
-        match self.download(&new_path).await {
-            Ok(data) => Ok(data),
-            Err(e) if e.is_not_found() => {
-                let legacy_path = crate::cloud_sync::paths::legacy_asset_path(hash);
-                match self.download(&legacy_path).await {
-                    Ok(data) => Ok(data),
-                    Err(e2) if e2.is_not_found() => {
-                        let bare_path = format!("assets/{hash}");
-                        self.download(&bare_path).await
-                    }
-                    Err(e2) => Err(e2),
-                }
-            }
-            Err(e) => Err(e),
-        }
+        // v2 单一路径：assets/{hash}.orsync（开发阶段无历史数据，不再回退遗留命名）
+        self.download(&crate::cloud_sync::paths::asset_path(hash)).await
     }
 
     async fn asset_exists(&self, hash: &str) -> Result<bool, SyncError> {
-        // 检查新路径；若不存在再检查旧路径（迁移期间可能多份并存）。
-        // P1-2：HEAD 非 2xx 不再一律当「不存在」——403/500 透传错误，
-        // 只有 404/409 才回退旧路径判定（权限错触发重复上传的历史问题）
-        let new_path = crate::cloud_sync::paths::asset_path(hash);
-        let new_url = self.build_object_url(&new_path);
-        let new_headers = self.sign_request("HEAD", &new_url, &sha256_hex(b""))?;
-
-        let result = self
-            .http
-            .inner()
-            .head(&new_url)
-            .headers(new_headers)
-            .send()
-            .await
-            .map_err(|e| SyncError::Network {
-                message: format!("HEAD 请求失败: {e}"),
-                retryable: true,
-            })?;
-
-        match SyncError::classify_head_status(result.status().as_u16())? {
-            true => return Ok(true),
-            false => {}
-        }
-
-        // 新路径不存在（404/409），回退检查遗留路径（.waitsync → 裸 hash）
-        for legacy_path in [
-            crate::cloud_sync::paths::legacy_asset_path(hash),
-            format!("assets/{hash}"),
-        ] {
-            let legacy_url = self.build_object_url(&legacy_path);
-            let legacy_headers = self.sign_request("HEAD", &legacy_url, &sha256_hex(b""))?;
-
-            let result = self
-                .http
-                .inner()
-                .head(&legacy_url)
-                .headers(legacy_headers)
-                .send()
-                .await
-                .map_err(|e| SyncError::Network {
-                    message: format!("HEAD 请求失败: {e}"),
-                    retryable: true,
-                })?;
-
-            if SyncError::classify_head_status(result.status().as_u16())? {
-                return Ok(true);
-            }
-        }
-        Ok(false)
+        // HEAD 存在性探测（403/500/429 透传类型化错误，不得静默当不存在）
+        self.exists(&crate::cloud_sync::paths::asset_path(hash)).await
     }
 
     async fn list_assets(&self) -> Result<Vec<String>, SyncError> {
@@ -580,6 +518,70 @@ impl SyncAdapter for S3Adapter {
         hashes.sort();
         hashes.dedup();
         Ok(hashes)
+    }
+
+    // ========================================================================
+    // v2：轻量探测 / 并发令牌 / 条件写
+    // ========================================================================
+
+    /// HEAD 存在性探测（不再为判断存在而下载整个对象）
+    async fn exists(&self, path: &str) -> Result<bool, SyncError> {
+        let url = self.build_object_url(path);
+        let headers = self.sign_request("HEAD", &url, &sha256_hex(b""))?;
+        let response = self
+            .http
+            .inner()
+            .head(&url)
+            .headers(headers)
+            .send()
+            .await
+            .map_err(|e| SyncError::Network {
+                message: format!("HEAD 请求失败: {e}"),
+                retryable: true,
+            })?;
+        SyncError::classify_head_status(response.status().as_u16())
+    }
+
+    /// 读取对象与并发令牌（S3 回 ETag）
+    async fn download_with_token(
+        &self,
+        path: &str,
+    ) -> Result<Option<(Vec<u8>, Option<String>)>, SyncError> {
+        let url = self.build_object_url(path);
+        let headers = self.sign_request("GET", &url, &sha256_hex(b""))?;
+        match self.http.get_with_token(&url, headers).await {
+            Ok((bytes, token)) => Ok(Some((bytes, token))),
+            Err(e) if e.is_not_found() => Ok(None),
+            Err(e) => Err(e),
+        }
+    }
+
+    /// 条件 PUT（S3/OSS 支持 If-Match 与 If-None-Match: *）
+    ///
+    /// 清单是小对象（不会触达 multipart 分派阈值），条件头可达。
+    async fn upload_conditional(
+        &self,
+        path: &str,
+        data: &[u8],
+        precondition: UploadPrecondition,
+    ) -> Result<UploadOutcome, SyncError> {
+        let url = self.build_object_url(path);
+        let payload_hash = sha256_hex(data);
+        let headers = self.sign_request("PUT", &url, &payload_hash)?;
+        let (if_match, if_none_star) = match &precondition {
+            UploadPrecondition::None => (None, false),
+            UploadPrecondition::Absent => (None, true),
+            UploadPrecondition::Match(token) => (Some(token.as_str()), false),
+        };
+        let ok = self
+            .http
+            .put_conditional(&url, headers, data.to_vec(), if_match, if_none_star)
+            .await?;
+        Ok(if ok {
+            UploadOutcome::Ok
+        } else {
+            UploadOutcome::PreconditionFailed
+        })
     }
 }
 

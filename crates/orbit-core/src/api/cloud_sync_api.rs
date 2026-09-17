@@ -108,41 +108,16 @@ impl SyncAdapter for BasePathAdapter {
     }
 
     async fn download_asset(&self, hash: &str) -> Result<Vec<u8>, SyncError> {
-        // 同 upload_asset：.orsync → .waitsync → 裸 hash 三级回退（迁移兼容）
-        let new_path = crate::cloud_sync::paths::asset_path(hash);
-        match self.inner.download(&self.join(&new_path)).await {
-            Ok(data) => Ok(data),
-            Err(e) if e.is_not_found() => {
-                let legacy = crate::cloud_sync::paths::legacy_asset_path(hash);
-                match self.inner.download(&self.join(&legacy)).await {
-                    Ok(data) => Ok(data),
-                    Err(e2) if e2.is_not_found() => {
-                        let bare = format!("assets/{}", hash);
-                        self.inner.download(&self.join(&bare)).await
-                    }
-                    Err(e2) => Err(e2),
-                }
-            }
-            Err(e) => Err(e),
-        }
+        // v2：附件单一路径（无历史数据，不再回退遗留命名）。
+        // 「单对象 → 分片拼装」的形态回退由内层适配器负责。
+        let path = crate::cloud_sync::paths::asset_path(hash);
+        self.inner.download(&self.join(&path)).await
     }
 
     async fn asset_exists(&self, hash: &str) -> Result<bool, SyncError> {
-        // S1：三路径探测。asset_exists 内层实现不带 base_path 语义，
-        // 这里统一走 download 探测（404/409 → 不存在，其余错误透传）：
-        // 新命名优先（asset_path），404 再试遗留命名。
-        for path in [
-            crate::cloud_sync::paths::asset_path(hash),
-            crate::cloud_sync::paths::legacy_asset_path(hash),
-            format!("assets/{}", hash),
-        ] {
-            match self.inner.download(&self.join(&path)).await {
-                Ok(_) => return Ok(true),
-                Err(e) if e.is_not_found() => continue,
-                Err(e) => return Err(e),
-            }
-        }
-        Ok(false)
+        // 内层适配器自带「单对象 → 分片清单」两段探测（HEAD 实现）
+        let path = crate::cloud_sync::paths::asset_path(hash);
+        self.inner.exists(&self.join(&path)).await
     }
 
     async fn list_assets(&self) -> Result<Vec<String>, SyncError> {
@@ -311,6 +286,38 @@ pub async fn pull_then_push(
             attachments_dir,
         )
         .await
+}
+
+// ============================================================================
+// 强制同步（进入 / 退出应用）
+// ============================================================================
+
+/// 强制同步：进入应用与退出应用时使用
+///
+/// ## 与 `sync_now` / `pull_then_push` 的唯一差别
+/// 只在**调用前提**：本函数不读取任何「自动同步开关 / 同步间隔 / 修改后
+/// 立即同步」设置——是否该同步由调用方判定（壳层已确认「配置存在 + 已解锁」）。
+/// 引擎侧仍走既有互斥与账本逻辑，不做任何开关绕过以外的特例。
+///
+/// ## 忙时语义
+/// 引擎正忙时不立即返回 `skipped`（那会让"退出同步"静默丢失），而是等待
+/// 最多 `wait_for_idle_ms` 再执行；等待超时仍忙则交由 `acquire_lock` 返回
+/// `skipped`，调用方须把它当作"本轮未执行"处理。
+pub async fn force_sync(
+    engine: &SyncEngine,
+    config: &SyncConfig,
+    origin: SyncOrigin,
+    device_id: &str,
+    attachments_dir: &str,
+    wait_for_idle_ms: u64,
+) -> Result<SyncResult, CloudSyncError> {
+    if wait_for_idle_ms > 0 {
+        let idle = engine.wait_idle(wait_for_idle_ms).await;
+        if !idle {
+            log::info!("[force_sync] 等待引擎空闲超时（{wait_for_idle_ms}ms），仍尝试执行");
+        }
+    }
+    pull_then_push(engine, config, origin, device_id, attachments_dir).await
 }
 
 // ============================================================================
@@ -523,55 +530,32 @@ mod tests {
         }
     }
 
-    /// S1 死循环场景的完整链路：桶中同时存在 `abc.orsync`（默认）与
-    /// `abc.waitsync` / `def`（遗留）→ list_assets 剥后缀 + 排序去重后应返回
-    /// 纯 hash 列表；download_asset 新路径优先、404 回退遗留路径。
+    /// v2：附件命名单一口径（`assets/{hash}.orsync`），读写/列举/探测全部对齐
+    ///
+    /// v1 曾并存 `.orsync` / `.waitsync` / 裸 hash 三种命名，读侧要三/四段
+    /// 回退，且"两个对象同一 hash"会让 list 差集与内容校验打架。v2 只有一种
+    /// 命名（开发阶段无历史数据），回退路径整体移除。
     #[tokio::test]
-    async fn s1_asset_paths_converge_across_naming_schemes() {
-        // 模拟存量桶：默认对象 + 遗留对象 + 两者并存的同一 hash
+    async fn v2_asset_paths_use_single_naming_scheme() {
         let mock = AssetMockAdapter::new()
             .with_file("wait-sync/user1/assets/abc123.orsync", b"abc-data")
-            .with_file("wait-sync/user1/assets/def456", b"def-data")
-            .with_file("wait-sync/user1/assets/legacy789.waitsync", b"legacy-data")
-            .with_listing(&[
-                "abc123.orsync",
-                "abc123.waitsync",
-                "abc123",
-                "def456",
-                "legacy789.waitsync",
-            ]);
+            .with_listing(&["abc123.orsync", "def456.orsync"]);
 
         let uploads = mock.uploads.clone();
         let list_prefixes = mock.list_prefixes.clone();
         let adapter = BasePathAdapter::new(Box::new(mock), "wait-sync/user1");
 
-        // list_assets：剥同步后缀 + 排序去重（S30），同一 hash 的多对象合一
+        // list_assets：剥同步后缀后返回纯 hash 列表，且前缀带 base_path
         let hashes = adapter.list_assets().await.unwrap();
-        assert_eq!(
-            hashes,
-            vec![
-                "abc123".to_string(),
-                "def456".to_string(),
-                "legacy789".to_string()
-            ]
-        );
+        assert_eq!(hashes, vec!["abc123".to_string(), "def456".to_string()]);
         assert_eq!(
             list_prefixes.lock().unwrap().as_slice(),
             ["wait-sync/user1/assets"],
             "list 前缀必须带 base_path"
         );
 
-        // download_asset：默认命名优先命中
-        let data = adapter.download_asset("abc123").await.unwrap();
-        assert_eq!(data, b"abc-data");
-
-        // download_asset：遗留命名 404 回退命中（迁移兼容）
-        let data = adapter.download_asset("def456").await.unwrap();
-        assert_eq!(data, b"def-data");
-        let data = adapter.download_asset("legacy789").await.unwrap();
-        assert_eq!(data, b"legacy-data");
-
-        // download_asset：三路径皆无 → NotFound 透传
+        // download_asset：命中即返回；未命中 → NotFound 透传（无回退）
+        assert_eq!(adapter.download_asset("abc123").await.unwrap(), b"abc-data");
         assert!(
             adapter
                 .download_asset("zzz")
@@ -580,24 +564,16 @@ mod tests {
                 .is_not_found()
         );
 
-        // upload_asset：统一写默认命名（不再产生多口径）
+        // asset_exists：存在 / 不存在
+        assert!(adapter.asset_exists("abc123").await.unwrap());
+        assert!(!adapter.asset_exists("missing").await.unwrap());
+
+        // upload_asset：统一写 assets/{hash}.orsync 并拼接 base_path
         adapter.upload_asset("new1", b"x").await.unwrap();
         assert_eq!(
             uploads.lock().unwrap().as_slice(),
             ["wait-sync/user1/assets/new1.orsync"]
         );
-    }
-
-    /// S1 asset_exists：三路径探测（默认 404 → 回退遗留命名）
-    #[tokio::test]
-    async fn s1_asset_exists_probes_both_naming_schemes() {
-        let mock = AssetMockAdapter::new().with_file("wait-sync/user1/assets/only-old", b"x");
-        let adapter = BasePathAdapter::new(Box::new(mock), "wait-sync/user1");
-
-        // 旧命名对象：默认路径 404 → 回退命中
-        assert!(adapter.asset_exists("only-old").await.unwrap());
-        // 三路径皆无 → false
-        assert!(!adapter.asset_exists("missing").await.unwrap());
     }
 
     /// base_path 为空时路径原样透传（根目录部署形态）

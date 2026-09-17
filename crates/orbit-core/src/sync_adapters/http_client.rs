@@ -167,6 +167,105 @@ impl HttpClient {
         }))
     }
 
+    /// 带并发令牌读取的 GET（v2 清单 CAS 的前置读取）
+    ///
+    /// 返回 `(响应体, ETag)`；服务端未提供 ETag 时令牌为 `None`，调用方
+    /// 退化为「写后回读校验」。重试策略与 `get_with_retry` 一致。
+    pub async fn get_with_token(
+        &self,
+        url: &str,
+        headers: reqwest::header::HeaderMap,
+    ) -> Result<(Vec<u8>, Option<String>), SyncError> {
+        let mut last_error = None;
+
+        for attempt in 0..=self.max_retries {
+            match self.client.get(url).headers(headers.clone()).send().await {
+                Ok(response) => {
+                    if response.status().is_success() {
+                        let token = response
+                            .headers()
+                            .get(reqwest::header::ETAG)
+                            .and_then(|v| v.to_str().ok())
+                            .map(|s| s.trim_matches('"').to_string());
+                        let bytes = response.bytes().await.map_err(|e| SyncError::Network {
+                            message: format!("读取响应体失败: {e}"),
+                            retryable: false,
+                        })?;
+                        return Ok((bytes.to_vec(), token));
+                    }
+                    let status = response.status();
+                    let body = response.text().await.unwrap_or_default();
+                    let error = SyncError::from_http_status(status.as_u16(), &body);
+                    if !error.is_retryable() || error.is_rate_limited() {
+                        return Err(error);
+                    }
+                    last_error = Some(error);
+                }
+                Err(e) => {
+                    last_error = Some(SyncError::Network {
+                        message: format!("GET 请求失败: {e}"),
+                        retryable: true,
+                    });
+                }
+            }
+
+            if attempt < self.max_retries {
+                let delay = Duration::from_millis(100 * 2u64.pow(attempt));
+                tokio::time::sleep(delay).await;
+            }
+        }
+
+        Err(last_error.unwrap_or_else(|| SyncError::Network {
+            message: "未知错误".to_string(),
+            retryable: false,
+        }))
+    }
+
+    /// 条件 PUT（v2 清单乐观并发写入）
+    ///
+    /// - `if_match = Some(token)`：`If-Match: "token"`，对象被他人改写时 412
+    /// - `if_none_match_star = true`：`If-None-Match: *`，对象已存在时 412
+    ///
+    /// 返回 `Ok(false)` 表示前置条件不满足（412），其余非 2xx 按类型报错。
+    /// 不在此层重试 412——那是调用方的语义分支（拉取合并重试），不是网络抖动。
+    pub async fn put_conditional(
+        &self,
+        url: &str,
+        headers: reqwest::header::HeaderMap,
+        body: Vec<u8>,
+        if_match: Option<&str>,
+        if_none_match_star: bool,
+    ) -> Result<bool, SyncError> {
+        let mut request = self.client.put(url).headers(headers).body(body);
+        if let Some(token) = if_match {
+            request = request.header(reqwest::header::IF_MATCH, format!("\"{token}\""));
+        }
+        if if_none_match_star {
+            request = request.header(reqwest::header::IF_NONE_MATCH, "*");
+        }
+
+        let response = request
+            .timeout(Duration::from_secs(120))
+            .send()
+            .await
+            .map_err(|e| SyncError::Network {
+                message: format!("条件 PUT 请求失败: {e}"),
+                retryable: true,
+            })?;
+
+        let status = response.status().as_u16();
+        match status {
+            412 => Ok(false),
+            // 部分 WebDAV 实现对 If-Match 失败返回 409 Conflict
+            409 if if_match.is_some() || if_none_match_star => Ok(false),
+            s if crate::sync::error::is_success_status(s) => Ok(true),
+            s => {
+                let body = response.text().await.unwrap_or_default();
+                Err(SyncError::from_http_status(s, &body))
+            }
+        }
+    }
+
     /// 单次 PUT（无 HTTP 级重试、120s 总超时长窗口），返回响应 ETag
     ///
     /// S4 multipart 分片上传专用（2026-09-14）：分片级重试由调用方
