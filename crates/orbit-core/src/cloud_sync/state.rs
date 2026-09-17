@@ -5,7 +5,11 @@
 //! - `remote_tables` / `remote_tombstones`：上次同步后远端**桶索引快照**
 //!   （表 → 桶键 → 指纹）。pull 据此只下载「远端指纹与快照不同」的桶；
 //!   没有这份快照就只能每次全量下载，差量无从谈起。
-//! - `last_synced_at`：上次同步完成时间（调度器与 UI 展示）
+//! - `last_synced_at`：上次同步完成时间（调度器与 UI 展示，墙上时钟）
+//! - `last_synced_clock_ms`：上次同步完成时的**逻辑时钟**值（`db::clock`）——
+//!   记录级「是否在上次同步之后被改过」的判定基线，供冲突败方副本留档使用
+//!   （与 `last_synced_at` 区分：后者是墙上时钟，是墓碑回收水位线的依据，
+//!   不能混用逻辑时钟，否则会把未见过墓碑的设备误判为已见过）
 //!
 //! 快照是**纯缓存**：丢失只损失一次增量能力（退化为完整下载一轮），
 //! 不涉及业务数据；而 push 侧的差量基准始终是实时读取的远端清单，
@@ -28,8 +32,15 @@ const STATE_FILE_NAME: &str = "sync_state.json";
 /// 本地同步账本
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct SyncState {
-    /// 最后一次同步完成时间（Unix 毫秒）
+    /// 最后一次同步完成时间（Unix 毫秒，墙上时钟）
     pub last_synced_at: i64,
+    /// 最后一次同步完成时的逻辑时钟值（见 `db::clock`；0 = 从未成功同步）
+    ///
+    /// 冲突败方副本的「真并发」判据：只有本地记录时间戳**晚于**本值，
+    /// 才说明这条记录在上次同步之后被本地改过，此时远端同 uuid 的更新
+    /// 才算冲突（否则只是他端顺延更新，属正常传播，不该留档噪声）。
+    #[serde(default)]
+    pub last_synced_clock_ms: i64,
     /// 当前设备 ID
     pub device_id: String,
     /// 上次成功同步后远端清单的 epoch（0 = 从未成功同步）
@@ -47,6 +58,7 @@ impl SyncState {
     pub fn empty(device_id: &str) -> Self {
         Self {
             last_synced_at: 0,
+            last_synced_clock_ms: 0,
             device_id: device_id.to_string(),
             manifest_epoch: 0,
             remote_tables: BTreeMap::new(),

@@ -11,6 +11,20 @@
 //!   次级裁决（高者胜），杜绝同毫秒平局导致的两端分歧与振荡（FR-3）
 //! - 墓碑集中的 uuid → 本地软删除（带时间戳裁决删除 vs 编辑）
 //!
+//! ## 逻辑时钟（HLC 折叠实现）
+//! 每条远端记录的 `updated_at` 与每个墓碑的 `deleted_at` 都经
+//! [`crate::db::clock::observe_ms`] 并入本地逻辑时钟（HLC receive 规则）：此后
+//! 本地写入必然大于「已见过的最大值」，设备间时钟漂移带来的系统性 LWW 偏置
+//! 在首次同步后即被消除。比较逻辑本身不变（仍是 `updated_at` + `version` 次序，
+//! 只是这把键由墙上时钟换成了单调逻辑时钟）。
+//!
+//! ## 冲突败方副本
+//! 裁决丢掉的败方字段过去直接消失（只有计数可见）。现在会把**真并发冲突**的
+//! 败方整行快照留档到本地表 `sync_conflicts`（同事务，见 `api::sync_conflict_api`）。
+//! 「真并发」判据：本地记录与远端记录都晚于上次同步成功时的逻辑时钟
+//! （`baseline_ms`，来自 `SyncState.last_synced_clock_ms`）；他端顺延更新
+//! （本地自上次同步后没动过）不算冲突，避免把每次跨端同步都灌成噪声。
+//!
 //! ## 事务保证
 //! 单表内「批量 INSERT + 逐条 UPDATE」在单个事务内（原子）；
 //! 墓碑应用是紧随其后的另一个事务。单条记录失败不阻塞整体，
@@ -25,7 +39,10 @@ use std::collections::HashMap;
 
 use sqlx::SqlitePool;
 
-use crate::cloud_sync::db_loader::{LocalRecordState, load_table_uuid_map};
+use crate::api::sync_conflict_api::{
+    ConflictSnapshot, insert_conflict_in_tx, payload_json_of, prune_in_tx, record_title_of,
+};
+use crate::cloud_sync::db_loader::{LocalRecordState, load_table_uuid_map, sqlite_row_to_json};
 use crate::cloud_sync::error::CloudSyncError;
 use crate::cloud_sync::meta::TombstoneEntry;
 use crate::db::repository::generic_repo::{push_json_value, validate_column_name};
@@ -96,6 +113,8 @@ pub struct MergeResult {
     /// 冲突裁决数（S28：两端同 uuid 都有更新的记录数——LWW 平局 version
     /// 裁决 + 本地胜出跳过 + 复活裁决的合计，此前恒 0 无可观测性）
     pub conflicts: u64,
+    /// 留档的败方副本数（真并发冲突才留档，≤ `conflicts`）
+    pub copied: u64,
     /// 错误信息（不阻塞整体流程）
     pub errors: Vec<String>,
 }
@@ -108,12 +127,27 @@ pub struct MergeResult {
 /// 的隐患（v1 用 uuid 做全模块 map key）。
 ///
 /// 墓碑集中的 uuid 执行软删除（FR-2.6：带时间戳裁决删除 vs 编辑）。
+///
+/// `baseline_ms`：上次同步成功时的本地逻辑时钟（`SyncState.last_synced_clock_ms`），
+/// 用于判定「真并发冲突」并据此留档败方副本；传 0（从未同步/测试）时不留档。
 pub async fn merge_table_items(
     db_pool: &SqlitePool,
     table: &str,
     remote_items: &[serde_json::Value],
     tombstones: &[TombstoneEntry],
+    baseline_ms: i64,
 ) -> Result<MergeResult, CloudSyncError> {
+    // 0. 接收远端时间戳（HLC receive 规则）：先于任何裁决，保证本轮之后的本地
+    //    写入必然大于已见值（含墓碑删除时间——删除 vs 编辑裁决同样依赖它）
+    for item in remote_items {
+        if let Some(ts) = item.get("updated_at").and_then(|v| v.as_i64()) {
+            crate::db::clock::observe_ms(ts);
+        }
+    }
+    for t in tombstones {
+        crate::db::clock::observe_ms(t.deleted_at());
+    }
+
     // 1. 加载本地（含软删）uuid → 裁决状态映射
     let local_map = load_table_uuid_map(db_pool, table).await?;
     // 列元数据必须在事务外读取：事务持有连接后再从池取连接，
@@ -133,12 +167,13 @@ pub async fn merge_table_items(
     //    在窗口内会观察到已删记录仍存活。
     let mut tx = db_pool.begin().await?;
 
-    match merge_single_table_in_tx(&mut tx, table, &refs, &local_map, &columns).await {
+    match merge_single_table_in_tx(&mut tx, table, &refs, &local_map, &columns, baseline_ms).await {
         Ok(table_result) => {
             result.inserted += table_result.inserted;
             result.updated += table_result.updated;
             result.skipped += table_result.skipped;
             result.conflicts += table_result.conflicts;
+            result.copied += table_result.copied;
             result.errors.extend(table_result.errors);
         }
         Err(e) => {
@@ -170,12 +205,15 @@ async fn merge_single_table_in_tx(
     items: &[&serde_json::Value],
     local_map: &HashMap<String, LocalRecordState>,
     columns: &HashMap<String, ColumnMeta>,
+    baseline_ms: i64,
 ) -> Result<MergeResult, CloudSyncError> {
     let mut result = MergeResult::default();
 
     // 1. 分类：待 INSERT 和待 UPDATE
     let mut to_insert: Vec<&serde_json::Map<String, serde_json::Value>> = Vec::new();
     let mut to_update: Vec<(&str, &serde_json::Map<String, serde_json::Value>)> = Vec::new();
+    // 真并发冲突的败方副本快照（数据写入完成后同事务落库）
+    let mut snapshots: Vec<ConflictSnapshot> = Vec::new();
 
     for item in items {
         let obj = match item.as_object() {
@@ -223,13 +261,19 @@ async fn merge_single_table_in_tx(
                     remote_version,
                     local.version,
                 );
+                // 真并发判据：双方记录都晚于上次同步基线（基线 0 = 从未同步，不留档）
+                let concurrent = baseline_ms > 0
+                    && local.updated_at > baseline_ms
+                    && remote_updated > baseline_ms;
+                let tie = remote_updated == local.updated_at;
+
                 match decision {
                     LwwDecision::Update => {
                         // 远端胜出（updated_at 更大，或平局时 version 更高）→ UPDATE
                         let uuid_ref = obj.get("uuid").and_then(|v| v.as_str()).unwrap_or("");
                         result.conflicts += 1;
                         // 平局裁决时输出 warn 日志，便于排查（非平局的正常 Update 不打日志）
-                        if remote_updated == local.updated_at {
+                        if tie {
                             log::warn!(
                                 "[merge] LWW 平局裁决：表 {} uuid={} updated_at={}，\
                                  远端 version={} > 本地 {}，采用远端",
@@ -240,11 +284,25 @@ async fn merge_single_table_in_tx(
                                 local.version
                             );
                         }
+                        // 本地被覆盖：把本地旧版本留档（必须在 UPDATE 之前读）
+                        if concurrent
+                            && let Some(local_obj) =
+                                load_local_payload(&mut *tx, table, &uuid).await
+                        {
+                            snapshots.push(build_snapshot(
+                                table,
+                                &uuid,
+                                if tie { "tie_version" } else { "lww" },
+                                "local",
+                                &local_obj,
+                                obj,
+                            ));
+                        }
                         to_update.push((uuid_ref, obj));
                     }
                     LwwDecision::Skip => {
                         // 本地胜出或数据相同 → 跳过
-                        if remote_updated == local.updated_at && remote_version == local.version {
+                        if tie && remote_version == local.version {
                             log::debug!(
                                 "[merge] LWW 完全平局：表 {} uuid={} updated_at 与 version 均相等，跳过",
                                 table,
@@ -253,13 +311,29 @@ async fn merge_single_table_in_tx(
                         } else {
                             // 本地胜出的真实冲突（远端也有更新但败出）
                             result.conflicts += 1;
+                            // 远端被丢弃：把远端版本留档
+                            if concurrent
+                                && let Some(local_obj) =
+                                    load_local_payload(&mut *tx, table, &uuid).await
+                            {
+                                snapshots.push(build_snapshot(
+                                    table,
+                                    &uuid,
+                                    if tie { "tie_version" } else { "lww" },
+                                    "remote",
+                                    obj,
+                                    &local_obj,
+                                ));
+                            }
                         }
                         result.skipped += 1;
                     }
                 }
             }
             Some(local) => {
-                // 复活裁决（FR-2.6 口径）：deleted_at=0（极旧格式）视为可复活
+                // 复活裁决（FR-2.6 口径）：deleted_at=0（极旧格式）视为可复活。
+                // 删除 vs 编辑的败方是「墓碑/存活记录」而非两版内容，不做副本留档
+                // （计入 conflicts 观察即可），避免把墓碑行当成可恢复内容误导用户。
                 result.conflicts += 1;
                 if remote_updated >= local.deleted_at || local.deleted_at == 0 {
                     log::info!(
@@ -304,7 +378,81 @@ async fn merge_single_table_in_tx(
         }
     }
 
+    // 4. 冲突败方副本落库（同事务：与合并结果原子，避免「数据已覆盖、副本没留」）
+    if !snapshots.is_empty() {
+        for snapshot in &snapshots {
+            match insert_conflict_in_tx(tx, snapshot).await {
+                Ok(()) => result.copied += 1,
+                Err(e) => result
+                    .errors
+                    .push(format!("表 {table}: 冲突副本留档失败: {e}")),
+            }
+        }
+        if let Err(e) = prune_in_tx(tx).await {
+            result.errors.push(format!("冲突副本裁剪失败: {e}"));
+        }
+    }
+
     Ok(result)
+}
+
+/// 读取本地整行（含软删行）快照，供冲突副本留档
+///
+/// 只有在判定为真并发冲突时才调用（低频），因此不把整行塞进
+/// [`LocalRecordState`]——那会让每轮 pull 都把全表内容物化成 JSON。
+async fn load_local_payload(
+    conn: &mut sqlx::SqliteConnection,
+    table: &str,
+    uuid: &str,
+) -> Option<serde_json::Map<String, serde_json::Value>> {
+    let sql = format!("SELECT * FROM \"{table}\" WHERE uuid = ? LIMIT 1");
+    match sqlx::query(&sql).bind(uuid).fetch_optional(conn).await {
+        Ok(Some(row)) => Some(sqlite_row_to_json(&row)),
+        Ok(None) => None,
+        Err(e) => {
+            log::warn!("[merge] 读取本地记录快照失败（表 {table} uuid={uuid}）: {e}");
+            None
+        }
+    }
+}
+
+/// 组装冲突副本快照（标题优先取胜方，便于列表里认出是哪条记录）
+///
+/// 两侧时间戳直接从整行载荷里的 `updated_at` 取——载荷就是**留档的那一版本身**，
+/// 另传参数会留下「记录的裁决时间与实际留档内容不一致」的口子。
+fn build_snapshot(
+    table: &str,
+    uuid: &str,
+    decision: &str,
+    loser_side: &str,
+    loser_obj: &serde_json::Map<String, serde_json::Value>,
+    winner_obj: &serde_json::Map<String, serde_json::Value>,
+) -> ConflictSnapshot {
+    let ts_of = |obj: &serde_json::Map<String, serde_json::Value>| {
+        obj.get("updated_at").and_then(|v| v.as_i64()).unwrap_or(0)
+    };
+    let winner_title = record_title_of(winner_obj);
+    let title = if winner_title.is_empty() {
+        record_title_of(loser_obj)
+    } else {
+        winner_title
+    };
+    ConflictSnapshot {
+        table_name: table.to_string(),
+        record_uuid: uuid.to_string(),
+        record_title: title,
+        decision: decision.to_string(),
+        loser_side: loser_side.to_string(),
+        winner_side: if loser_side == "local" {
+            "remote".to_string()
+        } else {
+            "local".to_string()
+        },
+        loser_payload: payload_json_of(loser_obj),
+        winner_payload: payload_json_of(winner_obj),
+        loser_updated_at: ts_of(loser_obj),
+        winner_updated_at: ts_of(winner_obj),
+    }
 }
 
 /// 批量 INSERT：分批 50 条构造 `INSERT INTO t (cols) VALUES (?),(?),...`
@@ -545,6 +693,8 @@ mod tests {
         assert_eq!(r.updated, 0);
         assert_eq!(r.deleted, 0);
         assert_eq!(r.skipped, 0);
+        assert_eq!(r.conflicts, 0);
+        assert_eq!(r.copied, 0);
         assert!(r.errors.is_empty());
     }
 
@@ -639,20 +789,14 @@ mod tests {
                 .connect("sqlite::memory:")
                 .await
                 .unwrap();
-            sqlx::query(
-                "CREATE TABLE todo_projects (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    uuid TEXT NOT NULL,
-                    title TEXT,
-                    is_deleted INTEGER NOT NULL DEFAULT 0,
-                    deleted_at INTEGER NOT NULL DEFAULT 0,
-                    updated_at INTEGER NOT NULL DEFAULT 0,
-                    version INTEGER NOT NULL DEFAULT 0
-                )",
-            )
-            .execute(&pool)
-            .await
-            .unwrap();
+            // 用真实迁移建库：冲突败方副本需要 sync_conflicts 表，
+            // 且手搓的极简 todo_projects 与线上列集不一致会掩盖列裁剪问题
+            sqlx::migrate!("./src/db/migrations")
+                .run(&pool)
+                .await
+                .unwrap();
+            // 迁移种子会插入「收件箱」行；本模块断言的是 uuid 精确查询，
+            // 但 resurrections 等用例按 uuid 定位，不受种子影响
             pool
         }
 
@@ -716,7 +860,9 @@ mod tests {
                 "_table": "todo_projects", "uuid": "r1", "title": "edited-on-b",
                 "is_deleted": 0, "deleted_at": 0, "updated_at": 200, "version": 2
             })];
-            let result = merge_table_items(&pool, "todo_projects", &items, &[]).await.unwrap();
+            let result = merge_table_items(&pool, "todo_projects", &items, &[], 0)
+                .await
+                .unwrap();
 
             assert_eq!(result.updated, 1, "复活必须走 UPDATE 路径");
             assert_eq!(result.inserted, 0, "绝不允许 INSERT 产生重复行");
@@ -737,7 +883,9 @@ mod tests {
                 "_table": "todo_projects", "uuid": "r2", "title": "stale-alive",
                 "is_deleted": 0, "deleted_at": 0, "updated_at": 200, "version": 1
             })];
-            let result = merge_table_items(&pool, "todo_projects", &items, &[]).await.unwrap();
+            let result = merge_table_items(&pool, "todo_projects", &items, &[], 0)
+                .await
+                .unwrap();
 
             assert_eq!(result.skipped, 1);
             assert_eq!(result.inserted + result.updated, 0);
@@ -755,14 +903,18 @@ mod tests {
                 "_table": "todo_projects", "uuid": "r3", "title": "remote-older",
                 "is_deleted": 0, "updated_at": 400, "version": 9
             })];
-            let result = merge_table_items(&pool, "todo_projects", &items, &[]).await.unwrap();
+            let result = merge_table_items(&pool, "todo_projects", &items, &[], 0)
+                .await
+                .unwrap();
             assert_eq!(result.skipped, 1, "本地较新应跳过");
 
             let items2 = vec![serde_json::json!({
                 "_table": "todo_projects", "uuid": "r3", "title": "remote-newer",
                 "is_deleted": 0, "updated_at": 600, "version": 1
             })];
-            let result2 = merge_table_items(&pool, "todo_projects", &items2, &[]).await.unwrap();
+            let result2 = merge_table_items(&pool, "todo_projects", &items2, &[], 0)
+                .await
+                .unwrap();
             assert_eq!(result2.updated, 1, "远端较新应更新");
             assert_eq!(row_count(&pool, "r3").await, 1);
         }
@@ -779,7 +931,9 @@ mod tests {
                 "_table": "todo_projects", "uuid": "c1", "title": "same",
                 "is_deleted": 0, "updated_at": 100, "version": 1
             })];
-            let r1 = merge_table_items(&pool, "todo_projects", &same, &[]).await.unwrap();
+            let r1 = merge_table_items(&pool, "todo_projects", &same, &[], 0)
+                .await
+                .unwrap();
             assert_eq!(r1.skipped, 1);
             assert_eq!(r1.conflicts, 0, "同数据全等平局不是冲突");
 
@@ -788,7 +942,7 @@ mod tests {
                 "_table": "todo_projects", "uuid": "c1", "title": "stale-remote",
                 "is_deleted": 0, "updated_at": 90, "version": 9
             })];
-            let r2 = merge_table_items(&pool, "todo_projects", &local_wins, &[])
+            let r2 = merge_table_items(&pool, "todo_projects", &local_wins, &[], 0)
                 .await
                 .unwrap();
             assert_eq!(r2.skipped, 1);
@@ -799,7 +953,7 @@ mod tests {
                 "_table": "todo_projects", "uuid": "c1", "title": "fresh-remote",
                 "is_deleted": 0, "updated_at": 200, "version": 1
             })];
-            let r3 = merge_table_items(&pool, "todo_projects", &remote_wins, &[])
+            let r3 = merge_table_items(&pool, "todo_projects", &remote_wins, &[], 0)
                 .await
                 .unwrap();
             assert_eq!(r3.updated, 1);
@@ -810,7 +964,9 @@ mod tests {
                 "_table": "todo_projects", "uuid": "c-new", "title": "brand-new",
                 "is_deleted": 0, "updated_at": 300, "version": 1
             })];
-            let r4 = merge_table_items(&pool, "todo_projects", &fresh, &[]).await.unwrap();
+            let r4 = merge_table_items(&pool, "todo_projects", &fresh, &[], 0)
+                .await
+                .unwrap();
             assert_eq!(r4.inserted, 1);
             assert_eq!(r4.conflicts, 0, "单端新增不是冲突");
         }
@@ -825,7 +981,9 @@ mod tests {
                 "_table": "todo_projects", "uuid": "c2", "title": "remote-alive",
                 "is_deleted": 0, "deleted_at": 0, "updated_at": 200, "version": 1
             })];
-            let result = merge_table_items(&pool, "todo_projects", &items, &[]).await.unwrap();
+            let result = merge_table_items(&pool, "todo_projects", &items, &[], 0)
+                .await
+                .unwrap();
             assert_eq!(result.skipped, 1, "删除胜出保持墓碑");
             assert_eq!(result.conflicts, 1, "复活裁决是删除vs编辑冲突，必须计数");
         }
@@ -891,7 +1049,9 @@ mod tests {
                 "title": "from-other-device",
                 "is_deleted": 0, "updated_at": 100, "version": 1
             })];
-            let result = merge_table_items(&pool, "todo_projects", &items, &[]).await.unwrap();
+            let result = merge_table_items(&pool, "todo_projects", &items, &[], 0)
+                .await
+                .unwrap();
             assert_eq!(result.inserted, 1);
             assert_eq!(row_count(&pool, "brand-new").await, 1);
         }
@@ -909,7 +1069,7 @@ mod tests {
                 "_table": "sync_configs", "uuid": "evil",
                 "endpoint": "https://attacker.example", "updated_at": 999, "version": 1
             })];
-            let result = merge_table_items(&pool, "sync_configs", &items, &[]).await;
+            let result = merge_table_items(&pool, "sync_configs", &items, &[], 0).await;
 
             assert!(result.is_err(), "非白名单表必须整体拒绝，不得部分合并");
             let err_msg = result.unwrap_err().to_string();
@@ -928,7 +1088,9 @@ mod tests {
                 "_table": "todo_projects", "uuid": "ok-1",
                 "title": "legit", "is_deleted": 0, "updated_at": 100, "version": 1
             })];
-            let result = merge_table_items(&pool, "todo_projects", &items, &[]).await.unwrap();
+            let result = merge_table_items(&pool, "todo_projects", &items, &[], 0)
+                .await
+                .unwrap();
             assert_eq!(result.inserted, 1);
         }
 
@@ -940,7 +1102,9 @@ mod tests {
                 "uuid": "no-table-field",
                 "title": "legacy-item", "is_deleted": 0, "updated_at": 100, "version": 1
             })];
-            let result = merge_table_items(&pool, "todo_projects", &items, &[]).await.unwrap();
+            let result = merge_table_items(&pool, "todo_projects", &items, &[], 0)
+                .await
+                .unwrap();
             assert_eq!(result.inserted, 1, "表路由由调用方给出，与记录字段无关");
         }
 
@@ -948,6 +1112,166 @@ mod tests {
             crate::cloud_sync::db_loader::load_table_uuid_map(pool, "todo_projects")
                 .await
                 .unwrap()
+        }
+
+        // ====================================================================
+        // 冲突败方副本（03 文档 §八 遗留项兑现）
+        //
+        // 留档判据是「真并发」：本地与远端都晚于上次同步基线；
+        // 基线 0（从未同步）/ 单侧改动 都不留档。
+        // ====================================================================
+
+        /// 读取最近一条冲突副本（loser_side, winner_side, record_title, loser_payload, decision）
+        async fn latest_conflict(
+            pool: &SqlitePool,
+        ) -> Option<(String, String, String, String, String)> {
+            sqlx::query_as(
+                "SELECT loser_side, winner_side, record_title, loser_payload, decision
+                 FROM sync_conflicts ORDER BY id DESC LIMIT 1",
+            )
+            .fetch_optional(pool)
+            .await
+            .unwrap()
+        }
+
+        async fn conflict_count(pool: &SqlitePool) -> i64 {
+            let (c,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM sync_conflicts")
+                .fetch_one(pool)
+                .await
+                .unwrap();
+            c
+        }
+
+        /// 基线 0（从未同步）不留档：两端各自独立的数据集合不是冲突
+        #[tokio::test]
+        async fn no_conflict_copy_without_sync_baseline() {
+            let pool = setup_pool().await;
+            insert_row(&pool, "b1", "local", 0, 0, 200).await;
+            let items = vec![serde_json::json!({
+                "uuid": "b1", "title": "remote", "is_deleted": 0, "deleted_at": 0,
+                "updated_at": 300, "version": 2
+            })];
+            let result = merge_table_items(&pool, "todo_projects", &items, &[], 0)
+                .await
+                .unwrap();
+            assert_eq!(result.updated, 1);
+            assert_eq!(result.conflicts, 1, "裁决计数照旧");
+            assert_eq!(result.copied, 0, "无同步基线不得留档");
+            assert_eq!(conflict_count(&pool).await, 0);
+        }
+
+        /// 真并发 + 远端胜出 → 留档「本地被覆盖的那一版」
+        #[tokio::test]
+        async fn concurrent_remote_win_copies_local_loser() {
+            let pool = setup_pool().await;
+            insert_row(&pool, "c10", "本地旧标题", 0, 0, 200).await;
+            let items = vec![serde_json::json!({
+                "uuid": "c10", "title": "远端新标题", "is_deleted": 0, "deleted_at": 0,
+                "updated_at": 300, "version": 5
+            })];
+            // 基线 100：本地(200) 与远端(300) 都在其之后 → 真并发
+            let result = merge_table_items(&pool, "todo_projects", &items, &[], 100)
+                .await
+                .unwrap();
+            assert_eq!(result.updated, 1);
+            assert_eq!(result.copied, 1);
+
+            let (loser, winner, title, payload, decision) = latest_conflict(&pool).await.unwrap();
+            assert_eq!(loser, "local", "本地被覆盖的是败方");
+            assert_eq!(winner, "remote");
+            assert_eq!(title, "远端新标题", "标题取胜方，便于认出是哪条记录");
+            assert_eq!(decision, "lww");
+            assert!(
+                payload.contains("本地旧标题"),
+                "败方载荷必须是本地旧值: {payload}"
+            );
+        }
+
+        /// 真并发 + 本地胜出 → 留档「远端被丢弃的那一版」
+        #[tokio::test]
+        async fn concurrent_local_win_copies_remote_loser() {
+            let pool = setup_pool().await;
+            insert_row(&pool, "c11", "本地新标题", 0, 0, 300).await;
+            let items = vec![serde_json::json!({
+                "uuid": "c11", "title": "远端旧标题", "is_deleted": 0, "deleted_at": 0,
+                "updated_at": 200, "version": 1
+            })];
+            let result = merge_table_items(&pool, "todo_projects", &items, &[], 100)
+                .await
+                .unwrap();
+            assert_eq!(result.skipped, 1);
+            assert_eq!(result.copied, 1);
+
+            let (loser, winner, title, payload, _) = latest_conflict(&pool).await.unwrap();
+            assert_eq!(loser, "remote", "远端被丢弃的是败方");
+            assert_eq!(winner, "local");
+            assert_eq!(title, "本地新标题");
+            assert!(
+                payload.contains("远端旧标题"),
+                "败方载荷必须是远端旧值: {payload}"
+            );
+        }
+
+        /// 非并发（本地自上次同步后没动过）→ 他端顺延更新不留档
+        #[tokio::test]
+        async fn sequential_remote_update_records_no_copy() {
+            let pool = setup_pool().await;
+            insert_row(&pool, "c12", "旧", 0, 0, 50).await;
+            let items = vec![serde_json::json!({
+                "uuid": "c12", "title": "他端更新", "is_deleted": 0, "deleted_at": 0,
+                "updated_at": 300, "version": 2
+            })];
+            let result = merge_table_items(&pool, "todo_projects", &items, &[], 100)
+                .await
+                .unwrap();
+            assert_eq!(result.updated, 1, "数据照常更新");
+            assert_eq!(
+                result.copied, 0,
+                "本地记录早于基线说明本轮只是顺延传播，不是冲突"
+            );
+        }
+
+        /// 平局（同毫秒）按 version 裁决时，decision 记为 tie_version 且同样留档
+        #[tokio::test]
+        async fn tie_break_conflict_is_copied_with_tie_decision() {
+            let pool = setup_pool().await;
+            // 本地 version=1，远端 version=2 → 远端胜
+            insert_row(&pool, "c13", "本地", 0, 0, 500).await;
+            let items = vec![serde_json::json!({
+                "uuid": "c13", "title": "远端", "is_deleted": 0, "deleted_at": 0,
+                "updated_at": 500, "version": 2
+            })];
+            let result = merge_table_items(&pool, "todo_projects", &items, &[], 100)
+                .await
+                .unwrap();
+            assert_eq!(result.copied, 1);
+            let (_, _, _, _, decision) = latest_conflict(&pool).await.unwrap();
+            assert_eq!(decision, "tie_version");
+        }
+
+        /// HLC receive：合并后本地逻辑时钟必须追平显著超前的远端时间戳，
+        /// 否则慢表后续写入会继续败给同一个已见值（漂移偏置无法消除）
+        #[tokio::test]
+        async fn merge_observes_remote_clock() {
+            let pool = setup_pool().await;
+            insert_row(&pool, "c14", "本地", 0, 0, 100).await;
+            // 远端时间戳领先本地逻辑时钟 1 秒（模拟对端时钟稍快）
+            let ahead = crate::db::clock::peek() + 1_000;
+            let items = vec![serde_json::json!({
+                "uuid": "c14", "title": "远端", "is_deleted": 0, "deleted_at": 0,
+                "updated_at": ahead, "version": 2
+            })];
+            merge_table_items(&pool, "todo_projects", &items, &[], 0)
+                .await
+                .unwrap();
+            assert!(
+                crate::db::clock::peek() >= ahead,
+                "合并必须把远端时间戳并入本地逻辑时钟"
+            );
+            assert!(
+                crate::db::clock::next_ms() > ahead,
+                "此后本地写入必须严格大于已见的远端值"
+            );
         }
     }
 }

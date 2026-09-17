@@ -39,6 +39,8 @@ pub struct PullResult {
     pub skipped_modules: u32,
     /// 冲突裁决数合计
     pub conflicts: u64,
+    /// 留档的冲突败方副本数合计
+    pub copied_conflicts: u64,
     /// 收集的错误（不阻塞整体流程）
     pub errors: Vec<String>,
     /// 本轮 Pull 失败的表名（push 侧据此跳过，防陈旧覆盖）
@@ -75,6 +77,7 @@ pub async fn pull_all(
             log::info!("[pull] 云端无清单（首次同步/云端为空），跳过拉取");
             let mut next = state.clone();
             next.last_synced_at = now_ms();
+            next.last_synced_clock_ms = crate::db::clock::next_ms();
             next.manifest_epoch = 0;
             next.remote_tables.clear();
             next.remote_tombstones.clear();
@@ -104,6 +107,7 @@ pub async fn pull_all(
     if manifest.epoch > 0 && manifest.epoch == state.manifest_epoch {
         log::info!("[pull] 清单 epoch 未变（{}），跳过", manifest.epoch);
         state.last_synced_at = now_ms();
+        state.last_synced_clock_ms = crate::db::clock::next_ms();
         state_store.save(&state)?;
         return Ok(PullResult {
             skipped_modules: 1,
@@ -126,12 +130,23 @@ pub async fn pull_all(
         let table: &str = table;
         builder.pulling("todos", "待办数据", idx as u32 + 1, tables.len() as u32);
 
-        match pull_single_table(db_pool, &data_key, adapter, &state, &manifest, table).await {
+        match pull_single_table(
+            db_pool,
+            &data_key,
+            adapter,
+            &state,
+            &manifest,
+            table,
+            state.last_synced_clock_ms,
+        )
+        .await
+        {
             Ok(outcome) => {
                 result.downloaded_chunks += outcome.downloaded_chunks;
                 result.skipped_chunks += outcome.skipped_chunks;
                 result.downloaded_tombstones += outcome.downloaded_tombstones;
                 result.conflicts += outcome.merge.conflicts;
+                result.copied_conflicts += outcome.merge.copied;
                 changed_records_total +=
                     outcome.merge.inserted + outcome.merge.updated + outcome.merge.deleted;
                 result.errors.extend(outcome.merge.errors);
@@ -164,6 +179,14 @@ pub async fn pull_all(
     let mut next = state.clone();
     next.last_synced_at = now_ms();
     next.update_from_manifest(&manifest);
+    // 逻辑时钟基线推进到「本轮同步结束时刻」，下一轮据此判定记录是否被本地改过；
+    // 同时把时钟（可能已被远端时间戳抬升）落盘 —— 慢表重启后不得回落到墙上时钟
+    next.last_synced_clock_ms = crate::db::clock::next_ms();
+    crate::db::clock::persist(db_pool)
+        .await
+        .map_err(|e| CloudSyncError::Database {
+            message: format!("逻辑时钟落盘失败: {e}"),
+        })?;
     // 失败表回滚快照到最后一次成功状态（强制下轮重试）
     for table in &result.failed_modules {
         if let Some(prev) = state.remote_tables.get(table) {
@@ -198,6 +221,7 @@ async fn pull_single_table(
     state: &SyncState,
     manifest: &ManifestV2,
     table: &str,
+    baseline_ms: i64,
 ) -> Result<TablePullOutcome, CloudSyncError> {
     if !SYNCABLE_TABLES.contains(&table) {
         return Err(CloudSyncError::UnknownModule(format!(
@@ -245,9 +269,7 @@ async fn pull_single_table(
             let payload: TombstoneBucketPayload = serde_json::from_slice(&plain)?;
             if payload.table != table || payload.bucket != *bucket {
                 return Err(CloudSyncError::Merge {
-                    message: format!(
-                        "墓碑分桶内容与路径不一致（路径 {table}/{bucket}）"
-                    ),
+                    message: format!("墓碑分桶内容与路径不一致（路径 {table}/{bucket}）"),
                 });
             }
             tombstones.extend(payload.tombstones);
@@ -255,8 +277,14 @@ async fn pull_single_table(
         }
     }
 
-    let merge =
-        crate::cloud_sync::merge::merge_table_items(db_pool, table, &items, &tombstones).await?;
+    let merge = crate::cloud_sync::merge::merge_table_items(
+        db_pool,
+        table,
+        &items,
+        &tombstones,
+        baseline_ms,
+    )
+    .await?;
 
     Ok(TablePullOutcome {
         merge,
@@ -335,7 +363,13 @@ mod tests {
             path: &str,
         ) -> Result<Option<(Vec<u8>, Option<String>)>, SyncError> {
             // 读清单不记入 downloads（避免"零下载"断言被清单读取干扰）
-            Ok(self.files.lock().unwrap().get(path).cloned().map(|b| (b, None)))
+            Ok(self
+                .files
+                .lock()
+                .unwrap()
+                .get(path)
+                .cloned()
+                .map(|b| (b, None)))
         }
         async fn list_assets(&self) -> Result<Vec<String>, SyncError> {
             Ok(Vec::new())
@@ -351,7 +385,10 @@ mod tests {
         tempfile::TempDir,
     ) {
         let pool = sqlx::SqlitePool::connect("sqlite::memory:").await.unwrap();
-        sqlx::migrate!("./src/db/migrations").run(&pool).await.unwrap();
+        sqlx::migrate!("./src/db/migrations")
+            .run(&pool)
+            .await
+            .unwrap();
         let tmp = tempfile::TempDir::new().unwrap();
         let crypto = SyncCryptoService::new(tmp.path());
         crypto.init_with_data_key("pw", &KEY).unwrap();
@@ -420,7 +457,9 @@ mod tests {
         // 账本已记录远端快照
         let state = store.load().unwrap();
         assert_eq!(state.manifest_epoch, 3);
-        assert!(state.remote_chunk_fp("todo_projects", 0).is_some() || !state.remote_tables.is_empty());
+        assert!(
+            state.remote_chunk_fp("todo_projects", 0).is_some() || !state.remote_tables.is_empty()
+        );
     }
 
     #[tokio::test]
