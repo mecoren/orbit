@@ -56,6 +56,16 @@
   （52 字节 `OSYN` 容器）模块；移除 `.waitsync` / 裸 hash 多命名回退（开发阶段无历史
   数据，v2 布局直接切换，不做旧布局迁移）。
 
+### 视图与交互
+
+- **日期选择器对齐日历视图（桌面 + 移动）**：两端选择日期的弹层此前与日历视图两套观感，
+  现统一为同一套日格——农历/节日/节气副标签、休/班徽标、周末蓝字、今天实心强调块、
+  选中描边，且与日历视图**共用同一份节假日缓存**（桌面 `["holidays","list"]`、
+  移动 `holidayProvider`），更新侧失效后两处同步刷新。桌面新增 `PickerCalendar`
+  （复用 `MonthCalendar` md 档；`DatePicker`/`DateTimePicker`、详情抽屉三处内联日历、
+  快捷新增条两处全部替换，删除 react-day-picker 封装与依赖）；移动 `WaitDatePicker`
+  日视图由 mini 圆格改 `AppMonthCalendar` medium 档并整面板可滚（短屏不溢出）。
+
 ## [0.1.0] - 2026-09-15
 
 ### 产品与平台
