@@ -34,6 +34,14 @@ import { useUndoableDeleteAction, hideManyFromQueries } from "@/hooks/use-undoab
 import { listNavDirection, isListActivationKey } from "../shared/list-keyboard";
 import { todayStartMs, toggleMyDayValue } from "../shared/task-filters";
 import { EmptyState } from "@/components/business/empty-state";
+import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { LabelChips } from "../shared/label-chips";
 import { ReminderChip } from "../shared/reminder-chip";
 import { displayReminder } from "../shared/reminder-meta";
@@ -211,13 +219,15 @@ export default function TaskTableView({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      {/* 批量工具条（与列表视图同款） */}
+      {/* 批量工具条（与列表视图同款；Button/Select 原语保证主题与焦点环一致） */}
       {selected.size > 0 && (
-        <div className="flex items-center gap-2 border-b bg-primary/5 px-4 py-2 text-sm">
-          <span className="text-muted-foreground">已选 {selected.size} 项</span>
-          <button
-            type="button"
-            className="rounded px-2 py-1 hover:bg-accent"
+        <div className="flex flex-wrap items-center gap-1 border-b bg-primary/5 px-4 py-2 text-sm">
+          <span className="mr-1 text-muted-foreground">已选 {selected.size} 项</span>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 px-2"
+            disabled={batchBusy}
             onClick={() =>
               void runBatch("标记完成", (sel) =>
                 batchUpdateStatus(sel, { done: 1, done_at: 0, status: "done" }),
@@ -225,10 +235,12 @@ export default function TaskTableView({
             }
           >
             标记完成
-          </button>
-          <button
-            type="button"
-            className="rounded px-2 py-1 hover:bg-accent"
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 px-2"
+            disabled={batchBusy}
             onClick={() =>
               void runBatch("移回待办", (sel) =>
                 batchUpdateStatus(sel, { done: 0, done_at: null, status: "pending" }),
@@ -236,56 +248,67 @@ export default function TaskTableView({
             }
           >
             移回待办
-          </button>
-          <button
-            type="button"
-            className="rounded px-2 py-1 hover:bg-accent"
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 px-2"
+            disabled={batchBusy}
             onClick={() =>
               void runBatch("设为高优先级", (sel) => batchUpdatePriority(sel, 3))
             }
           >
             设为高优先级
-          </button>
-          <select
-            aria-label="批量改期"
-            className="rounded bg-transparent px-2 py-1 text-sm hover:bg-accent"
-            defaultValue=""
-            onChange={(e) => {
-              const preset = e.target.value as "today" | "tomorrow" | "next_monday" | "clear";
+          </Button>
+          <Select
+            value=""
+            onValueChange={(v) => {
+              const preset = v as "today" | "tomorrow" | "next_monday" | "clear";
               if (!preset) return;
-              e.target.value = "";
               void runBatch("批量改期", (sel) => batchSetDueDate(sel, preset));
             }}
           >
-            <option value="" disabled>
-              改期…
-            </option>
-            <option value="today">改到今天</option>
-            <option value="tomorrow">改到明天</option>
-            <option value="next_monday">改到下周一</option>
-            <option value="clear">清除截止</option>
-          </select>
-          <button
-            type="button"
-            className="rounded px-2 py-1 hover:bg-accent"
+            <SelectTrigger
+              size="sm"
+              aria-label="批量改期"
+              className="h-7 border-transparent bg-transparent px-2 shadow-none hover:bg-accent"
+            >
+              <SelectValue placeholder="改期…" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="today">改到今天</SelectItem>
+              <SelectItem value="tomorrow">改到明天</SelectItem>
+              <SelectItem value="next_monday">改到下周一</SelectItem>
+              <SelectItem value="clear">清除截止</SelectItem>
+            </SelectContent>
+          </Select>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 px-2"
+            disabled={batchBusy}
             onClick={() =>
               void runBatch("加入我的一天", (sel) => batchUpdateMyDay(sel, true))
             }
           >
             加入我的一天
-          </button>
-          <button
-            type="button"
-            className="rounded px-2 py-1 hover:bg-accent"
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 px-2"
+            disabled={batchBusy}
             onClick={() =>
               void runBatch("移入未分组", (sel) => batchMoveToProject(sel, null, tasks))
             }
           >
             移入未分组
-          </button>
-          <button
-            type="button"
-            className="rounded px-2 py-1 hover:bg-accent"
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 px-2"
+            disabled={batchBusy}
             onClick={() =>
               void runBatch(allDoneSelected ? "取消收藏" : "收藏", (sel) =>
                 batchUpdateFavorite(sel, !allDoneSelected),
@@ -293,21 +316,24 @@ export default function TaskTableView({
             }
           >
             {allDoneSelected ? "取消收藏" : "收藏"}
-          </button>
-          <button
-            type="button"
-            className="rounded px-2 py-1 text-destructive hover:bg-accent"
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 px-2 text-destructive hover:text-destructive"
+            disabled={batchBusy}
             onClick={() => setConfirmBatchDelete(true)}
           >
             删除
-          </button>
-          <button
-            type="button"
-            className="ml-auto rounded px-2 py-1 hover:bg-accent"
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="ml-auto h-7 px-2"
             onClick={clearSelection}
           >
             取消选择
-          </button>
+          </Button>
         </div>
       )}
 

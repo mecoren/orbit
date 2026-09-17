@@ -19,6 +19,14 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import {
   templateCreate,
@@ -242,17 +250,21 @@ export function TemplatesSection() {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label>优先级</Label>
-                <select
-                  className="h-9 w-full rounded-md border bg-transparent px-2 text-sm"
+                <Select
                   value={draft.priority}
-                  onChange={(e) => setDraft((d) => ({ ...d, priority: e.target.value }))}
+                  onValueChange={(v) => setDraft((d) => ({ ...d, priority: v }))}
                 >
-                  {PRIORITY_OPTIONS.map((opt, i) => (
-                    <option key={i} value={String(i)}>
-                      {opt}
-                    </option>
-                  ))}
-                </select>
+                  <SelectTrigger className="h-9 w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {PRIORITY_OPTIONS.map((opt, i) => (
+                      <SelectItem key={i} value={String(i)}>
+                        {opt}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <div>
                 <Label>截止偏移（天）</Label>
@@ -274,8 +286,8 @@ export function TemplatesSection() {
             </div>
             <div>
               <Label>子任务（每行一条）</Label>
-              <textarea
-                className="min-h-24 w-full resize-y rounded-md border bg-transparent px-2 py-1.5 text-sm"
+              <Textarea
+                className="min-h-24 resize-y"
                 value={draft.subtasks}
                 placeholder={"订机票\n订酒店\n报销"}
                 onChange={(e) => setDraft((d) => ({ ...d, subtasks: e.target.value }))}
