@@ -40,14 +40,35 @@ pub const TRAY_MENU_SPEC: TrayMenuSpec = TrayMenuSpec {
     ],
 };
 
-/// 退出应用：销毁主窗（绕过驻留拦截）+ app.exit。
+/// 退出前同步的超时安全阀（网络异常时不得把退出卡死）
+pub const EXIT_SYNC_TIMEOUT_SECS: u64 = 15;
+
+/// 前端事件：退出同步开始（显示遮罩）
+pub const EXIT_SYNC_START_EVENT: &str = "sync-exit-start";
+
+/// 前端事件：退出同步结束（隐藏遮罩）
+pub const EXIT_SYNC_DONE_EVENT: &str = "sync-exit-done";
+
+/// 退出应用：先尽力同步云端（阻塞 + 超时放行），再销毁主窗 + app.exit。
+///
 /// 退出前把未来 24h 提醒注册进 Windows 系统 Toast 调度器——
 /// 进程结束后到点由操作系统直接弹（离线提醒，无需进程存活）；
 /// 下次启动时 scheduled_toast::clear_schedule_on_startup 清除，
 /// 防止与运行中的轮询通道双弹。
+///
+/// 同步只在「已配置云同步 + 已解锁」时产生等待：未配置/未解锁时
+/// `cloud_sync_force` 立即返回错误，不阻塞退出。窗口关闭（驻留）不触发本函数。
 pub fn quit_app(app: &AppHandle) {
     // 告知 ExitRequested 拦截器这是真退出（窗口回收的销毁不置此标志）
     crate::commands::window_recycler::mark_quitting();
+
+    let _ = app.emit(EXIT_SYNC_START_EVENT, ());
+    crate::commands::cloud_sync_cmd::run_exit_sync(
+        app,
+        std::time::Duration::from_secs(EXIT_SYNC_TIMEOUT_SECS),
+    );
+    let _ = app.emit(EXIT_SYNC_DONE_EVENT, ());
+
     #[cfg(target_os = "windows")]
     crate::commands::scheduled_toast::schedule_all_on_quit(app);
     if let Some(win) = app.get_webview_window("main") {

@@ -574,6 +574,18 @@ export const cloudSyncPullThenPush = (origin: "manual" | "background" | "exit" =
   invoke<string>("cloud_sync_pull_then_push", { origin }).then(parseResult);
 export const cloudSyncGetState = () =>
   invoke<string>("cloud_sync_get_state").then((s) => JSON.parse(s));
+/**
+ * 强制同步（进入 / 退出应用生命周期钩子专用）
+ *
+ * 与 `cloudSyncPullThenPush` 的差别只在**前提判定**：内核不检查自动同步开关、
+ * 同步间隔、修改后立即同步等设置——「是否该同步」由调用方判定。
+ * `waitForIdleMs`：引擎正忙时最多等待多久再执行（进入 ~3s / 退出 ~5s）。
+ */
+export const cloudSyncForce = (
+  origin: "manual" | "background" | "exit" = "background",
+  waitForIdleMs = 0,
+) =>
+  invoke<string>("cloud_sync_force", { origin, waitForIdleMs }).then(parseResult);
 export const cloudSyncIsRunning = () => invoke<boolean>("cloud_sync_is_running");
 /**
  * rekey 全量重传：以本机为准，用当前 Data Key 重加密覆盖云端全部数据。

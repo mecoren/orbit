@@ -9,6 +9,7 @@ import { UnlockPage } from "@/pages/unlock-page";
 import { useDbInvalidation, useSyncInvalidation } from "@/lib/events";
 import { useTodoReminderListener } from "@/hooks/use-todo-reminder-listener";
 import { useStartupSync } from "@/hooks/use-startup-sync";
+import { useExitSyncMask } from "@/hooks/use-exit-sync";
 import { UndoStackProvider } from "@/hooks/use-undo-stack";
 import {
   dbInitEncrypted,
@@ -43,8 +44,10 @@ function ReadyShell() {
   useDbInvalidation();
   useSyncInvalidation();
   useTodoReminderListener();
-  // M3：静默恢复同步会话 + 启动时一次 pull_then_push（未配置/未解锁自动跳过）
+  // 进入应用强制同步（静默恢复会话 + 忽略自动同步开关，未配置/未解锁自动跳过）
   useStartupSync();
+  // 退出同步遮罩：托盘退出时 Rust 侧先 emit sync-exit-start，再阻塞同步
+  const exiting = useExitSyncMask();
 
   return (
     <TooltipProvider>
@@ -52,6 +55,13 @@ function ReadyShell() {
       <UndoStackProvider>
         <RouterProvider router={router} />
       </UndoStackProvider>
+      {/* 退出同步遮罩：进程即将结束，展示进度并阻止用户继续操作 */}
+      {exiting ? (
+        <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center gap-3 bg-background/80 backdrop-blur-sm">
+          <EqualizerLoader />
+          <p className="text-sm text-muted-foreground">正在同步云端数据…</p>
+        </div>
+      ) : null}
       {/* sonner：top-right（04 文档 §六 Toast 规格）。
           不开 richColors：对齐 shadcn 示例观感——popover 卡片底 + 彩色类型图标 */}
       <Toaster position="top-right" />

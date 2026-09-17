@@ -301,6 +301,8 @@ pub fn run() {
             commands::cloud_sync_cmd::cloud_sync_now,
             commands::cloud_sync_cmd::cloud_sync_push_only,
             commands::cloud_sync_cmd::cloud_sync_pull_then_push,
+            // 强制同步（进入/退出应用生命周期钩子专用）
+            commands::cloud_sync_cmd::cloud_sync_force,
             // 增量同步历史（P1-17：设置页同步历史卡数据源）
             commands::cloud_sync_cmd::cloud_sync_history,
             commands::cloud_sync_cmd::cloud_sync_get_state,

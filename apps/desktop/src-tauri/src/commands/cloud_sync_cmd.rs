@@ -106,6 +106,84 @@ pub async fn cloud_sync_pull_then_push(app: AppHandle, origin: String) -> Result
     run_sync(&app, parse_origin(&origin), SyncAction::PullThenPush).await
 }
 
+/// 强制同步（进入 / 退出应用专用）
+///
+/// 与 `cloud_sync_now` 的差别只在**前提判定**：不检查自动同步开关、同步间隔、
+/// 修改后立即同步等设置——「是否该同步」由调用方（生命周期钩子）判定。
+/// `wait_for_idle_ms`：引擎忙时最多等待多久再执行（进入 ~3s / 退出 ~15s）。
+#[tauri::command]
+pub async fn cloud_sync_force(
+    app: AppHandle,
+    origin: String,
+    wait_for_idle_ms: u64,
+) -> Result<String, String> {
+    let record = sync_runtime::get_active_config(&app)
+        .await?
+        .ok_or_else(|| "[config] 尚未配置同步".to_string())?;
+    let config = sync_runtime::engine_config_of_record(&record)
+        .ok_or_else(|| "[config] 当前为本地同步配置，不参与云同步".to_string())?;
+
+    let engine = sync_runtime::sync_engine(&app)?;
+    let crypto = sync_runtime::sync_crypto(&app)?;
+    if !crypto.is_unlocked() {
+        return Err("[not_unlocked] 同步加密未解锁，请先输入同步密码".to_string());
+    }
+
+    let dir = resolve_app_data_dir(&app)?;
+    let attachments = sync_runtime::attachments_dir(&dir);
+    let device_id = orbit_core::context::get_device_id()
+        .unwrap_or_default()
+        .to_string();
+
+    let result = cloud_sync_api::force_sync(
+        &engine,
+        &config,
+        parse_origin(&origin),
+        &device_id,
+        &attachments,
+        wait_for_idle_ms,
+    )
+    .await
+    .map_err(err_tagged)?;
+
+    // 记账（与 run_sync 同口径；skipped 也记账，表示"本轮已尝试"）
+    let now_ms = chrono::Utc::now().timestamp_millis();
+    if let Some(state) = app.try_state::<AppState>() {
+        let _ = SyncConfigRepo::new(state.pool.clone())
+            .update_last_synced_at(record.id, now_ms)
+            .await;
+    }
+
+    let _ = app.emit("sync-finished", &result);
+    cloud_sync_api::result_to_json(&result).map_err(err_tagged)
+}
+
+/// 退出前强制同步（阻塞调用方，带超时安全阀）
+///
+/// ## 为什么阻塞
+/// 进程退出后后台协程会被销毁，"不阻塞等于不执行"。因此这里在 Tauri runtime
+/// 上 spawn 同步任务，调用线程用 `recv_timeout` 等待：超时即放行退出（网络
+/// 异常时不能把退出卡死），超时事实写入日志供诊断。
+///
+/// 本函数**同步**（不 async）：`quit_app` 运行在托盘菜单的同步回调里，
+/// 直接阻塞等待即可，避免在非 runtime 线程上 `block_on` 的嵌套风险。
+pub fn run_exit_sync(app: &AppHandle, timeout: std::time::Duration) {
+    let (tx, rx) = std::sync::mpsc::channel::<Result<String, String>>();
+    let app_for_task = app.clone();
+    tauri::async_runtime::spawn(async move {
+        let result = cloud_sync_force(app_for_task, "exit".to_string(), 5_000).await;
+        let _ = tx.send(result);
+    });
+    match rx.recv_timeout(timeout) {
+        Ok(Ok(_)) => log::info!("[exit-sync] 退出前同步完成"),
+        Ok(Err(e)) => log::warn!("[exit-sync] 退出前同步失败（继续退出）: {e}"),
+        Err(_) => log::warn!(
+            "[exit-sync] 退出前同步超时（{}s），放行退出",
+            timeout.as_secs()
+        ),
+    }
+}
+
 /// 查询增量同步历史（P1-17：sync_history 表只读展示）
 ///
 /// `scope`：all | incremental | push_only | pull_only（口径见 core API 文档）；

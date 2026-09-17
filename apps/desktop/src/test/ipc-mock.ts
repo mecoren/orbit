@@ -883,6 +883,37 @@ const commands: Record<string, (args: any, ctx: Ctx) => unknown> = {
       skipped: false,
       errors: [],
     }),
+  // 强制同步 / 先拉后推 / 仅推送：mock 统一返回同一结果（e2e 走 mock IPC）
+  cloud_sync_force: () =>
+    JSON.stringify({
+      pushed_modules: 1,
+      pulled_modules: 1,
+      uploaded_attachments: 0,
+      downloaded_attachments: 0,
+      duration_ms: 280,
+      skipped: false,
+      errors: [],
+    }),
+  cloud_sync_pull_then_push: () =>
+    JSON.stringify({
+      pushed_modules: 1,
+      pulled_modules: 1,
+      uploaded_attachments: 0,
+      downloaded_attachments: 0,
+      duration_ms: 280,
+      skipped: false,
+      errors: [],
+    }),
+  cloud_sync_push_only: () =>
+    JSON.stringify({
+      pushed_modules: 1,
+      pulled_modules: 0,
+      uploaded_attachments: 0,
+      downloaded_attachments: 0,
+      duration_ms: 200,
+      skipped: false,
+      errors: [],
+    }),
   cloud_sync_is_running: () => false,
   cloud_sync_get_state: () => JSON.stringify({ phase: "idle" }),
   // 增量同步历史（P1-17）：种三条同构（成功/失败/推送），设置页历史卡可渲染

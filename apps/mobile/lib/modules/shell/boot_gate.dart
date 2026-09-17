@@ -27,8 +27,10 @@ import '../auth/unlock_page.dart';
 ///   注：云同步结果经 cloudSyncNow 返回值直达（ADR 0003），无 sync-finished 流。
 ///   bootstrap 失败回落解锁页仅针对"已设密码需解锁"场景；
 ///   未设密码时初始化异常也回落解锁页属历史兜底，真实错误经日志暴露。
-///   ready 后挂 WidgetsBindingObserver：AppLifecycleState.resumed 时
-///   轮询分享接收（Android「分享到」热运行 onNewIntent 的一路）。
+///   ready 后挂 WidgetsBindingObserver：
+///   - resumed：轮询分享接收（Android「分享到」热运行 onNewIntent 的一路）
+///     + **进入应用强制同步**（先拉后推，忽略自动同步开关）
+///   - paused：**退到后台尽力同步**（带超时；被系统冻结则放弃，不承诺可靠）
 class BootGate extends ConsumerStatefulWidget {
   const BootGate({super.key, required this.child});
 
@@ -72,7 +74,8 @@ class _BootGateState extends ConsumerState<BootGate>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed && _phase == _BootPhase.ready) {
+    if (_phase != _BootPhase.ready) return;
+    if (state == AppLifecycleState.resumed) {
       // 热运行分享：Android onNewIntent 已把文本存原生侧待取，
       // 回到前台轮询取走（冷启动一路在 _goReady 首查）
       ShareReceiver.consume(ref);
@@ -80,6 +83,37 @@ class _BootGateState extends ConsumerState<BootGate>
       _refreshBadge();
       // 小组件快照同口径重算（隔夜口径漂移；#3）
       _widget.refresh();
+      // 进入应用强制同步（先拉后推；未配置/未解锁静默跳过）
+      unawaited(_forceSync(origin: 'background'));
+    } else if (state == AppLifecycleState.paused) {
+      // 退到后台：尽力同步一次（移动端无真正退出钩子，系统可能冻结进程，
+      // 超时即放弃，不阻塞生命周期回调）
+      unawaited(_forceSync(origin: 'exit'));
+    }
+  }
+
+  /// 生命周期强制同步（进入 / 退出应用）
+  ///
+  /// 与设置页「立即同步」共用同一桥方法（core 侧 `pull_then_push`：先拉后推）；
+  /// 差别只在**触发时机由生命周期决定**——不读取自动同步开关 / 间隔 /
+  /// 修改后立即同步等设置，「进入应用」「退到后台」本身就是触发条件。
+  /// 未配置或未解锁时 core 直接返回错误，此处静默跳过（不打扰用户）。
+  ///
+  /// 超时 6 秒：移动端退到后台可能被系统冻结，超时即放弃并留痕，
+  /// 绝不阻塞生命周期回调（阻塞会被系统判定应用无响应）。
+  Future<void> _forceSync({required String origin}) async {
+    final bridge = ref.read(orbitBridgeProvider);
+    try {
+      final config = await bridge.syncConfigGet();
+      if (config == null) return; // 未配置云同步
+      final result = await bridge
+          .cloudSyncNow(origin: origin)
+          .timeout(const Duration(seconds: 6));
+      // 拉取合并写入不走 db-change 事件，需在此失效业务缓存（口径同设置页）
+      if (result.pulledModules > 0) invalidateBusinessCaches(ref);
+    } catch (e) {
+      // 静默：网络异常 / 未解锁 / 超时都不打扰用户，下次进入或手动同步会重试
+      debugPrint('[BootGate] lifecycle sync($origin) skipped: $e');
     }
   }
 
