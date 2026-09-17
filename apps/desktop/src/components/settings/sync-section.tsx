@@ -1276,6 +1276,17 @@ function AutoBackupCard() {
 
 /* ============================ 5. 备份卡 ============================ */
 
+/**
+ * 待确认的恢复目标（三来源统一载荷，第一段预览确认与第二段最终确认共用）：
+ * - file：文件选择器选中的本地备份路径
+ * - local：本地历史备份条目
+ * - cloud：云端副本条目
+ */
+type PendingRestoreTarget =
+  | { kind: "file"; path: string; label: string }
+  | { kind: "local"; entry: BackupEntryView }
+  | { kind: "cloud"; entry: CloudBackupEntryView };
+
 function BackupCard() {
   const [busy, setBusy] = useState<"export" | "import" | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -1284,18 +1295,14 @@ function BackupCard() {
   const [cloudList, setCloudList] = useState<CloudBackupEntryView[] | null>(null);
 
   /**
-   * 待确认的恢复目标（五秒时停弹层确认后才执行）：
-   * - file：文件选择器选中的本地备份路径
-   * - local：本地历史备份条目
-   * - cloud：云端副本条目
-   * 全量恢复会完全覆盖当前全部待办数据，不可撤销，故统一强制冷静期。
+   * 第一段确认的恢复目标（看预览 + 5 秒时停；确认后只递交不执行）：
+   * 全量恢复会完全覆盖当前全部待办数据，不可撤销，故走两段式确认，
+   * 本段确认后把目标递交给 `pendingRestoreFinal`，由第二段最终确认执行。
    */
-  const [pendingRestore, setPendingRestore] = useState<
-    | { kind: "file"; path: string; label: string }
-    | { kind: "local"; entry: BackupEntryView }
-    | { kind: "cloud"; entry: CloudBackupEntryView }
-    | null
-  >(null);
+  const [pendingRestore, setPendingRestore] = useState<PendingRestoreTarget | null>(null);
+  /** 第二段最终确认的恢复目标（第一段确认后递交；本段再走 5 秒时停） */
+  const [pendingRestoreFinal, setPendingRestoreFinal] =
+    useState<PendingRestoreTarget | null>(null);
   /** schema 不一致时的强制恢复二次确认（忽略版本差异更危险，同走时停） */
   const [pendingSchemaForce, setPendingSchemaForce] = useState<
     | { kind: "local"; path: string; label: string }
@@ -1304,8 +1311,9 @@ function BackupCard() {
   >(null);
   /**
    * 恢复预览三态（确认框 body 展示）：
-   * 弹层打开即解密读取（与 5 秒倒计时并行，不阻塞时停）；
-   * loading / error / ready，失败不阻塞确认（预览仅供决策参考）。
+   * 弹层打开即解密读取；5 秒时停与解密串行——预览 loading 期间倒计时
+   * 不起算（ready / error 落定后才从满格计时），保证点恢复到真正可确认
+   * 之间必有完整 5 秒预览阅读期；失败不阻塞确认（预览仅供决策参考）。
    */
   const [previewState, setPreviewState] = useState<BackupPreviewState>({ status: "loading" });
 
@@ -1422,10 +1430,18 @@ function BackupCard() {
     setPendingRestore({ kind: "local", entry });
   };
 
-  /** 时停确认后执行本地恢复（含文件导入与本地历史） */
-  const confirmPendingRestore = async () => {
+  /** 第一段确认：只递交给第二段最终确认，不执行恢复 */
+  const confirmPendingRestore = () => {
     const pending = pendingRestore;
     setPendingRestore(null);
+    if (!pending) return;
+    setPendingRestoreFinal(pending);
+  };
+
+  /** 第二段最终确认后真正执行恢复（含文件导入、本地历史与云端副本） */
+  const confirmRestoreFinal = async () => {
+    const pending = pendingRestoreFinal;
+    setPendingRestoreFinal(null);
     if (!pending) return;
     if (pending.kind === "cloud") {
       await doRestoreCloud(pending.entry, false);
@@ -1469,14 +1485,18 @@ function BackupCard() {
     await doImport(pending.path, true);
   };
 
-  const pendingLabel =
-    pendingRestore == null
+  /** 恢复目标展示名（三来源统一口径，第一段与第二段弹框共用） */
+  const restoreTargetLabel = (t: PendingRestoreTarget | null) =>
+    t == null
       ? ""
-      : pendingRestore.kind === "file"
-        ? pendingRestore.label
-        : pendingRestore.kind === "local"
-          ? pendingRestore.entry.filename
-          : pendingRestore.entry.name;
+      : t.kind === "file"
+        ? t.label
+        : t.kind === "local"
+          ? t.entry.filename
+          : t.entry.name;
+
+  const pendingLabel = restoreTargetLabel(pendingRestore);
+  const pendingFinalLabel = restoreTargetLabel(pendingRestoreFinal);
 
   return (
     <div className="space-y-3 rounded-lg border p-5">
@@ -1613,10 +1633,12 @@ function BackupCard() {
         </div>
       )}
 
-      {/* 全量恢复确认：先看预览（前 10 条 + 统计）再确认，确认钮 5 秒时停防误触 */}
+      {/* 全量恢复第一段确认：先看预览（前 10 条 + 统计）再确认；时停自预览解密落定起算，解密中确认钮显示等待且不走字。确认后只递交不执行 */}
       <DangerousConfirmDialog
         open={pendingRestore != null}
         onOpenChange={(o) => !o && setPendingRestore(null)}
+        holdPaused={previewState.status === "loading"}
+        holdPendingLabel="正在解密预览…"
         title="从备份恢复全部数据"
         description={
           <>
@@ -1624,14 +1646,32 @@ function BackupCard() {
             <strong className="text-destructive">完全覆盖当前全部待办数据</strong>：
             当前新增或修改后尚未备份的内容将
             <strong className="text-destructive">永久丢失</strong>，此操作不可撤销。
-            请先核对下方备份预览，确认选对来源。
+            请先核对下方备份预览，确认选对来源。确认后还需最终确认一次才会真正恢复。
           </>
         }
         body={<BackupPreviewBody state={previewState} />}
         contentClassName="sm:max-w-xl"
         confirmLabel="确认恢复"
         busy={busy != null}
-        onConfirm={() => void confirmPendingRestore()}
+        onConfirm={confirmPendingRestore}
+      />
+
+      {/* 全量恢复第二段最终确认：独立再走 5 秒时停，第二次点击才真正执行覆盖 */}
+      <DangerousConfirmDialog
+        open={pendingRestoreFinal != null}
+        onOpenChange={(o) => !o && setPendingRestoreFinal(null)}
+        title="最后确认：立即覆盖恢复"
+        description={
+          <>
+            最后一次确认：将用备份「{pendingFinalLabel}」的内容
+            <strong className="text-destructive">立即覆盖当前全部待办数据</strong>，
+            未备份的内容将<strong className="text-destructive">永久丢失</strong>且不可撤销。
+            确认选对了备份来源再点，点取消可中止。
+          </>
+        }
+        confirmLabel="确认并恢复"
+        busy={busy != null}
+        onConfirm={() => void confirmRestoreFinal()}
       />
 
       {/* schema 不一致强制恢复：忽略版本差异风险更高，同走时停 */}

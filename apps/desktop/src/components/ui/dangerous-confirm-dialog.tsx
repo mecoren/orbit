@@ -5,6 +5,11 @@
  * 改密换钥等）统一走此组件。确认钮在 `holdSeconds` 倒计时走完前禁用，
  * 强制阅读后果文案，防误触。
  *
+ * 门控模式（`holdPaused`）：带异步前置准备的弹层（如备份恢复需先解密读
+ * 预览）把倒计时起点压到准备完成后——暂停期间确认钮禁用并显示等待文案，
+ * 不走字；`holdPaused` 翻 false 才从满格开始计时，保证用户有完整冷静期
+ * 先看到决策依据再读后果（解密慢时倒计时不再与加载并行消耗）。
+ *
  * 实现注意：刻意不用 Radix AlertDialog（Portal 传送门），而用页面内联
  * fixed 遮罩 + 白框。实测某版本 WebView2 下 Radix Portal 的 Content
  * 挂载后画不出来（只有灰罩没有白框、页面被焦点陷阱冻住，Chromium 正常），
@@ -29,6 +34,20 @@ export function formatHoldLabel(remaining: number, confirmLabel: string): string
   return confirmLabel;
 }
 
+/**
+ * 确认钮文案归一：门控暂停中优先显示等待文案（倒计时尚未起算），
+ * 否则走正常倒计时文案。抽纯函数便于单测（沿仓库纯函数共置惯例）。
+ */
+export function resolveHoldLabel(
+  remaining: number,
+  confirmLabel: string,
+  holdPaused: boolean,
+  holdPendingLabel: string,
+): string {
+  if (holdPaused) return holdPendingLabel;
+  return formatHoldLabel(remaining, confirmLabel);
+}
+
 interface DangerousConfirmDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -38,6 +57,14 @@ interface DangerousConfirmDialogProps {
   confirmLabel?: string;
   /** 强制冷静期秒数，默认 5 */
   holdSeconds?: number;
+  /**
+   * 倒计时门控：为 true 时不走字、确认钮禁用并显示 `holdPendingLabel`
+   * （备份恢复传预览 loading 态，解密完成前时停不起算）；默认 false
+   * （开层即计时，保持改密/重置云端等纯文案弹层既有口径）。
+   */
+  holdPaused?: boolean;
+  /** 门控暂停期间确认钮文案，默认“请稍候…” */
+  holdPendingLabel?: string;
   /** 执行中（禁用双钮，确认钮转圈由调用方文案体现） */
   busy?: boolean;
   /** 点确认后的回调（调用方负责关层清状态） */
@@ -55,6 +82,8 @@ export function DangerousConfirmDialog({
   description,
   confirmLabel = "确认",
   holdSeconds = DANGEROUS_HOLD_SECONDS,
+  holdPaused = false,
+  holdPendingLabel = "请稍候…",
   busy = false,
   onConfirm,
   body,
@@ -63,9 +92,11 @@ export function DangerousConfirmDialog({
   const [countdown, setCountdown] = useState(holdSeconds);
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // 开层从头计时，走完停表；关层/卸载复位，下次打开重计
+  // 开层从头计时，走完停表；关层/卸载复位，下次打开重计。
+  // 门控暂停中（holdPaused）不清倒计时走字：停表并保持满格，
+  // 翻 false 时从满格起算（预览就绪后才开始完整冷静期）。
   useEffect(() => {
-    if (!open) {
+    if (!open || holdPaused) {
       if (timer.current) clearInterval(timer.current);
       timer.current = null;
       setCountdown(holdSeconds);
@@ -86,7 +117,7 @@ export function DangerousConfirmDialog({
       if (timer.current) clearInterval(timer.current);
       timer.current = null;
     };
-  }, [open, holdSeconds]);
+  }, [open, holdSeconds, holdPaused]);
 
   // 开层期间锁背景滚动（Radix 原语自带行为，内联实现手动补齐）
   useEffect(() => {
@@ -128,10 +159,10 @@ export function DangerousConfirmDialog({
           </Button>
           <Button
             className="bg-destructive text-white hover:bg-destructive/90"
-            disabled={countdown > 0 || busy}
+            disabled={holdPaused || countdown > 0 || busy}
             onClick={onConfirm}
           >
-            {formatHoldLabel(countdown, confirmLabel)}
+            {resolveHoldLabel(countdown, confirmLabel, holdPaused, holdPendingLabel)}
           </Button>
         </div>
       </div>
