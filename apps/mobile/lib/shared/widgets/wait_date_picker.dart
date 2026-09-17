@@ -1,10 +1,14 @@
 import 'package:flutter/cupertino.dart'
     show CupertinoPicker, CupertinoPickerDefaultSelectionOverlay;
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/lunar/chinese_almanac.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_dimens.dart';
 import '../../core/theme/app_shapes.dart';
+import '../../data/api/dto.dart';
+import '../../modules/todo/providers/todo_providers.dart';
 import 'app_month_calendar.dart';
 import 'more_actions_sheet.dart' show bottomSheetTopShape;
 
@@ -21,7 +25,10 @@ class _PickerResult {
 ///
 /// 底部弹出日历面板：头部标题/相对日期副标题，标题栏可在日/年月/年视图间
 /// 切换，[showTime] 开启时附带时分步进器（日期+时间单面板一次选完）。
-/// 选中日期使用调用方传入的强调色圆形高亮。
+///
+/// 日视图 = 日历视图同款 `AppMonthCalendar`（medium 档）：农历/节日/节气
+/// 副标签 + 休/班徽标 + 周末蓝字，节假日走同一份 `holidayProvider` 缓存；
+/// 今天实心强调块、选中（非今天）= 强调色描边。
 ///
 /// 裁剪说明：原版还带表单字段形态的 WaitDatePicker widget（依赖 wait-home
 /// 的 colorThemeProvider/WaitFieldLabel），orbit 表单用 chip 行 + pick()，
@@ -76,7 +83,7 @@ class WaitDatePicker {
 /// 日期选择器视图模式
 enum _DatePickerViewMode { day, yearMonth, year }
 
-class _DatePickerSheet extends StatefulWidget {
+class _DatePickerSheet extends ConsumerStatefulWidget {
   const _DatePickerSheet({
     required this.accent,
     this.initialDate,
@@ -90,10 +97,10 @@ class _DatePickerSheet extends StatefulWidget {
   final WaitDatePickerMode mode;
 
   @override
-  State<_DatePickerSheet> createState() => _DatePickerSheetState();
+  ConsumerState<_DatePickerSheet> createState() => _DatePickerSheetState();
 }
 
-class _DatePickerSheetState extends State<_DatePickerSheet> {
+class _DatePickerSheetState extends ConsumerState<_DatePickerSheet> {
   late DateTime _currentMonth;
   DateTime? _selectedDate;
   TimeOfDay _selectedTime = const TimeOfDay(hour: 0, minute: 0);
@@ -230,6 +237,13 @@ class _DatePickerSheetState extends State<_DatePickerSheet> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    // 节假日与日历视图共用同一份 holidayProvider 缓存（cfg_holidays，
+    // 空库回落 Rust 预置表）——面板日格因此能显示休/班徽标
+    final holidayByDate =
+        ref.watch(holidayProvider).value ?? const <HolidayInfo>[];
+    final holidays = {
+      for (final h in holidayByDate) h.date: h.isHoliday,
+    };
 
     // 仅保留系统 Home Indicator 安全区，让面板底部排满屏幕
     // （模态底部面板本身已覆盖浮动导航栏，无需再为其预留空间）
@@ -239,7 +253,9 @@ class _DatePickerSheetState extends State<_DatePickerSheet> {
       bottom: false,
       child: Padding(
         padding: EdgeInsets.only(bottom: bottomInset),
-        child: Padding(
+        // 整面板可滚：日视图补农历副标签后退化为 medium 档，面板整体变高——
+        // 短屏（横屏 / 600dp 级）下固定 Column 会底部溢出
+        child: SingleChildScrollView(
           padding: const EdgeInsets.fromLTRB(
               0, AppDimens.space16, 0, AppDimens.space20),
           child: Column(
@@ -296,11 +312,16 @@ class _DatePickerSheetState extends State<_DatePickerSheet> {
                 child: _viewMode == _DatePickerViewMode.day
                     ? AppMonthCalendar(
                         key: const ValueKey('day'),
-                        size: AppCalendarSize.small,
+                        // medium 档（非 mini 圆格）：与日历视图同口径渲染
+                        // 农历/节日/节气副标签 + 休/班徽标 + 周末蓝字，
+                        // 今天实心块 / 选中描边沿用同一套日格规则
+                        size: AppCalendarSize.medium,
                         showHeader: false,
                         month: _currentMonth,
                         selected: _selectedDate,
                         accentColor: widget.accent,
+                        holidays: holidays,
+                        subLabelBuilder: ChineseAlmanac.daySubLabel,
                         selectableStart: firstDate,
                         selectableEnd: lastDate,
                         onDayTap: _selectDate,

@@ -1,22 +1,34 @@
-// 日期时间面板时间选择区测试：下拉框结构 + 滚轮选择交互
+// 日期时间面板测试：日视图与日历视图同口径（农历/休班）+ 时间选择区交互
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:orbit/data/api/mock_orbit_bridge.dart';
+import 'package:orbit/data/providers/bridge_provider.dart';
+import 'package:orbit/shared/widgets/app_month_calendar.dart';
 import 'package:orbit/shared/widgets/wait_date_picker.dart';
 
 void main() {
-  /// 挂一个按钮唤起 showTime 面板（日期+时间）
+  /// 挂一个按钮唤起 showTime 面板（日期+时间）。
+  /// 面板消费 holidayProvider，故须 ProviderScope + MockOrbitBridge 注入。
+  /// 默认 800×600 视口刻意保留：日视图 medium 档下内容高于视口，
+  /// 顺带覆盖「面板整页可滚」的短屏路径（不溢出即可）。
   Future<void> openPicker(WidgetTester tester) async {
-    await tester.pumpWidget(MaterialApp(
-      home: Scaffold(
-        body: Builder(
-          builder: (context) => Center(
-            child: TextButton(
-              onPressed: () => WaitDatePicker.pick(
-                context,
-                showTime: true,
+    await tester.pumpWidget(ProviderScope(
+      overrides: [
+        orbitBridgeProvider.overrideWithValue(MockOrbitBridge()),
+      ],
+      child: MaterialApp(
+        home: Scaffold(
+          body: Builder(
+            builder: (context) => Center(
+              child: TextButton(
+                onPressed: () => WaitDatePicker.pick(
+                  context,
+                  showTime: true,
+                ),
+                child: const Text('打开'),
               ),
-              child: const Text('打开'),
             ),
           ),
         ),
@@ -34,6 +46,19 @@ void main() {
   String minuteText(WidgetTester tester) => tester
       .widget<Text>(find.byKey(const ValueKey('time_minute_value')))
       .data!;
+
+  testWidgets('日视图：medium 档月历挂农历副标签与节假日（同日历视图口径）',
+      (tester) async {
+    await openPicker(tester);
+
+    final calendar = tester.widget<AppMonthCalendar>(
+      find.byType(AppMonthCalendar),
+    );
+    expect(calendar.size, AppCalendarSize.medium);
+    expect(calendar.subLabelBuilder, isNotNull, reason: '农历/节气/节日副标签');
+    expect(calendar.holidays, isNotNull, reason: '休/班徽标数据源');
+    expect(calendar.showHeader, isFalse, reason: '头部由面板标题栏接管');
+  });
 
   testWidgets('时间选择区：时/分下拉框 + 下拉箭头（无步进钮）', (tester) async {
     await openPicker(tester);
