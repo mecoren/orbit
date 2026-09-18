@@ -15,13 +15,14 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
+import { useWheelStepRef } from "@/features/todo/shared/wheel-nav";
 import { lunarYearLabel, solarToLunar } from "@/features/todo/shared/almanac";
 import { formatYmd } from "@/features/todo/shared/lunar";
 
 const WEEKDAY_LABELS = ["一", "二", "三", "四", "五", "六", "日"];
 const TODAY_BG = "#4C7DF0";
-const MIN_YEAR = 1901;
-const MAX_YEAR = 2100;
+export const MIN_YEAR = 1901;
+export const MAX_YEAR = 2100;
 
 export interface YearOverviewPanelProps {
   year: number;
@@ -50,8 +51,14 @@ export function YearOverviewPanel({
     if (year < MAX_YEAR) onYearChange(year + 1);
   };
 
+  // 面板整体滚轮切年（迷你月历区无独立滚动，接管不影响页面；边界由 goPrev/Next 钳制）
+  const wheelRef = useWheelStepRef((dir) => {
+    if (dir > 0) goNextYear();
+    else goPrevYear();
+  });
+
   return (
-    <div className={cn("flex h-full min-h-0 flex-col", className)}>
+    <div ref={wheelRef} className={cn("flex h-full min-h-0 flex-col", className)}>
       {/* 头部：大年份（点击返回月视图）+ 干支/图例 + 切年（与月历头部同节奏） */}
       <div className="mb-1 flex items-center gap-2">
         <Tooltip>

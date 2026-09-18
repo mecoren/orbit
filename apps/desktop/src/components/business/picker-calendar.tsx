@@ -25,6 +25,7 @@ import {
 import { WaitVirtualizedSelect } from "@/components/ui/wait-virtualized-select";
 import { daySubLabel } from "@/features/todo/shared/almanac";
 import { useHolidayMarks } from "@/features/todo/shared/use-holiday-marks";
+import { useWheelStepRef } from "@/features/todo/shared/wheel-nav";
 
 // 静态列表提到模块级只构造一次：弹层内 hover/翻月频繁重渲染时，
 // 201 个年份选项对象与 12 个月份元素引用稳定，React 可直接 bailout。
@@ -70,10 +71,17 @@ export function PickerCalendar({
   const goNext = () =>
     setView(month === 11 ? { year: year + 1, month: 0 } : { year, month: month + 1 });
 
+  // 弹层整体滚轮切月（桌面 mouse/trackpad 手势；内联进抽屉时会接管该区域的页面滚动）。
+  // 年/月下拉展开时事件落在 body portal 浮层，本监听收不到，列表照常滚动不翻月。
+  const wheelRef = useWheelStepRef((dir) => {
+    if (dir > 0) goNext();
+    else goPrev();
+  });
+
   return (
     // 宽度 368 ≈ 7 格 × 49px + 6 × 4px 间距：日格副标签可用宽约 41px，
     // 恰好容下 4 字节日名（「抗战胜利」「烈士纪念日」不截断成省略号）
-    <div className={cn("flex w-[368px] flex-col gap-2", className)}>
+    <div ref={wheelRef} className={cn("flex w-[368px] flex-col gap-2", className)}>
       <div className="flex items-center justify-between gap-1">
         <Button
           variant="outline"

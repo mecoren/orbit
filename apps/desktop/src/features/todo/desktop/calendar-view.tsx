@@ -70,7 +70,8 @@ import { LabelChips } from "../shared/label-chips";
 import { ReminderChip } from "../shared/reminder-chip";
 import { displayReminder, type DisplayReminder, type TaskReminderMeta } from "../shared/reminder-meta";
 import { TaskContextMenu } from "./task-context-menu";
-import { YearOverviewPanel } from "./year-overview";
+import { YearOverviewPanel, MAX_YEAR, MIN_YEAR } from "./year-overview";
+import { useWheelStepRef } from "../shared/wheel-nav";
 import type { TodoLabel, TodoProject, TodoTask } from "@/lib/tauri";
 
 export type CalendarSubMode = "month" | "year" | "agenda";
@@ -154,6 +155,27 @@ export function CalendarView({
   const [selected, setSelected] = useState<Date>(() => startOfDay(new Date()));
   /** 年模式下独立管理的年份（切回月历时同步为 viewYear） */
   const [yearPaneYear, setYearPaneYear] = useState(() => new Date().getFullYear());
+
+  // ---- 滚轮步进翻页（桌面 mouse/trackpad 手势） ----
+  // 回调经 useWheelStepRef 转存最新闭包，高频触发不丢步（150ms 冷却内只翻一档）。
+  const stepViewMonth = (dir: 1 | -1) => {
+    if (dir > 0) {
+      if (viewMonth === 11) {
+        setViewYear(viewYear + 1);
+        setViewMonth(0);
+      } else setViewMonth(viewMonth + 1);
+    } else if (viewMonth === 0) {
+      setViewYear(viewYear - 1);
+      setViewMonth(11);
+    } else setViewMonth(viewMonth - 1);
+  };
+  // 月模式工具栏年份无历史钳制（与翻月跨年语义一致）；年模式两侧钳制与年视图面板同口径
+  const stepViewYear = (dir: 1 | -1) => setViewYear(viewYear + dir);
+  const stepYearPaneYear = (dir: 1 | -1) =>
+    setYearPaneYear(Math.min(MAX_YEAR, Math.max(MIN_YEAR, yearPaneYear + dir)));
+  const viewYearWheelRef = useWheelStepRef(stepViewYear);
+  const viewMonthWheelRef = useWheelStepRef(stepViewMonth);
+  const yearPaneWheelRef = useWheelStepRef(stepYearPaneYear);
   // 月模式某日全部任务的弹层（点圆点行「展开」按钮打开）
   const [expandedDay, setExpandedDay] = useState<Date | null>(null);
   const [updatingHolidays, setUpdatingHolidays] = useState(false);
@@ -346,9 +368,20 @@ export function CalendarView({
       {/* 工具栏：月/年/议程三档切换 + 节假日手动更新（议程档） */}
       <div className="flex shrink-0 items-center justify-between gap-3 px-4 py-2">
         <h2 className="text-lg font-semibold">
-          {subMode === "year"
-            ? `${yearPaneYear}年`
-            : format(new Date(viewYear, viewMonth), "yyyy年M月", { locale: zhCN })}
+          {subMode === "year" ? (
+            <span ref={yearPaneWheelRef} title="滚轮切换年份">
+              {yearPaneYear}年
+            </span>
+          ) : (
+            <>
+              <span ref={viewYearWheelRef} title="滚轮切换年份">
+                {viewYear}年
+              </span>
+              <span ref={viewMonthWheelRef} title="滚轮切换月份">
+                {viewMonth + 1}月
+              </span>
+            </>
+          )}
         </h2>
         <div className="flex items-center gap-2">
           <div className="flex items-center overflow-hidden rounded-md border">
@@ -435,6 +468,8 @@ export function CalendarView({
                   setViewYear(y);
                   setViewMonth(m);
                 }}
+                // 日历整体滚轮翻月（含日格区；左栏无独立滚动，接管不影响右栏列表）
+                wheelStep={stepViewMonth}
                 selected={selected}
                 onDayClick={setSelected}
                 onDayContextMenu={(e, date) => {

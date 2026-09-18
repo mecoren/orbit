@@ -18,6 +18,7 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { useWheelStepRef } from "@/features/todo/shared/wheel-nav";
 
 export type MonthCalendarSize = "lg" | "md" | "sm";
 
@@ -63,6 +64,11 @@ export interface MonthCalendarProps {
   /** 日格右键（日历视图：右击某天快捷新增任务并预填日期） */
   onDayContextMenu?: (e: MouseEvent, date: Date) => void;
   onMonthChange?: (year: number, month: number) => void;
+  /**
+   * 滚轮步进回调（opt-in：传了才挂监听，避免内嵌场景误接管滚动）。
+   * 日历视图月模式传翻月；日期弹层不传（弹层根节点自己挂，避免双重触发）。
+   */
+  wheelStep?: (dir: 1 | -1) => void;
   /** 头部显示（sm 迷你选择器也可隐藏） */
   showHeader?: boolean;
   /** 点击月份标题（如跳年视图）；不传则标题不可点 */
@@ -158,6 +164,7 @@ export function MonthCalendar({
   onDayContextMenu,
   onMonthChange,
   showHeader = true,
+  wheelStep,
   onTitleClick,
   headerSubtitle,
   headerActions,
@@ -192,12 +199,16 @@ export function MonthCalendar({
     else changeMonth(year, month + 1);
   };
 
+  // 透传的滚轮回调只在调用方显式传入时挂载（useWheelStepRef 自身无条件调用保 hooks 顺序）
+  const wheelRef = useWheelStepRef((dir) => wheelStep?.(dir));
+
   const cells = useMemo(() => buildGrid(year, month), [year, month]);
   const todayYmd = formatYmd(now);
   const selectedYmd = selected ? formatYmd(startOfDay(selected)) : null;
 
   return (
     <div
+      ref={wheelStep ? wheelRef : undefined}
       className={cn(
         "flex flex-col",
         fillHeight && "h-full justify-center",
