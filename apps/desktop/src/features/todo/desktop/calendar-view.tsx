@@ -149,8 +149,12 @@ export function CalendarView({
 }: CalendarViewProps) {
   const setSelectedTaskId = useTodoStore((s) => s.setSelectedTaskId);
   const [subMode, setSubMode] = useState<CalendarSubMode>("month");
-  const [viewYear, setViewYear] = useState(() => new Date().getFullYear());
-  const [viewMonth, setViewMonth] = useState(() => new Date().getMonth());
+  /** 视图年月合并为单一 state：两键需原子变更，函数式更新规避连滑时的过期闭包 */
+  const [viewTime, setViewTime] = useState(() => ({
+    year: new Date().getFullYear(),
+    month: new Date().getMonth(),
+  }));
+  const { year: viewYear, month: viewMonth } = viewTime;
   /** 进入视图默认选中今天（右栏即当天的任务列表） */
   const [selected, setSelected] = useState<Date>(() => startOfDay(new Date()));
   /** 年模式下独立管理的年份（切回月历时同步为 viewYear） */
@@ -159,13 +163,9 @@ export function CalendarView({
   // ---- 滚轮步进翻页（桌面 mouse/trackpad 手势） ----
   // 回调经 useWheelStepRef 转存最新闭包；批量步数一次归一，
   // 快速连滑合并为一次渲染（前沿立即 + 后沿补齐，零丢步）。
-  const stepViewMonth = (n: number) => {
-    const next = shiftYearMonth(viewYear, viewMonth, n);
-    setViewYear(next.year);
-    setViewMonth(next.month);
-  };
-  // 月模式工具栏年份无历史钳制（与翻月跨年语义一致）；年模式两侧钳制与年视图面板同口径
-  const stepViewYear = (n: number) => setViewYear(viewYear + n);
+  const stepViewMonth = (n: number) =>
+    setViewTime((prev) => shiftYearMonth(prev.year, prev.month, n));
+  const stepViewYear = (n: number) => setViewTime((prev) => ({ ...prev, year: prev.year + n }));
   const stepYearPaneYear = (n: number) =>
     setYearPaneYear(Math.min(MAX_YEAR, Math.max(MIN_YEAR, yearPaneYear + n)));
   const viewYearWheelRef = useWheelStepRef(stepViewYear);
@@ -310,8 +310,7 @@ export function CalendarView({
 
   const goToday = () => {
     const now = startOfDay(new Date());
-    setViewYear(now.getFullYear());
-    setViewMonth(now.getMonth());
+    setViewTime({ year: now.getFullYear(), month: now.getMonth() });
     setSelected(now);
     setSubMode("month");
   };
@@ -460,8 +459,7 @@ export function CalendarView({
                 year={viewYear}
                 month={viewMonth}
                 onMonthChange={(y, m) => {
-                  setViewYear(y);
-                  setViewMonth(m);
+                  setViewTime({ year: y, month: m });
                 }}
                 // 日历整体滚轮翻月（含日格区；左栏无独立滚动，接管不影响右栏列表）
                 wheelStep={stepViewMonth}
@@ -549,20 +547,18 @@ export function CalendarView({
                 onBack={() => setSubMode("month")}
                 onSelect={(date) => {
                   // 点击年视图某天：回到月历并定位该日
-                  setViewYear(date.getFullYear());
-                  setViewMonth(date.getMonth());
+                  setViewTime({ year: date.getFullYear(), month: date.getMonth() });
                   setSelected(startOfDay(date));
                   setSubMode("month");
                 }}
                 onPickMonth={(m) => {
-                  setViewYear(yearPaneYear);
-                  setViewMonth(m);
+                  setViewTime({ year: yearPaneYear, month: m });
                   setSelected(new Date(yearPaneYear, m, 1));
                   setSubMode("month");
                 }}
                 onYearChange={(y) => {
                   setYearPaneYear(y);
-                  setViewYear(y);
+                  setViewTime((prev) => ({ ...prev, year: y }));
                 }}
               />
             </div>
