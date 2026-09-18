@@ -75,6 +75,61 @@ pub async fn push_all(
     device_id: &str,
     skip_tables: &[String],
 ) -> Result<PushResult, CloudSyncError> {
+    push_all_impl(
+        db_pool,
+        crypto,
+        state_store,
+        adapter,
+        progress_sender,
+        origin,
+        device_id,
+        skip_tables,
+        false,
+    )
+    .await
+}
+
+/// 强制全量 Push（rekey 场景专用）
+///
+/// 桶指纹是**明文内容**的哈希、与密钥无关——换密钥后远端清单指纹照旧
+/// 命中，增量路径会跳过全部桶且 `changed_any=false` 连清单都不重加密，
+/// 云端整体停留在旧 Key 密文（他端一律 KeyMismatch）。本入口无视指纹
+/// 比对：全桶重传 + 清单必写，`state_store.clear()` 只是辅助语义。
+pub async fn push_all_force_full(
+    db_pool: &SqlitePool,
+    crypto: &SyncCryptoService,
+    state_store: &SyncStateStore,
+    adapter: &dyn SyncAdapter,
+    progress_sender: &dyn ProgressSender,
+    origin: SyncOrigin,
+    device_id: &str,
+    skip_tables: &[String],
+) -> Result<PushResult, CloudSyncError> {
+    push_all_impl(
+        db_pool,
+        crypto,
+        state_store,
+        adapter,
+        progress_sender,
+        origin,
+        device_id,
+        skip_tables,
+        true,
+    )
+    .await
+}
+
+async fn push_all_impl(
+    db_pool: &SqlitePool,
+    crypto: &SyncCryptoService,
+    state_store: &SyncStateStore,
+    adapter: &dyn SyncAdapter,
+    progress_sender: &dyn ProgressSender,
+    origin: SyncOrigin,
+    device_id: &str,
+    skip_tables: &[String],
+    force: bool,
+) -> Result<PushResult, CloudSyncError> {
     let state = match state_store.load() {
         Ok(s) => s,
         Err(e) => {
@@ -117,7 +172,10 @@ pub async fn push_all(
         let mut outcomes: Vec<Result<TableOutcome, TableError>> = Vec::with_capacity(tables.len());
         for (idx, table) in tables.iter().enumerate() {
             builder.pushing("todos", "待办数据", idx as u32 + 1, tables.len() as u32);
-            outcomes.push(build_table_outcome(db_pool, adapter, &data_key, &remote_manifest, table).await);
+            outcomes.push(
+                build_table_outcome(db_pool, adapter, &data_key, &remote_manifest, table, force)
+                    .await,
+            );
         }
 
         for outcome in outcomes {
@@ -136,6 +194,11 @@ pub async fn push_all(
                 }
                 Err(e) => {
                     attempt.failed_modules += 1;
+                    log::warn!(
+                        "[push] 表 {} push 失败（隔离不中断）: {}",
+                        e.table,
+                        e.message
+                    );
                     attempt.errors.push(format!("表 {} push 失败: {}", e.table, e.message));
                 }
             }
@@ -152,10 +215,12 @@ pub async fn push_all(
             });
         }
 
-        // 4. 无任何变化 → 不写清单（避免 epoch 空转与无意义流量）
-        let changed_any = attempt.pushed_chunks > 0 || attempt.pushed_tombstones > 0;
+        // 4. 无任何变化 → 不写清单（避免 epoch 空转与无意义流量）；
+        //    force（rekey）下清单必须重加密落盘，不受此短路影响
+        let changed_any = force || attempt.pushed_chunks > 0 || attempt.pushed_tombstones > 0;
         if !changed_any {
             attempt.skipped_modules = 1;
+            attempt.cas_conflicts = result.cas_conflicts;
             result = attempt;
             let mut next_state = state.clone();
             next_state.last_synced_at = now_ms();
@@ -260,14 +325,21 @@ struct TableOutcome {
 }
 
 /// 单表差量计算与上传（错误隔离单元）
+///
+/// 索引合并口径（模块文档「为什么不会覆盖他端数据」的实现落点）：
+/// 新表索引 = **远端索引为底** + 本地桶逐条覆盖，远端有、本地无的桶
+/// （他端已推、本机尚未拉到的桶）原样保留——此前整体替换会把它们
+/// 变成清单不再引用的孤儿，他端数据对所有设备消失。删除语义由墓碑
+/// 表达，保留陈旧桶条目不会复活已删行（pull 侧 LWW/墓碑裁决兜底）。
 async fn build_table_outcome(
     db_pool: &SqlitePool,
     adapter: &dyn SyncAdapter,
     data_key: &[u8],
     remote: &Manifest,
     table: &str,
+    force: bool,
 ) -> Result<TableOutcome, TableError> {
-    let mut table_index = TableIndex::default();
+    let mut table_index = remote.table(table).cloned().unwrap_or_default();
     let mut pushed_chunks = 0u32;
     let mut skipped_chunks = 0u32;
 
@@ -287,7 +359,8 @@ async fn build_table_outcome(
         let remote_ref = remote
             .table(table)
             .and_then(|t| t.chunks.get(&chunk.bucket))
-            .filter(|r| r.fp == fp);
+            .filter(|r| r.fp == fp)
+            .filter(|_| !force);
 
         if remote_ref.is_some() {
             skipped_chunks += 1;
@@ -320,8 +393,8 @@ async fn build_table_outcome(
         );
     }
 
-    // 墓碑分桶差量
-    let mut tombstone_index = TombstoneIndex::default();
+    // 墓碑分桶差量（索引同数据桶口径：远端为底 + 本地覆盖）
+    let mut tombstone_index = remote.tombstone_index(table).cloned().unwrap_or_default();
     let mut pushed_tombstones = 0u32;
     let buckets = load_table_tombstones(db_pool, table)
         .await
@@ -355,7 +428,7 @@ async fn build_table_outcome(
             .and_then(|i| i.buckets.get(&bucket))
             .map(|b| b.fp.as_str());
 
-        if remote_fp != Some(fp.as_str()) {
+        if force || remote_fp != Some(fp.as_str()) {
             let bytes = serde_json::to_vec(&payload).map_err(|e| TableError {
                 table: table.to_string(),
                 message: e.to_string(),
@@ -895,6 +968,132 @@ mod tests {
             result.pushed_modules, 1,
             "有分桶上传时模块计数不得为 0: {:?}",
             result
+        );
+    }
+
+    #[tokio::test]
+    async fn push_preserves_remote_only_bucket_entries() {
+        // 落后设备 push 不得把他端已推、本机未拉的桶条目从清单索引抹掉：
+        // 远端独有桶（本机哈希域 0..64 之外的桶 99）必须在下一版清单中原样保留
+        let (pool, crypto, store, _tmp) = env().await;
+        sqlx::query(
+            "INSERT INTO todo_projects (uuid, title, created_at, updated_at) VALUES ('mine','P',1,1)",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        let adapter = MemAdapter::new();
+        push_all(
+            &pool,
+            &crypto,
+            &store,
+            &adapter,
+            &NoopProgressSender,
+            SyncOrigin::Manual,
+            "dev-1",
+            &[],
+        )
+        .await
+        .unwrap();
+
+        // 模拟他端写入：远端清单里插一个本机绝不会产出的桶条目
+        let (mut remote, _, _) = read_remote_manifest(&adapter, &[7u8; 32]).await.unwrap();
+        remote
+            .tables
+            .get_mut("todo_projects")
+            .unwrap()
+            .chunks
+            .insert(
+                99,
+                ChunkRef {
+                    fp: "ghost".to_string(),
+                    count: 1,
+                    size: 10,
+                },
+            );
+        remote.epoch += 1;
+        remote.device_id = "dev-2".to_string();
+        let payload = encrypt_payload(&serde_json::to_vec(&remote).unwrap(), &[7u8; 32]).unwrap();
+        adapter.put(paths::MANIFEST_PATH, payload);
+        *adapter.version.lock().unwrap() += 1;
+
+        sqlx::query("UPDATE todo_projects SET title='P2', updated_at=2 WHERE uuid='mine'")
+            .execute(&pool)
+            .await
+            .unwrap();
+        push_all(
+            &pool,
+            &crypto,
+            &store,
+            &adapter,
+            &NoopProgressSender,
+            SyncOrigin::Manual,
+            "dev-1",
+            &[],
+        )
+        .await
+        .unwrap();
+
+        let (final_manifest, _, _) = read_remote_manifest(&adapter, &[7u8; 32]).await.unwrap();
+        assert!(
+            final_manifest
+                .tables
+                .get("todo_projects")
+                .is_some_and(|t| t.chunks.contains_key(&99)),
+            "他端独有桶条目不得被本机 push 整体替换丢失: {:?}",
+            final_manifest.tables.get("todo_projects")
+        );
+    }
+
+    #[tokio::test]
+    async fn force_push_reuploads_unchanged_chunks_and_manifest() {
+        // rekey 场景：内容未变但密钥已换——增量路径会全部跳过，
+        // force 入口必须无视指纹重传桶并重写清单
+        let (pool, crypto, store, _tmp) = env().await;
+        sqlx::query(
+            "INSERT INTO todo_projects (uuid, title, created_at, updated_at) VALUES ('u1','P',1,1)",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        let adapter = MemAdapter::new();
+        push_all(
+            &pool,
+            &crypto,
+            &store,
+            &adapter,
+            &NoopProgressSender,
+            SyncOrigin::Manual,
+            "dev-1",
+            &[],
+        )
+        .await
+        .unwrap();
+
+        adapter.uploads.lock().unwrap().clear();
+        let result = push_all_force_full(
+            &pool,
+            &crypto,
+            &store,
+            &adapter,
+            &NoopProgressSender,
+            SyncOrigin::Manual,
+            "dev-1",
+            &[],
+        )
+        .await
+        .unwrap();
+
+        assert!(
+            result.pushed_chunks >= 1,
+            "force 下指纹未变的桶也必须重传: {:?}",
+            result
+        );
+        assert!(result.manifest_written, "force 下清单必须重写");
+        let uploads = adapter.uploads.lock().unwrap().clone();
+        assert!(
+            uploads.iter().any(|p| p.starts_with("tables/")),
+            "分桶必须实际上传: {uploads:?}"
         );
     }
 }

@@ -26,7 +26,7 @@ use crate::cloud_sync::error::CloudSyncError;
 use crate::cloud_sync::paths;
 use crate::cloud_sync::progress::{NoopProgressSender, ProgressSender, SyncOrigin, SyncProgress};
 use crate::cloud_sync::pull::pull_all;
-use crate::cloud_sync::push::push_all;
+use crate::cloud_sync::push::{push_all, push_all_force_full};
 use crate::cloud_sync::state::{SyncState, SyncStateStore};
 use crate::db::repository::sync_history_repo;
 use crate::sync_adapters::traits::SyncAdapter;
@@ -582,19 +582,23 @@ impl SyncEngine {
         self.sync_data_key_from_cloud(raw_adapter, base_path, &mut result)
             .await?;
 
-        // Push 数据
-        let push_result = push_all(
-            &self.db_pool,
-            &self.crypto,
-            &self.state_store,
-            adapter,
-            self.progress_sender.as_ref(),
-            origin,
-            device_id,
-            // push_only 无 Pull 阶段，无失败模块可跳过
-            &[],
-        )
-        .await?;
+        // Push 数据（业务级网络重试，与 sync_now 同口径——此前裸调用让
+        // 「修改后立即同步」在瞬断时零退避直接失败）
+        let push_result = self
+            .with_retry("push_all", 3, || {
+                push_all(
+                    &self.db_pool,
+                    &self.crypto,
+                    &self.state_store,
+                    adapter,
+                    self.progress_sender.as_ref(),
+                    origin,
+                    device_id,
+                    // push_only 无 Pull 阶段，无失败模块可跳过
+                    &[],
+                )
+            })
+            .await?;
         result.pushed_modules = push_result.pushed_modules;
         // S8：模块间错误隔离后的失败信息透传
         result.errors.extend(push_result.errors);
@@ -881,19 +885,24 @@ impl SyncEngine {
             reset_count
         );
 
-        // 3. 全模块 Push（新 Key 加密）
-        // skip_modules 为空：rekey 场景没有前置 Pull，不存在"Pull 失败模块"
-        let push_result = push_all(
-            &self.db_pool,
-            &self.crypto,
-            &self.state_store,
-            adapter,
-            self.progress_sender.as_ref(),
-            origin,
-            device_id,
-            &[],
-        )
-        .await?;
+        // 3. 全模块 Push（新 Key 加密）——必须走 force 全量：桶指纹是明文
+        // 内容的哈希、与密钥无关，增量比对会跳过所有桶使 rekey 空转，
+        // 云端整体停留旧 Key 密文（他端一律 KeyMismatch）。
+        // skip_tables 为空：rekey 场景没有前置 Pull，不存在"Pull 失败模块"
+        let push_result = self
+            .with_retry("push_all_force_full", 3, || {
+                push_all_force_full(
+                    &self.db_pool,
+                    &self.crypto,
+                    &self.state_store,
+                    adapter,
+                    self.progress_sender.as_ref(),
+                    origin,
+                    device_id,
+                    &[],
+                )
+            })
+            .await?;
         result.pushed_modules = push_result.pushed_modules;
         // S8 联动：rekey 语义是「以本机为准全量重加密重传」——任何模块失败
         // 都会留下「新 Key 模块 + 旧 Key 模块」的混合态密文（他端解不开
