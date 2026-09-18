@@ -6,7 +6,7 @@
  * 选中态经 useTodoShell 取用——从回收站面板切回来时筛选原样保留。
  */
 import { useEffect, useMemo, useState } from "react";
-import { BookmarkPlus, CalendarDays, CopyPlus, EyeOff, LayoutGrid, ListTodo, Search, Table2, Tag } from "lucide-react";
+import { AlertTriangle, BookmarkPlus, CalendarDays, CopyPlus, EyeOff, LayoutGrid, ListTodo, Search, Table2, Tag } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -28,7 +28,7 @@ import { useTodoStore } from "@/features/todo/store";
 import { useAppStore } from "@/stores/app-store";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { type TodoTask } from "@/lib/tauri";
-import { LS_HIDE_DONE, LS_VIEW_MODE, QUICK_VIEWS } from "../shared/constants";
+import { LS_HIDE_DONE, LS_VIEW_MODE, QUICK_VIEWS, TASK_LIST_PAGE_SIZE } from "../shared/constants";
 import { useTaskLabels } from "../shared/use-task-labels";
 import { useTaskReminders } from "../shared/use-task-reminders";
 import { useQuery } from "@tanstack/react-query";
@@ -198,6 +198,13 @@ export default function TaskPanel() {
     hideDone,
   ]);
 
+  // 拉取命中上限（A5）：壳层单次最多取 TASK_LIST_PAGE_SIZE 条，命中即意味着
+  // 还有未取到的任务。条幅按**原始拉取**判定（工具栏筛选只收窄已取到的部分，
+  // 截断风险依旧），计数后缀「+」只在该视图真的显示到上限时出现——否则
+  // 筛出 2 条也写「2+」反而读不通。静默少显示比显示慢更糟。
+  const listTruncated = tasks.length >= TASK_LIST_PAGE_SIZE;
+  const countCapped = visibleTasks.length >= TASK_LIST_PAGE_SIZE;
+
   // ---- 标题映射（04 §二）----
   const activeQuickDef = QUICK_VIEWS.find((v) => v.key === quickView);
   const title = activeSavedFilter
@@ -214,7 +221,10 @@ export default function TaskPanel() {
       <div className="flex items-center justify-between gap-3 border-b px-4 py-3">
         <div className="flex items-baseline gap-2">
           <h1 className="text-lg font-semibold">{title}</h1>
-          <span className="text-sm text-muted-foreground">{visibleTasks.length}</span>
+          <span className="text-sm text-muted-foreground">
+            {visibleTasks.length}
+            {countCapped && "+"}
+          </span>
         </div>
 
         <div className="flex items-center gap-2">
@@ -468,6 +478,14 @@ export default function TaskPanel() {
           )}
         </div>
       </div>
+
+      {/* 命中上限条幅（A5）：拉取被截断时明确告知列表不完整，收窄范围后自动消失 */}
+      {listTruncated && (
+        <div className="flex items-center gap-1.5 border-b bg-warning/10 px-4 py-1.5 text-xs text-warning">
+          <AlertTriangle className="size-3.5 shrink-0" />
+          任务数超过单次加载上限 {TASK_LIST_PAGE_SIZE.toLocaleString("zh-CN")} 条，当前列表不完整——请用搜索、项目或快捷视图收窄范围
+        </div>
+      )}
 
       {/* 内容区（flex-1 撑满，QuickAddBar 无论有无数据都固定在底部） */}
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">

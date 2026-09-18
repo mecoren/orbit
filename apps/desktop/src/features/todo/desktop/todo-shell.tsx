@@ -33,7 +33,7 @@ import {
   type TodoTask,
 } from "@/lib/tauri";
 import { parseTemplatePayload } from "../shared/template-apply";
-import { type QuickViewKey } from "../shared/constants";
+import { TASK_LIST_PAGE_SIZE, type QuickViewKey } from "../shared/constants";
 import { needsTodoIndexNav, TODO_INDEX_PATH } from "../shared/sidebar-nav";
 import { ProjectSidebar } from "./project-sidebar";
 import { TaskDetailDrawer } from "./task-detail-drawer";
@@ -169,7 +169,7 @@ export default function TodoShell() {
       todoTaskList({
         keyword: "",
         page: 1,
-        page_size: 10000,
+        page_size: TASK_LIST_PAGE_SIZE,
         ...taskPredicate,
       }),
     staleTime: 2 * 60 * 1000,

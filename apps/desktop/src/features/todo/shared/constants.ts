@@ -39,6 +39,12 @@ export const STATUS_COLOR = {
 export const FAVORITE_COLOR = "#FACC15";
 export const OVERDUE_COLOR_CLASS = "text-destructive";
 
+/**
+ * 主列表单次拉取上限（09 §A5）：壳层查询与面板「已达上限」提示同一口径，
+ * 命中它不再静默少显示——面板计数补「+」并出条幅。
+ */
+export const TASK_LIST_PAGE_SIZE = 10000;
+
 /** 「我的一天」日出高亮色（列表/表格/详情/右键菜单四处同口径，04 §5.2） */
 export const MY_DAY_COLOR = "#F59E0B";
 
