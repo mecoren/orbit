@@ -177,16 +177,22 @@ pub async fn merge_table_items(
             result.errors.extend(table_result.errors);
         }
         Err(e) => {
-            // 合并本身失败：整体回滚（含墓碑），保证该表不出现半合并
+            // 合并本身失败：整体回滚（含墓碑）并**上报 Err**——此前降级为
+            // Ok(errors) 会让调用方把该表记为成功、账本刷成新指纹，回滚掉的
+            // 内容永不再下载（静默空洞）；上报 Err 才能进 failed_modules
             let _ = tx.rollback().await;
-            result.errors.push(format!("表 {table} 合并失败: {e}"));
-            return Ok(result);
+            return Err(e);
         }
     }
 
     match apply_tombstones_in_tx(&mut tx, table, tombstones, &local_map).await {
         Ok(count) => result.deleted = count,
-        Err(e) => result.errors.push(format!("墓碑应用失败: {e}")),
+        Err(e) => {
+            // 墓碑应用失败：只记 errors 仍 commit 恰好留下本文件开头禁止的
+            // 「数据已合并、删除未应用」半合并；回滚整表上报 Err 同口径
+            let _ = tx.rollback().await;
+            return Err(e);
+        }
     }
 
     tx.commit().await?;
