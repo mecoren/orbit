@@ -25,7 +25,7 @@ import {
 import { WaitVirtualizedSelect } from "@/components/ui/wait-virtualized-select";
 import { daySubLabel } from "@/features/todo/shared/almanac";
 import { useHolidayMarks } from "@/features/todo/shared/use-holiday-marks";
-import { useWheelStepRef } from "@/features/todo/shared/wheel-nav";
+import { useWheelStepRef, shiftYearMonth } from "@/features/todo/shared/wheel-nav";
 
 // 静态列表提到模块级只构造一次：弹层内 hover/翻月频繁重渲染时，
 // 201 个年份选项对象与 12 个月份元素引用稳定，React 可直接 bailout。
@@ -73,9 +73,9 @@ export function PickerCalendar({
 
   // 弹层整体滚轮切月（桌面 mouse/trackpad 手势；内联进抽屉时会接管该区域的页面滚动）。
   // 年/月下拉展开时事件落在 body portal 浮层，本监听收不到，列表照常滚动不翻月。
-  const wheelRef = useWheelStepRef((dir) => {
-    if (dir > 0) goNext();
-    else goPrev();
+  // 批量步数经 shiftYearMonth 一次归一，快速连滑只触发一次渲染。
+  const wheelRef = useWheelStepRef((n) => {
+    setView((v) => shiftYearMonth(v.year, v.month, n));
   });
 
   return (

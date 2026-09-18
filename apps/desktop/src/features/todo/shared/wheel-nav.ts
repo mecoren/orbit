@@ -10,8 +10,8 @@
  * 1. `ctrlKey`/`metaKey` 直接放行——那是浏览器缩放手势；
  * 2. 事件落在年/月下拉列表（`[data-slot="select-content"]` / `[role="listbox"]`）直接放行——
  *    列表自己的原生滚动优先，不能一边滚列表一边翻月；
- * 3. 触控板连续小增量走累积阈值 + 触发后冷却——无冷却时高精度滚轮
- *    一次刻度吐多个事件会导致连翻数月。
+ * 3. 触控板连续小增量走累积阈值 + 前沿后沿节流——突发手势合并为一次渲染，
+ *    且冷却期内的步数不清零（旧实现直接丢弃，快速连滑会丢月）。
  */
 import { useCallback, useRef } from "react";
 
@@ -57,16 +57,32 @@ export interface AttachWheelStepOptions {
   cooldownMs?: number;
 }
 
-/** 在元素上挂滚轮步进监听，返回解绑函数（供回调 ref cleanup） */
+/** 在元素上挂滚轮步进监听，返回解绑函数（供回调 ref cleanup）
+ *
+ * 节流语义（前沿 + 后沿，零丢步）：
+ * - 冷却期外首个步进立即触发（单击无延迟感）；
+ * - 冷却期内的步进累积，期满一次性触发合计（快速连滑只多一次渲染，不丢月）。
+ */
 export function attachWheelStep(
   el: HTMLElement,
-  onStep: (dir: 1 | -1) => void,
+  onSteps: (steps: number) => void,
   opts: AttachWheelStepOptions = {},
 ): () => void {
   const threshold = opts.threshold ?? WHEEL_STEP_THRESHOLD_PX;
   const cooldownMs = opts.cooldownMs ?? WHEEL_STEP_COOLDOWN_MS;
   let acc = 0;
-  let lastFire = 0;
+  let pending = 0;
+  let lastFlush = 0;
+  let trailing: ReturnType<typeof setTimeout> | null = null;
+
+  const flush = () => {
+    trailing = null;
+    if (pending === 0) return;
+    lastFlush = Date.now();
+    const n = pending;
+    pending = 0;
+    onSteps(n);
+  };
 
   const onWheel = (e: WheelEvent) => {
     // 下拉列表内滚动不接管（见文件头规则 2；注意不能用 popper wrapper 判定，
@@ -79,31 +95,54 @@ export function attachWheelStep(
     const r = consumeWheelStep(acc, delta, threshold);
     acc = r.rest;
     if (!r.fire) return;
-    const now = Date.now();
-    if (now - lastFire < cooldownMs) return;
-    lastFire = now;
-    onStep(r.dir);
+    pending += r.dir;
+    if (Date.now() - lastFlush >= cooldownMs) {
+      if (trailing != null) {
+        clearTimeout(trailing);
+        trailing = null;
+      }
+      flush();
+    } else if (trailing == null) {
+      trailing = setTimeout(flush, cooldownMs);
+    }
   };
 
   el.addEventListener("wheel", onWheel, { passive: false });
-  return () => el.removeEventListener("wheel", onWheel);
+  return () => {
+    if (trailing != null) clearTimeout(trailing);
+    el.removeEventListener("wheel", onWheel);
+  };
 }
 
 /**
- * 回调 ref 版（React 19 支持返回 cleanup）：`<div ref={useWheelStepRef(onStep)}> …`。
- * onStep 用 ref 转存，调用方无需 useCallback 包裝也不會重掛监听。
+ * 回调 ref 版（React 19 支持返回 cleanup）：`<div ref={useWheelStepRef(onSteps)}> …`。
+ * onSteps 用 ref 转存，调用方无需 useCallback 包裝也不會重掛监听。
  */
 export function useWheelStepRef(
-  onStep: (dir: 1 | -1) => void,
+  onSteps: (steps: number) => void,
   opts: AttachWheelStepOptions = {},
 ): (el: HTMLElement | null) => void {
-  const onStepRef = useRef(onStep);
-  onStepRef.current = onStep;
+  const onStepsRef = useRef(onSteps);
+  onStepsRef.current = onSteps;
   const optsRef = useRef(opts);
   optsRef.current = opts;
 
   return useCallback((el: HTMLElement | null) => {
     if (el == null) return;
-    return attachWheelStep(el, (dir) => onStepRef.current(dir), optsRef.current);
+    return attachWheelStep(el, (n) => onStepsRef.current(n), optsRef.current);
   }, []);
+}
+
+/**
+ * 年月整体平移 n 个月（month 为 0-based；跨年自动进位，负数正确回绕）。
+ * 滚轮批量步进的归一出口，避免各调用方手写取模（负数取模易错）。
+ */
+export function shiftYearMonth(
+  year: number,
+  month: number,
+  steps: number,
+): { year: number; month: number } {
+  const total = year * 12 + month + steps;
+  const nextYear = Math.floor(total / 12);
+  return { year: nextYear, month: total - nextYear * 12 };
 }

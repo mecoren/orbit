@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { consumeWheelStep, WHEEL_STEP_THRESHOLD_PX } from "./wheel-nav";
+import { consumeWheelStep, shiftYearMonth, WHEEL_STEP_THRESHOLD_PX } from "./wheel-nav";
 
 describe("consumeWheelStep", () => {
   it("阈值以下只累积不触发", () => {
@@ -39,5 +39,26 @@ describe("consumeWheelStep", () => {
     const r = consumeWheelStep(5, 0);
     expect(r.fire).toBe(false);
     expect(r.rest).toBe(5);
+  });
+});
+
+describe("shiftYearMonth", () => {
+  it("月内平移", () => {
+    expect(shiftYearMonth(2026, 10, 1)).toEqual({ year: 2026, month: 11 });
+    expect(shiftYearMonth(2026, 10, -3)).toEqual({ year: 2026, month: 7 });
+  });
+
+  it("跨年进位", () => {
+    expect(shiftYearMonth(2026, 11, 1)).toEqual({ year: 2027, month: 0 });
+    expect(shiftYearMonth(2026, 11, 5)).toEqual({ year: 2027, month: 4 });
+  });
+
+  it("负数正确回绕（非 JS 取模负值）", () => {
+    expect(shiftYearMonth(2026, 0, -1)).toEqual({ year: 2025, month: 11 });
+    expect(shiftYearMonth(2026, 0, -13)).toEqual({ year: 2024, month: 11 });
+  });
+
+  it("零步进原样返回", () => {
+    expect(shiftYearMonth(2026, 5, 0)).toEqual({ year: 2026, month: 5 });
   });
 });

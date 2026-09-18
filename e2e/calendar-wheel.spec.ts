@@ -78,6 +78,22 @@ test("日期弹层滚轮下上翻月并回位", async ({ page }) => {
     .toBe(before);
 });
 
+test("日期弹层快速连滑 5 格恰好进 5 月（合并渲染但零丢步）", async ({ page }) => {
+  const monthTrigger = await openPickerCalendar(page);
+  const before = (await monthTrigger.textContent()) ?? "";
+  const startMonth = parseInt(before, 10);
+
+  await monthTrigger.hover();
+  // 背靠背连滑：全部落入同一冷却窗的步数必须累积，后沿一次性补齐
+  for (let i = 0; i < 5; i++) {
+    await page.mouse.wheel(0, 120);
+  }
+  const expected = `${((startMonth - 1 + 5) % 12) + 1}月`;
+  await expect
+    .poll(async () => monthTrigger.textContent(), { timeout: 5_000 })
+    .toBe(expected);
+});
+
 test("年份下拉展开时滚轮不翻月", async ({ page }) => {
   const monthTrigger = await openPickerCalendar(page);
   const before = await monthTrigger.textContent();

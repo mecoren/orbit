@@ -66,9 +66,10 @@ export interface MonthCalendarProps {
   onMonthChange?: (year: number, month: number) => void;
   /**
    * 滚轮步进回调（opt-in：传了才挂监听，避免内嵌场景误接管滚动）。
-   * 日历视图月模式传翻月；日期弹层不传（弹层根节点自己挂，避免双重触发）。
+   * 批量步数（快速连滑合并为一次回调）；日历视图月模式传翻月；
+   * 日期弹层不传（弹层根节点自己挂，避免双重触发）。
    */
-  wheelStep?: (dir: 1 | -1) => void;
+  wheelStep?: (steps: number) => void;
   /** 头部显示（sm 迷你选择器也可隐藏） */
   showHeader?: boolean;
   /** 点击月份标题（如跳年视图）；不传则标题不可点 */
@@ -202,7 +203,7 @@ export function MonthCalendar({
   };
 
   // 透传的滚轮回调只在调用方显式传入时挂载（useWheelStepRef 自身无条件调用保 hooks 顺序）
-  const wheelRef = useWheelStepRef((dir) => wheelStep?.(dir));
+  const wheelRef = useWheelStepRef((n) => wheelStep?.(n));
 
   const cells = useMemo(() => buildGrid(year, month), [year, month]);
   const todayYmd = formatYmd(now);

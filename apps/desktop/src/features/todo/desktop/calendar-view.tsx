@@ -71,7 +71,7 @@ import { ReminderChip } from "../shared/reminder-chip";
 import { displayReminder, type DisplayReminder, type TaskReminderMeta } from "../shared/reminder-meta";
 import { TaskContextMenu } from "./task-context-menu";
 import { YearOverviewPanel, MAX_YEAR, MIN_YEAR } from "./year-overview";
-import { useWheelStepRef } from "../shared/wheel-nav";
+import { useWheelStepRef, shiftYearMonth } from "../shared/wheel-nav";
 import type { TodoLabel, TodoProject, TodoTask } from "@/lib/tauri";
 
 export type CalendarSubMode = "month" | "year" | "agenda";
@@ -157,22 +157,17 @@ export function CalendarView({
   const [yearPaneYear, setYearPaneYear] = useState(() => new Date().getFullYear());
 
   // ---- 滚轮步进翻页（桌面 mouse/trackpad 手势） ----
-  // 回调经 useWheelStepRef 转存最新闭包，高频触发不丢步（150ms 冷却内只翻一档）。
-  const stepViewMonth = (dir: 1 | -1) => {
-    if (dir > 0) {
-      if (viewMonth === 11) {
-        setViewYear(viewYear + 1);
-        setViewMonth(0);
-      } else setViewMonth(viewMonth + 1);
-    } else if (viewMonth === 0) {
-      setViewYear(viewYear - 1);
-      setViewMonth(11);
-    } else setViewMonth(viewMonth - 1);
+  // 回调经 useWheelStepRef 转存最新闭包；批量步数一次归一，
+  // 快速连滑合并为一次渲染（前沿立即 + 后沿补齐，零丢步）。
+  const stepViewMonth = (n: number) => {
+    const next = shiftYearMonth(viewYear, viewMonth, n);
+    setViewYear(next.year);
+    setViewMonth(next.month);
   };
   // 月模式工具栏年份无历史钳制（与翻月跨年语义一致）；年模式两侧钳制与年视图面板同口径
-  const stepViewYear = (dir: 1 | -1) => setViewYear(viewYear + dir);
-  const stepYearPaneYear = (dir: 1 | -1) =>
-    setYearPaneYear(Math.min(MAX_YEAR, Math.max(MIN_YEAR, yearPaneYear + dir)));
+  const stepViewYear = (n: number) => setViewYear(viewYear + n);
+  const stepYearPaneYear = (n: number) =>
+    setYearPaneYear(Math.min(MAX_YEAR, Math.max(MIN_YEAR, yearPaneYear + n)));
   const viewYearWheelRef = useWheelStepRef(stepViewYear);
   const viewMonthWheelRef = useWheelStepRef(stepViewMonth);
   const yearPaneWheelRef = useWheelStepRef(stepYearPaneYear);

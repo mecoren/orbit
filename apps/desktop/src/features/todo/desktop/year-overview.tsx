@@ -52,9 +52,9 @@ export function YearOverviewPanel({
   };
 
   // 面板整体滚轮切年（迷你月历区无独立滚动，接管不影响页面；边界由 goPrev/Next 钳制）
-  const wheelRef = useWheelStepRef((dir) => {
-    if (dir > 0) goNextYear();
-    else goPrevYear();
+  const wheelRef = useWheelStepRef((n) => {
+    const next = Math.min(MAX_YEAR, Math.max(MIN_YEAR, year + n));
+    if (next !== year) onYearChange(next);
   });
 
   return (
