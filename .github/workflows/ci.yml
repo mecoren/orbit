@@ -43,11 +43,13 @@ jobs:
       - name: Playwright 冒烟测试
         run: pnpm e2e
 
-  # 内存门禁（docs/09 内存与性能治理专项）：两件事都零业务副作用、纯只读。
-  # audit-unbounded 扫常驻累加容器缺 `bounded` 标记；growth-curve 用同一份 dist
-  # 在 Chromium 里跑 1k/5k/10k 三档 × 3 次中位，判堆驻留/增长斜率/操作峰值/GC 后回落。
-  # Tauri exe 的真机口径（390MB 空闲 / 758MB 峰）依赖 Windows + WebView2，
-  # 不进 CI，留本地 `node perf-metrics/memory3.mjs --gate`（发版第 4 步）。
+  # 内存门禁（口径决策见 docs/adr/0007，归因与进度见 docs/09 内存与性能治理专项）：
+  # 两件事都零业务副作用、纯只读。audit-unbounded 扫常驻累加容器缺 `bounded` 标记；
+  # growth-curve 用同一份 dist 在 Chromium 里跑 1k/5k/10k 三档 × 3 次中位，判堆驻留/
+  # 增长斜率/操作峰值/GC 后回落。采样前后强制 window.gc()，故本 job 的数字与
+  # 09-12 报告的未 GC 口径不可互相换算。真机 Tauri exe 的进程树口径依赖 Windows +
+  # WebView2，不进 CI，留本地 `node perf-metrics/memory3.mjs --gate`
+  # （已列入 docs/08 正式发布门禁第 1 条）。
   perf-gate:
     runs-on: ubuntu-latest
     steps:

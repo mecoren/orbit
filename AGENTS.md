@@ -33,7 +33,7 @@ Orbit（循迹）是本地优先的跨平台任务管理应用：待办（项目
 | 状态(移动) | Riverpod；移动 UI 不引图表库（纯自绘 Row/Column） |
 | 核心 | Rust edition 工具链锁 `rust-toolchain.toml` 1.96，clippy + rustfmt |
 | 加密 | SQLCipher 本地库 + AES-256-GCM 云同步 E2E（PBKDF2 600k 单调不降级） |
-| 质量 | tsc / vitest 4 / Playwright 冒烟 / cargo test / flutter analyze+test；CI 三 job（web/rust-core/flutter-mobile 含 FRB codegen 一致性门禁） |
+| 质量 | tsc / vitest 4 / Playwright 冒烟 / cargo test / flutter analyze+test；内存门禁（`perf-metrics/`）；CI 四 job（web/rust-core/flutter-mobile 含 FRB codegen 一致性门禁/perf-gate） |
 
 ## 架构边界
 
@@ -105,13 +105,19 @@ flutter test
 flutter test test/xxx_test.dart          # 定向用例
 # vitest 必须在 apps/desktop 内跑（根目录跑会因路径解析假红）
 
+# 内存门禁（详见 docs/09_内存与性能治理专项-2026-09-18.md）
+node perf-metrics/audit-unbounded.mjs --gate   # 无界累加容器审计（零依赖，秒级）
+node perf-metrics/growth-curve.mjs --gate      # 1k/5k/10k 增长曲线与泄漏判据（需先 pnpm build）
+node perf-metrics/growth-curve.mjs --record    # 采纳新基线：只回写 baselines.json 的 measured
+node perf-metrics/memory3.mjs --gate           # 真机 Tauri exe 口径（Windows 本地，不入 CI）
+
 # 发版（详见 docs/08_发布与更新流程.md）
 pnpm bump 0.2.0           # 升版：写源 + 同步五处清单 + 两个 Cargo.lock
 pnpm bump:check           # 只校验一致性（零写入，CI/本地通用）
 ```
 
-- CI（`.github/workflows/ci.yml`）三 job：web（typecheck+vitest+build+e2e）/ rust-core（cargo check --workspace --all-targets）/ flutter-mobile（FRB codegen 一致性 + analyze + test）。提交前本地跑通同等检查。
-- e2e/Playwright 专用端口 **5273**（非 vite 默认 5173，防撞其他项目 dev server）；strictPort 双保险。
+- CI（`.github/workflows/ci.yml`）四 job：web（typecheck+vitest+build+e2e）/ rust-core（cargo check --workspace --all-targets + cargo test --workspace --lib）/ flutter-mobile（FRB codegen 一致性 + analyze + test）/ perf-gate（无界审计 + 内存增长曲线）。提交前本地跑通同等检查。
+- e2e/Playwright 专用端口 **5273**（非 vite 默认 5173，防撞其他项目 dev server）；strictPort 双保险。内存门禁端口 **5275**（`growth-curve` 自起 dist 静态服务）。
 
 ## 版本发布与更新流程（改版本号时自动执行）
 
@@ -122,7 +128,7 @@ pnpm bump:check           # 只校验一致性（零写入，CI/本地通用）
   1. `pnpm bump X.Y.Z`（同步 `tauri.conf.json` / 桌面壳 `Cargo.toml [package]` / 根 `Cargo.toml [workspace.package]` / `pubspec.yaml`（`+build` 自增）/ 两个 lock），确认输出 `VERSION_SYNC_OK`；
   2. 提炼变更：`git log v<上一 tag>..HEAD --oneline`，按功能合并同类提交，忽略 docs/chore/style 噪声；
   3. **两份更新日志同一次提交写完**：`CHANGELOG.md`（`[Unreleased]` 段改为 `## [X.Y.Z] - YYYY-MM-DD`）+ `apps/desktop/src/lib/changelog.ts`（`CHANGELOG_VERSIONS` 头部插入同版本条目）。只写一处 → 应用内关于页永久缺版本（qraft 0.2.7 的历史事故）；
-  4. 本地跑通 CI 等价检查：`pnpm typecheck` / `pnpm test` / `pnpm e2e` / `pnpm lint:rust`（`src/test/release-consistency.test.ts` 会把「版本与日志漂移」直接判红）；
+  4. 本地跑通 CI 等价检查：`pnpm typecheck` / `pnpm test` / `pnpm e2e` / `pnpm lint:rust` / 内存门禁（`perf-metrics/audit-unbounded.mjs --gate` + `growth-curve.mjs --gate`）（`src/test/release-consistency.test.ts` 会把「版本与日志漂移」直接判红）；
   5. **不主动提交**：保持工作区交用户确认；提交用 `chore(release): 版本 X.Y.Z`；
   6. 打 tag `vX.Y.Z` 并推送（`git push origin main --tags`）—— **tag 名必须等于清单版本**（`release.yml` 的 audit job 强校验），推送即公开 Release。
   - **tag 漂移重定（白名单外动作，谨慎）**：若远端已存在同名 `vX.Y.Z` 却指向别的提交（常见根因：并行会话版本漂移，旧会话已先推过 tag），`git push --tags` 会被远端拒收。正确顺序：① `git push origin :refs/tags/vX.Y.Z` 删远端旧 tag → ② `git tag -f vX.Y.Z <commit>` 移动本地 tag 到正确提交 → ③ `git push origin refs/tags/vX.Y.Z` 重推。删/移远端 tag 属公开动作，先确认无下游依赖（如已发布的 GitHub Release）再执行。
@@ -177,6 +183,27 @@ pnpm bump:check           # 只校验一致性（零写入，CI/本地通用）
 - 测试：`MockOrbitBridge` 注入 `orbitBridgeProvider.overrideWithValue` 冒烟渲染；纯 Dart test 直接调 bridge 排除 UI 层（widget 卡死超时先分离归因）。
 - toast 用 `WaitToast`（支持 action 钮）；空态对齐 `EmptyState` 组件模式（让出标题栏后剩余视口垂直居中）。
 
+## 内存口径与有界容器（门禁：`perf-metrics/audit-unbounded.mjs --gate`）
+
+口径决策见 `docs/adr/0007-memory-measurement-gate.md`（为什么必须强制 GC、为什么阈值只准收紧），
+专项进度与归因见 `docs/09_内存与性能治理专项-2026-09-18.md`。
+
+- **累加容器必须有界**：进程生命周期内可达的累加容器——Rust `static`/`Lazy`/`thread_local` 内集合、
+  `Mutex`/`RwLock` 包裹且跨调用存活的集合（含 `Arc` 共享的 struct 字段如 `dir_cache`）、跨 hook 存活的
+  模块级 `Map`/`Set`——声明行 ±3 行内必须带三选一标记：
+  `// bounded: <上界+淘汰策略>` ｜ `// bounded-by-lifecycle: <何时整体清空>` ｜ `// bounded-by-data: <来源天然有界>`。
+  缺标记即拦停。例外只能写进 `perf-metrics/baselines.json` 的 `knownUnbounded`（按 文件+规则 计数，
+  **只许降不许升**）；`sql-fetch-all`（无 `LIMIT` 的 `fetch_all`）当前提示级，A6 落地后翻正。
+- **内存结论必须可复算**：任何「省了多少 MB」的说法要能用 `growth-curve.mjs` 复现。三条口径红线：
+  采样前必须 `window.gc()`（否则量到的是分配量不是驻留，09-12 报告的 169/257MB 就栽在这里）；
+  峰值指标不 GC、泄漏指标必 GC，两者配对才分得清「重」与「漏」；进程 RSS 按 pid 子树收敛不按进程名全局求和。
+- **渲染必须过虚拟窗**：整列表渲染一律走 `useVirtualizer`，**包括分组置顶段**（逾期/今天/收藏头等）。
+  `domNodesSlope_per_1k` 阈值 30 是这条规则的哨兵——任何新增的裸 `.map()` 整列表渲染都会把斜率抬到数百而被拦下。
+- **改缓存策略要连测两份**：`placeholderData` / `gcTime` 的收益只在**换 queryKey** 路径上出现，只点勾选的
+  churn 测不到（`growth-curve` 的 `switchChurn` 与 `extraCopyCostMB` 就是为补这个盲区加的）。
+- **阈值与目标分开存**：`baselines.json` 的 `thresholds` 是防回归判据（今天必须过），`targets` 是期望值
+  （可以不过）。`--record` 只回写 `measured`，改阈值须连同理由写进 `$rationale` 并在 docs/09 留痕。
+
 ## 通用代码规范
 
 - 非显然函数/方法上方写中文文档注释（TS 多行注释块 / Rust `///`）；显然一行包装可省。
@@ -192,4 +219,4 @@ pnpm bump:check           # 只校验一致性（零写入，CI/本地通用）
 - React 19：<https://react.dev/reference/react>
 - Tailwind CSS v4：<https://tailwindcss.com/docs>
 - flutter_rust_bridge：<https://fzyzcjy.github.io/flutter_rust_bridge/>
-- 项目内权威文档：`docs/01-08`（产品/架构/数据/UI 规格/backlog/发布与更新流程）、`docs/adr/0001-0006`（SQLCipher/通知/双端拆分/发布工程/回收站边界/桌面驻留内存）
+- 项目内权威文档：`docs/01-09`（产品/架构/数据/UI 规格/backlog/发布与更新流程/内存与性能治理专项）、`docs/adr/0001-0007`（SQLCipher/通知/双端拆分/发布工程/回收站边界/桌面驻留内存/内存度量口径与门禁）

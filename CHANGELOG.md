@@ -99,6 +99,28 @@
   mock 桥同口径实现（并修正 `todo_subtasks_toggle_done`/`_promote` 参数名与调用方
   漂移导致的 mock 静默失效）。
 
+### 性能与内存
+
+- **万级列表常驻内存减半**（`docs/09` A14）：任务列表的「逾期」置顶段此前裸渲染在虚拟窗之外
+  （理由写着「逾期集天然有限」，实测 10k 档有 334 条），现与常规段并入同一条 `useVirtualizer`
+  流。万级驻留 76MB → **37MB**、DOM 节点 9980 → **863**（且三档恒定）、切视图峰值 267MB →
+  **61MB**、勾选操作峰值 327MB → **83MB**、进程树 RSS 433MB → **354MB**。置顶段外观不变
+  （红底 + 段首「逾期 · N」标题 + 段末分隔线），但**键盘 j/k 与 Enter 现在也能到达置顶行**
+  （旧实现里那一段既不能拖拽也不能键盘导航），顺带修掉按 `tasks` 取索引而行来自 `rest`
+  造成的焦点错位。
+- **列表缓存驻留收敛**（A1）：主列表与两条全表投影（任务提醒 / 任务标签）`gcTime` 由全局
+  10min 收到 10s，主列表不再挂 `placeholderData`——**换视图/换项目的首帧改为短暂骨架**（有意
+  取舍，实测旧结果集只值 2MB，摘掉它换来的是「按谓词分叉的万行缓存不再长期挂着」）；
+  全局搜索保留 `placeholderData` 但 `gcTime: 5s`（每次击键曾留一份结果集）。
+- **内存门禁入库并接 CI**（`perf-metrics/`）：新增 `growth-curve.mjs`（1k/5k/10k 三档 × 3 次中位、
+  强制 GC 采真实驻留、切视图与勾选两类峰值、20 次写后泄漏、进程树 RSS 按 pid 子树收敛）与
+  `audit-unbounded.mjs`（无界累加容器审计，`bounded*` 标记 + `knownUnbounded` 棘轮登记），
+  阈值落 `baselines.json`；CI 新增 `perf-gate` job，`rust-core` job 从只 `cargo check` 补为
+  `cargo test --workspace --lib`。真机 Tauri exe 口径仍走本地 `memory3.mjs`（Windows 依赖，不入 CI）。
+- **更正历史内存基线口径**：`docs/性能与UX系统性优化报告-2026-09-12.md` §5.2 的「10k 档 169MB
+  used / 257MB total、操作峰 758MB」采自未强制 GC 的采样点，量到的是分配量而非驻留；同前端
+  同档位强制 GC 后的真实驻留为 76MB / 128MB（A14 前）。该报告的 CPU/延迟结论不受影响。
+
 ## [0.1.0] - 2026-09-15
 
 ### 产品与平台
