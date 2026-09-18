@@ -111,13 +111,15 @@ const SIZE_SPECS: Record<MonthCalendarSize, SizeSpec> = {
     badge: "size-4 text-[9px]",
   },
   md: {
-    cell: "min-h-14 gap-0.5 rounded-lg px-0.5 pt-1.5",
+    // 日期弹层专用：行高 48px（内容约 42px）+ 行间距 2px，行间留白 8px 与
+    // 弹层上下 8px 节奏对齐；此前 min-h-14 + gap-1 每行多出 12px 空气感
+    cell: "min-h-12 gap-0.5 rounded-lg px-0.5 pt-1.5",
     number: "text-sm font-semibold",
     weekday: "py-0.5 text-xs font-medium",
     sub: "max-w-full truncate px-0.5 text-[10px] leading-none",
     navBtn: "size-7",
     title: "text-xl font-bold tracking-tight",
-    grid: "grid-cols-7 gap-1",
+    grid: "grid-cols-7 gap-0.5",
     // 徽标与 lg 同口径贴日格右上角（原负偏移会越出格子压到相邻日）
     badge: "right-0.5 top-0.5 size-3 text-[7px]",
   },
