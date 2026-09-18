@@ -1,7 +1,7 @@
-//! push — v2 差量上传（表级分桶 + 清单 CAS）
+//! push — 差量上传（表级分桶 + 清单 CAS）
 //!
 //! ## 流程
-//! 1. 读远端清单 `v2/manifest.orsync`（含并发令牌 ETag）
+//! 1. 读远端清单 `manifest.orsync`（含并发令牌 ETag）
 //! 2. 逐表：加载未删行 → 稳定哈希分桶 → 与清单桶索引比对 fingerprint →
 //!    **只上传变化的桶**（未变桶零流量）
 //! 3. 墓碑：按本地时区月份分桶 → 同上差量上传
@@ -13,7 +13,7 @@
 //! 新清单 = **远端清单的拷贝** + 本地有数据的桶覆盖。远端有、本地无的桶
 //! 条目**原样保留**（不删除）。删除语义始终由墓碑条目表达，由 pull 侧的
 //! LWW / 复活裁决消费——因此多设备并发 push 不再出现"后写者把前写者
-//! 新增的行整块抹掉"的窗口（v1 的整模块覆盖问题）。
+//! 新增的行整块抹掉"的窗口。
 //!
 //! ## 空数据覆盖守卫
 //! 本地全空 + 远端已有数据时阻断 push（删库重装后 sync_state.json 残留的
@@ -26,7 +26,7 @@ use crate::cloud_sync::crypto_io::{decrypt_payload, encrypt_payload};
 use crate::cloud_sync::db_loader::{load_table_items, load_table_tombstones, now_ms};
 use crate::cloud_sync::error::CloudSyncError;
 use crate::cloud_sync::meta::{
-    ChunkRef, ManifestV2, TableIndex, TombstoneBucketPayload, TombstoneBucketRef, TombstoneIndex,
+    ChunkRef, Manifest, TableIndex, TombstoneBucketPayload, TombstoneBucketRef, TombstoneIndex,
 };
 use crate::cloud_sync::paths;
 use crate::cloud_sync::progress::{ProgressBuilder, ProgressSender, SyncOrigin};
@@ -261,7 +261,7 @@ async fn build_table_outcome(
     db_pool: &SqlitePool,
     adapter: &dyn SyncAdapter,
     data_key: &[u8],
-    remote: &ManifestV2,
+    remote: &Manifest,
     table: &str,
 ) -> Result<TableOutcome, TableError> {
     let mut table_index = TableIndex::default();
@@ -411,12 +411,12 @@ impl std::fmt::Display for TableError {
 async fn read_remote_manifest(
     adapter: &dyn SyncAdapter,
     data_key: &[u8],
-) -> Result<(ManifestV2, Option<String>, Option<Vec<u8>>), CloudSyncError> {
+) -> Result<(Manifest, Option<String>, Option<Vec<u8>>), CloudSyncError> {
     match adapter.download_with_token(paths::MANIFEST_PATH).await? {
-        None => Ok((ManifestV2::empty(""), None, None)),
+        None => Ok((Manifest::empty(""), None, None)),
         Some((bytes, token)) => {
             let plain = decrypt_payload(&bytes, data_key)?;
-            let manifest: ManifestV2 = serde_json::from_slice(&plain)?;
+            let manifest: Manifest = serde_json::from_slice(&plain)?;
             if manifest.layout_version != crate::cloud_sync::meta::LAYOUT_VERSION {
                 return Err(CloudSyncError::Other {
                     message: format!(
@@ -446,7 +446,7 @@ async fn verify_manifest_write(
 async fn guard_against_empty_overwrite(
     db_pool: &SqlitePool,
     state: &crate::cloud_sync::state::SyncState,
-    remote: &ManifestV2,
+    remote: &Manifest,
 ) -> Result<(), CloudSyncError> {
     let remote_has_data = remote.tables.values().any(|t| !t.is_empty());
     if !remote_has_data {
@@ -637,7 +637,7 @@ mod tests {
         let uploads = adapter.uploads.lock().unwrap().clone();
         assert!(uploads.iter().any(|p| p == paths::MANIFEST_PATH));
         assert!(
-            uploads.iter().any(|p| p.starts_with("v2/tables/todo_projects/")),
+            uploads.iter().any(|p| p.starts_with("tables/todo_projects/")),
             "必须上传数据分桶: {uploads:?}"
         );
     }
@@ -738,7 +738,7 @@ mod tests {
         let uploads = adapter.uploads.lock().unwrap().clone();
         let chunk_uploads = uploads
             .iter()
-            .filter(|p| p.starts_with("v2/tables/"))
+            .filter(|p| p.starts_with("tables/"))
             .count();
         assert_eq!(chunk_uploads, 1);
     }

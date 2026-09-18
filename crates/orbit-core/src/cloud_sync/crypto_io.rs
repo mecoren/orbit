@@ -27,16 +27,16 @@ const NONCE_LEN: usize = 12;
 const DATA_KEY_LEN: usize = 32;
 
 /// payload magic header：ASCII "OSZS"（Orbit Sync Zstd，默认格式）
-const MAGIC_V2: &[u8; 4] = b"OSZS";
+const MAGIC: &[u8; 4] = b"OSZS";
 
 /// 遗留 payload magic：ASCII "WSZS"（读侧兼容，不再写入）
-const LEGACY_MAGIC_V2: &[u8; 4] = b"WSZS";
+const LEGACY_MAGIC: &[u8; 4] = b"WSZS";
 
 /// payload 版本号
-const VERSION_V2: u8 = 0x01;
+const PAYLOAD_VERSION: u8 = 0x01;
 
 /// payload 头部总长度：magic(4) + version(1) = 5 字节
-const V2_HEADER_LEN: usize = 5;
+const HEADER_LEN: usize = 5;
 
 /// zstd 压缩级别（level=3：速度与压缩率平衡，100K JSON 压缩 < 5ms）
 const ZSTD_LEVEL: i32 = 3;
@@ -77,9 +77,9 @@ pub fn encrypt_payload(plaintext: &[u8], data_key: &[u8]) -> Result<Vec<u8>, Clo
     let ciphertext = aes_gcm_encrypt(data_key, &compressed, &nonce)?;
 
     // 3. 拼接 payload：magic + version + nonce + ciphertext
-    let mut payload = Vec::with_capacity(V2_HEADER_LEN + NONCE_LEN + ciphertext.len());
-    payload.extend_from_slice(MAGIC_V2);
-    payload.push(VERSION_V2);
+    let mut payload = Vec::with_capacity(HEADER_LEN + NONCE_LEN + ciphertext.len());
+    payload.extend_from_slice(MAGIC);
+    payload.push(PAYLOAD_VERSION);
     payload.extend_from_slice(&nonce);
     payload.extend_from_slice(&ciphertext);
     Ok(payload)
@@ -112,25 +112,25 @@ fn derive_deterministic_nonce(data_key: &[u8], compressed: &[u8]) -> Vec<u8> {
 pub fn decrypt_payload(payload: &[u8], data_key: &[u8]) -> Result<Vec<u8>, CloudSyncError> {
     validate_data_key(data_key)?;
 
-    if payload.len() < V2_HEADER_LEN + NONCE_LEN {
+    if payload.len() < HEADER_LEN + NONCE_LEN {
         return Err(CloudSyncError::PayloadTooShort);
     }
     // 校验 magic header 与版本号，不匹配则视为格式错误
     // 读侧兼容：新 "OSZS" 与遗留 "WSZS" 均接受，写侧一律 "OSZS"
-    if (&payload[..4] != MAGIC_V2 && &payload[..4] != LEGACY_MAGIC_V2) || payload[4] != VERSION_V2 {
+    if (&payload[..4] != MAGIC && &payload[..4] != LEGACY_MAGIC) || payload[4] != PAYLOAD_VERSION {
         return Err(CloudSyncError::Crypto {
             message: format!(
                 "payload 格式不匹配：期望 magic={:?} version={}，实际 magic={:?} version={}",
-                MAGIC_V2,
-                VERSION_V2,
+                MAGIC,
+                PAYLOAD_VERSION,
                 &payload[..4.min(payload.len())],
                 payload.get(4).copied().unwrap_or(0),
             ),
         });
     }
 
-    let (header_and_nonce, ciphertext) = payload.split_at(V2_HEADER_LEN + NONCE_LEN);
-    let nonce = &header_and_nonce[V2_HEADER_LEN..];
+    let (header_and_nonce, ciphertext) = payload.split_at(HEADER_LEN + NONCE_LEN);
+    let nonce = &header_and_nonce[HEADER_LEN..];
     let compressed = aes_gcm_decrypt(data_key, ciphertext, nonce).map_err(map_decrypt_error)?;
 
     // 空明文（压缩前）的特殊处理：压缩后为空 Vec
@@ -242,7 +242,7 @@ mod deterministic_nonce_tests {
         assert_eq!(dec, plain);
         // 格式断言：magic + version 0x01 不变（新旧密文互通）
         assert_eq!(&enc[..4], b"OSZS");
-        assert_eq!(enc[4], VERSION_V2);
+        assert_eq!(enc[4], PAYLOAD_VERSION);
     }
 
     /// 遗留 magic "WSZS" 读侧兼容：旧密文仍可解开

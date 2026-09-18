@@ -6,7 +6,7 @@
 //! 无限期保留，也不能随意删除——需要一个**安全水位线**。
 //!
 //! ## 水位线口径
-//! [`ManifestV2::tombstone_watermark`] = 所有登记设备检查点
+//! [`Manifest::tombstone_watermark`] = 所有登记设备检查点
 //! （`last_synced_at`）的最小值，且**设备数 < 2 时返回 0（不回收）**。
 //! 早于该时刻删除的墓碑，可以确定已被全部设备同步过，删除不会导致复活。
 //!
@@ -21,7 +21,7 @@
 //! 墓碑」的判据，属后续增强项，当前不在本模块范围内。
 
 use crate::cloud_sync::error::CloudSyncError;
-use crate::cloud_sync::meta::ManifestV2;
+use crate::cloud_sync::meta::Manifest;
 use crate::cloud_sync::paths;
 use crate::sync_adapters::traits::SyncAdapter;
 
@@ -41,7 +41,7 @@ pub struct GcResult {
 /// 返回被剔除的 `(表名, 桶键)` 列表；水位线为 0（设备数不足）时不改动清单。
 /// **只修改内存中的清单**，不影响云端对象——调用方须在上传新清单成功后再调用
 /// [`delete_expired_buckets`] 删除对象。
-pub fn prune_expired_tombstones(manifest: &mut ManifestV2) -> Vec<(String, String)> {
+pub fn prune_expired_tombstones(manifest: &mut Manifest) -> Vec<(String, String)> {
     let watermark = manifest.tombstone_watermark();
     if watermark <= 0 {
         return Vec::new();
@@ -58,7 +58,7 @@ pub fn prune_expired_tombstones(manifest: &mut ManifestV2) -> Vec<(String, Strin
 
 /// 收集水位线之前的墓碑分桶（在 prune 之前调用语义更清晰）
 fn collect_expired_from_original(
-    manifest: &ManifestV2,
+    manifest: &Manifest,
     watermark_month: &str,
 ) -> Vec<(String, String)> {
     manifest
@@ -101,7 +101,7 @@ pub async fn delete_expired_buckets(
 /// （在清单上传成功后）。
 pub async fn collect_garbage(
     adapter: &dyn SyncAdapter,
-    manifest: &mut ManifestV2,
+    manifest: &mut Manifest,
 ) -> GcResult {
     let watermark = manifest.tombstone_watermark();
     if watermark <= 0 {
@@ -125,7 +125,7 @@ pub async fn collect_garbage(
 /// 校验清单中墓碑索引与对象是否一致（诊断用；返回缺失对象列表）
 pub async fn missing_tombstone_buckets(
     adapter: &dyn SyncAdapter,
-    manifest: &ManifestV2,
+    manifest: &Manifest,
 ) -> Result<Vec<(String, String)>, CloudSyncError> {
     let mut missing = Vec::new();
     for (table, index) in &manifest.tombstones {
@@ -145,8 +145,8 @@ mod tests {
     use crate::cloud_sync::meta::{TombstoneBucketRef, TombstoneIndex};
     use std::collections::BTreeMap;
 
-    fn manifest_with_tombstones(buckets: &[&str], devices: &[(&str, i64)]) -> ManifestV2 {
-        let mut m = ManifestV2::empty("dev-1");
+    fn manifest_with_tombstones(buckets: &[&str], devices: &[(&str, i64)]) -> Manifest {
+        let mut m = Manifest::empty("dev-1");
         for (id, ts) in devices {
             m.touch_device(id, *ts);
         }

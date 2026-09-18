@@ -167,7 +167,7 @@ impl HttpClient {
         }))
     }
 
-    /// 带并发令牌读取的 GET（v2 清单 CAS 的前置读取）
+    /// 带并发令牌读取的 GET（清单 CAS 的前置读取）
     ///
     /// 返回 `(响应体, ETag)`；服务端未提供 ETag 时令牌为 `None`，调用方
     /// 退化为「写后回读校验」。重试策略与 `get_with_retry` 一致。
@@ -221,7 +221,7 @@ impl HttpClient {
         }))
     }
 
-    /// 条件 PUT（v2 清单乐观并发写入）
+    /// 条件 PUT（清单乐观并发写入）
     ///
     /// - `if_match = Some(token)`：`If-Match: "token"`，对象被他人改写时 412
     /// - `if_none_match_star = true`：`If-None-Match: *`，对象已存在时 412

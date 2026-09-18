@@ -15,9 +15,7 @@
 //! 不涉及业务数据；而 push 侧的差量基准始终是实时读取的远端清单，
 //! 不依赖本地快照，因此不会出现「本地账本漂移导致云端被误覆盖」。
 //!
-//! ## 与 v1 的区别
-//! v1 用 `fp` / `remote_fp` 双指纹描述「整个模块」，粒度粗且双真相源易漂移；
-//! v2 快照精确到分桶，且只描述**远端**状态（本地状态由实时扫描得到）。
+//! 快照精确到分桶，且只描述**远端**状态（本地状态由实时扫描得到）。
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -78,7 +76,7 @@ impl SyncState {
     ///
     /// push/pull 结束时调用：此后本地记录的远端状态与清单一致，下轮
     /// pull 才能准确判断「哪些桶是远端新增/变更」。
-    pub fn update_from_manifest(&mut self, manifest: &crate::cloud_sync::meta::ManifestV2) {
+    pub fn update_from_manifest(&mut self, manifest: &crate::cloud_sync::meta::Manifest) {
         self.manifest_epoch = manifest.epoch;
         self.remote_tables = manifest
             .tables

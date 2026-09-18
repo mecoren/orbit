@@ -1,11 +1,7 @@
-//! meta — 云端 v2 清单（唯一真相源）与墓碑结构
+//! meta — 云端清单（唯一真相源）与墓碑结构
 //!
 //! ## 为什么是「单一清单」
-//! v1 有双真相源：全局 `_meta.orsync`（模块指纹）与 `modules/{name}/meta.orsync`
-//! （模块指纹 + 墓碑）。两者任一侧更新失败即产生"说谎的清单"，push 侧不得不
-//! 用「下载整个模块数据只为验证文件存在」这类补偿逻辑兜底。
-//!
-//! v2 只有一份 [`ManifestV2`]（`v2/manifest.orsync`），承载：
+//! 云端只有一份 [`Manifest`]（`manifest.orsync`），承载：
 //! - `epoch`：乐观并发版本号（写入前置条件，见 push 的 CAS）
 //! - `tables`：表名 → 分桶索引（桶号 → 指纹/行数/字节数）
 //! - `tombstones`：表名 → 墓碑分桶索引（月份键 → 指纹/条数/最大删除时间）
@@ -19,8 +15,8 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 
-/// 当前云端布局版本（未来协议演进判别依据）
-pub const LAYOUT_VERSION: u32 = 2;
+/// 当前云端布局版本（初始版本，未来协议演进判别依据）
+pub const LAYOUT_VERSION: u32 = 1;
 
 /// 单个数据分桶的索引条目
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -79,7 +75,7 @@ pub struct DeviceCheckpoint {
 
 /// 云端唯一真相源清单
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ManifestV2 {
+pub struct Manifest {
     /// 布局版本（当前 [`LAYOUT_VERSION`]）
     pub layout_version: u32,
     /// 乐观并发版本号：每次成功写入 +1，写入前须匹配读到的值
@@ -96,7 +92,7 @@ pub struct ManifestV2 {
     pub devices: BTreeMap<String, DeviceCheckpoint>,
 }
 
-impl ManifestV2 {
+impl Manifest {
     /// 构造空清单（首次同步场景）
     pub fn empty(device_id: &str) -> Self {
         Self {
@@ -152,7 +148,6 @@ impl ManifestV2 {
 ///
 /// 删除时间参与「删除 vs 编辑」裁决（`merge::apply_tombstones`），
 /// 必须保留删除发生时的原始时间戳，不能写成同步时刻。
-/// 开发阶段无历史数据，v1 的「纯字符串旧格式（deleted_at=0）」兼容已移除。
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct TombstoneEntry {
     /// 记录 uuid
@@ -175,7 +170,7 @@ impl TombstoneEntry {
     }
 }
 
-/// 墓碑分桶载荷（加密后写入 `v2/tombstones/{table}/{YYYY-MM}.orsync`）
+/// 墓碑分桶载荷（加密后写入 `tombstones/{table}/{YYYY-MM}.orsync`）
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TombstoneBucketPayload {
     /// 表名
@@ -191,8 +186,8 @@ mod tests {
     use super::*;
 
     #[test]
-    fn empty_manifest_has_layout_v2_and_zero_epoch() {
-        let m = ManifestV2::empty("dev-1");
+    fn empty_manifest_has_layout_version_and_zero_epoch() {
+        let m = Manifest::empty("dev-1");
         assert_eq!(m.layout_version, LAYOUT_VERSION);
         assert_eq!(m.epoch, 0);
         assert!(m.tables.is_empty());
@@ -202,14 +197,14 @@ mod tests {
 
     #[test]
     fn watermark_requires_two_devices() {
-        let mut m = ManifestV2::empty("dev-1");
+        let mut m = Manifest::empty("dev-1");
         m.touch_device("dev-1", 100);
         assert_eq!(m.tombstone_watermark(), 0, "单设备不得回收墓碑");
     }
 
     #[test]
     fn watermark_is_min_of_devices() {
-        let mut m = ManifestV2::empty("dev-1");
+        let mut m = Manifest::empty("dev-1");
         m.touch_device("dev-1", 900);
         m.touch_device("dev-2", 300);
         m.touch_device("dev-3", 600);
@@ -218,14 +213,14 @@ mod tests {
 
     #[test]
     fn table_index_lookup_defaults_missing() {
-        let m = ManifestV2::empty("d");
+        let m = Manifest::empty("d");
         assert!(m.table("todo_tasks").is_none());
         assert!(m.tombstone_index("todo_tasks").is_none());
     }
 
     #[test]
     fn manifest_serializes_with_stable_btreemap_order() {
-        let mut m = ManifestV2::empty("d");
+        let mut m = Manifest::empty("d");
         m.tables.insert(
             "todo_tasks".to_string(),
             TableIndex {
@@ -244,7 +239,7 @@ mod tests {
         let p1 = json.find("todo_projects").unwrap();
         let p2 = json.find("todo_tasks").unwrap();
         assert!(p1 < p2, "BTreeMap 保证 key 字典序，序列化须确定性");
-        let parsed: ManifestV2 = serde_json::from_str(&json).unwrap();
+        let parsed: Manifest = serde_json::from_str(&json).unwrap();
         assert_eq!(parsed.tables.len(), 2);
     }
 

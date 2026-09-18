@@ -202,7 +202,7 @@ pub fn is_success_status(status: u16) -> bool {
     (200..=299).contains(&status)
 }
 
-// 注：v1 的 `sync_bundle` 模块（52 字节 `OSYN` 容器）已随 v2 存储结构重构删除，
+// 注：旧 `sync_bundle` 模块（52 字节 `OSYN` 容器）已随存储结构重构删除，
 // 其到本错误类型的 `From` 转换一并移除。
 
 #[cfg(test)]

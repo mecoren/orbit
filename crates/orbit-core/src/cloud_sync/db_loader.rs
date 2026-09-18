@@ -1,16 +1,15 @@
-//! db_loader — 从数据库按表加载同步数据（v2 表级粒度）
+//! db_loader — 从数据库按表加载同步数据（表级粒度）
 //!
-//! v2 的分片单元是「表 + 桶」，因此加载入口一律按单表进行（不再有整模块
-//! 全表加载），既减少单次物化体积，也天然避免"跨表同 uuid 互相覆盖"的隐患
-//! （v1 的 `load_local_uuid_map` 用 uuid 做全局 key，同一 uuid 出现在两张表
-//! 时后者覆盖前者，复活裁决会读到错误的删除状态）。
+//! 分片单元是「表 + 桶」，因此加载入口一律按单表进行，既减少单次物化体积，
+//! 也天然避免"跨表同 uuid 互相覆盖"的隐患（曾用 uuid 做全局 key 时，
+//! 同一 uuid 出现在两张表时后者覆盖前者，复活裁决会读到错误的删除状态）。
 //!
 //! ## 可同步表白名单
 //! 唯一来源：`crate::db::sync_registry::SYNCABLE_TABLES`。
 //!
 //! ## 墓碑分桶
 //! 墓碑按**本地时区**月份（`YYYY-MM`）分桶，键用于云端对象路径
-//! `v2/tombstones/{table}/{YYYY-MM}.orsync`，并按同一键参与水位线回收。
+//! `tombstones/{table}/{YYYY-MM}.orsync`，并按同一键参与水位线回收。
 //! 时区口径遵循项目约定（chrono::Local），不在 SQL 里按 UTC 分组。
 
 use std::collections::{BTreeMap, HashMap};
@@ -28,7 +27,7 @@ pub fn is_syncable(table: &str) -> bool {
 
 /// 加载单表全部未删除记录
 ///
-/// 返回原始行的 JSON 数组（不注入 `_table`：v2 的表归属由分桶载荷的
+/// 返回原始行的 JSON 数组（不注入 `_table`：表归属由分桶载荷的
 /// `table` 字段承载，写入侧已做白名单校验）。
 pub async fn load_table_items(
     pool: &SqlitePool,

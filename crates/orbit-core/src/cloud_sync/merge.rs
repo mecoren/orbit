@@ -1,7 +1,7 @@
 //! merge — 单表 item 级 LWW 合并 + 墓碑应用
 //!
 //! Pull 时对下载的分桶数据做 item 级合并，保证多设备各自新增的记录都不丢失。
-//! v2 的合并单元是「一张表」：表路由由 pull 侧按分桶载荷的 `table` 字段给出
+//! 合并单元是「一张表」：表路由由 pull 侧按分桶载荷的 `table` 字段给出
 //! 并已做白名单校验，本模块不再依赖 `_table` 字段或模块定义。
 //!
 //! ## 合并规则
@@ -33,7 +33,7 @@
 //! ## 性能优化
 //! - INSERT 批量化：分批 50 条构造 `INSERT INTO t (cols) VALUES (?),(?),...`，
 //!   5000 条记录从 ~500ms 降至 ~20ms
-//! - 墓碑逐条 UPDATE（绑定各自删除时间，v1 的批量写法会丢时间戳，见 Fix-02）
+//! - 墓碑逐条 UPDATE（绑定各自删除时间，批量写法会丢时间戳，见 Fix-02）
 
 use std::collections::HashMap;
 
@@ -119,12 +119,12 @@ pub struct MergeResult {
     pub errors: Vec<String>,
 }
 
-/// 单表 item 级 LWW 合并（v2 合并单元）
+/// 单表 item 级 LWW 合并（合并单元）
 ///
-/// v2 的表路由由调用方（pull）完成并已做白名单校验（远端分桶载荷的
+/// 表路由由调用方（pull）完成并已做白名单校验（远端分桶载荷的
 /// `table` 字段必须落在 `SYNCABLE_TABLES` 内），因此本函数只处理一张表，
 /// 不再需要 `_table` 字段与跨表分组——同时也消除了"跨表同 uuid 互相覆盖"
-/// 的隐患（v1 用 uuid 做全模块 map key）。
+/// 的隐患（曾用 uuid 做全模块 map key）。
 ///
 /// 墓碑集中的 uuid 执行软删除（FR-2.6：带时间戳裁决删除 vs 编辑）。
 ///
@@ -1094,7 +1094,7 @@ mod tests {
             assert_eq!(result.inserted, 1);
         }
 
-        /// v2 回归：记录不含 `_table` 字段也能正常合并（表路由由调用方给出）
+        /// 回归：记录不含 `_table` 字段也能正常合并（表路由由调用方给出）
         #[tokio::test]
         async fn record_without_table_field_merges_by_called_table() {
             let pool = setup_pool().await;

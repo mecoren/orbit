@@ -1,13 +1,9 @@
-//! cloud_sync — 云端 v2 差量同步引擎
+//! cloud_sync — 云端差量同步引擎
 //!
-//! ## v2 是什么
-//! v1 是「模块级整包快照」：11 张表压成一个 `data.orsync`，任意一行改动都要
-//! 重传整个模块；全局 `_meta.orsync` 与模块 `meta.orsync` 双真相源，任一侧
-//! 写入中断就产生"说谎的清单"，push 侧不得不写一堆补偿逻辑。
-//!
-//! v2 改为「表级分桶 + 单一清单 + 版本前置」：
+//! ## 设计
+//! 「表级分桶 + 单一清单 + 版本前置」：
 //! - 数据按表切分为稳定哈希分桶（[`chunk`]），只上传/下载变化的桶
-//! - 云端只有一份 [`meta::ManifestV2`]（`v2/manifest.orsync`）承载
+//! - 云端只有一份 [`meta::Manifest`]（`manifest.orsync`）承载
 //!   `epoch` + 桶索引 + 墓碑水位线，是唯一真相源
 //! - 清单写入带前置条件（`If-Match` / `If-None-Match`），配合写后回读校验，
 //!   多设备并发写从"静默覆盖"变为"可检测冲突并自动收敛"（[`push`]）
@@ -18,9 +14,9 @@
 //! ```text
 //! {base_path}/
 //! ├─ crypto/config                           # 加密元数据（跨设备分发 Data Key）
-//! ├─ v2/manifest.orsync                      # 唯一真相源（加密）
-//! ├─ v2/tables/{table}/{bucket:02}.orsync    # 表级分桶（加密）
-//! ├─ v2/tombstones/{table}/{YYYY-MM}.orsync  # 墓碑分桶（加密）
+//! ├─ manifest.orsync                         # 唯一真相源（加密）
+//! ├─ tables/{table}/{bucket:02}.orsync       # 表级分桶（加密）
+//! ├─ tombstones/{table}/{YYYY-MM}.orsync     # 墓碑分桶（加密）
 //! └─ assets/{hash}.orsync                    # 附件内容寻址（≥8MiB 走分片续传）
 //! ```
 //!
@@ -29,7 +25,7 @@
 //! cloud_sync/
 //! ├── mod.rs          本文件：模块导出
 //! ├── chunk.rs        分桶切分与指纹（稳定哈希分桶）
-//! ├── meta.rs         ManifestV2 / 桶索引 / 墓碑结构
+//! ├── meta.rs         Manifest / 桶索引 / 墓碑结构
 //! ├── state.rs        本地账本（epoch + 远端桶索引快照）
 //! ├── engine.rs       SyncEngine 编排：三模式 + 互斥锁 + 重试
 //! ├── push.rs         差量上传 + 清单 CAS
@@ -39,7 +35,7 @@
 //! ├── db_loader.rs    按表加载（数据 / uuid 映射 / 墓碑分桶）
 //! ├── fingerprint.rs  canonical JSON + sha256 指纹
 //! ├── crypto_io.rs    encrypt_payload / decrypt_payload
-//! ├── paths.rs        v2 路径构造
+//! ├── paths.rs        路径构造
 //! ├── progress.rs     SyncProgress 事件
 //! ├── attachments.rs 附件同步（内容寻址 + 分片）
 //! └── modules.rs      同步模块注册表（与白名单一致性断言）
@@ -75,7 +71,7 @@ pub use gc::{
 };
 pub use merge::{MergeResult, merge_table_items};
 pub use meta::{
-    ChunkRef, LAYOUT_VERSION, ManifestV2, TableIndex, TombstoneBucketRef, TombstoneEntry,
+    ChunkRef, LAYOUT_VERSION, Manifest, TableIndex, TombstoneBucketRef, TombstoneEntry,
     TombstoneIndex,
 };
 pub use modules::{SYNC_MODULES, SyncModuleDef, find_module};

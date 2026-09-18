@@ -4,7 +4,7 @@
 //! 顺序切片（第 1~N 行一片、N+1~2N 行一片）在中间插入/删除一行后，**后续所有
 //! 分片的边界整体漂移**，分片指纹几乎全部变化，差量退化为全量重传。
 //!
-//! v2 采用**稳定哈希分桶**：`bucket = sha256(uuid) 前 4 字节 BE % TABLE_BUCKET_COUNT`。
+//! 采用**稳定哈希分桶**：`bucket = sha256(uuid) 前 4 字节 BE % TABLE_BUCKET_COUNT`。
 //! 行的归属只取决于自身 uuid，与库内位置和其他行的增删无关——单行编辑只会让
 //! 它所在的那一个桶变化，其余桶指纹保持稳定，差量上传才真正成立。
 //!
@@ -71,7 +71,7 @@ impl TableChunk {
     }
 }
 
-/// 分桶载荷结构（加密后写入 `v2/tables/{table}/{bucket:02}.orsync`）
+/// 分桶载荷结构（加密后写入 `tables/{table}/{bucket:02}.orsync`）
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChunkPayload {
     /// 表名（下载侧路由依据；与路径同源，冗余一份以便对象自描述）
@@ -194,7 +194,7 @@ mod tests {
 
     #[test]
     fn single_row_edit_only_changes_its_own_bucket() {
-        // v2 核心收益：改一行 → 只有一个桶的指纹变化
+        // 核心收益：改一行 → 只有一个桶的指纹变化
         let mut items: Vec<Value> = (0..200)
             .map(|i| json!({"uuid": format!("uuid-{i}"), "title": format!("T{i}")}))
             .collect();

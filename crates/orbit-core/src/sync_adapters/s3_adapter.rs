@@ -495,7 +495,7 @@ impl SyncAdapter for S3Adapter {
     }
 
     async fn download_asset(&self, hash: &str) -> Result<Vec<u8>, SyncError> {
-        // v2 单一路径：assets/{hash}.orsync（开发阶段无历史数据，不再回退遗留命名）
+        // 单一路径：assets/{hash}.orsync（无历史数据，不再回退遗留命名）
         self.download(&crate::cloud_sync::paths::asset_path(hash)).await
     }
 
@@ -521,7 +521,7 @@ impl SyncAdapter for S3Adapter {
     }
 
     // ========================================================================
-    // v2：轻量探测 / 并发令牌 / 条件写
+    // 轻量探测 / 并发令牌 / 条件写
     // ========================================================================
 
     /// HEAD 存在性探测（不再为判断存在而下载整个对象）

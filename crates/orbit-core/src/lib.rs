@@ -22,7 +22,7 @@ pub mod fs_util;
 pub mod s3;
 pub mod webdav;
 
-// 同步域（适配器构造/配置校验 + 云同步 v2 管线 + 密钥派生 + 全量备份）
+// 同步域（适配器构造/配置校验 + 云同步管线 + 密钥派生 + 全量备份）
 pub mod cloud_sync;
 pub mod full_sync_backup;
 pub mod sync;

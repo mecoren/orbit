@@ -1,4 +1,4 @@
-//! pull — v2 清单驱动的差量下载与合并
+//! pull — 清单驱动的差量下载与合并
 //!
 //! ## 流程
 //! 1. 读远端清单；不存在说明云端尚未有数据 → 直接返回（首次同步前置）
@@ -22,7 +22,7 @@ use crate::cloud_sync::chunk::ChunkPayload;
 use crate::cloud_sync::crypto_io::decrypt_payload;
 use crate::cloud_sync::db_loader::now_ms;
 use crate::cloud_sync::error::CloudSyncError;
-use crate::cloud_sync::meta::{ManifestV2, TombstoneBucketPayload, TombstoneEntry};
+use crate::cloud_sync::meta::{Manifest, TombstoneBucketPayload, TombstoneEntry};
 use crate::cloud_sync::paths;
 use crate::cloud_sync::progress::{ProgressBuilder, ProgressSender, SyncOrigin};
 use crate::cloud_sync::state::{SyncState, SyncStateStore};
@@ -89,7 +89,7 @@ pub async fn pull_all(
         }
         Some((bytes, _)) => {
             let plain = decrypt_payload(&bytes, &data_key)?;
-            let m: ManifestV2 = serde_json::from_slice(&plain)?;
+            let m: Manifest = serde_json::from_slice(&plain)?;
             if m.layout_version != crate::cloud_sync::meta::LAYOUT_VERSION {
                 return Err(CloudSyncError::Other {
                     message: format!(
@@ -219,7 +219,7 @@ async fn pull_single_table(
     data_key: &[u8],
     adapter: &dyn SyncAdapter,
     state: &SyncState,
-    manifest: &ManifestV2,
+    manifest: &Manifest,
     table: &str,
     baseline_ms: i64,
 ) -> Result<TablePullOutcome, CloudSyncError> {
@@ -397,8 +397,8 @@ mod tests {
     }
 
     /// 构造「远端含一行 todo_projects」的云端环境
-    fn seed_remote(adapter: &MemAdapter, uuid: &str, title: &str, updated_at: i64) -> ManifestV2 {
-        let mut manifest = ManifestV2::empty("dev-2");
+    fn seed_remote(adapter: &MemAdapter, uuid: &str, title: &str, updated_at: i64) -> Manifest {
+        let mut manifest = Manifest::empty("dev-2");
         manifest.epoch = 3;
 
         let items = vec![serde_json::json!({
@@ -568,7 +568,7 @@ mod tests {
         .unwrap();
 
         let adapter = MemAdapter::new();
-        let mut manifest = ManifestV2::empty("dev-2");
+        let mut manifest = Manifest::empty("dev-2");
         manifest.epoch = 7;
         // 远端墓碑：删除时间 100 > 本地更新时间 50 → 删除胜出
         let tombstones = vec![TombstoneEntry::new("victim".to_string(), 100)];

@@ -108,7 +108,7 @@ impl SyncAdapter for BasePathAdapter {
     }
 
     async fn download_asset(&self, hash: &str) -> Result<Vec<u8>, SyncError> {
-        // v2：附件单一路径（无历史数据，不再回退遗留命名）。
+        // 附件单一路径（无历史数据，不再回退遗留命名）。
         // 「单对象 → 分片拼装」的形态回退由内层适配器负责。
         let path = crate::cloud_sync::paths::asset_path(hash);
         self.inner.download(&self.join(&path)).await
@@ -530,13 +530,13 @@ mod tests {
         }
     }
 
-    /// v2：附件命名单一口径（`assets/{hash}.orsync`），读写/列举/探测全部对齐
+    /// 附件命名单一口径（`assets/{hash}.orsync`），读写/列举/探测全部对齐
     ///
-    /// v1 曾并存 `.orsync` / `.waitsync` / 裸 hash 三种命名，读侧要三/四段
-    /// 回退，且"两个对象同一 hash"会让 list 差集与内容校验打架。v2 只有一种
+    /// 历史上曾并存多种命名，读侧要多段
+    /// 回退，且"两个对象同一 hash"会让 list 差集与内容校验打架。现在只有一种
     /// 命名（开发阶段无历史数据），回退路径整体移除。
     #[tokio::test]
-    async fn v2_asset_paths_use_single_naming_scheme() {
+    async fn asset_paths_use_single_naming_scheme() {
         let mock = AssetMockAdapter::new()
             .with_file("wait-sync/user1/assets/abc123.orsync", b"abc-data")
             .with_listing(&["abc123.orsync", "def456.orsync"]);

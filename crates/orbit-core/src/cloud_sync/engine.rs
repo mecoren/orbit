@@ -192,7 +192,7 @@ fn join_base_path(base_path: &str, file_path: &str) -> String {
     }
 }
 
-/// Data Key 解密探针：用本地 Data Key 尝试解密云端 v2 清单
+/// Data Key 解密探针：用本地 Data Key 尝试解密云端清单
 ///
 /// 在 `sync_data_key_from_cloud` 所有正常完成路径返回前调用，提前发现
 /// "本地 Data Key 与云端加密数据不匹配"问题，避免进入 pull 流水后才报错。
@@ -1220,15 +1220,14 @@ impl SyncEngine {
         }
     }
 
-    /// 探测云端是否已有同步数据（v2：清单存在即视为有数据）
+    /// 探测云端是否已有同步数据（清单存在即视为有数据）
     ///
     /// 用于 `sync_data_key_from_cloud` 的 404/WrongPassword 容错分支决策：
     /// - 云端无数据（首次同步、云端被清空）→ 安全补传本地 bundle
     /// - 云端已有数据 → 阻断补传，避免本地错 Key 覆盖云端正确 Key
     ///
-    /// **实现方式**：对 `v2/manifest.orsync` 做一次 HEAD/存在性探测
-    /// （不再是 v1 的"逐模块 GET 整个 data 文件"，v2 清单是数据的唯一入口，
-    /// 判断它存不存在就够了）。探测错误（网络故障等）fail-closed 视为有数据，
+    /// **实现方式**：对 `manifest.orsync` 做一次 HEAD/存在性探测
+    /// （清单是数据的唯一入口，判断它存不存在就够了）。探测错误（网络故障等）fail-closed 视为有数据，
     /// 避免云端实际有数据时覆盖 crypto/config 造成全设备 KeyMismatch 污染。
     async fn cloud_has_module_data(&self, raw_adapter: &dyn SyncAdapter, base_path: &str) -> bool {
         let path = join_base_path(base_path, paths::MANIFEST_PATH);
@@ -1475,10 +1474,9 @@ mod tests {
     }
 
     // ========================================================================
-    // v2：云端"是否有数据"的判据收敛为「清单是否存在」
+    // 云端"是否有数据"的判据收敛为「清单是否存在」
     //
-    // v1 需要逐模块探测 data 文件（并为路径形态/后缀写了多个纯函数与用例）；
-    // v2 清单是数据唯一入口，判据收敛为一次存在性探测，相关路径匹配函数与
+    // 清单是数据唯一入口，判据收敛为一次存在性探测，相关路径匹配函数与
     // 用例一并移除（P3 减熵）。
     // ========================================================================
 
@@ -1781,7 +1779,7 @@ mod tests {
         // 期望：探针返回 Ok(())（探针首探默认路径 _meta.orsync）
         let key = test_data_key(0x42);
         let encrypted_meta = encrypt_payload(b"{}", &key).unwrap();
-        let adapter = ProbeMockAdapter::new().with_file("v2/manifest.orsync", encrypted_meta);
+        let adapter = ProbeMockAdapter::new().with_file("manifest.orsync", encrypted_meta);
 
         let result = probe_data_key_with_manifest(&adapter, "", &key).await;
         assert!(
@@ -1798,7 +1796,7 @@ mod tests {
         let cloud_key = test_data_key(0x42);
         let local_key = test_data_key(0x99);
         let encrypted_meta = encrypt_payload(b"{}", &cloud_key).unwrap();
-        let adapter = ProbeMockAdapter::new().with_file("v2/manifest.orsync", encrypted_meta);
+        let adapter = ProbeMockAdapter::new().with_file("manifest.orsync", encrypted_meta);
 
         let result = probe_data_key_with_manifest(&adapter, "", &local_key).await;
         assert!(
@@ -1827,7 +1825,7 @@ mod tests {
         let encrypted_meta = encrypt_payload(b"{}", &key).unwrap();
         // 文件放在 base_path 之下
         let adapter =
-            ProbeMockAdapter::new().with_file("wait-sync/user1/v2/manifest.orsync", encrypted_meta);
+            ProbeMockAdapter::new().with_file("wait-sync/user1/manifest.orsync", encrypted_meta);
 
         let result = probe_data_key_with_manifest(&adapter, "wait-sync/user1", &key).await;
         assert!(result.is_ok(), "base_path 非空时探针应正确拼接路径并下载");
@@ -1924,7 +1922,7 @@ mod tests {
         let key_a = svc_a.init("shared").unwrap();
 
         let encrypted_meta = encrypt_payload(b"{}", &key_a).unwrap();
-        let adapter = ProbeMockAdapter::new().with_file("v2/manifest.orsync", encrypted_meta);
+        let adapter = ProbeMockAdapter::new().with_file("manifest.orsync", encrypted_meta);
 
         let tmp_b = tempfile::TempDir::new().unwrap();
         let svc_b = crate::sync_crypto::SyncCryptoService::new(tmp_b.path());
@@ -1947,7 +1945,7 @@ mod tests {
         let key_a = svc_a.init("password_one").unwrap();
 
         let encrypted_meta = encrypt_payload(b"{}", &key_a).unwrap();
-        let adapter = ProbeMockAdapter::new().with_file("v2/manifest.orsync", encrypted_meta);
+        let adapter = ProbeMockAdapter::new().with_file("manifest.orsync", encrypted_meta);
 
         let tmp_b = tempfile::TempDir::new().unwrap();
         let svc_b = crate::sync_crypto::SyncCryptoService::new(tmp_b.path());
