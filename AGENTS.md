@@ -96,6 +96,10 @@ pnpm e2e                  # Playwright 冒烟（自动起 5273 端口 dev server
 pnpm test:rust            # cargo test --workspace（crates/*；不含 desktop 壳）
 cargo test --workspace    # 同上（含 m4 WebDAV 集成用例——本机无 WebDAV 时该用例环境依赖失败属已知非回归）
 cd apps/desktop/src-tauri && cargo check   # 桌面壳单独检查（嵌套 workspace）
+# 桌面壳**不是 rustfmt-clean**（HEAD 即有数个文件不合规）：在该目录跑裸
+# `cargo fmt` 会顺手重排 9+ 个他人文件产生噪音 diff；只格式化自己改的那个文件用
+# `rustfmt --edition 2021 src/commands/xxx.rs`（根 workspace 的 `cargo fmt --all`
+# 是 FRB codegen 的既定步骤，两者不要混用）
 flutter_rust_bridge_codegen generate \
   --config-file crates/orbit-flutter/flutter_rust_bridge.yaml   # FRB codegen 后须 cargo fmt --all
 
