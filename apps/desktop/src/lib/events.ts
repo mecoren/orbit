@@ -13,14 +13,16 @@ import { listen } from "@tauri-apps/api/event";
 
 import { invalidateByTable } from "./db-invalidation";
 
-/** Rust DbEvent 载荷（snake_case 直传） */
+/**
+ * Rust EVENT_BUS 经桌面事件泵转发的精简载荷（A3）：只有表名与操作类型，
+ * 整行 JSON（`DbEvent.payload`）不再过 IPC。`table: "*"` 是哨兵——事件落后
+ * （Lagged）或全量备份恢复时发它，本文件按未知表回退全量失效。
+ */
 export interface DbChangeEvent {
   table: string;
-  op: string;
-  record_id?: number;
-  record_uuid?: string;
-  device_id?: string;
-  timestamp: number;
+  op?: string;
+  /** 哨兵来源（lagged / import），仅诊断用 */
+  kind?: string;
 }
 
 /** SyncResult 载荷（cloud_sync_cmd run_sync emit） */

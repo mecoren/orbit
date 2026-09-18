@@ -1775,7 +1775,9 @@ export function installBrowserIpc() {
 
   /** 模拟 Rust EVENT_BUS 的 db-change 广播：写命令后触发 events 层失效 */
   function emitDbChange() {
-    emitEvent("db-change", { table: "mock", op: "mock", timestamp: Date.now() });
+    // 与桌面事件泵同口径（只 table + op，无整行 payload）；table="mock" 故意取
+    // 一个未登记表名，令 invalidateByTable 未命中而回退全量失效
+    emitEvent("db-change", { table: "mock", op: "mock" });
   }
 
   const internals = {

@@ -12,6 +12,7 @@ use orbit_core::db::migrate::{
 use orbit_core::db::pool::{init_pool, init_pool_unencrypted};
 use orbit_core::eventbus::EVENT_BUS;
 use tauri::{AppHandle, Emitter, Manager};
+use tokio::sync::broadcast::error::RecvError;
 
 use crate::AppState;
 use crate::commands::data_dir::resolve_app_data_dir;
@@ -82,14 +83,44 @@ pub async fn db_is_ready(app: AppHandle) -> bool {
 /// 启动事件转发任务：EVENT_BUS → Tauri emit("db-change")
 ///
 /// 从 db_init_* 命令内部调用，确保 pool 就绪后才开始转发。
+///
+/// 两条口径（A3）：
+/// 1. **只转发表名与操作类型**。`DbEvent.payload` 是整行 JSON，而桌面唯一消费方
+///    （`src/lib/events.ts` → `invalidateByTable`）只按表名失效缓存；批量写
+///    （拖拽重排、批量完成）时逐条转发整行等于每次写都付一份 IPC 序列化与一份
+///    渲染进程堆副本。
+/// 2. **落后（Lagged）不能终止转发**。广播通道容量 1024，溢出时该接收端跳过若干条
+///    并返回 `Err(Lagged)`；旧实现写成 `while let Ok(..)`，把 Lagged 当循环终止条件，
+///    事件泵从此永久停摆——界面不再刷新且只能重启应用才恢复。现按 `full_sync_cmd.rs`
+///    既有约定发 `table: "*"` 哨兵，令前端回退全量失效（宁多拉不漏刷）。
 fn start_event_forwarding(app: AppHandle) {
     let emit_handle = app.clone();
     tauri::async_runtime::spawn(async move {
         let mut rx = EVENT_BUS.subscribe();
-        while let Ok(event) = rx.recv().await {
-            let _ = emit_handle.emit("db-change", &event);
+        loop {
+            match rx.recv().await {
+                Ok(event) => {
+                    let _ = emit_handle.emit("db-change", lite_change(&event));
+                }
+                Err(RecvError::Lagged(skipped)) => {
+                    eprintln!("[event-pump] db-change 落后 {skipped} 条，改发全量失效哨兵");
+                    let _ = emit_handle.emit("db-change", lagged_change());
+                }
+                Err(RecvError::Closed) => break,
+            }
         }
     });
+}
+
+/// EVENT_BUS 事件 → 桌面精简载荷（整行 `payload` 不过 IPC）
+fn lite_change(event: &orbit_core::eventbus::events::DbEvent) -> serde_json::Value {
+    serde_json::json!({ "table": event.table, "op": event.op })
+}
+
+/// 事件落后时补发的哨兵：`table: "*"` 未登记在 `invalidateByTable` 映射表里，
+/// 前端据此回退全量失效（与 `full_sync_cmd.rs` 备份恢复哨兵同形状）
+fn lagged_change() -> serde_json::Value {
+    serde_json::json!({ "table": "*", "kind": "lagged" })
 }
 
 /// 加密→明文数据库迁移（清除主密码场景）
@@ -190,4 +221,43 @@ pub async fn db_migrate_to_encrypted(app: AppHandle, db_key_hex: String) -> Resu
     app.unmanage::<AppState>();
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use orbit_core::eventbus::events::DbOp;
+
+    /// 转发载荷必须是 table 维度：整行 payload 不得进 IPC（万行批量写时逐条
+    /// 序列化整行是驻留与 CPU 的主要来源）。
+    #[test]
+    fn lite_change_only_carries_table_and_op() {
+        let event = orbit_core::eventbus::events::DbEvent {
+            table: "todo_tasks".into(),
+            op: DbOp::Update,
+            record_id: 7,
+            record_uuid: "u-7".into(),
+            payload: Some(serde_json::json!({ "title": "一".repeat(4000) })),
+            device_id: "dev".into(),
+            timestamp: 0,
+        };
+        let lite = lite_change(&event);
+        assert_eq!(
+            lite.as_object().map(|m| m.len()),
+            Some(2),
+            "载荷字段须固定为 table + op"
+        );
+        assert_eq!(lite["table"], "todo_tasks");
+        assert_eq!(lite["op"], "Update");
+        assert!(lite.get("payload").is_none(), "整行内容不得过 IPC");
+    }
+
+    /// 哨兵表名必须是 "*"：与 full_sync_cmd 恢复哨兵同形状，且在
+    /// db-invalidation.ts 的表名映射里必然未命中，从而触发前端全量失效。
+    #[test]
+    fn lagged_change_uses_full_invalidate_sentinel() {
+        let lite = lagged_change();
+        assert_eq!(lite["table"], "*");
+        assert_eq!(lite["kind"], "lagged");
+    }
 }
