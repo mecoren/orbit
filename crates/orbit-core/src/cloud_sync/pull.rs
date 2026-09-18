@@ -173,12 +173,15 @@ pub async fn pull_all(
         builder.local_data_applied(changed_records_total);
     }
 
-    // 3. 失败表存在时：不推进 epoch（下轮完整重试这些表），但成功表的
-    //    快照已由 update_from_manifest 统一刷新——因此这里仍刷新整体快照，
-    //    失败表的桶指纹保持旧值（下轮会重新下载）。
+    // 3. 刷新整体快照；失败表回滚桶指纹到最后一次成功状态（强制下轮重试）。
+    //    存在失败表时 epoch 不推进——否则下轮在「epoch 未变」快速跳过处
+    //    整轮早退，失败表要等他端改写清单才有机会重试。
     let mut next = state.clone();
     next.last_synced_at = now_ms();
     next.update_from_manifest(&manifest);
+    if !result.failed_modules.is_empty() {
+        next.manifest_epoch = state.manifest_epoch;
+    }
     // 逻辑时钟基线推进到「本轮同步结束时刻」，下一轮据此判定记录是否被本地改过；
     // 同时把时钟（可能已被远端时间戳抬升）落盘 —— 慢表重启后不得回落到墙上时钟
     next.last_synced_clock_ms = crate::db::clock::next_ms();
@@ -496,6 +499,62 @@ mod tests {
             adapter.downloads.lock().unwrap().is_empty(),
             "epoch 未变不得产生任何下载"
         );
+    }
+
+    #[tokio::test]
+    async fn failed_table_keeps_epoch_and_retries_next_round() {
+        // 表下载失败时必须记录 failed_modules 且 epoch 不推进——否则下一轮
+        // 在「epoch 未变」快速跳过处整轮早退，失败表要等他端改写清单才重试
+        let (pool, crypto, store, _tmp) = env().await;
+        let adapter = MemAdapter::new();
+        let manifest = seed_remote(&adapter, "remote-1", "A", 100);
+
+        // 制造下载失败：清单在、桶对象没了（NotFound）
+        adapter
+            .files
+            .lock()
+            .unwrap()
+            .retain(|p, _| *p == paths::MANIFEST_PATH);
+        let result = pull_all(
+            &pool,
+            &crypto,
+            &store,
+            &adapter,
+            &NoopProgressSender,
+            SyncOrigin::Manual,
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            result.failed_modules,
+            vec!["todo_projects".to_string()],
+            "桶下载失败必须登记 failed_modules"
+        );
+        let state = store.load().unwrap();
+        assert_eq!(
+            state.manifest_epoch, 0,
+            "有失败表时 epoch 不得推进（清单实际为 {}）",
+            manifest.epoch
+        );
+
+        // 恢复云端内容后，下一轮不得被快速跳过，必须真正重试该表
+        seed_remote(&adapter, "remote-1", "A", 100);
+        let retry = pull_all(
+            &pool,
+            &crypto,
+            &store,
+            &adapter,
+            &NoopProgressSender,
+            SyncOrigin::Manual,
+        )
+        .await
+        .unwrap();
+        assert!(
+            retry.downloaded_chunks >= 1 && retry.failed_modules.is_empty(),
+            "下一轮必须重试并成功: {:?}",
+            retry
+        );
+        assert_eq!(store.load().unwrap().manifest_epoch, manifest.epoch);
     }
 
     #[tokio::test]
