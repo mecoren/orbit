@@ -111,7 +111,9 @@ const SIZE_SPECS: Record<MonthCalendarSize, SizeSpec> = {
     badge: "size-4 text-[9px]",
   },
   md: {
-    cell: "min-h-14 gap-0.5 rounded-lg px-0.5 pt-1.5",
+    // 格子 flex-col + justify-center：内容本应上下居中，此处不得加单边 pt
+    //（曾误加 pt-1.5 致数字整体下沉、顶部比底部多出 6px；lg 用对称 py-1.5 同理）
+    cell: "min-h-14 gap-0.5 rounded-lg px-0.5",
     number: "text-sm font-semibold",
     weekday: "py-0.5 text-xs font-medium",
     sub: "max-w-full truncate px-0.5 text-[10px] leading-none",
