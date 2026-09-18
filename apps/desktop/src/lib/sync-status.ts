@@ -125,6 +125,11 @@ export function syncResultSummary(r: {
   errors: string[];
 }): string {
   if (r.skipped) return "已有同步任务在进行中";
+  // 无任何推拉且无错误 = 本轮无新变化（数据早已由自动推送/上一轮同步完成），
+  // 直说"已是最新"，避免"推送 0 模块"被误读为同步失败
+  if (r.pushed_modules === 0 && r.pulled_modules === 0 && r.errors.length === 0) {
+    return "同步完成：已是最新，无需同步";
+  }
   const base = `同步完成：推送 ${r.pushed_modules} 模块 / 拉取 ${r.pulled_modules} 模块`;
   return r.errors.length ? `${base}（${r.errors.length} 个非致命错误）` : base;
 }

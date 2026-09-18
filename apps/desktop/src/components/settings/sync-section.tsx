@@ -37,6 +37,7 @@ import {
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
+import { syncResultSummary } from "@/lib/sync-status";
 import { Button } from "@/components/ui/button";
 import { DangerousConfirmDialog } from "@/components/ui/dangerous-confirm-dialog";
 import { BackupPreviewBody, type BackupPreviewState } from "./backup-preview-body";
@@ -812,10 +813,7 @@ function SyncRunCard() {
       if (result.skipped) {
         toast.info("已有同步任务在进行中");
       } else {
-        toast.success(
-          `同步完成：推送 ${result.pushed_modules} 模块 / 拉取 ${result.pulled_modules} 模块` +
-            (result.errors.length ? `（${result.errors.length} 个非致命错误）` : ""),
-        );
+        toast.success(syncResultSummary(result));
       }
     } catch (err) {
       // KeyMismatch → 引导恢复页（与后台调度器行为对齐）

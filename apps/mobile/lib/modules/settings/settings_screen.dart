@@ -17,6 +17,7 @@ import '../../data/providers/biometric_provider.dart';
 import '../../data/providers/todo_widget_provider.dart';
 import '../../data/providers/bridge_provider.dart';
 import '../../shared/widgets/liquid_glass_title_bar.dart';
+import '../../shared/utils/sync_status_text.dart';
 import '../../shared/widgets/scroll_offset_listenable.dart';
 import '../../shared/widgets/section_card.dart';
 import '../../shared/widgets/select_bottom_sheet.dart';
@@ -311,9 +312,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       // 原行为由 BootGate 的 syncFinished 订阅承担，流移除后在此兜住
       if (result.pulledModules > 0) invalidateBusinessCaches(ref);
       WaitToast.success(
-        result.skipped
-            ? '已有同步任务在进行中'
-            : '同步完成：推送 ${result.pushedModules} / 拉取 ${result.pulledModules} 模块',
+        syncResultSummary(
+          pushedModules: result.pushedModules,
+          pulledModules: result.pulledModules,
+          skipped: result.skipped,
+          errorCount: result.errors.length,
+        ),
       );
     } catch (e) {
       // P1-20：不再吞错误 tag——key_mismatch 是「本地密钥与云端密文不匹配」，

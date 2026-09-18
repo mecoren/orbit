@@ -156,6 +156,25 @@ void main() {
       );
     });
 
+    test('无变化且无错误时显示已是最新（而非 0 模块）', () {
+      expect(
+        syncResultSummary(pushedModules: 0, pulledModules: 0, skipped: false),
+        '同步完成：已是最新，无需同步',
+      );
+    });
+
+    test('0 模块但有错误时仍显示计数加后缀', () {
+      expect(
+        syncResultSummary(
+          pushedModules: 0,
+          pulledModules: 0,
+          skipped: false,
+          errorCount: 1,
+        ),
+        '同步完成：推送 0 模块 / 拉取 0 模块（1 个非致命错误）',
+      );
+    });
+
     test('有非致命错误时追加计数', () {
       expect(
         syncResultSummary(

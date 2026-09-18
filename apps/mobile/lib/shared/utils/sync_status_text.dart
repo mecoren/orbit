@@ -72,6 +72,11 @@ String syncResultSummary({
   int errorCount = 0,
 }) {
   if (skipped) return '已有同步任务在进行中';
+  // 无任何推拉且无错误 = 本轮无新变化（数据早已同步完成），
+  // 直说“已是最新”，避免“推送 0 模块”被误读为同步失败（与桌面端同口径）
+  if (pushedModules == 0 && pulledModules == 0 && errorCount == 0) {
+    return '同步完成：已是最新，无需同步';
+  }
   final base = '同步完成：推送 $pushedModules 模块 / 拉取 $pulledModules 模块';
   return errorCount > 0 ? '$base（$errorCount 个非致命错误）' : base;
 }

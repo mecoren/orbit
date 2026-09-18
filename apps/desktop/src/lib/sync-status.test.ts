@@ -157,6 +157,18 @@ describe("syncResultSummary", () => {
     ).toBe("同步完成：推送 2 模块 / 拉取 1 模块");
   });
 
+  it("无变化且无错误时显示已是最新（而非 0 模块）", () => {
+    expect(
+      syncResultSummary({ pushed_modules: 0, pulled_modules: 0, skipped: false, errors: [] }),
+    ).toBe("同步完成：已是最新，无需同步");
+  });
+
+  it("0 模块但有错误时仍显示计数加后缀", () => {
+    expect(
+      syncResultSummary({ pushed_modules: 0, pulled_modules: 0, skipped: false, errors: ["x"] }),
+    ).toBe("同步完成：推送 0 模块 / 拉取 0 模块（1 个非致命错误）");
+  });
+
   it("有非致命错误时追加计数", () => {
     expect(
       syncResultSummary({

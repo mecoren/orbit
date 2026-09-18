@@ -212,6 +212,9 @@ pub async fn push_all(
                 log::warn!("[push] {msg}");
                 result.pushed_chunks += attempt.pushed_chunks;
                 result.pushed_tombstones += attempt.pushed_tombstones;
+                // 分桶已上传但清单未落定：模块计数与分桶计数保持一致，
+                // 否则 UI 会显示"推送 0 模块"却有分桶上传的矛盾结果
+                result.pushed_modules = attempt.pushed_modules;
                 result.errors.push(msg);
                 return Ok(result);
             }
@@ -500,6 +503,8 @@ mod tests {
         files: Mutex<HashMap<String, Vec<u8>>>,
         version: Mutex<u64>,
         uploads: Mutex<Vec<String>>,
+        /// 置 true 时条件写恒报冲突（模拟他端持续并发写入，耗尽 CAS 重试）
+        conflict_all: Mutex<bool>,
     }
 
     impl MemAdapter {
@@ -508,6 +513,7 @@ mod tests {
                 files: Mutex::new(HashMap::new()),
                 version: Mutex::new(0),
                 uploads: Mutex::new(Vec::new()),
+                conflict_all: Mutex::new(false),
             }
         }
 
@@ -571,6 +577,9 @@ mod tests {
             data: &[u8],
             precondition: UploadPrecondition,
         ) -> Result<UploadOutcome, SyncError> {
+            if *self.conflict_all.lock().unwrap() {
+                return Ok(UploadOutcome::PreconditionFailed);
+            }
             // 首次写入用 Absent；匹配用 Match(当前版本)
             match &precondition {
                 UploadPrecondition::Absent => {
@@ -846,6 +855,46 @@ mod tests {
         assert!(
             final_manifest.tables.contains_key("todo_projects"),
             "他端表格索引不得丢失"
+        );
+    }
+
+    #[tokio::test]
+    async fn cas_exhaustion_keeps_module_count_consistent_with_chunks() {
+        // CAS 重试耗尽时分桶已上传、清单未落定：模块计数必须与分桶计数一致，
+        // 否则 UI 显示"推送 0 模块"却实际上传了分桶（矛盾结果）
+        let (pool, crypto, store, _tmp) = env().await;
+        sqlx::query(
+            "INSERT INTO todo_projects (uuid, title, created_at, updated_at) VALUES ('u1','P',1,1)",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        let adapter = MemAdapter::new();
+        *adapter.conflict_all.lock().unwrap() = true;
+        let result = push_all(
+            &pool,
+            &crypto,
+            &store,
+            &adapter,
+            &NoopProgressSender,
+            SyncOrigin::Manual,
+            "dev-1",
+            &[],
+        )
+        .await
+        .unwrap();
+
+        assert!(!result.errors.is_empty(), "重试耗尽必须留下错误信息");
+        assert!(
+            result.pushed_chunks > 0,
+            "分桶实际已上传: {:?}",
+            result
+        );
+        assert_eq!(
+            result.pushed_modules, 1,
+            "有分桶上传时模块计数不得为 0: {:?}",
+            result
         );
     }
 }
