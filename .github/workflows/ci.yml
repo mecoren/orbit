@@ -43,6 +43,39 @@ jobs:
       - name: Playwright 冒烟测试
         run: pnpm e2e
 
+  # 内存门禁（docs/09 内存与性能治理专项）：两件事都零业务副作用、纯只读。
+  # audit-unbounded 扫常驻累加容器缺 `bounded` 标记；growth-curve 用同一份 dist
+  # 在 Chromium 里跑 1k/5k/10k 三档 × 3 次中位，判堆驻留/增长斜率/操作峰值/GC 后回落。
+  # Tauri exe 的真机口径（390MB 空闲 / 758MB 峰）依赖 Windows + WebView2，
+  # 不进 CI，留本地 `node perf-metrics/memory3.mjs --gate`（发版第 4 步）。
+  perf-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: 安装依赖
+        run: pnpm install --frozen-lockfile
+
+      - name: 生产构建(门禁量的是构建产物口径)
+        run: pnpm --filter orbit build
+
+      - name: 安装 Playwright 浏览器
+        run: npx playwright install --with-deps chromium
+
+      - name: 常驻无界结构审计
+        run: node perf-metrics/audit-unbounded.mjs --gate
+
+      - name: 内存增长曲线与泄漏门禁
+        run: node perf-metrics/growth-curve.mjs --gate
+
   rust-core:
     runs-on: ubuntu-latest
     steps:
@@ -55,6 +88,11 @@ jobs:
 
       - name: 检查核心库 workspace
         run: cargo check --workspace --all-targets
+
+      # --lib 只跑各 crate 的库内单测：tests/ 下的 m4 WebDAV 集成用例要真实远端，
+      # runner 没有该环境（本机同口径——AGENTS.md 把它列为已知非回归失败）
+      - name: 核心库单元测试
+        run: cargo test --workspace --lib
 
   flutter-mobile:
     runs-on: ubuntu-latest

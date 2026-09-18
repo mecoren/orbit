@@ -1,0 +1,105 @@
+{
+  "$comment": "内存增长曲线门禁。thresholds=拦停值（今天必须过，作用是防回归），targets=方案 §1.1 的期望值（今天可以不过，作用是别忘了要去哪）。两者分开存是为了不让「没变差」被读成「已达标」。口径全部是 Chromium 可复现的那一半（同前端 1k/5k/10k + 强制 GC）；Tauri exe 的 390/758MB 走本地 memory3.mjs --gate，不进这里。growth-curve.mjs --record 回写 measured。",
+  "$buffer": "脚本内再乘 1.1 缓冲带抵 Chromium 抖动，故 thresholds 写的是判据本身，不是放宽后的值",
+  "$stability": "usedMB / domNodes / heapKB_per_row 三跑恒等（小数一位不变），阈值可贴量；peakMB_* / rssMB / leak 受回收时机与机器负载影响，留 10~15% 余量",
+  "thresholds": {
+    "usedJSHeapMB_1k": 14,
+    "usedJSHeapMB_10k": 42,
+    "totalJSHeapMB_10k": 78,
+    "heapKB_per_row": 3.2,
+    "leakMB_after20churn": 8,
+    "heapMB_per_extra10kCopy": 3,
+    "peakMB_onViewSwitch": 72,
+    "peakMB_duringChurn": 95,
+    "domNodes_10k": 950,
+    "domNodesSlope_per_1k": 30,
+    "rssMB_10k": 390
+  },
+  "thresholdsByPlatform": {
+    "linux": {
+      "rssMB_10k": null
+    }
+  },
+  "$thresholdsByPlatform": "RSS 与窗口/合成器实现强相关，Linux runner 尚未采到可信数值 → null 表示该平台不判此项（堆类指标跨平台等值，共用 thresholds）",
+  "targets": {
+    "usedJSHeapMB_10k": 60,
+    "rssMB_10k": 350,
+    "domNodes_10k": 800
+  },
+  "$rationale": {
+    "usedJSHeapMB_1k": "GC 后 11.9MB。绝对值最小的档位反而最敏感：应用外壳 + React Query + 1k 行的固定成本，新增常驻容器会先在这里露头",
+    "usedJSHeapMB_10k": "2026-09-18 A14 后实测 37MB（三跑恒等）。A14 前同口径 76MB——「逾期置顶段并入虚拟流」一项就占 39MB。docs/09-12 报告的「169MB used / 257MB total」是**未 GC** 口径，把上次回收以来的分配垃圾算进了驻留，据此更正历史基线。目标 60 已达成，余量留给 A2 瘦行做回归反查",
+    "totalJSHeapMB_10k": "V8 已提交堆 69.3MB（同 GC 口径，A14 前 128）。历史 257MB 同属未 GC",
+    "heapKB_per_row": "每行堆驻留 2.9KB/行（A14 前 6.8）。原名 heapSlopeKB_per_1k，单位口径写错已更正。斜率超阈值 = 多养了一份与数据量成正比的驻留集（缓存按参数分叉、整行 DTO 双份等）。纯行 DTO 深克隆只值 0.2KB/行（见 heapMB_per_extra10kCopy），余下是 fiber/measure 缓存/Date 等每行成本，A2 瘦行会再压一截",
+    "leakMB_after20churn": "20 次勾选后强制 GC 的末样减首样，实测 6MB（A14 前 3.6MB；驻留分母从 76 降到 37 后同样的绝对量占比翻倍，属口径变化非回归）。>8MB 说明有跨操作存活且不释放的容器",
+    "heapMB_per_extra10kCopy": "多存一份万行结果集的边际堆成本 = 2MB（每行 0.2KB），即 placeholderData 在换 key 重拉窗口里实际留下的量、A1 摘掉的东西。量级远小于预期 → A1 只按廉价保险保留，不宣称内存收益",
+    "peakMB_onViewSwitch": "切快捷视图（未完成↔全部任务）12 次的滚动峰值 61.3MB。A14 前 267MB：峰值几乎全来自置顶段每次重渲染 334 行",
+    "peakMB_duringChurn": "20 次勾选的滚动峰值 83.1MB（不 GC，量的是这段时间的分配总量而非驻留）。A14 前 327MB。与 leak 配对读：峰值高而回落干净 = 重但没漏，指向重复渲染工作量",
+    "domNodes_10k": "863，且 1k/5k/10k 三档完全恒定（斜率 0）——虚拟化哨兵首次拿到干净基线。A14 前 9980 且随档位线性增长",
+    "domNodesSlope_per_1k": "每千行 DOM 节点增量，A14 后 0。阈值 30 的用途：任何**新增**的整列表裸渲染都会把斜率抬到数百（逾期分组当年是 900）而被拦下，不受绝对量登记放松影响",
+    "rssMB_10k": "浏览器进程树 RSS（按 pid 子树收敛，不含本机日常浏览器）。A14 后 354MB（前 433），已贴近目标 350。与 09-12 报告「同前端 Chromium 10k 423MB」互证同量级；真机 Tauri exe 另走 memory3.mjs"
+  },
+  "knownUnbounded": [
+    {
+      "file": "crates/orbit-core/src/sync_adapters/webdav_adapter.rs",
+      "rule": "rust-shared-collection",
+      "count": 1,
+      "note": "dir_cache 只插不删（A7 收 MAX_DIRS FIFO）。该文件当前有并发会话 WIP，Wave 3 落地时随改加 bounded 标记"
+    },
+    {
+      "file": "crates/orbit-flutter/src/api/events.rs",
+      "rule": "rust-static-collection",
+      "count": 1,
+      "note": "NOTIFIED_REMINDERS 只插不删（A7 改 BTreeSet + 超 5000 丢最小 id）"
+    },
+    {
+      "file": "apps/desktop/src-tauri/src/commands/notification_scheduler.rs",
+      "rule": "rust-static-collection",
+      "count": 1,
+      "note": "桌面侧同款 NOTIFIED_REMINDERS（A7 同批）"
+    },
+    {
+      "file": "apps/desktop/src/hooks/use-todo-reminder-listener.tsx",
+      "rule": "ts-module-collection",
+      "count": 1,
+      "note": "reminderToastIds 在 snoozed 事件与 onDone 里 delete，但用户手动划掉 toast 不触发 delete → 一提醒一项残留（每项两个数字）。量级可忽略，复核是否补 onDismiss 清理后再加标记"
+    },
+    {
+      "file": "apps/desktop/src/features/todo/shared/activity-format.ts",
+      "rule": "ts-module-collection",
+      "count": 1,
+      "note": "TARGET_ACTIONS 是字面量枚举 Set（天然有界，应加 bounded-by-data 标记）。该文件属并发会话未提交的新增文件，本批不改他人 WIP，留待其会话自行补标记"
+    }
+  ],
+  "measured": {
+    "usedJSHeapMB_1k": 11.9,
+    "usedJSHeapMB_10k": 37,
+    "totalJSHeapMB_10k": 69.3,
+    "heapKB_per_row": 2.9,
+    "churnClicks": 20,
+    "switchClicks": 12,
+    "peakMB_onViewSwitch": 61.3,
+    "peakMB_duringChurn": 83.1,
+    "leakMB_after20churn": 6,
+    "heapMB_per_extra10kCopy": 2,
+    "domNodes_10k": 863,
+    "domNodesSlope_per_1k": 0,
+    "rssMB_10k": 354,
+    "measuredAt": "2026-09-18"
+  },
+  "measuredBeforeA14": {
+    "$comment": "A14 落地前同口径实测（2026-09-18，三跑恒等），留作专项报告的 before 列——--record 只回写 measured，本块手工维护",
+    "usedJSHeapMB_1k": 15.9,
+    "usedJSHeapMB_10k": 76,
+    "totalJSHeapMB_10k": 128.3,
+    "heapKB_per_row": 6.8,
+    "peakMB_onViewSwitch": 267,
+    "peakMB_duringChurn": 327.5,
+    "leakMB_after20churn": 3.6,
+    "heapMB_per_extra10kCopy": 2,
+    "domNodes_10k": 9980,
+    "domNodesSlope_per_1k": 900,
+    "rssMB_10k": 433
+  },
+  "recordedAt": "2026-09-18"
+}

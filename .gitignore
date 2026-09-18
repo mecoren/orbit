@@ -38,3 +38,6 @@ test-results/
 
 # 同步修复验证产物（临时库/截图/基线 JSON，7MB+ 不入库）
 .sync-test/
+
+# 内存门禁单次运行产物（入库的基线快照是 perf-metrics/baselines.json，本机每次跑都会覆盖它）
+perf-metrics/last-run.json
