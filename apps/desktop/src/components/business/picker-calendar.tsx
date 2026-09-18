@@ -91,7 +91,9 @@ export function PickerCalendar({
           >
             <SelectTrigger
               size="sm"
-              className="w-16 shrink-0 px-2"
+              // 宽 76px = 最宽项"12月"(约 30px) + gap(8px) + 箭头(16px) + px-2(16px) + 余量；
+              // w-16 时 10~12 月会被 line-clamp 拦腰截断（2026-11 实测“月”字只剩一半）
+              className="w-[76px] shrink-0 px-2"
               aria-label="选择月份"
             >
               <SelectValue />

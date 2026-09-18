@@ -65,8 +65,10 @@
   选中描边，且与日历视图**共用同一份节假日缓存**（桌面 `["holidays","list"]`、
   移动 `holidayProvider`），更新侧失效后两处同步刷新。桌面新增 `PickerCalendar`
   （复用 `MonthCalendar` md 档；`DatePicker`/`DateTimePicker`、详情抽屉三处内联日历、
-  快捷新增条两处全部替换，删除 react-day-picker 封装与依赖）；移动 `WaitDatePicker`
-  日视图由 mini 圆格改 `AppMonthCalendar` medium 档并整面板可滚（短屏不溢出）。
+   快捷新增条两处全部替换，删除 react-day-picker 封装与依赖）；移动 `WaitDatePicker`
+   日视图由 mini 圆格改 `AppMonthCalendar` medium 档并整面板可滚（短屏不溢出）。
+- **日期选择器月份下拉截断修复**：月份框加宽到 76px，10~12 月的“月”字不再被拦腰
+  截断（`w-16` 时值区仅 24px，“12月”约需 30px）。
 
 ## [0.1.0] - 2026-09-15
 
