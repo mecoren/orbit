@@ -47,6 +47,9 @@ export function GlobalSearchDialog({ open, onOpenChange }: GlobalSearchDialogPro
     enabled: open && debounced.length > 0,
     staleTime: 30_000,
     placeholderData: (prev) => prev, // 逐词输入时保留旧结果，避免闪烁（评审 M3）
+    // A1：每次击键新增一个 queryKey 变体，placeholderData 保住不闪，
+    // 但不该按全局 10min 驻留——离开搜索框后旧结果集不再需要
+    gcTime: 5_000,
   });
 
   const go = (path: string) => {

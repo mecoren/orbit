@@ -18,6 +18,8 @@ export function useTaskReminders(): Map<number, TaskReminderMeta[]> {
     queryKey: ["todo_reminders", "list"],
     queryFn: () => todoReminderList({ page: 1, page_size: 10000 }),
     staleTime: 60_000,
+    // A1：万行整表投影不随全局 10min gcTime 长驻（多视图切换会各留一份）
+    gcTime: 10_000,
   });
 
   return useMemo(() => {

@@ -23,6 +23,8 @@ export function useTaskLabels(): Map<number, TodoLabel[]> {
     queryKey: ["todo_task_label", "list"],
     queryFn: () => todoTaskLabelList({ page: 1, page_size: 10000 }),
     staleTime: 60_000,
+    // A1：万行关联表投影不随全局 10min gcTime 长驻（与 use-task-reminders 同口径）
+    gcTime: 10_000,
   });
 
   return useMemo(() => {

@@ -173,7 +173,11 @@ export default function TodoShell() {
         ...taskPredicate,
       }),
     staleTime: 2 * 60 * 1000,
-    placeholderData: (prev) => prev,
+    // A1 缓存驻留收敛：大列表不再挂 placeholderData（换谓词重拉的窗口里
+    // 不留旧万行数组），并把空闲回收从全局 10min 收到 10s。实测一份万行
+    // 结果集只值 2MB（growth-curve 的 heapMB_per_extra10kCopy），故这是
+    // 廉价保险而非内存收益来源；换视图首帧走骨架是它的取舍。
+    gcTime: 10_000,
   });
 
   const projects = projectsQuery.data ?? [];
@@ -221,8 +225,9 @@ export default function TodoShell() {
     if (savedFilterId === id) setSavedFilterId(null);
     invalidateFilters();
   };
-  // 仅"无任何数据"的失败才整块替换；后台 refetch 失败时保留旧数据展示
-  // （placeholderData 语义），避免瞬时 IPC 失败清掉可见列表
+  // 仅"无任何数据"的失败才整块替换：后台 refetch 失败时 React Query 保留既有
+  // data（不清空列表），瞬时 IPC 失败不影响可见列表；换视图首帧无数据走骨架，
+  // 是 A1 去掉 placeholderData 后的预期取舍
   const tasksError =
     tasksQuery.isError && tasks.length === 0
       ? tasksQuery.error instanceof Error

@@ -18,7 +18,7 @@ import {
 import { pushUndo } from "./undo-bridge";
 
 /** 同一任务的完成编排进行中守卫（双击/连点只生效一次） */
-const completing = new Set<number>();
+const completing = new Set<number>(); // bounded-by-lifecycle: completeTask 的 finally 分支 delete，只存活进行中的写
 
 export async function completeTask(task: TodoTask): Promise<void> {
   if (completing.has(task.id)) return;
