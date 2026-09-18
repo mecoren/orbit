@@ -32,6 +32,12 @@ describe("invalidateByTable 表级失效映射", () => {
     expect(calls).toHaveLength(5);
   });
 
+  it("todo_activity_log → 仅历史键（轨迹落库后自发事件，不搭 todo_tasks 竞态车）", () => {
+    const { qc, calls } = makeClient();
+    invalidateByTable(qc, "todo_activity_log");
+    expect(calls).toEqual([{ queryKey: ["task-activity"] }]);
+  });
+
   it("todo_subtasks → 仅详情键（主列表不含子任务数据）", () => {
     const { qc, calls } = makeClient();
     invalidateByTable(qc, "todo_subtasks");

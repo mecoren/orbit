@@ -405,6 +405,82 @@ function logActivity(
   });
 }
 
+/** 从属对象轨迹（子任务/评论/关联/提醒）——与 Rust log_target_activity
+ *  同口径：detail 统一 {"target": 可读名}；任务行查不到则跳过 */
+function logTarget(db: MockDb, taskId: number, action: string, target: string) {
+  const task = db.tasks.find((x) => x.id === taskId);
+  if (task) logActivity(db, task.id, task.title, action, JSON.stringify({ target }));
+}
+
+/** 长文本快照截断（与 Rust snapshot_text 同口径：60 字外折叠为 …） */
+const truncText = (s: string) => (s.length > 60 ? `${s.slice(0, 60)}…` : s);
+
+const pad2 = (n: number) => String(n).padStart(2, "0");
+const localDay = (ms: unknown): string | null => {
+  if (ms == null) return null;
+  const d = new Date(ms as number);
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+};
+const localDt = (ms: unknown): string | null => {
+  if (ms == null) return null;
+  const d = new Date(ms as number);
+  return `${localDay(ms)} ${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+};
+
+/** 变更字段快照（与 Rust changed_task_values 同口径：声明序 + 可读值——
+ *  截止/完成→本地时刻串、纯日期→本地日串、项目 id→名称、长文本 60 字截断；
+ *  枚举/数值留原值） */
+function changedTaskValues(
+  db: MockDb,
+  before: Record<string, unknown>,
+  after: Record<string, unknown>,
+): { field: string; from: unknown; to: unknown }[] {
+  const trunc = (v: unknown) => {
+    const s = String(v);
+    return s.length > 60 ? `${s.slice(0, 60)}…` : s;
+  };
+  const proj = (v: unknown) =>
+    v == null ? null : db.projects.find((p) => p.id === v)?.title ?? null;
+  const raw = (v: unknown) => v;
+  const specs: [string, (v: unknown) => unknown][] = [
+    ["title", trunc],
+    ["description", (v) => (v == null ? null : trunc(v))],
+    ["project_id", proj],
+    ["priority", raw],
+    ["status", raw],
+    ["done", raw],
+    ["done_at", localDt],
+    ["due_date", localDt],
+    ["start_date", localDay],
+    ["repeat_rule", raw],
+    ["percent_done", raw],
+    ["position", raw],
+    ["is_favorite", raw],
+    ["my_day_date", localDay],
+  ];
+  // 重复规则六字段合并为一条 repeat_rule 伪字段（与 Rust changed_task_values
+  // 同口径）：值为整体快照对象，任一子字段变化即记一条
+  const repeatSnap = (r: Record<string, unknown>) => ({
+    mode: (r.repeat_mode as number) ?? 0,
+    after: (r.repeat_after as number) ?? 0,
+    weekdays: (r.repeat_weekdays as number) ?? 0,
+    end_type: (r.repeat_end_type as number) ?? 0,
+    end_param: (r.repeat_end_param as number) ?? 0,
+    from_done: (r.repeat_from_done as number) ?? 0,
+  });
+  const out: { field: string; from: unknown; to: unknown }[] = [];
+  for (const [f, fmt] of specs) {
+    if (f === "repeat_rule") {
+      const from = repeatSnap(before);
+      const to = repeatSnap(after);
+      if (JSON.stringify(from) !== JSON.stringify(to)) out.push({ field: f, from, to });
+      continue;
+    }
+    if (before[f] !== after[f]) out.push({ field: f, from: fmt(before[f]), to: fmt(after[f]) });
+  }
+  return out;
+}
+
 /** keyword 过滤（title/description 大小写不敏感包含，对齐后端列表语义）。
  *  返回值必须与 db 内部完全【引用隔离】——真实 Tauri IPC 每次 JSON 序列化
  *  生成全新对象图；react-query 的 structuralSharing（replaceEqualDeep）在
@@ -564,13 +640,12 @@ const commands: Record<string, (args: any, ctx: Ctx) => unknown> = {
     if (!t) throw new Error(`task ${id} 不存在`);
     const before = { ...t } as Record<string, unknown>;
     Object.assign(t, input, { updated_at: Date.now(), version: t.version + 1 });
-    // 活动日志埋点（F6）：记录实际变化字段集（与 changed_task_fields 同口径）
+    // 活动日志埋点（F6）：变更字段集 + 前后值快照（与 changed_task_values 同口径）
     const after = t as unknown as Record<string, unknown>;
-    const fields = Object.keys(input).filter((k) => {
-      return before[k] !== after[k] && k !== "updated_at" && k !== "version";
-    });
-    if (fields.length > 0) {
-      logActivity(db, t.id, t.title, "update", JSON.stringify({ fields }));
+    const changes = changedTaskValues(db, before, after);
+    if (changes.length > 0) {
+      const fields = changes.map((c) => c.field);
+      logActivity(db, t.id, t.title, "update", JSON.stringify({ fields, changes }));
     }
     return ipcClone(t);
   },
@@ -707,12 +782,30 @@ const commands: Record<string, (args: any, ctx: Ctx) => unknown> = {
       version: 1,
     };
     db.subtasks.push(row);
+    logTarget(db, row.task_id, "subtask_add", row.title);
     return ipcClone(row);
   },
-  // 对齐 Rust toggle_todo_subtask_done：翻完成后按完成度回算父任务 percent_done
-  todo_subtasks_toggle_done: ({ id, done }, { db }) => {
+  todo_subtasks_update: (
+    { id, input }: { id: number; input: { title?: string } },
+    { db },
+  ) => {
     const s = db.subtasks.find((x) => x.id === id);
     if (!s) throw new Error(`subtask ${id} 不存在`);
+    const before = s.title;
+    if (input.title != null) s.title = input.title;
+    s.updated_at = Date.now();
+    s.version += 1;
+    // 改名轨迹（与 Rust update_todo_subtask 同口径）：target=「旧 → 新」对照串
+    if (before !== s.title) {
+      logTarget(db, s.task_id, "subtask_rename", `${before} → ${s.title}`);
+    }
+    return ipcClone(s);
+  },
+  // 对齐 Rust toggle_todo_subtask_done：翻完成后按完成度回算父任务 percent_done
+  // （参数名随 tauri.ts 调用方：subtaskId）
+  todo_subtasks_toggle_done: ({ subtaskId, done }, { db }) => {
+    const s = db.subtasks.find((x) => x.id === subtaskId);
+    if (!s) throw new Error(`subtask ${subtaskId} 不存在`);
     const now = Date.now();
     s.done = done ? 1 : 0;
     s.done_at = done ? now : null;
@@ -725,6 +818,7 @@ const commands: Record<string, (args: any, ctx: Ctx) => unknown> = {
       task.percent_done = live.length === 0 ? 0 : (doneCount / live.length) * 100;
       task.updated_at = now;
     }
+    logTarget(db, s.task_id, done ? "subtask_done" : "subtask_undone", s.title);
   },
   todo_subtasks_delete: ({ id }, { db }) => {
     const s = db.subtasks.find((x) => x.id === id);
@@ -741,12 +835,13 @@ const commands: Record<string, (args: any, ctx: Ctx) => unknown> = {
       task.percent_done = live.length === 0 ? 0 : (doneCount / live.length) * 100;
       task.updated_at = now;
     }
+    logTarget(db, s.task_id, "subtask_delete", s.title);
   },
   // 子任务转独立任务（对齐 Rust promote_todo_subtask：软删行 + 承接父任务
   // project/priority/due 建尾位新任务；percent_done 随软删重算）
-  todo_subtasks_promote: ({ id }, { db }) => {
-    const s = db.subtasks.find((x) => x.id === id);
-    if (!s) throw new Error(`subtask ${id} 不存在`);
+  todo_subtasks_promote: ({ subtaskId }, { db }) => {
+    const s = db.subtasks.find((x) => x.id === subtaskId);
+    if (!s) throw new Error(`subtask ${subtaskId} 不存在`);
     const parent = db.tasks.find((t) => t.id === s.task_id);
     if (!parent) throw new Error(`task ${s.task_id} 不存在`);
     const now = Date.now();
@@ -787,6 +882,9 @@ const commands: Record<string, (args: any, ctx: Ctx) => unknown> = {
       version: 1,
     };
     db.tasks.push(t);
+    // 与 Rust 同口径双埋点：新任务侧 create（from=subtask）+ 父任务侧 promote
+    logActivity(db, t.id, t.title, "create", JSON.stringify({ from: "subtask", parent_id: parent.id }));
+    logTarget(db, parent.id, "subtask_promote", s.title);
     return ipcClone(t);
   },
 
@@ -814,12 +912,26 @@ const commands: Record<string, (args: any, ctx: Ctx) => unknown> = {
       version: 1,
     };
     db.relations.push(r);
+    // 关联双向各记一条（与 Rust log_relation_change 同口径）
+    const ta = db.tasks.find((t) => t.id === r.task_id);
+    const tb = db.tasks.find((t) => t.id === r.other_task_id);
+    if (ta && tb) {
+      logTarget(db, ta.id, "link_add", tb.title);
+      logTarget(db, tb.id, "link_add", ta.title);
+    }
     return ipcClone(r);
   },
   todo_task_relations_delete: ({ id }, { db }) => {
     const idx = db.relations.findIndex((r) => r.id === id);
     if (idx < 0) throw new Error(`relation ${id} not found`);
+    const r = db.relations[idx];
     db.relations.splice(idx, 1);
+    const ta = db.tasks.find((t) => t.id === r.task_id);
+    const tb = db.tasks.find((t) => t.id === r.other_task_id);
+    if (ta && tb) {
+      logTarget(db, ta.id, "link_remove", tb.title);
+      logTarget(db, tb.id, "link_remove", ta.title);
+    }
   },
 
   // ---- labels / task_labels ----
@@ -865,10 +977,23 @@ const commands: Record<string, (args: any, ctx: Ctx) => unknown> = {
       version: 1,
     };
     db.taskLabels.push(link);
+    // 标签挂载轨迹（与 Rust log_label_change 同口径）
+    const task = db.tasks.find((x) => x.id === input.task_id);
+    const label = db.labels.find((x) => x.id === input.label_id);
+    if (task && label) {
+      logActivity(db, task.id, task.title, "label_add", JSON.stringify({ label: label.title }));
+    }
     return link;
   },
   todo_task_labels_delete: ({ id }, { db }) => {
+    const link = db.taskLabels.find((l) => l.id === id);
     db.taskLabels = db.taskLabels.filter((l) => l.id !== id);
+    // 标签摘除轨迹（同上；行已不在，用删除前快照）
+    const task = link && db.tasks.find((x) => x.id === link.task_id);
+    const label = link && db.labels.find((x) => x.id === link.label_id);
+    if (task && label) {
+      logActivity(db, task.id, task.title, "label_remove", JSON.stringify({ label: label.title }));
+    }
   },
 
   // ---- reminders / comments ----
@@ -886,10 +1011,14 @@ const commands: Record<string, (args: any, ctx: Ctx) => unknown> = {
       version: 1,
     };
     db.reminders.push(r);
+    // 提醒轨迹：target=格式化时刻串（与 Rust reminder_add 同口径）
+    logTarget(db, r.task_id, "reminder_add", localDt(r.remind_at) ?? "已设置");
     return ipcClone(r);
   },
   todo_reminders_delete: ({ id }, { db }) => {
-    db.reminders = db.reminders.filter((r) => r.id !== id);
+    const r = db.reminders.find((x) => x.id === id);
+    db.reminders = db.reminders.filter((x) => x.id !== id);
+    if (r) logTarget(db, r.task_id, "reminder_delete", localDt(r.remind_at) ?? "已设置");
   },
   todo_comments_list: ({ filter }, { db }) => {
     const kw = filter?.keyword?.trim().toLowerCase();
@@ -908,10 +1037,13 @@ const commands: Record<string, (args: any, ctx: Ctx) => unknown> = {
       is_deleted: 0,
     };
     db.comments.push(c);
+    logTarget(db, c.task_id, "comment_add", truncText(c.content));
     return c;
   },
   todo_comments_delete: ({ id }, { db }) => {
-    db.comments = db.comments.filter((c) => c.id !== id);
+    const c = db.comments.find((x) => x.id === id);
+    db.comments = db.comments.filter((x) => x.id !== id);
+    if (c) logTarget(db, c.task_id, "comment_delete", truncText(c.content));
   },
 
   // ---- 全局搜索 / 看板（list-page 查询、命令面板 Ctrl+P 用）----
@@ -1253,6 +1385,8 @@ const commands: Record<string, (args: any, ctx: Ctx) => unknown> = {
       is_local_cached: 1,
     };
     db.attachments.push(link);
+    // 附件轨迹仅新挂载记（幂等路径不重复记，与 Rust 同口径）
+    logTarget(db, taskId, "attachment_add", fileName);
     return ipcClone(link);
   },
   task_attachments_list: ({ taskId }: { taskId: number }, { db }: Ctx) =>
@@ -1265,7 +1399,11 @@ const commands: Record<string, (args: any, ctx: Ctx) => unknown> = {
   },
   task_attachment_remove: ({ linkId }: { linkId: number }, { db }: Ctx) => {
     const idx = db.attachments.findIndex((a) => a.link_id === linkId);
-    if (idx >= 0) db.attachments.splice(idx, 1);
+    if (idx >= 0) {
+      const link = db.attachments[idx];
+      db.attachments.splice(idx, 1);
+      logTarget(db, link.task_id, "attachment_delete", link.original_name);
+    }
   },
   attachments_gc: () => 0,
   // ---- 数据库维护（性能批次；内存 mock 库无碎片，各步返回零值）----

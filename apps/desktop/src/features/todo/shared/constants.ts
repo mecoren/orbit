@@ -21,6 +21,13 @@ export const PRIORITY_COLOR = ["#D1D5DB", "#6B7280", "#3B82F6", "#F59E0B", "#EF4
 /** 优先级 0–5 中文档位（多选批量工具条 / 右键菜单共用口径） */
 export const PRIORITY_LABELS = ["无", "低", "中", "高", "紧急", "立即处理"];
 
+/** 状态中文三档（详情抽屉状态选择器与历史格式化共用单口径） */
+export const STATUS_LABELS: Record<string, string> = {
+  pending: "待办",
+  doing: "进行中",
+  done: "已完成",
+};
+
 /** 状态语义色 */
 export const STATUS_COLOR = {
   pending: "#6B7280",

@@ -526,7 +526,10 @@ test("附件：详情抽屉区块渲染 + 列表/移除链路（mock 命令面�
   // 与标题行的 aria-label「删除」按钮同名，用弹层说明文案锚定作用域
   const popover = page.getByText("仅解除与任务的关联", { exact: false }).locator("..");
   await popover.getByRole("button", { name: "删除", exact: true }).click();
-  await expect(page.getByText("验收报告.pdf")).not.toBeVisible({ timeout: 5_000 });
+  // 附件行消失用「2.0 KB」锚定（文件名同时出现在历史「移除附件」条目里，不能再整页匹配）
+  await expect(page.getByText("2.0 KB")).not.toBeVisible({ timeout: 5_000 });
+  // 移除动作写入历史轨迹（2026-09-18 附件挂/卸埋点）
+  await expect(page.getByText("移除附件「验收报告.pdf」")).toBeVisible();
   // mock 库终态：附件关联已删
   const remaining = await page.evaluate(() => (window as any).__orbitMock.db.attachments.length);
   expect(remaining).toBe(0);
@@ -742,5 +745,6 @@ test("活动日志：写路径埋点 → 详情抽屉历史区块回看（2026-0
   await expect(drawer).toBeVisible();
   await expect(drawer.getByText("历史")).toBeVisible();
   await expect(drawer.getByText("标记为完成")).toBeVisible();
-  await expect(drawer.getByText(/更新（优先级）/)).toBeVisible();
+  // update 行为前后值明细格式（2026-09-18 可读快照改造后）
+  await expect(drawer.getByText(/更新（优先级：无 → 紧急）/)).toBeVisible();
 });

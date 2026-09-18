@@ -161,6 +161,14 @@ pub async fn add_task_attachment(
             );
             // 新挂载落盘后检查磁盘缓存总上限（幂等路径无新增字节不触发）
             enforce_attachment_cache_limit(pool, attachments_dir).await?;
+            // 历史轨迹仅新挂载记（幂等重复挂同 hash 不重复记），target=文件名
+            crate::api::business_api::log_target_activity(
+                pool,
+                task_id,
+                "attachment_add",
+                file_name,
+            )
+            .await;
             (link_id.0, link_uuid)
         }
     };
@@ -244,13 +252,16 @@ pub async fn read_task_attachment(
 /// `gc_local_attachments` 在合适的时机（如同步完成后/启动时）调用。
 pub async fn remove_task_attachment(pool: &SqlitePool, link_id: i64) -> CoreResult<()> {
     let now = crate::db::clock::next_ms();
-    let link: Option<(i64, String)> = sqlx::query_as(
-        "SELECT id, uuid FROM todo_task_attachments WHERE id = ? AND is_deleted = 0",
+    let link: Option<(i64, String, i64, String)> = sqlx::query_as(
+        "SELECT ta.id, ta.uuid, ta.task_id, COALESCE(a.original_name, ta.hash)
+         FROM todo_task_attachments ta
+         LEFT JOIN sys_attachments a ON a.hash = ta.hash
+         WHERE ta.id = ? AND ta.is_deleted = 0",
     )
     .bind(link_id)
     .fetch_optional(pool)
     .await?;
-    let Some((id, link_uuid)) = link else {
+    let Some((id, link_uuid, task_id, name)) = link else {
         return Ok(()); // 幂等：已删/不存在
     };
     sqlx::query(
@@ -264,6 +275,7 @@ pub async fn remove_task_attachment(pool: &SqlitePool, link_id: i64) -> CoreResu
     .execute(pool)
     .await?;
     emit_attachment_event("todo_task_attachments", id, &link_uuid, DbOp::Update, now);
+    crate::api::business_api::log_target_activity(pool, task_id, "attachment_delete", &name).await;
     Ok(())
 }
 
@@ -414,6 +426,56 @@ mod tests {
 
         let bytes = read_task_attachment(&pool, &dir, &view.hash).await.unwrap();
         assert_eq!(bytes, b"pdf-bytes");
+    }
+
+    /// 附件挂/卸落任务历史（target=文件名）；幂等重复挂不重复记
+    #[tokio::test]
+    async fn attachment_add_remove_logged_to_history() {
+        let pool = setup_db().await;
+        let task_id = create_task(&pool).await;
+        let dir = tmp_dir("history");
+        let view = add_task_attachment(
+            &pool,
+            &dir,
+            task_id,
+            "报告.pdf",
+            "application/pdf",
+            b"pdf-bytes",
+        )
+        .await
+        .unwrap();
+        add_task_attachment(
+            &pool,
+            &dir,
+            task_id,
+            "报告.pdf",
+            "application/pdf",
+            b"pdf-bytes",
+        )
+        .await
+        .unwrap();
+
+        let rows = crate::api::activity_log_api::list_task_activity(&pool, task_id, None)
+            .await
+            .unwrap();
+        let adds: Vec<_> = rows
+            .iter()
+            .filter(|r| r.action == "attachment_add")
+            .collect();
+        assert_eq!(adds.len(), 1, "幂等重复挂不应多记");
+        let v: serde_json::Value = serde_json::from_str(&adds[0].detail).unwrap();
+        assert_eq!(v["target"], "报告.pdf");
+
+        remove_task_attachment(&pool, view.link_id).await.unwrap();
+        let rows = crate::api::activity_log_api::list_task_activity(&pool, task_id, None)
+            .await
+            .unwrap();
+        let del = rows
+            .iter()
+            .find(|r| r.action == "attachment_delete")
+            .expect("卸附件应有轨迹");
+        let v: serde_json::Value = serde_json::from_str(&del.detail).unwrap();
+        assert_eq!(v["target"], "报告.pdf");
     }
 
     #[tokio::test]

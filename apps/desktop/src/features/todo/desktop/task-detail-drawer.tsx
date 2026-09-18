@@ -71,7 +71,8 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { useTodoStore } from "@/features/todo/store";
 import { hideFromQueries, useUndoableDeleteAction } from "@/hooks/use-undoable-delete";
 import { usePasteAttachment } from "@/hooks/use-paste-attachment";
-import { PRIORITY_COLOR, TODO_ACCENT, PRIORITY_LABELS, STATUS_COLOR, MY_DAY_COLOR, PRESET_10 } from "../shared/constants";
+import { PRIORITY_COLOR, TODO_ACCENT, PRIORITY_LABELS, STATUS_COLOR, STATUS_LABELS, MY_DAY_COLOR, PRESET_10 } from "../shared/constants";
+import { describeActivity } from "../shared/activity-format";
 import { todayStartMs, toggleMyDayValue } from "../shared/task-filters";
 import { ConfirmPopover } from "../shared/confirm-popover";
 import { renderMarkdown } from "../shared/markdown-lite";
@@ -123,11 +124,11 @@ const RELATION_TYPE_LABEL: Record<string, string> = {
   duplicated_by: "重复项",
 };
 
-// 状态三档从 STATUS_COLOR 组装（单口径；此前值与 constants 重复两份）
+// 状态三档从 STATUS_COLOR + STATUS_LABELS 组装（单口径；此前值与 constants 重复两份）
 const STATUS_ITEMS = [
-  { key: "pending", label: "待办", color: STATUS_COLOR.pending },
-  { key: "doing", label: "进行中", color: STATUS_COLOR.doing },
-  { key: "done", label: "已完成", color: STATUS_COLOR.done },
+  { key: "pending", label: STATUS_LABELS.pending, color: STATUS_COLOR.pending },
+  { key: "doing", label: STATUS_LABELS.doing, color: STATUS_COLOR.doing },
+  { key: "done", label: STATUS_LABELS.done, color: STATUS_COLOR.done },
 ] as const;
 
 interface ProjectOption {
@@ -1992,34 +1993,8 @@ function AttachmentsSection({ taskId }: { taskId: number }) {
 
 // ============================================================================
 // 活动历史区块（F6，2026-09-12）：任务操作轨迹回看（Todoist Activity log）
+// 行文案格式化在 shared/activity-format.ts（纯函数共置测试）
 // ============================================================================
-
-/** action → 中文动作文案（update 的 detail.fields 附加在括号里） */
-const ACTIVITY_ACTION_LABELS: Record<string, string> = {
-  create: "创建了任务",
-  update: "更新",
-  complete: "标记为完成",
-  uncomplete: "恢复为未完成",
-  delete: "移入回收站",
-  restore: "从回收站恢复",
-};
-
-/** update detail 里的字段名 → 中文（与属性行文案对齐；未映射字段原样展示） */
-const ACTIVITY_FIELD_LABELS: Record<string, string> = {
-  title: "标题",
-  description: "描述",
-  project_id: "所属项目",
-  priority: "优先级",
-  status: "状态",
-  done: "完成标记",
-  done_at: "完成时间",
-  due_date: "截止日期",
-  start_date: "开始日期",
-  percent_done: "进度",
-  position: "顺序",
-  is_favorite: "收藏",
-  my_day_date: "我的一天",
-};
 
 function ActivitySection({ taskId }: { taskId: number }) {
   const { data: rows = [] } = useQuery({
@@ -2028,28 +2003,17 @@ function ActivitySection({ taskId }: { taskId: number }) {
     staleTime: 30_000,
   });
 
-  const describe = (action: string, detail: string): string => {
-    const base = ACTIVITY_ACTION_LABELS[action] ?? action;
-    if (action !== "update") return base;
-    try {
-      const fields = (JSON.parse(detail) as { fields?: string[] }).fields ?? [];
-      if (fields.length === 0) return base;
-      const names = fields.map((f) => ACTIVITY_FIELD_LABELS[f] ?? f).join("、");
-      return `${base}（${names}）`;
-    } catch {
-      return base;
-    }
-  };
-
   return (
     <SectionBlock icon={History} title="历史">
       <div className="space-y-1.5">
         {rows.map((r) => (
           <div key={r.id} className="flex items-baseline gap-2 text-[12px]">
             <span className="shrink-0 tabular-nums text-muted-foreground/70">
-              {format(new Date(r.created_at), "MM-dd HH:mm")}
+              {format(new Date(r.created_at), "yyyy-MM-dd HH:mm")}
             </span>
-            <span className="text-muted-foreground">{describe(r.action, r.detail)}</span>
+            <span className="min-w-0 text-muted-foreground">
+              {describeActivity(r.action, r.detail)}
+            </span>
           </div>
         ))}
         {rows.length === 0 && (

@@ -3,8 +3,10 @@
 //! 对标 Todoist Activity log（免费版仅 1 周、Pro 完整——本地免费提供是差异化）
 //! 与 Things 3 任务历史。落地本地只读轨迹：
 //! - **记录**：[log_activity]——写路径埋点（create/update/complete/
-//!   uncomplete/delete/restore），update 记变更字段集进 detail JSON；
-//!   高频写**不 emit db-change**（口径同 notification_log）；
+//!   uncomplete/delete/restore + 从属对象动作 subtask_*/comment_*/link_*/
+//!   reminder_*），update 记变更字段集进 detail JSON；
+//!   落库后 emit `todo_activity_log` Insert 事件（历史区块即时刷新信号，
+//!   业务表的 todo_tasks 事件先于本行插入、不能搭车）；
 //! - **查询**：[list_task_activity]（单任务倒序，详情抽屉「历史」区块）。
 //!
 //! 白名单口径：todo_activity_log 是**本地操作轨迹**（各端各自记录，
@@ -13,7 +15,9 @@
 
 use sqlx::SqlitePool;
 
+use crate::db::repository::generic_repo;
 use crate::error::CoreResult;
+use crate::eventbus::{EVENT_BUS, events::DbEvent};
 
 /// 活动日志行（查询视图）
 #[derive(Debug, Clone, serde::Serialize, sqlx::FromRow)]
@@ -30,7 +34,11 @@ pub struct ActivityLogRow {
     pub created_at: i64,
 }
 
-/// 记录一条任务操作轨迹（写路径埋点统一入口；高频写不 emit 事件）
+/// 记录一条任务操作轨迹（写路径埋点统一入口）
+///
+/// INSERT 落库**后**才 emit `todo_activity_log` Insert 事件——业务写路径
+/// （update/complete/restore）的 `todo_tasks` 事件早于本行插入，前端若搭
+/// 那条车重拉历史会与落库竞态读到旧列表，故刷新信号必须由本行自己发。
 pub async fn log_activity(
     pool: &SqlitePool,
     task_id: i64,
@@ -39,7 +47,7 @@ pub async fn log_activity(
     detail_json: &str,
 ) -> CoreResult<()> {
     let now = chrono::Utc::now().timestamp_millis();
-    sqlx::query(
+    let res = sqlx::query(
         "INSERT INTO todo_activity_log (task_id, task_title, action, detail, created_at)
          VALUES (?, ?, ?, ?, ?)",
     )
@@ -50,6 +58,15 @@ pub async fn log_activity(
     .bind(now)
     .execute(pool)
     .await?;
+    let device_id = generic_repo::current_device_id();
+    EVENT_BUS.emit(DbEvent::insert(
+        "todo_activity_log",
+        res.last_insert_rowid(),
+        // 本表无 uuid 列（纯本地轨迹不进同步白名单），事件仅按 table 消费
+        "",
+        serde_json::json!({ "task_id": task_id, "action": action }),
+        &device_id,
+    ));
     Ok(())
 }
 

@@ -127,6 +127,23 @@ pub async fn toggle_todo_subtask_done(
     // 3. 重算父任务 percent_done
     recalc_task_percent_done(pool, task_id).await?;
 
+    // 活动日志：勾选/取消勾选进父任务历史（target=子任务标题快照）
+    let sub_title: Option<String> =
+        sqlx::query_scalar("SELECT title FROM todo_subtasks WHERE id = ?")
+            .bind(subtask_id)
+            .fetch_optional(pool)
+            .await
+            .ok()
+            .flatten();
+    if let Some(t) = sub_title {
+        let action = if done {
+            "subtask_done"
+        } else {
+            "subtask_undone"
+        };
+        crate::api::business_api::log_target_activity(pool, task_id, action, &t).await;
+    }
+
     Ok(())
 }
 
@@ -234,6 +251,9 @@ pub async fn promote_todo_subtask(pool: &SqlitePool, subtask_id: i64) -> CoreRes
         &format!(r#"{{"from":"subtask","parent_id":{}}}"#, parent.id),
     )
     .await;
+    // 父任务侧同步记一条：子任务被提升为独立任务（否则父历史凭空少一行）
+    crate::api::business_api::log_target_activity(pool, parent.id, "subtask_promote", &sub.title)
+        .await;
 
     Ok(created)
 }

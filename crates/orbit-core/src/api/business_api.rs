@@ -5,6 +5,7 @@
 
 pub use crate::db::sync_registry::FULL_BACKUP_TABLES;
 
+use chrono::TimeZone;
 use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
 
@@ -133,11 +134,18 @@ pub async fn update_todo_task(
 ) -> CoreResult<TodoTask> {
     let before: TodoTask = generic_repo::get_by_id(pool, "todo_tasks", id).await?;
     let t = generic_repo::update_todo_task(pool, id, input).await?;
-    // 活动日志（F6）：记录实际发生变化的字段集（比较前后行——
+    // 活动日志（F6）：记录实际发生变化的字段集 + 前后值快照（比较前后行——
     // 前端部分更新的 Option 语义下未命中字段的 UPDATE 不产生 diff）
-    let fields = changed_task_fields(&before, &t);
-    if !fields.is_empty() {
-        let detail = serde_json::json!({ "fields": fields }).to_string();
+    let changes = changed_task_values(pool, &before, &t).await;
+    if !changes.is_empty() {
+        let detail = serde_json::json!({
+            "fields": changes.iter().map(|(f, ..)| *f).collect::<Vec<_>>(),
+            "changes": changes
+                .iter()
+                .map(|(f, from, to)| serde_json::json!({ "field": f, "from": from, "to": to }))
+                .collect::<Vec<_>>(),
+        })
+        .to_string();
         let _ = activity_log_api::log_activity(pool, t.id, &t.title, "update", &detail).await;
     }
     Ok(t)
@@ -149,50 +157,183 @@ pub async fn delete_todo_task(pool: &SqlitePool, id: i64) -> CoreResult<()> {
     Ok(())
 }
 
-/// 比较任务前后行，返回发生变化的字段名集（活动日志 detail 用；
-/// 顺序与 TodoTask 字段声明序一致，测试锁定）
-fn changed_task_fields(before: &TodoTask, after: &TodoTask) -> Vec<&'static str> {
-    let mut fields = Vec::new();
+/// 长文本快照截断（历史行可读口径；全文仍在业务表，60 字外折叠为 …）
+fn snapshot_text(s: &str) -> String {
+    let mut it = s.chars();
+    let head: String = it.by_ref().take(60).collect();
+    if it.next().is_some() {
+        format!("{head}…")
+    } else {
+        head
+    }
+}
+
+/// ms 时间戳 → 本地 yyyy-MM-dd 可读串（NULL → null；按本地日界口径换算）
+fn snapshot_day(ms: Option<i64>) -> serde_json::Value {
+    ms.and_then(|t| chrono::Local.timestamp_millis_opt(t).single())
+        .map(|d| serde_json::Value::String(d.format("%Y-%m-%d").to_string()))
+        .unwrap_or(serde_json::Value::Null)
+}
+
+/// ms 时间戳 → 本地 yyyy-MM-dd HH:mm（完成时刻等带时分的场景）
+fn snapshot_dt(ms: Option<i64>) -> serde_json::Value {
+    ms.and_then(|t| chrono::Local.timestamp_millis_opt(t).single())
+        .map(|d| serde_json::Value::String(d.format("%Y-%m-%d %H:%M").to_string()))
+        .unwrap_or(serde_json::Value::Null)
+}
+
+/// 项目名快照（写入端解析——项目后续改名/删除历史仍可读；查不到落 null）
+async fn snapshot_project(pool: &SqlitePool, id: Option<i64>) -> serde_json::Value {
+    let Some(i) = id else {
+        return serde_json::Value::Null;
+    };
+    sqlx::query_scalar::<_, String>("SELECT title FROM todo_projects WHERE id = ?")
+        .bind(i)
+        .fetch_optional(pool)
+        .await
+        .ok()
+        .flatten()
+        .map(serde_json::Value::String)
+        .unwrap_or(serde_json::Value::Null)
+}
+
+/// 重复规则六字段整体快照（repeat_rule 伪字段的 from/to 值；前端按
+/// repeatLabel 口径渲染，字段名与 TodoTask 列对应）
+fn repeat_snapshot(t: &TodoTask) -> serde_json::Value {
+    serde_json::json!({
+        "mode": t.repeat_mode,
+        "after": t.repeat_after,
+        "weekdays": t.repeat_weekdays,
+        "end_type": t.repeat_end_type,
+        "end_param": t.repeat_end_param,
+        "from_done": t.repeat_from_done,
+    })
+}
+
+/// 比较任务前后行，产出变更集 (字段名, 前值, 后值)；顺序与 TodoTask 字段
+/// 声明序一致（测试锁定）。值预格式化为可读快照：日期→本地日串、项目→名称、
+/// 长文本截断；枚举/数值保留原值由前端按共享常量口径格式化（单口径原则）
+async fn changed_task_values(
+    pool: &SqlitePool,
+    before: &TodoTask,
+    after: &TodoTask,
+) -> Vec<(&'static str, serde_json::Value, serde_json::Value)> {
+    let mut out: Vec<(&'static str, serde_json::Value, serde_json::Value)> = Vec::new();
     if before.title != after.title {
-        fields.push("title");
+        out.push((
+            "title",
+            serde_json::Value::String(snapshot_text(&before.title)),
+            serde_json::Value::String(snapshot_text(&after.title)),
+        ));
     }
     if before.description != after.description {
-        fields.push("description");
+        out.push((
+            "description",
+            before
+                .description
+                .as_deref()
+                .map(|s| serde_json::Value::String(snapshot_text(s)))
+                .unwrap_or(serde_json::Value::Null),
+            after
+                .description
+                .as_deref()
+                .map(|s| serde_json::Value::String(snapshot_text(s)))
+                .unwrap_or(serde_json::Value::Null),
+        ));
     }
     if before.project_id != after.project_id {
-        fields.push("project_id");
+        out.push((
+            "project_id",
+            snapshot_project(pool, before.project_id).await,
+            snapshot_project(pool, after.project_id).await,
+        ));
     }
     if before.priority != after.priority {
-        fields.push("priority");
+        out.push((
+            "priority",
+            serde_json::json!(before.priority),
+            serde_json::json!(after.priority),
+        ));
     }
     if before.status != after.status {
-        fields.push("status");
+        out.push((
+            "status",
+            serde_json::json!(&before.status),
+            serde_json::json!(&after.status),
+        ));
     }
     if before.done != after.done {
-        fields.push("done");
+        out.push((
+            "done",
+            serde_json::json!(before.done),
+            serde_json::json!(after.done),
+        ));
     }
     if before.done_at != after.done_at {
-        fields.push("done_at");
+        out.push((
+            "done_at",
+            snapshot_dt(before.done_at),
+            snapshot_dt(after.done_at),
+        ));
     }
     if before.due_date != after.due_date {
-        fields.push("due_date");
+        out.push((
+            "due_date",
+            snapshot_dt(before.due_date),
+            snapshot_dt(after.due_date),
+        ));
     }
     if before.start_date != after.start_date {
-        fields.push("start_date");
+        out.push((
+            "start_date",
+            snapshot_day(before.start_date),
+            snapshot_day(after.start_date),
+        ));
+    }
+    if before.repeat_mode != after.repeat_mode
+        || before.repeat_after != after.repeat_after
+        || before.repeat_weekdays != after.repeat_weekdays
+        || before.repeat_end_type != after.repeat_end_type
+        || before.repeat_end_param != after.repeat_end_param
+        || before.repeat_from_done != after.repeat_from_done
+    {
+        // 六字段合并为一条伪字段变更（单改 repeat_after 不配 mode 无意义）；
+        // 值快照为对象，前端 repeatLabel 单口径渲染完整规则串
+        out.push((
+            "repeat_rule",
+            repeat_snapshot(before),
+            repeat_snapshot(after),
+        ));
     }
     if before.percent_done != after.percent_done {
-        fields.push("percent_done");
+        out.push((
+            "percent_done",
+            serde_json::json!(before.percent_done),
+            serde_json::json!(after.percent_done),
+        ));
     }
     if before.position != after.position {
-        fields.push("position");
+        out.push((
+            "position",
+            serde_json::json!(before.position),
+            serde_json::json!(after.position),
+        ));
     }
     if before.is_favorite != after.is_favorite {
-        fields.push("is_favorite");
+        out.push((
+            "is_favorite",
+            serde_json::json!(before.is_favorite),
+            serde_json::json!(after.is_favorite),
+        ));
     }
     if before.my_day_date != after.my_day_date {
-        fields.push("my_day_date");
+        out.push((
+            "my_day_date",
+            snapshot_day(before.my_day_date),
+            snapshot_day(after.my_day_date),
+        ));
     }
-    fields
+    out
 }
 
 // ---------- todo_subtasks ----------
@@ -209,18 +350,33 @@ pub async fn create_todo_subtask(
     pool: &SqlitePool,
     input: &TodoSubtaskCreateInput,
 ) -> CoreResult<TodoSubtask> {
-    generic_repo::create_todo_subtask(pool, input).await
+    let row = generic_repo::create_todo_subtask(pool, input).await?;
+    log_target_activity(pool, row.task_id, "subtask_add", &row.title).await;
+    Ok(row)
 }
 pub async fn update_todo_subtask(
     pool: &SqlitePool,
     id: i64,
     input: &TodoSubtaskUpdateInput,
 ) -> CoreResult<TodoSubtask> {
-    generic_repo::update_todo_subtask(pool, id, input).await
+    let before: TodoSubtask = generic_repo::get_by_id(pool, "todo_subtasks", id).await?;
+    let after = generic_repo::update_todo_subtask(pool, id, input).await?;
+    if before.title != after.title {
+        // 改名轨迹：target 直接给「旧 → 新」对照串
+        let target = format!(
+            "{} → {}",
+            snapshot_text(&before.title),
+            snapshot_text(&after.title)
+        );
+        log_target_activity(pool, after.task_id, "subtask_rename", &target).await;
+    }
+    Ok(after)
 }
 pub async fn delete_todo_subtask(pool: &SqlitePool, id: i64) -> CoreResult<()> {
     let t: TodoSubtask = generic_repo::get_by_id(pool, "todo_subtasks", id).await?;
-    generic_repo::soft_delete_by_id(pool, "todo_subtasks", id, &t.uuid).await
+    generic_repo::soft_delete_by_id(pool, "todo_subtasks", id, &t.uuid).await?;
+    log_target_activity(pool, t.task_id, "subtask_delete", &t.title).await;
+    Ok(())
 }
 
 // ---------- todo_labels ----------
@@ -265,11 +421,56 @@ pub async fn create_todo_task_label(
     pool: &SqlitePool,
     input: &TodoTaskLabelCreateInput,
 ) -> CoreResult<TodoTaskLabel> {
-    generic_repo::create_todo_task_label(pool, input).await
+    let row = generic_repo::create_todo_task_label(pool, input).await?;
+    log_label_change(pool, row.task_id, row.label_id, "label_add").await;
+    Ok(row)
 }
 pub async fn delete_todo_task_label(pool: &SqlitePool, id: i64) -> CoreResult<()> {
     let row = generic_repo::get_by_id::<TodoTaskLabel>(pool, "todo_task_labels", id).await?;
-    generic_repo::soft_delete_by_id(pool, "todo_task_labels", id, &row.uuid).await
+    generic_repo::soft_delete_by_id(pool, "todo_task_labels", id, &row.uuid).await?;
+    log_label_change(pool, row.task_id, row.label_id, "label_remove").await;
+    Ok(())
+}
+
+/// 任务标题查询（历史埋点用；软删行也可查，墓碑期轨迹仍归属该任务）
+pub(crate) async fn task_title_of(pool: &SqlitePool, task_id: i64) -> Option<String> {
+    sqlx::query_scalar::<_, String>("SELECT title FROM todo_tasks WHERE id = ?")
+        .bind(task_id)
+        .fetch_optional(pool)
+        .await
+        .ok()
+        .flatten()
+}
+
+/// 通用从属对象历史埋点（子任务/评论/关联/提醒）：detail 统一
+/// `{"target": 可读名}`；任务行查不到则跳过（轨迹缺失可接受，不阻断主流程）
+pub(crate) async fn log_target_activity(
+    pool: &SqlitePool,
+    task_id: i64,
+    action: &str,
+    target: &str,
+) {
+    if let Some(tt) = task_title_of(pool, task_id).await {
+        let detail = serde_json::json!({ "target": target }).to_string();
+        let _ = activity_log_api::log_activity(pool, task_id, &tt, action, &detail).await;
+    }
+}
+
+/// 标签挂/摘历史轨迹（label_add / label_remove）：任务标题 + 标签名写入端
+/// 快照；任务或标签行查不到则跳过（轨迹缺失可接受，不阻断主流程）
+async fn log_label_change(pool: &SqlitePool, task_id: i64, label_id: i64, action: &str) {
+    let label_title = sqlx::query_scalar::<_, String>("SELECT title FROM todo_labels WHERE id = ?")
+        .bind(label_id)
+        .fetch_optional(pool)
+        .await
+        .ok()
+        .flatten();
+    if let Some(lt) = label_title {
+        let detail = serde_json::json!({ "label": lt }).to_string();
+        if let Some(tt) = task_title_of(pool, task_id).await {
+            let _ = activity_log_api::log_activity(pool, task_id, &tt, action, &detail).await;
+        }
+    }
 }
 
 // ---------- todo_comments ----------
@@ -286,11 +487,27 @@ pub async fn create_todo_comment(
     pool: &SqlitePool,
     input: &TodoCommentCreateInput,
 ) -> CoreResult<TodoComment> {
-    generic_repo::create_todo_comment(pool, input).await
+    let row = generic_repo::create_todo_comment(pool, input).await?;
+    log_target_activity(
+        pool,
+        row.task_id,
+        "comment_add",
+        &snapshot_text(&row.content),
+    )
+    .await;
+    Ok(row)
 }
 pub async fn delete_todo_comment(pool: &SqlitePool, id: i64) -> CoreResult<()> {
     let t: TodoComment = generic_repo::get_by_id(pool, "todo_comments", id).await?;
-    generic_repo::soft_delete_by_id(pool, "todo_comments", id, &t.uuid).await
+    generic_repo::soft_delete_by_id(pool, "todo_comments", id, &t.uuid).await?;
+    log_target_activity(
+        pool,
+        t.task_id,
+        "comment_delete",
+        &snapshot_text(&t.content),
+    )
+    .await;
+    Ok(())
 }
 
 // ---------- todo_task_relations ----------
@@ -307,11 +524,26 @@ pub async fn create_todo_task_relation(
     pool: &SqlitePool,
     input: &TodoTaskRelationCreateInput,
 ) -> CoreResult<TodoTaskRelation> {
-    generic_repo::create_todo_task_relation(pool, input).await
+    let row = generic_repo::create_todo_task_relation(pool, input).await?;
+    log_relation_change(pool, row.task_id, row.other_task_id, "link_add").await;
+    Ok(row)
 }
 pub async fn delete_todo_task_relation(pool: &SqlitePool, id: i64) -> CoreResult<()> {
     let row = generic_repo::get_by_id::<TodoTaskRelation>(pool, "todo_task_relations", id).await?;
-    generic_repo::soft_delete_by_id(pool, "todo_task_relations", id, &row.uuid).await
+    generic_repo::soft_delete_by_id(pool, "todo_task_relations", id, &row.uuid).await?;
+    log_relation_change(pool, row.task_id, row.other_task_id, "link_remove").await;
+    Ok(())
+}
+
+/// 关联挂/摘历史轨迹（link_add / link_remove）：关联在双方任务抽屉都可见，
+/// 故双向各记一条（target=对方标题）；任一方查不到则整体跳过
+async fn log_relation_change(pool: &SqlitePool, task_id: i64, other_id: i64, action: &str) {
+    let title_a = task_title_of(pool, task_id).await;
+    let title_b = task_title_of(pool, other_id).await;
+    if let (Some(ta), Some(tb)) = (title_a, title_b) {
+        log_target_activity(pool, task_id, action, &tb).await;
+        log_target_activity(pool, other_id, action, &ta).await;
+    }
 }
 
 // ---------- todo_reminders ----------
@@ -328,11 +560,29 @@ pub async fn create_todo_reminder(
     pool: &SqlitePool,
     input: &TodoReminderCreateInput,
 ) -> CoreResult<TodoReminder> {
-    generic_repo::create_todo_reminder(pool, input).await
+    let row = generic_repo::create_todo_reminder(pool, input).await?;
+    let when = snapshot_dt(Some(row.remind_at));
+    log_target_activity(
+        pool,
+        row.task_id,
+        "reminder_add",
+        when.as_str().unwrap_or("已设置"),
+    )
+    .await;
+    Ok(row)
 }
 pub async fn delete_todo_reminder(pool: &SqlitePool, id: i64) -> CoreResult<()> {
     let t: TodoReminder = generic_repo::get_by_id(pool, "todo_reminders", id).await?;
-    generic_repo::soft_delete_by_id(pool, "todo_reminders", id, &t.uuid).await
+    generic_repo::soft_delete_by_id(pool, "todo_reminders", id, &t.uuid).await?;
+    let when = snapshot_dt(Some(t.remind_at));
+    log_target_activity(
+        pool,
+        t.task_id,
+        "reminder_delete",
+        when.as_str().unwrap_or("已设置"),
+    )
+    .await;
+    Ok(())
 }
 
 // =============================================================================
@@ -1066,5 +1316,327 @@ mod project_archive_tests {
         let _ = generic_repo::get_by_id::<TodoProject>(&pool, "todo_projects", p.id)
             .await
             .is_err();
+    }
+}
+
+#[cfg(test)]
+mod activity_detail_tests {
+    use super::*;
+
+    async fn setup_db() -> SqlitePool {
+        let pool = sqlx::SqlitePool::connect("sqlite::memory:").await.unwrap();
+        sqlx::migrate!("./src/db/migrations")
+            .run(&pool)
+            .await
+            .unwrap();
+        pool
+    }
+
+    /// 部分更新输入经 serde 构造（Option<Option<T>> 字段带 serde(default)）
+    fn update_input(json: &str) -> TodoTaskUpdateInput {
+        serde_json::from_str(json).unwrap()
+    }
+
+    /// update 轨迹带前后值快照：项目→名称、日期→本地日串、优先级→原值；
+    /// fields 顺序与 TodoTask 字段声明序一致
+    #[tokio::test]
+    async fn update_detail_carries_value_snapshot() {
+        let pool = setup_db().await;
+        let proj = create_todo_project(
+            &pool,
+            &TodoProjectCreateInput {
+                title: "发布准备".into(),
+                description: None,
+                hex_color: None,
+                sort_order: None,
+            },
+        )
+        .await
+        .unwrap();
+        let t = create_todo_task(
+            &pool,
+            &TodoTaskCreateInput {
+                title: "任务甲".into(),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+        let due = 1_759_000_000_000i64;
+        update_todo_task(
+            &pool,
+            t.id,
+            &update_input(&format!(
+                r#"{{"priority":4,"due_date":{},"project_id":{}}}"#,
+                due, proj.id
+            )),
+        )
+        .await
+        .unwrap();
+
+        let rows = activity_log_api::list_task_activity(&pool, t.id, None)
+            .await
+            .unwrap();
+        let upd = rows
+            .iter()
+            .find(|r| r.action == "update")
+            .expect("应有 update 轨迹");
+        let v: serde_json::Value = serde_json::from_str(&upd.detail).unwrap();
+        assert_eq!(
+            v["fields"],
+            serde_json::json!(["project_id", "priority", "due_date"])
+        );
+        assert_eq!(v["changes"][0]["from"], serde_json::Value::Null);
+        assert_eq!(v["changes"][0]["to"], "发布准备");
+        assert_eq!(v["changes"][1]["to"], 4);
+        // due_date 带时分割面（截止是时刻级字段，与抽屉属性行 yyyy-MM-dd HH:mm 同口径）
+        let expect_due = chrono::Local
+            .timestamp_millis_opt(due)
+            .single()
+            .unwrap()
+            .format("%Y-%m-%d %H:%M")
+            .to_string();
+        assert_eq!(v["changes"][2]["to"], expect_due);
+    }
+
+    /// 标签挂/摘各记一条轨迹，detail 带标签名快照
+    #[tokio::test]
+    async fn label_attach_detach_logged_with_name() {
+        let pool = setup_db().await;
+        let t = create_todo_task(
+            &pool,
+            &TodoTaskCreateInput {
+                title: "带标签任务".into(),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+        let l = create_todo_label(
+            &pool,
+            &TodoLabelCreateInput {
+                title: "工作".into(),
+                hex_color: None,
+            },
+        )
+        .await
+        .unwrap();
+        let tl = create_todo_task_label(
+            &pool,
+            &TodoTaskLabelCreateInput {
+                task_id: t.id,
+                label_id: l.id,
+            },
+        )
+        .await
+        .unwrap();
+
+        let rows = activity_log_api::list_task_activity(&pool, t.id, None)
+            .await
+            .unwrap();
+        let add = rows
+            .iter()
+            .find(|r| r.action == "label_add")
+            .expect("挂标签应有轨迹");
+        assert_eq!(add.task_title, "带标签任务");
+        let v: serde_json::Value = serde_json::from_str(&add.detail).unwrap();
+        assert_eq!(v["label"], "工作");
+
+        delete_todo_task_label(&pool, tl.id).await.unwrap();
+        let rows = activity_log_api::list_task_activity(&pool, t.id, None)
+            .await
+            .unwrap();
+        assert!(rows.iter().any(|r| r.action == "label_remove"));
+    }
+
+    /// 子任务/评论/关联/提醒写路径各留一条轨迹（detail 带 target 快照）；
+    /// 关联双向各记一条（双方任务抽屉都可见该关联）
+    #[tokio::test]
+    async fn attached_entities_logged_with_target() {
+        let pool = setup_db().await;
+        let t = create_todo_task(
+            &pool,
+            &TodoTaskCreateInput {
+                title: "主任务".into(),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+        let other = create_todo_task(
+            &pool,
+            &TodoTaskCreateInput {
+                title: "对方任务".into(),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+
+        let sub = create_todo_subtask(
+            &pool,
+            &TodoSubtaskCreateInput {
+                task_id: t.id,
+                title: "子任务甲".into(),
+                position: None,
+            },
+        )
+        .await
+        .unwrap();
+        crate::api::todo_api::toggle_todo_subtask_done(&pool, sub.id, true)
+            .await
+            .unwrap();
+        let c = create_todo_comment(
+            &pool,
+            &TodoCommentCreateInput {
+                task_id: t.id,
+                content: "评论乙".into(),
+            },
+        )
+        .await
+        .unwrap();
+        let rel = create_todo_task_relation(
+            &pool,
+            &TodoTaskRelationCreateInput {
+                task_id: t.id,
+                other_task_id: other.id,
+                relation_type: "related".into(),
+            },
+        )
+        .await
+        .unwrap();
+        let remind_at = 1_759_000_000_000i64;
+        let rem = create_todo_reminder(
+            &pool,
+            &TodoReminderCreateInput {
+                task_id: t.id,
+                remind_at,
+            },
+        )
+        .await
+        .unwrap();
+
+        let rows = activity_log_api::list_task_activity(&pool, t.id, None)
+            .await
+            .unwrap();
+        let find = |a: &str| rows.iter().find(|r| r.action == a);
+        assert_eq!(
+            find("subtask_add").unwrap().detail,
+            r#"{"target":"子任务甲"}"#
+        );
+        assert!(find("subtask_done").is_some());
+        assert!(find("comment_add").is_some());
+        assert!(find("link_add").is_some());
+        let expect_when = chrono::Local
+            .timestamp_millis_opt(remind_at)
+            .single()
+            .unwrap()
+            .format("%Y-%m-%d %H:%M")
+            .to_string();
+        assert_eq!(
+            find("reminder_add").unwrap().detail,
+            format!(r#"{{"target":"{expect_when}"}}"#)
+        );
+
+        // 对方任务侧也记一条 link_add（target=主任务标题）
+        let other_rows = activity_log_api::list_task_activity(&pool, other.id, None)
+            .await
+            .unwrap();
+        let link = other_rows
+            .iter()
+            .find(|r| r.action == "link_add")
+            .expect("对方任务应有 link_add 轨迹");
+        let v: serde_json::Value = serde_json::from_str(&link.detail).unwrap();
+        assert_eq!(v["target"], "主任务");
+
+        // 删除侧各记一条移除轨迹
+        delete_todo_subtask(&pool, sub.id).await.unwrap();
+        delete_todo_comment(&pool, c.id).await.unwrap();
+        delete_todo_task_relation(&pool, rel.id).await.unwrap();
+        delete_todo_reminder(&pool, rem.id).await.unwrap();
+        let rows = activity_log_api::list_task_activity(&pool, t.id, None)
+            .await
+            .unwrap();
+        for a in [
+            "subtask_delete",
+            "comment_delete",
+            "link_remove",
+            "reminder_delete",
+        ] {
+            assert!(rows.iter().any(|r| r.action == a), "缺 {a} 轨迹");
+        }
+        let other_rows = activity_log_api::list_task_activity(&pool, other.id, None)
+            .await
+            .unwrap();
+        assert!(other_rows.iter().any(|r| r.action == "link_remove"));
+    }
+
+    /// 重复规则任一子字段变更 → 合并为一条 repeat_rule 伪字段（值为六字段对象
+    /// 快照）；子任务改名记 subtask_rename（target=「旧 → 新」对照串）
+    #[tokio::test]
+    async fn repeat_rule_merged_and_subtask_rename_logged() {
+        let pool = setup_db().await;
+        let t = create_todo_task(
+            &pool,
+            &TodoTaskCreateInput {
+                title: "重复规则任务".into(),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+        update_todo_task(
+            &pool,
+            t.id,
+            &update_input(r#"{"repeat_mode":2,"repeat_after":2,"repeat_weekdays":2}"#),
+        )
+        .await
+        .unwrap();
+        let rows = activity_log_api::list_task_activity(&pool, t.id, None)
+            .await
+            .unwrap();
+        let upd = rows
+            .iter()
+            .find(|r| r.action == "update")
+            .expect("应有 update 轨迹");
+        let v: serde_json::Value = serde_json::from_str(&upd.detail).unwrap();
+        assert_eq!(v["fields"], serde_json::json!(["repeat_rule"]));
+        assert_eq!(v["changes"][0]["field"], "repeat_rule");
+        assert_eq!(v["changes"][0]["from"]["mode"], 0);
+        assert_eq!(v["changes"][0]["to"]["mode"], 2);
+        assert_eq!(v["changes"][0]["to"]["after"], 2);
+        assert_eq!(v["changes"][0]["to"]["weekdays"], 2);
+
+        let sub = create_todo_subtask(
+            &pool,
+            &TodoSubtaskCreateInput {
+                task_id: t.id,
+                title: "旧名".into(),
+                position: None,
+            },
+        )
+        .await
+        .unwrap();
+        update_todo_subtask(
+            &pool,
+            sub.id,
+            &TodoSubtaskUpdateInput {
+                title: Some("新名".into()),
+                done: None,
+                done_at: None,
+                position: None,
+            },
+        )
+        .await
+        .unwrap();
+        let rows = activity_log_api::list_task_activity(&pool, t.id, None)
+            .await
+            .unwrap();
+        let ren = rows
+            .iter()
+            .find(|r| r.action == "subtask_rename")
+            .expect("改名应有轨迹");
+        let v: serde_json::Value = serde_json::from_str(&ren.detail).unwrap();
+        assert_eq!(v["target"], "旧名 → 新名");
     }
 }
