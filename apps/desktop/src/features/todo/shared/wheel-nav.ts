@@ -39,14 +39,18 @@ export interface WheelStepState {
 
 /**
  * 纯函数：把单次位移并入累积，满阈值吐出一步并保留余量。
- * 余量保留保证触控板慢滑手感连续；单次超大位移只吐一步（多步由冷却拆到后续事件）。
+ * 余量保留保证触控板慢滑手感连续；单次超大位移只吐一步（多步由节流拆到后续事件）。
+ *
+ * 换向清零：累积余量与本次位移反号时先清零再累积——否则往下滚残留 +10 后往上滚 8px
+ * 会被算成 +2 继续向前（来回滚方向错乱），正确语义是新的反向手势；零位移不清。
  */
 export function consumeWheelStep(
   acc: number,
   delta: number,
   threshold: number = WHEEL_STEP_THRESHOLD_PX,
 ): WheelStepState {
-  const next = acc + delta;
+  const base = acc * delta < 0 ? 0 : acc;
+  const next = base + delta;
   if (Math.abs(next) < threshold) return { fire: false, dir: 1, rest: next };
   const dir = next > 0 ? 1 : -1;
   return { fire: true, dir, rest: next - dir * threshold };

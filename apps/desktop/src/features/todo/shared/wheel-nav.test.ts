@@ -40,6 +40,13 @@ describe("consumeWheelStep", () => {
     expect(r.fire).toBe(false);
     expect(r.rest).toBe(5);
   });
+
+  it("换向先清余量，不被残留位移带着反向走", () => {
+    // 往下滚残留 +10 后往上滚 8px：应按新手势累到 -8，而不是 +10-8=+2 继续向前
+    const r = consumeWheelStep(10, -8);
+    expect(r.fire).toBe(false);
+    expect(r.rest).toBe(-8);
+  });
 });
 
 describe("shiftYearMonth", () => {
