@@ -606,12 +606,15 @@ pub(crate) fn parse_upload_id(xml: &str) -> Option<String> {
 
 /// 截断 XML 用于错误日志（防大响应刷屏）
 ///
-/// `…` 是多字节字符，断言用字符数而非 String::len()（字节数）。
+/// 按**字符**取前 200：字节索引切片（`&xml[..200]`）会在中文网关错误页
+/// 等多字节 UTF-8 边界上 panic——截断发生在错误处理路径，panic 会把
+/// 一次可重试的同步失败升级为壳层崩溃。
 pub(crate) fn truncate_xml(xml: &str) -> String {
-    if xml.len() <= 200 {
+    let count = xml.chars().count();
+    if count <= 200 {
         xml.to_string()
     } else {
-        format!("{}…", &xml[..200])
+        format!("{}…", xml.chars().take(200).collect::<String>())
     }
 }
 
@@ -651,6 +654,15 @@ mod multipart_tests {
         // … 占 3 字节，len() = 203）
         assert_eq!(cut.chars().count(), 201);
         assert_eq!(cut.len(), 203);
+    }
+
+    /// 多字节响应（中文网关错误页）不得在字节边界 panic
+    #[test]
+    fn truncate_xml_multibyte_does_not_panic() {
+        let long = "服务器内部错误".repeat(100); // 700 字符
+        let cut = truncate_xml(&long);
+        assert_eq!(cut.chars().count(), 201);
+        assert!(cut.ends_with('…'));
     }
 
     /// multipart 分片纯计算：8MiB 阈值 = 1 个完整 5MiB 片 + 3MiB 尾片
