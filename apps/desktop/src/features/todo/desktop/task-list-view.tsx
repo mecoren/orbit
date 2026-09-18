@@ -120,16 +120,18 @@ export function TaskListView({ tasks, projects, labelsByTask, remindersByTask, l
   const qc = useQueryClient();
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  // 键盘导航（P1#8）：行 DOM 注册表 + 焦点移动（scrollToIndex 跟随）
+  // 键盘导航（P1#8）：行 DOM 注册表 + 焦点移动（scrollToIndex 跟随）。
+  // 索引口径必须是 stream 而非 tasks：渲染顺序 = 逾期置顶 + 其余，
+  // 按 tasks 取 id 会在存在逾期行时聚焦到错位的那一条
   const rowRefs = useRef(new Map<number, HTMLDivElement>());
   const focusRow = (index: number) => {
-    if (index < 0 || index >= tasks.length) return;
+    if (index < 0 || index >= stream.length) return;
     virtualizer.scrollToIndex(index, { align: "auto" });
     // 动态 measureElement 下，目标行可能晚一帧才挂载：rAF 重试至多 5 帧
     // （评审 I2 修复，与 Task 3 落地版保持一致）
     let tries = 0;
     const tryFocus = () => {
-      const el = rowRefs.current.get(tasks[index]?.id);
+      const el = rowRefs.current.get(stream[index]?.id);
       if (el) {
         el.focus();
       } else if (++tries < 5) {
@@ -139,25 +141,30 @@ export function TaskListView({ tasks, projects, labelsByTask, remindersByTask, l
     requestAnimationFrame(tryFocus);
   };
 
-  // 逾期置顶分组（性能批次 UX 优化）：未完成且已过截止的任务划入「逾期」
-  // 区置顶展示；无逾期时 overdue 空、rest 即全量——虚拟化数据源统一用
-  // rest，拖拽/键盘索引语义不受影响（dnd 落位走 tasks 原数组 findIndex）。
+  // 逾期置顶（A14）：置顶段与常规段合成**同一条虚拟流**（pinned 长度即分界），
+  // 不再单独裸渲染。上一轮口径把逾期区留在虚拟化之外，理由是「逾期集天然有限」，
+  // 实测证伪：10k 档 334 条逾期行未过虚拟窗，DOM 节点 955→9980、常驻堆 37→76MB、
+  // 每次写重渲染多产生 ~12MB 垃圾（growth-curve 的 domNodes_10k / usedJSHeapMB_10k
+  // / peakMB_duringChurn 三项指标同源）。索引语义统一后键盘导航覆盖置顶段。
   // 时间基准随数据变（跨零点拉新数据即换）——不能每渲染帧重建 now，
   // 否则 useMemo 失效：拖拽/选中态每次 set 都全量重跑分组
-  const { overdue: overdueTasks, rest } = useMemo(
-    () => groupOverdueFirst(tasks, Date.now()),
-    [tasks],
-  );
+  const { pinned, stream } = useMemo(() => {
+    const { overdue, rest } = groupOverdueFirst(tasks, Date.now());
+    return {
+      pinned: overdue.length,
+      stream: overdue.length > 0 ? [...overdue, ...rest] : rest,
+    };
+  }, [tasks]);
 
   // P0 虚拟化：仅渲染可视窗 ± overscan。行高固定 57px（TaskRow h-[57px]），
   // 元信息有无不改变行高——固定尺寸让 estimateSize 与实测恒一致，
   // 消除动态 measure 下滚动/增删行时的高度重排抖动
   const virtualizer = useVirtualizer({
-    count: rest.length,
+    count: stream.length,
     getScrollElement: () => scrollRef.current,
     estimateSize: () => 57,
     overscan: 8,
-    getItemKey: (i) => rest[i].id,
+    getItemKey: (i) => stream[i].id,
   });
 
   // 拖拽（P1#11）：PointerSensor distance:6 —— 小位移不算拖拽，保证行点击；
@@ -337,6 +344,8 @@ export function TaskListView({ tasks, projects, labelsByTask, remindersByTask, l
     // 虚拟窗 ~25 行 = 50 次分配/帧）
     const nowMs = Date.now();
     const overdue = !!t.due_date && !t.done && t.due_date < nowMs;
+    // 置顶段只换外观与拖拽能力，行为与常规段一致（可点/可勾选/可键盘到达）
+    const isPinned = vi.index < pinned;
     const due = dueText(t.due_date);
     const project = t.project_id != null ? projectById.get(t.project_id) : undefined;
     const reminder = displayReminder(remindersByTask.get(t.id) ?? [], nowMs, !!t.done);
@@ -347,13 +356,17 @@ export function TaskListView({ tasks, projects, labelsByTask, remindersByTask, l
         key={t.id}
         data-index={vi.index}
         ref={virtualizer.measureElement}
+        className={cn(
+          isPinned && "bg-destructive/5",
+          !isPinned && pinned > 0 && vi.index === pinned && "border-t border-border/30",
+        )}
         style={{ position: "absolute", top: vi.start, left: 0, width: "100%" }}
       >
         <TaskContextMenu task={t} projects={projects} onOpenDetail={() => onOpenDetail(t.id)}>
           <TaskRow
             task={t}
             index={vi.index}
-            count={tasks.length}
+            count={stream.length}
             labels={labelsByTask.get(t.id) ?? []}
             project={project}
             due={due}
@@ -377,7 +390,7 @@ export function TaskListView({ tasks, projects, labelsByTask, remindersByTask, l
             onToggleDone={() => void completeTask(t)}
             onToggleFavorite={() => toggleFavorite(t)}
             onToggleMyDay={() => toggleMyDay(t)}
-            sortable={sortable}
+            sortable={sortable && !isPinned}
           />
         </TaskContextMenu>
       </div>
@@ -393,51 +406,18 @@ export function TaskListView({ tasks, projects, labelsByTask, remindersByTask, l
       onDragCancel={() => setDraggingId(null)}
     >
       <div ref={scrollRef} className="flex-1 overflow-y-auto">
-        {/* 逾期置顶区（非虚拟化：逾期集天然有限，行数≈视图内未完成逾期项） */}
-        {overdueTasks.length > 0 && (
-          <div className="border-b border-border/30 bg-destructive/5">
-            <div className="flex items-center gap-1.5 px-4 py-1.5">
-              <TriangleAlert className="size-3.5 text-destructive" />
-              <span className="text-xs font-medium text-destructive">
-                逾期 · {overdueTasks.length}
-              </span>
-            </div>
-            {overdueTasks.map((t) => (
-              <TaskContextMenu key={`od-${t.id}`} task={t} projects={projects} onOpenDetail={() => onOpenDetail(t.id)}>
-                <TaskRow
-                  task={t}
-                  index={-1}
-                  count={tasks.length}
-                  labels={labelsByTask.get(t.id) ?? []}
-                  project={t.project_id != null ? projectById.get(t.project_id) : undefined}
-                  due={dueText(t.due_date)}
-                  overdue={true}
-                  reminder={displayReminder(remindersByTask.get(t.id) ?? [], Date.now(), !!t.done)}
-                  dragging={draggingId === t.id}
-                  selected={selected.has(t.id)}
-                  hasSelection={selected.size > 0}
-                  registerRef={(el) => {
-                    if (el) rowRefs.current.set(t.id, el);
-                    else rowRefs.current.delete(t.id);
-                  }}
-                  onActivate={() => {
-                    if (selected.size > 0) toggleSelect(t.id, false);
-                    else onOpenDetail(t.id);
-                  }}
-                  onToggleSelect={(shift) => toggleSelect(t.id, shift)}
-                  onClearSelection={clearSelection}
-                  onFocusMove={() => {}}
-                  onToggleDone={() => void completeTask(t)}
-                  onToggleFavorite={() => toggleFavorite(t)}
-                  onToggleMyDay={() => toggleMyDay(t)}
-                  sortable={false}
-                />
-              </TaskContextMenu>
-            ))}
+        {/* 逾期段标题（常驻小节点）：段内任务行本身进虚拟流。留在文档流里
+            会让虚拟窗整体下偏一个标题高（~29px），远小于 overscan 的 8 行
+            （456px），故不出空白；置顶段行进流前该偏移是 N×57px，滚动到
+            中段即整屏空白——这也是本轮把两段合一的附带修正 */}
+        {pinned > 0 && (
+          <div className="flex items-center gap-1.5 bg-destructive/5 px-4 py-1.5">
+            <TriangleAlert className="size-3.5 text-destructive" />
+            <span className="text-xs font-medium text-destructive">逾期 · {pinned}</span>
           </div>
         )}
         <RowContainerDropZone totalSize={virtualizer.getTotalSize()}>
-          {virtualizer.getVirtualItems().map((vi) => renderRow(rest[vi.index], vi))}
+          {virtualizer.getVirtualItems().map((vi) => renderRow(stream[vi.index], vi))}
         </RowContainerDropZone>
       </div>
 
