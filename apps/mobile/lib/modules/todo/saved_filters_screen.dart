@@ -183,7 +183,7 @@ class _SavedFiltersScreenState extends ConsumerState<SavedFiltersScreen> {
   Widget build(BuildContext context) {
     final colors = AppColors.ofContext(context);
     final filters = ref.watch(savedFiltersProvider);
-    final tasks = ref.watch(todoTasksProvider(const TaskListQuery()));
+    final tasks = ref.watch(todoTasksProvider);
 
     return Scaffold(
       body: Stack(

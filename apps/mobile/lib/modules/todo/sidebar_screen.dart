@@ -56,7 +56,7 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
       ref.watch(todoArchivedProjectsProvider).value ?? const [];
 
   List<TodoTask> _tasks() =>
-      ref.watch(todoTasksProvider(const TaskListQuery())).value ?? const [];
+      ref.watch(todoTasksProvider).value ?? const [];
 
   /// 侧栏计数单遍聚合（此前每个快捷视图行各跑一遍 filterTasks——
   /// 7 遍全量 + 7 次 DateTime.now()，万任务下 build 一次 8+ 遍遍历）

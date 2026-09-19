@@ -117,15 +117,13 @@ class _BootGateState extends ConsumerState<BootGate>
     }
   }
 
-  /// B6 角标刷新：读 todoTasksProvider 缓存值算「今天截止或已逾期」
-  /// 未完成数。此前直拉 bridge.todoTaskList 全量 IPC——与 provider 缓存
-  /// 完全重复（一次 db-change = provider 重拉一遍 + 角标直拉一遍 = 双份
-  /// 万行过桥）；改读缓存未就绪时静默跳过，_subscribeStreams 的 listen
-  /// 会在数据到达后补刷。
+  /// B6 角标刷新：读单份任务缓存（[todoTasksProvider]）算「今天截止或
+  /// 已逾期」未完成数——此前直拉 bridge.todoTaskList 全量 IPC，与缓存
+  /// 完全重复（双份万行过桥）；现只在缓存换值时计算，未就绪静默跳过
+  /// （listenManual 订阅会在数据到达后补刷）。
   Future<void> _refreshBadge() async {
     try {
-      final tasks =
-          ref.read(todoTasksProvider(const TaskListQuery())).value;
+      final tasks = ref.read(todoTasksProvider).value;
       if (!mounted || tasks == null) return;
       await _badge.update(dueTodayOrOverdueCount(tasks));
     } catch (e) {
@@ -202,7 +200,12 @@ class _BootGateState extends ConsumerState<BootGate>
     };
     // 后台闹钟通道：DB 未来提醒全量重排 + dbChanges 防抖跟随
     //（P2 提醒升级：后台/被杀/重启均由系统闹钟保证提醒）
-    _scheduler = ReminderScheduler.attachOnce(ref.read(orbitBridgeProvider));
+    // B6：标题 join 改读单份任务缓存（此前每次重排直拉全量任务，与列表
+    // 缓存完全重复）；快照为 null（缓存未就绪）时服务内回落直拉一次
+    _scheduler = ReminderScheduler.attachOnce(
+      ref.read(orbitBridgeProvider),
+      taskSnapshot: () => ref.read(todoTasksProvider).value,
+    );
     // 节假日自动更新守护（Rust 60s tick：每日固定时刻一次，
     // 错过时刻本次启动首轮即补更；首装从未成功也在此补拉）
     ref.read(orbitBridgeProvider).startHolidayScheduler();
@@ -250,11 +253,13 @@ class _BootGateState extends ConsumerState<BootGate>
       _scheduler?.onDbChange();
     });
 
-    // B6 图标角标数据口：dbChanges 失效后经 provider 重拉新值刷角标
-    //（ref.listen 仅限 build 期——异步流程用 manualRead 模式）。
-    _refreshBadge();
+    // B6 图标角标数据口：订阅单份任务缓存，每次换值（含失效重拉完成）即
+    // 重算——订阅本身让失效立即重拉并回调，不必在 dbChanges 里抢跑
+    //（ref.listen 仅限 build 期——异步流程用 listenManual）
+    ref.listenManual(todoTasksProvider, (_, _) => _refreshBadge());
+    _refreshBadge(); // 订阅前缓存已就绪（热重入）时补一次
 
-    // 小组件快照（#3）：与角标同一失效链——dbChanges 后重拉今日口径
+    // 小组件快照（#3）：ready 首刷（后续由 todo_tasks 事件驱动）
     _widget.refresh();
 
     // 提醒到期 → 本地通知即时呈现（无权限 / 异常时内部回落 warning toast）。

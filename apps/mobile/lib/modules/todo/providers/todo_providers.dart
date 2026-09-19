@@ -30,25 +30,34 @@ final todoLabelsProvider = FutureProvider<List<TodoLabel>>((ref) async {
   return bridge.todoLabelList(const ListFilter(pageSize: 1000));
 });
 
-/// 任务列表查询键（React queryKey ["todo_tasks", keyword]）
-class TaskListQuery {
-  final String keyword;
+/// 任务列表单次拉取上限（A5/B6，与桌面 `TASK_LIST_PAGE_SIZE` 同口径）：
+/// 单份缓存与列表页「不完整」条幅共用——结果集达到它即意味着还有未取到的
+/// 任务，条幅按此判定而非另开 count 接口。
+const int taskListPageSize = 10000;
 
-  const TaskListQuery({this.keyword = ''});
-
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) || other is TaskListQuery && other.keyword == keyword;
-
-  @override
-  int get hashCode => keyword.hashCode;
-}
-
-/// 全量任务列表（客户端经 task_logic 过滤/排序出各视图数据）
-final todoTasksProvider =
-    FutureProvider.family<List<TodoTask>, TaskListQuery>((ref, query) async {
+/// 全量任务列表（B6 单份缓存）：全 App 唯一一份万行全量，各视图
+/// （侧栏计数 / 子列表 / 日历 / 保存筛选 / 角标）经 task_logic 派生过滤，
+/// 不再按参数分叉缓存——family 时代每个 keyword 都留一份万行副本。
+///
+/// 关键词查询**不走本 provider**：单份缓存是列裁剪产物（keyword 空时
+/// description 不随行传输），在其上做客户端关键词过滤会把「按描述搜索」
+/// 静默变成恒无结果——那正是桌面 6c6c2b0 修掉的缺陷的移动端镜像。
+/// 列表内关键词一律走 [todoTasksSearchProvider] 服务端通道。
+final todoTasksProvider = FutureProvider<List<TodoTask>>((ref) async {
   final bridge = ref.watch(orbitBridgeProvider);
-  return bridge.todoTaskList(ListFilter(keyword: query.keyword, pageSize: 10000));
+  return bridge.todoTaskList(const ListFilter(pageSize: taskListPageSize));
+});
+
+/// 列表关键词服务端通道（B6 保留）：keyword 非空 → core SQL LIKE
+/// （title + description，description 仅在 keyword 非空时随行传输）。
+/// 保留给列表内搜索类入口（docs/05 §4.2 未接线设计稿的「搜索展开」），
+/// 禁止用 [todoTasksProvider] 缓存做客户端关键词过滤（见其文档注释）。
+final todoTasksSearchProvider =
+    FutureProvider.family<List<TodoTask>, String>((ref, keyword) async {
+  final bridge = ref.watch(orbitBridgeProvider);
+  return bridge.todoTaskList(
+    ListFilter(keyword: keyword, pageSize: taskListPageSize),
+  );
 });
 
 /// 任务详情聚合查询键（任务本体 + 子任务/标签/评论/关联/提醒）
@@ -75,8 +84,7 @@ final taskActivityProvider =
 final calendarByDayProvider = FutureProvider<Map<String, List<TodoTask>>>(
   (ref) async {
     // 保持依赖：任务列表刷新时本聚合同步重算
-    final tasks =
-        await ref.watch(todoTasksProvider(const TaskListQuery()).future);
+    final tasks = await ref.watch(todoTasksProvider.future);
     final map = <String, List<TodoTask>>{};
     for (final t in tasks) {
       final due = t.dueDate;

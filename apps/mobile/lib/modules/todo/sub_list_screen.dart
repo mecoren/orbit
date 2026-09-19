@@ -216,8 +216,8 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
   /// 落位邻居必须与 build 的 visible 同口径（含 hideDone 过滤）——
   /// 否则 UI 行数与计算索引错位，中值取到错误的相邻行。
   Future<void> _reorderTasks(int oldIndex, int newIndex) async {
-    final tasks = ref.watch(todoTasksProvider(const TaskListQuery())).value ??
-        const <TodoTask>[];
+    final tasks =
+        ref.read(todoTasksProvider).value ?? const <TodoTask>[];
     final visible = sortTasks(
         filterTasks(tasks, widget.query, hideDone: _hideDone), _sortKey);
     final reordered = reorderItems(visible, oldIndex, newIndex);
@@ -288,8 +288,7 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final tasks =
-        ref.watch(todoTasksProvider(const TaskListQuery())).value ?? [];
+    final tasks = ref.watch(todoTasksProvider).value ?? [];
     final projects = ref.watch(todoProjectsProvider).value ?? [];
 
     // done 快捷视图 → Logbook 分组态（按完成日倒序，与桌面同口径）；

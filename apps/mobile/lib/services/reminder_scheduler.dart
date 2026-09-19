@@ -15,7 +15,10 @@ import 'notification_service.dart';
 ///   防抖 2s 重排。任何提醒行的增删（含桌面端续排、推迟、云同步）
 ///   都会触发，保证闹钟面 = DB 未来集合；
 /// - **标题 join**：闹钟通知正文需要任务标题，todo_reminders_list 不含
-///   任务列——拉全量任务 join（一次性 map，数据量 MVP 级可接受）。
+///   任务列——由注入的 [taskSnapshot] 读单份任务缓存（B6，此前每次重排
+///   直拉全量任务，与列表缓存完全重复）；快照不可用（null，缓存未就绪）
+///   时回落直拉一次。缓存上限为 taskListPageSize，超出窗口的提醒任务
+///   会 join 不到（旧直拉同为有上限口径）。
 ///
 /// 重排幂等（cancelAll + 全量 zonedSchedule），频繁触发只有插件层
 /// 开销，无正确性风险。已删任务的提醒行由任务删除级联清掉（orbit-core
@@ -25,9 +28,12 @@ import 'notification_service.dart';
 /// [shutdown] 仅测试用——widget 测试的 fake_async 环境要求
 /// 退出时无 pending Timer（防抖定时器必须可撤销）。
 class ReminderScheduler {
-  ReminderScheduler._(this._bridge);
+  ReminderScheduler._(this._bridge, this._taskSnapshot);
 
   final OrbitBridge _bridge;
+
+  /// 任务快照读取口（B6）：返回 null 表示缓存未就绪（回落直拉）
+  final List<TodoTask>? Function()? _taskSnapshot;
 
   Timer? _debounce;
   bool _syncing = false;
@@ -36,9 +42,12 @@ class ReminderScheduler {
 
   static ReminderScheduler? _instance;
 
-  /// 单例工厂（bridge 注入一次）
-  static ReminderScheduler attachOnce(OrbitBridge bridge) {
-    _instance ??= ReminderScheduler._(bridge);
+  /// 单例工厂（bridge 与任务快照口注入一次；快照口可缺省=总是直拉）
+  static ReminderScheduler attachOnce(
+    OrbitBridge bridge, {
+    List<TodoTask>? Function()? taskSnapshot,
+  }) {
+    _instance ??= ReminderScheduler._(bridge, taskSnapshot);
     final s = _instance!;
     if (!s._attached && !s._shutdown) {
       s._attached = true;
@@ -82,7 +91,8 @@ class ReminderScheduler {
         // join 任务标题（闹钟正文/推迟 payload 自包含），并过滤不该再
         // 闹的行：任务已删（软删残留行——级联清理由轮询守护兜底）或
         // 已完成（P1#10 语义：完成实例不再续排/提醒）
-        final tasks =
+        // B6：优先读单份任务缓存；null（未就绪）回落直拉一次
+        final tasks = _taskSnapshot?.call() ??
             await _bridge.todoTaskList(const ListFilter(pageSize: 5000));
         final taskById = <int, TodoTask>{};
         for (final t in tasks) {
