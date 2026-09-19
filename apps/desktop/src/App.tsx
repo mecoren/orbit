@@ -12,6 +12,7 @@ import { useStartupSync } from "@/hooks/use-startup-sync";
 import { useExitSyncMask } from "@/hooks/use-exit-sync";
 import { UndoStackProvider } from "@/hooks/use-undo-stack";
 import { ErrorBoundary } from "@/components/error-boundary";
+import { markFirstScreenReady } from "@/lib/perf-marker";
 import {
   dbInitEncrypted,
   dbInitPlaintext,
@@ -123,6 +124,13 @@ export default function App() {
     await ensureDeviceId();
     setBoot("ready");
   };
+
+  // 冷启动度量（docs/09 §六）：boot 门控落到持续画面（解锁页/主界面）后
+  // 上报「首屏就绪」时刻；ORBIT_PERF_MARKER 未设置时 Rust 侧 no-op
+  useEffect(() => {
+    if (boot === "checking") return;
+    markFirstScreenReady();
+  }, [boot]);
 
   if (boot === "checking") {
     return (

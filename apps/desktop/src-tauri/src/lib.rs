@@ -369,6 +369,8 @@ pub fn run() {
             commands::db_maintenance_cmd::db_maintenance,
             // 主窗唤起（全局热键；窗口被超时回收后走重建路径）
             commands::window_recycler::show_main_window_cmd,
+            // 冷启动首屏标记（度量专用；ORBIT_PERF_MARKER 未设置时 no-op）
+            commands::perf_cmd::perf_first_screen_mark,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

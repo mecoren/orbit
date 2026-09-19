@@ -1169,3 +1169,7 @@ export const templateCreate = (input: TodoTemplateCreateInput) =>
 export const templateUpdate = (id: number, input: TodoTemplateUpdateInput) =>
   invoke<TodoTemplate>("template_update", { id, input });
 export const templateDelete = (id: number) => invoke<void>("template_delete", { id });
+
+// ========== 冷启动度量（docs/09 §六；ORBIT_PERF_MARKER 未设置时 Rust 侧 no-op）==========
+/** 上报「首屏就绪」时刻到 ORBIT_PERF_MARKER 指定文件（perf-metrics/cold-start.mjs 消费） */
+export const perfFirstScreenMark = () => invoke<void>("perf_first_screen_mark");

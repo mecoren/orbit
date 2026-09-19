@@ -535,6 +535,8 @@ const commands: Record<string, (args: any, ctx: Ctx) => unknown> = {
   master_auth_has: () => false,
   db_init_plaintext: () => undefined,
   db_set_device_id: () => undefined,
+  // 冷启动首屏标记（真桥 ORBIT_PERF_MARKER 未设置时 no-op，mock 恒成功）
+  perf_first_screen_mark: () => undefined,
 
   // ---- projects ----
   // 对齐 Rust list_todo_projects：默认排除已归档（is_archived=1）
