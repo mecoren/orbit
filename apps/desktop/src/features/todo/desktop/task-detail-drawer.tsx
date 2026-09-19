@@ -1212,8 +1212,9 @@ function SubtasksSection({
   onChanged: () => void;
 }) {
   const [newTitle, setNewTitle] = useState("");
-  // 待删子任务（null = 关闭）：删除前确认弹窗，防误触（与任务/评论删除同惯例）
+  // 待删子任务（null = 关闭）：删除前确认弹窗，防误触（与任一评论删除同惯例）
   const [confirmDelete, setConfirmDelete] = useState<TodoSubtask | null>(null);
+  const qc = useQueryClient();
   const doneCount = subtasks.filter((s) => s.done).length;
 
   const add = async () => {
@@ -1261,7 +1262,31 @@ function SubtasksSection({
                   s.done ? "border-primary bg-primary text-white" : "border-muted-foreground/40",
                 )}
                 onClick={async () => {
-                  await todoSubtaskToggleDone(s.id, !s.done);
+                  const next = !s.done;
+                  // 乐观勾选（D5）：percent_done = done_count/total*100，
+                  // 口径与 Rust todo_api.rs:262-284 同式，客户端可精确复算；
+                  // 真值仍走 onChanged 重拉收敛，失败翻回。
+                  const flip = (list: TodoSubtask[], done: number) =>
+                    list.map((x) => (x.id === s.id ? { ...x, done } : x));
+                  const patchDetail = (done: number) =>
+                    qc.setQueryData(["todo-task-detail", taskId], (old: unknown) => {
+                      if (old == null || typeof old !== "object" || !("subtasks" in old)) return old;
+                      const rec = old as { subtasks: TodoSubtask[] };
+                      if (!Array.isArray(rec.subtasks)) return old;
+                      const subtasks = flip(rec.subtasks, done);
+                      const n = subtasks.filter((x) => x.done).length;
+                      return {
+                        ...rec,
+                        subtasks,
+                        percent_done: subtasks.length > 0 ? Math.round((n / subtasks.length) * 100) : 0,
+                      };
+                    });
+                  patchDetail(next ? 1 : 0);
+                  try {
+                    await todoSubtaskToggleDone(s.id, next);
+                  } catch {
+                    patchDetail(s.done);
+                  }
                   onChanged();
                 }}
               >

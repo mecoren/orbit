@@ -230,7 +230,7 @@ export default function TaskTableView({
             disabled={batchBusy}
             onClick={() =>
               void runBatch("标记完成", (sel) =>
-                batchUpdateStatus(sel, { done: 1, done_at: 0, status: "done" }),
+                batchUpdateStatus(sel, { done: 1, done_at: 0, status: "done" }, qc),
               )
             }
           >
@@ -243,7 +243,7 @@ export default function TaskTableView({
             disabled={batchBusy}
             onClick={() =>
               void runBatch("移回待办", (sel) =>
-                batchUpdateStatus(sel, { done: 0, done_at: null, status: "pending" }),
+                batchUpdateStatus(sel, { done: 0, done_at: null, status: "pending" }, qc),
               )
             }
           >
@@ -255,7 +255,7 @@ export default function TaskTableView({
             className="h-7 px-2"
             disabled={batchBusy}
             onClick={() =>
-              void runBatch("设为高优先级", (sel) => batchUpdatePriority(sel, 3))
+              void runBatch("设为高优先级", (sel) => batchUpdatePriority(sel, 3, qc))
             }
           >
             设为高优先级
@@ -265,7 +265,7 @@ export default function TaskTableView({
             onValueChange={(v) => {
               const preset = v as "today" | "tomorrow" | "next_monday" | "clear";
               if (!preset) return;
-              void runBatch("批量改期", (sel) => batchSetDueDate(sel, preset));
+              void runBatch("批量改期", (sel) => batchSetDueDate(sel, preset, qc));
             }}
           >
             <SelectTrigger
@@ -288,7 +288,7 @@ export default function TaskTableView({
             className="h-7 px-2"
             disabled={batchBusy}
             onClick={() =>
-              void runBatch("加入我的一天", (sel) => batchUpdateMyDay(sel, true))
+              void runBatch("加入我的一天", (sel) => batchUpdateMyDay(sel, true, qc))
             }
           >
             加入我的一天
@@ -311,7 +311,7 @@ export default function TaskTableView({
             disabled={batchBusy}
             onClick={() =>
               void runBatch(allDoneSelected ? "取消收藏" : "收藏", (sel) =>
-                batchUpdateFavorite(sel, !allDoneSelected),
+                batchUpdateFavorite(sel, !allDoneSelected, qc),
               )
             }
           >

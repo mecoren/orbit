@@ -354,6 +354,7 @@ export function KanbanView({ tasks, projects, groupBy, labelsByTask, remindersBy
                         allDoneSelected
                           ? { done: 0, done_at: null, status: "pending" }
                           : { done: 1, done_at: Date.now(), status: "done" },
+                        qc,
                       ),
                     ),
                 },
@@ -362,12 +363,12 @@ export function KanbanView({ tasks, projects, groupBy, labelsByTask, remindersBy
                   icon: FolderInput,
                   run: () =>
                     runBatch(allDoneSelected ? "移回待办" : "移入进行中", (sel) =>
-                      batchUpdateStatus(sel, allDoneSelected ? { status: "pending" } : { status: "doing" }),
+                      batchUpdateStatus(sel, allDoneSelected ? { status: "pending" } : { status: "doing" }, qc),
                     ),
                 },
-                { label: "加入我的一天", icon: Sunrise, run: () => runBatch("加入我的一天", (sel) => batchUpdateMyDay(sel, true)) },
-                { label: "收藏", icon: Star, run: () => runBatch("收藏", (sel) => batchUpdateFavorite(sel, true)) },
-                { label: "取消收藏", icon: StarOff, run: () => runBatch("取消收藏", (sel) => batchUpdateFavorite(sel, false)) },
+                { label: "加入我的一天", icon: Sunrise, run: () => runBatch("加入我的一天", (sel) => batchUpdateMyDay(sel, true, qc)) },
+                { label: "收藏", icon: Star, run: () => runBatch("收藏", (sel) => batchUpdateFavorite(sel, true, qc)) },
+                { label: "取消收藏", icon: StarOff, run: () => runBatch("取消收藏", (sel) => batchUpdateFavorite(sel, false, qc)) },
               ] as const
             ).map(({ label, icon: Icon, run }) => (
               <Tooltip key={label}>
@@ -398,11 +399,11 @@ export function KanbanView({ tasks, projects, groupBy, labelsByTask, remindersBy
                 <TooltipContent>批量改期</TooltipContent>
               </Tooltip>
               <DropdownMenuContent align="center">
-                <DropdownMenuItem onSelect={() => void runBatch("改期到今天", (sel) => batchSetDueDate(sel, "today"))}>今天</DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => void runBatch("改期到明天", (sel) => batchSetDueDate(sel, "tomorrow"))}>明天</DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => void runBatch("改期到下周一", (sel) => batchSetDueDate(sel, "next_monday"))}>下周一</DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => void runBatch("改期到今天", (sel) => batchSetDueDate(sel, "today", qc))}>今天</DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => void runBatch("改期到明天", (sel) => batchSetDueDate(sel, "tomorrow", qc))}>明天</DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => void runBatch("改期到下周一", (sel) => batchSetDueDate(sel, "next_monday", qc))}>下周一</DropdownMenuItem>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem onSelect={() => void runBatch("清除截止", (sel) => batchSetDueDate(sel, "clear"))}>清除截止</DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => void runBatch("清除截止", (sel) => batchSetDueDate(sel, "clear", qc))}>清除截止</DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
             <DropdownMenu>
@@ -418,7 +419,7 @@ export function KanbanView({ tasks, projects, groupBy, labelsByTask, remindersBy
               </Tooltip>
               <DropdownMenuContent align="center">
                 {PRIORITY_LABELS.map((label, lv) => (
-                  <DropdownMenuItem key={lv} onSelect={() => void runBatch("设置优先级", (sel) => batchUpdatePriority(sel, lv))}>
+                  <DropdownMenuItem key={lv} onSelect={() => void runBatch("设置优先级", (sel) => batchUpdatePriority(sel, lv, qc))}>
                     <span className="flex w-4 shrink-0 items-center justify-center">
                       <span className="h-2 w-2 rounded-full" style={{ backgroundColor: PRIORITY_COLOR[lv] }} />
                     </span>

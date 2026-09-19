@@ -23,6 +23,7 @@ vi.mock("sonner", () => ({
 
 import { batchDuePresetDate, batchSetDueDate, batchUpdate, batchUpdateStatus } from "./batch-actions";
 import type { TodoTask } from "@/lib/tauri";
+import { QueryClient } from "@tanstack/react-query";
 
 function task(id: number, over: Partial<TodoTask> = {}): TodoTask {
   return {
@@ -179,5 +180,56 @@ describe("batchSetDueDate", () => {
     const failed = await batchSetDueDate([task(1), task(2)], "tomorrow");
     expect(failed).toBe(1);
     expect(toast.warning).toHaveBeenCalledWith("批量改期：2 条中 1 条失败");
+  });
+});
+
+describe("D5 乐观 patch（可选 qc）", () => {
+  function seedClient(ids: number[]) {
+    const qc = new QueryClient();
+    qc.setQueryData(
+      ["todo_tasks", "", {}],
+      ids.map((id) => task(id)),
+    );
+    return qc;
+  }
+  const prioOf = (qc: QueryClient, id: number) =>
+    qc.getQueryData<TodoTask[]>(["todo_tasks", "", {}])!.find((t) => t.id === id)?.priority;
+
+  it("batchUpdate：循环前一次性 patch，失败 id 精确回滚", async () => {
+    updateMock.mockImplementation(async (id) => {
+      if (id === 2) throw new Error("boom");
+      return undefined;
+    });
+    const qc = seedClient([1, 2, 3]);
+    const failed = await batchUpdate([task(1), task(2), task(3)], () => ({ priority: 3 }), "测试", qc);
+    expect(failed).toBe(1);
+    expect(prioOf(qc, 1)).toBe(3);
+    expect(prioOf(qc, 3)).toBe(3);
+    // 失败行回滚到传入快照（priority 0），而非残留乐观值
+    expect(prioOf(qc, 2)).toBe(0);
+  });
+
+  it("batchUpdateStatus 完成态：先全翻 done，失败行回滚", async () => {
+    completeMock.mockImplementation(async (id) => {
+      if (id === 2) throw new Error("boom");
+      return { task: { done: 1, done_at: 9, status: "done" }, next_instance: null };
+    });
+    const qc = seedClient([1, 2]);
+    const failed = await batchUpdateStatus(
+      [task(1), task(2)],
+      { done: 1, done_at: 0, status: "done" },
+      qc,
+    );
+    expect(failed).toBe(1);
+    const rows = qc.getQueryData<TodoTask[]>(["todo_tasks", "", {}])!;
+    expect(rows.find((t) => t.id === 1)?.done).toBe(1);
+    expect(rows.find((t) => t.id === 2)?.done).toBe(0);
+  });
+
+  it("无 qc 时行为不变（不碰缓存，旧 12 例口径）", async () => {
+    updateMock.mockResolvedValue(undefined);
+    const qc = seedClient([1]);
+    await batchUpdate([task(1)], () => ({ priority: 3 }), "测试");
+    expect(prioOf(qc, 1)).toBe(0);
   });
 });
