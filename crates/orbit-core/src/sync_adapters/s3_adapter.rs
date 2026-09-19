@@ -5,7 +5,7 @@ use crate::s3::{
     build_url, format_amz_date, format_date_stamp, get_signature_key, hmac_sha256, infer_service,
     parse_list_objects_xml, sha256_hex,
 };
-use crate::sync::error::SyncError;
+use crate::sync::error::{SyncError, transport_message};
 use crate::sync_adapters::http_client::HttpClient;
 use crate::sync_adapters::traits::{RemoteFile, SyncAdapter, UploadOutcome, UploadPrecondition};
 
@@ -166,13 +166,16 @@ impl S3Adapter {
         Ok(headers)
     }
 
-    /// 分页列举指定 prefix 下的全部对象 key（P0-3）
+    /// 分页列举指定 prefix 下的全部对象条目（P0-3 + F27）
     ///
     /// ListObjectsV2 单页默认最多 1000 条；循环携带 `continuation-token`
     /// 直到响应无 `NextContinuationToken`，避免大桶静默截断
     /// （pull 拉不到第 1001 个附件、push 误判云端缺文件全量重传）。
     /// 防御上限 1000 页（100 万对象）防异常服务器死循环。
-    async fn list_all_keys_paginated(&self, prefix: &str) -> Result<Vec<String>, SyncError> {
+    async fn list_all_entries_paginated(
+        &self,
+        prefix: &str,
+    ) -> Result<Vec<crate::s3::ListEntry>, SyncError> {
         // prefix 统一带尾斜杠（P0-10）：S3 prefix 是字符串前缀匹配，
         // `wait` 会同时命中 `wait2/...`、`waitfoo/...` 造成跨目录污染；
         // 解析端剥离按 `{prefix}/`，两端必须同口径
@@ -182,7 +185,7 @@ impl S3Adapter {
             format!("{}/", prefix)
         };
 
-        let mut keys = Vec::new();
+        let mut entries: Vec<crate::s3::ListEntry> = Vec::new();
         let mut continuation_token: Option<String> = None;
         for _ in 0..1000 {
             let mut query: Vec<(String, String)> = vec![
@@ -209,10 +212,10 @@ impl S3Adapter {
                     retryable: false,
                 }
             })?;
-            keys.extend(page.keys);
+            entries.extend(page.entries);
             match page.next_token {
                 Some(token) => continuation_token = Some(token),
-                None => return Ok(keys),
+                None => return Ok(entries),
             }
         }
         Err(SyncError::Network {
@@ -269,7 +272,7 @@ impl S3Adapter {
             .send()
             .await
             .map_err(|e| SyncError::Network {
-                message: format!("CreateMultipartUpload 请求失败: {e}"),
+                message: transport_message("CreateMultipartUpload 请求", &e),
                 retryable: true,
             })?;
         let status = response.status().as_u16();
@@ -278,7 +281,7 @@ impl S3Adapter {
             return Err(SyncError::from_http_status(status, &body));
         }
         let create_xml = response.text().await.map_err(|e| SyncError::Network {
-            message: format!("读取 CreateMultipartUpload 响应失败: {e}"),
+            message: transport_message("读取 CreateMultipartUpload 响应", &e),
             retryable: false,
         })?;
         let upload_id = parse_upload_id(&create_xml).ok_or_else(|| SyncError::Network {
@@ -293,25 +296,25 @@ impl S3Adapter {
         let mut part_etags: Vec<String> = Vec::new();
         for (idx, chunk) in data.chunks(Self::MULTIPART_PART_SIZE).enumerate() {
             let part_number = idx + 1;
-            let etag = self
+            match self
                 .upload_part_with_retry(&upload_id, path, part_number, chunk)
-                .await?;
-            part_etags.push(etag);
+                .await
+            {
+                Ok(etag) => part_etags.push(etag),
+                // F28：任一片失败必须 Abort。已上传的前若干片不会随请求失败
+                // 自动消失，未拼装的孤儿分片长期占桶计费——原注释把清理推给
+                // 「桶生命周期规则」，而自建 MinIO/NAS 默认没有这条规则。
+                Err(e) => {
+                    self.abort_multipart(path, &upload_id).await;
+                    return Err(e);
+                }
+            }
         }
 
         // 3. CompleteMultipartUpload：POST {path}?uploadId=…（带分片清单 body）
         let complete_url =
             self.build_object_url_with_query(path, &[("uploadId".to_string(), upload_id.clone())]);
-        let mut body = String::from("<CompleteMultipartUpload>\n");
-        for (i, etag) in part_etags.iter().enumerate() {
-            body.push_str(&format!(
-                "  <Part><PartNumber>{}</PartNumber><ETag>{}</ETag></Part>\n",
-                i + 1,
-                etag
-            ));
-        }
-        body.push_str("</CompleteMultipartUpload>");
-        let body_bytes = body.into_bytes();
+        let body_bytes = complete_multipart_body(&part_etags).into_bytes();
         let payload_hash = sha256_hex(&body_bytes);
         let headers = self.sign_request("POST", &complete_url, &payload_hash)?;
         let response = self
@@ -323,7 +326,7 @@ impl S3Adapter {
             .send()
             .await
             .map_err(|e| SyncError::Network {
-                message: format!("CompleteMultipartUpload 请求失败: {e}"),
+                message: transport_message("CompleteMultipartUpload 请求", &e),
                 retryable: true,
             })?;
         let status = response.status().as_u16();
@@ -339,7 +342,7 @@ impl S3Adapter {
         Ok(())
     }
 
-    /// 单片上传（带分片级重试：网络/限流错误重试 3 次，2/4/8s 退避）
+    /// 单片上传（带分片级重试：可重试错误最多 3 次，1/2/4s 退避）
     ///
     /// 返回该片的 ETag（Complete 阶段清单需要）。每次重试是全新的
     /// HTTP 请求（put_part_once 无 HTTP 级重试），不叠加放大。
@@ -418,29 +421,21 @@ impl S3Adapter {
 
 #[async_trait]
 impl SyncAdapter for S3Adapter {
-    async fn list_files(&self, base_path: &str) -> Result<Vec<RemoteFile>, SyncError> {
-        // v7: 复用 list_all_files，再过滤同步后缀（默认 .orsync，兼容遗留 .waitsync）
-        let all = self.list_all_files(base_path).await?;
-        Ok(all
-            .into_iter()
-            .filter(|f| crate::cloud_sync::paths::is_sync_payload_name(&f.name))
-            .collect())
-    }
-
     async fn list_all_files(&self, base_path: &str) -> Result<Vec<RemoteFile>, SyncError> {
         // 分页列举（P0-3）：>1000 对象不再静默截断
-        let keys = self.list_all_keys_paginated(base_path).await?;
+        let listed = self.list_all_entries_paginated(base_path).await?;
 
-        // 将 key 列表转为 RemoteFile（不过滤后缀，调用方自行过滤）
-        // lamport_version 无法从 ListObjects 响应获取（.waitsync 是二进制包，
-        // lamport_version 在包内 SyncRecord 中），保持 0，由 Pull 阶段下载后从包内容获取
-        let files: Vec<RemoteFile> = keys
+        // 将列举条目转为 RemoteFile（不过滤后缀，调用方自行过滤）
+        // size/last_modified 直取响应字段（F27）——此前恒 0 让云端备份列表的
+        // 「最新在前」排序退化成 key 字典序（文件名内嵌日期 → 实为最旧在前）。
+        // etag 同步透出（F26）：列举与条件写共用同一份令牌口径
+        let files: Vec<RemoteFile> = listed
             .into_iter()
-            .map(|k| RemoteFile {
-                name: k,
-                size: 0,
-                last_modified: 0,
-                lamport_version: 0,
+            .map(|e| RemoteFile {
+                name: e.key,
+                size: e.size,
+                last_modified: e.last_modified,
+                etag: e.etag,
             })
             .collect();
 
@@ -478,7 +473,7 @@ impl SyncAdapter for S3Adapter {
             .send()
             .await
             .map_err(|e| SyncError::Network {
-                message: format!("DELETE 请求失败: {e}"),
+                message: transport_message("DELETE 请求", &e),
                 // S12：传输层失败（连接中断/超时）是瞬态，标可重试——
                 // 此前 retryable:false 让业务级 with_retry 直接放弃
                 retryable: true,
@@ -496,23 +491,29 @@ impl SyncAdapter for S3Adapter {
 
     async fn download_asset(&self, hash: &str) -> Result<Vec<u8>, SyncError> {
         // 单一路径：assets/{hash}.orsync（无历史数据，不再回退遗留命名）
-        self.download(&crate::cloud_sync::paths::asset_path(hash)).await
+        self.download(&crate::cloud_sync::paths::asset_path(hash))
+            .await
     }
 
     async fn asset_exists(&self, hash: &str) -> Result<bool, SyncError> {
         // HEAD 存在性探测（403/500/429 透传类型化错误，不得静默当不存在）
-        self.exists(&crate::cloud_sync::paths::asset_path(hash)).await
+        self.exists(&crate::cloud_sync::paths::asset_path(hash))
+            .await
     }
 
-    async fn list_assets(&self) -> Result<Vec<String>, SyncError> {
+    async fn list_assets(&self, assets_dir: &str) -> Result<Vec<String>, SyncError> {
         // 分页列举（P0-3）：附件超过 1000 个不再静默截断
-        let keys = self.list_all_keys_paginated("assets/").await?;
+        // keys 已由 parse_list_objects_xml 剥掉 `{assets_dir}/` 前缀（P0-10 口径），
+        // 与 WebDAV 侧的 basename 同域，故 assets_dir 带不带 base_path 都只需剥后缀。
+        let listed = self.list_all_entries_paginated(assets_dir).await?;
 
         // 新版本文件名为 {hash}.orsync，需剥离同步后缀以保持接口契约。
-        // 遗留 {hash}.waitsync / 裸 {hash} 同口径剥离。去重后返回。
-        let mut hashes: Vec<String> = keys
+        // 遗留 {hash}.waitsync / 裸 {hash} 同口径剥离。控制台「新建文件夹」留下的
+        // 0 字节目录标记（剥前缀后为空串）不得混进 hash 集合。去重后返回。
+        let mut hashes: Vec<String> = listed
             .into_iter()
-            .map(|k| crate::cloud_sync::paths::strip_sync_extension(&k).to_string())
+            .map(|e| crate::cloud_sync::paths::strip_sync_extension(&e.key).to_string())
+            .filter(|h| !h.is_empty())
             .collect();
         // S30：dedup 只去相邻重复，先排序保证同名（多后缀并存）全去
         hashes.sort();
@@ -536,7 +537,7 @@ impl SyncAdapter for S3Adapter {
             .send()
             .await
             .map_err(|e| SyncError::Network {
-                message: format!("HEAD 请求失败: {e}"),
+                message: transport_message("HEAD 请求", &e),
                 retryable: true,
             })?;
         SyncError::classify_head_status(response.status().as_u16())
@@ -618,6 +619,31 @@ pub(crate) fn truncate_xml(xml: &str) -> String {
     }
 }
 
+/// 构造 CompleteMultipartUpload 请求体（F29）
+///
+/// ETag 是**服务端回传**的串，过去用 `format!` 直拼：兼容实现（部分自建网关）
+/// 返回含 `&` / `<` 的 ETag 会让整份清单变成 MalformedXML——分片全白传，
+/// 且错误只在 Complete 阶段暴露，重试代价是整文件。
+pub(crate) fn complete_multipart_body(part_etags: &[String]) -> String {
+    let mut body = String::from("<CompleteMultipartUpload>\n");
+    for (i, etag) in part_etags.iter().enumerate() {
+        body.push_str(&format!(
+            "  <Part><PartNumber>{}</PartNumber><ETag>{}</ETag></Part>\n",
+            i + 1,
+            xml_escape(etag)
+        ));
+    }
+    body.push_str("</CompleteMultipartUpload>");
+    body
+}
+
+/// XML 文本节点转义：`&` 必须最先替换，否则会把后插的实体二次转义
+fn xml_escape(s: &str) -> String {
+    s.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+}
+
 #[cfg(test)]
 mod multipart_tests {
     use super::*;
@@ -673,5 +699,20 @@ mod multipart_tests {
         let rem = total % S3Adapter::MULTIPART_PART_SIZE;
         assert_eq!(full, 1, "8MiB 阈值含 1 个完整 5MiB 片");
         assert!(rem > 0 && rem < S3Adapter::MULTIPART_PART_SIZE, "尾片 3MiB");
+    }
+
+    /// F29：服务端 ETag 进 Complete 清单必须 XML 转义，且 `&` 先替换
+    #[test]
+    fn complete_body_escapes_server_etag() {
+        let etags = vec!["abc".to_string(), "d&e<f>g".to_string()];
+        let body = complete_multipart_body(&etags);
+        assert!(body.contains("<Part><PartNumber>1</PartNumber><ETag>abc</ETag></Part>"));
+        assert!(
+            body.contains("<ETag>d&amp;e&lt;f&gt;g</ETag>"),
+            "实际输出: {body}"
+        );
+        // 转义顺序错（`&` 最后替换）会把已生成的实体再转一次
+        assert_eq!(xml_escape("&lt;"), "&amp;lt;");
+        assert_eq!(complete_multipart_body(&[]).lines().count(), 2, "空清单仍是合法对");
     }
 }
