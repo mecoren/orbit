@@ -317,7 +317,8 @@ mod tests {
                 )]),
             },
         );
-        m.tables.insert("todo_projects".to_string(), TableIndex::default());
+        m.tables
+            .insert("todo_projects".to_string(), TableIndex::default());
         let json = serde_json::to_string(&m).unwrap();
         let p1 = json.find("todo_projects").unwrap();
         let p2 = json.find("todo_tasks").unwrap();
@@ -358,7 +359,10 @@ mod tests {
         let m: Manifest = serde_json::from_str(LEGACY).unwrap();
         assert_eq!(m.epoch, 7);
         assert_eq!(m.devices["dev-old"].app_version, "", "缺字段即版本未知");
-        assert!(!m.all_devices_support_aad(), "版本未知的设备不得触发格式升级");
+        assert!(
+            !m.all_devices_support_aad(),
+            "版本未知的设备不得触发格式升级"
+        );
     }
 
     /// F46 门禁真值表：只有「全部已登记设备都达标」才允许写绑定密文
@@ -369,7 +373,10 @@ mod tests {
             app_version: v.to_string(),
         };
         let mut m = Manifest::empty("d");
-        assert!(!m.all_devices_support_aad(), "空设备表无法证明云端没有旧设备");
+        assert!(
+            !m.all_devices_support_aad(),
+            "空设备表无法证明云端没有旧设备"
+        );
         m.devices.insert("a".to_string(), dev("0.2.0"));
         assert!(m.all_devices_support_aad(), "唯一设备已达标 → 可绑定");
         m.devices.insert("b".to_string(), dev("0.1.9"));
@@ -387,10 +394,16 @@ mod tests {
         assert!(version_at_least("0.2.0", "0.2.0"));
         assert!(version_at_least("0.10.1", "0.2.0"));
         assert!(version_at_least("1", "0.2.0"), "缺段按 0 处理");
-        assert!(version_at_least("0.2.0-beta.1", "0.2.0"), "预发布后缀不参与门禁");
+        assert!(
+            version_at_least("0.2.0-beta.1", "0.2.0"),
+            "预发布后缀不参与门禁"
+        );
         assert!(!version_at_least("0.1.9", "0.2.0"));
         assert!(!version_at_least("abc", "0.2.0"), "非数字段按 0 → 低于阈值");
-        assert!(!version_at_least("", "0.0.0"), "空串恒 false（含阈值为 0 的情况）");
+        assert!(
+            !version_at_least("", "0.0.0"),
+            "空串恒 false（含阈值为 0 的情况）"
+        );
     }
 
     /// F43 布局版本门禁：未来版本 ≠ 上古版本（两处 `!=` 复制曾把两者混为一谈）

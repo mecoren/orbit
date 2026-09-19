@@ -51,10 +51,7 @@ pub const SYNC_FK_COLUMNS: &[(&str, &[(&str, &str)])] = &[
     ("todo_comments", &[("task_id", "todo_tasks")]),
     (
         "todo_task_relations",
-        &[
-            ("task_id", "todo_tasks"),
-            ("other_task_id", "todo_tasks"),
-        ],
+        &[("task_id", "todo_tasks"), ("other_task_id", "todo_tasks")],
     ),
     ("todo_reminders", &[("task_id", "todo_tasks")]),
     ("todo_task_attachments", &[("task_id", "todo_tasks")]),
@@ -72,12 +69,14 @@ pub fn fk_columns_of(table: &str) -> &'static [(&'static str, &'static str)] {
 /// 父表是否排在子表之前（pull 依赖序的前提；单测直接吃 SYNCABLE_TABLES 顺序）
 pub fn fk_parent_order_ok() -> bool {
     let pos = |t: &str| SYNCABLE_TABLES.iter().position(|s| *s == t);
-    SYNC_FK_COLUMNS.iter().all(|(child, cols)| {
-        match pos(child) {
+    SYNC_FK_COLUMNS
+        .iter()
+        .all(|(child, cols)| match pos(child) {
             None => false,
-            Some(c) => cols.iter().all(|(_, parent)| pos(parent).is_some_and(|p| p < c)),
-        }
-    })
+            Some(c) => cols
+                .iter()
+                .all(|(_, parent)| pos(parent).is_some_and(|p| p < c)),
+        })
 }
 
 #[cfg(test)]
@@ -139,4 +138,3 @@ mod sync_registry_tests {
         assert_eq!(fk_columns_of("todo_task_relations").len(), 2);
     }
 }
-

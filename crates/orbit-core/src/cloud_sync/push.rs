@@ -246,7 +246,9 @@ async fn push_all_impl(
                         e.table,
                         e.message
                     );
-                    attempt.errors.push(format!("表 {} push 失败: {}", e.table, e.message));
+                    attempt
+                        .errors
+                        .push(format!("表 {} push 失败: {}", e.table, e.message));
                 }
             }
         }
@@ -318,9 +320,7 @@ async fn push_all_impl(
         if let Some(reason) = conflict_reason {
             cas_attempt += 1;
             result.cas_conflicts += 1;
-            log::info!(
-                "[push] {reason}（第 {cas_attempt} 次），重新读取清单后重试"
-            );
+            log::info!("[push] {reason}（第 {cas_attempt} 次），重新读取清单后重试");
             if cas_attempt >= CAS_MAX_RETRIES {
                 let msg = format!(
                     "{reason}：并发冲突重试 {cas_attempt} 次仍未成功，本轮保留本地待下轮同步"
@@ -346,7 +346,8 @@ async fn push_all_impl(
 
         // 6. 清单已上新版：现在可以安全删除不再被引用的墓碑对象
         if !expired_tombstones.is_empty() {
-            let gc = crate::cloud_sync::gc::delete_expired_buckets(adapter, &expired_tombstones).await;
+            let gc =
+                crate::cloud_sync::gc::delete_expired_buckets(adapter, &expired_tombstones).await;
             log::info!(
                 "[push] 墓碑回收：剔除 {} 个分桶，实际删除 {} 个",
                 expired_tombstones.len(),
@@ -402,10 +403,12 @@ async fn build_table_outcome(
     // 写出的仍是存量 0x01；第二拍无需改这里，靠版本号自然打开。
     let bind_aad = remote.all_devices_support_aad();
 
-    let items = load_table_items(db_pool, table).await.map_err(|e| TableError {
-        table: table.to_string(),
-        message: e.to_string(),
-    })?;
+    let items = load_table_items(db_pool, table)
+        .await
+        .map_err(|e| TableError {
+            table: table.to_string(),
+            message: e.to_string(),
+        })?;
 
     for chunk in split_table_items(table, items) {
         let remote_ref = remote
@@ -440,12 +443,10 @@ async fn build_table_outcome(
             message: e.to_string(),
         })?;
         let bucket_path = paths::table_bucket_path(table, chunk.bucket);
-        let encrypted =
-            encrypt_bucket_payload(&payload, data_key, &bucket_path, bind_aad).map_err(|e| {
-                TableError {
-                    table: table.to_string(),
-                    message: e.to_string(),
-                }
+        let encrypted = encrypt_bucket_payload(&payload, data_key, &bucket_path, bind_aad)
+            .map_err(|e| TableError {
+                table: table.to_string(),
+                message: e.to_string(),
             })?;
         adapter
             .upload(&bucket_path, &encrypted)
@@ -486,9 +487,7 @@ async fn build_table_outcome(
         let fp = crate::cloud_sync::compute_fingerprint(
             &tombstones
                 .iter()
-                .map(|t| {
-                    serde_json::json!({"uuid": t.uuid, "deleted_at": t.deleted_at})
-                })
+                .map(|t| serde_json::json!({"uuid": t.uuid, "deleted_at": t.deleted_at}))
                 .collect::<Vec<_>>(),
         )
         .map_err(|e| TableError {
@@ -507,12 +506,10 @@ async fn build_table_outcome(
                 message: e.to_string(),
             })?;
             let bucket_path = paths::tombstone_bucket_path(table, &bucket);
-            let encrypted =
-                encrypt_bucket_payload(&bytes, data_key, &bucket_path, bind_aad).map_err(|e| {
-                    TableError {
-                        table: table.to_string(),
-                        message: e.to_string(),
-                    }
+            let encrypted = encrypt_bucket_payload(&bytes, data_key, &bucket_path, bind_aad)
+                .map_err(|e| TableError {
+                    table: table.to_string(),
+                    message: e.to_string(),
                 })?;
             adapter
                 .upload(&bucket_path, &encrypted)
@@ -748,7 +745,10 @@ mod tests {
         tempfile::TempDir,
     ) {
         let pool = sqlx::SqlitePool::connect("sqlite::memory:").await.unwrap();
-        sqlx::migrate!("./src/db/migrations").run(&pool).await.unwrap();
+        sqlx::migrate!("./src/db/migrations")
+            .run(&pool)
+            .await
+            .unwrap();
         let tmp = tempfile::TempDir::new().unwrap();
         let crypto = SyncCryptoService::new(tmp.path());
         crypto.init_with_data_key("pw", &[7u8; 32]).unwrap();
@@ -785,7 +785,9 @@ mod tests {
         let uploads = adapter.uploads.lock().unwrap().clone();
         assert!(uploads.iter().any(|p| p == paths::MANIFEST_PATH));
         assert!(
-            uploads.iter().any(|p| p.starts_with("tables/todo_projects/")),
+            uploads
+                .iter()
+                .any(|p| p.starts_with("tables/todo_projects/")),
             "必须上传数据分桶: {uploads:?}"
         );
     }
@@ -839,9 +841,8 @@ mod tests {
     #[tokio::test]
     async fn single_row_edit_uploads_only_one_chunk() {
         let (pool, crypto, store, _tmp) = env().await;
-        let mut sql = String::from(
-            "INSERT INTO todo_projects (uuid, title, created_at, updated_at) VALUES ",
-        );
+        let mut sql =
+            String::from("INSERT INTO todo_projects (uuid, title, created_at, updated_at) VALUES ");
         for i in 0..200 {
             if i > 0 {
                 sql.push(',');
@@ -887,10 +888,7 @@ mod tests {
 
         assert_eq!(result.pushed_chunks, 1, "单行编辑只能重传一个分桶");
         let uploads = adapter.uploads.lock().unwrap().clone();
-        let chunk_uploads = uploads
-            .iter()
-            .filter(|p| p.starts_with("tables/"))
-            .count();
+        let chunk_uploads = uploads.iter().filter(|p| p.starts_with("tables/")).count();
         assert_eq!(chunk_uploads, 1);
     }
 
@@ -1049,7 +1047,10 @@ mod tests {
         .unwrap();
 
         // 模拟删库重装：本地清空但账本残留
-        sqlx::query("DELETE FROM todo_projects").execute(&pool).await.unwrap();
+        sqlx::query("DELETE FROM todo_projects")
+            .execute(&pool)
+            .await
+            .unwrap();
         let err = push_all(
             &pool,
             &crypto,
@@ -1160,11 +1161,7 @@ mod tests {
         .unwrap();
 
         assert!(!result.errors.is_empty(), "重试耗尽必须留下错误信息");
-        assert!(
-            result.pushed_chunks > 0,
-            "分桶实际已上传: {:?}",
-            result
-        );
+        assert!(result.pushed_chunks > 0, "分桶实际已上传: {:?}", result);
         assert_eq!(
             result.pushed_modules, 1,
             "有分桶上传时模块计数不得为 0: {:?}",

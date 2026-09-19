@@ -841,7 +841,10 @@ mod tests {
             matches!(err, SyncCryptoError::Crypto { .. }),
             "降级 bundle 必须被拒且不得误报密码错误: {err:?}"
         );
-        assert!(err.to_string().contains("迭代次数"), "错误要写明降级: {err}");
+        assert!(
+            err.to_string().contains("迭代次数"),
+            "错误要写明降级: {err}"
+        );
 
         save_sync_crypto_meta(&svc.app_data_dir, &weak).unwrap();
         assert!(svc.unlock("pw").is_err(), "本地 meta 降级同样拒绝解锁");

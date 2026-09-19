@@ -2268,7 +2268,10 @@ mod tests {
             &Ok(ok_result(vec!["表 todo_tasks push 失败".to_string()])),
         )
         .await;
-        assert!(ledger(&engine.db_pool).await.is_none(), "部分失败轮次不得推进账本");
+        assert!(
+            ledger(&engine.db_pool).await.is_none(),
+            "部分失败轮次不得推进账本"
+        );
 
         record_incremental_history(
             &engine.db_pool,
@@ -2276,7 +2279,10 @@ mod tests {
             &Ok(SyncResult::skipped()),
         )
         .await;
-        assert!(ledger(&engine.db_pool).await.is_none(), "skipped 轮次不得推进账本");
+        assert!(
+            ledger(&engine.db_pool).await.is_none(),
+            "skipped 轮次不得推进账本"
+        );
 
         record_incremental_history(
             &engine.db_pool,
@@ -2286,7 +2292,10 @@ mod tests {
             }),
         )
         .await;
-        assert!(ledger(&engine.db_pool).await.is_none(), "引擎级失败不得推进账本");
+        assert!(
+            ledger(&engine.db_pool).await.is_none(),
+            "引擎级失败不得推进账本"
+        );
 
         record_incremental_history(&engine.db_pool, SYNC_TYPE_SYNC_NOW, &Ok(ok_result(vec![])))
             .await;

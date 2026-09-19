@@ -401,8 +401,7 @@ mod tests {
         let entries = parse_propfind_response(xml).unwrap();
         assert_eq!(entries.len(), 2);
         assert_eq!(
-            entries[0].href,
-            "/dav/wait-home/backups/工作 笔记.orfullsync",
+            entries[0].href, "/dav/wait-home/backups/工作 笔记.orfullsync",
             "编码段必须还原成真实文件名"
         );
         assert_eq!(
@@ -495,6 +494,9 @@ mod tests {
             entries[0].last_modified.as_deref(),
             Some("Mon, 07 Sep 2026 12:00:00 GMT")
         );
-        assert_eq!(entries[0].content_length, None, "404 propstat 的属性不得落地");
+        assert_eq!(
+            entries[0].content_length, None,
+            "404 propstat 的属性不得落地"
+        );
     }
 }

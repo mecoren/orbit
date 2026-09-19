@@ -224,9 +224,7 @@ pub async fn pull_all(
 /// `todo_task_attachments`/`todo_subtasks` 抢在 `todo_tasks` 之前到达
 /// （`_` < `s`），解析必失败。未登记的表排在最后（单表处另有白名单校验会拒），
 /// 同位次保持入参顺序——`sort_by_key` 是稳定排序。
-fn tables_in_dependency_order<'a>(
-    names: impl Iterator<Item = &'a String>,
-) -> Vec<&'a String> {
+fn tables_in_dependency_order<'a>(names: impl Iterator<Item = &'a String>) -> Vec<&'a String> {
     let mut v: Vec<&'a String> = names.collect();
     let rank = |t: &str| {
         crate::db::sync_registry::SYNCABLE_TABLES
@@ -771,7 +769,9 @@ mod tests {
         .map(str::to_string)
         .collect();
         assert!(
-            dict.iter().position(|t| t == "todo_task_attachments").unwrap()
+            dict.iter()
+                .position(|t| t == "todo_task_attachments")
+                .unwrap()
                 < dict.iter().position(|t| t == "todo_tasks").unwrap(),
             "夹具须复现「字典序把附件表排在任务表之前」这一前提"
         );

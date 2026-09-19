@@ -126,7 +126,8 @@ mod tests {
 
     #[test]
     fn no_prune_when_single_device() {
-        let mut m = manifest_with_tombstones(&["2020-01", "2026-09"], &[("dev-1", 1_700_000_000_000)]);
+        let mut m =
+            manifest_with_tombstones(&["2020-01", "2026-09"], &[("dev-1", 1_700_000_000_000)]);
         let expired = prune_expired_tombstones(&mut m);
         assert!(expired.is_empty(), "单设备不得回收墓碑");
         assert_eq!(m.tombstones["todo_tasks"].buckets.len(), 2);
@@ -144,7 +145,11 @@ mod tests {
 
         let expired = prune_expired_tombstones(&mut m);
         assert!(!expired.is_empty(), "水位线前应有可回收分桶");
-        assert!(expired.iter().all(|(_, b)| b.as_str() < expected_month.as_str()));
+        assert!(
+            expired
+                .iter()
+                .all(|(_, b)| b.as_str() < expected_month.as_str())
+        );
         assert!(
             m.tombstones["todo_tasks"]
                 .buckets

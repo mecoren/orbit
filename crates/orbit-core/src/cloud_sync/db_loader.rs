@@ -233,13 +233,12 @@ pub async fn load_table_uuid_map(
          COALESCE(NULLIF(deleted_at, 0), updated_at) AS deleted_at \
          FROM \"{table}\""
     );
-    let rows: Vec<(String, i64, i64, i64, i64)> =
-        sqlx::query_as(&sql)
-            .fetch_all(pool)
-            .await
-            .map_err(|e| CloudSyncError::Database {
-                message: format!("加载表 {table} uuid 映射失败: {e}"),
-            })?;
+    let rows: Vec<(String, i64, i64, i64, i64)> = sqlx::query_as(&sql)
+        .fetch_all(pool)
+        .await
+        .map_err(|e| CloudSyncError::Database {
+            message: format!("加载表 {table} uuid 映射失败: {e}"),
+        })?;
 
     let mut map = HashMap::with_capacity(rows.len());
     for (uuid, updated_at, version, is_deleted, deleted_at) in rows {
@@ -399,7 +398,10 @@ mod tests {
     #[tokio::test]
     async fn scan_local_buckets_respects_watermark_and_counts() {
         let pool = SqlitePool::connect("sqlite::memory:").await.unwrap();
-        sqlx::migrate!("./src/db/migrations").run(&pool).await.unwrap();
+        sqlx::migrate!("./src/db/migrations")
+            .run(&pool)
+            .await
+            .unwrap();
         sqlx::query(
             "INSERT INTO todo_projects (uuid, title, created_at, updated_at) \
              VALUES ('early','E',1,100), ('late','L',2,200)",
@@ -446,6 +448,9 @@ mod tests {
             .await
             .unwrap()
             .unwrap();
-        assert!(scan.dirty.contains(&crate::cloud_sync::chunk::bucket_of_uuid("zero")));
+        assert!(
+            scan.dirty
+                .contains(&crate::cloud_sync::chunk::bucket_of_uuid("zero"))
+        );
     }
 }

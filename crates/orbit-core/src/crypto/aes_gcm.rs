@@ -7,11 +7,7 @@ use super::error::{CryptoError, CryptoErrorKind};
 ///
 /// 返回 ciphertext || tag（16 字节）拼接，与 Dart `GCMBlockCipher.process` 输出格式一致。
 /// 这是 CryptoService 中 `_aesGcmEncrypt` 的 Rust 对应实现。
-pub fn aes_gcm_encrypt(
-    key: &[u8],
-    plaintext: &[u8],
-    nonce: &[u8],
-) -> Result<Vec<u8>, CryptoError> {
+pub fn aes_gcm_encrypt(key: &[u8], plaintext: &[u8], nonce: &[u8]) -> Result<Vec<u8>, CryptoError> {
     aes_gcm_encrypt_aad(key, plaintext, nonce, b"")
 }
 

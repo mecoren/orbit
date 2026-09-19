@@ -245,7 +245,7 @@ fn handle_conn(mut stream: TcpStream, svc: Arc<Svc>) -> std::io::Result<()> {
     loop {
         let mut request_line = String::new();
         match reader.read_line(&mut request_line) {
-            Ok(0) => return Ok(()),  // 客户端关闭连接
+            Ok(0) => return Ok(()), // 客户端关闭连接
             Ok(_) => {}
             Err(_) => return Ok(()), // 读超时/重置：结束本连接
         }

@@ -205,11 +205,10 @@ fn create_adapters(
     validate_config(config).map_err(|e| CloudSyncError::Adapter {
         message: e.to_string(),
     })?;
-    let inner: Arc<dyn SyncAdapter> = Arc::from(
-        create_adapter(config).map_err(|e| CloudSyncError::Adapter {
+    let inner: Arc<dyn SyncAdapter> =
+        Arc::from(create_adapter(config).map_err(|e| CloudSyncError::Adapter {
             message: e.to_string(),
-        })?,
-    );
+        })?);
     let adapter = BasePathAdapter::new(inner.clone(), &config.base_path);
     Ok((inner, adapter))
 }

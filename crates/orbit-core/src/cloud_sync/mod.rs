@@ -59,9 +59,7 @@ pub mod push;
 pub mod state;
 
 pub use attachments::{AttachmentSyncResult, sync_attachments_pull, sync_attachments_push};
-pub use chunk::{
-    ChunkPayload, TABLE_BUCKET_COUNT, TableChunk, bucket_of_uuid, split_table_items,
-};
+pub use chunk::{ChunkPayload, TABLE_BUCKET_COUNT, TableChunk, bucket_of_uuid, split_table_items};
 pub use crypto_io::{decrypt_payload, encrypt_payload};
 pub use engine::{SyncEngine, SyncResult};
 pub use error::CloudSyncError;

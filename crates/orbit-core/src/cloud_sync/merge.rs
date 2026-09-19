@@ -869,13 +869,11 @@ mod tests {
         }
 
         async fn id_of(db: &SqlitePool, table: &str, uuid: &str) -> i64 {
-            sqlx::query_scalar::<_, i64>(&format!(
-                "SELECT id FROM {table} WHERE uuid=?1"
-            ))
-            .bind(uuid)
-            .fetch_one(db)
-            .await
-            .unwrap()
+            sqlx::query_scalar::<_, i64>(&format!("SELECT id FROM {table} WHERE uuid=?1"))
+                .bind(uuid)
+                .fetch_one(db)
+                .await
+                .unwrap()
         }
 
         async fn fk_of(db: &SqlitePool, table: &str, uuid: &str, col: &str) -> Option<i64> {
@@ -930,7 +928,10 @@ mod tests {
                 .iter()
                 .find(|t| t["uuid"] == serde_json::json!("t-x"))
                 .unwrap();
-            assert_eq!(x.get(crate::cloud_sync::db_loader::FK_MARK), Some(&serde_json::json!({})));
+            assert_eq!(
+                x.get(crate::cloud_sync::db_loader::FK_MARK),
+                Some(&serde_json::json!({}))
+            );
             assert!(x["project_id"].is_null());
         }
 
@@ -947,9 +948,18 @@ mod tests {
             let remote_task = id_of(&a, "todo_tasks", "t-a").await;
             let remote_project = id_of(&a, "todo_projects", "p-a").await;
 
-            assert_eq!(fk_of(&b, "todo_tasks", "t-a", "project_id").await, Some(local_project));
-            assert_eq!(fk_of(&b, "todo_subtasks", "s-a", "task_id").await, Some(local_task));
-            assert_eq!(fk_of(&b, "todo_comments", "c-a", "task_id").await, Some(local_task));
+            assert_eq!(
+                fk_of(&b, "todo_tasks", "t-a", "project_id").await,
+                Some(local_project)
+            );
+            assert_eq!(
+                fk_of(&b, "todo_subtasks", "s-a", "task_id").await,
+                Some(local_task)
+            );
+            assert_eq!(
+                fk_of(&b, "todo_comments", "c-a", "task_id").await,
+                Some(local_task)
+            );
 
             // 夹具自检：两端 id 必须不同，否则「等于本端 id」与「等于远端整数」无法区分
             assert_ne!(local_task, remote_task, "夹具须保证两端任务 id 不同");

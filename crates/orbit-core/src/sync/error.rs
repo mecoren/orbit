@@ -115,7 +115,10 @@ impl SyncError {
     /// 历史实现只在 `download_object` 一处手工把 409 改写成 NotFound，
     /// 其余读点（GC 删除、清单探测）遇到 409 会当成网络错误上报。
     pub fn is_not_found(&self) -> bool {
-        matches!(self, SyncError::NotFound { .. } | SyncError::AncestorsNotFound { .. })
+        matches!(
+            self,
+            SyncError::NotFound { .. } | SyncError::AncestorsNotFound { .. }
+        )
     }
 
     /// 根据HTTP状态码构造对应错误
@@ -346,7 +349,10 @@ mod tests {
              (https://bob:S3cr3tPass@nas.example.com/dav/wait-sync/manifest.orsync)";
         let out = brief(url);
         assert!(!out.contains("S3cr3tPass"), "userinfo 口令不得落地: {out}");
-        assert!(out.contains("nas.example.com"), "host 要留住定位端点: {out}");
+        assert!(
+            out.contains("nas.example.com"),
+            "host 要留住定位端点: {out}"
+        );
         assert!(out.contains("***@"));
         assert_eq!(brief(""), "[响应体已脱敏]");
     }

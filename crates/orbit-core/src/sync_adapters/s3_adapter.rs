@@ -713,6 +713,10 @@ mod multipart_tests {
         );
         // 转义顺序错（`&` 最后替换）会把已生成的实体再转一次
         assert_eq!(xml_escape("&lt;"), "&amp;lt;");
-        assert_eq!(complete_multipart_body(&[]).lines().count(), 2, "空清单仍是合法对");
+        assert_eq!(
+            complete_multipart_body(&[]).lines().count(),
+            2,
+            "空清单仍是合法对"
+        );
     }
 }

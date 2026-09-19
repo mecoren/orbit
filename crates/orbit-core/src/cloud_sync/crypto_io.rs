@@ -202,7 +202,8 @@ fn decrypt_payload_at(
         return Err(CloudSyncError::Crypto {
             message: format!(
                 "payload 格式不匹配：期望 magic={:?}，实际 magic={:?}",
-                MAGIC, &payload[..4]
+                MAGIC,
+                &payload[..4]
             ),
         });
     }
@@ -434,7 +435,8 @@ mod aad_binding_tests {
     #[test]
     fn ciphertext_is_not_interchangeable_across_buckets() {
         let a = encrypt_bucket_payload(b"same", &key(), PATH, true).unwrap();
-        let b = encrypt_bucket_payload(b"same", &key(), "tables/todo_tasks/8.orsync", true).unwrap();
+        let b =
+            encrypt_bucket_payload(b"same", &key(), "tables/todo_tasks/8.orsync", true).unwrap();
         assert_ne!(a, b, "同一明文搬到别的桶必须产出不同密文");
     }
 
@@ -445,10 +447,7 @@ mod aad_binding_tests {
         let err = decrypt_bucket_payload(&enc, &key(), "tables/labels/3.orsync").unwrap_err();
         // 与「密钥不对」「密文被改一位」同表现为 tag 失败 → 沿用既有 KeyMismatch
         // 口径（0x01 格式下存储端改一个比特也是这个结果，不是 AAD 引入的新歧义）
-        assert!(
-            matches!(err, CloudSyncError::KeyMismatch),
-            "实际: {err:?}"
-        );
+        assert!(matches!(err, CloudSyncError::KeyMismatch), "实际: {err:?}");
     }
 
     /// 读侧兼容：存量 0x01 密文经绑定入口（多带一个 path）照样解开
