@@ -457,6 +457,8 @@ impl SyncCryptoService {
         }
 
         // 用同步密码 + 云端 salt 派生 master_key
+        // F33：iterations 来自云端明文 JSON，存储端可改写，先校验强度下限
+        crate::crypto::ensure_kdf_strength(bundle.iterations, "云端 crypto/config")?;
         let salt = bundle.decode_salt().map_err(|e| SyncCryptoError::Meta {
             message: e.to_string(),
         })?;
@@ -516,6 +518,9 @@ impl SyncCryptoService {
         let salt = meta.decode_salt().map_err(|e| SyncCryptoError::Meta {
             message: e.to_string(),
         })?;
+        // F33：迭代次数低于历史最小值即拒绝——AGENTS.md「PBKDF2 600k 单调不降级」
+        // 此前只有 200k→600k 一处特例，无下限（100k 之类的旧值会静默不升级）
+        crate::crypto::ensure_kdf_strength(meta.iterations, "同步元数据")?;
         let master_key = derive_master_key(sync_password, &salt, meta.iterations, DATA_KEY_LEN)?;
 
         let encrypted = meta
@@ -818,6 +823,29 @@ mod tests {
     // ========================================================================
     // v2 确定性派生
     // ========================================================================
+
+    /// F33：迭代次数低于历史最小值（200k）的 meta / 云端 bundle 一律拒绝派生
+    #[test]
+    fn weak_iterations_rejected_on_import_and_unlock() {
+        let (svc, _tmp) = make_service();
+        let weak = SyncCryptoMeta {
+            salt: BASE64.encode(random_bytes(SALT_LEN)),
+            encrypted_data_key: BASE64.encode([0u8; DATA_KEY_LEN + 16]),
+            data_key_nonce: BASE64.encode(random_bytes(NONCE_LEN)),
+            iterations: 1,
+            key_derivation: None,
+        };
+
+        let err = svc.import_crypto_bundle(&weak, "pw", true).unwrap_err();
+        assert!(
+            matches!(err, SyncCryptoError::Crypto { .. }),
+            "降级 bundle 必须被拒且不得误报密码错误: {err:?}"
+        );
+        assert!(err.to_string().contains("迭代次数"), "错误要写明降级: {err}");
+
+        save_sync_crypto_meta(&svc.app_data_dir, &weak).unwrap();
+        assert!(svc.unlock("pw").is_err(), "本地 meta 降级同样拒绝解锁");
+    }
 
     #[test]
     fn v2_init_writes_v2_meta_and_derives_key() {

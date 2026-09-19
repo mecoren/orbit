@@ -1,7 +1,7 @@
 use reqwest::Client;
 use std::time::Duration;
 
-use crate::sync::error::SyncError;
+use crate::sync::error::{SyncError, transport_message};
 
 /// 共享 HTTP 客户端封装
 ///
@@ -94,7 +94,7 @@ impl HttpClient {
                 }
                 Err(e) => {
                     let error = SyncError::Network {
-                        message: format!("GET 请求失败: {e}"),
+                        message: transport_message("GET 请求", &e),
                         retryable: true,
                     };
                     last_error = Some(error);
@@ -149,7 +149,7 @@ impl HttpClient {
                 }
                 Err(e) => {
                     last_error = Some(SyncError::Network {
-                        message: format!("PUT 请求失败: {e}"),
+                        message: transport_message("PUT 请求", &e),
                         retryable: true,
                     });
                 }
@@ -203,7 +203,7 @@ impl HttpClient {
                 }
                 Err(e) => {
                     last_error = Some(SyncError::Network {
-                        message: format!("GET 请求失败: {e}"),
+                        message: transport_message("GET 请求", &e),
                         retryable: true,
                     });
                 }
@@ -249,7 +249,7 @@ impl HttpClient {
             .send()
             .await
             .map_err(|e| SyncError::Network {
-                message: format!("条件 PUT 请求失败: {e}"),
+                message: transport_message("条件 PUT 请求", &e),
                 retryable: true,
             })?;
 
@@ -292,7 +292,7 @@ impl HttpClient {
             .send()
             .await
             .map_err(|e| SyncError::Network {
-                message: format!("分片 PUT 请求失败: {e}"),
+                message: transport_message("分片 PUT 请求", &e),
                 retryable: true,
             })?;
         if !response.status().is_success() {

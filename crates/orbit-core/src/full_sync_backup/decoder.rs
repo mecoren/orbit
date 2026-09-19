@@ -43,6 +43,8 @@ pub fn decode_backup(bytes: &[u8], sync_password: &str) -> FullSyncBackupResult<
     let (header, ciphertext) = parse_container(bytes)?;
 
     // 2. PBKDF2 派生 master_key
+    // F33：iterations 取自下载的备份文件头（云端对象可被存储端改写），先验强度下限
+    crate::crypto::ensure_kdf_strength(header.iterations, "备份文件头")?;
     let master_key = derive_master_key(sync_password, &header.salt, header.iterations, 32)?;
 
     // 3. AES-256-GCM 解密

@@ -31,11 +31,12 @@ pub enum SyncError {
     #[error("同步已取消: {message}")]
     Cancelled { message: String },
 
-    /// 资源不存在（HTTP 404，或坚果云 WebDAV 对父目录缺失的 409 AncestorsNotFound）。
+    /// 资源不存在（HTTP 404）。
     ///
     /// 历史问题：404 曾被映射为 `SyncError::Network` 并在消息中携带 "404"，
     /// 调用方靠字符串匹配判定资源不存在——响应体偶然包含 "404" 子串会误判。
-    /// 现由适配器按状态码构造本变体，`is_not_found()` 基于类型判断。
+    /// 现由适配器按状态码构造本变体，`is_not_found()` 基于类型判断
+    /// （WebDAV 的 409 父目录缺失见 [`SyncError::AncestorsNotFound`]）。
     #[error("资源不存在(404): {message}")]
     NotFound { message: String },
 
@@ -48,6 +49,17 @@ pub enum SyncError {
     /// `from_http_status` 内联判定 429 与「503 + 限流体」两种形态。
     #[error("请求被限流(429): {message}")]
     RateLimited { message: String },
+
+    /// 父目录链缺失（WebDAV RFC 4918 的 409 AncestorsNotFound；坚果云对不存在
+    /// 的路径同样回 409 而非 404）。
+    ///
+    /// F32：此前 409 落到 `from_http_status` 的兜底分支变成
+    /// `Network{message:"HTTP 409: …"}`，调用方靠 `contains("HTTP 409") &&
+    /// contains("AncestorsNotFound")` 嗅探判定——适配器消息格式一改（换措辞、
+    /// 加脱敏截断把 body 剪掉）判定就静默失效，且「父目录缺失」这一可自愈状态
+    /// 与真正的网络错误混为一谈。现由 `from_http_status` 按状态码构造本变体。
+    #[error("父目录不存在(409): {message}")]
+    AncestorsNotFound { message: String },
 }
 
 impl SyncError {
@@ -93,29 +105,40 @@ impl SyncError {
         matches!(self, SyncError::Auth { .. })
     }
 
-    /// 是否为「资源不存在」（404）错误
+    /// 是否为「对象取不到」错误（404，或 WebDAV 的 409 父目录链缺失）
     ///
-    /// 基于 `SyncError::NotFound` 变体的类型判断，不再做字符串匹配。
-    /// 适配器层（`from_http_status` / WebDAV 409 AncestorsNotFound 翻译）负责构造该变体。
+    /// 基于变体类型判断，不再做字符串匹配。适配器层（`from_http_status`）
+    /// 负责按状态码构造这两个变体。
+    ///
+    /// F32：409 一并算「取不到」——坚果云等实现对**不存在**的路径回的是
+    /// 409 AncestorsNotFound 而非 404，语义与 404 相同（这条路径现在没有数据）。
+    /// 历史实现只在 `download_object` 一处手工把 409 改写成 NotFound，
+    /// 其余读点（GC 删除、清单探测）遇到 409 会当成网络错误上报。
     pub fn is_not_found(&self) -> bool {
-        matches!(self, SyncError::NotFound { .. })
+        matches!(self, SyncError::NotFound { .. } | SyncError::AncestorsNotFound { .. })
     }
 
     /// 根据HTTP状态码构造对应错误
     ///
     /// S6/S19：429 与「503 + 限流体」构造类型化 `RateLimited` 变体
     /// （替代调用方 contains 嗅探）；其余分类不变。
+    ///
+    /// F34：响应体一律经 [`brief`] 脱敏后才进错误串——本函数是所有 HTTP 错误
+    /// 文本的公共咽喉，下游 `sync_history.error_message` / `app_log.log` /
+    /// UI tooltip 原样落盘与展示。
     pub fn from_http_status(status: u16, body: &str) -> Self {
+        let brief = brief(body);
         match status {
             401 | 403 => SyncError::Auth {
-                message: format!("认证失败({status}): {body}"),
+                message: format!("认证失败({status}): {brief}"),
             },
-            404 => SyncError::NotFound {
-                message: body.to_string(),
-            },
-            429 => SyncError::RateLimited {
-                message: body.to_string(),
-            },
+            404 => SyncError::NotFound { message: brief },
+            // F32：409 在 WebDAV 语境只有一个用处——父目录链缺失
+            // （MKCOL/PUT/GET 的 AncestorsNotFound），调用方需要的是「这条路径
+            // 现在不在、补目录后可自愈」而不是「网络错误」。S3 侧我们的对象
+            // 操作不会产生 409（桶已存在等场景不在同步路径上）。
+            409 => SyncError::AncestorsNotFound { message: brief },
+            429 => SyncError::RateLimited { message: brief },
             500..=599 => {
                 // 坚果云等 WebDAV 服务限流时返回 503 + "BlockedTemporarily" /
                 // "Too many requests" 体——与过载的 503 同码不同因，
@@ -125,17 +148,17 @@ impl SyncError {
                     || body.to_lowercase().contains("rate limit");
                 if status == 503 && limited {
                     SyncError::RateLimited {
-                        message: format!("服务器限流({status}): {body}"),
+                        message: format!("服务器限流({status}): {brief}"),
                     }
                 } else {
                     SyncError::Network {
-                        message: format!("服务器错误({status}): {body}"),
+                        message: format!("服务器错误({status}): {brief}"),
                         retryable: true,
                     }
                 }
             }
             _ => SyncError::Network {
-                message: format!("HTTP {status}: {body}"),
+                message: format!("HTTP {status}: {brief}"),
                 retryable: false,
             },
         }
@@ -202,12 +225,131 @@ pub fn is_success_status(status: u16) -> bool {
     (200..=299).contains(&status)
 }
 
+/// 服务端/传输层错误文本脱敏（F34，日志脱敏红线的实现处）
+///
+/// 错误串的去向是 `sync_history.error_message`、`app_log.log` 与 UI tooltip，
+/// 全部是「一次写入、长期可见、可能被同步到云端」的面，而两处原文都有泄露面：
+/// - S3/OSS 的 403 体会回显请求头（`Authorization: AWS4-HMAC-SHA256
+///   Credential=AKIA…/…, Signature=…`）
+/// - endpoint 由用户手输，reqwest `Error::Display` 原样回显 URL，
+///   `https://user:pass@host` 形态的 userinfo 随之落地
+///
+/// 口径：逐行只保留敏感标记**之前**的片段（错误码/描述在前、凭据在后），
+/// 纯片段行丢弃；URL userinfo 打码但保留 host；最后钳到 200 字符。
+/// 用 `to_ascii_lowercase` 而非 `to_lowercase`：字节长度不变，切片索引才
+/// 与原文对齐（非 ASCII 小写化会改字节数，`&line[..cut]` 会踩字符边界 panic）。
+pub fn brief(raw: &str) -> String {
+    const MAX_CHARS: usize = 200;
+    // 标记都带值前缀（`=` / `>`）或本身就是头名：`SignatureDoesNotMatch`、
+    // "The Access Key Id you provided" 这类**错误码文案**要留给用户看
+    const MARKERS: [&str; 8] = [
+        "authorization",
+        "credential",
+        "stringtosign",
+        "signature=",
+        "signature>",
+        "security-token",
+        "accesskeyid>",
+        "accesskeyid=",
+    ];
+    let mut kept: Vec<&str> = Vec::new();
+    for line in raw.lines() {
+        let lowered = line.to_ascii_lowercase();
+        // 无标记 = 整行可留；有标记 = 只留标记前的片段（凭据总在标记之后）
+        let cut = MARKERS
+            .iter()
+            .filter_map(|m| lowered.find(m))
+            .min()
+            .unwrap_or(line.len());
+        let head = line[..cut].trim();
+        if !head.is_empty() {
+            kept.push(head);
+        }
+    }
+    let mut text = redact_userinfo(&kept.join(" "));
+    if text.chars().count() > MAX_CHARS {
+        let head: String = text.chars().take(MAX_CHARS).collect();
+        text = format!("{head}…");
+    }
+    if text.is_empty() {
+        // 整段都被裁掉时留占位，至少状态码前缀还有诊断价值
+        "[响应体已脱敏]".to_string()
+    } else {
+        text
+    }
+}
+
+/// 传输层错误消息构造（F34）：reqwest `Error::Display` 原样回显请求 URL，
+/// endpoint 若含 `user:pass@` 会随之落 `app_log.log`，故统一过 [`brief`]。
+///
+/// 只产消息不产变体：调用点的 `retryable` 取值各不相同，由调用点自定。
+pub fn transport_message(what: &str, e: &dyn std::fmt::Display) -> String {
+    format!("{what}失败: {}", brief(&e.to_string()))
+}
+
+/// URL userinfo 打码：`https://user:pw@host/x` → `https://***@host/x`
+///
+/// 供适配器把 endpoint 拼进错误串前调用（F34：错误串会落 `sync_history`）。
+pub fn redact_userinfo(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    let mut rest = s;
+    while let Some(i) = rest.find("://") {
+        let after = &rest[i + 3..];
+        let end = after
+            .find(['/', ' ', '"', '\'', '<', '>'])
+            .unwrap_or(after.len());
+        let authority = &after[..end];
+        out.push_str(&rest[..i + 3]);
+        match authority.rfind('@') {
+            Some(at) => {
+                out.push_str("***@");
+                rest = &after[at + 1..];
+            }
+            None => {
+                out.push_str(authority);
+                rest = &after[end..];
+            }
+        }
+    }
+    out.push_str(rest);
+    out
+}
+
 // 注：旧 `sync_bundle` 模块（52 字节 `OSYN` 容器）已随存储结构重构删除，
 // 其到本错误类型的 `From` 转换一并移除。
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // F34：错误串脱敏红线（落 sync_history.error_message / app_log.log / UI tooltip）
+    #[test]
+    fn brief_cuts_credential_echo_keeps_error_code() {
+        let body = "<Error><Code>SignatureDoesNotMatch</Code><Detail>Authorization: \
+             AWS4-HMAC-SHA256 Credential=AKIAIOSFODNN7EXAMPLE/20260919/us-east-1/s3/\
+             aws4_request, SignedHeaders=host, Signature=deadbeefcafe</Detail></Error>";
+        let out = brief(body);
+        assert!(out.contains("SignatureDoesNotMatch"), "错误码要留住: {out}");
+        assert!(!out.contains("AKIA"), "AK 不得落地: {out}");
+        assert!(!out.contains("AWS4-HMAC"), "签名头不得落地: {out}");
+        assert!(!out.contains("deadbeef"), "Signature 值不得落地: {out}");
+    }
+
+    #[test]
+    fn brief_caps_length_and_masks_url_userinfo() {
+        // 无敏感标记的行整段保留（曾经 cut 默认 0 把每条诊断都裁成空串）
+        assert_eq!(brief("plain diagnostics line"), "plain diagnostics line");
+        let long = "x".repeat(5000);
+        assert!(brief(&long).starts_with("xxxx"), "非敏感内容要留住");
+        assert!(brief(&long).chars().count() <= 201, "必须钳到 200 字符");
+        let url = "error sending request for url \
+             (https://bob:S3cr3tPass@nas.example.com/dav/wait-sync/manifest.orsync)";
+        let out = brief(url);
+        assert!(!out.contains("S3cr3tPass"), "userinfo 口令不得落地: {out}");
+        assert!(out.contains("nas.example.com"), "host 要留住定位端点: {out}");
+        assert!(out.contains("***@"));
+        assert_eq!(brief(""), "[响应体已脱敏]");
+    }
 
     #[test]
     fn http_404_maps_to_not_found_variant() {
@@ -273,14 +415,29 @@ mod tests {
 
     #[test]
     fn head_status_2xx_means_exists() {
-        assert_eq!(SyncError::classify_head_status(200).unwrap(), true);
-        assert_eq!(SyncError::classify_head_status(204).unwrap(), true);
+        assert!(SyncError::classify_head_status(200).unwrap());
+        assert!(SyncError::classify_head_status(204).unwrap());
     }
 
     #[test]
     fn head_status_404_and_409_mean_absent() {
-        assert_eq!(SyncError::classify_head_status(404).unwrap(), false);
-        assert_eq!(SyncError::classify_head_status(409).unwrap(), false);
+        assert!(!SyncError::classify_head_status(404).unwrap());
+        assert!(!SyncError::classify_head_status(409).unwrap());
+    }
+
+    /// F32：409 由状态码产出类型化变体，判定不再依赖响应体文案
+    #[test]
+    fn status_409_is_typed_ancestors_not_found() {
+        // 空 body（服务器不回任何特征串）也必须判对——旧嗅探在这种响应上失效
+        let e = SyncError::from_http_status(409, "");
+        assert!(
+            matches!(e, SyncError::AncestorsNotFound { .. }),
+            "409 不得塌进 Network"
+        );
+        assert!(e.is_not_found(), "父目录缺失语义等同对象不存在");
+        assert!(!e.is_retryable(), "补目录是适配器的编排，不是网络重试");
+        // 未列出的状态码仍走兜底：不得被误判为「不存在」
+        assert!(!SyncError::from_http_status(418, "").is_not_found());
     }
 
     #[test]
