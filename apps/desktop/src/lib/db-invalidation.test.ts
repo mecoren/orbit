@@ -5,7 +5,7 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { QueryClient } from "@tanstack/react-query";
 
-import { invalidateByTable } from "./db-invalidation";
+import { invalidateByTable, isImmediateFullInvalidation, planFlushCoalesced } from "./db-invalidation";
 
 /** 最小 QueryClient 桩：只记录 invalidateQueries 的入参 */
 function makeClient() {
@@ -92,5 +92,44 @@ describe("invalidateByTable 表级失效映射", () => {
     for (const t of tables) {
       expect(invalidateByTable(qc, t), `表 ${t} 缺映射`).not.toBeNull();
     }
+  });
+});
+
+describe("D2 突发合并决策", () => {
+  it("Lagged 哨兵与 * 立刻全量，不等窗口", () => {
+    expect(isImmediateFullInvalidation("*")).toBe(true);
+    expect(isImmediateFullInvalidation("todo_tasks", "lagged")).toBe(true);
+    expect(isImmediateFullInvalidation("todo_tasks")).toBe(false);
+    expect(isImmediateFullInvalidation("mock")).toBe(false);
+  });
+
+  it("窗口内出现 * 则吞掉更窄的键，一窗一次全量", () => {
+    expect(planFlushCoalesced(["todo_tasks", "*", "todo_labels"])).toEqual({
+      full: true,
+      tables: [],
+    });
+  });
+
+  it("同表重复事件去重为一次表级失效", () => {
+    expect(planFlushCoalesced(["todo_tasks", "todo_tasks", "todo_tasks"])).toEqual({
+      full: false,
+      tables: ["todo_tasks"],
+    });
+  });
+
+  it("未知表不在计划期展开，flush 时回退全量（一窗只一次）", () => {
+    const plan = planFlushCoalesced(["todo_tasks", "mock"]);
+    expect(plan.full).toBe(false);
+    const { qc, calls } = makeClient();
+    let full = false;
+    for (const t of plan.tables) {
+      if (invalidateByTable(qc, t) === null) {
+        full = true;
+        break;
+      }
+    }
+    expect(full).toBe(true);
+    // todo_tasks 的 5 路先进了 calls，全量由调用方补一次（此处只断决策）
+    expect(calls).toHaveLength(5);
   });
 });

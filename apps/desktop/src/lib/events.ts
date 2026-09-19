@@ -11,7 +11,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useEffect } from "react";
 import { listen } from "@tauri-apps/api/event";
 
-import { invalidateByTable } from "./db-invalidation";
+import { invalidateByTable, isImmediateFullInvalidation, planFlushCoalesced } from "./db-invalidation";
 
 /**
  * Rust EVENT_BUS 经桌面事件泵转发的精简载荷（A3）：只有表名与操作类型，
@@ -36,13 +36,51 @@ export interface SyncFinishedEvent {
 export function useDbInvalidation() {
   const qc = useQueryClient();
   useEffect(() => {
-    const unlistenPromise = listen<DbChangeEvent>("db-change", (evt) => {
-      // mock 桥（浏览器/e2e）发的 table="mock"，走全量回退
-      if (invalidateByTable(qc, evt.payload.table) === null) {
+    // 突发合并（D2）：窗口内多条 db-change 合并成一次按表批量失效。
+    // N 条写 = N 次 invalidateQueries，每次都可能重拉万行；拖拽/批量/连点
+    // 下属纯重复工作量。尾随窗口 150ms，窗口计时从第一条事件起。
+    // bounded-by-lifecycle: 每次 flush 后 clear，只存活一个窗口期
+    const pending = new Set<string>();
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const flush = () => {
+      timer = null;
+      if (pending.size === 0) return;
+      // "*" 语义吞掉更窄的键：哨兵在窗口内出现过即一次全量失效
+      const plan = planFlushCoalesced(pending);
+      pending.clear();
+      if (plan.full) {
         void qc.invalidateQueries();
+        return;
+      }
+      let full = false;
+      for (const table of plan.tables) {
+        if (invalidateByTable(qc, table) === null) {
+          full = true;
+          break;
+        }
+      }
+      // 未知表（含 mock 桥的 table:"mock"）回退全量，一窗只一次
+      if (full) void qc.invalidateQueries();
+    };
+    const unlistenPromise = listen<DbChangeEvent>("db-change", (evt) => {
+      const table = evt.payload.table;
+      // Lagged 哨兵或 "*" 立刻全量，不等窗口（宁多拉不漏刷）
+      if (isImmediateFullInvalidation(table, evt.payload.kind)) {
+        if (timer) {
+          clearTimeout(timer);
+          timer = null;
+        }
+        pending.clear();
+        void qc.invalidateQueries();
+        return;
+      }
+      pending.add(table);
+      if (timer == null) {
+        timer = setTimeout(flush, 150);
       }
     });
     return () => {
+      if (timer) clearTimeout(timer);
       unlistenPromise.then((unlisten) => unlisten());
     };
   }, [qc]);

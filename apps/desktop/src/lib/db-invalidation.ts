@@ -49,3 +49,20 @@ export function invalidateByTable(qc: QueryClient, table: string): string[][] | 
   }
   return keys;
 }
+
+/**
+ * 突发合并决策纯函数（D2，events.ts 尾随窗口的收敛规则）：
+ * - Lagged 哨兵（table "*" 或 kind "lagged"）立刻全量，不等窗口；
+ * - 窗口内出现过 "*" 则吞掉更窄的键，一窗一次全量。
+ * 纯函数便于单测，未知表（含 mock 桥 table:"mock"）在 flush 时由
+ * invalidateByTable 返回 null 触发全量，一窗同样只一次。
+ */
+export function isImmediateFullInvalidation(table: string, kind?: string): boolean {
+  return table === "*" || kind === "lagged";
+}
+
+export function planFlushCoalesced(tables: Iterable<string>): { full: boolean; tables: string[] } {
+  const uniq = [...new Set(tables)];
+  if (uniq.includes("*")) return { full: true, tables: [] };
+  return { full: false, tables: uniq };
+}
