@@ -93,7 +93,19 @@ pub async fn db_is_ready(app: AppHandle) -> bool {
 ///    并返回 `Err(Lagged)`；旧实现写成 `while let Ok(..)`，把 Lagged 当循环终止条件，
 ///    事件泵从此永久停摆——界面不再刷新且只能重启应用才恢复。现按 `full_sync_cmd.rs`
 ///    既有约定发 `table: "*"` 哨兵，令前端回退全量失效（宁多拉不漏刷）。
+/// 事件转发器进程级 once-guard（对齐移动端 events.rs FORWARDER_STARTED 范式）。
+/// db_migrate_to_* 会 pool.close + unmanage<AppState>，下一次 db_init_* 的
+/// try_state 守卫被绕过而再次 spawn；EVENT_BUS 是进程级 Lazy static（sender
+/// 永不 drop，while let 不会自然结束），故重复 spawn 的转发任务常驻不释放，
+/// 且同一事件被 emit 多遍（改一次主密码多一条，前端同点击收 N 份 db-change）。
+/// 此处只补置位守卫，不加 JoinHandle::abort（无取消语义负担）。
+static FORWARDER_STARTED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
 fn start_event_forwarding(app: AppHandle) {
+    // 第二次起静默忽略：转发任务常驻，单条即够。
+    if FORWARDER_STARTED.swap(true, std::sync::atomic::Ordering::SeqCst) {
+        return;
+    }
     let emit_handle = app.clone();
     tauri::async_runtime::spawn(async move {
         let mut rx = EVENT_BUS.subscribe();
