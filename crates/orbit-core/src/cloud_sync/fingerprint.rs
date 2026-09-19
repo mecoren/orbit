@@ -7,7 +7,9 @@
 //! 1. 每条记录按 `uuid` 字段升序排序
 //! 2. 每个 JSON 对象的 key 按字典序排序（递归）
 //! 3. 排除同步元字段：`updated_at`、`id`（自增 id 不影响业务数据）
-//! 4. 紧凑序列化（无空格）
+//! 4. 排除带 `_fk` 标记的整数外键列（F47）：其值是本端自增 id，跨设备不可比，
+//!    真实语义由 `_fk` 里的父行 uuid 承载并参与指纹
+//! 5. 紧凑序列化（无空格）
 //!
 //! ## 为什么排除 `updated_at`？
 //! 指纹用于检测"业务数据是否变化"。`updated_at` 仅用于 LWW 合并时决冲突，
@@ -61,9 +63,18 @@ fn canonicalize_value(v: &Value) -> Result<Value, CloudSyncError> {
             // serde_json::Map 默认按插入顺序，需手动按 key 排序后插入
             let mut keys: Vec<&String> = obj.keys().collect();
             keys.sort();
+            // F47：整数外键列存的是本端自增 id（跨设备不可比），其真实语义已由
+            // `_fk` 里的父行 uuid 承载并参与指纹。排除这些列，否则两端对同一份
+            // 逻辑数据算出的桶指纹永远不等——每轮互相判为已变更而反复重传。
+            let fk_mark = obj
+                .get(crate::cloud_sync::db_loader::FK_MARK)
+                .and_then(|m| m.as_object());
             for k in keys {
                 // 排除同步元字段（仅作用于顶层 Object，避免误删嵌套的同名字段）
                 if META_FIELDS.contains(&k.as_str()) {
+                    continue;
+                }
+                if fk_mark.is_some_and(|m| m.contains_key(k.as_str())) {
                     continue;
                 }
                 let canonical_val = canonicalize_value(&obj[k])?;
@@ -122,6 +133,46 @@ mod tests {
         let fp1 = compute_fingerprint(&items1).unwrap();
         let fp2 = compute_fingerprint(&items2).unwrap();
         assert_eq!(fp1, fp2, "updated_at/id 不应影响指纹");
+    }
+
+    /// F47：整数外键列由 `_fk` 的父 uuid 代表，本端 id 不得进指纹
+    ///
+    /// 否则两台设备对同一份逻辑数据算出的桶指纹永远不等，每轮互相重传。
+    #[test]
+    fn fk_int_columns_are_represented_by_uuid_mark() {
+        let device_a = vec![json!({
+            "uuid": "t1", "title": "T", "id": 7, "task_id": 7,
+            "_fk": {"task_id": "parent-x"}, "updated_at": 1
+        })];
+        // 同一行逻辑数据，本端 id 与外键整数都不同、父 uuid 相同
+        let device_b = vec![json!({
+            "uuid": "t1", "title": "T", "id": 991, "task_id": 42,
+            "_fk": {"task_id": "parent-x"}, "updated_at": 9
+        })];
+        assert_eq!(
+            compute_fingerprint(&device_a).unwrap(),
+            compute_fingerprint(&device_b).unwrap(),
+            "跨设备同一份数据须指纹相等（否则每轮互相重传）"
+        );
+
+        // 换父级：_fk 变了即业务数据变了，必须落到指纹里
+        let moved = vec![json!({
+            "uuid": "t1", "title": "T", "id": 7, "task_id": 7,
+            "_fk": {"task_id": "parent-y"}, "updated_at": 1
+        })];
+        assert_ne!(
+            compute_fingerprint(&device_a).unwrap(),
+            compute_fingerprint(&moved).unwrap(),
+            "改父级须被指纹感知"
+        );
+
+        // 无 _fk 标记（叶子表）时，整数列照常参与指纹——排除逻辑只在有标记时生效
+        let plain1 = vec![json!({"uuid": "l1", "name": "N", "sort_order": 1})];
+        let plain2 = vec![json!({"uuid": "l1", "name": "N", "sort_order": 2})];
+        assert_ne!(
+            compute_fingerprint(&plain1).unwrap(),
+            compute_fingerprint(&plain2).unwrap()
+        );
     }
 
     #[test]

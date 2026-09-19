@@ -10,6 +10,8 @@
 //! - 两端都有 → `updated_at` 较大者胜（LWW）；`updated_at` 相等时用 `version`
 //!   次级裁决（高者胜），杜绝同毫秒平局导致的两端分歧与振荡（FR-3）
 //! - 墓碑集中的 uuid → 本地软删除（带时间戳裁决删除 vs 编辑）
+//! - 整数外键列 → 按载荷 `_fk` 里的父行 uuid 解析成本端 id（F47，
+//!   见 [`resolve_foreign_keys`]）；解析不出来即整表上报 Err 交由下轮重试
 //!
 //! ## 逻辑时钟（HLC 折叠实现）
 //! 每条远端记录的 `updated_at` 与每个墓碑的 `deleted_at` 都经
@@ -42,7 +44,9 @@ use sqlx::SqlitePool;
 use crate::api::sync_conflict_api::{
     ConflictSnapshot, insert_conflict_in_tx, payload_json_of, prune_in_tx, record_title_of,
 };
-use crate::cloud_sync::db_loader::{LocalRecordState, load_table_uuid_map, sqlite_row_to_json};
+use crate::cloud_sync::db_loader::{
+    FK_MARK, LocalRecordState, load_table_uuid_map, load_uuid_id_map, sqlite_row_to_json,
+};
 use crate::cloud_sync::error::CloudSyncError;
 use crate::cloud_sync::meta::TombstoneEntry;
 use crate::db::repository::generic_repo::{push_json_value, validate_column_name};
@@ -159,8 +163,24 @@ pub async fn merge_table_items(
                 message: format!("加载表 {table} 列元数据失败: {e}"),
             })?;
 
+    // 1.5 整数外键按父行 uuid 解析为本端 id（F47）；父表 uuid→id 同样须在事务外读。
+    //     无外键的叶子表直接借用原切片，省掉整表克隆。
+    let fk_cols = crate::db::sync_registry::fk_columns_of(table);
+    let resolved: Vec<serde_json::Value>;
+    let refs: Vec<&serde_json::Value> = if fk_cols.is_empty() {
+        remote_items.iter().collect()
+    } else {
+        let mut parent_ids: HashMap<&'static str, HashMap<String, i64>> = HashMap::new();
+        for (_, parent) in fk_cols {
+            if !parent_ids.contains_key(parent) {
+                parent_ids.insert(*parent, load_uuid_id_map(db_pool, parent).await?);
+            }
+        }
+        resolved = resolve_foreign_keys(table, remote_items, parent_ids)?;
+        resolved.iter().collect()
+    };
+
     let mut result = MergeResult::default();
-    let refs: Vec<&serde_json::Value> = remote_items.iter().collect();
 
     // 2. 单事务：数据合并 + 墓碑应用必须原子。此前两者各持一个事务，
     //    中断会留下「数据已合并、删除未应用」的半合并状态——其他设备
@@ -197,6 +217,79 @@ pub async fn merge_table_items(
 
     tx.commit().await?;
     Ok(result)
+}
+
+/// 把载荷里的整数外键换成本端 id（F47）
+///
+/// 输入是 [`load_table_items`] 注入过 `_fk: {外键列: 父行 uuid}` 的记录；
+/// 返回**去掉 `_fk`、外键列已解析**的副本，之后的 INSERT/UPDATE 路径看到的
+/// 就是本端可用的值。
+///
+/// 任意外键解析不出来即整表 `Err`（宁可不合并、让 pull 记为失败表下轮重试），
+/// 也不能写一个「本端存在但归属错误」的 id：那会静默改父，并且下一轮 push
+/// 会把错归属洗成看起来合法的 uuid 标记，把污染扩散到云端与其它设备。
+/// 两种失败都要报：
+/// - 缺 `_fk` 键：载荷由未带 F47 修复的旧客户端写出（此时整数不可信）；
+/// - 父 uuid 本端没有：父行本轮未到（pull 已按注册表父先子后定序，故多为
+///   对端该表推送失败），下轮父行到达即可自愈。
+///
+/// [`load_table_items`]: crate::cloud_sync::db_loader::load_table_items
+fn resolve_foreign_keys(
+    table: &str,
+    items: &[serde_json::Value],
+    parent_ids: HashMap<&'static str, HashMap<String, i64>>,
+) -> Result<Vec<serde_json::Value>, CloudSyncError> {
+    let fk_cols = crate::db::sync_registry::fk_columns_of(table);
+    let mut out = Vec::with_capacity(items.len());
+
+    for item in items {
+        let Some(obj) = item.as_object() else {
+            // 非对象记录交给下游按「记录不是 JSON 对象」报错，这里不改变语义
+            out.push(item.clone());
+            continue;
+        };
+        let Some(mark) = obj.get(FK_MARK).and_then(|v| v.as_object()) else {
+            return Err(CloudSyncError::Database {
+                message: format!(
+                    "表 {table} 的云端记录缺少外键 uuid 标记：载荷由旧版客户端写出，\
+                     请在其余设备升级应用后重试（本端未写入，避免按整数 id 误挂父级）"
+                ),
+            });
+        };
+        let mut row = obj.clone();
+        for (col, parent) in fk_cols {
+            // 外键为 NULL / 非整数：无父级可解析，原样保留
+            if row.get(*col).and_then(|v| v.as_i64()).is_none() {
+                continue;
+            }
+            let Some(uuid) = mark.get(*col).and_then(|v| v.as_str()) else {
+                return Err(CloudSyncError::Database {
+                    message: format!(
+                        "表 {table} 记录 {} 的外键 {col} 无 uuid 标记（对端旧版载荷）",
+                        obj.get("uuid").and_then(|v| v.as_str()).unwrap_or("?")
+                    ),
+                });
+            };
+            match parent_ids.get(parent).and_then(|m| m.get(uuid)) {
+                Some(local_id) => {
+                    row.insert((*col).to_string(), serde_json::Value::from(*local_id));
+                }
+                None => {
+                    return Err(CloudSyncError::Database {
+                        message: format!(
+                            "表 {table} 记录 {} 的父级 {parent}/{uuid} 本端不存在\
+                             （对端该表本轮未同步成功），下轮重试",
+                            obj.get("uuid").and_then(|v| v.as_str()).unwrap_or("?")
+                        ),
+                    });
+                }
+            }
+        }
+        row.remove(FK_MARK);
+        out.push(serde_json::Value::Object(row));
+    }
+
+    Ok(out)
 }
 
 /// 单表 items 合并（批量 INSERT + 单条 UPDATE）
@@ -708,6 +801,210 @@ mod tests {
     fn insert_batch_size_is_conservative() {
         // 验证批量大小保守值：50 条 × 15 字段 = 750 参数 < 999（SQLite 默认上限）
         const { assert!(INSERT_BATCH_SIZE * 15 < 999) };
+    }
+
+    // ========================================================================
+    // F47：整数外键跨设备搬运
+    //
+    // 线上事故形态不是 `FOREIGN KEY constraint failed`，而是**静默改父**：远端
+    // task_id=1 在本端恰好是另一行，约束检查直接通过。故这组用例断言的是
+    // 「本端按父行 uuid 解析出的 id」，并额外断言它不等于远端那个整数。
+    // 连接池显式开 FK，口径对齐 `db::pool::init_pool_unencrypted`。
+    // ========================================================================
+
+    mod fk_cross_device {
+        use super::*;
+        use crate::cloud_sync::db_loader::load_table_items;
+
+        async fn pool() -> SqlitePool {
+            let p = sqlx::sqlite::SqlitePoolOptions::new()
+                .max_connections(1)
+                .acquire_timeout(std::time::Duration::from_secs(30))
+                .connect("sqlite::memory:")
+                .await
+                .unwrap();
+            sqlx::migrate!("./src/db/migrations").run(&p).await.unwrap();
+            sqlx::query("PRAGMA foreign_keys=ON")
+                .execute(&p)
+                .await
+                .unwrap();
+            p
+        }
+
+        /// A 端：项目 + 任务 + 子任务 + 评论（外键一律用子查询取真实本端 id）
+        async fn seed_device_a(a: &SqlitePool) {
+            for sql in [
+                "INSERT INTO todo_projects (uuid, title, created_at, updated_at, version) \
+                 VALUES ('p-a', 'A的项目', 1000, 1000, 1)",
+                "INSERT INTO todo_tasks (uuid, title, project_id, created_at, updated_at, version) \
+                 VALUES ('t-a', 'A的任务', (SELECT id FROM todo_projects WHERE uuid='p-a'), 1001, 1001, 1)",
+                "INSERT INTO todo_subtasks (uuid, task_id, title, created_at, updated_at, version) \
+                 VALUES ('s-a', (SELECT id FROM todo_tasks WHERE uuid='t-a'), 'A的子任务', 1002, 1002, 1)",
+                "INSERT INTO todo_comments (uuid, task_id, content, created_at, updated_at, version) \
+                 VALUES ('c-a', (SELECT id FROM todo_tasks WHERE uuid='t-a'), 'A的评论', 1003, 1003, 1)",
+            ] {
+                sqlx::query(sql).execute(a).await.unwrap();
+            }
+        }
+
+        /// B 端：自建任务占住低位 id，使「远端整数」与「本端正确 id」必然不同
+        async fn seed_device_b(b: &SqlitePool) {
+            sqlx::query(
+                "INSERT INTO todo_projects (uuid, title, created_at, updated_at, version) \
+                 VALUES ('p-b', 'B的项目', 900, 900, 1)",
+            )
+            .execute(b)
+            .await
+            .unwrap();
+            for uuid in ["t-b1", "t-b2"] {
+                sqlx::query(
+                    "INSERT INTO todo_tasks (uuid, title, created_at, updated_at, version) \
+                     VALUES (?1, 'B本地任务', 901, 901, 1)",
+                )
+                .bind(uuid)
+                .execute(b)
+                .await
+                .unwrap();
+            }
+        }
+
+        async fn id_of(db: &SqlitePool, table: &str, uuid: &str) -> i64 {
+            sqlx::query_scalar::<_, i64>(&format!(
+                "SELECT id FROM {table} WHERE uuid=?1"
+            ))
+            .bind(uuid)
+            .fetch_one(db)
+            .await
+            .unwrap()
+        }
+
+        async fn fk_of(db: &SqlitePool, table: &str, uuid: &str, col: &str) -> Option<i64> {
+            sqlx::query_scalar::<_, Option<i64>>(&format!(
+                "SELECT {col} FROM {table} WHERE uuid=?1"
+            ))
+            .bind(uuid)
+            .fetch_optional(db)
+            .await
+            .unwrap()
+            .flatten()
+        }
+
+        /// 表遍历顺序：注册表声明序（父先子后），与 pull 的定序口径一致
+        async fn pull_all(a: &SqlitePool, b: &SqlitePool) -> Result<(), CloudSyncError> {
+            for table in crate::db::sync_registry::SYNCABLE_TABLES {
+                let items = load_table_items(a, table).await?;
+                if items.is_empty() {
+                    continue;
+                }
+                merge_table_items(b, table, &items, &[], 0).await?;
+            }
+            Ok(())
+        }
+
+        #[tokio::test]
+        async fn loader_marks_parents_by_uuid() {
+            let a = pool().await;
+            seed_device_a(&a).await;
+
+            let tasks = load_table_items(&a, "todo_tasks").await.unwrap();
+            let task = tasks
+                .iter()
+                .find(|t| t["uuid"] == serde_json::json!("t-a"))
+                .expect("A 端任务");
+            assert_eq!(
+                task["_fk"]["project_id"],
+                serde_json::json!("p-a"),
+                "外键列必须附父行 uuid，而不是只有本地自增 id"
+            );
+
+            // 外键为 NULL 的行：_fk 键必须存在且为空对象（区别于旧格式载荷的「键缺失」）
+            sqlx::query(
+                "INSERT INTO todo_tasks (uuid, title, created_at, updated_at, version) \
+                 VALUES ('t-x', '无项目', 1, 1, 1)",
+            )
+            .execute(&a)
+            .await
+            .unwrap();
+            let after = load_table_items(&a, "todo_tasks").await.unwrap();
+            let x = after
+                .iter()
+                .find(|t| t["uuid"] == serde_json::json!("t-x"))
+                .unwrap();
+            assert_eq!(x.get(crate::cloud_sync::db_loader::FK_MARK), Some(&serde_json::json!({})));
+            assert!(x["project_id"].is_null());
+        }
+
+        #[tokio::test]
+        async fn children_land_on_local_parent_ids_not_remote_ints() {
+            let (a, b) = (pool().await, pool().await);
+            seed_device_a(&a).await;
+            seed_device_b(&b).await;
+            pull_all(&a, &b).await.expect("跨端合并应成功");
+
+            let local_task = id_of(&b, "todo_tasks", "t-a").await;
+            let local_project = id_of(&b, "todo_projects", "p-a").await;
+            // A 端整数：task.id 与 project.id（若被原样搬运就会挂到 B 的别的行上）
+            let remote_task = id_of(&a, "todo_tasks", "t-a").await;
+            let remote_project = id_of(&a, "todo_projects", "p-a").await;
+
+            assert_eq!(fk_of(&b, "todo_tasks", "t-a", "project_id").await, Some(local_project));
+            assert_eq!(fk_of(&b, "todo_subtasks", "s-a", "task_id").await, Some(local_task));
+            assert_eq!(fk_of(&b, "todo_comments", "c-a", "task_id").await, Some(local_task));
+
+            // 夹具自检：两端 id 必须不同，否则「等于本端 id」与「等于远端整数」无法区分
+            assert_ne!(local_task, remote_task, "夹具须保证两端任务 id 不同");
+            assert_ne!(local_project, remote_project, "夹具须保证两端项目 id 不同");
+            // B 自建任务不得被劫持为 A 子行的父级
+            assert_ne!(
+                local_task,
+                id_of(&b, "todo_tasks", "t-b1").await,
+                "B 本地任务 t-b1 不应成为 A 子任务的父级"
+            );
+        }
+
+        #[tokio::test]
+        async fn legacy_payload_without_fk_mark_is_rejected() {
+            let (a, b) = (pool().await, pool().await);
+            seed_device_a(&a).await;
+            seed_device_b(&b).await;
+
+            let mut items = load_table_items(&a, "todo_subtasks").await.unwrap();
+            for it in &mut items {
+                if let Some(obj) = it.as_object_mut() {
+                    obj.remove(crate::cloud_sync::db_loader::FK_MARK);
+                }
+            }
+            let err = merge_table_items(&b, "todo_subtasks", &items, &[], 0)
+                .await
+                .expect_err("旧格式载荷（无外键标记）必须报错，不能按整数落库");
+            let msg = err.to_string();
+            assert!(msg.contains("旧版"), "错误信息要指升级方向: {msg}");
+            assert!(
+                fk_of(&b, "todo_subtasks", "s-a", "task_id").await.is_none(),
+                "报错路径不得留下半行数据"
+            );
+        }
+
+        #[tokio::test]
+        async fn unresolvable_parent_reports_error_instead_of_wrong_id() {
+            let (a, b) = (pool().await, pool().await);
+            seed_device_a(&a).await;
+            seed_device_b(&b).await;
+
+            // 只合子表、父表本轮没到（对端 todo_tasks 推送失败的真实形态）
+            let items = load_table_items(&a, "todo_subtasks").await.unwrap();
+            let err = merge_table_items(&b, "todo_subtasks", &items, &[], 0)
+                .await
+                .expect_err("父级缺失不能静默写整数 id");
+            assert!(
+                err.to_string().contains("父级 todo_tasks/t-a"),
+                "错误信息要点名缺失的父表与父 uuid: {err}"
+            );
+            assert!(
+                fk_of(&b, "todo_subtasks", "s-a", "task_id").await.is_none(),
+                "解析失败即整表不写，B 端不得多出半行子任务"
+            );
+        }
     }
 
     // ========================================================================
