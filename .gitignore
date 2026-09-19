@@ -35,6 +35,8 @@ Thumbs.db
 .zcode/
 .codebuddy/
 test-results/
+# Playwright 本地运行产物（trace/.last-run.json 等，可随时重跑再生）
+.e2e-tmp/
 
 # 同步修复验证产物（临时库/截图/基线 JSON，7MB+ 不入库）
 .sync-test/
