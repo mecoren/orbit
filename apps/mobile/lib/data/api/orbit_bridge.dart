@@ -183,6 +183,27 @@ abstract class OrbitBridge {
   /// 仅验证主密码（敏感操作二次确认）
   Future<bool> masterAuthVerify(String password);
 
+  /// 修改主密码（校验旧密码后重写 master_auth.json；数据库 Key 不变，
+  /// 无需重开连接池）
+  Future<void> masterAuthChangePassword(String oldPassword, String newPassword);
+
+  /// 清除主密码（删除 master_auth.json，此后以明文模式打开）
+  ///
+  /// **调用前必须已完成 [dbMigrateToPlaintext]**，否则加密库无法再打开。
+  Future<void> masterAuthClear();
+
+  // ── 加密 ↔ 明文库迁移（设置页安全卡）──
+
+  /// 加密库 → 明文库迁移
+  ///
+  /// 返回后桥状态被清空，**调用方须重新 [dbInitPlaintext] + 重新订阅事件**
+  /// 才能继续操作。
+  Future<void> dbMigrateToPlaintext();
+
+  /// 明文库 → 加密库迁移（先 masterAuthInit 持久化 meta，再调用本方法，
+  /// 之后 dbInitEncrypted(dbKeyHex) 重开）
+  Future<void> dbMigrateToEncrypted(String dbKeyHex);
+
   // ── 生物识别解锁（密钥链在 Secure Storage，加解密在 Rust）──
 
   /// 生成 biometric 密钥链三件套（Base64），供写入 Secure Storage
@@ -253,6 +274,10 @@ abstract class OrbitBridge {
 
   Future<List<TodoLabel>> todoLabelList(ListFilter filter);
   Future<TodoLabel> todoLabelCreate(TodoLabelCreateInput input);
+
+  /// 更新标签（patchJson：{"title":…,"hex_color":…}；标签管理页改名/改色）
+  Future<TodoLabel> todoLabelUpdate(int id, String patchJson);
+
   Future<void> todoLabelDelete(int id);
   Future<TaskLabelWithId> todoTaskLabelCreate(TodoTaskLabelCreateInput input);
   Future<void> todoTaskLabelDelete(int taskLabelId);
@@ -295,7 +320,19 @@ abstract class OrbitBridge {
 
   /// 立即同步（pull_then_push），返回结果摘要
   Future<SyncResultJson> cloudSyncNow({String origin = 'manual'});
+
+  /// 仅推送（修改后立即同步场景）
+  Future<SyncResultJson> cloudSyncPushOnly({String origin = 'manual'});
+
+  /// 先拉后推（启动/生命周期场景）
+  Future<SyncResultJson> cloudSyncPullThenPush({String origin = 'manual'});
+
   Future<bool> cloudSyncIsRunning();
+
+  /// 增量同步历史（scope：all | incremental | push_only | pull_only；
+  /// 只读聚合，设置页「同步历史」卡数据源）
+  Future<List<SyncHistoryRow>> cloudSyncHistory(
+      {String scope = 'all', int limit = 20});
 
   /// 测试连接（不落盘）：返回云端根目录条目数；用户名/密码留空时
   /// 从已存激活配置回填（同协议）。错误文案带 [config]/[network] tag。
@@ -355,6 +392,10 @@ abstract class OrbitBridge {
   Future<TodoSavedFilter> savedFilterCreate(
       String name, String conditions);
 
+  /// 更新保存的筛选器（可视化构建抽屉的「保存修改」路径）
+  Future<TodoSavedFilter> savedFilterUpdate(
+      int id, String name, String conditions);
+
   /// 删除保存的筛选器（软删）
   Future<void> savedFilterDelete(int id);
 
@@ -383,6 +424,9 @@ abstract class OrbitBridge {
 
   /// 创建任务模板（payload JSON 白名单键校验在后端）
   Future<TodoTemplate> templateCreate(String name, String payload);
+
+  /// 更新任务模板（模板管理页编辑）
+  Future<TodoTemplate> templateUpdate(int id, String name, String payload);
 
   /// 删除任务模板（软删）
   Future<void> templateDelete(int id);
@@ -424,6 +468,84 @@ abstract class OrbitBridge {
 
   /// 以本机为准重置云端：当前 Data Key 全量重加密覆盖（危险操作，UI 二次确认）
   Future<String> cloudSyncRekey();
+
+  /// 修改同步密码（v2 下即换 Key，内部编排云端全量重传；失败回滚本机密码）
+  Future<void> syncCryptoChangePassword(String oldPassword, String newPassword);
+
+  /// 导出密钥包（JSON 字符串；跨设备分发 Data Key 的本地侧载体）
+  Future<String> syncCryptoExportBundle();
+
+  /// 启动静默恢复会话（尝试用缓存同步密码解锁）
+  ///
+  /// 移动端无持久凭据库（会话密码随 lock 清除），除「本就已解锁」外恒为 false，
+  /// Dart 侧应引导用户手动输入。
+  Future<bool> syncCryptoRestoreSession();
+
+  /// 忘记本机同步密码（清除会话缓存与引擎挂载，云数据与 crypto meta 不动）
+  Future<void> syncCryptoForgetSession();
+
+  // ── 全量备份与恢复（.orfullsync；数据安全兜底）──
+
+  /// 导出全量加密备份到本机备份目录；[uploadCloud] 时额外上传云端副本
+  ///
+  /// 手动导出不受自动备份偏好开关约束。密码复用已解锁的同步加密会话，
+  /// 未解锁时抛 `[unlocked]` 类错误——UI 应先引导解锁同步密码。
+  Future<BackupExportResult> fullBackupExport({bool uploadCloud = false});
+
+  /// 从备份字节全量覆盖恢复（bytes 由 file_picker 读得）
+  ///
+  /// 警示：会清空当前业务表再写入备份内容（事务内原子）。成功后广播
+  /// db-change（table="*"）触发全量刷新。[ignoreSchemaMismatch] 用于
+  /// schema 不一致时的强制二次确认。
+  Future<BackupImportResult> fullBackupImport(
+    List<int> bytes, {
+    bool ignoreSchemaMismatch = false,
+  });
+
+  /// 从云端备份副本恢复（先下载字节，再走与本地一致的导入路径）
+  Future<BackupImportResult> fullBackupRestoreCloud(
+    String cloudPath, {
+    bool ignoreSchemaMismatch = false,
+  });
+
+  /// 本地备份文件列表（最新在前）
+  Future<List<BackupEntry>> fullBackupListLocal();
+
+  /// 删除单个本地备份文件
+  Future<void> fullBackupDeleteLocal(String filePath);
+
+  /// 云端备份副本列表（最新在前；未配置云同步时抛 [config]）
+  Future<List<CloudBackupEntry>> fullBackupListCloud();
+
+  /// 本地备份恢复预览（解密 + 前 10 条任务抽样 + 统计，不写库）
+  Future<BackupPreview> fullBackupPeekLocal(List<int> bytes);
+
+  /// 云端备份恢复预览（先下载字节，再走与本地一致的预览路径，不写库）
+  Future<BackupPreview> fullBackupPeekCloud(String cloudPath);
+
+  /// 当前设备 ID（导出预览展示）
+  Future<BackupDeviceInfo> fullBackupDeviceInfo();
+
+  /// 读取自动备份偏好（无记录时返回默认值：调度关闭、本地/云端开关开）
+  Future<BackupPrefs> backupPrefsGet();
+
+  /// 保存自动备份偏好（校验调度配置；返回回填 nextBackupAt 后的完整偏好）
+  Future<BackupPrefs> backupPrefsSave(BackupPrefs prefs);
+
+  /// 启动自动备份调度守护（幂等；DB 就绪后由 BootGate 调一次——
+  /// 每日按档位触发 + 错过时刻下次启动首轮补备 + 未解锁同步密码时静默跳过）
+  Future<void> startBackupScheduler();
+
+  // ── 通知历史（本地呈现轨迹，不进同步白名单）──
+
+  /// 通知历史列表（时间倒序；[kind] 为 null 时返回全部，limit 默认 50 上限 200）
+  Future<List<NotificationLogRow>> notificationLogList({
+    String? kind,
+    int? limit,
+  });
+
+  /// 清空通知历史，返回删除行数
+  Future<int> notificationLogClear();
 
   // ── 节假日数据（日历视图联网更新；cfg_holidays 本地缓存）──
 

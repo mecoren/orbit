@@ -21,6 +21,15 @@ class MockStore {
   // 冲突败方副本（03 §八）：JSON Map 形状 = Rust serde 产物，处置状态就地改写
   final conflicts = <Map<String, dynamic>>[];
 
+  // 通知历史（notification_log 同形：本地轨迹，不进同步白名单；通知历史页消费）
+  final notificationLog = <Map<String, dynamic>>[];
+
+  // 全量备份域（本地/云端备份清单 + 自动备份偏好 + 增量同步历史）
+  final localBackups = <BackupEntry>[];
+  final cloudBackups = <CloudBackupEntry>[];
+  final syncHistory = <SyncHistoryRow>[];
+  BackupPrefs backupPrefs = BackupPrefs.initial;
+
   var nextId = 1;
   bool masterAuthSet = false;
   bool dbReady = false;
@@ -286,5 +295,65 @@ class MockStore {
         'resolved_at': 0,
       },
     ]);
+
+    // 通知历史造态（通知页）：覆盖 到期 / 推迟 / 完成 三类
+    void notify(String kind, String title, int agoMs, String payload) {
+      final n = {
+        ...newEntity('nl'),
+        'kind': kind,
+        'task_id': t1['id'],
+        'task_title': title,
+        'reminder_id': null,
+        'payload': payload,
+        'created_at': now() - agoMs,
+      };
+      notificationLog.add(n);
+    }
+
+    notify('reminder_due', t1['title'], 3600000, jsonEncode({'remind_at': 0}));
+    notify('snooze', t1['title'], 7200000, jsonEncode({'snooze_until': 0}));
+    notify('complete', t1['title'], 86400000, '{}');
+
+    // 增量同步历史造态（同步历史卡）
+    syncHistory.addAll([
+      SyncHistoryRow(
+        id: id,
+        syncType: 'sync_now',
+        status: 'success',
+        startedAt: now() - 5400000,
+        finishedAt: now() - 5399000,
+        pulledCount: 3,
+        pushedCount: 5,
+        conflictCount: 0,
+      ),
+      SyncHistoryRow(
+        id: id,
+        syncType: 'push_only',
+        status: 'failed',
+        startedAt: now() - 86000000,
+        finishedAt: now() - 85998000,
+        pulledCount: 0,
+        pushedCount: 0,
+        conflictCount: 0,
+        errorMessage: '[network] 连接超时',
+      ),
+    ]);
   }
+
+  /// 全量备份清单（mock 导出/预览共用；表计数按当前内存库口径推导）
+  BackupManifest buildManifest({String? deviceId}) => BackupManifest(
+        formatVersion: 1,
+        createdAt: DateTime.fromMillisecondsSinceEpoch(now()).toIso8601String(),
+        createdAtTs: now(),
+        appVersion: '0.1.0',
+        deviceId: deviceId ?? 'mock-device',
+        deviceName: 'Mock 设备',
+        schemaVersion: 1,
+        tableCounts: [
+          BackupTableCount(table: 'todo_projects', count: projects.length),
+          BackupTableCount(table: 'todo_tasks', count: tasks.length),
+          BackupTableCount(table: 'todo_subtasks', count: subtasks.length),
+          BackupTableCount(table: 'todo_labels', count: labels.length),
+        ],
+      );
 }

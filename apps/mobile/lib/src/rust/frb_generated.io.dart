@@ -10,9 +10,11 @@ import 'api/biometric.dart';
 import 'api/csv_import.dart';
 import 'api/dto.dart';
 import 'api/events.dart';
+import 'api/full_sync_backup.dart';
 import 'api/holiday.dart';
 import 'api/ics_export.dart';
 import 'api/maintenance.dart';
+import 'api/notification_log.dart';
 import 'api/plaintext_export.dart';
 import 'api/saved_filter.dart';
 import 'api/search.dart';
@@ -58,10 +60,43 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   ActivityLogRow dco_decode_activity_log_row(dynamic raw);
 
   @protected
+  BackupDeviceInfo dco_decode_backup_device_info(dynamic raw);
+
+  @protected
+  BackupEntryView dco_decode_backup_entry_view(dynamic raw);
+
+  @protected
+  BackupExportResult dco_decode_backup_export_result(dynamic raw);
+
+  @protected
+  BackupImportResult dco_decode_backup_import_result(dynamic raw);
+
+  @protected
+  BackupManifestView dco_decode_backup_manifest_view(dynamic raw);
+
+  @protected
+  BackupPrefsView dco_decode_backup_prefs_view(dynamic raw);
+
+  @protected
+  BackupPreviewTask dco_decode_backup_preview_task(dynamic raw);
+
+  @protected
+  BackupPreviewView dco_decode_backup_preview_view(dynamic raw);
+
+  @protected
+  BackupTableCount dco_decode_backup_table_count(dynamic raw);
+
+  @protected
+  BackupTaskStats dco_decode_backup_task_stats(dynamic raw);
+
+  @protected
   BiometricSecretBundle dco_decode_biometric_secret_bundle(dynamic raw);
 
   @protected
   bool dco_decode_bool(dynamic raw);
+
+  @protected
+  BackupPrefsView dco_decode_box_autoadd_backup_prefs_view(dynamic raw);
 
   @protected
   bool dco_decode_box_autoadd_bool(dynamic raw);
@@ -148,6 +183,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   BigInt dco_decode_box_autoadd_usize(dynamic raw);
 
   @protected
+  CloudBackupEntryView dco_decode_cloud_backup_entry_view(dynamic raw);
+
+  @protected
   CommentSearchHit dco_decode_comment_search_hit(dynamic raw);
 
   @protected
@@ -199,6 +237,20 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<ActivityLogRow> dco_decode_list_activity_log_row(dynamic raw);
 
   @protected
+  List<BackupEntryView> dco_decode_list_backup_entry_view(dynamic raw);
+
+  @protected
+  List<BackupPreviewTask> dco_decode_list_backup_preview_task(dynamic raw);
+
+  @protected
+  List<BackupTableCount> dco_decode_list_backup_table_count(dynamic raw);
+
+  @protected
+  List<CloudBackupEntryView> dco_decode_list_cloud_backup_entry_view(
+    dynamic raw,
+  );
+
+  @protected
   List<CommentSearchHit> dco_decode_list_comment_search_hit(dynamic raw);
 
   @protected
@@ -212,6 +264,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<IcsTableCount> dco_decode_list_ics_table_count(dynamic raw);
+
+  @protected
+  List<NotificationLogRow> dco_decode_list_notification_log_row(dynamic raw);
 
   @protected
   Int64List dco_decode_list_prim_i_64_strict(dynamic raw);
@@ -242,6 +297,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<SyncConflict> dco_decode_list_sync_conflict(dynamic raw);
+
+  @protected
+  List<SyncHistoryView> dco_decode_list_sync_history_view(dynamic raw);
 
   @protected
   List<TableCount> dco_decode_list_table_count(dynamic raw);
@@ -297,6 +355,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<WidgetTodoItem> dco_decode_list_widget_todo_item(dynamic raw);
+
+  @protected
+  NotificationLogRow dco_decode_notification_log_row(dynamic raw);
 
   @protected
   String? dco_decode_opt_String(dynamic raw);
@@ -369,6 +430,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   SyncCryptoStatus dco_decode_sync_crypto_status(dynamic raw);
+
+  @protected
+  SyncHistoryView dco_decode_sync_history_view(dynamic raw);
 
   @protected
   TableCount dco_decode_table_count(dynamic raw);
@@ -507,12 +571,57 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   ActivityLogRow sse_decode_activity_log_row(SseDeserializer deserializer);
 
   @protected
+  BackupDeviceInfo sse_decode_backup_device_info(SseDeserializer deserializer);
+
+  @protected
+  BackupEntryView sse_decode_backup_entry_view(SseDeserializer deserializer);
+
+  @protected
+  BackupExportResult sse_decode_backup_export_result(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  BackupImportResult sse_decode_backup_import_result(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  BackupManifestView sse_decode_backup_manifest_view(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  BackupPrefsView sse_decode_backup_prefs_view(SseDeserializer deserializer);
+
+  @protected
+  BackupPreviewTask sse_decode_backup_preview_task(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  BackupPreviewView sse_decode_backup_preview_view(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  BackupTableCount sse_decode_backup_table_count(SseDeserializer deserializer);
+
+  @protected
+  BackupTaskStats sse_decode_backup_task_stats(SseDeserializer deserializer);
+
+  @protected
   BiometricSecretBundle sse_decode_biometric_secret_bundle(
     SseDeserializer deserializer,
   );
 
   @protected
   bool sse_decode_bool(SseDeserializer deserializer);
+
+  @protected
+  BackupPrefsView sse_decode_box_autoadd_backup_prefs_view(
+    SseDeserializer deserializer,
+  );
 
   @protected
   bool sse_decode_box_autoadd_bool(SseDeserializer deserializer);
@@ -609,6 +718,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   BigInt sse_decode_box_autoadd_usize(SseDeserializer deserializer);
 
   @protected
+  CloudBackupEntryView sse_decode_cloud_backup_entry_view(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   CommentSearchHit sse_decode_comment_search_hit(SseDeserializer deserializer);
 
   @protected
@@ -672,6 +786,26 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  List<BackupEntryView> sse_decode_list_backup_entry_view(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  List<BackupPreviewTask> sse_decode_list_backup_preview_task(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  List<BackupTableCount> sse_decode_list_backup_table_count(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  List<CloudBackupEntryView> sse_decode_list_cloud_backup_entry_view(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   List<CommentSearchHit> sse_decode_list_comment_search_hit(
     SseDeserializer deserializer,
   );
@@ -689,6 +823,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<IcsTableCount> sse_decode_list_ics_table_count(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  List<NotificationLogRow> sse_decode_list_notification_log_row(
     SseDeserializer deserializer,
   );
 
@@ -733,6 +872,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<SyncConflict> sse_decode_list_sync_conflict(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  List<SyncHistoryView> sse_decode_list_sync_history_view(
     SseDeserializer deserializer,
   );
 
@@ -806,6 +950,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<WidgetTodoItem> sse_decode_list_widget_todo_item(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  NotificationLogRow sse_decode_notification_log_row(
     SseDeserializer deserializer,
   );
 
@@ -886,6 +1035,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   SyncCryptoStatus sse_decode_sync_crypto_status(SseDeserializer deserializer);
+
+  @protected
+  SyncHistoryView sse_decode_sync_history_view(SseDeserializer deserializer);
 
   @protected
   TableCount sse_decode_table_count(SseDeserializer deserializer);
@@ -1058,6 +1210,66 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_backup_device_info(
+    BackupDeviceInfo self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_backup_entry_view(
+    BackupEntryView self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_backup_export_result(
+    BackupExportResult self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_backup_import_result(
+    BackupImportResult self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_backup_manifest_view(
+    BackupManifestView self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_backup_prefs_view(
+    BackupPrefsView self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_backup_preview_task(
+    BackupPreviewTask self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_backup_preview_view(
+    BackupPreviewView self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_backup_table_count(
+    BackupTableCount self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_backup_task_stats(
+    BackupTaskStats self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_biometric_secret_bundle(
     BiometricSecretBundle self,
     SseSerializer serializer,
@@ -1065,6 +1277,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_bool(bool self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_backup_prefs_view(
+    BackupPrefsView self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_box_autoadd_bool(bool self, SseSerializer serializer);
@@ -1181,6 +1399,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_box_autoadd_usize(BigInt self, SseSerializer serializer);
 
   @protected
+  void sse_encode_cloud_backup_entry_view(
+    CloudBackupEntryView self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_comment_search_hit(
     CommentSearchHit self,
     SseSerializer serializer,
@@ -1256,6 +1480,30 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_list_backup_entry_view(
+    List<BackupEntryView> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_backup_preview_task(
+    List<BackupPreviewTask> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_backup_table_count(
+    List<BackupTableCount> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_cloud_backup_entry_view(
+    List<CloudBackupEntryView> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_list_comment_search_hit(
     List<CommentSearchHit> self,
     SseSerializer serializer,
@@ -1279,6 +1527,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_list_ics_table_count(
     List<IcsTableCount> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_notification_log_row(
+    List<NotificationLogRow> self,
     SseSerializer serializer,
   );
 
@@ -1336,6 +1590,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_list_sync_conflict(
     List<SyncConflict> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_sync_history_view(
+    List<SyncHistoryView> self,
     SseSerializer serializer,
   );
 
@@ -1435,6 +1695,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_list_widget_todo_item(
     List<WidgetTodoItem> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_notification_log_row(
+    NotificationLogRow self,
     SseSerializer serializer,
   );
 
@@ -1552,6 +1818,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_sync_crypto_status(
     SyncCryptoStatus self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_sync_history_view(
+    SyncHistoryView self,
     SseSerializer serializer,
   );
 

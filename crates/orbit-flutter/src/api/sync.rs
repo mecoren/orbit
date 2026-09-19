@@ -95,7 +95,10 @@ fn with_runtime<T>(f: impl FnOnce(&mut SyncRuntime) -> Result<T, String>) -> Res
 }
 
 /// 取同步加密服务单例（对齐桌面 sync_runtime::sync_crypto）
-fn runtime_crypto() -> Result<SyncCryptoService, String> {
+///
+/// pub(crate)：全量备份域（[super::full_sync_backup]）复用同一已解锁实例，
+/// 避免备份导出/导入另起一份 Data Key 内存态。
+pub(crate) fn runtime_crypto() -> Result<SyncCryptoService, String> {
     with_runtime(|rt| Ok(rt.crypto.clone()))
 }
 
@@ -528,6 +531,54 @@ pub async fn cloud_sync_get_state() -> Result<String, String> {
 pub async fn cloud_sync_is_running() -> Result<bool, String> {
     let engine = runtime_engine()?;
     Ok(cloud_sync_api::is_running(&engine))
+}
+
+/// 增量同步历史行（镜像 orbit_core::models::business::SyncHistory）
+///
+/// 只读聚合（sync_history 表），不 emit 事件、不进同步白名单。
+#[derive(Debug, Clone, Serialize)]
+pub struct SyncHistoryView {
+    pub id: i64,
+    /// sync_now / push_only / pull_then_push
+    pub sync_type: String,
+    /// success / failed / conflict 等
+    pub status: String,
+    pub started_at: i64,
+    pub finished_at: Option<i64>,
+    pub pulled_count: i64,
+    pub pushed_count: i64,
+    pub conflict_count: i64,
+    pub error_message: Option<String>,
+}
+
+impl From<orbit_core::models::business::SyncHistory> for SyncHistoryView {
+    fn from(h: orbit_core::models::business::SyncHistory) -> Self {
+        Self {
+            id: h.id,
+            sync_type: h.sync_type,
+            status: h.status,
+            started_at: h.started_at,
+            finished_at: h.finished_at,
+            pulled_count: h.pulled_count,
+            pushed_count: h.pushed_count,
+            conflict_count: h.conflict_count,
+            error_message: h.error_message,
+        }
+    }
+}
+
+/// 查询增量同步历史（P1-17 展示面；设置页「同步历史」卡数据源）
+///
+/// `scope`：all | incremental | push_only | pull_only（口径见 core API 文档）；
+/// 只读聚合不 emit 事件；limit 由前端夹紧（1..=200）。
+///
+/// 对齐桌面 `cloud_sync_history`。
+pub async fn cloud_sync_history(scope: String, limit: i64) -> Result<Vec<SyncHistoryView>, String> {
+    let pool = with_state(|s| Ok(s.pool.clone()))?;
+    cloud_sync_api::incremental_history(&pool, &scope, limit.clamp(1, 200))
+        .await
+        .map_err(err_tagged_cloud)
+        .map(|rows| rows.into_iter().map(SyncHistoryView::from).collect())
 }
 
 /// 断开云同步：软删激活配置 + 清空本地指纹账本（下次配置后触发全量重推）

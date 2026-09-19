@@ -1241,3 +1241,311 @@ class ActivityLogRow {
         createdAt: j['created_at'] as int,
       );
 }
+
+// =============================================================================
+// 全量备份（.orfullsync；FRB full_sync_backup.rs 镜像）
+// =============================================================================
+
+/// 备份内单表记录数（Rust 侧 BTreeMap 展开为有序列表）
+class BackupTableCount {
+  final String table;
+  final int count;
+
+  const BackupTableCount({required this.table, required this.count});
+}
+
+/// 备份清单（manifest.json；恢复预览与导出结果共用）
+class BackupManifest {
+  final int formatVersion;
+  final String createdAt;
+  final int createdAtTs;
+  final String appVersion;
+  final String deviceId;
+  final String? deviceName;
+  final int schemaVersion;
+  final List<BackupTableCount> tableCounts;
+
+  const BackupManifest({
+    required this.formatVersion,
+    required this.createdAt,
+    required this.createdAtTs,
+    required this.appVersion,
+    required this.deviceId,
+    this.deviceName,
+    required this.schemaVersion,
+    required this.tableCounts,
+  });
+
+  /// 表记录数合计（清单摘要行展示）
+  int get totalRecords =>
+      tableCounts.fold(0, (sum, e) => sum + e.count);
+}
+
+/// 全量备份导出结果（本地文件 + 可选云端副本，两者失败互不阻塞）
+class BackupExportResult {
+  final String filePath;
+  final int fileSize;
+  final BackupManifest manifest;
+  final String? cloudPath;
+  final bool cloudUploaded;
+  final String? cloudError;
+  final String? localPath;
+  final String? localError;
+
+  const BackupExportResult({
+    required this.filePath,
+    required this.fileSize,
+    required this.manifest,
+    this.cloudPath,
+    required this.cloudUploaded,
+    this.cloudError,
+    this.localPath,
+    this.localError,
+  });
+}
+
+/// 全量备份导入（恢复）结果
+class BackupImportResult {
+  final int successCount;
+  final int errorCount;
+  final List<String> errors;
+  final BackupManifest manifest;
+
+  /// 恢复的是更早版本 schema 时提示重启以完成迁移
+  final bool needsRestart;
+
+  const BackupImportResult({
+    required this.successCount,
+    required this.errorCount,
+    required this.errors,
+    required this.manifest,
+    required this.needsRestart,
+  });
+}
+
+/// 备份内单条任务预览（恢复确认框抽样展示）
+class BackupPreviewTask {
+  final String title;
+  final String status;
+  final bool done;
+  final int? dueDate;
+  final int priority;
+  final String? project;
+  final bool isDeleted;
+
+  const BackupPreviewTask({
+    required this.title,
+    required this.status,
+    required this.done,
+    this.dueDate,
+    required this.priority,
+    this.project,
+    required this.isDeleted,
+  });
+}
+
+/// 备份内任务统计（存活/已完成/墓碑）
+class BackupTaskStats {
+  final int total;
+  final int alive;
+  final int done;
+  final int deleted;
+
+  const BackupTaskStats({
+    required this.total,
+    required this.alive,
+    required this.done,
+    required this.deleted,
+  });
+}
+
+/// 恢复预览（只读：清单统计 + 任务抽样 + schema 比对）
+class BackupPreview {
+  final BackupManifest manifest;
+  final List<BackupPreviewTask> sampleTasks;
+  final BackupTaskStats taskStats;
+
+  /// 备份 schema 与当前库不一致（恢复需追加一次强制确认）
+  final bool schemaMismatch;
+  final int currentSchemaVersion;
+
+  const BackupPreview({
+    required this.manifest,
+    required this.sampleTasks,
+    required this.taskStats,
+    required this.schemaMismatch,
+    required this.currentSchemaVersion,
+  });
+}
+
+/// 本地备份文件条目
+class BackupEntry {
+  final String filename;
+  final String filePath;
+  final int modifiedAt;
+  final int sizeBytes;
+
+  const BackupEntry({
+    required this.filename,
+    required this.filePath,
+    required this.modifiedAt,
+    required this.sizeBytes,
+  });
+}
+
+/// 云端备份副本条目（cloudPath 为 peek/restore 回传的完整对象路径）
+class CloudBackupEntry {
+  final String name;
+  final String cloudPath;
+  final int sizeBytes;
+  final int modifiedAt;
+
+  const CloudBackupEntry({
+    required this.name,
+    required this.cloudPath,
+    required this.sizeBytes,
+    required this.modifiedAt,
+  });
+}
+
+/// 自动备份偏好（镜像 core BackupPrefs；scheduleType 用字符串承载：
+/// off / hourly / daily / weekly / monthly / yearly）
+class BackupPrefs {
+  final String? localPath;
+  final bool keepLatest;
+  final bool cloudBackupEnabled;
+  final bool localBackupEnabled;
+  final String scheduleType;
+
+  /// "HH:mm"（daily/weekly/monthly/yearly 使用）
+  final String scheduleTime;
+  final int scheduleMinute;
+  final int scheduleWeekday;
+  final int scheduleDayOfMonth;
+  final int scheduleMonth;
+  final int lastBackupAt;
+  final int nextBackupAt;
+
+  const BackupPrefs({
+    this.localPath,
+    required this.keepLatest,
+    required this.cloudBackupEnabled,
+    required this.localBackupEnabled,
+    required this.scheduleType,
+    required this.scheduleTime,
+    required this.scheduleMinute,
+    required this.scheduleWeekday,
+    required this.scheduleDayOfMonth,
+    required this.scheduleMonth,
+    required this.lastBackupAt,
+    required this.nextBackupAt,
+  });
+
+  /// 默认值（与 core BackupPrefs::default 同口径：调度关闭、双开关开）
+  static const initial = BackupPrefs(
+    keepLatest: false,
+    cloudBackupEnabled: true,
+    localBackupEnabled: true,
+    scheduleType: 'off',
+    scheduleTime: '03:00',
+    scheduleMinute: 0,
+    scheduleWeekday: 0,
+    scheduleDayOfMonth: 1,
+    scheduleMonth: 1,
+    lastBackupAt: 0,
+    nextBackupAt: 0,
+  );
+
+  BackupPrefs copyWith({
+    bool? keepLatest,
+    bool? cloudBackupEnabled,
+    bool? localBackupEnabled,
+    String? scheduleType,
+    String? scheduleTime,
+    int? scheduleMinute,
+    int? scheduleWeekday,
+    int? scheduleDayOfMonth,
+    int? scheduleMonth,
+    int? lastBackupAt,
+    int? nextBackupAt,
+  }) =>
+      BackupPrefs(
+        localPath: localPath,
+        keepLatest: keepLatest ?? this.keepLatest,
+        cloudBackupEnabled: cloudBackupEnabled ?? this.cloudBackupEnabled,
+        localBackupEnabled: localBackupEnabled ?? this.localBackupEnabled,
+        scheduleType: scheduleType ?? this.scheduleType,
+        scheduleTime: scheduleTime ?? this.scheduleTime,
+        scheduleMinute: scheduleMinute ?? this.scheduleMinute,
+        scheduleWeekday: scheduleWeekday ?? this.scheduleWeekday,
+        scheduleDayOfMonth: scheduleDayOfMonth ?? this.scheduleDayOfMonth,
+        scheduleMonth: scheduleMonth ?? this.scheduleMonth,
+        lastBackupAt: lastBackupAt ?? this.lastBackupAt,
+        nextBackupAt: nextBackupAt ?? this.nextBackupAt,
+      );
+}
+
+/// 当前设备信息（导出预览展示）
+class BackupDeviceInfo {
+  final String deviceId;
+
+  const BackupDeviceInfo({required this.deviceId});
+}
+
+// =============================================================================
+// 通知历史（notification_log 本地轨迹表；FRB notification_log.rs 镜像）
+// =============================================================================
+
+/// 通知历史行（kind = reminder_due / snooze / complete / boot_skip）
+class NotificationLogRow {
+  final int id;
+  final String kind;
+  final int? taskId;
+  final String taskTitle;
+  final int? reminderId;
+
+  /// 附加 JSON：{remind_at, snooze_until, source}
+  final String payload;
+  final int createdAt;
+
+  const NotificationLogRow({
+    required this.id,
+    required this.kind,
+    this.taskId,
+    required this.taskTitle,
+    this.reminderId,
+    required this.payload,
+    required this.createdAt,
+  });
+}
+
+/// 增量同步历史行（FRB sync.rs SyncHistoryView 镜像；只读聚合）
+class SyncHistoryRow {
+  final int id;
+
+  /// sync_now / push_only / pull_then_push
+  final String syncType;
+  final String status;
+  final int startedAt;
+  final int? finishedAt;
+  final int pulledCount;
+  final int pushedCount;
+  final int conflictCount;
+  final String? errorMessage;
+
+  const SyncHistoryRow({
+    required this.id,
+    required this.syncType,
+    required this.status,
+    required this.startedAt,
+    this.finishedAt,
+    required this.pulledCount,
+    required this.pushedCount,
+    required this.conflictCount,
+    this.errorMessage,
+  });
+
+  /// 耗时毫秒（未完成时按 0 处理）
+  int get elapsedMs =>
+      finishedAt == null ? 0 : (finishedAt! - startedAt).clamp(0, 1 << 40);
+}

@@ -8,7 +8,7 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
 // These functions are ignored because they are not marked as `pub`: `active_config`, `attach_password_to_runtime`, `attachments_dir`, `auto_sync_flag`, `base_path_normalized`, `bucket_trimmed`, `detach_password_from_runtime`, `engine_config_of_record`, `err_tagged_cloud`, `err_tagged_crypto`, `from_record`, `interval_clamped`, `parse_origin`, `password_str`, `region_trimmed`, `run_sync`, `runtime_crypto`, `runtime_engine`, `skip_tls_flag`, `sync_on_change_flag`, `timeout_clamped`, `username_str`, `with_runtime`
 // These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `SyncAction`, `SyncRuntime`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`, `from`
 
 /// 读取当前激活配置（未配置返回 null）
 ///
@@ -61,6 +61,20 @@ Future<String> cloudSyncGetState() =>
 /// 对齐桌面 `cloud_sync_is_running`。
 Future<bool> cloudSyncIsRunning() =>
     RustLib.instance.api.crateApiSyncCloudSyncIsRunning();
+
+/// 查询增量同步历史（P1-17 展示面；设置页「同步历史」卡数据源）
+///
+/// `scope`：all | incremental | push_only | pull_only（口径见 core API 文档）；
+/// 只读聚合不 emit 事件；limit 由前端夹紧（1..=200）。
+///
+/// 对齐桌面 `cloud_sync_history`。
+Future<List<SyncHistoryView>> cloudSyncHistory({
+  required String scope,
+  required PlatformInt64 limit,
+}) => RustLib.instance.api.crateApiSyncCloudSyncHistory(
+  scope: scope,
+  limit: limit,
+);
 
 /// 断开云同步：软删激活配置 + 清空本地指纹账本（下次配置后触发全量重推）
 ///
@@ -353,4 +367,62 @@ class SyncCryptoStatus {
           runtimeType == other.runtimeType &&
           hasPassword == other.hasPassword &&
           isUnlocked == other.isUnlocked;
+}
+
+/// 增量同步历史行（镜像 orbit_core::models::business::SyncHistory）
+///
+/// 只读聚合（sync_history 表），不 emit 事件、不进同步白名单。
+class SyncHistoryView {
+  final PlatformInt64 id;
+
+  /// sync_now / push_only / pull_then_push
+  final String syncType;
+
+  /// success / failed / conflict 等
+  final String status;
+  final PlatformInt64 startedAt;
+  final PlatformInt64? finishedAt;
+  final PlatformInt64 pulledCount;
+  final PlatformInt64 pushedCount;
+  final PlatformInt64 conflictCount;
+  final String? errorMessage;
+
+  const SyncHistoryView({
+    required this.id,
+    required this.syncType,
+    required this.status,
+    required this.startedAt,
+    this.finishedAt,
+    required this.pulledCount,
+    required this.pushedCount,
+    required this.conflictCount,
+    this.errorMessage,
+  });
+
+  @override
+  int get hashCode =>
+      id.hashCode ^
+      syncType.hashCode ^
+      status.hashCode ^
+      startedAt.hashCode ^
+      finishedAt.hashCode ^
+      pulledCount.hashCode ^
+      pushedCount.hashCode ^
+      conflictCount.hashCode ^
+      errorMessage.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is SyncHistoryView &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          syncType == other.syncType &&
+          status == other.status &&
+          startedAt == other.startedAt &&
+          finishedAt == other.finishedAt &&
+          pulledCount == other.pulledCount &&
+          pushedCount == other.pushedCount &&
+          conflictCount == other.conflictCount &&
+          errorMessage == other.errorMessage;
 }

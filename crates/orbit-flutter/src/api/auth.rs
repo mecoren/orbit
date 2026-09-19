@@ -7,9 +7,13 @@
 use std::path::PathBuf;
 
 use orbit_core::crypto::master_auth::{
-    db_key_to_hex, init_master_auth, unlock_master_auth, verify_master_auth,
+    change_master_auth_password, db_key_to_hex, init_master_auth, unlock_master_auth,
+    verify_master_auth,
 };
 use orbit_core::db::lifecycle;
+use orbit_core::db::migrate::{
+    finalize_encrypted_migration, finalize_migration, migrate_to_encrypted, migrate_to_plaintext,
+};
 
 use super::state::{clear_state, set_state};
 
@@ -126,4 +130,73 @@ pub fn master_auth_verify(base_dir: String, password: String) -> Result<bool, St
         .map_err(|e| e.to_string())?
         .ok_or_else(|| "未设置主密码".to_string())?;
     Ok(verify_master_auth(&password, &meta))
+}
+
+/// 修改主密码（校验旧密码后重写 master_auth.json；数据库 Key 不变）
+///
+/// 对齐桌面 `master_auth_change_password`。注意：本函数只换「开屏密码包装」，
+/// 数据库文件的加密 Key 不受影响，故无需重开连接池。
+pub fn master_auth_change_password(
+    base_dir: String,
+    old_password: String,
+    new_password: String,
+) -> Result<(), String> {
+    let dir = dir_of(base_dir)?;
+    let meta = lifecycle::load_master_auth(&dir)
+        .map_err(|e| e.to_string())?
+        .ok_or_else(|| "未设置主密码".to_string())?;
+
+    let (new_meta, _) = change_master_auth_password(&old_password, &new_password, &meta)
+        .map_err(|e| e.to_string())?;
+    lifecycle::save_master_auth(&dir, &new_meta).map_err(|e| e.to_string())
+}
+
+/// 清除主密码（删除 master_auth.json，此后以明文模式打开）
+///
+/// 对齐桌面 `master_auth_clear`。**调用前必须已完成
+/// [db_migrate_to_plaintext]**，否则加密数据库将无法打开。
+pub fn master_auth_clear(base_dir: String) -> Result<(), String> {
+    let dir = dir_of(base_dir)?;
+    lifecycle::clear_master_auth(&dir).map_err(|e| e.to_string())
+}
+
+// ── 加密 ↔ 明文库迁移（对齐桌面 db_cmd.rs） ──
+
+/// 加密库 → 明文库迁移（设置页「关闭加密」场景）
+///
+/// 流程与桌面一致：WAL checkpoint → ATTACH 明文临时库 → sqlcipher_export →
+/// 关闭旧连接池 → 用明文文件替换 → 清空全局状态。
+/// **调用方（Dart）在返回后须重新走 db_init_plaintext 才可继续操作**，
+/// 否则后续命令报 `[not_initialized]`。
+pub async fn db_migrate_to_plaintext() -> Result<(), String> {
+    let (pool, dir) = super::state::with_state(|s| Ok((s.pool.clone(), s.base_dir.clone())))?;
+    let db_path = lifecycle::db_path(&dir);
+
+    migrate_to_plaintext(&pool, &db_path)
+        .await
+        .map_err(|e| format!("数据库迁移失败: {e}"))?;
+
+    pool.close().await;
+    finalize_migration(&db_path).map_err(|e| format!("数据库文件替换失败: {e}"))?;
+    super::state::clear_state();
+    Ok(())
+}
+
+/// 明文库 → 加密库迁移（首次设置主密码场景）
+///
+/// 流程与桌面一致：sqlcipher_export 到加密临时文件 → 关闭旧连接池 →
+/// 文件替换 → 清空全局状态。**调用方须先 master_auth_init 持久化 meta，
+/// 返回后再 db_init_encrypted(db_key_hex) 重开**。
+pub async fn db_migrate_to_encrypted(db_key_hex: String) -> Result<(), String> {
+    let (pool, dir) = super::state::with_state(|s| Ok((s.pool.clone(), s.base_dir.clone())))?;
+    let db_path = lifecycle::db_path(&dir);
+
+    migrate_to_encrypted(&pool, &db_path, &db_key_hex)
+        .await
+        .map_err(|e| format!("数据库加密迁移失败: {e}"))?;
+
+    pool.close().await;
+    finalize_encrypted_migration(&db_path).map_err(|e| format!("数据库文件替换失败: {e}"))?;
+    super::state::clear_state();
+    Ok(())
 }

@@ -21,6 +21,8 @@ import '../../src/rust/api/auth.dart' as gen_auth;
 import '../../src/rust/api/biometric.dart' as gen_bio;
 import '../../src/rust/api/todo.dart' as gen_todo;
 import '../../src/rust/api/trash.dart' as gen_trash;
+import '../../src/rust/api/full_sync_backup.dart' as gen_backup;
+import '../../src/rust/api/notification_log.dart' as gen_notif;
 import '../../src/rust/api/stats.dart' as gen_stats;
 import '../../src/rust/api/search.dart' as gen_search;
 import '../../src/rust/frb_generated.dart' show RustLib;
@@ -62,6 +64,26 @@ class RustOrbitBridge implements OrbitBridge {
   @override
   Future<bool> masterAuthVerify(String password) async =>
       gen_auth.masterAuthVerify(baseDir: await _dir(), password: password);
+
+  @override
+  Future<void> masterAuthChangePassword(
+          String oldPassword, String newPassword) async =>
+      gen_auth.masterAuthChangePassword(
+        baseDir: await _dir(),
+        oldPassword: oldPassword,
+        newPassword: newPassword,
+      );
+
+  @override
+  Future<void> masterAuthClear() async =>
+      gen_auth.masterAuthClear(baseDir: await _dir());
+
+  @override
+  Future<void> dbMigrateToPlaintext() => gen_auth.dbMigrateToPlaintext();
+
+  @override
+  Future<void> dbMigrateToEncrypted(String dbKeyHex) =>
+      gen_auth.dbMigrateToEncrypted(dbKeyHex: dbKeyHex);
 
   // ── 生物识别解锁（三件套经 Secure Storage，此处仅密钥编排）──
 
@@ -299,6 +321,10 @@ class RustOrbitBridge implements OrbitBridge {
       ));
 
   @override
+  Future<TodoLabel> todoLabelUpdate(int id, String patchJson) async =>
+      _mapLabel(await gen_todo.todoLabelsUpdate(id: id, patchJson: patchJson));
+
+  @override
   Future<void> todoLabelDelete(int id) => gen_todo.todoLabelsDelete(id: id);
 
   @override
@@ -495,7 +521,42 @@ class RustOrbitBridge implements OrbitBridge {
       );
 
   @override
+  Future<SyncResultJson> cloudSyncPushOnly({String origin = 'manual'}) async =>
+      SyncResultJson.fromJson(
+        jsonDecode(await gen_sync.cloudSyncPushOnly(origin: origin))
+            as Map<String, dynamic>,
+      );
+
+  @override
+  Future<SyncResultJson> cloudSyncPullThenPush({String origin = 'manual'}) async =>
+      SyncResultJson.fromJson(
+        jsonDecode(await gen_sync.cloudSyncPullThenPush(origin: origin))
+            as Map<String, dynamic>,
+      );
+
+  @override
   Future<bool> cloudSyncIsRunning() => gen_sync.cloudSyncIsRunning();
+
+  @override
+  Future<List<SyncHistoryRow>> cloudSyncHistory({
+    String scope = 'all',
+    int limit = 20,
+  }) async {
+    final rows = await gen_sync.cloudSyncHistory(scope: scope, limit: limit);
+    return rows
+        .map((r) => SyncHistoryRow(
+              id: r.id.toInt(),
+              syncType: r.syncType,
+              status: r.status,
+              startedAt: r.startedAt.toInt(),
+              finishedAt: r.finishedAt?.toInt(),
+              pulledCount: r.pulledCount.toInt(),
+              pushedCount: r.pushedCount.toInt(),
+              conflictCount: r.conflictCount.toInt(),
+              errorMessage: r.errorMessage,
+            ))
+        .toList();
+  }
 
   @override
   Future<int> syncTestConnection(Map<String, Object?> input) async =>
@@ -661,6 +722,25 @@ class RustOrbitBridge implements OrbitBridge {
   }
 
   @override
+  Future<TodoSavedFilter> savedFilterUpdate(
+      int id, String name, String conditions) async {
+    final r = await gen_sf.savedFilterUpdate(
+      id: id,
+      input: gen.TodoSavedFilterUpdateInput(
+        name: name,
+        conditions: conditions,
+        sortOrder: null,
+      ),
+    );
+    return TodoSavedFilter(
+      id: r.id.toInt(),
+      uuid: r.uuid,
+      name: r.name,
+      conditions: r.conditions,
+    );
+  }
+
+  @override
   Future<void> savedFilterDelete(int id) =>
       gen_sf.savedFilterDelete(id: id);
 
@@ -730,6 +810,24 @@ class RustOrbitBridge implements OrbitBridge {
   Future<TodoTemplate> templateCreate(String name, String payload) async {
     final r = await gen_tpl.templateCreate(
       input: gen.TodoTemplateCreateInput(
+        name: name,
+        payload: payload,
+        sortOrder: null,
+      ),
+    );
+    return TodoTemplate(
+      id: r.id.toInt(),
+      uuid: r.uuid,
+      name: r.name,
+      payload: r.payload,
+    );
+  }
+
+  @override
+  Future<TodoTemplate> templateUpdate(int id, String name, String payload) async {
+    final r = await gen_tpl.templateUpdate(
+      id: id,
+      input: gen.TodoTemplateUpdateInput(
         name: name,
         payload: payload,
         sortOrder: null,
@@ -839,6 +937,226 @@ class RustOrbitBridge implements OrbitBridge {
 
   @override
   Future<String> cloudSyncRekey() => gen_sync.cloudSyncRekey();
+
+  @override
+  Future<void> syncCryptoChangePassword(
+          String oldPassword, String newPassword) =>
+      gen_sync.syncCryptoChangePassword(
+        oldPassword: oldPassword,
+        newPassword: newPassword,
+      );
+
+  @override
+  Future<String> syncCryptoExportBundle() => gen_sync.syncCryptoExportBundle();
+
+  @override
+  Future<bool> syncCryptoRestoreSession() =>
+      gen_sync.syncCryptoRestoreSession();
+
+  @override
+  Future<void> syncCryptoForgetSession() =>
+      gen_sync.syncCryptoForgetSession();
+
+  // ── 全量备份与恢复（数据安全兜底）──
+
+  @override
+  Future<BackupExportResult> fullBackupExport({bool uploadCloud = false}) async {
+    final r = await gen_backup.fullBackupExport(uploadCloud: uploadCloud);
+    return BackupExportResult(
+      filePath: r.filePath,
+      fileSize: r.fileSize.toInt(),
+      manifest: _mapManifest(r.manifest),
+      cloudPath: r.cloudPath,
+      cloudUploaded: r.cloudUploaded,
+      cloudError: r.cloudError,
+      localPath: r.localPath,
+      localError: r.localError,
+    );
+  }
+
+  @override
+  Future<BackupImportResult> fullBackupImport(
+    List<int> bytes, {
+    bool ignoreSchemaMismatch = false,
+  }) async {
+    final r = await gen_backup.fullBackupImport(
+      bytes: bytes,
+      ignoreSchemaMismatch: ignoreSchemaMismatch,
+    );
+    return _mapImport(r);
+  }
+
+  @override
+  Future<BackupImportResult> fullBackupRestoreCloud(
+    String cloudPath, {
+    bool ignoreSchemaMismatch = false,
+  }) async {
+    final r = await gen_backup.fullBackupRestoreCloud(
+      cloudPath: cloudPath,
+      ignoreSchemaMismatch: ignoreSchemaMismatch,
+    );
+    return _mapImport(r);
+  }
+
+  @override
+  Future<List<BackupEntry>> fullBackupListLocal() async {
+    final rows = await gen_backup.fullBackupListLocal();
+    return rows
+        .map((e) => BackupEntry(
+              filename: e.filename,
+              filePath: e.filePath,
+              modifiedAt: e.modifiedAt.toInt(),
+              sizeBytes: e.sizeBytes.toInt(),
+            ))
+        .toList();
+  }
+
+  @override
+  Future<void> fullBackupDeleteLocal(String filePath) =>
+      gen_backup.fullBackupDeleteLocal(filePath: filePath);
+
+  @override
+  Future<List<CloudBackupEntry>> fullBackupListCloud() async {
+    final rows = await gen_backup.fullBackupListCloud();
+    return rows
+        .map((e) => CloudBackupEntry(
+              name: e.name,
+              cloudPath: e.cloudPath,
+              sizeBytes: e.sizeBytes.toInt(),
+              modifiedAt: e.modifiedAt.toInt(),
+            ))
+        .toList();
+  }
+
+  @override
+  Future<BackupPreview> fullBackupPeekLocal(List<int> bytes) async {
+    final r = await gen_backup.fullBackupPeekLocal(bytes: bytes);
+    return _mapPreview(r);
+  }
+
+  @override
+  Future<BackupPreview> fullBackupPeekCloud(String cloudPath) async {
+    final r = await gen_backup.fullBackupPeekCloud(cloudPath: cloudPath);
+    return _mapPreview(r);
+  }
+
+  @override
+  Future<BackupDeviceInfo> fullBackupDeviceInfo() async {
+    final r = await gen_backup.fullBackupDeviceInfo();
+    return BackupDeviceInfo(deviceId: r.deviceId);
+  }
+
+  @override
+  Future<BackupPrefs> backupPrefsGet() async =>
+      _mapPrefs(await gen_backup.backupPrefsGet());
+
+  @override
+  Future<BackupPrefs> backupPrefsSave(BackupPrefs prefs) async =>
+      _mapPrefs(await gen_backup.backupPrefsSave(prefs: _toGenPrefs(prefs)));
+
+  @override
+  Future<void> startBackupScheduler() => gen_backup.startBackupScheduler();
+
+  BackupManifest _mapManifest(gen_backup.BackupManifestView m) => BackupManifest(
+        formatVersion: m.formatVersion,
+        createdAt: m.createdAt,
+        createdAtTs: m.createdAtTs.toInt(),
+        appVersion: m.appVersion,
+        deviceId: m.deviceId,
+        deviceName: m.deviceName,
+        schemaVersion: m.schemaVersion.toInt(),
+        tableCounts: m.tableCounts
+            .map((c) => BackupTableCount(table: c.table, count: c.count.toInt()))
+            .toList(),
+      );
+
+  BackupImportResult _mapImport(gen_backup.BackupImportResult r) =>
+      BackupImportResult(
+        successCount: r.successCount.toInt(),
+        errorCount: r.errorCount.toInt(),
+        errors: r.errors,
+        manifest: _mapManifest(r.manifest),
+        needsRestart: r.needsRestart,
+      );
+
+  BackupPreview _mapPreview(gen_backup.BackupPreviewView p) => BackupPreview(
+        manifest: _mapManifest(p.manifest),
+        sampleTasks: p.sampleTasks
+            .map((t) => BackupPreviewTask(
+                  title: t.title,
+                  status: t.status,
+                  done: t.done,
+                  dueDate: t.dueDate?.toInt(),
+                  priority: t.priority.toInt(),
+                  project: t.project,
+                  isDeleted: t.isDeleted,
+                ))
+            .toList(),
+        taskStats: BackupTaskStats(
+          total: p.taskStats.total.toInt(),
+          alive: p.taskStats.alive.toInt(),
+          done: p.taskStats.done.toInt(),
+          deleted: p.taskStats.deleted.toInt(),
+        ),
+        schemaMismatch: p.schemaMismatch,
+        currentSchemaVersion: p.currentSchemaVersion.toInt(),
+      );
+
+  BackupPrefs _mapPrefs(gen_backup.BackupPrefsView p) => BackupPrefs(
+        localPath: p.localPath,
+        keepLatest: p.keepLatest,
+        cloudBackupEnabled: p.cloudBackupEnabled,
+        localBackupEnabled: p.localBackupEnabled,
+        scheduleType: p.scheduleType,
+        scheduleTime: p.scheduleTime,
+        scheduleMinute: p.scheduleMinute,
+        scheduleWeekday: p.scheduleWeekday,
+        scheduleDayOfMonth: p.scheduleDayOfMonth,
+        scheduleMonth: p.scheduleMonth,
+        lastBackupAt: p.lastBackupAt.toInt(),
+        nextBackupAt: p.nextBackupAt.toInt(),
+      );
+
+  gen_backup.BackupPrefsView _toGenPrefs(BackupPrefs p) =>
+      gen_backup.BackupPrefsView(
+        localPath: p.localPath,
+        keepLatest: p.keepLatest,
+        cloudBackupEnabled: p.cloudBackupEnabled,
+        localBackupEnabled: p.localBackupEnabled,
+        scheduleType: p.scheduleType,
+        scheduleTime: p.scheduleTime,
+        scheduleMinute: p.scheduleMinute,
+        scheduleWeekday: p.scheduleWeekday,
+        scheduleDayOfMonth: p.scheduleDayOfMonth,
+        scheduleMonth: p.scheduleMonth,
+        lastBackupAt: p.lastBackupAt,
+        nextBackupAt: p.nextBackupAt,
+      );
+
+  // ── 通知历史 ──
+
+  @override
+  Future<List<NotificationLogRow>> notificationLogList({
+    String? kind,
+    int? limit,
+  }) async {
+    final rows = await gen_notif.notificationLogList(kind: kind, limit: limit);
+    return rows
+        .map((r) => NotificationLogRow(
+              id: r.id.toInt(),
+              kind: r.kind,
+              taskId: r.taskId?.toInt(),
+              taskTitle: r.taskTitle,
+              reminderId: r.reminderId?.toInt(),
+              payload: r.payload,
+              createdAt: r.createdAt.toInt(),
+            ))
+        .toList();
+  }
+
+  @override
+  Future<int> notificationLogClear() async =>
+      (await gen_notif.notificationLogClear()).toInt();
 
   // ── 节假日 ──
 

@@ -71,3 +71,41 @@ Future<bool> masterAuthVerify({
   baseDir: baseDir,
   password: password,
 );
+
+/// 修改主密码（校验旧密码后重写 master_auth.json；数据库 Key 不变）
+///
+/// 对齐桌面 `master_auth_change_password`。注意：本函数只换「开屏密码包装」，
+/// 数据库文件的加密 Key 不受影响，故无需重开连接池。
+Future<void> masterAuthChangePassword({
+  required String baseDir,
+  required String oldPassword,
+  required String newPassword,
+}) => RustLib.instance.api.crateApiAuthMasterAuthChangePassword(
+  baseDir: baseDir,
+  oldPassword: oldPassword,
+  newPassword: newPassword,
+);
+
+/// 清除主密码（删除 master_auth.json，此后以明文模式打开）
+///
+/// 对齐桌面 `master_auth_clear`。**调用前必须已完成
+/// [db_migrate_to_plaintext]**，否则加密数据库将无法打开。
+Future<void> masterAuthClear({required String baseDir}) =>
+    RustLib.instance.api.crateApiAuthMasterAuthClear(baseDir: baseDir);
+
+/// 加密库 → 明文库迁移（设置页「关闭加密」场景）
+///
+/// 流程与桌面一致：WAL checkpoint → ATTACH 明文临时库 → sqlcipher_export →
+/// 关闭旧连接池 → 用明文文件替换 → 清空全局状态。
+/// **调用方（Dart）在返回后须重新走 db_init_plaintext 才可继续操作**，
+/// 否则后续命令报 `[not_initialized]`。
+Future<void> dbMigrateToPlaintext() =>
+    RustLib.instance.api.crateApiAuthDbMigrateToPlaintext();
+
+/// 明文库 → 加密库迁移（首次设置主密码场景）
+///
+/// 流程与桌面一致：sqlcipher_export 到加密临时文件 → 关闭旧连接池 →
+/// 文件替换 → 清空全局状态。**调用方须先 master_auth_init 持久化 meta，
+/// 返回后再 db_init_encrypted(db_key_hex) 重开**。
+Future<void> dbMigrateToEncrypted({required String dbKeyHex}) =>
+    RustLib.instance.api.crateApiAuthDbMigrateToEncrypted(dbKeyHex: dbKeyHex);

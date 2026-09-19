@@ -55,6 +55,37 @@ class MockOrbitBridge implements OrbitBridge {
   @override
   Future<bool> masterAuthVerify(String password) async => true;
 
+  @override
+  Future<void> masterAuthChangePassword(
+          String oldPassword, String newPassword) =>
+      _delay(() {
+        if (!store.masterAuthSet) {
+          throw Exception('[not_initialized] 未设置主密码');
+        }
+        if (newPassword.isEmpty) {
+          throw Exception('[invalid_input] 新密码不能为空');
+        }
+      });
+
+  @override
+  Future<void> masterAuthClear() => _delay(() {
+        store.masterAuthSet = false;
+      });
+
+  @override
+  Future<void> dbMigrateToPlaintext() => _delay(() {
+        // mock：迁移为无副作用的内存标记（真实实现会清空桥状态并要求重开连接池）
+        store.dbReady = true;
+      });
+
+  @override
+  Future<void> dbMigrateToEncrypted(String dbKeyHex) => _delay(() {
+        if (dbKeyHex.isEmpty) {
+          throw Exception('[invalid_input] DB Key 不能为空');
+        }
+        store.dbReady = true;
+      });
+
   // ── 生物识别解锁（mock：密钥链编排在内存，闭环可跑通）──
 
   /// 内存密钥链（biometricSetup 写入 / biometricUnlock 读出校验）
@@ -627,6 +658,14 @@ class MockOrbitBridge implements OrbitBridge {
       });
 
   @override
+  Future<TodoLabel> todoLabelUpdate(int id, String patchJson) => _delay(() {
+        final l = store.labels[id] ?? _notFound('label $id');
+        store.mergePatch(l, patchJson);
+        _emit('todo_labels');
+        return TodoLabel.fromJson(l);
+      });
+
+  @override
   Future<void> todoLabelDelete(int id) => _delay(() {
         store.labels.remove(id);
         _emit('todo_labels');
@@ -932,6 +971,25 @@ class MockOrbitBridge implements OrbitBridge {
   }
 
   @override
+  Future<TodoSavedFilter> savedFilterUpdate(
+      int id, String name, String conditions) {
+    return _delay(() {
+      if (name.trim().isEmpty) throw Exception('筛选器名称不能为空');
+      final index = store.savedFilters.indexWhere((f) => f.id == id);
+      if (index < 0) _notFound('saved filter $id');
+      final prev = store.savedFilters[index];
+      final row = TodoSavedFilter(
+        id: prev.id,
+        uuid: prev.uuid,
+        name: name,
+        conditions: conditions,
+      );
+      store.savedFilters[index] = row;
+      return row;
+    });
+  }
+
+  @override
   Future<void> savedFilterDelete(int id) {
     return _delay(() {
       store.savedFilters.removeWhere((f) => f.id == id);
@@ -1060,6 +1118,25 @@ class MockOrbitBridge implements OrbitBridge {
         payload: payload,
       );
       store.templates.add(row);
+      return row;
+    });
+  }
+
+  @override
+  Future<TodoTemplate> templateUpdate(int id, String name, String payload) {
+    return _delay(() {
+      if (name.trim().isEmpty) throw Exception('模板名称不能为空');
+      _validateTemplatePayload(payload);
+      final index = store.templates.indexWhere((t) => t.id == id);
+      if (index < 0) _notFound('template $id');
+      final prev = store.templates[index];
+      final row = TodoTemplate(
+        id: prev.id,
+        uuid: prev.uuid,
+        name: name,
+        payload: payload,
+      );
+      store.templates[index] = row;
       return row;
     });
   }
@@ -1210,7 +1287,44 @@ class MockOrbitBridge implements OrbitBridge {
       });
 
   @override
+  Future<SyncResultJson> cloudSyncPushOnly({String origin = 'manual'}) =>
+      _delay(() => const SyncResultJson(
+            pushedModules: 2,
+            pulledModules: 0,
+            uploadedAttachments: 0,
+            downloadedAttachments: 0,
+            durationMs: 420,
+            skipped: false,
+            errors: [],
+          ));
+
+  @override
+  Future<SyncResultJson> cloudSyncPullThenPush({String origin = 'manual'}) =>
+      _delay(() => const SyncResultJson(
+            pushedModules: 1,
+            pulledModules: 2,
+            uploadedAttachments: 0,
+            downloadedAttachments: 0,
+            durationMs: 910,
+            skipped: false,
+            errors: [],
+          ));
+
+  @override
   Future<bool> cloudSyncIsRunning() async => false;
+
+  @override
+  Future<List<SyncHistoryRow>> cloudSyncHistory({
+    String scope = 'all',
+    int limit = 20,
+  }) =>
+      _delay(() {
+        final rows = store.syncHistory
+            .where((r) => scope == 'all' || r.syncType == scope)
+            .toList()
+          ..sort((a, b) => b.startedAt.compareTo(a.startedAt));
+        return rows.take(limit).toList();
+      });
 
   @override
   Future<int> syncTestConnection(Map<String, Object?> input) => _delay(() {
@@ -1484,6 +1598,248 @@ class MockOrbitBridge implements OrbitBridge {
   @override
   Future<String> cloudSyncRekey() =>
       _delay(() => throw Exception('[not_unlocked] Mock 未实现'));
+
+  @override
+  Future<void> syncCryptoChangePassword(
+          String oldPassword, String newPassword) =>
+      _delay(() {
+        if (!store.syncPasswordSet) {
+          throw Exception('[not_initialized] 未设置同步密码');
+        }
+        if (oldPassword != store.syncPassword) {
+          throw Exception('[wrong_password] 同步密码错误');
+        }
+        if (newPassword.length < 6) {
+          throw Exception('[invalid_input] 同步密码至少 6 位');
+        }
+        store.syncPassword = newPassword;
+      });
+
+  @override
+  Future<String> syncCryptoExportBundle() => _delay(() {
+        if (!store.syncPasswordSet) {
+          throw Exception('[not_initialized] 未设置同步密码');
+        }
+        return jsonEncode({
+          'version': 'v2',
+          'salt': 'mock-salt',
+          'wrapped_data_key': 'mock-wrapped-key',
+          'nonce': 'mock-nonce',
+        });
+      });
+
+  @override
+  Future<bool> syncCryptoRestoreSession() =>
+      _delay(() => store.syncUnlocked);
+
+  @override
+  Future<void> syncCryptoForgetSession() => _delay(() {
+        store.syncUnlocked = false;
+      });
+
+  // ── 全量备份与恢复（内存假实现；口径对齐 Rust full_sync_backup.rs）──
+
+  @override
+  Future<BackupExportResult> fullBackupExport({bool uploadCloud = false}) =>
+      _delay(() {
+        if (!store.syncUnlocked) {
+          throw Exception('[not_unlocked] 同步加密未解锁，请先输入同步密码');
+        }
+        if (uploadCloud && !store.syncConfigured) {
+          throw Exception('[config] 尚未配置云同步，无法上传云端副本');
+        }
+        final manifest = store.buildManifest();
+        final ts = store.now();
+        final filename = 'orbit-${manifest.createdAtTs}.orfullsync';
+        final entry = BackupEntry(
+          filename: filename,
+          filePath: '/mock/backups/$filename',
+          modifiedAt: ts,
+          sizeBytes: 20480,
+        );
+        store.localBackups.insert(0, entry);
+        if (uploadCloud) {
+          store.cloudBackups.insert(
+            0,
+            CloudBackupEntry(
+              name: filename,
+              cloudPath: 'orbit/backups/$filename',
+              sizeBytes: 20480,
+              modifiedAt: ts,
+            ),
+          );
+        }
+        return BackupExportResult(
+          filePath: entry.filePath,
+          fileSize: entry.sizeBytes,
+          manifest: manifest,
+          cloudPath: uploadCloud ? 'orbit/backups/$filename' : null,
+          cloudUploaded: uploadCloud,
+          localPath: entry.filePath,
+        );
+      });
+
+  @override
+  Future<BackupImportResult> fullBackupImport(
+    List<int> bytes, {
+    bool ignoreSchemaMismatch = false,
+  }) =>
+      _delay(() {
+        if (!store.syncUnlocked) {
+          throw Exception('[not_unlocked] 同步加密未解锁，请先输入同步密码');
+        }
+        if (bytes.isEmpty) throw Exception('[backup] 备份内容为空');
+        _emit('*');
+        return BackupImportResult(
+          successCount: store.tasks.length,
+          errorCount: 0,
+          errors: const [],
+          manifest: store.buildManifest(),
+          needsRestart: false,
+        );
+      });
+
+  @override
+  Future<BackupImportResult> fullBackupRestoreCloud(
+    String cloudPath, {
+    bool ignoreSchemaMismatch = false,
+  }) =>
+      _delay(() {
+        if (!store.syncConfigured) {
+          throw Exception('[config] 尚未配置云同步，无法读取云端备份');
+        }
+        if (!store.syncUnlocked) {
+          throw Exception('[not_unlocked] 同步加密未解锁，请先输入同步密码');
+        }
+        _emit('*');
+        return BackupImportResult(
+          successCount: store.tasks.length,
+          errorCount: 0,
+          errors: const [],
+          manifest: store.buildManifest(),
+          needsRestart: false,
+        );
+      });
+
+  @override
+  Future<List<BackupEntry>> fullBackupListLocal() =>
+      _delay(() => List<BackupEntry>.from(store.localBackups));
+
+  @override
+  Future<void> fullBackupDeleteLocal(String filePath) => _delay(() {
+        store.localBackups.removeWhere((b) => b.filePath == filePath);
+      });
+
+  @override
+  Future<List<CloudBackupEntry>> fullBackupListCloud() => _delay(() {
+        if (!store.syncConfigured) {
+          throw Exception('[config] 尚未配置云同步，无法列出云端备份');
+        }
+        return List<CloudBackupEntry>.from(store.cloudBackups);
+      });
+
+  @override
+  Future<BackupPreview> fullBackupPeekLocal(List<int> bytes) => _delay(() {
+        if (!store.syncUnlocked) {
+          throw Exception('[not_unlocked] 同步加密未解锁，请先输入同步密码');
+        }
+        return _mockPreview();
+      });
+
+  @override
+  Future<BackupPreview> fullBackupPeekCloud(String cloudPath) => _delay(() {
+        if (!store.syncConfigured) {
+          throw Exception('[config] 尚未配置云同步，无法读取云端备份');
+        }
+        if (!store.syncUnlocked) {
+          throw Exception('[not_unlocked] 同步加密未解锁，请先输入同步密码');
+        }
+        return _mockPreview();
+      });
+
+  /// 恢复预览（按当前内存库抽样前 10 条未删任务）
+  BackupPreview _mockPreview() {
+    final alive = store.tasks.values
+        .where((t) => t['is_deleted'] == 0)
+        .toList();
+    final sample = alive.take(10).map((t) {
+      final projectId = t['project_id'] as int?;
+      return BackupPreviewTask(
+        title: (t['title'] as String?) ?? '（无标题）',
+        status: (t['status'] as String?) ?? 'pending',
+        done: t['done'] == 1,
+        dueDate: t['due_date'] as int?,
+        priority: (t['priority'] as int?) ?? 0,
+        project: projectId == null
+            ? null
+            : store.projects[projectId]?['title'] as String?,
+        isDeleted: false,
+      );
+    }).toList();
+    return BackupPreview(
+      manifest: store.buildManifest(),
+      sampleTasks: sample,
+      taskStats: BackupTaskStats(
+        total: store.tasks.length,
+        alive: alive.length,
+        done: alive.where((t) => t['done'] == 1).length,
+        deleted: store.tasks.length - alive.length,
+      ),
+      schemaMismatch: false,
+      currentSchemaVersion: 1,
+    );
+  }
+
+  @override
+  Future<BackupDeviceInfo> fullBackupDeviceInfo() async =>
+      const BackupDeviceInfo(deviceId: 'mock-device');
+
+  @override
+  Future<BackupPrefs> backupPrefsGet() => _delay(() => store.backupPrefs);
+
+  @override
+  Future<BackupPrefs> backupPrefsSave(BackupPrefs prefs) => _delay(() {
+        store.backupPrefs = prefs;
+        return prefs;
+      });
+
+  @override
+  Future<void> startBackupScheduler() async {}
+
+  // ── 通知历史（本地轨迹；与 Rust notification_log.rs 同口径）──
+
+  @override
+  Future<List<NotificationLogRow>> notificationLogList({
+    String? kind,
+    int? limit,
+  }) =>
+      _delay(() {
+        final rows = store.notificationLog
+            .where((n) => kind == null || n['kind'] == kind)
+            .toList()
+          ..sort((a, b) =>
+              (b['created_at'] as int).compareTo(a['created_at'] as int));
+        final n = (limit ?? 50).clamp(1, 200);
+        return rows.take(n).map(_toNotificationRow).toList();
+      });
+
+  @override
+  Future<int> notificationLogClear() => _delay(() {
+        final count = store.notificationLog.length;
+        store.notificationLog.clear();
+        return count;
+      });
+
+  NotificationLogRow _toNotificationRow(Map<String, dynamic> n) =>
+      NotificationLogRow(
+        id: n['id'] as int,
+        kind: n['kind'] as String,
+        taskId: n['task_id'] as int?,
+        taskTitle: n['task_title'] as String,
+        reminderId: n['reminder_id'] as int?,
+        payload: n['payload'] as String,
+        createdAt: n['created_at'] as int,
+      );
 
   // ── 节假日（内存假数据；形状对齐 Rust 预置 2026 表节选）──
 
