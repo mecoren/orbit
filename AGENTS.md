@@ -94,7 +94,8 @@ pnpm typecheck            # tsc --noEmit（-r 全 workspace）
 pnpm test                 # vitest run（桌面）
 pnpm e2e                  # Playwright 冒烟（自动起 5273 端口 dev server）
 pnpm test:rust            # cargo test --workspace（crates/*；不含 desktop 壳）
-cargo test --workspace    # 同上（含 m4 WebDAV 集成用例——本机无 WebDAV 时该用例环境依赖失败属已知非回归）
+cargo test --workspace    # 同上（云同步用例走 tests/common 的零依赖假服务，干净机器必须全绿；
+                          # 需要真 WebDAV/MinIO 的活体方言用例带 #[ignore]，手工 --ignored 跑）
 cd apps/desktop/src-tauri && cargo check   # 桌面壳单独检查（嵌套 workspace）
 # 桌面壳**不是 rustfmt-clean**（HEAD 即有数个文件不合规）：在该目录跑裸
 # `cargo fmt` 会顺手重排 9+ 个他人文件产生噪音 diff；只格式化自己改的那个文件用

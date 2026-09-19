@@ -15,6 +15,21 @@
 
 ### 云同步
 
+- **第五轮系统性探查收口（详见 `docs/同步功能第五轮探查报告-2026-09-19.md`）**：三条前轮「合规/无影响」结论被源码否证并修复——① 清单乐观锁（ETag CAS）在生产链路**从未发出过条件请求**：`BasePathAdapter` 漏转发 `download_with_token`/`upload_conditional`/`exists` 三个 trait 方法，落到 mock 友好退化默认（令牌恒 `None`、前置条件被丢弃、HEAD 降级为整对象下载），而单测 mock 恰好实现了真方法 → 长期假绿。已补转发并以契约测试钉住「包装器与两适配器覆写同一组方法」，故障注入假服务首次在网络上记录到 `If-Match`/`If-None-Match`；② WebDAV 大附件分片协议（>8MiB）自落地起从未执行：包装器先拼 base_path，而分片判定要求 `path.starts_with("assets/")`。改为按「上一段目录名 == assets」判定并把分片根目录随路径推导（分片落在 `{base_path}/assets_parts/` 内），包装器列举委托内层（含 `assets_parts` 并集），大附件不再每轮全量重传；③ 回收站物理清理守卫线被非干净轮次推进：手动同步在 `skipped`/`errors` 非空时也推进 `last_synced_at`，未推送墓碑可被提前物理删除、对端 pull 复活已删任务。记账收口到引擎唯一回写点（`advances_ledger()` = 非跳过且无错误），删除四处壳层回写。
+- **同步安全两处收口**：KDF 迭代下限 guard——云端 `crypto/config`（明文 JSON，存储端可改写）、本地 meta、`.orfullsync` 文件头三入口统一走 `ensure_kdf_strength`（下限取历史最小值 200k，避免挡存量），「存储端把迭代降到 1 次」的降级路径关闭；错误串脱敏 `brief()`（截 200 字符 + 丢弃含 `Authorization`/`Credential`/`<StringToSign>` 的行，挂全部错误分类 arm）——S3 原始响应体回显与用户输入 endpoint 的 userinfo 不再落 `sync_history.error_message`、`app_log.log` 与 UI tooltip。
+- **协议合规小修一批**：S3 列举补 `Size`/`LastModified`（云端备份列表「最新在前」此前在 S3 上退化为最旧在前）；multipart 失败补 `AbortMultipartUpload`（孤儿分片不再长期占桶，自建 MinIO/NAS 无生命周期规则）；Complete 请求体转义服务端 ETag；WebDAV href 百分号解码（中文/空格备份名不再乱码）；PROPFIND 207 按 propstat 状态码取舍（属性拉取失败的条目剔除、`url_exists` 不再对 207 恒真）；PROPFIND 补申请 `<getetag/>`（列举侧并发令牌与条件写同源）；适配器错误判定改 typed variant（不再按错误串嗅探 409/AncestorsNotFound）。
+- **ADR 0010 第一拍（AAD 绑定两拍发布的前置拍，详见 `docs/adr/0010`）**：布局版本门禁 `!=`→大小判定（可区分「未来版本」与「上古版本」）；新错误码 `PayloadVersionMismatch`（tag `payload_version`，双端归类为「升级应用」提示，不跳密钥恢复页）；`DeviceCheckpoint.app_version` 能力协商位（清单为加密 JSON + serde default，零迁移）；AAD 绑定代码入库（`PAYLOAD_VERSION=0x02`，只绑表桶对象路径、附件永不做），写侧由「清单内全部已登记设备 ≥ 0.2.0」门控、本版默认关闭——第二拍发布 0.2.0 后自动打开，门禁代码无需再改。
+- **性能：push 只重算变化的桶（docs/09 A10）**：新增 push 专用水位线 `SyncState.last_pushed_clock_ms`（与 pull 的冲突判据基线刻意分离——后者在 pull 结束推进到本轮结束时刻，复用会把「本轮开始前的本地编辑」判成非脏而漏传），配合「存活行数与远端清单条目比对」检出 merge 应用墓碑造成的软删这类时间戳早于水位线的集合变化；非脏桶零指纹重算、零序列化、零载荷构造。10k 行库「改一行后同步」的本地序列化从万级行降到 1 个桶（~156 行）。同一轮同步内 raw/包装适配器共享同一底层实例（一 run 一 Client，phase 间复用热连接）。
+- **同步完成后按真正变更的表精确失效**：pull 回报 `changed_tables`（合并实际写入的表），桌面 `useSyncInvalidation` 与移动「立即同步 / 启动同步」路径按表精确失效缓存、未知表回退全量——修掉「只拉附件」那轮 `pulled_modules == 0` 导致界面不刷新。
+- **同步失败可见性**：后台自动同步与「修改后立即同步」失败改走 `log::warn!`（此前 `eprintln!` 在打包 GUI 丢失，`app_log.log` 无痕）；多表失败合并入同步历史单条（不再只留首个错误）；进度事件的模块名取真实模块定义（不再硬编码单模块文案）。
+- **故障注入假服务 + 稳定性矩阵**：零依赖 `TcpListener` 假服务（7 种故障注入：5xx / 限流 / 半截体 / 停滞 / 列举截断 / 412 冲突 / 忽略条件头）与 `tests/sync_fault_matrix.rs`（四类操作 × 故障矩阵，10 用例，含 9MiB 分片双用例）替代本机真 WebDAV 依赖；`cargo test --workspace` 在干净机器全绿，原 m4 用例降级为 `#[ignore]` 的真服务端方言专用。
+- **减熵清理**：删除死代码 `AdapterType`、`SyncAdapter::list_files` 及全部实现、`gc::collect_garbage`/`missing_tombstone_buckets`、恒 0 的 `RemoteFile.lamport_version`、空目录 `src/manifest/` 与 `src/sync_bundle/`。
+- **第四轮系统性探查收口（详见 `docs/同步功能第四轮探查报告-2026-09-18.md`）**：修复
+  push 组装清单时整体替换远端索引导致他端同轮桶条目被孤立的并发数据丢失（改为桶级
+  合并）；修复换密 rekey 后桶指纹密钥无关致增量全跳、云端停留旧 Key 密文的空洞（新增
+  强制全量重传路径）；pull 存在失败表时不再推进清单 epoch（此前失败表永不重试）；
+  merge 表级失败回滚事务并向上抛错（消除半合并态）；push_only 与 rekey 补业务级网络
+  重试；S3 错误体中文截断 panic 修复。
 - **同步完成提示不再误报 0 模块**：无任何推拉且无错误时显示「已是最新，无需同步」
   （此前显示「推送 0 模块 / 拉取 0 模块」，易被误读为同步失败；该状态一般表示数据
   已由自动推送或上一轮同步完成）。另修复清单 CAS 并发重试耗尽时模块计数丢失
@@ -75,6 +90,12 @@
   年/月分段各滚各（悬浮提示说明），年视图滚轮切年。阈值 24px + 前沿后沿节流合并
   （单击零延迟、快速连滑只多一次渲染且零丢步），年/月下拉展开时滚轮只滚列表
   不翻月，Ctrl+滚轮仍是浏览器缩放。
+- **应用图标主体放大（任务栏图标显小修复）**：图标定标由「按资产宽（含彗星尾梢）
+  撑 80%」改为**短轴定标**——以蓝色圆环外径撑满画布 86%（PAD 0.10→0.07），主体
+  线性放大约 21%、面积 +47%；`fit_scale` 夹逼保证整幅资产不出画布、尾梢零裁切。
+  全图标族一次重生成（桌面 ICO/ICNS/PNG 全槽 + Android 启动器/启动屏/通知剪影 +
+  关于页 app-icon），ICO 十槽结构与首帧 256px（任务栏取用位）不变；≤32px 特调档
+  仅保留 alpha 陡化（几何放大已由全局承担）。口径详见 `docs/adr/0004` §1。
 - **详情抽屉历史区块实时刷新**：修改任务后「历史」列表此前要等 30s staleTime 过期后
   碰巧聚焦/重挂载才更新。根因两层：`log_activity` 按旧口径不 emit 事件，而业务写路径
   的 `todo_tasks` 事件**先于轨迹行 INSERT** 发出（前端搭车重拉会竞态读到旧列表）；
@@ -148,6 +169,14 @@
   跟着搜索框收窄就成了错的数字。命中集是小数组，故这一路保留 `placeholderData` 防击键
   闪空；A5 的截断条幅改按当前取数源判定（关键词命中上万条同样算截断）。e2e 补一条
   「标题不含、仅描述含关键词」用例锁该链路。
+- **列表标签/提醒改 core 侧瘦投影**（`docs/09` A4）：`use-task-labels` /
+  `use-task-reminders` 此前各拉一次万行整表（`todo_task_labels` / `todo_reminders` 全列，
+  含 uuid/version/时间戳落库元数据）在前端 join，现改 core 侧一次往返的分组投影
+  （`task_labels_projection` / `task_reminders_projection`）：只传行内展示必需列
+  （标签 id/title/hex_color、提醒 id/remind_at），同批带 `task_dependency_flags`
+  （任务→关联计数，Wave 5 的 C7 列表徽标用，免拉全量关系表）。三接口均为只读聚合——
+  不 emit 事件、不进同步白名单、无新迁移；桌面 Tauri command 与 FRB 函数同名同参，
+  失效键沿写表事件精确联动（改名/改色刷 chips）。
 - **移动端任务列表改单份缓存 + 派生过滤**（`docs/09` B6）：`todoTasksProvider` 此前是
   `family<TaskListQuery>`——每个 keyword 一份万行缓存，角标/日历/保存筛选各持一份参数变体。
   现收成全 App 唯一一份万行全量（各视图经 `filterTasks/sortTasks` 派生过滤），关键词字符
