@@ -151,4 +151,11 @@ class BiometricService {
     await bridge.biometricDisable(password);
     await _store.clear();
   }
+
+  /// 仅清理本机密钥链（不做 Rust 侧校验）
+  ///
+  /// 用于「关闭加密库」这类主密码整体消失的场景：此时旧 DB Key 已随明文
+  /// 迁移失效，三件套必然解不开，密码校验也无从谈起，直接清键避免留下
+  /// 永远失败的指纹入口。
+  Future<void> clearStoredSecrets() => _store.clear();
 }

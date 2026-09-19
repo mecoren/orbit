@@ -4,15 +4,18 @@ import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:path_provider/path_provider.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_dimens.dart';
+import '../../core/theme/app_shapes.dart';
 import '../../core/theme/orbit_accents.dart';
 import '../../data/api/dto.dart';
 import '../../data/providers/bridge_provider.dart';
 import '../../shared/widgets/liquid_glass_title_bar.dart';
 import '../../shared/widgets/scroll_offset_listenable.dart';
 import '../../shared/widgets/section_card.dart';
+import '../../shared/widgets/select_bottom_sheet.dart';
 import '../../shared/widgets/wait_toast.dart';
 import '../todo/providers/todo_providers.dart';
 
@@ -226,6 +229,8 @@ class _SyncSettingsPageState extends ConsumerState<SyncSettingsPage> {
                 ),
                 const SizedBox(height: AppDimens.space12),
                 const _SyncCryptoCard(),
+                const SizedBox(height: AppDimens.space12),
+                const _SyncHistoryCard(),
               ],
             ),
           ),
@@ -246,6 +251,86 @@ class _SyncSettingsPageState extends ConsumerState<SyncSettingsPage> {
   String _engineLabel(String engine) =>
       engine == 's3' ? 'S3' : 'WebDAV';
 
+  /// 定时同步间隔档位（桌面同款五档；存量配置的非档位值按分钟/小时回显）
+  static const _intervalChoices = <int, String>{
+    10: '每 10 分钟',
+    30: '每 30 分钟',
+    60: '每 60 分钟',
+    120: '每 2 小时',
+    360: '每 6 小时',
+  };
+
+  String _intervalLabel(int minutes) =>
+      _intervalChoices[minutes] ??
+      (minutes % 60 == 0 ? '每 ${minutes ~/ 60} 小时' : '每 $minutes 分钟');
+
+  /// 引擎选择抽屉（两档）
+  Future<void> _pickEngine() => showSelectBottomSheet<String>(
+        context,
+        title: '同步引擎',
+        items: const [
+          SelectItem(value: 'webdav', label: 'WebDAV'),
+          SelectItem(value: 's3', label: 'S3 兼容存储'),
+        ],
+        current: _engine,
+        onSelect: (v) {
+          if (mounted) setState(() => _engine = v);
+        },
+      );
+
+  /// 定时同步间隔抽屉（开关关闭时行不可点）
+  Future<void> _pickInterval() => showSelectBottomSheet<int>(
+        context,
+        title: '定时同步间隔',
+        items: [
+          for (final e in _intervalChoices.entries)
+            SelectItem(value: e.key, label: e.value),
+        ],
+        current: _intervalMin,
+        onSelect: (v) {
+          if (mounted) setState(() => _intervalMin = v);
+        },
+      );
+
+  /// 表单选择行：只读展示当前值 + 尾箭头，点行唤起底部抽屉
+  /// （选择类交互统一底部抽屉，AGENTS.md 移动端约定；装饰沿用表单
+  /// InputDecorator 口径，与相邻 TextFormField 视觉一致）。
+  /// [onTap] 为 null 即禁用态（值文字降为次要色）。
+  Widget _selectRow({
+    required AppColorSet colors,
+    required String label,
+    required String value,
+    required VoidCallback? onTap,
+    double fontSize = 15,
+  }) =>
+      InputDecorator(
+        decoration: InputDecoration(labelText: label),
+        child: InkWell(
+          onTap: onTap,
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  value,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: fontSize,
+                    color:
+                        onTap == null ? colors.secondaryText : colors.bodyText,
+                  ),
+                ),
+              ),
+              Icon(
+                Icons.keyboard_arrow_right_rounded,
+                size: AppDimens.iconSizeSm + 2,
+                color: colors.secondaryText,
+              ),
+            ],
+          ),
+        ),
+      );
+
   Widget _connectionForm(AppColorSet colors) {
     final isS3 = _engine == 's3';
     final endpointEmpty = _endpointController.text.trim().isEmpty;
@@ -253,17 +338,12 @@ class _SyncSettingsPageState extends ConsumerState<SyncSettingsPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // 引擎选择（同桌面下拉，两档）
-        DropdownButtonFormField<String>(
-          initialValue: _engine,
-          style: TextStyle(fontSize: 15, color: colors.bodyText),
-          dropdownColor: colors.popup,
-          decoration: const InputDecoration(labelText: '引擎'),
-          items: const [
-            DropdownMenuItem(value: 'webdav', child: Text('WebDAV')),
-            DropdownMenuItem(value: 's3', child: Text('S3 兼容存储')),
-          ],
-          onChanged: (v) => setState(() => _engine = v ?? 'webdav'),
+        // 引擎选择（同桌面下拉，两档）——选择类交互走底部抽屉
+        _selectRow(
+          colors: colors,
+          label: '引擎',
+          value: _engineLabel(_engine),
+          onTap: _pickEngine,
         ),
         const SizedBox(height: AppDimens.space12),
         TextFormField(
@@ -326,21 +406,13 @@ class _SyncSettingsPageState extends ConsumerState<SyncSettingsPage> {
             ),
             const SizedBox(width: AppDimens.space8),
             Expanded(
-              child: DropdownButtonFormField<int>(
-                initialValue: _intervalMin,
-                style: TextStyle(fontSize: 14, color: colors.bodyText),
-                dropdownColor: colors.popup,
-                decoration: const InputDecoration(labelText: '定时同步'),
-                items: const [
-                  DropdownMenuItem(value: 10, child: Text('每 10 分钟')),
-                  DropdownMenuItem(value: 30, child: Text('每 30 分钟')),
-                  DropdownMenuItem(value: 60, child: Text('每 60 分钟')),
-                  DropdownMenuItem(value: 120, child: Text('每 2 小时')),
-                  DropdownMenuItem(value: 360, child: Text('每 6 小时')),
-                ],
-                // 开关关闭时间隔不可选（onChanged null = 交互禁用）
-                onChanged:
-                    _autoEnabled ? (v) => setState(() => _intervalMin = v ?? 60) : null,
+              // 开关关闭时间隔不可点（onTap null = 禁用态）
+              child: _selectRow(
+                colors: colors,
+                label: '定时同步',
+                value: _intervalLabel(_intervalMin),
+                fontSize: 14,
+                onTap: _autoEnabled ? _pickInterval : null,
               ),
             ),
           ],
@@ -498,9 +570,12 @@ class _SyncSettingsPageState extends ConsumerState<SyncSettingsPage> {
 /// 同步密码卡（E2E 加密密钥管理，对齐桌面 SyncPasswordCard 核心面）
 ///
 /// 移动端口径：设置（init）/解锁（unlock）/锁定（lock）+
-/// 密钥包导入恢复（P1-20：换机/key_mismatch 场景——桌面导出的
-/// .orbitkey JSON 导入后即持有 Data Key，配合密码解锁可解云端密文；
-/// 修改密码与密钥包导出仍为桌面专属）。
+/// 密钥包导入恢复（P1-20：换机/key_mismatch 场景——导出的
+/// .orbitkey JSON 导入后即持有 Data Key，配合密码解锁可解云端密文）+
+/// 修改密码（v2 下内部编排云端全量重传）+ 导出密钥包 + 清除本机会话缓存。
+///
+/// 与桌面的唯一残差：移动端无系统钥匙串，同步密码只在进程内缓存，
+/// 应用重启后需重新输入（对应桌面「忘记此设备的同步密码缓存」的降级形态）。
 class _SyncCryptoCard extends ConsumerStatefulWidget {
   const _SyncCryptoCard();
 
@@ -520,6 +595,9 @@ class _SyncCryptoCardState extends ConsumerState<_SyncCryptoCard> {
   void initState() {
     super.initState();
     _refresh();
+    // 对齐桌面启动时序：先尝试静默恢复会话，失败再走手动解锁（移动端通常
+    // 恒为 false——无跨重启的持久凭据库）
+    _restoreSessionSilently();
   }
 
   @override
@@ -594,6 +672,146 @@ class _SyncCryptoCardState extends ConsumerState<_SyncCryptoCard> {
       // 锁定失败静默（桌面同语义）
     }
     await _refresh();
+  }
+
+  /// 启动静默恢复会话（对齐桌面 sync_crypto_restore_session）
+  ///
+  /// 移动端无跨重启用持久凭据库，会话密码随 lock 一并清除，故本调用通常
+  /// 恒为 false；保留接线是为了在未来的持久缓存落地后自动生效，不做 UI 承诺。
+  Future<void> _restoreSessionSilently() async {
+    try {
+      await ref.read(orbitBridgeProvider).syncCryptoRestoreSession();
+    } catch (_) {
+      // 静默：恢复失败即回退手动解锁路径
+    }
+  }
+
+  /// 修改同步密码（v2 下即换 Key 并重传云端；失败由 Rust 侧回滚）
+  Future<void> _changePassword() async {
+    if (_busy) return;
+    final oldCtrl = TextEditingController();
+    final newCtrl = TextEditingController();
+    final confirmCtrl = TextEditingController();
+    try {
+      final ok = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('修改同步密码'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'v2 密钥方案下改密等于更换密钥，会把云端数据全量重传一次；'
+                '其他设备在此期间请勿同步。',
+                style: TextStyle(fontSize: 12),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: oldCtrl,
+                obscureText: true,
+                decoration: const InputDecoration(labelText: '当前同步密码'),
+              ),
+              TextField(
+                controller: newCtrl,
+                obscureText: true,
+                decoration: const InputDecoration(labelText: '新同步密码'),
+              ),
+              TextField(
+                controller: confirmCtrl,
+                obscureText: true,
+                decoration: const InputDecoration(labelText: '确认新密码'),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('取消'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('确认修改'),
+            ),
+          ],
+        ),
+      );
+      if (ok != true || !mounted) return;
+      if (newCtrl.text.length < 6) {
+        WaitToast.destructive('同步密码至少 6 位');
+        return;
+      }
+      if (newCtrl.text != confirmCtrl.text) {
+        WaitToast.destructive('两次输入的新密码不一致');
+        return;
+      }
+      setState(() => _busy = true);
+      await ref
+          .read(orbitBridgeProvider)
+          .syncCryptoChangePassword(oldCtrl.text, newCtrl.text);
+      await ref.read(orbitBridgeProvider).syncCryptoUnlock(newCtrl.text);
+      WaitToast.success('同步密码已修改，云端数据已用新密钥重传');
+      await _refresh();
+    } catch (e) {
+      WaitToast.destructive('修改失败：${_errMsg(e)}');
+    } finally {
+      oldCtrl.dispose();
+      newCtrl.dispose();
+      confirmCtrl.dispose();
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  /// 导出密钥包：写入应用文档目录 exports/，供换机或 key_mismatch 恢复
+  Future<void> _exportBundle() async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    try {
+      final json = await ref.read(orbitBridgeProvider).syncCryptoExportBundle();
+      final dir = await getApplicationDocumentsDirectory();
+      final outDir = Directory('${dir.path}/exports');
+      if (!outDir.existsSync()) outDir.createSync(recursive: true);
+      final stamp = DateTime.now().millisecondsSinceEpoch;
+      final file = File('${outDir.path}/orbit-key-$stamp.orbitkey.json');
+      await file.writeAsString(json);
+      WaitToast.success('密钥包已导出（exports/${file.uri.pathSegments.last}）');
+    } catch (e) {
+      WaitToast.destructive('导出密钥包失败：${_errMsg(e)}');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  /// 忘记本机同步密码缓存（清会话缓存与引擎挂载；云端与 crypto meta 不动）
+  Future<void> _forgetSession() async {
+    if (_busy) return;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('清除本机同步密码缓存？'),
+        content: const Text(
+          '仅清除本机内存中的会话密码与已解锁状态，云端数据与密钥不受影响；'
+          '下次同步前需要重新输入同步密码。',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('清除'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    try {
+      await ref.read(orbitBridgeProvider).syncCryptoForgetSession();
+      WaitToast.success('已清除本机会话缓存');
+      await _refresh();
+    } catch (e) {
+      WaitToast.destructive('清除失败：${_errMsg(e)}');
+    }
   }
 
   /// 导入密钥包恢复（P1-20）：桌面「导出密钥包」产出的 JSON 文件
@@ -784,9 +1002,242 @@ class _SyncCryptoCardState extends ConsumerState<_SyncCryptoCard> {
                       child: const Text('导入密钥包恢复（换机 / 密钥不匹配）'),
                     ),
                   ),
+                  const SizedBox(height: AppDimens.space8),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton(
+                      onPressed: _busy ? null : _exportBundle,
+                      child: const Text('导出密钥包（备份到本机 exports/）'),
+                    ),
+                  ),
+                  const SizedBox(height: AppDimens.space8),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton(
+                      onPressed: _busy ? null : _changePassword,
+                      child: const Text('修改同步密码'),
+                    ),
+                  ),
+                  const SizedBox(height: AppDimens.space8),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton(
+                      onPressed: _busy ? null : _forgetSession,
+                      child: const Text('清除本机同步密码缓存'),
+                    ),
+                  ),
                 ],
               ],
             ),
+    );
+  }
+}
+
+/// 同步历史卡（对齐桌面 SyncHistoryCard；P1-17 展示面）
+///
+/// 数据源 sync_history 表为只读聚合（不 emit 事件、不进同步白名单），
+/// 故本卡不做 db-change 订阅，靠页面进入与手动刷新回读。
+class _SyncHistoryCard extends ConsumerStatefulWidget {
+  const _SyncHistoryCard();
+
+  @override
+  ConsumerState<_SyncHistoryCard> createState() => _SyncHistoryCardState();
+}
+
+class _SyncHistoryCardState extends ConsumerState<_SyncHistoryCard> {
+  static const _scopes = <String, String>{
+    'all': '全部',
+    'incremental': '完整同步',
+    'push_only': '仅推送',
+    'pull_only': '先拉后推',
+  };
+
+  static const _typeLabels = <String, String>{
+    'sync_now': '完整同步',
+    'push_only': '仅推送',
+    'pull_then_push': '先拉后推',
+  };
+
+  String _scope = 'all';
+  List<SyncHistoryRow> _rows = const [];
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  String _errMsg(Object e) => e
+      .toString()
+      .replaceFirst('Exception: ', '')
+      .replaceFirst(RegExp(r'^\[\w+\]\s*'), '');
+
+  Future<void> _load() async {
+    setState(() => _loading = true);
+    try {
+      final rows = await ref
+          .read(orbitBridgeProvider)
+          .cloudSyncHistory(scope: _scope, limit: 20);
+      if (!mounted) return;
+      setState(() {
+        _rows = rows;
+        _loading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _loading = false);
+      WaitToast.destructive('读取同步历史失败：${_errMsg(e)}');
+    }
+  }
+
+  Future<void> _switchScope(String scope) async {
+    if (_scope == scope) return;
+    setState(() => _scope = scope);
+    await _load();
+  }
+
+  String _when(int ms) {
+    final d = DateTime.fromMillisecondsSinceEpoch(ms);
+    String two(int v) => v.toString().padLeft(2, '0');
+    return '${d.month}月${d.day}日 ${two(d.hour)}:${two(d.minute)}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = AppColors.ofContext(context);
+
+    return SectionCard(
+      title: '同步历史',
+      subtitle: _loading ? null : '近 ${_rows.length} 次',
+      trailing: TextButton(
+        onPressed: _loading ? null : _load,
+        child: const Text('刷新'),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              for (final e in _scopes.entries) ...[
+                _chip(e.key, e.value),
+                const SizedBox(width: AppDimens.space8),
+              ],
+            ],
+          ),
+          const SizedBox(height: AppDimens.space8),
+          if (_loading)
+            const Padding(
+              padding: EdgeInsets.all(AppDimens.space16),
+              child: Center(
+                child: SizedBox(
+                  width: AppDimens.iconSizeLg,
+                  height: AppDimens.iconSizeLg,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: OrbitAccents.themeAccent,
+                  ),
+                ),
+              ),
+            )
+          else if (_rows.isEmpty)
+            Padding(
+              padding: const EdgeInsets.all(AppDimens.space16),
+              child: Center(
+                child: Text(
+                  '暂无同步记录；每次同步完成后会在这里留档。',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 12, color: colors.secondaryText),
+                ),
+              ),
+            )
+          else
+            for (final r in _rows) _row(colors, r),
+        ],
+      ),
+    );
+  }
+
+  Widget _chip(String key, String label) {
+    final colors = AppColors.ofContext(context);
+    final selected = _scope == key;
+    return GestureDetector(
+      onTap: () => _switchScope(key),
+      child: Container(
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppDimens.space12,
+          vertical: AppDimens.space6,
+        ),
+        decoration: BoxDecoration(
+          color: selected
+              ? OrbitAccents.themeAccent.withValues(alpha: 0.16)
+              : Colors.transparent,
+          borderRadius: AppShapes.small,
+          border: Border.all(
+            color: selected ? OrbitAccents.themeAccent : colors.divider,
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 13,
+            color: selected ? OrbitAccents.themeAccent : colors.bodyText,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _row(AppColorSet colors, SyncHistoryRow r) {
+    final ok = r.status == 'success';
+    return Padding(
+      padding: const EdgeInsets.only(top: AppDimens.space12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Text(
+                _typeLabels[r.syncType] ?? r.syncType,
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                  color: colors.bodyText,
+                ),
+              ),
+              const SizedBox(width: AppDimens.space8),
+              Text(
+                ok ? '成功' : r.status,
+                style: TextStyle(
+                  fontSize: 11,
+                  color: ok ? colors.success : colors.destructive,
+                ),
+              ),
+              const Spacer(),
+              Text(
+                _when(r.startedAt),
+                style: TextStyle(fontSize: 11, color: colors.secondaryText),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppDimens.space2),
+          Text(
+            '拉取 ${r.pulledCount} · 推送 ${r.pushedCount} · '
+            '冲突 ${r.conflictCount} · 耗时 ${(r.elapsedMs / 1000).toStringAsFixed(1)}s',
+            style: TextStyle(fontSize: 11, color: colors.secondaryText),
+          ),
+          if (r.errorMessage != null && r.errorMessage!.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: AppDimens.space2),
+              child: Text(
+                r.errorMessage!,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontSize: 11, color: colors.destructive),
+              ),
+            ),
+        ],
+      ),
     );
   }
 }

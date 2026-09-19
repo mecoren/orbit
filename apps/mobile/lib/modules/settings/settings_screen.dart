@@ -86,6 +86,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   void initState() {
     super.initState();
     _loadBioState();
+    _loadMasterAuthState();
     _conflictPending = _fetchConflictPending();
   }
 
@@ -407,6 +408,254 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         _bioAvailable = true;
         _bioEnabled = enabled;
       });
+    }
+  }
+
+  // ── 主密码与库迁移（安全卡）──
+
+  /// 去掉桥层错误前缀（`[tag] message` → `message`），页面 toast 只展示人话
+  String _stripTag(Object e) => e
+      .toString()
+      .replaceFirst('Exception: ', '')
+      .replaceFirst(RegExp(r'^\[\w+\]\s*'), '');
+
+  /// 是否已设置主密码（null = 探测中；决定展示「加密库」还是「明文库」态）
+  bool? _masterAuthSet;
+
+  /// 库迁移 / 主密码操作进行中（防重复点击；迁移期间禁止其他写操作）
+  bool _secBusy = false;
+
+  Future<void> _loadMasterAuthState() async {
+    try {
+      final has = await ref.read(orbitBridgeProvider).masterAuthHas();
+      if (mounted) setState(() => _masterAuthSet = has);
+    } catch (_) {
+      if (mounted) setState(() => _masterAuthSet = false);
+    }
+  }
+
+  /// 修改主密码（只重写 master_auth.json 的开屏密码包装，DB Key 不变）
+  Future<void> _changeMasterPassword() async {
+    if (_secBusy) return;
+    final oldCtrl = TextEditingController();
+    final newCtrl = TextEditingController();
+    final confirmCtrl = TextEditingController();
+    final bridge = ref.read(orbitBridgeProvider);
+    try {
+      final ok = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('修改主密码'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: oldCtrl,
+                obscureText: true,
+                decoration: const InputDecoration(labelText: '当前主密码'),
+              ),
+              TextField(
+                controller: newCtrl,
+                obscureText: true,
+                decoration: const InputDecoration(labelText: '新主密码'),
+              ),
+              TextField(
+                controller: confirmCtrl,
+                obscureText: true,
+                decoration: const InputDecoration(labelText: '确认新密码'),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('取消'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('确认修改'),
+            ),
+          ],
+        ),
+      );
+      if (ok != true || !mounted) return;
+      if (newCtrl.text.isEmpty) {
+        WaitToast.destructive('新主密码不能为空');
+        return;
+      }
+      if (newCtrl.text != confirmCtrl.text) {
+        WaitToast.destructive('两次输入的新密码不一致');
+        return;
+      }
+      setState(() => _secBusy = true);
+      await bridge.masterAuthChangePassword(oldCtrl.text, newCtrl.text);
+      WaitToast.success('主密码已修改');
+    } catch (e) {
+      final msg = e.toString();
+      WaitToast.destructive(
+          msg.contains('wrong_password') || msg.contains('密码错误')
+              ? '当前主密码不正确'
+              : '修改失败：$_stripTag(msg)');
+    } finally {
+      oldCtrl.dispose();
+      newCtrl.dispose();
+      confirmCtrl.dispose();
+      if (mounted) setState(() => _secBusy = false);
+    }
+  }
+
+  /// 关闭加密：加密库 → 明文库迁移 + 删除 master_auth.json + 重开明文连接
+  ///
+  /// 顺序不可颠倒：先迁移数据文件，成功了才清主密码——否则明文库配上
+  /// 残留的 master_auth.json 会让下次启动走加密分支而打不开库。
+  Future<void> _disableEncryption() async {
+    if (_secBusy) return;
+    final first = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('关闭加密？'),
+        content: const Text(
+          '将把本机数据库转为明文（不再需要主密码解锁），指纹解锁会一并关闭。'
+          '云端已上传的数据仍由同步密码端到端加密保护。此操作不可撤销。',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('继续'),
+          ),
+        ],
+      ),
+    );
+    if (first != true || !mounted) return;
+
+    final second = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('再次确认'),
+        content: const Text('关闭加密后，任何能拿到本机文件的人都可直接读取你的待办数据。'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('确认关闭加密'),
+          ),
+        ],
+      ),
+    );
+    if (second != true || !mounted) return;
+
+    final bridge = ref.read(orbitBridgeProvider);
+    setState(() => _secBusy = true);
+    try {
+      await bridge.dbMigrateToPlaintext();
+      await bridge.masterAuthClear();
+      await bridge.dbInitPlaintext();
+      // 旧的指纹三件套解的是已失效的 DB Key，直接清掉避免留下必败入口
+      await ref.read(biometricServiceProvider).clearStoredSecrets();
+      invalidateBusinessCaches(ref);
+      if (!mounted) return;
+      setState(() {
+        _masterAuthSet = false;
+        _bioEnabled = false;
+      });
+      WaitToast.success('已关闭加密，数据库已转为明文');
+    } catch (e) {
+      WaitToast.destructive('关闭加密失败：$_stripTag(e)');
+      await _loadMasterAuthState();
+    } finally {
+      if (mounted) setState(() => _secBusy = false);
+    }
+  }
+
+  /// 开启加密：设置主密码 + 明文库 → 加密库迁移 + 重开加密连接
+  ///
+  /// 失败回滚：迁移失败时清掉刚写入的 master_auth.json，保持「明文库 +
+  /// 无主密码」的一致状态，避免下次启动因残留 meta 而打不开库。
+  Future<void> _enableEncryption() async {
+    if (_secBusy) return;
+    final pwCtrl = TextEditingController();
+    final confirmCtrl = TextEditingController();
+    final bridge = ref.read(orbitBridgeProvider);
+    var metaWritten = false;
+    try {
+      final ok = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('开启加密'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                '设置主密码后，本机数据库将以 SQLCipher 加密；每次启动需输入'
+                '主密码解锁（可另开指纹解锁）。',
+                style: TextStyle(fontSize: 12),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: pwCtrl,
+                obscureText: true,
+                decoration: const InputDecoration(labelText: '主密码'),
+              ),
+              TextField(
+                controller: confirmCtrl,
+                obscureText: true,
+                decoration: const InputDecoration(labelText: '确认主密码'),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('取消'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('开始加密'),
+            ),
+          ],
+        ),
+      );
+      if (ok != true || !mounted) return;
+      if (pwCtrl.text.isEmpty) {
+        WaitToast.destructive('主密码不能为空');
+        return;
+      }
+      if (pwCtrl.text != confirmCtrl.text) {
+        WaitToast.destructive('两次输入的密码不一致');
+        return;
+      }
+
+      setState(() => _secBusy = true);
+      final dbKeyHex = await bridge.masterAuthInit(pwCtrl.text);
+      metaWritten = true;
+      await bridge.dbMigrateToEncrypted(dbKeyHex);
+      await bridge.dbInitEncrypted(dbKeyHex);
+      invalidateBusinessCaches(ref);
+      if (!mounted) return;
+      setState(() => _masterAuthSet = true);
+      WaitToast.success('已开启加密，下次启动需用主密码解锁');
+    } catch (e) {
+      if (metaWritten) {
+        // 回滚 meta，保持明文库可由 db_init_plaintext 打开
+        try {
+          await bridge.masterAuthClear();
+          await bridge.dbInitPlaintext();
+        } catch (_) {
+          // 回滚失败只提示用户重启；此处不再抛
+        }
+      }
+      WaitToast.destructive('开启加密失败：$_stripTag(e)');
+    } finally {
+      pwCtrl.dispose();
+      confirmCtrl.dispose();
+      if (mounted) setState(() => _secBusy = false);
     }
   }
 
@@ -734,6 +983,77 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 SectionCard(
                   title: '安全',
                   child: _buildSecurityCard(context),
+                ),
+                const SizedBox(height: AppDimens.space12),
+                // 组织卡：标签体系与任务模板的管理入口（此前只能新建，
+                // 改名/改色/删除与模板 CRUD 都没有 UI）
+                SectionCard(
+                  title: '组织',
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '标签用于跨项目归类任务；模板用于一键生成常用任务。',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: colors.secondaryText,
+                        ),
+                      ),
+                      const SizedBox(height: AppDimens.space4),
+                      _navRow(
+                        colors,
+                        label: '标签管理',
+                        onTap: () => context.push('/settings/labels'),
+                      ),
+                      _navRow(
+                        colors,
+                        label: '任务模板',
+                        onTap: () => context.push('/settings/templates'),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: AppDimens.space12),
+                // 数据安全卡：全量加密备份（导出/恢复，数据安全兜底）
+                SectionCard(
+                  title: '数据安全',
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '加密的全量备份可导出到本机或云端，换机/误删时可完整恢复；'
+                        '与明文导出不同，备份包只有同一同步密码才能打开。',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: colors.secondaryText,
+                        ),
+                      ),
+                      const SizedBox(height: AppDimens.space4),
+                      InkWell(
+                        borderRadius: AppShapes.medium,
+                        onTap: () => context.push('/settings/backup'),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                              vertical: AppDimens.space8),
+                          child: Row(
+                            children: [
+                              Text(
+                                '备份与恢复',
+                                style: TextStyle(
+                                    fontSize: 14, color: colors.bodyText),
+                              ),
+                              const Spacer(),
+                              Icon(
+                                Icons.chevron_right_rounded,
+                                size: AppDimens.iconSizeMd,
+                                color: colors.secondaryText,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
                 const SizedBox(height: AppDimens.space12),
                 // 小组件卡（#3）：Android 桌面小组件与快捷设置磁贴引导
@@ -1108,45 +1428,164 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     await ref.read(todoWidgetServiceProvider).requestPinTile();
   }
 
-  /// 安全卡内容：指纹硬件可用 → 指纹解锁开关；否则只读提示
-  ///（探测中空白占位避免闪烁；开关翻转动画期 _bioBusy 防重复触发）
+  /// 通用导航行（卡片内的「文案 + 右箭头」入口，行高满足触控热区）
+  Widget _navRow(
+    AppColorSet colors, {
+    required String label,
+    required VoidCallback onTap,
+  }) =>
+      InkWell(
+        borderRadius: AppShapes.medium,
+        onTap: onTap,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: AppDimens.touchTarget),
+          child: Row(
+            children: [
+              Text(label,
+                  style: TextStyle(fontSize: 14, color: colors.bodyText)),
+              const Spacer(),
+              Icon(
+                Icons.chevron_right_rounded,
+                size: AppDimens.iconSizeMd,
+                color: colors.secondaryText,
+              ),
+            ],
+          ),
+        ),
+      );
+
+  /// 安全卡内容：库加密态（明文/加密）+ 主密码操作 + 指纹解锁开关
+  ///
+  /// 三段结构：
+  /// 1. 加密态说明与迁移入口（明文库 → 开启加密；加密库 → 关闭加密）；
+  /// 2. 主密码修改（仅加密库；只换开屏密码包装，DB Key 不变）；
+  /// 3. 指纹解锁开关（硬件可用才有；无硬件给只读说明而非整卡降级）。
   Widget _buildSecurityCard(BuildContext context) {
     final colors = AppColors.ofContext(context);
-    if (_bioAvailable == null) {
-      return const SizedBox(height: 20);
-    }
-    if (_bioAvailable != true) {
-      return Text(
-        '本机未检测到指纹硬件，无法开启指纹解锁；主密码相关操作请在桌面端完成。',
-        style: TextStyle(fontSize: 13, color: colors.secondaryText),
-      );
-    }
+    final encrypted = _masterAuthSet;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
           children: [
-            Expanded(
-              child: Text(
-                '指纹解锁',
-                style: TextStyle(fontSize: 14, color: colors.bodyText),
-              ),
+            Icon(
+              encrypted == true
+                  ? Icons.lock_rounded
+                  : Icons.lock_open_rounded,
+              size: AppDimens.iconSizeMd,
+              color: encrypted == true ? colors.success : colors.secondaryText,
             ),
-            Switch(
-              value: _bioEnabled == true,
-              onChanged: (_bioBusy || _bioEnabled == null)
-                  ? null
-                  : (v) => v ? _bioEnable() : _bioDisable(),
+            const SizedBox(width: AppDimens.space8),
+            Text(
+              encrypted == null
+                  ? '检测中…'
+                  : encrypted
+                      ? '数据库已加密（SQLCipher）'
+                      : '数据库为明文',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+                color: colors.bodyText,
+              ),
             ),
           ],
         ),
         const SizedBox(height: AppDimens.space4),
         Text(
-          _bioEnabled == true
-              ? '开启后可在解锁页用指纹代替主密码（密钥链存于系统安全存储，不离开本机）。'
-              : '用指纹代替主密码解锁加密库；密钥链存于系统安全存储，不参与云同步。主密码修改/迁移仍请在桌面端完成。',
+          encrypted == true
+              ? '每次启动需输入主密码解锁；主密码只保护本机文件，云端数据由同步密码端到端加密。'
+              : '本机文件未加密，任何能访问设备的进程都能直接读取待办数据。',
           style: TextStyle(fontSize: 12, color: colors.secondaryText),
         ),
+        const SizedBox(height: AppDimens.space8),
+        if (encrypted == true)
+          InkWell(
+            borderRadius: AppShapes.medium,
+            onTap: _secBusy ? null : _changeMasterPassword,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: AppDimens.space8),
+              child: Row(
+                children: [
+                  Text('修改主密码',
+                      style: TextStyle(fontSize: 14, color: colors.bodyText)),
+                  const Spacer(),
+                  Icon(Icons.chevron_right_rounded,
+                      size: AppDimens.iconSizeMd, color: colors.secondaryText),
+                ],
+              ),
+            ),
+          ),
+        if (encrypted != null)
+          InkWell(
+            borderRadius: AppShapes.medium,
+            onTap: _secBusy
+                ? null
+                : (encrypted ? _disableEncryption : _enableEncryption),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: AppDimens.space8),
+              child: Row(
+                children: [
+                  Text(
+                    encrypted ? '关闭加密（转为明文库）' : '开启加密（设置主密码）',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: encrypted ? colors.destructive : colors.bodyText,
+                    ),
+                  ),
+                  const Spacer(),
+                  if (_secBusy)
+                    const SizedBox(
+                      width: AppDimens.iconSizeSm,
+                      height: AppDimens.iconSizeSm,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: OrbitAccents.themeAccent,
+                      ),
+                    )
+                  else
+                    Icon(Icons.chevron_right_rounded,
+                        size: AppDimens.iconSizeMd,
+                        color: colors.secondaryText),
+                ],
+              ),
+            ),
+          ),
+        const Divider(height: AppDimens.space24),
+        if (_bioAvailable == true) ...[
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  '指纹解锁',
+                  style: TextStyle(fontSize: 14, color: colors.bodyText),
+                ),
+              ),
+              Switch(
+                value: _bioEnabled == true,
+                // 明文库无需解锁，指纹开关不可用（_masterAuthSet 探测中同样置灰）
+                onChanged: (_bioBusy ||
+                        _bioEnabled == null ||
+                        encrypted != true)
+                    ? null
+                    : (v) => v ? _bioEnable() : _bioDisable(),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppDimens.space4),
+          Text(
+            _bioEnabled == true
+                ? '开启后可在解锁页用指纹代替主密码（密钥链存于系统安全存储，不离开本机）。'
+                : encrypted == true
+                    ? '用指纹代替主密码解锁加密库；密钥链存于系统安全存储，不参与云同步。'
+                    : '明文库无需解锁，指纹解锁不可用；开启加密后即可启用。',
+            style: TextStyle(fontSize: 12, color: colors.secondaryText),
+          ),
+        ] else if (_bioAvailable == false)
+          Text(
+            '本机未检测到指纹硬件，无法开启指纹解锁。',
+            style: TextStyle(fontSize: 12, color: colors.secondaryText),
+          ),
       ],
     );
   }

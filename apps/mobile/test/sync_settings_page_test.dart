@@ -42,6 +42,14 @@ Future<void> _scrollTo(WidgetTester tester, Finder finder) async {
   final scrollable = find.byType(ListView);
   await tester.dragUntilVisible(finder, scrollable, const Offset(0, -200));
   await tester.pumpAndSettle();
+  // dragUntilVisible 末尾的 ensureVisible 会把目标顶端对齐到视口顶部，
+  // 而顶部 56px 被液态玻璃标题栏盖住 → 命中落到标题栏上。先向下回滚
+  // 到标题栏之下，再补滚确保底边离视口下沿有 20px 余量。
+  for (var i = 0; i < 8; i++) {
+    if (tester.getRect(finder).top >= 80) break;
+    await tester.drag(scrollable, const Offset(0, 100));
+    await tester.pumpAndSettle();
+  }
   for (var i = 0; i < 8; i++) {
     // 留 20px 余量确保可命中点击
     if (tester.getRect(finder).bottom <= 580) break;

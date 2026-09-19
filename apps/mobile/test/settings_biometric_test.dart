@@ -48,6 +48,21 @@ Widget _wrap(MockOrbitBridge bridge, BiometricService service) =>
       child: const MaterialApp(home: SettingsScreen()),
     );
 
+/// 把目标滚进「标题栏之下、视口下沿之上」的可命中区间。
+///
+/// 安全卡位于设置页第三张卡，其内容随主密码态卡片与库迁移入口增长，固定
+/// 偏移量会随页面高度漂移；且顶部 56px 被 LiquidGlassTitleBar 浮层遮挡，
+/// 贴顶同样点不中（不能用 ensureVisible——它把目标顶端对齐到视口顶部）。
+Future<void> _scrollToTappable(WidgetTester tester, Finder finder) async {
+  final scrollable = find.byType(ListView).first;
+  for (var i = 0; i < 12; i++) {
+    final rect = tester.getRect(finder);
+    if (rect.top >= 80 && rect.bottom <= 580) break;
+    await tester.drag(scrollable, Offset(0, rect.bottom > 580 ? -100 : 100));
+    await tester.pumpAndSettle();
+  }
+}
+
 void main() {
   testWidgets('无指纹硬件：安全卡回退只读提示', (tester) async {
     final bridge = MockOrbitBridge()..store.masterAuthSet = true;
@@ -84,10 +99,7 @@ void main() {
     expect(switchFinder, findsOneWidget);
 
     // 开关当前关（value=false）→ 点开 → 弹密码确认
-    // （同步卡新增「冲突记录」入口行后开关落到首屏之下：先上滚再点；
-    //  不用 ensureVisible——贴顶会被 LiquidGlassTitleBar 浮层遮住点不中）
-    await tester.drag(find.byType(ListView).first, const Offset(0, -140));
-    await tester.pumpAndSettle();
+    await _scrollToTappable(tester, switchFinder);
     await tester.tap(switchFinder);
     await tester.pumpAndSettle();
     expect(find.text('开启指纹解锁'), findsOneWidget);
@@ -126,9 +138,8 @@ void main() {
     final switchFinder = find.byType(Switch);
     expect(tester.widget<Switch>(switchFinder).value, true);
 
-    // 同「打开开关」：先上滚再点（同步卡新增入口行后首屏放不下）
-    await tester.drag(find.byType(ListView).first, const Offset(0, -140));
-    await tester.pumpAndSettle();
+    // 同「打开开关」：先滚进可命中区间再点
+    await _scrollToTappable(tester, switchFinder);
     await tester.tap(switchFinder);
     await tester.pumpAndSettle();
     expect(find.text('关闭指纹解锁'), findsOneWidget);

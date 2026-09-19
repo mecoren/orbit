@@ -3,7 +3,10 @@ import 'package:go_router/go_router.dart';
 
 import 'router_keys.dart';
 import '../../modules/settings/about_page.dart';
+import '../../modules/settings/backup_page.dart';
+import '../../modules/settings/label_manager_page.dart';
 import '../../modules/settings/settings_screen.dart';
+import '../../modules/settings/template_manager_page.dart';
 import '../../modules/settings/sync_conflicts_page.dart';
 import '../../modules/settings/sync_settings_page.dart';
 import '../../modules/todo/calendar_screen.dart';
@@ -129,6 +132,27 @@ final appRouter = GoRouter(
       path: '/settings/conflicts',
       pageBuilder: (context, state) => pageSlideFromRight(
         const SyncConflictsPage(),
+        key: state.pageKey,
+      ),
+    ),
+    GoRoute(
+      path: '/settings/backup',
+      pageBuilder: (context, state) => pageSlideFromRight(
+        const BackupPage(),
+        key: state.pageKey,
+      ),
+    ),
+    GoRoute(
+      path: '/settings/labels',
+      pageBuilder: (context, state) => pageSlideFromRight(
+        const LabelManagerPage(),
+        key: state.pageKey,
+      ),
+    ),
+    GoRoute(
+      path: '/settings/templates',
+      pageBuilder: (context, state) => pageSlideFromRight(
+        const TemplateManagerPage(),
         key: state.pageKey,
       ),
     ),
