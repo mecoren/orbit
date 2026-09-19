@@ -77,6 +77,9 @@ whoami = "1.5"
 tauri-plugin-window-state = "2"
 keyring = { version = "3", features = ["windows-native", "apple-native", "linux-native"] }
 dirs = "6"
+# 开机自启（07 backlog #51）：注册项带 --hidden，自启拉起走静默驻留形态
+# （三平台分别写 HKCU Run / LaunchAgent plist / XDG .desktop，见 startup_cmd）
+tauri-plugin-autostart = "2"
 
 # Windows 平台：Mica 云母材质（DWM 直调）+ 系统字体枚举预留
 [target.'cfg(target_os = "windows")'.dependencies]

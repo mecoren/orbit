@@ -1072,6 +1072,14 @@ export const dbMaintenance = () => invoke<DbMaintenanceResult>("db_maintenance")
  */
 export const showMainWindow = () => invoke<void>("show_main_window_cmd");
 
+// ========== 启动形态（开机自启拉起：--hidden 静默驻留）==========
+/**
+ * 本次进程是否由开机自启拉起：为真时启动流程跳过主窗 show，静默驻留
+ * 托盘（壳层已同步接上隐藏回收链，常驻内存回落宿主档）。
+ * 判定源是 autostart 注册项注入的 `--hidden` 参数（startup_cmd）。
+ */
+export const startupLaunchedHidden = () => invoke<boolean>("startup_launched_hidden");
+
 // ========== saved_filters（保存的筛选器：#35）==========
 export interface TodoSavedFilter {
   id: number;

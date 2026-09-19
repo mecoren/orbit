@@ -1475,6 +1475,8 @@ const commands: Record<string, (args: any, ctx: Ctx) => unknown> = {
   }),
   // 唤起主窗：纯浏览器/冒烟环境无窗口概念，静默成功（热键路径不炸即可）
   show_main_window_cmd: (): null => null,
+  // 启动形态探针（自启 --hidden 判定）：纯浏览器无自启概念，恒非隐藏
+  startup_launched_hidden: (): boolean => false,
 
   // ---- 保存的筛选器（#35；条件 JSON 白名单键同 Rust）----
   saved_filters_list: (_a: unknown, { db }: Ctx) => ipcClone(db.savedFilters),

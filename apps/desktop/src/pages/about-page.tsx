@@ -245,6 +245,7 @@ const OSS_FRONTEND: OpenSourceComponent[] = [
   { name: "clsx", version: "^2.1.1", source: "frontend", description: "className 条件拼接工具", license: "MIT", repository: "https://github.com/lukeed/clsx" },
   { name: "tailwind-merge", version: "^2.5.0", source: "frontend", description: "Tailwind 类名冲突合并", license: "MIT", repository: "https://github.com/dcastil/tailwind-merge" },
   { name: "@tauri-apps/api", version: "^2.0.0", source: "frontend", description: "Tauri 前端 API（invoke / event）", license: "MIT / Apache-2.0", repository: "https://github.com/tauri-apps/tauri", homepage: "https://tauri.app" },
+  { name: "@tauri-apps/plugin-autostart", version: "^2.0.0", source: "frontend", description: "Tauri 开机自启动插件（前端绑定）", license: "MIT / Apache-2.0", repository: "https://github.com/tauri-apps/plugins-workspace" },
   { name: "@radix-ui/react-dialog", version: "^1.1.19", source: "frontend", description: "无障碍对话框原语", license: "MIT", repository: "https://github.com/radix-ui/primitives", homepage: "https://www.radix-ui.com" },
   { name: "@radix-ui/react-dropdown-menu", version: "^2.1.20", source: "frontend", description: "无障碍下拉菜单原语", license: "MIT", repository: "https://github.com/radix-ui/primitives", homepage: "https://www.radix-ui.com" },
   { name: "@radix-ui/react-select", version: "^2.3.3", source: "frontend", description: "无障碍下拉选择原语", license: "MIT", repository: "https://github.com/radix-ui/primitives", homepage: "https://www.radix-ui.com" },
@@ -255,6 +256,7 @@ const OSS_FRONTEND: OpenSourceComponent[] = [
 
 const OSS_RUST: OpenSourceComponent[] = [
   { name: "tauri", version: "2", source: "rust", description: "构建跨平台应用的 Rust 框架", license: "Apache-2.0 / MIT", repository: "https://github.com/tauri-apps/tauri", homepage: "https://tauri.app" },
+  { name: "tauri-plugin-autostart", version: "2", source: "rust", description: "开机自启动（系统启动项注册）", license: "Apache-2.0 / MIT", repository: "https://github.com/tauri-apps/plugins-workspace" },
   { name: "sqlx", version: "0.8", source: "rust", description: "异步 Rust SQL 工具包", license: "MIT / Apache-2.0", repository: "https://github.com/launchbadge/sqlx", homepage: "https://github.com/launchbadge/sqlx" },
   { name: "libsqlite3-sys", version: "0.30", source: "rust", description: "SQLite/SQLCipher 绑定（bundled 编译）", license: "MIT", repository: "https://github.com/rusqlite/rusqlite" },
   { name: "tokio", version: "1.45", source: "rust", description: "Rust 异步运行时", license: "MIT", repository: "https://github.com/tokio-rs/tokio", homepage: "https://tokio.rs" },

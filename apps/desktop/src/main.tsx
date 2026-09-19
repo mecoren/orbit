@@ -24,8 +24,16 @@ applyPlatformClass();
 // 由前端在主题/字体初始化后主动 show，消除启动瞬间的白屏闪烁。
 // capability 已含 core:default（含 window:allow-show）；非 Tauri 环境
 // （纯浏览器 dev）无 window API，静默跳过。
+// 唯一例外是开机自启拉起（注册项带 --hidden）：不弹主窗，静默驻留托盘，
+// 壳层同步已接隐藏回收链（降档 + 超时销毁，常驻内存回落宿主档）。
+// 探针链任一环失败都回退「照常显示」——窗口不出现比多弹一次严重得多。
 void import("@tauri-apps/api/window")
-  .then(({ getCurrentWindow }) => getCurrentWindow().show())
+  .then(async ({ getCurrentWindow }) => {
+    const hidden = await import("@/lib/tauri")
+      .then((m) => m.startupLaunchedHidden())
+      .catch(() => false);
+    if (!hidden) await getCurrentWindow().show();
+  })
   .catch(() => {});
 
 // 生产环境屏蔽默认网页右键菜单：应用内自定义右键菜单在组件层已 stopPropagation，

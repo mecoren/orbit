@@ -11,6 +11,7 @@ import {
   settingsCategories,
   type SettingsCategoryKey,
 } from "@/components/settings/categories";
+import { GeneralSection } from "@/components/settings/general-section";
 import { SecuritySection } from "@/components/settings/security-section";
 import { SyncSection } from "@/components/settings/sync-section";
 import { SyncConflictSection } from "@/components/settings/sync-conflict-section";
@@ -55,6 +56,7 @@ export function SettingsPage() {
         {/* 右内容 */}
         <div className="min-w-0 flex-1 overflow-y-auto">
           <div className="mx-auto max-w-2xl p-6">
+            {active === "general" && <GeneralSection />}
             {active === "security" && <SecuritySection />}
             {active === "sync" && <SyncSection />}
             {active === "conflicts" && <SyncConflictSection />}

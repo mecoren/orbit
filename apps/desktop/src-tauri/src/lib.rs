@@ -107,6 +107,18 @@ pub fn run() {
     #[cfg(desktop)]
     let builder = builder.plugin(tauri_plugin_process::init());
 
+    // 开机自启（07 backlog #51，tauri-plugin-autostart）：设置页「通用」开关
+    // 读写系统注册项（Windows HKCU Run / macOS LaunchAgent plist / Linux XDG
+    // .desktop）；args 注入 --hidden，自启拉起走静默驻留形态（startup_cmd）。
+    // 已知口径：底层 auto-launch 在 Windows 拼注册值时不给路径加引号，
+    // 安装路径含空格（Program Files / 用户名带空格）时自启会被系统解析坏。
+    #[cfg(desktop)]
+    let builder = builder.plugin(
+        tauri_plugin_autostart::Builder::new()
+            .args(["--hidden"])
+            .build(),
+    );
+
     // 关窗驻留拦截（07 报告 #16 托盘配套）：关闭主窗 = 隐藏驻留托盘，
     // 退出走托盘菜单；避免中断同步/备份调度器与提醒轮询守护。
     // tray_close_hint 事件驱动前端首次提示（localStorage 记忆不再骚扰）。
@@ -136,6 +148,16 @@ pub fn run() {
             #[cfg(desktop)]
             if let Err(e) = commands::tray::setup_tray(_app.handle()) {
                 eprintln!("[tray] 托盘初始化失败（不影响主功能）: {e}");
+            }
+
+            // 开机自启拉起（注册项带 --hidden）：静默驻留形态——前端
+            // main.tsx 经 startup_launched_hidden 命令判定后跳过主窗 show，
+            // 壳层同步接上隐藏回收链（降 WebView2 档位 + 排程超时销毁），
+            // 窗口回收后进程与四个守护继续常驻（内存 ~330MB → ~40MB），
+            // 托盘/热键唤起走 window_recycler 重建，与关窗驻留同一路径。
+            if commands::startup_cmd::resolve_launch_mode() {
+                commands::webview_low_power::set_memory_usage_level(_app.handle(), true);
+                commands::window_recycler::schedule_recycle_on_hide(_app.handle());
             }
 
             // Mica 云母材质：绕过 Tauri 原生 windowEffects 在无边框窗口上的局限，
@@ -371,6 +393,8 @@ pub fn run() {
             commands::window_recycler::show_main_window_cmd,
             // 冷启动首屏标记（度量专用；ORBIT_PERF_MARKER 未设置时 no-op）
             commands::perf_cmd::perf_first_screen_mark,
+            // 启动形态探针（自启拉起 = --hidden 静默驻留；前端据此跳过主窗 show）
+            commands::startup_cmd::startup_launched_hidden,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
