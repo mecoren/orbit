@@ -9,7 +9,9 @@ import '../../data/api/dto.dart';
 import '../../data/api/orbit_bridge.dart';
 import '../../data/providers/bridge_provider.dart';
 import '../../shared/utils/hex_color.dart';
+import '../../shared/widgets/info_tile.dart';
 import '../../shared/widgets/section_card.dart';
+import '../../shared/widgets/select_bottom_sheet.dart';
 import '../../shared/widgets/wait_date_picker.dart';
 import '../../shared/widgets/wait_toast.dart';
 // as rep：规避 Flutter widgets 自带 RepeatMode 类名冲突
@@ -25,8 +27,11 @@ import 'logic/task_logic.dart'
         formatYmd,
         priorityColorHex,
         priorityLabel,
-        quickViewCreateDefaults;
+        quickViewCreateDefaults,
+        statusColorHex,
+        statusLabel;
 import 'providers/todo_providers.dart';
+import 'repeat_edit_sheet.dart';
 
 /// 截止日期选择器（表单抽屉"自定义"与详情页截止日期行共用）
 ///
@@ -129,7 +134,6 @@ class _TodoFormSheet extends ConsumerStatefulWidget {
 class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
   final _titleController = TextEditingController();
   final _descriptionController = TextEditingController();
-  final _intervalController = TextEditingController(text: '1');
   final _formKey = GlobalKey<FormState>();
 
   int? _projectId;
@@ -139,14 +143,13 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
   int? _startDate;
   int? _remindAt;
   TodoReminder? _existingReminder;
+  // 重复规则值（预设/自定义/扩展字段的全部编辑都收敛到重复编辑抽屉，
+  // 表单侧只存结果，不再持有自定义档/间隔输入等中间态）
   int _repeatMode = rep.RepeatMode.none;
   int _repeatAfter = 1;
-  bool _customRepeat = false;
-  rep.RepeatUnit _customUnit = rep.RepeatUnit.day;
   // #34 重复规则扩展：星期几掩码（bit0=周一…bit6=周日）+ 结束条件 + when done
   int _repeatWeekdays = 0;
   int _repeatEndType = 0;
-  String _repeatEndText = '';
   int _repeatEndParam = 0;
   bool _repeatFromDone = false;
   bool _saving = false;
@@ -199,26 +202,6 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
   /// 解析命中的标签 id（保存链消费后清空）
   List<int> _pendingLabelIds = [];
 
-  /// 自定义档位派生 mode：单位 → repeat_mode
-  int get _effectiveRepeatMode =>
-      _customRepeat ? rep.modeForUnit(_customUnit) : _repeatMode;
-
-  /// 自定义档位派生 after：间隔输入（解析失败按 1 兜底）
-  /// 扩展区判定用的当前 mode（自定义面板的单位换算与保存口径一致）
-  int get repeatModeForExt => _customRepeat
-      ? rep.modeForUnit(_customUnit)
-      : _repeatMode;
-
-  int get _effectiveRepeatAfter => _customRepeat
-      ? (int.tryParse(_intervalController.text.trim()) ?? 1)
-      : _repeatAfter;
-
-  /// 结束参数：次数型取输入（≥1 防呆），日期型由 UI 不启用（移动端首版次数/永不二选，
-  /// 日期型走桌面端完整编辑器；保持桥面完整语义）
-  int get _effectiveRepeatEndParam => _repeatEndType == 2
-      ? (int.tryParse(_repeatEndText.trim()) ?? 0)
-      : _repeatEndParam;
-
   @override
   void initState() {
     super.initState();
@@ -248,7 +231,6 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
   void dispose() {
     _titleController.dispose();
     _descriptionController.dispose();
-    _intervalController.dispose();
     super.dispose();
   }
 
@@ -272,38 +254,19 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
         _status = task.status;
         _startDate = task.startDate;
         _repeatMode = task.repeatMode;
-      _repeatWeekdays = task.repeatWeekdays;
-      _repeatEndType = task.repeatEndType;
-      _repeatEndParam = task.repeatEndParam;
-      _repeatFromDone = task.repeatFromDone == 1;
-      _repeatEndText = _repeatEndType == 2
-          ? (task.repeatEndParam > 0 ? task.repeatEndParam.toString() : '')
-          : '';
         _repeatAfter = task.repeatAfter;
+        _repeatWeekdays = task.repeatWeekdays;
+        _repeatEndType = task.repeatEndType;
+        _repeatEndParam = task.repeatEndParam;
+        _repeatFromDone = task.repeatFromDone == 1;
         _existingReminder = firstReminder;
         _remindAt = firstReminder?.remindAt;
-        // 非预设组合（如"每 3 天"）→ 进自定义态并回填间隔/单位
-        final isPreset = rep.repeatPresets.any((p) =>
-            p.mode == task.repeatMode &&
-            (p.mode == rep.RepeatMode.none || task.repeatAfter == p.after));
-        _customRepeat =
-            task.repeatMode != rep.RepeatMode.none && !isPreset;
-        _customUnit = _unitForMode(task.repeatMode);
-        _intervalController.text = '${task.repeatAfter <= 0 ? 1 : task.repeatAfter}';
         _loaded = true;
       });
     } catch (_) {
       if (mounted) setState(() => _loadError = '记录不存在或加载失败');
     }
   }
-
-  /// repeat_mode → 自定义单位（编辑回填用；不重复归到"天"占位）
-  rep.RepeatUnit _unitForMode(int mode) => switch (mode) {
-        rep.RepeatMode.weekly => rep.RepeatUnit.week,
-        rep.RepeatMode.monthly => rep.RepeatUnit.month,
-        rep.RepeatMode.yearly => rep.RepeatUnit.year,
-        _ => rep.RepeatUnit.day,
-      };
 
   // ── 保存链：校验标题非空 → create/update → invalidate + 关闭 ──
 
@@ -314,8 +277,8 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
     _applyTitleParse();
     final title = _titleController.text.trim();
     final description = _descriptionController.text.trim();
-    final repeatMode = _effectiveRepeatMode;
-    final repeatAfter = _effectiveRepeatAfter;
+    final repeatMode = _repeatMode;
+    final repeatAfter = _repeatAfter;
     try {
       final bridge = ref.read(orbitBridgeProvider);
       if (widget.editingTaskId == null) {
@@ -340,7 +303,7 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
           repeatAfter: repeatAfter,
           repeatWeekdays: repeatMode == rep.RepeatMode.weekly ? _repeatWeekdays : 0,
           repeatEndType: _repeatEndType,
-          repeatEndParam: _effectiveRepeatEndParam,
+          repeatEndParam: _repeatEndParam,
           repeatFromDone: _repeatFromDone ? 1 : 0,
           myDayDate: viewDefaults.myDayMs,
           isFavorite: viewDefaults.favorite,
@@ -384,7 +347,7 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
             'repeat_weekdays':
                 repeatMode == rep.RepeatMode.weekly ? _repeatWeekdays : 0,
             'repeat_end_type': _repeatEndType,
-            'repeat_end_param': _effectiveRepeatEndParam,
+            'repeat_end_param': _repeatEndParam,
             'repeat_from_done': _repeatFromDone ? 1 : 0,
           }),
         );
@@ -437,16 +400,100 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
     setState(() => _remindAt = picked.millisecondsSinceEpoch);
   }
 
-  /// 字段小节标题（与优先级/截止日期小节同规格：12px secondary）
-  Widget _sectionLabel(String text) {
-    final colors = AppColors.ofContext(context);
-    return Align(
-      alignment: Alignment.centerLeft,
-      child: Text(
-        text,
-        style: TextStyle(fontSize: 12, color: colors.secondaryText),
-      ),
+  // ── 字段行 → 底部选择抽屉（与详情页信息区同口径：行只显值，点行再选）──
+
+  /// 项目行 → 单选抽屉（未分组 + 项目列表带色点）
+  Future<void> _pickProject() async {
+    final projects = ref.read(todoProjectsProvider).value ?? [];
+    await showSelectBottomSheet<String>(
+      context,
+      title: '项目',
+      items: [
+        const SelectItem<String>(value: '', label: '未分组'),
+        for (final project in projects)
+          SelectItem(
+            value: '${project.id}',
+            label: project.title,
+            colorDot:
+                hexToColor(project.hexColor, fallback: OrbitAccents.todoAccent),
+          ),
+      ],
+      current: _projectId == null ? '' : '$_projectId',
+      onSelect: (v) {
+        if (!mounted) return;
+        setState(() => _projectId = v.isEmpty ? null : int.parse(v));
+      },
     );
+  }
+
+  /// 优先级行 → 六档单选抽屉（P0「无」浅灰点，与列表/日历同源）
+  Future<void> _pickPriority() async {
+    await showSelectBottomSheet<int>(
+      context,
+      title: '优先级',
+      items: [
+        for (var i = 0; i <= 5; i++)
+          SelectItem(
+            value: i,
+            label: priorityLabel(i),
+            colorDot: hexToColor(priorityColorHex(i)),
+          ),
+      ],
+      current: _priority,
+      onSelect: (v) {
+        if (!mounted) return;
+        setState(() => _priority = v);
+      },
+    );
+  }
+
+  /// 状态行 → 三档单选抽屉（新建口径：只落 status，不补 done_at）
+  Future<void> _pickStatus() async {
+    await showSelectBottomSheet<String>(
+      context,
+      title: '状态',
+      items: [
+        for (final s in const [
+          ('pending', '待办', '#6B7280'),
+          ('doing', '进行中', '#3B82F6'),
+          ('done', '已完成', '#22C55E'),
+        ])
+          SelectItem(
+            value: s.$1,
+            label: s.$2,
+            colorDot: hexToColor(s.$3),
+          ),
+      ],
+      current: _status,
+      onSelect: (v) {
+        if (!mounted) return;
+        setState(() => _status = v);
+      },
+    );
+  }
+
+  /// 重复行 → 重复规则抽屉（预设点选即回填，自定义面板「确定」一次提交）
+  Future<void> _pickRepeat() async {
+    final value = await showRepeatEditSheet(
+      context,
+      mode: _repeatMode,
+      after: _repeatAfter,
+      weekdays: _repeatWeekdays,
+      endType: _repeatEndType,
+      endParam: _repeatEndParam,
+      fromDone: _repeatFromDone,
+      // 「下次 M月d日」预览锚点 = 表单当前截止日期（与完成引擎同源）
+      dueMs: _dueDate,
+    );
+    if (value == null || !mounted) return;
+    setState(() {
+      _repeatMode = value.mode;
+      _repeatAfter = value.after;
+      _repeatWeekdays = value.weekdays;
+      _repeatEndType = value.endType;
+      _repeatEndParam = value.endParam;
+      _repeatFromDone = value.fromDone;
+    });
   }
 
   /// 行间分隔线（日期与提醒卡片内）
@@ -454,6 +501,43 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
         height: 0.5,
         color: colors.divider.withValues(alpha: 0.3),
       );
+
+  /// 标题/描述输入框装饰：背景走 surface（亮色 #F9F9F9），
+  /// 边框与信息卡片同口径（divider@30%、radius 12）。
+  ///
+  /// 四态边框全部显式给出：主题的 `border` 是 `BorderSide.none`，只覆盖
+  /// enabledBorder 会让错误态回退到无边框（校验失败时框直接消失）。
+  InputDecoration _fieldDecoration({
+    required String label,
+    required String hint,
+    bool alignLabelWithHint = false,
+  }) {
+    final colors = AppColors.ofContext(context);
+    return InputDecoration(
+      labelText: label,
+      hintText: hint,
+      alignLabelWithHint: alignLabelWithHint,
+      counterText: '',
+      filled: true,
+      fillColor: colors.surface,
+      enabledBorder: OutlineInputBorder(
+        borderRadius: AppShapes.medium,
+        borderSide: BorderSide(color: colors.divider.withValues(alpha: 0.3)),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: AppShapes.medium,
+        borderSide: const BorderSide(color: OrbitAccents.themeAccent, width: 1.5),
+      ),
+      errorBorder: OutlineInputBorder(
+        borderRadius: AppShapes.medium,
+        borderSide: BorderSide(color: colors.destructive),
+      ),
+      focusedErrorBorder: OutlineInputBorder(
+        borderRadius: AppShapes.medium,
+        borderSide: BorderSide(color: colors.destructive, width: 1.5),
+      ),
+    );
+  }
 
   // ── 截止日期快捷项（本地时区自然日零点）──
 
@@ -478,6 +562,9 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
   Widget build(BuildContext context) {
     final colors = AppColors.ofContext(context);
     final projects = ref.watch(todoProjectsProvider).value ?? [];
+    final project = _projectId == null
+        ? null
+        : projects.where((p) => p.id == _projectId).firstOrNull;
     final isEdit = widget.editingTaskId != null;
 
     // 键盘避让：底部 padding 跟随 viewInsets
@@ -556,10 +643,9 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
                               maxLength: 200,
                               style: TextStyle(
                                   fontSize: 15, color: colors.bodyText),
-                              decoration: const InputDecoration(
-                                labelText: '标题 *',
-                                hintText: '请输入标题',
-                                counterText: '',
+                              decoration: _fieldDecoration(
+                                label: '标题 *',
+                                hint: '请输入标题',
                               ),
                               validator: (v) =>
                                   v == null || v.trim().isEmpty ? '请输入标题' : null,
@@ -581,103 +667,58 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
                               maxLength: 5000,
                               style: TextStyle(
                                   fontSize: 15, color: colors.bodyText),
-                              decoration: const InputDecoration(
-                                labelText: '描述',
-                                hintText: '请输入描述',
+                              decoration: _fieldDecoration(
+                                label: '描述',
+                                hint: '请输入描述',
                                 alignLabelWithHint: true,
-                                counterText: '',
                               ),
                             ),
                             const SizedBox(height: AppDimens.space12),
-                            // 3. 项目下拉（ListFilter 拉取数据生成选项）
-                            DropdownButtonFormField<String>(
-                              initialValue: _projectId == null ? '' : '$_projectId',
-                              style: TextStyle(
-                                  fontSize: 15, color: colors.bodyText),
-                              dropdownColor: colors.popup,
-                              decoration: const InputDecoration(labelText: '项目'),
-                              items: [
-                                const DropdownMenuItem(
-                                  value: '',
-                                  child: Text('无项目'),
-                                ),
-                                for (final project in projects)
-                                  DropdownMenuItem(
-                                    value: '${project.id}',
-                                    // 注意：菜单项 child 禁用 Flexible/Expanded——
-                                    // DropdownButtonFormField 构建时会以无界宽度
-                                    // 预量每个菜单项（弹层定宽），flex 子件遇无界
-                                    // 宽度约束会抛断言导致抽屉布局崩溃。
-                                    // mainAxisSize.min + 普通文本在无界下取固有
-                                    // 宽度、有界下仍可 ellipsis，两端皆安全。
-                                    child: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        // #36：项目名按项目色着字（去色块）
-                                        Text(
-                                          project.title,
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: TextStyle(
-                                            color: hexToColor(project.hexColor,
-                                                fallback:
-                                                    OrbitAccents.todoAccent),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
+                            // 3-6. 基本信息（与详情页信息区同形制：行显值，
+                            // 点行弹底部选择抽屉——字段不在行内直改）
+                            SectionCard(
+                              title: '信息',
+                              child: Column(
+                                children: [
+                                  InfoTile(
+                                    label: '项目',
+                                    value: project?.title ?? '未分组',
+                                    // #36：项目名按项目色着字
+                                    valueColor: project != null
+                                        ? hexToColor(project.hexColor,
+                                            fallback: colors.bodyText)
+                                        : null,
+                                    onClick: _pickProject,
                                   ),
-                              ],
-                              onChanged: (v) => setState(() => _projectId =
-                                  v == null || v.isEmpty ? null : int.parse(v)),
-                            ),
-                            const SizedBox(height: AppDimens.space16),
-                            // 4. 优先级六档横排色点
-                            Align(
-                              alignment: Alignment.centerLeft,
-                              child: Text(
-                                '优先级',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: colors.secondaryText,
-                                ),
+                                  InfoTile(
+                                    label: '优先级',
+                                    value: priorityLabel(_priority),
+                                    dotColorHex: priorityColorHex(_priority),
+                                    onClick: _pickPriority,
+                                  ),
+                                  InfoTile(
+                                    label: '状态',
+                                    value: statusLabel(_status),
+                                    dotColorHex: statusColorHex(_status),
+                                    onClick: _pickStatus,
+                                  ),
+                                  InfoTile(
+                                    label: '重复',
+                                    value: rep.repeatLabelExt(
+                                      _repeatMode,
+                                      _repeatAfter,
+                                      weekdays: _repeatWeekdays,
+                                      endType: _repeatEndType,
+                                      endParam: _repeatEndParam,
+                                      fromDone: _repeatFromDone ? 1 : 0,
+                                    ),
+                                    onClick: _pickRepeat,
+                                  ),
+                                ],
                               ),
                             ),
-                            const SizedBox(height: AppDimens.space8),
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                for (var i = 0; i <= 5; i++)
-                                  _PriorityDot(
-                                    index: i,
-                                    selected: _priority == i,
-                                    onTap: () => setState(() => _priority = i),
-                                  ),
-                              ],
-                            ),
                             const SizedBox(height: AppDimens.space16),
-                            // 5. 状态（三档单选，默认待办）
-                            _sectionLabel('状态'),
-                            const SizedBox(height: AppDimens.space8),
-                            Wrap(
-                              spacing: AppDimens.space8,
-                              runSpacing: AppDimens.space8,
-                              children: [
-                                for (final (label, value) in const [
-                                  ('待办', 'pending'),
-                                  ('进行中', 'doing'),
-                                  ('已完成', 'done'),
-                                ])
-                                  ChoiceChip(
-                                    label: Text(label),
-                                    selected: _status == value,
-                                    onSelected: (_) =>
-                                        setState(() => _status = value),
-                                  ),
-                              ],
-                            ),
-                            const SizedBox(height: AppDimens.space16),
-                            // 6-9. 日期与提醒（卡片信息行：与详情页 _InfoTile 同设计语言）
+                            // 7-9. 日期与提醒（卡片信息行：与详情页 _InfoTile 同设计语言）
                             SectionCard(
                               title: '日期与提醒',
                               child: Column(
@@ -749,125 +790,6 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
                                 ],
                               ),
                             ),
-                            const SizedBox(height: AppDimens.space16),
-                            // 10. 重复规则（预设 + 自定义 N×单位）
-                            _sectionLabel('重复'),
-                            const SizedBox(height: AppDimens.space8),
-                            Wrap(
-                              spacing: AppDimens.space8,
-                              runSpacing: AppDimens.space8,
-                              children: [
-                                for (final preset in rep.repeatPresets)
-                                  ChoiceChip(
-                                    label: Text(preset.label),
-                                    // 预设选中态：非自定义且 mode/after 与预设一致
-                                    selected: !_customRepeat &&
-                                        preset.mode == _repeatMode &&
-                                        (preset.mode ==
-                                                rep.RepeatMode.none ||
-                                            _repeatAfter == preset.after),
-                                    onSelected: (_) => setState(() {
-                                      _customRepeat = false;
-                                      _repeatMode = preset.mode;
-                                      _repeatAfter = preset.after;
-                                    }),
-                                  ),
-                                ChoiceChip(
-                                  label: const Text('自定义'),
-                                  selected: _customRepeat,
-                                  onSelected: (_) =>
-                                      setState(() => _customRepeat = true),
-                                ),
-                              ],
-                            ),
-                            if (_customRepeat) ...[
-                              const SizedBox(height: AppDimens.space8),
-                              Wrap(
-                                spacing: AppDimens.space8,
-                                runSpacing: AppDimens.space8,
-                                children: [
-                                  SizedBox(
-                                    width: 88,
-                                    child: TextFormField(
-                                      controller: _intervalController,
-                                      keyboardType: TextInputType.number,
-                                      style: TextStyle(
-                                          fontSize: 15,
-                                          color: colors.bodyText),
-                                      decoration: const InputDecoration(
-                                        labelText: '间隔',
-                                        counterText: '',
-                                      ),
-                                    ),
-                                  ),
-                                  for (final unit in rep.RepeatUnit.values)
-                                    ChoiceChip(
-                                      label: Text(unit.label),
-                                      selected: _customUnit == unit,
-                                      onSelected: (_) =>
-                                          setState(() => _customUnit = unit),
-                                    ),
-                                ],
-                              ),
-                            ],
-                            // #34 扩展规则：星期几（周档）/ 结束次数 / when done
-                            if (repeatModeForExt != rep.RepeatMode.none) ...[
-                              const SizedBox(height: AppDimens.space8),
-                              if (repeatModeForExt == rep.RepeatMode.weekly)
-                                Wrap(
-                                  spacing: AppDimens.space8,
-                                  runSpacing: AppDimens.space8,
-                                  children: [
-                                    for (final (i, name) in rep.weekdayNames
-                                        .indexed)
-                                      FilterChip(
-                                        label: Text(name),
-                                        selected:
-                                            (_repeatWeekdays & (1 << i)) != 0,
-                                        onSelected: (_) => setState(() =>
-                                            _repeatWeekdays ^= 1 << i),
-                                      ),
-                                  ],
-                                ),
-                              const SizedBox(height: AppDimens.space8),
-                              Row(
-                                children: [
-                                  const Text('结束后重复终止',
-                                      style: TextStyle(fontSize: 13)),
-                                  const SizedBox(width: AppDimens.space8),
-                                  SizedBox(
-                                    width: 72,
-                                    child: TextFormField(
-                                      initialValue: _repeatEndText,
-                                      keyboardType: TextInputType.number,
-                                      style: TextStyle(
-                                          fontSize: 15,
-                                          color: colors.bodyText),
-                                      decoration: const InputDecoration(
-                                        labelText: '次数',
-                                        counterText: '',
-                                      ),
-                                      onChanged: (v) => setState(() {
-                                        _repeatEndText = v;
-                                        _repeatEndType = 2;
-                                      }),
-                                    ),
-                                  ),
-                                  const SizedBox(width: AppDimens.space8),
-                                  Text('次（留空 = 永不）',
-                                      style: TextStyle(
-                                          fontSize: 12,
-                                          color: colors.secondaryText)),
-                                ],
-                              ),
-                              const SizedBox(height: AppDimens.space8),
-                              FilterChip(
-                                label: const Text('按完成日推进（下次顺延一个完整周期）'),
-                                selected: _repeatFromDone,
-                                onSelected: (_) => setState(
-                                    () => _repeatFromDone = !_repeatFromDone),
-                              ),
-                            ],
                           ],
                         ),
                       ),
@@ -1027,43 +949,6 @@ class _QuickCapsule extends StatelessWidget {
         child: Text(
           label,
           style: TextStyle(fontSize: 12, color: colors.secondaryText),
-        ),
-      ),
-    );
-  }
-}
-
-/// 优先级色点（32px 圆，六档全显——P0「无」浅灰实心点；选中 3px accent 环）
-class _PriorityDot extends StatelessWidget {
-  const _PriorityDot({
-    required this.index,
-    required this.selected,
-    required this.onTap,
-  });
-
-  final int index;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Tooltip(
-      message: 'P$index ${priorityLabel(index)}',
-      child: GestureDetector(
-        onTap: onTap,
-        child: Container(
-          width: 32,
-          height: 32,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: hexToColor(priorityColorHex(index)),
-            border: Border.all(
-              width: selected ? 3 : 1,
-              color: selected
-                  ? OrbitAccents.themeAccent
-                  : Colors.transparent,
-            ),
-          ),
         ),
       ),
     );

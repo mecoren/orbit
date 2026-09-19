@@ -14,6 +14,7 @@ import '../../data/api/dto.dart';
 import '../../data/providers/bridge_provider.dart';
 import '../../shared/utils/hex_color.dart';
 import '../../shared/widgets/circle_checkbox.dart';
+import '../../shared/widgets/info_tile.dart';
 import '../../shared/widgets/liquid_glass_title_bar.dart';
 import '../../shared/widgets/more_actions_sheet.dart' show bottomSheetTopShape;
 import '../../shared/widgets/scroll_offset_listenable.dart';
@@ -26,6 +27,7 @@ import 'form_bottom_sheet.dart' show showTodoDatePicker, syncTaskReminder;
 import 'logic/activity_format.dart';
 import 'logic/markdown_lite.dart';
 import 'logic/repeat_logic.dart' as rep;
+import 'repeat_edit_sheet.dart';
 import 'logic/task_logic.dart';
 import 'providers/todo_providers.dart';
 
@@ -330,98 +332,6 @@ class _TitleSectionState extends State<_TitleSection> {
 
 // ── 二、基本信息 ──
 
-/// 信息行（docs/05 §4.3 _InfoTile）：label 固定列宽 80 → 色点 + 值 → 清除钮 / 尾箭头
-class _InfoTile extends StatelessWidget {
-  const _InfoTile({
-    required this.label,
-    required this.value,
-    this.valueColor,
-    this.dotColorHex,
-    this.onClick,
-    this.onClear,
-  });
-
-  final String label;
-  final String value;
-
-  /// 值文字直接着色（#36 项目名按项目色；null 用默认 bodyText）
-  final Color? valueColor;
-
-  /// 值前 10×10 色点 hex（空串不渲染）
-  final String? dotColorHex;
-  final VoidCallback? onClick;
-
-  /// 可清除值（如截止日期）的清除钮回调；null 不渲染
-  final VoidCallback? onClear;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = AppColors.ofContext(context);
-    final row = Row(
-      children: [
-        SizedBox(
-          width: 80,
-          child: Text(
-            label,
-            style: TextStyle(fontSize: 12, color: colors.secondaryText),
-          ),
-        ),
-        Expanded(
-          child: Row(
-            children: [
-              if (dotColorHex != null && dotColorHex!.isNotEmpty) ...[
-                Container(
-                  width: 10,
-                  height: 10,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: hexToColor(dotColorHex!),
-                  ),
-                ),
-                const SizedBox(width: AppDimens.space8),
-              ],
-              Flexible(
-                child: Text(
-                  value,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 15,
-                    color: valueColor ?? colors.bodyText,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-        if (onClear != null) ...[
-          GestureDetector(
-            onTap: onClear,
-            child: Icon(
-              Icons.close_rounded,
-              size: AppDimens.iconSizeSm,
-              color: colors.secondaryText,
-            ),
-          ),
-          const SizedBox(width: AppDimens.space4),
-        ],
-        if (onClick != null)
-          Icon(
-            Icons.keyboard_arrow_right_rounded,
-            size: AppDimens.iconSizeSm + 2,
-            color: colors.secondaryText,
-          ),
-      ],
-    );
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: AppDimens.space8),
-      child: onClick == null
-          ? row
-          : InkWell(borderRadius: AppShapes.small, onTap: onClick, child: row),
-    );
-  }
-}
-
 class _InfoSection extends ConsumerWidget {
   const _InfoSection({required this.detail, required this.onPatch});
 
@@ -441,7 +351,7 @@ class _InfoSection extends ConsumerWidget {
       title: '信息',
       child: Column(
         children: [
-          _InfoTile(
+          InfoTile(
             label: '优先级',
             value: priorityLabel(detail.priority),
             dotColorHex: priorityColorHex(detail.priority),
@@ -461,7 +371,7 @@ class _InfoSection extends ConsumerWidget {
               onSelect: (v) => onPatch({'priority': v}),
             ),
           ),
-          _InfoTile(
+          InfoTile(
             label: '状态',
             value: statusLabel(detail.status),
             dotColorHex: statusColorHex(detail.status),
@@ -485,7 +395,7 @@ class _InfoSection extends ConsumerWidget {
               onSelect: (v) => onPatch(buildStatusPatch(v)),
             ),
           ),
-          _InfoTile(
+          InfoTile(
             label: '项目',
             value: projectTitle,
             // #36：项目名按项目色着字（侧边栏圆点口径外的展示位）
@@ -510,7 +420,7 @@ class _InfoSection extends ConsumerWidget {
                   onPatch({'project_id': v.isEmpty ? null : int.parse(v)}),
             ),
           ),
-          _InfoTile(
+          InfoTile(
             label: '截止日期',
             value: detail.dueDate != null ? formatYmd(detail.dueDate!) : '无',
             onClick: () => _pickDueDate(context),
@@ -519,7 +429,7 @@ class _InfoSection extends ConsumerWidget {
                 ? null
                 : () => onPatch(const {'due_date': null}),
           ),
-          _InfoTile(
+          InfoTile(
             label: '开始日期',
             value: detail.startDate != null ? formatYmd(detail.startDate!) : '无',
             onClick: () => _pickDateField(context,
@@ -528,7 +438,7 @@ class _InfoSection extends ConsumerWidget {
                 ? null
                 : () => onPatch(const {'start_date': null}),
           ),
-          _InfoTile(
+          InfoTile(
             label: '重复',
             value: rep.repeatLabelExt(
               detail.repeatMode,
@@ -573,145 +483,28 @@ class _InfoSection extends ConsumerWidget {
     await onPatch({key: dateToMidnightMs(picked)});
   }
 
-  /// 重复行点击 → 编辑弹层（预设即选即存，自定义 N×单位走应用）
+  /// 重复行点击 → 共享重复编辑抽屉（预设点选即存即关；自定义面板「确定」
+  /// 一次提交整组规则，与桌面端详情 RepeatEditor 同口径整组 patch）
   Future<void> _editRepeat(BuildContext context) async {
-    await showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: AppColors.ofContext(context).popup,
-      shape: bottomSheetTopShape,
-      builder: (_) => _RepeatEditSheet(
-        mode: detail.repeatMode,
-        after: detail.repeatAfter,
-        onApply: (m, a) => onPatch({'repeat_mode': m, 'repeat_after': a}),
-      ),
+    final value = await showRepeatEditSheet(
+      context,
+      mode: detail.repeatMode,
+      after: detail.repeatAfter,
+      weekdays: detail.repeatWeekdays,
+      endType: detail.repeatEndType,
+      endParam: detail.repeatEndParam,
+      fromDone: detail.repeatFromDone == 1,
+      dueMs: detail.dueDate,
     );
-  }
-}
-
-/// 重复规则编辑弹层：预设 ChoiceChips（点击即存即关）+ 自定义 N×单位
-class _RepeatEditSheet extends StatefulWidget {
-  const _RepeatEditSheet({
-    required this.mode,
-    required this.after,
-    required this.onApply,
-  });
-
-  final int mode;
-  final int after;
-  final void Function(int mode, int after) onApply;
-
-  @override
-  State<_RepeatEditSheet> createState() => _RepeatEditSheetState();
-}
-
-class _RepeatEditSheetState extends State<_RepeatEditSheet> {
-  // late final：初始化器访问 widget 需要 late；final 保证初始化后只读
-  // （预设档判定用），变更经 onApply 直接上抛
-  late final int _mode = widget.mode;
-  late final int _after = widget.after;
-  bool _custom = false;
-  final _intervalController = TextEditingController(text: '1');
-  rep.RepeatUnit _unit = rep.RepeatUnit.day;
-
-  @override
-  void dispose() {
-    _intervalController.dispose();
-    super.dispose();
-  }
-
-  void _applyAndClose(int mode, int after) {
-    widget.onApply(mode, after);
-    Navigator.of(context).pop();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = AppColors.ofContext(context);
-    return SafeArea(
-      top: false,
-      child: Padding(
-        padding: const EdgeInsets.all(AppDimens.space16),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              '重复规则',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-                color: colors.titleText,
-              ),
-            ),
-            const SizedBox(height: AppDimens.space16),
-            Wrap(
-              spacing: AppDimens.space8,
-              runSpacing: AppDimens.space8,
-              children: [
-                for (final preset in rep.repeatPresets)
-                  ChoiceChip(
-                    label: Text(preset.label),
-                    selected: !_custom &&
-                        preset.mode == _mode &&
-                        (preset.mode == rep.RepeatMode.none ||
-                            _after == preset.after),
-                    onSelected: (_) =>
-                        _applyAndClose(preset.mode, preset.after),
-                  ),
-                ChoiceChip(
-                  label: const Text('自定义'),
-                  selected: _custom,
-                  onSelected: (_) =>
-                      setState(() => _custom = true),
-                ),
-              ],
-            ),
-            if (_custom) ...[
-              const SizedBox(height: AppDimens.space12),
-              Wrap(
-                spacing: AppDimens.space8,
-                runSpacing: AppDimens.space8,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                children: [
-                  SizedBox(
-                    width: 88,
-                    child: TextField(
-                      controller: _intervalController,
-                      keyboardType: TextInputType.number,
-                      style:
-                          TextStyle(fontSize: 15, color: colors.bodyText),
-                      decoration: const InputDecoration(
-                        labelText: '间隔',
-                        counterText: '',
-                        isDense: true,
-                      ),
-                    ),
-                  ),
-                  for (final unit in rep.RepeatUnit.values)
-                    ChoiceChip(
-                      label: Text(unit.label),
-                      selected: _unit == unit,
-                      onSelected: (_) => setState(() => _unit = unit),
-                    ),
-                ],
-              ),
-              const SizedBox(height: AppDimens.space16),
-              Align(
-                alignment: Alignment.centerRight,
-                child: FilledButton(
-                  onPressed: () => _applyAndClose(
-                    rep.modeForUnit(_unit),
-                    int.tryParse(_intervalController.text.trim()) ?? 1,
-                  ),
-                  child: const Text('应用'),
-                ),
-              ),
-            ],
-            SizedBox(height: AppDimens.gestureInsetFallback / 2),
-          ],
-        ),
-      ),
-    );
+    if (value == null) return;
+    await onPatch({
+      'repeat_mode': value.mode,
+      'repeat_after': value.after,
+      'repeat_weekdays': value.weekdays,
+      'repeat_end_type': value.endType,
+      'repeat_end_param': value.endParam,
+      'repeat_from_done': value.fromDone ? 1 : 0,
+    });
   }
 }
 

@@ -50,19 +50,33 @@ Future<void> _scrollTo(WidgetTester tester, Finder finder) async {
 }
 
 void main() {
-  testWidgets('表单字段：状态/开始日期/提醒时间/重复齐备', (tester) async {
+  testWidgets('表单字段：信息区四行（项目/优先级/状态/重复）齐备', (tester) async {
     await _openForm(tester);
 
     expect(find.text('添加待办'), findsOneWidget);
+    // 信息区四行为「行显值 + 点行弹抽屉」，不再行内直选
+    await _scrollTo(tester, find.text('状态'));
     expect(find.text('状态'), findsOneWidget);
-    // 状态三档 chips（背景侧栏可能重名，限定 ChoiceChip 内断言）
-    Finder statusChip(String label) => find.descendant(
-          of: find.byType(ChoiceChip),
+    expect(
+      find.descendant(of: find.byType(SectionCard), matching: find.text('未分组')),
+      findsOneWidget,
+    );
+
+    // 状态行 → 三档单选抽屉 → 选中「进行中」回显到行
+    await tester.tap(find.text('状态'));
+    await tester.pumpAndSettle();
+    // 三档选项限定在最上层底部抽屉内（表单本身就是 BottomSheet，行值「待办」
+    // 与侧栏「已完成」都会撞裸 find.text——取 .last 即刚弹出的选择抽屉）
+    Finder sheetText(String label) => find.descendant(
+          of: find.byType(BottomSheet).last,
           matching: find.text(label),
         );
-    expect(statusChip('待办'), findsOneWidget);
-    expect(statusChip('进行中'), findsOneWidget);
-    expect(statusChip('已完成'), findsOneWidget);
+    expect(sheetText('待办'), findsOneWidget);
+    expect(sheetText('进行中'), findsOneWidget);
+    expect(sheetText('已完成'), findsOneWidget);
+    await tester.tap(sheetText('进行中'));
+    await tester.pumpAndSettle();
+    expect(find.text('进行中'), findsOneWidget);
 
     // 下方字段需滚动到可视区再断言
     await _scrollTo(tester, find.text('开始日期'));
@@ -75,6 +89,29 @@ void main() {
     expect(find.text('重复'), findsOneWidget);
     // 颜色字段已随 97d3eab 移除（桌面改看板标签展示，颜色经项目/标签承载）
     expect(find.text('颜色'), findsNothing);
+  });
+
+  testWidgets('校验失败：标题/描述框保留错误态边框（不回退到无边框）', (tester) async {
+    await _openForm(tester);
+
+    // 空标题直接保存 → 触发校验（不落库）
+    await tester.tap(find.byIcon(Icons.check_rounded));
+    await tester.pumpAndSettle();
+
+    // 回归保护：只覆盖 enabledBorder 时，错误态会回退到主题 BorderSide.none，
+    // 校验失败后输入框边框直接消失（2026-09-19 实机踩坑）
+    // TextFormField 不透出 decoration，取它构建出的内部 TextField
+    final decoration = tester
+        .widget<TextField>(find.descendant(
+          of: find.byType(TextFormField).first,
+          matching: find.byType(TextField),
+        ))
+        .decoration!;
+    final errorBorder = decoration.errorBorder! as OutlineInputBorder;
+    expect(errorBorder.borderSide.style, BorderStyle.solid);
+    expect(errorBorder.borderSide.color, isNot(Colors.transparent));
+    final focusedError = decoration.focusedErrorBorder! as OutlineInputBorder;
+    expect(focusedError.borderSide.style, BorderStyle.solid);
   });
 
   testWidgets('日期与提醒卡片：截止/开始/提醒行齐备 + 截止行内快捷胶囊', (tester) async {
@@ -108,8 +145,14 @@ void main() {
       find.descendant(of: find.byType(SectionCard), matching: find.text(todayYmd)),
       findsOneWidget,
     );
+    // 「无」在信息区（优先级 P0）与日期卡片（提醒未设占位）各一处——限定在
+    // 日期与提醒卡片内断言（按卡片标题行定位其 SectionCard 祖先）
+    final dateCard = find.ancestor(
+      of: find.text('日期与提醒'),
+      matching: find.byType(SectionCard),
+    );
     expect(
-      find.descendant(of: find.byType(SectionCard), matching: find.text('无')),
+      find.descendant(of: dateCard, matching: find.text('无')),
       findsOneWidget,
     );
   });
@@ -163,13 +206,18 @@ void main() {
     expect(task.dueDate, tomorrowZero.millisecondsSinceEpoch);
   });
 
-  testWidgets('保存：选择「每天」重复落库 repeat_mode=1/repeat_after=1', (tester) async {
+  testWidgets('保存：重复行抽屉选「每天」落库 repeat_mode=1/repeat_after=1', (tester) async {
     final bridge = await _openForm(tester);
 
     await tester.enterText(find.byType(TextFormField).first, '重复任务A');
-    await _scrollTo(tester, find.text('每天'));
+    // 重复行 → 共享重复编辑抽屉（预设档点选即回填并关闭，与桌面端同口径）
+    await _scrollTo(tester, find.text('重复'));
+    await tester.tap(find.text('重复'));
+    await tester.pumpAndSettle();
+    expect(find.text('自定义'), findsOneWidget);
+
     await tester.tap(find.text('每天'));
-    await tester.pump();
+    await tester.pumpAndSettle();
 
     await tester.tap(find.byIcon(Icons.check_rounded));
     await _settlePastMockLatency(tester);
@@ -182,6 +230,69 @@ void main() {
     final task = tasks!.firstWhere((t) => t.title == '重复任务A');
     expect(task.repeatMode, 1);
     expect(task.repeatAfter, 1);
+  });
+
+  testWidgets('保存：重复抽屉自定义面板（每 3 天 + 剩 5 次）落库扩展字段', (tester) async {
+    final bridge = await _openForm(tester);
+
+    await tester.enterText(find.byType(TextFormField).first, '重复任务B');
+    await _scrollTo(tester, find.text('重复'));
+    await tester.tap(find.text('重复'));
+    await tester.pumpAndSettle();
+
+    // 自定义面板：间隔 3 × 天 + 结束=次数 5
+    await tester.tap(find.text('自定义'));
+    await tester.pumpAndSettle();
+    expect(find.text('星期几'), findsNothing);
+    expect(find.text('结束'), findsOneWidget);
+    expect(find.text('完成后'), findsOneWidget);
+
+    await tester.enterText(
+        find.byKey(const ValueKey('repeat_interval_field')), '3');
+    await tester.tap(find.text('次数'));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+        find.byKey(const ValueKey('repeat_end_count_field')), '5');
+    await tester.tap(find.text('确定'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byIcon(Icons.check_rounded));
+    await _settlePastMockLatency(tester);
+
+    final tasks = await tester.runAsync(
+      () => bridge.todoTaskList(const ListFilter()),
+    );
+    final task = tasks!.firstWhere((t) => t.title == '重复任务B');
+    expect(task.repeatMode, 1);
+    expect(task.repeatAfter, 3);
+    expect(task.repeatEndType, 2);
+    expect(task.repeatEndParam, 5);
+  });
+
+  testWidgets('重复抽屉：有截止日期时显示「下次 M月d日」预览徽标', (tester) async {
+    await _openForm(tester);
+
+    // 截止日期快捷「今天」→ 预览锚点就位（不必走日期面板）
+    await _scrollTo(tester, find.text('截止日期'));
+    await tester.tap(find.text('今天'));
+    await tester.pumpAndSettle();
+
+    await _scrollTo(tester, find.text('重复'));
+    await tester.tap(find.text('重复'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('每天'));
+    await tester.pumpAndSettle();
+
+    // 规则生效 + 锚点已填 → 重开抽屉即见「下次 …」（每天 → 明天）
+    await tester.tap(find.text('重复'));
+    await tester.pumpAndSettle();
+    final tomorrow = DateTime.now().add(const Duration(days: 1));
+    const weekdayNames = ['一', '二', '三', '四', '五', '六', '日'];
+    expect(
+      find.text('下次 ${tomorrow.month}月${tomorrow.day}日'
+          '（周${weekdayNames[tomorrow.weekday - 1]}）'),
+      findsOneWidget,
+    );
   });
 
   // 颜色校验用例已随颜色字段移除而删除（97d3eab：桌面看板标签方案，
