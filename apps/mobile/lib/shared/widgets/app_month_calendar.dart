@@ -138,13 +138,15 @@ class AppMonthCalendar extends StatelessWidget {
   static const _weekdayLabels = ['一', '二', '三', '四', '五', '六', '日'];
 
   double get _cellHeight => switch (size) {
-        AppCalendarSize.large => 64,
+        // large 档对齐 wait-home 月历（参考图）的舒展密度：数字 + 农历副标签
+        // 两行内容在 74 高格内居中留白，不再贴边
+        AppCalendarSize.large => 74,
         AppCalendarSize.medium => 48,
         AppCalendarSize.small => 36,
       };
 
   double get _numberFont => switch (size) {
-        AppCalendarSize.large => 17,
+        AppCalendarSize.large => 19.5,
         AppCalendarSize.medium => 14,
         AppCalendarSize.small => 12.5,
       };
@@ -258,7 +260,11 @@ class AppMonthCalendar extends StatelessWidget {
                       child: Text(
                         label,
                         style: theme.textTheme.bodySmall?.copyWith(
-                          fontSize: size == AppCalendarSize.small ? 10 : null,
+                          fontSize: switch (size) {
+                            AppCalendarSize.large => 14,
+                            AppCalendarSize.small => 10,
+                            AppCalendarSize.medium => null,
+                          },
                           color: scheme.onSurfaceVariant,
                         ),
                       ),
@@ -365,10 +371,14 @@ class AppMonthCalendar extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
               textAlign: TextAlign.center,
               style: theme.textTheme.labelSmall?.copyWith(
-                fontSize: size == AppCalendarSize.large ? 10 : 9,
+                fontSize: size == AppCalendarSize.large ? 12 : 9,
                 height: 1.1,
-                color: scheme.onSurfaceVariant
-                    .withValues(alpha: inMonth ? 1 : 0.5),
+                // 今天实心块内副标签转白（对齐桌面端口径：灰字在强调色底上
+                // 对比度不足）；选中描边态底色仍为浅色，保持灰字
+                color: filled
+                    ? Colors.white.withValues(alpha: 0.9)
+                    : scheme.onSurfaceVariant
+                        .withValues(alpha: inMonth ? 1 : 0.5),
               ),
             ),
           )
@@ -426,10 +436,12 @@ class AppMonthCalendar extends StatelessWidget {
             alignment: Alignment.center,
             decoration: BoxDecoration(
               color: cellBackground,
+              // 选中描边与今天实心块同形制；圆角/线宽对齐 wait-home 参考图
+              //（选中为宽描边大圆角方框，非细线小圆角）
               borderRadius: isCircle
                   ? BorderRadius.circular(999)
-                  : BorderRadius.circular(10),
-              border: outlined ? Border.all(color: accent, width: 1.5) : null,
+                  : BorderRadius.circular(14),
+              border: outlined ? Border.all(color: accent, width: 2) : null,
             ),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,

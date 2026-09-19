@@ -200,6 +200,26 @@ void main() {
     );
   });
 
+  testWidgets('左右滑动翻月：左滑到下月、右滑回上月', (tester) async {
+    final bridge = _seededBridge();
+    await tester.pumpWidget(_wrap(const SizedBox(), bridge));
+    await settle(tester);
+
+    String title() =>
+        tester.widget<Text>(find.textContaining('年').first).data!;
+    final currentTitle = title();
+
+    // 月历区域左滑 → 下月（fling 兼有位移与速度，两个判据都越阈）
+    await tester.fling(find.text('一').first, const Offset(-320, 0), 900);
+    await tester.pumpAndSettle();
+    expect(title(), isNot(currentTitle));
+
+    // 右滑 → 回到原月份
+    await tester.fling(find.text('一').first, const Offset(320, 0), 900);
+    await tester.pumpAndSettle();
+    expect(title(), currentTitle);
+  });
+
   testWidgets('侧栏入口：「日历」行渲染并点击进入', (tester) async {
     final bridge = _seededBridge();
     _router = GoRouter(

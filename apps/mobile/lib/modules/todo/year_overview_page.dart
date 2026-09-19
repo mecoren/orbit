@@ -4,12 +4,16 @@ import 'package:flutter/services.dart';
 import '../../core/lunar/chinese_almanac.dart';
 import '../../core/lunar/lunar_calendar.dart';
 import '../../core/theme/app_dimens.dart';
+import '../../core/theme/orbit_accents.dart';
 import '../../shared/widgets/app_month_calendar.dart';
 import '../../shared/widgets/liquid_glass_title_bar.dart';
 
 /// 年份边界（与 LunarCalendar 压缩表覆盖范围一致）
 const _kMinYear = 1901;
 const _kMaxYear = 2100;
+
+/// 迷你月历日格高（日期行等距；空位占位同高，避免行高不齐）
+const double _kDayCellHeight = 30;
 
 /// 年视图选择页 /todo/calendar/year（Days Matter 风格）
 ///
@@ -81,7 +85,9 @@ class _YearOverviewPageState extends State<YearOverviewPage> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
-    final accent = scheme.primary;
+    // 今天实心格/周末数字/当前月标题走全局主题强调色（与桌面端日历同源）；
+    // scheme.primary 是 M3 fromSeed 派生值（#455E91），与桌面明显偏差
+    final accent = OrbitAccents.themeAccent;
 
     return Scaffold(
       backgroundColor: scheme.surface,
@@ -104,16 +110,21 @@ class _YearOverviewPageState extends State<YearOverviewPage> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const SizedBox(width: AppDimens.space8),
+                      // 大年份：参考图（wait-home 年视图）为超大字重标题，
+                      // 比 headlineLarge 明显更大，此处显式压字号 + 收紧字距
                       Text(
                         '$_year',
                         style: theme.textTheme.headlineLarge?.copyWith(
+                          fontSize: 44,
+                          height: 1.05,
                           fontWeight: FontWeight.w800,
-                          letterSpacing: -0.5,
+                          letterSpacing: -1,
                         ),
                       ),
                       const SizedBox(width: AppDimens.space12),
                       Padding(
-                        padding: const EdgeInsets.only(top: 10),
+                        // 与 44px 年份的视觉重心对齐（参考图图例居年份上/中段）
+                        padding: const EdgeInsets.only(top: AppDimens.space12),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
@@ -121,7 +132,7 @@ class _YearOverviewPageState extends State<YearOverviewPage> {
                               color: ChineseCalendarColors.lunarNewYear,
                               label: ChineseAlmanac.lunarYearLabel(_year),
                             ),
-                            const SizedBox(height: AppDimens.space4),
+                            const SizedBox(height: AppDimens.space6),
                             const _LegendLine(
                               color: ChineseCalendarColors.lunarNewMoon,
                               label: '农历初一',
@@ -161,15 +172,16 @@ class _YearOverviewPageState extends State<YearOverviewPage> {
                       final year = _kMinYear + index;
                       return SingleChildScrollView(
                         padding: const EdgeInsets.fromLTRB(
-                          AppDimens.space16,
-                          4,
-                          AppDimens.space16,
-                          28,
+                          AppDimens.space8,
+                          AppDimens.space8,
+                          AppDimens.space8,
+                          AppDimens.space32,
                         ),
                         child: Column(
                           children: [
                             for (var row = 0; row < 4; row++) ...[
-                              if (row > 0) const SizedBox(height: 10),
+                              // 月份块之间留出参考图同款的段落呼吸感
+                              if (row > 0) const SizedBox(height: 18),
                               Row(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
@@ -230,17 +242,18 @@ class _LegendLine extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         Container(
-          width: 14,
+          width: 16,
           height: 2,
           decoration: BoxDecoration(
             color: color,
             borderRadius: BorderRadius.circular(1),
           ),
         ),
-        const SizedBox(width: 5),
+        const SizedBox(width: 6),
         Text(
           label,
           style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                fontSize: 12.5,
                 color: Theme.of(context).colorScheme.onSurfaceVariant,
               ),
         ),
@@ -295,7 +308,7 @@ class _MiniMonth extends StatelessWidget {
 
     return Padding(
       padding: const EdgeInsets.symmetric(
-          horizontal: AppDimens.space8, vertical: AppDimens.space8),
+          horizontal: AppDimens.space6, vertical: AppDimens.space4),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -308,6 +321,7 @@ class _MiniMonth extends StatelessWidget {
               child: Text(
                 '${month + 1}月',
                 style: theme.textTheme.titleMedium?.copyWith(
+                  fontSize: 18,
                   fontWeight: FontWeight.w800,
                   color: isCurrentMonth || month + 1 == highlightMonth
                       ? accent
@@ -325,7 +339,7 @@ class _MiniMonth extends StatelessWidget {
                     child: Text(
                       label,
                       style: theme.textTheme.labelSmall?.copyWith(
-                        fontSize: 9.5,
+                        fontSize: 10.5,
                         color: scheme.onSurfaceVariant,
                       ),
                     ),
@@ -340,7 +354,7 @@ class _MiniMonth extends StatelessWidget {
                 for (final day in row)
                   Expanded(
                     child: day == null
-                        ? const SizedBox(height: 28)
+                        ? const SizedBox(height: _kDayCellHeight)
                         : _Day(
                             date: DateTime(year, month, day),
                             accent: accent,
@@ -393,7 +407,7 @@ class _Day extends StatelessWidget {
       behavior: HitTestBehavior.opaque,
       onTap: onPick,
       child: SizedBox(
-        height: 28,
+        height: _kDayCellHeight,
         child: Stack(
           alignment: Alignment.center,
           children: [
@@ -401,19 +415,19 @@ class _Day extends StatelessWidget {
             // 同形制，非圆形）；农历杠（春节红/初一蓝）与数字留 4px 间距
             //（原 bottom:1 紧贴数字底边视觉粘连）
             Container(
-              width: 24,
-              height: 24,
+              width: 26,
+              height: 26,
               alignment: Alignment.center,
               decoration: isToday
                   ? BoxDecoration(
                       color: accent,
-                      borderRadius: BorderRadius.circular(7),
+                      borderRadius: BorderRadius.circular(8),
                     )
                   : null,
               child: Text(
                 '${date.day}',
                 style: theme.textTheme.labelMedium?.copyWith(
-                  fontSize: 11.5,
+                  fontSize: 12.5,
                   height: 1,
                   fontFeatures: const [FontFeature.tabularFigures()],
                   fontWeight: isToday ? FontWeight.w800 : FontWeight.w500,

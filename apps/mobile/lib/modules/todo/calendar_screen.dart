@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
@@ -49,6 +50,9 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
   /// 分组锚点注册表：ymd → 分组节点（点击日历滚动定位）
   final Map<String, GlobalKey> _groupKeys = {};
 
+  /// 横向滑动累计位移（dragEnd 时与速度二选一判据，慢速长拖也能翻页）
+  double _swipeDx = 0;
+
   // ── 数据 ──
 
   Map<String, HolidayInfo> _holidayByDate() {
@@ -88,6 +92,24 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
         _month = DateTime(now.year, now.month);
         _selectedDate = DateTime(now.year, now.month, now.day);
       });
+
+  // ── 左右滑动翻月 ──
+
+  void _onSwipeStart(DragStartDetails _) => _swipeDx = 0;
+
+  void _onSwipeUpdate(DragUpdateDetails details) => _swipeDx += details.delta.dx;
+
+  /// 左右滑动翻月（左滑 = 下月、右滑 = 上月）：与年视图 PageView 滑动切年
+  /// 对称。速度或位移任一越阈即翻页——只判速度会漏掉慢速长拖
+  void _onSwipeEnd(DragEndDetails details) {
+    final velocity = details.primaryVelocity ?? 0;
+    final distance = MediaQuery.sizeOf(context).width * 0.15;
+    final toNext = velocity < -_kSwipeVelocity || _swipeDx < -distance;
+    final toPrev = velocity > _kSwipeVelocity || _swipeDx > distance;
+    if (!toNext && !toPrev) return;
+    HapticFeedback.selectionClick();
+    (toNext ? _nextMonth : _prevMonth)();
+  }
 
   void _selectDate(DateTime date) {
     setState(() => _selectedDate = date);
@@ -137,7 +159,6 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
   @override
   Widget build(BuildContext context) {
     final colors = AppColors.ofContext(context);
-    final scheme = Theme.of(context).colorScheme;
     // 派生聚合（calendarByDayProvider）：选中日等局部 setState 不再触发
     // 全量重聚合，仅任务数据变化时重算一次
     final byDay = ref.watch(calendarByDayProvider).value ??
@@ -169,160 +190,170 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
       body: Stack(
         children: [
           SafeArea(
-            // 整页滚动（wait-home 同款）：月历 + 当月列表一起滚，
-            // 小屏/横屏下列表不会被固定月历挤出视口
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.only(bottom: 96),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  SizedBox(height: LiquidGlassTitleBar.rowHeight),
-                  // ===== 头部：月份标题（点击开年视图）+ 今天 + 翻页 + 节假日更新 =====
-                  Padding(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: AppDimens.space8, vertical: 2),
-                    child: Row(
-                      children: [
-                        IconButton(
-                          icon: const Icon(Icons.chevron_left_rounded,
-                              size: AppDimens.iconSizeLg),
-                          onPressed: _prevMonth,
-                          tooltip: '上个月',
-                          visualDensity: VisualDensity.compact,
-                        ),
-                        Expanded(
-                          child: GestureDetector(
-                            // 标题点击 = 年视图
-                            onTap: _openYearOverview,
-                            child: Text(
-                              '${_month.year}年${_month.month}月',
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                fontSize: 17,
-                                fontWeight: FontWeight.w800,
-                                color: colors.titleText,
+            child: GestureDetector(
+              // 左右滑动翻月（左滑 = 下月、右滑 = 上月），与年视图 PageView
+              // 滑动切年对称；水平手势与整页纵向滚动不同向，互不抢占
+              onHorizontalDragStart: _onSwipeStart,
+              onHorizontalDragUpdate: _onSwipeUpdate,
+              onHorizontalDragEnd: _onSwipeEnd,
+              // 整页滚动（wait-home 同款）：月历 + 当月列表一起滚，
+              // 小屏/横屏下列表不会被固定月历挤出视口
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.only(bottom: 96),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    SizedBox(height: LiquidGlassTitleBar.rowHeight),
+                    // ===== 头部：月份标题（点击开年视图）+ 今天 + 翻页 + 节假日更新 =====
+                    Padding(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: AppDimens.space8, vertical: 2),
+                      child: Row(
+                        children: [
+                          IconButton(
+                            icon: const Icon(Icons.chevron_left_rounded,
+                                size: AppDimens.iconSizeLg),
+                            onPressed: _prevMonth,
+                            tooltip: '上个月',
+                            visualDensity: VisualDensity.compact,
+                          ),
+                          Expanded(
+                            child: GestureDetector(
+                              // 标题点击 = 年视图
+                              onTap: _openYearOverview,
+                              child: Text(
+                                '${_month.year}年${_month.month}月',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  fontSize: 17,
+                                  fontWeight: FontWeight.w800,
+                                  color: colors.titleText,
+                                ),
                               ),
                             ),
                           ),
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.chevron_right_rounded,
-                              size: AppDimens.iconSizeLg),
-                          onPressed: _nextMonth,
-                          tooltip: '下个月',
-                          visualDensity: VisualDensity.compact,
-                        ),
-                        const SizedBox(width: AppDimens.space4),
-                        IconButton(
-                          icon: const Icon(Icons.today_rounded,
-                              size: AppDimens.iconSizeMd),
-                          onPressed: _goToday,
-                          tooltip: '回到今天',
-                          visualDensity: VisualDensity.compact,
-                        ),
-                        _buildUpdateButton(),
-                      ],
-                    ),
-                  ),
-                  // ===== 月历（wait-home 完整版：农历副标签/休班徽标/任务圆点）=====
-                  Padding(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: AppDimens.space8),
-                    child: AppMonthCalendar(
-                      size: AppCalendarSize.large,
-                      showHeader: false,
-                      month: _month,
-                      selected: _selectedDate,
-                      onDayTap: _selectDate,
-                      onDayLongPress: _addOnDate,
-                      accentColor: scheme.primary,
-                      weekendColor: ChineseCalendarColors.weekend,
-                      holidays: {
-                        for (final e in holidayByDate.entries)
-                          e.key: e.value.isHoliday,
-                      },
-                      subLabelBuilder: ChineseAlmanac.daySubLabel,
-                      eventDotsBuilder: (date) => monthDots[_ymd(date)] ??
-                          const <Color>[],
-                    ),
-                  ),
-                  const SizedBox(height: AppDimens.space4),
-                  // ===== 当月任务列表标题行 =====
-                  Padding(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: AppDimens.space16),
-                    child: Row(
-                      children: [
-                        Text(
-                          '${_month.year}年${_month.month}月的任务',
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w700,
-                            color: colors.titleText,
+                          IconButton(
+                            icon: const Icon(Icons.chevron_right_rounded,
+                                size: AppDimens.iconSizeLg),
+                            onPressed: _nextMonth,
+                            tooltip: '下个月',
+                            visualDensity: VisualDensity.compact,
                           ),
-                        ),
-                        const SizedBox(width: AppDimens.space6),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 7, vertical: 2),
-                          decoration: BoxDecoration(
-                            color:
-                                colors.secondaryText.withValues(alpha: 0.12),
-                            borderRadius: BorderRadius.circular(999),
+                          const SizedBox(width: AppDimens.space4),
+                          IconButton(
+                            icon: const Icon(Icons.today_rounded,
+                                size: AppDimens.iconSizeMd),
+                            onPressed: _goToday,
+                            tooltip: '回到今天',
+                            visualDensity: VisualDensity.compact,
                           ),
-                          child: Text(
-                            '$monthTotal 条',
+                          _buildUpdateButton(),
+                        ],
+                      ),
+                    ),
+                    // ===== 月历（wait-home 完整版：农历副标签/休班徽标/任务圆点）=====
+                    Padding(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: AppDimens.space8),
+                      child: AppMonthCalendar(
+                        size: AppCalendarSize.large,
+                        showHeader: false,
+                        month: _month,
+                        selected: _selectedDate,
+                        onDayTap: _selectDate,
+                        onDayLongPress: _addOnDate,
+                        // 选中/今天强调色与桌面端日历同源（桌面月历 --primary 即
+                        // themeAccent 体系）：不走 scheme.primary——M3 fromSeed
+                        // 会把 #4E8CFF 派生成 #455E91 灰蓝，与桌面明显偏差
+                        accentColor: OrbitAccents.themeAccent,
+                        weekendColor: ChineseCalendarColors.weekend,
+                        holidays: {
+                          for (final e in holidayByDate.entries)
+                            e.key: e.value.isHoliday,
+                        },
+                        subLabelBuilder: ChineseAlmanac.daySubLabel,
+                        eventDotsBuilder: (date) => monthDots[_ymd(date)] ??
+                            const <Color>[],
+                      ),
+                    ),
+                    const SizedBox(height: AppDimens.space4),
+                    // ===== 当月任务列表标题行 =====
+                    Padding(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: AppDimens.space16),
+                      child: Row(
+                        children: [
+                          Text(
+                            '${_month.year}年${_month.month}月的任务',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                              color: colors.titleText,
+                            ),
+                          ),
+                          const SizedBox(width: AppDimens.space6),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 7, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: colors.secondaryText
+                                  .withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                            child: Text(
+                              '$monthTotal 条',
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: colors.secondaryText,
+                              ),
+                            ),
+                          ),
+                          const Spacer(),
+                          Text(
+                            '长按日历快捷新增',
                             style: TextStyle(
                               fontSize: 11,
                               color: colors.secondaryText,
                             ),
                           ),
-                        ),
-                        const Spacer(),
-                        Text(
-                          '长按日历快捷新增',
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: colors.secondaryText,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  // ===== 当月任务按日分组列表（与月历同页滚动） =====
-                  if (monthTotal == 0)
-                    Padding(
-                      padding: const EdgeInsets.all(AppDimens.space16),
-                      child: Row(
-                        children: [
-                          Icon(Icons.event_busy_rounded,
-                              size: 16,
-                              color: colors.secondaryText
-                                  .withValues(alpha: 0.6)),
-                          const SizedBox(width: AppDimens.space8),
-                          Expanded(
-                            child: Text(
-                              '本月没有带截止日期的任务，切换月份或长按日历新增',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: colors.secondaryText,
-                              ),
-                            ),
-                          ),
                         ],
                       ),
-                    )
-                  else
-                    for (final group in monthGroups)
-                      _MonthDayGroup(
-                        key: _groupKeyFor(_ymd(group.date)),
-                        date: group.date,
-                        isSelectedDay: _ymd(group.date) == selectedYmd,
-                        isToday: _ymd(group.date) == todayYmd,
-                        tasks: group.items,
-                        onOpenTask: _openTask,
-                      ),
-                ],
+                    ),
+                    // ===== 当月任务按日分组列表（与月历同页滚动） =====
+                    if (monthTotal == 0)
+                      Padding(
+                        padding: const EdgeInsets.all(AppDimens.space16),
+                        child: Row(
+                          children: [
+                            Icon(Icons.event_busy_rounded,
+                                size: 16,
+                                color: colors.secondaryText
+                                    .withValues(alpha: 0.6)),
+                            const SizedBox(width: AppDimens.space8),
+                            Expanded(
+                              child: Text(
+                                '本月没有带截止日期的任务，切换月份或长按日历新增',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: colors.secondaryText,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      )
+                    else
+                      for (final group in monthGroups)
+                        _MonthDayGroup(
+                          key: _groupKeyFor(_ymd(group.date)),
+                          date: group.date,
+                          isSelectedDay: _ymd(group.date) == selectedYmd,
+                          isToday: _ymd(group.date) == todayYmd,
+                          tasks: group.items,
+                          onOpenTask: _openTask,
+                        ),
+                  ],
+                ),
               ),
             ),
           ),
@@ -411,7 +442,6 @@ class _MonthDayGroup extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = AppColors.ofContext(context);
-    final scheme = Theme.of(context).colorScheme;
     final now = DateTime.now();
     // 今天零点 ms（逾期红判定口径：截止在今天内不算逾期）
     final todayMs = DateTime(now.year, now.month, now.day).millisecondsSinceEpoch;
@@ -426,7 +456,7 @@ class _MonthDayGroup extends StatelessWidget {
           child: Container(
             decoration: BoxDecoration(
               color: isSelectedDay
-                  ? scheme.primary.withValues(alpha: 0.10)
+                  ? OrbitAccents.themeAccent.withValues(alpha: 0.10)
                   : null,
               borderRadius: BorderRadius.circular(8),
             ),
@@ -439,7 +469,9 @@ class _MonthDayGroup extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
-                    color: isToday ? scheme.primary : colors.titleText,
+                    color: isToday
+                        ? OrbitAccents.themeAccent
+                        : colors.titleText,
                   ),
                 ),
                 const SizedBox(width: AppDimens.space8),
@@ -464,14 +496,14 @@ class _MonthDayGroup extends StatelessWidget {
                     padding: const EdgeInsets.symmetric(
                         horizontal: 6, vertical: 1),
                     decoration: BoxDecoration(
-                      border: Border.all(color: scheme.primary),
+                      border: Border.all(color: OrbitAccents.themeAccent),
                       borderRadius: BorderRadius.circular(999),
                     ),
                     child: Text(
                       '今天',
                       style: TextStyle(
                         fontSize: 10,
-                        color: scheme.primary,
+                        color: OrbitAccents.themeAccent,
                       ),
                     ),
                   ),
@@ -573,6 +605,9 @@ class _TaskCard extends StatelessWidget {
     );
   }
 }
+
+/// 翻月滑动的速度阈值（px/s；位移判据另取屏宽 15%）
+const double _kSwipeVelocity = 280;
 
 String _ymd(DateTime d) =>
     '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
