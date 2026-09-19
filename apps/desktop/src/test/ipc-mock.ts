@@ -953,6 +953,19 @@ const commands: Record<string, (args: any, ctx: Ctx) => unknown> = {
       logTarget(db, tb.id, "link_remove", ta.title);
     }
   },
+  // 任务→关联计数旗标（A4：与 Rust task_dependency_flags 同口径——仅出边存活行
+  // GROUP BY task_id；C7 消费前桌面仅 hooks 外无调用方，mock 先备齐防契约红）
+  task_dependency_flags: (_a, { db }) => {
+    const counts = new Map<number, number>();
+    for (const r of db.relations.filter((x) => !x.is_deleted)) {
+      counts.set(r.task_id, (counts.get(r.task_id) ?? 0) + 1);
+    }
+    return ipcClone(
+      [...counts]
+        .sort((a, b) => a[0] - b[0])
+        .map(([task_id, relation_count]) => ({ task_id, relation_count })),
+    );
+  },
 
   // ---- labels / task_labels ----
   todo_labels_list: (_a, { db }) => ipcClone(db.labels),
@@ -1015,6 +1028,23 @@ const commands: Record<string, (args: any, ctx: Ctx) => unknown> = {
       logActivity(db, task.id, task.title, "label_remove", JSON.stringify({ label: label.title }));
     }
   },
+  // 任务→标签投影（A4：与 Rust task_labels_projection 同口径——存活关联⋈存活标签，
+  // 瘦列 {id,title,hex_color}，按 task_id 分组、组内按 label id 升序）
+  task_labels_projection: (_a, { db }) => {
+    const labelById = new Map(db.labels.filter((l) => !l.is_deleted).map((l) => [l.id, l]));
+    const groups = new Map<number, Array<{ id: number; title: string; hex_color: string }>>();
+    const links = [...db.taskLabels]
+      .filter((r) => !r.is_deleted)
+      .sort((a, b) => a.task_id - b.task_id || a.label_id - b.label_id);
+    for (const r of links) {
+      const l = labelById.get(r.label_id);
+      if (!l) continue;
+      const list = groups.get(r.task_id) ?? [];
+      list.push({ id: l.id, title: l.title, hex_color: l.hex_color });
+      groups.set(r.task_id, list);
+    }
+    return ipcClone([...groups].map(([task_id, labels]) => ({ task_id, labels })));
+  },
 
   // ---- reminders / comments ----
   todo_reminders_list: (_a, { db }) => ipcClone(db.reminders),
@@ -1039,6 +1069,20 @@ const commands: Record<string, (args: any, ctx: Ctx) => unknown> = {
     const r = db.reminders.find((x) => x.id === id);
     db.reminders = db.reminders.filter((x) => x.id !== id);
     if (r) logTarget(db, r.task_id, "reminder_delete", localDt(r.remind_at) ?? "已设置");
+  },
+  // 任务→提醒投影（A4：与 Rust task_reminders_projection 同口径——存活行瘦列
+  // {id,remind_at}，按 task_id 分组、组内按 remind_at 升序）
+  task_reminders_projection: (_a, { db }) => {
+    const groups = new Map<number, Array<{ id: number; remind_at: number }>>();
+    const rows = [...db.reminders]
+      .filter((r) => !r.is_deleted)
+      .sort((a, b) => a.task_id - b.task_id || a.remind_at - b.remind_at);
+    for (const r of rows) {
+      const list = groups.get(r.task_id) ?? [];
+      list.push({ id: r.id, remind_at: r.remind_at });
+      groups.set(r.task_id, list);
+    }
+    return ipcClone([...groups].map(([task_id, reminders]) => ({ task_id, reminders })));
   },
   todo_comments_list: ({ filter }, { db }) => {
     const kw = filter?.keyword?.trim().toLowerCase();
@@ -1095,6 +1139,8 @@ const commands: Record<string, (args: any, ctx: Ctx) => unknown> = {
       duration_ms: 320,
       skipped: false,
       errors: [],
+      // F42：真正写入的表集合（纯推送轮为空）
+      changed_tables: [],
     }),
   // 强制同步 / 先拉后推 / 仅推送：mock 统一返回同一结果（e2e 走 mock IPC）
   cloud_sync_force: () =>
@@ -1106,6 +1152,7 @@ const commands: Record<string, (args: any, ctx: Ctx) => unknown> = {
       duration_ms: 280,
       skipped: false,
       errors: [],
+      changed_tables: ["todo_tasks"],
     }),
   cloud_sync_pull_then_push: () =>
     JSON.stringify({
@@ -1116,6 +1163,7 @@ const commands: Record<string, (args: any, ctx: Ctx) => unknown> = {
       duration_ms: 280,
       skipped: false,
       errors: [],
+      changed_tables: ["todo_tasks"],
     }),
   cloud_sync_push_only: () =>
     JSON.stringify({
@@ -1126,6 +1174,7 @@ const commands: Record<string, (args: any, ctx: Ctx) => unknown> = {
       duration_ms: 200,
       skipped: false,
       errors: [],
+      changed_tables: [],
     }),
   cloud_sync_is_running: () => false,
   cloud_sync_get_state: () => JSON.stringify({ phase: "idle" }),

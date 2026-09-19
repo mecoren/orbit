@@ -464,12 +464,43 @@ export interface TodoTaskDetail extends TodoTask {
 export const todoTaskGetDetail = (id: number) => invoke<TodoTaskDetail>("todo_tasks_get_detail", { id });
 export const todoTaskRecalcPercent = (taskId: number) => invoke<void>("todo_tasks_recalc_percent", { taskId });
 
+// ========== 任务列表投影聚合（A4，只读：一次往返替代万行整表+前端 join） ==========
+/** 行内标签 chip 最小载荷（core ProjectedTaskLabel 镜像：展示三列） */
+export interface ProjectedTaskLabel {
+  id: number;
+  title: string;
+  hex_color: string;
+}
+export interface TaskLabelsProjection {
+  task_id: number;
+  labels: ProjectedTaskLabel[];
+}
+/** 行内提醒最小载荷（core ProjectedReminder 镜像） */
+export interface ProjectedReminder {
+  id: number;
+  remind_at: number;
+}
+export interface TaskRemindersProjection {
+  task_id: number;
+  reminders: ProjectedReminder[];
+}
+/** 关联计数旗标（core TaskDependencyFlags 镜像；Wave 5 的 C7 消费） */
+export interface TaskDependencyFlags {
+  task_id: number;
+  relation_count: number;
+}
+export const taskLabelsProjection = () => invoke<TaskLabelsProjection[]>("task_labels_projection");
+export const taskRemindersProjection = () => invoke<TaskRemindersProjection[]>("task_reminders_projection");
+export const taskDependencyFlags = () => invoke<TaskDependencyFlags[]>("task_dependency_flags");
+
 // ========== M3 安全与同步 ==========
 
 /**
  * 同步域错误通道约定（Rust 侧 `[tag] message` 前缀）：
  * - key_mismatch → 引导恢复页；wrong_password / not_unlocked → 解锁入口
  * - local_meta_exists → Fix-10 确认覆盖；config → 表单校验提示
+ * - payload_version → 云端数据由**更新版本**的客户端写出（ADR 0010 两拍升级），
+ *   处置动作是「升级应用」：既不跳恢复页也不跳解锁页，toast 直给 message
  */
 export function syncErrorTag(err: unknown): string | null {
   const m = /^\[(\w+)\]/.exec(err instanceof Error ? err.message : String(err));
@@ -571,6 +602,8 @@ export interface SyncResultJson {
   duration_ms: number;
   skipped: boolean;
   errors: string[];
+  /** F42：本轮 pull 真正写入的表集合（按表精确失效缓存的依据） */
+  changed_tables?: string[];
 }
 
 const parseResult = (json: string): SyncResultJson => JSON.parse(json);

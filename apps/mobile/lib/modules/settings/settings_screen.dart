@@ -22,6 +22,7 @@ import '../../shared/widgets/scroll_offset_listenable.dart';
 import '../../shared/widgets/section_card.dart';
 import '../../shared/widgets/select_bottom_sheet.dart';
 import '../../shared/widgets/wait_toast.dart';
+import '../shell/db_invalidation.dart';
 import '../todo/logic/task_logic.dart' show formatDateTime;
 import '../todo/providers/todo_providers.dart';
 
@@ -310,7 +311,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       ref.invalidate(syncConfigProvider);
       // 同步结果经返回值直达（ADR 0003）：拉取到数据时失效业务缓存，
       // 原行为由 BootGate 的 syncFinished 订阅承担，流移除后在此兜住
-      if (result.pulledModules > 0) invalidateBusinessCaches(ref);
+      // （F42：按真正写入的表精确失效）
+      invalidateAfterSyncCaches(ref, result);
       WaitToast.success(
         syncResultSummary(
           pushedModules: result.pushedModules,
@@ -321,15 +323,26 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       );
     } catch (e) {
       // P1-20：不再吞错误 tag——key_mismatch 是「本地密钥与云端密文不匹配」，
-      // 重输密码无效，须走密钥包导入恢复；其余错误展示可读原因
+      // 重输密码无效，须走密钥包导入恢复；其余错误展示可读原因。
+      // F44：归类统一走 syncErrorAction——payload_version（云端版本更新，
+      // 需升级应用）不得塌进恢复流程，按原文提示即可
       final msg = e.toString();
-      if (msg.contains('key_mismatch')) {
+      final action = syncErrorAction(syncErrorTag(msg));
+      if (action == SyncErrorAction.recovery) {
         WaitToast.global(
           '同步密钥与云端数据不匹配',
           variant: WaitToastVariant.destructive,
           description: '本机密钥解不开云端密文，重输密码无效',
           actionLabel: '去恢复',
           onAction: () => context.push('/settings/sync'),
+        );
+        return;
+      }
+      if (action == SyncErrorAction.upgrade) {
+        WaitToast.global(
+          '需要升级应用',
+          variant: WaitToastVariant.destructive,
+          description: _shortErr(msg),
         );
         return;
       }

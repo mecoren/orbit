@@ -34,8 +34,12 @@ export interface DbChangeEvent {
 export interface SyncFinishedEvent {
   pushed_modules: number;
   pulled_modules: number;
+  /** 本轮下载的附件数（附件缓存更新不在同步表白名单，须单独判） */
+  downloaded_attachments?: number;
   duration_ms: number;
   skipped: boolean;
+  /** 本轮 pull 真正写入的表集合（F42：按表精确失效的依据） */
+  changed_tables?: string[];
 }
 
 export function useDbInvalidation() {
@@ -96,13 +100,45 @@ export function useDbInvalidation() {
   }, [qc]);
 }
 
-/** 云同步完成 → 拉取过数据时失效全部业务缓存（skipped/纯推送无需刷新） */
+/**
+ * 云同步完成 → 按「真正变更的表」精确失效缓存（skipped/无变更轮次零失效）
+ *
+ * 云端拉取的合并写入不走 EVENT_BUS（无 db-change），必须在此兜底。F42 起
+ * 引擎回报 `changed_tables`（merge 实际写入的表），替代此前「pulled_modules
+ * === 0 就整轮不刷」的粗判据——那会漏掉两类轮次：
+ * ① `pulled_modules == 0` 但附件有变更（附件缓存不在同步表白名单）；
+ * ② 模块计数为 0 但合并实际改了行（计数按桶，桶下载 ≠ 行变更）。
+ * 表集合缺失（旧引擎）时有拉取即保守全量；未知表回退全量（宁多拉不漏刷）。
+ */
 export function useSyncInvalidation() {
   const qc = useQueryClient();
   useEffect(() => {
     const unlistenPromise = listen<SyncFinishedEvent>("sync-finished", (evt) => {
-      if (evt.payload.skipped || evt.payload.pulled_modules === 0) return;
-      void qc.invalidateQueries();
+      const payload = evt.payload;
+      if (payload.skipped) return;
+      const tables = new Set(payload.changed_tables ?? []);
+      // 附件下载/占位行写入不进同步表事件，映射到挂载列表与附件键
+      if ((payload.downloaded_attachments ?? 0) > 0) {
+        tables.add("todo_task_attachments");
+      }
+      if (tables.size === 0) {
+        if (payload.pulled_modules > 0) {
+          countInvalidateCall();
+          void qc.invalidateQueries();
+        }
+        return;
+      }
+      let full = false;
+      for (const table of tables) {
+        if (invalidateByTable(qc, table) === null) {
+          full = true;
+          break;
+        }
+      }
+      if (full) {
+        countInvalidateCall();
+        void qc.invalidateQueries();
+      }
     });
     return () => {
       unlistenPromise.then((unlisten) => unlisten());

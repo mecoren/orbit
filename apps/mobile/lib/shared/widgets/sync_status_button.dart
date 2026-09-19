@@ -21,6 +21,7 @@ import '../../core/theme/app_dimens.dart';
 import '../../core/theme/orbit_accents.dart';
 import '../../data/api/dto.dart';
 import '../../data/providers/bridge_provider.dart';
+import '../../modules/shell/db_invalidation.dart';
 import '../../modules/todo/providers/todo_providers.dart';
 import '../utils/sync_status_text.dart';
 import 'more_actions_sheet.dart' show bottomSheetTopShape;
@@ -253,8 +254,9 @@ class _SyncInfoSheetState extends ConsumerState<_SyncInfoSheet> {
       final result =
           await ref.read(orbitBridgeProvider).cloudSyncNow(origin: 'manual');
       ref.invalidate(syncConfigProvider);
-      // 拉取合并写入不走 db-change 事件，需在此失效业务缓存（口径同设置页）
-      if (result.pulledModules > 0) invalidateBusinessCaches(ref);
+      // 拉取合并写入不走 db-change 事件，需在此失效业务缓存（F42：按真正
+      // 写入的表精确失效，口径同桌面 useSyncInvalidation）
+      invalidateAfterSyncCaches(ref, result);
       widget.onStatusChanged(
         result.skipped ? SyncUiStatus.idle : SyncUiStatus.success,
       );

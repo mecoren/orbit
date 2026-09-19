@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../data/api/dto.dart';
 import '../todo/providers/todo_providers.dart';
 
 /// db-change 表级失效目标（B7，与 provider 解耦的纯枚举——决策面可单测）
@@ -66,6 +67,8 @@ List<DbCacheTarget> planTableInvalidation(String table) => switch (table) {
           DbCacheTarget.taskDetail,
           DbCacheTarget.search,
         ],
+      // 附件挂/卸（内容寻址关联行）只影响任务详情的附件区，不碰主列表
+      'todo_task_attachments' => const [DbCacheTarget.taskDetail],
       'todo_saved_filters' => const [DbCacheTarget.savedFilters],
       'todo_activity_log' => const [DbCacheTarget.taskActivity],
       _ => const [],
@@ -106,6 +109,33 @@ bool invalidateByTable(WidgetRef ref, String table) {
     }
   }
   return true;
+}
+
+/// 云同步完成后的缓存失效（F42，与桌面 `useSyncInvalidation` 同口径）
+///
+/// 按本轮真正写入的表（`changedTables`）精确失效，替代此前
+/// `pulledModules > 0` 的粗判据——后者会漏掉两类轮次：① 只拉附件
+/// （附件缓存与同步表事件无关）；② 桶下载了但合并实际全 skip。
+/// 附件下载数 > 0 时映射到任务详情键（附件区）。
+/// 表集合缺失（旧引擎 / mock 桥）时按 pulledModules 保守全量。
+void invalidateAfterSyncCaches(WidgetRef ref, SyncResultJson result) {
+  if (result.skipped) return;
+  final tables = <String>{...result.changedTables};
+  if (result.downloadedAttachments > 0) {
+    tables.add('todo_task_attachments');
+  }
+  if (tables.isEmpty) {
+    if (result.pulledModules > 0) invalidateBusinessCaches(ref);
+    return;
+  }
+  var allKnown = true;
+  for (final table in tables) {
+    if (!invalidateByTable(ref, table)) {
+      allKnown = false;
+      break;
+    }
+  }
+  if (!allKnown) invalidateBusinessCaches(ref);
 }
 
 /// 该表是否影响提醒闹钟重排（todo_reminders 行本身与 todo_tasks 完成态——

@@ -110,8 +110,8 @@ class _BootGateState extends ConsumerState<BootGate>
       final result = await bridge
           .cloudSyncNow(origin: origin)
           .timeout(const Duration(seconds: 6));
-      // 拉取合并写入不走 db-change 事件，需在此失效业务缓存（口径同设置页）
-      if (result.pulledModules > 0) invalidateBusinessCaches(ref);
+      // 拉取合并写入不走 db-change 事件，需在此失效业务缓存（F42 精确失效）
+      invalidateAfterSyncCaches(ref, result);
     } catch (e) {
       // 静默：网络异常 / 未解锁 / 超时都不打扰用户，下次进入或手动同步会重试
       debugPrint('[BootGate] lifecycle sync($origin) skipped: $e');

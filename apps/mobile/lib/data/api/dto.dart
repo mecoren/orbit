@@ -559,6 +559,87 @@ class TodoReminderCreateInput {
   const TodoReminderCreateInput({required this.taskId, required this.remindAt});
 }
 
+// ---------- 任务列表投影聚合（A4，只读：FRB todo.rs 三投影的手写镜像） ----------
+
+/// 行内标签 chip 最小载荷（core ProjectedTaskLabel 镜像：展示三列）
+class ProjectedTaskLabel {
+  final int id;
+  final String title;
+  final String hexColor;
+
+  const ProjectedTaskLabel({
+    required this.id,
+    required this.title,
+    required this.hexColor,
+  });
+
+  factory ProjectedTaskLabel.fromJson(Map<String, dynamic> j) =>
+      ProjectedTaskLabel(
+        id: j['id'] as int,
+        title: j['title'] as String,
+        hexColor: j['hex_color'] as String,
+      );
+}
+
+/// 单任务的标签分组（组内按 label id 升序）
+class TaskLabelsProjection {
+  final int taskId;
+  final List<ProjectedTaskLabel> labels;
+
+  const TaskLabelsProjection({required this.taskId, required this.labels});
+
+  factory TaskLabelsProjection.fromJson(Map<String, dynamic> j) =>
+      TaskLabelsProjection(
+        taskId: j['task_id'] as int,
+        labels: (j['labels'] as List)
+            .map((e) => ProjectedTaskLabel.fromJson(e as Map<String, dynamic>))
+            .toList(),
+      );
+}
+
+/// 行内提醒最小载荷（core ProjectedReminder 镜像）
+class ProjectedReminder {
+  final int id;
+  final int remindAt;
+
+  const ProjectedReminder({required this.id, required this.remindAt});
+
+  factory ProjectedReminder.fromJson(Map<String, dynamic> j) => ProjectedReminder(
+        id: j['id'] as int,
+        remindAt: j['remind_at'] as int,
+      );
+}
+
+/// 单任务的提醒分组（组内按 remind_at 升序）
+class TaskRemindersProjection {
+  final int taskId;
+  final List<ProjectedReminder> reminders;
+
+  const TaskRemindersProjection({required this.taskId, required this.reminders});
+
+  factory TaskRemindersProjection.fromJson(Map<String, dynamic> j) =>
+      TaskRemindersProjection(
+        taskId: j['task_id'] as int,
+        reminders: (j['reminders'] as List)
+            .map((e) => ProjectedReminder.fromJson(e as Map<String, dynamic>))
+            .toList(),
+      );
+}
+
+/// 单任务的关联计数旗标（core TaskDependencyFlags 镜像；C7 消费）
+class TaskDependencyFlags {
+  final int taskId;
+  final int relationCount;
+
+  const TaskDependencyFlags({required this.taskId, required this.relationCount});
+
+  factory TaskDependencyFlags.fromJson(Map<String, dynamic> j) =>
+      TaskDependencyFlags(
+        taskId: j['task_id'] as int,
+        relationCount: j['relation_count'] as int,
+      );
+}
+
 // ---------- 复杂查询：任务详情聚合 ----------
 
 class TodoTaskDetail extends TodoTask {
@@ -755,6 +836,10 @@ class SyncResultJson {
   final bool skipped;
   final List<String> errors;
 
+  /// 本轮 pull 真正写入的表集合（F42：按表精确失效缓存的依据；
+  /// 旧引擎/ mock 不提供时为空 → 调用方回退 pulledModules 判据）
+  final List<String> changedTables;
+
   const SyncResultJson({
     required this.pushedModules,
     required this.pulledModules,
@@ -763,6 +848,7 @@ class SyncResultJson {
     required this.durationMs,
     required this.skipped,
     required this.errors,
+    this.changedTables = const [],
   });
 
   factory SyncResultJson.fromJson(Map<String, dynamic> j) => SyncResultJson(
@@ -773,6 +859,8 @@ class SyncResultJson {
         durationMs: j['duration_ms'] as int,
         skipped: j['skipped'] as bool,
         errors: (j['errors'] as List).cast<String>(),
+        changedTables:
+            (j['changed_tables'] as List?)?.cast<String>() ?? const [],
       );
 }
 
