@@ -28,6 +28,7 @@ use crate::cloud_sync::progress::{NoopProgressSender, ProgressSender, SyncOrigin
 use crate::cloud_sync::pull::pull_all;
 use crate::cloud_sync::push::{push_all, push_all_force_full};
 use crate::cloud_sync::state::{SyncState, SyncStateStore};
+use crate::db::repository::sync_config_repo::SyncConfigRepo;
 use crate::db::repository::sync_history_repo;
 use crate::sync_adapters::traits::SyncAdapter;
 use crate::sync_crypto::SyncCryptoService;
@@ -51,32 +52,40 @@ pub const SYNC_TYPE_PULL_THEN_PUSH: &str = "pull_only";
 ///   （pushed = pushed_modules + uploaded_attachments，行级计数引擎不产出）
 /// - `errors` 非空按 failed 记（整体 Ok 但模块级有错属于"部分失败"）
 /// - 历史写入失败静默（`let _`）——观测数据不得阻塞同步主链
+///
+/// 本函数同时是 `sync_configs.last_synced_at` 的**唯一**回写点（F24）：
+/// 三处同步模式与 force_sync（内部走 pull_then_push）全部经此漏斗，账本判据
+/// 与历史 status 同口径。曾由各壳层各自回写，桌面手动路径把 skipped 和
+/// errors 非空的部分失败也推进了守卫线。
 async fn record_incremental_history(
     pool: &SqlitePool,
     sync_type: &str,
     result: &Result<SyncResult, CloudSyncError>,
 ) {
     // Ok(skipped) 是防重入跳过：没有真正执行，不产生历史
-    if let Ok(r) = result {
-        if r.skipped {
-            return;
-        }
+    if matches!(result, Ok(r) if r.skipped) {
+        return;
     }
     let now_ms = chrono::Utc::now().timestamp_millis();
+    let mut clean = false;
     let (status, pulled, pushed, conflicts, error) = match result {
         Ok(r) => {
             let pulled = r.pulled_modules as i64 + r.downloaded_attachments as i64;
             let pushed = r.pushed_modules as i64 + r.uploaded_attachments as i64;
-            let status = if r.errors.is_empty() {
-                "success"
-            } else {
-                "failed"
-            };
-            let error = r.errors.first().map(|e| e.to_string());
+            // F24：历史 status 与账本推进共用同一判据（skipped 已在上方提前返回）
+            let ok = r.advances_ledger();
+            let status = if ok { "success" } else { "failed" };
+            clean = ok;
+            // F37：多表失败合并入同一条历史。条数受可同步表数（11）天然有界，
+            // 单条错误已由 `sync::error::brief` 钳长，无需再截总长
+            let error = (!r.errors.is_empty()).then(|| r.errors.join("；"));
             (status, pulled, pushed, r.conflicts as i64, error)
         }
         Err(e) => ("failed", 0, 0, 0, Some(e.to_string())),
     };
+    if clean {
+        advance_last_synced_at(pool, now_ms).await;
+    }
     let Ok(id) = sync_history_repo::insert(pool, sync_type, status, now_ms).await else {
         return;
     };
@@ -93,6 +102,17 @@ async fn record_incremental_history(
     .await;
     // 清理同类型最旧历史，防表无限增长
     let _ = sync_history_repo::prune_by_type(pool, sync_type, INCREMENTAL_HISTORY_KEEP).await;
+}
+
+/// 推进激活配置的 `last_synced_at`（回收站物理清理的守卫线）
+///
+/// 未配置云同步（无激活行）时静默无操作；写失败静默——账本是观测辅助，
+/// 不得让同步主链因它报错。
+async fn advance_last_synced_at(pool: &SqlitePool, now_ms: i64) {
+    let repo = SyncConfigRepo::new(pool.clone());
+    if let Ok(Some(record)) = repo.get_active_config().await {
+        let _ = repo.update_last_synced_at(record.id, now_ms).await;
+    }
 }
 
 /// 同步结果汇总
@@ -114,6 +134,12 @@ pub struct SyncResult {
     pub skipped: bool,
     /// 收集的错误信息（不阻塞整体流程）
     pub errors: Vec<String>,
+    /// 本轮 pull 真正写入的表集合（F42：前端按表精确失效缓存）
+    ///
+    /// 附件变更不在此列：附件下载轮可能 `changed_tables` 为空但本地附件缓存
+    /// 已更新，前端须同时看 `downloaded_attachments`（见 events.ts）。
+    #[serde(default)]
+    pub changed_tables: Vec<String>,
 }
 
 impl SyncResult {
@@ -123,6 +149,16 @@ impl SyncResult {
             skipped: true,
             ..Default::default()
         }
+    }
+
+    /// 干净轮次判据（F24）：只有真正执行且无模块级错误才允许推进 `last_synced_at`
+    ///
+    /// `errors` 非空意味着部分表/墓碑没推上去（模块级失败只进 `errors`，不外抛），
+    /// 而 `sync_configs.last_synced_at` 正是回收站物理清理的守卫线
+    /// （`trash_api::purge_todo_tasks_before` 按 `deleted_at < last_synced_at` 放行）——
+    /// 提前推进等于放开未推送的墓碑，对端 pull 时已删任务复活。
+    pub fn advances_ledger(&self) -> bool {
+        !self.skipped && self.errors.is_empty()
     }
 }
 
@@ -462,6 +498,8 @@ impl SyncEngine {
         // S28：冲突裁决计数透传（merge → PullResult → SyncResult → 历史落库）
         result.conflicts += pull_result.conflicts;
         result.errors.extend(pull_result.errors);
+        // F42：真正写入的表集合透传（前端按表精确失效缓存）
+        result.changed_tables.extend(pull_result.changed_tables);
 
         // 2. Push（业务级网络重试）：合并后的本地数据上传云端
         // P0-6：Pull 失败的模块本地仍是旧快照，跳过其 push 防陈旧数据覆盖云端
@@ -710,6 +748,8 @@ impl SyncEngine {
         // S28：冲突裁决计数透传（merge → PullResult → SyncResult → 历史落库）
         result.conflicts += pull_result.conflicts;
         result.errors.extend(pull_result.errors);
+        // F42：真正写入的表集合透传（前端按表精确失效缓存）
+        result.changed_tables.extend(pull_result.changed_tables);
 
         // 2. Pull 附件（S7：包入 with_retry，与模块数据同口径）
         let att_pull = self
@@ -955,6 +995,12 @@ impl SyncEngine {
             result.uploaded_attachments,
             result.duration_ms
         );
+        // F24：rekey 不经 record_incremental_history（它不是增量轮次），但云端
+        // 此刻确实持有本机全部数据与墓碑，守卫线同样该推进。
+        // 附件错误只进 result.errors 不外抛，故按其判据决定是否推进。
+        if result.advances_ledger() {
+            advance_last_synced_at(&self.db_pool, chrono::Utc::now().timestamp_millis()).await;
+        }
         Ok(result)
     }
 
@@ -1512,11 +1558,13 @@ mod tests {
             duration_ms: 1234,
             skipped: false,
             errors: vec!["module x failed".to_string()],
+            changed_tables: vec!["todo_tasks".to_string()],
         };
         let json = serde_json::to_string(&r).expect("序列化失败");
         let parsed: SyncResult = serde_json::from_str(&json).expect("反序列化失败");
         assert_eq!(parsed.pushed_modules, 3);
         assert_eq!(parsed.errors.len(), 1);
+        assert_eq!(parsed.changed_tables, ["todo_tasks"]);
     }
 
     #[tokio::test]
@@ -1736,9 +1784,6 @@ mod tests {
 
     #[async_trait]
     impl SyncAdapter for ProbeMockAdapter {
-        async fn list_files(&self, _base_path: &str) -> Result<Vec<RemoteFile>, SyncError> {
-            Ok(Vec::new())
-        }
         async fn list_all_files(&self, _base_path: &str) -> Result<Vec<RemoteFile>, SyncError> {
             Ok(Vec::new())
         }
@@ -1773,7 +1818,7 @@ mod tests {
         async fn asset_exists(&self, _hash: &str) -> Result<bool, SyncError> {
             Ok(false)
         }
-        async fn list_assets(&self) -> Result<Vec<String>, SyncError> {
+        async fn list_assets(&self, _assets_dir: &str) -> Result<Vec<String>, SyncError> {
             Ok(Vec::new())
         }
     }
@@ -2118,6 +2163,7 @@ mod tests {
             duration_ms: 120,
             skipped: false,
             errors,
+            changed_tables: Vec::new(),
         }
     }
 
@@ -2179,6 +2225,75 @@ mod tests {
             .await
             .unwrap();
         assert!(rows.is_empty(), "防重入跳过不是一次同步，不得记历史");
+    }
+
+    #[test]
+    fn advances_ledger_predicate() {
+        assert!(
+            !SyncResult::skipped().advances_ledger(),
+            "防重入跳过不是一次成功同步"
+        );
+        assert!(
+            !ok_result(vec!["表 todo_tasks push 失败".to_string()]).advances_ledger(),
+            "模块级失败（部分推送）不得推进守卫线"
+        );
+        assert!(ok_result(vec![]).advances_ledger(), "干净轮次才推进");
+    }
+
+    /// F24：账本回写的唯一漏斗——脏轮次不得放开回收站守卫线
+    #[tokio::test]
+    async fn ledger_advances_only_on_clean_rounds() {
+        let engine = history_engine().await;
+        async fn ledger(pool: &SqlitePool) -> Option<i64> {
+            sqlx::query_as::<_, (Option<i64>,)>(
+                "SELECT last_synced_at FROM sync_configs WHERE is_active = 1",
+            )
+            .fetch_one(pool)
+            .await
+            .unwrap()
+            .0
+        }
+        sqlx::query(
+            "INSERT INTO sync_configs (protocol, endpoint, bucket, region, path, device_id, \
+             credential, is_active, last_synced_at, created_at, updated_at) \
+             VALUES ('webdav', 'http://x', '', '', '', 'dev', '', 1, NULL, 1, 1)",
+        )
+        .execute(&engine.db_pool)
+        .await
+        .unwrap();
+
+        record_incremental_history(
+            &engine.db_pool,
+            SYNC_TYPE_SYNC_NOW,
+            &Ok(ok_result(vec!["表 todo_tasks push 失败".to_string()])),
+        )
+        .await;
+        assert!(ledger(&engine.db_pool).await.is_none(), "部分失败轮次不得推进账本");
+
+        record_incremental_history(
+            &engine.db_pool,
+            SYNC_TYPE_SYNC_NOW,
+            &Ok(SyncResult::skipped()),
+        )
+        .await;
+        assert!(ledger(&engine.db_pool).await.is_none(), "skipped 轮次不得推进账本");
+
+        record_incremental_history(
+            &engine.db_pool,
+            SYNC_TYPE_SYNC_NOW,
+            &Err::<SyncResult, _>(CloudSyncError::Adapter {
+                message: "连接超时".to_string(),
+            }),
+        )
+        .await;
+        assert!(ledger(&engine.db_pool).await.is_none(), "引擎级失败不得推进账本");
+
+        record_incremental_history(&engine.db_pool, SYNC_TYPE_SYNC_NOW, &Ok(ok_result(vec![])))
+            .await;
+        assert!(
+            matches!(ledger(&engine.db_pool).await, Some(t) if t > 0),
+            "干净轮次必须推进账本（否则回收站永不清理）"
+        );
     }
 
     #[tokio::test]

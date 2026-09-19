@@ -18,7 +18,6 @@ use tauri::{AppHandle, Emitter, Manager};
 use orbit_core::api::cloud_sync_api;
 use orbit_core::cloud_sync::progress::SyncOrigin;
 use orbit_core::context;
-use orbit_core::db::repository::sync_config_repo::SyncConfigRepo;
 
 use crate::AppState;
 use crate::commands::data_dir::resolve_app_data_dir;
@@ -120,7 +119,9 @@ async fn run_on_change_sync(app: &AppHandle) {
     )
     .await
     {
-        eprintln!("[sync-on-change] push 失败: {e}");
+        // F35：走 log 而非 stderr——打包 GUI 丢弃 stderr，后台同步失败
+        // 在 app_log.log 必须留痕（tauri-plugin-log 已注册 LogDir target）
+        log::warn!("[sync-on-change] push 失败: {e}");
         if e.is_key_mismatch_error() {
             let _ = app.emit("sync-key-mismatch", ());
         }
@@ -130,9 +131,9 @@ async fn run_on_change_sync(app: &AppHandle) {
 /// 单轮判定与触发
 async fn tick(app: &AppHandle) {
     // DB 未就绪静默跳过
-    let Some(state) = app.try_state::<AppState>() else {
+    if app.try_state::<AppState>().is_none() {
         return;
-    };
+    }
 
     let Ok(record) = sync_runtime::get_active_config(app).await else {
         return;
@@ -186,23 +187,13 @@ async fn tick(app: &AppHandle) {
         &attachments,
     )
     .await;
-    match result {
-        Ok(r) => {
-            if !r.skipped {
-                // S13：成功后才推进账本（此前在 sync_now 之前就写静态时间戳，
-                // 失败后也要等满一个 interval 才有重试窗口）；skipped（并发
-                // 跳过）不推进，让真正的执行者负责回写
-                let pool = state.pool.clone();
-                let _ = SyncConfigRepo::new(pool)
-                    .update_last_synced_at(record.id, now_ms)
-                    .await;
-            }
-        }
-        Err(e) => {
-            eprintln!("[sync-scheduler] 自动同步失败: {e}");
-            if e.is_key_mismatch_error() {
-                let _ = app.emit("sync-key-mismatch", ());
-            }
+    // F24：last_synced_at 回写已收口到 core 引擎漏斗（record_incremental_history），
+    // 壳层不再各自推进账本——未来的壳也不可能再忘记这个判据
+    if let Err(e) = result {
+        // F35：同 sync-on-change，日志落 app_log.log
+        log::warn!("[sync-scheduler] 自动同步失败: {e}");
+        if e.is_key_mismatch_error() {
+            let _ = app.emit("sync-key-mismatch", ());
         }
     }
 }

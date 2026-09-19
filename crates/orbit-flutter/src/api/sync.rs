@@ -124,7 +124,8 @@ fn runtime_engine() -> Result<SyncEngine, String> {
 // 内部辅助（错误标记 / 配置读取 / 记录转换）
 // ============================================================================
 
-/// CloudSyncError → `[tag] message`（key_mismatch 前端跳恢复页）
+/// CloudSyncError → `[tag] message`（key_mismatch 前端跳恢复页；
+/// payload_version = 云端由更新版本客户端写出，前端只需 toast 出「升级应用」文案）
 fn err_tagged_cloud(e: CloudSyncError) -> String {
     format!("[{}] {}", e.category_tag(), e)
 }
@@ -138,14 +139,6 @@ fn err_tagged_crypto(e: SyncCryptoError) -> String {
         SyncCryptoError::LocalMetaExists => format!("[local_meta_exists] {e}"),
         other => format!("[sync_crypto] {other}"),
     }
-}
-
-/// 当前毫秒时间戳（桌面用 chrono；本 crate 以 std::time 等价实现）
-fn now_ms() -> i64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_millis() as i64)
-        .unwrap_or(0)
 }
 
 /// 读取激活的同步配置记录（未配置返回 None）（对齐 sync_cmd::sync_config_active）
@@ -462,7 +455,7 @@ enum SyncAction {
 
 /// 同步执行公共骨架（照抄桌面 cloud_sync_cmd::run_sync，AppHandle 换全局状态）
 ///
-/// 配置 + 引擎 + 附件目录 → 动作 → last_synced_at 记账 → 结果 JSON 字符串。
+/// 配置 + 引擎 + 附件目录 → 动作 → 结果 JSON 字符串（last_synced_at 由 core 漏斗回写）。
 /// 差异：成功后不再 emit("sync-finished")——结果已经由返回值直达调用方，
 /// 广播给其他监听方待 events 模块提供 sync 事件流后再补。
 async fn run_sync(origin: SyncOrigin, action: SyncAction) -> Result<String, String> {
@@ -495,12 +488,7 @@ async fn run_sync(origin: SyncOrigin, action: SyncAction) -> Result<String, Stri
     }
     .map_err(err_tagged_cloud)?;
 
-    // 成功（含 skipped）后记账 last_synced_at
-    let pool = with_state(|s| Ok(s.pool.clone()))?;
-    let _ = SyncConfigRepo::new(pool)
-        .update_last_synced_at(record.id, now_ms())
-        .await;
-
+    // F24：last_synced_at 由 core 引擎漏斗按「干净轮次」判据回写，桥层不记账
     cloud_sync_api::result_to_json(&result).map_err(err_tagged_cloud)
 }
 

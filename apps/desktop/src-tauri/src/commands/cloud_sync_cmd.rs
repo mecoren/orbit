@@ -1,8 +1,8 @@
 //! cloud_sync_cmd — 云端增量同步执行命令组（06 任务 3.5）
 //!
 //! 全部走 orbit_core::api::cloud_sync_api 高阶函数（BasePathAdapter、重试退避、
-//! Data Key 对账守卫均在 core 内闭环）；壳层只做：引擎/配置获取 → 执行 →
-//! last_synced_at 记账 → 错误 `[category] message` 前缀化。
+//! Data Key 对账守卫、last_synced_at 记账均在 core 内闭环）；壳层只做：
+//! 引擎/配置获取 → 执行 → 事件广播 → 错误 `[category] message` 前缀化。
 
 use tauri::{AppHandle, Emitter, Manager};
 
@@ -34,7 +34,7 @@ enum SyncAction {
     PullThenPush,
 }
 
-/// 同步执行公共骨架：配置 + 引擎 + 附件目录 → 动作 → last_synced_at 记账
+/// 同步执行公共骨架：配置 + 引擎 + 附件目录 → 动作 → 事件广播
 async fn run_sync(
     app: &AppHandle,
     origin: SyncOrigin,
@@ -71,16 +71,7 @@ async fn run_sync(
     }
     .map_err(err_tagged)?;
 
-    // 成功（含 skipped）后记账 last_synced_at 并通知前端刷新
-    let now_ms = chrono::Utc::now().timestamp_millis();
-    let pool = app
-        .try_state::<AppState>()
-        .ok_or_else(|| "[database] 数据库未初始化".to_string())?
-        .pool
-        .clone();
-    let _ = SyncConfigRepo::new(pool)
-        .update_last_synced_at(record.id, now_ms)
-        .await;
+    // F24：last_synced_at 由 core 引擎漏斗按「干净轮次」判据回写，壳层不记账
 
     app.emit("sync-finished", &result)
         .map_err(|e| format!("[other] 事件发送失败: {e}"))?;
@@ -146,14 +137,7 @@ pub async fn cloud_sync_force(
     .await
     .map_err(err_tagged)?;
 
-    // 记账（与 run_sync 同口径；skipped 也记账，表示"本轮已尝试"）
-    let now_ms = chrono::Utc::now().timestamp_millis();
-    if let Some(state) = app.try_state::<AppState>() {
-        let _ = SyncConfigRepo::new(state.pool.clone())
-            .update_last_synced_at(record.id, now_ms)
-            .await;
-    }
-
+    // 记账口径同 run_sync（force_sync 内部走 pull_then_push，同一引擎漏斗）
     let _ = app.emit("sync-finished", &result);
     cloud_sync_api::result_to_json(&result).map_err(err_tagged)
 }

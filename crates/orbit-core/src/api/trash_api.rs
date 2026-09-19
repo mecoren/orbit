@@ -336,6 +336,11 @@ pub async fn maybe_purge_expired(pool: &SqlitePool) -> CoreResult<PurgeStats> {
 /// 的行——早于该时间点的删除已上传云端墓碑集；更晚的删除可能尚未 push，
 /// 物理清掉会让云端旧存活数据在 pull 时复活该任务。未启用云同步则无守卫
 /// （无其他设备可复活）。恢复/手动彻底删除不经此函数，不受守卫约束。
+///
+/// F24 起守卫线只在**干净轮次**推进（`SyncResult::advances_ledger()`：非 skipped
+/// 且 `errors` 为空），代价是任一轮带错即整天不推进 → 回收站物理清理要等到
+/// 下一个干净轮次（保留期本身以「天」计，延迟一次同步周期不构成用户可见变化）。
+/// ponytail: 无分阶段错误位（push/pull/附件各一个 flag），需要时按 stage 细分
 pub async fn purge_todo_tasks_before(pool: &SqlitePool, cutoff_ms: i64) -> CoreResult<(u64, u64)> {
     let now = chrono::Utc::now().timestamp_millis();
     let active: Option<(i64,)> = sqlx::query_as::<_, (i64,)>(
