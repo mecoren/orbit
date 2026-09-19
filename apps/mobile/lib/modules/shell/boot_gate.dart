@@ -213,6 +213,9 @@ class _BootGateState extends ConsumerState<BootGate>
     // 回收站 TTL 清理守护（Rust 60s tick：每日最多清一次，
     // 多日未开时本次启动首轮即补清过期间隔的过期任务）
     ref.read(orbitBridgeProvider).startTrashScheduler();
+    // 自动备份守护（Rust 60s tick：按 backup_prefs 频率触发；未解锁同步
+    // 密码时静默跳过只推进下次时间，不打扰用户）
+    ref.read(orbitBridgeProvider).startBackupScheduler();
     // 小组件勾选通道挂载 + 首刷快照（#3：通知完成回调同款位置——ready 后
     // 引擎稳定，原生积压队列可冲刷）
     _widget.attach(onOpenTask: (taskId) async {

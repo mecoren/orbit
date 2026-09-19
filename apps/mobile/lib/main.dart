@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'app.dart';
 import 'data/api/rust_orbit_bridge.dart';
 import 'data/providers/bridge_provider.dart';
+import 'services/local_prefs.dart';
 
 /// Orbit 移动端入口
 ///
@@ -25,6 +26,9 @@ Future<void> main() async {
   if (!useMock) {
     await initRustBridge();
   }
+
+  // 本机 UI 偏好（隐藏已完成等视图态）：首帧前载入，失败静默走默认值
+  await LocalPrefs.load();
 
   runApp(
     ProviderScope(
