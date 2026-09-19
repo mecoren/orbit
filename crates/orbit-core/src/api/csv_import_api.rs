@@ -87,12 +87,14 @@ fn finish_row(rows: &mut Vec<Vec<String>>, row: &mut Vec<String>) {
 // 映射：预设 → TodoTaskCreateInput
 // ============================================================================
 
-/// CSV 导入预设档位
+/// CSV 导入预设档位（`ics` 是 ICS 文件导入：内容走 VTODO 解析，
+/// 产物喂同一 CsvImportRow IR，经同一预览/执行与项目自动创建链路）
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CsvImportPreset {
     Orbit,
     Todoist,
     TickTick,
+    Ics,
 }
 
 impl CsvImportPreset {
@@ -101,8 +103,9 @@ impl CsvImportPreset {
             "orbit" => Ok(Self::Orbit),
             "todoist" => Ok(Self::Todoist),
             "ticktick" => Ok(Self::TickTick),
+            "ics" => Ok(Self::Ics),
             _ => Err(crate::error::CoreError::Other(format!(
-                "unknown csv import preset: '{key}', expected orbit/todoist/ticktick"
+                "unknown csv import preset: '{key}', expected orbit/todoist/ticktick/ics"
             ))),
         }
     }
@@ -195,6 +198,10 @@ pub struct CsvImportStats {
 /// 头一行必须存在且为表头。Todoist 的非 Task 类型行（section/note 等）
 /// 与已完成且 Completed Date 为空的行会标记跳过。
 pub fn map_csv_rows(content: &str, preset: CsvImportPreset) -> CoreResult<Vec<CsvImportRow>> {
+    // ICS 走 VTODO 解析（ics_import_api），CSV 走表头映射；产物同为 CsvImportRow
+    if preset == CsvImportPreset::Ics {
+        return crate::api::ics_import_api::map_ics_rows(content);
+    }
     let rows = parse_csv(content);
     let Some(header_row) = rows.first() else {
         return Err(crate::error::CoreError::Other(
@@ -214,6 +221,8 @@ pub fn map_csv_rows(content: &str, preset: CsvImportPreset) -> CoreResult<Vec<Cs
             CsvImportPreset::Orbit => map_orbit_row(&header, row, source_line),
             CsvImportPreset::Todoist => map_todoist_row(&header, row, source_line),
             CsvImportPreset::TickTick => map_ticktick_row(&header, row, source_line),
+            // ICS 已在 map_csv_rows 入口分流到 VTODO 解析，不会走到 CSV 行映射
+            CsvImportPreset::Ics => unreachable!("ICS preset 已分流"),
         };
         out.push(mapped);
     }

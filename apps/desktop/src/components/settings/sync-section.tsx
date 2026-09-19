@@ -1879,10 +1879,13 @@ function CsvImportCard() {
   const pickFile = async () => {
     try {
       const { open } = await import("@tauri-apps/plugin-dialog");
+      const isIcs = preset === "ics";
       const path = await open({
-        title: "选择要导入的 CSV 文件",
+        title: isIcs ? "选择要导入的 ICS 文件" : "选择要导入的 CSV 文件",
         multiple: false,
-        filters: [{ name: "CSV 表格", extensions: ["csv", "txt"] }],
+        filters: isIcs
+          ? [{ name: "iCalendar 日历", extensions: ["ics"] }]
+          : [{ name: "CSV 表格", extensions: ["csv", "txt"] }],
       });
       if (!path) return; // 用户取消
       const { readTextFile } = await import("@tauri-apps/plugin-fs");
@@ -1940,12 +1943,11 @@ function CsvImportCard() {
     <div className="space-y-3 rounded-lg border p-5">
       <div className="flex items-center gap-2">
         <Upload className="size-4 text-muted-foreground" />
-        <span className="text-sm font-medium">导入 CSV（迁移）</span>
+        <span className="text-sm font-medium">导入（迁移）</span>
       </div>
       <p className="text-xs text-muted-foreground">
-        从其他应用迁入任务：支持 Orbit 自有导出格式（往返一致）、Todoist 与
-        TickTick 模板。导入前先预览映射结果；项目不存在会自动创建，每行独立
-        成败互不阻断。
+        从其他应用迁入任务：支持 Orbit 自有导出格式（往返一致）、Todoist
+        TickTick 模板与 ICS 日历文件（只收 VTODO 待办）。导入前先预览映射结果；项目不存在会自动创建，每行独立成败互不阻断。
       </p>
       <div className="flex flex-wrap items-center gap-2">
         <Select
@@ -1963,6 +1965,7 @@ function CsvImportCard() {
             <SelectItem value="orbit">Orbit 导出格式</SelectItem>
             <SelectItem value="todoist">Todoist 模板</SelectItem>
             <SelectItem value="ticktick">TickTick 模板</SelectItem>
+            <SelectItem value="ics">ICS 日历（VTODO）</SelectItem>
           </SelectContent>
         </Select>
         <Button size="sm" variant="outline" onClick={() => void pickFile()}>

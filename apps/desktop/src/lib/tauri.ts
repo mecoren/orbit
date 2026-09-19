@@ -825,7 +825,7 @@ export const plaintextExportCsv = (excludeDeleted = true) =>
 // ---------- CSV 导入（迁移路径：orbit / Todoist / TickTick） ----------
 
 /** CSV 导入预设档位 key（Rust CsvImportPreset::from_key 同口径） */
-export type CsvImportPresetKey = "orbit" | "todoist" | "ticktick";
+export type CsvImportPresetKey = "orbit" | "todoist" | "ticktick" | "ics";
 
 /** 一条映射后的待导入行（预览载荷；Rust CsvImportRow 镜像） */
 export interface CsvImportRowView {
