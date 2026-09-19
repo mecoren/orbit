@@ -108,5 +108,34 @@ void main() {
       await _scrollTo(tester, find.text('暂无操作记录'));
       expect(find.text('历史'), findsOneWidget);
     });
+
+    testWidgets('满档 30 条：提示 + 显示更多展到 100 后提示消失', (tester) async {
+      final t1 = await tester.runAsync(seededTask);
+      // 直灌内存库补足 38 条（3 seeded + 35 注入，createdAt 早于全部 seeded）
+      await tester.runAsync(() async {
+        for (var i = 0; i < 35; i++) {
+          bridge.store.activityLog[10000 + i] = {
+            'id': 10000 + i,
+            'task_id': t1!.id,
+            'task_title': t1.title,
+            'action': 'create',
+            'detail': '{}',
+            'created_at': DateTime.now().millisecondsSinceEpoch - 10 * 86400000 - i,
+          };
+        }
+      });
+      await tester
+          .pumpWidget(_wrap(DetailScreen(taskId: t1!.id), bridge));
+      await _settle(tester);
+
+      await _scrollTo(tester, find.text('仅显示最近 30 条操作'));
+      expect(find.text('显示更多'), findsOneWidget);
+
+      await tester.tap(find.text('显示更多'));
+      await _settle(tester);
+      // 38 < 100：档位展满后截断提示整体消失
+      expect(find.text('仅显示最近 30 条操作'), findsNothing);
+      expect(find.text('显示更多'), findsNothing);
+    });
   });
 }

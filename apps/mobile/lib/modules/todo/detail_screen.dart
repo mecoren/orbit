@@ -2033,18 +2033,31 @@ class _AttachmentsSectionState extends ConsumerState<_AttachmentsSection> {
   }
 }
 
-// ── 十、历史（只读轨迹：taskActivityProvider 时间倒序 30 条）──
+// ── 十、历史（只读轨迹：taskActivityProvider 时间倒序；档位口径同桌面）──
 
-class _HistorySection extends ConsumerWidget {
+class _HistorySection extends ConsumerStatefulWidget {
   const _HistorySection({required this.taskId});
 
   final int taskId;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_HistorySection> createState() => _HistorySectionState();
+}
+
+class _HistorySectionState extends ConsumerState<_HistorySection> {
+  /// 取数档位：默认 30 条，满档提示「仅显示最近 N 条」并可展到
+  /// core clamp 上限 100（双端同口径，桌面见 ActivitySection）
+  static const _baseLimit = 30;
+  static const _maxLimit = 100;
+  int _limit = _baseLimit;
+
+  @override
+  Widget build(BuildContext context) {
     final colors = AppColors.ofContext(context);
     // 事件行文案由写入端 detail 快照驱动，格式化镜像桌面 activity-format.ts
-    final asyncRows = ref.watch(taskActivityProvider(taskId));
+    final asyncRows = ref.watch(
+      taskActivityProvider((taskId: widget.taskId, limit: _limit)),
+    );
 
     return SectionCard(
       title: '历史',
@@ -2092,6 +2105,31 @@ class _HistorySection extends ConsumerWidget {
                           ),
                         ],
                       ),
+                    ),
+                  if (rows.length >= _limit)
+                    Row(
+                      children: [
+                        Text(
+                          '仅显示最近 $_limit 条操作',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: colors.secondaryText,
+                          ),
+                        ),
+                        if (_limit < _maxLimit)
+                          TextButton(
+                            onPressed: () => setState(() => _limit = _maxLimit),
+                            style: TextButton.styleFrom(
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 8),
+                              minimumSize: Size.zero,
+                              tapTargetSize:
+                                  MaterialTapTargetSize.shrinkWrap,
+                            ),
+                            child: const Text('显示更多',
+                                style: TextStyle(fontSize: 12)),
+                          ),
+                      ],
                     ),
                 ],
               ),

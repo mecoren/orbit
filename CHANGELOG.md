@@ -109,6 +109,12 @@
   family 缓存，时间倒序 30 条 + 空态）；行文案格式化镜像桌面 `activity-format.ts`
   成 `logic/activity_format.dart`（三代 detail 回退同口径，纯函数单测双端各一套）；
   mock 桥同口径实现并 seeded 三代 detail 造态行供 widget 测试与预览。
+- **历史满档截断提示与显示更多展档（双端）**：历史区块固定取最近 30 条，老任务早期
+  轨迹此前静默不可见。满档时显「仅显示最近 30 条操作」+「显示更多」按钮，一次展到
+  core clamp 收口的上限 100（展到 100 仍满档只提示、不再展），诚实化口径同任务列表
+  命中上限条幅；桌面 queryKey 带档位、切任务以 `key` 重挂载复位展开态，移动端
+  `taskActivityProvider` 改 `(taskId, limit)` record family（前缀失效映射不受影响），
+  e2e 与 widget 双端各加一条满档用例。
 
 ### 性能与内存
 

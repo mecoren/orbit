@@ -208,7 +208,7 @@ export function TaskDetailDrawer({ projects }: TaskDetailDrawerProps) {
                 />
                 <CommentsSection taskId={t.id} comments={t.comments} onChanged={refetchDetail} />
                 <AttachmentsSection taskId={t.id} />
-                <ActivitySection taskId={t.id} />
+                <ActivitySection key={t.id} taskId={t.id} />
               </div>
             </div>
           </>
@@ -1996,10 +1996,16 @@ function AttachmentsSection({ taskId }: { taskId: number }) {
 // 行文案格式化在 shared/activity-format.ts（纯函数共置测试）
 // ============================================================================
 
+/** 历史取数档位：默认 30 条，命中上限时提示并可展到 core clamp 收口的 100 */
+const ACTIVITY_LIMIT = 30;
+const ACTIVITY_LIMIT_MAX = 100;
+
+/** taskId 切换时以 key 重挂载复位档位（切任务后不残留上一任务的展开态） */
 function ActivitySection({ taskId }: { taskId: number }) {
+  const [limit, setLimit] = useState(ACTIVITY_LIMIT);
   const { data: rows = [] } = useQuery({
-    queryKey: ["task-activity", taskId],
-    queryFn: () => taskActivityList(taskId, 30),
+    queryKey: ["task-activity", taskId, limit],
+    queryFn: () => taskActivityList(taskId, limit),
     staleTime: 30_000,
   });
 
@@ -2018,6 +2024,22 @@ function ActivitySection({ taskId }: { taskId: number }) {
         ))}
         {rows.length === 0 && (
           <p className="text-[12px] text-muted-foreground">暂无操作记录。</p>
+        )}
+        {/* 命中上限提示（口径同 task-panel A5 条幅的诚实化先例）：满档时
+            明确「被截断」，30 档给展入口；展到 100 仍满档只提示不再展 */}
+        {rows.length >= limit && (
+          <div className="flex items-center gap-1.5 pt-0.5 text-[12px] text-muted-foreground">
+            仅显示最近 {limit} 条操作
+            {limit < ACTIVITY_LIMIT_MAX && (
+              <button
+                type="button"
+                className="cursor-pointer text-primary hover:underline"
+                onClick={() => setLimit(ACTIVITY_LIMIT_MAX)}
+              >
+                显示更多
+              </button>
+            )}
+          </div>
         )}
       </div>
     </SectionBlock>

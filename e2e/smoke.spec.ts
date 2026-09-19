@@ -535,6 +535,36 @@ test("附件：详情抽屉区块渲染 + 列表/移除链路（mock 命令面�
   expect(remaining).toBe(0);
 });
 
+test("历史命中上限提示：满 30 条显「仅显示最近 30 条」，显示更多展到 100 后消失", async ({ page }) => {
+  await page.getByRole("button", { name: "未完成任务：既有任务-今天截止" }).click();
+  const drawer = page.getByRole("dialog");
+  await expect(drawer).toBeVisible();
+
+  // 直灌 34 条轨迹（> 默认档 30、< 上限档 100——展档后提示应整体消失）
+  await page.evaluate(() => {
+    const m = (window as any).__orbitMock;
+    const t = m.db.tasks.find((x: any) => x.title === "既有任务-今天截止");
+    for (let i = 0; i < 34; i++) {
+      m.db.activityLog.push({
+        id: m.db.seq++,
+        task_id: t.id,
+        task_title: t.title,
+        action: "update",
+        detail: JSON.stringify({ fields: ["priority"] }),
+        created_at: Date.now() - i * 60_000,
+      });
+    }
+    m.emitDbChange();
+  });
+
+  // 历史区块在抽屉底部，Playwright 断言/点击自动滚入
+  await expect(page.getByText("仅显示最近 30 条操作")).toBeVisible({ timeout: 5_000 });
+  await page.getByRole("button", { name: "显示更多" }).click();
+  // 34 < 100：展档取全后截断提示整体消失
+  await expect(page.getByText("仅显示最近 30 条操作")).toHaveCount(0, { timeout: 5_000 });
+  await expect(page.getByRole("button", { name: "显示更多" })).toHaveCount(0);
+});
+
 test("保存的筛选器：创建 → 侧栏分组 → 点击过滤 → 删除（#35）", async ({ page }) => {
   // 经 mock 直改内存库（真实链路 = 弹层名称/条件 JSON → saved_filter_create 同构）
   await page.evaluate(() => {
