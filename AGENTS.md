@@ -150,6 +150,7 @@ pnpm bump:check           # 只校验一致性（零写入，CI/本地通用）
 - 时间运算在本地时区整数域做（day index = `num_days_from_ce() - 719_163`）；**不要**用 ordinal0+year*366 拼接（跨年边界不单调，曾致 366 格错位）。
 - 单元测试写对应 crate 内 `#[cfg(test)] mod tests` + 纯函数独立 `mod xxx_fn_tests`；内存库 `sqlite::memory:` + `migrate!` 建 fixture。
 - FRB：改桥接 API 后必须跑 codegen + `cargo fmt --all` 再提交（CI 门禁校验生成物一致性）；codegen 会顺带同步 rust 源注释到 dart 产物。
+- FRB 生成物不只看 `pub` 函数面：`api/<domain>.rs` 里**增删/改名任何函数（含私有 fn）**都会改写 dart 产物首行那句「ignored because they are not marked as `pub`」注释清单，漏重生成即门禁红（F24 删桥层私有 `now_ms` 未重生成踩坑）。判据：跑完 codegen 后 `git diff apps/mobile/lib/src/rust crates/orbit-flutter/src/frb_generated.rs` 必须为空；收尾**只 add 生成物路径**——`cargo fmt --all` 会顺带重排 orbit-core 若干既有非 rustfmt-clean 文件（噪音 diff，不属于本批改动）。
 
 ## 桌面前端约定
 
