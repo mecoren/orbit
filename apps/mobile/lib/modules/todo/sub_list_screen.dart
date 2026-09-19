@@ -1,4 +1,6 @@
-﻿import 'package:flutter/material.dart';
+﻿import 'dart:async';
+
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:go_router/go_router.dart';
@@ -16,11 +18,19 @@ import '../../shared/widgets/glass_fab.dart';
 import '../../shared/widgets/liquid_glass_title_bar.dart';
 import '../../shared/widgets/more_actions_sheet.dart';
 import '../../shared/widgets/scroll_offset_listenable.dart';
+import '../../shared/widgets/select_bottom_sheet.dart';
 import '../../shared/widgets/wait_toast.dart';
+import '../../services/local_prefs.dart';
 import 'form_bottom_sheet.dart';
-import 'logic/template_apply.dart';
+import 'kanban_view.dart';
+import 'logic/batch_actions.dart';
 import 'logic/task_logic.dart';
+import 'logic/template_apply.dart';
+import 'logic/undo_stack.dart';
+import 'logic/view_mode.dart';
 import 'providers/todo_providers.dart';
+import 'providers/undo_provider.dart';
+import 'table_view.dart';
 
 /// 任务子列表 /todo/tasks（docs/05 §4.2 + 移动端任务书）
 ///
@@ -66,10 +76,13 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
   // 长按拖拽把手重排 + midpoint 落库）
   TaskSortKey _sortKey = TaskSortKey.manual;
 
-  // 隐藏已完成（Logbook 治理）：与桌面同默认开；会话内存态（与 _sortKey
-  // 同模式先例——视图态不跨页持久，退出即回默认）。done 视图下不参与
-  // 过滤（完成集入口），开关图标同步置灰
-  bool _hideDone = true;
+  // 隐藏已完成（Logbook 治理）：与桌面同默认开；本机偏好持久化
+  //（LocalPrefs，键值同桌面 localStorage `todo_hide_done`，退出重进保持档位）。
+  // done 视图下不参与过滤（完成集入口），开关图标同步置灰
+  bool _hideDone = LocalPrefs.getBool(_hideDoneKey, fallback: true);
+
+  /// 隐藏已完成持久化键（与桌面 constants.ts LS_HIDE_DONE 同值）
+  static const _hideDoneKey = 'todo_hide_done';
 
   static const _sortChoices = {
     TaskSortKey.manual: '拖拽顺序',
@@ -79,11 +92,313 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
     TaskSortKey.created: '创建时间',
   };
 
+  /// 优先级下限档位（对齐桌面 task-panel 的优先级筛选下拉；null = 不限）
+  static const _priorityChoices = <int, String>{
+    1: '低及以上',
+    2: '中及以上',
+    3: '高及以上',
+    4: '紧急及以上',
+    5: '仅立即处理',
+  };
+
+  // 视图模式与看板分组（本机偏好持久化，键名对齐桌面 localStorage）
+  TaskViewMode _viewMode = loadViewMode();
+  KanbanGroupBy _kanbanGroupBy = loadKanbanGroupBy();
+
+  // 列表内附加过滤（对齐桌面工具栏三枚筛选；会话态不持久化——语义是
+  // "临时收窄当前视图"，持久化会让用户下次进入看到莫名变少的列表）
+  TaskListFilters _filters = TaskListFilters.empty;
+
+  // 多选选中集（会话态，依附当前筛选结果；见 undo_provider 注释说明为何
+  // 刻意不做全局 Provider）。非空即选择模式。
+  final Set<int> _selected = {};
+
+  /// 批量动作进行中（防重复触发；批量期间串行写库）
+  bool _batchBusy = false;
+
   @override
   void dispose() {
     _reorderScrollController.dispose();
     _listScrollController.dispose();
     super.dispose();
+  }
+
+  /// 视图模式抽屉（视图三档 + 看板分组两段式同屉分区，避免嵌套弹层）
+  void _showViewSheet() {
+    final colors = AppColors.ofContext(context);
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: colors.popup,
+      shape: bottomSheetTopShape,
+      builder: (sheetContext) => SafeArea(
+        top: false,
+        child: ListView(
+          shrinkWrap: true,
+          padding: EdgeInsets.zero,
+          children: [
+            _sheetSectionTitle(sheetContext, '视图模式'),
+            for (final m in TaskViewMode.values)
+              _sheetRow(
+                sheetContext,
+                icon: m.icon,
+                label: m.label,
+                selected: m == _viewMode,
+                onTap: () {
+                  Navigator.of(sheetContext).pop();
+                  _setViewMode(m);
+                },
+              ),
+            if (_viewMode == TaskViewMode.kanban) ...[
+              Divider(
+                height: AppDimens.space12,
+                color: colors.divider.withValues(alpha: 0.3),
+              ),
+              _sheetSectionTitle(sheetContext, '看板分组'),
+              for (final g in KanbanGroupBy.values)
+                _sheetRow(
+                  sheetContext,
+                  icon: g == KanbanGroupBy.project
+                      ? Icons.folder_outlined
+                      : Icons.flag_outlined,
+                  label: g.label,
+                  selected: g == _kanbanGroupBy,
+                  onTap: () {
+                    Navigator.of(sheetContext).pop();
+                    _setKanbanGroupBy(g);
+                  },
+                ),
+            ],
+            SizedBox(height: AppDimens.gestureInsetFallback / 2),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _setViewMode(TaskViewMode mode) {
+    if (!mounted) return;
+    setState(() => _viewMode = mode);
+    unawaited(LocalPrefs.setString(viewModePrefsKey, mode.name));
+  }
+
+  void _setKanbanGroupBy(KanbanGroupBy by) {
+    if (!mounted) return;
+    setState(() => _kanbanGroupBy = by);
+    unawaited(LocalPrefs.setString(kanbanGroupByPrefsKey, by.name));
+  }
+
+  /// 列表内过滤抽屉（状态 / 优先级下限 / 标签三档，chip 即点即生效）
+  ///
+  /// 单屉三段而非「主屉→子屉」两段：三个维度可组合，多开一层会让用户
+  /// 看不到已选项之间的联动；chip 行高满足热区且一屏容纳。
+  void _showFilterSheet() {
+    final colors = AppColors.ofContext(context);
+    final labels = ref.read(todoLabelsProvider).value ?? const <TodoLabel>[];
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: colors.popup,
+      shape: bottomSheetTopShape,
+      builder: (sheetContext) => StatefulBuilder(
+        builder: (sheetContext, setSheetState) => SafeArea(
+          top: false,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.of(sheetContext).size.height * 0.7,
+            ),
+            child: ListView(
+              shrinkWrap: true,
+              padding: EdgeInsets.zero,
+              children: [
+                _sheetSectionTitle(sheetContext, '状态'),
+                _chipRow([
+                  _filterChip('全部', _filters.status == null, () {
+                    setSheetState(() {});
+                    _setFilters(_filters.copyWith(status: null));
+                  }),
+                  for (final s in const ['pending', 'doing', 'done'])
+                    _filterChip(statusLabel(s), _filters.status == s, () {
+                      setSheetState(() {});
+                      _setFilters(_filters.copyWith(status: s));
+                    }),
+                ]),
+                _sheetSectionTitle(sheetContext, '优先级下限'),
+                _chipRow([
+                  _filterChip('全部', _filters.priorityMin == null, () {
+                    setSheetState(() {});
+                    _setFilters(_filters.copyWith(priorityMin: null));
+                  }),
+                  for (final e in _priorityChoices.entries)
+                    _filterChip(e.value, _filters.priorityMin == e.key, () {
+                      setSheetState(() {});
+                      _setFilters(_filters.copyWith(priorityMin: e.key));
+                    }),
+                ]),
+                _sheetSectionTitle(sheetContext, '标签'),
+                if (labels.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: AppDimens.space16),
+                    child: Text(
+                      '还没有标签可筛选',
+                      style:
+                          TextStyle(fontSize: 12, color: colors.secondaryText),
+                    ),
+                  )
+                else
+                  _chipRow([
+                    _filterChip('全部', _filters.labelId == null, () {
+                      setSheetState(() {});
+                      _setFilters(_filters.copyWith(labelId: null));
+                    }),
+                    for (final l in labels)
+                      _filterChip(
+                        l.title,
+                        _filters.labelId == l.id,
+                        () {
+                          setSheetState(() {});
+                          _setFilters(_filters.copyWith(labelId: l.id));
+                        },
+                        dotHex: l.hexColor,
+                      ),
+                  ]),
+                if (!_filters.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(
+                      left: AppDimens.space16,
+                      right: AppDimens.space16,
+                      top: AppDimens.space12,
+                    ),
+                    child: SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton(
+                        onPressed: () {
+                          setSheetState(() {});
+                          _setFilters(TaskListFilters.empty);
+                        },
+                        child: const Text('清除全部筛选'),
+                      ),
+                    ),
+                  ),
+                SizedBox(height: AppDimens.gestureInsetFallback / 2),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _setFilters(TaskListFilters next) {
+    if (!mounted) return;
+    setState(() => _filters = next);
+  }
+
+  Widget _sheetSectionTitle(BuildContext ctx, String title) {
+    final colors = AppColors.ofContext(ctx);
+    return Padding(
+      padding: const EdgeInsets.only(
+        left: AppDimens.space16,
+        right: AppDimens.space16,
+        top: AppDimens.space16,
+        bottom: AppDimens.space8,
+      ),
+      child: Text(
+        title,
+        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: colors.titleText),
+      ),
+    );
+  }
+
+  Widget _sheetRow(
+    BuildContext ctx, {
+    required IconData icon,
+    required String label,
+    required bool selected,
+    required VoidCallback onTap,
+  }) {
+    final colors = AppColors.ofContext(ctx);
+    return InkWell(
+      onTap: onTap,
+      child: SizedBox(
+        height: AppDimens.touchTarget,
+        child: Row(
+          children: [
+            const SizedBox(width: AppDimens.space16),
+            Icon(icon, size: AppDimens.iconSizeMd, color: colors.bodyText),
+            const SizedBox(width: AppDimens.space12),
+            Expanded(
+              child: Text(
+                label,
+                style: TextStyle(fontSize: 15, color: colors.bodyText),
+              ),
+            ),
+            if (selected)
+              Icon(Icons.check_rounded,
+                  size: AppDimens.iconSizeMd, color: colors.accent),
+            const SizedBox(width: AppDimens.space16),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _chipRow(List<Widget> chips) => Padding(
+        padding: const EdgeInsets.symmetric(horizontal: AppDimens.space16),
+        child: Wrap(
+          spacing: AppDimens.space8,
+          runSpacing: AppDimens.space8,
+          children: chips,
+        ),
+      );
+
+  Widget _filterChip(String label, bool selected, VoidCallback onTap,
+      {String? dotHex}) {
+    final colors = AppColors.ofContext(context);
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppDimens.space12,
+          vertical: AppDimens.space8,
+        ),
+        decoration: BoxDecoration(
+          color: selected
+              ? OrbitAccents.themeAccent.withValues(alpha: 0.16)
+              : Colors.transparent,
+          borderRadius: AppShapes.small,
+          border: Border.all(
+            color: selected ? OrbitAccents.themeAccent : colors.divider,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (dotHex != null) ...[
+              Container(
+                width: AppDimens.colorDotSize - 4,
+                height: AppDimens.colorDotSize - 4,
+                decoration: BoxDecoration(
+                  color: hexToColor(dotHex),
+                  shape: BoxShape.circle,
+                ),
+              ),
+              const SizedBox(width: AppDimens.space6),
+            ],
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 13,
+                color: selected
+                    ? OrbitAccents.themeAccent
+                    : colors.bodyText,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   /// 长按 FAB：拉模板列表弹选择，选中后 payload 预填新建表单
@@ -201,9 +516,215 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
     try {
       await ref.read(orbitBridgeProvider).todoTaskDelete(task.id);
       ref.invalidate(todoTasksProvider);
+      // 删除可撤销（桌面 use-undoable-delete 同语义）：撤销 = 从回收站恢复
+      _offerUndo(UndoEntry(
+        label: '已删除 1 个任务',
+        restoreTaskIds: [task.id],
+        createdAt: DateTime.now().millisecondsSinceEpoch,
+      ));
     } catch (_) {
       WaitToast.destructive('删除失败');
     }
+  }
+
+  // ── 多选与批量操作（对齐桌面 batch-actions 的动作集裁剪版）──
+
+  bool get _selectionMode => _selected.isNotEmpty;
+
+  /// 长按菜单「多选」进入选择态：列表档专用（看板/表格的卡片热区与
+  /// 分组语义下多选会与横滑/列内滚动抢手势，桌面看板同样无多选）
+  void _enterSelection(TodoTask task) {
+    setState(() => _selected.add(task.id));
+  }
+
+  void _toggleSelect(int taskId) {
+    setState(() {
+      if (!_selected.remove(taskId)) _selected.add(taskId);
+    });
+  }
+
+  void _exitSelection() {
+    setState(_selected.clear);
+  }
+
+  /// 选中集（按当前缓存快照取，保证批量 patch 的「原值」与落库一致）
+  List<TodoTask> _selectedTasks() {
+    final tasks = ref.read(todoTasksProvider).value ?? const <TodoTask>[];
+    return tasks.where((t) => _selected.contains(t.id)).toList();
+  }
+
+  /// 批量动作统一入口：串行写库 + 单次收敛刷新 + 可撤销浮层
+  ///
+  /// 性能口径（AGENTS 内存/性能纪律）：批量期间**不逐条 invalidate**，
+  /// 全部完成后失效一次并单次 refetch——N 条写各自刷一遍列表在万任务下
+  /// 会触发 N 次全量重建。
+  Future<void> _runBatch(
+    BatchAction action, {
+    int? priority,
+    int? dueMs,
+    int? projectId,
+    TodoLabel? label,
+  }) async {
+    if (_selected.isEmpty || _batchBusy) return;
+    final targets = _selectedTasks();
+    if (targets.isEmpty) return;
+
+    if (action == BatchAction.delete) {
+      final destructive = AppColors.ofContext(context).destructive;
+      final ok = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: Text('删除 ${targets.length} 个任务？'),
+          content: const Text('删除后移入回收站，可在回收站中恢复。'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('取消'),
+            ),
+            FilledButton(
+              style: FilledButton.styleFrom(backgroundColor: destructive),
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text('删除'),
+            ),
+          ],
+        ),
+      );
+      if (ok != true || !mounted) return;
+    }
+
+    setState(() => _batchBusy = true);
+    final bridge = ref.read(orbitBridgeProvider);
+    final patches = <UndoTaskPatch>[];
+    final linkIds = <int>[];
+    var changed = 0;
+    var failures = 0;
+
+    try {
+      for (final task in targets) {
+        try {
+          switch (action) {
+            case BatchAction.delete:
+              await bridge.todoTaskDelete(task.id);
+              changed++;
+            case BatchAction.toggleDone:
+              final done = batchToggleDoneTarget(targets);
+              final patch = batchDonePatch(task, done: done);
+              if (patch == null) break;
+              // 完成走 complete（重复任务单事务推进）；取消走普通 patch
+              if (done) {
+                await bridge.todoTaskComplete(task.id);
+              } else {
+                await bridge.todoTaskUpdate(task.id, encodePatch(patch));
+              }
+              // 反向补丁覆盖 done/done_at/status 三键：只回滚 done 会留下
+              // 「未完成但 status=done」的不一致行
+              patches.add(inversePatchOf(task, patch));
+              changed++;
+            case BatchAction.priority:
+            case BatchAction.reschedule:
+            case BatchAction.moveProject:
+              final patch = batchFieldPatch(
+                task,
+                action: action,
+                priority: priority,
+                dueMs: dueMs,
+                projectId: projectId,
+              );
+              if (patch == null) break;
+              await bridge.todoTaskUpdate(task.id, encodePatch(patch));
+              patches.add(inversePatchOf(task, patch));
+              changed++;
+            case BatchAction.addLabel:
+              if (label == null) break;
+              final link = await bridge.todoTaskLabelCreate(
+                TodoTaskLabelCreateInput(taskId: task.id, labelId: label.id),
+              );
+              linkIds.add(link.taskLabelId);
+              changed++;
+          }
+        } catch (_) {
+          failures++;
+        }
+      }
+
+      ref.invalidate(todoTasksProvider);
+      ref.invalidate(taskDetailProvider);
+      if (action == BatchAction.addLabel) {
+        ref.invalidate(taskLabelsProjectionProvider);
+      }
+
+      if (!mounted) return;
+      _exitSelection();
+      if (changed == 0) {
+        WaitToast.info(failures > 0 ? '批量操作失败' : '选中项无需变更');
+        return;
+      }
+      _offerUndo(UndoEntry(
+        label: failures > 0
+            ? '${batchUndoLabel(action, changed)}（$failures 条失败）'
+            : batchUndoLabel(action, changed),
+        patches: patches,
+        restoreTaskIds:
+            action == BatchAction.delete ? targets.map((t) => t.id).toList() : const [],
+        detachLinkIds: linkIds,
+        createdAt: DateTime.now().millisecondsSinceEpoch,
+      ));
+    } finally {
+      if (mounted) setState(() => _batchBusy = false);
+    }
+  }
+
+  /// 把反向补丁入栈并挂出「撤销」浮层（5 秒窗口由 WaitToast 停留控制）
+  void _offerUndo(UndoEntry entry) {
+    ref.read(undoStackProvider).push(entry);
+    WaitToast.global(
+      entry.label,
+      variant: WaitToastVariant.warning,
+      description: '已移入回收站的任务可在回收站恢复',
+      actionLabel: '撤销',
+      onAction: _undoLast,
+    );
+  }
+
+  /// 撤销最近一条：逐条应用反向补丁（串行）→ 单次收敛刷新
+  Future<void> _undoLast() async {
+    final entry = ref.read(undoStackProvider).pop();
+    if (entry == null) return;
+    final bridge = ref.read(orbitBridgeProvider);
+    var ok = 0;
+    try {
+      for (final p in entry.patches) {
+        try {
+          await bridge.todoTaskUpdate(p.taskId, encodePatch(p.patch));
+          ok++;
+        } catch (_) {
+          /* 单条失败不阻断其余回滚 */
+        }
+      }
+      for (final id in entry.restoreTaskIds) {
+        try {
+          await bridge.trashTaskRestore(id);
+          ok++;
+        } catch (_) {
+          /* 已被彻底删除则跳过 */
+        }
+      }
+      for (final linkId in entry.detachLinkIds) {
+        try {
+          await bridge.todoTaskLabelDelete(linkId);
+          ok++;
+        } catch (_) {
+          /* 关联已不存在则跳过 */
+        }
+      }
+    } finally {
+      ref.invalidate(todoTasksProvider);
+      ref.invalidate(taskDetailProvider);
+      ref.invalidate(taskLabelsProjectionProvider);
+      ref.invalidate(trashTasksProvider);
+    }
+    if (!mounted) return;
+    WaitToast.success(ok > 0 ? '已撤销（$ok 项）' : '撤销失败');
   }
 
   // ── 长按拖拽重排（#37；仅 manual 档）──
@@ -244,6 +765,14 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
       context,
       title: task.title,
       actions: [
+        // 多选入口（仅有列表档长按手势的语境；看板/表格的卡片长按留给
+        // 单条操作，与桌面看板无多选同口径）
+        if (_viewMode == TaskViewMode.list)
+          MoreActionItem(
+            icon: Icons.checklist_rounded,
+            label: '多选',
+            onTap: () => _enterSelection(task),
+          ),
         MoreActionItem(
           icon: Icons.edit_rounded,
           label: '编辑',
@@ -276,6 +805,97 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
     );
   }
 
+  // ── 批量动作的参数抽屉（选择类交互统一底部抽屉） ──
+
+  Future<void> _batchPickPriority() async {
+    await showSelectBottomSheet<int>(
+      context,
+      title: '批量设置优先级',
+      current: null,
+      items: [
+        for (var p = 0; p <= 5; p++)
+          SelectItem(
+            value: p,
+            label: priorityLabel(p),
+            colorDot: hexToColor(priorityColorHex(p)),
+          ),
+      ],
+      onSelect: (p) => _runBatch(BatchAction.priority, priority: p),
+    );
+  }
+
+  Future<void> _batchPickReschedule() async {
+    await showSelectBottomSheet<BatchReschedule>(
+      context,
+      title: '批量改期',
+      current: null,
+      items: [
+        for (final c in BatchReschedule.values)
+          SelectItem(value: c, label: c.label),
+      ],
+      onSelect: (c) => _runBatch(BatchAction.reschedule,
+          dueMs: batchRescheduleMs(c)),
+    );
+  }
+
+  Future<void> _batchPickProject() async {
+    final projects = ref.read(todoProjectsProvider).value ?? const <TodoProject>[];
+    await showSelectBottomSheet<int?>(
+      context,
+      title: '移动到项目',
+      current: null,
+      items: [
+        const SelectItem<int?>(value: null, label: '未分组'),
+        for (final p in projects)
+          SelectItem<int?>(
+            value: p.id,
+            label: p.title,
+            colorDot: hexToColor(p.hexColor),
+          ),
+      ],
+      onSelect: (id) => _runBatch(BatchAction.moveProject, projectId: id),
+    );
+  }
+
+  Future<void> _batchPickLabel() async {
+    final labels = ref.read(todoLabelsProvider).value ?? const <TodoLabel>[];
+    if (labels.isEmpty) {
+      WaitToast.info('还没有标签，先在任务详情里创建一个');
+      return;
+    }
+    await showSelectBottomSheet<TodoLabel>(
+      context,
+      title: '批量加标签',
+      current: null,
+      items: [
+        for (final l in labels)
+          SelectItem(
+            value: l,
+            label: l.title,
+            colorDot: hexToColor(l.hexColor),
+          ),
+      ],
+      onSelect: (l) => _runBatch(BatchAction.addLabel, label: l),
+    );
+  }
+
+  void _onBatchAction(BatchAction action) {
+    switch (action) {
+      case BatchAction.toggleDone:
+        _runBatch(BatchAction.toggleDone);
+      case BatchAction.priority:
+        _batchPickPriority();
+      case BatchAction.reschedule:
+        _batchPickReschedule();
+      case BatchAction.moveProject:
+        _batchPickProject();
+      case BatchAction.addLabel:
+        _batchPickLabel();
+      case BatchAction.delete:
+        _runBatch(BatchAction.delete);
+    }
+  }
+
   // #37 复制任务：克隆后 toast + 刷新
   Future<void> _duplicateTask(TodoTask task) async {
     try {
@@ -295,10 +915,21 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
     // 隐藏开关不参与（完成集入口）。其余视图照旧平铺 + 逾期置顶
     final isLogbook = widget.query.quickView == QuickViewKey.done;
 
-    final visible = isLogbook
-        ? filterTasks(tasks, widget.query)
-        : sortTasks(
-            filterTasks(tasks, widget.query, hideDone: _hideDone), _sortKey);
+    // 标签投影（A4 只读聚合）：列表内标签筛选与看板/表格标签色点共用；
+    // 投影未就绪时回落空表（标签档不生效、色点不渲染，不阻塞列表）
+    final labelRows = ref.watch(taskLabelsProjectionProvider).value ??
+        const <TaskLabelsProjection>[];
+    final labelIdsByTask = indexLabelIdsByTask(labelRows);
+    final labelsByTask = {for (final r in labelRows) r.taskId: r.labels};
+
+    final visible = applyTaskListFilters(
+      isLogbook
+          ? filterTasks(tasks, widget.query)
+          : sortTasks(
+              filterTasks(tasks, widget.query, hideDone: _hideDone), _sortKey),
+      _filters,
+      labelIdsByTask: labelIdsByTask,
+    );
     final projectById = {for (final p in projects) p.id: p};
 
     // 逾期置顶分组（性能批次 UX 优化，与桌面同口径）：逾期行渲染在列表
@@ -315,11 +946,19 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
       TaskFilterInput(ungrouped: true) => '未分组',
       _ => widget.query.quickView?.label ?? '任务',
     };
-    final emptyMessage = emptyMessageFor(widget.query);
+    // 筛选生效时给出更贴切的空态文案（否则用户会以为是数据丢了）
+    final emptyMessage = (!_filters.isEmpty && tasks.isNotEmpty)
+        ? '没有符合筛选条件的任务'
+        : emptyMessageFor(widget.query);
     final colors = AppColors.ofContext(context);
     // 长按拖拽（#37）：仅 manual 档（拖拽顺序档）启用重排；其余档
-    // 顺序由排序键决定，拖了也会被覆盖（与桌面 sortable 同口径）
-    final reorderable = _sortKey == TaskSortKey.manual;
+    // 顺序由排序键决定，拖了也会被覆盖（与桌面 sortable 同口径）。
+    // 选择态强制回落普通列表：拖拽把手与「点行切换选中」抢同一手势
+    final reorderable = _sortKey == TaskSortKey.manual && !_selectionMode;
+    // 看板/表格仅在非 Logbook 态生效：完成历史按日分组的语义在分列/表格
+    // 里会丢失（桌面同口径——done 档列表被 LogbookView 接管）
+    final showKanban = _viewMode == TaskViewMode.kanban && !isLogbook;
+    final showTable = _viewMode == TaskViewMode.table && !isLogbook;
 
     // 命中上限条幅（A5，桌面 task-panel 同口径）：单份缓存拉取被截断时
     // 明确告知列表不完整；条幅常驻标题栏下沿，列表顶部让出同高，
@@ -337,6 +976,16 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
     Widget buildTile(TodoTask task, {required Widget? dragHandle}) {
       final project =
           task.projectId != null ? projectById[task.projectId] : null;
+      // 选择态换用选区行：不复用 TodoTaskTile 是因为它的勾选框语义是
+      // 「完成」，选择态下同一个圆圈的勾选含义会变成「选中」，语义冲突
+      if (_selectionMode) {
+        return _SelectionRow(
+          task: task,
+          selected: _selected.contains(task.id),
+          projectTitle: project?.title,
+          onTap: () => _toggleSelect(task.id),
+        );
+      }
       return TodoTaskTile(
         task: task,
         projectTitle: project?.title,
@@ -357,7 +1006,35 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
             ),
             child: EmptyState(message: emptyMessage),
           )
-        : isLogbook
+        : showKanban
+            ? KanbanBoard(
+                columns:
+                    groupTasksForKanban(visible, _kanbanGroupBy, projects),
+                padding: listPadding,
+                onToggleDone: _toggleDone,
+                onOpen: (t) => context.push('/todo/${t.id}'),
+                onLongPress: _showTaskActions,
+                // 按状态分组时列头不代表项目，卡片补一行项目名
+                projectTitleOf: _kanbanGroupBy == KanbanGroupBy.status
+                    ? (t) => t.projectId == null
+                        ? null
+                        : projectById[t.projectId]?.title
+                    : null,
+                labelDotsByTask: labelsByTask,
+              )
+            : showTable
+                ? TaskTableView(
+                    tasks: visible,
+                    padding: listPadding,
+                    onToggleDone: _toggleDone,
+                    onOpen: (t) => context.push('/todo/${t.id}'),
+                    onLongPress: _showTaskActions,
+                    projectTitleOf: (t) => t.projectId == null
+                        ? null
+                        : projectById[t.projectId]?.title,
+                    labelDotsByTask: labelsByTask,
+                  )
+                : isLogbook
             ? _LogbookList(
                 groups: doneGroups,
                 padding: listPadding,
@@ -480,18 +1157,77 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
             left: 0,
             right: 0,
             child: LiquidGlassTitleBar(
-              title: title,
+              // 选择态下标题栏让位给「已选 N 项」，与桌面多选头部同口径
+              title: _selectionMode ? '已选 ${_selected.length} 项' : title,
               // 跟随当前档位的活跃列表控制器（#37 双控制器分体后按档取用）
               scrollOffsetListenable: ScrollOffsetListenable(
                 reorderable ? _reorderScrollController : _listScrollController,
               ),
-              actions: [
+              actions: _selectionMode
+                  ? [
+                      TextButton(
+                        onPressed: _batchBusy
+                            ? null
+                            : () => setState(() {
+                                  _selected
+                                    ..clear()
+                                    ..addAll(visible.map((t) => t.id));
+                                }),
+                        child: const Text('全选'),
+                      ),
+                      IconButton(
+                        onPressed: _batchBusy ? null : _exitSelection,
+                        tooltip: '退出多选',
+                        icon: Icon(
+                          Icons.close_rounded,
+                          size: AppDimens.iconSizeMd,
+                          color: colors.titleText,
+                        ),
+                      ),
+                    ]
+                  : [
+                // 视图模式（列表/看板/表格；看板态下同屉追加分组切换）。
+                // 选择类交互统一底部抽屉（AGENTS.md 移动端约定），非 PopupMenu
+                IconButton(
+                  onPressed: _showViewSheet,
+                  tooltip: '视图模式',
+                  icon: Icon(
+                    _viewMode.icon,
+                    size: AppDimens.iconSizeMd,
+                    color: colors.titleText,
+                  ),
+                ),
+                // 列表内过滤（状态/优先级下限/标签三档；已启用档数出角标）
+                IconButton(
+                  onPressed: _showFilterSheet,
+                  tooltip: '筛选',
+                  icon: _filters.isEmpty
+                      ? Icon(
+                          Icons.filter_list_rounded,
+                          size: AppDimens.iconSizeMd,
+                          color: colors.titleText,
+                        )
+                      : Badge(
+                          label: Text('${_filters.activeCount}'),
+                          backgroundColor: OrbitAccents.todoAccent,
+                          child: Icon(
+                            Icons.filter_list_rounded,
+                            size: AppDimens.iconSizeMd,
+                            color: colors.titleText,
+                          ),
+                        ),
+                ),
                 // 隐藏已完成开关（Logbook 治理，默认开；done 视图置灰——
-                // 完成集入口开关无意义）。图标态：隐藏=实心可见性，显示=划线
+                // 完成集入口开关无意义）。图标态：隐藏=实心可见性，显示=划线。
+                // 切换即落本机偏好（LocalPrefs），下次进入沿用上次档位
                 IconButton(
                   onPressed: isLogbook
                       ? null
-                      : () => setState(() => _hideDone = !_hideDone),
+                      : () {
+                          final next = !_hideDone;
+                          setState(() => _hideDone = next);
+                          unawaited(LocalPrefs.setBool(_hideDoneKey, next));
+                        },
                   tooltip: _hideDone ? '显示已完成任务' : '隐藏已完成任务',
                   icon: Icon(
                     _hideDone
@@ -503,14 +1239,22 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
                         : colors.titleText,
                   ),
                 ),
-                // 排序档位菜单（#26；manual = position 拖拽顺序）
-                PopupMenuButton<TaskSortKey>(
-                  initialValue: _sortKey,
-                  onSelected: (k) => setState(() => _sortKey = k),
-                  itemBuilder: (_) => [
-                    for (final e in _sortChoices.entries)
-                      PopupMenuItem(value: e.key, child: Text(e.value)),
-                  ],
+                // 排序档位抽屉（#26；manual = position 拖拽顺序）——
+                // 选择类交互统一底部抽屉（AGENTS.md 移动端约定），不用 PopupMenu
+                IconButton(
+                  onPressed: () => showSelectBottomSheet<TaskSortKey>(
+                    context,
+                    title: '排序方式',
+                    items: [
+                      for (final e in _sortChoices.entries)
+                        SelectItem(value: e.key, label: e.value),
+                    ],
+                    current: _sortKey,
+                    onSelect: (k) {
+                      if (mounted) setState(() => _sortKey = k);
+                    },
+                  ),
+                  tooltip: '排序方式',
                   icon: Icon(
                     Icons.sort_rounded,
                     size: AppDimens.iconSizeMd,
@@ -521,22 +1265,108 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
             ),
           ),
           // FAB：右下，新建携 defaultProjectId=当前 projectId；
-          // 快捷视图入口携 view（#39 视图内新建自动带标记）
-          Positioned(
-            right: AppDimens.space16,
-            bottom: AppDimens.gestureInsetFallback + AppDimens.space16,
-            child: GlassFab(
-              accentColor: OrbitAccents.themeAccent,
-              onPressed: () => showTodoFormSheet(
-                context,
-                defaultProjectId: widget.query.projectId,
-                quickView: widget.query.quickView,
+          // 快捷视图入口携 view（#39 视图内新建自动带标记）。
+          // 选择态下让位给批量工具条（两者同占右下角，重叠会误触）
+          if (!_selectionMode)
+            Positioned(
+              right: AppDimens.space16,
+              bottom: AppDimens.gestureInsetFallback + AppDimens.space16,
+              child: GlassFab(
+                accentColor: OrbitAccents.themeAccent,
+                onPressed: () => showTodoFormSheet(
+                  context,
+                  defaultProjectId: widget.query.projectId,
+                  quickView: widget.query.quickView,
+                ),
+                // 长按 = 从模板新建（有模板才有此入口；选择后 payload 预填表单）
+                onLongPress: _pickTemplateAndCreate,
               ),
-              // 长按 = 从模板新建（有模板才有此入口；选择后 payload 预填表单）
-              onLongPress: _pickTemplateAndCreate,
             ),
-          ),
+          if (_selectionMode) _batchToolbar(colors),
         ],
+      ),
+    );
+  }
+
+  /// 批量动作工具条（底部浮动，从下沿上滑进入）
+  ///
+  /// 六个一级动作横排 + 横向滚动：一屏放不下时横滑而非折行，避免工具条
+  /// 高度随动作数增加挤压列表可视区。
+  Widget _batchToolbar(AppColorSet colors) {
+    return Positioned(
+      left: AppDimens.space12,
+      right: AppDimens.space12,
+      bottom: AppDimens.gestureInsetFallback + AppDimens.space8,
+      child: Material(
+        color: Colors.transparent,
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: AppDimens.space8),
+          decoration: BoxDecoration(
+            color: colors.popup,
+            borderRadius: AppShapes.medium,
+            border: Border.all(color: colors.divider.withValues(alpha: 0.3)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.16),
+                blurRadius: AppDimens.blurStatic / 3,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: AppDimens.space8),
+                  child: Row(
+                    children: [
+                      for (final a in BatchAction.values) ...[
+                        _batchButton(a),
+                        const SizedBox(width: AppDimens.space4),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+              if (_batchBusy)
+                const Padding(
+                  padding: EdgeInsets.only(right: AppDimens.space12),
+                  child: SizedBox(
+                    width: AppDimens.iconSizeSm,
+                    height: AppDimens.iconSizeSm,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: OrbitAccents.themeAccent,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _batchButton(BatchAction action) {
+    final colors = AppColors.ofContext(context);
+    final destructive = action == BatchAction.delete;
+    final tint = destructive ? colors.destructive : colors.bodyText;
+    return InkWell(
+      borderRadius: AppShapes.small,
+      onTap: _batchBusy ? null : () => _onBatchAction(action),
+      child: SizedBox(
+        width: 64,
+        height: AppDimens.touchTarget,
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(action.icon, size: AppDimens.iconSizeMd, color: tint),
+            const SizedBox(height: AppDimens.space2),
+            Text(action.label, style: TextStyle(fontSize: 11, color: tint)),
+          ],
+        ),
       ),
     );
   }
@@ -860,5 +1690,102 @@ class _TruncationBanner extends StatelessWidget {
       b.write(s[i]);
     }
     return b.toString();
+  }
+}
+
+/// 多选态任务行（行高与列表档 56 对齐，整行可点即切换选中）
+///
+/// 刻意不复用 [TodoTaskTile]：后者的圆形勾选框语义是「完成」，选择态下
+/// 同一个控件的勾选含义会变成「选中」——用独立行把两种语义彻底分开，
+/// 也顺带屏蔽了行内侧滑/勾选在批量语境下的误触。
+class _SelectionRow extends StatelessWidget {
+  const _SelectionRow({
+    required this.task,
+    required this.selected,
+    required this.onTap,
+    this.projectTitle,
+  });
+
+  final TodoTask task;
+  final bool selected;
+  final VoidCallback onTap;
+  final String? projectTitle;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = AppColors.ofContext(context);
+    final overdue = isOverdue(task);
+
+    return InkWell(
+      onTap: onTap,
+      child: Container(
+        height: AppDimens.listItemHeight,
+        padding: const EdgeInsets.symmetric(horizontal: AppDimens.space16),
+        decoration: BoxDecoration(
+          color: selected
+              ? OrbitAccents.todoAccent.withValues(alpha: 0.10)
+              : Colors.transparent,
+          border: Border(
+            bottom: BorderSide(color: colors.divider.withValues(alpha: 0.25)),
+          ),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              selected
+                  ? Icons.check_circle_rounded
+                  : Icons.radio_button_unchecked_rounded,
+              size: AppDimens.iconSizeLg,
+              color: selected ? OrbitAccents.todoAccent : colors.secondaryText,
+            ),
+            const SizedBox(width: AppDimens.space12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    task.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 15,
+                      color: colors.bodyText,
+                      decoration:
+                          task.isDone ? TextDecoration.lineThrough : null,
+                    ),
+                  ),
+                  if (projectTitle != null || task.dueDate != null) ...[
+                    const SizedBox(height: AppDimens.space2),
+                    Text(
+                      [
+                        ?projectTitle,
+                        if (task.dueDate != null) formatYmd(task.dueDate!),
+                      ].join(' · '),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: overdue
+                            ? colors.destructive
+                            : colors.secondaryText,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            Container(
+              width: AppDimens.colorDotSize / 2,
+              height: AppDimens.colorDotSize,
+              decoration: BoxDecoration(
+                color: hexToColor(priorityColorHex(task.priority)),
+                borderRadius: AppShapes.small,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }

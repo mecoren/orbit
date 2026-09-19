@@ -27,6 +27,9 @@ enum DbCacheTarget {
   /// 标签列表
   labels,
 
+  /// 任务→标签投影（列表页标签筛选与标签色点）
+  taskLabelProjection,
+
   /// 保存的筛选器
   savedFilters,
 
@@ -58,7 +61,11 @@ List<DbCacheTarget> planTableInvalidation(String table) => switch (table) {
           DbCacheTarget.labels,
           DbCacheTarget.taskDetail,
         ],
-      'todo_task_labels' ||
+      // 标签关联改动同时影响详情聚合与列表投影（列表标签筛选/色点）
+      'todo_task_labels' => const [
+          DbCacheTarget.taskDetail,
+          DbCacheTarget.taskLabelProjection,
+        ],
       'todo_task_relations' ||
       'todo_subtasks' ||
       'todo_reminders' =>
@@ -102,6 +109,8 @@ bool invalidateByTable(WidgetRef ref, String table) {
         ref.invalidate(todoArchivedProjectsProvider);
       case DbCacheTarget.labels:
         ref.invalidate(todoLabelsProvider);
+      case DbCacheTarget.taskLabelProjection:
+        ref.invalidate(taskLabelsProjectionProvider);
       case DbCacheTarget.savedFilters:
         ref.invalidate(savedFiltersProvider);
       case DbCacheTarget.taskActivity:

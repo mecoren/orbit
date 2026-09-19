@@ -30,6 +30,16 @@ final todoLabelsProvider = FutureProvider<List<TodoLabel>>((ref) async {
   return bridge.todoLabelList(const ListFilter(pageSize: 1000));
 });
 
+/// 任务→标签投影（A4 只读聚合；列表页标签筛选与卡片/表格标签色点消费）
+///
+/// 一次往返替代「列表 N 次 todoTaskLabelList」，投影未就绪时调用方回落
+/// 无标签点渲染（不阻塞列表）。
+final taskLabelsProjectionProvider =
+    FutureProvider<List<TaskLabelsProjection>>((ref) async {
+  final bridge = ref.watch(orbitBridgeProvider);
+  return bridge.taskLabelsProjection();
+});
+
 /// 任务列表单次拉取上限（A5/B6，与桌面 `TASK_LIST_PAGE_SIZE` 同口径）：
 /// 单份缓存与列表页「不完整」条幅共用——结果集达到它即意味着还有未取到的
 /// 任务，条幅按此判定而非另开 count 接口。
@@ -150,6 +160,7 @@ void invalidateBusinessCaches(WidgetRef ref) {
   ref.invalidate(todoProjectsProvider);
   ref.invalidate(todoArchivedProjectsProvider);
   ref.invalidate(todoLabelsProvider);
+  ref.invalidate(taskLabelsProjectionProvider);
   ref.invalidate(todoTasksProvider);
   ref.invalidate(taskDetailProvider);
   ref.invalidate(taskActivityProvider);

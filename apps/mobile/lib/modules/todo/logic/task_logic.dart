@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../data/api/dto.dart';
+import 'view_mode.dart';
 
 /// 待办共享业务纯函数（无 UI / 无 IO，可直接单测）
 ///
@@ -554,4 +555,146 @@ QuickViewCreateDefaults quickViewCreateDefaults(
     default:
       return const QuickViewCreateDefaults();
   }
+}
+
+// ---------- 列表内过滤（对齐桌面 task-panel 工具栏三枚筛选） ----------
+
+/// copyWith 的「未传参」哨兵：区分「不修改」与「显式置 null（清除该档）」
+const Object _keepFilterValue = Object();
+
+/// 列表内附加过滤档（null = 该维度不限制）
+///
+/// 与桌面 `task-panel.tsx` 工具栏三枚筛选同口径：
+/// - [status]：'pending' | 'doing' | 'done'；
+/// - [priorityMin]：优先级下限（>= 该值，桌面为下拉档位）；
+/// - [labelId]：命中该标签（需要任务→标签投影辅助判据）。
+///
+/// 与 `filterTasks` 正交：先按入口/快捷视图筛，再叠加本档。
+class TaskListFilters {
+  final String? status;
+  final int? priorityMin;
+  final int? labelId;
+
+  const TaskListFilters({this.status, this.priorityMin, this.labelId});
+
+  static const empty = TaskListFilters();
+
+  bool get isEmpty => status == null && priorityMin == null && labelId == null;
+
+  /// 已启用的过滤维度数（标题栏角标用）
+  int get activeCount =>
+      (status != null ? 1 : 0) +
+      (priorityMin != null ? 1 : 0) +
+      (labelId != null ? 1 : 0);
+
+  TaskListFilters copyWith({
+    Object? status = _keepFilterValue,
+    Object? priorityMin = _keepFilterValue,
+    Object? labelId = _keepFilterValue,
+  }) =>
+      TaskListFilters(
+        status:
+            identical(status, _keepFilterValue) ? this.status : status as String?,
+        priorityMin: identical(priorityMin, _keepFilterValue)
+            ? this.priorityMin
+            : priorityMin as int?,
+        labelId:
+            identical(labelId, _keepFilterValue) ? this.labelId : labelId as int?,
+      );
+}
+
+/// 应用列表内过滤（纯函数；[labelIdsByTask] 为空表时标签档不生效——投影未就绪）
+List<TodoTask> applyTaskListFilters(
+  List<TodoTask> tasks,
+  TaskListFilters filters, {
+  Map<int, Set<int>> labelIdsByTask = const {},
+}) {
+  if (filters.isEmpty) return tasks;
+  Iterable<TodoTask> list = tasks;
+  final status = filters.status;
+  if (status != null) {
+    list = list.where((t) => t.status == status);
+  }
+  final priorityMin = filters.priorityMin;
+  if (priorityMin != null) {
+    list = list.where((t) => t.priority >= priorityMin);
+  }
+  final labelId = filters.labelId;
+  if (labelId != null) {
+    list = list.where((t) => labelIdsByTask[t.id]?.contains(labelId) ?? false);
+  }
+  return list.toList();
+}
+
+/// 任务 → 标签 id 集索引（由桥投影构造；同一任务多标签走并集，不做交集）
+Map<int, Set<int>> indexLabelIdsByTask(List<TaskLabelsProjection> rows) => {
+      for (final r in rows) r.taskId: {for (final l in r.labels) l.id},
+    };
+
+// ---------- 看板分列 ----------
+
+/// 看板单列（按项目/按状态两种维度共用同一渲染单元）
+class KanbanColumn {
+  /// 稳定键（项目列 = 'p{id}' / 'none'；状态列 = 'pending' 等）
+  final String key;
+  final String title;
+
+  /// 列头色点（项目列取项目色；状态列取状态语义色；未分组取中性灰）
+  final String colorHex;
+  final List<TodoTask> tasks;
+
+  const KanbanColumn({
+    required this.key,
+    required this.title,
+    required this.colorHex,
+    required this.tasks,
+  });
+}
+
+/// 看板分列（纯函数）：
+/// - 按项目：有任务的项目各一列 + 「未分组」列（无任务的项目不出现，
+///   与桌面 kanban-view 同口径——空列在移动端横滑语境下是纯噪音）；
+/// - 按状态：固定 pending → doing → done 三列（含空列，状态列本身即语义）。
+List<KanbanColumn> groupTasksForKanban(
+  List<TodoTask> tasks,
+  KanbanGroupBy by,
+  List<TodoProject> projects,
+) {
+  if (by == KanbanGroupBy.status) {
+    const order = ['pending', 'doing', 'done'];
+    return [
+      for (final s in order)
+        KanbanColumn(
+          key: s,
+          title: statusLabel(s),
+          colorHex: statusColorHex(s),
+          tasks: tasks.where((t) => t.status == s).toList(),
+        ),
+    ];
+  }
+
+  final byProject = <int?, List<TodoTask>>{};
+  for (final t in tasks) {
+    byProject.putIfAbsent(t.projectId, () => []).add(t);
+  }
+  final columns = <KanbanColumn>[
+    for (final p in projects)
+      if (byProject.containsKey(p.id))
+        KanbanColumn(
+          key: 'p${p.id}',
+          title: p.title,
+          colorHex: p.hexColor,
+          tasks: byProject[p.id]!,
+        ),
+  ];
+  final ungrouped = byProject[null];
+  if (ungrouped != null) {
+    columns.add(KanbanColumn(
+      key: 'none',
+      title: '未分组',
+      colorHex: '#6B7280',
+      tasks: ungrouped,
+    ));
+  }
+  return columns;
 }

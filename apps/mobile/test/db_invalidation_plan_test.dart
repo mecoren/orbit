@@ -31,9 +31,8 @@ void main() {
           [DbCacheTarget.taskActivity]);
     });
 
-    test('子表只影响详情聚合', () {
+    test('纯详情子表只影响详情聚合', () {
       for (final table in [
-        'todo_task_labels',
         'todo_task_relations',
         'todo_subtasks',
         'todo_reminders',
@@ -41,6 +40,13 @@ void main() {
         expect(planTableInvalidation(table), [DbCacheTarget.taskDetail],
             reason: table);
       }
+    });
+
+    test('todo_task_labels 联动详情与列表标签投影', () {
+      // 列表页支持按标签筛选并把标签色点画进看板/表格卡片，
+      // 关联行增删必须同时刷新投影，否则筛选结果与色点会读到旧集合
+      expect(planTableInvalidation('todo_task_labels'),
+          [DbCacheTarget.taskDetail, DbCacheTarget.taskLabelProjection]);
     });
 
     test('todo_comments 联动详情与全局搜索', () {
