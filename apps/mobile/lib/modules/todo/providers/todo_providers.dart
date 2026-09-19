@@ -56,6 +56,14 @@ final taskDetailProvider = FutureProvider.family<TodoTaskDetail, int>(
   (ref, taskId) => ref.watch(orbitBridgeProvider).todoTaskGetDetail(taskId),
 );
 
+/// 单任务活动历史（详情页「历史」区块；family 参数 = 任务 id，
+/// 时间倒序 LIMIT 30 由 core 收口。不进 invalidateBusinessCaches：
+/// 全量任务列表事件会先于轨迹 INSERT 到达，靠它刷新会读到旧行，
+/// 失效口只挂 boot_gate 的 todo_activity_log 事件）
+final taskActivityProvider = FutureProvider.family<List<ActivityLogRow>, int>(
+  (ref, taskId) => ref.watch(orbitBridgeProvider).taskActivityList(taskId, limit: 30),
+);
+
 /// due_date → 本地 YYYY-MM-DD 任务聚合（日历视图月历圆点/按日分组共用）。
 ///
 /// 从 todoTasksProvider 派生而非在日历 build 里每次重算：点击选中日等

@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:path_provider/path_provider.dart';
 
 import '../../src/rust/api/dto.dart' as gen;
+import '../../src/rust/api/activity_log.dart' as gen_activity;
 import '../../src/rust/api/csv_import.dart' as gen_import;
 import '../../src/rust/api/asset.dart' as gen_asset;
 import '../../src/rust/api/saved_filter.dart' as gen_sf;
@@ -567,6 +568,14 @@ class RustOrbitBridge implements OrbitBridge {
   Future<void> taskAttachmentRemove(int linkId) =>
       gen_asset.taskAttachmentRemove(linkId: linkId);
 
+  // ── 任务活动日志（历史区块只读轨迹）──
+
+  @override
+  Future<List<ActivityLogRow>> taskActivityList(int taskId, {int? limit}) async {
+    final rows = await gen_activity.taskActivityList(taskId: taskId, limit: limit);
+    return rows.map(_mapActivityLog).toList();
+  }
+
   // ── 数据库维护（性能批次）──
 
   @override
@@ -743,6 +752,15 @@ class RustOrbitBridge implements OrbitBridge {
         mimeType: r.mimeType,
         sizeBytes: r.sizeBytes.toInt(),
         isLocalCached: r.isLocalCached.toInt(),
+      );
+
+  ActivityLogRow _mapActivityLog(gen.ActivityLogRow r) => ActivityLogRow(
+        id: r.id.toInt(),
+        taskId: r.taskId?.toInt(),
+        taskTitle: r.taskTitle,
+        action: r.action,
+        detail: r.detail,
+        createdAt: r.createdAt.toInt(),
       );
 
   // ── 同步加密 ──

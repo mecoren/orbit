@@ -820,6 +820,22 @@ class MockOrbitBridge implements OrbitBridge {
     });
   }
 
+  // ── 任务活动日志（历史区块；排序/截断口径同桌面 ipc-mock task_activity_list）──
+
+  @override
+  Future<List<ActivityLogRow>> taskActivityList(int taskId, {int? limit}) {
+    return _delay(() {
+      final rows = store.activityLog.values
+          .where((a) => a['task_id'] == taskId)
+          .map(ActivityLogRow.fromJson)
+          .toList()
+        ..sort((a, b) => a.createdAt != b.createdAt
+            ? b.createdAt.compareTo(a.createdAt)
+            : b.id.compareTo(a.id));
+      return rows.take(limit ?? 30).toList();
+    });
+  }
+
   // ── 数据库维护（性能批次；内存 mock 库无碎片，各步返回零值）──
 
   @override

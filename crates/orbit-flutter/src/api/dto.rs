@@ -992,3 +992,31 @@ impl From<orbit_core::api::sync_conflict_api::SyncConflict> for SyncConflict {
         }
     }
 }
+
+// ---------- 任务活动日志（历史区块批次；镜像 core ActivityLogRow 查询视图）----------
+/// 活动日志行（todo_activity_log 为本地轨迹表，不进同步白名单）
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct ActivityLogRow {
+    pub id: i64,
+    pub task_id: Option<i64>,
+    /// 任务标题快照（任务删除后仍可读）
+    pub task_title: String,
+    pub action: String,
+    /// 附加 JSON：{"fields"/"changes"/"label"/"target"} 四代形状（格式化在 Dart 侧）
+    pub detail: String,
+    /// 记录时间（ms）
+    pub created_at: i64,
+}
+
+impl From<orbit_core::api::activity_log_api::ActivityLogRow> for ActivityLogRow {
+    fn from(r: orbit_core::api::activity_log_api::ActivityLogRow) -> Self {
+        Self {
+            id: r.id,
+            task_id: r.task_id,
+            task_title: r.task_title,
+            action: r.action,
+            detail: r.detail,
+            created_at: r.created_at,
+        }
+    }
+}

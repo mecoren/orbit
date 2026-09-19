@@ -79,7 +79,8 @@
   碰巧聚焦/重挂载才更新。根因两层：`log_activity` 按旧口径不 emit 事件，而业务写路径
   的 `todo_tasks` 事件**先于轨迹行 INSERT** 发出（前端搭车重拉会竞态读到旧列表）；
   现改为轨迹落库后自发 `todo_activity_log` Insert 事件，桌面失效映射按该表精确刷
-  `task-activity` 键，移动端无历史消费面对该事件跳过（不白跑全量重拉）。
+  `task-activity` 键，移动端 BootGate 同口径精确失效 `taskActivityProvider`
+  （均不走全量重拉；移动端消费面见下方「移动端历史区块」）。
   时间戳格式由 `MM-dd HH:mm` 改为完整 `yyyy-MM-dd HH:mm`（跨年轨迹可分辨）。
 - **历史行可读快照**：update 轨迹 detail 追加前后值变更集 `changes`（日期→本地
   `yyyy-MM-dd` 串、项目 id→写入端解析的项目名、长文本 60 字截断；枚举/数值留原值
@@ -103,6 +104,11 @@
   `create(from=repeat, parent_id)` 使自身历史可溯源——此前推进只在数据库里
   发生，两边历史都看不出滚动这件事；幂等再完成不重复记，口径同子任务提升
   双埋点。
+- **移动端详情页「历史」区块**：FRB 桥暴露 `task_activity_list`（只读查询，不 emit
+  事件、不进同步白名单），详情页尾部新增「十、历史」区块（`taskActivityProvider`
+  family 缓存，时间倒序 30 条 + 空态）；行文案格式化镜像桌面 `activity-format.ts`
+  成 `logic/activity_format.dart`（三代 detail 回退同口径，纯函数单测双端各一套）；
+  mock 桥同口径实现并 seeded 三代 detail 造态行供 widget 测试与预览。
 
 ### 性能与内存
 

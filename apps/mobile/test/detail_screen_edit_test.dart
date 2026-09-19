@@ -108,6 +108,13 @@ void main() {
         (await tester.runAsync(() => remindersOf(5)))!.length;
 
     await _scrollTo(tester, find.text('添加提醒'));
+    // 历史区块让页面变长，scrollUntilVisible 可能停在目标半露出边缘处，
+    // tap 落空——ensureVisible 完整滚入后再反向拖 100px，避免按钮恰好
+    // 贴顶被玻璃标题栏叠层挡住命中
+    await tester.ensureVisible(find.text('添加提醒'));
+    await tester.pumpAndSettle();
+    await tester.drag(find.byType(Scrollable).first, const Offset(0, 100));
+    await tester.pumpAndSettle();
     expect(find.text('添加提醒'), findsOneWidget);
 
     await tester.tap(find.text('添加提醒'));

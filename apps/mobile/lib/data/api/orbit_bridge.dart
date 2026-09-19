@@ -324,6 +324,11 @@ abstract class OrbitBridge {
   /// 卸下附件（软删关联，孤儿二进制由 GC 清）
   Future<void> taskAttachmentRemove(int linkId);
 
+  // ── 任务活动日志（详情页「历史」区块：只读轨迹）──
+
+  /// 单任务活动历史（时间倒序；limit 缺省 30、上限 100 由 core 收口）
+  Future<List<ActivityLogRow>> taskActivityList(int taskId, {int? limit});
+
   // ── 数据库维护（性能批次：WAL checkpoint / 附件 GC / 查询统计 / VACUUM）──
 
   /// 一键数据库维护：回收 WAL 日志与磁盘碎片、清理无引用附件、更新查询统计。

@@ -1120,3 +1120,36 @@ class WidgetTodoItem {
     required this.done,
   });
 }
+
+/// 任务活动日志行（FRB ActivityLogRow 镜像；todo_activity_log 本地轨迹表，
+/// 不随云同步——各端各自记录过程态）
+class ActivityLogRow {
+  final int id;
+
+  /// 任务行被 purge 后可为 null（taskTitle 留快照仍可展示）
+  final int? taskId;
+  final String taskTitle;
+  final String action;
+
+  /// 附加 JSON：{"fields"/"changes"/"label"/"target"} 四代形状（格式化在 logic/activity_format.dart）
+  final String detail;
+  final int createdAt;
+
+  const ActivityLogRow({
+    required this.id,
+    this.taskId,
+    required this.taskTitle,
+    required this.action,
+    required this.detail,
+    required this.createdAt,
+  });
+
+  factory ActivityLogRow.fromJson(Map<String, dynamic> j) => ActivityLogRow(
+        id: j['id'] as int,
+        taskId: j['task_id'] as int?,
+        taskTitle: j['task_title'] as String,
+        action: j['action'] as String,
+        detail: j['detail'] as String,
+        createdAt: j['created_at'] as int,
+      );
+}

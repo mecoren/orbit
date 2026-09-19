@@ -236,11 +236,16 @@ class _BootGateState extends ConsumerState<BootGate>
     // 本地写操作 → 全量失效业务缓存（列表/详情/配置）+ 转发调度器重排
     // 闹钟（dbChanges 是 FRB 单播流：全 App 唯一订阅在此，二次 listen
     // 会被 Rust 侧 FORWARDER_STARTED 闸静默丢弃——见 events.rs 注释）
-    // todo_activity_log 轨迹行只喂桌面详情抽屉历史区块，移动端无消费面，
-    // 跳过以免每次业务写都多跑一轮万行级重拉
+    // todo_activity_log 轨迹行只喂详情页「历史」区块：单独失效
+    // taskActivityProvider 即返回，跳过全量链以免每次写都多跑万行级重拉
+    //（不能并进 invalidateBusinessCaches——业务 todo_tasks 事件先于轨迹
+    // INSERT 到达，历史靠那条链刷新会读到旧行）
     _dbChangesSub = bridge.dbChanges.listen((e) {
       if (!mounted) return;
-      if (e.table == 'todo_activity_log') return;
+      if (e.table == 'todo_activity_log') {
+        ref.invalidate(taskActivityProvider);
+        return;
+      }
       invalidateBusinessCaches(ref);
       _scheduler?.onDbChange();
     });

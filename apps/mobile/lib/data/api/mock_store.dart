@@ -14,6 +14,8 @@ class MockStore {
   final relations = <int, Map<String, dynamic>>{};
   final reminders = <int, Map<String, dynamic>>{};
   final attachments = <int, Map<String, dynamic>>{}; // linkId -> 附件关联行
+  // 任务活动轨迹行（todo_activity_log 同形：本地轨迹，不随同步；历史区块消费）
+  final activityLog = <int, Map<String, dynamic>>{};
   final savedFilters = <TodoSavedFilter>[]; // #35 保存的筛选器
   final templates = <TodoTemplate>[]; // 任务模板（竞品矩阵高价值缺口）
   // 冲突败方副本（03 §八）：JSON Map 形状 = Rust serde 产物，处置状态就地改写
@@ -221,6 +223,33 @@ class MockStore {
       'version': 1,
     };
     reminders[r['id'] as int] = r;
+
+    // 活动轨迹造态（历史区块）：覆盖三代 detail 形状（空/changes+fields/target）
+    void activity(String action, String detail, int agoMs) {
+      final a = {
+        ...newEntity('act'),
+        'task_id': t1['id'],
+        'task_title': t1['title'],
+        'action': action,
+        'detail': detail,
+        'created_at': now() - agoMs,
+      };
+      activityLog[a['id'] as int] = a;
+    }
+
+    activity('create', '{}', 4 * day);
+    activity(
+      'update',
+      jsonEncode({
+        'fields': ['priority'],
+        'changes': [
+          {'field': 'priority', 'from': 0, 'to': 4}
+        ],
+      }),
+      2 * day,
+    );
+    activity(
+        'comment_add', jsonEncode({'target': '评审会定在周四下午两点。'}), 3600000);
 
     // 冲突败方副本造态（03 §八）：两条覆盖「本地被覆盖 / 远端被丢弃」两条主路径
     conflicts.addAll([

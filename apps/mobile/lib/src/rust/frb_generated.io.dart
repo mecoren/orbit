@@ -3,6 +3,7 @@
 
 // ignore_for_file: unused_import, unused_element, unnecessary_import, duplicate_ignore, invalid_use_of_internal_member, annotate_overrides, non_constant_identifier_names, curly_braces_in_flow_control_structures, prefer_const_literals_to_create_immutables, unused_field
 
+import 'api/activity_log.dart';
 import 'api/asset.dart';
 import 'api/auth.dart';
 import 'api/biometric.dart';
@@ -52,6 +53,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   String dco_decode_String(dynamic raw);
+
+  @protected
+  ActivityLogRow dco_decode_activity_log_row(dynamic raw);
 
   @protected
   BiometricSecretBundle dco_decode_biometric_secret_bundle(dynamic raw);
@@ -190,6 +194,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<String> dco_decode_list_String(dynamic raw);
+
+  @protected
+  List<ActivityLogRow> dco_decode_list_activity_log_row(dynamic raw);
 
   @protected
   List<CommentSearchHit> dco_decode_list_comment_search_hit(dynamic raw);
@@ -463,6 +470,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   String sse_decode_String(SseDeserializer deserializer);
 
   @protected
+  ActivityLogRow sse_decode_activity_log_row(SseDeserializer deserializer);
+
+  @protected
   BiometricSecretBundle sse_decode_biometric_secret_bundle(
     SseDeserializer deserializer,
   );
@@ -621,6 +631,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<String> sse_decode_list_String(SseDeserializer deserializer);
+
+  @protected
+  List<ActivityLogRow> sse_decode_list_activity_log_row(
+    SseDeserializer deserializer,
+  );
 
   @protected
   List<CommentSearchHit> sse_decode_list_comment_search_hit(
@@ -955,6 +970,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_String(String self, SseSerializer serializer);
 
   @protected
+  void sse_encode_activity_log_row(
+    ActivityLogRow self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_biometric_secret_bundle(
     BiometricSecretBundle self,
     SseSerializer serializer,
@@ -1145,6 +1166,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_list_String(List<String> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_activity_log_row(
+    List<ActivityLogRow> self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_list_comment_search_hit(

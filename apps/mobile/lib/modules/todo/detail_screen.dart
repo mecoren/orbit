@@ -23,6 +23,7 @@ import '../../shared/widgets/wait_date_picker.dart';
 import '../../shared/widgets/wait_toast.dart';
 import 'form_bottom_sheet.dart' show showTodoDatePicker, syncTaskReminder;
 // as rep：规避 Flutter widgets 自带 RepeatMode 类名冲突
+import 'logic/activity_format.dart';
 import 'logic/markdown_lite.dart';
 import 'logic/repeat_logic.dart' as rep;
 import 'logic/task_logic.dart';
@@ -31,7 +32,8 @@ import 'providers/todo_providers.dart';
 /// 详情全屏 /todo/:id（docs/05 §4.3 + 移动端任务书）
 ///
 /// 数据源 todoTaskGetDetail(id) 聚合（taskDetailProvider）。
-/// 八区块固定顺序：标题区 → 信息 → 描述 → 子任务 → 标签 → 提醒 → 关联 → 评论。
+/// 十区块固定顺序：标题区 → 信息 → 描述 → 子任务 → 标签 → 提醒 → 关联 →
+/// 评论 → 附件 → 历史（历史单独走 taskActivityProvider，不受详情刷新牵动）。
 /// 上半区更新走 patchTask 出口（缺省键=跳过语义），下半五区增删改后统一
 /// invalidate 详情与列表，禁局部合并。
 class DetailScreen extends ConsumerStatefulWidget {
@@ -162,7 +164,7 @@ class _ErrorView extends StatelessWidget {
   }
 }
 
-/// 详情主体：八区块滚动容器（区块间距 12、页面尾留白）
+/// 详情主体：十区块滚动容器（区块间距 12、页面尾留白）
 class _DetailView extends StatelessWidget {
   const _DetailView({
     super.key,
@@ -192,7 +194,7 @@ class _DetailView extends StatelessWidget {
         bottom: AppDimens.gestureInsetFallback + AppDimens.space32,
       ),
       children: [
-        // 八区块固定顺序（docs/05 §4.3）
+        // 十区块固定顺序（docs/05 §4.3）
         _TitleSection(detail: detail, onPatch: onPatch, onToggleDone: onToggleDone),
         const SizedBox(height: AppDimens.space12),
         _InfoSection(detail: detail, onPatch: onPatch),
@@ -222,6 +224,8 @@ class _DetailView extends StatelessWidget {
         _CommentsSection(detail: detail, onChanged: onRefresh),
         const SizedBox(height: AppDimens.space12),
         _AttachmentsSection(taskId: detail.id),
+        const SizedBox(height: AppDimens.space12),
+        _HistorySection(taskId: detail.id),
       ],
     );
   }
@@ -2025,6 +2029,73 @@ class _AttachmentsSectionState extends ConsumerState<_AttachmentsSection> {
                       ),
                   ],
                 ),
+    );
+  }
+}
+
+// ── 十、历史（只读轨迹：taskActivityProvider 时间倒序 30 条）──
+
+class _HistorySection extends ConsumerWidget {
+  const _HistorySection({required this.taskId});
+
+  final int taskId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final colors = AppColors.ofContext(context);
+    // 事件行文案由写入端 detail 快照驱动，格式化镜像桌面 activity-format.ts
+    final asyncRows = ref.watch(taskActivityProvider(taskId));
+
+    return SectionCard(
+      title: '历史',
+      child: asyncRows.when(
+        loading: () => const SizedBox(height: 16),
+        error: (_, _) => Text(
+          '历史加载失败',
+          style: TextStyle(fontSize: 13, color: colors.secondaryText),
+        ),
+        data: (rows) => rows.isEmpty
+            ? Text(
+                '暂无操作记录',
+                style: TextStyle(
+                  fontSize: 13,
+                  color: colors.secondaryText.withValues(alpha: 0.5),
+                ),
+              )
+            : Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  for (final r in rows)
+                    Padding(
+                      padding:
+                          const EdgeInsets.only(bottom: AppDimens.space8),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            formatDateTime(r.createdAt),
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontFamily: 'monospace',
+                              color: colors.secondaryText,
+                            ),
+                          ),
+                          const SizedBox(width: AppDimens.space8),
+                          Expanded(
+                            child: Text(
+                              describeActivity(r.action, r.detail),
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: colors.bodyText,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                ],
+              ),
+      ),
     );
   }
 }
