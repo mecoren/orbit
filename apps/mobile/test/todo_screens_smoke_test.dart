@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:orbit/data/api/mock_orbit_bridge.dart';
 import 'package:orbit/data/providers/bridge_provider.dart';
 import 'package:orbit/modules/todo/logic/task_logic.dart';
+import 'package:orbit/modules/todo/providers/todo_providers.dart';
 import 'package:orbit/modules/todo/sidebar_screen.dart';
 import 'package:orbit/modules/todo/sub_list_screen.dart';
 import 'package:orbit/shared/widgets/glass_fab.dart';
@@ -108,5 +109,48 @@ void main() {
     // 种子数据均带截止日期或不匹配……无日期视图含未分组两条，不应为空；
     // 此处断言标题正确即可（筛选语义由 task_logic 单测覆盖）
     expect(find.text('无日期'), findsOneWidget);
+  });
+
+  testWidgets('任务子列表：命中拉取上限出「不完整」条幅（A5）', (tester) async {
+    final bridge = MockOrbitBridge();
+    // 造满单份缓存上限（mock 不过滤 pageSize，返回全量——刚好 10000 条即命中）
+    final now = bridge.store.now();
+    while (bridge.store.tasks.length < taskListPageSize) {
+      final t = <String, dynamic>{
+        ...bridge.store.newEntity('f'),
+        'title': '压测任务 ${bridge.store.tasks.length}',
+        'description': null,
+        'project_id': null,
+        'priority': 0,
+        'status': 'pending',
+        'done': 0,
+        'done_at': null,
+        'due_date': null,
+        'start_date': null,
+        'repeat_after': 1,
+        'repeat_mode': 0,
+        'hex_color': '',
+        'percent_done': 0,
+        'position': bridge.store.tasks.length,
+        'is_favorite': 0,
+        'my_day_date': null,
+        'is_deleted': 0,
+        'created_at': now,
+        'updated_at': now,
+        'deleted_at': null,
+        'version': 1,
+      };
+      bridge.store.tasks[t['id'] as int] = t;
+    }
+
+    await tester.pumpWidget(_wrap(
+      const SubListScreen(
+        query: TaskFilterInput(quickView: QuickViewKey.all),
+      ),
+      bridge,
+    ));
+    await _settlePastMockLatency(tester);
+
+    expect(find.textContaining('当前列表不完整'), findsOneWidget);
   });
 }

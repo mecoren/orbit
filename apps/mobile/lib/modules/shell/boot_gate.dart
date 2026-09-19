@@ -16,14 +16,15 @@ import '../../services/share_receiver.dart';
 import '../todo/logic/badge_count.dart';
 import '../todo/providers/todo_providers.dart';
 import '../auth/unlock_page.dart';
+import 'db_invalidation.dart';
 
 /// 启动门控（对齐原 React 版 App.tsx 门控序列）
 ///
 /// - masterAuthHas == true → 展示 [UnlockPage]，解锁成功 dbInitEncrypted；
 /// - 否则 → dbInitPlaintext 直入；
 /// - ready 后渲染主路由内容（[BootGate.child]），并挂载桥层事件流监听：
-///   dbChanges 全量失效业务缓存；reminderDue 经 [NotificationService]
-///   呈现本地通知（无权限静默降级 warning toast）。
+///   dbChanges 按表精确失效（B7，未知表回退全量）；reminderDue 经
+///   [NotificationService] 呈现本地通知（无权限静默降级 warning toast）。
 ///   注：云同步结果经 cloudSyncNow 返回值直达（ADR 0003），无 sync-finished 流。
 ///   bootstrap 失败回落解锁页仅针对"已设密码需解锁"场景；
 ///   未设密码时初始化异常也回落解锁页属历史兜底，真实错误经日志暴露。
@@ -236,21 +237,23 @@ class _BootGateState extends ConsumerState<BootGate>
   void _subscribeStreams() {
     final bridge = ref.read(orbitBridgeProvider);
 
-    // 本地写操作 → 全量失效业务缓存（列表/详情/配置）+ 转发调度器重排
-    // 闹钟（dbChanges 是 FRB 单播流：全 App 唯一订阅在此，二次 listen
-    // 会被 Rust 侧 FORWARDER_STARTED 闸静默丢弃——见 events.rs 注释）
-    // todo_activity_log 轨迹行只喂详情页「历史」区块：单独失效
-    // taskActivityProvider 即返回，跳过全量链以免每次写都多跑万行级重拉
-    //（不能并进 invalidateBusinessCaches——业务 todo_tasks 事件先于轨迹
-    // INSERT 到达，历史靠那条链刷新会读到旧行）
+    // 本地写操作 → B7 表级精确失效（db_invalidation.dart 映射；未知表
+    // 回退全量），并按表转发派生刷新（dbChanges 是 FRB 单播流：全 App
+    // 唯一订阅在此，二次 listen 会被 Rust 侧 FORWARDER_STARTED 闸静默
+    // 丢弃——见 events.rs 注释）
     _dbChangesSub = bridge.dbChanges.listen((e) {
       if (!mounted) return;
-      if (e.table == 'todo_activity_log') {
-        ref.invalidate(taskActivityProvider);
-        return;
+      if (!invalidateByTable(ref, e.table)) {
+        invalidateBusinessCaches(ref);
       }
-      invalidateBusinessCaches(ref);
-      _scheduler?.onDbChange();
+      // 闹钟重排只受提醒行与任务完成态影响；其余表重排是纯重复工作量
+      if (affectsReminderSchedule(e.table)) {
+        _scheduler?.onDbChange();
+      }
+      // 小组件快照（#3）：读今日任务口径，只有任务表变化需重写
+      if (affectsTaskSnapshot(e.table)) {
+        _widget.refresh();
+      }
     });
 
     // B6 图标角标数据口：订阅单份任务缓存，每次换值（含失效重拉完成）即

@@ -143,15 +143,21 @@ final searchProvider = FutureProvider.family<GlobalSearchResult, String>(
   },
 );
 
-/// 全量失效业务缓存（dbChanges / syncFinished(pulled>0) 时调用）
+/// 全量失效业务缓存（**仅**未知表回退与 syncFinished(pulled>0) 时调用）：
+/// 本地 db-change 走 B7 表级精确失效（modules/shell/db_invalidation.dart），
+/// 不再整包全刷；云同步拉取合并的写入不产生 db-change 事件，仍需此全量口。
 void invalidateBusinessCaches(WidgetRef ref) {
   ref.invalidate(todoProjectsProvider);
+  ref.invalidate(todoArchivedProjectsProvider);
   ref.invalidate(todoLabelsProvider);
   ref.invalidate(todoTasksProvider);
   ref.invalidate(taskDetailProvider);
+  ref.invalidate(taskActivityProvider);
   ref.invalidate(syncConfigProvider);
   ref.invalidate(trashTasksProvider);
   ref.invalidate(statsProvider);
+  ref.invalidate(savedFiltersProvider);
+  ref.invalidate(searchProvider);
 }
 
 /// 保存的筛选器列表（#35）

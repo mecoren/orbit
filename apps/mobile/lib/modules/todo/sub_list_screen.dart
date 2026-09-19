@@ -321,10 +321,16 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
     // 顺序由排序键决定，拖了也会被覆盖（与桌面 sortable 同口径）
     final reorderable = _sortKey == TaskSortKey.manual;
 
+    // 命中上限条幅（A5，桌面 task-panel 同口径）：单份缓存拉取被截断时
+    // 明确告知列表不完整；条幅常驻标题栏下沿，列表顶部让出同高，
+    // 收窄范围后结果集低于上限即自动消失
+    final truncated = tasks.length >= taskListPageSize;
+    final topInset =
+        MediaQuery.of(context).padding.top + LiquidGlassTitleBar.rowHeight;
     final listPadding = EdgeInsets.only(
-      top: MediaQuery.of(context).padding.top +
-          LiquidGlassTitleBar.rowHeight +
-          AppDimens.space8,
+      top: topInset +
+          AppDimens.space8 +
+          (truncated ? _TruncationBanner.height : 0),
       bottom: AppDimens.gestureInsetFallback + AppDimens.space32,
     );
 
@@ -462,6 +468,13 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
       body: Stack(
         children: [
           Positioned.fill(child: list),
+          if (truncated)
+            Positioned(
+              top: topInset,
+              left: 0,
+              right: 0,
+              child: const _TruncationBanner(),
+            ),
           Positioned(
             top: 0,
             left: 0,
@@ -794,5 +807,58 @@ class _LogbookList extends StatelessWidget {
   static String _dayKeyOf(DateTime d) {
     String p2(int n) => n.toString().padLeft(2, '0');
     return '${d.year}-${p2(d.month)}-${p2(d.day)}';
+  }
+}
+
+/// 命中上限条幅（A5）：单份任务缓存命中 taskListPageSize 时列表不完整——
+/// 文案与桌面 task-panel 条幅同口径，收窄范围（搜索/项目/快捷视图）后
+/// 结果集低于上限即自动消失。固定高度（定值），列表顶部按其让位。
+class _TruncationBanner extends StatelessWidget {
+  const _TruncationBanner();
+
+  /// 条幅高度（固定值）：列表 padding 与 Positioned 共用，改这里即两处同步
+  static const height = 44.0;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = AppColors.ofContext(context);
+    return Container(
+      height: height,
+      color: colors.warning.withValues(alpha: 0.12),
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppDimens.space16,
+        vertical: AppDimens.space4,
+      ),
+      child: Row(
+        children: [
+          Icon(
+            Icons.warning_amber_rounded,
+            size: AppDimens.iconSizeSm,
+            color: colors.warning,
+          ),
+          const SizedBox(width: AppDimens.space4),
+          Expanded(
+            child: Text(
+              '任务数超过单次加载上限 ${_withThousands(taskListPageSize)} 条，'
+              '当前列表不完整——请用搜索、项目或快捷视图收窄范围',
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(fontSize: 12, color: colors.warning),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// 千分位（与桌面 toLocaleString("zh-CN") 同观感；仅用于上限常量展示）
+  static String _withThousands(int n) {
+    final s = n.toString();
+    final b = StringBuffer();
+    for (var i = 0; i < s.length; i++) {
+      if (i > 0 && (s.length - i) % 3 == 0) b.write(',');
+      b.write(s[i]);
+    }
+    return b.toString();
   }
 }
