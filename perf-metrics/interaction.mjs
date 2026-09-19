@@ -56,36 +56,76 @@ const R = {};
 // —— 指标1：首次列表渲染（种完到行可见）——
 R.rowsVisible = await page.evaluate(() => document.querySelectorAll('[role="button"][aria-label*="任务："]').length);
 
-// —— 指标2：勾选完成端到端 ×20（click→写→db-change→invalidate→React Query 重拉→重渲染）——
-const checkTimes = [];
+// —— 指标2：勾选完成 ×15（D1 三口径：paint 与落库分离 + 失效计数）——
+// 因果澄清（§0.2）：mock 写是同步栈内改内存数组，真机写在 Rust 线程；
+// 旧 checkDoneMs 轮询 mock 内存数组，量到的是「mock 全量失效重拉成本」
+// （约 250ms），不是真机 IPC/落库时间。故拆三口径：
+// - paintMs：click → 目标行 aria-label 翻为已完成/行被移除（MutationObserver，
+//   可见变化，不轮询内存数组）；
+// - dbDoneMs：click → mock 内存 done 落 1（写栈代理；真机上此口径由 Rust 侧量，
+//   mock 下它恒约 5ms——若它随 paint 一起“变好”即测量污染，见反判据）；
+// - invalidateCalls：click 前后 window.__orbitPerf.invalidateCalls 增量
+//  （DEV 计数器，events.ts/db-invalidation.ts；一窗合并后批量写应 N→1）。
+const checkPaint = [];
+const checkDb = [];
+const checkInv = [];
 for (let i = 0; i < 15; i++) {
-  // 完成口径 = DB done 落 1（写命令+失效+重拉链；React Query 连续写去抖下
-  // DOM 帧合并到最后一次——单轮探针已证 DB→DOM 同帧差 ~1ms，故以 dbAt 为准）
   const t = await page.evaluate(async () => {
     const rows = [...document.querySelectorAll('[role="button"][aria-label^="未完成任务"]')];
     const row = rows[0];
-    if (!row) return -1;
+    if (!row) return { code: -1 };
     const label = row.getAttribute('aria-label');
     const m = label.match(/未完成任务：(.+)$/);
-    if (!m) return -4;
+    if (!m) return { code: -4 };
     const task = window.__orbitMock.db.tasks.find(t2 => t2.title === m[1]);
-    if (!task) return -5;
+    if (!task) return { code: -5 };
     const btn = row.querySelector('button[aria-label="标记完成"]');
-    if (!btn) return -3;
+    if (!btn) return { code: -3 };
+    const perf = (window.__orbitPerf ??= {});
+    const inv0 = perf.invalidateCalls ?? 0;
+    const title = m[1];
     const t0 = performance.now();
+    // paint 探针：该行 aria-label 翻转或被移除即首帧可见变化
+    const paintP = new Promise((resolve) => {
+      const done = () => resolve(performance.now() - t0);
+      const ob = new MutationObserver(() => {
+        if (!row.isConnected) { ob.disconnect(); done(); return; }
+        const now = row.getAttribute('aria-label') ?? '';
+        if (!now.startsWith('未完成任务') && now.includes(title)) { ob.disconnect(); done(); }
+      });
+      ob.observe(row, { attributes: true, attributeFilter: ['aria-label'] });
+      // 行被过滤掉（移出未完成视图）也算 paint：监听父容器 childList 兜底
+      const pob = new MutationObserver(() => {
+        if (!row.isConnected) { ob.disconnect(); pob.disconnect(); done(); }
+      });
+      if (row.parentElement) pob.observe(row.parentElement, { childList: true });
+      setTimeout(() => { ob.disconnect(); pob.disconnect(); resolve(-2); }, 10000);
+    });
     btn.click();
+    // dbDone 探针（mock 写栈代理，真机不以此口径为准）
+    let dbMs = -2;
     const deadline = t0 + 10000;
     while (performance.now() < deadline) {
       await new Promise(r => setTimeout(r, 5));
-      if (task.done === 1) return performance.now() - t0;
+      if (task.done === 1) { dbMs = performance.now() - t0; break; }
     }
-    return -2;
+    const paintMs = await paintP;
+    // 失效窗口是尾随后发（D2 150ms 窗 + 宏任务广播），多等一拍再读增量
+    await new Promise(r => setTimeout(r, 400));
+    const inv1 = (window.__orbitPerf ?? {}).invalidateCalls ?? inv0;
+    return { paintMs, dbMs, inv: inv1 - inv0 };
   });
-  if (t > 0) checkTimes.push(t);
-  else console.error('check fail code', t);
+  if (t.paintMs > 0) { checkPaint.push(t.paintMs); checkDb.push(t.dbMs); checkInv.push(t.inv); }
+  else console.error('check fail', t.code ?? t);
   await new Promise(r => setTimeout(r, 200));
 }
-R.checkDoneMs = { n: checkTimes.length, median: [...checkTimes].sort((a,b)=>a-b)[Math.floor(checkTimes.length/2)] | 0, p95: [...checkTimes].sort((a,b)=>a-b)[Math.floor(checkTimes.length*0.95)] | 0, all: checkTimes.map(x=>Math.round(x)) };
+const med = (a) => [...a].sort((x,y)=>x-y)[Math.floor(a.length/2)] | 0;
+const p95 = (a) => [...a].sort((x,y)=>x-y)[Math.floor(a.length*0.95)] | 0;
+R.checkPaintMs = { n: checkPaint.length, median: med(checkPaint), p95: p95(checkPaint), all: checkPaint.map(x=>Math.round(x)) };
+R.checkDbDoneMs = { n: checkDb.length, median: med(checkDb.filter(x=>x>0)), all: checkDb.map(x=>Math.round(x)) };
+R.invalidateCallsPerCheck = { n: checkInv.length, median: med(checkInv), all: checkInv };
+// 旧含糊口径保留别名（防报告脚本断键）：语义 = paintMs
+R.checkDoneMs = R.checkPaintMs;
 
 // —— 指标3：快速滚动 10 屏（主列表）长任务与帧率 ——
 const scrollPerf = await page.evaluate(async () => {

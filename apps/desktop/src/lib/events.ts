@@ -11,7 +11,12 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useEffect } from "react";
 import { listen } from "@tauri-apps/api/event";
 
-import { invalidateByTable, isImmediateFullInvalidation, planFlushCoalesced } from "./db-invalidation";
+import {
+  countInvalidateCall,
+  invalidateByTable,
+  isImmediateFullInvalidation,
+  planFlushCoalesced,
+} from "./db-invalidation";
 
 /**
  * Rust EVENT_BUS 经桌面事件泵转发的精简载荷（A3）：只有表名与操作类型，
@@ -49,6 +54,7 @@ export function useDbInvalidation() {
       const plan = planFlushCoalesced(pending);
       pending.clear();
       if (plan.full) {
+        countInvalidateCall();
         void qc.invalidateQueries();
         return;
       }
@@ -60,7 +66,10 @@ export function useDbInvalidation() {
         }
       }
       // 未知表（含 mock 桥的 table:"mock"）回退全量，一窗只一次
-      if (full) void qc.invalidateQueries();
+      if (full) {
+        countInvalidateCall();
+        void qc.invalidateQueries();
+      }
     };
     const unlistenPromise = listen<DbChangeEvent>("db-change", (evt) => {
       const table = evt.payload.table;
@@ -71,6 +80,7 @@ export function useDbInvalidation() {
           timer = null;
         }
         pending.clear();
+        countInvalidateCall();
         void qc.invalidateQueries();
         return;
       }

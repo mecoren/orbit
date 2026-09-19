@@ -38,6 +38,26 @@ const TABLE_QUERY_KEYS: Record<string, string[][]> = {
 };
 
 /**
+ * DEV 失效计数（D1 尺子）：每次 invalidateQueries 调用记 +1，挂
+ * `window.__orbitPerf.invalidateCalls`，仅 DEV 暴露，供
+ * `perf-metrics/interaction.mjs` 读 click 前后增量。生产包零开销。
+ */
+export function countInvalidateCall(): void {
+  try {
+    if (
+      typeof window !== "undefined" &&
+      (import.meta as unknown as { env?: { DEV?: boolean } }).env?.DEV
+    ) {
+      const w = window as unknown as { __orbitPerf?: { invalidateCalls?: number } };
+      w.__orbitPerf ??= {};
+      w.__orbitPerf.invalidateCalls = (w.__orbitPerf.invalidateCalls ?? 0) + 1;
+    }
+  } catch {
+    /* 非浏览器/无 DEV 环境静默跳过 */
+  }
+}
+
+/**
  * 按事件表名失效对应缓存。返回失效的键组（测试断言用）；
  * 未知表返回 null 表示调用方应回退全量失效。
  */
@@ -45,6 +65,7 @@ export function invalidateByTable(qc: QueryClient, table: string): string[][] | 
   const keys = TABLE_QUERY_KEYS[table];
   if (!keys) return null;
   for (const key of keys) {
+    countInvalidateCall();
     void qc.invalidateQueries({ queryKey: key });
   }
   return keys;
