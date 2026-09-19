@@ -1,6 +1,6 @@
 /**
  * 差分法内存/CPU：目标进程组 = 启动前后全系统同名进程的净增
- * A. Tauri release（orbit-desktop + msedgewbview2 子树）
+ * A. Tauri release（orbit + msedgewebview2 子树）
  * B. Chromium 同前端（post dist, 万级, 操作期）
  */
 import { spawn, execSync } from 'node:child_process';
@@ -22,14 +22,14 @@ const diffMB = (after, before) => Math.round((after.ws - before.ws) / 1048576);
 
 // ===== A. Tauri =====
 console.log('== A. Tauri release ==');
-const EXE = 'C:/Develop/project/00_AI/orbit/apps/desktop/src-tauri/target/release/orbit-desktop.exe';
+const EXE = 'C:/Develop/project/00_AI/orbit/apps/desktop/src-tauri/target/release/orbit.exe';
 {
-  const before = snapshot(['orbit-desktop', 'msedgewebview2']);
+  const before = snapshot(['orbit', 'msedgewebview2']);
   const p = spawn(EXE, [], { stdio: 'ignore' });
   await sleep(5000);
-  const s1 = snapshot(['orbit-desktop', 'msedgewebview2']);
+  const s1 = snapshot(['orbit', 'msedgewebview2']);
   await sleep(5000);
-  const s2 = snapshot(['orbit-desktop', 'msedgewebview2']);
+  const s2 = snapshot(['orbit', 'msedgewebview2']);
   console.log(JSON.stringify({
     wsMB_start: diffMB(s1, before), wsMB_stable: diffMB(s2, before),
     cpuS_total: Math.round((s2.cpu - before.cpu) * 10) / 10,

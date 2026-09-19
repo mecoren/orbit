@@ -9,7 +9,9 @@
 [workspace]
 
 [package]
-name = "orbit-desktop"
+# 二进制名即进程名：包名 orbit → target/release/orbit.exe，
+# 任务管理器/通知回退名均为 orbit（曾用 orbit-desktop，已改名）。
+name = "orbit"
 version = "0.1.0"
 edition = "2024"
 rust-version = "1.96"

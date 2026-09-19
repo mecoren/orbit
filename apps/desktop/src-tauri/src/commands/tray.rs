@@ -217,6 +217,8 @@ pub fn setup_tray(app: &AppHandle) -> tauri::Result<()> {
         tray_icon_bitmap(app).expect("default_window_icon 未配置（tauri.conf bundle.icon）");
     let mut builder = TrayIconBuilder::with_id("orbit-tray")
         .icon(tray_img)
+        // 悬停名与通知横幅同口径（用户可见名「循迹」；进程/英文名才是 orbit）
+        .tooltip("循迹")
         .menu(&menu)
         .show_menu_on_left_click(false)
         .on_menu_event(|app, event| match event.id().as_ref() {

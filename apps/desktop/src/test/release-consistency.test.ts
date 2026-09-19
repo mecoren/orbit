@@ -75,7 +75,7 @@ describe("发版一致性", () => {
   it("两个 Cargo.lock 的本地包版本行与源一致", () => {
     expect(lockVersion(read(path.join(ROOT, "Cargo.lock")), "orbit-core")).toBe(sourceVersion);
     expect(lockVersion(read(path.join(ROOT, "Cargo.lock")), "orbit-flutter")).toBe(sourceVersion);
-    expect(lockVersion(read(path.join(DESKTOP, "src-tauri/Cargo.lock")), "orbit-desktop")).toBe(
+    expect(lockVersion(read(path.join(DESKTOP, "src-tauri/Cargo.lock")), "orbit")).toBe(
       sourceVersion,
     );
   });

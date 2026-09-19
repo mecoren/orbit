@@ -203,7 +203,7 @@ fn notify_system(app: &AppHandle, reminder_id: i64, task_id: i64, title: &str, r
     }
     #[cfg(not(target_os = "windows"))]
     {
-        n.appname("Orbit");
+        n.appname("循迹");
     }
 
     let n = n

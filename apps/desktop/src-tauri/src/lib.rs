@@ -1,4 +1,4 @@
-//! orbit_desktop_lib — Tauri 2 桌面端壳入口（Orbit / 循迹）
+//! orbit_desktop_lib — Tauri 2 桌面端壳入口（显示名「循迹」/ 进程名 orbit）
 //!
 //! 职责：建立 Tauri 应用骨架，持有 SqlitePool，注册命令面，转发事件总线。
 //! 业务逻辑全部在 orbit_core，本文件不含业务逻辑。
@@ -146,7 +146,7 @@ pub fn run() {
                 eprintln!("[mica] dwm apply failed: {e}");
             }
 
-            // Windows Toast 通知身份注册（AUMID DisplayName=Orbit + 图标）+
+            // Windows Toast 通知身份注册（AUMID DisplayName=循迹 + 图标）+
             // 清除上次退出前的计划通知：都是首窗显示后才可能被消费的通道
             // （AUMID 含 PNG 编码写盘+注册表写、清理是 WinRT COM 遍历——
             // 合计几十 ms 同步 IO），丢后台线程不挡 setup 返回（首帧关键

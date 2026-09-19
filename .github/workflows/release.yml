@@ -182,7 +182,7 @@ jobs:
           projectPath: apps/desktop
           # tag 推送且非 dry_run 才发版；dry_run 时留空 → 只构建、只传 artifact
           tagName: ${{ startsWith(github.ref, 'refs/tags/v') && inputs.dry_run != true && github.ref_name || '' }}
-          releaseName: "Orbit ${{ github.ref_name }}"
+          releaseName: "循迹 ${{ github.ref_name }}"
           # 直发（非草稿）：应用内 updater 的 endpoint 是
           # /releases/latest/download/latest.json，草稿态 Release 对该地址 404。
           releaseDraft: false

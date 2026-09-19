@@ -3,11 +3,11 @@
 //! 根因（2026-09-11 用户报告「通知显示 orbit-desktop + 老图标」）：
 //! notify-rust 直发与计划 Toast 都以 AUMID `cn.wait.orbit` 发通知，但该
 //! AUMID 从未在 `HKCU\Software\Classes\AppUserModelId` 注册身份——通知
-//! 平台查不到 DisplayName/IconUri 时，横幅回退显示**发起进程名**（dev 态
-//! exe 名 orbit-desktop）+ 进程图标缓存，与品牌完全脱节。
+//! 平台查不到 DisplayName/IconUri 时，横幅回退显示**发起进程名**（exe 名
+//! orbit）+ 进程图标缓存，与品牌完全脱节。
 //!
 //! 修复：setup 阶段幂等写两个注册表值：
-//! - DisplayName = "Orbit"（用户口径：应用名就叫 orbit，不带 desktop）
+//! - DisplayName = "循迹"（用户可见应用名；进程/英文名才叫 orbit）
 //! - IconUri = 数据目录 cache/app-icon-notification.png
 //!
 //! 图标源：`app.default_window_icon()`——tauri codegen 从 icon.ico 首帧
@@ -25,8 +25,8 @@ use tauri::AppHandle;
 /// （notification_scheduler）和计划 Toast（scheduled_toast）同口径
 pub const APP_ID: &str = "cn.wait.orbit";
 
-/// 通知横幅显示名（用户口径：应用名就叫 orbit，不带 desktop 后缀）
-pub const DISPLAY_NAME: &str = "Orbit";
+/// 通知横幅显示名（用户可见应用名「循迹」；进程/英文名 orbit）
+pub const DISPLAY_NAME: &str = "循迹";
 
 /// 注册表键路径（Windows 通知平台按 AUMID 查此键下的身份值；
 /// 尾段与 APP_ID 同口径，由单测锁定——Rust 无常量字符串拼接原语）
@@ -130,7 +130,7 @@ mod tests {
         write_test_identity("file:///C:/tmp/icon.png").expect("写入探针 AUMID 键");
 
         let key = windows_registry::CURRENT_USER.open(TEST_KEY).expect("读取探针 AUMID 键");
-        assert_eq!(key.get_string("DisplayName").unwrap(), "Orbit");
+        assert_eq!(key.get_string("DisplayName").unwrap(), "循迹");
         assert_eq!(key.get_string("IconUri").unwrap(), "file:///C:/tmp/icon.png");
 
         // 幂等覆盖：二次写入新 IconUri 生效

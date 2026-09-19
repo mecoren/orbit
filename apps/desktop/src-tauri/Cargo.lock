@@ -3118,42 +3118,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "04744f49eae99ab78e0d5c0b603ab218f515ea8cfe5a456d7629ad883a3b6e7d"
 
 [[package]]
-name = "orbit-core"
-version = "0.1.0"
-dependencies = [
- "aes-gcm",
- "anyhow",
- "async-trait",
- "base64 0.22.1",
- "chrono",
- "futures",
- "hmac",
- "libsqlite3-sys",
- "log",
- "once_cell",
- "pbkdf2",
- "quick-xml 0.36.2",
- "rand 0.8.8",
- "reqwest 0.12.28",
- "serde",
- "serde_json",
- "sha2",
- "sqlx",
- "subtle",
- "tempfile",
- "thiserror 2.0.20",
- "tokio",
- "tokio-util",
- "url",
- "urlencoding",
- "uuid",
- "whoami",
- "zip 2.4.2",
- "zstd",
-]
-
-[[package]]
-name = "orbit-desktop"
+name = "orbit"
 version = "0.1.0"
 dependencies = [
  "base64 0.22.1",
@@ -3186,6 +3151,41 @@ dependencies = [
  "windows",
  "windows-core 0.61.2",
  "windows-registry",
+]
+
+[[package]]
+name = "orbit-core"
+version = "0.1.0"
+dependencies = [
+ "aes-gcm",
+ "anyhow",
+ "async-trait",
+ "base64 0.22.1",
+ "chrono",
+ "futures",
+ "hmac",
+ "libsqlite3-sys",
+ "log",
+ "once_cell",
+ "pbkdf2",
+ "quick-xml 0.36.2",
+ "rand 0.8.8",
+ "reqwest 0.12.28",
+ "serde",
+ "serde_json",
+ "sha2",
+ "sqlx",
+ "subtle",
+ "tempfile",
+ "thiserror 2.0.20",
+ "tokio",
+ "tokio-util",
+ "url",
+ "urlencoding",
+ "uuid",
+ "whoami",
+ "zip 2.4.2",
+ "zstd",
 ]
 
 [[package]]

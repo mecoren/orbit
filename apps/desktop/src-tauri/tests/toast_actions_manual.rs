@@ -32,7 +32,7 @@ fn toast_with_snooze_buttons() {
     }
     #[cfg(not(target_os = "windows"))]
     {
-        n.appname("Orbit");
+        n.appname("循迹");
     }
 
     let n = n

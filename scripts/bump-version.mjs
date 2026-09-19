@@ -30,7 +30,7 @@ const FILES = {
 /** lock 文件 + 各文件内需要同步版本的本地包名 */
 const LOCKS = [
   { file: "Cargo.lock", packages: ["orbit-core", "orbit-flutter"] },
-  { file: "apps/desktop/src-tauri/Cargo.lock", packages: ["orbit-desktop"] },
+  { file: "apps/desktop/src-tauri/Cargo.lock", packages: ["orbit"] },
 ];
 
 const SEMVER = /^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$/;
