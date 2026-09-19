@@ -38,6 +38,7 @@ export const ACTIVITY_ACTION_LABELS: Record<string, string> = {
   reminder_delete: "移除提醒",
   attachment_add: "添加附件",
   attachment_delete: "移除附件",
+  repeat_rollover: "已滚动下一周期",
 };
 
 /** detail 带 {"target"} 的从属对象动作：文案统一拼「target」 */
@@ -56,6 +57,7 @@ const TARGET_ACTIONS = new Set([
   "reminder_delete",
   "attachment_add",
   "attachment_delete",
+  "repeat_rollover",
 ]);
 
 /** update detail 里的字段名 → 中文（与属性行文案对齐；未映射字段原样展示） */

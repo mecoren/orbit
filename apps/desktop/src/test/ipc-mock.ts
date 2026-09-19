@@ -723,6 +723,18 @@ const commands: Record<string, (args: any, ctx: Ctx) => unknown> = {
     t.version += 1;
     // 活动日志埋点（F6，与 Rust complete 埋点同口径）
     logActivity(db, t.id, t.title, "complete", "{}");
+    // 重复滚周期双埋点（与 Rust 同口径）：原实例记「已滚动下一周期」
+    // （target=新实例截止串），新实例记 create(from=repeat)
+    if (next) {
+      logTarget(db, t.id, "repeat_rollover", localDt(next.due_date) ?? "下一周期");
+      logActivity(
+        db,
+        next.id,
+        next.title,
+        "create",
+        JSON.stringify({ from: "repeat", parent_id: t.id }),
+      );
+    }
     return ipcClone({ task: t, next_instance: next });
   },
   todo_tasks_delete: ({ id }, { db }) => {

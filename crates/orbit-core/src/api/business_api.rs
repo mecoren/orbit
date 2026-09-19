@@ -176,7 +176,7 @@ fn snapshot_day(ms: Option<i64>) -> serde_json::Value {
 }
 
 /// ms 时间戳 → 本地 yyyy-MM-dd HH:mm（完成时刻等带时分的场景）
-fn snapshot_dt(ms: Option<i64>) -> serde_json::Value {
+pub(crate) fn snapshot_dt(ms: Option<i64>) -> serde_json::Value {
     ms.and_then(|t| chrono::Local.timestamp_millis_opt(t).single())
         .map(|d| serde_json::Value::String(d.format("%Y-%m-%d %H:%M").to_string()))
         .unwrap_or(serde_json::Value::Null)

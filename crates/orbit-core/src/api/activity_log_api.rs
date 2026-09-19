@@ -4,7 +4,8 @@
 //! 与 Things 3 任务历史。落地本地只读轨迹：
 //! - **记录**：[log_activity]——写路径埋点（create/update/complete/
 //!   uncomplete/delete/restore + 从属对象动作 subtask_*/comment_*/link_*/
-//!   reminder_*），update 记变更字段集进 detail JSON；
+//!   reminder_*/attachment_* + 重复滚周期 repeat_rollover），update 记变更
+//!   字段集进 detail JSON；
 //!   落库后 emit `todo_activity_log` Insert 事件（历史区块即时刷新信号，
 //!   业务表的 todo_tasks 事件先于本行插入、不能搭车）；
 //! - **查询**：[list_task_activity]（单任务倒序，详情抽屉「历史」区块）。

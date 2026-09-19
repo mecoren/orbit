@@ -95,6 +95,9 @@ describe("describeActivity", () => {
     expect(
       describeActivity("subtask_rename", JSON.stringify({ target: "旧名 → 新名" })),
     ).toBe("子任务改名「旧名 → 新名」");
+    expect(
+      describeActivity("repeat_rollover", JSON.stringify({ target: "2026-09-26 10:00" })),
+    ).toBe("已滚动下一周期「2026-09-26 10:00」");
   });
 
   it("非 update 动作与非法 JSON 回退动作文案", () => {

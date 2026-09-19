@@ -820,6 +820,29 @@ pub async fn complete_todo_task(pool: &SqlitePool, id: i64) -> CoreResult<Comple
         )
         .await;
     }
+    // 重复滚周期双埋点（与子任务提升同构）：原实例记「已滚动下一周期」
+    // （target=新实例截止串），新实例记 create(from=repeat) 使其历史可溯源
+    if let Some(next) = &next_instance {
+        let target = crate::api::business_api::snapshot_dt(next.due_date)
+            .as_str()
+            .unwrap_or("下一周期")
+            .to_string();
+        crate::api::business_api::log_target_activity(
+            pool,
+            done_task.id,
+            "repeat_rollover",
+            &target,
+        )
+        .await;
+        let _ = crate::api::activity_log_api::log_activity(
+            pool,
+            next.id,
+            &next.title,
+            "create",
+            &format!(r#"{{"from":"repeat","parent_id":{}}}"#, done_task.id),
+        )
+        .await;
+    }
 
     Ok(CompleteTaskResult {
         task: done_task,
@@ -1590,6 +1613,71 @@ mod repeat_tests {
             .await
             .unwrap();
         assert_eq!(count, 2, "两次完成后应有且只有 1 个下一实例");
+    }
+
+    #[tokio::test]
+    async fn complete_recurring_logs_rollover_and_origin_trails() {
+        let pool = setup_db().await;
+        let t = create_todo_task(
+            &pool,
+            &TodoTaskCreateInput {
+                title: "滚周期任务".into(),
+                due_date: Some(local_midnight_days_ago(1)),
+                repeat_mode: Some(REPEAT_MODE_DAILY),
+                repeat_after: Some(1),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+        let res = complete_todo_task(&pool, t.id).await.unwrap();
+        let next = res.next_instance.expect("应生成下一实例");
+
+        // 原实例侧：repeat_rollover 轨迹，target=新实例截止的本地时刻串
+        let old_rows = crate::api::activity_log_api::list_task_activity(&pool, t.id, None)
+            .await
+            .unwrap();
+        let roll = old_rows
+            .iter()
+            .find(|r| r.action == "repeat_rollover")
+            .expect("原实例应有滚周期轨迹");
+        let detail: serde_json::Value = serde_json::from_str(&roll.detail).unwrap();
+        let expect_target = {
+            use chrono::TimeZone;
+            chrono::Local
+                .timestamp_millis_opt(next.due_date.unwrap())
+                .single()
+                .unwrap()
+                .format("%Y-%m-%d %H:%M")
+                .to_string()
+        };
+        assert_eq!(detail["target"].as_str().unwrap(), expect_target);
+
+        // 新实例侧：create(from=repeat) 使其历史可溯源到上一实例
+        let new_rows = crate::api::activity_log_api::list_task_activity(&pool, next.id, None)
+            .await
+            .unwrap();
+        let born = new_rows
+            .iter()
+            .find(|r| r.action == "create")
+            .expect("新实例应有 create 轨迹");
+        let born_detail: serde_json::Value = serde_json::from_str(&born.detail).unwrap();
+        assert_eq!(born_detail["from"].as_str().unwrap(), "repeat");
+        assert_eq!(born_detail["parent_id"].as_i64().unwrap(), t.id);
+
+        // 幂等再完成：不再滚、不重复记
+        complete_todo_task(&pool, t.id).await.unwrap();
+        let after = crate::api::activity_log_api::list_task_activity(&pool, t.id, None)
+            .await
+            .unwrap();
+        assert_eq!(
+            after
+                .iter()
+                .filter(|r| r.action == "repeat_rollover")
+                .count(),
+            1,
+            "重复完成不得叠加滚周期轨迹"
+        );
     }
 
     #[tokio::test]
