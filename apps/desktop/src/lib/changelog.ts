@@ -7,8 +7,8 @@
  * `src/test/release-consistency.test.ts` 强制校验，防版本与日志两头漂移。
  *
  * 提炼口径：`git log v<上一 tag>..HEAD --oneline` 按功能合并同类提交，
- * 忽略 docs/chore/style 等过程性噪声。首版 0.1.0 由初始提交至 2026-09-15
- * 的全部 353 次提交归并总结（明细见 CHANGELOG.md）。
+ * 忽略 docs/chore/style 等过程性噪声。首版 0.1.0 由 2026-08-23 初始提交至
+ * 2026-09-19 的全部 453 次提交归并总结（明细见 CHANGELOG.md）。
  */
 
 export type ChangeCategory = "feature" | "fix" | "refactor" | "chore";
@@ -29,7 +29,7 @@ export interface ChangelogVersion {
 export const CHANGELOG_VERSIONS: ChangelogVersion[] = [
   {
     version: "0.1.0",
-    date: "2026-09-15",
+    date: "2026-09-19",
     summary:
       "首个版本：本地优先 + 端到端加密的跨平台待办——桌面与移动双端全功能、云同步/备份、附件、统计与 ICS/CSV 数据出口一次到位",
     changes: [
@@ -46,12 +46,12 @@ export const CHANGELOG_VERSIONS: ChangelogVersion[] = [
       {
         category: "feature",
         description:
-          "重复任务：每周几、结束条件、when done 三档规则 + 「下次 M月d日」具体日预览 + 完成后自动推进（三端同一入口）",
+          "重复任务：每周几、结束条件、when done 三档规则 + 「下次 M月d日」具体日预览 + 完成后自动推进（三端同一入口，滚周期留痕可溯源）",
       },
       {
         category: "feature",
         description:
-          "效率入口：「我的一天」置顶视图、NLP 快速输入（明天/周X/!3/#项目/@标签）、全局搜索 Ctrl+K、命令面板、快捷键面板",
+          "效率入口：「我的一天」置顶视图、NLP 快速输入（明天/周X/!3/#项目/@标签）、全局搜索 Ctrl+K（FTS5 全文）、命令面板、快捷键面板",
       },
       {
         category: "feature",
@@ -73,7 +73,8 @@ export const CHANGELOG_VERSIONS: ChangelogVersion[] = [
       },
       {
         category: "feature",
-        description: "可回看轨迹：通知历史中心 + 任务活动日志（对标 Todoist Activity log）",
+        description:
+          "可回看轨迹：通知历史中心 + 任务活动日志（更新变更集、子任务/评论/关联/提醒/附件独立轨迹、重复规则单条快照）+ 双端历史区块满档展档",
       },
       {
         category: "feature",
@@ -82,43 +83,63 @@ export const CHANGELOG_VERSIONS: ChangelogVersion[] = [
       {
         category: "feature",
         description:
-          "安全：SQLCipher 本地加密 + 主密码体系 + 移动端生物识别解锁；云同步 AES-256-GCM 端到端加密（密钥不出本机）",
+          "日期选择器与日历视图统一（双端）：同一套日格（农历/休班/今天/选中）+ 共用节假日缓存；日历与日期弹层滚轮步进翻月翻年",
       },
       {
         category: "feature",
         description:
-          "云同步：WebDAV / S3（含 OSS）三协议，启动/定时/手动同步，大附件分片断点续传，密钥方案 v2（结构性消除 KeyMismatch）",
-      },
-      {
-        category: "feature",
-        description: "备份与恢复：本地/云端全量备份（AES-GCM 包）+ 云端副本可取回",
+          "安全：SQLCipher 本地加密 + 主密码体系 + 移动端生物识别解锁；云同步 AES-256-GCM 端到端加密（密钥不出本机，PBKDF2 600k 强度下限 guard）",
       },
       {
         category: "feature",
         description:
-          "数据出口：CSV 导入（orbit/Todoist/TickTick 预设）、CSV/JSON 导出（UTF-8 BOM）、ICS 日历导出（VTODO）、明文导出",
+          "云同步：WebDAV / S3（含 OSS）三协议，表级分桶差量 + 单一清单 CAS（单行编辑只重传 1 个分桶），大附件分片断点续传，进入/退出应用强制同步，密钥方案 v2（结构性消除 KeyMismatch）",
       },
       {
         category: "feature",
-        description: "统计面板：完成热力图（按年视图 + 年份切换）、连续完成天数、项目/优先级分布条",
+        description: "冲突可见：LWW 败方整行快照留档 + 双端「冲突记录」字段级差异对照与一键恢复",
       },
       {
         category: "feature",
-        description: "移动端（Flutter + FRB）功能对齐桌面：列表/详情/表单/日历/统计/搜索/侧滑手势/长按拖拽重排/NLP 输入",
+        description:
+          "同步状态：左上角云图标（同步中/成功/失败 + 悬浮详情 + 点击立即同步），替换原右下角悬浮指示条",
+      },
+      {
+        category: "feature",
+        description:
+          "备份与恢复：本地/云端全量备份融合为单入口（云端为准）+ 恢复预览与两段式确认 + AES-GCM 加密包（.orsync）",
+      },
+      {
+        category: "feature",
+        description:
+          "数据出口：CSV 导入（orbit/Todoist/TickTick 预设）、CSV/JSON 导出（UTF-8 BOM）、ICS 导出与导入（VTODO）、明文导出",
+      },
+      {
+        category: "feature",
+        description: "统计面板：完成热力图（按年视图 + 年份切换）、连续完成天数、项目/优先级分布条；节假日数据层与日历徽标",
+      },
+      {
+        category: "feature",
+        description:
+          "移动端（Flutter + FRB）功能对齐桌面：列表/详情/表单/日历/统计/搜索/侧滑手势/长按拖拽重排/NLP 输入/历史与冲突记录页",
       },
       {
         category: "feature",
         description: "应用内更新（手动检查 → 下载 → 安装重启）与关于页（应用信息 / 更新日志 / 开源许可 / 开源组件）",
       },
       {
-        category: "refactor",
-        description:
-          "性能：桌面与移动全量虚拟化 + 路由懒加载 + vendor 分包（首屏 chunk 985KB → 63KB）+ 图标字体子集化（5.1MB → 7KB）",
+        category: "feature",
+        description: "桌面常驻：托盘 + 关窗驻留、窄窗侧栏自适应折叠、开机自启动（--hidden 静默驻留托盘，不弹主窗）",
       },
       {
         category: "refactor",
         description:
-          "数据层：谓词下推 SQL + 列表通道列裁剪（万级 IPC 体积 -47%）+ FTS5 全文索引 + 软删前缀组合索引",
+          "性能：双端全量虚拟化 + 路由懒加载 + vendor 分包（首屏 chunk 985KB → 63KB）+ 图标字体子集化（5.1MB → 7KB）；逾期置顶段并入虚拟流，万级驻留 76MB → 37MB",
+      },
+      {
+        category: "refactor",
+        description:
+          "数据层：谓词下推 SQL + 列表通道列裁剪（万级 IPC 体积 -47%）+ FTS5 全文索引 + 软删前缀组合索引 + core 侧瘦投影 + db-change 表级精确失效",
       },
       {
         category: "refactor",
@@ -132,20 +153,21 @@ export const CHANGELOG_VERSIONS: ChangelogVersion[] = [
       {
         category: "fix",
         description:
+          "云同步五轮系统性探查收口：清单条件写曾未生效、WebDAV 大附件分片从未执行、回收站守卫线被非干净轮次推进、附件首传死锁、pull 漏拉窗口、rekey 后增量全跳",
+      },
+      {
+        category: "fix",
+        description:
           "两个上线阻塞修复：首同步补传 crypto/config（第二台设备无法入环）与 Android release 构建补 INTERNET 权限（真机云同步静默失败）",
       },
       {
         category: "fix",
         description:
-          "同步健壮性三轮：附件首传死锁、pull 漏拉窗口、附件 GC 与 pull 打架循环、rekey 中断一致性、WebDAV 409 自愈",
-      },
-      {
-        category: "fix",
-        description: "SQLCipher 多连接读取密文隐患（PRAGMA 逐连接注入）、KeyMismatch 恢复引导失效、Windows 通知身份（AUMID）",
+          "本地与通知链：SQLCipher 多连接读取密文隐患（PRAGMA 逐连接注入）、KeyMismatch 恢复引导失效、Windows 通知身份（AUMID）、附件图片预览 blob 泄漏",
       },
       {
         category: "chore",
-        description: "质量门禁：CI 三 job（含 FRB codegen 一致性）+ Playwright 冒烟 + 发版一致性护栏（版本/日志不漂移）",
+        description: "质量门禁：CI 四 job（含 FRB codegen 一致性 + 内存门禁）+ Playwright 冒烟 + 发版一致性护栏（版本/日志不漂移）",
       },
       {
         category: "chore",
@@ -153,7 +175,7 @@ export const CHANGELOG_VERSIONS: ChangelogVersion[] = [
       },
       {
         category: "chore",
-        description: "文档体系：AGENTS.md 单一真相源、docs/01-08 编号文档、ADR 0001-0006、9 份专项审查报告",
+        description: "文档体系：AGENTS.md 单一真相源、docs/01-09 编号文档、ADR 0001-0007/0010、7 份专项审查报告",
       },
     ],
   },
