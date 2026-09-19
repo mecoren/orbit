@@ -27,6 +27,7 @@ import {
   estimateNextSyncAt,
   formatLastSynced,
   formatNextSync,
+  syncErrorAction,
   syncProgressText,
   syncResultSummary,
   syncStatusLabel,
@@ -168,7 +169,8 @@ export function SyncStatusButton() {
       }
       void qc.invalidateQueries({ queryKey: ["sync-config"] });
     } catch (err) {
-      if (syncErrorTag(err) === "key_mismatch") {
+      // F44：只有 key_mismatch 跳恢复页；payload_version 走错误态 + 原因提示
+      if (syncErrorAction(syncErrorTag(err)) === "recovery") {
         setRunPhase("idle");
         setProgress("");
         navigate("/sync-recovery");

@@ -80,3 +80,27 @@ String syncResultSummary({
   final base = '同步完成：推送 $pushedModules 模块 / 拉取 $pulledModules 模块';
   return errorCount > 0 ? '$base（$errorCount 个非致命错误）' : base;
 }
+
+/// 同步错误 tag → 用户处置通道（F44，与桌面 `syncErrorAction` 同口径）
+enum SyncErrorAction { recovery, unlock, upgrade, none }
+
+/// 从桥层错误串提取 tag（Rust 侧 `[tag] message` 前缀；无标签返回空串）
+String syncErrorTag(String raw) {
+  final m = RegExp(r'^\[(\w+)\]').firstMatch(raw.trim());
+  return m?.group(1) ?? '';
+}
+
+/// 错误 tag 到处置动作的归类
+///
+/// - `recovery`（key_mismatch）：本地密钥解不开云端密文，引导密钥包恢复；
+/// - `unlock`（password / not_unlocked）：引导重输同步密码；
+/// - `upgrade`（payload_version）：云端载荷版本高于本端（ADR 0010 两拍升级），
+///   处置动作是**升级应用**——若不单独归类而塌进 key_mismatch，用户会被
+///   引到密钥恢复流程并可能放弃解不开的云端数据（误导且不可逆）；
+/// - `none`：网络 / 数据库 / 认证 / 限流等普通失败，按原文提示。
+SyncErrorAction syncErrorAction(String tag) => switch (tag) {
+      'key_mismatch' => SyncErrorAction.recovery,
+      'password' || 'not_unlocked' => SyncErrorAction.unlock,
+      'payload_version' => SyncErrorAction.upgrade,
+      _ => SyncErrorAction.none,
+    };

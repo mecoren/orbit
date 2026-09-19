@@ -187,4 +187,29 @@ void main() {
       );
     });
   });
+
+  group('syncErrorAction', () {
+    test('tag 解析：方括号前缀提取，无标签为空', () {
+      expect(syncErrorTag('[key_mismatch] 本地密钥与云端密文不匹配'), 'key_mismatch');
+      expect(syncErrorTag('[payload_version] 云端载荷版本高于本端'), 'payload_version');
+      expect(syncErrorTag('plain message'), '');
+    });
+
+    test('key_mismatch 走恢复，payload_version 走升级（F44 翻案防线）', () {
+      expect(syncErrorAction('key_mismatch'), SyncErrorAction.recovery);
+      expect(syncErrorAction('payload_version'), SyncErrorAction.upgrade);
+      expect(
+        syncErrorAction('payload_version'),
+        isNot(SyncErrorAction.recovery),
+      );
+    });
+
+    test('密码类走解锁，其余按普通失败', () {
+      expect(syncErrorAction('password'), SyncErrorAction.unlock);
+      expect(syncErrorAction('not_unlocked'), SyncErrorAction.unlock);
+      expect(syncErrorAction('network'), SyncErrorAction.none);
+      expect(syncErrorAction('rate_limited'), SyncErrorAction.none);
+      expect(syncErrorAction(''), SyncErrorAction.none);
+    });
+  });
 }

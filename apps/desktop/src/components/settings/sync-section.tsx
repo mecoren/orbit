@@ -37,7 +37,7 @@ import {
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
-import { syncResultSummary } from "@/lib/sync-status";
+import { syncErrorAction, syncResultSummary } from "@/lib/sync-status";
 import { Button } from "@/components/ui/button";
 import { DangerousConfirmDialog } from "@/components/ui/dangerous-confirm-dialog";
 import { BackupPreviewBody, type BackupPreviewState } from "./backup-preview-body";
@@ -816,8 +816,10 @@ function SyncRunCard() {
         toast.success(syncResultSummary(result));
       }
     } catch (err) {
-      // KeyMismatch → 引导恢复页（与后台调度器行为对齐）
-      if (syncErrorTag(err) === "key_mismatch") {
+      // KeyMismatch → 引导恢复页（与后台调度器行为对齐）。
+      // F44：payload_version（需升级应用）不在此列——后端 message 已含指引，
+      // 落到 `toast.error(errMsg(err))` 展示，绝不跳恢复页误导用户
+      if (syncErrorAction(syncErrorTag(err)) === "recovery") {
         navigate("/sync-recovery");
         return;
       }

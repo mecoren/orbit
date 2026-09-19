@@ -11,6 +11,7 @@ import {
   estimateNextSyncAt,
   formatLastSynced,
   formatNextSync,
+  syncErrorAction,
   syncProgressText,
   syncResultSummary,
   syncStatusLabel,
@@ -178,5 +179,21 @@ describe("syncResultSummary", () => {
         errors: ["附件上传失败", "标签下拉失败"],
       }),
     ).toBe("同步完成：推送 2 模块 / 拉取 1 模块（2 个非致命错误）");
+  });
+});
+
+describe("syncErrorAction", () => {
+  it("key_mismatch 走恢复页，payload_version 走升级提示（F44 翻案防线）", () => {
+    expect(syncErrorAction("key_mismatch")).toBe("recovery");
+    expect(syncErrorAction("payload_version")).toBe("upgrade");
+    expect(syncErrorAction("payload_version")).not.toBe("recovery");
+  });
+
+  it("密码类错误走解锁，其余按普通失败", () => {
+    expect(syncErrorAction("password")).toBe("unlock");
+    expect(syncErrorAction("not_unlocked")).toBe("unlock");
+    expect(syncErrorAction("network")).toBe("none");
+    expect(syncErrorAction("rate_limited")).toBe("none");
+    expect(syncErrorAction(null)).toBe("none");
   });
 });

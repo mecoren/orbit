@@ -15,6 +15,7 @@ import { useEffect } from "react";
 
 // 本 hook 渲染在 <RouterProvider> 之外（ReadyShell），故用命令式导航
 import { router } from "@/router";
+import { syncErrorAction } from "@/lib/sync-status";
 import {
   cloudSyncForce,
   syncConfigGet,
@@ -40,7 +41,9 @@ export function useStartupSync() {
         try {
           await cloudSyncForce("background", STARTUP_SYNC_WAIT_IDLE_MS);
         } catch (err) {
-          if (syncErrorTag(err) === "key_mismatch") {
+          // F44：归类统一走 syncErrorAction——payload_version（需升级应用）
+          // 不跳恢复页（启动场景静默，云图标会显示失败原因）
+          if (syncErrorAction(syncErrorTag(err)) === "recovery") {
             void router.navigate("/sync-recovery");
           }
         }

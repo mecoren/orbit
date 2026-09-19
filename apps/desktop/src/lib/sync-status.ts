@@ -133,3 +133,30 @@ export function syncResultSummary(r: {
   const base = `同步完成：推送 ${r.pushed_modules} 模块 / 拉取 ${r.pulled_modules} 模块`;
   return r.errors.length ? `${base}（${r.errors.length} 个非致命错误）` : base;
 }
+
+/** 同步错误 tag → 用户处置通道（F44，与移动端 `syncErrorAction` 同口径） */
+export type SyncErrorAction = "recovery" | "unlock" | "upgrade" | "none";
+
+/**
+ * 错误 tag（Rust 侧 `category_tag()`）到处置动作的归类
+ *
+ * - `recovery`（key_mismatch）：本地密钥解不开云端密文，跳密钥恢复页；
+ * - `unlock`（password / not_unlocked）：引导重输同步密码；
+ * - `upgrade`（payload_version）：云端载荷版本高于本端（ADR 0010 两拍升级），
+ *   处置动作是**升级应用**——若不单独归类而塌进 key_mismatch，用户会被
+ *   引到密钥恢复页并可能放弃解不开的云端数据（误导且不可逆）；
+ * - `none`：网络 / 数据库 / 认证 / 限流等普通失败，按原文 toast。
+ */
+export function syncErrorAction(tag: string | null): SyncErrorAction {
+  switch (tag) {
+    case "key_mismatch":
+      return "recovery";
+    case "password":
+    case "not_unlocked":
+      return "unlock";
+    case "payload_version":
+      return "upgrade";
+    default:
+      return "none";
+  }
+}
