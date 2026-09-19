@@ -344,6 +344,20 @@ test("读屏位置播报：焦点行更新 live 区域（D13）", async ({ page 
   await expect(live).toHaveText(/第 \d+ 项，共 \d+ 项/);
 });
 
+test("崩溃边界：页面崩溃后标题栏仍在、可恢复（D14）", async ({ page }) => {
+  // DEV 探针 ?crash=inner 在内层边界里抛错：页面崩溃，壳存活
+  await page.goto("/todo?crash=inner");
+  await expect(page.getByText("页面遇到了问题，已保留标题栏与后台监听")).toBeVisible();
+  // TitleBar 可点：进设置页（无 crash 参数，正常渲染）
+  await page.getByRole("button", { name: "设置" }).click();
+  await expect(page.getByRole("heading", { name: "设置" })).toBeVisible();
+  // 回到崩溃页点「回到今天」→ 软恢复进任务列表
+  await page.goto("/todo?crash=inner");
+  await expect(page.getByText("页面遇到了问题，已保留标题栏与后台监听")).toBeVisible();
+  await page.getByRole("button", { name: "回到今天" }).click();
+  await expect(page.getByRole("heading", { name: "全部任务" })).toBeVisible();
+});
+
 test("重复任务：完成推进下一实例（引擎下沉 todo_tasks_complete 单命令）", async ({ page }) => {
   // 快加一条任务，mock 内存库直改 repeat 字段为每天重复（表单编辑路径不在此用例范围）
   await quickAdd(page, "冒烟任务-每天喝水");

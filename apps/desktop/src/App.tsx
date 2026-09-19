@@ -11,6 +11,7 @@ import { useTodoReminderListener } from "@/hooks/use-todo-reminder-listener";
 import { useStartupSync } from "@/hooks/use-startup-sync";
 import { useExitSyncMask } from "@/hooks/use-exit-sync";
 import { UndoStackProvider } from "@/hooks/use-undo-stack";
+import { ErrorBoundary } from "@/components/error-boundary";
 import {
   dbInitEncrypted,
   dbInitPlaintext,
@@ -69,6 +70,34 @@ function ReadyShell() {
   );
 }
 
+/** 外层崩溃页（D14）：壳本身起不来时只给重载级恢复 + 托盘退出提示 */
+function BootCrashFallback({ onRetry }: { onRetry: () => void }) {
+  return (
+    <div className="flex h-screen flex-col items-center justify-center gap-3 bg-background p-8 text-center">
+      <p className="text-sm font-medium">应用壳遇到了问题</p>
+      <p className="max-w-sm text-xs text-muted-foreground">
+        可重载恢复；若窗口已隐藏到托盘，可从托盘菜单退出后重开。
+      </p>
+      <div className="flex gap-2">
+        <button
+          type="button"
+          className="rounded-md border px-3 py-1.5 text-sm hover:bg-accent"
+          onClick={onRetry}
+        >
+          重试
+        </button>
+        <button
+          type="button"
+          className="rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground hover:bg-primary/90"
+          onClick={() => window.location.reload()}
+        >
+          重载应用
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   const [boot, setBoot] = useState<BootState>("checking");
   const [bootError, setBootError] = useState<string | null>(null);
@@ -111,5 +140,10 @@ export default function App() {
     return <UnlockPage onUnlocked={handleUnlocked} />;
   }
 
-  return <ReadyShell />;
+  // 外层边界（D14）：ReadyShell（含路由/Toaster/全局失效）整体兜底
+  return (
+    <ErrorBoundary fallback={(_error, retry) => <BootCrashFallback onRetry={retry} />}>
+      <ReadyShell />
+    </ErrorBoundary>
+  );
 }

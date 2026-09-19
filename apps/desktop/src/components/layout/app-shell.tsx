@@ -11,7 +11,7 @@
  *   （localStorage 记忆，一次为限）
  */
 import { useEffect } from "react";
-import { Outlet, useLocation } from "react-router";
+import { Outlet, useLocation, useNavigate } from "react-router";
 import { listen } from "@tauri-apps/api/event";
 import { toast } from "sonner";
 
@@ -19,11 +19,62 @@ import { TitleBar } from "@/components/layout/title-bar";
 import { CommandPalette } from "@/components/layout/command-palette";
 import { GlobalSearchDialog } from "@/components/layout/global-search-dialog";
 import { ShortcutHelpDialog } from "@/components/layout/shortcut-help-dialog";
+import { ErrorBoundary } from "@/components/error-boundary";
 import { useAppStore } from "@/stores/app-store";
 import { useMicaEffect } from "@/hooks/use-mica-effect";
 import { useGlobalQuickAdd } from "@/hooks/use-global-quick-add";
 
 const LS_TRAY_CLOSE_HINTED = "orbit.tray.closeHinted";
+
+/**
+ * DEV 崩溃探针（仅 e2e 用）：`?crash=inner` 时在边界内抛错，验证内层
+ * 恢复（TitleBar 存活 + 回到今天）。`import.meta.env.DEV` 在生产构建
+ * 期静态置换为 false，分支随死码消除，不占线上体积。
+ */
+function DevCrashProbe() {
+  const location = useLocation();
+  if (
+    import.meta.env.DEV &&
+    new URLSearchParams(location.search).get("crash") === "inner"
+  ) {
+    throw new Error("[crash-test] inner outlet crash");
+  }
+  return null;
+}
+
+/** 内层崩溃页：壳（标题栏/监听/Toaster）存活，只给软恢复 */
+function OutletCrashFallback({ onRetry }: { onRetry: () => void }) {
+  const navigate = useNavigate();
+  return (
+    <div className="grid h-full place-items-center p-8">
+      <div className="max-w-sm space-y-3 text-center">
+        <p className="text-sm font-medium">页面遇到了问题，已保留标题栏与后台监听</p>
+        <p className="text-xs text-muted-foreground">
+          提醒、同步与托盘驻留不受影响；可重试当前页，或回到今天。
+        </p>
+        <div className="flex justify-center gap-2">
+          <button
+            type="button"
+            className="rounded-md border px-3 py-1.5 text-sm hover:bg-accent"
+            onClick={onRetry}
+          >
+            重试
+          </button>
+          <button
+            type="button"
+            className="rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground hover:bg-primary/90"
+            onClick={() => {
+              onRetry();
+              navigate("/todo");
+            }}
+          >
+            回到今天
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export function AppShell() {
   const commandOpen = useAppStore((s) => s.commandOpen);
@@ -68,7 +119,17 @@ export function AppShell() {
           key={location.pathname.split("/")[1] ?? ""}
           className="page-transition h-full"
         >
-          <Outlet />
+          {/* 内层边界（D14）：Outlet 崩溃不带走 TitleBar/监听/Toaster。
+              故意不跟 location 设 key：外层 div 已按路由首段 key（跨面板
+              持久侧栏/选中态/抽屉），边界再按全路径 key 会重挂载 TodoShell
+              丢 quickView（回收站→我的一天导航回归即因此红）。回到今天靠
+              按钮内 onRetry+导航同批恢复。 */}
+          <ErrorBoundary
+            fallback={(_error, retry) => <OutletCrashFallback onRetry={retry} />}
+          >
+            <DevCrashProbe />
+            <Outlet />
+          </ErrorBoundary>
         </div>
       </main>
       {/* 全局命令面板：提升到 AppShell 层级，避免嵌套在 TitleBar 定位容器中 */}
