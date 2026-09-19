@@ -597,10 +597,16 @@ const commands: Record<string, (args: any, ctx: Ctx) => unknown> = {
     if (filter?.project_id != null) rows = rows.filter((t) => t.project_id === filter.project_id);
     if (filter?.favorite_only === true) rows = rows.filter((t) => t.is_favorite === 1);
     if (filter?.my_day_today != null) rows = rows.filter((t) => t.my_day_date === filter.my_day_today);
+    // 排序（对齐 Rust generic_repo ORDER BY updated_at DESC）：插入序≠更新序，
+    // 贴近上限截断时它决定哪些行可见；mock 此前返回插入序，不可复现截断行为
+    rows = [...rows].sort((a, b) => b.updated_at - a.updated_at);
     const keyworded = filterByKeyword(rows, filter?.keyword);
+    // 分页（对齐 Rust LIMIT/OFFSET；调用方恒传 page:1/page_size:10000，
+    // 现有链路恰一整页，行为不变；第五轮 A5/A6 真分页后门禁才有意义）
+    const paged = paginateRows(keyworded, filter?.page, filter?.page_size);
     return pruneDesc
-      ? keyworded.map((t) => ({ ...t, description: null }))
-      : keyworded;
+      ? paged.map((t) => ({ ...t, description: null }))
+      : paged;
   },
   todo_tasks_get: ({ id }, { db }) => ipcClone(db.tasks.find((t) => t.id === id) ?? null),
   todo_tasks_get_by_uuid: ({ uuid: u }, { db }) => ipcClone(db.tasks.find((t) => t.uuid === u) ?? null),
@@ -1594,6 +1600,17 @@ const commands: Record<string, (args: any, ctx: Ctx) => unknown> = {
     return stats;
   },
 };
+
+/** 分页切片（对齐 Rust generic_repo::list：page_size 缺省/0→20，page 1 起，offset=(page-1)*page_size） */
+export function paginateRows<T>(rows: T[], page?: number, pageSize?: number): T[] {
+  const ps = !pageSize || pageSize <= 0 ? 20 : Math.floor(pageSize);
+  const p = !page || page < 1 ? 1 : Math.floor(page);
+  const start = (p - 1) * ps;
+  return rows.slice(start, start + ps);
+}
+
+/** mock 命令表（仅测试导入：契约测试直调命令实现断言分页/排序/列裁剪保真） */
+export const mockCommands = commands;
 
 /** CSV 轻量解析（RFC 4180 关键子集：引号转义/逗号切分/跳空行；换行在字段内不支持） */
 function parseCsvLite(content: string): string[][] {
