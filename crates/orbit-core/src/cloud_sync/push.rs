@@ -19,11 +19,15 @@
 //! 本地全空 + 远端已有数据时阻断 push（删库重装后 sync_state.json 残留的
 //! 场景），要求走恢复流程而非静默清空云端。
 
+use std::collections::HashMap;
+
 use sqlx::SqlitePool;
 
 use crate::cloud_sync::chunk::split_table_items;
-use crate::cloud_sync::crypto_io::{decrypt_payload, encrypt_payload};
-use crate::cloud_sync::db_loader::{load_table_items, load_table_tombstones, now_ms};
+use crate::cloud_sync::crypto_io::{decrypt_payload, encrypt_bucket_payload, encrypt_payload};
+use crate::cloud_sync::db_loader::{
+    LocalBucketScan, load_table_items, load_table_tombstones, now_ms, scan_local_buckets,
+};
 use crate::cloud_sync::error::CloudSyncError;
 use crate::cloud_sync::meta::{
     ChunkRef, Manifest, TableIndex, TombstoneBucketPayload, TombstoneBucketRef, TombstoneIndex,
@@ -155,6 +159,33 @@ async fn push_all_impl(
     let builder = ProgressBuilder::new(progress_sender, origin);
     builder.starting(tables.len() as u32);
 
+    // F41：本轮水位线上界——本轮开始时刻的逻辑时钟快照。成功保存账本时
+    // 写入 `last_synced_clock_ms`：所有 `updated_at ≤ 本值` 的本地写入都在
+    // 本轮推送范围内；本轮开始**之后**的新写入必然大于本值，下轮重新算脏
+    // 时仍命中，因此不存在"计算脏集合后本地又改"的漏传窗口。
+    let clock_mark = crate::db::clock::next_ms();
+
+    // F41：按水位线预计算每表分桶扫描结果（CAS 重试轮次间复用）。
+    // 水位线 ≤ 0（首同步 / 账本缺失 / 时钟未加载）与扫描失败都退化为全量。
+    let mut bucket_scans: HashMap<&str, Option<LocalBucketScan>> = HashMap::new();
+    for table in &tables {
+        let scan = if force {
+            None
+        } else {
+            // 水位线用 push 专用字段（不是 last_synced_clock_ms）：后者在 pull
+            // 结束时会推进到本轮结束时刻，复用它会把「本轮开始前的本地编辑」
+            // 判成非脏而漏传（fault_matrix four_ops_converge 曾据此翻红）
+            match scan_local_buckets(db_pool, table, state.last_pushed_clock_ms).await {
+                Ok(scan) => scan,
+                Err(e) => {
+                    log::warn!("[push] 表 {table} 分桶扫描失败，退化为完整比对: {e}");
+                    None
+                }
+            }
+        };
+        bucket_scans.insert(table, scan);
+    }
+
     let mut result = PushResult::default();
     let mut cas_attempt = 0u32;
 
@@ -171,10 +202,26 @@ async fn push_all_impl(
         let mut new_manifest = remote_manifest.clone();
         let mut outcomes: Vec<Result<TableOutcome, TableError>> = Vec::with_capacity(tables.len());
         for (idx, table) in tables.iter().enumerate() {
-            builder.pushing("todos", "待办数据", idx as u32 + 1, tables.len() as u32);
+            // F36：模块名与显示名按表定位，不再硬编码单模块文案
+            let module = crate::cloud_sync::modules::module_for_table(table);
+            builder.pushing(
+                module.name,
+                module.display_name,
+                idx as u32 + 1,
+                tables.len() as u32,
+            );
+            let scan = bucket_scans.get(*table).and_then(|scan| scan.as_ref());
             outcomes.push(
-                build_table_outcome(db_pool, adapter, &data_key, &remote_manifest, table, force)
-                    .await,
+                build_table_outcome(
+                    db_pool,
+                    adapter,
+                    &data_key,
+                    &remote_manifest,
+                    table,
+                    force,
+                    scan,
+                )
+                .await,
             );
         }
 
@@ -224,6 +271,10 @@ async fn push_all_impl(
             result = attempt;
             let mut next_state = state.clone();
             next_state.last_synced_at = now_ms();
+            // F41：无变化轮次同样确认了「本轮上界之前的写入已全部在云端」，
+            // 推进 push 水位线使下轮脏集合不包含它们（不动 last_synced_clock_ms
+            // ——那是 pull 侧冲突判据的基线，语义见 state.rs）
+            next_state.last_pushed_clock_ms = next_state.last_pushed_clock_ms.max(clock_mark);
             next_state.update_from_manifest(&remote_manifest);
             state_store.save(&next_state)?;
             return Ok(result);
@@ -306,6 +357,9 @@ async fn push_all_impl(
 
         let mut next_state = state.clone();
         next_state.last_synced_at = now_ms();
+        // F41：push 水位线推进到本轮上界（不是"现在"——本轮开始后的新写入
+        // 必须留给下轮重新判脏）。last_synced_clock_ms 不动，语义见 state.rs。
+        next_state.last_pushed_clock_ms = next_state.last_pushed_clock_ms.max(clock_mark);
         next_state.update_from_manifest(&new_manifest);
         state_store.save(&next_state)?;
         return Ok(result);
@@ -338,10 +392,15 @@ async fn build_table_outcome(
     remote: &Manifest,
     table: &str,
     force: bool,
+    scan: Option<&LocalBucketScan>,
 ) -> Result<TableOutcome, TableError> {
     let mut table_index = remote.table(table).cloned().unwrap_or_default();
     let mut pushed_chunks = 0u32;
     let mut skipped_chunks = 0u32;
+    // AAD 绑定写入门禁（ADR 0010 第一拍）：远端清单里全部已登记设备都具备 0x02
+    // 读取能力时才绑路径。当前发布版本低于 AAD_MIN_APP_VERSION，此值恒 false，
+    // 写出的仍是存量 0x01；第二拍无需改这里，靠版本号自然打开。
+    let bind_aad = remote.all_devices_support_aad();
 
     let items = load_table_items(db_pool, table).await.map_err(|e| TableError {
         table: table.to_string(),
@@ -349,46 +408,60 @@ async fn build_table_outcome(
     })?;
 
     for chunk in split_table_items(table, items) {
+        let remote_ref = remote
+            .table(table)
+            .and_then(|t| t.chunks.get(&chunk.bucket));
+
+        // F41：行数一致 + 无晚于水位线的行 → 内容与上轮推送时逐字节一致，
+        // 直接沿用远端清单条目（既不算指纹也不序列化载荷）。远端缺该桶
+        // （他端清理/首推）或任一判据不满足时必须走完整比对。
+        let unchanged = !force
+            && remote_ref.is_some_and(|r| {
+                scan.is_some_and(|s| s.bucket_is_unchanged(chunk.bucket, r.count))
+            });
+        if unchanged {
+            skipped_chunks += 1;
+            continue;
+        }
+
         let fp = chunk.fingerprint().map_err(|e| TableError {
             table: table.to_string(),
             message: e.to_string(),
         })?;
-        let size = chunk.to_payload_bytes().map(|b| b.len() as u64).unwrap_or(0);
-        let count = chunk.items.len() as u64;
 
-        let remote_ref = remote
-            .table(table)
-            .and_then(|t| t.chunks.get(&chunk.bucket))
-            .filter(|r| r.fp == fp)
-            .filter(|_| !force);
-
-        if remote_ref.is_some() {
+        // 指纹相等即零上传：远端条目保持原样（count/size 同源，无需重算载荷）
+        if !force && remote_ref.is_some_and(|r| r.fp == fp) {
             skipped_chunks += 1;
-        } else {
-            let payload = chunk.to_payload_bytes().map_err(|e| TableError {
-                table: table.to_string(),
-                message: e.to_string(),
-            })?;
-            let encrypted = encrypt_payload(&payload, data_key).map_err(|e| TableError {
-                table: table.to_string(),
-                message: e.to_string(),
-            })?;
-            adapter
-                .upload(&paths::table_bucket_path(table, chunk.bucket), &encrypted)
-                .await
-                .map_err(|e| TableError {
-                    table: table.to_string(),
-                    message: format!("上传分桶 {}: {e}", chunk.bucket),
-                })?;
-            pushed_chunks += 1;
+            continue;
         }
+
+        let payload = chunk.to_payload_bytes().map_err(|e| TableError {
+            table: table.to_string(),
+            message: e.to_string(),
+        })?;
+        let bucket_path = paths::table_bucket_path(table, chunk.bucket);
+        let encrypted =
+            encrypt_bucket_payload(&payload, data_key, &bucket_path, bind_aad).map_err(|e| {
+                TableError {
+                    table: table.to_string(),
+                    message: e.to_string(),
+                }
+            })?;
+        adapter
+            .upload(&bucket_path, &encrypted)
+            .await
+            .map_err(|e| TableError {
+                table: table.to_string(),
+                message: format!("上传分桶 {}: {e}", chunk.bucket),
+            })?;
+        pushed_chunks += 1;
 
         table_index.chunks.insert(
             chunk.bucket,
             ChunkRef {
                 fp,
-                count,
-                size,
+                count: chunk.items.len() as u64,
+                size: payload.len() as u64,
             },
         );
     }
@@ -433,12 +506,16 @@ async fn build_table_outcome(
                 table: table.to_string(),
                 message: e.to_string(),
             })?;
-            let encrypted = encrypt_payload(&bytes, data_key).map_err(|e| TableError {
-                table: table.to_string(),
-                message: e.to_string(),
-            })?;
+            let bucket_path = paths::tombstone_bucket_path(table, &bucket);
+            let encrypted =
+                encrypt_bucket_payload(&bytes, data_key, &bucket_path, bind_aad).map_err(|e| {
+                    TableError {
+                        table: table.to_string(),
+                        message: e.to_string(),
+                    }
+                })?;
             adapter
-                .upload(&paths::tombstone_bucket_path(table, &bucket), &encrypted)
+                .upload(&bucket_path, &encrypted)
                 .await
                 .map_err(|e| TableError {
                     table: table.to_string(),
@@ -493,15 +570,7 @@ async fn read_remote_manifest(
         Some((bytes, token)) => {
             let plain = decrypt_payload(&bytes, data_key)?;
             let manifest: Manifest = serde_json::from_slice(&plain)?;
-            if manifest.layout_version != crate::cloud_sync::meta::LAYOUT_VERSION {
-                return Err(CloudSyncError::Other {
-                    message: format!(
-                        "云端清单布局版本 {} 不受支持（当前 {}）",
-                        manifest.layout_version,
-                        crate::cloud_sync::meta::LAYOUT_VERSION
-                    ),
-                });
-            }
+            manifest.check_layout_version()?;
             Ok((manifest, token, Some(bytes)))
         }
     }
@@ -566,7 +635,7 @@ mod tests {
     use super::*;
     use crate::cloud_sync::progress::NoopProgressSender;
     use crate::sync::error::SyncError;
-    use crate::sync_adapters::traits::{RemoteFile, UploadOutcome, UploadPrecondition};
+    use crate::sync_adapters::traits::{UploadOutcome, UploadPrecondition};
     use async_trait::async_trait;
     use std::collections::HashMap;
     use std::sync::Mutex;
@@ -597,9 +666,6 @@ mod tests {
 
     #[async_trait]
     impl SyncAdapter for MemAdapter {
-        async fn list_files(&self, _: &str) -> Result<Vec<RemoteFile>, SyncError> {
-            Ok(Vec::new())
-        }
         async fn download(&self, path: &str) -> Result<Vec<u8>, SyncError> {
             self.files
                 .lock()
@@ -629,7 +695,7 @@ mod tests {
         async fn asset_exists(&self, _: &str) -> Result<bool, SyncError> {
             Ok(false)
         }
-        async fn list_assets(&self) -> Result<Vec<String>, SyncError> {
+        async fn list_assets(&self, _assets_dir: &str) -> Result<Vec<String>, SyncError> {
             Ok(Vec::new())
         }
         async fn download_with_token(
@@ -799,7 +865,10 @@ mod tests {
         .unwrap();
 
         adapter.uploads.lock().unwrap().clear();
-        sqlx::query("UPDATE todo_projects SET title='X', updated_at=2 WHERE uuid='uuid-5'")
+        // F41：改动必须推进逻辑时钟（水位线判据的前提；生产写路径由
+        // `clock::next_ms()` 保证，测试里也照此写）
+        sqlx::query("UPDATE todo_projects SET title='X', updated_at=? WHERE uuid='uuid-5'")
+            .bind(crate::db::clock::next_ms())
             .execute(&pool)
             .await
             .unwrap();
@@ -823,6 +892,137 @@ mod tests {
             .filter(|p| p.starts_with("tables/"))
             .count();
         assert_eq!(chunk_uploads, 1);
+    }
+
+    /// F41：非脏桶零重算的可见证据（水位线判据的直接后果）
+    ///
+    /// 直接改内容但不推进 `updated_at`（不合规写）时，该桶被判定为「与上轮
+    /// 逐字节一致」而跳过重算——**这是契约声明而非缺陷**：所有业务写路径
+    /// （API / merge / 软删）都必须经 `clock::next_ms()` 推进时间戳。此用例
+    /// 把契约钉住：若将来新增绕过逻辑时钟的写路径，这里会红，正确处置是修
+    /// 写路径，而不是回退 F41 判据（回退即每轮全表重算，A10 归因基线失效）。
+    #[tokio::test]
+    async fn non_dirty_bucket_is_skipped_without_recompute() {
+        let (pool, crypto, store, _tmp) = env().await;
+        sqlx::query(
+            "INSERT INTO todo_projects (uuid, title, created_at, updated_at) VALUES ('u1','P',1,1)",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        let adapter = MemAdapter::new();
+        push_all(
+            &pool,
+            &crypto,
+            &store,
+            &adapter,
+            &NoopProgressSender,
+            SyncOrigin::Manual,
+            "dev-1",
+            &[],
+        )
+        .await
+        .unwrap();
+
+        // 内容变了但时间戳没动（不合规写）：水位线判据看不见
+        sqlx::query("UPDATE todo_projects SET title='CHANGED' WHERE uuid='u1'")
+            .execute(&pool)
+            .await
+            .unwrap();
+        let result = push_all(
+            &pool,
+            &crypto,
+            &store,
+            &adapter,
+            &NoopProgressSender,
+            SyncOrigin::Manual,
+            "dev-1",
+            &[],
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(
+            result.pushed_chunks, 0,
+            "非脏桶不得重算（合规写路径必推进 updated_at，见用例注释）"
+        );
+        assert!(!result.manifest_written);
+    }
+
+    /// F41：软删行的时间戳可能早于水位线（merge 墓碑锚定远端删除时间），
+    /// 「行数比对」判据必须兜住「桶内活行减少」——纯时间戳判据是盲的
+    #[tokio::test]
+    async fn tombstone_applied_row_triggers_bucket_recompute() {
+        let (pool, crypto, store, _tmp) = env().await;
+        // 两个同桶 uuid（桶号是 sha256 取模，循环搜索必然命中）
+        let (uuid_a, uuid_b) = {
+            let mut seen: HashMap<u32, String> = HashMap::new();
+            let mut pair = None;
+            for i in 0..200 {
+                let uuid = format!("row-{i}");
+                let bucket = crate::cloud_sync::chunk::bucket_of_uuid(&uuid);
+                if let Some(prev) = seen.get(&bucket) {
+                    pair = Some((prev.clone(), uuid));
+                    break;
+                }
+                seen.insert(bucket, uuid);
+            }
+            pair.expect("200 个 uuid 对 64 桶必然碰撞")
+        };
+        assert_ne!(uuid_a, uuid_b);
+
+        for uuid in [&uuid_a, &uuid_b] {
+            sqlx::query(
+                "INSERT INTO todo_projects (uuid, title, created_at, updated_at) VALUES (?,'P',1,1)",
+            )
+            .bind(uuid)
+            .execute(&pool)
+            .await
+            .unwrap();
+        }
+        let adapter = MemAdapter::new();
+        let first = push_all(
+            &pool,
+            &crypto,
+            &store,
+            &adapter,
+            &NoopProgressSender,
+            SyncOrigin::Manual,
+            "dev-1",
+            &[],
+        )
+        .await
+        .unwrap();
+        // 迁移可能带种子行（如默认模板），首轮桶数不强求 1；关键是第二轮
+        assert!(first.pushed_chunks >= 1, "首轮至少推送一个分桶");
+
+        // 模拟 merge 应用远端墓碑：is_deleted=1 且时间戳锚定为墓碑原始值
+        // （`updated_at = deleted_at = 1`，远早于本轮水位线 → 时间戳判据失效）
+        sqlx::query(
+            "UPDATE todo_projects SET is_deleted=1, deleted_at=1, updated_at=1 WHERE uuid=?",
+        )
+        .bind(&uuid_a)
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        let result = push_all(
+            &pool,
+            &crypto,
+            &store,
+            &adapter,
+            &NoopProgressSender,
+            SyncOrigin::Manual,
+            "dev-1",
+            &[],
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(
+            result.pushed_chunks, 1,
+            "桶内活行减少（2→1）必须触发重算并重传——时间戳判据的盲区靠行数比对检出"
+        );
     }
 
     #[tokio::test]
@@ -899,8 +1099,9 @@ mod tests {
         *adapter.version.lock().unwrap() += 1;
         assert!(token.is_some());
 
-        // 再改本地一行触发 push
-        sqlx::query("UPDATE todo_projects SET title='P2', updated_at=2 WHERE uuid='mine'")
+        // 再改本地一行触发 push（推进逻辑时钟，见 F41 水位线判据）
+        sqlx::query("UPDATE todo_projects SET title='P2', updated_at=? WHERE uuid='mine'")
+            .bind(crate::db::clock::next_ms())
             .execute(&pool)
             .await
             .unwrap();

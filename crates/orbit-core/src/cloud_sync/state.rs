@@ -39,6 +39,16 @@ pub struct SyncState {
     /// 才算冲突（否则只是他端顺延更新，属正常传播，不该留档噪声）。
     #[serde(default)]
     pub last_synced_clock_ms: i64,
+    /// 最后一次 **push 成功**时的逻辑时钟上界（F41 增量 push 的水位线；
+    /// 0 = 从未成功 push → 首轮全量）
+    ///
+    /// 与 `last_synced_clock_ms` 刻意分开：后者在 pull 结束时会推进到
+    /// 「本轮结束时刻」，若复用它做脏判据，pull 之后 push 会把**本轮开始前
+    /// 的本地编辑**判成非脏而漏传。本字段只由 push 成功推进，且推进到
+    /// push **开始**时的时钟快照（不是结束时刻），保证「本轮开始后的新写入」
+    /// 下轮仍判脏。
+    #[serde(default)]
+    pub last_pushed_clock_ms: i64,
     /// 当前设备 ID
     pub device_id: String,
     /// 上次成功同步后远端清单的 epoch（0 = 从未成功同步）
@@ -57,6 +67,7 @@ impl SyncState {
         Self {
             last_synced_at: 0,
             last_synced_clock_ms: 0,
+            last_pushed_clock_ms: 0,
             device_id: device_id.to_string(),
             manifest_epoch: 0,
             remote_tables: BTreeMap::new(),

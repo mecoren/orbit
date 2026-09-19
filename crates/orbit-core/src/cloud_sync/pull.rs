@@ -19,7 +19,7 @@
 use sqlx::SqlitePool;
 
 use crate::cloud_sync::chunk::ChunkPayload;
-use crate::cloud_sync::crypto_io::decrypt_payload;
+use crate::cloud_sync::crypto_io::{decrypt_bucket_payload, decrypt_payload};
 use crate::cloud_sync::db_loader::now_ms;
 use crate::cloud_sync::error::CloudSyncError;
 use crate::cloud_sync::meta::{Manifest, TombstoneBucketPayload, TombstoneEntry};
@@ -51,6 +51,13 @@ pub struct PullResult {
     pub skipped_chunks: u32,
     /// 下载的墓碑分桶数
     pub downloaded_tombstones: u32,
+    /// 真正被合并写入的表集合（F42）
+    ///
+    /// 「下载了分桶」与「本地数据变了」不是一回事：桶内容可能合并后全 skip。
+    /// 前端据本字段按表精确失效缓存（`lib/db-invalidation.ts` 映射），
+    /// 替代此前 `pulled_modules == 0 就整轮不刷新`的粗判据——顺带修掉
+    /// 「只拉附件、模块计数为 0」那一轮界面不刷新的问题。
+    pub changed_tables: Vec<String>,
 }
 
 /// 执行差量 Pull
@@ -90,15 +97,7 @@ pub async fn pull_all(
         Some((bytes, _)) => {
             let plain = decrypt_payload(&bytes, &data_key)?;
             let m: Manifest = serde_json::from_slice(&plain)?;
-            if m.layout_version != crate::cloud_sync::meta::LAYOUT_VERSION {
-                return Err(CloudSyncError::Other {
-                    message: format!(
-                        "云端清单布局版本 {} 不受支持（当前 {}）",
-                        m.layout_version,
-                        crate::cloud_sync::meta::LAYOUT_VERSION
-                    ),
-                });
-            }
+            m.check_layout_version()?;
             m
         }
     };
@@ -116,11 +115,10 @@ pub async fn pull_all(
     }
 
     let builder = ProgressBuilder::new(progress_sender, origin);
-    // 表集合 = 有数据分桶的表 ∪ 有墓碑分桶的表。
-    // 数据被删光的表只剩墓碑，若只遍历 tables 会漏掉删除传播。
+    // 表集合 = 有数据分桶的表 ∪ 有墓碑分桶的表，按依赖序遍历（F47）
     let mut table_names: std::collections::BTreeSet<&String> = manifest.tables.keys().collect();
     table_names.extend(manifest.tombstones.keys());
-    let tables: Vec<&String> = table_names.into_iter().collect();
+    let tables = tables_in_dependency_order(table_names.into_iter());
     builder.starting(tables.len() as u32);
 
     let mut result = PullResult::default();
@@ -128,7 +126,14 @@ pub async fn pull_all(
 
     for (idx, table) in tables.iter().enumerate() {
         let table: &str = table;
-        builder.pulling("todos", "待办数据", idx as u32 + 1, tables.len() as u32);
+        // F36：模块名与显示名按表定位，不再硬编码单模块文案
+        let module = crate::cloud_sync::modules::module_for_table(table);
+        builder.pulling(
+            module.name,
+            module.display_name,
+            idx as u32 + 1,
+            tables.len() as u32,
+        );
 
         match pull_single_table(
             db_pool,
@@ -153,9 +158,14 @@ pub async fn pull_all(
                 if outcome.downloaded_chunks > 0 || outcome.downloaded_tombstones > 0 {
                     result.pulled_modules = 1;
                 }
+                // F42：真正写入的表才回报（桶下载了但合并全 skip 不算变更）
+                if outcome.merge.inserted + outcome.merge.updated + outcome.merge.deleted > 0 {
+                    result.changed_tables.push(table.to_string());
+                }
+                let module = crate::cloud_sync::modules::module_for_table(table);
                 builder.merging(
-                    "todos",
-                    "待办数据",
+                    module.name,
+                    module.display_name,
                     outcome.merge.inserted,
                     outcome.merge.updated,
                     outcome.merge.deleted,
@@ -208,6 +218,26 @@ pub async fn pull_all(
     Ok(result)
 }
 
+/// 表遍历顺序：`SYNCABLE_TABLES` 声明序即父表先于子表（F47）
+///
+/// 子行的整数外键要靠**本轮已落库**的父行 uuid 解析，字典序会让
+/// `todo_task_attachments`/`todo_subtasks` 抢在 `todo_tasks` 之前到达
+/// （`_` < `s`），解析必失败。未登记的表排在最后（单表处另有白名单校验会拒），
+/// 同位次保持入参顺序——`sort_by_key` 是稳定排序。
+fn tables_in_dependency_order<'a>(
+    names: impl Iterator<Item = &'a String>,
+) -> Vec<&'a String> {
+    let mut v: Vec<&'a String> = names.collect();
+    let rank = |t: &str| {
+        crate::db::sync_registry::SYNCABLE_TABLES
+            .iter()
+            .position(|s| *s == t)
+            .unwrap_or(crate::db::sync_registry::SYNCABLE_TABLES.len())
+    };
+    v.sort_by_key(|t| rank(t));
+    v
+}
+
 /// 单表拉取结果
 struct TablePullOutcome {
     merge: crate::cloud_sync::merge::MergeResult,
@@ -244,7 +274,7 @@ async fn pull_single_table(
             }
             let path = paths::table_bucket_path(table, *bucket);
             let bytes = adapter.download(&path).await?;
-            let plain = decrypt_payload(&bytes, data_key)?;
+            let plain = decrypt_bucket_payload(&bytes, data_key, &path)?;
             let payload: ChunkPayload = serde_json::from_slice(&plain)?;
             if payload.table != table || payload.bucket != *bucket {
                 return Err(CloudSyncError::Merge {
@@ -268,7 +298,7 @@ async fn pull_single_table(
             }
             let path = paths::tombstone_bucket_path(table, bucket);
             let bytes = adapter.download(&path).await?;
-            let plain = decrypt_payload(&bytes, data_key)?;
+            let plain = decrypt_bucket_payload(&bytes, data_key, &path)?;
             let payload: TombstoneBucketPayload = serde_json::from_slice(&plain)?;
             if payload.table != table || payload.bucket != *bucket {
                 return Err(CloudSyncError::Merge {
@@ -305,7 +335,6 @@ mod tests {
     use crate::cloud_sync::meta::{ChunkRef, TableIndex};
     use crate::cloud_sync::progress::NoopProgressSender;
     use crate::sync::error::SyncError;
-    use crate::sync_adapters::traits::RemoteFile;
     use async_trait::async_trait;
     use std::collections::HashMap;
     use std::sync::Mutex;
@@ -329,9 +358,6 @@ mod tests {
 
     #[async_trait]
     impl SyncAdapter for MemAdapter {
-        async fn list_files(&self, _: &str) -> Result<Vec<RemoteFile>, SyncError> {
-            Ok(Vec::new())
-        }
         async fn download(&self, path: &str) -> Result<Vec<u8>, SyncError> {
             self.downloads.lock().unwrap().push(path.to_string());
             self.files
@@ -374,7 +400,7 @@ mod tests {
                 .cloned()
                 .map(|b| (b, None)))
         }
-        async fn list_assets(&self) -> Result<Vec<String>, SyncError> {
+        async fn list_assets(&self, _assets_dir: &str) -> Result<Vec<String>, SyncError> {
             Ok(Vec::new())
         }
     }
@@ -462,6 +488,51 @@ mod tests {
         assert_eq!(state.manifest_epoch, 3);
         assert!(
             state.remote_chunk_fp("todo_projects", 0).is_some() || !state.remote_tables.is_empty()
+        );
+    }
+
+    /// F42：changed_tables 只回报真正被合并写入的表（无变化轮次为空）
+    ///
+    /// 前端按此集合精确失效缓存（桌面 `useSyncInvalidation` / 移动端
+    /// `invalidateAfterSyncCaches`），替代 `pulled_modules == 0 就整轮不刷`
+    /// 的粗判据——那会漏掉「只拉附件」与「桶下载了但合并全 skip」两类轮次。
+    #[tokio::test]
+    async fn changed_tables_reports_only_written_tables() {
+        let (pool, crypto, store, _tmp) = env().await;
+        let adapter = MemAdapter::new();
+        seed_remote(&adapter, "remote-1", "来自他端", 100);
+
+        let first = pull_all(
+            &pool,
+            &crypto,
+            &store,
+            &adapter,
+            &NoopProgressSender,
+            SyncOrigin::Manual,
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            first.changed_tables,
+            vec!["todo_projects".to_string()],
+            "首次拉取必须回报真正写入的表"
+        );
+
+        // epoch 未变 → 快速跳过：没有任何表被写入
+        let second = pull_all(
+            &pool,
+            &crypto,
+            &store,
+            &adapter,
+            &NoopProgressSender,
+            SyncOrigin::Manual,
+        )
+        .await
+        .unwrap();
+        assert!(
+            second.changed_tables.is_empty(),
+            "无变化轮次不得回报表变更: {:?}",
+            second.changed_tables
         );
     }
 
@@ -683,5 +754,38 @@ mod tests {
                 .unwrap();
         assert_eq!(is_deleted, 1, "远端墓碑必须传播为本地软删");
         assert_eq!(deleted_at, 100, "删除时间必须保留原始值");
+    }
+
+    /// F47：pull 的表遍历必须是「父先子后」，否则子行外键无父可解析
+    #[test]
+    fn table_traversal_is_parent_before_child() {
+        // 输入刻意用字典序（BTreeSet 的实际产出），并预置一条未登记表
+        let dict: std::collections::BTreeSet<String> = [
+            "todo_task_attachments",
+            "todo_tasks",
+            "todo_subtasks",
+            "todo_projects",
+            "unregistered_table",
+        ]
+        .into_iter()
+        .map(str::to_string)
+        .collect();
+        assert!(
+            dict.iter().position(|t| t == "todo_task_attachments").unwrap()
+                < dict.iter().position(|t| t == "todo_tasks").unwrap(),
+            "夹具须复现「字典序把附件表排在任务表之前」这一前提"
+        );
+        let ordered = tables_in_dependency_order(dict.iter());
+        assert_eq!(
+            ordered,
+            vec![
+                "todo_projects",
+                "todo_tasks",
+                "todo_subtasks",
+                "todo_task_attachments",
+                "unregistered_table",
+            ],
+            "依赖序：注册表声明顺序优先，未登记表殿后"
+        );
     }
 }
