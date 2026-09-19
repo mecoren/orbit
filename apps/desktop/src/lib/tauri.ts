@@ -26,6 +26,15 @@ export interface ListFilter {
   my_day_today?: number | null;
 }
 
+/**
+ * todo_tasks 谓词下推参数（F5）：ListFilter 里去掉 keyword/分页的那一组。
+ * 壳层全量查询与面板搜索查询共用同一份对象——两处各自拼一遍迟早口径漂移。
+ */
+export type TaskListPredicate = Pick<
+  ListFilter,
+  "done" | "project_id" | "favorite_only" | "my_day_today"
+>;
+
 // ---------- 通用业务 ----------
 
 /** 通用业务表记录数（列表页计数角标） */

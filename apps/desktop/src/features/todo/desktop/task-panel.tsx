@@ -34,7 +34,7 @@ import { useTaskReminders } from "../shared/use-task-reminders";
 import { useQuery } from "@tanstack/react-query";
 import { filterTasks, sortTasks, type TaskSortKey } from "../shared/task-filters";
 import { applySavedFilter } from "../shared/saved-filter";
-import { savedFiltersList } from "@/lib/tauri";
+import { savedFiltersList, todoTaskList } from "@/lib/tauri";
 import { useTodoShell } from "./todo-shell";
 import { TaskListView } from "./task-list-view";
 import { LogbookView } from "./logbook-view";
@@ -87,6 +87,7 @@ export default function TaskPanel() {
     tasks,
     tasksLoading,
     tasksError,
+    taskPredicate,
     openCreateForm,
     openCreateFormOnDate,
     openCreateFormFromTemplate,
@@ -100,6 +101,32 @@ export default function TaskPanel() {
   // 搜索防抖（200ms，与全局搜索 250ms 同族）：输入期不再每键全量
   // filterTasks 重跑（万任务下一键一遍分组+排序），停止击键才过滤
   const debouncedKeyword = useDebouncedValue(keyword.trim(), 200);
+  const searching = debouncedKeyword.length > 0;
+  // 关键词下沉服务端（A2 前置修复）：全量通道的 description 按批2 列裁剪以
+  // `NULL AS description` 占位不传输（万级列表省 47% IPC 体积），面板内的
+  // 客户端关键词过滤因此恒搜不到描述——**搜描述静默无结果**。这里对防抖后的
+  // 关键词单开一路：SQL 端 LIKE 按 title+description 过滤且命中集保留全列。
+  // 不复用壳层那份万行集合做键参数——侧栏未完成计数与详情导航都吃它，
+  // 跟着搜索框收窄就是错的数字。
+  const taskSearchQuery = useQuery({
+    queryKey: ["todo_tasks", debouncedKeyword, taskPredicate],
+    queryFn: () =>
+      todoTaskList({
+        keyword: debouncedKeyword,
+        page: 1,
+        page_size: TASK_LIST_PAGE_SIZE,
+        ...taskPredicate,
+      }),
+    enabled: searching,
+    staleTime: 2 * 60 * 1000,
+    gcTime: 10_000,
+    // 命中集是小数组（服务端已按关键词收窄），留上一档只为击键间不闪空；
+    // 全量通道刻意不挂该防闪（A1）
+    placeholderData: (prev) => prev,
+  });
+  // 取数中且从未有过命中集时，先用全量集合按标题匹配兜一帧（等价于修复前的
+  // 可见行为），服务端结果落地后再换——中间态只少不多，不会出假的「无结果」
+  const sourceTasks = searching ? (taskSearchQuery.data ?? tasks) : tasks;
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [priorityFilter, setPriorityFilter] = useState<PriorityFilter>("all");
   const [viewMode, setViewMode] = useState<ViewMode>(loadViewMode);
@@ -131,7 +158,8 @@ export default function TaskPanel() {
   const taskReminders = useTaskReminders();
 
   // ---- 内存筛选 + 排序（共享模块，语义同 04 §四；排序档位 #26）----
-  // keyword 在面板内客户端过滤（全量数据由壳层提供）
+  // keyword 的服务端命中集仍再过一遍本地关键词分支：击键间 placeholder 留着
+  // 上一档命中集，不二次过滤就会闪出几条不匹配当前关键词的行
   // #35：选中的保存筛选器（db-change 自动失效）
   const savedFiltersQuery = useQuery({
     queryKey: ["saved-filters", "list"],
@@ -154,7 +182,7 @@ export default function TaskPanel() {
         labelIndex[tid] = labels.map((l) => l.id);
       }
       const filtered = applySavedFilter(
-        (tasks as TodoTask[]).filter((t) =>
+        (sourceTasks as TodoTask[]).filter((t) =>
           debouncedKeyword
             ? t.title.toLowerCase().includes(debouncedKeyword.toLowerCase()) ||
               (t.description ?? "").toLowerCase().includes(debouncedKeyword.toLowerCase())
@@ -167,7 +195,7 @@ export default function TaskPanel() {
     }
     return sortTasks(
       filterTasks(
-        (tasks as TodoTask[]).filter((t) =>
+        (sourceTasks as TodoTask[]).filter((t) =>
           debouncedKeyword
             ? t.title.toLowerCase().includes(debouncedKeyword.toLowerCase()) ||
               (t.description ?? "").toLowerCase().includes(debouncedKeyword.toLowerCase())
@@ -185,7 +213,7 @@ export default function TaskPanel() {
       sortKey,
     );
   }, [
-    tasks,
+    sourceTasks,
     debouncedKeyword,
     quickView,
     projectId,
@@ -198,11 +226,11 @@ export default function TaskPanel() {
     hideDone,
   ]);
 
-  // 拉取命中上限（A5）：壳层单次最多取 TASK_LIST_PAGE_SIZE 条，命中即意味着
-  // 还有未取到的任务。条幅按**原始拉取**判定（工具栏筛选只收窄已取到的部分，
-  // 截断风险依旧），计数后缀「+」只在该视图真的显示到上限时出现——否则
-  // 筛出 2 条也写「2+」反而读不通。静默少显示比显示慢更糟。
-  const listTruncated = tasks.length >= TASK_LIST_PAGE_SIZE;
+  // 拉取命中上限（A5）：壳层/搜索通道单次最多取 TASK_LIST_PAGE_SIZE 条，命中
+  // 即意味着还有未取到的任务。条幅按**当前取数源**判定（搜索时是服务端命中集，
+  // 关键词命中上万条同样是截断），计数后缀「+」只在该视图真的显示到上限时出现
+  // ——否则筛出 2 条也写「2+」反而读不通。静默少显示比显示慢更糟。
+  const listTruncated = sourceTasks.length >= TASK_LIST_PAGE_SIZE;
   const countCapped = visibleTasks.length >= TASK_LIST_PAGE_SIZE;
 
   // ---- 标题映射（04 §二）----

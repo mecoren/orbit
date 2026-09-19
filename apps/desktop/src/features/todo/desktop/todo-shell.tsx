@@ -29,6 +29,7 @@ import {
   todoLabelList,
   todoProjectList,
   todoTaskList,
+  type TaskListPredicate,
   type TodoProject,
   type TodoTask,
 } from "@/lib/tauri";
@@ -66,6 +67,8 @@ interface TodoShellContextValue {
   tasksLoading: boolean;
   /** 任务全量查询错误文案（仅无任何数据时的整块失败才非 null） */
   tasksError: string | null;
+  /** 任务列表谓词下推参数（快捷视图/项目互斥选中 → SQL 端过滤；面板搜索查询复用） */
+  taskPredicate: TaskListPredicate;
 
   // ---- 表单/标签管理（壳层挂载的弹层，面板只触发）----
   formOpen: boolean;
@@ -147,7 +150,7 @@ export default function TodoShell() {
     d.setHours(0, 0, 0, 0);
     return d.getTime();
   }, []);
-  const taskPredicate = useMemo(() => {
+  const taskPredicate = useMemo<TaskListPredicate>(() => {
     if (projectId != null) return { project_id: projectId };
     switch (quickView) {
       case "undone":
@@ -164,6 +167,10 @@ export default function TodoShell() {
   }, [quickView, projectId, todayZero]);
 
   const tasksQuery = useQuery({
+    // keyword 恒空 = 全量通道（侧栏计数、详情导航、无搜索时的列表渲染都吃它）。
+    // 搜索态另开一路带 keyword 的小结果集查询（task-panel）：SQL 端的
+    // keyword LIKE 命中集才带 description——本通道按批2 列裁剪把该列以
+    // NULL 占位不传输，在这里传 keyword 只会搜到标题。
     queryKey: ["todo_tasks", "", taskPredicate],
     queryFn: () =>
       todoTaskList({
@@ -289,6 +296,7 @@ export default function TodoShell() {
     tasks,
     tasksLoading: tasksQuery.isLoading,
     tasksError,
+    taskPredicate,
     formOpen,
     setFormOpen,
     editingTask,

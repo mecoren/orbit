@@ -778,3 +778,52 @@ test("活动日志：写路径埋点 → 详情抽屉历史区块回看（2026-0
   // update 行为前后值明细格式（2026-09-18 可读快照改造后）
   await expect(drawer.getByText(/更新（优先级：无 → 紧急）/)).toBeVisible();
 });
+
+test("工具栏搜索命中标题与描述（A2 关键词下沉服务端）", async ({ page }) => {
+  // 全量列表通道按批2 列裁剪把 description 以 null 占位不传输（万级省 47%
+  // IPC 体积），关键词必须下沉服务端 LIKE 才搜得到描述。此前壳层恒传
+  // keyword:"" + 面板客户端过滤，**搜描述静默无结果**且纯函数单测测不到
+  // （fixture 自带 description）——本用例锁这条链。
+  await page.evaluate(() => {
+    const m = (window as any).__orbitMock;
+    const now = Date.now();
+    m.db.tasks.push({
+      id: 9001,
+      uuid: "e2e-desc-only",
+      title: "冒烟-只在描述里含关键词",
+      description: "正文含唯一标记 QPZZZ",
+      project_id: null,
+      priority: 3,
+      status: "pending",
+      done: 0,
+      done_at: null,
+      due_date: null,
+      start_date: null,
+      repeat_after: 0,
+      repeat_mode: 0,
+      percent_done: 0,
+      position: 9001,
+      is_favorite: 0,
+      my_day_date: null,
+      is_deleted: 0,
+      created_at: now,
+      updated_at: now,
+      deleted_at: null,
+      version: 1,
+    });
+    m.emitDbChange();
+  });
+  const descOnly = page.getByRole("button", { name: "未完成任务：冒烟-只在描述里含关键词" });
+  await expect(descOnly).toBeVisible();
+  const seeded = page.getByRole("button", { name: "未完成任务：既有任务-今天截止" });
+
+  // 标题里没有 QPZZZ：只有走服务端 description 匹配才会命中
+  await page.getByPlaceholder("搜索", { exact: true }).fill("QPZZZ");
+  await expect(descOnly).toBeVisible();
+  await expect(seeded).toHaveCount(0);
+
+  // 清空回全量（搜索态不得粘在缓存上）
+  await page.getByPlaceholder("搜索", { exact: true }).fill("");
+  await expect(seeded).toBeVisible();
+  await expect(descOnly).toBeVisible();
+});
