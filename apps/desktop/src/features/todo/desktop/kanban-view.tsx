@@ -53,7 +53,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import {
   todoTaskUpdate,
   todoTaskUpdatePosition,
-  type TodoLabel,
+  type ProjectedTaskLabel,
   type TodoProject,
   type TodoTask,
 } from "@/lib/tauri";
@@ -82,7 +82,7 @@ interface KanbanViewProps {
   projects: TodoProject[];
   groupBy: KanbanGroupBy;
   /** 任务→标签映射（list-page 级拉取，卡片渲染标签 chips） */
-  labelsByTask: Map<number, TodoLabel[]>;
+  labelsByTask: Map<number, ProjectedTaskLabel[]>;
   /** 任务→提醒映射（TaskPanel 级拉取，卡片渲染提醒徽标） */
   remindersByTask: Map<number, TaskReminderMeta[]>;
   /** 工具栏排序档位（#26）：列内沿用传入序；manual 才允许拖拽重排 */
@@ -476,7 +476,7 @@ const KanbanColumn = memo(function KanbanColumn({
   column: ColumnDef;
   tasks: TodoTask[];
   projects: TodoProject[];
-  labelsByTask: Map<number, TodoLabel[]>;
+  labelsByTask: Map<number, ProjectedTaskLabel[]>;
   remindersByTask: Map<number, TaskReminderMeta[]>;
   draggingId: number | null;
   /** 拖拽结束时间戳 ref（点击抑制用） */
@@ -594,7 +594,7 @@ const KanbanCard = memo(function KanbanCard({
   hasSelection = false,
 }: {
   task: TodoTask;
-  labels: TodoLabel[];
+  labels: ProjectedTaskLabel[];
   /** 行内提醒徽标数据（displayReminder 产物；null = 无存活提醒行） */
   reminder: DisplayReminder | null;
   dragging?: boolean;

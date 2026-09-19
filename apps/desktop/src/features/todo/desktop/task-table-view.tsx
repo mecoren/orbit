@@ -17,7 +17,7 @@ import { Clock, ListChecks, Star, Sunrise } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   todoTaskUpdate,
-  type TodoLabel,
+  type ProjectedTaskLabel,
   type TodoProject,
   type TodoTask,
 } from "@/lib/tauri";
@@ -59,7 +59,7 @@ import { CheckSvg } from "./task-list-view";
 export interface TaskTableViewProps {
   tasks: TodoTask[];
   projects: TodoProject[];
-  labelsByTask: Map<number, TodoLabel[]>;
+  labelsByTask: Map<number, ProjectedTaskLabel[]>;
   remindersByTask: Map<number, TaskReminderMeta[]>;
   onOpenDetail: (id: number) => void;
   /** 列表同款加载/错误态通道（H3：查询进行中不闪「暂无任务」空态） */

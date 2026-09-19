@@ -27,9 +27,17 @@ const TABLE_QUERY_KEYS: Record<string, string[][]> = {
   todo_activity_log: [["task-activity"]],
   todo_subtasks: [["todo-task-detail"]],
   todo_projects: [["todo-project"]],
-  todo_labels: [["todo-label"], ["todo-task-detail"], ["global-search"]],
-  todo_task_labels: [["todo_task_label"], ["todo-task-detail"]],
-  todo_reminders: [["todo_reminders"], ["todo-task-detail"]],
+  todo_labels: [
+    ["todo-label"],
+    ["todo-task-detail"],
+    ["global-search"],
+    // A4 标签 chips 投影（JOIN 依赖标签表：改名/改色须刷 chips）
+    ["todo_task_labels", "projection"],
+  ],
+  // A4：标签 chips 投影（旧 ["todo_task_label"] 整表键仍被右键菜单消费，保留）
+  todo_task_labels: [["todo_task_label"], ["todo_task_labels", "projection"], ["todo-task-detail"]],
+  // A4：提醒徽标投影（旧 ["todo_reminders"] 整表键仍被新建表单消费，保留）
+  todo_reminders: [["todo_reminders"], ["todo_reminders", "projection"], ["todo-task-detail"]],
   todo_comments: [["todo-task-detail"]],
   todo_task_relations: [["todo-task-detail"]],
   todo_task_attachments: [["task-attachments"]],

@@ -6,7 +6,7 @@
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`
 
 /// 活动日志行（todo_activity_log 为本地轨迹表，不进同步白名单）
 class ActivityLogRow {
@@ -297,6 +297,50 @@ class ListFilter {
           myDayToday == other.myDayToday;
 }
 
+/// 行内提醒最小载荷（镜像 ProjectedReminder）
+class ProjectedReminder {
+  final PlatformInt64 id;
+  final PlatformInt64 remindAt;
+
+  const ProjectedReminder({required this.id, required this.remindAt});
+
+  @override
+  int get hashCode => id.hashCode ^ remindAt.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ProjectedReminder &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          remindAt == other.remindAt;
+}
+
+/// 行内标签 chip 最小载荷（镜像 ProjectedTaskLabel：展示三列）
+class ProjectedTaskLabel {
+  final PlatformInt64 id;
+  final String title;
+  final String hexColor;
+
+  const ProjectedTaskLabel({
+    required this.id,
+    required this.title,
+    required this.hexColor,
+  });
+
+  @override
+  int get hashCode => id.hashCode ^ title.hashCode ^ hexColor.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ProjectedTaskLabel &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          title == other.title &&
+          hexColor == other.hexColor;
+}
+
 /// 冲突败方副本（纯本地表，不随云同步；两个 payload 为整行字段快照 JSON 字符串）
 class SyncConflict {
   final PlatformInt64 id;
@@ -420,6 +464,28 @@ class TaskAttachmentView {
           isLocalCached == other.isLocalCached;
 }
 
+/// 单任务的关联计数旗标（镜像 TaskDependencyFlags；C7 消费前移动端暂无调用方）
+class TaskDependencyFlags {
+  final PlatformInt64 taskId;
+  final PlatformInt64 relationCount;
+
+  const TaskDependencyFlags({
+    required this.taskId,
+    required this.relationCount,
+  });
+
+  @override
+  int get hashCode => taskId.hashCode ^ relationCount.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is TaskDependencyFlags &&
+          runtimeType == other.runtimeType &&
+          taskId == other.taskId &&
+          relationCount == other.relationCount;
+}
+
 /// 任务详情中的标签：TodoLabel 全部字段 + task_label_id
 ///
 /// core 版（orbit_core::api::todo_api::TaskLabelWithId）用
@@ -479,6 +545,47 @@ class TaskLabelWithId {
           deletedAt == other.deletedAt &&
           version == other.version &&
           taskLabelId == other.taskLabelId;
+}
+
+/// 单任务的标签分组（镜像 TaskLabelsProjection）
+class TaskLabelsProjection {
+  final PlatformInt64 taskId;
+  final List<ProjectedTaskLabel> labels;
+
+  const TaskLabelsProjection({required this.taskId, required this.labels});
+
+  @override
+  int get hashCode => taskId.hashCode ^ labels.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is TaskLabelsProjection &&
+          runtimeType == other.runtimeType &&
+          taskId == other.taskId &&
+          labels == other.labels;
+}
+
+/// 单任务的提醒分组（镜像 TaskRemindersProjection）
+class TaskRemindersProjection {
+  final PlatformInt64 taskId;
+  final List<ProjectedReminder> reminders;
+
+  const TaskRemindersProjection({
+    required this.taskId,
+    required this.reminders,
+  });
+
+  @override
+  int get hashCode => taskId.hashCode ^ reminders.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is TaskRemindersProjection &&
+          runtimeType == other.runtimeType &&
+          taskId == other.taskId &&
+          reminders == other.reminders;
 }
 
 /// 评论（镜像 orbit_core::models::business::TodoComment）

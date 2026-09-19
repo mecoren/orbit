@@ -405,6 +405,43 @@ class RustOrbitBridge implements OrbitBridge {
   @override
   Future<void> todoReminderDelete(int id) => gen_todo.todoRemindersDelete(id: id);
 
+  // ── 任务列表投影聚合（A4，只读）──
+
+  @override
+  Future<List<TaskLabelsProjection>> taskLabelsProjection() async =>
+      (await gen_todo.taskLabelsProjection())
+          .map((g) => TaskLabelsProjection(
+                taskId: g.taskId,
+                labels: g.labels
+                    .map((l) => ProjectedTaskLabel(
+                          id: l.id,
+                          title: l.title,
+                          hexColor: l.hexColor,
+                        ))
+                    .toList(),
+              ))
+          .toList();
+
+  @override
+  Future<List<TaskRemindersProjection>> taskRemindersProjection() async =>
+      (await gen_todo.taskRemindersProjection())
+          .map((g) => TaskRemindersProjection(
+                taskId: g.taskId,
+                reminders: g.reminders
+                    .map((r) => ProjectedReminder(id: r.id, remindAt: r.remindAt))
+                    .toList(),
+              ))
+          .toList();
+
+  @override
+  Future<List<TaskDependencyFlags>> taskDependencyFlags() async =>
+      (await gen_todo.taskDependencyFlags())
+          .map((f) => TaskDependencyFlags(
+                taskId: f.taskId,
+                relationCount: f.relationCount,
+              ))
+          .toList();
+
   // ── 同步配置与执行 ──
 
   @override

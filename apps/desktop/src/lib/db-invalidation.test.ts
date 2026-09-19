@@ -44,19 +44,34 @@ describe("invalidateByTable 表级失效映射", () => {
     expect(calls).toEqual([{ queryKey: ["todo-task-detail"] }]);
   });
 
-  it("todo_reminders → 提醒列表 + 详情", () => {
+  it("todo_reminders → 提醒列表 + 徽标投影 + 详情（A4）", () => {
     const { qc, calls } = makeClient();
     invalidateByTable(qc, "todo_reminders");
-    expect(calls).toEqual([{ queryKey: ["todo_reminders"] }, { queryKey: ["todo-task-detail"] }]);
+    expect(calls).toEqual([
+      { queryKey: ["todo_reminders"] },
+      { queryKey: ["todo_reminders", "projection"] },
+      { queryKey: ["todo-task-detail"] },
+    ]);
   });
 
-  it("todo_labels → 标签列表 + 详情 + 搜索", () => {
+  it("todo_labels → 标签列表 + 详情 + 搜索 + chips 投影（A4）", () => {
     const { qc, calls } = makeClient();
     invalidateByTable(qc, "todo_labels");
     expect(calls).toEqual([
       { queryKey: ["todo-label"] },
       { queryKey: ["todo-task-detail"] },
       { queryKey: ["global-search"] },
+      { queryKey: ["todo_task_labels", "projection"] },
+    ]);
+  });
+
+  it("todo_task_labels → 旧整表键 + chips 投影 + 详情（A4）", () => {
+    const { qc, calls } = makeClient();
+    invalidateByTable(qc, "todo_task_labels");
+    expect(calls).toEqual([
+      { queryKey: ["todo_task_label"] },
+      { queryKey: ["todo_task_labels", "projection"] },
+      { queryKey: ["todo-task-detail"] },
     ]);
   });
 

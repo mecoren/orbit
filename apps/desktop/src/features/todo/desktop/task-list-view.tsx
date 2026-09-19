@@ -65,7 +65,7 @@ import { isListActivationKey, listNavDirection } from "../shared/list-keyboard";
 import { midpoint } from "../shared/position";
 import { batchSetDueDate, batchUpdateStatus, batchUpdatePriority, batchUpdateFavorite, batchMoveToProject, batchUpdateMyDay } from "../shared/batch-actions";
 import { useUndoableDeleteAction, hideManyFromQueries } from "@/hooks/use-undoable-delete";
-import { todoTaskDelete, todoTaskUpdate, todoTaskUpdatePosition, type TodoLabel, type TodoProject, type TodoTask } from "@/lib/tauri";
+import { todoTaskDelete, todoTaskUpdate, todoTaskUpdatePosition, type ProjectedTaskLabel, type TodoProject, type TodoTask } from "@/lib/tauri";
 import { patchQueriesData } from "@/lib/query-patch";
 import { FAVORITE_COLOR, OVERDUE_COLOR_CLASS, PRIORITY_COLOR, PRIORITY_LABELS, TODO_ACCENT, MY_DAY_COLOR } from "../shared/constants";
 import { LabelChips } from "../shared/label-chips";
@@ -77,7 +77,7 @@ interface TaskListViewProps {
   tasks: TodoTask[];
   projects: TodoProject[];
   /** 任务→标签映射（list-page 级拉取，行内渲染标签 chips） */
-  labelsByTask: Map<number, TodoLabel[]>;
+  labelsByTask: Map<number, ProjectedTaskLabel[]>;
   /** 任务→提醒映射（TaskPanel 级拉取，行内渲染提醒徽标） */
   remindersByTask: Map<number, TaskReminderMeta[]>;
   loading?: boolean;
@@ -686,7 +686,7 @@ interface TaskRowProps {
   task: TodoTask;
   index: number;
   count: number;
-  labels: TodoLabel[];
+  labels: ProjectedTaskLabel[];
   project?: TodoProject;
   due: string | null;
   overdue: boolean;

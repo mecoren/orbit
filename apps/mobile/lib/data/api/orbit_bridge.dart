@@ -276,6 +276,17 @@ abstract class OrbitBridge {
   Future<TodoReminder> todoReminderCreate(TodoReminderCreateInput input);
   Future<void> todoReminderDelete(int id);
 
+  // ── 任务列表投影聚合（A4，只读：一次往返替代万行整表 + 前端 join）──
+
+  /// 任务→标签投影（组内按 label id 升序）
+  Future<List<TaskLabelsProjection>> taskLabelsProjection();
+
+  /// 任务→提醒投影（组内按 remind_at 升序）
+  Future<List<TaskRemindersProjection>> taskRemindersProjection();
+
+  /// 任务→关联计数旗标（仅出边存活行；Wave 5 的 C7 消费）
+  Future<List<TaskDependencyFlags>> taskDependencyFlags();
+
   // ── 同步配置与执行 ──
 
   /// 当前同步配置；未配置时返回 null

@@ -98,6 +98,154 @@ pub async fn get_todo_task_detail(pool: &SqlitePool, id: i64) -> CoreResult<Todo
     })
 }
 
+// ============================================================================
+// 任务列表投影聚合（A4，只读）
+//
+// 背景：列表行/看板卡/日历行共用的标签 chips 与提醒徽标，此前是
+// `todo_labels_list` + `todo_task_labels_list(page_size:10000)` /
+// `todo_reminders_list(page_size:10000)` 两次万行整表 + 前端 join
+//（见桌面 use-task-labels/use-task-reminders）。现改 core 侧一次往返的
+// 瘦投影：只传行内展示必需列（标签 id/title/hex_color、提醒 id/remind_at），
+// uuid/version/时间戳等落库元数据不出桥。
+//
+// 约束（只读聚合三件套，与 stats_api 同口径）：
+// - 不 emit db-change 事件（读路径；前端缓存失效仍走写表事件键）；
+// - 不进 `db/sync_registry.rs` 同步白名单（无新表、无新行）；
+// - 无新迁移（只读现有表）。
+//
+// 分组方式：SQL 按 task_id 有序输出 + Rust 侧单遍分组。不用
+// GROUP_CONCAT——标题含分隔符（逗号/换行）时解析脆弱，且提醒 id 需
+// 逐行保留（行内 displayReminder 按 id 选行）。
+//
+// dependency_flags 口径（同批给 Wave 5 的 C7 用）：仅统计出边
+//（`todo_task_relations.task_id` 方向），与详情抽屉 relations 查询
+//（`WHERE task_id = ?`）一致；入边（仅出现在 other_task_id 侧）不计，
+// C7 若需双向再扩展。
+// ============================================================================
+
+/// 行内标签 chip 最小载荷（TodoLabel 子集：展示只需 id/title/hex_color）
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProjectedTaskLabel {
+    pub id: i64,
+    pub title: String,
+    pub hex_color: String,
+}
+
+/// 单任务的标签分组（按 task_id 聚合，组内按 label id 升序）
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TaskLabelsProjection {
+    pub task_id: i64,
+    pub labels: Vec<ProjectedTaskLabel>,
+}
+
+/// 行内提醒最小载荷（TaskReminder 子集；is_deleted 恒 0 由 SQL 过滤保证，
+/// 前端 TaskReminderMeta 的 is_deleted 字段填 0 对齐）
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProjectedReminder {
+    pub id: i64,
+    pub remind_at: i64,
+}
+
+/// 单任务的提醒分组（按 task_id 聚合，组内按 remind_at 升序）
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TaskRemindersProjection {
+    pub task_id: i64,
+    pub reminders: Vec<ProjectedReminder>,
+}
+
+/// 单任务的关联计数旗标（C7 列表徽标只判“有无关联”，无需拉全量关系表）
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+pub struct TaskDependencyFlags {
+    pub task_id: i64,
+    pub relation_count: i64,
+}
+
+/// 标签 JOIN 行（内部扁平形状；SQL 别名与字段一一对应）
+#[derive(sqlx::FromRow)]
+struct FlatTaskLabelRow {
+    task_id: i64,
+    id: i64,
+    title: String,
+    hex_color: String,
+}
+
+/// 提醒扁平行（内部形状；只取展示列）
+#[derive(sqlx::FromRow)]
+struct FlatReminderRow {
+    id: i64,
+    task_id: i64,
+    remind_at: i64,
+}
+
+/// 任务→标签投影（一次往返替代 labels+task_labels 两次整表拉取；只读）
+pub async fn task_labels_projection(pool: &SqlitePool) -> CoreResult<Vec<TaskLabelsProjection>> {
+    let rows: Vec<FlatTaskLabelRow> = sqlx::query_as(
+        "SELECT tl.task_id AS task_id, l.id AS id, l.title AS title, l.hex_color AS hex_color \
+         FROM todo_task_labels tl INNER JOIN todo_labels l ON l.id = tl.label_id \
+         WHERE tl.is_deleted = 0 AND l.is_deleted = 0 \
+         ORDER BY tl.task_id, l.id",
+    )
+    .fetch_all(pool)
+    .await?;
+    // 有序单遍分组（SQL 已按 task_id 排序，无任务表依赖：无挂载任务不出现）
+    let mut out: Vec<TaskLabelsProjection> = Vec::new();
+    for r in rows {
+        let chip = ProjectedTaskLabel {
+            id: r.id,
+            title: r.title,
+            hex_color: r.hex_color,
+        };
+        match out.last_mut() {
+            Some(g) if g.task_id == r.task_id => g.labels.push(chip),
+            _ => out.push(TaskLabelsProjection {
+                task_id: r.task_id,
+                labels: vec![chip],
+            }),
+        }
+    }
+    Ok(out)
+}
+
+/// 任务→提醒投影（一次往返替代万行提醒整表；组内 remind_at 升序，只读）
+pub async fn task_reminders_projection(
+    pool: &SqlitePool,
+) -> CoreResult<Vec<TaskRemindersProjection>> {
+    let rows: Vec<FlatReminderRow> = sqlx::query_as(
+        "SELECT id AS id, task_id AS task_id, remind_at AS remind_at \
+         FROM todo_reminders WHERE is_deleted = 0 \
+         ORDER BY task_id, remind_at",
+    )
+    .fetch_all(pool)
+    .await?;
+    let mut out: Vec<TaskRemindersProjection> = Vec::new();
+    for r in rows {
+        let meta = ProjectedReminder {
+            id: r.id,
+            remind_at: r.remind_at,
+        };
+        match out.last_mut() {
+            Some(g) if g.task_id == r.task_id => g.reminders.push(meta),
+            _ => out.push(TaskRemindersProjection {
+                task_id: r.task_id,
+                reminders: vec![meta],
+            }),
+        }
+    }
+    Ok(out)
+}
+
+/// 任务→关联计数旗标（SQL GROUP BY task_id；仅出边、仅存活行；只读）
+pub async fn task_dependency_flags(pool: &SqlitePool) -> CoreResult<Vec<TaskDependencyFlags>> {
+    let rows: Vec<TaskDependencyFlags> = sqlx::query_as(
+        "SELECT task_id AS task_id, COUNT(*) AS relation_count \
+         FROM todo_task_relations WHERE is_deleted = 0 \
+         GROUP BY task_id ORDER BY task_id",
+    )
+    .fetch_all(pool)
+    .await?;
+    Ok(rows)
+}
+
 /// 子任务完成状态切换 + 自动重算父任务 percent_done
 pub async fn toggle_todo_subtask_done(
     pool: &SqlitePool,
@@ -2672,5 +2820,177 @@ mod predicate_pushdown_tests {
         .await
         .unwrap();
         assert!(none.is_empty());
+    }
+}
+
+/// 任务列表投影聚合回归（A4：列表行/看板卡/日历行共用的标签 chips 与
+/// 提醒徽标，不再各拉一次万行整表在前端 join；dependency_flags 同批给
+/// Wave 5 的 C7 消费——列表徽标只需“有无关联”，无需拉全量关系表）
+#[cfg(test)]
+mod task_projection_tests {
+    use super::*;
+    use crate::api::business_api::{
+        create_todo_label, create_todo_reminder, create_todo_task, create_todo_task_label,
+        create_todo_task_relation, delete_todo_label, delete_todo_reminder, delete_todo_task_label,
+        delete_todo_task_relation,
+    };
+    use crate::models::business::{
+        TodoLabelCreateInput, TodoReminderCreateInput, TodoTaskCreateInput,
+        TodoTaskLabelCreateInput, TodoTaskRelationCreateInput,
+    };
+
+    async fn setup_db() -> SqlitePool {
+        let pool = sqlx::SqlitePool::connect("sqlite::memory:").await.unwrap();
+        sqlx::migrate!("./src/db/migrations")
+            .run(&pool)
+            .await
+            .unwrap();
+        pool
+    }
+
+    async fn mk_task(pool: &SqlitePool, title: &str) -> i64 {
+        create_todo_task(
+            pool,
+            &TodoTaskCreateInput {
+                title: title.into(),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap()
+        .id
+    }
+
+    async fn mk_label(pool: &SqlitePool, title: &str) -> i64 {
+        create_todo_label(
+            pool,
+            &TodoLabelCreateInput {
+                title: title.into(),
+                hex_color: None,
+            },
+        )
+        .await
+        .unwrap()
+        .id
+    }
+
+    async fn link_label(pool: &SqlitePool, task_id: i64, label_id: i64) -> i64 {
+        create_todo_task_label(pool, &TodoTaskLabelCreateInput { task_id, label_id })
+            .await
+            .unwrap()
+            .id
+    }
+
+    async fn add_reminder(pool: &SqlitePool, task_id: i64, remind_at: i64) -> i64 {
+        create_todo_reminder(pool, &TodoReminderCreateInput { task_id, remind_at })
+            .await
+            .unwrap()
+            .id
+    }
+
+    async fn link_relation(
+        pool: &SqlitePool,
+        task_id: i64,
+        other_task_id: i64,
+        relation_type: &str,
+    ) -> i64 {
+        create_todo_task_relation(
+            pool,
+            &TodoTaskRelationCreateInput {
+                task_id,
+                other_task_id,
+                relation_type: relation_type.into(),
+            },
+        )
+        .await
+        .unwrap()
+        .id
+    }
+
+    #[tokio::test]
+    async fn labels_projection_groups_and_filters_deleted() {
+        let pool = setup_db().await;
+        let t1 = mk_task(&pool, "任务甲").await;
+        let t2 = mk_task(&pool, "任务乙").await;
+        let l1 = mk_label(&pool, "工作").await;
+        let l2 = mk_label(&pool, "生活").await;
+        link_label(&pool, t1, l1).await;
+        link_label(&pool, t1, l2).await;
+        link_label(&pool, t2, l1).await;
+        // 软删关联行：t2 的 l2 挂载后摘除，不应出现在投影里
+        let dead_link = link_label(&pool, t2, l2).await;
+        delete_todo_task_label(&pool, dead_link).await.unwrap();
+        // 软删标签行：挂到 t1 上的“作废”标签整体不可见
+        let l3 = mk_label(&pool, "作废").await;
+        link_label(&pool, t1, l3).await;
+        delete_todo_label(&pool, l3).await.unwrap();
+
+        let proj = task_labels_projection(&pool).await.unwrap();
+        assert_eq!(proj.len(), 2);
+        let g1 = proj.iter().find(|g| g.task_id == t1).expect("t1 应有分组");
+        assert_eq!(g1.labels.len(), 2);
+        assert!(g1.labels.iter().any(|l| l.title == "工作"));
+        assert!(g1.labels.iter().any(|l| l.title == "生活"));
+        assert!(g1.labels.iter().all(|l| l.title != "作废"));
+        let g2 = proj.iter().find(|g| g.task_id == t2).expect("t2 应有分组");
+        assert_eq!(g2.labels.len(), 1);
+        assert_eq!(g2.labels[0].title, "工作");
+    }
+
+    #[tokio::test]
+    async fn reminders_projection_groups_sorted_and_filters_deleted() {
+        let pool = setup_db().await;
+        let t1 = mk_task(&pool, "任务甲").await;
+        let t2 = mk_task(&pool, "任务乙").await;
+        add_reminder(&pool, t1, 3000).await;
+        add_reminder(&pool, t1, 1000).await;
+        let dead = add_reminder(&pool, t1, 2000).await;
+        delete_todo_reminder(&pool, dead).await.unwrap();
+        add_reminder(&pool, t2, 5000).await;
+
+        let proj = task_reminders_projection(&pool).await.unwrap();
+        assert_eq!(proj.len(), 2);
+        let g1 = proj.iter().find(|g| g.task_id == t1).expect("t1 应有分组");
+        let ats: Vec<i64> = g1.reminders.iter().map(|r| r.remind_at).collect();
+        // 存活行按 remind_at 升序（displayReminder 的选取前提）
+        assert_eq!(ats, vec![1000, 3000]);
+        let g2 = proj.iter().find(|g| g.task_id == t2).expect("t2 应有分组");
+        assert_eq!(g2.reminders.len(), 1);
+        assert_eq!(g2.reminders[0].remind_at, 5000);
+    }
+
+    #[tokio::test]
+    async fn dependency_flags_counts_outgoing_undeleted_only() {
+        let pool = setup_db().await;
+        let t1 = mk_task(&pool, "任务甲").await;
+        let t2 = mk_task(&pool, "任务乙").await;
+        let t3 = mk_task(&pool, "任务丙").await;
+        link_relation(&pool, t1, t2, "blocks").await;
+        // 软删的出边不计数
+        let dead = link_relation(&pool, t1, t3, "relates_to").await;
+        delete_todo_task_relation(&pool, dead).await.unwrap();
+        // 入边（t2 → t1）只计在 t2 名下，不计入 t1
+        link_relation(&pool, t2, t1, "blocked_by").await;
+
+        let flags = task_dependency_flags(&pool).await.unwrap();
+        let f1 = flags
+            .iter()
+            .find(|f| f.task_id == t1)
+            .expect("t1 应有 flags");
+        assert_eq!(f1.relation_count, 1);
+        let f2 = flags
+            .iter()
+            .find(|f| f.task_id == t2)
+            .expect("t2 应有 flags");
+        assert_eq!(f2.relation_count, 1);
+        assert!(flags.iter().all(|f| f.task_id != t3));
+    }
+
+    #[tokio::test]
+    async fn projections_empty_on_fresh_db() {
+        let pool = setup_db().await;
+        assert!(task_labels_projection(&pool).await.unwrap().is_empty());
+        assert!(task_reminders_projection(&pool).await.unwrap().is_empty());
+        assert!(task_dependency_flags(&pool).await.unwrap().is_empty());
     }
 }

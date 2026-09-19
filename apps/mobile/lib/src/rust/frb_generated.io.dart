@@ -223,6 +223,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   Uint8List dco_decode_list_prim_u_8_strict(dynamic raw);
 
   @protected
+  List<ProjectedReminder> dco_decode_list_projected_reminder(dynamic raw);
+
+  @protected
+  List<ProjectedTaskLabel> dco_decode_list_projected_task_label(dynamic raw);
+
+  @protected
   List<StatsHeatmapCell> dco_decode_list_stats_heatmap_cell(dynamic raw);
 
   @protected
@@ -244,7 +250,20 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<TaskAttachmentView> dco_decode_list_task_attachment_view(dynamic raw);
 
   @protected
+  List<TaskDependencyFlags> dco_decode_list_task_dependency_flags(dynamic raw);
+
+  @protected
   List<TaskLabelWithId> dco_decode_list_task_label_with_id(dynamic raw);
+
+  @protected
+  List<TaskLabelsProjection> dco_decode_list_task_labels_projection(
+    dynamic raw,
+  );
+
+  @protected
+  List<TaskRemindersProjection> dco_decode_list_task_reminders_projection(
+    dynamic raw,
+  );
 
   @protected
   List<TodoComment> dco_decode_list_todo_comment(dynamic raw);
@@ -307,6 +326,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   PlaintextExportView dco_decode_plaintext_export_view(dynamic raw);
 
   @protected
+  ProjectedReminder dco_decode_projected_reminder(dynamic raw);
+
+  @protected
+  ProjectedTaskLabel dco_decode_projected_task_label(dynamic raw);
+
+  @protected
   ReminderDueDto dco_decode_reminder_due_dto(dynamic raw);
 
   @protected
@@ -352,7 +377,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   TaskAttachmentView dco_decode_task_attachment_view(dynamic raw);
 
   @protected
+  TaskDependencyFlags dco_decode_task_dependency_flags(dynamic raw);
+
+  @protected
   TaskLabelWithId dco_decode_task_label_with_id(dynamic raw);
+
+  @protected
+  TaskLabelsProjection dco_decode_task_labels_projection(dynamic raw);
+
+  @protected
+  TaskRemindersProjection dco_decode_task_reminders_projection(dynamic raw);
 
   @protected
   TodoComment dco_decode_todo_comment(dynamic raw);
@@ -668,6 +702,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   Uint8List sse_decode_list_prim_u_8_strict(SseDeserializer deserializer);
 
   @protected
+  List<ProjectedReminder> sse_decode_list_projected_reminder(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  List<ProjectedTaskLabel> sse_decode_list_projected_task_label(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   List<StatsHeatmapCell> sse_decode_list_stats_heatmap_cell(
     SseDeserializer deserializer,
   );
@@ -701,7 +745,22 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  List<TaskDependencyFlags> sse_decode_list_task_dependency_flags(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   List<TaskLabelWithId> sse_decode_list_task_label_with_id(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  List<TaskLabelsProjection> sse_decode_list_task_labels_projection(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  List<TaskRemindersProjection> sse_decode_list_task_reminders_projection(
     SseDeserializer deserializer,
   );
 
@@ -782,6 +841,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  ProjectedReminder sse_decode_projected_reminder(SseDeserializer deserializer);
+
+  @protected
+  ProjectedTaskLabel sse_decode_projected_task_label(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   ReminderDueDto sse_decode_reminder_due_dto(SseDeserializer deserializer);
 
   @protected
@@ -829,7 +896,22 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  TaskDependencyFlags sse_decode_task_dependency_flags(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   TaskLabelWithId sse_decode_task_label_with_id(SseDeserializer deserializer);
+
+  @protected
+  TaskLabelsProjection sse_decode_task_labels_projection(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  TaskRemindersProjection sse_decode_task_reminders_projection(
+    SseDeserializer deserializer,
+  );
 
   @protected
   TodoComment sse_decode_todo_comment(SseDeserializer deserializer);
@@ -1216,6 +1298,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_list_projected_reminder(
+    List<ProjectedReminder> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_projected_task_label(
+    List<ProjectedTaskLabel> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_list_stats_heatmap_cell(
     List<StatsHeatmapCell> self,
     SseSerializer serializer,
@@ -1258,8 +1352,26 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_list_task_dependency_flags(
+    List<TaskDependencyFlags> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_list_task_label_with_id(
     List<TaskLabelWithId> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_task_labels_projection(
+    List<TaskLabelsProjection> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_task_reminders_projection(
+    List<TaskRemindersProjection> self,
     SseSerializer serializer,
   );
 
@@ -1366,6 +1478,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_projected_reminder(
+    ProjectedReminder self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_projected_task_label(
+    ProjectedTaskLabel self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_reminder_due_dto(
     ReminderDueDto self,
     SseSerializer serializer,
@@ -1441,8 +1565,26 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_task_dependency_flags(
+    TaskDependencyFlags self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_task_label_with_id(
     TaskLabelWithId self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_task_labels_projection(
+    TaskLabelsProjection self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_task_reminders_projection(
+    TaskRemindersProjection self,
     SseSerializer serializer,
   );
 

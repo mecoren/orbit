@@ -115,3 +115,40 @@ pub async fn global_search(
         .await
         .map_err(|e| e.to_string())
 }
+
+// ---------- 任务列表投影聚合（A4，只读） ----------
+//
+// 薄壳转发 orbit_core::api::todo_api 三投影（不 emit、不进同步白名单）：
+// - `task_labels_projection`：任务→标签 chips（替代 labels+task_labels 两次整表）；
+// - `task_reminders_projection`：任务→提醒徽标（替代万行提醒整表）；
+// - `task_dependency_flags`：任务→关联计数（Wave 5 的 C7 列表徽标用）。
+
+/// 任务→标签投影（一次往返；组内按 label id 升序）
+#[tauri::command]
+pub async fn task_labels_projection(
+    state: State<'_, AppState>,
+) -> Result<Vec<todo_api::TaskLabelsProjection>, String> {
+    todo_api::task_labels_projection(&state.pool)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// 任务→提醒投影（一次往返；组内按 remind_at 升序）
+#[tauri::command]
+pub async fn task_reminders_projection(
+    state: State<'_, AppState>,
+) -> Result<Vec<todo_api::TaskRemindersProjection>, String> {
+    todo_api::task_reminders_projection(&state.pool)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// 任务→关联计数旗标（仅出边存活行；C7 消费前无前端调用方）
+#[tauri::command]
+pub async fn task_dependency_flags(
+    state: State<'_, AppState>,
+) -> Result<Vec<todo_api::TaskDependencyFlags>, String> {
+    todo_api::task_dependency_flags(&state.pool)
+        .await
+        .map_err(|e| e.to_string())
+}

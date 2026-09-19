@@ -747,6 +747,66 @@ class MockOrbitBridge implements OrbitBridge {
         _emit('todo_reminders');
       });
 
+  // ── 任务列表投影聚合（A4，只读：从内存库同口径推导，不 emit 事件）──
+
+  @override
+  Future<List<TaskLabelsProjection>> taskLabelsProjection() => _delay(() {
+        final groups = <int, List<ProjectedTaskLabel>>{};
+        final taskIds = store.taskLabels.keys.toList()..sort();
+        for (final taskId in taskIds) {
+          final labelIds = store.taskLabels[taskId]!.keys.toList()..sort();
+          for (final labelId in labelIds) {
+            final l = store.labels[labelId];
+            if (l == null || (l['is_deleted'] as int) != 0) continue;
+            (groups[taskId] ??= []).add(ProjectedTaskLabel(
+              id: l['id'] as int,
+              title: l['title'] as String,
+              hexColor: l['hex_color'] as String,
+            ));
+          }
+          if (groups[taskId]?.isEmpty ?? false) groups.remove(taskId);
+        }
+        return groups.entries
+            .map((e) => TaskLabelsProjection(taskId: e.key, labels: e.value))
+            .toList();
+      });
+
+  @override
+  Future<List<TaskRemindersProjection>> taskRemindersProjection() => _delay(() {
+        final groups = <int, List<ProjectedReminder>>{};
+        final rows = store.reminders.values
+            .where((r) => (r['is_deleted'] as int) == 0)
+            .toList()
+          ..sort((a, b) {
+            final t = (a['task_id'] as int).compareTo(b['task_id'] as int);
+            return t != 0 ? t : (a['remind_at'] as int).compareTo(b['remind_at'] as int);
+          });
+        for (final r in rows) {
+          (groups[r['task_id'] as int] ??= []).add(ProjectedReminder(
+            id: r['id'] as int,
+            remindAt: r['remind_at'] as int,
+          ));
+        }
+        return groups.entries
+            .map((e) => TaskRemindersProjection(taskId: e.key, reminders: e.value))
+            .toList();
+      });
+
+  @override
+  Future<List<TaskDependencyFlags>> taskDependencyFlags() => _delay(() {
+        final counts = <int, int>{};
+        for (final r in store.relations.values) {
+          if ((r['is_deleted'] as int) != 0) continue;
+          final taskId = r['task_id'] as int;
+          counts[taskId] = (counts[taskId] ?? 0) + 1;
+        }
+        final ids = counts.keys.toList()..sort();
+        return ids
+            .map((taskId) =>
+                TaskDependencyFlags(taskId: taskId, relationCount: counts[taskId]!))
+            .toList();
+      });
+
   // ── 任务附件（内容寻址；与桌面 ipc-mock 同构语义）──
 
   @override

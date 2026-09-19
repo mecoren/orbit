@@ -227,3 +227,15 @@ Future<TodoReminder> todoRemindersCreate({
 /// 删除提醒（软删，对应桌面 todo_reminders_delete）
 Future<void> todoRemindersDelete({required PlatformInt64 id}) =>
     RustLib.instance.api.crateApiTodoTodoRemindersDelete(id: id);
+
+/// 任务→标签投影（对应桌面 task_labels_projection；一次往返替代两次整表）
+Future<List<TaskLabelsProjection>> taskLabelsProjection() =>
+    RustLib.instance.api.crateApiTodoTaskLabelsProjection();
+
+/// 任务→提醒投影（对应桌面 task_reminders_projection；组内 remind_at 升序）
+Future<List<TaskRemindersProjection>> taskRemindersProjection() =>
+    RustLib.instance.api.crateApiTodoTaskRemindersProjection();
+
+/// 任务→关联计数旗标（对应桌面 task_dependency_flags；Wave 5 的 C7 消费）
+Future<List<TaskDependencyFlags>> taskDependencyFlags() =>
+    RustLib.instance.api.crateApiTodoTaskDependencyFlags();

@@ -6,7 +6,7 @@
  * 优先级圆点口径不统一；改为点色即可分辨、文字回归安静层级。
  * 超 max 折叠为 +N。
  */
-import type { TodoLabel } from "@/lib/tauri";
+import type { ProjectedTaskLabel } from "@/lib/tauri";
 import { cn } from "@/lib/utils";
 
 /** hex_color 兜底（历史数据可能为空串） */
@@ -17,7 +17,7 @@ export function LabelChips({
   className,
   max = 3,
 }: {
-  labels: TodoLabel[];
+  labels: ProjectedTaskLabel[];
   className?: string;
   /** 最多直显的标签数，超出折叠 +N */
   max?: number;

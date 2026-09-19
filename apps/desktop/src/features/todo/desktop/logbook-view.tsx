@@ -21,14 +21,14 @@ import { EmptyState } from "@/components/business/empty-state";
 import { TaskContextMenu } from "./task-context-menu";
 import { CalendarTaskRow } from "./calendar-view";
 import { groupDoneByDay } from "../shared/task-filters";
-import type { TodoLabel, TodoProject, TodoTask } from "@/lib/tauri";
+import type { ProjectedTaskLabel, TodoProject, TodoTask } from "@/lib/tauri";
 
 interface LogbookViewProps {
   /** filterTasks 输出的完成集（quickView=done 语义：全部 done 任务） */
   tasks: TodoTask[];
   projects: TodoProject[];
   projectById: Map<number, TodoProject>;
-  labelsByTask: Map<number, TodoLabel[]>;
+  labelsByTask: Map<number, ProjectedTaskLabel[]>;
   loading?: boolean;
   onOpenDetail: (id: number) => void;
 }

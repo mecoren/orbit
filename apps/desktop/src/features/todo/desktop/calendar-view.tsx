@@ -72,14 +72,14 @@ import { displayReminder, type DisplayReminder, type TaskReminderMeta } from "..
 import { TaskContextMenu } from "./task-context-menu";
 import { YearOverviewPanel, MAX_YEAR, MIN_YEAR } from "./year-overview";
 import { useWheelStepRef, shiftYearMonth } from "../shared/wheel-nav";
-import type { TodoLabel, TodoProject, TodoTask } from "@/lib/tauri";
+import type { ProjectedTaskLabel, TodoProject, TodoTask } from "@/lib/tauri";
 
 export type CalendarSubMode = "month" | "year" | "agenda";
 
 interface CalendarViewProps {
   tasks: TodoTask[];
   projects: TodoProject[];
-  labelsByTask: Map<number, TodoLabel[]>;
+  labelsByTask: Map<number, ProjectedTaskLabel[]>;
   /** 任务→提醒映射（TaskPanel 级拉取，行内渲染提醒徽标） */
   remindersByTask: Map<number, TaskReminderMeta[]>;
   /** 空「新建任务」动作回调（议程空态引导，由 list-page 注入打开表单） */
@@ -790,7 +790,7 @@ interface VirtualGroupedListProps {
   holidayMarks?: Record<string, HolidayMark>;
   projects: TodoProject[];
   projectById: Map<number, TodoProject>;
-  labelsByTask: Map<number, TodoLabel[]>;
+  labelsByTask: Map<number, ProjectedTaskLabel[]>;
   /** 任务→提醒映射（行内提醒徽标） */
   remindersByTask: Map<number, TaskReminderMeta[]>;
   onOpenDetail: (id: number) => void;
@@ -942,7 +942,7 @@ function DayGroupBlock({
   holiday?: HolidayMark;
   projects: TodoProject[];
   projectById: Map<number, TodoProject>;
-  labelsByTask: Map<number, TodoLabel[]>;
+  labelsByTask: Map<number, ProjectedTaskLabel[]>;
   /** 任务→提醒映射（行内提醒徽标） */
   remindersByTask: Map<number, TaskReminderMeta[]>;
   onOpenDetail: (id: number) => void;
@@ -1017,7 +1017,7 @@ function DayGroupBlock({
 
 interface CalendarTaskRowProps {
   task: TodoTask;
-  labels: TodoLabel[];
+  labels: ProjectedTaskLabel[];
   project?: TodoProject;
   onActivate: () => void;
   overdue?: boolean;

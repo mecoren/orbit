@@ -713,6 +713,94 @@ impl From<orbit_core::api::todo_api::CompleteTaskResult> for CompleteTaskResult 
     }
 }
 
+// ---------- 任务列表投影聚合（A4，只读；镜像 orbit_core::api::todo_api 三投影） ----------
+
+/// 行内标签 chip 最小载荷（镜像 ProjectedTaskLabel：展示三列）
+#[derive(Debug, Clone, Serialize)]
+pub struct ProjectedTaskLabel {
+    pub id: i64,
+    pub title: String,
+    pub hex_color: String,
+}
+
+impl From<orbit_core::api::todo_api::ProjectedTaskLabel> for ProjectedTaskLabel {
+    fn from(l: orbit_core::api::todo_api::ProjectedTaskLabel) -> Self {
+        Self {
+            id: l.id,
+            title: l.title,
+            hex_color: l.hex_color,
+        }
+    }
+}
+
+/// 单任务的标签分组（镜像 TaskLabelsProjection）
+#[derive(Debug, Clone, Serialize)]
+pub struct TaskLabelsProjection {
+    pub task_id: i64,
+    pub labels: Vec<ProjectedTaskLabel>,
+}
+
+impl From<orbit_core::api::todo_api::TaskLabelsProjection> for TaskLabelsProjection {
+    fn from(g: orbit_core::api::todo_api::TaskLabelsProjection) -> Self {
+        Self {
+            task_id: g.task_id,
+            labels: g.labels.into_iter().map(ProjectedTaskLabel::from).collect(),
+        }
+    }
+}
+
+/// 行内提醒最小载荷（镜像 ProjectedReminder）
+#[derive(Debug, Clone, Serialize)]
+pub struct ProjectedReminder {
+    pub id: i64,
+    pub remind_at: i64,
+}
+
+impl From<orbit_core::api::todo_api::ProjectedReminder> for ProjectedReminder {
+    fn from(r: orbit_core::api::todo_api::ProjectedReminder) -> Self {
+        Self {
+            id: r.id,
+            remind_at: r.remind_at,
+        }
+    }
+}
+
+/// 单任务的提醒分组（镜像 TaskRemindersProjection）
+#[derive(Debug, Clone, Serialize)]
+pub struct TaskRemindersProjection {
+    pub task_id: i64,
+    pub reminders: Vec<ProjectedReminder>,
+}
+
+impl From<orbit_core::api::todo_api::TaskRemindersProjection> for TaskRemindersProjection {
+    fn from(g: orbit_core::api::todo_api::TaskRemindersProjection) -> Self {
+        Self {
+            task_id: g.task_id,
+            reminders: g
+                .reminders
+                .into_iter()
+                .map(ProjectedReminder::from)
+                .collect(),
+        }
+    }
+}
+
+/// 单任务的关联计数旗标（镜像 TaskDependencyFlags；C7 消费前移动端暂无调用方）
+#[derive(Debug, Clone, Serialize)]
+pub struct TaskDependencyFlags {
+    pub task_id: i64,
+    pub relation_count: i64,
+}
+
+impl From<orbit_core::api::todo_api::TaskDependencyFlags> for TaskDependencyFlags {
+    fn from(f: orbit_core::api::todo_api::TaskDependencyFlags) -> Self {
+        Self {
+            task_id: f.task_id,
+            relation_count: f.relation_count,
+        }
+    }
+}
+
 // ---------- CSV 导入（迁移路径；镜像 orbit_core::api::csv_import_api） ----------
 
 /// 一条映射后的待导入行（预览载荷）

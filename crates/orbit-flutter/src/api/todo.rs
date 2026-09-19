@@ -6,7 +6,9 @@
 //!   list/get/create/delete 命令 → 委托 orbit_core::api::business_api 同名函数；
 //! - [todo_cmd](../../../../../apps/desktop/src-tauri/src/commands/todo_cmd.rs) 的
 //!   todo_tasks_get_detail / todo_subtasks_toggle_done / todo_tasks_update_position /
-//!   todo_projects_update_sort_order → 委托 orbit_core::api::todo_api。
+//!   todo_projects_update_sort_order / task_labels_projection /
+//!   task_reminders_projection / task_dependency_flags → 委托
+//!   orbit_core::api::todo_api。
 //!
 //! ## DTO 镜像模式（本模块签名一律使用 [super::dto] 本地类型）
 //! FRB 只为 rust_input 扫描范围内的类型定义生成字段级 Dart 镜像；
@@ -37,12 +39,14 @@ use orbit_core::models::business::{
 // 类型定义在 super::dto（FRB 扫描范围内 → 字段级镜像而非 opaque）。
 // 注：TaskLabelWithId 仅作为 TodoTaskDetail.labels 的元素类型出现，
 // 生成代码经 crate::api::dto 路径引用，无需在此再导出。
+// 同理 ProjectedTaskLabel / ProjectedReminder 仅作为分组 labels/reminders
+// 的元素类型出现，不再导出（否则 unused_imports）。
 pub use super::dto::{
-    CompleteTaskResult, ListFilter, TodoComment, TodoCommentCreateInput, TodoLabel,
-    TodoLabelCreateInput, TodoProject, TodoProjectCreateInput, TodoReminder,
-    TodoReminderCreateInput, TodoSubtask, TodoSubtaskCreateInput, TodoTask, TodoTaskCreateInput,
-    TodoTaskDetail, TodoTaskLabel, TodoTaskLabelCreateInput, TodoTaskRelation,
-    TodoTaskRelationCreateInput,
+    CompleteTaskResult, ListFilter, TaskDependencyFlags, TaskLabelsProjection,
+    TaskRemindersProjection, TodoComment, TodoCommentCreateInput, TodoLabel, TodoLabelCreateInput,
+    TodoProject, TodoProjectCreateInput, TodoReminder, TodoReminderCreateInput, TodoSubtask,
+    TodoSubtaskCreateInput, TodoTask, TodoTaskCreateInput, TodoTaskDetail, TodoTaskLabel,
+    TodoTaskLabelCreateInput, TodoTaskRelation, TodoTaskRelationCreateInput,
 };
 
 fn pool() -> Result<sqlx::SqlitePool, String> {
@@ -467,4 +471,35 @@ pub async fn todo_reminders_delete(id: i64) -> Result<(), String> {
     business_api::delete_todo_reminder(&pool, id)
         .await
         .map_err(|e| e.to_string())
+}
+
+// =============================================================================
+// 任务列表投影聚合（A4，只读；与桌面 task_*_projection 命令一一对应）
+// =============================================================================
+
+/// 任务→标签投影（对应桌面 task_labels_projection；一次往返替代两次整表）
+pub async fn task_labels_projection() -> Result<Vec<TaskLabelsProjection>, String> {
+    let pool = pool()?;
+    todo_api::task_labels_projection(&pool)
+        .await
+        .map_err(|e| e.to_string())
+        .map(|v| v.into_iter().map(TaskLabelsProjection::from).collect())
+}
+
+/// 任务→提醒投影（对应桌面 task_reminders_projection；组内 remind_at 升序）
+pub async fn task_reminders_projection() -> Result<Vec<TaskRemindersProjection>, String> {
+    let pool = pool()?;
+    todo_api::task_reminders_projection(&pool)
+        .await
+        .map_err(|e| e.to_string())
+        .map(|v| v.into_iter().map(TaskRemindersProjection::from).collect())
+}
+
+/// 任务→关联计数旗标（对应桌面 task_dependency_flags；Wave 5 的 C7 消费）
+pub async fn task_dependency_flags() -> Result<Vec<TaskDependencyFlags>, String> {
+    let pool = pool()?;
+    todo_api::task_dependency_flags(&pool)
+        .await
+        .map_err(|e| e.to_string())
+        .map(|v| v.into_iter().map(TaskDependencyFlags::from).collect())
 }
