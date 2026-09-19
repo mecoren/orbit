@@ -84,6 +84,7 @@ import {
   repeatLabel,
 } from "../shared/repeat";
 import { completeTask } from "@/features/todo/shared/task-actions";
+import { patchQueriesData } from "@/lib/query-patch";
 import {
   todoTaskDuplicate,
   globalSearch,
@@ -112,6 +113,7 @@ import {
   taskActivityList,
   type TodoComment,
   type TodoSubtask,
+  type TodoTask,
 } from "@/lib/tauri";
 
 /** 关联类型中文标签（只读展示） */
@@ -167,6 +169,9 @@ export function TaskDetailDrawer({ projects }: TaskDetailDrawerProps) {
 
   const updateTask = async (patch: Parameters<typeof todoTaskUpdate>[1]) => {
     if (selectedTaskId == null) return;
+    // 抽屉单字段乐观（D3）：列表与详情同时提前 paint，真值仍走失效重拉收敛
+    patchQueriesData<TodoTask>(qc, ["todo_tasks"], [selectedTaskId], patch);
+    patchQueriesData<TodoTask>(qc, ["todo-task-detail"], [selectedTaskId], patch);
     await todoTaskUpdate(selectedTaskId, patch);
     refetchDetail();
   };

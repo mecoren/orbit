@@ -66,6 +66,7 @@ import { midpoint } from "../shared/position";
 import { batchSetDueDate, batchUpdateStatus, batchUpdatePriority, batchUpdateFavorite, batchMoveToProject, batchUpdateMyDay } from "../shared/batch-actions";
 import { useUndoableDeleteAction, hideManyFromQueries } from "@/hooks/use-undoable-delete";
 import { todoTaskDelete, todoTaskUpdate, todoTaskUpdatePosition, type TodoLabel, type TodoProject, type TodoTask } from "@/lib/tauri";
+import { patchQueriesData } from "@/lib/query-patch";
 import { FAVORITE_COLOR, OVERDUE_COLOR_CLASS, PRIORITY_COLOR, PRIORITY_LABELS, TODO_ACCENT, MY_DAY_COLOR } from "../shared/constants";
 import { LabelChips } from "../shared/label-chips";
 import { ReminderChip } from "../shared/reminder-chip";
@@ -271,7 +272,10 @@ export function TaskListView({ tasks, projects, labelsByTask, remindersByTask, l
       // 容器空白 → 尾部追加
       const last = tasks[tasks.length - 1];
       if (!last || last.id === draggedId) return;
-      await todoTaskUpdatePosition(draggedId, midpoint(last.position));
+      // 乐观 patch 落点（D3）：写库成功前行先定住，不等重拉（回弹即此处缺失）
+      const tailPos = midpoint(last.position);
+      patchQueriesData<TodoTask>(qc, ["todo_tasks"], [draggedId], { position: tailPos });
+      await todoTaskUpdatePosition(draggedId, tailPos);
     } else {
       const targetId = rowIdOf(over.id);
       const targetIdx = tasks.findIndex((t) => t.id === targetId);
@@ -280,7 +284,9 @@ export function TaskListView({ tasks, projects, labelsByTask, remindersByTask, l
       const prev = tasks[targetIdx - 1];
       if (prev && prev.id === draggedId) return;
       const prevPos = prev && prev.id !== draggedId ? prev.position : undefined;
-      await todoTaskUpdatePosition(draggedId, midpoint(prevPos, tasks[targetIdx].position));
+      const nextPos = midpoint(prevPos, tasks[targetIdx].position);
+      patchQueriesData<TodoTask>(qc, ["todo_tasks"], [draggedId], { position: nextPos });
+      await todoTaskUpdatePosition(draggedId, nextPos);
     }
     // 排序展示口径在前端 sortTasks(position 升序)，失效后按新 position 重排
     void qc.invalidateQueries({ queryKey: ["todo_tasks"] });
@@ -330,11 +336,16 @@ export function TaskListView({ tasks, projects, labelsByTask, remindersByTask, l
 
   const projectById = new Map(projects.map((p) => [p.id, p]));
   const toggleFavorite = (t: TodoTask) => {
+    // 乐观翻转（D3）：纯字段，先 paint 后收敛（失效链仍在，见 handleDragEnd 尾）
+    patchQueriesData<TodoTask>(qc, ["todo_tasks"], [t.id], { is_favorite: t.is_favorite ? 0 : 1 });
     void todoTaskUpdate(t.id, { is_favorite: t.is_favorite ? 0 : 1 });
   };
   // 我的一天：加入当天（本地零点）/ 移出（null）。视图按日判断，
   // 昨天加入的任务今天自动退出视图但数据保留（微软 To Do 同款语义）
   const toggleMyDay = (t: TodoTask) => {
+    patchQueriesData<TodoTask>(qc, ["todo_tasks"], [t.id], {
+      my_day_date: toggleMyDayValue(t.my_day_date),
+    });
     void todoTaskUpdate(t.id, { my_day_date: toggleMyDayValue(t.my_day_date) });
   };
   const draggingTask = draggingId != null ? tasks.find((t) => t.id === draggingId) : undefined;
