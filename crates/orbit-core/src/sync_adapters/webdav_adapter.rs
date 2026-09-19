@@ -4,7 +4,7 @@ use std::sync::Mutex;
 use async_trait::async_trait;
 use reqwest::header::{AUTHORIZATION, HeaderMap};
 
-use crate::sync::error::SyncError;
+use crate::sync::error::{SyncError, transport_message};
 use crate::sync_adapters::http_client::HttpClient;
 use crate::sync_adapters::traits::{RemoteFile, SyncAdapter, UploadOutcome, UploadPrecondition};
 use crate::webdav::parse_propfind_response;
@@ -195,7 +195,7 @@ impl WebDavAdapter {
             .send()
             .await
             .map_err(|e| SyncError::Network {
-                message: format!("MKCOL 请求失败: {e}"),
+                message: transport_message("MKCOL 请求", &e),
                 retryable: true,
             })?;
 
@@ -226,9 +226,11 @@ impl WebDavAdapter {
                             Err(SyncError::Config {
                                 field: "endpoint/path".to_string(),
                                 message: format!(
-                                    "无法创建云端目录「{url}」: 父目录已存在但服务器拒绝创建(409)。\
+                                    "无法创建云端目录「{}」: 父目录已存在但服务器拒绝创建(409)。\
                                      可能原因:目录名含非法字符、权限不足、或服务器限制。\
-                                     服务器响应: {body}"
+                                     服务器响应: {}",
+                                    crate::sync::error::redact_userinfo(url),
+                                    crate::sync::error::brief(&body)
                                 ),
                             })
                         } else {
@@ -243,9 +245,11 @@ impl WebDavAdapter {
                         Err(SyncError::Config {
                             field: "endpoint".to_string(),
                             message: format!(
-                                "无法创建云端目录「{url}」: 服务器返回 409 AncestorsNotFound,\
+                                "无法创建云端目录「{}」: 服务器返回 409 AncestorsNotFound,\
                                  且已到达根目录仍无法创建。请检查 endpoint 是否指向有效的 WebDAV 路径。\
-                                 服务器响应: {body}"
+                                 服务器响应: {}",
+                                crate::sync::error::redact_userinfo(url),
+                                crate::sync::error::brief(&body)
                             ),
                         })
                     }
@@ -260,7 +264,10 @@ impl WebDavAdapter {
                     Ok(())
                 } else {
                     Err(SyncError::Network {
-                        message: format!("MKCOL 创建目录失败: HTTP {status}: {body}"),
+                        message: format!(
+                            "MKCOL 创建目录失败: HTTP {status}: {}",
+                            crate::sync::error::brief(&body)
+                        ),
                         retryable: true,
                     })
                 }
@@ -268,7 +275,10 @@ impl WebDavAdapter {
             _ => {
                 let body = response.text().await.unwrap_or_default();
                 Err(SyncError::Network {
-                    message: format!("MKCOL 创建目录失败: HTTP {status}: {body}"),
+                    message: format!(
+                        "MKCOL 创建目录失败: HTTP {status}: {}",
+                        crate::sync::error::brief(&body)
+                    ),
                     retryable: false,
                 })
             }
@@ -278,7 +288,13 @@ impl WebDavAdapter {
     /// 检查指定 URL 的资源是否存在(PROPFIND Depth:0)
     ///
     /// 用于 MKCOL 返回 409 时区分"父目录不存在"和"目录已存在"等场景,
-    /// 避免盲目递归导致死循环。返回 true 表示存在(207/2xx),false 表示不存在(404)。
+    /// 避免盲目递归导致死循环。
+    ///
+    /// F31：207 不再恒等于「存在」——按 RFC 4918，服务器对**不存在**的资源
+    /// 同样回 207 + 条目级 404（Nextcloud/坚果云均如此）。历史实现在 207 上
+    /// 直接返回 true，于是 MKCOL 409 时「父目录其实不存在」被误判成「目录已
+    /// 存在」，跳过递归创建，后续 PUT 继续 409。现按解析后的条目判定：
+    /// multistatus 里有存活条目（至少一个 2xx propstat）才算存在。
     async fn url_exists(&self, url: &str) -> Result<bool, SyncError> {
         let mut headers = self.auth_headers();
         headers.insert("Depth", "0".parse().unwrap());
@@ -300,14 +316,27 @@ impl WebDavAdapter {
             .send()
             .await
             .map_err(|e| SyncError::Network {
-                message: format!("PROPFIND 验证请求失败: {e}"),
+                message: transport_message("PROPFIND 验证请求", &e),
                 retryable: true,
             })?;
 
         let status = response.status().as_u16();
-        // 207 Multi-Status 或 2xx: 资源存在
-        // 404: 资源不存在
-        Ok(status == 207 || (200..=299).contains(&status))
+        if status == 404 {
+            return Ok(false);
+        }
+        if !response.status().is_success() && status != 207 {
+            let body = response.text().await.unwrap_or_default();
+            return Err(SyncError::from_http_status(status, &body));
+        }
+        let xml = response.text().await.map_err(|e| SyncError::Network {
+            message: transport_message("读取 PROPFIND 验证响应", &e),
+            retryable: false,
+        })?;
+        let entries = parse_propfind_response(&xml).map_err(|e| SyncError::Network {
+            message: format!("解析 PROPFIND XML 失败: {e}"),
+            retryable: false,
+        })?;
+        Ok(!entries.is_empty())
     }
 
     /// 解析 URL 的父目录 URL
@@ -341,9 +370,11 @@ impl WebDavAdapter {
     // ================================================================
     // S4 WebDAV 分片协议（2026-09-14 收口）
     //
-    // WebDAV 无 multipart 标准协议，自造分片布局（云端）：
-    //   assets_parts/{hash}/head.json      # 明文清单（无密钥材料）
-    //   assets_parts/{hash}/000000.bin …  # 密文分片
+    // WebDAV 无 multipart 标准协议，自造分片布局（云端）。分片根目录与单对象
+    // 同前缀（F23）：`assets_dir` 的末段 `assets` 换成 `assets_parts`，故
+    // base_path 下的同步走 `{base_path}/assets_parts/…`，不会写到分享根目录外：
+    //   …/assets_parts/{hash}/head.json      # 明文清单（无密钥材料）
+    //   …/assets_parts/{hash}/000000.bin …  # 密文分片
     //
     // head.json 字段：total（分片数）/ size（密文字节数）/ sha256（密文
     // 整体哈希）。跨密钥防混片由 sha256 天然承担：确定性加密（6a711d6）
@@ -360,24 +391,36 @@ impl WebDavAdapter {
     const PARTS_THRESHOLD: usize = 8 * 1024 * 1024;
     const PARTS_SIZE: usize = 5 * 1024 * 1024;
 
-    /// 分片路径：`assets_parts/{hash}/{index:06}.bin`
-    fn part_bin_path(hash: &str, index: usize) -> String {
-        format!("assets_parts/{hash}/{index:06}.bin")
+    /// 分片路径：`{parts_root}/{hash}/{index:06}.bin`
+    ///
+    /// `parts_root` 由入站对象路径推导（`asset_parts_target`），因此生产链路
+    /// 带 base_path 前缀时分片同样落在 `{base_path}/assets_parts` 内（F23）。
+    fn part_bin_path(parts_root: &str, hash: &str, index: usize) -> String {
+        format!("{parts_root}/{hash}/{index:06}.bin")
     }
 
-    /// 清单路径：`assets_parts/{hash}/head.json`
-    fn parts_head_path(hash: &str) -> String {
-        format!("assets_parts/{hash}/head.json")
+    /// 清单路径：`{parts_root}/{hash}/head.json`
+    fn parts_head_path(parts_root: &str, hash: &str) -> String {
+        format!("{parts_root}/{hash}/head.json")
     }
 
     /// 大附件分片上传（断点续传）
+    ///
+    /// `asset_path` 为触发本路径的单对象路径（可能带 base_path 前缀），
+    /// `parts_root` 由它推导——二者都必须透传，缺前缀即把分片写到 base_path 之外。
     ///
     /// 1. 读 head.json：已有清单且 size/sha256 全一致 → 续传；
     ///    不一致（rekey 后密文不同，或上游异常）→ 删除旧分片目录重传
     /// 2. 逐片：HEAD 探测，已存在且 Content-Length 等于本片大小 → 跳过
     /// 3. 全部片就位后**最后**写 head.json——清单是「完整」信号，读侧
     ///    只在清单存在时拼装，中断留下的半成品目录不可读
-    async fn upload_asset_parts(&self, hash: &str, encrypted: &[u8]) -> Result<(), SyncError> {
+    async fn upload_asset_parts(
+        &self,
+        hash: &str,
+        parts_root: &str,
+        asset_path: &str,
+        encrypted: &[u8],
+    ) -> Result<(), SyncError> {
         let total = encrypted.len().div_ceil(Self::PARTS_SIZE);
         let head = AssetPartsHead {
             total,
@@ -387,7 +430,7 @@ impl WebDavAdapter {
 
         // 1. 既有清单检查：全字段一致 → 续传；否则清目录重传。
         //    半成品目录（无清单）也清理——防陈旧分片与新会话混片
-        let head_path = Self::parts_head_path(hash);
+        let head_path = Self::parts_head_path(parts_root, hash);
         let reusable = match self.download(&head_path).await {
             Ok(bytes) => {
                 let existing: serde_json::Result<AssetPartsHead> = serde_json::from_slice(&bytes);
@@ -408,7 +451,7 @@ impl WebDavAdapter {
             Err(e) => return Err(e),
         };
         if !reusable {
-            self.delete_parts_dir(hash).await;
+            self.delete_parts_dir(hash, parts_root).await;
         }
 
         // 2. 逐片上传：已存在且大小一致 → 跳过（断点续传核心）
@@ -416,7 +459,7 @@ impl WebDavAdapter {
             let start = index * Self::PARTS_SIZE;
             let end = std::cmp::min(start + Self::PARTS_SIZE, encrypted.len());
             let chunk = &encrypted[start..end];
-            let part_path = Self::part_bin_path(hash, index);
+            let part_path = Self::part_bin_path(parts_root, hash, index);
             // 已存在且大小等于本片 → 跳过（确定性加密下大小相等即内容相等）
             if let Some(existing_len) = self.remote_file_size(&part_path).await?
                 && existing_len == chunk.len() as u64
@@ -447,9 +490,7 @@ impl WebDavAdapter {
         //    读侧优先命中单对象，残留旧 Key 密文会导致他端解密失败。
         //    404（本就无旧对象，大附件首传走分片）忽略；其余失败透传
         //    （留旧对象 = 他端解密报错，不如本轮失败重试）
-        if let Err(e) = self
-            .delete(&crate::cloud_sync::paths::asset_path(hash))
-            .await
+        if let Err(e) = self.delete(asset_path).await
             && !e.is_not_found()
         {
             return Err(e);
@@ -469,7 +510,7 @@ impl WebDavAdapter {
             .send()
             .await
             .map_err(|e| SyncError::Network {
-                message: format!("HEAD 请求失败: {e}"),
+                message: transport_message("HEAD 请求", &e),
                 retryable: true,
             })?;
         match SyncError::classify_head_status(response.status().as_u16())? {
@@ -482,18 +523,37 @@ impl WebDavAdapter {
         }
     }
 
+    /// 单个对象的 GET（不含分片回退）
+    ///
+    /// F32：坚果云在父目录不存在时对 GET 返回 409 AncestorsNotFound，
+    /// `from_http_status` 现按状态码产出 `AncestorsNotFound` 变体、
+    /// `is_not_found()` 已含该变体——调用方（`download` 的分片回退、
+    /// 清单探测）按类型判定即可，不再需要在此按消息子串改写为 NotFound。
+    async fn download_object(&self, path: &str) -> Result<Vec<u8>, SyncError> {
+        let url = self.build_url(path);
+        let headers = self.auth_headers();
+        self.http.get_with_retry(&url, headers).await
+    }
+
     /// 分片拼装下载：读 head.json → 逐片下载 → 拼接 + 大小/sha256 校验
-    async fn download_asset_parts(&self, hash: &str) -> Result<Vec<u8>, SyncError> {
-        let head_path = Self::parts_head_path(hash);
+    async fn download_asset_parts(
+        &self,
+        hash: &str,
+        parts_root: &str,
+    ) -> Result<Vec<u8>, SyncError> {
+        let head_path = Self::parts_head_path(parts_root, hash);
         let head_bytes = self.download(&head_path).await?;
         let head: AssetPartsHead =
             serde_json::from_slice(&head_bytes).map_err(|e| SyncError::Network {
                 message: format!("解析分片清单失败: {e}"),
                 retryable: false,
             })?;
-        let mut assembled = Vec::with_capacity(head.size);
+        // 不用 with_capacity(head.size)：head.json 是明文清单，size 由服务端
+        // 提供，预分配会把「篡改一个数字」放大成本地分配风暴；拼装后与
+        // head.size 不符本来就会被下面的校验拒掉
+        let mut assembled = Vec::new();
         for index in 0..head.total {
-            let part_path = Self::part_bin_path(hash, index);
+            let part_path = Self::part_bin_path(parts_root, hash, index);
             let mut part = self.download(&part_path).await?;
             assembled.append(&mut part);
         }
@@ -524,9 +584,9 @@ impl WebDavAdapter {
     /// 分片按序上传（000000 起连续编号），按序删除直到首个 404 即尾后
     /// 停止；上限 10000 片防御异常目录。部分失败留孤儿分片无碍正确性
     /// （无 head.json 不可读、不参与 list_assets 差集不会拉回）。
-    async fn delete_parts_dir(&self, hash: &str) {
+    async fn delete_parts_dir(&self, hash: &str, parts_root: &str) {
         for index in 0..10_000 {
-            let part_path = Self::part_bin_path(hash, index);
+            let part_path = Self::part_bin_path(parts_root, hash, index);
             match self.delete(&part_path).await {
                 Ok(()) => {}
                 Err(e) if e.is_not_found() => break,
@@ -535,19 +595,19 @@ impl WebDavAdapter {
                 }
             }
         }
-        if let Err(e) = self.delete(&Self::parts_head_path(hash)).await
+        if let Err(e) = self.delete(&Self::parts_head_path(parts_root, hash)).await
             && !e.is_not_found()
         {
             log::info!("[webdav parts] 删除清单失败（继续）: {e}");
         }
     }
 
-    /// 列出 assets_parts/ 下的一级子目录名（即分片附件的 hash 集合）
+    /// 列出 `{parts_root}/` 下的一级子目录名（即分片附件的 hash 集合）
     ///
     /// 专用 PROPFIND：`list_all_files` 过滤目录条目（is_collection），
     /// 拿不到 {hash}/ 子目录。目录不存在（从未有分片附件）返回空。
-    async fn list_parts_hashes(&self) -> Result<Vec<String>, SyncError> {
-        let url = self.build_url("assets_parts/");
+    async fn list_parts_hashes(&self, parts_root: &str) -> Result<Vec<String>, SyncError> {
+        let url = self.build_url(&format!("{parts_root}/"));
         let mut headers = self.auth_headers();
         headers.insert("Depth", "1".parse().unwrap());
         headers.insert("Content-Type", "application/xml".parse().unwrap());
@@ -569,7 +629,7 @@ impl WebDavAdapter {
             .send()
             .await
             .map_err(|e| SyncError::Network {
-                message: format!("PROPFIND 请求失败: {e}"),
+                message: transport_message("PROPFIND 请求", &e),
                 retryable: true,
             })?;
         let status = response.status().as_u16();
@@ -581,7 +641,7 @@ impl WebDavAdapter {
             return Err(SyncError::from_http_status(status, &body));
         }
         let xml = response.text().await.map_err(|e| SyncError::Network {
-            message: format!("读取 PROPFIND 响应失败: {e}"),
+            message: transport_message("读取 PROPFIND 响应", &e),
             retryable: false,
         })?;
         let entries = parse_propfind_response(&xml).map_err(|e| SyncError::Network {
@@ -610,15 +670,6 @@ impl WebDavAdapter {
 
 #[async_trait]
 impl SyncAdapter for WebDavAdapter {
-    async fn list_files(&self, base_path: &str) -> Result<Vec<RemoteFile>, SyncError> {
-        // v7: 复用 list_all_files，再过滤同步后缀（默认 .orsync，兼容遗留 .waitsync）
-        let all = self.list_all_files(base_path).await?;
-        Ok(all
-            .into_iter()
-            .filter(|f| crate::cloud_sync::paths::is_sync_payload_name(&f.name))
-            .collect())
-    }
-
     async fn list_all_files(&self, base_path: &str) -> Result<Vec<RemoteFile>, SyncError> {
         let url = self.build_url(base_path);
 
@@ -629,12 +680,14 @@ impl SyncAdapter for WebDavAdapter {
         // 请求 resourcetype 以识别目录条目（RFC 4918 标准）：目录若不被过滤，
         // 其尾斜杠 href 会使 basename 提取退化为整条 URL 混入文件列表，
         // 污染 cloud_has_module_data 探测与附件 diff（见 07 排查报告 P0-1）。
+        // F26：getetag 一并申请——不申请则服务端不回，列举侧永远拿不到并发令牌。
         let propfind_body = r#"<?xml version="1.0" encoding="utf-8"?>
 <d:propfind xmlns:d="DAV:">
   <d:prop>
     <d:resourcetype/>
     <d:getcontentlength/>
     <d:getlastmodified/>
+    <d:getetag/>
   </d:prop>
 </d:propfind>"#;
 
@@ -650,7 +703,7 @@ impl SyncAdapter for WebDavAdapter {
             .send()
             .await
             .map_err(|e| SyncError::Network {
-                message: format!("PROPFIND 请求失败: {e}"),
+                message: transport_message("PROPFIND 请求", &e),
                 retryable: true,
             })?;
 
@@ -669,7 +722,7 @@ impl SyncAdapter for WebDavAdapter {
         }
 
         let xml = response.text().await.map_err(|e| SyncError::Network {
-            message: format!("读取 PROPFIND 响应失败: {e}"),
+            message: transport_message("读取 PROPFIND 响应", &e),
             retryable: false,
         })?;
 
@@ -711,7 +764,7 @@ impl SyncAdapter for WebDavAdapter {
                     name,
                     size: e.content_length.unwrap_or(0) as u64,
                     last_modified,
-                    lamport_version: 0,
+                    etag: e.etag,
                 }
             })
             .collect();
@@ -719,27 +772,18 @@ impl SyncAdapter for WebDavAdapter {
         Ok(files)
     }
 
+    /// 下载：单对象 404 且路径是附件对象 → 回退分片拼装（S4 + F23）
+    ///
+    /// 回退必须挂在**路径级** `download` 上：生产链路全经 `BasePathAdapter`，
+    /// 它只调 `inner.download(join(asset_path))`，挂在 `download_asset` 里的
+    /// 两段回退在真机上不可达（大附件读侧必 404）。
     async fn download(&self, path: &str) -> Result<Vec<u8>, SyncError> {
-        let url = self.build_url(path);
-        let headers = self.auth_headers();
-        match self.http.get_with_retry(&url, headers).await {
+        match self.download_object(path).await {
             Ok(data) => Ok(data),
-            Err(SyncError::Network { message, retryable }) => {
-                // 坚果云在父目录不存在时对 GET 返回 409 AncestorsNotFound，
-                // 这与 MKCOL 的 409 语义不同，应视为资源不存在而非网络错误。
-                // S19（2026-09-13 探查）：409 数字判断保留（from_http_status 的
-                // 兜底分支将非 2xx/4xx 归 Network 且消息带 "HTTP 409" 状态码
-                // 锚点——适配器对 GET 无法拿到原始 status，此嗅探有锚点、非
-                // 裸子串），AncestorsNotFound 体特征一并校验防 409 其他语义
-                // （如 MKCOL 冲突）误判。
-                if message.contains("HTTP 409") && message.contains("AncestorsNotFound") {
-                    Err(SyncError::NotFound {
-                        message: format!("资源不存在(409): {message}"),
-                    })
-                } else {
-                    Err(SyncError::Network { message, retryable })
-                }
-            }
+            Err(e) if e.is_not_found() => match asset_parts_target(path) {
+                Some((hash, parts_root)) => self.download_asset_parts(&hash, &parts_root).await,
+                None => Err(e),
+            },
             Err(e) => Err(e),
         }
     }
@@ -749,11 +793,19 @@ impl SyncAdapter for WebDavAdapter {
         // 分派点在 upload 层而非 upload_asset：BasePathAdapter 的
         // upload_asset 直接转发 inner.upload，分派若只在 upload_asset
         // 会被包装器绕过。模块数据（几百 KB 级）不会触阈值，路径不含
-        // assets/{hash}.waitsync 形态的常规上传零变化
+        // assets/{hash}.orsync 形态的常规上传零变化
+        //
+        // F23：判定改按「上一段目录名 == assets」（`asset_parts_target`），
+        // 旧判定 `path.starts_with("assets/")` 在生产链路恒 false——所有路径
+        // 都被包装器拼上了 base_path 前缀，S4 分片协议自落地起从未执行过，
+        // 大附件静默退化成单 PUT（慢速上行必超时）。同时 parts_root 随路径
+        // 推导，分片与单对象同处 {base_path} 命名空间内。
         if data.len() >= Self::PARTS_THRESHOLD
-            && let Some(hash) = asset_hash_from_path(path)
+            && let Some((hash, parts_root)) = asset_parts_target(path)
         {
-            return self.upload_asset_parts(&hash, data).await;
+            return self
+                .upload_asset_parts(&hash, &parts_root, path, data)
+                .await;
         }
         // 先确保父目录存在,避免 409 AncestorsNotFound
         // (如 path = "sync/data/file.waitsync" → 创建 sync/data 目录)
@@ -773,15 +825,11 @@ impl SyncAdapter for WebDavAdapter {
         // S29（2026-09-14 审查）：dir_cache 失效处理——云端目录被外部删除后，
         // 缓存仍认为目录存在（ensure_directory 直接跳过 MKCOL），PUT 持续 409
         // 直至进程重启。409（AncestorsNotFound，父目录缺失语义）时清空缓存、
-        // 重建目录链后重试一次；非 409 错误原样透传。
-        // 识别口径与 download 一致：from_http_status 兜底分支的消息带 "HTTP 409"
-        // 状态码锚点 + AncestorsNotFound 体特征（适配器对 PUT 同样拿不到原始
-        // status，此嗅探有状态码锚点，非裸子串）。
+        // 重建目录链后重试一次；其余错误原样透传。
+        // F32：判定改按 `AncestorsNotFound` 变体（`from_http_status` 按状态码
+        // 构造），不再嗅探消息子串——嗅探会被 F34 的响应体截断打掉。
         match first {
-            Err(e)
-                if e.to_string().contains("HTTP 409")
-                    && e.to_string().contains("AncestorsNotFound") =>
-            {
+            Err(e) if matches!(e, SyncError::AncestorsNotFound { .. }) => {
                 log::info!("[webdav] PUT 409 AncestorsNotFound：清空目录缓存并重建后重试 {path}");
                 if let Ok(mut cache) = self.dir_cache.lock() {
                     cache.clear();
@@ -810,7 +858,7 @@ impl SyncAdapter for WebDavAdapter {
             .send()
             .await
             .map_err(|e| SyncError::Network {
-                message: format!("DELETE 请求失败: {e}"),
+                message: transport_message("DELETE 请求", &e),
                 // S12：传输层失败是瞬态，标可重试（同 S3 侧口径）
                 retryable: true,
             })?;
@@ -826,35 +874,19 @@ impl SyncAdapter for WebDavAdapter {
     }
 
     async fn download_asset(&self, hash: &str) -> Result<Vec<u8>, SyncError> {
-        // 两段：单对象 → 分片拼装（大附件）。分片清单只在全部片就位后
-        // 写入，半成品目录无清单不可读，因此「单对象 404 + 清单 404」
-        // 即真正的附件不存在。
-        let path = crate::cloud_sync::paths::asset_path(hash);
-        match self.download(&path).await {
-            Ok(data) => Ok(data),
-            Err(e) if e.is_not_found() => self.download_asset_parts(hash).await,
-            Err(e) => Err(e),
-        }
+        // 两段回退（单对象 → 分片拼装）已上移到 `download`（F23），此处只拼路径
+        self.download(&crate::cloud_sync::paths::asset_path(hash))
+            .await
     }
 
     async fn asset_exists(&self, hash: &str) -> Result<bool, SyncError> {
-        // 单对象存在即返回；否则查分片清单（大附件形态）。
-        // 不查清单会误判「不存在」：push 差集每轮把分片附件当缺失
-        // 空跑重传，首传探测三分叉也会误放行。
-        if self
-            .remote_file_size(&crate::cloud_sync::paths::asset_path(hash))
-            .await?
-            .is_some()
-        {
-            return Ok(true);
-        }
-        self.remote_file_size(&Self::parts_head_path(hash))
+        // 分片感知探测已上移到 `exists`（F23）
+        self.exists(&crate::cloud_sync::paths::asset_path(hash))
             .await
-            .map(|s| s.is_some())
     }
 
-    async fn list_assets(&self) -> Result<Vec<String>, SyncError> {
-        let url = self.build_url("assets/");
+    async fn list_assets(&self, assets_dir: &str) -> Result<Vec<String>, SyncError> {
+        let url = self.build_url(&format!("{assets_dir}/"));
 
         let mut headers = self.auth_headers();
         headers.insert("Depth", "1".parse().unwrap());
@@ -866,6 +898,7 @@ impl SyncAdapter for WebDavAdapter {
     <d:resourcetype/>
     <d:getcontentlength/>
     <d:getlastmodified/>
+    <d:getetag/>
   </d:prop>
 </d:propfind>"#;
 
@@ -881,30 +914,34 @@ impl SyncAdapter for WebDavAdapter {
             .send()
             .await
             .map_err(|e| SyncError::Network {
-                message: format!("PROPFIND 请求失败: {e}"),
+                message: transport_message("PROPFIND 请求", &e),
                 retryable: true,
             })?;
 
         let status = response.status().as_u16();
-        // 404: 目录不存在,视为空列表(首次使用时 assets 目录尚未创建)
-        if status == 404 {
-            return Ok(Vec::new());
-        }
-        // S11：非 2xx 错误走统一框架（同 list_all_files）
-        if !response.status().is_success() && status != 207 {
-            let body = response.text().await.unwrap_or_default();
-            return Err(SyncError::from_http_status(status, &body));
-        }
+        // 404 = 目录不存在（首次使用时 assets 尚未创建），视为空列表。
+        // 但不得提前 return：大附件只落在 assets_parts/ 下，此时 assets/ 恒 404，
+        // 提前返回会让下面的分片并集永远跑不到——push 侧 S7 空列表防御误报
+        // 「疑似列举异常」并跳过上传，pull 侧则永远不下载已存在的大附件（F23 补充）。
+        let entries = if status == 404 {
+            Vec::new()
+        } else {
+            // S11：非 2xx 错误走统一框架（同 list_all_files）
+            if !response.status().is_success() && status != 207 {
+                let body = response.text().await.unwrap_or_default();
+                return Err(SyncError::from_http_status(status, &body));
+            }
 
-        let xml = response.text().await.map_err(|e| SyncError::Network {
-            message: format!("读取 PROPFIND 响应失败: {e}"),
-            retryable: false,
-        })?;
+            let xml = response.text().await.map_err(|e| SyncError::Network {
+                message: transport_message("读取 PROPFIND 响应", &e),
+                retryable: false,
+            })?;
 
-        let entries = parse_propfind_response(&xml).map_err(|e| SyncError::Network {
-            message: format!("解析 PROPFIND XML 失败: {e}"),
-            retryable: false,
-        })?;
+            parse_propfind_response(&xml).map_err(|e| SyncError::Network {
+                message: format!("解析 PROPFIND XML 失败: {e}"),
+                retryable: false,
+            })?
+        };
 
         // 提取 hash：跳过目录本身（is_collection），从 display_name 或 href 提取文件名。
         // href 先剥尾斜杠（目录条目防御：rsplit 对尾斜杠取到空串）。
@@ -927,11 +964,15 @@ impl SyncAdapter for WebDavAdapter {
             .map(|name| crate::cloud_sync::paths::strip_sync_extension(&name).to_string())
             .collect();
 
-        // S4：并集分片目录（assets_parts/{hash}/ 一级子目录名即 hash）——
+        // S4：并集分片目录（{parts_root}/{hash}/ 一级子目录名即 hash）——
         // 分片附件不在 assets/ 下，不并集会被 push 差集判缺失（每轮空跑
-        // 重传）与 pull 活跃引用过滤漏拉。list_all_files 过滤目录条目
-        // （is_collection），这里用专用 PROPFIND 取目录条目名
-        for hash in self.list_parts_hashes().await? {
+        // 重传）与 pull 活跃引用过滤漏拉，GC 也永远看不见它们（云端孤儿
+        // 永不清理）。parts_root 与 assets_dir 同前缀（F23）。
+        // list_all_files 过滤目录条目（is_collection），这里用专用 PROPFIND 取目录条目名
+        for hash in self
+            .list_parts_hashes(&parts_root_for_assets_dir(assets_dir))
+            .await?
+        {
             if !hashes.contains(&hash) {
                 hashes.push(hash);
             }
@@ -948,8 +989,21 @@ impl SyncAdapter for WebDavAdapter {
     // ========================================================================
 
     /// HEAD 存在性探测（不再为判断存在而下载整个对象）
+    ///
+    /// 附件对象还要探分片清单：大附件只有 `assets_parts/{hash}/head.json`，
+    /// 单对象恒 404。漏这一腿即「大附件被判定不存在」——push 差集每轮空跑
+    /// 重传、S7 空列表防御的首传三分叉探测误放行、pull 的活跃引用判定失真。
     async fn exists(&self, path: &str) -> Result<bool, SyncError> {
-        self.remote_file_size(path).await.map(|s| s.is_some())
+        if self.remote_file_size(path).await?.is_some() {
+            return Ok(true);
+        }
+        match asset_parts_target(path) {
+            Some((hash, parts_root)) => self
+                .remote_file_size(&Self::parts_head_path(&parts_root, &hash))
+                .await
+                .map(|s| s.is_some()),
+            None => Ok(false),
+        }
     }
 
     /// 读取对象与并发令牌（WebDAV 回 ETag；不提供的服务端返回 None）
@@ -961,19 +1015,8 @@ impl SyncAdapter for WebDavAdapter {
         let headers = self.auth_headers();
         match self.http.get_with_token(&url, headers).await {
             Ok((bytes, token)) => Ok(Some((bytes, token))),
-            Err(SyncError::Network { message, retryable })
-                if message.contains("HTTP 404") =>
-            {
-                let _ = retryable;
-                Ok(None)
-            }
-            // 坚果云父目录缺失时 GET 返回 409 AncestorsNotFound（下载路径同口径）
-            Err(SyncError::Network { message, retryable })
-                if message.contains("HTTP 409") && message.contains("AncestorsNotFound") =>
-            {
-                let _ = retryable;
-                Ok(None)
-            }
+            // 404 与坚果云 409（父目录缺失，语义等同「这条路径没有对象」）
+            // 都归「不存在」：F32 起由 `is_not_found()` 按变体判定
             Err(e) if e.is_not_found() => Ok(None),
             Err(e) => Err(e),
         }
@@ -1008,20 +1051,34 @@ impl SyncAdapter for WebDavAdapter {
     }
 }
 
-/// 从附件对象路径提取内容哈希（S4 分片分派用）
+/// 由附件目录推导分片根目录：末段 `assets` → `assets_parts`
 ///
-/// 识别 `assets/{hash}.orsync`（默认）与 `assets/{hash}.waitsync` /
-/// `assets/{hash}`（遗留）；
-/// 其余路径（模块数据、crypto/config 等）返回 None——`upload` 的 S4
-/// 分片分派只对附件大对象生效，模块数据零变化。
-fn asset_hash_from_path(path: &str) -> Option<String> {
-    let name = path.rsplit('/').next()?;
-    let hash = crate::cloud_sync::paths::strip_sync_extension(name);
-    if path.starts_with("assets/") && !hash.is_empty() {
-        Some(hash.to_string())
-    } else {
-        None
+/// 入站目录形如 `assets` / `{base_path}/assets`，产出 `assets_parts` /
+/// `{base_path}/assets_parts`（F23：前缀必须随路径一起走，否则分片落到
+/// 分享根目录之外，列举侧看不见 → 每轮重传 + 云端孤儿永不清理）。
+fn parts_root_for_assets_dir(assets_dir: &str) -> String {
+    assets_dir.strip_suffix("/assets").map_or_else(
+        || "assets_parts".to_string(),
+        |head| format!("{head}/assets_parts"),
+    )
+}
+
+/// 从对象路径识别「附件对象」，返回 (裸 hash, 该附件的分片根目录)
+///
+/// 附件对象 = 父目录名为 `assets` 的路径，识别 `assets/{hash}.orsync`（默认）
+/// 与 `assets/{hash}.waitsync` / `assets/{hash}`（遗留），base_path 前缀任意深度
+/// 皆可（`{base}/assets/{hash}.orsync`）。其余路径（模块数据、分片自身、
+/// crypto/config 等）返回 None——S4 分片分派只对附件大对象生效，模块数据零变化。
+fn asset_parts_target(path: &str) -> Option<(String, String)> {
+    let (dir, name) = path.rsplit_once('/')?;
+    if dir.rsplit('/').next()? != "assets" {
+        return None;
     }
+    let hash = crate::cloud_sync::paths::strip_sync_extension(name);
+    if hash.is_empty() {
+        return None;
+    }
+    Some((hash.to_string(), parts_root_for_assets_dir(dir)))
 }
 
 #[cfg(test)]
@@ -1088,58 +1145,103 @@ mod tests {
 // 无环境为已知边界）；此处覆盖分派判定的全部路径形态与清单结构。
 // ====================================================================
 
+/// 测试辅助：只要 hash 分量（分片根目录另有专项用例）
+#[cfg(test)]
+fn hash_of(path: &str) -> Option<String> {
+    asset_parts_target(path).map(|(h, _)| h)
+}
+
+/// 测试辅助：只要分片根目录分量
+#[cfg(test)]
+fn parts_root_of(path: &str) -> Option<String> {
+    asset_parts_target(path).map(|(_, root)| root)
+}
+
 #[test]
-fn asset_hash_from_path_new_naming() {
+fn asset_parts_target_new_naming() {
+    assert_eq!(hash_of("assets/abc123.orsync").as_deref(), Some("abc123"));
     assert_eq!(
-        asset_hash_from_path("assets/abc123.orsync").as_deref(),
-        Some("abc123")
+        parts_root_of("assets/abc123.orsync").as_deref(),
+        Some("assets_parts"),
+        "无前缀形态（根目录部署）的分片根目录仍是 assets_parts"
+    );
+}
+
+/// F23 核心回归：base_path 前缀形态必须识别，且 parts_root 同带前缀
+///
+/// 旧判定 `path.starts_with("assets/")` 对本形态返回 None → 生产链路大附件
+/// 分片协议从未执行。此用例把「前缀深度无关」与「分片不得写到 base_path
+/// 之外」两件事一起钉住。
+#[test]
+fn asset_parts_target_accepts_base_path_prefixed_form() {
+    assert_eq!(hash_of("wait/assets/abc.orsync").as_deref(), Some("abc"));
+    assert_eq!(
+        parts_root_of("wait/assets/abc.orsync").as_deref(),
+        Some("wait/assets_parts"),
+        "分片必须落在 base_path/assets_parts 之内"
+    );
+    // 多级前缀同理
+    assert_eq!(
+        parts_root_of("a/b/c/assets/abc.orsync").as_deref(),
+        Some("a/b/c/assets_parts")
     );
 }
 
 #[test]
-fn asset_hash_from_path_bare_naming_and_legacy_suffix() {
+fn asset_parts_target_bare_naming_and_legacy_suffix() {
     // 裸文件名（无后缀）原样作为 hash 解析
-    assert_eq!(
-        asset_hash_from_path("assets/abc123").as_deref(),
-        Some("abc123")
-    );
+    assert_eq!(hash_of("assets/abc123").as_deref(), Some("abc123"));
     // 遗留后缀不再是同步载荷：原样保留，避免与同 hash 的新对象混淆
     assert_eq!(
-        asset_hash_from_path("assets/abc123.waitsync").as_deref(),
+        hash_of("assets/abc123.waitsync").as_deref(),
         Some("abc123.waitsync")
     );
 }
 
 #[test]
-fn asset_hash_from_path_rejects_non_asset() {
+fn asset_parts_target_rejects_non_asset() {
     // 模块数据路径（同名文件在 modules/ 下）不得误判为附件
-    assert!(asset_hash_from_path("modules/todos/data.orsync").is_none());
-    assert!(asset_hash_from_path("modules/todos/data.waitsync").is_none());
-    assert!(asset_hash_from_path("crypto/config").is_none());
-    assert!(asset_hash_from_path("_meta.orsync").is_none());
-    assert!(asset_hash_from_path("_meta.waitsync").is_none());
-    // 带 base_path 的完整形态：assets/ 必须是路径段而非前缀子串
-    assert!(asset_hash_from_path("wait/assets/abc.orsync").is_none());
+    assert!(hash_of("modules/todos/data.orsync").is_none());
+    assert!(hash_of("modules/todos/data.waitsync").is_none());
+    assert!(hash_of("crypto/config").is_none());
+    assert!(hash_of("_meta.orsync").is_none());
+    assert!(hash_of("_meta.waitsync").is_none());
+    // 分片自身路径（父目录是 {hash}）不得再触发分片分派——否则
+    // download/exists 的回退会在拼装内部自我递归
+    assert!(hash_of("wait/assets_parts/abc/head.json").is_none());
+    assert!(hash_of("assets_parts/abc/000000.bin").is_none());
+    // assets 必须是**目录段**，不是文件名的一部分
+    assert!(hash_of("assets_dir.orsync").is_none());
+    assert!(hash_of("wait/assetsx/abc.orsync").is_none());
 }
 
 #[test]
-fn asset_hash_from_path_rejects_empty_hash() {
-    assert!(asset_hash_from_path("assets/.orsync").is_none());
+fn asset_parts_target_rejects_empty_hash() {
+    assert!(hash_of("assets/.orsync").is_none());
+}
+
+#[test]
+fn parts_root_for_assets_dir_replaces_last_segment() {
+    assert_eq!(parts_root_for_assets_dir("assets"), "assets_parts");
+    assert_eq!(
+        parts_root_for_assets_dir("wait-sync/user1/assets"),
+        "wait-sync/user1/assets_parts"
+    );
 }
 
 #[test]
 fn part_paths_are_derived_correctly() {
     assert_eq!(
-        WebDavAdapter::part_bin_path("abc", 0),
+        WebDavAdapter::part_bin_path("assets_parts", "abc", 0),
         "assets_parts/abc/000000.bin"
     );
     assert_eq!(
-        WebDavAdapter::part_bin_path("abc", 42),
-        "assets_parts/abc/000042.bin"
+        WebDavAdapter::part_bin_path("wait/assets_parts", "abc", 42),
+        "wait/assets_parts/abc/000042.bin"
     );
     assert_eq!(
-        WebDavAdapter::parts_head_path("abc"),
-        "assets_parts/abc/head.json"
+        WebDavAdapter::parts_head_path("wait/assets_parts", "abc"),
+        "wait/assets_parts/abc/head.json"
     );
 }
 
