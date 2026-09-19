@@ -49,6 +49,14 @@ pub enum CloudSyncError {
     )]
     KeyMismatch,
 
+    /// 云端载荷/清单版本高于本客户端支持上限（ADR 0010 决定 3）
+    ///
+    /// 必须独立于 `KeyMismatch`：解密失败统一塌进密钥错误会把用户导向
+    /// 密钥恢复页，而真正的处置动作是「升级应用」——云端数据并未损坏。
+    /// 同类地也不能落进 `Crypto`（`is_password_error` 为真 → 跳解锁页）。
+    #[error("云端数据版本过新: {message}")]
+    PayloadVersionMismatch { message: String },
+
     #[error("未知模块: {0}")]
     UnknownModule(String),
 
@@ -90,6 +98,12 @@ impl From<crate::sync::error::SyncError> for CloudSyncError {
         match err {
             // Fix-09：保留「资源不存在」类型，供上层 404 分支判断
             crate::sync::error::SyncError::NotFound { message } => {
+                CloudSyncError::NotFound { message }
+            }
+            // F32：409 父目录缺失在上层语义等同「云端无此文件」
+            // （坚果云对不存在路径回 409）——与 F32 之前 `download_object`
+            // 手工改写为 NotFound 的行为一致，避免塌进 Adapter 丢掉分支判据。
+            crate::sync::error::SyncError::AncestorsNotFound { message } => {
                 CloudSyncError::NotFound { message }
             }
             // S6：认证/限流类型透传——with_retry 按类型排除认证错误、
@@ -243,7 +257,7 @@ impl CloudSyncError {
 
     /// 错误分类标签（用于桥接层向前端传递分类信息）
     ///
-    /// 返回 `password`/`key_mismatch`/`database`/`network`/`other` 之一——纯 tag
+    /// 返回 `password`/`key_mismatch`/`payload_version`/`database`/`network`/`other` 之一——纯 tag
     /// 不带方括号，桥层 `format!("[{}] …")` 统一加括号。曾因 tag 自带括号被
     /// 桥层再包一层产出 `[[key_mismatch]]`，前端 `^\[(\w+)\]` 正则失配导致
     /// KeyMismatch 恢复引导失效（2026-09-10 修复）。前端通过字符串前缀匹配
@@ -254,6 +268,10 @@ impl CloudSyncError {
     pub fn category_tag(&self) -> &'static str {
         if self.is_key_mismatch_error() {
             "key_mismatch"
+        } else if matches!(self, CloudSyncError::PayloadVersionMismatch { .. }) {
+            // ADR 0010 决定 3：云端版本比本客户端新，处置动作是「升级应用」。
+            // 落 "other" 会被读成未知故障，落 password/key_mismatch 会跳错页面
+            "payload_version"
         } else if self.is_password_error() {
             "password"
         } else if self.is_database_error() {
