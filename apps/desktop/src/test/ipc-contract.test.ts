@@ -33,6 +33,7 @@ function tauriCommands(): string[] {
  * “内存库只覆盖主链路用到的命令，未覆盖统一 reject 防静默假绿”）。
  * 新命令忘分类会在用例 ① 当场红：补 mock 实现或入此表并注明原因。
  */
+// bounded-by-data: 手写固定 allowlist（字面量枚举，只随新命令分类变更）
 const MOCK_ALLOWLIST = new Set<string>([
   // —— 启动/鉴权（浏览器冒烟恒走明文免密分支）——
   "db_init_encrypted",
