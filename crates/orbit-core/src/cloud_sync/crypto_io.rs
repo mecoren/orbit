@@ -86,6 +86,11 @@ pub fn encrypt_payload(plaintext: &[u8], data_key: &[u8]) -> Result<Vec<u8>, Clo
 }
 
 /// 确定性 nonce 派生（纯函数，供单测）
+/// 口径澄清（N36 收口）：`full` 是 SHA-256 的 hex 字符串（64 个 ASCII 字符），
+/// 取前 12 字节即 12 个 hex 字符 = 48-bit 熵，不是 AES-GCM 标准 96-bit 随机
+/// nonce。生日界约 2^24，同步 payload 量级下可用，但不得误述为“96-bit 余量
+/// 充足”。存量云端密文即按此格式落盘，任何改动（取原始字节/加长）都是格式
+/// 演进，须走版本门禁，当前一行不改，只 pin 住现状。
 ///
 /// `SHA256(data_key ‖ SHA256(compressed)hex ‖ len_be)[0..12]`
 ///
@@ -225,11 +230,16 @@ mod deterministic_nonce_tests {
         assert_ne!(n1, n3, "前缀延长的明文不得命中同一 nonce（len 域分离）");
     }
 
-    /// 派生 nonce 长度恒为 12 字节
+    /// 派生 nonce 长度恒为 12 字节，且为 hex ASCII（pin 住存量格式：改即不兼容）
     #[test]
     fn derived_nonce_length_is_12() {
         let n = derive_deterministic_nonce(&[9u8; 32], b"any");
         assert_eq!(n.len(), NONCE_LEN);
+        assert_eq!(NONCE_LEN, 12);
+        assert!(
+            n.iter().all(|b| b.is_ascii_hexdigit()),
+            "存量 nonce 是 hex 字符串前 12 字符，须全为 hex ASCII"
+        );
     }
 
     /// 往返：确定性加密 → 现有 decrypt 正常解开（格式不变，version 0x01）
