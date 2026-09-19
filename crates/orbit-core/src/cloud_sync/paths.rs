@@ -14,6 +14,9 @@
 //! ├─ tombstones/{table}/{YYYY-MM}.orsync  # 墓碑按本地时区月份分桶（可安全回收）
 //! └─ assets/{hash}.orsync                 # 附件内容寻址（≥8MiB 走既有分片/续传通道）
 //! ```
+//! WebDAV 无 multipart 标准协议，≥8MiB 附件改落同级 `assets_parts/{hash}/`
+//! （`head.json` 明文清单 + `NNNNNN.bin` 密文分片，S4）；分片根目录与
+//! `assets` 共用 `{base_path}` 前缀，由适配器按入站路径推导（F23）。
 
 /// 加密元数据路径（保持不变，无扩展名）
 ///
@@ -64,11 +67,6 @@ pub fn asset_path(hash: &str) -> String {
     format!("{ASSETS_DIR}/{hash}{SYNC_EXTENSION}")
 }
 
-/// 是否为同步载荷路径（仅认 `.orsync`）
-pub fn is_sync_payload_name(name: &str) -> bool {
-    name.ends_with(SYNC_EXTENSION)
-}
-
 /// 剥离同步载荷后缀，供附件 hash 提取复用（无后缀时原样返回）
 pub fn strip_sync_extension(name: &str) -> &str {
     name.strip_suffix(SYNC_EXTENSION).unwrap_or(name)
@@ -117,13 +115,5 @@ mod tests {
         assert_eq!(strip_sync_extension("abc.orsync"), "abc");
         assert_eq!(strip_sync_extension("abc"), "abc");
         assert_eq!(strip_sync_extension("abc.waitsync"), "abc.waitsync");
-    }
-
-    #[test]
-    fn is_sync_payload_name_matches_orsync_only() {
-        assert!(is_sync_payload_name("manifest.orsync"));
-        assert!(is_sync_payload_name("assets/x.orsync"));
-        assert!(!is_sync_payload_name("assets/x.waitsync"));
-        assert!(!is_sync_payload_name("assets/x"));
     }
 }

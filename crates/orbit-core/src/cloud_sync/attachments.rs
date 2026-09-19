@@ -94,7 +94,11 @@ pub async fn sync_attachments_push(
     // 2. 查询云端已有附件（避免重复上传）
     // Fix-13：list 失败不得静默视为"云端为空"——那会导致全量重复上传，
     // 在坚果云等严格限流服务上雪上加霜。本轮终止，下次同步重试。
-    let cloud_hashes: HashSet<String> = match adapter.list_assets().await {
+    // 目录传相对 ASSETS_DIR：base_path 前缀由 BasePathAdapter 负责（F23）
+    let cloud_hashes: HashSet<String> = match adapter
+        .list_assets(crate::cloud_sync::paths::ASSETS_DIR)
+        .await
+    {
         Ok(list) => list.into_iter().collect(),
         Err(e) => {
             result
@@ -270,7 +274,10 @@ pub async fn sync_attachments_pull(
     // 1. 列出云端附件
     // Fix-13：list 失败不得静默视为"云端无附件"（那会静默跳过全部下载且无感知），
     // 记入 errors 让 UI 可见，下次同步重试。
-    let cloud_hashes: Vec<String> = match adapter.list_assets().await {
+    let cloud_hashes: Vec<String> = match adapter
+        .list_assets(crate::cloud_sync::paths::ASSETS_DIR)
+        .await
+    {
         Ok(list) => list,
         Err(e) => {
             result
@@ -501,13 +508,6 @@ mod tests {
 
     #[async_trait::async_trait]
     impl SyncAdapter for AttSyncMock {
-        async fn list_files(
-            &self,
-            _: &str,
-        ) -> Result<Vec<crate::sync_adapters::traits::RemoteFile>, crate::sync::error::SyncError>
-        {
-            Ok(Vec::new())
-        }
         async fn list_all_files(
             &self,
             _: &str,
@@ -549,7 +549,10 @@ mod tests {
                 None => Ok(false),
             }
         }
-        async fn list_assets(&self) -> Result<Vec<String>, crate::sync::error::SyncError> {
+        async fn list_assets(
+            &self,
+            _assets_dir: &str,
+        ) -> Result<Vec<String>, crate::sync::error::SyncError> {
             Ok(self.cloud_hashes.clone())
         }
     }
@@ -745,13 +748,6 @@ mod tests {
 
     #[async_trait::async_trait]
     impl SyncAdapter for PullMockAdapter {
-        async fn list_files(
-            &self,
-            _: &str,
-        ) -> Result<Vec<crate::sync_adapters::traits::RemoteFile>, crate::sync::error::SyncError>
-        {
-            Ok(Vec::new())
-        }
         async fn list_all_files(
             &self,
             _: &str,
@@ -791,7 +787,10 @@ mod tests {
         async fn asset_exists(&self, _: &str) -> Result<bool, crate::sync::error::SyncError> {
             Ok(false)
         }
-        async fn list_assets(&self) -> Result<Vec<String>, crate::sync::error::SyncError> {
+        async fn list_assets(
+            &self,
+            _assets_dir: &str,
+        ) -> Result<Vec<String>, crate::sync::error::SyncError> {
             Ok(self.files.keys().cloned().collect())
         }
     }
@@ -903,7 +902,9 @@ mod tests {
         .await
         .unwrap();
 
-        // orphan 未被下载（downloaded 只计 referenced），也不产生占位行
+        // 云端另有 orphan：downloaded 只计有引用的 referenced 那一个，
+        // orphan 既不下盘也不插占位行（GC ↔ pull 打架循环的回归点）
+        assert_eq!(r.downloaded, 1, "下载数只计有引用的附件，孤儿不得计入");
         assert!(!att_dir.join(&hash_o).exists(), "孤儿附件不得落盘");
         assert!(
             attachment_repo::get_by_hash(&pool, &hash_o)

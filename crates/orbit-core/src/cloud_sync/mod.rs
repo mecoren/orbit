@@ -66,15 +66,13 @@ pub use crypto_io::{decrypt_payload, encrypt_payload};
 pub use engine::{SyncEngine, SyncResult};
 pub use error::CloudSyncError;
 pub use fingerprint::compute_fingerprint;
-pub use gc::{
-    GcResult, collect_garbage, delete_expired_buckets, prune_expired_tombstones,
-};
+pub use gc::{GcResult, delete_expired_buckets, prune_expired_tombstones};
 pub use merge::{MergeResult, merge_table_items};
 pub use meta::{
     ChunkRef, LAYOUT_VERSION, Manifest, TableIndex, TombstoneBucketRef, TombstoneEntry,
     TombstoneIndex,
 };
-pub use modules::{SYNC_MODULES, SyncModuleDef, find_module};
+pub use modules::{SYNC_MODULES, SyncModuleDef, find_module, module_for_table};
 pub use progress::{NoopProgressSender, ProgressSender, SyncProgress};
 pub use pull::{PullResult, pull_all};
 pub use push::{PushResult, push_all};

@@ -65,6 +65,19 @@ pub fn find_module(name: &str) -> Option<&'static SyncModuleDef> {
     SYNC_MODULES.iter().find(|m| m.name == name)
 }
 
+/// 按表名定位所属模块（进度事件文案，F36）
+///
+/// push/pull 按 11 张表逐张报进度，此前模块名与显示名硬编码
+/// `("todos", "待办数据")`——MVP 单模块下文案恰好一致，但表级遍历与模块
+/// 口径已脱钩：新增模块或改 display_name 时进度会静默错报。表必然被某个
+/// 模块覆盖，由 `modules_match_syncable_tables_exactly` 用例守护。
+pub fn module_for_table(table: &str) -> &'static SyncModuleDef {
+    SYNC_MODULES
+        .iter()
+        .find(|m| m.tables.contains(&table))
+        .expect("每张可同步表必须被某个模块覆盖（modules_match_syncable_tables_exactly）")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -107,6 +120,19 @@ mod tests {
         let m = find_module("todos").unwrap();
         assert_eq!(m.display_name, "待办数据");
         assert_eq!(m.primary_table(), "todo_projects");
+    }
+
+    /// F36：进度模块名/显示名必须来自模块定义（每张表都能定位到所属模块）
+    #[test]
+    fn module_resolves_for_every_syncable_table() {
+        for table in SYNCABLE_TABLES {
+            let module = module_for_table(table);
+            assert_eq!(module.name, "todos");
+            assert_eq!(
+                module.display_name, "待办数据",
+                "表 {table} 的进度显示名必须取模块定义"
+            );
+        }
     }
 
     /// 核心不变量：SYNC_MODULES 覆盖的表集合必须与白名单注册表完全一致

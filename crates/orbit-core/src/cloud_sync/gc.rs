@@ -20,7 +20,6 @@
 //! 清单索引 → 不会被 pull 读到，仅占存储；其清理需要「桶内所有 uuid 都有
 //! 墓碑」的判据，属后续增强项，当前不在本模块范围内。
 
-use crate::cloud_sync::error::CloudSyncError;
 use crate::cloud_sync::meta::Manifest;
 use crate::cloud_sync::paths;
 use crate::sync_adapters::traits::SyncAdapter;
@@ -91,52 +90,6 @@ pub async fn delete_expired_buckets(
         }
     }
     result
-}
-
-/// 高层入口：剔除过期墓碑并删除对应对象
-///
-/// 供维护入口/测试使用。push 流程内**不要**直接调用本函数——push 需要保证
-/// 「清单先上传、对象后删除」的顺序，因此分两步调用
-/// [`prune_expired_tombstones`]（在清单上传前）与 [`delete_expired_buckets`]
-/// （在清单上传成功后）。
-pub async fn collect_garbage(
-    adapter: &dyn SyncAdapter,
-    manifest: &mut Manifest,
-) -> GcResult {
-    let watermark = manifest.tombstone_watermark();
-    if watermark <= 0 {
-        return GcResult {
-            watermark: 0,
-            ..Default::default()
-        };
-    }
-    let watermark_month = crate::cloud_sync::db_loader::local_month_key(watermark);
-    let expired = collect_expired_from_original(manifest, &watermark_month);
-    for index in manifest.tombstones.values_mut() {
-        index
-            .buckets
-            .retain(|bucket, _| bucket.as_str() >= watermark_month.as_str());
-    }
-    let mut result = delete_expired_buckets(adapter, &expired).await;
-    result.watermark = watermark;
-    result
-}
-
-/// 校验清单中墓碑索引与对象是否一致（诊断用；返回缺失对象列表）
-pub async fn missing_tombstone_buckets(
-    adapter: &dyn SyncAdapter,
-    manifest: &Manifest,
-) -> Result<Vec<(String, String)>, CloudSyncError> {
-    let mut missing = Vec::new();
-    for (table, index) in &manifest.tombstones {
-        for bucket in index.buckets.keys() {
-            let path = paths::tombstone_bucket_path(table, bucket);
-            if !adapter.exists(&path).await? {
-                missing.push((table.clone(), bucket.clone()));
-            }
-        }
-    }
-    Ok(missing)
 }
 
 #[cfg(test)]
