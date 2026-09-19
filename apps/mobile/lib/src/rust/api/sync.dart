@@ -6,7 +6,7 @@
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `active_config`, `attach_password_to_runtime`, `attachments_dir`, `auto_sync_flag`, `base_path_normalized`, `bucket_trimmed`, `detach_password_from_runtime`, `engine_config_of_record`, `err_tagged_cloud`, `err_tagged_crypto`, `from_record`, `interval_clamped`, `now_ms`, `parse_origin`, `password_str`, `region_trimmed`, `run_sync`, `runtime_crypto`, `runtime_engine`, `skip_tls_flag`, `sync_on_change_flag`, `timeout_clamped`, `username_str`, `with_runtime`
+// These functions are ignored because they are not marked as `pub`: `active_config`, `attach_password_to_runtime`, `attachments_dir`, `auto_sync_flag`, `base_path_normalized`, `bucket_trimmed`, `detach_password_from_runtime`, `engine_config_of_record`, `err_tagged_cloud`, `err_tagged_crypto`, `from_record`, `interval_clamped`, `parse_origin`, `password_str`, `region_trimmed`, `run_sync`, `runtime_crypto`, `runtime_engine`, `skip_tls_flag`, `sync_on_change_flag`, `timeout_clamped`, `username_str`, `with_runtime`
 // These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `SyncAction`, `SyncRuntime`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`
 
