@@ -1,7 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Orbit 品牌色资源（M5.1）：启动屏底色，与应用深空品牌底一致 -->
+<!-- Orbit 品牌色资源（M5.1）：启动屏底色（白底 + 居中品牌图） -->
 <resources>
-    <color name="launch_bg">#FF1A1A21</color>
+    <color name="launch_bg">#FFFFFFFF</color>
+    <!-- 自适应图标背景层（mipmap-anydpi-v26/ic_launcher.xml 引用）：
+         **透明**——与桌面端口径一致（图标即透明底品牌图形，不铺底板；
+         宿主壁纸/启动画面底色自然透出） -->
+    <color name="ic_launcher_background">#00000000</color>
     <!-- 小组件（#3）：亮色卡片底 / 强调 / 勾选环，与移动端浅色主题对齐 -->
     <color name="widget_bg_color">#F2F3F7</color>
     <color name="widget_accent">#FF4E8CFF</color>

@@ -20,8 +20,8 @@ MVP 发布（06 文档 §二 M5）要求五端产物签名/分发就绪。现状
   ——加粗正圆环（#246CF6，环带宽 ~165px、内嵌带拖尾的卫星球）、左上
   月牙形行星（被环咬出缺口）、彗星自中心越环、环内柔光 glow。全族无
   底板（用户口径「扣成透明背景」）：桌面任务栏/Android 桌面/关于页
-  背景由宿主提供；Android 启动屏深色由 `launch_background.xml` 的
-  `launch_bg` 承载，图标层透明直贴。
+  背景由宿主提供；Android 启动屏白底由 `launch_background.xml` 的
+  `launch_bg` 承载，图标层透明直贴（2026-09-19 白底口径）。
   - 源图：`scripts/icon-source-2026-09-08b.png`（1254²，ChatGPT 生图
     自带透明通道）。质量实测后**直接栅格使用、不重描**：主环外缘段内
     圆度 ±1px（左右长轴椭圆 rx 364 / ry 347，段内 std≤1.2）、主体蓝
@@ -52,13 +52,32 @@ MVP 发布（06 文档 §二 M5）要求五端产物签名/分发就绪。现状
     （10 槽含 DPI 缩放档，手写容器）+ `icon.icns`（ic07–ic10，Pillow 手写 ICNS 容器，无需
     macOS iconutil）+ Windows Store Square 族；
   - 桌面关于页 `apps/desktop/public/app-icon.png`（256，透明底同主图）；
-  - Android `mipmap-*/ic_launcher.png`（48–192 五密度）；
+  - 移动端 Flutter 资产 `apps/mobile/assets/app_icon.png`（512，启动等待
+    画面白底居中显示；与桌面端同一枚图标）；
+  - Android `mipmap-*/ic_launcher.png`（48–192 五密度）+ 自适应图标
+    `mipmap-anydpi-v26/{ic_launcher,ic_launcher_round}.xml`（**透明**背景层
+    `@color/ic_launcher_background` + 前景层 `mipmap-*/ic_launcher_foreground.png`，
+    108dp 画布、内容缩入 60% 安全区）——透明底与桌面端口径一致；缺分层
+    时系统会给 legacy 位图自造模糊底板（脏底），铺白底则出现白色圆角
+    方块（2026-09-19 两次实测反馈），Manifest 同步声明 `roundIcon`；
+    **像素按 2x 规格给**（48dp 图标 96px、108dp 画布 216px，同族翻倍）：
+    启动器与系统/OEM 启动画面都会放大绘制（API 31+ 图标区 288dp、
+    可见 192dp），1x 像素放大即糊；
   - 通知小图标 `drawable-*/ic_stat_orbit.png`（主体白色剪影，
     API 21+ alpha 语义），`notification_service.dart` 已接线（初始化
     小图标 + 文档注明 22.x 无 channelIcon 参数）。
-- Android 启动屏：`launch_background.xml`（含 -v21）品牌深色底
-  `@color/launch_bg` + 居中 `@mipmap/launch_image`（xxxhdpi 512，
-  全出血无圆角版），亮暗共用深色底（避免启动瞬间明暗跳变）；桌面
+- Android 启动屏（2026-09-19 改白底 + 居中品牌图）：`launch_background.xml`
+  （含 -v21）`@color/launch_bg`（白）+ 居中 `@mipmap/launch_image`
+  （xxxhdpi 512，全出血无圆角版），亮暗共用白底；API 31+ 另由
+  `values-v31` / `values-night-v31` 的 `windowSplashScreenBackground`
+  显式锁白（系统 SplashScreen 缺省回落主题 colorBackground，深色主题会
+  变黑，且 night 限定符优先于 version 故两份都要写），并同组显式指定
+  `windowSplashScreenAnimatedIcon`（自适应图标前景层）+ 
+  `windowSplashScreenIconBackgroundColor`（同 `@color/ic_launcher_background`，
+  即透明，与桌面端一致不铺底板）——缺省时系统会给 legacy 位图自造
+  模糊底板；Flutter 侧首帧前的
+  等待画面（`BootGate` booting 态）同为白底 + 居中 `assets/app_icon.png`，
+  与原生启动屏无缝衔接（口径见 `AGENTS.md` 移动端约定）；桌面
   窗口 `visible:false` + 前端就绪后 `getCurrentWindow().show()`
   （main.tsx），消除原生空窗白闪。
 - 源图：`docs/adr/assets/orbit-icon-master.png`（1024px）。

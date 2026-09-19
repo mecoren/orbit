@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/routing/router_keys.dart';
-import '../../core/theme/orbit_accents.dart';
+import '../../core/theme/app_dimens.dart';
 import '../../data/providers/bridge_provider.dart';
 import '../../data/providers/todo_widget_provider.dart';
 import '../../services/device_id.dart';
@@ -296,9 +296,17 @@ class _BootGateState extends ConsumerState<BootGate>
       case _BootPhase.unlock:
         return UnlockPage(onUnlocked: _onUnlocked);
       case _BootPhase.booting:
+        // 启动等待画面：白底 + 居中品牌图（与桌面端**同一枚图标**，
+        // 由 scripts/generate_icons.py 产出为 assets/app_icon.png）。
+        // 与原生启动屏（launch_background：白底 + 居中同图）无缝衔接。
         return const Scaffold(
+          backgroundColor: Colors.white,
           body: Center(
-            child: CircularProgressIndicator(color: OrbitAccents.themeAccent),
+            child: Image(
+              image: AssetImage('assets/app_icon.png'),
+              width: AppDimens.splashLogoSize,
+              height: AppDimens.splashLogoSize,
+            ),
           ),
         );
     }

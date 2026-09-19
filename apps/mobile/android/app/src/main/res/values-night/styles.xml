@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Theme applied to the Android Window while the process is starting when the OS's Dark Mode setting is on -->
+    <!-- Theme applied to the Android Window while the process is starting when the OS's Dark Mode setting is on
+         （Orbit：夜间同样走白底启动屏，双主题共用，见 drawable/launch_background.xml） -->
     <style name="LaunchTheme" parent="@android:style/Theme.Black.NoTitleBar">
         <!-- Show a splash screen on the activity. Automatically removed when
              the Flutter engine draws its first frame -->

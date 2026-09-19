@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Orbit 启动屏（API 31+ 系统 SplashScreen）：白底 + 居中品牌图。
+     Android 12 起系统接管冷启动首帧：背景取自 windowSplashScreenBackground
+     （缺省回落主题 colorBackground，深色主题会变黑），居中图标取自
+     windowSplashScreenAnimatedIcon（缺省用应用图标，且对 legacy 位图会
+     自造一层模糊底板——故显式指向自适应图标的前景层 + 白底 icon 背景）。
+     深色模式另有 values-night-v31 同内容覆盖（night 限定符优先于 version）。 -->
+<resources>
+    <style name="LaunchTheme" parent="@android:style/Theme.Light.NoTitleBar">
+        <item name="android:windowBackground">@drawable/launch_background</item>
+        <item name="android:windowSplashScreenBackground">@color/launch_bg</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@mipmap/ic_launcher_foreground</item>
+        <item name="android:windowSplashScreenIconBackgroundColor">@color/ic_launcher_background</item>
+    </style>
+</resources>

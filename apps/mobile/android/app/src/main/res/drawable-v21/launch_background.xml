@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Orbit 启动屏（v21+ 亮色主题）：同 drawable/launch_background.xml -->
+<!-- Orbit 启动屏（v21+ 亮色主题）：白底 + 居中品牌图，
+     同 drawable/launch_background.xml -->
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
     <item android:drawable="@color/launch_bg" />
     <item

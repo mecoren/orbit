@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Orbit 启动屏（亮色主题）：品牌深空底 + 居中轨道图（M5.1）
-     深色底双主题共用——启动瞬间与应用首帧（深色主导的玻璃 UI）无明暗跳变。 -->
+<!-- Orbit 启动屏（亮色主题）：白底 + 居中品牌图（M5.1）
+     白底双主题共用，与 Flutter 首帧（BootGate booting 白底 + 同图）无缝衔接；
+     图标与桌面端同源（scripts/generate_icons.py 的 launch_image/icon 族）。 -->
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
     <item android:drawable="@color/launch_bg" />
     <item

@@ -60,3 +60,7 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  # 品牌图（启动等待画面白底居中）：与桌面端**同一枚图标**，
+  # 由 scripts/generate_icons.py 产出（同 icon-transparent 母版口径）
+  assets:
+    - assets/app_icon.png

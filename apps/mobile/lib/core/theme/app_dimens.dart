@@ -49,6 +49,9 @@ class AppDimens {
   /// FAB 尺寸（docs/05：GlassFab 56px 圆形）
   static const double fabSize = 56;
 
+  /// 启动等待画面品牌图边长（booting 阶段白底居中，与桌面端同源图标）
+  static const double splashLogoSize = 96;
+
   /// 任务行 checkbox 直径（docs/05 §七）
   static const double taskCheckboxSize = 24;
 

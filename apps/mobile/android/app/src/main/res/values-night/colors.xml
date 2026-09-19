@@ -1,7 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Orbit 品牌色资源（M5.1）：夜间同值（深色底双主题共用） -->
+<!-- Orbit 品牌色资源（M5.1）：夜间同值（白底双主题共用） -->
 <resources>
-    <color name="launch_bg">#FF1A1A21</color>
+    <color name="launch_bg">#FFFFFFFF</color>
+    <!-- 自适应图标背景层：夜间同透明（与桌面端一致，不铺底板） -->
+    <color name="ic_launcher_background">#00000000</color>
     <!-- 小组件（#3）：暗色卡片底（深空品牌面），强调同亮色 -->
     <color name="widget_bg_color">#FF23232B</color>
     <color name="widget_accent">#FF4E8CFF</color>

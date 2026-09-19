@@ -9,7 +9,12 @@
 - 桌面关于页：apps/desktop/public/app-icon.png（256，透明底 squircle）
 - Android 启动器：apps/mobile/android/app/src/main/res/mipmap-{m,hdpi,xhdpi,
   xxhdpi,xxxhdpi}/ic_launcher.png（Flutter 模板同尺寸族）
+- Android 自适应图标（API 26+）：mipmap-anydpi-v26/{ic_launcher,
+  ic_launcher_round}.xml（白底 @color/ic_launcher_background + 前景分层）
+  + mipmap-*/ic_launcher_foreground.png（108dp 画布，内容缩入安全区）
 - Android 启动屏：mipmap-xxxhdpi/launch_image.png（512，无圆角全出血）
+- 移动端 Flutter 资产：apps/mobile/assets/app_icon.png（512，启动等待
+  画面白底居中显示，与桌面同源图标）
 - Android 通知小图标：drawable-*/ic_stat_orbit.png（白色剪影，API 21+ 语义）
 - 设计源文件：docs/adr/assets/orbit-icon-master.png
 
@@ -17,7 +22,11 @@
 蓝色正圆环（缺口嵌卫星球、彗星从中心越环）+ 双层 glow 光晕；主体蓝
 #2B6EF7。资产为栅格合成（环圆度实测 ±2px、蓝色 std<3，无需重描）；
 **全族透明底**（用户口径「扣成透明背景」）——无底板，深色底由宿主环境
-提供；Android 启动屏的深色由 launch_background.xml 的 launch_bg 提供。
+提供；Android 启动屏为白底 + 居中本图（launch_background.xml 的 launch_bg）。
+
+图标口径（2026-09-19）：移动端与桌面端**同一枚图标**——launcher 图标、
+原生启动屏图、Flutter 等待画面资产三处全部出自本脚本的 render_master，
+换版一次产出全平台，不允许单端手改位图。
 内容对齐：**短轴定标**——以 solid 短轴（蓝色圆环外径 812，视觉主体）
 撑满画布 86%（PAD=0.07），fit_scale 夹逼保证整幅资产不越界、彗星尾梢
 不裁；源图已按 solid 紧框裁过（glow 余量≈0），环占 88.2% 为 clip-free
@@ -51,13 +60,32 @@ def fit_scale(ss: int, pad: float = PAD) -> float:
 
 
 # Android 密度族：mipmap 名 -> 边长 px
+# 说明（2026-09-19）：像素按 2 倍规格给（48dp 图标给 96px）——Android 按
+# 目录 bucket 换算 dp 后自行缩放，给足像素只赚清晰度；启动器与 OEM 启动
+# 画面（Android 12+ 系统 SplashScreen 把图标放大到 192dp 区域）会放大绘制，
+# 1x 像素会被放大糊化，这是用户反馈「图标发虚」的直接原因。
 ANDROID_DENSITIES = {
-    "mipmap-mdpi": 48,
-    "mipmap-hdpi": 72,
-    "mipmap-xhdpi": 96,
-    "mipmap-xxhdpi": 144,
-    "mipmap-xxxhdpi": 192,
+    "mipmap-mdpi": 96,
+    "mipmap-hdpi": 144,
+    "mipmap-xhdpi": 192,
+    "mipmap-xxhdpi": 288,
+    "mipmap-xxxhdpi": 384,
 }
+# 自适应图标（API 26+ 分层图标）：画布 108dp，前景层内容缩入安全区。
+# 像素同样按 2 倍规格给（108dp 画布给 216px）：系统启动画面会把前景层
+# 放大绘制（API 31+ 系统 SplashScreen 图标区 288dp、可见 192dp；
+# OEM 启动动画另有放大），2x 像素保证放大后不糊。
+ADAPTIVE_DENSITIES = {
+    "mipmap-mdpi": 216,
+    "mipmap-hdpi": 324,
+    "mipmap-xhdpi": 432,
+    "mipmap-xxhdpi": 648,
+    "mipmap-xxxhdpi": 864,
+}
+# 108dp 画布中系统可见区 72dp（66.7%）；取 60%（pad 0.20）给彗星尾梢留
+# 余量——圆形 / 圆角方形遮罩下四角不裁到品牌图形。
+ADAPTIVE_PAD = 0.20
+
 # 通知小图标：密度族同上
 NOTIFICATION_DENSITIES = {
     "drawable-mdpi": 24,
@@ -123,8 +151,43 @@ def render_master(size: int) -> Image.Image:
 
 
 def render_launch(size: int) -> Image.Image:
-    """Android 启动屏图：透明底（launch_background.xml 的 launch_bg 提供深色）。"""
+    """Android 启动屏图：透明底（白底由 launch_background.xml 的 launch_bg 提供）。"""
     return render_master(size)
+
+
+def render_adaptive_foreground(size: int) -> Image.Image:
+    """自适应图标前景层：透明底，品牌图形按 ADAPTIVE_PAD 缩入安全区。"""
+    im = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    _place_asset(im, size, ADAPTIVE_PAD)
+    return im
+
+
+def write_adaptive_icons(res: Path) -> None:
+    """写自适应图标族：前景层密度族 + mipmap-anydpi-v26 分层描述。
+
+    背景层取 `@color/ic_launcher_background`（**透明**，见
+    res/values/colors.xml）——与桌面端口径一致：图标即透明底品牌图形，
+    不铺白底/底板。缺分层时系统启动画面会给 legacy 位图自造一层模糊
+    底板（观感发灰、图标被放大），这正是 2026-09-19 移动端「图标带
+    模糊背景」的根因；铺白底则会出现白色圆角方块（同日二次反馈）。
+    """
+    for bucket, size in ADAPTIVE_DENSITIES.items():
+        render_adaptive_foreground(size).save(
+            res / bucket / "ic_launcher_foreground.png")
+    anydpi = res / "mipmap-anydpi-v26"
+    anydpi.mkdir(parents=True, exist_ok=True)
+    xml = (
+        '<?xml version="1.0" encoding="utf-8"?>\n'
+        "<!-- Orbit 自适应图标（API 26+）：白底 + 品牌前景层；"
+        "脚本产出（scripts/generate_icons.py），勿手改。 -->\n"
+        '<adaptive-icon xmlns:android='
+        '"http://schemas.android.com/apk/res/android">\n'
+        '    <background android:drawable="@color/ic_launcher_background" />\n'
+        '    <foreground android:drawable="@mipmap/ic_launcher_foreground" />\n'
+        "</adaptive-icon>\n"
+    )
+    for name in ("ic_launcher.xml", "ic_launcher_round.xml"):
+        (anydpi / name).write_text(xml, encoding="utf-8")
 
 
 def render_notification_silhouette(size: int) -> Image.Image:
@@ -269,8 +332,16 @@ def main() -> None:
     for bucket, size in ANDROID_DENSITIES.items():
         render_master(size).save(res / bucket / "ic_launcher.png")
 
+    # ---- Android 自适应图标（API 26+ 分层：白底 + 品牌前景）----
+    write_adaptive_icons(res)
+
     # ---- Android 启动屏（全出血无圆角，xxxhdpi 512 一枚）----
     render_launch(512).save(res / "mipmap-xxxhdpi/launch_image.png")
+
+    # ---- 移动端 Flutter 资产（启动等待画面白底居中，与桌面同源图标）----
+    mobile_assets = REPO / "apps/mobile/assets"
+    mobile_assets.mkdir(parents=True, exist_ok=True)
+    render_master(512).save(mobile_assets / "app_icon.png")
 
     # ---- Android 通知小图标 ----
     notif = render_notification_silhouette(512)
