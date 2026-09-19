@@ -18,8 +18,10 @@
 #2B6EF7。资产为栅格合成（环圆度实测 ±2px、蓝色 std<3，无需重描）；
 **全族透明底**（用户口径「扣成透明背景」）——无底板，深色底由宿主环境
 提供；Android 启动屏的深色由 launch_background.xml 的 launch_bg 提供。
-内容对齐：solid bbox 占画布 80%，glow 越出 PAD 自然淡出。参数改动请
-同步更新本文件顶部注释与 0004 ADR。
+内容对齐：**短轴定标**——以 solid 短轴（蓝色圆环外径 812，视觉主体）
+撑满画布 86%（PAD=0.07），fit_scale 夹逼保证整幅资产不越界、彗星尾梢
+不裁；源图已按 solid 紧框裁过（glow 余量≈0），环占 88.2% 为 clip-free
+上限。参数改动请同步更新本文件顶部注释与 0004 ADR。
 """
 
 from __future__ import annotations
@@ -33,9 +35,20 @@ REPO = Path(__file__).resolve().parent.parent
 ASSET_PATH = Path(__file__).resolve().parent / "icon-asset-2026-09-08b.png"
 
 # ---- 设计参数（与 docs/adr/0004 §图标一致）----
-PAD = 0.10  # solid 主体边距（相对画布；glow 越出边距自然淡出）
+PAD = 0.07  # solid 短轴边距（相对画布；短轴=蓝色圆环外径，视觉主体定标基准）
 # 资产内 solid 内容 bbox（icon-asset-2026-09-08b.png 920×816 实测）
 SOLID_BBOX = (1, 3, 915, 814)  # x0, y0, x1, y1（含端点）
+
+
+def fit_scale(ss: int, pad: float = PAD) -> float:
+    """定标系数：以 solid 短轴（=蓝色圆环外径 812，视觉主体）撑满 (1-2*pad)*ss。
+
+    夹逼 ss/ASSET.width 保证整幅资产不越出画布——彗星尾梢与 glow 一律不裁。
+    """
+    sx0, sy0, sx1, sy1 = SOLID_BBOX
+    short_axis = min(sx1 - sx0 + 1, sy1 - sy0 + 1)
+    return min((ss - 2 * ss * pad) / short_axis, ss / ASSET.width)
+
 
 # Android 密度族：mipmap 名 -> 边长 px
 ANDROID_DENSITIES = {
@@ -58,11 +71,9 @@ ASSET = Image.open(ASSET_PATH).convert("RGBA")
 
 
 def _place_asset(im: Image.Image, ss: int, pad: float = PAD) -> None:
-    """资产 solid bbox 按边距对齐缩放贴入 ss×ss 画布（glow 可越出）。"""
+    """资产按 fit_scale 短轴定标缩放贴入 ss×ss 画布（整幅资产不越界）。"""
     sx0, sy0, sx1, sy1 = SOLID_BBOX
-    content_w = sx1 - sx0 + 1
-    content_h = sy1 - sy0 + 1
-    scale = (ss - 2 * ss * pad) / content_w
+    scale = fit_scale(ss, pad)
     dw = round(ASSET.width * scale)
     dh = round(ASSET.height * scale)
     resized = ASSET.resize((dw, dh), Image.LANCZOS)
@@ -84,52 +95,30 @@ def _steepen_alpha(im: Image.Image, lo: float, hi: float) -> Image.Image:
     return Image.fromarray(a)
 
 
-# 小尺寸特调档（任务栏/标题栏显示区）：主体放大 + 去光晕灰雾。
-# 动机：全构图在 ≤24px 下环带仅 ~2px 且中间调 23%（半透明灰雾），
-# 在任务栏上显示为模糊发灰；放大主体 + alpha 陡化后环带加粗、边缘干净。
+# 小尺寸特调档（任务栏/标题栏显示区）：仅 alpha 陡化（去抗锯齿灰雾），
+# 几何定标统一走短轴 PAD/fit_scale。动机：≤24px 下环带边缘中间调占比高，
+# 显示发灰；陡化后边缘干净。实测（16px）蓝像素 55→58、不透明覆盖
+# 21.5%→22.7%。若小图观感仍发虚优先抬 lo，不要再动几何。
 SMALL_TIERS = {
-    16: (0.05, (160, 235)),
-    20: (0.05, (160, 235)),
-    24: (0.06, (150, 240)),
-    32: (0.08, (140, 245)),
+    16: (160, 235),
+    20: (160, 235),
+    24: (150, 240),
+    32: (140, 245),
 }
 
 
-def _solid_silhouette(size: int) -> Image.Image:
-    """资产不透明主体（alpha>128）二值剪影，白色，供通知图/自检。"""
-    ss = 512
-    m = Image.new("L", ss, 0)
-    a = ASSET.resize((ss, ss), Image.LANCZOS)
-    px = a.load()
-    d = ImageDraw.Draw(m)
-    for y in range(ss):
-        for x in range(ss):
-            if px[x, y][3] > 128:
-                d.point((x, y), fill=255)
-    white = Image.new("RGBA", (ss, ss), (0, 0, 0, 0))
-    white.putalpha(m)
-    return Image.merge("RGBA", (m, m, m, white.split()[3])).resize(
-        (size, size), Image.LANCZOS)
-
-
 def render_master(size: int) -> Image.Image:
-    """主图标：透明底 + 资产直放（固定 1024 母版缩放）。
+    """主图标：透明底 + 资产直放（固定 1024 母版缩放，短轴定标）。
 
     用户口径「扣成透明背景」——无任何底色/底板，图标即资产本身；
     深色底由各宿主环境提供（桌面任务栏/Android 桌面/关于页背景）。
-    ≤32px 走 SMALL_TIERS 特调档（主体放大 + alpha 陡化去灰雾），
-    其余尺寸全构图。
+    ≤32px 额外走 SMALL_TIERS alpha 陡化（去灰雾），几何定标全族统一。
     """
-    if size in SMALL_TIERS:
-        pad, (lo, hi) = SMALL_TIERS[size]
-        ss = 1024
-        im = Image.new("RGBA", (ss, ss), (0, 0, 0, 0))
-        _place_asset(im, ss, pad)
-        im = _steepen_alpha(im, lo, hi)
-        return im.resize((size, size), Image.LANCZOS)
     ss = 1024
     im = Image.new("RGBA", (ss, ss), (0, 0, 0, 0))
     _place_asset(im, ss)
+    if size in SMALL_TIERS:
+        im = _steepen_alpha(im, *SMALL_TIERS[size])
     return im.resize((size, size), Image.LANCZOS)
 
 
@@ -141,28 +130,17 @@ def render_launch(size: int) -> Image.Image:
 def render_notification_silhouette(size: int) -> Image.Image:
     """通知小图标：主体白色剪影（透明底），Android 5.0+ alpha 通道语义。
 
-    以 solid 层的外接紧框（非含 glow 的全资产框）铺放，保证小尺寸主体占比。
+    几何与主图共用 fit_scale 口径（不逐处漂移）；状态栏图标有额外内缩
+    惯例，取 pad=0.10（短轴口径下环占 80%，仍大于旧 width 口径的 71%），
+    避免 24px 档彗星尾梢贴边被 OEM 切梢。
     """
     ss = 512
-    sx0, sy0, sx1, sy1 = SOLID_BBOX
-    scale = (ss - 2 * ss * PAD) / (sx1 - sx0 + 1)
-    dw = round(ASSET.width * scale)
-    dh = round(ASSET.height * scale)
-    resized = ASSET.resize((dw, dh), Image.LANCZOS)
-    cx_a = (sx0 + sx1) / 2 * scale
-    cy_a = (sy0 + sy1) / 2 * scale
-    x = round(ss / 2 - cx_a)
-    y = round(ss / 2 - cy_a)
-    canvas = Image.new("L", (ss, ss), 0)
-    canvas.paste(resized.split()[3].point(lambda v: 255 if v > 128 else 0), (x, y))
-    white = Image.new("RGBA", (ss, ss), (0, 0, 0, 0))
-    px = canvas.load()
-    d = ImageDraw.Draw(white)
-    for yy in range(ss):
-        for xx in range(ss):
-            if px[xx, yy] > 0:
-                d.point((xx, yy), fill=(255, 255, 255, 255))
-    return white.resize((size, size), Image.LANCZOS)
+    canvas = Image.new("RGBA", (ss, ss), (0, 0, 0, 0))
+    _place_asset(canvas, ss, 0.10)
+    a = canvas.split()[3].point(lambda v: 255 if v > 128 else 0)
+    white = Image.new("L", (ss, ss), 255)
+    return Image.merge("RGBA", (white, white, white, a)).resize(
+        (size, size), Image.LANCZOS)
 
 
 def write_icns(images: list[Image.Image], path: Path) -> None:
@@ -236,9 +214,10 @@ def self_check(master: Image.Image, notif: Image.Image) -> None:
         r, g, b, al = px[x, y]
         if al > 30:
             raise RuntimeError(f"自检失败：底不透明 ({x},{y}) -> ({r},{g},{b},{al})")
-    # 3) 主体蓝存在（环带实测绘于 512 图：r≈143..210，取中带 r=0.34w）
+    # 3) 主体蓝存在（短轴定标后实测采样平台：rr=0.325w 在 PAD 0.06~0.08
+    # 区间均 12/12 命中；取平台中心而非边缘，抗后续微调）
     cx = cy = w / 2
-    rr = w * 0.34  # 环带中段（512 图实测 solid 峰区 143..251）
+    rr = w * 0.325  # 环带中段
     hits = 0
     import math
     for deg in range(0, 360, 30):

@@ -146,9 +146,10 @@ fn solid_bbox(rgba: &[u8], w: u32, h: u32) -> Option<(u32, u32, u32, u32)> {
 }
 
 /// 从源图裁出紧致子图（solid bbox）成独立 Image。
-/// 源图自带 10% 内容边距（generate_icons PAD，全尺寸展示位的视觉规范），
-/// 托盘 16px 下内容仅 ~12.8px 显小——裁掉边距让主体撑满方格（视觉放大
-/// ~25%），仅托盘位使用，不碰全尺寸资产的留白口径。
+/// 源图自带短轴设计边距（generate_icons PAD=0.07，环占画布 86%；横向
+/// 因彗星尾梢仅余 ~1.5%），托盘小图上主体仍显小——裁掉边距让主体撑满
+/// 方格（视觉收益 ~14%，2026-09-18 短轴定标放大前为 ~25%），仅托盘位
+/// 使用，不碰全尺寸资产的留白口径。
 fn crop_to_content(src: &tauri::image::Image<'_>) -> tauri::image::Image<'static> {
     let (sw, sh) = (src.width(), src.height());
     let rgba = src.rgba();
@@ -170,8 +171,8 @@ fn crop_to_content(src: &tauri::image::Image<'_>) -> tauri::image::Image<'static
 
 /// 系统托盘图标位图：Windows 下按 shell 小图标标准尺寸（SM_CXSMICON，
 /// 100% 缩放 16px、随 DPI 走 20/24px+）从 default_window_icon 生成。
-/// 先紧致裁剪（crop_to_content：去 10% 设计边距）再盒式下采样——
-/// 主体撑满托盘方格（视觉放大约 25%）。
+/// 先紧致裁剪（crop_to_content：去短轴 7% 设计边距）再盒式下采样——
+/// 主体撑满托盘方格（视觉收益 ~14%）。
 ///
 /// 为什么不复用 default_window_icon（256px）：tray-icon 的 Windows 实现
 /// 原样按位图尺寸 CreateIcon，shell 随后把 256px HICON 低质量拉伸到
