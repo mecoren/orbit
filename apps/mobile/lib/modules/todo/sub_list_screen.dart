@@ -745,7 +745,6 @@ class _LogbookList extends StatelessWidget {
       }
     }
     return ListView.builder(
-      controller: ScrollController(),
       padding: padding,
       itemCount: flat.length,
       itemBuilder: (context, index) {
