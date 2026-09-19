@@ -148,6 +148,24 @@
   跟着搜索框收窄就成了错的数字。命中集是小数组，故这一路保留 `placeholderData` 防击键
   闪空；A5 的截断条幅改按当前取数源判定（关键词命中上万条同样算截断）。e2e 补一条
   「标题不含、仅描述含关键词」用例锁该链路。
+- **移动端任务列表改单份缓存 + 派生过滤**（`docs/09` B6）：`todoTasksProvider` 此前是
+  `family<TaskListQuery>`——每个 keyword 一份万行缓存，角标/日历/保存筛选各持一份参数变体。
+  现收成全 App 唯一一份万行全量（各视图经 `filterTasks/sortTasks` 派生过滤），关键词字符
+  单独保留一条**服务端通道** `todoTasksSearchProvider`（SQL LIKE 含 description，该列仅在
+  keyword 非空时随行传输）——在单份缓存上做客户端关键词过滤会让「按描述搜索」静默变无结果
+  （桌面 6c6c2b0 缺陷的移动端镜像，已用 provider 取数口径单测锁住）。同批把提醒调度器的
+  标题 join 从「每次重排直拉 5000 条任务」改为读单份缓存（未就绪才回落直拉）、首页角标改
+  订阅缓存换值：一次 db-change 不再有第二份万行过桥。
+- **移动端 db-change 改表级精确失效**（`docs/09` B7）：此前每条事件一律七路全刷（项目/标签/
+  任务/详情/同步配置/回收站/统计），勾选一条任务会把无关的配置与统计一起标脏重拉；现按事件
+  表映射失效（`modules/shell/db_invalidation.dart`，决策面纯函数可单测），未知表回退全量
+  （宁多拉不漏刷），闹钟重排与小组件快照只在任务/提醒表变化时触发。同批落地 A5 的移动端
+  截断条幅：单份缓存命中 10,000 上限时列表页常驻「列表不完整」提示（与桌面同口径）。
+- **冷启动测量换真首屏口径**（`docs/09` 度量行）：`cold-start.mjs` 旧值「首窗句柄 + 400ms
+  拍定常数」不是就绪信号；现应用侧新增 `perf_first_screen_mark`（`ORBIT_PERF_MARKER`
+  环境变量门控、进程内只记第一笔、`create_new` 不覆盖既有文件），前端 boot 门控落定后
+  双 rAF 上报首帧时刻，脚本按「spawn 前 t0 → 文件内 epoch ms」计耗时（兼容改名过渡期的
+  两种 exe 名）。
 - **内存门禁入库并接 CI**（`perf-metrics/`）：新增 `growth-curve.mjs`（1k/5k/10k 三档 × 3 次中位、
   强制 GC 采真实驻留、切视图与勾选两类峰值、20 次写后泄漏、进程树 RSS 按 pid 子树收敛）与
   `audit-unbounded.mjs`（无界累加容器审计，`bounded*` 标记 + `knownUnbounded` 棘轮登记），
