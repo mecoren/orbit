@@ -398,7 +398,7 @@ export function TaskListView({ tasks, projects, labelsByTask, remindersByTask, l
             onToggleSelect={(shift) => toggleSelect(t.id, shift)}
             onClearSelection={clearSelection}
             onFocusMove={(dir) => focusRow(vi.index + (dir === "down" ? 1 : -1))}
-            onToggleDone={() => void completeTask(t)}
+            onToggleDone={() => void completeTask(t, qc)}
             onToggleFavorite={() => toggleFavorite(t)}
             onToggleMyDay={() => toggleMyDay(t)}
             sortable={sortable && !isPinned}

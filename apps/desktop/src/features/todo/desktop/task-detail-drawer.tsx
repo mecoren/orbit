@@ -234,6 +234,7 @@ function TitleRow({
   task: Awaited<ReturnType<typeof todoTaskGetDetail>>;
   onPatch: (patch: Record<string, unknown>) => Promise<void>;
 }) {
+  const qc = useQueryClient();
   const inMyDay = task.my_day_date === todayStartMs();
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(task.title);
@@ -261,7 +262,7 @@ function TitleRow({
           "h-5 w-5 shrink-0 rounded-full border-2 transition-colors",
           task.done ? "border-primary bg-primary" : "border-muted-foreground/30 hover:border-primary",
         )}
-        onClick={() => void completeTask(task)}
+        onClick={() => void completeTask(task, qc)}
       >
         {task.done ? <Check className="m-auto size-3 text-white" /> : null}
       </button>
@@ -397,13 +398,14 @@ function PropertyGrid({
   projects: ProjectOption[];
   onPatch: (patch: Record<string, unknown>) => Promise<void>;
 }) {
+  const qc = useQueryClient();
   const project = projects.find((p) => p.id === task.project_id);
   const statusDef = STATUS_ITEMS.find((s) => s.key === task.status);
 
   const setStatus = (key: string) => {
     // 评审 I2：对已完成任务再点「已完成」是幂等动作，不得经 completeTask 翻回待办
     if (key === "done") {
-      if (!task.done) void completeTask(task);
+      if (!task.done) void completeTask(task, qc);
     } else void onPatch({ status: key, done: 0, done_at: null });
   };
 

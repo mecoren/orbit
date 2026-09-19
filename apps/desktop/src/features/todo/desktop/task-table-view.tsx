@@ -455,7 +455,7 @@ export default function TaskTableView({
                       )}
                       onClick={(e) => {
                         e.stopPropagation();
-                        void completeTask(t);
+                        void completeTask(t, qc);
                       }}
                     >
                       {t.done ? <CheckSvg /> : null}

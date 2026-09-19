@@ -161,6 +161,7 @@ pnpm bump:check           # 只校验一致性（零写入，CI/本地通用）
 **状态与数据**
 
 - 服务端状态一律 React Query；queryKey 见架构边界节；`staleTime` 2min + `placeholderData: (prev) => prev` 防切 key 闪骨架。
+- 桌面写路径可先 patch 缓存提前 paint（`lib/query-patch.ts`，**只改已存在行字段，不增删不重排**），但 db-change 失效链仍是真值收敛者，不得以 `setQueryData`/`select` 替代；重复任务完成等**派生新行**的场景禁止在 TS 复刻引擎规则（沿革：桌面 `db-change` 转发器每次改主密码多一条，`spawn` 出的常驻任务须由进程级 `AtomicBool`/`Once` once-guard 保护，审计脚本看不见任务泄漏）。
 - localStorage 键全集（04 §七）：`todo_view_mode`、`todo_sidebar_ungrouped_after`、`color_palette`、`custom_palette_accent`、`theme_mode`、`font_family/font_size_level/font_weight_level`；新键遵循同风格命名。
 
 **样式与 UI**

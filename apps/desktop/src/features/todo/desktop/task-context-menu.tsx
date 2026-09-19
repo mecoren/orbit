@@ -177,7 +177,7 @@ export function TaskContextMenu({
             <DropdownMenuItem
               onSelect={() => {
                 close();
-                void completeTask(task);
+                void completeTask(task, qc);
               }}
             >
               <Check size={14} />

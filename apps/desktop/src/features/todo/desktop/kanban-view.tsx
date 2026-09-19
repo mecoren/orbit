@@ -192,7 +192,7 @@ export function KanbanView({ tasks, projects, groupBy, labelsByTask, remindersBy
       await todoTaskUpdate(taskId, { project_id: pid });
     } else if (colKey === "done") {
       const task = tasks.find((t) => t.id === taskId);
-      if (task) await completeTask(task);
+      if (task) await completeTask(task, qc);
     } else {
       await todoTaskUpdate(taskId, { status: colKey, done: 0, done_at: null });
     }
@@ -611,6 +611,7 @@ const KanbanCard = memo(function KanbanCard({
   /** 任一卡片被选中时，卡片点击语义切换为「切换勾选」（与列表行一致） */
   hasSelection?: boolean;
 }) {
+  const qc = useQueryClient();
   const draggable = useDraggable({ id: `task:${task.id}`, disabled: !!overlay || !sortable });
   const { setNodeRef: setDropRef, isOver } = useDroppable({ id: `task:${task.id}` });
 
@@ -715,7 +716,7 @@ const KanbanCard = memo(function KanbanCard({
           )}
           onClick={(e) => {
             e.stopPropagation();
-            void completeTask(task);
+            void completeTask(task, qc);
           }}
         >
           {task.done ? <CheckSvg /> : null}

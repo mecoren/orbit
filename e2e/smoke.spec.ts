@@ -367,6 +367,56 @@ test("重复任务：完成推进下一实例（引擎下沉 todo_tasks_complete
   expect(next!.due_date).toBeGreaterThan(Date.now());
 });
 
+test("完成态乐观：重复任务完成即翻已完成，撤销删克隆（D4）", async ({ page }) => {
+  // 同重复口径造每天重复任务
+  await quickAdd(page, "冒烟任务-乐观撤销");
+  await expect(page.getByText("冒烟任务-乐观撤销")).toBeVisible();
+  await page.evaluate(() => {
+    const m = (window as any).__orbitMock;
+    const t = m.db.tasks.find((x: any) => x.title === "冒烟任务-乐观撤销");
+    t.repeat_mode = 1;
+    t.repeat_after = 1;
+    t.due_date = Date.now() + 86400000;
+    m.emitDbChange();
+  });
+  await expect(
+    page.getByRole("button", { name: "未完成任务：冒烟任务-乐观撤销" }),
+  ).toBeVisible();
+
+  // 完成：乐观翻转 + 引擎派生下一实例（不追加进当前视图缓存，失效链带出）
+  const row = page.getByRole("button", { name: "未完成任务：冒烟任务-乐观撤销" });
+  await row.getByRole("button", { name: "标记完成" }).click();
+  // 克隆与旧实例同标题：收敛后视图仍恰 1 行未完成（是克隆，不是旧行残留——
+  // 若客户端错误追加 next_instance，这里会先闪 2 行）
+  await expect(
+    page.getByRole("button", { name: "未完成任务：冒烟任务-乐观撤销" }),
+  ).toBeVisible({ timeout: 10_000 });
+  const settled = await page.evaluate(() => {
+    const m = (window as any).__orbitMock;
+    return m.db.tasks
+      .filter((x: any) => x.title === "冒烟任务-乐观撤销" && !x.is_deleted)
+      .map((x: any) => x.done);
+  });
+  expect(settled.length).toBe(2);
+  expect(settled.filter((d: number) => d === 1).length).toBe(1);
+
+  // 撤销：complete 入的是通用撤销栈（pushUndo），无 toast 撤销钮，走 Ctrl+Z；
+  // 撤销语义 = 旧实例回 pending + 引擎克隆软删（D4 三方关系）
+  await page.keyboard.press("Control+Z");
+  await expect(
+    page.getByRole("button", { name: "未完成任务：冒烟任务-乐观撤销" }),
+  ).toBeVisible({ timeout: 10_000 });
+  const afterUndo = await page.evaluate(() => {
+    const m = (window as any).__orbitMock;
+    return m.db.tasks
+      .filter((x: any) => x.title === "冒烟任务-乐观撤销")
+      .map((x: any) => ({ done: x.done, is_deleted: x.is_deleted }));
+  });
+  // 旧实例回未完成，克隆进回收站（软删），无残留 pending 副本
+  expect(afterUndo.filter((r: any) => !r.is_deleted && r.done === 0).length).toBe(1);
+  expect(afterUndo.filter((r: any) => r.is_deleted === 1).length).toBe(1);
+});
+
 test("日历视图：左右分栏 + 选中定位 + 年视图 + 右键新增预填日期", async ({ page }) => {
   const today = new Date();
 
