@@ -185,10 +185,13 @@ pnpm bump:check           # 只校验一致性（零写入，CI/本地通用）
 - 路由 `core/routing/app_router.dart`（栈式导航）；页面结构 = LiquidGlassTitleBar（Stack 顶部）+ 整页 ListView 滚动（**必须整页滚动，不要 Column+Expanded 固定高度**——曾致内容溢出）。
 - Riverpod：Provider 按 `modules/todo/providers/`；`FutureProvider.family` 家族化参数缓存（如 statsProvider(year)）；db-change 后 `invalidateBusinessCaches` 统一失效。
 - 主题 token 全在 `core/theme/`：`AppColors.ofContext(context)` 取语义色、`AppDimens.spaceN` 间距、`AppShapes.small/medium/large` 圆角（特殊值 `AppShapes.of(n)`）、`OrbitAccents.todoAccent/themeAccent` 双强调色——**不写裸魔法值**。
+- 日历今天/选中强调色禁用 `scheme.primary`：`modules/todo/calendar_screen.dart`（月历今日实心块与选中描边、右栏选中日高亮底、今日文字与「今天」徽标）和 `year_overview_page.dart`（迷你历今日实心格/周末数字/当前月标题）统一取 `OrbitAccents.themeAccent`（#4E8CFF，与桌面端日历 `--primary`＝themeAccent 体系同源）——`ColorScheme.fromSeed` 会把 seed 漂移成亮色 #455E91 灰蓝 / 暗色 #AFC6FF，与桌面端肉眼可辨（2026-09-19 选中色对齐）。
 - UI 自绘不引库：条形图/热力图纯 Row/Column/Container；组件复刻 wait-home mobile `activity_heatmap.dart` 同构。
 - 布局对齐坑：行标签/占位格与实际格必须同 padding 规则（末行不加尾距，否则固定高 Column 溢出 3px）；`Text.rich` 在 widget 测试 `find.text` 不可见——标题行用 Row + 独立 Text。
 - 测试：`MockOrbitBridge` 注入 `orbitBridgeProvider.overrideWithValue` 冒烟渲染；纯 Dart test 直接调 bridge 排除 UI 层（widget 卡死超时先分离归因）。
 - toast 用 `WaitToast`（支持 action 钮）；空态对齐 `EmptyState` 组件模式（让出标题栏后剩余视口垂直居中）。
+- **品牌图与启动屏同源**：移动端启动器图标（`mipmap-*/ic_launcher.png`）、原生启动屏图（`mipmap-xxxhdpi/launch_image.png`）、Flutter 等待画面资产（`assets/app_icon.png`）三处均出自 `scripts/generate_icons.py`，与桌面端**同一枚图标**——换版一次产出全平台，不手改单端位图；启动屏与 `BootGate` booting 态同口径：白底 + 居中品牌图（`AppDimens.splashLogoSize`），亮暗主题共用白底（`launch_bg` 双 values 同值）；API 31+ 还须在 `values-v31`/`values-night-v31` 显式 `windowSplashScreenBackground` 锁白（night 限定符优先于 version，两份缺一即深色下变黑），并显式 `windowSplashScreenAnimatedIcon`＝自适应前景层 + `windowSplashScreenIconBackgroundColor`＝`@color/ic_launcher_background`；启动器图标**必须走自适应分层图标**（`mipmap-anydpi-v26`，背景层 `@color/ic_launcher_background` **透明** + `ic_launcher_foreground` 前景层，Manifest 带 `roundIcon`，脚本产出）——**透明底与桌面端一致，不铺白底/底板**：缺分层时系统会给 legacy 位图自造模糊底板（发灰脏底），铺白底则出现白色圆角方块（2026-09-19 两次实测反馈）；图标像素一律按 **2x 规格**给（如 48dp 图标给 96px、108dp 画布给 216px）——Android 按目录 bucket 换算 dp 后自行缩放，给足像素只赚清晰度，而启动器与系统/OEM 启动画面都会放大绘制，1x 像素会被放糊。
+- **选择类交互统一用底部抽屉**：单选/多选/排序切换/模板套用/日期时间等「从一组值里挑一个」的交互一律 `showModalBottomSheet`（`isScrollControlled: true`，`backgroundColor: AppColors.ofContext(context).popup`，`shape: bottomSheetTopShape`，行高 `AppDimens.touchTarget`）——纯文本选择复用 `shared/widgets/select_bottom_sheet.dart` 的 `showSelectBottomSheet` 泛型口径，选项带色点/自定义行时同款自绘；**不用** `PopupMenuButton` / `DropdownButton` / `AlertDialog` 列表做选择（`AlertDialog` 只留给确认与文本输入），选项超过 3 个时尤其必须抽屉（移动端弹层宽度受限且遮罩误触率高）。
 
 ## 内存口径与有界容器（门禁：`perf-metrics/audit-unbounded.mjs --gate`）
 
