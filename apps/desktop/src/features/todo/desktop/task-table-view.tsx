@@ -114,8 +114,15 @@ export default function TaskTableView({
 
   // 键盘导航：行 DOM 注册表（j/k 移焦点，Enter/Space 打开）
   const rowRefs = useRef(new Map<number, HTMLDivElement>());
+  // 读屏位置播报（D13）：与列表视图同口径，只在焦点变化时更新 live 节点
+  const [livePos, setLivePos] = useState("");
+  const announcePos = (index: number) => {
+    if (index < 0 || index >= tasks.length) return;
+    setLivePos(`第 ${index + 1} 项，共 ${tasks.length} 项`);
+  };
   const focusRow = (index: number) => {
     if (index < 0 || index >= tasks.length) return;
+    announcePos(index);
     virtualizer.scrollToIndex(index, { align: "auto" });
     rowRefs.current.get(tasks[index]?.id)?.focus();
   };
@@ -351,6 +358,10 @@ export default function TaskTableView({
 
       {/* 数据行（虚拟化） */}
       <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto">
+        {/* 读屏位置播报（D13）：焦点变化时更新，滚动/渲染不碰 */}
+        <div role="status" aria-live="polite" data-testid="task-pos-live" className="sr-only">
+          {livePos}
+        </div>
         <div style={{ height: virtualizer.getTotalSize(), position: "relative" }}>
           {virtualizer.getVirtualItems().map((vi) => {
             const t = tasks[vi.index];
@@ -380,6 +391,7 @@ export default function TaskTableView({
                   role="button"
                   tabIndex={0}
                   aria-label={`${t.done ? "已完成" : "未完成"}任务：${t.title}`}
+                  onFocus={() => announcePos(vi.index)}
                   className={cn(
                     "group relative grid h-[52px] cursor-default items-center gap-3 border-b border-border/30 px-4 hover:bg-accent/30",
                     "focus-visible:bg-accent/40 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring",

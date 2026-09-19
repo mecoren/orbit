@@ -328,6 +328,22 @@ test("视图内新增自动带视图标记（#39）：收藏视图表单新建 �
   expect(fav).toBe(1);
 });
 
+test("读屏位置播报：焦点行更新 live 区域（D13）", async ({ page }) => {
+  // 先保证至少两行（seed 单行时 j 无处可移），聚首行后 j 下移必变播报
+  await quickAdd(page, "冒烟任务-播报第二行");
+  await expect(page.getByText("冒烟任务-播报第二行")).toBeVisible();
+  // focus 不开抽屉（click 会进详情），只移焦点
+  const first = page.getByRole("button", { name: /^未完成任务：/ }).first();
+  await first.focus();
+  const live = page.getByTestId("task-pos-live");
+  await expect(live).toHaveText(/第 \d+ 项，共 \d+ 项/);
+  const before = await live.textContent();
+  // j 下移一行 → 播报变化（键盘导航与播报同源）
+  await page.keyboard.press("j");
+  await expect(live).not.toHaveText(before ?? "", { timeout: 5000 });
+  await expect(live).toHaveText(/第 \d+ 项，共 \d+ 项/);
+});
+
 test("重复任务：完成推进下一实例（引擎下沉 todo_tasks_complete 单命令）", async ({ page }) => {
   // 快加一条任务，mock 内存库直改 repeat 字段为每天重复（表单编辑路径不在此用例范围）
   await quickAdd(page, "冒烟任务-每天喝水");

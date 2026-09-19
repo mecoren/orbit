@@ -125,8 +125,17 @@ export function TaskListView({ tasks, projects, labelsByTask, remindersByTask, l
   // 索引口径必须是 stream 而非 tasks：渲染顺序 = 逾期置顶 + 其余，
   // 按 tasks 取 id 会在存在逾期行时聚焦到错位的那一条
   const rowRefs = useRef(new Map<number, HTMLDivElement>());
+  // 读屏位置播报（D13 虚拟列表品类基线）：role=status 的 live 节点只在焦点
+  // 变化时更新，绝不在 render 中更新（虚拟化滚动每帧打断朗读比不播报更糟）；
+  // 行 role=button 上不加 aria-posinset（Narrator/NVDA 静默忽略）。
+  const [livePos, setLivePos] = useState("");
+  const announcePos = (index: number, total: number) => {
+    if (index < 0 || index >= total) return;
+    setLivePos(`第 ${index + 1} 项，共 ${total} 项`);
+  };
   const focusRow = (index: number) => {
     if (index < 0 || index >= stream.length) return;
+    announcePos(index, stream.length);
     virtualizer.scrollToIndex(index, { align: "auto" });
     // 动态 measureElement 下，目标行可能晚一帧才挂载：rAF 重试至多 5 帧
     // （评审 I2 修复，与 Task 3 落地版保持一致）
@@ -398,6 +407,7 @@ export function TaskListView({ tasks, projects, labelsByTask, remindersByTask, l
             onToggleSelect={(shift) => toggleSelect(t.id, shift)}
             onClearSelection={clearSelection}
             onFocusMove={(dir) => focusRow(vi.index + (dir === "down" ? 1 : -1))}
+            onFocusRow={(i) => announcePos(i, stream.length)}
             onToggleDone={() => void completeTask(t, qc)}
             onToggleFavorite={() => toggleFavorite(t)}
             onToggleMyDay={() => toggleMyDay(t)}
@@ -417,6 +427,10 @@ export function TaskListView({ tasks, projects, labelsByTask, remindersByTask, l
       onDragCancel={() => setDraggingId(null)}
     >
       <div ref={scrollRef} className="flex-1 overflow-y-auto">
+        {/* 读屏位置播报（D13）：焦点变化时更新，滚动/渲染不碰 */}
+        <div role="status" aria-live="polite" data-testid="task-pos-live" className="sr-only">
+          {livePos}
+        </div>
         {/* 逾期段标题（常驻小节点）：段内任务行本身进虚拟流。留在文档流里
             会让虚拟窗整体下偏一个标题高（~29px），远小于 overscan 的 8 行
             （456px），故不出空白；置顶段行进流前该偏移是 N×57px，滚动到
@@ -691,6 +705,8 @@ interface TaskRowProps {
   /** Esc 选中态退选全部 */
   onClearSelection: () => void;
   onFocusMove: (dir: "up" | "down") => void;
+  /** 焦点行播报（D13）：父级据此更新 live 区域「第 N 项，共 M 项” */
+  onFocusRow?: (index: number) => void;
   onToggleDone: () => void;
   onToggleFavorite: () => void;
   onToggleMyDay: () => void;
@@ -715,6 +731,7 @@ const TaskRow = memo(function TaskRow({
   onToggleSelect,
   onClearSelection,
   onFocusMove,
+  onFocusRow,
   onToggleDone,
   onToggleFavorite,
   onToggleMyDay,
@@ -739,6 +756,7 @@ const TaskRow = memo(function TaskRow({
       role="button"
       tabIndex={0}
       aria-label={`${t.done ? "已完成" : "未完成"}任务：${t.title}`}
+      onFocus={() => onFocusRow?.(index)}
       className={cn(
         "group relative flex h-[57px] cursor-default items-center gap-3 border-b border-border/30 px-4 hover:bg-accent/30",
         "focus-visible:bg-accent/40 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring",
