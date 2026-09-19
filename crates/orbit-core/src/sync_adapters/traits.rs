@@ -3,13 +3,6 @@ use serde::{Deserialize, Serialize};
 
 use crate::sync::error::SyncError;
 
-/// 同步适配器类型
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub enum AdapterType {
-    S3,
-    WebDAV,
-}
-
 /// 远程文件信息
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RemoteFile {
@@ -17,7 +10,12 @@ pub struct RemoteFile {
     pub size: u64,
     /// 最后修改时间（Unix 时间戳，秒）
     pub last_modified: i64,
-    pub lamport_version: i64,
+    /// 并发令牌（ETag，已剥引号/弱校验前缀；服务端不提供则为 None）
+    ///
+    /// F26（2026-09-19 第五轮探查）：S3 `<ETag>` 与 WebDAV `<d:getetag/>`
+    /// 都在列举响应里，此前整体丢弃，列举侧无法与条件写（CAS）共用同一份
+    /// 「当前远端版本」快照。字段语义与 `download_with_token` 的令牌一致。
+    pub etag: Option<String>,
 }
 
 /// 上传前置条件（乐观并发控制）
@@ -38,6 +36,25 @@ pub enum UploadPrecondition {
     Match(String),
 }
 
+/// 归一化 ETag：剥掉服务端包裹的弱校验前缀与引号
+///
+/// S3 回 `"abc"`、WebDAV 回 `"abc"` 或 `W/"abc"`，条件请求头要求的是裸令牌
+/// （`If-Match: "abc"` 由发送侧自行加引号）。空值返回 None（部分服务器对目录
+/// 回空 getetag）。F26 起两协议的列举侧共用此口径，与 `download_with_token`
+/// 的令牌保持同源。
+pub(crate) fn normalize_etag(raw: &str) -> Option<String> {
+    let trimmed = raw.trim();
+    let unquoted = trimmed
+        .strip_prefix("W/")
+        .unwrap_or(trimmed)
+        .trim_matches('"');
+    if unquoted.is_empty() {
+        None
+    } else {
+        Some(unquoted.to_string())
+    }
+}
+
 /// 条件上传结果
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum UploadOutcome {
@@ -54,10 +71,16 @@ pub enum UploadOutcome {
 /// 无令牌读取），使既有 mock 适配器无需改动即可编译；生产适配器覆盖实现。
 #[async_trait]
 pub trait SyncAdapter: Send + Sync {
-    /// 列出远程目录下的一级文件
-    async fn list_files(&self, base_path: &str) -> Result<Vec<RemoteFile>, SyncError>;
-
     /// 列出远程目录下的所有文件（不过滤后缀，供备份列举使用）
+    ///
+    /// **两协议的「列出」深度不同，实现者须知道自己在承诺什么**（F32）：
+    /// WebDAV 用 `PROPFIND Depth:1`，只回**直接子项**一层（更深的目录不递归，
+    /// 且返回的 `RemoteFile.name` 是 basename、丢父级路径）；S3 用
+    /// `ListObjectsV2 prefix=…`，按前缀**递归**列出所有后代 key（`name` 是
+    /// 去掉前缀后的相对路径，可含 `/`）。当前云端布局（`backups/`、`tables/`、
+    /// `assets/` 均为「base_path 下一层」）让两者结果重合；若将来引入二级
+    /// 嵌套，WebDAV 侧会静默漏项——那时须改为递归 PROPFIND 或显式按目录列举，
+    /// 而不是让调用方以为两协议等价。
     async fn list_all_files(&self, _base_path: &str) -> Result<Vec<RemoteFile>, SyncError> {
         Ok(Vec::new())
     }
@@ -80,10 +103,17 @@ pub trait SyncAdapter: Send + Sync {
     /// 检查附件是否存在
     async fn asset_exists(&self, hash: &str) -> Result<bool, SyncError>;
 
-    /// 列出云端所有附件的 hash 列表
+    /// 列出云端所有附件的裸 hash 列表
     ///
-    /// 用于附件 GC：对比本地引用集合，识别云端孤儿附件。
-    async fn list_assets(&self) -> Result<Vec<String>, SyncError>;
+    /// 用于附件 push/pull 差集与孤儿 GC：返回值必须与本地 `sys_attachments.hash`
+    /// 同域（**裸 hash**，既无目录前缀也无同步后缀）。
+    ///
+    /// `assets_dir` 为附件对象所在目录的**完整云端路径**（`assets` 或
+    /// `{base_path}/assets`），由调用方给全路径、适配器不再自拼前缀（F23）：
+    /// 生产链路唯一调用方是 `BasePathAdapter`，它掌握 base_path。
+    /// WebDAV 实现还须并集 `assets_parts/` 下的分片附件（把 `assets_dir` 末段
+    /// `assets` 换成 `assets_parts`）——漏掉即分片附件在差集里永远缺席。
+    async fn list_assets(&self, assets_dir: &str) -> Result<Vec<String>, SyncError>;
 
     // ========================================================================
     // 轻量存在性探测 / 并发令牌读取 / 条件写

@@ -28,7 +28,7 @@ use crate::cloud_sync::progress::{ProgressSender, SyncOrigin};
 use crate::cloud_sync::state::SyncState;
 use crate::sync::engine::{SyncConfig, create_adapter, validate_config};
 use crate::sync::error::SyncError;
-use crate::sync_adapters::traits::{RemoteFile, SyncAdapter};
+use crate::sync_adapters::traits::{RemoteFile, SyncAdapter, UploadOutcome, UploadPrecondition};
 use crate::sync_crypto::SyncCryptoService;
 
 // ============================================================================
@@ -42,14 +42,23 @@ use crate::sync_crypto::SyncCryptoService;
 /// 此包装器在不改变 push/pull/attachments 函数签名的前提下，透明地为所有
 /// download/upload/upload_asset/download_asset 等调用拼接 base_path。
 ///
+/// **不变量（F22，2026-09-19 第五轮探查）**：`SyncAdapter` 的**每一个**方法都必须
+/// 在此显式转发。trait 为 `exists`/`download_with_token`/`upload_conditional`
+/// 提供的是「mock 友好」的退化默认实现（HEAD 降级为下载、令牌恒 `None`、
+/// 前置条件被忽略后无条件覆盖）——漏转发一个就等于静默关掉一层并发保护，
+/// 且编译与既有单测都不会报警（生产弱于 mock，即假绿）。
+///
 /// full_sync_backup 不使用此包装器（它自行在调用层拼接完整路径），因此不受影响。
 struct BasePathAdapter {
-    inner: Box<dyn SyncAdapter>,
+    /// 共享底层适配器（Arc 而非 Box）：同一轮同步里 raw 适配器与包装器
+    /// 必须指向同一实例，否则各自持有独立的 reqwest 连接池（F40：
+    /// 每轮两个全新 Client，phase 间无热连接）
+    inner: Arc<dyn SyncAdapter>,
     base_path: String,
 }
 
 impl BasePathAdapter {
-    fn new(inner: Box<dyn SyncAdapter>, base_path: &str) -> Self {
+    fn new(inner: Arc<dyn SyncAdapter>, base_path: &str) -> Self {
         let trimmed = base_path.trim_matches('/');
         Self {
             inner,
@@ -77,11 +86,6 @@ impl BasePathAdapter {
 
 #[async_trait]
 impl SyncAdapter for BasePathAdapter {
-    async fn list_files(&self, prefix: &str) -> Result<Vec<RemoteFile>, SyncError> {
-        // list_files 的 prefix 由调用方传入，此处拼接 base_path
-        self.inner.list_files(&self.join(prefix)).await
-    }
-
     async fn list_all_files(&self, prefix: &str) -> Result<Vec<RemoteFile>, SyncError> {
         self.inner.list_all_files(&self.join(prefix)).await
     }
@@ -120,21 +124,38 @@ impl SyncAdapter for BasePathAdapter {
         self.inner.exists(&self.join(&path)).await
     }
 
-    async fn list_assets(&self) -> Result<Vec<String>, SyncError> {
-        // S1：列举 {base_path}/assets/ 并剥同步后缀（与内层适配器同口径）。
-        // 多后缀并存时排序去重合一。
-        let prefix = self.join("assets");
-        let files = self.inner.list_all_files(&prefix).await?;
-        let mut hashes: Vec<String> = files
-            .into_iter()
-            .map(|f| f.name)
-            .map(|name| crate::cloud_sync::paths::strip_sync_extension(&name).to_string())
-            .collect();
-        // dedup 前先排序（同一 hash 的多后缀双对象场景；
-        // Vec::dedup 只去相邻重复）
-        hashes.sort();
-        hashes.dedup();
-        Ok(hashes)
+    async fn list_assets(&self, assets_dir: &str) -> Result<Vec<String>, SyncError> {
+        // F23：委托内层适配器列举，包装器只负责把 base_path 拼进目录。
+        // 此前这里是自行「list assets 目录 + 剥后缀」的复制品：看不见
+        // assets_parts 下的分片附件（差集每轮缺席 → 空跑重传、云端孤儿
+        // 永不清理），而内层实现（含 S4 并集逻辑）被架空成死代码。
+        self.inner.list_assets(&self.join(assets_dir)).await
+    }
+
+    async fn exists(&self, path: &str) -> Result<bool, SyncError> {
+        // 必须转发：默认实现会整对象下载来判存在（HEAD 优化随之失效）
+        self.inner.exists(&self.join(path)).await
+    }
+
+    async fn download_with_token(
+        &self,
+        path: &str,
+    ) -> Result<Option<(Vec<u8>, Option<String>)>, SyncError> {
+        // 必须转发：默认实现把令牌钉死为 None，清单 CAS 随之退化为裸覆盖
+        self.inner.download_with_token(&self.join(path)).await
+    }
+
+    async fn upload_conditional(
+        &self,
+        path: &str,
+        data: &[u8],
+        precondition: UploadPrecondition,
+    ) -> Result<UploadOutcome, SyncError> {
+        // 必须转发：默认实现丢弃前置条件直接覆盖上传，
+        // `If-Match`/`If-None-Match` 一个都不会发到网络上
+        self.inner
+            .upload_conditional(&self.join(path), data, precondition)
+            .await
     }
 }
 
@@ -168,32 +189,29 @@ pub fn create_engine_noop(
 // 同步操作
 // ============================================================================
 
-/// 构造带 base_path 前缀的适配器（供 cloud_sync push/pull/attachments 使用）
+/// 构造一轮同步用的适配器对：`(原始适配器, 带 base_path 包装器)`
 ///
 /// cloud_sync 的 push/pull 使用相对路径（`_meta.json`、`modules/...`），
 /// 需通过 `BasePathAdapter` 包装器拼接 `config.base_path` 前缀，
 /// 确保文件存放在 `{base_path}/` 目录下，与 meta.rs 文档的云端目录结构一致。
-fn create_base_path_adapter(config: &SyncConfig) -> Result<BasePathAdapter, CloudSyncError> {
-    validate_config(config).map_err(|e| CloudSyncError::Adapter {
-        message: e.to_string(),
-    })?;
-    let inner = create_adapter(config).map_err(|e| CloudSyncError::Adapter {
-        message: e.to_string(),
-    })?;
-    Ok(BasePathAdapter::new(inner, &config.base_path))
-}
-
-/// 构造原始适配器（不带 base_path 前缀）
 ///
-/// 供引擎锁内的 Data Key 同步使用（`bundle_io` 内部自行拼接 base_path 与双读回退）。
-/// Fix-08 起 Data Key 同步在 `SyncEngine` 各方法锁内执行，api 层只需传入原始适配器。
-fn create_raw_adapter(config: &SyncConfig) -> Result<Box<dyn SyncAdapter>, CloudSyncError> {
+/// 原始适配器供引擎锁内的 Data Key 同步使用（`bundle_io` 内部自行拼接
+/// base_path 与双读回退）。两者**共享同一底层实例**（F40）：此前各构造一次
+/// `create_adapter` → 两个独立 reqwest 连接池，push/pull/DataKey 三个阶段
+/// 互不复用热连接，每轮同步多付一次 TLS/连接建立成本。
+fn create_adapters(
+    config: &SyncConfig,
+) -> Result<(Arc<dyn SyncAdapter>, BasePathAdapter), CloudSyncError> {
     validate_config(config).map_err(|e| CloudSyncError::Adapter {
         message: e.to_string(),
     })?;
-    create_adapter(config).map_err(|e| CloudSyncError::Adapter {
-        message: e.to_string(),
-    })
+    let inner: Arc<dyn SyncAdapter> = Arc::from(
+        create_adapter(config).map_err(|e| CloudSyncError::Adapter {
+            message: e.to_string(),
+        })?,
+    );
+    let adapter = BasePathAdapter::new(inner.clone(), &config.base_path);
+    Ok((inner, adapter))
 }
 
 /// 执行完整同步（Push + Pull + 附件）
@@ -215,8 +233,7 @@ pub async fn sync_now(
 ) -> Result<SyncResult, CloudSyncError> {
     // Fix-08：Data Key 同步已移入 engine.sync_now 互斥锁内，
     // 此处仅需构造两种适配器（带/不带 base_path 前缀）。
-    let raw_adapter = create_raw_adapter(config)?;
-    let adapter = create_base_path_adapter(config)?;
+    let (raw_adapter, adapter) = create_adapters(config)?;
     engine
         .sync_now(
             &adapter,
@@ -244,8 +261,7 @@ pub async fn push_only(
 ) -> Result<SyncResult, CloudSyncError> {
     // Fix-08：Data Key 同步在 engine.push_only 锁内执行
     // （用错误的 Data Key 加密上传会导致云端数据无法被其他设备解密）。
-    let raw_adapter = create_raw_adapter(config)?;
-    let adapter = create_base_path_adapter(config)?;
+    let (raw_adapter, adapter) = create_adapters(config)?;
     engine
         .push_only(
             &adapter,
@@ -274,8 +290,7 @@ pub async fn pull_then_push(
 ) -> Result<SyncResult, CloudSyncError> {
     // Fix-08：Data Key 同步在 engine.pull_then_push 锁内执行
     // （pull 前必须导入云端 Data Key，否则解密失败）。
-    let raw_adapter = create_raw_adapter(config)?;
-    let adapter = create_base_path_adapter(config)?;
+    let (raw_adapter, adapter) = create_adapters(config)?;
     engine
         .pull_then_push(
             &adapter,
@@ -354,8 +369,7 @@ pub async fn rekey_cloud(
     device_id: &str,
     attachments_dir: &str,
 ) -> Result<SyncResult, CloudSyncError> {
-    let raw_adapter = create_raw_adapter(config)?;
-    let adapter = create_base_path_adapter(config)?;
+    let (raw_adapter, adapter) = create_adapters(config)?;
     engine
         .rekey_cloud_reencrypt(
             &adapter,
@@ -432,6 +446,7 @@ mod tests {
             duration_ms: 500,
             skipped: false,
             errors: vec![],
+            changed_tables: vec![],
         };
         let json = result_to_json(&result).unwrap();
         assert!(json.contains("\"pushed_modules\":3"));
@@ -485,7 +500,7 @@ mod tests {
                     name: n.to_string(),
                     size: 0,
                     last_modified: 0,
-                    lamport_version: 0,
+                    etag: None,
                 })
                 .collect();
             self
@@ -494,9 +509,6 @@ mod tests {
 
     #[async_trait]
     impl SyncAdapter for AssetMockAdapter {
-        async fn list_files(&self, base_path: &str) -> Result<Vec<RemoteFile>, SyncError> {
-            self.list_all_files(base_path).await
-        }
         async fn list_all_files(&self, prefix: &str) -> Result<Vec<RemoteFile>, SyncError> {
             self.list_prefixes.lock().unwrap().push(prefix.to_string());
             Ok(self.listing.clone())
@@ -525,8 +537,21 @@ mod tests {
         async fn asset_exists(&self, hash: &str) -> Result<bool, SyncError> {
             Ok(self.files.contains_key(&format!("assets/{hash}.orsync")))
         }
-        async fn list_assets(&self) -> Result<Vec<String>, SyncError> {
-            Ok(Vec::new())
+        async fn list_assets(&self, assets_dir: &str) -> Result<Vec<String>, SyncError> {
+            // 与两个生产适配器的契约一致：入参是**完整云端目录**，返回裸 hash
+            // （S3 的 Key 已按前缀剥离、WebDAV 的 name 是 basename，
+            // 平铺 assets 目录下两口径同形——F23 归一化责任在下沉到适配器）
+            self.list_prefixes
+                .lock()
+                .unwrap()
+                .push(assets_dir.to_string());
+            let mut hashes: Vec<String> = self
+                .listing
+                .iter()
+                .map(|f| crate::cloud_sync::paths::strip_sync_extension(&f.name).to_string())
+                .collect();
+            hashes.sort();
+            Ok(hashes)
         }
     }
 
@@ -543,10 +568,11 @@ mod tests {
 
         let uploads = mock.uploads.clone();
         let list_prefixes = mock.list_prefixes.clone();
-        let adapter = BasePathAdapter::new(Box::new(mock), "wait-sync/user1");
+        let adapter = BasePathAdapter::new(Arc::new(mock), "wait-sync/user1");
 
-        // list_assets：剥同步后缀后返回纯 hash 列表，且前缀带 base_path
-        let hashes = adapter.list_assets().await.unwrap();
+        // list_assets：委托内层适配器，前缀带 base_path，返回裸 hash
+        // （F23：归一化与 assets_parts 并集是适配器的职责，包装器只拼前缀）
+        let hashes = adapter.list_assets("assets").await.unwrap();
         assert_eq!(hashes, vec!["abc123".to_string(), "def456".to_string()]);
         assert_eq!(
             list_prefixes.lock().unwrap().as_slice(),
@@ -581,9 +607,234 @@ mod tests {
     async fn s1_empty_base_path_passes_through() {
         let mock = AssetMockAdapter::new();
         let uploads = mock.uploads.clone();
-        let adapter = BasePathAdapter::new(Box::new(mock), "");
+        let adapter = BasePathAdapter::new(Arc::new(mock), "");
 
         adapter.upload_asset("h1", b"x").await.unwrap();
         assert_eq!(uploads.lock().unwrap().as_slice(), ["assets/h1.orsync"]);
+    }
+
+    /// 带并发令牌与条件写的 mock（形状对齐 `cloud_sync::push::tests::MemAdapter`）
+    ///
+    /// 关键：它**实现**了 `download_with_token`/`upload_conditional`/`exists`。
+    /// F22 的失效模式正是「包装器少转发一个方法 → 落到 trait 退化默认 →
+    /// 生产实现比 mock 更弱」，所以断言必须打在「调用真的到达内层」上。
+    struct CasMockAdapter {
+        objects: std::sync::Mutex<std::collections::HashMap<String, (Vec<u8>, String)>>,
+        seen: Arc<std::sync::Mutex<Vec<String>>>,
+        seen_preconditions: Arc<std::sync::Mutex<Vec<String>>>,
+        exists_hits: Arc<std::sync::Mutex<Vec<String>>>,
+    }
+
+    impl CasMockAdapter {
+        fn new(path: &str, data: &[u8], etag: &str) -> Self {
+            let mut objects = std::collections::HashMap::new();
+            objects.insert(path.to_string(), (data.to_vec(), etag.to_string()));
+            Self {
+                objects: std::sync::Mutex::new(objects),
+                seen: Arc::new(std::sync::Mutex::new(Vec::new())),
+                seen_preconditions: Arc::new(std::sync::Mutex::new(Vec::new())),
+                exists_hits: Arc::new(std::sync::Mutex::new(Vec::new())),
+            }
+        }
+
+        fn describe(precondition: &UploadPrecondition) -> String {
+            match precondition {
+                UploadPrecondition::None => "none".to_string(),
+                UploadPrecondition::Absent => "absent".to_string(),
+                UploadPrecondition::Match(token) => format!("match:{token}"),
+            }
+        }
+    }
+
+    #[async_trait]
+    impl SyncAdapter for CasMockAdapter {
+        async fn download(&self, path: &str) -> Result<Vec<u8>, SyncError> {
+            self.objects
+                .lock()
+                .unwrap()
+                .get(path)
+                .map(|(b, _)| b.clone())
+                .ok_or_else(|| SyncError::NotFound {
+                    message: path.to_string(),
+                })
+        }
+        async fn upload(&self, path: &str, data: &[u8]) -> Result<(), SyncError> {
+            self.objects
+                .lock()
+                .unwrap()
+                .insert(path.to_string(), (data.to_vec(), "v+1".to_string()));
+            Ok(())
+        }
+        async fn delete(&self, _: &str) -> Result<(), SyncError> {
+            Ok(())
+        }
+        async fn upload_asset(&self, _: &str, _: &[u8]) -> Result<(), SyncError> {
+            Ok(())
+        }
+        async fn download_asset(&self, _: &str) -> Result<Vec<u8>, SyncError> {
+            Err(SyncError::NotFound {
+                message: "无".to_string(),
+            })
+        }
+        async fn asset_exists(&self, _: &str) -> Result<bool, SyncError> {
+            Ok(false)
+        }
+        async fn list_assets(&self, _assets_dir: &str) -> Result<Vec<String>, SyncError> {
+            Ok(Vec::new())
+        }
+        async fn exists(&self, path: &str) -> Result<bool, SyncError> {
+            self.exists_hits.lock().unwrap().push(path.to_string());
+            Ok(self.objects.lock().unwrap().contains_key(path))
+        }
+        async fn download_with_token(
+            &self,
+            path: &str,
+        ) -> Result<Option<(Vec<u8>, Option<String>)>, SyncError> {
+            self.seen.lock().unwrap().push(path.to_string());
+            Ok(self
+                .objects
+                .lock()
+                .unwrap()
+                .get(path)
+                .map(|(b, etag)| (b.clone(), Some(etag.clone()))))
+        }
+        async fn upload_conditional(
+            &self,
+            path: &str,
+            data: &[u8],
+            precondition: UploadPrecondition,
+        ) -> Result<UploadOutcome, SyncError> {
+            self.seen.lock().unwrap().push(path.to_string());
+            self.seen_preconditions
+                .lock()
+                .unwrap()
+                .push(Self::describe(&precondition));
+            let mut objects = self.objects.lock().unwrap();
+            let current = objects.get(path).map(|(_, etag)| etag.clone());
+            let satisfied = match &precondition {
+                UploadPrecondition::None => true,
+                UploadPrecondition::Absent => current.is_none(),
+                UploadPrecondition::Match(token) => current.as_deref() == Some(token.as_str()),
+            };
+            if !satisfied {
+                return Ok(UploadOutcome::PreconditionFailed);
+            }
+            objects.insert(path.to_string(), (data.to_vec(), "v+1".to_string()));
+            Ok(UploadOutcome::Ok)
+        }
+    }
+
+    /// F22 回归防线：包装器必须把「令牌 / 前置条件 / HEAD 探测」三件事真的送到内层
+    ///
+    /// 修复前本用例三处全红：令牌恒 `None`、前置条件塌成裸覆盖写、
+    /// `exists` 走默认实现下载整对象。
+    #[tokio::test]
+    async fn wrapper_forwards_tokens_preconditions_and_head_probe() {
+        let joined = "wait-sync/user1/manifest.orsync";
+        let mock = CasMockAdapter::new(joined, b"remote-manifest", "etag-7");
+        let seen = mock.seen.clone();
+        let seen_pre = mock.seen_preconditions.clone();
+        let exists_hits = mock.exists_hits.clone();
+        let adapter = BasePathAdapter::new(Arc::new(mock), "wait-sync/user1");
+
+        // 1. 令牌透出 + 路径已拼 base_path
+        let got = adapter
+            .download_with_token("manifest.orsync")
+            .await
+            .unwrap()
+            .expect("对象存在必须返回 Some");
+        assert_eq!(got.0, b"remote-manifest");
+        assert_eq!(
+            got.1.as_deref(),
+            Some("etag-7"),
+            "并发令牌不得被包装器的 trait 默认实现吞成 None"
+        );
+        assert_eq!(seen.lock().unwrap().as_slice(), [joined]);
+
+        // 2. 陈旧令牌 → PreconditionFailed（CAS 真的有在生效）
+        let stale = adapter
+            .upload_conditional(
+                "manifest.orsync",
+                b"mine",
+                UploadPrecondition::Match("etag-stale".to_string()),
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            stale,
+            UploadOutcome::PreconditionFailed,
+            "令牌不符必须回条件失败，而非静默覆盖对端"
+        );
+
+        // 3. 当前令牌 → 写入成功，且前置条件原样透传
+        let fresh = adapter
+            .upload_conditional(
+                "manifest.orsync",
+                b"mine",
+                UploadPrecondition::Match("etag-7".to_string()),
+            )
+            .await
+            .unwrap();
+        assert_eq!(fresh, UploadOutcome::Ok);
+        let absent = adapter
+            .upload_conditional("brand-new.orsync", b"x", UploadPrecondition::Absent)
+            .await
+            .unwrap();
+        assert_eq!(
+            absent,
+            UploadOutcome::Ok,
+            "Absent 且远端无对象 → 首次写入成功"
+        );
+        assert_eq!(
+            seen_pre.lock().unwrap().as_slice(),
+            ["match:etag-stale", "match:etag-7", "absent",],
+            "前置条件不得被降级成无条件上传"
+        );
+        assert_eq!(
+            seen.lock().unwrap().as_slice(),
+            [
+                joined,
+                joined,
+                "wait-sync/user1/manifest.orsync",
+                "wait-sync/user1/brand-new.orsync"
+            ],
+            "每一次条件写都要带 base_path 前缀"
+        );
+
+        // 4. exists 走内层 HEAD 探测，不退化成下载整对象
+        assert!(adapter.exists("manifest.orsync").await.unwrap());
+        assert!(!adapter.exists("nope.orsync").await.unwrap());
+        assert_eq!(
+            exists_hits.lock().unwrap().len(),
+            2,
+            "必须命中内层 HEAD 实现"
+        );
+    }
+
+    /// F40 回归防线：一轮同步的 raw 适配器与 base_path 包装器必须共享同一底层实例
+    ///
+    /// 此前两个入口各调一次 `create_adapter` → 两个独立 `reqwest::Client`
+    /// （各自连接池），push/pull/DataKey 三个阶段互不复用热连接。断言打在
+    /// 指针相等上——任何「顺手再构造一个」的改动都会让它翻红。
+    #[test]
+    fn adapters_share_single_underlying_instance() {
+        let config = SyncConfig {
+            adapter_type: "webdav".into(),
+            endpoint: "http://127.0.0.1:1/dav".into(),
+            bucket: String::new(),
+            region: String::new(),
+            access_key: "user".into(),
+            secret_key: "pass".into(),
+            base_path: "orbit/dev".into(),
+            device_id: "dev-1".into(),
+            device_name: "dev-1".into(),
+            timeout_secs: 5,
+            skip_tls_verify: false,
+        };
+        let (raw, wrapped) = create_adapters(&config).unwrap();
+        assert!(
+            Arc::ptr_eq(&raw, &wrapped.inner),
+            "raw 适配器与包装器必须指向同一实例（一 run 一 Client）"
+        );
     }
 }
