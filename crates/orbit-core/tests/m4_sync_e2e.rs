@@ -1,13 +1,21 @@
-//! 5.x 同步链路端到端集成测试（M4 清单自动化可覆盖段）
+//! 5.x 同步链路端到端集成测试（活体真服务端诊断用例）
+//!
+//! **默认不跑**（`#[ignore]`）：本用例探不到外部 WebDAV 时会 panic，曾是
+//! 干净机器 `cargo test --workspace` 必红的根因（第五轮探查 F25）。
+//! 无外部依赖的等价覆盖（含四类操作 × 七种故障、清单 CAS 的网络级证据）
+//! 在 `tests/sync_fault_matrix.rs`，用同仓假服务随时可跑。
+//!
+//! 本用例保留的价值是「真服务端方言」：wsgidav / 群晖 / 坚果云对 PROPFIND
+//! 形态、MKCOL 409 语义、ETag 引号的处理各家不同，假服务证明不了这些。
 //!
 //! 场景（对齐 docs/superpowers/plans/2026-08-24-m4-device-checklist.md §五）：
-//! - 前置：本地 WebDAV 服务（集成测试内嵌起一个内存实现，或用环境变量
-//!   ORBIT_TEST_WEBDAV 指向外部服务器——本测试与 `.m4-evidence/dav_probe.py`
-//!   探针配套：宿主机运行 `python .m4-evidence/dav_probe.py` 后跑本测试）
-//! - 5.2/5.3：sync_data_key → push（移动端实例 A 上传）→ 第二实例 B pull 收敛
-//! - 5.4：`sync_config.json` 明文降级文件落盘验证（save_with_plaintext_fallback）
+//! - 5.2/5.3：sync_data_key → push（设备 A 上传）→ 设备 B pull 收敛
+//! - 5.4：`sync_config.json` 明文降级文件落盘验证（save_with_plaintext_fallback，
+//!   不依赖网络，普通 `cargo test` 即跑）
 //!
-//! 运行：`ORBIT_TEST_WEBDAV=http://127.0.0.1:8123 cargo test -p orbit-core --test m4_sync_e2e`
+//! 运行：`ORBIT_TEST_WEBDAV=http://127.0.0.1:8123 cargo test -p orbit-core \
+//!   --test m4_sync_e2e -- --ignored`（先起服务器，如
+//!   `python .m4-evidence/dav_probe.py`）
 
 use std::path::PathBuf;
 
@@ -21,6 +29,13 @@ fn test_webdav_endpoint() -> String {
     std::env::var("ORBIT_TEST_WEBDAV").unwrap_or_else(|_| "http://127.0.0.1:8123".into())
 }
 
+/// 每轮唯一 base_path：起跑态天然为空，无需再维护一份「删除上次残留」的路径清单
+/// （旧清理清单停在 `_meta.orsync`/`modules` 老布局，从未删过现布局，
+/// 收敛用例的结论其实依赖云端残留——第五轮探查 F25）
+fn test_base_path() -> String {
+    format!("orbit-m4-e2e-{}", std::process::id())
+}
+
 fn sync_config(endpoint: &str, device_id: &str) -> orbit_core::sync::engine::SyncConfig {
     orbit_core::sync::engine::SyncConfig {
         adapter_type: "webdav".into(),
@@ -29,7 +44,7 @@ fn sync_config(endpoint: &str, device_id: &str) -> orbit_core::sync::engine::Syn
         region: String::new(),
         access_key: "m4tester".into(),
         secret_key: "m4pass123".into(),
-        base_path: "orbit-m4-e2e".into(),
+        base_path: test_base_path(),
         device_id: device_id.into(),
         device_name: device_id.into(),
         timeout_secs: 15,
@@ -55,6 +70,7 @@ async fn setup_db(tag: &str) -> (SqlitePool, PathBuf) {
 /// 5.2/5.3 双实例收敛：A init（上传 crypto/config + 推数据）→ B 用同密码
 /// init 后 pull → 断言 B 收敛到 A 的任务集
 #[tokio::test]
+#[ignore = "需要本机可达的真 WebDAV 服务；无外部依赖的等价覆盖见 tests/sync_fault_matrix.rs"]
 async fn two_instance_convergence_over_webdav() {
     let endpoint = test_webdav_endpoint();
     // 前置连通性：服务器不在线时跳过（不失败——CI/无网络环境下不误报）
@@ -77,28 +93,6 @@ async fn two_instance_convergence_over_webdav() {
 
     let sync_password = "m4-sync-pass-123456";
 
-    // 前置清理：删除上次运行残留的 base_path 内容（_meta / crypto / modules）。
-    // 不清理的话，上次运行留下的密文（可能来自旧密钥方案/不同密码的失败运行）
-    // 会让本次首推直接 KeyMismatch——e2e 必须从已知空态起步。
-    {
-        let cleanup_cfg = sync_config(&endpoint, "cleanup");
-        let adapter =
-            orbit_core::sync::engine::create_adapter(&cleanup_cfg).expect("构造清理适配器");
-        for leftover in [
-            "_meta.orsync",
-            "_meta.waitsync",
-            "crypto/config",
-            "crypto",
-            "modules",
-        ] {
-            let path = format!("{}/{}", cleanup_cfg.base_path, leftover);
-            match adapter.delete(&path).await {
-                Ok(()) => println!("[e2e-cleanup] 已删除残留 {path}"),
-                Err(e) => println!("[e2e-cleanup] {path} 不存在或删除失败（忽略）: {e}"),
-            }
-        }
-    }
-
     // ── 实例 A：init + 建任务 + push ──
     let (pool_a, dir_a) = setup_db("device-a").await;
     let crypto_a = SyncCryptoService::new(&dir_a);
@@ -106,8 +100,8 @@ async fn two_instance_convergence_over_webdav() {
     let engine_a = cloud_sync_api::create_engine_noop(pool_a.clone(), crypto_a, &dir_a);
     engine_a.set_sync_password(sync_password.to_string());
 
-    // A 建一个任务
-    let now = chrono::Utc::now().timestamp_millis();
+    // A 建一个任务（时间戳走逻辑时钟，与生产写路径同口径）
+    let now = orbit_core::db::clock::next_ms();
     sqlx::query(
         "INSERT INTO todo_tasks (uuid, title, status, done, position, created_at, updated_at, version) \
          VALUES ('e2e-a-1', 'E2E收敛任务A', 'pending', 0, 1, ?, ?, 1)",
@@ -167,8 +161,10 @@ async fn two_instance_convergence_over_webdav() {
 
     // ── 反向：B 编辑 → A pull 收敛（双向）──
     sqlx::query(
-        "UPDATE todo_tasks SET title='E2E收敛任务A-已编辑', version=version+1 WHERE uuid='e2e-a-1'",
+        "UPDATE todo_tasks SET title='E2E收敛任务A-已编辑', version=version+1, updated_at=? \
+         WHERE uuid='e2e-a-1'",
     )
+    .bind(orbit_core::db::clock::next_ms())
     .execute(&pool_b)
     .await
     .expect("B edit");
@@ -201,9 +197,11 @@ async fn two_instance_convergence_over_webdav() {
 
     // ── 墓碑收敛：B 删除 → A pull 后不复活 ──
     sqlx::query(
-        "UPDATE todo_tasks SET is_deleted=1, deleted_at=?, version=version+1 WHERE uuid='e2e-a-1'",
+        "UPDATE todo_tasks SET is_deleted=1, deleted_at=?, updated_at=?, version=version+1 \
+         WHERE uuid='e2e-a-1'",
     )
-    .bind(now)
+    .bind(orbit_core::db::clock::next_ms())
+    .bind(orbit_core::db::clock::next_ms())
     .execute(&pool_b)
     .await
     .expect("B tombstone");
