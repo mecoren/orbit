@@ -4,6 +4,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path_provider/path_provider.dart';
 
 import '../../core/theme/app_colors.dart';
@@ -82,12 +83,20 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   /// 待处理冲突数（03 §八 冲突败方副本；缓存 future 防 build 抖动）
   Future<int> _conflictPending = Future<int>.value(0);
 
+  /// 关于卡版本号（package_info_plus 真实构建版本，不硬编码）
+  String _appVersion = '…';
+
   @override
   void initState() {
     super.initState();
     _loadBioState();
     _loadMasterAuthState();
     _conflictPending = _fetchConflictPending();
+    PackageInfo.fromPlatform().then((info) {
+      if (mounted) {
+        setState(() => _appVersion = '${info.version}+${info.buildNumber}');
+      }
+    }).catchError((_) {});
   }
 
   /// 待处理冲突数查询（桥不可用时静默回落 0，不阻断设置页渲染）
@@ -659,6 +668,37 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     }
   }
 
+  /// 清除主密码（路由到库迁移：加密库须先 db_migrate_to_plaintext
+  /// 转为明文库才能删 master_auth.json，否则加密库打不开）
+  ///
+  /// 库迁移入口即「关闭加密」整行（迁移 + 清除 + 重开明文连接）；
+  /// 本行做二次确认后转调同一流程，避免用户绕过迁移单独清除。
+  Future<void> _clearMasterPassword() async {
+    if (_secBusy) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('清除主密码？'),
+        content: const Text(
+          '清除前会先把加密库迁移为明文库（否则加密库将打不开），'
+          '指纹解锁一并关闭。此操作不可撤销，是否继续？',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('继续'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    await _disableEncryption();
+  }
+
   /// 主密码确认弹窗（生物识别开关两向共用；返回输入的密码或 null 取消）
   Future<String?> _askPassword(String title, String hint) {
     final controller = TextEditingController();
@@ -1010,6 +1050,16 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         label: '任务模板',
                         onTap: () => context.push('/settings/templates'),
                       ),
+                      _navRow(
+                        colors,
+                        label: '外观设置',
+                        onTap: () => context.push('/settings/appearance'),
+                      ),
+                      _navRow(
+                        colors,
+                        label: '通知历史',
+                        onTap: () => context.push('/settings/notifications'),
+                      ),
                     ],
                   ),
                 ),
@@ -1323,7 +1373,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                           ),
                           const Spacer(),
                           Text(
-                            '0.1.0',
+                            _appVersion,
                             style: TextStyle(
                               fontSize: 14,
                               color: OrbitAccents.themeAccent,
@@ -1512,6 +1562,28 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   const Spacer(),
                   Icon(Icons.chevron_right_rounded,
                       size: AppDimens.iconSizeMd, color: colors.secondaryText),
+                ],
+              ),
+            ),
+          ),
+        // 清除主密码：加密库下单独清除会打不开库，入口先确认再路由
+        // 到「关闭加密」完成库迁移（db_migrate_to_plaintext + clear +
+        // 重开），与桌面关闭加密口径一致
+        if (encrypted == true)
+          InkWell(
+            borderRadius: AppShapes.medium,
+            onTap: _secBusy ? null : _clearMasterPassword,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: AppDimens.space8),
+              child: Row(
+                children: [
+                  Text('清除主密码…',
+                      style: TextStyle(
+                          fontSize: 14, color: colors.destructive)),
+                  const Spacer(),
+                  Icon(Icons.chevron_right_rounded,
+                      size: AppDimens.iconSizeMd,
+                      color: colors.secondaryText),
                 ],
               ),
             ),

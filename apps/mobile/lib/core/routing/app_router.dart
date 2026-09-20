@@ -3,8 +3,10 @@ import 'package:go_router/go_router.dart';
 
 import 'router_keys.dart';
 import '../../modules/settings/about_page.dart';
+import '../../modules/settings/appearance_page.dart';
 import '../../modules/settings/backup_page.dart';
 import '../../modules/settings/label_manager_page.dart';
+import '../../modules/settings/notification_history_page.dart';
 import '../../modules/settings/settings_screen.dart';
 import '../../modules/settings/template_manager_page.dart';
 import '../../modules/settings/sync_conflicts_page.dart';
@@ -153,6 +155,20 @@ final appRouter = GoRouter(
       path: '/settings/templates',
       pageBuilder: (context, state) => pageSlideFromRight(
         const TemplateManagerPage(),
+        key: state.pageKey,
+      ),
+    ),
+    GoRoute(
+      path: '/settings/appearance',
+      pageBuilder: (context, state) => pageSlideFromRight(
+        const AppearancePage(),
+        key: state.pageKey,
+      ),
+    ),
+    GoRoute(
+      path: '/settings/notifications',
+      pageBuilder: (context, state) => pageSlideFromRight(
+        const NotificationHistoryPage(),
         key: state.pageKey,
       ),
     ),
