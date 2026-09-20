@@ -1374,6 +1374,11 @@ class _RemindersSection extends ConsumerWidget {
                             await ref
                                 .read(orbitBridgeProvider)
                                 .todoReminderDelete(reminder.id);
+                            // 同步撤掉该任务的系统闹钟：残留闹钟与「后台推迟
+                            // 产物」在系统侧无法区分，不取消会在下次重排的孤儿
+                            // 补齐里被误判而把刚删的提醒建回来
+                            await NotificationService.instance
+                                .cancelAlarmFor(reminder.taskId);
                           }),
                         ),
                       ],

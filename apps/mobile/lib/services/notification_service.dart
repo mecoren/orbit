@@ -9,6 +9,7 @@ import 'package:timezone/timezone.dart' as tz;
 import '../data/api/dto.dart';
 import '../data/api/orbit_bridge.dart';
 import '../shared/widgets/wait_toast.dart';
+import 'reminder_snooze.dart';
 
 /// 本地通知服务（Phase 7 平台集成；P2 提醒升级全面改版）
 ///
@@ -161,6 +162,19 @@ class NotificationService {
   /// 后台 isolate 不可达（FRB 不可重入）——后台路径只做 UI 层处置。
   static Future<void> Function(int taskId)? onCompleteAction;
 
+  /// 通知「推迟 N 分钟」action 回调：前台进程存活时把推迟落成 DB 事实
+  /// （软删旧行 + 新建新时刻行，见 reminder_snooze.dart）。
+  ///
+  /// 为什么必须落库：引擎到期处置（advance_fired_reminder）会把非重复任务的
+  /// 提醒行软删；不落库时「提醒行没了 + DB 里没有未来提醒 → 重排 cancelAll
+  /// 把刚排的推迟闹钟也清掉」→ 用户表现为「点推迟后提醒被删、且不再提醒」。
+  /// 后台 isolate 不可达（FRB 不可重入）——那条路径由启动补齐兜底。
+  static Future<void> Function(
+    int taskId,
+    int fromRemindAt,
+    int nextAt,
+  )? onSnoozeAction;
+
   /// 推迟执行体：解析 payload → 重排系统闹钟 + 静默确认通知。
   /// 全部走插件原生 API（不依赖 FRB/DB），前后台 isolate 皆可运行。
   Future<void> _handleSnoozeResponse(NotificationResponse response) async {
@@ -174,7 +188,37 @@ class NotificationService {
 
     await _ensureSelfContained();
 
-    final nextAt = remindAt + minutes * 60 * 1000;
+    // 起算点：刚到点就点推迟 = 原时刻；补扫（过期较久才点）取现在——
+    // 否则新时刻仍落在过去，排程会被跳过/立即触发
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final nextAt = (remindAt > now ? remindAt : now) + minutes * 60 * 1000;
+    // 推迟意图落地（两条通道，幂等可叠加）：
+    // 1. 主 isolate 暂时不写 spool（避免每次前台推迟都留一份冗余文件）
+    // 2. 暂存文件：后台 isolate 无法重入 FRB、也读不到主 isolate 注入的回调，
+    //    只能写本机文件，由下次启动（BootGate ready）drain 后写回 DB
+    if (onSnoozeAction == null) {
+      // 后台 isolate：写暂存文件（systemTemp 不可写时静默失效——那种情况下由
+      // 重排时的「孤儿闹钟补齐」兜底，见 reminder_snooze.dart）
+      await SnoozeSpool.append(
+        taskId: taskId,
+        fromRemindAt: remindAt,
+        nextAt: nextAt,
+      );
+      debugPrint('[NotificationService] snooze → spool(task=$taskId)');
+    } else {
+      try {
+        await onSnoozeAction!.call(taskId, remindAt, nextAt);
+        debugPrint('[NotificationService] snooze landed(task=$taskId)');
+      } catch (e) {
+        // 即时落库失败：退回 spool，下次启动补齐
+        debugPrint('[NotificationService] snooze land failed: $e');
+        await SnoozeSpool.append(
+          taskId: taskId,
+          fromRemindAt: remindAt,
+          nextAt: nextAt,
+        );
+      }
+    }
     final clock = _clockLabel(nextAt);
     await _scheduleAlarm(
       id: alarmIdFor(taskId),
@@ -365,6 +409,36 @@ class NotificationService {
       }
     } catch (_) {}
     return false;
+  }
+
+  /// 系统侧闹钟域 pending（启动补齐用）：解析 payload 得 taskId|remindAt，
+  /// 跳过确认/完成通知域（id ≥ 1e9）。读取失败返回空表（保守：不落地）。
+  Future<List<PendingAlarm>> pendingAlarms() async {
+    final out = <PendingAlarm>[];
+    try {
+      final pending = await _plugin.pendingNotificationRequests();
+      for (final p in pending) {
+        if (p.id <= 0 || p.id >= 1000000000) continue; // 闹钟域之外
+        final parts = (p.payload ?? '').split('|');
+        if (parts.length < 2) continue;
+        final taskId = int.tryParse(parts[0]);
+        final at = int.tryParse(parts[1]);
+        if (taskId == null || at == null) continue;
+        out.add(PendingAlarm(taskId: taskId, remindAt: at));
+      }
+    } catch (_) {}
+    return out;
+  }
+
+  /// 取消某任务的系统闹钟（用户手动删掉提醒行时调用）
+  ///
+  /// 必要性：「后台推迟产物」与「用户删提醒后的残留闹钟」在系统侧无法区分
+  /// （都是只有 payload、没有 DB 行）；不主动取消，下次重排的孤儿补齐会把
+  /// 用户刚删掉的提醒又建回来（planSnoozeLanding 的 activeTaskIds 规则）。
+  Future<void> cancelAlarmFor(int taskId) async {
+    try {
+      await _plugin.cancel(id: alarmIdFor(taskId));
+    } catch (_) {}
   }
 
   // ── 通道 2：后台闹钟全量重排 ──

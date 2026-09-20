@@ -13,6 +13,7 @@ import '../../services/todo_widget_service.dart';
 import '../../services/badge_service.dart';
 import '../../services/notification_service.dart';
 import '../../services/reminder_scheduler.dart';
+import '../../services/reminder_snooze.dart';
 import '../../services/share_receiver.dart';
 import '../todo/logic/badge_count.dart';
 import '../todo/providers/todo_providers.dart';
@@ -81,6 +82,12 @@ class _BootGateState extends ConsumerState<BootGate>
       // 热运行分享：Android onNewIntent 已把文本存原生侧待取，
       // 回到前台轮询取走（冷启动一路在 _goReady 首查）
       ShareReceiver.consume(ref);
+      // 回前台先补掉后台 isolate 留下的推迟暂存：它在后台隔离区写不了 DB，
+      // 若用户一直不重启 App，只有这里能把推迟写回（见 _landSpooledSnoozes）
+      unawaited(_landSpooledSnoozes());
+      // 再补一次「孤儿闹钟落地」：切前台不一定伴随 db-change，没有这一步，
+      // 后台点推迟留下的系统闹钟会在下一次重排的 cancelAll 里被清掉
+      unawaited(_scheduler?.landPendingSnoozes().then((_) {}));
       // B6 角标重算：隔夜挂后台后「今天」口径漂移，resumed 即刷新
       _refreshBadge();
       // 小组件快照同口径重算（隔夜口径漂移；#3）
@@ -201,6 +208,30 @@ class _BootGateState extends ConsumerState<BootGate>
         debugPrint('[BootGate] notification complete failed: $e');
       }
     };
+    // 通知「推迟 N 分钟」action：前台把推迟写回 DB（软删旧行 + 新建新时刻行，
+    // 对齐引擎 snooze 语义）——不落库则到期行被引擎清理、重排 cancelAll 又会
+    // 清掉刚排的推迟闹钟 → 提醒直接消失（2026-09-20 修复）。
+    // 后台 isolate 不可达（FRB 不可重入），那条路径由 ReminderScheduler 的
+    // 启动补齐落地（reminder_snooze.dart 的 planSnoozeLanding）。
+    NotificationService.onSnoozeAction = (taskId, fromRemindAt, nextAt) async {
+      try {
+        await landSnoozeInDb(
+          ref.read(orbitBridgeProvider),
+          taskId: taskId,
+          fromRemindAt: fromRemindAt,
+          nextAt: nextAt,
+        );
+      } catch (e) {
+        debugPrint('[BootGate] notification snooze failed: $e');
+      }
+    };
+    // 后台推迟暂存落地：App 不在前台时，通知 action 由插件在**独立后台
+    // isolate** 回调（见 ADR 0002 §三）——那里无法重入 FRB、也看不到这里
+    // 注入的 onSnoozeAction，推迟意图只能落在本机暂存文件。启动时 drain 并
+    // 写回 DB，之后的闹钟重排（cancelAll + 按 DB 排）才会把推迟后的新时刻
+    // 排上；不写回则 DB 里没有这条未来提醒，重排会把刚排的推迟闹钟清掉
+    //（2026-09-20「点推迟后提醒消失」修复）。
+    unawaited(_landSpooledSnoozes());
     // 后台闹钟通道：DB 未来提醒全量重排 + dbChanges 防抖跟随
     //（P2 提醒升级：后台/被杀/重启均由系统闹钟保证提醒）
     // B6：标题 join 改读单份任务缓存（此前每次重排直拉全量任务，与列表
@@ -241,6 +272,23 @@ class _BootGateState extends ConsumerState<BootGate>
       // 路由就绪后取走建任务（toast 需 Overlay，早于此无渲染面）
       ShareReceiver.consume(ref);
     });
+  }
+
+  /// 消费后台 isolate 留下的推迟暂存（写回 DB；失败静默不阻断启动）
+  Future<void> _landSpooledSnoozes() async {
+    try {
+      final bridge = ref.read(orbitBridgeProvider);
+      for (final s in await SnoozeSpool.drain()) {
+        await landSnoozeInDb(
+          bridge,
+          taskId: s.taskId,
+          fromRemindAt: s.fromRemindAt,
+          nextAt: s.nextAt,
+        );
+      }
+    } catch (e) {
+      debugPrint('[BootGate] snooze spool drain failed: $e');
+    }
   }
 
   /// 桥层事件流监听（ready 后挂载，全生命周期持有）

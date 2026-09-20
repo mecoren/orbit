@@ -145,6 +145,36 @@ tauri-plugin-notification schedule API（该核查随移动端拆分归档失效
   SCHEDULE_EXACT_ALARM 权限引导为可选路径，未授予回落非精确）。
 - 桌面端不在本 ADR 范围：桌面推迟走 sonner toast 自定义卡片
   （reminder-snooze.ts 删旧建新），关窗驻留托盘轮询语义不变。
+- **推迟写库修订（2026-09-20）**：上文 §三 第 3 点的「后台不写 Rust DB、
+  DB 收敛靠前台删僵尸行」被实测证伪——引擎到期处置
+  （`todo_api::advance_fired_reminder`）会把非重复任务的提醒行软删，只排
+  系统闹钟不写库必然两头落空：① 提醒行被引擎清理 → 任务里提醒凭空消失；
+  ② 随后 db-change 触发的重排（`cancelAllPendingNotifications` + 按 DB 排）
+  把刚排上的推迟闹钟一并清掉 → 推迟静默失效（用户报「点推迟十分钟，
+  提醒直接被删除」）。
+  现口径：**推迟必须落成 DB 事实**（软删旧时刻行 + 新建推迟时刻行，与桌面
+  `reminder-snooze.ts` 的删旧建新同语义）。三条落地通道：
+  ① **前台**（Activity 可见，主 isolate）经 `NotificationService.onSnoozeAction`
+  点即落库；
+  ② **App 不在前台时 action 由独立后台 isolate 回调**——该隔离区既不能重入
+  FRB，也读不到主 isolate 里注入的静态回调（此处曾漏判，修复第一版因此无效），
+  故把推迟意图写入 `dart:io` 暂存文件（`SnoozeSpool`，systemTemp 下 jsonl，
+  不依赖插件注册），由 App 回前台（resumed）或下次冷启动时 drain 写回 DB；
+  ③ `planSnoozeLanding` 兜底：暂存丢失但系统闹钟仍在时，DB 有旧行则推进到
+  闹钟时刻。
+  实现与单测见 `lib/services/reminder_snooze.dart` 与
+  `test/reminder_snooze_test.dart`。
+
+  **二次修订（同日，真机复验后）**：上述 ②③ 两条通道实测仍不生效——
+  ① 后台 isolate 里 `Directory.systemTemp` 在 Android 指向不可写路径，
+  写暂存文件静默失败；② 点推迟时 DB 旧行多已被引擎「到期即清理」删掉，
+  而 `planSnoozeLanding` 原本「无行不复活」的保守规则恰好排除了这种最常见
+  形态。现以**孤儿闹钟落地**为主通道：读系统 pending（App 侧随时可读）→
+  「任务存活未完成 + 该任务无提醒行 + 闹钟时刻在 (now, now+24h]」即补建提醒行；
+  触发点为**每次重排前**与**回前台（resumed）**；配套在用户手动删提醒时
+  `NotificationService.cancelAlarmFor(taskId)` 同步撤闹钟，避免残留闹钟被
+  误判成推迟产物而"复活"提醒。暂存文件降级为快路径（写得进去更快，写不进
+  也不影响正确性）。
 
 ### 模拟器实测记录（2026-09-05/06，Pixel 9 Pro XL AVD / API 36）
 
