@@ -893,7 +893,7 @@ class _LabelsSection extends StatelessWidget {
               decoration: BoxDecoration(
                 borderRadius: AppShapes.small,
                 border: Border.all(
-                  color: colors.divider.withValues(alpha: 0.3),
+                  color: colors.divider,
                 ),
               ),
               child: Row(
@@ -1122,7 +1122,7 @@ class _LabelEditSheetState extends ConsumerState<_LabelEditSheet> {
                 decoration: BoxDecoration(
                   border: Border(
                     top: BorderSide(
-                      color: colors.divider.withValues(alpha: 0.3),
+                      color: colors.divider,
                     ),
                   ),
                 ),
@@ -1171,7 +1171,7 @@ class _LabelEditSheetState extends ConsumerState<_LabelEditSheet> {
                                   width: _newColorHex == hex ? 3 : 1,
                                   color: _newColorHex == hex
                                       ? OrbitAccents.themeAccent
-                                      : colors.divider.withValues(alpha: 0.6),
+                                      : colors.outline,
                                 ),
                               ),
                             ),
@@ -1725,7 +1725,7 @@ class _CommentsSectionState extends ConsumerState<_CommentsSection> {
             padding: const EdgeInsets.only(top: AppDimens.space8),
             decoration: BoxDecoration(
               border: Border(
-                top: BorderSide(color: colors.divider.withValues(alpha: 0.3)),
+                top: BorderSide(color: colors.divider),
               ),
             ),
             child: Row(

@@ -114,7 +114,7 @@ class TaskTableView extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: AppDimens.space12),
         decoration: BoxDecoration(
           border: Border(
-            bottom: BorderSide(color: colors.divider.withValues(alpha: 0.25)),
+            bottom: BorderSide(color: colors.divider),
           ),
         ),
         child: Row(

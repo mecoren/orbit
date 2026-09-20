@@ -657,9 +657,9 @@ class _BackupPageState extends ConsumerState<BackupPage> {
       margin: const EdgeInsets.only(top: AppDimens.space8),
       padding: const EdgeInsets.all(AppDimens.space12),
       decoration: BoxDecoration(
-        color: colors.surfaceSecondary.withValues(alpha: 0.4),
+        color: colors.surfaceSecondary,
         borderRadius: AppShapes.medium,
-        border: Border.all(color: colors.divider.withValues(alpha: 0.4)),
+        border: Border.all(color: colors.outline),
       ),
       child: Row(
         children: [

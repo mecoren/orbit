@@ -269,9 +269,9 @@ class _RepeatEditSheetState extends State<_RepeatEditSheet> {
     return Container(
       padding: const EdgeInsets.all(AppDimens.space8),
       decoration: BoxDecoration(
-        color: colors.surfaceSecondary.withValues(alpha: 0.5),
+        color: colors.surfaceSecondary,
         borderRadius: AppShapes.medium,
-        border: Border.all(color: colors.divider.withValues(alpha: 0.6)),
+        border: Border.all(color: colors.outline),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,

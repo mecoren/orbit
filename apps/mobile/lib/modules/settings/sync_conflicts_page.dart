@@ -278,9 +278,9 @@ class _SyncConflictsPageState extends ConsumerState<SyncConflictsPage> {
       margin: const EdgeInsets.only(top: AppDimens.space8),
       padding: const EdgeInsets.all(AppDimens.space12),
       decoration: BoxDecoration(
-        color: colors.surfaceSecondary.withValues(alpha: 0.4),
+        color: colors.surfaceSecondary,
         borderRadius: AppShapes.medium,
-        border: Border.all(color: colors.divider.withValues(alpha: 0.4)),
+        border: Border.all(color: colors.outline),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -340,10 +340,10 @@ class _SyncConflictsPageState extends ConsumerState<SyncConflictsPage> {
             Container(
               padding: const EdgeInsets.all(AppDimens.space8),
               decoration: BoxDecoration(
-                color: colors.background.withValues(alpha: 0.5),
+                color: colors.background,
                 borderRadius: AppShapes.small,
                 border:
-                    Border.all(color: colors.divider.withValues(alpha: 0.4)),
+                    Border.all(color: colors.outline),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,

@@ -450,9 +450,9 @@ class _TemplateManagerPageState extends ConsumerState<TemplateManagerPage> {
         vertical: AppDimens.space4,
       ),
       decoration: BoxDecoration(
-        color: colors.surfaceSecondary.withValues(alpha: 0.4),
+        color: colors.surfaceSecondary,
         borderRadius: AppShapes.medium,
-        border: Border.all(color: colors.divider.withValues(alpha: 0.4)),
+        border: Border.all(color: colors.outline),
       ),
       child: Row(
         children: [

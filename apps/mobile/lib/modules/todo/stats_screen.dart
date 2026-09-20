@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_dimens.dart';
+import '../../core/theme/app_elevation.dart';
+import '../../core/theme/app_shapes.dart';
 import '../../core/theme/orbit_accents.dart';
 import '../../data/api/dto.dart';
 import '../../shared/utils/hex_color.dart';
@@ -166,9 +168,10 @@ class _OverviewCards extends StatelessWidget {
     Widget cell(String label, int value) => Container(
           padding: const EdgeInsets.all(AppDimens.space12),
           decoration: BoxDecoration(
-            color: colors.surface.withValues(alpha: 0.6),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: colors.divider.withValues(alpha: 0.3)),
+            color: colors.surface,
+            borderRadius: AppShapes.medium,
+            border: Border.all(color: colors.outline),
+            boxShadow: AppElevation.e1(Theme.of(context).brightness),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -230,9 +233,10 @@ class _StreakCard extends StatelessWidget {
         vertical: AppDimens.space12,
       ),
       decoration: BoxDecoration(
-        color: colors.surface.withValues(alpha: 0.6),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: colors.divider.withValues(alpha: 0.3)),
+        color: colors.surface,
+        borderRadius: AppShapes.medium,
+        border: Border.all(color: colors.outline),
+        boxShadow: AppElevation.e1(Theme.of(context).brightness),
       ),
       child: Row(
         children: [
@@ -292,9 +296,10 @@ class _HeatmapCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(AppDimens.space16),
       decoration: BoxDecoration(
-        color: colors.surface.withValues(alpha: 0.6),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: colors.divider.withValues(alpha: 0.3)),
+        color: colors.surface,
+        borderRadius: AppShapes.medium,
+        border: Border.all(color: colors.outline),
+        boxShadow: AppElevation.e1(Theme.of(context).brightness),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -349,9 +354,10 @@ class _DistSection extends StatelessWidget {
       margin: const EdgeInsets.only(top: AppDimens.space12),
       padding: const EdgeInsets.all(AppDimens.space16),
       decoration: BoxDecoration(
-        color: colors.surface.withValues(alpha: 0.6),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: colors.divider.withValues(alpha: 0.3)),
+        color: colors.surface,
+        borderRadius: AppShapes.medium,
+        border: Border.all(color: colors.outline),
+        boxShadow: AppElevation.e1(Theme.of(context).brightness),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

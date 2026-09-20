@@ -500,8 +500,8 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
 
   /// 行间分隔线（日期与提醒卡片内）
   Widget _tileDivider(AppColorSet colors) => Container(
-        height: 0.5,
-        color: colors.divider.withValues(alpha: 0.3),
+        height: 1,
+        color: colors.divider,
       );
 
   /// 标题/描述输入框装饰：背景走 surface（亮色 #F9F9F9），
@@ -524,7 +524,7 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
       fillColor: colors.surface,
       enabledBorder: OutlineInputBorder(
         borderRadius: AppShapes.medium,
-        borderSide: BorderSide(color: colors.divider.withValues(alpha: 0.3)),
+        borderSide: BorderSide(color: colors.outline),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: AppShapes.medium,
@@ -947,7 +947,7 @@ class _QuickCapsule extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
         decoration: BoxDecoration(
           borderRadius: AppShapes.full,
-          border: Border.all(color: colors.divider.withValues(alpha: 0.4))),
+          border: Border.all(color: colors.outline)),
         child: Text(
           label,
           style: TextStyle(fontSize: 12, color: colors.secondaryText),
@@ -1014,7 +1014,7 @@ class _TitleParseChips extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
         borderRadius: AppShapes.full,
-        border: Border.all(color: colors.divider.withValues(alpha: 0.4)),
+        border: Border.all(color: colors.outline),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,

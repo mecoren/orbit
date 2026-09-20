@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_dimens.dart';
+import '../../core/theme/app_elevation.dart';
 import '../../core/theme/app_shapes.dart';
 import '../../core/theme/orbit_accents.dart';
 import '../../data/api/dto.dart';
@@ -134,9 +135,10 @@ class KanbanBoard extends StatelessWidget {
     return Container(
       margin: const EdgeInsets.only(bottom: AppDimens.space8),
       decoration: BoxDecoration(
-        color: colors.surface.withValues(alpha: 0.6),
+        color: colors.surface,
         borderRadius: AppShapes.medium,
-        border: Border.all(color: colors.divider.withValues(alpha: 0.3)),
+        border: Border.all(color: colors.outline),
+        boxShadow: AppElevation.e1(Theme.of(context).brightness),
       ),
       child: InkWell(
         borderRadius: AppShapes.medium,

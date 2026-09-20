@@ -232,7 +232,7 @@ class TodoHeatmap extends StatelessWidget {
                       border: Border.all(
                         color: y == year
                             ? OrbitAccents.todoAccent
-                            : colors.divider.withValues(alpha: 0.3),
+                            : colors.outline,
                       ),
                     ),
                     alignment: Alignment.center,
