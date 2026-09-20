@@ -14,6 +14,26 @@
 
 ## [Unreleased]
 
+### 移动端补齐（对照桌面命令 + 新页面）
+
+- **FRB 桥补齐 10 函数缺口**：`todo_labels_get` / `todo_task_labels_get` /
+  `todo_tasks_recalc_percent` / `business_count` / `todo_projects_get_by_uuid` /
+  `todo_tasks_get_by_uuid` / `cloud_sync_force`（进入/退出应用专用）/
+  `ping` / `crypto_sha256` / `crypto_random_hex`；Dart 侧 OrbitBridge 抽象、
+  Rust/Mock 两实现、mock_store 同口径，BootGate 生命周期改走 `cloudSyncForce`。
+- **保存筛选器七键可视化构建抽屉**：状态/最低优先级/天内截止/项目/标签/
+  仅逾期/仅收藏七键，替代手写条件文本框；行内编辑钮支持更新已有筛选器。
+- **详情页**：关联任务搜索增删（全局搜索选人 + 跳详情 + 解除）、子任务完成
+  进度条、附件拍照（相机）与文件双来源（分享文本建任务仍由 ShareReceiver 覆盖）。
+- **外观设置页**：主题三态（跟随系统/浅色/深色）+ 字号/字重三档，全走
+  LocalPrefs 字符串读写，写后即时重建主题；app_theme 注释口径同步。
+- **通知历史页**：类型过滤/分页（50 步进，上限 200）/清空 + 提醒总开关
+ （`reminder_enabled`，关后仅记历史不弹窗）；开机经 `db_maintenance`
+  清理过期通知日志（30 天 TTL）。
+- **关于页**：package_info_plus 真实构建版本 + 更新日志分区 + 开源许可入口；
+  设置页关于卡版本号同源；组织卡新增外观/通知历史入口；安全卡新增清除主密码
+  入口（二次确认后路由到关闭加密库迁移流程）。
+
 ## [0.1.0] - 2026-09-19
 
 ### 产品与平台
