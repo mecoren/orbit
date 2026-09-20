@@ -1,77 +1,103 @@
 import 'package:flutter/material.dart';
 
-/// 字体排版规范
+/// 字体排版规范（设计系统 v2）
 ///
-/// 自 wait-home/mobile 移植的统一 Material TextTheme（支持动态字重）。
+/// v2 核心变化：**为每一档补齐 `height`（行高倍数）**。
+/// 旧版只有 `fontSize`，行高吃系统默认，导致多行文字与标题行距拥挤、
+/// 段落贴在一起——这是"内容拥挤"观感的直接来源。v2 按内容类型给出行高：
+/// - 展示/标题类 1.2 ~ 1.4（紧致，成块）
+/// - 正文类 1.45 ~ 1.5（舒展，可读）
+/// - 标签类 1.35 ~ 1.4（紧凑）
+///
+/// 字体族使用 Android 系统默认（Roboto），不引入 google_fonts。
 class Typography {
   Typography._();
 
-  /// 基础 TextTheme（Android 默认字体族为 Roboto，无需引入 google_fonts）
+  /// 基础 TextTheme（含行高）
   static const TextTheme textTheme = TextTheme(
     displayLarge: TextStyle(
       fontSize: 32,
-      fontWeight: FontWeight.w400,
+      height: 1.2,
+      fontWeight: FontWeight.w500,
       letterSpacing: -0.5,
     ),
     displayMedium: TextStyle(
       fontSize: 28,
-      fontWeight: FontWeight.w400,
+      height: 1.2,
+      fontWeight: FontWeight.w500,
+      letterSpacing: -0.3,
     ),
     displaySmall: TextStyle(
       fontSize: 24,
-      fontWeight: FontWeight.w400,
+      height: 1.25,
+      fontWeight: FontWeight.w500,
     ),
     headlineLarge: TextStyle(
       fontSize: 22,
-      fontWeight: FontWeight.w500,
+      height: 1.3,
+      fontWeight: FontWeight.w600,
     ),
     headlineMedium: TextStyle(
       fontSize: 20,
-      fontWeight: FontWeight.w500,
+      height: 1.3,
+      fontWeight: FontWeight.w600,
     ),
     headlineSmall: TextStyle(
       fontSize: 18,
-      fontWeight: FontWeight.w500,
+      height: 1.35,
+      fontWeight: FontWeight.w600,
     ),
     titleLarge: TextStyle(
-      fontSize: 16,
+      fontSize: 17,
+      height: 1.4,
       fontWeight: FontWeight.w600,
     ),
     titleMedium: TextStyle(
-      fontSize: 14,
+      fontSize: 15,
+      height: 1.4,
       fontWeight: FontWeight.w600,
     ),
     titleSmall: TextStyle(
-      fontSize: 12,
+      fontSize: 13,
+      height: 1.4,
       fontWeight: FontWeight.w600,
     ),
     bodyLarge: TextStyle(
-      fontSize: 16,
+      fontSize: 15,
+      height: 1.5,
       fontWeight: FontWeight.w400,
     ),
     bodyMedium: TextStyle(
       fontSize: 14,
+      height: 1.5,
       fontWeight: FontWeight.w400,
     ),
     bodySmall: TextStyle(
-      fontSize: 12,
+      fontSize: 13,
+      height: 1.45,
       fontWeight: FontWeight.w400,
     ),
     labelLarge: TextStyle(
       fontSize: 14,
+      height: 1.4,
       fontWeight: FontWeight.w600,
     ),
     labelMedium: TextStyle(
       fontSize: 12,
-      fontWeight: FontWeight.w600,
+      height: 1.35,
+      fontWeight: FontWeight.w500,
     ),
     labelSmall: TextStyle(
-      fontSize: 10,
-      fontWeight: FontWeight.w600,
+      fontSize: 11,
+      height: 1.35,
+      fontWeight: FontWeight.w500,
     ),
   );
 
   /// 应用自定义字重到 TextTheme
+  ///
+  /// 正文/标签跟随用户选择的 [baseWeight]；标题层保留固定字重（w500/w600），
+  /// 避免整屏字重被拉平时层级塌陷。
   static TextTheme withWeight(TextTheme base, FontWeight baseWeight) {
     return base.copyWith(
       displayLarge: base.displayLarge?.copyWith(fontWeight: baseWeight),

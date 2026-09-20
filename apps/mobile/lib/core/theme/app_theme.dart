@@ -7,18 +7,20 @@ import 'color_schemes.dart';
 import 'orbit_accents.dart';
 import 'typography.dart';
 
-/// 应用主题工厂
+/// 应用主题工厂（设计系统 v2 —— 现代分层白卡）
 ///
-/// 自 wait-home/mobile 移植并裁剪：
-/// - 强调色固定为 OrbitAccents.themeAccent（#4E8CFF，docs/05 §2.2），
-///   暗色由 ColorScheme.fromSeed 自动调整；
-/// - 亮暗由外观页三态控制（theme_mode：system/light/dark，默认跟随系统；
-///   见 services/appearance.dart），此处仅按传入 brightness 生成对应档；
-/// - 字号经 fontScale 等比缩放全文阶，字重经 baseWeight 统一正文/标题基重
-///   （Typography.withWeight 口径）；
-/// - 字体使用 Android 系统默认（Roboto），不引入 google_fonts.
+/// v2 相对旧版（wait-home 平移）的关键变化：
+/// 1. **色彩分层**：手写 ColorScheme（见 [ColorSchemes]），页面底浅灰 +
+///    卡片纯白，取代旧版 `#F3F3F3`/`#F9F9F9` 几乎同色的"糊"；
+/// 2. **组件形态**：卡片给圆角 + 极浅描边 + 柔和阴影，输入框/按钮/抽屉/
+///    对话框全部重定，摆脱 M3 默认观感；
+/// 3. **排版**：`TextTheme` 补齐行高（见 [Typography]），
+///    字号缩放改用 `TextTheme.apply(fontSizeFactor:)` 统一处理；
+/// 4. **分割线**：0.3px 脏线 → 1px 极浅实线。
 ///
-/// 参考 shrimpsend 的 buildAppTheme 模式。
+/// 亮暗由外观页三态控制（theme_mode：system/light/dark，默认跟随系统；
+/// 见 services/appearance.dart），此处仅按传入 brightness 生成对应档。
+/// 字体使用 Android 系统默认（Roboto），不引入 google_fonts。
 ThemeData buildAppTheme({
   required Brightness brightness,
   double fontScale = 1.0,
@@ -28,116 +30,91 @@ ThemeData buildAppTheme({
   final accent = OrbitAccents.themeAccent;
   final colorScheme =
       isDark ? ColorSchemes.dark(accent) : ColorSchemes.light(accent);
+  final colors = AppColors.of(brightness);
 
-  // 使用 AppColors Token 值作为增强默认色
-  final colorSet = AppColors.of(brightness);
-  final effectiveOnSurface = colorSet.bodyText;
-  final effectiveOnSurfaceVariant = colorSet.secondaryText;
-  final effectiveDividerColor = colorSet.divider;
-  final effectiveColorScheme = colorScheme.copyWith(
-    onSurface: effectiveOnSurface,
-    onSurfaceVariant: effectiveOnSurfaceVariant,
-  );
-
-  // 外观页字号/字重：先等比缩放字阶，再统一基重（标题/标签行保留 w500/w600
-  // 层级，见 Typography.withWeight）
-  final scaled = Typography.textTheme.copyWith(
-    displayLarge: Typography.textTheme.displayLarge
-        ?.copyWith(fontSize: 32 * fontScale),
-    displayMedium: Typography.textTheme.displayMedium
-        ?.copyWith(fontSize: 28 * fontScale),
-    displaySmall: Typography.textTheme.displaySmall
-        ?.copyWith(fontSize: 24 * fontScale),
-    headlineLarge: Typography.textTheme.headlineLarge
-        ?.copyWith(fontSize: 22 * fontScale),
-    headlineMedium: Typography.textTheme.headlineMedium
-        ?.copyWith(fontSize: 20 * fontScale),
-    headlineSmall: Typography.textTheme.headlineSmall
-        ?.copyWith(fontSize: 18 * fontScale),
-    titleLarge: Typography.textTheme.titleLarge
-        ?.copyWith(fontSize: 16 * fontScale),
-    titleMedium: Typography.textTheme.titleMedium
-        ?.copyWith(fontSize: 14 * fontScale),
-    titleSmall: Typography.textTheme.titleSmall
-        ?.copyWith(fontSize: 12 * fontScale),
-    bodyLarge: Typography.textTheme.bodyLarge
-        ?.copyWith(fontSize: 16 * fontScale),
-    bodyMedium: Typography.textTheme.bodyMedium
-        ?.copyWith(fontSize: 14 * fontScale),
-    bodySmall: Typography.textTheme.bodySmall
-        ?.copyWith(fontSize: 12 * fontScale),
-    labelLarge: Typography.textTheme.labelLarge
-        ?.copyWith(fontSize: 14 * fontScale),
-    labelMedium: Typography.textTheme.labelMedium
-        ?.copyWith(fontSize: 12 * fontScale),
-    labelSmall: Typography.textTheme.labelSmall
-        ?.copyWith(fontSize: 10 * fontScale),
-  );
+  // 字号缩放：apply 统一乘 fontScale，行高（height 为倍数）随之等比变化
+  final scaled = Typography.textTheme.apply(fontSizeFactor: fontScale);
   final textTheme = Typography.withWeight(scaled, baseWeight);
 
-  // 页面背景 = surfaceContainerHighest（亮色 #F3F3F3，暗色 #000000）
-  // 卡片/AppBar/弹层 = surface（亮色 #F9F9F9，暗色 #181818）
   return ThemeData(
     useMaterial3: true,
     brightness: brightness,
-    colorScheme: effectiveColorScheme,
+    colorScheme: colorScheme,
     textTheme: textTheme,
+    // 页面底 = 浅灰（surfaceContainerHighest 已映射到 AppColors.background）
     scaffoldBackgroundColor: colorScheme.surfaceContainerHighest,
+    canvasColor: colors.surface,
+    dividerColor: colors.divider,
+    // 文本选择/光标走强调色（表单质感）
+    textSelectionTheme: TextSelectionThemeData(
+      cursorColor: accent,
+      selectionColor: accent.withValues(alpha: 0.22),
+      selectionHandleColor: accent,
+    ),
     appBarTheme: AppBarTheme(
       centerTitle: false,
       elevation: 0,
-      scrolledUnderElevation: 0.5,
-      backgroundColor: colorScheme.surface,
-      foregroundColor: effectiveOnSurface,
-      titleTextStyle: textTheme.titleLarge?.copyWith(
-        color: effectiveOnSurface,
-      ),
-    ),
-    cardTheme: CardThemeData(
-      elevation: 0,
-      clipBehavior: Clip.antiAlias,
-      shadowColor: Colors.transparent,
-      shape: RoundedRectangleBorder(
-        borderRadius: AppShapes.of(16),
-      ),
-      color: colorScheme.surface,
+      scrolledUnderElevation: 0,
+      backgroundColor: colors.surface,
       surfaceTintColor: Colors.transparent,
+      foregroundColor: colors.titleText,
+      titleTextStyle: textTheme.titleLarge?.copyWith(color: colors.titleText),
     ),
-    listTileTheme: const ListTileThemeData(
+    // 卡片：白底 + 中圆角 + 极浅描边（暗色必需）+ 极弱阴影
+    cardTheme: CardThemeData(
+      elevation: isDark ? 0 : 1,
+      color: colors.surface,
+      shadowColor: const Color(0xFF101828),
+      surfaceTintColor: Colors.transparent,
+      margin: EdgeInsets.zero,
+      clipBehavior: Clip.antiAlias,
       shape: RoundedRectangleBorder(
         borderRadius: AppShapes.medium,
-      ),
-      contentPadding: EdgeInsets.symmetric(
-        horizontal: AppDimens.space16,
-        vertical: AppDimens.space4,
+        side: isDark
+            ? BorderSide(color: colors.outline)
+            : BorderSide.none,
       ),
     ),
+    listTileTheme: ListTileThemeData(
+      shape: const RoundedRectangleBorder(borderRadius: AppShapes.medium),
+      contentPadding: const EdgeInsets.symmetric(
+        horizontal: AppDimens.pageInline,
+        vertical: AppDimens.space4,
+      ),
+      titleTextStyle: textTheme.titleMedium?.copyWith(color: colors.titleText),
+      subtitleTextStyle: textTheme.bodySmall?.copyWith(
+        color: colors.secondaryText,
+      ),
+      iconColor: colors.iconText,
+    ),
+    // 输入框：浅灰填充 + 极浅描边；聚焦时强调色描边 + 表面提亮
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
-      fillColor: isDark
-          ? colorScheme.surfaceContainerHighest.withValues(alpha: 0.5)
-          : colorScheme.surfaceContainerHighest,
+      fillColor: colors.surfaceSecondary,
+      hintStyle: textTheme.bodyMedium?.copyWith(color: colors.deactivatedText),
+      contentPadding: const EdgeInsets.symmetric(
+        horizontal: AppDimens.space16,
+        vertical: 14,
+      ),
       border: const OutlineInputBorder(
         borderRadius: AppShapes.medium,
         borderSide: BorderSide.none,
       ),
       enabledBorder: OutlineInputBorder(
         borderRadius: AppShapes.medium,
-        borderSide: BorderSide(
-          color: effectiveOnSurfaceVariant.withValues(alpha: 0.5),
-        ),
+        borderSide: BorderSide(color: colors.outline),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: AppShapes.medium,
-        borderSide: BorderSide(color: accent, width: 1.5),
+        borderSide: BorderSide(color: accent, width: 1.6),
       ),
-      contentPadding: const EdgeInsets.symmetric(
-        horizontal: AppDimens.space16,
-        vertical: 14,
+      errorBorder: OutlineInputBorder(
+        borderRadius: AppShapes.medium,
+        borderSide: BorderSide(color: colors.destructive),
       ),
-      hintStyle: TextStyle(
-        color: effectiveOnSurfaceVariant.withValues(alpha: 0.6),
-        fontSize: 14,
+      focusedErrorBorder: OutlineInputBorder(
+        borderRadius: AppShapes.medium,
+        borderSide: BorderSide(color: colors.destructive, width: 1.6),
       ),
     ),
     filledButtonTheme: FilledButtonThemeData(
@@ -145,6 +122,10 @@ ThemeData buildAppTheme({
         minimumSize: const Size(0, AppDimens.touchTarget),
         backgroundColor: accent,
         foregroundColor: Colors.white,
+        disabledBackgroundColor: colors.divider,
+        disabledForegroundColor: colors.deactivatedText,
+        elevation: 0,
+        shadowColor: Colors.transparent,
         shape: const RoundedRectangleBorder(
           borderRadius: AppShapes.medium,
         ),
@@ -157,9 +138,12 @@ ThemeData buildAppTheme({
       style: OutlinedButton.styleFrom(
         minimumSize: const Size(0, AppDimens.touchTarget),
         foregroundColor: accent,
-        side: BorderSide(color: accent.withValues(alpha: 0.5)),
+        side: BorderSide(color: accent.withValues(alpha: 0.45)),
         shape: const RoundedRectangleBorder(
           borderRadius: AppShapes.medium,
+        ),
+        textStyle: textTheme.labelLarge?.copyWith(
+          fontWeight: FontWeight.w600,
         ),
       ),
     ),
@@ -170,29 +154,33 @@ ThemeData buildAppTheme({
         shape: const RoundedRectangleBorder(
           borderRadius: AppShapes.medium,
         ),
+        textStyle: textTheme.labelLarge?.copyWith(
+          fontWeight: FontWeight.w600,
+        ),
       ),
     ),
     floatingActionButtonTheme: FloatingActionButtonThemeData(
-      elevation: isDark ? 0 : 2,
+      elevation: isDark ? 0 : 3,
+      highlightElevation: isDark ? 0 : 4,
       backgroundColor: accent,
       foregroundColor: Colors.white,
-      shape: RoundedRectangleBorder(
-        borderRadius: AppShapes.of(16),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: AppShapes.of(18)),
     ),
+    // 分割线：1px 极浅实线，替代旧版 0.3px 脏线
     dividerTheme: DividerThemeData(
-      thickness: 0.3,
-      space: 0.3,
-      color: effectiveDividerColor.withValues(alpha: 0.8),
+      thickness: 1,
+      space: 1,
+      color: colors.divider,
     ),
     snackBarTheme: SnackBarThemeData(
       behavior: SnackBarBehavior.floating,
-      shape: RoundedRectangleBorder(
-        borderRadius: AppShapes.of(10),
-      ),
+      backgroundColor: isDark ? colors.surfaceElevated : const Color(0xFF272C36),
+      contentTextStyle: textTheme.bodyMedium?.copyWith(color: Colors.white),
+      actionTextColor: isDark ? accent : const Color(0xFF9DBBFF),
+      elevation: 0,
+      shape: const RoundedRectangleBorder(borderRadius: AppShapes.medium),
     ),
-    // 悬浮提示统一主题色底白字（对齐桌面 ui/tooltip.tsx 原语 bg-primary 口径；
-    // 热力图/表单优先级等原生 Tooltip 不再走默认灰底）
+    // 悬浮提示统一主题色底白字（对齐桌面 ui/tooltip.tsx 原语 bg-primary 口径）
     tooltipTheme: TooltipThemeData(
       decoration: BoxDecoration(
         color: accent,
@@ -205,14 +193,14 @@ ThemeData buildAppTheme({
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
     ),
     chipTheme: ChipThemeData(
-      shape: const RoundedRectangleBorder(
-        borderRadius: AppShapes.large,
-      ),
-      backgroundColor: accent.withValues(alpha: 0.1),
-      labelStyle: textTheme.labelMedium?.copyWith(
-        color: accent,
-      ),
+      shape: const RoundedRectangleBorder(borderRadius: AppShapes.full),
+      backgroundColor: accent.withValues(alpha: 0.10),
+      labelStyle: textTheme.labelMedium?.copyWith(color: accent),
       side: BorderSide.none,
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppDimens.space8,
+        vertical: AppDimens.space2,
+      ),
     ),
     checkboxTheme: CheckboxThemeData(
       fillColor: WidgetStateProperty.resolveWith((states) {
@@ -222,19 +210,15 @@ ThemeData buildAppTheme({
         return Colors.transparent;
       }),
       checkColor: WidgetStateProperty.all(Colors.white),
-      side: BorderSide(
-        color: effectiveOnSurfaceVariant.withValues(alpha: 0.5),
-      ),
-      shape: RoundedRectangleBorder(
-        borderRadius: AppShapes.of(4),
-      ),
+      side: BorderSide(color: colors.outline),
+      shape: RoundedRectangleBorder(borderRadius: AppShapes.of(5)),
     ),
     radioTheme: RadioThemeData(
       fillColor: WidgetStateProperty.resolveWith((states) {
         if (states.contains(WidgetState.selected)) {
           return accent;
         }
-        return effectiveOnSurfaceVariant.withValues(alpha: 0.5);
+        return colors.iconText;
       }),
     ),
     switchTheme: SwitchThemeData(
@@ -244,9 +228,7 @@ ThemeData buildAppTheme({
           // 纯色强调色，避免低对比度导致看不清选中状态
           return accent;
         }
-        return isDark
-            ? effectiveOnSurfaceVariant.withValues(alpha: 0.35)
-            : effectiveOnSurfaceVariant.withValues(alpha: 0.3);
+        return colors.iconText.withValues(alpha: isDark ? 0.35 : 0.30);
       }),
       trackOutlineColor: WidgetStateProperty.all(Colors.transparent),
       trackOutlineWidth: WidgetStateProperty.all(0),
@@ -254,11 +236,40 @@ ThemeData buildAppTheme({
     ),
     dropdownMenuTheme: DropdownMenuThemeData(
       menuStyle: MenuStyle(
-        backgroundColor: WidgetStateProperty.all(colorScheme.surface),
+        backgroundColor: WidgetStateProperty.all(colors.surfaceElevated),
+        surfaceTintColor: WidgetStateProperty.all(Colors.transparent),
+        shape: WidgetStateProperty.all(
+          const RoundedRectangleBorder(borderRadius: AppShapes.medium),
+        ),
       ),
     ),
-    // ── 全局滚动条（qraft 同款悬浮细滑块风格）──
-    // 轨道透明、圆角胶囊滑块、hover/按下加深；悬浮于内容之上
+    // 底部抽屉默认皮肤（调用点显式传参时以显式为准）
+    bottomSheetTheme: BottomSheetThemeData(
+      backgroundColor: colors.surfaceElevated,
+      modalBackgroundColor: colors.surfaceElevated,
+      surfaceTintColor: Colors.transparent,
+      elevation: 0,
+      modalElevation: 0,
+      clipBehavior: Clip.antiAlias,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+    ),
+    // 对话框：大圆角 + 白底 + 无 M3 色调叠加
+    dialogTheme: DialogThemeData(
+      backgroundColor: colors.surfaceElevated,
+      surfaceTintColor: Colors.transparent,
+      elevation: 0,
+      insetPadding: const EdgeInsets.symmetric(
+        horizontal: AppDimens.space24,
+        vertical: AppDimens.space24,
+      ),
+      shape: RoundedRectangleBorder(borderRadius: AppShapes.xl),
+      titleTextStyle: textTheme.titleLarge?.copyWith(color: colors.titleText),
+      contentTextStyle:
+          textTheme.bodyMedium?.copyWith(color: colors.bodyText),
+    ),
+    // ── 全局滚动条（悬浮细滑块：轨道透明、圆角胶囊、hover/按下加深）──
     scrollbarTheme: ScrollbarThemeData(
       thickness: WidgetStateProperty.resolveWith((states) {
         if (states.contains(WidgetState.dragged)) return 6;
@@ -269,12 +280,12 @@ ThemeData buildAppTheme({
       radius: const Radius.circular(999),
       thumbColor: WidgetStateProperty.resolveWith((states) {
         if (states.contains(WidgetState.dragged)) {
-          return effectiveOnSurfaceVariant.withValues(alpha: 0.45);
+          return colors.iconText.withValues(alpha: 0.55);
         }
         if (states.contains(WidgetState.hovered)) {
-          return effectiveOnSurfaceVariant.withValues(alpha: 0.4);
+          return colors.iconText.withValues(alpha: 0.45);
         }
-        return effectiveOnSurfaceVariant.withValues(alpha: 0.28);
+        return colors.iconText.withValues(alpha: 0.30);
       }),
       trackVisibility: const WidgetStatePropertyAll(false),
       trackColor: const WidgetStatePropertyAll(Colors.transparent),

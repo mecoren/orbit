@@ -1,26 +1,27 @@
-/// 应用间距 / 尺寸 / 模糊 Token
+/// 应用间距 / 尺寸 / 模糊 Token（设计系统 v2）
 ///
 /// 参考 SaltUI `SaltDimens`：私有构造 + `static const` 集中管理。
-/// 数值与 wait-home/mobile 及 orbit docs/05 §七 常量速查卡一致。
+/// 刻度基于 4pt 子网格（8pt 主网格），并提供一批**语义命名**供页面统一节奏，
+/// 避免各页各自挑选 `spaceN` 导致留白不均。
 ///
-/// 动效参数（时长 / 曲线）不在本文件，见 [AppMotion]。
+/// 动效参数（时长 / 曲线）不在本文件，见 [AppMotion]；阴影海拔见 [AppElevation]。
 class AppDimens {
   AppDimens._();
 
-  // ── 间距（spacing）──
-  /// 极小间隙（徽标与文字间；wait-home 同名）
+  // ── 间距刻度（spacing scale，4pt 子网格）──
+  /// 极小间隙（徽标与文字间）
   static const double space2 = 2;
 
   /// 极小间隙（图标与文字间）
   static const double space4 = 4;
 
-  /// 小间隙内部细间距（wait-home 同名）
+  /// 小间隙内部细间距
   static const double space6 = 6;
 
-  /// 小间隙
+  /// 小间隙（图标与文字、行内元素）
   static const double space8 = 8;
 
-  /// 紧凑内边距
+  /// 紧凑内边距（行内卡片、chip）
   static const double space12 = 12;
 
   /// 标准内边距（页面/卡片水平内边距）
@@ -35,7 +36,26 @@ class AppDimens {
   /// 大分区间距
   static const double space32 = 32;
 
-  /// 手势条兜底高度（docs/05：env(safe-area-inset-bottom) 为 0 时兜底）
+  // ── 语义间距（页面节奏基准，新代码优先用这一组）──
+  /// 页面水平内边距（所有页面左右留白的统一基准）
+  static const double pageInline = space16;
+
+  /// 卡片 / 区块内边距
+  static const double cardPadding = space16;
+
+  /// 卡片之间的竖直间距
+  static const double cardGap = space12;
+
+  /// 分区（Section）之间的竖直间距
+  static const double sectionGap = space24;
+
+  /// 列表行水平内边距
+  static const double rowInline = 14;
+
+  /// 列表行竖直内边距
+  static const double rowVertical = space12;
+
+  /// 手势条兜底高度
   static const double gestureInsetFallback = 48;
 
   // ── 组件尺寸（component size）──
@@ -45,22 +65,22 @@ class AppDimens {
   /// 列表项高度
   static const double listItemHeight = 56;
 
-  /// 标题栏高度（docs/05 §三：56px 单行液态玻璃标题栏）
+  /// 标题栏高度（56px 单行玻璃标题栏）
   static const double titleBarHeight = 56;
 
-  /// FAB 尺寸（docs/05：GlassFab 56px 圆形）
+  /// FAB 尺寸（GlassFab 56px 方形圆角）
   static const double fabSize = 56;
 
   /// 启动等待画面品牌图边长（booting 阶段白底居中，与桌面端同源图标）
   static const double splashLogoSize = 96;
 
-  /// 任务行 checkbox 直径（docs/05 §七）
+  /// 任务行 checkbox 直径
   static const double taskCheckboxSize = 24;
 
-  /// 详情子任务 checkbox 直径（docs/05 §四：22px 圆）
+  /// 详情子任务 checkbox 直径
   static const double subtaskCheckboxSize = 22;
 
-  /// 标签色点直径（docs/05 §七：12×12 色点）
+  /// 标签色点直径
   static const double colorDotSize = 12;
 
   /// 小图标尺寸
@@ -79,11 +99,11 @@ class AppDimens {
   /// 静态玻璃模糊（卡片/弹层，性能成本 ∝ σ²）
   static const double blurStatic = 45;
 
-  /// 标题栏最大模糊（docs/05 §三：blur σ20）
-  static const double blurTitleBarMax = 20;
+  /// 标题栏最大模糊（frosted 白玻璃，比旧版 20 略降以贴合"白卡"轻盈感）
+  static const double blurTitleBarMax = 16;
 
-  /// FAB / 底栏模糊（docs/05：GlassFab blur18）
-  static const double blurFab = 18;
+  /// FAB / 底栏模糊
+  static const double blurFab = 14;
 
   /// 滚动渐显区间（模糊层从透明到完全显示的滚动偏移）
   static const double blurScrollFadeDistance = 32;
