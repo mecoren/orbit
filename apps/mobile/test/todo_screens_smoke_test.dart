@@ -153,4 +153,68 @@ void main() {
 
     expect(find.textContaining('当前列表不完整'), findsOneWidget);
   });
+
+  // 多选崩屏回归（2026-09-20）：选择态强制回落 ListView.builder 分支，该分支
+  // 对「无逾期任务」的 rest 索引曾算成 -1 → RangeError 整屏红。
+  testWidgets('任务子列表：无逾期任务时进入多选不崩（索引不越界）', (tester) async {
+    // 真机视口：600 高的小屏下长按菜单本身会贴边溢出，与本用例无关
+    tester.view.physicalSize = const Size(1080, 2400);
+    tester.view.devicePixelRatio = 3;
+    addTearDown(tester.view.reset);
+
+    final bridge = MockOrbitBridge();
+    // 抹掉截止时间与完成态：逾期区为空（触发原越界分支）
+    for (final t in bridge.store.tasks.values) {
+      t['due_date'] = null;
+      t['done'] = 0;
+      t['status'] = 'pending';
+      t['done_at'] = null;
+    }
+
+    await tester.pumpWidget(_wrap(
+      const SubListScreen(
+        query: TaskFilterInput(quickView: QuickViewKey.all),
+      ),
+      bridge,
+    ));
+    await _settlePastMockLatency(tester);
+
+    await tester.longPress(find.text('完成移动端重构方案评审'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('多选'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('已选 1 项'), findsOneWidget);
+    expect(find.text('完成移动端重构方案评审'), findsWidgets);
+  });
+
+  // 逾期区索引口径回归：非重排档（切排序档后）走 ListView.builder，
+  // 逾期行数须与 od.length 一致（曾把 od[0] 渲染两次、丢掉 od.last）。
+  testWidgets('任务子列表：非重排档下逾期区每行只渲染一次', (tester) async {
+    final bridge = MockOrbitBridge();
+    // 再压一条逾期：逾期区 ≥2 行才暴露索引偏移（1 行时偏移正好抵消）
+    final extra = bridge.store.tasks.values.firstWhere((t) =>
+        t['is_deleted'] == 0 && t['done'] == 0 && t['due_date'] == null);
+    extra['due_date'] = bridge.store.now() - 86400000;
+    extra['title'] = '逾期压测任务';
+
+    await tester.pumpWidget(_wrap(
+      const SubListScreen(
+        query: TaskFilterInput(quickView: QuickViewKey.all),
+      ),
+      bridge,
+    ));
+    await _settlePastMockLatency(tester);
+
+    // 切出 manual 档 → 列表换 ListView.builder 分支（逾期置顶区块）
+    await tester.tap(find.byIcon(Icons.sort_rounded));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('截止时间'));
+    await tester.pumpAndSettle();
+
+    // 区块头计数与实际行数一致：每条逾期任务只渲染一次，不重复不丢失
+    expect(find.text('逾期 · 2'), findsOneWidget);
+    expect(find.text('回复合作方邮件（逾期）'), findsOneWidget);
+    expect(find.text('逾期压测任务'), findsOneWidget);
+  });
 }

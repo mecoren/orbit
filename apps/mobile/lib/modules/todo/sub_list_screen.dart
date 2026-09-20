@@ -1112,30 +1112,27 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
             : ListView.builder(
                 controller: _listScrollController,
                 padding: listPadding,
-                // 逾期置顶（非重排档）：逾期行 + 区块头算作前置 item，
-                // 后接 rest 任务行——单一 builder 保持懒加载，不额外组 chunk
+                // 逾期置顶（非重排档）：逾期区头行（与首条逾期行同行）+ 逾期行 +
+                // 「其余任务」分隔行算作前置 item，后接 rest 任务行——单一 builder
+                // 保持懒加载，不额外组 chunk。
+                //
+                // 索引口径（od 非空时）：item 0 = 区块头 + od[0]，
+                // item 1..od.length-1 = od[1..]，item od.length = 分隔行，
+                // 其后 = rest[0..]；**od 为空时必须直接映射 rest[index]**——
+                // 曾经的 `index - od.length - 1` 在无逾期任务时算得 rest[-1]，
+                // 只在非 manual 档 / 多选态（回落到本 ListView.builder 分支）
+                // 触发 RangeError 崩屏（2026-09-20 多选崩溃修复）。
                 itemCount: overdueGroups.overdue.isNotEmpty
                     ? overdueGroups.overdue.length + 1 + overdueGroups.rest.length
                     : overdueGroups.rest.length,
                 itemBuilder: (context, index) {
                   final od = overdueGroups.overdue;
-                  if (od.isNotEmpty && index == od.length) {
-                    // 逾期区尾部即为「其余」分隔（区块头随首行渲染在 index 0 前，
-                    // 见下方 header 判定）；此处渲染 rest 区标题行
-                    return Padding(
-                      padding: const EdgeInsets.symmetric(
-                          vertical: AppDimens.space4),
-                      child: Text(
-                        '  其余任务',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: colors.secondaryText,
-                        ),
-                      ),
-                    );
+                  final rest = overdueGroups.rest;
+                  if (od.isEmpty) {
+                    return _withEntrance(
+                        rest[index], buildTile(rest[index], dragHandle: null));
                   }
-                  final isOverdueZone = od.isNotEmpty && index <= od.length;
-                  if (od.isNotEmpty && index == 0) {
+                  if (index == 0) {
                     return Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -1159,14 +1156,30 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
                             ],
                           ),
                         ),
-                        buildTile(od[0], dragHandle: null),
+                        _withEntrance(od[0], buildTile(od[0], dragHandle: null)),
                       ],
                     );
                   }
-                  final task = isOverdueZone
-                      ? od[index - 1]
-                      : overdueGroups.rest[index - od.length - 1];
-                  return buildTile(task, dragHandle: null);
+                  if (index < od.length) {
+                    return _withEntrance(
+                        od[index], buildTile(od[index], dragHandle: null));
+                  }
+                  if (index == od.length) {
+                    // 逾期区尾部即为「其余」分隔（区块头随首行渲染在 index 0 前）
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(
+                          vertical: AppDimens.space4),
+                      child: Text(
+                        '  其余任务',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: colors.secondaryText,
+                        ),
+                      ),
+                    );
+                  }
+                  final task = rest[index - od.length - 1];
+                  return _withEntrance(task, buildTile(task, dragHandle: null));
                 },
               );
 
