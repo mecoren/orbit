@@ -13,8 +13,11 @@ import '../../core/theme/app_shapes.dart';
 import '../../core/theme/orbit_accents.dart';
 import '../../data/api/dto.dart';
 import '../../data/providers/bridge_provider.dart';
+import '../../services/notification_service.dart';
 import '../../shared/utils/hex_color.dart';
+import '../../shared/widgets/animated_strikethrough.dart';
 import '../../shared/widgets/circle_checkbox.dart';
+import '../../shared/widgets/confirm_bottom_sheet.dart';
 import '../../shared/widgets/info_tile.dart';
 import '../../shared/widgets/liquid_glass_title_bar.dart';
 import '../../shared/widgets/more_actions_sheet.dart' show bottomSheetTopShape;
@@ -314,16 +317,16 @@ class _TitleSectionState extends State<_TitleSection> {
                   )
                 : GestureDetector(
                     onTap: () => setState(() => _editing = true),
-                    child: Text(
-                      task.title,
+                    child: AnimatedStrikethrough(
+                      text: task.title,
+                      done: task.isDone,
+                      thickness: 2,
                       style: TextStyle(
                         fontSize: 24,
                         height: 1.2,
                         color: colors.titleText,
-                        decoration:
-                            task.isDone ? TextDecoration.lineThrough : null,
-                        decorationThickness: 2,
                       ),
+                      doneColor: colors.titleText,
                     ),
                   ),
           ),
@@ -803,17 +806,14 @@ class _SubtasksSectionState extends ConsumerState<_SubtasksSection> {
                   ),
                   const SizedBox(width: AppDimens.space8),
                   Expanded(
-                    child: Text(
-                      subtask.title,
+                    child: AnimatedStrikethrough(
+                      text: subtask.title,
+                      done: subtask.isDone,
                       style: TextStyle(
                         fontSize: 15,
-                        color: subtask.isDone
-                            ? colors.secondaryText.withValues(alpha: 0.5)
-                            : colors.bodyText,
-                        decoration: subtask.isDone
-                            ? TextDecoration.lineThrough
-                            : null,
+                        color: colors.bodyText,
                       ),
+                      doneColor: colors.secondaryText.withValues(alpha: 0.5),
                     ),
                   ),
                   // 转独立任务（承接父任务上下文；对齐桌面行尾入口）

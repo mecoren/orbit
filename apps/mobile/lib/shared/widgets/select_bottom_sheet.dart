@@ -30,6 +30,7 @@ Future<void> showSelectBottomSheet<T>(
     isScrollControlled: true,
     backgroundColor: colors.popup,
     shape: bottomSheetTopShape,
+    sheetAnimationStyle: bottomSheetMotion,
     builder: (sheetContext) => SafeArea(
       top: false,
       child: ConstrainedBox(

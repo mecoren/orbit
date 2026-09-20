@@ -12,6 +12,7 @@ import '../../core/theme/orbit_accents.dart';
 import '../../data/api/dto.dart';
 import '../../data/providers/bridge_provider.dart';
 import '../../shared/utils/hex_color.dart';
+import '../../shared/widgets/animated_strikethrough.dart';
 import '../../shared/widgets/app_month_calendar.dart';
 import '../../shared/widgets/glass_fab.dart';
 import '../../shared/widgets/liquid_glass_title_bar.dart';
@@ -570,16 +571,16 @@ class _TaskCard extends StatelessWidget {
             ),
             const SizedBox(width: AppDimens.space8),
             Expanded(
-              child: Text(
-                task.title,
+              child: AnimatedStrikethrough(
+                text: task.title,
+                done: task.isDone,
                 maxLines: 1,
-                overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w600,
-                  decoration: task.isDone ? TextDecoration.lineThrough : null,
-                  color: task.isDone ? colors.secondaryText : colors.titleText,
+                  color: colors.titleText,
                 ),
+                doneColor: colors.secondaryText,
               ),
             ),
             if (hasTime)

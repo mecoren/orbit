@@ -8,6 +8,8 @@ import '../../core/theme/app_dimens.dart';
 import '../../core/theme/orbit_accents.dart';
 import '../../data/api/dto.dart';
 import '../../data/providers/bridge_provider.dart';
+import '../../shared/widgets/animated_strikethrough.dart';
+import '../../shared/widgets/confirm_bottom_sheet.dart';
 import '../../shared/widgets/empty_state.dart';
 import '../../shared/widgets/liquid_glass_title_bar.dart';
 import '../../shared/widgets/more_actions_sheet.dart';
@@ -471,18 +473,15 @@ class _SavedFiltersScreenState extends ConsumerState<SavedFiltersScreen> {
                                               width: AppDimens.space8,
                                             ),
                                             Expanded(
-                                              child: Text(
-                                                t.title,
+                                              child: AnimatedStrikethrough(
+                                                text: t.title,
+                                                done: t.isDone,
                                                 maxLines: 1,
-                                                overflow: TextOverflow.ellipsis,
                                                 style: TextStyle(
                                                   fontSize: 14,
                                                   color: colors.bodyText,
-                                                  decoration: t.isDone
-                                                      ? TextDecoration
-                                                            .lineThrough
-                                                      : null,
                                                 ),
+                                                doneColor: colors.bodyText,
                                               ),
                                             ),
                                           ],

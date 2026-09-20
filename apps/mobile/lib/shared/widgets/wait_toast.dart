@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_dimens.dart';
+import '../../core/theme/app_motion.dart';
 import '../../core/theme/app_shapes.dart';
 import '../../core/routing/router_keys.dart';
 
@@ -118,10 +119,8 @@ class _ToastView extends StatefulWidget {
 
 class _ToastViewState extends State<_ToastView>
     with SingleTickerProviderStateMixin {
-  late final AnimationController _controller = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: AppDimens.durationFast),
-  )..forward();
+  late final AnimationController _controller =
+      AnimationController(vsync: this, duration: AppMotion.fast)..forward();
 
   @override
   void dispose() {
@@ -163,7 +162,7 @@ class _ToastViewState extends State<_ToastView>
         position: Tween<Offset>(
           begin: const Offset(0, -0.4),
           end: Offset.zero,
-        ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOut)),
+        ).animate(CurvedAnimation(parent: _controller, curve: AppMotion.standard)),
         child: FadeTransition(
           opacity: _controller,
           child: GestureDetector(

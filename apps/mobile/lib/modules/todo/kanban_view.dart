@@ -6,6 +6,7 @@ import '../../core/theme/app_shapes.dart';
 import '../../core/theme/orbit_accents.dart';
 import '../../data/api/dto.dart';
 import '../../shared/utils/hex_color.dart';
+import '../../shared/widgets/animated_strikethrough.dart';
 import '../../shared/widgets/circle_checkbox.dart';
 import 'logic/task_logic.dart';
 
@@ -157,17 +158,16 @@ class KanbanBoard extends StatelessWidget {
                   ),
                   const SizedBox(width: AppDimens.space8),
                   Expanded(
-                    child: Text(
-                      task.title,
+                    child: AnimatedStrikethrough(
+                      text: task.title,
+                      done: task.isDone,
                       maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         fontSize: 14,
                         height: 1.3,
                         color: colors.bodyText,
-                        decoration:
-                            task.isDone ? TextDecoration.lineThrough : null,
                       ),
+                      doneColor: colors.bodyText,
                     ),
                   ),
                   if (task.isStarred)

@@ -1,14 +1,17 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_dimens.dart';
+import '../../core/theme/app_motion.dart';
 import '../../core/theme/app_shapes.dart';
 import '../../core/theme/orbit_accents.dart';
 import '../../data/api/dto.dart';
 import '../../data/providers/bridge_provider.dart';
 import '../../shared/utils/hex_color.dart';
+import '../../shared/widgets/confirm_bottom_sheet.dart';
 import '../../shared/widgets/glass_fab.dart';
 import '../../shared/widgets/liquid_glass_title_bar.dart';
 import '../../shared/widgets/more_actions_sheet.dart';
@@ -371,6 +374,27 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
                   index,
                 ),
                 onReorderItem: _reorderProjects,
+                // 拖拽起止触感 + 抬起放大（与任务列表 manual 档同口径）
+                onReorderStart: (_) => HapticFeedback.selectionClick(),
+                onReorderEnd: (_) => HapticFeedback.selectionClick(),
+                proxyDecorator: (child, index, animation) => AnimatedBuilder(
+                  animation: animation,
+                  builder: (context, child) {
+                    final elevated = AppMotion.standard.transform(
+                      Tween<double>(begin: 0, end: 1).evaluate(animation),
+                    );
+                    return Transform.scale(
+                      scale: 1 + (AppMotion.dragLiftScale - 1) * elevated,
+                      child: Material(
+                        elevation: 6 * elevated,
+                        borderRadius: AppShapes.medium,
+                        color: Colors.transparent,
+                        child: child,
+                      ),
+                    );
+                  },
+                  child: child,
+                ),
               ),
               // 新建项目（#36：移动端此前无创建项目入口）
               ListTile(

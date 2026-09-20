@@ -1,18 +1,22 @@
 ﻿import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_dimens.dart';
+import '../../core/theme/app_motion.dart';
 import '../../core/theme/app_shapes.dart';
 import '../../core/theme/orbit_accents.dart';
 import '../../data/api/dto.dart';
 import '../../data/providers/bridge_provider.dart';
 import '../../shared/utils/hex_color.dart';
+import '../../shared/widgets/animated_strikethrough.dart';
 import '../../shared/widgets/circle_checkbox.dart';
+import '../../shared/widgets/confirm_bottom_sheet.dart';
 import '../../shared/widgets/empty_state.dart';
 import '../../shared/widgets/glass_fab.dart';
 import '../../shared/widgets/liquid_glass_title_bar.dart';
@@ -906,6 +910,41 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
     }
   }
 
+  // ── 行入场动画（仅标准列表分支，见 [_withEntrance]）──
+
+  /// 上一次 build 已见的任务 id（首次为 null = 尚未播种）
+  Set<int>? _knownTaskIds;
+
+  /// 本次 build 新出现的任务 id（本次播放行入场）
+  Set<int> _appearedTaskIds = const {};
+
+  /// 追踪新出现任务；在 build 内直改字段（不 setState，不触发重建）。
+  ///
+  /// 播种时机取**首次拿到非空数据**的那一帧（不是首次 build）：provider 首帧
+  /// 通常仍在加载（`value ?? []` 为空），若此时就播种，数据到达后整表都会播
+  /// 入场（观感是列表整体撑开）。同样地，滚动出场不重播——虚拟化复用重建时
+  /// id 已在集合中；清空视图后重新出现的行会正常播一次。
+  void _trackTaskAppearance(List<TodoTask> tasks) {
+    final ids = {for (final t in tasks) t.id};
+    final known = _knownTaskIds;
+    if (known == null) {
+      if (tasks.isEmpty) return; // 数据未就绪：保持未播种
+      _knownTaskIds = ids;
+      _appearedTaskIds = const {};
+      return;
+    }
+    _appearedTaskIds = ids.difference(known);
+    _knownTaskIds = ids;
+  }
+
+  /// 标准列表分支的行入场包装。manual 重排档与 Logbook 分组档有意不做：
+  /// 二者共用同一 buildTile，逐行追加入场需镜像数据源，回归面过大
+  /// （边界记 docs/05 §九）。
+  Widget _withEntrance(TodoTask task, Widget tile) => _RowEntrance(
+        play: _appearedTaskIds.contains(task.id),
+        child: tile,
+      );
+
   @override
   Widget build(BuildContext context) {
     final tasks = ref.watch(todoTasksProvider).value ?? [];
@@ -931,6 +970,8 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
       labelIdsByTask: labelIdsByTask,
     );
     final projectById = {for (final p in projects) p.id: p};
+
+    _trackTaskAppearance(visible);
 
     // 逾期置顶分组（性能批次 UX 优化，与桌面同口径）：逾期行渲染在列表
     // 顶部的红调区块，其余照旧——长按拖拽语义不受影响（重排仍走原序数组）
@@ -1049,17 +1090,25 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
                 itemCount: visible.length,
                 onReorderItem: (oldIndex, newIndex) =>
                     _reorderTasks(oldIndex, newIndex),
+                // 拖拽起止各一次轻触感反馈（对齐微软 To-Do 拖动确认）
+                onReorderStart: (_) => HapticFeedback.selectionClick(),
+                onReorderEnd: (_) => HapticFeedback.selectionClick(),
                 proxyDecorator: (child, index, animation) => AnimatedBuilder(
                   animation: animation,
                   builder: (context, child) {
-                    final elevated = Curves.easeOut.transform(
+                    final elevated = AppMotion.standard.transform(
                       Tween<double>(begin: 0, end: 1).evaluate(animation),
                     );
-                    return Material(
-                      elevation: 6 * elevated,
-                      borderRadius: AppShapes.medium,
-                      color: Colors.transparent,
-                      child: child,
+                    // 抬起：轻微放大 + 阴影加深（抬手即销毁，不驻留）
+                    final scale = 1 + (AppMotion.dragLiftScale - 1) * elevated;
+                    return Transform.scale(
+                      scale: scale,
+                      child: Material(
+                        elevation: 6 * elevated,
+                        borderRadius: AppShapes.medium,
+                        color: Colors.transparent,
+                        child: child,
+                      ),
                     );
                   },
                   child: child,
@@ -1372,6 +1421,35 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
   }
 }
 
+/// 行入场过渡（仅标准列表分支）：新行高度展开 + 淡入
+///
+/// [play] 为假时原样返回子组件——绝大多数行不引入任何额外层级，
+/// 虚拟化复用与滚动出场因此既无额外开销也无视觉扰动。
+class _RowEntrance extends StatelessWidget {
+  const _RowEntrance({required this.play, required this.child});
+
+  final bool play;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!play) return child;
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0, end: 1),
+      duration: AppMotion.normal,
+      curve: AppMotion.standard,
+      builder: (context, t, child) => ClipRect(
+        child: Align(
+          alignment: Alignment.topCenter,
+          heightFactor: t,
+          child: Opacity(opacity: t, child: child),
+        ),
+      ),
+      child: child,
+    );
+  }
+}
+
 /// 任务行卡片（docs/05 §4.5）：24px 圆 checkbox + 标题 + 副标题行
 /// （优先级色点 8px + 项目名 + 日期，逾期 #F44436）+ 收藏星标。
 /// 侧滑手势（07 #18）：面板露出操作按钮（TickTick 式）——
@@ -1424,7 +1502,10 @@ class TodoTaskTile extends StatelessWidget {
               extentRatio: 0.26,
               children: [
                 SlidableAction(
-                  onPressed: (_) => onDelete?.call(),
+                  onPressed: (_) {
+                    HapticFeedback.mediumImpact();
+                    onDelete?.call();
+                  },
                   backgroundColor: colors.destructive,
                   foregroundColor: Colors.white,
                   icon: Icons.delete_outline_rounded,
@@ -1438,7 +1519,10 @@ class TodoTaskTile extends StatelessWidget {
         extentRatio: 0.26,
         children: [
           SlidableAction(
-            onPressed: (_) => onToggleDone(),
+            onPressed: (_) {
+              HapticFeedback.mediumImpact();
+              onToggleDone();
+            },
             backgroundColor: OrbitAccents.todoAccent,
             foregroundColor: Colors.white,
             icon: task.isDone ? Icons.undo_rounded : Icons.check_rounded,
@@ -1475,17 +1559,16 @@ class TodoTaskTile extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text(
-                        task.title,
+                      AnimatedStrikethrough(
+                        text: task.title,
+                        done: task.isDone,
                         maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.w500,
                           color: colors.titleText,
-                          decoration:
-                              task.isDone ? TextDecoration.lineThrough : null,
                         ),
+                        doneColor: colors.titleText,
                       ),
                       // 副标题恒渲染：优先级色点六档全显（P0「无」浅灰也参与）
                       Padding(
@@ -1744,16 +1827,15 @@ class _SelectionRow extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Text(
-                    task.title,
+                  AnimatedStrikethrough(
+                    text: task.title,
+                    done: task.isDone,
                     maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       fontSize: 15,
                       color: colors.bodyText,
-                      decoration:
-                          task.isDone ? TextDecoration.lineThrough : null,
                     ),
+                    doneColor: colors.bodyText,
                   ),
                   if (projectTitle != null || task.dueDate != null) ...[
                     const SizedBox(height: AppDimens.space2),

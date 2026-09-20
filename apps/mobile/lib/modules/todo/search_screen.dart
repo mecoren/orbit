@@ -8,6 +8,7 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_dimens.dart';
 import '../../core/theme/orbit_accents.dart';
 import '../../data/api/dto.dart';
+import '../../shared/widgets/animated_strikethrough.dart';
 import '../../shared/widgets/empty_state.dart';
 import '../../shared/widgets/liquid_glass_title_bar.dart';
 import '../../shared/widgets/scroll_offset_listenable.dart';
@@ -171,15 +172,15 @@ class _ResultList extends StatelessWidget {
                 size: AppDimens.iconSizeMd,
                 color: t.done == 1 ? OrbitAccents.todoAccent : colors.secondaryText,
               ),
-              title: Text(
-                t.title,
+              title: AnimatedStrikethrough(
+                text: t.title,
+                done: t.done == 1,
                 maxLines: 1,
-                overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   fontSize: 15,
                   color: colors.titleText,
-                  decoration: t.done == 1 ? TextDecoration.lineThrough : null,
                 ),
+                doneColor: colors.titleText,
               ),
               subtitle: t.dueDate != null
                   ? Text(

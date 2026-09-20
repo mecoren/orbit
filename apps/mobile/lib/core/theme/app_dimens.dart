@@ -1,7 +1,9 @@
-/// 应用间距 / 尺寸 / 模糊 / 时长 Token
+/// 应用间距 / 尺寸 / 模糊 Token
 ///
 /// 参考 SaltUI `SaltDimens`：私有构造 + `static const` 集中管理。
 /// 数值与 wait-home/mobile 及 orbit docs/05 §七 常量速查卡一致。
+///
+/// 动效参数（时长 / 曲线）不在本文件，见 [AppMotion]。
 class AppDimens {
   AppDimens._();
 
@@ -85,14 +87,4 @@ class AppDimens {
 
   /// 滚动渐显区间（模糊层从透明到完全显示的滚动偏移）
   static const double blurScrollFadeDistance = 32;
-
-  // ── 动画时长（duration ms）──
-  /// 快速动画（按压反馈、状态切换）
-  static const int durationFast = 150;
-
-  /// 常规动画（图标切换、淡入淡出）
-  static const int durationNormal = 250;
-
-  /// 慢速动画（容器形变、展开收起）
-  static const int durationSlow = 300;
 }

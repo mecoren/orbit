@@ -5,6 +5,7 @@ import '../../core/theme/app_dimens.dart';
 import '../../core/theme/app_shapes.dart';
 import '../../data/api/dto.dart';
 import '../../shared/utils/hex_color.dart';
+import '../../shared/widgets/animated_strikethrough.dart';
 import '../../shared/widgets/circle_checkbox.dart';
 import 'logic/task_logic.dart';
 
@@ -127,15 +128,15 @@ class TaskTableView extends StatelessWidget {
             const SizedBox(width: AppDimens.space8),
             Expanded(
               flex: 3,
-              child: Text(
-                task.title,
+              child: AnimatedStrikethrough(
+                text: task.title,
+                done: task.isDone,
                 maxLines: 1,
-                overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   fontSize: 13,
                   color: colors.bodyText,
-                  decoration: task.isDone ? TextDecoration.lineThrough : null,
                 ),
+                doneColor: colors.bodyText,
               ),
             ),
             Expanded(

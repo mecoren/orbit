@@ -10,6 +10,7 @@ import '../../data/api/orbit_bridge.dart';
 import '../../data/providers/bridge_provider.dart';
 import '../../shared/utils/hex_color.dart';
 import '../../shared/widgets/info_tile.dart';
+import '../../shared/widgets/more_actions_sheet.dart' show bottomSheetMotion;
 import '../../shared/widgets/section_card.dart';
 import '../../shared/widgets/select_bottom_sheet.dart';
 import '../../shared/widgets/wait_date_picker.dart';
@@ -72,6 +73,7 @@ Future<void> showTodoFormSheet(
     context: context,
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
+    sheetAnimationStyle: bottomSheetMotion,
     builder: (_) => _TodoFormSheet(
       editingTaskId: editingTaskId,
       defaultProjectId: defaultProjectId,

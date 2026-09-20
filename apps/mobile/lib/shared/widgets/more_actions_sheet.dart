@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_dimens.dart';
+import '../../core/theme/app_motion.dart';
 
 /// MoreActions 风格底部操作菜单（长按弹层）
 ///
@@ -33,6 +34,7 @@ Future<void> showMoreActionsSheet(
     context: context,
     backgroundColor: colors.popup,
     shape: bottomSheetTopShape,
+    sheetAnimationStyle: bottomSheetMotion,
     builder: (sheetContext) => SafeArea(
       top: false,
       child: Column(
@@ -97,5 +99,14 @@ Future<void> showMoreActionsSheet(
 /// 圆角形状常量复用：底部抽屉顶部圆角统一 20（AppShapes.large 的顶边版本）
 const RoundedRectangleBorder bottomSheetTopShape = RoundedRectangleBorder(
   borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+);
+
+/// 底部抽屉统一入场动画（`showModalBottomSheet` 的 `sheetAnimationStyle`）：
+/// 入场 250ms 滑入、退场 150ms 更快收起（对齐微软 To-Do 的轻快手感）。
+/// 选择类 / 操作菜单 / 表单三类抽屉同口径，避免逐处手调时长。
+const AnimationStyle bottomSheetMotion = AnimationStyle(
+  duration: AppMotion.normal,
+  reverseDuration: AppMotion.fast,
+  curve: AppMotion.sheetEnter,
 );
 

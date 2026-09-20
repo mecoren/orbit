@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/lunar/chinese_almanac.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_dimens.dart';
+import '../../core/theme/app_motion.dart';
 import '../../core/theme/app_shapes.dart';
 import '../../data/api/dto.dart';
 import '../../modules/todo/providers/todo_providers.dart';
@@ -308,23 +309,29 @@ class _DatePickerSheetState extends ConsumerState<_DatePickerSheet> {
               const SizedBox(height: AppDimens.space16),
               // 内容区：日视图、年月视图或年视图
               AnimatedSwitcher(
-                duration: const Duration(milliseconds: 200),
+                duration: AppMotion.viewSwitch,
                 child: _viewMode == _DatePickerViewMode.day
-                    ? AppMonthCalendar(
-                        key: const ValueKey('day'),
-                        // medium 档（非 mini 圆格）：与日历视图同口径渲染
-                        // 农历/节日/节气副标签 + 休/班徽标 + 周末蓝字，
-                        // 今天实心块 / 选中描边沿用同一套日格规则
-                        size: AppCalendarSize.medium,
-                        showHeader: false,
-                        month: _currentMonth,
-                        selected: _selectedDate,
-                        accentColor: widget.accent,
-                        holidays: holidays,
-                        subLabelBuilder: ChineseAlmanac.daySubLabel,
-                        selectableStart: firstDate,
-                        selectableEnd: lastDate,
-                        onDayTap: _selectDate,
+                    // 日格左右留白：网格贴屏边会显得局促，与头部/按钮的
+                    // space20 内边距对齐（收窄后日格接近正方形）
+                    ? Padding(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: AppDimens.space20),
+                        child: AppMonthCalendar(
+                          key: const ValueKey('day'),
+                          // medium 档（非 mini 圆格）：与日历视图同口径渲染
+                          // 农历/节日/节气副标签 + 休/班徽标 + 周末蓝字，
+                          // 今天实心块 / 选中描边沿用同一套日格规则
+                          size: AppCalendarSize.medium,
+                          showHeader: false,
+                          month: _currentMonth,
+                          selected: _selectedDate,
+                          accentColor: widget.accent,
+                          holidays: holidays,
+                          subLabelBuilder: ChineseAlmanac.daySubLabel,
+                          selectableStart: firstDate,
+                          selectableEnd: lastDate,
+                          onDayTap: _selectDate,
+                        ),
                       )
                     : _viewMode == _DatePickerViewMode.year
                         ? _YearGrid(

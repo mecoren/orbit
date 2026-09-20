@@ -18,6 +18,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_dimens.dart';
+import '../../core/theme/app_motion.dart';
 import '../../core/theme/orbit_accents.dart';
 import '../../data/api/dto.dart';
 import '../../data/providers/bridge_provider.dart';
@@ -185,8 +186,8 @@ class _SyncStatusButtonState extends ConsumerState<SyncStatusButton> {
               top: 0,
               child: TweenAnimationBuilder<double>(
                 tween: Tween(begin: 0.4, end: 1),
-                duration: const Duration(milliseconds: AppDimens.durationSlow),
-                curve: Curves.easeOutBack,
+                duration: AppMotion.slow,
+                curve: AppMotion.bounce,
                 builder: (context, scale, child) =>
                     Transform.scale(scale: scale, child: child),
                 child: Container(
