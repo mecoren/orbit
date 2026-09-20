@@ -5,10 +5,15 @@ import 'package:flutter/material.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_dimens.dart';
 
-/// 渐变玻璃背景组件（无级渐变模糊）
+/// 渐变玻璃背景组件（无级渐变模糊）—— "白玻璃"配方 v2
 ///
-/// 自 wait-home/mobile 移植。使用单一 [BackdropFilter] 配合 [ShaderMask]
-/// （BlendMode.dstIn）实现无级渐变模糊，避免条带式分段的视觉割裂。
+/// 使用单一 [BackdropFilter] 配合 [ShaderMask]（BlendMode.dstIn）实现无级
+/// 渐变模糊，避免条带式分段的视觉割裂。
+///
+/// v2 相对旧版（wait-home 平移）的变化：**tint 不透明度从 0.20 提到 0.75**。
+/// 旧版玻璃近乎全透，内容从标题栏下方穿过，文字浮在杂乱像素上、可读性差，
+/// 也是"玻璃不精致"的来源；v2 采用"高不透明度白底 + 轻模糊"的 frost 配方，
+/// 顶部接近实白、向下渐隐，既保留玻璃质感又保证标题清晰。
 ///
 /// 原理：
 /// - [ClipRect] 限制模糊区域，避免 GPU 模糊整个屏幕（性能关键）
@@ -19,7 +24,7 @@ class GradientBackdropFilter extends StatelessWidget {
   const GradientBackdropFilter({
     super.key,
     this.maxSigma = AppDimens.blurTitleBarMax,
-    this.maxTintOpacity = 0.20,
+    this.maxTintOpacity = 0.75,
     this.minTintOpacity = 0.0,
     this.opacity = 1.0,
     this.child,

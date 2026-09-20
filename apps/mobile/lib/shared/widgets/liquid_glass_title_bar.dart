@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_dimens.dart';
 import 'gradient_backdrop_filter.dart';
 
@@ -150,7 +151,7 @@ class LiquidGlassTitleBar extends StatelessWidget
               child: _buildRow(context, colorScheme),
             ),
             // 层 C：底部折射高光线（跟随模糊层同步显隐）
-            if (showHighlightLine) _buildHighlightLine(isDark),
+            if (showHighlightLine) _buildHighlightLine(context, isDark),
           ],
         ),
       ),
@@ -159,7 +160,7 @@ class LiquidGlassTitleBar extends StatelessWidget
 
   Widget _buildRow(BuildContext context, ColorScheme colorScheme) {
     final leading = _buildLeading(context);
-    final title = _buildTitle(colorScheme);
+    final title = _buildTitle(context, colorScheme);
 
     final hasActions = actions != null && actions!.isNotEmpty;
     final hasActionButton = onActionsTap != null;
@@ -213,25 +214,32 @@ class LiquidGlassTitleBar extends StatelessWidget
     return leading;
   }
 
-  Widget _buildTitle(ColorScheme colorScheme) {
+  Widget _buildTitle(BuildContext context, ColorScheme colorScheme) {
+    // 字号走设计系统字阶（titleLarge），不再硬编码 17
+    final titleStyle = Theme.of(context).textTheme.titleLarge?.copyWith(
+          color: colorScheme.onSurface,
+        );
     return titleWidget ??
         Text(
           title ?? '',
-          style: TextStyle(
-            fontSize: 17,
-            fontWeight: FontWeight.w500,
-            color: colorScheme.onSurface,
-          ),
+          style: titleStyle,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
         );
   }
 
-  /// 层 C：底部液态玻璃边缘高光线（跟随模糊层同步显隐）
+  /// 层 C：底部分隔线（跟随模糊层同步显隐）
   ///
-  /// 注意：高光线仅占底部 1px，绝不能用 Positioned.fill 包裹；
+  /// v2 改为"场景自适应"：
+  /// - 亮色：极浅灰细线（[AppColorSet.outline]）——白玻璃在浅灰底上原本无边界，
+  ///   需一条克制的分隔线定义栏底（对齐 iOS 导航栏做法）；纯白高光线在浅底上
+  ///   完全不可见，旧配方等于白画一层。
+  /// - 暗色：保留白色微光渐变（深底上高光才成立）。
+  ///
+  /// 注意：分隔线仅占底部 1px，绝不能用 Positioned.fill 包裹；
   /// Positioned 必须是 Stack 直接子节点，Opacity 只能包内部 Container。
-  Widget _buildHighlightLine(bool isDark) {
+  Widget _buildHighlightLine(BuildContext context, bool isDark) {
+    final colors = AppColors.ofContext(context);
     final lineContainer = Container(
       height: 1,
       decoration: BoxDecoration(
@@ -241,17 +249,17 @@ class LiquidGlassTitleBar extends StatelessWidget
           colors: isDark
               ? [
                   Colors.white.withValues(alpha: 0.0),
-                  Colors.white.withValues(alpha: 0.30),
-                  Colors.white.withValues(alpha: 0.45),
-                  Colors.white.withValues(alpha: 0.30),
+                  Colors.white.withValues(alpha: 0.22),
+                  Colors.white.withValues(alpha: 0.32),
+                  Colors.white.withValues(alpha: 0.22),
                   Colors.white.withValues(alpha: 0.0),
                 ]
               : [
-                  Colors.white.withValues(alpha: 0.0),
-                  Colors.white.withValues(alpha: 0.85),
-                  Colors.white.withValues(alpha: 1.0),
-                  Colors.white.withValues(alpha: 0.85),
-                  Colors.white.withValues(alpha: 0.0),
+                  colors.outline.withValues(alpha: 0.0),
+                  colors.outline.withValues(alpha: 0.9),
+                  colors.outline.withValues(alpha: 1.0),
+                  colors.outline.withValues(alpha: 0.9),
+                  colors.outline.withValues(alpha: 0.0),
                 ],
         ),
       ),

@@ -4,17 +4,20 @@ import 'package:flutter/material.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_dimens.dart';
+import '../../core/theme/app_elevation.dart';
 import '../../core/theme/app_shapes.dart';
 import 'alpha_indication.dart';
 
-/// 液态玻璃风格浮动按钮
+/// 悬浮按钮（白玻璃配方 v2）
 ///
-/// 自 wait-home/mobile 移植，对应 orbit React 版 glass-fab.tsx：
-/// - BackdropFilter sigma 18 + alpha 0.15 极低透明度
-/// - 细微边框 + 底部折射高光线（亮 [0,.85,1,.85,0] / 暗 [0,.30,.45,.30,0]）
-/// - 图标使用强调色
+/// v2 相对旧版（wait-home 玻璃 FAB）的变化：
+/// - tint 从 alpha 0.15 提到 0.82 —— 白色磨砂块，而非几乎全透的"水膜"；
+/// - 模糊 sigma 18 → 14（高不透明度下无需重度模糊，省 GPU）；
+/// - 新增 [AppElevation] 柔和阴影 —— FAB 从页面"浮起来"，不再贴平；
+/// - 圆角统一到设计系统 [AppShapes.large]，与卡片族同形。
 ///
-/// 交互反馈使用 [AlphaIndication]（无 ripple 的 alpha 指示）。
+/// 交互反馈仍使用 [AlphaIndication]（无 ripple 的 alpha 指示），保持
+/// "轻点即走"的移动端手感。
 class GlassFab extends StatelessWidget {
   const GlassFab({
     super.key,
@@ -38,11 +41,18 @@ class GlassFab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final brightness = Theme.of(context).brightness;
+    final isDark = brightness == Brightness.dark;
+    final colors = AppColors.of(brightness);
 
-    return SizedBox(
+    return Container(
       width: _GlassFabDefaults.size,
       height: _GlassFabDefaults.size,
+      // 阴影必须放在裁剪层之外，否则会被 ClipRRect 裁掉
+      decoration: BoxDecoration(
+        borderRadius: _GlassFabDefaults.shape,
+        boxShadow: AppElevation.e2(brightness),
+      ),
       child: ClipRRect(
         borderRadius: _GlassFabDefaults.shape,
         child: BackdropFilter(
@@ -56,58 +66,23 @@ class GlassFab extends StatelessWidget {
             borderRadius: _GlassFabDefaults.shape,
             child: Container(
               decoration: BoxDecoration(
-                color: isDark
-                    ? AppColors.dark.surface.withValues(alpha: 0.15)
-                    : const Color(0xFFFFFFFF).withValues(alpha: 0.15),
+                color: colors.surface.withValues(
+                  alpha: isDark ? 0.86 : 0.82,
+                ),
                 borderRadius: _GlassFabDefaults.shape,
                 border: Border.all(
                   color: isDark
-                      ? Colors.white.withValues(alpha: 0.12)
-                      : Colors.black.withValues(alpha: 0.06),
+                      ? Colors.white.withValues(alpha: 0.10)
+                      : colors.outline,
                   width: _GlassFabDefaults.borderWidth,
                 ),
               ),
-              child: Stack(
-                children: [
-                  Center(
-                    child: Icon(
-                      icon,
-                      color: accentColor,
-                      size: _GlassFabDefaults.iconSize,
-                    ),
-                  ),
-                  // 底部折射高光线（docs/05 §三：1px 五段 alpha）
-                  Positioned(
-                    bottom: 0,
-                    left: 0,
-                    right: 0,
-                    child: Container(
-                      width: double.infinity,
-                      height: _GlassFabDefaults.highlightHeight,
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.centerLeft,
-                          end: Alignment.centerRight,
-                          colors: isDark
-                              ? [
-                                  Colors.white.withValues(alpha: 0.0),
-                                  Colors.white.withValues(alpha: 0.30),
-                                  Colors.white.withValues(alpha: 0.45),
-                                  Colors.white.withValues(alpha: 0.30),
-                                  Colors.white.withValues(alpha: 0.0),
-                                ]
-                              : [
-                                  Colors.white.withValues(alpha: 0.0),
-                                  Colors.white.withValues(alpha: 0.85),
-                                  Colors.white.withValues(alpha: 1.0),
-                                  Colors.white.withValues(alpha: 0.85),
-                                  Colors.white.withValues(alpha: 0.0),
-                                ],
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
+              child: Center(
+                child: Icon(
+                  icon,
+                  color: accentColor,
+                  size: _GlassFabDefaults.iconSize,
+                ),
               ),
             ),
           ),
@@ -124,18 +99,15 @@ class _GlassFabDefaults {
   /// FAB 尺寸
   static const double size = AppDimens.fabSize;
 
-  /// 玻璃模糊 sigma（docs/05：blur18）
+  /// 玻璃模糊 sigma（高不透明度白玻璃，无需重度模糊）
   static const double blurSigma = AppDimens.blurFab;
 
-  /// 圆角（与设计系统 [AppShapes.medium] 统一为 12）
-  static const BorderRadius shape = AppShapes.medium;
+  /// 圆角（与卡片族同形制）
+  static const BorderRadius shape = AppShapes.large;
 
   /// 图标尺寸
-  static const double iconSize = AppDimens.iconSizeXl;
+  static const double iconSize = 26;
 
   /// 边框宽度
-  static const double borderWidth = 0.5;
-
-  /// 底部折射高光线高度
-  static const double highlightHeight = 1;
+  static const double borderWidth = 0.8;
 }
