@@ -138,6 +138,12 @@ void main() {
     // scrollUntilVisible 的目标不能链 .first——目标未进树时 evaluate
     // 内部先取 first 会抛 No element，等滚到位再取
     await _scrollTo(tester, find.textContaining(':'));
+    // 子任务进度条 + 常驻关联区让页面变长，scroll 可能停在目标贴顶被
+    // 玻璃标题栏叠层挡住命中的边缘处——与「添加提醒」用例同款反向拖 100px
+    await tester.ensureVisible(find.textContaining(':').first);
+    await tester.pumpAndSettle();
+    await tester.drag(find.byType(Scrollable).first, const Offset(0, 100));
+    await tester.pumpAndSettle();
     await tester.tap(find.textContaining(':').first);
     await tester.pumpAndSettle();
 
@@ -159,6 +165,13 @@ void main() {
         (await tester.runAsync(() => remindersOf(5)))!.length, 1);
 
     await _scrollTo(tester, find.textContaining(':'));
+    // 同上：进度条 + 常驻关联区导致的目标贴顶被标题栏遮挡，完整滚入后
+    // 反向拖 100px 再取 .last（关联区删除用 InkWell 非 IconButton，
+    // 不会误中；取 .last 仍为提醒的删除）
+    await tester.ensureVisible(find.textContaining(':').first);
+    await tester.pumpAndSettle();
+    await tester.drag(find.byType(Scrollable).first, const Offset(0, 100));
+    await tester.pumpAndSettle();
 
     // IconButton+close 只在子任务/提醒两区出现且提醒在后，
     // 信息区清空按钮是裸 Icon 非 IconButton 不会误中；取 .last 即提醒的删除

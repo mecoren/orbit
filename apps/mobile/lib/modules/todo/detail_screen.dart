@@ -4,6 +4,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 
 import '../../core/theme/app_colors.dart';
@@ -218,10 +219,12 @@ class _DetailView extends StatelessWidget {
           repeatFromDone: detail.repeatFromDone,
           onChanged: onRefresh,
         ),
-        if (detail.relations.isNotEmpty) ...[
-          const SizedBox(height: AppDimens.space12),
-          _RelationsSection(relations: detail.relations),
-        ],
+        const SizedBox(height: AppDimens.space12),
+        _RelationsSection(
+          taskId: detail.id,
+          relations: detail.relations,
+          onChanged: onRefresh,
+        ),
         const SizedBox(height: AppDimens.space12),
         _CommentsSection(detail: detail, onChanged: onRefresh),
         const SizedBox(height: AppDimens.space12),
@@ -761,12 +764,28 @@ class _SubtasksSectionState extends ConsumerState<_SubtasksSection> {
     final subtasks = widget.detail.subtasks;
     final doneCount = subtasks.where((s) => s.isDone).length;
 
+    final progress = subtasks.isEmpty ? 0.0 : doneCount / subtasks.length;
     return SectionCard(
       title: '子任务',
       subtitle: '$doneCount/${subtasks.length}',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          if (subtasks.isNotEmpty) ...[
+            ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: LinearProgressIndicator(
+                value: progress,
+                minHeight: 6,
+                backgroundColor:
+                    OrbitAccents.todoAccent.withValues(alpha: 0.15),
+                valueColor: const AlwaysStoppedAnimation<Color>(
+                  OrbitAccents.todoAccent,
+                ),
+              ),
+            ),
+            const SizedBox(height: AppDimens.space8),
+          ],
           for (final subtask in subtasks)
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 2),
@@ -1378,41 +1397,221 @@ class _RemindersSection extends ConsumerWidget {
   }
 }
 
-// ── 七、关联任务（只读胶囊，空则不渲染区块——由父级判断）──
+// ── 七、关联任务（搜索增删 + 只读胶囊；空态保留添加入口）──
 
-class _RelationsSection extends StatelessWidget {
-  const _RelationsSection({required this.relations});
+class _RelationsSection extends ConsumerStatefulWidget {
+  const _RelationsSection({
+    required this.taskId,
+    required this.relations,
+    required this.onChanged,
+  });
 
+  final int taskId;
   final List<TodoTaskRelation> relations;
+  final VoidCallback onChanged;
+
+  @override
+  ConsumerState<_RelationsSection> createState() => _RelationsSectionState();
+}
+
+class _RelationsSectionState extends ConsumerState<_RelationsSection> {
+  Future<void> _remove(TodoTaskRelation relation) async {
+    try {
+      await ref
+          .read(orbitBridgeProvider)
+          .todoTaskRelationDelete(relation.id);
+      widget.onChanged();
+      if (mounted) WaitToast.success('已解除关联');
+    } catch (e) {
+      if (mounted) WaitToast.destructive('解除关联失败');
+    }
+  }
+
+  /// 关联任务搜索增删：关键词走全局搜索，多选一即建关联
+  Future<void> _pickAndAdd() async {
+    final queryCtl = TextEditingController();
+    List<TodoTask> hits = [];
+    bool searching = false;
+    final targetId = await showModalBottomSheet<int>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppColors.ofContext(context).popup,
+      shape: bottomSheetTopShape,
+      builder: (sheetCtx) => StatefulBuilder(
+        builder: (ctx, setSheet) => SafeArea(
+          top: false,
+          child: Padding(
+            padding: EdgeInsets.only(
+              left: AppDimens.space16,
+              right: AppDimens.space16,
+              top: AppDimens.space16,
+              bottom: MediaQuery.of(ctx).viewInsets.bottom + AppDimens.space16,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Text(
+                  '关联任务',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: AppDimens.space8),
+                TextField(
+                  controller: queryCtl,
+                  autofocus: true,
+                  decoration: const InputDecoration(
+                    labelText: '搜索任务标题',
+                    hintText: '输入关键词后点搜索',
+                  ),
+                  onSubmitted: (_) async {
+                    setSheet(() => searching = true);
+                    try {
+                      final r = await ref
+                          .read(orbitBridgeProvider)
+                          .globalSearch(queryCtl.text.trim(), limit: 20);
+                      setSheet(() {
+                        hits = r.tasks
+                            .where((t) => t.id != widget.taskId)
+                            .toList();
+                        searching = false;
+                      });
+                    } catch (_) {
+                      setSheet(() => searching = false);
+                    }
+                  },
+                ),
+                const SizedBox(height: AppDimens.space8),
+                if (searching)
+                  const Center(child: CircularProgressIndicator())
+                else
+                  Flexible(
+                    child: ListView(
+                      shrinkWrap: true,
+                      children: [
+                        for (final t in hits.take(20))
+                          SizedBox(
+                            height: AppDimens.touchTarget,
+                            child: InkWell(
+                              onTap: () => Navigator.pop(sheetCtx, t.id),
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      t.title,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(fontSize: 15),
+                                    ),
+                                  ),
+                                  Text(
+                                    '#${t.id}',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: AppColors.ofContext(
+                                        context,
+                                      ).secondaryText,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        if (hits.isEmpty)
+                          const Padding(
+                            padding: EdgeInsets.symmetric(vertical: 12),
+                            child: Text(
+                              '输入关键词后回车搜索（排除本任务）',
+                              style: TextStyle(fontSize: 13),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    if (targetId == null) return;
+    try {
+      await ref.read(orbitBridgeProvider).todoTaskRelationCreate(
+            TodoTaskRelationCreateInput(
+              taskId: widget.taskId,
+              otherTaskId: targetId,
+              relationType: 'related',
+            ),
+          );
+      widget.onChanged();
+      if (mounted) WaitToast.success('已添加关联');
+    } catch (e) {
+      if (mounted) WaitToast.destructive('添加关联失败');
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return SectionCard(
       title: '关联',
-      child: Wrap(
-        spacing: AppDimens.space4,
-        runSpacing: AppDimens.space4,
-        children: [
-          for (final relation in relations)
-            Container(
-              padding: const EdgeInsets.symmetric(
-                horizontal: AppDimens.space8,
-                vertical: 2,
-              ),
-              decoration: BoxDecoration(
-                borderRadius: AppShapes.small,
-                color: OrbitAccents.todoAccent.withValues(alpha: 0.1),
-              ),
-              child: Text(
-                '任务 #${relation.otherTaskId}',
-                style: const TextStyle(
-                  fontSize: 12,
-                  color: OrbitAccents.todoAccent,
-                ),
-              ),
-            ),
-        ],
+      trailing: IconButton(
+        visualDensity: VisualDensity.compact,
+        tooltip: '添加关联',
+        icon: const Icon(
+          Icons.add_rounded,
+          size: AppDimens.iconSizeSm,
+          color: OrbitAccents.todoAccent,
+        ),
+        onPressed: _pickAndAdd,
       ),
+      child: widget.relations.isEmpty
+          ? Text(
+              '暂无关联任务，可点右上 + 搜索添加',
+              style: TextStyle(
+                fontSize: 13,
+                color: AppColors.ofContext(context).secondaryText,
+              ),
+            )
+          : Wrap(
+              spacing: AppDimens.space4,
+              runSpacing: AppDimens.space4,
+              children: [
+                for (final relation in widget.relations)
+                  InkWell(
+                    onTap: () => context.push('/todo/${relation.otherTaskId}'),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: AppDimens.space8,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        borderRadius: AppShapes.small,
+                        color: OrbitAccents.todoAccent.withValues(alpha: 0.1),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            '任务 #${relation.otherTaskId}',
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: OrbitAccents.todoAccent,
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          InkWell(
+                            onTap: () => _remove(relation),
+                            child: const Icon(
+                              Icons.close_rounded,
+                              size: 14,
+                              color: OrbitAccents.todoAccent,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+              ],
+            ),
     );
   }
 }
@@ -1578,7 +1777,9 @@ class _CommentsSectionState extends ConsumerState<_CommentsSection> {
   }
 }
 
-// ── 九、附件（file_picker 添加 + 内容寻址列表 + 删除确认）──
+// ── 九、附件（文件/拍照双来源 + 内容寻址列表 + 删除确认）──
+// 来源口径：文件（file_picker）/ 拍照（image_picker 相机）/ 分享导入
+// （系统分享文本经 ShareReceiver 建任务，BootGate 冷热双路消费）
 
 class _AttachmentsSection extends ConsumerStatefulWidget {
   const _AttachmentsSection({required this.taskId});
@@ -1610,16 +1811,9 @@ class _AttachmentsSectionState extends ConsumerState<_AttachmentsSection> {
     }
   }
 
-  Future<void> _add() async {
-    if (_busy) return;
-    final result = await FilePicker.platform.pickFiles(allowMultiple: false);
-    final path = result?.files.single.path;
-    if (path == null) return;
-    final name = result!.files.single.name;
-
+  Future<void> _uploadBytes(String name, List<int> bytes, String source) async {
     setState(() => _busy = true);
     try {
-      final bytes = await File(path).readAsBytes();
       await ref.read(orbitBridgeProvider).taskAttachmentAdd(
             widget.taskId,
             name,
@@ -1627,12 +1821,40 @@ class _AttachmentsSectionState extends ConsumerState<_AttachmentsSection> {
             bytes,
           );
       await _load();
+      if (mounted) WaitToast.success('已添加附件（$source）');
     } catch (e) {
       if (mounted) WaitToast.destructive('附件上传失败');
     } finally {
       if (mounted) setState(() => _busy = false);
     }
   }
+
+  Future<void> _addFile() async {
+    if (_busy) return;
+    final result = await FilePicker.platform.pickFiles(allowMultiple: false);
+    final path = result?.files.single.path;
+    if (path == null) return;
+    final name = result!.files.single.name;
+    final bytes = await File(path).readAsBytes();
+    await _uploadBytes(name, bytes, '文件');
+  }
+
+  /// 拍照添加附件（相机直拍；取消静默返回，无权限时提示）
+  Future<void> _addCamera() async {
+    if (_busy) return;
+    try {
+      final shot = await ImagePicker().pickImage(source: ImageSource.camera);
+      if (shot == null) return;
+      final bytes = await shot.readAsBytes();
+      final name =
+          'photo-${DateTime.now().millisecondsSinceEpoch}.jpg';
+      await _uploadBytes(name, bytes, '拍照');
+    } catch (_) {
+      if (mounted) WaitToast.destructive('相机不可用');
+    }
+  }
+
+
 
   String _mimeFromName(String name) {
     final ext = name.split('.').last.toLowerCase();
@@ -1743,13 +1965,23 @@ class _AttachmentsSectionState extends ConsumerState<_AttachmentsSection> {
               iconSize: 18,
               padding: EdgeInsets.zero,
               constraints: const BoxConstraints(),
-              onPressed: _add,
+              onPressed: () => showSelectBottomSheet<String>(
+                context,
+                title: '添加附件',
+                current: null,
+                items: const [
+                  SelectItem(value: 'file', label: '选择文件'),
+                  SelectItem(value: 'camera', label: '拍照'),
+                ],
+                onSelect: (v) =>
+                    v == 'camera' ? _addCamera() : _addFile(),
+              ),
             ),
       child: list == null
           ? const SizedBox(height: 16)
           : list.isEmpty
               ? Text(
-                  '点击 + 选择文件添加附件（单任务 20 个，单文件 50MB）',
+                  '点 + 添加附件：文件 / 拍照（单任务 20 个，单文件 50MB）\n系统分享的文本会自动建任务（分享导入）',
                   style: TextStyle(
                     fontSize: 13,
                     color: colors.secondaryText.withValues(alpha: 0.5),
