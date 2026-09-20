@@ -8,6 +8,7 @@ import '../../core/theme/app_dimens.dart';
 import '../../data/providers/bridge_provider.dart';
 import '../../data/providers/todo_widget_provider.dart';
 import '../../services/device_id.dart';
+import '../../services/local_prefs.dart';
 import '../../services/todo_widget_service.dart';
 import '../../services/badge_service.dart';
 import '../../services/notification_service.dart';
@@ -93,12 +94,12 @@ class _BootGateState extends ConsumerState<BootGate>
     }
   }
 
-  /// 生命周期强制同步（进入 / 退出应用）
+  /// 生命周期强制同步（进入 / 退出应用，对齐桌面 cloud_sync_force）
   ///
-  /// 与设置页「立即同步」共用同一桥方法（core 侧 `pull_then_push`：先拉后推）；
-  /// 差别只在**触发时机由生命周期决定**——不读取自动同步开关 / 间隔 /
-  /// 修改后立即同步等设置，「进入应用」「退到后台」本身就是触发条件。
-  /// 未配置或未解锁时 core 直接返回错误，此处静默跳过（不打扰用户）。
+  /// 与设置页「立即同步」不同：本路径走 `cloudSyncForce`（core 侧
+  /// `force_sync`：先拉后推，不检查自动同步开关 / 间隔 / 修改后立即同步）；
+  /// 「进入应用」「退到后台」本身就是触发条件。未配置或未解锁时 core
+  /// 直接返回错误，此处静默跳过（不打扰用户）。
   ///
   /// 超时 6 秒：移动端退到后台可能被系统冻结，超时即放弃并留痕，
   /// 绝不阻塞生命周期回调（阻塞会被系统判定应用无响应）。
@@ -107,8 +108,9 @@ class _BootGateState extends ConsumerState<BootGate>
     try {
       final config = await bridge.syncConfigGet();
       if (config == null) return; // 未配置云同步
+      final waitMs = origin == 'exit' ? 15000 : 3000;
       final result = await bridge
-          .cloudSyncNow(origin: origin)
+          .cloudSyncForce(origin: origin, waitForIdleMs: waitMs)
           .timeout(const Duration(seconds: 6));
       // 拉取合并写入不走 db-change 事件，需在此失效业务缓存（F42 精确失效）
       invalidateAfterSyncCaches(ref, result);
@@ -216,6 +218,11 @@ class _BootGateState extends ConsumerState<BootGate>
     // 自动备份守护（Rust 60s tick：按 backup_prefs 频率触发；未解锁同步
     // 密码时静默跳过只推进下次时间，不打扰用户）
     ref.read(orbitBridgeProvider).startBackupScheduler();
+    // 开机清理过期通知日志：db_maintenance 内含通知历史 + 活动日志 30 天
+    // TTL 修剪（core db_maintenance_api 口径），失败静默不阻断启动
+    unawaited(ref.read(orbitBridgeProvider).dbMaintenance().then((_) {}).catchError((e) {
+      debugPrint('[BootGate] boot maintenance skipped: $e');
+    }));
     // 小组件勾选通道挂载 + 首刷快照（#3：通知完成回调同款位置——ready 后
     // 引擎稳定，原生积压队列可冲刷）
     _widget.attach(onOpenTask: (taskId) async {
@@ -273,6 +280,9 @@ class _BootGateState extends ConsumerState<BootGate>
     // 推迟产物（系统闹钟已有更晚排程）→ 删除该行，DB 与闹钟面收敛。
     // 完成实例清理（对齐桌面端 P1#10）：任务已完成则不再打扰，删除行。
     _reminderDueSub = bridge.reminderDue.listen((e) async {
+      // 提醒总开关（通知历史页 LocalPrefs `reminder_enabled`，默认开）：
+      // 关后到期事件仅由 Rust 写历史，不再弹窗打扰
+      if (!LocalPrefs.getBool('reminder_enabled', fallback: true)) return;
       try {
         final task = await bridge.todoTaskGet(e.taskId);
         if (task.done == 1 || task.isDeleted == 1) {
