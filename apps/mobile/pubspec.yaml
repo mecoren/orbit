@@ -25,6 +25,12 @@ dependencies:
   # 文件选择（CSV 导入迁移路径：选 Todoist/TickTick 导出的 CSV 文件）
   file_picker: ^10.3.2
 
+  # 附件拍照来源（详情页附件区相机入口；相册仍走 file_picker）
+  image_picker: ^1.0.7
+
+  # 关于页真实构建版本号（读取原生包版本，不硬编码）
+  package_info_plus: ^8.1.0
+
   # 本地通知三件套（Phase 7 平台集成：提醒到期系统通知，无权限静默降级 toast）
   flutter_local_notifications: ^22.3.0
   timezone: ^0.11.1
