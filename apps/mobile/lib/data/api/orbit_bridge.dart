@@ -259,6 +259,18 @@ abstract class OrbitBridge {
   /// 详情聚合：任务 + 子任务 + 标签 + 评论 + 关联 + 提醒
   Future<TodoTaskDetail> todoTaskGetDetail(int id);
 
+  /// 重算任务进度（子任务变更后手动触发，对齐桌面 todo_tasks_recalc_percent）
+  Future<void> todoTaskRecalcPercent(int taskId);
+
+  /// 按 uuid 获取项目（同步引擎定位远端记录，对齐桌面 todo_projects_get_by_uuid）
+  Future<TodoProject?> todoProjectGetByUuid(String uuid);
+
+  /// 按 uuid 获取任务（对齐桌面 todo_tasks_get_by_uuid）
+  Future<TodoTask?> todoTaskGetByUuid(String uuid);
+
+  /// 业务表记录数（首页仪表盘计数角标，只读聚合，对齐桌面 business_count）
+  Future<int> businessCount(String table);
+
   // ── todo_subtasks ──
 
   Future<List<TodoSubtask>> todoSubtaskList(ListFilter filter);
@@ -273,6 +285,7 @@ abstract class OrbitBridge {
   // ── todo_labels / todo_task_labels ──
 
   Future<List<TodoLabel>> todoLabelList(ListFilter filter);
+  Future<TodoLabel> todoLabelGet(int id);
   Future<TodoLabel> todoLabelCreate(TodoLabelCreateInput input);
 
   /// 更新标签（patchJson：{"title":…,"hex_color":…}；标签管理页改名/改色）
@@ -280,6 +293,7 @@ abstract class OrbitBridge {
 
   Future<void> todoLabelDelete(int id);
   Future<TaskLabelWithId> todoTaskLabelCreate(TodoTaskLabelCreateInput input);
+  Future<TaskLabelWithId> todoTaskLabelGet(int id);
   Future<void> todoTaskLabelDelete(int taskLabelId);
 
   // ── todo_comments ──
@@ -328,6 +342,20 @@ abstract class OrbitBridge {
   Future<SyncResultJson> cloudSyncPullThenPush({String origin = 'manual'});
 
   Future<bool> cloudSyncIsRunning();
+
+  /// 强制同步（进入/退出应用专用，对齐桌面 cloud_sync_force；
+  /// 不检查自动开关/间隔，忙时最多等待 [waitForIdleMs] 毫秒）
+  Future<SyncResultJson> cloudSyncForce(
+      {String origin = 'manual', int waitForIdleMs = 3000});
+
+  /// 桥接探活（对齐桌面 ping；验证 Dart → Rust → orbit_core 通路）
+  Future<String> ping();
+
+  /// SHA-256 哈希 hex（对齐桌面 crypto_sha256）
+  Future<String> cryptoSha256(String input);
+
+  /// 密码学安全随机 hex（对齐桌面 crypto_random_hex；[len] 为字节数）
+  Future<String> cryptoRandomHex(int len);
 
   /// 增量同步历史（scope：all | incremental | push_only | pull_only；
   /// 只读聚合，设置页「同步历史」卡数据源）

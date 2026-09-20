@@ -222,6 +222,26 @@ class RustOrbitBridge implements OrbitBridge {
       gen_todo.todoTasksUpdatePosition(id: id, position: position.toDouble());
 
   @override
+  Future<void> todoTaskRecalcPercent(int taskId) =>
+      gen_todo.todoTasksRecalcPercent(taskId: taskId);
+
+  @override
+  Future<TodoProject?> todoProjectGetByUuid(String uuid) async {
+    final p = await gen_todo.todoProjectsGetByUuid(uuid: uuid);
+    return p == null ? null : _mapProject(p);
+  }
+
+  @override
+  Future<TodoTask?> todoTaskGetByUuid(String uuid) async {
+    final t = await gen_todo.todoTasksGetByUuid(uuid: uuid);
+    return t == null ? null : _mapTask(t);
+  }
+
+  @override
+  Future<int> businessCount(String table) async =>
+      (await gen_todo.businessCount(table: table)).toInt();
+
+  @override
   Future<TodoTaskDetail> todoTaskGetDetail(int id) async {
     final d = await gen_todo.todoTasksGetDetail(id: id);
     return TodoTaskDetail(
@@ -315,6 +335,10 @@ class RustOrbitBridge implements OrbitBridge {
           .toList();
 
   @override
+  Future<TodoLabel> todoLabelGet(int id) async =>
+      _mapLabel(await gen_todo.todoLabelsGet(id: id));
+
+  @override
   Future<TodoLabel> todoLabelCreate(TodoLabelCreateInput input) async =>
       _mapLabel(await gen_todo.todoLabelsCreate(
         input: gen.TodoLabelCreateInput(title: input.title, hexColor: input.hexColor),
@@ -351,6 +375,27 @@ class RustOrbitBridge implements OrbitBridge {
       deletedAt: l.deletedAt,
       version: l.version,
       taskLabelId: link.id,
+    );
+  }
+
+  @override
+  Future<TaskLabelWithId> todoTaskLabelGet(int id) async {
+    final link = await gen_todo.todoTaskLabelsGet(id: id);
+    final labels = await gen_todo.todoLabelsList(
+      filter: _genFilter(const ListFilter()),
+    );
+    final l = labels.firstWhere((x) => x.id == link.labelId);
+    return TaskLabelWithId(
+      id: l.id,
+      uuid: l.uuid,
+      title: l.title,
+      hexColor: l.hexColor,
+      isDeleted: l.isDeleted,
+      createdAt: l.createdAt,
+      updatedAt: l.updatedAt,
+      deletedAt: l.deletedAt,
+      version: l.version,
+      taskLabelId: link.id.toInt(),
     );
   }
 
@@ -536,6 +581,26 @@ class RustOrbitBridge implements OrbitBridge {
 
   @override
   Future<bool> cloudSyncIsRunning() => gen_sync.cloudSyncIsRunning();
+
+  @override
+  Future<SyncResultJson> cloudSyncForce(
+      {String origin = 'manual', int waitForIdleMs = 3000}) async =>
+      SyncResultJson.fromJson(
+        jsonDecode(await gen_sync.cloudSyncForce(
+          origin: origin,
+          waitForIdleMs: BigInt.from(waitForIdleMs),
+        )) as Map<String, dynamic>,
+      );
+
+  @override
+  Future<String> ping() => gen_auth.ping();
+
+  @override
+  Future<String> cryptoSha256(String input) =>
+      gen_auth.cryptoSha256(input: input);
+
+  @override
+  Future<String> cryptoRandomHex(int len) => gen_auth.cryptoRandomHex(len: len);
 
   @override
   Future<List<SyncHistoryRow>> cloudSyncHistory({

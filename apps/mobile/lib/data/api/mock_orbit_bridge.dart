@@ -452,6 +452,43 @@ class MockOrbitBridge implements OrbitBridge {
       });
 
   @override
+  Future<void> todoTaskRecalcPercent(int taskId) => _delay(() {
+        store.recalcPercent(taskId);
+      });
+
+  @override
+  Future<TodoProject?> todoProjectGetByUuid(String uuid) => _delay(() {
+        for (final p in store.projects.values) {
+          if (p['uuid'] == uuid) return TodoProject.fromJson(p);
+        }
+        return null;
+      });
+
+  @override
+  Future<TodoTask?> todoTaskGetByUuid(String uuid) => _delay(() {
+        for (final t in store.tasks.values) {
+          if (t['uuid'] == uuid) return TodoTask.fromJson(t);
+        }
+        return null;
+      });
+
+  @override
+  Future<int> businessCount(String table) => _delay(() {
+        switch (table) {
+          case 'todo_projects':
+            return store.projects.values.where((e) => e['is_deleted'] == 0).length;
+          case 'todo_tasks':
+            return store.tasks.values.where((e) => e['is_deleted'] == 0).length;
+          case 'todo_subtasks':
+            return store.subtasks.values.where((e) => e['is_deleted'] == 0).length;
+          case 'todo_labels':
+            return store.labels.length;
+          default:
+            return 0;
+        }
+      });
+
+  @override
   Future<TodoTaskDetail> todoTaskGetDetail(int id) => _delay(() {
         final m = store.tasks[id] ?? _notFound('task $id');
         final base = TodoTask.fromJson(m);
@@ -641,6 +678,10 @@ class MockOrbitBridge implements OrbitBridge {
       () => store.labels.values.map(TodoLabel.fromJson).toList());
 
   @override
+  Future<TodoLabel> todoLabelGet(int id) =>
+      _delay(() => TodoLabel.fromJson(store.labels[id] ?? _notFound('label $id')));
+
+  @override
   Future<TodoLabel> todoLabelCreate(TodoLabelCreateInput input) => _delay(() {
         final l = {
           ...store.newEntity('l'),
@@ -682,6 +723,16 @@ class MockOrbitBridge implements OrbitBridge {
         (store.taskLabels[input.taskId] ??= {})[input.labelId] = linkId;
         _emit('todo_task_labels');
         return _labelWithLink(input.labelId, linkId);
+      });
+
+  @override
+  Future<TaskLabelWithId> todoTaskLabelGet(int id) => _delay(() {
+        for (final entry in store.taskLabels.entries) {
+          for (final link in entry.value.entries) {
+            if (link.value == id) return _labelWithLink(link.key, id);
+          }
+        }
+        _notFound('task_label $id');
       });
 
   @override
@@ -1312,6 +1363,39 @@ class MockOrbitBridge implements OrbitBridge {
 
   @override
   Future<bool> cloudSyncIsRunning() async => false;
+
+  @override
+  Future<SyncResultJson> cloudSyncForce(
+          {String origin = 'manual', int waitForIdleMs = 3000}) =>
+      _delay(() => const SyncResultJson(
+            pushedModules: 1,
+            pulledModules: 2,
+            uploadedAttachments: 0,
+            downloadedAttachments: 0,
+            durationMs: 910,
+            skipped: false,
+            errors: [],
+          ));
+
+  @override
+  Future<String> ping() async => 'pong from orbit_core bridge';
+
+  @override
+  Future<String> cryptoSha256(String input) async {
+    var h1 = 0x811c9dc5;
+    var h2 = 0x01000193;
+    for (final c in input.codeUnits) {
+      h1 = (h1 ^ c) * 16777619 & 0xffffffff;
+      h2 = (h2 + c) * 31 & 0xffffffff;
+    }
+    final hex = (h1.toRadixString(16).padLeft(8, '0') +
+            h2.toRadixString(16).padLeft(8, '0'));
+    return (hex * 4).substring(0, 64);
+  }
+
+  @override
+  Future<String> cryptoRandomHex(int len) async =>
+      List.filled(len * 2, 'a').join();
 
   @override
   Future<List<SyncHistoryRow>> cloudSyncHistory({
