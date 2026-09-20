@@ -516,6 +516,42 @@ pub async fn cloud_sync_pull_then_push(origin: String) -> Result<String, String>
     run_sync(parse_origin(&origin), SyncAction::PullThenPush).await
 }
 
+/// 强制同步（进入 / 退出应用专用，对齐桌面 `cloud_sync_force`）
+///
+/// 与 `cloud_sync_now` 的差别只在前提判定：不检查自动同步开关/间隔，
+/// 是否该同步由调用方（生命周期钩子）判定。引擎忙时最多等待
+/// `wait_for_idle_ms` 毫秒再执行；返回 SyncResult 的 JSON 字符串。
+pub async fn cloud_sync_force(origin: String, wait_for_idle_ms: u64) -> Result<String, String> {
+    let record = active_config()
+        .await?
+        .ok_or_else(|| "[config] 尚未配置同步，请先在设置中填写连接信息".to_string())?;
+    let config = engine_config_of_record(&record)
+        .ok_or_else(|| "[config] 当前为本地同步配置，不参与云同步".to_string())?;
+
+    let crypto = runtime_crypto()?;
+    if !crypto.is_unlocked() {
+        return Err("[not_unlocked] 同步加密未解锁，请先输入同步密码".to_string());
+    }
+
+    let engine = runtime_engine()?;
+    let base_dir = with_state(|s| Ok(s.base_dir.clone()))?;
+    let attachments = attachments_dir(&base_dir);
+    let device_id = context::get_device_id().unwrap_or_default().to_string();
+
+    let result = cloud_sync_api::force_sync(
+        &engine,
+        &config,
+        parse_origin(&origin),
+        &device_id,
+        &attachments,
+        wait_for_idle_ms,
+    )
+    .await
+    .map_err(err_tagged_cloud)?;
+
+    cloud_sync_api::result_to_json(&result).map_err(err_tagged_cloud)
+}
+
 /// 本地同步状态账本（sync_state.json；指纹元数据，不含业务数据）
 ///
 /// 对齐桌面 `cloud_sync_get_state`；返回 SyncState 的 JSON 字符串。

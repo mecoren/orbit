@@ -24,6 +24,24 @@ fn dir_of(base_dir: String) -> Result<PathBuf, String> {
     Ok(PathBuf::from(base_dir))
 }
 
+// ── 通用加密工具（对应桌面 crypto_cmd.rs 无状态三件套）──
+
+/// 桥接探活（对应桌面 ping；验证 Dart → Rust → orbit_core 通路）
+pub async fn ping() -> Result<String, String> {
+    Ok("pong from orbit_core bridge".to_string())
+}
+
+/// SHA-256 哈希（对应桌面 crypto_sha256；前端透传 hex 字符串）
+pub async fn crypto_sha256(input: String) -> Result<String, String> {
+    Ok(orbit_core::crypto::sha256_hex(input.as_bytes()))
+}
+
+/// 生成密码学安全随机字节并以 hex 返回（对应桌面 crypto_random_hex）
+pub async fn crypto_random_hex(len: u32) -> Result<String, String> {
+    let bytes = orbit_core::crypto::random_bytes(len as usize);
+    Ok(bytes.iter().map(|b| format!("{:02x}", b)).collect())
+}
+
 // ── DB 生命周期 ──
 
 /// 初始化明文数据库（未设置主密码时使用）

@@ -50,6 +50,19 @@ Future<String> cloudSyncPushOnly({required String origin}) =>
 Future<String> cloudSyncPullThenPush({required String origin}) =>
     RustLib.instance.api.crateApiSyncCloudSyncPullThenPush(origin: origin);
 
+/// 强制同步（进入 / 退出应用专用，对齐桌面 `cloud_sync_force`）
+///
+/// 与 `cloud_sync_now` 的差别只在前提判定：不检查自动同步开关/间隔，
+/// 是否该同步由调用方（生命周期钩子）判定。引擎忙时最多等待
+/// `wait_for_idle_ms` 毫秒再执行；返回 SyncResult 的 JSON 字符串。
+Future<String> cloudSyncForce({
+  required String origin,
+  required BigInt waitForIdleMs,
+}) => RustLib.instance.api.crateApiSyncCloudSyncForce(
+  origin: origin,
+  waitForIdleMs: waitForIdleMs,
+);
+
 /// 本地同步状态账本（sync_state.json；指纹元数据，不含业务数据）
 ///
 /// 对齐桌面 `cloud_sync_get_state`；返回 SyncState 的 JSON 字符串。

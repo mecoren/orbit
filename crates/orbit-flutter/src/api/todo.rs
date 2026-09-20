@@ -26,8 +26,9 @@
 //!   serde_json::from_str 可无损还原；若直接作为 FRB 参数，
 //!   Dart 无法区分 null 与缺省，三态退化为两态。UpdateInput 因此不做 DTO 镜像；
 //! - TodoTaskDetail / TaskLabelWithId 在 core 中 #[serde(flatten)] 内嵌任务/标签，
-//!   DTO 按扁平形状镜像（与桌面 Tauri JSON 契约一致），见 [super::dto]；
-//! - get_by_uuid 不导出（移动端桥不消费）。
+//!   DTO 按扁平形状镜像（与桌面 Tauri JSON 契约一致），见 [super::dto];
+//! - get_by_uuid 已导出（todo_projects/tasks_get_by_uuid，与桌面 business_cmd 宏口径一致）；
+//! - business_count / recalc_percent 只读聚合已对齐桌面。
 
 use orbit_core::api::{business_api, todo_api};
 // patch_json 仅在本模块内部反序列化为 core UpdateInput（不过 FRB 桥）
@@ -203,6 +204,40 @@ pub async fn todo_tasks_duplicate(id: i64) -> Result<super::dto::TodoTask, Strin
         .map(super::dto::TodoTask::from)
 }
 
+/// 重算任务进度（子任务变更后手动触发，对应桌面 todo_cmd::todo_tasks_recalc_percent）
+pub async fn todo_tasks_recalc_percent(task_id: i64) -> Result<(), String> {
+    let pool = pool()?;
+    todo_api::recalc_task_percent_done(&pool, task_id)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// 按 uuid 获取项目（对应桌面 todo_projects_get_by_uuid；同步引擎定位远端记录用）
+pub async fn todo_projects_get_by_uuid(uuid: String) -> Result<Option<TodoProject>, String> {
+    let pool = pool()?;
+    business_api::get_todo_project_by_uuid(&pool, &uuid)
+        .await
+        .map_err(|e| e.to_string())
+        .map(|opt| opt.map(TodoProject::from))
+}
+
+/// 按 uuid 获取任务（对应桌面 todo_tasks_get_by_uuid）
+pub async fn todo_tasks_get_by_uuid(uuid: String) -> Result<Option<TodoTask>, String> {
+    let pool = pool()?;
+    business_api::get_todo_task_by_uuid(&pool, &uuid)
+        .await
+        .map_err(|e| e.to_string())
+        .map(|opt| opt.map(TodoTask::from))
+}
+
+/// 业务表记录数（对应桌面 business_count；首页仪表盘计数角标，只读聚合）
+pub async fn business_count(table: String) -> Result<i64, String> {
+    let pool = pool()?;
+    business_api::business_count(&pool, &table)
+        .await
+        .map_err(|e| e.to_string())
+}
+
 /// 任务详情聚合（含子任务/标签/评论/关系/提醒，对应桌面 todo_cmd::todo_tasks_get_detail）
 pub async fn todo_tasks_get_detail(id: i64) -> Result<TodoTaskDetail, String> {
     let pool = pool()?;
@@ -294,6 +329,15 @@ pub async fn todo_labels_list(filter: ListFilter) -> Result<Vec<TodoLabel>, Stri
     Ok(items.into_iter().map(TodoLabel::from).collect())
 }
 
+/// 获取单个标签（对应桌面 todo_labels_get）
+pub async fn todo_labels_get(id: i64) -> Result<TodoLabel, String> {
+    let pool = pool()?;
+    business_api::get_todo_label(&pool, id)
+        .await
+        .map_err(|e| e.to_string())
+        .map(TodoLabel::from)
+}
+
 /// 创建标签（对应桌面 todo_labels_create）
 pub async fn todo_labels_create(input: TodoLabelCreateInput) -> Result<TodoLabel, String> {
     let pool = pool()?;
@@ -333,6 +377,15 @@ pub async fn todo_task_labels_list(filter: ListFilter) -> Result<Vec<TodoTaskLab
         .await
         .map_err(|e| e.to_string())?;
     Ok(items.into_iter().map(TodoTaskLabel::from).collect())
+}
+
+/// 获取单个任务↔标签关联（对应桌面 todo_task_labels_get）
+pub async fn todo_task_labels_get(id: i64) -> Result<TodoTaskLabel, String> {
+    let pool = pool()?;
+    business_api::get_todo_task_label(&pool, id)
+        .await
+        .map_err(|e| e.to_string())
+        .map(TodoTaskLabel::from)
 }
 
 /// 关联标签到任务（对应桌面 todo_task_labels_create）

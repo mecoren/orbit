@@ -8,6 +8,17 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
 // These functions are ignored because they are not marked as `pub`: `dir_of`
 
+/// 桥接探活（对应桌面 ping；验证 Dart → Rust → orbit_core 通路）
+Future<String> ping() => RustLib.instance.api.crateApiAuthPing();
+
+/// SHA-256 哈希（对应桌面 crypto_sha256；前端透传 hex 字符串）
+Future<String> cryptoSha256({required String input}) =>
+    RustLib.instance.api.crateApiAuthCryptoSha256(input: input);
+
+/// 生成密码学安全随机字节并以 hex 返回（对应桌面 crypto_random_hex）
+Future<String> cryptoRandomHex({required int len}) =>
+    RustLib.instance.api.crateApiAuthCryptoRandomHex(len: len);
+
 /// 初始化明文数据库（未设置主密码时使用）
 ///
 /// 成功后全局状态就绪（事件转发由 Dart 先行调用 subscribe_db_changes 建立）。

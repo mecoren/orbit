@@ -97,6 +97,22 @@ Future<CompleteTaskResult> todoTasksComplete({required PlatformInt64 id}) =>
 Future<TodoTask> todoTasksDuplicate({required PlatformInt64 id}) =>
     RustLib.instance.api.crateApiTodoTodoTasksDuplicate(id: id);
 
+/// 重算任务进度（子任务变更后手动触发，对应桌面 todo_cmd::todo_tasks_recalc_percent）
+Future<void> todoTasksRecalcPercent({required PlatformInt64 taskId}) =>
+    RustLib.instance.api.crateApiTodoTodoTasksRecalcPercent(taskId: taskId);
+
+/// 按 uuid 获取项目（对应桌面 todo_projects_get_by_uuid；同步引擎定位远端记录用）
+Future<TodoProject?> todoProjectsGetByUuid({required String uuid}) =>
+    RustLib.instance.api.crateApiTodoTodoProjectsGetByUuid(uuid: uuid);
+
+/// 按 uuid 获取任务（对应桌面 todo_tasks_get_by_uuid）
+Future<TodoTask?> todoTasksGetByUuid({required String uuid}) =>
+    RustLib.instance.api.crateApiTodoTodoTasksGetByUuid(uuid: uuid);
+
+/// 业务表记录数（对应桌面 business_count；首页仪表盘计数角标，只读聚合）
+Future<PlatformInt64> businessCount({required String table}) =>
+    RustLib.instance.api.crateApiTodoBusinessCount(table: table);
+
 /// 任务详情聚合（含子任务/标签/评论/关系/提醒，对应桌面 todo_cmd::todo_tasks_get_detail）
 Future<TodoTaskDetail> todoTasksGetDetail({required PlatformInt64 id}) =>
     RustLib.instance.api.crateApiTodoTodoTasksGetDetail(id: id);
@@ -146,6 +162,10 @@ Future<TodoTask> todoSubtasksPromote({required PlatformInt64 subtaskId}) =>
 Future<List<TodoLabel>> todoLabelsList({required ListFilter filter}) =>
     RustLib.instance.api.crateApiTodoTodoLabelsList(filter: filter);
 
+/// 获取单个标签（对应桌面 todo_labels_get）
+Future<TodoLabel> todoLabelsGet({required PlatformInt64 id}) =>
+    RustLib.instance.api.crateApiTodoTodoLabelsGet(id: id);
+
 /// 创建标签（对应桌面 todo_labels_create）
 Future<TodoLabel> todoLabelsCreate({required TodoLabelCreateInput input}) =>
     RustLib.instance.api.crateApiTodoTodoLabelsCreate(input: input);
@@ -166,6 +186,10 @@ Future<void> todoLabelsDelete({required PlatformInt64 id}) =>
 /// 列出任务↔标签关联（对应桌面 todo_task_labels_list）
 Future<List<TodoTaskLabel>> todoTaskLabelsList({required ListFilter filter}) =>
     RustLib.instance.api.crateApiTodoTodoTaskLabelsList(filter: filter);
+
+/// 获取单个任务↔标签关联（对应桌面 todo_task_labels_get）
+Future<TodoTaskLabel> todoTaskLabelsGet({required PlatformInt64 id}) =>
+    RustLib.instance.api.crateApiTodoTodoTaskLabelsGet(id: id);
 
 /// 关联标签到任务（对应桌面 todo_task_labels_create）
 Future<TodoTaskLabel> todoTaskLabelsCreate({

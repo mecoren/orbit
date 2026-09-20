@@ -130,6 +130,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  TodoProject dco_decode_box_autoadd_todo_project(dynamic raw);
+
+  @protected
   TodoProjectCreateInput dco_decode_box_autoadd_todo_project_create_input(
     dynamic raw,
   );
@@ -376,6 +379,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   SyncConfigView? dco_decode_opt_box_autoadd_sync_config_view(dynamic raw);
+
+  @protected
+  TodoProject? dco_decode_opt_box_autoadd_todo_project(dynamic raw);
 
   @protected
   TodoTask? dco_decode_opt_box_autoadd_todo_task(dynamic raw);
@@ -657,6 +663,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   TodoLabelCreateInput sse_decode_box_autoadd_todo_label_create_input(
     SseDeserializer deserializer,
   );
+
+  @protected
+  TodoProject sse_decode_box_autoadd_todo_project(SseDeserializer deserializer);
 
   @protected
   TodoProjectCreateInput sse_decode_box_autoadd_todo_project_create_input(
@@ -975,6 +984,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   SyncConfigView? sse_decode_opt_box_autoadd_sync_config_view(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  TodoProject? sse_decode_opt_box_autoadd_todo_project(
     SseDeserializer deserializer,
   );
 
@@ -1326,6 +1340,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_box_autoadd_todo_label_create_input(
     TodoLabelCreateInput self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_box_autoadd_todo_project(
+    TodoProject self,
     SseSerializer serializer,
   );
 
@@ -1725,6 +1745,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_opt_box_autoadd_sync_config_view(
     SyncConfigView? self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_opt_box_autoadd_todo_project(
+    TodoProject? self,
     SseSerializer serializer,
   );
 
