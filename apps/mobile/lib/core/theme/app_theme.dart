@@ -12,12 +12,18 @@ import 'typography.dart';
 /// 自 wait-home/mobile 移植并裁剪：
 /// - 强调色固定为 OrbitAccents.themeAccent（#4E8CFF，docs/05 §2.2），
 ///   暗色由 ColorScheme.fromSeed 自动调整；
-/// - 亮暗跟随系统（MediaQuery.platformBrightness），不做应用内切换——
-///   与 React 版行为一致；
-/// - 字体使用 Android 系统默认（Roboto），不引入 google_fonts。
+/// - 亮暗由外观页三态控制（theme_mode：system/light/dark，默认跟随系统；
+///   见 services/appearance.dart），此处仅按传入 brightness 生成对应档；
+/// - 字号经 fontScale 等比缩放全文阶，字重经 baseWeight 统一正文/标题基重
+///   （Typography.withWeight 口径）；
+/// - 字体使用 Android 系统默认（Roboto），不引入 google_fonts.
 ///
 /// 参考 shrimpsend 的 buildAppTheme 模式。
-ThemeData buildAppTheme({required Brightness brightness}) {
+ThemeData buildAppTheme({
+  required Brightness brightness,
+  double fontScale = 1.0,
+  FontWeight baseWeight = FontWeight.w400,
+}) {
   final isDark = brightness == Brightness.dark;
   final accent = OrbitAccents.themeAccent;
   final colorScheme =
@@ -33,7 +39,41 @@ ThemeData buildAppTheme({required Brightness brightness}) {
     onSurfaceVariant: effectiveOnSurfaceVariant,
   );
 
-  const textTheme = Typography.textTheme;
+  // 外观页字号/字重：先等比缩放字阶，再统一基重（标题/标签行保留 w500/w600
+  // 层级，见 Typography.withWeight）
+  final scaled = Typography.textTheme.copyWith(
+    displayLarge: Typography.textTheme.displayLarge
+        ?.copyWith(fontSize: 32 * fontScale),
+    displayMedium: Typography.textTheme.displayMedium
+        ?.copyWith(fontSize: 28 * fontScale),
+    displaySmall: Typography.textTheme.displaySmall
+        ?.copyWith(fontSize: 24 * fontScale),
+    headlineLarge: Typography.textTheme.headlineLarge
+        ?.copyWith(fontSize: 22 * fontScale),
+    headlineMedium: Typography.textTheme.headlineMedium
+        ?.copyWith(fontSize: 20 * fontScale),
+    headlineSmall: Typography.textTheme.headlineSmall
+        ?.copyWith(fontSize: 18 * fontScale),
+    titleLarge: Typography.textTheme.titleLarge
+        ?.copyWith(fontSize: 16 * fontScale),
+    titleMedium: Typography.textTheme.titleMedium
+        ?.copyWith(fontSize: 14 * fontScale),
+    titleSmall: Typography.textTheme.titleSmall
+        ?.copyWith(fontSize: 12 * fontScale),
+    bodyLarge: Typography.textTheme.bodyLarge
+        ?.copyWith(fontSize: 16 * fontScale),
+    bodyMedium: Typography.textTheme.bodyMedium
+        ?.copyWith(fontSize: 14 * fontScale),
+    bodySmall: Typography.textTheme.bodySmall
+        ?.copyWith(fontSize: 12 * fontScale),
+    labelLarge: Typography.textTheme.labelLarge
+        ?.copyWith(fontSize: 14 * fontScale),
+    labelMedium: Typography.textTheme.labelMedium
+        ?.copyWith(fontSize: 12 * fontScale),
+    labelSmall: Typography.textTheme.labelSmall
+        ?.copyWith(fontSize: 10 * fontScale),
+  );
+  final textTheme = Typography.withWeight(scaled, baseWeight);
 
   // 页面背景 = surfaceContainerHighest（亮色 #F3F3F3，暗色 #000000）
   // 卡片/AppBar/弹层 = surface（亮色 #F9F9F9，暗色 #181818）
