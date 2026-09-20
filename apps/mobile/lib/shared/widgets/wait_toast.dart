@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_dimens.dart';
+import '../../core/theme/app_elevation.dart';
 import '../../core/theme/app_motion.dart';
 import '../../core/theme/app_shapes.dart';
 import '../../core/routing/router_keys.dart';
@@ -186,16 +187,8 @@ class _ToastViewState extends State<_ToastView>
                 decoration: BoxDecoration(
                   color: colors.popup,
                   borderRadius: AppShapes.medium,
-                  border: Border.all(
-                    color: colors.divider.withValues(alpha: 0.3),
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.12),
-                      blurRadius: AppDimens.blurStatic / 3,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
+                  border: Border.all(color: colors.outline),
+                  boxShadow: AppElevation.e2(brightness),
                 ),
                 // IntrinsicHeight：给 Row(crossAxisAlignment.stretch) 提供
                 // 有界高度——Container 在 Overlay 的 Positioned 下无固有高度，

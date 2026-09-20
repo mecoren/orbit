@@ -8,6 +8,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_dimens.dart';
+import '../../core/theme/app_elevation.dart';
 import '../../core/theme/app_motion.dart';
 import '../../core/theme/app_shapes.dart';
 import '../../core/theme/orbit_accents.dart';
@@ -156,7 +157,7 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
             if (_viewMode == TaskViewMode.kanban) ...[
               Divider(
                 height: AppDimens.space12,
-                color: colors.divider.withValues(alpha: 0.3),
+                color: colors.divider,
               ),
               _sheetSectionTitle(sheetContext, '看板分组'),
               for (final g in KanbanGroupBy.values)
@@ -1346,12 +1347,13 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
           decoration: BoxDecoration(
             color: colors.popup,
             borderRadius: AppShapes.medium,
-            border: Border.all(color: colors.divider.withValues(alpha: 0.3)),
+            border: Border.all(color: colors.outline),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withValues(alpha: 0.16),
-                blurRadius: AppDimens.blurStatic / 3,
-                offset: const Offset(0, 4),
+                color: const Color(0xFF101828).withValues(alpha: 0.16),
+                blurRadius: 24,
+                offset: const Offset(0, 8),
+                spreadRadius: -4,
               ),
             ],
           ),
@@ -1481,6 +1483,7 @@ class TodoTaskTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final colors = AppColors.ofContext(context);
     final priorityHex = priorityColorHex(task.priority);
     final overdue = isOverdue(task);
@@ -1528,8 +1531,16 @@ class TodoTaskTile extends StatelessWidget {
         padding: const EdgeInsets.symmetric(
             horizontal: AppDimens.space12, vertical: 4),
         child: Material(
-        color: colors.surface.withValues(alpha: 0.5),
-        borderRadius: AppShapes.medium,
+        color: colors.surface,
+        shape: RoundedRectangleBorder(
+          borderRadius: AppShapes.medium,
+          side: isDark
+              ? BorderSide(color: colors.outline)
+              : BorderSide.none,
+        ),
+        clipBehavior: Clip.antiAlias,
+        elevation: isDark ? 0 : 1,
+        shadowColor: AppElevation.shadowColor,
         child: InkWell(
           borderRadius: AppShapes.medium,
           onTap: onOpen,
@@ -1802,7 +1813,7 @@ class _SelectionRow extends StatelessWidget {
               ? OrbitAccents.todoAccent.withValues(alpha: 0.10)
               : Colors.transparent,
           border: Border(
-            bottom: BorderSide(color: colors.divider.withValues(alpha: 0.25)),
+            bottom: BorderSide(color: colors.divider),
           ),
         ),
         child: Row(

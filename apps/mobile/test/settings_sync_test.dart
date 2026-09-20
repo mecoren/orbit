@@ -86,6 +86,11 @@ void main() {
     expect(find.text('导入密钥包恢复（换机 / 密钥不匹配）'), findsOneWidget);
     expect(find.text('同步密码（端到端加密）'), findsOneWidget);
     expect(find.text('已锁定'), findsOneWidget);
+
+    // WaitToast 的停留计时器是进程级 static（不随 widget 树 dispose 取消），
+    // 用例收尾前推足停留时长 + 跑完退场动画，避免框架判定「仍有 Timer 挂起」
+    await tester.pump(const Duration(seconds: 3));
+    await tester.pumpAndSettle();
   });
 
   // P1-20：立即同步 key_mismatch 错误不再被吞——toast 引导去恢复入口

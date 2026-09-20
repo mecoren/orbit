@@ -2,14 +2,18 @@ import 'package:flutter/material.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_dimens.dart';
+import '../../core/theme/app_elevation.dart';
 import '../../core/theme/app_shapes.dart';
 import '../../core/theme/orbit_accents.dart';
 
-/// 详情屏区块容器（docs/05 §4.3 _SectionCard）
+/// 详情屏区块容器（设计系统 v2：白卡 + 柔和阴影）
 ///
-/// radius 12、边框 divider@30%、内边距 16、无阴影；头部行 =
-/// 标题 12/w600 accent（todoAccent）+ 可选副标题 bodySmall/sub + Spacer + trailing。
-/// 区块间距 12 由父级承担，本组件不管。
+/// v2 变化：旧版 `surface@60%` + `divider@30%` 边框 + 无阴影，在灰底上几乎
+/// 与背景同色；v2 改为**纯白卡面 + 极浅描边 + e1 柔和阴影**，区块从页面底
+/// 明确"浮起"。圆角走 [AppShapes.sectionCard]，内边距走 [AppDimens.cardPadding]。
+///
+/// 头部行 = 标题（labelMedium/w600，todoAccent）+ 可选副标题 + Spacer + trailing。
+/// 区块间距由父级承担，本组件不管。
 class SectionCard extends StatelessWidget {
   const SectionCard({
     super.key,
@@ -32,14 +36,16 @@ class SectionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     final colors = AppColors.ofContext(context);
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(AppDimens.space16),
+      padding: const EdgeInsets.all(AppDimens.cardPadding),
       decoration: BoxDecoration(
-        color: colors.surface.withValues(alpha: 0.6),
+        color: colors.surface,
         borderRadius: AppShapes.sectionCard,
-        border: Border.all(color: colors.divider.withValues(alpha: 0.3)),
+        border: Border.all(color: colors.outline),
+        boxShadow: AppElevation.e1(theme.brightness),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -51,19 +57,18 @@ class SectionCard extends StatelessWidget {
                 if (title != null)
                   Text(
                     title!,
-                    style: const TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
+                    style: theme.textTheme.labelMedium?.copyWith(
                       color: OrbitAccents.todoAccent,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                 if (subtitle != null) ...[
                   SizedBox(width: title != null ? AppDimens.space8 : 0),
                   Text(
                     subtitle!,
-                    style: TextStyle(
-                      fontSize: 12,
+                    style: theme.textTheme.labelMedium?.copyWith(
                       color: colors.secondaryText,
+                      fontWeight: FontWeight.w400,
                     ),
                   ),
                 ],

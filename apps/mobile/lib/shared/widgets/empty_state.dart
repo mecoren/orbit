@@ -14,6 +14,7 @@ class EmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     final colors = AppColors.ofContext(context);
     return Column(
       mainAxisAlignment: MainAxisAlignment.center,
@@ -21,12 +22,14 @@ class EmptyState extends StatelessWidget {
         Icon(
           icon,
           size: 56,
-          color: colors.secondaryText.withValues(alpha: 0.4),
+          color: colors.iconText.withValues(alpha: 0.5),
         ),
         const SizedBox(height: AppDimens.space12),
         Text(
           message,
-          style: TextStyle(fontSize: 14, color: colors.secondaryText),
+          style: theme.textTheme.bodyMedium?.copyWith(
+            color: colors.secondaryText,
+          ),
         ),
       ],
     );
