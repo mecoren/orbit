@@ -184,9 +184,10 @@ pnpm bump:check           # 只校验一致性（零写入，CI/本地通用）
 
 - 路由 `core/routing/app_router.dart`（栈式导航）；页面结构 = LiquidGlassTitleBar（Stack 顶部）+ 整页 ListView 滚动（**必须整页滚动，不要 Column+Expanded 固定高度**——曾致内容溢出）。
 - Riverpod：Provider 按 `modules/todo/providers/`；`FutureProvider.family` 家族化参数缓存（如 statsProvider(year)）；db-change 后 `invalidateBusinessCaches` 统一失效。
-- 主题 token 全在 `core/theme/`：`AppColors.ofContext(context)` 取语义色、`AppDimens.spaceN` 间距、`AppShapes.small/medium/large` 圆角（特殊值 `AppShapes.of(n)`）、`OrbitAccents.todoAccent/themeAccent` 双强调色——**不写裸魔法值**。
+- 主题 token 全在 `core/theme/`：`AppColors.ofContext(context)` 取语义色（分层表面 `background`/`surface`/`surfaceSecondary`/`surfaceElevated` + `outline` 描边 + 三级文字）、`AppDimens` 间距（刻度 `spaceN` + 语义 `pageInline`/`cardPadding`/`cardGap`/`sectionGap`/`rowInline`/`rowVertical`）、`AppShapes` 圆角（`xs`/`small`/`medium`/`large`/`xl`＝6/10/14/20/28，特殊值 `AppShapes.of(n)`）、`AppElevation` 阴影（`e1`~`e4`）、`OrbitAccents.todoAccent/themeAccent` 双强调色——**不写裸魔法值**。
+- **设计系统 v2（2026-09-20）＝现代分层白卡**：浅灰底 + 纯白卡片 + 柔和阴影 + 8pt 网格 + 字阶带行高；`ColorScheme` **手写不走 `fromSeed`**（杜绝角色漂移，`primary` 恒等于 themeAccent）；玻璃为"白玻璃"配方（tint 75% + σ16/14），亮色标题栏底边改用 `outline` 细线定界。规格镜像见 docs/05 §2.2 / §三 / §七。
 - **动效口径参考微软 To-Do 移动端**（勾选确认、完成划线、行入场、拖拽抬起、抽屉轻快入场、触感反馈）；动效参数统一收口 `core/theme/app_motion.dart`（时长/曲线/缩放档；视图内禁裸 `Duration(...)` 与裸 `Curves.*`），清单与有意边界见 docs/05 §九。视觉蓝本仍是 wait-home——该章只加"动作过程"，不改任何像素规格。
-- 日历今天/选中强调色禁用 `scheme.primary`：`modules/todo/calendar_screen.dart`（月历今日实心块与选中描边、右栏选中日高亮底、今日文字与「今天」徽标）和 `year_overview_page.dart`（迷你历今日实心格/周末数字/当前月标题）统一取 `OrbitAccents.themeAccent`（#4E8CFF，与桌面端日历 `--primary`＝themeAccent 体系同源）——`ColorScheme.fromSeed` 会把 seed 漂移成亮色 #455E91 灰蓝 / 暗色 #AFC6FF，与桌面端肉眼可辨（2026-09-19 选中色对齐）。
+- 日历今天/选中强调色统一取 `OrbitAccents.themeAccent`（#4E8CFF，与桌面端日历 `--primary`＝themeAccent 体系同源）：`modules/todo/calendar_screen.dart`（月历今日实心块与选中描边、右栏选中日高亮底、今日文字与「今天」徽标）和 `year_overview_page.dart`（迷你历今日实心格/周末数字/当前月标题）。设计系统 v2 起 `ColorScheme` 手写、`scheme.primary` 已恒等于 themeAccent（`fromSeed` 漂移问题根除），组件仍建议显式取 `OrbitAccents.themeAccent` 以绑定语义。
 - UI 自绘不引库：条形图/热力图纯 Row/Column/Container；组件复刻 wait-home mobile `activity_heatmap.dart` 同构。
 - 布局对齐坑：行标签/占位格与实际格必须同 padding 规则（末行不加尾距，否则固定高 Column 溢出 3px）；`Text.rich` 在 widget 测试 `find.text` 不可见——标题行用 Row + 独立 Text。
 - 测试：`MockOrbitBridge` 注入 `orbitBridgeProvider.overrideWithValue` 冒烟渲染；纯 Dart test 直接调 bridge 排除 UI 层（widget 卡死超时先分离归因）。
