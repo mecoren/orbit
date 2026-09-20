@@ -654,15 +654,19 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
     }
   }
 
-  /// 把反向补丁入栈并挂出「撤销」浮层（5 秒窗口由 WaitToast 停留控制）
+  /// 把反向补丁入栈并挂出「撤销」浮层（停留 = 5s 撤销窗口，到期自动收起）
   void _offerUndo(UndoEntry entry) {
     ref.read(undoStackProvider).push(entry);
     WaitToast.global(
       entry.label,
       variant: WaitToastVariant.warning,
-      description: '已移入回收站的任务可在回收站恢复',
+      // 回收站恢复指引只对删除类撤销成立（其余动作没有回收站语义）
+      description: entry.restoreTaskIds.isNotEmpty
+          ? '已移入回收站的任务可在回收站恢复'
+          : null,
       actionLabel: '撤销',
       onAction: _undoLast,
+      autoDismissAfter: WaitToast.undoDwell,
     );
   }
 

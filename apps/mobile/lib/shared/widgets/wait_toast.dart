@@ -24,10 +24,20 @@ class WaitToast {
   static OverlayEntry? _active;
   static Timer? _dismissTimer;
 
+  /// 默认停留时长（纯提示，无交互）
+  static const Duration defaultDwell = Duration(milliseconds: 2600);
+
+  /// 撤销类浮层停留时长＝撤销窗口（trash 延迟提交 5s、undo_stack 窗口同口径）。
+  /// 到期即自动收起：撤销浮层不能长驻（会一直挡住内容，且窗口过后点了也无效）
+  static const Duration undoDwell = Duration(seconds: 5);
+
   /// 展示一条 toast；[description] 可选副文案；[onTap] 可选整卡点击回调
   ///（提醒 toast 用于跳任务详情；不传时点击仅收起）；
-  /// [actionLabel]/[onAction] 可选右侧动作按钮（撤销删除等场景——
-  /// 带动作按钮时不自动收起，由动作完成时机或手动点击控制）
+  /// [actionLabel]/[onAction] 可选右侧动作按钮（撤销删除等场景）。
+  ///
+  /// 停留口径：无交互 → [defaultDwell] 自动收；带 onTap 的提醒条不收
+  /// （等用户点）；带动作按钮默认不收（错误引导类需要用户处置），
+  /// 撤销类调用点显式传 [autoDismissAfter] = [undoDwell] 到期自动收。
   static void global(
     String title, {
     WaitToastVariant variant = WaitToastVariant.info,
@@ -35,6 +45,7 @@ class WaitToast {
     VoidCallback? onTap,
     String? actionLabel,
     VoidCallback? onAction,
+    Duration? autoDismissAfter,
   }) {
     final overlay = rootNavigatorKey.currentState?.overlay;
     if (overlay == null) return;
@@ -56,10 +67,12 @@ class WaitToast {
     _active = entry;
     overlay.insert(entry);
 
-    // 停留 2.6s 后自动收起（动画由 _ToastView 内部退出态承担）
-    // 带 onTap/action 时不自动收：入口由点击驱动，避免用户来不及点
-    if (onTap == null && onAction == null) {
-      _dismissTimer = Timer(const Duration(milliseconds: 2600), _remove);
+    // 自动收起（动画由 _ToastView 内部退出态承担）：无交互 → defaultDwell；
+    // 带 onTap/action → 仅当调用点显式给了 autoDismissAfter 才计时
+    final auto = autoDismissAfter ??
+        (onTap == null && onAction == null ? defaultDwell : null);
+    if (auto != null) {
+      _dismissTimer = Timer(auto, _remove);
     }
   }
 

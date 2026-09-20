@@ -95,6 +95,8 @@ class _TrashScreenState extends ConsumerState<TrashScreen> {
       description: toastDesc,
       actionLabel: '撤销',
       onAction: () => _pending?.cancel(),
+      // 与延迟提交窗口严格同长：窗口一过撤销已无效，浮层不该继续长驻
+      autoDismissAfter: const Duration(milliseconds: _undoWindowMs),
     );
   }
 
