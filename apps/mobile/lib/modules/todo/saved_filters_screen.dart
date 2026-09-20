@@ -10,7 +10,9 @@ import '../../data/api/dto.dart';
 import '../../data/providers/bridge_provider.dart';
 import '../../shared/widgets/empty_state.dart';
 import '../../shared/widgets/liquid_glass_title_bar.dart';
+import '../../shared/widgets/more_actions_sheet.dart';
 import '../../shared/widgets/scroll_offset_listenable.dart';
+import '../../shared/widgets/select_bottom_sheet.dart';
 import '../../shared/widgets/wait_toast.dart';
 import 'logic/task_logic.dart';
 import '../../shared/utils/hex_color.dart';
@@ -38,53 +40,228 @@ class _SavedFiltersScreenState extends ConsumerState<SavedFiltersScreen> {
     super.dispose();
   }
 
-  Future<void> _create() async {
-    final nameCtl = TextEditingController();
-    final condCtl = TextEditingController(text: '{"due_overdue":true}');
-    final confirmed = await showDialog<bool>(
+  /// 七键可视化构建抽屉（新建 + 更新共用；替代手写条件文本框）
+  ///
+  /// 七键：status / priority_min / project_ids / label_ids /
+  /// due_within_days / due_overdue / favorite_only。仅收纳已设置键，
+  /// 未设置键不写入 JSON（与桌面白名单校验口径一致）。
+  Future<void> _openBuilder({TodoSavedFilter? existing}) async {
+    final colors = AppColors.ofContext(context);
+    final nameCtl = TextEditingController(text: existing?.name ?? '');
+    Map<String, dynamic> init = {};
+    try {
+      if (existing != null) {
+        init = jsonDecode(existing.conditions) as Map<String, dynamic>;
+      }
+    } catch (_) {}
+    String? status = init['status'] as String?;
+    int priorityMin = (init['priority_min'] as num?)?.toInt() ?? 0;
+    final projectCtl = TextEditingController(
+      text: init['project_ids'] is List
+          ? (init['project_ids'] as List).join(',')
+          : '',
+    );
+    final labelCtl = TextEditingController(
+      text: init['label_ids'] is List
+          ? (init['label_ids'] as List).join(',')
+          : '',
+    );
+    final withinCtl = TextEditingController(
+      text: init['due_within_days']?.toString() ?? '',
+    );
+    bool overdue = init['due_overdue'] == true;
+    bool favorite = init['favorite_only'] == true;
+
+    List<int>? parseIds(String raw) {
+      final ids = <int>[];
+      for (final part in raw.split(',')) {
+        final v = int.tryParse(part.trim());
+        if (v != null) ids.add(v);
+      }
+      return ids.isEmpty ? null : ids;
+    }
+
+    final saved = await showModalBottomSheet<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('新建筛选器'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: nameCtl,
-              autofocus: true,
-              decoration: const InputDecoration(labelText: '名称（如：本周 P0）'),
+      isScrollControlled: true,
+      backgroundColor: colors.popup,
+      shape: bottomSheetTopShape,
+      builder: (sheetCtx) => StatefulBuilder(
+        builder: (ctx, setSheet) => SafeArea(
+          top: false,
+          child: Padding(
+            padding: EdgeInsets.only(
+              left: AppDimens.space16,
+              right: AppDimens.space16,
+              top: AppDimens.space16,
+              bottom: MediaQuery.of(ctx).viewInsets.bottom + AppDimens.space16,
             ),
-            const SizedBox(height: 8),
-            TextField(
-              controller: condCtl,
-              decoration: const InputDecoration(
-                labelText: '条件 JSON',
-                hintText: '{"priority_min":4,"due_within_days":7}',
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    existing == null ? '新建筛选器' : '编辑筛选器',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: colors.titleText,
+                    ),
+                  ),
+                  const SizedBox(height: AppDimens.space12),
+                  TextField(
+                    controller: nameCtl,
+                    decoration: const InputDecoration(
+                      labelText: '名称（如：本周 P0）',
+                    ),
+                  ),
+                  const SizedBox(height: AppDimens.space8),
+                  SizedBox(
+                    height: AppDimens.touchTarget,
+                    child: InkWell(
+                      onTap: () => showSelectBottomSheet<String?>(
+                        ctx,
+                        title: '状态',
+                        current: status,
+                        items: const [
+                          SelectItem(value: null, label: '全部状态'),
+                          SelectItem(value: 'pending', label: '待办'),
+                          SelectItem(value: 'done', label: '已完成'),
+                        ],
+                        onSelect: (v) => setSheet(() => status = v),
+                      ),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              '状态：${status ?? '全部'}',
+                              style: TextStyle(
+                                fontSize: 15,
+                                color: colors.bodyText,
+                              ),
+                            ),
+                          ),
+                          Icon(
+                            Icons.chevron_right_rounded,
+                            color: colors.secondaryText,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  SizedBox(
+                    height: AppDimens.touchTarget,
+                    child: InkWell(
+                      onTap: () => showSelectBottomSheet<int>(
+                        ctx,
+                        title: '最低优先级',
+                        current: priorityMin,
+                        items: const [
+                          SelectItem(value: 0, label: '全部优先级'),
+                          SelectItem(value: 1, label: 'P1 及以上'),
+                          SelectItem(value: 2, label: 'P2 及以上'),
+                          SelectItem(value: 3, label: 'P3 及以上'),
+                          SelectItem(value: 4, label: '仅 P4'),
+                        ],
+                        onSelect: (v) => setSheet(() => priorityMin = v),
+                      ),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              '优先级≥：${priorityMin == 0 ? '全部' : 'P$priorityMin'}',
+                              style: TextStyle(
+                                fontSize: 15,
+                                color: colors.bodyText,
+                              ),
+                            ),
+                          ),
+                          Icon(
+                            Icons.chevron_right_rounded,
+                            color: colors.secondaryText,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  TextField(
+                    controller: withinCtl,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      labelText: '天内截止（留空不限，如 7）',
+                    ),
+                  ),
+                  TextField(
+                    controller: projectCtl,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      labelText: '项目 id（逗号分隔，留空不限）',
+                    ),
+                  ),
+                  TextField(
+                    controller: labelCtl,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      labelText: '标签 id（逗号分隔，留空不限）',
+                    ),
+                  ),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('仅已逾期'),
+                    value: overdue,
+                    onChanged: (v) => setSheet(() => overdue = v),
+                  ),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('仅收藏'),
+                    value: favorite,
+                    onChanged: (v) => setSheet(() => favorite = v),
+                  ),
+                  const SizedBox(height: AppDimens.space8),
+                  FilledButton(
+                    onPressed: () => Navigator.pop(sheetCtx, true),
+                    child: Text(existing == null ? '创建' : '保存修改'),
+                  ),
+                ],
               ),
             ),
-          ],
+          ),
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('创建'),
-          ),
-        ],
       ),
     );
-    if (confirmed != true) return;
+    if (saved != true) return;
+    final name = nameCtl.text.trim();
+    if (name.isEmpty) {
+      if (mounted) WaitToast.destructive('名称不能为空');
+      return;
+    }
+    final cond = <String, dynamic>{};
+    if (status != null) cond['status'] = status;
+    if (priorityMin > 0) cond['priority_min'] = priorityMin;
+    final pids = parseIds(projectCtl.text);
+    if (pids != null) cond['project_ids'] = pids;
+    final lids = parseIds(labelCtl.text);
+    if (lids != null) cond['label_ids'] = lids;
+    final within = int.tryParse(withinCtl.text.trim());
+    if (within != null && within > 0) cond['due_within_days'] = within;
+    if (overdue) cond['due_overdue'] = true;
+    if (favorite) cond['favorite_only'] = true;
     try {
-      await ref
-          .read(orbitBridgeProvider)
-          .savedFilterCreate(nameCtl.text.trim(), condCtl.text.trim());
-      if (mounted) WaitToast.success('已创建筛选器');
+      final bridge = ref.read(orbitBridgeProvider);
+      if (existing == null) {
+        await bridge.savedFilterCreate(name, jsonEncode(cond));
+        if (mounted) WaitToast.success('已创建筛选器');
+      } else {
+        await bridge.savedFilterUpdate(existing.id, name, jsonEncode(cond));
+        if (mounted) WaitToast.success('已更新筛选器');
+      }
     } catch (e) {
-      if (mounted) WaitToast.destructive('创建失败：$e');
+      if (mounted) WaitToast.destructive('保存失败：$e');
     }
   }
+
+  Future<void> _create() => _openBuilder();
 
   Future<void> _delete(TodoSavedFilter f) async {
     final destructive = AppColors.ofContext(context).destructive;
@@ -241,11 +418,27 @@ class _SavedFiltersScreenState extends ConsumerState<SavedFiltersScreen> {
                                     color: colors.secondaryText,
                                   ),
                                 ),
-                                trailing: Icon(
-                                  expanded
-                                      ? Icons.expand_less_rounded
-                                      : Icons.expand_more_rounded,
-                                  color: colors.secondaryText,
+                                trailing: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    IconButton(
+                                      visualDensity: VisualDensity.compact,
+                                      tooltip: '编辑',
+                                      icon: Icon(
+                                        Icons.edit_outlined,
+                                        size: AppDimens.iconSizeSm,
+                                        color: colors.secondaryText,
+                                      ),
+                                      onPressed: () =>
+                                          _openBuilder(existing: f),
+                                    ),
+                                    Icon(
+                                      expanded
+                                          ? Icons.expand_less_rounded
+                                          : Icons.expand_more_rounded,
+                                      color: colors.secondaryText,
+                                    ),
+                                  ],
                                 ),
                                 onTap: () => setState(
                                   () => _expandedId = expanded ? null : f.id,
