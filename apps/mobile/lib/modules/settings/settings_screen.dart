@@ -17,6 +17,7 @@ import '../../data/api/orbit_bridge.dart'
 import '../../data/providers/biometric_provider.dart';
 import '../../data/providers/todo_widget_provider.dart';
 import '../../data/providers/bridge_provider.dart';
+import '../../shared/widgets/confirm_bottom_sheet.dart';
 import '../../shared/widgets/liquid_glass_title_bar.dart';
 import '../../shared/utils/sync_status_text.dart';
 import '../../shared/widgets/scroll_offset_listenable.dart';
@@ -129,20 +130,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     // 不走明文确认弹窗——日历文件语义上就是给外部消费的）
     if (kind == 'ics') return _exportIcs();
     // 二次确认：明示未加密属性
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('导出明文数据'),
-        content: const Text(
-          '导出内容为未加密明文，任何拿到该文件的人都能读取。确定继续？',
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('取消')),
-          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('继续')),
-        ],
-      ),
+    final confirmed = await showConfirmBottomSheet(
+      context,
+      title: '导出明文数据',
+      message: '导出内容为未加密明文，任何拿到该文件的人都能读取。确定继续？',
+      confirmLabel: '继续',
     );
-    if (confirmed != true) return;
+    if (!confirmed) return;
 
     setState(() => _exporting = kind);
     try {
@@ -269,22 +263,15 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final content = _importContent;
     if (content == null || _importing != null) return;
     final preview = _importPreview;
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('确认导入'),
-        content: Text(
-          '将导入 ${preview?.stats.success ?? 0} 条任务'
+    final confirmed = await showConfirmBottomSheet(
+      context,
+      title: '确认导入',
+      message: '将导入 ${preview?.stats.success ?? 0} 条任务'
           '（跳过 ${preview?.stats.skipped ?? 0} 行）。'
           '项目不存在会自动创建。确定继续？',
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('取消')),
-          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('导入')),
-        ],
-      ),
+      confirmLabel: '导入',
     );
-    if (confirmed != true) return;
+    if (!confirmed) return;
 
     setState(() => _importing = 'execute');
     try {
@@ -519,46 +506,24 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   /// 残留的 master_auth.json 会让下次启动走加密分支而打不开库。
   Future<void> _disableEncryption() async {
     if (_secBusy) return;
-    final first = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('关闭加密？'),
-        content: const Text(
-          '将把本机数据库转为明文（不再需要主密码解锁），指纹解锁会一并关闭。'
+    final first = await showConfirmBottomSheet(
+      context,
+      title: '关闭加密？',
+      message: '将把本机数据库转为明文（不再需要主密码解锁），指纹解锁会一并关闭。'
           '云端已上传的数据仍由同步密码端到端加密保护。此操作不可撤销。',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('继续'),
-          ),
-        ],
-      ),
+      confirmLabel: '继续',
+      destructive: true,
     );
-    if (first != true || !mounted) return;
+    if (!first || !mounted) return;
 
-    final second = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('再次确认'),
-        content: const Text('关闭加密后，任何能拿到本机文件的人都可直接读取你的待办数据。'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('确认关闭加密'),
-          ),
-        ],
-      ),
+    final second = await showConfirmBottomSheet(
+      context,
+      title: '再次确认',
+      message: '关闭加密后，任何能拿到本机文件的人都可直接读取你的待办数据。',
+      confirmLabel: '确认关闭加密',
+      destructive: true,
     );
-    if (second != true || !mounted) return;
+    if (!second || !mounted) return;
 
     final bridge = ref.read(orbitBridgeProvider);
     setState(() => _secBusy = true);
@@ -675,27 +640,15 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   /// 本行做二次确认后转调同一流程，避免用户绕过迁移单独清除。
   Future<void> _clearMasterPassword() async {
     if (_secBusy) return;
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('清除主密码？'),
-        content: const Text(
-          '清除前会先把加密库迁移为明文库（否则加密库将打不开），'
+    final confirmed = await showConfirmBottomSheet(
+      context,
+      title: '清除主密码？',
+      message: '清除前会先把加密库迁移为明文库（否则加密库将打不开），'
           '指纹解锁一并关闭。此操作不可撤销，是否继续？',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('继续'),
-          ),
-        ],
-      ),
+      confirmLabel: '继续',
+      destructive: true,
     );
-    if (confirmed != true || !mounted) return;
+    if (!confirmed || !mounted) return;
     await _disableEncryption();
   }
 

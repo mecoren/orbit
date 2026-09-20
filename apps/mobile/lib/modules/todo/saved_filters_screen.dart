@@ -266,26 +266,14 @@ class _SavedFiltersScreenState extends ConsumerState<SavedFiltersScreen> {
   Future<void> _create() => _openBuilder();
 
   Future<void> _delete(TodoSavedFilter f) async {
-    final destructive = AppColors.ofContext(context).destructive;
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('删除筛选器'),
-        content: Text('确定要删除「${f.name}」吗？'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: destructive),
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('删除'),
-          ),
-        ],
-      ),
+    final confirmed = await showConfirmBottomSheet(
+      context,
+      title: '删除筛选器',
+      message: '确定要删除「${f.name}」吗？',
+      confirmLabel: '删除',
+      destructive: true,
     );
-    if (confirmed != true) return;
+    if (!confirmed) return;
     await ref.read(orbitBridgeProvider).savedFilterDelete(f.id);
   }
 

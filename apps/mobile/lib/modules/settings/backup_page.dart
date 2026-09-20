@@ -8,6 +8,7 @@ import '../../core/theme/app_shapes.dart';
 import '../../core/theme/orbit_accents.dart';
 import '../../data/api/dto.dart';
 import '../../data/providers/bridge_provider.dart';
+import '../../shared/widgets/confirm_bottom_sheet.dart';
 import '../../shared/widgets/liquid_glass_title_bar.dart';
 import '../../shared/widgets/scroll_offset_listenable.dart';
 import '../../shared/widgets/section_card.dart';
@@ -208,50 +209,28 @@ class _BackupPageState extends ConsumerState<BackupPage> {
     required String sourceLabel,
     required Future<BackupImportResult> Function(bool force) run,
   }) async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('恢复此备份？'),
-        content: SingleChildScrollView(
-          child: _PreviewBody(preview: preview, sourceLabel: sourceLabel),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('覆盖恢复'),
-          ),
-        ],
-      ),
+    final ok = await showConfirmBottomSheet(
+      context,
+      title: '恢复此备份？',
+      // 预览体（备份时间/来源设备/任务抽样/schema 比对）整体进抽屉，
+      // 超高时由抽屉内部滚动，不再自带 SingleChildScrollView
+      content: _PreviewBody(preview: preview, sourceLabel: sourceLabel),
+      confirmLabel: '覆盖恢复',
+      destructive: true,
     );
-    if (ok != true || !mounted) return;
+    if (!ok || !mounted) return;
 
     if (preview.schemaMismatch) {
-      final forced = await showDialog<bool>(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          title: const Text('版本不一致'),
-          content: Text(
-            '备份的数据结构版本为 ${preview.manifest.schemaVersion}，'
+      final forced = await showConfirmBottomSheet(
+        context,
+        title: '版本不一致',
+        message: '备份的数据结构版本为 ${preview.manifest.schemaVersion}，'
             '本机为 ${preview.currentSchemaVersion}。'
             '强行恢复可能丢失本机新增字段的数据，且不可撤销。',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('取消'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('仍然恢复'),
-            ),
-          ],
-        ),
+        confirmLabel: '仍然恢复',
+        destructive: true,
       );
-      if (forced != true || !mounted) return;
+      if (!forced || !mounted) return;
     }
 
     setState(() => _busy = 'restore');
@@ -272,24 +251,14 @@ class _BackupPageState extends ConsumerState<BackupPage> {
   }
 
   Future<void> _deleteLocal(BackupEntry entry) async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('删除这份备份？'),
-        content: Text('${entry.filename}\n删除后无法恢复。'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('删除'),
-          ),
-        ],
-      ),
+    final ok = await showConfirmBottomSheet(
+      context,
+      title: '删除这份备份？',
+      message: '${entry.filename}\n删除后无法恢复。',
+      confirmLabel: '删除',
+      destructive: true,
     );
-    if (ok != true) return;
+    if (!ok) return;
     try {
       await ref.read(orbitBridgeProvider).fullBackupDeleteLocal(entry.filePath);
       WaitToast.success('已删除备份');

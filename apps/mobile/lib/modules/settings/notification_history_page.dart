@@ -7,6 +7,7 @@ import '../../core/theme/app_dimens.dart';
 import '../../data/api/dto.dart';
 import '../../data/providers/bridge_provider.dart';
 import '../../services/local_prefs.dart';
+import '../../shared/widgets/confirm_bottom_sheet.dart';
 import '../../shared/widgets/empty_state.dart';
 import '../../shared/widgets/liquid_glass_title_bar.dart';
 import '../../shared/widgets/scroll_offset_listenable.dart';
@@ -98,24 +99,14 @@ class _NotificationHistoryPageState
   }
 
   Future<void> _clear() async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('清空通知历史'),
-        content: const Text('将删除全部本地通知历史（不同步，不可恢复）。'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('清空'),
-          ),
-        ],
-      ),
+    final confirmed = await showConfirmBottomSheet(
+      context,
+      title: '清空通知历史',
+      message: '将删除全部本地通知历史（不同步，不可恢复）。',
+      confirmLabel: '清空',
+      destructive: true,
     );
-    if (confirmed != true) return;
+    if (!confirmed) return;
     try {
       final n = await ref.read(orbitBridgeProvider).notificationLogClear();
       if (mounted) WaitToast.success('已清空 $n 条');

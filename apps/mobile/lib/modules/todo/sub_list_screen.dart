@@ -497,26 +497,14 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
   }
 
   Future<void> _deleteTask(TodoTask task) async {
-    final destructive = AppColors.ofContext(context).destructive;
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('删除任务'),
-        content: Text('确定要删除任务「${task.title}」吗？删除后将移入回收站，可在回收站中恢复。'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: destructive),
-            onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: const Text('删除'),
-          ),
-        ],
-      ),
+    final confirmed = await showConfirmBottomSheet(
+      context,
+      title: '删除任务',
+      message: '确定要删除任务「${task.title}」吗？删除后将移入回收站，可在回收站中恢复。',
+      confirmLabel: '删除',
+      destructive: true,
     );
-    if (confirmed != true || !mounted) return;
+    if (!confirmed || !mounted) return;
     try {
       await ref.read(orbitBridgeProvider).todoTaskDelete(task.id);
       ref.invalidate(todoTasksProvider);
@@ -574,26 +562,14 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
     if (targets.isEmpty) return;
 
     if (action == BatchAction.delete) {
-      final destructive = AppColors.ofContext(context).destructive;
-      final ok = await showDialog<bool>(
-        context: context,
-        builder: (dialogContext) => AlertDialog(
-          title: Text('删除 ${targets.length} 个任务？'),
-          content: const Text('删除后移入回收站，可在回收站中恢复。'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(false),
-              child: const Text('取消'),
-            ),
-            FilledButton(
-              style: FilledButton.styleFrom(backgroundColor: destructive),
-              onPressed: () => Navigator.of(dialogContext).pop(true),
-              child: const Text('删除'),
-            ),
-          ],
-        ),
+      final ok = await showConfirmBottomSheet(
+        context,
+        title: '删除 ${targets.length} 个任务？',
+        message: '删除后移入回收站，可在回收站中恢复。',
+        confirmLabel: '删除',
+        destructive: true,
       );
-      if (ok != true || !mounted) return;
+      if (!ok || !mounted) return;
     }
 
     setState(() => _batchBusy = true);

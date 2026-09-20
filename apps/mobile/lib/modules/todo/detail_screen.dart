@@ -725,26 +725,14 @@ class _SubtasksSectionState extends ConsumerState<_SubtasksSection> {
 
   /// 删除确认（对齐评论删除惯例：软删无恢复入口，防误触）
   Future<void> _confirmDelete(TodoSubtask subtask) async {
-    final destructive = AppColors.ofContext(context).destructive;
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('删除子任务'),
-        content: Text('确定要删除「${subtask.title}」吗？'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: destructive),
-            onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: const Text('删除'),
-          ),
-        ],
-      ),
+    final confirmed = await showConfirmBottomSheet(
+      context,
+      title: '删除子任务',
+      message: '确定要删除「${subtask.title}」吗？',
+      confirmLabel: '删除',
+      destructive: true,
     );
-    if (confirmed != true || !mounted) return;
+    if (!confirmed || !mounted) return;
     await _mutate(
         () => ref.read(orbitBridgeProvider).todoSubtaskDelete(subtask.id));
   }
@@ -1652,26 +1640,14 @@ class _CommentsSectionState extends ConsumerState<_CommentsSection> {
   }
 
   Future<void> _delete(TodoComment comment) async {
-    final destructive = AppColors.ofContext(context).destructive;
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('删除评论'),
-        content: const Text('确定要删除这条评论吗？此操作无法撤销。'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: destructive),
-            onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: const Text('删除'),
-          ),
-        ],
-      ),
+    final confirmed = await showConfirmBottomSheet(
+      context,
+      title: '删除评论',
+      message: '确定要删除这条评论吗？此操作无法撤销。',
+      confirmLabel: '删除',
+      destructive: true,
     );
-    if (confirmed != true || !mounted) return;
+    if (!confirmed || !mounted) return;
     try {
       await ref.read(orbitBridgeProvider).todoCommentDelete(comment.id);
       widget.onChanged();
@@ -1919,26 +1895,14 @@ class _AttachmentsSectionState extends ConsumerState<_AttachmentsSection> {
   }
 
   Future<void> _remove(TaskAttachmentView att) async {
-    final destructive = AppColors.ofContext(context).destructive;
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('移除附件'),
-        content: Text('确定要移除「${att.originalName}」吗？仅解除与任务的关联。'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: destructive),
-            onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: const Text('移除'),
-          ),
-        ],
-      ),
+    final confirmed = await showConfirmBottomSheet(
+      context,
+      title: '移除附件',
+      message: '确定要移除「${att.originalName}」吗？仅解除与任务的关联。',
+      confirmLabel: '移除',
+      destructive: true,
     );
-    if (confirmed != true) return;
+    if (!confirmed) return;
     try {
       await ref.read(orbitBridgeProvider).taskAttachmentRemove(att.linkId);
       await _load();

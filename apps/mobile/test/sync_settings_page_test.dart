@@ -148,9 +148,9 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('断开云同步？'), findsOneWidget);
 
-    // 弹窗内「断开」是确认键（屏内对话框）
+    // 抽屉内「断开」是确认键（确认类交互统一走底部抽屉）
     await tester.tap(find.descendant(
-      of: find.byType(AlertDialog),
+      of: find.byType(BottomSheet),
       matching: find.text('断开'),
     ));
     await _flush(tester);

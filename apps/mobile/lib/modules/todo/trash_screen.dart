@@ -8,6 +8,7 @@ import '../../core/theme/app_dimens.dart';
 import '../../core/theme/orbit_accents.dart';
 import '../../data/api/dto.dart';
 import '../../data/providers/bridge_provider.dart';
+import '../../shared/widgets/confirm_bottom_sheet.dart';
 import '../../shared/widgets/empty_state.dart';
 import '../../shared/widgets/liquid_glass_title_bar.dart';
 import '../../shared/widgets/more_actions_sheet.dart';
@@ -137,28 +138,15 @@ class _TrashScreenState extends ConsumerState<TrashScreen> {
   }
 
   Future<void> _purgeTask(TodoTask task) async {
-    final destructive = AppColors.ofContext(context).destructive;
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('彻底删除'),
-        content: Text(
-          '确定要彻底删除「${task.title}」吗？任务及其子任务、评论、提醒将一并被清除，删除后 5 秒内可撤销。',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: destructive),
-            onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: const Text('彻底删除'),
-          ),
-        ],
-      ),
+    final confirmed = await showConfirmBottomSheet(
+      context,
+      title: '彻底删除',
+      message: '确定要彻底删除「${task.title}」吗？任务及其子任务、评论、提醒将一并被清除，'
+          '删除后 5 秒内可撤销。',
+      confirmLabel: '彻底删除',
+      destructive: true,
     );
-    if (confirmed != true || !mounted) return;
+    if (!confirmed || !mounted) return;
     // bridge 调度时先行捕获——commit 闭包可能在 dispose 兜底路径 fire，
     // 此时 ref 已不可用（unmounted 后 read 会抛 StateError）
     final bridge = ref.read(orbitBridgeProvider);
@@ -171,26 +159,14 @@ class _TrashScreenState extends ConsumerState<TrashScreen> {
   }
 
   Future<void> _purgeAll(int count, List<int> ids) async {
-    final destructive = AppColors.ofContext(context).destructive;
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('清空回收站'),
-        content: Text('确定要清空回收站中的 $count 个任务吗？删除后 5 秒内可整批撤销。'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: destructive),
-            onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: const Text('清空'),
-          ),
-        ],
-      ),
+    final confirmed = await showConfirmBottomSheet(
+      context,
+      title: '清空回收站',
+      message: '确定要清空回收站中的 $count 个任务吗？删除后 5 秒内可整批撤销。',
+      confirmLabel: '清空',
+      destructive: true,
     );
-    if (confirmed != true || !mounted) return;
+    if (!confirmed || !mounted) return;
     // 同 _purgeTask：bridge 先行捕获，dispose 兜底 fire 时不再碰 ref
     final bridge = ref.read(orbitBridgeProvider);
     _scheduleUndoablePurge(

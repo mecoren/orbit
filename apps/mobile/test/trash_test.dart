@@ -169,7 +169,7 @@ void main() {
       await tester.tap(find.text('彻底删除').first); // 菜单项
       await tester.pumpAndSettle();
       expect(find.textContaining('确定要彻底删除'), findsOneWidget);
-      await tester.tap(find.text('彻底删除').last); // AlertDialog 确认钮
+      await tester.tap(find.text('彻底删除').last); // 确认抽屉的确认钮
       await tester.pumpAndSettle();
 
       // 乐观隐藏：列表行消失（toast description 里仍有标题副本，故按列表行

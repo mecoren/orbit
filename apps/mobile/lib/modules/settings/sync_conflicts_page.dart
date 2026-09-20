@@ -9,6 +9,7 @@ import '../../core/theme/app_shapes.dart';
 import '../../core/theme/orbit_accents.dart';
 import '../../data/api/dto.dart';
 import '../../data/providers/bridge_provider.dart';
+import '../../shared/widgets/confirm_bottom_sheet.dart';
 import '../../shared/widgets/liquid_glass_title_bar.dart';
 import '../../shared/widgets/scroll_offset_listenable.dart';
 import '../../shared/widgets/section_card.dart';
@@ -84,24 +85,15 @@ class _SyncConflictsPageState extends ConsumerState<SyncConflictsPage> {
       .replaceFirst(RegExp(r'^\[\w+\]\s*'), '');
 
   Future<void> _restore(SyncConflict row) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('恢复为败方版本？'),
-        content: Text(
-          '将把「${row.recordTitle.isEmpty ? row.recordUuid : row.recordTitle}」'
+    final confirmed = await showConfirmBottomSheet(
+      context,
+      title: '恢复为败方版本？',
+      message: '将把「${row.recordTitle.isEmpty ? row.recordUuid : row.recordTitle}」'
           '的内容回放为被覆盖的那一版，并作为一次新的本端修改参与同步。'
           '当前内容会被覆盖，且不会另存副本。',
-        ),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx, false), child: const Text('取消')),
-          FilledButton(
-              onPressed: () => Navigator.pop(ctx, true), child: const Text('确认恢复')),
-        ],
-      ),
+      confirmLabel: '确认恢复',
     );
-    if (confirmed != true) return;
+    if (!confirmed) return;
     setState(() => _busy = true);
     try {
       await ref.read(orbitBridgeProvider).syncConflictRestore(row.id);
@@ -128,24 +120,15 @@ class _SyncConflictsPageState extends ConsumerState<SyncConflictsPage> {
   }
 
   Future<void> _clear() async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('清空冲突记录？'),
-        content: Text('将删除全部 ${_rows.length} 条本地冲突记录，此操作不可撤销。'
-            '记录仅存于本机，不影响任务数据与云同步。'),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx, false), child: const Text('取消')),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: Text('清空',
-                style: TextStyle(color: AppColors.ofContext(ctx).destructive)),
-          ),
-        ],
-      ),
+    final confirmed = await showConfirmBottomSheet(
+      context,
+      title: '清空冲突记录？',
+      message: '将删除全部 ${_rows.length} 条本地冲突记录，此操作不可撤销。'
+          '记录仅存于本机，不影响任务数据与云同步。',
+      confirmLabel: '清空',
+      destructive: true,
     );
-    if (confirmed != true) return;
+    if (!confirmed) return;
     setState(() => _busy = true);
     try {
       final n = await ref.read(orbitBridgeProvider).syncConflictClear(null);

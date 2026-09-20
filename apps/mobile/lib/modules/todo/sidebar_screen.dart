@@ -277,43 +277,24 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
   /// 删除保护双流（docs/05 §4.1 文案）：有未完成任务拒绝；否则 destructive 确认
   Future<void> _deleteProject(TodoProject project, int undoneCount) async {
     if (undoneCount > 0) {
-      await showDialog<void>(
-        context: context,
-        builder: (dialogContext) => AlertDialog(
-          title: const Text('无法删除'),
-          content: Text(
-            '该项目下还有 $undoneCount 条未完成任务，请先清空或移走任务后再删除。',
-          ),
-          actions: [
-            FilledButton(
-              onPressed: () => Navigator.of(dialogContext).pop(),
-              child: const Text('我知道了'),
-            ),
-          ],
-        ),
+      // 单按钮信息抽屉（cancelLabel: null）：只告知，没有可点的「取消」
+      await showConfirmBottomSheet(
+        context,
+        title: '无法删除',
+        message: '该项目下还有 $undoneCount 条未完成任务，请先清空或移走任务后再删除。',
+        confirmLabel: '我知道了',
+        cancelLabel: null,
       );
       return;
     }
-    final destructive = AppColors.ofContext(context).destructive;
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('删除项目'),
-        content: Text('确定要删除项目「${project.title}」吗？该操作不可撤销。'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: destructive),
-            onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: const Text('删除'),
-          ),
-        ],
-      ),
+    final confirmed = await showConfirmBottomSheet(
+      context,
+      title: '删除项目',
+      message: '确定要删除项目「${project.title}」吗？该操作不可撤销。',
+      confirmLabel: '删除',
+      destructive: true,
     );
-    if (confirmed != true || !mounted) return;
+    if (!confirmed || !mounted) return;
     try {
       await ref.read(orbitBridgeProvider).todoProjectDelete(project.id);
       WaitToast.success('项目已删除');

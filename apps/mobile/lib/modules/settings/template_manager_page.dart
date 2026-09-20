@@ -9,6 +9,7 @@ import '../../core/theme/app_shapes.dart';
 import '../../core/theme/orbit_accents.dart';
 import '../../data/api/dto.dart';
 import '../../data/providers/bridge_provider.dart';
+import '../../shared/widgets/confirm_bottom_sheet.dart';
 import '../../shared/widgets/controller_disposer.dart';
 import '../../shared/widgets/liquid_glass_title_bar.dart';
 import '../../shared/widgets/more_actions_sheet.dart' show bottomSheetTopShape;
@@ -88,24 +89,14 @@ class _TemplateManagerPageState extends ConsumerState<TemplateManagerPage> {
   }
 
   Future<void> _delete(TodoTemplate tpl) async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text('删除模板「${tpl.name}」？'),
-        content: const Text('已按该模板创建的任务不受影响。'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('删除'),
-          ),
-        ],
-      ),
+    final ok = await showConfirmBottomSheet(
+      context,
+      title: '删除模板「${tpl.name}」？',
+      message: '已按该模板创建的任务不受影响。',
+      confirmLabel: '删除',
+      destructive: true,
     );
-    if (ok != true || !mounted) return;
+    if (!ok || !mounted) return;
     setState(() => _busy = true);
     try {
       await ref.read(orbitBridgeProvider).templateDelete(tpl.id);

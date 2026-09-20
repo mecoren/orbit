@@ -12,6 +12,7 @@ import '../../core/theme/app_shapes.dart';
 import '../../core/theme/orbit_accents.dart';
 import '../../data/api/dto.dart';
 import '../../data/providers/bridge_provider.dart';
+import '../../shared/widgets/confirm_bottom_sheet.dart';
 import '../../shared/widgets/liquid_glass_title_bar.dart';
 import '../../shared/widgets/scroll_offset_listenable.dart';
 import '../../shared/widgets/section_card.dart';
@@ -543,27 +544,14 @@ class _SyncSettingsPageState extends ConsumerState<SyncSettingsPage> {
 
   /// 断开确认：断开仅清除本机连接配置，不删本地数据与云端文件
   Future<void> _confirmDisconnect(BuildContext context) async {
-    final destructive = AppColors.ofContext(context).destructive;
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('断开云同步？'),
-        content: const Text(
-          '将清除本机保存的连接配置与凭据；本地数据与云端文件均不会删除，之后可随时重新配置。',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('取消'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(true),
-            child: Text('断开', style: TextStyle(color: destructive)),
-          ),
-        ],
-      ),
+    final confirmed = await showConfirmBottomSheet(
+      context,
+      title: '断开云同步？',
+      message: '将清除本机保存的连接配置与凭据；本地数据与云端文件均不会删除，之后可随时重新配置。',
+      confirmLabel: '断开',
+      destructive: true,
     );
-    if (confirmed == true) await _disconnect();
+    if (confirmed) await _disconnect();
   }
 }
 
@@ -784,27 +772,14 @@ class _SyncCryptoCardState extends ConsumerState<_SyncCryptoCard> {
   /// 忘记本机同步密码缓存（清会话缓存与引擎挂载；云端与 crypto meta 不动）
   Future<void> _forgetSession() async {
     if (_busy) return;
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('清除本机同步密码缓存？'),
-        content: const Text(
-          '仅清除本机内存中的会话密码与已解锁状态，云端数据与密钥不受影响；'
+    final ok = await showConfirmBottomSheet(
+      context,
+      title: '清除本机同步密码缓存？',
+      message: '仅清除本机内存中的会话密码与已解锁状态，云端数据与密钥不受影响；'
           '下次同步前需要重新输入同步密码。',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('清除'),
-          ),
-        ],
-      ),
+      confirmLabel: '清除',
     );
-    if (ok != true) return;
+    if (!ok) return;
     try {
       await ref.read(orbitBridgeProvider).syncCryptoForgetSession();
       WaitToast.success('已清除本机会话缓存');
