@@ -13,6 +13,7 @@ import '../../shared/widgets/shadcn/orbit_empty_state.dart';
 import '../../shared/widgets/shadcn/orbit_page_header.dart';
 import 'logic/task_logic.dart';
 import 'providers/todo_providers.dart';
+import '../../core/theme/icon_map.dart';
 
 /// 全局搜索页 /todo/search（backlog #26：补齐与桌面 Ctrl+K 对等的能力）
 ///
@@ -89,14 +90,14 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                       hintStyle:
                           TextStyle(fontSize: 15, color: colors.secondaryText),
                       prefixIcon: Icon(
-                        Icons.search_rounded,
+                        OrbitIcons.search,
                         size: AppDimens.iconSizeMd,
                         color: colors.secondaryText,
                       ),
                       suffixIcon: _keyword.isNotEmpty
                           ? IconButton(
                               icon: Icon(
-                                Icons.close_rounded,
+                                OrbitIcons.close,
                                 size: AppDimens.iconSizeMd,
                                 color: colors.secondaryText,
                               ),
@@ -147,7 +148,7 @@ class _ResultList extends StatelessWidget {
         padding: const EdgeInsets.only(top: 64),
         child: EmptyState(
           message: '没有找到相关内容',
-          icon: Icons.search_off_rounded,
+          icon: OrbitIcons.searchEmpty,
         ),
       );
     }
@@ -165,8 +166,8 @@ class _ResultList extends StatelessWidget {
             ListTile(
               leading: Icon(
                 t.done == 1
-                    ? Icons.check_circle_outline_rounded
-                    : Icons.radio_button_unchecked_rounded,
+                    ? OrbitIcons.success
+                    : OrbitIcons.circle,
                 size: AppDimens.iconSizeMd,
                 color: t.done == 1 ? OrbitAccents.todoAccent : colors.secondaryText,
               ),
@@ -217,7 +218,7 @@ class _ResultList extends StatelessWidget {
                 ),
               ),
               trailing: Icon(
-                Icons.chevron_right_rounded,
+                OrbitIcons.chevronRight,
                 size: AppDimens.iconSizeMd,
                 color: colors.secondaryText,
               ),
@@ -229,7 +230,7 @@ class _ResultList extends StatelessWidget {
           for (final c in result.comments)
             ListTile(
               leading: Icon(
-                Icons.chat_bubble_outline_rounded,
+                OrbitIcons.message,
                 size: AppDimens.iconSizeMd,
                 color: colors.secondaryText,
               ),

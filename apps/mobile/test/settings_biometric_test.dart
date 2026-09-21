@@ -8,6 +8,7 @@ import 'package:orbit/data/providers/bridge_provider.dart';
 import 'package:orbit/modules/settings/settings_screen.dart';
 import 'package:orbit/services/biometric_service.dart';
 import 'package:orbit/data/api/orbit_bridge.dart' show BiometricSecretBundle;
+import 'support/orbit_test_app.dart';
 
 /// 设置页安全卡指纹开关 widget 测试
 ///
@@ -45,7 +46,7 @@ Widget _wrap(MockOrbitBridge bridge, BiometricService service) =>
         orbitBridgeProvider.overrideWithValue(bridge),
         biometricServiceProvider.overrideWithValue(service),
       ],
-      child: const MaterialApp(home: SettingsScreen()),
+      child: orbitTestApp(home: SettingsScreen()),
     );
 
 /// 把目标滚进「标题栏之下、视口下沿之上」的可命中区间。

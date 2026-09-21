@@ -3,16 +3,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:orbit/core/routing/router_keys.dart';
 import 'package:orbit/data/api/mock_orbit_bridge.dart';
 import 'package:orbit/data/providers/bridge_provider.dart';
 import 'package:orbit/modules/settings/label_manager_page.dart';
 import 'package:orbit/modules/settings/template_manager_page.dart';
 import 'package:orbit/shared/utils/hex_color.dart';
+import 'support/orbit_test_app.dart';
 
 Widget _wrap(Widget child, MockOrbitBridge bridge) => ProviderScope(
       overrides: [orbitBridgeProvider.overrideWithValue(bridge)],
-      child: MaterialApp(navigatorKey: rootNavigatorKey, home: child),
+      child: orbitTestApp(home: child),
     );
 
 Future<void> _settle(WidgetTester tester) async {

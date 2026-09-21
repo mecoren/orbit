@@ -8,17 +8,17 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:orbit/core/routing/router_keys.dart';
 import 'package:orbit/data/api/mock_orbit_bridge.dart';
 import 'package:orbit/data/providers/bridge_provider.dart';
 import 'package:orbit/shared/widgets/sync_status_button.dart';
+import 'support/orbit_test_app.dart';
+import 'package:orbit/core/theme/icon_map.dart';
 
 /// WaitToast 经全局 rootNavigatorKey 的 Overlay 插入（wait_toast.dart），
 /// 故测试宿主 MaterialApp 必须挂同一 key，否则 toast 静默丢弃。
 Widget _wrap(MockOrbitBridge bridge) => ProviderScope(
       overrides: [orbitBridgeProvider.overrideWithValue(bridge)],
-      child: MaterialApp(
-        navigatorKey: rootNavigatorKey,
+      child: orbitTestApp(
         home: const Scaffold(
           body: Align(
             alignment: Alignment.topLeft,
@@ -52,7 +52,7 @@ void main() {
     await tester.pumpWidget(_wrap(MockOrbitBridge()));
     await _flush(tester);
 
-    expect(find.byIcon(Icons.cloud_rounded), findsOneWidget);
+    expect(find.byIcon(OrbitIcons.cloud), findsOneWidget);
     expect(
       tester.widget<IconButton>(find.byType(IconButton)).tooltip,
       '未配置云同步',

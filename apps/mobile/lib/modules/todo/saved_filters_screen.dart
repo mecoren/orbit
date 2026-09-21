@@ -18,6 +18,7 @@ import '../../shared/widgets/shadcn/orbit_toast.dart';
 import 'logic/task_logic.dart';
 import '../../shared/utils/hex_color.dart';
 import 'providers/todo_providers.dart';
+import '../../core/theme/icon_map.dart';
 
 /// 保存的筛选器页 /todo/saved-filters（#35：Apple Smart List 同款）
 ///
@@ -144,7 +145,7 @@ class _SavedFiltersScreenState extends ConsumerState<SavedFiltersScreen> {
                             ),
                           ),
                           Icon(
-                            Icons.chevron_right_rounded,
+                            OrbitIcons.chevronRight,
                             color: colors.secondaryText,
                           ),
                         ],
@@ -179,7 +180,7 @@ class _SavedFiltersScreenState extends ConsumerState<SavedFiltersScreen> {
                             ),
                           ),
                           Icon(
-                            Icons.chevron_right_rounded,
+                            OrbitIcons.chevronRight,
                             color: colors.secondaryText,
                           ),
                         ],
@@ -365,7 +366,7 @@ class _SavedFiltersScreenState extends ConsumerState<SavedFiltersScreen> {
                       return const SliverFillRemaining(
                         hasScrollBody: false,
                         child: EmptyState(
-                          icon: Icons.filter_alt_outlined,
+                          icon: OrbitIcons.filter,
                           message: '还没有保存的筛选器——把常用组合条件（优先级/截止窗口/收藏）存为命名视图',
                         ),
                       );
@@ -388,7 +389,7 @@ class _SavedFiltersScreenState extends ConsumerState<SavedFiltersScreen> {
                             children: [
                               ListTile(
                                 leading: Icon(
-                                  Icons.filter_alt_rounded,
+                                  OrbitIcons.filter,
                                   size: AppDimens.iconSizeMd,
                                   color: OrbitAccents.todoAccent,
                                 ),
@@ -414,7 +415,7 @@ class _SavedFiltersScreenState extends ConsumerState<SavedFiltersScreen> {
                                       visualDensity: VisualDensity.compact,
                                       tooltip: '编辑',
                                       icon: Icon(
-                                        Icons.edit_outlined,
+                                        OrbitIcons.edit,
                                         size: AppDimens.iconSizeSm,
                                         color: colors.secondaryText,
                                       ),
@@ -423,8 +424,8 @@ class _SavedFiltersScreenState extends ConsumerState<SavedFiltersScreen> {
                                     ),
                                     Icon(
                                       expanded
-                                          ? Icons.expand_less_rounded
-                                          : Icons.expand_more_rounded,
+                                          ? OrbitIcons.expandLess
+                                          : OrbitIcons.expandMore,
                                       color: colors.secondaryText,
                                     ),
                                   ],
@@ -508,7 +509,7 @@ class _SavedFiltersScreenState extends ConsumerState<SavedFiltersScreen> {
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _create,
-        icon: const Icon(Icons.add),
+        icon: const Icon(OrbitIcons.add),
         label: const Text('新建筛选器'),
       ),
     );

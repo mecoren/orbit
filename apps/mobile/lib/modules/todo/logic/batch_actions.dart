@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../data/api/dto.dart';
 import 'task_logic.dart' show viewDueHour;
 import 'undo_stack.dart';
+import '../../../core/theme/icon_map.dart';
 
 /// 批量动作（对齐桌面 `shared/batch-actions.ts` 的动作集裁剪版）
 ///
@@ -25,12 +26,12 @@ extension BatchActionMeta on BatchAction {
       };
 
   IconData get icon => switch (this) {
-        BatchAction.toggleDone => Icons.check_circle_outline_rounded,
-        BatchAction.priority => Icons.flag_outlined,
-        BatchAction.reschedule => Icons.event_outlined,
-        BatchAction.moveProject => Icons.folder_outlined,
-        BatchAction.addLabel => Icons.label_outline_rounded,
-        BatchAction.delete => Icons.delete_outline_rounded,
+        BatchAction.toggleDone => OrbitIcons.success,
+        BatchAction.priority => OrbitIcons.flag,
+        BatchAction.reschedule => OrbitIcons.calendar,
+        BatchAction.moveProject => OrbitIcons.folder,
+        BatchAction.addLabel => OrbitIcons.tag,
+        BatchAction.delete => OrbitIcons.delete,
       };
 }
 

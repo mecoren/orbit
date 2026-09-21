@@ -13,6 +13,7 @@ import '../../shared/widgets/shadcn/orbit_confirm_sheet.dart';
 import '../../shared/widgets/shadcn/orbit_page_header.dart';
 import '../../shared/widgets/shadcn/orbit_section_card.dart';
 import '../../shared/widgets/shadcn/orbit_toast.dart';
+import '../../core/theme/icon_map.dart';
 
 /// 冲突记录页 /settings/conflicts（03 文档 §八 遗留项兑现）
 ///
@@ -285,7 +286,7 @@ class _SyncConflictsPageState extends ConsumerState<SyncConflictsPage> {
         children: [
           Row(
             children: [
-              Icon(Icons.warning_amber_rounded,
+              Icon(OrbitIcons.warning,
                   size: AppDimens.iconSizeMd, color: colors.warning),
               const SizedBox(width: AppDimens.space8),
               Expanded(

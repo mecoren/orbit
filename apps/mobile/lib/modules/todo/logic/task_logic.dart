@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../data/api/dto.dart';
 import 'view_mode.dart';
+import '../../../core/theme/icon_map.dart';
 
 /// 待办共享业务纯函数（无 UI / 无 IO，可直接单测）
 ///
@@ -46,13 +47,13 @@ extension QuickViewMeta on QuickViewKey {
 
   /// Material Rounded 图标（docs/05 §4.1 图标映射 + nodate 补充）
   IconData get icon => switch (this) {
-        QuickViewKey.myDay => Icons.wb_sunny_rounded,
-        QuickViewKey.today => Icons.calendar_today_rounded,
-        QuickViewKey.week => Icons.date_range_rounded,
-        QuickViewKey.all => Icons.list_alt_rounded,
-        QuickViewKey.done => Icons.check_circle_outline_rounded,
-        QuickViewKey.favorite => Icons.star_border_rounded,
-        QuickViewKey.nodate => Icons.event_busy_rounded,
+        QuickViewKey.myDay => OrbitIcons.sun,
+        QuickViewKey.today => OrbitIcons.calendar,
+        QuickViewKey.week => OrbitIcons.calendarRange,
+        QuickViewKey.all => OrbitIcons.list,
+        QuickViewKey.done => OrbitIcons.success,
+        QuickViewKey.favorite => OrbitIcons.starOutline,
+        QuickViewKey.nodate => OrbitIcons.calendarBlocked,
       };
 }
 

@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import 'package:orbit/data/api/mock_orbit_bridge.dart';
 import 'package:orbit/data/providers/bridge_provider.dart';
 import 'package:orbit/modules/todo/search_screen.dart';
+import 'support/orbit_test_app.dart';
 
 final _router = GoRouter(
   initialLocation: '/todo/search',
@@ -23,7 +24,7 @@ final _router = GoRouter(
 
 Widget _wrap(MockOrbitBridge bridge) => ProviderScope(
       overrides: [orbitBridgeProvider.overrideWithValue(bridge)],
-      child: MaterialApp.router(routerConfig: _router),
+      child: orbitTestAppRouter(routerConfig: _router),
     );
 
 void main() {

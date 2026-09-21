@@ -21,6 +21,7 @@ import 'form_bottom_sheet.dart';
 import 'logic/task_logic.dart';
 import 'providers/todo_providers.dart';
 import 'year_overview_page.dart';
+import '../../core/theme/icon_map.dart';
 
 /// 日历视图 /todo/calendar（wait-home 重要日期风格重构）
 ///
@@ -212,7 +213,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                       child: Row(
                         children: [
                           IconButton(
-                            icon: const Icon(Icons.chevron_left_rounded,
+                            icon: const Icon(OrbitIcons.chevronLeft,
                                 size: AppDimens.iconSizeLg),
                             onPressed: _prevMonth,
                             tooltip: '上个月',
@@ -234,7 +235,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                             ),
                           ),
                           IconButton(
-                            icon: const Icon(Icons.chevron_right_rounded,
+                            icon: const Icon(OrbitIcons.chevronRight,
                                 size: AppDimens.iconSizeLg),
                             onPressed: _nextMonth,
                             tooltip: '下个月',
@@ -242,7 +243,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                           ),
                           const SizedBox(width: AppDimens.space4),
                           IconButton(
-                            icon: const Icon(Icons.today_rounded,
+                            icon: const Icon(OrbitIcons.calendarCheck,
                                 size: AppDimens.iconSizeMd),
                             onPressed: _goToday,
                             tooltip: '回到今天',
@@ -326,7 +327,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                         padding: const EdgeInsets.all(AppDimens.space16),
                         child: Row(
                           children: [
-                            Icon(Icons.event_busy_rounded,
+                            Icon(OrbitIcons.calendarBlocked,
                                 size: 16,
                                 color: colors.secondaryText
                                     .withValues(alpha: 0.6)),
@@ -398,7 +399,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
               height: 18,
               child: CircularProgressIndicator(strokeWidth: 2),
             )
-          : const Icon(Icons.refresh_rounded, size: AppDimens.iconSizeMd),
+          : const Icon(OrbitIcons.refresh, size: AppDimens.iconSizeMd),
       tooltip: tip,
       onPressed: _updating ? null : _updateHolidays,
     );
@@ -598,7 +599,7 @@ class _TaskCard extends StatelessWidget {
                   ),
                 ),
               ),
-            Icon(Icons.chevron_right_rounded,
+            Icon(OrbitIcons.chevronRight,
                 size: 18, color: colors.secondaryText),
           ],
         ),

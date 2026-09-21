@@ -30,3 +30,19 @@ Widget orbitTestApp({
         child: child ?? const SizedBox.shrink(),
       ),
     );
+
+/// 路由形态的测试壳（GoRouter 用）：与 [orbitTestApp] 同构，同样包 ShadcnLayer。
+Widget orbitTestAppRouter({
+  required RouterConfig<Object> routerConfig,
+  Brightness brightness = Brightness.light,
+}) =>
+    MaterialApp.router(
+      routerConfig: routerConfig,
+      debugShowCheckedModeBanner: false,
+      theme: buildAppTheme(brightness: brightness),
+      builder: (context, child) => sh.ShadcnLayer(
+        theme: buildShadcnTheme(brightness: brightness),
+        scaling: sh.AdaptiveScaling.desktop,
+        child: child ?? const SizedBox.shrink(),
+      ),
+    );

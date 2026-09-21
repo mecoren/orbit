@@ -1,4 +1,3 @@
-import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -8,6 +7,7 @@ import 'package:orbit/data/providers/biometric_provider.dart';
 import 'package:orbit/data/providers/bridge_provider.dart';
 import 'package:orbit/modules/auth/unlock_page.dart';
 import 'package:orbit/services/biometric_service.dart';
+import 'support/orbit_test_app.dart';
 
 /// UnlockPage 指纹入口 widget 测试
 ///
@@ -64,7 +64,7 @@ void main() {
             store: _FakeStore(), // 无三件套 = 未启用
           )),
         ],
-        child: const MaterialApp(home: UnlockPage(onUnlocked: fail)),
+        child: orbitTestApp(home: UnlockPage(onUnlocked: fail)),
       ),
     );
     await tester.pumpAndSettle();
@@ -87,7 +87,7 @@ void main() {
             store: store,
           )),
         ],
-        child: MaterialApp(
+        child: orbitTestApp(
           home: UnlockPage(onUnlocked: (key) => unlockedKey = key),
         ),
       ),
@@ -117,7 +117,7 @@ void main() {
             store: store,
           )),
         ],
-        child: MaterialApp(
+        child: orbitTestApp(
           home: UnlockPage(onUnlocked: (_) => called = true),
         ),
       ),

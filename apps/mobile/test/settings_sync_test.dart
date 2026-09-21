@@ -8,6 +8,7 @@ import 'package:orbit/data/api/mock_orbit_bridge.dart';
 import 'package:orbit/data/providers/bridge_provider.dart';
 import 'package:orbit/modules/settings/settings_screen.dart';
 import 'package:orbit/modules/settings/sync_settings_page.dart';
+import 'support/orbit_test_app.dart';
 
 void main() {
   // appRouter 是带导航状态的全局单例，直接复用会在用例间串路由；
@@ -39,7 +40,7 @@ void main() {
         overrides: [
           orbitBridgeProvider.overrideWithValue(MockOrbitBridge()),
         ],
-        child: MaterialApp.router(routerConfig: buildRouter()),
+        child: orbitTestAppRouter(routerConfig: buildRouter()),
       ),
     );
     await tester.pump(const Duration(milliseconds: 300));
@@ -67,7 +68,7 @@ void main() {
         overrides: [
           orbitBridgeProvider.overrideWithValue(bridge),
         ],
-        child: MaterialApp.router(routerConfig: buildRouter()),
+        child: orbitTestAppRouter(routerConfig: buildRouter()),
       ),
     );
     await tester.pump(const Duration(milliseconds: 300));
@@ -105,7 +106,7 @@ void main() {
         overrides: [
           orbitBridgeProvider.overrideWithValue(bridge),
         ],
-        child: MaterialApp.router(routerConfig: buildRouter()),
+        child: orbitTestAppRouter(routerConfig: buildRouter()),
       ),
     );
     await tester.pump(const Duration(milliseconds: 300));

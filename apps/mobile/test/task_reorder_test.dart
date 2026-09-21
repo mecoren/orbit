@@ -11,10 +11,12 @@ import 'package:orbit/data/api/mock_orbit_bridge.dart';
 import 'package:orbit/data/providers/bridge_provider.dart';
 import 'package:orbit/modules/todo/logic/task_logic.dart';
 import 'package:orbit/modules/todo/sub_list_screen.dart';
+import 'support/orbit_test_app.dart';
+import 'package:orbit/core/theme/icon_map.dart';
 
 Widget _wrap(Widget child, MockOrbitBridge bridge) => ProviderScope(
       overrides: [orbitBridgeProvider.overrideWithValue(bridge)],
-      child: MaterialApp(home: child),
+      child: orbitTestApp(home: child),
     );
 
 Future<void> _settlePastMockLatency(WidgetTester tester) async {
@@ -24,7 +26,7 @@ Future<void> _settlePastMockLatency(WidgetTester tester) async {
 
 /// 打开右上排序菜单切换档位（sort 图标按钮 → PopupMenuItem 文案）
 Future<void> _switchSort(WidgetTester tester, String label) async {
-  await tester.tap(find.byIcon(Icons.sort_rounded));
+  await tester.tap(find.byIcon(OrbitIcons.sort));
   await tester.pumpAndSettle();
   await tester.tap(find.text(label).last);
   await tester.pumpAndSettle();
@@ -43,7 +45,7 @@ void main() {
 
     // 默认 manual 档：ReorderableListView + 把手图标
     expect(find.byType(ReorderableListView), findsOneWidget);
-    expect(find.byIcon(Icons.drag_handle_rounded), findsWidgets);
+    expect(find.byIcon(OrbitIcons.drag), findsWidgets);
   });
 
   testWidgets('非 manual 档：无把手（顺序由排序档决定）', (tester) async {
@@ -60,7 +62,7 @@ void main() {
     await _settlePastMockLatency(tester);
 
     expect(find.byType(ReorderableListView), findsNothing);
-    expect(find.byIcon(Icons.drag_handle_rounded), findsNothing);
+    expect(find.byIcon(OrbitIcons.drag), findsNothing);
     // 列表本身仍渲染（普通 ListView）
     expect(find.text('完成移动端重构方案评审'), findsOneWidget);
   });

@@ -12,10 +12,11 @@ import 'package:orbit/modules/todo/logic/task_logic.dart';
 import 'package:orbit/modules/todo/stats_screen.dart';
 import 'package:orbit/shared/widgets/shadcn/orbit_heatmap.dart';
 import 'package:orbit/shared/utils/hex_color.dart';
+import 'support/orbit_test_app.dart';
 
 Widget _wrap(Widget child, MockOrbitBridge bridge) => ProviderScope(
       overrides: [orbitBridgeProvider.overrideWithValue(bridge)],
-      child: MaterialApp(home: child),
+      child: orbitTestApp(home: child),
     );
 
 Future<void> _settle(WidgetTester tester) async {
@@ -89,7 +90,7 @@ void main() {
     final heatmap = _buildHeatmap(year: now.year, counts: {
       _key(now): 2,
     });
-    await tester.pumpWidget(MaterialApp(
+    await tester.pumpWidget(orbitTestApp(
       home: Scaffold(
         body: OrbitHeatmap(
           heatmap: heatmap,

@@ -27,6 +27,7 @@ import '../../modules/todo/providers/todo_providers.dart';
 import '../utils/sync_status_text.dart';
 import 'shadcn/orbit_actions_sheet.dart' show bottomSheetTopShape;
 import 'shadcn/orbit_toast.dart';
+import '../../core/theme/icon_map.dart';
 
 /// 云同步配置页路由（未配置 / 未解锁时的引导目标）
 const String _syncSettingsRoute = '/settings/sync';
@@ -170,7 +171,7 @@ class _SyncStatusButtonState extends ConsumerState<SyncStatusButton> {
         alignment: Alignment.center,
         clipBehavior: Clip.none,
         children: [
-          Icon(Icons.cloud_rounded, size: AppDimens.iconSizeMd, color: color),
+          Icon(OrbitIcons.cloud, size: AppDimens.iconSizeMd, color: color),
           if (status == SyncUiStatus.syncing)
             const SizedBox(
               width: _iconBox,
@@ -197,7 +198,7 @@ class _SyncStatusButtonState extends ConsumerState<SyncStatusButton> {
                     color: colors.success,
                     shape: BoxShape.circle,
                   ),
-                  child: const Icon(Icons.check_rounded,
+                  child: const Icon(OrbitIcons.check,
                       size: 10, color: Colors.white),
                 ),
               ),
@@ -324,7 +325,7 @@ class _SyncInfoSheetState extends ConsumerState<_SyncInfoSheet> {
             Row(
               children: [
                 const Icon(
-                  Icons.cloud_rounded,
+                  OrbitIcons.cloud,
                   size: AppDimens.iconSizeMd,
                   color: OrbitAccents.themeAccent,
                 ),

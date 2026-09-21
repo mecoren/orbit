@@ -10,10 +10,11 @@ import 'package:orbit/data/api/mock_orbit_bridge.dart';
 import 'package:orbit/data/providers/bridge_provider.dart';
 import 'package:orbit/modules/shell/boot_gate.dart';
 import 'package:orbit/services/reminder_scheduler.dart';
+import 'support/orbit_test_app.dart';
 
 Widget _wrap(MockOrbitBridge bridge) => ProviderScope(
       overrides: [orbitBridgeProvider.overrideWithValue(bridge)],
-      child: MaterialApp(
+      child: orbitTestApp(
         home: BootGate(child: const Text('MAIN_CONTENT')),
       ),
     );

@@ -15,6 +15,7 @@ import '../../shared/widgets/shadcn/orbit_section_card.dart';
 import '../../shared/widgets/shadcn/orbit_toast.dart';
 import '../todo/logic/task_logic.dart' show labelPaletteHexes;
 import '../todo/providers/todo_providers.dart';
+import '../../core/theme/icon_map.dart';
 
 /// 标签管理页 /settings/labels（对齐桌面 `label-manager.tsx`）
 ///
@@ -107,7 +108,7 @@ class _LabelManagerPageState extends ConsumerState<LabelManagerPage> {
                               : null,
                         ),
                         child: hex.toUpperCase() == current.toUpperCase()
-                            ? const Icon(Icons.check_rounded,
+                            ? const Icon(OrbitIcons.check,
                                 size: AppDimens.iconSizeSm,
                                 color: Colors.white)
                             : null,
@@ -251,7 +252,7 @@ class _LabelManagerPageState extends ConsumerState<LabelManagerPage> {
                                   : null,
                             ),
                             child: hex.toUpperCase() == color.toUpperCase()
-                                ? const Icon(Icons.check_rounded,
+                                ? const Icon(OrbitIcons.check,
                                     size: AppDimens.iconSizeSm,
                                     color: Colors.white)
                                 : null,
@@ -336,7 +337,7 @@ class _LabelManagerPageState extends ConsumerState<LabelManagerPage> {
                         width: double.infinity,
                         child: OutlinedButton.icon(
                           onPressed: _busy ? null : _createLabel,
-                          icon: const Icon(Icons.add_rounded,
+                          icon: const Icon(OrbitIcons.add,
                               size: AppDimens.iconSizeSm + 2),
                           label: const Text('新建标签'),
                         ),
@@ -402,13 +403,13 @@ class _LabelManagerPageState extends ConsumerState<LabelManagerPage> {
           IconButton(
             onPressed: _busy ? null : () => _rename(label),
             tooltip: '编辑',
-            icon: Icon(Icons.edit_outlined,
+            icon: Icon(OrbitIcons.edit,
                 size: AppDimens.iconSizeMd, color: colors.secondaryText),
           ),
           IconButton(
             onPressed: _busy ? null : () => _delete(label),
             tooltip: '删除',
-            icon: Icon(Icons.delete_outline_rounded,
+            icon: Icon(OrbitIcons.delete,
                 size: AppDimens.iconSizeMd, color: colors.destructive),
           ),
         ],

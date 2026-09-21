@@ -9,10 +9,12 @@ import 'package:orbit/modules/todo/form_bottom_sheet.dart';
 import 'package:orbit/modules/todo/logic/task_logic.dart' show QuickViewKey;
 import 'package:orbit/modules/todo/sidebar_screen.dart';
 import 'package:orbit/shared/widgets/shadcn/orbit_section_card.dart';
+import 'support/orbit_test_app.dart';
+import 'package:orbit/core/theme/icon_map.dart';
 
 Widget _wrap(Widget child, MockOrbitBridge bridge) => ProviderScope(
       overrides: [orbitBridgeProvider.overrideWithValue(bridge)],
-      child: MaterialApp(home: child),
+      child: orbitTestApp(home: child),
     );
 
 /// 推进假时钟越过 MockOrbitBridge 的 120ms 人为延迟，再收敛帧
@@ -26,7 +28,7 @@ Future<MockOrbitBridge> _openForm(WidgetTester tester) async {
   final bridge = MockOrbitBridge();
   await tester.pumpWidget(_wrap(const SidebarScreen(), bridge));
   await _settlePastMockLatency(tester);
-  await tester.tap(find.byIcon(Icons.add_rounded));
+  await tester.tap(find.byIcon(OrbitIcons.add));
   await tester.pumpAndSettle();
   return bridge;
 }
@@ -95,7 +97,7 @@ void main() {
     await _openForm(tester);
 
     // 空标题直接保存 → 触发校验（不落库）
-    await tester.tap(find.byIcon(Icons.check_rounded));
+    await tester.tap(find.byIcon(OrbitIcons.check));
     await tester.pumpAndSettle();
 
     // 回归保护：只覆盖 enabledBorder 时，错误态会回退到主题 BorderSide.none，
@@ -166,7 +168,7 @@ void main() {
         .descendant(of: find.byType(SectionCard), matching: find.text('今天')));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byIcon(Icons.check_rounded));
+    await tester.tap(find.byIcon(OrbitIcons.check));
     await _settlePastMockLatency(tester);
 
     final tasks = await tester.runAsync(
@@ -186,15 +188,15 @@ void main() {
     await tester.pump();
 
     // chips：截止（明天日期）+ P3 优先级
-    expect(find.byIcon(Icons.event_rounded), findsOneWidget);
-    expect(find.byIcon(Icons.flag_rounded), findsOneWidget);
+    expect(find.byIcon(OrbitIcons.calendar), findsOneWidget);
+    expect(find.byIcon(OrbitIcons.flag), findsOneWidget);
     final tomorrow = DateTime.now().add(const Duration(days: 1));
     final expectedY =
         '${tomorrow.year}-${tomorrow.month.toString().padLeft(2, '0')}-${tomorrow.day.toString().padLeft(2, '0')}';
     expect(find.text('截止 $expectedY'), findsOneWidget);
 
     // 保存 → 字段应用（due_date=明天零点、priority=3）+ 标题剥离
-    await tester.tap(find.byIcon(Icons.check_rounded));
+    await tester.tap(find.byIcon(OrbitIcons.check));
     await _settlePastMockLatency(tester);
 
     final tasks = await tester.runAsync(
@@ -219,7 +221,7 @@ void main() {
     await tester.tap(find.text('每天'));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byIcon(Icons.check_rounded));
+    await tester.tap(find.byIcon(OrbitIcons.check));
     await _settlePastMockLatency(tester);
 
     // testWidgets 体在 FakeAsync 区，bridge 的 Future.delayed 需真实时钟：
@@ -256,7 +258,7 @@ void main() {
     await tester.tap(find.text('确定'));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byIcon(Icons.check_rounded));
+    await tester.tap(find.byIcon(OrbitIcons.check));
     await _settlePastMockLatency(tester);
 
     final tasks = await tester.runAsync(
@@ -391,12 +393,12 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [orbitBridgeProvider.overrideWithValue(bridge)],
-        child: MaterialApp(
+        child: orbitTestApp(
           home: Builder(
             builder: (context) => Scaffold(
               body: Center(
                 child: IconButton(
-                  icon: const Icon(Icons.add_rounded),
+                  icon: const Icon(OrbitIcons.add),
                   onPressed: () => showTodoFormSheet(context, quickView: view),
                 ),
               ),
@@ -405,7 +407,7 @@ void main() {
         ),
       ),
     );
-    await tester.tap(find.byIcon(Icons.add_rounded));
+    await tester.tap(find.byIcon(OrbitIcons.add));
     await tester.pumpAndSettle();
     return bridge;
   }
@@ -414,7 +416,7 @@ void main() {
     final bridge = await openFormInView(tester, QuickViewKey.myDay);
 
     await tester.enterText(find.byType(TextFormField).first, '我的一天快建任务');
-    await tester.tap(find.byIcon(Icons.check_rounded));
+    await tester.tap(find.byIcon(OrbitIcons.check));
     await _settlePastMockLatency(tester);
 
     final tasks = await tester.runAsync(
@@ -432,7 +434,7 @@ void main() {
     final bridge = await openFormInView(tester, QuickViewKey.favorite);
 
     await tester.enterText(find.byType(TextFormField).first, '收藏快建任务');
-    await tester.tap(find.byIcon(Icons.check_rounded));
+    await tester.tap(find.byIcon(OrbitIcons.check));
     await _settlePastMockLatency(tester);
 
     final tasks = await tester.runAsync(
@@ -446,7 +448,7 @@ void main() {
     final bridge = await openFormInView(tester, QuickViewKey.today);
 
     await tester.enterText(find.byType(TextFormField).first, '今日截止快建任务');
-    await tester.tap(find.byIcon(Icons.check_rounded));
+    await tester.tap(find.byIcon(OrbitIcons.check));
     await _settlePastMockLatency(tester);
 
     final tasks = await tester.runAsync(
@@ -464,7 +466,7 @@ void main() {
     final bridge = await _openForm(tester); // 侧栏 FAB：quickView=null
 
     await tester.enterText(find.byType(TextFormField).first, '普通快建任务');
-    await tester.tap(find.byIcon(Icons.check_rounded));
+    await tester.tap(find.byIcon(OrbitIcons.check));
     await _settlePastMockLatency(tester);
 
     final tasks = await tester.runAsync(

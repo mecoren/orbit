@@ -4,9 +4,9 @@
 // 3. onNotificationTap 注入契约：BootGate 注入的回调 push '/todo/:id'
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:orbit/core/routing/router_keys.dart';
 import 'package:orbit/services/notification_service.dart';
 import 'package:orbit/shared/widgets/shadcn/orbit_toast.dart';
+import 'support/orbit_test_app.dart';
 
 void main() {
   group('taskIdFromPayload（通知点击两路共用口径）', () {
@@ -29,8 +29,7 @@ void main() {
     testWidgets('带 onTap 的 toast：点击卡片触发回调', (tester) async {
       var fired = 0;
       await tester.pumpWidget(
-        MaterialApp(
-          navigatorKey: rootNavigatorKey,
+        orbitTestApp(
           home: const Scaffold(body: SizedBox()),
         ),
       );
@@ -46,8 +45,7 @@ void main() {
 
     testWidgets('无 onTap 行为不变：点击仅收起不抛错', (tester) async {
       await tester.pumpWidget(
-        MaterialApp(
-          navigatorKey: rootNavigatorKey,
+        orbitTestApp(
           home: const Scaffold(body: SizedBox()),
         ),
       );

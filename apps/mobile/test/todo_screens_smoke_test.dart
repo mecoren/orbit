@@ -10,10 +10,12 @@ import 'package:orbit/modules/todo/providers/todo_providers.dart';
 import 'package:orbit/modules/todo/sidebar_screen.dart';
 import 'package:orbit/modules/todo/sub_list_screen.dart';
 import 'package:orbit/shared/widgets/shadcn/orbit_fab.dart';
+import 'support/orbit_test_app.dart';
+import 'package:orbit/core/theme/icon_map.dart';
 
 Widget _wrap(Widget child, MockOrbitBridge bridge) => ProviderScope(
       overrides: [orbitBridgeProvider.overrideWithValue(bridge)],
-      child: MaterialApp(home: child),
+      child: orbitTestApp(home: child),
     );
 
 /// 推进假时钟越过 MockOrbitBridge 的 120ms 人为延迟，再收敛帧
@@ -60,7 +62,7 @@ void main() {
     final rowIcons = tester.widgetList<Icon>(
       find.descendant(of: workRows, matching: find.byType(Icon)),
     );
-    final folder = rowIcons.firstWhere((i) => i.icon == Icons.folder_rounded);
+    final folder = rowIcons.firstWhere((i) => i.icon == OrbitIcons.folder);
     expect(folder.color, const Color(0xFF4E8CFF));
   });
 
@@ -207,7 +209,7 @@ void main() {
     await _settlePastMockLatency(tester);
 
     // 切出 manual 档 → 列表换 ListView.builder 分支（逾期置顶区块）
-    await tester.tap(find.byIcon(Icons.sort_rounded));
+    await tester.tap(find.byIcon(OrbitIcons.sort));
     await tester.pumpAndSettle();
     await tester.tap(find.text('截止时间'));
     await tester.pumpAndSettle();

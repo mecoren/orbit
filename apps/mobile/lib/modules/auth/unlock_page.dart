@@ -5,6 +5,7 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_dimens.dart';
 import '../../data/providers/biometric_provider.dart';
 import '../../data/providers/bridge_provider.dart';
+import '../../core/theme/icon_map.dart';
 
 /// 主密码解锁页（原 React 版 unlock-page.tsx 同构）
 ///
@@ -169,7 +170,7 @@ class _UnlockPageState extends ConsumerState<UnlockPage> {
                               height: AppDimens.iconSizeSm,
                               child: CircularProgressIndicator(strokeWidth: 2, color: colors.secondaryText),
                             )
-                          : const Icon(Icons.fingerprint_rounded,
+                          : const Icon(OrbitIcons.fingerprint,
                               size: AppDimens.iconSizeSm + 2),
                       label: const Text('指纹解锁'),
                     ),

@@ -5,11 +5,10 @@
 // - 撤销类 → 调用点显式传 undoDwell/窗口时长，到期自动收。
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:orbit/core/routing/router_keys.dart';
 import 'package:orbit/shared/widgets/shadcn/orbit_toast.dart';
+import 'support/orbit_test_app.dart';
 
-Widget _harness() => MaterialApp(
-      navigatorKey: rootNavigatorKey,
+Widget _harness() => orbitTestApp(
       home: const Scaffold(body: SizedBox.expand()),
     );
 

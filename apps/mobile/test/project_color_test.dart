@@ -7,9 +7,10 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:orbit/data/api/dto.dart';
 import 'package:orbit/modules/todo/sub_list_screen.dart';
+import 'support/orbit_test_app.dart';
 
 Widget _harness({required TodoTask task, String? projectColorHex}) =>
-    MaterialApp(
+    orbitTestApp(
       home: Scaffold(
         body: ListView(
           children: [

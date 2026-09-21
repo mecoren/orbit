@@ -20,6 +20,7 @@ import '../../shared/widgets/shadcn/orbit_toast.dart';
 import 'form_bottom_sheet.dart';
 import 'logic/task_logic.dart';
 import 'providers/todo_providers.dart';
+import '../../core/theme/icon_map.dart';
 
 /// 侧栏首屏 /todo（docs/05 §4.1 + 移动端任务书）
 ///
@@ -115,17 +116,17 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
       title: project.title,
       actions: [
         MoreActionItem(
-          icon: Icons.edit_rounded,
+          icon: OrbitIcons.edit,
           label: '编辑',
           onTap: () => _editProject(project),
         ),
         MoreActionItem(
-          icon: Icons.archive_outlined,
+          icon: OrbitIcons.archive,
           label: project.isArchived == 1 ? '取消归档' : '归档项目',
           onTap: () => _toggleArchive(project),
         ),
         MoreActionItem(
-          icon: Icons.delete_outline_rounded,
+          icon: OrbitIcons.delete,
           label: '删除',
           color: OrbitAccents.overdueRed,
           onTap: () => _deleteProject(project, undoneCount),
@@ -379,7 +380,7 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
               // 新建项目（#36：移动端此前无创建项目入口）
               ListTile(
                 leading: Icon(
-                  Icons.add_rounded,
+                  OrbitIcons.add,
                   size: AppDimens.iconSizeMd,
                   color: colors.secondaryText,
                 ),
@@ -400,7 +401,7 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
                 ..._archivedProjects().map(
                   (p) => ListTile(
                     leading: Icon(
-                      Icons.folder_rounded,
+                      OrbitIcons.folder,
                       size: AppDimens.iconSizeMd,
                       color: p.hexColor.isNotEmpty
                           ? hexToColor(p.hexColor)
@@ -425,7 +426,7 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
               // 三、未分组
               ListTile(
                 leading: Icon(
-                  Icons.inbox_rounded,
+                  OrbitIcons.inbox,
                   size: AppDimens.iconSizeMd,
                   color: colors.secondaryText,
                 ),
@@ -449,7 +450,7 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
                       background: surfaceHighest,
                     ),
                     Icon(
-                      Icons.chevron_right_rounded,
+                      OrbitIcons.chevronRight,
                       size: AppDimens.iconSizeMd,
                       color: colors.secondaryText,
                     ),
@@ -471,7 +472,7 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
               leading: const SyncStatusButton(),
               actions: [
                 IconButton(
-                  icon: const Icon(Icons.settings_rounded,
+                  icon: const Icon(OrbitIcons.settings,
                       size: AppDimens.iconSizeMd),
                   onPressed: () => context.push('/settings'),
                 ),
@@ -497,7 +498,7 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
     final colors = AppColors.ofContext(context);
     return ListTile(
       leading: Icon(
-        Icons.calendar_month_rounded,
+        OrbitIcons.calendarDays,
         size: AppDimens.iconSizeMd,
         color: OrbitAccents.todoAccent,
       ),
@@ -510,7 +511,7 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
         ),
       ),
       trailing: Icon(
-        Icons.chevron_right_rounded,
+        OrbitIcons.chevronRight,
         size: AppDimens.iconSizeMd,
         color: colors.secondaryText,
       ),
@@ -523,7 +524,7 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
     final colors = AppColors.ofContext(context);
     return ListTile(
       leading: Icon(
-        Icons.insights_rounded,
+        OrbitIcons.trending,
         size: AppDimens.iconSizeMd,
         color: OrbitAccents.todoAccent,
       ),
@@ -536,7 +537,7 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
         ),
       ),
       trailing: Icon(
-        Icons.chevron_right_rounded,
+        OrbitIcons.chevronRight,
         size: AppDimens.iconSizeMd,
         color: colors.secondaryText,
       ),
@@ -549,7 +550,7 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
     final colors = AppColors.ofContext(context);
     return ListTile(
       leading: Icon(
-        Icons.filter_alt_rounded,
+        OrbitIcons.filter,
         size: AppDimens.iconSizeMd,
         color: OrbitAccents.todoAccent,
       ),
@@ -562,7 +563,7 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
         ),
       ),
       trailing: Icon(
-        Icons.chevron_right_rounded,
+        OrbitIcons.chevronRight,
         size: AppDimens.iconSizeMd,
         color: colors.secondaryText,
       ),
@@ -575,7 +576,7 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
     final colors = AppColors.ofContext(context);
     return ListTile(
       leading: Icon(
-        Icons.search_rounded,
+        OrbitIcons.search,
         size: AppDimens.iconSizeMd,
         color: OrbitAccents.todoAccent,
       ),
@@ -588,7 +589,7 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
         ),
       ),
       trailing: Icon(
-        Icons.chevron_right_rounded,
+        OrbitIcons.chevronRight,
         size: AppDimens.iconSizeMd,
         color: colors.secondaryText,
       ),
@@ -602,7 +603,7 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
     final trashedCount = ref.watch(trashTasksProvider).value?.length ?? 0;
     return ListTile(
       leading: Icon(
-        Icons.delete_outline_rounded,
+        OrbitIcons.delete,
         size: AppDimens.iconSizeMd,
         color: colors.secondaryText,
       ),
@@ -619,7 +620,7 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
         children: [
           CountBadge.wrap(n: trashedCount, background: badgeBackground),
           Icon(
-            Icons.chevron_right_rounded,
+            OrbitIcons.chevronRight,
             size: AppDimens.iconSizeMd,
             color: colors.secondaryText,
           ),
@@ -655,7 +656,7 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
         children: [
           CountBadge.wrap(n: undone, background: surfaceHighest),
           Icon(
-            Icons.chevron_right_rounded,
+            OrbitIcons.chevronRight,
             size: AppDimens.iconSizeMd,
             color: colors.secondaryText,
           ),
@@ -686,7 +687,7 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
           children: [
             // 项目固定图标（folder_rounded）按项目自选色染色，无色回退强调色
             Icon(
-              Icons.folder_rounded,
+              OrbitIcons.folder,
               size: AppDimens.iconSizeMd,
               color: hexToColor(project.hexColor,
                   fallback: OrbitAccents.todoAccent),
@@ -719,7 +720,7 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
                 width: AppDimens.iconSizeMd + AppDimens.space8,
                 height: AppDimens.touchTarget - AppDimens.space12,
                 child: Icon(
-                  Icons.drag_handle_rounded,
+                  OrbitIcons.drag,
                   size: AppDimens.iconSizeMd,
                   color: colors.secondaryText,
                 ),

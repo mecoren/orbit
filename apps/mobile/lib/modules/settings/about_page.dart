@@ -4,6 +4,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_dimens.dart';
 import '../../core/theme/orbit_accents.dart';
+import '../../core/theme/icon_map.dart';
 
 /// 关于页 /about（设置页关于卡入口）
 ///
@@ -137,7 +138,7 @@ class _AboutPageState extends State<AboutPage> {
                   const SizedBox(height: AppDimens.space8),
                   OutlinedButton.icon(
                     onPressed: () => showLicensePage(context: context),
-                    icon: const Icon(Icons.description_outlined, size: 18),
+                    icon: const Icon(OrbitIcons.fileText, size: 18),
                     label: const Text('查看开源许可'),
                   ),
                 ],

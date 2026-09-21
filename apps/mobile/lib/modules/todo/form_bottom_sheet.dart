@@ -33,6 +33,7 @@ import 'logic/task_logic.dart'
         statusLabel;
 import 'providers/todo_providers.dart';
 import 'repeat_edit_sheet.dart';
+import '../../core/theme/icon_map.dart';
 
 /// 截止日期选择器（表单抽屉"自定义"与详情页截止日期行共用）
 ///
@@ -620,7 +621,7 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
                                       ),
                                     )
                                   : Icon(
-                                      Icons.check_rounded,
+                                      OrbitIcons.check,
                                       size: AppDimens.iconSizeLg,
                                       color: OrbitAccents.todoAccent,
                                     ),
@@ -728,7 +729,7 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
                                 children: [
                                   // 截止日期：未设 → 行内快捷胶囊；已设 → 值 + 清除
                                   _FormDateTile(
-                                    icon: Icons.flag_outlined,
+                                    icon: OrbitIcons.flag,
                                     label: '截止日期',
                                     value: _dueDate != null
                                         ? formatYmd(_dueDate!)
@@ -760,7 +761,7 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
                                   ),
                                   _tileDivider(colors),
                                   _FormDateTile(
-                                    icon: Icons.play_circle_outline_rounded,
+                                    icon: OrbitIcons.playCircle,
                                     label: '开始日期',
                                     value: _startDate != null
                                         ? formatYmd(_startDate!)
@@ -778,7 +779,7 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
                                   _tileDivider(colors),
                                   // 提醒时间（虚拟字段：提交时同步 todo_reminders）
                                   _FormDateTile(
-                                    icon: Icons.notifications_outlined,
+                                    icon: OrbitIcons.notification,
                                     label: '提醒时间',
                                     value: _remindAt != null
                                         ? formatDateTime(_remindAt!)
@@ -900,7 +901,7 @@ class _FormDateTile extends StatelessWidget {
             GestureDetector(
               onTap: onClear,
               child: Icon(
-                Icons.close_rounded,
+                OrbitIcons.close,
                 size: AppDimens.iconSizeSm,
                 color: colors.secondaryText,
               ),
@@ -910,7 +911,7 @@ class _FormDateTile extends StatelessWidget {
         if (onTap != null) ...[
           const SizedBox(width: AppDimens.space4),
           Icon(
-            Icons.keyboard_arrow_right_rounded,
+            OrbitIcons.chevronRight,
             size: AppDimens.iconSizeSm + 2,
             color: colors.secondaryText,
           ),
@@ -974,28 +975,28 @@ class _TitleParseChips extends StatelessWidget {
         if (parse.dueDate != null)
           _parseChip(
             context,
-            icon: Icons.event_rounded,
+            icon: OrbitIcons.calendar,
             label: '截止 ${formatYmd(parse.dueDate!.millisecondsSinceEpoch)}',
             color: colors.secondaryText,
           ),
         if (parse.priority > 0)
           _parseChip(
             context,
-            icon: Icons.flag_rounded,
+            icon: OrbitIcons.flag,
             label: 'P${parse.priority} ${priorityLabel(parse.priority)}',
             color: hexToColor(priorityColorHex(parse.priority)),
           ),
         if (parse.projectId != null)
           _parseChip(
             context,
-            icon: Icons.folder_rounded,
+            icon: OrbitIcons.folder,
             label: '项目已识别',
             color: colors.secondaryText,
           ),
         if (parse.labelIds.isNotEmpty)
           _parseChip(
             context,
-            icon: Icons.sell_rounded,
+            icon: OrbitIcons.tag,
             label: '标签 ×${parse.labelIds.length}',
             color: colors.secondaryText,
           ),

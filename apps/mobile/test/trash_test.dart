@@ -9,22 +9,22 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:orbit/core/routing/router_keys.dart';
 import 'package:orbit/data/api/mock_orbit_bridge.dart';
 import 'package:orbit/data/api/dto.dart';
 import 'package:orbit/data/providers/bridge_provider.dart';
 import 'package:orbit/modules/todo/trash_screen.dart';
+import 'support/orbit_test_app.dart';
 
 Widget _wrap(Widget child, MockOrbitBridge bridge) => ProviderScope(
       overrides: [orbitBridgeProvider.overrideWithValue(bridge)],
-      child: MaterialApp(home: child),
+      child: orbitTestApp(home: child),
     );
 
 /// 撤销 toast 需挂 rootNavigatorKey 的 Overlay（WaitToast.global 经全局
 /// Navigator 插入；普通 _wrap 的 MaterialApp 无 key 时 toast 静默不显示）
 Widget _wrapWithNavKey(Widget child, MockOrbitBridge bridge) => ProviderScope(
       overrides: [orbitBridgeProvider.overrideWithValue(bridge)],
-      child: MaterialApp(navigatorKey: rootNavigatorKey, home: child),
+      child: orbitTestApp(home: child),
     );
 
 /// testWidgets 的 FakeAsync 下桥的 120ms 延迟需靠 pump 推进假时钟才能完成

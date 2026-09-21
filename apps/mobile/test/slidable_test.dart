@@ -6,8 +6,9 @@ import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:orbit/data/api/dto.dart';
 import 'package:orbit/modules/todo/sub_list_screen.dart';
+import 'support/orbit_test_app.dart';
 
-Widget _harness(TodoTask task) => MaterialApp(
+Widget _harness(TodoTask task) => orbitTestApp(
       home: Scaffold(
         body: ListView(
           children: [

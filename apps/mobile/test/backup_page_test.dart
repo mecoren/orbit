@@ -7,16 +7,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:orbit/core/routing/router_keys.dart';
 import 'package:orbit/data/api/mock_orbit_bridge.dart';
 import 'package:orbit/data/providers/bridge_provider.dart';
 import 'package:orbit/modules/settings/backup_page.dart';
+import 'support/orbit_test_app.dart';
 
 Widget _wrap(MockOrbitBridge bridge) => ProviderScope(
       overrides: [orbitBridgeProvider.overrideWithValue(bridge)],
       // rootNavigatorKey：WaitToast 经全局 Navigator Overlay 插入
       child:
-          MaterialApp(navigatorKey: rootNavigatorKey, home: const BackupPage()),
+          orbitTestApp(home: const BackupPage()),
     );
 
 /// 跨过 mock 的 120ms 延迟与随后的一次刷新 setState

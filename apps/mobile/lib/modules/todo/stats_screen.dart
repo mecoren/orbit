@@ -13,6 +13,7 @@ import '../../shared/widgets/shadcn/orbit_page_header.dart';
 import 'logic/task_logic.dart';
 import 'providers/todo_providers.dart';
 import '../../shared/widgets/shadcn/orbit_heatmap.dart';
+import '../../core/theme/icon_map.dart';
 
 /// 统计页 /todo/stats（backlog #25：统计仪表盘，对标 TickTick 成就页）
 ///
@@ -68,7 +69,7 @@ class _StatsScreenState extends ConsumerState<StatsScreen> {
                         ),
                         child: const EmptyState(
                           message: '暂无统计数据，创建并完成一些任务后这里会展示完成情况',
-                          icon: Icons.insights_rounded,
+                          icon: OrbitIcons.trending,
                         ),
                       )
                     : ListView(
@@ -239,7 +240,7 @@ class _StreakCard extends StatelessWidget {
       child: Row(
         children: [
           Icon(
-            Icons.local_fire_department_outlined,
+            OrbitIcons.flame,
             size: 22,
             color: streak.current > 0 ? OrbitAccents.myDayAmber : colors.secondaryText,
           ),

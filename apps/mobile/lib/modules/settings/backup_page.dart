@@ -14,6 +14,7 @@ import '../../shared/widgets/shadcn/orbit_section_card.dart';
 import '../../shared/widgets/shadcn/orbit_select_sheet.dart';
 import '../../shared/widgets/shadcn/orbit_toast.dart';
 import '../todo/logic/task_logic.dart' show formatDateTime;
+import '../../core/theme/icon_map.dart';
 
 /// 备份与恢复页 /settings/backup（数据安全兜底）
 ///
@@ -458,7 +459,7 @@ class _BackupPageState extends ConsumerState<BackupPage> {
                   onPressed: busy ? null : () => _export(uploadCloud: false),
                   icon: _busy == 'export'
                       ? const _MiniSpinner()
-                      : const Icon(Icons.save_alt_rounded,
+                      : const Icon(OrbitIcons.download,
                           size: AppDimens.iconSizeSm + 2),
                   label: const Text('导出本地备份'),
                 ),
@@ -469,7 +470,7 @@ class _BackupPageState extends ConsumerState<BackupPage> {
                   onPressed: busy ? null : () => _export(uploadCloud: true),
                   icon: _busy == 'exportCloud'
                       ? const _MiniSpinner()
-                      : const Icon(Icons.cloud_upload_outlined,
+                      : const Icon(OrbitIcons.cloudSync,
                           size: AppDimens.iconSizeSm + 2),
                   label: const Text('备份到云端'),
                 ),
@@ -504,14 +505,14 @@ class _BackupPageState extends ConsumerState<BackupPage> {
           const SizedBox(height: AppDimens.space8),
           _actionRow(
             colors,
-            icon: Icons.insert_drive_file_outlined,
+            icon: OrbitIcons.file,
             label: '从本地文件恢复',
             trailing: _busy == 'restore' ? const _MiniSpinner() : null,
             onTap: busy ? null : _restoreFromFile,
           ),
           _actionRow(
             colors,
-            icon: Icons.cloud_download_outlined,
+            icon: OrbitIcons.cloudDownload,
             label: '从云端副本恢复',
             trailing: Text(
               _cloud.isEmpty ? '无副本' : '${_cloud.length} 份',
@@ -681,7 +682,7 @@ class _BackupPageState extends ConsumerState<BackupPage> {
           ),
           IconButton(
             onPressed: _busy != null ? null : () => _deleteLocal(e),
-            icon: Icon(Icons.delete_outline_rounded,
+            icon: Icon(OrbitIcons.delete,
                 size: AppDimens.iconSizeMd, color: colors.destructive),
             tooltip: '删除',
           ),
@@ -721,7 +722,7 @@ class _BackupPageState extends ConsumerState<BackupPage> {
                   style: TextStyle(fontSize: 14, color: OrbitAccents.themeAccent),
                 ),
               Icon(
-                Icons.chevron_right_rounded,
+                OrbitIcons.chevronRight,
                 size: AppDimens.iconSizeMd,
                 color: colors.secondaryText,
               ),

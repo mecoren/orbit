@@ -14,6 +14,7 @@ import '../../shared/widgets/shadcn/orbit_page_header.dart';
 import '../../shared/widgets/shadcn/orbit_actions_sheet.dart';
 import '../../shared/widgets/shadcn/orbit_toast.dart';
 import 'providers/todo_providers.dart';
+import '../../core/theme/icon_map.dart';
 
 /// 彻底删除的撤销窗口（与桌面 UNDO_DELAY_MS 同口径；窗口内数据仍在库，
 /// 点撤销即取消提交）
@@ -186,13 +187,13 @@ class _TrashScreenState extends ConsumerState<TrashScreen> {
       title: task.title,
       actions: [
         MoreActionItem(
-          icon: Icons.restore_from_trash_outlined,
+          icon: OrbitIcons.archiveRestore,
           label: '恢复',
           color: OrbitAccents.themeAccent,
           onTap: () => _restoreTask(task),
         ),
         MoreActionItem(
-          icon: Icons.delete_forever_outlined,
+          icon: OrbitIcons.delete,
           label: '彻底删除',
           color: OrbitAccents.overdueRed,
           onTap: () => _purgeTask(task),
@@ -244,7 +245,7 @@ class _TrashScreenState extends ConsumerState<TrashScreen> {
                     ),
                     child: const EmptyState(
                       message: '回收站是空的，删除的任务会先进入这里',
-                      icon: Icons.delete_outline_rounded,
+                      icon: OrbitIcons.delete,
                     ),
                   )
                 : ListView.builder(
@@ -340,7 +341,7 @@ class _TrashTaskTile extends StatelessWidget {
       ),
       trailing: IconButton(
         icon: Icon(
-          Icons.restore_from_trash_outlined,
+          OrbitIcons.archiveRestore,
           size: AppDimens.iconSizeMd,
           color: OrbitAccents.themeAccent,
         ),

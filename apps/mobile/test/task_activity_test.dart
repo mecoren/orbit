@@ -9,12 +9,13 @@ import 'package:orbit/data/api/mock_orbit_bridge.dart';
 import 'package:orbit/data/providers/bridge_provider.dart';
 import 'package:orbit/modules/todo/detail_screen.dart';
 import 'package:orbit/modules/todo/logic/activity_format.dart';
+import 'support/orbit_test_app.dart';
 
 const _seededTaskTitle = '完成移动端重构方案评审';
 
 Widget _wrap(Widget child, MockOrbitBridge bridge) => ProviderScope(
       overrides: [orbitBridgeProvider.overrideWithValue(bridge)],
-      child: MaterialApp(home: child),
+      child: orbitTestApp(home: child),
     );
 
 Future<void> _settle(WidgetTester tester) async {

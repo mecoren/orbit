@@ -12,6 +12,7 @@ import '../../shared/widgets/shadcn/orbit_empty_state.dart';
 import '../../shared/widgets/shadcn/orbit_page_header.dart';
 import '../../shared/widgets/shadcn/orbit_select_sheet.dart';
 import '../../shared/widgets/shadcn/orbit_toast.dart';
+import '../../core/theme/icon_map.dart';
 
 /// 通知历史页 /settings/notifications
 ///
@@ -150,7 +151,7 @@ class _NotificationHistoryPageState
                   Expanded(
                     child: OutlinedButton.icon(
                       onPressed: _pickKind,
-                      icon: const Icon(Icons.filter_alt_outlined, size: 18),
+                      icon: const Icon(OrbitIcons.filter, size: 18),
                       label: Text('类型：${kindLabel(_kind)}'),
                     ),
                   ),
@@ -158,7 +159,7 @@ class _NotificationHistoryPageState
                   Expanded(
                     child: OutlinedButton.icon(
                       onPressed: _clear,
-                      icon: const Icon(Icons.delete_outline_rounded, size: 18),
+                      icon: const Icon(OrbitIcons.delete, size: 18),
                       label: const Text('清空'),
                     ),
                   ),
@@ -169,7 +170,7 @@ class _NotificationHistoryPageState
                 const Center(child: CircularProgressIndicator())
               else if (rows.isEmpty)
                 const EmptyState(
-                  icon: Icons.notifications_off_outlined,
+                  icon: OrbitIcons.notificationOff,
                   message: '暂无通知历史',
                 )
               else ...[

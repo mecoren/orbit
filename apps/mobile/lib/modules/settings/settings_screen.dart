@@ -26,6 +26,7 @@ import '../../shared/widgets/shadcn/orbit_toast.dart';
 import '../shell/db_invalidation.dart';
 import '../todo/logic/task_logic.dart' show formatDateTime;
 import '../todo/providers/todo_providers.dart';
+import '../../core/theme/icon_map.dart';
 
 /// 设置页 /settings（移动端任务书卡片结构）
 ///
@@ -802,7 +803,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                               ),
                               const Spacer(),
                               Icon(
-                                Icons.chevron_right_rounded,
+                                OrbitIcons.chevronRight,
                                 size: AppDimens.iconSizeMd,
                                 color: colors.secondaryText,
                               ),
@@ -858,7 +859,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                               ),
                               const Spacer(),
                               Icon(
-                                Icons.chevron_right_rounded,
+                                OrbitIcons.chevronRight,
                                 size: AppDimens.iconSizeMd,
                                 color: colors.secondaryText,
                               ),
@@ -881,7 +882,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                     color: Colors.white.withValues(alpha: 0.9),
                                   ),
                                 )
-                              : const Icon(Icons.sync_rounded,
+                              : const Icon(OrbitIcons.refresh,
                                   size: AppDimens.iconSizeSm + 2),
                           label: Text(_syncing ? '同步中…' : '立即同步'),
                         ),
@@ -935,7 +936,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                 ),
                               ),
                               Icon(
-                                Icons.chevron_right_rounded,
+                                OrbitIcons.chevronRight,
                                 size: AppDimens.iconSizeMd,
                                 color: colors.secondaryText,
                               ),
@@ -959,7 +960,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                               ),
                               const Spacer(),
                               Icon(
-                                Icons.chevron_right_rounded,
+                                OrbitIcons.chevronRight,
                                 size: AppDimens.iconSizeMd,
                                 color: colors.secondaryText,
                               ),
@@ -1046,7 +1047,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                               ),
                               const Spacer(),
                               Icon(
-                                Icons.chevron_right_rounded,
+                                OrbitIcons.chevronRight,
                                 size: AppDimens.iconSizeMd,
                                 color: colors.secondaryText,
                               ),
@@ -1090,7 +1091,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                       height: AppDimens.iconSizeSm,
                                       child: CircularProgressIndicator(strokeWidth: 2, color: colors.secondaryText),
                                     )
-                                  : const Icon(Icons.data_object_rounded, size: AppDimens.iconSizeSm),
+                                  : const Icon(OrbitIcons.braces, size: AppDimens.iconSizeSm),
                               label: const Text('导出 JSON'),
                             ),
                           ),
@@ -1104,7 +1105,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                       height: AppDimens.iconSizeSm,
                                       child: CircularProgressIndicator(strokeWidth: 2, color: colors.secondaryText),
                                     )
-                                  : const Icon(Icons.table_view_rounded, size: AppDimens.iconSizeSm),
+                                  : const Icon(OrbitIcons.table, size: AppDimens.iconSizeSm),
                               label: const Text('导出 CSV'),
                             ),
                           ),
@@ -1124,7 +1125,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                     color: colors.secondaryText,
                                   ),
                                 )
-                              : const Icon(Icons.calendar_month_rounded,
+                              : const Icon(OrbitIcons.calendarDays,
                                   size: AppDimens.iconSizeSm),
                           label: const Text('导出日历（ICS）'),
                         ),
@@ -1173,7 +1174,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                     color: colors.secondaryText,
                                   ),
                                 )
-                              : const Icon(Icons.build_circle_outlined,
+                              : const Icon(OrbitIcons.wrench,
                                   size: AppDimens.iconSizeSm),
                           label: const Text('立即维护'),
                         ),
@@ -1219,7 +1220,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                           Expanded(
                             child: OutlinedButton.icon(
                               onPressed: _importing != null ? null : _pickImportFile,
-                              icon: const Icon(Icons.upload_file_rounded,
+                              icon: const Icon(OrbitIcons.upload,
                                   size: AppDimens.iconSizeSm),
                               label: Text(
                                 _importFileName ?? '选择文件',
@@ -1242,7 +1243,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                         color: colors.secondaryText,
                                       ),
                                     )
-                                  : const Icon(Icons.visibility_rounded,
+                                  : const Icon(OrbitIcons.eye,
                                       size: AppDimens.iconSizeSm),
                               label: const Text('预览'),
                             ),
@@ -1263,7 +1264,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                     color: Colors.white,
                                   ),
                                 )
-                              : const Icon(Icons.download_rounded,
+                              : const Icon(OrbitIcons.download,
                                   size: AppDimens.iconSizeSm),
                           label: Text(
                               '导入 ${_importPreview!.stats.success} 条任务'),
@@ -1332,7 +1333,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                             ),
                           ),
                           Icon(
-                            Icons.chevron_right_rounded,
+                            OrbitIcons.chevronRight,
                             size: AppDimens.iconSizeMd,
                             color: colors.secondaryText,
                           ),
@@ -1382,7 +1383,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                           child: CircularProgressIndicator(
                               strokeWidth: 2, color: colors.secondaryText),
                         )
-                      : const Icon(Icons.widgets_rounded,
+                      : const Icon(OrbitIcons.layoutGrid,
                           size: AppDimens.iconSizeSm),
                   label: const Text('刷新小组件'),
                 ),
@@ -1391,7 +1392,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               Expanded(
                 child: OutlinedButton.icon(
                   onPressed: _pinTile,
-                  icon: const Icon(Icons.apps_rounded,
+                  icon: const Icon(OrbitIcons.grid,
                       size: AppDimens.iconSizeSm),
                   label: const Text('添加快捷磁贴'),
                 ),
@@ -1446,7 +1447,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   style: TextStyle(fontSize: 14, color: colors.bodyText)),
               const Spacer(),
               Icon(
-                Icons.chevron_right_rounded,
+                OrbitIcons.chevronRight,
                 size: AppDimens.iconSizeMd,
                 color: colors.secondaryText,
               ),
@@ -1472,8 +1473,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           children: [
             Icon(
               encrypted == true
-                  ? Icons.lock_rounded
-                  : Icons.lock_open_rounded,
+                  ? OrbitIcons.lock
+                  : OrbitIcons.lockOpen,
               size: AppDimens.iconSizeMd,
               color: encrypted == true ? colors.success : colors.secondaryText,
             ),
@@ -1511,7 +1512,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   Text('修改主密码',
                       style: TextStyle(fontSize: 14, color: colors.bodyText)),
                   const Spacer(),
-                  Icon(Icons.chevron_right_rounded,
+                  Icon(OrbitIcons.chevronRight,
                       size: AppDimens.iconSizeMd, color: colors.secondaryText),
                 ],
               ),
@@ -1532,7 +1533,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       style: TextStyle(
                           fontSize: 14, color: colors.destructive)),
                   const Spacer(),
-                  Icon(Icons.chevron_right_rounded,
+                  Icon(OrbitIcons.chevronRight,
                       size: AppDimens.iconSizeMd,
                       color: colors.secondaryText),
                 ],
@@ -1567,7 +1568,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       ),
                     )
                   else
-                    Icon(Icons.chevron_right_rounded,
+                    Icon(OrbitIcons.chevronRight,
                         size: AppDimens.iconSizeMd,
                         color: colors.secondaryText),
                 ],

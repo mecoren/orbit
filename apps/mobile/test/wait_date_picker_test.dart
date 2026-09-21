@@ -7,6 +7,8 @@ import 'package:orbit/data/api/mock_orbit_bridge.dart';
 import 'package:orbit/data/providers/bridge_provider.dart';
 import 'package:orbit/shared/widgets/shadcn/orbit_month_calendar.dart';
 import 'package:orbit/shared/widgets/shadcn/orbit_date_picker.dart';
+import 'support/orbit_test_app.dart';
+import 'package:orbit/core/theme/icon_map.dart';
 
 void main() {
   /// 挂一个按钮唤起 showTime 面板（日期+时间）。
@@ -18,7 +20,7 @@ void main() {
       overrides: [
         orbitBridgeProvider.overrideWithValue(MockOrbitBridge()),
       ],
-      child: MaterialApp(
+      child: orbitTestApp(
         home: Scaffold(
           body: Builder(
             builder: (context) => Center(
@@ -70,8 +72,8 @@ void main() {
     expect(find.text('分'), findsOneWidget);
 
     // 下拉箭头 ×2，步进 +/- 钮已移除
-    expect(find.byIcon(Icons.expand_more_rounded), findsNWidgets(2));
-    expect(find.byIcon(Icons.add_rounded), findsNothing);
+    expect(find.byIcon(OrbitIcons.expandMore), findsNWidgets(2));
+    expect(find.byIcon(OrbitIcons.add), findsNothing);
     expect(find.byIcon(Icons.remove_rounded), findsNothing);
   });
 

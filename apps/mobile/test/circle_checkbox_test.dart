@@ -5,6 +5,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:orbit/core/theme/app_motion.dart';
 import 'package:orbit/core/theme/orbit_accents.dart';
 import 'package:orbit/shared/widgets/shadcn/orbit_checkbox.dart';
+import 'support/orbit_test_app.dart';
+import 'package:orbit/core/theme/icon_map.dart';
 
 /// 勾选态由父层驱动（组件本身无状态）
 class _Host extends StatefulWidget {
@@ -21,7 +23,7 @@ class _HostState extends State<_Host> {
   bool checked = false;
 
   @override
-  Widget build(BuildContext context) => MaterialApp(
+  Widget build(BuildContext context) => orbitTestApp(
         home: Scaffold(
           body: Center(
             child: CircleCheckbox(
@@ -54,7 +56,7 @@ void main() {
     await tester.pumpWidget(_Host(onToggle: () => taps++));
     await tester.pump(AppMotion.fast);
 
-    expect(find.byIcon(Icons.check_rounded), findsNothing);
+    expect(find.byIcon(OrbitIcons.check), findsNothing);
     expect(_boxColor(tester), Colors.transparent);
     expect(taps, 0);
   });
@@ -68,7 +70,7 @@ void main() {
     await tester.pump(AppMotion.fast);
 
     expect(taps, 1);
-    expect(find.byIcon(Icons.check_rounded), findsOneWidget);
+    expect(find.byIcon(OrbitIcons.check), findsOneWidget);
     expect(_boxColor(tester), OrbitAccents.todoAccent);
   });
 
@@ -88,7 +90,7 @@ void main() {
 
     expect(taps, 2);
     expect(_boxColor(tester), Colors.transparent);
-    expect(find.byIcon(Icons.check_rounded), findsNothing);
+    expect(find.byIcon(OrbitIcons.check), findsNothing);
   });
 
   testWidgets('尺寸参数生效（详情标题档 28/18、子任务档 22/14）', (tester) async {

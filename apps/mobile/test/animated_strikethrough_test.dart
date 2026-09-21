@@ -4,11 +4,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:orbit/core/theme/app_motion.dart';
 import 'package:orbit/shared/widgets/shadcn/orbit_strikethrough.dart';
+import 'support/orbit_test_app.dart';
 
 const TextStyle _baseStyle = TextStyle(fontSize: 16, color: Color(0xFF1A1D26));
 const Color _doneColor = Color(0xFF6B7685);
 
-Widget _harness(ValueNotifier<bool> done, String text) => MaterialApp(
+Widget _harness(ValueNotifier<bool> done, String text) => orbitTestApp(
       home: Scaffold(
         body: ValueListenableBuilder<bool>(
           valueListenable: done,
@@ -88,7 +89,7 @@ void main() {
 
   testWidgets('不限行（maxLines null）：多行文本仍可绘制划线', (tester) async {
     await tester.pumpWidget(
-      const MaterialApp(
+      orbitTestApp(
         home: Scaffold(
           body: SizedBox(
             width: 120,

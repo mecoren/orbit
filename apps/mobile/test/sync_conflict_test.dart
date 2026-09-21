@@ -8,15 +8,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:orbit/core/routing/router_keys.dart';
 import 'package:orbit/data/api/mock_orbit_bridge.dart';
 import 'package:orbit/data/providers/bridge_provider.dart';
 import 'package:orbit/modules/settings/sync_conflicts_page.dart';
+import 'support/orbit_test_app.dart';
 
 /// 恢复成功 toast 走 WaitToast.global（需 rootNavigatorKey 的 Overlay）
 Widget _wrap(Widget child, MockOrbitBridge bridge) => ProviderScope(
       overrides: [orbitBridgeProvider.overrideWithValue(bridge)],
-      child: MaterialApp(navigatorKey: rootNavigatorKey, home: child),
+      child: orbitTestApp(home: child),
     );
 
 /// testWidgets 的 FakeAsync 下 mock 桥 120ms 延迟需靠 pump 推进假时钟

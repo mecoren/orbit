@@ -10,6 +10,7 @@ import '../../shared/utils/hex_color.dart';
 import '../../shared/widgets/shadcn/orbit_strikethrough.dart';
 import '../../shared/widgets/shadcn/orbit_checkbox.dart';
 import 'logic/task_logic.dart';
+import '../../core/theme/icon_map.dart';
 
 /// 看板视图（对齐桌面 `kanban-view.tsx` 的分列 + 卡片信息层级）
 ///
@@ -173,7 +174,7 @@ class KanbanBoard extends StatelessWidget {
                   ),
                   if (task.isStarred)
                     Icon(
-                      Icons.star_rounded,
+                      OrbitIcons.star,
                       size: AppDimens.iconSizeSm,
                       color: OrbitAccents.todoAccent,
                     ),
@@ -195,7 +196,7 @@ class KanbanBoard extends StatelessWidget {
                 children: [
                   if (task.dueDate != null) ...[
                     Icon(
-                      Icons.event_rounded,
+                      OrbitIcons.calendar,
                       size: AppDimens.iconSizeSm - 4,
                       color: overdue ? colors.destructive : colors.secondaryText,
                     ),

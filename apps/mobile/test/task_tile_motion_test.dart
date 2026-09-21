@@ -8,9 +8,10 @@ import 'package:orbit/data/api/dto.dart';
 import 'package:orbit/modules/todo/sub_list_screen.dart';
 import 'package:orbit/shared/widgets/shadcn/orbit_strikethrough.dart';
 import 'package:orbit/shared/widgets/shadcn/orbit_checkbox.dart';
+import 'support/orbit_test_app.dart';
 
 Widget _harness(TodoTask task, {required VoidCallback onToggleDone}) =>
-    MaterialApp(
+    orbitTestApp(
       home: Scaffold(
         body: ListView(
           children: [

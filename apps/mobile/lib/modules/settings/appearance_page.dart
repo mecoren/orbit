@@ -6,6 +6,7 @@ import '../../services/appearance.dart';
 import '../../shared/widgets/shadcn/orbit_page_header.dart';
 import '../../shared/widgets/shadcn/orbit_select_sheet.dart';
 import '../../shared/widgets/shadcn/orbit_toast.dart';
+import '../../core/theme/icon_map.dart';
 
 /// 外观设置页 /settings/appearance
 ///
@@ -106,19 +107,19 @@ class _AppearancePageState extends State<AppearancePage> {
               ListTile(
                 title: const Text('主题模式'),
                 subtitle: Text(Appearance.themeLabel()),
-                trailing: const Icon(Icons.chevron_right_rounded),
+                trailing: const Icon(OrbitIcons.chevronRight),
                 onTap: _pickTheme,
               ),
               ListTile(
                 title: const Text('字号'),
                 subtitle: Text(Appearance.fontSizeLabel()),
-                trailing: const Icon(Icons.chevron_right_rounded),
+                trailing: const Icon(OrbitIcons.chevronRight),
                 onTap: _pickFontSize,
               ),
               ListTile(
                 title: const Text('字重'),
                 subtitle: Text(Appearance.fontWeightLabel()),
-                trailing: const Icon(Icons.chevron_right_rounded),
+                trailing: const Icon(OrbitIcons.chevronRight),
                 onTap: _pickFontWeight,
               ),
               const SizedBox(height: AppDimens.space12),

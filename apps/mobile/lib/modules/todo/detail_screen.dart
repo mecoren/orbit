@@ -33,6 +33,7 @@ import 'logic/repeat_logic.dart' as rep;
 import 'repeat_edit_sheet.dart';
 import 'logic/task_logic.dart';
 import 'providers/todo_providers.dart';
+import '../../core/theme/icon_map.dart';
 
 /// 详情全屏 /todo/:id（docs/05 §4.3 + 移动端任务书）
 ///
@@ -803,7 +804,7 @@ class _SubtasksSectionState extends ConsumerState<_SubtasksSection> {
                   IconButton(
                     visualDensity: VisualDensity.compact,
                     tooltip: '转为独立任务',
-                    icon: Icon(Icons.open_in_new_rounded,
+                    icon: Icon(OrbitIcons.openExternal,
                         size: AppDimens.iconSizeSm,
                         color: colors.secondaryText),
                     onPressed: () => _promote(subtask),
@@ -811,7 +812,7 @@ class _SubtasksSectionState extends ConsumerState<_SubtasksSection> {
                   // close 删除（确认弹窗防误触，对齐桌面/评论删除惯例）
                   IconButton(
                     visualDensity: VisualDensity.compact,
-                    icon: Icon(Icons.close_rounded,
+                    icon: Icon(OrbitIcons.close,
                         size: AppDimens.iconSizeSm,
                         color: colors.secondaryText),
                     onPressed: () => _confirmDelete(subtask),
@@ -839,7 +840,7 @@ class _SubtasksSectionState extends ConsumerState<_SubtasksSection> {
                       ),
                     ),
                     IconButton(
-                      icon: const Icon(Icons.check_rounded,
+                      icon: const Icon(OrbitIcons.check,
                           size: AppDimens.iconSizeMd,
                           color: OrbitAccents.todoAccent),
                       onPressed: _submitDraft,
@@ -848,7 +849,7 @@ class _SubtasksSectionState extends ConsumerState<_SubtasksSection> {
                 )
               : TextButton.icon(
                   onPressed: () => setState(() => _adding = true),
-                  icon: const Icon(Icons.add_rounded,
+                  icon: const Icon(OrbitIcons.add,
                       size: AppDimens.iconSizeSm + 2),
                   label: const Text('添加子任务'),
                 ),
@@ -1140,7 +1141,7 @@ class _LabelEditSheetState extends ConsumerState<_LabelEditSheet> {
                           ),
                         ),
                         IconButton(
-                          icon: Icon(Icons.add_rounded,
+                          icon: Icon(OrbitIcons.add,
                               size: AppDimens.iconSizeLg,
                               color: OrbitAccents.todoAccent),
                           onPressed: _createLabel,
@@ -1297,7 +1298,7 @@ class _RemindersSection extends ConsumerWidget {
                     child: Row(
                       children: [
                         Icon(
-                          Icons.notifications_outlined,
+                          OrbitIcons.notification,
                           size: AppDimens.iconSizeSm + 2,
                           color: colors.secondaryText,
                         ),
@@ -1361,7 +1362,7 @@ class _RemindersSection extends ConsumerWidget {
                         // 删除（无确认直删，对齐桌面行为）
                         IconButton(
                           visualDensity: VisualDensity.compact,
-                          icon: Icon(Icons.close_rounded,
+                          icon: Icon(OrbitIcons.close,
                               size: AppDimens.iconSizeSm,
                               color: colors.secondaryText),
                           onPressed: () => _mutate(context, ref, () async {
@@ -1544,7 +1545,7 @@ class _RelationsSectionState extends ConsumerState<_RelationsSection> {
         visualDensity: VisualDensity.compact,
         tooltip: '添加关联',
         icon: const Icon(
-          Icons.add_rounded,
+          OrbitIcons.add,
           size: AppDimens.iconSizeSm,
           color: OrbitAccents.todoAccent,
         ),
@@ -1588,7 +1589,7 @@ class _RelationsSectionState extends ConsumerState<_RelationsSection> {
                           InkWell(
                             onTap: () => _remove(relation),
                             child: const Icon(
-                              Icons.close_rounded,
+                              OrbitIcons.close,
                               size: 14,
                               color: OrbitAccents.todoAccent,
                             ),
@@ -1703,7 +1704,7 @@ class _CommentsSectionState extends ConsumerState<_CommentsSection> {
                       GestureDetector(
                         onTap: () => _delete(comment),
                         child: Icon(
-                          Icons.delete_outline_rounded,
+                          OrbitIcons.delete,
                           size: AppDimens.iconSizeSm,
                           color: colors.secondaryText,
                         ),
@@ -1738,7 +1739,7 @@ class _CommentsSectionState extends ConsumerState<_CommentsSection> {
                   ),
                 ),
                 IconButton(
-                  icon: const Icon(Icons.send_rounded,
+                  icon: const Icon(OrbitIcons.send,
                       size: AppDimens.iconSizeMd,
                       color: OrbitAccents.todoAccent),
                   onPressed: _submit,
@@ -1924,7 +1925,7 @@ class _AttachmentsSectionState extends ConsumerState<_AttachmentsSection> {
               child: CircularProgressIndicator(strokeWidth: 2),
             )
           : IconButton(
-              icon: const Icon(Icons.add),
+              icon: const Icon(OrbitIcons.add),
               iconSize: 18,
               padding: EdgeInsets.zero,
               constraints: const BoxConstraints(),
@@ -1965,8 +1966,8 @@ class _AttachmentsSectionState extends ConsumerState<_AttachmentsSection> {
                           children: [
                             Icon(
                               att.isLocalCached == 0
-                                  ? Icons.cloud_download_outlined
-                                  : Icons.description_outlined,
+                                  ? OrbitIcons.cloudDownload
+                                  : OrbitIcons.fileText,
                               size: 18,
                               color: colors.secondaryText,
                             ),
@@ -1999,7 +2000,7 @@ class _AttachmentsSectionState extends ConsumerState<_AttachmentsSection> {
                             GestureDetector(
                               onTap: () => _open(att),
                               child: const Icon(
-                                Icons.open_in_new_rounded,
+                                OrbitIcons.openExternal,
                                 size: 18,
                               ),
                             ),
@@ -2007,7 +2008,7 @@ class _AttachmentsSectionState extends ConsumerState<_AttachmentsSection> {
                             GestureDetector(
                               onTap: () => _remove(att),
                               child: Icon(
-                                Icons.delete_outline_rounded,
+                                OrbitIcons.delete,
                                 size: 18,
                                 color: colors.secondaryText,
                               ),

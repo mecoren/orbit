@@ -15,10 +15,11 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:orbit/data/api/mock_orbit_bridge.dart';
 import 'package:orbit/data/providers/bridge_provider.dart';
 import 'package:orbit/modules/settings/sync_settings_page.dart';
+import 'support/orbit_test_app.dart';
 
 Widget _wrap(MockOrbitBridge bridge) => ProviderScope(
       overrides: [orbitBridgeProvider.overrideWithValue(bridge)],
-      child: const MaterialApp(home: SyncSettingsPage()),
+      child: orbitTestApp(home: SyncSettingsPage()),
     );
 
 /// 发起桥调用 → pump 推进虚拟时钟 → await 完成（纪律 1）

@@ -7,6 +7,7 @@ import '../../core/theme/app_dimens.dart';
 import '../../core/theme/orbit_accents.dart';
 import '../../shared/widgets/shadcn/orbit_month_calendar.dart';
 import '../../shared/widgets/shadcn/orbit_page_header.dart';
+import '../../core/theme/icon_map.dart';
 
 /// 年份边界（与 LunarCalendar 压缩表覆盖范围一致）
 const _kMinYear = 1901;
@@ -147,12 +148,12 @@ class _YearOverviewPageState extends State<YearOverviewPage> {
                           children: [
                             IconButton(
                               onPressed: () => _shiftYear(-1),
-                              icon: const Icon(Icons.chevron_left_rounded),
+                              icon: const Icon(OrbitIcons.chevronLeft),
                               tooltip: '上一年',
                             ),
                             IconButton(
                               onPressed: () => _shiftYear(1),
-                              icon: const Icon(Icons.chevron_right_rounded),
+                              icon: const Icon(OrbitIcons.chevronRight),
                               tooltip: '下一年',
                             ),
                           ],

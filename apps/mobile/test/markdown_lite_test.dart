@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:orbit/modules/todo/logic/markdown_lite.dart';
+import 'support/orbit_test_app.dart';
 
 void main() {
   group('parseInlineNodes 行内（对齐桌面用例）', () {
@@ -91,7 +92,7 @@ void main() {
   group('widget 冒烟（详情页描述区消费口径）', () {
     testWidgets('描述含标题/粗体/链接时不崩溃且渲染出节点', (tester) async {
       await tester.pumpWidget(
-        MaterialApp(
+        orbitTestApp(
           home: Scaffold(
             body: SingleChildScrollView(
               child: Column(
@@ -123,7 +124,7 @@ void main() {
 
     testWidgets('空描述占位段不崩溃（上层 Column children 非空保证）', (tester) async {
       await tester.pumpWidget(
-        MaterialApp(
+        orbitTestApp(
           home: Scaffold(
             body: Column(
               children: buildMarkdownWidgets('',

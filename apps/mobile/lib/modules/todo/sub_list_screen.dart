@@ -35,6 +35,7 @@ import 'logic/view_mode.dart';
 import 'providers/todo_providers.dart';
 import 'providers/undo_provider.dart';
 import 'table_view.dart';
+import '../../core/theme/icon_map.dart';
 
 /// 任务子列表 /todo/tasks（docs/05 §4.2 + 移动端任务书）
 ///
@@ -163,8 +164,8 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
                 _sheetRow(
                   sheetContext,
                   icon: g == KanbanGroupBy.project
-                      ? Icons.folder_outlined
-                      : Icons.flag_outlined,
+                      ? OrbitIcons.folder
+                      : OrbitIcons.flag,
                   label: g.label,
                   selected: g == _kanbanGroupBy,
                   onTap: () {
@@ -339,7 +340,7 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
               ),
             ),
             if (selected)
-              Icon(Icons.check_rounded,
+              Icon(OrbitIcons.check,
                   size: AppDimens.iconSizeMd, color: colors.accent),
             const SizedBox(width: AppDimens.space16),
           ],
@@ -753,34 +754,34 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
         // 单条操作，与桌面看板无多选同口径）
         if (_viewMode == TaskViewMode.list)
           MoreActionItem(
-            icon: Icons.checklist_rounded,
+            icon: OrbitIcons.listChecks,
             label: '多选',
             onTap: () => _enterSelection(task),
           ),
         MoreActionItem(
-          icon: Icons.edit_rounded,
+          icon: OrbitIcons.edit,
           label: '编辑',
           onTap: () => showTodoFormSheet(context, editingTaskId: task.id),
         ),
         MoreActionItem(
-          icon: Icons.wb_sunny_rounded,
+          icon: OrbitIcons.sun,
           label: task.isInMyDay ? '移出我的一天' : '加入我的一天',
           color: OrbitAccents.myDayAmber,
           onTap: () => _toggleMyDay(task),
         ),
         MoreActionItem(
-          icon: Icons.star_rounded,
+          icon: OrbitIcons.star,
           label: task.isStarred ? '取消收藏' : '收藏',
           color: OrbitAccents.starYellow,
           onTap: () => _toggleFavorite(task),
         ),
         MoreActionItem(
-          icon: Icons.copy_rounded,
+          icon: OrbitIcons.copy,
           label: '复制任务',
           onTap: () => _duplicateTask(task),
         ),
         MoreActionItem(
-          icon: Icons.delete_outline_rounded,
+          icon: OrbitIcons.delete,
           label: '删除',
           color: OrbitAccents.overdueRed,
           onTap: () => _deleteTask(task),
@@ -1101,7 +1102,7 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
                     child: buildTile(
                       task,
                       dragHandle: Icon(
-                        Icons.drag_handle_rounded,
+                        OrbitIcons.drag,
                         size: AppDimens.iconSizeMd,
                         color: colors.secondaryText,
                       ),
@@ -1141,7 +1142,7 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
                               vertical: AppDimens.space4),
                           child: Row(
                             children: [
-                              Icon(Icons.warning_amber_rounded,
+                              Icon(OrbitIcons.warning,
                                   size: AppDimens.iconSizeSm,
                                   color: colors.destructive),
                               const SizedBox(width: AppDimens.space4),
@@ -1217,7 +1218,7 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
                         onPressed: _batchBusy ? null : _exitSelection,
                         tooltip: '退出多选',
                         icon: Icon(
-                          Icons.close_rounded,
+                          OrbitIcons.close,
                           size: AppDimens.iconSizeMd,
                           color: colors.titleText,
                         ),
@@ -1241,7 +1242,7 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
                   tooltip: '筛选',
                   icon: _filters.isEmpty
                       ? Icon(
-                          Icons.filter_list_rounded,
+                          OrbitIcons.filterList,
                           size: AppDimens.iconSizeMd,
                           color: colors.titleText,
                         )
@@ -1249,7 +1250,7 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
                           label: Text('${_filters.activeCount}'),
                           backgroundColor: OrbitAccents.todoAccent,
                           child: Icon(
-                            Icons.filter_list_rounded,
+                            OrbitIcons.filterList,
                             size: AppDimens.iconSizeMd,
                             color: colors.titleText,
                           ),
@@ -1269,8 +1270,8 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
                   tooltip: _hideDone ? '显示已完成任务' : '隐藏已完成任务',
                   icon: Icon(
                     _hideDone
-                        ? Icons.visibility_off_outlined
-                        : Icons.visibility_outlined,
+                        ? OrbitIcons.eyeOff
+                        : OrbitIcons.eye,
                     size: AppDimens.iconSizeMd,
                     color: isLogbook
                         ? colors.titleText.withValues(alpha: 0.3)
@@ -1294,7 +1295,7 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
                   ),
                   tooltip: '排序方式',
                   icon: Icon(
-                    Icons.sort_rounded,
+                    OrbitIcons.sort,
                     size: AppDimens.iconSizeMd,
                     color: AppColors.ofContext(context).titleText,
                   ),
@@ -1499,7 +1500,7 @@ class TodoTaskTile extends StatelessWidget {
                   },
                   backgroundColor: colors.destructive,
                   foregroundColor: Colors.white,
-                  icon: Icons.delete_outline_rounded,
+                  icon: OrbitIcons.delete,
                   label: '删除',
                   borderRadius: AppShapes.medium,
                 ),
@@ -1516,7 +1517,7 @@ class TodoTaskTile extends StatelessWidget {
             },
             backgroundColor: OrbitAccents.todoAccent,
             foregroundColor: Colors.white,
-            icon: task.isDone ? Icons.undo_rounded : Icons.check_rounded,
+            icon: task.isDone ? OrbitIcons.undo : OrbitIcons.check,
             label: task.isDone ? '恢复' : '完成',
             borderRadius: AppShapes.medium,
           ),
@@ -1620,7 +1621,7 @@ class TodoTaskTile extends StatelessWidget {
                 if (task.isStarred) ...[
                   const SizedBox(width: AppDimens.space8),
                   Icon(
-                    Icons.star_rounded,
+                    OrbitIcons.star,
                     size: AppDimens.iconSizeLg,
                     color: OrbitAccents.starYellow,
                   ),
@@ -1686,7 +1687,7 @@ class _LogbookList extends StatelessWidget {
               padding: const EdgeInsets.symmetric(vertical: AppDimens.space4),
               child: Row(
                 children: [
-                  Icon(Icons.check_circle_outline_rounded,
+                  Icon(OrbitIcons.success,
                       size: AppDimens.iconSizeSm,
                       color: OrbitAccents.doneGreen),
                   const SizedBox(width: AppDimens.space4),
@@ -1744,7 +1745,7 @@ class _TruncationBanner extends StatelessWidget {
       child: Row(
         children: [
           Icon(
-            Icons.warning_amber_rounded,
+            OrbitIcons.warning,
             size: AppDimens.iconSizeSm,
             color: colors.warning,
           ),
@@ -1815,8 +1816,8 @@ class _SelectionRow extends StatelessWidget {
           children: [
             Icon(
               selected
-                  ? Icons.check_circle_rounded
-                  : Icons.radio_button_unchecked_rounded,
+                  ? OrbitIcons.success
+                  : OrbitIcons.circle,
               size: AppDimens.iconSizeLg,
               color: selected ? OrbitAccents.todoAccent : colors.secondaryText,
             ),

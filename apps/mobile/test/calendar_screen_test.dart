@@ -10,10 +10,12 @@ import 'package:orbit/data/providers/bridge_provider.dart';
 import 'package:orbit/modules/todo/calendar_screen.dart';
 import 'package:orbit/core/routing/router_keys.dart';
 import 'package:orbit/modules/todo/sidebar_screen.dart';
+import 'package:orbit/core/theme/icon_map.dart';
+import 'support/orbit_test_app.dart';
 
 Widget _wrap(Widget child, MockOrbitBridge bridge) => ProviderScope(
       overrides: [orbitBridgeProvider.overrideWithValue(bridge)],
-      child: MaterialApp.router(routerConfig: _router),
+      child: orbitTestAppRouter(routerConfig: _router),
     );
 
 /// 极简路由：侧栏 + 日历 + 详情占位页
@@ -160,7 +162,7 @@ void main() {
     await tester.pumpWidget(_wrap(const SizedBox(), bridge));
     await settle(tester);
 
-    final refresh = find.byIcon(Icons.refresh_rounded);
+    final refresh = find.byIcon(OrbitIcons.refresh);
     expect(refresh, findsOneWidget);
     await tester.tap(refresh);
     await tester.pump(); // 触发 _updateHolidays async 开始
@@ -184,7 +186,7 @@ void main() {
         .data;
 
     // 下一个月 → 标题变化
-    await tester.tap(find.byIcon(Icons.chevron_right_rounded).first);
+    await tester.tap(find.byIcon(OrbitIcons.chevronRight).first);
     await tester.pumpAndSettle();
     final nextTitle = tester
         .widget<Text>(find.textContaining('年').first)
@@ -192,7 +194,7 @@ void main() {
     expect(nextTitle, isNot(currentTitle));
 
     // 点「回到今天」按钮 → 标题还原
-    await tester.tap(find.byIcon(Icons.today_rounded));
+    await tester.tap(find.byIcon(OrbitIcons.calendarCheck));
     await tester.pumpAndSettle();
     expect(
       tester.widget<Text>(find.textContaining('年').first).data,

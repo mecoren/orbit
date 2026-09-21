@@ -19,6 +19,7 @@ import '../../shared/widgets/shadcn/orbit_toast.dart';
 import '../todo/logic/task_logic.dart' show priorityLabel;
 import '../todo/logic/template_apply.dart';
 import '../todo/providers/todo_providers.dart';
+import '../../core/theme/icon_map.dart';
 
 /// 任务模板管理页 /settings/templates（对齐桌面 `templates-section.tsx`）
 ///
@@ -341,7 +342,7 @@ class _TemplateManagerPageState extends ConsumerState<TemplateManagerPage> {
               value,
               style: TextStyle(fontSize: 14, color: OrbitAccents.themeAccent),
             ),
-            Icon(Icons.chevron_right_rounded,
+            Icon(OrbitIcons.chevronRight,
                 size: AppDimens.iconSizeMd, color: colors.secondaryText),
           ],
         ),
@@ -400,7 +401,7 @@ class _TemplateManagerPageState extends ConsumerState<TemplateManagerPage> {
                         width: double.infinity,
                         child: OutlinedButton.icon(
                           onPressed: _busy ? null : () => _upsert(),
-                          icon: const Icon(Icons.add_rounded,
+                          icon: const Icon(OrbitIcons.add,
                               size: AppDimens.iconSizeSm + 2),
                           label: const Text('新建模板'),
                         ),
@@ -485,13 +486,13 @@ class _TemplateManagerPageState extends ConsumerState<TemplateManagerPage> {
           IconButton(
             onPressed: _busy ? null : () => _upsert(editing: tpl),
             tooltip: '编辑',
-            icon: Icon(Icons.edit_outlined,
+            icon: Icon(OrbitIcons.edit,
                 size: AppDimens.iconSizeMd, color: colors.secondaryText),
           ),
           IconButton(
             onPressed: _busy ? null : () => _delete(tpl),
             tooltip: '删除',
-            icon: Icon(Icons.delete_outline_rounded,
+            icon: Icon(OrbitIcons.delete,
                 size: AppDimens.iconSizeMd, color: colors.destructive),
           ),
         ],

@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 
 import 'package:orbit/core/routing/app_router.dart';
+import 'support/orbit_test_app.dart';
 
 void main() {
   testWidgets('pageSlideFromRight 页面入栈后渲染目标内容', (tester) async {
@@ -19,7 +20,7 @@ void main() {
         ),
       ],
     );
-    await tester.pumpWidget(MaterialApp.router(routerConfig: router));
+    await tester.pumpWidget(orbitTestAppRouter(routerConfig: router));
     expect(find.text('A 页'), findsOneWidget);
 
     final context = tester.element(find.text('A 页'));

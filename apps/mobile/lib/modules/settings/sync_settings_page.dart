@@ -18,6 +18,7 @@ import '../../shared/widgets/shadcn/orbit_section_card.dart';
 import '../../shared/widgets/shadcn/orbit_select_sheet.dart';
 import '../../shared/widgets/shadcn/orbit_toast.dart';
 import '../todo/providers/todo_providers.dart';
+import '../../core/theme/icon_map.dart';
 
 /// 云同步配置页 /settings/sync（设置页「云同步设置」入口）
 ///
@@ -321,7 +322,7 @@ class _SyncSettingsPageState extends ConsumerState<SyncSettingsPage> {
                 ),
               ),
               Icon(
-                Icons.keyboard_arrow_right_rounded,
+                OrbitIcons.chevronRight,
                 size: AppDimens.iconSizeSm + 2,
                 color: colors.secondaryText,
               ),
@@ -904,8 +905,8 @@ class _SyncCryptoCardState extends ConsumerState<_SyncCryptoCard> {
                     children: [
                       Icon(
                         status.isUnlocked
-                            ? Icons.verified_user_rounded
-                            : Icons.lock_rounded,
+                            ? OrbitIcons.shield
+                            : OrbitIcons.lock,
                         size: AppDimens.iconSizeMd,
                         color: status.isUnlocked
                             ? colors.success

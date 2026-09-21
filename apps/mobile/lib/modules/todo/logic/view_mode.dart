@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../services/local_prefs.dart';
+import '../../../core/theme/icon_map.dart';
 
 /// 任务列表视图模式（对齐桌面 `task-panel.tsx` 的 `ViewMode`）
 ///
@@ -18,9 +19,9 @@ extension TaskViewModeMeta on TaskViewMode {
       };
 
   IconData get icon => switch (this) {
-        TaskViewMode.list => Icons.view_list_rounded,
-        TaskViewMode.kanban => Icons.view_kanban_rounded,
-        TaskViewMode.table => Icons.table_rows_rounded,
+        TaskViewMode.list => OrbitIcons.list,
+        TaskViewMode.kanban => OrbitIcons.kanban,
+        TaskViewMode.table => OrbitIcons.tableRows,
       };
 }
 

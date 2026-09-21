@@ -7,10 +7,12 @@ import 'package:orbit/data/api/mock_orbit_bridge.dart';
 import 'package:orbit/data/providers/bridge_provider.dart';
 import 'package:orbit/modules/todo/detail_screen.dart';
 import 'package:orbit/shared/widgets/shadcn/orbit_month_calendar.dart';
+import 'support/orbit_test_app.dart';
+import 'package:orbit/core/theme/icon_map.dart';
 
 Widget _wrap(Widget child, MockOrbitBridge bridge) => ProviderScope(
       overrides: [orbitBridgeProvider.overrideWithValue(bridge)],
-      child: MaterialApp(home: child),
+      child: orbitTestApp(home: child),
     );
 
 Future<void> _settle(WidgetTester tester) async {
@@ -176,7 +178,7 @@ void main() {
     // IconButton+close 只在子任务/提醒两区出现且提醒在后，
     // 信息区清空按钮是裸 Icon 非 IconButton 不会误中；取 .last 即提醒的删除
     await tester.tap(
-      find.widgetWithIcon(IconButton, Icons.close_rounded).last,
+      find.widgetWithIcon(IconButton, OrbitIcons.close).last,
     );
     await _settle(tester);
 
