@@ -21,7 +21,7 @@ import '../../../core/theme/icon_map.dart';
 /// - 无交�?�?[defaultDwell] 自动收；
 /// - �?[onTap]（提醒跳详情）或 `actionLabel`（撤销类）�?默认**不自动收**�?
 ///   由用户处置；撤销类调用点显式�?`autoDismissAfter: undoDwell`�?
-///   shadcn �?`showDuration` 非空，故「不自动收」用 [_holdForever] 表达�?
+///   shadcn 的 `showDuration` 非空，故「不自动收」用 [holdForever] 表达。
 enum WaitToastVariant { info, success, warning, destructive }
 
 abstract final class WaitToast {
@@ -31,9 +31,14 @@ abstract final class WaitToast {
   /// 撤销类浮层停留时长＝撤销窗口（trash 延迟提交 5s、undo_stack 窗口同口径）
   static const Duration undoDwell = Duration(seconds: 5);
 
-  /// 「不自动收起」的替代值：shadcn `showDuration` 不接�?null�?
-  /// 用一个远超会话时长的常量表达常驻，由用户点击或下一�?toast 撤下�?
-  static const Duration _holdForever = Duration(days: 365);
+  /// 「不自动收起」的替代值：shadcn `showToast` 的 `showDuration` 是**非空**参数
+  /// （底层 `ToastEntry.showDuration` 支持 null = 常驻，但公开入口传不进去），
+  /// 故用一个远超会话时长的常量表达常驻，由用户点击或下一条 toast 撤下。
+  ///
+  /// 副作用：库会把 `showDuration` 落成一个真实 `Timer` 且**不在 dispose 里取消**，
+  /// 所以 widget 测试若不断言自动收起，收尾需 `pump(holdForever)` 把它推掉，
+  /// 否则会命中 flutter_test 的「A Timer is still pending」断言。
+  static const Duration holdForever = Duration(days: 365);
 
   static sh.ToastOverlay? _active;
 
@@ -64,7 +69,7 @@ abstract final class WaitToast {
     _active = sh.showToast(
       context: context,
       location: sh.ToastLocation.bottomCenter,
-      showDuration: auto ?? _holdForever,
+      showDuration: auto ?? holdForever,
       builder: (context, overlay) => _ToastCard(
         title: title,
         description: description,
@@ -171,49 +176,53 @@ class _ToastCard extends StatelessWidget {
                         ),
                       ),
                     ),
-                    Padding(
-                      padding: const EdgeInsets.all(AppDimens.cardPadding),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Icon(_variantIcon(variant),
-                              size: AppDimens.iconSizeSm, color: color),
-                          const SizedBox(width: AppDimens.space12),
-                          Flexible(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Text(
-                                  title,
-                                  style: TextStyle(
-                                    fontSize: 15,
-                                    fontWeight: FontWeight.w500,
-                                    color: colors.titleText,
-                                  ),
-                                ),
-                                if (description != null) ...[
-                                  const SizedBox(height: AppDimens.space4),
+                    // Expanded（而非裸 Padding）：shadcn 的 toast 容器给卡片的是**有界**
+                    // 宽度，而 Row 的非弹性子级拿到的是无界主轴约束——不显式吃掉剩余
+                    // 宽度，标题/描述的固有宽度会直接顶破卡片（实测 49/50px 溢出）
+                    Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.all(AppDimens.cardPadding),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Icon(_variantIcon(variant),
+                                size: AppDimens.iconSizeSm, color: color),
+                            const SizedBox(width: AppDimens.space12),
+                            Flexible(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
                                   Text(
-                                    description!,
+                                    title,
                                     style: TextStyle(
-                                      fontSize: 13,
-                                      color: colors.secondaryText,
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.w500,
+                                      color: colors.titleText,
                                     ),
                                   ),
+                                  if (description != null) ...[
+                                    const SizedBox(height: AppDimens.space4),
+                                    Text(
+                                      description!,
+                                      style: TextStyle(
+                                        fontSize: 13,
+                                        color: colors.secondaryText,
+                                      ),
+                                    ),
+                                  ],
                                 ],
-                              ],
+                              ),
                             ),
-                          ),
-                          if (actionLabel != null && onAction != null) ...[
-                            const SizedBox(width: AppDimens.space12),
-                            sh.Button.ghost(
-                              onPressed: onAction,
-                              child: Text(actionLabel!),
-                            ),
+                            if (actionLabel != null && onAction != null) ...[
+                              const SizedBox(width: AppDimens.space12),
+                              sh.Button.ghost(
+                                onPressed: onAction,
+                                child: Text(actionLabel!),
+                              ),
+                            ],
                           ],
-                        ],
+                        ),
                       ),
                     ),
                   ],
