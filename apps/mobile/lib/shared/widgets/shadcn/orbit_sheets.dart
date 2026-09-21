@@ -50,7 +50,13 @@ Future<bool> showConfirmBottomSheet(
   String? cancelLabel = '取消',
   bool destructive = false,
 }) async {
-  // 取值语义：确认 -> true；取�?下滑关闭/点遮�?-> false（结果缺失按 false 处理�?
+  // 取值语义：确认 -> true；取消 / 下滑关闭 / 点遮罩 -> false（结果缺失按 false 处理）
+  //
+  // 关闭一律从**弹层内容内部**发起（`closeOverlay(sheetContext, …)`）：`showOverlay`
+  // 返回的 `DrawerOverlayCompleter` 没有覆写 `closeWithResult`，会落到基类实现
+  // `async => remove()`——值被静默丢弃、弹层以 null 关闭（shadcn_flutter 0.0.53
+  // 行为，实测「点确认拿不到 true」）；`closeOverlay` 走内容侧注入的 completer
+  // 适配器（`closeDrawer(ctx, value)`），结果才能带到 `completer.future`。
   late final sh.OverlayCompleter<bool?> completer;
   completer = sh.showOverlay<bool>(
     context,
@@ -62,8 +68,8 @@ Future<bool> showConfirmBottomSheet(
         confirmLabel: confirmLabel,
         cancelLabel: cancelLabel,
         destructive: destructive,
-        onCancel: () => completer.closeWithResult(false),
-        onConfirm: () => completer.closeWithResult(true),
+        onCancel: () => sh.closeOverlay(sheetContext, false),
+        onConfirm: () => sh.closeOverlay(sheetContext, true),
       ),
     ),
   );
@@ -97,7 +103,7 @@ Future<void> showSelectBottomSheet<T>(
         items: items,
         current: current,
         onPick: (value) {
-          completer.close();
+          sh.closeOverlay(sheetContext);
           onSelect(value);
         },
       ),
@@ -135,7 +141,7 @@ Future<void> showMoreActionsSheet(
         title: title,
         actions: actions,
         onPick: (action) {
-          completer.close();
+          sh.closeOverlay(sheetContext);
           action.onTap();
         },
       ),

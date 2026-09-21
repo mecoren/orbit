@@ -72,9 +72,19 @@ class OrbitApp extends StatelessWidget {
             // 圆角与字号双双漂移。触控尺寸由 shared/widgets/shadcn/ 原语用
             // AppDimens.touchTarget 显式保证。
             scaling: sh.AdaptiveScaling.desktop,
-            // BootGate 挂在 shadcn 层与 Navigator 之间：门控期间无路由内容，
-            // ready 后放行 child 并持有桥层事件流监听
-            child: BootGate(child: child ?? const SizedBox.shrink()),
+            // DrawerOverlay 是 SheetConfiguration 系弹层的落点（`orbit_sheets.dart`
+            // 三个共享弹层 = 确认/单选/更多操作，全站 50+ 调用点走 showOverlay）。
+            // shadcn 只在**自家的** Scaffold 内挂这一层（`scaffold.dart` 的
+            // _buildContent），本项目页面用 Material Scaffold，所以必须在根部统一
+            // 挂一次——缺了不是样式差异，是 `openRawDrawer` 直接断言
+            // 「No DrawerOverlay found in the widget tree」整屏红。
+            // 挂在 ShadcnLayer 之内、Navigator 之上：页面 context 向上能查到这里，
+            // InheritedTheme/Data 的 capture 也以这一层为终点。
+            child: sh.DrawerOverlay(
+              // BootGate 挂在 shadcn 层与 Navigator 之间：门控期间无路由内容，
+              // ready 后放行 child 并持有桥层事件流监听
+              child: BootGate(child: child ?? const SizedBox.shrink()),
+            ),
           ),
         );
       },
