@@ -1,3 +1,5 @@
+import 'package:flutter/cupertino.dart'
+    show CupertinoPicker, CupertinoPickerDefaultSelectionOverlay;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sh;
@@ -128,11 +130,40 @@ class _DatePickerSheetState extends ConsumerState<_DatePickerSheet> {
     return OrbitDatePicker.formatDate(_draft);
   }
 
-  void _bumpTime({int hours = 0, int minutes = 0}) {
+  void _setTime({int? hours, int? minutes}) {
     setState(() {
       _draft = DateTime(_draft.year, _draft.month, _draft.day,
-          (_draft.hour + hours) % 24, (_draft.minute + minutes) % 60);
+          hours ?? _draft.hour, minutes ?? _draft.minute);
     });
+  }
+
+  /// 时分滚轮弹层的二级弹层。
+  ///
+  /// **不能用 Material `showModalBottomSheet`**：日期面板本身挂在根 `DrawerOverlay`
+  /// 上（Navigator 之外），弹层内容里没有 `Navigator` 祖先，Material 路由式弹层
+  /// 唤不起来——二级面板同样走 shadcn `SheetConfiguration`（`DrawerOverlay` 支持
+  /// 堆叠条目），确认值照旧从内容侧 `closeOverlay` 回传。
+  Future<void> _pickTimeWheel({
+    required String title,
+    required int itemCount,
+    required int current,
+    required ValueChanged<int> onPicked,
+  }) async {
+    late final sh.OverlayCompleter<int?> completer;
+    completer = sh.showOverlay<int>(
+      context,
+      sh.SheetConfiguration<int>(
+        builder: (sheetContext) => _TimeWheelSheet(
+          title: title,
+          itemCount: itemCount,
+          initialItem: current,
+          accent: widget.accent ?? OrbitAccents.themeAccent,
+          onConfirm: (value) => sh.closeOverlay(sheetContext, value),
+        ),
+      ),
+    );
+    final result = await completer.future;
+    if (result != null) onPicked(result);
   }
 
   @override
@@ -418,15 +449,21 @@ class _DatePickerSheetState extends ConsumerState<_DatePickerSheet> {
         borderRadius: AppShapes.medium,
       ),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Icon(OrbitIcons.clock, size: AppDimens.iconSizeSm, color: accent),
           const SizedBox(width: AppDimens.space12),
-          _TimeStepper(
-            value: _draft.hour,
-            onDelta: (d) => _bumpTime(hours: d),
-            semanticPrefix: '时',
-            valueKey: 'time_hour_value',
+          Expanded(
+            child: _TimeDropdownField(
+              valueKey: 'time_hour_value',
+              value: _draft.hour,
+              unit: '时',
+              onTap: () => _pickTimeWheel(
+                title: '选择小时',
+                itemCount: 24,
+                current: _draft.hour,
+                onPicked: (h) => _setTime(hours: h),
+              ),
+            ),
           ),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: AppDimens.space8),
@@ -439,11 +476,18 @@ class _DatePickerSheetState extends ConsumerState<_DatePickerSheet> {
               ),
             ),
           ),
-          _TimeStepper(
-            value: _draft.minute,
-            onDelta: (d) => _bumpTime(minutes: d * 5),
-            semanticPrefix: '分',
-            valueKey: 'time_minute_value',
+          Expanded(
+            child: _TimeDropdownField(
+              valueKey: 'time_minute_value',
+              value: _draft.minute,
+              unit: '分',
+              onTap: () => _pickTimeWheel(
+                title: '选择分钟',
+                itemCount: 60,
+                current: _draft.minute,
+                onPicked: (m) => _setTime(minutes: m),
+              ),
+            ),
           ),
         ],
       ),
@@ -451,69 +495,169 @@ class _DatePickerSheetState extends ConsumerState<_DatePickerSheet> {
   }
 }
 
-/// 时分步进器（- 数值 +；分档步进 5 分钟）
+/// 时/分下拉选择框：值 + 单位 + 下拉箭头，整框可点弹出滚轮。
 ///
-/// 提示走 shadcn `Tooltip`：本组件只出现在 shadcn 弹层（日期面板）里，而弹层挂在
-/// Navigator 之外的根 `DrawerOverlay` 上，Material `IconButton.tooltip` 在那里
-/// 找不到 `Overlay` 祖先会抛断言（见 `orbit_month_calendar.dart` 同款说明）；
-/// 数值 Text 带 [valueKey]，供测试读值且不与月历日期文本撞 finder。
-class _TimeStepper extends StatelessWidget {
-  const _TimeStepper({
-    required this.value,
-    required this.onDelta,
-    required this.semanticPrefix,
+/// 数值 Text 带 [valueKey]：测试用它精确定位并读值，避免与月历日期数字撞文本。
+class _TimeDropdownField extends StatelessWidget {
+  const _TimeDropdownField({
     required this.valueKey,
+    required this.value,
+    required this.unit,
+    required this.onTap,
   });
 
-  final int value;
-  final ValueChanged<int> onDelta;
-  final String semanticPrefix;
   final String valueKey;
+  final int value;
+  final String unit;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final colors = AppColors.ofContext(context);
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        sh.Tooltip(
-          tooltip: (context) => Text('$semanticPrefix -1'),
-          child: IconButton(
-            onPressed: () => onDelta(-1),
-            icon: Icon(
-              OrbitIcons.remove,
-              size: AppDimens.iconSizeSm,
-              color: colors.iconText,
+    return InkWell(
+      borderRadius: AppShapes.medium,
+      onTap: onTap,
+      child: Container(
+        height: 44,
+        decoration: BoxDecoration(
+          color: colors.surface,
+          borderRadius: AppShapes.medium,
+          border: Border.all(color: colors.outline),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              value.toString().padLeft(2, '0'),
+              key: ValueKey(valueKey),
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+                color: colors.titleText,
+                fontFeatures: const [FontFeature.tabularFigures()],
+              ),
             ),
-            visualDensity: VisualDensity.compact,
+            const SizedBox(width: AppDimens.space4),
+            Text(
+              unit,
+              style: TextStyle(fontSize: 11, color: colors.secondaryText),
+            ),
+            const SizedBox(width: AppDimens.space4),
+            // 右侧下拉箭头（与输入框下拉同视觉；弹层内不用 Material Tooltip——
+            // 弹层挂在 Navigator 之外，Material 的 RawTooltip 找不到 Overlay 祖先）
+            Icon(OrbitIcons.expandMore,
+                size: AppDimens.iconSizeMd, color: colors.iconText),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// 滚轮选择弹层：`CupertinoPicker` 滚动选值，确认回传选中项
+///
+/// 承载在 shadcn `SheetConfiguration` 上（二级弹层，见 `_pickTimeWheel` 说明）。
+class _TimeWheelSheet extends StatefulWidget {
+  const _TimeWheelSheet({
+    required this.title,
+    required this.itemCount,
+    required this.initialItem,
+    required this.accent,
+    required this.onConfirm,
+  });
+
+  final String title;
+
+  /// 可选值数量（小时 24 / 分钟 60），值 = index
+  final int itemCount;
+
+  /// 初始选中项（对应当前时/分值）
+  final int initialItem;
+
+  final Color accent;
+  final ValueChanged<int> onConfirm;
+
+  @override
+  State<_TimeWheelSheet> createState() => _TimeWheelSheetState();
+}
+
+class _TimeWheelSheetState extends State<_TimeWheelSheet> {
+  late int _selected = widget.initialItem;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = AppColors.ofContext(context);
+    return Material(
+      type: MaterialType.transparency,
+      child: Container(
+        width: double.infinity,
+        decoration: BoxDecoration(
+          color: colors.popup,
+          borderRadius: const BorderRadius.vertical(
+            top: Radius.circular(AppShapes.radiusXl),
           ),
         ),
-        SizedBox(
-          width: 32,
-          child: Text(
-            value.toString().padLeft(2, '0'),
-            key: ValueKey(valueKey),
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w600,
-              color: colors.titleText,
-            ),
+        child: SafeArea(
+          top: false,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(
+                  AppDimens.space20,
+                  AppDimens.space16,
+                  AppDimens.space12,
+                  0,
+                ),
+                child: Row(
+                  children: [
+                    Text(
+                      widget.title,
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        color: colors.titleText,
+                      ),
+                    ),
+                    const Spacer(),
+                    sh.Button.ghost(
+                      onPressed: () => widget.onConfirm(_selected),
+                      child: const Text('确认'),
+                    ),
+                  ],
+                ),
+              ),
+              SizedBox(
+                height: 216,
+                child: CupertinoPicker(
+                  itemExtent: 44,
+                  scrollController: FixedExtentScrollController(
+                    initialItem: widget.initialItem,
+                  ),
+                  selectionOverlay: CupertinoPickerDefaultSelectionOverlay(
+                    background: widget.accent.withValues(alpha: 0.08),
+                  ),
+                  onSelectedItemChanged: (i) => _selected = i,
+                  children: [
+                    for (var i = 0; i < widget.itemCount; i++)
+                      Center(
+                        child: Text(
+                          i.toString().padLeft(2, '0'),
+                          style: TextStyle(fontSize: 16, color: colors.bodyText),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              // 占位色块避免弹层底部贴边突兀
+              SizedBox(
+                height: AppDimens.space8,
+                child: ColoredBox(color: colors.popup),
+              ),
+            ],
           ),
         ),
-        sh.Tooltip(
-          tooltip: (context) => Text('$semanticPrefix +1'),
-          child: IconButton(
-            onPressed: () => onDelta(1),
-            icon: Icon(
-              OrbitIcons.add,
-              size: AppDimens.iconSizeSm,
-              color: colors.iconText,
-            ),
-            visualDensity: VisualDensity.compact,
-          ),
-        ),
-      ],
+      ),
     );
   }
 }

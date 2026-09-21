@@ -1,4 +1,5 @@
 // 日期时间面板测试：日视图与日历视图同口径（农历/休班）+ 时间选择区交互
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -61,48 +62,64 @@ void main() {
     expect(calendar.showHeader, isFalse, reason: '头部由面板标题栏接管');
   });
 
-  testWidgets('时间选择区：时/分步进行（- 数值 +，无二级弹层）', (tester) async {
+  testWidgets('时间选择区：时/分下拉框 + 下拉箭头（无步进钮）', (tester) async {
     await openPicker(tester);
 
     expect(find.text('确认'), findsOneWidget);
 
-    // 时分各一组「- / 数值 / +」步进器（线上下拉框已按 v3 收敛为步进器行）
-    expect(find.byIcon(OrbitIcons.add), findsNWidgets(2));
-    expect(find.byIcon(OrbitIcons.remove), findsNWidgets(2));
-    expect(find.byKey(const ValueKey('time_hour_value')), findsOneWidget);
-    expect(find.byKey(const ValueKey('time_minute_value')), findsOneWidget);
+    // 布局结构：时/分单位标签各一
+    expect(find.text('时'), findsOneWidget);
+    expect(find.text('分'), findsOneWidget);
 
-    // 点步进钮不弹二级弹层（ValueKey 只用于读值，不可点）
-    await tester.tap(find.byIcon(OrbitIcons.add).first);
-    await tester.pumpAndSettle();
-    expect(find.text('确认'), findsOneWidget);
+    // 下拉箭头 ×2，步进 +/- 钮不存在
+    expect(find.byIcon(OrbitIcons.expandMore), findsNWidgets(2));
+    expect(find.byIcon(OrbitIcons.add), findsNothing);
+    expect(find.byIcon(OrbitIcons.remove), findsNothing);
   });
 
-  testWidgets('小时步进：点 + 钮 → 时 +1（23 点回绕 0）', (tester) async {
+  testWidgets('小时下拉：点框弹滚轮 → 滑一格 → 确认落值', (tester) async {
     final initialHour = DateTime.now().hour;
     await openPicker(tester);
     expect(hourText(tester), initialHour.toString().padLeft(2, '0'));
 
-    // 时行 = 第一组步进器的「+」钮
-    await tester.tap(find.byIcon(OrbitIcons.add).first);
-    await tester.pump();
-    expect(
-      hourText(tester),
-      ((initialHour + 1) % 24).toString().padLeft(2, '0'),
-    );
+    // 点小时下拉框 → 弹出滚轮弹层
+    await tester.tap(find.byKey(const ValueKey('time_hour_value')));
+    await tester.pumpAndSettle();
+    expect(find.byType(CupertinoPicker), findsOneWidget);
+
+    // 滚轮滑动方向随边界自适应：ListWheel 无环绕语义——初始在末项（23 点）
+    // 时上滑会被 maxScrollExtent 钳住，改下滑 -1；否则上滑 +1。
+    final atLast = initialHour == 23;
+    await tester.drag(find.byType(CupertinoPicker),
+        Offset(0, atLast ? 44 : -44));
+    await tester.pumpAndSettle();
+
+    // 确认弹层（弹层在上层，取 last）→ 数值按滑动方向 ±1
+    await tester.tap(find.text('确认').last);
+    await tester.pumpAndSettle();
+    final expected = atLast ? initialHour - 1 : initialHour + 1;
+    expect(hourText(tester), expected.toString().padLeft(2, '0'));
   });
 
-  testWidgets('分钟步进：点 + 钮 → 分 +5（55 分回绕 00）', (tester) async {
+  testWidgets('分钟下拉：点框弹滚轮 → 滑一格 → 确认落值', (tester) async {
     final initialMinute = DateTime.now().minute;
     await openPicker(tester);
     expect(minuteText(tester), initialMinute.toString().padLeft(2, '0'));
 
-    // 分行 = 第二组步进器的「+」钮
-    await tester.tap(find.byIcon(OrbitIcons.add).last);
-    await tester.pump();
-    expect(
-      minuteText(tester),
-      ((initialMinute + 5) % 60).toString().padLeft(2, '0'),
-    );
+    // 点分钟下拉框 → 弹出滚轮弹层
+    await tester.tap(find.byKey(const ValueKey('time_minute_value')));
+    await tester.pumpAndSettle();
+    expect(find.byType(CupertinoPicker), findsOneWidget);
+
+    // 边界自适应（同小时用例）：末项 59 分下滑 -1，否则上滑 +1
+    final atLast = initialMinute == 59;
+    await tester.drag(find.byType(CupertinoPicker),
+        Offset(0, atLast ? 44 : -44));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('确认').last);
+    await tester.pumpAndSettle();
+    final expected = atLast ? initialMinute - 1 : initialMinute + 1;
+    expect(minuteText(tester), expected.toString().padLeft(2, '0'));
   });
 }
