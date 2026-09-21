@@ -66,21 +66,29 @@ class OrbitPageHeader extends StatelessWidget implements PreferredSizeWidget {
     final colors = AppColors.ofContext(context);
     return Material(
       color: colors.surface,
-      child: Container(
-        height: rowHeight,
-        padding: const EdgeInsets.symmetric(horizontal: AppDimens.space16),
-        decoration: BoxDecoration(
-          border: Border(
-            bottom: BorderSide(color: colors.outline, width: 1),
+      // 状态栏避让：表面铺满状态栏区域（同页头色，与页头连成一片不露页面底色），
+      // 标题行整体下移状态栏高度。因此页头实际占高 = `状态栏 + rowHeight`，
+      // 与各页内容区让位口径一致（SafeArea 内空出 rowHeight，或滚动区 padding
+      // 手动加 `MediaQuery.padding.top + rowHeight`）——缺少这层避让时标题会被
+      // 状态栏压到顶部（页头自身却只有 56px，视觉上「标题太靠上」）
+      child: SafeArea(
+        bottom: false,
+        child: Container(
+          height: rowHeight,
+          padding: const EdgeInsets.symmetric(horizontal: AppDimens.space16),
+          decoration: BoxDecoration(
+            border: Border(
+              bottom: BorderSide(color: colors.outline, width: 1),
+            ),
           ),
-        ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            ?_buildLeading(context, colors),
-            Expanded(child: _buildTitle(context, colors)),
-            _buildTrailing(),
-          ],
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              ?_buildLeading(context, colors),
+              Expanded(child: _buildTitle(context, colors)),
+              _buildTrailing(),
+            ],
+          ),
         ),
       ),
     );

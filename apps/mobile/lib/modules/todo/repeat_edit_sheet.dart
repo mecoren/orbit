@@ -211,7 +211,11 @@ class _RepeatEditSheetState extends State<_RepeatEditSheet> {
           padding: const EdgeInsets.all(AppDimens.space16),
           child: Column(
             mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
+            // stretch：内容铺满宽度。`showModalBottomSheet` 给内容的是**宽松约束**，
+            // 本面板全是 Wrap/Text 这类收缩组件，不撑开时面板宽度会收缩到内容宽度
+            // （观感"太窄"）；其它底部抽屉因内含撑满元素（TextField/Row+Expanded）
+            // 天然全宽，此处显式对齐同一口径
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Text(
                 '重复',
@@ -267,6 +271,7 @@ class _RepeatEditSheetState extends State<_RepeatEditSheet> {
   /// 自定义面板（对应桌面端 RepeatField 的 customOpen 区）
   Widget _buildCustomPanel(AppColorSet colors) {
     return Container(
+      key: const ValueKey('repeat_custom_panel'),
       padding: const EdgeInsets.all(AppDimens.space8),
       decoration: BoxDecoration(
         color: colors.surfaceSecondary,

@@ -1,15 +1,24 @@
-/// 底部弹层族（设计系统 v3：shadcn `SheetConfiguration` 承载浮层机制�?
+/// 底部弹层族（设计系统 v3：承载与形状统一走 Material）
 ///
-/// 三个共享弹层（确�?/ 单�?/ 更多操作）的**公共 API 与旧实现逐字一�?*�?
-/// 调用点合�?70+ 处（`showConfirmBottomSheet` 25、`showSelectBottomSheet` 31�?
-/// `showMoreActionsSheet` 3），保留原名与原参数以免制造无�?diff�?
+/// 三个共享弹层（确认 / 单选 / 更多操作）的**公共 API 与旧实现逐字一致**：
+/// 调用点合计 70+ 处（`showConfirmBottomSheet` 25、`showSelectBottomSheet` 31、
+/// `showMoreActionsSheet` 3），保留原名与原参数以免制造无谓 diff。
 ///
-/// 变化点只在内部：浮层�?shadcn �?overlay 体系承载（`showOverlay` +
-/// `SheetConfiguration`），内容�?shadcn 原语（`Button`）与设计 token 构成�?
-/// 不再�?Material �?`showModalBottomSheet`�?
+/// **为什么承载回到 Material `showModalBottomSheet`**（2026-09-21 修复）：
+/// shadcn 的 `SheetConfiguration` 打开的 sheet 容器（`SheetRawContainer`）把背景
+/// 画成 `colorScheme.background` 的不透明**矩形**（`getBorderRadius()` 硬编码
+/// `BorderRadius.zero`），而 `SheetConfiguration` 没有背景/圆角入口——于是
+/// `_SheetShell` 自绘的顶部圆角被这层直角背景盖住，观感变成"两边有角"。
+/// 页面级抽屉（表单 / 重复规则 / 色板 / 视图切换）本就走 Material
+/// `showModalBottomSheet` 且圆角正常，故共享弹层族与其统一到同一承载 +
+/// 同一形状常量 [bottomSheetTopShape]（形状与动效的唯一来源仍是本文件）。
 ///
-/// �?`AlertDialog` 的分工不变：确认类一律走底部抽屉（拇指可达）�?
-/// `AlertDialog` 只保留需要文本输入的场景�?
+/// 与 `AlertDialog` 的分工不变：确认类一律走底部抽屉（拇指可达）；
+/// `AlertDialog` 只保留需要文本输入的场景。
+///
+/// **注意**：调用方必须持有 `Navigator` 祖先（页面 / Material 抽屉内均可）；
+/// shadcn 浮层（挂在 Navigator 之外的根 `DrawerOverlay`）内部不可调用本族——
+/// 那里没有 `Navigator`，Material 路由式弹层唤不起来。
 library;
 
 import 'package:flutter/material.dart';
@@ -21,11 +30,7 @@ import '../../../core/theme/app_motion.dart';
 import '../../../core/theme/app_shapes.dart';
 import '../../../core/theme/icon_map.dart';
 
-/// 底部抽屉顶圆角描边形�?
-///
-/// 保留给仍�?Material `showModalBottomSheet` 弹出的页面级弹层
-/// （表�?重复规则/详情内的二级面板）——这些容器不属于共享弹层族，
-/// 但形状与动效口径要与此处统一，故常量的唯一来源仍是本文件�?
+/// 底部抽屉顶圆角描边形状（全项目底部抽屉的唯一形状来源）
 const RoundedRectangleBorder bottomSheetTopShape = RoundedRectangleBorder(
   borderRadius: BorderRadius.vertical(
     top: Radius.circular(AppShapes.radiusLarge),
@@ -51,29 +56,24 @@ Future<bool> showConfirmBottomSheet(
   bool destructive = false,
 }) async {
   // 取值语义：确认 -> true；取消 / 下滑关闭 / 点遮罩 -> false（结果缺失按 false 处理）
-  //
-  // 关闭一律从**弹层内容内部**发起（`closeOverlay(sheetContext, …)`）：`showOverlay`
-  // 返回的 `DrawerOverlayCompleter` 没有覆写 `closeWithResult`，会落到基类实现
-  // `async => remove()`——值被静默丢弃、弹层以 null 关闭（shadcn_flutter 0.0.53
-  // 行为，实测「点确认拿不到 true」）；`closeOverlay` 走内容侧注入的 completer
-  // 适配器（`closeDrawer(ctx, value)`），结果才能带到 `completer.future`。
-  late final sh.OverlayCompleter<bool?> completer;
-  completer = sh.showOverlay<bool>(
-    context,
-    sh.SheetConfiguration<bool>(
-      builder: (sheetContext) => _ConfirmSheet(
-        title: title,
-        message: message,
-        content: content,
-        confirmLabel: confirmLabel,
-        cancelLabel: cancelLabel,
-        destructive: destructive,
-        onCancel: () => sh.closeOverlay(sheetContext, false),
-        onConfirm: () => sh.closeOverlay(sheetContext, true),
-      ),
+  final result = await showModalBottomSheet<bool>(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: AppColors.ofContext(context).popup,
+    shape: bottomSheetTopShape,
+    sheetAnimationStyle: bottomSheetMotion,
+    builder: (sheetContext) => _ConfirmSheet(
+      title: title,
+      message: message,
+      content: content,
+      confirmLabel: confirmLabel,
+      cancelLabel: cancelLabel,
+      destructive: destructive,
+      onCancel: () => Navigator.of(sheetContext).pop(false),
+      onConfirm: () => Navigator.of(sheetContext).pop(true),
     ),
   );
-  return await completer.future ?? false;
+  return result ?? false;
 }
 
 /// 单选弹层数据项�?2×12 色点 + 文案�?
@@ -94,22 +94,22 @@ Future<void> showSelectBottomSheet<T>(
   T? current,
   required ValueChanged<T> onSelect,
 }) async {
-  late final sh.OverlayCompleter<void> completer;
-  completer = sh.showOverlay<void>(
-    context,
-    sh.SheetConfiguration<void>(
-      builder: (sheetContext) => _SelectSheet<T>(
-        title: title,
-        items: items,
-        current: current,
-        onPick: (value) {
-          sh.closeOverlay(sheetContext);
-          onSelect(value);
-        },
-      ),
+  await showModalBottomSheet<void>(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: AppColors.ofContext(context).popup,
+    shape: bottomSheetTopShape,
+    sheetAnimationStyle: bottomSheetMotion,
+    builder: (sheetContext) => _SelectSheet<T>(
+      title: title,
+      items: items,
+      current: current,
+      onPick: (value) {
+        Navigator.of(sheetContext).pop();
+        onSelect(value);
+      },
     ),
   );
-  await completer.future;
 }
 
 /// 更多操作菜单项（图标 + 文案；destructive 项由调用方传红色 [color]�?
@@ -133,24 +133,27 @@ Future<void> showMoreActionsSheet(
   required String title,
   required List<MoreActionItem> actions,
 }) async {
-  late final sh.OverlayCompleter<void> completer;
-  completer = sh.showOverlay<void>(
-    context,
-    sh.SheetConfiguration<void>(
-      builder: (sheetContext) => _ActionsSheet(
-        title: title,
-        actions: actions,
-        onPick: (action) {
-          sh.closeOverlay(sheetContext);
-          action.onTap();
-        },
-      ),
+  await showModalBottomSheet<void>(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: AppColors.ofContext(context).popup,
+    shape: bottomSheetTopShape,
+    sheetAnimationStyle: bottomSheetMotion,
+    builder: (sheetContext) => _ActionsSheet(
+      title: title,
+      actions: actions,
+      onPick: (action) {
+        Navigator.of(sheetContext).pop();
+        action.onTap();
+      },
     ),
   );
-  await completer.future;
 }
 
 /// 弹层通用外壳：顶部拖拽手�?+ 圆角�?+ 弹层表面�?+ 向上投影
+/// 表面色与顶部圆角由承载方（Material `showModalBottomSheet` 的
+/// `backgroundColor` + [bottomSheetTopShape]）提供，保持形状单一来源；
+/// 此处不再自绘——两层圆角半径不一致时会从 shape 圆角之外溢出白色小三角
 class _SheetShell extends StatelessWidget {
   const _SheetShell({required this.child});
 
@@ -161,14 +164,8 @@ class _SheetShell extends StatelessWidget {
     final colors = AppColors.ofContext(context);
     return Material(
       type: MaterialType.transparency,
-      child: Container(
+      child: SizedBox(
         width: double.infinity,
-        decoration: BoxDecoration(
-          color: colors.popup,
-          borderRadius: const BorderRadius.vertical(
-            top: Radius.circular(AppShapes.radiusXl),
-          ),
-        ),
         child: SafeArea(
           top: false,
           child: Column(

@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:orbit/data/api/dto.dart';
 import 'package:orbit/data/api/mock_orbit_bridge.dart';
 import 'package:orbit/data/providers/bridge_provider.dart';
 import 'package:orbit/modules/todo/calendar_screen.dart';
@@ -26,6 +27,18 @@ MockOrbitBridge _seededBridge() {
   final bridge = MockOrbitBridge();
   bridge.store.seed();
   return bridge;
+}
+
+/// 含 2026-10 国庆假期的桥（复现「翻到十月应看到假期」场景）
+class _OctHolidayBridge extends MockOrbitBridge {
+  @override
+  Future<List<HolidayInfo>> holidayList() async => const [
+        HolidayInfo(date: '2026-09-25', year: 2026, isHoliday: true, name: '中秋节'),
+        HolidayInfo(date: '2026-10-01', year: 2026, isHoliday: true, name: '国庆节'),
+        HolidayInfo(date: '2026-10-02', year: 2026, isHoliday: true, name: '国庆节'),
+        HolidayInfo(date: '2026-10-08', year: 2026, isHoliday: true, name: '国庆节'),
+        HolidayInfo(date: '2026-10-10', year: 2026, isHoliday: false, name: '国庆节后补班'),
+      ];
 }
 
 void main() {
@@ -241,6 +254,24 @@ void main() {
         const Offset(320, 0), 900);
     await tester.pumpAndSettle();
     expect(title(), currentTitle);
+  });
+
+  testWidgets('横滑翻月后网格与标题同步：目标月假期徽标不丢', (tester) async {
+    final bridge = _OctHolidayBridge()..store.seed();
+    await tester.pumpWidget(_wrap(const SizedBox(), bridge));
+    await settle(tester);
+
+    // 横滑到 10 月（与上一条用例同起手：从日期格起滑，星期表头不在 PageView 内）
+    await tester.fling(find.text('${DateTime.now().day}').first,
+        const Offset(-320, 0), 900);
+    await tester.pumpAndSettle();
+    expect(find.text('2026年10月'), findsOneWidget);
+
+    // 网格必须真的渲染 10 月：10/1、10/2、10/8 的「休」与 10/10 的「班」可见。
+    // 修复前 firstDay/lastDay 随 month 漂移（`month ± 5 年`），横滑后 PageView
+    // 页索引语义整体错位——标题已到 10 月而网格落在相邻月，徽标全无
+    expect(find.text('休'), findsNWidgets(3));
+    expect(find.text('班'), findsOneWidget);
   });
 
   testWidgets('侧栏入口：「日历」行渲染并点击进入', (tester) async {

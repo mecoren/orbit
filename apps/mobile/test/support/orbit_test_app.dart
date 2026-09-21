@@ -10,9 +10,9 @@ import 'package:shadcn_flutter/shadcn_flutter.dart' as sh;
 /// + DrawerOverlay，见 [_orbitRootLayers]）。
 ///
 /// **为什么测试也必须包这两层**：设计系统 v3 的轻提示（`WaitToast` →
-/// `showToast`）依赖 ShadcnLayer 注入的 `ToastLayer`；三个共享弹层
-/// （`showOverlay` + `SheetConfiguration`，见 `orbit_sheets.dart`）需要
-/// ShadcnLayer 的 `OverlayManagerLayer` **加** `DrawerOverlay` 才有落点。
+/// `showToast`）依赖 ShadcnLayer 注入的 `ToastLayer`；shadcn 的
+/// `Tooltip`/`Sheet`/`Drawer` 系浮层依赖 `OverlayManagerLayer`（+ 根
+/// `DrawerOverlay` 作落点，见 `orbit_sheets.dart` 的承载口径说明）。
 /// 缺了任何一层都不是"样式不同"而是直接断言失败。测试壳与生产壳同构，
 /// 才能让同名断言继续有效。
 ///

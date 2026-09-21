@@ -197,9 +197,13 @@ class OrbitMonthCalendar extends StatelessWidget {
     final weekend = weekendColor ?? ChineseCalendarColors.weekend;
     final monthStart = DateTime(month.year, month.month, 1);
 
-    // 可翻范围：调用方给了可选范围就用它，否则以当前月 ±5 年为界
-    final firstDay = selectableStart ?? DateTime(month.year - 5, month.month, 1);
-    final lastDay = selectableEnd ?? DateTime(month.year + 5, month.month, 1);
+    // 可翻范围：调用方给了可选范围就用它，否则用**固定绝对窗口**。
+    // 不得用 month 推导（原实现为 `month ± 5 年`）：firstDay/lastDay 随 month
+    // 变化时，table_calendar 内部 PageView 的页索引语义会在 setState 重建后整体
+    // 漂移——横滑翻月后标题已是目标月，网格却渲染相邻月（2026-09-21 实测：
+    // 横滑到 10 月后 10 月的假期徽标消失，补位/当月判定同样错位）
+    final firstDay = selectableStart ?? DateTime(2000, 1, 1);
+    final lastDay = selectableEnd ?? DateTime(2099, 12, 31);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -385,6 +389,9 @@ class OrbitMonthCalendar extends StatelessWidget {
     // 今天 = 实心强调块；选中（非今天）= 描边
     final filled = isToday;
     final outlined = !isToday && isSelected;
+    // 当月日期正常显示（周末走识别蓝）；前后月补位日期**弱显示**（deactivatedText
+    // 灰，正是「翻到某月时该月为正常显示、其余月份退到背景」的视觉锚点）。
+    // 越界禁用态（可选范围之外）比补位更弱一档
     final numberColor = outOfRange
         ? colors.deactivatedText.withValues(alpha: 0.5)
         : filled
@@ -423,10 +430,11 @@ class OrbitMonthCalendar extends StatelessWidget {
               style: TextStyle(
                 fontSize: size == AppCalendarSize.large ? 12 : 9,
                 height: 1.1,
-                // 今天实心块内副标签转白（强调色底上灰字对比度不足）
+                // 今天实心块内副标签转白（强调色底上灰字对比度不足）；
+                // 补位格副标签与上方数字同步弱化
                 color: filled
                     ? const Color(0xFFFFFFFF).withValues(alpha: 0.9)
-                    : colors.secondaryText.withValues(alpha: inMonth ? 1 : 0.5),
+                    : colors.secondaryText.withValues(alpha: inMonth ? 1 : 0.45),
               ),
             ),
           )

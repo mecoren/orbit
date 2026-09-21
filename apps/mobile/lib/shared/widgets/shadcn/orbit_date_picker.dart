@@ -13,19 +13,23 @@ import '../../../core/theme/orbit_accents.dart';
 import '../../../data/api/dto.dart';
 import '../../../modules/todo/providers/todo_providers.dart';
 import 'orbit_month_calendar.dart';
+import 'orbit_sheets.dart';
 
 /// 日期选择器初始视图
 enum OrbitDatePickerMode { day, month, year }
 
-/// 日期（可选时间）选择器（设计系统 v3：shadcn `SheetConfiguration` 承载面板）。
+/// 日期（可选时间）选择器（底部面板承载走 Material，形状同共享弹层族）。
+///
+/// **承载与形状口径**：与 `orbit_sheets.dart` 同源——`showModalBottomSheet` +
+/// [bottomSheetTopShape]（顶部圆角唯一来源），面板自身不再自绘表面。原因：
+/// shadcn `SheetConfiguration` 的 sheet 容器（`SheetRawContainer`）硬编码直角 +
+/// 不透明背景，会把面板自绘的圆角盖住（观感"两边有角"）。
 ///
 /// 面板：顶部标题（可点切换 日 / 年月 / 年）+ 相对日期副标题 + 清除/确认；
 /// 日视图复用 [OrbitMonthCalendar]（medium 档）——因此农历/节气/休班徽标与
 /// 日历页**同源同口径**（同一份 `holidayProvider` 缓存传入）。
 ///
 /// 与旧 `WaitDatePicker` 的差异（有意收敛）：
-/// - 面板容器由 Material 的 `showModalBottomSheet` 改为 shadcn 的
-///   `SheetConfiguration`（浮层机制统一，动画/遮罩/下滑关闭由 shadcn 负责）；
 /// - 时分选择由「滚轮 + 下拉」合并为**步进器行**（`- / 数值 / +`），
 ///   触控目标更大、无需二级弹层，与紧凑表单场景更契合；
 /// - 保留 [formatDate] / [formatDateTime] 两个静态格式化入口（调用方按需）。
@@ -50,28 +54,23 @@ class OrbitDatePicker {
     OrbitDatePickerMode mode = OrbitDatePickerMode.day,
     Color? accent,
   }) async {
-    late final sh.OverlayCompleter<DateTime?> completer;
-    completer = sh.showOverlay<DateTime>(
-      context,
-      sh.SheetConfiguration<DateTime>(
-        builder: (sheetContext) => _DatePickerSheet(
-          initialDate: initialDate,
-          showTime: showTime,
-          initialMode: mode,
-          accent: accent,
-          // 关闭必须从**弹层内容内部**发起（`closeOverlay(sheetContext, …)`）：
-          // `showOverlay` 返回的 `DrawerOverlayCompleter` 没有覆写
-          // `closeWithResult`，落到基类实现 `async => remove()`——值被静默丢弃、
-          // 弹层以 null 关闭（shadcn_flutter 0.0.53 行为，实测「点确认拿不回选中日」）。
-          // `closeOverlay` 走内容侧注入的 completer 适配器，`closeDrawer(ctx, value)`
-          // 才真正把结果带到 `completer.future`。
-          onCancel: () => sh.closeOverlay(sheetContext),
-          onConfirm: (value) => sh.closeOverlay(sheetContext, value),
-          onClear: () => sh.closeOverlay(sheetContext),
-        ),
+    // 关闭与回值走 Material 路由：清除 / 直接关闭都回 null（picker 语义不变）
+    return showModalBottomSheet<DateTime>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppColors.ofContext(context).popup,
+      shape: bottomSheetTopShape,
+      sheetAnimationStyle: bottomSheetMotion,
+      builder: (sheetContext) => _DatePickerSheet(
+        initialDate: initialDate,
+        showTime: showTime,
+        initialMode: mode,
+        accent: accent,
+        onCancel: () => Navigator.of(sheetContext).pop(),
+        onConfirm: (value) => Navigator.of(sheetContext).pop(value),
+        onClear: () => Navigator.of(sheetContext).pop(),
       ),
     );
-    return completer.future;
   }
 }
 
@@ -137,32 +136,30 @@ class _DatePickerSheetState extends ConsumerState<_DatePickerSheet> {
     });
   }
 
-  /// 时分滚轮弹层的二级弹层。
+  /// 时分滚轮弹层（二级面板）。
   ///
-  /// **不能用 Material `showModalBottomSheet`**：日期面板本身挂在根 `DrawerOverlay`
-  /// 上（Navigator 之外），弹层内容里没有 `Navigator` 祖先，Material 路由式弹层
-  /// 唤不起来——二级面板同样走 shadcn `SheetConfiguration`（`DrawerOverlay` 支持
-  /// 堆叠条目），确认值照旧从内容侧 `closeOverlay` 回传。
+  /// 主面板已改为 Material 路由承载（见 [OrbitDatePicker.pick]），二级面板同走
+  /// `showModalBottomSheet`：遮罩/动画/形状口径一致，选中值经 `Navigator.pop` 回传。
   Future<void> _pickTimeWheel({
     required String title,
     required int itemCount,
     required int current,
     required ValueChanged<int> onPicked,
   }) async {
-    late final sh.OverlayCompleter<int?> completer;
-    completer = sh.showOverlay<int>(
-      context,
-      sh.SheetConfiguration<int>(
-        builder: (sheetContext) => _TimeWheelSheet(
-          title: title,
-          itemCount: itemCount,
-          initialItem: current,
-          accent: widget.accent ?? OrbitAccents.themeAccent,
-          onConfirm: (value) => sh.closeOverlay(sheetContext, value),
-        ),
+    final result = await showModalBottomSheet<int>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppColors.ofContext(context).popup,
+      shape: bottomSheetTopShape,
+      sheetAnimationStyle: bottomSheetMotion,
+      builder: (sheetContext) => _TimeWheelSheet(
+        title: title,
+        itemCount: itemCount,
+        initialItem: current,
+        accent: widget.accent ?? OrbitAccents.themeAccent,
+        onConfirm: (value) => Navigator.of(sheetContext).pop(value),
       ),
     );
-    final result = await completer.future;
     if (result != null) onPicked(result);
   }
 
@@ -172,16 +169,12 @@ class _DatePickerSheetState extends ConsumerState<_DatePickerSheet> {
     final accent = widget.accent ?? OrbitAccents.themeAccent;
     final maxHeight = MediaQuery.of(context).size.height * 0.85;
 
+    // 表面色与顶部圆角由承载提供（backgroundColor + bottomSheetTopShape），
+    // 此处不再自绘，避免两层圆角半径不一致时溢出白色小三角
     return Material(
       type: MaterialType.transparency,
-      child: Container(
+      child: SizedBox(
         width: double.infinity,
-        decoration: BoxDecoration(
-          color: colors.popup,
-          borderRadius: const BorderRadius.vertical(
-            top: Radius.circular(AppShapes.radiusXl),
-          ),
-        ),
         child: SafeArea(
           top: false,
           child: ConstrainedBox(
@@ -556,7 +549,7 @@ class _TimeDropdownField extends StatelessWidget {
 
 /// 滚轮选择弹层：`CupertinoPicker` 滚动选值，确认回传选中项
 ///
-/// 承载在 shadcn `SheetConfiguration` 上（二级弹层，见 `_pickTimeWheel` 说明）。
+/// 承载与形状同主面板（Material `showModalBottomSheet` + `bottomSheetTopShape`）。
 class _TimeWheelSheet extends StatefulWidget {
   const _TimeWheelSheet({
     required this.title,
@@ -587,16 +580,11 @@ class _TimeWheelSheetState extends State<_TimeWheelSheet> {
   @override
   Widget build(BuildContext context) {
     final colors = AppColors.ofContext(context);
+    // 表面色与顶部圆角由承载提供（同主面板口径）
     return Material(
       type: MaterialType.transparency,
-      child: Container(
+      child: SizedBox(
         width: double.infinity,
-        decoration: BoxDecoration(
-          color: colors.popup,
-          borderRadius: const BorderRadius.vertical(
-            top: Radius.circular(AppShapes.radiusXl),
-          ),
-        ),
         child: SafeArea(
           top: false,
           child: Column(
