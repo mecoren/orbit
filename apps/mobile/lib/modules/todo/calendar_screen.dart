@@ -264,6 +264,12 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                         selected: _selectedDate,
                         onDayTap: _selectDate,
                         onDayLongPress: _addOnDate,
+                        // 横滑翻月：月历自带 PageView（availableGestures =
+                        // horizontalSwipe），必须把页码回调接回 _month，否则
+                        // 网格翻页了而标题与下方按日分组列表还停在旧月份
+                        onMonthChange: (focused) => setState(() {
+                          _month = DateTime(focused.year, focused.month, 1);
+                        }),
                         // 选中/今天强调色与桌面端日历同源（桌面月历 --primary 即
                         // themeAccent 体系）：不走 scheme.primary——M3 fromSeed
                         // 会把 #4E8CFF 派生成 #455E91 灰蓝，与桌面明显偏差

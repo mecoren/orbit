@@ -245,8 +245,8 @@ class _OrbitHeatmapState extends State<OrbitHeatmap> {
   }
 
   Widget _buildWeekdayLabels(AppColorSet colors) {
-    // 周一/周三/周五 三档（与 wait-home 同款稀疏标注）
-    final labels = <int, String>{0: '一', 2: '三', 4: '五'};
+    // 周一/周三/周五 三档（与 wait-home 同款稀疏标注；标签列宽 28 够放两字）
+    final labels = <int, String>{0: '周一', 2: '周三', 4: '周五'};
     return Column(
       children: [
         for (var row = 0; row < 7; row++)

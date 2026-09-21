@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:shadcn_flutter/shadcn_flutter.dart' as sh;
 import 'package:table_calendar/table_calendar.dart';
 
 import '../../../core/theme/app_colors.dart';
@@ -167,6 +168,28 @@ class OrbitMonthCalendar extends StatelessWidget {
       '${d.year}-${d.month.toString().padLeft(2, '0')}-'
       '${d.day.toString().padLeft(2, '0')}';
 
+  /// 月份导航钮（图标 + 悬浮提示）
+  ///
+  /// 提示刻意走 shadcn `Tooltip` 而非 Material `IconButton.tooltip`：本组件既渲染
+  /// 在普通页面（日历页，位于 Navigator 的 Overlay 之内），也渲染在 shadcn 弹层
+  /// （日期面板）里——后者挂在 Navigator **之外**的根 `DrawerOverlay` 上，
+  /// Material 的 `RawTooltip` 在那里找不到 `Overlay` 祖先会直接抛
+  /// 「No Overlay widget found」；shadcn 提示吃 `ShadcnLayer` 的
+  /// `OverlayManagerLayer`，两种位置都能用。
+  Widget _navButton({
+    required String tooltip,
+    required VoidCallback? onPressed,
+    required IconData icon,
+  }) =>
+      sh.Tooltip(
+        tooltip: (context) => Text(tooltip),
+        child: IconButton(
+          onPressed: onPressed,
+          icon: Icon(icon, size: _navIconSize + 4),
+          visualDensity: VisualDensity.compact,
+        ),
+      );
+
   @override
   Widget build(BuildContext context) {
     final colors = AppColors.ofContext(context);
@@ -290,7 +313,8 @@ class OrbitMonthCalendar extends StatelessWidget {
         ),
         ?headerSubtitle,
         const Spacer(),
-        IconButton(
+        _navButton(
+          tooltip: '上个月',
           onPressed: onMonthChange == null
               ? null
               : () => onMonthChange!(
@@ -298,11 +322,10 @@ class OrbitMonthCalendar extends StatelessWidget {
                         ? DateTime(monthStart.year - 1, 12)
                         : DateTime(monthStart.year, monthStart.month - 1),
                   ),
-          icon: Icon(OrbitIcons.chevronLeft, size: _navIconSize + 4),
-          tooltip: '上个月',
-          visualDensity: VisualDensity.compact,
+          icon: OrbitIcons.chevronLeft,
         ),
-        IconButton(
+        _navButton(
+          tooltip: '下个月',
           onPressed: onMonthChange == null
               ? null
               : () => onMonthChange!(
@@ -310,9 +333,7 @@ class OrbitMonthCalendar extends StatelessWidget {
                         ? DateTime(monthStart.year + 1, 1)
                         : DateTime(monthStart.year, monthStart.month + 1),
                   ),
-          icon: Icon(OrbitIcons.chevronRight, size: _navIconSize + 4),
-          tooltip: '下个月',
-          visualDensity: VisualDensity.compact,
+          icon: OrbitIcons.chevronRight,
         ),
         ...headerActions,
       ],

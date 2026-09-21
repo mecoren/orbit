@@ -1,11 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sh;
 
+import '../../../core/lunar/chinese_almanac.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_dimens.dart';
 import '../../../core/theme/app_shapes.dart';
 import '../../../core/theme/icon_map.dart';
 import '../../../core/theme/orbit_accents.dart';
+import '../../../data/api/dto.dart';
+import '../../../modules/todo/providers/todo_providers.dart';
 import 'orbit_month_calendar.dart';
 
 /// 日期选择器初始视图
@@ -53,9 +57,15 @@ class OrbitDatePicker {
           showTime: showTime,
           initialMode: mode,
           accent: accent,
-          onCancel: completer.close,
-          onConfirm: (value) => completer.closeWithResult(value),
-          onClear: () => completer.closeWithResult(null),
+          // 关闭必须从**弹层内容内部**发起（`closeOverlay(sheetContext, …)`）：
+          // `showOverlay` 返回的 `DrawerOverlayCompleter` 没有覆写
+          // `closeWithResult`，落到基类实现 `async => remove()`——值被静默丢弃、
+          // 弹层以 null 关闭（shadcn_flutter 0.0.53 行为，实测「点确认拿不回选中日」）。
+          // `closeOverlay` 走内容侧注入的 completer 适配器，`closeDrawer(ctx, value)`
+          // 才真正把结果带到 `completer.future`。
+          onCancel: () => sh.closeOverlay(sheetContext),
+          onConfirm: (value) => sh.closeOverlay(sheetContext, value),
+          onClear: () => sh.closeOverlay(sheetContext),
         ),
       ),
     );
@@ -63,7 +73,7 @@ class OrbitDatePicker {
   }
 }
 
-class _DatePickerSheet extends StatefulWidget {
+class _DatePickerSheet extends ConsumerStatefulWidget {
   const _DatePickerSheet({
     required this.showTime,
     required this.initialMode,
@@ -83,10 +93,10 @@ class _DatePickerSheet extends StatefulWidget {
   final VoidCallback onClear;
 
   @override
-  State<_DatePickerSheet> createState() => _DatePickerSheetState();
+  ConsumerState<_DatePickerSheet> createState() => _DatePickerSheetState();
 }
 
-class _DatePickerSheetState extends State<_DatePickerSheet> {
+class _DatePickerSheetState extends ConsumerState<_DatePickerSheet> {
   late DateTime _draft = widget.initialDate ?? DateTime.now();
   late DateTime _month = DateTime(_draft.year, _draft.month, 1);
   late OrbitDatePickerMode _mode = widget.initialMode;
@@ -254,7 +264,7 @@ class _DatePickerSheetState extends State<_DatePickerSheet> {
                       Expanded(
                         child: sh.Button.primary(
                           onPressed: () => widget.onConfirm(_draft),
-                          child: const Text('确定'),
+                          child: const Text('确认'),
                         ),
                       ),
                     ],
@@ -269,11 +279,22 @@ class _DatePickerSheetState extends State<_DatePickerSheet> {
   }
 
   Widget _buildDayView(Color accent) {
+    // 节假日与日历视图共用同一份 holidayProvider 缓存（cfg_holidays，空库回落
+    // Rust 预置表）——面板日格因此能显示休/班徽标，农历副标签同源同口径
+    final holidayByDate =
+        ref.watch(holidayProvider).value ?? const <HolidayInfo>[];
     return OrbitMonthCalendar(
       month: _month,
       size: AppCalendarSize.medium,
+      // 头部由面板标题栏接管（标题可点切换 日/年月/年）
+      showHeader: false,
       selected: _draft,
       accentColor: accent,
+      weekendColor: ChineseCalendarColors.weekend,
+      holidays: {
+        for (final e in holidayByDate) e.date: e.isHoliday,
+      },
+      subLabelBuilder: ChineseAlmanac.daySubLabel,
       onDayTap: (date) => setState(() {
         _draft = DateTime(
             date.year, date.month, date.day, _draft.hour, _draft.minute);
@@ -405,6 +426,7 @@ class _DatePickerSheetState extends State<_DatePickerSheet> {
             value: _draft.hour,
             onDelta: (d) => _bumpTime(hours: d),
             semanticPrefix: '时',
+            valueKey: 'time_hour_value',
           ),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: AppDimens.space8),
@@ -421,6 +443,7 @@ class _DatePickerSheetState extends State<_DatePickerSheet> {
             value: _draft.minute,
             onDelta: (d) => _bumpTime(minutes: d * 5),
             semanticPrefix: '分',
+            valueKey: 'time_minute_value',
           ),
         ],
       ),
@@ -429,16 +452,23 @@ class _DatePickerSheetState extends State<_DatePickerSheet> {
 }
 
 /// 时分步进器（- 数值 +；分档步进 5 分钟）
+///
+/// 提示走 shadcn `Tooltip`：本组件只出现在 shadcn 弹层（日期面板）里，而弹层挂在
+/// Navigator 之外的根 `DrawerOverlay` 上，Material `IconButton.tooltip` 在那里
+/// 找不到 `Overlay` 祖先会抛断言（见 `orbit_month_calendar.dart` 同款说明）；
+/// 数值 Text 带 [valueKey]，供测试读值且不与月历日期文本撞 finder。
 class _TimeStepper extends StatelessWidget {
   const _TimeStepper({
     required this.value,
     required this.onDelta,
     required this.semanticPrefix,
+    required this.valueKey,
   });
 
   final int value;
   final ValueChanged<int> onDelta;
   final String semanticPrefix;
+  final String valueKey;
 
   @override
   Widget build(BuildContext context) {
@@ -446,20 +476,23 @@ class _TimeStepper extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        IconButton(
-          onPressed: () => onDelta(-1),
-          icon: Icon(
-            OrbitIcons.remove,
-            size: AppDimens.iconSizeSm,
-            color: colors.iconText,
+        sh.Tooltip(
+          tooltip: (context) => Text('$semanticPrefix -1'),
+          child: IconButton(
+            onPressed: () => onDelta(-1),
+            icon: Icon(
+              OrbitIcons.remove,
+              size: AppDimens.iconSizeSm,
+              color: colors.iconText,
+            ),
+            visualDensity: VisualDensity.compact,
           ),
-          tooltip: '$semanticPrefix -1',
-          visualDensity: VisualDensity.compact,
         ),
         SizedBox(
           width: 32,
           child: Text(
             value.toString().padLeft(2, '0'),
+            key: ValueKey(valueKey),
             textAlign: TextAlign.center,
             style: TextStyle(
               fontSize: 18,
@@ -468,15 +501,17 @@ class _TimeStepper extends StatelessWidget {
             ),
           ),
         ),
-        IconButton(
-          onPressed: () => onDelta(1),
-          icon: Icon(
-            OrbitIcons.add,
-            size: AppDimens.iconSizeSm,
-            color: colors.iconText,
+        sh.Tooltip(
+          tooltip: (context) => Text('$semanticPrefix +1'),
+          child: IconButton(
+            onPressed: () => onDelta(1),
+            icon: Icon(
+              OrbitIcons.add,
+              size: AppDimens.iconSizeSm,
+              color: colors.iconText,
+            ),
+            visualDensity: VisualDensity.compact,
           ),
-          tooltip: '$semanticPrefix +1',
-          visualDensity: VisualDensity.compact,
         ),
       ],
     );
