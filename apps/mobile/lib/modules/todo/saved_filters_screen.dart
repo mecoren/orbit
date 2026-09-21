@@ -8,14 +8,13 @@ import '../../core/theme/app_dimens.dart';
 import '../../core/theme/orbit_accents.dart';
 import '../../data/api/dto.dart';
 import '../../data/providers/bridge_provider.dart';
-import '../../shared/widgets/animated_strikethrough.dart';
-import '../../shared/widgets/confirm_bottom_sheet.dart';
-import '../../shared/widgets/empty_state.dart';
-import '../../shared/widgets/liquid_glass_title_bar.dart';
-import '../../shared/widgets/more_actions_sheet.dart';
-import '../../shared/widgets/scroll_offset_listenable.dart';
-import '../../shared/widgets/select_bottom_sheet.dart';
-import '../../shared/widgets/wait_toast.dart';
+import '../../shared/widgets/shadcn/orbit_strikethrough.dart';
+import '../../shared/widgets/shadcn/orbit_confirm_sheet.dart';
+import '../../shared/widgets/shadcn/orbit_empty_state.dart';
+import '../../shared/widgets/shadcn/orbit_page_header.dart';
+import '../../shared/widgets/shadcn/orbit_actions_sheet.dart';
+import '../../shared/widgets/shadcn/orbit_select_sheet.dart';
+import '../../shared/widgets/shadcn/orbit_toast.dart';
 import 'logic/task_logic.dart';
 import '../../shared/utils/hex_color.dart';
 import 'providers/todo_providers.dart';
@@ -501,9 +500,8 @@ class _SavedFiltersScreenState extends ConsumerState<SavedFiltersScreen> {
             top: 0,
             left: 0,
             right: 0,
-            child: LiquidGlassTitleBar(
+            child: OrbitPageHeader(
               title: '筛选器',
-              scrollOffsetListenable: ScrollOffsetListenable(_scrollController),
             ),
           ),
         ],

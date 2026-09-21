@@ -51,7 +51,7 @@ Widget _wrap(MockOrbitBridge bridge, BiometricService service) =>
 /// 把目标滚进「标题栏之下、视口下沿之上」的可命中区间。
 ///
 /// 安全卡位于设置页第三张卡，其内容随主密码态卡片与库迁移入口增长，固定
-/// 偏移量会随页面高度漂移；且顶部 56px 被 LiquidGlassTitleBar 浮层遮挡，
+/// 偏移量会随页面高度漂移；且顶部 56px 被 OrbitPageHeader 浮层遮挡，
 /// 贴顶同样点不中（不能用 ensureVisible——它把目标顶端对齐到视口顶部）。
 Future<void> _scrollToTappable(WidgetTester tester, Finder finder) async {
   final scrollable = find.byType(ListView).first;

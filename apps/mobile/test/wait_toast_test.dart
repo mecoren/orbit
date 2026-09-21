@@ -6,7 +6,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:orbit/core/routing/router_keys.dart';
-import 'package:orbit/shared/widgets/wait_toast.dart';
+import 'package:orbit/shared/widgets/shadcn/orbit_toast.dart';
 
 Widget _harness() => MaterialApp(
       navigatorKey: rootNavigatorKey,

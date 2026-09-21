@@ -9,12 +9,12 @@ import '../../data/api/dto.dart';
 import '../../data/api/orbit_bridge.dart';
 import '../../data/providers/bridge_provider.dart';
 import '../../shared/utils/hex_color.dart';
-import '../../shared/widgets/info_tile.dart';
-import '../../shared/widgets/more_actions_sheet.dart' show bottomSheetMotion;
-import '../../shared/widgets/section_card.dart';
-import '../../shared/widgets/select_bottom_sheet.dart';
-import '../../shared/widgets/wait_date_picker.dart';
-import '../../shared/widgets/wait_toast.dart';
+import '../../shared/widgets/shadcn/orbit_info_row.dart';
+import '../../shared/widgets/shadcn/orbit_actions_sheet.dart' show bottomSheetMotion;
+import '../../shared/widgets/shadcn/orbit_section_card.dart';
+import '../../shared/widgets/shadcn/orbit_select_sheet.dart';
+import '../../shared/widgets/shadcn/orbit_date_picker.dart';
+import '../../shared/widgets/shadcn/orbit_toast.dart';
 // as rep：规避 Flutter widgets 自带 RepeatMode 类名冲突
 import 'logic/parse_quick_input.dart';
 import 'logic/repeat_logic.dart' as rep;
@@ -36,13 +36,13 @@ import 'repeat_edit_sheet.dart';
 
 /// 截止日期选择器（表单抽屉"自定义"与详情页截止日期行共用）
 ///
-/// 已切换为 wait-home 移植的 WaitDatePicker 底部面板（月历 + 年月/年视图），
+/// 已切换为 wait-home 移植的 OrbitDatePicker 底部面板（月历 + 年月/年视图），
 /// 函数签名保持不变，detail_screen 等调用方自动跟随。
 Future<DateTime?> showTodoDatePicker(
   BuildContext context, {
   DateTime? initialDate,
 }) {
-  return WaitDatePicker.pick(
+  return OrbitDatePicker.pick(
     context,
     initialDate: initialDate,
     accent: OrbitAccents.todoAccent,
@@ -389,7 +389,7 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
 
   /// 提醒时间选择：wait 面板 showTime 模式，日期+时分单面板一次选完
   Future<void> _pickReminder() async {
-    final picked = await WaitDatePicker.pick(
+    final picked = await OrbitDatePicker.pick(
       context,
       initialDate: _remindAt != null
           ? DateTime.fromMillisecondsSinceEpoch(_remindAt!)

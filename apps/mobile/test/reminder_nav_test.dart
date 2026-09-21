@@ -6,7 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:orbit/core/routing/router_keys.dart';
 import 'package:orbit/services/notification_service.dart';
-import 'package:orbit/shared/widgets/wait_toast.dart';
+import 'package:orbit/shared/widgets/shadcn/orbit_toast.dart';
 
 void main() {
   group('taskIdFromPayload（通知点击两路共用口径）', () {

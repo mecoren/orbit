@@ -8,7 +8,7 @@ import 'package:timezone/timezone.dart' as tz;
 
 import '../data/api/dto.dart';
 import '../data/api/orbit_bridge.dart';
-import '../shared/widgets/wait_toast.dart';
+import '../shared/widgets/shadcn/orbit_toast.dart';
 import 'reminder_snooze.dart';
 
 /// 本地通知服务（Phase 7 平台集成；P2 提醒升级全面改版）

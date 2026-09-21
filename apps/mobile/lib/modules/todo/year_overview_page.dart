@@ -5,8 +5,8 @@ import '../../core/lunar/chinese_almanac.dart';
 import '../../core/lunar/lunar_calendar.dart';
 import '../../core/theme/app_dimens.dart';
 import '../../core/theme/orbit_accents.dart';
-import '../../shared/widgets/app_month_calendar.dart';
-import '../../shared/widgets/liquid_glass_title_bar.dart';
+import '../../shared/widgets/shadcn/orbit_month_calendar.dart';
+import '../../shared/widgets/shadcn/orbit_page_header.dart';
 
 /// 年份边界（与 LunarCalendar 压缩表覆盖范围一致）
 const _kMinYear = 1901;
@@ -97,7 +97,7 @@ class _YearOverviewPageState extends State<YearOverviewPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                SizedBox(height: LiquidGlassTitleBar.rowHeight),
+                SizedBox(height: OrbitPageHeader.rowHeight),
                 // ===== 头部：大年份 + 干支生肖/图例 + 切年 =====
                 Padding(
                   padding: const EdgeInsets.fromLTRB(
@@ -219,7 +219,7 @@ class _YearOverviewPageState extends State<YearOverviewPage> {
             top: 0,
             left: 0,
             right: 0,
-            child: LiquidGlassTitleBar(
+            child: OrbitPageHeader(
               title: '选择日期',
               showBack: true,
             ),

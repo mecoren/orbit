@@ -7,12 +7,11 @@ import '../../core/theme/app_dimens.dart';
 import '../../data/api/dto.dart';
 import '../../data/providers/bridge_provider.dart';
 import '../../services/local_prefs.dart';
-import '../../shared/widgets/confirm_bottom_sheet.dart';
-import '../../shared/widgets/empty_state.dart';
-import '../../shared/widgets/liquid_glass_title_bar.dart';
-import '../../shared/widgets/scroll_offset_listenable.dart';
-import '../../shared/widgets/select_bottom_sheet.dart';
-import '../../shared/widgets/wait_toast.dart';
+import '../../shared/widgets/shadcn/orbit_confirm_sheet.dart';
+import '../../shared/widgets/shadcn/orbit_empty_state.dart';
+import '../../shared/widgets/shadcn/orbit_page_header.dart';
+import '../../shared/widgets/shadcn/orbit_select_sheet.dart';
+import '../../shared/widgets/shadcn/orbit_toast.dart';
 
 /// 通知历史页 /settings/notifications
 ///
@@ -242,9 +241,8 @@ class _NotificationHistoryPageState
             top: 0,
             left: 0,
             right: 0,
-            child: LiquidGlassTitleBar(
+            child: OrbitPageHeader(
               title: '通知历史',
-              scrollOffsetListenable: ScrollOffsetListenable(_scrollController),
             ),
           ),
         ],

@@ -9,7 +9,7 @@ import 'package:orbit/modules/todo/logic/task_logic.dart';
 import 'package:orbit/modules/todo/providers/todo_providers.dart';
 import 'package:orbit/modules/todo/sidebar_screen.dart';
 import 'package:orbit/modules/todo/sub_list_screen.dart';
-import 'package:orbit/shared/widgets/glass_fab.dart';
+import 'package:orbit/shared/widgets/shadcn/orbit_fab.dart';
 
 Widget _wrap(Widget child, MockOrbitBridge bridge) => ProviderScope(
       overrides: [orbitBridgeProvider.overrideWithValue(bridge)],
@@ -70,7 +70,7 @@ void main() {
     await _settlePastMockLatency(tester);
 
     // 一级页面右下 FAB → 新建任务表单抽屉出现
-    await tester.tap(find.byType(GlassFab));
+    await tester.tap(find.byType(OrbitFab));
     await tester.pumpAndSettle();
 
     expect(find.text('添加待办'), findsOneWidget);

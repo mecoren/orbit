@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:orbit/core/theme/app_motion.dart';
 import 'package:orbit/core/theme/orbit_accents.dart';
-import 'package:orbit/shared/widgets/circle_checkbox.dart';
+import 'package:orbit/shared/widgets/shadcn/orbit_checkbox.dart';
 
 /// 勾选态由父层驱动（组件本身无状态）
 class _Host extends StatefulWidget {
@@ -27,7 +27,6 @@ class _HostState extends State<_Host> {
             child: CircleCheckbox(
               checked: checked,
               size: widget.size,
-              checkSize: widget.size - 8,
               onToggle: () {
                 widget.onToggle();
                 setState(() => checked = !checked);

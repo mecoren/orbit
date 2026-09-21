@@ -8,7 +8,7 @@ import 'package:orbit/data/providers/bridge_provider.dart';
 import 'package:orbit/modules/todo/form_bottom_sheet.dart';
 import 'package:orbit/modules/todo/logic/task_logic.dart' show QuickViewKey;
 import 'package:orbit/modules/todo/sidebar_screen.dart';
-import 'package:orbit/shared/widgets/section_card.dart';
+import 'package:orbit/shared/widgets/shadcn/orbit_section_card.dart';
 
 Widget _wrap(Widget child, MockOrbitBridge bridge) => ProviderScope(
       overrides: [orbitBridgeProvider.overrideWithValue(bridge)],

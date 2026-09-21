@@ -3,10 +3,9 @@ import 'package:flutter/material.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_dimens.dart';
 import '../../services/appearance.dart';
-import '../../shared/widgets/liquid_glass_title_bar.dart';
-import '../../shared/widgets/scroll_offset_listenable.dart';
-import '../../shared/widgets/select_bottom_sheet.dart';
-import '../../shared/widgets/wait_toast.dart';
+import '../../shared/widgets/shadcn/orbit_page_header.dart';
+import '../../shared/widgets/shadcn/orbit_select_sheet.dart';
+import '../../shared/widgets/shadcn/orbit_toast.dart';
 
 /// 外观设置页 /settings/appearance
 ///
@@ -136,9 +135,8 @@ class _AppearancePageState extends State<AppearancePage> {
             top: 0,
             left: 0,
             right: 0,
-            child: LiquidGlassTitleBar(
+            child: OrbitPageHeader(
               title: '外观',
-              scrollOffsetListenable: ScrollOffsetListenable(_scrollController),
             ),
           ),
         ],

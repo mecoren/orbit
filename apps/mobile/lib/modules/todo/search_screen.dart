@@ -8,10 +8,9 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_dimens.dart';
 import '../../core/theme/orbit_accents.dart';
 import '../../data/api/dto.dart';
-import '../../shared/widgets/animated_strikethrough.dart';
-import '../../shared/widgets/empty_state.dart';
-import '../../shared/widgets/liquid_glass_title_bar.dart';
-import '../../shared/widgets/scroll_offset_listenable.dart';
+import '../../shared/widgets/shadcn/orbit_strikethrough.dart';
+import '../../shared/widgets/shadcn/orbit_empty_state.dart';
+import '../../shared/widgets/shadcn/orbit_page_header.dart';
 import 'logic/task_logic.dart';
 import 'providers/todo_providers.dart';
 
@@ -73,7 +72,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
               children: [
                 SizedBox(
                   height: MediaQuery.of(context).padding.top +
-                      LiquidGlassTitleBar.rowHeight,
+                      OrbitPageHeader.rowHeight,
                 ),
                 // 搜索框（自动聚焦）
                 Padding(
@@ -122,9 +121,8 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
             top: 0,
             left: 0,
             right: 0,
-            child: LiquidGlassTitleBar(
+            child: OrbitPageHeader(
               title: '搜索',
-              scrollOffsetListenable: ScrollOffsetListenable(_scrollController),
             ),
           ),
         ],

@@ -10,6 +10,28 @@ dependencies:
     sdk: flutter
   cupertino_icons: ^1.0.8
 
+  # ── UI 组件体系（shadcn_flutter）──
+  # 接入方式：MaterialApp.router + builder 内包 ShadcnLayer（方案 B）。
+  # 为什么不用 MaterialShadcnApp（方案 A）：其依赖 shadcn_flutter_material 全库
+  # 仅 0.0.54 一个版本，硬要求 Dart >=3.13 + Flutter >=3.47；本仓库锁
+  # Flutter 3.44.2 / Dart 3.12.2 无法解析。方案 B 无需 material_ui 迁移，
+  # Material 主题（core/theme/app_theme.dart）与 shadcn 主题并存，页面层不受影响。
+  # 0.0.x 属预 1.0，API 漂移风险高：此处**精确锁版、不带 ^**，升版须单独立项评估。
+  shadcn_flutter: 0.0.53
+
+  # 水平滑动操作（shadcn 无侧滑原语；侧滑完成/删除是移动端核心手感，保留）
+  flutter_slidable: ^4.0.3
+
+  # 月历（农历/节气/休班/事件圆点经 CalendarBuilders 注入；
+  # 依赖 intl ^0.20.0 与现有一致，需在 main() 先 initializeDateFormatting）
+  table_calendar: 3.2.1
+
+  # 图表（统计页条形/环形占比；**不支持热力图**——热力图由 token 色阶网格承载）
+  fl_chart: 1.2.0
+
+  # 声明式动效（补 shadcn 动画原语覆盖不到的复杂入场）
+  flutter_animate: ^4.5.2
+
   # 状态管理（wait-home/mobile 同款：Riverpod 3.x 手动声明，无 codegen）
   flutter_riverpod: ^3.3.0
 
@@ -46,14 +68,13 @@ dependencies:
   flutter_rust_bridge: 2.12.0
   rust_lib_orbit:
     path: rust_builder
-  flutter_slidable: ^4.0.3
 
   # Android 桌面小组件（#3 存在感链条）：widget 数据快照写入 + 添加引导；
   # 勾选/磁贴交互走原生广播直写 SQLite（无 isolate 依赖，见 TodoWidgetProvider）
   home_widget: ^0.9.3
 
-  # Markdown 描述链接点击跳系统浏览器（官方第一方插件，平台桥接非 UI 库；
-  # 与 file_picker/local_auth 同类，不违反「UI 自绘不引库」惯例）
+  # Markdown 描述链接点击跳系统浏览器（官方第一方插件，平台桥接非 UI 库，
+  # 与 file_picker/local_auth 同类）
   url_launcher: ^6.3.0
 
 dev_dependencies:

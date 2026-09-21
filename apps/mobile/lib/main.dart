@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/date_symbol_data_local.dart';
 
 import 'app.dart';
 import 'data/api/rust_orbit_bridge.dart';
@@ -10,7 +11,8 @@ import 'services/local_prefs.dart';
 /// Orbit 移动端入口
 ///
 /// 启动序列（对齐 React 版 App.tsx 门控）：
-/// 竖屏锁定 → FRB 运行时初始化 → 启动门控（masterAuthHas? unlock : plaintext）。
+/// 竖屏锁定 → intl 日期本地化数据 → FRB 运行时初始化 → 启动门控
+/// （masterAuthHas? unlock : plaintext）。
 ///
 /// 桥接切换：默认注入 RustOrbitBridge（真 Rust 后端）；
 /// 纯 UI 开发可用 `flutter run --dart-define=ORBIT_USE_MOCK_BRIDGE=true`
@@ -21,6 +23,12 @@ Future<void> main() async {
     DeviceOrientation.portraitUp,
     DeviceOrientation.portraitDown,
   ]);
+
+  // 月历（table_calendar）与 zh_CN 日期格式依赖 intl 的语言数据，
+  // 必须在 runApp 前装载完成，否则首帧日历会抛 LocaleDataException。
+  // en_US 一并装载：intl 的默认 locale 是 en_US，未装载时 DateFormat 默认构造会报错。
+  await initializeDateFormatting('zh_CN');
+  await initializeDateFormatting('en_US');
 
   const useMock = bool.fromEnvironment('ORBIT_USE_MOCK_BRIDGE');
   if (!useMock) {

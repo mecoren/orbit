@@ -4,8 +4,8 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_dimens.dart';
 import '../../core/theme/app_shapes.dart';
 import '../../core/theme/orbit_accents.dart';
-import '../../shared/widgets/more_actions_sheet.dart' show bottomSheetTopShape;
-import '../../shared/widgets/wait_date_picker.dart';
+import '../../shared/widgets/shadcn/orbit_actions_sheet.dart' show bottomSheetTopShape;
+import '../../shared/widgets/shadcn/orbit_date_picker.dart';
 // as rep：规避 Flutter widgets 自带 RepeatMode 类名冲突
 import 'logic/repeat_logic.dart' as rep;
 
@@ -150,7 +150,7 @@ class _RepeatEditSheetState extends State<_RepeatEditSheet> {
   }
 
   Future<void> _pickEndDate() async {
-    final picked = await WaitDatePicker.pick(
+    final picked = await OrbitDatePicker.pick(
       context,
       initialDate: _endDateMs > 0
           ? DateTime.fromMillisecondsSinceEpoch(_endDateMs)

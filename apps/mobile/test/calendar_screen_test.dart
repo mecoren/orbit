@@ -106,7 +106,7 @@ void main() {
     await tester.pumpWidget(_wrap(const SizedBox(), bridge));
     await settle(tester);
 
-    // 长按今天格（月历 AppMonthCalendar 的日格）
+    // 长按今天格（月历 OrbitMonthCalendar 的日格）
     final today = DateTime.now();
     final dayText = find.text('${today.day}').first;
     await tester.longPress(dayText, warnIfMissed: false);

@@ -5,8 +5,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:orbit/data/api/mock_orbit_bridge.dart';
 import 'package:orbit/data/providers/bridge_provider.dart';
-import 'package:orbit/shared/widgets/app_month_calendar.dart';
-import 'package:orbit/shared/widgets/wait_date_picker.dart';
+import 'package:orbit/shared/widgets/shadcn/orbit_month_calendar.dart';
+import 'package:orbit/shared/widgets/shadcn/orbit_date_picker.dart';
 
 void main() {
   /// 挂一个按钮唤起 showTime 面板（日期+时间）。
@@ -23,7 +23,7 @@ void main() {
           body: Builder(
             builder: (context) => Center(
               child: TextButton(
-                onPressed: () => WaitDatePicker.pick(
+                onPressed: () => OrbitDatePicker.pick(
                   context,
                   showTime: true,
                 ),
@@ -51,8 +51,8 @@ void main() {
       (tester) async {
     await openPicker(tester);
 
-    final calendar = tester.widget<AppMonthCalendar>(
-      find.byType(AppMonthCalendar),
+    final calendar = tester.widget<OrbitMonthCalendar>(
+      find.byType(OrbitMonthCalendar),
     );
     expect(calendar.size, AppCalendarSize.medium);
     expect(calendar.subLabelBuilder, isNotNull, reason: '农历/节气/节日副标签');

@@ -7,8 +7,8 @@ import '../../core/theme/app_shapes.dart';
 import '../../core/theme/orbit_accents.dart';
 import '../../data/api/dto.dart';
 import '../../shared/utils/hex_color.dart';
-import '../../shared/widgets/animated_strikethrough.dart';
-import '../../shared/widgets/circle_checkbox.dart';
+import '../../shared/widgets/shadcn/orbit_strikethrough.dart';
+import '../../shared/widgets/shadcn/orbit_checkbox.dart';
 import 'logic/task_logic.dart';
 
 /// 看板视图（对齐桌面 `kanban-view.tsx` 的分列 + 卡片信息层级）
@@ -155,7 +155,6 @@ class KanbanBoard extends StatelessWidget {
                   CircleCheckbox(
                     checked: task.isDone,
                     size: AppDimens.subtaskCheckboxSize,
-                    checkSize: AppDimens.subtaskCheckboxSize - AppDimens.space8,
                     onToggle: () => onToggleDone(task),
                   ),
                   const SizedBox(width: AppDimens.space8),

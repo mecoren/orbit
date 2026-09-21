@@ -6,7 +6,7 @@ import '../data/api/orbit_bridge.dart';
 import '../data/providers/bridge_provider.dart';
 import '../modules/todo/logic/parse_quick_input.dart';
 import '../modules/todo/providers/todo_providers.dart';
-import '../shared/widgets/wait_toast.dart';
+import '../shared/widgets/shadcn/orbit_toast.dart';
 
 /// 分享接收服务（小而美批次④：Android 分享到 Orbit 建任务）
 ///

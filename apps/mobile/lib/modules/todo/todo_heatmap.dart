@@ -13,8 +13,8 @@ import '../../data/api/dto.dart';
 /// - 4 档色阶走待办强调色 alpha 22/45/68/90%（锚定 max≥4 分档）；
 /// - 布局：顶部月份标签、左侧 周一/周三/周五、右侧竖排年份按钮、底部 少/多 图例；
 /// - 12dp 格横滚（wait-home 移动端同款）；长按/悬停格显示「日期: N 个完成」。
-class TodoHeatmap extends StatelessWidget {
-  const TodoHeatmap({
+class OrbitHeatmap extends StatelessWidget {
+  const OrbitHeatmap({
     super.key,
     required this.heatmap,
     required this.availableYears,

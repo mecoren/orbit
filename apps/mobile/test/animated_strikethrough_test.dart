@@ -3,7 +3,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:orbit/core/theme/app_motion.dart';
-import 'package:orbit/shared/widgets/animated_strikethrough.dart';
+import 'package:orbit/shared/widgets/shadcn/orbit_strikethrough.dart';
 
 const TextStyle _baseStyle = TextStyle(fontSize: 16, color: Color(0xFF1A1D26));
 const Color _doneColor = Color(0xFF6B7685);

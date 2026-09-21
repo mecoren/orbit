@@ -6,7 +6,7 @@ import 'package:orbit/data/api/dto.dart';
 import 'package:orbit/data/api/mock_orbit_bridge.dart';
 import 'package:orbit/data/providers/bridge_provider.dart';
 import 'package:orbit/modules/todo/detail_screen.dart';
-import 'package:orbit/shared/widgets/app_month_calendar.dart';
+import 'package:orbit/shared/widgets/shadcn/orbit_month_calendar.dart';
 
 Widget _wrap(Widget child, MockOrbitBridge bridge) => ProviderScope(
       overrides: [orbitBridgeProvider.overrideWithValue(bridge)],
@@ -30,11 +30,11 @@ Future<void> _scrollTo(WidgetTester tester, Finder finder) async {
   await tester.pumpAndSettle();
 }
 
-/// 点击月历里的日期格：限定在 AppMonthCalendar 内，避免与时间
+/// 点击月历里的日期格：限定在 OrbitMonthCalendar 内，避免与时间
 /// 步进器的时/分数字文本（如恰好 minute==15）撞 find.text
 Future<void> _tapDay(WidgetTester tester, String day) async {
   await tester.tap(
-    find.descendant(of: find.byType(AppMonthCalendar), matching: find.text(day)).first,
+    find.descendant(of: find.byType(OrbitMonthCalendar), matching: find.text(day)).first,
   );
 }
 

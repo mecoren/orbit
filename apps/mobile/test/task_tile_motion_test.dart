@@ -6,8 +6,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:orbit/core/theme/app_motion.dart';
 import 'package:orbit/data/api/dto.dart';
 import 'package:orbit/modules/todo/sub_list_screen.dart';
-import 'package:orbit/shared/widgets/animated_strikethrough.dart';
-import 'package:orbit/shared/widgets/circle_checkbox.dart';
+import 'package:orbit/shared/widgets/shadcn/orbit_strikethrough.dart';
+import 'package:orbit/shared/widgets/shadcn/orbit_checkbox.dart';
 
 Widget _harness(TodoTask task, {required VoidCallback onToggleDone}) =>
     MaterialApp(

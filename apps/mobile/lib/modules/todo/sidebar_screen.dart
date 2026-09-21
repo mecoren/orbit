@@ -11,13 +11,12 @@ import '../../core/theme/orbit_accents.dart';
 import '../../data/api/dto.dart';
 import '../../data/providers/bridge_provider.dart';
 import '../../shared/utils/hex_color.dart';
-import '../../shared/widgets/confirm_bottom_sheet.dart';
-import '../../shared/widgets/glass_fab.dart';
-import '../../shared/widgets/liquid_glass_title_bar.dart';
-import '../../shared/widgets/more_actions_sheet.dart';
-import '../../shared/widgets/scroll_offset_listenable.dart';
+import '../../shared/widgets/shadcn/orbit_confirm_sheet.dart';
+import '../../shared/widgets/shadcn/orbit_fab.dart';
+import '../../shared/widgets/shadcn/orbit_page_header.dart';
+import '../../shared/widgets/shadcn/orbit_actions_sheet.dart';
 import '../../shared/widgets/sync_status_button.dart';
-import '../../shared/widgets/wait_toast.dart';
+import '../../shared/widgets/shadcn/orbit_toast.dart';
 import 'form_bottom_sheet.dart';
 import 'logic/task_logic.dart';
 import 'providers/todo_providers.dart';
@@ -322,7 +321,7 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
             controller: _scrollController,
             padding: EdgeInsets.only(
               top: MediaQuery.of(context).padding.top +
-                  LiquidGlassTitleBar.rowHeight +
+                  OrbitPageHeader.rowHeight +
                   AppDimens.space8,
               bottom: AppDimens.gestureInsetFallback + AppDimens.space32,
             ),
@@ -464,13 +463,12 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
             top: 0,
             left: 0,
             right: 0,
-            child: LiquidGlassTitleBar(
+            child: OrbitPageHeader(
               title: '循迹',
               showMenu: false,
               showBack: false,
               // 左端云同步图标（未配置/未解锁直达配置页；就绪弹信息面板）
               leading: const SyncStatusButton(),
-              scrollOffsetListenable: ScrollOffsetListenable(_scrollController),
               actions: [
                 IconButton(
                   icon: const Icon(Icons.settings_rounded,
@@ -484,7 +482,7 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
           Positioned(
             right: AppDimens.space16,
             bottom: AppDimens.gestureInsetFallback + AppDimens.space16,
-            child: GlassFab(
+            child: OrbitFab(
               accentColor: OrbitAccents.themeAccent,
               onPressed: () => showTodoFormSheet(context),
             ),

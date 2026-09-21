@@ -5,8 +5,8 @@ import '../../core/theme/app_dimens.dart';
 import '../../core/theme/app_shapes.dart';
 import '../../data/api/dto.dart';
 import '../../shared/utils/hex_color.dart';
-import '../../shared/widgets/animated_strikethrough.dart';
-import '../../shared/widgets/circle_checkbox.dart';
+import '../../shared/widgets/shadcn/orbit_strikethrough.dart';
+import '../../shared/widgets/shadcn/orbit_checkbox.dart';
 import 'logic/task_logic.dart';
 
 /// 表格视图（对齐桌面 `task-table-view.tsx` 的六列概览）
@@ -122,7 +122,6 @@ class TaskTableView extends StatelessWidget {
             CircleCheckbox(
               checked: task.isDone,
               size: AppDimens.subtaskCheckboxSize,
-              checkSize: AppDimens.subtaskCheckboxSize - AppDimens.space8,
               onToggle: () => onToggleDone(task),
             ),
             const SizedBox(width: AppDimens.space8),

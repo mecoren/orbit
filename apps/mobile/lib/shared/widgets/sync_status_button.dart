@@ -1,7 +1,7 @@
 /// 云同步状态图标（移动端标题栏左上角；对齐桌面 SyncStatusButton 口径）
 ///
 /// - 位置：仅首页（SidebarScreen，标题「循迹」）标题栏左端（该页无返回/菜单键，
-///   经 [LiquidGlassTitleBar.leading] 插槽挂载）
+///   经 [OrbitPageHeader.leading] 插槽挂载）
 /// - 未配置 / 未解锁 → 点击直达云同步配置页（/settings/sync）引导；
 ///   已就绪 → 点击弹出底部信息面板（状态 / 上次 / 下次同步 / 失败原因 + 立即同步）
 /// - 移动端无 sync-progress / sync-finished 事件流（ADR 0003）：状态只能用
@@ -25,8 +25,8 @@ import '../../data/providers/bridge_provider.dart';
 import '../../modules/shell/db_invalidation.dart';
 import '../../modules/todo/providers/todo_providers.dart';
 import '../utils/sync_status_text.dart';
-import 'more_actions_sheet.dart' show bottomSheetTopShape;
-import 'wait_toast.dart';
+import 'shadcn/orbit_actions_sheet.dart' show bottomSheetTopShape;
+import 'shadcn/orbit_toast.dart';
 
 /// 云同步配置页路由（未配置 / 未解锁时的引导目标）
 const String _syncSettingsRoute = '/settings/sync';

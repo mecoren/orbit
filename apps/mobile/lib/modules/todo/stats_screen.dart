@@ -8,12 +8,11 @@ import '../../core/theme/app_shapes.dart';
 import '../../core/theme/orbit_accents.dart';
 import '../../data/api/dto.dart';
 import '../../shared/utils/hex_color.dart';
-import '../../shared/widgets/empty_state.dart';
-import '../../shared/widgets/liquid_glass_title_bar.dart';
-import '../../shared/widgets/scroll_offset_listenable.dart';
+import '../../shared/widgets/shadcn/orbit_empty_state.dart';
+import '../../shared/widgets/shadcn/orbit_page_header.dart';
 import 'logic/task_logic.dart';
 import 'providers/todo_providers.dart';
-import 'todo_heatmap.dart';
+import '../../shared/widgets/shadcn/orbit_heatmap.dart';
 
 /// 统计页 /todo/stats（backlog #25：统计仪表盘，对标 TickTick 成就页）
 ///
@@ -65,7 +64,7 @@ class _StatsScreenState extends ConsumerState<StatsScreen> {
                         // 让出状态栏 + 标题栏后在剩余视口内垂直居中
                         padding: EdgeInsets.only(
                           top: MediaQuery.of(context).padding.top +
-                              LiquidGlassTitleBar.rowHeight,
+                              OrbitPageHeader.rowHeight,
                         ),
                         child: const EmptyState(
                           message: '暂无统计数据，创建并完成一些任务后这里会展示完成情况',
@@ -76,7 +75,7 @@ class _StatsScreenState extends ConsumerState<StatsScreen> {
                     controller: _scrollController,
                     padding: EdgeInsets.only(
                       top: MediaQuery.of(context).padding.top +
-                          LiquidGlassTitleBar.rowHeight +
+                          OrbitPageHeader.rowHeight +
                           AppDimens.space8,
                       bottom: AppDimens.gestureInsetFallback + AppDimens.space32,
                     ),
@@ -135,9 +134,8 @@ class _StatsScreenState extends ConsumerState<StatsScreen> {
             top: 0,
             left: 0,
             right: 0,
-            child: LiquidGlassTitleBar(
+            child: OrbitPageHeader(
               title: '统计',
-              scrollOffsetListenable: ScrollOffsetListenable(_scrollController),
             ),
           ),
         ],
@@ -325,7 +323,7 @@ class _HeatmapCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: AppDimens.space12),
-          TodoHeatmap(
+          OrbitHeatmap(
             heatmap: stats.heatmap,
             availableYears: stats.availableYears,
             year: year,

@@ -9,11 +9,10 @@ import '../../core/theme/app_shapes.dart';
 import '../../core/theme/orbit_accents.dart';
 import '../../data/api/dto.dart';
 import '../../data/providers/bridge_provider.dart';
-import '../../shared/widgets/confirm_bottom_sheet.dart';
-import '../../shared/widgets/liquid_glass_title_bar.dart';
-import '../../shared/widgets/scroll_offset_listenable.dart';
-import '../../shared/widgets/section_card.dart';
-import '../../shared/widgets/wait_toast.dart';
+import '../../shared/widgets/shadcn/orbit_confirm_sheet.dart';
+import '../../shared/widgets/shadcn/orbit_page_header.dart';
+import '../../shared/widgets/shadcn/orbit_section_card.dart';
+import '../../shared/widgets/shadcn/orbit_toast.dart';
 
 /// 冲突记录页 /settings/conflicts（03 文档 §八 遗留项兑现）
 ///
@@ -154,7 +153,7 @@ class _SyncConflictsPageState extends ConsumerState<SyncConflictsPage> {
               controller: _scrollController,
               padding: EdgeInsets.only(
                 top: MediaQuery.of(context).padding.top +
-                    LiquidGlassTitleBar.rowHeight +
+                    OrbitPageHeader.rowHeight +
                     AppDimens.space16,
                 left: AppDimens.space16,
                 right: AppDimens.space16,
@@ -226,9 +225,8 @@ class _SyncConflictsPageState extends ConsumerState<SyncConflictsPage> {
             top: 0,
             left: 0,
             right: 0,
-            child: LiquidGlassTitleBar(
+            child: OrbitPageHeader(
               title: '冲突记录',
-              scrollOffsetListenable: ScrollOffsetListenable(_scrollController),
             ),
           ),
         ],

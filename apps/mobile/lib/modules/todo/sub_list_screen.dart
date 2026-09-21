@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -15,16 +15,15 @@ import '../../core/theme/orbit_accents.dart';
 import '../../data/api/dto.dart';
 import '../../data/providers/bridge_provider.dart';
 import '../../shared/utils/hex_color.dart';
-import '../../shared/widgets/animated_strikethrough.dart';
-import '../../shared/widgets/circle_checkbox.dart';
-import '../../shared/widgets/confirm_bottom_sheet.dart';
-import '../../shared/widgets/empty_state.dart';
-import '../../shared/widgets/glass_fab.dart';
-import '../../shared/widgets/liquid_glass_title_bar.dart';
-import '../../shared/widgets/more_actions_sheet.dart';
-import '../../shared/widgets/scroll_offset_listenable.dart';
-import '../../shared/widgets/select_bottom_sheet.dart';
-import '../../shared/widgets/wait_toast.dart';
+import '../../shared/widgets/shadcn/orbit_strikethrough.dart';
+import '../../shared/widgets/shadcn/orbit_checkbox.dart';
+import '../../shared/widgets/shadcn/orbit_confirm_sheet.dart';
+import '../../shared/widgets/shadcn/orbit_empty_state.dart';
+import '../../shared/widgets/shadcn/orbit_fab.dart';
+import '../../shared/widgets/shadcn/orbit_page_header.dart';
+import '../../shared/widgets/shadcn/orbit_actions_sheet.dart';
+import '../../shared/widgets/shadcn/orbit_select_sheet.dart';
+import '../../shared/widgets/shadcn/orbit_toast.dart';
 import '../../services/local_prefs.dart';
 import 'form_bottom_sheet.dart';
 import 'kanban_view.dart';
@@ -41,7 +40,7 @@ import 'table_view.dart';
 ///
 /// 入口三参数互斥：projectId > ungrouped > view（task_logic 同款优先级）。
 /// 列表消费共享 filterTasks/sortTasks；空态文案按入口映射；
-/// 右下 GlassFab 新建（携 defaultProjectId）；Tile 长按弹操作菜单
+/// 右下 OrbitFab 新建（携 defaultProjectId）；Tile 长按弹操作菜单
 /// （编辑 / 星标切换 / 删除确认）；manual 档行尾拖拽把手长按拖拽重排
 /// （#37，position midpoint 落库与桌面同口径）。
 class SubListScreen extends ConsumerStatefulWidget {
@@ -987,7 +986,7 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
     // 收窄范围后结果集低于上限即自动消失
     final truncated = tasks.length >= taskListPageSize;
     final topInset =
-        MediaQuery.of(context).padding.top + LiquidGlassTitleBar.rowHeight;
+        MediaQuery.of(context).padding.top + OrbitPageHeader.rowHeight;
     final listPadding = EdgeInsets.only(
       top: topInset +
           AppDimens.space8 +
@@ -1024,7 +1023,7 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
         ? Padding(
             padding: EdgeInsets.only(
               top: MediaQuery.of(context).padding.top +
-                  LiquidGlassTitleBar.rowHeight,
+                  OrbitPageHeader.rowHeight,
             ),
             child: EmptyState(message: emptyMessage),
           )
@@ -1199,13 +1198,9 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
             top: 0,
             left: 0,
             right: 0,
-            child: LiquidGlassTitleBar(
+            child: OrbitPageHeader(
               // 选择态下标题栏让位给「已选 N 项」，与桌面多选头部同口径
               title: _selectionMode ? '已选 ${_selected.length} 项' : title,
-              // 跟随当前档位的活跃列表控制器（#37 双控制器分体后按档取用）
-              scrollOffsetListenable: ScrollOffsetListenable(
-                reorderable ? _reorderScrollController : _listScrollController,
-              ),
               actions: _selectionMode
                   ? [
                       TextButton(
@@ -1314,7 +1309,7 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
             Positioned(
               right: AppDimens.space16,
               bottom: AppDimens.gestureInsetFallback + AppDimens.space16,
-              child: GlassFab(
+              child: OrbitFab(
                 accentColor: OrbitAccents.themeAccent,
                 onPressed: () => showTodoFormSheet(
                   context,

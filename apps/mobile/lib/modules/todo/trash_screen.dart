@@ -8,12 +8,11 @@ import '../../core/theme/app_dimens.dart';
 import '../../core/theme/orbit_accents.dart';
 import '../../data/api/dto.dart';
 import '../../data/providers/bridge_provider.dart';
-import '../../shared/widgets/confirm_bottom_sheet.dart';
-import '../../shared/widgets/empty_state.dart';
-import '../../shared/widgets/liquid_glass_title_bar.dart';
-import '../../shared/widgets/more_actions_sheet.dart';
-import '../../shared/widgets/scroll_offset_listenable.dart';
-import '../../shared/widgets/wait_toast.dart';
+import '../../shared/widgets/shadcn/orbit_confirm_sheet.dart';
+import '../../shared/widgets/shadcn/orbit_empty_state.dart';
+import '../../shared/widgets/shadcn/orbit_page_header.dart';
+import '../../shared/widgets/shadcn/orbit_actions_sheet.dart';
+import '../../shared/widgets/shadcn/orbit_toast.dart';
 import 'providers/todo_providers.dart';
 
 /// 彻底删除的撤销窗口（与桌面 UNDO_DELAY_MS 同口径；窗口内数据仍在库，
@@ -241,7 +240,7 @@ class _TrashScreenState extends ConsumerState<TrashScreen> {
                 ? Padding(
                     padding: EdgeInsets.only(
                       top: MediaQuery.of(context).padding.top +
-                          LiquidGlassTitleBar.rowHeight,
+                          OrbitPageHeader.rowHeight,
                     ),
                     child: const EmptyState(
                       message: '回收站是空的，删除的任务会先进入这里',
@@ -252,7 +251,7 @@ class _TrashScreenState extends ConsumerState<TrashScreen> {
                     controller: _scrollController,
                     padding: EdgeInsets.only(
                       top: MediaQuery.of(context).padding.top +
-                          LiquidGlassTitleBar.rowHeight +
+                          OrbitPageHeader.rowHeight +
                           AppDimens.space8,
                       bottom:
                           AppDimens.gestureInsetFallback + AppDimens.space32,
@@ -274,9 +273,8 @@ class _TrashScreenState extends ConsumerState<TrashScreen> {
             top: 0,
             left: 0,
             right: 0,
-            child: LiquidGlassTitleBar(
+            child: OrbitPageHeader(
               title: '回收站',
-              scrollOffsetListenable: ScrollOffsetListenable(_scrollController),
               actions: [
                 if (visible.isNotEmpty)
                   TextButton(

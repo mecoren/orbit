@@ -7,7 +7,13 @@ import 'color_schemes.dart';
 import 'orbit_accents.dart';
 import 'typography.dart';
 
-/// 应用主题工厂（设计系统 v2 —— 现代分层白卡）
+/// 应用主题工厂 —— Material 侧（设计系统 v2 目标：现代分层白卡）
+///
+/// **设计系统 v3 起本文件只服务 Material 设施**（`Scaffold` /
+/// `showModalBottomSheet` / 文本选择 / 滚动条等未迁移或无需迁移的部分）；
+/// 面向 shadcn 组件族的那一套主题由 `shadcn_theme.dart` 的 `buildShadcnTheme`
+/// 提供，二者从同一份 `core/theme` token 派生，数值同源。
+/// 新增视觉规则请优先落到 shadcn 侧。
 ///
 /// v2 相对旧版（wait-home 平移）的关键变化：
 /// 1. **色彩分层**：手写 ColorScheme（见 [ColorSchemes]），页面底浅灰 +

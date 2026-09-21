@@ -10,7 +10,7 @@ import 'package:orbit/data/api/mock_orbit_bridge.dart';
 import 'package:orbit/data/providers/bridge_provider.dart';
 import 'package:orbit/modules/todo/logic/task_logic.dart';
 import 'package:orbit/modules/todo/stats_screen.dart';
-import 'package:orbit/modules/todo/todo_heatmap.dart';
+import 'package:orbit/shared/widgets/shadcn/orbit_heatmap.dart';
 import 'package:orbit/shared/utils/hex_color.dart';
 
 Widget _wrap(Widget child, MockOrbitBridge bridge) => ProviderScope(
@@ -84,14 +84,14 @@ void main() {
   });
 
   testWidgets('热力图：色阶锚定 max≥4 + 空格中性色 + tooltip 文案', (tester) async {
-    // 直接测 TodoHeatmap 组件：今天 2 条完成（max=2 也不许吃满最深色）
+    // 直接测 OrbitHeatmap 组件：今天 2 条完成（max=2 也不许吃满最深色）
     final now = DateTime.now();
     final heatmap = _buildHeatmap(year: now.year, counts: {
       _key(now): 2,
     });
     await tester.pumpWidget(MaterialApp(
       home: Scaffold(
-        body: TodoHeatmap(
+        body: OrbitHeatmap(
           heatmap: heatmap,
           availableYears: [now.year],
           year: now.year,

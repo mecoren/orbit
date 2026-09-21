@@ -12,11 +12,11 @@ import '../../core/theme/orbit_accents.dart';
 import '../../data/api/dto.dart';
 import '../../data/providers/bridge_provider.dart';
 import '../../shared/utils/hex_color.dart';
-import '../../shared/widgets/animated_strikethrough.dart';
-import '../../shared/widgets/app_month_calendar.dart';
-import '../../shared/widgets/glass_fab.dart';
-import '../../shared/widgets/liquid_glass_title_bar.dart';
-import '../../shared/widgets/wait_toast.dart';
+import '../../shared/widgets/shadcn/orbit_strikethrough.dart';
+import '../../shared/widgets/shadcn/orbit_month_calendar.dart';
+import '../../shared/widgets/shadcn/orbit_fab.dart';
+import '../../shared/widgets/shadcn/orbit_page_header.dart';
+import '../../shared/widgets/shadcn/orbit_toast.dart';
 import 'form_bottom_sheet.dart';
 import 'logic/task_logic.dart';
 import 'providers/todo_providers.dart';
@@ -204,7 +204,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    SizedBox(height: LiquidGlassTitleBar.rowHeight),
+                    SizedBox(height: OrbitPageHeader.rowHeight),
                     // ===== 头部：月份标题（点击开年视图）+ 今天 + 翻页 + 节假日更新 =====
                     Padding(
                       padding: const EdgeInsets.symmetric(
@@ -256,7 +256,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                     Padding(
                       padding: const EdgeInsets.symmetric(
                           horizontal: AppDimens.space8),
-                      child: AppMonthCalendar(
+                      child: OrbitMonthCalendar(
                         size: AppCalendarSize.large,
                         showHeader: false,
                         month: _month,
@@ -362,7 +362,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
             top: 0,
             left: 0,
             right: 0,
-            child: LiquidGlassTitleBar(
+            child: OrbitPageHeader(
               title: '日历',
               showBack: true,
             ),
@@ -371,7 +371,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
           Positioned(
             right: AppDimens.space16,
             bottom: AppDimens.gestureInsetFallback + AppDimens.space16,
-            child: GlassFab(
+            child: OrbitFab(
               accentColor: OrbitAccents.themeAccent,
               onPressed: () => showTodoFormSheet(context),
             ),

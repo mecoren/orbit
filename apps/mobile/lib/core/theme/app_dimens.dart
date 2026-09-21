@@ -65,10 +65,10 @@ class AppDimens {
   /// 列表项高度
   static const double listItemHeight = 56;
 
-  /// 标题栏高度（56px 单行玻璃标题栏）
+  /// 页头高度（56px 单行页头，设计系统 v3：实色表面 + 底边 1px 描边）
   static const double titleBarHeight = 56;
 
-  /// FAB 尺寸（GlassFab 56px 方形圆角）
+  /// FAB 尺寸（56px 圆形悬浮按钮）
   static const double fabSize = 56;
 
   /// 启动等待画面品牌图边长（booting 阶段白底居中，与桌面端同源图标）
@@ -94,17 +94,4 @@ class AppDimens {
 
   /// 超大图标尺寸（FAB 图标等）
   static const double iconSizeXl = 28;
-
-  // ── 模糊（blur sigma）──
-  /// 静态玻璃模糊（卡片/弹层，性能成本 ∝ σ²）
-  static const double blurStatic = 45;
-
-  /// 标题栏最大模糊（frosted 白玻璃，比旧版 20 略降以贴合"白卡"轻盈感）
-  static const double blurTitleBarMax = 16;
-
-  /// FAB / 底栏模糊
-  static const double blurFab = 14;
-
-  /// 滚动渐显区间（模糊层从透明到完全显示的滚动偏移）
-  static const double blurScrollFadeDistance = 32;
 }

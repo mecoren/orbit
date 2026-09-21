@@ -15,17 +15,16 @@ import '../../data/api/dto.dart';
 import '../../data/providers/bridge_provider.dart';
 import '../../services/notification_service.dart';
 import '../../shared/utils/hex_color.dart';
-import '../../shared/widgets/animated_strikethrough.dart';
-import '../../shared/widgets/circle_checkbox.dart';
-import '../../shared/widgets/confirm_bottom_sheet.dart';
-import '../../shared/widgets/info_tile.dart';
-import '../../shared/widgets/liquid_glass_title_bar.dart';
-import '../../shared/widgets/more_actions_sheet.dart' show bottomSheetTopShape;
-import '../../shared/widgets/scroll_offset_listenable.dart';
-import '../../shared/widgets/section_card.dart';
-import '../../shared/widgets/select_bottom_sheet.dart';
-import '../../shared/widgets/wait_date_picker.dart';
-import '../../shared/widgets/wait_toast.dart';
+import '../../shared/widgets/shadcn/orbit_strikethrough.dart';
+import '../../shared/widgets/shadcn/orbit_checkbox.dart';
+import '../../shared/widgets/shadcn/orbit_confirm_sheet.dart';
+import '../../shared/widgets/shadcn/orbit_info_row.dart';
+import '../../shared/widgets/shadcn/orbit_page_header.dart';
+import '../../shared/widgets/shadcn/orbit_actions_sheet.dart' show bottomSheetTopShape;
+import '../../shared/widgets/shadcn/orbit_section_card.dart';
+import '../../shared/widgets/shadcn/orbit_select_sheet.dart';
+import '../../shared/widgets/shadcn/orbit_date_picker.dart';
+import '../../shared/widgets/shadcn/orbit_toast.dart';
 import 'form_bottom_sheet.dart' show showTodoDatePicker, syncTaskReminder;
 // as rep：规避 Flutter widgets 自带 RepeatMode 类名冲突
 import 'logic/activity_format.dart';
@@ -136,9 +135,8 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
             top: 0,
             left: 0,
             right: 0,
-            child: LiquidGlassTitleBar(
+            child: OrbitPageHeader(
               title: detailAsync?.value?.title ?? '详情',
-              scrollOffsetListenable: ScrollOffsetListenable(_scrollController),
             ),
           ),
         ],
@@ -193,7 +191,7 @@ class _DetailView extends StatelessWidget {
       controller: scrollController,
       padding: EdgeInsets.only(
         top: MediaQuery.of(context).padding.top +
-            LiquidGlassTitleBar.rowHeight +
+            OrbitPageHeader.rowHeight +
             AppDimens.space12,
         left: AppDimens.space16,
         right: AppDimens.space16,
@@ -297,7 +295,6 @@ class _TitleSectionState extends State<_TitleSection> {
           CircleCheckbox(
             checked: task.isDone,
             size: 28,
-            checkSize: 18,
             onToggle: () => widget.onToggleDone(task),
           ),
           const SizedBox(width: AppDimens.space12),
@@ -786,8 +783,6 @@ class _SubtasksSectionState extends ConsumerState<_SubtasksSection> {
                   CircleCheckbox(
                     checked: subtask.isDone,
                     size: AppDimens.subtaskCheckboxSize,
-                    checkSize:
-                        AppDimens.subtaskCheckboxSize - AppDimens.space8,
                     onToggle: () => _mutate(() => ref
                         .read(orbitBridgeProvider)
                         .todoSubtaskToggleDone(subtask.id, !subtask.isDone)),
@@ -1080,7 +1075,6 @@ class _LabelEditSheetState extends ConsumerState<_LabelEditSheet> {
                                     CircleCheckbox(
                                       checked: attachedIds.contains(label.id),
                                       size: AppDimens.iconSizeMd + 2,
-                                      checkSize: AppDimens.iconSizeSm,
                                       onToggle: () => _toggleLabel(label),
                                     ),
                                     const SizedBox(width: AppDimens.space12),
@@ -1220,7 +1214,7 @@ class _RemindersSection extends ConsumerWidget {
 
   /// 底部弹 wait 面板选日期+时间，确认返回毫秒；取消/清除返回 null
   Future<DateTime?> _pick(BuildContext context, int? currentMs) {
-    return WaitDatePicker.pick(
+    return OrbitDatePicker.pick(
       context,
       initialDate: currentMs != null
           ? DateTime.fromMillisecondsSinceEpoch(currentMs)
