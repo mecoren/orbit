@@ -13,7 +13,7 @@ Orbit（循迹）是本地优先的跨平台任务管理应用：待办（项目
 - **软删语义**：业务表全带 `uuid`（同步主键，UNIQUE 索引防僵尸行复活）/`is_deleted`/`version`/毫秒时间戳三件套；删除一律软删墓碑进回收站，物理 DELETE 只存在于回收站 purge 路径（ADR 0005 延迟提交边界）。
 - **日期分桶按本地时区日界**：毫秒时间戳在 Rust 侧用 chrono::Local 换算本地日期后再分桶（`local_day_index`），前端 Date/Dart 本地语义对齐；不要在 SQL 里按 UTC 天分组。
 - **迁移文件增量策略**：DDL 只在 `orbit-core/src/db/migrations/`，`0001_init.sql` 为冻结基线永不改；新增结构默认追加 `NNNN_xxx.sql`（sqlx 按文件名顺序执行，老库只跑新增文件，不删库）。加列必须带 `DEFAULT`，加表/加索引用 `IF NOT EXISTS`，破坏性变更走重建表；未发布的多文件可合并为一个，已发布文件永不改/删。新字段补行尾中文注释（DDL 注释随 sqlite_master 落库，GUI 可见），存量库升级靠增量迁移原地完成（仅大版本基线重建才走删库+云同步/`.orsync`恢复）。
-- **双强调色体系勿混用**：待办模块色 `TODO_ACCENT = #3B82F6`（checkbox/选中态/图表）与全局主题色 `themeAccent = #4E8CFF`（GlassFab/Spinner）两个 Context 并存（docs/05 §2.1）。
+- **双强调色体系勿混用**：待办模块色 `TODO_ACCENT = #3B82F6`（checkbox/选中态/图表）与全局主题色 `themeAccent = #4E8CFF`（OrbitFab/Spinner，shadcn `primary` 角色）两个 Context 并存（docs/05 §2.1）。
 - **悬浮提示统一主题色底白字**：桌面所有 tooltip 对齐 `ui/tooltip.tsx` 原语口径 `bg-primary text-primary-foreground`（手搓 Portal 提示也不得用 `bg-popover` 灰白弹层色——2026-09-10 热力图曾踩坑）；移动端原生 `Tooltip` 由 `app_theme.dart` 全局 `tooltipTheme` 统一（强调色底白字），不逐处覆写。
 - **滚动条全项目标准**：桌面全局 `index.css` 定义 `::-webkit-scrollbar` 10px 透明轨道主题色圆角滑块，原生 `overflow-auto` 容器自动继承——**禁设 `scrollbar-width` 非 auto 值**（会禁用 webkit 自定义退化为系统原生条）；需隐藏的用三件套 `scrollbar-width:none + -ms-overflow-style:none + ::-webkit-scrollbar display:none`。移动端全局 `ScrollbarThemeData`（app_theme.dart）只对显式 Scrollbar 生效，`SingleChildScrollView` 惯例不挂。
 - **无 prettier 约定**：仓库不配 prettier，`npx prettier` 现跑会重排整文件产生巨型噪音 diff；已跑坏的用 `git checkout HEAD --` 恢复后手工重放。
@@ -30,7 +30,7 @@ Orbit（循迹）是本地优先的跨平台任务管理应用：待办（项目
 | UI | shadcn/ui 风格（Radix 原语）+ Tailwind CSS v4（CSS-first，无 tailwind.config） |
 | 状态 | React Query（queryKey 约定见下）+ 局部 zustand；localStorage 持久化视图态 |
 | 移动 | Flutter（stable，CI 锁 3.44.2）+ flutter_rust_bridge 2.12（codegen 锁 2.12.0） |
-| 状态(移动) | Riverpod；移动 UI 不引图表库（纯自绘 Row/Column） |
+| 状态(移动) | Riverpod；移动 UI 组件体系 = shadcn_flutter 0.0.53（精确锁版）+ table_calendar/fl_chart，库内无等价物的组件自绘同风格并沉淀 `shared/widgets/shadcn/` |
 | 核心 | Rust edition 工具链锁 `rust-toolchain.toml` 1.96，clippy + rustfmt |
 | 加密 | SQLCipher 本地库 + AES-256-GCM 云同步 E2E（PBKDF2 600k 单调不降级） |
 | 质量 | tsc / vitest 4 / Playwright 冒烟 / cargo test / flutter analyze+test；内存门禁（`perf-metrics/`）；CI 四 job（web/rust-core/flutter-mobile 含 FRB codegen 一致性门禁/perf-gate） |
@@ -79,7 +79,8 @@ apps/
       core/              # theme/（AppColors/AppDimens/AppShapes/OrbitAccents）、routing/
       data/api/          # OrbitBridge 接口 + Rust/Mock 两实现 + dto.dart（手写镜像）
       modules/todo/      # 视图与页面 + providers/（Riverpod）+ logic/
-      shared/widgets/    # 跨模块组件（EmptyState、WaitToast、LiquidGlassTitleBar…）
+      shared/widgets/    # 跨模块组件：controller_disposer 等生命周期工具 +
+                         # shadcn/（设计系统 v3 原语层，orbit_*.dart）
     test/                # flutter test（widget/单元），与 lib 镜像目录结构
 docs/                    # NN_主题.md 编号文档（01 产品需求 → 07 竞品 backlog）
 docs/adr/                # 架构决策记录（0001-0005）
@@ -182,19 +183,20 @@ pnpm bump:check           # 只校验一致性（零写入，CI/本地通用）
 
 ## 移动端约定（Flutter）
 
-- 路由 `core/routing/app_router.dart`（栈式导航）；页面结构 = LiquidGlassTitleBar（Stack 顶部）+ 整页 ListView 滚动（**必须整页滚动，不要 Column+Expanded 固定高度**——曾致内容溢出）。
+- 路由 `core/routing/app_router.dart`（栈式导航）；页面结构 = OrbitPageHeader（Stack 顶部，实色页头 + 底边 1px 描边，`shared/widgets/shadcn/orbit_page_header.dart`）+ 整页 ListView 滚动（**必须整页滚动，不要 Column+Expanded 固定高度**——曾致内容溢出）。
 - Riverpod：Provider 按 `modules/todo/providers/`；`FutureProvider.family` 家族化参数缓存（如 statsProvider(year)）；db-change 后 `invalidateBusinessCaches` 统一失效。
 - 主题 token 全在 `core/theme/`：`AppColors.ofContext(context)` 取语义色（分层表面 `background`/`surface`/`surfaceSecondary`/`surfaceElevated` + `outline` 描边 + 三级文字）、`AppDimens` 间距（刻度 `spaceN` + 语义 `pageInline`/`cardPadding`/`cardGap`/`sectionGap`/`rowInline`/`rowVertical`）、`AppShapes` 圆角（`xs`/`small`/`medium`/`large`/`xl`＝6/10/14/20/28，特殊值 `AppShapes.of(n)`）、`AppElevation` 阴影（`e1`~`e4`）、`OrbitAccents.todoAccent/themeAccent` 双强调色——**不写裸魔法值**。
-- **设计系统 v2（2026-09-20）＝现代分层白卡**：浅灰底 + 纯白卡片 + 柔和阴影 + 8pt 网格 + 字阶带行高；`ColorScheme` **手写不走 `fromSeed`**（杜绝角色漂移，`primary` 恒等于 themeAccent）；玻璃为"白玻璃"配方（tint 75% + σ16/14），亮色标题栏底边改用 `outline` 细线定界。规格镜像见 docs/05 §2.2 / §三 / §七。
+- **设计系统 v3（2026-09-21）＝ shadcn New York 语言**：`MaterialApp.router` + builder 内 `ShadcnLayer` 双主题并存——shadcn 主题由 `core/theme/shadcn_theme.dart` 从同一份 `core/theme` token 派生，数值同源不漂移；对比靠 **1px 描边 + 表面分层**，阴影只留给浮层；玻璃三件套已删（`AppDimens` 的 4 个模糊 token 一并移除）。保留 v2 的分层白卡思想与 8pt 网格；**shadcn 与 Material 的 `ThemeData`/`Typography`/`ThemeMode` 同名不同源，同文件必须前缀导入（shadcn 用 `as sh`）**。
+- **新组件优先 shadcn_flutter，缺了自绘同风格件沉淀原语层**：新增 UI 一律先取 shadcn_flutter 原语（`sh.` 前缀导入）；库内没有等价物的（看板、热力图、带农历/休班语义的月历等），**自绘一个与 shadcn New York 语言一致的组件，并沉淀进 `lib/shared/widgets/shadcn/`**——文件名 `orbit_*.dart`、吃 `core/theme` token、不写裸魔法值；页面只允许依赖该原语层与 shadcn 基础组件，禁止在页面里裸写一次性样式。迁移时高频符号保留原名（`WaitToast`/`SectionCard`/`SelectItem` 等，避免数百处无谓 diff），新组件一律 `Orbit*` 命名。
 - **动效口径参考微软 To-Do 移动端**（勾选确认、完成划线、行入场、拖拽抬起、抽屉轻快入场、触感反馈）；动效参数统一收口 `core/theme/app_motion.dart`（时长/曲线/缩放档；视图内禁裸 `Duration(...)` 与裸 `Curves.*`），清单与有意边界见 docs/05 §九。视觉蓝本仍是 wait-home——该章只加"动作过程"，不改任何像素规格。
-- 日历今天/选中强调色统一取 `OrbitAccents.themeAccent`（#4E8CFF，与桌面端日历 `--primary`＝themeAccent 体系同源）：`modules/todo/calendar_screen.dart`（月历今日实心块与选中描边、右栏选中日高亮底、今日文字与「今天」徽标）和 `year_overview_page.dart`（迷你历今日实心格/周末数字/当前月标题）。设计系统 v2 起 `ColorScheme` 手写、`scheme.primary` 已恒等于 themeAccent（`fromSeed` 漂移问题根除），组件仍建议显式取 `OrbitAccents.themeAccent` 以绑定语义。
-- UI 自绘不引库：条形图/热力图纯 Row/Column/Container；组件复刻 wait-home mobile `activity_heatmap.dart` 同构。
+- 日历今天/选中强调色统一取 `OrbitAccents.themeAccent`（#4E8CFF，与桌面端日历 `--primary`＝themeAccent 体系同源）：`modules/todo/calendar_screen.dart`（月历今日实心块与选中描边、右栏选中日高亮底、今日文字与「今天」徽标）和 `year_overview_page.dart`（迷你历今日实心格/周末数字/当前月标题）。设计系统 v3 起 shadcn 主题由 token 派生（`shadcn_theme.dart`，`primary` 取 `AppColorSet.accent`，亮色即 themeAccent），组件仍建议显式取 `OrbitAccents.themeAccent` 以绑定语义。
+- 图表：统计页条形/环形占比用 `fl_chart`（1.2.0 精确锁版）；**热力图 fl_chart 不支持**（shadcn `tracker` 只是单行条带，承载不了 7 行 × 53 列年历网格），由 `shared/widgets/shadcn/orbit_heatmap.dart` 用 token 色阶自组网格——色阶取 `OrbitAccents.todoAccent` 的 22/45/68/90% 四档。
 - 布局对齐坑：行标签/占位格与实际格必须同 padding 规则（末行不加尾距，否则固定高 Column 溢出 3px）；`Text.rich` 在 widget 测试 `find.text` 不可见——标题行用 Row + 独立 Text。
 - 测试：`MockOrbitBridge` 注入 `orbitBridgeProvider.overrideWithValue` 冒烟渲染；纯 Dart test 直接调 bridge 排除 UI 层（widget 卡死超时先分离归因）。
-- toast 用 `WaitToast`（支持 action 钮）；空态对齐 `EmptyState` 组件模式（让出标题栏后剩余视口垂直居中）。
+- toast 用 `WaitToast`（实现已迁 `shared/widgets/shadcn/orbit_toast.dart`，底层 = shadcn `showToast`，支持 action 钮）；空态用 `EmptyState`（`shared/widgets/shadcn/orbit_empty_state.dart`，让出页头后剩余视口垂直居中）。**ShadcnLayer 是两者的浮层依赖**——测试壳必须与生产根装配同构，统一用 `test/support/orbit_test_app.dart` 的 `orbitTestApp` / `orbitTestAppRouter`。
 - **品牌图与启动屏同源**：移动端启动器图标（`mipmap-*/ic_launcher.png`）、原生启动屏图（`mipmap-xxxhdpi/launch_image.png`）、Flutter 等待画面资产（`assets/app_icon.png`）三处均出自 `scripts/generate_icons.py`，与桌面端**同一枚图标**——换版一次产出全平台，不手改单端位图；启动屏与 `BootGate` booting 态同口径：白底 + 居中品牌图（`AppDimens.splashLogoSize`），亮暗主题共用白底（`launch_bg` 双 values 同值）；API 31+ 还须在 `values-v31`/`values-night-v31` 显式 `windowSplashScreenBackground` 锁白（night 限定符优先于 version，两份缺一即深色下变黑），并显式 `windowSplashScreenAnimatedIcon`＝自适应前景层 + `windowSplashScreenIconBackgroundColor`＝`@color/ic_launcher_background`；启动器图标**必须走自适应分层图标**（`mipmap-anydpi-v26`，背景层 `@color/ic_launcher_background` **透明** + `ic_launcher_foreground` 前景层，Manifest 带 `roundIcon`，脚本产出）——**透明底与桌面端一致，不铺白底/底板**：缺分层时系统会给 legacy 位图自造模糊底板（发灰脏底），铺白底则出现白色圆角方块（2026-09-19 两次实测反馈）；图标像素一律按 **2x 规格**给（如 48dp 图标给 96px、108dp 画布给 216px）——Android 按目录 bucket 换算 dp 后自行缩放，给足像素只赚清晰度，而启动器与系统/OEM 启动画面都会放大绘制，1x 像素会被放糊。
-- **选择类交互统一用底部抽屉**：单选/多选/排序切换/模板套用/日期时间等「从一组值里挑一个」的交互一律 `showModalBottomSheet`（`isScrollControlled: true`，`backgroundColor: AppColors.ofContext(context).popup`，`shape: bottomSheetTopShape`，行高 `AppDimens.touchTarget`）——纯文本选择复用 `shared/widgets/select_bottom_sheet.dart` 的 `showSelectBottomSheet` 泛型口径，选项带色点/自定义行时同款自绘；**不用** `PopupMenuButton` / `DropdownButton` / `AlertDialog` 列表做选择（`AlertDialog` 只留给文本输入表单，见下条），选项超过 3 个时尤其必须抽屉（移动端弹层宽度受限且遮罩误触率高）。
-- **确认类交互（尤其删除）统一用底部抽屉**：删除 / 清空 / 恢复 / 覆盖导入 / 断开云同步 / 关闭加密等一切「二次确认」一律走 `showConfirmBottomSheet`（`shared/widgets/confirm_bottom_sheet.dart`）——`title` + `message`（长预览体走 `content`）+ `confirmLabel`，破坏性操作 `destructive: true`（红底），返回 `bool`（确认 `true`；取消 / 点遮罩 / 下滑一律 `false`），纯告知场景传 `cancelLabel: null` 只留一个按钮；按钮行 = 取消 `OutlinedButton` + 确认 `FilledButton`。**确认不再用 `AlertDialog`**（2026-09-20 全量迁移：回收站彻底删除/清空、任务单条与批量删除、项目删除与删除保护提示、筛选器/模板/标签删除、子任务/评论/附件删除、冲突恢复/清空、备份恢复/版本不一致/删除、通知历史清空、关闭加密与清除主密码、明文导出与 CSV 导入确认、断开云同步与清同步密码缓存）——`AlertDialog` 现仅保留带 `TextField` 的输入表单（新建/编辑项目与标签、改主密码/改同步密码/输密钥包密码）；理由与选择类同源：抽屉落在拇指区、破坏性按钮有整行触控面积、点遮罩或下滑等同「取消」，不会误触发删除。
+- **选择类交互统一用底部抽屉**：单选/多选/排序切换/模板套用/日期时间等「从一组值里挑一个」的交互一律走 shadcn 弹层——纯文本选择复用 `shared/widgets/shadcn/orbit_select_sheet.dart` 的 `showSelectBottomSheet` 泛型口径（浮层机制 = `showOverlay` + `SheetConfiguration`，行高 `AppDimens.touchTarget`，点选即回调并关闭）；选项带色点/自定义行时同款自绘；**不用** `PopupMenuButton` / `DropdownButton` / `AlertDialog` 列表做选择（`AlertDialog` 只留给文本输入表单，见下条），选项超过 3 个时尤其必须抽屉（移动端弹层宽度受限且遮罩误触率高）。页面内的二级面板仍可用 Material `showModalBottomSheet`，但其形状/动效常量必须从 `shared/widgets/shadcn/orbit_actions_sheet.dart` 取（`bottomSheetTopShape` / `bottomSheetMotion`），保证与共享弹层族同口径。
+- **确认类交互（尤其删除）统一用底部抽屉**：删除 / 清空 / 恢复 / 覆盖导入 / 断开云同步 / 关闭加密等一切「二次确认」一律走 `showConfirmBottomSheet`（`shared/widgets/shadcn/orbit_confirm_sheet.dart`，返回 `Future<bool>`）——`title` + `message`（长预览体走 `content`）+ `confirmLabel`，破坏性操作 `destructive: true`（红底），返回 `bool`（确认 `true`；取消 / 点遮罩 / 下滑一律 `false`），纯告知场景传 `cancelLabel: null` 只留一个按钮；按钮行 = 取消 `OutlinedButton` + 确认 `FilledButton`。**确认不再用 `AlertDialog`**（2026-09-20 全量迁移：回收站彻底删除/清空、任务单条与批量删除、项目删除与删除保护提示、筛选器/模板/标签删除、子任务/评论/附件删除、冲突恢复/清空、备份恢复/版本不一致/删除、通知历史清空、关闭加密与清除主密码、明文导出与 CSV 导入确认、断开云同步与清同步密码缓存）——`AlertDialog` 现仅保留带 `TextField` 的输入表单（新建/编辑项目与标签、改主密码/改同步密码/输密钥包密码）；理由与选择类同源：抽屉落在拇指区、破坏性按钮有整行触控面积、点遮罩或下滑等同「取消」，不会误触发删除。
 
 ## 内存口径与有界容器（门禁：`perf-metrics/audit-unbounded.mjs --gate`）
 
