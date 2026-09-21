@@ -185,6 +185,7 @@ void main() {
       expect(rowTitle, findsOneWidget);
       final trashed = await _bridgeCallT(tester, bridge.trashTasksList());
       expect(trashed.any((t) => t.id == victim.id), isTrue);
+      await drainToastTimers(tester);
     });
 
     testWidgets('彻底删除：不点撤销 → 5s 窗口过后真提交（物理删除）', (tester) async {

@@ -93,7 +93,10 @@ void main() {
     expect(find.text('确认'), findsOneWidget);
     await _tapDay(tester, '15');
     await tester.tap(find.text('确认'));
-    await tester.pumpAndSettle();
+    // shadcn 弹层的确认值在**关闭动画收尾后**才回到调用方（`closeOverlay` →
+    // closeDrawer 动画 → complete），patch 是在那之后才发起的——pumpAndSettle
+    // 只走完动画，还要再推 300ms 假时钟越过 mock 桥的 120ms 延迟
+    await _settle(tester);
 
     final detail = await tester.runAsync(() => detailOf(5));
     final now = DateTime.now();

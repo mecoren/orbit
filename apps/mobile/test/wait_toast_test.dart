@@ -48,6 +48,7 @@ void main() {
 
     await tester.pump(const Duration(seconds: 10));
     expect(find.text('待办提醒：写周报'), findsOneWidget);
+    await drainToastTimers(tester, holdForever: true);
   });
 
   testWidgets('带动作但未给时长：保持常驻（错误引导类需用户处置）', (tester) async {
@@ -61,5 +62,6 @@ void main() {
 
     await tester.pump(const Duration(seconds: 10));
     expect(find.text('同步密钥与云端数据不匹配'), findsOneWidget);
+    await drainToastTimers(tester, holdForever: true);
   });
 }

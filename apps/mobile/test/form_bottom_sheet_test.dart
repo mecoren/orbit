@@ -67,16 +67,13 @@ void main() {
     // 状态行 → 三档单选抽屉 → 选中「进行中」回显到行
     await tester.tap(find.text('状态'));
     await tester.pumpAndSettle();
-    // 三档选项限定在最上层底部抽屉内（表单本身就是 BottomSheet，行值「待办」
-    // 与侧栏「已完成」都会撞裸 find.text——取 .last 即刚弹出的选择抽屉）
-    Finder sheetText(String label) => find.descendant(
-          of: find.byType(BottomSheet).last,
-          matching: find.text(label),
-        );
-    expect(sheetText('待办'), findsOneWidget);
-    expect(sheetText('进行中'), findsOneWidget);
-    expect(sheetText('已完成'), findsOneWidget);
-    await tester.tap(sheetText('进行中'));
+    // 三档选项文案：v3 起选择抽屉是 shadcn sheet（无 Material BottomSheet 祖先
+    // 可限定，故不再用 byType 圈范围）。「进行中」全屏唯一；「待办」（表单行值）
+    // 与「已完成」（侧栏行）会撞同名文案，退化为存在性断言
+    expect(find.text('进行中'), findsOneWidget);
+    expect(find.text('待办'), findsWidgets);
+    expect(find.text('已完成'), findsWidgets);
+    await tester.tap(find.text('进行中'));
     await tester.pumpAndSettle();
     expect(find.text('进行中'), findsOneWidget);
 
@@ -187,9 +184,15 @@ void main() {
     await tester.enterText(find.byType(TextFormField).first, '明天开会 !3');
     await tester.pump();
 
-    // chips：截止（明天日期）+ P3 优先级
-    expect(find.byIcon(OrbitIcons.calendar), findsOneWidget);
-    expect(find.byIcon(OrbitIcons.flag), findsOneWidget);
+    // chips：截止（明天日期）+ P3 优先级。
+    // 图标限定在表单抽屉内：v3 图标收口后侧栏「今天截止」等行也用同一批语义图标，
+    // 裸 byIcon 会同时命中背后的侧栏
+    Finder inForm(Finder matching) => find.descendant(
+          of: find.byType(BottomSheet).last,
+          matching: matching,
+        );
+    expect(inForm(find.byIcon(OrbitIcons.calendar)), findsOneWidget);
+    expect(inForm(find.byIcon(OrbitIcons.flag)), findsOneWidget);
     final tomorrow = DateTime.now().add(const Duration(days: 1));
     final expectedY =
         '${tomorrow.year}-${tomorrow.month.toString().padLeft(2, '0')}-${tomorrow.day.toString().padLeft(2, '0')}';

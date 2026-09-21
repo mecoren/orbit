@@ -35,12 +35,16 @@ void main() {
       );
       WaitToast.global('待办提醒：买牛奶',
           variant: WaitToastVariant.warning, onTap: () => fired++);
-      await tester.pump(); // Overlay 插入帧
+      // shadcn toast 有入场动画（自下而上 500ms），只推一帧时卡片还在屏幕外，
+      // 点击会落空——必须 settle 到入场结束
+      await tester.pumpAndSettle();
       expect(find.text('待办提醒：买牛奶'), findsOneWidget);
 
       await tester.tap(find.text('待办提醒：买牛奶'));
       await tester.pumpAndSettle(); // 退出动画
       expect(fired, 1);
+      // 该条带 onTap = 「不自动收」档，按常驻档收尾
+      await drainToastTimers(tester, holdForever: true);
     });
 
     testWidgets('无 onTap 行为不变：点击仅收起不抛错', (tester) async {
@@ -50,12 +54,13 @@ void main() {
         ),
       );
       WaitToast.warning('普通警告');
-      await tester.pump();
+      await tester.pumpAndSettle();
       expect(find.text('普通警告'), findsOneWidget);
 
       await tester.tap(find.text('普通警告'));
       await tester.pumpAndSettle();
       expect(find.text('普通警告'), findsNothing);
+      await drainToastTimers(tester);
     });
   });
 

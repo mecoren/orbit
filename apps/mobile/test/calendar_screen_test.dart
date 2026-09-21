@@ -65,9 +65,12 @@ void main() {
     // 种子里「完成移动端重构方案评审」截止在明天（now+1d）——
     // 落在月历圆点 + 当月分组列表的任务卡（整页滚动布局下滚到可见）
     final card = find.text('完成移动端重构方案评审');
+    // 显式指定外层整页滚动：月历自带 PageView（可横滑翻月）也是 Scrollable，
+    // 不限定会让 scrollUntilVisible 取到多个候选而抛 Bad state
     await tester.scrollUntilVisible(
       card.first,
       300,
+      scrollable: find.byType(Scrollable).first,
     );
     expect(card, findsWidgets);
 
@@ -116,6 +119,20 @@ void main() {
 
     // 新增表单打开（标题「添加待办」）：
     expect(find.text('添加待办'), findsOneWidget);
+
+    // 表单「日期与提醒」区在懒列表（ListView）下方，v3 信息区更高后落在视口外
+    // 未构建——先滚到可见再断言预填（抽屉 ListView 是抽屉内第一个 Scrollable，
+    // 其余 Scrollable 来自输入框自身）
+    await tester.scrollUntilVisible(
+      find.text('截止日期'),
+      200,
+      scrollable: find
+          .descendant(
+            of: find.byType(BottomSheet),
+            matching: find.byType(Scrollable),
+          )
+          .first,
+    );
 
     // 预填断言：截止日期与开始日期都显示今天（长按今天格预填截止 +
     // 新增默认开始日期=今天，同一天 → 同一字符串出现两次）
@@ -211,13 +228,17 @@ void main() {
         tester.widget<Text>(find.textContaining('年').first).data!;
     final currentTitle = title();
 
-    // 月历区域左滑 → 下月（fling 兼有位移与速度，两个判据都越阈）
-    await tester.fling(find.text('一').first, const Offset(-320, 0), 900);
+    // 月历区域左滑 → 下月（fling 兼有位移与速度，两个判据都越阈）。
+    // 起点取**日期格**而非星期表头：v3 月历的横滑由 table_calendar 的 PageView
+    // 承担，星期表头在 PageView 之外，从表头起滑不会翻页
+    final dayCell = find.text('${DateTime.now().day}').first;
+    await tester.fling(dayCell, const Offset(-320, 0), 900);
     await tester.pumpAndSettle();
     expect(title(), isNot(currentTitle));
 
     // 右滑 → 回到原月份
-    await tester.fling(find.text('一').first, const Offset(320, 0), 900);
+    await tester.fling(find.text('${DateTime.now().day}').first,
+        const Offset(320, 0), 900);
     await tester.pumpAndSettle();
     expect(title(), currentTitle);
   });
@@ -289,9 +310,11 @@ void main() {
     await settle(tester);
 
     // 断言压测任务卡渲染（整页滚动布局下列表在月历下方，滚到可见）
+    // scrollable 必须显式指定外层整页滚动（月历 PageView 也是 Scrollable）
     await tester.scrollUntilVisible(
       find.textContaining('压测任务').first,
       300,
+      scrollable: find.byType(Scrollable).first,
     );
     expect(find.textContaining('压测任务'), findsWidgets);
 

@@ -40,16 +40,17 @@ void main() {
     expect(find.text('已完成'), findsOneWidget);
     expect(find.text('收藏'), findsOneWidget);
     expect(find.text('无日期'), findsOneWidget);
-    // 日历/统计入口行可见（回收站行在统计行之下；新增行后 600px 视口装不下，
-    // 滚到底再断言尾部的回收站/项目段与「未分组」行，避免默认视口截断）
+    // 日历入口行可见（回收站行在统计行之下；新增行后 600px 视口装不下，
+    // 滚到底再断言尾部段落，避免默认视口截断——「统计」行随 v3 页头/行高
+    // 增长也落到了懒渲染区外，一并放到滚动之后断言）
     expect(find.text('日历'), findsOneWidget);
-    expect(find.text('统计'), findsOneWidget);
     // 项目种子数据
     await tester.scrollUntilVisible(
       find.text('未分组'),
       200,
       scrollable: find.byType(Scrollable).first,
     );
+    expect(find.text('统计'), findsOneWidget);
     expect(find.text('回收站'), findsOneWidget);
     expect(find.text('项目'), findsOneWidget);
     expect(find.text('工作'), findsOneWidget);

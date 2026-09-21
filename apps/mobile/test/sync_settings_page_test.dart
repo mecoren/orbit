@@ -71,6 +71,14 @@ const _presetConfig = <String, Object?>{
   'password': 'pw',
 };
 
+/// 状态徽标文案（14px）。
+///
+/// 与 toast 成功条**同名**（toast 标题 15px）——测试壳与生产壳同构后 toast 会
+/// 真的弹出，裸 `find.text('已解锁')` 会命中两处，故按字号把徽标择出来。
+Finder _badge(String text) => find.byWidgetPredicate(
+      (w) => w is Text && w.data == text && w.style?.fontSize == 14,
+    );
+
 void main() {
   testWidgets('未配置时：默认 WebDAV + 切换 S3 出现 bucket/region 字段', (tester) async {
     await tester.pumpWidget(_wrap(MockOrbitBridge()));
@@ -118,6 +126,7 @@ void main() {
     expect(saved!.endpoint, 'https://dav.example.com');
     expect(saved.username, 'demo');
     expect(saved.engine, 'webdav');
+    await drainToastTimers(tester);
   });
 
   testWidgets('测试连接：留空凭据回填已存配置（同引擎）成功', (tester) async {
@@ -132,6 +141,7 @@ void main() {
     await _flush(tester);
     // Mock 同引擎回填凭据成功（无异常抛出即连接成功路径）
     expect(await _probe(tester, bridge.syncConfigGet()), isNotNull);
+    await drainToastTimers(tester);
   });
 
   testWidgets('已配置时：回读表单值 + 断开确认弹窗 → 配置清除表单复位', (tester) async {
@@ -149,15 +159,15 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('断开云同步？'), findsOneWidget);
 
-    // 抽屉内「断开」是确认键（确认类交互统一走底部抽屉）
-    await tester.tap(find.descendant(
-      of: find.byType(BottomSheet),
-      matching: find.text('断开'),
-    ));
+    // 抽屉内「断开」是确认键（确认类交互统一走 `showConfirmBottomSheet` —— v3 起
+    // 承载在 shadcn sheet 上而非 Material BottomSheet，故改按入栈顺序取 last：
+    // 抽屉浮层渲染在页面之后）
+    await tester.tap(find.text('断开').last);
     await _flush(tester);
 
     expect(await _probe(tester, bridge.syncConfigGet()), isNull);
     expect(find.text('https://dav.example.com'), findsNothing);
+    await drainToastTimers(tester);
   });
 
   // ── 同步密码卡 ──
@@ -180,6 +190,7 @@ void main() {
 
     expect(find.text('已解锁'), findsOneWidget);
     expect((await _probe(tester, bridge.syncCryptoStatus())).hasPassword, isTrue);
+    await drainToastTimers(tester);
   });
 
   testWidgets('同步密码卡：两次密码不一致 → 报错不落库', (tester) async {
@@ -199,6 +210,7 @@ void main() {
     await _flush(tester);
 
     expect((await _probe(tester, bridge.syncCryptoStatus())).hasPassword, isFalse);
+    await drainToastTimers(tester);
   });
 
   testWidgets('同步密码卡：密码过短（<6 位）→ 报错不落库', (tester) async {
@@ -218,6 +230,7 @@ void main() {
     await _flush(tester);
 
     expect((await _probe(tester, bridge.syncCryptoStatus())).hasPassword, isFalse);
+    await drainToastTimers(tester);
   });
 
   testWidgets('同步密码卡：锁定 → 错误密码保持锁定 → 正确密码解锁', (tester) async {
@@ -229,11 +242,11 @@ void main() {
 
     // 密码卡在连接卡下方，视口外时被懒裁剪剥出树——先滚入再断言状态徽标
     await _scrollTo(tester, find.text('锁定'));
-    expect(find.text('已解锁'), findsOneWidget);
+    expect(_badge('已解锁'), findsOneWidget);
 
     await tester.tap(find.text('锁定'));
     await _flush(tester);
-    expect(find.text('已锁定'), findsOneWidget);
+    expect(_badge('已锁定'), findsOneWidget);
 
     // 错误密码 → 保持锁定（解锁态字段在卡下方，用 .last，纪律 3）
     await _scrollTo(tester, find.text('解锁'));
@@ -242,7 +255,7 @@ void main() {
     await tester.pump();
     await _tapAt(tester, find.text('解锁'));
     await _flush(tester);
-    expect(find.text('已锁定'), findsOneWidget);
+    expect(_badge('已锁定'), findsOneWidget);
 
     // 正确密码 → 解锁
     await tester.enterText(
@@ -250,6 +263,7 @@ void main() {
     await tester.pump();
     await _tapAt(tester, find.text('解锁'));
     await _flush(tester);
-    expect(find.text('已解锁'), findsOneWidget);
+    expect(_badge('已解锁'), findsOneWidget);
+    await drainToastTimers(tester);
   });
 }

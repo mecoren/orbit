@@ -116,6 +116,7 @@ void main() {
     final sw = tester.widget<Switch>(switchFinder);
     expect(sw.value, true);
     expect(store.bundle, isNotNull);
+    await drainToastTimers(tester);
   });
 
   testWidgets('关闭开关：密码确认 → 删键回落', (tester) async {
@@ -152,6 +153,7 @@ void main() {
 
     expect(tester.widget<Switch>(switchFinder).value, false);
     expect(store.bundle, isNull);
+    await drainToastTimers(tester);
   });
 }
 
