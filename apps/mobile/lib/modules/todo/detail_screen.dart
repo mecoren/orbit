@@ -20,6 +20,7 @@ import '../../shared/widgets/shadcn/orbit_checkbox.dart';
 import '../../shared/widgets/shadcn/orbit_confirm_sheet.dart';
 import '../../shared/widgets/shadcn/orbit_info_row.dart';
 import '../../shared/widgets/shadcn/orbit_page_header.dart';
+import '../../shared/widgets/shadcn/orbit_skeleton.dart';
 import '../../shared/widgets/shadcn/orbit_actions_sheet.dart' show bottomSheetTopShape;
 import '../../shared/widgets/shadcn/orbit_section_card.dart';
 import '../../shared/widgets/shadcn/orbit_select_sheet.dart';
@@ -111,11 +112,8 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
                 ? const _ErrorView()
                 : detailAsync.when(
                     skipLoadingOnReload: true,
-                    loading: () => const Center(
-                      child: CircularProgressIndicator(
-                        color: OrbitAccents.themeAccent,
-                      ),
-                    ),
+                    // 初次加载骨架：标题 + 信息行占位（重查有旧值时不闪，直接旧内容）
+                    loading: () => const _DetailSkeleton(),
                     error: (_, _) => const _ErrorView(),
                     data: (detail) => _DetailView(
                       // key 仅绑 id，不纳入 updatedAt——若含之，任何 patch 后
@@ -165,6 +163,39 @@ class _ErrorView extends StatelessWidget {
           TextButton(onPressed: () => context.pop(), child: const Text('返回')),
         ],
       ),
+    );
+  }
+}
+
+/// 详情初次加载骨架：标题块 + 四行信息行占位
+///
+/// 版式对齐 `_DetailView`（同款顶边距 + 横向 space16），加载落定即整块替换；
+/// `skipLoadingOnReload` 保证重查时旧内容保留，不闪骨架。
+class _DetailSkeleton extends StatelessWidget {
+  const _DetailSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      physics: const NeverScrollableScrollPhysics(),
+      padding: EdgeInsets.only(
+        top: MediaQuery.of(context).padding.top +
+            OrbitPageHeader.rowHeight +
+            AppDimens.space12,
+        left: AppDimens.space16,
+        right: AppDimens.space16,
+      ),
+      children: const [
+        OrbitSkeleton.block(height: 26, borderRadius: 13),
+        SizedBox(height: AppDimens.space16),
+        OrbitSkeleton.line(width: 200),
+        SizedBox(height: AppDimens.space12),
+        OrbitSkeleton.line(width: 160),
+        SizedBox(height: AppDimens.space12),
+        OrbitSkeleton.line(width: 220),
+        SizedBox(height: AppDimens.space12),
+        OrbitSkeleton.line(width: 140),
+      ],
     );
   }
 }

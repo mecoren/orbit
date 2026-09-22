@@ -21,6 +21,7 @@ import '../../shared/widgets/shadcn/orbit_confirm_sheet.dart';
 import '../../shared/widgets/shadcn/orbit_empty_state.dart';
 import '../../shared/widgets/shadcn/orbit_fab.dart';
 import '../../shared/widgets/shadcn/orbit_page_header.dart';
+import '../../shared/widgets/shadcn/orbit_skeleton.dart';
 import '../../shared/widgets/shadcn/orbit_actions_sheet.dart';
 import '../../shared/widgets/shadcn/orbit_select_sheet.dart';
 import '../../shared/widgets/shadcn/orbit_toast.dart';
@@ -928,7 +929,10 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final tasks = ref.watch(todoTasksProvider).value ?? [];
+    final tasksAsync = ref.watch(todoTasksProvider);
+    final tasks = tasksAsync.value ?? [];
+    // 初次加载（无旧值可守）才给骨架：重查/下拉刷新走旧内容，不闪骨架
+    final tasksLoading = !tasksAsync.hasValue && tasksAsync.isLoading;
     final projects = ref.watch(todoProjectsProvider).value ?? [];
 
     // done 快捷视图 → Logbook 分组态（按完成日倒序，与桌面同口径）；
@@ -1020,26 +1024,29 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
       );
     }
 
-    final Widget list = visible.isEmpty
-        ? Padding(
-            padding: EdgeInsets.only(
-              top: MediaQuery.of(context).padding.top +
-                  OrbitPageHeader.rowHeight,
-            ),
-            // 空态给出口：筛选没结果就清筛选，否则直接开新建表单（与右下
-            // OrbitFab 同一入口，列表空时 FAB 仍可见但离拇指更远）
-            child: EmptyState(
-              message: emptyMessage,
-              actionLabel: filteredEmpty ? '清除筛选' : '新建任务',
-              onAction: filteredEmpty
-                  ? () => _setFilters(TaskListFilters.empty)
-                  : () => showTodoFormSheet(
-                        context,
-                        defaultProjectId: widget.query.projectId,
-                        quickView: widget.query.quickView,
-                      ),
-            ),
-          )
+    final Widget list = tasksLoading
+        // 初次加载骨架：8 行任务行占位（复选圆 + 标题行 + 元信息行）
+        ? _TaskListSkeleton(padding: listPadding)
+        : visible.isEmpty
+            ? Padding(
+                padding: EdgeInsets.only(
+                  top: MediaQuery.of(context).padding.top +
+                      OrbitPageHeader.rowHeight,
+                ),
+                // 空态给出口：筛选没结果就清筛选，否则直接开新建表单（与右下
+                // OrbitFab 同一入口，列表空时 FAB 仍可见但离拇指更远）
+                child: EmptyState(
+                  message: emptyMessage,
+                  actionLabel: filteredEmpty ? '清除筛选' : '新建任务',
+                  onAction: filteredEmpty
+                      ? () => _setFilters(TaskListFilters.empty)
+                      : () => showTodoFormSheet(
+                            context,
+                            defaultProjectId: widget.query.projectId,
+                            quickView: widget.query.quickView,
+                          ),
+                ),
+            )
         : showKanban
             ? KanbanBoard(
                 columns:
@@ -1437,6 +1444,44 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
                 action.label,
                 style: TextStyle(fontSize: 11, color: tint),
                 maxLines: 1,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// 主列表初次加载骨架：8 行任务行占位（复选圆 + 标题行 + 元信息行）
+///
+/// 只在"无旧值可守"的初次加载出现（tasksLoading 见 build）；重查/下拉刷新
+/// 走旧内容，不闪骨架。行高贴近真实任务行，落定替换时跳变最小。
+class _TaskListSkeleton extends StatelessWidget {
+  const _TaskListSkeleton({required this.padding});
+
+  final EdgeInsetsGeometry padding;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView.builder(
+      physics: const NeverScrollableScrollPhysics(),
+      padding: padding,
+      itemCount: 8,
+      itemBuilder: (context, index) => const Padding(
+        padding: EdgeInsets.symmetric(vertical: AppDimens.space12),
+        child: Row(
+          children: [
+            OrbitSkeleton.circle(size: 22),
+            SizedBox(width: AppDimens.space12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  OrbitSkeleton.line(width: 180, height: 15),
+                  SizedBox(height: AppDimens.space6),
+                  OrbitSkeleton.line(width: 130, height: 12),
+                ],
               ),
             ),
           ],

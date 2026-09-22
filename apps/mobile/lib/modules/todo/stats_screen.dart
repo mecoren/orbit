@@ -10,6 +10,7 @@ import '../../data/api/dto.dart';
 import '../../shared/utils/hex_color.dart';
 import '../../shared/widgets/shadcn/orbit_empty_state.dart';
 import '../../shared/widgets/shadcn/orbit_page_header.dart';
+import '../../shared/widgets/shadcn/orbit_skeleton.dart';
 import 'logic/task_logic.dart';
 import 'providers/todo_providers.dart';
 import '../../shared/widgets/shadcn/orbit_heatmap.dart';
@@ -58,7 +59,8 @@ class _StatsScreenState extends ConsumerState<StatsScreen> {
         children: [
           Positioned.fill(
             child: stats == null
-                ? const Center(child: CircularProgressIndicator())
+                // 初次加载骨架：总览卡 + streak + 热力图占位（有旧值时不闪，直接旧内容）
+                ? const _StatsSkeleton()
                 : stats.overview.total == 0
                     ? Padding(
                         // 空态对齐 trash_screen / SubListScreen 模式：
@@ -442,6 +444,47 @@ class _DistSection extends StatelessWidget {
               ),
         ],
       ),
+    );
+  }
+}
+
+/// 统计页初次加载骨架：总览三卡 + streak 行 + 热力图区占位
+///
+/// 版式对齐真实内容（横向 space16、三卡等分），加载落定即整块替换为实数；
+/// 年份切换等"有旧值"的重查不走这里（旧内容保留，不闪骨架）。
+class _StatsSkeleton extends StatelessWidget {
+  const _StatsSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    Widget row(double height, {int flex = 1}) => Expanded(
+          flex: flex,
+          child: OrbitSkeleton.block(height: height),
+        );
+    return ListView(
+      physics: const NeverScrollableScrollPhysics(),
+      padding: EdgeInsets.only(
+        top: MediaQuery.of(context).padding.top +
+            OrbitPageHeader.rowHeight +
+            AppDimens.space8,
+        left: AppDimens.space16,
+        right: AppDimens.space16,
+      ),
+      children: [
+        Row(
+          children: [
+            row(86),
+            const SizedBox(width: AppDimens.space8),
+            row(86),
+            const SizedBox(width: AppDimens.space8),
+            row(86),
+          ],
+        ),
+        const SizedBox(height: AppDimens.space12),
+        const OrbitSkeleton.block(height: 64),
+        const SizedBox(height: AppDimens.space12),
+        const OrbitSkeleton.block(height: 220),
+      ],
     );
   }
 }

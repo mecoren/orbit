@@ -37,6 +37,9 @@ class AppMotion {
   /// 页面出栈转场（反向播放，略快于入栈）
   static const Duration pageExit = Duration(milliseconds: 220);
 
+  /// 骨架呼吸周期（首屏加载占位专用；往返一次的时长）
+  static const Duration skeletonPulse = Duration(milliseconds: 1100);
+
   // ── 曲线（curve）──
 
   /// 通用收尾曲线：起势快、收尾干净（easeOutQuint 近似）
@@ -69,6 +72,10 @@ class AppMotion {
   /// 弹跳收尾曲线（星标弹跳、同步对勾回弹等小尺寸元素；
   /// 大尺寸容器不适用——过冲会产生可见错位）
   static const Curve bounce = Curves.easeOutBack;
+
+  /// 呼吸曲线（骨架明暗往返：对称过渡，来回观感一致；
+  /// 不用 standard——easeOut 系单程收尾快，往返播放会"一头沉"）
+  static const Curve breathe = Curves.easeInOut;
 
   // ── 缩放档（scale）──
 
