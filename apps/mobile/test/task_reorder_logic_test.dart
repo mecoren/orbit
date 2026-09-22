@@ -1,7 +1,7 @@
 // 长按拖拽重排（#37）核心纯函数单测：
 // - reorderItems：语义插入位移动/越界防御（侧栏项目段既有函数随迁用例）
 // - midpointPosition：相邻 position 取中值（与桌面 shared/position.ts 同口径）
-// widget 层断言（把手渲染/拖拽落库）见 task_reorder_test.dart——依赖
+// widget 层断言（整行长按拾起/拖动落库/原地松手弹菜单）见 task_reorder_test.dart——依赖
 // MockOrbitBridge 编译，须待并发会话工作区稳定后一并运行。
 import 'package:flutter_test/flutter_test.dart';
 import 'package:orbit/modules/todo/logic/task_logic.dart';

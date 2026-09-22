@@ -44,8 +44,8 @@ import '../../core/theme/icon_map.dart';
 /// 入口三参数互斥：projectId > ungrouped > view（task_logic 同款优先级）。
 /// 列表消费共享 filterTasks/sortTasks；空态文案按入口映射；
 /// 右下 OrbitFab 新建（携 defaultProjectId）；Tile 长按弹操作菜单
-/// （编辑 / 星标切换 / 删除确认）；manual 档行尾拖拽把手长按拖拽重排
-/// （#37，position midpoint 落库与桌面同口径）。
+/// （编辑 / 星标切换 / 删除确认）；manual 档长按整行拾起拖动重排
+/// （#37，position midpoint 落库与桌面同口径；原地松手仍是操作菜单）。
 class SubListScreen extends ConsumerStatefulWidget {
   const SubListScreen({super.key, required this.query});
 
@@ -79,9 +79,20 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
   final _reorderScrollController = ScrollController();
   final _listScrollController = ScrollController();
 
-  // 排序档位（#26：会话内存态，退出即回 manual；#37 manual 档下行
-  // 长按拖拽把手重排 + midpoint 落库）
+  // 排序档位（#26：会话内存态，退出即回 manual；#37 manual 档下整行
+  // 长按拾起拖动重排 + midpoint 落库）
   TaskSortKey _sortKey = TaskSortKey.manual;
+
+  /// 本次长按拾起的行下标（[onReorderStart] 记，[onReorderEnd] 读后清）
+  int? _dragFromIndex;
+
+  /// 本次长按拾起是否真的发生过位移（[onReorderItem] 置真）。
+  ///
+  /// manual 档长按手势被拖动独占（行内 InkWell 的长按必须置空，见
+  /// [TodoTaskTile.onLongPress]），操作菜单因此改由「拾起后原地松手」承接：
+  /// 位移过关才走重排落库，没位移就当作长按菜单——两条路径共用同一个长按，
+  /// 行尾不必再挂拖拽把手图标。
+  bool _dragMoved = false;
 
   // 隐藏已完成（Logbook 治理）：与桌面同默认开；本机偏好持久化
   //（LocalPrefs，键值同桌面 localStorage `todo_hide_done`，退出重进保持档位）。
@@ -1065,7 +1076,7 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
     final colors = AppColors.ofContext(context);
     // 长按拖拽（#37）：仅 manual 档（拖拽顺序档）启用重排；其余档
     // 顺序由排序键决定，拖了也会被覆盖（与桌面 sortable 同口径）。
-    // 选择态强制回落普通列表：拖拽把手与「点行切换选中」抢同一手势
+    // 选择态强制回落普通列表：整行长按拾起与「点行切换选中」抢同一手势
     final reorderable = _sortKey == TaskSortKey.manual && !_selectionMode;
     // 看板/表格仅在非 Logbook 态生效：完成历史按日分组的语义在分列/表格
     // 里会丢失（桌面同口径——done 档列表被 LogbookView 接管）
@@ -1085,7 +1096,7 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
       bottom: AppDimens.gestureInsetFallback + AppDimens.space32,
     );
 
-    Widget buildTile(TodoTask task, {required Widget? dragHandle}) {
+    Widget buildTile(TodoTask task, {bool draggable = false}) {
       final project =
           task.projectId != null ? projectById[task.projectId] : null;
       // 选择态换用选区行：不复用 TodoTaskTile 是因为它的勾选框语义是
@@ -1104,9 +1115,9 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
         projectColorHex: project?.hexColor,
         onOpen: () => context.push('/todo/${task.id}'),
         onToggleDone: () => _toggleDone(task),
-        onLongPress: () => _showTaskActions(task),
+        // manual 档长按让位给整行拖动（原地松手由 _reorderEnd 兜回来弹菜单）
+        onLongPress: draggable ? null : () => _showTaskActions(task),
         onDelete: () => _deleteTask(task),
-        dragHandle: dragHandle,
       );
     }
 
@@ -1174,25 +1185,47 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
                 padding: listPadding,
                 buildDefaultDragHandles: false,
                 itemCount: visible.length,
-                onReorderItem: (oldIndex, newIndex) =>
-                    _reorderTasks(oldIndex, newIndex),
-                // 拖拽起止各一次轻触感反馈（对齐微软 To-Do 拖动确认）
-                onReorderStart: (_) => HapticFeedback.selectionClick(),
-                onReorderEnd: (_) => HapticFeedback.selectionClick(),
+                onReorderItem: (oldIndex, newIndex) {
+                  _dragMoved = true;
+                  _reorderTasks(oldIndex, newIndex);
+                },
+                // 拾起 / 落位各一次轻触感反馈（对齐微软 To-Do 拖动确认）
+                onReorderStart: (index) {
+                  HapticFeedback.selectionClick();
+                  _dragFromIndex = index;
+                  _dragMoved = false;
+                },
+                onReorderEnd: (index) {
+                  HapticFeedback.selectionClick();
+                  final from = _dragFromIndex;
+                  _dragFromIndex = null;
+                  // 拾起后原地松手（无位移）= 长按菜单：manual 档行内长按已
+                  // 让位给拖动，操作菜单入口由这里兜住，功能与样式两边不欠账
+                  if (!_dragMoved && from != null && from < visible.length) {
+                    _showTaskActions(visible[from]);
+                  }
+                },
                 proxyDecorator: (child, index, animation) => AnimatedBuilder(
                   animation: animation,
                   builder: (context, child) {
                     final elevated = AppMotion.standard.transform(
                       Tween<double>(begin: 0, end: 1).evaluate(animation),
                     );
-                    // 抬起：轻微放大 + 阴影加深（抬手即销毁，不驻留）
+                    // 抬起：轻微放大 + 阴影加深（抬手即销毁，不驻留）。
+                    // 底面给 surface：行本身是扁平透明行，抬起时要靠这层才
+                    // 看得出「拿起来的是一张卡」，否则阴影会落空。
                     final scale = 1 + (AppMotion.dragLiftScale - 1) * elevated;
                     return Transform.scale(
                       scale: scale,
                       child: Material(
                         elevation: 6 * elevated,
                         borderRadius: AppShapes.medium,
-                        color: Colors.transparent,
+                        clipBehavior: Clip.antiAlias,
+                        color: Color.lerp(
+                          Colors.transparent,
+                          colors.surface,
+                          elevated,
+                        ),
                         child: child,
                       ),
                     );
@@ -1201,17 +1234,12 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
                 ),
                 itemBuilder: (context, index) {
                   final task = visible[index];
-                  return ReorderableDragStartListener(
+                  // 整行皆可长按拾起（无行尾把手图标）：500ms 长按后退化为
+                  // 普通拖动，滚动与左右滑不受影响
+                  return ReorderableDelayedDragStartListener(
                     key: ValueKey('reorder-task-${task.id}'),
                     index: index,
-                    child: buildTile(
-                      task,
-                      dragHandle: Icon(
-                        OrbitIcons.drag,
-                        size: AppDimens.iconSizeMd,
-                        color: colors.secondaryText,
-                      ),
-                    ),
+                    child: buildTile(task, draggable: true),
                   );
                 },
               )
@@ -1235,8 +1263,7 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
                   final od = overdueGroups.overdue;
                   final rest = overdueGroups.rest;
                   if (od.isEmpty) {
-                    return _withEntrance(
-                        rest[index], buildTile(rest[index], dragHandle: null));
+                    return _withEntrance(rest[index], buildTile(rest[index]));
                   }
                   if (index == 0) {
                     return Column(
@@ -1262,13 +1289,12 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
                             ],
                           ),
                         ),
-                        _withEntrance(od[0], buildTile(od[0], dragHandle: null)),
+                        _withEntrance(od[0], buildTile(od[0])),
                       ],
                     );
                   }
                   if (index < od.length) {
-                    return _withEntrance(
-                        od[index], buildTile(od[index], dragHandle: null));
+                    return _withEntrance(od[index], buildTile(od[index]));
                   }
                   if (index == od.length) {
                     // 逾期区尾部即为「其余」分隔（区块头随首行渲染在 index 0 前）
@@ -1285,7 +1311,7 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
                     );
                   }
                   final task = rest[index - od.length - 1];
-                  return _withEntrance(task, buildTile(task, dragHandle: null));
+                  return _withEntrance(task, buildTile(task));
                 },
               );
 
@@ -1560,7 +1586,8 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
 /// 主列表初次加载骨架：8 行任务行占位（复选圆 + 标题行 + 元信息行）
 ///
 /// 只在"无旧值可守"的初次加载出现（tasksLoading 见 build）；重查/下拉刷新
-/// 走旧内容，不闪骨架。行高贴近真实任务行，落定替换时跳变最小。
+/// 走旧内容，不闪骨架。内边距与下沿分隔线与真实行（`TodoTaskTile` 扁平行）
+/// 同口径，落定替换时跳变最小。
 class _TaskListSkeleton extends StatelessWidget {
   const _TaskListSkeleton({required this.padding});
 
@@ -1568,13 +1595,20 @@ class _TaskListSkeleton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = AppColors.ofContext(context);
     return ListView.builder(
       physics: const NeverScrollableScrollPhysics(),
       padding: padding,
       itemCount: 8,
-      itemBuilder: (context, index) => const Padding(
-        padding: EdgeInsets.symmetric(vertical: AppDimens.space12),
-        child: Row(
+      itemBuilder: (context, index) => Container(
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppDimens.space16,
+          vertical: AppDimens.space8,
+        ),
+        decoration: BoxDecoration(
+          border: Border(bottom: BorderSide(color: colors.divider)),
+        ),
+        child: const Row(
           children: [
             OrbitSkeleton.circle(size: 22),
             SizedBox(width: AppDimens.space12),
@@ -1652,8 +1686,14 @@ class _RowExit extends StatelessWidget {
   }
 }
 
-/// 任务行卡片（docs/05 §4.5）：24px 圆 checkbox + 标题 + 副标题行
+/// 任务行（docs/05 §4.5）：24px 圆 checkbox + 标题 + 副标题行
 /// （优先级色点 8px + 项目名 + 日期，逾期 #F44436）+ 收藏星标。
+///
+/// 扁平行（2026-09-22 样式收敛）：无卡底、无阴影、无行尾拖拽把手，仅下沿
+/// 1px 分隔线——与多选态行 [_SelectionRow] 同形制，整列读起来是一张干净的
+/// 表，而不是一摞带阴影的白卡（拖动排序也改由整行长按拾起承担，见
+/// [SubListScreen.buildTile]，因此行尾不再需要把手图标做提示）。
+///
 /// 侧滑手势（07 #18）：面板露出操作按钮（TickTick 式）——
 /// 右滑露「完成」（已完成态变「恢复」，行保留不删）、
 /// 左滑露「删除」（既有确认弹窗 + 回收站语义）。
@@ -1662,12 +1702,11 @@ class TodoTaskTile extends StatelessWidget {
     super.key,
     required this.task,
     required this.onToggleDone,
-    required this.onLongPress,
     required this.onOpen,
+    this.onLongPress,
     this.projectTitle,
     this.projectColorHex,
     this.onDelete,
-    this.dragHandle,
   });
 
   final TodoTask task;
@@ -1678,19 +1717,19 @@ class TodoTaskTile extends StatelessWidget {
   /// 项目名着色 hex（#36：项目名按项目色渲染；空串回退次要文本色）
   final String? projectColorHex;
   final VoidCallback onToggleDone;
-  final VoidCallback onLongPress;
+
+  /// 长按回调（弹操作菜单）。manual 档（拖拽顺序）传 null：长按让位给
+  /// 整行拾起拖动——`ReorderableDelayedDragStartListener` 与行内 InkWell 的
+  /// 长按识别器同按 500ms 竞争，行内（更靠叶子）先注册先赢，故拖动档必须
+  /// 摘掉这里的长按，否则拖动永远起不来。
+  final VoidCallback? onLongPress;
   final VoidCallback onOpen;
 
   /// 右滑「删除」动作回调（null 时隐藏删除面板——搜索页等只读场景复用 Tile）
   final VoidCallback? onDelete;
 
-  /// 长按拖拽把手（#37；侧栏项目行同款形制）：ReorderableDragStartListener
-  /// 包装的拖拽图标，点击/长按启动重排；null（非 manual 档/只读场景）不渲染
-  final Widget? dragHandle;
-
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     final colors = AppColors.ofContext(context);
     final priorityHex = priorityColorHex(task.priority);
     final overdue = isOverdue(task);
@@ -1734,119 +1773,100 @@ class TodoTaskTile extends StatelessWidget {
           ),
         ],
       ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(
-            horizontal: AppDimens.space12, vertical: 4),
-        child: Material(
-        color: colors.surface,
-        shape: RoundedRectangleBorder(
-          borderRadius: AppShapes.medium,
-          side: isDark
-              ? BorderSide(color: colors.outline)
-              : BorderSide.none,
-        ),
-        clipBehavior: Clip.antiAlias,
-        elevation: isDark ? 0 : 1,
-        shadowColor: AppElevation.shadowColor,
-        child: InkWell(
-          borderRadius: AppShapes.medium,
-          onTap: onOpen,
-          onLongPress: onLongPress,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: AppDimens.space12,
-              vertical: AppDimens.space8,
-            ),
-            child: Row(
-              children: [
-                // 24px 圆形 checkbox（check 16）
-                CircleCheckbox(
-                  checked: task.isDone,
-                  onToggle: onToggleDone,
-                ),
-                const SizedBox(width: AppDimens.space12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      AnimatedStrikethrough(
-                        text: task.title,
-                        done: task.isDone,
-                        maxLines: 1,
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w500,
-                          color: colors.titleText,
-                        ),
-                        doneColor: colors.titleText,
+      child: InkWell(
+        onTap: onOpen,
+        onLongPress: onLongPress,
+        child: Container(
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppDimens.space16,
+            vertical: AppDimens.space8,
+          ),
+          decoration: BoxDecoration(
+            // 扁平行：不铺卡底，仅下沿 1px 分隔线（与 _SelectionRow 同口径）
+            border: Border(bottom: BorderSide(color: colors.divider)),
+          ),
+          child: Row(
+            children: [
+              // 24px 圆形 checkbox（check 16）
+              CircleCheckbox(
+                checked: task.isDone,
+                onToggle: onToggleDone,
+              ),
+              const SizedBox(width: AppDimens.space12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    AnimatedStrikethrough(
+                      text: task.title,
+                      done: task.isDone,
+                      maxLines: 1,
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500,
+                        color: colors.titleText,
                       ),
-                      // 副标题恒渲染：优先级色点六档全显（P0「无」浅灰也参与）
-                      Padding(
-                        padding: const EdgeInsets.only(top: 2),
-                        child: Wrap(
-                            spacing: AppDimens.space4,
-                            runSpacing: 2,
-                            crossAxisAlignment: WrapCrossAlignment.center,
-                            children: [
-                              // 8px 优先级色点（六档全显，含 P0 浅灰）
-                              Container(
-                                width: 8,
-                                height: 8,
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  color: hexToColor(priorityHex),
-                                ),
-                              ),
-                              if (projectTitle != null &&
-                                  task.projectId != null)
-                                Text(
-                                  projectTitle!,
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    // #36：项目名按项目色着字（无色回退次要色）
-                                    color: (projectColorHex != null &&
-                                            projectColorHex!.isNotEmpty)
-                                        ? hexToColor(projectColorHex!,
-                                            fallback: colors.secondaryText)
-                                        : colors.secondaryText,
-                                  ),
-                                ),
-                              // 日期段：逾期 #F44336
-                              if (task.dueDate != null)
-                                Text(
-                                  formatYmd(task.dueDate!),
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: overdue
-                                        ? OrbitAccents.overdueRed
-                                        : colors.secondaryText,
-                                  ),
-                                ),
-                            ],
+                      doneColor: colors.titleText,
+                    ),
+                    // 副标题恒渲染：优先级色点六档全显（P0「无」浅灰也参与）
+                    Padding(
+                      padding: const EdgeInsets.only(top: 2),
+                      child: Wrap(
+                        spacing: AppDimens.space4,
+                        runSpacing: 2,
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        children: [
+                          // 8px 优先级色点（六档全显，含 P0 浅灰）
+                          Container(
+                            width: 8,
+                            height: 8,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: hexToColor(priorityHex),
+                            ),
                           ),
-                        ),
-                    ],
-                  ),
+                          if (projectTitle != null && task.projectId != null)
+                            Text(
+                              projectTitle!,
+                              style: TextStyle(
+                                fontSize: 12,
+                                // #36：项目名按项目色着字（无色回退次要色）
+                                color: (projectColorHex != null &&
+                                        projectColorHex!.isNotEmpty)
+                                    ? hexToColor(projectColorHex!,
+                                        fallback: colors.secondaryText)
+                                    : colors.secondaryText,
+                              ),
+                            ),
+                          // 日期段：逾期 #F44336
+                          if (task.dueDate != null)
+                            Text(
+                              formatYmd(task.dueDate!),
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: overdue
+                                    ? OrbitAccents.overdueRed
+                                    : colors.secondaryText,
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
-                if (task.isStarred) ...[
-                  const SizedBox(width: AppDimens.space8),
-                  Icon(
-                    OrbitIcons.star,
-                    size: AppDimens.iconSizeLg,
-                    color: OrbitAccents.starYellow,
-                  ),
-                ],
-                // 拖拽把手（#37）：仅 manual 档渲染（传入方已 ReorderableDragStartListener 包装）
-                if (dragHandle != null) ...[
-                  const SizedBox(width: AppDimens.space8),
-                  dragHandle!,
-                ],
+              ),
+              if (task.isStarred) ...[
+                const SizedBox(width: AppDimens.space8),
+                Icon(
+                  OrbitIcons.star,
+                  size: AppDimens.iconSizeLg,
+                  color: OrbitAccents.starYellow,
+                ),
               ],
-            ),
+            ],
           ),
         ),
-      ),
       ),
     );
   }
@@ -1858,7 +1878,7 @@ class TodoTaskTile extends StatelessWidget {
 class _LogbookList extends StatelessWidget {
   final List<DoneDayGroup> groups;
   final EdgeInsets padding;
-  final Widget Function(TodoTask task, {required Widget? dragHandle}) buildTile;
+  final Widget Function(TodoTask task) buildTile;
 
   const _LogbookList({
     required this.groups,
@@ -1885,7 +1905,7 @@ class _LogbookList extends StatelessWidget {
       itemCount: flat.length,
       itemBuilder: (context, index) {
         final item = flat[index];
-        if (!item.isHead) return buildTile(item.task!, dragHandle: null);
+        if (!item.isHead) return buildTile(item.task!);
         final g = item.g;
         final isToday = g.key == todayKey;
         final label = isToday
@@ -1921,7 +1941,7 @@ class _LogbookList extends StatelessWidget {
                 ],
               ),
             ),
-            buildTile(item.task!, dragHandle: null),
+            buildTile(item.task!),
           ],
         );
       },
