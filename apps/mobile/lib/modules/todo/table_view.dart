@@ -89,13 +89,32 @@ class TaskTableView extends StatelessWidget {
         const SizedBox(width: AppDimens.space8),
         Expanded(flex: 3, child: Text('标题', style: style)),
         Expanded(flex: 2, child: Text('项目', style: style)),
+        // 固定列宽的表头受字号档保护：全局 TextScaler 生效后字号会变，
+        // FittedBox 只在放不下时等比缩小，保证任何档位都单行不换列高
         SizedBox(
-            width: 36, child: Text('标签', style: style, textAlign: TextAlign.center)),
+          width: 36,
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.center,
+            child: Text('标签', style: style),
+          ),
+        ),
         SizedBox(
-            width: 64, child: Text('截止', style: style, textAlign: TextAlign.right)),
+          width: 64,
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerRight,
+            child: Text('截止', style: style),
+          ),
+        ),
         SizedBox(
-            width: 28,
-            child: Text('优先级', style: style, textAlign: TextAlign.right)),
+          width: 28,
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerRight,
+            child: Text('优先级', style: style),
+          ),
+        ),
       ],
     );
   }

@@ -21,7 +21,8 @@ import 'typography.dart';
 /// 2. **组件形态**：卡片给圆角 + 极浅描边 + 柔和阴影，输入框/按钮/抽屉/
 ///    对话框全部重定，摆脱 M3 默认观感；
 /// 3. **排版**：`TextTheme` 补齐行高（见 [Typography]），
-///    字号缩放改用 `TextTheme.apply(fontSizeFactor:)` 统一处理；
+///    字号缩放不在此层做——改由 `app.dart` 注入全局 `TextScaler`，
+///    内联 `TextStyle(fontSize:)` 才能一并生效；
 /// 4. **分割线**：0.3px 脏线 → 1px 极浅实线。
 ///
 /// 亮暗由外观页三态控制（theme_mode：system/light/dark，默认跟随系统；
@@ -29,7 +30,6 @@ import 'typography.dart';
 /// 字体使用 Android 系统默认（Roboto），不引入 google_fonts。
 ThemeData buildAppTheme({
   required Brightness brightness,
-  double fontScale = 1.0,
   FontWeight baseWeight = FontWeight.w400,
 }) {
   final isDark = brightness == Brightness.dark;
@@ -38,9 +38,9 @@ ThemeData buildAppTheme({
       isDark ? ColorSchemes.dark(accent) : ColorSchemes.light(accent);
   final colors = AppColors.of(brightness);
 
-  // 字号缩放：apply 统一乘 fontScale，行高（height 为倍数）随之等比变化
-  final scaled = Typography.textTheme.apply(fontSizeFactor: fontScale);
-  final textTheme = Typography.withWeight(scaled, baseWeight);
+  // 字号缩放不在主题层做（会被 ~300 处内联 fontSize 绕过）：全局 TextScaler
+  // 由 app.dart 注入，此处只保留字重档映射
+  final textTheme = Typography.withWeight(Typography.textTheme, baseWeight);
 
   return ThemeData(
     useMaterial3: true,

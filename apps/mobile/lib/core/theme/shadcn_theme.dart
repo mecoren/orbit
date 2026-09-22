@@ -36,21 +36,16 @@ const double kShadcnRadiusBase = AppShapes.radiusMedium / 12;
 /// 构建一�?shadcn 主题（亮/暗各构建一份，�?`OrbitApp` 同时喂给 [ShadcnLayer]�?
 ///
 /// - [brightness] 决定取哪�?token 色板（[AppColors.of]�?
-/// - [fontScale] 外观页字号档�?.9 / 1.0 / 1.15），�?`Typography.scale` 等比缩放
 /// - [baseWeight] 外观页字重档（w400 / w500 / w600），只作用于正文类字�?
 ///   （标题类字阶的权重是语义的一部分，不随用户偏好漂移）
 sh.ThemeData buildShadcnTheme({
   required m.Brightness brightness,
-  double fontScale = 1.0,
   m.FontWeight baseWeight = m.FontWeight.w400,
 }) {
   return sh.ThemeData(
     colorScheme: buildShadcnColorScheme(brightness),
     radius: kShadcnRadiusBase,
-    typography: buildShadcnTypography(
-      fontScale: fontScale,
-      baseWeight: baseWeight,
-    ),
+    typography: buildShadcnTypography(baseWeight: baseWeight),
     iconTheme: kShadcnIconTheme,
   );
 }
@@ -109,8 +104,10 @@ const Color _onPrimary = Color(0xFFFFFFFF);
 ///   �?shadcn 里本就不�?fontFamily，靠继承，所以只需覆盖这三个出�?
 /// - 缩放后仍保证「行高是倍数」的语义不丢（shadcn 的字阶默认不�?height�?
 ///   逐行高度由组件自身的 padding/lineHeight 决定�?
+/// 字号缩放不在此层做：由 app.dart 注入全局 TextScaler 后，shadcn 字阶与内联
+/// TextStyle 同时生效，故本函数不收 fontScale 参数（原先的 typography.scale
+/// 会在 TextScaler 之上被乘两次）
 sh.Typography buildShadcnTypography({
-  double fontScale = 1.0,
   m.FontWeight baseWeight = m.FontWeight.w400,
 }) {
   const geist = sh.Typography.geist();
@@ -123,10 +120,6 @@ sh.Typography buildShadcnTypography({
       fontWeight: m.FontWeight.w600,
     ),
   );
-
-  if (fontScale != 1.0) {
-    typography = typography.scale(fontScale);
-  }
 
   // 字重档只作用于正文类字阶；h1~h4 / textLarge 等标题类字阶保持语义权重
   if (baseWeight != m.FontWeight.w400) {

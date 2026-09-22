@@ -1404,7 +1404,16 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
           children: [
             Icon(action.icon, size: AppDimens.iconSizeMd, color: tint),
             const SizedBox(height: AppDimens.space2),
-            Text(action.label, style: TextStyle(fontSize: 11, color: tint)),
+            // 64×48 定宽格里的按钮文案：字号档放大（或系统无障碍放大）时
+            // 由 FittedBox 等比缩小，不撑破格宽
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                action.label,
+                style: TextStyle(fontSize: 11, color: tint),
+                maxLines: 1,
+              ),
+            ),
           ],
         ),
       ),

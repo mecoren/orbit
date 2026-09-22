@@ -29,6 +29,12 @@ import 'services/appearance.dart';
 ///
 /// 启动门控经 builder 包裹主路由：masterAuthHas? 解锁页 : 明文库直入，
 /// ready 前不渲染任何路由内容。
+///
+/// **字号档为什么走全局 TextScaler 而不是 TextTheme**：仓库里近 300 处内联
+/// `TextStyle(fontSize:)` 不经过 `ThemeData.textTheme`，只缩放 textTheme
+/// 会让字号档在绝大多数文本上失效（历史遗留：外观页字号档几乎无感）。
+/// 故改为在 builder 顶部注入 `MediaQuery.textScaler`——Text 绘制时统一乘一次，
+/// 内联字号与 textTheme 一视同仁，同时无需逐处迁移内联样式。
 class OrbitApp extends StatelessWidget {
   const OrbitApp({super.key});
 
@@ -45,52 +51,70 @@ class OrbitApp extends StatelessWidget {
           debugShowCheckedModeBanner: false,
           theme: buildAppTheme(
             brightness: Brightness.light,
-            fontScale: scale,
             baseWeight: weight,
           ),
           darkTheme: buildAppTheme(
             brightness: Brightness.dark,
-            fontScale: scale,
             baseWeight: weight,
           ),
           themeMode: mode,
           routerConfig: appRouter,
-          builder: (context, child) => sh.ShadcnLayer(
-            theme: buildShadcnTheme(
-              brightness: Brightness.light,
-              fontScale: scale,
-              baseWeight: weight,
-            ),
-            darkTheme: buildShadcnTheme(
-              brightness: Brightness.dark,
-              fontScale: scale,
-              baseWeight: weight,
-            ),
-            themeMode: _shadcnThemeMode(mode),
-            // 关闭 shadcn 的移动端 1.25× 自动放大：仓库 token（字号阶梯 /
-            // AppShapes 圆角 / AppDimens 触控尺寸）已按移动端标定，再乘一次会让
-            // 圆角与字号双双漂移。触控尺寸由 shared/widgets/shadcn/ 原语用
-            // AppDimens.touchTarget 显式保证。
-            scaling: sh.AdaptiveScaling.desktop,
-            // DrawerOverlay 是 shadcn Sheet/Drawer 系浮层的落点。项目内底部弹层
-            // 已统一走 Material `showModalBottomSheet`（圆角口径见
-            // shared/widgets/shadcn/orbit_sheets.dart），故这一层现在是**被动装配**：
-            // shadcn 的 openRawDrawer / openSheetOverlay 一旦被启用，缺了它直接断言
-            // 「No DrawerOverlay found in the widget tree」整屏红；shadcn 只在
-            // **自家的** Scaffold 内挂这一层（`scaffold.dart` 的 _buildContent），
-            // 本项目页面用 Material Scaffold，所以必须在根部统一挂一次。
-            // 挂在 ShadcnLayer 之内、Navigator 之上：页面 context 向上能查到这里，
-            // InheritedTheme/Data 的 capture 也以这一层为终点。
-            child: sh.DrawerOverlay(
-              // BootGate 挂在 shadcn 层与 Navigator 之间：门控期间无路由内容，
-              // ready 后放行 child 并持有桥层事件流监听
-              child: BootGate(child: child ?? const SizedBox.shrink()),
-            ),
-          ),
+          builder: (context, child) {
+            final content = sh.ShadcnLayer(
+              theme: buildShadcnTheme(
+                brightness: Brightness.light,
+                baseWeight: weight,
+              ),
+              darkTheme: buildShadcnTheme(
+                brightness: Brightness.dark,
+                baseWeight: weight,
+              ),
+              themeMode: _shadcnThemeMode(mode),
+              // 关闭 shadcn 的移动端 1.25× 自动放大：仓库 token（字号阶梯 /
+              // AppShapes 圆角 / AppDimens 触控尺寸）已按移动端标定，再乘一次会让
+              // 圆角与字号双双漂移。触控尺寸由 shared/widgets/shadcn/ 原语用
+              // AppDimens.touchTarget 显式保证。
+              scaling: sh.AdaptiveScaling.desktop,
+              // DrawerOverlay 是 shadcn Sheet/Drawer 系浮层的落点。项目内底部弹层
+              // 已统一走 Material `showModalBottomSheet`（圆角口径见
+              // shared/widgets/shadcn/orbit_sheets.dart），故这一层现在是**被动装配**：
+              // shadcn 的 openRawDrawer / openSheetOverlay 一旦被启用，缺了它直接断言
+              // 「No DrawerOverlay found in the widget tree」整屏红；shadcn 只在
+              // **自家的** Scaffold 内挂这一层（`scaffold.dart` 的 _buildContent），
+              // 本项目页面用 Material Scaffold，所以必须在根部统一挂一次。
+              // 挂在 ShadcnLayer 之内、Navigator 之上：页面 context 向上能查到这里，
+              // InheritedTheme/Data 的 capture 也以这一层为终点。
+              child: sh.DrawerOverlay(
+                // BootGate 挂在 shadcn 层与 Navigator 之间：门控期间无路由内容，
+                // ready 后放行 child 并持有桥层事件流监听
+                child: BootGate(child: child ?? const SizedBox.shrink()),
+              ),
+            );
+
+            // 字号档（小 0.9 / 标准 1.0 / 大 1.15）以 MediaQuery 注入：
+            // 标准档不覆写，原样保留系统（无障碍）字号缩放；其余档在系统缩放比
+            // 之上再乘一次，两者可叠加而非互相顶替。
+            final scaler = _appearanceTextScaler(context, scale);
+            if (scaler == null) return content;
+            return MediaQuery(
+              data: MediaQuery.of(context).copyWith(textScaler: scaler),
+              child: content,
+            );
+          },
         );
       },
     );
   }
+}
+
+/// 外观字号档 → 待注入的 [TextScaler]（null = 不覆写）
+///
+/// 标准档（1.0）返回 null，原样保留系统的 `SystemTextScaler`——系统无障碍
+/// 字号设置不能被外观偏好顶掉；小/大档在**系统缩放比之上**再乘一次
+/// （`scale(1.0)` 取系统当前等效倍数），两者叠加而非互相替换。
+TextScaler? _appearanceTextScaler(BuildContext context, double scale) {
+  if (scale == 1.0) return null;
+  return TextScaler.linear(MediaQuery.textScalerOf(context).scale(1.0) * scale);
 }
 
 /// Material 的 ThemeMode → shadcn 的 ThemeMode
