@@ -40,6 +40,9 @@ class AppMotion {
   /// 骨架呼吸周期（首屏加载占位专用；往返一次的时长）
   static const Duration skeletonPulse = Duration(milliseconds: 1100);
 
+  /// 滚动定位时长（日历选中日滚到分组 / 年视图翻年；与曲线配套）
+  static const Duration scrollSettle = Duration(milliseconds: 260);
+
   // ── 曲线（curve）──
 
   /// 通用收尾曲线：起势快、收尾干净（easeOutQuint 近似）
@@ -61,6 +64,15 @@ class AppMotion {
 
   /// 页面入栈曲线
   static const Curve pageIn = emphasized;
+
+  /// 路由入栈缓动（= easeOutCubic；别名收口，数值零变化）
+  static const Curve pageInCubic = Curves.easeOutCubic;
+
+  /// 页面出栈曲线（= easeInCubic；别名收口，数值零变化）
+  static const Curve pageOutCubic = Curves.easeInCubic;
+
+  /// 滚动定位曲线（= easeOutCubic；别名收口，数值零变化）
+  static const Curve scrollSettleCurve = Curves.easeOutCubic;
 
   /// 底部抽屉入场曲线（**不用过冲曲线**——全高抽屉过冲会在上移后露出屏幕
   /// 底部空白，观感是错位而非弹跳）

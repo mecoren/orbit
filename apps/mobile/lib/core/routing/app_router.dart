@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import '../theme/app_motion.dart';
 import 'router_keys.dart';
 import '../../modules/settings/about_page.dart';
 import '../../modules/settings/appearance_page.dart';
@@ -39,13 +40,13 @@ CustomTransitionPage<void> pageSlideFromRight(Widget child, {LocalKey? key}) =>
     CustomTransitionPage<void>(
       key: key,
       child: child,
-      transitionDuration: const Duration(milliseconds: 280),
-      reverseTransitionDuration: const Duration(milliseconds: 220),
+      transitionDuration: AppMotion.pageEnter,
+      reverseTransitionDuration: AppMotion.pageExit,
       transitionsBuilder: (context, animation, secondaryAnimation, child) {
         final curved = CurvedAnimation(
           parent: animation,
-          curve: Curves.easeOutCubic,
-          reverseCurve: Curves.easeInCubic,
+          curve: AppMotion.pageInCubic,
+          reverseCurve: AppMotion.pageOutCubic,
         );
         return SlideTransition(
           position: Tween(begin: const Offset(1, 0), end: Offset.zero)

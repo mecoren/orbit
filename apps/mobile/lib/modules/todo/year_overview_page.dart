@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import '../../core/lunar/chinese_almanac.dart';
 import '../../core/lunar/lunar_calendar.dart';
 import '../../core/theme/app_dimens.dart';
+import '../../core/theme/app_motion.dart';
 import '../../core/theme/orbit_accents.dart';
 import '../../shared/widgets/shadcn/orbit_month_calendar.dart';
 import '../../shared/widgets/shadcn/orbit_page_header.dart';
@@ -71,8 +72,8 @@ class _YearOverviewPageState extends State<YearOverviewPage> {
     HapticFeedback.selectionClick();
     _controller.animateToPage(
       target - _kMinYear,
-      duration: const Duration(milliseconds: 260),
-      curve: Curves.easeOutCubic,
+      duration: AppMotion.scrollSettle,
+      curve: AppMotion.scrollSettleCurve,
     );
   }
 

@@ -7,6 +7,7 @@ import 'package:intl/intl.dart';
 import '../../core/lunar/chinese_almanac.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_dimens.dart';
+import '../../core/theme/app_motion.dart';
 import '../../core/theme/app_shapes.dart';
 import '../../core/theme/orbit_accents.dart';
 import '../../data/api/dto.dart';
@@ -122,8 +123,8 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
           Scrollable.ensureVisible(node,
-              duration: const Duration(milliseconds: 260),
-              curve: Curves.easeOutCubic);
+              duration: AppMotion.scrollSettle,
+              curve: AppMotion.scrollSettleCurve);
         }
       });
     }
