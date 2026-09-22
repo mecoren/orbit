@@ -26,6 +26,7 @@ import '../../modules/shell/db_invalidation.dart';
 import '../../modules/todo/providers/todo_providers.dart';
 import '../utils/sync_status_text.dart';
 import 'shadcn/orbit_actions_sheet.dart' show bottomSheetTopShape;
+import 'shadcn/orbit_sheet_scaffold.dart';
 import 'shadcn/orbit_toast.dart';
 import '../../core/theme/icon_map.dart';
 
@@ -314,55 +315,61 @@ class _SyncInfoSheetState extends ConsumerState<_SyncInfoSheet> {
             lastSyncedAtMs: config.lastSyncedAt,
           );
 
-    return SafeArea(
-      top: false,
-      child: Padding(
-        padding: const EdgeInsets.all(AppDimens.space16),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
+    // 信息区可滚、「立即同步」固定在骨架尾栏（口径见 orbit_sheet_scaffold.dart）
+    return OrbitSheetScaffold(
+      header: Padding(
+        padding: const EdgeInsets.fromLTRB(
+          AppDimens.space16,
+          AppDimens.space16,
+          AppDimens.space16,
+          AppDimens.space16,
+        ),
+        child: Row(
           children: [
-            Row(
-              children: [
-                const Icon(
-                  OrbitIcons.cloud,
-                  size: AppDimens.iconSizeMd,
-                  color: OrbitAccents.themeAccent,
-                ),
-                const SizedBox(width: AppDimens.space8),
-                Text(
-                  '云同步',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                    color: colors.titleText,
-                  ),
-                ),
-              ],
+            const Icon(
+              OrbitIcons.cloud,
+              size: AppDimens.iconSizeMd,
+              color: OrbitAccents.themeAccent,
             ),
-            const SizedBox(height: AppDimens.space16),
-            _infoRow(colors, '状态', syncStatusLabel(widget.status)),
-            _infoRow(colors, '上次同步', formatLastSynced(config?.lastSyncedAt)),
-            _infoRow(colors, '下次自动同步', formatNextSync(nextAt)),
-            if (widget.errorMessage != null)
-              _infoRow(colors, '失败原因', widget.errorMessage!),
-            const SizedBox(height: AppDimens.space8),
-            FilledButton(
-              onPressed: _busy ? null : () => unawaited(_runSync()),
-              child: _busy
-                  ? const SizedBox(
-                      width: AppDimens.iconSizeSm,
-                      height: AppDimens.iconSizeSm,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: Colors.white,
-                      ),
-                    )
-                  : const Text('立即同步'),
+            const SizedBox(width: AppDimens.space8),
+            Text(
+              '云同步',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: colors.titleText,
+              ),
             ),
-            SizedBox(height: AppDimens.gestureInsetFallback / 4),
           ],
         ),
+      ),
+      contentPadding: const EdgeInsets.symmetric(
+        horizontal: AppDimens.space16,
+      ),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _infoRow(colors, '状态', syncStatusLabel(widget.status)),
+          _infoRow(colors, '上次同步', formatLastSynced(config?.lastSyncedAt)),
+          _infoRow(colors, '下次自动同步', formatNextSync(nextAt)),
+          if (widget.errorMessage != null)
+            _infoRow(colors, '失败原因', widget.errorMessage!),
+        ],
+      ),
+      actions: OrbitSheetActions(
+        confirmLabel: '立即同步',
+        onConfirm: _busy ? null : () => unawaited(_runSync()),
+        confirmChild: _busy
+            ? const SizedBox(
+                width: AppDimens.iconSizeSm,
+                height: AppDimens.iconSizeSm,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: Colors.white,
+                ),
+              )
+            : null,
       ),
     );
   }

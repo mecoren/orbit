@@ -24,6 +24,7 @@ import '../../shared/widgets/shadcn/orbit_page_header.dart';
 import '../../shared/widgets/shadcn/orbit_skeleton.dart';
 import '../../shared/widgets/shadcn/orbit_actions_sheet.dart';
 import '../../shared/widgets/shadcn/orbit_select_sheet.dart';
+import '../../shared/widgets/shadcn/orbit_sheet_scaffold.dart';
 import '../../shared/widgets/shadcn/orbit_toast.dart';
 import '../../services/local_prefs.dart';
 import 'form_bottom_sheet.dart';
@@ -210,16 +211,14 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
       backgroundColor: colors.popup,
       shape: bottomSheetTopShape,
       builder: (sheetContext) => StatefulBuilder(
-        builder: (sheetContext, setSheetState) => SafeArea(
-          top: false,
-          child: ConstrainedBox(
-            constraints: BoxConstraints(
-              maxHeight: MediaQuery.of(sheetContext).size.height * 0.7,
-            ),
-            child: ListView(
-              shrinkWrap: true,
-              padding: EdgeInsets.zero,
-              children: [
+        builder: (sheetContext, setSheetState) => OrbitSheetScaffold(
+          maxHeightFactor: 0.7,
+          // 三段筛选 chip 自管滚动，「清除全部筛选」固定在尾部（见 build 尾部）
+          contentScrollable: false,
+          content: ListView(
+            shrinkWrap: true,
+            padding: EdgeInsets.zero,
+            children: [
                 _sheetSectionTitle(sheetContext, '状态'),
                 _chipRow([
                   _filterChip('全部', _filters.status == null, () {
@@ -272,28 +271,19 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
                         dotHex: l.hexColor,
                       ),
                   ]),
-                if (!_filters.isEmpty)
-                  Padding(
-                    padding: const EdgeInsets.only(
-                      left: AppDimens.space16,
-                      right: AppDimens.space16,
-                      top: AppDimens.space12,
-                    ),
-                    child: SizedBox(
-                      width: double.infinity,
-                      child: OutlinedButton(
-                        onPressed: () {
-                          setSheetState(() {});
-                          _setFilters(TaskListFilters.empty);
-                        },
-                        child: const Text('清除全部筛选'),
-                      ),
-                    ),
-                  ),
                 SizedBox(height: AppDimens.gestureInsetFallback / 2),
               ],
             ),
-          ),
+          // 清除动作固定在抽屉底部（有筛选时才出现）；chip 即点即生效，无需确认钮
+          actions: _filters.isEmpty
+              ? null
+              : OrbitSheetActions(
+                  confirmLabel: '清除全部筛选',
+                  onConfirm: () {
+                    setSheetState(() {});
+                    _setFilters(TaskListFilters.empty);
+                  },
+                ),
         ),
       ),
     );

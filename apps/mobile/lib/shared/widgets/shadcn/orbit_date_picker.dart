@@ -14,6 +14,7 @@ import '../../../data/api/dto.dart';
 import '../../../modules/todo/providers/todo_providers.dart';
 import 'orbit_month_calendar.dart';
 import 'orbit_card.dart';
+import 'orbit_sheet_scaffold.dart';
 import 'orbit_sheets.dart';
 
 /// 日期选择器初始视图
@@ -168,137 +169,89 @@ class _DatePickerSheetState extends ConsumerState<_DatePickerSheet> {
   Widget build(BuildContext context) {
     final colors = AppColors.ofContext(context);
     final accent = widget.accent ?? OrbitAccents.themeAccent;
-    final maxHeight = MediaQuery.of(context).size.height * 0.85;
 
-    // 表面色与顶部圆角由承载提供（backgroundColor + bottomSheetTopShape），
-    // 此处不再自绘，避免两层圆角半径不一致时溢出白色小三角
-    return Material(
-      type: MaterialType.transparency,
-      child: SizedBox(
-        width: double.infinity,
-        child: SafeArea(
-          top: false,
-          child: ConstrainedBox(
-            constraints: BoxConstraints(maxHeight: maxHeight),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                // 拖拽手柄
-                Center(
-                  child: Container(
-                    width: 40,
-                    height: 4,
-                    margin: const EdgeInsets.only(top: AppDimens.space8),
-                    decoration: BoxDecoration(
-                      color: colors.deactivatedText.withValues(alpha: 0.4),
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
-                ),
-                // 头部：标题（可点切换视图）+ 相对日期副标题 + 清除
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(
-                    AppDimens.space16,
-                    AppDimens.space12,
-                    AppDimens.space16,
-                    AppDimens.space8,
-                  ),
-                  child: Row(
-                    children: [
-                      InkWell(
-                        onTap: _cycleMode,
-                        borderRadius: AppShapes.small,
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: AppDimens.space6,
-                            vertical: AppDimens.space4,
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                _title,
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w600,
-                                  color: colors.titleText,
-                                ),
-                              ),
-                              const SizedBox(width: AppDimens.space4),
-                              Icon(
-                                OrbitIcons.expandVertical,
-                                size: AppDimens.iconSizeSm,
-                                color: colors.iconText,
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: AppDimens.space8),
-                      Text(
-                        _subtitle,
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: colors.secondaryText,
-                        ),
-                      ),
-                      const Spacer(),
-                      sh.Button.ghost(
-                        onPressed: widget.onClear,
-                        child: const Text('清除'),
-                      ),
-                    ],
-                  ),
-                ),
-                Flexible(
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: AppDimens.space12,
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        switch (_mode) {
-                          OrbitDatePickerMode.day => _buildDayView(accent),
-                          OrbitDatePickerMode.month => _buildMonthView(accent),
-                          OrbitDatePickerMode.year => _buildYearView(accent),
-                        },
-                        if (widget.showTime) ...[
-                          const SizedBox(height: AppDimens.space12),
-                          _buildTimeRow(colors, accent),
-                        ],
-                        const SizedBox(height: AppDimens.space12),
-                      ],
-                    ),
-                  ),
-                ),
-                Divider(height: 1, color: colors.divider),
-                Padding(
-                  padding: const EdgeInsets.all(AppDimens.space12),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: sh.Button.outline(
-                          onPressed: widget.onCancel,
-                          child: const Text('取消'),
-                        ),
-                      ),
-                      const SizedBox(width: AppDimens.space12),
-                      Expanded(
-                        child: sh.Button.primary(
-                          onPressed: () => widget.onConfirm(_draft),
-                          child: const Text('确认'),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
+    // 骨架（手柄 / 标题 / 可滚内容 / 固定尾栏）与底部按钮口径统一走
+    // orbit_sheet_scaffold.dart：内容再长，取消·确认也钉在抽屉底部
+    return OrbitSheetScaffold(
+      // 头部：标题（可点切换视图）+ 相对日期副标题 + 清除
+      header: Padding(
+        padding: const EdgeInsets.fromLTRB(
+          AppDimens.space16,
+          AppDimens.space12,
+          AppDimens.space16,
+          AppDimens.space8,
         ),
+        child: Row(
+          children: [
+            InkWell(
+              onTap: _cycleMode,
+              borderRadius: AppShapes.small,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppDimens.space6,
+                  vertical: AppDimens.space4,
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      _title,
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        color: colors.titleText,
+                      ),
+                    ),
+                    const SizedBox(width: AppDimens.space4),
+                    Icon(
+                      OrbitIcons.expandVertical,
+                      size: AppDimens.iconSizeSm,
+                      color: colors.iconText,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(width: AppDimens.space8),
+            Text(
+              _subtitle,
+              style: TextStyle(
+                fontSize: 12,
+                color: colors.secondaryText,
+              ),
+            ),
+            const Spacer(),
+            sh.Button.ghost(
+              onPressed: widget.onClear,
+              child: const Text('清除'),
+            ),
+          ],
+        ),
+      ),
+      contentPadding: const EdgeInsets.symmetric(
+        horizontal: AppDimens.space12,
+      ),
+      content: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          switch (_mode) {
+            OrbitDatePickerMode.day => _buildDayView(accent),
+            OrbitDatePickerMode.month => _buildMonthView(accent),
+            OrbitDatePickerMode.year => _buildYearView(accent),
+          },
+          if (widget.showTime) ...[
+            const SizedBox(height: AppDimens.space12),
+            _buildTimeRow(colors, accent),
+          ],
+          const SizedBox(height: AppDimens.space12),
+        ],
+      ),
+      actions: OrbitSheetActions(
+        cancelLabel: '取消',
+        onCancel: widget.onCancel,
+        confirmLabel: '确认',
+        onConfirm: () => widget.onConfirm(_draft),
       ),
     );
   }

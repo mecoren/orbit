@@ -23,6 +23,7 @@ import '../../shared/widgets/shadcn/orbit_page_header.dart';
 import '../../shared/widgets/shadcn/orbit_skeleton.dart';
 import '../../shared/widgets/shadcn/orbit_actions_sheet.dart' show bottomSheetTopShape;
 import '../../shared/widgets/shadcn/orbit_section_card.dart';
+import '../../shared/widgets/shadcn/orbit_sheet_scaffold.dart';
 import '../../shared/widgets/shadcn/orbit_select_sheet.dart';
 import '../../shared/widgets/shadcn/orbit_date_picker.dart';
 import '../../shared/widgets/shadcn/orbit_toast.dart';
@@ -643,62 +644,37 @@ class _DescriptionEditSheetState extends State<_DescriptionEditSheet> {
   @override
   Widget build(BuildContext context) {
     final colors = AppColors.ofContext(context);
-    return Padding(
-      padding: EdgeInsets.only(
-        bottom: MediaQuery.of(context).viewInsets.bottom,
-      ),
-      child: SafeArea(
-        top: false,
-        child: ConstrainedBox(
-          constraints: BoxConstraints(
-            maxHeight: MediaQuery.of(context).size.height * 0.7,
-          ),
-          child: Padding(
-            padding: const EdgeInsets.all(AppDimens.space16),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text(
-                  '编辑描述',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                    color: colors.titleText,
-                  ),
-                ),
-                const SizedBox(height: AppDimens.space12),
-                TextField(
-                  controller: _controller,
-                  maxLines: null,
-                  minLines: 6,
-                  maxLength: 5000,
-                  autofocus: true,
-                  style: TextStyle(fontSize: 15, color: colors.bodyText),
-                  decoration: const InputDecoration(
-                    hintText: '请输入描述',
-                    counterText: '',
-                  ),
-                ),
-                const SizedBox(height: AppDimens.space12),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    TextButton(
-                      onPressed: () => Navigator.of(context).pop(),
-                      child: const Text('取消'),
-                    ),
-                    const SizedBox(width: AppDimens.space8),
-                    FilledButton(
-                      onPressed: _save,
-                      child: const Text('保存'),
-                    ),
-                  ],
-                ),
-              ],
-            ),
+    // 输入区自管高度（maxLines: null 撑到高度上限后内部滚动），
+    // 取消·保存固定在骨架尾栏（口径见 orbit_sheet_scaffold.dart）
+    return OrbitSheetScaffold(
+      title: '编辑描述',
+      maxHeightFactor: 0.7,
+      contentScrollable: false,
+      content: Padding(
+        padding: const EdgeInsets.fromLTRB(
+          AppDimens.space16,
+          0,
+          AppDimens.space16,
+          AppDimens.space16,
+        ),
+        child: TextField(
+          controller: _controller,
+          maxLines: null,
+          minLines: 6,
+          maxLength: 5000,
+          autofocus: true,
+          style: TextStyle(fontSize: 15, color: colors.bodyText),
+          decoration: const InputDecoration(
+            hintText: '请输入描述',
+            counterText: '',
           ),
         ),
+      ),
+      actions: OrbitSheetActions(
+        cancelLabel: '取消',
+        onCancel: () => Navigator.of(context).pop(),
+        confirmLabel: '保存',
+        onConfirm: _save,
       ),
     );
   }

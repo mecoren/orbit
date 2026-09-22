@@ -16,6 +16,7 @@ import '../../shared/widgets/shadcn/orbit_page_header.dart';
 import '../../shared/widgets/shadcn/orbit_actions_sheet.dart' show bottomSheetTopShape;
 import '../../shared/widgets/shadcn/orbit_section_card.dart';
 import '../../shared/widgets/shadcn/orbit_select_sheet.dart';
+import '../../shared/widgets/shadcn/orbit_sheet_scaffold.dart';
 import '../../shared/widgets/shadcn/orbit_toast.dart';
 import '../todo/logic/task_logic.dart' show priorityLabel;
 import '../todo/logic/template_apply.dart';
@@ -134,37 +135,20 @@ class _TemplateManagerPageState extends ConsumerState<TemplateManagerPage> {
           controllers: [nameCtrl, titleCtrl, notesCtrl, subtasksCtrl],
           child: StatefulBuilder(
           builder: (sheetContext, setSheetState) {
-            final sheetColors = AppColors.ofContext(sheetContext);
-            return Padding(
-              padding: EdgeInsets.only(
-                bottom: MediaQuery.of(sheetContext).viewInsets.bottom,
-              ),
-              child: SafeArea(
-                top: false,
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(
-                    maxHeight:
-                        MediaQuery.of(sheetContext).size.height * 0.85,
+              // 表单滚动 + 底部操作区固定：长表单（备注/子任务多行）会把
+              // 保存按钮顶出可视区；骨架与按钮口径见 orbit_sheet_scaffold.dart
+              return OrbitSheetScaffold(
+                title: editing == null ? '新建模板' : '编辑模板',
+                contentScrollable: false,
+                content: ListView(
+                  shrinkWrap: true,
+                  padding: const EdgeInsets.fromLTRB(
+                    AppDimens.space16,
+                    0,
+                    AppDimens.space16,
+                    AppDimens.space16,
                   ),
-                  // 表单滚动 + 底部操作区固定：长表单（备注/子任务多行）会把
-                  // 保存按钮顶出可视区，固定尾栏才保证「保存」始终可点
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Flexible(
-                        child: ListView(
-                    shrinkWrap: true,
-                    padding: const EdgeInsets.all(AppDimens.space16),
-                    children: [
-                      Text(
-                        editing == null ? '新建模板' : '编辑模板',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                          color: sheetColors.titleText,
-                        ),
-                      ),
-                      const SizedBox(height: AppDimens.space16),
+                  children: [
                       TextField(
                         key: const ValueKey('tpl-field-name'),
                         controller: nameCtrl,
@@ -238,60 +222,32 @@ class _TemplateManagerPageState extends ConsumerState<TemplateManagerPage> {
                           labelText: '子任务（每行一条，可选）',
                         ),
                       ),
-                    ],
-                  ),
-                      ),
-                      // 固定尾栏：不随表单滚动，保证「保存」始终可点
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(
-                          AppDimens.space16,
-                          AppDimens.space8,
-                          AppDimens.space16,
-                          AppDimens.space16,
-                        ),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: OutlinedButton(
-                                onPressed: () =>
-                                    Navigator.of(sheetContext).pop(null),
-                                child: const Text('取消'),
-                              ),
-                            ),
-                            const SizedBox(width: AppDimens.space8),
-                            Expanded(
-                              child: FilledButton(
-                                onPressed: () {
-                                  final name = nameCtrl.text.trim();
-                                  if (name.isEmpty) {
-                                    WaitToast.destructive('模板名称不能为空');
-                                    return;
-                                  }
-                                  Navigator.of(sheetContext).pop((
-                                    name: name,
-                                    payload: _buildPayload(
-                                      title: titleCtrl.text,
-                                      notes: notesCtrl.text,
-                                      priority: priority,
-                                      offsetDays: offsetDays,
-                                      subtasks: subtasksCtrl.text,
-                                    ),
-                                  ));
-                                },
-                                child: const Text('保存'),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      SizedBox(
-                          height: MediaQuery.of(sheetContext).padding.bottom),
-                    ],
-                  ),
+                  ],
                 ),
-              ),
-            );
-          },
+                actions: OrbitSheetActions(
+                  cancelLabel: '取消',
+                  onCancel: () => Navigator.of(sheetContext).pop(null),
+                  confirmLabel: '保存',
+                  onConfirm: () {
+                    final name = nameCtrl.text.trim();
+                    if (name.isEmpty) {
+                      WaitToast.destructive('模板名称不能为空');
+                      return;
+                    }
+                    Navigator.of(sheetContext).pop((
+                      name: name,
+                      payload: _buildPayload(
+                        title: titleCtrl.text,
+                        notes: notesCtrl.text,
+                        priority: priority,
+                        offsetDays: offsetDays,
+                        subtasks: subtasksCtrl.text,
+                      ),
+                    ));
+                  },
+                ),
+              );
+            },
           ),
         ),
       );

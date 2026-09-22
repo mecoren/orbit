@@ -1,6 +1,7 @@
 // 日期时间面板测试：日视图与日历视图同口径（农历/休班）+ 时间选择区交互
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:orbit/data/api/mock_orbit_bridge.dart';
@@ -48,6 +49,36 @@ void main() {
   String minuteText(WidgetTester tester) => tester
       .widget<Text>(find.byKey(const ValueKey('time_minute_value')))
       .data!;
+
+  /// 标签字形的水平中心（Text 局部坐标）。
+  ///
+  /// 底部按钮经 `Expanded` 拉满宽后，标签 Text 的盒子与按钮同宽，字形落位由
+  /// `textAlign` 决定——故只能量字形，量 Text 盒子量不出居中与否。
+  double glyphCenterX(WidgetTester tester, String label) {
+    final paragraph = tester.renderObject<RenderParagraph>(find.text(label));
+    final boxes = paragraph.getBoxesForSelection(
+      TextSelection(baseOffset: 0, extentOffset: label.length),
+    );
+    return boxes
+        .map((box) => box.toRect())
+        .reduce((a, b) => a.expandToInclude(b))
+        .center
+        .dx;
+  }
+
+  testWidgets('底部双按钮：标签水平居中（贴左即 TextAlign.start 回归）',
+      (tester) async {
+    await openPicker(tester);
+
+    for (final label in ['取消', '确认']) {
+      final labelBoxWidth = tester.getSize(find.text(label)).width;
+      expect(
+        glyphCenterX(tester, label),
+        moreOrLessEquals(labelBoxWidth / 2, epsilon: 1),
+        reason: '$label 应居中于按钮内',
+      );
+    }
+  });
 
   testWidgets('日视图：medium 档月历挂农历副标签与节假日（同日历视图口径）',
       (tester) async {

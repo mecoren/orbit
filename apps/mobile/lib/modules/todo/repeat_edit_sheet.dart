@@ -7,6 +7,7 @@ import '../../core/theme/orbit_accents.dart';
 import '../../shared/widgets/shadcn/orbit_actions_sheet.dart' show bottomSheetTopShape;
 import '../../shared/widgets/shadcn/orbit_card.dart';
 import '../../shared/widgets/shadcn/orbit_date_picker.dart';
+import '../../shared/widgets/shadcn/orbit_sheet_scaffold.dart';
 // as rep：规避 Flutter widgets 自带 RepeatMode 类名冲突
 import 'logic/repeat_logic.dart' as rep;
 
@@ -203,69 +204,61 @@ class _RepeatEditSheetState extends State<_RepeatEditSheet> {
       DateTime.now().millisecondsSinceEpoch,
       fromDone: widget.fromDone ? 1 : 0,
     );
-    return SafeArea(
-      top: false,
-      child: Padding(
-        // 间隔/次数输入聚焦时抬升面板，避免被键盘遮挡
-        padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(AppDimens.space16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            // stretch：内容铺满宽度。`showModalBottomSheet` 给内容的是**宽松约束**，
-            // 本面板全是 Wrap/Text 这类收缩组件，不撑开时面板宽度会收缩到内容宽度
-            // （观感"太窄"）；其它底部抽屉因内含撑满元素（TextField/Row+Expanded）
-            // 天然全宽，此处显式对齐同一口径
-            crossAxisAlignment: CrossAxisAlignment.stretch,
+    // 键盘避让 / 手柄 / 标题 / 内容滚动由骨架统一承担（见 orbit_sheet_scaffold.dart）；
+    // 面板宽度口径：`showModalBottomSheet` 给内容的是**宽松约束**，本面板全是
+    // Wrap/Text 这类收缩组件，不撑开时面板会收缩到内容宽度（观感"太窄"）——
+    // 骨架的 stretch 列已按同一口径铺满全宽
+    return OrbitSheetScaffold(
+      title: '重复',
+      contentPadding: const EdgeInsets.all(AppDimens.space16),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Wrap(
+            spacing: AppDimens.space8,
+            runSpacing: AppDimens.space8,
+            crossAxisAlignment: WrapCrossAlignment.center,
             children: [
-              Text(
-                '重复',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: colors.titleText,
+              for (final preset in rep.repeatPresets)
+                _RepeatChip(
+                  label: preset.label,
+                  selected:
+                      !_custom && !_panelOpen && preset.mode == widget.mode,
+                  onTap: () => _pickPreset(preset),
                 ),
+              _RepeatChip(
+                label: _custom
+                    ? rep.repeatLabelExt(
+                        widget.mode,
+                        widget.after,
+                        weekdays: widget.weekdays,
+                        endType: widget.endType,
+                        endParam: widget.endParam,
+                        fromDone: widget.fromDone ? 1 : 0,
+                      )
+                    : '自定义',
+                selected: _custom || _panelOpen,
+                onTap: () => setState(() => _panelOpen = !_panelOpen),
               ),
-              const SizedBox(height: AppDimens.space12),
-              Wrap(
-                spacing: AppDimens.space8,
-                runSpacing: AppDimens.space8,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                children: [
-                  for (final preset in rep.repeatPresets)
-                    _RepeatChip(
-                      label: preset.label,
-                      selected: !_custom &&
-                          !_panelOpen &&
-                          preset.mode == widget.mode,
-                      onTap: () => _pickPreset(preset),
-                    ),
-                  _RepeatChip(
-                    label: _custom
-                        ? rep.repeatLabelExt(
-                            widget.mode,
-                            widget.after,
-                            weekdays: widget.weekdays,
-                            endType: widget.endType,
-                            endParam: widget.endParam,
-                            fromDone: widget.fromDone ? 1 : 0,
-                          )
-                        : '自定义',
-                    selected: _custom || _panelOpen,
-                    onTap: () => setState(() => _panelOpen = !_panelOpen),
-                  ),
-                  if (nextLabel != null) _NextBadge(label: '下次 $nextLabel'),
-                ],
-              ),
-              if (_panelOpen) ...[
-                const SizedBox(height: AppDimens.space8),
-                _buildCustomPanel(colors),
-              ],
-              SizedBox(height: AppDimens.gestureInsetFallback / 2),
+              if (nextLabel != null) _NextBadge(label: '下次 $nextLabel'),
             ],
           ),
-        ),
+          if (_panelOpen) ...[
+            const SizedBox(height: AppDimens.space8),
+            _buildCustomPanel(colors),
+          ],
+          SizedBox(height: AppDimens.gestureInsetFallback / 2),
+        ],
       ),
+      // 「确定」= 应用自定义面板里的规则，固定在抽屉底部（预设是点选即存即关，
+      // 无需按钮，故仅自定义面板展开时出现）
+      actions: _panelOpen
+          ? OrbitSheetActions(
+              confirmLabel: '确定',
+              onConfirm: _applyCustom,
+            )
+          : null,
     );
   }
 
@@ -380,27 +373,6 @@ class _RepeatEditSheetState extends State<_RepeatEditSheet> {
                 colors: colors,
               ),
             ],
-          ),
-          const SizedBox(height: AppDimens.space4),
-          // 确定：仅收自定义面板（左侧对齐，对齐桌面端 ghost 按钮位）
-          Align(
-            alignment: Alignment.centerLeft,
-            child: TextButton(
-              onPressed: _applyCustom,
-              style: TextButton.styleFrom(
-                minimumSize: Size.zero,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: AppDimens.space12,
-                  vertical: AppDimens.space6,
-                ),
-                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                foregroundColor: OrbitAccents.themeAccent,
-              ),
-              child: const Text(
-                '确定',
-                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-              ),
-            ),
           ),
         ],
       ),

@@ -14,6 +14,7 @@ import '../../shared/widgets/shadcn/orbit_empty_state.dart';
 import '../../shared/widgets/shadcn/orbit_page_header.dart';
 import '../../shared/widgets/shadcn/orbit_actions_sheet.dart';
 import '../../shared/widgets/shadcn/orbit_select_sheet.dart';
+import '../../shared/widgets/shadcn/orbit_sheet_scaffold.dart';
 import '../../shared/widgets/shadcn/orbit_toast.dart';
 import 'logic/task_logic.dart';
 import '../../shared/utils/hex_color.dart';
@@ -89,145 +90,131 @@ class _SavedFiltersScreenState extends ConsumerState<SavedFiltersScreen> {
       backgroundColor: colors.popup,
       shape: bottomSheetTopShape,
       builder: (sheetCtx) => StatefulBuilder(
-        builder: (ctx, setSheet) => SafeArea(
-          top: false,
-          child: Padding(
-            padding: EdgeInsets.only(
-              left: AppDimens.space16,
-              right: AppDimens.space16,
-              top: AppDimens.space16,
-              bottom: MediaQuery.of(ctx).viewInsets.bottom + AppDimens.space16,
-            ),
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Text(
-                    existing == null ? '新建筛选器' : '编辑筛选器',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      color: colors.titleText,
-                    ),
-                  ),
-                  const SizedBox(height: AppDimens.space12),
-                  TextField(
-                    controller: nameCtl,
-                    decoration: const InputDecoration(
-                      labelText: '名称（如：本周 P0）',
-                    ),
-                  ),
-                  const SizedBox(height: AppDimens.space8),
-                  SizedBox(
-                    height: AppDimens.touchTarget,
-                    child: InkWell(
-                      onTap: () => showSelectBottomSheet<String?>(
-                        ctx,
-                        title: '状态',
-                        current: status,
-                        items: const [
-                          SelectItem(value: null, label: '全部状态'),
-                          SelectItem(value: 'pending', label: '待办'),
-                          SelectItem(value: 'done', label: '已完成'),
-                        ],
-                        onSelect: (v) => setSheet(() => status = v),
-                      ),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              '状态：${status ?? '全部'}',
-                              style: TextStyle(
-                                fontSize: 15,
-                                color: colors.bodyText,
-                              ),
-                            ),
-                          ),
-                          Icon(
-                            OrbitIcons.chevronRight,
-                            color: colors.secondaryText,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  SizedBox(
-                    height: AppDimens.touchTarget,
-                    child: InkWell(
-                      onTap: () => showSelectBottomSheet<int>(
-                        ctx,
-                        title: '最低优先级',
-                        current: priorityMin,
-                        items: const [
-                          SelectItem(value: 0, label: '全部优先级'),
-                          SelectItem(value: 1, label: 'P1 及以上'),
-                          SelectItem(value: 2, label: 'P2 及以上'),
-                          SelectItem(value: 3, label: 'P3 及以上'),
-                          SelectItem(value: 4, label: '仅 P4'),
-                        ],
-                        onSelect: (v) => setSheet(() => priorityMin = v),
-                      ),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              '优先级≥：${priorityMin == 0 ? '全部' : 'P$priorityMin'}',
-                              style: TextStyle(
-                                fontSize: 15,
-                                color: colors.bodyText,
-                              ),
-                            ),
-                          ),
-                          Icon(
-                            OrbitIcons.chevronRight,
-                            color: colors.secondaryText,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  TextField(
-                    controller: withinCtl,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(
-                      labelText: '天内截止（留空不限，如 7）',
-                    ),
-                  ),
-                  TextField(
-                    controller: projectCtl,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(
-                      labelText: '项目 id（逗号分隔，留空不限）',
-                    ),
-                  ),
-                  TextField(
-                    controller: labelCtl,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(
-                      labelText: '标签 id（逗号分隔，留空不限）',
-                    ),
-                  ),
-                  SwitchListTile(
-                    contentPadding: EdgeInsets.zero,
-                    title: const Text('仅已逾期'),
-                    value: overdue,
-                    onChanged: (v) => setSheet(() => overdue = v),
-                  ),
-                  SwitchListTile(
-                    contentPadding: EdgeInsets.zero,
-                    title: const Text('仅收藏'),
-                    value: favorite,
-                    onChanged: (v) => setSheet(() => favorite = v),
-                  ),
-                  const SizedBox(height: AppDimens.space8),
-                  FilledButton(
-                    onPressed: () => Navigator.pop(sheetCtx, true),
-                    child: Text(existing == null ? '创建' : '保存修改'),
-                  ),
-                ],
+        builder: (ctx, setSheet) => OrbitSheetScaffold(
+          title: existing == null ? '新建筛选器' : '编辑筛选器',
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: AppDimens.space16,
+          ),
+          // 表单滚动、底部按钮固定（长表单不再把「创建」顶出可视区）
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              TextField(
+                controller: nameCtl,
+                decoration: const InputDecoration(
+                  labelText: '名称（如：本周 P0）',
+                ),
               ),
-            ),
+              const SizedBox(height: AppDimens.space8),
+              SizedBox(
+                height: AppDimens.touchTarget,
+                child: InkWell(
+                  onTap: () => showSelectBottomSheet<String?>(
+                    ctx,
+                    title: '状态',
+                    current: status,
+                    items: const [
+                      SelectItem(value: null, label: '全部状态'),
+                      SelectItem(value: 'pending', label: '待办'),
+                      SelectItem(value: 'done', label: '已完成'),
+                    ],
+                    onSelect: (v) => setSheet(() => status = v),
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          '状态：${status ?? '全部'}',
+                          style: TextStyle(
+                            fontSize: 15,
+                            color: colors.bodyText,
+                          ),
+                        ),
+                      ),
+                      Icon(
+                        OrbitIcons.chevronRight,
+                        color: colors.secondaryText,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              SizedBox(
+                height: AppDimens.touchTarget,
+                child: InkWell(
+                  onTap: () => showSelectBottomSheet<int>(
+                    ctx,
+                    title: '最低优先级',
+                    current: priorityMin,
+                    items: const [
+                      SelectItem(value: 0, label: '全部优先级'),
+                      SelectItem(value: 1, label: 'P1 及以上'),
+                      SelectItem(value: 2, label: 'P2 及以上'),
+                      SelectItem(value: 3, label: 'P3 及以上'),
+                      SelectItem(value: 4, label: '仅 P4'),
+                    ],
+                    onSelect: (v) => setSheet(() => priorityMin = v),
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          '优先级≥：${priorityMin == 0 ? '全部' : 'P$priorityMin'}',
+                          style: TextStyle(
+                            fontSize: 15,
+                            color: colors.bodyText,
+                          ),
+                        ),
+                      ),
+                      Icon(
+                        OrbitIcons.chevronRight,
+                        color: colors.secondaryText,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              TextField(
+                controller: withinCtl,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(
+                  labelText: '天内截止（留空不限，如 7）',
+                ),
+              ),
+              TextField(
+                controller: projectCtl,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(
+                  labelText: '项目 id（逗号分隔，留空不限）',
+                ),
+              ),
+              TextField(
+                controller: labelCtl,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(
+                  labelText: '标签 id（逗号分隔，留空不限）',
+                ),
+              ),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('仅已逾期'),
+                value: overdue,
+                onChanged: (v) => setSheet(() => overdue = v),
+              ),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('仅收藏'),
+                value: favorite,
+                onChanged: (v) => setSheet(() => favorite = v),
+              ),
+            ],
+          ),
+          actions: OrbitSheetActions(
+            cancelLabel: '取消',
+            onCancel: () => Navigator.pop(sheetCtx),
+            confirmLabel: existing == null ? '创建' : '保存修改',
+            onConfirm: () => Navigator.pop(sheetCtx, true),
           ),
         ),
       ),
