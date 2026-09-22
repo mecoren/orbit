@@ -150,3 +150,44 @@ const sh.IconThemeProperties kShadcnIconTheme = sh.IconThemeProperties(
   large: m.IconThemeData(size: AppDimens.iconSizeLg),
   xLarge: m.IconThemeData(size: AppDimens.iconSizeXl),
 );
+
+/// destructive 按钮的实心填充覆盖（包在 [sh.ShadcnLayer] 之内使用，全应用生效）
+///
+/// **为什么必须覆盖**：shadcn_flutter 的 `_buttonDestructiveDecoration` 常态用
+/// `colorScheme.destructive.scaleAlpha(0.5)`（50% 透明）+ 纯白字——落在浅色抽屉上就是
+/// 一片淡粉，用户会读成「按钮被禁用」（2026-09-22 反馈）。桌面端 `ui/button.tsx` 的
+/// destructive 是 `bg-destructive text-white hover:bg-destructive/90`（**不透明**实色），
+/// 此处对齐桌面口径：常态实心、悬停/按下混白 10% 变浅、禁用回落中性表面。
+///
+/// 圆角仍取 `theme.radiusMd`（= `AppShapes.radiusMedium`，与其它按钮同源）。
+sh.ComponentTheme<sh.DestructiveButtonTheme> buildDestructiveButtonTheme({
+  required m.Widget child,
+}) {
+  return sh.ComponentTheme<sh.DestructiveButtonTheme>(
+    data: sh.DestructiveButtonTheme(
+      decoration: (context, states, defaultValue) {
+        final theme = sh.Theme.of(context);
+        final shape = m.BorderRadius.circular(theme.radiusMd);
+        if (states.contains(m.WidgetState.disabled)) {
+          return m.BoxDecoration(
+            color: theme.colorScheme.muted,
+            borderRadius: shape,
+          );
+        }
+        final base = theme.colorScheme.destructive;
+        final hovered = states.contains(m.WidgetState.hovered) ||
+            states.contains(m.WidgetState.pressed);
+        return m.BoxDecoration(
+          color: hovered
+              ? m.Color.alphaBlend(
+                  const m.Color(0xFFFFFFFF).withValues(alpha: 0.1),
+                  base,
+                )
+              : base,
+          borderRadius: shape,
+        );
+      },
+    ),
+    child: child,
+  );
+}

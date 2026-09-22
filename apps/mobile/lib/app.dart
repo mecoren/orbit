@@ -84,10 +84,15 @@ class OrbitApp extends StatelessWidget {
               // 本项目页面用 Material Scaffold，所以必须在根部统一挂一次。
               // 挂在 ShadcnLayer 之内、Navigator 之上：页面 context 向上能查到这里，
               // InheritedTheme/Data 的 capture 也以这一层为终点。
-              child: sh.DrawerOverlay(
-                // BootGate 挂在 shadcn 层与 Navigator 之间：门控期间无路由内容，
-                // ready 后放行 child 并持有桥层事件流监听
-                child: BootGate(child: child ?? const SizedBox.shrink()),
+              // 破坏性按钮（删除/清空类）的实心填充口径，必须在 ShadcnLayer 之内、
+              // 组件之上覆盖才全局生效（shadcn 默认 0.5 alpha 淡粉会被读成禁用态，
+              // 详见 shadcn_theme.buildDestructiveButtonTheme）
+              child: buildDestructiveButtonTheme(
+                child: sh.DrawerOverlay(
+                  // BootGate 挂在 shadcn 层与 Navigator 之间：门控期间无路由内容，
+                  // ready 后放行 child 并持有桥层事件流监听
+                  child: BootGate(child: child ?? const SizedBox.shrink()),
+                ),
               ),
             );
 

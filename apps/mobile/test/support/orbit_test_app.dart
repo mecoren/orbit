@@ -59,7 +59,11 @@ Widget _orbitRootLayers({
     sh.ShadcnLayer(
       theme: buildShadcnTheme(brightness: brightness),
       scaling: sh.AdaptiveScaling.desktop,
-      child: sh.DrawerOverlay(child: child),
+      // destructive 按钮的实心填充口径（与 lib/app.dart 同装配，详见
+      // shadcn_theme.buildDestructiveButtonTheme）
+      child: buildDestructiveButtonTheme(
+        child: sh.DrawerOverlay(child: child),
+      ),
     );
 
 /// 收尾：推掉 shadcn toast 的停留计时器，并收敛残留动画。
