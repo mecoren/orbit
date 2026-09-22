@@ -363,11 +363,13 @@ class _SavedFiltersScreenState extends ConsumerState<SavedFiltersScreen> {
                 sliver: filters.when(
                   data: (list) {
                     if (list.isEmpty) {
-                      return const SliverFillRemaining(
+                      return SliverFillRemaining(
                         hasScrollBody: false,
                         child: EmptyState(
                           icon: OrbitIcons.filter,
                           message: '还没有保存的筛选器——把常用组合条件（优先级/截止窗口/收藏）存为命名视图',
+                          actionLabel: '新建筛选器',
+                          onAction: _create,
                         ),
                       );
                     }

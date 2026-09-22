@@ -969,9 +969,9 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
       _ => widget.query.quickView?.label ?? '任务',
     };
     // 筛选生效时给出更贴切的空态文案（否则用户会以为是数据丢了）
-    final emptyMessage = (!_filters.isEmpty && tasks.isNotEmpty)
-        ? '没有符合筛选条件的任务'
-        : emptyMessageFor(widget.query);
+    final filteredEmpty = !_filters.isEmpty && tasks.isNotEmpty;
+    final emptyMessage =
+        filteredEmpty ? '没有符合筛选条件的任务' : emptyMessageFor(widget.query);
     final colors = AppColors.ofContext(context);
     // 长按拖拽（#37）：仅 manual 档（拖拽顺序档）启用重排；其余档
     // 顺序由排序键决定，拖了也会被覆盖（与桌面 sortable 同口径）。
@@ -1026,7 +1026,19 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
               top: MediaQuery.of(context).padding.top +
                   OrbitPageHeader.rowHeight,
             ),
-            child: EmptyState(message: emptyMessage),
+            // 空态给出口：筛选没结果就清筛选，否则直接开新建表单（与右下
+            // OrbitFab 同一入口，列表空时 FAB 仍可见但离拇指更远）
+            child: EmptyState(
+              message: emptyMessage,
+              actionLabel: filteredEmpty ? '清除筛选' : '新建任务',
+              onAction: filteredEmpty
+                  ? () => _setFilters(TaskListFilters.empty)
+                  : () => showTodoFormSheet(
+                        context,
+                        defaultProjectId: widget.query.projectId,
+                        quickView: widget.query.quickView,
+                      ),
+            ),
           )
         : showKanban
             ? KanbanBoard(
