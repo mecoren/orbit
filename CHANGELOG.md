@@ -36,6 +36,16 @@
   （`pageInCubic` / `pageOutCubic` / `scrollSettle*`，数值零变化，`app_motion_test` 锁值）；
   删除零引用的 `pageIn` / `pageOut`。
 - **依赖瘦身**：删除热力图副本与三个零引用依赖。
+- **底部抽屉口径收口（`OrbitSheetScaffold` / `OrbitSheetActions`）**：新增抽屉骨架原语——手柄 +
+  标题 + **可滚内容区** + **固定底部按钮行**，确认/取消类按钮一律钉在抽屉底部且标签居中
+  （shadcn 按钮内标签盒子与按钮同宽，默认 `TextAlign.start` 会贴左，观感"字不在按钮中间"；
+  圆角/高度未动，仍为 `AppShapes.medium`／shadcn `radiusMd` = 14）。已迁移：确认弹层、
+  日期时间选择器、描述编辑、筛选器新建、模板新建/编辑、云同步面板、重复规则「确定」、
+  列表过滤「清除全部筛选」（后两者原先在滚动区内，会随内容滚走）；口径与回归见 docs/05 §十一。
+- **破坏性按钮实心化**：`sh.Button.destructive` 常态填充原是 shadcn 默认的 50% 透明
+  `destructive`（白字淡粉，被用户读成「按钮不可点」）→ 全局覆盖为 token 实色
+  （`shadcn_theme.buildDestructiveButtonTheme`：悬停/按下混白 10% 变浅、禁用回落中性表面），
+  与桌面 `bg-destructive text-white hover:bg-destructive/90` 同口径。
 
 ### 移动端撤销浮层常驻修复（2026-09-20）
 
