@@ -72,64 +72,74 @@ class _StatsScreenState extends ConsumerState<StatsScreen> {
                           icon: OrbitIcons.trending,
                         ),
                       )
-                    : ListView(
-                    controller: _scrollController,
-                    padding: EdgeInsets.only(
-                      top: MediaQuery.of(context).padding.top +
-                          OrbitPageHeader.rowHeight +
-                          AppDimens.space8,
-                      bottom: AppDimens.gestureInsetFallback + AppDimens.space32,
+                    : RefreshIndicator(
+                        // 下拉刷新：本地重读 + 已配置时跑一轮云同步（共用回调见 pullToRefresh）。
+                        // edgeOffset 下移到页头之下，否则指示条被 OrbitPageHeader 盖住。
+                        onRefresh: () => pullToRefresh(ref),
+                        color: OrbitAccents.themeAccent,
+                        edgeOffset: MediaQuery.of(context).padding.top +
+                            OrbitPageHeader.rowHeight,
+                        displacement: AppDimens.space8,
+                        child: ListView(
+                          controller: _scrollController,
+                          padding: EdgeInsets.only(
+                            top: MediaQuery.of(context).padding.top +
+                                OrbitPageHeader.rowHeight +
+                                AppDimens.space8,
+                            bottom: AppDimens.gestureInsetFallback +
+                                AppDimens.space32,
+                          ),
+                          children: [
+                            _OverviewCards(overview: stats.overview),
+                            const SizedBox(height: AppDimens.space12),
+                            _StreakCard(streak: stats.streak),
+                            const SizedBox(height: AppDimens.space12),
+                            _HeatmapCard(
+                              stats: stats,
+                              year: _year,
+                              onYearChange: (y) => setState(() => _year = y),
+                            ),
+                            const SizedBox(height: AppDimens.space12),
+                            _DistSection(
+                              title: '项目分布',
+                              rows: [
+                                for (final r in stats.byProject)
+                                  (
+                                    r.projectTitle ?? '未分组',
+                                    r.doneCount,
+                                    r.pendingCount,
+                                    hexToColor(r.projectHexColor,
+                                        fallback: OrbitAccents.todoAccent),
+                                  ),
+                              ],
+                            ),
+                            _DistSection(
+                              title: '优先级分布',
+                              rows: [
+                                for (final r in stats.byPriority)
+                                  (
+                                    _priorityLabel(r.priority),
+                                    r.doneCount,
+                                    r.pendingCount,
+                                    hexToColor(priorityColorHex(r.priority)),
+                                  ),
+                              ],
+                            ),
+                            _DistSection(
+                              title: '星期分布（已完成）',
+                              rows: [
+                                for (final r in stats.byWeekday)
+                                  (
+                                    _weekdayLabel(r.weekday),
+                                    r.doneCount,
+                                    0,
+                                    OrbitAccents.todoAccent,
+                                  ),
+                              ],
+                            ),
+                          ],
+                        ),
                     ),
-                    children: [
-                      _OverviewCards(overview: stats.overview),
-                      const SizedBox(height: AppDimens.space12),
-                      _StreakCard(streak: stats.streak),
-                      const SizedBox(height: AppDimens.space12),
-                      _HeatmapCard(
-                        stats: stats,
-                        year: _year,
-                        onYearChange: (y) => setState(() => _year = y),
-                      ),
-                      const SizedBox(height: AppDimens.space12),
-                      _DistSection(
-                        title: '项目分布',
-                        rows: [
-                          for (final r in stats.byProject)
-                            (
-                              r.projectTitle ?? '未分组',
-                              r.doneCount,
-                              r.pendingCount,
-                              hexToColor(r.projectHexColor,
-                                  fallback: OrbitAccents.todoAccent),
-                            ),
-                        ],
-                      ),
-                      _DistSection(
-                        title: '优先级分布',
-                        rows: [
-                          for (final r in stats.byPriority)
-                            (
-                              _priorityLabel(r.priority),
-                              r.doneCount,
-                              r.pendingCount,
-                              hexToColor(priorityColorHex(r.priority)),
-                            ),
-                        ],
-                      ),
-                      _DistSection(
-                        title: '星期分布（已完成）',
-                        rows: [
-                          for (final r in stats.byWeekday)
-                            (
-                              _weekdayLabel(r.weekday),
-                              r.doneCount,
-                              0,
-                              OrbitAccents.todoAccent,
-                            ),
-                        ],
-                      ),
-                    ],
-                  ),
           ),
           Positioned(
             top: 0,

@@ -248,26 +248,35 @@ class _TrashScreenState extends ConsumerState<TrashScreen> {
                       icon: OrbitIcons.delete,
                     ),
                   )
-                : ListView.builder(
-                    controller: _scrollController,
-                    padding: EdgeInsets.only(
-                      top: MediaQuery.of(context).padding.top +
-                          OrbitPageHeader.rowHeight +
-                          AppDimens.space8,
-                      bottom:
-                          AppDimens.gestureInsetFallback + AppDimens.space32,
+                : RefreshIndicator(
+                    // 下拉刷新：本地重读 + 已配置时跑一轮云同步（共用回调见 pullToRefresh）。
+                    // edgeOffset 下移到页头之下，否则指示条被 OrbitPageHeader 盖住。
+                    onRefresh: () => pullToRefresh(ref),
+                    color: OrbitAccents.themeAccent,
+                    edgeOffset: MediaQuery.of(context).padding.top +
+                        OrbitPageHeader.rowHeight,
+                    displacement: AppDimens.space8,
+                    child: ListView.builder(
+                      controller: _scrollController,
+                      padding: EdgeInsets.only(
+                        top: MediaQuery.of(context).padding.top +
+                            OrbitPageHeader.rowHeight +
+                            AppDimens.space8,
+                        bottom:
+                            AppDimens.gestureInsetFallback + AppDimens.space32,
+                      ),
+                      itemCount: visible.length,
+                      itemBuilder: (context, index) {
+                        final task = visible[index];
+                        return _TrashTaskTile(
+                          task: task,
+                          subtitle: _expiresLabel(task, retentionDays),
+                          onLongPress: () => _showTaskActions(task),
+                          onRestore: () => _restoreTask(task),
+                          onPurge: () => _purgeTask(task),
+                        );
+                      },
                     ),
-                    itemCount: visible.length,
-                    itemBuilder: (context, index) {
-                      final task = visible[index];
-                      return _TrashTaskTile(
-                        task: task,
-                        subtitle: _expiresLabel(task, retentionDays),
-                        onLongPress: () => _showTaskActions(task),
-                        onRestore: () => _restoreTask(task),
-                        onPurge: () => _purgeTask(task),
-                      );
-                    },
                   ),
           ),
           Positioned(

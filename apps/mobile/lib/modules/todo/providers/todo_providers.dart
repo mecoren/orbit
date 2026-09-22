@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../data/api/dto.dart';
@@ -169,6 +170,37 @@ void invalidateBusinessCaches(WidgetRef ref) {
   ref.invalidate(statsProvider);
   ref.invalidate(savedFiltersProvider);
   ref.invalidate(searchProvider);
+}
+
+/// 下拉刷新共用回调（主列表 / 侧栏 / 统计 / 回收站四页的 `RefreshIndicator`）
+///
+/// 本地优先应用里「刷新」分两步，顺序不能反：
+/// 1. 本地缓存立即重读——即使第 2 步失败或未配置云同步，用户也一定看到一次
+///    真正的重新查询，手势不会白拉；
+/// 2. 已配置云同步时再跑一轮手动同步——拉取合并写入不产生 db-change 事件
+///    （结果经 cloudSyncNow 返回值直达，ADR 0003），必须在此显式失效后
+///    云端改动才会出现在列表里。
+///
+/// 同步失败**不在此弹错**：下拉是探索性手势，且第 1 步已保证本地数据最新；
+/// 同步配置/锁定/密钥问题由设置页与顶栏云同步状态入口负责表达。
+Future<void> pullToRefresh(WidgetRef ref) async {
+  invalidateBusinessCaches(ref);
+
+  SyncConfigView? config;
+  try {
+    config = await ref.read(syncConfigProvider.future);
+  } catch (_) {
+    return; // 配置查询尚未落定：只做本地重读
+  }
+  if (config == null) return; // 未配置云同步：本地重读即刷新
+
+  try {
+    await ref.read(orbitBridgeProvider).cloudSyncNow(origin: 'manual');
+    ref.invalidate(syncConfigProvider);
+    invalidateBusinessCaches(ref);
+  } catch (e) {
+    debugPrint('[pullToRefresh] cloud sync failed: $e');
+  }
 }
 
 /// 保存的筛选器列表（#35）

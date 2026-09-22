@@ -318,147 +318,156 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
     return Scaffold(
       body: Stack(
         children: [
-          ListView(
-            controller: _scrollController,
-            padding: EdgeInsets.only(
-              top: MediaQuery.of(context).padding.top +
-                  OrbitPageHeader.rowHeight +
-                  AppDimens.space8,
-              bottom: AppDimens.gestureInsetFallback + AppDimens.space32,
-            ),
-            children: [
-              // 一、快捷视图（六行 ListTile：图标 quickView 色 + 标题 + 计数 badge + chevron）
-              const SectionHeader(label: '快捷视图'),
-              for (final key in QuickViewKey.values)
-                _buildQuickViewRow(key, counts, surfaceHighest),
-              // 二、日历（月视图格内待办长条 + 节假日徽标）
-              _buildCalendarRow(context),
-              // 三、统计（backlog #25：总览/热力图/streak/分布）
-              _buildStatsRow(context),
-              // 四、搜索（backlog #26：任务/项目/评论三路聚合）
-              _buildSearchRow(context),
-              // 五、筛选器（#35：保存的组合条件命名视图）
-              _buildSavedFiltersRow(context),
-              // 六、回收站（已删除任务的恢复入口；计数 = 回收站内任务数）
-              _buildTrashRow(context, surfaceHighest),
-              // 四、项目（色块 + 名称 + 未完成计数；长按菜单；右侧把手拖拽重排）
-              const SectionHeader(label: '项目'),
-              ReorderableListView.builder(
-                shrinkWrap: true,
-                padding: EdgeInsets.zero,
-                physics: const NeverScrollableScrollPhysics(),
-                buildDefaultDragHandles: false,
-                itemCount: projects.length,
-                itemBuilder: (context, index) => _buildProjectRow(
-                  projects[index],
-                  undoneByProject,
-                  index,
-                ),
-                onReorderItem: _reorderProjects,
-                // 拖拽起止触感 + 抬起放大（与任务列表 manual 档同口径）
-                onReorderStart: (_) => HapticFeedback.selectionClick(),
-                onReorderEnd: (_) => HapticFeedback.selectionClick(),
-                proxyDecorator: (child, index, animation) => AnimatedBuilder(
-                  animation: animation,
-                  builder: (context, child) {
-                    final elevated = AppMotion.standard.transform(
-                      Tween<double>(begin: 0, end: 1).evaluate(animation),
-                    );
-                    return Transform.scale(
-                      scale: 1 + (AppMotion.dragLiftScale - 1) * elevated,
-                      child: Material(
-                        elevation: 6 * elevated,
-                        borderRadius: AppShapes.medium,
-                        color: Colors.transparent,
-                        child: child,
-                      ),
-                    );
-                  },
-                  child: child,
-                ),
+          // 下拉刷新：本地重读 + 已配置时跑一轮云同步（共用回调见 pullToRefresh）。
+          // edgeOffset 下移到页头之下，否则指示条被 OrbitPageHeader 盖住。
+          RefreshIndicator(
+            onRefresh: () => pullToRefresh(ref),
+            color: OrbitAccents.themeAccent,
+            edgeOffset: MediaQuery.of(context).padding.top +
+                OrbitPageHeader.rowHeight,
+            displacement: AppDimens.space8,
+            child: ListView(
+              controller: _scrollController,
+              padding: EdgeInsets.only(
+                top: MediaQuery.of(context).padding.top +
+                    OrbitPageHeader.rowHeight +
+                    AppDimens.space8,
+                bottom: AppDimens.gestureInsetFallback + AppDimens.space32,
               ),
-              // 新建项目（#36：移动端此前无创建项目入口）
-              ListTile(
-                leading: Icon(
-                  OrbitIcons.add,
-                  size: AppDimens.iconSizeMd,
-                  color: colors.secondaryText,
+              children: [
+                // 一、快捷视图（六行 ListTile：图标 quickView 色 + 标题 + 计数 badge + chevron）
+                const SectionHeader(label: '快捷视图'),
+                for (final key in QuickViewKey.values)
+                  _buildQuickViewRow(key, counts, surfaceHighest),
+                // 二、日历（月视图格内待办长条 + 节假日徽标）
+                _buildCalendarRow(context),
+                // 三、统计（backlog #25：总览/热力图/streak/分布）
+                _buildStatsRow(context),
+                // 四、搜索（backlog #26：任务/项目/评论三路聚合）
+                _buildSearchRow(context),
+                // 五、筛选器（#35：保存的组合条件命名视图）
+                _buildSavedFiltersRow(context),
+                // 六、回收站（已删除任务的恢复入口；计数 = 回收站内任务数）
+                _buildTrashRow(context, surfaceHighest),
+                // 四、项目（色块 + 名称 + 未完成计数；长按菜单；右侧把手拖拽重排）
+                const SectionHeader(label: '项目'),
+                ReorderableListView.builder(
+                  shrinkWrap: true,
+                  padding: EdgeInsets.zero,
+                  physics: const NeverScrollableScrollPhysics(),
+                  buildDefaultDragHandles: false,
+                  itemCount: projects.length,
+                  itemBuilder: (context, index) => _buildProjectRow(
+                    projects[index],
+                    undoneByProject,
+                    index,
+                  ),
+                  onReorderItem: _reorderProjects,
+                  // 拖拽起止触感 + 抬起放大（与任务列表 manual 档同口径）
+                  onReorderStart: (_) => HapticFeedback.selectionClick(),
+                  onReorderEnd: (_) => HapticFeedback.selectionClick(),
+                  proxyDecorator: (child, index, animation) => AnimatedBuilder(
+                    animation: animation,
+                    builder: (context, child) {
+                      final elevated = AppMotion.standard.transform(
+                        Tween<double>(begin: 0, end: 1).evaluate(animation),
+                      );
+                      return Transform.scale(
+                        scale: 1 + (AppMotion.dragLiftScale - 1) * elevated,
+                        child: Material(
+                          elevation: 6 * elevated,
+                          borderRadius: AppShapes.medium,
+                          color: Colors.transparent,
+                          child: child,
+                        ),
+                      );
+                    },
+                    child: child,
+                  ),
                 ),
-                title: Text(
-                  '新建项目',
-                  style: TextStyle(
-                    fontSize: 15,
+                // 新建项目（#36：移动端此前无创建项目入口）
+                ListTile(
+                  leading: Icon(
+                    OrbitIcons.add,
+                    size: AppDimens.iconSizeMd,
                     color: colors.secondaryText,
                   ),
-                ),
-                dense: true,
-                onTap: _addProject,
-              ),
-              // 归档项目区（有归档才渲染；行点击进项目视图读任务，
-              // 行尾恢复钮取消归档——长按菜单同款入口兜底）
-              if (_archivedProjects().isNotEmpty) ...[
-                const SectionHeader(label: '已归档'),
-                ..._archivedProjects().map(
-                  (p) => ListTile(
-                    leading: Icon(
-                      OrbitIcons.folder,
-                      size: AppDimens.iconSizeMd,
-                      color: p.hexColor.isNotEmpty
-                          ? hexToColor(p.hexColor)
-                          : OrbitAccents.todoAccent,
-                    ),
-                    title: Text(
-                      p.title,
-                      style: TextStyle(
-                        fontSize: 15,
-                        color: colors.secondaryText,
-                      ),
-                    ),
-                    dense: true,
-                    trailing: TextButton(
-                      onPressed: () => _toggleArchive(p),
-                      child: const Text('恢复'),
-                    ),
-                    onTap: () => context.push('/todo/tasks?projectId=${p.id}'),
-                  ),
-                ),
-              ],
-              // 三、未分组
-              ListTile(
-                leading: Icon(
-                  OrbitIcons.inbox,
-                  size: AppDimens.iconSizeMd,
-                  color: colors.secondaryText,
-                ),
-                title: Text(
-                  '未分组',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w500,
-                    color: colors.titleText,
-                  ),
-                ),
-                trailing: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    CountBadge.wrap(
-                      // 未分组未完成 = 全部未完成 − 有项目未完成之和
-                      //（fold 带初值 0，空项目 Map 不崩——reduce 空集 No element）
-                      n: counts.quickView[QuickViewKey.all]! -
-                          counts.undoneByProject.values
-                              .fold(0, (a, b) => a + b),
-                      background: surfaceHighest,
-                    ),
-                    Icon(
-                      OrbitIcons.chevronRight,
-                      size: AppDimens.iconSizeMd,
+                  title: Text(
+                    '新建项目',
+                    style: TextStyle(
+                      fontSize: 15,
                       color: colors.secondaryText,
                     ),
-                  ],
+                  ),
+                  dense: true,
+                  onTap: _addProject,
                 ),
-                onTap: _openUngrouped,
-              ),
-            ],
+                // 归档项目区（有归档才渲染；行点击进项目视图读任务，
+                // 行尾恢复钮取消归档——长按菜单同款入口兜底）
+                if (_archivedProjects().isNotEmpty) ...[
+                  const SectionHeader(label: '已归档'),
+                  ..._archivedProjects().map(
+                    (p) => ListTile(
+                      leading: Icon(
+                        OrbitIcons.folder,
+                        size: AppDimens.iconSizeMd,
+                        color: p.hexColor.isNotEmpty
+                            ? hexToColor(p.hexColor)
+                            : OrbitAccents.todoAccent,
+                      ),
+                      title: Text(
+                        p.title,
+                        style: TextStyle(
+                          fontSize: 15,
+                          color: colors.secondaryText,
+                        ),
+                      ),
+                      dense: true,
+                      trailing: TextButton(
+                        onPressed: () => _toggleArchive(p),
+                        child: const Text('恢复'),
+                      ),
+                      onTap: () => context.push('/todo/tasks?projectId=${p.id}'),
+                    ),
+                  ),
+                ],
+                // 三、未分组
+                ListTile(
+                  leading: Icon(
+                    OrbitIcons.inbox,
+                    size: AppDimens.iconSizeMd,
+                    color: colors.secondaryText,
+                  ),
+                  title: Text(
+                    '未分组',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w500,
+                      color: colors.titleText,
+                    ),
+                  ),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      CountBadge.wrap(
+                        // 未分组未完成 = 全部未完成 − 有项目未完成之和
+                        //（fold 带初值 0，空项目 Map 不崩——reduce 空集 No element）
+                        n: counts.quickView[QuickViewKey.all]! -
+                            counts.undoneByProject.values
+                                .fold(0, (a, b) => a + b),
+                        background: surfaceHighest,
+                      ),
+                      Icon(
+                        OrbitIcons.chevronRight,
+                        size: AppDimens.iconSizeMd,
+                        color: colors.secondaryText,
+                      ),
+                    ],
+                  ),
+                  onTap: _openUngrouped,
+                ),
+              ],
+            ),
           ),
           Positioned(
             top: 0,

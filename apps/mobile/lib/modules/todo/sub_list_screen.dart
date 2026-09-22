@@ -1196,10 +1196,23 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
                 },
               );
 
+    // 下拉刷新：只接标准列表 / Logbook / 手动重排分支——看板是横滑、表格是定表头
+    // 横滚列，RefreshIndicator 会与横向拖拽抢同一手势；空态无 Scrollable 也触发不了。
+    // 指示条用 edgeOffset 下移到 OrbitPageHeader 之下，否则被页头盖住看不见。
+    final Widget body = visible.isEmpty || showKanban || showTable
+        ? list
+        : RefreshIndicator(
+            onRefresh: () => pullToRefresh(ref),
+            color: OrbitAccents.themeAccent,
+            edgeOffset: topInset,
+            displacement: AppDimens.space8,
+            child: list,
+          );
+
     return Scaffold(
       body: Stack(
         children: [
-          Positioned.fill(child: list),
+          Positioned.fill(child: body),
           if (truncated)
             Positioned(
               top: topInset,
