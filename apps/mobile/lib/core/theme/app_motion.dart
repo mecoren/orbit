@@ -62,13 +62,14 @@ class AppMotion {
   /// 元素退场（缓缓起步、加速离场）
   static const Curve accelerate = Cubic(0.3, 0.0, 0.8, 0.15);
 
-  /// 页面入栈曲线
-  static const Curve pageIn = emphasized;
-
   /// 路由入栈缓动（= easeOutCubic；别名收口，数值零变化）
+  ///
+  /// **路由转场真值**：`core/routing/app_router.dart` 的 `pageSlideFromRight` 只取这一对
+  ///（配 [pageEnter] / [pageExit]）。改手感只改这里，但属观感变更须单独立项——
+  /// `test/app_motion_test.dart` 锁定当前值。
   static const Curve pageInCubic = Curves.easeOutCubic;
 
-  /// 页面出栈曲线（= easeInCubic；别名收口，数值零变化）
+  /// 路由出栈缓动（= easeInCubic；别名收口，数值零变化）
   static const Curve pageOutCubic = Curves.easeInCubic;
 
   /// 滚动定位曲线（= easeOutCubic；别名收口，数值零变化）
@@ -77,9 +78,6 @@ class AppMotion {
   /// 底部抽屉入场曲线（**不用过冲曲线**——全高抽屉过冲会在上移后露出屏幕
   /// 底部空白，观感是错位而非弹跳）
   static const Curve sheetEnter = emphasized;
-
-  /// 页面出栈曲线
-  static const Curve pageOut = accelerate;
 
   /// 弹跳收尾曲线（星标弹跳、同步对勾回弹等小尺寸元素；
   /// 大尺寸容器不适用——过冲会产生可见错位）
