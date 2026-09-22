@@ -13,6 +13,7 @@ import '../../../core/theme/orbit_accents.dart';
 import '../../../data/api/dto.dart';
 import '../../../modules/todo/providers/todo_providers.dart';
 import 'orbit_month_calendar.dart';
+import 'orbit_card.dart';
 import 'orbit_sheets.dart';
 
 /// 日期选择器初始视图
@@ -510,16 +511,13 @@ class _TimeDropdownField extends StatelessWidget {
     return InkWell(
       borderRadius: AppShapes.medium,
       onTap: onTap,
-      child: Container(
+      child: SizedBox(
         height: 44,
-        decoration: BoxDecoration(
-          color: colors.surface,
-          borderRadius: AppShapes.medium,
-          border: Border.all(color: colors.outline),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
+        child: OrbitCard(
+          padding: EdgeInsets.zero,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
             Text(
               value.toString().padLeft(2, '0'),
               key: ValueKey(valueKey),
@@ -541,7 +539,8 @@ class _TimeDropdownField extends StatelessWidget {
             Icon(OrbitIcons.expandMore,
                 size: AppDimens.iconSizeMd, color: colors.iconText),
           ],
-        ),
+          ),
+      ),
       ),
     );
   }

@@ -9,6 +9,7 @@ import '../../core/theme/orbit_accents.dart';
 import '../../data/api/dto.dart';
 import '../../data/providers/bridge_provider.dart';
 import '../../shared/widgets/shadcn/orbit_confirm_sheet.dart';
+import '../../shared/widgets/shadcn/orbit_card.dart';
 import '../../shared/widgets/shadcn/orbit_page_header.dart';
 import '../../shared/widgets/shadcn/orbit_section_card.dart';
 import '../../shared/widgets/shadcn/orbit_select_sheet.dart';
@@ -651,15 +652,12 @@ class _BackupPageState extends ConsumerState<BackupPage> {
   }
 
   Widget _localRow(AppColorSet colors, BackupEntry e) {
-    return Container(
-      margin: const EdgeInsets.only(top: AppDimens.space8),
-      padding: const EdgeInsets.all(AppDimens.space12),
-      decoration: BoxDecoration(
-        color: colors.surfaceSecondary,
-        borderRadius: AppShapes.medium,
-        border: Border.all(color: colors.outline),
-      ),
-      child: Row(
+    return Padding(
+      padding: const EdgeInsets.only(top: AppDimens.space8),
+      child: OrbitCard(
+        fillColor: colors.surfaceSecondary,
+        padding: const EdgeInsets.all(AppDimens.space12),
+        child: Row(
         children: [
           Expanded(
             child: Column(
@@ -687,6 +685,7 @@ class _BackupPageState extends ConsumerState<BackupPage> {
             tooltip: '删除',
           ),
         ],
+        ),
       ),
     );
   }

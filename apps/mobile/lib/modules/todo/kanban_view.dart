@@ -2,12 +2,12 @@ import 'package:flutter/material.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_dimens.dart';
-import '../../core/theme/app_elevation.dart';
 import '../../core/theme/app_shapes.dart';
 import '../../core/theme/orbit_accents.dart';
 import '../../data/api/dto.dart';
 import '../../shared/utils/hex_color.dart';
 import '../../shared/widgets/shadcn/orbit_strikethrough.dart';
+import '../../shared/widgets/shadcn/orbit_card.dart';
 import '../../shared/widgets/shadcn/orbit_checkbox.dart';
 import 'logic/task_logic.dart';
 import '../../core/theme/icon_map.dart';
@@ -133,23 +133,21 @@ class KanbanBoard extends StatelessWidget {
     final dots = labelDotsByTask[task.id] ?? const <ProjectedTaskLabel>[];
     final projectTitle = projectTitleOf?.call(task);
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: AppDimens.space8),
-      decoration: BoxDecoration(
-        color: colors.surface,
-        borderRadius: AppShapes.medium,
-        border: Border.all(color: colors.outline),
-        boxShadow: AppElevation.e1(Theme.of(context).brightness),
-      ),
-      child: InkWell(
-        borderRadius: AppShapes.medium,
-        onTap: () => onOpen(task),
-        onLongPress: () => onLongPress(task),
-        child: Padding(
-          padding: const EdgeInsets.all(AppDimens.space12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
+    // v3 卡片：描边/圆角/填充下沉 OrbitCard，去掉 v2 的 e1 阴影；
+    // OrbitCard padding 归零、内层保留原 Padding——InkWell 水波纹仍盖满整卡
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppDimens.space8),
+      child: OrbitCard(
+        padding: EdgeInsets.zero,
+        child: InkWell(
+          borderRadius: AppShapes.medium,
+          onTap: () => onOpen(task),
+          onLongPress: () => onLongPress(task),
+          child: Padding(
+            padding: const EdgeInsets.all(AppDimens.space12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -237,6 +235,7 @@ class KanbanBoard extends StatelessWidget {
                 ),
               ],
             ],
+            ),
           ),
         ),
       ),

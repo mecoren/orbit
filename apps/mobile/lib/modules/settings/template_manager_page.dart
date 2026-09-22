@@ -10,6 +10,7 @@ import '../../core/theme/orbit_accents.dart';
 import '../../data/api/dto.dart';
 import '../../data/providers/bridge_provider.dart';
 import '../../shared/widgets/shadcn/orbit_confirm_sheet.dart';
+import '../../shared/widgets/shadcn/orbit_card.dart';
 import '../../shared/widgets/controller_disposer.dart';
 import '../../shared/widgets/shadcn/orbit_page_header.dart';
 import '../../shared/widgets/shadcn/orbit_actions_sheet.dart' show bottomSheetTopShape;
@@ -441,19 +442,16 @@ class _TemplateManagerPageState extends ConsumerState<TemplateManagerPage> {
       ?subtaskText,
     ].join(' · ');
 
-    return Container(
-      margin: const EdgeInsets.only(top: AppDimens.space8),
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppDimens.space12,
-        vertical: AppDimens.space4,
-      ),
-      decoration: BoxDecoration(
-        color: colors.surfaceSecondary,
-        borderRadius: AppShapes.medium,
-        border: Border.all(color: colors.outline),
-      ),
-      child: Row(
-        children: [
+    return Padding(
+      padding: const EdgeInsets.only(top: AppDimens.space8),
+      child: OrbitCard(
+        fillColor: colors.surfaceSecondary,
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppDimens.space12,
+          vertical: AppDimens.space4,
+        ),
+        child: Row(
+          children: [
           Expanded(
             child: InkWell(
               borderRadius: AppShapes.small,
@@ -496,6 +494,7 @@ class _TemplateManagerPageState extends ConsumerState<TemplateManagerPage> {
                 size: AppDimens.iconSizeMd, color: colors.destructive),
           ),
         ],
+        ),
       ),
     );
   }

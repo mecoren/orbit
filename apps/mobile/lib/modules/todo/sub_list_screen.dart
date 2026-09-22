@@ -1399,14 +1399,9 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
             color: colors.popup,
             borderRadius: AppShapes.medium,
             border: Border.all(color: colors.outline),
-            boxShadow: [
-              BoxShadow(
-                color: const Color(0xFF101828).withValues(alpha: 0.16),
-                blurRadius: 24,
-                offset: const Offset(0, 8),
-                spreadRadius: -4,
-              ),
-            ],
+            // 浮空工具条：阴影走 e3（底部浮层档，向上投影压住列表）；
+            // 原手写单阴影向下，在条下无内容处浪费、条上列表处缺投影
+            boxShadow: AppElevation.ofContext(context, level: 3),
           ),
           child: Row(
             children: [

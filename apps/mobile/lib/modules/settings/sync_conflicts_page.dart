@@ -10,6 +10,7 @@ import '../../core/theme/orbit_accents.dart';
 import '../../data/api/dto.dart';
 import '../../data/providers/bridge_provider.dart';
 import '../../shared/widgets/shadcn/orbit_confirm_sheet.dart';
+import '../../shared/widgets/shadcn/orbit_card.dart';
 import '../../shared/widgets/shadcn/orbit_page_header.dart';
 import '../../shared/widgets/shadcn/orbit_section_card.dart';
 import '../../shared/widgets/shadcn/orbit_toast.dart';
@@ -273,17 +274,14 @@ class _SyncConflictsPageState extends ConsumerState<SyncConflictsPage> {
     final diffs = _diff(loser, winner);
     final open = _expanded == r.id;
 
-    return Container(
-      margin: const EdgeInsets.only(top: AppDimens.space8),
-      padding: const EdgeInsets.all(AppDimens.space12),
-      decoration: BoxDecoration(
-        color: colors.surfaceSecondary,
-        borderRadius: AppShapes.medium,
-        border: Border.all(color: colors.outline),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
+    return Padding(
+      padding: const EdgeInsets.only(top: AppDimens.space8),
+      child: OrbitCard(
+        fillColor: colors.surfaceSecondary,
+        padding: const EdgeInsets.all(AppDimens.space12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
           Row(
             children: [
               Icon(OrbitIcons.warning,
@@ -336,14 +334,10 @@ class _SyncConflictsPageState extends ConsumerState<SyncConflictsPage> {
           ),
           if (open) ...[
             const SizedBox(height: AppDimens.space4),
-            Container(
+            OrbitCard(
+              fillColor: colors.background,
               padding: const EdgeInsets.all(AppDimens.space8),
-              decoration: BoxDecoration(
-                color: colors.background,
-                borderRadius: AppShapes.small,
-                border:
-                    Border.all(color: colors.outline),
-              ),
+              borderRadius: AppShapes.small,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: diffs.isEmpty
@@ -382,6 +376,7 @@ class _SyncConflictsPageState extends ConsumerState<SyncConflictsPage> {
             ),
           ],
         ],
+      ),
       ),
     );
   }

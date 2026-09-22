@@ -3,12 +3,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_dimens.dart';
-import '../../core/theme/app_elevation.dart';
-import '../../core/theme/app_shapes.dart';
 import '../../core/theme/orbit_accents.dart';
 import '../../data/api/dto.dart';
 import '../../shared/utils/hex_color.dart';
 import '../../shared/widgets/shadcn/orbit_empty_state.dart';
+import '../../shared/widgets/shadcn/orbit_card.dart';
 import '../../shared/widgets/shadcn/orbit_page_header.dart';
 import '../../shared/widgets/shadcn/orbit_skeleton.dart';
 import 'logic/task_logic.dart';
@@ -176,14 +175,8 @@ class _OverviewCards extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = AppColors.ofContext(context);
-    Widget cell(String label, int value) => Container(
+    Widget cell(String label, int value) => OrbitCard(
           padding: const EdgeInsets.all(AppDimens.space12),
-          decoration: BoxDecoration(
-            color: colors.surface,
-            borderRadius: AppShapes.medium,
-            border: Border.all(color: colors.outline),
-            boxShadow: AppElevation.e1(Theme.of(context).brightness),
-          ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
@@ -238,16 +231,10 @@ class _StreakCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = AppColors.ofContext(context);
-    return Container(
+    return OrbitCard(
       padding: const EdgeInsets.symmetric(
         horizontal: AppDimens.space16,
         vertical: AppDimens.space12,
-      ),
-      decoration: BoxDecoration(
-        color: colors.surface,
-        borderRadius: AppShapes.medium,
-        border: Border.all(color: colors.outline),
-        boxShadow: AppElevation.e1(Theme.of(context).brightness),
       ),
       child: Row(
         children: [
@@ -304,14 +291,8 @@ class _HeatmapCard extends StatelessWidget {
     final heatTotal =
         stats.heatmap.cells.fold<int>(0, (s, c) => s + c.count);
 
-    return Container(
+    return OrbitCard(
       padding: const EdgeInsets.all(AppDimens.space16),
-      decoration: BoxDecoration(
-        color: colors.surface,
-        borderRadius: AppShapes.medium,
-        border: Border.all(color: colors.outline),
-        boxShadow: AppElevation.e1(Theme.of(context).brightness),
-      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -361,20 +342,15 @@ class _DistSection extends StatelessWidget {
     final colors = AppColors.ofContext(context);
     final visible = rows.where((r) => r.$2 + r.$3 > 0).toList();
 
-    return Container(
-      margin: const EdgeInsets.only(top: AppDimens.space12),
-      padding: const EdgeInsets.all(AppDimens.space16),
-      decoration: BoxDecoration(
-        color: colors.surface,
-        borderRadius: AppShapes.medium,
-        border: Border.all(color: colors.outline),
-        boxShadow: AppElevation.e1(Theme.of(context).brightness),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            title,
+    return Padding(
+      padding: const EdgeInsets.only(top: AppDimens.space12),
+      child: OrbitCard(
+        padding: const EdgeInsets.all(AppDimens.space16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              title,
             style: TextStyle(
               fontSize: 14,
               fontWeight: FontWeight.w600,
@@ -443,6 +419,7 @@ class _DistSection extends StatelessWidget {
                 ),
               ),
         ],
+      ),
       ),
     );
   }

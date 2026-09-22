@@ -5,6 +5,7 @@ import '../../core/theme/app_dimens.dart';
 import '../../core/theme/app_shapes.dart';
 import '../../core/theme/orbit_accents.dart';
 import '../../shared/widgets/shadcn/orbit_actions_sheet.dart' show bottomSheetTopShape;
+import '../../shared/widgets/shadcn/orbit_card.dart';
 import '../../shared/widgets/shadcn/orbit_date_picker.dart';
 // as rep：规避 Flutter widgets 自带 RepeatMode 类名冲突
 import 'logic/repeat_logic.dart' as rep;
@@ -270,14 +271,10 @@ class _RepeatEditSheetState extends State<_RepeatEditSheet> {
 
   /// 自定义面板（对应桌面端 RepeatField 的 customOpen 区）
   Widget _buildCustomPanel(AppColorSet colors) {
-    return Container(
+    return OrbitCard(
       key: const ValueKey('repeat_custom_panel'),
+      fillColor: colors.surfaceSecondary,
       padding: const EdgeInsets.all(AppDimens.space8),
-      decoration: BoxDecoration(
-        color: colors.surfaceSecondary,
-        borderRadius: AppShapes.medium,
-        border: Border.all(color: colors.outline),
-      ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,

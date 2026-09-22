@@ -1,24 +1,23 @@
 import 'package:flutter/material.dart';
-import 'package:shadcn_flutter/shadcn_flutter.dart' as sh;
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_dimens.dart';
-import '../../../core/theme/app_shapes.dart';
 import '../../../core/theme/orbit_accents.dart';
+import 'orbit_card.dart';
 
-/// 详情/设置区块容器（设计系�?v3：shadcn `Card` 承载�?
+/// 详情/设置区块容器（[OrbitCard] 的带头变体）
 ///
-/// **公共 API 与旧 `SectionCard` 逐字一�?*�?0 处调用，9 个文件）�?
-/// 仅内部实现从「自�?Container + 阴影」换�?shadcn `Card`—�?
-/// 描边/圆角/填充色全部由 shadcn 主题派生（`border = AppColors.outline`�?
-/// `radiusMd = AppShapes.radiusMedium`），因此视觉与其�?shadcn 卡片自动同构�?
+/// **公共 API 与旧 `SectionCard` 逐字一致**（调用方零改动）：
+/// 仅内部实现从直铺 shadcn `Card` 改为复用 [OrbitCard]——描边/圆角/
+/// 填充色仍由 shadcn 主题派生（`border = AppColors.outline` /
+/// `radiusMd = AppShapes.radiusMedium`），视觉与其他 shadcn 卡片自动同构。
 ///
-/// �?v2 的差异（有意）：**不再投阴�?*。shadcn 语言用�?px 描边 + 表面分层�?
-/// 表达深度，阴影只留给浮层（抽�?对话�?菜单），与「对比靠描边与层级」的
-/// 设计原则一致�?
+/// 与 v2 的差异（有意）：**不再投阴影**。shadcn 语言用 1px 描边 + 表面分层
+/// 表达深度，阴影只留给浮层（抽屉/对话/菜单），与「对比靠描边与层级」的
+/// 设计原则一致。
 ///
-/// 头部�?= 标题（labelMedium/w600，[OrbitAccents.todoAccent]�? 可选副标题
-/// + Spacer + trailing。区块间距由父级承担，本组件不管�?
+/// 头部 = 标题（labelMedium/w600，[OrbitAccents.todoAccent]）+ 可选副标题
+/// + Spacer + trailing。区块间距由父级承担，本组件不管。
 class SectionCard extends StatelessWidget {
   const SectionCard({
     super.key,
@@ -31,7 +30,7 @@ class SectionCard extends StatelessWidget {
   /// 头部标题；缺省不渲染头行（详情标题区为无头卡片）
   final String? title;
 
-  /// 副标题（如子任务区的 doneCount/total�?
+  /// 副标题（如子任务区的 doneCount/total）
   final String? subtitle;
 
   /// 头部尾随控件
@@ -42,13 +41,7 @@ class SectionCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = AppColors.ofContext(context);
-    return sh.Card(
-      padding: const EdgeInsets.all(AppDimens.cardPadding),
-      filled: true,
-      fillColor: colors.surface,
-      borderColor: colors.outline,
-      borderWidth: 1,
-      borderRadius: AppShapes.medium,
+    return OrbitCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         mainAxisSize: MainAxisSize.min,

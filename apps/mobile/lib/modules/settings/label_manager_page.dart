@@ -8,6 +8,7 @@ import '../../data/api/dto.dart';
 import '../../data/providers/bridge_provider.dart';
 import '../../shared/utils/hex_color.dart';
 import '../../shared/widgets/shadcn/orbit_confirm_sheet.dart';
+import '../../shared/widgets/shadcn/orbit_card.dart';
 import '../../shared/widgets/controller_disposer.dart';
 import '../../shared/widgets/shadcn/orbit_page_header.dart';
 import '../../shared/widgets/shadcn/orbit_actions_sheet.dart' show bottomSheetTopShape;
@@ -362,19 +363,16 @@ class _LabelManagerPageState extends ConsumerState<LabelManagerPage> {
   }
 
   Widget _row(AppColorSet colors, TodoLabel label) {
-    return Container(
-      margin: const EdgeInsets.only(top: AppDimens.space8),
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppDimens.space12,
-        vertical: AppDimens.space4,
-      ),
-      decoration: BoxDecoration(
-        color: colors.surfaceSecondary,
-        borderRadius: AppShapes.medium,
-        border: Border.all(color: colors.outline),
-      ),
-      child: Row(
-        children: [
+    return Padding(
+      padding: const EdgeInsets.only(top: AppDimens.space8),
+      child: OrbitCard(
+        fillColor: colors.surfaceSecondary,
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppDimens.space12,
+          vertical: AppDimens.space4,
+        ),
+        child: Row(
+          children: [
           // 色点即改色入口（点一下弹色板抽屉）
           InkWell(
             borderRadius: AppShapes.small,
@@ -413,6 +411,7 @@ class _LabelManagerPageState extends ConsumerState<LabelManagerPage> {
                 size: AppDimens.iconSizeMd, color: colors.destructive),
           ),
         ],
+        ),
       ),
     );
   }
