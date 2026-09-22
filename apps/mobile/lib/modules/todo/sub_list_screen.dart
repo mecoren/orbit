@@ -1219,7 +1219,30 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
     return Scaffold(
       body: Stack(
         children: [
-          Positioned.fill(child: body),
+          Positioned.fill(
+            // 视图切换过渡：列表 / 看板 / 表格三态用淡入 + 轻微上滑衔接
+            //（viewSwitch 200ms；key 只跟视图走——任务增删、骨架落定、
+            // 下拉刷新都不触发，仍是瞬时替换，避免整列表无谓重播）
+            child: AnimatedSwitcher(
+              duration: AppMotion.viewSwitch,
+              switchInCurve: AppMotion.decelerate,
+              switchOutCurve: AppMotion.accelerate,
+              transitionBuilder: (child, animation) => FadeTransition(
+                opacity: animation,
+                child: SlideTransition(
+                  position: Tween<Offset>(
+                    begin: const Offset(0, 0.03),
+                    end: Offset.zero,
+                  ).animate(animation),
+                  child: child,
+                ),
+              ),
+              child: KeyedSubtree(
+                key: ValueKey('view-${_viewMode.name}'),
+                child: body,
+              ),
+            ),
+          ),
           if (truncated)
             Positioned(
               top: topInset,
