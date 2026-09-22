@@ -611,6 +611,7 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
                               ),
                             ),
                             IconButton(
+                              tooltip: '保存',
                               icon: _saving
                                   ? SizedBox(
                                       width: 20,
@@ -898,9 +899,17 @@ class _FormDateTile extends StatelessWidget {
           ),
           if (onClear != null) ...[
             const SizedBox(width: AppDimens.space8),
-            GestureDetector(
-              onTap: onClear,
-              child: Icon(
+            // 裸 Icon 热区不足：换 IconButton（48 约束 + 波纹 + 读屏语义），
+            // 视觉仍是小叉（口径同 orbit_info_row 的清除钮）
+            IconButton(
+              tooltip: '清除',
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(
+                minWidth: AppDimens.touchTarget,
+                minHeight: AppDimens.touchTarget,
+              ),
+              onPressed: onClear,
+              icon: Icon(
                 OrbitIcons.close,
                 size: AppDimens.iconSizeSm,
                 color: colors.secondaryText,

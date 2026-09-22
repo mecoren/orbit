@@ -224,9 +224,12 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
                   for (final hex in _projectColorPalette)
                     GestureDetector(
                       onTap: () => setDialogState(() => selectedColor = hex),
-                      child: Container(
-                        width: 32,
-                        height: 32,
+                      // 32 色点视觉不变，热区补到 48（touchTarget）
+                      child: Padding(
+                        padding: const EdgeInsets.all(AppDimens.space8),
+                        child: Container(
+                          width: 32,
+                          height: 32,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
                           color: hexToColor(hex),
@@ -237,6 +240,7 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
                             width: 2.5,
                           ),
                         ),
+                      ),
                       ),
                     ),
                 ],
@@ -493,6 +497,7 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
               leading: const SyncStatusButton(),
               actions: [
                 IconButton(
+                  tooltip: '设置',
                   icon: const Icon(OrbitIcons.settings,
                       size: AppDimens.iconSizeMd),
                   onPressed: () => context.push('/settings'),

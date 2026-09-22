@@ -96,6 +96,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                       ),
                       suffixIcon: _keyword.isNotEmpty
                           ? IconButton(
+                              tooltip: '清除搜索',
                               icon: Icon(
                                 OrbitIcons.close,
                                 size: AppDimens.iconSizeMd,

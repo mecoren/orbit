@@ -95,24 +95,29 @@ class _LabelManagerPageState extends ConsumerState<LabelManagerPage> {
                   for (final hex in labelPaletteHexes)
                     GestureDetector(
                       onTap: () => Navigator.of(sheetContext).pop(hex),
-                      child: Container(
-                        width: AppDimens.touchTarget - AppDimens.space8,
-                        height: AppDimens.touchTarget - AppDimens.space8,
-                        decoration: BoxDecoration(
-                          color: hexToColor(hex),
-                          shape: BoxShape.circle,
-                          border: hex.toUpperCase() == current.toUpperCase()
-                              ? Border.all(
-                                  color: colors.titleText,
-                                  width: 2,
-                                )
+                      // 40 色点视觉不变，热区补到 48（touchTarget）——与
+                      // 「新建标签」对话框色板、侧栏项目色板同口径
+                      child: Padding(
+                        padding: const EdgeInsets.all(AppDimens.space4),
+                        child: Container(
+                          width: AppDimens.touchTarget - AppDimens.space8,
+                          height: AppDimens.touchTarget - AppDimens.space8,
+                          decoration: BoxDecoration(
+                            color: hexToColor(hex),
+                            shape: BoxShape.circle,
+                            border: hex.toUpperCase() == current.toUpperCase()
+                                ? Border.all(
+                                    color: colors.titleText,
+                                    width: 2,
+                                  )
+                                : null,
+                          ),
+                          child: hex.toUpperCase() == current.toUpperCase()
+                              ? const Icon(OrbitIcons.check,
+                                  size: AppDimens.iconSizeSm,
+                                  color: Colors.white)
                               : null,
                         ),
-                        child: hex.toUpperCase() == current.toUpperCase()
-                            ? const Icon(OrbitIcons.check,
-                                size: AppDimens.iconSizeSm,
-                                color: Colors.white)
-                            : null,
                       ),
                     ),
                 ],
@@ -242,21 +247,27 @@ class _LabelManagerPageState extends ConsumerState<LabelManagerPage> {
                       for (final hex in labelPaletteHexes)
                         GestureDetector(
                           onTap: () => setDialogState(() => color = hex),
-                          child: Container(
-                            width: AppDimens.touchTarget - AppDimens.space12,
-                            height: AppDimens.touchTarget - AppDimens.space12,
-                            decoration: BoxDecoration(
-                              color: hexToColor(hex),
-                              shape: BoxShape.circle,
-                              border: hex.toUpperCase() == color.toUpperCase()
-                                  ? Border.all(color: colors.titleText, width: 2)
+                          // 36 色点视觉不变，热区补到 48（touchTarget）
+                          child: Padding(
+                            padding: const EdgeInsets.all(AppDimens.space6),
+                            child: Container(
+                              width: AppDimens.touchTarget - AppDimens.space12,
+                              height: AppDimens.touchTarget - AppDimens.space12,
+                              decoration: BoxDecoration(
+                                color: hexToColor(hex),
+                                shape: BoxShape.circle,
+                                border: hex.toUpperCase() ==
+                                        color.toUpperCase()
+                                    ? Border.all(
+                                        color: colors.titleText, width: 2)
+                                    : null,
+                              ),
+                              child: hex.toUpperCase() == color.toUpperCase()
+                                  ? const Icon(OrbitIcons.check,
+                                      size: AppDimens.iconSizeSm,
+                                      color: Colors.white)
                                   : null,
                             ),
-                            child: hex.toUpperCase() == color.toUpperCase()
-                                ? const Icon(OrbitIcons.check,
-                                    size: AppDimens.iconSizeSm,
-                                    color: Colors.white)
-                                : null,
                           ),
                         ),
                     ],
@@ -373,18 +384,21 @@ class _LabelManagerPageState extends ConsumerState<LabelManagerPage> {
         ),
         child: Row(
           children: [
-          // 色点即改色入口（点一下弹色板抽屉）
-          InkWell(
-            borderRadius: AppShapes.small,
-            onTap: _busy ? null : () => _changeColor(label),
-            child: Padding(
-              padding: const EdgeInsets.all(AppDimens.space8),
-              child: Container(
-                width: AppDimens.colorDotSize + AppDimens.space4,
-                height: AppDimens.colorDotSize + AppDimens.space4,
-                decoration: BoxDecoration(
-                  color: hexToColor(label.hexColor),
-                  shape: BoxShape.circle,
+          // 色点即改色入口（点一下弹色板抽屉；热区 48，视觉 16 不变）
+          Tooltip(
+            message: '更换颜色',
+            child: InkWell(
+              borderRadius: AppShapes.small,
+              onTap: _busy ? null : () => _changeColor(label),
+              child: Padding(
+                padding: const EdgeInsets.all(AppDimens.space16),
+                child: Container(
+                  width: AppDimens.colorDotSize + AppDimens.space4,
+                  height: AppDimens.colorDotSize + AppDimens.space4,
+                  decoration: BoxDecoration(
+                    color: hexToColor(label.hexColor),
+                    shape: BoxShape.circle,
+                  ),
                 ),
               ),
             ),

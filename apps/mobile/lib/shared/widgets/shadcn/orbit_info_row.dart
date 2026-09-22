@@ -78,6 +78,7 @@ class InfoTile extends StatelessWidget {
           ),
           if (onClear != null)
             IconButton(
+              tooltip: '清除',
               onPressed: onClear,
               icon: Icon(
                 OrbitIcons.close,

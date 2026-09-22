@@ -842,6 +842,7 @@ class _SubtasksSectionState extends ConsumerState<_SubtasksSection> {
                   ),
                   // close 删除（确认弹窗防误触，对齐桌面/评论删除惯例）
                   IconButton(
+                    tooltip: '删除子任务',
                     visualDensity: VisualDensity.compact,
                     icon: Icon(OrbitIcons.close,
                         size: AppDimens.iconSizeSm,
@@ -871,6 +872,7 @@ class _SubtasksSectionState extends ConsumerState<_SubtasksSection> {
                       ),
                     ),
                     IconButton(
+                      tooltip: '确定',
                       icon: const Icon(OrbitIcons.check,
                           size: AppDimens.iconSizeMd,
                           color: OrbitAccents.todoAccent),
@@ -1172,6 +1174,7 @@ class _LabelEditSheetState extends ConsumerState<_LabelEditSheet> {
                           ),
                         ),
                         IconButton(
+                          tooltip: '新建标签',
                           icon: Icon(OrbitIcons.add,
                               size: AppDimens.iconSizeLg,
                               color: OrbitAccents.todoAccent),
@@ -1187,9 +1190,12 @@ class _LabelEditSheetState extends ConsumerState<_LabelEditSheet> {
                         for (final hex in labelPaletteHexes)
                           GestureDetector(
                             onTap: () => setState(() => _newColorHex = hex),
-                            child: Container(
-                              width: 26,
-                              height: 26,
+                            // 26 色点视觉不变，热区补到 48（touchTarget）
+                            child: Padding(
+                              padding: const EdgeInsets.all(11),
+                              child: Container(
+                                width: 26,
+                                height: 26,
                               decoration: BoxDecoration(
                                 shape: BoxShape.circle,
                                 color: hexToColor(hex),
@@ -1200,6 +1206,7 @@ class _LabelEditSheetState extends ConsumerState<_LabelEditSheet> {
                                       : colors.outline,
                                 ),
                               ),
+                            ),
                             ),
                           ),
                       ],
@@ -1392,6 +1399,7 @@ class _RemindersSection extends ConsumerWidget {
                         ),
                         // 删除（无确认直删，对齐桌面行为）
                         IconButton(
+                          tooltip: '删除提醒',
                           visualDensity: VisualDensity.compact,
                           icon: Icon(OrbitIcons.close,
                               size: AppDimens.iconSizeSm,
@@ -1770,6 +1778,7 @@ class _CommentsSectionState extends ConsumerState<_CommentsSection> {
                   ),
                 ),
                 IconButton(
+                  tooltip: '发送',
                   icon: const Icon(OrbitIcons.send,
                       size: AppDimens.iconSizeMd,
                       color: OrbitAccents.todoAccent),
@@ -1956,6 +1965,7 @@ class _AttachmentsSectionState extends ConsumerState<_AttachmentsSection> {
               child: CircularProgressIndicator(strokeWidth: 2),
             )
           : IconButton(
+              tooltip: '添加附件',
               icon: const Icon(OrbitIcons.add),
               iconSize: 18,
               padding: EdgeInsets.zero,

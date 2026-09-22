@@ -97,6 +97,7 @@ class OrbitPageHeader extends StatelessWidget implements PreferredSizeWidget {
   Widget? _buildLeading(BuildContext context, AppColorSet colors) {
     if (showMenu) {
       return IconButton(
+        tooltip: '菜单',
         padding: const EdgeInsets.only(right: AppDimens.space8),
         icon: Icon(
           OrbitIcons.menu,
@@ -108,6 +109,7 @@ class OrbitPageHeader extends StatelessWidget implements PreferredSizeWidget {
     }
     if (showBack) {
       return IconButton(
+        tooltip: '返回',
         padding: const EdgeInsets.only(right: AppDimens.space8),
         icon: Icon(
           OrbitIcons.back,
