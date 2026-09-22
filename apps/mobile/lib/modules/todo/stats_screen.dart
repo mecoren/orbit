@@ -21,7 +21,7 @@ import '../../core/theme/icon_map.dart';
 /// 数据 = bridge.statsAggregate 一次性聚合（只读）：
 /// - 总览五卡 + streak 行；
 /// - 热力图（2026-09-10 对齐 wait-home：按年视图 + 右侧年份按钮 +
-///   月份标签/Portal 同款 tooltip/少多图例，组件见 todo_heatmap.dart）；
+///   月份标签/Portal 同款 tooltip/少多图例，组件见 orbit_heatmap.dart）；
 /// - 项目 / 优先级 / 星期三分布卡（纯 Row 条形，不引图表库）。
 class StatsScreen extends ConsumerStatefulWidget {
   const StatsScreen({super.key});
@@ -286,7 +286,7 @@ class _StreakCard extends StatelessWidget {
   }
 }
 
-/// 热力图卡（标题行带年份/完成数副标题；主体 = todo_heatmap.dart 组件）
+/// 热力图卡（标题行带年份/完成数副标题；主体 = orbit_heatmap.dart 组件）
 class _HeatmapCard extends StatelessWidget {
   const _HeatmapCard({
     required this.stats,

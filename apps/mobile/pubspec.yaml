@@ -8,7 +8,6 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  cupertino_icons: ^1.0.8
 
   # ── UI 组件体系（shadcn_flutter）──
   # 接入方式：MaterialApp.router + builder 内包 ShadcnLayer（方案 B）。
@@ -26,11 +25,7 @@ dependencies:
   # 依赖 intl ^0.20.0 与现有一致，需在 main() 先 initializeDateFormatting）
   table_calendar: 3.2.1
 
-  # 图表（统计页条形/环形占比；**不支持热力图**——热力图由 token 色阶网格承载）
-  fl_chart: 1.2.0
 
-  # 声明式动效（补 shadcn 动画原语覆盖不到的复杂入场）
-  flutter_animate: ^4.5.2
 
   # 状态管理（wait-home/mobile 同款：Riverpod 3.x 手动声明，无 codegen）
   flutter_riverpod: ^3.3.0
