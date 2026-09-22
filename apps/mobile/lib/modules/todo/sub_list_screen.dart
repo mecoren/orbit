@@ -126,6 +126,9 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
   void dispose() {
     _reorderScrollController.dispose();
     _listScrollController.dispose();
+    // 退场窗内直接离屏：补一次失效，避免主列表缓存残留已删行
+    //（窗后 mounted 熄火，本该触发的那次 invalidate 没发生）
+    if (_exitingIds.isNotEmpty) ref.invalidate(todoTasksProvider);
     super.dispose();
   }
 
@@ -472,7 +475,26 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
 
   /// 完成/取消统一入口：完成走 todoTaskComplete（Rust 单事务推进重复
   /// 任务下一实例——引擎下沉后与桌面同口径）；取消完成仍走普通 patch
+  ///
+  /// 标准分支内的离场型切换播退场（[_removeRowWithExit]）；在原地的
+  /// （勾选确认/完成划线）保持现状不动——docs/05 §9.2 的其余边界不碰。
   Future<void> _toggleDone(TodoTask task) async {
+    if (_exitApplies && _toggleWillLeave(task)) {
+      try {
+        if (task.isDone) {
+          await ref.read(orbitBridgeProvider).todoTaskUpdate(
+                task.id,
+                encodePatch(buildDoneTogglePatch(task)),
+              );
+        } else {
+          await ref.read(orbitBridgeProvider).todoTaskComplete(task.id);
+        }
+        unawaited(_removeRowWithExit(task.id));
+      } catch (_) {
+        WaitToast.destructive('完成失败');
+      }
+      return;
+    }
     if (task.isDone) return _patchTask(task.id, buildDoneTogglePatch(task));
     try {
       await ref.read(orbitBridgeProvider).todoTaskComplete(task.id);
@@ -498,6 +520,51 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
     );
   }
 
+  /// 退场动画生效 gate：仅标准列表分支（[_withEntrance] 那一支）。
+  /// 看板/表格/Logbook/手动重排/多选态全部走即时失效——行组件与
+  /// 手势体系不同，不掺和（批量删除同样即时，见 [_onBatchAction]）。
+  bool get _exitApplies =>
+      !_selectionMode &&
+      _viewMode == TaskViewMode.list &&
+      widget.query.quickView != QuickViewKey.done &&
+      _sortKey != TaskSortKey.manual;
+
+  /// 标准分支内：切换完成态导致行离场 ⟺ 开了状态筛选（改写 status 即失配），
+  /// 或完成时隐藏已完成档。取消完成在非 Logbook 下恒可见（未完成行永不隐藏）。
+  bool _toggleWillLeave(TodoTask task) =>
+      _filters.status != null || (!task.isDone && _hideDone);
+
+  /// 写后退场（删除 / 离场型完成共用）：
+  ///
+  /// 1. 写操作由调用方先行 await 落库（ADR 0005：不延迟提交），失败直接
+  ///    抛错 toast，不进退场、不失效——列表原样不动；
+  /// 2. 成功后立即失效除主列表外的缓存——徽标/详情/统计/回收站即时更新
+  ///    （option A：计数先行，只留行晚 300ms）；
+  /// 3. 主列表延迟失效：ghost 行（旧对象）先播 300ms 退场（[_RowExit]），
+  ///    再 invalidate，主列表即收敛；
+  /// 4. 延迟窗内撤销恢复（[_undoLast]）会先摘掉 ghost，后续失效照常——
+  ///    列表显示恢复后的行，不闪；
+  /// 5. 退场窗内直接离屏：dispose 补一次失效，避免缓存残留已删行。
+  Future<void> _removeRowWithExit(int taskId) async {
+    setState(() => _exitingIds.add(taskId));
+    // 与 invalidateBusinessCaches 同清单，唯独不碰 todoTasksProvider
+    ref.invalidate(todoProjectsProvider);
+    ref.invalidate(todoArchivedProjectsProvider);
+    ref.invalidate(todoLabelsProvider);
+    ref.invalidate(taskLabelsProjectionProvider);
+    ref.invalidate(taskDetailProvider);
+    ref.invalidate(taskActivityProvider);
+    ref.invalidate(syncConfigProvider);
+    ref.invalidate(trashTasksProvider);
+    ref.invalidate(statsProvider);
+    ref.invalidate(savedFiltersProvider);
+    ref.invalidate(searchProvider);
+    await Future.delayed(AppMotion.slow);
+    if (!mounted) return;
+    setState(() => _exitingIds.remove(taskId));
+    ref.invalidate(todoTasksProvider);
+  }
+
   Future<void> _deleteTask(TodoTask task) async {
     final confirmed = await showConfirmBottomSheet(
       context,
@@ -509,7 +576,12 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
     if (!confirmed || !mounted) return;
     try {
       await ref.read(orbitBridgeProvider).todoTaskDelete(task.id);
-      ref.invalidate(todoTasksProvider);
+      if (_exitApplies) {
+        // 标准分支：ghost 退场（其余缓存已在 runner 内即时失效）
+        unawaited(_removeRowWithExit(task.id));
+      } else {
+        ref.invalidate(todoTasksProvider);
+      }
       // 删除可撤销（桌面 use-undoable-delete 同语义）：撤销 = 从回收站恢复
       _offerUndo(UndoEntry(
         label: '已删除 1 个任务',
@@ -676,6 +748,16 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
   Future<void> _undoLast() async {
     final entry = ref.read(undoStackProvider).pop();
     if (entry == null) return;
+    // 先摘 ghost：延迟窗内的撤销恢复必须立刻显示回行，不能等退场播完
+    //（后到的延迟失效照常触发，届时只是重读一次，无闪）
+    if (mounted) {
+      setState(() {
+        _exitingIds.removeWhere(entry.restoreTaskIds.contains);
+        for (final p in entry.patches) {
+          _exitingIds.remove(p.taskId);
+        }
+      });
+    }
     final bridge = ref.read(orbitBridgeProvider);
     var ok = 0;
     try {
@@ -900,6 +982,10 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
   /// 本次 build 新出现的任务 id（本次播放行入场）
   Set<int> _appearedTaskIds = const {};
 
+  /// 正在退场的行 id（ghost：失效延迟 300ms 内仍用旧对象渲染 [_RowExit]；
+  /// 写操作照常立即落库，延迟的只是主列表失效——见 [_removeRowWithExit]）
+  final Set<int> _exitingIds = {};
+
   /// 追踪新出现任务；在 build 内直改字段（不 setState，不触发重建）。
   ///
   /// 播种时机取**首次拿到非空数据**的那一帧（不是首次 build）：provider 首帧
@@ -922,10 +1008,20 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
   /// 标准列表分支的行入场包装。manual 重排档与 Logbook 分组档有意不做：
   /// 二者共用同一 buildTile，逐行追加入场需镜像数据源，回归面过大
   /// （边界记 docs/05 §九）。
-  Widget _withEntrance(TodoTask task, Widget tile) => _RowEntrance(
-        play: _appearedTaskIds.contains(task.id),
-        child: tile,
-      );
+  ///
+  /// 退场 ghost 也挂在这里：失效延迟窗内，旧对象仍在 `visible` 里，
+  /// 直接播 [_RowExit]——无需快照、不碰索引口径（逾期分组的 od 偏移
+  /// 曾经出过 rest[-1] 崩屏，不另起一套索引映射）。
+  Widget _withEntrance(TodoTask task, Widget tile) {
+    if (_exitingIds.contains(task.id)) {
+      // 窗内点击穿透禁掉：300ms 里重复点勾选/删除会打乱 ghost 与写入的对应
+      return _RowExit(child: IgnorePointer(child: tile));
+    }
+    return _RowEntrance(
+      play: _appearedTaskIds.contains(task.id),
+      child: tile,
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1526,6 +1622,34 @@ class _RowEntrance extends StatelessWidget {
       tween: Tween(begin: 0, end: 1),
       duration: AppMotion.normal,
       curve: AppMotion.standard,
+      builder: (context, t, child) => ClipRect(
+        child: Align(
+          alignment: Alignment.topCenter,
+          heightFactor: t,
+          child: Opacity(opacity: t, child: child),
+        ),
+      ),
+      child: child,
+    );
+  }
+}
+
+/// 行退场过渡（[_RowEntrance] 的镜像：仅标准列表分支的删除 / 离场型完成）
+///
+/// 300ms（[AppMotion.slow]）高度收起 + 淡出，曲线用退场加速
+///（[AppMotion.accelerate]）。由 [_removeRowWithExit] 在失效延迟窗内挂载，
+/// 窗后 invalidate 即卸载——存在期恒定一帧动画长度，不常驻。
+class _RowExit extends StatelessWidget {
+  const _RowExit({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 1, end: 0),
+      duration: AppMotion.slow,
+      curve: AppMotion.accelerate,
       builder: (context, t, child) => ClipRect(
         child: Align(
           alignment: Alignment.topCenter,
