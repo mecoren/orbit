@@ -53,6 +53,10 @@ class _BackupPageState extends ConsumerState<BackupPage> {
   /// null = 空闲；用于按钮防重复点击
   String? _busy;
 
+  /// 本机设备标识（导出区展示，对齐恢复预览里的「来源设备」）；
+  /// 读取失败为 null → 该行整段不渲染（非必需信息，不阻断备份主链路）
+  String? _deviceId;
+
   @override
   void initState() {
     super.initState();
@@ -72,6 +76,13 @@ class _BackupPageState extends ConsumerState<BackupPage> {
 
   Future<void> _load() async {
     final bridge = ref.read(orbitBridgeProvider);
+    // 本机设备标识：单独 try，读取失败静默（导出区少一行，不影响备份链路）
+    String? deviceId;
+    try {
+      deviceId = (await bridge.fullBackupDeviceInfo()).deviceId;
+    } catch (_) {
+      /* 设备标识非必需 */
+    }
     try {
       final prefs = await bridge.backupPrefsGet();
       final local = await bridge.fullBackupListLocal();
@@ -88,6 +99,7 @@ class _BackupPageState extends ConsumerState<BackupPage> {
         _local = local;
         _cloud = cloud;
         _cloudError = cloudError;
+        _deviceId = deviceId;
         _loading = false;
       });
     } catch (e) {
@@ -452,6 +464,17 @@ class _BackupPageState extends ConsumerState<BackupPage> {
                 : '上次备份：${formatDateTime(last * 1000)}',
             style: TextStyle(fontSize: 12, color: colors.secondaryText),
           ),
+          // 本机设备标识：与恢复预览里的「来源设备」同值，便于确认备份来自哪台设备
+          if (_deviceId != null && _deviceId!.isNotEmpty) ...[
+            const SizedBox(height: AppDimens.space4),
+            Text(
+              '本机设备标识：$_deviceId',
+              style: TextStyle(
+                fontSize: 11,
+                color: colors.secondaryText.withValues(alpha: 0.7),
+              ),
+            ),
+          ],
           const SizedBox(height: AppDimens.space12),
           Row(
             children: [

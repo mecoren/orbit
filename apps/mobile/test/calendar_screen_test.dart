@@ -11,6 +11,7 @@ import 'package:orbit/data/providers/bridge_provider.dart';
 import 'package:orbit/modules/todo/calendar_screen.dart';
 import 'package:orbit/core/routing/router_keys.dart';
 import 'package:orbit/modules/todo/sidebar_screen.dart';
+import 'package:orbit/shared/widgets/shadcn/orbit_month_calendar.dart';
 import 'package:orbit/core/theme/icon_map.dart';
 import 'support/orbit_test_app.dart';
 
@@ -357,5 +358,84 @@ void main() {
     await tester.drag(find.byType(Scrollable).first, const Offset(0, -300));
     await tester.pump(const Duration(milliseconds: 200));
     expect(anyCard, findsWidgets);
+  });
+
+  // ── 议程档（docs/07 #56：对齐桌面 CalendarSubMode.agenda）──
+
+  testWidgets('议程档：切档隐藏月历网格，仅保留按日分组列表', (tester) async {
+    final bridge = _seededBridge();
+    await tester.pumpWidget(_wrap(const SizedBox(), bridge));
+    await settle(tester);
+
+    // 月档：网格在树内（月历自带星期表头与农历副标签）
+    expect(find.byType(OrbitMonthCalendar), findsOneWidget);
+    expect(find.text('长按日历快捷新增'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('切换到议程'));
+    await tester.pumpAndSettle();
+
+    // 议程档：网格整体退出树，提示改口横滑翻月
+    expect(find.byType(OrbitMonthCalendar), findsNothing);
+    expect(find.text('左右滑动切换月份'), findsOneWidget);
+
+    // 列表数据不受档位影响（种子任务卡仍在树内；整页 Column 非懒构建）
+    expect(find.text('完成移动端重构方案评审'), findsWidgets);
+
+    // 切回月档：网格恢复（注意不要先滚动页面，否则工具栏按钮不可命中）
+    await tester.tap(find.byTooltip('切换到月历'));
+    await tester.pumpAndSettle();
+    expect(find.byType(OrbitMonthCalendar), findsOneWidget);
+    expect(find.text('长按日历快捷新增'), findsOneWidget);
+  });
+
+  testWidgets('议程档：日期头带休/班徽标（网格已隐藏，徽标只能来自日期头）', (tester) async {
+    final bridge = _OctHolidayBridge()..store.seed();
+    final now = bridge.store.now();
+    // 造两天任务：2026-10-01（mock 休）与 2026-10-10（mock 班）
+    final dueMsList = [
+      DateTime(2026, 10, 1, 9).millisecondsSinceEpoch,
+      DateTime(2026, 10, 10, 9).millisecondsSinceEpoch,
+    ];
+    for (var i = 0; i < dueMsList.length; i++) {
+      final id = 500 + i;
+      bridge.store.tasks[id] = {
+        'id': id,
+        'uuid': 'uuid-holiday-$i',
+        'title': '假期任务$i',
+        'description': null,
+        'project_id': null,
+        'priority': 0,
+        'status': 'pending',
+        'done': 0,
+        'done_at': null,
+        'due_date': dueMsList[i],
+        'start_date': null,
+        'repeat_after': 1,
+        'repeat_mode': 0,
+        'percent_done': 0,
+        'position': 500 + i,
+        'is_favorite': 0,
+        'my_day_date': null,
+        'is_deleted': 0,
+        'created_at': now,
+        'updated_at': now,
+        'deleted_at': null,
+        'version': 1,
+      };
+    }
+    await tester.pumpWidget(_wrap(const SizedBox(), bridge));
+    await settle(tester);
+
+    // 翻到 2026-10 后切议程档
+    await tester.tap(find.byTooltip('下个月'));
+    await tester.pumpAndSettle();
+    expect(find.text('2026年10月'), findsOneWidget);
+    await tester.tap(find.byTooltip('切换到议程'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(OrbitMonthCalendar), findsNothing);
+    expect(find.text('假期任务0'), findsOneWidget);
+    expect(find.text('休'), findsWidgets);
+    expect(find.text('班'), findsWidgets);
   });
 }

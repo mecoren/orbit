@@ -50,6 +50,9 @@ class ChineseCalendarColors {
   /// 节气
   static const Color lunarNewMoon = Color(0xFF0EA5E9);
 
+  /// 调休上班日（班）徽标底色——月历日格与议程档日期头共用同一取值
+  static const Color workdayBadge = Color(0xFFF97316);
+
   /// 调休上班日的压暗底（与休息日浅识别底同源派生）
   static Color workdayBackground(Brightness brightness) =>
       brightness == Brightness.dark
@@ -532,7 +535,7 @@ class _HolidayBadge extends StatelessWidget {
       height: 14,
       alignment: Alignment.center,
       decoration: BoxDecoration(
-        color: isOff ? weekendColor : const Color(0xFFF97316),
+        color: isOff ? weekendColor : ChineseCalendarColors.workdayBadge,
         shape: BoxShape.circle,
       ),
       child: Text(

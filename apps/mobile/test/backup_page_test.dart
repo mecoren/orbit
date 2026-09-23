@@ -45,6 +45,8 @@ void main() {
     expect(find.text('从云端副本恢复'), findsOneWidget);
     // 未配置云同步：云端清单不可用提示，但不阻断其余卡
     expect(find.textContaining('云端副本不可用'), findsOneWidget);
+    // 本机设备标识（导出区；与恢复预览里的「来源设备」同源）
+    expect(find.textContaining('本机设备标识：mock-device'), findsOneWidget);
   });
 
   testWidgets('未解锁同步密码时导出给出可读错误提示', (tester) async {

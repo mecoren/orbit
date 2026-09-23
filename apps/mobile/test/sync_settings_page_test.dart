@@ -266,4 +266,82 @@ void main() {
     expect(_badge('已解锁'), findsOneWidget);
     await drainToastTimers(tester);
   });
+
+  // ── 密钥治理（docs/07 #55：版本显示 / v1 迁移 / 以本机为准重置云端）──
+
+  testWidgets('密钥治理：v2 设备显示方案版本且不出现升级入口', (tester) async {
+    final bridge = MockOrbitBridge()
+      ..store.syncPasswordSet = true
+      ..store.syncUnlocked = true
+      ..store.syncPassword = '123456';
+    await tester.pumpWidget(_wrap(bridge));
+    await _flush(tester);
+
+    await _scrollTo(tester, find.text('本机密钥方案：v2（同密码跨设备同 Key）'));
+    expect(find.text('升级密钥方案到 v2'), findsNothing);
+    expect(find.text('以本机为准重置云端'), findsOneWidget);
+  });
+
+  testWidgets('密钥治理：v1 存量设备 → 升级入口，确认后置 v2 并隐去入口', (tester) async {
+    final bridge = MockOrbitBridge()
+      ..store.syncPasswordSet = true
+      ..store.syncUnlocked = true
+      ..store.syncPassword = '123456'
+      ..store.syncKeyVersion = 'v1';
+    await tester.pumpWidget(_wrap(bridge));
+    await _flush(tester);
+
+    await _scrollTo(tester, find.text('本机密钥方案：v1（旧版随机密钥）'));
+    expect(find.text('升级密钥方案到 v2'), findsOneWidget);
+
+    await _tapAt(tester, find.text('升级密钥方案到 v2'));
+    await tester.pumpAndSettle();
+    // 升级需当前同步密码（对话框内唯一输入框）
+    await tester.enterText(
+        find.widgetWithText(TextField, '当前同步密码'), '123456');
+    await tester.pump();
+    await tester.tap(find.text('确认升级'));
+    await _flush(tester);
+
+    expect(bridge.store.syncKeyVersion, 'v2');
+    await _scrollTo(tester, find.text('本机密钥方案：v2（同密码跨设备同 Key）'));
+    expect(find.text('升级密钥方案到 v2'), findsNothing);
+    await drainToastTimers(tester);
+  });
+
+  testWidgets('密钥治理：以本机为准重置云端走危险确认并执行', (tester) async {
+    final bridge = MockOrbitBridge()
+      ..store.syncPasswordSet = true
+      ..store.syncUnlocked = true
+      ..store.syncPassword = '123456';
+    await tester.pumpWidget(_wrap(bridge));
+    await _flush(tester);
+
+    await _tapAt(tester, find.text('以本机为准重置云端'));
+    await tester.pumpAndSettle();
+    // 不可逆操作必须二次确认（确认钮在抽屉内，取 last）
+    expect(find.text('确认重置云端'), findsOneWidget);
+    await tester.tap(find.text('确认重置云端').last);
+    await _flush(tester);
+
+    expect(find.textContaining('云端已重置'), findsOneWidget);
+    await drainToastTimers(tester);
+  });
+
+  testWidgets('密钥治理：未解锁时重置云端 → 报错不静默', (tester) async {
+    final bridge = MockOrbitBridge()
+      ..store.syncPasswordSet = true
+      ..store.syncUnlocked = false
+      ..store.syncPassword = '123456';
+    await tester.pumpWidget(_wrap(bridge));
+    await _flush(tester);
+
+    await _tapAt(tester, find.text('以本机为准重置云端'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('确认重置云端').last);
+    await _flush(tester);
+
+    expect(find.textContaining('重置失败'), findsOneWidget);
+    await drainToastTimers(tester);
+  });
 }

@@ -34,6 +34,11 @@ import '../../core/theme/icon_map.dart';
 /// - 点击月份标题打开年视图（12 迷你月历 + 干支生肖 + 春节/初一下划线，
 ///   PageView 滑动切年），点任意日期回月历定位该日
 ///
+/// **视图档**（工具栏月/列表图标切换，对齐桌面 `CalendarSubMode`）：
+/// 月档 = 上网格 + 下列表；**议程档** = 隐藏网格、整页本月按日分组列表，
+/// 进入时一次性定位到今天、日期头带休/班徽标（桌面 agenda 档语义）；
+/// 年档为标题点击进入的独立页（[YearOverviewPage]）。
+///
 /// 数据口径：与子列表同源 todoTasksProvider 全量任务，客户端按 due_date
 /// 本地日聚合；节假日数据 cfg_holidays 缓存（空库回落 Rust 预置 2026 表）。
 class CalendarScreen extends ConsumerStatefulWidget {
@@ -49,6 +54,12 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
 
   /// 当前选中日期（默认今天；点击日格切换，右栏滚动定位）
   DateTime _selectedDate = DateTime.now();
+
+  /// 视图档：false = 月档（月历网格 + 当月按日列表）、true = 议程档
+  /// （隐藏月历网格，整页当月按日分组列表 + 进入时定位今天）。
+  /// 对齐桌面 `CalendarSubMode.agenda`；桌面第三档是年视图，移动端为标题
+  /// 点击进入的独立页（[YearOverviewPage]），故页内只需月 ⇄ 议程两态切换。
+  bool _agendaMode = false;
 
   /// 分组锚点注册表：ymd → 分组节点（点击日历滚动定位）
   final Map<String, GlobalKey> _groupKeys = {};
@@ -141,6 +152,22 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
 
   /// 打开任务详情（稳定方法引用：分组 build 不再逐组创建闭包）
   void _openTask(int id) => context.push('/todo/$id');
+
+  /// 切换月档 ⇄ 议程档。切入议程档时**一次性**定位到今天（当月今天有任务
+  /// 分组时）——用户随后主动滚动不再干预，与桌面议程档「自动滚到今天」同口径
+  void _toggleAgenda() {
+    setState(() => _agendaMode = !_agendaMode);
+    if (!_agendaMode) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final node = _groupKeys[_ymd(DateTime.now())]?.currentContext;
+      if (node != null) {
+        Scrollable.ensureVisible(node,
+            duration: AppMotion.scrollSettle,
+            curve: AppMotion.scrollSettleCurve);
+      }
+    });
+  }
 
   /// 月份标题点击：打开年视图，返回后定位到所选日期
   Future<void> _openYearOverview() async {
@@ -250,42 +277,57 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                             tooltip: '回到今天',
                             visualDensity: VisualDensity.compact,
                           ),
+                          // 月档 ⇄ 议程档切换（年档由标题点击进入，见 _openYearOverview）
+                          IconButton(
+                            icon: Icon(
+                              _agendaMode
+                                  ? OrbitIcons.calendar
+                                  : OrbitIcons.list,
+                              size: AppDimens.iconSizeMd,
+                            ),
+                            onPressed: _toggleAgenda,
+                            tooltip: _agendaMode ? '切换到月历' : '切换到议程',
+                            visualDensity: VisualDensity.compact,
+                          ),
                           _buildUpdateButton(),
                         ],
                       ),
                     ),
                     // ===== 月历（wait-home 完整版：农历副标签/休班徽标/任务圆点）=====
-                    Padding(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: AppDimens.space8),
-                      child: OrbitMonthCalendar(
-                        size: AppCalendarSize.large,
-                        showHeader: false,
-                        month: _month,
-                        selected: _selectedDate,
-                        onDayTap: _selectDate,
-                        onDayLongPress: _addOnDate,
-                        // 横滑翻月：月历自带 PageView（availableGestures =
-                        // horizontalSwipe），必须把页码回调接回 _month，否则
-                        // 网格翻页了而标题与下方按日分组列表还停在旧月份
-                        onMonthChange: (focused) => setState(() {
-                          _month = DateTime(focused.year, focused.month, 1);
-                        }),
-                        // 选中/今天强调色与桌面端日历同源（桌面月历 --primary 即
-                        // themeAccent 体系）：不走 scheme.primary——M3 fromSeed
-                        // 会把 #4E8CFF 派生成 #455E91 灰蓝，与桌面明显偏差
-                        accentColor: OrbitAccents.themeAccent,
-                        weekendColor: ChineseCalendarColors.weekend,
-                        holidays: {
-                          for (final e in holidayByDate.entries)
-                            e.key: e.value.isHoliday,
-                        },
-                        subLabelBuilder: ChineseAlmanac.daySubLabel,
-                        eventDotsBuilder: (date) => monthDots[_ymd(date)] ??
-                            const <Color>[],
+                    // 议程档隐藏网格：整页让给按日分组列表（桌面 agenda 档同语义）
+                    if (!_agendaMode) ...[
+                      Padding(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: AppDimens.space8),
+                        child: OrbitMonthCalendar(
+                          size: AppCalendarSize.large,
+                          showHeader: false,
+                          month: _month,
+                          selected: _selectedDate,
+                          onDayTap: _selectDate,
+                          onDayLongPress: _addOnDate,
+                          // 横滑翻月：月历自带 PageView（availableGestures =
+                          // horizontalSwipe），必须把页码回调接回 _month，否则
+                          // 网格翻页了而标题与下方按日分组列表还停在旧月份
+                          onMonthChange: (focused) => setState(() {
+                            _month = DateTime(focused.year, focused.month, 1);
+                          }),
+                          // 选中/今天强调色与桌面端日历同源（桌面月历 --primary 即
+                          // themeAccent 体系）：不走 scheme.primary——M3 fromSeed
+                          // 会把 #4E8CFF 派生成 #455E91 灰蓝，与桌面明显偏差
+                          accentColor: OrbitAccents.themeAccent,
+                          weekendColor: ChineseCalendarColors.weekend,
+                          holidays: {
+                            for (final e in holidayByDate.entries)
+                              e.key: e.value.isHoliday,
+                          },
+                          subLabelBuilder: ChineseAlmanac.daySubLabel,
+                          eventDotsBuilder: (date) => monthDots[_ymd(date)] ??
+                              const <Color>[],
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: AppDimens.space4),
+                      const SizedBox(height: AppDimens.space4),
+                    ],
                     // ===== 当月任务列表标题行 =====
                     Padding(
                       padding: const EdgeInsets.symmetric(
@@ -319,7 +361,8 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                           ),
                           const Spacer(),
                           Text(
-                            '长按日历快捷新增',
+                            // 议程档无网格可长按，改为提示横滑翻月
+                            _agendaMode ? '左右滑动切换月份' : '长按日历快捷新增',
                             style: TextStyle(
                               fontSize: 11,
                               color: colors.secondaryText,
@@ -341,7 +384,9 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                             const SizedBox(width: AppDimens.space8),
                             Expanded(
                               child: Text(
-                                '本月没有带截止日期的任务，切换月份或长按日历新增',
+                                _agendaMode
+                                    ? '本月没有带截止日期的任务，切换月份或点右下角新增'
+                                    : '本月没有带截止日期的任务，切换月份或长按日历新增',
                                 style: TextStyle(
                                   fontSize: 12,
                                   color: colors.secondaryText,
@@ -358,6 +403,11 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                           date: group.date,
                           isSelectedDay: _ymd(group.date) == selectedYmd,
                           isToday: _ymd(group.date) == todayYmd,
+                          // 议程档日期头带休/班徽标（桌面 VirtualGroupedList
+                          // 的 showHolidayMark 同口径；月档右栏不带）
+                          holidayMark: _agendaMode
+                              ? holidayByDate[_ymd(group.date)]?.isHoliday
+                              : null,
                           tasks: group.items,
                           onOpenTask: _openTask,
                         ),
@@ -427,6 +477,7 @@ class _MonthDayGroup extends StatelessWidget {
     required this.isToday,
     required this.tasks,
     required this.onOpenTask,
+    this.holidayMark,
   });
 
   final DateTime date;
@@ -434,6 +485,9 @@ class _MonthDayGroup extends StatelessWidget {
   final bool isToday;
   final List<TodoTask> tasks;
   final ValueChanged<int> onOpenTask;
+
+  /// 节假日徽标：true 休 / false 班 / null 不渲染（议程档传入，月档为 null）
+  final bool? holidayMark;
 
   static const _weekdayNames = ['一', '二', '三', '四', '五', '六', '日'];
 
@@ -499,6 +553,30 @@ class _MonthDayGroup extends StatelessWidget {
                     color: colors.secondaryText,
                   ),
                 ),
+                // 休/班徽标（议程档）：底色取值与月历日格徽标同源
+                if (holidayMark != null) ...[
+                  const SizedBox(width: AppDimens.space6),
+                  Container(
+                    width: 16,
+                    height: 16,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: holidayMark!
+                          ? ChineseCalendarColors.weekend
+                          : ChineseCalendarColors.workdayBadge,
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Text(
+                      holidayMark! ? '休' : '班',
+                      style: const TextStyle(
+                        fontSize: 10,
+                        height: 1,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                ],
                 if (isToday) ...[
                   const SizedBox(width: AppDimens.space8),
                   Container(

@@ -30,7 +30,10 @@ import '../../core/theme/icon_map.dart';
 ///
 /// 移动端差异（crates/orbit-flutter/src/api/sync.rs 模块注释）：
 /// - 无系统钥匙串：同步密码仅进程内缓存，重启后需重新解锁；
-/// - 无后台调度器：定时同步/修改后立即同步仅存档到配置，手动触发为准；
+/// - 无后台调度器：**定时同步**仅存档到配置（间隔由桌面端执行）；
+///   **修改后立即同步**已在移动端生效（写路径 db-change → 5s 防抖
+///   `cloudSyncPushOnly`，见 services/sync_on_change_scheduler.dart；
+///   沿用桌面口径，需「定时同步」总开关同时开启）；
 /// - 无 sync-config-changed 事件流：保存后本页自行重读刷新。
 class SyncSettingsPage extends ConsumerStatefulWidget {
   const SyncSettingsPage({super.key});
@@ -431,7 +434,13 @@ class _SyncSettingsPageState extends ConsumerState<SyncSettingsPage> {
           label: '修改后立即同步',
           value: _onChange,
           onChanged: (v) => setState(() => _onChange = v),
-          description: _onChange ? '编辑/删除任务后自动推送（桌面端生效）' : '仅按定时或手动同步',
+          // 门控与桌面同口径：需「定时同步」总开关同时开启（见
+          // sync_on_change_scheduler.dart 的 pushNow 门控链）
+          description: !_onChange
+              ? '仅按定时或手动同步'
+              : _autoEnabled
+                  ? '编辑后约 5 秒自动推送（需已解锁同步密码）'
+                  : '编辑后约 5 秒自动推送（需开启上方「定时同步」总开关）',
         ),
         const SizedBox(height: AppDimens.space12),
         Row(
@@ -561,6 +570,11 @@ class _SyncSettingsPageState extends ConsumerState<SyncSettingsPage> {
 /// .orbitkey JSON 导入后即持有 Data Key，配合密码解锁可解云端密文）+
 /// 修改密码（v2 下内部编排云端全量重传）+ 导出密钥包 + 清除本机会话缓存。
 ///
+/// **密钥治理面**（docs/07 #55，对齐桌面 sync-recovery-page）：三条此前移动端不可达的
+/// 路径——①「本机密钥方案」版本显示（`sync_crypto_meta_version`）；②v1 存量设备的
+/// 「升级到 v2」迁移（同密码确定性派生 + 云端全量重传，探测到 v1 才显示入口）；
+/// ③「以本机为准重置云端」（`cloud_sync_rekey`，危险操作走 destructive 二次确认）。
+///
 /// 与桌面的唯一残差：移动端无系统钥匙串，同步密码只在进程内缓存，
 /// 应用重启后需重新输入（对应桌面「忘记此设备的同步密码缓存」的降级形态）。
 class _SyncCryptoCard extends ConsumerStatefulWidget {
@@ -573,6 +587,9 @@ class _SyncCryptoCard extends ConsumerStatefulWidget {
 class _SyncCryptoCardState extends ConsumerState<_SyncCryptoCard> {
   SyncCryptoStatus? _status;
   bool _busy = false;
+
+  /// 本机密钥方案版本（'v1' / 'v2'；未设置密码或探测失败为 null）
+  String? _metaVersion;
 
   late final _pwController = TextEditingController();
   late final _confirmController = TextEditingController();
@@ -602,7 +619,26 @@ class _SyncCryptoCardState extends ConsumerState<_SyncCryptoCard> {
     } catch (_) {
       // 状态查询失败保持原状（桌面同语义静默）
     }
+    await _loadMetaVersion();
   }
+
+  /// 探测本机密钥方案版本：v1 存量设备才显示迁移入口。
+  /// 探测失败静默——默认不显示入口，不阻塞主路径（与桌面同语义）
+  Future<void> _loadMetaVersion() async {
+    try {
+      final v = await ref.read(orbitBridgeProvider).syncCryptoMetaVersion();
+      if (mounted) setState(() => _metaVersion = v);
+    } catch (_) {
+      /* 探测失败不显示迁移入口 */
+    }
+  }
+
+  /// 密钥方案版本展示文案
+  String get _metaVersionLabel => switch (_metaVersion) {
+        'v1' => 'v1（旧版随机密钥）',
+        'v2' => 'v2（同密码跨设备同 Key）',
+        _ => '未知',
+      };
 
   String _errMsg(Object e) => e
       .toString()
@@ -785,6 +821,90 @@ class _SyncCryptoCardState extends ConsumerState<_SyncCryptoCard> {
       await _refresh();
     } catch (e) {
       WaitToast.destructive('清除失败：${_errMsg(e)}');
+    }
+  }
+
+  /// 升级密钥方案到 v2（仅 v1 存量设备显示入口）：
+  /// 同密码确定性派生新 Key + 云端全量重传，期间其他设备不要同步
+  Future<void> _upgradeV2() async {
+    if (_busy) return;
+    final ctrl = TextEditingController();
+    try {
+      final ok = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('升级密钥方案到 v2'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                '升级后同一同步密码在任何设备都派生同一把密钥，不再需要密钥包分发，'
+                '可彻底避免「密钥不一致」。升级会立即用新密钥全量重传云端数据，'
+                '期间请勿在其他设备同步。此操作不可撤销。',
+                style: TextStyle(fontSize: 12),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: ctrl,
+                obscureText: true,
+                decoration: const InputDecoration(labelText: '当前同步密码'),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('取消'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('确认升级'),
+            ),
+          ],
+        ),
+      );
+      if (ok != true || !mounted) return;
+      setState(() => _busy = true);
+      await ref.read(orbitBridgeProvider).syncCryptoUpgradeV2(ctrl.text);
+      WaitToast.success('已升级 v2 并完成云端重传。其他设备输入相同密码即可同步');
+      await _refresh();
+    } catch (e) {
+      WaitToast.destructive('升级失败：${_errMsg(e)}');
+    } finally {
+      ctrl.dispose();
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  /// 以本机为准重置云端（危险）：当前 Data Key 全量重加密**覆盖**云端。
+  /// 本机没有的记录与附件会永久丢失（桌面 sync-recovery-page 的兜底路径）
+  Future<void> _rekeyCloud() async {
+    if (_busy) return;
+    final ok = await showConfirmBottomSheet(
+      context,
+      title: '以本机为准重置云端',
+      message: '将用当前设备的数据密钥重加密并覆盖云端全部数据：仅存于云端的记录与附件'
+          '会永久丢失，其他设备需输入本机当前同步密码后重新同步。'
+          '此操作不可撤销，请确认云端数据已无需保留。',
+      confirmLabel: '确认重置云端',
+      destructive: true,
+    );
+    if (!ok || !mounted) return;
+    setState(() => _busy = true);
+    try {
+      // 真桥返回 result_to_json 的 JSON 串（非对象），与桌面同源结构
+      final raw = await ref.read(orbitBridgeProvider).cloudSyncRekey();
+      final result =
+          SyncResultJson.fromJson(jsonDecode(raw) as Map<String, dynamic>);
+      WaitToast.success(
+        '云端已重置：${result.pushedModules} 个模块、'
+        '${result.uploadedAttachments} 个附件已用本机密钥重传',
+      );
+      await _refresh();
+    } catch (e) {
+      WaitToast.destructive('重置失败：${_errMsg(e)}');
+    } finally {
+      if (mounted) setState(() => _busy = false);
     }
   }
 
@@ -998,6 +1118,35 @@ class _SyncCryptoCardState extends ConsumerState<_SyncCryptoCard> {
                     child: OutlinedButton(
                       onPressed: _busy ? null : _forgetSession,
                       child: const Text('清除本机同步密码缓存'),
+                    ),
+                  ),
+                  const SizedBox(height: AppDimens.space16),
+                  // ── 密钥治理（docs/07 #55）：版本显示 + v1 迁移 + 重置云端 ──
+                  Text(
+                    '本机密钥方案：$_metaVersionLabel',
+                    style: TextStyle(fontSize: 12, color: colors.secondaryText),
+                  ),
+                  // v1 存量设备才显示迁移入口（探测非 v1 时整条不出现）
+                  if (_metaVersion == 'v1') ...[
+                    const SizedBox(height: AppDimens.space8),
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton(
+                        onPressed: _busy ? null : _upgradeV2,
+                        child: const Text('升级密钥方案到 v2'),
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: AppDimens.space8),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton(
+                      onPressed: _busy ? null : _rekeyCloud,
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: colors.destructive,
+                        side: BorderSide(color: colors.destructive),
+                      ),
+                      child: const Text('以本机为准重置云端'),
                     ),
                   ),
                 ],
