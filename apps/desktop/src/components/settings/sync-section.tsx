@@ -68,6 +68,7 @@ import {
   backupPrefsSave,
   cloudSyncHistory,
   cloudSyncNow,
+  fullBackupDeviceInfo,
   fullBackupExport,
   fullBackupImport,
   fullBackupListLocal,
@@ -1294,6 +1295,23 @@ function BackupCard() {
   const [cloudOpen, setCloudOpen] = useState(false);
   const [cloudList, setCloudList] = useState<CloudBackupEntryView[] | null>(null);
 
+  /** 本机设备标识（导出区展示；与备份清单 device_id 同源，读取失败不渲染） */
+  const [deviceId, setDeviceId] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+    void fullBackupDeviceInfo()
+      .then((r) => {
+        if (!cancelled) setDeviceId(r.device_id);
+      })
+      .catch(() => {
+        /* 设备标识非必需：失败则不渲染该行 */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   /**
    * 第一段确认的恢复目标（看预览 + 5 秒时停；确认后只递交不执行）：
    * 全量恢复会完全覆盖当前全部待办数据，不可撤销，故走两段式确认，
@@ -1508,6 +1526,12 @@ function BackupCard() {
         导出包含全部待办表数据的加密备份包（AES-256-GCM）；口令取自已解锁的同步密码，
         无需另行输入。恢复可从本地文件、本地历史或云端副本选源。
       </p>
+      {deviceId ? (
+        <p className="text-[11px] text-muted-foreground">
+          本机设备标识：{deviceId}
+          （与备份包清单同源，恢复预览里的「来源设备」即此值）
+        </p>
+      ) : null}
       <div className="flex flex-wrap items-center gap-2">
         <Button size="sm" variant="outline" disabled={!!busy} onClick={() => void handleExportCloud()}>
           {busy === "export" ? <Loader2 className="mr-1 size-3 animate-spin" /> : null}

@@ -791,6 +791,13 @@ export const fullBackupPeekLocal = (path: string) =>
 export const fullBackupPeekCloud = (cloudPath: string) =>
   invoke<BackupPreviewView>("full_backup_peek_cloud", { cloudPath });
 
+/** 本机设备标识（导出区展示；与备份清单 `device_id` 同源，未初始化返回空串） */
+export interface FullBackupDeviceInfo {
+  device_id: string;
+}
+export const fullBackupDeviceInfo = () =>
+  invoke<FullBackupDeviceInfo>("full_backup_device_info");
+
 // ---------- 定时自动备份（backup_scheduler） ----------
 
 export type BackupScheduleType =
