@@ -5,8 +5,11 @@ import 'package:path_provider/path_provider.dart';
 
 /// 本机 UI 偏好存储（移动端对应物 = 桌面 localStorage）
 ///
-/// 只承载视图态类本机偏好（隐藏已完成、排序档等会话态），**不进 DB、不进同步**
+/// 只承载视图态类本机偏好（已完成区展开态、排序档等会话态），**不进 DB、不进同步**
 /// ——与桌面 localStorage 键全集同口径（如 `todo_hide_done`），键名直接复用。
+///
+/// 例外：`todo_done_section_open`（已完成折叠卡展开态）是**移动端独有键**——
+/// 桌面仍用 eye 开关（`todo_hide_done`），两端承载形态不同故键不同（docs/05 §八）。
 ///
 /// 落盘载体：应用支持目录 `prefs.json`（与 `device_id.txt` 同目录先例，
 /// 清库不清偏好）。读写失败一律静默降级：偏好不是业务数据——读不到按各自

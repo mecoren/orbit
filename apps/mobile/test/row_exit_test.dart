@@ -48,8 +48,10 @@ void main() {
 
   testWidgets('完成退场：ghost 停留 300ms 后行消失', (tester) async {
     await _pumpList(tester, MockOrbitBridge());
-    // 默认 manual 重排档不进退场（仅标准列表分支）：先切到截止时间排序
-    await tester.tap(find.byTooltip('排序方式'));
+    // 默认 manual 重排档不进退场（仅标准列表分支）：先从 ⋮ 面板切到截止时间排序
+    await tester.tap(find.byTooltip('更多操作'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('排序方式'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('截止时间'));
     await tester.pumpAndSettle();
@@ -79,9 +81,11 @@ void main() {
   testWidgets('看板分支：完成后即时失效，无 ghost 停留', (tester) async {
     await _pumpList(tester, MockOrbitBridge());
 
-    await tester.tap(find.byTooltip('视图模式'));
+    await tester.tap(find.byTooltip('更多操作'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('看板'));
+    await tester.tap(find.text('视图'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('看板视图'));
     await tester.pumpAndSettle();
     expect(find.byType(KanbanBoard), findsOneWidget);
 

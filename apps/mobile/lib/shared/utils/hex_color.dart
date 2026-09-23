@@ -13,3 +13,11 @@ Color hexToColor(String? hex, {Color fallback = const Color(0xFF3B82F6)}) {
   if (parsed == null) return fallback;
   return Color(parsed);
 }
+
+/// Color → `#RRGGBB`（大写；与 `hex_color` 字段 / 预设板同格式）
+///
+/// 自定义取色的落库形态：alpha 有意丢弃（项目色只用 RGB，透明度交给主题层）。
+String colorToHex(Color color) {
+  final rgb = color.toARGB32() & 0xFFFFFF;
+  return '#${rgb.toRadixString(16).padLeft(6, '0').toUpperCase()}';
+}

@@ -10,7 +10,8 @@ import '../../data/api/orbit_bridge.dart';
 import '../../data/providers/bridge_provider.dart';
 import '../../shared/utils/hex_color.dart';
 import '../../shared/widgets/shadcn/orbit_info_row.dart';
-import '../../shared/widgets/shadcn/orbit_actions_sheet.dart' show bottomSheetMotion;
+import '../../shared/widgets/shadcn/orbit_actions_sheet.dart'
+    show bottomSheetMotion, bottomSheetTopShape;
 import '../../shared/widgets/shadcn/orbit_section_card.dart';
 import '../../shared/widgets/shadcn/orbit_select_sheet.dart';
 import '../../shared/widgets/shadcn/orbit_date_picker.dart';
@@ -87,6 +88,64 @@ Future<void> showTodoFormSheet(
       presetTemplate: presetTemplate,
     ),
   );
+}
+
+/// 从模板新建：拉模板列表 → 选择 → payload 预填完整新建表单
+///
+/// 与任务列表页「长按加号」、快速添加面板「模板」档共用同一链，避免选择逻辑
+/// 在两处复刻。无模板或拉取失败静默返回（模板是可选入口，不炸主流程）。
+Future<void> showTemplateCreateFlow(
+  BuildContext context,
+  OrbitBridge bridge, {
+  int? defaultProjectId,
+  QuickViewKey? quickView,
+}) async {
+  try {
+    final templates = await bridge.templatesList();
+    if (!context.mounted || templates.isEmpty) return;
+    final colors = AppColors.ofContext(context);
+    final tpl = await showModalBottomSheet<TodoTemplate>(
+      context: context,
+      backgroundColor: colors.popup,
+      shape: bottomSheetTopShape,
+      sheetAnimationStyle: bottomSheetMotion,
+      builder: (ctx) => SafeArea(
+        child: ListView(
+          shrinkWrap: true,
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(AppDimens.space16),
+              child: Text(
+                '从模板新建',
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                  color: colors.titleText,
+                ),
+              ),
+            ),
+            for (final t in templates)
+              ListTile(
+                title: Text(
+                  t.name,
+                  style: TextStyle(fontSize: 14, color: colors.bodyText),
+                ),
+                onTap: () => Navigator.pop(ctx, t),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (tpl == null || !context.mounted) return;
+    await showTodoFormSheet(
+      context,
+      defaultProjectId: defaultProjectId,
+      quickView: quickView,
+      presetTemplate: parseTemplatePayload(tpl.payload),
+    );
+  } catch (_) {
+    /* 模板拉取失败：静默（模板是可选入口） */
+  }
 }
 
 /// 提醒同步（桌面端 task-form-sheet 同语义）：

@@ -54,3 +54,25 @@ KanbanGroupBy loadKanbanGroupBy() => LocalPrefs.getEnum(
       KanbanGroupBy.values,
       fallback: KanbanGroupBy.project,
     );
+
+/// 单项目视图档持久化键
+///
+/// **为什么按键存而不是一张 JSON 表**：`LocalPrefs` 的值域就是字符串，
+/// 一个项目一个键既能沿用 `getEnum` 的脏值回落，也不会因一条脏记录毁掉整张表。
+String projectViewModePrefsKey(int projectId) =>
+    'todo_view_mode_project_$projectId';
+
+/// 读某项目上下文的视图档：该项目设过就用它，未设过回落全局档
+/// （全局档 = 「全部任务 / 今天」等非项目视图的默认值，也是新项目的初值）
+TaskViewMode loadViewModeForProject(int? projectId) {
+  if (projectId == null) return loadViewMode();
+  return LocalPrefs.getEnum(
+    projectViewModePrefsKey(projectId),
+    TaskViewMode.values,
+    fallback: loadViewMode(),
+  );
+}
+
+/// 写某项目的视图档（只动项目档：全局档保持「非项目视图的默认值」语义）
+Future<void> saveProjectViewMode(int projectId, TaskViewMode mode) =>
+    LocalPrefs.setString(projectViewModePrefsKey(projectId), mode.name);

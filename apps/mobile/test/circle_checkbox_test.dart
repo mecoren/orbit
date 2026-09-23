@@ -111,4 +111,24 @@ void main() {
     expect(_box(tester).size, 28);
     expect(_box(tester).borderRadius, BorderRadius.circular(14));
   });
+
+  // 列表行优先级着色入口（2026-09-23）：高/紧急/立即由圆环颜色表达，
+  // P0「无」不传（回落中性灰）——断言覆写生效且不勾选态仍是空心圆
+  testWidgets('borderColor 覆写描边色（优先级语义）', (tester) async {
+    await tester.pumpWidget(orbitTestApp(
+      home: Scaffold(
+        body: Center(
+          child: CircleCheckbox(
+            checked: false,
+            borderColor: const Color(0xFFF59E0B),
+            onToggle: () {},
+          ),
+        ),
+      ),
+    ));
+    await tester.pump(AppMotion.fast);
+
+    expect(_box(tester).borderColor, const Color(0xFFF59E0B));
+    expect(_box(tester).state, sh.CheckboxState.unchecked);
+  });
 }

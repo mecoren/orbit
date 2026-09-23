@@ -409,6 +409,26 @@ String formatYmd(int ms) {
   return '${d.year}-${_two(d.month)}-${_two(d.day)}';
 }
 
+/// 行右侧截止日期短标签（相对化，TickTick 版式的日期列用）：
+/// 今天 / 明天 / 昨天 / 同年 `M月D日` / 跨年 `yyyy年M月D日`。
+///
+/// 按**本地时区日界**判相对（不做时长差比较——同一天任何时刻都算「今天」，
+/// 逾期与否仍由 [isOverdue] 单独判定，两者互不干扰）。
+String formatDueLabel(int ms, {DateTime? now}) {
+  final d = DateTime.fromMillisecondsSinceEpoch(ms);
+  final n = now ?? DateTime.now();
+  final today = DateTime(n.year, n.month, n.day);
+  final diff = DateTime(d.year, d.month, d.day).difference(today).inDays;
+  return switch (diff) {
+    0 => '今天',
+    1 => '明天',
+    -1 => '昨天',
+    _ => d.year == n.year
+        ? '${d.month}月${d.day}日'
+        : '${d.year}年${d.month}月${d.day}日',
+  };
+}
+
 /// yyyy-MM-dd HH:mm（本地时区）
 String formatDateTime(int ms) {
   final d = DateTime.fromMillisecondsSinceEpoch(ms);
@@ -551,6 +571,11 @@ String priorityColorHex(int priority) => switch (priority) {
       5 => '#DC2626',
       _ => '#D1D5DB',
     };
+
+/// 勾选框描边优先级色 hex（列表行优先级着色的唯一入口）：
+/// P0「无」返回 null——回落组件默认中性灰描边，无优先级不该产生视觉噪音。
+String? priorityRingHex(int priority) =>
+    priority <= 0 ? null : priorityColorHex(priority);
 
 /// 优先级 0–5 文案（P0 显"无"）
 String priorityLabel(int priority) => switch (priority) {

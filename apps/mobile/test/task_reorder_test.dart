@@ -3,7 +3,9 @@
 // 2. 非手动档（截止时间）不重排（顺序由排序档决定）；
 // 3. 长按拾起后拖动 → onReorderItem → todoTaskUpdatePosition 以相邻 position
 //    取中值落库（与桌面 midpoint 同口径：prev 缺省 0 / next 缺省 100000）；
-// 4. 长按拾起后**原地松手**（无位移）→ 仍弹操作菜单（长按手势在 manual 档
+// 4. 长按拾起后**手指移动过** → 只落位排序、松手不弹操作菜单（位移判据取行内
+//    Listener 的原始指针位移；onReorderItem 只在真换过槽位时才触发，靠不住）；
+// 5. 长按拾起后**原地松手**（无位移）→ 仍弹操作菜单（长按手势在 manual 档
 //    让位给拖动后，菜单入口由 onReorderEnd 兜回来，功能不欠账）。
 // MockOrbitBridge 注入（同 todo_screens_smoke_test 的延迟越过口径）。
 import 'package:flutter/material.dart';
@@ -26,9 +28,11 @@ Future<void> _settlePastMockLatency(WidgetTester tester) async {
   await tester.pumpAndSettle();
 }
 
-/// 打开右上排序菜单切换档位（sort 图标按钮 → PopupMenuItem 文案）
+/// 经页头 ⋮ 下拉面板切排序档（⋮ → 就地展开「排序方式」→ 点档位）
 Future<void> _switchSort(WidgetTester tester, String label) async {
-  await tester.tap(find.byIcon(OrbitIcons.sort));
+  await tester.tap(find.byTooltip('更多操作'));
+  await tester.pumpAndSettle();
+  await tester.tap(find.text('排序方式'));
   await tester.pumpAndSettle();
   await tester.tap(find.text(label).last);
   await tester.pumpAndSettle();
@@ -106,6 +110,54 @@ void main() {
       (t) => t['title'] == '完成移动端重构方案评审',
     );
     expect(storeTask['position'] as int, greaterThan(50000));
+  });
+
+  testWidgets('长按拾起后拖动落位：不弹操作菜单（有位移即排序，非长按）', (tester) async {
+    final bridge = MockOrbitBridge();
+    await tester.pumpWidget(_wrap(
+      const SubListScreen(
+        query: TaskFilterInput(quickView: QuickViewKey.all),
+      ),
+      bridge,
+    ));
+    await _settlePastMockLatency(tester);
+
+    final gesture = await _pickUp(tester, find.text('完成移动端重构方案评审'));
+    await gesture.moveBy(const Offset(0, 600));
+    await tester.pump();
+    await gesture.up();
+    await tester.pumpAndSettle();
+    await _settlePastMockLatency(tester);
+
+    // 落位（无论换没换槽位）都是排序手势，不该再兜出长按菜单
+    expect(find.text('多选'), findsNothing);
+    expect(find.text('复制任务'), findsNothing);
+  });
+
+  testWidgets('长按拾起后来回拖动回到原位：不弹菜单、不写库', (tester) async {
+    final bridge = MockOrbitBridge();
+    await tester.pumpWidget(_wrap(
+      const SubListScreen(
+        query: TaskFilterInput(quickView: QuickViewKey.all),
+      ),
+      bridge,
+    ));
+    await _settlePastMockLatency(tester);
+
+    final gesture = await _pickUp(tester, find.text('完成移动端重构方案评审'));
+    await gesture.moveBy(const Offset(0, 120));
+    await tester.pump();
+    await gesture.moveBy(const Offset(0, -120));
+    await tester.pump();
+    await gesture.up();
+    await tester.pumpAndSettle();
+    await _settlePastMockLatency(tester);
+
+    expect(find.text('多选'), findsNothing);
+    final storeTask = bridge.store.tasks.values.firstWhere(
+      (t) => t['title'] == '完成移动端重构方案评审',
+    );
+    expect(storeTask['position'] as int, 0, reason: '净位移为零，槽位未变，不写库');
   });
 
   testWidgets('长按原地松手：manual 档仍弹操作菜单（多选入口在）', (tester) async {

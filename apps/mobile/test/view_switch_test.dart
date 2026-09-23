@@ -35,11 +35,14 @@ Future<void> _pumpList(WidgetTester tester, MockOrbitBridge bridge) async {
   await _settle(tester);
 }
 
-/// 经右上「视图模式」抽屉切到目标视图，停在过渡起播后（不断言 settled）
+/// 经页头 ⋮ 下拉面板切视图档（⋮ → 就地展开「视图」→ 点档位），
+/// 停在过渡起播后（不断言 settled）
 Future<void> _switchTo(WidgetTester tester, String label) async {
-  await tester.tap(find.byTooltip('视图模式'));
+  await tester.tap(find.byTooltip('更多操作'));
   await tester.pumpAndSettle();
-  await tester.tap(find.text(label));
+  await tester.tap(find.text('视图'));
+  await tester.pumpAndSettle();
+  await tester.tap(find.text('$label视图'));
   await tester.pump();
 }
 

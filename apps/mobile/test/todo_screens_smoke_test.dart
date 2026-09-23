@@ -209,8 +209,11 @@ void main() {
     ));
     await _settlePastMockLatency(tester);
 
-    // 切出 manual 档 → 列表换 ListView.builder 分支（逾期置顶区块）
-    await tester.tap(find.byIcon(OrbitIcons.sort));
+    // 切出 manual 档 → 列表换 ListView.builder 分支（逾期置顶区块）；
+    // 排序入口在页头 ⋮ 下拉面板里（就地展开）
+    await tester.tap(find.byTooltip('更多操作'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('排序方式'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('截止时间'));
     await tester.pumpAndSettle();

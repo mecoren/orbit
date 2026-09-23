@@ -11,7 +11,6 @@ import '../../core/theme/orbit_accents.dart';
 import '../../data/api/dto.dart';
 import '../../data/providers/bridge_provider.dart';
 import '../../shared/utils/hex_color.dart';
-import '../../shared/widgets/shadcn/orbit_confirm_sheet.dart';
 import '../../shared/widgets/shadcn/orbit_fab.dart';
 import '../../shared/widgets/shadcn/orbit_page_header.dart';
 import '../../shared/widgets/shadcn/orbit_skeleton.dart';
@@ -20,6 +19,8 @@ import '../../services/shortcut_receiver.dart';
 import '../../shared/widgets/sync_status_button.dart';
 import '../../shared/widgets/shadcn/orbit_toast.dart';
 import 'form_bottom_sheet.dart';
+import 'logic/project_actions.dart';
+import 'logic/project_palette.dart';
 import 'logic/task_logic.dart';
 import 'providers/todo_providers.dart';
 import '../../core/theme/icon_map.dart';
@@ -37,11 +38,7 @@ class SidebarScreen extends ConsumerStatefulWidget {
 }
 
 /// 项目 10 色预设板（#36；与桌面端 project-sidebar PROJECT_COLORS 同序列）
-const List<String> _projectColorPalette = [
-  '#EF4444', '#F59E0B', '#22C55E', '#3B82F6', '#8B5CF6',
-  '#EC4899', '#14B8A6', '#F97316', '#6366F1', '#6B7280',
-];
-
+/// 实际取值在 `logic/project_palette.dart`（侧栏 / 编辑项目整页 / 取色抽屉共用）
 class _SidebarScreenState extends ConsumerState<SidebarScreen> {
   final _scrollController = ScrollController();
 
@@ -137,6 +134,10 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
 
   // ── 项目长按菜单（编辑 / 归档 / 删除保护流）──
 
+  /// 项目长按菜单（编辑 / 归档 / 删除保护流）
+  ///
+  /// 「编辑」push 编辑项目整页（2026-09-23：由对话框升级）；归档 / 删除走
+  /// `logic/project_actions.dart` 的共享实现（编辑页 ⋮ 更多是同一套）。
   void _showProjectActions(TodoProject project, int undoneCount) {
     showMoreActionsSheet(
       context,
@@ -145,44 +146,27 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
         MoreActionItem(
           icon: OrbitIcons.edit,
           label: '编辑',
-          onTap: () => _editProject(project),
+          onTap: () => context.push('/todo/projects/${project.id}/edit'),
         ),
         MoreActionItem(
           icon: OrbitIcons.archive,
           label: project.isArchived == 1 ? '取消归档' : '归档项目',
-          onTap: () => _toggleArchive(project),
+          onTap: () => toggleProjectArchive(ref, project),
         ),
         MoreActionItem(
           icon: OrbitIcons.delete,
           label: '删除',
           color: OrbitAccents.overdueRed,
-          onTap: () => _deleteProject(project, undoneCount),
+          onTap: () => deleteProject(ref, context, project, undoneCount),
         ),
       ],
     );
   }
 
-  /// 归档切换（桌面右键同口径）：is_archived 翻转经 patchJson；
-  /// 双失效（主列表 + 归档区）
-  Future<void> _toggleArchive(TodoProject project) async {
-    final next = project.isArchived == 1 ? 0 : 1;
-    try {
-      await ref
-          .read(orbitBridgeProvider)
-          .todoProjectUpdate(project.id, '{"is_archived":$next}');
-      ref.invalidate(todoProjectsProvider);
-      ref.invalidate(todoArchivedProjectsProvider);
-      WaitToast.success(next == 1 ? '项目已归档' : '已恢复到项目列表');
-    } catch (_) {
-      WaitToast.destructive('操作失败');
-    }
-  }
-
   /// 新建项目（#36）：名称输入 + 默认色按现有项目数轮换预设板
   Future<void> _addProject() async {
     final projects = _projects();
-    final defaultColor =
-        _projectColorPalette[projects.length % _projectColorPalette.length];
+    final defaultColor = defaultProjectColor(projects.length);
     final controller = TextEditingController();
     final title = await showDialog<String>(
       context: context,
@@ -217,120 +201,6 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
       WaitToast.success('项目已创建');
     } catch (_) {
       WaitToast.destructive('创建失败');
-    }
-  }
-
-  Future<void> _editProject(TodoProject project) async {
-    final dialogColors = AppColors.ofContext(context);
-    final controller = TextEditingController(text: project.title);
-    // #36：色板当前选中（初始 = 项目现色，无色回退默认蓝）
-    var selectedColor =
-        project.hexColor.isNotEmpty ? project.hexColor : '#3B82F6';
-    final result = await showDialog<(String, String)?>(
-      context: context,
-      builder: (dialogContext) => StatefulBuilder(
-        builder: (dialogContext, setDialogState) => AlertDialog(
-          title: const Text('编辑项目'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              TextField(
-                controller: controller,
-                autofocus: true,
-                maxLength: 50,
-                decoration: const InputDecoration(labelText: '项目名称'),
-              ),
-              const SizedBox(height: AppDimens.space8),
-              // 10 色预设板（#36；与桌面端 ProjectEditDialog 同序列）
-              Wrap(
-                spacing: AppDimens.space8,
-                runSpacing: AppDimens.space8,
-                children: [
-                  for (final hex in _projectColorPalette)
-                    GestureDetector(
-                      onTap: () => setDialogState(() => selectedColor = hex),
-                      // 32 色点视觉不变，热区补到 48（touchTarget）
-                      child: Padding(
-                        padding: const EdgeInsets.all(AppDimens.space8),
-                        child: Container(
-                          width: 32,
-                          height: 32,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: hexToColor(hex),
-                          border: Border.all(
-                            color: selectedColor.toLowerCase() == hex.toLowerCase()
-                                ? dialogColors.titleText
-                                : Colors.transparent,
-                            width: 2.5,
-                          ),
-                        ),
-                      ),
-                      ),
-                    ),
-                ],
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(),
-              child: const Text('取消'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.of(dialogContext)
-                  .pop((controller.text.trim(), selectedColor)),
-              child: const Text('保存'),
-            ),
-          ],
-        ),
-      ),
-    );
-    controller.dispose();
-    final saved = result;
-    if (!mounted || saved == null) return;
-    final (newTitle, newColor) = saved;
-    if (newTitle.isEmpty) return;
-    if (newTitle == project.title && newColor == project.hexColor) return;
-    try {
-      await ref.read(orbitBridgeProvider).todoProjectUpdate(project.id,
-          encodePatch({
-            if (newTitle != project.title) 'title': newTitle,
-            if (newColor != project.hexColor) 'hex_color': newColor,
-          }));
-      ref.invalidate(todoProjectsProvider);
-    } catch (_) {
-      WaitToast.destructive('保存失败');
-    }
-  }
-
-  /// 删除保护双流（docs/05 §4.1 文案）：有未完成任务拒绝；否则 destructive 确认
-  Future<void> _deleteProject(TodoProject project, int undoneCount) async {
-    if (undoneCount > 0) {
-      // 单按钮信息抽屉（cancelLabel: null）：只告知，没有可点的「取消」
-      await showConfirmBottomSheet(
-        context,
-        title: '无法删除',
-        message: '该项目下还有 $undoneCount 条未完成任务，请先清空或移走任务后再删除。',
-        confirmLabel: '我知道了',
-        cancelLabel: null,
-      );
-      return;
-    }
-    final confirmed = await showConfirmBottomSheet(
-      context,
-      title: '删除项目',
-      message: '确定要删除项目「${project.title}」吗？该操作不可撤销。',
-      confirmLabel: '删除',
-      destructive: true,
-    );
-    if (!confirmed || !mounted) return;
-    try {
-      await ref.read(orbitBridgeProvider).todoProjectDelete(project.id);
-      WaitToast.success('项目已删除');
-    } catch (_) {
-      WaitToast.destructive('删除失败');
     }
   }
 
@@ -466,7 +336,7 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
                             ),
                             dense: true,
                             trailing: TextButton(
-                              onPressed: () => _toggleArchive(p),
+                              onPressed: () => toggleProjectArchive(ref, p),
                               child: const Text('恢复'),
                             ),
                             onTap: () => context.push('/todo/tasks?projectId=${p.id}'),

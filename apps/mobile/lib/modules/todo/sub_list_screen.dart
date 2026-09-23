@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -18,8 +19,10 @@ import '../../shared/utils/hex_color.dart';
 import '../../shared/widgets/shadcn/orbit_strikethrough.dart';
 import '../../shared/widgets/shadcn/orbit_checkbox.dart';
 import '../../shared/widgets/shadcn/orbit_confirm_sheet.dart';
+import '../../shared/widgets/shadcn/orbit_dropdown_panel.dart';
 import '../../shared/widgets/shadcn/orbit_empty_state.dart';
 import '../../shared/widgets/shadcn/orbit_fab.dart';
+import '../../shared/widgets/shadcn/orbit_list_card.dart';
 import '../../shared/widgets/shadcn/orbit_page_header.dart';
 import '../../shared/widgets/shadcn/orbit_skeleton.dart';
 import '../../shared/widgets/shadcn/orbit_actions_sheet.dart';
@@ -33,11 +36,11 @@ import 'logic/batch_actions.dart';
 // as rep：规避 Flutter widgets 自带 RepeatMode 类名冲突（同 detail_screen）
 import 'logic/repeat_logic.dart' as rep;
 import 'logic/task_logic.dart';
-import 'logic/template_apply.dart';
 import 'logic/undo_stack.dart';
 import 'logic/view_mode.dart';
 import 'providers/todo_providers.dart';
 import 'providers/undo_provider.dart';
+import 'quick_add_sheet.dart';
 import 'table_view.dart';
 import '../../core/theme/icon_map.dart';
 
@@ -88,21 +91,40 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
   /// 本次长按拾起的行下标（[onReorderStart] 记，[onReorderEnd] 读后清）
   int? _dragFromIndex;
 
-  /// 本次长按拾起是否真的发生过位移（[onReorderItem] 置真）。
+  /// 本次按下的落点（指针 down 记；位移测量的原点）
+  Offset? _pressOrigin;
+
+  /// 本次长按拾起后手指是否真的移动过（超过 [kTouchSlop]）。
   ///
   /// manual 档长按手势被拖动独占（行内 InkWell 的长按必须置空，见
   /// [TodoTaskTile.onLongPress]），操作菜单因此改由「拾起后原地松手」承接：
-  /// 位移过关才走重排落库，没位移就当作长按菜单——两条路径共用同一个长按，
-  /// 行尾不必再挂拖拽把手图标。
-  bool _dragMoved = false;
+  /// 移动过即视为在排序，松手不弹菜单；纹丝未动才当长按菜单——两条路径共用
+  /// 同一个长按，行尾不必再挂拖拽把手图标。
+  ///
+  /// **位移判据不问列表要**：[ReorderableListView] 只在真的换了槽位时才回调
+  /// （拖开一圈又落回原槽位 → 全程无回调），且它几个回调的先后不由调用方掌握；
+  /// 原始指针事件才是可靠来源（[Listener] 收事件不经手势竞技场裁决）。
+  bool _pressMoved = false;
 
-  // 隐藏已完成（Logbook 治理）：与桌面同默认开；本机偏好持久化
-  //（LocalPrefs，键值同桌面 localStorage `todo_hide_done`，退出重进保持档位）。
-  // done 视图下不参与过滤（完成集入口），开关图标同步置灰
-  bool _hideDone = LocalPrefs.getBool(_hideDoneKey, fallback: true);
+  // 已完成区展开态（列表尾部「已完成 N ⌄」折叠卡）：默认收起——与改版前
+  // 「默认隐藏已完成」的观感一致（收起时列表只呈现未完成任务）。
+  //
+  // 旧键 `todo_hide_done`（页头 eye 开关时代）只作**一次性回落**读取：
+  // 老用户上次把已完成显出来过，这次进入就记住展开；此后只读写新键。
+  bool _doneExpanded = LocalPrefs.getBool(
+    _doneOpenKey,
+    fallback: !LocalPrefs.getBool(_legacyHideDoneKey, fallback: true),
+  );
 
-  /// 隐藏已完成持久化键（与桌面 constants.ts LS_HIDE_DONE 同值）
-  static const _hideDoneKey = 'todo_hide_done';
+  /// 已完成区展开态持久化键（新键；语义是「展开」而非「隐藏」）
+  static const _doneOpenKey = 'todo_done_section_open';
+
+  /// 页头 eye 开关时代的旧键（只读回落一次，见 [_doneExpanded]）
+  static const _legacyHideDoneKey = 'todo_hide_done';
+
+  /// 已完成卡内联上限：展开只直显最近这么多条（完成时刻倒序），其余走卡内
+  /// 「查看全部」入口进完成集视图——卡片是 Column 而非懒加载列表，必须设界
+  static const _doneInlineMax = 20;
 
   static const _sortChoices = {
     TaskSortKey.manual: '拖拽顺序',
@@ -122,7 +144,9 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
   };
 
   // 视图模式与看板分组（本机偏好持久化，键名对齐桌面 localStorage）
-  TaskViewMode _viewMode = loadViewMode();
+  // 视图档在 [initState] 播种：项目视图优先取该项目记忆的档位（`widget` 要到
+  // initState 才可读，故不做字段初始值）
+  late TaskViewMode _viewMode;
   KanbanGroupBy _kanbanGroupBy = loadKanbanGroupBy();
 
   // 列表内附加过滤（对齐桌面工具栏三枚筛选；会话态不持久化——语义是
@@ -137,6 +161,12 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
   bool _batchBusy = false;
 
   @override
+  void initState() {
+    super.initState();
+    _viewMode = loadViewModeForProject(widget.query.projectId);
+  }
+
+  @override
   void dispose() {
     _reorderScrollController.dispose();
     _listScrollController.dispose();
@@ -146,69 +176,148 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
     super.dispose();
   }
 
-  /// 视图模式抽屉（视图三档 + 看板分组两段式同屉分区，避免嵌套弹层）
-  void _showViewSheet() {
-    final colors = AppColors.ofContext(context);
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: colors.popup,
-      shape: bottomSheetTopShape,
-      builder: (sheetContext) => SafeArea(
-        top: false,
-        child: ListView(
-          shrinkWrap: true,
-          padding: EdgeInsets.zero,
-          children: [
-            _sheetSectionTitle(sheetContext, '视图模式'),
-            for (final m in TaskViewMode.values)
-              _sheetRow(
-                sheetContext,
-                icon: m.icon,
-                label: m.label,
-                selected: m == _viewMode,
-                onTap: () {
-                  Navigator.of(sheetContext).pop();
-                  _setViewMode(m);
-                },
-              ),
-            if (_viewMode == TaskViewMode.kanban) ...[
-              Divider(
-                height: AppDimens.space12,
-                color: colors.divider,
-              ),
-              _sheetSectionTitle(sheetContext, '看板分组'),
-              for (final g in KanbanGroupBy.values)
-                _sheetRow(
-                  sheetContext,
-                  icon: g == KanbanGroupBy.project
-                      ? OrbitIcons.folder
-                      : OrbitIcons.flag,
-                  label: g.label,
-                  selected: g == _kanbanGroupBy,
-                  onTap: () {
-                    Navigator.of(sheetContext).pop();
-                    _setKanbanGroupBy(g);
-                  },
-                ),
-            ],
-            SizedBox(height: AppDimens.gestureInsetFallback / 2),
-          ],
-        ),
-      ),
-    );
+  /// 按下：重置位移原点（时间上先于 500ms 的长按拾起）
+  void _onPressDown(PointerDownEvent event) {
+    _pressOrigin = event.position;
+    _pressMoved = false;
   }
 
+  /// 移动：越过 [kTouchSlop] 即认定「移动过」。
+  ///
+  /// 拾起前的位移不必在这里管：[DelayedMultiDragGestureRecognizer] 自身的
+  /// 滑动阈值更严——超过 slop 就直接判废，拖动根本不会开始。
+  void _onPressMove(PointerMoveEvent event) {
+    final origin = _pressOrigin;
+    if (origin == null || _pressMoved) return;
+    if ((event.position - origin).distance > kTouchSlop) {
+      _pressMoved = true;
+    }
+  }
+
+  /// 切视图档：写「当前上下文档」——项目上下文写该项目的档位（下次进这个项目
+  /// 沿用），其余视图写全局档。全局档语义 = 「非项目视图的默认值」，
+  /// 项目档没设过时也以它为初值（见 `logic/view_mode.dart`）
   void _setViewMode(TaskViewMode mode) {
     if (!mounted) return;
     setState(() => _viewMode = mode);
-    unawaited(LocalPrefs.setString(viewModePrefsKey, mode.name));
+    final projectId = widget.query.projectId;
+    if (projectId != null) {
+      unawaited(saveProjectViewMode(projectId, mode));
+    } else {
+      unawaited(LocalPrefs.setString(viewModePrefsKey, mode.name));
+    }
   }
 
   void _setKanbanGroupBy(KanbanGroupBy by) {
     if (!mounted) return;
     setState(() => _kanbanGroupBy = by);
     unawaited(LocalPrefs.setString(kanbanGroupByPrefsKey, by.name));
+  }
+
+  /// 切排序档（#26；manual = position 拖拽顺序，档位集合 [_sortChoices] 单一口径）
+  void _setSortKey(TaskSortKey key) {
+    if (!mounted) return;
+    setState(() => _sortKey = key);
+  }
+
+  /// 页头 ⋮ 下拉面板（2026-09-23）：两组条目——「这个列表」与「怎么操作」
+  ///
+  /// 页头由「返回 + 标题 + 四枚图标」收敛成「返回 + 标题 + ⋮」；视图档与排序档
+  /// 在面板内**就地展开**子项（选中打勾），展开期间其余条目置灰
+  /// （口径见 [showOrbitDropdownPanel]）。上下文条目按需出现：
+  /// 「编辑项目」只在项目视图有，「看板分组」只在看板档有——常驻只会添噪音。
+  void _showOverflowPanel() {
+    final projectId = widget.query.projectId;
+    showOrbitDropdownPanel(
+      context,
+      topInset: MediaQuery.of(context).padding.top + OrbitPageHeader.rowHeight,
+      groups: [
+        [
+          if (projectId != null)
+            OrbitPanelItem(
+              icon: OrbitIcons.edit,
+              label: '编辑项目',
+              onTap: () => context.push('/todo/projects/$projectId/edit'),
+            ),
+          OrbitPanelItem(
+            icon: _viewMode.icon,
+            label: '视图',
+            children: [
+              for (final m in TaskViewMode.values)
+                OrbitPanelItem(
+                  icon: m.icon,
+                  label: '${m.label}视图',
+                  checked: m == _viewMode,
+                  onTap: () => _setViewMode(m),
+                ),
+            ],
+          ),
+          if (_viewMode == TaskViewMode.kanban)
+            OrbitPanelItem(
+              icon: OrbitIcons.flag,
+              label: '看板分组',
+              children: [
+                for (final g in KanbanGroupBy.values)
+                  OrbitPanelItem(
+                    icon: g == KanbanGroupBy.project
+                        ? OrbitIcons.folder
+                        : OrbitIcons.flag,
+                    label: g.label,
+                    checked: g == _kanbanGroupBy,
+                    onTap: () => _setKanbanGroupBy(g),
+                  ),
+              ],
+            ),
+          OrbitPanelItem(
+            icon: OrbitIcons.success,
+            label: '隐藏已完成',
+            checked: !_doneExpanded,
+            onTap: _toggleDoneSection,
+          ),
+        ],
+        [
+          OrbitPanelItem(
+            icon: OrbitIcons.filterList,
+            label: '筛选',
+            trailingLabel:
+                _filters.isEmpty ? null : '已启用 ${_filters.activeCount} 项',
+            onTap: _showFilterSheet,
+          ),
+          OrbitPanelItem(
+            icon: OrbitIcons.sort,
+            label: '排序方式',
+            children: [
+              for (final e in _sortChoices.entries)
+                OrbitPanelItem(
+                  icon: OrbitIcons.sort,
+                  label: e.value,
+                  checked: e.key == _sortKey,
+                  onTap: () => _setSortKey(e.key),
+                ),
+            ],
+          ),
+          OrbitPanelItem(
+            icon: OrbitIcons.listChecks,
+            label: '批量选择',
+            onTap: _enterSelectionFromPanel,
+          ),
+        ],
+      ],
+    );
+  }
+
+  /// 面板「批量选择」入口：多选态以「选中集非空」为准，故先选上当前视图的
+  /// 首条未完成任务——与长按菜单「多选」同语义（那里选的是被长按的那行）
+  void _enterSelectionFromPanel() {
+    final tasks = ref.read(todoTasksProvider).value ?? const <TodoTask>[];
+    final first = sortTasks(filterTasks(tasks, widget.query), _sortKey)
+        .where((t) => !t.isDone)
+        .firstOrNull;
+    if (first == null) {
+      WaitToast.info('没有可多选的任务');
+      return;
+    }
+    setState(() => _selected.add(first.id));
   }
 
   /// 列表内过滤抽屉（状态 / 优先级下限 / 标签三档，chip 即点即生效）
@@ -323,39 +432,6 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
     );
   }
 
-  Widget _sheetRow(
-    BuildContext ctx, {
-    required IconData icon,
-    required String label,
-    required bool selected,
-    required VoidCallback onTap,
-  }) {
-    final colors = AppColors.ofContext(ctx);
-    return InkWell(
-      onTap: onTap,
-      child: SizedBox(
-        height: AppDimens.touchTarget,
-        child: Row(
-          children: [
-            const SizedBox(width: AppDimens.space16),
-            Icon(icon, size: AppDimens.iconSizeMd, color: colors.bodyText),
-            const SizedBox(width: AppDimens.space12),
-            Expanded(
-              child: Text(
-                label,
-                style: TextStyle(fontSize: 15, color: colors.bodyText),
-              ),
-            ),
-            if (selected)
-              Icon(OrbitIcons.check,
-                  size: AppDimens.iconSizeMd, color: colors.accent),
-            const SizedBox(width: AppDimens.space16),
-          ],
-        ),
-      ),
-    );
-  }
-
   Widget _chipRow(List<Widget> chips) => Padding(
         padding: const EdgeInsets.symmetric(horizontal: AppDimens.space16),
         child: Wrap(
@@ -413,52 +489,14 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
     );
   }
 
-  /// 长按 FAB：拉模板列表弹选择，选中后 payload 预填新建表单
-  ///（模板选择是低频入口，长按避免与点击新建抢占；无模板静默无反应）
-  Future<void> _pickTemplateAndCreate() async {
-    try {
-      final templates =
-          await ref.read(orbitBridgeProvider).templatesList();
-      if (!mounted || templates.isEmpty) return;
-      final colors = AppColors.ofContext(context);
-      final tpl = await showModalBottomSheet<TodoTemplate>(
-        context: context,
-        backgroundColor: colors.popup,
-        shape: bottomSheetTopShape,
-        builder: (ctx) => SafeArea(
-          child: ListView(
-            shrinkWrap: true,
-            children: [
-              Padding(
-                padding: const EdgeInsets.all(AppDimens.space16),
-                child: Text('从模板新建',
-                    style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600,
-                        color: colors.titleText)),
-              ),
-              for (final t in templates)
-                ListTile(
-                  title: Text(t.name,
-                      style:
-                          TextStyle(fontSize: 14, color: colors.bodyText)),
-                  onTap: () => Navigator.pop(ctx, t),
-                ),
-            ],
-          ),
-        ),
-      );
-      if (tpl == null || !mounted) return;
-      await showTodoFormSheet(
+  /// 长按 FAB：从模板新建（选择链见 [showTemplateCreateFlow]，与快速添加面板
+  /// 「模板」档同源）。模板选择是低频入口，长按避免与点击新建抢占。
+  Future<void> _pickTemplateAndCreate() => showTemplateCreateFlow(
         context,
+        ref.read(orbitBridgeProvider),
         defaultProjectId: widget.query.projectId,
         quickView: widget.query.quickView,
-        presetTemplate: parseTemplatePayload(tpl.payload),
       );
-    } catch (_) {
-      /* 模板拉取失败：静默（长按入口可选，不炸主流程） */
-    }
-  }
 
   // ── 写操作（await bridge 后 invalidate）──
 
@@ -543,9 +581,17 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
       _sortKey != TaskSortKey.manual;
 
   /// 标准分支内：切换完成态导致行离场 ⟺ 开了状态筛选（改写 status 即失配），
-  /// 或完成时隐藏已完成档。取消完成在非 Logbook 下恒可见（未完成行永不隐藏）。
+  /// 或「完成」动作本身——未完成任务区只承载未完成行，勾完即离场（改由尾部
+  /// 已完成卡承载）。取消完成是**进**未完成区而非离场，不播 ghost。
   bool _toggleWillLeave(TodoTask task) =>
-      _filters.status != null || (!task.isDone && _hideDone);
+      _filters.status != null || !task.isDone;
+
+  /// 已完成区展开 / 收起（本机偏好持久化，下次进入沿用上次档位）
+  void _toggleDoneSection() {
+    final next = !_doneExpanded;
+    setState(() => _doneExpanded = next);
+    unawaited(LocalPrefs.setBool(_doneOpenKey, next));
+  }
 
   /// 写后退场（删除 / 离场型完成共用）：
   ///
@@ -821,13 +867,14 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
   /// invalidate 以服务端权威顺序刷新；拖拽期间行序由 ReorderableListView
   /// 自管，落库失败 invalidate 兜底回原序。
   ///
-  /// 落位邻居必须与 build 的 visible 同口径（含 hideDone 过滤）——
+  /// 落位邻居必须与 build 的可重排分支同口径（仅未完成任务、同排序档）——
   /// 否则 UI 行数与计算索引错位，中值取到错误的相邻行。
   Future<void> _reorderTasks(int oldIndex, int newIndex) async {
     final tasks =
         ref.read(todoTasksProvider).value ?? const <TodoTask>[];
-    final visible = sortTasks(
-        filterTasks(tasks, widget.query, hideDone: _hideDone), _sortKey);
+    final visible = sortTasks(filterTasks(tasks, widget.query), _sortKey)
+        .where((t) => !t.isDone)
+        .toList();
     final reordered = reorderItems(visible, oldIndex, newIndex);
     final dragged = reordered[newIndex];
     final prevPos = newIndex > 0 ? reordered[newIndex - 1].position : null;
@@ -1080,7 +1127,12 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
       isLogbook
           ? filterTasks(tasks, widget.query)
           : sortTasks(
-              filterTasks(tasks, widget.query, hideDone: _hideDone), _sortKey),
+              // 列表档：完成行交给尾部「已完成」折叠卡承接（不再是页头开关
+              // 一刀切隐藏）；看板 / 表格没有承接位，维持改版前的隐藏口径——
+              // 完成历史混进卡片墙/表格会淹掉这两档的工作面板语义
+              filterTasks(tasks, widget.query,
+                  hideDone: _viewMode != TaskViewMode.list),
+              _sortKey),
       _filters,
       labelIdsByTask: labelIdsByTask,
     );
@@ -1088,9 +1140,21 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
 
     _trackTaskAppearance(visible);
 
+    // 未完成区（列表本体；逾期置顶只作用于这一段）
+    final undone =
+        isLogbook ? const <TodoTask>[] : visible.where((t) => !t.isDone).toList();
+
+    // 已完成区（列表尾部折叠卡的数据源；Logbook 本身即完成集，不重复一份）：
+    // 完成时刻倒序——卡内直显最近 [_doneInlineMax] 条，其余走「查看全部」
+    final done = isLogbook
+        ? const <TodoTask>[]
+        : (visible.where((t) => t.isDone).toList()
+          ..sort((a, b) =>
+              (b.doneAt ?? b.createdAt).compareTo(a.doneAt ?? a.createdAt)));
+
     // 逾期置顶分组（性能批次 UX 优化，与桌面同口径）：逾期行渲染在列表
     // 顶部的红调区块，其余照旧——长按拖拽语义不受影响（重排仍走原序数组）
-    final overdueGroups = groupOverdueFirst(visible);
+    final overdueGroups = groupOverdueFirst(undone);
 
     // Logbook 分组（done 视图）：按完成日倒序，组内完成时刻倒序
     final doneGroups = isLogbook ? groupDoneByDay(visible) : <DoneDayGroup>[];
@@ -1128,8 +1192,19 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
           (truncated ? _TruncationBanner.height : 0),
       bottom: AppDimens.gestureInsetFallback + AppDimens.space32,
     );
+    // 卡片列表（标准列表 / 重排档 / 骨架）在满幅 padding 上再让出卡片外缘：
+    // 卡片是「页面里的一张卡」而非通栏表格；看板 / 表格 / Logbook 维持满幅。
+    // 显式取四边（不用 add：ReorderableListView.padding 要求 EdgeInsets 而非
+    // EdgeInsetsGeometry，链式调用的静态类型会退化成后者）
+    final cardListPadding = EdgeInsets.fromLTRB(
+      AppDimens.space12,
+      listPadding.top,
+      AppDimens.space12,
+      listPadding.bottom,
+    );
 
-    Widget buildTile(TodoTask task, {bool draggable = false}) {
+    Widget buildTile(TodoTask task,
+        {bool draggable = false, OrbitCardEdge edge = OrbitCardEdge.none}) {
       final project =
           task.projectId != null ? projectById[task.projectId] : null;
       // 行内提醒徽标：未来最近一条 / 全过期最早一条（完成实例不警示）
@@ -1146,6 +1221,7 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
           selected: _selected.contains(task.id),
           projectTitle: project?.title,
           onTap: () => _toggleSelect(task.id),
+          edge: edge,
         );
       }
       return TodoTaskTile(
@@ -1161,26 +1237,82 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
         // manual 档长按让位给整行拖动（原地松手由 _reorderEnd 兜回来弹菜单）
         onLongPress: draggable ? null : () => _showTaskActions(task),
         onDelete: () => _deleteTask(task),
+        // 卡片段位（扁平行传 none，保持看板/表格/搜索口径）
+        edge: edge,
       );
     }
 
+    /// 已完成折叠卡（列表尾部独立卡片，TickTick 版式）
+    ///
+    /// 头行「已完成 N ⌄」+ 展开后的完成行 + 超出上限时的「查看全部」尾行，
+    /// 三段共用同一张卡的段位（首段圆上角 / 末段圆下角）。
+    ///
+    /// 卡内行是 `Column`（整卡只能整体成段，套不进懒加载列表），故直显条数
+    /// 必须设界——[_doneInlineMax] 之外的完成行交给完成集视图，万行完成历史
+    /// 不会在展开瞬间全部实例化。
+    Widget buildDoneCard() {
+      final shown = _doneExpanded
+          ? done.take(_doneInlineMax).toList()
+          : const <TodoTask>[];
+      final hasMore = _doneExpanded && done.length > shown.length;
+      final segments = 1 + shown.length + (hasMore ? 1 : 0);
+      var seg = 0;
+      Widget next(Widget child) => OrbitCardSegment(
+            edge: OrbitCardEdge.of(seg++, segments),
+            child: child,
+          );
+      return Padding(
+        // 与未完成任务区拉开一档卡距（同卡内段间不设距，靠 1px 分隔线）
+        padding: const EdgeInsets.only(top: AppDimens.cardGap),
+        child: AnimatedSize(
+          duration: AppMotion.normal,
+          curve: AppMotion.standard,
+          alignment: Alignment.topCenter,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              next(_doneCardHeader(colors, done.length)),
+              for (final t in shown) next(buildTile(t)),
+              if (hasMore) next(_doneCardMore(colors, done.length)),
+            ],
+          ),
+        ),
+      );
+    }
+
+    // 标准列表条目表（懒加载：itemBuilder 按下标取一条构造，不预建行）
+    //
+    // 表化取代旧版「按下标反算 od / rest 归属」的算术：区块头与「其余任务」
+    // 分隔行各自成条（旧版头行随 od[0] 同项渲染，段位只能落在任务行上），
+    // 也因此不存在 od 为空时 rest[-1] 那类越界隐患。
+    final entries = <_TaskListEntry>[
+      if (overdueGroups.overdue.isNotEmpty) ...[
+        const _TaskListEntry.overdueHead(),
+        for (final t in overdueGroups.overdue) _TaskListEntry.task(t),
+        // 「其余任务」只在真的还有其余行时才出来（旧版恒出，全部逾期时
+        // 会在列表尾部留一个孤零零的分隔标签）
+        if (overdueGroups.rest.isNotEmpty) const _TaskListEntry.restDivider(),
+      ],
+      for (final t in overdueGroups.rest) _TaskListEntry.task(t),
+    ];
+
     final Widget list = tasksLoading
         // 初次加载骨架：8 行任务行占位（复选圆 + 标题行 + 元信息行）
-        ? _TaskListSkeleton(padding: listPadding)
+        ? _TaskListSkeleton(padding: cardListPadding)
         : visible.isEmpty
             ? Padding(
                 padding: EdgeInsets.only(
                   top: MediaQuery.of(context).padding.top +
                       OrbitPageHeader.rowHeight,
                 ),
-                // 空态给出口：筛选没结果就清筛选，否则直接开新建表单（与右下
-                // OrbitFab 同一入口，列表空时 FAB 仍可见但离拇指更远）
+                // 空态给出口：筛选没结果就清筛选，否则直接开快速添加面板（与
+                // 右下 OrbitFab 同一入口，列表空时 FAB 仍可见但离拇指更远）
                 child: EmptyState(
                   message: emptyMessage,
                   actionLabel: filteredEmpty ? '清除筛选' : '新建任务',
                   onAction: filteredEmpty
                       ? () => _setFilters(TaskListFilters.empty)
-                      : () => showTodoFormSheet(
+                      : () => showQuickAddSheet(
                             context,
                             defaultProjectId: widget.query.projectId,
                             quickView: widget.query.quickView,
@@ -1225,27 +1357,28 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
             ? ReorderableListView.builder(
                 key: const ValueKey('reorderable-task-list'),
                 scrollController: _reorderScrollController,
-                padding: listPadding,
+                padding: cardListPadding,
                 buildDefaultDragHandles: false,
-                itemCount: visible.length,
+                // 重排只作用于未完成任务：已完成行在尾部折叠卡里（footer），
+                // 全列可拖的约束下不能让它们混进 item
+                itemCount: undone.length,
+                footer: done.isEmpty ? null : buildDoneCard(),
                 onReorderItem: (oldIndex, newIndex) {
-                  _dragMoved = true;
                   _reorderTasks(oldIndex, newIndex);
                 },
                 // 拾起 / 落位各一次轻触感反馈（对齐微软 To-Do 拖动确认）
                 onReorderStart: (index) {
                   HapticFeedback.selectionClick();
                   _dragFromIndex = index;
-                  _dragMoved = false;
                 },
                 onReorderEnd: (index) {
                   HapticFeedback.selectionClick();
                   final from = _dragFromIndex;
                   _dragFromIndex = null;
-                  // 拾起后原地松手（无位移）= 长按菜单：manual 档行内长按已
+                  // 拾起后原地松手（手指没动）= 长按菜单：manual 档行内长按已
                   // 让位给拖动，操作菜单入口由这里兜住，功能与样式两边不欠账
-                  if (!_dragMoved && from != null && from < visible.length) {
-                    _showTaskActions(visible[from]);
+                  if (!_pressMoved && from != null && from < undone.length) {
+                    _showTaskActions(undone[from]);
                   }
                 },
                 proxyDecorator: (child, index, animation) => AnimatedBuilder(
@@ -1276,85 +1409,47 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
                   child: child,
                 ),
                 itemBuilder: (context, index) {
-                  final task = visible[index];
+                  final task = undone[index];
                   // 整行皆可长按拾起（无行尾把手图标）：500ms 长按后退化为
                   // 普通拖动，滚动与左右滑不受影响
                   return ReorderableDelayedDragStartListener(
                     key: ValueKey('reorder-task-${task.id}'),
                     index: index,
-                    child: buildTile(task, draggable: true),
+                    // 原始指针监听（不参与手势竞争）只为记位移：列表自身
+                    // 的回调给不出「拾起后动没动」，见 [_pressMoved]
+                    child: Listener(
+                      onPointerDown: _onPressDown,
+                      onPointerMove: _onPressMove,
+                      child: buildTile(
+                        task,
+                        draggable: true,
+                        edge: OrbitCardEdge.of(index, undone.length),
+                      ),
+                    ),
                   );
                 },
               )
             : ListView.builder(
                 controller: _listScrollController,
-                padding: listPadding,
-                // 逾期置顶（非重排档）：逾期区头行（与首条逾期行同行）+ 逾期行 +
-                // 「其余任务」分隔行算作前置 item，后接 rest 任务行——单一 builder
-                // 保持懒加载，不额外组 chunk。
-                //
-                // 索引口径（od 非空时）：item 0 = 区块头 + od[0]，
-                // item 1..od.length-1 = od[1..]，item od.length = 分隔行，
-                // 其后 = rest[0..]；**od 为空时必须直接映射 rest[index]**——
-                // 曾经的 `index - od.length - 1` 在无逾期任务时算得 rest[-1]，
-                // 只在非 manual 档 / 多选态（回落到本 ListView.builder 分支）
-                // 触发 RangeError 崩屏（2026-09-20 多选崩溃修复）。
-                itemCount: overdueGroups.overdue.isNotEmpty
-                    ? overdueGroups.overdue.length + 1 + overdueGroups.rest.length
-                    : overdueGroups.rest.length,
+                padding: cardListPadding,
+                // 标准分支：条目表逐条懒加载（条目构造见 build 内 [entries]），
+                // 尾部多一项 = 已完成折叠卡（各自成卡，不在同一张卡内）
+                itemCount: entries.length + (done.isEmpty ? 0 : 1),
                 itemBuilder: (context, index) {
-                  final od = overdueGroups.overdue;
-                  final rest = overdueGroups.rest;
-                  if (od.isEmpty) {
-                    return _withEntrance(rest[index], buildTile(rest[index]));
+                  if (index >= entries.length) return buildDoneCard();
+                  final edge = OrbitCardEdge.of(index, entries.length);
+                  final entry = entries[index];
+                  final task = entry.task;
+                  if (task != null) {
+                    return _withEntrance(task, buildTile(task, edge: edge));
                   }
-                  if (index == 0) {
-                    return Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Padding(
-                          padding: const EdgeInsets.symmetric(
-                              vertical: AppDimens.space4),
-                          child: Row(
-                            children: [
-                              Icon(OrbitIcons.warning,
-                                  size: AppDimens.iconSizeSm,
-                                  color: colors.destructive),
-                              const SizedBox(width: AppDimens.space4),
-                              Text(
-                                '逾期 · ${od.length}',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600,
-                                  color: colors.destructive,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        _withEntrance(od[0], buildTile(od[0])),
-                      ],
-                    );
-                  }
-                  if (index < od.length) {
-                    return _withEntrance(od[index], buildTile(od[index]));
-                  }
-                  if (index == od.length) {
-                    // 逾期区尾部即为「其余」分隔（区块头随首行渲染在 index 0 前）
-                    return Padding(
-                      padding: const EdgeInsets.symmetric(
-                          vertical: AppDimens.space4),
-                      child: Text(
-                        '  其余任务',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: colors.secondaryText,
-                        ),
-                      ),
-                    );
-                  }
-                  final task = rest[index - od.length - 1];
-                  return _withEntrance(task, buildTile(task));
+                  // 区块头 /「其余任务」分隔行：与任务行同卡，段位同源
+                  return OrbitCardSegment(
+                    edge: edge,
+                    child: entry.isHead
+                        ? _overdueHeadRow(colors, overdueGroups.overdue.length)
+                        : _restDividerRow(colors),
+                  );
                 },
               );
 
@@ -1420,7 +1515,16 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
                             : () => setState(() {
                                   _selected
                                     ..clear()
-                                    ..addAll(visible.map((t) => t.id));
+                                    // 全选只选**看得见**的：未完成任务区恒在；
+                                    // 已完成卡收起时卡内行不在树上，展开时也只
+                                    // 算直显的前 [_doneInlineMax] 条（否则批量
+                                    // 删除会连带清掉屏上根本没出现的完成行）
+                                    ..addAll(undone.map((t) => t.id))
+                                    ..addAll(_doneExpanded
+                                        ? done
+                                            .take(_doneInlineMax)
+                                            .map((t) => t.id)
+                                        : const <int>[]);
                                 }),
                         child: const Text('全选'),
                       ),
@@ -1435,24 +1539,15 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
                       ),
                     ]
                   : [
-                // 视图模式（列表/看板/表格；看板态下同屉追加分组切换）。
-                // 选择类交互统一底部抽屉（AGENTS.md 移动端约定），非 PopupMenu
+                // 视图 / 筛选 / 排序三档收进 ⋮ 溢出菜单：四枚图标并排会把
+                // 动态标题挤到只剩半行；筛选生效时 ⋮ 挂角标（否则列表莫名
+                // 变少没有出处）。选择类交互仍走底部抽屉，非 PopupMenu
                 IconButton(
-                  onPressed: _showViewSheet,
-                  tooltip: '视图模式',
-                  icon: Icon(
-                    _viewMode.icon,
-                    size: AppDimens.iconSizeMd,
-                    color: colors.titleText,
-                  ),
-                ),
-                // 列表内过滤（状态/优先级下限/标签三档；已启用档数出角标）
-                IconButton(
-                  onPressed: _showFilterSheet,
-                  tooltip: '筛选',
+                  onPressed: _showOverflowPanel,
+                  tooltip: '更多操作',
                   icon: _filters.isEmpty
                       ? Icon(
-                          OrbitIcons.filterList,
+                          OrbitIcons.moreVertical,
                           size: AppDimens.iconSizeMd,
                           color: colors.titleText,
                         )
@@ -1460,61 +1555,18 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
                           label: Text('${_filters.activeCount}'),
                           backgroundColor: OrbitAccents.todoAccent,
                           child: Icon(
-                            OrbitIcons.filterList,
+                            OrbitIcons.moreVertical,
                             size: AppDimens.iconSizeMd,
                             color: colors.titleText,
                           ),
                         ),
                 ),
-                // 隐藏已完成开关（Logbook 治理，默认开；done 视图置灰——
-                // 完成集入口开关无意义）。图标态：隐藏=实心可见性，显示=划线。
-                // 切换即落本机偏好（LocalPrefs），下次进入沿用上次档位
-                IconButton(
-                  onPressed: isLogbook
-                      ? null
-                      : () {
-                          final next = !_hideDone;
-                          setState(() => _hideDone = next);
-                          unawaited(LocalPrefs.setBool(_hideDoneKey, next));
-                        },
-                  tooltip: _hideDone ? '显示已完成任务' : '隐藏已完成任务',
-                  icon: Icon(
-                    _hideDone
-                        ? OrbitIcons.eyeOff
-                        : OrbitIcons.eye,
-                    size: AppDimens.iconSizeMd,
-                    color: isLogbook
-                        ? colors.titleText.withValues(alpha: 0.3)
-                        : colors.titleText,
-                  ),
-                ),
-                // 排序档位抽屉（#26；manual = position 拖拽顺序）——
-                // 选择类交互统一底部抽屉（AGENTS.md 移动端约定），不用 PopupMenu
-                IconButton(
-                  onPressed: () => showSelectBottomSheet<TaskSortKey>(
-                    context,
-                    title: '排序方式',
-                    items: [
-                      for (final e in _sortChoices.entries)
-                        SelectItem(value: e.key, label: e.value),
-                    ],
-                    current: _sortKey,
-                    onSelect: (k) {
-                      if (mounted) setState(() => _sortKey = k);
-                    },
-                  ),
-                  tooltip: '排序方式',
-                  icon: Icon(
-                    OrbitIcons.sort,
-                    size: AppDimens.iconSizeMd,
-                    color: AppColors.ofContext(context).titleText,
-                  ),
-                ),
               ],
             ),
           ),
-          // FAB：右下，新建携 defaultProjectId=当前 projectId；
-          // 快捷视图入口携 view（#39 视图内新建自动带标记）。
+          // FAB：右下，点击弹快速添加面板（携 defaultProjectId=当前 projectId；
+          // 快捷视图入口携 view，#39 视图内新建自动带标记）。完整表单入口收在面板
+          // 的「全屏」档里；长按仍是模板直入（有模板才有此入口）。
           // 选择态下让位给批量工具条（两者同占右下角，重叠会误触）
           if (!_selectionMode)
             Positioned(
@@ -1522,7 +1574,7 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
               bottom: AppDimens.gestureInsetFallback + AppDimens.space16,
               child: OrbitFab(
                 accentColor: OrbitAccents.themeAccent,
-                onPressed: () => showTodoFormSheet(
+                onPressed: () => showQuickAddSheet(
                   context,
                   defaultProjectId: widget.query.projectId,
                   quickView: widget.query.quickView,
@@ -1624,6 +1676,128 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
       ),
     );
   }
+
+  // ── 卡片化列表的行内构件 ──
+
+  /// 逾期区块头行（卡片首段）：警示图标 + 「逾期 · N」，红色为区块主信号
+  Widget _overdueHeadRow(AppColorSet colors, int count) {
+    return Container(
+      constraints: const BoxConstraints(minHeight: AppDimens.touchTarget),
+      padding: const EdgeInsets.symmetric(horizontal: AppDimens.space16),
+      alignment: Alignment.centerLeft,
+      child: Row(
+        children: [
+          Icon(OrbitIcons.warning,
+              size: AppDimens.iconSizeSm, color: colors.destructive),
+          const SizedBox(width: AppDimens.space4),
+          Text(
+            '逾期 · $count',
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: colors.destructive,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// 「其余任务」分隔行（卡内段）：逾期区与普通区的分界
+  Widget _restDividerRow(AppColorSet colors) {
+    return Container(
+      constraints: const BoxConstraints(minHeight: AppDimens.space32),
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppDimens.space16,
+        vertical: AppDimens.space8,
+      ),
+      alignment: Alignment.centerLeft,
+      child: Text(
+        '其余任务',
+        style: TextStyle(fontSize: 12, color: colors.secondaryText),
+      ),
+    );
+  }
+
+  /// 已完成卡头行：左「已完成」+ 总数，右展开 / 收起箭头；整行即开关
+  Widget _doneCardHeader(AppColorSet colors, int total) {
+    return InkWell(
+      onTap: _toggleDoneSection,
+      child: Container(
+        constraints: const BoxConstraints(minHeight: AppDimens.touchTarget),
+        padding: const EdgeInsets.symmetric(horizontal: AppDimens.space16),
+        alignment: Alignment.center,
+        child: Row(
+          children: [
+            Text(
+              '已完成',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+                color: colors.secondaryText,
+              ),
+            ),
+            const SizedBox(width: AppDimens.space8),
+            Text(
+              '$total',
+              style: TextStyle(fontSize: 13, color: colors.iconText),
+            ),
+            const Spacer(),
+            Icon(
+              _doneExpanded ? OrbitIcons.expandLess : OrbitIcons.expandMore,
+              size: AppDimens.iconSizeMd,
+              color: colors.iconText,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// 已完成卡尾行：进完成集视图（卡内只直显最近 [_doneInlineMax] 条）
+  Widget _doneCardMore(AppColorSet colors, int total) {
+    return InkWell(
+      onTap: () => context.push('/todo/tasks?view=${QuickViewKey.done.name}'),
+      child: Container(
+        constraints: const BoxConstraints(minHeight: AppDimens.touchTarget),
+        padding: const EdgeInsets.symmetric(horizontal: AppDimens.space16),
+        alignment: Alignment.centerLeft,
+        child: Text(
+          '查看全部 $total 条已完成',
+          style: TextStyle(fontSize: 13, color: colors.accent),
+        ),
+      ),
+    );
+  }
+}
+
+/// 标准列表条目（表化索引口径；懒加载靠 itemBuilder 按下标现取现建）
+///
+/// 三种条目共处一张卡：逾期区块头 / 任务行 / 「其余任务」分隔行——段位由
+/// 「条目下标 + 条目总数」推出（[OrbitCardEdge.of]），与卡片分段描边一一对应。
+class _TaskListEntry {
+  const _TaskListEntry.task(this.task)
+      : isHead = false,
+        isDivider = false;
+
+  const _TaskListEntry.overdueHead()
+      : task = null,
+        isHead = true,
+        isDivider = false;
+
+  const _TaskListEntry.restDivider()
+      : task = null,
+        isHead = false,
+        isDivider = true;
+
+  /// 任务行载荷（头行 / 分隔行为 null）
+  final TodoTask? task;
+
+  /// 逾期区块头
+  final bool isHead;
+
+  /// 「其余任务」分隔行
+  final bool isDivider;
 }
 
 /// 主列表初次加载骨架：8 行任务行占位（复选圆 + 标题行 + 元信息行）
@@ -1729,13 +1903,19 @@ class _RowExit extends StatelessWidget {
   }
 }
 
-/// 任务行（docs/05 §4.5）：24px 圆 checkbox + 标题 + 副标题行
-/// （优先级色点 8px + 项目名 + 日期，逾期 #F44436）+ 收藏星标。
+/// 任务行（docs/05 §4.5，2026-09-23 版式改写）
 ///
-/// 扁平行（2026-09-22 样式收敛）：无卡底、无阴影、无行尾拖拽把手，仅下沿
-/// 1px 分隔线——与多选态行 [_SelectionRow] 同形制，整列读起来是一张干净的
-/// 表，而不是一摞带阴影的白卡（拖动排序也改由整行长按拾起承担，见
-/// [SubListScreen.buildTile]，因此行尾不再需要把手图标做提示）。
+/// 版式：24px 圆 checkbox +「标题 /（标签 + 项目名）」左列 +「截止日期 /
+/// 元信息图标」右列（右对齐）。
+/// - **优先级落在勾选框描边上**（高/紧急/立即 = 橙红圆环，P0「无」回落中性灰，
+///   见 `task_logic.priorityRingHex`）——同一信息不再于副标题重复一枚 8px 色点；
+/// - **日期右对齐并相对化**（今天 / 明天 / 昨天 / M月D日，未来主题蓝、逾期红），
+///   提醒铃铛、重复、子任务进度、关联、星标等元信息图标压在日期下方右对齐——
+///   与竞品列表页的信息层级一致（左列读「是什么」，右列读「什么时候 / 什么状态」）；
+/// - **卡片分段**（[OrbitCardSegment]）：列表档每行是一张卡的一段（首段圆上角、
+///   末段圆下角、段间 1px `divider`）；[OrbitCardEdge.none]（看板 / 表格 /
+///   搜索等复用场景）仍是扁平行（仅下沿 1px 分隔线）；
+/// - 无行尾拖拽把手：拖动排序由整行长按拾起承担（见 [SubListScreen.buildTile]）。
 ///
 /// 侧滑手势（07 #18）：面板露出操作按钮（TickTick 式）——
 /// 右滑露「完成」（已完成态变「恢复」，行保留不删）、
@@ -1753,9 +1933,13 @@ class TodoTaskTile extends StatelessWidget {
     this.reminder,
     this.relationCount = 0,
     this.onDelete,
+    this.edge = OrbitCardEdge.none,
   });
 
   final TodoTask task;
+
+  /// 卡片段位（列表档的卡片化；默认扁平行，看板 / 表格 / 搜索不受影响）
+  final OrbitCardEdge edge;
 
   /// 副标题项目名；无项目（未分组）不渲染该段
   final String? projectTitle;
@@ -1816,50 +2000,69 @@ class TodoTaskTile extends StatelessWidget {
     ];
   }
 
-  /// 行内提醒段：铃铛 + HH:mm；已到期且任务未完成转逾期红。
-  /// 桌面用 Bell / BellRing 双图标区分，移动图标集无 bellRing——以颜色为主信号
-  List<Widget> _reminderChips(AppColorSet colors) {
+  /// 行右侧元信息图标列（日期下方、右对齐，TickTick 版式）
+  ///
+  /// 顺序：重复 → 提醒（铃铛 + HH:mm，到期未完转逾期红）→ 子任务进度
+  /// （percent_done 0/100 不显示）→ 关联（C7 投影 > 0 才出）→ 星标（黄色）。
+  /// 逐项为空则整列不渲染（右列宽度对标题的挤压随之让出）。
+  List<Widget> _metaIcons(AppColorSet colors) {
+    final chips = <Widget>[];
+    void add(Widget w) {
+      if (chips.isNotEmpty) chips.add(const SizedBox(width: AppDimens.space6));
+      chips.add(w);
+    }
+
+    // 重复：repeat_mode > 0 才算真规则（repeat_after 是间隔，无规则时恒 1）
+    if (task.repeatMode > 0) {
+      add(Icon(OrbitIcons.repeat, size: 12, color: colors.iconText));
+    }
     final r = reminder;
-    if (r == null) return const [];
-    final color = r.fired ? OrbitAccents.overdueRed : colors.secondaryText;
-    return [
-      Icon(OrbitIcons.notification, size: 12, color: color),
-      Text(r.clock, style: TextStyle(fontSize: 12, color: color)),
-    ];
-  }
-
-  /// 行内关联段（C7）：链环图标 + 「关联」，与桌面列表行同口径
-  /// （详情页关联区才是查看/编辑入口，此处只做「这任务挂着别的任务」提示）
-  List<Widget> _dependencyChips(AppColorSet colors) {
-    if (relationCount <= 0) return const [];
-    return [
-      Icon(OrbitIcons.link, size: 12, color: colors.secondaryText),
-      Text(
-        '关联',
-        style: TextStyle(fontSize: 12, color: colors.secondaryText),
-      ),
-    ];
-  }
-
-  /// 行内子任务进度段（MS To Do Steps 同款体验）：
-  /// percent_done 由后端按子任务勾选回算，0 = 无子任务、100 = 全完成，均不显示
-  List<Widget> _progressChips(AppColorSet colors) {
+    if (r != null) {
+      // 桌面用 Bell / BellRing 双图标区分，移动图标集无 bellRing——以颜色为主信号
+      final color = r.fired ? OrbitAccents.overdueRed : colors.secondaryText;
+      add(Icon(OrbitIcons.notification, size: 12, color: color));
+      add(Text(r.clock, style: TextStyle(fontSize: 12, color: color)));
+    }
+    // 子任务进度（MS To Do Steps 同款体验；percent_done 由后端按勾选回算）
     final pct = task.percentDone;
-    if (pct <= 0 || pct >= 100) return const [];
-    return [
-      Icon(OrbitIcons.listChecks, size: 12, color: colors.secondaryText),
-      Text(
+    if (pct > 0 && pct < 100) {
+      add(Icon(OrbitIcons.listChecks, size: 12, color: colors.secondaryText));
+      add(Text(
         '${pct.round()}%',
         style: TextStyle(fontSize: 12, color: colors.secondaryText),
-      ),
-    ];
+      ));
+    }
+    // 关联（C7）：只做「这任务挂着别的任务」提示（详情页关联区才是编辑入口）
+    if (relationCount > 0) {
+      add(Icon(OrbitIcons.link, size: 12, color: colors.secondaryText));
+    }
+    if (task.isStarred) {
+      add(Icon(
+        OrbitIcons.star,
+        size: AppDimens.iconSizeSm,
+        color: OrbitAccents.starYellow,
+      ));
+    }
+    return chips;
+  }
+
+  /// 勾选框描边：优先级 1–5 取语义色，P0「无」回落组件默认中性灰
+  Color? _priorityRingColor() {
+    final hex = priorityRingHex(task.priority);
+    return hex == null ? null : hexToColor(hex);
   }
 
   @override
   Widget build(BuildContext context) {
     final colors = AppColors.ofContext(context);
-    final priorityHex = priorityColorHex(task.priority);
     final overdue = isOverdue(task);
+    // 截止日期短标签（右列；未来主题蓝、逾期红）
+    final dueLabel =
+        task.dueDate == null ? null : formatDueLabel(task.dueDate!);
+    final meta = _metaIcons(colors);
+    // 副标题（标签 / 项目名）有无：无则整行只留标题
+    final hasSubtitle =
+        labels.isNotEmpty || (projectTitle != null && task.projectId != null);
 
     return Slidable(
       // 每行独立 key，避免虚拟化复用时动作面板串行
@@ -1903,103 +2106,110 @@ class TodoTaskTile extends StatelessWidget {
       child: InkWell(
         onTap: onOpen,
         onLongPress: onLongPress,
-        child: Container(
-          padding: const EdgeInsets.symmetric(
-            horizontal: AppDimens.space16,
-            vertical: AppDimens.space8,
-          ),
-          decoration: BoxDecoration(
-            // 扁平行：不铺卡底，仅下沿 1px 分隔线（与 _SelectionRow 同口径）
-            border: Border(bottom: BorderSide(color: colors.divider)),
-          ),
-          child: Row(
-            children: [
-              // 24px 圆形 checkbox（check 16）
-              CircleCheckbox(
-                checked: task.isDone,
-                onToggle: onToggleDone,
-              ),
-              const SizedBox(width: AppDimens.space12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    AnimatedStrikethrough(
-                      text: task.title,
-                      done: task.isDone,
-                      maxLines: 1,
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w500,
-                        color: colors.titleText,
+        child: OrbitCardSegment(
+          edge: edge,
+          child: Container(
+            // 单行行也有完整热区高度（卡片里行高不随元信息有无跳动）
+            constraints: const BoxConstraints(minHeight: AppDimens.touchTarget),
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppDimens.space16,
+              vertical: AppDimens.space8,
+            ),
+            decoration: edge == OrbitCardEdge.none
+                // 扁平行（卡片外复用：看板 / 表格 / 搜索）：仅下沿 1px 分隔线
+                ? BoxDecoration(
+                    border: Border(bottom: BorderSide(color: colors.divider)),
+                  )
+                : null,
+            child: Row(
+              children: [
+                // 24px 圆形 checkbox（check 16）：描边承载优先级语义
+                CircleCheckbox(
+                  checked: task.isDone,
+                  onToggle: onToggleDone,
+                  borderColor: _priorityRingColor(),
+                ),
+                const SizedBox(width: AppDimens.space12),
+                // 左列：标题 +（标签 / 项目名）——读「这是什么」
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      AnimatedStrikethrough(
+                        text: task.title,
+                        done: task.isDone,
+                        maxLines: 1,
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w500,
+                          color: colors.titleText,
+                        ),
+                        doneColor: colors.titleText,
                       ),
-                      doneColor: colors.titleText,
-                    ),
-                    // 副标题恒渲染：优先级色点六档全显（P0「无」浅灰也参与）
-                    Padding(
-                      padding: const EdgeInsets.only(top: 2),
-                      child: Wrap(
-                        spacing: AppDimens.space4,
-                        runSpacing: 2,
-                        crossAxisAlignment: WrapCrossAlignment.center,
-                        children: [
-                          // 8px 优先级色点（六档全显，含 P0 浅灰）
-                          Container(
-                            width: 8,
-                            height: 8,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: hexToColor(priorityHex),
-                            ),
+                      // 副标题只在有标签 / 项目名时出现：优先级已由勾选框描边
+                      // 表达，不再占一枚色点，纯标题行因此更紧凑
+                      if (hasSubtitle)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 2),
+                          child: Wrap(
+                            spacing: AppDimens.space4,
+                            runSpacing: 2,
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            children: [
+                              // 标签段：色点 + 名（最多 3 个，超出折叠 +N）
+                              ..._labelChips(colors),
+                              if (projectTitle != null &&
+                                  task.projectId != null)
+                                Text(
+                                  projectTitle!,
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    // #36：项目名按项目色着字（无色回退次要色）
+                                    color: (projectColorHex != null &&
+                                            projectColorHex!.isNotEmpty)
+                                        ? hexToColor(projectColorHex!,
+                                            fallback: colors.secondaryText)
+                                        : colors.secondaryText,
+                                  ),
+                                ),
+                            ],
                           ),
-                          // 标签段：色点 + 名（最多 3 个，超出折叠 +N）
-                          ..._labelChips(colors),
-                          if (projectTitle != null && task.projectId != null)
-                            Text(
-                              projectTitle!,
-                              style: TextStyle(
-                                fontSize: 12,
-                                // #36：项目名按项目色着字（无色回退次要色）
-                                color: (projectColorHex != null &&
-                                        projectColorHex!.isNotEmpty)
-                                    ? hexToColor(projectColorHex!,
-                                        fallback: colors.secondaryText)
-                                    : colors.secondaryText,
-                              ),
-                            ),
-                          // 提醒段：铃铛 + HH:mm（到期未完转逾期红）
-                          ..._reminderChips(colors),
-                          // 关联段：链环 + 「关联」（有关联任务时）
-                          ..._dependencyChips(colors),
-                          // 日期段：逾期 #F44336
-                          if (task.dueDate != null)
-                            Text(
-                              formatYmd(task.dueDate!),
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: overdue
-                                    ? OrbitAccents.overdueRed
-                                    : colors.secondaryText,
-                              ),
-                            ),
-                          // 子任务进度段（percent_done 后端回算；0/100 不显示）
-                          ..._progressChips(colors),
-                        ],
-                      ),
-                    ),
-                  ],
+                        ),
+                    ],
+                  ),
                 ),
-              ),
-              if (task.isStarred) ...[
-                const SizedBox(width: AppDimens.space8),
-                Icon(
-                  OrbitIcons.star,
-                  size: AppDimens.iconSizeLg,
-                  color: OrbitAccents.starYellow,
-                ),
+                // 右列：截止日期 + 元信息图标——读「什么时候 / 什么状态」
+                if (dueLabel != null || meta.isNotEmpty) ...[
+                  const SizedBox(width: AppDimens.space8),
+                  Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      if (dueLabel != null)
+                        Text(
+                          dueLabel,
+                          style: TextStyle(
+                            fontSize: 12,
+                            // 未来与今天走主题蓝，逾期转红
+                            color: overdue
+                                ? OrbitAccents.overdueRed
+                                : OrbitAccents.themeAccent,
+                          ),
+                        ),
+                      if (meta.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 2),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: meta,
+                          ),
+                        ),
+                    ],
+                  ),
+                ],
               ],
-            ],
+            ),
           ),
         ),
       ),
@@ -2153,6 +2363,7 @@ class _SelectionRow extends StatelessWidget {
     required this.selected,
     required this.onTap,
     this.projectTitle,
+    this.edge = OrbitCardEdge.none,
   });
 
   final TodoTask task;
@@ -2160,78 +2371,86 @@ class _SelectionRow extends StatelessWidget {
   final VoidCallback onTap;
   final String? projectTitle;
 
+  /// 卡片段位（同 [TodoTaskTile.edge]：列表档卡片化，看板 / 表格用 none）
+  final OrbitCardEdge edge;
+
   @override
   Widget build(BuildContext context) {
     final colors = AppColors.ofContext(context);
     final overdue = isOverdue(task);
 
-    return InkWell(
-      onTap: onTap,
-      child: Container(
-        height: AppDimens.listItemHeight,
-        padding: const EdgeInsets.symmetric(horizontal: AppDimens.space16),
-        decoration: BoxDecoration(
-          color: selected
-              ? OrbitAccents.todoAccent.withValues(alpha: 0.10)
-              : Colors.transparent,
-          border: Border(
-            bottom: BorderSide(color: colors.divider),
+    return OrbitCardSegment(
+      edge: edge,
+      child: InkWell(
+        onTap: onTap,
+        child: Container(
+          constraints: const BoxConstraints(minHeight: AppDimens.listItemHeight),
+          padding: const EdgeInsets.symmetric(horizontal: AppDimens.space16),
+          decoration: BoxDecoration(
+            color: selected
+                ? OrbitAccents.todoAccent.withValues(alpha: 0.10)
+                : Colors.transparent,
+            // 卡内段不画横线（分隔线由 OrbitCardSegment 承担）
+            border: edge == OrbitCardEdge.none
+                ? Border(bottom: BorderSide(color: colors.divider))
+                : null,
           ),
-        ),
-        child: Row(
-          children: [
-            Icon(
-              selected
-                  ? OrbitIcons.success
-                  : OrbitIcons.circle,
-              size: AppDimens.iconSizeLg,
-              color: selected ? OrbitAccents.todoAccent : colors.secondaryText,
-            ),
-            const SizedBox(width: AppDimens.space12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  AnimatedStrikethrough(
-                    text: task.title,
-                    done: task.isDone,
-                    maxLines: 1,
-                    style: TextStyle(
-                      fontSize: 15,
-                      color: colors.bodyText,
-                    ),
-                    doneColor: colors.bodyText,
-                  ),
-                  if (projectTitle != null || task.dueDate != null) ...[
-                    const SizedBox(height: AppDimens.space2),
-                    Text(
-                      [
-                        ?projectTitle,
-                        if (task.dueDate != null) formatYmd(task.dueDate!),
-                      ].join(' · '),
+          child: Row(
+            children: [
+              Icon(
+                selected
+                    ? OrbitIcons.success
+                    : OrbitIcons.circle,
+                size: AppDimens.iconSizeLg,
+                color:
+                    selected ? OrbitAccents.todoAccent : colors.secondaryText,
+              ),
+              const SizedBox(width: AppDimens.space12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    AnimatedStrikethrough(
+                      text: task.title,
+                      done: task.isDone,
                       maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
                       style: TextStyle(
-                        fontSize: 12,
-                        color: overdue
-                            ? colors.destructive
-                            : colors.secondaryText,
+                        fontSize: 15,
+                        color: colors.bodyText,
                       ),
+                      doneColor: colors.bodyText,
                     ),
+                    if (projectTitle != null || task.dueDate != null) ...[
+                      const SizedBox(height: AppDimens.space2),
+                      Text(
+                        [
+                          ?projectTitle,
+                          if (task.dueDate != null) formatYmd(task.dueDate!),
+                        ].join(' · '),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: overdue
+                              ? colors.destructive
+                              : colors.secondaryText,
+                        ),
+                      ),
+                    ],
                   ],
-                ],
+                ),
               ),
-            ),
-            Container(
-              width: AppDimens.colorDotSize / 2,
-              height: AppDimens.colorDotSize,
-              decoration: BoxDecoration(
-                color: hexToColor(priorityColorHex(task.priority)),
-                borderRadius: AppShapes.small,
+              Container(
+                width: AppDimens.colorDotSize / 2,
+                height: AppDimens.colorDotSize,
+                decoration: BoxDecoration(
+                  color: hexToColor(priorityColorHex(task.priority)),
+                  borderRadius: AppShapes.small,
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

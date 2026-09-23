@@ -4,9 +4,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:orbit/data/api/mock_orbit_bridge.dart';
 import 'package:orbit/data/providers/bridge_provider.dart';
 import 'package:orbit/modules/settings/label_manager_page.dart';
+import 'package:orbit/modules/todo/project_edit_page.dart';
 import 'package:orbit/modules/todo/sidebar_screen.dart';
 import 'package:orbit/shared/utils/hex_color.dart';
 import 'package:orbit/shared/widgets/shadcn/orbit_info_row.dart';
@@ -117,34 +119,40 @@ void main() {
     await _drainMockLatency(tester);
   });
 
-  testWidgets('侧栏项目色板：色点热区 48，视觉 32 不变', (tester) async {
-    await tester.pumpWidget(_wrap(const SidebarScreen(), MockOrbitBridge()));
+  testWidgets('编辑项目整页：色点热区 48，视觉 32 不变', (tester) async {
+    final bridge = MockOrbitBridge();
+    final projectId = bridge.store.projects
+        .values
+        .firstWhere((p) => p['title'] == '工作')['id'] as int;
+
+    // 编辑项目 2026-09-23 由对话框升级为整页（页面内有 context.pop()），
+    // 故测试壳必须是带 GoRouter 的路由壳
+    final router = GoRouter(
+      initialLocation: '/edit',
+      routes: [
+        GoRoute(
+          path: '/',
+          builder: (_, _) => const Scaffold(body: Text('返回页')),
+        ),
+        GoRoute(
+          path: '/edit',
+          builder: (_, _) => ProjectEditPage(projectId: projectId),
+        ),
+      ],
+    );
+    await tester.pumpWidget(ProviderScope(
+      overrides: [orbitBridgeProvider.overrideWithValue(bridge)],
+      child: orbitTestAppRouter(routerConfig: router),
+    ));
     await _settle(tester);
 
-    // 色板在「编辑项目」对话框内（长按项目行 → 更多操作 → 编辑）。
-    // 项目行落在默认 600px 视口的懒渲染区外，先滚到可见；scrollUntilVisible
-    // 收尾的 ensureVisible 默认 alignment 0（顶到视口最上沿），而侧栏是 Stack
-    // ——页头压着列表顶部，顶到上沿的长按会被页头吃掉，故再对齐到视口中部。
-    await tester.scrollUntilVisible(
-      find.text('工作'),
-      200,
-      scrollable: find.byType(Scrollable).first,
-    );
-    await Scrollable.ensureVisible(
-      tester.element(find.text('工作')),
-      alignment: 0.5,
-    );
-    await tester.pumpAndSettle();
-
-    await tester.longPress(find.text('工作'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('编辑'));
-    await tester.pumpAndSettle();
-    expect(find.text('编辑项目'), findsOneWidget);
-
-    final dot = _circleDotsIn(find.byType(AlertDialog)).first;
+    // 热区 = 外层 Padding 补出的 48（视觉 32 不变）
+    final dot = find.byWidgetPredicate((w) =>
+        w is Container &&
+        w.decoration is BoxDecoration &&
+        (w.decoration as BoxDecoration).shape == BoxShape.circle &&
+        (w.decoration as BoxDecoration).color == hexToColor('#EF4444'));
     expect(tester.getSize(dot), const Size(32, 32));
     expect(_heatArea(tester, dot), 48);
-    await _drainMockLatency(tester);
   });
 }

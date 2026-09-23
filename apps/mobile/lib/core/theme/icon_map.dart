@@ -22,6 +22,9 @@ abstract final class OrbitIcons {
 
   static const IconData back = LucideIcons.arrowLeft;
   static const IconData menu = LucideIcons.menu;
+
+  /// 纵向省略号（页头溢出菜单）
+  static const IconData moreVertical = LucideIcons.ellipsisVertical;
   static const IconData chevronRight = LucideIcons.chevronRight;
   static const IconData chevronLeft = LucideIcons.chevronLeft;
   static const IconData expandMore = LucideIcons.chevronDown;
@@ -68,9 +71,11 @@ abstract final class OrbitIcons {
   /// 未收藏态星标（与 [star] 同字形，语义上成对，便于调用点自解释）
   static const IconData starOutline = LucideIcons.star;
 
-  /// 可见性（隐藏/显示已完成任务开关）
+  /// 可见性（外观/隐私类开关）
   static const IconData eye = LucideIcons.eye;
-  static const IconData eyeOff = LucideIcons.eyeOff;
+
+  /// 无颜色（清单颜色行的「无」档：斜杠圆）
+  static const IconData noColor = LucideIcons.circleSlash;
 
   // ── 日历与时间 ──
 
@@ -102,6 +107,15 @@ abstract final class OrbitIcons {
   static const IconData archiveRestore = LucideIcons.archiveRestore;
   static const IconData circle = LucideIcons.circle;
   static const IconData playCircle = LucideIcons.circlePlay;
+
+  /// 重复任务（行右侧元信息图标列）
+  static const IconData repeat = LucideIcons.repeat;
+
+  /// 从模板新建（快捷添加面板「模板」档）
+  static const IconData template = LucideIcons.layoutTemplate;
+
+  /// 全屏展开（快捷添加面板「全屏」档：展开为完整新建表单）
+  static const IconData fullscreen = LucideIcons.maximize2;
 
   // ── 统计与图表 ──
 

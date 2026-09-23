@@ -21,10 +21,17 @@ class CircleCheckbox extends StatelessWidget {
     required this.checked,
     required this.onToggle,
     this.size = AppDimens.taskCheckboxSize,
+    this.borderColor,
   });
 
   final bool checked;
   final VoidCallback onToggle;
+
+  /// 未勾选态描边色；null = 组件默认中性灰。
+  ///
+  /// 任务列表用它承载优先级语义（高/紧急/立即以橙红圆环表达，P0「无」
+  /// 回落默认灰）——同一信息不再于副标题重复一枚色点（docs/05 §4.5）。
+  final Color? borderColor;
 
   /// 外圆直径（列表行 24 / 详情标题 28 / 子任�?22�?
   final double size;
@@ -44,7 +51,8 @@ class CircleCheckbox extends StatelessWidget {
         size: size,
         borderRadius: BorderRadius.circular(size / 2),
         activeColor: OrbitAccents.todoAccent,
-        borderColor: colors.secondaryText.withValues(alpha: 0.4),
+        borderColor:
+            borderColor ?? colors.secondaryText.withValues(alpha: 0.4),
         onChanged: (_) => _handleChanged(),
       ),
     );

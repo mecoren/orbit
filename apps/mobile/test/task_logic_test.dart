@@ -699,5 +699,45 @@ group('displayReminder 行内提醒选取', () {
     expect(formatHm(DateTime(2026, 9, 23, 9, 5).millisecondsSinceEpoch),
         '09:05');
   });
+
+  group('行右侧日期列与优先级描边（2026-09-23 版式改写）', () {
+    final now = DateTime(2026, 9, 23, 14, 30);
+
+    test('formatDueLabel：今天 / 明天 / 昨天', () {
+      expect(formatDueLabel(DateTime(2026, 9, 23).millisecondsSinceEpoch,
+          now: now), '今天');
+      expect(formatDueLabel(DateTime(2026, 9, 24).millisecondsSinceEpoch,
+          now: now), '明天');
+      expect(formatDueLabel(DateTime(2026, 9, 22).millisecondsSinceEpoch,
+          now: now), '昨天');
+    });
+
+    test('formatDueLabel：按本地日界判相对（同一天任何时刻都算今天）', () {
+      expect(
+        formatDueLabel(
+            DateTime(2026, 9, 23, 23, 59).millisecondsSinceEpoch, now: now),
+        '今天',
+      );
+      expect(
+        formatDueLabel(DateTime(2026, 9, 24, 0, 1).millisecondsSinceEpoch,
+            now: now),
+        '明天',
+      );
+    });
+
+    test('formatDueLabel：更远同年走 M月D日，跨年带年份', () {
+      expect(formatDueLabel(DateTime(2026, 12, 5).millisecondsSinceEpoch,
+          now: now), '12月5日');
+      expect(formatDueLabel(DateTime(2027, 1, 3).millisecondsSinceEpoch,
+          now: now), '2027年1月3日');
+    });
+
+    test('priorityRingHex：P0「无」不出色（回落中性灰描边），P1–P5 取语义色', () {
+      expect(priorityRingHex(0), isNull);
+      for (var p = 1; p <= 5; p++) {
+        expect(priorityRingHex(p), priorityColorHex(p));
+      }
+    });
+  });
 });
 }

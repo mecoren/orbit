@@ -1028,7 +1028,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        '标签用于跨项目归类任务；模板用于一键生成常用任务。',
+                        '标签用于跨项目归类任务；模板用于一键生成常用任务；'
+                        '编辑操作决定任务列表页底部快速添加面板显示哪些按钮。',
                         style: TextStyle(
                           fontSize: 12,
                           color: colors.secondaryText,
@@ -1044,6 +1045,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         colors,
                         label: '任务模板',
                         onTap: () => context.push('/settings/templates'),
+                      ),
+                      _navRow(
+                        colors,
+                        label: '编辑操作',
+                        onTap: () => context.push('/settings/quick-actions'),
                       ),
                       _navRow(
                         colors,
