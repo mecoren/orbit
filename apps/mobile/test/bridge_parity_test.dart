@@ -37,7 +37,10 @@ void main() {
   });
 
   test('get_by_uuid 往返 + business_count 计数', () async {
-    final task = (await bridge.todoTaskList(const ListFilter())).first;
+    // A2 口径：uuid 是列表通道的裁剪列（空串占位），真实 uuid 需走单条全列通道
+    final listed = (await bridge.todoTaskList(const ListFilter())).first;
+    expect(listed.uuid, isEmpty, reason: '列表通道 uuid 应被裁掉');
+    final task = await bridge.todoTaskGet(listed.id);
     final byUuid = await bridge.todoTaskGetByUuid(task.uuid);
     expect(byUuid?.id, task.id);
     final projects = await bridge.todoProjectList(const ListFilter());

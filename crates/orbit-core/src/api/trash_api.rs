@@ -144,8 +144,10 @@ pub async fn list_trashed_tasks(pool: &SqlitePool) -> CoreResult<Vec<TodoTask>> 
     let items = sqlx::query_as::<_, TodoTask>(
         "SELECT * FROM todo_tasks \
          WHERE is_deleted = 1 AND deleted_at IS NOT NULL \
-         ORDER BY deleted_at DESC, id DESC",
+         ORDER BY deleted_at DESC, id DESC \
+         LIMIT ?1",
     )
+    .bind(TRASH_LIST_LIMIT)
     .fetch_all(pool)
     .await?;
     Ok(items)
@@ -255,11 +257,27 @@ pub async fn purge_todo_task(pool: &SqlitePool, id: i64) -> CoreResult<()> {
     Ok(())
 }
 
+/// 回收站列表返回上限（性能批次 A6）
+///
+/// 回收站是「找回入口」而非全量浏览面：按 `deleted_at` 倒序只回最近 N 条
+/// （最可能被找回的那批），与项目/标签列表 1000 同量级；上限内已是全部时
+/// 行为与加限前一致。**清空回收站不受本上限约束**（见
+/// [purge_all_trashed_tasks] 的独立投影查询）。
+pub const TRASH_LIST_LIMIT: i64 = 1000;
+
 /// 清空回收站（全部墓碑任务物理删除；含各自的子表行）
 ///
 /// 返回删除的任务数。无墓碑时直接返回 0（不 emit 事件）。
+///
+/// 事件载荷取**独立投影查询**而非 [list_trashed_tasks]：后者带列表上限，
+/// 复用它会让「删除行数 > 事件数」（超上限的墓碑被物理删却不发 db-change）。
+/// 投影只取 id/uuid（与 TTL 清理同口径），不整行物化。
 pub async fn purge_all_trashed_tasks(pool: &SqlitePool) -> CoreResult<u64> {
-    let trashed: Vec<TodoTask> = list_trashed_tasks(pool).await?;
+    let trashed: Vec<(i64, String)> = sqlx::query_as::<_, (i64, String)>(
+        "SELECT id, uuid FROM todo_tasks WHERE is_deleted = 1 AND deleted_at IS NOT NULL",
+    )
+    .fetch_all(pool)
+    .await?;
     if trashed.is_empty() {
         return Ok(0);
     }
@@ -285,8 +303,8 @@ pub async fn purge_all_trashed_tasks(pool: &SqlitePool) -> CoreResult<u64> {
     tx.commit().await?;
 
     let device_id = generic_repo::current_device_id();
-    for t in &trashed {
-        EVENT_BUS.emit(DbEvent::delete("todo_tasks", t.id, &t.uuid, &device_id));
+    for (id, uuid) in &trashed {
+        EVENT_BUS.emit(DbEvent::delete("todo_tasks", *id, uuid, &device_id));
     }
     Ok(trashed.len() as u64)
 }
@@ -580,6 +598,45 @@ mod tests {
         // 不在回收站的任务不可彻底删除
         let live = create_todo_task(&pool, &input("活的")).await.unwrap();
         assert!(purge_todo_task(&pool, live.id).await.is_err());
+    }
+
+    /// A6 不变量：回收站**列表**按上限截断，但**清空回收站**必须覆盖全部墓碑
+    /// （旧实现清空复用列表结果推事件——加 LIMIT 后会出现「行被物理删却没发
+    /// db-change」的静默漏刷，故清空改走独立投影查询；本用例锁住这条边界）
+    #[tokio::test]
+    async fn trash_list_limits_but_purge_all_covers_every_row() {
+        let pool = setup_db().await;
+        let total = TRASH_LIST_LIMIT + 5;
+        // 单事务批量造墓碑：绕开业务写路径（千级时钟/事件开销无谓），
+        // deleted_at 递增使「最近删除」= 最大 deleted_at
+        let mut tx = pool.begin().await.unwrap();
+        for i in 0..total {
+            sqlx::query(
+                "INSERT INTO todo_tasks (uuid, title, is_deleted, deleted_at, created_at, updated_at) \
+                 VALUES (?1, ?2, 1, ?3, 0, 0)",
+            )
+            .bind(format!("trash-u{i}"))
+            .bind(format!("墓碑{i}"))
+            .bind(i)
+            .execute(&mut *tx)
+            .await
+            .unwrap();
+        }
+        tx.commit().await.unwrap();
+
+        let listed = list_trashed_tasks(&pool).await.unwrap();
+        assert_eq!(listed.len() as i64, TRASH_LIST_LIMIT, "列表应按上限截断");
+        // 截断保留的是最近删除（deleted_at 最大）
+        assert_eq!(listed[0].deleted_at, Some(total - 1));
+
+        let purged = purge_all_trashed_tasks(&pool).await.unwrap();
+        assert_eq!(purged as i64, total, "清空回收站应覆盖全部墓碑而非列表上限");
+        let (left,): (i64,) =
+            sqlx::query_as("SELECT COUNT(*) FROM todo_tasks WHERE is_deleted = 1")
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        assert_eq!(left, 0);
     }
 
     #[tokio::test]

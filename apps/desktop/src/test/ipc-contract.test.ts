@@ -114,7 +114,13 @@ function list(filter: Record<string, unknown>) {
   const impl = mockCommands.todo_tasks_list as (
     args: unknown,
     ctx: unknown,
-  ) => Array<{ id: number; updated_at: number; description: string | null; title: string }>;
+  ) => Array<{
+    id: number;
+    updated_at: number;
+    description: string | null;
+    uuid: string;
+    title: string;
+  }>;
   return impl({ filter }, { db });
 }
 
@@ -154,10 +160,17 @@ describe("mock IPC 契约", () => {
   it("③ 列裁剪保真：空 keyword 时 description 为 null（D0 守门犬）", () => {
     const pruned = list({ keyword: "", page: 1, page_size: 45 });
     expect(pruned).toHaveLength(45);
-    for (const t of pruned) expect(t.description).toBeNull();
+    for (const t of pruned) {
+      expect(t.description).toBeNull();
+      // A2：uuid 同为列表通道零消费列，以空串占位（Rust 侧 '' AS uuid）
+      expect(t.uuid).toBe("");
+    }
     // 非空 keyword 走全列：描述保留且按 title+description 过滤
     const full = list({ keyword: "描述 1", page: 1, page_size: 45 });
     expect(full.length).toBeGreaterThan(0);
-    for (const t of full) expect(t.description).not.toBeNull();
+    for (const t of full) {
+      expect(t.description).not.toBeNull();
+      expect(t.uuid).not.toBe("");
+    }
   });
 });

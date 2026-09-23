@@ -17,6 +17,15 @@ use crate::error::CoreResult;
 /// 多连接场景显式封顶可预期（6 连接 × ≤8MB）。
 const PAGE_CACHE_MB: i64 = 8;
 
+/// 连接池上限（内存治理 A8：6 → 3）
+///
+/// 口径：同步 push/pull 已串行化（WebDAV 并发 MKCOL 503 与 ProgressSender Send
+/// 约束两轮踩坑后收敛），单同步流最多占 1 连接；UI 命令 + 备份 / 提醒 / 节假日 /
+/// 回收站调度器并发余量 2 足够（各调度器互不同拍，且都短事务）。SQLite WAL 下
+/// 多连接可并发读、串行写（busy_timeout=5s 等待），池越大只是多份 page cache
+/// 驻留——池上限即是内存下界，故取满足并发需求的最小值。
+const MAX_CONNECTIONS: u32 = 3;
+
 /// 初始化加密数据库连接池
 ///
 /// # 参数
@@ -26,7 +35,7 @@ const PAGE_CACHE_MB: i64 = 8;
 ///
 /// # 流程
 /// 1. 构建 SQLite 连接选项（WAL 模式 + 外键约束 + 忙等待 + 每连接 PRAGMA）
-/// 2. 建立连接池（max_connections=6）
+/// 2. 建立连接池（`MAX_CONNECTIONS`，见常量口径）
 /// 3. 若提供密钥，经 options.pragma 注入 PRAGMA key（sqlx 保证每条
 ///    连接建立时都执行、且 key 最先于其它 PRAGMA——池是惰性建连接的，
 ///    直接对池执行只会命中第一条连接，加密库后续连接将因未解密读出密文）
@@ -48,12 +57,9 @@ pub async fn init_pool(db_path: &Path, db_key: Option<&str>) -> CoreResult<Sqlit
         opts = opts.pragma("key", format!("'{escaped}'"));
     }
 
-    // 连接池 6：同步 push/pull 已串行化（WebDAV 并发 MKCOL 503 与
-    // ProgressSender Send 约束两轮踩坑后收敛），单同步流最多占 1 连接；
-    // UI 命令 + 备份/提醒/节假日调度器并发余量 5 足够。SQLite WAL 下
-    // 多连接可并发读、串行写（busy_timeout=5s 等待）
+    // 连接池上限：口径见 MAX_CONNECTIONS 注释（性能批次 A8：6 → 3）
     let pool = SqlitePoolOptions::new()
-        .max_connections(6)
+        .max_connections(MAX_CONNECTIONS)
         .connect_with(opts)
         .await?;
 
@@ -84,13 +90,15 @@ mod tests {
             .await
             .unwrap();
 
-        // 并发取 6 条连接（全部即时建立后各自持有）
-        let conns: Vec<_> =
-            futures::future::join_all(std::iter::repeat_with(|| pool.acquire()).take(6))
-                .await
-                .into_iter()
-                .map(|c| c.unwrap())
-                .collect();
+        // 并发取满整池连接（全部即时建立后各自持有）——池上限随 A8 收紧，
+        // 此处按常量取数，避免写死数字与上限漂移
+        let conns: Vec<_> = futures::future::join_all(
+            std::iter::repeat_with(|| pool.acquire()).take(MAX_CONNECTIONS as usize),
+        )
+        .await
+        .into_iter()
+        .map(|c| c.unwrap())
+        .collect();
 
         for (i, mut conn) in conns.into_iter().enumerate() {
             let (fk,): (i64,) = sqlx::query_as("PRAGMA foreign_keys")

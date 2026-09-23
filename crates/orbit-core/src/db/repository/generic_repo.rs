@@ -35,10 +35,20 @@ pub(crate) fn current_device_id() -> String {
 // 泛型 list/get/soft_delete（适用于所有有 is_deleted + id 的表）
 // =============================================================================
 
-/// todo_tasks 列表通道的裁剪列清单（批2）：全列减 `description`，该列以
-/// `NULL AS description` 占位保持行形状（FromRow/DTO 不变）。字段顺序
-/// 与 0001 迁移列序一致（可读性；SQLite 按名绑定）。
-const LIST_COLUMNS_TASKS_PRUNED: &str = "id, uuid, title, NULL AS description, \
+/// todo_tasks 列表通道的裁剪列清单（批2 + 内存治理 A2）：全列减两个
+/// 「列表通道零消费」列，两者都以占位表达式保持行形状（FromRow/DTO 形状不变）：
+///
+/// - `description` → `NULL AS description`（批2：万级列表实测占 IPC 序列化
+///   体积 47%，1KB/行）；
+/// - `uuid` → `'' AS uuid`（A2：单列约 450KB/万行。**必须用空串而非 NULL**——
+///   DTO 该字段是非空 `String`，NULL 会让 FromRow 解码直接失败）。
+///
+/// 消费方核实（2026-09-23）：桌面前端全仓仅 `ipc-mock` 的 `todo_tasks_get_by_uuid`
+/// 提到 uuid，移动端 modules/services 零消费（同步冲突行读的是
+/// `sync_conflicts.record_uuid`，与任务 uuid 不同源）；同步 push/pull、活动日志、
+/// 事件载荷（`DbEvent::delete`）与回收站清理都走单行 `get_by_id` 全列路径。
+/// 字段顺序与 0001 迁移列序一致（可读性；SQLite 按名绑定）。
+const LIST_COLUMNS_TASKS_PRUNED: &str = "id, '' AS uuid, title, NULL AS description, \
     project_id, priority, status, done, done_at, due_date, start_date, \
     repeat_after, repeat_mode, repeat_weekdays, repeat_end_type, repeat_end_param, \
     repeat_from_done, percent_done, position, is_favorite, my_day_date, \
@@ -55,12 +65,13 @@ const LIST_COLUMNS_TASKS_PRUNED: &str = "id, uuid, title, NULL AS description, \
 /// 调用方混用属契约错误，但基线是不静默丢数据所以选择忽略）。
 /// 调用方需保证 T: sqlx::FromRow 且表结构匹配。
 ///
-/// todo_tasks 列裁剪（批2）：keyword 为空时 description 列以 `NULL AS description`
-/// 占位不传输——万级列表场景实测 description 占 IPC 序列化体积 47%（1KB/行），
-/// 而列表/看板/日历/表格四视图与移动列表均零消费，仅 keyword 本地过滤依赖它
+/// todo_tasks 列裁剪（批2 + A2）：keyword 为空时 description / uuid 两列以占位
+/// 表达式不传输（清单与理由见 [LIST_COLUMNS_TASKS_PRUNED]）——万级列表场景实测
+/// description 占 IPC 序列化体积 47%（1KB/行）、uuid 约 450KB/万行，而列表/看板/
+/// 日历/表格四视图与移动列表对两者均零消费，仅 keyword 本地过滤依赖 description
 /// （keyword 非空时 SQL LIKE 已按 title+description 过滤，保留全列语义保序）。
-/// DTO 形状不变（前端 `description ?? null` 兜底既有），详情 get_todo_task_detail
-/// 单条保持全列。
+/// DTO 形状不变（`description` 前端 `?? null` 兜底；`uuid` 回落空串），详情
+/// get_todo_task_detail 单条保持全列。
 pub async fn list<T>(pool: &SqlitePool, table: &str, filter: &ListFilter) -> CoreResult<Vec<T>>
 where
     T: for<'r> sqlx::FromRow<'r, sqlx::sqlite::SqliteRow> + Send + Unpin,
@@ -1517,6 +1528,8 @@ mod column_prune_tests {
         assert_eq!(rows.len(), 1);
         // 裁剪：列表通道 description 为 NULL（形状在、值不传）
         assert_eq!(rows[0].description, None);
+        // A2：uuid 同为列表通道零消费列，以空串占位（不能是 NULL——DTO 非空 String）
+        assert!(rows[0].uuid.is_empty(), "列表通道 uuid 应被裁掉");
         // 其余字段全量（含非默认值字段防白名单漏列）
         assert_eq!(rows[0].title, "带描述的任务");
     }
@@ -1541,6 +1554,8 @@ mod column_prune_tests {
         // keyword 命中 description → 行返回且 description 全列保留
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0].description.as_deref(), Some("描述含关键词采购"));
+        // keyword 分支走 SELECT *：uuid 一并回全（裁剪只作用于无 keyword 通道）
+        assert!(!rows[0].uuid.is_empty(), "keyword 通道应保留 uuid");
     }
 
     #[tokio::test]

@@ -584,9 +584,9 @@ const commands: Record<string, (args: any, ctx: Ctx) => unknown> = {
   // 谓词下推（F5）：六键与 Rust build_task_predicate_clause 同口径（仅本命令消费）
   todo_tasks_list: ({ filter }, { db }) => {
     let rows = db.tasks.filter((t) => !t.is_deleted);
-    // 列裁剪（批2 对齐 Rust）：keyword 空时 description 不传输（NULL 占位
-    // 保形状）；keyword 非空保留全列（SQL LIKE 依赖）
-    const pruneDesc = !filter?.keyword?.trim();
+    // 列裁剪（批2 + A2 对齐 Rust）：keyword 空时 description 与 uuid 都不传输
+    // （NULL / 空串占位保形状）；keyword 非空保留全列（SQL LIKE 依赖）
+    const pruneListColumns = !filter?.keyword?.trim();
     // 归档项目任务排除（聚合视图；project_id 谓词=用户主动选中该归档项目时放行）
     if (filter?.project_id == null) {
       const archivedIds = new Set(db.projects.filter((p) => p.is_archived && !p.is_deleted).map((p) => p.id));
@@ -606,8 +606,8 @@ const commands: Record<string, (args: any, ctx: Ctx) => unknown> = {
     // 分页（对齐 Rust LIMIT/OFFSET；调用方恒传 page:1/page_size:10000，
     // 现有链路恰一整页，行为不变；第五轮 A5/A6 真分页后门禁才有意义）
     const paged = paginateRows(keyworded, filter?.page, filter?.page_size);
-    return pruneDesc
-      ? paged.map((t) => ({ ...t, description: null }))
+    return pruneListColumns
+      ? paged.map((t) => ({ ...t, description: null, uuid: "" }))
       : paged;
   },
   todo_tasks_get: ({ id }, { db }) => ipcClone(db.tasks.find((t) => t.id === id) ?? null),
@@ -1237,6 +1237,8 @@ const commands: Record<string, (args: any, ctx: Ctx) => unknown> = {
   // ---- 备份/导出（设置页打开才拉取；给空态安全值）----
   backup_prefs_get: () => null,
   full_backup_list_local: () => [],
+  // 本机设备标识（导出区展示；mock 回固定同构体，未初始化场景不出现在冒烟链路）
+  full_backup_device_info: () => ({ device_id: "mock-device" }),
   // 恢复预览（确认框打开才拉取；mock 回固定同构体，走 ready 分支）
   full_backup_peek_local: () => ipcClone(MOCK_BACKUP_PREVIEW),
   full_backup_peek_cloud: () => ipcClone(MOCK_BACKUP_PREVIEW),
