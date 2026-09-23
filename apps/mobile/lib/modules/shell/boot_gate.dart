@@ -15,6 +15,7 @@ import '../../services/notification_service.dart';
 import '../../services/reminder_scheduler.dart';
 import '../../services/reminder_snooze.dart';
 import '../../services/share_receiver.dart';
+import '../../services/shortcut_receiver.dart';
 import '../../services/sync_on_change_scheduler.dart';
 import '../todo/logic/badge_count.dart';
 import '../todo/providers/todo_providers.dart';
@@ -87,6 +88,9 @@ class _BootGateState extends ConsumerState<BootGate>
       // 热运行分享：Android onNewIntent 已把文本存原生侧待取，
       // 回到前台轮询取走（冷启动一路在 _goReady 首查）
       ShareReceiver.consume(ref);
+      // 热运行静态快捷方式（长按图标 → 新建任务/今天/搜索）：同款「原生暂存
+      // → 前台取走」；动作语义由侧栏页处理器落地
+      ShortcutReceiver.consume();
       // 回前台先补掉后台 isolate 留下的推迟暂存：它在后台隔离区写不了 DB，
       // 若用户一直不重启 App，只有这里能把推迟写回（见 _landSpooledSnoozes）
       unawaited(_landSpooledSnoozes());
@@ -286,6 +290,9 @@ class _BootGateState extends ConsumerState<BootGate>
       // 分享冷启动一路：onCreate intent 携带 EXTRA_TEXT 已存原生侧，
       // 路由就绪后取走建任务（toast 需 Overlay，早于此无渲染面）
       ShareReceiver.consume(ref);
+      // 快捷方式冷启动一路：launch intent 的动作 id 已在原生侧；取走后由
+      // 侧栏处理器补发（侧栏若已装配则直接执行，否则暂存到其 initState 后补）
+      ShortcutReceiver.consume();
     });
   }
 

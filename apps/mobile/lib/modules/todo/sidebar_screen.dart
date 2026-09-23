@@ -16,6 +16,7 @@ import '../../shared/widgets/shadcn/orbit_fab.dart';
 import '../../shared/widgets/shadcn/orbit_page_header.dart';
 import '../../shared/widgets/shadcn/orbit_skeleton.dart';
 import '../../shared/widgets/shadcn/orbit_actions_sheet.dart';
+import '../../services/shortcut_receiver.dart';
 import '../../shared/widgets/sync_status_button.dart';
 import '../../shared/widgets/shadcn/orbit_toast.dart';
 import 'form_bottom_sheet.dart';
@@ -45,9 +46,34 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
   final _scrollController = ScrollController();
 
   @override
+  void initState() {
+    super.initState();
+    // Android 静态快捷方式（长按图标：新建任务 / 今天 / 搜索）落点页——
+    // 三个动作都要页面 context（弹快加表单 / 入栈），故由侧栏注册处理器；
+    // 补发推迟到下一帧：initState 期不能做 InheritedWidget 依赖与弹层
+    ShortcutReceiver.attach(_handleQuickAction);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) ShortcutReceiver.flushPending();
+    });
+  }
+
+  @override
   void dispose() {
+    ShortcutReceiver.detach(_handleQuickAction);
     _scrollController.dispose();
     super.dispose();
+  }
+
+  /// 快捷方式动作落点（原生只给动作 id，语义在此收口）
+  void _handleQuickAction(QuickAction action) {
+    switch (action) {
+      case QuickAction.newTask:
+        showTodoFormSheet(context);
+      case QuickAction.today:
+        _openView(QuickViewKey.today);
+      case QuickAction.search:
+        _openSearch();
+    }
   }
 
   // ── 数据 ──

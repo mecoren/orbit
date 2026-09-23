@@ -7,4 +7,12 @@
     <string name="widget_check_desc">勾选任务</string>
     <string name="widget_tile_label">今日待办</string>
     <string name="widget_tile_desc">查看今天截止或逾期的任务</string>
+    <!-- 长按图标静态快捷方式（res/xml/shortcuts.xml）：
+         short = 快捷菜单短标签，long = 可拖到桌面时的长标签 -->
+    <string name="shortcut_new_task_short">新建任务</string>
+    <string name="shortcut_new_task_long">新建任务（快加）</string>
+    <string name="shortcut_today_short">今天</string>
+    <string name="shortcut_today_long">今天截止的任务</string>
+    <string name="shortcut_search_short">搜索</string>
+    <string name="shortcut_search_long">搜索任务 / 项目 / 评论</string>
 </resources>

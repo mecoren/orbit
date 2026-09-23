@@ -21,6 +21,11 @@ class MainActivity : FlutterFragmentActivity() {
      *  MethodChannel("orbit/share") 回吐给 Dart 侧建任务。 */
     private var pendingText: String? = null
 
+    /** 长按图标静态快捷方式（res/xml/shortcuts.xml）：只暂存动作 id
+     *  （new_task / today / search），语义与路由落点在 Dart 侧
+     *  （services/shortcut_receiver.dart）——原生不复制业务判断。 */
+    private var pendingShortcut: String? = null
+
     override fun configureFlutterEngine(engine: FlutterEngine) {
         super.configureFlutterEngine(engine)
         // 小组件勾选转发中枢挂引擎（#3）：configure 时 attach，
@@ -35,12 +40,24 @@ class MainActivity : FlutterFragmentActivity() {
             BadgeChannel.handle(this, call.method, call.arguments, result)
         }
         pendingText = readSharedText(intent)
+        // 冷启动快捷方式：launch intent 携带动作 id（热运行一路在 onNewIntent）
+        pendingShortcut = readShortcutAction(intent)
         engine.dartExecutor.binaryMessenger
             .let { m ->
                 io.flutter.plugin.common.MethodChannel(m, "orbit/share").setMethodCallHandler { call, result ->
                     if (call.method == "takeSharedText") {
                         result.success(pendingText)
                         pendingText = null
+                    } else {
+                        result.notImplemented()
+                    }
+                }
+                // 快捷方式通道：与分享通道同款「取走即清」语义（Dart 侧
+                // resumed / 冷启动首帧各轮询一次，重复取到 null 无害）
+                io.flutter.plugin.common.MethodChannel(m, "orbit/shortcuts").setMethodCallHandler { call, result ->
+                    if (call.method == "takePendingShortcut") {
+                        result.success(pendingShortcut)
+                        pendingShortcut = null
                     } else {
                         result.notImplemented()
                     }
@@ -52,6 +69,8 @@ class MainActivity : FlutterFragmentActivity() {
         super.onNewIntent(intent)
         // 热运行分享：存待取文本；Dart 侧 lifecycle resume 时轮询 take
         pendingText = readSharedText(intent)
+        // 热运行快捷方式（launchMode=singleTop → 复用本实例走此路）
+        pendingShortcut = readShortcutAction(intent)
     }
 
     override fun onDestroy() {
@@ -65,5 +84,12 @@ class MainActivity : FlutterFragmentActivity() {
         if (intent?.action != Intent.ACTION_SEND) return null
         if (intent.type != "text/plain") return null
         return intent.getStringExtra(Intent.EXTRA_TEXT)?.takeIf { it.isNotBlank() }
+    }
+
+    /** 读静态快捷方式动作 id（shortcuts.xml 的 `<extra name="orbit_shortcut">`）；
+     *  非本应用的私有 action 一律忽略，避免误吞外部 intent。 */
+    private fun readShortcutAction(intent: Intent?): String? {
+        if (intent?.action != "cn.wait.orbit.action.SHORTCUT") return null
+        return intent.getStringExtra("orbit_shortcut")?.takeIf { it.isNotBlank() }
     }
 }

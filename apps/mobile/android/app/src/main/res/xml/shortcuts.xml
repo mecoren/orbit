@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Android 静态快捷方式（长按启动器图标）：系统级最高频入口，对齐 MS To-Do / TickTick。
+  只声明「动作 id」——语义与路由落点在 Dart 侧（lib/services/shortcut_receiver.dart），
+  原生侧只负责把 id 暂存（冷启动 configureFlutterEngine 读 launch intent，
+  热运行 singleTop 走 onNewIntent）并等 Dart 取走，逻辑不跨端重写。
+  action 用应用私有串，避免与系统/其他应用 intent 语义混淆。
+-->
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <shortcut
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_add"
+        android:shortcutId="new_task"
+        android:shortcutLongLabel="@string/shortcut_new_task_long"
+        android:shortcutShortLabel="@string/shortcut_new_task_short">
+        <intent
+            android:action="cn.wait.orbit.action.SHORTCUT"
+            android:targetClass="cn.wait.orbit.MainActivity"
+            android:targetPackage="cn.wait.orbit">
+            <extra
+                android:name="orbit_shortcut"
+                android:value="new_task" />
+        </intent>
+    </shortcut>
+
+    <shortcut
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_today"
+        android:shortcutId="today"
+        android:shortcutLongLabel="@string/shortcut_today_long"
+        android:shortcutShortLabel="@string/shortcut_today_short">
+        <intent
+            android:action="cn.wait.orbit.action.SHORTCUT"
+            android:targetClass="cn.wait.orbit.MainActivity"
+            android:targetPackage="cn.wait.orbit">
+            <extra
+                android:name="orbit_shortcut"
+                android:value="today" />
+        </intent>
+    </shortcut>
+
+    <shortcut
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_search"
+        android:shortcutId="search"
+        android:shortcutLongLabel="@string/shortcut_search_long"
+        android:shortcutShortLabel="@string/shortcut_search_short">
+        <intent
+            android:action="cn.wait.orbit.action.SHORTCUT"
+            android:targetClass="cn.wait.orbit.MainActivity"
+            android:targetPackage="cn.wait.orbit">
+            <extra
+                android:name="orbit_shortcut"
+                android:value="search" />
+        </intent>
+    </shortcut>
+
+</shortcuts>

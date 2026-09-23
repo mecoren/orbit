@@ -50,6 +50,15 @@
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
+            <!-- 长按图标静态快捷方式（新建任务 / 今天 / 搜索）：
+                 res/xml/shortcuts.xml 声明三个 shortcut，动作 id 经私有 action 的
+                 显式 intent 回到本 Activity；冷启动读 launch intent、热运行走
+                 singleTop 的 onNewIntent，原生只暂存 id，语义落点在 Dart 侧
+                 （lib/services/shortcut_receiver.dart）。 -->
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts"
+                />
             <!-- 小而美批次④ 分享接收：系统分享面板出现 循迹（纯文本） -->
             <intent-filter>
                 <action android:name="android.intent.action.SEND"/>
