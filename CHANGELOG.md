@@ -14,6 +14,67 @@
 
 ## [Unreleased]
 
+### 移动端日历节假日更新时刻可配（2026-09-23，docs/07 #59）
+
+- 桥位 `holiday_set_fixed_hour` **双端早就绪**（移动 FRB 生成物 `holidaySetFixedHour` + Rust
+  `api/holiday.rs`；桌面 `holiday_cmd.rs` 已注册命令），但两端 UI 均零消费、`HolidayMeta.fixedHour`
+  也无处展示——每日自动更新时刻只能吃 core 缺省 08:00。本轮移动端接线：抽象桥暴露该方法（Rust 侧
+  转发 FRB 既有函数，**零 codegen**）+ Rust/Mock 两实现（mock 落 `MockStore.holidayFixedHour`，
+  clamp 0-23）；设置页新增「日历与节假日」卡（值行读记账 → 0-23 整点单选抽屉 → 落库 + toast），
+  日历页更新按钮 tooltip 带上当前固定时刻（与设置页同一份 `holidayMetaProvider` 记账）；新增
+  `_valueRow` 值行原语（形制同回收站「保留时间」行）。测试 2 例。桌面侧接线留后续。
+
+### 移动端对标 TickTick 批次 P1（2026-09-23，docs/07 #55–#57）
+
+- **同步密钥治理三入口（#55）**：桥位 `sync_crypto_meta_version` / `sync_crypto_upgrade_v2` /
+  `cloud_sync_rekey` 早已存在且桌面 `sync-recovery-page` 有入口，移动端此前**零调用**——v1 老用户
+  无法在移动端升级密钥方案、「以本机为准重置云端」不可达、也看不到自己是 v1 还是 v2。本轮在同步
+  密码卡补「本机密钥方案」版本行 + v1 设备才出现的「升级密钥方案到 v2」（密码对话框）+「以本机为准
+  重置云端」（destructive 二次确认，解析 `result_to_json` 后给出推送模块/附件数）。Mock 桥三方法由
+  「Mock 未实现」补齐同口径实现（store 新增 `syncKeyVersion`）。测试 4 例。
+- **日历议程档（#56）**：桌面 `CalendarSubMode` 有 `month|year|agenda` 三档，移动端只有「月历网格 +
+  当月按日列表」一屏。本轮补工具栏月/列表切换：议程档隐藏网格、整页让给按日分组列表、切入时一次性
+  定位今天、日期头带休/班徽标（月档不带，对齐桌面 `showHolidayMark`），提示与空态文案随档位改口；
+  「班」徽标底色抽为 `ChineseCalendarColors.workdayBadge` 单一来源。测试 2 例。
+- **备份导出区本机设备标识（#57）**：`full_backup_device_info` 桥位双端均零消费；恢复预览已有「来源
+  设备」，导出侧却无从知道本机标识。本轮在导出卡补一行「本机设备标识：<id>」（读取失败静默不渲染、
+  不阻断备份链路），与恢复预览「来源设备」同值可直接对号。桌面侧同步接线留后续。
+
+### 移动端「修改后立即同步」生效（2026-09-23，docs/07 #58 / docs/10 §A-2）
+
+- **写路径触发 `push_only`**：新增 `services/sync_on_change_scheduler.dart`（进程级单例），由
+  BootGate 唯一的 dbChanges 订阅转发——业务写路径落库 → **5s 滑动防抖**（对齐桌面
+  `sync_scheduler.rs` 的 `ON_CHANGE_DEBOUNCE_SECS`）→ 门控（已配置云同步 && `sync_on_change`
+  && `is_auto_sync` && 有同步密码且已解锁 && 引擎空闲）→ `cloudSyncPushOnly(origin: background)`。
+  不做表过滤（引擎增量指纹未变时秒级跳过，无放大效应），配置每轮现读，开关改动下一轮即生效。
+- **两处有意差异（移动端无后台调度器所致）**：①桌面 60s tick 兜底在移动端不存在，故推送
+  进行中收到的写入在出窗后**补排一轮**，避免漏推只能等下一次编辑或切前台；②移动端无
+  sync-progress 事件流，后台推送不占用标题栏「同步中」指示，仅成功后失效
+  `syncConfigProvider` 刷新「上次同步」。
+- **耗电/流量口径**：触发只来自用户真实编辑，每窗口至多一次推送，引擎忙 / 指纹未变时零上传，
+  不做后台轮询（进入 / 退出前台的 `cloudSyncForce` 兜底保持原状）。设置页开关文案改口（标注
+  移动端已生效 + 依赖「定时同步」总开关）。测试 10 例（调度器 9 例 + BootGate 接线 1 例），
+  flutter 514 全绿。
+
+### 移动端对标 TickTick 批次 P0（2026-09-23，docs/07 #52–#54）
+
+- **ICS 日历导入打通（#52）**：`ics` 预设此前只有 orbit-core（`CsvImportPreset::Ics` + `map_ics_rows`）
+  与桌面导入卡接通，移动端预设停在 orbit/todoist/ticktick、文件选择器只放行 `csv/txt`——本轮补
+  「ICS 日历」档、按档位放行 `.ics`、导入卡标题改口为「导入文件（迁移）」并补 ICS 文案；文件读取由
+  `String.fromCharCodes`（Latin-1 逐字节转码，中文标题必乱码）改为 `utf8.decode(allowMalformed)`。
+  Mock 桥按 core 口径补 VTODO 解析（unfold / TEXT 反转义 / PRIORITY 逆表 / DUE 三种形态 /
+  VEVENT 忽略 / 块级跳过），`csv_import_test` 新增 5 例。
+- **提醒相对档快捷（#53）**：提醒字段由「点行直进日期时间面板」改两段式——先给相对档（有截止：
+  截止当天 9:00 / 前推 1 小时·30·15 分钟；无截止：今天·明天 9:00），末项「自定义时间…」进原面板。
+  产物仍是绝对毫秒时刻（`remind_at`），**零 schema 变更**；同刻档位去重、过期档位不过滤（与日期
+  面板允许选过去同口径）。纯函数 `reminderPresets` + 单测 4 例，表单交互回归 2 例。
+- **任务行元信息补齐（#54，对齐桌面）**：列表行副标题原本只有「优先级色点 + 项目名 + 截止」，本轮补
+  标签段（6px 色点 + 名，超 3 折叠 `+N`）、提醒段（铃铛 + `HH:mm`；未来取最近一条 / 全过期取最早一条、
+  已完成实例不警示、到期未完转逾期红）、子任务进度段（`listChecks` + `N%`，0/100 不显示）。新增
+  `displayReminder` 纯函数镜像桌面 `reminder-meta.ts`；桥位 `taskRemindersProjection` 由「零调用」
+  转为接线，并在 `db_invalidation.dart` 为 `todo_reminders` 补提醒投影失效目标（增删提醒后徽标立即跟随）。
+  `docs/05 §4.5` 任务行规格随之同步。
+
 ### 移动端 UI 批次（2026-09-22）
 
 - **字号档（全局 TextScaler）**：外观字号档从逐处覆写 `fontSize` 改为全局 `TextScaler`，
