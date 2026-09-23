@@ -47,6 +47,9 @@ class MockStore {
   /// 未设置密码时无元数据（`syncCryptoMetaVersion` 返 null）；升级即置 'v2'
   String syncKeyVersion = 'v2';
 
+  /// 节假日每日固定更新时刻（0-23；core 缺省 08:00）
+  int holidayFixedHour = 8;
+
   int get id => nextId++;
 
   /// 合并 patch：键存在即生效，值为 null 表示清空（对齐 `Option<Option<T>>`）

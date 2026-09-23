@@ -589,6 +589,9 @@ abstract class OrbitBridge {
   /// 更新记账（上次成功/尝试、连续失败次数、固定时刻）
   Future<HolidayMeta> holidayMeta();
 
+  /// 设置每日固定更新时刻（0-23 时；越界由 core clamp）
+  Future<void> holidaySetFixedHour(int hour);
+
   /// 启动自动更新守护（幂等；DB 就绪后由 BootGate 调一次——
   /// 每日固定时刻更新 + 错过时刻下次启动首轮补更）
   Future<void> startHolidayScheduler();

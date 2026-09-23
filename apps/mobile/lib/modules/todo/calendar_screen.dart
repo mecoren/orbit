@@ -446,9 +446,11 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
   Widget _buildUpdateButton() {
     final meta = ref.watch(holidayMetaProvider).value;
     final lastUpdate = meta?.lastUpdateMs ?? 0;
+    // 固定时刻与设置页「日历与节假日」同一份记账（core 缺省 08:00，可改）
+    final hourLabel = '${(meta?.fixedHour ?? 8).toString().padLeft(2, '0')}:00';
     final tip = lastUpdate > 0
-        ? '上次更新：${DateFormat('M月d日 HH:mm').format(DateTime.fromMillisecondsSinceEpoch(lastUpdate))}（每天自动更新一次）'
-        : '每天自动更新一次，也可手动更新';
+        ? '上次更新：${DateFormat('M月d日 HH:mm').format(DateTime.fromMillisecondsSinceEpoch(lastUpdate))}（每天 $hourLabel 自动更新）'
+        : '每天 $hourLabel 自动更新，也可手动更新';
     return IconButton(
       icon: _updating
           ? const SizedBox(

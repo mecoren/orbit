@@ -1264,6 +1264,10 @@ class RustOrbitBridge implements OrbitBridge {
   }
 
   @override
+  Future<void> holidaySetFixedHour(int hour) =>
+      gen_holiday.holidaySetFixedHour(hour: hour);
+
+  @override
   Future<void> startHolidayScheduler() =>
       gen_holiday.startHolidayScheduler();
 

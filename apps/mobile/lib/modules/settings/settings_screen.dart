@@ -400,6 +400,37 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     );
   }
 
+  /// 节假日每日更新时刻展示（core 缺省 08:00；未取到记账时按缺省显示）
+  String _holidayFixedHourLabel(int? hour) =>
+      '${(hour ?? 8).toString().padLeft(2, '0')}:00';
+
+  /// 选每日自动更新时刻（0-23 整点）：core 侧固定时刻调度 + 错过补更，
+  /// 与日历页更新按钮共用同一份 holidayMetaProvider 记账
+  Future<void> _pickHolidayFixedHour() async {
+    final current = ref.read(holidayMetaProvider).value?.fixedHour ?? 8;
+    final bridge = ref.read(orbitBridgeProvider);
+    await showSelectBottomSheet<int>(
+      context,
+      title: '每日更新时刻',
+      items: [
+        for (var hour = 0; hour < 24; hour++)
+          SelectItem(value: hour, label: _holidayFixedHourLabel(hour)),
+      ],
+      current: current,
+      onSelect: (hour) async {
+        if (hour == current) return;
+        try {
+          await bridge.holidaySetFixedHour(hour);
+          ref.invalidate(holidayMetaProvider);
+          WaitToast.success(
+              '节假日每日更新时刻已设为 ${_holidayFixedHourLabel(hour)}');
+        } catch (_) {
+          WaitToast.destructive('保存失败');
+        }
+      },
+    );
+  }
+
   /// 生物识别状态探测（build 期一次；开关翻转后手动 setState 刷新）
   Future<void> _loadBioState() async {
     final service = ref.read(biometricServiceProvider);
@@ -1028,6 +1059,33 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   ),
                 ),
                 const SizedBox(height: AppDimens.space12),
+                // 日历与节假日卡：每日自动更新时刻（core 侧固定时刻调度 +
+                // 错过补更；桥位此前双端就绪但 UI 零接线，docs/07 #59）
+                SectionCard(
+                  title: '日历与节假日',
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '日历里的放假/调休数据每天联网更新一次，也可在日历页手动更新；'
+                        '错过更新时刻会在下次启动时补更。',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: colors.secondaryText,
+                        ),
+                      ),
+                      const SizedBox(height: AppDimens.space4),
+                      _valueRow(
+                        colors,
+                        label: '每日更新时刻',
+                        value: _holidayFixedHourLabel(
+                            ref.watch(holidayMetaProvider).value?.fixedHour),
+                        onTap: _pickHolidayFixedHour,
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: AppDimens.space12),
                 // 数据安全卡：全量加密备份（导出/恢复，数据安全兜底）
                 SectionCard(
                   title: '数据安全',
@@ -1458,6 +1516,41 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               Text(label,
                   style: TextStyle(fontSize: 14, color: colors.bodyText)),
               const Spacer(),
+              Icon(
+                OrbitIcons.chevronRight,
+                size: AppDimens.iconSizeMd,
+                color: colors.secondaryText,
+              ),
+            ],
+          ),
+        ),
+      );
+
+  /// 值行：左标签 + 右值（强调色）+ 右箭头，点行弹选择抽屉
+  /// （形制与回收站「保留时间」行一致，热区同 `touchTarget`）
+  Widget _valueRow(
+    AppColorSet colors, {
+    required String label,
+    required String value,
+    required VoidCallback onTap,
+  }) =>
+      InkWell(
+        borderRadius: AppShapes.medium,
+        onTap: onTap,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: AppDimens.touchTarget),
+          child: Row(
+            children: [
+              Text(label,
+                  style: TextStyle(fontSize: 14, color: colors.bodyText)),
+              const Spacer(),
+              Text(
+                value,
+                style: TextStyle(
+                  fontSize: 14,
+                  color: OrbitAccents.themeAccent,
+                ),
+              ),
               Icon(
                 OrbitIcons.chevronRight,
                 size: AppDimens.iconSizeMd,

@@ -2142,20 +2142,24 @@ class MockOrbitBridge implements OrbitBridge {
       _mockHolidays.where((h) => h.date == date).firstOrNull?.isHoliday;
 
   @override
-  Future<HolidayMeta> holidayUpdate() async => const HolidayMeta(
+  Future<HolidayMeta> holidayUpdate() async => HolidayMeta(
         lastUpdateMs: 1770000000000,
         lastAttemptMs: 1770000000000,
         failureCount: 0,
-        fixedHour: 8,
+        fixedHour: store.holidayFixedHour,
       );
 
   @override
-  Future<HolidayMeta> holidayMeta() async => const HolidayMeta(
+  Future<HolidayMeta> holidayMeta() async => HolidayMeta(
         lastUpdateMs: 1770000000000,
         lastAttemptMs: 1770000000000,
         failureCount: 0,
-        fixedHour: 8,
+        fixedHour: store.holidayFixedHour,
       );
+
+  @override
+  Future<void> holidaySetFixedHour(int hour) =>
+      _delay(() => store.holidayFixedHour = hour.clamp(0, 23));
 
   @override
   Future<void> startHolidayScheduler() async {}
