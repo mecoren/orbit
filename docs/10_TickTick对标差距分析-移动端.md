@@ -131,7 +131,7 @@
 | 4 | `cloudSyncRekey` | **真实缺口** → 见 A-3 |
 | 5 | `taskRemindersProjection` | **真实缺口** → 见 A-4 |
 | 6 | `taskDependencyFlags`（`orbit_bridge.dart:327`） | **双端均未消费**（桌面仅 `lib/tauri.ts` 类型声明）—— 非移动端独有缺口，记双端共同待办 |
-| 7 | `fullBackupDeviceInfo`（`:555`） | 小节缺口：导出预览不显示设备 ID / 上次备份设备 |
+| 7 | `fullBackupDeviceInfo`（`:555`） | **已接线**：移动端 2026-09-23（`docs/07 #57`）；桌面同步接线同批完成（`docs/07 #60`，`tauri.ts` 包装 + 备份卡导出区展示） |
 | 8 | `cloudSyncIsRunning`（`:344`） | **已消费**（2026-09-23，M6）：`services/sync_on_change_scheduler.dart` 以「引擎忙让位」纳入推送门控（`docs/07 #58`）；UI 仍以本地 busy 态替代（非 UI 缺口） |
 | 9 | `todoProjectGetByUuid`（`:266`） | 桌面同步引擎定位远端记录用；移动端同步由 core 内部完成 —— 平价遗留 |
 | 10 | `todoTaskGetByUuid`（`:269`） | 同上 |
@@ -162,7 +162,7 @@
 | `todo_task_relations_get` | `api/todo.rs:463` | 冗余 |
 | `todo_reminders_get` | `api/todo.rs:504` | 冗余 |
 | `cloud_sync_get_state` | `api/sync.rs:558` | 核实为**未消费**：FRB 导出（`:558`）与 Dart 产物（`src/rust/api/sync.dart:69`）齐备但抽象桥未包；桌面命令已注册（`cloud_sync_cmd.rs:232`）+ TS 包装（`tauri.ts:617`）齐备而 UI 零消费。语义是同步**状态账本**（桶指纹/epoch/水位线，`sync_state.json`），**非**「是否正在同步」（后者用 `cloudSyncIsRunning`）——M6 忙门控只用后者，本项无可依赖关系 |
-| `holiday_set_fixed_hour` | `api/holiday.rs:100` | **已接线**（2026-09-23，M11）：抽象桥暴露 + Rust/Mock 两实现 + 设置页「日历与节假日」卡（`docs/07 #59`）；桌面侧仍零消费 |
+| `holiday_set_fixed_hour` | `api/holiday.rs:100` | **双端均已接线**：移动端 2026-09-23（`docs/07 #59`，设置页「日历与节假日」卡）；桌面同批（`docs/07 #60`，设置页新增「日历」分类 + 日历页 tooltip 带时刻） |
 | `trash_purge_expired` | `api/trash.rs:143` | 无（`startTrashScheduler` 守护覆盖） |
 | `attachments_gc` | `api/asset.rs:57` | 无（`dbMaintenance` 内含 GC） |
 | `orbit_state_initialized` | `api/state.rs:72` | 无（BootGate 走自身编排） |
@@ -239,9 +239,11 @@
 > （`docs/07 #59`，**纯 Dart——FRB 生成物早已就绪，零 codegen**，下表原「FRB codegen」为盘点期误判）。
 > P2 余项（M8 / M9 / M10 / M12 / M13）**尚未启动**，全部要动 DDL、新表或新机制。
 >
-> 两处双端不对称记档：①M2 提醒相对档为**移动端先行**，桌面 `quick-date-options` 尚无相对档；
-> ②M7 的 `full_backup_device_info` 桌面侧仍未接线。两项均已在 `docs/07 #53 / #57` 依据列标注。
-> 另：`taskDependencyFlags`（A-5#6）为**双端共同未消费**，仍待双方一并决定去留。
+> **双端不对称已全部收口（2026-09-23 桌面补齐批次，`docs/07 #60–#63`）**：①M2 提醒相对档的桌面侧
+> （`buildReminderDueOptions` + `QuickDateMenu.dueDateMs`，三处提醒入口全覆盖）；②M7 的
+> `full_backup_device_info` 桌面侧包装 + 备份卡展示；③`holiday_set_fixed_hour` 桌面侧设置项。
+> 另：`taskDependencyFlags`（A-5#6）仍为**双端共同未消费**，待双方一并决定去留；`cloud_sync_get_state`
+> 亦仍双端零消费（语义是状态账本，非「是否正在同步」）。
 
 ### P1 —— 近期做（中难度、修正双端不对称）
 

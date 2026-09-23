@@ -14,6 +14,33 @@
 
 ## [Unreleased]
 
+### 桌面端补齐批次（2026-09-23，docs/07 #60–#63）
+
+- **桌面两处对称（#60）**：①设置页新增「日历」分类，值行读 `holiday_meta.fixed_hour` → 0-23
+  整点下拉写 `holiday_set_fixed_hour`，日历页两处更新按钮 tooltip 带上当前固定时刻（与移动端
+  #59 同口径）；②`tauri.ts` 补 `fullBackupDeviceInfo` 包装，备份卡导出区显示「本机设备标识」
+  （与备份清单 `device_id` 同源，恢复预览的「来源设备」即此值），`ipc-mock` 补同名命令。
+- **桌面提醒相对档（#61）**：移动端 #53 的对称项。`lib/quick-dates.ts` 新增
+  `buildReminderDueOptions`（截止当天 09:00 / 前推 1 小时·30·15 分钟；同刻去重、过期不过滤），
+  `QuickDateMenu` 加可选 `dueDateMs` 前置「相对截止」组、`DateTimePicker` 透传；三处提醒入口全覆盖
+  ——快速输入栏、详情抽屉提醒区、任务表单（经 `FieldDef.relativeDateField` 从同表单截止值实时取锚点）。
+  产物仍是绝对毫秒 `remind_at`，零 schema 变更。
+- **应用内更新兜底出口（#62，`docs/07 #50` 残余收口）**：新增 `lib/update-fallback.ts`
+  纯函数 `resolveReleaseFallbackUrl`；检查/下载安装两条失败路径的 toast 加「复制下载链接」action。
+  **安装方式识别（MSI/NSIS/便携/dmg）有意不做**：`bundle.targets="all"` 但 `latest.json` 只发布
+  nsis/mac-app/appimage/deb 键、不发布便携产物，可靠区分 MSI/NSIS 需注册表查询或真机安装器验证，
+  启发式误判会挡住本可升级的用户——故只交付可验证的兜底出口。
+- **内存治理三连（#63，docs/09 A6/A8/A2 首步）**：①回收站列表加 `LIMIT 1000`，并把
+  `purge_all_trashed_tasks` 改走独立 id/uuid 投影查询（原本复用列表函数推事件，加限后会静默漏发
+  db-change；新用例锁边界）；②连接池上限提为常量 `MAX_CONNECTIONS = 3`（同步已串行化，池上限即
+  内存下界）；③瘦行首步：列表通道裁剪列清单加 `'' AS uuid`（约 450KB/万行，必须空串不能 NULL——
+  DTO 非空 String；消费方核实后双端零依赖），双端 mock 同口径，契约测试与桥一致性用例同步加断言。
+
+> 本轮环境限制：JS 侧门禁（`pnpm typecheck`/`test`/`build`、Playwright）在本机不可用
+> （node_modules 的 pnpm 重解析点无法穿透，离线无法重建），桌面 TS 改动以 IDE 类型诊断 + 人工复核
+> 验证，最终以 CI 为准；**`docs/09` 的 cold-start 基线取数（P3）因此未执行**（需先 `pnpm build`）。
+> Rust 侧 `cargo test --workspace --lib` 617 全绿、移动端 `flutter analyze` 零问题 + 516 全绿。
+
 ### 移动端日历节假日更新时刻可配（2026-09-23，docs/07 #59）
 
 - 桥位 `holiday_set_fixed_hour` **双端早就绪**（移动 FRB 生成物 `holidaySetFixedHour` + Rust
