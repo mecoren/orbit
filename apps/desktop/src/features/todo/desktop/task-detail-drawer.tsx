@@ -198,6 +198,7 @@ export function TaskDetailDrawer({ projects }: TaskDetailDrawerProps) {
                   taskId={t.id}
                   reminders={t.reminders}
                   taskDone={!!t.done}
+                  dueDateMs={t.due_date}
                   repeatMode={t.repeat_mode}
                   repeatAfter={t.repeat_after}
                   repeatWeekdays={t.repeat_weekdays}
@@ -1468,12 +1469,15 @@ function RemindersSection({
   repeatEndType,
   repeatEndParam,
   repeatFromDone,
+  dueDateMs,
   onChanged,
 }: {
   taskId: number;
   reminders: Awaited<ReturnType<typeof todoTaskGetDetail>>["reminders"];
   /** 完成实例不再红警（与行内徽标同口径；过期提醒按普通 muted 展示） */
   taskDone: boolean;
+  /** 任务截止日期（ms；null = 无）——提醒选择器据此给「相对截止」档 */
+  dueDateMs: number | null;
   /** 任务重复规则（>0 时提醒行显示徽标；触发后由监听器自动排下一次） */
   repeatMode: number;
   repeatAfter: number;
@@ -1520,7 +1524,11 @@ function RemindersSection({
         {reminders.map((r) =>
           editing?.id === r.id ? (
             <div key={r.id} className="max-w-xs space-y-1.5 rounded-lg bg-muted/40 p-2">
-              <DateTimePicker value={editing.draft} onChange={(v) => setEditing({ ...editing, draft: v })} />
+              <DateTimePicker
+                value={editing.draft}
+                dueDateMs={dueDateMs}
+                onChange={(v) => setEditing({ ...editing, draft: v })}
+              />
               <div className="flex justify-end gap-1">
                 <Button size="sm" variant="ghost" onClick={() => setEditing(null)}>取消</Button>
                 <Button size="sm" onClick={() => void commitNew()}>保存</Button>

@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { buildQuickDateOptions, buildQuickDateTimeOptions } from "./quick-dates";
+import {
+  buildQuickDateOptions,
+  buildQuickDateTimeOptions,
+  buildReminderDueOptions,
+} from "./quick-dates";
 
 describe("buildQuickDateOptions", () => {
   it("今天/明天/下周（下周一零点），提示为周短文案", () => {
@@ -48,5 +52,41 @@ describe("buildQuickDateTimeOptions", () => {
     const now = new Date(2026, 7, 25, 23, 0);
     const opts = buildQuickDateTimeOptions(now);
     expect(opts.some((o) => o.key === "tonight")).toBe(false);
+  });
+});
+
+describe("buildReminderDueOptions（相对截止提醒档）", () => {
+  it("有截止：当天 09:00 + 前推 1 小时 / 30 / 15 分钟", () => {
+    const opts = buildReminderDueOptions(new Date(2026, 8, 23, 18, 0).getTime());
+    expect(opts.map((o) => o.key)).toEqual([
+      "dueDay9",
+      "dueBefore1h",
+      "dueBefore30m",
+      "dueBefore15m",
+    ]);
+    expect(opts[0].label).toBe("截止当天 09:00");
+    expect(opts[0].value).toEqual(new Date(2026, 8, 23, 9, 0));
+    expect(opts[1].value).toEqual(new Date(2026, 8, 23, 17, 0));
+    expect(opts[2].value).toEqual(new Date(2026, 8, 23, 17, 30));
+    expect(opts[3].value).toEqual(new Date(2026, 8, 23, 17, 45));
+  });
+
+  it("同刻去重：截止 09:15 时「当天 09:00」与「前 15 分钟」合并", () => {
+    const opts = buildReminderDueOptions(new Date(2026, 8, 23, 9, 15).getTime());
+    expect(opts.map((o) => o.key)).toEqual(["dueDay9", "dueBefore1h", "dueBefore30m"]);
+    expect(new Set(opts.map((o) => o.value.getTime())).size).toBe(opts.length);
+  });
+
+  it("已过期档位不过滤（与日期面板允许选过去同口径）", () => {
+    const due = new Date(2026, 8, 23, 20, 0).getTime();
+    const opts = buildReminderDueOptions(due);
+    expect(opts).toHaveLength(4);
+    expect(opts.every((o) => o.value.getTime() < due)).toBe(true);
+  });
+
+  it("无截止 / 非法值 → 空数组（调用方不渲染该组）", () => {
+    expect(buildReminderDueOptions(null)).toEqual([]);
+    expect(buildReminderDueOptions(undefined)).toEqual([]);
+    expect(buildReminderDueOptions(Number.NaN)).toEqual([]);
   });
 });

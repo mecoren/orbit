@@ -354,6 +354,8 @@ export function QuickAddBar({ projects, defaultProjectId, quickView }: QuickAddB
                   <QuickDateMenu
                     kind="datetime"
                     value={remindDraft}
+                    // 已选截止 → 多一组「相对截止」档（对齐移动端 #53 口径）
+                    dueDateMs={dueDate ? dueDate.getTime() : null}
                     onSelect={(d) => {
                       setRemindDraft(format(d, "yyyy-MM-dd'T'HH:mm"));
                       setRemindOpen(false);

@@ -99,7 +99,8 @@ export function buildTaskFields(projects: TodoProject[]): FieldDef[] {
       ],
     },
     { name: "due_date", label: "截止日期", type: "date" },
-    { name: "remind_at", label: "提醒时间", type: "datetime" },
+    // 相对档锚点：表单内已有截止日期时，提醒选择器额外给「相对截止」档
+    { name: "remind_at", label: "提醒时间", type: "datetime", relativeDateField: "due_date" },
     { name: "start_date", label: "开始日期", type: "date" },
   ];
 }

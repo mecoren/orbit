@@ -115,6 +115,11 @@ interface DateTimePickerProps {
   disabled?: boolean;
   /** 弹层首选快捷选项（一小时后/今天晚些时候/明天/下周）；false 直接展示日历+时间 */
   quick?: boolean;
+  /**
+   * 任务截止日期（ms）：仅**提醒时间**字段传，弹层多给一组「相对截止」档
+   * （截止当天 09:00 / 前推 1 小时·30·15 分钟）；截止日期字段自身不要传
+   */
+  dueDateMs?: number | null;
 }
 
 export function DateTimePicker({
@@ -123,6 +128,7 @@ export function DateTimePicker({
   placeholder = "选择日期时间",
   disabled,
   quick = true,
+  dueDateMs,
 }: DateTimePickerProps) {
   const [open, setOpen] = useState(false);
   // 快捷菜单 ⇄ 完整日历+时间视图切换；关闭弹层时复位为快捷视图
@@ -206,6 +212,7 @@ export function DateTimePicker({
           <QuickDateMenu
             kind="datetime"
             value={value}
+            dueDateMs={dueDateMs}
             onSelect={(d) => {
               onChange(format(d, "yyyy-MM-dd'T'HH:mm"));
               setOpen(false);

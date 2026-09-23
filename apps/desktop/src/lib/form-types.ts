@@ -49,6 +49,12 @@ export interface FieldDef {
   maxLength?: number;
   /** 是否为逗号分隔的多值字段（如 director/genre），收集时自动归一化全角逗号 */
   multi?: boolean;
+  /**
+   * 相对档锚点字段名（仅 datetime 用）：取同表单该字段的日期值作为选择器的
+   * `dueDateMs`，据此给出「相对截止」快捷档（对齐移动端 #53 口径）。
+   * 例：任务表单的 `remind_at` 传 `"due_date"`；不传则无该组。
+   */
+  relativeDateField?: string;
 }
 
 export type FormValues = Record<string, unknown>;

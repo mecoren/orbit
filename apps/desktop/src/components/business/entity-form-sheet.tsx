@@ -250,6 +250,7 @@ export function EntityFormSheet({
                           <FieldRenderer
                             field={field}
                             value={values[field.name]}
+                            relativeDateMs={relativeDateMsOf(field, values)}
                             onChange={(v) => setField(field.name, v)}
                           />
                         </div>
@@ -261,6 +262,7 @@ export function EntityFormSheet({
                       <FieldRenderer
                         field={field}
                         value={values[field.name]}
+                        relativeDateMs={relativeDateMsOf(field, values)}
                         onChange={(v) => setField(field.name, v)}
                       />
                     )}
@@ -304,15 +306,30 @@ export function EntityFormSheet({
   );
 }
 
+/**
+ * 字段声明的相对锚点日期 → ms（供 datetime 字段的「相对截止」档用）。
+ * 锚点值形如 `YYYY-MM-DD`（date 字段统一形态）；无声明/空值/非法值 → null。
+ */
+function relativeDateMsOf(field: FieldDef, values: FormValues): number | null {
+  if (!field.relativeDateField) return null;
+  const raw = values[field.relativeDateField];
+  if (typeof raw !== "string" || !raw) return null;
+  const ms = new Date(`${raw}T00:00:00`).getTime();
+  return Number.isNaN(ms) ? null : ms;
+}
+
 /** 根据字段类型渲染对应的输入控件 */
 function FieldRenderer({
   field,
   value,
   onChange,
+  relativeDateMs,
 }: {
   field: FieldDef;
   value: unknown;
   onChange: (value: unknown) => void;
+  /** 「相对截止」档锚点（仅 datetime 用；见 [FieldDef.relativeDateField]） */
+  relativeDateMs?: number | null;
 }) {
   switch (field.type) {
     case "textarea":
@@ -356,6 +373,7 @@ function FieldRenderer({
           value={(value as string) ?? ""}
           onChange={onChange}
           placeholder={field.placeholder}
+          dueDateMs={relativeDateMs}
         />
       );
 
