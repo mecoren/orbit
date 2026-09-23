@@ -226,6 +226,8 @@ export function CalendarView({
     queryFn: holidayMeta,
     staleTime: 5 * 60_000,
   });
+  // 每日固定更新时刻（设置 → 日历 可改；core 缺省 08:00）——两处 tooltip 共用
+  const holidayHourText = `${String(holidayMetaQuery.data?.fixed_hour ?? 8).padStart(2, "0")}:00`;
 
   const refreshHolidays = async () => {
     setUpdatingHolidays(true);
@@ -347,8 +349,8 @@ export function CalendarView({
         </TooltipTrigger>
         <TooltipContent>
           {holidayMetaQuery.data && holidayMetaQuery.data.last_update_ms > 0
-            ? `上次更新：${format(new Date(holidayMetaQuery.data.last_update_ms), "M月d日 HH:mm")}（每天自动更新一次，也可手动更新）`
-            : "每天自动更新一次，也可手动更新"}
+            ? `上次更新：${format(new Date(holidayMetaQuery.data.last_update_ms), "M月d日 HH:mm")}（每天 ${holidayHourText} 自动更新，也可手动更新）`
+            : `每天 ${holidayHourText} 自动更新，也可手动更新`}
         </TooltipContent>
       </Tooltip>
     </>
@@ -433,8 +435,8 @@ export function CalendarView({
                 </TooltipTrigger>
                 <TooltipContent>
                   {holidayMetaQuery.data && holidayMetaQuery.data.last_update_ms > 0
-                    ? `上次更新：${format(new Date(holidayMetaQuery.data.last_update_ms), "M月d日 HH:mm")}（每天自动更新一次）`
-                    : "每天自动更新一次，也可手动更新"}
+                    ? `上次更新：${format(new Date(holidayMetaQuery.data.last_update_ms), "M月d日 HH:mm")}（每天 ${holidayHourText} 自动更新）`
+                    : `每天 ${holidayHourText} 自动更新，也可手动更新`}
                 </TooltipContent>
               </Tooltip>
             </>

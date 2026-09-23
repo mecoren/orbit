@@ -11,6 +11,7 @@ import {
   settingsCategories,
   type SettingsCategoryKey,
 } from "@/components/settings/categories";
+import { CalendarSection } from "@/components/settings/calendar-section";
 import { GeneralSection } from "@/components/settings/general-section";
 import { SecuritySection } from "@/components/settings/security-section";
 import { SyncSection } from "@/components/settings/sync-section";
@@ -62,6 +63,7 @@ export function SettingsPage() {
             {active === "conflicts" && <SyncConflictSection />}
             {active === "theme" && <ThemeSection />}
             {active === "todo" && <TodoSection />}
+            {active === "calendar" && <CalendarSection />}
             {active === "shortcuts" && <ShortcutsSection />}
             {active === "templates" && <TemplatesSection />}
             {active === "notifications" && <NotificationHistorySection />}
