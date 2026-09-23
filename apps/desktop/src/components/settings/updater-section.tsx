@@ -15,6 +15,7 @@ import { Download, Loader2, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import { resolveReleaseFallbackUrl } from "@/lib/update-fallback";
 
 /** 点击时加载的插件模块类型（编译期无浏览器 fallback 报错） */
 type UpdaterModule = typeof import("@tauri-apps/plugin-updater");
@@ -26,6 +27,22 @@ export function UpdaterSection() {
   const [version, setVersion] = useState<string | null>(null);
   const [pendingInstall, setPendingInstall] = useState<(() => Promise<void>) | null>(null);
   const [lastChecked, setLastChecked] = useState<number | null>(null);
+
+  /**
+   * 兜底出口：复制 Release 页下载链接。
+   *
+   * 项目未引入 opener 插件（外链直开需新依赖 + capabilities），剪贴板是最短
+   * 可用路径；剪贴板不可用（无焦点/权限）时退化为把链接摆在提示里手抄。
+   */
+  const copyFallbackLink = async (version: string | null) => {
+    const url = resolveReleaseFallbackUrl(version);
+    try {
+      await navigator.clipboard.writeText(url);
+      toast.success("下载链接已复制", { description: url });
+    } catch {
+      toast.info("请手动打开下载页", { description: url });
+    }
+  };
 
   const checkForUpdate = async () => {
     if (checking) return;
@@ -45,9 +62,13 @@ export function UpdaterSection() {
       setLastChecked(Date.now());
     } catch (e) {
       // 常见两类：endpoint 不可达（网络/未发布 latest.json）与签名校验失败
-      //（签名密钥未注入的未签名路径）
+      //（签名密钥未注入的未签名路径）。两者都不该是死路——给 Release 页出口
       toast.error("检查更新失败", {
-        description: e instanceof Error ? e.message : String(e),
+        description: `${e instanceof Error ? e.message : String(e)}——可就地升级不可用时，从 Release 页手动下载。`,
+        action: {
+          label: "复制下载链接",
+          onClick: () => void copyFallbackLink(null),
+        },
       });
     } finally {
       setChecking(false);
@@ -63,8 +84,14 @@ export function UpdaterSection() {
       const process: ProcessModule = await import("@tauri-apps/plugin-process");
       await process.relaunch();
     } catch (e) {
+      // 下载/安装失败（签名校验、当前安装方式不被清单覆盖、权限）同样给出口：
+      // 复制该版本的 Release tag 链接，用户可手动下载对应安装包
       toast.error("更新失败", {
-        description: e instanceof Error ? e.message : String(e),
+        description: `${e instanceof Error ? e.message : String(e)}——可复制该版本下载链接后手动安装。`,
+        action: {
+          label: "复制下载链接",
+          onClick: () => void copyFallbackLink(version),
+        },
       });
     } finally {
       setDownloading(false);
