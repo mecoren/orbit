@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -18,6 +20,7 @@ import '../../shared/utils/hex_color.dart';
 import '../../shared/widgets/shadcn/orbit_strikethrough.dart';
 import '../../shared/widgets/shadcn/orbit_checkbox.dart';
 import '../../shared/widgets/shadcn/orbit_confirm_sheet.dart';
+import '../../shared/widgets/shadcn/orbit_image_thumb.dart';
 import '../../shared/widgets/shadcn/orbit_info_row.dart';
 import '../../shared/widgets/shadcn/orbit_page_header.dart';
 import '../../shared/widgets/shadcn/orbit_skeleton.dart';
@@ -1787,10 +1790,28 @@ class _AttachmentsSectionState extends ConsumerState<_AttachmentsSection> {
   List<TaskAttachmentView>? _attachments;
   bool _busy = false;
 
+  /// 行内缩略图字节缓存（hash → 压缩字节）
+  // bounded: 条数 ≤ [_thumbMaxEntries] 且总量 ≤ [_thumbBudgetBytes]，超出按插入序 FIFO 淘汰
+  final Map<String, Uint8List> _thumbs = {};
+  int _thumbBytes = 0;
+
+  /// 单图源字节上限：超过则不做缩略图（读一次的成本高于收益，行内回落图片图标）
+  static const _thumbSourceLimitBytes = 2 * 1024 * 1024;
+  static const _thumbBudgetBytes = 16 * 1024 * 1024;
+  static const _thumbMaxEntries = 12;
+
   @override
   void initState() {
     super.initState();
     _load();
+  }
+
+  @override
+  void dispose() {
+    // 缩略图字节随区块卸载整体释放（bounded-by-lifecycle：与详情页同生命周期）
+    _thumbs.clear();
+    _thumbBytes = 0;
+    super.dispose();
   }
 
   Future<void> _load() async {
@@ -1798,8 +1819,48 @@ class _AttachmentsSectionState extends ConsumerState<_AttachmentsSection> {
       final list =
           await ref.read(orbitBridgeProvider).taskAttachmentsList(widget.taskId);
       if (mounted) setState(() => _attachments = list);
+      unawaited(_loadThumbs(list));
     } catch (_) {
       if (mounted) setState(() => _attachments = []);
+    }
+  }
+
+  /// 只对「本机已落地的小体积图片」做行内缩略图
+  bool _thumbnailable(TaskAttachmentView att) =>
+      att.mimeType.startsWith('image/') &&
+      att.isLocalCached == 1 &&
+      att.sizeBytes > 0 &&
+      att.sizeBytes <= _thumbSourceLimitBytes;
+
+  /// 串行读取缩略图字节（一次 `_load` 最多 20 条；并发读会把 20 份字节同时压进堆）
+  ///
+  /// 单条失败（未落地 / 读取异常）静默跳过——行内回落文件图标，不影响其余行。
+  Future<void> _loadThumbs(List<TaskAttachmentView> list) async {
+    final bridge = ref.read(orbitBridgeProvider);
+    var changed = false;
+    for (final att in list) {
+      if (_thumbs.containsKey(att.hash) || !_thumbnailable(att)) continue;
+      try {
+        final bytes = await bridge.taskAttachmentRead(att.hash);
+        if (!mounted) return;
+        if (bytes.isEmpty) continue; // 空字节流不渲染（mock / 占位）
+        _thumbs[att.hash] = Uint8List.fromList(bytes);
+        _thumbBytes += bytes.length;
+        _evictThumbs();
+        changed = true;
+      } catch (_) {
+        /* 单条失败不影响其余 */
+      }
+    }
+    if (changed && mounted) setState(() {});
+  }
+
+  /// 缓存淘汰：条数与总字节双上限，任一超出即从最旧（插入序）开始丢
+  void _evictThumbs() {
+    while (_thumbs.length > _thumbMaxEntries ||
+        (_thumbBytes > _thumbBudgetBytes && _thumbs.length > 1)) {
+      final oldest = _thumbs.keys.first;
+      _thumbBytes -= _thumbs.remove(oldest)!.length;
     }
   }
 
@@ -1874,7 +1935,8 @@ class _AttachmentsSectionState extends ConsumerState<_AttachmentsSection> {
       await target.writeAsBytes(bytes);
       if (!mounted) return;
       if (att.mimeType.startsWith('image/')) {
-        // 图片：应用内全屏预览（无第三方打开器依赖）。
+        // 图片：应用内全屏预览（无第三方打开器依赖；双指缩放走内置
+        // InteractiveViewer，不引第三方查看器）。点按任意处关闭。
         // cacheWidth 降采样解码（F4 内存优化）：4K 照片按屏宽 3x 像素解码，
         // 不再原图全尺寸进纹理——单图 ~4000x3000 解码内存从 ~45MB 降到 ~8MB
         final dpr = MediaQuery.devicePixelRatioOf(context);
@@ -1887,10 +1949,14 @@ class _AttachmentsSectionState extends ConsumerState<_AttachmentsSection> {
             insetPadding: const EdgeInsets.all(16),
             child: GestureDetector(
               onTap: () => Navigator.of(dialogContext).pop(),
-              child: Image.file(
-                target,
-                fit: BoxFit.contain,
-                cacheWidth: cacheWidth,
+              child: InteractiveViewer(
+                minScale: 1,
+                maxScale: 4,
+                child: Image.file(
+                  target,
+                  fit: BoxFit.contain,
+                  cacheWidth: cacheWidth,
+                ),
               ),
             ),
           ),
@@ -1925,6 +1991,29 @@ class _AttachmentsSectionState extends ConsumerState<_AttachmentsSection> {
     } catch (_) {
       if (mounted) WaitToast.destructive('操作失败');
     }
+  }
+
+  /// 行首视觉：图片附件走 32 缩略图（字节缺失回落图片图标），其余走文件类型图标
+  ///
+  /// 未同步到本机（isLocalCached == 0）一律云下载图标——缩略图只可能来自本地字节。
+  Widget _leading(AppColorSet colors, TaskAttachmentView att) {
+    final cached = att.isLocalCached != 0;
+    final isImage = att.mimeType.startsWith('image/');
+    final icon = Icon(
+      !cached
+          ? OrbitIcons.cloudDownload
+          : isImage
+              ? OrbitIcons.image
+              : OrbitIcons.fileText,
+      size: AppDimens.iconSizeSm,
+      color: colors.secondaryText,
+    );
+    if (!isImage) return icon;
+    return OrbitImageThumb(
+      size: AppDimens.space32,
+      bytes: _thumbs[att.hash],
+      fallback: icon,
+    );
   }
 
   @override
@@ -1981,13 +2070,7 @@ class _AttachmentsSectionState extends ConsumerState<_AttachmentsSection> {
                         ),
                         child: Row(
                           children: [
-                            Icon(
-                              att.isLocalCached == 0
-                                  ? OrbitIcons.cloudDownload
-                                  : OrbitIcons.fileText,
-                              size: 18,
-                              color: colors.secondaryText,
-                            ),
+                            _leading(colors, att),
                             const SizedBox(width: AppDimens.space8),
                             Expanded(
                               child: Column(

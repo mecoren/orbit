@@ -112,6 +112,7 @@ abstract final class OrbitIcons {
 
   static const IconData file = LucideIcons.file;
   static const IconData fileText = LucideIcons.fileText;
+  static const IconData image = LucideIcons.image;
   static const IconData braces = LucideIcons.braces;
 
   // ── 外观与主题 ──
