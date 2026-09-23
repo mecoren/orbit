@@ -106,8 +106,8 @@ export function nextRepeatLabel(
   return next == null ? null : formatCnDate(next);
 }
 
-/** 毫秒时间戳 →「M月d日（周X）」中文短日期 */
-function formatCnDate(ms: number): string {
+/** 毫秒时间戳 →「M月d日（周X）」中文短日期（完成提示条幅复用，与移动端 formatCnDate 同口径） */
+export function formatCnDate(ms: number): string {
   const d = new Date(ms);
   const wd = "一二三四五六日"[d.getDay() === 0 ? 6 : d.getDay() - 1];
   return `${d.getMonth() + 1}月${d.getDate()}日（周${wd}）`;

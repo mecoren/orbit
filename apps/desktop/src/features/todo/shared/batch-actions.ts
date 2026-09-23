@@ -122,6 +122,10 @@ export async function batchUpdateStatus(
   if (failed > 0) {
     toast.warning(`批量更新状态：${tasks.length} 条中 ${failed} 条失败`);
   }
+  // 重复任务推进提示：批量完成里混有重复任务时，明确告知生成了下一期
+  if (clones.length > 0) {
+    toast.success(`已为 ${clones.length} 条重复任务生成下一期`);
+  }
   const completed = tasks.filter((t) => !t.done);
   if (completed.length > failed) {
     pushUndo({

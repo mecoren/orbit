@@ -15,6 +15,8 @@
  */
 import { type QueryClient } from "@tanstack/react-query";
 
+import { toast } from "sonner";
+
 import {
   todoTaskComplete,
   todoTaskDelete,
@@ -22,6 +24,7 @@ import {
   type TodoTask,
 } from "@/lib/tauri";
 import { patchQueriesData } from "@/lib/query-patch";
+import { formatCnDate } from "./repeat";
 import { pushUndo } from "./undo-bridge";
 
 /** 同一任务的完成编排进行中守卫（双击/连点只生效一次） */
@@ -77,6 +80,10 @@ export async function completeTask(task: TodoTask, qc?: QueryClient): Promise<vo
         done_at: res.task.done_at,
         status: res.task.status,
       });
+    }
+    // 重复任务推进提示：明确告知「列表里多出来的那条」从哪来（不然用户茫然）
+    if (res.next_instance?.due_date != null) {
+      toast.success(`已完成，已生成下一期：${formatCnDate(res.next_instance.due_date)}`);
     }
     pushUndo({
       label: "完成任务",
