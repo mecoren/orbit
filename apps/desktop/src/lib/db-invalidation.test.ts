@@ -44,6 +44,15 @@ describe("invalidateByTable 表级失效映射", () => {
     expect(calls).toEqual([{ queryKey: ["todo-task-detail"] }]);
   });
 
+  it("todo_task_relations → 详情 + 行内关联旗标投影（C7）", () => {
+    const { qc, calls } = makeClient();
+    invalidateByTable(qc, "todo_task_relations");
+    expect(calls).toEqual([
+      { queryKey: ["todo-task-detail"] },
+      { queryKey: ["todo_task_relations", "projection"] },
+    ]);
+  });
+
   it("todo_reminders → 提醒列表 + 徽标投影 + 详情（A4）", () => {
     const { qc, calls } = makeClient();
     invalidateByTable(qc, "todo_reminders");

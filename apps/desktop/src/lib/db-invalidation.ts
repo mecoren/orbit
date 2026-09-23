@@ -39,7 +39,8 @@ const TABLE_QUERY_KEYS: Record<string, string[][]> = {
   // A4：提醒徽标投影（旧 ["todo_reminders"] 整表键仍被新建表单消费，保留）
   todo_reminders: [["todo_reminders"], ["todo_reminders", "projection"], ["todo-task-detail"]],
   todo_comments: [["todo-task-detail"]],
-  todo_task_relations: [["todo-task-detail"]],
+  // A4/C7：关联行增删既动详情区，也动列表行「有关联/被阻塞」旗标投影
+  todo_task_relations: [["todo-task-detail"], ["todo_task_relations", "projection"]],
   todo_task_attachments: [["task-attachments"]],
   todo_templates: [["templates"]],
   todo_saved_filters: [["saved-filters"]],

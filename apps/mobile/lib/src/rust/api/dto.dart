@@ -464,9 +464,11 @@ class TaskAttachmentView {
           isLocalCached == other.isLocalCached;
 }
 
-/// 单任务的关联计数旗标（镜像 TaskDependencyFlags；C7 消费前移动端暂无调用方）
+/// 单任务的关联计数旗标（镜像 TaskDependencyFlags；C7 行内关联徽标消费）
 class TaskDependencyFlags {
   final PlatformInt64 taskId;
+
+  /// 出边存活行总数（> 0 即「有关联」）
   final PlatformInt64 relationCount;
 
   const TaskDependencyFlags({

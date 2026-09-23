@@ -785,10 +785,11 @@ impl From<orbit_core::api::todo_api::TaskRemindersProjection> for TaskRemindersP
     }
 }
 
-/// 单任务的关联计数旗标（镜像 TaskDependencyFlags；C7 消费前移动端暂无调用方）
+/// 单任务的关联计数旗标（镜像 TaskDependencyFlags；C7 行内关联徽标消费）
 #[derive(Debug, Clone, Serialize)]
 pub struct TaskDependencyFlags {
     pub task_id: i64,
+    /// 出边存活行总数（> 0 即「有关联」）
     pub relation_count: i64,
 }
 

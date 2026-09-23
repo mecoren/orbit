@@ -31,7 +31,7 @@ import {
   type DragStartEvent,
 } from "@dnd-kit/core";
 import {
-  ListChecks, Check, CircleCheck, CalendarClock, Clock, Flag, FolderInput, GripVertical, Inbox, Plus, Star, StarOff, Sunrise, Trash2, TriangleAlert, X } from "lucide-react";
+  ListChecks, Check, CircleCheck, CalendarClock, Clock, Flag, FolderInput, GripVertical, Inbox, Link2, Plus, Star, StarOff, Sunrise, Trash2, TriangleAlert, X } from "lucide-react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { toast } from "sonner";
 
@@ -65,7 +65,7 @@ import { isListActivationKey, listNavDirection } from "../shared/list-keyboard";
 import { midpoint } from "../shared/position";
 import { batchSetDueDate, batchUpdateStatus, batchUpdatePriority, batchUpdateFavorite, batchMoveToProject, batchUpdateMyDay } from "../shared/batch-actions";
 import { useUndoableDeleteAction, hideManyFromQueries } from "@/hooks/use-undoable-delete";
-import { todoTaskDelete, todoTaskUpdate, todoTaskUpdatePosition, type ProjectedTaskLabel, type TodoProject, type TodoTask } from "@/lib/tauri";
+import { todoTaskDelete, todoTaskUpdate, todoTaskUpdatePosition, type ProjectedTaskLabel, type TaskDependencyFlags, type TodoProject, type TodoTask } from "@/lib/tauri";
 import { patchQueriesData } from "@/lib/query-patch";
 import { FAVORITE_COLOR, OVERDUE_COLOR_CLASS, PRIORITY_COLOR, PRIORITY_LABELS, TODO_ACCENT, MY_DAY_COLOR } from "../shared/constants";
 import { LabelChips } from "../shared/label-chips";
@@ -80,6 +80,8 @@ interface TaskListViewProps {
   labelsByTask: Map<number, ProjectedTaskLabel[]>;
   /** 任务→提醒映射（TaskPanel 级拉取，行内渲染提醒徽标） */
   remindersByTask: Map<number, TaskReminderMeta[]>;
+  /** 任务→关联旗标映射（TaskPanel 级拉取，行内渲染「有关联 / 被阻塞」徽标） */
+  dependenciesByTask: Map<number, TaskDependencyFlags>;
   loading?: boolean;
   /** 列表查询错误文案；非空时整块渲染 ErrorState */
   error?: string | null;
@@ -117,7 +119,7 @@ const rowsFirstCollision: CollisionDetection = (args) => {
   return rowHits.length > 0 ? rowHits : collisions;
 };
 
-export function TaskListView({ tasks, projects, labelsByTask, remindersByTask, loading, error, onCreateClick, onOpenDetail, sortable = true }: TaskListViewProps) {
+export function TaskListView({ tasks, projects, labelsByTask, remindersByTask, dependenciesByTask, loading, error, onCreateClick, onOpenDetail, sortable = true }: TaskListViewProps) {
   const qc = useQueryClient();
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -392,6 +394,7 @@ export function TaskListView({ tasks, projects, labelsByTask, remindersByTask, l
             due={due}
             overdue={overdue}
             reminder={reminder}
+            dependency={dependenciesByTask.get(t.id)}
             dragging={draggingId === t.id}
             selected={selected.has(t.id)}
             hasSelection={selected.size > 0}
@@ -692,6 +695,8 @@ interface TaskRowProps {
   overdue: boolean;
   /** 行内提醒徽标数据（displayReminder 产物；null = 无存活提醒行） */
   reminder: DisplayReminder | null;
+  /** 行内关联旗标（C7 投影；undefined = 无出边关联） */
+  dependency?: TaskDependencyFlags;
   /** 本行正被拖拽（原始行降透明度，浮层由 DragOverlay 渲染） */
   dragging: boolean;
   /** 多选态（P2#17） */
@@ -723,6 +728,7 @@ const TaskRow = memo(function TaskRow({
   due,
   overdue,
   reminder,
+  dependency,
   dragging,
   selected,
   hasSelection,
@@ -738,6 +744,8 @@ const TaskRow = memo(function TaskRow({
   sortable,
 }: TaskRowProps) {
   const inMyDay = t.my_day_date === todayStartMs();
+  // 投影只输出有出边的任务；这里再挡一次 0 计数（避免多出一个空 meta 行）
+  const dep = dependency != null && dependency.relation_count > 0 ? dependency : undefined;
   const { attributes, listeners, setNodeRef: setDragRef } = useDraggable({
     id: `row:${t.id}`,
     // 本行拖拽进行中即禁用拖拽源（浮层副本不再作为拖拽源；边界行禁拖无意义故不处理）；
@@ -870,7 +878,7 @@ const TaskRow = memo(function TaskRow({
         >
           {t.title}
         </div>
-        {(labels.length > 0 || project != null || due || reminder != null || t.percent_done > 0) && (
+        {(labels.length > 0 || project != null || due || reminder != null || dep != null || t.percent_done > 0) && (
           <div
             className={cn(
               "mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground",
@@ -878,6 +886,17 @@ const TaskRow = memo(function TaskRow({
             )}
           >
             <LabelChips labels={labels} />
+            {/* 行内关联提示（C7）：有关联任务时给一枚只读徽标（title 补数量）；
+                详情抽屉的关联区才是查看/编辑关联的入口 */}
+            {dep && (
+              <span
+                className="inline-flex items-center gap-0.5"
+                title={`${dep.relation_count} 个关联任务`}
+              >
+                <Link2 size={11} />
+                关联
+              </span>
+            )}
             {project && (
               <span
                 className="truncate"
@@ -960,6 +979,7 @@ function taskRowPropsEqual(prev: TaskRowProps, next: TaskRowProps): boolean {
     prev.due === next.due &&
     prev.overdue === next.overdue &&
     prev.reminder === next.reminder &&
+    prev.dependency === next.dependency &&
     prev.dragging === next.dragging &&
     prev.selected === next.selected &&
     prev.hasSelection === next.hasSelection &&

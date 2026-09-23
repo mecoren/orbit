@@ -954,7 +954,7 @@ const commands: Record<string, (args: any, ctx: Ctx) => unknown> = {
     }
   },
   // 任务→关联计数旗标（A4：与 Rust task_dependency_flags 同口径——仅出边存活行
-  // GROUP BY task_id；C7 消费前桌面仅 hooks 外无调用方，mock 先备齐防契约红）
+  // GROUP BY task_id；C7 列表行「有关联」徽标消费）
   task_dependency_flags: (_a, { db }) => {
     const counts = new Map<number, number>();
     for (const r of db.relations.filter((x) => !x.is_deleted)) {

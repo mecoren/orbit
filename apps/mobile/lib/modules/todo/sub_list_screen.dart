@@ -1050,6 +1050,14 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
       for (final r in reminderRows) r.taskId: r.reminders,
     };
 
+    // 关联计数投影（A4 只读聚合）：行内「有关联」徽标数据源；
+    // 未就绪时回落空表（不渲染徽标，不阻塞列表）
+    final dependencyRows = ref.watch(taskDependencyFlagsProvider).value ??
+        const <TaskDependencyFlags>[];
+    final relationCountByTask = {
+      for (final r in dependencyRows) r.taskId: r.relationCount,
+    };
+
     final visible = applyTaskListFilters(
       isLogbook
           ? filterTasks(tasks, widget.query)
@@ -1128,6 +1136,8 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
         projectColorHex: project?.hexColor,
         labels: labelsByTask[task.id] ?? const <ProjectedTaskLabel>[],
         reminder: reminder,
+        // 行内关联徽标（C7）：投影未命中即 0（不渲染），> 0 才出徽标
+        relationCount: relationCountByTask[task.id] ?? 0,
         onOpen: () => context.push('/todo/${task.id}'),
         onToggleDone: () => _toggleDone(task),
         // manual 档长按让位给整行拖动（原地松手由 _reorderEnd 兜回来弹菜单）
@@ -1723,6 +1733,7 @@ class TodoTaskTile extends StatelessWidget {
     this.projectColorHex,
     this.labels = const <ProjectedTaskLabel>[],
     this.reminder,
+    this.relationCount = 0,
     this.onDelete,
   });
 
@@ -1739,6 +1750,9 @@ class TodoTaskTile extends StatelessWidget {
 
   /// 行内提醒徽标载荷；null（无存活提醒）不渲染该段
   final DisplayReminder? reminder;
+
+  /// 出边关联条数（C7 投影）；0 = 无关联，不渲染徽标段
+  final int relationCount;
   final VoidCallback onToggleDone;
 
   /// 长按回调（弹操作菜单）。manual 档（拖拽顺序）传 null：长按让位给
@@ -1793,6 +1807,19 @@ class TodoTaskTile extends StatelessWidget {
     return [
       Icon(OrbitIcons.notification, size: 12, color: color),
       Text(r.clock, style: TextStyle(fontSize: 12, color: color)),
+    ];
+  }
+
+  /// 行内关联段（C7）：链环图标 + 「关联」，与桌面列表行同口径
+  /// （详情页关联区才是查看/编辑入口，此处只做「这任务挂着别的任务」提示）
+  List<Widget> _dependencyChips(AppColorSet colors) {
+    if (relationCount <= 0) return const [];
+    return [
+      Icon(OrbitIcons.link, size: 12, color: colors.secondaryText),
+      Text(
+        '关联',
+        style: TextStyle(fontSize: 12, color: colors.secondaryText),
+      ),
     ];
   }
 
@@ -1925,6 +1952,8 @@ class TodoTaskTile extends StatelessWidget {
                             ),
                           // 提醒段：铃铛 + HH:mm（到期未完转逾期红）
                           ..._reminderChips(colors),
+                          // 关联段：链环 + 「关联」（有关联任务时）
+                          ..._dependencyChips(colors),
                           // 日期段：逾期 #F44336
                           if (task.dueDate != null)
                             Text(

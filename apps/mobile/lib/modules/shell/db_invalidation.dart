@@ -33,6 +33,9 @@ enum DbCacheTarget {
   /// 任务→提醒投影（列表行内提醒徽标）
   taskReminderProjection,
 
+  /// 任务→关联计数投影（列表行内「有关联」徽标）
+  taskDependencyProjection,
+
   /// 保存的筛选器
   savedFilters,
 
@@ -46,8 +49,8 @@ enum DbCacheTarget {
 /// - todo_tasks 联动统计/回收站/全局搜索（读路径跨表聚合）；
 /// - todo_activity_log 轨迹单独一链——业务写路径的 todo_tasks 事件先于
 ///   轨迹 INSERT 到达，历史区块挂 todo_tasks 会竞态读旧行；
-/// - 子表（标签关联/子任务/关联）只影响详情聚合，不碰主列表；
-/// - 提醒行例外：除详情聚合外还刷新行内提醒徽标投影（列表行读它）。
+/// - 子表（标签关联/子任务）只影响详情聚合，不碰主列表；
+/// - 提醒行 / 关联行例外：除详情聚合外还刷新各自的列表行投影（行内徽标读它）。
 List<DbCacheTarget> planTableInvalidation(String table) => switch (table) {
       'todo_tasks' => const [
           DbCacheTarget.tasks,
@@ -70,7 +73,12 @@ List<DbCacheTarget> planTableInvalidation(String table) => switch (table) {
           DbCacheTarget.taskDetail,
           DbCacheTarget.taskLabelProjection,
         ],
-      'todo_task_relations' || 'todo_subtasks' => const [DbCacheTarget.taskDetail],
+      // 关联行增删另刷行内关联旗标投影（列表行读它；解除/添加关联后徽标须立即跟随）
+      'todo_task_relations' => const [
+          DbCacheTarget.taskDetail,
+          DbCacheTarget.taskDependencyProjection,
+        ],
+      'todo_subtasks' => const [DbCacheTarget.taskDetail],
       // 提醒行另刷行内提醒徽标投影（列表行读它；增删提醒后徽标须立即跟随）
       'todo_reminders' => const [
           DbCacheTarget.taskDetail,
@@ -119,6 +127,8 @@ bool invalidateByTable(WidgetRef ref, String table) {
         ref.invalidate(taskLabelsProjectionProvider);
       case DbCacheTarget.taskReminderProjection:
         ref.invalidate(taskRemindersProjectionProvider);
+      case DbCacheTarget.taskDependencyProjection:
+        ref.invalidate(taskDependencyFlagsProvider);
       case DbCacheTarget.savedFilters:
         ref.invalidate(savedFiltersProvider);
       case DbCacheTarget.taskActivity:

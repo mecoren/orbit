@@ -484,9 +484,10 @@ export interface TaskRemindersProjection {
   task_id: number;
   reminders: ProjectedReminder[];
 }
-/** 关联计数旗标（core TaskDependencyFlags 镜像；Wave 5 的 C7 消费） */
+/** 关联计数旗标（core TaskDependencyFlags 镜像；C7 行内关联徽标消费） */
 export interface TaskDependencyFlags {
   task_id: number;
+  /** 出边存活行总数（> 0 即「有关联」） */
   relation_count: number;
 }
 export const taskLabelsProjection = () => invoke<TaskLabelsProjection[]>("task_labels_projection");

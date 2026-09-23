@@ -51,6 +51,16 @@ final taskRemindersProjectionProvider =
   return bridge.taskRemindersProjection();
 });
 
+/// 任务→关联计数投影（A4 只读聚合；C7 列表行「有关联」徽标消费）
+///
+/// 只传出边存活行总数（core 侧 GROUP BY task_id，`relation_count > 0`
+/// 即有关联），不拉全量关系表；投影未就绪时调用方不渲染徽标。
+final taskDependencyFlagsProvider =
+    FutureProvider<List<TaskDependencyFlags>>((ref) async {
+  final bridge = ref.watch(orbitBridgeProvider);
+  return bridge.taskDependencyFlags();
+});
+
 /// 任务列表单次拉取上限（A5/B6，与桌面 `TASK_LIST_PAGE_SIZE` 同口径）：
 /// 单份缓存与列表页「不完整」条幅共用——结果集达到它即意味着还有未取到的
 /// 任务，条幅按此判定而非另开 count 接口。
@@ -173,6 +183,7 @@ void invalidateBusinessCaches(WidgetRef ref) {
   ref.invalidate(todoLabelsProvider);
   ref.invalidate(taskLabelsProjectionProvider);
   ref.invalidate(taskRemindersProjectionProvider);
+  ref.invalidate(taskDependencyFlagsProvider);
   ref.invalidate(todoTasksProvider);
   ref.invalidate(taskDetailProvider);
   ref.invalidate(taskActivityProvider);

@@ -117,10 +117,11 @@ pub async fn get_todo_task_detail(pool: &SqlitePool, id: i64) -> CoreResult<Todo
 // GROUP_CONCAT——标题含分隔符（逗号/换行）时解析脆弱，且提醒 id 需
 // 逐行保留（行内 displayReminder 按 id 选行）。
 //
-// dependency_flags 口径（同批给 Wave 5 的 C7 用）：仅统计出边
+// dependency_flags 口径（Wave 5 的 C7 行内关联徽标）：仅统计出边
 //（`todo_task_relations.task_id` 方向），与详情抽屉 relations 查询
-//（`WHERE task_id = ?`）一致；入边（仅出现在 other_task_id 侧）不计，
-// C7 若需双向再扩展。
+//（`WHERE task_id = ?`）一致；入边（仅出现在 other_task_id 侧）不计。
+// 只判「有无关联」不含 relation_type 分档：双端详情抽屉的「添加关联」固定写
+// relates_to，没有任何入口写 blocks/blocked_by，分档字段会是恒 0 的死数据。
 // ============================================================================
 
 /// 行内标签 chip 最小载荷（TodoLabel 子集：展示只需 id/title/hex_color）
@@ -153,10 +154,11 @@ pub struct TaskRemindersProjection {
     pub reminders: Vec<ProjectedReminder>,
 }
 
-/// 单任务的关联计数旗标（C7 列表徽标只判“有无关联”，无需拉全量关系表）
+/// 单任务的关联计数旗标（C7 行内关联徽标只判“有无关联”，无需拉全量关系表）
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
 pub struct TaskDependencyFlags {
     pub task_id: i64,
+    /// 出边存活行总数（> 0 即「有关联」）
     pub relation_count: i64,
 }
 

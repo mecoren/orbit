@@ -32,13 +32,14 @@ void main() {
     });
 
     test('纯详情子表只影响详情聚合', () {
-      for (final table in [
-        'todo_task_relations',
-        'todo_subtasks',
-      ]) {
-        expect(planTableInvalidation(table), [DbCacheTarget.taskDetail],
-            reason: table);
-      }
+      expect(planTableInvalidation('todo_subtasks'), [DbCacheTarget.taskDetail]);
+    });
+
+    test('todo_task_relations 联动详情与列表关联旗标投影', () {
+      // 列表行内「有关联」徽标读关联计数投影，解除/添加关联后必须一并刷新，
+      // 否则徽标会停在旧集合（与 todo_task_labels / todo_reminders 同型）
+      expect(planTableInvalidation('todo_task_relations'),
+          [DbCacheTarget.taskDetail, DbCacheTarget.taskDependencyProjection]);
     });
 
     test('todo_reminders 联动详情与列表提醒徽标投影', () {

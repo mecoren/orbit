@@ -29,6 +29,7 @@ import { useAppStore } from "@/stores/app-store";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { type TodoTask } from "@/lib/tauri";
 import { LS_HIDE_DONE, LS_VIEW_MODE, QUICK_VIEWS, TASK_LIST_PAGE_SIZE } from "../shared/constants";
+import { useTaskDependencies } from "../shared/use-task-dependencies";
 import { useTaskLabels } from "../shared/use-task-labels";
 import { useTaskReminders } from "../shared/use-task-reminders";
 import { useQuery } from "@tanstack/react-query";
@@ -156,6 +157,8 @@ export default function TaskPanel() {
   const taskLabels = useTaskLabels();
   // 任务→提醒映射（列表行/看板卡/日历行提醒徽标共用；db-change 失效同口径）
   const taskReminders = useTaskReminders();
+  // 任务→关联旗标映射（C7 列表行「有关联 / 被阻塞」徽标；关联行写事件精确失效）
+  const taskDependencies = useTaskDependencies();
 
   // ---- 内存筛选 + 排序（共享模块，语义同 04 §四；排序档位 #26）----
   // keyword 的服务端命中集仍再过一遍本地关键词分支：击键间 placeholder 留着
@@ -564,6 +567,7 @@ export default function TaskPanel() {
             projects={projects}
             labelsByTask={taskLabels}
             remindersByTask={taskReminders}
+            dependenciesByTask={taskDependencies}
             loading={tasksLoading}
             error={tasksError}
             // #26：仅拖拽顺序档显示拖拽把手
