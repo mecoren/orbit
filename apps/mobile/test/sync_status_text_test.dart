@@ -212,4 +212,47 @@ void main() {
       expect(syncErrorAction(''), SyncErrorAction.none);
     });
   });
+
+  group('同步账本展示口径', () {
+    test('指纹摘要截前 8 位；短指纹原样返回', () {
+      expect(shortFingerprint('a1b2c3d4e5f60718'), 'a1b2c3d4');
+      expect(shortFingerprint('abc'), 'abc');
+    });
+
+    test('表名升序；数据桶按数值桶号排（10 不排到 2 前）', () {
+      final rows = syncLedgerModules({
+        'todos': {'10': 'ffffffff1111', '2': '2222222233', '1': '1111111122'},
+        'projects': {'0': '0000000011'},
+      });
+      expect(rows.map((r) => r.table).toList(), ['projects', 'todos']);
+      expect(rows[1].buckets, 3);
+      expect(rows[1].entries.map((e) => e.key).toList(), ['1', '2', '10']);
+      expect(rows[1].entries.first.fp, '11111111');
+    });
+
+    test('墓碑桶键是 YYYY-MM，按字符串升序', () {
+      final rows = syncLedgerModules({
+        'todos': {'2026-09': 'cccccccc', '2026-08': 'bbbbbbbb'},
+      });
+      expect(rows.single.entries.map((e) => e.key).toList(), ['2026-08', '2026-09']);
+    });
+
+    test('空快照 → 空行 + 桶总数 0', () {
+      expect(syncLedgerModules(const {}), isEmpty);
+      expect(countBuckets(const {}), 0);
+      expect(
+        countBuckets(const {
+          'todos': {'0': 'a', '1': 'b'},
+          'projects': {'0': 'c'},
+        }),
+        3,
+      );
+    });
+
+    test('逻辑时钟 0 / 负值 = 未推进', () {
+      expect(formatLedgerClockMs(0), '未推进');
+      expect(formatLedgerClockMs(-1), '未推进');
+      expect(formatLedgerClockMs(1700000000000), isNot('未推进'));
+    });
+  });
 }

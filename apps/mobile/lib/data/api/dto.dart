@@ -626,9 +626,11 @@ class TaskRemindersProjection {
       );
 }
 
-/// 单任务的关联计数旗标（core TaskDependencyFlags 镜像；C7 消费）
+/// 单任务的关联计数旗标（core TaskDependencyFlags 镜像；C7 行内关联徽标消费）
 class TaskDependencyFlags {
   final int taskId;
+
+  /// 出边存活行总数（> 0 即「有关联」）
   final int relationCount;
 
   const TaskDependencyFlags({required this.taskId, required this.relationCount});
@@ -1548,4 +1550,62 @@ class SyncHistoryRow {
   /// 耗时毫秒（未完成时按 0 处理）
   int get elapsedMs =>
       finishedAt == null ? 0 : (finishedAt! - startedAt).clamp(0, 1 << 40);
+}
+
+/// 本地同步账本（core `SyncState` 镜像；`sync_state.json`，只有指纹元数据）
+///
+/// 桥侧以 JSON 字符串返回（对齐桌面 `cloud_sync_get_state`），此处解析为
+/// 强类型；水位线是逻辑时钟毫秒（0 = 从未推进），指纹是桶内容的 sha256。
+class SyncStateView {
+  /// 最后一次同步完成时间（Unix 毫秒，墙上时钟）
+  final int lastSyncedAt;
+
+  /// 最后一次同步完成时的逻辑时钟（pull 侧「真并发」判据基线）
+  final int lastSyncedClockMs;
+
+  /// 最后一次 push 成功时的逻辑时钟上界（增量 push 水位线；0 = 首轮全量）
+  final int lastPushedClockMs;
+  final String deviceId;
+
+  /// 远端清单 epoch（0 = 从未成功同步）
+  final int manifestEpoch;
+
+  /// 远端数据桶快照：表 → 桶号 → 指纹
+  final Map<String, Map<String, String>> remoteTables;
+
+  /// 远端墓碑桶快照：表 → 桶键（YYYY-MM）→ 指纹
+  final Map<String, Map<String, String>> remoteTombstones;
+
+  const SyncStateView({
+    required this.lastSyncedAt,
+    required this.lastSyncedClockMs,
+    required this.lastPushedClockMs,
+    required this.deviceId,
+    required this.manifestEpoch,
+    required this.remoteTables,
+    required this.remoteTombstones,
+  });
+
+  factory SyncStateView.fromJson(Map<String, dynamic> j) => SyncStateView(
+        lastSyncedAt: (j['last_synced_at'] as num?)?.toInt() ?? 0,
+        lastSyncedClockMs: (j['last_synced_clock_ms'] as num?)?.toInt() ?? 0,
+        lastPushedClockMs: (j['last_pushed_clock_ms'] as num?)?.toInt() ?? 0,
+        deviceId: j['device_id'] as String? ?? '',
+        manifestEpoch: (j['manifest_epoch'] as num?)?.toInt() ?? 0,
+        remoteTables: _stringMapOf(j['remote_tables']),
+        remoteTombstones: _stringMapOf(j['remote_tombstones']),
+      );
+
+  /// 桶索引快照（嵌套对象，值都是指纹字符串）；缺字段/形状异常回落空表
+  static Map<String, Map<String, String>> _stringMapOf(Object? raw) {
+    if (raw is! Map) return const {};
+    final out = <String, Map<String, String>>{};
+    raw.forEach((k, v) {
+      if (v is! Map) return;
+      out['$k'] = {
+        for (final e in v.entries) '${e.key}': '${e.value}',
+      };
+    });
+    return out;
+  }
 }

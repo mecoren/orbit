@@ -362,6 +362,10 @@ abstract class OrbitBridge {
   Future<List<SyncHistoryRow>> cloudSyncHistory(
       {String scope = 'all', int limit = 20});
 
+  /// 本地同步账本（`sync_state.json`：桶指纹 + 水位线 + 设备/epoch；
+  /// 只读诊断，设置页「同步账本」卡数据源；未配置云同步时不报错，返回空账本）
+  Future<SyncStateView> cloudSyncGetState();
+
   /// 测试连接（不落盘）：返回云端根目录条目数；用户名/密码留空时
   /// 从已存激活配置回填（同协议）。错误文案带 [config]/[network] tag。
   Future<int> syncTestConnection(Map<String, Object?> input);

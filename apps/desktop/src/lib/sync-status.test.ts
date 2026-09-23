@@ -7,11 +7,15 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  countBuckets,
   deriveSyncStatus,
   estimateNextSyncAt,
+  formatClockMs,
   formatLastSynced,
   formatNextSync,
+  shortFingerprint,
   syncErrorAction,
+  syncLedgerModules,
   syncProgressText,
   syncResultSummary,
   syncStatusLabel,
@@ -195,5 +199,42 @@ describe("syncErrorAction", () => {
     expect(syncErrorAction("network")).toBe("none");
     expect(syncErrorAction("rate_limited")).toBe("none");
     expect(syncErrorAction(null)).toBe("none");
+  });
+});
+
+describe("同步账本展示口径", () => {
+  it("指纹摘要截前 8 位；短指纹原样返回", () => {
+    expect(shortFingerprint("a1b2c3d4e5f60718")).toBe("a1b2c3d4");
+    expect(shortFingerprint("abc")).toBe("abc");
+  });
+
+  it("表名升序；数据桶按数值桶号排（10 不排到 2 前）", () => {
+    const rows = syncLedgerModules({
+      todos: { "10": "ffffffff1111", "2": "2222222233", "1": "1111111122" },
+      projects: { "0": "0000000011" },
+    });
+    expect(rows.map((r) => r.table)).toEqual(["projects", "todos"]);
+    expect(rows[1].buckets).toBe(3);
+    expect(rows[1].entries.map((e) => e.key)).toEqual(["1", "2", "10"]);
+    expect(rows[1].entries[0].fp).toBe("11111111");
+  });
+
+  it("墓碑桶键是 YYYY-MM，按字符串升序", () => {
+    const rows = syncLedgerModules({
+      todos: { "2026-09": "cccccccc", "2026-08": "bbbbbbbb" },
+    });
+    expect(rows[0].entries.map((e) => e.key)).toEqual(["2026-08", "2026-09"]);
+  });
+
+  it("空快照 → 空行 + 桶总数 0", () => {
+    expect(syncLedgerModules({})).toEqual([]);
+    expect(countBuckets({})).toBe(0);
+    expect(countBuckets({ todos: { "0": "a", "1": "b" }, projects: { "0": "c" } })).toBe(3);
+  });
+
+  it("逻辑时钟 0 / 负值 = 未推进", () => {
+    expect(formatClockMs(0)).toBe("未推进");
+    expect(formatClockMs(-1)).toBe("未推进");
+    expect(formatClockMs(1_700_000_000_000)).not.toBe("未推进");
   });
 });

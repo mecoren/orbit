@@ -1866,6 +1866,32 @@ class MockOrbitBridge implements OrbitBridge {
       });
 
   @override
+  Future<SyncStateView> cloudSyncGetState() => _delay(() {
+        // 账本由历史末次完成时间派生：无历史＝从未同步（水位线 0、无桶快照），
+        // 与真桥「首轮全量前」同形；有历史即给一份可渲染的桶指纹样本
+        final stamps = [
+          for (final r in store.syncHistory) r.finishedAt ?? r.startedAt,
+        ];
+        final last = stamps.isEmpty
+            ? 0
+            : stamps.reduce((a, b) => a > b ? a : b);
+        return SyncStateView(
+          lastSyncedAt: last,
+          lastSyncedClockMs: last,
+          lastPushedClockMs: last,
+          deviceId: 'mock-device-0001',
+          manifestEpoch: last == 0 ? 0 : 7,
+          remoteTables: last == 0
+              ? const {}
+              : const {
+                  'todos': {'0': 'a1b2c3d4e5f60718'},
+                  'projects': {'0': '0011223344556677'},
+                },
+          remoteTombstones: const {},
+        );
+      });
+
+  @override
   Future<String> cloudSyncRekey() => _delay(() {
         if (!store.syncPasswordSet) {
           throw Exception('[not_initialized] 未设置同步密码');

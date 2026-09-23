@@ -14,6 +14,24 @@
 
 ## [Unreleased]
 
+### 小而实用批次（2026-09-23，A 类四项）
+
+- **移动端附件图片缩略图（docs/09 A9 落地）**：详情附件区图片行显示 32px 行内缩略图（新增原语
+  `shared/widgets/shadcn/orbit_image_thumb.dart`），只对「已在本机落地且 ≤ 2MB」的图片读字节，
+  解码按 `size × dpr` 降采样；字节缓存 12 条 / 16MB 双上限 + 插入序 FIFO 淘汰 + 区块 dispose
+  整体清空。全屏预览加双指缩放（内置 `InteractiveViewer`）。此前只能靠文件名分辨截图。
+- **Android 长按图标静态快捷方式**：新建任务 / 今天 / 搜索三档（`res/xml/shortcuts.xml` +
+  三个自绘矢量图标 + Manifest `android.app.shortcuts`），原生只暂存动作 id、Dart 侧
+  `ShortcutReceiver` 统一落点（侧栏处理器承接，冷启动动作先暂存后补发），语义不跨端重写。
+- **列表行「关联」徽标（A4 投影的 C7 消费）**：双端列表行在任务有关联时渲染链环徽标（桌面
+  `use-task-dependencies` + `task-list-view` 元信息行、移动 `taskDependencyFlagsProvider` +
+  `TodoTaskTile`），关联行写事件经 db-invalidation 精确失效该投影。「被阻塞」档不做——双端详情
+  抽屉的「添加关联」固定写 `relates_to`，没有入口写 `blocks` / `blocked_by`。
+- **同步状态可视化（双端接 `cloud_sync_get_state`）**：设置页新增「同步账本」卡——各表各桶的
+  指纹前 8 位、push / pull 水位线、远端清单 epoch、本机设备标识；桌面展开才拉取并随同步完成
+  刷新，移动端进入页面 + 刷新按钮回读。移动抽象桥补 `cloudSyncGetState` + `SyncStateView`
+  镜像 DTO（JSON 串解析），`ipc-mock` 的 `cloud_sync_get_state` 修正为 SyncState 结构。
+
 ### 桌面端补齐批次（2026-09-23，docs/07 #60–#63）
 
 - **桌面两处对称（#60）**：①设置页新增「日历」分类，值行读 `holiday_meta.fixed_hour` → 0-23

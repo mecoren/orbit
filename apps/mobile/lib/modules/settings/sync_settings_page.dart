@@ -12,6 +12,7 @@ import '../../core/theme/app_shapes.dart';
 import '../../core/theme/orbit_accents.dart';
 import '../../data/api/dto.dart';
 import '../../data/providers/bridge_provider.dart';
+import '../../shared/utils/sync_status_text.dart';
 import '../../shared/widgets/shadcn/orbit_confirm_sheet.dart';
 import '../../shared/widgets/shadcn/orbit_page_header.dart';
 import '../../shared/widgets/shadcn/orbit_section_card.dart';
@@ -235,6 +236,8 @@ class _SyncSettingsPageState extends ConsumerState<SyncSettingsPage> {
                 const _SyncCryptoCard(),
                 const SizedBox(height: AppDimens.space12),
                 const _SyncHistoryCard(),
+                const SizedBox(height: AppDimens.space12),
+                const _SyncLedgerCard(),
               ],
             ),
           ),
@@ -1361,6 +1364,187 @@ class _SyncHistoryCardState extends ConsumerState<_SyncHistoryCard> {
             ),
         ],
       ),
+    );
+  }
+}
+
+/// 同步账本卡（对齐桌面 SyncLedgerCard；只读诊断）
+///
+/// 数据源 `sync_state.json`：桶指纹 + 水位线 + 本机设备 / 远端清单 epoch。
+/// 为什么值得单列一卡：同步成败此前只有一个「转没转」+ 上次时间，出问题时
+/// 看不到引擎认为远端长什么样；指纹是桶内容（按 uuid 排序、排除时间戳与
+/// 自增 id）的 sha256，两台设备同一桶指纹相等即内容一致。
+///
+/// 只读聚合不 emit 事件、不进同步白名单，故不订阅 db-change，靠进入页面
+/// 与「刷新」回读（同 [_SyncHistoryCard] 口径）。
+class _SyncLedgerCard extends ConsumerStatefulWidget {
+  const _SyncLedgerCard();
+
+  @override
+  ConsumerState<_SyncLedgerCard> createState() => _SyncLedgerCardState();
+}
+
+class _SyncLedgerCardState extends ConsumerState<_SyncLedgerCard> {
+  SyncStateView? _state;
+  bool _loading = true;
+  Object? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  String _errMsg(Object e) => e
+      .toString()
+      .replaceFirst('Exception: ', '')
+      .replaceFirst(RegExp(r'^\[\w+\]\s*'), '');
+
+  Future<void> _load() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final state = await ref.read(orbitBridgeProvider).cloudSyncGetState();
+      if (!mounted) return;
+      setState(() {
+        _state = state;
+        _loading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = e;
+        _loading = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = AppColors.ofContext(context);
+    final state = _state;
+
+    return SectionCard(
+      title: '同步账本',
+      subtitle: '桶指纹与水位线（排障用）',
+      trailing: TextButton(
+        onPressed: _loading ? null : _load,
+        child: const Text('刷新'),
+      ),
+      child: _loading && state == null
+          ? const Padding(
+              padding: EdgeInsets.all(AppDimens.space16),
+              child: Center(
+                child: SizedBox(
+                  width: AppDimens.iconSizeLg,
+                  height: AppDimens.iconSizeLg,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: OrbitAccents.themeAccent,
+                  ),
+                ),
+              ),
+            )
+          : state == null
+              ? Text(
+                  '读取失败：${_errMsg(_error!)}',
+                  style: TextStyle(fontSize: 12, color: colors.destructive),
+                )
+              : Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _row(colors, '上次同步', formatLastSynced(state.lastSyncedAt)),
+                    _row(colors, '推送水位线',
+                        formatLedgerClockMs(state.lastPushedClockMs)),
+                    _row(colors, '拉取水位线',
+                        formatLedgerClockMs(state.lastSyncedClockMs)),
+                    _row(colors, '远端清单',
+                        state.manifestEpoch > 0 ? 'epoch ${state.manifestEpoch}' : '未建立'),
+                    _row(colors, '本机设备',
+                        state.deviceId.isEmpty ? '—' : state.deviceId),
+                    const SizedBox(height: AppDimens.space12),
+                    _buckets(colors, '远端数据桶', state.remoteTables),
+                    const SizedBox(height: AppDimens.space12),
+                    _buckets(colors, '远端墓碑桶', state.remoteTombstones),
+                    const SizedBox(height: AppDimens.space8),
+                    Text(
+                      '指纹 = 桶内数据（按 uuid 排序、排除时间戳与自增 id）的 sha256 前 8 位；'
+                      '两台设备同一桶指纹相同即该桶内容一致。',
+                      style: TextStyle(fontSize: 11, color: colors.secondaryText),
+                    ),
+                  ],
+                ),
+    );
+  }
+
+  /// 键值行：定宽标签 + 可换行取值（设备 ID 等长串折行不撑破卡片）
+  Widget _row(AppColorSet colors, String label, String value) => Padding(
+        padding: const EdgeInsets.only(bottom: AppDimens.space6),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SizedBox(
+              width: 76,
+              child: Text(
+                label,
+                style: TextStyle(fontSize: 12, color: colors.secondaryText),
+              ),
+            ),
+            Expanded(
+              child: Text(
+                value,
+                style: TextStyle(fontSize: 12, color: colors.bodyText),
+              ),
+            ),
+          ],
+        ),
+      );
+
+  /// 一张桶指纹表（表名 + 桶数 + 各桶「键:指纹前 8 位」）
+  Widget _buckets(
+    AppColorSet colors,
+    String title,
+    Map<String, Map<String, String>> snapshot,
+  ) {
+    final modules = syncLedgerModules(snapshot);
+    if (modules.isEmpty) {
+      return Text(
+        '$title：暂无',
+        style: TextStyle(fontSize: 12, color: colors.secondaryText),
+      );
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          '$title（${modules.length} 表 / ${countBuckets(snapshot)} 桶）',
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w500,
+            color: colors.bodyText,
+          ),
+        ),
+        const SizedBox(height: AppDimens.space4),
+        for (final m in modules)
+          Padding(
+            padding: const EdgeInsets.only(bottom: AppDimens.space4),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '${m.table} · ${m.buckets} 桶',
+                  style: TextStyle(fontSize: 12, color: colors.bodyText),
+                ),
+                Text(
+                  m.entries.map((e) => '${e.key}:${e.fp}').join('  '),
+                  style: TextStyle(fontSize: 11, color: colors.secondaryText),
+                ),
+              ],
+            ),
+          ),
+      ],
     );
   }
 }

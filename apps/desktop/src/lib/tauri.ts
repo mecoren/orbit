@@ -615,8 +615,29 @@ export const cloudSyncPushOnly = (origin: "manual" | "background" | "exit" = "ma
   invoke<string>("cloud_sync_push_only", { origin }).then(parseResult);
 export const cloudSyncPullThenPush = (origin: "manual" | "background" | "exit" = "manual") =>
   invoke<string>("cloud_sync_pull_then_push", { origin }).then(parseResult);
-export const cloudSyncGetState = () =>
-  invoke<string>("cloud_sync_get_state").then((s) => JSON.parse(s));
+/**
+ * 本地同步账本（core `SyncState` 镜像；`sync_state.json`，只有指纹元数据）
+ *
+ * 只读诊断口径：水位线是逻辑时钟毫秒（`db::clock`），0 = 从未推进；
+ * 指纹是桶内容（按 uuid 排序、排除 updated_at/自增 id 后）的 sha256。
+ */
+export interface SyncStateJson {
+  /** 最后一次同步完成时间（Unix 毫秒，墙上时钟） */
+  last_synced_at: number;
+  /** 最后一次同步完成时的逻辑时钟（pull 侧「真并发」判据基线） */
+  last_synced_clock_ms: number;
+  /** 最后一次 push 成功时的逻辑时钟上界（增量 push 水位线；0 = 首轮全量） */
+  last_pushed_clock_ms: number;
+  device_id: string;
+  /** 远端清单 epoch（0 = 从未成功同步） */
+  manifest_epoch: number;
+  /** 远端数据桶快照：表 → 桶号 → 指纹 */
+  remote_tables: Record<string, Record<string, string>>;
+  /** 远端墓碑桶快照：表 → 桶键（YYYY-MM）→ 指纹 */
+  remote_tombstones: Record<string, Record<string, string>>;
+}
+export const cloudSyncGetState = (): Promise<SyncStateJson> =>
+  invoke<string>("cloud_sync_get_state").then((s) => JSON.parse(s) as SyncStateJson);
 /**
  * 强制同步（进入 / 退出应用生命周期钩子专用）
  *

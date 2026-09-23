@@ -6,6 +6,7 @@
  * 2. 同步密码卡（E2E）：未设置 → 设置；已设置 → 解锁/锁定/修改 + 密钥包导出
  * 3. 同步执行卡：立即同步 + 进度事件 + 上次同步时间
  * 3b. 同步历史卡（P1-17）：增量同步成败/耗时/计数可回看（sync_history 表）
+ * 3c. 同步账本卡：sync_state.json 的桶指纹与水位线（只读诊断，排障用）
  * 4. 自动备份卡：调度频率（core v4 调度器）+ 本地/云端开关 + 上次/下次时间
  * 5. 备份卡：.orfullsync 导出（可选云端副本）/ 导入恢复 / 本地历史备份列表
  * 6. 数据导出卡：明文 JSON/CSV（07 报告 #15，与 .orfullsync 加密包并列；
@@ -25,6 +26,7 @@ import {
   CloudUpload,
   DatabaseBackup,
   Download,
+  Fingerprint,
   HardDrive,
   History,
   KeyRound,
@@ -37,7 +39,15 @@ import {
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
-import { syncErrorAction, syncResultSummary } from "@/lib/sync-status";
+import {
+  countBuckets,
+  formatClockMs,
+  formatLastSynced,
+  syncErrorAction,
+  syncLedgerModules,
+  syncResultSummary,
+  type SyncLedgerModule,
+} from "@/lib/sync-status";
 import { Button } from "@/components/ui/button";
 import { DangerousConfirmDialog } from "@/components/ui/dangerous-confirm-dialog";
 import { BackupPreviewBody, type BackupPreviewState } from "./backup-preview-body";
@@ -66,6 +76,7 @@ import { Switch } from "@/components/ui/switch";
 import {
   backupPrefsGet,
   backupPrefsSave,
+  cloudSyncGetState,
   cloudSyncHistory,
   cloudSyncNow,
   fullBackupDeviceInfo,
@@ -100,6 +111,7 @@ import {
   type SyncCryptoStatus,
   type SyncEngineKind,
   type SyncHistoryEntry,
+  type SyncStateJson,
 } from "@/lib/tauri";
 
 function SectionHeader({ title, desc }: { title: string; desc: string }) {
@@ -143,6 +155,7 @@ export function SyncSection() {
       <SyncPasswordCard />
       <SyncRunCard key={`run-${version}`} />
       <SyncHistoryCard />
+      <SyncLedgerCard />
       <AutoBackupCard />
       <BackupCard />
       <PlaintextExportCard />
@@ -954,6 +967,141 @@ function SyncHistoryCard() {
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+/* ============================ 3c. 同步账本卡 ============================ */
+
+/**
+ * 同步账本（`sync_state.json` 只读诊断）：桶指纹 + 水位线 + 设备/epoch。
+ *
+ * 为什么值得单独一张卡：同步成败在 UI 上历来只有一个「转/没转」+ 上次时间，
+ * 出问题时看不到「引擎认为远端长什么样」。这里的指纹是桶内容的 sha256
+ * （按 uuid 排序、排除时间戳/自增 id），两台设备同一桶指纹相等即内容一致；
+ * 水位线（逻辑时钟）说明增量 push 从哪一刻起算。
+ *
+ * 展开才拉取（与历史卡同款：诊断信息不进设置页首屏 IPC），同步完成后刷新。
+ */
+function SyncLedgerCard() {
+  const [open, setOpen] = useState(false);
+  const [state, setState] = useState<SyncStateJson | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [failed, setFailed] = useState(false);
+
+  const load = () => {
+    setLoading(true);
+    setFailed(false);
+    cloudSyncGetState()
+      .then(setState)
+      .catch(() => setFailed(true))
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    if (open && state === null && !failed) load();
+  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    const unlisten = listen("sync-finished", () => {
+      if (open) load();
+    });
+    return () => {
+      unlisten.then((fn) => fn());
+    };
+  }, [open]);
+
+  return (
+    <div className="rounded-lg border">
+      <button
+        type="button"
+        className="flex w-full items-center gap-4 p-5 text-left"
+        aria-expanded={open}
+        onClick={() => setOpen((v) => !v)}
+      >
+        <Fingerprint className="size-4 shrink-0 text-muted-foreground" />
+        <p className="min-w-0 flex-1 text-sm font-medium">
+          同步账本
+          <span className="ml-2 text-xs font-normal text-muted-foreground">
+            桶指纹与水位线（排障用）
+          </span>
+        </p>
+        <ChevronDown
+          className={cn("size-4 shrink-0 text-muted-foreground transition-transform", open && "rotate-180")}
+        />
+      </button>
+      {open && (
+        <div className="space-y-3 border-t p-5 text-xs">
+          {loading && state === null && (
+            <p className="py-2 text-center text-muted-foreground">加载中…</p>
+          )}
+          {failed && (
+            <p className="py-2 text-center text-muted-foreground">
+              读取失败——折叠后重新展开可重试
+            </p>
+          )}
+          {state && (
+            <>
+              <dl className="grid grid-cols-[6rem_1fr] gap-x-4 gap-y-1.5">
+                <dt className="text-muted-foreground">上次同步</dt>
+                <dd>{formatLastSynced(state.last_synced_at)}</dd>
+                <dt className="text-muted-foreground">推送水位线</dt>
+                <dd title={String(state.last_pushed_clock_ms)}>
+                  {formatClockMs(state.last_pushed_clock_ms)}
+                </dd>
+                <dt className="text-muted-foreground">拉取水位线</dt>
+                <dd title={String(state.last_synced_clock_ms)}>
+                  {formatClockMs(state.last_synced_clock_ms)}
+                </dd>
+                <dt className="text-muted-foreground">远端清单</dt>
+                <dd>{state.manifest_epoch > 0 ? `epoch ${state.manifest_epoch}` : "未建立"}</dd>
+                <dt className="text-muted-foreground">本机设备</dt>
+                <dd className="truncate font-mono" title={state.device_id}>
+                  {state.device_id || "—"}
+                </dd>
+              </dl>
+              <LedgerBuckets title="远端数据桶" snapshot={state.remote_tables} />
+              <LedgerBuckets title="远端墓碑桶" snapshot={state.remote_tombstones} />
+              <p className="text-muted-foreground">
+                指纹 = 桶内数据（按 uuid 排序、排除时间戳与自增 id）的 sha256 前 8 位；
+                两台设备同一桶指纹相同即该桶内容一致。
+              </p>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** 一张桶指纹表（表名 + 桶数 + 各桶「键:指纹前 8 位」） */
+function LedgerBuckets({
+  title,
+  snapshot,
+}: {
+  title: string;
+  snapshot: Record<string, Record<string, string>>;
+}) {
+  const modules: SyncLedgerModule[] = syncLedgerModules(snapshot);
+  const total = countBuckets(snapshot);
+  if (modules.length === 0) {
+    return <p className="text-muted-foreground">{title}：暂无</p>;
+  }
+  return (
+    <div className="space-y-1">
+      <p className="text-muted-foreground">
+        {title}（{modules.length} 表 / {total} 桶）
+      </p>
+      <ul className="space-y-0.5">
+        {modules.map((m) => (
+          <li key={m.table} className="flex flex-wrap items-baseline gap-x-2">
+            <span className="font-medium">{m.table}</span>
+            <span className="text-muted-foreground">{m.buckets} 桶</span>
+            <span className="break-all font-mono text-[11px] text-muted-foreground">
+              {m.entries.map((e) => `${e.key}:${e.fp}`).join("  ")}
+            </span>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }

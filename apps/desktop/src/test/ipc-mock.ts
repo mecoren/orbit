@@ -1177,7 +1177,23 @@ const commands: Record<string, (args: any, ctx: Ctx) => unknown> = {
       changed_tables: [],
     }),
   cloud_sync_is_running: () => false,
-  cloud_sync_get_state: () => JSON.stringify({ phase: "idle" }),
+  // 同步账本（core SyncState 镜像）：种一份「已同步过一轮」的账本，
+  // 设置页账本卡可渲染水位线与桶指纹（此前误返回 {phase:"idle"}，与结构不符）
+  cloud_sync_get_state: () => {
+    const now = Date.now();
+    return JSON.stringify({
+      last_synced_at: now - 600_000,
+      last_synced_clock_ms: now - 600_100,
+      last_pushed_clock_ms: now - 600_200,
+      device_id: "mock-device-0001",
+      manifest_epoch: 7,
+      remote_tables: {
+        todos: { "0": "a1b2c3d4e5f60718", "1": "9f8e7d6c5b4a3021" },
+        projects: { "0": "0011223344556677" },
+      },
+      remote_tombstones: { todos: { "2026-08": "778899aabbccddee" } },
+    });
+  },
   // 增量同步历史（P1-17）：种三条同构（成功/失败/推送），设置页历史卡可渲染
   cloud_sync_history: ({ scope, limit }: { scope: string; limit: number }) => {
     const now = Date.now();

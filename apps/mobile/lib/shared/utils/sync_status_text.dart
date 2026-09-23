@@ -81,6 +81,75 @@ String syncResultSummary({
   return errorCount > 0 ? '$base（$errorCount 个非致命错误）' : base;
 }
 
+/// 同步账本：单表（同步模块）的桶指纹摘要
+class SyncLedgerModule {
+  /// 表名（同步模块名）
+  final String table;
+
+  /// 桶数
+  final int buckets;
+
+  /// 各桶指纹摘要，按桶键升序
+  final List<SyncLedgerEntry> entries;
+
+  const SyncLedgerModule({
+    required this.table,
+    required this.buckets,
+    required this.entries,
+  });
+}
+
+/// 桶键 + 指纹摘要
+class SyncLedgerEntry {
+  final String key;
+  final String fp;
+
+  const SyncLedgerEntry({required this.key, required this.fp});
+}
+
+/// 指纹摘要：sha256 hex 前 8 位（够分辨桶，又不把整行铺满）
+String shortFingerprint(String fp) => fp.length > 8 ? fp.substring(0, 8) : fp;
+
+/// 桶索引快照（core `SyncState.remote_tables` / `remote_tombstones`）→ 展示行
+///
+/// 表名升序；桶内按桶键升序——数据桶的键是**数字桶号的字符串形态**，直接按
+/// 字符串排会把 10 排到 2 前面（桶号 ≥ 10 的库上肉眼可见），故先试数值比较；
+/// 墓碑桶键是 YYYY-MM，落回字符串比较。
+List<SyncLedgerModule> syncLedgerModules(
+  Map<String, Map<String, String>> snapshot,
+) {
+  final tables = snapshot.keys.toList()..sort();
+  return [
+    for (final table in tables)
+      SyncLedgerModule(
+        table: table,
+        buckets: snapshot[table]!.length,
+        entries: _sortedLedgerEntries(snapshot[table]!),
+      ),
+  ];
+}
+
+List<SyncLedgerEntry> _sortedLedgerEntries(Map<String, String> buckets) {
+  final keys = buckets.keys.toList()
+    ..sort((a, b) {
+      final na = int.tryParse(a);
+      final nb = int.tryParse(b);
+      if (na != null && nb != null) return na.compareTo(nb);
+      return a.compareTo(b);
+    });
+  return [
+    for (final k in keys) SyncLedgerEntry(key: k, fp: shortFingerprint(buckets[k]!)),
+  ];
+}
+
+/// 桶总数（跨表求和）
+int countBuckets(Map<String, Map<String, String>> snapshot) =>
+    snapshot.values.fold(0, (n, b) => n + b.length);
+
+/// 逻辑时钟毫秒 → 展示文案；0 = 从未推进（首轮全量 / 从未成功同步）
+String formatLedgerClockMs(int value) =>
+    value <= 0 ? '未推进' : formatDateTime(value);
+
 /// 同步错误 tag → 用户处置通道（F44，与桌面 `syncErrorAction` 同口径）
 enum SyncErrorAction { recovery, unlock, upgrade, none }
 

@@ -117,6 +117,59 @@ export function syncProgressText(e: {
   }
 }
 
+/** 同步账本：单表（模块）的桶指纹摘要 */
+export interface SyncLedgerModule {
+  /** 表名（同步模块名） */
+  table: string;
+  /** 桶数 */
+  buckets: number;
+  /** 各桶指纹摘要，按桶键升序 */
+  entries: { key: string; fp: string }[];
+}
+
+/** 指纹摘要：sha256 hex 前 8 位（够分辨桶，又不把整行铺满） */
+export function shortFingerprint(fp: string): string {
+  return fp.length > 8 ? fp.slice(0, 8) : fp;
+}
+
+/**
+ * 桶索引快照（core `SyncState.remote_tables` / `remote_tombstones`）→ 展示行
+ *
+ * 表名升序；桶内按桶键升序——数据桶的键是**数字桶号的字符串形态**，直接按
+ * 字符串排会把 10 排到 2 前面（桶号 ≥ 10 的库上肉眼可见），故先试数值比较。
+ */
+export function syncLedgerModules(
+  snapshot: Record<string, Record<string, string>>,
+): SyncLedgerModule[] {
+  return Object.keys(snapshot)
+    .sort()
+    .map((table) => {
+      const buckets = snapshot[table] ?? {};
+      const keys = Object.keys(buckets).sort((a, b) => {
+        const na = Number(a);
+        const nb = Number(b);
+        if (Number.isFinite(na) && Number.isFinite(nb)) return na - nb;
+        return a.localeCompare(b);
+      });
+      return {
+        table,
+        buckets: keys.length,
+        entries: keys.map((k) => ({ key: k, fp: shortFingerprint(buckets[k]) })),
+      };
+    });
+}
+
+/** 桶总数（跨表求和） */
+export function countBuckets(snapshot: Record<string, Record<string, string>>): number {
+  return Object.values(snapshot).reduce((n, b) => n + Object.keys(b).length, 0);
+}
+
+/** 逻辑时钟毫秒 → 展示文案；0 = 从未推进（首轮全量 / 从未成功同步） */
+export function formatClockMs(value: number): string {
+  if (!value || value <= 0) return "未推进";
+  return new Date(value).toLocaleString();
+}
+
 /** 同步结果摘要（成功提示 / 底部面板文案） */
 export function syncResultSummary(r: {
   pushed_modules: number;

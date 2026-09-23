@@ -1001,6 +1001,13 @@ class RustOrbitBridge implements OrbitBridge {
       gen_sync.syncCryptoUpgradeV2(syncPassword: password);
 
   @override
+  Future<SyncStateView> cloudSyncGetState() async {
+    // 桥侧与桌面同源：core state_to_json 的 JSON 串，此处解析为强类型镜像
+    final raw = await gen_sync.cloudSyncGetState();
+    return SyncStateView.fromJson(jsonDecode(raw) as Map<String, dynamic>);
+  }
+
+  @override
   Future<String> cloudSyncRekey() => gen_sync.cloudSyncRekey();
 
   @override
