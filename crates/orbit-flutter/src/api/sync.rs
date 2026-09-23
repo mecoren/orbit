@@ -11,8 +11,10 @@
 //!   [sync_crypto_restore_session]/[sync_crypto_forget_session]
 //!
 //! ## v1 范围（明确不做）
-//! 仅手动触发命令面。桌面端的后台 60s tick 调度器、sync_on_change watcher、
-//! 定时备份均**不移植**——移动端自动同步由后续版本配合 OS 后台任务另行设计。
+//! 仅手动触发命令面。桌面端的后台 60s tick 调度器与定时备份**不移植**——移动端
+//! 定时自动同步由后续版本配合 OS 后台任务另行设计。**「修改后立即同步」不在此列**：
+//! 它与桌面同为壳层调度（移动实现见 `apps/mobile/lib/services/sync_on_change_scheduler.dart`
+//! ——写路径 db-change → 5s 防抖 → 本层 [cloud_sync_push_only]），本层只存取配置。
 //!
 //! ## keyring 降级策略（与桌面 sync_runtime.rs 的差异）
 //! Android 无系统凭据库，本层**不注册** KeyringCekProvider /
@@ -222,7 +224,8 @@ pub struct SyncConfigInput {
     pub interval_minutes: Option<i64>,
     /// 总开关（自动同步）；null 时默认 true
     pub auto_sync_enabled: Option<bool>,
-    /// 修改后立即同步（v1 移动端不启用 watcher，仅存档）
+    /// 修改后立即同步（调度在壳层：桌面 `sync_scheduler.rs` / 移动
+    /// `services/sync_on_change_scheduler.dart`；本层仅存取配置）
     pub sync_on_change: Option<bool>,
     /// 跳过 TLS 证书校验（自签名证书）
     pub skip_tls_verify: Option<bool>,

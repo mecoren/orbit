@@ -15,6 +15,7 @@ import '../../services/notification_service.dart';
 import '../../services/reminder_scheduler.dart';
 import '../../services/reminder_snooze.dart';
 import '../../services/share_receiver.dart';
+import '../../services/sync_on_change_scheduler.dart';
 import '../todo/logic/badge_count.dart';
 import '../todo/providers/todo_providers.dart';
 import '../auth/unlock_page.dart';
@@ -34,6 +35,9 @@ import 'db_invalidation.dart';
 ///   - resumed：轮询分享接收（Android「分享到」热运行 onNewIntent 的一路）
 ///     + **进入应用强制同步**（先拉后推，忽略自动同步开关）
 ///   - paused：**退到后台尽力同步**（带超时；被系统冻结则放弃，不承诺可靠）
+///
+///   ready 后挂「修改后立即同步」调度器（[SyncOnChangeScheduler]）：写路径
+///   db-change → 5s 防抖 → `cloudSyncPushOnly`（门控见调度器文档）。
 class BootGate extends ConsumerStatefulWidget {
   const BootGate({super.key, required this.child});
 
@@ -53,6 +57,7 @@ class _BootGateState extends ConsumerState<BootGate>
   StreamSubscription<dynamic>? _dbChangesSub;
   StreamSubscription<dynamic>? _reminderDueSub;
   ReminderScheduler? _scheduler;
+  SyncOnChangeScheduler? _syncOnChange;
   // B6 图标角标：注入式服务（ROM 异常全吞）；listen/resumed 双口刷新
   final BadgeService _badge = BadgeService();
   // 小组件快照（#3）：与角标同款双口刷新（ready + dbChanges）；
@@ -240,6 +245,16 @@ class _BootGateState extends ConsumerState<BootGate>
       ref.read(orbitBridgeProvider),
       taskSnapshot: () => ref.read(todoTasksProvider).value,
     );
+    // 「修改后立即同步」（docs/10 §A-2 M6）：写路径 db-change → 5s 防抖后
+    // cloudSyncPushOnly（门控：已配置 + 两个开关 + 已解锁 + 引擎空闲）。
+    // 后台推送不产生进度事件，成功后只失效同步配置缓存刷新「上次同步」，
+    // 标题栏同步指示不被后台推送占用（仅手动同步走本地态）
+    _syncOnChange = SyncOnChangeScheduler.attachOnce(
+      ref.read(orbitBridgeProvider),
+      onPushed: () {
+        if (mounted) ref.invalidate(syncConfigProvider);
+      },
+    );
     // 节假日自动更新守护（Rust 60s tick：每日固定时刻一次，
     // 错过时刻本次启动首轮即补更；首装从未成功也在此补拉）
     ref.read(orbitBridgeProvider).startHolidayScheduler();
@@ -312,6 +327,9 @@ class _BootGateState extends ConsumerState<BootGate>
       if (affectsTaskSnapshot(e.table)) {
         _widget.refresh();
       }
+      // 「修改后立即同步」（M6）：写路径落库即排一次防抖推送（表过滤与
+      // 门控都在调度器内——不过滤表，引擎指纹未变会秒级跳过）
+      _syncOnChange?.onDbChange();
     });
 
     // B6 图标角标数据口：订阅单份任务缓存，每次换值（含失效重拉完成）即

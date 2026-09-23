@@ -231,7 +231,8 @@ class SyncConfigInput {
   /// 总开关（自动同步）；null 时默认 true
   final bool? autoSyncEnabled;
 
-  /// 修改后立即同步（v1 移动端不启用 watcher，仅存档）
+  /// 修改后立即同步（调度在壳层：桌面 `sync_scheduler.rs` / 移动
+  /// `services/sync_on_change_scheduler.dart`；本层仅存取配置）
   final bool? syncOnChange;
 
   /// 跳过 TLS 证书校验（自签名证书）
