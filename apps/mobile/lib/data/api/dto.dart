@@ -247,6 +247,16 @@ class TodoTaskCreateInput {
   });
 }
 
+/// 统一完成命令结果（镜像 Rust CompleteTaskResult，与桌面 CompleteTaskResult 同构）：
+/// [nextInstance] 为重复任务推进生成的下一实例（普通任务为 null）——
+/// UI 层用它做「已生成下一期」提示。
+class CompleteTaskResult {
+  final TodoTask task;
+  final TodoTask? nextInstance;
+
+  const CompleteTaskResult({required this.task, this.nextInstance});
+}
+
 // ---------- todo_subtasks ----------
 
 class TodoSubtask {

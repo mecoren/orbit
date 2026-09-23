@@ -285,7 +285,7 @@ class MockOrbitBridge implements OrbitBridge {
 
 
   @override
-  Future<TodoTask> todoTaskComplete(int id) => _delay(() {
+  Future<CompleteTaskResult> todoTaskComplete(int id) => _delay(() {
         // 对齐 Rust complete_todo_task：普通任务标记完成；重复任务
         // （repeat_mode>0 且有 due_date）克隆下一实例（due 按天/周步进、
         // 子任务复制标题、不复制提醒）再标记本实例；已完成任务幂等跳过
@@ -299,6 +299,7 @@ class MockOrbitBridge implements OrbitBridge {
         final endType = (t['repeat_end_type'] as int?) ?? 0;
         final endParam = (t['repeat_end_param'] as int?) ?? 0;
         final endTerminated = endType == 2 && endParam <= 1;
+        Map<String, Object?>? spawnedNext;
         if (done == 0 && repeatMode > 0 && due != null && !endTerminated) {
           final after = ((t['repeat_after'] as int?) ?? 1).clamp(1, 1000);
           final stepMs = switch (repeatMode) {
@@ -355,6 +356,7 @@ class MockOrbitBridge implements OrbitBridge {
               'version': 1,
             };
             store.tasks[next['id'] as int] = next;
+            spawnedNext = next;
             for (final s in store.subtasksOf(id)) {
               final clone = {
                 ...store.newEntity('s'),
@@ -380,7 +382,10 @@ class MockOrbitBridge implements OrbitBridge {
         t['updated_at'] = now;
         t['version'] = ((t['version'] as int?) ?? 1) + 1;
         _emit('todo_tasks');
-        return TodoTask.fromJson(t);
+        return CompleteTaskResult(
+          task: TodoTask.fromJson(t),
+          nextInstance: spawnedNext == null ? null : TodoTask.fromJson(spawnedNext),
+        );
       });
 
   @override

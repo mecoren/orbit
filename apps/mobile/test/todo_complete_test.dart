@@ -19,7 +19,7 @@ void main() {
       final t = await bridge.todoTaskCreate(
         const TodoTaskCreateInput(title: '普通任务'),
       );
-      final done = await bridge.todoTaskComplete(t.id);
+      final done = (await bridge.todoTaskComplete(t.id)).task;
       expect(done.isDone, isTrue);
       expect(done.status, 'done');
       expect(done.doneAt, isNotNull);
@@ -40,8 +40,11 @@ void main() {
       await bridge.todoSubtaskCreate(
         TodoSubtaskCreateInput(taskId: t.id, title: '子任务甲'),
       );
-      final done = await bridge.todoTaskComplete(t.id);
-      expect(done.isDone, isTrue);
+      final res = await bridge.todoTaskComplete(t.id);
+      expect(res.task.isDone, isTrue);
+      // 契约：推进生成的下一实例随结果返回（UI 靠它弹「已生成下一期」提示）
+      expect(res.nextInstance, isNotNull);
+      expect(res.nextInstance!.dueDate, due + 86400000);
 
       final all = await bridge.todoTaskList(const ListFilter());
       // 原实例 + 下一实例
@@ -99,7 +102,7 @@ void main() {
         repeatFromDone: 1,
       ));
       final beforeComplete = DateTime.now().millisecondsSinceEpoch;
-      final done = await bridge.todoTaskComplete(t.id);
+      final done = (await bridge.todoTaskComplete(t.id)).task;
       expect(done.isDone, isTrue);
       final list = await bridge.todoTaskList(const ListFilter());
       final next = list.firstWhere((x) => !x.isDone && x.title == '理发');

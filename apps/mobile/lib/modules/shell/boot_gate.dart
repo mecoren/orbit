@@ -18,7 +18,10 @@ import '../../services/share_receiver.dart';
 import '../../services/shortcut_receiver.dart';
 import '../../services/sync_on_change_scheduler.dart';
 import '../todo/logic/badge_count.dart';
+// as rep：规避 Flutter widgets 自带 RepeatMode 类名冲突（同 detail_screen）
+import '../todo/logic/repeat_logic.dart' as rep;
 import '../todo/providers/todo_providers.dart';
+import '../../shared/widgets/shadcn/orbit_toast.dart';
 import '../auth/unlock_page.dart';
 import 'db_invalidation.dart';
 
@@ -210,9 +213,14 @@ class _BootGateState extends ConsumerState<BootGate>
     };
     // B5 通知「完成」action：前台直调桥完成任务（dbChanges 事件自然
     // 失效业务缓存 + 调度器重排闹钟——完成实例提醒行由引擎软删）。
+    // 重复任务推进时前台弹「已生成下一期」提示（后台 isolate 不可达，静默）。
     NotificationService.onCompleteAction = (taskId) async {
       try {
-        await ref.read(orbitBridgeProvider).todoTaskComplete(taskId);
+        final res = await ref.read(orbitBridgeProvider).todoTaskComplete(taskId);
+        final next = res.nextInstance;
+        if (next != null && next.dueDate != null) {
+          WaitToast.success('已完成，已生成下一期：${rep.formatCnDate(next.dueDate!)}');
+        }
       } catch (e) {
         debugPrint('[BootGate] notification complete failed: $e');
       }

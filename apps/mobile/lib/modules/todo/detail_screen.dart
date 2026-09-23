@@ -86,10 +86,15 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
     final id = widget.taskId;
     if (id == null || task.isDone) return _patchTask(buildDoneTogglePatch(task));
     try {
-      await ref.read(orbitBridgeProvider).todoTaskComplete(id);
+      final res = await ref.read(orbitBridgeProvider).todoTaskComplete(id);
       if (!mounted) return;
       ref.invalidate(todoTasksProvider);
       ref.invalidate(taskDetailProvider(id));
+      // 重复任务推进提示：明确告知「列表里多出来的那条」从哪来（与桌面同文案）
+      final next = res.nextInstance;
+      if (next != null && next.dueDate != null) {
+        WaitToast.success('已完成，已生成下一期：${rep.formatCnDate(next.dueDate!)}');
+      }
     } catch (_) {
       WaitToast.destructive('完成失败');
     }

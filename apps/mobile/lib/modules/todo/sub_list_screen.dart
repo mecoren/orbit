@@ -30,6 +30,8 @@ import '../../services/local_prefs.dart';
 import 'form_bottom_sheet.dart';
 import 'kanban_view.dart';
 import 'logic/batch_actions.dart';
+// as rep：规避 Flutter widgets 自带 RepeatMode 类名冲突（同 detail_screen）
+import 'logic/repeat_logic.dart' as rep;
 import 'logic/task_logic.dart';
 import 'logic/template_apply.dart';
 import 'logic/undo_stack.dart';
@@ -488,7 +490,8 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
                 encodePatch(buildDoneTogglePatch(task)),
               );
         } else {
-          await ref.read(orbitBridgeProvider).todoTaskComplete(task.id);
+          final res = await ref.read(orbitBridgeProvider).todoTaskComplete(task.id);
+          _notifyNextInstance(res);
         }
         unawaited(_removeRowWithExit(task.id));
       } catch (_) {
@@ -498,11 +501,20 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
     }
     if (task.isDone) return _patchTask(task.id, buildDoneTogglePatch(task));
     try {
-      await ref.read(orbitBridgeProvider).todoTaskComplete(task.id);
+      final res = await ref.read(orbitBridgeProvider).todoTaskComplete(task.id);
       ref.invalidate(todoTasksProvider);
       ref.invalidate(taskDetailProvider);
+      _notifyNextInstance(res);
     } catch (_) {
       WaitToast.destructive('完成失败');
+    }
+  }
+
+  /// 重复任务推进提示：明确告知「列表里多出来的那条」从哪来（与桌面同文案）
+  void _notifyNextInstance(CompleteTaskResult res) {
+    final next = res.nextInstance;
+    if (next != null && next.dueDate != null) {
+      WaitToast.success('已完成，已生成下一期：${rep.formatCnDate(next.dueDate!)}');
     }
   }
 
@@ -653,6 +665,7 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
     final linkIds = <int>[];
     var changed = 0;
     var failures = 0;
+    var spawnedRepeats = 0; // 批量完成里推进出下一期的重复任务条数
 
     try {
       for (final task in targets) {
@@ -667,7 +680,8 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
               if (patch == null) break;
               // 完成走 complete（重复任务单事务推进）；取消走普通 patch
               if (done) {
-                await bridge.todoTaskComplete(task.id);
+                final res = await bridge.todoTaskComplete(task.id);
+                if (res.nextInstance != null) spawnedRepeats++;
               } else {
                 await bridge.todoTaskUpdate(task.id, encodePatch(patch));
               }
@@ -723,14 +737,18 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
             action == BatchAction.delete ? targets.map((t) => t.id).toList() : const [],
         detachLinkIds: linkIds,
         createdAt: DateTime.now().millisecondsSinceEpoch,
-      ));
+      ),
+      // 重复任务推进提示并入撤销浮层副文案（单槽 toast，避免互相顶掉）
+      extraDescription: spawnedRepeats > 0 ? '已为 $spawnedRepeats 条重复任务生成下一期' : null,
+      );
     } finally {
       if (mounted) setState(() => _batchBusy = false);
     }
   }
 
-  /// 把反向补丁入栈并挂出「撤销」浮层（停留 = 5s 撤销窗口，到期自动收起）
-  void _offerUndo(UndoEntry entry) {
+  /// 把反向补丁入栈并挂出「撤销」浮层（停留 = 5s 撤销窗口，到期自动收起）；
+  /// [extraDescription] 可选副文案（批量完成混有重复任务时告知已生成下一期）
+  void _offerUndo(UndoEntry entry, {String? extraDescription}) {
     ref.read(undoStackProvider).push(entry);
     WaitToast.global(
       entry.label,
@@ -738,7 +756,7 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
       // 回收站恢复指引只对删除类撤销成立（其余动作没有回收站语义）
       description: entry.restoreTaskIds.isNotEmpty
           ? '已移入回收站的任务可在回收站恢复'
-          : null,
+          : extraDescription,
       actionLabel: '撤销',
       onAction: _undoLast,
       autoDismissAfter: WaitToast.undoDwell,
