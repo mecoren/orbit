@@ -41,6 +41,16 @@ final taskLabelsProjectionProvider =
   return bridge.taskLabelsProjection();
 });
 
+/// 任务→提醒投影（A4 只读聚合；列表行内提醒徽标消费）
+///
+/// 一次往返替代「列表 N 次 todoReminderList」；投影未就绪时调用方回落
+/// 不渲染徽标（不阻塞列表）。core 侧已滤软删并按 remind_at 升序。
+final taskRemindersProjectionProvider =
+    FutureProvider<List<TaskRemindersProjection>>((ref) async {
+  final bridge = ref.watch(orbitBridgeProvider);
+  return bridge.taskRemindersProjection();
+});
+
 /// 任务列表单次拉取上限（A5/B6，与桌面 `TASK_LIST_PAGE_SIZE` 同口径）：
 /// 单份缓存与列表页「不完整」条幅共用——结果集达到它即意味着还有未取到的
 /// 任务，条幅按此判定而非另开 count 接口。
@@ -162,6 +172,7 @@ void invalidateBusinessCaches(WidgetRef ref) {
   ref.invalidate(todoArchivedProjectsProvider);
   ref.invalidate(todoLabelsProvider);
   ref.invalidate(taskLabelsProjectionProvider);
+  ref.invalidate(taskRemindersProjectionProvider);
   ref.invalidate(todoTasksProvider);
   ref.invalidate(taskDetailProvider);
   ref.invalidate(taskActivityProvider);

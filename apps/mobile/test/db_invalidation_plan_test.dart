@@ -35,11 +35,17 @@ void main() {
       for (final table in [
         'todo_task_relations',
         'todo_subtasks',
-        'todo_reminders',
       ]) {
         expect(planTableInvalidation(table), [DbCacheTarget.taskDetail],
             reason: table);
       }
+    });
+
+    test('todo_reminders 联动详情与列表提醒徽标投影', () {
+      // 列表行内提醒徽标读提醒投影，增删提醒后必须一并刷新，
+      // 否则徽标会停在旧时刻（与 todo_task_labels 同型）
+      expect(planTableInvalidation('todo_reminders'),
+          [DbCacheTarget.taskDetail, DbCacheTarget.taskReminderProjection]);
     });
 
     test('todo_task_labels 联动详情与列表标签投影', () {

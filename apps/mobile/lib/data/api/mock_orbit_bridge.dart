@@ -1467,11 +1467,7 @@ class MockOrbitBridge implements OrbitBridge {
   Future<CsvImportPreview> csvImportPreview(
       String content, String preset, int previewLimit) {
     return _delay(() {
-      final rows = _parseCsvLite(content);
-      final mapped = rows
-          .skip(1)
-          .map((row) => _mapImportRowLite(preset, rows.first, row))
-          .toList();
+      final mapped = _importRowsLite(content, preset);
       return CsvImportPreview(
         preset: preset,
         rows: mapped.take(previewLimit).toList(),
@@ -1488,12 +1484,11 @@ class MockOrbitBridge implements OrbitBridge {
   @override
   Future<CsvImportStats> csvImportExecute(String content, String preset) {
     return _delay(() {
-      final rows = _parseCsvLite(content);
+      final mapped = _importRowsLite(content, preset);
       var success = 0;
       var skipped = 0;
       final notes = <String>[];
-      for (final row in rows.skip(1)) {
-        final m = _mapImportRowLite(preset, rows.first, row);
+      for (final m in mapped) {
         if (m.skipReason != null) {
           skipped++;
           notes.add('第 ${m.sourceLine} 行跳过：${m.skipReason}');
@@ -1512,7 +1507,8 @@ class MockOrbitBridge implements OrbitBridge {
           'status': m.done ? 'done' : 'pending',
           'done': m.done ? 1 : 0,
           'done_at': m.done ? now : null,
-          'due_date': null,
+          // 预览行携带的截止日期落库（ICS 的 DUE 有值；CSV 轻量映射当前恒 null）
+          'due_date': m.dueDate,
           'start_date': null,
           'repeat_after': 0,
           'repeat_mode': 0,
@@ -1556,6 +1552,186 @@ class MockOrbitBridge implements OrbitBridge {
     };
     store.projects[p['id'] as int] = p;
     return p['id'] as int;
+  }
+
+  /// 导入行映射（与真桥同口径）：`ics` 档走 VTODO 解析，其余走 CSV 表头映射。
+  /// 键集合与 orbit-core `CsvImportPreset::from_key` 一致。
+  static List<CsvImportPreviewRow> _importRowsLite(
+      String content, String preset) {
+    if (preset == 'ics') return _mapIcsRowsLite(content);
+    final rows = _parseCsvLite(content);
+    if (rows.isEmpty) return const [];
+    return rows
+        .skip(1)
+        .map((row) => _mapImportRowLite(preset, rows.first, row))
+        .toList();
+  }
+
+  /// VTODO 轻量解析（镜像 orbit-core `ics_import_api::map_ics_rows`）：
+  /// 只收 VTODO、VEVENT 整块忽略；单块坏只跳过该块，不阻断整文件。
+  /// [CsvImportPreviewRow.sourceLine] 取块序号（unfold 后文件行号已错位）。
+  static List<CsvImportPreviewRow> _mapIcsRowsLite(String content) {
+    final out = <CsvImportPreviewRow>[];
+    final props = <String, String>{};
+    var inTodo = false;
+    var blockNo = 0;
+    for (final line in _unfoldIcs(content)) {
+      final parts = _splitIcsLine(line);
+      if (parts == null) continue;
+      final name = _icsPropName(parts.$1).toUpperCase();
+      final value = parts.$2;
+      if (name == 'BEGIN' && value.toUpperCase() == 'VTODO') {
+        inTodo = true;
+        props.clear();
+        blockNo++;
+        continue;
+      }
+      if (name == 'END' && value.toUpperCase() == 'VTODO') {
+        if (inTodo) {
+          inTodo = false;
+          out.add(_finishIcsBlock(props, blockNo));
+          props.clear();
+        }
+        continue;
+      }
+      // 同名属性后写覆盖先写（对齐 core 的 rev().find() 末次优先）
+      if (inTodo) props[name] = value;
+    }
+    return out;
+  }
+
+  /// 单个 VTODO 块 → 预览行（字段缺失给默认值，不抛异常）
+  static CsvImportPreviewRow _finishIcsBlock(
+      Map<String, String> props, int blockNo) {
+    CsvImportPreviewRow skip(String reason) => CsvImportPreviewRow(
+          sourceLine: blockNo,
+          projectTitle: null,
+          title: '',
+          priority: null,
+          done: false,
+          dueDate: null,
+          skipReason: reason,
+        );
+    final summary = props['SUMMARY'];
+    if (summary == null) return skip('VTODO 无 SUMMARY');
+    final title = _unescapeIcsText(summary).trim();
+    if (title.isEmpty) return skip('标题为空');
+    final categories = props['CATEGORIES'];
+    final projectTitle =
+        categories == null ? null : _unescapeIcsText(categories).trim();
+    return CsvImportPreviewRow(
+      sourceLine: blockNo,
+      projectTitle: (projectTitle == null || projectTitle.isEmpty)
+          ? null
+          : projectTitle,
+      title: title,
+      priority: _icsPriority(props['PRIORITY']),
+      done: (props['STATUS'] ?? '').toUpperCase() == 'COMPLETED',
+      dueDate: _parseIcsDatetime(props['DUE']),
+      skipReason: null,
+    );
+  }
+
+  /// RFC 5545 行展开：CRLF（容忍裸 LF/CR）后紧跟空格/TAB 的续行拼回上一行
+  static List<String> _unfoldIcs(String content) {
+    final out = <String>[];
+    for (final raw in content
+        .replaceAll('\r\n', '\n')
+        .replaceAll('\r', '\n')
+        .split('\n')) {
+      if (raw.isEmpty) continue;
+      final first = raw[0];
+      if ((first == ' ' || first == '\t') && out.isNotEmpty) {
+        out[out.length - 1] = out.last + raw.substring(1);
+      } else {
+        out.add(raw);
+      }
+    }
+    return out;
+  }
+
+  /// 内容行拆分：首个 `:` 左为名（可含参数），右为值（值内冒号合法）
+  static (String, String)? _splitIcsLine(String line) {
+    final idx = line.indexOf(':');
+    if (idx < 0) return null;
+    return (line.substring(0, idx), line.substring(idx + 1));
+  }
+
+  /// 属性名去参数（`DUE;TZID=X` → `DUE`）
+  static String _icsPropName(String field) => field.split(';').first;
+
+  /// TEXT 反转义（镜像 core `unescape_ics_text`）：必须逐字符扫描——
+  /// 链式 replace 会把字面量 `\\n` 误读成换行
+  static String _unescapeIcsText(String s) {
+    final out = StringBuffer();
+    for (var i = 0; i < s.length; i++) {
+      if (s[i] != '\\') {
+        out.write(s[i]);
+        continue;
+      }
+      if (i + 1 >= s.length) {
+        out.write('\\');
+        break;
+      }
+      final next = s[++i];
+      if (next == 'n' || next == 'N') {
+        out.write('\n');
+      } else if (next == '\\' || next == ';' || next == ',') {
+        out.write(next);
+      } else {
+        out
+          ..write('\\')
+          ..write(next);
+      }
+    }
+    return out.toString();
+  }
+
+  /// PRIORITY 逆映射（导出表：任务 5→ics 1 … 1→ics 5；6-9/缺失/非法 → 0）
+  static int _icsPriority(String? value) {
+    switch (value?.trim()) {
+      case '1':
+        return 5;
+      case '2':
+        return 4;
+      case '3':
+        return 3;
+      case '4':
+        return 2;
+      case '5':
+        return 1;
+      default:
+        return 0;
+    }
+  }
+
+  /// ICS 日期时间 → ms：`YYYYMMDD` 本地零点 / `YYYYMMDDTHHMMSS` 本地 /
+  /// `...Z` UTC 瞬时；非法返回 null（务实解析，不阻断导入）
+  static int? _parseIcsDatetime(String? value) {
+    final v = value?.trim();
+    if (v == null || v.isEmpty) return null;
+    final m =
+        RegExp(r'^(\d{4})(\d{2})(\d{2})(?:T(\d{2})(\d{2})(\d{2}))?(Z)?$')
+            .firstMatch(v);
+    if (m == null) return null;
+    final dt = m.group(7) == 'Z'
+        ? DateTime.utc(
+            int.parse(m.group(1)!),
+            int.parse(m.group(2)!),
+            int.parse(m.group(3)!),
+            int.tryParse(m.group(4) ?? '') ?? 0,
+            int.tryParse(m.group(5) ?? '') ?? 0,
+            int.tryParse(m.group(6) ?? '') ?? 0,
+          ).toLocal()
+        : DateTime(
+            int.parse(m.group(1)!),
+            int.parse(m.group(2)!),
+            int.parse(m.group(3)!),
+            int.tryParse(m.group(4) ?? '') ?? 0,
+            int.tryParse(m.group(5) ?? '') ?? 0,
+            int.tryParse(m.group(6) ?? '') ?? 0,
+          );
+    return dt.millisecondsSinceEpoch;
   }
 
   /// RFC 4180 关键子集解析（引号转义/逗号切分/跳空行）
@@ -1673,15 +1849,40 @@ class MockOrbitBridge implements OrbitBridge {
 
   @override
   Future<String?> syncCryptoMetaVersion() =>
-      _delay(() => store.syncPasswordSet ? 'v2' : null);
+      _delay(() => store.syncPasswordSet ? store.syncKeyVersion : null);
 
   @override
-  Future<void> syncCryptoUpgradeV2(String password) =>
-      _delay(() => throw Exception('[not_unlocked] Mock 未实现'));
+  Future<void> syncCryptoUpgradeV2(String password) => _delay(() {
+        if (!store.syncPasswordSet) {
+          throw Exception('[not_initialized] 未设置同步密码');
+        }
+        if (password != store.syncPassword) {
+          throw Exception('[wrong_password] 同步密码错误');
+        }
+        // 升级即换钥（同密码确定性派生 + 云端全量重传）；mock 只落版本标记
+        store.syncKeyVersion = 'v2';
+      });
 
   @override
-  Future<String> cloudSyncRekey() =>
-      _delay(() => throw Exception('[not_unlocked] Mock 未实现'));
+  Future<String> cloudSyncRekey() => _delay(() {
+        if (!store.syncPasswordSet) {
+          throw Exception('[not_initialized] 未设置同步密码');
+        }
+        if (!store.syncUnlocked) {
+          throw Exception('[not_unlocked] 同步加密未解锁，请先输入同步密码');
+        }
+        // 真桥返回 cloud_sync_api::result_to_json 的 JSON 串（非 SyncResultJson 对象）
+        return jsonEncode(const <String, Object?>{
+          'pushed_modules': 3,
+          'pulled_modules': 0,
+          'uploaded_attachments': 1,
+          'downloaded_attachments': 0,
+          'duration_ms': 1200,
+          'skipped': false,
+          'errors': <String>[],
+          'changed_tables': <String>[],
+        });
+      });
 
   @override
   Future<void> syncCryptoChangePassword(

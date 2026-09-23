@@ -1043,6 +1043,13 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
     final labelIdsByTask = indexLabelIdsByTask(labelRows);
     final labelsByTask = {for (final r in labelRows) r.taskId: r.labels};
 
+    // 提醒投影（A4 只读聚合）：行内提醒徽标数据源；同样在未就绪时回落空表
+    final reminderRows = ref.watch(taskRemindersProjectionProvider).value ??
+        const <TaskRemindersProjection>[];
+    final remindersByTask = {
+      for (final r in reminderRows) r.taskId: r.reminders,
+    };
+
     final visible = applyTaskListFilters(
       isLogbook
           ? filterTasks(tasks, widget.query)
@@ -1099,6 +1106,12 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
     Widget buildTile(TodoTask task, {bool draggable = false}) {
       final project =
           task.projectId != null ? projectById[task.projectId] : null;
+      // 行内提醒徽标：未来最近一条 / 全过期最早一条（完成实例不警示）
+      final reminder = displayReminder(
+        remindersByTask[task.id] ?? const <ProjectedReminder>[],
+        DateTime.now().millisecondsSinceEpoch,
+        taskDone: task.isDone,
+      );
       // 选择态换用选区行：不复用 TodoTaskTile 是因为它的勾选框语义是
       // 「完成」，选择态下同一个圆圈的勾选含义会变成「选中」，语义冲突
       if (_selectionMode) {
@@ -1113,6 +1126,8 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
         task: task,
         projectTitle: project?.title,
         projectColorHex: project?.hexColor,
+        labels: labelsByTask[task.id] ?? const <ProjectedTaskLabel>[],
+        reminder: reminder,
         onOpen: () => context.push('/todo/${task.id}'),
         onToggleDone: () => _toggleDone(task),
         // manual 档长按让位给整行拖动（原地松手由 _reorderEnd 兜回来弹菜单）
@@ -1706,6 +1721,8 @@ class TodoTaskTile extends StatelessWidget {
     this.onLongPress,
     this.projectTitle,
     this.projectColorHex,
+    this.labels = const <ProjectedTaskLabel>[],
+    this.reminder,
     this.onDelete,
   });
 
@@ -1716,6 +1733,12 @@ class TodoTaskTile extends StatelessWidget {
 
   /// 项目名着色 hex（#36：项目名按项目色渲染；空串回退次要文本色）
   final String? projectColorHex;
+
+  /// 行内标签段数据源（任务→标签投影）；空表不渲染该段
+  final List<ProjectedTaskLabel> labels;
+
+  /// 行内提醒徽标载荷；null（无存活提醒）不渲染该段
+  final DisplayReminder? reminder;
   final VoidCallback onToggleDone;
 
   /// 长按回调（弹操作菜单）。manual 档（拖拽顺序）传 null：长按让位给
@@ -1727,6 +1750,65 @@ class TodoTaskTile extends StatelessWidget {
 
   /// 右滑「删除」动作回调（null 时隐藏删除面板——搜索页等只读场景复用 Tile）
   final VoidCallback? onDelete;
+
+  /// 行内标签段：色点 + 标签名，最多 3 个，超出折叠 +N
+  /// （与桌面 `LabelChips` 同口径——点色分辨、文字回归安静层级）
+  List<Widget> _labelChips(AppColorSet colors) {
+    if (labels.isEmpty) return const [];
+    const max = 3;
+    return [
+      for (final l in labels.take(max))
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 6,
+              height: 6,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: hexToColor(l.hexColor, fallback: colors.secondaryText),
+              ),
+            ),
+            const SizedBox(width: 2),
+            Text(
+              l.title,
+              style: TextStyle(fontSize: 12, color: colors.secondaryText),
+            ),
+          ],
+        ),
+      if (labels.length > max)
+        Text(
+          '+${labels.length - max}',
+          style: TextStyle(fontSize: 12, color: colors.secondaryText),
+        ),
+    ];
+  }
+
+  /// 行内提醒段：铃铛 + HH:mm；已到期且任务未完成转逾期红。
+  /// 桌面用 Bell / BellRing 双图标区分，移动图标集无 bellRing——以颜色为主信号
+  List<Widget> _reminderChips(AppColorSet colors) {
+    final r = reminder;
+    if (r == null) return const [];
+    final color = r.fired ? OrbitAccents.overdueRed : colors.secondaryText;
+    return [
+      Icon(OrbitIcons.notification, size: 12, color: color),
+      Text(r.clock, style: TextStyle(fontSize: 12, color: color)),
+    ];
+  }
+
+  /// 行内子任务进度段（MS To Do Steps 同款体验）：
+  /// percent_done 由后端按子任务勾选回算，0 = 无子任务、100 = 全完成，均不显示
+  List<Widget> _progressChips(AppColorSet colors) {
+    final pct = task.percentDone;
+    if (pct <= 0 || pct >= 100) return const [];
+    return [
+      Icon(OrbitIcons.listChecks, size: 12, color: colors.secondaryText),
+      Text(
+        '${pct.round()}%',
+        style: TextStyle(fontSize: 12, color: colors.secondaryText),
+      ),
+    ];
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1826,6 +1908,8 @@ class TodoTaskTile extends StatelessWidget {
                               color: hexToColor(priorityHex),
                             ),
                           ),
+                          // 标签段：色点 + 名（最多 3 个，超出折叠 +N）
+                          ..._labelChips(colors),
                           if (projectTitle != null && task.projectId != null)
                             Text(
                               projectTitle!,
@@ -1839,6 +1923,8 @@ class TodoTaskTile extends StatelessWidget {
                                     : colors.secondaryText,
                               ),
                             ),
+                          // 提醒段：铃铛 + HH:mm（到期未完转逾期红）
+                          ..._reminderChips(colors),
                           // 日期段：逾期 #F44336
                           if (task.dueDate != null)
                             Text(
@@ -1850,6 +1936,8 @@ class TodoTaskTile extends StatelessWidget {
                                     : colors.secondaryText,
                               ),
                             ),
+                          // 子任务进度段（percent_done 后端回算；0/100 不显示）
+                          ..._progressChips(colors),
                         ],
                       ),
                     ),

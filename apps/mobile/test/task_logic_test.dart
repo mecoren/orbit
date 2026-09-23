@@ -616,4 +616,88 @@ group('computeSidebarCounts 单遍计数', () {
       expect(groupDoneByDay(const []), isEmpty);
     });
   });
+
+// ---------- 提醒相对档（M2：TickTick 式快捷）----------
+
+group('reminderPresets 提醒快捷档', () {
+  test('有截止日期：当天 9:00 + 前推 1 小时 / 30 / 15 分钟', () {
+    final due = DateTime(2026, 9, 23, 18).millisecondsSinceEpoch;
+    final out = reminderPresets(dueDate: due);
+    expect(out.map((p) => p.label), [
+      '截止当天 09:00',
+      '截止前 1 小时',
+      '截止前 30 分钟',
+      '截止前 15 分钟',
+    ]);
+    expect(out[0].ms, DateTime(2026, 9, 23, 9).millisecondsSinceEpoch);
+    expect(out[1].ms, due - const Duration(hours: 1).inMilliseconds);
+    expect(out[2].ms, due - const Duration(minutes: 30).inMilliseconds);
+    expect(out[3].ms, due - const Duration(minutes: 15).inMilliseconds);
+  });
+
+  test('无截止日期：今天 / 明天 9:00（按传入 now 锚定本地日界）', () {
+    final out = reminderPresets(now: DateTime(2026, 9, 23, 20, 30));
+    expect(out.map((p) => p.label), ['今天 09:00', '明天 09:00']);
+    expect(out[0].ms, DateTime(2026, 9, 23, 9).millisecondsSinceEpoch);
+    expect(out[1].ms, DateTime(2026, 9, 24, 9).millisecondsSinceEpoch);
+  });
+
+  test('同刻去重：截止 09:15 时「当天 9:00」与「前 15 分钟」合并', () {
+    final due = DateTime(2026, 9, 23, 9, 15).millisecondsSinceEpoch;
+    final out = reminderPresets(dueDate: due);
+    expect(out.length, 3);
+    expect(out.first.label, '截止当天 09:00');
+    expect(out.map((p) => p.ms).toSet().length, out.length);
+  });
+
+  test('过期档位不过滤（与日期面板允许选过去同口径）', () {
+    final now = DateTime(2026, 9, 23, 20);
+    final out = reminderPresets(dueDate: now.millisecondsSinceEpoch);
+    expect(out.length, 4);
+    expect(out.every((p) => p.ms < now.millisecondsSinceEpoch), isTrue);
+  });
+});
+
+// ---------- 行内提醒徽标（M3：镜像桌面 reminder-meta.ts）----------
+
+group('displayReminder 行内提醒选取', () {
+  ProjectedReminder r(int id, int at) => ProjectedReminder(id: id, remindAt: at);
+
+  test('无存活提醒 → null（调用方不渲染徽标）', () {
+    expect(displayReminder(const [], 1000, taskDone: false), isNull);
+  });
+
+  test('有未来行 → 取最近一条（下一个将响的时刻）', () {
+    final d = displayReminder([r(1, 5000), r(2, 3000), r(3, 9000)], 1000,
+        taskDone: false);
+    expect(d!.id, 2);
+    expect(d.fired, isFalse);
+  });
+
+  test('全部已过期 → 取最早一条（展示错过了哪一响）', () {
+    final d = displayReminder([r(1, 900), r(2, 300), r(3, 700)], 1000,
+        taskDone: false);
+    expect(d!.id, 2);
+    expect(d.fired, isTrue);
+  });
+
+  test('已完成实例不警示（过期也按 muted 展示）', () {
+    final d = displayReminder([r(1, 900)], 1000, taskDone: true);
+    expect(d!.fired, isFalse);
+  });
+
+  test('恰在 now 视为已到期（与桌面 <= 口径一致）', () {
+    expect(displayReminder([r(1, 1000)], 1000, taskDone: false)!.fired, isTrue);
+  });
+
+  test('未按序传入也选得对（按 remind_at 兜底排序）', () {
+    final d = displayReminder([r(1, 8000), r(2, 2000)], 1000, taskDone: false);
+    expect(d!.id, 2);
+  });
+
+  test('formatHm 输出 HH:mm 补零（徽标时钟口径）', () {
+    expect(formatHm(DateTime(2026, 9, 23, 9, 5).millisecondsSinceEpoch),
+        '09:05');
+  });
+});
 }

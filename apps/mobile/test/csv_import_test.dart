@@ -63,4 +63,81 @@ void main() {
       expect(stats.skipped, 1);
     });
   });
+
+  // `ics` 预设与真桥同口径（orbit-core `ics_import_api::map_ics_rows`）：
+  // 只收 VTODO、VEVENT 整块忽略、PRIORITY 逆映射、DUE 解析、块级跳过不阻断。
+  group('MockOrbitBridge ICS 导入（VTODO）', () {
+    test('预览：解析 VTODO 字段 + VEVENT 整块忽略', () async {
+      final bridge = MockOrbitBridge();
+      const ics = 'BEGIN:VCALENDAR\r\nVERSION:2.0\r\n'
+          'BEGIN:VTODO\r\nUID:a@orbit\r\n'
+          'SUMMARY:买牛奶\\, 全脂\r\nCATEGORIES:生活\r\n'
+          'PRIORITY:3\r\nDUE:20260919T180000\r\n'
+          'STATUS:NEEDS-ACTION\r\nEND:VTODO\r\n'
+          'BEGIN:VEVENT\r\nSUMMARY:日历事件不导入\r\nEND:VEVENT\r\n'
+          'END:VCALENDAR\r\n';
+      final before = (await bridge.todoTaskList(const ListFilter())).length;
+      final preview = await bridge.csvImportPreview(ics, 'ics', 10);
+      // 预览不得写库
+      expect((await bridge.todoTaskList(const ListFilter())).length, before);
+      expect(preview.rows.length, 1);
+      final row = preview.rows.single;
+      expect(row.skipReason, isNull);
+      expect(row.title, '买牛奶, 全脂');
+      expect(row.projectTitle, '生活');
+      expect(row.priority, 3);
+      expect(row.done, isFalse);
+      expect(row.dueDate, isNotNull);
+      expect(preview.stats.success, 1);
+    });
+
+    test('执行：写库 + 项目自动创建 + DUE 落 due_date', () async {
+      final bridge = MockOrbitBridge();
+      const ics = 'BEGIN:VTODO\r\nSUMMARY:买牛奶\r\nCATEGORIES:生活\r\n'
+          'PRIORITY:5\r\nDUE:20260919\r\nEND:VTODO\r\n';
+      final stats = await bridge.csvImportExecute(ics, 'ics');
+      expect(stats.success, 1);
+      expect(stats.failed, 0);
+
+      final tasks = await bridge.todoTaskList(const ListFilter());
+      final milk = tasks.firstWhere((t) => t.title == '买牛奶');
+      // ICS PRIORITY 5 → Orbit 1（与导出表互逆）
+      expect(milk.priority, 1);
+      expect(milk.dueDate, isNotNull);
+
+      final projects = await bridge.todoProjectList(const ListFilter());
+      final life = projects.where((p) => p.title == '生活').toList();
+      expect(life.length, 1);
+      expect(milk.projectId, life.first.id);
+    });
+
+    test('STATUS:COMPLETED → 完成态落库', () async {
+      final bridge = MockOrbitBridge();
+      const ics = 'BEGIN:VTODO\r\nSUMMARY:已完成\r\nSTATUS:COMPLETED\r\n'
+          'COMPLETED:20260918T120000Z\r\nEND:VTODO\r\n';
+      await bridge.csvImportExecute(ics, 'ics');
+      final tasks = await bridge.todoTaskList(const ListFilter());
+      expect(tasks.firstWhere((t) => t.title == '已完成').isDone, isTrue);
+    });
+
+    test('无 SUMMARY / 空标题块级跳过，其它块照常导入', () async {
+      final bridge = MockOrbitBridge();
+      const ics = 'BEGIN:VTODO\r\nDUE:20260919\r\nEND:VTODO\r\n'
+          'BEGIN:VTODO\r\nSUMMARY:   \r\nEND:VTODO\r\n'
+          'BEGIN:VTODO\r\nSUMMARY:正常\r\nEND:VTODO\r\n';
+      final preview = await bridge.csvImportPreview(ics, 'ics', 10);
+      expect(preview.stats.skipped, 2);
+      expect(preview.stats.success, 1);
+      expect(preview.rows.last.title, '正常');
+    });
+
+    test('续行展开 + TEXT 反转义（字面量 \\\\n 不误读为换行）', () async {
+      final bridge = MockOrbitBridge();
+      const ics = 'BEGIN:VTODO\r\nSUMMARY:第一行\r\n 第二行\r\n'
+          'END:VTODO\r\nBEGIN:VTODO\r\nSUMMARY:C:\\\\new\r\nEND:VTODO\r\n';
+      final preview = await bridge.csvImportPreview(ics, 'ics', 10);
+      expect(preview.rows[0].title, '第一行第二行');
+      expect(preview.rows[1].title, 'C:\\new');
+    });
+  });
 }

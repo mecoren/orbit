@@ -29,11 +29,15 @@ import 'logic/task_logic.dart'
         priorityColorHex,
         priorityLabel,
         quickViewCreateDefaults,
+        reminderPresets,
         statusColorHex,
         statusLabel;
 import 'providers/todo_providers.dart';
 import 'repeat_edit_sheet.dart';
 import '../../core/theme/icon_map.dart';
+
+/// 提醒选择抽屉的「自定义时间…」哨兵值（毫秒档位取值域是纯数字，不冲突）
+const String _reminderCustomKey = 'custom';
 
 /// 截止日期选择器（表单抽屉"自定义"与详情页截止日期行共用）
 ///
@@ -388,8 +392,30 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
     if (picked != null && mounted) onPicked(dateToMidnightMs(picked));
   }
 
-  /// 提醒时间选择：wait 面板 showTime 模式，日期+时分单面板一次选完
+  /// 提醒时间选择：先给相对档快捷（TickTick 式，见 [reminderPresets]），
+  /// 末项「自定义时间…」进日期+时分单面板；两路产物都是绝对毫秒时刻
   Future<void> _pickReminder() async {
+    await showSelectBottomSheet<String>(
+      context,
+      title: '提醒时间',
+      items: [
+        for (final p in reminderPresets(dueDate: _dueDate))
+          SelectItem<String>(value: '${p.ms}', label: p.label),
+        const SelectItem<String>(
+            value: _reminderCustomKey, label: '自定义时间…'),
+      ],
+      onSelect: (v) {
+        if (v == _reminderCustomKey) {
+          _pickCustomReminder();
+        } else {
+          setState(() => _remindAt = int.parse(v));
+        }
+      },
+    );
+  }
+
+  /// 自定义提醒时刻：wait 面板 showTime 模式，日期+时分单面板一次选完
+  Future<void> _pickCustomReminder() async {
     final picked = await OrbitDatePicker.pick(
       context,
       initialDate: _remindAt != null

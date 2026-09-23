@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
@@ -67,7 +68,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   /// 数据导出进行中的格式（'json' / 'csv' / 'ics'），null 空闲
   String? _exporting;
 
-  /// CSV 导入：选中的预设档（orbit/todoist/ticktick）与文件名
+  /// 导入：选中的预设档（orbit/todoist/ticktick/ics）与文件名
   String _importPreset = 'orbit';
   String? _importFileName;
   String? _importContent;
@@ -204,24 +205,34 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     }
   }
 
-  // ── CSV 导入（迁移路径）：file_picker 选文件 → 预览（不写库）→ 确认执行 ──
+  // ── 导入（迁移路径）：file_picker 选文件 → 预览（不写库）→ 确认执行 ──
 
+  /// 预设档位（键必须与 orbit-core `CsvImportPreset::from_key` 一致）。
+  /// `ics` 档走 VTODO 解析（core `ics_import_api`），与桌面导入卡同口径——
+  /// 用于从 Google/Apple/Outlook 日历或 TickTick 导出的 .ics 迁入任务。
   static const _importPresets = {
     'orbit': 'Orbit 导出格式',
     'todoist': 'Todoist 模板',
     'ticktick': 'TickTick 模板',
+    'ics': 'ICS 日历',
   };
 
   Future<void> _pickImportFile() async {
+    final isIcs = _importPreset == 'ics';
     try {
       final picked = await FilePicker.platform.pickFiles(
-        dialogTitle: '选择要导入的 CSV 文件',
+        dialogTitle: isIcs ? '选择要导入的 ICS 文件' : '选择要导入的 CSV 文件',
         type: FileType.custom,
-        allowedExtensions: ['csv', 'txt'],
+        allowedExtensions: isIcs ? ['ics'] : ['csv', 'txt'],
         withData: true,
       );
       if (picked == null) return; // 用户取消
-      final content = String.fromCharCodes(picked.files.single.bytes ?? []);
+      // CSV 与 ICS 均为 UTF-8 文本（各主流应用导出统一 UTF-8）。不能用
+      // String.fromCharCodes——它按 Latin-1 逐字节转码，中文任务标题会乱码。
+      final content = utf8.decode(
+        picked.files.single.bytes ?? const <int>[],
+        allowMalformed: true,
+      );
       if (content.trim().isEmpty) {
         WaitToast.destructive('文件内容为空');
         return;
@@ -1185,13 +1196,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 const SizedBox(height: AppDimens.space12),
                 // CSV 导入卡（迁移路径）：与其他应用迁入任务
                 SectionCard(
-                  title: '导入 CSV（迁移）',
+                  title: '导入文件（迁移）',
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
                         '从其他应用迁入任务：支持 Orbit 导出格式、Todoist 与'
-                        ' TickTick 模板。导入前先预览；项目不存在会自动创建。',
+                        ' TickTick 模板，以及 ICS 日历文件（只收 VTODO 待办）。'
+                        '导入前先预览；项目不存在会自动创建。',
                         style: TextStyle(fontSize: 12, color: colors.secondaryText),
                       ),
                       const SizedBox(height: AppDimens.space12),

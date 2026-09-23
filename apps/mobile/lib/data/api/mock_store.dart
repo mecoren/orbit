@@ -43,6 +43,10 @@ class MockStore {
   bool syncUnlocked = false;
   String syncPassword = '';
 
+  /// 同步密钥方案版本：'v1' 存量随机密钥 / 'v2' 同密码确定性派生。
+  /// 未设置密码时无元数据（`syncCryptoMetaVersion` 返 null）；升级即置 'v2'
+  String syncKeyVersion = 'v2';
+
   int get id => nextId++;
 
   /// 合并 patch：键存在即生效，值为 null 表示清空（对齐 `Option<Option<T>>`）

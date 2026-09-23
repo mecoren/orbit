@@ -177,6 +177,68 @@ void main() {
         DateTime(now.year, now.month, now.day).millisecondsSinceEpoch);
   });
 
+  testWidgets('提醒：无截止 → 今天/明天 9:00 快捷档，落库绝对时刻', (tester) async {
+    final bridge = await _openForm(tester);
+    await tester.enterText(find.byType(TextFormField).first, '带提醒任务');
+
+    await _scrollTo(tester, find.text('提醒时间'));
+    await tester.tap(find.text('提醒时间'));
+    await tester.pumpAndSettle();
+
+    // 无截止日期 → 两档 9:00 + 自定义入口（相对档基准是本地日界）
+    expect(find.text('今天 09:00'), findsOneWidget);
+    expect(find.text('明天 09:00'), findsOneWidget);
+    expect(find.text('自定义时间…'), findsOneWidget);
+
+    await tester.tap(find.text('明天 09:00'));
+    await tester.pumpAndSettle();
+
+    String two(int v) => v.toString().padLeft(2, '0');
+    final now = DateTime.now();
+    final tomorrow9 = DateTime(now.year, now.month, now.day, 9)
+        .add(const Duration(days: 1));
+    // 行回显仍是绝对日期时刻（formatDateTime 口径）
+    expect(
+      find.text('${tomorrow9.year}-${two(tomorrow9.month)}-'
+          '${two(tomorrow9.day)} 09:00'),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.byIcon(OrbitIcons.check));
+    await _settlePastMockLatency(tester);
+
+    final tasks =
+        await tester.runAsync(() => bridge.todoTaskList(const ListFilter()));
+    final task = tasks!.firstWhere((t) => t.title == '带提醒任务');
+    final reminders = await tester
+        .runAsync(() => bridge.todoReminderList(const ListFilter()));
+    final rows = reminders!
+        .where((r) => r.taskId == task.id && r.isDeleted == 0)
+        .toList();
+    expect(rows.length, 1);
+    expect(rows.single.remindAt, tomorrow9.millisecondsSinceEpoch);
+  });
+
+  testWidgets('提醒：有截止 → 相对档以截止为基准（当天 9:00 + 前推三档）', (tester) async {
+    await _openForm(tester);
+
+    await _scrollTo(tester, find.text('截止日期'));
+    await tester.tap(find
+        .descendant(of: find.byType(SectionCard), matching: find.text('明天')));
+    await tester.pumpAndSettle();
+
+    await _scrollTo(tester, find.text('提醒时间'));
+    await tester.tap(find.text('提醒时间'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('截止当天 09:00'), findsOneWidget);
+    expect(find.text('截止前 1 小时'), findsOneWidget);
+    expect(find.text('截止前 30 分钟'), findsOneWidget);
+    expect(find.text('截止前 15 分钟'), findsOneWidget);
+    // 有截止时不再出「今天/明天」日界档（基准切换为截止时刻）
+    expect(find.text('今天 09:00'), findsNothing);
+  });
+
   testWidgets('NLP 快速输入：标题 token 实时预览 chips + 保存应用剥离', (tester) async {
     final bridge = await _openForm(tester);
 

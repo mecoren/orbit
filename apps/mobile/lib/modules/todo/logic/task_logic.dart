@@ -437,6 +437,99 @@ String relativeFromNow(int ms) {
   return formatRelativeTime(ms);
 }
 
+// ---------- 行内提醒徽标（镜像桌面 reminder-meta.ts） ----------
+
+/// 行内提醒展示载荷：一条提醒 + 派生态（[fired] = 已到期且任务未完成）
+typedef DisplayReminder = ({int id, String clock, bool fired});
+
+/// HH:mm（本地时区；行内提醒徽标与通知副标题同口径）
+String formatHm(int ms) {
+  final d = DateTime.fromMillisecondsSinceEpoch(ms);
+  return '${_two(d.hour)}:${_two(d.minute)}';
+}
+
+/// 行内提醒选取（镜像桌面 `displayReminder`）：
+/// 有未来行取**最近**一条（下一个将响的时刻），全过期取**最早**一条
+/// （展示「错过了什么」而非最后一响）；已完成实例不再警示。
+///
+/// [rows] 来自 `task_reminders_projection`（core 侧已滤软删），此处仍按
+/// remind_at 升序兜底排序——契约漂移时不至于选错一条。
+DisplayReminder? displayReminder(
+  List<ProjectedReminder> rows,
+  int nowMs, {
+  required bool taskDone,
+}) {
+  if (rows.isEmpty) return null;
+  final sorted = [...rows]..sort((a, b) => a.remindAt.compareTo(b.remindAt));
+  final future = sorted.where((r) => r.remindAt > nowMs).toList();
+  final pick = future.isNotEmpty ? future.first : sorted.first;
+  return (
+    id: pick.id,
+    clock: formatHm(pick.remindAt),
+    fired: !taskDone && pick.remindAt <= nowMs,
+  );
+}
+
+// ---------- 提醒预设档（相对快捷入口） ----------
+
+/// 提醒预设锚定时刻：9:00（「截止当天 9:00」「今天/明天 9:00」共用，
+/// 与 `viewDueHour` 的 18:00 分开——提醒发生在开工时刻，截止在收工时刻）
+const int reminderPresetHour = 9;
+
+/// 提醒快捷预设（TickTick 式相对档）。
+///
+/// 提交口径不变：产物仍是**绝对毫秒时刻**（`todo_reminders.remind_at`），
+/// 本函数只负责「少几次滚动」的输入便捷层，零 schema 变更。
+///
+/// - 有截止日期 → 以截止时刻为基准：截止当天 9:00 / 前推 1 小时·30·15 分钟；
+/// - 无截止日期 → 以今天零点为基准：今天 9:00 / 明天 9:00。
+///
+/// 相同时刻的档位去重（如截止恰好是当天 9:00 时，「截止当天 9:00」与
+/// 「截止前 N 分钟」不会重复出现）；已过期的档位**不过滤**——与日期面板
+/// 允许选过去时刻同口径，用户可能就是要补记一条。
+List<({String label, int ms})> reminderPresets({int? dueDate, DateTime? now}) {
+  final n = now ?? DateTime.now();
+  final out = <({String label, int ms})>[];
+  if (dueDate != null) {
+    final due = DateTime.fromMillisecondsSinceEpoch(dueDate);
+    out
+      ..add((
+        label: '截止当天 ${_two(reminderPresetHour)}:00',
+        ms: DateTime(due.year, due.month, due.day, reminderPresetHour)
+            .millisecondsSinceEpoch,
+      ))
+      ..add((
+        label: '截止前 1 小时',
+        ms: dueDate - const Duration(hours: 1).inMilliseconds,
+      ))
+      ..add((
+        label: '截止前 30 分钟',
+        ms: dueDate - const Duration(minutes: 30).inMilliseconds,
+      ))
+      ..add((
+        label: '截止前 15 分钟',
+        ms: dueDate - const Duration(minutes: 15).inMilliseconds,
+      ));
+  } else {
+    final today = DateTime(n.year, n.month, n.day, reminderPresetHour);
+    out
+      ..add((
+        label: '今天 ${_two(reminderPresetHour)}:00',
+        ms: today.millisecondsSinceEpoch,
+      ))
+      ..add((
+        label: '明天 ${_two(reminderPresetHour)}:00',
+        ms: today.add(const Duration(days: 1)).millisecondsSinceEpoch,
+      ));
+  }
+  // 同刻去重（保留首个标签——「截止当天 9:00」优先于相对档）
+  final seen = <int>{};
+  return [
+    for (final p in out)
+      if (seen.add(p.ms)) p,
+  ];
+}
+
 // ---------- 派生判定 ----------
 
 /// 逾期：有截止日期、早于今日零点且未完成（日期段标 #F44336）
