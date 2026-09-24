@@ -7,7 +7,9 @@ import 'package:orbit/data/api/mock_orbit_bridge.dart';
 import 'package:orbit/data/providers/bridge_provider.dart';
 import 'package:orbit/modules/settings/quick_actions_page.dart';
 import 'package:orbit/modules/todo/logic/quick_actions.dart';
-import 'package:orbit/modules/todo/logic/task_logic.dart' show TaskFilterInput;
+import 'package:orbit/modules/todo/logic/task_logic.dart'
+    show TaskFilterInput, dateToMidnightMs, formatYmd;
+import 'package:orbit/modules/todo/quick_add_sheet.dart' show showQuickAddSheet;
 import 'package:orbit/modules/todo/sub_list_screen.dart';
 import 'package:orbit/shared/widgets/shadcn/orbit_fab.dart';
 import 'package:orbit/services/local_prefs.dart';
@@ -233,6 +235,31 @@ void main() {
       expect(find.text('模板'), findsOneWidget);
       expect(find.text('全屏'), findsOneWidget);
       expect(find.text('设置'), findsOneWidget);
+    });
+
+    testWidgets('initialDueDate 预填截止并回显 chip（日历长按口径）', (tester) async {
+      final due = dateToMidnightMs(
+        DateTime.now().add(const Duration(days: 3)),
+      );
+      await tester.pumpWidget(_wrap(
+        Scaffold(
+          body: Builder(
+            builder: (context) => TextButton(
+              onPressed: () =>
+                  showQuickAddSheet(context, initialDueDate: due),
+              child: const Text('开面板'),
+            ),
+          ),
+        ),
+        MockOrbitBridge(),
+      ));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('开面板'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('准备做什么？'), findsOneWidget);
+      expect(find.text(formatYmd(due)), findsOneWidget);
     });
   });
 

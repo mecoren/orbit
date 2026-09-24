@@ -7,6 +7,7 @@ import 'package:orbit/data/api/mock_orbit_bridge.dart';
 import 'package:orbit/data/providers/bridge_provider.dart';
 import 'package:orbit/modules/todo/logic/task_logic.dart';
 import 'package:orbit/modules/todo/providers/todo_providers.dart';
+import 'package:orbit/modules/todo/calendar_screen.dart';
 import 'package:orbit/modules/todo/sidebar_screen.dart';
 import 'package:orbit/modules/todo/sub_list_screen.dart';
 import 'package:orbit/shared/widgets/shadcn/orbit_fab.dart';
@@ -67,17 +68,16 @@ void main() {
     expect(folder.color, const Color(0xFF4E8CFF));
   });
 
-  testWidgets('侧栏首屏：FAB 点击弹出"添加待办"底部抽屉', (tester) async {
+  testWidgets('侧栏首屏：FAB 点击弹出快速添加面板（与列表页同一入口）', (tester) async {
     final bridge = MockOrbitBridge();
     await tester.pumpWidget(_wrap(const SidebarScreen(), bridge));
     await _settlePastMockLatency(tester);
 
-    // 一级页面右下 FAB → 新建任务表单抽屉出现
+    // 一级页面右下 FAB → 与列表页同一快速添加面板（不再是完整表单）
     await tester.tap(find.byType(OrbitFab));
     await tester.pumpAndSettle();
 
-    expect(find.text('添加待办'), findsOneWidget);
-    expect(find.text('标题 *'), findsOneWidget);
+    expect(find.text('准备做什么？'), findsOneWidget);
   });
 
   testWidgets('任务子列表：全量视图渲染任务行卡片', (tester) async {
@@ -98,6 +98,17 @@ void main() {
     );
     // 种子数据中的具体任务标题
     expect(find.text('完成移动端重构方案评审'), findsOneWidget);
+  });
+
+  testWidgets('日历页：FAB 点击弹出快速添加面板（与列表页同一入口）', (tester) async {
+    final bridge = MockOrbitBridge();
+    await tester.pumpWidget(_wrap(const CalendarScreen(), bridge));
+    await _settlePastMockLatency(tester);
+
+    await tester.tap(find.byType(OrbitFab));
+    await tester.pumpAndSettle();
+
+    expect(find.text('准备做什么？'), findsOneWidget);
   });
 
   testWidgets('任务子列表：今天视图空态文案', (tester) async {

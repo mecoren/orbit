@@ -18,9 +18,9 @@ import '../../shared/widgets/shadcn/orbit_month_calendar.dart';
 import '../../shared/widgets/shadcn/orbit_fab.dart';
 import '../../shared/widgets/shadcn/orbit_page_header.dart';
 import '../../shared/widgets/shadcn/orbit_toast.dart';
-import 'form_bottom_sheet.dart';
 import 'logic/task_logic.dart';
 import 'providers/todo_providers.dart';
+import 'quick_add_sheet.dart' show showQuickAddSheet;
 import 'year_overview_page.dart';
 import '../../core/theme/icon_map.dart';
 
@@ -141,9 +141,10 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
     }
   }
 
-  /// 长按日历某天：以该天为截止日期快捷新增（对应桌面右键）
+  /// 长按日历某天：以该天为截止日期快捷新增（与列表页同一快速添加面板，
+  /// 截止预填该天；对应桌面右键）
   void _addOnDate(DateTime date) {
-    showTodoFormSheet(
+    showQuickAddSheet(
       context,
       initialDueDate:
           DateTime(date.year, date.month, date.day).millisecondsSinceEpoch,
@@ -425,13 +426,14 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
               showBack: true,
             ),
           ),
-          // FAB：新建任务（通用表单自选日期；日格长按可预填日期）
+          // FAB：新建任务（与列表页同一快速添加面板，面板内自选日期；
+          // 日格长按预填该天为截止）
           Positioned(
             right: AppDimens.space16,
             bottom: AppDimens.gestureInsetFallback + AppDimens.space16,
             child: OrbitFab(
               accentColor: OrbitAccents.themeAccent,
-              onPressed: () => showTodoFormSheet(context),
+              onPressed: () => showQuickAddSheet(context),
             ),
           ),
         ],

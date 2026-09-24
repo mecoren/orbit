@@ -60,10 +60,16 @@ IconData quickActionIcon(QuickActionId id) => switch (id) {
 ///
 /// [defaultProjectId]/[quickView] 由入口页携入：列表页带当前项目与快捷视图，
 /// 面板内新建因此与 FAB 完整表单同口径（视图标记静默附加）。
+/// [initialDueDate] 预填截止（午夜毫秒，日历长按日格快捷新增用）。
+///
+/// **统一新建入口**：列表页 FAB/空态、侧栏 FAB（含桌面快捷方式）、日历 FAB/
+/// 日格长按的新建一律走本面板；完整表单（`showTodoFormSheet`）只留给编辑态、
+/// 面板内「全屏」展开与模板套用（notes/子任务字段快加面板承接不了）。
 Future<void> showQuickAddSheet(
   BuildContext context, {
   int? defaultProjectId,
   QuickViewKey? quickView,
+  int? initialDueDate,
 }) {
   return showModalBottomSheet<void>(
     context: context,
@@ -74,6 +80,7 @@ Future<void> showQuickAddSheet(
     builder: (_) => _QuickAddSheet(
       defaultProjectId: defaultProjectId,
       quickView: quickView,
+      initialDueDate: initialDueDate,
     ),
   );
 }
@@ -103,13 +110,16 @@ class _PendingImage {
 }
 
 class _QuickAddSheet extends ConsumerStatefulWidget {
-  const _QuickAddSheet({this.defaultProjectId, this.quickView});
+  const _QuickAddSheet({this.defaultProjectId, this.quickView, this.initialDueDate});
 
   /// 新建任务默认归属项目（null = 未分组）
   final int? defaultProjectId;
 
   /// 当前快捷视图（视图内新建自动带本视图标记）
   final QuickViewKey? quickView;
+
+  /// 预填截止（午夜毫秒；日历长按日格快捷新增用）
+  final int? initialDueDate;
 
   @override
   ConsumerState<_QuickAddSheet> createState() => _QuickAddSheetState();
@@ -129,6 +139,7 @@ class _QuickAddSheetState extends ConsumerState<_QuickAddSheet> {
   void initState() {
     super.initState();
     _projectId = widget.defaultProjectId;
+    _dueDate = widget.initialDueDate;
   }
 
   @override

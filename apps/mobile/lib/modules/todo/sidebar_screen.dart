@@ -18,11 +18,11 @@ import '../../shared/widgets/shadcn/orbit_actions_sheet.dart';
 import '../../services/shortcut_receiver.dart';
 import '../../shared/widgets/sync_status_button.dart';
 import '../../shared/widgets/shadcn/orbit_toast.dart';
-import 'form_bottom_sheet.dart';
 import 'logic/project_actions.dart';
 import 'logic/project_palette.dart';
 import 'logic/task_logic.dart';
 import 'providers/todo_providers.dart';
+import 'quick_add_sheet.dart' show showQuickAddSheet;
 import '../../core/theme/icon_map.dart';
 
 /// 侧栏首屏 /todo（docs/05 §4.1 + 移动端任务书）
@@ -61,11 +61,12 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
     super.dispose();
   }
 
-  /// 快捷方式动作落点（原生只给动作 id，语义在此收口）
+  /// 快捷方式动作落点（原生只给动作 id，语义在此收口；
+  /// 新建走与列表页同一快速添加面板）
   void _handleQuickAction(QuickAction action) {
     switch (action) {
       case QuickAction.newTask:
-        showTodoFormSheet(context);
+        showQuickAddSheet(context);
       case QuickAction.today:
         _openView(QuickViewKey.today);
       case QuickAction.search:
@@ -401,13 +402,14 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
               ],
             ),
           ),
-          // FAB：右下，一级页面直达新建任务（不携带默认项目，表单内自选）
+          // FAB：右下，一级页面直达新建（与列表页同一快速添加面板，
+          // 不携带默认项目，面板内「清单」档自选）
           Positioned(
             right: AppDimens.space16,
             bottom: AppDimens.gestureInsetFallback + AppDimens.space16,
             child: OrbitFab(
               accentColor: OrbitAccents.themeAccent,
-              onPressed: () => showTodoFormSheet(context),
+              onPressed: () => showQuickAddSheet(context),
             ),
           ),
         ],
