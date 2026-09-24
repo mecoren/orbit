@@ -681,9 +681,8 @@
   （minisign）+ 应用内更新（07 backlog #20）。
 - **版本单一来源** + `pnpm bump` / `pnpm bump:check` + 发版一致性护栏（vitest 断言五处
   清单 / 两个 lock / 应用内日志，e2e 断言关于页版本徽标）。
-- 测试规模（2026-09-24）：Rust 617 / Flutter 590（`flutter analyze` 零告警）；vitest 269
-  与 Playwright 19 为 09-19 基线数，桌面增量以 CI 为准（本机 JS 工具链不可用期间
-  未重数，见 09-23 桌面批次的环境限制备注）。
+- 测试规模（2026-09-24）：Rust 617 / vitest 377 / Flutter 590（`flutter analyze`
+  零告警）/ Playwright 19（基线数，以 CI 为准）。
 
 ### 文档与规范
 
