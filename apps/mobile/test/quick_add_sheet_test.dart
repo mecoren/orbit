@@ -300,5 +300,61 @@ void main() {
       expect(enabled.last, QuickActionId.image);
       expect(hidden.contains(QuickActionId.image), isFalse);
     });
+
+    testWidgets('横滑过程中预览图标跟手让位，松手回弹跟回', (tester) async {
+      await tester.pumpWidget(_wrap(const QuickActionsPage(), MockOrbitBridge()));
+      await tester.pumpAndSettle();
+
+      AnimatedPositioned previewMore() => tester.widget<AnimatedPositioned>(
+            find.byKey(const ValueKey('preview-more')),
+          );
+      final before = previewMore().left!;
+
+      // 按住「标签」行向左拖 120px（未过阈值不松手）：「...」应同步左移让位
+      // （本行在首屏内，直接按住；勿 ensureVisible——滚动会把顶部预览滑出
+      // sliver 缓存区，finder 即不可见）
+      final gesture =
+          await tester.startGesture(tester.getCenter(find.text('标签')));
+      // 分两次 move：第一次越过 touch slop 启动拖拽，第二次产生有效位移
+      //（与真手指连续滑动一致；单次 move 只够启动 recognizer）
+      await gesture.moveBy(const Offset(-60, 0));
+      await tester.pump();
+      await gesture.moveBy(const Offset(-60, 0));
+      await tester.pump();
+
+      expect(previewMore().left!, lessThan(before));
+
+      // 未过阈值松手 → 回弹，预览回到原位；档位归属不变
+      await gesture.up();
+      await tester.pumpAndSettle();
+      expect(previewMore().left!, before);
+      final (enabled, hidden) = QuickActions.read();
+      expect(enabled.contains(QuickActionId.label), isTrue);
+      expect(hidden.contains(QuickActionId.label), isFalse);
+    });
+
+    testWidgets('从「更多」横滑时预览尾部出现幽灵占位', (tester) async {
+      // 拉高测试面：整页无需滚动即全可见（滚动会把顶部预览滑出缓存区）
+      tester.view.physicalSize = const Size(2400, 4200);
+      tester.view.devicePixelRatio = 3.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await tester.pumpWidget(_wrap(const QuickActionsPage(), MockOrbitBridge()));
+      await tester.pumpAndSettle();
+
+      final gesture =
+          await tester.startGesture(tester.getCenter(find.text('图片')));
+      await gesture.moveBy(const Offset(60, 0));
+      await tester.pump();
+      await gesture.moveBy(const Offset(60, 0));
+      await tester.pump();
+
+      expect(find.byKey(const ValueKey('preview-ghost')), findsOneWidget);
+
+      await gesture.up();
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('preview-ghost')), findsNothing);
+    });
   });
 }

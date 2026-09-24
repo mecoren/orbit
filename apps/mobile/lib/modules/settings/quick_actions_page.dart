@@ -8,7 +8,9 @@
 ///   菜单的档（更多段为空时整卡隐藏，不留空卡）；
 /// - 行**左右滑动**在两段间移动（滑出 + 对侧淡入，预览图标同步滑到新槽位），
 ///   与行内圆形加/减按钮同语义（快捷路径）；滑动方向不区分左右，归属只由
-///   所在卡片决定；
+///   所在卡片决定。**滑动过程中预览跟手**：`Dismissible.onUpdate` 的手势进度
+///   按阈值归一后直接驱动预览图标让位/腾槽（滑出段淡出让位，滑入段幽灵图标
+///   淡入占位），过阈值时一次触感确认，取消回弹则沿原路跟回；
 /// - 拖动右侧手柄在**段内**调整顺序（抬起放大 + 轻触感反馈，与任务行同口径）。
 ///
 /// 档位集合由 [QuickActionId] 封闭定义（只收录本仓真有对应能力的操作），
@@ -34,6 +36,32 @@ import '../todo/quick_add_sheet.dart' show quickActionIcon;
 /// 预览行单个图标槽宽（图标 22 + 间距 12），供 `AnimatedPositioned` 定位
 const double _previewSlot = 34;
 
+/// 横滑换段的滑动阈值（行宽占比）：`Dismissible.dismissThresholds` 与预览
+/// 跟手位移共用这一个常量——手势进度（行位移占宽比 0…1）除以它即预览插值
+/// 进度（0…1，钳制），1 = 落位后的最终布局。
+const double _swipeThreshold = 0.4;
+
+/// 横滑过程中的实时快照（驱动预览图标跟手位移）。
+///
+/// 数据源 = `Dismissible.onUpdate`（它监听行位移控制器：手指拖动、松手回弹、
+/// 惯性滑出都会持续回调，进度归零即自然复位，无需定时器收尾）。
+class _SwipeLive {
+  const _SwipeLive({
+    required this.id,
+    required this.fromEnabled,
+    required this.progress,
+  });
+
+  /// 被横滑的档位
+  final QuickActionId id;
+
+  /// 它来自工具栏段（true）还是「更多」段（false）
+  final bool fromEnabled;
+
+  /// 预览插值进度 0…1（= 手势进度 ÷ [_swipeThreshold] 后钳制）
+  final double progress;
+}
+
 class QuickActionsPage extends StatefulWidget {
   const QuickActionsPage({super.key});
 
@@ -47,21 +75,24 @@ class _QuickActionsPageState extends State<QuickActionsPage> {
   /// 抬起中的档位（预览行对应图标着强调色 + 行文案加粗；落位即清）
   QuickActionId? _lifting;
 
-  /// 首帧抑制入场动画：页面初建时各行已在位，不做淡入；
-  /// 首帧后置 false，此后换段落位的新行才播淡入滑入。
-  bool _suppressEnter = true;
+  /// 横滑跟手快照（只重建预览行，不碰列表；落位提交/回弹归零时清）
+  final ValueNotifier<_SwipeLive?> _swipeLive = ValueNotifier(null);
+
+  /// 各档位的初始归属（打开页面时快照）：入场动画只播给**换段落位**的行——
+  /// 页面初建、滚动重建都不播（否则滑出缓存区再回来会重播淡入）。
+  /// 每次换段提交后同步更新，故二次换段仍能播。
+  late Set<QuickActionId> _initiallyEnabled;
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _suppressEnter = false;
-    });
+    _initiallyEnabled = Set.of(QuickActions.read().$1);
   }
 
   @override
   void dispose() {
     _scrollController.dispose();
+    _swipeLive.dispose();
     super.dispose();
   }
 
@@ -86,8 +117,14 @@ class _QuickActionsPageState extends State<QuickActionsPage> {
   void _moveAcross(QuickActionId id, bool toEnabled) {
     HapticFeedback.selectionClick();
     unawaited(QuickActions.setEnabled(id, toEnabled));
+    // 同步归属快照：落位行播入场动画，其余行不受影响
+    toEnabled ? _initiallyEnabled.add(id) : _initiallyEnabled.remove(id);
     setState(() {});
   }
+
+  /// 该行是否刚换段落位（相对打开页面时的归属）：是才播入场动画。
+  bool _isNewlyPlaced(QuickActionId id, bool inEnabledSection) =>
+      _initiallyEnabled.contains(id) != inEnabledSection;
 
   /// 单档在两段间移动（加号 = 提到工具栏尾部，减号 = 收回「更多」尾部）
   void _toggle(QuickActionId id, bool currentlyEnabled) {
@@ -214,13 +251,44 @@ class _QuickActionsPageState extends State<QuickActionsPage> {
           direction: DismissDirection.horizontal,
           movementDuration: AppMotion.normal,
           resizeDuration: AppMotion.normal,
+          dismissThresholds: const {
+            DismissDirection.startToEnd: _swipeThreshold,
+            DismissDirection.endToStart: _swipeThreshold,
+          },
           background: _swipeBackground(colors, toEnabled: !enabledSection),
           secondaryBackground:
               _swipeBackground(colors, toEnabled: !enabledSection),
           confirmDismiss: (_) async => true,
-          onDismissed: (_) => _moveAcross(id, !enabledSection),
+          // 跟手驱动预览：手势进度 ÷ 阈值 = 预览插值进度。回弹/落位动画的每帧
+          // 都会回调（行位移控制器的 listener），进度归零即复位，无需收尾。
+          onUpdate: (details) {
+            if (details.reached && !details.previousReached) {
+              HapticFeedback.selectionClick();
+            }
+            final p =
+                (details.progress / _swipeThreshold).clamp(0.0, 1.0);
+            final cur = _swipeLive.value;
+            if (p < 0.02) {
+              if (cur != null) _swipeLive.value = null;
+              return;
+            }
+            if (cur == null ||
+                cur.id != id ||
+                cur.fromEnabled != enabledSection ||
+                (cur.progress - p).abs() > 0.005) {
+              _swipeLive.value = _SwipeLive(
+                id: id,
+                fromEnabled: enabledSection,
+                progress: p,
+              );
+            }
+          },
+          onDismissed: (_) {
+            _swipeLive.value = null;
+            _moveAcross(id, !enabledSection);
+          },
           child: _EnterTransition(
-            animate: !_suppressEnter,
+            animate: _isNewlyPlaced(id, enabledSection),
             child: _actionRow(
               colors,
               id: id,
@@ -280,8 +348,11 @@ class _QuickActionsPageState extends State<QuickActionsPage> {
 
   /// 面板形态预览（只读）：输入框占位 + 工具栏图标行 + 发送钮。
   ///
-  /// 图标行用 `AnimatedPositioned` 按槽位定位——档位增减或换序时图标**平滑
-  /// 滑到新槽位**（而非整行重绘），这是"上面图标跟着动"的动画来源。
+  /// 图标行用 `AnimatedPositioned` 按槽位定位——档位增减、换序、横滑换段时
+  /// 图标**平滑滑到新槽位**（而非整行重绘），这是"上面图标跟着动"的动画来源。
+  /// 横滑过程中 [_swipeLive] 逐帧给出插值进度：滑出段的图标淡出、后项实时
+  /// 让位；滑入段在尾部用幽灵图标淡入占位。落位提交的布局与进度 1.0 时完全
+  /// 一致，故提交瞬间无跳变；取消回弹则沿同一插值原路跟回。
   Widget _preview(AppColorSet colors, List<QuickActionId> enabled) {
     return Container(
       padding: const EdgeInsets.fromLTRB(
@@ -308,40 +379,13 @@ class _QuickActionsPageState extends State<QuickActionsPage> {
               Expanded(
                 child: SingleChildScrollView(
                   scrollDirection: Axis.horizontal,
-                  child: SizedBox(
-                    width: (enabled.length + 1) * _previewSlot,
-                    height: AppDimens.iconSizeMd,
-                    child: Stack(
-                      children: [
-                        for (var i = 0; i < enabled.length; i++)
-                          AnimatedPositioned(
-                            // key = 档位身份：换序时同一图标滑向新槽位
-                            key: ValueKey(enabled[i]),
-                            duration: AppMotion.normal,
-                            curve: AppMotion.standard,
-                            left: i * _previewSlot,
-                            top: 0,
-                            child: Icon(
-                              quickActionIcon(enabled[i]),
-                              size: AppDimens.iconSizeMd,
-                              color: _lifting == enabled[i]
-                                  ? OrbitAccents.themeAccent
-                                  : colors.iconText,
-                            ),
-                          ),
-                        AnimatedPositioned(
-                          key: const ValueKey('preview-more'),
-                          duration: AppMotion.normal,
-                          curve: AppMotion.standard,
-                          left: enabled.length * _previewSlot,
-                          top: 0,
-                          child: Icon(
-                            OrbitIcons.moreVertical,
-                            size: AppDimens.iconSizeMd,
-                            color: colors.iconText,
-                          ),
-                        ),
-                      ],
+                  child: ValueListenableBuilder<_SwipeLive?>(
+                    valueListenable: _swipeLive,
+                    builder: (context, live, _) => SizedBox(
+                      width: _previewWidth(enabled, live),
+                      height: AppDimens.iconSizeMd,
+                      child:
+                          Stack(children: _previewIcons(colors, enabled, live)),
                     ),
                   ),
                 ),
@@ -365,6 +409,95 @@ class _QuickActionsPageState extends State<QuickActionsPage> {
         ],
       ),
     );
+  }
+
+  /// 预览行宽：跟手过程中按插值进度实时伸缩，与落位后的真实宽度在两端对齐。
+  double _previewWidth(List<QuickActionId> enabled, _SwipeLive? live) {
+    var slots = (enabled.length + 1).toDouble();
+    if (live != null) {
+      if (live.fromEnabled && enabled.contains(live.id)) {
+        slots -= live.progress;
+      } else if (!live.fromEnabled && !enabled.contains(live.id)) {
+        slots += live.progress;
+      }
+    }
+    return slots * _previewSlot;
+  }
+
+  /// 预览图标（含「...」)：常态按槽位排布；跟手过程中滑出项淡出、后项让位，
+  /// 滑入项以幽灵图标在尾部淡入占位（落位即扶正，无跳变）。
+  List<Widget> _previewIcons(
+    AppColorSet colors,
+    List<QuickActionId> enabled,
+    _SwipeLive? live,
+  ) {
+    // 落位提交后 id 已换段：防御性忽略过期快照（按常态排布）
+    var outIndex = -1;
+    var swipeIn = false;
+    if (live != null) {
+      if (live.fromEnabled) {
+        outIndex = enabled.indexOf(live.id);
+      } else {
+        swipeIn = !enabled.contains(live.id);
+      }
+    }
+    final p = live?.progress ?? 0;
+    final icons = <Widget>[
+      for (var i = 0; i < enabled.length; i++)
+        AnimatedPositioned(
+          // key = 档位身份：换序/换段时同一图标滑向新槽位
+          key: ValueKey(enabled[i]),
+          duration: AppMotion.normal,
+          curve: AppMotion.standard,
+          left: i * _previewSlot -
+              (outIndex >= 0 && i > outIndex ? p * _previewSlot : 0),
+          top: 0,
+          child: AnimatedOpacity(
+            duration: AppMotion.fast,
+            curve: AppMotion.standard,
+            opacity: outIndex == i ? 1 - p : 1,
+            child: Icon(
+              quickActionIcon(enabled[i]),
+              size: AppDimens.iconSizeMd,
+              color: _lifting == enabled[i]
+                  ? OrbitAccents.themeAccent
+                  : colors.iconText,
+            ),
+          ),
+        ),
+      if (swipeIn)
+        AnimatedPositioned(
+          key: const ValueKey('preview-ghost'),
+          duration: AppMotion.normal,
+          curve: AppMotion.standard,
+          left: enabled.length * _previewSlot,
+          top: 0,
+          child: AnimatedOpacity(
+            duration: AppMotion.fast,
+            curve: AppMotion.standard,
+            opacity: p,
+            child: Icon(
+              quickActionIcon(live!.id),
+              size: AppDimens.iconSizeMd,
+              color: colors.iconText,
+            ),
+          ),
+        ),
+      AnimatedPositioned(
+        key: const ValueKey('preview-more'),
+        duration: AppMotion.normal,
+        curve: AppMotion.standard,
+        left: (enabled.length + (swipeIn ? p : 0) - (outIndex >= 0 ? p : 0)) *
+            _previewSlot,
+        top: 0,
+        child: Icon(
+          OrbitIcons.moreVertical,
+          size: AppDimens.iconSizeMd,
+          color: colors.iconText,
+        ),
+      ),
+    ];
+    return icons;
   }
 
   Widget _actionRow(
@@ -442,7 +575,7 @@ class _QuickActionsPageState extends State<QuickActionsPage> {
   }
 }
 
-/// 换段落位行的入场过渡（淡入 + 轻微滑入；首帧抑制，不打扰页面转场）。
+/// 换段落位行的入场过渡（淡入 + 轻微滑入；只在跨段移动时挂载，滚动重建不播）。
 class _EnterTransition extends StatelessWidget {
   const _EnterTransition({required this.animate, required this.child});
 
