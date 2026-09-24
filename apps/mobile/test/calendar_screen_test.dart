@@ -120,7 +120,7 @@ void main() {
     expect(find.text('班'), findsWidgets);
   });
 
-  testWidgets('长按日格：弹出新增表单且截止日期预填为该日', (tester) async {
+  testWidgets('长按日格：弹出快速添加面板且截止预填为该日', (tester) async {
     final bridge = _seededBridge();
     await tester.pumpWidget(_wrap(const SizedBox(), bridge));
     await settle(tester);
@@ -131,28 +131,13 @@ void main() {
     await tester.longPress(dayText, warnIfMissed: false);
     await tester.pumpAndSettle();
 
-    // 新增表单打开（标题「添加待办」）：
-    expect(find.text('添加待办'), findsOneWidget);
+    // 统一新建入口：快速添加面板打开（不再是完整表单）
+    expect(find.text('准备做什么？'), findsOneWidget);
 
-    // 表单「日期与提醒」区在懒列表（ListView）下方，v3 信息区更高后落在视口外
-    // 未构建——先滚到可见再断言预填（抽屉 ListView 是抽屉内第一个 Scrollable，
-    // 其余 Scrollable 来自输入框自身）
-    await tester.scrollUntilVisible(
-      find.text('截止日期'),
-      200,
-      scrollable: find
-          .descendant(
-            of: find.byType(BottomSheet),
-            matching: find.byType(Scrollable),
-          )
-          .first,
-    );
-
-    // 预填断言：截止日期与开始日期都显示今天（长按今天格预填截止 +
-    // 新增默认开始日期=今天，同一天 → 同一字符串出现两次）
+    // 截止预填今天：chip 回显今天日期
     final ymd =
         '${today.year.toString().padLeft(4, '0')}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
-    expect(find.text(ymd), findsNWidgets(2));
+    expect(find.text(ymd), findsOneWidget);
   });
 
   testWidgets('年视图：点月份标题进入，干支生肖 + 迷你月历 + 点日期返回', (tester) async {

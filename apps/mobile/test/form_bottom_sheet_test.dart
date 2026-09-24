@@ -7,7 +7,6 @@ import 'package:orbit/data/api/mock_orbit_bridge.dart';
 import 'package:orbit/data/providers/bridge_provider.dart';
 import 'package:orbit/modules/todo/form_bottom_sheet.dart';
 import 'package:orbit/modules/todo/logic/task_logic.dart' show QuickViewKey;
-import 'package:orbit/modules/todo/sidebar_screen.dart';
 import 'package:orbit/shared/widgets/shadcn/orbit_section_card.dart';
 import 'support/orbit_test_app.dart';
 import 'package:orbit/core/theme/icon_map.dart';
@@ -23,12 +22,23 @@ Future<void> _settlePastMockLatency(WidgetTester tester) async {
   await tester.pumpAndSettle();
 }
 
-/// 打开侧栏首屏并点击 FAB，返回注入的 bridge
+/// 直接打开完整表单（表单字段测试不依赖入口接线；新建统一入口走快加面板，
+/// 侧栏 FAB 已不再直达表单，见 todo_screens_smoke_test 的接线用例）
 Future<MockOrbitBridge> _openForm(WidgetTester tester) async {
   final bridge = MockOrbitBridge();
-  await tester.pumpWidget(_wrap(const SidebarScreen(), bridge));
+  await tester.pumpWidget(_wrap(
+    Scaffold(
+      body: Builder(
+        builder: (context) => TextButton(
+          onPressed: () => showTodoFormSheet(context),
+          child: const Text('开表单'),
+        ),
+      ),
+    ),
+    bridge,
+  ));
   await _settlePastMockLatency(tester);
-  await tester.tap(find.byIcon(OrbitIcons.add));
+  await tester.tap(find.text('开表单'));
   await tester.pumpAndSettle();
   return bridge;
 }
