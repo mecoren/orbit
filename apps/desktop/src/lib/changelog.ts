@@ -8,7 +8,8 @@
  *
  * 提炼口径：`git log v<上一 tag>..HEAD --oneline` 按功能合并同类提交，
  * 忽略 docs/chore/style 等过程性噪声。首版 0.1.0 由 2026-08-23 初始提交至
- * 2026-09-19 的全部 453 次提交归并总结（明细见 CHANGELOG.md）。
+ * 2026-09-24 的全部 543 次提交归并总结（222 feat / 130 fix / 32 perf / 84 docs，
+ * 明细见 CHANGELOG.md）。
  */
 
 export type ChangeCategory = "feature" | "fix" | "refactor" | "chore";
@@ -29,7 +30,7 @@ export interface ChangelogVersion {
 export const CHANGELOG_VERSIONS: ChangelogVersion[] = [
   {
     version: "0.1.0",
-    date: "2026-09-19",
+    date: "2026-09-24",
     summary:
       "首个版本：本地优先 + 端到端加密的跨平台待办——桌面与移动双端全功能、云同步/备份、附件、统计与 ICS/CSV 数据出口一次到位",
     changes: [
@@ -132,6 +133,31 @@ export const CHANGELOG_VERSIONS: ChangelogVersion[] = [
         description: "桌面常驻：托盘 + 关窗驻留、窄窗侧栏自适应折叠、开机自启动（--hidden 静默驻留托盘，不弹主窗）",
       },
       {
+        category: "feature",
+        description:
+          "移动端快速添加面板：底部抽屉统一新建入口（侧栏/日历/快捷方式同源），档位锚点卡片 + 选中态落图标 + 「编辑操作」设置页（跨段直拖、拖拽实时预览）",
+      },
+      {
+        category: "feature",
+        description:
+          "移动端页头下拉面板 + 「编辑项目」整页 + 每项目视图档；任务列表重排（左右两列、优先级勾选框描边、卡片化、已完成折叠卡、长按整行拖拽）",
+      },
+      {
+        category: "feature",
+        description:
+          "移动端 TickTick 对标：ICS 导入、提醒相对档、任务行元信息、密钥治理、日历议程档、修改后立即同步、日历更新时刻可配、附件缩略图、静态快捷方式",
+      },
+      {
+        category: "feature",
+        description:
+          "移动端抽屉口径收口：确认/输入/密码/日期选择器统一底部抽屉（AlertDialog 清零）；字号档改全局 TextScaler，下拉刷新、骨架屏与动效对齐微软 To-Do",
+      },
+      {
+        category: "feature",
+        description:
+          "桌面补齐：设置页「日历」分类、提醒相对档、更新兜底出口、备份设备标识、同步账本卡、关联徽标、重复完成推进提示",
+      },
+      {
         category: "refactor",
         description:
           "性能：双端全量虚拟化 + 路由懒加载 + vendor 分包（首屏 chunk 985KB → 63KB）+ 图标字体子集化（5.1MB → 7KB）；逾期置顶段并入虚拟流，万级驻留 76MB → 37MB",
@@ -164,6 +190,11 @@ export const CHANGELOG_VERSIONS: ChangelogVersion[] = [
         category: "fix",
         description:
           "本地与通知链：SQLCipher 多连接读取密文隐患（PRAGMA 逐连接注入）、KeyMismatch 恢复引导失效、Windows 通知身份（AUMID）、附件图片预览 blob 泄漏",
+      },
+      {
+        category: "fix",
+        description:
+          "移动端修复：提醒推迟落库（推迟后提醒不再丢失）、撤销浮层到期自动收、多选崩屏与逾期行重复、长按拖拽误弹菜单、日历翻月错位",
       },
       {
         category: "chore",
