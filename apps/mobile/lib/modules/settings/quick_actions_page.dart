@@ -11,7 +11,9 @@
 ///   所在卡片决定。**滑动过程中预览跟手**：`Dismissible.onUpdate` 的手势进度
 ///   按阈值归一后直接驱动预览图标让位/腾槽（滑出段淡出让位，滑入段幽灵图标
 ///   淡入占位），过阈值时一次触感确认，取消回弹则沿原路跟回；
-/// - 拖动右侧手柄在**段内**调整顺序（抬起放大 + 轻触感反馈，与任务行同口径）。
+/// - 拖动右侧手柄排序与跨段直移（抬起放大 + 轻触感反馈，与任务行同口径；
+///   手指可在两张卡片之间直拖：悬停段/槽位实时映射，预览按落位结果预演，
+///   跨段翻越时触感确认，松手即提交；落位行挂一次入场动画）。
 ///
 /// 档位集合由 [QuickActionId] 封闭定义（只收录本仓真有对应能力的操作），
 /// 存 [LocalPrefs] 本机偏好——不进 DB、不进同步。
@@ -75,19 +77,37 @@ class _QuickActionsPageState extends State<QuickActionsPage> {
   /// 抬起中的档位（预览行对应图标着强调色 + 行文案加粗；落位即清）
   QuickActionId? _lifting;
 
+  /// 抬起项来自工具栏段（true）还是「更多」段（false）
+  bool _liftingFromEnabled = true;
+
+  /// 抬起拖拽中的悬停槽位（[_hoverSection] 内的序号）：拖拽排序时预览按此
+  /// 实时重排；落位提交/取消即清（`onReorderEnd`）。
+  int? _hoverSlot;
+
+  /// 手指当前所在的段（true = 工具栏段，false =「更多」段，null = 都不在）：
+  /// 与来源段不同即跨段拖拽，落点段决定提交去向，预览实时预演落位结果。
+  bool? _hoverSection;
+
+  /// 拖拽中最后一个指针位置（落点判定用；松手瞬间即上一次 move 的位置）。
+  Offset? _lastPointer;
+
+  /// 本次拖拽落点已提交（`onReorderItem` 与 `onReorderEnd` 都会到，用它防双提交）
+  bool _dropHandled = false;
+
+  /// 拖拽开始时两段的长度快照（拖拽中提交前长度不变，槽位钳制用，避免逐帧读配置）
+  (int, int)? _dragLens;
+
+  /// 段列表容器 key（悬停槽位定位用：手指全局坐标 → 列表局部 Y → 槽位；
+  /// 行高等 `touchTarget`，直接整除）。
+  final _enabledListKey = GlobalKey();
+  final _hiddenListKey = GlobalKey();
+
   /// 横滑跟手快照（只重建预览行，不碰列表；落位提交/回弹归零时清）
   final ValueNotifier<_SwipeLive?> _swipeLive = ValueNotifier(null);
 
-  /// 各档位的初始归属（打开页面时快照）：入场动画只播给**换段落位**的行——
-  /// 页面初建、滚动重建都不播（否则滑出缓存区再回来会重播淡入）。
-  /// 每次换段提交后同步更新，故二次换段仍能播。
-  late Set<QuickActionId> _initiallyEnabled;
-
-  @override
-  void initState() {
-    super.initState();
-    _initiallyEnabled = Set.of(QuickActions.read().$1);
-  }
+  /// 刚换段落位的档位：落位行播一次入场动画（淡入 + 滑入），播完即清——
+  /// 页面初建、滚动重建都不播（滚动必然发生在后续帧，清掉后重建不再重播）。
+  final Set<QuickActionId> _arrived = {};
 
   @override
   void dispose() {
@@ -96,35 +116,90 @@ class _QuickActionsPageState extends State<QuickActionsPage> {
     super.dispose();
   }
 
-  /// 段内重排（新顺序直接落库；预览行图标滑到新槽位）
+  /// 段内重排落点（`onReorderItem`）：落点段决定提交去向——
+  /// 落回本段即段内重排，落在另一段即跨段搬移（拖拽中手指可跨过卡片边界）。
   void _onReorderEnabled(int oldIndex, int newIndex) {
-    final (enabled, hidden) = QuickActions.read();
-    final reordered = reorderWithinSection(enabled, oldIndex, newIndex);
-    unawaited(QuickActions.write(reordered, hidden));
-    setState(() => _lifting = null);
+    _commitDrop(
+      sourceEnabled: true,
+      oldIndex: oldIndex,
+      newIndex: newIndex,
+    );
   }
 
-  /// 段内重排（「更多」段；工具栏预览不受影响）
+  /// 段内重排落点（「更多」段；去向判定同上）
   void _onReorderHidden(int oldIndex, int newIndex) {
+    _commitDrop(
+      sourceEnabled: false,
+      oldIndex: oldIndex,
+      newIndex: newIndex,
+    );
+  }
+
+  /// 拖拽落点统一提交：按松手位置所在段路由（跨段即搬移，同段即重排）。
+  void _commitDrop({
+    required bool sourceEnabled,
+    required int oldIndex,
+    required int newIndex,
+  }) {
+    if (_dropHandled) return;
+    _dropHandled = true;
+    final dropSection = _locate(_lastPointer)?.$1 ?? sourceEnabled;
+    if (dropSection == sourceEnabled) {
+      final (enabled, hidden) = QuickActions.read();
+      if (sourceEnabled) {
+        final reordered = reorderWithinSection(enabled, oldIndex, newIndex);
+        unawaited(QuickActions.write(reordered, hidden));
+      } else {
+        final reordered = reorderWithinSection(hidden, oldIndex, newIndex);
+        unawaited(QuickActions.write(enabled, reordered));
+      }
+    } else {
+      final id = _lifting;
+      if (id != null) {
+        // 跨段搬移：落到悬停槽位（无悬停记录时追加尾部）
+        final lens = _dragLens;
+        var slot = dropSection
+            ? (lens?.$1 ?? 0)
+            : (lens?.$2 ?? 0);
+        if (_hoverSection == dropSection && _hoverSlot != null) {
+          slot = _hoverSlot!;
+        }
+        _commitCrossMove(id, sourceEnabled, slot);
+      }
+    }
+    setState(() {
+      _lifting = null;
+      _hoverSlot = null;
+      _hoverSection = null;
+    });
+  }
+
+  /// 跨段搬移提交（拖拽落到另一段 / 滑动换段的落位都走这里，按槽位插入，
+  /// 不是追加尾部；落位行挂一次入场动画）。
+  void _commitCrossMove(QuickActionId id, bool fromEnabled, int destSlot) {
     final (enabled, hidden) = QuickActions.read();
-    final reordered = reorderWithinSection(hidden, oldIndex, newIndex);
-    unawaited(QuickActions.write(enabled, reordered));
-    setState(() => _lifting = null);
+    final src = fromEnabled ? enabled : hidden;
+    final dst = fromEnabled ? hidden : enabled;
+    src.remove(id);
+    dst.insert(destSlot.clamp(0, dst.length), id);
+    unawaited(QuickActions.write(
+      fromEnabled ? src : dst,
+      fromEnabled ? dst : src,
+    ));
+    _arrived.add(id);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _arrived.remove(id));
   }
 
   /// 行在两段间移动（滑动换段与加/减按钮的统一出口）：
   /// 启用 → 追加到「更多」尾部，反之追加到工具栏尾部（各自相对顺序不乱）。
+  /// 落位行挂一次入场动画（本帧 build 即起播，播完后清标记，滚动重建不重播）。
   void _moveAcross(QuickActionId id, bool toEnabled) {
     HapticFeedback.selectionClick();
     unawaited(QuickActions.setEnabled(id, toEnabled));
-    // 同步归属快照：落位行播入场动画，其余行不受影响
-    toEnabled ? _initiallyEnabled.add(id) : _initiallyEnabled.remove(id);
+    _arrived.add(id);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _arrived.remove(id));
     setState(() {});
   }
-
-  /// 该行是否刚换段落位（相对打开页面时的归属）：是才播入场动画。
-  bool _isNewlyPlaced(QuickActionId id, bool inEnabledSection) =>
-      _initiallyEnabled.contains(id) != inEnabledSection;
 
   /// 单档在两段间移动（加号 = 提到工具栏尾部，减号 = 收回「更多」尾部）
   void _toggle(QuickActionId id, bool currentlyEnabled) {
@@ -139,7 +214,15 @@ class _QuickActionsPageState extends State<QuickActionsPage> {
     return Scaffold(
       body: Stack(
         children: [
-          ListView(
+          NotificationListener<ScrollNotification>(
+            // 拖拽中页面被自动滚动时内容在手指下移动，按最后指针位置重定位
+            onNotification: (n) {
+              if (_lifting != null && n is ScrollUpdateNotification) {
+                _refreshHover();
+              }
+              return false;
+            },
+            child: ListView(
             controller: _scrollController,
             padding: EdgeInsets.only(
               top: MediaQuery.of(context).padding.top +
@@ -150,14 +233,20 @@ class _QuickActionsPageState extends State<QuickActionsPage> {
               bottom: AppDimens.gestureInsetFallback + AppDimens.space32,
             ),
             children: [
-              _preview(colors, enabled),
+              _preview(colors, _liveOrder(enabled)),
               const SizedBox(height: AppDimens.cardGap),
               SectionCard(
                 title: '编辑操作',
                 child: enabled.isEmpty
-                    ? _emptyHint(colors, '全部收进了「更多」，工具栏只剩「...」入口。')
+                    // 空段也挂定位 key：更多段的行可直接拖进来建首位
+                    ? SizedBox(
+                        key: _enabledListKey,
+                        child: _emptyHint(colors,
+                            '全部收进了「更多」，工具栏只剩「...」入口。'),
+                      )
                     : _sectionList(
                         colors,
+                        listKey: _enabledListKey,
                         items: enabled,
                         enabledSection: true,
                         onReorder: _onReorderEnabled,
@@ -169,6 +258,7 @@ class _QuickActionsPageState extends State<QuickActionsPage> {
                   title: '更多',
                   child: _sectionList(
                     colors,
+                    listKey: _hiddenListKey,
                     items: hidden,
                     enabledSection: false,
                     onReorder: _onReorderHidden,
@@ -178,7 +268,7 @@ class _QuickActionsPageState extends State<QuickActionsPage> {
               const SizedBox(height: AppDimens.cardGap),
               Text(
                 '左右滑动行可在「编辑操作」与「更多」之间移动，也可用行内加减按钮；'
-                '拖动右侧手柄调整段内顺序，上方预览实时跟随。',
+                '按住右侧手柄可直接拖到另一段（含跨卡片），上方预览实时跟随。',
                 style: TextStyle(
                   fontSize: 12,
                   height: 1.5,
@@ -186,6 +276,7 @@ class _QuickActionsPageState extends State<QuickActionsPage> {
                 ),
               ),
             ],
+            ),
           ),
           Positioned(
             top: 0,
@@ -198,15 +289,116 @@ class _QuickActionsPageState extends State<QuickActionsPage> {
     );
   }
 
+  /// 拖拽中指针定位：返回手指所在的段与槽位（行高等 `touchTarget` 整除；
+  /// 上下各放宽半行，落点判定不苛刻）。
+  ///
+  /// 「更多」段为空（无卡）且指针在工具栏段下方时，视为更多段首位——
+  /// 空段也能被拖拽直建。
+  (bool, int)? _locate(Offset? global) {
+    if (global == null) return null;
+    final lens = _dragLens;
+    const tolerance = AppDimens.touchTarget / 2;
+    final hBox =
+        _hiddenListKey.currentContext?.findRenderObject() as RenderBox?;
+    if (hBox != null && hBox.hasSize) {
+      final rect = hBox.localToGlobal(Offset.zero) & hBox.size;
+      if (_expanded(rect, tolerance).contains(global)) {
+        return (false, _slotIn(rect, global, lens?.$2 ?? 0));
+      }
+    }
+    final eBox =
+        _enabledListKey.currentContext?.findRenderObject() as RenderBox?;
+    if (eBox != null && eBox.hasSize) {
+      final rect = eBox.localToGlobal(Offset.zero) & eBox.size;
+      if (_expanded(rect, tolerance).contains(global)) {
+        return (true, _slotIn(rect, global, lens?.$1 ?? 0));
+      }
+      if ((lens?.$2 ?? 1) == 0 && global.dy > rect.bottom + tolerance) {
+        return (false, 0);
+      }
+    }
+    return null;
+  }
+
+  /// 列表局部 Y → 槽位（允许等于长度，即尾后追加位）
+  int _slotIn(Rect rect, Offset global, int length) {
+    if (length <= 0) return 0;
+    return ((global.dy - rect.top) / AppDimens.touchTarget)
+        .floor()
+        .clamp(0, length);
+  }
+
+  Rect _expanded(Rect rect, double tolerance) => Rect.fromLTRB(
+        rect.left - tolerance,
+        rect.top - tolerance,
+        rect.right + tolerance,
+        rect.bottom + tolerance,
+      );
+
+  void _onDragMove(Offset global) {
+    if (_lifting == null) return;
+    _lastPointer = global;
+    _refreshHover();
+  }
+
+  /// 按最后指针位置刷新悬停段/槽位（手指移动与拖拽中页面滚动共用；
+  /// 跨段翻越时给一次触感确认）。
+  void _refreshHover() {
+    if (_lifting == null) return;
+    final located = _locate(_lastPointer);
+    final section = located?.$1;
+    final slot = located?.$2;
+    if (section != _hoverSection || slot != _hoverSlot) {
+      if (section != null && section != _hoverSection) {
+        HapticFeedback.selectionClick();
+      }
+      setState(() {
+        _hoverSection = section;
+        _hoverSlot = slot;
+      });
+    }
+  }
+
+  /// 拖拽排序中的实时顺序（仅工具栏段驱动预览；「更多」段拖拽不影响工具栏）。
+  ///
+  /// - 本段内：抬起项按悬停槽位重排；
+  /// - 悬停在另一段：工具栏段预演落位结果（拖走即闭合缺口，拖入即按槽位插入）；
+  /// - 手指在两段之外：保持原序（视同取消预演）。
+  List<QuickActionId> _liveOrder(List<QuickActionId> enabled) {
+    final id = _lifting;
+    if (id == null) return enabled;
+    final hover = _hoverSection;
+    final slot = _hoverSlot ?? 0;
+    if (_liftingFromEnabled) {
+      if (hover == null) return enabled;
+      final order = List<QuickActionId>.of(enabled)..remove(id);
+      if (hover) order.insert(slot.clamp(0, order.length), id);
+      return order;
+    }
+    if (hover == true) {
+      final order = List<QuickActionId>.of(enabled);
+      order.insert(slot.clamp(0, order.length), id);
+      return order;
+    }
+    return enabled;
+  }
+
   /// 单段可拖列表：行体横滑换段（`Dismissible`），手柄纵拖排序
   ///（`buildDefaultDragHandles: false`，手势互不抢占）。
+  ///纵拖拾起后手指 Y 实时映射悬停槽位，顶部预览按此重排（落位即所见）。
   Widget _sectionList(
     AppColorSet colors, {
+    required GlobalKey listKey,
     required List<QuickActionId> items,
     required bool enabledSection,
     required void Function(int oldIndex, int newIndex) onReorder,
   }) {
-    return ReorderableListView.builder(
+    return Listener(
+      key: listKey,
+      // 裸指针事件（竞技场之前）：重排拖拽中也照常收到，不干扰手势归属；
+      // 两段共用同一定位，手指跨过卡片边界即跨段预演
+      onPointerMove: (e) => _onDragMove(e.position),
+      child: ReorderableListView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       buildDefaultDragHandles: false,
@@ -215,11 +407,42 @@ class _QuickActionsPageState extends State<QuickActionsPage> {
       // 拾起 / 落位各一次轻触感反馈 + 抬起放大（与任务行/项目行同口径）
       onReorderStart: (index) {
         HapticFeedback.selectionClick();
-        setState(() => _lifting = items[index]);
+        final (enabled, hidden) = QuickActions.read();
+        setState(() {
+          _lifting = items[index];
+          _liftingFromEnabled = enabledSection;
+          _hoverSection = enabledSection;
+          _hoverSlot = index;
+          _lastPointer = null;
+          _dropHandled = false;
+          _dragLens = (enabled.length, hidden.length);
+        });
       },
       onReorderEnd: (_) {
         HapticFeedback.selectionClick();
-        if (_lifting != null) setState(() => _lifting = null);
+        // 兜底：落点回调未覆盖（如拖拽被取消）时按最后指针位置再路由一次
+        if (!_dropHandled) {
+          final dropSection = _locate(_lastPointer)?.$1 ?? _liftingFromEnabled;
+          final id = _lifting;
+          if (id != null && dropSection != _liftingFromEnabled) {
+            var slot = dropSection
+                ? (_dragLens?.$1 ?? 0)
+                : (_dragLens?.$2 ?? 0);
+            if (_hoverSection == dropSection && _hoverSlot != null) {
+              slot = _hoverSlot!;
+            }
+            _commitCrossMove(id, _liftingFromEnabled, slot);
+          }
+        }
+        if (_lifting != null ||
+            _hoverSlot != null ||
+            _hoverSection != null) {
+          setState(() {
+            _lifting = null;
+            _hoverSlot = null;
+            _hoverSection = null;
+          });
+        }
       },
       proxyDecorator: (child, index, animation) => AnimatedBuilder(
         animation: animation,
@@ -288,7 +511,7 @@ class _QuickActionsPageState extends State<QuickActionsPage> {
             _moveAcross(id, !enabledSection);
           },
           child: _EnterTransition(
-            animate: _isNewlyPlaced(id, enabledSection),
+            animate: _arrived.contains(id),
             child: _actionRow(
               colors,
               id: id,
@@ -298,6 +521,7 @@ class _QuickActionsPageState extends State<QuickActionsPage> {
           ),
         );
       },
+      ),
     );
   }
 
@@ -581,7 +805,8 @@ class _QuickActionsPageState extends State<QuickActionsPage> {
   }
 }
 
-/// 换段落位行的入场过渡（淡入 + 轻微滑入；只在跨段移动时挂载，滚动重建不播）。
+/// 换段落位行的入场过渡（淡入 + 轻微滑入；调用方用落位标记控制只播一次，
+/// 滚动重建不播）。
 class _EnterTransition extends StatelessWidget {
   const _EnterTransition({required this.animate, required this.child});
 

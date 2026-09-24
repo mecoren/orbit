@@ -303,6 +303,14 @@ void main() {
         find.byIcon(OrbitIcons.remove),
         findsNWidgets(QuickActions.defaultEnabled.length - 1),
       );
+      // 收进「更多」的行挂过入场过渡
+      expect(
+        find.ancestor(
+          of: find.text('标签'),
+          matching: find.byWidgetPredicate((w) => w is TweenAnimationBuilder),
+        ),
+        findsOneWidget,
+      );
     });
 
     testWidgets('左滑把工具栏档位收进「更多」', (tester) async {
@@ -321,12 +329,29 @@ void main() {
       await tester.pumpWidget(_wrap(const QuickActionsPage(), MockOrbitBridge()));
       await tester.pumpAndSettle();
 
+      // 落位前行外无入场过渡（初建不播）
+      expect(
+        find.ancestor(
+          of: find.text('图片'),
+          matching: find.byWidgetPredicate((w) => w is TweenAnimationBuilder),
+        ),
+        findsNothing,
+      );
+
       await tester.drag(find.text('图片'), const Offset(400, 0));
       await tester.pumpAndSettle();
 
       final (enabled, hidden) = QuickActions.read();
       expect(enabled.last, QuickActionId.image);
       expect(hidden.contains(QuickActionId.image), isFalse);
+      // 落位行挂过入场过渡（淡入 + 滑入播完后仍在树上）
+      expect(
+        find.ancestor(
+          of: find.text('图片'),
+          matching: find.byWidgetPredicate((w) => w is TweenAnimationBuilder),
+        ),
+        findsOneWidget,
+      );
     });
 
     testWidgets('横滑过程中预览图标跟手让位，松手回弹跟回', (tester) async {
@@ -386,6 +411,114 @@ void main() {
       await gesture.up();
       await tester.pumpAndSettle();
       expect(find.byKey(const ValueKey('preview-ghost')), findsNothing);
+    });
+
+    testWidgets('纵拖排序时预览实时重排，落位提交', (tester) async {
+      await tester.pumpWidget(_wrap(const QuickActionsPage(), MockOrbitBridge()));
+      await tester.pumpAndSettle();
+
+      AnimatedPositioned previewIcon(QuickActionId id) =>
+          tester.widget<AnimatedPositioned>(
+            find.byWidgetPredicate(
+              (w) => w is AnimatedPositioned && w.key == ValueKey(id),
+            ),
+          );
+      expect(previewIcon(QuickActionId.due).left, 0);
+
+      // 按住首行「日期」的手柄往下拖：首段 move 启动拖拽，次段产生位移
+      final gesture = await tester.startGesture(
+        tester.getCenter(find.byIcon(OrbitIcons.drag).first),
+      );
+      await gesture.moveBy(const Offset(0, 30));
+      await tester.pump();
+      await gesture.moveBy(const Offset(0, 90));
+      await tester.pump();
+
+      // 抬起未落位时预览已重排（日期图标离开首槽）
+      expect(previewIcon(QuickActionId.due).left!, greaterThan(0));
+
+      await gesture.up();
+      await tester.pumpAndSettle();
+      final (enabled, _) = QuickActions.read();
+      expect(enabled.first, isNot(QuickActionId.due));
+    });
+
+    Finder previewIconOf(QuickActionId id) => find.byWidgetPredicate(
+          (w) => w is AnimatedPositioned && w.key == ValueKey(id),
+        );
+
+    Finder handleOf(String label) => find.descendant(
+          of: find.ancestor(
+            of: find.text(label),
+            matching: find.byType(Dismissible),
+          ),
+          matching: find.byIcon(OrbitIcons.drag),
+        );
+
+    testWidgets('更多直拖到工具栏：预览实时插入，落位提交', (tester) async {
+      // 拉高测试面：整页无需滚动（拖拽中滚动会干扰悬停定位）
+      tester.view.physicalSize = const Size(2400, 4200);
+      tester.view.devicePixelRatio = 3.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await tester.pumpWidget(_wrap(const QuickActionsPage(), MockOrbitBridge()));
+      await tester.pumpAndSettle();
+      expect(previewIconOf(QuickActionId.image), findsNothing);
+
+      // 按住「图片」手柄向上拖：分段 move，拖进工具栏段即停
+      final gesture =
+          await tester.startGesture(tester.getCenter(handleOf('图片')));
+      for (var i = 0; i < 8; i++) {
+        await gesture.moveBy(const Offset(0, -50));
+        await tester.pump();
+        if (previewIconOf(QuickActionId.image).evaluate().isNotEmpty) break;
+      }
+
+      // 未松手时工具栏预览已按悬停槽位插入图片图标
+      expect(previewIconOf(QuickActionId.image), findsOneWidget);
+
+      await gesture.up();
+      await tester.pumpAndSettle();
+      final (enabled, hidden) = QuickActions.read();
+      expect(enabled.contains(QuickActionId.image), isTrue);
+      expect(hidden.contains(QuickActionId.image), isFalse);
+      expect(
+        find.ancestor(
+          of: find.text('图片'),
+          matching: find.byWidgetPredicate((w) => w is TweenAnimationBuilder),
+        ),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('工具栏直拖到更多：预览实时闭合，落位提交', (tester) async {
+      tester.view.physicalSize = const Size(2400, 4200);
+      tester.view.devicePixelRatio = 3.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await tester.pumpWidget(_wrap(const QuickActionsPage(), MockOrbitBridge()));
+      await tester.pumpAndSettle();
+      expect(previewIconOf(QuickActionId.label), findsOneWidget);
+
+      // 按住「标签」手柄向下拖：拖进「更多」段即停
+      final gesture =
+          await tester.startGesture(tester.getCenter(handleOf('标签')));
+      for (var i = 0; i < 8; i++) {
+        await gesture.moveBy(const Offset(0, 50));
+        await tester.pump();
+        if (previewIconOf(QuickActionId.label).evaluate().isEmpty) break;
+      }
+
+      // 未松手时工具栏预览已闭合缺口（标签图标暂离）
+      expect(previewIconOf(QuickActionId.label), findsNothing);
+
+      await gesture.up();
+      await tester.pumpAndSettle();
+      final (enabled, hidden) = QuickActions.read();
+      expect(enabled.contains(QuickActionId.label), isFalse);
+      expect(hidden.contains(QuickActionId.label), isTrue);
     });
   });
 }
