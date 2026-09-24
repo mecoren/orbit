@@ -46,6 +46,9 @@ List<Object> quickActionDragItems(
 ///
 /// 语义：项越过标题行即换段（标题行自身不可拖，调用方保证不传它的索引）；
 /// 同段内拖拽只调顺序。返回新的（启用段, 未启用段）。
+///
+/// 索引口径为 `ReorderableListView.onReorderItem` 回调（v3.41+）：[newIndex]
+/// 已是"旧位先移除"后的语义插入位，直接 remove + insert 消费，不再 -1。
 (List<QuickActionId>, List<QuickActionId>) reorderQuickActions({
   required List<QuickActionId> enabled,
   required List<QuickActionId> hidden,
@@ -68,6 +71,21 @@ List<Object> quickActionDragItems(
     (boundary < 0 || i < boundary ? newEnabled : newHidden).add(item);
   }
   return (newEnabled, newHidden);
+}
+
+/// 单段内重排的纯逻辑（设置页双卡片各持一段，段内拖拽只调顺序不换段）。
+///
+/// 索引口径与 [reorderQuickActions] 一致（`onReorderItem` 语义插入位）。
+List<QuickActionId> reorderWithinSection(
+  List<QuickActionId> list,
+  int oldIndex,
+  int newIndex,
+) {
+  if (oldIndex < 0 || oldIndex >= list.length) return list;
+  final out = List<QuickActionId>.of(list);
+  final moved = out.removeAt(oldIndex);
+  out.insert(newIndex.clamp(0, out.length), moved);
+  return out;
 }
 
 /// 快捷操作档配置读写（本机 UI 偏好，不进 DB、不进同步）

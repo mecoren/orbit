@@ -140,6 +140,38 @@ void main() {
     });
   });
 
+  group('段内重排（双卡片各持一段，只调顺序不换段）', () {
+    test('启用段内下移', () {
+      expect(
+        reorderWithinSection(QuickActions.defaultEnabled, 0, 2),
+        [
+          QuickActionId.priority,
+          QuickActionId.label,
+          QuickActionId.due,
+          QuickActionId.project,
+        ],
+      );
+    });
+
+    test('更多段内上移', () {
+      expect(
+        reorderWithinSection(QuickActions.defaultHidden, 2, 0),
+        [
+          QuickActionId.fullscreen,
+          QuickActionId.image,
+          QuickActionId.template,
+        ],
+      );
+    });
+
+    test('越界旧位原样返回', () {
+      expect(
+        reorderWithinSection(QuickActions.defaultEnabled, 9, 0),
+        QuickActions.defaultEnabled,
+      );
+    });
+  });
+
   group('快速添加面板', () {
     testWidgets('默认档位：工具栏四枚 + 更多入口', (tester) async {
       await _openPanel(tester);
@@ -243,6 +275,30 @@ void main() {
         find.byIcon(OrbitIcons.remove),
         findsNWidgets(QuickActions.defaultEnabled.length - 1),
       );
+    });
+
+    testWidgets('左滑把工具栏档位收进「更多」', (tester) async {
+      await tester.pumpWidget(_wrap(const QuickActionsPage(), MockOrbitBridge()));
+      await tester.pumpAndSettle();
+
+      await tester.drag(find.text('标签'), const Offset(-400, 0));
+      await tester.pumpAndSettle();
+
+      final (enabled, hidden) = QuickActions.read();
+      expect(enabled.contains(QuickActionId.label), isFalse);
+      expect(hidden.last, QuickActionId.label);
+    });
+
+    testWidgets('右滑把「更多」档位提到工具栏', (tester) async {
+      await tester.pumpWidget(_wrap(const QuickActionsPage(), MockOrbitBridge()));
+      await tester.pumpAndSettle();
+
+      await tester.drag(find.text('图片'), const Offset(400, 0));
+      await tester.pumpAndSettle();
+
+      final (enabled, hidden) = QuickActions.read();
+      expect(enabled.last, QuickActionId.image);
+      expect(hidden.contains(QuickActionId.image), isFalse);
     });
   });
 }
