@@ -14,6 +14,7 @@ import '../../data/api/dto.dart';
 import '../../data/providers/bridge_provider.dart';
 import '../../shared/utils/sync_status_text.dart';
 import '../../shared/widgets/shadcn/orbit_confirm_sheet.dart';
+import '../../shared/widgets/shadcn/orbit_password_sheet.dart';
 import '../../shared/widgets/shadcn/orbit_page_header.dart';
 import '../../shared/widgets/shadcn/orbit_section_card.dart';
 import '../../shared/widgets/shadcn/orbit_select_sheet.dart';
@@ -713,76 +714,41 @@ class _SyncCryptoCardState extends ConsumerState<_SyncCryptoCard> {
   }
 
   /// 修改同步密码（v2 下即换 Key 并重传云端；失败由 Rust 侧回滚）
+  ///
+  /// 密码输入走共享抽屉（`showPasswordSheet`）；长度/一致校验在关闭后执行。
   Future<void> _changePassword() async {
     if (_busy) return;
-    final oldCtrl = TextEditingController();
-    final newCtrl = TextEditingController();
-    final confirmCtrl = TextEditingController();
     try {
-      final ok = await showDialog<bool>(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          title: const Text('修改同步密码'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text(
-                'v2 密钥方案下改密等于更换密钥，会把云端数据全量重传一次；'
-                '其他设备在此期间请勿同步。',
-                style: TextStyle(fontSize: 12),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: oldCtrl,
-                obscureText: true,
-                decoration: const InputDecoration(labelText: '当前同步密码'),
-              ),
-              TextField(
-                controller: newCtrl,
-                obscureText: true,
-                decoration: const InputDecoration(labelText: '新同步密码'),
-              ),
-              TextField(
-                controller: confirmCtrl,
-                obscureText: true,
-                decoration: const InputDecoration(labelText: '确认新密码'),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('取消'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('确认修改'),
-            ),
-          ],
-        ),
+      final values = await showPasswordSheet(
+        context,
+        title: '修改同步密码',
+        message: 'v2 密钥方案下改密等于更换密钥，会把云端数据全量重传一次；'
+            '其他设备在此期间请勿同步。',
+        labels: const ['当前同步密码', '新同步密码', '确认新密码'],
+        confirmLabel: '确认修改',
       );
-      if (ok != true || !mounted) return;
-      if (newCtrl.text.length < 6) {
+      if (values == null || !mounted) return;
+      final oldPw = values[0];
+      final newPw = values[1];
+      final confirmPw = values[2];
+      if (newPw.length < 6) {
         WaitToast.destructive('同步密码至少 6 位');
         return;
       }
-      if (newCtrl.text != confirmCtrl.text) {
+      if (newPw != confirmPw) {
         WaitToast.destructive('两次输入的新密码不一致');
         return;
       }
       setState(() => _busy = true);
       await ref
           .read(orbitBridgeProvider)
-          .syncCryptoChangePassword(oldCtrl.text, newCtrl.text);
-      await ref.read(orbitBridgeProvider).syncCryptoUnlock(newCtrl.text);
+          .syncCryptoChangePassword(oldPw, newPw);
+      await ref.read(orbitBridgeProvider).syncCryptoUnlock(newPw);
       WaitToast.success('同步密码已修改，云端数据已用新密钥重传');
       await _refresh();
     } catch (e) {
       WaitToast.destructive('修改失败：${_errMsg(e)}');
     } finally {
-      oldCtrl.dispose();
-      newCtrl.dispose();
-      confirmCtrl.dispose();
       if (mounted) setState(() => _busy = false);
     }
   }
@@ -831,50 +797,25 @@ class _SyncCryptoCardState extends ConsumerState<_SyncCryptoCard> {
   /// 同密码确定性派生新 Key + 云端全量重传，期间其他设备不要同步
   Future<void> _upgradeV2() async {
     if (_busy) return;
-    final ctrl = TextEditingController();
     try {
-      final ok = await showDialog<bool>(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          title: const Text('升级密钥方案到 v2'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text(
-                '升级后同一同步密码在任何设备都派生同一把密钥，不再需要密钥包分发，'
-                '可彻底避免「密钥不一致」。升级会立即用新密钥全量重传云端数据，'
-                '期间请勿在其他设备同步。此操作不可撤销。',
-                style: TextStyle(fontSize: 12),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: ctrl,
-                obscureText: true,
-                decoration: const InputDecoration(labelText: '当前同步密码'),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('取消'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('确认升级'),
-            ),
-          ],
-        ),
+      final values = await showPasswordSheet(
+        context,
+        title: '升级密钥方案到 v2',
+        message: '升级后同一同步密码在任何设备都派生同一把密钥，不再需要密钥包分发，'
+            '可彻底避免「密钥不一致」。升级会立即用新密钥全量重传云端数据，'
+            '期间请勿在其他设备同步。此操作不可撤销。',
+        labels: const ['当前同步密码'],
+        confirmLabel: '确认升级',
       );
-      if (ok != true || !mounted) return;
+      if (values == null || !mounted) return;
+      final pw = values.first;
       setState(() => _busy = true);
-      await ref.read(orbitBridgeProvider).syncCryptoUpgradeV2(ctrl.text);
+      await ref.read(orbitBridgeProvider).syncCryptoUpgradeV2(pw);
       WaitToast.success('已升级 v2 并完成云端重传。其他设备输入相同密码即可同步');
       await _refresh();
     } catch (e) {
       WaitToast.destructive('升级失败：${_errMsg(e)}');
     } finally {
-      ctrl.dispose();
       if (mounted) setState(() => _busy = false);
     }
   }
@@ -926,7 +867,6 @@ class _SyncCryptoCardState extends ConsumerState<_SyncCryptoCard> {
     // FilePicker 弹系统选择器是 async gap，回来时页面可能已销毁
     if (!mounted) return;
     setState(() => _busy = true);
-    final pwController = TextEditingController();
     try {
       // 两段式：先读文件校验结构，再问密码（避免密码输完才发现文件坏了）
       final raw = await File(path).readAsString();
@@ -938,28 +878,16 @@ class _SyncCryptoCardState extends ConsumerState<_SyncCryptoCard> {
         return;
       }
       final bundle = SyncCryptoBundle.fromJson(j);
-      // readAsString 是 async gap，showDialog 前页面可能已销毁
+      // readAsString 是 async gap，弹抽屉前页面可能已销毁
       if (!mounted) return;
-      final pw = await showDialog<String>(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          title: const Text('输入该密钥包的同步密码'),
-          content: TextField(
-            controller: pwController,
-            obscureText: true,
-            autofocus: true,
-            decoration: const InputDecoration(
-                labelText: '同步密码', hintText: '导出密钥包时使用的密码'),
-          ),
-          actions: [
-            TextButton(
-                onPressed: () => Navigator.pop(ctx), child: const Text('取消')),
-            FilledButton(
-                onPressed: () => Navigator.pop(ctx, pwController.text),
-                child: const Text('导入')),
-          ],
-        ),
+      final values = await showPasswordSheet(
+        context,
+        title: '输入该密钥包的同步密码',
+        labels: const ['同步密码'],
+        hints: const ['导出密钥包时使用的密码'],
+        confirmLabel: '导入',
       );
+      final pw = values?.firstOrNull;
       if (pw == null || pw.isEmpty) return;
       await ref
           .read(orbitBridgeProvider)
@@ -969,7 +897,6 @@ class _SyncCryptoCardState extends ConsumerState<_SyncCryptoCard> {
     } catch (e) {
       WaitToast.destructive('导入失败：${_errMsg(e)}');
     } finally {
-      pwController.dispose();
       if (mounted) setState(() => _busy = false);
     }
   }
