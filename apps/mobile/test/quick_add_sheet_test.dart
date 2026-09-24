@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:orbit/core/theme/app_motion.dart';
 import 'package:orbit/core/theme/icon_map.dart';
 import 'package:orbit/data/api/mock_orbit_bridge.dart';
 import 'package:orbit/data/providers/bridge_provider.dart';
@@ -350,11 +351,14 @@ void main() {
       await tester.pump();
 
       expect(previewMore().left!, lessThan(before));
+      // 跟手期间零延迟直跟（无平滑拖尾）
+      expect(previewMore().duration, AppMotion.instant);
 
       // 未过阈值松手 → 回弹，预览回到原位；档位归属不变
       await gesture.up();
       await tester.pumpAndSettle();
       expect(previewMore().left!, before);
+      expect(previewMore().duration, AppMotion.normal);
       final (enabled, hidden) = QuickActions.read();
       expect(enabled.contains(QuickActionId.label), isTrue);
       expect(hidden.contains(QuickActionId.label), isFalse);

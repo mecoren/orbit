@@ -16,6 +16,10 @@ class AppMotion {
 
   // ── 时长（duration）──
 
+  /// 零延迟（跟手追踪：手势进度逐帧直驱定位，不加平滑；
+  /// 手指离开后再切回常规时长收尾，故跟手与收尾是同一套隐式动画）
+  static const Duration instant = Duration.zero;
+
   /// 快速动画（按压反馈、状态切换、即时确认感）
   static const Duration fast = Duration(milliseconds: 150);
 

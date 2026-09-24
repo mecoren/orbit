@@ -351,8 +351,9 @@ class _QuickActionsPageState extends State<QuickActionsPage> {
   /// 图标行用 `AnimatedPositioned` 按槽位定位——档位增减、换序、横滑换段时
   /// 图标**平滑滑到新槽位**（而非整行重绘），这是"上面图标跟着动"的动画来源。
   /// 横滑过程中 [_swipeLive] 逐帧给出插值进度：滑出段的图标淡出、后项实时
-  /// 让位；滑入段在尾部用幽灵图标淡入占位。落位提交的布局与进度 1.0 时完全
-  /// 一致，故提交瞬间无跳变；取消回弹则沿同一插值原路跟回。
+  /// 让位；滑入段在尾部用幽灵图标淡入占位。跟手期间时长切零延迟直跟（与行
+  /// 1:1 无拖尾），手指离开后切回常规时长收尾。落位提交的布局与进度 1.0 时
+  /// 完全一致，故提交瞬间无跳变；取消回弹则沿同一插值原路跟回。
   Widget _preview(AppColorSet colors, List<QuickActionId> enabled) {
     return Container(
       padding: const EdgeInsets.fromLTRB(
@@ -442,18 +443,23 @@ class _QuickActionsPageState extends State<QuickActionsPage> {
       }
     }
     final p = live?.progress ?? 0;
+    // 跟手追踪中零延迟直跟（与行 1:1），手指离开后切回常规时长收尾——
+    // 同一套隐式动画，只换时长，故收尾从当前显示位置平滑起播，无跳变。
+    final tracking = outIndex >= 0 || swipeIn;
+    final posDuration = tracking ? AppMotion.instant : AppMotion.normal;
+    final fadeDuration = tracking ? AppMotion.instant : AppMotion.fast;
     final icons = <Widget>[
       for (var i = 0; i < enabled.length; i++)
         AnimatedPositioned(
           // key = 档位身份：换序/换段时同一图标滑向新槽位
           key: ValueKey(enabled[i]),
-          duration: AppMotion.normal,
+          duration: posDuration,
           curve: AppMotion.standard,
           left: i * _previewSlot -
               (outIndex >= 0 && i > outIndex ? p * _previewSlot : 0),
           top: 0,
           child: AnimatedOpacity(
-            duration: AppMotion.fast,
+            duration: fadeDuration,
             curve: AppMotion.standard,
             opacity: outIndex == i ? 1 - p : 1,
             child: Icon(
@@ -468,12 +474,12 @@ class _QuickActionsPageState extends State<QuickActionsPage> {
       if (swipeIn)
         AnimatedPositioned(
           key: const ValueKey('preview-ghost'),
-          duration: AppMotion.normal,
+          duration: posDuration,
           curve: AppMotion.standard,
           left: enabled.length * _previewSlot,
           top: 0,
           child: AnimatedOpacity(
-            duration: AppMotion.fast,
+            duration: fadeDuration,
             curve: AppMotion.standard,
             opacity: p,
             child: Icon(
@@ -485,7 +491,7 @@ class _QuickActionsPageState extends State<QuickActionsPage> {
         ),
       AnimatedPositioned(
         key: const ValueKey('preview-more'),
-        duration: AppMotion.normal,
+        duration: posDuration,
         curve: AppMotion.standard,
         left: (enabled.length + (swipeIn ? p : 0) - (outIndex >= 0 ? p : 0)) *
             _previewSlot,
