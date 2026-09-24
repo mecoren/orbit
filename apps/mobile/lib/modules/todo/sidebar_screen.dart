@@ -15,6 +15,8 @@ import '../../shared/widgets/shadcn/orbit_fab.dart';
 import '../../shared/widgets/shadcn/orbit_page_header.dart';
 import '../../shared/widgets/shadcn/orbit_skeleton.dart';
 import '../../shared/widgets/shadcn/orbit_actions_sheet.dart';
+import '../../shared/widgets/shadcn/orbit_sheet_scaffold.dart';
+import '../../shared/widgets/controller_disposer.dart';
 import '../../services/shortcut_receiver.dart';
 import '../../shared/widgets/sync_status_button.dart';
 import '../../shared/widgets/shadcn/orbit_toast.dart';
@@ -165,35 +167,13 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
   }
 
   /// 新建项目（#36）：名称输入 + 默认色按现有项目数轮换预设板
+  ///
+  /// 输入型抽屉（AGENTS.md 选择/确认/输入统一走底部抽屉；模板/筛选器表单同口径，
+  /// 不再用中央 `AlertDialog`——拇指可达 + 键盘避让由 [OrbitSheetScaffold] 兜底）。
   Future<void> _addProject() async {
     final projects = _projects();
     final defaultColor = defaultProjectColor(projects.length);
-    final controller = TextEditingController();
-    final title = await showDialog<String>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('新建项目'),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          maxLength: 50,
-          decoration: const InputDecoration(labelText: '项目名称'),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            onPressed: () =>
-                Navigator.of(dialogContext).pop(controller.text.trim()),
-            child: const Text('创建'),
-          ),
-        ],
-      ),
-    );
-    controller.dispose();
-    final newTitle = title;
+    final newTitle = await _askProjectName();
     if (!mounted || newTitle == null || newTitle.isEmpty) return;
     try {
       await ref.read(orbitBridgeProvider).todoProjectCreate(
@@ -203,6 +183,63 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
     } catch (_) {
       WaitToast.destructive('创建失败');
     }
+  }
+
+  /// 新建项目名称输入抽屉（返回 trim 后的名称；取消/下滑关闭返回 null）
+  Future<String?> _askProjectName() {
+    final controller = TextEditingController();
+    final colors = AppColors.ofContext(context);
+    return showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: colors.popup,
+      shape: bottomSheetTopShape,
+      sheetAnimationStyle: bottomSheetMotion,
+      // 控制器交给抽屉子树释放（退出动画期间表单会重建一次，提前 dispose
+      // 会让那一帧读到已释放的 controller，见 ControllerDisposer）
+      builder: (sheetContext) => ControllerDisposer(
+        controllers: [controller],
+        child: StatefulBuilder(
+          builder: (ctx, setSheetState) {
+            void submit() {
+              final name = controller.text.trim();
+              if (name.isEmpty) {
+                WaitToast.destructive('项目名称不能为空');
+                return;
+              }
+              Navigator.of(ctx).pop(name);
+            }
+
+            return OrbitSheetScaffold(
+              title: '新建项目',
+              contentPadding: const EdgeInsets.fromLTRB(
+                AppDimens.space16,
+                0,
+                AppDimens.space16,
+                AppDimens.space16,
+              ),
+              content: TextField(
+                controller: controller,
+                autofocus: true,
+                maxLength: 50,
+                textInputAction: TextInputAction.done,
+                decoration: const InputDecoration(labelText: '项目名称'),
+                onChanged: (_) => setSheetState(() {}),
+                onSubmitted: (_) => submit(),
+              ),
+              actions: OrbitSheetActions(
+                cancelLabel: '取消',
+                onCancel: () => Navigator.of(ctx).pop(),
+                confirmLabel: '创建',
+                // 空名禁用确认（与编辑项目整页 ✓ 置灰同口径，避免空提交）
+                onConfirm:
+                    controller.text.trim().isEmpty ? null : submit,
+              ),
+            );
+          },
+        ),
+      ),
+    );
   }
 
   // ── UI ──
