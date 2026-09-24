@@ -19,6 +19,7 @@ import '../../data/providers/biometric_provider.dart';
 import '../../data/providers/todo_widget_provider.dart';
 import '../../data/providers/bridge_provider.dart';
 import '../../shared/widgets/shadcn/orbit_confirm_sheet.dart';
+import '../../shared/widgets/shadcn/orbit_password_sheet.dart';
 import '../../shared/widgets/shadcn/orbit_page_header.dart';
 import '../../shared/utils/sync_status_text.dart';
 import '../../shared/widgets/shadcn/orbit_section_card.dart';
@@ -473,60 +474,32 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 
   /// 修改主密码（只重写 master_auth.json 的开屏密码包装，DB Key 不变）
+  ///
+  /// 密码输入走共享抽屉（`showPasswordSheet`）；合法性校验在关闭后执行。
   Future<void> _changeMasterPassword() async {
     if (_secBusy) return;
-    final oldCtrl = TextEditingController();
-    final newCtrl = TextEditingController();
-    final confirmCtrl = TextEditingController();
     final bridge = ref.read(orbitBridgeProvider);
     try {
-      final ok = await showDialog<bool>(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          title: const Text('修改主密码'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: oldCtrl,
-                obscureText: true,
-                decoration: const InputDecoration(labelText: '当前主密码'),
-              ),
-              TextField(
-                controller: newCtrl,
-                obscureText: true,
-                decoration: const InputDecoration(labelText: '新主密码'),
-              ),
-              TextField(
-                controller: confirmCtrl,
-                obscureText: true,
-                decoration: const InputDecoration(labelText: '确认新密码'),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('取消'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('确认修改'),
-            ),
-          ],
-        ),
+      final values = await showPasswordSheet(
+        context,
+        title: '修改主密码',
+        labels: const ['当前主密码', '新主密码', '确认新密码'],
+        confirmLabel: '确认修改',
       );
-      if (ok != true || !mounted) return;
-      if (newCtrl.text.isEmpty) {
+      if (values == null || !mounted) return;
+      final oldPw = values[0];
+      final newPw = values[1];
+      final confirmPw = values[2];
+      if (newPw.isEmpty) {
         WaitToast.destructive('新主密码不能为空');
         return;
       }
-      if (newCtrl.text != confirmCtrl.text) {
+      if (newPw != confirmPw) {
         WaitToast.destructive('两次输入的新密码不一致');
         return;
       }
       setState(() => _secBusy = true);
-      await bridge.masterAuthChangePassword(oldCtrl.text, newCtrl.text);
+      await bridge.masterAuthChangePassword(oldPw, newPw);
       WaitToast.success('主密码已修改');
     } catch (e) {
       final msg = e.toString();
@@ -535,9 +508,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               ? '当前主密码不正确'
               : '修改失败：$_stripTag(msg)');
     } finally {
-      oldCtrl.dispose();
-      newCtrl.dispose();
-      confirmCtrl.dispose();
       if (mounted) setState(() => _secBusy = false);
     }
   }
@@ -596,60 +566,31 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   /// 无主密码」的一致状态，避免下次启动因残留 meta 而打不开库。
   Future<void> _enableEncryption() async {
     if (_secBusy) return;
-    final pwCtrl = TextEditingController();
-    final confirmCtrl = TextEditingController();
     final bridge = ref.read(orbitBridgeProvider);
     var metaWritten = false;
     try {
-      final ok = await showDialog<bool>(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          title: const Text('开启加密'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text(
-                '设置主密码后，本机数据库将以 SQLCipher 加密；每次启动需输入'
-                '主密码解锁（可另开指纹解锁）。',
-                style: TextStyle(fontSize: 12),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: pwCtrl,
-                obscureText: true,
-                decoration: const InputDecoration(labelText: '主密码'),
-              ),
-              TextField(
-                controller: confirmCtrl,
-                obscureText: true,
-                decoration: const InputDecoration(labelText: '确认主密码'),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('取消'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('开始加密'),
-            ),
-          ],
-        ),
+      final values = await showPasswordSheet(
+        context,
+        title: '开启加密',
+        message: '设置主密码后，本机数据库将以 SQLCipher 加密；每次启动需输入'
+            '主密码解锁（可另开指纹解锁）。',
+        labels: const ['主密码', '确认主密码'],
+        confirmLabel: '开始加密',
       );
-      if (ok != true || !mounted) return;
-      if (pwCtrl.text.isEmpty) {
+      if (values == null || !mounted) return;
+      final pw = values[0];
+      final confirmPw = values[1];
+      if (pw.isEmpty) {
         WaitToast.destructive('主密码不能为空');
         return;
       }
-      if (pwCtrl.text != confirmCtrl.text) {
+      if (pw != confirmPw) {
         WaitToast.destructive('两次输入的密码不一致');
         return;
       }
 
       setState(() => _secBusy = true);
-      final dbKeyHex = await bridge.masterAuthInit(pwCtrl.text);
+      final dbKeyHex = await bridge.masterAuthInit(pw);
       metaWritten = true;
       await bridge.dbMigrateToEncrypted(dbKeyHex);
       await bridge.dbInitEncrypted(dbKeyHex);
@@ -669,8 +610,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       }
       WaitToast.destructive('开启加密失败：$_stripTag(e)');
     } finally {
-      pwCtrl.dispose();
-      confirmCtrl.dispose();
       if (mounted) setState(() => _secBusy = false);
     }
   }
@@ -694,32 +633,17 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     await _disableEncryption();
   }
 
-  /// 主密码确认弹窗（生物识别开关两向共用；返回输入的密码或 null 取消）
-  Future<String?> _askPassword(String title, String hint) {
-    final controller = TextEditingController();
-    return showDialog<String>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(title),
-        content: TextField(
-          controller: controller,
-          obscureText: true,
-          autofocus: true,
-          decoration: InputDecoration(labelText: '主密码', hintText: hint),
-          onSubmitted: (_) => Navigator.pop(ctx, controller.text),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, controller.text),
-            child: const Text('确认'),
-          ),
-        ],
-      ),
+  /// 主密码确认抽屉（生物识别开关两向共用；返回输入的密码或 null 取消）
+  Future<String?> _askPassword(String title, String hint) async {
+    final values = await showPasswordSheet(
+      context,
+      title: title,
+      labels: const ['主密码'],
+      hints: [hint],
+      confirmLabel: '确认',
     );
+    if (values == null || values.isEmpty) return null;
+    return values.first;
   }
 
   /// 开启生物识别：密码确认（Rust 验证拿 db_key_hex）→ 指纹闸门 → 落键
