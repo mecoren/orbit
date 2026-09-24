@@ -11,7 +11,8 @@ import '../../shared/widgets/shadcn/orbit_confirm_sheet.dart';
 import '../../shared/widgets/shadcn/orbit_card.dart';
 import '../../shared/widgets/controller_disposer.dart';
 import '../../shared/widgets/shadcn/orbit_page_header.dart';
-import '../../shared/widgets/shadcn/orbit_actions_sheet.dart' show bottomSheetTopShape;
+import '../../shared/widgets/shadcn/orbit_actions_sheet.dart' show bottomSheetMotion, bottomSheetTopShape;
+import '../../shared/widgets/shadcn/orbit_sheet_scaffold.dart';
 import '../../shared/widgets/shadcn/orbit_section_card.dart';
 import '../../shared/widgets/shadcn/orbit_toast.dart';
 import '../todo/logic/task_logic.dart' show labelPaletteHexes;
@@ -212,6 +213,8 @@ class _LabelManagerPageState extends ConsumerState<LabelManagerPage> {
   }
 
   /// 新建/编辑共用表单（标题 + 色板；返回 (名称, 颜色hex)）
+  ///
+  /// 输入型抽屉（与新建项目/模板/筛选器表单同口径，不再用中央 `AlertDialog`）。
   Future<(String, String)?> _askLabelDraft({
     required String title,
     String initialTitle = '',
@@ -219,25 +222,48 @@ class _LabelManagerPageState extends ConsumerState<LabelManagerPage> {
   }) async {
     final controller = TextEditingController(text: initialTitle);
     var color = initialColor;
-    {
-      final ok = await showDialog<bool>(
-        context: context,
-        // 控制器交给对话框子树释放（弹层退出动画期间表单会重建一次，
-        // 提前 dispose 会让那一帧读到已释放的 controller）
-        builder: (ctx) => ControllerDisposer(
-          controllers: [controller],
-          child: StatefulBuilder(
-          builder: (ctx, setDialogState) {
-            final colors = AppColors.ofContext(ctx);
-            return AlertDialog(
-              title: Text(title),
+    final colors = AppColors.ofContext(context);
+    final result = await showModalBottomSheet<(String, String)?>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: colors.popup,
+      shape: bottomSheetTopShape,
+      sheetAnimationStyle: bottomSheetMotion,
+      // 控制器交给抽屉子树释放（退出动画期间表单会重建一次，提前 dispose
+      // 会让那一帧读到已释放的 controller，见 ControllerDisposer）
+      builder: (sheetContext) => ControllerDisposer(
+        controllers: [controller],
+        child: StatefulBuilder(
+          builder: (ctx, setSheetState) {
+            final sheetColors = AppColors.ofContext(ctx);
+            void submit() {
+              final name = controller.text.trim();
+              if (name.isEmpty) {
+                WaitToast.destructive('标签名称不能为空');
+                return;
+              }
+              Navigator.of(ctx).pop((name, color));
+            }
+
+            return OrbitSheetScaffold(
+              title: title,
+              contentPadding: const EdgeInsets.fromLTRB(
+                AppDimens.space16,
+                0,
+                AppDimens.space16,
+                AppDimens.space16,
+              ),
               content: Column(
                 mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   TextField(
                     controller: controller,
                     autofocus: true,
+                    textInputAction: TextInputAction.done,
                     decoration: const InputDecoration(labelText: '标签名称'),
+                    onChanged: (_) => setSheetState(() {}),
+                    onSubmitted: (_) => submit(),
                   ),
                   const SizedBox(height: AppDimens.space16),
                   Wrap(
@@ -246,7 +272,7 @@ class _LabelManagerPageState extends ConsumerState<LabelManagerPage> {
                     children: [
                       for (final hex in labelPaletteHexes)
                         GestureDetector(
-                          onTap: () => setDialogState(() => color = hex),
+                          onTap: () => setSheetState(() => color = hex),
                           // 36 色点视觉不变，热区补到 48（touchTarget）
                           child: Padding(
                             padding: const EdgeInsets.all(AppDimens.space6),
@@ -259,7 +285,7 @@ class _LabelManagerPageState extends ConsumerState<LabelManagerPage> {
                                 border: hex.toUpperCase() ==
                                         color.toUpperCase()
                                     ? Border.all(
-                                        color: colors.titleText, width: 2)
+                                        color: sheetColors.titleText, width: 2)
                                     : null,
                               ),
                               child: hex.toUpperCase() == color.toUpperCase()
@@ -274,29 +300,25 @@ class _LabelManagerPageState extends ConsumerState<LabelManagerPage> {
                   ),
                 ],
               ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(ctx, false),
-                  child: const Text('取消'),
-                ),
-                FilledButton(
-                  onPressed: () => Navigator.pop(ctx, true),
-                  child: const Text('保存'),
-                ),
-              ],
+              actions: OrbitSheetActions(
+                cancelLabel: '取消',
+                onCancel: () => Navigator.of(ctx).pop(),
+                confirmLabel: '保存',
+                onConfirm:
+                    controller.text.trim().isEmpty ? null : submit,
+              ),
             );
           },
-          ),
         ),
-      );
-      if (ok != true) return null;
-      final name = controller.text.trim();
-      if (name.isEmpty) {
-        WaitToast.destructive('标签名称不能为空');
-        return null;
-      }
-      return (name, color);
+      ),
+    );
+    // 下滑/点遮罩关闭返回 null；空名在屉内已拦截，此处只做兜底
+    if (result == null) return null;
+    if (result.$1.isEmpty) {
+      WaitToast.destructive('标签名称不能为空');
+      return null;
     }
+    return result;
   }
 
   @override
