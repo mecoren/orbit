@@ -134,10 +134,11 @@ void main() {
     // 统一新建入口：快速添加面板打开（不再是完整表单）
     expect(find.text('准备做什么？'), findsOneWidget);
 
-    // 截止预填今天：chip 回显今天日期
+    // 截止预填今天：选中态落底部图标（tooltip 带值），顶部不加 chips 行
+    expect(find.byTooltip('截止：今天'), findsOneWidget);
     final ymd =
         '${today.year.toString().padLeft(4, '0')}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
-    expect(find.text(ymd), findsOneWidget);
+    expect(find.text(ymd), findsNothing);
   });
 
   testWidgets('年视图：点月份标题进入，干支生肖 + 迷你月历 + 点日期返回', (tester) async {

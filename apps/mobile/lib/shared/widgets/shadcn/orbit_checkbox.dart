@@ -37,7 +37,8 @@ class CircleCheckbox extends StatelessWidget {
   final double size;
 
   void _handleChanged() {
-    HapticFeedback.selectionClick();
+    // 触感只给「勾选确认」（未选→已选）；点回来取消完成不震（docs/05 §9.1）
+    if (!checked) HapticFeedback.selectionClick();
     onToggle();
   }
 

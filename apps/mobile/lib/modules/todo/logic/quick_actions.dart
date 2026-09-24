@@ -3,7 +3,7 @@ import '../../../services/local_prefs.dart';
 /// 底部快速添加面板的快捷操作档（TickTick「编辑操作」的 Orbit 等价物）
 ///
 /// 只收录**本仓真有对应能力**的档位：
-/// - [due]/[priority]/[label]/[project] → 截止日期 / 优先级 / 标签 / 清单（项目）；
+/// - [due]/[priority]/[label]/[project] → 截止日期 / 优先级 / 标签 / 项目；
 /// - [image] → 相册图片（任务落库后挂附件，复用 `task_attachment_add`）；
 /// - [template] → 任务模板（复用模板选择 + 表单预填链）；
 /// - [fullscreen] → 展开为完整新建表单（详细字段编辑）。
@@ -17,7 +17,7 @@ extension QuickActionMeta on QuickActionId {
         QuickActionId.due => '日期',
         QuickActionId.priority => '优先级',
         QuickActionId.label => '标签',
-        QuickActionId.project => '清单',
+        QuickActionId.project => '项目',
         QuickActionId.image => '图片',
         QuickActionId.template => '模板',
         QuickActionId.fullscreen => '全屏',

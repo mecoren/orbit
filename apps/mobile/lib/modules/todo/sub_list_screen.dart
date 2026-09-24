@@ -2092,7 +2092,8 @@ class TodoTaskTile extends StatelessWidget {
         children: [
           SlidableAction(
             onPressed: (_) {
-              HapticFeedback.mediumImpact();
+              // 触感只给「完成」确认；滑回来恢复不震（与勾选框同口径）
+              if (!task.isDone) HapticFeedback.mediumImpact();
               onToggleDone();
             },
             backgroundColor: OrbitAccents.todoAccent,

@@ -53,11 +53,136 @@ class OrbitPanelItem {
   final String? trailingLabel;
 }
 
-/// 顶部下拉面板（页头 ⋮ 的载体；设计系统 v3 原语层，2026-09-23）
+/// 浮层卡片宽度：显式宽度同样受屏宽 - 32 钳制，保证不贴边
+double orbitFloatCardWidth(BuildContext context, [double? width]) {
+  final screen = MediaQuery.of(context).size;
+  return math.min(
+    width ??
+        math.min(
+          orbitPanelMaxWidth,
+          math.min(screen.width * orbitPanelWidthFactor,
+              screen.width - AppDimens.space32),
+        ),
+    screen.width - AppDimens.space32,
+  );
+}
+/// 浮层卡片壳（下拉面板与快加快捷卡片共用同一视觉：`popup` 底 + 1px `outline` +
+/// 弹出层阴影 `e4` + large 圆角；内容区限高 0.7 屏，滚动与尾栏由内容自理）。
+class OrbitFloatCard extends StatelessWidget {
+  const OrbitFloatCard({super.key, required this.child, this.width});
+
+  /// 卡片内容（面板则传可滚条目列，多选卡传列表 + 尾栏）
+  final Widget child;
+
+  /// 卡片宽度；null = 与下拉面板同宽（[orbitPanelMaxWidth] 上限）；
+  /// 显式宽度同样受屏宽 - 32 钳制，保证不贴边
+  final double? width;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = AppColors.ofContext(context);
+    final screen = MediaQuery.of(context).size;
+    // 宽度走统入口（含小屏钳制），与锚点定位用同一数值
+    final w = orbitFloatCardWidth(context, width);
+    return Padding(
+      // 外留白既作面板与屏幕边的间距，也给投影留出空间（否则被裁剪）
+      padding: const EdgeInsets.all(AppDimens.space8),
+      child: Container(
+        width: w,
+        decoration: BoxDecoration(
+          borderRadius: AppShapes.large,
+          boxShadow: AppElevation.ofContext(context, level: 4),
+        ),
+        // 表面与「按下水波纹」都由这层 Material 承担（圆角裁切）
+        child: Material(
+          color: colors.popup,
+          borderRadius: AppShapes.large,
+          clipBehavior: Clip.antiAlias,
+          child: Container(
+            decoration: BoxDecoration(
+              borderRadius: AppShapes.large,
+              border: Border.all(color: colors.outline),
+            ),
+            // 条目多时卡片可滚：整屏高度上限内不出屏
+            constraints: BoxConstraints(maxHeight: screen.height * 0.7),
+            child: child,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 锚点浮层卡片通用入口（快加快捷卡片用；出场动效与下拉面板同源）
+/// [anchor] 为空回落右上（与面板默认同）。
+Future<T?> showOrbitFloatCard<T>(
+  BuildContext context, {
+  required Widget child,
+  Rect? anchor,
+  bool above = true,
+  double? topInset,
+  double? width,
+}) {
+  final screen = MediaQuery.of(context).size;
+  final Alignment alignment;
+  final EdgeInsets padding;
+  final Alignment scaleAlignment;
+  if (anchor != null && above) {
+    // 右沿对齐锚右沿，但钳在屏内：左置按钮的卡片不能滑出左屏
+    // （240 宽卡片锚在左首图标时右对齐会出屏，曾致“窄条”假象）
+    final w = orbitFloatCardWidth(context, width);
+    final right = (screen.width - anchor.right)
+        .clamp(0.0, math.max(0.0, screen.width - w - AppDimens.space8))
+        .toDouble();
+    alignment = Alignment.bottomRight;
+    padding = EdgeInsets.only(
+      bottom: math.max(0, screen.height - anchor.top) + AppDimens.space8,
+      right: right,
+    );
+    scaleAlignment = Alignment.bottomRight;
+  } else {
+    alignment = Alignment.topRight;
+    padding = EdgeInsets.only(
+      top: topInset ??
+          MediaQuery.of(context).padding.top + AppDimens.titleBarHeight,
+      right: 0,
+    );
+    scaleAlignment = Alignment.topRight;
+  }
+  return showGeneralDialog<T>(
+    context: context,
+    barrierDismissible: true,
+    // 有意不铺遮罩色：面板打开时下层照旧可读（竞品同款）；点别处即关闭
+    barrierColor: Colors.transparent,
+    barrierLabel: '关闭菜单',
+    transitionDuration: AppMotion.fast,
+    pageBuilder: (dialogContext, _, _) => Align(
+      alignment: alignment,
+      child: Padding(
+        padding: padding,
+        child: OrbitFloatCard(width: width, child: child),
+      ),
+    ),
+    // 出场：淡入 + 自锚点同侧轻微放大（空间上「从按钮里长出来」）
+    transitionBuilder: (context, animation, _, child) {
+      final curved =
+          CurvedAnimation(parent: animation, curve: AppMotion.decelerate);
+      return FadeTransition(
+        opacity: curved,
+        child: ScaleTransition(
+          scale: Tween<double>(begin: 0.96, end: 1).animate(curved),
+          alignment: scaleAlignment,
+          child: child,
+        ),
+      );
+    },
+  );
+}
+/// 顶部下拉面板（页头 ⋮ 的载体；快加面板「更多」与快捷档复用其「锚点上方」
+/// 形态；设计系统 v3 原语层，2026-09-23）
 ///
-/// **形态**：锚在触发钮下方的浮层卡片（`popup` 底 + 1px `outline` + 弹出层阴影
-/// `e4` + large 圆角），条目成组、组间 1px `divider`；点面板外任意处关闭
-/// （不铺遮罩色——列表保持可见，即时可读上下文）。
+/// **形态**：锚在触发钮附近的浮层卡片（见 [OrbitFloatCard]），条目成组、组间
+/// 1px `divider`；点面板外任意处关闭（不铺遮罩色——下层保持可见）。
 ///
 /// **就地展开子项**：带 [OrbitPanelItem.children] 的条目点一下在**面板内**展开
 /// （子项缩进到文案列、选中项打勾），展开期间其余顶层条目置灰、点击只收起子菜单
@@ -67,43 +192,28 @@ class OrbitPanelItem {
 /// **与底部抽屉的分工**（2026-09-23 修订，见 AGENTS.md）：从一组值里挑一个的
 /// 纯选择类交互仍走底部抽屉（`showSelectBottomSheet` 等）；**页头的「当前列表
 /// 操作」类入口**收敛到本面板——它锚在触发钮附近、不遮住列表，且「就地展开」
-/// 的层级感是抽屉给不了的（竞品同款版式）。
+/// 的层级感是抽屉给不了的（竞品同款版式）。快加面板的档位快捷项（优先级 /
+/// 项目单选、标签多选卡）同样锚在触发钮上方弹出，与页头面板同源同形。
 Future<void> showOrbitDropdownPanel(
   BuildContext context, {
   required List<List<OrbitPanelItem>> groups,
 
   /// 面板顶端避让（通常 = 状态栏 + 页头高，使面板贴在页头下沿）
   double? topInset,
+
+  /// 锚矩形（全局坐标）：与 [above] 联用，面板长在锚点上方、右沿对齐锚右沿；
+  /// 为空时走默认的右上形态（此时 [above] 被忽略）。
+  Rect? anchor,
+
+  /// 锚点上方形态（快加面板「更多」与快捷档用）
+  bool above = false,
 }) {
-  final top = topInset ??
-      MediaQuery.of(context).padding.top + AppDimens.titleBarHeight;
-  return showGeneralDialog<void>(
-    context: context,
-    barrierDismissible: true,
-    // 有意不铺遮罩色：面板打开时列表照旧可读（竞品同款）；点别处即关闭
-    barrierColor: Colors.transparent,
-    barrierLabel: '关闭菜单',
-    transitionDuration: AppMotion.fast,
-    pageBuilder: (dialogContext, _, _) => Align(
-      alignment: Alignment.topRight,
-      child: Padding(
-        padding: EdgeInsets.only(top: top, right: 0),
-        child: _OrbitDropdownPanel(groups: groups),
-      ),
-    ),
-    // 出场：淡入 + 自右上轻微放大（与锚点同侧，空间上「从按钮里长出来」）
-    transitionBuilder: (context, animation, _, child) {
-      final curved =
-          CurvedAnimation(parent: animation, curve: AppMotion.decelerate);
-      return FadeTransition(
-        opacity: curved,
-        child: ScaleTransition(
-          scale: Tween<double>(begin: 0.96, end: 1).animate(curved),
-          alignment: Alignment.topRight,
-          child: child,
-        ),
-      );
-    },
+  return showOrbitFloatCard<void>(
+    context,
+    anchor: anchor,
+    above: above,
+    topInset: topInset,
+    child: _OrbitDropdownPanel(groups: groups),
   );
 }
 
@@ -148,67 +258,36 @@ class _OrbitDropdownPanelState extends State<_OrbitDropdownPanel> {
   @override
   Widget build(BuildContext context) {
     final colors = AppColors.ofContext(context);
-    final screen = MediaQuery.of(context).size;
-    // 宽度：定宽 300，小屏（<332）收到屏宽 - 两侧 16，保证不贴边
-    final width = math.min(
-      orbitPanelMaxWidth,
-      math.min(screen.width * orbitPanelWidthFactor,
-          screen.width - AppDimens.space32),
-    );
 
-    return Padding(
-      // 外留白既作面板与屏幕边的间距，也给投影留出空间（否则被裁剪）
-      padding: const EdgeInsets.all(AppDimens.space8),
-      child: Container(
-        width: width,
-        decoration: BoxDecoration(
-          borderRadius: AppShapes.large,
-          boxShadow: AppElevation.ofContext(context, level: 4),
-        ),
-        // 表面与「按下水波纹」都由这层 Material 承担（圆角裁切）
-        child: Material(
-          color: colors.popup,
-          borderRadius: AppShapes.large,
-          clipBehavior: Clip.antiAlias,
-          child: Container(
-            decoration: BoxDecoration(
-              borderRadius: AppShapes.large,
-              border: Border.all(color: colors.outline),
-            ),
-            // 条目多（含展开子项）时面板可滚：整屏高度上限内不出屏
-            constraints: BoxConstraints(maxHeight: screen.height * 0.7),
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(vertical: AppDimens.space6),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  for (var g = 0; g < widget.groups.length; g++) ...[
-                    if (g > 0)
-                      Padding(
-                        padding: const EdgeInsets.symmetric(
-                            vertical: AppDimens.space4),
-                        child: Divider(
-                          height: 1,
-                          thickness: 1,
-                          indent: AppDimens.space12,
-                          endIndent: AppDimens.space12,
-                          color: colors.divider,
-                        ),
+    // 壳由入口统一包（[showOrbitFloatCard]），此处只出条目列，避免双层边框
+    return SingleChildScrollView(
+      padding: const EdgeInsets.symmetric(vertical: AppDimens.space6),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+                for (var g = 0; g < widget.groups.length; g++) ...[
+                  if (g > 0)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(
+                          vertical: AppDimens.space4),
+                      child: Divider(
+                        height: 1,
+                        thickness: 1,
+                        indent: AppDimens.space12,
+                        endIndent: AppDimens.space12,
+                        color: colors.divider,
                       ),
-                    for (var i = 0; i < widget.groups[g].length; i++) ...[
-                      _topRow(g, i, widget.groups[g][i]),
-                      if (_isExpanded(g, i))
-                        for (final child in widget.groups[g][i].children)
-                          _childRow(child),
-                    ],
+                    ),
+                  for (var i = 0; i < widget.groups[g].length; i++) ...[
+                    _topRow(g, i, widget.groups[g][i]),
+                    if (_isExpanded(g, i))
+                      for (final child in widget.groups[g][i].children)
+                        _childRow(child),
                   ],
                 ],
-              ),
+              ],
             ),
-          ),
-        ),
-      ),
     );
   }
 

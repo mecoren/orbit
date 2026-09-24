@@ -9,9 +9,16 @@ import 'package:orbit/data/providers/bridge_provider.dart';
 import 'package:orbit/modules/settings/quick_actions_page.dart';
 import 'package:orbit/modules/todo/logic/quick_actions.dart';
 import 'package:orbit/modules/todo/logic/task_logic.dart'
-    show TaskFilterInput, dateToMidnightMs, formatYmd;
+    show
+        TaskFilterInput,
+        dateToMidnightMs,
+        formatDueLabel,
+        formatYmd,
+        priorityColorHex;
 import 'package:orbit/modules/todo/quick_add_sheet.dart' show showQuickAddSheet;
 import 'package:orbit/modules/todo/sub_list_screen.dart';
+import 'package:orbit/shared/utils/hex_color.dart';
+import 'package:orbit/shared/widgets/shadcn/orbit_dropdown_panel.dart';
 import 'package:orbit/shared/widgets/shadcn/orbit_fab.dart';
 import 'package:orbit/services/local_prefs.dart';
 import 'support/orbit_test_app.dart';
@@ -215,15 +222,106 @@ void main() {
       expect(created['due_date'], isNotNull);
     });
 
-    testWidgets('优先级档：选择后 chip 回显', (tester) async {
+    testWidgets('优先级档：旗子变色无文字胶囊，不加 chips 行', (tester) async {
       await _openPanel(tester);
 
       await tester.tap(find.byTooltip('优先级'));
       await tester.pumpAndSettle();
+      // 锚点卡片形态：除面板自身外不再有第二个 BottomSheet
+      expect(find.byType(BottomSheet), findsOneWidget);
+      // 卡片完整落屏内（左置按钮右对齐曾把 240 宽卡片推出左屏，只剩窄条）
+      final cardRect = tester.getRect(find.byType(OrbitFloatCard));
+      final screenSize = tester.view.physicalSize / tester.view.devicePixelRatio;
+      expect(cardRect.left, greaterThanOrEqualTo(0));
+      expect(cardRect.right, lessThanOrEqualTo(screenSize.width));
       await tester.tap(find.text('高'));
       await tester.pumpAndSettle();
 
-      expect(find.text('P3 高'), findsOneWidget);
+      // 只旗子变该档色：无文字胶囊，tooltip 仍带已选值，顶部无 chips 行
+      expect(find.byTooltip('优先级：P3 高'), findsOneWidget);
+      expect(find.text('P3 高'), findsNothing);
+      final button = tester.widget<IconButton>(
+        find.ancestor(
+          of: find.byTooltip('优先级：P3 高'),
+          matching: find.byType(IconButton),
+        ),
+      );
+      expect((button.icon as Icon).color,
+          hexToColor(priorityColorHex(3), fallback: Colors.black));
+    });
+
+    testWidgets('标签档：锚点多选卡片点行即选中，无确认尾栏', (tester) async {
+      await _openPanel(tester);
+      // 等标签 provider 落定（mock 120ms 延迟），否则卡片直接报“还没有标签”
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byTooltip('标签'));
+      await tester.pumpAndSettle();
+      // 卡片内列表（mock 种子：紧急/阅读），无确认/取消尾栏
+      Finder cardText(String label) => find.descendant(
+            of: find.byKey(const ValueKey('quick-add-label-card-list')),
+            matching: find.text(label),
+          );
+      expect(cardText('紧急'), findsOneWidget);
+      expect(cardText('阅读'), findsOneWidget);
+      expect(find.text('确定'), findsNothing);
+      expect(find.text('取消'), findsNothing);
+
+      // 点行即选中，底部胶囊实时显示
+      await tester.tap(cardText('紧急'));
+      await tester.pump();
+      expect(find.byTooltip('标签：已选1个'), findsOneWidget);
+      // 再点即取消，胶囊回到未选态
+      await tester.tap(cardText('紧急'));
+      await tester.pump();
+      expect(find.byTooltip('标签'), findsOneWidget);
+    });
+
+    testWidgets('项目档：锚点单选卡片，未分组可清除', (tester) async {
+      await _openPanel(tester);
+
+      await tester.tap(find.byTooltip('项目'));
+      await tester.pumpAndSettle();
+      // 卡片形态：除面板自身外不再有第二个 BottomSheet
+      expect(find.byType(BottomSheet), findsOneWidget);
+      expect(find.text('未分组'), findsOneWidget);
+    });
+
+    testWidgets('日期档：快捷抽屉选明天→图标带值，可清除', (tester) async {
+      await _openPanel(tester);
+
+      await tester.tap(find.byTooltip('日期'));
+      await tester.pumpAndSettle();
+      // 顶层抽屉（快捷日期单）内的行：背景列表页另有一处「明天」文本，
+      // 故点选限定在最后（最顶）一个 BottomSheet 内
+      Finder sheetRow(String label) => find.descendant(
+            of: find.byType(BottomSheet).last,
+            matching: find.text(label),
+          );
+      expect(sheetRow('今天'), findsOneWidget);
+      expect(sheetRow('明天'), findsOneWidget);
+      expect(sheetRow('选择日期…'), findsOneWidget);
+      // 未设时无清除入口
+      expect(find.text('清除日期'), findsNothing);
+
+      await tester.tap(sheetRow('明天'));
+      await tester.pumpAndSettle();
+      expect(find.byTooltip('截止：明天'), findsOneWidget);
+      // 底部胶囊直接显示具体值（背景列表页另有一处「明天」，限定到面板内）
+      final panel = find.byType(BottomSheet);
+      expect(
+        find.descendant(of: panel, matching: find.text('明天')),
+        findsOneWidget,
+      );
+
+      // 再点开已有清除入口，清除后回到未选态
+      await tester.tap(find.byTooltip('截止：明天'));
+      await tester.pumpAndSettle();
+      expect(sheetRow('清除日期'), findsOneWidget);
+      await tester.tap(sheetRow('清除日期'));
+      await tester.pumpAndSettle();
+      expect(find.byTooltip('日期'), findsOneWidget);
     });
 
     testWidgets('更多菜单：未启用三档 + 固定「设置」入口', (tester) async {
@@ -238,7 +336,7 @@ void main() {
       expect(find.text('设置'), findsOneWidget);
     });
 
-    testWidgets('initialDueDate 预填截止并回显 chip（日历长按口径）', (tester) async {
+    testWidgets('initialDueDate 预填截止落图标态、无 chips 行（日历长按口径）', (tester) async {
       final due = dateToMidnightMs(
         DateTime.now().add(const Duration(days: 3)),
       );
@@ -260,7 +358,10 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('准备做什么？'), findsOneWidget);
-      expect(find.text(formatYmd(due)), findsOneWidget);
+      expect(find.byTooltip('截止：${formatDueLabel(due)}'), findsOneWidget);
+      // 底部胶囊直接显示具体值；顶部不加 chips 行
+      expect(find.text(formatDueLabel(due)), findsOneWidget);
+      expect(find.text(formatYmd(due)), findsNothing);
     });
   });
 

@@ -440,7 +440,7 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
             ),
           ),
           // FAB：右下，一级页面直达新建（与列表页同一快速添加面板，
-          // 不携带默认项目，面板内「清单」档自选）
+          // 不携带默认项目，面板内「项目」档自选）
           Positioned(
             right: AppDimens.space16,
             bottom: AppDimens.gestureInsetFallback + AppDimens.space16,
