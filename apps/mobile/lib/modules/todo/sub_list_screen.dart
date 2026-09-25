@@ -2243,7 +2243,8 @@ class TodoTaskTile extends StatelessWidget {
                           fontWeight: FontWeight.w500,
                           color: colors.titleText,
                         ),
-                        doneColor: colors.titleText,
+                        // 完成态全口径统一：划线 + 置灰一档（日历卡同款）
+                        doneColor: colors.secondaryText,
                       ),
                       // 副标题只在有标签 / 项目名时出现：优先级已由勾选框描边
                       // 表达，不再占一枚色点，纯标题行因此更紧凑
@@ -2517,7 +2518,8 @@ class _SelectionRow extends StatelessWidget {
                         fontSize: 15,
                         color: colors.bodyText,
                       ),
-                      doneColor: colors.bodyText,
+                      // 完成态全口径统一：划线 + 置灰一档
+                      doneColor: colors.secondaryText,
                     ),
                     if (projectTitle != null || task.dueDate != null) ...[
                       const SizedBox(height: AppDimens.space2),

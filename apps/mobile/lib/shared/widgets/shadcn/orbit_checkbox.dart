@@ -33,7 +33,12 @@ class CircleCheckbox extends StatelessWidget {
   /// 回落默认灰）——同一信息不再于副标题重复一枚色点（docs/05 §4.5）。
   final Color? borderColor;
 
-  /// 外圆直径（列表行 24 / 详情标题 28 / 子任�?22�?
+  /// 热区外扩下限：勾选是高频精确点击，22–28px 图形热区在密集列表里
+  /// 误触率高——布局盒取 `max(size, 44)`、图形居中，可点面积扩到触控
+  /// 标准档而视觉直径不变
+  static const double minHitExtent = 44;
+
+  /// 外圆直径（列表行 24 / 详情标题 28 / 子任务 22；可点热区不小于 44）
   final double size;
 
   void _handleChanged() {
@@ -46,15 +51,22 @@ class CircleCheckbox extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = AppColors.ofContext(context);
     return SizedBox.square(
-      dimension: size,
-      child: sh.Checkbox(
-        state: checked ? sh.CheckboxState.checked : sh.CheckboxState.unchecked,
-        size: size,
-        borderRadius: BorderRadius.circular(size / 2),
-        activeColor: OrbitAccents.todoAccent,
-        borderColor:
-            borderColor ?? colors.secondaryText.withValues(alpha: 0.4),
-        onChanged: (_) => _handleChanged(),
+      dimension: size < minHitExtent ? minHitExtent : size,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: _handleChanged,
+        child: Center(
+          child: sh.Checkbox(
+            state:
+                checked ? sh.CheckboxState.checked : sh.CheckboxState.unchecked,
+            size: size,
+            borderRadius: BorderRadius.circular(size / 2),
+            activeColor: OrbitAccents.todoAccent,
+            borderColor:
+                borderColor ?? colors.secondaryText.withValues(alpha: 0.4),
+            onChanged: (_) => _handleChanged(),
+          ),
+        ),
       ),
     );
   }

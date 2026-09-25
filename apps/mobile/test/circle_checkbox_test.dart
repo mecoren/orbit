@@ -51,7 +51,7 @@ sh.Checkbox _box(WidgetTester tester) => tester.widget<sh.Checkbox>(
       ),
     );
 
-/// 外层定尺方框（圆形直径的承载者，树序第一个即组件自身那层）
+/// 外层定尺方框（热区承载者，树序第一个即组件自身那层）
 SizedBox _square(WidgetTester tester) => tester.widget<SizedBox>(
       find
           .descendant(
@@ -106,10 +106,20 @@ void main() {
     await tester.pumpWidget(_Host(onToggle: () {}, size: 28));
     await tester.pump(AppMotion.fast);
 
-    expect(_square(tester).width, 28);
-    expect(_square(tester).height, 28);
     expect(_box(tester).size, 28);
     expect(_box(tester).borderRadius, BorderRadius.circular(14));
+    // 布局盒取热区下限（44）：图形 28 居中——视觉直径不变，可点面积扩到触控档
+    expect(_square(tester).width, CircleCheckbox.minHitExtent);
+    expect(_square(tester).height, CircleCheckbox.minHitExtent);
+  });
+
+  testWidgets('小尺寸档（子任务 22）热区同样外扩到 44', (tester) async {
+    await tester.pumpWidget(_Host(onToggle: () {}, size: 22));
+    await tester.pump(AppMotion.fast);
+
+    expect(_box(tester).size, 22);
+    expect(_square(tester).width, CircleCheckbox.minHitExtent);
+    expect(_square(tester).height, CircleCheckbox.minHitExtent);
   });
 
   // 列表行优先级着色入口（2026-09-23）：高/紧急/立即由圆环颜色表达，

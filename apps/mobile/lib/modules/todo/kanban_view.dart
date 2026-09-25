@@ -176,7 +176,8 @@ class KanbanBoard extends StatelessWidget {
                         height: 1.3,
                         color: colors.bodyText,
                       ),
-                      doneColor: colors.bodyText,
+                      // 完成态全口径统一：划线 + 置灰一档
+                      doneColor: colors.secondaryText,
                     ),
                   ),
                   if (task.isStarred)

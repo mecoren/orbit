@@ -156,7 +156,8 @@ class TaskTableView extends StatelessWidget {
                   fontSize: 13,
                   color: colors.bodyText,
                 ),
-                doneColor: colors.bodyText,
+                // 完成态全口径统一：划线 + 置灰一档
+                doneColor: colors.secondaryText,
               ),
             ),
             Expanded(
