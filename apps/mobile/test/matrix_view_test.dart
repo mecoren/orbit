@@ -1,11 +1,12 @@
-// 四象限视图 widget 测试：概览 2×2 计数 → 点格下钻全量列表 → 返回概览。
+// 四象限视图 widget 测试（2×2 格内列表版）：四格齐出、任务按桶落位格内、
+// 空象限「没有任务」、点行/勾选回调。
 //
 // 纯函数口径（轴边界）已在 task_logic_test.dart 覆盖，此处只测装配态交互。
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:orbit/data/api/dto.dart';
 import 'package:orbit/modules/todo/matrix_view.dart';
-import 'package:orbit/shared/widgets/shadcn/orbit_list_card.dart';
+import 'package:orbit/shared/widgets/shadcn/orbit_checkbox.dart';
 
 import 'support/orbit_test_app.dart';
 
@@ -45,7 +46,11 @@ TodoTask _task({
   );
 }
 
-Future<void> _pumpMatrix(WidgetTester tester) async {
+Future<void> _pumpMatrix(
+  WidgetTester tester, {
+  ValueChanged<TodoTask>? onOpen,
+  ValueChanged<TodoTask>? onToggleDone,
+}) async {
   final now = DateTime.now();
   final tasks = [
     _task(id: 1, title: '救火任务', priority: 3, dueDate: now.millisecondsSinceEpoch),
@@ -59,10 +64,8 @@ Future<void> _pumpMatrix(WidgetTester tester) async {
         body: EisenhowerMatrixBoard(
           tasks: tasks,
           padding: EdgeInsets.zero,
-          buildTile: (task, {edge = OrbitCardEdge.none}) => ListTile(
-            key: ValueKey('tile-${task.id}'),
-            title: Text(task.title),
-          ),
+          onOpen: onOpen ?? (_) {},
+          onToggleDone: onToggleDone ?? (_) {},
         ),
       ),
     ),
@@ -71,7 +74,7 @@ Future<void> _pumpMatrix(WidgetTester tester) async {
 }
 
 void main() {
-  testWidgets('概览：四象限格齐出，计数按桶落位', (tester) async {
+  testWidgets('概览：四象限格齐出，行动短语 + 计数按桶落位', (tester) async {
     await _pumpMatrix(tester);
     expect(find.text('立即做'), findsOneWidget);
     expect(find.text('计划做'), findsOneWidget);
@@ -79,27 +82,30 @@ void main() {
     expect(find.text('可延后'), findsOneWidget);
     // 计数：紧急重要 1 / 重要不紧急 1 / 紧急不重要 1 / 双无 0
     expect(find.text('0'), findsOneWidget);
+    // 任务行按桶落格：三个标题全可见（2×2 恒在，无下钻）
+    expect(find.text('救火任务'), findsOneWidget);
+    expect(find.text('要事任务'), findsOneWidget);
+    expect(find.text('杂事任务'), findsOneWidget);
   });
 
-  testWidgets('下钻：点象限格进入全量列表，行复用列表档构造', (tester) async {
+  testWidgets('空象限：格内居中「没有任务」', (tester) async {
     await _pumpMatrix(tester);
-    await tester.tap(find.text('立即做'));
-    await tester.pumpAndSettle();
-    // 轴文案是下钻态专属：概览格里没有
-    expect(find.text('紧急 · 重要 · 1 项'), findsOneWidget);
-    expect(find.byKey(const ValueKey('tile-1')), findsOneWidget);
-    // 其余象限任务不串桶
-    expect(find.byKey(const ValueKey('tile-2')), findsNothing);
+    expect(find.text('没有任务'), findsOneWidget);
   });
 
-  testWidgets('返回：下钻态点返回行回到 2×2 概览', (tester) async {
-    await _pumpMatrix(tester);
-    await tester.tap(find.text('立即做'));
+  testWidgets('点行进详情：onOpen 带回任务', (tester) async {
+    TodoTask? opened;
+    await _pumpMatrix(tester, onOpen: (t) => opened = t);
+    await tester.tap(find.text('救火任务'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('紧急 · 重要 · 1 项'));
+    expect(opened?.id, 1);
+  });
+
+  testWidgets('勾选完成：onToggleDone 带回任务', (tester) async {
+    TodoTask? toggled;
+    await _pumpMatrix(tester, onToggleDone: (t) => toggled = t);
+    await tester.tap(find.byType(CircleCheckbox).first);
     await tester.pumpAndSettle();
-    // 回到概览：轴行文案消失，四格回归
-    expect(find.text('紧急 · 重要 · 1 项'), findsNothing);
-    expect(find.text('计划做'), findsOneWidget);
+    expect(toggled, isNotNull);
   });
 }

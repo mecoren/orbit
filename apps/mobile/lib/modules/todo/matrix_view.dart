@@ -3,32 +3,34 @@ import 'package:flutter/services.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_dimens.dart';
-import '../../core/theme/app_motion.dart';
-import '../../core/theme/app_shapes.dart';
 import '../../core/theme/orbit_accents.dart';
-import '../../core/theme/icon_map.dart';
 import '../../data/api/dto.dart';
+import '../../shared/utils/hex_color.dart';
 import '../../shared/widgets/shadcn/orbit_card.dart';
-import '../../shared/widgets/shadcn/orbit_list_card.dart';
+import '../../shared/widgets/shadcn/orbit_checkbox.dart';
+import '../../shared/widgets/shadcn/orbit_strikethrough.dart';
 import 'logic/task_logic.dart';
 
-/// 四象限视图（Eisenhower Matrix）
+/// 四象限视图（Eisenhower Matrix，竞品口径版式）
 ///
-/// 移动端形态取舍：
-/// - **概览 + 下钻两态**：手机宽度摆不下桌面版四格一屏铺开的完整工作面，
-///   概览 2×2 格只放计数与前三条标题预览（点格看全量），格间用
-///   `IntrinsicHeight` 同行等高；下钻态整页滚动展示该象限全部任务行，
-///   行直接复用列表档 [buildTile]（勾选 / 侧滑 / 提醒徽标全功能不欠账）。
+/// **整幅 2×2 恒在**（不再概览/下钻两态）：四个象限卡同屏等分剩余高度，
+/// 任务行直接列在格内、超出格高**格内自滚**（半屏宽的格里右侧日期列会挤掉
+/// 标题，行版式改「标题 + 截止日期」纵排两行）；空象限格内居中「没有任务」。
+/// 行为与列表档对齐：点行进详情、勾选完成、长按弹行操作菜单。
+///
 /// - **轴口径**见 [groupEisenhower]：重要 = 优先级≥高，紧急 = 截止≤今天末；
 ///   已完成不入桶——完成历史交给「已完成」视图。
-/// - 象限色带只落在格顶 3px（shadcn New York：描边 + 表面分层承载结构，
-///   色相只做象限识别信号，不整格铺色）。
-class EisenhowerMatrixBoard extends StatefulWidget {
+/// - **象限识别色**（整幅矩阵一套语义）：Ⅰ 红 = 火烧眉毛、Ⅱ 琥珀 = 要事计划、
+///   Ⅲ 蓝 = 临时插队、Ⅳ 绿 = 可放一放；头行罗马数字徽标与文案同色，
+///   全部取既有 token，不新增色值。
+class EisenhowerMatrixBoard extends StatelessWidget {
   const EisenhowerMatrixBoard({
     super.key,
     required this.tasks,
     required this.padding,
-    required this.buildTile,
+    required this.onOpen,
+    required this.onToggleDone,
+    this.onLongPress,
   });
 
   /// 已按当前排序档排好的任务集（matrix 档 hideDone 由调用方保证，完成行不入桶）
@@ -37,71 +39,75 @@ class EisenhowerMatrixBoard extends StatefulWidget {
   /// 外层让位标题栏的内边距（与列表档同口径，切换视图不跳动）
   final EdgeInsets padding;
 
-  /// 行构造口（列表档 [TodoTaskTile] 的包装；edge 由本视图按段位传）
-  final Widget Function(TodoTask task, {OrbitCardEdge edge}) buildTile;
+  final ValueChanged<TodoTask> onOpen;
+  final ValueChanged<TodoTask> onToggleDone;
 
-  @override
-  State<EisenhowerMatrixBoard> createState() => _EisenhowerMatrixBoardState();
-}
+  /// 长按行（弹操作菜单）；null = 无长按语义
+  final ValueChanged<TodoTask>? onLongPress;
 
-class _EisenhowerMatrixBoardState extends State<EisenhowerMatrixBoard> {
-  /// 下钻象限；null = 概览 2×2
-  EisenhowerQuadrant? _open;
-
-  /// 象限识别色（整幅矩阵共用一套语义：红=火烧眉毛、蓝=要事、
-  /// 琥珀=临时插队、灰=可放一放；全部取既有 token，不新增色值）
+  /// 象限识别色（Ⅰ 红 / Ⅱ 琥珀 / Ⅲ 蓝 / Ⅳ 绿）
   Color _tint(AppColorSet colors, EisenhowerQuadrant q) => switch (q) {
         EisenhowerQuadrant.urgentImportant => OrbitAccents.overdueRed,
-        EisenhowerQuadrant.importantNotUrgent => OrbitAccents.todoAccent,
-        EisenhowerQuadrant.urgentNotImportant => OrbitAccents.myDayAmber,
-        EisenhowerQuadrant.neither => colors.secondaryText,
+        EisenhowerQuadrant.importantNotUrgent => OrbitAccents.myDayAmber,
+        EisenhowerQuadrant.urgentNotImportant => OrbitAccents.todoAccent,
+        EisenhowerQuadrant.neither => OrbitAccents.doneGreen,
+      };
+
+  /// 罗马数字徽标（竞品同款象限序号）
+  String _roman(EisenhowerQuadrant q) => switch (q) {
+        EisenhowerQuadrant.urgentImportant => 'Ⅰ',
+        EisenhowerQuadrant.importantNotUrgent => 'Ⅱ',
+        EisenhowerQuadrant.urgentNotImportant => 'Ⅲ',
+        EisenhowerQuadrant.neither => 'Ⅳ',
       };
 
   @override
   Widget build(BuildContext context) {
-    final buckets = groupEisenhower(widget.tasks);
-    final open = _open;
-    final child = open == null
-        ? _overview(context, buckets)
-        : _drilldown(context, open, buckets[open] ?? const <TodoTask>[]);
-    return AnimatedSwitcher(
-      duration: AppMotion.viewSwitch,
-      switchInCurve: AppMotion.decelerate,
-      switchOutCurve: AppMotion.accelerate,
-      child: KeyedSubtree(
-        key: ValueKey('matrix-${open?.name ?? 'overview'}'),
-        child: child,
+    final buckets = groupEisenhower(tasks);
+    return Padding(
+      padding: padding,
+      child: Column(
+        children: [
+          Expanded(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Expanded(
+                  child: _cell(context, EisenhowerQuadrant.urgentImportant,
+                      buckets[EisenhowerQuadrant.urgentImportant]!),
+                ),
+                const SizedBox(width: AppDimens.cardGap),
+                Expanded(
+                  child: _cell(context, EisenhowerQuadrant.importantNotUrgent,
+                      buckets[EisenhowerQuadrant.importantNotUrgent]!),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: AppDimens.cardGap),
+          Expanded(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Expanded(
+                  child: _cell(context, EisenhowerQuadrant.urgentNotImportant,
+                      buckets[EisenhowerQuadrant.urgentNotImportant]!),
+                ),
+                const SizedBox(width: AppDimens.cardGap),
+                Expanded(
+                  child: _cell(context, EisenhowerQuadrant.neither,
+                      buckets[EisenhowerQuadrant.neither]!),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
 
-  // ── 概览：2×2 象限格 ──
-
-  Widget _overview(
-    BuildContext context,
-    Map<EisenhowerQuadrant, List<TodoTask>> buckets,
-  ) {
-    Widget row(EisenhowerQuadrant a, EisenhowerQuadrant b) => IntrinsicHeight(
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Expanded(child: _cell(context, a, buckets[a]!)),
-              const SizedBox(width: AppDimens.cardGap),
-              Expanded(child: _cell(context, b, buckets[b]!)),
-            ],
-          ),
-        );
-    return ListView(
-      padding: widget.padding,
-      children: [
-        row(EisenhowerQuadrant.urgentImportant,
-            EisenhowerQuadrant.importantNotUrgent),
-        const SizedBox(height: AppDimens.cardGap),
-        row(EisenhowerQuadrant.urgentNotImportant, EisenhowerQuadrant.neither),
-      ],
-    );
-  }
-
+  /// 象限卡：头行（罗马数字徽标 + 行动短语 + 计数）+ 1px 分隔线 +
+  /// 任务列（格内自滚；空象限居中「没有任务」）
   Widget _cell(
     BuildContext context,
     EisenhowerQuadrant q,
@@ -111,189 +117,168 @@ class _EisenhowerMatrixBoardState extends State<EisenhowerMatrixBoard> {
     final tint = _tint(colors, q);
     return OrbitCard(
       padding: EdgeInsets.zero,
-      child: InkWell(
-        borderRadius: AppShapes.medium,
-        onTap: () {
-          HapticFeedback.selectionClick();
-          setState(() => _open = q);
-        },
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // 象限色带：顶缘 3px，随格圆角只圆上缘
-            Container(
-              height: 3,
-              decoration: BoxDecoration(
-                color: tint,
-                borderRadius: const BorderRadius.vertical(
-                  top: Radius.circular(AppShapes.radiusMedium),
-                ),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.all(AppDimens.space12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          q.actionLabel,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                            color: colors.titleText,
-                          ),
-                        ),
-                      ),
-                      Text(
-                        '${tasks.length}',
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          color: tasks.isEmpty
-                              ? colors.secondaryText
-                              : tint,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: AppDimens.space2),
-                  Text(
-                    q.axisLabel,
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: colors.secondaryText,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(
+                AppDimens.space12, AppDimens.space8, AppDimens.space12,
+                AppDimens.space8),
+            child: Row(
+              children: [
+                Container(
+                  width: 16,
+                  height: 16,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(color: tint, shape: BoxShape.circle),
+                  child: Text(
+                    _roman(q),
+                    style: const TextStyle(
+                      fontSize: 9,
+                      height: 1,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFFFFFFFF),
                     ),
                   ),
-                  if (tasks.isNotEmpty) ...[
-                    const SizedBox(height: AppDimens.space8),
-                    // 前三条标题预览：给「点进去是什么」的实感，不占整格高度
-                    for (final t in tasks.take(3))
-                      Padding(
-                        padding: const EdgeInsets.only(top: AppDimens.space4),
-                        child: Text(
-                          t.title,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: colors.secondaryText,
-                          ),
+                ),
+                const SizedBox(width: AppDimens.space6),
+                Expanded(
+                  child: Text(
+                    q.actionLabel,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: tint,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: AppDimens.space4),
+                Text(
+                  '${tasks.length}',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    fontFeatures: const [FontFeature.tabularFigures()],
+                    color: tasks.isEmpty ? colors.secondaryText : tint,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Divider(height: 1, thickness: 1, color: colors.divider),
+          Expanded(
+            child: tasks.isEmpty
+                ? Center(
+                    child: Text(
+                      '没有任务',
+                      style:
+                          TextStyle(fontSize: 12, color: colors.secondaryText),
+                    ),
+                  )
+                : ListView.builder(
+                    padding: const EdgeInsets.symmetric(
+                        vertical: AppDimens.space2),
+                    itemCount: tasks.length,
+                    itemBuilder: (context, index) => _QuadrantRow(
+                      task: tasks[index],
+                      onOpen: onOpen,
+                      onToggleDone: onToggleDone,
+                      onLongPress: onLongPress,
+                    ),
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// 象限格内的紧凑任务行：勾选框 +「标题 / 截止日期」纵排两行
+///
+/// 半屏宽格里放不下列表档的右侧日期列，日期改落在标题下（竞品同款）：
+/// 相对口径 [formatDueShort]，未来/今天主题蓝、逾期红；完成态标题划线置灰。
+class _QuadrantRow extends StatelessWidget {
+  const _QuadrantRow({
+    required this.task,
+    required this.onOpen,
+    required this.onToggleDone,
+    this.onLongPress,
+  });
+
+  final TodoTask task;
+  final ValueChanged<TodoTask> onOpen;
+  final ValueChanged<TodoTask> onToggleDone;
+  final ValueChanged<TodoTask>? onLongPress;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = AppColors.ofContext(context);
+    final hex = priorityRingHex(task.priority);
+    final dueLabel =
+        task.dueDate == null ? null : formatDueShort(task.dueDate!);
+
+    return InkWell(
+      onTap: () => onOpen(task),
+      onLongPress: onLongPress == null ? null : () => onLongPress!(task),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppDimens.space12,
+          vertical: AppDimens.space6,
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SizedBox(
+              height: AppDimens.taskCheckboxSize,
+              child: CircleCheckbox(
+                checked: task.isDone,
+                onToggle: () {
+                  HapticFeedback.selectionClick();
+                  onToggleDone(task);
+                },
+                borderColor:
+                    hex == null ? null : hexToColor(hex),
+              ),
+            ),
+            const SizedBox(width: AppDimens.space8),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  AnimatedStrikethrough(
+                    text: task.title,
+                    done: task.isDone,
+                    maxLines: 1,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                      color: colors.titleText,
+                    ),
+                    doneColor: colors.secondaryText,
+                  ),
+                  if (dueLabel != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 2),
+                      child: Text(
+                        dueLabel,
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontFeatures: const [FontFeature.tabularFigures()],
+                          color: isOverdue(task)
+                              ? OrbitAccents.overdueRed
+                              : OrbitAccents.themeAccent,
                         ),
                       ),
-                    if (tasks.length > 3)
-                      Padding(
-                        padding: const EdgeInsets.only(top: AppDimens.space4),
-                        child: Text(
-                          '还有 ${tasks.length - 3} 条',
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: colors.secondaryText.withValues(alpha: 0.7),
-                          ),
-                        ),
-                      ),
-                  ],
+                    ),
                 ],
               ),
             ),
           ],
         ),
       ),
-    );
-  }
-
-  // ── 下钻：单象限全量列表 ──
-
-  Widget _drilldown(
-    BuildContext context,
-    EisenhowerQuadrant q,
-    List<TodoTask> tasks,
-  ) {
-    final colors = AppColors.ofContext(context);
-    final tint = _tint(colors, q);
-    return ListView(
-      padding: widget.padding,
-      children: [
-        // 返回行：整行可点回概览（不给独立返回钮，拇指热区更大）
-        InkWell(
-          onTap: () => setState(() => _open = null),
-          borderRadius: AppShapes.small,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: AppDimens.space8),
-            child: Row(
-              children: [
-                Icon(OrbitIcons.back,
-                    size: AppDimens.iconSizeSm, color: colors.titleText),
-                const SizedBox(width: AppDimens.space8),
-                Expanded(
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 3,
-                        height: AppDimens.iconSizeSm,
-                        decoration: BoxDecoration(
-                          color: tint,
-                          borderRadius: AppShapes.small,
-                        ),
-                      ),
-                      const SizedBox(width: AppDimens.space8),
-                      Expanded(
-                        child: Text(
-                          q.actionLabel,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                            color: colors.titleText,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                Text(
-                  '${q.axisLabel} · ${tasks.length} 项',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: colors.secondaryText,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-        const SizedBox(height: AppDimens.space4),
-        if (tasks.isEmpty)
-          Padding(
-            padding: const EdgeInsets.only(top: AppDimens.space32),
-            child: Column(
-              children: [
-                Icon(
-                  OrbitIcons.grid,
-                  size: AppDimens.iconSizeLg * 2,
-                  color: colors.secondaryText.withValues(alpha: 0.4),
-                ),
-                const SizedBox(height: AppDimens.space12),
-                Text(
-                  '这格是空的',
-                  style: TextStyle(fontSize: 13, color: colors.secondaryText),
-                ),
-              ],
-            ),
-          )
-        else
-          // 任务行按段位成卡（与列表档「逾期置顶」区块同视觉语言）
-          for (var i = 0; i < tasks.length; i++)
-            widget.buildTile(
-              tasks[i],
-              edge: OrbitCardEdge.of(i, tasks.length),
-            ),
-      ],
     );
   }
 }

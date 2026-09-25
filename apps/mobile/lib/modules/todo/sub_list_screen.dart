@@ -312,11 +312,14 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
                 ),
             ],
           ),
-          OrbitPanelItem(
-            icon: OrbitIcons.listChecks,
-            label: '批量选择',
-            onTap: _enterSelectionFromPanel,
-          ),
+          // 批量选择仅列表档：选区行（_SelectionRow）只在列表档渲染，
+          // 看板/表格/矩阵的行不换装，多选态在这些档没有视觉落点
+          if (_viewMode == TaskViewMode.list)
+            OrbitPanelItem(
+              icon: OrbitIcons.listChecks,
+              label: '批量选择',
+              onTap: _enterSelectionFromPanel,
+            ),
         ],
       ],
     );
@@ -1385,9 +1388,11 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
                 : showMatrix
                     ? EisenhowerMatrixBoard(
                         tasks: visible,
-                        // 象限卡/下钻卡与标准列表卡同让位：左右 12 页边
+                        // 象限卡与标准列表卡同让位：左右 12 页边
                         padding: cardListPadding,
-                        buildTile: buildTile,
+                        onOpen: (t) => context.push('/todo/${t.id}'),
+                        onToggleDone: _toggleDone,
+                        onLongPress: _showTaskActions,
                       )
                     : isLogbook
             ? _LogbookList(
@@ -1499,9 +1504,10 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
               );
 
     // 下拉刷新：只接标准列表 / Logbook / 手动重排分支——看板是横滑、表格是定表头
-    // 横滚列，RefreshIndicator 会与横向拖拽抢同一手势；空态无 Scrollable 也触发不了。
+    // 横滚列、矩阵是格内自滚的 2×2 恒在板，嵌套滚动手势会与下拉刷新打架；
+    // 空态无 Scrollable 也触发不了。
     // 指示条用 edgeOffset 下移到 OrbitPageHeader 之下，否则被页头盖住看不见。
-    final Widget body = visible.isEmpty || showKanban || showTable
+    final Widget body = visible.isEmpty || showKanban || showTable || showMatrix
         ? list
         : RefreshIndicator(
             onRefresh: () => pullToRefresh(ref),
