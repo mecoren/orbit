@@ -946,6 +946,19 @@ class MockOrbitBridge implements OrbitBridge {
   }
 
   @override
+  Future<List<TaskDescriptionFlag>> taskDescriptionFlags() => _delay(() {
+        final rows = store.tasks.values
+            .where((t) => (t['is_deleted'] as int) == 0)
+            .where((t) =>
+                t['description'] != null &&
+                (t['description'] as String).isNotEmpty)
+            .map((t) => TaskDescriptionFlag(taskId: t['id'] as int))
+            .toList()
+          ..sort((a, b) => a.taskId.compareTo(b.taskId));
+        return rows;
+      });
+
+  @override
   Future<List<TaskAttachmentView>> taskAttachmentsList(int taskId) {
     return _delay(() {
       return store.attachments.values

@@ -248,6 +248,29 @@ pub async fn task_dependency_flags(pool: &SqlitePool) -> CoreResult<Vec<TaskDepe
     Ok(rows)
 }
 
+/// 「有描述」任务 id 位（行内元信息投影；只读）
+///
+/// 列表通道裁剪 `description`（见 `generic_repo::LIST_COLUMNS_TASKS_PRUNED`，
+/// 万级列表下该列占 IPC 体积 47%）后，前端列表行拿不到描述原文——行内描述
+/// 图标只需「有无」一位，本投影**只出有描述的行**（无描述任务缺位即 false），
+/// 不回传原文不破列裁剪。
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+pub struct TaskDescriptionFlag {
+    pub task_id: i64,
+}
+
+/// 任务→「有描述」投影（只读；只出 description 非空串的存活行）
+pub async fn task_description_flags(pool: &SqlitePool) -> CoreResult<Vec<TaskDescriptionFlag>> {
+    let rows: Vec<TaskDescriptionFlag> = sqlx::query_as(
+        "SELECT id AS task_id FROM todo_tasks \
+         WHERE is_deleted = 0 AND description IS NOT NULL AND description != '' \
+         ORDER BY id",
+    )
+    .fetch_all(pool)
+    .await?;
+    Ok(rows)
+}
+
 /// 子任务完成状态切换 + 自动重算父任务 percent_done
 pub async fn toggle_todo_subtask_done(
     pool: &SqlitePool,
@@ -2863,6 +2886,20 @@ mod task_projection_tests {
         .id
     }
 
+    async fn mk_task_with_desc(pool: &SqlitePool, title: &str, description: Option<&str>) -> i64 {
+        create_todo_task(
+            pool,
+            &TodoTaskCreateInput {
+                title: title.into(),
+                description: description.map(|d| d.into()),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap()
+        .id
+    }
+
     async fn mk_label(pool: &SqlitePool, title: &str) -> i64 {
         create_todo_label(
             pool,
@@ -2989,10 +3026,30 @@ mod task_projection_tests {
     }
 
     #[tokio::test]
+    async fn description_flags_only_non_empty_alive_rows() {
+        let pool = setup_db().await;
+        let t_no_desc = mk_task(&pool, "无描述").await;
+        let t_with_desc = mk_task_with_desc(&pool, "有描述", Some("正文")).await;
+        // 空串 = 无描述口径（与 SQL description != '' 一致）
+        let _t_empty_desc = mk_task_with_desc(&pool, "空描述", Some("")).await;
+        // 软删行不出现（软删墓碑进回收站，列表行图标不亮）
+        let t_dead = mk_task_with_desc(&pool, "软删带描述", Some("正文")).await;
+        crate::api::business_api::delete_todo_task(&pool, t_dead)
+            .await
+            .unwrap();
+
+        let flags = task_description_flags(&pool).await.unwrap();
+        assert_eq!(flags.len(), 1);
+        assert_eq!(flags[0].task_id, t_with_desc);
+        assert!(flags.iter().all(|f| f.task_id != t_no_desc));
+    }
+
+    #[tokio::test]
     async fn projections_empty_on_fresh_db() {
         let pool = setup_db().await;
         assert!(task_labels_projection(&pool).await.unwrap().is_empty());
         assert!(task_reminders_projection(&pool).await.unwrap().is_empty());
         assert!(task_dependency_flags(&pool).await.unwrap().is_empty());
+        assert!(task_description_flags(&pool).await.unwrap().is_empty());
     }
 }

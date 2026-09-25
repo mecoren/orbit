@@ -263,3 +263,7 @@ Future<List<TaskRemindersProjection>> taskRemindersProjection() =>
 /// 任务→关联计数旗标（对应桌面 task_dependency_flags；Wave 5 的 C7 消费）
 Future<List<TaskDependencyFlags>> taskDependencyFlags() =>
     RustLib.instance.api.crateApiTodoTaskDependencyFlags();
+
+/// 任务→「有描述」投影（对应桌面 task_description_flags；只出有描述的行）
+Future<List<TaskDescriptionFlag>> taskDescriptionFlags() =>
+    RustLib.instance.api.crateApiTodoTaskDescriptionFlags();

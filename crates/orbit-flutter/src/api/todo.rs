@@ -43,7 +43,7 @@ use orbit_core::models::business::{
 // 同理 ProjectedTaskLabel / ProjectedReminder 仅作为分组 labels/reminders
 // 的元素类型出现，不再导出（否则 unused_imports）。
 pub use super::dto::{
-    CompleteTaskResult, ListFilter, TaskDependencyFlags, TaskLabelsProjection,
+    CompleteTaskResult, ListFilter, TaskDependencyFlags, TaskDescriptionFlag, TaskLabelsProjection,
     TaskRemindersProjection, TodoComment, TodoCommentCreateInput, TodoLabel, TodoLabelCreateInput,
     TodoProject, TodoProjectCreateInput, TodoReminder, TodoReminderCreateInput, TodoSubtask,
     TodoSubtaskCreateInput, TodoTask, TodoTaskCreateInput, TodoTaskDetail, TodoTaskLabel,
@@ -555,4 +555,13 @@ pub async fn task_dependency_flags() -> Result<Vec<TaskDependencyFlags>, String>
         .await
         .map_err(|e| e.to_string())
         .map(|v| v.into_iter().map(TaskDependencyFlags::from).collect())
+}
+
+/// 任务→「有描述」投影（对应桌面 task_description_flags；只出有描述的行）
+pub async fn task_description_flags() -> Result<Vec<TaskDescriptionFlag>, String> {
+    let pool = pool()?;
+    todo_api::task_description_flags(&pool)
+        .await
+        .map_err(|e| e.to_string())
+        .map(|v| v.into_iter().map(TaskDescriptionFlag::from).collect())
 }

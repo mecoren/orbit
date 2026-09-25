@@ -652,6 +652,17 @@ class TaskDependencyFlags {
       );
 }
 
+/// 「有描述」任务 id 位（列表通道裁剪 description 后行内描述图标的来源；
+/// 只出有描述的行，无描述任务缺位即 false）
+class TaskDescriptionFlag {
+  final int taskId;
+
+  const TaskDescriptionFlag({required this.taskId});
+
+  factory TaskDescriptionFlag.fromJson(Map<String, dynamic> j) =>
+      TaskDescriptionFlag(taskId: j['task_id'] as int);
+}
+
 // ---------- 复杂查询：任务详情聚合 ----------
 
 class TodoTaskDetail extends TodoTask {

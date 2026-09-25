@@ -61,6 +61,14 @@ final taskDependencyFlagsProvider =
   return bridge.taskDependencyFlags();
 });
 
+/// 「有描述」任务 id 集（列表通道裁剪 description 后行内描述图标的来源）；
+/// 未就绪回落空集（不渲染图标，不阻塞列表）
+final taskDescriptionFlagsProvider = FutureProvider<Set<int>>((ref) async {
+  final bridge = ref.watch(orbitBridgeProvider);
+  final rows = await bridge.taskDescriptionFlags();
+  return {for (final r in rows) r.taskId};
+});
+
 /// 任务列表单次拉取上限（A5/B6，与桌面 `TASK_LIST_PAGE_SIZE` 同口径）：
 /// 单份缓存与列表页「不完整」条幅共用——结果集达到它即意味着还有未取到的
 /// 任务，条幅按此判定而非另开 count 接口。
@@ -201,6 +209,7 @@ void invalidateBusinessCaches(WidgetRef ref) {
   ref.invalidate(taskLabelsProjectionProvider);
   ref.invalidate(taskRemindersProjectionProvider);
   ref.invalidate(taskDependencyFlagsProvider);
+  ref.invalidate(taskDescriptionFlagsProvider);
   ref.invalidate(todoTasksProvider);
   ref.invalidate(taskDetailProvider);
   ref.invalidate(taskActivityProvider);

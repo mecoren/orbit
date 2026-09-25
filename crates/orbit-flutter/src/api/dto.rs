@@ -802,6 +802,19 @@ impl From<orbit_core::api::todo_api::TaskDependencyFlags> for TaskDependencyFlag
     }
 }
 
+/// 「有描述」任务 id 位（镜像 TaskDescriptionFlag；列表通道裁剪 description
+/// 后行内描述图标的来源，只出有描述的行）
+#[derive(Debug, Clone, Serialize)]
+pub struct TaskDescriptionFlag {
+    pub task_id: i64,
+}
+
+impl From<orbit_core::api::todo_api::TaskDescriptionFlag> for TaskDescriptionFlag {
+    fn from(f: orbit_core::api::todo_api::TaskDescriptionFlag) -> Self {
+        Self { task_id: f.task_id }
+    }
+}
+
 // ---------- CSV 导入（迁移路径；镜像 orbit_core::api::csv_import_api） ----------
 
 /// 一条映射后的待导入行（预览载荷）

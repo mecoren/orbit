@@ -327,6 +327,9 @@ abstract class OrbitBridge {
   /// 任务→关联计数旗标（仅出边存活行；Wave 5 的 C7 消费）
   Future<List<TaskDependencyFlags>> taskDependencyFlags();
 
+  /// 任务→「有描述」投影（只出 description 非空串的存活行；行内描述图标消费）
+  Future<List<TaskDescriptionFlag>> taskDescriptionFlags();
+
   // ── 同步配置与执行 ──
 
   /// 当前同步配置；未配置时返回 null

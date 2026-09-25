@@ -314,6 +314,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<TaskDependencyFlags> dco_decode_list_task_dependency_flags(dynamic raw);
 
   @protected
+  List<TaskDescriptionFlag> dco_decode_list_task_description_flag(dynamic raw);
+
+  @protected
   List<TaskLabelWithId> dco_decode_list_task_label_with_id(dynamic raw);
 
   @protected
@@ -448,6 +451,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   TaskDependencyFlags dco_decode_task_dependency_flags(dynamic raw);
+
+  @protected
+  TaskDescriptionFlag dco_decode_task_description_flag(dynamic raw);
 
   @protected
   TaskLabelWithId dco_decode_task_label_with_id(dynamic raw);
@@ -903,6 +909,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  List<TaskDescriptionFlag> sse_decode_list_task_description_flag(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   List<TaskLabelWithId> sse_decode_list_task_label_with_id(
     SseDeserializer deserializer,
   );
@@ -1063,6 +1074,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   TaskDependencyFlags sse_decode_task_dependency_flags(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  TaskDescriptionFlag sse_decode_task_description_flag(
     SseDeserializer deserializer,
   );
 
@@ -1638,6 +1654,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_list_task_description_flag(
+    List<TaskDescriptionFlag> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_list_task_label_with_id(
     List<TaskLabelWithId> self,
     SseSerializer serializer,
@@ -1865,6 +1887,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_task_dependency_flags(
     TaskDependencyFlags self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_task_description_flag(
+    TaskDescriptionFlag self,
     SseSerializer serializer,
   );
 

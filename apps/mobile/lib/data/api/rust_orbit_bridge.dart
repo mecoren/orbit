@@ -518,6 +518,12 @@ class RustOrbitBridge implements OrbitBridge {
               ))
           .toList();
 
+  @override
+  Future<List<TaskDescriptionFlag>> taskDescriptionFlags() async =>
+      (await gen_todo.taskDescriptionFlags())
+          .map((f) => TaskDescriptionFlag(taskId: f.taskId))
+          .toList();
+
   // ── 同步配置与执行 ──
 
   @override

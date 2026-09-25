@@ -36,6 +36,9 @@ enum DbCacheTarget {
   /// 任务→关联计数投影（列表行内「有关联」徽标）
   taskDependencyProjection,
 
+  /// 任务→「有描述」投影（列表行内描述图标；description 在列表通道被裁剪）
+  taskDescriptionProjection,
+
   /// 保存的筛选器
   savedFilters,
 
@@ -52,12 +55,14 @@ enum DbCacheTarget {
 /// - 子表（标签关联/子任务）只影响详情聚合，不碰主列表；
 /// - 提醒行 / 关联行例外：除详情聚合外还刷新各自的列表行投影（行内徽标读它）。
 List<DbCacheTarget> planTableInvalidation(String table) => switch (table) {
+      // 描述编辑走任务 UPDATE：行内描述图标位（行元信息投影）随行失效
       'todo_tasks' => const [
           DbCacheTarget.tasks,
           DbCacheTarget.taskDetail,
           DbCacheTarget.trashTasks,
           DbCacheTarget.stats,
           DbCacheTarget.search,
+          DbCacheTarget.taskDescriptionProjection,
         ],
       'todo_projects' => const [
           DbCacheTarget.projects,
@@ -129,6 +134,8 @@ bool invalidateByTable(WidgetRef ref, String table) {
         ref.invalidate(taskRemindersProjectionProvider);
       case DbCacheTarget.taskDependencyProjection:
         ref.invalidate(taskDependencyFlagsProvider);
+      case DbCacheTarget.taskDescriptionProjection:
+        ref.invalidate(taskDescriptionFlagsProvider);
       case DbCacheTarget.savedFilters:
         ref.invalidate(savedFiltersProvider);
       case DbCacheTarget.taskActivity:

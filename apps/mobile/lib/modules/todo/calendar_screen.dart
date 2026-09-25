@@ -256,6 +256,9 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
     final remindersByTask = {
       for (final r in reminderRows) r.taskId: r.reminders,
     };
+    // 「有描述」任务 id 集（列表通道裁剪 description，图标位走行元信息投影）
+    final descriptionIds = ref.watch(taskDescriptionFlagsProvider).value ??
+        const <int>{};
     final now = DateTime.now();
     final todayYmd = _ymd(now);
     final selectedYmd = _ymd(_selectedDate);
@@ -494,6 +497,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                         tasks: byDay[selectedYmd] ?? const <TodoTask>[],
                         isToday: selectedYmd == todayYmd,
                         holidayMark: holidayByDate[selectedYmd]?.isHoliday,
+                        descriptionIds: descriptionIds,
                         remindersByTask: remindersByTask,
                         nowMs: now.millisecondsSinceEpoch,
                         onOpenTask: _openTask,
@@ -788,6 +792,7 @@ class _SelectedDayList extends StatelessWidget {
     required this.tasks,
     required this.isToday,
     required this.holidayMark,
+    required this.descriptionIds,
     required this.remindersByTask,
     required this.nowMs,
     required this.onOpenTask,
@@ -800,6 +805,9 @@ class _SelectedDayList extends StatelessWidget {
 
   /// 休/班徽标：true 休 / false 班 / null 不渲染
   final bool? holidayMark;
+
+  /// 「有描述」任务 id 集（列表通道裁剪 description 后的行内图标位）
+  final Set<int> descriptionIds;
   final Map<int, List<ProjectedReminder>> remindersByTask;
   final int nowMs;
   final ValueChanged<int> onOpenTask;
@@ -907,6 +915,7 @@ class _SelectedDayList extends StatelessWidget {
                 edge: OrbitCardEdge.of(i, tasks.length),
                 child: _DayTaskRow(
                   task: tasks[i],
+                  hasDescription: descriptionIds.contains(tasks[i].id),
                   reminder: displayReminder(
                     remindersByTask[tasks[i].id] ??
                         const <ProjectedReminder>[],
@@ -932,12 +941,16 @@ class _SelectedDayList extends StatelessWidget {
 class _DayTaskRow extends StatelessWidget {
   const _DayTaskRow({
     required this.task,
+    required this.hasDescription,
     required this.reminder,
     required this.onToggle,
     required this.onOpen,
   });
 
   final TodoTask task;
+
+  /// 有无描述（列表通道裁剪 description，位来自行元信息投影）
+  final bool hasDescription;
 
   /// 行内提醒载荷；null（无存活提醒）不渲染
   final DisplayReminder? reminder;
@@ -962,8 +975,7 @@ class _DayTaskRow extends StatelessWidget {
           size: 12,
           color: reminder!.fired ? OrbitAccents.overdueRed : colors.iconText,
         ),
-      if (task.description != null && task.description!.isNotEmpty)
-        Icon(OrbitIcons.fileText, size: 12, color: colors.iconText),
+      if (hasDescription) Icon(OrbitIcons.fileText, size: 12, color: colors.iconText),
     ];
 
     return InkWell(
