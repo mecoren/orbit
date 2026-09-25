@@ -13,9 +13,9 @@ import 'logic/task_logic.dart';
 ///
 /// 移动端形态取舍：
 /// - 桌面六列 `完成 / 标题 / 项目 / 标签 / 截止 / 优先级` 在 360dp 宽度下
-///   放不下六栏文本，故按**权重压缩**：完成 24、标题 flex 3、项目 flex 2、
-///   标签 36（色点列）、截止 64、优先级 28（色点列）——色点列替代文本列，
-///   信息不丢且不折行。
+///   放不下六栏文本，故按**权重压缩**：完成 24、标题 flex 4、项目 flex 2、
+///   标签 36（色点列）、截止 76——优先级由勾选框描边环承载（2026-09-25
+///   与列表/看板同口径），不再单设色点列，信息不丢且不折行。
 /// - 不做表内编辑（桌面同样无表内编辑），点行开详情、长按弹操作菜单。
 /// - `ListView.builder` 惰性构建，不引入虚拟化库。
 class TaskTableView extends StatelessWidget {
@@ -108,14 +108,6 @@ class TaskTableView extends StatelessWidget {
             child: Text('截止', style: style),
           ),
         ),
-        SizedBox(
-          width: 28,
-          child: FittedBox(
-            fit: BoxFit.scaleDown,
-            alignment: Alignment.centerRight,
-            child: Text('优先级', style: style),
-          ),
-        ),
       ],
     );
   }
@@ -150,7 +142,7 @@ class TaskTableView extends StatelessWidget {
             ),
             const SizedBox(width: AppDimens.space8),
             Expanded(
-              flex: 3,
+              flex: 4,
               child: AnimatedStrikethrough(
                 text: task.title,
                 done: task.isDone,
