@@ -15,7 +15,10 @@ import 'providers/todo_providers.dart';
 import '../../shared/widgets/shadcn/orbit_heatmap.dart';
 import '../../core/theme/icon_map.dart';
 
-/// 统计页签 /todo/stats（backlog #25：统计仪表盘）
+/// 统计页 /todo/stats（backlog #25：统计仪表盘）
+///
+/// 2026-09-25 起不再占底栏页签（五页签改今天/清单/日历/四象限/更多），
+/// 由「更多」面板推入——[showBack] 传 true 出返回键（页签根语义已退役）。
 ///
 /// 数据 = bridge.statsAggregate 一次性聚合（只读）：
 /// - 总览五卡 + streak 行；
@@ -23,7 +26,10 @@ import '../../core/theme/icon_map.dart';
 ///   月份标签/Portal 同款 tooltip/少多图例，组件见 orbit_heatmap.dart）；
 /// - 项目 / 优先级 / 星期三分布卡（纯 Row 条形，不引图表库）。
 class StatsScreen extends ConsumerStatefulWidget {
-  const StatsScreen({super.key});
+  const StatsScreen({super.key, this.showBack = false});
+
+  /// 页头返回键（根级推入页开启）
+  final bool showBack;
 
   @override
   ConsumerState<StatsScreen> createState() => _StatsScreenState();
@@ -148,8 +154,8 @@ class _StatsScreenState extends ConsumerState<StatsScreen> {
             right: 0,
             child: OrbitPageHeader(
               title: '统计',
-              // 页签根：无返回键（底部导航承担回退语义）
-              showBack: false,
+              // 根级推入页：出返回键（底栏页签不承载本页）
+              showBack: widget.showBack,
             ),
           ),
         ],

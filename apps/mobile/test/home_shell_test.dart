@@ -1,5 +1,5 @@
-// 底部导航壳测试：页签切换、今天页签页头（日期副标）、中央添加钮、
-// 「今天」页签角标（MockOrbitBridge 注入 + 生产路由表全链路）。
+// 底部导航壳测试：页签切换、今天页签页头（日期副标）、右下悬浮新建钮、
+// 「更多」面板、「今天」页签角标（MockOrbitBridge 注入 + 生产路由表全链路）。
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -8,8 +8,8 @@ import 'package:orbit/data/api/mock_orbit_bridge.dart';
 import 'package:orbit/data/providers/bridge_provider.dart';
 import 'package:orbit/modules/todo/calendar_screen.dart';
 import 'package:orbit/modules/todo/logic/task_logic.dart';
+import 'package:orbit/modules/todo/matrix_screen.dart';
 import 'package:orbit/modules/todo/sidebar_screen.dart';
-import 'package:orbit/modules/todo/stats_screen.dart';
 import 'package:orbit/shared/widgets/shadcn/orbit_bottom_nav.dart';
 import 'package:orbit/shared/widgets/shadcn/orbit_fab.dart';
 import 'support/orbit_test_app.dart';
@@ -35,23 +35,24 @@ MockOrbitBridge _seededBridge() {
 }
 
 void main() {
-  testWidgets('初始落「今天」页签：页头今天 + 日期副标，页签栏四枚 + 中央添加钮',
+  testWidgets('初始落「今天」页签：页头今天 + 日期副标，五枚页签无中央添加钮',
       (tester) async {
     await _pump(tester, _seededBridge());
 
     expect(find.text('今天'), findsWidgets); // 页头 + 页签
     // 日期副标（M月D日 周X）随页签根出现
     expect(find.text(todayHeaderLabel(DateTime.now())), findsOneWidget);
-    // 四枚页签
+    // 五枚页签
     expect(find.byType(OrbitBottomNav), findsOneWidget);
     expect(find.text('清单'), findsOneWidget);
     expect(find.text('日历'), findsOneWidget);
-    expect(find.text('统计'), findsOneWidget);
-    // 中央添加钮 = 壳里唯一的 OrbitFab 实例（页面内 FAB 已上收）
+    expect(find.text('四象限'), findsOneWidget);
+    expect(find.text('更多'), findsOneWidget);
+    // 悬浮新建钮 = 壳里唯一的 OrbitFab 实例
     expect(find.byType(OrbitFab), findsOneWidget);
   });
 
-  testWidgets('切页签：清单 → 日历 → 统计 → 回今天，各自页面渲染', (tester) async {
+  testWidgets('切页签：清单 → 日历 → 四象限 → 回今天，各自页面渲染', (tester) async {
     await _pump(tester, _seededBridge());
 
     await tester.tap(find.text('清单'));
@@ -63,23 +64,41 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byType(CalendarScreen), findsOneWidget);
 
-    await tester.tap(find.text('统计'));
+    await tester.tap(find.text('四象限'));
     await tester.pumpAndSettle();
-    expect(find.byType(StatsScreen), findsOneWidget);
+    expect(find.byType(MatrixScreen), findsOneWidget);
 
     await tester.tap(find.text('今天'));
     await tester.pumpAndSettle();
     expect(find.text(todayHeaderLabel(DateTime.now())), findsOneWidget);
   });
 
-  testWidgets('中央添加钮：点击弹出快速添加面板', (tester) async {
+  testWidgets('悬浮新建钮：点击弹出快速添加面板', (tester) async {
     await _pump(tester, _seededBridge());
 
-    // 中央添加钮是壳内唯一的 OrbitFab（页面内 FAB 已上收）
+    // 悬浮钮是壳内唯一的 OrbitFab
     await tester.tap(find.byType(OrbitFab));
     await tester.pumpAndSettle();
 
     expect(find.text('准备做什么？'), findsOneWidget);
+  });
+
+  testWidgets('「更多」动作位：点击弹出次级目的地面板（不切页签）', (tester) async {
+    await _pump(tester, _seededBridge());
+
+    await tester.tap(find.text('更多'));
+    await tester.pumpAndSettle();
+
+    // 面板条目齐出
+    expect(find.text('统计'), findsOneWidget);
+    expect(find.text('回收站'), findsOneWidget);
+    expect(find.text('设置'), findsOneWidget);
+
+    // 点条目导航：进统计页（根级推入，底栏随之隐藏）
+    await tester.tap(find.text('统计'));
+    await tester.pumpAndSettle();
+    expect(find.text('总任务'), findsOneWidget);
+    expect(find.byType(OrbitBottomNav), findsNothing);
   });
 
   testWidgets('「今天」页签角标：有今天截止未完成任务时显示计数', (tester) async {

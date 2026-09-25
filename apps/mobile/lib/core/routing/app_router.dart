@@ -16,6 +16,7 @@ import '../../modules/settings/template_manager_page.dart';
 import '../../modules/shell/home_shell.dart';
 import '../../modules/todo/calendar_screen.dart';
 import '../../modules/todo/detail_screen.dart';
+import '../../modules/todo/matrix_screen.dart';
 import '../../modules/todo/project_edit_page.dart';
 import '../../modules/todo/saved_filters_screen.dart';
 import '../../modules/todo/search_screen.dart';
@@ -33,7 +34,8 @@ import '../../modules/todo/logic/task_logic.dart';
 /// /todo/tasks              任务子列表（页签栈内入栈，底栏常驻；
 ///                          query 三参数互斥 view/projectId/ungrouped）
 /// /todo/projects/:id/edit  项目（清单）编辑整页
-/// /todo/calendar /todo/stats  「日历」「统计」页签
+/// /todo/calendar /todo/matrix  「日历」「四象限」页签
+/// /todo/stats              统计（「更多」面板推入的根级页，底栏隐藏）
 /// /todo/:id                任务详情全屏（根级路由，覆盖页签壳、底栏隐藏）
 /// /settings        设置
 /// /about           关于
@@ -151,15 +153,24 @@ final appRouter = GoRouter(
                 tabRoot(const CalendarScreen(), key: state.pageKey),
           ),
         ]),
-        // ── 统计 ──
+        // ── 四象限 ──
         StatefulShellBranch(routes: [
           GoRoute(
-            path: '/todo/stats',
+            path: '/todo/matrix',
             pageBuilder: (context, state) =>
-                tabRoot(const StatsScreen(), key: state.pageKey),
+                tabRoot(const MatrixScreen(), key: state.pageKey),
           ),
         ]),
       ],
+    ),
+    // 统计：「更多」面板推入的根级页（底栏隐藏；静态段声明在 /todo/:id
+    // 动态段之前，不会落进详情路由）
+    GoRoute(
+      path: '/todo/stats',
+      pageBuilder: (context, state) => pageSlideFromRight(
+        const StatsScreen(showBack: true),
+        key: state.pageKey,
+      ),
     ),
     // 任务详情：根级全屏页（覆盖页签壳，底栏隐藏）；go_router 静态段优先于
     // 动态段，/todo/tasks 等不会落进本路由

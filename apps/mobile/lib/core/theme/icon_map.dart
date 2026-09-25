@@ -25,6 +25,9 @@ abstract final class OrbitIcons {
 
   /// 纵向省略号（页头溢出菜单）
   static const IconData moreVertical = LucideIcons.ellipsisVertical;
+
+  /// 横向省略号（底部导航「更多」动作位）
+  static const IconData more = LucideIcons.ellipsis;
   static const IconData chevronRight = LucideIcons.chevronRight;
   static const IconData chevronLeft = LucideIcons.chevronLeft;
   static const IconData expandMore = LucideIcons.chevronDown;
