@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_dimens.dart';
+import '../../../core/theme/app_motion.dart';
 import '../../../core/theme/icon_map.dart';
+import '../../../core/theme/orbit_accents.dart';
 
 /// 页头（设计系�?v3：替换原「液态玻璃标题栏」）
 ///
@@ -31,8 +33,10 @@ class OrbitPageHeader extends StatelessWidget implements PreferredSizeWidget {
     this.title,
     this.titleWidget,
     this.leading,
-    // 功能�?
+    // 功能槽
     this.actions,
+    // 完成进度线（0..1；null 不渲染）
+    this.progress,
   });
 
   /// 行高（页面内容区让位基准；与�?`OrbitPageHeader.rowHeight` 同值同义）
@@ -58,12 +62,18 @@ class OrbitPageHeader extends StatelessWidget implements PreferredSizeWidget {
   /// 尾随动作插槽（多个自由控件）
   final List<Widget>? actions;
 
+  /// 完成进度线（0..1，TickTick 列表页头语义）：落在页头底缘的 2px 主题色线，
+  /// 覆在 1px 描边之上；null 不渲染。进度变化走隐式动画补间。
+  final double? progress;
+
   @override
   Size get preferredSize => const Size.fromHeight(rowHeight);
 
   @override
   Widget build(BuildContext context) {
     final colors = AppColors.ofContext(context);
+    // 实例字段进闭包前先落本地：Dart 流分析不提升成员字段可空性
+    final headerProgress = progress;
     return Material(
       color: colors.surface,
       // 状态栏避让：表面铺满状态栏区域（同页头色，与页头连成一片不露页面底色），
@@ -75,18 +85,51 @@ class OrbitPageHeader extends StatelessWidget implements PreferredSizeWidget {
         bottom: false,
         child: Container(
           height: rowHeight,
-          padding: const EdgeInsets.symmetric(horizontal: AppDimens.space16),
           decoration: BoxDecoration(
             border: Border(
               bottom: BorderSide(color: colors.outline, width: 1),
             ),
           ),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
+          child: Stack(
+            // passthrough：标题行保持满高（默认 loose 会把 Row 收缩到内容高，
+            // 标题垂直居中基准整体上移——页头避让几何测试拦下的回归）
+            fit: StackFit.passthrough,
             children: [
-              ?_buildLeading(context, colors),
-              Expanded(child: _buildTitle(context, colors)),
-              _buildTrailing(),
+              // 内边距挂在标题行上而不是 Container 上：进度线要通栏（与它
+              // 覆盖的 1px 描边同宽），收进 padding 会两头各缩 16px
+              Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: AppDimens.space16),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    ?_buildLeading(context, colors),
+                    Expanded(child: _buildTitle(context, colors)),
+                    _buildTrailing(),
+                  ],
+                ),
+              ),
+              // 进度线：钳在 [0,1] 防脏入参溢出；TweenAnimationBuilder 隐式
+              // 补间进度变化（首次构建 begin=end，不播从 0 涨过来的入场动画）
+              if (headerProgress != null)
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  child: TweenAnimationBuilder<double>(
+                    tween: Tween(end: headerProgress.clamp(0.0, 1.0)),
+                    duration: AppMotion.normal,
+                    curve: AppMotion.standard,
+                    builder: (context, value, _) => FractionallySizedBox(
+                      alignment: Alignment.centerLeft,
+                      widthFactor: value,
+                      child: Container(
+                        height: 2,
+                        color: OrbitAccents.themeAccent,
+                      ),
+                    ),
+                  ),
+                ),
             ],
           ),
         ),

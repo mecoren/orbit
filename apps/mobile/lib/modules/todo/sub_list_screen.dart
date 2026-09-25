@@ -1515,6 +1515,42 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
             child: OrbitPageHeader(
               // 选择态下标题栏让位给「已选 N 项」，与桌面多选头部同口径
               title: _selectionMode ? '已选 ${_selected.length} 项' : title,
+              // 非选择态：标题旁挂未完成计数（TickTick 页头语义）；Logbook
+              // 态 undone 恒空，不渲染计数。count 与 Flexible 同行防长标题溢出
+              titleWidget: _selectionMode
+                  ? null
+                  : Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w600,
+                              color: colors.titleText,
+                            ),
+                          ),
+                        ),
+                        if (undone.isNotEmpty) ...[
+                          const SizedBox(width: AppDimens.space6),
+                          Text(
+                            '${undone.length}',
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: colors.secondaryText,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+              // 完成进度线（TickTick 列表页头语义）：只在「既有未完成又有
+              // 已完成」时出现——看板/表格档隐藏完成行（done 空）、Logbook
+              // 恒为完成集（undone 空），进度线在这些档位只会误导
+              progress: !_selectionMode && undone.isNotEmpty && done.isNotEmpty
+                  ? done.length / (done.length + undone.length)
+                  : null,
               actions: _selectionMode
                   ? [
                       TextButton(
