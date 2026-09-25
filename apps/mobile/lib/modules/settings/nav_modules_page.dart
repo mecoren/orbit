@@ -14,11 +14,13 @@ import '../shell/nav_modules.dart';
 
 /// 功能模块配置页（底部导航可配置；「更多」面板「编辑」入口，对齐竞品）
 ///
-/// **两段列表**：已启用（红圈减号 = 停用）/ 未启用（绿圈加号 = 启用），段内
-/// 右端拖拽手柄重排。规则见 [NavModulesState]：底栏 = 启用序前
-/// [NavModulesState.bottomTabLimit] 个模块 + 固定「更多」动作位，其余启用
-/// 模块收进「更多」面板；最后一个启用模块不可停用（减号置灰）。
-/// 配置即写即落盘（[navModulesProvider]），底栏/面板实时跟随重建。
+/// **顶部底栏预览 + 两段列表**：预览底栏落位（启用序前
+/// [NavModulesState.bottomTabLimit] 个模块 + 固定「更多」位，只读，启停/
+/// 重排实时跟随——编辑操作页顶部预览同口径）；已启用（红圈减号 = 停用）/
+/// 未启用（绿圈加号 = 启用）段内右端拖拽手柄重排。规则见 [NavModulesState]：
+/// 底栏 = 启用序前 [NavModulesState.bottomTabLimit] 个模块 + 固定「更多」
+/// 动作位，其余启用模块收进「更多」面板；最后一个启用模块不可停用
+/// （减号置灰）。配置即写即落盘（[navModulesProvider]），底栏/面板实时跟随重建。
 class NavModulesPage extends ConsumerWidget {
   const NavModulesPage({super.key});
 
@@ -40,6 +42,8 @@ class NavModulesPage extends ConsumerWidget {
                 bottom: AppDimens.gestureInsetFallback + AppDimens.space32,
               ),
               children: [
+                _NavPreview(bottomTabs: nav.bottomTabs),
+                const SizedBox(height: AppDimens.cardGap),
                 _section(
                   context,
                   ref,
@@ -57,7 +61,8 @@ class NavModulesPage extends ConsumerWidget {
                 ),
                 const SizedBox(height: AppDimens.space12),
                 Text(
-                  '底栏显示启用列表的前 ${NavModulesState.bottomTabLimit} 个模块，'
+                  '上方为底栏预览（与真实底栏同形同序）；底栏显示启用列表的前 '
+                  '${NavModulesState.bottomTabLimit} 个模块，'
                   '其余入口收在「更多」面板里。',
                   style: TextStyle(
                     fontSize: 12,
@@ -130,6 +135,47 @@ class NavModulesPage extends ConsumerWidget {
               enabledSection: enabledSection,
               canToggle: enabledSection ? modules.length > 1 : true,
             ),
+        ],
+      ),
+    );
+  }
+}
+
+/// 底栏落位预览（只读）：启用序前 [NavModulesState.bottomTabLimit] 个模块 +
+/// 固定「更多」位，与真实底栏同形（56 高 + 表面 + 描边 + 页签均分 + 22 图标，
+/// 图标独立展示无文字——与 [OrbitBottomNav] 同口径）。
+///
+/// 落位即所见：调用方传当前 [NavModulesState.bottomTabs]，启停/重排经
+/// provider 重建即跟随（编辑操作页顶部预览同口径，但此处无拖拽跟手——
+/// 预览只读，不参与手势）。
+class _NavPreview extends StatelessWidget {
+  const _NavPreview({required this.bottomTabs});
+
+  /// 当前底栏页签（启用序前 N 个，不含「更多」位）
+  final List<OrbitNavModule> bottomTabs;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = AppColors.ofContext(context);
+    return Container(
+      key: const ValueKey('nav-preview'),
+      height: 56,
+      decoration: BoxDecoration(
+        color: colors.surface,
+        borderRadius: AppShapes.medium,
+        border: Border.all(color: colors.outline),
+      ),
+      child: Row(
+        children: [
+          for (final m in bottomTabs)
+            Expanded(
+              child: Icon(m.icon,
+                  size: AppDimens.iconSizeLg, color: colors.iconText),
+            ),
+          Expanded(
+            child: Icon(OrbitIcons.more,
+                size: AppDimens.iconSizeLg, color: colors.iconText),
+          ),
         ],
       ),
     );

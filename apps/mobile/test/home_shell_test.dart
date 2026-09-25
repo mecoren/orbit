@@ -37,21 +37,27 @@ MockOrbitBridge _seededBridge() {
   return bridge;
 }
 
+/// 底栏页签按图标定位（栏体纯图标无文字，见 OrbitBottomNav）
+Finder _navIcon(IconData icon) => find.descendant(
+      of: find.byType(OrbitBottomNav),
+      matching: find.byIcon(icon),
+    );
+
 void main() {
   setUp(() => LocalPrefs.resetForTest());
   testWidgets('初始落「今天」页签：页头今天 + 日期副标，五枚页签无中央添加钮',
       (tester) async {
     await _pump(tester, _seededBridge());
 
-    expect(find.text('今天'), findsWidgets); // 页头 + 页签
+    expect(find.text('今天'), findsOneWidget); // 仅页头（底栏纯图标无文字）
     // 日期副标（M月D日 周X）随页签根出现
     expect(find.text(todayHeaderLabel(DateTime.now())), findsOneWidget);
-    // 五枚页签
+    // 五枚页签（图标定位）
     expect(find.byType(OrbitBottomNav), findsOneWidget);
-    expect(find.text('清单'), findsOneWidget);
-    expect(find.text('日历'), findsOneWidget);
-    expect(find.text('四象限'), findsOneWidget);
-    expect(find.text('更多'), findsOneWidget);
+    expect(_navIcon(OrbitIcons.list), findsOneWidget);
+    expect(_navIcon(OrbitIcons.calendarDays), findsOneWidget);
+    expect(_navIcon(OrbitIcons.grid), findsOneWidget);
+    expect(_navIcon(OrbitIcons.more), findsOneWidget);
     // 悬浮新建钮 = 壳里唯一的 OrbitFab 实例
     expect(find.byType(OrbitFab), findsOneWidget);
   });
@@ -59,20 +65,20 @@ void main() {
   testWidgets('切页签：清单 → 日历 → 四象限 → 回今天，各自页面渲染', (tester) async {
     await _pump(tester, _seededBridge());
 
-    await tester.tap(find.text('清单'));
+    await tester.tap(_navIcon(OrbitIcons.list));
     await tester.pumpAndSettle();
     expect(find.byType(SidebarScreen), findsOneWidget);
     expect(find.text('循迹'), findsOneWidget);
 
-    await tester.tap(find.text('日历'));
+    await tester.tap(_navIcon(OrbitIcons.calendarDays));
     await tester.pumpAndSettle();
     expect(find.byType(CalendarScreen), findsOneWidget);
 
-    await tester.tap(find.text('四象限'));
+    await tester.tap(_navIcon(OrbitIcons.grid));
     await tester.pumpAndSettle();
     expect(find.byType(MatrixScreen), findsOneWidget);
 
-    await tester.tap(find.text('今天'));
+    await tester.tap(_navIcon(OrbitIcons.sun));
     await tester.pumpAndSettle();
     expect(find.text(todayHeaderLabel(DateTime.now())), findsOneWidget);
   });
@@ -91,7 +97,7 @@ void main() {
       (tester) async {
     await _pump(tester, _seededBridge());
 
-    await tester.tap(find.text('更多'));
+    await tester.tap(_navIcon(OrbitIcons.more));
     await tester.pumpAndSettle();
 
     // 面板标题行 + 次级目的地条目齐出（默认配置：统计/搜索/回收站/设置）
@@ -112,25 +118,75 @@ void main() {
       (tester) async {
     await _pump(tester, _seededBridge());
 
-    await tester.tap(find.text('更多'));
+    await tester.tap(_navIcon(OrbitIcons.more));
     await tester.pumpAndSettle();
     await tester.tap(find.text('编辑'));
     await tester.pumpAndSettle();
 
     expect(find.text('功能模块'), findsOneWidget);
     expect(find.text('已启用'), findsOneWidget);
-    expect(find.text('未启用'), findsOneWidget);
-    // 池内 8 模块全员可见可配
-    for (final label in ['今天', '清单', '日历', '四象限', '统计', '搜索', '回收站', '设置']) {
+    // 顶部预览把下方内容顶出首屏：两段 ReorderableListView 懒构建，
+    // 滚到可见再断言（外层 ListView 显式指定，内层段列表不可滚会歧义）
+    final pageScroll = find.byType(Scrollable).first;
+    // 首屏：已启用段 4 行齐出
+    for (final label in ['今天', '清单', '日历', '四象限']) {
       expect(find.text(label), findsOneWidget);
     }
+    await tester.scrollUntilVisible(find.text('未启用'), 200,
+        scrollable: pageScroll);
+    expect(find.text('未启用'), findsOneWidget);
+    // 滚到底：未启用段 4 行齐出（池内 8 模块全员可见可配）
+    await tester.scrollUntilVisible(find.text('设置'), 200,
+        scrollable: pageScroll);
+    for (final label in ['统计', '搜索', '回收站', '设置']) {
+      expect(find.text(label), findsOneWidget);
+    }
+  });
+
+  testWidgets('功能模块配置页：顶部底栏预览跟随启用序', (tester) async {
+    await _pump(tester, _seededBridge());
+
+    await tester.tap(_navIcon(OrbitIcons.more));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('编辑'));
+    await tester.pumpAndSettle();
+
+    // 预览 = 底栏落位：今天/清单/日历/四象限 + 更多（纯图标）
+    final preview = find.byKey(const ValueKey('nav-preview'));
+    expect(preview, findsOneWidget);
+    for (final icon in [
+      OrbitIcons.sun,
+      OrbitIcons.list,
+      OrbitIcons.calendarDays,
+      OrbitIcons.grid,
+      OrbitIcons.more,
+    ]) {
+      expect(
+        find.descendant(of: preview, matching: find.byIcon(icon)),
+        findsOneWidget,
+      );
+    }
+
+    // 默认启用序第 4 枚减号停用四象限 → 预览由统计顺延顶替
+    await tester.tap(find.byIcon(OrbitIcons.remove).at(3));
+    await tester.pumpAndSettle();
+    expect(
+      find.descendant(
+          of: preview, matching: find.byIcon(OrbitIcons.grid)),
+      findsNothing,
+    );
+    expect(
+      find.descendant(
+          of: preview, matching: find.byIcon(OrbitIcons.trending)),
+      findsOneWidget,
+    );
   });
 
   testWidgets('配置页停用「四象限」：返回壳后底栏页签由统计顺延顶替',
       (tester) async {
     await _pump(tester, _seededBridge());
 
-    await tester.tap(find.text('更多'));
+    await tester.tap(_navIcon(OrbitIcons.more));
     await tester.pumpAndSettle();
     await tester.tap(find.text('编辑'));
     await tester.pumpAndSettle();
@@ -142,10 +198,10 @@ void main() {
 
     await tester.tap(find.byTooltip('返回'));
     await tester.pumpAndSettle();
-    // 底栏：四象限消失，启用序第 5 位「统计」顺延进底栏
-    expect(find.text('四象限'), findsNothing);
-    expect(find.text('统计'), findsOneWidget);
-    expect(find.text('今天'), findsWidgets); // 页头 + 页签仍在
+    // 底栏：四象限图标消失，启用序第 5 位「统计」图标顺延进底栏
+    expect(_navIcon(OrbitIcons.grid), findsNothing);
+    expect(_navIcon(OrbitIcons.trending), findsOneWidget);
+    expect(find.text('今天'), findsOneWidget); // 仅页头（底栏纯图标）
   });
 
   testWidgets('「今天」页签角标：有今天截止未完成任务时显示计数', (tester) async {

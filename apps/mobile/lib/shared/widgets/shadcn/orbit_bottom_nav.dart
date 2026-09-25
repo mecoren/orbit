@@ -10,8 +10,9 @@ import '../../../core/theme/orbit_accents.dart';
 /// 对齐竞品主导航形态：页签均分整栏（末位固定「更多」动作页签，点击不切页
 /// 而是弹出来源锚定面板——面板内是次级目的地），「新建」上收页面右下悬浮钮
 /// （宿主 Scaffold 的 floatingActionButton，见 `home_shell.dart`）。
-/// 页签选中态 = 主题强调色（图标 + 文字 + w600），未选中 = 次要文字色；
-/// 页签可挂计数角标（红色小胶囊，<=0 不显示）。
+/// 页签**纯图标**（无文字，竞品同款）：选中态 = 主题强调色，未选中 =
+/// 次要文字色，读屏文案走语义标签（见 [_buildTab]）；页签可挂计数角标
+/// （红色小胶囊，<=0 不显示）。
 class OrbitBottomNav extends StatefulWidget {
   const OrbitBottomNav({
     super.key,
@@ -90,39 +91,35 @@ class _OrbitBottomNavState extends State<OrbitBottomNav> {
     );
   }
 
-  /// 页签：图标 + 文字纵向排布，整格可点（InkWell 水波溢出格内裁圆角）
+  /// 页签：纯图标居中，整格可点（InkWell 水波溢出格内裁圆角）；
+  /// 文字不渲染——读屏走外层语义标签（图标独立展示时无文字可读）
   Widget _buildTab(BuildContext context, AppColorSet colors, int index) {
     final item = widget.items[index];
     final selected = index == widget.currentIndex;
     final color =
         selected ? OrbitAccents.themeAccent : colors.secondaryText;
     final badge = widget.badges[index] ?? 0;
-    return InkWell(
-      onTap: () => _handleTap(index),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        key: index == widget.moreTabIndex ? _moreKey : null,
-        children: [
-          Stack(
-            clipBehavior: Clip.none,
-            children: [
-              Icon(item.icon, size: AppDimens.iconSizeLg, color: color),
-              // 角标贴图标右上角（允许溢出 Stack 绘制，不参与命中）
-              if (badge > 0)
-                Positioned(top: -5, right: -12, child: _buildBadge(badge)),
-            ],
-          ),
-          const SizedBox(height: AppDimens.space2),
-          Text(
-            item.label,
-            style: TextStyle(
-              fontSize: 10,
-              height: 1,
-              fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
-              color: color,
+    return Semantics(
+      label: item.label,
+      button: true,
+      selected: selected,
+      child: InkWell(
+        onTap: () => _handleTap(index),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          key: index == widget.moreTabIndex ? _moreKey : null,
+          children: [
+            Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Icon(item.icon, size: AppDimens.iconSizeLg, color: color),
+                // 角标贴图标右上角（允许溢出 Stack 绘制，不参与命中）
+                if (badge > 0)
+                  Positioned(top: -5, right: -12, child: _buildBadge(badge)),
+              ],
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -151,10 +148,12 @@ class _OrbitBottomNavState extends State<OrbitBottomNav> {
   }
 }
 
-/// 底部导航页签描述（图标 + 文案）
+/// 底部导航页签描述（图标独立展示 + 读屏语义文案）
 class OrbitBottomNavItem {
   const OrbitBottomNavItem({required this.icon, required this.label});
 
   final IconData icon;
+
+  /// 读屏文案（栏体不渲染文字，见 [_buildTab]）
   final String label;
 }
