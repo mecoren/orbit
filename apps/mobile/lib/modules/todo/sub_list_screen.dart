@@ -36,6 +36,7 @@ import 'logic/batch_actions.dart';
 // as rep：规避 Flutter widgets 自带 RepeatMode 类名冲突（同 detail_screen）
 import 'logic/quick_add_context.dart';
 import 'logic/repeat_logic.dart' as rep;
+import 'logic/display_prefs.dart';
 import 'logic/task_logic.dart';
 import 'logic/undo_stack.dart';
 import 'logic/view_mode.dart';
@@ -244,6 +245,7 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
   /// 「编辑项目」只在项目视图有，「看板分组」只在看板档有——常驻只会添噪音。
   void _showOverflowPanel() {
     final projectId = widget.query.projectId;
+    final prefs = ref.watch(displayPrefsProvider);
     showOrbitDropdownPanel(
       context,
       topInset: MediaQuery.of(context).padding.top + OrbitPageHeader.rowHeight,
@@ -290,6 +292,20 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
             checked: !_doneExpanded,
             onTap: _toggleDoneSection,
           ),
+          // 显示详细（竞品同款）：关 = 行内只剩标题 + 右列时刻的紧凑形态
+          OrbitPanelItem(
+            icon: OrbitIcons.tableRows,
+            label: '显示详细',
+            checked: prefs.detail,
+            onTap: () => ref
+                .read(displayPrefsProvider.notifier)
+                .setDetail(!prefs.detail),
+          ),
+          OrbitPanelItem(
+            icon: OrbitIcons.settings,
+            label: '显示设置',
+            onTap: _showDisplaySettingsSheet,
+          ),
         ],
         [
           OrbitPanelItem(
@@ -322,6 +338,77 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
             ),
         ],
       ],
+    );
+  }
+
+  /// 显示设置抽屉（竞品「显示设置」）：行内副标题的三个粒度开关写即落盘；
+  /// 主开关关闭时清单/标签两位置灰（detail 关 = 副标题整行不渲染）
+  void _showDisplaySettingsSheet() {
+    final colors = AppColors.ofContext(context);
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: colors.popup,
+      shape: bottomSheetTopShape,
+      builder: (sheetContext) => Consumer(
+        builder: (context, ref, _) {
+          final prefs = ref.watch(displayPrefsProvider);
+          final controller = ref.read(displayPrefsProvider.notifier);
+          Widget row(String label, bool value, bool enabled,
+                  ValueChanged<bool> onChanged) =>
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: AppDimens.space16, vertical: AppDimens.space2),
+                child: SizedBox(
+                  height: AppDimens.touchTarget,
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Opacity(
+                          opacity: enabled ? 1 : 0.4,
+                          child: Text(
+                            label,
+                            style: TextStyle(
+                                fontSize: 14, color: colors.bodyText),
+                          ),
+                        ),
+                      ),
+                      Switch(
+                        value: value,
+                        onChanged: enabled ? onChanged : null,
+                      ),
+                    ],
+                  ),
+                ),
+              );
+
+          return OrbitSheetScaffold(
+            title: '显示设置',
+            maxHeightFactor: 0.5,
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                row('显示详细', prefs.detail, true,
+                    (v) => controller.setDetail(v)),
+                row('所属清单', prefs.project, prefs.detail,
+                    (v) => controller.setProject(v)),
+                row('标签', prefs.tags, prefs.detail,
+                    (v) => controller.setTags(v)),
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: AppDimens.space16, vertical: AppDimens.space8),
+                  child: Text(
+                    '「显示详细」关闭后任务行只显示标题与时刻；清单与标签仅在显示详细开启时生效。',
+                    style: TextStyle(
+                        fontSize: 12, color: colors.secondaryText),
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
     );
   }
 
@@ -1202,6 +1289,9 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
       for (final r in dependencyRows) r.taskId: r.relationCount,
     };
 
+    // 显示偏好（竞品「显示详细/显示设置」）：行内副标题渲染粒度
+    final displayPrefs = ref.watch(displayPrefsProvider);
+
     final visible = applyTaskListFilters(
       isLogbook
           ? filterTasks(tasks, widget.query)
@@ -1323,6 +1413,9 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
         projectTitle: projectTitle,
         projectColorHex: project?.hexColor,
         labels: labelsByTask[task.id] ?? const <ProjectedTaskLabel>[],
+        showDetail: displayPrefs.detail,
+        showProject: displayPrefs.project,
+        showTags: displayPrefs.tags,
         reminder: reminder,
         // 行内关联徽标（C7）：投影未命中即 0（不渲染），> 0 才出徽标
         relationCount: relationCountByTask[task.id] ?? 0,
@@ -2155,6 +2248,9 @@ class TodoTaskTile extends StatelessWidget {
     this.labels = const <ProjectedTaskLabel>[],
     this.reminder,
     this.relationCount = 0,
+    this.showDetail = true,
+    this.showProject = true,
+    this.showTags = true,
     this.onDelete,
     this.edge = OrbitCardEdge.none,
   });
@@ -2178,6 +2274,13 @@ class TodoTaskTile extends StatelessWidget {
 
   /// 出边关联条数（C7 投影）；0 = 无关联，不渲染徽标段
   final int relationCount;
+
+  /// 显示偏好（竞品「显示详细」）：detail=false 行内只剩标题 + 右列时刻；
+  /// project/tags 分别控制副标题里的所属清单 / 标签（detail 关着时不生效）。
+  /// 缺省全开——搜索页等未接偏好入口的复用面保持原渲染。
+  final bool showDetail;
+  final bool showProject;
+  final bool showTags;
   final VoidCallback onToggleDone;
 
   /// 长按回调（弹操作菜单）。manual 档（拖拽顺序）传 null：长按让位给
@@ -2285,9 +2388,11 @@ class TodoTaskTile extends StatelessWidget {
     final dueLabel =
         task.dueDate == null ? null : formatDueShort(task.dueDate!);
     final meta = _metaIcons(colors);
-    // 副标题（标签 / 项目名）有无：无则整行只留标题
-    final hasSubtitle =
-        labels.isNotEmpty || (projectTitle != null && task.projectId != null);
+    // 副标题（标签 / 项目名）有无：无则整行只留标题；显示偏好逐位门控
+    // （detail 关 = 单行紧凑形态，project/tags 不再参与）
+    final hasSubtitle = showDetail &&
+        ((showTags && labels.isNotEmpty) ||
+            (showProject && projectTitle != null && task.projectId != null));
 
     return Slidable(
       // 每行独立 key，避免虚拟化复用时动作面板串行
@@ -2385,8 +2490,9 @@ class TodoTaskTile extends StatelessWidget {
                             crossAxisAlignment: WrapCrossAlignment.center,
                             children: [
                               // 标签段：色点 + 名（最多 3 个，超出折叠 +N）
-                              ..._labelChips(colors),
-                              if (projectTitle != null &&
+                              if (showTags) ..._labelChips(colors),
+                              if (showProject &&
+                                  projectTitle != null &&
                                   task.projectId != null)
                                 Text(
                                   projectTitle!,
