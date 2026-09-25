@@ -67,8 +67,35 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  testWidgets('月历+分组列表：农历副标签渲染，任务卡点击进详情页', (tester) async {
+  testWidgets('月历+选中日任务卡：当天任务卡渲染，点击进详情页', (tester) async {
     final bridge = _seededBridge();
+    // 造一条今天截止的未完成任务：月档下方列表 = 选中日任务卡，
+    // 只有选中日（默认今天）的任务出现
+    final now = bridge.store.now();
+    bridge.store.tasks[8001] = {
+      'id': 8001,
+      'uuid': 'uuid-cal-1',
+      'title': '今日评审任务',
+      'description': null,
+      'project_id': null,
+      'priority': 3,
+      'status': 'pending',
+      'done': 0,
+      'done_at': null,
+      'due_date': now,
+      'start_date': null,
+      'repeat_after': 1,
+      'repeat_mode': 0,
+      'percent_done': 0,
+      'position': 999,
+      'is_favorite': 0,
+      'my_day_date': null,
+      'is_deleted': 0,
+      'created_at': now,
+      'updated_at': now,
+      'deleted_at': null,
+      'version': 1,
+    };
     await tester.pumpWidget(_wrap(const SizedBox(), bridge));
     await settle(tester);
 
@@ -76,9 +103,8 @@ void main() {
     // 星期表头存在（周一始）
     expect(find.text('一'), findsOneWidget);
 
-    // 种子里「完成移动端重构方案评审」截止在明天（now+1d）——
-    // 落在月历圆点 + 当月分组列表的任务卡（整页滚动布局下滚到可见）
-    final card = find.text('完成移动端重构方案评审');
+    // 选中日任务卡（整页滚动布局下滚到可见）
+    final card = find.text('今日评审任务');
     // 显式指定外层整页滚动：月历自带 PageView（可横滑翻月）也是 Scrollable，
     // 不限定会让 scrollUntilVisible 取到多个候选而抛 Bad state
     await tester.scrollUntilVisible(
@@ -256,9 +282,19 @@ void main() {
 
     // 网格必须真的渲染 10 月：10/1、10/2、10/8 的「休」与 10/10 的「班」可见。
     // 修复前 firstDay/lastDay 随 month 漂移（`month ± 5 年`），横滑后 PageView
-    // 页索引语义整体错位——标题已到 10 月而网格落在相邻月，徽标全无
-    expect(find.text('休'), findsNWidgets(3));
-    expect(find.text('班'), findsOneWidget);
+    // 页索引语义整体错位——标题已到 10 月而网格落在相邻月，徽标全无。
+    // 断言收窄在月历网格内：选中日（今天 9-25，mock 里也是「休」）的日期头
+    // 徽标会在网格之外多出一枚，不能计入网格渲染数
+    final gridHoliday = find.descendant(
+      of: find.byType(OrbitMonthCalendar),
+      matching: find.text('休'),
+    );
+    expect(gridHoliday, findsNWidgets(3));
+    final gridWorkday = find.descendant(
+      of: find.byType(OrbitMonthCalendar),
+      matching: find.text('班'),
+    );
+    expect(gridWorkday, findsOneWidget);
   });
 
   testWidgets('页签根语义：页头无返回键（日历已是底部页签，回退由导航承担）', (tester) async {
@@ -318,7 +354,7 @@ void main() {
 
     // 在整页滚动区上竖向拖动，验证滚动查看不崩溃且卡片仍渲染
     final anyCard = find.byWidgetPredicate(
-      (w) => w.runtimeType.toString() == '_TaskCard',
+      (w) => w.runtimeType.toString() == '_DayTaskRow',
     );
     expect(anyCard, findsWidgets);
     await tester.drag(find.byType(Scrollable).first, const Offset(0, -300));

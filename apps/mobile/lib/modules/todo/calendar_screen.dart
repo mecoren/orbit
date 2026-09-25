@@ -13,6 +13,8 @@ import '../../core/theme/orbit_accents.dart';
 import '../../data/api/dto.dart';
 import '../../data/providers/bridge_provider.dart';
 import '../../shared/utils/hex_color.dart';
+import '../../shared/widgets/shadcn/orbit_checkbox.dart';
+import '../../shared/widgets/shadcn/orbit_list_card.dart';
 import '../../shared/widgets/shadcn/orbit_strikethrough.dart';
 import '../../shared/widgets/shadcn/orbit_month_calendar.dart';
 import '../../shared/widgets/shadcn/orbit_page_header.dart';
@@ -153,6 +155,25 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
   /// 打开任务详情（稳定方法引用：分组 build 不再逐组创建闭包）
   void _openTask(int id) => context.push('/todo/$id');
 
+  /// 选中日任务卡勾选完成/取消（与列表档同口径：完成走 todoTaskComplete
+  /// 单事务推进重复任务，取消走普通 patch）
+  Future<void> _toggleDone(TodoTask task) async {
+    try {
+      if (task.isDone) {
+        await ref.read(orbitBridgeProvider).todoTaskUpdate(
+              task.id,
+              encodePatch(buildDoneTogglePatch(task)),
+            );
+      } else {
+        await ref.read(orbitBridgeProvider).todoTaskComplete(task.id);
+      }
+      ref.invalidate(todoTasksProvider);
+      ref.invalidate(taskDetailProvider);
+    } catch (_) {
+      WaitToast.destructive('更新失败');
+    }
+  }
+
   /// 切换月档 ⇄ 议程档。切入议程档时**一次性**定位到今天（当月今天有任务
   /// 分组时）——用户随后主动滚动不再干预，与桌面议程档「自动滚到今天」同口径
   void _toggleAgenda() {
@@ -194,6 +215,13 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
     final byDay = ref.watch(calendarByDayProvider).value ??
         const <String, List<TodoTask>>{};
     final holidayByDate = _holidayByDate();
+    // 提醒投影（A4 只读聚合）：选中日任务卡的行内提醒图标数据源，
+    // 未就绪回落空表（不渲染图标，不阻塞列表）
+    final reminderRows = ref.watch(taskRemindersProjectionProvider).value ??
+        const <TaskRemindersProjection>[];
+    final remindersByTask = {
+      for (final r in reminderRows) r.taskId: r.reminders,
+    };
     final now = DateTime.now();
     final todayYmd = _ymd(now);
     final selectedYmd = _ymd(_selectedDate);
@@ -330,89 +358,100 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                       ),
                       const SizedBox(height: AppDimens.space4),
                     ],
-                    // ===== 当月任务列表标题行 =====
-                    Padding(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: AppDimens.space16),
-                      child: Row(
-                        children: [
-                          Text(
-                            '${_month.year}年${_month.month}月的任务',
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w700,
-                              color: colors.titleText,
+                    // ===== 下方任务列表 =====
+                    // 月档 = 选中日任务卡（竞品口径：点日格看当天任务）；
+                    // 议程档 = 整月按日分组列表（桌面 agenda 档同语义，
+                    // 月标题 + 分组块原样保留）
+                    if (_agendaMode) ...[
+                      Padding(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: AppDimens.space16),
+                        child: Row(
+                          children: [
+                            Text(
+                              '${_month.year}年${_month.month}月的任务',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w700,
+                                color: colors.titleText,
+                              ),
                             ),
-                          ),
-                          const SizedBox(width: AppDimens.space6),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 7, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: colors.secondaryText
-                                  .withValues(alpha: 0.12),
-                              borderRadius: BorderRadius.circular(999),
+                            const SizedBox(width: AppDimens.space6),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 7, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: colors.secondaryText
+                                    .withValues(alpha: 0.12),
+                                borderRadius: BorderRadius.circular(999),
+                              ),
+                              child: Text(
+                                '$monthTotal 条',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: colors.secondaryText,
+                                ),
+                              ),
                             ),
-                            child: Text(
-                              '$monthTotal 条',
+                            const Spacer(),
+                            Text(
+                              // 议程档无网格可长按，改为提示横滑翻月
+                              '左右滑动切换月份',
                               style: TextStyle(
                                 fontSize: 11,
                                 color: colors.secondaryText,
                               ),
                             ),
-                          ),
-                          const Spacer(),
-                          Text(
-                            // 议程档无网格可长按，改为提示横滑翻月
-                            _agendaMode ? '左右滑动切换月份' : '长按日历快捷新增',
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: colors.secondaryText,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    // ===== 当月任务按日分组列表（与月历同页滚动） =====
-                    if (monthTotal == 0)
-                      Padding(
-                        padding: const EdgeInsets.all(AppDimens.space16),
-                        child: Row(
-                          children: [
-                            Icon(OrbitIcons.calendarBlocked,
-                                size: 16,
-                                color: colors.secondaryText
-                                    .withValues(alpha: 0.6)),
-                            const SizedBox(width: AppDimens.space8),
-                            Expanded(
-                              child: Text(
-                                _agendaMode
-                                    ? '本月没有带截止日期的任务，切换月份或点底部「+」新增'
-                                    : '本月没有带截止日期的任务，切换月份或长按日历新增',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: colors.secondaryText,
-                                ),
-                              ),
-                            ),
                           ],
                         ),
-                      )
-                    else
-                      for (final group in monthGroups)
-                        _MonthDayGroup(
-                          key: _groupKeyFor(_ymd(group.date)),
-                          date: group.date,
-                          isSelectedDay: _ymd(group.date) == selectedYmd,
-                          isToday: _ymd(group.date) == todayYmd,
-                          // 议程档日期头带休/班徽标（桌面 VirtualGroupedList
-                          // 的 showHolidayMark 同口径；月档右栏不带）
-                          holidayMark: _agendaMode
-                              ? holidayByDate[_ymd(group.date)]?.isHoliday
-                              : null,
-                          tasks: group.items,
-                          onOpenTask: _openTask,
-                        ),
+                      ),
+                      if (monthTotal == 0)
+                        Padding(
+                          padding: const EdgeInsets.all(AppDimens.space16),
+                          child: Row(
+                            children: [
+                              Icon(OrbitIcons.calendarBlocked,
+                                  size: 16,
+                                  color: colors.secondaryText
+                                      .withValues(alpha: 0.6)),
+                              const SizedBox(width: AppDimens.space8),
+                              Expanded(
+                                child: Text(
+                                  '本月没有带截止日期的任务，切换月份或点底部「+」新增',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: colors.secondaryText,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        )
+                      else
+                        for (final group in monthGroups)
+                          _MonthDayGroup(
+                            key: _groupKeyFor(_ymd(group.date)),
+                            date: group.date,
+                            isSelectedDay: _ymd(group.date) == selectedYmd,
+                            isToday: _ymd(group.date) == todayYmd,
+                            // 议程档日期头带休/班徽标（桌面 VirtualGroupedList
+                            // 的 showHolidayMark 同口径；月档右栏不带）
+                            holidayMark: holidayByDate[_ymd(group.date)]
+                                ?.isHoliday,
+                            tasks: group.items,
+                            onOpenTask: _openTask,
+                          ),
+                    ] else
+                      _SelectedDayList(
+                        date: _selectedDate,
+                        tasks: byDay[selectedYmd] ?? const <TodoTask>[],
+                        isToday: selectedYmd == todayYmd,
+                        holidayMark: holidayByDate[selectedYmd]?.isHoliday,
+                        remindersByTask: remindersByTask,
+                        nowMs: now.millisecondsSinceEpoch,
+                        onOpenTask: _openTask,
+                        onToggleDone: _toggleDone,
+                      ),
                   ],
                 ),
               ),
@@ -683,6 +722,264 @@ class _TaskCard extends StatelessWidget {
               ),
             Icon(OrbitIcons.chevronRight,
                 size: 18, color: colors.secondaryText),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// 月档下方：选中日任务卡（竞品口径）
+///
+/// 点日格即看当天任务：头行 = 日期语义头（今天 / M月D日 周X + N天后/前 +
+/// 农历/节日副标签 + 休/班徽标）+「长按日历快捷新增」提示；任务列同一张卡
+/// （[OrbitCardSegment] 分段描边），行 = 勾选框（优先级描边环）+ 标题 +
+/// 右列（时刻 + 元信息图标纵排）。当天无任务时居中「当天没有任务」。
+class _SelectedDayList extends StatelessWidget {
+  const _SelectedDayList({
+    required this.date,
+    required this.tasks,
+    required this.isToday,
+    required this.holidayMark,
+    required this.remindersByTask,
+    required this.nowMs,
+    required this.onOpenTask,
+    required this.onToggleDone,
+  });
+
+  final DateTime date;
+  final List<TodoTask> tasks;
+  final bool isToday;
+
+  /// 休/班徽标：true 休 / false 班 / null 不渲染
+  final bool? holidayMark;
+  final Map<int, List<ProjectedReminder>> remindersByTask;
+  final int nowMs;
+  final ValueChanged<int> onOpenTask;
+  final ValueChanged<TodoTask> onToggleDone;
+
+  static const _weekdayNames = ['一', '二', '三', '四', '五', '六', '日'];
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = AppColors.ofContext(context);
+    final subLabel = ChineseAlmanac.daySubLabel(date);
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: AppDimens.space16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // 日期语义头
+          Padding(
+            padding: const EdgeInsets.fromLTRB(
+                0, AppDimens.space8, 0, AppDimens.space4),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Text(
+                  isToday ? '今天' : '${date.month}月${date.day}日',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: isToday ? OrbitAccents.themeAccent : colors.titleText,
+                  ),
+                ),
+                if (!isToday) ...[
+                  const SizedBox(width: AppDimens.space8),
+                  Text(
+                    '星期${_weekdayNames[date.weekday - 1]}',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: colors.secondaryText,
+                    ),
+                  ),
+                ],
+                if (subLabel != null) ...[
+                  const SizedBox(width: AppDimens.space8),
+                  Flexible(
+                    child: Text(
+                      subLabel,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: colors.secondaryText,
+                      ),
+                    ),
+                  ),
+                ],
+                if (holidayMark != null) ...[
+                  const SizedBox(width: AppDimens.space6),
+                  Container(
+                    width: 16,
+                    height: 16,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: holidayMark!
+                          ? ChineseCalendarColors.weekend
+                          : ChineseCalendarColors.workdayBadge,
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Text(
+                      holidayMark! ? '休' : '班',
+                      style: const TextStyle(
+                        fontSize: 10,
+                        height: 1,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                ],
+                const Spacer(),
+                Text(
+                  '长按日历快捷新增',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: colors.secondaryText,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          // 任务卡：当天无任务居中提示，有任务按分段成卡
+          if (tasks.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: AppDimens.space20),
+              child: Center(
+                child: Text(
+                  '当天没有任务',
+                  style: TextStyle(fontSize: 12, color: colors.secondaryText),
+                ),
+              ),
+            )
+          else
+            for (var i = 0; i < tasks.length; i++) ...[
+              if (i > 0) const SizedBox(height: AppDimens.space2),
+              OrbitCardSegment(
+                edge: OrbitCardEdge.of(i, tasks.length),
+                child: _DayTaskRow(
+                  task: tasks[i],
+                  reminder: displayReminder(
+                    remindersByTask[tasks[i].id] ??
+                        const <ProjectedReminder>[],
+                    nowMs,
+                    taskDone: tasks[i].isDone,
+                  ),
+                  onToggle: () => onToggleDone(tasks[i]),
+                  onOpen: () => onOpenTask(tasks[i].id),
+                ),
+              ),
+            ],
+        ],
+      ),
+    );
+  }
+}
+
+/// 选中日任务卡的行：勾选框（优先级描边环）+ 标题 + 右列（时刻 / 元信息图标）
+///
+/// 与主列表行同一信息层级，但日期由头行表达——右列只出时刻（带时刻的任务），
+/// 未来/今天主题蓝、逾期红；重复 / 提醒 / 描述元信息图标压在时刻下方右对齐
+/// （图标档 12，与主列表行同源）。
+class _DayTaskRow extends StatelessWidget {
+  const _DayTaskRow({
+    required this.task,
+    required this.reminder,
+    required this.onToggle,
+    required this.onOpen,
+  });
+
+  final TodoTask task;
+
+  /// 行内提醒载荷；null（无存活提醒）不渲染
+  final DisplayReminder? reminder;
+  final VoidCallback onToggle;
+  final VoidCallback onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = AppColors.ofContext(context);
+    final hex = priorityRingHex(task.priority);
+    final d = task.dueDate == null
+        ? null
+        : DateTime.fromMillisecondsSinceEpoch(task.dueDate!);
+    final hasTime = d != null &&
+        (d.hour != 0 || d.minute != 0 || d.second != 0 || d.millisecond != 0);
+    final meta = <Widget>[
+      if (task.repeatMode > 0)
+        Icon(OrbitIcons.repeat, size: 12, color: colors.iconText),
+      if (reminder != null)
+        Icon(
+          OrbitIcons.notification,
+          size: 12,
+          color: reminder!.fired ? OrbitAccents.overdueRed : colors.iconText,
+        ),
+      if (task.description != null && task.description!.isNotEmpty)
+        Icon(OrbitIcons.fileText, size: 12, color: colors.iconText),
+    ];
+
+    return InkWell(
+      onTap: onOpen,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppDimens.space12,
+          vertical: AppDimens.space8,
+        ),
+        child: Row(
+          children: [
+            CircleCheckbox(
+              checked: task.isDone,
+              onToggle: onToggle,
+              borderColor: hex == null ? null : hexToColor(hex),
+            ),
+            const SizedBox(width: AppDimens.space12),
+            Expanded(
+              child: AnimatedStrikethrough(
+                text: task.title,
+                done: task.isDone,
+                maxLines: 1,
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                  color: colors.titleText,
+                ),
+                doneColor: colors.secondaryText,
+              ),
+            ),
+            if (hasTime || meta.isNotEmpty) ...[
+              const SizedBox(width: AppDimens.space8),
+              Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  if (hasTime)
+                    Text(
+                      '${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontFeatures: const [FontFeature.tabularFigures()],
+                        color: isOverdue(task)
+                            ? OrbitAccents.overdueRed
+                            : OrbitAccents.themeAccent,
+                      ),
+                    ),
+                  if (meta.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 2),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          for (var i = 0; i < meta.length; i++) ...[
+                            if (i > 0) const SizedBox(width: AppDimens.space6),
+                            meta[i],
+                          ],
+                        ],
+                      ),
+                    ),
+                ],
+              ),
+            ],
           ],
         ),
       ),
