@@ -1039,10 +1039,12 @@ class _QuickCapsule extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        // 4pt 网格口径（10→12 / 4 不变）
+        padding: const EdgeInsets.symmetric(
+            horizontal: AppDimens.space12, vertical: AppDimens.space4),
         decoration: BoxDecoration(
-          borderRadius: AppShapes.full,
-          border: Border.all(color: colors.outline)),
+            borderRadius: AppShapes.full,
+            border: Border.all(color: colors.outline)),
         child: Text(
           label,
           style: TextStyle(fontSize: 12, color: colors.secondaryText),
@@ -1106,7 +1108,9 @@ class _TitleParseChips extends StatelessWidget {
   }) {
     final colors = AppColors.ofContext(context);
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      // 4pt 网格口径（3→4）
+      padding: const EdgeInsets.symmetric(
+          horizontal: AppDimens.space8, vertical: AppDimens.space4),
       decoration: BoxDecoration(
         borderRadius: AppShapes.full,
         border: Border.all(color: colors.outline),
@@ -1115,7 +1119,7 @@ class _TitleParseChips extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           Icon(icon, size: 12, color: color),
-          const SizedBox(width: 4),
+          const SizedBox(width: AppDimens.space4),
           Text(
             label,
             style: TextStyle(fontSize: 12, color: color),

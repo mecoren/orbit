@@ -205,17 +205,17 @@ class _OverviewCards extends StatelessWidget {
         Row(
           children: [
             Expanded(child: cell('总任务', overview.total)),
-            const SizedBox(width: AppDimens.space8),
+            const SizedBox(width: AppDimens.cardGap),
             Expanded(child: cell('已完成', overview.done)),
-            const SizedBox(width: AppDimens.space8),
+            const SizedBox(width: AppDimens.cardGap),
             Expanded(child: cell('未完成', overview.pending)),
           ],
         ),
-        const SizedBox(height: AppDimens.space8),
+        const SizedBox(height: AppDimens.cardGap),
         Row(
           children: [
             Expanded(child: cell('近 7 天完成', overview.doneLast7d)),
-            const SizedBox(width: AppDimens.space8),
+            const SizedBox(width: AppDimens.cardGap),
             Expanded(child: cell('近 30 天完成', overview.doneLast30d)),
           ],
         ),

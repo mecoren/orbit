@@ -245,19 +245,24 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                                 size: AppDimens.iconSizeLg),
                             onPressed: _prevMonth,
                             tooltip: '上个月',
-                            visualDensity: VisualDensity.compact,
                           ),
                           Expanded(
                             child: GestureDetector(
                               // 标题点击 = 年视图
                               onTap: _openYearOverview,
-                              child: Text(
-                                '${_month.year}年${_month.month}月',
-                                textAlign: TextAlign.center,
-                                style: TextStyle(
-                                  fontSize: 17,
-                                  fontWeight: FontWeight.w800,
-                                  color: colors.titleText,
+                              // FittedBox 保单行：窄屏去掉 compact 后标题可用宽
+                              // 变小，等比缩字不折行（工具条行高保持稳定）
+                              child: FittedBox(
+                                fit: BoxFit.scaleDown,
+                                child: Text(
+                                  '${_month.year}年${_month.month}月',
+                                  maxLines: 1,
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    fontSize: 17,
+                                    fontWeight: FontWeight.w600,
+                                    color: colors.titleText,
+                                  ),
                                 ),
                               ),
                             ),
@@ -267,7 +272,6 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                                 size: AppDimens.iconSizeLg),
                             onPressed: _nextMonth,
                             tooltip: '下个月',
-                            visualDensity: VisualDensity.compact,
                           ),
                           const SizedBox(width: AppDimens.space4),
                           IconButton(
@@ -275,7 +279,6 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                                 size: AppDimens.iconSizeMd),
                             onPressed: _goToday,
                             tooltip: '回到今天',
-                            visualDensity: VisualDensity.compact,
                           ),
                           // 月档 ⇄ 议程档切换（年档由标题点击进入，见 _openYearOverview）
                           IconButton(
@@ -287,7 +290,6 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                             ),
                             onPressed: _toggleAgenda,
                             tooltip: _agendaMode ? '切换到月历' : '切换到议程',
-                            visualDensity: VisualDensity.compact,
                           ),
                           _buildUpdateButton(),
                         ],
@@ -629,8 +631,9 @@ class _TaskCard extends StatelessWidget {
     final hasTime =
         task.dueDate != null && (task.dueDate! % 86400000) != 0; // 零点=纯日期
 
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
+    return InkWell(
+      // 按压水波与卡片同圆角（GestureDetector 无任何按压反馈）
+      borderRadius: AppShapes.of(10),
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.symmetric(

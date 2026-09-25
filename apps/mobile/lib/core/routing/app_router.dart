@@ -235,6 +235,11 @@ final appRouter = GoRouter(
         key: state.pageKey,
       ),
     ),
-    GoRoute(path: '/about', builder: (context, state) => const AboutPage()),
+    GoRoute(
+      path: '/about',
+      // 与同级设置子页统一右滑入转场（原裸 builder 无转场，突兀）
+      pageBuilder: (context, state) =>
+          pageSlideFromRight(const AboutPage(), key: state.pageKey),
+    ),
   ],
 );
