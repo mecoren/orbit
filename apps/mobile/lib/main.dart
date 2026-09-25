@@ -38,6 +38,13 @@ Future<void> main() async {
   // 本机 UI 偏好（隐藏已完成等视图态）：首帧前载入，失败静默走默认值
   await LocalPrefs.load();
 
+  // 图片解码缓存上限（内存收口 2026-09-25）：Flutter 默认 1000 张 / 100MB，
+  // 附件图多的库来回浏览会把驻留顶高；解码侧已有 cacheWidth 降采样
+  // （orbit_image_thumb / detail_screen），这里再给缓存总量封顶。
+  PaintingBinding.instance.imageCache
+    ..maximumSize = 300
+    ..maximumSizeBytes = 60 << 20;
+
   runApp(
     ProviderScope(
       overrides: [

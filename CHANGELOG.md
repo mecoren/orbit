@@ -16,6 +16,17 @@
 
 ## [Unreleased]
 
+### 移动端内存收口（2026-09-25）
+
+- **五个 family provider 改 autoDispose**（`taskDetailProvider` / `taskActivityProvider` /
+  `searchProvider` / `statsProvider` / `todoTasksSearchProvider`）：riverpod 3 的 family
+  默认不自动回收，浏览过的每个任务详情/活动轨迹、搜过的每个关键词（含结果快照）、
+  翻过的每个统计年份（含 365 天聚合）都常驻到进程结束；改后仅当前在看的实例驻留，
+  离开即释放。
+- **图片解码缓存封顶**：`imageCache` 从默认 1000 张/100MB 收到 300 张/60MB
+  （`main.dart`，解码侧本有 cacheWidth 降采样，此处补缓存总量上限）。
+- 全量 597 项 flutter test 通过——无用例依赖跨页缓存常驻语义。
+
 ### 移动端列表页头完成进度线与未完成计数（2026-09-25）
 
 - **页头新增完成进度线**（`OrbitPageHeader.progress` 可选槽，TickTick 列表页头语义）：

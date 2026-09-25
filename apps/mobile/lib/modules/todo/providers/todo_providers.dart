@@ -83,8 +83,11 @@ final todoTasksProvider = FutureProvider<List<TodoTask>>((ref) async {
 /// （title + description，description 仅在 keyword 非空时随行传输）。
 /// 保留给列表内搜索类入口（docs/05 §4.2 未接线设计稿的「搜索展开」），
 /// 禁止用 [todoTasksProvider] 缓存做客户端关键词过滤（见其文档注释）。
-final todoTasksSearchProvider =
-    FutureProvider.family<List<TodoTask>, String>((ref, keyword) async {
+///
+/// autoDispose：关键词 family 桶按词累积（每词一份整页结果），当前无
+/// 消费点也按未来接线口径收紧——有监听才驻留。
+final todoTasksSearchProvider = FutureProvider.autoDispose.family
+    <List<TodoTask>, String>((ref, keyword) async {
   final bridge = ref.watch(orbitBridgeProvider);
   return bridge.todoTaskList(
     ListFilter(keyword: keyword, pageSize: taskListPageSize),
@@ -92,7 +95,11 @@ final todoTasksSearchProvider =
 });
 
 /// 任务详情聚合查询键（任务本体 + 子任务/标签/评论/关联/提醒）
-final taskDetailProvider = FutureProvider.family<TodoTaskDetail, int>(
+///
+/// autoDispose（内存收口 2026-09-25）：riverpod 3 的 family 默认**不**自动
+/// 回收，浏览过的每个任务详情会常驻到进程结束；详情缓存只在详情页存活期
+/// 有意义，离开即释放，重进重新拉取。
+final taskDetailProvider = FutureProvider.autoDispose.family<TodoTaskDetail, int>(
   (ref, taskId) => ref.watch(orbitBridgeProvider).todoTaskGetDetail(taskId),
 );
 
@@ -101,8 +108,10 @@ final taskDetailProvider = FutureProvider.family<TodoTaskDetail, int>(
 /// N 条」。时间倒序由 core 收口。不进 invalidateBusinessCaches：
 /// 全量任务列表事件会先于轨迹 INSERT 到达，靠它刷新会读到旧行，
 /// 失效口只挂 boot_gate 的 todo_activity_log 事件）
+///
+/// autoDispose 同 [taskDetailProvider]：历史行随详情页关闭释放。
 final taskActivityProvider =
-    FutureProvider.family<List<ActivityLogRow>, ({int taskId, int limit})>(
+    FutureProvider.autoDispose.family<List<ActivityLogRow>, ({int taskId, int limit})>(
   (ref, q) =>
       ref.watch(orbitBridgeProvider).taskActivityList(q.taskId, limit: q.limit),
 );
@@ -163,12 +172,20 @@ final trashMetaProvider = FutureProvider<TrashMeta>((ref) async {
 
 /// 统计聚合（backlog #25 统计页；family 参数 = 热力图年份，
 /// 2026-09-10 对齐 wait-home：当前年滚动 365 天、历史年完整年）
-final statsProvider = FutureProvider.family<StatsAggregate, int>((ref, year) async {
+///
+/// autoDispose：切过多少年就存多少份聚合（含 365 天任务数组），
+/// 只保留当前在看的年份，翻旧年重新聚合。
+final statsProvider =
+    FutureProvider.autoDispose.family<StatsAggregate, int>((ref, year) async {
   return ref.watch(orbitBridgeProvider).statsAggregate(year: year);
 });
 
 /// 全局搜索（backlog #26 搜索页；family 参数 = 关键词，防抖后由 UI 层触发）
-final searchProvider = FutureProvider.family<GlobalSearchResult, String>(
+///
+/// autoDispose：搜索词 family 桶按词累积，历史关键词（含其中的任务/
+/// 项目快照）不应常驻——只有当前关键词驻留，回退重搜重拉。
+final searchProvider = FutureProvider.autoDispose.family
+    <GlobalSearchResult, String>(
   (ref, keyword) async {
     return ref.watch(orbitBridgeProvider).globalSearch(keyword);
   },
