@@ -112,14 +112,19 @@ void main() {
     };
     await _pump(tester, bridge);
 
-    // 角标挂在「今天」页签图标右上：底部导航内的计数文本与页面页头计数并存
+    // 角标挂在「今天」页签图标右上：底部导航内的计数文本与页面页头计数并存。
+    // today 视图含逾期（截止 < 明日零点即计入，与 computeSidebarCounts 同口径）
+    final endOfToday =
+        DateTime.fromMillisecondsSinceEpoch(now).add(const Duration(days: 1));
+    final endOfTodayMs = DateTime(
+      endOfToday.year,
+      endOfToday.month,
+      endOfToday.day,
+    ).millisecondsSinceEpoch;
     final undone = (bridge.store.tasks.values).where((t) {
       if (t['is_deleted'] == 1 || t['done'] == 1) return false;
       final due = t['due_date'] as int?;
-      if (due == null) return false;
-      final d = DateTime.fromMillisecondsSinceEpoch(due);
-      final n = DateTime.fromMillisecondsSinceEpoch(now);
-      return d.year == n.year && d.month == n.month && d.day == n.day;
+      return due != null && due < endOfTodayMs;
     }).length;
     expect(undone, greaterThan(0));
     expect(

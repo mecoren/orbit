@@ -71,8 +71,8 @@ export const QUICK_VIEWS: QuickViewDef[] = [
   { key: "all", label: "全部任务", icon: ListTodo, color: "#3B82F6" },
   { key: "undone", label: "未完成", icon: CircleDot, color: "#F59E0B" },
   { key: "done", label: "已完成", icon: CheckCircle2, color: "#22C55E" },
-  { key: "today", label: "今天截止", icon: CalendarDays, color: "#EF4444" },
-  { key: "week", label: "本周截止", icon: CalendarRange, color: "#F59E0B" },
+  { key: "today", label: "今天", icon: CalendarDays, color: "#EF4444" },
+  { key: "week", label: "近7天", icon: CalendarRange, color: "#F59E0B" },
   { key: "favorite", label: "收藏", icon: Star, color: "#8B5CF6" },
 ];
 

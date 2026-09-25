@@ -56,13 +56,13 @@ describe("quickViewCreateDefaults · 四视图注入矩阵", () => {
     expect(r.dueMs).toBeUndefined();
     expect(r.favorite).toBeUndefined();
   });
-  it("今天截止 → due_date = 今天 18:00", () => {
+  it("今天 → due_date = 今天 18:00", () => {
     const r = quickViewCreateDefaults("today", new Date(2026, 8, 9, 15, 0));
     expect(r.dueMs).toBe(at18(9, 9));
     expect(r.myDayMs).toBeUndefined();
     expect(r.favorite).toBeUndefined();
   });
-  it("本周截止 → due_date = 当周周五 18:00", () => {
+  it("近7天 → due_date = 当周周五 18:00", () => {
     const r = quickViewCreateDefaults("week", new Date(2026, 8, 9, 15, 0)); // 周三
     expect(r.dueMs).toBe(at18(9, 11));
   });

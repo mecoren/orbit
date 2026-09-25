@@ -72,14 +72,14 @@ export function filterTasks(tasks: TodoTask[], input: TaskFilterInput): TodoTask
         list = list.filter((t) => !!t.done);
         break;
       case "today":
-        list = list.filter(
-          (t) => t.due_date != null && t.due_date >= todayStart.getTime() && t.due_date < todayEnd,
-        );
+        // 今天 = 逾期 + 今日到期（截止 < 明日零点即命中）：逾期未完成仍是
+        // 「今天要做的事」，与移动端 today 视图同口径；task-list-view 的
+        // 逾期置顶段自然承接渲染
+        list = list.filter((t) => t.due_date != null && t.due_date < todayEnd);
         break;
       case "week":
-        list = list.filter(
-          (t) => t.due_date != null && t.due_date >= todayStart.getTime() && t.due_date < weekEnd,
-        );
+        // 近 7 天 = 逾期 + 未来 7 天到期（同口径去掉下界）
+        list = list.filter((t) => t.due_date != null && t.due_date < weekEnd);
         break;
       case "favorite":
         list = list.filter((t) => !!t.is_favorite);

@@ -69,7 +69,7 @@ void main() {
       _task(
         id: 6,
         projectId: 10,
-        dueDate: todayStart - day, // 昨天截止（today 视图不含）
+        dueDate: todayStart - day, // 昨天截止（today/week 视图含逾期）
       ),
     ];
 
@@ -101,10 +101,11 @@ void main() {
       expect(result.map((t) => t.id), [2, 5]);
     });
 
-    test('view=today 只含今天截止（≥今日零点 且 <明日零点）', () {
+    test('view=today 含逾期 + 今日截止（截止 < 明日零点即命中）', () {
       final onlyToday = filterTasks(
           tasks, const TaskFilterInput(quickView: QuickViewKey.today));
-      expect(onlyToday.map((t) => t.id), [1]);
+      // 1（今天）、6（昨天逾期）；已完成行不因窗口放宽而回流
+      expect(onlyToday.map((t) => t.id), [1, 6]);
 
       // 边界：恰为今日零点 → 含；恰为明日零点 → 不含
       final edge = [
@@ -118,11 +119,11 @@ void main() {
       );
     });
 
-    test('view=week 含今天 ≤ d < 今天+7 的未过期任务', () {
+    test('view=week 含逾期 + 今天 ≤ d < 今天+7 的任务', () {
       final result = filterTasks(
           tasks, const TaskFilterInput(quickView: QuickViewKey.week));
-      // 1（今天）、4（后天）；6 为昨天不含
-      expect(result.map((t) => t.id), [1, 4]);
+      // 1（今天）、4（后天）、6（昨天逾期）
+      expect(result.map((t) => t.id), [1, 4, 6]);
     });
 
     test('view=favorite 只含收藏', () {
@@ -253,11 +254,11 @@ void main() {
       expect(
         emptyMessageFor(
             const TaskFilterInput(quickView: QuickViewKey.today)),
-        '今天没有截止的任务',
+        '今天没有到期的任务',
       );
       expect(
         emptyMessageFor(const TaskFilterInput(quickView: QuickViewKey.week)),
-        '本周没有截止的任务',
+        '近7天没有截止的任务',
       );
       expect(
         emptyMessageFor(const TaskFilterInput(quickView: QuickViewKey.done)),

@@ -1467,7 +1467,7 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
                     edge: edge,
                     child: entry.isHead
                         ? _overdueHeadRow(colors, overdueGroups.overdue.length)
-                        : _restDividerRow(colors),
+                        : _restDividerRow(colors, _restDividerLabel),
                   );
                 },
               );
@@ -1759,8 +1759,16 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
     );
   }
 
+  /// 「其余任务」分隔行的语境文案：today/week 视图的分隔线以下是**当日/近 7 天**
+  /// 到期任务（逾期段在其上），按视图命名；项目等其余入口维持「其余任务」
+  String get _restDividerLabel => switch (widget.query.quickView) {
+        QuickViewKey.today => '今天',
+        QuickViewKey.week => '近7天',
+        _ => '其余任务',
+      };
+
   /// 「其余任务」分隔行（卡内段）：逾期区与普通区的分界
-  Widget _restDividerRow(AppColorSet colors) {
+  Widget _restDividerRow(AppColorSet colors, String label) {
     return Container(
       constraints: const BoxConstraints(minHeight: AppDimens.space32),
       padding: const EdgeInsets.symmetric(
@@ -1769,7 +1777,7 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
       ),
       alignment: Alignment.centerLeft,
       child: Text(
-        '其余任务',
+        label,
         style: TextStyle(fontSize: 12, color: colors.secondaryText),
       ),
     );

@@ -35,8 +35,8 @@ void main() {
     expect(find.text('快捷视图'), findsOneWidget);
     // 七个快捷视图行全部可见（07 报告新增「我的一天」置顶）
     expect(find.text('我的一天'), findsOneWidget);
-    expect(find.text('今天截止'), findsOneWidget);
-    expect(find.text('本周截止'), findsOneWidget);
+    expect(find.text('今天'), findsOneWidget);
+    expect(find.text('近7天'), findsOneWidget);
     expect(find.text('全部任务'), findsOneWidget);
     expect(find.text('已完成'), findsOneWidget);
     expect(find.text('收藏'), findsOneWidget);

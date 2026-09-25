@@ -14,7 +14,7 @@ import '../../../core/theme/icon_map.dart';
 /// - `shared/time.ts` —— 相对时间分档与 yyyy-MM-dd 格式化。
 ///
 /// 快捷视图七键（docs/05 §4.1 + 07 报告新增「我的一天」置顶）：
-/// 我的一天 / 今天 / 本周 / 全部 / 已完成 / 收藏 / 无日期。
+/// 我的一天 / 今天 / 近7天 / 全部 / 已完成 / 收藏 / 无日期。
 
 // ---------- 快捷视图定义 ----------
 
@@ -23,11 +23,11 @@ enum QuickViewKey { myDay, today, week, all, done, favorite, nodate }
 
 /// [QuickViewKey] 的展示元数据（标签 / 语义色，色值对齐 docs/05 §2.2 quickView 板）
 extension QuickViewMeta on QuickViewKey {
-  /// 侧栏行文案
+  /// 侧栏行文案（today/week 视图含逾期任务，命名不带「截止」限定）
   String get label => switch (this) {
         QuickViewKey.myDay => '我的一天',
-        QuickViewKey.today => '今天截止',
-        QuickViewKey.week => '本周截止',
+        QuickViewKey.today => '今天',
+        QuickViewKey.week => '近7天',
         QuickViewKey.all => '全部任务',
         QuickViewKey.done => '已完成',
         QuickViewKey.favorite => '收藏',
@@ -94,18 +94,16 @@ List<TodoTask> filterTasks(List<TodoTask> tasks, TaskFilterInput input,
       case QuickViewKey.done:
         list = list.where((t) => t.isDone);
       case QuickViewKey.today:
+        // 今天 = 逾期 + 今日到期（截止 < 明日零点即命中）：逾期未完成仍是
+        // 「今天要做的事」，与图标角标 dueTodayOrOverdueCount 同口径；
+        // 列表渲染由 groupOverdueFirst 的逾期置顶段自然承接
         list = list.where(
-          (t) =>
-              t.dueDate != null &&
-              t.dueDate! >= todayStart &&
-              t.dueDate! < todayEnd,
+          (t) => t.dueDate != null && t.dueDate! < todayEnd,
         );
       case QuickViewKey.week:
+        // 近 7 天 = 逾期 + 未来 7 天到期（同口径去掉下界）
         list = list.where(
-          (t) =>
-              t.dueDate != null &&
-              t.dueDate! >= todayStart &&
-              t.dueDate! < weekEnd,
+          (t) => t.dueDate != null && t.dueDate! < weekEnd,
         );
       case QuickViewKey.favorite:
         list = list.where((t) => t.isStarred);
@@ -195,8 +193,9 @@ SidebarCounts computeSidebarCounts(
     if (t.isDone) continue;
 
     if (t.dueDate != null) {
-      if (t.dueDate! >= todayStart && t.dueDate! < todayEnd) today++;
-      if (t.dueDate! >= todayStart && t.dueDate! < weekEnd) week++;
+      // today/week 含逾期（截止 < 窗口上界即命中，与 filterTasks 同口径）
+      if (t.dueDate! < todayEnd) today++;
+      if (t.dueDate! < weekEnd) week++;
     } else {
       nodate++;
     }
@@ -679,8 +678,8 @@ String emptyMessageFor(TaskFilterInput input) {
   if (input.ungrouped) return '暂无未分组任务';
   return switch (input.quickView) {
     QuickViewKey.done => '暂无已完成任务',
-    QuickViewKey.today => '今天没有截止的任务',
-    QuickViewKey.week => '本周没有截止的任务',
+    QuickViewKey.today => '今天没有到期的任务',
+    QuickViewKey.week => '近7天没有截止的任务',
     QuickViewKey.favorite => '暂无收藏任务',
     QuickViewKey.nodate => '暂无无日期的任务',
     _ => '暂无任务',

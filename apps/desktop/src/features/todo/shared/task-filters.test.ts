@@ -69,8 +69,9 @@ describe("filterTasks - 互斥目标（ungrouped > projectId > quickView）", ()
   });
 });
 
-describe("filterTasks - quickView today 边界", () => {
+describe("filterTasks - quickView today 边界（含逾期：d < today+1d 即命中）", () => {
   const cases = [
+    { name: "昨日 00:00 命中（含逾期）", due: T0 - DAY_MS, hit: true },
     { name: "恰好今日 00:00 命中", due: T0, hit: true },
     { name: "今日 23:59:59.999 命中", due: T0 + DAY_MS - 1, hit: true },
     { name: "明日 00:00 不命中", due: T0 + DAY_MS, hit: false },
@@ -88,7 +89,7 @@ describe("filterTasks - quickView today 边界", () => {
   });
 });
 
-describe("filterTasks - quickView week 边界（today ≤ d < today+7d）", () => {
+describe("filterTasks - quickView week 边界（含逾期：d < today+7d 即命中）", () => {
   const cases = [
     { name: "今日 00:00 命中", due: T0 },
     { name: "today+6d23:59:59.999 命中", due: T0 + 7 * DAY_MS - 1 },
@@ -100,7 +101,8 @@ describe("filterTasks - quickView week 边界（today ≤ d < today+7d）", () =
         [mk({ id: 9, due_date: c.due }), mk({ id: 8, due_date: T0 - 1 })],
         { quickView: "week" },
       );
-      expect(out.map((t) => t.id)).toEqual(c.hit === false ? [] : [9]);
+      // id 8 昨天截止（逾期）也命中：today/week 视图含逾期，与移动端同口径
+      expect(out.map((t) => t.id)).toEqual(c.hit === false ? [8] : [9, 8]);
     });
   }
 });
