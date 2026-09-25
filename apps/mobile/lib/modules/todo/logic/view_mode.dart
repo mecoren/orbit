@@ -7,21 +7,24 @@ import '../../../core/theme/icon_map.dart';
 ///
 /// 桌面为四档 `list | kanban | calendar | table` + `done` 档自动接管 Logbook；
 /// 移动端日历是独立路由页（`/todo/calendar`），故本枚举只承载**同页内**切换
-/// 的三档：列表 / 看板 / 表格。Logbook 仍是「已完成」快捷视图下列表档的
-/// 自动形态（`isLogbook`），不作为可选项。
-enum TaskViewMode { list, kanban, table }
+/// 的四档：列表 / 看板 / 表格 / 矩阵（四象限，TickTick 同款，桌面暂无）。
+/// Logbook 仍是「已完成」快捷视图下列表档的自动形态（`isLogbook`），
+/// 不作为可选项。
+enum TaskViewMode { list, kanban, table, matrix }
 
 extension TaskViewModeMeta on TaskViewMode {
   String get label => switch (this) {
         TaskViewMode.list => '列表',
         TaskViewMode.kanban => '看板',
         TaskViewMode.table => '表格',
+        TaskViewMode.matrix => '矩阵',
       };
 
   IconData get icon => switch (this) {
         TaskViewMode.list => OrbitIcons.list,
         TaskViewMode.kanban => OrbitIcons.kanban,
         TaskViewMode.table => OrbitIcons.tableRows,
+        TaskViewMode.matrix => OrbitIcons.grid,
       };
 }
 

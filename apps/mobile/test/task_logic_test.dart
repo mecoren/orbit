@@ -739,5 +739,60 @@ group('displayReminder 行内提醒选取', () {
       }
     });
   });
+
+  group('四象限分组 groupEisenhower（对标 TickTick 矩阵视图）', () {
+    // 固定"2026-09-25 14:00"注入，测试与运行日期无关
+    final now = DateTime(2026, 9, 25, 14, 0).millisecondsSinceEpoch;
+    final todayEnd =
+        DateTime(2026, 9, 26).millisecondsSinceEpoch; // 今天 24:00 = 紧急界
+
+    test('轴口径：重要 = 优先级≥3，紧急 = 截止≤今天末（含逾期），无截止 = 不紧急', () {
+      final buckets = groupEisenhower([
+        _task(id: 1, priority: 3, dueDate: now), // 紧急重要
+        _task(id: 2, priority: 5), // 重要不紧急（无截止）
+        _task(id: 3, priority: 0, dueDate: todayEnd - 1), // 紧急不重要
+        _task(id: 4), // 双无
+        _task(id: 5, priority: 2, dueDate: todayEnd - 1), // 中优先级不算重要
+        _task(id: 6, priority: 3, dueDate: todayEnd), // 明天 0 点起 = 不紧急
+      ], now);
+      expect(
+        buckets[EisenhowerQuadrant.urgentImportant]!.map((t) => t.id),
+        [1],
+      );
+      expect(
+        buckets[EisenhowerQuadrant.importantNotUrgent]!.map((t) => t.id),
+        [2, 6],
+      );
+      expect(
+        buckets[EisenhowerQuadrant.urgentNotImportant]!.map((t) => t.id),
+        [3, 5],
+      );
+      expect(buckets[EisenhowerQuadrant.neither]!.map((t) => t.id), [4]);
+    });
+
+    test('已完成不入桶；组内保持入参顺序（排序在调用方做）', () {
+      final buckets = groupEisenhower([
+        _task(id: 1, priority: 3, dueDate: now, done: 1, status: 'done'),
+        _task(id: 2, priority: 4),
+        _task(id: 3, priority: 4),
+      ], now);
+      expect(buckets.values.every((l) => l.isEmpty), isFalse);
+      expect(
+        buckets.values.fold<int>(0, (n, l) => n + l.length),
+        2,
+        reason: '完成行不入任何桶',
+      );
+      expect(
+        buckets[EisenhowerQuadrant.importantNotUrgent]!.map((t) => t.id),
+        [2, 3],
+      );
+    });
+
+    test('空输入返回四空桶（概览格可直接按桶渲染）', () {
+      final buckets = groupEisenhower(const [], now);
+      expect(buckets.length, EisenhowerQuadrant.values.length);
+      expect(buckets.values.every((l) => l.isEmpty), isTrue);
+    });
+  });
 });
 }

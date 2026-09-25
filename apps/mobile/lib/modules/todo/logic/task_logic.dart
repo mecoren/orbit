@@ -298,6 +298,63 @@ OverdueGroups groupOverdueFirst(List<TodoTask> tasks, [int? nowMs]) {
   return OverdueGroups(overdue: overdue, rest: rest);
 }
 
+// ---------- 四象限分组（Eisenhower Matrix，对标 TickTick 矩阵视图） ----------
+
+/// 四象限桶位（展示顺序即枚举序：先重要后次要，先紧急后不紧急）
+enum EisenhowerQuadrant {
+  urgentImportant,
+  importantNotUrgent,
+  urgentNotImportant,
+  neither,
+}
+
+/// 四象限的展示元数据：行动短语 + 轴文案（2×2 概览格头两行）
+extension EisenhowerQuadrantMeta on EisenhowerQuadrant {
+  String get actionLabel => switch (this) {
+        EisenhowerQuadrant.urgentImportant => '立即做',
+        EisenhowerQuadrant.importantNotUrgent => '计划做',
+        EisenhowerQuadrant.urgentNotImportant => '抽空做',
+        EisenhowerQuadrant.neither => '可延后',
+      };
+
+  String get axisLabel => switch (this) {
+        EisenhowerQuadrant.urgentImportant => '紧急 · 重要',
+        EisenhowerQuadrant.importantNotUrgent => '不紧急 · 重要',
+        EisenhowerQuadrant.urgentNotImportant => '紧急 · 不重要',
+        EisenhowerQuadrant.neither => '不紧急 · 不重要',
+      };
+}
+
+/// 四象限分组纯函数：已完成不入桶（矩阵只承载未完成工作集，完成历史
+/// 交给「已完成」视图）。轴口径——重要 = 优先级 ≥ 高(3)；紧急 = 截止
+/// 在今天 24:00 之前（含逾期，本地时区日界）。[nowMs] 供测试注入固定时间。
+Map<EisenhowerQuadrant, List<TodoTask>> groupEisenhower(
+    List<TodoTask> tasks, [
+      int? nowMs,
+    ]) {
+  final now = DateTime.fromMillisecondsSinceEpoch(
+    nowMs ?? DateTime.now().millisecondsSinceEpoch,
+  );
+  final dayEnd =
+      DateTime(now.year, now.month, now.day + 1).millisecondsSinceEpoch;
+  final buckets = {
+    for (final q in EisenhowerQuadrant.values) q: <TodoTask>[],
+  };
+  for (final t in tasks) {
+    if (t.isDone) continue;
+    final urgent = t.dueDate != null && t.dueDate! < dayEnd;
+    final important = t.priority >= 3;
+    final q = switch ((urgent, important)) {
+      (true, true) => EisenhowerQuadrant.urgentImportant,
+      (false, true) => EisenhowerQuadrant.importantNotUrgent,
+      (true, false) => EisenhowerQuadrant.urgentNotImportant,
+      (false, false) => EisenhowerQuadrant.neither,
+    };
+    buckets[q]!.add(t);
+  }
+  return buckets;
+}
+
 // ---------- 写操作 patch 构造 ----------
 
 /// 勾选/取消勾选 → todoTaskUpdate 的增量 patch：

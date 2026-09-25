@@ -32,6 +32,7 @@ import '../../shared/widgets/shadcn/orbit_toast.dart';
 import '../../services/local_prefs.dart';
 import 'form_bottom_sheet.dart';
 import 'kanban_view.dart';
+import 'matrix_view.dart';
 import 'logic/batch_actions.dart';
 // as rep：规避 Flutter widgets 自带 RepeatMode 类名冲突（同 detail_screen）
 import 'logic/repeat_logic.dart' as rep;
@@ -1175,10 +1176,11 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
     // 顺序由排序键决定，拖了也会被覆盖（与桌面 sortable 同口径）。
     // 选择态强制回落普通列表：整行长按拾起与「点行切换选中」抢同一手势
     final reorderable = _sortKey == TaskSortKey.manual && !_selectionMode;
-    // 看板/表格仅在非 Logbook 态生效：完成历史按日分组的语义在分列/表格
-    // 里会丢失（桌面同口径——done 档列表被 LogbookView 接管）
+    // 看板/表格/矩阵仅在非 Logbook 态生效：完成历史按日分组的语义在分列/
+    // 表格/象限里会丢失（桌面同口径——done 档列表被 LogbookView 接管）
     final showKanban = _viewMode == TaskViewMode.kanban && !isLogbook;
     final showTable = _viewMode == TaskViewMode.table && !isLogbook;
+    final showMatrix = _viewMode == TaskViewMode.matrix && !isLogbook;
 
     // 命中上限条幅（A5，桌面 task-panel 同口径）：单份缓存拉取被截断时
     // 明确告知列表不完整；条幅常驻标题栏下沿，列表顶部让出同高，
@@ -1347,7 +1349,13 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
                         : projectById[t.projectId]?.title,
                     labelDotsByTask: labelsByTask,
                   )
-                : isLogbook
+                : showMatrix
+                    ? EisenhowerMatrixBoard(
+                        tasks: visible,
+                        padding: listPadding,
+                        buildTile: buildTile,
+                      )
+                    : isLogbook
             ? _LogbookList(
                 groups: doneGroups,
                 padding: listPadding,

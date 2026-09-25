@@ -486,6 +486,7 @@ class _ViewPreview extends StatelessWidget {
         TaskViewMode.list => _listPreview(),
         TaskViewMode.kanban => _kanbanPreview(),
         TaskViewMode.table => _tablePreview(),
+        TaskViewMode.matrix => _matrixPreview(),
       },
     );
   }
@@ -568,6 +569,35 @@ class _ViewPreview extends StatelessWidget {
               for (var c = 0; c < 3; c++) ...[
                 if (c > 0) const SizedBox(width: AppDimens.space6),
                 Expanded(child: _line(widthFactor: 1)),
+              ],
+            ],
+          ),
+      ],
+    );
+  }
+
+  /// 矩阵：2×2 象限格，每格一枚短线示意任务
+  Widget _matrixPreview() {
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        for (var r = 0; r < 2; r++)
+          Row(
+            children: [
+              for (var c = 0; c < 2; c++) ...[
+                if (c > 0) const SizedBox(width: AppDimens.space6),
+                Expanded(
+                  child: Container(
+                    height: 22,
+                    padding: const EdgeInsets.all(AppDimens.space6),
+                    decoration: BoxDecoration(
+                      borderRadius: AppShapes.xs,
+                      border: Border.all(color: colors.outline),
+                    ),
+                    alignment: Alignment.centerLeft,
+                    child: _line(widthFactor: 0.55),
+                  ),
+                ),
               ],
             ],
           ),
