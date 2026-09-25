@@ -12,6 +12,7 @@ import 'package:orbit/modules/todo/calendar_screen.dart';
 import 'package:orbit/core/routing/router_keys.dart';
 import 'package:orbit/modules/todo/sidebar_screen.dart';
 import 'package:orbit/core/theme/app_colors.dart';
+import 'package:orbit/shared/widgets/shadcn/orbit_list_card.dart';
 import 'package:orbit/shared/widgets/shadcn/orbit_month_calendar.dart';
 import 'package:orbit/core/theme/icon_map.dart';
 import 'package:table_calendar/table_calendar.dart'
@@ -153,7 +154,11 @@ void main() {
 
     // mock 节假日：2026-01-01「休」/2026-01-04「班」/2026-02-17「休」
     // （当前 2026-09 不含节假日 → 翻月验证数据链路）
-    expect(find.text('日历'), findsOneWidget);
+    // 页头：月份导航标题（「日历」文字标题已收敛进月份标题，见页头收敛）
+    expect(
+      find.text('${DateTime.now().year}年${DateTime.now().month}月'),
+      findsOneWidget,
+    );
 
     // 从 2026-09 向前翻 8 次到 2026-01（9→8→…→1，跨年取道 2025）
     for (var i = 0; i < 10; i++) {
@@ -236,7 +241,10 @@ void main() {
 
     expect(find.text('节假日数据已更新'), findsOneWidget);
     // provider 已失效重拉（mock 返回相同常量，断言不抛错即通过）
-    expect(find.text('日历'), findsOneWidget);
+    expect(
+      find.text('${DateTime.now().year}年${DateTime.now().month}月'),
+      findsOneWidget,
+    );
     // 快进过 toast 的 2.6s 自动收起 Timer（防测试结束时 pending timer 断言）
     await tester.pump(const Duration(milliseconds: 2700));
   });
@@ -250,8 +258,8 @@ void main() {
         .widget<Text>(find.textContaining('年').first)
         .data;
 
-    // 下一个月 → 标题变化
-    await tester.tap(find.byIcon(OrbitIcons.chevronRight).first);
+    // 下一个月 → 标题变化（页头翻页钮，tooltip 精确定位）
+    await tester.tap(find.byTooltip('下个月'));
     await tester.pumpAndSettle();
     final nextTitle = tester
         .widget<Text>(find.textContaining('年').first)
@@ -532,5 +540,71 @@ void main() {
     expect(find.text('假期任务0'), findsOneWidget);
     expect(find.text('休'), findsWidgets);
     expect(find.text('班'), findsWidgets);
+  });
+
+  testWidgets('选中日列表样式切换：卡片 ⇄ 时间线往返 + 时刻左置', (tester) async {
+    final bridge = _seededBridge();
+    // 造一条今天 17:00 截止的任务（时刻确定，非零点，时间线左列必渲染）
+    final now = DateTime.now();
+    final due = DateTime(now.year, now.month, now.day, 17).millisecondsSinceEpoch;
+    bridge.store.tasks[9001] = {
+      'id': 9001,
+      'uuid': 'uuid-style-1',
+      'title': '样式切换任务',
+      'description': null,
+      'project_id': null,
+      'priority': 0,
+      'status': 'pending',
+      'done': 0,
+      'done_at': null,
+      'due_date': due,
+      'start_date': null,
+      'repeat_after': 1,
+      'repeat_mode': 0,
+      'percent_done': 0,
+      'position': 9001,
+      'is_favorite': 0,
+      'my_day_date': null,
+      'is_deleted': 0,
+      'created_at': due,
+      'updated_at': due,
+      'deleted_at': null,
+      'version': 1,
+    };
+    await tester.pumpWidget(_wrap(const SizedBox(), bridge));
+    await settle(tester);
+
+    Finder timelineRows() => find.byWidgetPredicate(
+          (w) => w.runtimeType.toString() == '_DayTimelineRow',
+          description: '_DayTimelineRow',
+        );
+    // 卡片样式顶层分段（时间线行内部同样用 OrbitCardSegment 包卡片内容，
+    // 故不断言绝对零——顶层分段数 == 时间线行数即「无裸卡片分段」）
+    Finder cardSegments() => find.byWidgetPredicate(
+          (w) =>
+              w is OrbitCardSegment &&
+              w.child.runtimeType.toString() == '_DayTaskRow',
+          description: 'card OrbitCardSegment',
+        );
+    int count(Finder f) => f.evaluate().length;
+
+    // 默认卡片样式（右列时刻在卡内）
+    await dragListUp(tester, -400);
+    expect(count(timelineRows()), 0);
+    expect(count(cardSegments()) > 0, isTrue);
+
+    // 切时间线：时刻左置列出现，顶层只剩时间线行内嵌的分段
+    await tester.ensureVisible(find.byTooltip('切换为时间线样式'));
+    await tester.tap(find.byTooltip('切换为时间线样式'));
+    await tester.pumpAndSettle();
+    expect(count(timelineRows()) > 0, isTrue);
+    expect(count(cardSegments()), count(timelineRows()));
+    expect(find.text('17:00'), findsWidgets);
+
+    // 切回卡片
+    await tester.tap(find.byTooltip('切换为卡片样式'));
+    await tester.pumpAndSettle();
+    expect(count(timelineRows()), 0);
+    expect(count(cardSegments()) > 0, isTrue);
   });
 }

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -20,6 +22,7 @@ import '../../shared/widgets/shadcn/orbit_strikethrough.dart';
 import '../../shared/widgets/shadcn/orbit_month_calendar.dart';
 import '../../shared/widgets/shadcn/orbit_page_header.dart';
 import '../../shared/widgets/shadcn/orbit_toast.dart';
+import '../../services/local_prefs.dart';
 import 'logic/task_logic.dart';
 import 'providers/todo_providers.dart';
 import 'quick_add_sheet.dart' show showQuickAddSheet;
@@ -40,6 +43,16 @@ import '../../core/theme/icon_map.dart';
 /// 月档 = 上网格 + 下列表；**议程档** = 隐藏网格、整页本月按日分组列表，
 /// 进入时一次性定位到今天、日期头带休/班徽标（桌面 agenda 档语义）；
 /// 年档为标题点击进入的独立页（[YearOverviewPage]）。
+///
+/// **页头收敛**（竞品一屏操作）：「日历」文字标题已移除——月份导航
+/// （`< 年月 >`，点标题进年视图）与回到今天 / 议程切换 / 节假日更新
+/// 三个动作直接落在页头标题槽与动作槽；窄屏下标题等比缩字不断行
+/// （FittedBox，页头行高恒定），图标保持 48 热区不压缩。
+///
+/// **选中日列表双样式**（月档，竞品同款切换）：卡片（默认：勾选 + 标题 +
+/// 右列时刻/元信息）⇄ 时间线（时刻左置列 + 右侧卡片行）；切换钮在日期
+/// 语义头右侧，档位落本机偏好 `todo_calendar_day_compact`（缺省卡片，
+/// 零 DDL、不进同步），议程档分组列表不受影响。
 ///
 /// 数据口径：与子列表同源 todoTasksProvider 全量任务，客户端按 due_date
 /// 本地日聚合；节假日数据 cfg_holidays 缓存（空库回落 Rust 预置 2026 表）。
@@ -71,6 +84,18 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
   /// 对齐桌面 `CalendarSubMode.agenda`；桌面第三档是年视图，移动端为标题
   /// 点击进入的独立页（[YearOverviewPage]），故页内只需月 ⇄ 议程两态切换。
   bool _agendaMode = false;
+
+  /// 选中日列表样式：false = 卡片（默认），true = 时间线（时刻左置）。
+  /// 本机偏好持久化（LocalPrefs，不进 DB 不进同步；读失败回落卡片）
+  static const _dayCompactKey = 'todo_calendar_day_compact';
+  bool _dayCompact = LocalPrefs.getBool(_dayCompactKey, fallback: false);
+
+  /// 卡片 ⇄ 时间线切换（写即落盘，失败静默——偏好不是业务数据）
+  void _toggleDayStyle() {
+    final next = !_dayCompact;
+    setState(() => _dayCompact = next);
+    unawaited(LocalPrefs.setBool(_dayCompactKey, next));
+  }
 
   /// 分组锚点注册表：ymd → 分组节点（点击日历滚动定位）
   final Map<String, GlobalKey> _groupKeys = {};
@@ -299,67 +324,6 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     SizedBox(height: OrbitPageHeader.rowHeight),
-                    // ===== 头部：月份标题（点击开年视图）+ 今天 + 翻页 + 节假日更新 =====
-                    Padding(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: AppDimens.space8, vertical: 2),
-                      child: Row(
-                        children: [
-                          IconButton(
-                            icon: const Icon(OrbitIcons.chevronLeft,
-                                size: AppDimens.iconSizeLg),
-                            onPressed: _prevMonth,
-                            tooltip: '上个月',
-                          ),
-                          Expanded(
-                            child: GestureDetector(
-                              // 标题点击 = 年视图
-                              onTap: _openYearOverview,
-                              // FittedBox 保单行：窄屏去掉 compact 后标题可用宽
-                              // 变小，等比缩字不折行（工具条行高保持稳定）
-                              child: FittedBox(
-                                fit: BoxFit.scaleDown,
-                                child: Text(
-                                  '${_month.year}年${_month.month}月',
-                                  maxLines: 1,
-                                  textAlign: TextAlign.center,
-                                  style: TextStyle(
-                                    fontSize: 17,
-                                    fontWeight: FontWeight.w600,
-                                    color: colors.titleText,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                          IconButton(
-                            icon: const Icon(OrbitIcons.chevronRight,
-                                size: AppDimens.iconSizeLg),
-                            onPressed: _nextMonth,
-                            tooltip: '下个月',
-                          ),
-                          const SizedBox(width: AppDimens.space4),
-                          IconButton(
-                            icon: const Icon(OrbitIcons.calendarCheck,
-                                size: AppDimens.iconSizeMd),
-                            onPressed: _goToday,
-                            tooltip: '回到今天',
-                          ),
-                          // 月档 ⇄ 议程档切换（年档由标题点击进入，见 _openYearOverview）
-                          IconButton(
-                            icon: Icon(
-                              _agendaMode
-                                  ? OrbitIcons.calendar
-                                  : OrbitIcons.list,
-                              size: AppDimens.iconSizeMd,
-                            ),
-                            onPressed: _toggleAgenda,
-                            tooltip: _agendaMode ? '切换到月历' : '切换到议程',
-                          ),
-                          _buildUpdateButton(),
-                        ],
-                      ),
-                    ),
                     // ===== 月历（wait-home 完整版：农历副标签/休班徽标/任务圆点）=====
                     // 议程档隐藏网格：整页让给按日分组列表（桌面 agenda 档同语义）
                     if (!_agendaMode) ...[
@@ -500,6 +464,8 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                         descriptionIds: descriptionIds,
                         remindersByTask: remindersByTask,
                         nowMs: now.millisecondsSinceEpoch,
+                        compact: _dayCompact,
+                        onToggleStyle: _toggleDayStyle,
                         onOpenTask: _openTask,
                         onToggleDone: _toggleDone,
                       ),
@@ -513,9 +479,65 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
             left: 0,
             right: 0,
             child: OrbitPageHeader(
-              title: '日历',
-              // 页签根：无返回键（底部导航承担回退语义）
+              // 页签根：无返回键（底部导航承担回退语义）；「日历」文字标题已收敛——
+              // 月份导航（< 年月 >，点标题进年视图）走标题槽，回到今天 /
+              // 议程切换 / 节假日更新走动作槽（竞品同款一屏操作）
               showBack: false,
+              titleWidget: Row(
+                children: [
+                  IconButton(
+                    icon: const Icon(OrbitIcons.chevronLeft,
+                        size: AppDimens.iconSizeLg),
+                    onPressed: _prevMonth,
+                    tooltip: '上个月',
+                  ),
+                  Expanded(
+                    child: GestureDetector(
+                      // 标题点击 = 年视图
+                      onTap: _openYearOverview,
+                      // FittedBox 保单行：窄屏下标题可用宽变小，等比缩字不折行
+                      // （页头行高恒 56，不断行是底线）
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(
+                          '${_month.year}年${_month.month}月',
+                          maxLines: 1,
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 17,
+                            fontWeight: FontWeight.w600,
+                            color: colors.titleText,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(OrbitIcons.chevronRight,
+                        size: AppDimens.iconSizeLg),
+                    onPressed: _nextMonth,
+                    tooltip: '下个月',
+                  ),
+                ],
+              ),
+              actions: [
+                IconButton(
+                  icon: const Icon(OrbitIcons.calendarCheck,
+                      size: AppDimens.iconSizeMd),
+                  onPressed: _goToday,
+                  tooltip: '回到今天',
+                ),
+                // 月档 ⇄ 议程档切换（年档由标题点击进入，见 _openYearOverview）
+                IconButton(
+                  icon: Icon(
+                    _agendaMode ? OrbitIcons.calendar : OrbitIcons.list,
+                    size: AppDimens.iconSizeMd,
+                  ),
+                  onPressed: _toggleAgenda,
+                  tooltip: _agendaMode ? '切换到月历' : '切换到议程',
+                ),
+                _buildUpdateButton(),
+              ],
             ),
           ),
         ],
@@ -783,9 +805,10 @@ class _TaskCard extends StatelessWidget {
 /// 月档下方：选中日任务卡（竞品口径）
 ///
 /// 点日格即看当天任务：头行 = 日期语义头（今天 / M月D日 周X + N天后/前 +
-/// 农历/节日副标签 + 休/班徽标）+「长按日历快捷新增」提示；任务列同一张卡
-/// （[OrbitCardSegment] 分段描边），行 = 勾选框（优先级描边环）+ 标题 +
-/// 右列（时刻 + 元信息图标纵排）。当天无任务时居中「当天没有任务」。
+/// 农历/节日副标签 + 休/班徽标）+ 样式切换钮 +「长按日历快捷新增」提示；
+/// 任务列同一张卡（[OrbitCardSegment] 分段描边），卡片行 = 勾选框
+/// （优先级描边环）+ 标题 + 右列（时刻 + 元信息图标纵排），时间线行 =
+/// 时刻左置列 + 右侧卡片行（无时刻留空对齐）。当天无任务时居中「当天没有任务」。
 class _SelectedDayList extends StatelessWidget {
   const _SelectedDayList({
     required this.date,
@@ -795,6 +818,8 @@ class _SelectedDayList extends StatelessWidget {
     required this.descriptionIds,
     required this.remindersByTask,
     required this.nowMs,
+    required this.compact,
+    required this.onToggleStyle,
     required this.onOpenTask,
     required this.onToggleDone,
   });
@@ -810,6 +835,13 @@ class _SelectedDayList extends StatelessWidget {
   final Set<int> descriptionIds;
   final Map<int, List<ProjectedReminder>> remindersByTask;
   final int nowMs;
+
+  /// 时间线样式（true = 时刻左置列 + 右侧卡片行；false = 卡片默认样式）
+  final bool compact;
+
+  /// 样式切换回调（落盘由调用方承担，本组件只发事件）
+  final VoidCallback onToggleStyle;
+
   final ValueChanged<int> onOpenTask;
   final ValueChanged<TodoTask> onToggleDone;
 
@@ -894,6 +926,24 @@ class _SelectedDayList extends StatelessWidget {
                     color: colors.secondaryText,
                   ),
                 ),
+                const SizedBox(width: AppDimens.space4),
+                // 卡片 ⇄ 时间线切换（图标 = 切过去的目标样式，与议程切换钮同口径）
+                IconButton(
+                  // 内容行高 ~24：默认 48 热区会把头行撑高一倍，取 40 折中
+                  // （图标 18 + 上下各 11，点按面积仍是视觉字形的四倍）
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(
+                    minWidth: 40,
+                    minHeight: 40,
+                  ),
+                  icon: Icon(
+                    compact ? OrbitIcons.tableRows : OrbitIcons.clock,
+                    size: AppDimens.iconSizeSm,
+                    color: colors.secondaryText,
+                  ),
+                  tooltip: compact ? '切换为卡片样式' : '切换为时间线样式',
+                  onPressed: onToggleStyle,
+                ),
               ],
             ),
           ),
@@ -908,6 +958,23 @@ class _SelectedDayList extends StatelessWidget {
                 ),
               ),
             )
+          else if (compact)
+            for (var i = 0; i < tasks.length; i++) ...[
+              if (i > 0) const SizedBox(height: AppDimens.space2),
+              _DayTimelineRow(
+                task: tasks[i],
+                edge: OrbitCardEdge.of(i, tasks.length),
+                hasDescription: descriptionIds.contains(tasks[i].id),
+                reminder: displayReminder(
+                  remindersByTask[tasks[i].id] ??
+                      const <ProjectedReminder>[],
+                  nowMs,
+                  taskDone: tasks[i].isDone,
+                ),
+                onToggle: () => onToggleDone(tasks[i]),
+                onOpen: () => onOpenTask(tasks[i].id),
+              ),
+            ]
           else
             for (var i = 0; i < tasks.length; i++) ...[
               if (i > 0) const SizedBox(height: AppDimens.space2),
@@ -945,6 +1012,7 @@ class _DayTaskRow extends StatelessWidget {
     required this.reminder,
     required this.onToggle,
     required this.onOpen,
+    this.showTimeColumn = true,
   });
 
   final TodoTask task;
@@ -954,6 +1022,11 @@ class _DayTaskRow extends StatelessWidget {
 
   /// 行内提醒载荷；null（无存活提醒）不渲染
   final DisplayReminder? reminder;
+
+  /// 右列时刻是否渲染：时间线样式传 false（时刻由外层左置列承载，
+  /// 此处再渲染即一题两答）
+  final bool showTimeColumn;
+
   final VoidCallback onToggle;
   final VoidCallback onOpen;
 
@@ -1006,13 +1079,13 @@ class _DayTaskRow extends StatelessWidget {
                 doneColor: colors.secondaryText,
               ),
             ),
-            if (hasTime || meta.isNotEmpty) ...[
+            if ((hasTime && showTimeColumn) || meta.isNotEmpty) ...[
               const SizedBox(width: AppDimens.space8),
               Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  if (hasTime)
+                  if (hasTime && showTimeColumn)
                     Text(
                       '${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}',
                       style: TextStyle(
@@ -1042,6 +1115,86 @@ class _DayTaskRow extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// 选中日任务卡的时间线行（竞品第二种列表样式）：时刻左置列 + 右侧卡片。
+///
+/// 无时刻的任务左列留空（同宽占位，对齐有时刻的行）；卡片内容复用
+/// [_DayTaskRow]（关掉右列时刻），勾选/标题/元信息图标行为与卡片样式一致。
+class _DayTimelineRow extends StatelessWidget {
+  const _DayTimelineRow({
+    required this.task,
+    required this.edge,
+    required this.hasDescription,
+    required this.reminder,
+    required this.onToggle,
+    required this.onOpen,
+  });
+
+  final TodoTask task;
+
+  /// 卡片分段边（与卡片样式同规则：首段圆上角、末段圆下角）
+  final OrbitCardEdge edge;
+
+  /// 有无描述（列表通道裁剪 description，位来自行元信息投影）
+  final bool hasDescription;
+
+  /// 行内提醒载荷；null（无存活提醒）不渲染
+  final DisplayReminder? reminder;
+  final VoidCallback onToggle;
+  final VoidCallback onOpen;
+
+  /// 时刻列宽：`HH:mm` 12px tabular 约 36px，余量对齐卡片内边距
+  static const _timeColumnWidth = 42.0;
+
+  @override
+  Widget build(BuildContext context) {
+    final d = task.dueDate == null
+        ? null
+        : DateTime.fromMillisecondsSinceEpoch(task.dueDate!);
+    final hasTime = d != null &&
+        (d.hour != 0 || d.minute != 0 || d.second != 0 || d.millisecond != 0);
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          width: _timeColumnWidth,
+          child: Padding(
+            // 与卡片首行对齐：卡片上下内边距 8 + 标题字形上沿余量
+            padding: const EdgeInsets.only(top: 10),
+            child: hasTime
+                ? Text(
+                    '${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}',
+                    maxLines: 1,
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontFeatures: const [FontFeature.tabularFigures()],
+                      color: isOverdue(task)
+                          ? OrbitAccents.overdueRed
+                          : OrbitAccents.themeAccent,
+                    ),
+                  )
+                : null,
+          ),
+        ),
+        const SizedBox(width: AppDimens.space8),
+        Expanded(
+          child: OrbitCardSegment(
+            edge: edge,
+            child: _DayTaskRow(
+              task: task,
+              hasDescription: hasDescription,
+              reminder: reminder,
+              showTimeColumn: false,
+              onToggle: onToggle,
+              onOpen: onOpen,
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
