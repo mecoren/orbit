@@ -220,3 +220,61 @@ export function groupDoneByDay(
   }
   return groups;
 }
+
+// ---------- 四象限分组（Eisenhower Matrix，对标 TickTick 矩阵视图） ----------
+
+/** 四象限桶位（展示顺序即枚举序：先重要后次要，先紧急后不紧急） */
+export type EisenhowerQuadrant =
+  | "urgentImportant"
+  | "importantNotUrgent"
+  | "urgentNotImportant"
+  | "neither";
+
+/** 四象限展示元数据：行动短语 + 轴文案（格头两行；象限识别色走 Tailwind
+ *  语义类，见 matrix-view 的 QUADRANT_TINT——不新增色值） */
+export const EISENHOWER_META: Record<
+  EisenhowerQuadrant,
+  { action: string; axis: string }
+> = {
+  urgentImportant: { action: "立即做", axis: "紧急 · 重要" },
+  importantNotUrgent: { action: "计划做", axis: "不紧急 · 重要" },
+  urgentNotImportant: { action: "抽空做", axis: "紧急 · 不重要" },
+  neither: { action: "可延后", axis: "不紧急 · 不重要" },
+};
+
+/** 四象限分组结果（四键恒在，空桶也要渲染格） */
+export type EisenhowerBuckets = Record<EisenhowerQuadrant, TodoTask[]>;
+
+/**
+ * 四象限分组纯函数：已完成不入桶（矩阵只承载未完成工作集，完成历史
+ * 交给侧栏「已完成」入口）。轴口径与移动端 groupEisenhower 逐字对齐——
+ * 重要 = 优先级 ≥ 高(3)；紧急 = 截止在今天 24:00 之前（含逾期，本地时区
+ * 日界）。[now] 供测试注入固定时间。组内保持入参顺序（排序在调用方做）。
+ */
+export function groupEisenhower(
+  tasks: TodoTask[],
+  now = new Date(),
+): EisenhowerBuckets {
+  const dayEnd = new Date(now);
+  dayEnd.setHours(24, 0, 0, 0);
+  const buckets: EisenhowerBuckets = {
+    urgentImportant: [],
+    importantNotUrgent: [],
+    urgentNotImportant: [],
+    neither: [],
+  };
+  for (const t of tasks) {
+    if (t.done) continue;
+    const urgent = t.due_date != null && t.due_date < dayEnd.getTime();
+    const important = t.priority >= 3;
+    const q: EisenhowerQuadrant = urgent
+      ? important
+        ? "urgentImportant"
+        : "urgentNotImportant"
+      : important
+        ? "importantNotUrgent"
+        : "neither";
+    buckets[q].push(t);
+  }
+  return buckets;
+}

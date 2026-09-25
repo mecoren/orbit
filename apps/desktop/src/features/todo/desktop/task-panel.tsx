@@ -6,7 +6,7 @@
  * 选中态经 useTodoShell 取用——从回收站面板切回来时筛选原样保留。
  */
 import { useEffect, useMemo, useState } from "react";
-import { AlertTriangle, BookmarkPlus, CalendarDays, CopyPlus, EyeOff, LayoutGrid, ListTodo, Search, Table2, Tag } from "lucide-react";
+import { AlertTriangle, BookmarkPlus, CalendarDays, CopyPlus, EyeOff, Grid2x2, LayoutGrid, ListTodo, Search, Table2, Tag } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -45,15 +45,19 @@ import { useDebouncedValue } from "../shared/use-debounced-value";
 import { KanbanView, type KanbanGroupBy } from "./kanban-view";
 import { CalendarView } from "./calendar-view";
 import TaskTableView from "./task-table-view";
+import { MatrixView } from "./matrix-view";
 
 type StatusFilter = "all" | "undone" | "pending" | "doing" | "done";
 type PriorityFilter = "all" | "0" | "1" | "2" | "3" | "4" | "5";
-type ViewMode = "list" | "kanban" | "calendar" | "table";
+/** 五档视图（矩阵 = 四象限 Eisenhower Matrix，TickTick 同款；2026-09-25 与移动端对齐） */
+type ViewMode = "list" | "kanban" | "calendar" | "table" | "matrix";
 
-/** 视图切换状态持久化（04 §二；07-P2#14 增 calendar 档） */
+/** 视图切换状态持久化（04 §二；07-P2#14 增 calendar 档；2026-09-25 增 matrix 档） */
 function loadViewMode(): ViewMode {
   const saved = localStorage.getItem(LS_VIEW_MODE);
-  return saved === "kanban" || saved === "calendar" || saved === "table" ? saved : "list";
+  return saved === "kanban" || saved === "calendar" || saved === "table" || saved === "matrix"
+    ? saved
+    : "list";
 }
 
 /** 排序档位持久化键（#26：默认 manual = 拖拽顺序） */
@@ -149,7 +153,19 @@ export default function TaskPanel() {
 
   useEffect(() => {
     if (viewToggleIntent === 0) return;
-    setViewMode((m) => (m === "list" ? "kanban" : m === "kanban" ? "calendar" : "list"));
+    // 循环切换 list→kanban→calendar→table→matrix→list（原实现漏了 table，
+    // 加 matrix 档时一并修正）
+    setViewMode((m) =>
+      m === "list"
+        ? "kanban"
+        : m === "kanban"
+          ? "calendar"
+          : m === "calendar"
+            ? "table"
+            : m === "table"
+              ? "matrix"
+              : "list",
+    );
     consumeViewToggleIntent();
   }, [viewToggleIntent, consumeViewToggleIntent]);
 
@@ -362,7 +378,7 @@ export default function TaskPanel() {
             </SelectContent>
           </Select>
 
-          {/* 视图切换四联钮（列表/看板/日历/表格） */}
+          {/* 视图切换五联钮（列表/看板/日历/表格/矩阵） */}
           <div className="flex items-center overflow-hidden rounded-md border">
             <Tooltip>
               <TooltipTrigger asChild>
@@ -427,6 +443,22 @@ export default function TaskPanel() {
                 </button>
               </TooltipTrigger>
               <TooltipContent>表格视图</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  aria-label="矩阵视图"
+                  onClick={() => setViewMode("matrix")}
+                  className={cn(
+                    "flex h-8 w-8 items-center justify-center",
+                    viewMode === "matrix" ? "bg-primary/10 text-primary" : "hover:bg-accent",
+                  )}
+                >
+                  <Grid2x2 size={14} />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent>矩阵视图（四象限）</TooltipContent>
             </Tooltip>
           </div>
 
@@ -553,6 +585,16 @@ export default function TaskPanel() {
           />
         ) : viewMode === "table" ? (
           <TaskTableView
+            tasks={visibleTasks}
+            projects={projects}
+            labelsByTask={taskLabels}
+            remindersByTask={taskReminders}
+            loading={tasksLoading}
+            error={tasksError}
+            onOpenDetail={(id) => setSelectedTaskId(id)}
+          />
+        ) : viewMode === "matrix" ? (
+          <MatrixView
             tasks={visibleTasks}
             projects={projects}
             labelsByTask={taskLabels}

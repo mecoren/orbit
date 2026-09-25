@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { type TodoTask } from "@/lib/tauri";
-import { filterTasks, groupDoneByDay, groupOverdueFirst, sortTasks, todayStartMs, toggleMyDayValue } from "./task-filters";
+import { filterTasks, groupDoneByDay, groupEisenhower, groupOverdueFirst, sortTasks, todayStartMs, toggleMyDayValue } from "./task-filters";
 
 /** 补齐 TodoTask 全部必填字段的工厂 */
 function mk(partial: Partial<TodoTask>): TodoTask {
@@ -461,5 +461,48 @@ describe("groupDoneByDay 完成日分组（Logbook 数据源）", () => {
 
   it("空集返回空数组", () => {
     expect(groupDoneByDay([], d12)).toEqual([]);
+  });
+});
+
+describe("groupEisenhower - 四象限分组（TickTick 矩阵口径，与移动端逐字对齐）", () => {
+  // 固定"2026-09-25 14:00"注入，测试与运行日期无关
+  const now = new Date(2026, 8, 25, 14, 0);
+  const todayEnd = new Date(2026, 8, 26).getTime(); // 今天 24:00 = 紧急界
+
+  it("轴口径：重要 = 优先级≥3，紧急 = 截止≤今天末（含逾期），无截止 = 不紧急", () => {
+    const buckets = groupEisenhower(
+      [
+        mk({ id: 1, priority: 3, due_date: now.getTime() }), // 紧急重要
+        mk({ id: 2, priority: 5 }), // 重要不紧急（无截止）
+        mk({ id: 3, priority: 0, due_date: todayEnd - 1 }), // 紧急不重要
+        mk({ id: 4 }), // 双无
+        mk({ id: 5, priority: 2, due_date: todayEnd - 1 }), // 中优先级不算重要
+        mk({ id: 6, priority: 3, due_date: todayEnd }), // 明天 0 点起 = 不紧急
+      ],
+      now,
+    );
+    expect(buckets.urgentImportant.map((t) => t.id)).toEqual([1]);
+    expect(buckets.importantNotUrgent.map((t) => t.id)).toEqual([2, 6]);
+    expect(buckets.urgentNotImportant.map((t) => t.id)).toEqual([3, 5]);
+    expect(buckets.neither.map((t) => t.id)).toEqual([4]);
+  });
+
+  it("已完成不入桶；组内保持入参顺序（排序在调用方做）", () => {
+    const buckets = groupEisenhower(
+      [
+        mk({ id: 1, priority: 3, due_date: now.getTime(), done: 1, status: "done" }),
+        mk({ id: 2, priority: 4 }),
+        mk({ id: 3, priority: 4 }),
+      ],
+      now,
+    );
+    expect(buckets.urgentImportant).toHaveLength(0);
+    expect(buckets.importantNotUrgent.map((t) => t.id)).toEqual([2, 3]);
+  });
+
+  it("空输入返回四空桶（矩阵格可直接按桶渲染）", () => {
+    const buckets = groupEisenhower([], now);
+    expect(Object.keys(buckets)).toHaveLength(4);
+    expect(Object.values(buckets).every((l) => l.length === 0)).toBe(true);
   });
 });
