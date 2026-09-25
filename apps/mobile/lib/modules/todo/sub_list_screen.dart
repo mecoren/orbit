@@ -876,13 +876,23 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
   ///
   /// 落位邻居必须与 build 的可重排分支同口径（仅未完成任务、同排序档）——
   /// 否则 UI 行数与计算索引错位，中值取到错误的相邻行。
+  /// 重排档渲染流：逾期置顶**平铺**（与标准分支的逾期置顶段同序）。
+  /// 头行/分隔行若插进流会打破 ReorderableListView 的槽位索引，
+  /// 故只排序不插行；无逾期时原样返回（重排落库数学与旧口径一致）。
+  List<TodoTask> _manualReorderStream(List<TodoTask> undone) {
+    final grouped = groupOverdueFirst(undone);
+    return grouped.overdue.isEmpty
+        ? undone
+        : [...grouped.overdue, ...grouped.rest];
+  }
+
   Future<void> _reorderTasks(int oldIndex, int newIndex) async {
     final tasks =
         ref.read(todoTasksProvider).value ?? const <TodoTask>[];
     final visible = sortTasks(filterTasks(tasks, widget.query), _sortKey)
         .where((t) => !t.isDone)
         .toList();
-    final reordered = reorderItems(visible, oldIndex, newIndex);
+    final reordered = reorderItems(_manualReorderStream(visible), oldIndex, newIndex);
     final dragged = reordered[newIndex];
     final prevPos = newIndex > 0 ? reordered[newIndex - 1].position : null;
     final nextPos =
@@ -1160,8 +1170,10 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
               (b.doneAt ?? b.createdAt).compareTo(a.doneAt ?? a.createdAt)));
 
     // 逾期置顶分组（性能批次 UX 优化，与桌面同口径）：逾期行渲染在列表
-    // 顶部的红调区块，其余照旧——长按拖拽语义不受影响（重排仍走原序数组）
+    // 顶部的红调区块，其余照旧——长按拖拽语义不受影响（重排走下方
+    // manualUndone 同口径平铺流）
     final overdueGroups = groupOverdueFirst(undone);
+    final manualUndone = _manualReorderStream(undone);
 
     // Logbook 分组（done 视图）：按完成日倒序，组内完成时刻倒序
     final doneGroups = isLogbook ? groupDoneByDay(visible) : <DoneDayGroup>[];
@@ -1385,8 +1397,9 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
                 padding: cardListPadding,
                 buildDefaultDragHandles: false,
                 // 重排只作用于未完成任务：已完成行在尾部折叠卡里（footer），
-                // 全列可拖的约束下不能让它们混进 item
-                itemCount: undone.length,
+                // 全列可拖的约束下不能让它们混进 item。渲染流逾期置顶平铺，
+                // 与标准分支同序（今天/近7天视图含逾期后，manual 档也先看到逾期）
+                itemCount: manualUndone.length,
                 footer: done.isEmpty ? null : buildDoneCard(),
                 onReorderItem: (oldIndex, newIndex) {
                   _reorderTasks(oldIndex, newIndex);
@@ -1402,8 +1415,10 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
                   _dragFromIndex = null;
                   // 拾起后原地松手（手指没动）= 长按菜单：manual 档行内长按已
                   // 让位给拖动，操作菜单入口由这里兜住，功能与样式两边不欠账
-                  if (!_pressMoved && from != null && from < undone.length) {
-                    _showTaskActions(undone[from]);
+                  if (!_pressMoved &&
+                      from != null &&
+                      from < manualUndone.length) {
+                    _showTaskActions(manualUndone[from]);
                   }
                 },
                 proxyDecorator: (child, index, animation) => AnimatedBuilder(
@@ -1434,7 +1449,7 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
                   child: child,
                 ),
                 itemBuilder: (context, index) {
-                  final task = undone[index];
+                  final task = manualUndone[index];
                   // 整行皆可长按拾起（无行尾把手图标）：500ms 长按后退化为
                   // 普通拖动，滚动与左右滑不受影响
                   return ReorderableDelayedDragStartListener(
