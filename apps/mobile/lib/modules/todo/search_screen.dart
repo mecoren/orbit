@@ -8,9 +8,11 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_dimens.dart';
 import '../../core/theme/orbit_accents.dart';
 import '../../data/api/dto.dart';
+import '../../shared/utils/hex_color.dart';
 import '../../shared/widgets/shadcn/orbit_strikethrough.dart';
 import '../../shared/widgets/shadcn/orbit_empty_state.dart';
 import '../../shared/widgets/shadcn/orbit_page_header.dart';
+import '../../shared/widgets/shadcn/orbit_section_header.dart';
 import 'logic/task_logic.dart';
 import 'providers/todo_providers.dart';
 import '../../core/theme/icon_map.dart';
@@ -163,49 +165,20 @@ class _ResultList extends StatelessWidget {
       ),
       children: [
         if (result.tasks.isNotEmpty) ...[
-          _header(context, '任务'),
+          const OrbitSectionHeader(label: '任务'),
           for (final t in result.tasks)
-            ListTile(
-              leading: Icon(
-                t.done == 1
-                    ? OrbitIcons.success
-                    : OrbitIcons.circle,
-                size: AppDimens.iconSizeMd,
-                color: t.done == 1 ? OrbitAccents.todoAccent : colors.secondaryText,
-              ),
-              title: AnimatedStrikethrough(
-                text: t.title,
-                done: t.done == 1,
-                maxLines: 1,
-                style: TextStyle(
-                  fontSize: 15,
-                  color: colors.titleText,
-                ),
-                doneColor: colors.titleText,
-              ),
-              subtitle: t.dueDate != null
-                  ? Text(
-                      _formatDate(t.dueDate!),
-                      style:
-                          TextStyle(fontSize: 12, color: colors.secondaryText),
-                    )
-                  : null,
-              trailing: Text(
-                priorityLabel(t.priority),
-                style: TextStyle(fontSize: 12, color: colors.secondaryText),
-              ),
-              onTap: () => context.push('/todo/${t.id}'),
-            ),
+            _TaskResultRow(task: t, projects: result.projects),
         ],
         if (result.projects.isNotEmpty) ...[
-          _header(context, '项目'),
+          const OrbitSectionHeader(label: '项目'),
           for (final p in result.projects)
             ListTile(
               leading: Container(
-                width: 12,
-                height: 12,
+                width: AppDimens.colorDotSize,
+                height: AppDimens.colorDotSize,
                 decoration: BoxDecoration(
-                  color: _parseColor(p.hexColor),
+                  // 解析失败回落 hexToColor 默认值（即待办强调色）
+                  color: hexToColor(p.hexColor),
                   shape: BoxShape.circle,
                 ),
               ),
@@ -228,7 +201,7 @@ class _ResultList extends StatelessWidget {
             ),
         ],
         if (result.comments.isNotEmpty) ...[
-          _header(context, '评论'),
+          const OrbitSectionHeader(label: '评论'),
           for (final c in result.comments)
             ListTile(
               leading: Icon(
@@ -254,37 +227,106 @@ class _ResultList extends StatelessWidget {
       ],
     );
   }
+}
 
-  Widget _header(BuildContext context, String label) {
+/// 搜索结果任务行：视觉对齐主列表任务行（信息层级 / 完成态 / 逾期色同口径）
+///
+/// 刻意不带勾选框与侧滑：搜索语境是只读跳板，完成操作进详情做——
+/// 引导图标用「描边色承载优先级」的圆圈语言与列表行呼应（P0「无」回落次要色）。
+class _TaskResultRow extends StatelessWidget {
+  const _TaskResultRow({required this.task, required this.projects});
+
+  final TodoTask task;
+  final List<TodoProject> projects;
+
+  @override
+  Widget build(BuildContext context) {
     final colors = AppColors.ofContext(context);
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(
-        AppDimens.space16,
-        AppDimens.space8,
-        AppDimens.space16,
-        AppDimens.space4,
-      ),
-      child: Text(
-        label,
-        style: TextStyle(
-          fontSize: 12,
-          fontWeight: FontWeight.w600,
-          color: colors.secondaryText,
+    final done = task.isDone;
+    final overdue = isOverdue(task);
+    final project = task.projectId == null
+        ? null
+        : projects.where((p) => p.id == task.projectId).firstOrNull;
+    final ringHex = done ? null : priorityRingHex(task.priority);
+    final dueLabel =
+        task.dueDate == null ? null : formatDueShort(task.dueDate!);
+
+    return InkWell(
+      onTap: () => context.push('/todo/${task.id}'),
+      child: Container(
+        constraints: const BoxConstraints(minHeight: AppDimens.touchTarget),
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppDimens.space16,
+          vertical: AppDimens.space8,
+        ),
+        decoration: BoxDecoration(
+          border: Border(bottom: BorderSide(color: colors.divider)),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              done ? OrbitIcons.success : OrbitIcons.circle,
+              size: AppDimens.iconSizeLg,
+              color: done
+                  ? OrbitAccents.todoAccent
+                  : (ringHex != null
+                      ? hexToColor(ringHex)
+                      : colors.secondaryText),
+            ),
+            const SizedBox(width: AppDimens.space12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  AnimatedStrikethrough(
+                    text: task.title,
+                    done: done,
+                    maxLines: 1,
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w500,
+                      color: colors.titleText,
+                    ),
+                    // 完成态全口径统一：划线 + 置灰一档
+                    doneColor: colors.secondaryText,
+                  ),
+                  if (project != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 2),
+                      child: Text(
+                        project.title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 12,
+                          // 项目名按项目色着字（无色回退次要色，与列表行同口径）
+                          color: project.hexColor.isNotEmpty
+                              ? hexToColor(project.hexColor,
+                                  fallback: colors.secondaryText)
+                              : colors.secondaryText,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            if (dueLabel != null) ...[
+              const SizedBox(width: AppDimens.space8),
+              Text(
+                dueLabel,
+                style: TextStyle(
+                  fontSize: 12,
+                  // 未来与今天走主题蓝，逾期转红（任务行同口径）
+                  color: overdue
+                      ? OrbitAccents.overdueRed
+                      : OrbitAccents.themeAccent,
+                ),
+              ),
+            ],
+          ],
         ),
       ),
     );
-  }
-
-  static String _formatDate(int ms) {
-    final d = DateTime.fromMillisecondsSinceEpoch(ms);
-    return '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
-  }
-
-  static Color _parseColor(String? hex) {
-    if (hex == null || hex.length != 7 || !hex.startsWith('#')) {
-      return OrbitAccents.todoAccent;
-    }
-    final v = int.tryParse(hex.substring(1), radix: 16);
-    return v == null ? OrbitAccents.todoAccent : Color(0xFF000000 | v);
   }
 }
