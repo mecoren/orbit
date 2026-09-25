@@ -61,16 +61,25 @@ class KanbanBoard extends StatelessWidget {
       scrollDirection: Axis.horizontal,
       padding: padding,
       itemCount: columns.length,
-      itemBuilder: (context, index) => _column(context, columns[index]),
+      // 末列不再加列间距：右页边由列表 padding 承担，避免双重留白
+      itemBuilder: (context, index) => _column(
+        context,
+        columns[index],
+        isLast: index == columns.length - 1,
+      ),
     );
   }
 
-  Widget _column(BuildContext context, KanbanColumn column) {
+  Widget _column(
+    BuildContext context,
+    KanbanColumn column, {
+    bool isLast = false,
+  }) {
     final colors = AppColors.ofContext(context);
     final accent = hexToColor(column.colorHex);
     return Container(
       width: columnWidth,
-      margin: const EdgeInsets.only(right: AppDimens.space12),
+      margin: EdgeInsets.only(right: isLast ? 0 : AppDimens.space12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

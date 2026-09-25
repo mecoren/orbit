@@ -158,7 +158,8 @@ class _ResultList extends StatelessWidget {
       controller: scrollController,
       padding: const EdgeInsets.only(
         top: AppDimens.space8,
-        bottom: AppDimens.gestureInsetFallback + AppDimens.space32,
+        // 底栏页签常驻：页尾只留呼吸留白
+        bottom: AppDimens.space16,
       ),
       children: [
         if (result.tasks.isNotEmpty) ...[

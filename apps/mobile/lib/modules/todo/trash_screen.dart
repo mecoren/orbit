@@ -262,8 +262,8 @@ class _TrashScreenState extends ConsumerState<TrashScreen> {
                         top: MediaQuery.of(context).padding.top +
                             OrbitPageHeader.rowHeight +
                             AppDimens.space8,
-                        bottom:
-                            AppDimens.gestureInsetFallback + AppDimens.space32,
+                        // 底栏页签常驻：页尾只留呼吸留白
+                        bottom: AppDimens.space16,
                       ),
                       itemCount: visible.length,
                       itemBuilder: (context, index) {

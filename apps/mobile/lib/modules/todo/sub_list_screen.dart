@@ -1211,11 +1211,14 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
     final truncated = tasks.length >= taskListPageSize;
     final topInset =
         MediaQuery.of(context).padding.top + OrbitPageHeader.rowHeight;
+    // 底栏页签常驻（分支内容在其上方）：页尾只留呼吸留白；选择态另让出
+    // 批量工具条整段占位（条体 + 底距 + 呼吸），末行不被浮动工具条遮住
     final listPadding = EdgeInsets.only(
       top: topInset +
           AppDimens.space8 +
           (truncated ? _TruncationBanner.height : 0),
-      bottom: AppDimens.gestureInsetFallback + AppDimens.space32,
+      bottom: AppDimens.space16 +
+          (_selectionMode ? _batchToolbarClearance : 0),
     );
     // 卡片列表（标准列表 / 重排档 / 骨架）在满幅 padding 上再让出卡片外缘：
     // 卡片是「页面里的一张卡」而非通栏表格；看板 / 表格 / Logbook 维持满幅。
@@ -1334,8 +1337,8 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
                   top: MediaQuery.of(context).padding.top +
                       OrbitPageHeader.rowHeight,
                 ),
-                // 空态给出口：筛选没结果就清筛选，否则直接开快速添加面板（与
-                // 右下 OrbitFab 同一入口，列表空时 FAB 仍可见但离拇指更远）
+                // 空态给出口：筛选没结果就清筛选，否则直接开快速添加面板
+                //（与底部导航中央添加钮同一入口）
                 child: EmptyState(
                   message: emptyMessage,
                   actionLabel: filteredEmpty ? '清除筛选' : '新建任务',
@@ -1348,11 +1351,12 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
                           ),
                 ),
             )
-        : showKanban
+            : showKanban
             ? KanbanBoard(
                 columns:
                     groupTasksForKanban(visible, _kanbanGroupBy, projects),
-                padding: listPadding,
+                // 列卡与标准列表卡同让位：左右 12 页边（列间 12 由卡间距承担）
+                padding: cardListPadding,
                 onToggleDone: _toggleDone,
                 onOpen: (t) => context.push('/todo/${t.id}'),
                 onLongPress: _showTaskActions,
@@ -1381,7 +1385,8 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
                 : showMatrix
                     ? EisenhowerMatrixBoard(
                         tasks: visible,
-                        padding: listPadding,
+                        // 象限卡/下钻卡与标准列表卡同让位：左右 12 页边
+                        padding: cardListPadding,
                         buildTile: buildTile,
                       )
                     : isLogbook
@@ -1667,6 +1672,10 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
     );
   }
 
+  /// 批量工具条在页尾的占位高度：条体（触控高 + 上下 8）+ 底距 + 呼吸各 8
+  static const double _batchToolbarClearance =
+      AppDimens.touchTarget + AppDimens.space8 * 4;
+
   /// 批量动作工具条（底部浮动，从下沿上滑进入）
   ///
   /// 六个一级动作横排 + 横向滚动：一屏放不下时横滑而非折行，避免工具条
@@ -1675,7 +1684,7 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
     return Positioned(
       left: AppDimens.space12,
       right: AppDimens.space12,
-      bottom: AppDimens.gestureInsetFallback + AppDimens.space8,
+      bottom: AppDimens.space8,
       child: Material(
         color: Colors.transparent,
         child: Container(

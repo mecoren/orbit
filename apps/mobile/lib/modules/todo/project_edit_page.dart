@@ -252,7 +252,8 @@ class _ProjectEditPageState extends ConsumerState<ProjectEditPage> {
         AppDimens.space16,
         topInset + AppDimens.space8,
         AppDimens.space16,
-        AppDimens.gestureInsetFallback + AppDimens.space32,
+        // 底栏页签常驻：页尾只留呼吸留白
+        AppDimens.space16,
       ),
       children: [
         _nameRow(colors),

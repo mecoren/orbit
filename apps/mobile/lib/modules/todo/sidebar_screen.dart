@@ -278,8 +278,8 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
                       top: MediaQuery.of(context).padding.top +
                           OrbitPageHeader.rowHeight +
                           AppDimens.space8,
-                      bottom:
-                          AppDimens.gestureInsetFallback + AppDimens.space32,
+                      // 底栏页签常驻：页尾只留呼吸留白
+                      bottom: AppDimens.space16,
                     ),
                     children: [
                       // 一、快捷视图（六行 ListTile：图标 quickView 色 + 标题 + 计数 badge + chevron）
@@ -654,7 +654,7 @@ class _SidebarSkeleton extends StatelessWidget {
         top: MediaQuery.of(context).padding.top +
             OrbitPageHeader.rowHeight +
             AppDimens.space8,
-        bottom: AppDimens.gestureInsetFallback + AppDimens.space32,
+        bottom: AppDimens.space16,
       ),
       children: [
         for (var i = 0; i < 6; i++) row(120 - (i % 3) * 20.0),
