@@ -14,6 +14,7 @@ import '../../shared/utils/hex_color.dart';
 import '../../shared/widgets/shadcn/orbit_page_header.dart';
 import '../../shared/widgets/shadcn/orbit_skeleton.dart';
 import '../../shared/widgets/shadcn/orbit_actions_sheet.dart';
+import '../../shared/widgets/shadcn/orbit_section_header.dart';
 import '../../shared/widgets/shadcn/orbit_sheet_scaffold.dart';
 import '../../shared/widgets/controller_disposer.dart';
 import '../../services/shortcut_receiver.dart';
@@ -255,8 +256,7 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
             (!projectsAsync.hasValue && projectsAsync.isLoading);
     final counts = _counts(tasks);
     final undoneByProject = _undoneByProject(counts);
-    final surfaceHighest =
-        Theme.of(context).colorScheme.surfaceContainerHighest;
+    final badgeBackground = colors.surfaceSecondary;
 
     return Scaffold(
       body: Stack(
@@ -283,18 +283,18 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
                     ),
                     children: [
                       // 一、快捷视图（六行 ListTile：图标 quickView 色 + 标题 + 计数 badge + chevron）
-                      const SectionHeader(label: '快捷视图'),
+                      const OrbitSectionHeader(label: '快捷视图'),
                       for (final key in QuickViewKey.values)
-                        _buildQuickViewRow(key, counts, surfaceHighest),
+                        _buildQuickViewRow(key, counts, badgeBackground),
                       // 二、搜索（任务/项目/评论三路聚合）
                       _buildSearchRow(context),
                       // 三、筛选器（#35：保存的组合条件命名视图）
                       _buildSavedFiltersRow(context),
                       // 四、回收站（已删除任务的恢复入口；计数 = 回收站内任务数）
-                      _buildTrashRow(context, surfaceHighest),
+                      _buildTrashRow(context, badgeBackground),
                       // 日历 / 统计已升级为底部页签，不再占清单首页行位。
                       // 五、项目（色块 + 名称 + 未完成计数；长按菜单；右侧把手拖拽重排）
-                      const SectionHeader(label: '项目'),
+                      const OrbitSectionHeader(label: '项目'),
                       ReorderableListView.builder(
                         shrinkWrap: true,
                         padding: EdgeInsets.zero,
@@ -349,7 +349,7 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
                       // 归档项目区（有归档才渲染；行点击进项目视图读任务，
                       // 行尾恢复钮取消归档——长按菜单同款入口兜底）
                       if (_archivedProjects().isNotEmpty) ...[
-                        const SectionHeader(label: '已归档'),
+                        const OrbitSectionHeader(label: '已归档'),
                         ..._archivedProjects().map(
                           (p) => ListTile(
                             leading: Icon(
@@ -399,7 +399,7 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
                               n: counts.quickView[QuickViewKey.all]! -
                                   counts.undoneByProject.values
                                       .fold(0, (a, b) => a + b),
-                              background: surfaceHighest,
+                              background: badgeBackground,
                             ),
                             Icon(
                               OrbitIcons.chevronRight,
@@ -445,7 +445,8 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
       leading: Icon(
         OrbitIcons.filter,
         size: AppDimens.iconSizeMd,
-        color: OrbitAccents.todoAccent,
+        // 功能行图标统一次要文字色；彩色只留给快捷视图与项目行
+        color: colors.secondaryText,
       ),
       title: Text(
         '筛选器',
@@ -471,7 +472,8 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
       leading: Icon(
         OrbitIcons.search,
         size: AppDimens.iconSizeMd,
-        color: OrbitAccents.todoAccent,
+        // 功能行图标统一次要文字色；彩色只留给快捷视图与项目行
+        color: colors.secondaryText,
       ),
       title: Text(
         '搜索',
@@ -601,8 +603,7 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
             if (undone > 0) ...[
               CountBadge(
                 n: undone,
-                background:
-                    Theme.of(context).colorScheme.surfaceContainerHighest,
+                background: colors.surfaceSecondary,
               ),
               const SizedBox(width: AppDimens.space8),
             ],
@@ -611,7 +612,7 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
               index: index,
               child: SizedBox(
                 width: AppDimens.iconSizeMd + AppDimens.space8,
-                height: AppDimens.touchTarget - AppDimens.space12,
+                height: AppDimens.touchTarget,
                 child: Icon(
                   OrbitIcons.drag,
                   size: AppDimens.iconSizeMd,
@@ -663,37 +664,6 @@ class _SidebarSkeleton extends StatelessWidget {
         const SizedBox(height: AppDimens.space8),
         for (var i = 0; i < 3; i++) row(100 + (i % 2) * 40.0, iconSize: 12),
       ],
-    );
-  }
-}
-
-/// 分区头（docs/05 §4.1）：L16/R8/T12/B4、12px/w600/sub
-class SectionHeader extends StatelessWidget {
-  const SectionHeader({super.key, required this.label});
-
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = AppColors.ofContext(context);
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(
-        AppDimens.space16,
-        AppDimens.space12,
-        AppDimens.space8,
-        AppDimens.space4,
-      ),
-      child: Align(
-        alignment: Alignment.centerLeft,
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.w600,
-            color: colors.secondaryText,
-          ),
-        ),
-      ),
     );
   }
 }

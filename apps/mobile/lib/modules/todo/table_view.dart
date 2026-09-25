@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_dimens.dart';
-import '../../core/theme/app_shapes.dart';
 import '../../core/theme/orbit_accents.dart';
 import '../../data/api/dto.dart';
 import '../../shared/utils/hex_color.dart';
@@ -143,6 +142,10 @@ class TaskTableView extends StatelessWidget {
             CircleCheckbox(
               checked: task.isDone,
               size: AppDimens.subtaskCheckboxSize,
+              // 优先级由描边环承载（列表行/看板卡同口径），不再另立方点列
+              borderColor: task.priority > 0
+                  ? hexToColor(priorityRingHex(task.priority)!)
+                  : null,
               onToggle: () => onToggleDone(task),
             ),
             const SizedBox(width: AppDimens.space8),
@@ -209,20 +212,6 @@ class TaskTableView extends StatelessWidget {
                   color: overdue
                       ? OrbitAccents.overdueRed
                       : colors.secondaryText,
-                ),
-              ),
-            ),
-            SizedBox(
-              width: 28,
-              child: Align(
-                alignment: Alignment.centerRight,
-                child: Container(
-                  width: AppDimens.colorDotSize,
-                  height: AppDimens.colorDotSize,
-                  decoration: BoxDecoration(
-                    color: hexToColor(priorityColorHex(task.priority)),
-                    borderRadius: AppShapes.small,
-                  ),
                 ),
               ),
             ),

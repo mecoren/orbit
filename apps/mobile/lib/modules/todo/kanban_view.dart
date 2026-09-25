@@ -138,7 +138,6 @@ class KanbanBoard extends StatelessWidget {
   Widget _card(BuildContext context, TodoTask task) {
     final colors = AppColors.ofContext(context);
     final overdue = isOverdue(task);
-    final priorityHex = priorityColorHex(task.priority);
     final dots = labelDotsByTask[task.id] ?? const <ProjectedTaskLabel>[];
     final projectTitle = projectTitleOf?.call(task);
 
@@ -163,6 +162,10 @@ class KanbanBoard extends StatelessWidget {
                   CircleCheckbox(
                     checked: task.isDone,
                     size: AppDimens.subtaskCheckboxSize,
+                    // 优先级由描边环承载（列表行同口径），不再另画色条
+                    borderColor: task.priority > 0
+                        ? hexToColor(priorityRingHex(task.priority)!)
+                        : null,
                     onToggle: () => onToggleDone(task),
                   ),
                   const SizedBox(width: AppDimens.space8),
@@ -189,17 +192,6 @@ class KanbanBoard extends StatelessWidget {
                     ),
                 ],
               ),
-              const SizedBox(height: AppDimens.space8),
-              // 优先级色条（0=无 时隐藏，避免每张卡都有一条灰条）
-              if (task.priority > 0)
-                Container(
-                  height: 3,
-                  width: 40,
-                  decoration: BoxDecoration(
-                    color: hexToColor(priorityHex),
-                    borderRadius: AppShapes.small,
-                  ),
-                ),
               const SizedBox(height: AppDimens.space8),
               Row(
                 children: [
