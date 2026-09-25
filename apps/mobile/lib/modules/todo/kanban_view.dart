@@ -200,7 +200,7 @@ class KanbanBoard extends StatelessWidget {
                     ),
                     const SizedBox(width: AppDimens.space2),
                     Text(
-                      formatYmd(task.dueDate!),
+                      formatDueShort(task.dueDate!),
                       style: TextStyle(
                         fontSize: 11,
                         color:

@@ -733,6 +733,38 @@ group('displayReminder 行内提醒选取', () {
           now: now), '2027年1月3日');
     });
 
+    test('formatDueShort：纯零点不带时刻，带时刻补 HH:mm', () {
+      // 只选日期（零点）→ 与 formatDueLabel 同输出
+      expect(formatDueShort(DateTime(2026, 9, 23).millisecondsSinceEpoch,
+          now: now), '今天');
+      // 带时刻（18:00 视图新建归一口径）→ 补时刻
+      expect(
+        formatDueShort(
+            DateTime(2026, 9, 23, 18).millisecondsSinceEpoch, now: now),
+        '今天 18:00',
+      );
+      expect(
+        formatDueShort(
+            DateTime(2026, 12, 5, 9, 5).millisecondsSinceEpoch, now: now),
+        '12月5日 09:05',
+      );
+    });
+
+    test('formatStampLabel：今天/昨天相对化，更远带日期，恒带 HH:mm', () {
+      expect(formatStampLabel(DateTime(2026, 9, 23, 7, 5).millisecondsSinceEpoch,
+          now: now), '今天 07:05');
+      expect(
+          formatStampLabel(
+              DateTime(2026, 9, 22, 23, 59).millisecondsSinceEpoch, now: now),
+          '昨天 23:59');
+      expect(formatStampLabel(DateTime(2026, 9, 20).millisecondsSinceEpoch,
+          now: now), '9月20日 00:00');
+      expect(
+          formatStampLabel(
+              DateTime(2025, 12, 31, 8, 0).millisecondsSinceEpoch, now: now),
+          '2025年12月31日 08:00');
+    });
+
     test('priorityRingHex：P0「无」不出色（回落中性灰描边），P1–P5 取语义色', () {
       expect(priorityRingHex(0), isNull);
       for (var p = 1; p <= 5; p++) {

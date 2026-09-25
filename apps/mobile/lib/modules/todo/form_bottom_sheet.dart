@@ -25,8 +25,8 @@ import 'logic/task_logic.dart'
         QuickViewKey,
         atViewDueHour,
         dateToMidnightMs,
-        formatDateTime,
-        formatYmd,
+        formatDueShort,
+        formatStampLabel,
         priorityColorHex,
         priorityLabel,
         quickViewCreateDefaults,
@@ -818,7 +818,7 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
                                     icon: OrbitIcons.flag,
                                     label: '截止日期',
                                     value: _dueDate != null
-                                        ? formatYmd(_dueDate!)
+                                        ? formatDueShort(_dueDate!)
                                         : null,
                                     onTap: _pickCustomDate,
                                     onClear: _dueDate == null
@@ -850,7 +850,7 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
                                     icon: OrbitIcons.playCircle,
                                     label: '开始日期',
                                     value: _startDate != null
-                                        ? formatYmd(_startDate!)
+                                        ? formatDueShort(_startDate!)
                                         : null,
                                     onTap: () => _pickDateField(
                                       current: _startDate,
@@ -868,7 +868,7 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
                                     icon: OrbitIcons.notification,
                                     label: '提醒时间',
                                     value: _remindAt != null
-                                        ? formatDateTime(_remindAt!)
+                                        ? formatStampLabel(_remindAt!)
                                         : null,
                                     onTap: _pickReminder,
                                     onClear: _remindAt == null
@@ -1070,7 +1070,7 @@ class _TitleParseChips extends StatelessWidget {
           _parseChip(
             context,
             icon: OrbitIcons.calendar,
-            label: '截止 ${formatYmd(parse.dueDate!.millisecondsSinceEpoch)}',
+            label: '截止 ${formatDueShort(parse.dueDate!.millisecondsSinceEpoch)}',
             color: colors.secondaryText,
           ),
         if (parse.priority > 0)

@@ -6,7 +6,8 @@ import 'package:orbit/data/api/dto.dart';
 import 'package:orbit/data/api/mock_orbit_bridge.dart';
 import 'package:orbit/data/providers/bridge_provider.dart';
 import 'package:orbit/modules/todo/form_bottom_sheet.dart';
-import 'package:orbit/modules/todo/logic/task_logic.dart' show QuickViewKey;
+import 'package:orbit/modules/todo/logic/task_logic.dart'
+    show QuickViewKey, formatDueShort, formatStampLabel;
 import 'package:orbit/shared/widgets/shadcn/orbit_section_card.dart';
 import 'support/orbit_test_app.dart';
 import 'package:orbit/core/theme/icon_map.dart';
@@ -129,11 +130,12 @@ void main() {
     await _scrollTo(tester, find.text('日期与提醒'));
     expect(find.text('日期与提醒'), findsOneWidget);
 
-    // 快捷胶囊限定在 SectionCard 内（侧栏快捷视图也有「今天」）
+    // 快捷胶囊限定在 SectionCard 内（侧栏快捷视图也有「今天」）；
+    // 开始日期值行走 formatDueShort 口径也是「今天」，卡内共两处
     expect(
       find.descendant(
           of: find.byType(SectionCard), matching: find.text('今天')),
-      findsOneWidget,
+      findsNWidgets(2),
     );
     expect(
       find.descendant(
@@ -146,19 +148,17 @@ void main() {
       findsOneWidget,
     );
 
-    // 开始日期默认当天 → 值行显示今天；结束日期已移除，提醒未设值 → 占位「无」
-    final today = DateTime.now();
-    final todayYmd =
-        '${today.year.toString().padLeft(4, '0')}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
-    expect(
-      find.descendant(of: find.byType(SectionCard), matching: find.text(todayYmd)),
-      findsOneWidget,
-    );
     // 「无」在信息区（优先级 P0）与日期卡片（提醒未设占位）各一处——限定在
     // 日期与提醒卡片内断言（按卡片标题行定位其 SectionCard 祖先）
     final dateCard = find.ancestor(
       of: find.text('日期与提醒'),
       matching: find.byType(SectionCard),
+    );
+    // 开始日期默认当天 → 值行显示口语化「今天」（formatDueShort 纯日期不带
+    // 时刻），与快捷胶囊「今天」同名共两处
+    expect(
+      find.descendant(of: dateCard, matching: find.text('今天')),
+      findsNWidgets(2),
     );
     expect(
       find.descendant(of: dateCard, matching: find.text('无')),
@@ -172,7 +172,8 @@ void main() {
     await tester.enterText(find.byType(TextFormField).first, '快捷截止任务');
     await _scrollTo(tester, find.text('截止日期'));
     await tester.tap(find
-        .descendant(of: find.byType(SectionCard), matching: find.text('今天')));
+        .descendant(of: find.byType(SectionCard), matching: find.text('今天'))
+        .first);
     await tester.pumpAndSettle();
 
     await tester.tap(find.byIcon(OrbitIcons.check));
@@ -203,16 +204,11 @@ void main() {
     await tester.tap(find.text('明天 09:00'));
     await tester.pumpAndSettle();
 
-    String two(int v) => v.toString().padLeft(2, '0');
     final now = DateTime.now();
-    final tomorrow9 = DateTime(now.year, now.month, now.day, 9)
-        .add(const Duration(days: 1));
-    // 行回显仍是绝对日期时刻（formatDateTime 口径）
-    expect(
-      find.text('${tomorrow9.year}-${two(tomorrow9.month)}-'
-          '${two(tomorrow9.day)} 09:00'),
-      findsOneWidget,
-    );
+    final tomorrow9 = DateTime(now.year, now.month, now.day + 1, 9);
+    // 行回显走 formatStampLabel 口径（口语化：明天 09:00）
+    expect(find.text(formatStampLabel(tomorrow9.millisecondsSinceEpoch)),
+        findsOneWidget);
 
     await tester.tap(find.byIcon(OrbitIcons.check));
     await _settlePastMockLatency(tester);
@@ -266,9 +262,10 @@ void main() {
     expect(inForm(find.byIcon(OrbitIcons.calendar)), findsOneWidget);
     expect(inForm(find.byIcon(OrbitIcons.flag)), findsOneWidget);
     final tomorrow = DateTime.now().add(const Duration(days: 1));
-    final expectedY =
-        '${tomorrow.year}-${tomorrow.month.toString().padLeft(2, '0')}-${tomorrow.day.toString().padLeft(2, '0')}';
-    expect(find.text('截止 $expectedY'), findsOneWidget);
+    final tomorrowZero = DateTime(tomorrow.year, tomorrow.month, tomorrow.day);
+    // chip 预览走 formatDueShort 口径（明天零点纯日期 → 「明天」）
+    expect(find.text('截止 ${formatDueShort(tomorrowZero.millisecondsSinceEpoch)}'),
+        findsOneWidget);
 
     // 保存 → 字段应用（due_date=明天零点、priority=3）+ 标题剥离
     await tester.tap(find.byIcon(OrbitIcons.check));
@@ -279,7 +276,6 @@ void main() {
     );
     final task = tasks!.firstWhere((t) => t.title == '开会');
     expect(task.priority, 3);
-    final tomorrowZero = DateTime(tomorrow.year, tomorrow.month, tomorrow.day);
     expect(task.dueDate, tomorrowZero.millisecondsSinceEpoch);
   });
 
@@ -351,7 +347,8 @@ void main() {
 
     // 截止日期快捷「今天」→ 预览锚点就位（不必走日期面板）
     await _scrollTo(tester, find.text('截止日期'));
-    await tester.tap(find.text('今天'));
+    // .first = 截止行内的快捷胶囊（开始日期值行同样叫「今天」）
+    await tester.tap(find.text('今天').first);
     await tester.pumpAndSettle();
 
     await _scrollTo(tester, find.text('重复'));
@@ -395,8 +392,9 @@ void main() {
     await tester.pumpAndSettle();
 
     final now = DateTime.now();
-    final expected =
-        '${now.year}-${now.month.toString().padLeft(2, '0')}-15';
+    // 回显走 formatDueShort 口径（本月 15 号零点；15 号落在今天±1 时出相对文案）
+    final expected = formatDueShort(
+        DateTime(now.year, now.month, 15).millisecondsSinceEpoch);
     expect(find.text(expected), findsOneWidget);
   });
 

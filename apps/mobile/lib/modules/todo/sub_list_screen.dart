@@ -2128,7 +2128,7 @@ class TodoTaskTile extends StatelessWidget {
     final overdue = isOverdue(task);
     // 截止日期短标签（右列；未来主题蓝、逾期红）
     final dueLabel =
-        task.dueDate == null ? null : formatDueLabel(task.dueDate!);
+        task.dueDate == null ? null : formatDueShort(task.dueDate!);
     final meta = _metaIcons(colors);
     // 副标题（标签 / 项目名）有无：无则整行只留标题
     final hasSubtitle =

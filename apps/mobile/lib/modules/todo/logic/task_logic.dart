@@ -485,6 +485,34 @@ String formatDueLabel(int ms, {DateTime? now}) {
   };
 }
 
+/// 截止短标签 + 时刻（列表行 / 看板卡 / 表格列 / 详情属性行共用）：
+/// [formatDueLabel] 的相对口径不变，时间戳带非零时刻时补 ` HH:mm`
+/// （用户只选日期的本地零点不补——「今天」比「今天 00:00」安静）。
+/// 时刻判定必须取**本地字段**而非 `ms % 86400000`：本地零点在 UTC+8 下
+/// 对应前一日 16:00 的 epoch 值，取模恒非零，纯日期会被误判带时刻。
+String formatDueShort(int ms, {DateTime? now}) {
+  final d = DateTime.fromMillisecondsSinceEpoch(ms);
+  final hasTime =
+      d.hour != 0 || d.minute != 0 || d.second != 0 || d.millisecond != 0;
+  if (!hasTime) return formatDueLabel(ms, now: now);
+  return '${formatDueLabel(ms, now: now)} ${_two(d.hour)}:${_two(d.minute)}';
+}
+
+/// 时间戳口语化（恒带 HH:mm；详情历史 / 提醒行用）：
+/// 今天 / 昨天 相对化，同年 `M月D日`，跨年补年份。
+String formatStampLabel(int ms, {DateTime? now}) {
+  final d = DateTime.fromMillisecondsSinceEpoch(ms);
+  final n = now ?? DateTime.now();
+  final hm = '${_two(d.hour)}:${_two(d.minute)}';
+  final today = DateTime(n.year, n.month, n.day);
+  final diff = DateTime(d.year, d.month, d.day).difference(today).inDays;
+  if (diff == 0) return '今天 $hm';
+  if (diff == -1) return '昨天 $hm';
+  return d.year == n.year
+      ? '${d.month}月${d.day}日 $hm'
+      : '${d.year}年${d.month}月${d.day}日 $hm';
+}
+
 /// 周几中文名（周一..周日；「今天」页头日期副标与完成日志分组头共用）
 String weekdayCn(DateTime d) => switch (d.weekday) {
       DateTime.monday => '周一',

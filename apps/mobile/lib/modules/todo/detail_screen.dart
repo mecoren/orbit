@@ -466,7 +466,7 @@ class _InfoSection extends ConsumerWidget {
           ),
           InfoTile(
             label: '截止日期',
-            value: detail.dueDate != null ? formatYmd(detail.dueDate!) : '无',
+            value: detail.dueDate != null ? formatDueShort(detail.dueDate!) : '无',
             onClick: () => _pickDueDate(context),
             // 有值才可清除；patch {"due_date": null} 走三态清空语义
             onClear: detail.dueDate == null
@@ -475,7 +475,7 @@ class _InfoSection extends ConsumerWidget {
           ),
           InfoTile(
             label: '开始日期',
-            value: detail.startDate != null ? formatYmd(detail.startDate!) : '无',
+            value: detail.startDate != null ? formatDueShort(detail.startDate!) : '无',
             onClick: () => _pickDateField(context,
                 current: detail.startDate, key: 'start_date'),
             onClear: detail.startDate == null
@@ -1333,7 +1333,7 @@ class _RemindersSection extends ConsumerWidget {
                               children: [
                                 Flexible(
                                   child: Text(
-                                    formatDateTime(reminder.remindAt),
+                                    formatStampLabel(reminder.remindAt),
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                     style: TextStyle(
@@ -2180,10 +2180,9 @@ class _HistorySectionState extends ConsumerState<_HistorySection> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            formatDateTime(r.createdAt),
+                            formatStampLabel(r.createdAt),
                             style: TextStyle(
                               fontSize: 11,
-                              fontFamily: 'monospace',
                               color: colors.secondaryText,
                             ),
                           ),

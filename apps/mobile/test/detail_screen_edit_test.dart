@@ -6,6 +6,7 @@ import 'package:orbit/data/api/dto.dart';
 import 'package:orbit/data/api/mock_orbit_bridge.dart';
 import 'package:orbit/data/providers/bridge_provider.dart';
 import 'package:orbit/modules/todo/detail_screen.dart';
+import 'package:orbit/modules/todo/logic/task_logic.dart' show formatStampLabel;
 import 'package:orbit/shared/widgets/shadcn/orbit_month_calendar.dart';
 import 'support/orbit_test_app.dart';
 import 'package:orbit/core/theme/icon_map.dart';
@@ -139,17 +140,22 @@ void main() {
     final before = (await tester.runAsync(() => remindersOf(5)))!;
     expect(before.length, 1);
 
-    // 基础屏上唯一含冒号的文本即提醒时间（信息区日期走 formatYmd 无时分）；
-    // scrollUntilVisible 的目标不能链 .first——目标未进树时 evaluate
-    // 内部先取 first 会抛 No element，等滚到位再取
-    await _scrollTo(tester, find.textContaining(':'));
+    // 提醒行文本走 formatStampLabel 口径：按种子 remind_at 精确算出文案
+    // （信息区截止/开始日期口语化后同样可能带时刻，textContaining(':') 会误中）
+    final remindAtMs = (await tester.runAsync(
+      () => remindersOf(5),
+    ))!
+        .first
+        .remindAt;
+    final stampText = formatStampLabel(remindAtMs);
+    await _scrollTo(tester, find.text(stampText));
     // 子任务进度条 + 常驻关联区让页面变长，scroll 可能停在目标贴顶被
     // 玻璃标题栏叠层挡住命中的边缘处——与「添加提醒」用例同款反向拖 100px
-    await tester.ensureVisible(find.textContaining(':').first);
+    await tester.ensureVisible(find.text(stampText));
     await tester.pumpAndSettle();
     await tester.drag(find.byType(Scrollable).first, const Offset(0, 100));
     await tester.pumpAndSettle();
-    await tester.tap(find.textContaining(':').first);
+    await tester.tap(find.text(stampText));
     await tester.pumpAndSettle();
 
     // 改选 20 号 → 确认（初始时间非 20 日零点 → 必然变化）
@@ -169,11 +175,16 @@ void main() {
     expect(
         (await tester.runAsync(() => remindersOf(5)))!.length, 1);
 
-    await _scrollTo(tester, find.textContaining(':'));
+    final remindAtMs2 = (await tester.runAsync(
+      () => remindersOf(5),
+    ))!
+        .first
+        .remindAt;
+    await _scrollTo(tester, find.text(formatStampLabel(remindAtMs2)));
     // 同上：进度条 + 常驻关联区导致的目标贴顶被标题栏遮挡，完整滚入后
     // 反向拖 100px 再取 .last（关联区删除用 InkWell 非 IconButton，
     // 不会误中；取 .last 仍为提醒的删除）
-    await tester.ensureVisible(find.textContaining(':').first);
+    await tester.ensureVisible(find.text(formatStampLabel(remindAtMs2)));
     await tester.pumpAndSettle();
     await tester.drag(find.byType(Scrollable).first, const Offset(0, 100));
     await tester.pumpAndSettle();

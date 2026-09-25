@@ -99,8 +99,9 @@ class TaskTableView extends StatelessWidget {
             child: Text('标签', style: style),
           ),
         ),
+        const SizedBox(width: 4),
         SizedBox(
-          width: 64,
+          width: 76,
           child: FittedBox(
             fit: BoxFit.scaleDown,
             alignment: Alignment.centerRight,
@@ -194,9 +195,9 @@ class TaskTableView extends StatelessWidget {
               ),
             ),
             SizedBox(
-              width: 64,
+              width: 76,
               child: Text(
-                task.dueDate == null ? '—' : formatYmd(task.dueDate!),
+                task.dueDate == null ? '—' : formatDueShort(task.dueDate!),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 textAlign: TextAlign.right,
