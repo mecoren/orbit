@@ -232,7 +232,7 @@ class _QuadrantRow extends StatelessWidget {
           children: [
             SizedBox(
               height: AppDimens.taskCheckboxSize,
-              child: CircleCheckbox(
+              child: OrbitCheckbox(
                 checked: task.isDone,
                 onToggle: () {
                   HapticFeedback.selectionClick();

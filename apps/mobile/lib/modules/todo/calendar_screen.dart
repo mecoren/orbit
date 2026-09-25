@@ -987,7 +987,7 @@ class _DayTaskRow extends StatelessWidget {
         ),
         child: Row(
           children: [
-            CircleCheckbox(
+            OrbitCheckbox(
               checked: task.isDone,
               onToggle: onToggle,
               borderColor: hex == null ? null : hexToColor(hex),

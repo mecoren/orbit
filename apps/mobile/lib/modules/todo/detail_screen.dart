@@ -333,7 +333,7 @@ class _TitleSectionState extends State<_TitleSection> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // 28px 圆 checkbox（check 18，docs/05 §七）
-          CircleCheckbox(
+          OrbitCheckbox(
             checked: task.isDone,
             size: 28,
             onToggle: () => widget.onToggleDone(task),
@@ -796,7 +796,7 @@ class _SubtasksSectionState extends ConsumerState<_SubtasksSection> {
               child: Row(
                 children: [
                   // 22px 圆 checkbox（check 14，docs/05 §四）
-                  CircleCheckbox(
+                  OrbitCheckbox(
                     checked: subtask.isDone,
                     size: AppDimens.subtaskCheckboxSize,
                     onToggle: () => _mutate(() => ref
@@ -1090,7 +1090,7 @@ class _LabelEditSheetState extends ConsumerState<_LabelEditSheet> {
                                 child: Row(
                                   children: [
                                     const SizedBox(width: AppDimens.space16),
-                                    CircleCheckbox(
+                                    OrbitCheckbox(
                                       checked: attachedIds.contains(label.id),
                                       size: AppDimens.iconSizeMd + 2,
                                       onToggle: () => _toggleLabel(label),

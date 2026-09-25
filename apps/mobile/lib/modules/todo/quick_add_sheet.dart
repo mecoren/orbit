@@ -421,7 +421,7 @@ class _QuickAddSheetState extends ConsumerState<_QuickAddSheet> {
                           ),
                           child: Row(
                             children: [
-                              CircleCheckbox(
+                              OrbitCheckbox(
                                 checked: checked,
                                 onToggle: () => toggle(label),
                                 size: AppDimens.subtaskCheckboxSize,

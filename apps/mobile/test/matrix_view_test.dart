@@ -104,7 +104,7 @@ void main() {
   testWidgets('勾选完成：onToggleDone 带回任务', (tester) async {
     TodoTask? toggled;
     await _pumpMatrix(tester, onToggleDone: (t) => toggled = t);
-    await tester.tap(find.byType(CircleCheckbox).first);
+    await tester.tap(find.byType(OrbitCheckbox).first);
     await tester.pumpAndSettle();
     expect(toggled, isNotNull);
   });

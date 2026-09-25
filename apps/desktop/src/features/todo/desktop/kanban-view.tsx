@@ -704,17 +704,22 @@ const KanbanCard = memo(function KanbanCard({
             {selected ? <CheckSvg /> : null}
           </button>
         )}
-        {/* 完成 checkbox（M5，与列表/表格同款圆环）：卡片正面直接入口，
-            不必右键菜单绕一圈 */}
+        {/* 完成 checkbox（M5，与列表同款方角）：卡片正面直接入口，
+            不必右键菜单绕一圈；未完成描边 = 优先级色（P0 回落中性灰） */}
         <button
           type="button"
           aria-label={task.done ? "标记未完成" : "标记完成"}
           className={cn(
-            "mt-0.5 h-5 w-5 shrink-0 rounded-full border-2 transition-colors",
+            "mt-0.5 h-5 w-5 shrink-0 rounded-[4px] border-2 transition-colors",
             task.done
               ? "border-primary bg-primary"
               : "border-muted-foreground/30 hover:border-primary",
           )}
+          style={
+            !task.done && task.priority > 0
+              ? { borderColor: PRIORITY_COLOR[task.priority] }
+              : undefined
+          }
           onClick={(e) => {
             e.stopPropagation();
             void completeTask(task, qc);

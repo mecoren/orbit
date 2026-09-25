@@ -260,9 +260,14 @@ function TitleRow({
         type="button"
         aria-label={task.done ? "标记未完成" : "标记完成"}
         className={cn(
-          "h-5 w-5 shrink-0 rounded-full border-2 transition-colors",
+          "h-5 w-5 shrink-0 rounded-[4px] border-2 transition-colors",
           task.done ? "border-primary bg-primary" : "border-muted-foreground/30 hover:border-primary",
         )}
+        style={
+          !task.done && task.priority > 0
+            ? { borderColor: PRIORITY_COLOR[task.priority] }
+            : undefined
+        }
         onClick={() => void completeTask(task, qc)}
       >
         {task.done ? <Check className="m-auto size-3 text-white" /> : null}

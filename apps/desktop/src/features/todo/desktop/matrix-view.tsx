@@ -262,23 +262,23 @@ const MatrixRow = memo(function MatrixRow({
         }
       }}
     >
-      {/* 优先级左缘竖条（TaskRow 同形制，六档全显） */}
-      <span
-        aria-hidden
-        className="pointer-events-none absolute inset-y-1 left-0 w-1 rounded-full"
-        style={{ background: PRIORITY_COLOR[t.priority] }}
-      />
-
-      {/* 完成 checkbox：圆环（TaskRow 同款） */}
+      {/* 完成 checkbox：方角（TaskRow 同款，4px 圆角）；未完成描边 =
+          优先级色（P0「无」回落中性灰）——紧急度以完成按钮颜色为准
+          （原左缘竖条移除，颜色移交此处） */}
       <button
         type="button"
         aria-label={t.done ? "标记未完成" : "标记完成"}
         className={cn(
-          "h-[18px] w-[18px] shrink-0 rounded-full border-2 transition-colors",
+          "h-[18px] w-[18px] shrink-0 rounded-[4px] border-2 transition-colors",
           t.done
             ? "border-primary bg-primary"
             : "border-muted-foreground/30 hover:border-primary",
         )}
+        style={
+          !t.done && t.priority > 0
+            ? { borderColor: PRIORITY_COLOR[t.priority] }
+            : undefined
+        }
         onClick={(e) => {
           e.stopPropagation();
           onToggleDone();

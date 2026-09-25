@@ -1,8 +1,8 @@
-// 圆形勾选框（设计系统 v3：shadcn `Checkbox` 承载，圆形形态保留）。
+// 方角勾选框（设计系统 v3：shadcn `Checkbox` 承载，TickTick 同款方角形态）。
 //
 // 断言口径随实现收敛：v3 的描边/填充/对号动画由 shadcn `Checkbox` 内部承担
 // （内部是三层嵌套 AnimatedContainer，逐节点断言既脆又测不到本项目契约），
-// 本组件只剩「圆形 + 尺寸 + 强调色 + 回调转发」四件事，故断言落在组件契约上。
+// 本组件只剩「方角 + 尺寸 + 强调色 + 回调转发」四件事，故断言落在组件契约上。
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:orbit/core/theme/app_motion.dart';
@@ -30,7 +30,7 @@ class _HostState extends State<_Host> {
   Widget build(BuildContext context) => orbitTestApp(
         home: Scaffold(
           body: Center(
-            child: CircleCheckbox(
+            child: OrbitCheckbox(
               checked: checked,
               size: widget.size,
               onToggle: () {
@@ -46,7 +46,7 @@ class _HostState extends State<_Host> {
 /// 组件内的 shadcn 勾选框（唯一）
 sh.Checkbox _box(WidgetTester tester) => tester.widget<sh.Checkbox>(
       find.descendant(
-        of: find.byType(CircleCheckbox),
+        of: find.byType(OrbitCheckbox),
         matching: find.byType(sh.Checkbox),
       ),
     );
@@ -55,22 +55,22 @@ sh.Checkbox _box(WidgetTester tester) => tester.widget<sh.Checkbox>(
 SizedBox _square(WidgetTester tester) => tester.widget<SizedBox>(
       find
           .descendant(
-            of: find.byType(CircleCheckbox),
+            of: find.byType(OrbitCheckbox),
             matching: find.byType(SizedBox),
           )
           .first,
     );
 
 void main() {
-  testWidgets('未勾选：state=unchecked、形态圆形、不触发回调', (tester) async {
+  testWidgets('未勾选：state=unchecked、方角形态、不触发回调', (tester) async {
     var taps = 0;
     await tester.pumpWidget(_Host(onToggle: () => taps++));
     await tester.pump(AppMotion.fast);
 
     expect(_box(tester).state, sh.CheckboxState.unchecked);
     expect(_box(tester).activeColor, OrbitAccents.todoAccent);
-    // 圆形 = 半径取直径一半（v2 手绘版的圆形识别在 v3 由 borderRadius 表达）
-    expect(_box(tester).borderRadius, BorderRadius.circular(12));
+    // 方角 = 固定 4px 圆角（TickTick 同款；与桌面端 rounded-[4px] 跨端同源）
+    expect(_box(tester).borderRadius, BorderRadius.circular(OrbitCheckbox.cornerRadius));
     expect(taps, 0);
   });
 
@@ -78,7 +78,7 @@ void main() {
     var taps = 0;
     await tester.pumpWidget(_Host(onToggle: () => taps++));
 
-    await tester.tap(find.byType(CircleCheckbox));
+    await tester.tap(find.byType(OrbitCheckbox));
     await tester.pump();
     await tester.pump(AppMotion.fast);
 
@@ -90,11 +90,11 @@ void main() {
     var taps = 0;
     await tester.pumpWidget(_Host(onToggle: () => taps++));
 
-    await tester.tap(find.byType(CircleCheckbox));
+    await tester.tap(find.byType(OrbitCheckbox));
     await tester.pump(AppMotion.fast);
     expect(_box(tester).state, sh.CheckboxState.checked);
 
-    await tester.tap(find.byType(CircleCheckbox));
+    await tester.tap(find.byType(OrbitCheckbox));
     await tester.pump();
     await tester.pump(AppMotion.fast);
 
@@ -107,10 +107,10 @@ void main() {
     await tester.pump(AppMotion.fast);
 
     expect(_box(tester).size, 28);
-    expect(_box(tester).borderRadius, BorderRadius.circular(14));
-    // 布局盒取热区下限（44）：图形 28 居中——视觉直径不变，可点面积扩到触控档
-    expect(_square(tester).width, CircleCheckbox.minHitExtent);
-    expect(_square(tester).height, CircleCheckbox.minHitExtent);
+    expect(_box(tester).borderRadius, BorderRadius.circular(OrbitCheckbox.cornerRadius));
+    // 布局盒取热区下限（44）：图形 28 居中——视觉尺寸不变，可点面积扩到触控档
+    expect(_square(tester).width, OrbitCheckbox.minHitExtent);
+    expect(_square(tester).height, OrbitCheckbox.minHitExtent);
   });
 
   testWidgets('小尺寸档（子任务 22）热区同样外扩到 44', (tester) async {
@@ -118,17 +118,17 @@ void main() {
     await tester.pump(AppMotion.fast);
 
     expect(_box(tester).size, 22);
-    expect(_square(tester).width, CircleCheckbox.minHitExtent);
-    expect(_square(tester).height, CircleCheckbox.minHitExtent);
+    expect(_square(tester).width, OrbitCheckbox.minHitExtent);
+    expect(_square(tester).height, OrbitCheckbox.minHitExtent);
   });
 
-  // 列表行优先级着色入口（2026-09-23）：高/紧急/立即由圆环颜色表达，
-  // P0「无」不传（回落中性灰）——断言覆写生效且不勾选态仍是空心圆
+  // 列表行优先级着色入口（2026-09-23）：高/紧急/立即由方环颜色表达，
+  // P0「无」不传（回落中性灰）——断言覆写生效且不勾选态仍是空心方框
   testWidgets('borderColor 覆写描边色（优先级语义）', (tester) async {
     await tester.pumpWidget(orbitTestApp(
       home: Scaffold(
         body: Center(
-          child: CircleCheckbox(
+          child: OrbitCheckbox(
             checked: false,
             borderColor: const Color(0xFFF59E0B),
             onToggle: () {},

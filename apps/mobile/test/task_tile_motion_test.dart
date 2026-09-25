@@ -73,7 +73,7 @@ void main() {
     expect(find.text('动效测试任务'), findsOneWidget);
     expect(_strikeLayer(), findsNothing);
 
-    await tester.tap(find.byType(CircleCheckbox));
+    await tester.tap(find.byType(OrbitCheckbox));
     await tester.pump();
     await tester.pump(AppMotion.fast);
 

@@ -2350,7 +2350,7 @@ class TodoTaskTile extends StatelessWidget {
             child: Row(
               children: [
                 // 24px 圆形 checkbox（check 16）：描边承载优先级语义
-                CircleCheckbox(
+                OrbitCheckbox(
                   checked: task.isDone,
                   onToggle: onToggleDone,
                   borderColor: _priorityRingColor(),

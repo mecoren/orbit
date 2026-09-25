@@ -159,7 +159,7 @@ class KanbanBoard extends StatelessWidget {
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  CircleCheckbox(
+                  OrbitCheckbox(
                     checked: task.isDone,
                     size: AppDimens.subtaskCheckboxSize,
                     // 优先级由描边环承载（列表行同口径），不再另画色条

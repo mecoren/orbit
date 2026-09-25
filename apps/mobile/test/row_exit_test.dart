@@ -61,7 +61,7 @@ void main() {
 
     // 点勾选：写库（120ms）→ ghost 起播
     await tester.tap(
-      find.descendant(of: _tileOf(title), matching: find.byType(CircleCheckbox)),
+      find.descendant(of: _tileOf(title), matching: find.byType(OrbitCheckbox)),
     );
     await tester.pump(const Duration(milliseconds: 200));
     // 退场窗内：旧对象仍在树上，且正被 _RowExit 包裹播退场
@@ -92,7 +92,7 @@ void main() {
     await tester.tap(
       find.descendant(
         of: find.byType(KanbanBoard),
-        matching: find.byType(CircleCheckbox),
+        matching: find.byType(OrbitCheckbox),
       ).first,
     );
     // 写完即失效：旧值重查中卡片仍在，但绝不能挂 ghost（无 _RowExit）
@@ -100,7 +100,7 @@ void main() {
     expect(
       find.descendant(
         of: find.byType(KanbanBoard),
-        matching: find.byType(CircleCheckbox),
+        matching: find.byType(OrbitCheckbox),
       ),
       findsWidgets,
       reason: '旧值重查中，卡片仍在树上',
