@@ -230,16 +230,22 @@ export type EisenhowerQuadrant =
   | "urgentNotImportant"
   | "neither";
 
-/** 四象限展示元数据：行动短语 + 轴文案（格头两行；象限识别色走 Tailwind
- *  语义类，见 matrix-view 的 QUADRANT_TINT——不新增色值） */
-export const EISENHOWER_META: Record<
-  EisenhowerQuadrant,
-  { action: string; axis: string }
-> = {
-  urgentImportant: { action: "立即做", axis: "紧急 · 重要" },
-  importantNotUrgent: { action: "计划做", axis: "不紧急 · 重要" },
-  urgentNotImportant: { action: "抽空做", axis: "紧急 · 不重要" },
-  neither: { action: "可延后", axis: "不紧急 · 不重要" },
+/** 四象限展示名（对齐竞品：重要且紧急 / 重要不紧急 / 不重要但紧急 /
+ *  不重要不紧急；罗马徽标Ⅰ-Ⅳ在格头承载象限序号） */
+export const EISENHOWER_META: Record<EisenhowerQuadrant, { action: string }> = {
+  urgentImportant: { action: "重要且紧急" },
+  importantNotUrgent: { action: "重要不紧急" },
+  urgentNotImportant: { action: "不重要但紧急" },
+  neither: { action: "不重要不紧急" },
+};
+
+/** 四象限识别色（格头罗马徽标/名称着色 + 顶缘色带；与移动端矩阵格 tint
+ *  同源：逾期红 / 我的一天琥珀 / 待办强调蓝 / 完成绿） */
+export const QUADRANT_COLOR: Record<EisenhowerQuadrant, string> = {
+  urgentImportant: "#F44336",
+  importantNotUrgent: "#F59E0B",
+  urgentNotImportant: "#3B82F6",
+  neither: "#22C55E",
 };
 
 /** 四象限分组结果（四键恒在，空桶也要渲染格） */

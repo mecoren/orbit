@@ -22,6 +22,7 @@ import { EmptyState } from "@/components/business/empty-state";
 import { completeTask } from "../shared/task-actions";
 import {
   EISENHOWER_META,
+  QUADRANT_COLOR,
   groupEisenhower,
   type EisenhowerQuadrant,
 } from "../shared/task-filters";
@@ -49,8 +50,7 @@ export interface MatrixViewProps {
 /** 格内行固定高（estimateSize 与实测恒一致，同 task-list-view 的 57 口径） */
 const ROW_HEIGHT = 50;
 
-/** 象限渲染顺序（枚举序 = 先重要后次要、先紧急后不紧急）与识别色带
- *  （全走既有语义类：destructive / primary / warning / 中性灰，零新增色值） */
+/** 象限渲染顺序（枚举序 = 先重要后次要、先紧急后不紧急） */
 const QUADRANT_ORDER: EisenhowerQuadrant[] = [
   "urgentImportant",
   "importantNotUrgent",
@@ -58,11 +58,12 @@ const QUADRANT_ORDER: EisenhowerQuadrant[] = [
   "neither",
 ];
 
-const QUADRANT_TINT: Record<EisenhowerQuadrant, string> = {
-  urgentImportant: "bg-destructive",
-  importantNotUrgent: "bg-primary",
-  urgentNotImportant: "bg-warning",
-  neither: "bg-muted-foreground/60",
+/** 格头罗马徽标（对齐移动端矩阵格与竞品：Ⅰ-Ⅳ 白字彩底圆标） */
+const QUADRANT_ROMAN: Record<EisenhowerQuadrant, string> = {
+  urgentImportant: "Ⅰ",
+  importantNotUrgent: "Ⅱ",
+  urgentNotImportant: "Ⅲ",
+  neither: "Ⅳ",
 };
 
 export function MatrixView({
@@ -178,10 +179,26 @@ function QuadrantCard({
   return (
     <section className="flex min-h-0 flex-col overflow-hidden rounded-md border bg-card">
       {/* 象限色带：顶缘 3px（与移动端矩阵格同形制，只做识别信号不整格铺色） */}
-      <div aria-hidden className={cn("h-[3px] shrink-0", QUADRANT_TINT[quadrant])} />
-      <header className="flex shrink-0 items-baseline gap-2 px-3 pb-1 pt-2">
-        <h2 className="text-sm font-semibold">{meta.action}</h2>
-        <span className="truncate text-xs text-muted-foreground">{meta.axis}</span>
+      <div
+        aria-hidden
+        className="h-[3px] shrink-0"
+        style={{ background: QUADRANT_COLOR[quadrant] }}
+      />
+      {/* 格头：罗马徽标 + 色名（对齐移动端矩阵格与竞品；识别色同源） */}
+      <header className="flex shrink-0 items-center gap-2 px-3 pb-1 pt-2">
+        <span
+          aria-hidden
+          className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[9px] font-bold leading-none text-white"
+          style={{ background: QUADRANT_COLOR[quadrant] }}
+        >
+          {QUADRANT_ROMAN[quadrant]}
+        </span>
+        <h2
+          className="truncate text-sm font-semibold"
+          style={{ color: QUADRANT_COLOR[quadrant] }}
+        >
+          {meta.action}
+        </h2>
         <span className="ml-auto shrink-0 text-xs font-semibold tabular-nums text-muted-foreground">
           {tasks.length}
         </span>

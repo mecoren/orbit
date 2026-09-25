@@ -76,10 +76,10 @@ Future<void> _pumpMatrix(
 void main() {
   testWidgets('概览：四象限格齐出，行动短语 + 计数按桶落位', (tester) async {
     await _pumpMatrix(tester);
-    expect(find.text('立即做'), findsOneWidget);
-    expect(find.text('计划做'), findsOneWidget);
-    expect(find.text('抽空做'), findsOneWidget);
-    expect(find.text('可延后'), findsOneWidget);
+    expect(find.text('重要且紧急'), findsOneWidget);
+    expect(find.text('重要不紧急'), findsOneWidget);
+    expect(find.text('不重要但紧急'), findsOneWidget);
+    expect(find.text('不重要不紧急'), findsOneWidget);
     // 计数：紧急重要 1 / 重要不紧急 1 / 紧急不重要 1 / 双无 0
     expect(find.text('0'), findsOneWidget);
     // 任务行按桶落格：三个标题全可见（2×2 恒在，无下钻）

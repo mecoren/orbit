@@ -307,20 +307,14 @@ enum EisenhowerQuadrant {
   neither,
 }
 
-/// 四象限的展示元数据：行动短语 + 轴文案（2×2 概览格头两行）
+/// 四象限的展示名（对齐竞品：重要且紧急 / 重要不紧急 / 不重要但紧急 /
+/// 不重要不紧急，罗马徽标Ⅰ-Ⅳ在矩阵格头承载象限序号）
 extension EisenhowerQuadrantMeta on EisenhowerQuadrant {
   String get actionLabel => switch (this) {
-        EisenhowerQuadrant.urgentImportant => '立即做',
-        EisenhowerQuadrant.importantNotUrgent => '计划做',
-        EisenhowerQuadrant.urgentNotImportant => '抽空做',
-        EisenhowerQuadrant.neither => '可延后',
-      };
-
-  String get axisLabel => switch (this) {
-        EisenhowerQuadrant.urgentImportant => '紧急 · 重要',
-        EisenhowerQuadrant.importantNotUrgent => '不紧急 · 重要',
-        EisenhowerQuadrant.urgentNotImportant => '紧急 · 不重要',
-        EisenhowerQuadrant.neither => '不紧急 · 不重要',
+        EisenhowerQuadrant.urgentImportant => '重要且紧急',
+        EisenhowerQuadrant.importantNotUrgent => '重要不紧急',
+        EisenhowerQuadrant.urgentNotImportant => '不重要但紧急',
+        EisenhowerQuadrant.neither => '不重要不紧急',
       };
 }
 
