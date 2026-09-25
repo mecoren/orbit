@@ -40,7 +40,10 @@ import '../../core/theme/icon_map.dart';
 /// - 数据导出/CSV 导入卡（07 报告 #15）；
 /// - 关于卡：版本 → push /about。
 class SettingsScreen extends ConsumerStatefulWidget {
-  const SettingsScreen({super.key});
+  const SettingsScreen({super.key, this.showBack = true});
+
+  /// 页头返回键（模块分支根传 false；推入语义保留默认）
+  final bool showBack;
 
   @override
   ConsumerState<SettingsScreen> createState() => _SettingsScreenState();
@@ -913,7 +916,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       const SizedBox(height: AppDimens.space4),
                       InkWell(
                         borderRadius: AppShapes.medium,
-                        onTap: () => context.push('/todo/trash'),
+                        onTap: () => context.go('/todo/trash'),
                         child: Padding(
                           padding: const EdgeInsets.symmetric(
                               vertical: AppDimens.space8),
@@ -1351,6 +1354,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             right: 0,
             child: OrbitPageHeader(
               title: '设置',
+              showBack: widget.showBack,
             ),
           ),
         ],

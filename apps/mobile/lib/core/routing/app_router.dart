@@ -7,6 +7,7 @@ import '../../modules/settings/about_page.dart';
 import '../../modules/settings/appearance_page.dart';
 import '../../modules/settings/backup_page.dart';
 import '../../modules/settings/label_manager_page.dart';
+import '../../modules/settings/nav_modules_page.dart';
 import '../../modules/settings/notification_history_page.dart';
 import '../../modules/settings/quick_actions_page.dart';
 import '../../modules/settings/settings_screen.dart';
@@ -14,6 +15,7 @@ import '../../modules/settings/sync_conflicts_page.dart';
 import '../../modules/settings/sync_settings_page.dart';
 import '../../modules/settings/template_manager_page.dart';
 import '../../modules/shell/home_shell.dart';
+import '../../modules/shell/nav_modules.dart';
 import '../../modules/todo/calendar_screen.dart';
 import '../../modules/todo/detail_screen.dart';
 import '../../modules/todo/matrix_screen.dart';
@@ -29,20 +31,26 @@ import '../../modules/todo/logic/task_logic.dart';
 /// 应用路由（go_router，底部页签壳 + 栈式导航语义）
 ///
 /// ```
-/// /today                   「今天」页签（今日截止视图，日期副标页头）
-/// /todo                    「清单」页签（快捷视图 + 项目 + 未分组）
+/// /today                   「今天」模块（今日截止视图，日期副标页头）
+/// /todo                    「清单」模块（快捷视图 + 项目 + 未分组）
 /// /todo/tasks              任务子列表（页签栈内入栈，底栏常驻；
 ///                          query 三参数互斥 view/projectId/ungrouped）
 /// /todo/projects/:id/edit  项目（清单）编辑整页
-/// /todo/calendar /todo/matrix  「日历」「四象限」页签
-/// /todo/stats              统计（「更多」面板推入的根级页，底栏隐藏）
+/// /todo/calendar           「日历」模块
+/// /todo/matrix             「四象限」模块
+/// /todo/stats              「统计」模块（可配置进底栏或「更多」面板）
+/// /todo/search             「搜索」模块
+/// /todo/trash              「回收站」模块
+/// /settings                「设置」模块
+/// /settings/nav-modules    功能模块配置页（「更多」面板「编辑」入口）
 /// /todo/:id                任务详情全屏（根级路由，覆盖页签壳、底栏隐藏）
-/// /settings        设置
-/// /about           关于
 /// ```
 ///
 /// 一级页签经 [StatefulShellRoute.indexedStack] 各自持有导航栈：切换互不丢
-/// 栈，页签内入栈底栏常驻；二级页（详情 / 设置等）挂根级路由，覆盖全屏。
+/// 栈，页签内入栈底栏常驻；二级页（详情等）挂根级路由，覆盖全屏。
+/// **分支序 = [OrbitNavModule] 枚举序**（goBranch 按下标寻分支，见该枚举
+/// 文档）——八个模块全部声明为分支，底栏显示哪些由用户配置决定（功能模块
+/// 配置页），配置外的模块分支依旧可达（侧栏/设置内跳转 `go` 切分支）。
 /// 页签根用 [NoTransitionPage]（切页签是平移切换语义，不做推入转场），
 /// 页签栈内的入栈仍走 [pageSlideFromRight]。
 ///
@@ -84,10 +92,12 @@ SubListScreen _todayTab() => const SubListScreen(
 
 final appRouter = GoRouter(
   navigatorKey: rootNavigatorKey,
-  initialLocation: '/today',
+  // 冷启动落点随底部导航配置走：「今天」被停用时落启用序第一个模块
+  initialLocation: startupLocation,
   routes: [
-    GoRoute(path: '/', redirect: (_, _) => '/today'),
-    // 底部页签壳：四个一级页签各自持栈（切页签互不丢栈；页签内入栈底栏常驻）
+    GoRoute(path: '/', redirect: (_, _) => startupLocation),
+    // 底部页签壳：八个模块分支各自持栈（分支序 = OrbitNavModule 枚举序，
+    // 底栏显示哪些由功能模块配置决定；切模块互不丢栈，栈内入栈底栏常驻）
     StatefulShellRoute.indexedStack(
       builder: (context, state, navigationShell) =>
           HomeShell(navigationShell: navigationShell),
@@ -124,23 +134,9 @@ final appRouter = GoRouter(
             ),
           ),
           GoRoute(
-            path: '/todo/trash',
-            pageBuilder: (context, state) => pageSlideFromRight(
-              const TrashScreen(),
-              key: state.pageKey,
-            ),
-          ),
-          GoRoute(
             path: '/todo/saved-filters',
             pageBuilder: (context, state) => pageSlideFromRight(
               const SavedFiltersScreen(),
-              key: state.pageKey,
-            ),
-          ),
-          GoRoute(
-            path: '/todo/search',
-            pageBuilder: (context, state) => pageSlideFromRight(
-              const SearchScreen(),
               key: state.pageKey,
             ),
           ),
@@ -161,16 +157,39 @@ final appRouter = GoRouter(
                 tabRoot(const MatrixScreen(), key: state.pageKey),
           ),
         ]),
+        // ── 统计（默认在「更多」面板；配置进底栏即成页签）──
+        StatefulShellBranch(routes: [
+          GoRoute(
+            path: '/todo/stats',
+            pageBuilder: (context, state) => tabRoot(
+                const StatsScreen(showBack: false), key: state.pageKey),
+          ),
+        ]),
+        // ── 搜索 ──
+        StatefulShellBranch(routes: [
+          GoRoute(
+            path: '/todo/search',
+            pageBuilder: (context, state) => tabRoot(
+                const SearchScreen(showBack: false), key: state.pageKey),
+          ),
+        ]),
+        // ── 回收站 ──
+        StatefulShellBranch(routes: [
+          GoRoute(
+            path: '/todo/trash',
+            pageBuilder: (context, state) => tabRoot(
+                const TrashScreen(showBack: false), key: state.pageKey),
+          ),
+        ]),
+        // ── 设置（子页 /settings/* 仍是根级推入：覆盖全屏、底栏隐藏）──
+        StatefulShellBranch(routes: [
+          GoRoute(
+            path: '/settings',
+            pageBuilder: (context, state) => tabRoot(
+                const SettingsScreen(showBack: false), key: state.pageKey),
+          ),
+        ]),
       ],
-    ),
-    // 统计：「更多」面板推入的根级页（底栏隐藏；静态段声明在 /todo/:id
-    // 动态段之前，不会落进详情路由）
-    GoRoute(
-      path: '/todo/stats',
-      pageBuilder: (context, state) => pageSlideFromRight(
-        const StatsScreen(showBack: true),
-        key: state.pageKey,
-      ),
     ),
     // 任务详情：根级全屏页（覆盖页签壳，底栏隐藏）；go_router 静态段优先于
     // 动态段，/todo/tasks 等不会落进本路由
@@ -183,10 +202,11 @@ final appRouter = GoRouter(
         key: state.pageKey,
       ),
     ),
+    // 功能模块配置页：底部导航可配置（「更多」面板「编辑」入口；根级全屏推入）
     GoRoute(
-      path: '/settings',
+      path: '/settings/nav-modules',
       pageBuilder: (context, state) => pageSlideFromRight(
-        const SettingsScreen(),
+        const NavModulesPage(),
         key: state.pageKey,
       ),
     ),

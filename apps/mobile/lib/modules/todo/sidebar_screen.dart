@@ -105,9 +105,11 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
 
   void _openView(QuickViewKey key) => context.push('/todo/tasks?view=${key.name}');
 
-  void _openSearch() => context.push('/todo/search');
+  // 搜索/回收站/设置均为可配置模块（分支）：go 切分支而非推入，
+  // 底栏常驻、返回走页签（推入会叠一整层壳，go_router 分支路由语义）
+  void _openSearch() => context.go('/todo/search');
 
-  void _openTrash() => context.push('/todo/trash');
+  void _openTrash() => context.go('/todo/trash');
 
   void _openProject(TodoProject p) =>
       context.push('/todo/tasks?projectId=${p.id}');
@@ -428,7 +430,7 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
                   tooltip: '设置',
                   icon: const Icon(OrbitIcons.settings,
                       size: AppDimens.iconSizeMd),
-                  onPressed: () => context.push('/settings'),
+                  onPressed: () => context.go('/settings'),
                 ),
               ],
             ),

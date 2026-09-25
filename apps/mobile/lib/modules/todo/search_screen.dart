@@ -24,7 +24,10 @@ import '../../core/theme/icon_map.dart';
 /// - 评论行 → 显示所属任务与内容摘要，点击进所属任务详情；
 /// - 空态文案与桌面同口径（连续输入两字起更精准可选）。
 class SearchScreen extends ConsumerStatefulWidget {
-  const SearchScreen({super.key});
+  const SearchScreen({super.key, this.showBack = true});
+
+  /// 页头返回键（模块分支根传 false；推入语义保留默认）
+  final bool showBack;
 
   @override
   ConsumerState<SearchScreen> createState() => _SearchScreenState();
@@ -131,6 +134,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
             right: 0,
             child: OrbitPageHeader(
               title: '搜索',
+              showBack: widget.showBack,
             ),
           ),
         ],

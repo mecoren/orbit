@@ -207,20 +207,41 @@ Future<void> showOrbitDropdownPanel(
 
   /// 锚点上方形态（快加面板「更多」与快捷档用）
   bool above = false,
+
+  /// 标题行文案（如「更多」）；与 [actionLabel] 至少给一个才渲染标题行
+  String? title,
+
+  /// 标题行尾随动作文案（如「编辑」，主题强调色）；点击先收面板再回调
+  String? actionLabel,
+  VoidCallback? onAction,
 }) {
   return showOrbitFloatCard<void>(
     context,
     anchor: anchor,
     above: above,
     topInset: topInset,
-    child: _OrbitDropdownPanel(groups: groups),
+    child: _OrbitDropdownPanel(
+      groups: groups,
+      title: title,
+      actionLabel: actionLabel,
+      onAction: onAction,
+    ),
   );
 }
 
 class _OrbitDropdownPanel extends StatefulWidget {
-  const _OrbitDropdownPanel({required this.groups});
+  const _OrbitDropdownPanel({
+    required this.groups,
+    this.title,
+    this.actionLabel,
+    this.onAction,
+  });
 
   final List<List<OrbitPanelItem>> groups;
+
+  final String? title;
+  final String? actionLabel;
+  final VoidCallback? onAction;
 
   @override
   State<_OrbitDropdownPanel> createState() => _OrbitDropdownPanelState();
@@ -255,6 +276,60 @@ class _OrbitDropdownPanelState extends State<_OrbitDropdownPanel> {
     child.onTap?.call();
   }
 
+  /// 标题行动作：先收面板再执行（导航类回调在面板关闭后落到下层页面）
+  void _tapAction() {
+    Navigator.of(context).pop();
+    widget.onAction?.call();
+  }
+
+  /// 标题行：左侧标题 + 右侧强调色动作（竞品「更多 / 编辑」同款版式）
+  Widget _headerRow() {
+    final colors = AppColors.ofContext(context);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+        AppDimens.space12,
+        AppDimens.space8,
+        AppDimens.space8,
+        AppDimens.space4,
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              widget.title ?? '',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+                color: colors.titleText,
+              ),
+            ),
+          ),
+          if (widget.actionLabel != null)
+            InkWell(
+              borderRadius: AppShapes.small,
+              onTap: _tapAction,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppDimens.space8,
+                  vertical: AppDimens.space4,
+                ),
+                child: Text(
+                  widget.actionLabel!,
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w500,
+                    color: colors.accent,
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final colors = AppColors.ofContext(context);
@@ -266,6 +341,8 @@ class _OrbitDropdownPanelState extends State<_OrbitDropdownPanel> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+                if (widget.title != null || widget.actionLabel != null)
+                  _headerRow(),
                 for (var g = 0; g < widget.groups.length; g++) ...[
                   if (g > 0)
                     Padding(

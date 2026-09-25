@@ -1,15 +1,18 @@
 // 底部导航壳测试：页签切换、今天页签页头（日期副标）、右下悬浮新建钮、
-// 「更多」面板、「今天」页签角标（MockOrbitBridge 注入 + 生产路由表全链路）。
+// 「更多」面板（编辑入口 + 条目切分支）、「今天」页签角标、功能模块配置联动
+// （MockOrbitBridge 注入 + 生产路由表全链路）。
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:orbit/core/routing/app_router.dart';
+import 'package:orbit/core/theme/icon_map.dart';
 import 'package:orbit/data/api/mock_orbit_bridge.dart';
 import 'package:orbit/data/providers/bridge_provider.dart';
 import 'package:orbit/modules/todo/calendar_screen.dart';
 import 'package:orbit/modules/todo/logic/task_logic.dart';
 import 'package:orbit/modules/todo/matrix_screen.dart';
 import 'package:orbit/modules/todo/sidebar_screen.dart';
+import 'package:orbit/services/local_prefs.dart';
 import 'package:orbit/shared/widgets/shadcn/orbit_bottom_nav.dart';
 import 'package:orbit/shared/widgets/shadcn/orbit_fab.dart';
 import 'support/orbit_test_app.dart';
@@ -35,6 +38,7 @@ MockOrbitBridge _seededBridge() {
 }
 
 void main() {
+  setUp(() => LocalPrefs.resetForTest());
   testWidgets('初始落「今天」页签：页头今天 + 日期副标，五枚页签无中央添加钮',
       (tester) async {
     await _pump(tester, _seededBridge());
@@ -83,22 +87,65 @@ void main() {
     expect(find.text('准备做什么？'), findsOneWidget);
   });
 
-  testWidgets('「更多」动作位：点击弹出次级目的地面板（不切页签）', (tester) async {
+  testWidgets('「更多」动作位：弹出面板（标题行带编辑），点条目切分支底栏常驻',
+      (tester) async {
     await _pump(tester, _seededBridge());
 
     await tester.tap(find.text('更多'));
     await tester.pumpAndSettle();
 
-    // 面板条目齐出
+    // 面板标题行 + 次级目的地条目齐出（默认配置：统计/搜索/回收站/设置）
+    expect(find.text('编辑'), findsOneWidget);
     expect(find.text('统计'), findsOneWidget);
+    expect(find.text('搜索'), findsOneWidget);
     expect(find.text('回收站'), findsOneWidget);
     expect(find.text('设置'), findsOneWidget);
 
-    // 点条目导航：进统计页（根级推入，底栏随之隐藏）
+    // 点条目 = 切分支（与页签同语义）：底栏保持可见，页面切到统计
     await tester.tap(find.text('统计'));
     await tester.pumpAndSettle();
     expect(find.text('总任务'), findsOneWidget);
-    expect(find.byType(OrbitBottomNav), findsNothing);
+    expect(find.byType(OrbitBottomNav), findsOneWidget);
+  });
+
+  testWidgets('「更多」面板「编辑」：进功能模块配置页，两段列表齐出',
+      (tester) async {
+    await _pump(tester, _seededBridge());
+
+    await tester.tap(find.text('更多'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('编辑'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('功能模块'), findsOneWidget);
+    expect(find.text('已启用'), findsOneWidget);
+    expect(find.text('未启用'), findsOneWidget);
+    // 池内 8 模块全员可见可配
+    for (final label in ['今天', '清单', '日历', '四象限', '统计', '搜索', '回收站', '设置']) {
+      expect(find.text(label), findsOneWidget);
+    }
+  });
+
+  testWidgets('配置页停用「四象限」：返回壳后底栏页签由统计顺延顶替',
+      (tester) async {
+    await _pump(tester, _seededBridge());
+
+    await tester.tap(find.text('更多'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('编辑'));
+    await tester.pumpAndSettle();
+
+    // 默认启用序 [今天, 清单, 日历, 四象限]：第 4 枚减号停用四象限
+    await tester.tap(find.byIcon(OrbitIcons.remove).at(3));
+    await tester.pumpAndSettle();
+    expect(find.text('四象限'), findsOneWidget); // 移入未启用段
+
+    await tester.tap(find.byTooltip('返回'));
+    await tester.pumpAndSettle();
+    // 底栏：四象限消失，启用序第 5 位「统计」顺延进底栏
+    expect(find.text('四象限'), findsNothing);
+    expect(find.text('统计'), findsOneWidget);
+    expect(find.text('今天'), findsWidgets); // 页头 + 页签仍在
   });
 
   testWidgets('「今天」页签角标：有今天截止未完成任务时显示计数', (tester) async {

@@ -79,6 +79,9 @@ class LocalPrefs {
     return fallback;
   }
 
+  /// 测试专用：清空内存态（用例间隔离；生产路径不调用）
+  static void resetForTest() => _values = {};
+
   static Future<void> _flush() async {
     try {
       final file = await _file();

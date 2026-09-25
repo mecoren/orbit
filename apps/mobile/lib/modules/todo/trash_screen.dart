@@ -31,7 +31,10 @@ const _undoWindowMs = 5000;
 /// - 行副标题显示保留期倒计时（永久档显示删除日期）；
 /// - 自动过期清理由 Rust 守护执行（startTrashScheduler，BootGate 接线）。
 class TrashScreen extends ConsumerStatefulWidget {
-  const TrashScreen({super.key});
+  const TrashScreen({super.key, this.showBack = true});
+
+  /// 页头返回键（模块分支根传 false；推入语义保留默认）
+  final bool showBack;
 
   @override
   ConsumerState<TrashScreen> createState() => _TrashScreenState();
@@ -291,6 +294,7 @@ class _TrashScreenState extends ConsumerState<TrashScreen> {
             right: 0,
             child: OrbitPageHeader(
               title: '回收站',
+              showBack: widget.showBack,
               actions: [
                 if (visible.isNotEmpty)
                   TextButton(
