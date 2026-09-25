@@ -10,7 +10,7 @@ import 'package:orbit/modules/todo/providers/todo_providers.dart';
 import 'package:orbit/modules/todo/calendar_screen.dart';
 import 'package:orbit/modules/todo/sidebar_screen.dart';
 import 'package:orbit/modules/todo/sub_list_screen.dart';
-import 'package:orbit/shared/widgets/shadcn/orbit_fab.dart';
+import 'package:orbit/modules/todo/quick_add_sheet.dart' show showQuickAddSheet;
 import 'support/orbit_test_app.dart';
 import 'package:orbit/core/theme/icon_map.dart';
 
@@ -41,17 +41,17 @@ void main() {
     expect(find.text('已完成'), findsOneWidget);
     expect(find.text('收藏'), findsOneWidget);
     expect(find.text('无日期'), findsOneWidget);
-    // 日历入口行可见（回收站行在统计行之下；新增行后 600px 视口装不下，
-    // 滚到底再断言尾部段落，避免默认视口截断——「统计」行随 v3 页头/行高
-    // 增长也落到了懒渲染区外，一并放到滚动之后断言）
-    expect(find.text('日历'), findsOneWidget);
+    // 日历 / 统计已升级为底部页签，清单页不再有对应入口行（回收站行在
+    // 筛选器行之下；行数精简后 600px 视口仍可能截断尾部，滚到底再断言）
+    expect(find.text('日历'), findsNothing);
+    expect(find.text('统计'), findsNothing);
     // 项目种子数据
     await tester.scrollUntilVisible(
       find.text('未分组'),
       200,
       scrollable: find.byType(Scrollable).first,
     );
-    expect(find.text('统计'), findsOneWidget);
+    expect(find.text('搜索'), findsOneWidget);
     expect(find.text('回收站'), findsOneWidget);
     expect(find.text('项目'), findsOneWidget);
     expect(find.text('工作'), findsOneWidget);
@@ -68,13 +68,16 @@ void main() {
     expect(folder.color, const Color(0xFF4E8CFF));
   });
 
-  testWidgets('侧栏首屏：FAB 点击弹出快速添加面板（与列表页同一入口）', (tester) async {
+  testWidgets('清单页：中央添加钮语境的快加面板直接可唤出（底栏承载一级新建）', (tester) async {
     final bridge = MockOrbitBridge();
     await tester.pumpWidget(_wrap(const SidebarScreen(), bridge));
     await _settlePastMockLatency(tester);
 
-    // 一级页面右下 FAB → 与列表页同一快速添加面板（不再是完整表单）
-    await tester.tap(find.byType(OrbitFab));
+    // 清单页签不再有右下 FAB：一级新建由底部导航中央添加钮承担（壳层），
+    // 页面语境下与列表页同一快速添加面板
+    showQuickAddSheet(
+      tester.element(find.byType(SidebarScreen)),
+    );
     await tester.pumpAndSettle();
 
     expect(find.text('准备做什么？'), findsOneWidget);
@@ -100,12 +103,13 @@ void main() {
     expect(find.text('完成移动端重构方案评审'), findsOneWidget);
   });
 
-  testWidgets('日历页：FAB 点击弹出快速添加面板（与列表页同一入口）', (tester) async {
+  testWidgets('日历页签：快加面板可唤出且页头无返回键（页签根语义）', (tester) async {
     final bridge = MockOrbitBridge();
     await tester.pumpWidget(_wrap(const CalendarScreen(), bridge));
     await _settlePastMockLatency(tester);
 
-    await tester.tap(find.byType(OrbitFab));
+    // 日历页签不再有右下 FAB（新建入口在底部导航中央钮），面板直接可唤出
+    showQuickAddSheet(tester.element(find.byType(CalendarScreen)));
     await tester.pumpAndSettle();
 
     expect(find.text('准备做什么？'), findsOneWidget);

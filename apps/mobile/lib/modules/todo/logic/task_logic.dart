@@ -298,7 +298,7 @@ OverdueGroups groupOverdueFirst(List<TodoTask> tasks, [int? nowMs]) {
   return OverdueGroups(overdue: overdue, rest: rest);
 }
 
-// ---------- 四象限分组（Eisenhower Matrix，对标 TickTick 矩阵视图） ----------
+// ---------- 四象限分组（Eisenhower Matrix） ----------
 
 /// 四象限桶位（展示顺序即枚举序：先重要后次要，先紧急后不紧急）
 enum EisenhowerQuadrant {
@@ -466,7 +466,7 @@ String formatYmd(int ms) {
   return '${d.year}-${_two(d.month)}-${_two(d.day)}';
 }
 
-/// 行右侧截止日期短标签（相对化，TickTick 版式的日期列用）：
+/// 行右侧截止日期短标签（相对化，列表行日期列用）：
 /// 今天 / 明天 / 昨天 / 同年 `M月D日` / 跨年 `yyyy年M月D日`。
 ///
 /// 按**本地时区日界**判相对（不做时长差比较——同一天任何时刻都算「今天」，
@@ -485,6 +485,21 @@ String formatDueLabel(int ms, {DateTime? now}) {
         : '${d.year}年${d.month}月${d.day}日',
   };
 }
+
+/// 周几中文名（周一..周日；「今天」页头日期副标与完成日志分组头共用）
+String weekdayCn(DateTime d) => switch (d.weekday) {
+      DateTime.monday => '周一',
+      DateTime.tuesday => '周二',
+      DateTime.wednesday => '周三',
+      DateTime.thursday => '周四',
+      DateTime.friday => '周五',
+      DateTime.saturday => '周六',
+      _ => '周日',
+    };
+
+/// 「今天」页头日期副标：`M月D日 周X`
+String todayHeaderLabel(DateTime now) =>
+    '${now.month}月${now.day}日 ${weekdayCn(now)}';
 
 /// yyyy-MM-dd HH:mm（本地时区）
 String formatDateTime(int ms) {
@@ -553,7 +568,7 @@ DisplayReminder? displayReminder(
 /// 与 `viewDueHour` 的 18:00 分开——提醒发生在开工时刻，截止在收工时刻）
 const int reminderPresetHour = 9;
 
-/// 提醒快捷预设（TickTick 式相对档）。
+/// 提醒快捷预设（相对档）。
 ///
 /// 提交口径不变：产物仍是**绝对毫秒时刻**（`todo_reminders.remind_at`），
 /// 本函数只负责「少几次滚动」的输入便捷层，零 schema 变更。

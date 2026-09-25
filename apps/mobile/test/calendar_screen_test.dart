@@ -261,35 +261,15 @@ void main() {
     expect(find.text('班'), findsOneWidget);
   });
 
-  testWidgets('侧栏入口：「日历」行渲染并点击进入', (tester) async {
+  testWidgets('页签根语义：页头无返回键（日历已是底部页签，回退由导航承担）', (tester) async {
     final bridge = _seededBridge();
-    _router = GoRouter(
-      navigatorKey: rootNavigatorKey,
-      initialLocation: '/todo',
-      routes: [
-        GoRoute(path: '/todo', builder: (_, _) => const SidebarScreen()),
-        GoRoute(
-          path: '/todo/calendar',
-          builder: (_, _) => const CalendarScreen(),
-        ),
-      ],
-    );
     await tester.pumpWidget(_wrap(const SizedBox(), bridge));
     await tester.pump(const Duration(milliseconds: 300));
     await tester.pumpAndSettle();
 
-    // 默认视口可能截断：滚到「日历」行
-    await tester.scrollUntilVisible(
-      find.text('日历'),
-      200,
-      scrollable: find.byType(Scrollable).first,
-    );
-    expect(find.text('日历'), findsOneWidget);
-
-    // 点击进入日历页
-    await tester.tap(find.text('日历'));
-    await tester.pumpAndSettle();
     expect(find.byType(CalendarScreen), findsOneWidget);
+    // 日历升级为底部页签根：页头不带返回键（原「侧栏入口行」随页签化移除）
+    expect(find.byTooltip('返回'), findsNothing);
   });
 
   testWidgets('超量待办：同日多条任务在下方列表可纵向滑动查看', (tester) async {

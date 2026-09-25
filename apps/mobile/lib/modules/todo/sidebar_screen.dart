@@ -11,7 +11,6 @@ import '../../core/theme/orbit_accents.dart';
 import '../../data/api/dto.dart';
 import '../../data/providers/bridge_provider.dart';
 import '../../shared/utils/hex_color.dart';
-import '../../shared/widgets/shadcn/orbit_fab.dart';
 import '../../shared/widgets/shadcn/orbit_page_header.dart';
 import '../../shared/widgets/shadcn/orbit_skeleton.dart';
 import '../../shared/widgets/shadcn/orbit_actions_sheet.dart';
@@ -27,11 +26,12 @@ import 'providers/todo_providers.dart';
 import 'quick_add_sheet.dart' show showQuickAddSheet;
 import '../../core/theme/icon_map.dart';
 
-/// 侧栏首屏 /todo（docs/05 §4.1 + 移动端任务书）
+/// 清单页签 /todo（docs/05 §4.1 + 移动端任务书）
 ///
 /// 三段结构：快捷视图六行（今天/本周/全部/已完成/收藏/无日期，带未完成计数
 /// badge）→ 项目段（色点 + 标题 + 未完成数，右侧把手可拖拽重排）→ 未分组行。
-/// 行点击 push 子列表；长按项目弹 MoreActions 底部菜单（编辑 / 删除保护流）。
+/// 行点击 push 子列表（底栏常驻）；长按项目弹 MoreActions 底部菜单
+/// （编辑 / 删除保护流）。日历 / 统计为底部页签，不再在本页占行。
 class SidebarScreen extends ConsumerStatefulWidget {
   const SidebarScreen({super.key});
 
@@ -69,8 +69,9 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
     switch (action) {
       case QuickAction.newTask:
         showQuickAddSheet(context);
+      // 「今天」已升级为底部页签：快捷方式直达页签根
       case QuickAction.today:
-        _openView(QuickViewKey.today);
+        context.go('/today');
       case QuickAction.search:
         _openSearch();
     }
@@ -102,10 +103,6 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
   // ── 导航 ──
 
   void _openView(QuickViewKey key) => context.push('/todo/tasks?view=${key.name}');
-
-  void _openCalendar() => context.push('/todo/calendar');
-
-  void _openStats() => context.push('/todo/stats');
 
   void _openSearch() => context.push('/todo/search');
 
@@ -289,17 +286,14 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
                       const SectionHeader(label: '快捷视图'),
                       for (final key in QuickViewKey.values)
                         _buildQuickViewRow(key, counts, surfaceHighest),
-                      // 二、日历（月视图格内待办长条 + 节假日徽标）
-                      _buildCalendarRow(context),
-                      // 三、统计（backlog #25：总览/热力图/streak/分布）
-                      _buildStatsRow(context),
-                      // 四、搜索（backlog #26：任务/项目/评论三路聚合）
+                      // 二、搜索（任务/项目/评论三路聚合）
                       _buildSearchRow(context),
-                      // 五、筛选器（#35：保存的组合条件命名视图）
+                      // 三、筛选器（#35：保存的组合条件命名视图）
                       _buildSavedFiltersRow(context),
-                      // 六、回收站（已删除任务的恢复入口；计数 = 回收站内任务数）
+                      // 四、回收站（已删除任务的恢复入口；计数 = 回收站内任务数）
                       _buildTrashRow(context, surfaceHighest),
-                      // 四、项目（色块 + 名称 + 未完成计数；长按菜单；右侧把手拖拽重排）
+                      // 日历 / 统计已升级为底部页签，不再占清单首页行位。
+                      // 五、项目（色块 + 名称 + 未完成计数；长按菜单；右侧把手拖拽重排）
                       const SectionHeader(label: '项目'),
                       ReorderableListView.builder(
                         shrinkWrap: true,
@@ -439,74 +433,12 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
               ],
             ),
           ),
-          // FAB：右下，一级页面直达新建（与列表页同一快速添加面板，
-          // 不携带默认项目，面板内「项目」档自选）
-          Positioned(
-            right: AppDimens.space16,
-            bottom: AppDimens.gestureInsetFallback + AppDimens.space16,
-            child: OrbitFab(
-              accentColor: OrbitAccents.themeAccent,
-              onPressed: () => showQuickAddSheet(context),
-            ),
-          ),
         ],
       ),
     );
   }
 
-  /// 日历入口行（独立于快捷视图：月历格内待办长条 + 节假日徽标的专属页面）
-  Widget _buildCalendarRow(BuildContext context) {
-    final colors = AppColors.ofContext(context);
-    return ListTile(
-      leading: Icon(
-        OrbitIcons.calendarDays,
-        size: AppDimens.iconSizeMd,
-        color: OrbitAccents.todoAccent,
-      ),
-      title: Text(
-        '日历',
-        style: TextStyle(
-          fontSize: 16,
-          fontWeight: FontWeight.w500,
-          color: colors.titleText,
-        ),
-      ),
-      trailing: Icon(
-        OrbitIcons.chevronRight,
-        size: AppDimens.iconSizeMd,
-        color: colors.secondaryText,
-      ),
-      onTap: _openCalendar,
-    );
-  }
-
-  /// 统计入口行（backlog #25：总览/热力图/连续天数/分布的专属页面，同日历行模式）
-  Widget _buildStatsRow(BuildContext context) {
-    final colors = AppColors.ofContext(context);
-    return ListTile(
-      leading: Icon(
-        OrbitIcons.trending,
-        size: AppDimens.iconSizeMd,
-        color: OrbitAccents.todoAccent,
-      ),
-      title: Text(
-        '统计',
-        style: TextStyle(
-          fontSize: 16,
-          fontWeight: FontWeight.w500,
-          color: colors.titleText,
-        ),
-      ),
-      trailing: Icon(
-        OrbitIcons.chevronRight,
-        size: AppDimens.iconSizeMd,
-        color: colors.secondaryText,
-      ),
-      onTap: _openStats,
-    );
-  }
-
-  /// 保存的筛选器入口行（#35：Apple Smart List 同款，独立路由页）
+  /// 保存的筛选器入口行（#35：保存的组合条件命名视图，独立路由页）
   Widget _buildSavedFiltersRow(BuildContext context) {
     final colors = AppColors.ofContext(context);
     return ListTile(
@@ -532,7 +464,7 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
     );
   }
 
-  /// 搜索入口行（backlog #26：任务/项目/评论三路聚合的专属页面，同日历行模式）
+  /// 搜索入口行（任务/项目/评论三路聚合的专属页面）
   Widget _buildSearchRow(BuildContext context) {
     final colors = AppColors.ofContext(context);
     return ListTile(

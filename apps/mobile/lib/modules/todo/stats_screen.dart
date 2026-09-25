@@ -15,7 +15,7 @@ import 'providers/todo_providers.dart';
 import '../../shared/widgets/shadcn/orbit_heatmap.dart';
 import '../../core/theme/icon_map.dart';
 
-/// 统计页 /todo/stats（backlog #25：统计仪表盘，对标 TickTick 成就页）
+/// 统计页签 /todo/stats（backlog #25：统计仪表盘）
 ///
 /// 数据 = bridge.statsAggregate 一次性聚合（只读）：
 /// - 总览五卡 + streak 行；
@@ -148,6 +148,8 @@ class _StatsScreenState extends ConsumerState<StatsScreen> {
             right: 0,
             child: OrbitPageHeader(
               title: '统计',
+              // 页签根：无返回键（底部导航承担回退语义）
+              showBack: false,
             ),
           ),
         ],

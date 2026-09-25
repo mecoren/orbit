@@ -21,7 +21,6 @@ import '../../shared/widgets/shadcn/orbit_checkbox.dart';
 import '../../shared/widgets/shadcn/orbit_confirm_sheet.dart';
 import '../../shared/widgets/shadcn/orbit_dropdown_panel.dart';
 import '../../shared/widgets/shadcn/orbit_empty_state.dart';
-import '../../shared/widgets/shadcn/orbit_fab.dart';
 import '../../shared/widgets/shadcn/orbit_list_card.dart';
 import '../../shared/widgets/shadcn/orbit_page_header.dart';
 import '../../shared/widgets/shadcn/orbit_skeleton.dart';
@@ -35,6 +34,7 @@ import 'kanban_view.dart';
 import 'matrix_view.dart';
 import 'logic/batch_actions.dart';
 // as rep：规避 Flutter widgets 自带 RepeatMode 类名冲突（同 detail_screen）
+import 'logic/quick_add_context.dart';
 import 'logic/repeat_logic.dart' as rep;
 import 'logic/task_logic.dart';
 import 'logic/undo_stack.dart';
@@ -48,15 +48,27 @@ import '../../core/theme/icon_map.dart';
 /// 任务子列表 /todo/tasks（docs/05 §4.2 + 移动端任务书）
 ///
 /// 入口三参数互斥：projectId > ungrouped > view（task_logic 同款优先级）。
-/// 列表消费共享 filterTasks/sortTasks；空态文案按入口映射；
-/// 右下 OrbitFab 新建（携 defaultProjectId）；Tile 长按弹操作菜单
+/// 「今天」页签与页签栈内入栈共用本屏：页签根传 `showBack: false` 并以
+/// `titleOverride` 换页头文案（页头自动带日期副标）；列表消费共享
+/// filterTasks/sortTasks；空态文案按入口映射；Tile 长按弹操作菜单
 /// （编辑 / 星标切换 / 删除确认）；manual 档长按整行拾起拖动重排
 /// （#37，position midpoint 落库与桌面同口径；原地松手仍是操作菜单）。
 class SubListScreen extends ConsumerStatefulWidget {
-  const SubListScreen({super.key, required this.query});
+  const SubListScreen({
+    super.key,
+    required this.query,
+    this.showBack = true,
+    this.titleOverride,
+  });
 
   /// 路由 query 参数解析结果（view/projectId/ungrouped 三选一）
   final TaskFilterInput query;
+
+  /// 页头返回键（页签根页关闭——底部导航承担回退语义）
+  final bool showBack;
+
+  /// 页头标题覆盖（null 用入口语义名：项目名 / 未分组 / 视图名）
+  final String? titleOverride;
 
   /// 解析路由 query → 筛选输入（projectId > ungrouped > view）
   static TaskFilterInput parseQuery(GoRouterState state) {
@@ -165,10 +177,13 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
   void initState() {
     super.initState();
     _viewMode = loadViewModeForProject(widget.query.projectId);
+    // 登记新建落点：底部导航中央添加钮读取本屏筛选入参做预填（退场清空）
+    QuickAddContext.set(widget.query);
   }
 
   @override
   void dispose() {
+    QuickAddContext.set(null);
     _reorderScrollController.dispose();
     _listScrollController.dispose();
     // 退场窗内直接离屏：补一次失效，避免主列表缓存残留已删行
@@ -489,15 +504,6 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
       ),
     );
   }
-
-  /// 长按 FAB：从模板新建（选择链见 [showTemplateCreateFlow]，与快速添加面板
-  /// 「模板」档同源）。模板选择是低频入口，长按避免与点击新建抢占。
-  Future<void> _pickTemplateAndCreate() => showTemplateCreateFlow(
-        context,
-        ref.read(orbitBridgeProvider),
-        defaultProjectId: widget.query.projectId,
-        quickView: widget.query.quickView,
-      );
 
   // ── 写操作（await bridge 后 invalidate）──
 
@@ -1160,13 +1166,18 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
     // Logbook 分组（done 视图）：按完成日倒序，组内完成时刻倒序
     final doneGroups = isLogbook ? groupDoneByDay(visible) : <DoneDayGroup>[];
 
-    // 动态标题：项目名 / 未分组 / 视图名
-    final title = switch (widget.query) {
-      TaskFilterInput(projectId: final id?) =>
-          projectById[id]?.title ?? '项目',
-      TaskFilterInput(ungrouped: true) => '未分组',
-      _ => widget.query.quickView?.label ?? '任务',
-    };
+    // 动态标题：页头覆盖文案（页签根）优先，否则按入口取项目名 / 未分组 / 视图名
+    final title = widget.titleOverride ??
+        switch (widget.query) {
+          TaskFilterInput(projectId: final id?) =>
+            projectById[id]?.title ?? '项目',
+          TaskFilterInput(ungrouped: true) => '未分组',
+          _ => widget.query.quickView?.label ?? '任务',
+        };
+    // 日期副标只在「今天」页签根出现（页签栈内的今天截止视图不带，与项目
+    // 列表页头同构——有覆盖标题且无返回键即页签根）
+    final showDateSubtitle =
+        widget.query.quickView == QuickViewKey.today && !widget.showBack;
     // 筛选生效时给出更贴切的空态文案（否则用户会以为是数据丢了）
     final filteredEmpty = !_filters.isEmpty && tasks.isNotEmpty;
     final emptyMessage =
@@ -1244,7 +1255,7 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
       );
     }
 
-    /// 已完成折叠卡（列表尾部独立卡片，TickTick 版式）
+    /// 已完成折叠卡（列表尾部独立卡片）
     ///
     /// 头行「已完成 N ⌄」+ 展开后的完成行 + 超出上限时的「查看全部」尾行，
     /// 三段共用同一张卡的段位（首段圆上角 / 末段圆下角）。
@@ -1514,40 +1525,58 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
             right: 0,
             child: OrbitPageHeader(
               // 选择态下标题栏让位给「已选 N 项」，与桌面多选头部同口径
+              showBack: widget.showBack,
               title: _selectionMode ? '已选 ${_selected.length} 项' : title,
-              // 非选择态：标题旁挂未完成计数（TickTick 页头语义）；Logbook
-              // 态 undone 恒空，不渲染计数。count 与 Flexible 同行防长标题溢出
+              // 非选择态：标题旁挂未完成计数，页签根（今天）再带日期副标；
+              // Logbook 态 undone 恒空，不渲染计数。count 与 Flexible 同行
+              // 防长标题溢出
               titleWidget: _selectionMode
                   ? null
-                  : Row(
+                  : Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Flexible(
-                          child: Text(
-                            title,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.w600,
-                              color: colors.titleText,
+                        Row(
+                          children: [
+                            Flexible(
+                              child: Text(
+                                title,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w600,
+                                  color: colors.titleText,
+                                ),
+                              ),
                             ),
-                          ),
+                            if (undone.isNotEmpty) ...[
+                              const SizedBox(width: AppDimens.space6),
+                              Text(
+                                '${undone.length}',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: colors.secondaryText,
+                                ),
+                              ),
+                            ],
+                          ],
                         ),
-                        if (undone.isNotEmpty) ...[
-                          const SizedBox(width: AppDimens.space6),
+                        // 「今天」页签的日期副标（M月D日 周X）：页签根才出现
+                        if (showDateSubtitle)
                           Text(
-                            '${undone.length}',
+                            todayHeaderLabel(DateTime.now()),
                             style: TextStyle(
-                              fontSize: 13,
+                              fontSize: 11,
+                              height: 1.2,
                               color: colors.secondaryText,
                             ),
                           ),
-                        ],
                       ],
                     ),
-              // 完成进度线（TickTick 列表页头语义）：只在「既有未完成又有
-              // 已完成」时出现——看板/表格档隐藏完成行（done 空）、Logbook
-              // 恒为完成集（undone 空），进度线在这些档位只会误导
+              // 完成进度线：只在「既有未完成又有已完成」时出现——看板/表格
+              // 档隐藏完成行（done 空）、Logbook 恒为完成集（undone 空），
+              // 进度线在这些档位只会误导
               progress: !_selectionMode && undone.isNotEmpty && done.isNotEmpty
                   ? done.length / (done.length + undone.length)
                   : null,
@@ -1608,25 +1637,8 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
               ],
             ),
           ),
-          // FAB：右下，点击弹快速添加面板（携 defaultProjectId=当前 projectId；
-          // 快捷视图入口携 view，#39 视图内新建自动带标记）。完整表单入口收在面板
-          // 的「全屏」档里；长按仍是模板直入（有模板才有此入口）。
-          // 选择态下让位给批量工具条（两者同占右下角，重叠会误触）
-          if (!_selectionMode)
-            Positioned(
-              right: AppDimens.space16,
-              bottom: AppDimens.gestureInsetFallback + AppDimens.space16,
-              child: OrbitFab(
-                accentColor: OrbitAccents.themeAccent,
-                onPressed: () => showQuickAddSheet(
-                  context,
-                  defaultProjectId: widget.query.projectId,
-                  quickView: widget.query.quickView,
-                ),
-                // 长按 = 从模板新建（有模板才有此入口；选择后 payload 预填表单）
-                onLongPress: _pickTemplateAndCreate,
-              ),
-            ),
+          // 一级新建入口在底部导航中央添加钮（落点经 QuickAddContext 预填
+          // 为当前视图）；选择态下底部是批量工具条
           if (_selectionMode) _batchToolbar(colors),
         ],
       ),
@@ -1961,7 +1973,7 @@ class _RowExit extends StatelessWidget {
 ///   搜索等复用场景）仍是扁平行（仅下沿 1px 分隔线）；
 /// - 无行尾拖拽把手：拖动排序由整行长按拾起承担（见 [SubListScreen.buildTile]）。
 ///
-/// 侧滑手势（07 #18）：面板露出操作按钮（TickTick 式）——
+/// 侧滑手势（07 #18）：面板露出操作按钮——
 /// 右滑露「完成」（已完成态变「恢复」，行保留不删）、
 /// 左滑露「删除」（既有确认弹窗 + 回收站语义）。
 class TodoTaskTile extends StatelessWidget {
@@ -2044,7 +2056,7 @@ class TodoTaskTile extends StatelessWidget {
     ];
   }
 
-  /// 行右侧元信息图标列（日期下方、右对齐，TickTick 版式）
+  /// 行右侧元信息图标列（日期下方、右对齐）
   ///
   /// 顺序：重复 → 提醒（铃铛 + HH:mm，到期未完转逾期红）→ 子任务进度
   /// （percent_done 0/100 不显示）→ 关联（C7 投影 > 0 才出）→ 星标（黄色）。

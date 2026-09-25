@@ -13,8 +13,8 @@ import '../../../core/theme/icon_map.dart';
 ///
 /// 按实例着色用 shadcn 的组件级主题（`ComponentTheme<PrimaryButtonTheme>`）实现：
 /// `ButtonStyle` 只带 variance/size/density/shape 不带颜色，颜色只能经组件主题
-/// �?`decoration` 委托覆盖——这样既保住�?shadcn Button 的按�?悬停/焦点状态机�?
-/// 又能让待办模块用 [OrbitAccents.todoAccent]、其余模块用全局 primary�?
+/// 或 `decoration` 委托覆盖——这样既保住了 shadcn Button 的按压/悬停/焦点状态机，
+/// 又能让待办模块用 [OrbitAccents.todoAccent]、其余模块用全局 primary。
 class OrbitFab extends StatelessWidget {
   const OrbitFab({
     super.key,
@@ -22,6 +22,7 @@ class OrbitFab extends StatelessWidget {
     required this.accentColor,
     this.onLongPress,
     this.icon = OrbitIcons.add,
+    this.dimension = AppDimens.fabSize,
   });
 
   /// 点击回调
@@ -33,8 +34,11 @@ class OrbitFab extends StatelessWidget {
   /// 强调色（填充底色；图标恒为白色）
   final Color accentColor;
 
-  /// 图标，默�?plus
+  /// 图标，默认 plus
   final IconData icon;
+
+  /// 圆钮边长（默认悬浮钮规格 56；底部导航中央凸起钮用 48 小档）
+  final double dimension;
 
   @override
   Widget build(BuildContext context) {
@@ -48,7 +52,7 @@ class OrbitFab extends StatelessWidget {
         ),
       ),
       child: SizedBox.square(
-        dimension: AppDimens.fabSize,
+        dimension: dimension,
         child: sh.Button.primary(
           onPressed: onPressed,
           onLongPressStart: onLongPress == null ? null : (_) => onLongPress!(),

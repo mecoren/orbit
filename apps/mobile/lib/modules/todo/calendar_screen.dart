@@ -15,7 +15,6 @@ import '../../data/providers/bridge_provider.dart';
 import '../../shared/utils/hex_color.dart';
 import '../../shared/widgets/shadcn/orbit_strikethrough.dart';
 import '../../shared/widgets/shadcn/orbit_month_calendar.dart';
-import '../../shared/widgets/shadcn/orbit_fab.dart';
 import '../../shared/widgets/shadcn/orbit_page_header.dart';
 import '../../shared/widgets/shadcn/orbit_toast.dart';
 import 'logic/task_logic.dart';
@@ -423,17 +422,8 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
             right: 0,
             child: OrbitPageHeader(
               title: '日历',
-              showBack: true,
-            ),
-          ),
-          // FAB：新建任务（与列表页同一快速添加面板，面板内自选日期；
-          // 日格长按预填该天为截止）
-          Positioned(
-            right: AppDimens.space16,
-            bottom: AppDimens.gestureInsetFallback + AppDimens.space16,
-            child: OrbitFab(
-              accentColor: OrbitAccents.themeAccent,
-              onPressed: () => showQuickAddSheet(context),
+              // 页签根：无返回键（底部导航承担回退语义）
+              showBack: false,
             ),
           ),
         ],

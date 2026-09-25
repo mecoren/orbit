@@ -19,7 +19,6 @@ import 'package:orbit/modules/todo/quick_add_sheet.dart' show showQuickAddSheet;
 import 'package:orbit/modules/todo/sub_list_screen.dart';
 import 'package:orbit/shared/utils/hex_color.dart';
 import 'package:orbit/shared/widgets/shadcn/orbit_dropdown_panel.dart';
-import 'package:orbit/shared/widgets/shadcn/orbit_fab.dart';
 import 'package:orbit/services/local_prefs.dart';
 import 'support/orbit_test_app.dart';
 
@@ -34,14 +33,17 @@ Future<void> _settle(WidgetTester tester) async {
   await tester.pumpAndSettle();
 }
 
-/// 打开任务列表页并点 FAB 唤出快速添加面板
+/// 打开任务列表页并唤出快速添加面板
+///
+/// 一级新建入口已上收到底部导航中央添加钮（页面内无 FAB），测试直接在
+/// 列表页语境下调 [showQuickAddSheet]（与中央钮同链路，含落点预填读取）。
 Future<MockOrbitBridge> _openPanel(WidgetTester tester) async {
   final bridge = MockOrbitBridge();
   await tester.pumpWidget(
     _wrap(const SubListScreen(query: TaskFilterInput()), bridge),
   );
   await _settle(tester);
-  await tester.tap(find.byType(OrbitFab));
+  showQuickAddSheet(tester.element(find.byType(SubListScreen)));
   await tester.pumpAndSettle();
   return bridge;
 }
