@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_dimens.dart';
 import '../../core/theme/app_shapes.dart';
+import '../../core/theme/orbit_accents.dart';
 import '../../data/api/dto.dart';
 import '../../shared/utils/hex_color.dart';
 import '../../shared/widgets/shadcn/orbit_strikethrough.dart';
@@ -203,7 +204,10 @@ class TaskTableView extends StatelessWidget {
                 textAlign: TextAlign.right,
                 style: TextStyle(
                   fontSize: 11,
-                  color: overdue ? colors.destructive : colors.secondaryText,
+                  // 逾期红统一 OrbitAccents 口径（任务行/看板/多选行同源）
+                  color: overdue
+                      ? OrbitAccents.overdueRed
+                      : colors.secondaryText,
                 ),
               ),
             ),

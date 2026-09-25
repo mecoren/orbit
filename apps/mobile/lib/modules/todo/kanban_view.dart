@@ -174,7 +174,8 @@ class KanbanBoard extends StatelessWidget {
                     Icon(
                       OrbitIcons.star,
                       size: AppDimens.iconSizeSm,
-                      color: OrbitAccents.todoAccent,
+                      // 星标统一黄色语义（列表行同源），不再借强调色
+                      color: OrbitAccents.starYellow,
                     ),
                 ],
               ),
@@ -196,15 +197,19 @@ class KanbanBoard extends StatelessWidget {
                     Icon(
                       OrbitIcons.calendar,
                       size: AppDimens.iconSizeSm - 4,
-                      color: overdue ? colors.destructive : colors.secondaryText,
+                      // 逾期红统一 OrbitAccents 口径（任务行/表格/多选行同源）
+                      color: overdue
+                          ? OrbitAccents.overdueRed
+                          : colors.secondaryText,
                     ),
                     const SizedBox(width: AppDimens.space2),
                     Text(
                       formatDueShort(task.dueDate!),
                       style: TextStyle(
                         fontSize: 11,
-                        color:
-                            overdue ? colors.destructive : colors.secondaryText,
+                        color: overdue
+                            ? OrbitAccents.overdueRed
+                            : colors.secondaryText,
                       ),
                     ),
                     const SizedBox(width: AppDimens.space8),

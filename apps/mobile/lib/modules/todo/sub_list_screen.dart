@@ -1647,7 +1647,8 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
                         )
                       : Badge(
                           label: Text('${_filters.activeCount}'),
-                          backgroundColor: OrbitAccents.todoAccent,
+                          // 计数/警示角标全项目统一逾期红（底栏页签角标同口径）
+                          backgroundColor: OrbitAccents.overdueRed,
                           child: Icon(
                             OrbitIcons.moreVertical,
                             size: AppDimens.iconSizeMd,
@@ -1765,14 +1766,14 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
       child: Row(
         children: [
           Icon(OrbitIcons.warning,
-              size: AppDimens.iconSizeSm, color: colors.destructive),
+              size: AppDimens.iconSizeSm, color: OrbitAccents.overdueRed),
           const SizedBox(width: AppDimens.space4),
           Text(
             '逾期 · $count',
             style: TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.w600,
-              color: colors.destructive,
+              color: OrbitAccents.overdueRed,
             ),
           ),
         ],
@@ -2122,9 +2123,11 @@ class TodoTaskTile extends StatelessWidget {
       add(Icon(OrbitIcons.link, size: 12, color: colors.secondaryText));
     }
     if (task.isStarred) {
+      // 星标与同列其余元信息图标同尺寸档（12），色走星标黄——
+      // 与看板卡星标同口径，不再比邻项大一圈
       add(Icon(
         OrbitIcons.star,
-        size: AppDimens.iconSizeSm,
+        size: 12,
         color: OrbitAccents.starYellow,
       ));
     }
@@ -2518,8 +2521,9 @@ class _SelectionRow extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           fontSize: 12,
+                          // 逾期红统一 OrbitAccents 口径（任务行/看板/表格同源）
                           color: overdue
-                              ? colors.destructive
+                              ? OrbitAccents.overdueRed
                               : colors.secondaryText,
                         ),
                       ),
