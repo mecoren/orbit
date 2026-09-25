@@ -870,6 +870,65 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
     WaitToast.success(ok > 0 ? '已撤销（$ok 项）' : '撤销失败');
   }
 
+  /// 逾期区「顺延」（竞品同款）：把当前视图的逾期任务一键改期到今天
+  /// （截止落当日 18:00 收工时刻，与批量改期同口径 [batchRescheduleMs]）。
+  ///
+  /// **18:00 已过则顺延到明天 18:00**：逾期桶按时刻级判定（[groupOverdueFirst]
+  /// = due < now），今天 18:00 已过时顺延到今天只会原地落回逾期桶（横幅
+  /// 不消失、按钮看似失效），必须越过当前时刻才兑现「离开逾期区」。
+  ///
+  /// 与 [_runBatch] 同性能口径：批量期间不逐条 invalidate，全部完成后
+  /// 失效一次；反向补丁入撤销栈（撤销恢复原截止时刻）。
+  Future<void> _postponeOverdue(List<TodoTask> tasks) async {
+    if (tasks.isEmpty || _batchBusy) return;
+    final nowMs = DateTime.now().millisecondsSinceEpoch;
+    final todayTarget = batchRescheduleMs(BatchReschedule.today);
+    final toTomorrow = todayTarget <= nowMs;
+    final dueMs = toTomorrow
+        ? batchRescheduleMs(BatchReschedule.tomorrow)
+        : todayTarget;
+    setState(() => _batchBusy = true);
+    final bridge = ref.read(orbitBridgeProvider);
+    final patches = <UndoTaskPatch>[];
+    var changed = 0;
+    var failures = 0;
+    try {
+      for (final task in tasks) {
+        final patch = batchFieldPatch(
+          task,
+          action: BatchAction.reschedule,
+          dueMs: dueMs,
+        );
+        if (patch == null) continue;
+        try {
+          await bridge.todoTaskUpdate(task.id, encodePatch(patch));
+          patches.add(inversePatchOf(task, patch));
+          changed++;
+        } catch (_) {
+          failures++;
+        }
+      }
+      ref.invalidate(todoTasksProvider);
+      ref.invalidate(taskDetailProvider);
+      if (!mounted) return;
+      if (changed == 0) {
+        WaitToast.info(failures > 0 ? '顺延失败' : '没有需要顺延的任务');
+        return;
+      }
+      _offerUndo(UndoEntry(
+        label: failures > 0
+            ? '已顺延 $changed 个任务（$failures 条失败）'
+            : toTomorrow
+                ? '已顺延 $changed 个任务到明天'
+                : '已顺延 $changed 个任务到今天',
+        patches: patches,
+        createdAt: DateTime.now().millisecondsSinceEpoch,
+      ));
+    } finally {
+      if (mounted) setState(() => _batchBusy = false);
+    }
+  }
+
   // ── 长按拖拽重排（#37；仅 manual 档）──
 
   /// 拖拽落位：以语义插入位的相邻两条 position 取中值落库（midpointPosition
@@ -1401,10 +1460,41 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
                 buildTile: buildTile,
               )
             : reorderable
-            ? ReorderableListView.builder(
+            ? Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // manual 档逾期平铺无头行：顺延入口挂列表上方的独立横幅卡
+                  //（横幅在 ReorderableListView 之外，不占重排槽位）；有横幅时
+                  // 列表顶部让位改由横幅承担，只留呼吸间距
+                  if (overdueGroups.overdue.isNotEmpty) ...[
+                    SizedBox(height: listPadding.top),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: AppDimens.space12),
+                      child: OrbitCardSegment(
+                        edge: OrbitCardEdge.of(0, 1),
+                        child: _overdueHeadRow(
+                          colors, overdueGroups.overdue.length,
+                          onPostpone: _selectionMode
+                              ? null
+                              : () => _postponeOverdue(overdueGroups.overdue),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: AppDimens.space8),
+                  ],
+                  Expanded(
+                    child: ReorderableListView.builder(
                 key: const ValueKey('reorderable-task-list'),
                 scrollController: _reorderScrollController,
-                padding: cardListPadding,
+                padding: overdueGroups.overdue.isNotEmpty
+                    ? EdgeInsets.fromLTRB(
+                        cardListPadding.left,
+                        AppDimens.space8,
+                        cardListPadding.right,
+                        cardListPadding.bottom,
+                      )
+                    : cardListPadding,
                 buildDefaultDragHandles: false,
                 // 重排只作用于未完成任务：已完成行在尾部折叠卡里（footer），
                 // 全列可拖的约束下不能让它们混进 item。渲染流逾期置顶平铺，
@@ -1478,6 +1568,9 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
                     ),
                   );
                 },
+                    ),
+                  ),
+                ],
               )
             : ListView.builder(
                 controller: _listScrollController,
@@ -1497,7 +1590,13 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
                   return OrbitCardSegment(
                     edge: edge,
                     child: entry.isHead
-                        ? _overdueHeadRow(colors, overdueGroups.overdue.length)
+                        ? _overdueHeadRow(
+                            colors, overdueGroups.overdue.length,
+                            // 多选态不挂顺延：逾期行在选区口径里，批量改期另有入口
+                            onPostpone: _selectionMode
+                                ? null
+                                : () =>
+                                    _postponeOverdue(overdueGroups.overdue))
                         : _restDividerRow(colors, _restDividerLabel),
                   );
                 },
@@ -1772,8 +1871,12 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
 
   // ── 卡片化列表的行内构件 ──
 
-  /// 逾期区块头行（卡片首段）：警示图标 + 「逾期 · N」，红色为区块主信号
-  Widget _overdueHeadRow(AppColorSet colors, int count) {
+  /// 逾期区块头行（卡片首段）：警示图标 + 「逾期 · N」+ 行尾「顺延」
+  ///
+  /// 「顺延」= 逾期区一键改期今天（竞品同款；[onPostpone] 为空不渲染——
+  /// 多选态下逾期行在选区口径里，批量改期另有入口）。
+  Widget _overdueHeadRow(AppColorSet colors, int count,
+      {VoidCallback? onPostpone}) {
     return Container(
       constraints: const BoxConstraints(minHeight: AppDimens.touchTarget),
       padding: const EdgeInsets.symmetric(horizontal: AppDimens.space16),
@@ -1791,6 +1894,25 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
               color: OrbitAccents.overdueRed,
             ),
           ),
+          const Spacer(),
+          if (onPostpone != null)
+            TextButton(
+              // 头行里的轻量动作：收掉默认内边距，主题蓝与行内链接同档
+              style: TextButton.styleFrom(
+                visualDensity: VisualDensity.compact,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: AppDimens.space8),
+              ),
+              onPressed: _batchBusy ? null : onPostpone,
+              child: const Text(
+                '顺延',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: OrbitAccents.themeAccent,
+                ),
+              ),
+            ),
         ],
       ),
     );
