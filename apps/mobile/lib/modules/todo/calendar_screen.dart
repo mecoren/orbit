@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import 'package:table_calendar/table_calendar.dart' show CalendarFormat;
 
 import '../../core/lunar/chinese_almanac.dart';
 import '../../core/theme/app_colors.dart';
@@ -50,11 +51,20 @@ class CalendarScreen extends ConsumerStatefulWidget {
 }
 
 class _CalendarScreenState extends ConsumerState<CalendarScreen> {
-  /// 当前展示的月份（year + month）
+  /// 当前展示的月份（year + month）：标题 / 议程分组 / 补位弱化口径
   DateTime _month = DateTime(DateTime.now().year, DateTime.now().month);
+
+  /// table_calendar 焦点日（onPageChanged 原样回传，**不归一化**）：月档下
+  /// 只需与 [_month] 同月页；周档下逐字回传决定显示哪一周——归一化到 1 号
+  /// 会把周条拽回月初那一周（table_calendar 周页粒度是「周」）
+  DateTime _focusedDate = DateTime.now();
 
   /// 当前选中日期（默认今天；点击日格切换，右栏滚动定位）
   DateTime _selectedDate = DateTime.now();
+
+  /// 月历档位：月（整月网格）⇄ 周（单行周条）。网格上滑收起、下滑展开
+  /// （table_calendar 档位序 month → week，上滑 = 下一档），竞品同款
+  CalendarFormat _calFormat = CalendarFormat.month;
 
   /// 视图档：false = 月档（月历网格 + 当月按日列表）、true = 议程档
   /// （隐藏月历网格，整页当月按日分组列表 + 进入时定位今天）。
@@ -96,17 +106,40 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
 
   // ── 月导航 / 选中 / 快捷新增 ──
 
-  void _prevMonth() =>
-      setState(() => _month = _month.month == 1 ? DateTime(_month.year - 1, 12) : DateTime(_month.year, _month.month - 1));
+  /// 月档位下跳整月：焦点日必须同步落到目标月 1 号（focusedDay prop 驱动
+  /// table_calendar 翻页），否则网格停在原月而标题已换
+  void _setMonth(DateTime monthStart) => setState(() {
+        _month = monthStart;
+        _focusedDate = monthStart;
+      });
 
-  void _nextMonth() =>
-      setState(() => _month = _month.month == 12 ? DateTime(_month.year + 1, 1) : DateTime(_month.year, _month.month + 1));
+  void _prevMonth() => _setMonth(_month.month == 1
+      ? DateTime(_month.year - 1, 12)
+      : DateTime(_month.year, _month.month - 1));
+
+  void _nextMonth() => _setMonth(_month.month == 12
+      ? DateTime(_month.year + 1, 1)
+      : DateTime(_month.year, _month.month + 1));
 
   void _goToday() => setState(() {
         final now = DateTime.now();
         _month = DateTime(now.year, now.month);
         _selectedDate = DateTime(now.year, now.month, now.day);
+        // 周档收起时同样跳回今天所在周
+        _focusedDate = _selectedDate;
       });
+
+  /// 月历收展（网格上滑收成单行周条 / 下滑展开整月）：收起对齐**选中日**
+  /// 所在周（周条即「选中日 + 前后各几日」），展开回到当前周所在的整月页
+  void _onCalFormatChange(CalendarFormat format) {
+    setState(() {
+      _calFormat = format;
+      _focusedDate = format == CalendarFormat.week
+          ? _selectedDate
+          : DateTime(_focusedDate.year, _focusedDate.month, 1);
+      _month = DateTime(_focusedDate.year, _focusedDate.month, 1);
+    });
+  }
 
   // ── 左右滑动翻月 ──
 
@@ -201,6 +234,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
       setState(() {
         _month = DateTime(picked.year, picked.month);
         _selectedDate = DateTime(picked.year, picked.month, picked.day);
+        _focusedDate = _selectedDate;
       });
     }
   }
@@ -333,13 +367,26 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                           size: AppCalendarSize.large,
                           showHeader: false,
                           month: _month,
+                          focusedDay: _focusedDate,
+                          calendarFormat: _calFormat,
+                          // 月 ⇄ 周两档：网格上滑收成单行周条、下滑展开
+                          // （顺序必须大到小，上滑 = 档位序下一档 = 周）
+                          availableCalendarFormats: const {
+                            CalendarFormat.month: '月',
+                            CalendarFormat.week: '周',
+                          },
+                          onFormatChange: _onCalFormatChange,
+                          // 周条跨月周不弱化补位日期
+                          dimOutsideMonth: _calFormat != CalendarFormat.week,
                           selected: _selectedDate,
                           onDayTap: _selectDate,
                           onDayLongPress: _addOnDate,
-                          // 横滑翻月：月历自带 PageView（availableGestures =
-                          // horizontalSwipe），必须把页码回调接回 _month，否则
-                          // 网格翻页了而标题与下方按日分组列表还停在旧月份
+                          // 横滑翻月/翻周：月历自带 PageView（availableGestures
+                          // = all），必须把页码回调**原样**接回（周档收到的是
+                          // ±7 天的逐字日期，归一化到 1 号会把周条拽回月初周），
+                          // 否则网格翻页了而标题还停在旧月份
                           onMonthChange: (focused) => setState(() {
+                            _focusedDate = focused;
                             _month = DateTime(focused.year, focused.month, 1);
                           }),
                           // 选中/今天强调色与桌面端日历同源（桌面月历 --primary 即

@@ -11,8 +11,11 @@ import 'package:orbit/data/providers/bridge_provider.dart';
 import 'package:orbit/modules/todo/calendar_screen.dart';
 import 'package:orbit/core/routing/router_keys.dart';
 import 'package:orbit/modules/todo/sidebar_screen.dart';
+import 'package:orbit/core/theme/app_colors.dart';
 import 'package:orbit/shared/widgets/shadcn/orbit_month_calendar.dart';
 import 'package:orbit/core/theme/icon_map.dart';
+import 'package:table_calendar/table_calendar.dart'
+    show CalendarFormat, TableCalendar;
 import 'support/orbit_test_app.dart';
 
 Widget _wrap(Widget child, MockOrbitBridge bridge) => ProviderScope(
@@ -67,6 +70,30 @@ void main() {
     await tester.pumpAndSettle();
   }
 
+  /// 整页滚动一屏（起点取月历下缘之下的列表区）：网格起滑的纵向手势已被
+  /// 「上滑收周条/下滑展开」接管（AvailableGestures.all），从列表区起滑
+  /// 才走外层整页滚动
+  Future<void> dragListUp(WidgetTester tester, [double dy = -300]) async {
+    final calendarBottom =
+        tester.getBottomRight(find.byType(OrbitMonthCalendar)).dy;
+    await tester.dragFrom(Offset(120, calendarBottom + 40), Offset(0, dy));
+    await tester.pump(const Duration(milliseconds: 200));
+    await tester.pumpAndSettle();
+  }
+
+  /// 树内的 table_calendar 实例（应用侧是 `TableCalendar<void>`，byType 的
+  /// `TableCalendar<dynamic>` 泛型实参不等会扑空，走 `is` 子类型判定）
+  Finder tableCalendarFinder() => find.byWidgetPredicate(
+        (w) => w is TableCalendar,
+        description: 'TableCalendar',
+      );
+
+  TableCalendar calendarOf(WidgetTester tester) =>
+      tester.widget<TableCalendar>(tableCalendarFinder());
+
+  CalendarFormat calendarFormatOf(WidgetTester tester) =>
+      calendarOf(tester).calendarFormat;
+
   testWidgets('月历+选中日任务卡：当天任务卡渲染，点击进详情页', (tester) async {
     final bridge = _seededBridge();
     // 造一条今天截止的未完成任务：月档下方列表 = 选中日任务卡，
@@ -105,13 +132,8 @@ void main() {
 
     // 选中日任务卡（整页滚动布局下滚到可见）
     final card = find.text('今日评审任务');
-    // 显式指定外层整页滚动：月历自带 PageView（可横滑翻月）也是 Scrollable，
-    // 不限定会让 scrollUntilVisible 取到多个候选而抛 Bad state
-    await tester.scrollUntilVisible(
-      card.first,
-      300,
-      scrollable: find.byType(Scrollable).first,
-    );
+    // 竖滚起点在列表区（网格起滑会被周历收展手势接管，见 dragListUp）
+    await dragListUp(tester, -400);
     expect(card, findsWidgets);
 
     // 点击下方列表的任务卡 → 详情页出现
@@ -297,6 +319,82 @@ void main() {
     expect(gridWorkday, findsOneWidget);
   });
 
+  testWidgets('月历上滑收成单行周条、下滑展开复原（收起对齐选中日所在周）',
+      (tester) async {
+    final bridge = _seededBridge();
+    await tester.pumpWidget(_wrap(const SizedBox(), bridge));
+    await settle(tester);
+
+    final calendar = find.byType(OrbitMonthCalendar);
+    final monthHeight = tester.getSize(calendar).height;
+    final today = DateTime.now().day;
+
+    // 在日格上上滑 → 收成单行周条（table_calendar 档位切到 week）
+    await tester.fling(find.text('$today').first, const Offset(0, -220), 800);
+    await tester.pumpAndSettle();
+    expect(calendarFormatOf(tester), CalendarFormat.week);
+    expect(tester.getSize(calendar).height, lessThan(monthHeight));
+    // 周条 = 选中日（今天）所在周：今天仍在条内
+    expect(find.text('$today'), findsWidgets);
+    // focusedDay 原样落在选中日（收起对齐选中周，未拽回月初那一周）
+    final focused = calendarOf(tester).focusedDay;
+    expect(focused.year, DateTime.now().year);
+    expect(focused.month, DateTime.now().month);
+    expect(focused.day, DateTime.now().day);
+
+    // 周条横滑翻周：focused 逐字 ±7 天（onPageChanged 原样回传口径）
+    await tester.fling(find.text('$today').first, const Offset(-260, 0), 900);
+    await tester.pumpAndSettle();
+    final focusedAfterWeekSwipe = calendarOf(tester).focusedDay;
+    expect(
+      focusedAfterWeekSwipe.difference(DateTime.now()).inDays.abs(),
+      inInclusiveRange(6, 8),
+    );
+    expect(calendarFormatOf(tester), CalendarFormat.week);
+
+    // 下滑 → 展开回整月档（翻周后「今天」已不在条内，锚点改取条内任意日号格）
+    final anyDayCell = find.descendant(
+      of: tableCalendarFinder(),
+      matching: find.byWidgetPredicate(
+        (w) => w is Text && int.tryParse(w.data ?? '') != null,
+      ),
+    ).first;
+    await tester.fling(anyDayCell, const Offset(0, 220), 800);
+    await tester.pumpAndSettle();
+    expect(calendarFormatOf(tester), CalendarFormat.month);
+    expect(tester.getSize(calendar).height, monthHeight);
+  });
+
+  testWidgets('周条跨月周：补位日期不弱化（dimOutsideMonth=false 生效）',
+      (tester) async {
+    final bridge = _seededBridge();
+    await tester.pumpWidget(_wrap(const SizedBox(), bridge));
+    await settle(tester);
+
+    // 收成周条后，条内所有日号一律正常色（周档 dimOutsideMonth=false）：
+    // 找出条内任一日期格断言非 deactivatedText（月档下补位格是弱化灰，
+    // 开关若失效跨月周会露灰）
+    await tester.fling(find.text('${DateTime.now().day}').first,
+        const Offset(0, -220), 800);
+    await tester.pumpAndSettle();
+    expect(calendarFormatOf(tester), CalendarFormat.week);
+
+    final strip = find.descendant(
+      of: tableCalendarFinder(),
+      matching: find.byWidgetPredicate(
+        (w) => w is Text && int.tryParse(w.data ?? '') != null,
+      ),
+    );
+    expect(strip, findsWidgets);
+    for (final text in tester.widgetList<Text>(strip)) {
+      expect(
+        text.style!.color,
+        isNot(AppColors.light.deactivatedText),
+        reason: '周条内 ${text.data} 不应弱化',
+      );
+    }
+  });
+
   testWidgets('页签根语义：页头无返回键（日历已是底部页签，回退由导航承担）', (tester) async {
     final bridge = _seededBridge();
     await tester.pumpWidget(_wrap(const SizedBox(), bridge));
@@ -344,21 +442,16 @@ void main() {
     await settle(tester);
 
     // 断言压测任务卡渲染（整页滚动布局下列表在月历下方，滚到可见）
-    // scrollable 必须显式指定外层整页滚动（月历 PageView 也是 Scrollable）
-    await tester.scrollUntilVisible(
-      find.textContaining('压测任务').first,
-      300,
-      scrollable: find.byType(Scrollable).first,
-    );
+    // 竖滚起点在列表区（网格起滑会被周历收展手势接管，见 dragListUp）
+    await dragListUp(tester, -400);
     expect(find.textContaining('压测任务'), findsWidgets);
 
-    // 在整页滚动区上竖向拖动，验证滚动查看不崩溃且卡片仍渲染
+    // 在列表区竖向拖动，验证滚动查看不崩溃且卡片仍渲染
     final anyCard = find.byWidgetPredicate(
       (w) => w.runtimeType.toString() == '_DayTaskRow',
     );
     expect(anyCard, findsWidgets);
-    await tester.drag(find.byType(Scrollable).first, const Offset(0, -300));
-    await tester.pump(const Duration(milliseconds: 200));
+    await dragListUp(tester, -300);
     expect(anyCard, findsWidgets);
   });
 

@@ -77,6 +77,13 @@ class ChineseCalendarColors {
 ///
 /// 翻页口径：[month] 由父级单向驱动，[onMonthChange] 只上报
 /// （**不在回调里 setState**，否则热重载会重置到初始月）。
+///
+/// **月 ⇄ 周收展**（日历页月档上滑收成单行周条）：给 [availableCalendarFormats]
+/// 传多档集合（**顺序必须大到小**：month → week，上滑 = 档位序下一档）即开启，
+/// 纵向手势由网格接管（页面上滑不再滚动）；此时必须用 [focusedDay] 回传
+/// `onMonthChange` 收到的**原样日期**——周档的翻页粒度是「周」，归一化到
+/// 月初会把周条拽回月初那一周。单档调用方（日期选择面板等）不传这些参数，
+/// 纵向手势不接管，整页滚动语义不变。
 class OrbitMonthCalendar extends StatelessWidget {
   const OrbitMonthCalendar({
     super.key,
@@ -86,6 +93,11 @@ class OrbitMonthCalendar extends StatelessWidget {
     this.onDayTap,
     this.onDayLongPress,
     this.onMonthChange,
+    this.calendarFormat = CalendarFormat.month,
+    this.availableCalendarFormats,
+    this.onFormatChange,
+    this.focusedDay,
+    this.dimOutsideMonth = true,
     this.showHeader = true,
     this.showWeekdays = true,
     this.onTitleTap,
@@ -111,6 +123,23 @@ class OrbitMonthCalendar extends StatelessWidget {
   final ValueChanged<DateTime>? onDayLongPress;
 
   final ValueChanged<DateTime>? onMonthChange;
+
+  /// 受控档位（月/周），配合 [availableCalendarFormats] + [onFormatChange]
+  final CalendarFormat calendarFormat;
+
+  /// 可切换档位集合（null = 仅月档，纵向手势不接管——页面滚动语义不变）
+  final Map<CalendarFormat, String>? availableCalendarFormats;
+
+  /// 档位变化回调（网格上滑收起 / 下滑展开）
+  final ValueChanged<CalendarFormat>? onFormatChange;
+
+  /// 焦点日（决定周档显示哪一周 / 月档显示哪一页；缺省 = [month] 当月 1 日）。
+  /// 开启收展后必须回传 `onMonthChange` 收到的原样日期（见类文档）
+  final DateTime? focusedDay;
+
+  /// 前后月补位日期是否弱显示（周档的跨月周传 false：条内前后月日期正常显示）
+  final bool dimOutsideMonth;
+
   final bool showHeader;
   final bool showWeekdays;
 
@@ -207,6 +236,10 @@ class OrbitMonthCalendar extends StatelessWidget {
     // 横滑到 10 月后 10 月的假期徽标消失，补位/当月判定同样错位）
     final firstDay = selectableStart ?? DateTime(2000, 1, 1);
     final lastDay = selectableEnd ?? DateTime(2099, 12, 31);
+    // 多档集合才开纵向手势（上滑收起/下滑展开）；单档保持 horizontalSwipe，
+    // 网格上的纵向滑动仍归外层整页滚动
+    final formats = availableCalendarFormats;
+    final multiFormat = formats != null && formats.length > 1;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -220,11 +253,15 @@ class OrbitMonthCalendar extends StatelessWidget {
           // 故把内置装饰全部置空，避免"双份高亮"
           firstDay: firstDay,
           lastDay: lastDay,
-          focusedDay: monthStart,
+          focusedDay: focusedDay ?? monthStart,
           locale: 'zh_CN',
           startingDayOfWeek: StartingDayOfWeek.monday,
-          calendarFormat: CalendarFormat.month,
-          availableGestures: AvailableGestures.horizontalSwipe,
+          calendarFormat: calendarFormat,
+          availableCalendarFormats: formats ?? const {CalendarFormat.month: ''},
+          availableGestures: multiFormat
+              ? AvailableGestures.all
+              : AvailableGestures.horizontalSwipe,
+          onFormatChanged: multiFormat ? onFormatChange : null,
           headerVisible: false,
           daysOfWeekHeight:
               showWeekdays ? (size == AppCalendarSize.large ? 24 : 18) : 0,
@@ -360,7 +397,10 @@ class OrbitMonthCalendar extends StatelessWidget {
   ) {
     final ymd = _ymd(date);
     final now = DateTime.now();
-    final inMonth = date.month == month.month && date.year == month.year;
+    // 周档跨月周不弱化补位（dimOutsideMonth = false）：单行周条里前后月日期
+    // 与当月日期同等显示，只弱化可选范围外的越界格
+    final inMonth = !dimOutsideMonth ||
+        (date.month == month.month && date.year == month.year);
     final isToday = isSameDay(date, now);
     final isSelected = selected != null && _ymd(selected!) == ymd;
     final isWeekend =

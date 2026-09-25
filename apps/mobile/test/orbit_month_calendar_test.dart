@@ -32,4 +32,21 @@ void main() {
     expect(colorOf(tester, '10'), AppColors.light.titleText);
     expect(colorOf(tester, '14'), ChineseCalendarColors.weekend);
   });
+
+  testWidgets('dimOutsideMonth=false：补位日期不弱化（周条跨月周口径）', (tester) async {
+    await tester.pumpWidget(orbitTestApp(
+      home: Scaffold(
+        body: OrbitMonthCalendar(
+          month: DateTime(2026, 2),
+          showHeader: false,
+          dimOutsideMonth: false,
+        ),
+      ),
+    ));
+    await tester.pumpAndSettle();
+
+    // 同一批补位格转正常读数：工作日主文字色、周末识别蓝（与当月格同档）
+    expect(colorOf(tester, '29'), AppColors.light.titleText);
+    expect(colorOf(tester, '31'), ChineseCalendarColors.weekend);
+  });
 }
