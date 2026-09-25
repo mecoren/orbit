@@ -12,6 +12,7 @@ import '../../shared/widgets/shadcn/orbit_confirm_sheet.dart';
 import '../../shared/widgets/shadcn/orbit_empty_state.dart';
 import '../../shared/widgets/shadcn/orbit_page_header.dart';
 import '../../shared/widgets/shadcn/orbit_actions_sheet.dart';
+import '../../shared/widgets/shadcn/orbit_skeleton.dart';
 import '../../shared/widgets/shadcn/orbit_toast.dart';
 import 'providers/todo_providers.dart';
 import '../../core/theme/icon_map.dart';
@@ -224,7 +225,10 @@ class _TrashScreenState extends ConsumerState<TrashScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final tasks = ref.watch(trashTasksProvider).value ?? [];
+    // 初次加载给骨架：`value ?? []` 会把加载帧误渲染成「回收站是空的」闪现
+    final trashAsync = ref.watch(trashTasksProvider);
+    final tasks = trashAsync.value ?? [];
+    final trashLoading = !trashAsync.hasValue && trashAsync.isLoading;
     // 乐观隐藏：撤销窗口内的墓碑行从界面过滤（数据仍在库，撤销即恢复显示）
     final visible =
         _hiddenIds.isEmpty ? tasks : tasks.where((t) => !_hiddenIds.contains(t.id)).toList();
@@ -237,7 +241,9 @@ class _TrashScreenState extends ConsumerState<TrashScreen> {
       body: Stack(
         children: [
           Positioned.fill(
-            child: visible.isEmpty
+            child: trashLoading
+                ? const _TrashSkeleton()
+                : visible.isEmpty
                 ? Padding(
                     padding: EdgeInsets.only(
                       top: MediaQuery.of(context).padding.top +
@@ -305,6 +311,41 @@ class _TrashScreenState extends ConsumerState<TrashScreen> {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// 回收站初次加载骨架：行占位（标题行 + 副标题行），有旧值时不出现
+class _TrashSkeleton extends StatelessWidget {
+  const _TrashSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      physics: const NeverScrollableScrollPhysics(),
+      padding: EdgeInsets.only(
+        top: MediaQuery.of(context).padding.top +
+            OrbitPageHeader.rowHeight +
+            AppDimens.space8,
+        bottom: AppDimens.space16,
+      ),
+      children: [
+        for (var i = 0; i < 6; i++)
+          Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppDimens.space16,
+              vertical: AppDimens.space12,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                OrbitSkeleton.line(width: 180 - (i % 3) * 30.0),
+                const SizedBox(height: AppDimens.space8),
+                OrbitSkeleton.line(width: 110),
+              ],
+            ),
+          ),
+      ],
     );
   }
 }

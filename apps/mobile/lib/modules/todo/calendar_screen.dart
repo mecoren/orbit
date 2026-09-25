@@ -385,7 +385,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                             Expanded(
                               child: Text(
                                 _agendaMode
-                                    ? '本月没有带截止日期的任务，切换月份或点右下角新增'
+                                    ? '本月没有带截止日期的任务，切换月份或点底部「+」新增'
                                     : '本月没有带截止日期的任务，切换月份或长按日历新增',
                                 style: TextStyle(
                                   fontSize: 12,

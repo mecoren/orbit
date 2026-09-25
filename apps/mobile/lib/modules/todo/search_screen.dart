@@ -115,7 +115,11 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                 ),
                 Expanded(
                   child: result == null
-                      ? const SizedBox.shrink()
+                      // 初始态给引导占位：整块空白会让「搜不了」像「坏了」
+                      ? const EmptyState(
+                          message: '输入关键词，搜索任务、项目或评论',
+                          icon: OrbitIcons.search,
+                        )
                       : _ResultList(result: result, scrollController: _scrollController),
                 ),
               ],
