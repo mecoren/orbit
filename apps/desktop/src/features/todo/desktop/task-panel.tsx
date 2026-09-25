@@ -252,6 +252,13 @@ export default function TaskPanel() {
   const listTruncated = sourceTasks.length >= TASK_LIST_PAGE_SIZE;
   const countCapped = visibleTasks.length >= TASK_LIST_PAGE_SIZE;
 
+  // 完成进度线（TickTick 列表页头语义；移动端 2026-09-25 先落地，本端对齐）：
+  // 只在「既有未完成又有已完成」时出现——看板/表格随隐藏开关剔除完成行、
+  // Logbook 恒为完成集，进度线在这些档位只会误导（done=0 或 =全部 → 不出线）
+  const doneCount = visibleTasks.reduce((n, t) => n + (t.done ? 1 : 0), 0);
+  const doneProgress =
+    doneCount > 0 && doneCount < visibleTasks.length ? doneCount / visibleTasks.length : null;
+
   // ---- 标题映射（04 §二）----
   const activeQuickDef = QUICK_VIEWS.find((v) => v.key === quickView);
   const title = activeSavedFilter
@@ -264,8 +271,8 @@ export default function TaskPanel() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-      {/* 工具栏 */}
-      <div className="flex items-center justify-between gap-3 border-b px-4 py-3">
+      {/* 工具栏（relative：底缘挂完成进度线，与 1px 描边同宽通栏） */}
+      <div className="relative flex items-center justify-between gap-3 border-b px-4 py-3">
         <div className="flex items-baseline gap-2">
           <h1 className="text-lg font-semibold">{title}</h1>
           <span className="text-sm text-muted-foreground">
@@ -538,6 +545,23 @@ export default function TaskPanel() {
                 ))}
               </DropdownMenuContent>
             </DropdownMenu>
+          )}
+
+          {/* 完成进度线：工具栏底缘 2px 主题色通栏线（宽度即完成占比，
+              width 过渡补间；Tooltip 走全局统一原语口径） */}
+          {doneProgress != null && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div
+                  aria-hidden
+                  className="absolute bottom-0 left-0 h-0.5 bg-primary transition-all duration-300"
+                  style={{ width: `${doneProgress * 100}%` }}
+                />
+              </TooltipTrigger>
+              <TooltipContent>
+                已完成 {doneCount} / {visibleTasks.length}
+              </TooltipContent>
+            </Tooltip>
           )}
         </div>
       </div>

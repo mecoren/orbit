@@ -16,6 +16,21 @@
 
 ## [Unreleased]
 
+### 桌面端四象限视图与完成进度线（两端对齐）（2026-09-25）
+
+- **桌面视图档增至五档**（`ViewMode` 新增 `matrix`，工具栏第五钮 + localStorage 白名单 +
+  内容区分支）：2×2 恒定四象限（宽屏无下钻态），每格色带/计数 + 格内独立 `useVirtualizer`
+  虚拟化列表；行复用 TaskRow 信息层级（优先级竖条/勾选/标签/项目/提醒/截止/子任务进度），
+  交互收敛为勾选完成 + 开详情 + 收藏（拖拽/多选在象限分桶下语义不成立）。`groupEisenhower`
+  纯函数与单测同移动端逐字对齐；视图循环快捷键顺带修掉漏 table 档的既有缺陷。
+- **任务面板完成进度线**（对齐移动页头）：工具栏底缘 2px 主题色通栏线，宽度 = 完成占比
+  （width 过渡补间），Tooltip「已完成 x / y」；仅在既有未完成又有已完成时出现。
+- **内存口径两端确认**：桌面 React Query 默认 gcTime 10min + 大列表 key 10s 收敛 +
+  `perf-metrics` 双门禁（audit-unbounded 0 违例、growth-curve 阈值在 CI），与移动端
+  autoDispose 改造对等，无需改码。
+- 桌面 380 项 vitest + 37 项 Playwright e2e 全绿；浏览器目检（mock 四象限数据）验证
+  矩阵渲染、进度线出现与勾选联动（20%→30%）。
+
 ### 移动端内存收口（2026-09-25）
 
 - **五个 family provider 改 autoDispose**（`taskDetailProvider` / `taskActivityProvider` /
