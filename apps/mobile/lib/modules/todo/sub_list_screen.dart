@@ -1220,6 +1220,10 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
         {bool draggable = false, OrbitCardEdge edge = OrbitCardEdge.none}) {
       final project =
           task.projectId != null ? projectById[task.projectId] : null;
+      // 项目视图内行内不再重复项目名（页头已是该项目，行内重述是噪音）；
+      // 快捷视图 / 未分组 / 搜索等跨项目语境保留项目名着色段
+      final projectTitle =
+          widget.query.projectId != null ? null : project?.title;
       // 行内提醒徽标：未来最近一条 / 全过期最早一条（完成实例不警示）
       final reminder = displayReminder(
         remindersByTask[task.id] ?? const <ProjectedReminder>[],
@@ -1232,14 +1236,14 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
         return _SelectionRow(
           task: task,
           selected: _selected.contains(task.id),
-          projectTitle: project?.title,
+          projectTitle: projectTitle,
           onTap: () => _toggleSelect(task.id),
           edge: edge,
         );
       }
       return TodoTaskTile(
         task: task,
-        projectTitle: project?.title,
+        projectTitle: projectTitle,
         projectColorHex: project?.hexColor,
         labels: labelsByTask[task.id] ?? const <ProjectedTaskLabel>[],
         reminder: reminder,
@@ -1341,7 +1345,9 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
                 onOpen: (t) => context.push('/todo/${t.id}'),
                 onLongPress: _showTaskActions,
                 // 按状态分组时列头不代表项目，卡片补一行项目名
-                projectTitleOf: _kanbanGroupBy == KanbanGroupBy.status
+                //（项目视图内页头已表达，行内不再重复）
+                projectTitleOf: _kanbanGroupBy == KanbanGroupBy.status &&
+                        widget.query.projectId == null
                     ? (t) => t.projectId == null
                         ? null
                         : projectById[t.projectId]?.title
