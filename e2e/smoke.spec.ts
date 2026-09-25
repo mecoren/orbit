@@ -270,9 +270,9 @@ test("视图内新增自动带视图标记（#39）：我的一天 QuickAddBar �
 });
 
 test("视图内新增自动带视图标记（#39）：今日截止视图新建 → db 落今天 18:00", async ({ page }) => {
-  // 进入今天截止视图
-  await page.getByRole("button", { name: "今天截止" }).first().click();
-  await expect(page.getByRole("heading", { name: "今天截止" })).toBeVisible();
+  // 进入今天视图（视图含逾期；侧栏快捷视图名与页签同名，exact 防子串误中任务行）
+  await page.getByRole("button", { name: "今天", exact: true }).first().click();
+  await expect(page.getByRole("heading", { name: "今天", exact: true })).toBeVisible();
 
   // 视图内 QuickAddBar 新建（无日期词）：due_date = 视图默认（今天 18:00）
   await quickAdd(page, "视图标记任务-今日18点");
