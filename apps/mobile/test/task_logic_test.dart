@@ -617,7 +617,7 @@ group('computeSidebarCounts 单遍计数', () {
     });
   });
 
-// ---------- 提醒相对档（M2：TickTick 式快捷）----------
+// ---------- 提醒相对档（M2：快捷相对档）----------
 
 group('reminderPresets 提醒快捷档', () {
   test('有截止日期：当天 9:00 + 前推 1 小时 / 30 / 15 分钟', () {
@@ -740,7 +740,7 @@ group('displayReminder 行内提醒选取', () {
     });
   });
 
-  group('四象限分组 groupEisenhower（对标 TickTick 矩阵视图）', () {
+  group('四象限分组 groupEisenhower', () {
     // 固定"2026-09-25 14:00"注入，测试与运行日期无关
     final now = DateTime(2026, 9, 25, 14, 0).millisecondsSinceEpoch;
     final todayEnd =

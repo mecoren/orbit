@@ -12,7 +12,7 @@ import '../../shared/widgets/shadcn/orbit_card.dart';
 import '../../shared/widgets/shadcn/orbit_list_card.dart';
 import 'logic/task_logic.dart';
 
-/// 四象限视图（Eisenhower Matrix，对标 TickTick 矩阵视图）
+/// 四象限视图（Eisenhower Matrix）
 ///
 /// 移动端形态取舍：
 /// - **概览 + 下钻两态**：手机宽度摆不下桌面版四格一屏铺开的完整工作面，

@@ -62,7 +62,7 @@ class OrbitPageHeader extends StatelessWidget implements PreferredSizeWidget {
   /// 尾随动作插槽（多个自由控件）
   final List<Widget>? actions;
 
-  /// 完成进度线（0..1，TickTick 列表页头语义）：落在页头底缘的 2px 主题色线，
+  /// 完成进度线（0..1）：落在页头底缘的 2px 主题色线，
   /// 覆在 1px 描边之上；null 不渲染。进度变化走隐式动画补间。
   final double? progress;
 

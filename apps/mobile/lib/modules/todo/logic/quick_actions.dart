@@ -1,6 +1,6 @@
 import '../../../services/local_prefs.dart';
 
-/// 底部快速添加面板的快捷操作档（TickTick「编辑操作」的 Orbit 等价物）
+/// 底部快速添加面板的快捷操作档（「编辑操作」设置的 Orbit 等价物）
 ///
 /// 只收录**本仓真有对应能力**的档位：
 /// - [due]/[priority]/[label]/[project] → 截止日期 / 优先级 / 标签 / 项目；

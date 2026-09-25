@@ -210,7 +210,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
   /// 预设档位（键必须与 orbit-core `CsvImportPreset::from_key` 一致）。
   /// `ics` 档走 VTODO 解析（core `ics_import_api`），与桌面导入卡同口径——
-  /// 用于从 Google/Apple/Outlook 日历或 TickTick 导出的 .ics 迁入任务。
+  /// 用于从 Google/Apple/Outlook 日历等工具导出的 .ics 迁入任务。
   static const _importPresets = {
     'orbit': 'Orbit 导出格式',
     'todoist': 'Todoist 模板',

@@ -451,7 +451,7 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
     if (picked != null && mounted) onPicked(dateToMidnightMs(picked));
   }
 
-  /// 提醒时间选择：先给相对档快捷（TickTick 式，见 [reminderPresets]），
+  /// 提醒时间选择：先给相对档快捷（见 [reminderPresets]），
   /// 末项「自定义时间…」进日期+时分单面板；两路产物都是绝对毫秒时刻
   Future<void> _pickReminder() async {
     await showSelectBottomSheet<String>(
