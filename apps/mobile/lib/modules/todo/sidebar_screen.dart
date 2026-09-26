@@ -12,6 +12,7 @@ import '../../data/api/dto.dart';
 import '../../data/providers/bridge_provider.dart';
 import '../../shared/utils/hex_color.dart';
 import '../../shared/widgets/shadcn/orbit_page_header.dart';
+import '../../shared/widgets/shadcn/orbit_list_card.dart';
 import '../../shared/widgets/shadcn/orbit_skeleton.dart';
 import '../../shared/widgets/shadcn/orbit_actions_sheet.dart';
 import '../../shared/widgets/shadcn/orbit_section_header.dart';
@@ -260,6 +261,10 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
     final counts = _counts(tasks);
     final undoneByProject = _undoneByProject(counts);
     final badgeBackground = colors.surfaceSecondary;
+    final archivedProjects = _archivedProjects();
+    // 项目卡段数：项目行 + 末尾「新建项目」行共拼一张卡
+    //（今天任务列表同款整卡口径，见任务子列表 cardListPadding + OrbitCardSegment）
+    final projectCardCount = projects.length + 1;
 
     return Scaffold(
       body: Stack(
@@ -285,22 +290,57 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
                       bottom: AppDimens.space16,
                     ),
                     children: [
-                      // 一、快捷视图（六行 ListTile：图标 quickView 色 + 标题 + 计数 badge + chevron）
-                      const OrbitSectionHeader(label: '快捷视图'),
-                      for (final key in QuickViewKey.values)
-                        _buildQuickViewRow(key, counts, badgeBackground),
-                      // 二、搜索（任务/项目/评论三路聚合）
-                      _buildSearchRow(context),
-                      // 三、筛选器（#35：保存的组合条件命名视图）
-                      _buildSavedFiltersRow(context),
-                      // 四、回收站（已删除任务的恢复入口；计数 = 回收站内任务数）
-                      _buildTrashRow(context, badgeBackground),
+                      // 一、快捷视图卡（今天任务列表同款卡片化：六行共拼一张卡——
+                      // 首段圆上角 / 末段圆下角 / 段间 1px divider；卡片外缘
+                      // 左右各让 space12，与任务子列表 cardListPadding 同口径）
+                      // 区块标题「快捷视图」已去除：底部导航直达后无需重复标注
+                      Padding(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: AppDimens.space12),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            for (var i = 0;
+                                i < QuickViewKey.values.length;
+                                i++)
+                              _buildQuickViewRow(
+                                QuickViewKey.values[i],
+                                counts,
+                                badgeBackground,
+                                OrbitCardEdge.of(
+                                    i, QuickViewKey.values.length),
+                              ),
+                          ],
+                        ),
+                      ),
+                      // 二、功能入口卡（搜索 / 筛选器 / 回收站；与快捷卡各自成卡，
+                      // 间距 cardGap——三行皆无分区头，同卡即同组）
+                      const SizedBox(height: AppDimens.cardGap),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: AppDimens.space12),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            _buildSearchRow(
+                                context, OrbitCardEdge.of(0, 3)),
+                            _buildSavedFiltersRow(
+                                context, OrbitCardEdge.of(1, 3)),
+                            _buildTrashRow(context, badgeBackground,
+                                OrbitCardEdge.of(2, 3)),
+                          ],
+                        ),
+                      ),
                       // 日历 / 统计已升级为底部页签，不再占清单首页行位。
-                      // 五、项目（色块 + 名称 + 未完成计数；长按菜单；右侧把手拖拽重排）
+                      // 五、项目卡（项目行 + 末尾「新建项目」行共拼一张卡；
+                      // 重排档行序由 ReorderableListView 自管，段位按卡内下标反算）
                       const OrbitSectionHeader(label: '项目'),
                       ReorderableListView.builder(
                         shrinkWrap: true,
-                        padding: EdgeInsets.zero,
+                        // 卡片外缘：左右各让 space12（与任务子列表同口径）；
+                        // 上下零垫——卡内段首尾贴边，新建项目行在表外无缝续接
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: AppDimens.space12),
                         physics: const NeverScrollableScrollPhysics(),
                         buildDefaultDragHandles: false,
                         itemCount: projects.length,
@@ -308,6 +348,7 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
                           projects[index],
                           undoneByProject,
                           index,
+                          OrbitCardEdge.of(index, projectCardCount),
                         ),
                         onReorderItem: _reorderProjects,
                         // 拖拽起止触感 + 抬起放大（与任务列表 manual 档同口径）
@@ -340,86 +381,92 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
                           child: child,
                         ),
                       ),
-                      // 新建项目（#36：移动端此前无创建项目入口）
-                      ListTile(
-                        leading: Icon(
-                          OrbitIcons.add,
-                          size: AppDimens.iconSizeMd,
-                          color: colors.secondaryText,
-                        ),
-                        title: Text(
-                          '新建项目',
-                          style: TextStyle(
-                            fontSize: 15,
-                            color: colors.secondaryText,
-                          ),
-                        ),
-                        dense: true,
-                        onTap: _addProject,
-                      ),
-                      // 归档项目区（有归档才渲染；行点击进项目视图读任务，
-                      // 行尾恢复钮取消归档——长按菜单同款入口兜底）
-                      if (_archivedProjects().isNotEmpty) ...[
-                        const OrbitSectionHeader(label: '已归档'),
-                        ..._archivedProjects().map(
-                          (p) => ListTile(
+                      // 新建项目（#36：移动端此前无创建项目入口；项目卡末段）
+                      Padding(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: AppDimens.space12),
+                        child: OrbitCardSegment(
+                          edge: OrbitCardEdge.of(
+                              projects.length, projectCardCount),
+                          child: ListTile(
                             leading: Icon(
-                              OrbitIcons.folder,
+                              OrbitIcons.add,
                               size: AppDimens.iconSizeMd,
-                              color: p.hexColor.isNotEmpty
-                                  ? hexToColor(p.hexColor)
-                                  : OrbitAccents.todoAccent,
+                              color: colors.secondaryText,
                             ),
                             title: Text(
-                              p.title,
+                              '新建项目',
                               style: TextStyle(
                                 fontSize: 15,
                                 color: colors.secondaryText,
                               ),
                             ),
                             dense: true,
-                            trailing: TextButton(
-                              onPressed: () => toggleProjectArchive(ref, p),
-                              child: const Text('恢复'),
-                            ),
-                            onTap: () => context.push('/todo/tasks?projectId=${p.id}'),
+                            onTap: _addProject,
+                          ),
+                        ),
+                      ),
+                      // 归档项目区（有归档才渲染；同卡多段，行尾恢复钮取消归档——
+                      // 长按菜单同款入口兜底）
+                      if (archivedProjects.isNotEmpty) ...[
+                        const OrbitSectionHeader(label: '已归档'),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: AppDimens.space12),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              for (var i = 0;
+                                  i < archivedProjects.length;
+                                  i++)
+                                _buildArchivedRow(
+                                    archivedProjects[i], i, archivedProjects.length),
+                            ],
                           ),
                         ),
                       ],
-                      // 三、未分组
-                      ListTile(
-                        leading: Icon(
-                          OrbitIcons.inbox,
-                          size: AppDimens.iconSizeMd,
-                          color: colors.secondaryText,
-                        ),
-                        title: Text(
-                          '未分组',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w500,
-                            color: colors.titleText,
-                          ),
-                        ),
-                        trailing: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            CountBadge.wrap(
-                              // 未分组未完成 = 全部未完成 − 有项目未完成之和
-                              //（fold 带初值 0，空项目 Map 不崩——reduce 空集 No element）
-                              n: counts.quickView[QuickViewKey.all]! -
-                                  counts.undoneByProject.values
-                                      .fold(0, (a, b) => a + b),
-                              background: badgeBackground,
-                            ),
-                            Icon(
-                              OrbitIcons.chevronRight,
+                      // 三、未分组（独立单段卡，与项目卡各自成卡，间距 cardGap）
+                      const SizedBox(height: AppDimens.cardGap),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: AppDimens.space12),
+                        child: OrbitCardSegment(
+                          edge: OrbitCardEdge.single,
+                          child: ListTile(
+                            leading: Icon(
+                              OrbitIcons.inbox,
                               size: AppDimens.iconSizeMd,
                               color: colors.secondaryText,
                             ),
-                          ],
+                            title: Text(
+                              '未分组',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w500,
+                                color: colors.titleText,
+                              ),
+                            ),
+                            trailing: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                CountBadge.wrap(
+                                  // 未分组未完成 = 全部未完成 − 有项目未完成之和
+                                  //（fold 带初值 0，空项目 Map 不崩——reduce 空集 No element）
+                                  n: counts.quickView[QuickViewKey.all]! -
+                                      counts.undoneByProject.values
+                                          .fold(0, (a, b) => a + b),
+                                  background: badgeBackground,
+                                ),
+                                Icon(
+                                  OrbitIcons.chevronRight,
+                                  size: AppDimens.iconSizeMd,
+                                  color: colors.secondaryText,
+                                ),
+                              ],
+                            ),
+                            onTap: _openUngrouped,
+                          ),
                         ),
-                        onTap: _openUngrouped,
                       ),
                     ],
                   ),
@@ -450,145 +497,196 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
   }
 
   /// 保存的筛选器入口行（#35：保存的组合条件命名视图，独立路由页）
-  Widget _buildSavedFiltersRow(BuildContext context) {
+  Widget _buildSavedFiltersRow(BuildContext context,
+      [OrbitCardEdge edge = OrbitCardEdge.none]) {
     final colors = AppColors.ofContext(context);
-    return ListTile(
-      leading: Icon(
-        OrbitIcons.filter,
-        size: AppDimens.iconSizeMd,
-        // 功能行图标统一次要文字色；彩色只留给快捷视图与项目行
-        color: colors.secondaryText,
-      ),
-      title: Text(
-        '筛选器',
-        style: TextStyle(
-          fontSize: 16,
-          fontWeight: FontWeight.w500,
-          color: colors.titleText,
+    return OrbitCardSegment(
+      edge: edge,
+      child: ListTile(
+        leading: Icon(
+          OrbitIcons.filter,
+          size: AppDimens.iconSizeMd,
+          // 功能行图标统一次要文字色；彩色只留给快捷视图与项目行
+          color: colors.secondaryText,
         ),
+        title: Text(
+          '筛选器',
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w500,
+            color: colors.titleText,
+          ),
+        ),
+        trailing: Icon(
+          OrbitIcons.chevronRight,
+          size: AppDimens.iconSizeMd,
+          color: colors.secondaryText,
+        ),
+        onTap: () => context.push('/todo/saved-filters'),
       ),
-      trailing: Icon(
-        OrbitIcons.chevronRight,
-        size: AppDimens.iconSizeMd,
-        color: colors.secondaryText,
-      ),
-      onTap: () => context.push('/todo/saved-filters'),
     );
   }
 
   /// 搜索入口行（任务/项目/评论三路聚合的专属页面）
-  Widget _buildSearchRow(BuildContext context) {
+  Widget _buildSearchRow(BuildContext context,
+      [OrbitCardEdge edge = OrbitCardEdge.none]) {
     final colors = AppColors.ofContext(context);
-    return ListTile(
-      leading: Icon(
-        OrbitIcons.search,
-        size: AppDimens.iconSizeMd,
-        // 功能行图标统一次要文字色；彩色只留给快捷视图与项目行
-        color: colors.secondaryText,
-      ),
-      title: Text(
-        '搜索',
-        style: TextStyle(
-          fontSize: 16,
-          fontWeight: FontWeight.w500,
-          color: colors.titleText,
+    return OrbitCardSegment(
+      edge: edge,
+      child: ListTile(
+        leading: Icon(
+          OrbitIcons.search,
+          size: AppDimens.iconSizeMd,
+          // 功能行图标统一次要文字色；彩色只留给快捷视图与项目行
+          color: colors.secondaryText,
         ),
+        title: Text(
+          '搜索',
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w500,
+            color: colors.titleText,
+          ),
+        ),
+        trailing: Icon(
+          OrbitIcons.chevronRight,
+          size: AppDimens.iconSizeMd,
+          color: colors.secondaryText,
+        ),
+        onTap: _openSearch,
       ),
-      trailing: Icon(
-        OrbitIcons.chevronRight,
-        size: AppDimens.iconSizeMd,
-        color: colors.secondaryText,
-      ),
-      onTap: _openSearch,
     );
   }
 
   /// 回收站入口行（已删除任务的恢复入口；独立路由页，同日历行模式）
-  Widget _buildTrashRow(BuildContext context, Color badgeBackground) {
+  Widget _buildTrashRow(BuildContext context, Color badgeBackground,
+      [OrbitCardEdge edge = OrbitCardEdge.none]) {
     final colors = AppColors.ofContext(context);
     final trashedCount = ref.watch(trashTasksProvider).value?.length ?? 0;
-    return ListTile(
-      leading: Icon(
-        OrbitIcons.delete,
-        size: AppDimens.iconSizeMd,
-        color: colors.secondaryText,
-      ),
-      title: Text(
-        '回收站',
-        style: TextStyle(
-          fontSize: 16,
-          fontWeight: FontWeight.w500,
-          color: colors.titleText,
+    return OrbitCardSegment(
+      edge: edge,
+      child: ListTile(
+        leading: Icon(
+          OrbitIcons.delete,
+          size: AppDimens.iconSizeMd,
+          color: colors.secondaryText,
         ),
-      ),
-      trailing: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          CountBadge.wrap(n: trashedCount, background: badgeBackground),
-          Icon(
-            OrbitIcons.chevronRight,
-            size: AppDimens.iconSizeMd,
-            color: colors.secondaryText,
+        title: Text(
+          '回收站',
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w500,
+            color: colors.titleText,
           ),
-        ],
+        ),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            CountBadge.wrap(n: trashedCount, background: badgeBackground),
+            Icon(
+              OrbitIcons.chevronRight,
+              size: AppDimens.iconSizeMd,
+              color: colors.secondaryText,
+            ),
+          ],
+        ),
+        onTap: _openTrash,
       ),
-      onTap: _openTrash,
     );
   }
 
   Widget _buildQuickViewRow(
     QuickViewKey key,
     SidebarCounts counts,
-    Color surfaceHighest,
-  ) {
+    Color surfaceHighest, [
+    OrbitCardEdge edge = OrbitCardEdge.none,
+  ]) {
     final colors = AppColors.ofContext(context);
     final undone = _undoneCount(counts, key);
-    return ListTile(
-      leading: Icon(
-        key.icon,
-        size: AppDimens.iconSizeMd,
-        color: hexToColor(key.colorHex),
-      ),
-      title: Text(
-        key.label,
-        style: TextStyle(
-          fontSize: 16,
-          fontWeight: FontWeight.w500,
-          color: colors.titleText,
+    return OrbitCardSegment(
+      edge: edge,
+      child: ListTile(
+        leading: Icon(
+          key.icon,
+          size: AppDimens.iconSizeMd,
+          color: hexToColor(key.colorHex),
         ),
+        title: Text(
+          key.label,
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w500,
+            color: colors.titleText,
+          ),
+        ),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            CountBadge.wrap(n: undone, background: surfaceHighest),
+            Icon(
+              OrbitIcons.chevronRight,
+              size: AppDimens.iconSizeMd,
+              color: colors.secondaryText,
+            ),
+          ],
+        ),
+        onTap: () => _openView(key),
       ),
-      trailing: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          CountBadge.wrap(n: undone, background: surfaceHighest),
-          Icon(
-            OrbitIcons.chevronRight,
-            size: AppDimens.iconSizeMd,
+    );
+  }
+
+  /// 已归档项目行（归档卡内段；行点击进项目视图读任务，
+  /// 行尾恢复钮取消归档——长按菜单同款入口兜底）
+  Widget _buildArchivedRow(TodoProject project, int index, int count) {
+    final colors = AppColors.ofContext(context);
+    return OrbitCardSegment(
+      edge: OrbitCardEdge.of(index, count),
+      child: ListTile(
+        leading: Icon(
+          OrbitIcons.folder,
+          size: AppDimens.iconSizeMd,
+          color: project.hexColor.isNotEmpty
+              ? hexToColor(project.hexColor)
+              : OrbitAccents.todoAccent,
+        ),
+        title: Text(
+          project.title,
+          style: TextStyle(
+            fontSize: 15,
             color: colors.secondaryText,
           ),
-        ],
+        ),
+        dense: true,
+        trailing: TextButton(
+          onPressed: () => toggleProjectArchive(ref, project),
+          child: const Text('恢复'),
+        ),
+        onTap: () => context.push('/todo/tasks?projectId=${project.id}'),
       ),
-      onTap: () => _openView(key),
     );
   }
 
   Widget _buildProjectRow(
     TodoProject project,
     Map<int, int> undoneByProject,
-    int index,
-  ) {
+    int index, [
+    OrbitCardEdge edge = OrbitCardEdge.none,
+  ]) {
     final colors = AppColors.ofContext(context);
     final undone = undoneByProject[project.id] ?? 0;
     return InkWell(
       key: ValueKey(project.id),
-      borderRadius: AppShapes.medium,
       onTap: () => _openProject(project),
       onLongPress: () => _showProjectActions(project, undone),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(
-          horizontal: AppDimens.space16,
-          vertical: AppDimens.space12,
-        ),
+      // 卡内段（今天任务列表同款：按压水波盖在卡面上，描边由段画；
+      // 行内不再自带圆角——外缘圆角归卡片）
+      child: OrbitCardSegment(
+        edge: edge,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppDimens.space16,
+            vertical: AppDimens.space12,
+          ),
         child: Row(
           children: [
             // 项目固定图标（folder_rounded）按项目自选色染色，无色回退强调色
@@ -632,6 +730,7 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
               ),
             ),
           ],
+          ),
         ),
       ),
     );

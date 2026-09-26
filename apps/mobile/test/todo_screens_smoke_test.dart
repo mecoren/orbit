@@ -32,7 +32,7 @@ void main() {
     await _settlePastMockLatency(tester);
 
     expect(find.text('循迹'), findsOneWidget);
-    expect(find.text('快捷视图'), findsOneWidget);
+    // 「快捷视图」区块标题已去除（底部导航直达后无需重复标注），直接断言行内容
     // 七个快捷视图行全部可见（07 报告新增「我的一天」置顶）
     expect(find.text('我的一天'), findsOneWidget);
     expect(find.text('今天'), findsOneWidget);

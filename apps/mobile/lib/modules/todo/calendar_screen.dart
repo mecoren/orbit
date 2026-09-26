@@ -324,13 +324,22 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     SizedBox(height: OrbitPageHeader.rowHeight),
+                    // 页头下竖直留白（与 stats_screen 首内容上沿 space8 同口径）
+                    const SizedBox(height: AppDimens.space8),
                     // ===== 月历（wait-home 完整版：农历副标签/休班徽标/任务圆点）=====
                     // 议程档隐藏网格：整页让给按日分组列表（桌面 agenda 档同语义）
+                    // 月历卡（今天任务列表同款卡片化：整张月历是一张单段卡，
+                    // 外缘左右各让 space12，与任务子列表 cardListPadding 同口径）
                     if (!_agendaMode) ...[
                       Padding(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: AppDimens.space8),
-                        child: OrbitMonthCalendar(
+                            horizontal: AppDimens.space12),
+                        child: OrbitCardSegment(
+                          edge: OrbitCardEdge.single,
+                          child: Padding(
+                            padding:
+                                const EdgeInsets.all(AppDimens.space8),
+                            child: OrbitMonthCalendar(
                           size: AppCalendarSize.large,
                           showHeader: false,
                           month: _month,
@@ -368,6 +377,8 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                           subLabelBuilder: ChineseAlmanac.daySubLabel,
                           eventDotsBuilder: (date) => monthDots[_ymd(date)] ??
                               const <Color>[],
+                            ),
+                          ),
                         ),
                       ),
                       const SizedBox(height: AppDimens.space4),
@@ -421,27 +432,39 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                       ),
                       if (monthTotal == 0)
                         Padding(
-                          padding: const EdgeInsets.all(AppDimens.space16),
-                          child: Row(
-                            children: [
-                              Icon(OrbitIcons.calendarBlocked,
-                                  size: 16,
-                                  color: colors.secondaryText
-                                      .withValues(alpha: 0.6)),
-                              const SizedBox(width: AppDimens.space8),
-                              Expanded(
-                                child: Text(
-                                  '本月没有带截止日期的任务，切换月份或点底部「+」新增',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: colors.secondaryText,
+                          padding: const EdgeInsets.fromLTRB(
+                              AppDimens.space12,
+                              AppDimens.space8,
+                              AppDimens.space12,
+                              0),
+                          child: OrbitCardSegment(
+                            edge: OrbitCardEdge.single,
+                            child: Padding(
+                              padding:
+                                  const EdgeInsets.all(AppDimens.space16),
+                              child: Row(
+                                children: [
+                                  Icon(OrbitIcons.calendarBlocked,
+                                      size: 16,
+                                      color: colors.secondaryText
+                                          .withValues(alpha: 0.6)),
+                                  const SizedBox(width: AppDimens.space8),
+                                  Expanded(
+                                    child: Text(
+                                      '本月没有带截止日期的任务，切换月份或点底部「+」新增',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: colors.secondaryText,
+                                      ),
+                                    ),
                                   ),
-                                ),
+                                ],
                               ),
-                            ],
+                            ),
                           ),
                         )
-                      else
+                      else ...[
+                        const SizedBox(height: AppDimens.space8),
                         for (final group in monthGroups)
                           _MonthDayGroup(
                             key: _groupKeyFor(_ymd(group.date)),
@@ -455,6 +478,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                             tasks: group.items,
                             onOpenTask: _openTask,
                           ),
+                      ],
                     ] else
                       _SelectedDayList(
                         date: _selectedDate,
@@ -575,8 +599,11 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
 }
 
 /// 下方列表的按日分组块（对齐桌面右栏 DayGroupBlock）：
-/// 日期头（今天强调 + 「今天」徽标，选中日高亮底）+ 任务行
-/// （浅色圆角卡：优先级色点 + 标题 + HH:mm 逾期红）
+/// 日期头（今天强调 + 「今天」徽标，选中日高亮底）+ 任务行。
+///
+/// 卡片化（今天任务列表同款）：整组共拼一张卡——日期头是卡内首段，
+/// 任务行是后续段（段位按「头 0 + 行 i+1」反算）；组间 cardGap 由外缘
+/// 下垫承担。任务行不再自带灰底——卡面由段统一铺 surface。
 class _MonthDayGroup extends StatelessWidget {
   const _MonthDayGroup({
     super.key,
@@ -616,124 +643,134 @@ class _MonthDayGroup extends StatelessWidget {
     final now = DateTime.now();
     // 今天零点 ms（逾期红判定口径：截止在今天内不算逾期）
     final todayMs = DateTime(now.year, now.month, now.day).millisecondsSinceEpoch;
+    // 卡内段数：日期头首段 + 任务行
+    final total = 1 + tasks.length;
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // 日期头
-        Padding(
-          padding: const EdgeInsets.fromLTRB(AppDimens.space16,
-              AppDimens.space8, AppDimens.space16, AppDimens.space4),
-          child: Container(
-            decoration: BoxDecoration(
-              color: isSelectedDay
-                  ? OrbitAccents.themeAccent.withValues(alpha: 0.10)
+    return Padding(
+      // 组卡外缘：左右各让 space12（与任务子列表同口径），组间 cardGap 下垫
+      padding: const EdgeInsets.fromLTRB(AppDimens.space12, 0,
+          AppDimens.space12, AppDimens.cardGap),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // 日期头（卡内首段）
+          OrbitCardSegment(
+            edge: OrbitCardEdge.of(0, total),
+            child: Container(
+              // 选中日高亮底：盖在卡面上（首段故只取上圆角，与卡片外缘同弧）
+              decoration: isSelectedDay
+                  ? BoxDecoration(
+                      color: OrbitAccents.themeAccent.withValues(alpha: 0.10),
+                      borderRadius: const BorderRadius.vertical(
+                        top: Radius.circular(AppShapes.radiusMedium - 1),
+                      ),
+                    )
                   : null,
-              borderRadius: BorderRadius.circular(8),
-            ),
-            padding: const EdgeInsets.symmetric(
-                horizontal: AppDimens.space12, vertical: AppDimens.space4),
-            child: Row(
-              children: [
-                Text(
-                  '${date.month}月${date.day}日',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: isToday
-                        ? OrbitAccents.themeAccent
-                        : colors.titleText,
-                  ),
-                ),
-                const SizedBox(width: AppDimens.space8),
-                Text(
-                  '星期${_weekdayNames[date.weekday - 1]}',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: colors.secondaryText,
-                  ),
-                ),
-                const SizedBox(width: AppDimens.space8),
-                Text(
-                  _relativeLabel,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: colors.secondaryText,
-                  ),
-                ),
-                // 休/班徽标（议程档）：底色取值与月历日格徽标同源
-                if (holidayMark != null) ...[
-                  const SizedBox(width: AppDimens.space6),
-                  Container(
-                    width: 16,
-                    height: 16,
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      color: holidayMark!
-                          ? ChineseCalendarColors.weekend
-                          : ChineseCalendarColors.workdayBadge,
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: Text(
-                      holidayMark! ? '休' : '班',
-                      style: const TextStyle(
-                        fontSize: 10,
-                        height: 1,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.white,
-                      ),
+              padding: const EdgeInsets.symmetric(
+                  horizontal: AppDimens.space12, vertical: AppDimens.space8),
+              child: Row(
+                children: [
+                  Text(
+                    '${date.month}月${date.day}日',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: isToday
+                          ? OrbitAccents.themeAccent
+                          : colors.titleText,
                     ),
                   ),
-                ],
-                if (isToday) ...[
                   const SizedBox(width: AppDimens.space8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 6, vertical: 1),
-                    decoration: BoxDecoration(
-                      border: Border.all(color: OrbitAccents.themeAccent),
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                    child: Text(
-                      '今天',
-                      style: TextStyle(
-                        fontSize: 10,
-                        color: OrbitAccents.themeAccent,
-                      ),
+                  Text(
+                    '星期${_weekdayNames[date.weekday - 1]}',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: colors.secondaryText,
                     ),
                   ),
+                  const SizedBox(width: AppDimens.space8),
+                  Text(
+                    _relativeLabel,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: colors.secondaryText,
+                    ),
+                  ),
+                  // 休/班徽标（议程档）：底色取值与月历日格徽标同源
+                  if (holidayMark != null) ...[
+                    const SizedBox(width: AppDimens.space6),
+                    Container(
+                      width: 16,
+                      height: 16,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: holidayMark!
+                            ? ChineseCalendarColors.weekend
+                            : ChineseCalendarColors.workdayBadge,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text(
+                        holidayMark! ? '休' : '班',
+                        style: const TextStyle(
+                          fontSize: 10,
+                          height: 1,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ],
+                  if (isToday) ...[
+                    const SizedBox(width: AppDimens.space8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 6, vertical: 1),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: OrbitAccents.themeAccent),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Text(
+                        '今天',
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: OrbitAccents.themeAccent,
+                        ),
+                      ),
+                    ),
+                  ],
                 ],
-              ],
+              ),
             ),
           ),
-        ),
-        // 任务行
-        for (final t in tasks)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(
-                AppDimens.space16, 0, AppDimens.space16, AppDimens.space6),
-            child: _TaskCard(
-              task: t,
+          // 任务行（卡内续段：段位 = 头部 1 + 行下标）
+          for (var i = 0; i < tasks.length; i++)
+            _TaskCard(
+              task: tasks[i],
               todayMs: todayMs,
-              onTap: () => onOpenTask(t.id),
+              edge: OrbitCardEdge.of(i + 1, total),
+              onTap: () => onOpenTask(tasks[i].id),
             ),
-          ),
-      ],
+        ],
+      ),
     );
   }
 }
 
-/// 单条任务行（浅色圆角卡：优先级色点 + 标题 + HH:mm 逾期红；对齐桌面右栏行）
+/// 单条任务行（卡内段：优先级色点 + 标题 + HH:mm 逾期红；对齐桌面右栏行）
 class _TaskCard extends StatelessWidget {
   const _TaskCard({
     required this.task,
     required this.todayMs,
     required this.onTap,
+    this.edge = OrbitCardEdge.none,
   });
 
   final TodoTask task;
   final int todayMs;
   final VoidCallback onTap;
+
+  /// 卡片段位（议程组卡内续段；默认扁平，复用面不受影响）
+  final OrbitCardEdge edge;
 
   @override
   Widget build(BuildContext context) {
@@ -744,58 +781,58 @@ class _TaskCard extends StatelessWidget {
         task.dueDate != null && (task.dueDate! % 86400000) != 0; // 零点=纯日期
 
     return InkWell(
-      // 按压水波与卡片同圆角（GestureDetector 无任何按压反馈）
-      borderRadius: AppShapes.of(10),
       onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(
-            horizontal: AppDimens.space12, vertical: 10),
-        decoration: BoxDecoration(
-          color: colors.secondaryText.withValues(alpha: 0.05),
-          borderRadius: AppShapes.of(10),
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 8,
-              height: 8,
-              decoration: BoxDecoration(
-                color: hexToColor(hex),
-                shape: BoxShape.circle,
-              ),
-            ),
-            const SizedBox(width: AppDimens.space8),
-            Expanded(
-              child: AnimatedStrikethrough(
-                text: task.title,
-                done: task.isDone,
-                maxLines: 1,
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: colors.titleText,
+      // 卡内段（今天任务列表同款：卡面由段铺，行内只定内边距与最小行高）
+      child: OrbitCardSegment(
+        edge: edge,
+        child: Container(
+          constraints:
+              const BoxConstraints(minHeight: AppDimens.touchTarget),
+          padding: const EdgeInsets.symmetric(
+              horizontal: AppDimens.space12, vertical: AppDimens.space8),
+          child: Row(
+            children: [
+              Container(
+                width: 8,
+                height: 8,
+                decoration: BoxDecoration(
+                  color: hexToColor(hex),
+                  shape: BoxShape.circle,
                 ),
-                doneColor: colors.secondaryText,
               ),
-            ),
-            if (hasTime)
-              Padding(
-                padding: const EdgeInsets.only(left: AppDimens.space8),
-                child: Text(
-                  DateFormat('HH:mm').format(
-                      DateTime.fromMillisecondsSinceEpoch(task.dueDate!)),
+              const SizedBox(width: AppDimens.space8),
+              Expanded(
+                child: AnimatedStrikethrough(
+                  text: task.title,
+                  done: task.isDone,
+                  maxLines: 1,
                   style: TextStyle(
-                    fontSize: 12,
-                    fontFeatures: const [FontFeature.tabularFigures()],
-                    color: overdue
-                        ? OrbitAccents.overdueRed
-                        : colors.secondaryText,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: colors.titleText,
+                  ),
+                  doneColor: colors.secondaryText,
+                ),
+              ),
+              if (hasTime)
+                Padding(
+                  padding: const EdgeInsets.only(left: AppDimens.space8),
+                  child: Text(
+                    DateFormat('HH:mm').format(
+                        DateTime.fromMillisecondsSinceEpoch(task.dueDate!)),
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontFeatures: const [FontFeature.tabularFigures()],
+                      color: overdue
+                          ? OrbitAccents.overdueRed
+                          : colors.secondaryText,
+                    ),
                   ),
                 ),
-              ),
-            Icon(OrbitIcons.chevronRight,
-                size: 18, color: colors.secondaryText),
-          ],
+              Icon(OrbitIcons.chevronRight,
+                  size: 18, color: colors.secondaryText),
+            ],
+          ),
         ),
       ),
     );
@@ -851,8 +888,9 @@ class _SelectedDayList extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = AppColors.ofContext(context);
     final subLabel = ChineseAlmanac.daySubLabel(date);
+    // 卡片外缘左右各让 space12（与任务子列表 cardListPadding 同口径）
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: AppDimens.space16),
+      padding: const EdgeInsets.symmetric(horizontal: AppDimens.space12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -947,20 +985,25 @@ class _SelectedDayList extends StatelessWidget {
               ],
             ),
           ),
-          // 任务卡：当天无任务居中提示，有任务按分段成卡
+          // 任务卡：当天无任务居中提示，有任务按分段成卡。
+          // 段间无缝（今天任务列表同款整卡：首段圆上角 / 末段圆下角，
+          // 段间 1px divider 由上一段下沿画一次）
           if (tasks.isEmpty)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: AppDimens.space20),
-              child: Center(
-                child: Text(
-                  '当天没有任务',
-                  style: TextStyle(fontSize: 12, color: colors.secondaryText),
+            OrbitCardSegment(
+              edge: OrbitCardEdge.single,
+              child: Padding(
+                padding:
+                    const EdgeInsets.symmetric(vertical: AppDimens.space20),
+                child: Center(
+                  child: Text(
+                    '当天没有任务',
+                    style: TextStyle(fontSize: 12, color: colors.secondaryText),
+                  ),
                 ),
               ),
             )
           else if (compact)
-            for (var i = 0; i < tasks.length; i++) ...[
-              if (i > 0) const SizedBox(height: AppDimens.space2),
+            for (var i = 0; i < tasks.length; i++)
               _DayTimelineRow(
                 task: tasks[i],
                 edge: OrbitCardEdge.of(i, tasks.length),
@@ -973,11 +1016,9 @@ class _SelectedDayList extends StatelessWidget {
                 ),
                 onToggle: () => onToggleDone(tasks[i]),
                 onOpen: () => onOpenTask(tasks[i].id),
-              ),
-            ]
+              )
           else
-            for (var i = 0; i < tasks.length; i++) ...[
-              if (i > 0) const SizedBox(height: AppDimens.space2),
+            for (var i = 0; i < tasks.length; i++)
               OrbitCardSegment(
                 edge: OrbitCardEdge.of(i, tasks.length),
                 child: _DayTaskRow(
@@ -993,7 +1034,6 @@ class _SelectedDayList extends StatelessWidget {
                   onOpen: () => onOpenTask(tasks[i].id),
                 ),
               ),
-            ],
         ],
       ),
     );
