@@ -191,6 +191,7 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
     final colors = AppColors.ofContext(context);
     return showModalBottomSheet<String>(
       context: context,
+      useRootNavigator: true,
       isScrollControlled: true,
       backgroundColor: colors.popup,
       shape: bottomSheetTopShape,
@@ -323,7 +324,15 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
                               child: Material(
                                 elevation: 6 * elevated,
                                 borderRadius: AppShapes.medium,
-                                color: Colors.transparent,
+                                clipBehavior: Clip.antiAlias,
+                                // 底面随抬起渐变为实色 surface：项目行本身是扁平
+                                // 透明行，常驻透明会透出页面底色变成灰块（与任务
+                                // 列表 manual 档 / 编辑操作页同口径）
+                                color: Color.lerp(
+                                  Colors.transparent,
+                                  colors.surface,
+                                  elevated,
+                                ),
                                 child: child,
                               ),
                             );

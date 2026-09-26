@@ -235,6 +235,15 @@
   页头行高 + 16 计算、水平内边距统一 `pageInline`、底垫手势区 + 32。
 - 统计页与其骨架屏同补 `pageInline` 水平内边距（原 16 硬编码）。
 
+### 移动端拖拽浮层底面随抬起实色化（2026-09-26）
+
+- **侧栏项目行 proxyDecorator 补实色渐变**：扁平行本身透明，常驻透明会透出
+  页面底色变成灰块——底面随抬起 `elevated` 从透明渐变为实色 surface（与任务
+  列表 manual 档 / 编辑操作页同口径，`Clip.antiAlias` + medium 圆角 + 6 高度
+  阴影不变）。
+- 口径入库：AGENTS.md 新增拖拽浮层统一口径条（scale + 实色底 + 起止触感，
+  `elevated` 取 `AppMotion.standard.transform`）。
+
 ### 移动端底部页签主导航（2026-09-25）
 
 - **底部导航栏落地**（`OrbitBottomNav` 原语 + `HomeShell` 壳式主导航）：今天 / 清单 /
