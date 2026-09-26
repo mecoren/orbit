@@ -60,6 +60,7 @@ Future<RepeatRuleValue?> showRepeatEditSheet(
   final colors = AppColors.ofContext(context);
   return showModalBottomSheet<RepeatRuleValue>(
     context: context,
+    useRootNavigator: true,
     isScrollControlled: true,
     backgroundColor: colors.popup,
     shape: bottomSheetTopShape,

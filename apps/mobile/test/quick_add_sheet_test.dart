@@ -624,4 +624,59 @@ void main() {
       expect(hidden.contains(QuickActionId.label), isTrue);
     });
   });
+
+  group('抽屉盖住导航壳', () {
+    // 回归：分支 Navigator 内弹出的抽屉曾被壳 FAB 盖住（FAB 与底栏是
+    // Scaffold 兄弟层，抽屉困在 body 的分支路由里）。全项目抽屉走根路由，
+    // 点位落在抽屉/遮罩上不再点透到 FAB，面板功能不受影响。
+    testWidgets('快加面板走根路由：壳 FAB 点不透，面板可正常关闭', (tester) async {
+      var fabTaps = 0;
+      await tester.pumpWidget(_wrap(
+        Scaffold(
+          floatingActionButton: FloatingActionButton(
+            key: const ValueKey('shell-fab'),
+            onPressed: () => fabTaps++,
+            child: const Icon(Icons.add),
+          ),
+          bottomNavigationBar: BottomNavigationBar(
+            items: const [
+              BottomNavigationBarItem(icon: Icon(Icons.home), label: 'a'),
+              BottomNavigationBarItem(icon: Icon(Icons.list), label: 'b'),
+            ],
+          ),
+          // 壳 body 内再挂分支 Navigator（与 HomeShell 页签栈同构）
+          body: Navigator(
+            onGenerateRoute: (_) => MaterialPageRoute(
+              builder: (context) => Center(
+                child: TextButton(
+                  onPressed: () => showQuickAddSheet(context),
+                  child: const Text('开面板'),
+                ),
+              ),
+            ),
+          ),
+        ),
+        MockOrbitBridge(),
+      ));
+      await _settle(tester);
+
+      await tester.tap(find.text('开面板'));
+      await tester.pumpAndSettle();
+      expect(find.text('准备做什么？'), findsOneWidget);
+
+      // FAB 点位落在抽屉/遮罩上：点不透到底栏壳（点中遮罩会正常关闭面板）
+      await tester.tapAt(
+        tester.getCenter(find.byKey(const ValueKey('shell-fab'))),
+      );
+      await tester.pumpAndSettle();
+      expect(fabTaps, 0);
+
+      // 面板仍可经遮罩正常收起
+      if (find.text('准备做什么？').evaluate().isNotEmpty) {
+        await tester.tapAt(const Offset(400, 100));
+        await tester.pumpAndSettle();
+      }
+      expect(find.text('准备做什么？'), findsNothing);
+    });
+  });
 }

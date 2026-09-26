@@ -13,6 +13,10 @@
 /// `showModalBottomSheet` 且圆角正常，故共享弹层族与其统一到同一承载 +
 /// 同一形状常量 [bottomSheetTopShape]（形状与动效的唯一来源仍是本文件）。
 ///
+/// 全项目底部抽屉一律 `useRootNavigator: true`：页签分支各持 Navigator，
+/// 默认落在分支路由时抽屉会被壳的悬浮钮/底栏盖住（抽屉在 Scaffold body 内，
+/// FAB 与底栏是 Scaffold 兄弟层）；走根路由抽屉才盖住底栏全屏可点。
+///
 /// 与 `AlertDialog` 的分工终态（2026-09-24）：`AlertDialog` 已清零——确认类
 /// 走底部抽屉，普通文本输入（新建项目/标签/模板/筛选器）走输入型底部抽屉
 /// （`OrbitSheetScaffold` + 固定尾栏），密码类输入走 `orbit_password_sheet.dart`
@@ -64,6 +68,7 @@ Future<bool> showConfirmBottomSheet(
   // 取值语义：确认 -> true；取消 / 下滑关闭 / 点遮罩 -> false（结果缺失按 false 处理）
   final result = await showModalBottomSheet<bool>(
     context: context,
+    useRootNavigator: true,
     isScrollControlled: true,
     backgroundColor: AppColors.ofContext(context).popup,
     shape: bottomSheetTopShape,
@@ -82,13 +87,22 @@ Future<bool> showConfirmBottomSheet(
   return result ?? false;
 }
 
-/// 单选弹层数据项（12×12 色点 + 文案）
+/// 单选弹层数据项（行首图标 / 12×12 色点 + 文案，二选一）
+/// - [icon] + [iconColor]：行首语义图标（快捷视图切换等与清单页图标同源的场景）；
+/// - [colorDot]：12px 语义色点（项目 / 优先级等颜色即语义的场景）。
 class SelectItem<T> {
   final T value;
   final String label;
   final Color? colorDot;
+  final IconData? icon;
+  final Color? iconColor;
 
-  const SelectItem({required this.value, required this.label, this.colorDot});
+  const SelectItem(
+      {required this.value,
+      required this.label,
+      this.colorDot,
+      this.icon,
+      this.iconColor});
 }
 
 /// 详情/表单底部单选弹层：行 = 可选色点 + 文案，当前值尾随对勾；
@@ -102,6 +116,7 @@ Future<void> showSelectBottomSheet<T>(
 }) async {
   await showModalBottomSheet<void>(
     context: context,
+    useRootNavigator: true,
     isScrollControlled: true,
     backgroundColor: AppColors.ofContext(context).popup,
     shape: bottomSheetTopShape,
@@ -141,6 +156,7 @@ Future<void> showMoreActionsSheet(
 }) async {
   await showModalBottomSheet<void>(
     context: context,
+    useRootNavigator: true,
     isScrollControlled: true,
     backgroundColor: AppColors.ofContext(context).popup,
     shape: bottomSheetTopShape,
@@ -258,7 +274,14 @@ class _SelectSheet<T> extends StatelessWidget {
                 ),
                 child: Row(
                   children: [
-                    if (item.colorDot != null) ...[
+                    if (item.icon != null) ...[
+                      Icon(
+                        item.icon!,
+                        size: AppDimens.iconSizeMd,
+                        color: item.iconColor ?? colors.bodyText,
+                      ),
+                      const SizedBox(width: AppDimens.space12),
+                    ] else if (item.colorDot != null) ...[
                       Container(
                         width: AppDimens.colorDotSize,
                         height: AppDimens.colorDotSize,

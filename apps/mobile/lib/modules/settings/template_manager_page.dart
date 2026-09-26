@@ -128,6 +128,7 @@ class _TemplateManagerPageState extends ConsumerState<TemplateManagerPage> {
 
     return showModalBottomSheet<({String name, Map<String, Object?> payload})>(
         context: context,
+        useRootNavigator: true,
         isScrollControlled: true,
         backgroundColor: colors.popup,
         shape: bottomSheetTopShape,

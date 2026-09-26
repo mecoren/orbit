@@ -38,6 +38,7 @@ Future<List<String>?> showPasswordSheet(
   final colors = AppColors.ofContext(context);
   return showModalBottomSheet<List<String>>(
     context: context,
+    useRootNavigator: true,
     isScrollControlled: true,
     backgroundColor: colors.popup,
     shape: bottomSheetTopShape,

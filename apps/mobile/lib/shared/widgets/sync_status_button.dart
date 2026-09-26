@@ -113,6 +113,7 @@ class _SyncStatusButtonState extends ConsumerState<SyncStatusButton> {
     final colors = AppColors.ofContext(context);
     await showModalBottomSheet<void>(
       context: context,
+      useRootNavigator: true,
       backgroundColor: colors.popup,
       shape: bottomSheetTopShape,
       builder: (_) => _SyncInfoSheet(

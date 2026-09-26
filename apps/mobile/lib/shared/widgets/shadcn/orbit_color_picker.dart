@@ -22,6 +22,7 @@ Future<Color?> showOrbitColorPickerSheet(
   var picked = initial;
   final result = await showModalBottomSheet<Color>(
     context: context,
+    useRootNavigator: true,
     isScrollControlled: true,
     backgroundColor: AppColors.ofContext(context).popup,
     shape: bottomSheetTopShape,

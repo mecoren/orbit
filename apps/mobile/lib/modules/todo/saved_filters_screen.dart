@@ -86,6 +86,7 @@ class _SavedFiltersScreenState extends ConsumerState<SavedFiltersScreen> {
 
     final saved = await showModalBottomSheet<bool>(
       context: context,
+      useRootNavigator: true,
       isScrollControlled: true,
       backgroundColor: colors.popup,
       shape: bottomSheetTopShape,

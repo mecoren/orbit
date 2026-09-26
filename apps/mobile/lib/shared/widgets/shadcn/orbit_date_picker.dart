@@ -59,6 +59,7 @@ class OrbitDatePicker {
     // 关闭与回值走 Material 路由：清除 / 直接关闭都回 null（picker 语义不变）
     return showModalBottomSheet<DateTime>(
       context: context,
+      useRootNavigator: true,
       isScrollControlled: true,
       backgroundColor: AppColors.ofContext(context).popup,
       shape: bottomSheetTopShape,
@@ -150,6 +151,7 @@ class _DatePickerSheetState extends ConsumerState<_DatePickerSheet> {
   }) async {
     final result = await showModalBottomSheet<int>(
       context: context,
+      useRootNavigator: true,
       isScrollControlled: true,
       backgroundColor: AppColors.ofContext(context).popup,
       shape: bottomSheetTopShape,

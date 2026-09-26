@@ -65,6 +65,7 @@ class _LabelManagerPageState extends ConsumerState<LabelManagerPage> {
     final colors = AppColors.ofContext(context);
     return showModalBottomSheet<String>(
       context: context,
+      useRootNavigator: true,
       backgroundColor: colors.popup,
       shape: bottomSheetTopShape,
       builder: (sheetContext) => SafeArea(
@@ -225,6 +226,7 @@ class _LabelManagerPageState extends ConsumerState<LabelManagerPage> {
     final colors = AppColors.ofContext(context);
     final result = await showModalBottomSheet<(String, String)?>(
       context: context,
+      useRootNavigator: true,
       isScrollControlled: true,
       backgroundColor: colors.popup,
       shape: bottomSheetTopShape,

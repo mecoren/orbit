@@ -602,6 +602,7 @@ class _DescriptionSectionState extends State<_DescriptionSection> {
   void _openEditor(BuildContext context) {
     showModalBottomSheet<void>(
       context: context,
+      useRootNavigator: true,
       isScrollControlled: true,
       backgroundColor: AppColors.ofContext(context).popup,
       shape: bottomSheetTopShape,
@@ -948,6 +949,7 @@ class _LabelsSection extends StatelessWidget {
     final colors = AppColors.ofContext(context);
     showModalBottomSheet<void>(
       context: context,
+      useRootNavigator: true,
       isScrollControlled: true,
       backgroundColor: colors.popup,
       shape: bottomSheetTopShape,
@@ -1445,6 +1447,7 @@ class _RelationsSectionState extends ConsumerState<_RelationsSection> {
     bool searching = false;
     final targetId = await showModalBottomSheet<int>(
       context: context,
+      useRootNavigator: true,
       isScrollControlled: true,
       backgroundColor: AppColors.ofContext(context).popup,
       shape: bottomSheetTopShape,

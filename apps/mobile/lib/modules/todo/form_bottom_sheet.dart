@@ -77,6 +77,7 @@ Future<void> showTodoFormSheet(
 }) {
   return showModalBottomSheet<void>(
     context: context,
+    useRootNavigator: true,
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
     sheetAnimationStyle: bottomSheetMotion,
@@ -106,6 +107,7 @@ Future<void> showTemplateCreateFlow(
     final colors = AppColors.ofContext(context);
     final tpl = await showModalBottomSheet<TodoTemplate>(
       context: context,
+      useRootNavigator: true,
       backgroundColor: colors.popup,
       shape: bottomSheetTopShape,
       sheetAnimationStyle: bottomSheetMotion,

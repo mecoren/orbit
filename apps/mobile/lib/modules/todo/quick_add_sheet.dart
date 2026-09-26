@@ -80,6 +80,7 @@ Future<void> showQuickAddSheet(
 }) {
   return showModalBottomSheet<void>(
     context: context,
+    useRootNavigator: true,
     isScrollControlled: true,
     backgroundColor: AppColors.ofContext(context).popup,
     shape: bottomSheetTopShape,
