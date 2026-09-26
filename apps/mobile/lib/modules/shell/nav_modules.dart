@@ -173,6 +173,40 @@ class NavModulesController extends Notifier<NavModulesState> {
     await _persist();
   }
 
+  /// 跨段搬移（编辑操作页同款落位语义）：把 [module] 按 [destSlot] 插入目标段
+  /// （越界钳制）；同段调用退化为区内重排；最后一个启用模块不可停用。
+  ///
+  /// 页面横滑换段（落尾）走 [toggle]，拖拽跨卡（悬停槽位）走这里——槽位来自
+  /// 手指位置映射，提交即落盘，底栏/面板经 provider 实时跟随重建。
+  Future<void> move({
+    required OrbitNavModule module,
+    required bool toEnabled,
+    required int destSlot,
+  }) async {
+    final current = state;
+    final fromEnabled = current.enabled.contains(module);
+    if (!fromEnabled && !current.disabled.contains(module)) return;
+    if (fromEnabled == toEnabled) {
+      final list = [...(toEnabled ? current.enabled : current.disabled)];
+      final oldIndex = list.indexOf(module);
+      final slot = destSlot.clamp(0, list.length - 1);
+      if (oldIndex == slot) return;
+      list.insert(slot, list.removeAt(oldIndex));
+      state = toEnabled
+          ? NavModulesState(enabled: list, disabled: current.disabled)
+          : NavModulesState(enabled: current.enabled, disabled: list);
+      await _persist();
+      return;
+    }
+    if (fromEnabled && current.enabled.length <= 1) return;
+    final enabled = [...current.enabled]..remove(module);
+    final disabled = [...current.disabled]..remove(module);
+    final dest = toEnabled ? enabled : disabled;
+    dest.insert(destSlot.clamp(0, dest.length), module);
+    state = NavModulesState(enabled: enabled, disabled: disabled);
+    await _persist();
+  }
+
   Future<void> _persist() =>
       LocalPrefs.setString(navModulesPrefsKey, jsonEncode(state.toJson()));
 }

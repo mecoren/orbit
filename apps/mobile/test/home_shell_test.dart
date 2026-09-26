@@ -167,8 +167,9 @@ void main() {
       );
     }
 
-    // 默认启用序第 4 枚减号停用四象限 → 预览由统计顺延顶替
-    await tester.tap(find.byIcon(OrbitIcons.remove).at(3));
+    // 默认启用序第 4 枚停用钮停用四象限 → 预览由统计顺延顶替
+    // （行内启停走 tooltip 按钮：横滑底衬里也有加减图标，按图标定位会漂移）
+    await tester.tap(find.byTooltip('停用').at(3));
     await tester.pumpAndSettle();
     expect(
       find.descendant(
@@ -191,10 +192,16 @@ void main() {
     await tester.tap(find.text('编辑'));
     await tester.pumpAndSettle();
 
-    // 默认启用序 [今天, 清单, 日历, 四象限]：第 4 枚减号停用四象限
-    await tester.tap(find.byIcon(OrbitIcons.remove).at(3));
+    // 默认启用序 [今天, 清单, 日历, 四象限]：第 4 枚停用钮停用四象限
+    await tester.tap(find.byTooltip('停用').at(3));
     await tester.pumpAndSettle();
-    expect(find.text('四象限'), findsOneWidget); // 移入未启用段
+    // 移入未启用段（段在首屏下，懒构建，需滚到可见再断言）
+    await tester.scrollUntilVisible(
+      find.text('四象限'),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(find.text('四象限'), findsOneWidget);
 
     await tester.tap(find.byTooltip('返回'));
     await tester.pumpAndSettle();
@@ -204,8 +211,7 @@ void main() {
     expect(find.text('今天'), findsOneWidget); // 仅页头（底栏纯图标）
   });
 
-  testWidgets('「今天」页签角标：有今天截止未完成任务时显示计数', (tester) async {
-    final bridge = _seededBridge();
+  testWidgets('「今天」页签角标：有今天截止未完成任务时显示计数', (tester) async {    final bridge = _seededBridge();
     // 造一条今天截止的未完成任务（截止 = 当前时刻，落在今天日界内）
     final now = bridge.store.now();
     bridge.store.tasks[9001] = {

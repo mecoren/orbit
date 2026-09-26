@@ -164,6 +164,84 @@ void main() {
     });
   });
 
+  group('跨段移动', () {
+    test('停用按槽位插入停用区指定位置', () async {
+      final container = makeContainer();
+      final controller = container.read(navModulesProvider.notifier);
+      // 把启用序第 5 位「统计」停用到停用区首位（默认停用区空）
+      await controller.move(
+          module: OrbitNavModule.stats, toEnabled: false, destSlot: 0);
+      final state = stateOf(container);
+      expect(state.enabled.contains(OrbitNavModule.stats), false);
+      expect(state.disabled, [OrbitNavModule.stats]);
+      // 启用序前 4（底栏）不受影响
+      expect(state.bottomTabs, [
+        OrbitNavModule.today,
+        OrbitNavModule.sidebar,
+        OrbitNavModule.calendar,
+        OrbitNavModule.matrix,
+      ]);
+    });
+
+    test('启用按槽位插入启用区指定位置', () async {
+      final container = makeContainer();
+      final controller = container.read(navModulesProvider.notifier);
+      await controller.toggle(OrbitNavModule.settings);
+      await controller.toggle(OrbitNavModule.trash);
+      // 把「回收站」启用到启用区首位
+      await controller.move(
+          module: OrbitNavModule.trash, toEnabled: true, destSlot: 0);
+      final state = stateOf(container);
+      expect(state.enabled.first, OrbitNavModule.trash);
+      expect(state.disabled, [OrbitNavModule.settings]);
+    });
+
+    test('槽位越界钳制到尾部', () async {
+      final container = makeContainer();
+      final controller = container.read(navModulesProvider.notifier);
+      await controller.move(
+          module: OrbitNavModule.today, toEnabled: false, destSlot: 99);
+      final state = stateOf(container);
+      expect(state.disabled, [OrbitNavModule.today]);
+      expect(state.enabled.first, OrbitNavModule.sidebar);
+    });
+
+    test('最后一个启用模块不可停用', () async {
+      final container = makeContainer();
+      final controller = container.read(navModulesProvider.notifier);
+      for (final m in OrbitNavModule.values) {
+        if (m == OrbitNavModule.today) continue;
+        await controller.toggle(m);
+      }
+      await controller.move(
+          module: OrbitNavModule.today, toEnabled: false, destSlot: 0);
+      expect(stateOf(container).enabled, [OrbitNavModule.today]);
+    });
+
+    test('同段调用退化为区内重排', () async {
+      final container = makeContainer();
+      final controller = container.read(navModulesProvider.notifier);
+      await controller.move(
+          module: OrbitNavModule.today, toEnabled: true, destSlot: 2);
+      expect(stateOf(container).enabled.take(4), [
+        OrbitNavModule.sidebar,
+        OrbitNavModule.calendar,
+        OrbitNavModule.today,
+        OrbitNavModule.matrix,
+      ]);
+    });
+
+    test('跨段移动写后落盘', () async {
+      final container = makeContainer();
+      await container.read(navModulesProvider.notifier).move(
+          module: OrbitNavModule.trash, toEnabled: false, destSlot: 0);
+      final persisted = LocalPrefs.getString(navModulesPrefsKey);
+      expect(persisted, isNotNull);
+      final container2 = makeContainer();
+      expect(stateOf(container2).disabled, [OrbitNavModule.trash]);
+    });
+  });
+
   group('不变量（枚举序 = 路由分支序的契约）', () {
     test('branchIndex 恒等于枚举序；路径唯一且非空；文案唯一', () {
       final paths = <String>{};
