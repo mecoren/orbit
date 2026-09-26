@@ -54,14 +54,14 @@ import 'providers/todo_providers.dart';
 
 /// 快捷操作档 → 图标（面板工具栏与设置页预览/列表共用同一映射）
 IconData quickActionIcon(QuickActionId id) => switch (id) {
-      QuickActionId.due => OrbitIcons.calendar,
-      QuickActionId.priority => OrbitIcons.flag,
-      QuickActionId.label => OrbitIcons.tag,
-      QuickActionId.project => OrbitIcons.list,
-      QuickActionId.image => OrbitIcons.image,
-      QuickActionId.template => OrbitIcons.template,
-      QuickActionId.fullscreen => OrbitIcons.fullscreen,
-    };
+  QuickActionId.due => OrbitIcons.calendar,
+  QuickActionId.priority => OrbitIcons.flag,
+  QuickActionId.label => OrbitIcons.tag,
+  QuickActionId.project => OrbitIcons.list,
+  QuickActionId.image => OrbitIcons.image,
+  QuickActionId.template => OrbitIcons.template,
+  QuickActionId.fullscreen => OrbitIcons.fullscreen,
+};
 
 /// 打开快速添加面板（提交成功后自动关闭）
 ///
@@ -118,7 +118,11 @@ class _PendingImage {
 }
 
 class _QuickAddSheet extends ConsumerStatefulWidget {
-  const _QuickAddSheet({this.defaultProjectId, this.quickView, this.initialDueDate});
+  const _QuickAddSheet({
+    this.defaultProjectId,
+    this.quickView,
+    this.initialDueDate,
+  });
 
   /// 新建任务默认归属项目（null = 未分组）
   final int? defaultProjectId;
@@ -168,7 +172,8 @@ class _QuickAddSheetState extends ConsumerState<_QuickAddSheet> {
     setState(() => _saving = true);
     try {
       final bridge = ref.read(orbitBridgeProvider);
-      final projects = ref.read(todoProjectsProvider).value ?? const <TodoProject>[];
+      final projects =
+          ref.read(todoProjectsProvider).value ?? const <TodoProject>[];
       final labels = ref.read(todoLabelsProvider).value ?? const <TodoLabel>[];
       final parsed = parseQuickInput(
         raw,
@@ -188,22 +193,25 @@ class _QuickAddSheetState extends ConsumerState<_QuickAddSheet> {
         return;
       }
       final viewDefaults = quickViewCreateDefaults(widget.quickView);
-      final inDueView = widget.quickView == QuickViewKey.today ||
+      final inDueView =
+          widget.quickView == QuickViewKey.today ||
           widget.quickView == QuickViewKey.week;
       final due = parsed.dueDate != null
           ? dateToMidnightMs(parsed.dueDate!)
           : (_dueDate ?? viewDefaults.dueMs);
-      final created = await bridge.todoTaskCreate(TodoTaskCreateInput(
-        title: title,
-        projectId: parsed.projectId ?? _projectId,
-        priority: parsed.priority > 0 ? parsed.priority : _priority,
-        status: 'pending',
-        dueDate: inDueView && due != null ? atViewDueHour(due) : due,
-        // 开始日期默认今天（与移动端表单同口径：新建任务恒有开始日期）
-        startDate: dateToMidnightMs(DateTime.now()),
-        myDayDate: viewDefaults.myDayMs,
-        isFavorite: viewDefaults.favorite,
-      ));
+      final created = await bridge.todoTaskCreate(
+        TodoTaskCreateInput(
+          title: title,
+          projectId: parsed.projectId ?? _projectId,
+          priority: parsed.priority > 0 ? parsed.priority : _priority,
+          status: 'pending',
+          dueDate: inDueView && due != null ? atViewDueHour(due) : due,
+          // 开始日期默认今天（与移动端表单同口径：新建任务恒有开始日期）
+          startDate: dateToMidnightMs(DateTime.now()),
+          myDayDate: viewDefaults.myDayMs,
+          isFavorite: viewDefaults.favorite,
+        ),
+      );
       // 标签：NLP 命中 ∪ 手动选择（去重；单条失败不阻断任务本身）
       final labelIds = <int>{...parsed.labelIds, ..._labels.map((l) => l.id)};
       for (final labelId in labelIds) {
@@ -389,9 +397,12 @@ class _QuickAddSheetState extends ConsumerState<_QuickAddSheet> {
                   : picked.add(label.id);
             });
             if (mounted) {
-              setState(() => _labels = [
-                    for (final l in all) if (picked.contains(l.id)) l,
-                  ]);
+              setState(
+                () => _labels = [
+                  for (final l in all)
+                    if (picked.contains(l.id)) l,
+                ],
+              );
             }
           }
 
@@ -407,7 +418,8 @@ class _QuickAddSheetState extends ConsumerState<_QuickAddSheet> {
                   key: const ValueKey('quick-add-label-card-list'),
                   shrinkWrap: true,
                   padding: const EdgeInsets.symmetric(
-                      vertical: AppDimens.space8),
+                    vertical: AppDimens.space8,
+                  ),
                   itemCount: all.length,
                   itemBuilder: (context, index) {
                     final label = all[index];
@@ -446,7 +458,9 @@ class _QuickAddSheetState extends ConsumerState<_QuickAddSheet> {
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                   style: TextStyle(
-                                      fontSize: 15, color: colors.bodyText),
+                                    fontSize: 15,
+                                    color: colors.bodyText,
+                                  ),
                                 ),
                               ),
                             ],
@@ -466,7 +480,8 @@ class _QuickAddSheetState extends ConsumerState<_QuickAddSheet> {
 
   /// 项目档：锚在触发钮上方的单选卡片（未分组 + 项目列表带项目色，点选即回填）
   Future<void> _pickProject([Rect? anchor]) async {
-    final projects = ref.read(todoProjectsProvider).value ?? const <TodoProject>[];
+    final projects =
+        ref.read(todoProjectsProvider).value ?? const <TodoProject>[];
     await showOrbitDropdownPanel(
       context,
       anchor: anchor,
@@ -595,8 +610,9 @@ class _QuickAddSheetState extends ConsumerState<_QuickAddSheet> {
   /// 固定「设置」入口分两组；点选后菜单自关，回调内再处理面板
   Future<void> _openMoreMenu(List<QuickActionId> hidden) async {
     final box = _moreKey.currentContext?.findRenderObject() as RenderBox?;
-    final anchor =
-        box == null || !box.hasSize ? null : box.localToGlobal(Offset.zero) & box.size;
+    final anchor = box == null || !box.hasSize
+        ? null
+        : box.localToGlobal(Offset.zero) & box.size;
     await showOrbitDropdownPanel(
       context,
       anchor: anchor,
@@ -656,7 +672,10 @@ class _QuickAddSheetState extends ConsumerState<_QuickAddSheet> {
                 counterText: '',
                 border: InputBorder.none,
                 isDense: true,
-                hintStyle: TextStyle(fontSize: 15, color: colors.deactivatedText),
+                hintStyle: TextStyle(
+                  fontSize: 15,
+                  color: colors.deactivatedText,
+                ),
               ),
               onChanged: (_) => setState(() {}),
               onSubmitted: (_) => _submit(),
@@ -675,9 +694,7 @@ class _QuickAddSheetState extends ConsumerState<_QuickAddSheet> {
                   child: SingleChildScrollView(
                     scrollDirection: Axis.horizontal,
                     child: Row(
-                      children: [
-                        for (final id in enabled) _toolbarButton(id),
-                      ],
+                      children: [for (final id in enabled) _toolbarButton(id)],
                     ),
                   ),
                 ),
@@ -779,10 +796,7 @@ class _QuickAddSheetState extends ConsumerState<_QuickAddSheet> {
         if (_projectId == null) return null;
         final projects =
             ref.read(todoProjectsProvider).value ?? const <TodoProject>[];
-        return projects
-            .where((p) => p.id == _projectId)
-            .firstOrNull
-            ?.title;
+        return projects.where((p) => p.id == _projectId).firstOrNull?.title;
       case QuickActionId.image:
         return _images.isEmpty ? null : '${_images.length}张';
       case QuickActionId.template || QuickActionId.fullscreen:
