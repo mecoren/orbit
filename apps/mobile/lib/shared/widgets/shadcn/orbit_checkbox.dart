@@ -45,7 +45,7 @@ class OrbitCheckbox extends StatelessWidget {
   /// 标准档而视觉直径不变
   static const double minHitExtent = 44;
 
-  /// 外框边长（列表行 24 / 详情标题 28 / 子任务 22；可点热区不小于 44）
+  /// 外框边长（列表行 20 / 详情标题 28 / 子任务 22；可点热区不小于 44）
   final double size;
 
   void _handleChanged() {

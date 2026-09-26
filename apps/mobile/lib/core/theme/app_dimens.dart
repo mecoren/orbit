@@ -74,8 +74,9 @@ class AppDimens {
   /// 启动等待画面品牌图边长（booting 阶段白底居中，与桌面端同源图标）
   static const double splashLogoSize = 96;
 
-  /// 任务行 checkbox 直径
-  static const double taskCheckboxSize = 24;
+  /// 任务行 checkbox 边长（20px 方角，与桌面端任务行 h-5 w-5 同源；
+  /// 2026-09-26 由 24 下调——24 相对 15px 标题偏重）
+  static const double taskCheckboxSize = 20;
 
   /// 详情子任务 checkbox 直径
   static const double subtaskCheckboxSize = 22;

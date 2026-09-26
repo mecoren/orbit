@@ -161,7 +161,7 @@ class KanbanBoard extends StatelessWidget {
                 children: [
                   OrbitCheckbox(
                     checked: task.isDone,
-                    size: AppDimens.subtaskCheckboxSize,
+                    size: AppDimens.taskCheckboxSize,
                     // 优先级由描边环承载（列表行同口径），不再另画色条
                     borderColor: task.priority > 0
                         ? hexToColor(priorityRingHex(task.priority)!)

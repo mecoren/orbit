@@ -133,7 +133,7 @@ class TaskTableView extends StatelessWidget {
           children: [
             OrbitCheckbox(
               checked: task.isDone,
-              size: AppDimens.subtaskCheckboxSize,
+              size: AppDimens.taskCheckboxSize,
               // 优先级由描边环承载（列表行/看板卡同口径），不再另立方点列
               borderColor: task.priority > 0
                   ? hexToColor(priorityRingHex(task.priority)!)

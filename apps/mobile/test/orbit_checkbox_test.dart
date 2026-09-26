@@ -6,6 +6,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:orbit/core/theme/app_colors.dart';
+import 'package:orbit/core/theme/app_dimens.dart';
 import 'package:orbit/core/theme/app_motion.dart';
 import 'package:orbit/shared/widgets/shadcn/orbit_checkbox.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sh;
@@ -60,6 +61,8 @@ SizedBox _square(WidgetTester tester) => tester.widget<SizedBox>(
           )
           .first,
     );
+
+void _noop() {}
 
 void main() {
   testWidgets('未勾选：state=unchecked、方角形态、不触发回调', (tester) async {
@@ -120,6 +123,12 @@ void main() {
     expect(_box(tester).size, 22);
     expect(_square(tester).width, OrbitCheckbox.minHitExtent);
     expect(_square(tester).height, OrbitCheckbox.minHitExtent);
+  });
+
+  test('任务行默认尺寸 20（与桌面端任务行 h-5 w-5 跨端同源）', () {
+    const box = OrbitCheckbox(checked: false, onToggle: _noop);
+    expect(box.size, AppDimens.taskCheckboxSize);
+    expect(box.size, 20);
   });
 
   // 列表行优先级着色入口（2026-09-23）：高/紧急/立即由方环颜色表达，
