@@ -50,8 +50,10 @@ import '../../core/theme/icon_map.dart';
 ///
 /// 入口三参数互斥：projectId > ungrouped > view（task_logic 同款优先级）。
 /// 「今天」页签与页签栈内入栈共用本屏：页签根传 `showBack: false` 并以
-/// `titleOverride` 换页头文案（页头自动带日期副标）；列表消费共享
-/// filterTasks/sortTasks；空态文案按入口映射；Tile 长按弹操作菜单
+/// `titleOverride` 换页头文案（页头自动带日期副标）；页签根的标题是快捷视图
+/// 切换器（点标题开单选抽屉在我的一天/今天/近7天/全部任务/已完成/收藏/
+/// 无日期之间切换，标题与列表同步换成该视图——切到哪就叫哪，会话态不持久化）；
+/// 列表消费共享 filterTasks/sortTasks；空态文案按入口映射；Tile 长按弹操作菜单
 /// （编辑 / 星标切换 / 删除确认）；manual 档长按整行拾起拖动重排
 /// （#37，position midpoint 落库与桌面同口径；原地松手仍是操作菜单）。
 class SubListScreen extends ConsumerStatefulWidget {
@@ -173,6 +175,50 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
 
   /// 批量动作进行中（防重复触发；批量期间串行写库）
   bool _batchBusy = false;
+
+  /// 今天页签的快捷视图覆写（null = 跟随路由 query；页头标题点选切换后落此处）。
+  /// 会话态不持久化——下次进页签回到「今天」本位（与排序档退出即回 manual 同口径）
+  QuickViewKey? _viewOverride;
+
+  /// 生效中的筛选（今天页签切换视图后即覆写值；其余入口恒等于路由 query）
+  TaskFilterInput get _effectiveQuery => _viewOverride == null
+      ? widget.query
+      : TaskFilterInput(quickView: _viewOverride);
+
+  /// 是否今天页签根（快捷视图切换入口只在此出现：页签栈内入栈的今天视图
+  /// 与项目/未分组列表不挂切换器，标题即入口语义不容二义）
+  bool get _isTodayTab =>
+      widget.query.quickView == QuickViewKey.today && !widget.showBack;
+
+  /// 标题点选切换快捷视图：切到哪标题就叫哪（[_viewOverride]），列表、
+  /// 空态、分隔行、Logbook 分组与新建落点同步跟随；切回今天即清覆写
+  void _switchQuickView(QuickViewKey view) {
+    if (!mounted) return;
+    setState(() => _viewOverride = view == QuickViewKey.today ? null : view);
+    // 新建落点跟随当前列表（与 initState 登记同源，退场清空不变）
+    QuickAddContext.set(_effectiveQuery);
+  }
+
+  /// 快捷视图单选抽屉（纯选择类交互走底部抽屉；行首语义图标 + 当前档打勾，
+  /// 图标与清单页快捷行同源 `QuickViewKey.icon` + `colorHex`）
+  Future<void> _showViewSwitchSheet() {
+    final current = _effectiveQuery.quickView ?? QuickViewKey.today;
+    return showSelectBottomSheet<QuickViewKey>(
+      context,
+      title: '快捷视图',
+      current: current,
+      items: [
+        for (final v in QuickViewKey.values)
+          SelectItem(
+            value: v,
+            label: v.label,
+            icon: v.icon,
+            iconColor: hexToColor(v.colorHex),
+          ),
+      ],
+      onSelect: _switchQuickView,
+    );
+  }
 
   @override
   void initState() {
@@ -347,6 +393,7 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
     final colors = AppColors.ofContext(context);
     showModalBottomSheet<void>(
       context: context,
+      useRootNavigator: true,
       isScrollControlled: true,
       backgroundColor: colors.popup,
       shape: bottomSheetTopShape,
@@ -416,7 +463,7 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
   /// 首条未完成任务——与长按菜单「多选」同语义（那里选的是被长按的那行）
   void _enterSelectionFromPanel() {
     final tasks = ref.read(todoTasksProvider).value ?? const <TodoTask>[];
-    final first = sortTasks(filterTasks(tasks, widget.query), _sortKey)
+    final first = sortTasks(filterTasks(tasks, _effectiveQuery), _sortKey)
         .where((t) => !t.isDone)
         .firstOrNull;
     if (first == null) {
@@ -435,6 +482,7 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
     final labels = ref.read(todoLabelsProvider).value ?? const <TodoLabel>[];
     showModalBottomSheet<void>(
       context: context,
+      useRootNavigator: true,
       isScrollControlled: true,
       backgroundColor: colors.popup,
       shape: bottomSheetTopShape,
@@ -674,7 +722,7 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
   bool get _exitApplies =>
       !_selectionMode &&
       _viewMode == TaskViewMode.list &&
-      widget.query.quickView != QuickViewKey.done &&
+      _effectiveQuery.quickView != QuickViewKey.done &&
       _sortKey != TaskSortKey.manual;
 
   /// 标准分支内：切换完成态导致行离场 ⟺ 开了状态筛选（改写 status 即失配），
@@ -1038,7 +1086,7 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
   Future<void> _reorderTasks(int oldIndex, int newIndex) async {
     final tasks =
         ref.read(todoTasksProvider).value ?? const <TodoTask>[];
-    final visible = sortTasks(filterTasks(tasks, widget.query), _sortKey)
+    final visible = sortTasks(filterTasks(tasks, _effectiveQuery), _sortKey)
         .where((t) => !t.isDone)
         .toList();
     final reordered = reorderItems(_manualReorderStream(visible), oldIndex, newIndex);
@@ -1265,7 +1313,8 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
 
     // done 快捷视图 → Logbook 分组态（按完成日倒序，与桌面同口径）；
     // 隐藏开关不参与（完成集入口）。其余视图照旧平铺 + 逾期置顶
-    final isLogbook = widget.query.quickView == QuickViewKey.done;
+    // （今天页签切换到已完成同样进 Logbook：标题与分组同步跟随覆写视图）
+    final isLogbook = _effectiveQuery.quickView == QuickViewKey.done;
 
     // 标签投影（A4 只读聚合）：列表内标签筛选与看板/表格标签色点共用；
     // 投影未就绪时回落空表（标签档不生效、色点不渲染，不阻塞列表）
@@ -1294,12 +1343,12 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
 
     final visible = applyTaskListFilters(
       isLogbook
-          ? filterTasks(tasks, widget.query)
+          ? filterTasks(tasks, _effectiveQuery)
           : sortTasks(
               // 列表档：完成行交给尾部「已完成」折叠卡承接（不再是页头开关
               // 一刀切隐藏）；看板 / 表格没有承接位，维持改版前的隐藏口径——
               // 完成历史混进卡片墙/表格会淹掉这两档的工作面板语义
-              filterTasks(tasks, widget.query,
+              filterTasks(tasks, _effectiveQuery,
                   hideDone: _viewMode != TaskViewMode.list),
               _sortKey),
       _filters,
@@ -1330,22 +1379,25 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
     // Logbook 分组（done 视图）：按完成日倒序，组内完成时刻倒序
     final doneGroups = isLogbook ? groupDoneByDay(visible) : <DoneDayGroup>[];
 
-    // 动态标题：页头覆盖文案（页签根）优先，否则按入口取项目名 / 未分组 / 视图名
-    final title = widget.titleOverride ??
-        switch (widget.query) {
+    // 动态标题：今天页签的视图覆写优先（切到哪就叫哪），其次页头覆盖文案
+    // （页签根），否则按入口取项目名 / 未分组 / 视图名
+    final title = _viewOverride?.label ??
+        widget.titleOverride ??
+        switch (_effectiveQuery) {
           TaskFilterInput(projectId: final id?) =>
             projectById[id]?.title ?? '项目',
           TaskFilterInput(ungrouped: true) => '未分组',
-          _ => widget.query.quickView?.label ?? '任务',
+          _ => _effectiveQuery.quickView?.label ?? '任务',
         };
     // 日期副标只在「今天」页签根出现（页签栈内的今天截止视图不带，与项目
-    // 列表页头同构——有覆盖标题且无返回键即页签根）
+    // 列表页头同构——有覆盖标题且无返回键即页签根；覆写到别的视图即消失）
     final showDateSubtitle =
-        widget.query.quickView == QuickViewKey.today && !widget.showBack;
+        _effectiveQuery.quickView == QuickViewKey.today && !widget.showBack;
     // 筛选生效时给出更贴切的空态文案（否则用户会以为是数据丢了）
     final filteredEmpty = !_filters.isEmpty && tasks.isNotEmpty;
-    final emptyMessage =
-        filteredEmpty ? '没有符合筛选条件的任务' : emptyMessageFor(widget.query);
+    final emptyMessage = filteredEmpty
+        ? '没有符合筛选条件的任务'
+        : emptyMessageFor(_effectiveQuery);
     final colors = AppColors.ofContext(context);
     // 长按拖拽（#37）：仅 manual 档（拖拽顺序档）启用重排；其余档
     // 顺序由排序键决定，拖了也会被覆盖（与桌面 sortable 同口径）。
@@ -1390,7 +1442,7 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
       // 项目视图内行内不再重复项目名（页头已是该项目，行内重述是噪音）；
       // 快捷视图 / 未分组 / 搜索等跨项目语境保留项目名着色段
       final projectTitle =
-          widget.query.projectId != null ? null : project?.title;
+          _effectiveQuery.projectId != null ? null : project?.title;
       // 行内提醒徽标：未来最近一条 / 全过期最早一条（完成实例不警示）
       final reminder = displayReminder(
         remindersByTask[task.id] ?? const <ProjectedReminder>[],
@@ -1501,8 +1553,8 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
                       ? () => _setFilters(TaskListFilters.empty)
                       : () => showQuickAddSheet(
                             context,
-                            defaultProjectId: widget.query.projectId,
-                            quickView: widget.query.quickView,
+                            defaultProjectId: _effectiveQuery.projectId,
+                            quickView: _effectiveQuery.quickView,
                           ),
                 ),
             )
@@ -1518,7 +1570,7 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
                 // 按状态分组时列头不代表项目，卡片补一行项目名
                 //（项目视图内页头已表达，行内不再重复）
                 projectTitleOf: _kanbanGroupBy == KanbanGroupBy.status &&
-                        widget.query.projectId == null
+                        _effectiveQuery.projectId == null
                     ? (t) => t.projectId == null
                         ? null
                         : projectById[t.projectId]?.title
@@ -1763,16 +1815,47 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
                         Row(
                           children: [
                             Flexible(
-                              child: Text(
-                                title,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.w600,
-                                  color: colors.titleText,
-                                ),
-                              ),
+                              child: _isTodayTab && !_selectionMode
+                                  // 今天页签根：标题即快捷视图切换器（点标题开单选抽屉，
+                                  // 切到哪标题就叫哪；尾随下箭头明示可点）
+                                  ? InkWell(
+                                      borderRadius: AppShapes.small,
+                                      onTap: _showViewSwitchSheet,
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Flexible(
+                                            child: Text(
+                                              title,
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: TextStyle(
+                                                fontSize: 18,
+                                                fontWeight: FontWeight.w600,
+                                                color: colors.titleText,
+                                              ),
+                                            ),
+                                          ),
+                                          const SizedBox(
+                                              width: AppDimens.space4),
+                                          Icon(
+                                            OrbitIcons.expandMore,
+                                            size: AppDimens.iconSizeSm,
+                                            color: colors.secondaryText,
+                                          ),
+                                        ],
+                                      ),
+                                    )
+                                  : Text(
+                                      title,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.w600,
+                                        color: colors.titleText,
+                                      ),
+                                    ),
                             ),
                             if (undone.isNotEmpty) ...[
                               const SizedBox(width: AppDimens.space6),
@@ -2013,7 +2096,8 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
 
   /// 「其余任务」分隔行的语境文案：today/week 视图的分隔线以下是**当日/近 7 天**
   /// 到期任务（逾期段在其上），按视图命名；项目等其余入口维持「其余任务」
-  String get _restDividerLabel => switch (widget.query.quickView) {
+  /// （今天页签覆写视图后同步跟随覆写值）
+  String get _restDividerLabel => switch (_effectiveQuery.quickView) {
         QuickViewKey.today => '今天',
         QuickViewKey.week => '近7天',
         _ => '其余任务',

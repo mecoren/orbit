@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:orbit/core/theme/app_colors.dart';
+import 'package:orbit/core/theme/app_dimens.dart';
 import 'package:orbit/shared/widgets/shadcn/orbit_sheets.dart';
 import 'support/orbit_test_app.dart';
 
@@ -71,6 +72,32 @@ void main() {
     expect(sheet.shape, bottomSheetTopShape, reason: '顶部圆角唯一来源');
     expect(sheet.backgroundColor, AppColors.light.popup, reason: '弹层表面色');
     expect(find.text('视图模式'), findsOneWidget);
+  });
+
+  testWidgets('单选弹层：icon 项渲染语义图标（快捷视图切换口径）', (tester) async {
+    final ctx = await pumpHost(tester);
+    const iconColor = Color(0xFFEF4444);
+    showSelectBottomSheet<String>(
+      ctx,
+      title: '快捷视图',
+      items: const [
+        SelectItem(
+          value: 'today',
+          label: '今天',
+          icon: Icons.calendar_today,
+          iconColor: iconColor,
+        ),
+      ],
+      current: 'today',
+      onSelect: (_) {},
+    );
+    await tester.pumpAndSettle();
+
+    // 行首是语义图标而非色点：图标按传入色染色，尺寸与清单页快捷行同档
+    final icon = tester.widget<Icon>(find.byIcon(Icons.calendar_today));
+    expect(icon.color, iconColor);
+    expect(icon.size, AppDimens.iconSizeMd);
+    expect(find.text('今天'), findsOneWidget);
   });
 
   testWidgets('确认弹层：底部按钮标签水平居中（贴左即 TextAlign.start 回归）',
