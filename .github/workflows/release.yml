@@ -200,7 +200,7 @@ jobs:
             - **Windows**：SmartScreen 可能提示「未知发布者」——更多信息 → 仍要运行。
             - **macOS**：Gatekeeper 提示无法验证开发者——右键打开，或
               `xattr -cr /Applications/Orbit.app` 后再启动。
-            - **Android**：`app-release.apk` 直接覆盖安装（同包名
+            - **Android**：下载 `Orbit_<版本>.apk` 直接覆盖安装（同包名
               `cn.wait.orbit`）；启用「未知来源」安装即可。
 
             ## 应用内更新
@@ -242,16 +242,25 @@ jobs:
         # 公共 runner 无该文件 → debug 签名（可安装，不可上架）
         run: flutter build apk --release
 
+      - name: 按版本号重命名 APK
+        # 与桌面产物 Orbit_<ver>_* 同款命名；版本真值在 apps/desktop/package.json
+        # （tag 与该版本已在 audit job 强校验一致，无需再比对）
+        run: |
+          VER=$(jq -r .version ../../apps/desktop/package.json)
+          mv build/app/outputs/flutter-apk/app-release.apk \
+            "build/app/outputs/flutter-apk/Orbit_${VER}.apk"
+
       - name: 上传 APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: orbit-apk
-          path: apps/mobile/build/app/outputs/flutter-apk/app-release.apk
+          path: apps/mobile/build/app/outputs/flutter-apk/Orbit_*.apk
           if-no-files-found: error
           retention-days: 7
 
   # ────────────────────────────────────────────────────────────────────────
-  # 应用内更新清单 latest.json：单点生成，读各平台已上传的 .sig 内容合成。
+  # 应用内更新清单 latest.json：单点生成，读各平台已上传的 .sig 内容合成，
+  # 清单发布完成后统一清理 *.sig 资产（签名已内联，下载页不露中间文件）。
   # 资产名不做任何改名（与 tauri-action 默认产物名逐字节一致），改名会让
   # manifest 的 URL 与 Release 资产错位 → 更新检查 404。
   # 平台键写法依据 tauri-plugin-updater 的查找顺序：
@@ -301,8 +310,19 @@ jobs:
 
           declare -A ASSET_ID
           while IFS=$'\t' read -r aid aname; do ASSET_ID["$aname"]="$aid"; done < <(
-            gh api "${API}/releases/${RELEASE_ID}/assets" --paginate | jq -r '.[] | "\(.id)\t\(.name)"'
+            gh api "${API}/releases/assets/${RELEASE_ID}/assets" --paginate | jq -r '.[] | "\(.id)\t\(.name)"'
           )
+
+          # 幂等重跑回落源：上一轮发布已在收尾清理 *.sig 资产时，改从已发布的
+          # latest.json 取签名（同 tag 同产物，签名内容不变），保证重跑仍能
+          # 合成完整清单而非因缺 .sig 全部跳过。
+          EXISTING_SIGS='{}'
+          LATEST_ID="${ASSET_ID["latest.json"]:-}"
+          if [ -n "${LATEST_ID}" ]; then
+            EXISTING_SIGS=$(gh api "${API}/releases/assets/${LATEST_ID}" \
+              -H "Accept: application/octet-stream" 2>/dev/null \
+              | jq -c '.platforms // {}' 2>/dev/null || echo '{}')
+          fi
 
           PLATFORMS='{}'
           while IFS= read -r entry; do
@@ -311,14 +331,19 @@ jobs:
             key="${entry%%|*}"
             asset="${entry#*|}"
             sig_id="${ASSET_ID["${asset}.sig"]:-}"
-            if [ -z "$sig_id" ]; then
-              echo "::warning::缺少签名资产 ${asset}.sig，跳过平台键 ${key}"
-              continue
+            if [ -n "$sig_id" ]; then
+              sig=$(gh api "${API}/releases/assets/${sig_id}" -H "Accept: application/octet-stream" | tr -d '[:space:]')
+              echo "平台键 ${key} → ${asset}（签名取自 .sig 资产）"
+            else
+              sig=$(jq -r --arg k "$key" '.[$k].signature // empty' <<<"$EXISTING_SIGS" | tr -d '[:space:]')
+              if [ -z "$sig" ]; then
+                echo "::warning::缺少签名资产 ${asset}.sig 且已发布 latest.json 无平台键 ${key}，跳过"
+                continue
+              fi
+              echo "平台键 ${key} → ${asset}（.sig 已清理，签名回落 latest.json）"
             fi
-            sig=$(gh api "${API}/releases/assets/${sig_id}" -H "Accept: application/octet-stream" | tr -d '[:space:]')
             PLATFORMS=$(jq -n --argjson p "$PLATFORMS" --arg k "$key" --arg s "$sig" --arg u "${BASE}/${asset}" \
               '$p + {($k): {signature: $s, url: $u}}')
-            echo "平台键 ${key} → ${asset}"
           done <<< "$ENTRIES"
 
           COUNT=$(jq 'length' <<< "$PLATFORMS")
@@ -366,6 +391,21 @@ jobs:
             fi
           fi
 
+          # 收尾清理 *.sig 资产：签名已内联进 latest.json，updater 链路只读清单
+          # 不读 .sig 资产，公开下载页不再露出中间签名文件。放最后一步（失败仅
+          # 告警不回滚清单）；SHA256SUMS 由后置 publish-extras 生成，天然不含 .sig。
+          for aname in "${!ASSET_ID[@]}"; do
+            case "$aname" in
+              *.sig)
+                if gh api -X DELETE "${API}/releases/assets/${ASSET_ID[$aname]}" >/dev/null; then
+                  echo "已清理签名资产 ${aname}"
+                else
+                  echo "::warning::清理 ${aname} 失败（不影响发布，可手工删除）"
+                fi
+                ;;
+            esac
+          done
+
   # ────────────────────────────────────────────────────────────────────────
   # 附加资产：Android APK + SHA256SUMS（覆盖含 APK 在内全部平台产物）。
   # SHA256SUMS 在最后一步生成，故 sums 里包含 latest.json 与实际发布的 APK。
@@ -395,7 +435,8 @@ jobs:
           set -euo pipefail
           TAG="${GITHUB_REF_NAME}"
 
-          gh release upload "$TAG" extras/app-release.apk --clobber
+          # APK 已在 android job 按版本重命名，artifact 内即最终资产名
+          gh release upload "$TAG" extras/Orbit_*.apk --clobber
 
           mkdir -p dist
           gh release download "$TAG" --dir dist --clobber
