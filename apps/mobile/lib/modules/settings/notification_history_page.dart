@@ -7,9 +7,11 @@ import '../../core/theme/app_dimens.dart';
 import '../../data/api/dto.dart';
 import '../../data/providers/bridge_provider.dart';
 import '../../services/local_prefs.dart';
+import '../../shared/widgets/shadcn/orbit_card.dart';
 import '../../shared/widgets/shadcn/orbit_confirm_sheet.dart';
 import '../../shared/widgets/shadcn/orbit_empty_state.dart';
 import '../../shared/widgets/shadcn/orbit_page_header.dart';
+import '../../shared/widgets/shadcn/orbit_section_card.dart';
 import '../../shared/widgets/shadcn/orbit_select_sheet.dart';
 import '../../shared/widgets/shadcn/orbit_toast.dart';
 import '../../core/theme/icon_map.dart';
@@ -132,40 +134,51 @@ class _NotificationHistoryPageState
         children: [
           ListView(
             controller: _scrollController,
-            padding: const EdgeInsets.fromLTRB(
-              AppDimens.space16,
-              96,
-              AppDimens.space16,
-              AppDimens.space24,
+            padding: EdgeInsets.only(
+              top: MediaQuery.of(context).padding.top +
+                  OrbitPageHeader.rowHeight +
+                  AppDimens.space16,
+              left: AppDimens.pageInline,
+              right: AppDimens.pageInline,
+              bottom: AppDimens.gestureInsetFallback + AppDimens.space32,
             ),
             children: [
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                title: const Text('到期提醒'),
-                subtitle: const Text('关闭后仅记历史，不弹窗'),
-                value: _reminderOn,
-                onChanged: _toggleReminder,
+              SectionCard(
+                title: '提醒设置',
+                child: _switchRow(
+                  colors,
+                  title: '到期提醒',
+                  subtitle: '关闭后仅记历史，不弹窗',
+                  value: _reminderOn,
+                  onChanged: _toggleReminder,
+                ),
               ),
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: _pickKind,
-                      icon: const Icon(OrbitIcons.filter, size: 18),
-                      label: Text('类型：${kindLabel(_kind)}'),
+              const SizedBox(height: AppDimens.cardGap),
+              SectionCard(
+                title: '历史记录',
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: _pickKind,
+                            icon: const Icon(OrbitIcons.filter, size: 18),
+                            label: Text('类型：${kindLabel(_kind)}'),
+                          ),
+                        ),
+                        const SizedBox(width: AppDimens.space8),
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: _clear,
+                            icon: const Icon(OrbitIcons.delete, size: 18),
+                            label: const Text('清空'),
+                          ),
+                        ),
+                      ],
                     ),
-                  ),
-                  const SizedBox(width: AppDimens.space8),
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: _clear,
-                      icon: const Icon(OrbitIcons.delete, size: 18),
-                      label: const Text('清空'),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: AppDimens.space8),
+                    const SizedBox(height: AppDimens.space8),
               if (_loading)
                 const Center(child: CircularProgressIndicator())
               else if (rows.isEmpty)
@@ -175,16 +188,15 @@ class _NotificationHistoryPageState
                 )
               else ...[
                 for (final r in rows)
-                  Container(
-                    margin: const EdgeInsets.only(bottom: AppDimens.space8),
-                    padding: const EdgeInsets.all(AppDimens.space12),
-                    decoration: BoxDecoration(
-                      color: colors.surfaceSecondary,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
+                  Padding(
+                    padding:
+                        const EdgeInsets.only(bottom: AppDimens.space8),
+                    child: OrbitCard(
+                      fillColor: colors.surfaceSecondary,
+                      padding: const EdgeInsets.all(AppDimens.space12),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
                         Row(
                           children: [
                             Container(
@@ -225,6 +237,7 @@ class _NotificationHistoryPageState
                       ],
                     ),
                   ),
+                ),
                 if (_limit < 200)
                   Center(
                     child: TextButton(
@@ -236,6 +249,9 @@ class _NotificationHistoryPageState
                     ),
                   ),
               ],
+                  ],
+                ),
+              ),
             ],
           ),
           Positioned(
@@ -245,6 +261,41 @@ class _NotificationHistoryPageState
             child: OrbitPageHeader(
               title: '通知历史',
             ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// 开关行：左标题 + 副标题 + 右开关（热区同 `touchTarget`）
+  Widget _switchRow(
+    AppColorSet colors, {
+    required String title,
+    required String subtitle,
+    required bool value,
+    required ValueChanged<bool> onChanged,
+  }) {
+    return ConstrainedBox(
+      constraints: const BoxConstraints(minHeight: AppDimens.touchTarget),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(title,
+                    style: TextStyle(fontSize: 14, color: colors.bodyText)),
+                const SizedBox(height: 2),
+                Text(subtitle,
+                    style: TextStyle(
+                        fontSize: 12, color: colors.secondaryText)),
+              ],
+            ),
+          ),
+          Switch.adaptive(
+            value: value,
+            onChanged: onChanged,
           ),
         ],
       ),

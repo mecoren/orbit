@@ -5,6 +5,9 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_dimens.dart';
 import '../../core/theme/orbit_accents.dart';
 import '../../core/theme/icon_map.dart';
+import '../../shared/widgets/shadcn/orbit_card.dart';
+import '../../shared/widgets/shadcn/orbit_page_header.dart';
+import '../../shared/widgets/shadcn/orbit_section_card.dart';
 
 /// 关于页 /about（设置页关于卡入口）
 ///
@@ -46,116 +49,123 @@ class _AboutPageState extends State<AboutPage> {
   Widget build(BuildContext context) {
     final colors = AppColors.ofContext(context);
     return Scaffold(
-      body: SafeArea(
-        child: Column(
-          children: [
-            Align(
-              alignment: Alignment.centerLeft,
-              child: BackButton(color: colors.titleText),
-            ),
-            Expanded(
-              child: ListView(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: AppDimens.space24,
+      body: Stack(
+        children: [
+          Positioned.fill(
+            child: ListView(
+              padding: EdgeInsets.only(
+                top: MediaQuery.of(context).padding.top +
+                    OrbitPageHeader.rowHeight +
+                    AppDimens.space16,
+                left: AppDimens.pageInline,
+                right: AppDimens.pageInline,
+                bottom:
+                    AppDimens.gestureInsetFallback + AppDimens.space32,
+              ),
+              children: [
+                Column(
+                  children: [
+                    Text(
+                      '循迹',
+                      style: TextStyle(
+                        fontSize: 28,
+                        fontWeight: FontWeight.w600,
+                        color: colors.titleText,
+                      ),
+                    ),
+                    const SizedBox(height: AppDimens.space8),
+                    Text(
+                      'Orbit · 本地优先的待办与知识库',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: colors.secondaryText,
+                      ),
+                    ),
+                    const SizedBox(height: AppDimens.space4),
+                    Text(
+                      '版本 $_version',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: colors.secondaryText,
+                      ),
+                    ),
+                  ],
                 ),
-                children: [
-                  Column(
+                const SizedBox(height: AppDimens.space16),
+                SectionCard(
+                  title: '更新日志',
+                  child: Column(
                     children: [
-                      Text(
-                        '循迹',
-                        style: TextStyle(
-                          fontSize: 28,
-                          fontWeight: FontWeight.w600,
-                          color: colors.titleText,
+                      for (var i = 0; i < _changelog.length; i++) ...[
+                        if (i > 0)
+                          const SizedBox(height: AppDimens.space8),
+                        OrbitCard(
+                          fillColor: colors.surfaceSecondary,
+                          padding:
+                              const EdgeInsets.all(AppDimens.space12),
+                          child: Column(
+                            crossAxisAlignment:
+                                CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                _changelog[i]['version']!,
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                _changelog[i]['summary']!,
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: colors.bodyText,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: AppDimens.space8),
-                      Text(
-                        'Orbit · 本地优先的待办与知识库',
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: colors.secondaryText,
-                        ),
-                      ),
-                      const SizedBox(height: AppDimens.space4),
-                      Text(
-                        '版本 $_version',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: colors.secondaryText,
-                        ),
-                      ),
+                      ],
                     ],
                   ),
-                  const SizedBox(height: AppDimens.space24),
-                  Text(
-                    '更新日志',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      color: colors.titleText,
-                    ),
-                  ),
-                  const SizedBox(height: AppDimens.space8),
-                  for (final entry in _changelog)
-                    Container(
-                      margin: const EdgeInsets.only(bottom: AppDimens.space8),
-                      padding: const EdgeInsets.all(AppDimens.space12),
-                      decoration: BoxDecoration(
-                        color: colors.surfaceSecondary,
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            entry['version']!,
-                            style: const TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            entry['summary']!,
-                            style: TextStyle(
-                              fontSize: 13,
-                              color: colors.bodyText,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  const SizedBox(height: AppDimens.space8),
-                  Text(
-                    '开源许可',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      color: colors.titleText,
-                    ),
-                  ),
-                  const SizedBox(height: AppDimens.space8),
-                  OutlinedButton.icon(
-                    onPressed: () => showLicensePage(context: context),
-                    icon: const Icon(OrbitIcons.fileText, size: 18),
-                    label: const Text('查看开源许可'),
-                  ),
-                ],
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.only(bottom: AppDimens.space24),
-              child: Text(
-                '数据经端到端同步加密，仅你持有密钥。',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: OrbitAccents.themeAccent.withValues(alpha: 0.9),
                 ),
-              ),
+                const SizedBox(height: AppDimens.cardGap),
+                SectionCard(
+                  title: '开源许可',
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: () => showLicensePage(context: context),
+                      icon: const Icon(OrbitIcons.fileText, size: 18),
+                      label: const Text('查看开源许可'),
+                    ),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.only(top: AppDimens.space16),
+                  child: Center(
+                    child: Text(
+                      '数据经端到端同步加密，仅你持有密钥。',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: OrbitAccents.themeAccent
+                            .withValues(alpha: 0.9),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
-          ],
-        ),
+          ),
+          const Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            child: OrbitPageHeader(
+              title: '关于',
+            ),
+          ),
+        ],
       ),
     );
   }

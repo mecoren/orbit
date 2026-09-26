@@ -228,6 +228,13 @@
   日期标签）与单测共置。
 - 测试：移动 `holiday_cache_page_test` + 桌面 `calendar-cache-format.test.ts`。
 
+### 移动端设置页视觉收敛（2026-09-26）
+
+- **关于/外观/通知历史三页改 SectionCard 分组**（与缓存页同口径）：裸
+  ListTile/SwitchListTile 改分组卡 + 值行/开关行；列表顶距统一按状态栏 +
+  页头行高 + 16 计算、水平内边距统一 `pageInline`、底垫手势区 + 32。
+- 统计页与其骨架屏同补 `pageInline` 水平内边距（原 16 硬编码）。
+
 ### 移动端底部页签主导航（2026-09-25）
 
 - **底部导航栏落地**（`OrbitBottomNav` 原语 + `HomeShell` 壳式主导航）：今天 / 清单 /

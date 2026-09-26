@@ -2,8 +2,11 @@ import 'package:flutter/material.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_dimens.dart';
+import '../../core/theme/app_shapes.dart';
+import '../../core/theme/orbit_accents.dart';
 import '../../services/appearance.dart';
 import '../../shared/widgets/shadcn/orbit_page_header.dart';
+import '../../shared/widgets/shadcn/orbit_section_card.dart';
 import '../../shared/widgets/shadcn/orbit_select_sheet.dart';
 import '../../shared/widgets/shadcn/orbit_toast.dart';
 import '../../core/theme/icon_map.dart';
@@ -97,32 +100,42 @@ class _AppearancePageState extends State<AppearancePage> {
         children: [
           ListView(
             controller: _scrollController,
-            padding: const EdgeInsets.fromLTRB(
-              AppDimens.space16,
-              96,
-              AppDimens.space16,
-              AppDimens.space24,
+            padding: EdgeInsets.only(
+              top: MediaQuery.of(context).padding.top +
+                  OrbitPageHeader.rowHeight +
+                  AppDimens.space16,
+              left: AppDimens.pageInline,
+              right: AppDimens.pageInline,
+              bottom: AppDimens.gestureInsetFallback + AppDimens.space32,
             ),
             children: [
-              ListTile(
-                title: const Text('主题模式'),
-                subtitle: Text(Appearance.themeLabel()),
-                trailing: const Icon(OrbitIcons.chevronRight),
-                onTap: _pickTheme,
+              SectionCard(
+                title: '外观',
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _valueRow(
+                      colors,
+                      label: '主题模式',
+                      value: Appearance.themeLabel(),
+                      onTap: _pickTheme,
+                    ),
+                    _valueRow(
+                      colors,
+                      label: '字号',
+                      value: Appearance.fontSizeLabel(),
+                      onTap: _pickFontSize,
+                    ),
+                    _valueRow(
+                      colors,
+                      label: '字重',
+                      value: Appearance.fontWeightLabel(),
+                      onTap: _pickFontWeight,
+                    ),
+                  ],
+                ),
               ),
-              ListTile(
-                title: const Text('字号'),
-                subtitle: Text(Appearance.fontSizeLabel()),
-                trailing: const Icon(OrbitIcons.chevronRight),
-                onTap: _pickFontSize,
-              ),
-              ListTile(
-                title: const Text('字重'),
-                subtitle: Text(Appearance.fontWeightLabel()),
-                trailing: const Icon(OrbitIcons.chevronRight),
-                onTap: _pickFontWeight,
-              ),
-              const SizedBox(height: AppDimens.space12),
+              const SizedBox(height: AppDimens.cardGap),
               Text(
                 '预览：字号与字重即时作用于全文，主题即时切换亮暗（默认跟随系统）。',
                 style: TextStyle(
@@ -144,4 +157,39 @@ class _AppearancePageState extends State<AppearancePage> {
       ),
     );
   }
+
+  /// 值行：左标签 + 右值（强调色）+ 右箭头，点行弹选择抽屉
+  /// （形制与设置页「保留时间」行一致，热区同 `touchTarget`）
+  Widget _valueRow(
+    AppColorSet colors, {
+    required String label,
+    required String value,
+    required VoidCallback onTap,
+  }) =>
+      InkWell(
+        borderRadius: AppShapes.medium,
+        onTap: onTap,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: AppDimens.touchTarget),
+          child: Row(
+            children: [
+              Text(label,
+                  style: TextStyle(fontSize: 14, color: colors.bodyText)),
+              const Spacer(),
+              Text(
+                value,
+                style: TextStyle(
+                  fontSize: 14,
+                  color: OrbitAccents.themeAccent,
+                ),
+              ),
+              Icon(
+                OrbitIcons.chevronRight,
+                size: AppDimens.iconSizeMd,
+                color: colors.secondaryText,
+              ),
+            ],
+          ),
+        ),
+      );
 }

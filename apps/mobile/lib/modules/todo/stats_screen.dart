@@ -93,6 +93,8 @@ class _StatsScreenState extends ConsumerState<StatsScreen> {
                             top: MediaQuery.of(context).padding.top +
                                 OrbitPageHeader.rowHeight +
                                 AppDimens.space8,
+                            left: AppDimens.pageInline,
+                            right: AppDimens.pageInline,
                             bottom: AppDimens.gestureInsetFallback +
                                 AppDimens.space32,
                           ),
@@ -452,8 +454,8 @@ class _StatsSkeleton extends StatelessWidget {
         top: MediaQuery.of(context).padding.top +
             OrbitPageHeader.rowHeight +
             AppDimens.space8,
-        left: AppDimens.space16,
-        right: AppDimens.space16,
+        left: AppDimens.pageInline,
+        right: AppDimens.pageInline,
       ),
       children: [
         Row(
