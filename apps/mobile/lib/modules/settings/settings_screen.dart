@@ -1015,6 +1015,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                             ref.watch(holidayMetaProvider).value?.fixedHour),
                         onTap: _pickHolidayFixedHour,
                       ),
+                      _navRow(
+                        colors,
+                        label: '节假日数据缓存',
+                        onTap: () => context.push('/settings/holidays'),
+                      ),
                     ],
                   ),
                 ),

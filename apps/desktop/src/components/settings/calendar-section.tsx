@@ -9,7 +9,8 @@
  * 口径：日程由 Rust 守护执行（每日固定时刻一次 + 错过补更），本分区只写配置；
  * 「上次更新」读 `holiday_meta` 记账，与日历页工具栏共用同一份服务端真值。
  */
-import { CalendarDays } from "lucide-react";
+import { useState } from "react";
+import { CalendarDays, Database, Loader2, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
@@ -20,7 +21,17 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { holidayMeta, holidaySetFixedHour } from "@/lib/tauri";
+import {
+  holidayMeta,
+  holidaySetFixedHour,
+  holidaysList,
+  holidaysUpdate,
+} from "@/lib/tauri";
+import {
+  groupHolidaysByYear,
+  summarizeHolidayCache,
+  holidayMdLabel,
+} from "./calendar-cache-format";
 
 function SectionHeader({ title, desc }: { title: string; desc: string }) {
   return (
@@ -56,6 +67,29 @@ export function CalendarSection() {
     },
     onError: (e) => toast.error(String(e)),
   });
+
+  const listQuery = useQuery({
+    queryKey: ["holidays", "list"],
+    queryFn: holidaysList,
+    staleTime: 2 * 60 * 1000,
+  });
+  const cache = listQuery.data ?? [];
+  const summary = summarizeHolidayCache(cache);
+  const groups = groupHolidaysByYear(cache);
+
+  const [updatingCache, setUpdatingCache] = useState(false);
+  const refreshCache = async () => {
+    setUpdatingCache(true);
+    try {
+      await holidaysUpdate();
+      await qc.invalidateQueries({ queryKey: ["holidays"] });
+      toast.success("节假日数据已更新");
+    } catch (err) {
+      toast.error(`节假日更新失败：${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setUpdatingCache(false);
+    }
+  };
 
   return (
     <div className="space-y-4">
@@ -101,6 +135,87 @@ export function CalendarSection() {
         <p className="text-xs text-muted-foreground">
           提示：错过设定时刻会在下次启动时补更；本机设置，不随云同步。
         </p>
+      </div>
+
+      <div className="space-y-4 rounded-lg border p-5">
+        <div className="flex items-center gap-3">
+          <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-muted">
+            <Database className="size-4 text-muted-foreground" />
+          </div>
+          <div>
+            <p className="text-sm font-medium">数据缓存</p>
+            <p className="text-xs text-muted-foreground">
+              本地已缓存的放假/调休数据（空库时回落内置表，日历照常显示徽标）
+            </p>
+          </div>
+        </div>
+
+        {listQuery.isLoading ? (
+          <p className="text-xs text-muted-foreground">缓存加载中…</p>
+        ) : listQuery.isError ? (
+          <p className="text-xs text-muted-foreground">缓存加载失败</p>
+        ) : summary.total === 0 ? (
+          <p className="text-xs text-muted-foreground">暂无节假日缓存</p>
+        ) : (
+          <>
+            <p className="text-xs text-muted-foreground">
+              共 {summary.total} 条（放假 {summary.offDays} · 补班{" "}
+              {summary.workdays}）· 覆盖年份 {summary.years.join("、")}
+            </p>
+            <div className="space-y-2">
+              {groups.map((g) => (
+                <details key={g.year} open={g.year === summary.years[0]}>
+                  <summary className="cursor-pointer text-sm font-medium">
+                    {g.year} 年（{g.items.length} 条）
+                  </summary>
+                  <ul className="mt-1 space-y-1 pl-1">
+                    {g.items.map((h) => (
+                      <li
+                        key={h.date}
+                        className="flex items-center gap-2 text-xs"
+                      >
+                        <span className="w-14 shrink-0 tabular-nums text-muted-foreground">
+                          {holidayMdLabel(h.date)}
+                        </span>
+                        <span
+                          className="inline-flex size-4 shrink-0 items-center justify-center rounded text-[10px] font-semibold text-white"
+                          style={{
+                            backgroundColor: h.is_holiday
+                              ? "#4C7DF0"
+                              : "#FF7043",
+                          }}
+                          title={h.name}
+                        >
+                          {h.is_holiday ? "休" : "班"}
+                        </span>
+                        <span className="truncate">{h.name}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </details>
+              ))}
+            </div>
+          </>
+        )}
+
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={refreshCache}
+            disabled={updatingCache}
+            className="inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-medium hover:bg-accent disabled:opacity-50"
+          >
+            {updatingCache ? (
+              <Loader2 className="size-3.5 animate-spin" />
+            ) : (
+              <RefreshCw className="size-3.5" />
+            )}
+            {updatingCache ? "更新中…" : "立即更新"}
+          </button>
+          <span className="text-xs text-muted-foreground">
+            联网拉取整年数据，失败时旧缓存保留
+          </span>
+        </div>
       </div>
     </div>
   );
