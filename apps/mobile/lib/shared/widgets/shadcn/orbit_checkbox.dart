@@ -4,7 +4,6 @@ import 'package:shadcn_flutter/shadcn_flutter.dart' as sh;
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_dimens.dart';
-import '../../../core/theme/orbit_accents.dart';
 
 /// 任务勾选框（设计系统 v3：shadcn `Checkbox` 承载，方角形态）
 ///
@@ -16,6 +15,10 @@ import '../../../core/theme/orbit_accents.dart';
 /// 与旧实现的差异：**删除了 `checkSize` 参数**（shadcn 的勾选图形随 `size`
 /// 等比缩放，单独指定勾选大小已无意义），调用点改为只传 `size`。
 /// 历史名 `OrbitCheckbox` 已随方角化更名 [OrbitCheckbox]。
+///
+/// 完成态（checked）填充走弱化灰（`deactivatedText`）：已完成行整行置灰
+///（标题 / 日期 / 元信息同口径），勾选框不再保留待办蓝——未完成态仍是
+///空心方框（描边由 [borderColor] 承载优先级语义）。
 class OrbitCheckbox extends StatelessWidget {
   const OrbitCheckbox({
     super.key,
@@ -65,7 +68,7 @@ class OrbitCheckbox extends StatelessWidget {
                 checked ? sh.CheckboxState.checked : sh.CheckboxState.unchecked,
             size: size,
             borderRadius: BorderRadius.circular(cornerRadius),
-            activeColor: OrbitAccents.todoAccent,
+            activeColor: colors.deactivatedText,
             borderColor:
                 borderColor ?? colors.secondaryText.withValues(alpha: 0.4),
             onChanged: (_) => _handleChanged(),

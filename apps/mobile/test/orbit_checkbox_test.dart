@@ -5,8 +5,8 @@
 // 本组件只剩「方角 + 尺寸 + 强调色 + 回调转发」四件事，故断言落在组件契约上。
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:orbit/core/theme/app_colors.dart';
 import 'package:orbit/core/theme/app_motion.dart';
-import 'package:orbit/core/theme/orbit_accents.dart';
 import 'package:orbit/shared/widgets/shadcn/orbit_checkbox.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sh;
 
@@ -68,7 +68,7 @@ void main() {
     await tester.pump(AppMotion.fast);
 
     expect(_box(tester).state, sh.CheckboxState.unchecked);
-    expect(_box(tester).activeColor, OrbitAccents.todoAccent);
+    expect(_box(tester).activeColor, AppColors.light.deactivatedText);
     // 方角 = 固定 4px 圆角（TickTick 同款；与桌面端 rounded-[4px] 跨端同源）
     expect(_box(tester).borderRadius, BorderRadius.circular(OrbitCheckbox.cornerRadius));
     expect(taps, 0);

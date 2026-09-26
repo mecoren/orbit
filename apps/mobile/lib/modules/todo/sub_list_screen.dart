@@ -2379,9 +2379,12 @@ class TodoTaskTile extends StatelessWidget {
 
   /// 行内标签段：色点 + 标签名，最多 3 个，超出折叠 +N
   /// （与桌面 `LabelChips` 同口径——点色分辨、文字回归安静层级）
-  List<Widget> _labelChips(AppColorSet colors) {
+  ///
+  /// 完成态整行置灰：色点与文字统一走弱化灰，不再保留标签原色。
+  List<Widget> _labelChips(AppColorSet colors, {bool done = false}) {
     if (labels.isEmpty) return const [];
     const max = 3;
+    final muted = colors.deactivatedText;
     return [
       for (final l in labels.take(max))
         Row(
@@ -2392,20 +2395,26 @@ class TodoTaskTile extends StatelessWidget {
               height: 6,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: hexToColor(l.hexColor, fallback: colors.secondaryText),
+                color: done
+                    ? muted
+                    : hexToColor(l.hexColor,
+                        fallback: colors.secondaryText),
               ),
             ),
             const SizedBox(width: 2),
             Text(
               l.title,
-              style: TextStyle(fontSize: 12, color: colors.secondaryText),
+              style: TextStyle(
+                  fontSize: 12,
+                  color: done ? muted : colors.secondaryText),
             ),
           ],
         ),
       if (labels.length > max)
         Text(
           '+${labels.length - max}',
-          style: TextStyle(fontSize: 12, color: colors.secondaryText),
+          style: TextStyle(
+              fontSize: 12, color: done ? muted : colors.secondaryText),
         ),
     ];
   }
@@ -2415,44 +2424,54 @@ class TodoTaskTile extends StatelessWidget {
   /// 顺序：重复 → 提醒（铃铛 + HH:mm，到期未完转逾期红）→ 子任务进度
   /// （percent_done 0/100 不显示）→ 关联（C7 投影 > 0 才出）→ 星标（黄色）。
   /// 逐项为空则整列不渲染（右列宽度对标题的挤压随之让出）。
-  List<Widget> _metaIcons(AppColorSet colors) {
+  ///
+  /// 完成态整行置灰：重复 / 提醒 / 进度 / 关联 / 星标统一走弱化灰，
+  /// 不再保留逾期红与星标黄（已完成实例不再警示）。
+  List<Widget> _metaIcons(AppColorSet colors, {bool done = false}) {
     final chips = <Widget>[];
     void add(Widget w) {
       if (chips.isNotEmpty) chips.add(const SizedBox(width: AppDimens.space6));
       chips.add(w);
     }
+    final muted = colors.deactivatedText;
 
     // 重复：repeat_mode > 0 才算真规则（repeat_after 是间隔，无规则时恒 1）
     if (task.repeatMode > 0) {
-      add(Icon(OrbitIcons.repeat, size: 12, color: colors.iconText));
+      add(Icon(OrbitIcons.repeat,
+          size: 12, color: done ? muted : colors.iconText));
     }
     final r = reminder;
     if (r != null) {
       // 桌面用 Bell / BellRing 双图标区分，移动图标集无 bellRing——以颜色为主信号
-      final color = r.fired ? OrbitAccents.overdueRed : colors.secondaryText;
+      final color = done
+          ? muted
+          : (r.fired ? OrbitAccents.overdueRed : colors.secondaryText);
       add(Icon(OrbitIcons.notification, size: 12, color: color));
       add(Text(r.clock, style: TextStyle(fontSize: 12, color: color)));
     }
     // 子任务进度（MS To Do Steps 同款体验；percent_done 由后端按勾选回算）
     final pct = task.percentDone;
     if (pct > 0 && pct < 100) {
-      add(Icon(OrbitIcons.listChecks, size: 12, color: colors.secondaryText));
+      add(Icon(OrbitIcons.listChecks,
+          size: 12, color: done ? muted : colors.secondaryText));
       add(Text(
         '${pct.round()}%',
-        style: TextStyle(fontSize: 12, color: colors.secondaryText),
+        style:
+            TextStyle(fontSize: 12, color: done ? muted : colors.secondaryText),
       ));
     }
     // 关联（C7）：只做「这任务挂着别的任务」提示（详情页关联区才是编辑入口）
     if (relationCount > 0) {
-      add(Icon(OrbitIcons.link, size: 12, color: colors.secondaryText));
+      add(Icon(OrbitIcons.link,
+          size: 12, color: done ? muted : colors.secondaryText));
     }
     if (task.isStarred) {
-      // 星标与同列其余元信息图标同尺寸档（12），色走星标黄——
-      // 与看板卡星标同口径，不再比邻项大一圈
+      // 星标与同列其余元信息图标同尺寸档（12），未完成态色走星标黄——
+      // 与看板卡星标同口径，不再比邻项大一圈；完成态走弱化灰
       add(Icon(
         OrbitIcons.star,
         size: 12,
-        color: OrbitAccents.starYellow,
+        color: done ? muted : OrbitAccents.starYellow,
       ));
     }
     return chips;
@@ -2467,11 +2486,15 @@ class TodoTaskTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = AppColors.ofContext(context);
-    final overdue = isOverdue(task);
-    // 截止日期短标签（右列；未来主题蓝、逾期红）
+    final done = task.isDone;
+    // 完成态整行置灰：标题 / 副标题 / 日期 / 元信息统一弱化灰，
+    // 逾期红与主题蓝不再保留（已完成实例不再警示）。
+    final muted = colors.deactivatedText;
+    final overdue = !done && isOverdue(task);
+    // 截止日期短标签（右列；未完成态未来主题蓝、逾期红；完成态置灰）
     final dueLabel =
         task.dueDate == null ? null : formatDueShort(task.dueDate!);
-    final meta = _metaIcons(colors);
+    final meta = _metaIcons(colors, done: done);
     // 副标题（标签 / 项目名）有无：无则整行只留标题；显示偏好逐位门控
     // （detail 关 = 单行紧凑形态，project/tags 不再参与）
     final hasSubtitle = showDetail &&
@@ -2538,11 +2561,11 @@ class TodoTaskTile extends StatelessWidget {
                 : null,
             child: Row(
               children: [
-                // 24px 圆形 checkbox（check 16）：描边承载优先级语义
+                // 24px 方角 checkbox：描边承载优先级语义（完成态不再保留色环）
                 OrbitCheckbox(
-                  checked: task.isDone,
+                  checked: done,
                   onToggle: onToggleDone,
-                  borderColor: _priorityRingColor(),
+                  borderColor: done ? null : _priorityRingColor(),
                 ),
                 const SizedBox(width: AppDimens.space12),
                 // 左列：标题 +（标签 / 项目名）——读「这是什么」
@@ -2553,15 +2576,15 @@ class TodoTaskTile extends StatelessWidget {
                     children: [
                       AnimatedStrikethrough(
                         text: task.title,
-                        done: task.isDone,
+                        done: done,
                         maxLines: 1,
                         style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.w500,
                           color: colors.titleText,
                         ),
-                        // 完成态全口径统一：划线 + 置灰一档（日历卡同款）
-                        doneColor: colors.secondaryText,
+                        // 完成态全口径统一：划线 + 置灰（弱化灰，与日期/元信息同源）
+                        doneColor: muted,
                       ),
                       // 副标题只在有标签 / 项目名时出现：优先级已由勾选框描边
                       // 表达，不再占一枚色点，纯标题行因此更紧凑
@@ -2574,7 +2597,7 @@ class TodoTaskTile extends StatelessWidget {
                             crossAxisAlignment: WrapCrossAlignment.center,
                             children: [
                               // 标签段：色点 + 名（最多 3 个，超出折叠 +N）
-                              if (showTags) ..._labelChips(colors),
+                              if (showTags) ..._labelChips(colors, done: done),
                               if (showProject &&
                                   projectTitle != null &&
                                   task.projectId != null)
@@ -2582,12 +2605,16 @@ class TodoTaskTile extends StatelessWidget {
                                   projectTitle!,
                                   style: TextStyle(
                                     fontSize: 12,
-                                    // #36：项目名按项目色着字（无色回退次要色）
-                                    color: (projectColorHex != null &&
-                                            projectColorHex!.isNotEmpty)
-                                        ? hexToColor(projectColorHex!,
-                                            fallback: colors.secondaryText)
-                                        : colors.secondaryText,
+                                    // #36：未完成态项目名按项目色着字（无色回退次要色）；
+                                    // 完成态统一弱化灰
+                                    color: done
+                                        ? muted
+                                        : ((projectColorHex != null &&
+                                                projectColorHex!.isNotEmpty)
+                                            ? hexToColor(projectColorHex!,
+                                                fallback:
+                                                    colors.secondaryText)
+                                            : colors.secondaryText),
                                   ),
                                 ),
                             ],
@@ -2608,10 +2635,12 @@ class TodoTaskTile extends StatelessWidget {
                           dueLabel,
                           style: TextStyle(
                             fontSize: 12,
-                            // 未来与今天走主题蓝，逾期转红
-                            color: overdue
-                                ? OrbitAccents.overdueRed
-                                : OrbitAccents.themeAccent,
+                            // 未完成态未来与今天走主题蓝，逾期转红；完成态置灰
+                            color: done
+                                ? muted
+                                : (overdue
+                                    ? OrbitAccents.overdueRed
+                                    : OrbitAccents.themeAccent),
                           ),
                         ),
                       if (meta.isNotEmpty)
