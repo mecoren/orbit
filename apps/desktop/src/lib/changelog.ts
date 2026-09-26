@@ -29,6 +29,53 @@ export interface ChangelogVersion {
 /** 新版本发布时在数组头部追加（与 CHANGELOG.md 同一次提交） */
 export const CHANGELOG_VERSIONS: ChangelogVersion[] = [
   {
+    version: "0.1.1",
+    date: "2026-09-26",
+    summary:
+      "移动端对标优化批次：底部导航可配置、今天页签快捷视图、四象限与完成态收敛、日历打磨、节假日缓存查看",
+    changes: [
+      {
+        category: "feature",
+        description:
+          "底部导航：四页签主导航 → 可配置功能模块（启停/排序/落盘）→ 横滑换段与跨段拖拽（预览实时跟手）→ 纯图标 + 页顶预览；今天页签标题点选切换快捷视图",
+      },
+      {
+        category: "feature",
+        description:
+          "四象限双端对齐：移动矩阵视图（格内滚动任务列表）与象限更名（重要且紧急等四名）；桌面补矩阵档 + 任务面板完成进度线",
+      },
+      {
+        category: "feature",
+        description:
+          "完成语义收敛：双端勾选框方角化、桌面紧急度改以勾选框颜色为准、已完成行整行置灰（不再保留主题蓝/逾期红/星标黄）",
+      },
+      {
+        category: "feature",
+        description:
+          "日历打磨：选中日任务卡、月档上滑收成周条、页头收敛与卡片/时间线双样式、描述图标行元信息投影",
+      },
+      {
+        category: "feature",
+        description:
+          "列表体验：今天视图纳入逾期、逾期区一键顺延、日期口语化、显示详细与显示设置、页头完成进度线与未完成计数",
+      },
+      {
+        category: "feature",
+        description:
+          "节假日数据缓存查看（双端）：缓存概览 + 按年分组只读展示 + 立即更新；设置页关于/外观/通知历史改分组卡视觉收敛",
+      },
+      {
+        category: "fix",
+        description:
+          "底部抽屉统一走根路由（分支 Navigator 内不再被底栏盖住）、拖拽浮层底面随抬起实色化、表格视图表头同步、勾选框热区与完成态统一",
+      },
+      {
+        category: "fix",
+        description: "内存收口：family provider 改 autoDispose + 图片解码缓存封顶",
+      },
+    ],
+  },
+  {
     version: "0.1.0",
     date: "2026-09-24",
     summary:
