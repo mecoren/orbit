@@ -99,9 +99,7 @@ void main() {
   testWidgets('宽度收口：锚定面板不铺满（≤ 上限 + 外留白）', (tester) async {
     await open(tester);
 
-    final panel = find.byWidgetPredicate(
-      (w) => w.runtimeType.toString() == '_OrbitDropdownPanel',
-    );
+    final panel = find.byType(OrbitDropdownPanelView);
     final width = tester.getSize(panel).width;
     // 外留白（space8 × 2）由面板自身内边距承担，故比内容宽一档
     expect(width, lessThanOrEqualTo(orbitPanelMaxWidth + 16));

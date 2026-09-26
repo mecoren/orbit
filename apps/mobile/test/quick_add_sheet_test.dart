@@ -679,4 +679,66 @@ void main() {
       expect(find.text('准备做什么？'), findsNothing);
     });
   });
+
+  group('工具栏不抢键盘', () {
+    // 回归：点工具栏按钮输入法会消失——弹层路由抢走焦点所致。
+    // 锚点小卡片（优先级/项目/标签/更多）改 Overlay 直挂后，打开时焦点一直在
+    // 输入框、输入法没沉过；底部大抽屉（截止日期）打开时下沉、关闭后恢复。
+    bool inputFocused(WidgetTester tester) {
+      // TextField 自建 Focus 在子树内：经 EditableTextState 取 focusNode
+      final state = tester.state<EditableTextState>(
+        find.byType(EditableText),
+      );
+      return state.widget.focusNode.hasFocus;
+    }
+
+    testWidgets('优先级卡片打开时输入法不消失', (tester) async {
+      await _openPanel(tester);
+      expect(inputFocused(tester), isTrue);
+      expect(tester.testTextInput.isVisible, isTrue);
+
+      await tester.tap(find.byTooltip('优先级'));
+      await tester.pumpAndSettle();
+      // 卡片弹出，但焦点一直在输入框、输入法没沉过
+      expect(find.byType(OrbitFloatCard), findsOneWidget);
+      expect(inputFocused(tester), isTrue);
+      expect(tester.testTextInput.isVisible, isTrue);
+
+      // 点卡外关闭 → 焦点还在
+      await tester.tapAt(const Offset(10, 100));
+      await tester.pumpAndSettle();
+      expect(find.byType(OrbitFloatCard), findsNothing);
+      expect(inputFocused(tester), isTrue);
+      expect(tester.testTextInput.isVisible, isTrue);
+    });
+
+    testWidgets('更多菜单打开时输入法不消失', (tester) async {
+      await _openPanel(tester);
+      expect(tester.testTextInput.isVisible, isTrue);
+
+      await tester.tap(find.byTooltip('更多'));
+      await tester.pumpAndSettle();
+      expect(find.text('设置'), findsOneWidget);
+      expect(inputFocused(tester), isTrue);
+      expect(tester.testTextInput.isVisible, isTrue);
+
+      await tester.tapAt(const Offset(10, 100));
+      await tester.pumpAndSettle();
+      expect(find.text('设置'), findsNothing);
+      expect(inputFocused(tester), isTrue);
+    });
+
+    testWidgets('截止日期抽屉点选后焦点回到输入框', (tester) async {
+      await _openPanel(tester);
+      expect(inputFocused(tester), isTrue);
+
+      await tester.tap(find.byTooltip('日期'));
+      await tester.pumpAndSettle();
+      expect(inputFocused(tester), isFalse);
+
+      await tester.tap(find.text('今天'));
+      await tester.pumpAndSettle();
+      expect(inputFocused(tester), isTrue);
+    });
+  });
 }

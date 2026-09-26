@@ -113,6 +113,99 @@ class OrbitFloatCard extends StatelessWidget {
   }
 }
 
+/// 锚点浮层卡片定位（三件套：对齐 + 内边距 + 缩放锚点）
+typedef OrbitFloatCardLayout = ({
+  Alignment align,
+  EdgeInsets padding,
+  Alignment scale,
+});
+
+/// 锚点上方形态的定位计算（[showOrbitFloatCard] 与 Overlay 直挂版共用同一数值，
+/// 卡片与锚点不错位）
+OrbitFloatCardLayout orbitFloatCardLayout(
+  BuildContext context, {
+  Rect? anchor,
+  bool above = true,
+  double? topInset,
+  double? width,
+}) {
+  final screen = MediaQuery.of(context).size;
+  if (anchor != null && above) {
+    // 右沿对齐锚右沿，但钳在屏内：左置按钮的卡片不能滑出左屏
+    // （240 宽卡片锚在左首图标时右对齐会出屏，曾致“窄条”假象）
+    final w = orbitFloatCardWidth(context, width);
+    final right = (screen.width - anchor.right)
+        .clamp(0.0, math.max(0.0, screen.width - w - AppDimens.space8))
+        .toDouble();
+    return (
+      align: Alignment.bottomRight,
+      padding: EdgeInsets.only(
+        bottom: math.max(0, screen.height - anchor.top) + AppDimens.space8,
+        right: right,
+      ),
+      scale: Alignment.bottomRight,
+    );
+  }
+  return (
+    align: Alignment.topRight,
+    padding: EdgeInsets.only(
+      top: topInset ??
+          MediaQuery.of(context).padding.top + AppDimens.titleBarHeight,
+      right: 0,
+    ),
+    scale: Alignment.topRight,
+  );
+}
+
+/// Overlay 直挂的锚点卡片进场动效件（与路由版 [showOrbitFloatCard] 同源：
+/// 淡入 + 自锚点同侧轻微放大；Overlay 没有转场器，自带一次控制器）。
+class OrbitOverlayCard extends StatefulWidget {
+  const OrbitOverlayCard({
+    super.key,
+    required this.child,
+    required this.scaleAlignment,
+  });
+
+  /// 卡片内容（通常是 [OrbitFloatCard]）
+  final Widget child;
+
+  /// 缩放锚点（[orbitFloatCardLayout] 的 scale，与路由版同值）
+  final Alignment scaleAlignment;
+
+  @override
+  State<OrbitOverlayCard> createState() => _OrbitOverlayCardState();
+}
+
+class _OrbitOverlayCardState extends State<OrbitOverlayCard>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: AppMotion.fast,
+  )..forward();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final curved = CurvedAnimation(
+      parent: _controller,
+      curve: AppMotion.decelerate,
+    );
+    return FadeTransition(
+      opacity: curved,
+      child: ScaleTransition(
+        scale: Tween<double>(begin: 0.96, end: 1).animate(curved),
+        alignment: widget.scaleAlignment,
+        child: widget.child,
+      ),
+    );
+  }
+}
+
 /// 锚点浮层卡片通用入口（快加快捷卡片用；出场动效与下拉面板同源）
 /// [anchor] 为空回落右上（与面板默认同）。
 Future<T?> showOrbitFloatCard<T>(
@@ -123,32 +216,13 @@ Future<T?> showOrbitFloatCard<T>(
   double? topInset,
   double? width,
 }) {
-  final screen = MediaQuery.of(context).size;
-  final Alignment alignment;
-  final EdgeInsets padding;
-  final Alignment scaleAlignment;
-  if (anchor != null && above) {
-    // 右沿对齐锚右沿，但钳在屏内：左置按钮的卡片不能滑出左屏
-    // （240 宽卡片锚在左首图标时右对齐会出屏，曾致“窄条”假象）
-    final w = orbitFloatCardWidth(context, width);
-    final right = (screen.width - anchor.right)
-        .clamp(0.0, math.max(0.0, screen.width - w - AppDimens.space8))
-        .toDouble();
-    alignment = Alignment.bottomRight;
-    padding = EdgeInsets.only(
-      bottom: math.max(0, screen.height - anchor.top) + AppDimens.space8,
-      right: right,
-    );
-    scaleAlignment = Alignment.bottomRight;
-  } else {
-    alignment = Alignment.topRight;
-    padding = EdgeInsets.only(
-      top: topInset ??
-          MediaQuery.of(context).padding.top + AppDimens.titleBarHeight,
-      right: 0,
-    );
-    scaleAlignment = Alignment.topRight;
-  }
+  final layout = orbitFloatCardLayout(
+    context,
+    anchor: anchor,
+    above: above,
+    topInset: topInset,
+    width: width,
+  );
   return showGeneralDialog<T>(
     context: context,
     barrierDismissible: true,
@@ -157,9 +231,9 @@ Future<T?> showOrbitFloatCard<T>(
     barrierLabel: '关闭菜单',
     transitionDuration: AppMotion.fast,
     pageBuilder: (dialogContext, _, _) => Align(
-      alignment: alignment,
+      alignment: layout.align,
       child: Padding(
-        padding: padding,
+        padding: layout.padding,
         child: OrbitFloatCard(width: width, child: child),
       ),
     ),
@@ -171,15 +245,17 @@ Future<T?> showOrbitFloatCard<T>(
         opacity: curved,
         child: ScaleTransition(
           scale: Tween<double>(begin: 0.96, end: 1).animate(curved),
-          alignment: scaleAlignment,
+          alignment: layout.scale,
           child: child,
         ),
       );
     },
   );
 }
-/// 顶部下拉面板（页头 ⋮ 的载体；快加面板「更多」与快捷档复用其「锚点上方」
-/// 形态；设计系统 v3 原语层，2026-09-23）
+/// 顶部下拉面板（页头 ⋮ 的载体；设计系统 v3 原语层，2026-09-23）
+/// 快加面板的档位快捷项（优先级 / 项目单选、标签多选卡、「更多」）形态同源，
+/// 但走 Overlay 直挂（[OrbitOverlayCard]，不经过路由、不抢输入框焦点——
+/// 路由版弹出即失焦，输入法下沉；见快加面板键盘保持）。
 ///
 /// **形态**：锚在触发钮附近的浮层卡片（见 [OrbitFloatCard]），条目成组、组间
 /// 1px `divider`；点面板外任意处关闭（不铺遮罩色——下层保持可见）。
@@ -220,7 +296,7 @@ Future<void> showOrbitDropdownPanel(
     anchor: anchor,
     above: above,
     topInset: topInset,
-    child: _OrbitDropdownPanel(
+    child: OrbitDropdownPanelView(
       groups: groups,
       title: title,
       actionLabel: actionLabel,
@@ -229,12 +305,16 @@ Future<void> showOrbitDropdownPanel(
   );
 }
 
-class _OrbitDropdownPanel extends StatefulWidget {
-  const _OrbitDropdownPanel({
+/// 下拉面板内容视图（公开件：路由版包在 [OrbitFloatCard] 里，Overlay 直挂版
+/// 由调用方包卡并传 [onClose] 接管关闭动作）。
+class OrbitDropdownPanelView extends StatefulWidget {
+  const OrbitDropdownPanelView({
+    super.key,
     required this.groups,
     this.title,
     this.actionLabel,
     this.onAction,
+    this.onClose,
   });
 
   final List<List<OrbitPanelItem>> groups;
@@ -243,16 +323,29 @@ class _OrbitDropdownPanel extends StatefulWidget {
   final String? actionLabel;
   final VoidCallback? onAction;
 
+  /// 关闭动作覆写（Overlay 直挂时传调用方的 remove；null = 路由 pop，
+  /// 既有调用方行为不变）
+  final VoidCallback? onClose;
+
   @override
-  State<_OrbitDropdownPanel> createState() => _OrbitDropdownPanelState();
+  State<OrbitDropdownPanelView> createState() => OrbitDropdownPanelViewState();
 }
 
-class _OrbitDropdownPanelState extends State<_OrbitDropdownPanel> {
+class OrbitDropdownPanelViewState extends State<OrbitDropdownPanelView> {
   /// 当前就地展开的顶层条目（组下标, 条目下标）；null = 无展开
   (int, int)? _expanded;
 
   bool _isExpanded(int groupIndex, int itemIndex) =>
       _expanded == (groupIndex, itemIndex);
+
+  void _close() {
+    final onClose = widget.onClose;
+    if (onClose != null) {
+      onClose();
+    } else {
+      Navigator.of(context).pop();
+    }
+  }
 
   void _tapTop(int groupIndex, int itemIndex, OrbitPanelItem item) {
     final expanded = _expanded;
@@ -266,19 +359,19 @@ class _OrbitDropdownPanelState extends State<_OrbitDropdownPanel> {
           _expanded = expanded == null ? (groupIndex, itemIndex) : null);
       return;
     }
-    Navigator.of(context).pop();
+    _close();
     item.onTap?.call();
   }
 
   /// 子项：选中即执行并关面板（与底部抽屉「点选即回调并关闭」同语义）
   void _tapChild(OrbitPanelItem child) {
-    Navigator.of(context).pop();
+    _close();
     child.onTap?.call();
   }
 
   /// 标题行动作：先收面板再执行（导航类回调在面板关闭后落到下层页面）
   void _tapAction() {
-    Navigator.of(context).pop();
+    _close();
     widget.onAction?.call();
   }
 

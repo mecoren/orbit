@@ -17,6 +17,8 @@
 /// 任务本身——部分成功口径与表单的标签/子任务挂载一致。
 library;
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -140,6 +142,10 @@ class _QuickAddSheet extends ConsumerStatefulWidget {
 class _QuickAddSheetState extends ConsumerState<_QuickAddSheet> {
   final _titleController = TextEditingController();
 
+  /// 输入框焦点：工具栏弹层（底部抽屉/锚点卡片都是新路由）会抢走焦点致输入法
+  /// 下沉，弹层关闭后凭它把焦点还回去（见 [_withKeyboard]），可边选边打字。
+  final _titleFocus = FocusNode();
+
   /// 「更多」钮定位键：下拉面板锚在它上方弹出，用该键取全局矩形
   final _moreKey = GlobalKey();
 
@@ -160,6 +166,7 @@ class _QuickAddSheetState extends ConsumerState<_QuickAddSheet> {
   @override
   void dispose() {
     _titleController.dispose();
+    _titleFocus.dispose();
     super.dispose();
   }
 
@@ -273,6 +280,84 @@ class _QuickAddSheetState extends ConsumerState<_QuickAddSheet> {
     return box.localToGlobal(Offset.zero) & box.size;
   }
 
+  /// 工具栏弹层关闭后把焦点还给输入框（输入法重新升起）。
+  /// 上面还有下级弹层时不抢——由下级关闭时恢复，避免键盘盖住日期面板。
+  void _restoreKeyboard(bool hadFocus) {
+    if (!hadFocus || !mounted) return;
+    final route = ModalRoute.of(context);
+    if (route != null && !route.isCurrent) return;
+    _titleFocus.requestFocus();
+  }
+
+  /// 包一层键盘保持：打开底部抽屉前记住输入框是否有焦点，关闭后恢复。
+  /// 模板/全屏/设置会关掉本面板（导航离开），不包这层。
+  /// 锚点小卡片走 [_openAnchoredCard]（Overlay 直挂，根本不抢焦点）。
+  Future<void> _withKeyboard(Future<void> Function() open) async {
+    final hadFocus = _titleFocus.hasFocus;
+    await open();
+    _restoreKeyboard(hadFocus);
+  }
+
+  /// 直挂 Overlay 的锚点卡片（关闭即 complete；返回键拦截见 build 的 PopScope）
+  OverlayEntry? _cardEntry;
+  Completer<void>? _cardDone;
+
+  bool get _cardOpen => _cardEntry != null;
+
+  /// 关闭锚点卡片（幂等；卡外点按/返回键/选中关闭都走这里）
+  void _closeCard() {
+    _cardEntry?.remove();
+    _cardEntry = null;
+    final done = _cardDone;
+    _cardDone = null;
+    if (done != null && !done.isCompleted) done.complete();
+    if (mounted) setState(() {});
+  }
+
+  /// 锚点卡片 Overlay 直挂：不走路由、不抢输入框焦点，输入法全程保持升起
+  /// （点按钮键盘不再下沉，可边选边打字）。定位/动效与路由版同源
+  /// （[orbitFloatCardLayout] + [OrbitOverlayCard]），卡外点按关闭。
+  Future<void> _openAnchoredCard({
+    required Rect? anchor,
+    required Widget child,
+    double? width,
+  }) {
+    _closeCard();
+    if (!mounted) return Future.value();
+    final layout = orbitFloatCardLayout(
+      context,
+      anchor: anchor,
+      above: true,
+      width: width,
+    );
+    final done = _cardDone = Completer<void>();
+    _cardEntry = OverlayEntry(
+      builder: (_) => Stack(
+        children: [
+          Positioned.fill(
+            child: GestureDetector(
+              behavior: HitTestBehavior.translucent,
+              onTap: _closeCard,
+            ),
+          ),
+          Align(
+            alignment: layout.align,
+            child: Padding(
+              padding: layout.padding,
+              child: OrbitOverlayCard(
+                scaleAlignment: layout.scale,
+                child: OrbitFloatCard(width: width, child: child),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+    Overlay.of(context).insert(_cardEntry!);
+    setState(() {});
+    return done.future;
+  }
+
   /// 截止日期档：快捷抽屉（今天/明天/下周/选择日期…+ 已设时清除），与桌面
   /// QuickDateMenu 和表单今天/明天/下周快捷同口径；选中态只落工具栏图标。
   Future<void> _pickDue() async {
@@ -287,6 +372,9 @@ class _QuickAddSheetState extends ConsumerState<_QuickAddSheet> {
     } else if (_dueDate == nextWeek) {
       current = 'nextweek';
     }
+    // 自定义日期会再开下级日期面板：把焦点记忆传进去，由下级关闭时恢复
+    //（本级恢复时下级还在上面，[_restoreKeyboard] 会主动让路）
+    final hadFocus = _titleFocus.hasFocus;
     await showSelectBottomSheet<String>(
       context,
       title: '截止日期',
@@ -309,10 +397,11 @@ class _QuickAddSheetState extends ConsumerState<_QuickAddSheet> {
           case 'clear':
             if (mounted) setState(() => _dueDate = null);
           case 'custom':
-            await _pickCustomDue();
+            await _pickCustomDue(hadFocus);
         }
       },
     );
+    _restoreKeyboard(hadFocus);
   }
 
   /// 本地时区自然日零点毫秒（今天 + [offsetDays] 天，与表单同口径）
@@ -325,7 +414,8 @@ class _QuickAddSheetState extends ConsumerState<_QuickAddSheet> {
 
   /// 自定义日期：完整月历面板；取消/清除回 null 即不动原值，
   /// 清除走快捷抽屉「清除日期」（picker 的 null 不区分取消与清除）。
-  Future<void> _pickCustomDue() async {
+  /// [hadFocus] 由上级截止抽屉传入（本面板是下级，关闭时由这里恢复键盘）。
+  Future<void> _pickCustomDue([bool hadFocus = false]) async {
     final picked = await OrbitDatePicker.pick(
       context,
       initialDate: _dueDate != null
@@ -333,30 +423,34 @@ class _QuickAddSheetState extends ConsumerState<_QuickAddSheet> {
           : null,
       accent: OrbitAccents.todoAccent,
     );
-    if (picked == null || !mounted) return;
-    setState(() => _dueDate = dateToMidnightMs(picked));
+    if (!mounted) return;
+    if (picked != null) {
+      setState(() => _dueDate = dateToMidnightMs(picked));
+    }
+    _restoreKeyboard(hadFocus);
   }
 
   /// 优先级档：锚在触发钮上方的单选卡片（六档带档色，点选即回填并关闭）
   Future<void> _pickPriority([Rect? anchor]) async {
-    await showOrbitDropdownPanel(
-      context,
+    await _openAnchoredCard(
       anchor: anchor,
-      above: true,
-      groups: [
-        [
-          for (var i = 0; i <= 5; i++)
-            OrbitPanelItem(
-              icon: OrbitIcons.flag,
-              label: priorityLabel(i),
-              color: hexToColor(priorityColorHex(i)),
-              checked: i == _priority,
-              onTap: () {
-                if (mounted) setState(() => _priority = i);
-              },
-            ),
+      child: OrbitDropdownPanelView(
+        groups: [
+          [
+            for (var i = 0; i <= 5; i++)
+              OrbitPanelItem(
+                icon: OrbitIcons.flag,
+                label: priorityLabel(i),
+                color: hexToColor(priorityColorHex(i)),
+                checked: i == _priority,
+                onTap: () {
+                  if (mounted) setState(() => _priority = i);
+                },
+              ),
+          ],
         ],
-      ],
+        onClose: _closeCard,
+      ),
     );
   }
 
@@ -379,8 +473,7 @@ class _QuickAddSheetState extends ConsumerState<_QuickAddSheet> {
     }
     if (!mounted) return;
     final picked = Set<int>.of(_labels.map((l) => l.id));
-    await showOrbitFloatCard<void>(
-      context,
+    await _openAnchoredCard(
       anchor: anchor,
       // 标签行（复选框 + 色点 + 标题）：240 宽放不下长标题，加宽到 300
       // （壳内按屏宽 - 32 钳制，不贴边）
@@ -482,35 +575,36 @@ class _QuickAddSheetState extends ConsumerState<_QuickAddSheet> {
   Future<void> _pickProject([Rect? anchor]) async {
     final projects =
         ref.read(todoProjectsProvider).value ?? const <TodoProject>[];
-    await showOrbitDropdownPanel(
-      context,
+    await _openAnchoredCard(
       anchor: anchor,
-      above: true,
-      groups: [
-        [
-          OrbitPanelItem(
-            icon: OrbitIcons.list,
-            label: '未分组',
-            checked: _projectId == null,
-            onTap: () {
-              if (mounted) setState(() => _projectId = null);
-            },
-          ),
-          for (final project in projects)
+      child: OrbitDropdownPanelView(
+        groups: [
+          [
             OrbitPanelItem(
               icon: OrbitIcons.list,
-              label: project.title,
-              color: hexToColor(
-                project.hexColor,
-                fallback: OrbitAccents.todoAccent,
-              ),
-              checked: _projectId == project.id,
+              label: '未分组',
+              checked: _projectId == null,
               onTap: () {
-                if (mounted) setState(() => _projectId = project.id);
+                if (mounted) setState(() => _projectId = null);
               },
             ),
+            for (final project in projects)
+              OrbitPanelItem(
+                icon: OrbitIcons.list,
+                label: project.title,
+                color: hexToColor(
+                  project.hexColor,
+                  fallback: OrbitAccents.todoAccent,
+                ),
+                checked: _projectId == project.id,
+                onTap: () {
+                  if (mounted) setState(() => _projectId = project.id);
+                },
+              ),
+          ],
         ],
-      ],
+        onClose: _closeCard,
+      ),
     );
   }
 
@@ -518,31 +612,39 @@ class _QuickAddSheetState extends ConsumerState<_QuickAddSheet> {
   /// 已有待传图片时先走管理菜单（继续添加/清空），代替已删除的 chips 清除行。
   Future<void> _pickImage() async {
     if (_images.isNotEmpty && mounted) {
-      await showMoreActionsSheet(
-        context,
-        title: '图片（${_images.length}张待上传）',
-        actions: [
-          MoreActionItem(
-            icon: OrbitIcons.image,
-            label: '继续添加',
-            onTap: _addImage,
-          ),
-          MoreActionItem(
-            icon: OrbitIcons.delete,
-            label: '清空图片',
-            color: AppColors.ofContext(context).destructive,
-            onTap: () {
-              if (mounted) setState(() => _images.clear());
-            },
-          ),
-        ],
+      // 管理菜单内「继续添加」会再进系统相册：焦点记忆同样透传
+      final hadFocus = _titleFocus.hasFocus;
+      await _withKeyboard(
+        () => showMoreActionsSheet(
+          context,
+          title: '图片（${_images.length}张待上传）',
+          actions: [
+            MoreActionItem(
+              icon: OrbitIcons.image,
+              label: '继续添加',
+              onTap: () => _addImage(hadFocus),
+            ),
+            MoreActionItem(
+              icon: OrbitIcons.delete,
+              label: '清空图片',
+              color: AppColors.ofContext(context).destructive,
+              onTap: () {
+                if (mounted) setState(() => _images.clear());
+              },
+            ),
+          ],
+        ),
       );
       return;
     }
     await _addImage();
   }
 
-  Future<void> _addImage() async {
+  /// [keepKeyboard] 由上级管理菜单透传（本调用是下级，关闭时由这里恢复）；
+  /// 直接调用时按当前焦点自行判断。
+  Future<void> _addImage([bool? keepKeyboard]) async {
+    // 系统相册同样会让输入法下沉，回来后恢复
+    final hadFocus = keepKeyboard ?? _titleFocus.hasFocus;
     try {
       final shot = await ImagePicker().pickImage(
         source: ImageSource.gallery,
@@ -555,6 +657,8 @@ class _QuickAddSheetState extends ConsumerState<_QuickAddSheet> {
       setState(() => _images.add(_PendingImage(name: shot.name, bytes: bytes)));
     } catch (_) {
       if (mounted) WaitToast.destructive('选择图片失败');
+    } finally {
+      _restoreKeyboard(hadFocus);
     }
   }
 
@@ -607,34 +711,36 @@ class _QuickAddSheetState extends ConsumerState<_QuickAddSheet> {
   }
 
   /// 「更多」菜单：锚在按钮上方的下拉面板（竞品同款浮层卡片），未启用档 +
-  /// 固定「设置」入口分两组；点选后菜单自关，回调内再处理面板
+  /// 固定「设置」入口分两组；点选后菜单自关，回调内再处理面板。
+  /// Overlay 直挂（不抢键盘）；导航离开类入口（设置）照旧先关面板。
   Future<void> _openMoreMenu(List<QuickActionId> hidden) async {
     final box = _moreKey.currentContext?.findRenderObject() as RenderBox?;
     final anchor = box == null || !box.hasSize
         ? null
         : box.localToGlobal(Offset.zero) & box.size;
-    await showOrbitDropdownPanel(
-      context,
+    await _openAnchoredCard(
       anchor: anchor,
-      above: true,
-      groups: [
-        if (hidden.isNotEmpty)
+      child: OrbitDropdownPanelView(
+        groups: [
+          if (hidden.isNotEmpty)
+            [
+              for (final id in hidden)
+                OrbitPanelItem(
+                  icon: quickActionIcon(id),
+                  label: id.label,
+                  onTap: () => _onAction(id),
+                ),
+            ],
           [
-            for (final id in hidden)
-              OrbitPanelItem(
-                icon: quickActionIcon(id),
-                label: id.label,
-                onTap: () => _onAction(id),
-              ),
+            OrbitPanelItem(
+              icon: OrbitIcons.settings,
+              label: '设置',
+              onTap: _openSettings,
+            ),
           ],
-        [
-          OrbitPanelItem(
-            icon: OrbitIcons.settings,
-            label: '设置',
-            onTap: _openSettings,
-          ),
         ],
-      ],
+        onClose: _closeCard,
+      ),
     );
   }
 
@@ -645,67 +751,77 @@ class _QuickAddSheetState extends ConsumerState<_QuickAddSheet> {
     final colors = AppColors.ofContext(context);
     final (enabled, hidden) = QuickActions.read();
 
-    return OrbitSheetScaffold(
-      showHandle: true,
-      contentScrollable: false,
-      maxHeightFactor: 0.7,
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(
-              AppDimens.space16,
-              AppDimens.space12,
-              AppDimens.space16,
-              0,
-            ),
-            child: TextField(
-              controller: _titleController,
-              autofocus: true,
-              minLines: 1,
-              maxLines: 4,
-              maxLength: 200,
-              style: TextStyle(fontSize: 15, color: colors.bodyText),
-              decoration: InputDecoration(
-                hintText: '准备做什么？',
-                counterText: '',
-                border: InputBorder.none,
-                isDense: true,
-                hintStyle: TextStyle(
-                  fontSize: 15,
-                  color: colors.deactivatedText,
-                ),
+    // 锚点卡片开着时返回键先关卡片（Overlay 不占路由，默认会直接关面板丢草稿）
+    return PopScope(
+      canPop: !_cardOpen,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _closeCard();
+      },
+      child: OrbitSheetScaffold(
+        showHandle: true,
+        contentScrollable: false,
+        maxHeightFactor: 0.7,
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                AppDimens.space16,
+                AppDimens.space12,
+                AppDimens.space16,
+                0,
               ),
-              onChanged: (_) => setState(() {}),
-              onSubmitted: (_) => _submit(),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(
-              AppDimens.space8,
-              AppDimens.space4,
-              AppDimens.space12,
-              AppDimens.space8,
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: Row(
-                      children: [for (final id in enabled) _toolbarButton(id)],
-                    ),
+              child: TextField(
+                controller: _titleController,
+                focusNode: _titleFocus,
+                autofocus: true,
+                minLines: 1,
+                maxLines: 4,
+                maxLength: 200,
+                style: TextStyle(fontSize: 15, color: colors.bodyText),
+                decoration: InputDecoration(
+                  hintText: '准备做什么？',
+                  counterText: '',
+                  border: InputBorder.none,
+                  isDense: true,
+                  hintStyle: TextStyle(
+                    fontSize: 15,
+                    color: colors.deactivatedText,
                   ),
                 ),
-                // 「更多」固定在发送钮左侧，不随工具栏横滚被挤走
-                _moreButton(),
-                const SizedBox(width: AppDimens.space8),
-                _sendButton(colors),
-              ],
+                onChanged: (_) => setState(() {}),
+                onSubmitted: (_) => _submit(),
+              ),
             ),
-          ),
-        ],
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                AppDimens.space8,
+                AppDimens.space4,
+                AppDimens.space12,
+                AppDimens.space8,
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        children: [
+                          for (final id in enabled) _toolbarButton(id),
+                        ],
+                      ),
+                    ),
+                  ),
+                  // 「更多」固定在发送钮左侧，不随工具栏横滚被挤走
+                  _moreButton(),
+                  const SizedBox(width: AppDimens.space8),
+                  _sendButton(colors),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
