@@ -940,19 +940,57 @@ export interface HolidayInfo {
   name: string;
 }
 
-/** 节假日更新记账（日历工具栏「上次更新」展示用） */
+/** 节假日更新记账（日历工具栏「上次更新」+ 设置页自动开关用） */
 export interface HolidayMeta {
-  /** 上次成功更新（ms；0 = 从未成功） */
+  /** 上次「自动更新范围内年份」成功更新（ms；0 = 从未成功） */
   last_update_ms: number;
   /** 上次尝试（ms；0 = 从未尝试） */
   last_attempt_ms: number;
   /** 连续失败次数（成功后清零） */
   failure_count: number;
-  /** 每日固定更新时刻（本地时区小时 0-23；默认 8） */
-  fixed_hour: number;
+  /** 自动更新总开关（关闭后仅手动 / 按年补写） */
+  auto_enabled: boolean;
 }
 
-/** 全部节假日（date 升序；空库回落预置 2026 表，冷启动可用） */
+/** 按年范围补写结果汇总 */
+export interface HolidayRangeSummary {
+  /** 成功写入（含空响应）的年份数 */
+  ok: number;
+  /** 获取失败的年份数（含熔断后未尝试的年份） */
+  failed: number;
+  /** 成功但线上无数据的年份数 */
+  empty: number;
+  /** 是否被中途取消 */
+  cancelled: boolean;
+}
+
+/** 范围补写进度（`holiday-progress` 事件载荷；serde 内部标签 `phase`） */
+export type HolidayProgress =
+  | { phase: "starting"; total: number }
+  | {
+      phase: "year";
+      year: number;
+      done: number;
+      total: number;
+      ok: boolean;
+      empty: boolean;
+    }
+  | { phase: "done"; ok: number; failed: number; cancelled: boolean }
+  | { phase: "error"; message: string };
+
+/** 按单年补写结果（记账 + 该年实际行数；`row_count == 0` = 该年线上无数据） */
+export interface HolidayYearOutcome {
+  meta: HolidayMeta;
+  row_count: number;
+}
+
+/** 按年补写的可选年份下界（timor.tech 实测有数据的最早年份） */
+export const HOLIDAY_FETCH_YEAR_MIN = 2013;
+
+/** 按年补写的可选年份上界 = 明年（与 core `holiday_fetch_year_max` 同口径） */
+export const holidayFetchYearMax = (now = new Date()) => now.getFullYear() + 1;
+
+/** 全部节假日（date 升序；按年合并：DB 已覆盖年份为准，预置表兜底其余年份） */
 export const holidaysList = () => invoke<HolidayInfo[]>("holidays_list");
 
 /** 判定某日期：Some(true) 放假 / Some(false) 补班 / null 普通日（按星期） */
@@ -965,9 +1003,20 @@ export const holidaysUpdate = () => invoke<HolidayMeta>("holidays_update");
 /** 更新记账 */
 export const holidayMeta = () => invoke<HolidayMeta>("holiday_meta");
 
-/** 设置每日固定更新时刻（0-23，越界 clamp） */
-export const holidaySetFixedHour = (hour: number) =>
-  invoke<void>("holiday_set_fixed_hour", { hour });
+/** 按单年补写（年份需在 2013 ~ 明年；整年替换，历史年份不写自动更新记账） */
+export const holidayFetchYear = (year: number) =>
+  invoke<HolidayYearOutcome>("holiday_fetch_year", { year });
+
+/** 按年份范围补写（并发 + 熔断；进度经 `holiday-progress` 事件） */
+export const holidayFetchRange = (start: number, end: number) =>
+  invoke<HolidayRangeSummary>("holiday_fetch_range", { start, end });
+
+/** 请求取消进行中的范围补写（幂等） */
+export const holidayCancelFetch = () => invoke<void>("holiday_cancel_fetch");
+
+/** 设置自动更新总开关 */
+export const holidaySetAutoEnabled = (enabled: boolean) =>
+  invoke<void>("holiday_set_auto_enabled", { enabled });
 
 
 // ---------- 回收站（删除的任务可恢复；保留时间可配） ----------

@@ -238,6 +238,17 @@ const MOCK_HOLIDAYS = [
   { date: "2026-02-17", year: 2026, is_holiday: true, name: "初一" },
 ] as const;
 
+/** 冒烟用节假日记账（形状对齐 Rust HolidayMeta：每月口径 + 自动开关） */
+function mockHolidayMeta() {
+  const now = Date.now();
+  return {
+    last_update_ms: now,
+    last_attempt_ms: now,
+    failure_count: 0,
+    auto_enabled: true,
+  };
+}
+
 /** 恢复预览样例（形状对齐 Rust BackupPreview；确认框 ready 分支可渲染） */
 const MOCK_BACKUP_PREVIEW = {
   manifest: {
@@ -1259,14 +1270,28 @@ const commands: Record<string, (args: any, ctx: Ctx) => unknown> = {
   full_backup_peek_local: () => ipcClone(MOCK_BACKUP_PREVIEW),
   full_backup_peek_cloud: () => ipcClone(MOCK_BACKUP_PREVIEW),
 
-  // ---- 节假日（日历视图挂载即拉取；空表回落 Rust 侧预置 2026 表，
-  //      浏览器 mock 回给一小段同构数据让徽标链路可走通；更新命令模拟成功）----
+  // ---- 节假日（日历视图挂载即拉取；按年合并回落 Rust 侧预置表，
+  //      浏览器 mock 回给一小段同构数据让徽标链路可走通；更新/补写命令模拟成功）----
   holidays_list: () => ipcClone(MOCK_HOLIDAYS),
   holiday_is_on: ({ date }: { date: string }) =>
     MOCK_HOLIDAYS.find((h) => h.date === date)?.is_holiday ?? null,
-  holidays_update: () => ({ last_update_ms: Date.now(), last_attempt_ms: Date.now(), failure_count: 0, fixed_hour: 8 }),
-  holiday_meta: () => ({ last_update_ms: Date.now(), last_attempt_ms: Date.now(), failure_count: 0, fixed_hour: 8 }),
-  holiday_set_fixed_hour: () => undefined,
+  holidays_update: () => ({ ...mockHolidayMeta() }),
+  holiday_meta: () => ({ ...mockHolidayMeta() }),
+  // 自动更新总开关（月口径；mock 只回成功，状态不回读）
+  holiday_set_auto_enabled: () => undefined,
+  // 单年补写：回「记账 + 该年行数」（冒烟只验链路，行数取该年样例条数）
+  holiday_fetch_year: ({ year }: { year: number }) => ({
+    meta: mockHolidayMeta(),
+    row_count: MOCK_HOLIDAYS.filter((h) => h.year === year).length,
+  }),
+  // 范围补写：mock 直接回全成功汇总（进度事件在 mock 中不产生）
+  holiday_fetch_range: () => ({
+    ok: 0,
+    failed: 0,
+    empty: 0,
+    cancelled: false,
+  }),
+  holiday_cancel_fetch: () => undefined,
 
   // ---- 回收站（对齐 trash_cmd 软删/恢复/彻底删除语义；TTL 守卫在 mock 中不模拟）----
   trash_tasks_list: (_a, { db }) =>
