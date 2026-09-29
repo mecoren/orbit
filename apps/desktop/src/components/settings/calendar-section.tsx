@@ -36,6 +36,7 @@ import {
   holidaysUpdate,
 } from "@/lib/tauri";
 import {
+  holidayFailedYearsLabel,
   holidayProgressLabel,
   holidayProgressPercent,
   useHolidayProgress,
@@ -91,7 +92,7 @@ export function CalendarSection() {
   const [updatingCache, setUpdatingCache] = useState(false);
   const [fetchingYear, setFetchingYear] = useState<number | null>(null);
   const [rangeBusy, setRangeBusy] = useState(false);
-  const { progress, clear: clearProgress } = useHolidayProgress();
+  const { progress, failedYears, clear: clearProgress } = useHolidayProgress();
 
   /** 可选年份：2013 ~ 明年（下界 = 数据源实测有数据的最早年份） */
   const yearOptions = useMemo(() => {
@@ -149,9 +150,15 @@ export function CalendarSection() {
       if (summary.cancelled) {
         toast.message("已取消范围更新（已完成的年份保留）");
       } else if (summary.failed > 0) {
-        toast.error(
-          `范围更新完成：成功 ${summary.ok} · 失败 ${summary.failed}（旧缓存保留）`,
-        );
+        // 部分成功不是错误：如实报出三个计数 + 失败年份（warning 级，非 error）
+        const parts = [`成功 ${summary.ok} 年`, `失败 ${summary.failed} 年`];
+        if (summary.empty > 0) parts.push(`无数据 ${summary.empty} 年`);
+        const failedLabel = holidayFailedYearsLabel(failedYears);
+        toast.warning(`范围更新完成：${parts.join(" · ")}`, {
+          description: failedLabel
+            ? `失败年份：${failedLabel}（沿用原缓存）`
+            : "失败年份沿用原缓存",
+        });
       } else if (summary.empty > 0) {
         toast.success(
           `范围更新完成：成功 ${summary.ok}（其中 ${summary.empty} 年线上无数据）`,

@@ -97,8 +97,13 @@ abstract final class WaitToast {
       global(title, variant: WaitToastVariant.info);
   static void success(String title) =>
       global(title, variant: WaitToastVariant.success);
-  static void warning(String title, {VoidCallback? onTap}) =>
-      global(title, variant: WaitToastVariant.warning, onTap: onTap);
+  /// [description] 为可选副文案（同 [global] 同名参数）：warning 是唯一开放的
+  /// 快捷入口，用于「部分成功」把明细（失败年份）与结论分行，避免标题过长
+  static void warning(String title, {VoidCallback? onTap, String? description}) =>
+      global(title,
+          variant: WaitToastVariant.warning,
+          onTap: onTap,
+          description: description);
   static void destructive(String title) =>
       global(title, variant: WaitToastVariant.destructive);
 }

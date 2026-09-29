@@ -2210,9 +2210,13 @@ class MockOrbitBridge implements OrbitBridge {
       });
 
   /// 按年补写：Mock 只认识 2026（预置表年份），其余年份一律「线上无数据」；
-  /// 记账语义对齐 core——历史年份只写 last_attempt，不动 last_update
+  /// 记账语义对齐 core——历史年份只写 last_attempt，不动 last_update；
+  /// `holidayFailedYears` 内的年份模拟拉取失败（抛错，与 core 的 Err 同路径）
   @override
   Future<HolidayYearOutcome> holidayFetchYear(int year) => _delay(() {
+        if (store.holidayFailedYears.contains(year)) {
+          throw Exception('[holiday] $year 年拉取失败');
+        }
         final rowCount = store.holidayEmptyYears.contains(year)
             ? 0
             : _mockHolidays.where((h) => h.year == year).length;
@@ -2237,6 +2241,7 @@ class MockOrbitBridge implements OrbitBridge {
       message: '',
     ));
     var ok = 0;
+    var failed = 0;
     var empty = 0;
     var cancelled = false;
     for (var i = 0; i < years.length; i++) {
@@ -2246,9 +2251,13 @@ class MockOrbitBridge implements OrbitBridge {
         break;
       }
       final year = years[i];
-      final isYearEmpty = store.holidayEmptyYears.contains(year) ||
-          _mockHolidays.every((h) => h.year != year);
-      if (isYearEmpty) {
+      final isFailed = store.holidayFailedYears.contains(year);
+      final isYearEmpty = !isFailed &&
+          (store.holidayEmptyYears.contains(year) ||
+              _mockHolidays.every((h) => h.year != year));
+      if (isFailed) {
+        failed++;
+      } else if (isYearEmpty) {
         empty++;
       } else {
         ok++;
@@ -2258,7 +2267,7 @@ class MockOrbitBridge implements OrbitBridge {
         total: years.length,
         year: year,
         done: i + 1,
-        yearOk: true,
+        yearOk: !isFailed,
         yearEmpty: isYearEmpty,
         okCount: 0,
         failed: 0,
@@ -2268,6 +2277,8 @@ class MockOrbitBridge implements OrbitBridge {
     }
     _holidayRangeActive = false;
     store.holidayLastAttemptMs = store.now();
+    // 整次操作记账一次（core 口径：有失败 +1，全成功清零）
+    store.holidayFailureCount = failed > 0 ? store.holidayFailureCount + 1 : 0;
     _holidayProgressCtrl.add(HolidayProgress(
       phase: 'done',
       total: years.length,
@@ -2276,13 +2287,13 @@ class MockOrbitBridge implements OrbitBridge {
       yearOk: false,
       yearEmpty: false,
       okCount: ok,
-      failed: 0,
+      failed: failed,
       cancelled: cancelled,
       message: '',
     ));
     return HolidayRangeSummary(
       ok: ok,
-      failed: 0,
+      failed: failed,
       empty: empty,
       cancelled: cancelled,
     );

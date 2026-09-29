@@ -1,7 +1,8 @@
 // 设置页「节假日数据缓存」查看页回归：
 // 概览统计（总数/放假补班拆分/覆盖年份/更新记账/自动开关）
 // + 按年分组明细（日期/休班徽标/假日名）
-// + 三处联网写入口（立即更新 / 按年份范围获取 / 更新该年）。
+// + 三处联网写入口（立即更新 / 按年份范围获取 / 更新该年）
+// + 范围补写部分成功的如实上报（三计数 + 失败年份）。
 // 数据形状对齐 MockOrbitBridge 节假日假数据（2026 表节选 3 行）。
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -132,6 +133,29 @@ void main() {
     expect(find.text('正在补写节假日'), findsNothing);
     // 2013/2014 均不在 Mock 预置表 → 全部「无数据」
     expect(find.text('补写完成：成功 0 年 · 无数据 2 年'), findsOneWidget);
+    await drainToastTimers(tester);
+  });
+
+  testWidgets('按年份范围获取：部分成功按事实上报（三计数 + 失败年份，非 error 级）',
+      (tester) async {
+    final bridge = MockOrbitBridge();
+    await tester.pumpWidget(_wrap(bridge));
+    await _settle(tester);
+
+    // 2014 模拟拉取失败；2013 不在预置表 → 无数据
+    bridge.store.holidayFailedYears.add(2014);
+
+    await tester.tap(find.text('按年份范围获取'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('2013 年'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('2014 年'));
+    await tester.pumpAndSettle();
+
+    await _advance(tester, 2000);
+    expect(find.text('补写完成：成功 0 年 · 失败 1 年 · 无数据 1 年'), findsOneWidget);
+    // 失败年份来自逐年进度事件（终态 done 只带计数）
+    expect(find.text('失败年份：2014（沿用原缓存）'), findsOneWidget);
     await drainToastTimers(tester);
   });
 }

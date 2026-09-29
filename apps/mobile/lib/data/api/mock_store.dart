@@ -60,6 +60,10 @@ class MockStore {
   /// 模拟「该年线上无数据」（AC-E7 提示路径：按年补写返回 0 行仍算成功）
   final Set<int> holidayEmptyYears = {};
 
+  /// 模拟「该年拉取失败」（网络/解析失败路径：失败年份不进库、沿用原缓存，
+  /// 计数进 `HolidayRangeSummary.failed`）
+  final Set<int> holidayFailedYears = {};
+
   int get id => nextId++;
 
   /// 合并 patch：键存在即生效，值为 null 表示清空（对齐 `Option<Option<T>>`）

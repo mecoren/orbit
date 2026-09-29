@@ -143,10 +143,21 @@ class _HolidayCachePageState extends ConsumerState<HolidayCachePage> {
   /// 不由弹层自行 pop——弹层与「范围调用返回」是两个独立事件源，
   /// 各自 pop 会撞车（双重 pop 会误关页面上层路由）；统一在此处按调用
   /// 返回时机关闭，语义等价且无竞态。
+  ///
+  /// 另订阅一份进度流收集**失败年份**：终态 `done` 只带失败计数，「哪一年失败」
+  /// 只存在于逐年事件里，汇总 toast 据此如实报出（熔断中止时未尝试年份不发事件，
+  /// 故该列表可能短于 `failed` 计数，不得反推「已全部列出」）。
   Future<void> _runRange(int start, int end) async {
     if (_rangeBusy) return;
     setState(() => _rangeBusy = true);
     final navigator = Navigator.of(context, rootNavigator: true);
+    final bridge = ref.read(orbitBridgeProvider);
+    final failedYears = <int>[];
+    final progressSub = bridge.holidayProgress.listen((p) {
+      if (p.phase == 'year' && !p.yearOk && !failedYears.contains(p.year)) {
+        failedYears.add(p.year);
+      }
+    });
     final dialogClosed = showDialog<void>(
       context: context,
       barrierDismissible: false,
@@ -155,10 +166,11 @@ class _HolidayCachePageState extends ConsumerState<HolidayCachePage> {
     HolidayRangeSummary? summary;
     Object? failure;
     try {
-      summary =
-          await ref.read(orbitBridgeProvider).holidayFetchRange(start, end);
+      summary = await bridge.holidayFetchRange(start, end);
     } catch (e) {
       failure = e;
+    } finally {
+      await progressSub.cancel();
     }
     navigator.pop();
     await dialogClosed;
@@ -174,10 +186,23 @@ class _HolidayCachePageState extends ConsumerState<HolidayCachePage> {
     if (s.cancelled) {
       WaitToast.info('已取消（成功 ${s.ok} 年 · 无数据 ${s.empty} 年）');
     } else if (s.failed > 0) {
-      WaitToast.destructive('部分失败：成功 ${s.ok} 年 · 失败 ${s.failed} 年');
+      // 部分成功不是错误：warning 级 + 三个计数如实报出，失败年份走副文案
+      final parts = ['成功 ${s.ok} 年', '失败 ${s.failed} 年'];
+      if (s.empty > 0) parts.add('无数据 ${s.empty} 年');
+      final label = _failedYearsLabel(failedYears);
+      WaitToast.warning(
+        '补写完成：${parts.join(' · ')}',
+        description: label.isEmpty ? '失败年份沿用原缓存' : '失败年份：$label（沿用原缓存）',
+      );
     } else {
       WaitToast.success('补写完成：成功 ${s.ok} 年 · 无数据 ${s.empty} 年');
     }
+  }
+
+  /// 失败年份列表文案（升序、顿号分隔）；空列表返回空串
+  String _failedYearsLabel(List<int> years) {
+    final sorted = [...years]..sort();
+    return sorted.join('、');
   }
 
   @override
