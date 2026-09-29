@@ -6,7 +6,7 @@
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`
 
 /// 活动日志行（todo_activity_log 为本地轨迹表，不进同步白名单）
 class ActivityLogRow {
@@ -205,9 +205,9 @@ class HolidayInfo {
           name == other.name;
 }
 
-/// 节假日更新记账（上次更新时间/失败次数/固定时刻；日历工具栏展示用）
+/// 节假日更新记账（上次更新/尝试时间、失败次数、自动更新开关；日历工具栏展示用）
 class HolidayMeta {
-  /// 上次成功更新（ms；0 = 从未成功）
+  /// 上次「自动更新范围内年份」成功更新（ms；0 = 从未成功）
   final PlatformInt64 lastUpdateMs;
 
   /// 上次尝试（ms；0 = 从未尝试）
@@ -216,14 +216,14 @@ class HolidayMeta {
   /// 连续失败次数（成功后清零）
   final int failureCount;
 
-  /// 每日固定更新时刻（本地时区小时 0-23；默认 8）
-  final int fixedHour;
+  /// 自动更新总开关（关闭后仅手动 / 按年补写）
+  final bool autoEnabled;
 
   const HolidayMeta({
     required this.lastUpdateMs,
     required this.lastAttemptMs,
     required this.failureCount,
-    required this.fixedHour,
+    required this.autoEnabled,
   });
 
   @override
@@ -231,7 +231,7 @@ class HolidayMeta {
       lastUpdateMs.hashCode ^
       lastAttemptMs.hashCode ^
       failureCount.hashCode ^
-      fixedHour.hashCode;
+      autoEnabled.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -241,7 +241,150 @@ class HolidayMeta {
           lastUpdateMs == other.lastUpdateMs &&
           lastAttemptMs == other.lastAttemptMs &&
           failureCount == other.failureCount &&
-          fixedHour == other.fixedHour;
+          autoEnabled == other.autoEnabled;
+}
+
+/// 范围补写进度（core `HolidayProgress` 枚举的**平铺**镜像）
+///
+/// core 侧是 `#[serde(tag = "phase")]` 的带字段枚举；FRB api 扫描范围内无枚举
+/// 先例，且带字段枚举的 Dart 生成形态（sealed class）与项目既有「本地 struct
+/// 镜像」约定不一致，故此处按 serde 的实际形状**平铺**为单结构：
+/// 只保证 `phase` 对应的字段有意义，其余字段为类型零值。
+///
+/// 字段命名刻意区分阶段前缀，避免跨变体同名不同型（core 的 `Year.ok` 是
+/// `bool`「该年成功」，`Done.ok` 是 `u32`「成功年份数」——平铺后会撞名）：
+/// - `year` 阶段：`total` / `year` / `done` / `year_ok` / `year_empty`
+/// - `done` 阶段：`ok_count` / `failed` / `cancelled`
+/// - `error` 阶段：`message`
+class HolidayProgressDto {
+  /// 阶段：`starting` / `year` / `done` / `error`
+  final String phase;
+
+  /// 总年份数（starting / year 阶段有效）
+  final int total;
+
+  /// 当前年份（year 阶段有效）
+  final int year;
+
+  /// 已结算年份数（year 阶段有效）
+  final int done;
+
+  /// 该年是否拉取成功（year 阶段有效）
+  final bool yearOk;
+
+  /// 该年是否线上无数据（year 阶段有效）
+  final bool yearEmpty;
+
+  /// 成功写入（含空响应）的年份数（done 阶段有效）
+  final int okCount;
+
+  /// 获取失败的年份数（done 阶段有效）
+  final int failed;
+
+  /// 是否被中途取消（done 阶段有效）
+  final bool cancelled;
+
+  /// 错误信息（error 阶段有效）
+  final String message;
+
+  const HolidayProgressDto({
+    required this.phase,
+    required this.total,
+    required this.year,
+    required this.done,
+    required this.yearOk,
+    required this.yearEmpty,
+    required this.okCount,
+    required this.failed,
+    required this.cancelled,
+    required this.message,
+  });
+
+  @override
+  int get hashCode =>
+      phase.hashCode ^
+      total.hashCode ^
+      year.hashCode ^
+      done.hashCode ^
+      yearOk.hashCode ^
+      yearEmpty.hashCode ^
+      okCount.hashCode ^
+      failed.hashCode ^
+      cancelled.hashCode ^
+      message.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is HolidayProgressDto &&
+          runtimeType == other.runtimeType &&
+          phase == other.phase &&
+          total == other.total &&
+          year == other.year &&
+          done == other.done &&
+          yearOk == other.yearOk &&
+          yearEmpty == other.yearEmpty &&
+          okCount == other.okCount &&
+          failed == other.failed &&
+          cancelled == other.cancelled &&
+          message == other.message;
+}
+
+/// 按年范围补写结果汇总
+class HolidayRangeSummary {
+  /// 成功写入（含空响应）的年份数
+  final int ok;
+
+  /// 获取失败的年份数（含熔断后未尝试的年份）
+  final int failed;
+
+  /// 成功但线上无数据的年份数
+  final int empty;
+
+  /// 是否被中途取消
+  final bool cancelled;
+
+  const HolidayRangeSummary({
+    required this.ok,
+    required this.failed,
+    required this.empty,
+    required this.cancelled,
+  });
+
+  @override
+  int get hashCode =>
+      ok.hashCode ^ failed.hashCode ^ empty.hashCode ^ cancelled.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is HolidayRangeSummary &&
+          runtimeType == other.runtimeType &&
+          ok == other.ok &&
+          failed == other.failed &&
+          empty == other.empty &&
+          cancelled == other.cancelled;
+}
+
+/// 按单年补写结果（记账 + 该年实际行数；`row_count == 0` = 该年线上无数据）
+class HolidayYearOutcome {
+  final HolidayMeta meta;
+
+  /// 该年实际拉取到的行数（0 = 线上无数据，UI 提示用）
+  final int rowCount;
+
+  const HolidayYearOutcome({required this.meta, required this.rowCount});
+
+  @override
+  int get hashCode => meta.hashCode ^ rowCount.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is HolidayYearOutcome &&
+          runtimeType == other.runtimeType &&
+          meta == other.meta &&
+          rowCount == other.rowCount;
 }
 
 /// 通用列表过滤条件（镜像 orbit_core::models::business::ListFilter；

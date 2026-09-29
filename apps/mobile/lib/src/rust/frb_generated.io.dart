@@ -49,6 +49,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  RustStreamSink<HolidayProgressDto>
+  dco_decode_StreamSink_holiday_progress_dto_Sse(dynamic raw);
+
+  @protected
   RustStreamSink<ReminderDueDto> dco_decode_StreamSink_reminder_due_dto_Sse(
     dynamic raw,
   );
@@ -220,6 +224,15 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   HolidayMeta dco_decode_holiday_meta(dynamic raw);
+
+  @protected
+  HolidayProgressDto dco_decode_holiday_progress_dto(dynamic raw);
+
+  @protected
+  HolidayRangeSummary dco_decode_holiday_range_summary(dynamic raw);
+
+  @protected
+  HolidayYearOutcome dco_decode_holiday_year_outcome(dynamic raw);
 
   @protected
   int dco_decode_i_32(dynamic raw);
@@ -572,6 +585,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  RustStreamSink<HolidayProgressDto>
+  sse_decode_StreamSink_holiday_progress_dto_Sse(SseDeserializer deserializer);
+
+  @protected
   RustStreamSink<ReminderDueDto> sse_decode_StreamSink_reminder_due_dto_Sse(
     SseDeserializer deserializer,
   );
@@ -779,6 +796,21 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   HolidayMeta sse_decode_holiday_meta(SseDeserializer deserializer);
+
+  @protected
+  HolidayProgressDto sse_decode_holiday_progress_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  HolidayRangeSummary sse_decode_holiday_range_summary(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  HolidayYearOutcome sse_decode_holiday_year_outcome(
+    SseDeserializer deserializer,
+  );
 
   @protected
   int sse_decode_i_32(SseDeserializer deserializer);
@@ -1225,6 +1257,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_StreamSink_holiday_progress_dto_Sse(
+    RustStreamSink<HolidayProgressDto> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_StreamSink_reminder_due_dto_Sse(
     RustStreamSink<ReminderDueDto> self,
     SseSerializer serializer,
@@ -1493,6 +1531,24 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_holiday_meta(HolidayMeta self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_holiday_progress_dto(
+    HolidayProgressDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_holiday_range_summary(
+    HolidayRangeSummary self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_holiday_year_outcome(
+    HolidayYearOutcome self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_i_32(int self, SseSerializer serializer);

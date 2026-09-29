@@ -11,11 +11,11 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
 /// 启动节假日自动更新守护（幂等；Dart 在 DB 就绪后调用一次，BootGate 接线）
 ///
-/// 每日固定时刻（默认 08:00 本地）一次；错过时刻后下次启动首轮 tick 即补更。
+/// 每月一次（跨月后首轮 tick 即拉）；总开关关闭时 core 侧直接跳过。
 Future<void> startHolidayScheduler() =>
     RustLib.instance.api.crateApiHolidayStartHolidayScheduler();
 
-/// 全部节假日（date 升序；空库回落预置 2026 表，冷启动可用）
+/// 全部节假日（date 升序；按年合并：DB 已覆盖年份为准，预置表兜底其余年份）
 Future<List<HolidayInfo>> holidayList() =>
     RustLib.instance.api.crateApiHolidayHolidayList();
 
@@ -27,10 +27,35 @@ Future<bool?> holidayIsOn({required String date}) =>
 Future<HolidayMeta> holidayUpdate() =>
     RustLib.instance.api.crateApiHolidayHolidayUpdate();
 
-/// 更新记账（上次成功/尝试、连续失败次数、固定时刻）
+/// 按单年补写（年份需在 2013 ~ 明年；整年替换，历史年份不写自动更新记账）
+///
+/// 返回记账 + 该年实际行数（`row_count == 0` = 该年线上无数据，UI 提示用）
+Future<HolidayYearOutcome> holidayFetchYear({required int year}) =>
+    RustLib.instance.api.crateApiHolidayHolidayFetchYear(year: year);
+
+/// 按年份范围补写（分片并发 + 熔断；进度经 [subscribe_holiday_progress] 回传）
+Future<HolidayRangeSummary> holidayFetchRange({
+  required int start,
+  required int end,
+}) => RustLib.instance.api.crateApiHolidayHolidayFetchRange(
+  start: start,
+  end: end,
+);
+
+/// 请求取消进行中的范围补写（幂等；无进行中操作时无害）
+Future<void> holidayCancelFetch() =>
+    RustLib.instance.api.crateApiHolidayHolidayCancelFetch();
+
+/// 更新记账（上次成功/尝试、连续失败次数、自动更新开关）
 Future<HolidayMeta> holidayMeta() =>
     RustLib.instance.api.crateApiHolidayHolidayMeta();
 
-/// 设置每日固定更新时刻（0-23，越界 clamp）
-Future<void> holidaySetFixedHour({required int hour}) =>
-    RustLib.instance.api.crateApiHolidayHolidaySetFixedHour(hour: hour);
+/// 设置自动更新总开关（关闭后调度器不再联网，仅保留手动与按年补写）
+Future<void> holidaySetAutoEnabled({required bool enabled}) =>
+    RustLib.instance.api.crateApiHolidayHolidaySetAutoEnabled(enabled: enabled);
+
+/// 订阅范围补写进度（Dart 侧 `StreamProvider` 单点消费）
+///
+/// 每次调用新建一条 Rust→Dart 流；Dart 取消订阅后 `sink.add` 失败即自行退出。
+Stream<HolidayProgressDto> subscribeHolidayProgress() =>
+    RustLib.instance.api.crateApiHolidaySubscribeHolidayProgress();

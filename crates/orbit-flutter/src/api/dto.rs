@@ -927,17 +927,17 @@ impl From<orbit_core::api::holiday_api::HolidayInfo> for HolidayInfo {
     }
 }
 
-/// 节假日更新记账（上次更新时间/失败次数/固定时刻；日历工具栏展示用）
+/// 节假日更新记账（上次更新/尝试时间、失败次数、自动更新开关；日历工具栏展示用）
 #[derive(Debug, Clone)]
 pub struct HolidayMeta {
-    /// 上次成功更新（ms；0 = 从未成功）
+    /// 上次「自动更新范围内年份」成功更新（ms；0 = 从未成功）
     pub last_update_ms: i64,
     /// 上次尝试（ms；0 = 从未尝试）
     pub last_attempt_ms: i64,
     /// 连续失败次数（成功后清零）
     pub failure_count: i32,
-    /// 每日固定更新时刻（本地时区小时 0-23；默认 8）
-    pub fixed_hour: u32,
+    /// 自动更新总开关（关闭后仅手动 / 按年补写）
+    pub auto_enabled: bool,
 }
 
 impl From<orbit_core::api::holiday_api::HolidayMeta> for HolidayMeta {
@@ -946,8 +946,138 @@ impl From<orbit_core::api::holiday_api::HolidayMeta> for HolidayMeta {
             last_update_ms: m.last_update_ms,
             last_attempt_ms: m.last_attempt_ms,
             failure_count: m.failure_count,
-            fixed_hour: m.fixed_hour,
+            auto_enabled: m.auto_enabled,
         }
+    }
+}
+
+/// 按单年补写结果（记账 + 该年实际行数；`row_count == 0` = 该年线上无数据）
+#[derive(Debug, Clone)]
+pub struct HolidayYearOutcome {
+    pub meta: HolidayMeta,
+    /// 该年实际拉取到的行数（0 = 线上无数据，UI 提示用）
+    pub row_count: u32,
+}
+
+impl From<orbit_core::api::holiday_api::HolidayYearOutcome> for HolidayYearOutcome {
+    fn from(o: orbit_core::api::holiday_api::HolidayYearOutcome) -> Self {
+        Self {
+            meta: HolidayMeta::from(o.meta),
+            row_count: o.row_count,
+        }
+    }
+}
+
+/// 按年范围补写结果汇总
+#[derive(Debug, Clone)]
+pub struct HolidayRangeSummary {
+    /// 成功写入（含空响应）的年份数
+    pub ok: u32,
+    /// 获取失败的年份数（含熔断后未尝试的年份）
+    pub failed: u32,
+    /// 成功但线上无数据的年份数
+    pub empty: u32,
+    /// 是否被中途取消
+    pub cancelled: bool,
+}
+
+impl From<orbit_core::api::holiday_api::HolidayRangeSummary> for HolidayRangeSummary {
+    fn from(s: orbit_core::api::holiday_api::HolidayRangeSummary) -> Self {
+        Self {
+            ok: s.ok,
+            failed: s.failed,
+            empty: s.empty,
+            cancelled: s.cancelled,
+        }
+    }
+}
+
+/// 范围补写进度（core `HolidayProgress` 枚举的**平铺**镜像）
+///
+/// core 侧是 `#[serde(tag = "phase")]` 的带字段枚举；FRB api 扫描范围内无枚举
+/// 先例，且带字段枚举的 Dart 生成形态（sealed class）与项目既有「本地 struct
+/// 镜像」约定不一致，故此处按 serde 的实际形状**平铺**为单结构：
+/// 只保证 `phase` 对应的字段有意义，其余字段为类型零值。
+///
+/// 字段命名刻意区分阶段前缀，避免跨变体同名不同型（core 的 `Year.ok` 是
+/// `bool`「该年成功」，`Done.ok` 是 `u32`「成功年份数」——平铺后会撞名）：
+/// - `year` 阶段：`total` / `year` / `done` / `year_ok` / `year_empty`
+/// - `done` 阶段：`ok_count` / `failed` / `cancelled`
+/// - `error` 阶段：`message`
+#[derive(Debug, Clone)]
+pub struct HolidayProgressDto {
+    /// 阶段：`starting` / `year` / `done` / `error`
+    pub phase: String,
+    /// 总年份数（starting / year 阶段有效）
+    pub total: u32,
+    /// 当前年份（year 阶段有效）
+    pub year: i32,
+    /// 已结算年份数（year 阶段有效）
+    pub done: u32,
+    /// 该年是否拉取成功（year 阶段有效）
+    pub year_ok: bool,
+    /// 该年是否线上无数据（year 阶段有效）
+    pub year_empty: bool,
+    /// 成功写入（含空响应）的年份数（done 阶段有效）
+    pub ok_count: u32,
+    /// 获取失败的年份数（done 阶段有效）
+    pub failed: u32,
+    /// 是否被中途取消（done 阶段有效）
+    pub cancelled: bool,
+    /// 错误信息（error 阶段有效）
+    pub message: String,
+}
+
+impl From<orbit_core::api::holiday_api::HolidayProgress> for HolidayProgressDto {
+    fn from(p: orbit_core::api::holiday_api::HolidayProgress) -> Self {
+        use orbit_core::api::holiday_api::HolidayProgress as P;
+        let mut dto = Self {
+            phase: String::new(),
+            total: 0,
+            year: 0,
+            done: 0,
+            year_ok: false,
+            year_empty: false,
+            ok_count: 0,
+            failed: 0,
+            cancelled: false,
+            message: String::new(),
+        };
+        match p {
+            P::Starting { total } => {
+                dto.phase = "starting".into();
+                dto.total = total;
+            }
+            P::Year {
+                year,
+                done,
+                total,
+                ok,
+                empty,
+            } => {
+                dto.phase = "year".into();
+                dto.year = year;
+                dto.done = done;
+                dto.total = total;
+                dto.year_ok = ok;
+                dto.year_empty = empty;
+            }
+            P::Done {
+                ok,
+                failed,
+                cancelled,
+            } => {
+                dto.phase = "done".into();
+                dto.ok_count = ok;
+                dto.failed = failed;
+                dto.cancelled = cancelled;
+            }
+            P::Error { message } => {
+                dto.phase = "error".into();
+                dto.message = message;
+            }
+        }
+        dto
     }
 }
 

@@ -38,7 +38,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.12.0";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -277808666;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 328996580;
 
 // Section: executor
 
@@ -1474,6 +1474,114 @@ fn wire__crate__api__search__global_search_result_default_impl(
         },
     )
 }
+fn wire__crate__api__holiday__holiday_cancel_fetch_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "holiday_cancel_fetch",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, ()>((move || {
+                    let output_ok = Result::<_, ()>::Ok({
+                        crate::api::holiday::holiday_cancel_fetch();
+                    })?;
+                    Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
+fn wire__crate__api__holiday__holiday_fetch_range_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "holiday_fetch_range",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_start = <i32>::sse_decode(&mut deserializer);
+            let api_end = <i32>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| async move {
+                transform_result_sse::<_, String>(
+                    (move || async move {
+                        let output_ok =
+                            crate::api::holiday::holiday_fetch_range(api_start, api_end).await?;
+                        Ok(output_ok)
+                    })()
+                    .await,
+                )
+            }
+        },
+    )
+}
+fn wire__crate__api__holiday__holiday_fetch_year_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "holiday_fetch_year",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_year = <i32>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| async move {
+                transform_result_sse::<_, String>(
+                    (move || async move {
+                        let output_ok = crate::api::holiday::holiday_fetch_year(api_year).await?;
+                        Ok(output_ok)
+                    })()
+                    .await,
+                )
+            }
+        },
+    )
+}
 fn wire__crate__api__holiday__holiday_is_on_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -1580,7 +1688,7 @@ fn wire__crate__api__holiday__holiday_meta_impl(
         },
     )
 }
-fn wire__crate__api__holiday__holiday_set_fixed_hour_impl(
+fn wire__crate__api__holiday__holiday_set_auto_enabled_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
     rust_vec_len_: i32,
@@ -1588,7 +1696,7 @@ fn wire__crate__api__holiday__holiday_set_fixed_hour_impl(
 ) {
     FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
         flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "holiday_set_fixed_hour",
+            debug_name: "holiday_set_auto_enabled",
             port: Some(port_),
             mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
         },
@@ -1602,13 +1710,13 @@ fn wire__crate__api__holiday__holiday_set_fixed_hour_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
-            let api_hour = <u32>::sse_decode(&mut deserializer);
+            let api_enabled = <bool>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
                 transform_result_sse::<_, String>(
                     (move || async move {
                         let output_ok =
-                            crate::api::holiday::holiday_set_fixed_hour(api_hour).await?;
+                            crate::api::holiday::holiday_set_auto_enabled(api_enabled).await?;
                         Ok(output_ok)
                     })()
                     .await,
@@ -2474,6 +2582,44 @@ fn wire__crate__api__events__subscribe_db_changes_impl(
                 transform_result_sse::<_, ()>((move || {
                     let output_ok = Result::<_, ()>::Ok({
                         crate::api::events::subscribe_db_changes(api_sink);
+                    })?;
+                    Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
+fn wire__crate__api__holiday__subscribe_holiday_progress_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "subscribe_holiday_progress",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_sink = <StreamSink<
+                crate::api::dto::HolidayProgressDto,
+                flutter_rust_bridge::for_generated::SseCodec,
+            >>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, ()>((move || {
+                    let output_ok = Result::<_, ()>::Ok({
+                        crate::api::holiday::subscribe_holiday_progress(api_sink);
                     })?;
                     Ok(output_ok)
                 })())
@@ -5771,6 +5917,19 @@ impl SseDecode
 }
 
 impl SseDecode
+    for StreamSink<
+        crate::api::dto::HolidayProgressDto,
+        flutter_rust_bridge::for_generated::SseCodec,
+    >
+{
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut inner = <String>::sse_decode(deserializer);
+        return StreamSink::deserialize(inner);
+    }
+}
+
+impl SseDecode
     for StreamSink<crate::api::events::ReminderDueDto, flutter_rust_bridge::for_generated::SseCodec>
 {
     // Codec=Sse (Serialization based), see doc to use other codecs
@@ -6206,12 +6365,68 @@ impl SseDecode for crate::api::dto::HolidayMeta {
         let mut var_lastUpdateMs = <i64>::sse_decode(deserializer);
         let mut var_lastAttemptMs = <i64>::sse_decode(deserializer);
         let mut var_failureCount = <i32>::sse_decode(deserializer);
-        let mut var_fixedHour = <u32>::sse_decode(deserializer);
+        let mut var_autoEnabled = <bool>::sse_decode(deserializer);
         return crate::api::dto::HolidayMeta {
             last_update_ms: var_lastUpdateMs,
             last_attempt_ms: var_lastAttemptMs,
             failure_count: var_failureCount,
-            fixed_hour: var_fixedHour,
+            auto_enabled: var_autoEnabled,
+        };
+    }
+}
+
+impl SseDecode for crate::api::dto::HolidayProgressDto {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_phase = <String>::sse_decode(deserializer);
+        let mut var_total = <u32>::sse_decode(deserializer);
+        let mut var_year = <i32>::sse_decode(deserializer);
+        let mut var_done = <u32>::sse_decode(deserializer);
+        let mut var_yearOk = <bool>::sse_decode(deserializer);
+        let mut var_yearEmpty = <bool>::sse_decode(deserializer);
+        let mut var_okCount = <u32>::sse_decode(deserializer);
+        let mut var_failed = <u32>::sse_decode(deserializer);
+        let mut var_cancelled = <bool>::sse_decode(deserializer);
+        let mut var_message = <String>::sse_decode(deserializer);
+        return crate::api::dto::HolidayProgressDto {
+            phase: var_phase,
+            total: var_total,
+            year: var_year,
+            done: var_done,
+            year_ok: var_yearOk,
+            year_empty: var_yearEmpty,
+            ok_count: var_okCount,
+            failed: var_failed,
+            cancelled: var_cancelled,
+            message: var_message,
+        };
+    }
+}
+
+impl SseDecode for crate::api::dto::HolidayRangeSummary {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_ok = <u32>::sse_decode(deserializer);
+        let mut var_failed = <u32>::sse_decode(deserializer);
+        let mut var_empty = <u32>::sse_decode(deserializer);
+        let mut var_cancelled = <bool>::sse_decode(deserializer);
+        return crate::api::dto::HolidayRangeSummary {
+            ok: var_ok,
+            failed: var_failed,
+            empty: var_empty,
+            cancelled: var_cancelled,
+        };
+    }
+}
+
+impl SseDecode for crate::api::dto::HolidayYearOutcome {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_meta = <crate::api::dto::HolidayMeta>::sse_decode(deserializer);
+        let mut var_rowCount = <u32>::sse_decode(deserializer);
+        return crate::api::dto::HolidayYearOutcome {
+            meta: var_meta,
+            row_count: var_rowCount,
         };
     }
 }
@@ -8098,328 +8313,341 @@ fn pde_ffi_dispatcher_primary_impl(
             rust_vec_len,
             data_len,
         ),
-        40 => wire__crate__api__holiday__holiday_is_on_impl(port, ptr, rust_vec_len, data_len),
-        41 => wire__crate__api__holiday__holiday_list_impl(port, ptr, rust_vec_len, data_len),
-        42 => wire__crate__api__holiday__holiday_meta_impl(port, ptr, rust_vec_len, data_len),
-        43 => wire__crate__api__holiday__holiday_set_fixed_hour_impl(
+        40 => {
+            wire__crate__api__holiday__holiday_cancel_fetch_impl(port, ptr, rust_vec_len, data_len)
+        }
+        41 => {
+            wire__crate__api__holiday__holiday_fetch_range_impl(port, ptr, rust_vec_len, data_len)
+        }
+        42 => wire__crate__api__holiday__holiday_fetch_year_impl(port, ptr, rust_vec_len, data_len),
+        43 => wire__crate__api__holiday__holiday_is_on_impl(port, ptr, rust_vec_len, data_len),
+        44 => wire__crate__api__holiday__holiday_list_impl(port, ptr, rust_vec_len, data_len),
+        45 => wire__crate__api__holiday__holiday_meta_impl(port, ptr, rust_vec_len, data_len),
+        46 => wire__crate__api__holiday__holiday_set_auto_enabled_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        44 => wire__crate__api__holiday__holiday_update_impl(port, ptr, rust_vec_len, data_len),
-        45 => wire__crate__api__ics_export__ics_export_impl(port, ptr, rust_vec_len, data_len),
-        46 => wire__crate__api__auth__master_auth_change_password_impl(
+        47 => wire__crate__api__holiday__holiday_update_impl(port, ptr, rust_vec_len, data_len),
+        48 => wire__crate__api__ics_export__ics_export_impl(port, ptr, rust_vec_len, data_len),
+        49 => wire__crate__api__auth__master_auth_change_password_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        47 => wire__crate__api__auth__master_auth_clear_impl(port, ptr, rust_vec_len, data_len),
-        48 => wire__crate__api__auth__master_auth_has_impl(port, ptr, rust_vec_len, data_len),
-        49 => wire__crate__api__auth__master_auth_init_impl(port, ptr, rust_vec_len, data_len),
-        50 => wire__crate__api__auth__master_auth_unlock_impl(port, ptr, rust_vec_len, data_len),
-        51 => wire__crate__api__auth__master_auth_verify_impl(port, ptr, rust_vec_len, data_len),
-        52 => wire__crate__api__notification_log__notification_log_clear_impl(
+        50 => wire__crate__api__auth__master_auth_clear_impl(port, ptr, rust_vec_len, data_len),
+        51 => wire__crate__api__auth__master_auth_has_impl(port, ptr, rust_vec_len, data_len),
+        52 => wire__crate__api__auth__master_auth_init_impl(port, ptr, rust_vec_len, data_len),
+        53 => wire__crate__api__auth__master_auth_unlock_impl(port, ptr, rust_vec_len, data_len),
+        54 => wire__crate__api__auth__master_auth_verify_impl(port, ptr, rust_vec_len, data_len),
+        55 => wire__crate__api__notification_log__notification_log_clear_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        53 => wire__crate__api__notification_log__notification_log_list_impl(
+        56 => wire__crate__api__notification_log__notification_log_list_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        54 => {
+        57 => {
             wire__crate__api__state__orbit_state_initialized_impl(port, ptr, rust_vec_len, data_len)
         }
-        55 => wire__crate__api__auth__ping_impl(port, ptr, rust_vec_len, data_len),
-        56 => wire__crate__api__plaintext_export__plaintext_export_csv_impl(
+        58 => wire__crate__api__auth__ping_impl(port, ptr, rust_vec_len, data_len),
+        59 => wire__crate__api__plaintext_export__plaintext_export_csv_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        57 => wire__crate__api__plaintext_export__plaintext_export_json_impl(
+        60 => wire__crate__api__plaintext_export__plaintext_export_json_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        58 => wire__crate__api__saved_filter__saved_filter_create_impl(
+        61 => wire__crate__api__saved_filter__saved_filter_create_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        59 => wire__crate__api__saved_filter__saved_filter_delete_impl(
+        62 => wire__crate__api__saved_filter__saved_filter_delete_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        60 => wire__crate__api__saved_filter__saved_filter_update_impl(
+        63 => wire__crate__api__saved_filter__saved_filter_update_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        61 => wire__crate__api__saved_filter__saved_filters_list_impl(
+        64 => wire__crate__api__saved_filter__saved_filters_list_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        62 => wire__crate__api__full_sync_backup__start_backup_scheduler_impl(
+        65 => wire__crate__api__full_sync_backup__start_backup_scheduler_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        63 => wire__crate__api__holiday__start_holiday_scheduler_impl(
+        66 => wire__crate__api__holiday__start_holiday_scheduler_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        64 => {
+        67 => {
             wire__crate__api__events__start_reminder_poller_impl(port, ptr, rust_vec_len, data_len)
         }
-        65 => {
+        68 => {
             wire__crate__api__trash__start_trash_scheduler_impl(port, ptr, rust_vec_len, data_len)
         }
-        66 => wire__crate__api__stats__stats_aggregate_impl(port, ptr, rust_vec_len, data_len),
-        67 => {
+        69 => wire__crate__api__stats__stats_aggregate_impl(port, ptr, rust_vec_len, data_len),
+        70 => {
             wire__crate__api__events__subscribe_db_changes_impl(port, ptr, rust_vec_len, data_len)
         }
-        68 => wire__crate__api__sync__sync_config_get_impl(port, ptr, rust_vec_len, data_len),
-        69 => wire__crate__api__sync__sync_config_save_impl(port, ptr, rust_vec_len, data_len),
-        70 => wire__crate__api__sync_conflict__sync_conflict_clear_impl(
+        71 => wire__crate__api__holiday__subscribe_holiday_progress_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        71 => wire__crate__api__sync_conflict__sync_conflict_count_impl(
+        72 => wire__crate__api__sync__sync_config_get_impl(port, ptr, rust_vec_len, data_len),
+        73 => wire__crate__api__sync__sync_config_save_impl(port, ptr, rust_vec_len, data_len),
+        74 => wire__crate__api__sync_conflict__sync_conflict_clear_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        72 => wire__crate__api__sync_conflict__sync_conflict_dismiss_impl(
+        75 => wire__crate__api__sync_conflict__sync_conflict_count_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        73 => wire__crate__api__sync_conflict__sync_conflict_list_impl(
+        76 => wire__crate__api__sync_conflict__sync_conflict_dismiss_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        74 => wire__crate__api__sync_conflict__sync_conflict_restore_impl(
+        77 => wire__crate__api__sync_conflict__sync_conflict_list_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        75 => wire__crate__api__sync__sync_crypto_change_password_impl(
+        78 => wire__crate__api__sync_conflict__sync_conflict_restore_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        76 => wire__crate__api__sync__sync_crypto_export_bundle_impl(
+        79 => wire__crate__api__sync__sync_crypto_change_password_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        77 => wire__crate__api__sync__sync_crypto_forget_session_impl(
+        80 => wire__crate__api__sync__sync_crypto_export_bundle_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        78 => wire__crate__api__sync__sync_crypto_import_bundle_impl(
+        81 => wire__crate__api__sync__sync_crypto_forget_session_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        79 => wire__crate__api__sync__sync_crypto_init_impl(port, ptr, rust_vec_len, data_len),
-        80 => wire__crate__api__sync__sync_crypto_lock_impl(port, ptr, rust_vec_len, data_len),
-        81 => {
+        82 => wire__crate__api__sync__sync_crypto_import_bundle_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        83 => wire__crate__api__sync__sync_crypto_init_impl(port, ptr, rust_vec_len, data_len),
+        84 => wire__crate__api__sync__sync_crypto_lock_impl(port, ptr, rust_vec_len, data_len),
+        85 => {
             wire__crate__api__sync__sync_crypto_meta_version_impl(port, ptr, rust_vec_len, data_len)
         }
-        82 => wire__crate__api__sync__sync_crypto_restore_session_impl(
+        86 => wire__crate__api__sync__sync_crypto_restore_session_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        83 => wire__crate__api__sync__sync_crypto_status_impl(port, ptr, rust_vec_len, data_len),
-        84 => wire__crate__api__sync__sync_crypto_unlock_impl(port, ptr, rust_vec_len, data_len),
-        85 => {
+        87 => wire__crate__api__sync__sync_crypto_status_impl(port, ptr, rust_vec_len, data_len),
+        88 => wire__crate__api__sync__sync_crypto_unlock_impl(port, ptr, rust_vec_len, data_len),
+        89 => {
             wire__crate__api__sync__sync_crypto_upgrade_v2_impl(port, ptr, rust_vec_len, data_len)
         }
-        86 => wire__crate__api__sync__sync_disconnect_impl(port, ptr, rust_vec_len, data_len),
-        87 => wire__crate__api__sync__sync_test_connection_impl(port, ptr, rust_vec_len, data_len),
-        88 => wire__crate__api__activity_log__task_activity_list_impl(
+        90 => wire__crate__api__sync__sync_disconnect_impl(port, ptr, rust_vec_len, data_len),
+        91 => wire__crate__api__sync__sync_test_connection_impl(port, ptr, rust_vec_len, data_len),
+        92 => wire__crate__api__activity_log__task_activity_list_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        89 => wire__crate__api__asset__task_attachment_add_impl(port, ptr, rust_vec_len, data_len),
-        90 => wire__crate__api__asset__task_attachment_read_impl(port, ptr, rust_vec_len, data_len),
-        91 => {
+        93 => wire__crate__api__asset__task_attachment_add_impl(port, ptr, rust_vec_len, data_len),
+        94 => wire__crate__api__asset__task_attachment_read_impl(port, ptr, rust_vec_len, data_len),
+        95 => {
             wire__crate__api__asset__task_attachment_remove_impl(port, ptr, rust_vec_len, data_len)
         }
-        92 => {
+        96 => {
             wire__crate__api__asset__task_attachments_list_impl(port, ptr, rust_vec_len, data_len)
         }
-        93 => wire__crate__api__todo__task_dependency_flags_impl(port, ptr, rust_vec_len, data_len),
-        94 => {
+        97 => wire__crate__api__todo__task_dependency_flags_impl(port, ptr, rust_vec_len, data_len),
+        98 => {
             wire__crate__api__todo__task_description_flags_impl(port, ptr, rust_vec_len, data_len)
         }
-        95 => {
+        99 => {
             wire__crate__api__todo__task_labels_projection_impl(port, ptr, rust_vec_len, data_len)
         }
-        96 => wire__crate__api__todo__task_reminders_projection_impl(
+        100 => wire__crate__api__todo__task_reminders_projection_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        97 => wire__crate__api__template__template_create_impl(port, ptr, rust_vec_len, data_len),
-        98 => wire__crate__api__template__template_delete_impl(port, ptr, rust_vec_len, data_len),
-        99 => wire__crate__api__template__template_update_impl(port, ptr, rust_vec_len, data_len),
-        100 => wire__crate__api__template__templates_list_impl(port, ptr, rust_vec_len, data_len),
-        101 => wire__crate__api__todo__todo_comments_create_impl(port, ptr, rust_vec_len, data_len),
-        102 => wire__crate__api__todo__todo_comments_delete_impl(port, ptr, rust_vec_len, data_len),
-        103 => wire__crate__api__todo__todo_comments_get_impl(port, ptr, rust_vec_len, data_len),
-        104 => wire__crate__api__todo__todo_comments_list_impl(port, ptr, rust_vec_len, data_len),
-        105 => wire__crate__api__todo__todo_labels_create_impl(port, ptr, rust_vec_len, data_len),
-        106 => wire__crate__api__todo__todo_labels_delete_impl(port, ptr, rust_vec_len, data_len),
-        107 => wire__crate__api__todo__todo_labels_get_impl(port, ptr, rust_vec_len, data_len),
-        108 => wire__crate__api__todo__todo_labels_list_impl(port, ptr, rust_vec_len, data_len),
-        109 => wire__crate__api__todo__todo_labels_update_impl(port, ptr, rust_vec_len, data_len),
-        110 => wire__crate__api__todo__todo_projects_create_impl(port, ptr, rust_vec_len, data_len),
-        111 => wire__crate__api__todo__todo_projects_delete_impl(port, ptr, rust_vec_len, data_len),
-        112 => wire__crate__api__todo__todo_projects_get_impl(port, ptr, rust_vec_len, data_len),
-        113 => wire__crate__api__todo__todo_projects_get_by_uuid_impl(
+        101 => wire__crate__api__template__template_create_impl(port, ptr, rust_vec_len, data_len),
+        102 => wire__crate__api__template__template_delete_impl(port, ptr, rust_vec_len, data_len),
+        103 => wire__crate__api__template__template_update_impl(port, ptr, rust_vec_len, data_len),
+        104 => wire__crate__api__template__templates_list_impl(port, ptr, rust_vec_len, data_len),
+        105 => wire__crate__api__todo__todo_comments_create_impl(port, ptr, rust_vec_len, data_len),
+        106 => wire__crate__api__todo__todo_comments_delete_impl(port, ptr, rust_vec_len, data_len),
+        107 => wire__crate__api__todo__todo_comments_get_impl(port, ptr, rust_vec_len, data_len),
+        108 => wire__crate__api__todo__todo_comments_list_impl(port, ptr, rust_vec_len, data_len),
+        109 => wire__crate__api__todo__todo_labels_create_impl(port, ptr, rust_vec_len, data_len),
+        110 => wire__crate__api__todo__todo_labels_delete_impl(port, ptr, rust_vec_len, data_len),
+        111 => wire__crate__api__todo__todo_labels_get_impl(port, ptr, rust_vec_len, data_len),
+        112 => wire__crate__api__todo__todo_labels_list_impl(port, ptr, rust_vec_len, data_len),
+        113 => wire__crate__api__todo__todo_labels_update_impl(port, ptr, rust_vec_len, data_len),
+        114 => wire__crate__api__todo__todo_projects_create_impl(port, ptr, rust_vec_len, data_len),
+        115 => wire__crate__api__todo__todo_projects_delete_impl(port, ptr, rust_vec_len, data_len),
+        116 => wire__crate__api__todo__todo_projects_get_impl(port, ptr, rust_vec_len, data_len),
+        117 => wire__crate__api__todo__todo_projects_get_by_uuid_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        114 => wire__crate__api__todo__todo_projects_list_impl(port, ptr, rust_vec_len, data_len),
-        115 => wire__crate__api__todo__todo_projects_list_archived_impl(
+        118 => wire__crate__api__todo__todo_projects_list_impl(port, ptr, rust_vec_len, data_len),
+        119 => wire__crate__api__todo__todo_projects_list_archived_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        116 => wire__crate__api__todo__todo_projects_update_impl(port, ptr, rust_vec_len, data_len),
-        117 => wire__crate__api__todo__todo_projects_update_sort_order_impl(
+        120 => wire__crate__api__todo__todo_projects_update_impl(port, ptr, rust_vec_len, data_len),
+        121 => wire__crate__api__todo__todo_projects_update_sort_order_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        118 => {
+        122 => {
             wire__crate__api__todo__todo_reminders_create_impl(port, ptr, rust_vec_len, data_len)
         }
-        119 => {
+        123 => {
             wire__crate__api__todo__todo_reminders_delete_impl(port, ptr, rust_vec_len, data_len)
         }
-        120 => wire__crate__api__todo__todo_reminders_get_impl(port, ptr, rust_vec_len, data_len),
-        121 => wire__crate__api__todo__todo_reminders_list_impl(port, ptr, rust_vec_len, data_len),
-        122 => wire__crate__api__todo__todo_subtasks_create_impl(port, ptr, rust_vec_len, data_len),
-        123 => wire__crate__api__todo__todo_subtasks_delete_impl(port, ptr, rust_vec_len, data_len),
-        124 => wire__crate__api__todo__todo_subtasks_get_impl(port, ptr, rust_vec_len, data_len),
-        125 => wire__crate__api__todo__todo_subtasks_list_impl(port, ptr, rust_vec_len, data_len),
-        126 => {
+        124 => wire__crate__api__todo__todo_reminders_get_impl(port, ptr, rust_vec_len, data_len),
+        125 => wire__crate__api__todo__todo_reminders_list_impl(port, ptr, rust_vec_len, data_len),
+        126 => wire__crate__api__todo__todo_subtasks_create_impl(port, ptr, rust_vec_len, data_len),
+        127 => wire__crate__api__todo__todo_subtasks_delete_impl(port, ptr, rust_vec_len, data_len),
+        128 => wire__crate__api__todo__todo_subtasks_get_impl(port, ptr, rust_vec_len, data_len),
+        129 => wire__crate__api__todo__todo_subtasks_list_impl(port, ptr, rust_vec_len, data_len),
+        130 => {
             wire__crate__api__todo__todo_subtasks_promote_impl(port, ptr, rust_vec_len, data_len)
         }
-        127 => wire__crate__api__todo__todo_subtasks_toggle_done_impl(
+        131 => wire__crate__api__todo__todo_subtasks_toggle_done_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        128 => wire__crate__api__todo__todo_subtasks_update_impl(port, ptr, rust_vec_len, data_len),
-        129 => {
+        132 => wire__crate__api__todo__todo_subtasks_update_impl(port, ptr, rust_vec_len, data_len),
+        133 => {
             wire__crate__api__todo__todo_task_labels_create_impl(port, ptr, rust_vec_len, data_len)
         }
-        130 => {
+        134 => {
             wire__crate__api__todo__todo_task_labels_delete_impl(port, ptr, rust_vec_len, data_len)
         }
-        131 => wire__crate__api__todo__todo_task_labels_get_impl(port, ptr, rust_vec_len, data_len),
-        132 => {
+        135 => wire__crate__api__todo__todo_task_labels_get_impl(port, ptr, rust_vec_len, data_len),
+        136 => {
             wire__crate__api__todo__todo_task_labels_list_impl(port, ptr, rust_vec_len, data_len)
         }
-        133 => wire__crate__api__todo__todo_task_relations_create_impl(
+        137 => wire__crate__api__todo__todo_task_relations_create_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        134 => wire__crate__api__todo__todo_task_relations_delete_impl(
+        138 => wire__crate__api__todo__todo_task_relations_delete_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        135 => {
+        139 => {
             wire__crate__api__todo__todo_task_relations_get_impl(port, ptr, rust_vec_len, data_len)
         }
-        136 => {
+        140 => {
             wire__crate__api__todo__todo_task_relations_list_impl(port, ptr, rust_vec_len, data_len)
         }
-        137 => wire__crate__api__todo__todo_tasks_complete_impl(port, ptr, rust_vec_len, data_len),
-        138 => wire__crate__api__todo__todo_tasks_create_impl(port, ptr, rust_vec_len, data_len),
-        139 => wire__crate__api__todo__todo_tasks_delete_impl(port, ptr, rust_vec_len, data_len),
-        140 => wire__crate__api__todo__todo_tasks_duplicate_impl(port, ptr, rust_vec_len, data_len),
-        141 => wire__crate__api__todo__todo_tasks_get_impl(port, ptr, rust_vec_len, data_len),
-        142 => {
+        141 => wire__crate__api__todo__todo_tasks_complete_impl(port, ptr, rust_vec_len, data_len),
+        142 => wire__crate__api__todo__todo_tasks_create_impl(port, ptr, rust_vec_len, data_len),
+        143 => wire__crate__api__todo__todo_tasks_delete_impl(port, ptr, rust_vec_len, data_len),
+        144 => wire__crate__api__todo__todo_tasks_duplicate_impl(port, ptr, rust_vec_len, data_len),
+        145 => wire__crate__api__todo__todo_tasks_get_impl(port, ptr, rust_vec_len, data_len),
+        146 => {
             wire__crate__api__todo__todo_tasks_get_by_uuid_impl(port, ptr, rust_vec_len, data_len)
         }
-        143 => {
+        147 => {
             wire__crate__api__todo__todo_tasks_get_detail_impl(port, ptr, rust_vec_len, data_len)
         }
-        144 => wire__crate__api__todo__todo_tasks_list_impl(port, ptr, rust_vec_len, data_len),
-        145 => wire__crate__api__todo__todo_tasks_recalc_percent_impl(
+        148 => wire__crate__api__todo__todo_tasks_list_impl(port, ptr, rust_vec_len, data_len),
+        149 => wire__crate__api__todo__todo_tasks_recalc_percent_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        146 => wire__crate__api__todo__todo_tasks_update_impl(port, ptr, rust_vec_len, data_len),
-        147 => wire__crate__api__todo__todo_tasks_update_position_impl(
+        150 => wire__crate__api__todo__todo_tasks_update_impl(port, ptr, rust_vec_len, data_len),
+        151 => wire__crate__api__todo__todo_tasks_update_position_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        148 => wire__crate__api__trash__trash_meta_impl(port, ptr, rust_vec_len, data_len),
-        149 => wire__crate__api__trash__trash_purge_all_impl(port, ptr, rust_vec_len, data_len),
-        150 => wire__crate__api__trash__trash_purge_expired_impl(port, ptr, rust_vec_len, data_len),
-        151 => wire__crate__api__trash__trash_set_retention_days_impl(
+        152 => wire__crate__api__trash__trash_meta_impl(port, ptr, rust_vec_len, data_len),
+        153 => wire__crate__api__trash__trash_purge_all_impl(port, ptr, rust_vec_len, data_len),
+        154 => wire__crate__api__trash__trash_purge_expired_impl(port, ptr, rust_vec_len, data_len),
+        155 => wire__crate__api__trash__trash_set_retention_days_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        152 => wire__crate__api__trash__trash_task_purge_impl(port, ptr, rust_vec_len, data_len),
-        153 => wire__crate__api__trash__trash_task_restore_impl(port, ptr, rust_vec_len, data_len),
-        154 => wire__crate__api__trash__trash_tasks_list_impl(port, ptr, rust_vec_len, data_len),
-        155 => wire__crate__api__widget__widget_todo_query_impl(port, ptr, rust_vec_len, data_len),
-        156 => wire__crate__api__widget__widget_todo_toggle_impl(port, ptr, rust_vec_len, data_len),
+        156 => wire__crate__api__trash__trash_task_purge_impl(port, ptr, rust_vec_len, data_len),
+        157 => wire__crate__api__trash__trash_task_restore_impl(port, ptr, rust_vec_len, data_len),
+        158 => wire__crate__api__trash__trash_tasks_list_impl(port, ptr, rust_vec_len, data_len),
+        159 => wire__crate__api__widget__widget_todo_query_impl(port, ptr, rust_vec_len, data_len),
+        160 => wire__crate__api__widget__widget_todo_toggle_impl(port, ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
@@ -8964,7 +9192,7 @@ impl flutter_rust_bridge::IntoDart for crate::api::dto::HolidayMeta {
             self.last_update_ms.into_into_dart().into_dart(),
             self.last_attempt_ms.into_into_dart().into_dart(),
             self.failure_count.into_into_dart().into_dart(),
-            self.fixed_hour.into_into_dart().into_dart(),
+            self.auto_enabled.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -8974,6 +9202,79 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::dto::HolidayMeta>
     for crate::api::dto::HolidayMeta
 {
     fn into_into_dart(self) -> crate::api::dto::HolidayMeta {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::dto::HolidayProgressDto {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.phase.into_into_dart().into_dart(),
+            self.total.into_into_dart().into_dart(),
+            self.year.into_into_dart().into_dart(),
+            self.done.into_into_dart().into_dart(),
+            self.year_ok.into_into_dart().into_dart(),
+            self.year_empty.into_into_dart().into_dart(),
+            self.ok_count.into_into_dart().into_dart(),
+            self.failed.into_into_dart().into_dart(),
+            self.cancelled.into_into_dart().into_dart(),
+            self.message.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::dto::HolidayProgressDto
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::dto::HolidayProgressDto>
+    for crate::api::dto::HolidayProgressDto
+{
+    fn into_into_dart(self) -> crate::api::dto::HolidayProgressDto {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::dto::HolidayRangeSummary {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.ok.into_into_dart().into_dart(),
+            self.failed.into_into_dart().into_dart(),
+            self.empty.into_into_dart().into_dart(),
+            self.cancelled.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::dto::HolidayRangeSummary
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::dto::HolidayRangeSummary>
+    for crate::api::dto::HolidayRangeSummary
+{
+    fn into_into_dart(self) -> crate::api::dto::HolidayRangeSummary {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::dto::HolidayYearOutcome {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.meta.into_into_dart().into_dart(),
+            self.row_count.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::dto::HolidayYearOutcome
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::dto::HolidayYearOutcome>
+    for crate::api::dto::HolidayYearOutcome
+{
+    fn into_into_dart(self) -> crate::api::dto::HolidayYearOutcome {
         self
     }
 }
@@ -10320,6 +10621,18 @@ impl SseEncode
 }
 
 impl SseEncode
+    for StreamSink<
+        crate::api::dto::HolidayProgressDto,
+        flutter_rust_bridge::for_generated::SseCodec,
+    >
+{
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        unimplemented!("")
+    }
+}
+
+impl SseEncode
     for StreamSink<crate::api::events::ReminderDueDto, flutter_rust_bridge::for_generated::SseCodec>
 {
     // Codec=Sse (Serialization based), see doc to use other codecs
@@ -10603,7 +10916,41 @@ impl SseEncode for crate::api::dto::HolidayMeta {
         <i64>::sse_encode(self.last_update_ms, serializer);
         <i64>::sse_encode(self.last_attempt_ms, serializer);
         <i32>::sse_encode(self.failure_count, serializer);
-        <u32>::sse_encode(self.fixed_hour, serializer);
+        <bool>::sse_encode(self.auto_enabled, serializer);
+    }
+}
+
+impl SseEncode for crate::api::dto::HolidayProgressDto {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <String>::sse_encode(self.phase, serializer);
+        <u32>::sse_encode(self.total, serializer);
+        <i32>::sse_encode(self.year, serializer);
+        <u32>::sse_encode(self.done, serializer);
+        <bool>::sse_encode(self.year_ok, serializer);
+        <bool>::sse_encode(self.year_empty, serializer);
+        <u32>::sse_encode(self.ok_count, serializer);
+        <u32>::sse_encode(self.failed, serializer);
+        <bool>::sse_encode(self.cancelled, serializer);
+        <String>::sse_encode(self.message, serializer);
+    }
+}
+
+impl SseEncode for crate::api::dto::HolidayRangeSummary {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <u32>::sse_encode(self.ok, serializer);
+        <u32>::sse_encode(self.failed, serializer);
+        <u32>::sse_encode(self.empty, serializer);
+        <bool>::sse_encode(self.cancelled, serializer);
+    }
+}
+
+impl SseEncode for crate::api::dto::HolidayYearOutcome {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <crate::api::dto::HolidayMeta>::sse_encode(self.meta, serializer);
+        <u32>::sse_encode(self.row_count, serializer);
     }
 }
 
