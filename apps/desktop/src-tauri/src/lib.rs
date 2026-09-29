@@ -197,8 +197,10 @@ pub fn run() {
             commands::sync_scheduler::sync_scheduler_start(_app.handle().clone());
             commands::sync_scheduler::sync_on_change_watcher_start(_app.handle().clone());
 
-            // 节假日自动更新守护（60s tick；每日固定时刻一次，错过启动即补更）
+            // 节假日自动更新守护（60s tick；每月一次，跨月首次启动即补更）
             commands::holiday_scheduler::holiday_scheduler_start(_app.handle().clone());
+            // 节假日范围补写进度泵（转发 core 进度广播为 holiday-progress 事件）
+            commands::holiday_scheduler::holiday_progress_pump_start(_app.handle().clone());
 
             // 回收站 TTL 清理守护（60s tick；每日最多一次，启动首轮即补清）
             commands::trash_scheduler::trash_scheduler_start(_app.handle().clone());
@@ -323,7 +325,10 @@ pub fn run() {
             commands::holiday_cmd::holiday_is_on,
             commands::holiday_cmd::holidays_update,
             commands::holiday_cmd::holiday_meta,
-            commands::holiday_cmd::holiday_set_fixed_hour,
+            commands::holiday_cmd::holiday_fetch_year,
+            commands::holiday_cmd::holiday_fetch_range,
+            commands::holiday_cmd::holiday_cancel_fetch,
+            commands::holiday_cmd::holiday_set_auto_enabled,
             commands::cloud_sync_cmd::cloud_sync_now,
             commands::cloud_sync_cmd::cloud_sync_push_only,
             commands::cloud_sync_cmd::cloud_sync_pull_then_push,
