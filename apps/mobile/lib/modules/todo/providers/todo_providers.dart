@@ -168,6 +168,14 @@ final holidayMetaProvider = FutureProvider<HolidayMeta>((ref) async {
   return ref.watch(orbitBridgeProvider).holidayMeta();
 });
 
+/// 节假日范围补写进度流（设置页「按年份范围获取」进度条/取消按钮消费）
+///
+/// 注意：bridge 侧 `holidayProgress` 是**每次订阅新建一条** Rust→Dart 流，
+/// 因此不要在多处重复 watch；设置页单点消费即可。
+final holidayProgressProvider = StreamProvider<HolidayProgress>((ref) {
+  return ref.watch(orbitBridgeProvider).holidayProgress;
+});
+
 /// 回收站任务列表（React queryKey ["trash","tasks"]；最近删除排最前）
 final trashTasksProvider = FutureProvider<List<TodoTask>>((ref) async {
   return ref.watch(orbitBridgeProvider).trashTasksList();

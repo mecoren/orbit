@@ -69,6 +69,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   /// 小组件：数据面首刷完成中
   bool _widgetBusy = false;
 
+  /// 节假日自动更新总开关交互中（防重复点击）
+  bool _holidayAutoBusy = false;
+
   /// 数据导出进行中的格式（'json' / 'csv' / 'ics'），null 空闲
   String? _exporting;
 
@@ -404,35 +407,21 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     );
   }
 
-  /// 节假日每日更新时刻展示（core 缺省 08:00；未取到记账时按缺省显示）
-  String _holidayFixedHourLabel(int? hour) =>
-      '${(hour ?? 8).toString().padLeft(2, '0')}:00';
-
-  /// 选每日自动更新时刻（0-23 整点）：core 侧固定时刻调度 + 错过补更，
-  /// 与日历页更新按钮共用同一份 holidayMetaProvider 记账
-  Future<void> _pickHolidayFixedHour() async {
-    final current = ref.read(holidayMetaProvider).value?.fixedHour ?? 8;
+  /// 切换节假日自动更新总开关：关闭后 Rust 调度器不再联网，仅保留日历页
+  /// 「手动更新」与缓存页「按年补写」；三处记账同源 holidayMetaProvider
+  Future<void> _toggleHolidayAuto(bool enabled) async {
+    if (_holidayAutoBusy) return;
+    setState(() => _holidayAutoBusy = true);
     final bridge = ref.read(orbitBridgeProvider);
-    await showSelectBottomSheet<int>(
-      context,
-      title: '每日更新时刻',
-      items: [
-        for (var hour = 0; hour < 24; hour++)
-          SelectItem(value: hour, label: _holidayFixedHourLabel(hour)),
-      ],
-      current: current,
-      onSelect: (hour) async {
-        if (hour == current) return;
-        try {
-          await bridge.holidaySetFixedHour(hour);
-          ref.invalidate(holidayMetaProvider);
-          WaitToast.success(
-              '节假日每日更新时刻已设为 ${_holidayFixedHourLabel(hour)}');
-        } catch (_) {
-          WaitToast.destructive('保存失败');
-        }
-      },
-    );
+    try {
+      await bridge.holidaySetAutoEnabled(enabled);
+      ref.invalidate(holidayMetaProvider);
+      WaitToast.success(enabled ? '已开启节假日自动更新' : '已关闭节假日自动更新');
+    } catch (_) {
+      WaitToast.destructive('保存失败');
+    } finally {
+      if (mounted) setState(() => _holidayAutoBusy = false);
+    }
   }
 
   /// 生物识别状态探测（build 期一次；开关翻转后手动 setState 刷新）
@@ -706,6 +695,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   Widget build(BuildContext context) {
     final colors = AppColors.ofContext(context);
     final config = ref.watch(syncConfigProvider).value;
+    // 节假日自动更新总开关（core 缺省开启；记账未取到按开启显示）
+    final holidayAuto =
+        ref.watch(holidayMetaProvider).value?.autoEnabled ?? true;
 
     return Scaffold(
       body: Stack(
@@ -992,29 +984,52 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   ),
                 ),
                 const SizedBox(height: AppDimens.space12),
-                // 日历与节假日卡：每日自动更新时刻（core 侧固定时刻调度 +
-                // 错过补更；桥位此前双端就绪但 UI 零接线，docs/07 #59）
+                // 日历与节假日卡：每月自动更新总开关（core 侧跨月调度 +
+                // 跨月后下次启动补更）+ 缓存页入口（按年补写 / 清理）
                 SectionCard(
                   title: '日历与节假日',
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        '日历里的放假/调休数据每天联网更新一次，也可在日历页手动更新；'
-                        '错过更新时刻会在下次启动时补更。',
+                        '日历里的放假/调休数据每月联网更新一次，跨月后下次启动即补更；'
+                        '也可在日历页手动更新，或在缓存页按年份补写历史数据。',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: colors.secondaryText,
+                        ),
+                      ),
+                      const SizedBox(height: AppDimens.space8),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              '自动更新',
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: colors.bodyText,
+                              ),
+                            ),
+                          ),
+                          Switch(
+                            value: holidayAuto,
+                            onChanged: _holidayAutoBusy
+                                ? null
+                                : (v) => _toggleHolidayAuto(v),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: AppDimens.space4),
+                      Text(
+                        holidayAuto
+                            ? '每月自动联网更新一次；关闭后仅保留手动更新与按年补写。'
+                            : '自动更新已关闭：需要时请在日历页手动更新，或在缓存页按年补写。',
                         style: TextStyle(
                           fontSize: 12,
                           color: colors.secondaryText,
                         ),
                       ),
                       const SizedBox(height: AppDimens.space4),
-                      _valueRow(
-                        colors,
-                        label: '每日更新时刻',
-                        value: _holidayFixedHourLabel(
-                            ref.watch(holidayMetaProvider).value?.fixedHour),
-                        onTap: _pickHolidayFixedHour,
-                      ),
                       _navRow(
                         colors,
                         label: '节假日数据缓存',
@@ -1455,41 +1470,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               Text(label,
                   style: TextStyle(fontSize: 14, color: colors.bodyText)),
               const Spacer(),
-              Icon(
-                OrbitIcons.chevronRight,
-                size: AppDimens.iconSizeMd,
-                color: colors.secondaryText,
-              ),
-            ],
-          ),
-        ),
-      );
-
-  /// 值行：左标签 + 右值（强调色）+ 右箭头，点行弹选择抽屉
-  /// （形制与回收站「保留时间」行一致，热区同 `touchTarget`）
-  Widget _valueRow(
-    AppColorSet colors, {
-    required String label,
-    required String value,
-    required VoidCallback onTap,
-  }) =>
-      InkWell(
-        borderRadius: AppShapes.medium,
-        onTap: onTap,
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(minHeight: AppDimens.touchTarget),
-          child: Row(
-            children: [
-              Text(label,
-                  style: TextStyle(fontSize: 14, color: colors.bodyText)),
-              const Spacer(),
-              Text(
-                value,
-                style: TextStyle(
-                  fontSize: 14,
-                  color: OrbitAccents.themeAccent,
-                ),
-              ),
               Icon(
                 OrbitIcons.chevronRight,
                 size: AppDimens.iconSizeMd,
