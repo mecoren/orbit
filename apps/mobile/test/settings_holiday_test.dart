@@ -1,12 +1,16 @@
 // 设置页「日历与节假日」卡回归（docs/07 #59 / docs/10 §A-6）：
-// 每日固定更新时刻的读（holidayMeta.fixedHour）与写（holidaySetFixedHour）双向打通。
-// 桥位此前双端均就绪（移动 FRB 生成物 + 桌面命令）但 UI 零消费。
+// 每月自动更新总开关的读（holidayMeta.autoEnabled，缺省开启）与写
+// （holidaySetAutoEnabled）双向打通。
+//
+// 「每日固定更新时刻」口径已随对齐 PiggyCount 下线（改为每月一次 + 总开关），
+// 原 08:00 值行/时刻抽屉用例一并删除。
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:orbit/data/api/mock_orbit_bridge.dart';
 import 'package:orbit/data/providers/bridge_provider.dart';
 import 'package:orbit/modules/settings/settings_screen.dart';
+import 'package:orbit/shared/widgets/shadcn/orbit_section_card.dart';
 import 'support/orbit_test_app.dart';
 
 Widget _wrap(MockOrbitBridge bridge) => ProviderScope(
@@ -14,8 +18,10 @@ Widget _wrap(MockOrbitBridge bridge) => ProviderScope(
       child: orbitTestApp(home: const SettingsScreen()),
     );
 
-/// 越过 Mock 120ms 延迟并收敛帧
+/// 越过 Mock 120ms 延迟并收敛帧（写 + invalidate 后重取记账是两段延迟，双跑）
 Future<void> _settle(WidgetTester tester) async {
+  await tester.pump(const Duration(milliseconds: 300));
+  await tester.pumpAndSettle();
   await tester.pump(const Duration(milliseconds: 300));
   await tester.pumpAndSettle();
 }
@@ -38,50 +44,44 @@ Future<void> _scrollTo(WidgetTester tester, Finder finder) async {
   }
 }
 
+/// 「日历与节假日」卡内的开关（按卡片作用域取，避免与其它卡开关串号）
+Finder _holidaySwitch() => find.descendant(
+      of: find.ancestor(
+        of: find.text('日历与节假日'),
+        matching: find.byType(SectionCard),
+      ),
+      matching: find.byType(Switch),
+    );
+
 void main() {
-  testWidgets('日历与节假日：默认 08:00 → 选 21:00 落库并回显', (tester) async {
+  testWidgets('日历与节假日：默认开启 → 关闭后落库并回显', (tester) async {
     final bridge = MockOrbitBridge();
     await tester.pumpWidget(_wrap(bridge));
     await _settle(tester);
 
-    await _scrollTo(tester, find.text('每日更新时刻'));
-    expect(find.text('每日更新时刻'), findsOneWidget);
-    // 值行读 holidayMeta.fixedHour（core 缺省 08:00）
-    expect(find.text('08:00'), findsOneWidget);
+    await _scrollTo(tester, find.text('每月自动更新'));
+    expect(find.text('每月自动更新'), findsOneWidget);
+    // core 缺省开启（cfg_kv 无键按 1 处理），Mock 同口径
+    expect(bridge.store.holidayAutoEnabled, isTrue);
+    expect(tester.widget<Switch>(_holidaySwitch()).value, isTrue);
+    expect(find.textContaining('每月自动联网更新一次'), findsOneWidget);
 
-    await tester.tap(find.text('每日更新时刻'));
-    await tester.pumpAndSettle();
+    await tester.tap(_holidaySwitch());
+    await _settle(tester);
 
-    // 抽屉已开：标题与值行同名「每日更新时刻」，故应有两处
-    expect(find.text('每日更新时刻'), findsNWidgets(2));
-
-    // 0-23 整点档位；抽屉内容超一屏（shrinkWrap + 0.6 屏高上限），
-    // 远端档位需在抽屉内滚动后才可见（页面 ListView 在前、抽屉在后，取 last）
-    expect(find.text('08:00'), findsWidgets);
-    await tester.dragUntilVisible(
-      find.text('21:00'),
-      find.byType(ListView).last,
-      const Offset(0, -120),
-    );
-    await tester.pumpAndSettle();
-    await tester.ensureVisible(find.text('21:00'));
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.text('21:00'));
-    await tester.pumpAndSettle();
-
-    expect(bridge.store.holidayFixedHour, 21);
-    // 抽屉关闭后值行回显新时刻
-    expect(find.text('21:00'), findsOneWidget);
+    expect(bridge.store.holidayAutoEnabled, isFalse);
+    expect(tester.widget<Switch>(_holidaySwitch()).value, isFalse);
+    expect(find.textContaining('自动更新已关闭'), findsOneWidget);
     await drainToastTimers(tester);
   });
 
-  testWidgets('日历与节假日：重进页面回读已存的时刻', (tester) async {
-    final bridge = MockOrbitBridge()..store.holidayFixedHour = 6;
+  testWidgets('日历与节假日：关闭态重进页面回读已存开关', (tester) async {
+    final bridge = MockOrbitBridge()..store.holidayAutoEnabled = false;
     await tester.pumpWidget(_wrap(bridge));
     await _settle(tester);
 
-    await _scrollTo(tester, find.text('每日更新时刻'));
-    expect(find.text('06:00'), findsOneWidget);
+    await _scrollTo(tester, find.text('每月自动更新'));
+    expect(tester.widget<Switch>(_holidaySwitch()).value, isFalse);
+    expect(find.textContaining('自动更新已关闭'), findsOneWidget);
   });
 }
