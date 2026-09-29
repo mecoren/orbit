@@ -15,7 +15,7 @@
 //! 存 `cfg_kv`（key `trash_retention_days`；档位 7/30/90/永久=0，默认 30，对标
 //! Todoist/微软 To Do）。cfg_kv 是本地 KV 表（migration 0003），不在
 //! SYNCABLE_TABLES 同步白名单——保留时间是本机偏好，各端各自设置（与
-//! holiday_fixed_hour 同边界）。
+//! holiday_auto_enabled 同边界）。
 //!
 //! ## TTL 清理与墓碑同步协议的冲突守卫（ADR 见 docs/adr/0005）
 //! 墓碑行是云同步「删除」语义的唯一载体。若把尚未 push 到云端的墓碑物理清掉，
