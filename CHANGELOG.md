@@ -16,6 +16,96 @@
 
 ## [Unreleased]
 
+### 节假日更新能力对齐 PiggyCount（每月口径 + 自动开关 + 按年补写）
+
+- **自动更新口径改月度**：原「每日固定时刻（`fixed_hour` 0–23 可配）」下线，改为
+  `should_update_now` 月度判定——从未成功即更、上次成功所在自然月 ≠ 当前月即更；
+  跨月后下次启动首轮 tick 即补更。随之移除 `holiday_set_fixed_hour` 桥位
+  （core / Tauri command / FRB / `tauri.ts` / 移动 `OrbitBridge` 四实现）、
+  `HolidayMeta.fixed_hour` 字段与双端「每日更新时刻」UI 及其测试。
+- **新增自动更新总开关** `holiday_auto_enabled`（缺省开启，`cfg_kv` 无键按 1 处理）：
+  关闭后 Rust 调度器不再联网，仅保留手动更新与按年补写；双端设置页给出开关行。
+  **无 DDL 迁移**——全部新状态落 `cfg_kv`（`0001_init.sql` 保持冻结、未新增迁移文件），
+  `sync_registry.rs` 白名单与同步表计数断言不动。
+- **新增按年 / 按年范围联网补写**：`holiday_fetch_year(year)` 单年整年替换（可选
+  2013 ~ 明年，`HOLIDAY_FETCH_YEAR_MIN = 2013`）；`holiday_fetch_range(start, end)`
+  两阶段补写——阶段 1 分片并发（`RANGE_CONCURRENCY = 4`，保序 yield）纯网络拉取，
+  阶段 2 串行落库（`sqlx` 事务不可并发），连续失败 3 次熔断（`RANGE_ABORT_AFTER`），
+  整次操作 `failure_count` 只 +1；取消走 `AtomicBool` 单会话守卫（`RANGE_ACTIVE` CAS）
+  + RAII `RangeGuard` 在 Drop 复位，支持并发拒绝与 panic 安全。
+- **逐年进度跨端管线**：core 新建独立 `tokio::sync::broadcast` 通道（**刻意不复用
+  `EVENT_BUS`**——节假日是只读缓存表，铁律要求不 emit `DbEvent`）；桌面侧
+  `holiday_scheduler.rs` 新增一次性进度泵 `app.emit("holiday-progress", ..)`，前端
+  `useHolidayProgress()`（`listen` + `useEffect` 清理）驱动设置页进度条与取消；移动侧
+  FRB `subscribe_holiday_progress(StreamSink)` → Dart 单个 `StreamProvider` 收口
+  （避免重复订阅产生多份监听），承载为可取消的进度弹层。
+- **读取按年合并兜底**：`list_holidays` 以 DB 已覆盖年份为准、预置表只追加未覆盖
+  年份；`is_holiday_on` 在该年已被 DB 覆盖时严格以 DB 为准（无行即 `None`，不回落预置）。
+  修掉「补写任一历史年份 → 2026 预置徽标整体消失」的旧整表回落缺陷。
+- **记账正确性 AC-E6 / AC-E7**：历史年份补写只写 `last_attempt_ms`、不动
+  `last_update_ms`（否则会静默抑制当月自动更新，属隐性新鲜度 bug）；空响应按成功
+  处理并清空该年，UI 明确提示「该年无数据」而非静默当作已更新。
+- **双端设置页/缓存页**：桌面「日历与节假日」重构为概览 + 每月自动更新开关 +
+  立即更新 + 按年份范围获取（两个 Select，`start <= end` 校验）+ 进度区（内联 bar，
+  桌面无 `ui/progress.tsx`）+ 年份分组「更新该年」；移动设置页同款开关，缓存页新增
+  范围入口（两次 `showSelectBottomSheet`）、单年「更新该年」与进度弹层（含取消）。
+- 回归：`cargo test --workspace --lib` 636 全绿（节假日 29 例：月度三分支 / 按年合并 /
+  覆盖年不回落 / `fetch_year` 三分支 / AC-E6 记账差异 / 熔断 / 取消恢复记账 /
+  进度广播序列 / 并发范围被拒）；桌面 `pnpm typecheck` + vitest 398 全绿（新增
+  `use-holiday-progress` 6 例）；移动端本地分析器 208 文件 0 issue。文档同步：
+  `docs/02 §五` 查询键与进度流、`docs/07 §五` backlog、`docs/10` 桥表与 M11、
+  `PRIVACY.md`、`docs/adr/0005`。
+
+### 桌面端工具栏收拢为「↑↓」+「···」双菜单
+
+- **12 控件收拢为 5**（TickTick Web 同款，prd/desktop-toolbar-dropdown）：工具栏右侧保留
+  搜索框 / 新增 / 模板下拉，原状态 Select、优先级 Select、视图切换五联钮、看板分组
+  Select、标签管理钮、存为视图、Ctrl+P 等低频入口全部并入两枚图标菜单——
+  **「↑↓」排序菜单**：分组（仅看板显示）/ 排序五档 / 顺序（升降）+ 状态/优先级筛选
+  Sub 就地展开，段尾回显当前档；**「···」更多菜单**：顶部视图图标排（点按即切不关
+  菜单、当前档高亮）+ 隐藏已完成开关 + 存为视图 / 搜索或跳转（Ctrl+P）/ 标签管理。
+- **新增排序方向档**：`todo_sort_dir` localStorage 键（`asc`/`desc`，未存过 = 各档
+  现状默认方向，存量顺序零变化）；方向只翻转主键比较，回落键不翻、due 档无截止恒
+  沉底、manual 档忽略方向。`sortTasks(tasks, sortKey, dir?)` 第三参为可选——所有既有
+  调用点语义不变。
+- 回归：vitest 新增 6 用例（各档方向翻转 / manual 忽略 / 默认方向快照，64 用例全绿）；
+  e2e 新增 2 用例（排序菜单升降序切换 + 视图图标排点按即切菜单不关）并把日历/看板/
+  存为视图/标签管理 4 处入口断言平移到菜单路径；全量 smoke 28 用例绿。
+  `docs/04 §二骨架图 / §四排序语义 / §七 localStorage 键全集` 规格同步。
+
+### 标签管理弹窗整体高度钉死
+
+- **LabelManager Dialog 固定 `h-[380px]`**（≈3 张标签卡 + 底部新建行，对齐参考图）：
+  标签多于 3 条时列表区内部滚动（`flex-1 min-h-0 overflow-y-auto`），弹窗不再随内容
+  无限长高；0 条时高度不变，新建行 `shrink-0` 钉底。
+  `overflow-hidden` 覆盖 Dialog 原语非交互路径的 `overflow-y-auto`（弹窗自身不滚，
+  滚动手势全交列表区）。
+- 回归：e2e 新增「标签管理弹窗整体高度钉死」——真实创建链路灌 5 个标签，断言
+  弹窗高度=380±2px、列表区 `scrollHeight > clientHeight`、新建输入框仍钉底可见；
+  旧代码（无钉高）跑同用例判红。`docs/04 §3.8` 规格同步。
+
+### 桌面端完成态勾选框灰化（对齐移动端）
+
+- **完成 checkbox 去蓝**：列表行 / 看板卡 / 表格行 / 矩阵行 / 详情标题行 / 子任务共 6 处，
+  完成态由 `border-primary bg-primary`（待办蓝）改为 `muted-foreground` 弱化灰实底
+  （白勾保留），与已完成行的灰色划线标题同调；移动端 `OrbitCheckbox` 早已走
+  `deactivatedText` 弱化灰，本次为跨端同源收口。
+- 回归：e2e 新增「完成态勾选框灰化」——以 `var()` 探针读同名 token 解析值作基准，
+  断言完成态底色等于 `--muted-foreground` 且不等于 `--primary`（oklch 计算值序列化
+  不稳定，故不做字符串硬比）；`docs/04 §3.2` 完成 checkbox 规格行同步。
+
+### 桌面端评论输入改为「点击占位框就地展开」
+
+- **详情抽屉评论区**：常显的单行输入框换成「添加评论」占位框，点击才就地展开
+  固定高度输入区（160px）；内容超出时走内部滚动条，不再随输入无限增高。
+  `Ctrl+Enter` 发送、`Esc` 或取消钮收起（Esc 拦在 Radix DismissableLayer 之前，
+  只收输入区、不连带关闭抽屉）。
+- **右键「添加评论」弹窗**：Textarea 由 `field-sizing` 自适应增高改为固定高度 +
+  超出内部滚动，与抽屉同口径。
+- 回归：e2e 新增「详情评论：点击占位框就地展开固定高度输入区」（折叠态无输入控件 /
+  展开即聚焦 / 灌 20 行后 `scrollHeight > clientHeight` 且控件高度不变 / 发送后收起并落库）；
+  `docs/04 §3.4-8` 评论区块描述同步。
+
 ### 移动端清单侧栏与日历卡片化对齐今天列表
 
 - **清单侧栏整卡化**（今天任务列表同款 `OrbitCardSegment` 口径）：
