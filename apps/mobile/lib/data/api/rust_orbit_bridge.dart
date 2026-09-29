@@ -1260,34 +1260,67 @@ class RustOrbitBridge implements OrbitBridge {
   Future<bool?> holidayIsOn(String date) => gen_holiday.holidayIsOn(date: date);
 
   @override
-  Future<HolidayMeta> holidayUpdate() async {
-    final m = await gen_holiday.holidayUpdate();
-    return HolidayMeta(
-      lastUpdateMs: m.lastUpdateMs,
-      lastAttemptMs: m.lastAttemptMs,
-      failureCount: m.failureCount,
-      fixedHour: m.fixedHour,
+  Future<HolidayMeta> holidayUpdate() async =>
+      _mapHolidayMeta(await gen_holiday.holidayUpdate());
+
+  @override
+  Future<HolidayYearOutcome> holidayFetchYear(int year) async {
+    final o = await gen_holiday.holidayFetchYear(year: year);
+    return HolidayYearOutcome(
+      meta: _mapHolidayMeta(o.meta),
+      rowCount: o.rowCount,
     );
   }
 
   @override
-  Future<HolidayMeta> holidayMeta() async {
-    final m = await gen_holiday.holidayMeta();
-    return HolidayMeta(
-      lastUpdateMs: m.lastUpdateMs,
-      lastAttemptMs: m.lastAttemptMs,
-      failureCount: m.failureCount,
-      fixedHour: m.fixedHour,
+  Future<HolidayRangeSummary> holidayFetchRange(int start, int end) async {
+    final s = await gen_holiday.holidayFetchRange(start: start, end: end);
+    return HolidayRangeSummary(
+      ok: s.ok,
+      failed: s.failed,
+      empty: s.empty,
+      cancelled: s.cancelled,
     );
   }
 
   @override
-  Future<void> holidaySetFixedHour(int hour) =>
-      gen_holiday.holidaySetFixedHour(hour: hour);
+  Future<void> holidayCancelFetch() => gen_holiday.holidayCancelFetch();
 
   @override
-  Future<void> startHolidayScheduler() =>
-      gen_holiday.startHolidayScheduler();
+  Future<HolidayMeta> holidayMeta() async =>
+      _mapHolidayMeta(await gen_holiday.holidayMeta());
+
+  @override
+  Future<void> holidaySetAutoEnabled(bool enabled) =>
+      gen_holiday.holidaySetAutoEnabled(enabled: enabled);
+
+  /// 范围补写进度：FRB 平铺 DTO → 领域 DTO（字段逐一对应，无派生）
+  @override
+  Stream<HolidayProgress> get holidayProgress =>
+      gen_holiday.subscribeHolidayProgress().map(
+            (p) => HolidayProgress(
+              phase: p.phase,
+              total: p.total,
+              year: p.year,
+              done: p.done,
+              yearOk: p.yearOk,
+              yearEmpty: p.yearEmpty,
+              okCount: p.okCount,
+              failed: p.failed,
+              cancelled: p.cancelled,
+              message: p.message,
+            ),
+          );
+
+  @override
+  Future<void> startHolidayScheduler() => gen_holiday.startHolidayScheduler();
+
+  HolidayMeta _mapHolidayMeta(gen.HolidayMeta m) => HolidayMeta(
+        lastUpdateMs: m.lastUpdateMs,
+        lastAttemptMs: m.lastAttemptMs,
+        failureCount: m.failureCount,
+        autoEnabled: m.autoEnabled,
+      );
 
   // ── 回收站 ──
 

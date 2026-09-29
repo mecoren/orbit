@@ -594,14 +594,28 @@ abstract class OrbitBridge {
   /// 手动更新（强制拉取；失败抛错误文案，旧缓存保留）
   Future<HolidayMeta> holidayUpdate();
 
-  /// 更新记账（上次成功/尝试、连续失败次数、固定时刻）
+  /// 按单年补写（年份需在 2013 ~ 明年；整年替换，历史年份不写自动更新记账）
+  ///
+  /// 返回记账 + 该年实际行数（`rowCount == 0` = 该年线上无数据，UI 据此提示）
+  Future<HolidayYearOutcome> holidayFetchYear(int year);
+
+  /// 按年份范围补写（分片并发 + 熔断；进度经 [holidayProgress] 回传）
+  Future<HolidayRangeSummary> holidayFetchRange(int start, int end);
+
+  /// 请求取消进行中的范围补写（幂等；无进行中操作时无害）
+  Future<void> holidayCancelFetch();
+
+  /// 更新记账（上次成功/尝试、连续失败次数、自动更新总开关）
   Future<HolidayMeta> holidayMeta();
 
-  /// 设置每日固定更新时刻（0-23 时；越界由 core clamp）
-  Future<void> holidaySetFixedHour(int hour);
+  /// 设置自动更新总开关（关闭后调度器不再联网，仅保留手动与按年补写）
+  Future<void> holidaySetAutoEnabled(bool enabled);
+
+  /// 范围补写进度流（每次订阅新建一条；取消订阅后 core 侧自行退出）
+  Stream<HolidayProgress> get holidayProgress;
 
   /// 启动自动更新守护（幂等；DB 就绪后由 BootGate 调一次——
-  /// 每日固定时刻更新 + 错过时刻下次启动首轮补更）
+  /// 每月一次更新 + 跨月后下次启动首轮补更 + 总开关关闭时静默跳过）
   Future<void> startHolidayScheduler();
 
   // ── 回收站（删除的任务可恢复；保留时间可配）──

@@ -47,8 +47,18 @@ class MockStore {
   /// 未设置密码时无元数据（`syncCryptoMetaVersion` 返 null）；升级即置 'v2'
   String syncKeyVersion = 'v2';
 
-  /// 节假日每日固定更新时刻（0-23；core 缺省 08:00）
-  int holidayFixedHour = 8;
+  /// 节假日自动更新总开关（core 缺省开启：仅显式关闭才置 false）
+  bool holidayAutoEnabled = true;
+
+  /// 节假日更新记账（ms；0 = 从未成功/从未尝试；测试可直改以模拟各档位）
+  int holidayLastUpdateMs = 1770000000000;
+  int holidayLastAttemptMs = 1770000000000;
+
+  /// 连续失败次数（成功后清零）
+  int holidayFailureCount = 0;
+
+  /// 模拟「该年线上无数据」（AC-E7 提示路径：按年补写返回 0 行仍算成功）
+  final Set<int> holidayEmptyYears = {};
 
   int get id => nextId++;
 

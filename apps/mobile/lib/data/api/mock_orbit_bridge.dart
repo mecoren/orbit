@@ -2180,6 +2180,19 @@ class MockOrbitBridge implements OrbitBridge {
     HolidayInfo(date: '2026-02-17', year: 2026, isHoliday: true, name: '初一'),
   ];
 
+  final _holidayProgressCtrl =
+      StreamController<HolidayProgress>.broadcast();
+
+  /// 范围补写会话标志（`cancelHolidayFetch` 置 false，循环下一轮感知退出）
+  bool _holidayRangeActive = false;
+
+  HolidayMeta get _mockHolidayMeta => HolidayMeta(
+        lastUpdateMs: store.holidayLastUpdateMs,
+        lastAttemptMs: store.holidayLastAttemptMs,
+        failureCount: store.holidayFailureCount,
+        autoEnabled: store.holidayAutoEnabled,
+      );
+
   @override
   Future<List<HolidayInfo>> holidayList() async => _mockHolidays;
 
@@ -2188,24 +2201,107 @@ class MockOrbitBridge implements OrbitBridge {
       _mockHolidays.where((h) => h.date == date).firstOrNull?.isHoliday;
 
   @override
-  Future<HolidayMeta> holidayUpdate() async => HolidayMeta(
-        lastUpdateMs: 1770000000000,
-        lastAttemptMs: 1770000000000,
-        failureCount: 0,
-        fixedHour: store.holidayFixedHour,
-      );
+  Future<HolidayMeta> holidayUpdate() => _delay(() {
+        final now = store.now();
+        store.holidayLastUpdateMs = now;
+        store.holidayLastAttemptMs = now;
+        store.holidayFailureCount = 0;
+        return _mockHolidayMeta;
+      });
+
+  /// 按年补写：Mock 只认识 2026（预置表年份），其余年份一律「线上无数据」；
+  /// 记账语义对齐 core——历史年份只写 last_attempt，不动 last_update
+  @override
+  Future<HolidayYearOutcome> holidayFetchYear(int year) => _delay(() {
+        final rowCount = store.holidayEmptyYears.contains(year)
+            ? 0
+            : _mockHolidays.where((h) => h.year == year).length;
+        store.holidayLastAttemptMs = store.now();
+        return HolidayYearOutcome(meta: _mockHolidayMeta, rowCount: rowCount);
+      });
 
   @override
-  Future<HolidayMeta> holidayMeta() async => HolidayMeta(
-        lastUpdateMs: 1770000000000,
-        lastAttemptMs: 1770000000000,
-        failureCount: 0,
-        fixedHour: store.holidayFixedHour,
-      );
+  Future<HolidayRangeSummary> holidayFetchRange(int start, int end) async {
+    final years = [for (var y = start; y <= end; y++) y];
+    _holidayRangeActive = true;
+    _holidayProgressCtrl.add(HolidayProgress(
+      phase: 'starting',
+      total: years.length,
+      year: 0,
+      done: 0,
+      yearOk: false,
+      yearEmpty: false,
+      okCount: 0,
+      failed: 0,
+      cancelled: false,
+      message: '',
+    ));
+    var ok = 0;
+    var empty = 0;
+    var cancelled = false;
+    for (var i = 0; i < years.length; i++) {
+      await _delay(() => null);
+      if (!_holidayRangeActive) {
+        cancelled = true;
+        break;
+      }
+      final year = years[i];
+      final isYearEmpty = store.holidayEmptyYears.contains(year) ||
+          _mockHolidays.every((h) => h.year != year);
+      if (isYearEmpty) {
+        empty++;
+      } else {
+        ok++;
+      }
+      _holidayProgressCtrl.add(HolidayProgress(
+        phase: 'year',
+        total: years.length,
+        year: year,
+        done: i + 1,
+        yearOk: true,
+        yearEmpty: isYearEmpty,
+        okCount: 0,
+        failed: 0,
+        cancelled: false,
+        message: '',
+      ));
+    }
+    _holidayRangeActive = false;
+    store.holidayLastAttemptMs = store.now();
+    _holidayProgressCtrl.add(HolidayProgress(
+      phase: 'done',
+      total: years.length,
+      year: 0,
+      done: years.length,
+      yearOk: false,
+      yearEmpty: false,
+      okCount: ok,
+      failed: 0,
+      cancelled: cancelled,
+      message: '',
+    ));
+    return HolidayRangeSummary(
+      ok: ok,
+      failed: 0,
+      empty: empty,
+      cancelled: cancelled,
+    );
+  }
 
   @override
-  Future<void> holidaySetFixedHour(int hour) =>
-      _delay(() => store.holidayFixedHour = hour.clamp(0, 23));
+  Future<void> holidayCancelFetch() async {
+    _holidayRangeActive = false;
+  }
+
+  @override
+  Future<HolidayMeta> holidayMeta() => _delay(() => _mockHolidayMeta);
+
+  @override
+  Future<void> holidaySetAutoEnabled(bool enabled) =>
+      _delay(() => store.holidayAutoEnabled = enabled);
+
+  @override
+  Stream<HolidayProgress> get holidayProgress => _holidayProgressCtrl.stream;
 
   @override
   Future<void> startHolidayScheduler() async {}
