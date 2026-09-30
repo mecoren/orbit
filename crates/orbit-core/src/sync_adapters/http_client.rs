@@ -171,6 +171,21 @@ impl HttpClient {
     ///
     /// 返回 `(响应体, ETag)`；服务端未提供 ETag 时令牌为 `None`，调用方
     /// 退化为「写后回读校验」。重试策略与 `get_with_retry` 一致。
+    ///
+    /// ## 令牌口径（F50，2026-09-30 第六轮）
+    ///
+    /// ETag 归一走 `sync_adapters::traits::normalize_etag`，**与列举侧
+    /// （S3 `ListObjectsV2` 的 `<ETag>`、WebDAV `PROPFIND` 的
+    /// `<d:getetag/>`）同源**。此前这里用裸 `trim_matches('"')`，漏了两点：
+    ///
+    /// 1. **弱校验前缀未剥**：服务端回 `W/"abc"` 时令牌成 `W/"abc"`
+    ///    （前导 `W` 挡住引号裁剪，只裁掉尾部引号），而 `put_conditional`
+    ///    会拼成 `If-Match: "W/"abc"` —— 语法非法或与真实 ETag 不等，
+    ///    弱 ETag 的 WebDAV 服务端上 CAS **恒失败**：合并重试耗尽后清单
+    ///    永不落盘。
+    /// 2. **空值未归 `None`**：部分 WebDAV 实现对目录回 `ETag: ""`，此时
+    ///    会发出 `If-Match: ""`（必然 412），等价于把并发保护变成永久失败，
+    ///    而正确行为是退化为「写后回读校验」。
     pub async fn get_with_token(
         &self,
         url: &str,
@@ -186,7 +201,7 @@ impl HttpClient {
                             .headers()
                             .get(reqwest::header::ETAG)
                             .and_then(|v| v.to_str().ok())
-                            .map(|s| s.trim_matches('"').to_string());
+                            .and_then(crate::sync_adapters::traits::normalize_etag);
                         let bytes = response.bytes().await.map_err(|e| SyncError::Network {
                             message: format!("读取响应体失败: {e}"),
                             retryable: false,
@@ -361,6 +376,103 @@ mod tests {
     /// 写入并强制 flush；客户端已断开（停滞用例被掐断）时返回 false
     fn write_out(out: &mut dyn std::io::Write, bytes: &[u8]) -> bool {
         std::io::Write::write_all(out, bytes).is_ok() && std::io::Write::flush(out).is_ok()
+    }
+
+    /// 起一个只回单条 200 响应的本地服务器：`extra_headers` 原样拼进响应头
+    /// （用于验证 ETag 归一化），响应体固定 1 字节。
+    ///
+    /// 与 `spawn_slow_body_server` 同规矩：只服务单个连接、读完请求头即回，
+    /// 客户端提前断开导致的写失败按正常退出处理（绝不留 accept 死循环）。
+    fn spawn_header_server(extra_headers: &str) -> String {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let extra = extra_headers.to_string();
+        tokio::task::spawn_blocking(move || {
+            let Ok((mut stream, _)) = listener.accept() else {
+                return;
+            };
+            let mut buf = [0u8; 4096];
+            let mut req = Vec::new();
+            loop {
+                let n = std::io::Read::read(&mut stream, &mut buf).unwrap_or(0);
+                if n == 0 {
+                    return;
+                }
+                req.extend_from_slice(&buf[..n]);
+                if req.windows(4).any(|w| w == b"\r\n\r\n") {
+                    break;
+                }
+            }
+            let mut out = std::io::BufWriter::new(&mut stream);
+            let head =
+                format!("HTTP/1.1 200 OK\r\nContent-Length: 1\r\nConnection: close\r\n{extra}\r\n");
+            if !write_out(&mut out, head.as_bytes()) {
+                return;
+            }
+            let _ = write_out(&mut out, b"m");
+        });
+        format!("http://127.0.0.1:{port}/")
+    }
+
+    // ========================================================================
+    // F50（2026-09-30 第六轮）：GET 侧 ETag 必须与列举侧同口径
+    //
+    // 列举侧（S3 ListObjects / WebDAV PROPFIND）走
+    // `sync_adapters::traits::normalize_etag`：剥 `W/` + 剥引号 + 空归 None。
+    // 条件写读侧此前用裸 `trim_matches('"')`，弱 ETag 与空 ETag 两种服务端
+    // 回值下都会产出**发不出去的令牌**，CAS 恒失败。以下三条锁住口径。
+    // ========================================================================
+
+    /// 弱 ETag：`W/"abc"` → 令牌必须为 `abc`。
+    ///
+    /// 旧口径产出 `W/"abc`，`put_conditional` 拼成 `If-Match: "W/"abc"`
+    /// → 弱 ETag 服务端上 CAS 恒不匹配（清单永不落盘）。
+    #[tokio::test]
+    async fn get_with_token_strips_weak_etag_prefix() {
+        let url = spawn_header_server("ETag: W/\"abc\"\r\n");
+        let http = HttpClient::new(30, 0, false).expect("构造 HTTP 客户端");
+        let (_, token) = http
+            .get_with_token(&url, reqwest::header::HeaderMap::new())
+            .await
+            .expect("GET 必须成功");
+        assert_eq!(
+            token.as_deref(),
+            Some("abc"),
+            "弱校验前缀 W/ 与引号都必须剥掉（与列举侧同口径）"
+        );
+    }
+
+    /// 空 ETag（部分 WebDAV 实现对目录回 `ETag: ""`）→ 必须归 `None`，
+    /// 让调用方退化到「写后回读校验」，而不是发 `If-Match: ""`（必然 412）。
+    #[tokio::test]
+    async fn get_with_token_maps_empty_etag_to_none() {
+        let url = spawn_header_server("ETag: \"\"\r\n");
+        let http = HttpClient::new(30, 0, false).expect("构造 HTTP 客户端");
+        let (_, token) = http
+            .get_with_token(&url, reqwest::header::HeaderMap::new())
+            .await
+            .expect("GET 必须成功");
+        assert_eq!(token, None, "空 ETag 必须归 None（退化写后回读校验）");
+    }
+
+    /// 对照面：强 ETag 正常剥引号；无 ETag 头仍为 `None`（行为不得回退）。
+    #[tokio::test]
+    async fn get_with_token_keeps_strong_etag_and_absent_header() {
+        let http = HttpClient::new(30, 0, false).expect("构造 HTTP 客户端");
+
+        let url = spawn_header_server("ETag: \"abc\"\r\n");
+        let (_, token) = http
+            .get_with_token(&url, reqwest::header::HeaderMap::new())
+            .await
+            .expect("GET 必须成功");
+        assert_eq!(token.as_deref(), Some("abc"), "强 ETag 只剥引号");
+
+        let url = spawn_header_server("");
+        let (_, token) = http
+            .get_with_token(&url, reqwest::header::HeaderMap::new())
+            .await
+            .expect("GET 必须成功");
+        assert_eq!(token, None, "服务端不提供 ETag 时必须为 None");
     }
 
     // ========================================================================
