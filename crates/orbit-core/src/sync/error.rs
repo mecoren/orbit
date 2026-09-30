@@ -160,6 +160,14 @@ impl SyncError {
                     }
                 }
             }
+            // F79（2026-09-30 第六轮）：408（服务端等待请求超时）与 425
+            // （Too Early，TLS 早数据被拒）是**明确可重试**的状态码，此前落
+            // 兜底 `retryable: false` → `with_retry` 当场放弃，把一次可自愈的
+            // 抖动报成永久失败（用户看到「同步失败」而重按一次就好）。
+            408 | 425 => SyncError::Network {
+                message: format!("HTTP {status}（可重试）: {brief}"),
+                retryable: true,
+            },
             _ => SyncError::Network {
                 message: format!("HTTP {status}: {brief}"),
                 retryable: false,
