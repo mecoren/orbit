@@ -42,6 +42,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
+import { Switch } from "@/components/ui/switch";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   getDescPreviewDelayMs,
@@ -1493,8 +1494,13 @@ function RemindersSection({
   repeatFromDone: number;
   onChanged: () => void;
 }) {
-  // 编辑态：{reminderId, draft}——编辑=删旧建新（04 §3.4）
-  const [editing, setEditing] = useState<{ id: number | null; draft: string } | null>(null);
+  // 编辑态：{reminderId, draft, isConstant}——编辑=删旧建新（04 §3.4）；
+  // isConstant 为 G2 持续提醒标记，随行落库（勾选 = 响到完成为止）
+  const [editing, setEditing] = useState<{
+    id: number | null;
+    draft: string;
+    isConstant: boolean;
+  } | null>(null);
   // 待删提醒（null = 关闭）：行内确认弹框（qraft tab 删除同款）
   const [confirmDelete, setConfirmDelete] = useState<Awaited<ReturnType<typeof todoTaskGetDetail>>["reminders"][number] | null>(null);
 
@@ -1503,10 +1509,29 @@ function RemindersSection({
     const ms = new Date(editing.draft.replace(" ", "T")).getTime();
     if (!Number.isNaN(ms)) {
       if (editing.id != null) await todoReminderDelete(editing.id);
-      await todoReminderCreate({ task_id: taskId, remind_at: ms });
+      await todoReminderCreate({
+        task_id: taskId,
+        remind_at: ms,
+        is_constant: editing.isConstant ? 1 : 0,
+      });
       onChanged();
     }
     setEditing(null);
+  };
+
+  // 行内「持续」徽标点击：翻转持续标记（无 update 路径 → 删旧建新，时刻不变）
+  const toggleConstant = async (
+    r: Awaited<ReturnType<typeof todoTaskGetDetail>>["reminders"][number],
+  ) => {
+    const next = r.is_constant === 1 ? 0 : 1;
+    await todoReminderDelete(r.id);
+    await todoReminderCreate({
+      task_id: taskId,
+      remind_at: r.remind_at,
+      is_constant: next,
+    });
+    onChanged();
+    toast.success(next === 1 ? "已开启持续提醒（响到完成为止）" : "已关闭持续提醒");
   };
 
   const fmt = (ms: number) => format(new Date(ms), "yyyy-MM-dd HH:mm");
@@ -1518,7 +1543,7 @@ function RemindersSection({
       trailing={
         editing == null ? (
           <Button variant="link" size="sm" className="h-6 px-1 text-xs"
-            onClick={() => setEditing({ id: null, draft: format(new Date(Date.now() + 3600_000), "yyyy-MM-dd'T'HH:mm") })}
+            onClick={() => setEditing({ id: null, draft: format(new Date(Date.now() + 3600_000), "yyyy-MM-dd'T'HH:mm"), isConstant: false })}
           >
             添加提醒
           </Button>
@@ -1534,6 +1559,14 @@ function RemindersSection({
                 dueDateMs={dueDateMs}
                 onChange={(v) => setEditing({ ...editing, draft: v })}
               />
+              <label className="flex cursor-pointer items-center justify-between gap-2 text-xs text-muted-foreground">
+                <span>持续提醒（响到完成为止）</span>
+                <Switch
+                  checked={editing.isConstant}
+                  onCheckedChange={(v) => setEditing({ ...editing, isConstant: v })}
+                  aria-label="持续提醒"
+                />
+              </label>
               <div className="flex justify-end gap-1">
                 <Button size="sm" variant="ghost" onClick={() => setEditing(null)}>取消</Button>
                 <Button size="sm" onClick={() => void commitNew()}>保存</Button>
@@ -1571,10 +1604,21 @@ function RemindersSection({
                     "flex-1 truncate text-left hover:text-primary",
                     !taskDone && r.remind_at <= Date.now() && "text-destructive",
                   )}
-                  onClick={() => setEditing({ id: r.id, draft: fmt(r.remind_at) })}
+                  onClick={() => setEditing({ id: r.id, draft: fmt(r.remind_at), isConstant: r.is_constant === 1 })}
                 >
                   {fmt(r.remind_at)}
                 </button>
+                {r.is_constant === 1 && (
+                  <button
+                    type="button"
+                    title="持续提醒：未完成则每 5 分钟再提醒，点击关闭"
+                    data-testid={`constant-${r.id}`}
+                    onClick={() => void toggleConstant(r)}
+                    className="shrink-0 rounded-full bg-orange-500/15 px-1.5 py-0.5 text-[10px] font-medium text-orange-600 hover:bg-orange-500/25 dark:text-orange-400"
+                  >
+                    持续
+                  </button>
+                )}
                 {repeatMode > 0 && (
                   <span className="shrink-0 rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] text-primary">
                     {repeatLabel(repeatMode, repeatAfter, {
@@ -1598,6 +1642,14 @@ function RemindersSection({
         {editing?.id === null && (
           <div className="max-w-xs space-y-1.5 rounded-lg bg-muted/40 p-2">
             <DateTimePicker value={editing.draft} onChange={(v) => setEditing({ ...editing, draft: v })} />
+            <label className="flex cursor-pointer items-center justify-between gap-2 text-xs text-muted-foreground">
+              <span>持续提醒（响到完成为止）</span>
+              <Switch
+                checked={editing.isConstant}
+                onCheckedChange={(v) => setEditing({ ...editing, isConstant: v })}
+                aria-label="持续提醒"
+              />
+            </label>
             <div className="flex justify-end gap-1">
               <Button size="sm" variant="ghost" onClick={() => setEditing(null)}>取消</Button>
               <Button size="sm" onClick={() => void commitNew()}>添加</Button>
