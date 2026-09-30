@@ -44,6 +44,31 @@ pub const SYNC_TYPE_SYNC_NOW: &str = "incremental";
 pub const SYNC_TYPE_PUSH_ONLY: &str = "push_only";
 pub const SYNC_TYPE_PULL_THEN_PUSH: &str = "pull_only";
 
+/// 部分失败摘要文案（F55，2026-09-30 第六轮）
+///
+/// 表级错误隔离下 `errors` 条数受可同步表数（11）天然有界，但逐条铺开会让
+/// 进度帧文案过长（指示器上是单行）。故最多列 3 条，其余折叠为计数。
+/// 单条错误已由 `sync::error::brief` 钳长。
+fn summarize_partial_failures(errors: &[String]) -> String {
+    const MAX_LISTED: usize = 3;
+    let head = errors
+        .iter()
+        .take(MAX_LISTED)
+        .cloned()
+        .collect::<Vec<_>>()
+        .join("；");
+    if errors.len() > MAX_LISTED {
+        format!(
+            "{} 个模块未能同步：{}（另有 {} 个未列出）",
+            errors.len(),
+            head,
+            errors.len() - MAX_LISTED
+        )
+    } else {
+        format!("{} 个模块未能同步：{}", errors.len(), head)
+    }
+}
+
 /// 写一条增量同步历史（P1-17：增量同步此前零历史，成功率/耗时不可度量）
 ///
 /// 口径：
@@ -419,17 +444,38 @@ impl SyncEngine {
     ///
     /// Done 事件仅在成功路径末尾发送；失败若不发事件，后台调度器只 eprintln，
     /// 前端悬浮指示器会永远停在最后一个 pushing/pulling 帧。
-    fn emit_error_on_failure(
-        &self,
-        origin: SyncOrigin,
-        result: &Result<SyncResult, CloudSyncError>,
-    ) {
-        if let Err(e) = result {
-            self.progress_sender.send(SyncProgress::Error {
-                origin,
-                message: e.to_string(),
-                module: None,
-            });
+    ///
+    /// ## 部分失败也是失败（F55，2026-09-30 第六轮）
+    ///
+    /// `push/pull` 是**表级错误隔离**：单表失败只记进 `result.errors`，整体
+    /// 仍返回 `Ok`。该结果在历史表被记为 `failed`（`record_incremental_history`
+    /// 用 `advances_ledger()`），但此前只发 `Done` 帧 → UI 说「同步完成」、
+    /// 历史说「失败」。后台调度路径（桌面 `sync_scheduler`、移动
+    /// `sync_on_change_scheduler`）不把返回值交给 UI，用户唯一可见信号就是
+    /// 进度帧——等于被误导为成功。
+    ///
+    /// 故 `Ok` 且 `errors` 非空时**在 `Done` 之后再补一帧 `Error`**（带摘要）。
+    /// 保留 `Done`：本轮拉到的数据确实已生效，不能因单表失败否定整轮；后发的
+    /// `Error` 让指示器落到失败态并给出可读原因。
+    fn emit_result_events(&self, origin: SyncOrigin, result: &Result<SyncResult, CloudSyncError>) {
+        match result {
+            Err(e) => {
+                self.progress_sender.send(SyncProgress::Error {
+                    origin,
+                    message: e.to_string(),
+                    module: None,
+                });
+            }
+            Ok(r) if !r.errors.is_empty() => {
+                let summary = summarize_partial_failures(&r.errors);
+                log::warn!("[sync] 部分模块同步失败：{summary}");
+                self.progress_sender.send(SyncProgress::Error {
+                    origin,
+                    message: summary,
+                    module: None,
+                });
+            }
+            Ok(_) => {}
         }
     }
 
@@ -453,7 +499,7 @@ impl SyncEngine {
             )
             .await;
         record_incremental_history(&self.db_pool, SYNC_TYPE_SYNC_NOW, &r).await;
-        self.emit_error_on_failure(origin, &r);
+        self.emit_result_events(origin, &r);
         r
     }
 
@@ -594,7 +640,7 @@ impl SyncEngine {
             )
             .await;
         record_incremental_history(&self.db_pool, SYNC_TYPE_PUSH_ONLY, &r).await;
-        self.emit_error_on_failure(origin, &r);
+        self.emit_result_events(origin, &r);
         r
     }
 
@@ -703,7 +749,7 @@ impl SyncEngine {
             )
             .await;
         record_incremental_history(&self.db_pool, SYNC_TYPE_PULL_THEN_PUSH, &r).await;
-        self.emit_error_on_failure(origin, &r);
+        self.emit_result_events(origin, &r);
         r
     }
 
@@ -869,7 +915,7 @@ impl SyncEngine {
                 attachments_dir,
             )
             .await;
-        self.emit_error_on_failure(origin, &r);
+        self.emit_result_events(origin, &r);
         r
     }
 
@@ -944,9 +990,12 @@ impl SyncEngine {
             })
             .await?;
         result.pushed_modules = push_result.pushed_modules;
-        // S8 联动：rekey 语义是「以本机为准全量重加密重传」——任何模块失败
-        // 都会留下「新 Key 模块 + 旧 Key 模块」的混合态密文（他端解不开
-        // 旧 Key 模块），此处必须硬失败中断 rekey，不走模块间隔离的宽松路径
+        // S8 联动 + F49（2026-09-30 第六轮）：rekey 语义是「以本机为准全量重加密
+        // 重传」——任何模块失败都会留下「新 Key 模块 + 旧 Key 模块」的混合态密文。
+        // 主防线已下沉到 `push_all_force_full`（`require_all_tables_ok`）：任一表
+        // 失败会在**写入清单之前**返回 Err，故此处通常到不了。这条保留作二道
+        // 防线（防将来 force 入口被复用而漏传该标志），并兜住「清单已写但仍有
+        // 失败表」的任何回归。
         if push_result.failed_modules > 0 {
             return Err(CloudSyncError::Other {
                 message: format!(
