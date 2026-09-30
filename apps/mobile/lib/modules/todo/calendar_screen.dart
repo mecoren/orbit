@@ -146,6 +146,22 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
       ? DateTime(_month.year + 1, 1)
       : DateTime(_month.year, _month.month + 1));
 
+  /// 页头相对天数小字：优先锚定**选中日**距今天（点日格即变：今天 →
+  /// 「今天」、9/20 → 「N天前」）；选中日不在所看月份（翻月浏览未重新
+  /// 选中）时回落为该月 1 号距今天（竞品月份口径「10月 5天后」）
+  String _monthRelativeLabel() {
+    final now = DateTime.now();
+    final selected = _selectedDate;
+    final inViewMonth =
+        selected.year == _month.year && selected.month == _month.month;
+    final anchor = inViewMonth
+        ? DateTime(selected.year, selected.month, selected.day)
+        : DateTime(_month.year, _month.month, 1);
+    final diff = anchor.difference(DateTime(now.year, now.month, now.day)).inDays;
+    if (diff == 0) return '今天';
+    return diff < 0 ? '${-diff}天前' : '$diff天后';
+  }
+
   void _goToday() => setState(() {
         final now = DateTime.now();
         _month = DateTime(now.year, now.month);
@@ -328,18 +344,15 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                     const SizedBox(height: AppDimens.space8),
                     // ===== 月历（wait-home 完整版：农历副标签/休班徽标/任务圆点）=====
                     // 议程档隐藏网格：整页让给按日分组列表（桌面 agenda 档同语义）
-                    // 月历卡（今天任务列表同款卡片化：整张月历是一张单段卡，
-                    // 外缘左右各让 space12，与任务子列表 cardListPadding 同口径）
+                    // 去卡片化：月历不再包卡片，直接铺页面底色（间隔口径见下）
                     if (!_agendaMode) ...[
+                      // 去卡片化（竞品同款）：月历直接铺页面底色，白卡描边/
+                      // 圆角/内衬一并移除；左右 space12 与页头上方 space8
+                      // 留白保留（周条收起态同口径）
                       Padding(
                         padding: const EdgeInsets.symmetric(
                             horizontal: AppDimens.space12),
-                        child: OrbitCardSegment(
-                          edge: OrbitCardEdge.single,
-                          child: Padding(
-                            padding:
-                                const EdgeInsets.all(AppDimens.space8),
-                            child: OrbitMonthCalendar(
+                        child: OrbitMonthCalendar(
                           size: AppCalendarSize.large,
                           showHeader: false,
                           month: _month,
@@ -357,10 +370,10 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                           selected: _selectedDate,
                           onDayTap: _selectDate,
                           onDayLongPress: _addOnDate,
-                          // 横滑翻月/翻周：月历自带 PageView（availableGestures
-                          // = all），必须把页码回调**原样**接回（周档收到的是
-                          // ±7 天的逐字日期，归一化到 1 号会把周条拽回月初周），
-                          // 否则网格翻页了而标题还停在旧月份
+                          // 横滑翻月/翻周：月历网格自带 PageView（纵向收展走
+                          // 月历的轴锁定门），必须把页码回调**原样**接回（周档
+                          // 收到的是 ±7 天的逐字日期，归一化到 1 号会把周条拽回
+                          // 月初周），否则网格翻页了而标题还停在旧月份
                           onMonthChange: (focused) => setState(() {
                             _focusedDate = focused;
                             _month = DateTime(focused.year, focused.month, 1);
@@ -377,8 +390,6 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                           subLabelBuilder: ChineseAlmanac.daySubLabel,
                           eventDotsBuilder: (date) => monthDots[_ymd(date)] ??
                               const <Color>[],
-                            ),
-                          ),
                         ),
                       ),
                       const SizedBox(height: AppDimens.space4),
@@ -519,19 +530,49 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                     child: GestureDetector(
                       // 标题点击 = 年视图
                       onTap: _openYearOverview,
+                      // 竞品口径：月份大字 + 相对天数小字；小字锚定选中日
+                      // （点日格即变），翻月未选中回落当月 1 号（见
+                      // _monthRelativeLabel）。年份仅在跨年时以小字前缀补出
+                      // （与月历表头同约定）。
                       // FittedBox 保单行：窄屏下标题可用宽变小，等比缩字不折行
                       // （页头行高恒 56，不断行是底线）
                       child: FittedBox(
                         fit: BoxFit.scaleDown,
-                        child: Text(
-                          '${_month.year}年${_month.month}月',
-                          maxLines: 1,
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontSize: 17,
-                            fontWeight: FontWeight.w600,
-                            color: colors.titleText,
-                          ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.baseline,
+                          textBaseline: TextBaseline.alphabetic,
+                          children: [
+                            if (_month.year != now.year) ...[
+                              Text(
+                                '${_month.year}年',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                  color: colors.secondaryText,
+                                ),
+                              ),
+                              const SizedBox(width: 3),
+                            ],
+                            Text(
+                              '${_month.month}月',
+                              maxLines: 1,
+                              style: TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.w800,
+                                color: colors.titleText,
+                              ),
+                            ),
+                            const SizedBox(width: 5),
+                            Text(
+                              _monthRelativeLabel(),
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500,
+                                color: colors.secondaryText,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ),
@@ -576,11 +617,12 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
   Widget _buildUpdateButton() {
     final meta = ref.watch(holidayMetaProvider).value;
     final lastUpdate = meta?.lastUpdateMs ?? 0;
-    // 固定时刻与设置页「日历与节假日」同一份记账（core 缺省 08:00，可改）
-    final hourLabel = '${(meta?.fixedHour ?? 8).toString().padLeft(2, '0')}:00';
-    final tip = lastUpdate > 0
-        ? '上次更新：${DateFormat('M月d日 HH:mm').format(DateTime.fromMillisecondsSinceEpoch(lastUpdate))}（每天 $hourLabel 自动更新）'
-        : '每天 $hourLabel 自动更新，也可手动更新';
+    // 与设置页「日历与节假日」同一份记账（core 缺省开启自动更新）
+    final auto = meta?.autoEnabled ?? true;
+    final lastText = lastUpdate > 0
+        ? '上次更新：${DateFormat('M月d日 HH:mm').format(DateTime.fromMillisecondsSinceEpoch(lastUpdate))}'
+        : '尚未更新过';
+    final tip = auto ? '$lastText（每月自动更新）' : '$lastText（自动更新已关闭）';
     return IconButton(
       icon: _updating
           ? const SizedBox(

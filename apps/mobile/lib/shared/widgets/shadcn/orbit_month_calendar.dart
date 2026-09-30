@@ -79,11 +79,12 @@ class ChineseCalendarColors {
 /// （**不在回调里 setState**，否则热重载会重置到初始月）。
 ///
 /// **月 ⇄ 周收展**（日历页月档上滑收成单行周条）：给 [availableCalendarFormats]
-/// 传多档集合（**顺序必须大到小**：month → week，上滑 = 档位序下一档）即开启，
-/// 纵向手势由网格接管（页面上滑不再滚动）；此时必须用 [focusedDay] 回传
-/// `onMonthChange` 收到的**原样日期**——周档的翻页粒度是「周」，归一化到
-/// 月初会把周条拽回月初那一周。单档调用方（日期选择面板等）不传这些参数，
-/// 纵向手势不接管，整页滚动语义不变。
+/// 传多档集合（**顺序必须大到小**：month → week，上滑 = 档位序下一档）即开启。
+/// 纵向手势由本组件的 [_VerticalFormatSwipeGate] 轴锁定接管（横滑翻页的
+/// 斜向弧线不会误触发收展；网格上的纵向滑动仍不落到页面滚动）；此时必须用
+/// [focusedDay] 回传 `onMonthChange` 收到的**原样日期**——周档的翻页粒度是
+/// 「周」，归一化到月初会把周条拽回月初那一周。单档调用方（日期选择面板等）
+/// 不传这些参数，纵向手势不接管，整页滚动语义不变。
 class OrbitMonthCalendar extends StatelessWidget {
   const OrbitMonthCalendar({
     super.key,
@@ -236,19 +237,15 @@ class OrbitMonthCalendar extends StatelessWidget {
     // 横滑到 10 月后 10 月的假期徽标消失，补位/当月判定同样错位）
     final firstDay = selectableStart ?? DateTime(2000, 1, 1);
     final lastDay = selectableEnd ?? DateTime(2099, 12, 31);
-    // 多档集合才开纵向手势（上滑收起/下滑展开）；单档保持 horizontalSwipe，
-    // 网格上的纵向滑动仍归外层整页滚动
+    // 多档集合才开纵向收展手势（上滑收起/下滑展开）；纵向检测由本组件的
+    // 轴锁定门 [_VerticalFormatSwipeGate] 接管——table_calendar 内置
+    // SimpleGestureDetector 只累计纵向分量 25px 即触发，横滑翻页带出的
+    // 斜向弧线会先赢下手势竞技场被误判成收展（2026-09-26 实测）。
+    // 单档保持 horizontalSwipe，网格上的纵向滑动仍归外层整页滚动
     final formats = availableCalendarFormats;
     final multiFormat = formats != null && formats.length > 1;
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        if (showHeader) ...[
-          _buildHeader(context, colors, monthStart),
-          const SizedBox(height: 4),
-        ],
-        TableCalendar<void>(
+    Widget calendar = TableCalendar<void>(
           // 网格与手势交给 table_calendar；今天/选中的底色由我们自己画，
           // 故把内置装饰全部置空，避免"双份高亮"
           firstDay: firstDay,
@@ -258,10 +255,8 @@ class OrbitMonthCalendar extends StatelessWidget {
           startingDayOfWeek: StartingDayOfWeek.monday,
           calendarFormat: calendarFormat,
           availableCalendarFormats: formats ?? const {CalendarFormat.month: ''},
-          availableGestures: multiFormat
-              ? AvailableGestures.all
-              : AvailableGestures.horizontalSwipe,
-          onFormatChanged: multiFormat ? onFormatChange : null,
+          // 纵向收展一律走外层轴锁定门（内置纵向检测关闭，避免斜向误触发）
+          availableGestures: AvailableGestures.horizontalSwipe,
           headerVisible: false,
           daysOfWeekHeight:
               showWeekdays ? (size == AppCalendarSize.large ? 24 : 18) : 0,
@@ -309,9 +304,38 @@ class OrbitMonthCalendar extends StatelessWidget {
                     )
                 : null,
           ),
-        ),
+    );
+
+    if (multiFormat) {
+      calendar = _VerticalFormatSwipeGate(
+        onSwipeUp: () => _stepFormat(true),
+        onSwipeDown: () => _stepFormat(false),
+        child: calendar,
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (showHeader) ...[
+          _buildHeader(context, colors, monthStart),
+          const SizedBox(height: 4),
+        ],
+        calendar,
       ],
     );
+  }
+
+  /// 纵向滑动步进档位（上滑 = 收起 / 档位序下一档，下滑 = 展开 / 上一档）；
+  /// 已在边界档位时不上报（table_calendar 原实现会原样重报当前档，父级空 setState）
+  void _stepFormat(bool up) {
+    final formats = availableCalendarFormats?.keys.toList();
+    if (formats == null || formats.length < 2 || onFormatChange == null) return;
+    final current = formats.indexOf(calendarFormat);
+    if (current < 0) return;
+    final next = (current + (up ? 1 : -1)).clamp(0, formats.length - 1);
+    if (next == current) return;
+    onFormatChange!(formats[next]);
   }
 
   Widget _buildHeader(
@@ -587,6 +611,78 @@ class _HolidayBadge extends StatelessWidget {
           color: Color(0xFFFFFFFF),
         ),
       ),
+    );
+  }
+}
+
+/// 纵向收展手势判定阈值（累计位移 px）与轴向优势倍数
+const double _kVerticalSwipeMinDistance = 40;
+const double _kVerticalSwipeDominance = 1.2;
+
+/// 轴锁定纵向滑动门：网格上滑收档 / 下滑展档（替代 table_calendar 内置
+/// SimpleGestureDetector 的纵向检测）。
+///
+/// **为什么替换**：内置 `continuousDistinct` 口径只累计纵向分量 25px 即触发，
+/// 而手指横滑翻周/翻月带斜向弧线时，纵向识别器会先越过触摸斜率赢下竞技场
+/// ——实测「上滑收起后左右滑周条也触发收展」。这里改为手势结束时统一判定：
+/// 累计纵向位移过 [_kVerticalSwipeMinDistance] 且达到横向位移的
+/// [_kVerticalSwipeDominance] 倍才上报，横滑为主的弧线不再误触发。
+class _VerticalFormatSwipeGate extends StatefulWidget {
+  const _VerticalFormatSwipeGate({
+    required this.onSwipeUp,
+    required this.onSwipeDown,
+    required this.child,
+  });
+
+  final VoidCallback onSwipeUp;
+  final VoidCallback onSwipeDown;
+  final Widget child;
+
+  @override
+  State<_VerticalFormatSwipeGate> createState() =>
+      _VerticalFormatSwipeGateState();
+}
+
+class _VerticalFormatSwipeGateState extends State<_VerticalFormatSwipeGate> {
+  /// 手势累计位移（dragEnd 拿不到终点坐标，只能逐事件累加 delta）
+  double _dx = 0;
+  double _dy = 0;
+
+  void _onDragStart(DragStartDetails _) {
+    _dx = 0;
+    _dy = 0;
+  }
+
+  void _onDragUpdate(DragUpdateDetails details) {
+    _dx += details.delta.dx;
+    _dy += details.delta.dy;
+  }
+
+  void _onDragEnd(DragEndDetails _) {
+    final dx = _dx;
+    final dy = _dy;
+    _dx = 0;
+    _dy = 0;
+    // 轴锁定：纵向位移过阈且显著大于横向，横滑为主的斜向弧线不触发
+    final vertical = dy.abs();
+    if (vertical < _kVerticalSwipeMinDistance ||
+        vertical < dx.abs() * _kVerticalSwipeDominance) {
+      return;
+    }
+    if (dy < 0) {
+      widget.onSwipeUp();
+    } else {
+      widget.onSwipeDown();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onVerticalDragStart: _onDragStart,
+      onVerticalDragUpdate: _onDragUpdate,
+      onVerticalDragEnd: _onDragEnd,
+      child: widget.child,
     );
   }
 }

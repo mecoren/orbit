@@ -10,10 +10,13 @@ import 'package:orbit/data/api/mock_orbit_bridge.dart';
 import 'package:orbit/data/providers/bridge_provider.dart';
 import 'package:orbit/modules/todo/calendar_screen.dart';
 import 'package:orbit/core/routing/router_keys.dart';
+import 'package:orbit/core/theme/app_dimens.dart';
 import 'package:orbit/modules/todo/sidebar_screen.dart';
+import 'package:orbit/modules/todo/year_overview_page.dart';
 import 'package:orbit/core/theme/app_colors.dart';
 import 'package:orbit/shared/widgets/shadcn/orbit_list_card.dart';
 import 'package:orbit/shared/widgets/shadcn/orbit_month_calendar.dart';
+import 'package:orbit/shared/widgets/shadcn/orbit_page_header.dart';
 import 'package:orbit/core/theme/icon_map.dart';
 import 'package:table_calendar/table_calendar.dart'
     show CalendarFormat, TableCalendar;
@@ -70,6 +73,23 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
     await tester.pumpAndSettle();
   }
+
+  /// 页头标题里的月份大字（titleWidget 槽内唯一以「月」结尾的 Text；
+  /// 相对天数小字「N天前/N天后」不含「月」，trailing 提示在 title 之后）
+  String headerTitle(WidgetTester tester) => tester
+      .widget<Text>(find
+          .descendant(
+            of: find.byType(OrbitPageHeader),
+            matching: find.textContaining('月'),
+          )
+          .first)
+      .data!;
+
+  /// 页头标题槽内按字面找 Text
+  Finder headerText(String text) => find.descendant(
+        of: find.byType(OrbitPageHeader),
+        matching: find.text(text),
+      );
 
   /// 整页滚动一屏（起点取月历下缘之下的列表区）：网格起滑的纵向手势已被
   /// 「上滑收周条/下滑展开」接管（AvailableGestures.all），从列表区起滑
@@ -154,19 +174,16 @@ void main() {
 
     // mock 节假日：2026-01-01「休」/2026-01-04「班」/2026-02-17「休」
     // （当前 2026-09 不含节假日 → 翻月验证数据链路）
-    // 页头：月份导航标题（「日历」文字标题已收敛进月份标题，见页头收敛）
-    expect(
-      find.text('${DateTime.now().year}年${DateTime.now().month}月'),
-      findsOneWidget,
-    );
+    // 页头：月份导航标题仅显月份（「日历」文字标题已收敛进月份标题）
+    expect(headerText('${DateTime.now().month}月'), findsOneWidget);
 
-    // 从 2026-09 向前翻 8 次到 2026-01（9→8→…→1，跨年取道 2025）
+    // 从 2026-09 向前翻到 2026-01（同年 → 标题无年份前缀）
     for (var i = 0; i < 10; i++) {
-      if (find.text('2026年1月').evaluate().isNotEmpty) break;
+      if (headerText('1月').evaluate().isNotEmpty) break;
       await tester.tap(find.byTooltip('上个月'));
       await tester.pumpAndSettle();
     }
-    expect(find.text('2026年1月'), findsOneWidget);
+    expect(headerText('1月'), findsOneWidget);
 
     // 元旦（01-01 放假）与补班日（01-04）徽标同屏可见
     expect(find.text('休'), findsWidgets);
@@ -200,7 +217,7 @@ void main() {
     await settle(tester);
 
     // 点月份标题 → 年视图页（干支生肖标签 + 12 迷你月历）
-    await tester.tap(find.textContaining('年').first);
+    await tester.tap(headerText('${DateTime.now().month}月').first);
     await tester.pumpAndSettle();
     expect(find.byWidgetPredicate(
       (w) => w is Text && (w.data ?? '').endsWith('年') && (w.data ?? '').length == 4,
@@ -224,7 +241,7 @@ void main() {
         scrollable: yearScroll);
     await tester.tap(find.text('9月').first);
     await tester.pumpAndSettle();
-    expect(find.text('2026年9月'), findsOneWidget);
+    expect(headerText('9月'), findsOneWidget);
   });
 
   testWidgets('手动更新：点击刷新按钮 → toast「节假日数据已更新」', (tester) async {
@@ -241,12 +258,104 @@ void main() {
 
     expect(find.text('节假日数据已更新'), findsOneWidget);
     // provider 已失效重拉（mock 返回相同常量，断言不抛错即通过）
-    expect(
-      find.text('${DateTime.now().year}年${DateTime.now().month}月'),
-      findsOneWidget,
-    );
+    expect(headerText('${DateTime.now().month}月'), findsOneWidget);
     // 快进过 toast 的 2.6s 自动收起 Timer（防测试结束时 pending timer 断言）
     await tester.pump(const Duration(milliseconds: 2700));
+  });
+
+  testWidgets('页头相对天数小字：跟随选中日（点日格即变），翻月未选中回落锚定 1 号',
+      (tester) async {
+    final bridge = _seededBridge();
+    await tester.pumpWidget(_wrap(const SizedBox(), bridge));
+    await settle(tester);
+
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+
+    // 仅显月份：当前年不带年份前缀（跨年才补「YYYY年」小字，与月历表头同约定）
+    expect(headerTitle(tester), '${now.month}月');
+    // 旧格式「YYYY年M月」不再出现
+    expect(find.textContaining('年${now.month}月'), findsNothing);
+
+    // 默认选中今天：小字「今天」（选中日在所看月份内 → 锚定选中日）
+    expect(headerText('今天'), findsOneWidget);
+
+    // 点当月另一天（距今天恰 5 天）：小字立即跟随选中日
+    final targetDay = now.day >= 6 ? now.day - 5 : now.day + 5;
+    final targetLabel = now.day >= 6 ? '5天前' : '5天后';
+    await tester.tap(find.text('$targetDay').first, warnIfMissed: false);
+    await tester.pumpAndSettle();
+    expect(headerText(targetLabel), findsOneWidget);
+    // 同月内选择：月份标题不变
+    expect(headerTitle(tester), '${now.month}月');
+
+    // 翻到下月（选中日留在本月）：回落为下月 1 号距今天（竞品月份口径）
+    await tester.tap(find.byTooltip('下个月'));
+    await tester.pumpAndSettle();
+    final nextDiff = DateTime(now.year, now.month + 1, 1).difference(today).inDays;
+    expect(headerTitle(tester), '${DateTime(now.year, now.month + 1).month}月');
+    expect(
+        headerText(nextDiff == 0
+            ? '今天'
+            : '${nextDiff.abs()}天${nextDiff < 0 ? '前' : '后'}'),
+        findsOneWidget);
+  });
+
+  testWidgets('月历去卡片化：网格直接铺底（无卡片分段包裹），左右与上方间隔保留',
+      (tester) async {
+    final bridge = _seededBridge();
+    await tester.pumpWidget(_wrap(const SizedBox(), bridge));
+    await settle(tester);
+
+    final calendar = find.byType(OrbitMonthCalendar);
+    // 去卡片：月历不再包在 OrbitCardSegment 白卡里（描边/圆角/内衬一并移除）
+    expect(
+      find.ancestor(of: calendar, matching: find.byType(OrbitCardSegment)),
+      findsNothing,
+    );
+
+    // 左右间隔保留：左缘距屏幕 space12（去卡片前是卡片 12 + 内衬 8 = 20）
+    expect(tester.getTopLeft(calendar).dx, AppDimens.space12);
+    // 上方间隔保留：顶缘 = 页头行高 + 页头下 space8 留白
+    expect(tester.getTopLeft(calendar).dy,
+        OrbitPageHeader.rowHeight + AppDimens.space8);
+  });
+
+  testWidgets('年视图间距：页边距 16 / 行组间隔 32 / 日格行高 24（参考三列竞品版式）',
+      (tester) async {
+    await tester.pumpWidget(
+      orbitTestApp(
+        home: const YearOverviewPage(initialYear: 2026, initialMonth: 9),
+      ),
+    );
+    await settle(tester);
+
+    // 滚动区内边距：左右页边距 space16、顶部 space12、底部 space32
+    final scroll = tester
+        .widget<SingleChildScrollView>(find.byType(SingleChildScrollView));
+    final pad = scroll.padding! as EdgeInsets;
+    expect(pad.left, AppDimens.space16);
+    expect(pad.top, AppDimens.space12);
+    expect(pad.bottom, AppDimens.space32);
+
+    // 行组间隔（1-3 月行块 → 4-6 月行块）= space32
+    // （外层月份行是全页唯一 crossAxisAlignment.start 且含月份标题的 Row，
+    // 迷你月历内部行均为默认 center）
+    Finder monthRow(String title) => find.ancestor(
+          of: find.text(title),
+          matching: find.byWidgetPredicate(
+            (w) => w is Row && w.crossAxisAlignment == CrossAxisAlignment.start,
+          ),
+        );
+    expect(monthRow('1月'), findsOneWidget);
+    final gap = tester.getTopLeft(monthRow('4月')).dy -
+        tester.getBottomLeft(monthRow('1月')).dy;
+    expect(gap, AppDimens.space32);
+
+    // 日格行高 = 24（相邻两行同列日期：1 → 8）
+    final d1 = tester.getTopLeft(find.text('1').first).dy;
+    final d8 = tester.getTopLeft(find.text('8').first).dy;
+    expect(d8 - d1, 24);
   });
 
   testWidgets('月导航：上/下月翻页与「今天」回位', (tester) async {
@@ -254,25 +363,18 @@ void main() {
     await tester.pumpWidget(_wrap(const SizedBox(), bridge));
     await settle(tester);
 
-    final currentTitle = tester
-        .widget<Text>(find.textContaining('年').first)
-        .data;
+    final currentTitle = headerTitle(tester);
 
     // 下一个月 → 标题变化（页头翻页钮，tooltip 精确定位）
     await tester.tap(find.byTooltip('下个月'));
     await tester.pumpAndSettle();
-    final nextTitle = tester
-        .widget<Text>(find.textContaining('年').first)
-        .data;
+    final nextTitle = headerTitle(tester);
     expect(nextTitle, isNot(currentTitle));
 
     // 点「回到今天」按钮 → 标题还原
     await tester.tap(find.byIcon(OrbitIcons.calendarCheck));
     await tester.pumpAndSettle();
-    expect(
-      tester.widget<Text>(find.textContaining('年').first).data,
-      currentTitle,
-    );
+    expect(headerTitle(tester), currentTitle);
   });
 
   testWidgets('左右滑动翻月：左滑到下月、右滑回上月', (tester) async {
@@ -280,8 +382,7 @@ void main() {
     await tester.pumpWidget(_wrap(const SizedBox(), bridge));
     await settle(tester);
 
-    String title() =>
-        tester.widget<Text>(find.textContaining('年').first).data!;
+    String title() => headerTitle(tester);
     final currentTitle = title();
 
     // 月历区域左滑 → 下月（fling 兼有位移与速度，两个判据都越阈）。
@@ -308,7 +409,7 @@ void main() {
     await tester.fling(find.text('${DateTime.now().day}').first,
         const Offset(-320, 0), 900);
     await tester.pumpAndSettle();
-    expect(find.text('2026年10月'), findsOneWidget);
+    expect(headerText('10月'), findsOneWidget);
 
     // 网格必须真的渲染 10 月：10/1、10/2、10/8 的「休」与 10/10 的「班」可见。
     // 修复前 firstDay/lastDay 随 month 漂移（`month ± 5 年`），横滑后 PageView
@@ -532,7 +633,7 @@ void main() {
     // 翻到 2026-10 后切议程档
     await tester.tap(find.byTooltip('下个月'));
     await tester.pumpAndSettle();
-    expect(find.text('2026年10月'), findsOneWidget);
+    expect(headerText('10月'), findsOneWidget);
     await tester.tap(find.byTooltip('切换到议程'));
     await tester.pumpAndSettle();
 

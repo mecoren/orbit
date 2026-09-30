@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -15,7 +17,8 @@ const _kMinYear = 1901;
 const _kMaxYear = 2100;
 
 /// 迷你月历日格高（日期行等距；空位占位同高，避免行高不齐）
-const double _kDayCellHeight = 30;
+/// 24 = 参考竞品年视图的紧凑行距（原 30 过松，12 月挤出一屏）
+const double _kDayCellHeight = 24;
 
 /// 年视图选择页 /todo/calendar/year（Days Matter 风格）
 ///
@@ -100,70 +103,7 @@ class _YearOverviewPageState extends State<YearOverviewPage> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 SizedBox(height: OrbitPageHeader.rowHeight),
-                // ===== 头部：大年份 + 干支生肖/图例 + 切年 =====
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(
-                    AppDimens.space12,
-                    AppDimens.space4,
-                    AppDimens.space8,
-                    0,
-                  ),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const SizedBox(width: AppDimens.space8),
-                      // 大年份：参考图（wait-home 年视图）为超大字重标题，
-                      // 比 headlineLarge 明显更大，此处显式压字号 + 收紧字距
-                      Text(
-                        '$_year',
-                        style: theme.textTheme.headlineLarge?.copyWith(
-                          fontSize: 44,
-                          height: 1.05,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: -1,
-                        ),
-                      ),
-                      const SizedBox(width: AppDimens.space12),
-                      Padding(
-                        // 与 44px 年份的视觉重心对齐（参考图图例居年份上/中段）
-                        padding: const EdgeInsets.only(top: AppDimens.space12),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            _LegendLine(
-                              color: ChineseCalendarColors.lunarNewYear,
-                              label: ChineseAlmanac.lunarYearLabel(_year),
-                            ),
-                            const SizedBox(height: AppDimens.space6),
-                            const _LegendLine(
-                              color: ChineseCalendarColors.lunarNewMoon,
-                              label: '农历初一',
-                            ),
-                          ],
-                        ),
-                      ),
-                      const Spacer(),
-                      Padding(
-                        padding: const EdgeInsets.only(top: AppDimens.space6),
-                        child: Row(
-                          children: [
-                            IconButton(
-                              onPressed: () => _shiftYear(-1),
-                              icon: const Icon(OrbitIcons.chevronLeft),
-                              tooltip: '上一年',
-                            ),
-                            IconButton(
-                              onPressed: () => _shiftYear(1),
-                              icon: const Icon(OrbitIcons.chevronRight),
-                              tooltip: '下一年',
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                // ===== 年份页面（左右滑动切年） =====
+                // ===== 年份页面（左右滑动切年）；年份块已上收进页头行 =====
                 Expanded(
                   child: PageView.builder(
                     controller: _controller,
@@ -173,17 +113,21 @@ class _YearOverviewPageState extends State<YearOverviewPage> {
                     itemBuilder: (context, index) {
                       final year = _kMinYear + index;
                       return SingleChildScrollView(
+                        // 间距口径参考竞品年视图：左右页边距 space16（原 8
+                        // 过窄）、顶部 space12、底部 space32 给下滑余量
                         padding: const EdgeInsets.fromLTRB(
-                          AppDimens.space8,
-                          AppDimens.space8,
-                          AppDimens.space8,
+                          AppDimens.space16,
+                          AppDimens.space12,
+                          AppDimens.space16,
                           AppDimens.space32,
                         ),
                         child: Column(
                           children: [
                             for (var row = 0; row < 4; row++) ...[
-                              // 月份块之间留出参考图同款的段落呼吸感
-                              if (row > 0) const SizedBox(height: 18),
+                              // 行组之间留出参考图同款的段落呼吸感
+                              // （space32 + 迷你月历自带上下 space4 ≈ 40）
+                              if (row > 0)
+                                const SizedBox(height: AppDimens.space32),
                               Row(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
@@ -222,8 +166,74 @@ class _YearOverviewPageState extends State<YearOverviewPage> {
             left: 0,
             right: 0,
             child: OrbitPageHeader(
-              title: '选择日期',
-              showBack: true,
+              // 无返回键/标题：大年份 + 干支生肖/图例 + 切年箭头直接落页头行
+              // （竞品同款一屏版式）；点击年份 = 返回上一页——月历 push 处
+              // 拿到空结果不跳转，停在进入年视图时的月份
+              showBack: false,
+              titleWidget: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const SizedBox(width: AppDimens.space8),
+                  GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () => Navigator.of(context).pop(),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // 大年份：参考图（wait-home 年视图）为超大字重标题，
+                        // 比 headlineLarge 明显更大，此处显式压字号 + 收紧字距
+                        Text(
+                          '$_year',
+                          style: theme.textTheme.headlineLarge?.copyWith(
+                            fontSize: 44,
+                            height: 1.05,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: -1,
+                          ),
+                        ),
+                        const SizedBox(width: AppDimens.space12),
+                        Padding(
+                          // 与 44px 年份的视觉重心对齐（参考图图例居年份上/中段）
+                          padding:
+                              const EdgeInsets.only(top: AppDimens.space12),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              _LegendLine(
+                                color: ChineseCalendarColors.lunarNewYear,
+                                label: ChineseAlmanac.lunarYearLabel(_year),
+                              ),
+                              const SizedBox(height: AppDimens.space6),
+                              const _LegendLine(
+                                color: ChineseCalendarColors.lunarNewMoon,
+                                label: '农历初一',
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Spacer(),
+                  Padding(
+                    padding: const EdgeInsets.only(top: AppDimens.space6),
+                    child: Row(
+                      children: [
+                        IconButton(
+                          onPressed: () => _shiftYear(-1),
+                          icon: const Icon(OrbitIcons.chevronLeft),
+                          tooltip: '上一年',
+                        ),
+                        IconButton(
+                          onPressed: () => _shiftYear(1),
+                          icon: const Icon(OrbitIcons.chevronRight),
+                          tooltip: '下一年',
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ],
@@ -410,53 +420,66 @@ class _Day extends StatelessWidget {
       onTap: onPick,
       child: SizedBox(
         height: _kDayCellHeight,
-        child: Stack(
-          alignment: Alignment.center,
-          children: [
-            // 今天 = 强调色圆角方块（与月视图日格 BorderRadius.circular(10)
-            // 同形制，非圆形）；农历杠（春节红/初一蓝）与数字留 4px 间距
-            //（原 bottom:1 紧贴数字底边视觉粘连）
-            Container(
-              width: 26,
-              height: 26,
+        // Expanded 紧约束会把日格压到 ~15px 宽（一行 3 列迷你月历）：
+        // 今天块定宽 26 会被压成细条，随格宽收正方形
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final side = math.min(26.0, constraints.maxWidth);
+            return Stack(
               alignment: Alignment.center,
-              decoration: isToday
-                  ? BoxDecoration(
-                      color: accent,
-                      borderRadius: BorderRadius.circular(8),
-                    )
-                  : null,
-              child: Text(
-                '${date.day}',
-                style: theme.textTheme.labelMedium?.copyWith(
-                  fontSize: 12.5,
-                  height: 1,
-                  fontFeatures: const [FontFeature.tabularFigures()],
-                  fontWeight: isToday ? FontWeight.w800 : FontWeight.w500,
-                  color: isToday
-                      ? Colors.white
-                      : isWeekend
-                          ? accent
-                          : theme.colorScheme.onSurface,
-                ),
-              ),
-            ),
-            if (markColor != null)
-              Positioned(
-                bottom: 1,
-                child: Padding(
-                  padding: const EdgeInsets.only(top: 4),
-                  child: Container(
-                    width: 13,
-                    height: 2,
-                    decoration: BoxDecoration(
-                      color: markColor,
-                      borderRadius: BorderRadius.circular(1),
+              children: [
+                // 今天 = 强调色圆角方块（与月视图日格 BorderRadius.circular(10)
+                // 同形制，非圆形）；农历杠（春节红/初一蓝）与数字留 4px 间距
+                //（原 bottom:1 紧贴数字底边视觉粘连）
+                Container(
+                  width: side,
+                  height: side,
+                  alignment: Alignment.center,
+                  decoration: isToday
+                      ? BoxDecoration(
+                          color: accent,
+                          borderRadius: BorderRadius.circular(8),
+                        )
+                      : null,
+                  // 两位日期窄格单行自适应：maxLines 禁换行 + FittedBox 缩放
+                  // 兜底——竖排「1/0」即回归（2026-09-26 实测）
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      '${date.day}',
+                      maxLines: 1,
+                      style: theme.textTheme.labelMedium?.copyWith(
+                        fontSize: 12.5,
+                        height: 1,
+                        fontFeatures: const [FontFeature.tabularFigures()],
+                        fontWeight: isToday ? FontWeight.w800 : FontWeight.w500,
+                        color: isToday
+                            ? Colors.white
+                            : isWeekend
+                                ? accent
+                                : theme.colorScheme.onSurface,
+                      ),
                     ),
                   ),
                 ),
-              ),
-          ],
+                if (markColor != null)
+                  Positioned(
+                    bottom: 1,
+                    child: Padding(
+                      padding: const EdgeInsets.only(top: 4),
+                      child: Container(
+                        width: 13,
+                        height: 2,
+                        decoration: BoxDecoration(
+                          color: markColor,
+                          borderRadius: BorderRadius.circular(1),
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            );
+          },
         ),
       ),
     );
