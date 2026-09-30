@@ -845,13 +845,15 @@ const TaskRow = memo(function TaskRow({
 
       {/* 完成 checkbox：方角（TickTick 同款，4px 圆角与移动端跨端同源）；
           未完成描边 = 优先级色（P0「无」回落中性灰）——紧急度以完成按钮
-          颜色为准（原左缘竖条移除，颜色移交此处；日历行无钮保留竖条） */}
+          颜色为准（原左缘竖条移除，颜色移交此处；日历行无钮保留竖条）。
+          完成态改弱化灰实底（与移动端 OrbitCheckbox 的 deactivatedText 同口径，
+          与已完成行的灰色划线标题同调，不再保留待办蓝强调） */}
       <button
         type="button"
         aria-label={t.done ? "标记未完成" : "标记完成"}
         className={cn(
           "h-5 w-5 shrink-0 rounded-[4px] border-2 transition-colors",
-          t.done ? "border-primary bg-primary" : "border-muted-foreground/30 hover:border-primary",
+          t.done ? "border-muted-foreground bg-muted-foreground" : "border-muted-foreground/30 hover:border-primary",
         )}
         style={
           !t.done && t.priority > 0

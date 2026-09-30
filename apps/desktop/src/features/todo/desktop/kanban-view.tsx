@@ -712,7 +712,7 @@ const KanbanCard = memo(function KanbanCard({
           className={cn(
             "mt-0.5 h-5 w-5 shrink-0 rounded-[4px] border-2 transition-colors",
             task.done
-              ? "border-primary bg-primary"
+              ? "border-muted-foreground bg-muted-foreground"
               : "border-muted-foreground/30 hover:border-primary",
           )}
           style={

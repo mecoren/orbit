@@ -288,7 +288,7 @@ const MatrixRow = memo(function MatrixRow({
         className={cn(
           "h-[18px] w-[18px] shrink-0 rounded-[4px] border-2 transition-colors",
           t.done
-            ? "border-primary bg-primary"
+            ? "border-muted-foreground bg-muted-foreground"
             : "border-muted-foreground/30 hover:border-primary",
         )}
         style={

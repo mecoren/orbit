@@ -462,7 +462,7 @@ export default function TaskTableView({
                       className={cn(
                         "h-5 w-5 shrink-0 rounded-full border-2 transition-colors",
                         t.done
-                          ? "border-primary bg-primary"
+                          ? "border-muted-foreground bg-muted-foreground"
                           : "border-muted-foreground/30 hover:border-primary",
                       )}
                       onClick={(e) => {
