@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { type TodoTask } from "@/lib/tauri";
-import { filterTasks, groupDoneByDay, groupEisenhower, groupOverdueFirst, sortTasks, todayStartMs, toggleMyDayValue } from "./task-filters";
+import { BASE_SORT_DIR, filterTasks, groupDoneByDay, groupEisenhower, groupOverdueFirst, sortTasks, todayStartMs, toggleMyDayValue } from "./task-filters";
 
 /** 补齐 TodoTask 全部必填字段的工厂 */
 function mk(partial: Partial<TodoTask>): TodoTask {
@@ -53,6 +53,35 @@ describe("filterTasks - 互斥目标（ungrouped > projectId > quickView）", ()
     const tasks = [mk({ id: 1, project_id: 3 }), mk({ id: 2, project_id: 4 })];
     const out = filterTasks(tasks, { projectId: 3 });
     expect(out.map((t) => t.id)).toEqual([1]);
+  });
+
+  it("projectIds 集合覆盖多个清单（父清单聚合子清单任务）", () => {
+    const tasks = [
+      mk({ id: 1, project_id: 3 }), // 父清单
+      mk({ id: 2, project_id: 4 }), // 子清单
+      mk({ id: 3, project_id: 9 }), // 无关清单
+      mk({ id: 4, project_id: null }), // 未分组
+    ];
+    const out = filterTasks(tasks, { projectId: 3, projectIds: [3, 4] });
+    expect(out.map((t) => t.id)).toEqual([1, 2]);
+  });
+
+  it("projectIds 优先于 projectId（集合里不含选中项目也不会退回等值）", () => {
+    const tasks = [mk({ id: 1, project_id: 3 }), mk({ id: 2, project_id: 4 })];
+    const out = filterTasks(tasks, { projectId: 3, projectIds: [4] });
+    expect(out.map((t) => t.id)).toEqual([2]);
+  });
+
+  it("projectIds 空数组视同未提供（回落 projectId 等值）", () => {
+    const tasks = [mk({ id: 1, project_id: 3 }), mk({ id: 2, project_id: 4 })];
+    const out = filterTasks(tasks, { projectId: 3, projectIds: [] });
+    expect(out.map((t) => t.id)).toEqual([1]);
+  });
+
+  it("ungrouped 优先于 projectIds", () => {
+    const tasks = [mk({ id: 1, project_id: 3 }), mk({ id: 2, project_id: null })];
+    const out = filterTasks(tasks, { ungrouped: true, projectIds: [3] });
+    expect(out.map((t) => t.id)).toEqual([2]);
   });
 
   it("ungrouped 优先于 projectId 与 quickView（收藏视图任务因属于项目被排除）", () => {
@@ -255,6 +284,63 @@ describe("sortTasks - 排序档位（#26：due/priority/title/created）", () =>
   it("manual（缺省）：维持 position 升序语义不变", () => {
     const out = sortTasks([mk({ id: 3, position: 2 }), mk({ id: 1, position: 1 })], "manual");
     expect(out.map((t) => t.id)).toEqual([1, 3]);
+  });
+});
+
+describe("sortTasks - 方向档 dir（工具栏「顺序」收拢，主键翻转/回落键不翻转）", () => {
+  it("due desc：远截止在前，无截止恒沉底（不随方向翻到顶）", () => {
+    const out = sortTasks(
+      [
+        mk({ id: 1, due_date: null }),
+        mk({ id: 2, due_date: 300 }),
+        mk({ id: 3, due_date: 100 }),
+        mk({ id: 4, due_date: 200 }),
+      ],
+      "due",
+      "desc",
+    );
+    expect(out.map((t) => t.id)).toEqual([2, 4, 3, 1]);
+  });
+
+  it("created asc：从旧到新（图 2「顺序：从旧到新」口径）", () => {
+    const out = sortTasks(
+      [mk({ id: 1, created_at: 100 }), mk({ id: 2, created_at: 300 }), mk({ id: 3, created_at: 200 })],
+      "created",
+      "asc",
+    );
+    expect(out.map((t) => t.id)).toEqual([1, 3, 2]);
+  });
+
+  it("priority asc：小值在前（低优先在前），同值仍落回 position 升序", () => {
+    const out = sortTasks(
+      [
+        mk({ id: 1, priority: 2, position: 1 }),
+        mk({ id: 2, priority: 5, position: 3 }),
+        mk({ id: 3, priority: 2, position: 0 }),
+      ],
+      "priority",
+      "asc",
+    );
+    expect(out.map((t) => t.id)).toEqual([3, 1, 2]);
+  });
+
+  it("title desc：拼音序倒排", () => {
+    const out = sortTasks(
+      [mk({ id: 1, title: "周会" }), mk({ id: 2, title: "备份" }), mk({ id: 3, title: "吃饭" })],
+      "title",
+      "desc",
+    );
+    expect(out.map((t) => t.id)).toEqual([1, 3, 2]);
+  });
+
+  it("manual 忽略 dir：拖拽序无方向概念", () => {
+    const out = sortTasks([mk({ id: 3, position: 2 }), mk({ id: 1, position: 1 })], "manual", "desc");
+    expect(out.map((t) => t.id)).toEqual([1, 3]);
+  });
+
+  it("BASE_SORT_DIR：各档位现状默认方向（未显式选方向 = 收拢前行为）", () => {
+    // due/title 现状升序；priority/created 现状降序（大优先级在前 / 最新在前）
+    expect(BASE_SORT_DIR).toEqual({ due: "asc", priority: "desc", title: "asc", created: "desc" });
   });
 });
 

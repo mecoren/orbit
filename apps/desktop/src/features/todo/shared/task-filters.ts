@@ -1,7 +1,7 @@
 /**
  * 待办任务共享过滤/排序逻辑（M4 Task 10，从 desktop/list-page.tsx 原样搬移）
  *
- * 语义（04 §四）：互斥目标 ungrouped > projectId > quickView；
+ * 语义（04 §四）：互斥目标 ungrouped > projectId/projectIds > quickView；
  * 快捷视图与状态/优先级筛选仅在非项目目标下生效；
  * 排序默认 position 升序 → created_at 降序（sortKey 可切截止/优先级/标题/创建时间，
  * 07 backlog #26 双端排序选项；非默认档下手动拖拽排序把手由 UI 隐藏）。
@@ -14,9 +14,30 @@ export type TaskStatusFilter = "all" | "pending" | "doing" | "done" | "undone";
 /** 排序档位（manual = position 拖拽顺序，唯一允许拖拽重排的档位） */
 export type TaskSortKey = "manual" | "due" | "priority" | "title" | "created";
 
+/** 排序方向（工具栏「↑↓ → 顺序」档；manual 无方向概念） */
+export type TaskSortDir = "asc" | "desc";
+
+/** 各档位现状默认方向：due/title 升序、priority/created 降序——
+ *  用户未显式选方向时逐档回落到它，保证「入口收拢」前后可见顺序零变化 */
+export const BASE_SORT_DIR: Record<Exclude<TaskSortKey, "manual">, TaskSortDir> = {
+  due: "asc",
+  priority: "desc",
+  title: "asc",
+  created: "desc",
+};
+
 export interface TaskFilterInput {
   quickView?: QuickViewKey | null;
   projectId?: number | null;
+  /**
+   * 清单聚合集合（M8+ 清单文件夹）= 选中项目 + 全部后代项目 id。
+   *
+   * 给出且非空时优先于 [projectId] 的等值匹配：父清单视图要连同子清单的
+   * **直接**任务一起显示（TickTick List Folder 同款）。口径与壳层谓词下推
+   * 的 `ListFilter.project_ids` 一致——两层必须同源，否则服务端取回了子清单
+   * 任务、客户端这里又把它过滤掉，表现为「聚合不生效」。
+   */
+  projectIds?: number[] | null;
   ungrouped?: boolean;
   keyword?: string | null; // title+description 大小写不敏感包含
   statusFilter?: TaskStatusFilter;
@@ -45,6 +66,7 @@ export function filterTasks(tasks: TodoTask[], input: TaskFilterInput): TodoTask
   const {
     quickView = null,
     projectId = null,
+    projectIds = null,
     ungrouped = false,
     keyword = null,
     statusFilter = "all",
@@ -59,8 +81,14 @@ export function filterTasks(tasks: TodoTask[], input: TaskFilterInput): TodoTask
   const todayEnd = todayStart.getTime() + 24 * 3600 * 1000;
   const weekEnd = todayEnd + 6 * 24 * 3600 * 1000;
 
+  // 清单聚合集合优先于等值：集合可能只含选中项目本身（无子清单），
+  // 此时与等值等价，无需分叉
+  const aggregated = projectIds != null && projectIds.length > 0 ? new Set(projectIds) : null;
+
   if (ungrouped) {
     list = list.filter((t) => t.project_id == null);
+  } else if (aggregated != null) {
+    list = list.filter((t) => t.project_id != null && aggregated.has(t.project_id));
   } else if (projectId != null) {
     list = list.filter((t) => t.project_id === projectId);
   } else {
@@ -122,33 +150,53 @@ export function filterTasks(tasks: TodoTask[], input: TaskFilterInput): TodoTask
   return list;
 }
 
-export function sortTasks(tasks: TodoTask[], sortKey: TaskSortKey = "manual"): TodoTask[] {
+/**
+ * 排序（工具栏「↑↓」菜单数据源）。
+ *
+ * dir 语义：只翻转**主键**比较方向，回落键方向不随 dir 变（保平局稳定性）；
+ * due 档无截止恒沉底（升/降序都不翻到顶）；manual 档忽略 dir（拖拽序无方向）。
+ * dir 缺省 = BASE_SORT_DIR[sortKey]（收拢前现状）。
+ */
+export function sortTasks(
+  tasks: TodoTask[],
+  sortKey: TaskSortKey = "manual",
+  dir?: TaskSortDir,
+): TodoTask[] {
   const list = [...tasks];
   switch (sortKey) {
-    case "due":
-      // 无截止排最后，有截止按时间升序（同值落回创建时间降序）
+    case "due": {
+      // 无截止排最后（方向无关），有截止按方向排，同值落回创建时间降序
+      const sign = (dir ?? BASE_SORT_DIR.due) === "asc" ? 1 : -1;
       return list.sort((a, b) => {
         if (a.due_date == null && b.due_date == null) return b.created_at - a.created_at;
         if (a.due_date == null) return 1;
         if (b.due_date == null) return -1;
-        if (a.due_date !== b.due_date) return a.due_date - b.due_date;
+        if (a.due_date !== b.due_date) return sign * (a.due_date - b.due_date);
         return b.created_at - a.created_at;
       });
-    case "priority":
-      // 优先级大者排前（同值落回拖拽顺序）
+    }
+    case "priority": {
+      // 主键按方向排（desc = 大者在前 = 现状），同值落回拖拽顺序
+      const sign = (dir ?? BASE_SORT_DIR.priority) === "asc" ? 1 : -1;
       return list.sort((a, b) => {
-        if (a.priority !== b.priority) return b.priority - a.priority;
+        if (a.priority !== b.priority) return sign * (a.priority - b.priority);
         const pa = a.position ?? 0;
         const pb = b.position ?? 0;
         return pa !== pb ? pa - pb : b.created_at - a.created_at;
       });
-    case "title":
-      // 标题 localeCompare 升序（中文拼音序）
-      return list.sort((a, b) => a.title.localeCompare(b.title, "zh-Hans-CN"));
-    case "created":
-      // 创建时间降序（最新在前）
-      return list.sort((a, b) => b.created_at - a.created_at);
+    }
+    case "title": {
+      // localeCompare 按方向排（asc = 中文拼音序 = 现状）
+      const sign = (dir ?? BASE_SORT_DIR.title) === "asc" ? 1 : -1;
+      return list.sort((a, b) => sign * a.title.localeCompare(b.title, "zh-Hans-CN"));
+    }
+    case "created": {
+      // 创建时间按方向排（desc = 最新在前 = 现状；asc = 从旧到新）
+      const sign = (dir ?? BASE_SORT_DIR.created) === "asc" ? 1 : -1;
+      return list.sort((a, b) => sign * (a.created_at - b.created_at));
+    }
     default:
+      // manual：dir 不生效（拖拽顺序唯一语义就是 position 升序）
       return list.sort((a, b) => {
         const pa = a.position ?? 0;
         const pb = b.position ?? 0;

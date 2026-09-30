@@ -32,10 +32,29 @@ async function quickAdd(page: Page, title: string) {
   await bar.press("Enter");
 }
 
-/** 切换「隐藏已完成」开关（Logbook 治理，默认开）：完成后断言完成行
- *  可见前须先显示（hidden 状态下完成行从列表消失属预期行为） */
+/** 打开「···」更多菜单（工具栏收拢后所有低频入口的公共前缀步骤） */
+async function openMoreMenu(page: Page) {
+  await page.getByRole("button", { name: "更多" }).click();
+  await expect(page.getByRole("menu")).toBeVisible();
+}
+
+/** 「···」菜单切视图：视图图标排点按即切且菜单不关，须按 Esc 收起——
+ *  Radix 菜单开着时 popper 覆盖层 + html pointer-events:none 会拦截后续页面点击 */
+async function switchViewViaMenu(page: Page, name: string) {
+  await openMoreMenu(page);
+  await page.getByRole("button", { name }).click();
+  await page.keyboard.press("Escape");
+}
+
+/** 切换「隐藏已完成」开关（Logbook 治理，默认开 = 隐藏）：入口在「···」菜单；
+ *  幂等（已显示则不重复点），完成后断言完成行可见前须先调用 */
 async function showDoneTasks(page: Page) {
-  await page.getByRole("button", { name: "显示已完成任务" }).click();
+  await openMoreMenu(page);
+  const item = page.getByRole("menuitemcheckbox", { name: "隐藏已完成" });
+  if ((await item.getAttribute("aria-checked")) === "true") {
+    await item.click();
+  }
+  await page.keyboard.press("Escape");
 }
 
 test.beforeEach(async ({ page }) => {
@@ -450,8 +469,8 @@ test("完成态乐观：重复任务完成即翻已完成，撤销删克隆（D4
 test("日历视图：左右分栏 + 选中定位 + 年视图 + 右键新增预填日期", async ({ page }) => {
   const today = new Date();
 
-  // ---- 切到日历视图（工具栏三联钮） ----
-  await page.getByRole("button", { name: "日历视图" }).click();
+  // ---- 切到日历视图（「···」菜单视图图标排，切完收菜单） ----
+  await switchViewViaMenu(page, "日历视图");
 
   // 左半区月历：默认选中今天 → 右栏显示当月任务分组（seed 的今天截止任务）
   await expect(page.getByText("月的任务", { exact: false })).toBeVisible();
@@ -765,8 +784,8 @@ test("看板多选批量：勾选卡片 → 工具条 → 批量改期落库（2
     mk("看板批量-乙", 41);
     m.emitDbChange();
   });
-  // 切看板视图
-  await page.getByRole("button", { name: "看板视图" }).click();
+  // 切看板视图（「···」菜单视图图标排，切完收菜单）
+  await switchViewViaMenu(page, "看板视图");
   await expect(page.getByText("看板批量-甲")).toBeVisible();
 
   // 勾选两张卡的多选圈 → 工具条浮现
@@ -803,8 +822,9 @@ test("看板多选批量：勾选卡片 → 工具条 → 批量改期落库（2
 });
 
 test("筛选器可视化构建器：pill 选条件 → 保存落库 → 侧栏生效（2026-09-12 F3）", async ({ page }) => {
-  // 工具栏「存为视图」入口（当前工具栏筛选预填）→ 构建器弹层（不再有条件 JSON 手填框）
-  await page.locator('button[aria-label="存为视图"]').click();
+  // 「···」菜单「存为视图」入口（当前工具栏筛选预填）→ 构建器弹层（不再有条件 JSON 手填框）
+  await openMoreMenu(page);
+  await page.getByRole("menuitem", { name: "存为视图" }).click();
   const dialog = page.getByRole("dialog");
   await expect(dialog).toBeVisible();
   await expect(dialog.getByText("任意状态")).toBeVisible();
@@ -906,4 +926,199 @@ test("工具栏搜索命中标题与描述（A2 关键词下沉服务端）", as
   await page.getByPlaceholder("搜索", { exact: true }).fill("");
   await expect(seeded).toBeVisible();
   await expect(descOnly).toBeVisible();
+});
+
+test("详情评论：点击占位框就地展开固定高度输入区（内容超出内部滚动，2026-09-29）", async ({ page }) => {
+  // 任务行点击打开详情抽屉
+  const row = page.getByRole("button", { name: "未完成任务：既有任务-今天截止" });
+  await row.click();
+  const drawer = page.getByRole("dialog");
+  await expect(drawer).toBeVisible();
+
+  // 折叠态：只有「添加评论」占位触发框，无常驻输入控件
+  const trigger = drawer.getByRole("button", { name: "添加评论" });
+  await trigger.scrollIntoViewIfNeeded();
+  await expect(trigger).toBeVisible();
+  await expect(drawer.getByPlaceholder("输入评论...")).toHaveCount(0);
+
+  // 点击 → 就地展开（占位框消失、输入框自动聚焦）
+  await trigger.click();
+  const editor = drawer.getByPlaceholder("输入评论...");
+  await expect(editor).toBeVisible();
+  await expect(editor).toBeFocused();
+  await expect(trigger).toHaveCount(0);
+
+  // 固定高度 + 超出滚动：灌入 20 行后内部滚动高度超出，但控件高度不变
+  const heightBefore = (await editor.boundingBox())!.height;
+  await editor.fill(
+    Array.from({ length: 20 }, (_, i) => `评论第 ${i + 1} 行`).join("\n"),
+  );
+  const metrics = await editor.evaluate((el) => ({
+    clientHeight: el.clientHeight,
+    scrollHeight: el.scrollHeight,
+    overflowY: getComputedStyle(el).overflowY,
+  }));
+  expect(metrics.scrollHeight).toBeGreaterThan(metrics.clientHeight);
+  expect(metrics.overflowY).toBe("auto");
+  expect((await editor.boundingBox())!.height).toBeCloseTo(heightBefore, 0);
+
+  // Ctrl+Enter 提交 → 收起回占位框 + 评论落库并展示
+  await editor.press("Control+Enter");
+  await expect(drawer.getByRole("button", { name: "添加评论" })).toBeVisible();
+  await expect(drawer.getByPlaceholder("输入评论...")).toHaveCount(0);
+  // 展示位只认评论卡片段落：同一串文本还会出现在抽屉的「活动记录」行
+  // （mock 的 comment_add 日志），getByText 会命中两处触发 strict mode 报错
+  await expect(
+    drawer.locator("p").filter({ hasText: "评论第 1 行" }),
+  ).toBeVisible({ timeout: 5_000 });
+  const saved = await page.evaluate(() =>
+    (window as any).__orbitMock.db.comments.some(
+      (c: any) => typeof c.content === "string" && c.content.includes("评论第 20 行"),
+    ),
+  );
+  expect(saved).toBe(true);
+});
+
+test("完成态勾选框灰化：弱化灰实底，不再保留待办蓝（2026-09-29）", async ({ page }) => {
+  // 完成 seed 任务 → Logbook 治理默认隐藏完成行：先显示再断言色值
+  const row = page.getByRole("button", { name: "未完成任务：既有任务-今天截止" });
+  await row.getByRole("button", { name: "标记完成" }).click();
+  await showDoneTasks(page);
+
+  const checkbox = page
+    .getByRole("button", { name: "已完成任务：既有任务-今天截止" })
+    .getByRole("button", { name: "标记未完成" });
+  await expect(checkbox).toBeVisible();
+
+  // 用探针元素读同名 token 的解析值：完成态底色须等于 --muted-foreground 而非 --primary
+  // （oklch 计算值序列化格式不稳定，直接比字符串不可靠，故以 var() 探针取基准）
+  const colors = await checkbox.evaluate((el) => {
+    const probe = document.createElement("div");
+    document.body.appendChild(probe);
+    const readToken = (name: string) => {
+      probe.style.backgroundColor = `var(${name})`;
+      return getComputedStyle(probe).backgroundColor;
+    };
+    const bg = getComputedStyle(el).backgroundColor;
+    const muted = readToken("--muted-foreground");
+    const primary = readToken("--primary");
+    probe.remove();
+    return { bg, muted, primary };
+  });
+  expect(colors.bg).toBe(colors.muted);
+  expect(colors.bg).not.toBe(colors.primary);
+});
+
+test("标签管理弹窗整体高度钉死：列表内部滚动，底部新建行不随内容推移（2026-09-29）", async ({ page }) => {
+  await openMoreMenu(page);
+  await page.getByRole("menuitem", { name: "标签管理" }).click();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog).toBeVisible();
+
+  // 灌 5 个标签（>3 卡容量），走真实创建链路；标签名在 Input value 里
+  // （非文本节点），存在性一律用「删除标签 X」按钮断言
+  const input = dialog.getByPlaceholder("新标签名称，Enter 创建");
+  for (const name of ["标签甲", "标签乙", "标签丙", "标签丁", "标签戊"]) {
+    await input.fill(name);
+    await input.press("Enter");
+    await expect(dialog.getByRole("button", { name: `删除标签 ${name}` })).toBeVisible();
+  }
+
+  // 整体高度钉死 380px：不管多少内容都不得长高
+  const height = (await dialog.boundingBox())!.height;
+  expect(Math.abs(height - 380)).toBeLessThanOrEqual(2);
+
+  // 列表区内部滚动（5 卡超出 3 卡容量）且新建行仍钉在底部可见
+  const list = dialog
+    .getByRole("button", { name: "删除标签 标签甲" })
+    .locator("xpath=ancestor::div[2]");
+  const scroll = await list.evaluate((el) => {
+    let node: HTMLElement | null = el as HTMLElement;
+    while (node && node !== document.body) {
+      if (getComputedStyle(node).overflowY === "auto") break;
+      node = node.parentElement;
+    }
+    return node ? { sh: node.scrollHeight, ch: node.clientHeight } : null;
+  });
+  expect(scroll).not.toBeNull();
+  expect(scroll!.sh).toBeGreaterThan(scroll!.ch);
+  await expect(input).toBeVisible();
+});
+
+test("「↑↓」排序菜单：创建时间档 + 升/降序切换（2026-09-29 工具栏收拢）", async ({ page }) => {
+  // 两条新建任务做方向对比（seed 任务今天截止已逾期，走逾期置顶分组恒在顶，
+  // 不能拿它比 y 序）；创建时间档现状默认降序 = 新的在前
+  await quickAdd(page, "方向任务-早生");
+  await quickAdd(page, "方向任务-晚生");
+  await expect(page.getByText("方向任务-晚生")).toBeVisible();
+  const earlyRow = page.getByRole("button", { name: "未完成任务：方向任务-早生" });
+  const lateRow = page.getByRole("button", { name: "未完成任务：方向任务-晚生" });
+  const yOf = async (loc: ReturnType<Page["getByRole"]>) => (await loc.boundingBox())!.y;
+
+  // 「↑↓」→ 排序子菜单 → 创建时间
+  await page.getByRole("button", { name: "排序与筛选", exact: true }).click();
+  await page.getByRole("menuitem", { name: "排序" }).click();
+  await page.getByRole("menuitemradio", { name: "创建时间" }).click();
+  await expect(lateRow).toBeVisible();
+  expect(await yOf(lateRow)).toBeLessThan(await yOf(earlyRow));
+
+  // 顺序子菜单 → 升序（从旧到新）：早生翻到前面
+  await page.getByRole("button", { name: "排序与筛选", exact: true }).click();
+  await page.getByRole("menuitem", { name: "顺序" }).click();
+  await page.getByRole("menuitemradio", { name: "升序" }).click();
+  await expect(lateRow).toBeVisible();
+  expect(await yOf(lateRow)).toBeGreaterThan(await yOf(earlyRow));
+
+  // 方向持久化：LS todo_sort_dir 落 asc（内存 mock 刷新即重置，行序断言做不了）
+  const savedDir = await page.evaluate(() => localStorage.getItem("todo_sort_dir"));
+  expect(savedDir).toBe("asc");
+});
+
+test("「···」更多菜单：视图图标排点按即切且菜单不关（2026-09-29 工具栏收拢）", async ({ page }) => {
+  await openMoreMenu(page);
+  const menu = page.getByRole("menu");
+  await expect(menu).toBeVisible();
+
+  // CheckboxItem 文本须与普通 MenuItem 左对齐（原语默认 pl-8 给左侧指示器留位，
+  // 曾致「隐藏已完成」比「存为视图」缩进一截——2026-09-29 指示器改行尾后锁死）
+  const plainLeft = await page
+    .getByRole("menuitem", { name: "存为视图" })
+    .evaluate((el) => {
+      const textNode = Array.from(el.childNodes).find(
+        (n) => n.nodeType === Node.TEXT_NODE && n.textContent?.includes("存为视图"),
+      )!;
+      const range = document.createRange();
+      range.selectNode(textNode);
+      return range.getBoundingClientRect().left;
+    });
+  const checkboxTextLeft = await page
+    .getByRole("menuitemcheckbox", { name: "隐藏已完成" })
+    .evaluate((el) => {
+      const textNode = Array.from(el.childNodes).find(
+        (n) => n.nodeType === Node.TEXT_NODE && n.textContent?.includes("隐藏已完成"),
+      )!;
+      const range = document.createRange();
+      range.selectNode(textNode);
+      return range.getBoundingClientRect().left;
+    });
+  expect(Math.abs(checkboxTextLeft - plainLeft)).toBeLessThanOrEqual(1);
+
+  // 点矩阵视图 icon：普通 button 不触发 Radix 关菜单
+  await menu.getByRole("button", { name: "矩阵视图" }).click();
+  await expect(menu).toBeVisible();
+
+  // 收起后矩阵四象限真实渲染（空桶也出格）
+  await page.keyboard.press("Escape");
+  await expect(page.getByText("重要且紧急")).toBeVisible();
+
+  // 状态筛选子菜单仍可走通（收拢后等价性抽验：已完成档，入口在「↑↓」排序与筛选菜单）——
+  // 子菜单 radio 用 evaluate 直点（仓库惯例：Radix 弹层内合成点击被 html 拦截）
+  await page.getByRole("button", { name: "排序与筛选" }).click();
+  await expect(page.getByRole("menu")).toBeVisible();
+  await page.getByRole("menuitem", { name: "状态" }).click();
+  await page.getByRole("menuitemradio", { name: "已完成" }).evaluate((el) => (el as HTMLElement).click());
+  // seed 任务是待办：切「已完成」档后从列表消失
+  await expect(
+    page.getByRole("button", { name: "未完成任务：既有任务-今天截止" }),
+  ).toHaveCount(0);
 });

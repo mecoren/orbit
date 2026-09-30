@@ -6,9 +6,8 @@
  * 选中态经 useTodoShell 取用——从回收站面板切回来时筛选原样保留。
  */
 import { useEffect, useMemo, useState } from "react";
-import { AlertTriangle, BookmarkPlus, CalendarDays, CopyPlus, EyeOff, Grid2x2, LayoutGrid, ListTodo, Search, Table2, Tag } from "lucide-react";
+import { AlertTriangle, CopyPlus, ListTodo, Search } from "lucide-react";
 
-import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -17,13 +16,6 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { useTodoStore } from "@/features/todo/store";
 import { useAppStore } from "@/stores/app-store";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -33,7 +25,7 @@ import { useTaskDependencies } from "../shared/use-task-dependencies";
 import { useTaskLabels } from "../shared/use-task-labels";
 import { useTaskReminders } from "../shared/use-task-reminders";
 import { useQuery } from "@tanstack/react-query";
-import { filterTasks, sortTasks, type TaskSortKey } from "../shared/task-filters";
+import { filterTasks, sortTasks, BASE_SORT_DIR, type TaskSortDir, type TaskSortKey } from "../shared/task-filters";
 import { applySavedFilter } from "../shared/saved-filter";
 import { savedFiltersList, todoTaskList } from "@/lib/tauri";
 import { useTodoShell } from "./todo-shell";
@@ -42,6 +34,7 @@ import { LogbookView } from "./logbook-view";
 import { QuickAddBar } from "./quick-add-bar";
 import { toolbarToForm, buildConditions } from "../shared/saved-filter-builder";
 import { useDebouncedValue } from "../shared/use-debounced-value";
+import { SortMenuButton, MoreMenuButton } from "./toolbar-menus";
 import { KanbanView, type KanbanGroupBy } from "./kanban-view";
 import { CalendarView } from "./calendar-view";
 import TaskTableView from "./task-table-view";
@@ -50,7 +43,8 @@ import { MatrixView } from "./matrix-view";
 type StatusFilter = "all" | "undone" | "pending" | "doing" | "done";
 type PriorityFilter = "all" | "0" | "1" | "2" | "3" | "4" | "5";
 /** 五档视图（矩阵 = 四象限 Eisenhower Matrix，TickTick 同款；2026-09-25 与移动端对齐） */
-type ViewMode = "list" | "kanban" | "calendar" | "table" | "matrix";
+export type ViewMode = "list" | "kanban" | "calendar" | "table" | "matrix";
+export type { StatusFilter, PriorityFilter };
 
 /** 视图切换状态持久化（04 §二；07-P2#14 增 calendar 档；2026-09-25 增 matrix 档） */
 function loadViewMode(): ViewMode {
@@ -62,6 +56,8 @@ function loadViewMode(): ViewMode {
 
 /** 排序档位持久化键（#26：默认 manual = 拖拽顺序） */
 const LS_SORT_KEY = "todo_sort_key";
+/** 排序方向持久化（工具栏「↑↓→顺序」档；未存过 = null = 各档位现状默认方向） */
+const LS_SORT_DIR = "todo_sort_dir";
 
 /** 隐藏已完成开关持久化读取：未存过 = 默认开（Logbook 治理新默认，
  *  存量用户首次升级后完成行不再平铺在默认列表——明确入口在侧栏「已完成」） */
@@ -77,6 +73,12 @@ function loadSortKey(): TaskSortKey {
     : "manual";
 }
 
+/** 方向档读取：未存过/脏值 = null（跟随 BASE_SORT_DIR 现状默认） */
+function loadSortDir(): TaskSortDir | null {
+  const saved = localStorage.getItem(LS_SORT_DIR);
+  return saved === "asc" || saved === "desc" ? saved : null;
+}
+
 export default function TaskPanel() {
   const setSelectedTaskId = useTodoStore((s) => s.setSelectedTaskId);
   const setCommandOpen = useAppStore((s) => s.setCommandOpen);
@@ -86,6 +88,7 @@ export default function TaskPanel() {
   const {
     quickView,
     projectId,
+    activeProjectIds,
     ungrouped,
     savedFilterId,
     projects,
@@ -136,6 +139,10 @@ export default function TaskPanel() {
   const [priorityFilter, setPriorityFilter] = useState<PriorityFilter>("all");
   const [viewMode, setViewMode] = useState<ViewMode>(loadViewMode);
   const [sortKey, setSortKey] = useState<TaskSortKey>(loadSortKey);
+  // null = 用户未显式选过方向（生效方向跟随 BASE_SORT_DIR[sortKey]，存量顺序零变化）
+  const [sortDir, setSortDir] = useState<TaskSortDir | null>(loadSortDir);
+  // 「↑↓→顺序」菜单显示与排序实际使用的生效方向（manual 档忽略方向，随意兜底）
+  const effectiveSortDir = sortDir ?? BASE_SORT_DIR[sortKey === "manual" ? "due" : sortKey];
   const [kanbanGroupBy, setKanbanGroupBy] = useState<KanbanGroupBy>("project");
   const [hideDone, setHideDone] = useState<boolean>(loadHideDone);
 
@@ -146,6 +153,12 @@ export default function TaskPanel() {
   useEffect(() => {
     localStorage.setItem(LS_SORT_KEY, sortKey);
   }, [sortKey]);
+
+  useEffect(() => {
+    // null = 回落各档位默认方向，把键清掉（下次升级口径变化时自动跟随）
+    if (sortDir == null) localStorage.removeItem(LS_SORT_DIR);
+    else localStorage.setItem(LS_SORT_DIR, sortDir);
+  }, [sortDir]);
 
   useEffect(() => {
     localStorage.setItem(LS_HIDE_DONE, hideDone ? "1" : "0");
@@ -210,7 +223,7 @@ export default function TaskPanel() {
         activeSavedFilter.conditions,
         labelIndex,
       );
-      return sortTasks(filtered, sortKey);
+      return sortTasks(filtered, sortKey, sortDir ?? undefined);
     }
     return sortTasks(
       filterTasks(
@@ -223,6 +236,8 @@ export default function TaskPanel() {
         {
           quickView,
           projectId,
+          // 清单聚合：父清单视图含全部后代清单的直接任务（口径与壳层谓词下推同源）
+          projectIds: activeProjectIds,
           ungrouped,
           statusFilter,
           priorityFilter: priorityFilter === "all" ? null : Number(priorityFilter),
@@ -230,16 +245,19 @@ export default function TaskPanel() {
         },
       ),
       sortKey,
+      sortDir ?? undefined,
     );
   }, [
     sourceTasks,
     debouncedKeyword,
     quickView,
     projectId,
+    activeProjectIds,
     ungrouped,
     statusFilter,
     priorityFilter,
     sortKey,
+    sortDir,
     activeSavedFilter,
     taskLabels,
     hideDone,
@@ -292,230 +310,41 @@ export default function TaskPanel() {
             />
           </div>
 
-          <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as StatusFilter)}>
-            <SelectTrigger className="h-8 w-28">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">全部状态</SelectItem>
-              <SelectItem value="undone">未完成</SelectItem>
-              <SelectItem value="pending">待办</SelectItem>
-              <SelectItem value="doing">进行中</SelectItem>
-              <SelectItem value="done">已完成</SelectItem>
-            </SelectContent>
-          </Select>
-
-          {/* 隐藏已完成开关（Logbook 治理）：done 视图/已完成状态筛选下置灰
-              （要看完成集的明确入口，开关无意义）；完成历史看侧栏「已完成」 */}
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant={hideDone ? "secondary" : "ghost"}
-                size="icon"
-                className="h-8 w-8"
-                aria-label={hideDone ? "显示已完成任务" : "隐藏已完成任务"}
-                aria-pressed={hideDone}
-                disabled={isLogbook || statusFilter === "done"}
-                onClick={() => setHideDone((v) => !v)}
-              >
-                <EyeOff size={14} className={cn(!hideDone && "opacity-40")} />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>
-              {hideDone ? "已完成已隐藏，点击显示" : "点击隐藏已完成任务"}
-            </TooltipContent>
-          </Tooltip>
-
-          {/* 存为视图（F3）：把当前工具栏筛选一键固化为保存筛选器；
-              undone 档无白名单键（构建器内自动丢弃），其余档位原样预填 */}
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8"
-                aria-label="存为视图"
-                onClick={() =>
-                  createSavedFilterWith(
-                    buildConditions(
-                      toolbarToForm({
-                        statusFilter,
-                        priorityFilter: priorityFilter === "all" ? null : Number(priorityFilter),
-                        favoriteOnly: quickView === "favorite",
-                      }),
-                    ),
-                  )
-                }
-              >
-                <BookmarkPlus size={14} />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>把当前筛选存为视图</TooltipContent>
-          </Tooltip>
-
-          <Select
-            value={priorityFilter}
-            onValueChange={(v) => setPriorityFilter(v as PriorityFilter)}
-          >
-            <SelectTrigger className="h-8 w-32">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">全部优先级</SelectItem>
-              <SelectItem value="0">无优先级</SelectItem>
-              <SelectItem value="1">低</SelectItem>
-              <SelectItem value="2">中</SelectItem>
-              <SelectItem value="3">高</SelectItem>
-              <SelectItem value="4">紧急</SelectItem>
-              <SelectItem value="5">立即处理</SelectItem>
-            </SelectContent>
-          </Select>
-
-          {/* 排序档位（#26；manual = 拖拽顺序，仅该档显示拖拽把手） */}
-          <Select value={sortKey} onValueChange={(v) => setSortKey(v as TaskSortKey)}>
-            <SelectTrigger className="h-8 w-28" aria-label="排序方式">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="manual">拖拽顺序</SelectItem>
-              <SelectItem value="due">截止时间</SelectItem>
-              <SelectItem value="priority">优先级</SelectItem>
-              <SelectItem value="title">标题</SelectItem>
-              <SelectItem value="created">创建时间</SelectItem>
-            </SelectContent>
-          </Select>
-
-          {/* 视图切换五联钮（列表/看板/日历/表格/矩阵） */}
-          <div className="flex items-center overflow-hidden rounded-md border">
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button
-                  type="button"
-                  aria-label="列表视图"
-                  onClick={() => setViewMode("list")}
-                  className={cn(
-                    "flex h-8 w-8 items-center justify-center",
-                    viewMode === "list" ? "bg-primary/10 text-primary" : "hover:bg-accent",
-                  )}
-                >
-                  <ListTodo size={14} />
-                </button>
-              </TooltipTrigger>
-              <TooltipContent>列表视图</TooltipContent>
-            </Tooltip>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button
-                  type="button"
-                  aria-label="看板视图"
-                  onClick={() => setViewMode("kanban")}
-                  className={cn(
-                    "flex h-8 w-8 items-center justify-center",
-                    viewMode === "kanban" ? "bg-primary/10 text-primary" : "hover:bg-accent",
-                  )}
-                >
-                  <LayoutGrid size={14} />
-                </button>
-              </TooltipTrigger>
-              <TooltipContent>看板视图</TooltipContent>
-            </Tooltip>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button
-                  type="button"
-                  aria-label="日历视图"
-                  onClick={() => setViewMode("calendar")}
-                  className={cn(
-                    "flex h-8 w-8 items-center justify-center",
-                    viewMode === "calendar" ? "bg-primary/10 text-primary" : "hover:bg-accent",
-                  )}
-                >
-                  <CalendarDays size={14} />
-                </button>
-              </TooltipTrigger>
-              <TooltipContent>日历视图</TooltipContent>
-            </Tooltip>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button
-                  type="button"
-                  aria-label="表格视图"
-                  onClick={() => setViewMode("table")}
-                  className={cn(
-                    "flex h-8 w-8 items-center justify-center",
-                    viewMode === "table" ? "bg-primary/10 text-primary" : "hover:bg-accent",
-                  )}
-                >
-                  <Table2 size={14} />
-                </button>
-              </TooltipTrigger>
-              <TooltipContent>表格视图</TooltipContent>
-            </Tooltip>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button
-                  type="button"
-                  aria-label="矩阵视图"
-                  onClick={() => setViewMode("matrix")}
-                  className={cn(
-                    "flex h-8 w-8 items-center justify-center",
-                    viewMode === "matrix" ? "bg-primary/10 text-primary" : "hover:bg-accent",
-                  )}
-                >
-                  <Grid2x2 size={14} />
-                </button>
-              </TooltipTrigger>
-              <TooltipContent>矩阵视图（四象限）</TooltipContent>
-            </Tooltip>
-          </div>
-
-          {/* 看板模式专属：分组 Select（w-24） */}
-          {viewMode === "kanban" && (
-            <Select
-              value={kanbanGroupBy}
-              onValueChange={(v) => setKanbanGroupBy(v as KanbanGroupBy)}
-            >
-              <SelectTrigger className="h-8 w-24">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="project">按项目</SelectItem>
-                <SelectItem value="status">按状态</SelectItem>
-              </SelectContent>
-            </Select>
-          )}
-
-          {/* 搜索或跳转（命令面板，Ctrl+P） */}
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="outline"
-                size="icon"
-                className="h-8 w-8"
-                aria-label="搜索或跳转"
-                onClick={() => setCommandOpen(true)}
-              >
-                <Search size={14} />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>搜索或跳转 (Ctrl+P)</TooltipContent>
-          </Tooltip>
-
-          {/* 标签管理（h-8 w-8 Tag icon） */}
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="outline"
-                size="icon"
-                className="h-8 w-8"
-                aria-label="标签管理"
-                onClick={() => setLabelManagerOpen(true)}
-              >
-                <Tag size={14} />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>标签管理</TooltipContent>
-          </Tooltip>
+          {/* 收拢双菜单（TickTick 同款，prd/desktop-toolbar-dropdown）：
+              「↑↓」= 分组/排序/顺序 + 状态/优先级筛选；「···」= 视图/显示/入口类低频项 */}
+          <SortMenuButton
+            viewMode={viewMode}
+            sortKey={sortKey}
+            onSortKeyChange={setSortKey}
+            sortDir={effectiveSortDir}
+            onSortDirChange={setSortDir}
+            kanbanGroupBy={kanbanGroupBy}
+            onKanbanGroupByChange={setKanbanGroupBy}
+            statusFilter={statusFilter}
+            onStatusFilterChange={setStatusFilter}
+            priorityFilter={priorityFilter}
+            onPriorityFilterChange={setPriorityFilter}
+          />
+          <MoreMenuButton
+            viewMode={viewMode}
+            onViewModeChange={setViewMode}
+            hideDone={hideDone}
+            onHideDoneChange={setHideDone}
+            hideDoneDisabled={isLogbook || statusFilter === "done"}
+            onSaveAsView={() =>
+              createSavedFilterWith(
+                buildConditions(
+                  toolbarToForm({
+                    statusFilter,
+                    priorityFilter: priorityFilter === "all" ? null : Number(priorityFilter),
+                    favoriteOnly: quickView === "favorite",
+                  }),
+                ),
+              )
+            }
+            onOpenCommand={() => setCommandOpen(true)}
+            onOpenLabels={() => setLabelManagerOpen(true)}
+          />
 
           {/* 新增按钮 */}
           <Button
