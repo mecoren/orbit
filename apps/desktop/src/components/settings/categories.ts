@@ -9,7 +9,7 @@ export interface CategoryItem {
   icon: LucideIcon;
 }
 
-/** Orbit MVP 分类：通用（开机自启动）/ 安全 / 主题 / 待办（回收站保留时间）/ 日历（节假日更新时刻）/ 同步与备份 / 冲突记录 / 快捷键 / 任务模板 / 通知历史 */
+/** Orbit MVP 分类：通用（开机自启动）/ 安全 / 主题 / 待办（回收站保留时间）/ 日历（节假日每月自动更新 + 按年补写）/ 同步与备份 / 冲突记录 / 快捷键 / 任务模板 / 通知历史 */
 export const settingsCategories: CategoryItem[] = [
   { key: "general", label: "通用", icon: Power },
   { key: "security", label: "安全", icon: Shield },
