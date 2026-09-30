@@ -246,13 +246,34 @@ const MOCK_HOLIDAYS = [
   { date: "2026-02-17", year: 2026, is_holiday: true, name: "初一" },
 ] as const;
 
-/** 冒烟用节假日记账（形状对齐 Rust HolidayMeta：每月口径 + 自动开关） */
+/** e2e 造态：节假日记账失败态（`failure_count > 0` 的诊断行只有造态才能出现）。
+ *
+ *  为什么走 localStorage：mock 是页面模块，每次 goto 都重建内存态——用例需要
+ *  「先设态、再进设置页」两步导航，内存变量会在第二次加载时丢掉；localStorage
+ *  同源持久，是唯一跨 `goto` 的通道。写入口见 `window.__orbitMock.setHolidayFailure`。 */
+const HOLIDAY_FAILURE_KEY = "__orbitMockHolidayFailure";
+
+function holidayFailureFromStorage(): { count: number; lastAttemptMs: number } {
+  try {
+    const raw = localStorage.getItem(HOLIDAY_FAILURE_KEY);
+    if (!raw) return { count: 0, lastAttemptMs: 0 };
+    const v = JSON.parse(raw) as { count?: number; lastAttemptMs?: number };
+    return { count: v.count ?? 0, lastAttemptMs: v.lastAttemptMs ?? 0 };
+  } catch {
+    return { count: 0, lastAttemptMs: 0 };
+  }
+}
+
+/** 冒烟用节假日记账（形状对齐 Rust HolidayMeta：每月口径 + 自动开关 + 失败计数） */
 function mockHolidayMeta() {
   const now = Date.now();
+  const failure = holidayFailureFromStorage();
   return {
-    last_update_ms: now,
-    last_attempt_ms: now,
-    failure_count: 0,
+    last_update_ms: now - 86_400_000,
+    // 失败态才带上「上次尝试」的真实时刻（未造态时与成功时间同值，不影响正常态断言）
+    last_attempt_ms:
+      failure.count > 0 && failure.lastAttemptMs > 0 ? failure.lastAttemptMs : now,
+    failure_count: failure.count,
     auto_enabled: true,
   };
 }
@@ -1929,6 +1950,8 @@ declare global {
       emitSyncProgress: (payload: unknown) => void;
       /** 手动推同步完成事件 */
       emitSyncFinished: (payload: unknown) => void;
+      /** 节假日失败态造态（写 localStorage，跨 goto 生效；0 恢复正常态） */
+      setHolidayFailure: (count: number, lastAttemptMs?: number) => void;
     };
   }
 }
@@ -1950,6 +1973,16 @@ export function installBrowserIpc() {
     syncState,
     emitSyncProgress: (payload: unknown) => emitEvent("sync-progress", payload),
     emitSyncFinished: (payload: unknown) => emitEvent("sync-finished", payload),
+    setHolidayFailure: (count: number, lastAttemptMs = 0) => {
+      if (count > 0) {
+        localStorage.setItem(
+          HOLIDAY_FAILURE_KEY,
+          JSON.stringify({ count, lastAttemptMs }),
+        );
+      } else {
+        localStorage.removeItem(HOLIDAY_FAILURE_KEY);
+      }
+    },
   };
 
   // transformCallback 注册的回调表：id → cb。
