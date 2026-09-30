@@ -40,35 +40,52 @@ pub struct GcResult {
 /// 返回被剔除的 `(表名, 桶键)` 列表；水位线为 0（设备数不足）时不改动清单。
 /// **只修改内存中的清单**，不影响云端对象——调用方须在上传新清单成功后再调用
 /// [`delete_expired_buckets`] 删除对象。
-pub fn prune_expired_tombstones(manifest: &mut Manifest) -> Vec<(String, String)> {
+///
+/// `already_known` 传**本轮 push 之前**的远端清单（F52）：只有当某个墓碑分桶
+/// 在上一版清单里就已经存在时，才允许被水位线剔除。本轮刚新建/刚上传的墓碑
+/// 在任何设备上都还没有机会被 pull 到——若不豁免，一台离线较久的设备刚推上来
+/// 的旧墓碑会在同一轮被剔除并删对象，对端永久看不到这次删除而复活记录。
+pub fn prune_expired_tombstones(
+    manifest: &mut Manifest,
+    already_known: &Manifest,
+) -> Vec<(String, String)> {
     let watermark = manifest.tombstone_watermark();
     if watermark <= 0 {
         return Vec::new();
     }
     let watermark_month = crate::cloud_sync::db_loader::local_month_key(watermark);
-    let expired = collect_expired_from_original(manifest, &watermark_month);
-    for index in manifest.tombstones.values_mut() {
-        index
-            .buckets
-            .retain(|bucket, _| bucket.as_str() >= watermark_month.as_str());
+    let expired = collect_expired_from_original(manifest, already_known, &watermark_month);
+    for (table, bucket) in &expired {
+        if let Some(index) = manifest.tombstones.get_mut(table) {
+            index.buckets.remove(bucket);
+        }
     }
     expired
 }
 
 /// 收集水位线之前的墓碑分桶（在 prune 之前调用语义更清晰）
+///
+/// 两条判据同时满足才可回收：① 桶键月份早于水位线月份；② 该桶在上一版清单里
+/// 已存在（本轮新建的豁免，见 [`prune_expired_tombstones`]）。
 fn collect_expired_from_original(
     manifest: &Manifest,
+    already_known: &Manifest,
     watermark_month: &str,
 ) -> Vec<(String, String)> {
     manifest
         .tombstones
         .iter()
         .flat_map(|(table, index)| {
+            let known = already_known.tombstone_index(table);
             index
                 .buckets
                 .keys()
-                .filter(|b| b.as_str() < watermark_month)
+                .filter(|b| {
+                    b.as_str() < watermark_month
+                        && known.is_some_and(|k| k.buckets.contains_key(b.as_str()))
+                })
                 .map(|b| (table.clone(), b.clone()))
+                .collect::<Vec<_>>()
         })
         .collect()
 }
@@ -101,7 +118,7 @@ mod tests {
     fn manifest_with_tombstones(buckets: &[&str], devices: &[(&str, i64)]) -> Manifest {
         let mut m = Manifest::empty("dev-1");
         for (id, ts) in devices {
-            m.touch_device(id, *ts);
+            m.touch_device(id, *ts, *ts);
         }
         m.tombstones.insert(
             "todo_tasks".to_string(),
@@ -128,7 +145,8 @@ mod tests {
     fn no_prune_when_single_device() {
         let mut m =
             manifest_with_tombstones(&["2020-01", "2026-09"], &[("dev-1", 1_700_000_000_000)]);
-        let expired = prune_expired_tombstones(&mut m);
+        let known = m.clone();
+        let expired = prune_expired_tombstones(&mut m, &known);
         assert!(expired.is_empty(), "单设备不得回收墓碑");
         assert_eq!(m.tombstones["todo_tasks"].buckets.len(), 2);
     }
@@ -142,8 +160,10 @@ mod tests {
         );
         let watermark = m.tombstone_watermark();
         let expected_month = crate::cloud_sync::db_loader::local_month_key(watermark);
+        // 这些桶在上一版清单里就已存在（正常多轮演进形态）
+        let known = m.clone();
 
-        let expired = prune_expired_tombstones(&mut m);
+        let expired = prune_expired_tombstones(&mut m, &known);
         assert!(!expired.is_empty(), "水位线前应有可回收分桶");
         assert!(
             expired
@@ -164,7 +184,39 @@ mod tests {
         let ts = 1_789_473_600_000i64; // 2026-09
         let month = crate::cloud_sync::db_loader::local_month_key(ts);
         let mut m = manifest_with_tombstones(&[month.as_str()], &[("d1", ts), ("d2", ts)]);
-        let expired = prune_expired_tombstones(&mut m);
+        let known = m.clone();
+        let expired = prune_expired_tombstones(&mut m, &known);
         assert!(expired.is_empty(), "同月分桶必须保留");
+    }
+
+    /// F52：本轮**新建/新上传**的墓碑分桶不得当轮回收
+    ///
+    /// 场景：一台离线一个多月的设备刚把「上个月的删除」推上来，若当轮就按水位线
+    /// 剔除并删对象，其他设备永远看不到这次删除 → 复活。
+    #[test]
+    fn bucket_added_this_round_is_not_pruned() {
+        let mut m = manifest_with_tombstones(
+            &["2026-01"],
+            &[("d1", 1_800_000_000_000), ("d2", 1_800_000_000_000)],
+        );
+        // 上一版清单里没有该表任何墓碑桶（= 本轮新增）
+        let mut known = Manifest::empty("d1");
+        known.touch_device("d1", 1_800_000_000_000, 1_800_000_000_000);
+        known.touch_device("d2", 1_800_000_000_000, 1_800_000_000_000);
+
+        assert!(prune_expired_tombstones(&mut m, &known).is_empty());
+        assert!(
+            m.tombstones["todo_tasks"].buckets.contains_key("2026-01"),
+            "本轮新增的墓碑桶必须保留，等下轮水位线判定"
+        );
+
+        // 下一轮（已在上一版清单里）才允许回收
+        let known = m.clone();
+        let expired = prune_expired_tombstones(&mut m, &known);
+        assert_eq!(
+            expired,
+            vec![("todo_tasks".to_string(), "2026-01".to_string())]
+        );
+        assert!(m.tombstones["todo_tasks"].buckets.is_empty());
     }
 }

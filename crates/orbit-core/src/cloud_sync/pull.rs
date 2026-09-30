@@ -84,6 +84,8 @@ pub async fn pull_all(
             log::info!("[pull] 云端无清单（首次同步/云端为空），跳过拉取");
             let mut next = state.clone();
             next.last_synced_at = now_ms();
+            // F52：本机已成功读取清单（此处为空），登记 pull 位置供水位线使用
+            next.last_pulled_at = next.last_synced_at;
             next.last_synced_clock_ms = crate::db::clock::next_ms();
             next.manifest_epoch = 0;
             next.remote_tables.clear();
@@ -106,6 +108,8 @@ pub async fn pull_all(
     if manifest.epoch > 0 && manifest.epoch == state.manifest_epoch {
         log::info!("[pull] 清单 epoch 未变（{}），跳过", manifest.epoch);
         state.last_synced_at = now_ms();
+        // F52：epoch 未变说明清单内容与本机快照一致，本机确实「看过」它
+        state.last_pulled_at = state.last_synced_at;
         state.last_synced_clock_ms = crate::db::clock::next_ms();
         state_store.save(&state)?;
         return Ok(PullResult {
@@ -188,6 +192,9 @@ pub async fn pull_all(
     //    整轮早退，失败表要等他端改写清单才有机会重试。
     let mut next = state.clone();
     next.last_synced_at = now_ms();
+    // F52：本轮成功 pull（含失败表回滚）→ 登记 pull 位置；水位线只认这个字段，
+    // `push_only` 不推进它，故「只推不拉」的设备不会让未见的墓碑被回收
+    next.last_pulled_at = next.last_synced_at;
     next.update_from_manifest(&manifest);
     if !result.failed_modules.is_empty() {
         next.manifest_epoch = state.manifest_epoch;

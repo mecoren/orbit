@@ -32,6 +32,13 @@ const STATE_FILE_NAME: &str = "sync_state.json";
 pub struct SyncState {
     /// 最后一次同步完成时间（Unix 毫秒，墙上时钟）
     pub last_synced_at: i64,
+    /// 最后一次**成功 pull** 的时间（Unix 毫秒，墙上时钟）
+    ///
+    /// F52：push 时把它上报进清单的 `DeviceCheckpoint.last_pulled_at`，
+    /// 作为墓碑回收水位线的依据（只有 pull 才能证明本机看到过清单里的墓碑）。
+    /// push 不推进本字段——`push_only` 只推不拉，推进它会让水位线虚高。
+    #[serde(default)]
+    pub last_pulled_at: i64,
     /// 最后一次同步完成时的逻辑时钟值（见 `db::clock`；0 = 从未成功同步）
     ///
     /// 冲突败方副本的「真并发」判据：只有本地记录时间戳**晚于**本值，
@@ -66,6 +73,7 @@ impl SyncState {
     pub fn empty(device_id: &str) -> Self {
         Self {
             last_synced_at: 0,
+            last_pulled_at: 0,
             last_synced_clock_ms: 0,
             last_pushed_clock_ms: 0,
             device_id: device_id.to_string(),

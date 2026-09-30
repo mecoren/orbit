@@ -106,8 +106,16 @@ impl TombstoneIndex {
 /// 设备同步检查点（墓碑安全回收的水位线依据 + 协议能力协商位）
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct DeviceCheckpoint {
-    /// 该设备最后一次成功同步的本地时间（Unix 毫秒）
+    /// 该设备最后一次成功同步（含 push）的本地时间（Unix 毫秒）——纯诊断字段，
+    /// **不参与任何判定**（改前曾被 `tombstone_watermark` 当作 pull 位置使用）
     pub last_synced_at: i64,
+    /// 该设备最后一次**成功 pull** 的本地时刻（Unix 毫秒）
+    ///
+    /// 墓碑水位线的**唯一**依据：只有 pull 才能证明「该设备已看到清单里此前的
+    /// 墓碑」。push（尤其不拉取的 `push_only` / `rekey`）不推进它。
+    /// 存量清单缺此字段、或设备从未 pull → 0 → 水位线取 0 → 保守不回收（F52）。
+    #[serde(default)]
+    pub last_pulled_at: i64,
     /// 该设备当时的应用版本（`APP_VERSION` 口径）
     ///
     /// 唯一的能力协商原语：清单是加密 JSON，加字段靠 serde default 兼容，
@@ -162,29 +170,41 @@ impl Manifest {
 
     /// 墓碑回收水位线（Unix 毫秒）
     ///
-    /// 取所有设备检查点的**最小值**：只有早于「最落后设备上次成功同步时间」
-    /// 的墓碑才确定已被所有设备看到，可以安全回收。
+    /// 取所有设备 [`DeviceCheckpoint::last_pulled_at`] 的**最小值**：只有早于
+    /// 「最落后设备上次成功 **pull** 时刻」的墓碑才确定已被所有设备看到，
+    /// 可以安全回收。
+    ///
+    /// F52（2026-09-30 第六轮）：此前取的是 `last_synced_at`，而该字段实际语义是
+    /// 「最后一次 push 时刻」（全仓只有 push 会写它）。不拉取的 `push_only`
+    /// （on-change 防抖即触发）会把自己的检查点推到最新，于是该设备**从未 pull
+    /// 到**的墓碑被判定「已被全部设备同步过」而被 GC——对端随后把本地存活行
+    /// 推回云端，已删记录复活。改用 pull 位置后，不 pull 的轮次不再抬高水位线。
     ///
     /// 保守策略：设备数 < 2（单设备或尚未登记）返回 0，即**不回收**——
     /// 单设备场景没有"其他设备需要看到墓碑"的约束，但新设备加入时仍需要
-    /// 完整墓碑来判断删除；宁可不回收也不冒复活风险。
+    /// 完整墓碑来判断删除；宁可不回收也不冒复活风险。任一设备的
+    /// `last_pulled_at` 为 0（从未 pull / 存量清单）同样使水位线归 0。
     pub fn tombstone_watermark(&self) -> i64 {
         if self.devices.len() < 2 {
             return 0;
         }
         self.devices
             .values()
-            .map(|c| c.last_synced_at)
+            .map(|c| c.last_pulled_at)
             .min()
             .unwrap_or(0)
     }
 
     /// 登记/更新本机检查点（版本串取 [`APP_VERSION`]）
-    pub fn touch_device(&mut self, device_id: &str, last_synced_at: i64) {
+    ///
+    /// `last_synced_at` 为本次 push 时刻（诊断）；`last_pulled_at` 取本机账本里
+    /// 记录的「最后一次成功 pull 时刻」——不拉取的轮次传进旧值即可，水位线不会被抬高。
+    pub fn touch_device(&mut self, device_id: &str, last_synced_at: i64, last_pulled_at: i64) {
         self.devices.insert(
             device_id.to_string(),
             DeviceCheckpoint {
                 last_synced_at,
+                last_pulled_at,
                 app_version: APP_VERSION.to_string(),
             },
         );
@@ -281,17 +301,41 @@ mod tests {
     #[test]
     fn watermark_requires_two_devices() {
         let mut m = Manifest::empty("dev-1");
-        m.touch_device("dev-1", 100);
+        m.touch_device("dev-1", 100, 100);
         assert_eq!(m.tombstone_watermark(), 0, "单设备不得回收墓碑");
     }
 
     #[test]
     fn watermark_is_min_of_devices() {
         let mut m = Manifest::empty("dev-1");
-        m.touch_device("dev-1", 900);
-        m.touch_device("dev-2", 300);
-        m.touch_device("dev-3", 600);
+        m.touch_device("dev-1", 900, 900);
+        m.touch_device("dev-2", 300, 300);
+        m.touch_device("dev-3", 600, 600);
         assert_eq!(m.tombstone_watermark(), 300);
+    }
+
+    /// F52：水位线只认 pull 位置——「只 push 从不 pull」的设备不得抬高它
+    #[test]
+    fn watermark_ignores_push_only_devices() {
+        let mut m = Manifest::empty("dev-1");
+        // dev-1 一直正常 pull
+        m.touch_device("dev-1", 2_000, 2_000);
+        // dev-2 最后一次 pull 停在 500，但刚做了一次 push_only（push 时刻推到 9_999_999）
+        m.touch_device("dev-2", 9_999_999, 500);
+        assert_eq!(
+            m.tombstone_watermark(),
+            500,
+            "push_only 不得把水位线抬到 9_999_999（那会让 dev-2 没见过的墓碑被回收）"
+        );
+    }
+
+    /// F52：任一设备从未 pull（含存量清单）→ 水位线归 0，保守不回收
+    #[test]
+    fn watermark_is_zero_when_any_device_never_pulled() {
+        let mut m = Manifest::empty("dev-1");
+        m.touch_device("dev-1", 2_000, 2_000);
+        m.touch_device("dev-2", 2_000, 0);
+        assert_eq!(m.tombstone_watermark(), 0);
     }
 
     #[test]
@@ -359,6 +403,10 @@ mod tests {
         let m: Manifest = serde_json::from_str(LEGACY).unwrap();
         assert_eq!(m.epoch, 7);
         assert_eq!(m.devices["dev-old"].app_version, "", "缺字段即版本未知");
+        assert_eq!(
+            m.devices["dev-old"].last_pulled_at, 0,
+            "F52：存量清单无 last_pulled_at → 0（水位线归 0，保守不回收）"
+        );
         assert!(
             !m.all_devices_support_aad(),
             "版本未知的设备不得触发格式升级"
@@ -370,6 +418,7 @@ mod tests {
     fn aad_gate_requires_every_registered_device_upgraded() {
         let dev = |v: &str| DeviceCheckpoint {
             last_synced_at: 1,
+            last_pulled_at: 1,
             app_version: v.to_string(),
         };
         let mut m = Manifest::empty("d");
@@ -432,8 +481,12 @@ mod tests {
     #[test]
     fn touch_device_records_local_app_version() {
         let mut m = Manifest::empty("dev-1");
-        m.touch_device("dev-1", 42);
+        m.touch_device("dev-1", 42, 41);
         assert_eq!(m.devices["dev-1"].app_version, APP_VERSION);
         assert_eq!(m.devices["dev-1"].last_synced_at, 42);
+        assert_eq!(
+            m.devices["dev-1"].last_pulled_at, 41,
+            "pull 位置必须与 push 时刻分开记录（F52）"
+        );
     }
 }

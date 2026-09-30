@@ -89,6 +89,8 @@ pub async fn push_all(
         device_id,
         skip_tables,
         false,
+        // 增量 push：单表失败只隔离该表（其余表继续），失败表由下轮重试
+        false,
     )
     .await
 }
@@ -119,6 +121,9 @@ pub async fn push_all_force_full(
         device_id,
         skip_tables,
         true,
+        // F49：rekey 全量重传必须全表成功才换清单——部分失败落盘会留下
+        // 「新 Key 清单 + 旧 Key 分桶」的混合态，全体设备解密失败
+        true,
     )
     .await
 }
@@ -133,6 +138,7 @@ async fn push_all_impl(
     device_id: &str,
     skip_tables: &[String],
     force: bool,
+    require_all_tables_ok: bool,
 ) -> Result<PushResult, CloudSyncError> {
     let state = match state_store.load() {
         Ok(s) => s,
@@ -264,6 +270,29 @@ async fn push_all_impl(
             });
         }
 
+        // F49（2026-09-30 第六轮）：rekey 必须「全表成功才换清单」。
+        // 清单用**新** Data Key 加密，而失败表的分桶对象仍是**旧** Key 密文
+        // （对象路径由桶号决定、非内容寻址，force 是原地覆盖）——清单一旦落盘
+        // 就是「新 Key 清单指向旧 Key 分桶」的混合态，全体设备（含本机）解密
+        // 失败被引到恢复页。故此检查必须在**写清单之前**：此前它放在
+        // `engine::rekey_cloud_reencrypt_inner` 里，位于本函数返回之后，防线落空。
+        if require_all_tables_ok && attempt.failed_modules > 0 {
+            return Err(CloudSyncError::Other {
+                message: format!(
+                    "rekey 全量重传有 {} 个模块失败，已在写入清单前中断（云端清单与 config \
+                     仍为旧 Key，已重加密的分桶待重试覆盖）: {:?}",
+                    attempt.failed_modules, attempt.errors
+                ),
+            });
+        }
+
+        // F48（2026-09-30 第六轮）：本轮是否「干净」。任一表 push 失败都会让该表的
+        // 脏桶没能上传（表级失败只进 errors、不外抛）；此时**不得**推进 push
+        // 水位线——否则这些桶下轮被 `bucket_is_unchanged`（行数相等 + 无晚于
+        // 水位线的行）判为「逐字节一致」而永久跳过，本地编辑静默漏传。
+        // 与 F24 对 `last_synced_at` 建立的「不干净轮次不推进」纪律同源。
+        let round_clean = attempt.failed_modules == 0;
+
         // 4. 无任何变化 → 不写清单（避免 epoch 空转与无意义流量）；
         //    force（rekey）下清单必须重加密落盘，不受此短路影响
         let changed_any = force || attempt.pushed_chunks > 0 || attempt.pushed_tombstones > 0;
@@ -271,25 +300,37 @@ async fn push_all_impl(
             attempt.skipped_modules = 1;
             attempt.cas_conflicts = result.cas_conflicts;
             result = attempt;
-            let mut next_state = state.clone();
-            next_state.last_synced_at = now_ms();
-            // F41：无变化轮次同样确认了「本轮上界之前的写入已全部在云端」，
-            // 推进 push 水位线使下轮脏集合不包含它们（不动 last_synced_clock_ms
-            // ——那是 pull 侧冲突判据的基线，语义见 state.rs）
-            next_state.last_pushed_clock_ms = next_state.last_pushed_clock_ms.max(clock_mark);
-            next_state.update_from_manifest(&remote_manifest);
-            state_store.save(&next_state)?;
+            if round_clean {
+                let mut next_state = state.clone();
+                next_state.last_synced_at = now_ms();
+                // F41：无变化轮次同样确认了「本轮上界之前的写入已全部在云端」，
+                // 推进 push 水位线使下轮脏集合不包含它们（不动 last_synced_clock_ms
+                // ——那是 pull 侧冲突判据的基线，语义见 state.rs）
+                next_state.last_pushed_clock_ms = next_state.last_pushed_clock_ms.max(clock_mark);
+                next_state.update_from_manifest(&remote_manifest);
+                state_store.save(&next_state)?;
+            } else {
+                log::warn!(
+                    "[push] 本轮 {} 张表失败，不推进 push 水位线（失败表的脏桶留待下轮重算）: {:?}",
+                    result.failed_modules,
+                    result.errors
+                );
+            }
             return Ok(result);
         }
 
         // 5. 组装并条件写清单
         //    墓碑水位线回收：先从清单剔除「早于所有设备检查点」的墓碑分桶，
         //    对象删除放在清单上传成功之后（顺序见 gc 模块文档）。
-        let expired_tombstones = crate::cloud_sync::gc::prune_expired_tombstones(&mut new_manifest);
+        //    F52：只回收「上一版清单里已存在」的桶——本轮新建的墓碑豁免一轮。
+        let expired_tombstones =
+            crate::cloud_sync::gc::prune_expired_tombstones(&mut new_manifest, &remote_manifest);
         new_manifest.epoch = remote_manifest.epoch + 1;
         new_manifest.device_id = device_id.to_string();
         new_manifest.updated_at = now_ms();
-        new_manifest.touch_device(device_id, now_ms());
+        // F52：`last_synced_at` 仅作诊断（本次 push 时刻）；水位线依据是本机账本里
+        // 记录的「最后一次成功 pull 时刻」——push_only/rekey 不 pull，故不会抬高它
+        new_manifest.touch_device(device_id, now_ms(), state.last_pulled_at);
 
         let payload = encrypt_payload(&serde_json::to_vec(&new_manifest)?, &data_key)?;
 
@@ -342,6 +383,14 @@ async fn push_all_impl(
         result.pushed_tombstones += attempt.pushed_tombstones;
         result.pushed_modules = attempt.pushed_modules;
         result.manifest_written = true;
+        // F48：先把失败表信息落进日志（errors 随即被 extend 移走）
+        if attempt.failed_modules > 0 {
+            log::warn!(
+                "[push] 本轮 {} 张表失败，不推进 push 水位线（下轮重算其脏桶）: {:?}",
+                attempt.failed_modules,
+                attempt.errors
+            );
+        }
         result.errors.extend(attempt.errors);
 
         // 6. 清单已上新版：现在可以安全删除不再被引用的墓碑对象
@@ -360,7 +409,11 @@ async fn push_all_impl(
         next_state.last_synced_at = now_ms();
         // F41：push 水位线推进到本轮上界（不是"现在"——本轮开始后的新写入
         // 必须留给下轮重新判脏）。last_synced_clock_ms 不动，语义见 state.rs。
-        next_state.last_pushed_clock_ms = next_state.last_pushed_clock_ms.max(clock_mark);
+        // F48：只有**本轮表级全成功**才推进；有失败表时保留旧水位线，
+        // 使失败表的脏桶下轮仍被判脏并重传（否则行数不变的编辑永久漏传）。
+        if round_clean {
+            next_state.last_pushed_clock_ms = next_state.last_pushed_clock_ms.max(clock_mark);
+        }
         next_state.update_from_manifest(&new_manifest);
         state_store.save(&next_state)?;
         return Ok(result);
@@ -585,6 +638,18 @@ async fn verify_manifest_write(
 }
 
 /// 空数据覆盖守卫：本地全空 + 远端有数据 + 本机曾同步过 → 阻断
+///
+/// ## 与「合法清空全部数据」的区分（F53，2026-09-30 第六轮）
+///
+/// 「本地全空」有两种成因，处置必须相反：
+///
+/// - **删库重装**：本地物理清空、账本残留 → 必须阻断（否则空数据覆盖云端）。
+/// - **用户合法清空**：逐条软删产生墓碑（回收站仍有内容 / TTL 未到）→
+///   **必须放行**，否则删除永远传不上云（远端活行原样保留，下一轮 pull
+///   又把它们拉回来，表现为「删了还会自己回来」）。
+///
+/// 两者唯一可判差异是**本地是否留有墓碑**：合法删除必然产生 `is_deleted = 1`
+/// 的行，删库重装则一行不留。故在「本地全空」成立后追加墓碑判据。
 async fn guard_against_empty_overwrite(
     db_pool: &SqlitePool,
     state: &crate::cloud_sync::state::SyncState,
@@ -601,9 +666,17 @@ async fn guard_against_empty_overwrite(
     if !local_all_tables_empty(db_pool).await? {
         return Ok(());
     }
-    let msg = "空数据覆盖守卫触发：本地数据库为空但远端已有同步数据、且本机曾成功同步过——\
-               疑似删库重装后残留 sync_state.json，已阻断 Push 以防空数据覆盖云端。\
-               请在设置中使用「从云端恢复」或清除同步状态后重试"
+    // F53：无存活行但留有墓碑 = 合法清空（删除必须能上云），放行。
+    if local_has_tombstones(db_pool).await? {
+        log::info!(
+            "[push] 空数据覆盖守卫放行：本地无存活行但存在软删墓碑（用户合法清空全部数据），\
+             本轮需把墓碑同步到云端"
+        );
+        return Ok(());
+    }
+    let msg = "空数据覆盖守卫触发：本地数据库既无存活行也无任何软删墓碑，但远端已有同步数据、\
+               且本机曾成功同步过——疑似删库重装后残留 sync_state.json，已阻断 Push 以防空数据\
+               覆盖云端。请在设置中使用「从云端恢复」或清除同步状态后重试"
         .to_string();
     log::warn!("[push] 空数据覆盖守卫触发：{msg}");
     Err(CloudSyncError::State { message: msg })
@@ -627,6 +700,28 @@ async fn local_all_tables_empty(db_pool: &SqlitePool) -> Result<bool, CloudSyncE
     Ok(true)
 }
 
+/// 是否存在软删墓碑（任一可同步表 `is_deleted = 1` 计数 > 0）
+///
+/// F53（2026-09-30 第六轮）：空数据覆盖守卫的**合法清空**判别依据。
+/// `local_all_tables_empty` 只看 `is_deleted = 0`，把「用户合法清空」
+/// 与「删库重装」判成同一态；墓碑是两者唯一的可判差异。
+async fn local_has_tombstones(db_pool: &SqlitePool) -> Result<bool, CloudSyncError> {
+    for table in SYNCABLE_TABLES {
+        let count: (i64,) = sqlx::query_as(&format!(
+            "SELECT COUNT(*) FROM {table} WHERE is_deleted = 1"
+        ))
+        .fetch_one(db_pool)
+        .await
+        .map_err(|e| CloudSyncError::Database {
+            message: format!("统计表 {table} 墓碑数失败: {e}"),
+        })?;
+        if count.0 > 0 {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -644,6 +739,8 @@ mod tests {
         uploads: Mutex<Vec<String>>,
         /// 置 true 时条件写恒报冲突（模拟他端持续并发写入，耗尽 CAS 重试）
         conflict_all: Mutex<bool>,
+        /// 置为某子串时，路径包含它的普通 `upload` 恒失败（注入单表上传故障）
+        fail_upload_contains: Mutex<Option<String>>,
     }
 
     impl MemAdapter {
@@ -653,6 +750,7 @@ mod tests {
                 version: Mutex::new(0),
                 uploads: Mutex::new(Vec::new()),
                 conflict_all: Mutex::new(false),
+                fail_upload_contains: Mutex::new(None),
             }
         }
 
@@ -674,6 +772,16 @@ mod tests {
                 })
         }
         async fn upload(&self, path: &str, data: &[u8]) -> Result<(), SyncError> {
+            // 故障注入：模拟某张表的分桶上传持续失败（限流/瞬断），
+            // 用于钉住「失败轮次不得推进 push 水位线」与「rekey 不得半落清单」
+            if let Some(needle) = self.fail_upload_contains.lock().unwrap().clone()
+                && path.contains(&needle)
+            {
+                return Err(SyncError::Network {
+                    message: format!("注入上传失败: {path}"),
+                    retryable: true,
+                });
+            }
             self.uploads.lock().unwrap().push(path.to_string());
             self.put(path, data.to_vec());
             Ok(())
@@ -1066,6 +1174,76 @@ mod tests {
         assert!(err.to_string().contains("空数据覆盖守卫"));
     }
 
+    /// F53（2026-09-30 第六轮）：用户「清空全部数据」造成的本地全空是**合法
+    /// 删除**，守卫必须放行——否则删除永远传不上云，下一轮 pull 又把远端活行
+    /// 拉回来，用户看到的是「删了还会自己回来」。
+    ///
+    /// 与既有 `empty_local_with_remote_data_is_blocked`（物理 `DELETE`，无墓碑）
+    /// 构成一对：物理清空仍必须阻断，软删清空必须放行。
+    #[tokio::test]
+    async fn fully_soft_deleted_local_passes_empty_guard_and_pushes_tombstones() {
+        let (pool, crypto, store, _tmp) = env().await;
+        sqlx::query(
+            "INSERT INTO todo_projects (uuid, title, created_at, updated_at) VALUES ('u1','P',1,1)",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        let adapter = MemAdapter::new();
+        push_all(
+            &pool,
+            &crypto,
+            &store,
+            &adapter,
+            &NoopProgressSender,
+            SyncOrigin::Manual,
+            "dev-1",
+            &[],
+        )
+        .await
+        .unwrap();
+
+        // 用户「清空全部数据」：逐条软删（墓碑留在本地）
+        // 迁移可能带种子行，故按表全量软删，确保 `local_all_tables_empty` 为真
+        let now = crate::db::clock::next_ms();
+        for table in SYNCABLE_TABLES {
+            sqlx::query(&format!(
+                "UPDATE {table} SET is_deleted = 1, deleted_at = ?, updated_at = ? \
+                 WHERE is_deleted = 0"
+            ))
+            .bind(now)
+            .bind(now)
+            .execute(&pool)
+            .await
+            .unwrap();
+        }
+        assert!(
+            local_all_tables_empty(&pool).await.unwrap(),
+            "前置条件：本地确已无存活行"
+        );
+        assert!(
+            local_has_tombstones(&pool).await.unwrap(),
+            "前置条件：本地确留有墓碑"
+        );
+
+        let result = push_all(
+            &pool,
+            &crypto,
+            &store,
+            &adapter,
+            &NoopProgressSender,
+            SyncOrigin::Manual,
+            "dev-1",
+            &[],
+        )
+        .await
+        .expect("合法清空全部数据不得被空数据覆盖守卫阻断");
+        assert!(
+            result.pushed_tombstones >= 1,
+            "墓碑必须真正上云（否则远端活行仍在，下一轮 pull 会把它们拉回来）"
+        );
+    }
+
     #[tokio::test]
     async fn cas_conflict_does_not_lose_other_device_buckets() {
         let (pool, crypto, store, _tmp) = env().await;
@@ -1292,6 +1470,148 @@ mod tests {
         assert!(
             uploads.iter().any(|p| p.starts_with("tables/")),
             "分桶必须实际上传: {uploads:?}"
+        );
+    }
+
+    /// F48（2026-09-30 第六轮）：失败轮次不得推进 push 水位线，且恢复后必须重传
+    ///
+    /// 场景：改一行（**行数不变**）→ 该桶上传失败（限流/瞬断）→ 若水位线照旧推进，
+    /// 下轮 `bucket_is_unchanged`（行数相等 + 无晚于水位线的行）会判该桶
+    /// 「逐字节一致」而跳过，**编辑永久漏传云端**。此处钉住两条：失败轮次水位线
+    /// 不动；恢复后下轮必须重传该桶。
+    #[tokio::test]
+    async fn failed_table_does_not_advance_push_watermark_and_retries_next_round() {
+        let (pool, crypto, store, _tmp) = env().await;
+        sqlx::query(
+            "INSERT INTO todo_projects (uuid, title, created_at, updated_at) VALUES ('u1','P',1,1)",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        let adapter = MemAdapter::new();
+        push_all(
+            &pool,
+            &crypto,
+            &store,
+            &adapter,
+            &NoopProgressSender,
+            SyncOrigin::Manual,
+            "dev-1",
+            &[],
+        )
+        .await
+        .unwrap();
+        let watermark_after_clean = store.load().unwrap().last_pushed_clock_ms;
+        assert!(watermark_after_clean > 0, "干净首轮必须推进水位线");
+
+        // 行数不变的内容编辑：水位线判据（时间戳）看不见，行数比对也看不见
+        sqlx::query("UPDATE todo_projects SET title='P-EDITED', updated_at=? WHERE uuid='u1'")
+            .bind(crate::db::clock::next_ms())
+            .execute(&pool)
+            .await
+            .unwrap();
+
+        // 注入该表分桶上传失败；其余 10 张表无数据 → changed_any 为 false
+        *adapter.fail_upload_contains.lock().unwrap() = Some("tables/todo_projects/".to_string());
+        let failed = push_all(
+            &pool,
+            &crypto,
+            &store,
+            &adapter,
+            &NoopProgressSender,
+            SyncOrigin::Manual,
+            "dev-1",
+            &[],
+        )
+        .await
+        .unwrap();
+        assert!(failed.failed_modules >= 1, "必须登记失败表: {failed:?}");
+        assert!(!failed.errors.is_empty());
+        assert!(!failed.manifest_written);
+        assert_eq!(
+            store.load().unwrap().last_pushed_clock_ms,
+            watermark_after_clean,
+            "失败轮次不得推进 push 水位线（否则该桶下轮被判「未变」永久漏传）"
+        );
+
+        // 恢复网络：该桶必须被重新判脏并重传
+        *adapter.fail_upload_contains.lock().unwrap() = None;
+        adapter.uploads.lock().unwrap().clear();
+        let recovered = push_all(
+            &pool,
+            &crypto,
+            &store,
+            &adapter,
+            &NoopProgressSender,
+            SyncOrigin::Manual,
+            "dev-1",
+            &[],
+        )
+        .await
+        .unwrap();
+        assert!(
+            recovered.pushed_chunks >= 1 && recovered.manifest_written,
+            "恢复后必须重传失败表的脏桶并落清单: {recovered:?}"
+        );
+    }
+
+    /// F49（2026-09-30 第六轮）：rekey 全量重传任一表失败必须在**写清单之前**中断
+    ///
+    /// 否则云端会出现「新 Key 清单 + 旧 Key 分桶」的混合态（分桶路径由桶号决定、
+    /// 非内容寻址，force 是原地覆盖），全体设备含本机一律 `KeyMismatch`。
+    #[tokio::test]
+    async fn force_push_aborts_before_manifest_when_a_table_fails() {
+        let (pool, crypto, store, _tmp) = env().await;
+        sqlx::query(
+            "INSERT INTO todo_projects (uuid, title, created_at, updated_at) VALUES ('u1','P',1,1)",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        let adapter = MemAdapter::new();
+        push_all(
+            &pool,
+            &crypto,
+            &store,
+            &adapter,
+            &NoopProgressSender,
+            SyncOrigin::Manual,
+            "dev-1",
+            &[],
+        )
+        .await
+        .unwrap();
+        let (before, _, _) = read_remote_manifest(&adapter, &[7u8; 32]).await.unwrap();
+
+        *adapter.fail_upload_contains.lock().unwrap() = Some("tables/todo_projects/".to_string());
+        adapter.uploads.lock().unwrap().clear();
+        let err = push_all_force_full(
+            &pool,
+            &crypto,
+            &store,
+            &adapter,
+            &NoopProgressSender,
+            SyncOrigin::Manual,
+            "dev-1",
+            &[],
+        )
+        .await
+        .expect_err("rekey 部分失败必须报错");
+        assert!(
+            err.to_string().contains("写入清单前中断"),
+            "错误信息须说明清单未被改写: {err}"
+        );
+        let uploads = adapter.uploads.lock().unwrap().clone();
+        assert!(
+            !uploads.iter().any(|p| p == paths::MANIFEST_PATH),
+            "失败轮次不得写清单: {uploads:?}"
+        );
+
+        let (after, _, _) = read_remote_manifest(&adapter, &[7u8; 32]).await.unwrap();
+        assert_eq!(
+            after.epoch, before.epoch,
+            "清单 epoch 不得推进（否则成新 Key 清单指向旧 Key 分桶）"
         );
     }
 }
