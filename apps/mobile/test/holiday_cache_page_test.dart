@@ -38,6 +38,10 @@ void main() {
     expect(find.text('共 3 条（放假 2 · 补班 1）'), findsOneWidget);
     expect(find.textContaining('覆盖年份：2026'), findsOneWidget);
     expect(find.textContaining('上次成功更新：'), findsOneWidget);
+    // 正常态（failureCount = 0）不亮失败诊断行，避免白占版面；只否定**诊断行**
+    //（区块底部说明文案里也有「连续失败」字样，松断言会假红）
+    expect(find.textContaining('上次尝试：'), findsNothing);
+    expect(find.textContaining('（旧缓存保留可用）'), findsNothing);
     // 每月自动更新总开关（core 缺省开启）
     expect(find.text('每月自动更新'), findsOneWidget);
     expect(tester.widget<Switch>(find.byType(Switch)).value, isTrue);
@@ -46,6 +50,22 @@ void main() {
     final maxYear = DateTime.now().year + 1;
     expect(find.text('按年份范围获取'), findsOneWidget);
     expect(find.textContaining('可选 2013–$maxYear 年'), findsOneWidget);
+  });
+
+  testWidgets('概览：失败态亮出「上次尝试 + 连续失败」，计数用警示色',
+      (tester) async {
+    final bridge = MockOrbitBridge();
+    bridge.store.holidayLastUpdateMs =
+        DateTime(2026, 9, 1, 8).millisecondsSinceEpoch;
+    bridge.store.holidayLastAttemptMs =
+        DateTime(2026, 9, 30, 15, 20).millisecondsSinceEpoch;
+    bridge.store.holidayFailureCount = 3;
+    await tester.pumpWidget(_wrap(bridge));
+    await _settle(tester);
+
+    expect(find.textContaining('上次成功更新：2026-09-01 08:00'), findsOneWidget);
+    expect(find.textContaining('上次尝试：2026-09-30 15:20'), findsOneWidget);
+    expect(find.text('连续失败 3 次（旧缓存保留可用）'), findsOneWidget);
   });
 
   testWidgets('明细：按年分组 + 日期/休班徽标/假日名 + 更新该年', (tester) async {

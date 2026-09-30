@@ -301,11 +301,20 @@ class _HolidayCachePageState extends ConsumerState<HolidayCachePage> {
             '上次成功更新：${_stampLabel(meta?.lastUpdateMs)}',
             style: TextStyle(fontSize: 12, color: colors.secondaryText),
           ),
-          if ((meta?.failureCount ?? 0) > 0)
+          // 失败态才亮出「上次尝试 + 连续失败」（core 成功一次即清零）：只有失败计数
+          // 而没有尝试时刻，用户分不清调度器还在重试还是早已放弃；计数用警示色
+          // （与桌面设置页概览同口径：时间戳 muted，计数 warning）
+          if ((meta?.failureCount ?? 0) > 0) ...[
+            if ((meta?.lastAttemptMs ?? 0) > 0)
+              Text(
+                '上次尝试：${_stampLabel(meta!.lastAttemptMs)}',
+                style: TextStyle(fontSize: 12, color: colors.secondaryText),
+              ),
             Text(
               '连续失败 ${meta!.failureCount} 次（旧缓存保留可用）',
-              style: TextStyle(fontSize: 12, color: colors.secondaryText),
+              style: TextStyle(fontSize: 12, color: colors.warning),
             ),
+          ],
           const Divider(height: AppDimens.space24),
           Row(
             children: [
