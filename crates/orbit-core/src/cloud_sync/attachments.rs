@@ -18,7 +18,7 @@
 //! 单个附件上传/下载失败不阻塞其他附件，错误收集到返回值。
 
 use std::collections::HashSet;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU32, Ordering};
 
 use futures::stream::{self, StreamExt};
@@ -192,16 +192,30 @@ pub async fn sync_attachments_push(
                 let local_path = attachment.local_path.clone().unwrap_or_default();
 
                 // 4a. 读取本地文件
-                let file_data = if local_path.is_empty() {
+                //
+                // F68（2026-09-30 第六轮）：此前用 `unwrap_or_default()` 把读取
+                // 失败一律吞成空 `Vec`，随后统一报「本地文件为空或不存在」——
+                // 权限不足 / 文件被外部删除 / 磁盘错误全都指向「文件内容为空」
+                // 这个错误方向，真实原因（`io::Error`）永久丢失，用户按提示去
+                // 查文件内容只会白费功夫。这里把两种情形分开报。
+                let path = if local_path.is_empty() {
                     // local_path 为空时从 attachments_dir 读取
-                    let path = Path::new(attachments_dir).join(&hash);
-                    tokio::fs::read(&path).await.unwrap_or_default()
+                    Path::new(attachments_dir).join(&hash)
                 } else {
-                    tokio::fs::read(&local_path).await.unwrap_or_default()
+                    PathBuf::from(&local_path)
+                };
+                let file_data = match tokio::fs::read(&path).await {
+                    Ok(bytes) => bytes,
+                    Err(e) => {
+                        return (
+                            hash,
+                            Err(format!("读取本地附件失败 {}: {e}", path.display())),
+                        );
+                    }
                 };
 
                 if file_data.is_empty() {
-                    return (hash, Err(format!("本地文件为空或不存在: {}", local_path)));
+                    return (hash, Err(format!("本地附件内容为空: {}", path.display())));
                 }
 
                 // 4b. 加密
