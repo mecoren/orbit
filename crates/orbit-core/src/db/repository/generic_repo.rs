@@ -89,15 +89,16 @@ where
     let keyword_clause = build_keyword_clause(table, filter.keyword.as_deref());
     // 谓词下推子句（仅 todo_tasks；占位符按声明顺序绑定）
     let predicate_clause = build_task_predicate_clause(table, filter);
-    // 归档项目任务排除（仅 todo_tasks 的聚合视图；project_id 谓词 =
-    // 用户主动选中该归档项目时放行——归档区点击进项目视图仍可读任务，
+    // 归档项目任务排除（仅 todo_tasks 的聚合视图；project_id / project_ids 谓词 =
+    // 用户主动选中该项目（或其父清单）时放行——归档区点击进项目视图仍可读任务，
     // 对齐「归档=从默认列表收起，不是软删」语义）
-    let archived_exclude_clause = if table == "todo_tasks" && filter.project_id.is_none() {
-        " AND (project_id IS NULL OR project_id NOT IN \
+    let archived_exclude_clause =
+        if table == "todo_tasks" && filter.project_id.is_none() && filter.project_ids.is_none() {
+            " AND (project_id IS NULL OR project_id NOT IN \
            (SELECT id FROM todo_projects WHERE is_deleted = 0 AND is_archived = 1))"
-    } else {
-        ""
-    };
+        } else {
+            ""
+        };
     // 列裁剪（批2）：无 keyword 的 todo_tasks 列表不传 description 大列
     let select_expr = if table == "todo_tasks" && keyword_clause.clause.is_empty() {
         LIST_COLUMNS_TASKS_PRUNED
@@ -176,7 +177,25 @@ fn build_task_predicate_clause(table: &str, filter: &ListFilter) -> TaskPredicat
         clause.push_str(" AND priority >= ?");
         bindings.push(min as i64);
     }
-    if let Some(pid) = filter.project_id {
+    // 项目谓词：集合优先于等值（M8+ 清单文件夹聚合——选中父清单时客户端把
+    // 「自身 + 全部后代项目 id」算好传 project_ids；两者同时给出时只认集合）
+    if let Some(ids) = filter.project_ids.as_deref() {
+        if ids.is_empty() {
+            // 空集合 = 该视图不覆盖任何项目 → 空结果。**不能退化成「不加子句」**
+            // （那会变成全量），故写恒假条件。
+            clause.push_str(" AND 1 = 0");
+        } else {
+            clause.push_str(" AND project_id IN (");
+            for i in 0..ids.len() {
+                if i > 0 {
+                    clause.push_str(", ");
+                }
+                clause.push('?');
+                bindings.push(ids[i]);
+            }
+            clause.push(')');
+        }
+    } else if let Some(pid) = filter.project_id {
         clause.push_str(" AND project_id = ?");
         bindings.push(pid);
     }
@@ -1484,6 +1503,68 @@ mod task_predicate_tests {
         );
         assert_eq!(c.bindings, vec![7, zero]);
         assert!(c.status_binding.is_none());
+    }
+
+    /// project_ids 集合 → IN (?, ?, ?)，绑定序 = 集合序（清单文件夹聚合）
+    #[test]
+    fn project_ids_renders_in_clause() {
+        let c = build_task_predicate_clause(
+            "todo_tasks",
+            &filter_with(|f| {
+                f.project_ids = Some(vec![3, 5, 8]);
+            }),
+        );
+        assert_eq!(c.clause, " AND project_id IN (?, ?, ?)");
+        assert_eq!(c.bindings, vec![3, 5, 8]);
+        assert!(c.status_binding.is_none());
+    }
+
+    /// 集合优先于等值：两者同时给出时只认集合（不叠加、不重复绑定）
+    #[test]
+    fn project_ids_wins_over_project_id() {
+        let c = build_task_predicate_clause(
+            "todo_tasks",
+            &filter_with(|f| {
+                f.project_id = Some(7);
+                f.project_ids = Some(vec![7, 9]);
+            }),
+        );
+        assert_eq!(c.clause, " AND project_id IN (?, ?)");
+        assert_eq!(c.bindings, vec![7, 9]);
+    }
+
+    /// 空集合 = 空结果：恒假子句而非「不加约束」
+    ///（退化成全量会让「无所属项目的视图」意外显示全部任务）
+    #[test]
+    fn empty_project_ids_is_always_false() {
+        let c = build_task_predicate_clause(
+            "todo_tasks",
+            &filter_with(|f| {
+                f.project_ids = Some(vec![]);
+            }),
+        );
+        assert_eq!(c.clause, " AND 1 = 0");
+        assert!(c.bindings.is_empty());
+    }
+
+    /// project_ids 与前置/后置谓词的绑定序不串位
+    /// （IN 的 N 个占位符插在 priority_min 与 my_day_today 之间）
+    #[test]
+    fn project_ids_binding_order_with_neighbors() {
+        let zero = 1_789_142_400_000_i64;
+        let c = build_task_predicate_clause(
+            "todo_tasks",
+            &filter_with(|f| {
+                f.priority_min = Some(2);
+                f.project_ids = Some(vec![11, 12]);
+                f.my_day_today = Some(zero);
+            }),
+        );
+        assert_eq!(
+            c.clause,
+            " AND priority >= ? AND project_id IN (?, ?) AND my_day_date = ?"
+        );
+        assert_eq!(c.bindings, vec![2, 11, 12, zero]);
     }
 
     /// 空谓词 → 空子句（基线查询零开销）

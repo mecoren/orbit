@@ -188,6 +188,211 @@ Set<String> collectDescendantUuids(
   return result;
 }
 
+/// 收集某项目的全部后代**本地 id**（不含自身）；项目不存在则返回空列表。
+///
+/// 与 [collectDescendantUuids] 同源同口径，只是键不同：
+/// - uuid 版供「上级文件夹候选」排除成环；
+/// - id 版供**父清单聚合子清单任务**——`TodoTask.projectId` 是本地 id，
+///   展开成 id 集合才能喂给 `TaskFilterInput.projectIds`。
+///
+/// 断链/自引用/成环的节点已由 [buildProjectTree] 归到顶层，故结果天然不含
+/// 环上节点的错误祖先链。
+List<int> collectDescendantIds(List<TodoProject> projects, int rootId) {
+  ProjectTreeNode? find(List<ProjectTreeNode> list) {
+    for (final node in list) {
+      if (node.project.id == rootId) return node;
+      final hit = find(node.children);
+      if (hit != null) return hit;
+    }
+    return null;
+  }
+
+  final root = find(buildProjectTree(projects));
+  if (root == null) return const <int>[];
+
+  final out = <int>[];
+
+  void walk(List<ProjectTreeNode> list) {
+    for (final node in list) {
+      out.add(node.project.id);
+      walk(node.children);
+    }
+  }
+
+  walk(root.children);
+  return out;
+}
+
+/// 清单视图覆盖的项目 id 集合 = 自身 + 全部后代（聚合口径单一口径源）。
+///
+/// 父清单选中时任务列表应包含其所有后代清单的**直接**任务（TickTick
+/// List Folder 同款）；[rootId] 打头保证集合恒非空——项目列表尚未加载完时
+/// 不能退化成空集（那会让列表闪空）。
+List<int> projectIdsWithDescendants(List<TodoProject> projects, int rootId) =>
+    <int>[rootId, ...collectDescendantIds(projects, rootId)];
+
+// ---------- 拖拽跨层级改父（M8+） ----------
+
+/// 横向位移阈值（逻辑像素）：超过它即判定「改层级」而非同级重排。
+///
+/// 与缩进步长（14）同量级但不相等——整层宽度会与手抖难分。
+const double dragReparentPx = 20;
+
+/// 拖拽落位意图（由横向位移与落点行共同判定）
+enum ProjectDropKind { reorder, nest, outdent }
+
+/// 拖拽落位计算结果（纯数据，调用方负责落库与刷新）
+class ProjectDropPlan {
+  const ProjectDropPlan({
+    required this.kind,
+    required this.parentUuid,
+    required this.order,
+  });
+
+  final ProjectDropKind kind;
+
+  /// 被拖项目改父后的上级 uuid；null = 顶层。kind=reorder 时为原父（不变）
+  final String? parentUuid;
+
+  /// 落库用的**全局顺序**（项目 id 升序 = 应处的 sortOrder 1..n）。
+  ///
+  /// 口径 = 未折叠的全量 DFS 序——折叠只是浏览态，不该影响落库结果。
+  final List<int> order;
+}
+
+/// 拖拽落位解析：把（被拖行、落点行、横向位移）翻译成「是否改父 + 改到哪个父
+/// + 全局新顺序」。与桌面 `shared/project-tree.ts::planProjectDrop` 逐字同口径。
+///
+/// 手势语义：
+/// - 右移 ≥ 阈值 → **内嵌**：成为落点行的最后一个子项（落点在被拖项子树内会
+///   成环，拒绝并回落同级重排）；
+/// - 左移 ≥ 阈值 → **提升一级**：挂到当前父的父下、排在原父之后；已在顶层时
+///   无处可升，回落同级重排；
+/// - 位移不足阈值 → **同级重排**（保持原父，只在自身兄弟组内挪位）。
+///
+/// **顺序的算法**：改层级必须在**树上做手术**（摘除 + 插入目标兄弟数组），
+/// 再把手术后的树按前序展平取其 id 序列。反例说明为何不能在「旧展平序列」上
+/// 做下标算术：把节点插到某子树之后时，兄弟组的落位由父节点自身的 sortOrder
+/// 决定（子树内编号会插在中间），下标算术会让被拖项漂到同层末位。
+///
+/// 返回 null = 无法解析（id 不存在 / 自身拖自身）。
+ProjectDropPlan? planProjectDrop({
+  required List<TodoProject> projects,
+  required int activeId,
+  required int overId,
+  required double deltaX,
+  double threshold = dragReparentPx,
+}) {
+  if (activeId == overId) return null;
+
+  final tree = buildProjectTree(projects);
+  final fullNodes = flattenProjectTree(tree, (_) => false);
+  final dfsIndex = <int, int>{};
+  for (var i = 0; i < fullNodes.length; i++) {
+    dfsIndex[fullNodes[i].project.id] = i;
+  }
+
+  final siblingsOf = <int, List<ProjectTreeNode>>{};
+  final parentOf = <int, ProjectTreeNode?>{};
+  final nodeOf = <int, ProjectTreeNode>{};
+
+  void walk(List<ProjectTreeNode> list, ProjectTreeNode? parent) {
+    for (final node in list) {
+      siblingsOf[node.project.id] = list;
+      parentOf[node.project.id] = parent;
+      nodeOf[node.project.id] = node;
+      walk(node.children, node);
+    }
+  }
+
+  walk(tree, null);
+
+  final activeNode = nodeOf[activeId];
+  final overNode = nodeOf[overId];
+  final activeIdx = dfsIndex[activeId];
+  final overIdx = dfsIndex[overId];
+  if (activeNode == null ||
+      overNode == null ||
+      activeIdx == null ||
+      overIdx == null) {
+    return null;
+  }
+
+  // 被拖项子树的 DFS 区间（子树在 DFS 序里连续）：落点落在区间内 = 成环
+  var activeSubtreeEnd = activeIdx;
+  while (activeSubtreeEnd + 1 < fullNodes.length &&
+      fullNodes[activeSubtreeEnd + 1].depth > fullNodes[activeIdx].depth) {
+    activeSubtreeEnd++;
+  }
+  final overInActiveSubtree =
+      overIdx >= activeIdx && overIdx <= activeSubtreeEnd;
+
+  // 空 uuid 的项目不能当父（子项存的是 uuid，写空串等于「顶层」，语义会丢）
+  final overUuid = normalizeParentUuid(overNode.project.uuid);
+  final parentNode = parentOf[activeId];
+
+  var kind = ProjectDropKind.reorder;
+  var parentUuid = normalizeParentUuid(activeNode.project.parentUuid);
+
+  // 摘除：从原兄弟数组里取出被拖节点（三种意图各自决定插到哪）
+  final oldSiblings = siblingsOf[activeId]!;
+  oldSiblings.remove(activeNode);
+
+  if (deltaX >= threshold && overUuid != null && !overInActiveSubtree) {
+    // 内嵌：挂到落点行的子项末位
+    kind = ProjectDropKind.nest;
+    parentUuid = overUuid;
+    overNode.children.add(activeNode);
+  } else if (deltaX <= -threshold && parentNode != null) {
+    // 提升一级：挂到祖父下、紧跟原父之后（祖父用树上的「有效父」，
+    // 已含成环/断链归顶层的修正）
+    final grandParent = parentOf[parentNode.project.id];
+    kind = ProjectDropKind.outdent;
+    parentUuid = grandParent == null
+        ? null
+        : normalizeParentUuid(grandParent.project.uuid);
+    final targetSiblings = grandParent?.children ?? tree;
+    final at = targetSiblings.indexOf(parentNode);
+    targetSiblings.insert(
+      at < 0 ? targetSiblings.length : at + 1,
+      activeNode,
+    );
+  } else {
+    // 同级重排：只在自身兄弟组内挪位；落点不在本组时按 DFS 位置就近取锚
+    final others = oldSiblings; // 已摘除 active，即其余兄弟
+    final next = <ProjectTreeNode>[...others];
+    if (activeIdx < overIdx) {
+      // 往下拖：插到「DFS 位置最靠后、且不晚于落点」的兄弟之后；无则最前
+      var anchor = -1;
+      for (var i = 0; i < others.length; i++) {
+        if ((dfsIndex[others[i].project.id] ?? -1) <= overIdx) anchor = i;
+      }
+      next.insert(anchor + 1, activeNode);
+    } else {
+      // 往上拖：插到「DFS 位置最靠前、且不早于落点」的兄弟之前；无则最后
+      var anchor = -1;
+      for (var i = 0; i < others.length; i++) {
+        if ((dfsIndex[others[i].project.id] ?? _maxDfsIndex) >= overIdx) {
+          anchor = i;
+          break;
+        }
+      }
+      next.insert(anchor < 0 ? next.length : anchor, activeNode);
+    }
+    oldSiblings
+      ..clear()
+      ..addAll(next);
+  }
+
+  final order = <int>[
+    for (final n in flattenProjectTree(tree, (_) => false)) n.project.id,
+  ];
+  return ProjectDropPlan(kind: kind, parentUuid: parentUuid, order: order);
+}
+
+/// `dfsIndex` 查不到时的兜底上界（等价 `Number.MAX_SAFE_INTEGER`）
+const int _maxDfsIndex = 1 << 62;
+
 /// 「上级文件夹」候选列表：排除自身与其全部后代（否则成环，Rust 侧必拒）。
 ///
 /// [selfUuid] 当前编辑项目的 uuid；新建（无 uuid）传 null → 返回全量。

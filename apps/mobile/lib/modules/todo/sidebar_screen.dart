@@ -143,9 +143,9 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
   /// sortOrder（单条失败忽略，继续其余）→ 完成后 invalidate 项目 provider
   /// 以服务端权威顺序刷新。
   ///
-  /// M8：重排作用于**当前可见序列**（树展平后的顺序），且只改同级 sortOrder，
-  /// **不改 parentUuid**（改层级走编辑页的「上级文件夹」）。被折叠隐藏的后代
-  /// 不在可见序列内，保留原编号——它们只与自身兄弟集比较，不受影响。
+  /// 垂直重排只动同级 sortOrder、**不改 parentUuid**（改层级走横向拖动或
+  /// 编辑页的「上级文件夹」）。被折叠隐藏的后代不在可见序列内，保留原编号
+  /// ——它们只与自身兄弟集比较，不受影响。
   Future<void> _reorderProjects(int oldIndex, int newIndex) async {
     final visible = _visibleProjectNodes(
       ref.read(todoProjectsProvider).value ?? const [],
@@ -160,6 +160,106 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
       }
     }
     ref.invalidate(todoProjectsProvider);
+  }
+
+  // ── 横向拖动改层级（M8+，与桌面同手势语义）──
+
+  /// 本次横向拖动的累计位移（[onHorizontalDragUpdate] 累加，抬手时消费清零）
+  double _hDragDx = 0;
+
+  /// 横向拖动落位：右移内嵌为上一可见行的子项、左移提升一级。
+  ///
+  /// 复用与桌面逐字同口径的纯函数 `planProjectDrop`：
+  /// - 右移 → 落点取「上一个可见行」——DFS 序里它必不在本项目子树内，
+  ///   天然不成环；最上面一行无处可挂，直接放弃；
+  /// - 左移 → 落点取「当前父」（提升一级分支不消费落点行，只用它做入口校验）；
+  ///   顶层项目无处可升，直接放弃。
+  ///
+  /// 位移不足阈值 / 计划退化为同级重排时静默返回（垂直拖拽才是排序入口，
+  /// 这里不该抢它的活）。
+  Future<void> _applyIndentChange(TodoProject project, double dx) async {
+    if (dx.abs() < dragReparentPx) return;
+    final projects =
+        ref.read(todoProjectsProvider).value ?? const <TodoProject>[];
+    final visible = _visibleProjectNodes(projects);
+    final idx = visible.indexWhere((n) => n.project.id == project.id);
+    if (idx < 0) return;
+
+    final int overId;
+    if (dx > 0) {
+      if (idx == 0) {
+        WaitToast.info('已是第一项，没有可移入的上级');
+        return;
+      }
+      overId = visible[idx - 1].project.id;
+    } else {
+      final parentUuid = normalizeParentUuid(project.parentUuid);
+      TodoProject? parent;
+      for (final p in projects) {
+        if (normalizeParentUuid(p.uuid) == parentUuid) {
+          parent = p;
+          break;
+        }
+      }
+      if (parent == null) {
+        WaitToast.info('已在最外层，无法再移出');
+        return;
+      }
+      overId = parent.id;
+    }
+
+    final plan = planProjectDrop(
+      projects: projects,
+      activeId: project.id,
+      overId: overId,
+      // 方向已由上面的分支定下，位移取阈值本身即可（函数只看符号与阈值）
+      deltaX: dx > 0 ? dragReparentPx : -dragReparentPx,
+    );
+    if (plan == null || plan.kind == ProjectDropKind.reorder) return;
+
+    final bridge = ref.read(orbitBridgeProvider);
+    try {
+      if (normalizeParentUuid(project.parentUuid) != plan.parentUuid) {
+        await bridge.todoProjectUpdate(
+          project.id,
+          encodePatch({'parent_uuid': plan.parentUuid}),
+        );
+      }
+      for (var i = 0; i < plan.order.length; i++) {
+        try {
+          await bridge.todoProjectUpdateSortOrder(plan.order[i], i + 1);
+        } catch (_) {
+          // 忽略单条失败：继续落剩余排序，最后统一 invalidate 兜底
+        }
+      }
+      if (mounted) {
+        WaitToast.success(
+          plan.kind == ProjectDropKind.nest ? '已移入上一项' : '已移出上一层',
+        );
+      }
+    } catch (_) {
+      if (mounted) WaitToast.destructive('移动失败');
+    } finally {
+      ref.invalidate(todoProjectsProvider);
+    }
+  }
+
+  /// 长按菜单里「移入上一项」是否可用（必须有上一个可见行）
+  bool _canIndentInto(TodoProject project) {
+    final projects =
+        ref.read(todoProjectsProvider).value ?? const <TodoProject>[];
+    final visible = _visibleProjectNodes(projects);
+    final idx = visible.indexWhere((n) => n.project.id == project.id);
+    return idx > 0;
+  }
+
+  /// 长按菜单里「移出上一层」是否可用（父必须真实存在于当前列表）
+  bool _canOutdent(TodoProject project) {
+    final parentUuid = normalizeParentUuid(project.parentUuid);
+    if (parentUuid == null) return false;
+    final projects =
+        ref.read(todoProjectsProvider).value ?? const <TodoProject>[];
+    return projects.any((p) => normalizeParentUuid(p.uuid) == parentUuid);
   }
 
   // ── 项目长按菜单（编辑 / 归档 / 删除保护流）──
@@ -178,6 +278,20 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
           label: '编辑',
           onTap: () => context.push('/todo/projects/${project.id}/edit'),
         ),
+        // 改层级的显式入口：横向拖动是快捷手势（无提示难发现 + 无障碍不可达），
+        // 这两条是它的等价可达路径；不可用时不出现在菜单里
+        if (_canIndentInto(project))
+          MoreActionItem(
+            icon: OrbitIcons.indentIncrease,
+            label: '移入上一项',
+            onTap: () => _applyIndentChange(project, dragReparentPx),
+          ),
+        if (_canOutdent(project))
+          MoreActionItem(
+            icon: OrbitIcons.indentDecrease,
+            label: '移出上一层',
+            onTap: () => _applyIndentChange(project, -dragReparentPx),
+          ),
         MoreActionItem(
           icon: OrbitIcons.archive,
           label: project.isArchived == 1 ? '取消归档' : '归档项目',
@@ -709,80 +823,92 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
     final undone = undoneByProject[project.id] ?? 0;
     final hasChildren = node.children.isNotEmpty;
     final collapsed = hasChildren && _collapsedFolders.contains(project.uuid);
-    return InkWell(
+    return GestureDetector(
       key: ValueKey(project.id),
-      onTap: () => _openProject(project),
-      onLongPress: () => _showProjectActions(project, undone),
-      // 卡内段（今天任务列表同款：按压水波盖在卡面上，描边由段画；
-      // 行内不再自带圆角——外缘圆角归卡片）
-      child: OrbitCardSegment(
-        edge: edge,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(
-            horizontal: AppDimens.space16,
-            vertical: AppDimens.space12,
-          ),
-        child: Row(
-          children: [
-            if (node.depth > 0) SizedBox(width: node.depth * 14),
-            // 折叠箭头（有子项目才有；点击只切折叠态，不触发行导航）
-            if (hasChildren)
-              GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: () => _toggleFolder(project.uuid),
+      // 横向拖动改层级（与桌面同手势语义）：右移内嵌到上一行、左移提升一级。
+      // 只吃横向——列表纵向滚动与把手拖拽重排仍归 ReorderableListView，
+      // 行体点击/长按仍归下面的 InkWell（手势竞技场按轴分流，互不夺权）。
+      onHorizontalDragStart: (_) => _hDragDx = 0,
+      onHorizontalDragUpdate: (d) => _hDragDx += d.delta.dx,
+      onHorizontalDragEnd: (_) {
+        final dx = _hDragDx;
+        _hDragDx = 0;
+        _applyIndentChange(project, dx);
+      },
+      child: InkWell(
+        onTap: () => _openProject(project),
+        onLongPress: () => _showProjectActions(project, undone),
+        // 卡内段（今天任务列表同款：按压水波盖在卡面上，描边由段画；
+        // 行内不再自带圆角——外缘圆角归卡片）
+        child: OrbitCardSegment(
+          edge: edge,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppDimens.space16,
+              vertical: AppDimens.space12,
+            ),
+          child: Row(
+            children: [
+              if (node.depth > 0) SizedBox(width: node.depth * 14),
+              // 折叠箭头（有子项目才有；点击只切折叠态，不触发行导航）
+              if (hasChildren)
+                GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => _toggleFolder(project.uuid),
+                  child: SizedBox(
+                    width: AppDimens.iconSizeMd + AppDimens.space8,
+                    height: AppDimens.touchTarget,
+                    child: Icon(
+                      collapsed ? OrbitIcons.chevronRight : OrbitIcons.expandMore,
+                      size: AppDimens.iconSizeMd,
+                      color: colors.secondaryText,
+                    ),
+                  ),
+                )
+              else
+                const SizedBox(width: AppDimens.iconSizeMd + AppDimens.space8),
+              // 项目固定图标（folder_rounded）按项目自选色染色，无色回退强调色
+              Icon(
+                OrbitIcons.folder,
+                size: AppDimens.iconSizeMd,
+                color: hexToColor(project.hexColor,
+                    fallback: OrbitAccents.todoAccent),
+              ),
+              const SizedBox(width: AppDimens.space12),
+              Expanded(
+                child: Text(
+                  project.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                    color: colors.titleText,
+                  ),
+                ),
+              ),
+              if (undone > 0) ...[
+                CountBadge(
+                  n: undone,
+                  background: colors.surfaceSecondary,
+                ),
+                const SizedBox(width: AppDimens.space8),
+              ],
+              // 拖拽把手（仅把手可拖，行体点击仍进列表不冲突）
+              ReorderableDragStartListener(
+                index: index,
                 child: SizedBox(
                   width: AppDimens.iconSizeMd + AppDimens.space8,
                   height: AppDimens.touchTarget,
                   child: Icon(
-                    collapsed ? OrbitIcons.chevronRight : OrbitIcons.expandMore,
+                    OrbitIcons.drag,
                     size: AppDimens.iconSizeMd,
                     color: colors.secondaryText,
                   ),
                 ),
-              )
-            else
-              const SizedBox(width: AppDimens.iconSizeMd + AppDimens.space8),
-            // 项目固定图标（folder_rounded）按项目自选色染色，无色回退强调色
-            Icon(
-              OrbitIcons.folder,
-              size: AppDimens.iconSizeMd,
-              color: hexToColor(project.hexColor,
-                  fallback: OrbitAccents.todoAccent),
-            ),
-            const SizedBox(width: AppDimens.space12),
-            Expanded(
-              child: Text(
-                project.title,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w500,
-                  color: colors.titleText,
-                ),
               ),
-            ),
-            if (undone > 0) ...[
-              CountBadge(
-                n: undone,
-                background: colors.surfaceSecondary,
-              ),
-              const SizedBox(width: AppDimens.space8),
             ],
-            // 拖拽把手（仅把手可拖，行体点击仍进列表不冲突）
-            ReorderableDragStartListener(
-              index: index,
-              child: SizedBox(
-                width: AppDimens.iconSizeMd + AppDimens.space8,
-                height: AppDimens.touchTarget,
-                child: Icon(
-                  OrbitIcons.drag,
-                  size: AppDimens.iconSizeMd,
-                  color: colors.secondaryText,
-                ),
-              ),
             ),
-          ],
           ),
         ),
       ),

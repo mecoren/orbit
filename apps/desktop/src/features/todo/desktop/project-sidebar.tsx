@@ -13,7 +13,10 @@
  *
  * M8 清单文件夹分组：项目按 `parent_uuid` 构成层级树（父子序、depth 缩进、
  * 有子项者带折叠箭头），孤儿/自引用/成环一律回落顶层（shared/project-tree）。
- * 拖拽仍只改同级 sort_order——改层级走编辑弹窗的「上级文件夹」下拉。
+ *
+ * M8+ 拖拽跨层级：横向位移即意图——右移把项目内嵌为落点行的子项、左移提升
+ * 一级、位移不足则同级重排（判定在纯函数 `planProjectDrop`）；编辑弹窗的
+ * 「上级文件夹」下拉仍保留，是拖拽的等价入口 + 触屏/键盘可达路径。
  */
 import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -72,6 +75,7 @@ import {
   flattenProjectTree,
   normalizeParentUuid,
   parentFolderCandidates,
+  planProjectDrop,
 } from "../shared/project-tree";
 import {
   loadSidebarManualCollapsed,
@@ -255,39 +259,75 @@ export function ProjectSidebar({
     });
   };
 
-  // 拖拽结束：可见序列 arraymove；未分组位置存 localStorage，
-  // 可见项目逐条 sortOrder=i+1 重编号落库（04 §3.1）。
-  // M8：拖拽只动同级 sort_order，**不改 parent_uuid**（改层级走编辑弹窗的「上级文件夹」）；
-  // 被折叠隐藏的后代不在可见序列内，保留原编号——它们只与自身兄弟集比较，不受影响。
+  // 拖拽结束：可见序列 arraymove（未分组位置存 localStorage）+ 项目全局重编号落库。
+  //
+  // M8+ 跨层级改父：横向位移决定意图——右移 ≥ 阈值 = 内嵌为落点行的子项，
+  // 左移 ≥ 阈值 = 提升一级（挂到当前父的父下），位移不足 = 同级重排。
+  // 判定与顺序规划全在纯函数 `planProjectDrop`（可单测），这里只做乐观更新 +
+  // 落库。编号口径改为**未折叠全量 DFS 序**（折叠是浏览态，不该影响落库结果）。
+  //
+  // 未分组虚拟项不参与改父（它是伪项目）：其参与的拖拽仍走可见序列编号。
   const handleDragEnd = async (event: DragEndEvent) => {
     const { active, over } = event;
     if (!over || active.id === over.id) return;
-    const oldIndex = orderedIds.indexOf(active.id as number);
-    const newIndex = orderedIds.indexOf(over.id as number);
+    const activeId = active.id as number;
+    const overId = over.id as number;
+    const oldIndex = orderedIds.indexOf(activeId);
+    const newIndex = orderedIds.indexOf(overId);
     if (oldIndex < 0 || newIndex < 0) return;
+
+    // 未分组新位置：记录前驱项目 id（无前驱 = 最前）
     const reordered = [...orderedIds];
     const [moved] = reordered.splice(oldIndex, 1);
     reordered.splice(newIndex, 0, moved);
-
-    // 未分组新位置：记录前驱项目 id（无前驱 = 最前）
     const ugIdx = reordered.indexOf(UNGROUPED_ID);
     const prevId = ugIdx > 0 ? reordered[ugIdx - 1] : null;
     localStorage.setItem(LS_UNGROUPED_AFTER, prevId == null ? "" : String(prevId));
 
-    // 乐观更新项目缓存：只按 id 覆盖 sort_order（M8 后列表含折叠隐藏项，
-    // 整表替换会把它们从缓存里抹掉导致展开后闪空）
-    const reorderedProjects = reordered
-      .filter((id) => id !== UNGROUPED_ID)
-      .map((id) => projectById.get(id))
-      .filter((p): p is TodoProject => p != null);
-    const nextOrder = new Map(reorderedProjects.map((p, i) => [p.id, i + 1]));
+    // 改父判定（未分组参与时不适用）
+    const involvesUngrouped = activeId === UNGROUPED_ID || overId === UNGROUPED_ID;
+    const plan = involvesUngrouped
+      ? null
+      : planProjectDrop({ projects, activeId, overId, deltaX: event.delta.x });
+
+    // 新序号：改父时用全量 DFS 序；未分组参与时退回可见序列编号
+    const nextOrder = new Map<number, number>();
+    if (plan != null) {
+      plan.order.forEach((id, i) => nextOrder.set(id, i + 1));
+    } else {
+      reordered
+        .filter((id) => id !== UNGROUPED_ID)
+        .forEach((id, i) => nextOrder.set(id, i + 1));
+    }
+
+    const activeProject = projectById.get(activeId);
+    const parentChanged =
+      plan != null &&
+      activeProject != null &&
+      normalizeParentUuid(activeProject.parent_uuid) !== plan.parentUuid;
+
+    // 乐观更新：只按 id 覆盖 sort_order / 被拖项的 parent_uuid（M8 后列表含折叠
+    // 隐藏项，整表替换会把它们从缓存里抹掉导致展开后闪空）
     qc.setQueryData<TodoProject[]>(["todo-project", "list"], (prev) =>
       prev == null
         ? prev
-        : prev.map((p) => (nextOrder.has(p.id) ? { ...p, sort_order: nextOrder.get(p.id)! } : p)),
+        : prev.map((p) => {
+            const so = nextOrder.get(p.id);
+            if (so == null && !(parentChanged && p.id === activeId)) return p;
+            return {
+              ...p,
+              sort_order: so ?? p.sort_order,
+              parent_uuid: parentChanged && p.id === activeId ? plan.parentUuid : p.parent_uuid,
+            };
+          }),
     );
-    for (let i = 0; i < reorderedProjects.length; i++) {
-      await todoProjectUpdateSortOrder(reorderedProjects[i].id, i + 1);
+
+    for (const [id, so] of nextOrder) {
+      await todoProjectUpdateSortOrder(id, so);
+    }
+    // 改父单独落库（三态：null = 移到顶层）；失败由末尾 refetch 兜回原状
+    if (parentChanged) {
+      await todoProjectUpdate(activeId, { parent_uuid: plan.parentUuid });
     }
     void refetchProjects();
   };
@@ -334,29 +374,17 @@ export function ProjectSidebar({
             );
           })}
           <Tooltip>
-
             <TooltipTrigger asChild>
-
               <button
-
                 type="button"
-
                 aria-label="保存当前筛选"
-
                 className="flex h-8 w-8 items-center justify-center rounded-md hover:bg-accent/50"
-
                 onClick={onCreateSavedFilter}
-
               >
-
                 <Filter className="size-4" />
-
               </button>
-
             </TooltipTrigger>
-
             <TooltipContent>保存当前筛选</TooltipContent>
-
           </Tooltip>
 
           <Tooltip>
@@ -942,7 +970,10 @@ function SortableProjectRow({
       data-uuid={project.uuid}
       data-depth={depth}
       style={{
-        transform: transform ? `translateY(${transform.y}px)` : undefined,
+        // 横向位移一并跟随：改层级靠横向手势表达，不给位移反馈等于没有反馈
+        transform: transform
+          ? `translate3d(${transform.x}px, ${transform.y}px, 0)`
+          : undefined,
         transition,
         // 层级缩进用物理属性 paddingLeft（避开与 Tailwind `px-2` 的逻辑属性 padding-inline 冲突）
         paddingLeft: 8 + depth * 14,
@@ -952,11 +983,19 @@ function SortableProjectRow({
         active ? "bg-primary/10 font-medium text-primary" : "hover:bg-sidebar-accent/50",
       )}
     >
-      <GripVertical
-        {...attributes}
-        {...listeners}
-        className="w-3 cursor-grab text-muted-foreground/30 opacity-0 group-hover:opacity-100"
-      />
+      {/* 拖拽把手（title 挂外层 span：Lucide 图标不接 title 属性）：横向位移
+          就是「改层级」手势，提示文案保证可发现性 */}
+      <span
+        title="拖动排序：向右拖成为子项，向左拖移出上一层"
+        className="flex w-3 items-center"
+      >
+        <GripVertical
+          {...attributes}
+          {...listeners}
+          aria-label={`拖动项目 ${project.title}`}
+          className="cursor-grab text-muted-foreground/30 opacity-0 group-hover:opacity-100"
+        />
+      </span>
       {/* 折叠箭头：仅父节点渲染；叶子渲染等宽占位保持名称左对齐 */}
       {hasChildren ? (
         <button

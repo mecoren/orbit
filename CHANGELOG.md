@@ -34,6 +34,58 @@
 - 同批修正该模块头部过期描述（原写「短连接（响应恒带 `Connection: close`）」，实现早已是
   keep-alive）。
 
+### 清单层级补齐：拖拽跨层级改父 + 父清单聚合子清单任务（对标 TickTick List Folder）
+
+- **父清单聚合子清单任务**（选中父清单时，任务列表含其全部后代的**直接**任务）：
+  - 核心侧新增**集合谓词** `ListFilter.project_ids: Option<Vec<i64>>`（`build_task_predicate_clause`
+    拼 ` AND project_id IN (?, ?, …)`）。三条口径显式写死，写错会静默出错：① 空集合 = 「该视图不覆盖
+    任何项目」→ ` AND 1 = 0`，**不能退化成「不加子句」**（那会把全库任务当成聚合结果）；② 集合非空时
+    **优先于** `project_id`（二者不叠加）；③ 归档排除（`archived_exclude_clause`）在 `project_id`
+    **与** `project_ids` 皆空时才生效——集合是用户主动指定的视图范围，含归档子清单时须放行。
+  - 前端单一口径源 `projectIdsWithDescendants(projects, id)`（= 自身 + `collectDescendantIds`），
+    桌面 `features/todo/shared/project-tree.ts`、移动 `modules/todo/logic/project_tree.dart` 各一份。
+    桌面由壳层算好后**同时**喂给查询谓词（`todo-shell.tsx::taskPredicate`）与面板本地过滤
+    （`task-panel.tsx::filterTasks`）——两层必须同源，只改一层会表现成「聚合不生效」。移动端数据层是
+    「全量拉取 + 客户端过滤」，故只落 `TaskFilterInput.projectIds` 一路；`sub_list_screen._listQuery`
+    刻意与入口语义分开——页头标题 / 空态 / 新建落点仍按被点中的**单个**清单解释。
+- **拖拽跨层级改父**（桌面 + 移动同手势语义）：横向位移即意图——右拖 ≥ 20px **内嵌**为落点行的最后
+  一个子项、左拖 ≥ 20px **提升一级**（挂到当前父的父下、紧跟原父之后）、位移不足阈值 **同级重排**。
+  - 判定与落库顺序全在纯函数 `planProjectDrop`（双端逐字同口径，各带 12 例单测）：改层级必须在**树上
+    做手术**（从原兄弟数组摘除 → 插入目标兄弟数组），再把手术后的树按前序展平取 id 序列。反例说明为何
+    不能在旧展平序列上做下标算术：把节点插到某子树之后时，兄弟组落位由**父节点自身 `sort_order`**
+    决定，下标算术会让被拖项漂到同层末位。单测用 `displayAfter()`（模拟落库后重拉：按新 `sort_order`
+    排序 → 按新 `parent_uuid` 构树 → DFS）断言真实消费路径，而非只断言返回值。
+  - 成环拒绝：落点落在被拖项子树的 DFS 连续区间内即视为成环 → 回落同级重排；空 uuid 的项目不当父。
+  - 落库顺序口径改为**未折叠全量 DFS 序**（折叠只是浏览态，不该影响编号），缓存只覆盖 `sort_order`
+    与被拖项的 `parent_uuid`（列表含折叠隐藏项，整表替换会把它们从缓存抹掉导致展开后闪空）。
+  - **桌面**：dnd-kit `DragEndEvent.delta.x` 作横向信号；行 transform 由 `translateY` 改 `translate3d`
+    让横向位移有可见反馈；把手加 `title` 承担可发现性（Lucide 图标不接 `title`，故挂在外层 `span`）。
+  - **移动**：`ReorderableListView` 只支持纵向，横向层级由行体 `GestureDetector.onHorizontalDrag*`
+    表达（手势竞技场按轴分流，不夺 `InkWell` 点击/长按与纵向重排），右移落点取「上一个可见行」
+    （DFS 序里必不在自身子树内，天然不成环）；另给长按菜单加「移入上一项 / 移出上一层」——拖动无提示、
+    无障碍不可达，这两条是显式可达路径（图标取 `OrbitIcons.indentIncrease/Decrease`，仍单口取图标）。
+- **FRB 镜像同步**（`crates/orbit-flutter/src/api/dto.rs::ListFilter` 加 `project_ids`）并用
+  `flutter_rust_bridge_codegen`（2.12.0，与依赖锁定同版本）重生成 `frb_generated.rs` /
+  `frb_generated{,.io}.dart`：镜像结构变更**必须与生成物同批**，否则 Dart 侧 `SseEncode` 与 Rust 侧
+  `SseDecode` 字段错位——`todo_projects_list` / `todo_tasks_list` 等 8 个入口共用该结构，错位即全线崩。
+  生成后按仓库惯例 `cargo fmt --all` 并做**二次生成幂等校验**（改动文件 md5 零差异）。
+- **mock IPC 边界修正**（`apps/desktop/src/test/ipc-mock.ts`，本批 e2e 的前置）：`todo_projects_update_sort_order`
+  长期只在 `ipc-contract.test.ts` 的 `MOCK_ALLOWLIST` 占位、**从未实现**——拖拽在 mock 下第一条落库调用
+  即 reject，`handleDragEnd` 整个中断（改层级因此永远走不到）。现补实现并移出 allowlist；同时
+  `todo_projects_list` 补 `ORDER BY sort_order ASC, id ASC`（此前返回插入序，与真实链路排序不一致，
+  重排结果在 e2e 里根本看不见）；`todo_tasks_list` 补 `project_ids` 集合谓词（含归档放行口径）。
+- 验证：Rust `cargo test --lib` **663 passed / 0 failed**；桌面 `vitest` **478 passed / 48 files**
+  （基线 457 → +21）；新增 `e2e/project-drag-reparent.spec.ts`（内嵌 / 提升 / 位移不足阈值不改层级）
+  与 `e2e/project-aggregation.spec.ts`（父清单聚合）**共 4 passed**，并回归
+  `e2e/project-folder.spec.ts` **3 passed**；移动端新增 `task_logic_test.dart` 的 `projectIds`
+  集合过滤 4 例（与桌面 `task-filters.test.ts` 同口径）+ `project_tree_test.dart` 的
+  `planProjectDrop` 12 例；移动端进程内 analyzer `ANALYZED_FILES=212 ISSUES=0`
+  （沙箱内 `flutter analyze` / `flutter test` 不可用，新增用例留 CI 执行）。
+  **提交范围**：桌面 `task-filters.ts` / `task-panel.tsx` / `task-filters.test.ts` 与并发会话的
+  「工具栏排序方向档 + 收拢双菜单」改动同处 hunk，按「冲突文件不提交」约定留在工作树——故面板
+  **客户端**过滤层的聚合（`filterTasks` 的 `projectIds` 分支）与其 UI 层 e2e 一并随该批落库；
+  服务端谓词（`ListFilter.project_ids`）、侧栏拖拽与移动端聚合已随本批生效。
+
 ### 清单文件夹分组（对标 TickTick List Folder）
 
 - **`todo_projects` 新增 `parent_uuid`**（`0003_project_parent.sql`，`TEXT DEFAULT NULL`，行尾中文注释）：
@@ -54,13 +106,15 @@
   同层沿用 `sort_order` 顺序。
 - **双端编辑入口提供「上级文件夹」选择**：候选**排除自身与全部后代**（否则成环，Rust 侧必拒），
   文案带祖先路径（"父 / 子"）避免不同层级同名歧义；移动端为当前层级行 + 候选面板，桌面端为 Select。
-- **拖拽排序语义不变**：拖拽仍只改同级 `sort_order`、**不改层级**（跨层级改父留后续批次）；
+- **拖拽排序语义**（本批）：拖拽仍只改同级 `sort_order`、**不改层级**（跨层级改父留后续批次）；
   折叠隐藏的后代不在可见序列内、保留原编号——它们只与自身兄弟集比较，不受影响。
+  **后续批次已扩展**：横向位移可改父，见上节「清单层级补齐」。
 - **mock IPC 边界修正**（`src/test/ipc-mock.ts`）：浏览器 / e2e mock 的 invoke 参数此前直传对象，
   与真实 Tauri IPC 的 **JSON 序列化边界**不一致——值为 `undefined` 的键在真实链路会被丢弃，在 mock 里
   却会让 `Object.assign(entity, input)` 把字段覆盖成 `undefined`（实测：编辑项目只改颜色 → 项目标题
   被清空）。现于命令分发入口统一做一次 JSON round-trip，与真实链路字段语义对齐。
-- **未做**（后续批次）：拖拽跨层级改父、父清单聚合子清单任务。
+- **未做**（本批）：拖拽跨层级改父、父清单聚合子清单任务。**均已补齐**（2026-09-30），见上节
+  「清单层级补齐」。
 
 ### 日历周视图（对标 TickTick Week View）
 

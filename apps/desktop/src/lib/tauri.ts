@@ -21,6 +21,11 @@ export interface ListFilter {
   status?: string | null;
   priority_min?: number | null;
   project_id?: number | null;
+  /**
+   * 项目 id 集合（SQL `project_id IN (...)`）：清单文件夹聚合——选中父清单时
+   * 传「自身 + 全部后代项目 id」。非空集合优先于 [project_id]；空集合 = 空结果。
+   */
+  project_ids?: number[] | null;
   favorite_only?: boolean | null;
   /** 我的一天零点毫秒（调用方算好本地零点传入） */
   my_day_today?: number | null;
@@ -32,7 +37,7 @@ export interface ListFilter {
  */
 export type TaskListPredicate = Pick<
   ListFilter,
-  "done" | "project_id" | "favorite_only" | "my_day_today"
+  "done" | "project_id" | "project_ids" | "favorite_only" | "my_day_today"
 >;
 
 // ---------- 通用业务 ----------

@@ -2871,7 +2871,9 @@ mod reminder_poll_tests {
 #[cfg(test)]
 mod predicate_pushdown_tests {
     use super::*;
-    use crate::api::business_api::{create_todo_project, create_todo_task, list_todo_tasks};
+    use crate::api::business_api::{
+        create_todo_project, create_todo_task, list_todo_tasks, update_todo_project,
+    };
     use crate::models::business::TodoTaskCreateInput;
 
     async fn setup_db() -> SqlitePool {
@@ -2891,6 +2893,27 @@ mod predicate_pushdown_tests {
         };
         f(&mut input);
         create_todo_task(pool, &input).await.unwrap().id
+    }
+
+    /// 建一个项目；parent_uuid 空 = 顶层。返回 (id, uuid)
+    async fn mk_project_with_parent(
+        pool: &SqlitePool,
+        title: &str,
+        parent_uuid: Option<&str>,
+    ) -> (i64, String) {
+        let p = create_todo_project(
+            pool,
+            &crate::models::business::TodoProjectCreateInput {
+                title: title.into(),
+                description: None,
+                hex_color: None,
+                sort_order: None,
+                parent_uuid: parent_uuid.map(str::to_string),
+            },
+        )
+        .await
+        .unwrap();
+        (p.id, p.uuid)
     }
 
     #[tokio::test]
@@ -2999,6 +3022,116 @@ mod predicate_pushdown_tests {
         .unwrap();
         assert_eq!(by_proj.len(), 1);
         assert_eq!(by_proj[0].id, in_proj);
+    }
+
+    /// project_ids 集合谓词：父清单视图聚合「自身 + 后代项目」任务
+    ///（M8+ 清单文件夹聚合的 SQL 侧口径）
+    #[tokio::test]
+    async fn project_ids_aggregates_descendant_tasks() {
+        let pool = setup_db().await;
+        let (parent, parent_uuid) = mk_project_with_parent(&pool, "父清单", None).await;
+        let (child, _child_uuid) =
+            mk_project_with_parent(&pool, "子清单", Some(&parent_uuid)).await;
+        let (other, _) = mk_project_with_parent(&pool, "无关清单", None).await;
+
+        mk(&pool, "父任务", |i| i.project_id = Some(parent)).await;
+        mk(&pool, "子任务", |i| i.project_id = Some(child)).await;
+        mk(&pool, "无关任务", |i| i.project_id = Some(other)).await;
+        mk(&pool, "未分组任务", |_| {}).await;
+
+        // 只选父 → 仅父自身任务（等值语义不变）
+        let only_parent = list_todo_tasks(
+            &pool,
+            &ListFilter {
+                project_id: Some(parent),
+                page_size: 100,
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(only_parent.len(), 1);
+        assert_eq!(only_parent[0].title, "父任务");
+
+        // 集合 = 父 + 子（客户端展开后代后传入）→ 两者任务都在，无关/未分组不入
+        let aggregated = list_todo_tasks(
+            &pool,
+            &ListFilter {
+                project_ids: Some(vec![parent, child]),
+                page_size: 100,
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+        let mut titles: Vec<&str> = aggregated.iter().map(|t| t.title.as_str()).collect();
+        titles.sort_unstable();
+        assert_eq!(titles, vec!["子任务", "父任务"]);
+
+        // 空集合 → 空结果（不是全量）
+        let none = list_todo_tasks(
+            &pool,
+            &ListFilter {
+                project_ids: Some(vec![]),
+                page_size: 100,
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+        assert!(none.is_empty());
+    }
+
+    /// project_ids 与 project_id 同口径放行归档项目任务
+    ///（选中父清单时其归档子清单的任务仍可见：归档=从默认列表收起，非软删）
+    #[tokio::test]
+    async fn project_ids_bypasses_archived_exclusion() {
+        let pool = setup_db().await;
+        let (parent, parent_uuid) = mk_project_with_parent(&pool, "父清单", None).await;
+        let (child, _child_uuid) =
+            mk_project_with_parent(&pool, "归档子清单", Some(&parent_uuid)).await;
+        mk(&pool, "子任务", |i| i.project_id = Some(child)).await;
+
+        update_todo_project(
+            &pool,
+            child,
+            &crate::models::business::TodoProjectUpdateInput {
+                title: None,
+                description: None,
+                hex_color: None,
+                sort_order: None,
+                is_archived: Some(1),
+                parent_uuid: None,
+            },
+        )
+        .await
+        .unwrap();
+
+        // 默认聚合视图（无项目谓词）→ 归档项目任务被排除
+        let all = list_todo_tasks(
+            &pool,
+            &ListFilter {
+                page_size: 100,
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+        assert!(all.is_empty(), "归档项目的任务不进默认聚合视图");
+
+        // 显式选中父清单（集合含归档子）→ 放行
+        let by_folder = list_todo_tasks(
+            &pool,
+            &ListFilter {
+                project_ids: Some(vec![parent, child]),
+                page_size: 100,
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(by_folder.len(), 1);
+        assert_eq!(by_folder[0].title, "子任务");
     }
 
     #[tokio::test]

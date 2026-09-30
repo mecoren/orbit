@@ -4,10 +4,15 @@ import type { TodoProject } from "@/lib/tauri";
 import {
   buildFolderPathLabels,
   buildProjectTree,
+  collectDescendantIds,
   collectDescendantUuids,
+  DRAG_REPARENT_PX,
   flattenProjectTree,
   normalizeParentUuid,
   parentFolderCandidates,
+  planProjectDrop,
+  projectIdsWithDescendants,
+  type ProjectDropPlan,
 } from "./project-tree";
 
 let seq = 0;
@@ -249,5 +254,236 @@ describe("buildFolderPathLabels", () => {
     expect(labels.get("b")).toBe("根 / 子");
     expect(labels.get("c")).toBe("根 / 子 / 孙");
     expect(labels.get("d")).toBe("独立");
+  });
+});
+
+// ---------- 清单聚合（父清单聚合子清单任务） ----------
+
+describe("collectDescendantIds / projectIdsWithDescendants", () => {
+  it("无子项：后代为空，集合只有自身", () => {
+    const a = proj("a", "甲");
+    const b = proj("b", "乙");
+    expect(collectDescendantIds([a, b], a.id)).toEqual([]);
+    expect(projectIdsWithDescendants([a, b], a.id)).toEqual([a.id]);
+  });
+
+  it("一层父子：集合 = 自身 + 子（自身排首位）", () => {
+    const a = proj("a", "甲");
+    const b = proj("b", "乙", "a");
+    expect(collectDescendantIds([a, b], a.id)).toEqual([b.id]);
+    expect(projectIdsWithDescendants([a, b], a.id)).toEqual([a.id, b.id]);
+  });
+
+  it("三层嵌套：后代按 DFS 序（中 → 叶）", () => {
+    const a = proj("a", "根");
+    const b = proj("b", "中", "a");
+    const c = proj("c", "叶", "b");
+    const d = proj("d", "独立");
+    const list = [a, b, c, d];
+    expect(projectIdsWithDescendants(list, a.id)).toEqual([a.id, b.id, c.id]);
+    expect(collectDescendantIds(list, b.id)).toEqual([c.id]);
+    expect(collectDescendantIds(list, d.id)).toEqual([]);
+  });
+
+  it("孤儿项目（父不存在）不算任何人的后代", () => {
+    const a = proj("a", "甲");
+    const orphan = proj("x", "孤儿", "missing");
+    expect(collectDescendantIds([a, orphan], a.id)).toEqual([]);
+  });
+
+  it("id 不在列表里仍返回自身——项目列表未加载完时不能退化成空集", () => {
+    const a = proj("a", "甲");
+    expect(collectDescendantIds([a], 999_999)).toEqual([]);
+    expect(projectIdsWithDescendants([a], 999_999)).toEqual([999_999]);
+  });
+});
+
+// ---------- 拖拽跨层级改父 ----------
+
+/**
+ * 模拟落库后重新拉取：按新 sort_order 排序 → 按新 parent_uuid 构树 → DFS 展平。
+ * 这是 planProjectDrop 的真实消费路径（列表查询 ORDER BY sort_order ASC），
+ * 断言它才能验出「顺序漂移」这类只有重建才暴露的缺陷。
+ */
+function displayAfter(
+  projects: TodoProject[],
+  activeId: number,
+  plan: ProjectDropPlan,
+): string[] {
+  const so = new Map(plan.order.map((id, i) => [id, i + 1]));
+  const next = projects
+    .map((p) => ({
+      ...p,
+      sort_order: so.get(p.id) ?? p.sort_order,
+      parent_uuid: p.id === activeId ? plan.parentUuid : p.parent_uuid,
+    }))
+    .sort((a, b) => a.sort_order - b.sort_order);
+  return flattenAll(next).map((n) => `${n.project.title}(${n.depth})`);
+}
+
+describe("planProjectDrop", () => {
+  const flat = () => {
+    const a = proj("a", "甲");
+    const b = proj("b", "乙");
+    const c = proj("c", "丙");
+    return { a, b, c, list: [a, b, c] };
+  };
+
+  it("位移不足阈值 → 同级重排（保持原父）", () => {
+    const { a, c, list } = flat();
+    const plan = planProjectDrop({ projects: list, activeId: a.id, overId: c.id, deltaX: 0 });
+    expect(plan).not.toBeNull();
+    expect(plan!.kind).toBe("reorder");
+    expect(plan!.parentUuid).toBeNull();
+    expect(displayAfter(list, a.id, plan!)).toEqual(["乙(0)", "丙(0)", "甲(0)"]);
+  });
+
+  it("向上拖 → 插到落点之前", () => {
+    const { a, c, list } = flat();
+    const plan = planProjectDrop({ projects: list, activeId: c.id, overId: a.id, deltaX: 0 })!;
+    expect(plan.kind).toBe("reorder");
+    expect(displayAfter(list, c.id, plan)).toEqual(["丙(0)", "甲(0)", "乙(0)"]);
+  });
+
+  it("右移达阈值 → 内嵌为落点行的子项", () => {
+    const { a, c, list } = flat();
+    const plan = planProjectDrop({
+      projects: list,
+      activeId: a.id,
+      overId: c.id,
+      deltaX: DRAG_REPARENT_PX,
+    })!;
+    expect(plan.kind).toBe("nest");
+    expect(plan.parentUuid).toBe("c");
+    expect(displayAfter(list, a.id, plan)).toEqual(["乙(0)", "丙(0)", "甲(1)"]);
+  });
+
+  it("内嵌对象已有子项 → 排到子项末位（不插队）", () => {
+    const a = proj("a", "甲");
+    const b = proj("b", "乙");
+    const b1 = proj("b1", "乙一", "b");
+    const b2 = proj("b2", "乙二", "b");
+    const list = [a, b, b1, b2];
+    const plan = planProjectDrop({ projects: list, activeId: a.id, overId: b.id, deltaX: 99 })!;
+    expect(plan.kind).toBe("nest");
+    expect(plan.parentUuid).toBe("b");
+    expect(displayAfter(list, a.id, plan)).toEqual([
+      "乙(0)",
+      "乙一(1)",
+      "乙二(1)",
+      "甲(1)",
+    ]);
+  });
+
+  it("内嵌到自身后代 → 成环被拒，回落同级重排", () => {
+    const a = proj("a", "甲");
+    const b = proj("b", "乙", "a");
+    const plan = planProjectDrop({ projects: [a, b], activeId: a.id, overId: b.id, deltaX: 99 })!;
+    expect(plan.kind).toBe("reorder");
+    expect(plan.parentUuid).toBeNull();
+    expect(displayAfter([a, b], a.id, plan)).toEqual(["甲(0)", "乙(1)"]);
+  });
+
+  it("左移达阈值 → 提升一级，排在原父之后", () => {
+    const a = proj("a", "甲");
+    const b = proj("b", "乙", "a");
+    const c = proj("c", "丙");
+    const list = [a, b, c];
+    const plan = planProjectDrop({
+      projects: list,
+      activeId: b.id,
+      overId: a.id,
+      deltaX: -DRAG_REPARENT_PX,
+    })!;
+    expect(plan.kind).toBe("outdent");
+    expect(plan.parentUuid).toBeNull();
+    expect(displayAfter(list, b.id, plan)).toEqual(["甲(0)", "乙(0)", "丙(0)"]);
+  });
+
+  it("提升一级带子项 → 子树跟随，落位紧跟原父", () => {
+    const a = proj("a", "甲");
+    const b = proj("b", "乙", "a");
+    const b1 = proj("b1", "乙一", "b");
+    const c = proj("c", "丙");
+    const list = [a, b, b1, c];
+    const plan = planProjectDrop({
+      projects: list,
+      activeId: b.id,
+      overId: a.id,
+      deltaX: -DRAG_REPARENT_PX,
+    })!;
+    expect(plan.kind).toBe("outdent");
+    expect(plan.parentUuid).toBeNull();
+    expect(displayAfter(list, b.id, plan)).toEqual([
+      "甲(0)",
+      "乙(0)",
+      "乙一(1)",
+      "丙(0)",
+    ]);
+  });
+
+  it("已在顶层左移 → 无处可升，回落同级重排", () => {
+    const { a, b, list } = flat();
+    const plan = planProjectDrop({
+      projects: list,
+      activeId: a.id,
+      overId: b.id,
+      deltaX: -99,
+    })!;
+    expect(plan.kind).toBe("reorder");
+    expect(plan.parentUuid).toBeNull();
+    expect(displayAfter(list, a.id, plan)).toEqual(["乙(0)", "甲(0)", "丙(0)"]);
+  });
+
+  it("同级重排只在自身兄弟组内挪位：落在别组子树里 → 贴到该子树前后", () => {
+    // 顶层顺序 甲(带子 甲一) / 乙 / 丙；把 丙 上拖到 甲一（甲的子项）上：
+    // 丙 的兄弟组是 [甲, 乙]，能落的最靠上槽位是「甲之后、乙之前」
+    const a = proj("a", "甲");
+    const a1 = proj("a1", "甲一", "a");
+    const b = proj("b", "乙");
+    const c = proj("c", "丙");
+    const list = [a, a1, b, c];
+    const plan = planProjectDrop({ projects: list, activeId: c.id, overId: a1.id, deltaX: 0 })!;
+    expect(plan.kind).toBe("reorder");
+    expect(plan.parentUuid).toBeNull();
+    expect(displayAfter(list, c.id, plan)).toEqual([
+      "甲(0)",
+      "甲一(1)",
+      "丙(0)",
+      "乙(0)",
+    ]);
+  });
+
+  it("自定义阈值：位移 5px 时默认阈值不触发、阈值 5 触发", () => {
+    const { a, c, list } = flat();
+    expect(
+      planProjectDrop({ projects: list, activeId: a.id, overId: c.id, deltaX: 5 })!.kind,
+    ).toBe("reorder");
+    expect(
+      planProjectDrop({ projects: list, activeId: a.id, overId: c.id, deltaX: 5, threshold: 5 })!
+        .kind,
+    ).toBe("nest");
+  });
+
+  it("自身拖自身 / 未知 id → null", () => {
+    const { a, list } = flat();
+    expect(planProjectDrop({ projects: list, activeId: a.id, overId: a.id, deltaX: 99 })).toBeNull();
+    expect(
+      planProjectDrop({ projects: list, activeId: 999_999, overId: a.id, deltaX: 99 }),
+    ).toBeNull();
+    expect(
+      planProjectDrop({ projects: list, activeId: a.id, overId: 999_999, deltaX: 99 }),
+    ).toBeNull();
+  });
+
+  it("order 恒为全量项目 id 的一个排列（不丢行、不重复）", () => {
+    const a = proj("a", "甲");
+    const b = proj("b", "乙", "a");
+    const c = proj("c", "丙");
+    const d = proj("d", "丁", "c");
+    const list = [a, b, c, d];
+    const plan = planProjectDrop({ projects: list, activeId: d.id, overId: b.id, deltaX: 99 })!;
+    expect([...plan.order].sort()).toEqual([a.id, b.id, c.id, d.id].sort());
+    expect(new Set(plan.order).size).toBe(4);
   });
 });

@@ -558,8 +558,15 @@ const commands: Record<string, (args: any, ctx: Ctx) => unknown> = {
   perf_first_screen_mark: () => undefined,
 
   // ---- projects ----
-  // 对齐 Rust list_todo_projects：默认排除已归档（is_archived=1）
-  todo_projects_list: (_a, { db }) => ipcClone(db.projects.filter((p) => !p.is_archived)),
+  // 对齐 Rust business_api::list_todo_projects：排除已归档（is_archived=1），
+  // 并 `ORDER BY sort_order ASC, id ASC`——侧栏树按此序渲染，拖拽落库后
+  // 会经 refetch 重新拉取，缺排序会让重排结果永远看不到（插入序 ≠ 排序序）
+  todo_projects_list: (_a, { db }) =>
+    ipcClone(
+      db.projects
+        .filter((p) => !p.is_archived)
+        .sort((a, b) => a.sort_order - b.sort_order || a.id - b.id),
+    ),
   // 归档项目列表（is_archived=1，最近归档在前——对齐 Rust updated_at DESC）
   todo_projects_list_archived: (_a, { db }) =>
     ipcClone(
@@ -604,6 +611,16 @@ const commands: Record<string, (args: any, ctx: Ctx) => unknown> = {
     const idx = db.projects.findIndex((p) => p.id === id);
     if (idx >= 0) db.projects.splice(idx, 1);
   },
+  // 拖拽排序单条落库（对齐 Rust update_todo_project_sort_order：
+  // 只动 sort_order，并 bump updated_at/version）。缺此实现时拖拽会在第一条
+  // 落库调用 reject、整个 handleDragEnd 中断——改层级也就永远走不到。
+  todo_projects_update_sort_order: ({ id, sortOrder }, { db }) => {
+    const p = db.projects.find((x) => x.id === id);
+    if (!p) throw new Error(`project ${id} 不存在`);
+    p.sort_order = sortOrder;
+    p.updated_at = Date.now();
+    p.version += 1;
+  },
 
   // ---- tasks ----
   // 对齐 Rust generic_repo::list 的 WHERE is_deleted = 0（删除走软删，墓碑进回收站）。
@@ -613,8 +630,9 @@ const commands: Record<string, (args: any, ctx: Ctx) => unknown> = {
     // 列裁剪（批2 + A2 对齐 Rust）：keyword 空时 description 与 uuid 都不传输
     // （NULL / 空串占位保形状）；keyword 非空保留全列（SQL LIKE 依赖）
     const pruneListColumns = !filter?.keyword?.trim();
-    // 归档项目任务排除（聚合视图；project_id 谓词=用户主动选中该归档项目时放行）
-    if (filter?.project_id == null) {
+    // 归档项目任务排除（聚合视图；project_id / project_ids 谓词 = 用户主动
+    // 选中该（组）项目时放行——后者是 M8+ 清单文件夹聚合）
+    if (filter?.project_id == null && filter?.project_ids == null) {
       const archivedIds = new Set(db.projects.filter((p) => p.is_archived && !p.is_deleted).map((p) => p.id));
       rows = rows.filter((t) => t.project_id == null || !archivedIds.has(t.project_id));
     }
@@ -622,7 +640,17 @@ const commands: Record<string, (args: any, ctx: Ctx) => unknown> = {
     if (filter?.done === false) rows = rows.filter((t) => t.done !== 1);
     if (filter?.status != null) rows = rows.filter((t) => t.status === filter.status);
     if (filter?.priority_min != null) rows = rows.filter((t) => t.priority >= filter.priority_min);
-    if (filter?.project_id != null) rows = rows.filter((t) => t.project_id === filter.project_id);
+    // 集合谓词（M8+）：非空时优先于等值（与 Rust build_task_predicate_clause 同口径）；
+    // 空集合 = 覆盖 0 个项目 → 空结果（**不能退化成「不加子句」**）
+    if (filter?.project_ids != null) {
+      const ids = new Set(filter.project_ids);
+      rows =
+        filter.project_ids.length === 0
+          ? []
+          : rows.filter((t) => t.project_id != null && ids.has(t.project_id));
+    } else if (filter?.project_id != null) {
+      rows = rows.filter((t) => t.project_id === filter.project_id);
+    }
     if (filter?.favorite_only === true) rows = rows.filter((t) => t.is_favorite === 1);
     if (filter?.my_day_today != null) rows = rows.filter((t) => t.my_day_date === filter.my_day_today);
     // 排序（对齐 Rust generic_repo ORDER BY updated_at DESC）：插入序≠更新序，

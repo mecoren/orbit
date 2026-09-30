@@ -73,9 +73,9 @@ impl<'de> Deserialize<'de> for FlexibleI64 {
 /// 通用列表过滤条件（所有业务表共用）。
 ///
 /// 谓词下推（2026-09-12 F5）：`done`/`status`/`priority_min`/`project_id`/
-/// `favorite_only`/`my_day_today` 仅 `todo_tasks` 表消费（其他表忽略），
-/// 语义与前端 `shared/task-filters.ts` 的 filterTasks 对齐——面板主查询
-/// 把视图/工具栏筛选下推到 SQL，替代万行全量拉取后内存过滤。
+/// `project_ids`/`favorite_only`/`my_day_today` 仅 `todo_tasks` 表消费
+/// （其他表忽略），语义与前端 `shared/task-filters.ts` 的 filterTasks 对齐
+/// ——面板主查询把视图/工具栏筛选下推到 SQL，替代万行全量拉取后内存过滤。
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ListFilter {
     pub keyword: Option<String>,
@@ -89,6 +89,10 @@ pub struct ListFilter {
     pub priority_min: Option<i32>,
     /// 项目 id 等值（软删行已由基线谓词排除）
     pub project_id: Option<i64>,
+    /// 项目 id **集合**（`project_id IN (...)`）：清单文件夹聚合——
+    /// 选中父清单时客户端把「自身 + 全部后代项目 id」算好传入。非空集合时
+    /// 优先于 [Self::project_id]（二者不叠加）；空集合 = 空结果（不是不过滤）。
+    pub project_ids: Option<Vec<i64>>,
     /// 仅收藏（is_favorite = 1）
     pub favorite_only: Option<bool>,
     /// 我的一天：仅 my_day_date = 今天本地零点（调用方算好零点传入；

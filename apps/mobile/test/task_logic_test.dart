@@ -137,6 +137,47 @@ void main() {
           tasks, const TaskFilterInput(quickView: QuickViewKey.nodate));
       expect(result.map((t) => t.id), [2, 3, 5]);
     });
+
+    // ---- 清单聚合（M8+ 清单文件夹）：projectIds 集合替代 projectId 等值 ----
+
+    test('projectIds 集合覆盖多个清单（父清单聚合子清单任务）', () {
+      final result =
+          filterTasks(tasks, const TaskFilterInput(projectIds: [10, 20]));
+      // 10 的 1/2/6 + 20 的 4；未分组任务（3/5）不入
+      expect(result.map((t) => t.id), [1, 2, 4, 6]);
+    });
+
+    test('projectIds 优先于 projectId（集合不含选中项目也不退回等值）', () {
+      final result = filterTasks(
+        tasks,
+        const TaskFilterInput(
+          quickView: QuickViewKey.done,
+          projectId: 10,
+          projectIds: [20],
+        ),
+      );
+      expect(result.map((t) => t.id), [4]);
+    });
+
+    test('projectIds 空集合视同未提供（回落 projectId 等值）', () {
+      final result = filterTasks(
+        tasks,
+        const TaskFilterInput(
+          quickView: QuickViewKey.done,
+          projectId: 10,
+          projectIds: [],
+        ),
+      );
+      expect(result.map((t) => t.id).toSet(), {1, 2, 6});
+    });
+
+    test('ungrouped 优先于 projectIds', () {
+      final result = filterTasks(
+        tasks,
+        const TaskFilterInput(ungrouped: true, projectIds: [10]),
+      );
+      expect(result.map((t) => t.id), [3, 5]);
+    });
   });
 
   group('sortTasks 排序（position 升序 → created_at 降序）', () {

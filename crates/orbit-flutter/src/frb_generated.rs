@@ -6759,6 +6759,7 @@ impl SseDecode for crate::api::dto::ListFilter {
         let mut var_status = <Option<String>>::sse_decode(deserializer);
         let mut var_priorityMin = <Option<i32>>::sse_decode(deserializer);
         let mut var_projectId = <Option<i64>>::sse_decode(deserializer);
+        let mut var_projectIds = <Option<Vec<i64>>>::sse_decode(deserializer);
         let mut var_favoriteOnly = <Option<bool>>::sse_decode(deserializer);
         let mut var_myDayToday = <Option<i64>>::sse_decode(deserializer);
         return crate::api::dto::ListFilter {
@@ -6769,6 +6770,7 @@ impl SseDecode for crate::api::dto::ListFilter {
             status: var_status,
             priority_min: var_priorityMin,
             project_id: var_projectId,
+            project_ids: var_projectIds,
             favorite_only: var_favoriteOnly,
             my_day_today: var_myDayToday,
         };
@@ -7294,6 +7296,17 @@ impl SseDecode for Option<usize> {
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         if (<bool>::sse_decode(deserializer)) {
             return Some(<usize>::sse_decode(deserializer));
+        } else {
+            return None;
+        }
+    }
+}
+
+impl SseDecode for Option<Vec<i64>> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        if (<bool>::sse_decode(deserializer)) {
+            return Some(<Vec<i64>>::sse_decode(deserializer));
         } else {
             return None;
         }
@@ -9565,6 +9578,7 @@ impl flutter_rust_bridge::IntoDart for crate::api::dto::ListFilter {
             self.status.into_into_dart().into_dart(),
             self.priority_min.into_into_dart().into_dart(),
             self.project_id.into_into_dart().into_dart(),
+            self.project_ids.into_into_dart().into_dart(),
             self.favorite_only.into_into_dart().into_dart(),
             self.my_day_today.into_into_dart().into_dart(),
         ]
@@ -11331,6 +11345,7 @@ impl SseEncode for crate::api::dto::ListFilter {
         <Option<String>>::sse_encode(self.status, serializer);
         <Option<i32>>::sse_encode(self.priority_min, serializer);
         <Option<i64>>::sse_encode(self.project_id, serializer);
+        <Option<Vec<i64>>>::sse_encode(self.project_ids, serializer);
         <Option<bool>>::sse_encode(self.favorite_only, serializer);
         <Option<i64>>::sse_encode(self.my_day_today, serializer);
     }
@@ -11745,6 +11760,16 @@ impl SseEncode for Option<usize> {
         <bool>::sse_encode(self.is_some(), serializer);
         if let Some(value) = self {
             <usize>::sse_encode(value, serializer);
+        }
+    }
+}
+
+impl SseEncode for Option<Vec<i64>> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <bool>::sse_encode(self.is_some(), serializer);
+        if let Some(value) = self {
+            <Vec<i64>>::sse_encode(value, serializer);
         }
     }
 }

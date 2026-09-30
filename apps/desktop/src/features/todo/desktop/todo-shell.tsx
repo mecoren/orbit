@@ -33,6 +33,7 @@ import {
   type TodoProject,
   type TodoTask,
 } from "@/lib/tauri";
+import { projectIdsWithDescendants } from "../shared/project-tree";
 import { parseTemplatePayload } from "../shared/template-apply";
 import { TASK_LIST_PAGE_SIZE, type QuickViewKey } from "../shared/constants";
 import { needsTodoIndexNav, TODO_INDEX_PATH } from "../shared/sidebar-nav";
@@ -59,6 +60,12 @@ interface TodoShellContextValue {
   onSelectSavedFilter: (id: number) => void;
   /** 选中项目 id（表单默认项目用；null = 无选中/未分组） */
   activeProjectId: number | null;
+  /**
+   * 选中清单覆盖的项目 id 集合（M8+ 清单文件夹聚合）= 自身 + 全部后代；
+   * null = 未选中项目视图（快捷视图 / 未分组 / 筛选器）。
+   * 面板的客户端 `filterTasks` 与壳层谓词下推共用它，保证两层口径一致。
+   */
+  activeProjectIds: number[] | null;
 
   // ---- 共享查询数据 ----
   projects: TodoProject[];
@@ -141,8 +148,9 @@ export default function TodoShell() {
   // 替代「万行全量拉取 + 前端过滤」的驻留大头：
   // - quickView=undone → done=false；done → done=true（Logbook 数据源）
   // - quickView=favorite → favorite_only；my_day → my_day_today=今天零点
-  // - projectId → project_id 等值（ungrouped 无对应谓词，保留全量拉取由
-  //   前端过滤——NULL 语义 SQL 端可表达但「未分组」是低频视图，先不扩）
+  // - projectId → project_ids 集合（自身 + 全部后代，清单文件夹聚合；
+  //   ungrouped 无对应谓词，保留全量拉取由前端过滤——NULL 语义 SQL 端可
+  //   表达但「未分组」是低频视图，先不扩）
   // 工具栏状态/优先级筛选仍在前端 filterTasks（面板私有态不进壳层查询键，
   // 避免每改一档筛选触发一次全量 IPC）。
   const todayZero = useMemo(() => {
@@ -150,8 +158,19 @@ export default function TodoShell() {
     d.setHours(0, 0, 0, 0);
     return d.getTime();
   }, []);
+
+  // 清单聚合集合：projects 就绪前回落 [projectId]（无后代可展开），
+  // 列表到齐后自动补全。依赖 projects 数组本体——重命名/改色会换引用，
+  // 但 projectIdsWithDescendants 的结果是纯 id 数组，React 侧 new 数组
+  // 不会导致重复请求：taskPredicate 的 useMemo 依赖是下面的 memo 引用。
+  const activeProjectIds = useMemo(() => {
+    if (projectId == null) return null;
+    const list = projectsQuery.data ?? [];
+    return projectIdsWithDescendants(list, projectId);
+  }, [projectId, projectsQuery.data]);
+
   const taskPredicate = useMemo<TaskListPredicate>(() => {
-    if (projectId != null) return { project_id: projectId };
+    if (activeProjectIds != null) return { project_ids: activeProjectIds };
     switch (quickView) {
       case "undone":
         return { done: false };
@@ -164,7 +183,7 @@ export default function TodoShell() {
       default:
         return {};
     }
-  }, [quickView, projectId, todayZero]);
+  }, [quickView, activeProjectIds, todayZero]);
 
   const tasksQuery = useQuery({
     // keyword 恒空 = 全量通道（侧栏计数、详情导航、无搜索时的列表渲染都吃它）。
@@ -292,6 +311,7 @@ export default function TodoShell() {
       setQuickView("all");
     },
     activeProjectId: projectId != null && !ungrouped ? projectId : null,
+    activeProjectIds: projectId != null && !ungrouped ? activeProjectIds : null,
     projects,
     tasks,
     tasksLoading: tasksQuery.isLoading,

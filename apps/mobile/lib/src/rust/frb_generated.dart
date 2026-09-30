@@ -6406,8 +6406,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   ListFilter dco_decode_list_filter(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 9)
-      throw Exception('unexpected arr length: expect 9 but see ${arr.length}');
+    if (arr.length != 10)
+      throw Exception('unexpected arr length: expect 10 but see ${arr.length}');
     return ListFilter(
       keyword: dco_decode_opt_String(arr[0]),
       page: dco_decode_u_32(arr[1]),
@@ -6416,8 +6416,9 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       status: dco_decode_opt_String(arr[4]),
       priorityMin: dco_decode_opt_box_autoadd_i_32(arr[5]),
       projectId: dco_decode_opt_box_autoadd_i_64(arr[6]),
-      favoriteOnly: dco_decode_opt_box_autoadd_bool(arr[7]),
-      myDayToday: dco_decode_opt_box_autoadd_i_64(arr[8]),
+      projectIds: dco_decode_opt_list_prim_i_64_strict(arr[7]),
+      favoriteOnly: dco_decode_opt_box_autoadd_bool(arr[8]),
+      myDayToday: dco_decode_opt_box_autoadd_i_64(arr[9]),
     );
   }
 
@@ -6694,6 +6695,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   BigInt? dco_decode_opt_box_autoadd_usize(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw == null ? null : dco_decode_box_autoadd_usize(raw);
+  }
+
+  @protected
+  Int64List? dco_decode_opt_list_prim_i_64_strict(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw == null ? null : dco_decode_list_prim_i_64_strict(raw);
   }
 
   @protected
@@ -8410,6 +8417,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_status = sse_decode_opt_String(deserializer);
     var var_priorityMin = sse_decode_opt_box_autoadd_i_32(deserializer);
     var var_projectId = sse_decode_opt_box_autoadd_i_64(deserializer);
+    var var_projectIds = sse_decode_opt_list_prim_i_64_strict(deserializer);
     var var_favoriteOnly = sse_decode_opt_box_autoadd_bool(deserializer);
     var var_myDayToday = sse_decode_opt_box_autoadd_i_64(deserializer);
     return ListFilter(
@@ -8420,6 +8428,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       status: var_status,
       priorityMin: var_priorityMin,
       projectId: var_projectId,
+      projectIds: var_projectIds,
       favoriteOnly: var_favoriteOnly,
       myDayToday: var_myDayToday,
     );
@@ -8959,6 +8968,19 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
     if (sse_decode_bool(deserializer)) {
       return (sse_decode_box_autoadd_usize(deserializer));
+    } else {
+      return null;
+    }
+  }
+
+  @protected
+  Int64List? sse_decode_opt_list_prim_i_64_strict(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    if (sse_decode_bool(deserializer)) {
+      return (sse_decode_list_prim_i_64_strict(deserializer));
     } else {
       return null;
     }
@@ -10748,6 +10770,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_opt_String(self.status, serializer);
     sse_encode_opt_box_autoadd_i_32(self.priorityMin, serializer);
     sse_encode_opt_box_autoadd_i_64(self.projectId, serializer);
+    sse_encode_opt_list_prim_i_64_strict(self.projectIds, serializer);
     sse_encode_opt_box_autoadd_bool(self.favoriteOnly, serializer);
     sse_encode_opt_box_autoadd_i_64(self.myDayToday, serializer);
   }
@@ -11249,6 +11272,19 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_bool(self != null, serializer);
     if (self != null) {
       sse_encode_box_autoadd_usize(self, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_opt_list_prim_i_64_strict(
+    Int64List? self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    sse_encode_bool(self != null, serializer);
+    if (self != null) {
+      sse_encode_list_prim_i_64_strict(self, serializer);
     }
   }
 

@@ -37,6 +37,7 @@ import 'logic/batch_actions.dart';
 import 'logic/quick_add_context.dart';
 import 'logic/repeat_logic.dart' as rep;
 import 'logic/display_prefs.dart';
+import 'logic/project_tree.dart';
 import 'logic/task_logic.dart';
 import 'logic/undo_stack.dart';
 import 'logic/view_mode.dart';
@@ -184,6 +185,25 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
   TaskFilterInput get _effectiveQuery => _viewOverride == null
       ? widget.query
       : TaskFilterInput(quickView: _viewOverride);
+
+  /// 生效中的**列表**筛选输入：在 [_effectiveQuery] 之上叠加清单聚合
+  /// （选中父清单时覆盖自身 + 全部后代清单的直接任务，TickTick List Folder
+  /// 同款）。
+  ///
+  /// 刻意与 [_effectiveQuery] 分开：入口语义（页头标题、空态文案、新建落点、
+  /// 视图档记忆）必须仍按**被点中的那一个清单**解释，只有任务列表吃聚合集合。
+  TaskFilterInput _listQuery([List<TodoProject>? projects]) {
+    final id = _effectiveQuery.projectId;
+    if (id == null) return _effectiveQuery;
+    final list =
+        projects ?? ref.read(todoProjectsProvider).value ?? const <TodoProject>[];
+    return TaskFilterInput(
+      quickView: _effectiveQuery.quickView,
+      projectId: id,
+      projectIds: projectIdsWithDescendants(list, id),
+      ungrouped: _effectiveQuery.ungrouped,
+    );
+  }
 
   /// 是否今天页签根（快捷视图切换入口只在此出现：页签栈内入栈的今天视图
   /// 与项目/未分组列表不挂切换器，标题即入口语义不容二义）
@@ -463,7 +483,7 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
   /// 首条未完成任务——与长按菜单「多选」同语义（那里选的是被长按的那行）
   void _enterSelectionFromPanel() {
     final tasks = ref.read(todoTasksProvider).value ?? const <TodoTask>[];
-    final first = sortTasks(filterTasks(tasks, _effectiveQuery), _sortKey)
+    final first = sortTasks(filterTasks(tasks, _listQuery()), _sortKey)
         .where((t) => !t.isDone)
         .firstOrNull;
     if (first == null) {
@@ -1086,7 +1106,7 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
   Future<void> _reorderTasks(int oldIndex, int newIndex) async {
     final tasks =
         ref.read(todoTasksProvider).value ?? const <TodoTask>[];
-    final visible = sortTasks(filterTasks(tasks, _effectiveQuery), _sortKey)
+    final visible = sortTasks(filterTasks(tasks, _listQuery()), _sortKey)
         .where((t) => !t.isDone)
         .toList();
     final reordered = reorderItems(_manualReorderStream(visible), oldIndex, newIndex);
@@ -1343,12 +1363,12 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
 
     final visible = applyTaskListFilters(
       isLogbook
-          ? filterTasks(tasks, _effectiveQuery)
+          ? filterTasks(tasks, _listQuery(projects))
           : sortTasks(
               // 列表档：完成行交给尾部「已完成」折叠卡承接（不再是页头开关
               // 一刀切隐藏）；看板 / 表格没有承接位，维持改版前的隐藏口径——
               // 完成历史混进卡片墙/表格会淹掉这两档的工作面板语义
-              filterTasks(tasks, _effectiveQuery,
+              filterTasks(tasks, _listQuery(projects),
                   hideDone: _viewMode != TaskViewMode.list),
               _sortKey),
       _filters,

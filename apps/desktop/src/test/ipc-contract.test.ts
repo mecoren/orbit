@@ -70,7 +70,6 @@ const MOCK_ALLOWLIST = new Set<string>([
   // —— 单条 get/杂项（冒烟主链路未调用，调用即 reject 会立刻暴露）——
   "todo_comments_get",
   "todo_projects_get_by_uuid",
-  "todo_projects_update_sort_order",
   "todo_subtasks_get",
   "todo_task_labels_get",
   "todo_task_relations_get",

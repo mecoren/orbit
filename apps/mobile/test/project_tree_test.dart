@@ -284,4 +284,314 @@ void main() {
       expect(labels['d'], '独立');
     });
   });
+
+  /// 模拟落库后重新拉取：按新 sortOrder 排序 → 按新 parentUuid 构树 → DFS 展平。
+  /// 这是 planProjectDrop 的真实消费路径（列表查询按 sortOrder 升序），
+  /// 断言它才能验出「顺序漂移」这类只有重建才暴露的缺陷。
+  List<String> displayAfter(
+    List<TodoProject> projects,
+    int activeId,
+    ProjectDropPlan plan,
+  ) {
+    final so = <int, int>{};
+    for (var i = 0; i < plan.order.length; i++) {
+      so[plan.order[i]] = i + 1;
+    }
+    final next = [
+      for (final p in projects)
+        TodoProject(
+          id: p.id,
+          uuid: p.uuid,
+          title: p.title,
+          description: p.description,
+          hexColor: p.hexColor,
+          sortOrder: (so[p.id] ?? p.sortOrder.round()).toDouble(),
+          parentUuid: p.id == activeId ? plan.parentUuid : p.parentUuid,
+          isArchived: p.isArchived,
+          isDeleted: p.isDeleted,
+          createdAt: p.createdAt,
+          updatedAt: p.updatedAt,
+          deletedAt: p.deletedAt,
+          version: p.version,
+        ),
+    ]..sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
+    return [
+      for (final n in flattenAll(next)) '${n.project.title}(${n.depth})',
+    ];
+  }
+
+  group('collectDescendantIds / projectIdsWithDescendants', () {
+    test('无子项：后代为空，集合只有自身', () {
+      final a = proj('a', '甲');
+      final b = proj('b', '乙');
+      expect(collectDescendantIds([a, b], a.id), isEmpty);
+      expect(projectIdsWithDescendants([a, b], a.id), [a.id]);
+    });
+
+    test('一层父子：集合 = 自身 + 子（自身排首位）', () {
+      final a = proj('a', '甲');
+      final b = proj('b', '乙', parentUuid: 'a');
+      expect(collectDescendantIds([a, b], a.id), [b.id]);
+      expect(projectIdsWithDescendants([a, b], a.id), [a.id, b.id]);
+    });
+
+    test('三层嵌套：后代按 DFS 序（中 → 叶）', () {
+      final a = proj('a', '根');
+      final b = proj('b', '中', parentUuid: 'a');
+      final c = proj('c', '叶', parentUuid: 'b');
+      final d = proj('d', '独立');
+      expect(projectIdsWithDescendants([a, b, c, d], a.id), [a.id, b.id, c.id]);
+      expect(collectDescendantIds([a, b, c, d], b.id), [c.id]);
+      expect(collectDescendantIds([a, b, c, d], d.id), isEmpty);
+    });
+
+    test('孤儿项目（父不存在）不算任何人的后代', () {
+      final a = proj('a', '甲');
+      final orphan = proj('x', '孤儿', parentUuid: 'missing');
+      expect(collectDescendantIds([a, orphan], a.id), isEmpty);
+    });
+
+    test('id 不在列表里仍返回自身——项目列表未加载完时不能退化成空集', () {
+      final a = proj('a', '甲');
+      expect(collectDescendantIds([a], 999999), isEmpty);
+      expect(projectIdsWithDescendants([a], 999999), [999999]);
+    });
+  });
+
+  group('planProjectDrop', () {
+    test('位移不足阈值 → 同级重排（保持原父）', () {
+      final a = proj('a', '甲');
+      final b = proj('b', '乙');
+      final c = proj('c', '丙');
+      final list = [a, b, c];
+      final plan = planProjectDrop(
+        projects: list,
+        activeId: a.id,
+        overId: c.id,
+        deltaX: 0,
+      );
+      expect(plan, isNotNull);
+      expect(plan!.kind, ProjectDropKind.reorder);
+      expect(plan.parentUuid, isNull);
+      expect(displayAfter(list, a.id, plan), ['乙(0)', '丙(0)', '甲(0)']);
+    });
+
+    test('向上拖 → 插到落点之前', () {
+      final a = proj('a', '甲');
+      final b = proj('b', '乙');
+      final c = proj('c', '丙');
+      final list = [a, b, c];
+      final plan = planProjectDrop(
+        projects: list,
+        activeId: c.id,
+        overId: a.id,
+        deltaX: 0,
+      )!;
+      expect(plan.kind, ProjectDropKind.reorder);
+      expect(displayAfter(list, c.id, plan), ['丙(0)', '甲(0)', '乙(0)']);
+    });
+
+    test('右移达阈值 → 内嵌为落点行的子项', () {
+      final a = proj('a', '甲');
+      final b = proj('b', '乙');
+      final c = proj('c', '丙');
+      final list = [a, b, c];
+      final plan = planProjectDrop(
+        projects: list,
+        activeId: a.id,
+        overId: c.id,
+        deltaX: dragReparentPx,
+      )!;
+      expect(plan.kind, ProjectDropKind.nest);
+      expect(plan.parentUuid, 'c');
+      expect(displayAfter(list, a.id, plan), ['乙(0)', '丙(0)', '甲(1)']);
+    });
+
+    test('内嵌对象已有子项 → 排到子项末位（不插队）', () {
+      final a = proj('a', '甲');
+      final b = proj('b', '乙');
+      final b1 = proj('b1', '乙一', parentUuid: 'b');
+      final b2 = proj('b2', '乙二', parentUuid: 'b');
+      final list = [a, b, b1, b2];
+      final plan = planProjectDrop(
+        projects: list,
+        activeId: a.id,
+        overId: b.id,
+        deltaX: 99,
+      )!;
+      expect(plan.kind, ProjectDropKind.nest);
+      expect(plan.parentUuid, 'b');
+      expect(displayAfter(list, a.id, plan), [
+        '乙(0)',
+        '乙一(1)',
+        '乙二(1)',
+        '甲(1)',
+      ]);
+    });
+
+    test('内嵌到自身后代 → 成环被拒，回落同级重排', () {
+      final a = proj('a', '甲');
+      final b = proj('b', '乙', parentUuid: 'a');
+      final plan = planProjectDrop(
+        projects: [a, b],
+        activeId: a.id,
+        overId: b.id,
+        deltaX: 99,
+      )!;
+      expect(plan.kind, ProjectDropKind.reorder);
+      expect(plan.parentUuid, isNull);
+      expect(displayAfter([a, b], a.id, plan), ['甲(0)', '乙(1)']);
+    });
+
+    test('左移达阈值 → 提升一级，排在原父之后', () {
+      final a = proj('a', '甲');
+      final b = proj('b', '乙', parentUuid: 'a');
+      final c = proj('c', '丙');
+      final list = [a, b, c];
+      final plan = planProjectDrop(
+        projects: list,
+        activeId: b.id,
+        overId: a.id,
+        deltaX: -dragReparentPx,
+      )!;
+      expect(plan.kind, ProjectDropKind.outdent);
+      expect(plan.parentUuid, isNull);
+      expect(displayAfter(list, b.id, plan), ['甲(0)', '乙(0)', '丙(0)']);
+    });
+
+    test('提升一级带子项 → 子树跟随，落位紧跟原父', () {
+      final a = proj('a', '甲');
+      final b = proj('b', '乙', parentUuid: 'a');
+      final b1 = proj('b1', '乙一', parentUuid: 'b');
+      final c = proj('c', '丙');
+      final list = [a, b, b1, c];
+      final plan = planProjectDrop(
+        projects: list,
+        activeId: b.id,
+        overId: a.id,
+        deltaX: -dragReparentPx,
+      )!;
+      expect(plan.kind, ProjectDropKind.outdent);
+      expect(plan.parentUuid, isNull);
+      expect(displayAfter(list, b.id, plan), [
+        '甲(0)',
+        '乙(0)',
+        '乙一(1)',
+        '丙(0)',
+      ]);
+    });
+
+    test('已在顶层左移 → 无处可升，回落同级重排', () {
+      final a = proj('a', '甲');
+      final b = proj('b', '乙');
+      final c = proj('c', '丙');
+      final list = [a, b, c];
+      final plan = planProjectDrop(
+        projects: list,
+        activeId: a.id,
+        overId: b.id,
+        deltaX: -99,
+      )!;
+      expect(plan.kind, ProjectDropKind.reorder);
+      expect(plan.parentUuid, isNull);
+      expect(displayAfter(list, a.id, plan), ['乙(0)', '甲(0)', '丙(0)']);
+    });
+
+    test('同级重排只在自身兄弟组内挪位：落在别组子树里 → 贴到该子树前后', () {
+      final a = proj('a', '甲');
+      final a1 = proj('a1', '甲一', parentUuid: 'a');
+      final b = proj('b', '乙');
+      final c = proj('c', '丙');
+      final list = [a, a1, b, c];
+      final plan = planProjectDrop(
+        projects: list,
+        activeId: c.id,
+        overId: a1.id,
+        deltaX: 0,
+      )!;
+      expect(plan.kind, ProjectDropKind.reorder);
+      expect(plan.parentUuid, isNull);
+      expect(displayAfter(list, c.id, plan), [
+        '甲(0)',
+        '甲一(1)',
+        '丙(0)',
+        '乙(0)',
+      ]);
+    });
+
+    test('自定义阈值：位移 5 时默认阈值不触发、阈值 5 触发', () {
+      final a = proj('a', '甲');
+      final b = proj('b', '乙');
+      final c = proj('c', '丙');
+      final list = [a, b, c];
+      expect(
+        planProjectDrop(
+          projects: list,
+          activeId: a.id,
+          overId: c.id,
+          deltaX: 5,
+        )!.kind,
+        ProjectDropKind.reorder,
+      );
+      expect(
+        planProjectDrop(
+          projects: list,
+          activeId: a.id,
+          overId: c.id,
+          deltaX: 5,
+          threshold: 5,
+        )!.kind,
+        ProjectDropKind.nest,
+      );
+    });
+
+    test('自身拖自身 / 未知 id → null', () {
+      final a = proj('a', '甲');
+      final b = proj('b', '乙');
+      final list = [a, b];
+      expect(
+        planProjectDrop(
+          projects: list,
+          activeId: a.id,
+          overId: a.id,
+          deltaX: 99,
+        ),
+        isNull,
+      );
+      expect(
+        planProjectDrop(
+          projects: list,
+          activeId: 999999,
+          overId: a.id,
+          deltaX: 99,
+        ),
+        isNull,
+      );
+      expect(
+        planProjectDrop(
+          projects: list,
+          activeId: a.id,
+          overId: 999999,
+          deltaX: 99,
+        ),
+        isNull,
+      );
+    });
+
+    test('order 恒为全量项目 id 的一个排列（不丢行、不重复）', () {
+      final a = proj('a', '甲');
+      final b = proj('b', '乙', parentUuid: 'a');
+      final c = proj('c', '丙');
+      final d = proj('d', '丁', parentUuid: 'c');
+      final list = [a, b, c, d];
+      final plan = planProjectDrop(
+        projects: list,
+        activeId: d.id,
+        overId: b.id,
+        deltaX: 99,
+      )!;
+      expect(plan.order.toSet(), {a.id, b.id, c.id, d.id});
+      expect(plan.order.length, 4);
+    });
+  });
 }

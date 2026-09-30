@@ -51,6 +51,11 @@ abstract final class OrbitIcons {
   static const IconData openExternal = LucideIcons.externalLink;
   static const IconData drag = LucideIcons.gripVertical;
   static const IconData sort = LucideIcons.arrowUpDown;
+  /// 层级下沉（项目从上一层移入上一项之下；横向拖动改层级的菜单等价入口）
+  static const IconData indentIncrease = LucideIcons.indentIncrease;
+
+  /// 层级提升（项目移出上一层）
+  static const IconData indentDecrease = LucideIcons.indentDecrease;
   static const IconData search = LucideIcons.search;
   static const IconData searchEmpty = LucideIcons.searchX;
   static const IconData filter = LucideIcons.filter;

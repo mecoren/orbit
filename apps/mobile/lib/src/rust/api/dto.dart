@@ -388,7 +388,7 @@ class HolidayYearOutcome {
 }
 
 /// 通用列表过滤条件（镜像 orbit_core::models::business::ListFilter；
-/// 谓词下推六键仅 todo_tasks 消费，见 core 侧注释）
+/// 谓词下推七键仅 todo_tasks 消费，见 core 侧注释）
 class ListFilter {
   final String? keyword;
   final int page;
@@ -397,6 +397,11 @@ class ListFilter {
   final String? status;
   final int? priorityMin;
   final PlatformInt64? projectId;
+
+  /// 项目 id **集合**（`project_id IN (...)`）：清单文件夹聚合——选中父
+  /// 清单时客户端把「自身 + 全部后代项目 id」算好传入。非空时优先于
+  /// [Self::project_id]；空集合 = 空结果。
+  final Int64List? projectIds;
   final bool? favoriteOnly;
   final PlatformInt64? myDayToday;
 
@@ -408,6 +413,7 @@ class ListFilter {
     this.status,
     this.priorityMin,
     this.projectId,
+    this.projectIds,
     this.favoriteOnly,
     this.myDayToday,
   });
@@ -421,6 +427,7 @@ class ListFilter {
       status.hashCode ^
       priorityMin.hashCode ^
       projectId.hashCode ^
+      projectIds.hashCode ^
       favoriteOnly.hashCode ^
       myDayToday.hashCode;
 
@@ -436,6 +443,7 @@ class ListFilter {
           status == other.status &&
           priorityMin == other.priorityMin &&
           projectId == other.projectId &&
+          projectIds == other.projectIds &&
           favoriteOnly == other.favoriteOnly &&
           myDayToday == other.myDayToday;
 }

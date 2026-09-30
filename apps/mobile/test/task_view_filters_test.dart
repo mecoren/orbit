@@ -48,6 +48,8 @@ TodoProject _project(int id, String title) => TodoProject(
       description: null,
       hexColor: '#4E8CFF',
       sortOrder: id.toDouble(),
+      // M8：顶层项目（本文件不测层级，统一 null）
+      parentUuid: null,
       isArchived: 0,
       isDeleted: 0,
       createdAt: 0,

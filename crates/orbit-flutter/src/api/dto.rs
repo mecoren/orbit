@@ -27,7 +27,7 @@ use serde::Serialize;
 // =============================================================================
 
 /// 通用列表过滤条件（镜像 orbit_core::models::business::ListFilter；
-/// 谓词下推六键仅 todo_tasks 消费，见 core 侧注释）
+/// 谓词下推七键仅 todo_tasks 消费，见 core 侧注释）
 #[derive(Debug, Clone, Serialize)]
 pub struct ListFilter {
     pub keyword: Option<String>,
@@ -37,6 +37,10 @@ pub struct ListFilter {
     pub status: Option<String>,
     pub priority_min: Option<i32>,
     pub project_id: Option<i64>,
+    /// 项目 id **集合**（`project_id IN (...)`）：清单文件夹聚合——选中父
+    /// 清单时客户端把「自身 + 全部后代项目 id」算好传入。非空时优先于
+    /// [Self::project_id]；空集合 = 空结果。
+    pub project_ids: Option<Vec<i64>>,
     pub favorite_only: Option<bool>,
     pub my_day_today: Option<i64>,
 }
@@ -51,6 +55,7 @@ impl From<orbit_core::models::business::ListFilter> for ListFilter {
             status: f.status,
             priority_min: f.priority_min,
             project_id: f.project_id,
+            project_ids: f.project_ids,
             favorite_only: f.favorite_only,
             my_day_today: f.my_day_today,
         }
@@ -67,6 +72,7 @@ impl From<ListFilter> for orbit_core::models::business::ListFilter {
             status: f.status,
             priority_min: f.priority_min,
             project_id: f.project_id,
+            project_ids: f.project_ids,
             favorite_only: f.favorite_only,
             my_day_today: f.my_day_today,
         }

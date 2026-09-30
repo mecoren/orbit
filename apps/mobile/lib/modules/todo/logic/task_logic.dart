@@ -59,13 +59,25 @@ extension QuickViewMeta on QuickViewKey {
 
 // ---------- 筛选 / 排序 ----------
 
-/// 任务列表筛选输入（三目标互斥，优先级 ungrouped > projectId > quickView）
+/// 任务列表筛选输入（三目标互斥，优先级 ungrouped > projectId/projectIds > quickView）
 class TaskFilterInput {
   final QuickViewKey? quickView;
   final int? projectId;
+
+  /// 清单聚合集合（M8+ 清单文件夹）= 选中项目 + 全部后代项目 id。
+  ///
+  /// 给出且非空时优先于 [projectId] 的等值匹配：父清单视图要连同子清单的
+  /// **直接**任务一起显示（TickTick List Folder 同款）。集合由
+  /// `logic/project_tree.dart::projectIdsWithDescendants` 展开，与桌面同口径。
+  final List<int>? projectIds;
   final bool ungrouped;
 
-  const TaskFilterInput({this.quickView, this.projectId, this.ungrouped = false});
+  const TaskFilterInput({
+    this.quickView,
+    this.projectId,
+    this.projectIds,
+    this.ungrouped = false,
+  });
 }
 
 /// 按输入过滤任务（互斥语义见 [TaskFilterInput]；时间窗口为本地时区自然日）。
@@ -81,9 +93,19 @@ List<TodoTask> filterTasks(List<TodoTask> tasks, TaskFilterInput input,
 
   Iterable<TodoTask> list = tasks;
 
+  // 清单聚合集合优先于等值：集合可能只含选中项目本身（无子清单），
+  // 此时与等值等价，无需分叉
+  final aggregated =
+      (input.projectIds != null && input.projectIds!.isNotEmpty)
+          ? input.projectIds!.toSet()
+          : null;
+
   if (input.ungrouped) {
     // 未分组：projectId 为空
     list = list.where((t) => t.projectId == null);
+  } else if (aggregated != null) {
+    list = list.where(
+        (t) => t.projectId != null && aggregated.contains(t.projectId));
   } else if (input.projectId != null) {
     list = list.where((t) => t.projectId == input.projectId);
   } else {
