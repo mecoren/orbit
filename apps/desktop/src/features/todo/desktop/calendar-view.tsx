@@ -70,6 +70,11 @@ import { OVERDUE_COLOR_CLASS, PRIORITY_COLOR, TODO_ACCENT } from "../shared/cons
 import { LabelChips } from "../shared/label-chips";
 import { ReminderChip } from "../shared/reminder-chip";
 import { displayReminder, type DisplayReminder, type TaskReminderMeta } from "../shared/reminder-meta";
+import {
+  holidayAutoLabel,
+  holidayFailureSuffix,
+  holidayMetaLines,
+} from "../shared/holiday-meta";
 import { TaskContextMenu } from "./task-context-menu";
 import { YearOverviewPanel, MAX_YEAR, MIN_YEAR } from "./year-overview";
 import { useWheelStepRef, shiftYearMonth } from "../shared/wheel-nav";
@@ -211,11 +216,12 @@ export function CalendarView({
     queryFn: holidayMeta,
     staleTime: 5 * 60_000,
   });
-  // 自动更新口径（设置 → 日历 可关；每月一次）——两处 tooltip 共用
-  const holidayAutoText =
-    holidayMetaQuery.data?.auto_enabled === false
-      ? "已关闭每月自动更新"
-      : "每月自动更新";
+  // 节假日记账文案：口径短句 / 上次成功更新 / 失败后缀全部走单一出口
+  // （shared/holiday-meta），与设置页概览、移动端缓存页同源同措辞
+  const holidayMetaData = holidayMetaQuery.data;
+  const holidayAutoText = holidayAutoLabel(holidayMetaData?.auto_enabled !== false);
+  const holidayLines = holidayMetaLines(holidayMetaData);
+  const holidayFailText = holidayFailureSuffix(holidayMetaData);
 
   const refreshHolidays = async () => {
     setUpdatingHolidays(true);
@@ -359,9 +365,7 @@ export function CalendarView({
           </Button>
         </TooltipTrigger>
         <TooltipContent>
-          {holidayMetaQuery.data && holidayMetaQuery.data.last_update_ms > 0
-            ? `上次更新：${format(new Date(holidayMetaQuery.data.last_update_ms), "M月d日 HH:mm")}（${holidayAutoText}，也可手动更新）`
-            : `${holidayAutoText}，也可手动更新`}
+          {`${holidayLines.lastUpdate}（${holidayAutoText}，也可手动更新）${holidayFailText}`}
         </TooltipContent>
       </Tooltip>
     </>
@@ -462,9 +466,7 @@ export function CalendarView({
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>
-                  {holidayMetaQuery.data && holidayMetaQuery.data.last_update_ms > 0
-                    ? `上次更新：${format(new Date(holidayMetaQuery.data.last_update_ms), "M月d日 HH:mm")}（${holidayAutoText}）`
-                    : `${holidayAutoText}，也可手动更新`}
+                  {`${holidayLines.lastUpdate}（${holidayAutoText}，也可手动更新）${holidayFailText}`}
                 </TooltipContent>
               </Tooltip>
             </>

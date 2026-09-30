@@ -42,6 +42,7 @@ import {
   holidayProgressPercent,
   useHolidayProgress,
 } from "@/features/todo/shared/use-holiday-progress";
+import { holidayMetaLines } from "@/features/todo/shared/holiday-meta";
 import {
   groupHolidaysByYear,
   summarizeHolidayCache,
@@ -66,8 +67,8 @@ export function CalendarSection() {
     staleTime: 2 * 60 * 1000,
   });
   const autoEnabled = metaQuery.data?.auto_enabled ?? true;
-  const lastUpdate = metaQuery.data?.last_update_ms ?? 0;
-  const failureCount = metaQuery.data?.failure_count ?? 0;
+  // 记账文案走单一出口（设置页 / 日历页 tooltip / 移动缓存页同口径，见 shared/holiday-meta）
+  const metaLines = holidayMetaLines(metaQuery.data);
 
   const autoMutation = useMutation({
     mutationFn: (enabled: boolean) => holidaySetAutoEnabled(enabled),
@@ -205,17 +206,15 @@ export function CalendarSection() {
           />
         </div>
 
-        <p className="text-xs text-muted-foreground">
-          {lastUpdate > 0
-            ? `上次更新：${new Date(lastUpdate).toLocaleString()}`
-            : "尚未成功更新过"}
-        </p>
+        <p className="text-xs text-muted-foreground">{metaLines.lastUpdate}</p>
 
-        {/* 连续失败计数与移动端缓存页同口径（唯一展示该字段的入口；成功后 core 清零） */}
-        {failureCount > 0 && (
-          <p className="text-xs text-muted-foreground">
-            连续失败 {failureCount} 次（旧缓存保留可用）
-          </p>
+        {/* 失败态才亮出「上次尝试 + 连续失败」（core 成功一次即清零）：只有计数
+            没有尝试时刻，用户分不清调度器还在重试还是早已放弃 */}
+        {metaLines.lastAttempt && (
+          <p className="text-xs text-muted-foreground">{metaLines.lastAttempt}</p>
+        )}
+        {metaLines.failure && (
+          <p className="text-xs text-warning">{metaLines.failure}</p>
         )}
 
         <p className="text-xs text-muted-foreground">
