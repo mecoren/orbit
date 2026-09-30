@@ -96,12 +96,15 @@ export function LabelManager({ open, onOpenChange }: LabelManagerProps) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
+      {/* 整体高度钉死（≈3 张标签卡 + 底部新建行，不随内容增减）：
+          列表区 flex-1 内部滚动，overflow-hidden 覆盖原语非交互路径的
+          overflow-y-auto（弹窗自身不滚，滚动手势交给列表区） */}
+      <DialogContent className="h-[380px] max-w-md overflow-hidden">
         <DialogHeader>
           <DialogTitle>标签管理</DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-1">
+        <div className="min-h-0 flex-1 space-y-1 overflow-y-auto pr-1">
           {labels.map((l) => (
             <div key={l.id} className="rounded-md border p-2">
               <div className="flex items-center gap-2">
@@ -145,8 +148,8 @@ export function LabelManager({ open, onOpenChange }: LabelManagerProps) {
           ))}
         </div>
 
-        {/* 新增行 */}
-        <div className="flex items-center gap-2 border-t pt-3">
+        {/* 新增行（固定在弹窗底部，不随列表滚动） */}
+        <div className="flex shrink-0 items-center gap-2 border-t pt-3">
           <Input
             value={newTitle}
             placeholder="新标签名称，Enter 创建"
