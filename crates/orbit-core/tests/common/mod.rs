@@ -6,8 +6,10 @@
 //! `TcpListener` 起一个内存假服务，把两协议的线上行为变成可控夹具。
 //!
 //! 口径：
-//! - 只服务 HTTP/1.1 短连接（响应恒带 `Connection: close`），一条连接一个请求，
-//!   免去 keep-alive 分帧；
+//! - HTTP/1.1 keep-alive：同一条连接连续处理请求直到客户端关闭（半截体/停滞
+//!   这类必须破坏连接语义的响应除外，写完即关）；
+//! - 请求行同时接受 origin-form 与 absolute-form（后者是本机 `HTTP_PROXY` 下
+//!   reqwest 的常态），统一归一为路径再入库——真服务端也必须容忍两种形态；
 //! - 目录是隐式的（PUT 自动带出父级，MKCOL 恒 201），PROPFIND 由对象键反推；
 //! - **不校验 SigV4 签名值**（校验签名等价于再写一遍签名器，证明不了自己），
 //!   只要求 S3 请求带形态正确的 `Authorization` 头，否则 403——真签名被真服务端
@@ -231,6 +233,24 @@ fn unquote(v: &str) -> &str {
     v.trim().trim_matches('"')
 }
 
+/// 把请求行 target 归一到路径形态（含前导 `/`，保留 query 交由调用方切分）
+///
+/// 只处理 absolute-form（`http://host[:port]/path`）；origin-form（`/path`）
+/// 与 `*` 原样返回。作者机常驻系统代理（`HTTP_PROXY=http://127.0.0.1:xxxxx`），
+/// 漏了这一步会让整套夹具在「本机绿 / 代理下红」之间漂移。
+fn normalize_target(target: &str) -> String {
+    for scheme in ["http://", "https://"] {
+        if let Some(rest) = target.strip_prefix(scheme) {
+            return match rest.find('/') {
+                Some(i) => rest[i..].to_string(),
+                // `http://host` 无路径：语义上是根目录
+                None => "/".to_string(),
+            };
+        }
+    }
+    target.to_string()
+}
+
 /// 单连接请求循环（HTTP/1.1 keep-alive）
 ///
 /// 客户端（reqwest）有连接池：若服务端「一请求一关闭」，池里会出现已被对端
@@ -284,6 +304,12 @@ fn handle_conn(mut stream: TcpStream, svc: Arc<Svc>) -> std::io::Result<()> {
             }
         }
 
+        // 请求行可能是 absolute-form：环境里有 HTTP_PROXY/HTTPS_PROXY 时
+        // reqwest 按代理约定发「GET http://host:port/path HTTP/1.1」，真
+        // WebDAV/S3 服务端一律容忍（RFC 7230 §5.3.2 要求 origin server 接受
+        // absolute-form）。夹具必须同口径归一到路径，否则对象键带上
+        // `scheme://host:port` 前缀，PROPFIND 反推目录与断言路径全体错位。
+        let target = normalize_target(&target);
         let (path, query) = match target.split_once('?') {
             Some((p, q)) => (p.to_string(), q.to_string()),
             None => (target.clone(), String::new()),
