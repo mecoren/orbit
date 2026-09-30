@@ -113,10 +113,42 @@ impl HttpClient {
         }))
     }
 
+    /// PUT 请求的 per-request 总超时预算（F60）
+    ///
+    /// 口径与分片上传的 120s 窗口同源：**每 5MiB 给 120s**，不足 5MiB 也至少
+    /// 120s。两档事实依据：
+    ///
+    /// - 分片固定 5MiB 片 × 120s 是既有约定（`put_part_once`），即容忍下限约
+    ///   42 KB/s；
+    /// - S3 侧 8MiB 是 multipart 阈值，即单 PUT 的最大体量 → 240s 预算，
+    ///   按 350kbps（约 44 KB/s）慢速上行需约 190s，仍有 26% 余量。
+    ///
+    /// 纯函数，便于单测钉住档位（真跑一趟停滞传输要等满一个窗口，不适合进单测）。
+    fn put_timeout_budget(body_len: usize) -> Duration {
+        const PER_STEP_BYTES: usize = 5 * 1024 * 1024;
+        const STEP_SECS: u64 = 120;
+        let steps = body_len.div_ceil(PER_STEP_BYTES).max(1) as u64;
+        Duration::from_secs(STEP_SECS * steps)
+    }
+
     /// 带重试的 PUT 请求
     ///
     /// 限流场景（429 / 坚果云 503 BlockedTemporarily）不进行 HTTP 级重试，
     /// 直接返回错误交由业务级 with_retry 处理（30/60/120 秒长退避）。
+    ///
+    /// ## 发送阶段必须有超时（F60，2026-09-30 第六轮）
+    ///
+    /// 客户端只配了 `read_timeout`（见 `HttpClient::new`），它**只覆盖响应体
+    /// 读取**。请求发送阶段（请求体上行 + 等响应头）此前**没有任何超时**：
+    /// 服务端接受连接后停止读取时，socket 写阻塞，PUT 永不返回——整轮同步挂死，
+    /// 并一直持着引擎的同步互斥锁（后续所有同步入口都只能拿到 `skipped`）。
+    ///
+    /// 现按请求体大小给 per-request 总超时（[`Self::put_timeout_budget`]）。
+    /// **不能照搬分片的固定 120s**：S3 侧 <8MiB 走单 PUT，8MiB 在 350kbps
+    /// 上限链路上要 190s，固定窗口会把健康的慢速上行掐断（这正是 S4 把总超时
+    /// 改成读超时的原因）。上限的代价是最坏情形：4 次尝试 × 各自窗口（默认
+    /// `max_retries = 3`，8MiB 单 PUT 最坏约 16 分钟）——比无限期挂死好，且
+    /// 真慢速上行不会触发（每档都有 2.4 倍以上余量）。
     pub async fn put_with_retry(
         &self,
         url: &str,
@@ -124,11 +156,13 @@ impl HttpClient {
         body: Vec<u8>,
     ) -> Result<(), SyncError> {
         let mut last_error = None;
+        let budget = Self::put_timeout_budget(body.len());
 
         for attempt in 0..=self.max_retries {
             match self
                 .client
                 .put(url)
+                .timeout(budget)
                 .headers(headers.clone())
                 .body(body.clone())
                 .send()
@@ -473,6 +507,44 @@ mod tests {
             .await
             .expect("GET 必须成功");
         assert_eq!(token, None, "服务端不提供 ETag 时必须为 None");
+    }
+
+    // ========================================================================
+    // F60（2026-09-30 第六轮）：PUT 发送阶段的超时预算
+    //
+    // 真跑「服务端收下请求后停止读取」需要等满一个 120s 窗口，不适合进单测；
+    // 这里钉住纯函数的档位（档位一旦被改小，慢速上行会重新被掐断）。
+    // ========================================================================
+
+    #[test]
+    fn put_timeout_budget_has_120s_floor_for_small_bodies() {
+        assert_eq!(HttpClient::put_timeout_budget(0), Duration::from_secs(120));
+        assert_eq!(
+            HttpClient::put_timeout_budget(100 * 1024),
+            Duration::from_secs(120),
+            "小请求体（清单、分桶）也必须给足 120s"
+        );
+        assert_eq!(
+            HttpClient::put_timeout_budget(5 * 1024 * 1024),
+            Duration::from_secs(120),
+            "刚好一片仍是一档"
+        );
+    }
+
+    #[test]
+    fn put_timeout_budget_scales_for_large_single_put() {
+        // 8MiB = S3 multipart 阈值 = 单 PUT 的最大体量 → 2 档 240s
+        assert_eq!(
+            HttpClient::put_timeout_budget(8 * 1024 * 1024),
+            Duration::from_secs(240)
+        );
+        assert_eq!(
+            HttpClient::put_timeout_budget(5 * 1024 * 1024 + 1),
+            Duration::from_secs(240),
+            "跨过 5MiB 即升档"
+        );
+        // 单调不减：体量变大绝不缩小预算
+        assert!(HttpClient::put_timeout_budget(20 * 1024 * 1024) > Duration::from_secs(240));
     }
 
     // ========================================================================
