@@ -131,6 +131,13 @@ pub fn unlock_master_auth(
         kind: CryptoErrorKind::InvalidKeyLength,
     })?;
 
+    // F63（2026-09-30 第六轮）：本地 `master_auth.json` 属**不可信来源**
+    // （文件可被篡改），声明的迭代次数低于历史下限即拒绝派生，与
+    // `sync_crypto` 侧（unlock / import bundle）同口径。
+    // F33 曾漏挂本入口：攻击者把 iterations 改成 1 就能把口令派生降级成
+    // 可暴破强度，而载荷侧没有任何 tag 兜得住（这里派生的是校验基准本身）。
+    super::key_derivation::ensure_kdf_strength(meta.iterations, "主密码元数据")?;
+
     // 派生密钥（仅在内存中存在）
     let derived_key = derive_master_key(password, &salt, meta.iterations, DB_KEY_LEN)?;
 

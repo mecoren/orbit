@@ -394,6 +394,11 @@ impl SyncCryptoService {
         let salt = meta.decode_salt().map_err(|e| SyncCryptoError::Meta {
             message: e.to_string(),
         })?;
+        // F62（2026-09-30 第六轮）：`rotate_key` 是唯一漏挂 KDF 下限的派生入口。
+        // 它读的是本地 `sync_crypto_meta.json`（同样可被篡改），必须与
+        // `decrypt_data_key_internal` / `import_crypto_bundle` 同口径校验，
+        // 否则「轮换」会把整套云端密文重新包到一把降级强度派生的密钥下。
+        crate::crypto::ensure_kdf_strength(meta.iterations, "同步元数据（rotate_key）")?;
         let master_key = derive_master_key(sync_password, &salt, meta.iterations, DATA_KEY_LEN)?;
 
         // 生成新 Data Key
