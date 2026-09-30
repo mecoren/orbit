@@ -530,6 +530,8 @@ pub struct TodoReminder {
     pub uuid: String,
     pub task_id: i64,
     pub remind_at: i64,
+    /// 持续提醒标记（G2）：1 = 未完成则按间隔顺延重排（响到完成为止）
+    pub is_constant: i32,
     pub is_deleted: i32,
     pub created_at: i64,
     pub updated_at: i64,
@@ -544,6 +546,7 @@ impl From<orbit_core::models::business::TodoReminder> for TodoReminder {
             uuid: r.uuid,
             task_id: r.task_id,
             remind_at: r.remind_at,
+            is_constant: r.is_constant,
             is_deleted: r.is_deleted,
             created_at: r.created_at,
             updated_at: r.updated_at,
@@ -558,6 +561,8 @@ impl From<orbit_core::models::business::TodoReminder> for TodoReminder {
 pub struct TodoReminderCreateInput {
     pub task_id: i64,
     pub remind_at: i64,
+    /// 省略 = 0（一次性）——移动端表单未开持续提醒时传 0
+    pub is_constant: i32,
 }
 
 impl From<TodoReminderCreateInput> for orbit_core::models::business::TodoReminderCreateInput {
@@ -565,6 +570,7 @@ impl From<TodoReminderCreateInput> for orbit_core::models::business::TodoReminde
         Self {
             task_id: i.task_id,
             remind_at: i.remind_at,
+            is_constant: i.is_constant,
         }
     }
 }

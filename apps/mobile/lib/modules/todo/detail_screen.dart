@@ -1292,6 +1292,27 @@ class _RemindersSection extends ConsumerWidget {
         taskId,
         picked.millisecondsSinceEpoch,
         reminder,
+        isConstant: reminder.isConstant,
+      );
+    });
+  }
+
+  /// 翻转持续提醒标记（G2）：时刻不变，仅标记变更——删旧建新（对齐桌面
+  /// 详情抽屉的「持续」徽标；todo_reminders 无 update 路径）
+  Future<void> _toggleConstant(
+    BuildContext context,
+    WidgetRef ref,
+    TodoReminder reminder,
+  ) async {
+    await _mutate(context, ref, () async {
+      final bridge = ref.read(orbitBridgeProvider);
+      await bridge.todoReminderDelete(reminder.id);
+      await bridge.todoReminderCreate(
+        TodoReminderCreateInput(
+          taskId: taskId,
+          remindAt: reminder.remindAt,
+          isConstant: reminder.constant ? 0 : 1,
+        ),
       );
     });
   }
@@ -1351,6 +1372,33 @@ class _RemindersSection extends ConsumerWidget {
                                     color: colors.secondaryText,
                                   ),
                                 ),
+                                if (reminder.constant) ...[
+                                  const SizedBox(width: AppDimens.space8),
+                                  // 持续提醒徽标（G2）：点按翻转（响了就不停，
+                                  // 直到完成；见 core advance_fired_reminder）
+                                  GestureDetector(
+                                    onTap: () =>
+                                        _toggleConstant(context, ref, reminder),
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: AppDimens.space4 + 2,
+                                        vertical: 2,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        borderRadius: AppShapes.full,
+                                        color: Colors.orange
+                                            .withValues(alpha: 0.15),
+                                      ),
+                                      child: const Text(
+                                        '持续',
+                                        style: TextStyle(
+                                          fontSize: 10,
+                                          color: Colors.deepOrange,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ],
                                 if (repeatMode > 0) ...[
                                   const SizedBox(width: AppDimens.space8),
                                   Container(

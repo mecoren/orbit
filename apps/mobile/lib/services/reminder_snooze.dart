@@ -42,7 +42,9 @@ class SnoozeLanding {
   const SnoozeLanding({required this.deleteIds, required this.creates});
 
   final List<int> deleteIds;
-  final List<({int taskId, int remindAt})> creates;
+
+  /// 待新建行；`isConstant` 从被替换的旧行继承（G2 持续提醒：推迟不降级）
+  final List<({int taskId, int remindAt, int isConstant})> creates;
 
   bool get isEmpty => deleteIds.isEmpty && creates.isEmpty;
 
@@ -77,29 +79,36 @@ SnoozeLanding planSnoozeLanding({
   }
 
   final deleteIds = <int>[];
-  final creates = <({int taskId, int remindAt})>[];
+  final creates = <({int taskId, int remindAt, int isConstant})>[];
   final handled = <int>{};
 
   for (final p in pending) {
     if (!handled.add(p.taskId)) continue;
     final rows = byTask[p.taskId];
     if (rows == null || rows.isEmpty) {
-      // 孤儿闹钟 → 后台推迟产物（仅 activeTaskIds 非空时启用）
+      // 孤儿闹钟 → 后台推迟产物（仅 activeTaskIds 非空时启用）。
+      // 无源行可继承持续标记（持续提醒的行永不被引擎删除，走到这里
+      // 属罕见态）→ 按一次性落地
       if (activeTaskIds == null || !activeTaskIds.contains(p.taskId)) continue;
       if (p.remindAt <= now ||
           p.remindAt > now + orphanWindow.inMilliseconds) {
         continue;
       }
-      creates.add((taskId: p.taskId, remindAt: p.remindAt));
+      creates.add((taskId: p.taskId, remindAt: p.remindAt, isConstant: 0));
       continue;
     }
     if (rows.any((r) => r.remindAt == p.remindAt)) continue;
     final older = rows.where((r) => r.remindAt < p.remindAt).toList()
       ..sort((a, b) => b.remindAt.compareTo(a.remindAt));
     if (older.isEmpty) continue;
-    // 只推进最新的一条旧行；更早的历史行由引擎到期清理兜底
+    // 只推进最新的一条旧行；更早的历史行由引擎到期清理兜底。
+    // 持续标记随行继承（G2）：被替换的顺延链不该因推迟降级成一次性
     deleteIds.add(older.first.id);
-    creates.add((taskId: p.taskId, remindAt: p.remindAt));
+    creates.add((
+      taskId: p.taskId,
+      remindAt: p.remindAt,
+      isConstant: older.first.isConstant,
+    ));
   }
   return SnoozeLanding(deleteIds: deleteIds, creates: creates);
 }
@@ -109,6 +118,11 @@ SnoozeLanding planSnoozeLanding({
 ///
 /// 只碰同刻行是有意为之：引擎可能已为重复任务续排了下一实例行、
 /// 用户也可能手排了其他提醒，都不该被这次推迟顺手清掉。
+///
+/// **持续提醒例外（G2）**：`is_constant = 1` 的行到期后被引擎**原地顺延**
+/// （不软删），此时已无同刻行可比对；若只新建推迟行，会与顺延链形成
+/// 「两条同时在跑」的双份提醒。故额外把该任务存活中的持续行（顺延产物）
+/// 一并软删，并继承其持续标记——推迟只替换这一条链，仍不碰其他提醒行。
 ///
 /// 桥调用逐条 try/catch：任一步失败都不阻断推迟本身——系统闹钟已在侧，
 /// 用户至少会收到下一次提醒；DB 面由下次启动的补齐/引擎清理收敛。
@@ -121,6 +135,7 @@ Future<void> landSnoozeInDb(
   // 推迟时刻已成过去（用户很久没回前台，闹钟早响过）：丢弃该意图——
   // 补建一条过去时刻的行只会被引擎立刻消费并再弹一次
   if (nextAt <= DateTime.now().millisecondsSinceEpoch) return;
+  final now = DateTime.now().millisecondsSinceEpoch;
   List<TodoReminder> rows;
   try {
     rows = await bridge.todoReminderList(const ListFilter(pageSize: 5000));
@@ -132,16 +147,25 @@ Future<void> landSnoozeInDb(
       r.isDeleted == 0 && r.taskId == taskId && r.remindAt == nextAt)) {
     return;
   }
+  int inheritedConstant = 0;
   for (final r in rows) {
     if (r.isDeleted != 0 || r.taskId != taskId) continue;
-    if (r.remindAt != fromRemindAt) continue;
+    // 同刻行（本次通知对应的行）/ 待替换的持续顺延链（未来时刻的持续行）
+    final sameTick = r.remindAt == fromRemindAt;
+    final rearmedConstant = r.constant && r.remindAt > fromRemindAt && r.remindAt > now;
+    if (!sameTick && !rearmedConstant) continue;
+    if (r.constant) inheritedConstant = 1;
     try {
       await bridge.todoReminderDelete(r.id);
     } catch (_) {}
   }
   try {
     await bridge.todoReminderCreate(
-      TodoReminderCreateInput(taskId: taskId, remindAt: nextAt),
+      TodoReminderCreateInput(
+        taskId: taskId,
+        remindAt: nextAt,
+        isConstant: inheritedConstant,
+      ),
     );
   } catch (_) {}
 }
@@ -233,7 +257,11 @@ Future<bool> applySnoozeLanding(OrbitBridge bridge, SnoozeLanding plan) async {
   for (final c in plan.creates) {
     try {
       await bridge.todoReminderCreate(
-        TodoReminderCreateInput(taskId: c.taskId, remindAt: c.remindAt),
+        TodoReminderCreateInput(
+          taskId: c.taskId,
+          remindAt: c.remindAt,
+          isConstant: c.isConstant,
+        ),
       );
       changed = true;
     } catch (_) {}

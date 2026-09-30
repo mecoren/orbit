@@ -35,6 +35,9 @@ type QueryClientLike = ReturnType<typeof useQueryClient>;
  * 阻断推迟——用户意图是「到点再提醒我一次」，新建行无论如何都要落地；
  * 系列续排的防雪球守卫在 use-todo-reminder-listener 续排路径上，
  * 推迟产物行到期时不会克隆出平行系列。
+ *
+ * `isConstant`（G2）随行传递：推迟一条持续提醒不该把它降级成一次性——
+ * 新行的持续标记与原行一致，顺延链在推迟后继续生效。
  */
 export async function snoozeReminder(
   reminderId: number,
@@ -42,6 +45,7 @@ export async function snoozeReminder(
   remindAt: number,
   minutes: number,
   qc: QueryClientLike,
+  isConstant = 0,
 ): Promise<boolean> {
   const nextAt = snoozeRemindAt(remindAt, minutes);
   try {
@@ -50,7 +54,11 @@ export async function snoozeReminder(
     } catch {
       /* 行已被续排引擎/完成清理删除则跳过，继续新建 */
     }
-    await todoReminderCreate({ task_id: taskId, remind_at: nextAt });
+    await todoReminderCreate({
+      task_id: taskId,
+      remind_at: nextAt,
+      is_constant: isConstant,
+    });
     void qc.invalidateQueries({ queryKey: ["todo-task-detail", taskId] });
     return true;
   } catch {

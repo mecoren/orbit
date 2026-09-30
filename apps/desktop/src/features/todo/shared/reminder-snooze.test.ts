@@ -54,8 +54,27 @@ describe("snoozeReminder", () => {
 
     expect(ok).toBe(true);
     expect(deleteMock).toHaveBeenCalledWith(7);
-    expect(createMock).toHaveBeenCalledWith({ task_id: 3, remind_at: base + 10 * MIN });
+    expect(createMock).toHaveBeenCalledWith({
+      task_id: 3,
+      remind_at: base + 10 * MIN,
+      is_constant: 0,
+    });
     expect(qcLike.invalidateQueries).toHaveBeenCalled();
+  });
+
+  it("持续提醒标记随行传递（G2）：推迟不把持续提醒降级成一次性", async () => {
+    deleteMock.mockResolvedValue(undefined);
+    createMock.mockResolvedValue({});
+    const base = new Date(2026, 8, 5, 10, 0).getTime();
+
+    const ok = await snoozeReminder(9, 5, base, 30, qcLike, 1);
+
+    expect(ok).toBe(true);
+    expect(createMock).toHaveBeenCalledWith({
+      task_id: 5,
+      remind_at: base + 30 * MIN,
+      is_constant: 1,
+    });
   });
 
   it("删除失败（续排竞态下行已消失）不阻断：仍新建推迟行", async () => {
@@ -66,7 +85,11 @@ describe("snoozeReminder", () => {
     const ok = await snoozeReminder(7, 3, base, 60, qcLike);
 
     expect(ok).toBe(true);
-    expect(createMock).toHaveBeenCalledWith({ task_id: 3, remind_at: base + 60 * MIN });
+    expect(createMock).toHaveBeenCalledWith({
+      task_id: 3,
+      remind_at: base + 60 * MIN,
+      is_constant: 0,
+    });
   });
 
   it("新建失败返回 false（不静默吞掉，调用方可回退提示）", async () => {

@@ -72,16 +72,24 @@ class ReminderDueDto {
   final String title;
   final PlatformInt64 remindAt;
 
+  /// 持续提醒标记（G2）：1 = 响到完成为止，前端据此标注文案
+  final int isConstant;
+
   const ReminderDueDto({
     required this.id,
     required this.taskId,
     required this.title,
     required this.remindAt,
+    required this.isConstant,
   });
 
   @override
   int get hashCode =>
-      id.hashCode ^ taskId.hashCode ^ title.hashCode ^ remindAt.hashCode;
+      id.hashCode ^
+      taskId.hashCode ^
+      title.hashCode ^
+      remindAt.hashCode ^
+      isConstant.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -91,5 +99,6 @@ class ReminderDueDto {
           id == other.id &&
           taskId == other.taskId &&
           title == other.title &&
-          remindAt == other.remindAt;
+          remindAt == other.remindAt &&
+          isConstant == other.isConstant;
 }

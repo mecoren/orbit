@@ -152,23 +152,35 @@ Future<void> showTemplateCreateFlow(
 
 /// 提醒同步（桌面端 task-form-sheet 同语义）：
 /// - 清空（remindAt=null）→ 删旧提醒；
-/// - 变更 → 删旧建新；
+/// - 变更（时刻或持续标记）→ 删旧建新；
 /// - 未动（同值）→ 跳过。
 /// 新建场景 existing 传 null：有值即建立。
+///
+/// `isConstant`（G2 持续提醒）：1 = 到期后未完成则每 5 分钟再提醒，直至完成。
+/// 参与「未动」判定——只翻转开关而时刻不变时同样要删旧建新。
 Future<void> syncTaskReminder(
   OrbitBridge bridge,
   int taskId,
   int? remindAt,
-  TodoReminder? existing,
-) async {
+  TodoReminder? existing, {
+  int isConstant = 0,
+}) async {
   if (remindAt == null) {
     if (existing != null) await bridge.todoReminderDelete(existing.id);
     return;
   }
-  if (existing != null && existing.remindAt == remindAt) return;
+  if (existing != null &&
+      existing.remindAt == remindAt &&
+      existing.isConstant == isConstant) {
+    return;
+  }
   if (existing != null) await bridge.todoReminderDelete(existing.id);
   await bridge.todoReminderCreate(
-    TodoReminderCreateInput(taskId: taskId, remindAt: remindAt),
+    TodoReminderCreateInput(
+      taskId: taskId,
+      remindAt: remindAt,
+      isConstant: isConstant,
+    ),
   );
 }
 
@@ -210,6 +222,8 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
   String _status = 'pending';
   int? _startDate;
   int? _remindAt;
+  /// 持续提醒开关（G2）：到期未完成则每 5 分钟再提醒，直至完成
+  bool _remindConstant = false;
   TodoReminder? _existingReminder;
   // 重复规则值（预设/自定义/扩展字段的全部编辑都收敛到重复编辑抽屉，
   // 表单侧只存结果，不再持有自定义档/间隔输入等中间态）
@@ -329,6 +343,7 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
         _repeatFromDone = task.repeatFromDone == 1;
         _existingReminder = firstReminder;
         _remindAt = firstReminder?.remindAt;
+        _remindConstant = firstReminder?.constant ?? false;
         _loaded = true;
       });
     } catch (_) {
@@ -378,7 +393,13 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
         ));
         // 新建：设置提醒 → 建立提醒实体
         if (_remindAt != null) {
-          await syncTaskReminder(bridge, created.id, _remindAt, null);
+          await syncTaskReminder(
+            bridge,
+            created.id,
+            _remindAt,
+            null,
+            isConstant: _remindConstant ? 1 : 0,
+          );
         }
         // 新建：NLP 命中的标签挂载
         for (final labelId in _pendingLabelIds) {
@@ -425,6 +446,7 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
           widget.editingTaskId!,
           _remindAt,
           _existingReminder,
+          isConstant: _remindConstant ? 1 : 0,
         );
       }
       ref.invalidate(todoTasksProvider);
@@ -878,6 +900,39 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
                                         : () =>
                                             setState(() => _remindAt = null),
                                   ),
+                                  // 持续提醒（G2）：仅在已设提醒时出现——
+                                  // 无提醒时刻时该开关无意义
+                                  if (_remindAt != null) ...[
+                                    _tileDivider(colors),
+                                    SizedBox(
+                                      height: AppDimens.touchTarget,
+                                      child: Row(
+                                        children: [
+                                          Icon(
+                                            OrbitIcons.notification,
+                                            size: 18,
+                                            color: colors.bodyText
+                                                .withValues(alpha: 0.7),
+                                          ),
+                                          const SizedBox(width: 12),
+                                          Expanded(
+                                            child: Text(
+                                              '持续提醒（响到完成为止）',
+                                              style: TextStyle(
+                                                fontSize: 14,
+                                                color: colors.bodyText,
+                                              ),
+                                            ),
+                                          ),
+                                          Switch(
+                                            value: _remindConstant,
+                                            onChanged: (v) => setState(
+                                                () => _remindConstant = v),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
                                 ],
                               ),
                             ),

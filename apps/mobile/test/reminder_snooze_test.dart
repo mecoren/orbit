@@ -8,12 +8,14 @@ import 'package:orbit/data/api/dto.dart';
 import 'package:orbit/data/api/mock_orbit_bridge.dart';
 import 'package:orbit/services/reminder_snooze.dart';
 
-TodoReminder _row(int id, int taskId, int remindAt, {int isDeleted = 0}) =>
+TodoReminder _row(int id, int taskId, int remindAt,
+        {int isDeleted = 0, int isConstant = 0}) =>
     TodoReminder(
       id: id,
       uuid: 'uuid-$id',
       taskId: taskId,
       remindAt: remindAt,
+      isConstant: isConstant,
       isDeleted: isDeleted,
       createdAt: 0,
       updatedAt: 0,
@@ -284,7 +286,7 @@ void main() {
         bridge,
         SnoozeLanding(
           deleteIds: [old.id],
-          creates: [(taskId: task.id, remindAt: 2000)],
+          creates: [(taskId: task.id, remindAt: 2000, isConstant: 0)],
         ),
       );
 
@@ -302,6 +304,51 @@ void main() {
         const SnoozeLanding(deleteIds: [], creates: []),
       );
       expect(changed, isFalse);
+    });
+  });
+
+  // ── G2 持续提醒：推迟不降级、不产生双份链 ──
+
+  group('持续提醒（G2）推迟语义', () {
+    test('planSnoozeLanding 从被替换行继承持续标记', () {
+      final plan = planSnoozeLanding(
+        pending: const [PendingAlarm(taskId: 1, remindAt: 2000)],
+        reminders: [_row(10, 1, 1000, isConstant: 1)],
+      );
+      expect(plan.deleteIds, [10]);
+      expect(plan.creates.single.isConstant, 1,
+          reason: '推迟一条持续提醒不该把它降级成一次性');
+    });
+
+    test('landSnoozeInDb 替换已顺延的持续链（无同刻行也不留双份）', () async {
+      final bridge = MockOrbitBridge();
+      final task = await bridge
+          .todoTaskCreate(const TodoTaskCreateInput(title: '吃药'));
+      // 引擎到期后原地顺延：行仍在，remind_at 已推到未来（无同刻行）
+      final future = DateTime.now().millisecondsSinceEpoch + 300000;
+      final rearmed = await bridge.todoReminderCreate(
+        TodoReminderCreateInput(
+          taskId: task.id,
+          remindAt: future,
+          isConstant: 1,
+        ),
+      );
+      final nextAt = DateTime.now().millisecondsSinceEpoch + 600000;
+
+      await landSnoozeInDb(
+        bridge,
+        taskId: task.id,
+        fromRemindAt: future - 300000, // 通知里带的原到期时刻（已顺延）
+        nextAt: nextAt,
+      );
+
+      final rows = (await bridge.todoReminderList(const ListFilter(pageSize: 100)))
+          .where((r) => r.taskId == task.id && r.isDeleted == 0)
+          .toList();
+      expect(rows, hasLength(1), reason: '顺延链被替换，不留双份提醒');
+      expect(rows.single.remindAt, nextAt);
+      expect(rows.single.isConstant, 1, reason: '持续标记随行传递');
+      expect(rows.single.id, isNot(rearmed.id));
     });
   });
 }

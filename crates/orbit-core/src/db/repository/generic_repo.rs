@@ -973,10 +973,11 @@ pub async fn create_todo_reminder(
     let now = crate::db::clock::next_ms();
     let uuid = uuid::Uuid::new_v4().to_string();
     let row = sqlx::query_as::<_, TodoReminder>(
-        "INSERT INTO todo_reminders (uuid, task_id, remind_at, is_deleted, created_at, updated_at, version)
-         VALUES (?, ?, ?, 0, ?, ?, 1) RETURNING *",
+        "INSERT INTO todo_reminders (uuid, task_id, remind_at, is_constant, is_deleted, created_at, updated_at, version)
+         VALUES (?, ?, ?, ?, 0, ?, ?, 1) RETURNING *",
     )
     .bind(&uuid).bind(input.task_id).bind(input.remind_at)
+    .bind(input.is_constant)
     .bind(now).bind(now).fetch_one(pool).await?;
     emit_event("todo_reminders", row.id, &row.uuid, DbOp::Insert, now);
     Ok(row)

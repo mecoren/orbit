@@ -58,6 +58,8 @@ pub struct ReminderDueDto {
     pub task_id: i64,
     pub title: String,
     pub remind_at: i64,
+    /// 持续提醒标记（G2）：1 = 响到完成为止，前端据此标注文案
+    pub is_constant: i32,
 }
 
 const POLL_INTERVAL_SECS: u64 = 20;
@@ -87,8 +89,12 @@ where
 static FORWARDER_STARTED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 static POLLER_STARTED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
-/// 已通知去重集合（reminder.id；重启后允许重新扫描历史 24h 内项）
-static NOTIFIED_REMINDERS: Lazy<std::sync::Mutex<HashSet<i64>>> =
+/// 已通知去重集合（(reminder.id, remind_at)）。
+///
+/// 键带 remind_at 而非只带 id：持续提醒顺延后同一行会再次到期（G2），
+/// 按 id 去重只弹第一轮——与桌面 notification_scheduler 同口径。
+/// 重启后允许重新扫描历史 24h 内项。
+static NOTIFIED_REMINDERS: Lazy<std::sync::Mutex<HashSet<(i64, i64)>>> =
     Lazy::new(|| std::sync::Mutex::new(HashSet::new()));
 
 // ── FRB 导出 ──
@@ -141,8 +147,10 @@ async fn poll_once(sink: &StreamSink<ReminderDueDto>) {
     let Ok(rows) = rows else { return };
 
     for row in rows {
-        // 去重：进程内存活期
-        if NOTIFIED_REMINDERS.lock().unwrap().contains(&row.id) {
+        // 去重：进程内存活期，键为 (id, remind_at)——持续提醒顺延后
+        // remind_at 变化（新键），后续几轮照常推送（G2）
+        let dedupe_key = (row.id, row.remind_at);
+        if NOTIFIED_REMINDERS.lock().unwrap().contains(&dedupe_key) {
             continue;
         }
 
@@ -151,13 +159,14 @@ async fn poll_once(sink: &StreamSink<ReminderDueDto>) {
             task_id: row.task_id,
             title: row.title.clone(),
             remind_at: row.remind_at,
+            is_constant: row.is_constant,
         });
 
-        // 到期处置下沉引擎（advance_fired_reminder，与桌面同源）：重复任务
-        // 删旧建新续排（防雪球守卫在引擎内）；非重复/已完成行清理。失败
-        // 静默——下一轮 20s 轮询幂等重扫兜底
+        // 到期处置下沉引擎（advance_fired_reminder，与桌面同源）：持续提醒
+        // 原地顺延（G2）；重复任务删旧建新续排（防雪球守卫在引擎内）；
+        // 非重复/已完成行清理。失败静默——下一轮 20s 轮询幂等重扫兜底
         let _ = orbit_core::api::todo_api::advance_fired_reminder(&pool, &row).await;
 
-        NOTIFIED_REMINDERS.lock().unwrap().insert(row.id);
+        NOTIFIED_REMINDERS.lock().unwrap().insert(dedupe_key);
     }
 }

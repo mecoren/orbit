@@ -6581,13 +6581,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   ReminderDueDto dco_decode_reminder_due_dto(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 4)
-      throw Exception('unexpected arr length: expect 4 but see ${arr.length}');
+    if (arr.length != 5)
+      throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
     return ReminderDueDto(
       id: dco_decode_i_64(arr[0]),
       taskId: dco_decode_i_64(arr[1]),
       title: dco_decode_String(arr[2]),
       remindAt: dco_decode_i_64(arr[3]),
+      isConstant: dco_decode_i_32(arr[4]),
     );
   }
 
@@ -6999,18 +7000,19 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   TodoReminder dco_decode_todo_reminder(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 9)
-      throw Exception('unexpected arr length: expect 9 but see ${arr.length}');
+    if (arr.length != 10)
+      throw Exception('unexpected arr length: expect 10 but see ${arr.length}');
     return TodoReminder(
       id: dco_decode_i_64(arr[0]),
       uuid: dco_decode_String(arr[1]),
       taskId: dco_decode_i_64(arr[2]),
       remindAt: dco_decode_i_64(arr[3]),
-      isDeleted: dco_decode_i_32(arr[4]),
-      createdAt: dco_decode_i_64(arr[5]),
-      updatedAt: dco_decode_i_64(arr[6]),
-      deletedAt: dco_decode_opt_box_autoadd_i_64(arr[7]),
-      version: dco_decode_i_32(arr[8]),
+      isConstant: dco_decode_i_32(arr[4]),
+      isDeleted: dco_decode_i_32(arr[5]),
+      createdAt: dco_decode_i_64(arr[6]),
+      updatedAt: dco_decode_i_64(arr[7]),
+      deletedAt: dco_decode_opt_box_autoadd_i_64(arr[8]),
+      version: dco_decode_i_32(arr[9]),
     );
   }
 
@@ -7018,11 +7020,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   TodoReminderCreateInput dco_decode_todo_reminder_create_input(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 2)
-      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+    if (arr.length != 3)
+      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
     return TodoReminderCreateInput(
       taskId: dco_decode_i_64(arr[0]),
       remindAt: dco_decode_i_64(arr[1]),
+      isConstant: dco_decode_i_32(arr[2]),
     );
   }
 
@@ -8823,11 +8826,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_taskId = sse_decode_i_64(deserializer);
     var var_title = sse_decode_String(deserializer);
     var var_remindAt = sse_decode_i_64(deserializer);
+    var var_isConstant = sse_decode_i_32(deserializer);
     return ReminderDueDto(
       id: var_id,
       taskId: var_taskId,
       title: var_title,
       remindAt: var_remindAt,
+      isConstant: var_isConstant,
     );
   }
 
@@ -9308,6 +9313,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_uuid = sse_decode_String(deserializer);
     var var_taskId = sse_decode_i_64(deserializer);
     var var_remindAt = sse_decode_i_64(deserializer);
+    var var_isConstant = sse_decode_i_32(deserializer);
     var var_isDeleted = sse_decode_i_32(deserializer);
     var var_createdAt = sse_decode_i_64(deserializer);
     var var_updatedAt = sse_decode_i_64(deserializer);
@@ -9318,6 +9324,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       uuid: var_uuid,
       taskId: var_taskId,
       remindAt: var_remindAt,
+      isConstant: var_isConstant,
       isDeleted: var_isDeleted,
       createdAt: var_createdAt,
       updatedAt: var_updatedAt,
@@ -9333,7 +9340,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_taskId = sse_decode_i_64(deserializer);
     var var_remindAt = sse_decode_i_64(deserializer);
-    return TodoReminderCreateInput(taskId: var_taskId, remindAt: var_remindAt);
+    var var_isConstant = sse_decode_i_32(deserializer);
+    return TodoReminderCreateInput(
+      taskId: var_taskId,
+      remindAt: var_remindAt,
+      isConstant: var_isConstant,
+    );
   }
 
   @protected
@@ -11077,6 +11089,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_i_64(self.taskId, serializer);
     sse_encode_String(self.title, serializer);
     sse_encode_i_64(self.remindAt, serializer);
+    sse_encode_i_32(self.isConstant, serializer);
   }
 
   @protected
@@ -11416,6 +11429,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_String(self.uuid, serializer);
     sse_encode_i_64(self.taskId, serializer);
     sse_encode_i_64(self.remindAt, serializer);
+    sse_encode_i_32(self.isConstant, serializer);
     sse_encode_i_32(self.isDeleted, serializer);
     sse_encode_i_64(self.createdAt, serializer);
     sse_encode_i_64(self.updatedAt, serializer);
@@ -11431,6 +11445,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_i_64(self.taskId, serializer);
     sse_encode_i_64(self.remindAt, serializer);
+    sse_encode_i_32(self.isConstant, serializer);
   }
 
   @protected

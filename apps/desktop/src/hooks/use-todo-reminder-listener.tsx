@@ -5,6 +5,11 @@
  * toast 展示（含推迟 10 分钟 / 30 分钟 / 1 小时操作，删旧建新语义见
  * reminder-snooze.ts）；系统通知失败时此通道保证用户必达。
  *
+ * 另监听两条系统通知动作的落地事件：
+ * - "todo_reminder:snoozed"（推迟按钮）→ 关 toast + 确认提示 + 失效详情缓存；
+ * - "todo_reminder:completed"（G2 持续提醒的「完成」按钮）→ 关 toast +
+ *   确认提示 + 失效任务列表/计数/详情缓存。
+ *
  * 到期处置（重复任务续排/僵尸清理）已下沉 Rust 轮询守护
  * （orbit-core advance_fired_reminder，窗口隐藏也照常执行），
  * 本 hook 只负责呈现，不再操作 todo_reminders 数据。
@@ -27,6 +32,8 @@ interface ReminderDuePayload {
   task_id: number;
   title: string;
   remind_at: number;
+  /** 持续提醒标记（1 = 响到完成为止）——正文标注用 */
+  is_constant: number;
 }
 
 /** Rust 系统通知推迟完成事件（notify-rust action → 删旧建新后 emit） */
@@ -37,13 +44,20 @@ interface ReminderSnoozedPayload {
   title: string;
 }
 
+/** Rust 系统通知「完成」按钮落地事件（G2 持续提醒：完成即停） */
+interface ReminderCompletedPayload {
+  reminder_id: number;
+  task_id: number;
+  title: string;
+}
+
 /** 系统通知正文点击路由事件（Rust 唤起主窗后 emit） */
 interface ReminderOpenPayload {
   task_id: number;
   title: string;
 }
 
-/** reminder.id → in-app toast id（snoozed 事件到达时按源 id 关对应 toast） */
+/** reminder.id → in-app toast id（snoozed/completed 事件到达时按源 id 关对应 toast） */
 const reminderToastIds = new Map<number, number | string>();
 
 export function useTodoReminderListener() {
@@ -69,6 +83,24 @@ export function useTodoReminderListener() {
         void qc.invalidateQueries({ queryKey: ["todo-task-detail", task_id] });
       },
     );
+    // 系统通知「完成」按钮（G2 持续提醒专属）：Rust 已完成任务并广播。
+    // 前端关闭对应常驻 in-app toast（其引用的提醒行已被完成命令软删）
+    // + 确认提示 + 失效任务列表/详情缓存（行内勾选态、提醒区块即时同步）
+    const unlistenCompleted = listen<ReminderCompletedPayload>(
+      "todo_reminder:completed",
+      (event) => {
+        const { reminder_id, task_id, title } = event.payload;
+        const toastId = reminderToastIds.get(reminder_id);
+        if (toastId != null) {
+          toast.dismiss(toastId);
+          reminderToastIds.delete(reminder_id);
+        }
+        toast.success("已完成", { description: title, duration: 4_000 });
+        void qc.invalidateQueries({ queryKey: ["todo_tasks"] });
+        void qc.invalidateQueries({ queryKey: ["count"] });
+        void qc.invalidateQueries({ queryKey: ["todo-task-detail", task_id] });
+      },
+    );
     const unlistenPromise = listen<ReminderDuePayload>("todo_reminder:due", (event) => {
       const r = event.payload;
       // 窗口隐藏（驻留托盘）期间不弹 in-app toast：系统通知才是后台
@@ -84,8 +116,16 @@ export function useTodoReminderListener() {
             <ReminderToast
               title={r.title}
               remindAt={r.remind_at}
+              isConstant={r.is_constant !== 0}
               onSnooze={(minutes) =>
-                snoozeReminder(r.id, r.task_id, r.remind_at, minutes, qc)
+                snoozeReminder(
+                  r.id,
+                  r.task_id,
+                  r.remind_at,
+                  minutes,
+                  qc,
+                  r.is_constant,
+                )
               }
               onViewTask={() => {
                 // §7-③：与全局搜索/命令面板同范式——写 selectedTaskId 打开
@@ -118,6 +158,7 @@ export function useTodoReminderListener() {
     return () => {
       unlistenPromise.then((unlisten) => unlisten());
       unlistenSnoozed.then((unlisten) => unlisten());
+      unlistenCompleted.then((unlisten) => unlisten());
       unlistenOpen.then((unlisten) => unlisten());
     };
   }, [qc]);

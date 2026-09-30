@@ -510,6 +510,9 @@ class TodoReminder {
   final String uuid;
   final int taskId;
   final int remindAt;
+
+  /// 持续提醒标记（G2）：1 = 未完成则按 5 分钟间隔顺延重排（响到完成为止）
+  final int isConstant;
   final int isDeleted;
   final int createdAt;
   final int updatedAt;
@@ -526,6 +529,7 @@ class TodoReminder {
     required this.uuid,
     required this.taskId,
     required this.remindAt,
+    required this.isConstant,
     required this.isDeleted,
     required this.createdAt,
     required this.updatedAt,
@@ -534,11 +538,15 @@ class TodoReminder {
     this.reminderTitle,
   });
 
+  /// 是否持续提醒（响到完成为止）
+  bool get constant => isConstant == 1;
+
   factory TodoReminder.fromJson(Map<String, dynamic> j) => TodoReminder(
         id: j['id'] as int,
         uuid: j['uuid'] as String,
         taskId: j['task_id'] as int,
         remindAt: j['remind_at'] as int,
+        isConstant: (j['is_constant'] as int?) ?? 0,
         isDeleted: j['is_deleted'] as int,
         createdAt: j['created_at'] as int,
         updatedAt: j['updated_at'] as int,
@@ -553,6 +561,7 @@ class TodoReminder {
         uuid: uuid,
         taskId: taskId,
         remindAt: remindAt,
+        isConstant: isConstant,
         isDeleted: isDeleted,
         createdAt: createdAt,
         updatedAt: updatedAt,
@@ -566,7 +575,14 @@ class TodoReminderCreateInput {
   final int taskId;
   final int remindAt;
 
-  const TodoReminderCreateInput({required this.taskId, required this.remindAt});
+  /// 持续提醒标记（G2）；默认 0 = 一次性
+  final int isConstant;
+
+  const TodoReminderCreateInput({
+    required this.taskId,
+    required this.remindAt,
+    this.isConstant = 0,
+  });
 }
 
 // ---------- 任务列表投影聚合（A4，只读：FRB todo.rs 三投影的手写镜像） ----------

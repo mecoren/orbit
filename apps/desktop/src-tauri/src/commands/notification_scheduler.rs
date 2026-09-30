@@ -7,6 +7,8 @@
 //!   （P1#10）/ 重复任务到期删旧建新续排（防雪球守卫在引擎内）——
 //!   移动端 events.rs 轮询同源，双端口径由引擎测试锁定
 //! - 去重集合进程内存活期，超期 24h 以上陈旧提醒不补弹
+//! - 去重键 = (提醒 id, 到期时刻) 而非仅 id（G2 持续提醒：同一行顺延后
+//!   remind_at 变化，按 id 去重会把「响到完成为止」的后续几轮全挡掉）
 //! - 触发双通道：系统通知（notify-rust 直发，带推迟按钮，P2 升级）
 //!   + emit "todo_reminder:due"（前端 toast 兜底，亦带推迟按钮）
 //! - DB 未就绪：try_state 失败时静默跳过，初始化完成后自动开始工作
@@ -18,8 +20,12 @@
 //! - show() 返回 NotificationHandle；每条通知 spawn 一个阻塞线程
 //!   wait_for_response（跨平台 API，比 wait_for_action 多区分「正文点击
 //!   Default」与「关闭 Closed」两个事件），收到：
+//!   · complete action（G2 持续提醒专属）→ 完成任务（完成即停：完成命令
+//!     软删存活提醒行，顺延链自然终止）+ emit "todo_reminder:completed"
+//!     → 前端关闭对应 toast 并失效详情缓存。
 //!   · snooze action → ① 删旧建新写 DB（orbit-core business_api，桌面
-//!     环境直写）；② emit "todo_reminder:snoozed" → 前端失效详情缓存。
+//!     环境直写；持续标记随行传递，推迟不降级成一次性）；② emit
+//!     "todo_reminder:snoozed" → 前端失效详情缓存。
 //!   · 正文点击（Default）→ 通知点击路由：唤起主窗（window_recycler
 //!     统一入口，含隐藏驻留/已回收两态）+ emit "todo_reminder:open" →
 //!     前端写 selectedTaskId 打开任务详情抽屉（对齐移动端 onNotificationTap
@@ -49,10 +55,16 @@ const DAY_MS: i64 = 86_400_000;
 /// 系统通知推迟档位（action id → 分钟；与前端 SNOOZE_PRESETS 同口径）
 const SNOOZE_ACTIONS: &[(&str, i64)] = &[("snooze_10", 10), ("snooze_30", 30), ("snooze_60", 60)];
 
+/// 持续提醒专属「完成」按钮 action id（G2：完成即停，只挂在 is_constant 提醒上）
+const COMPLETE_ACTION: &str = "complete";
+
 static POLLER_STARTED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
-/// 已通知去重集合（reminder.id；重启后允许重新扫描历史 24h 内项）
-static NOTIFIED_REMINDERS: Lazy<std::sync::Mutex<HashSet<i64>>> =
+/// 已通知去重集合（(reminder.id, remind_at)）。
+///
+/// 键带 remind_at 而非只带 id：持续提醒顺延后同一行会再次到期（G2），
+/// 按 id 去重只弹第一轮。重启后允许重新扫描历史 24h 内项。
+static NOTIFIED_REMINDERS: Lazy<std::sync::Mutex<HashSet<(i64, i64)>>> =
     Lazy::new(|| std::sync::Mutex::new(HashSet::new()));
 
 /// 启动首轮完成标记：首轮须跳过「历史遗留」过期提醒——
@@ -69,6 +81,8 @@ struct ReminderDueEvent {
     task_id: i64,
     title: String,
     remind_at: i64,
+    /// 持续提醒标记（1 = 响到完成为止）：前端 toast 据此显示徽标/文案
+    is_constant: i32,
 }
 
 /// 推迟完成事件（前端按 reminder_id 关闭对应 in-app toast +
@@ -78,6 +92,15 @@ struct ReminderSnoozedEvent {
     reminder_id: i64,
     task_id: i64,
     remind_at: i64,
+    title: String,
+}
+
+/// 通知「完成」按钮落地事件（G2 持续提醒）：前端按 reminder_id 关闭
+/// 对应 in-app toast（duration Infinity 常驻，不关会挂着引用已删行）
+#[derive(Clone, Serialize)]
+struct ReminderCompletedEvent {
+    reminder_id: i64,
+    task_id: i64,
     title: String,
 }
 
@@ -119,8 +142,10 @@ async fn poll_once(app: &AppHandle) {
 
     for row in &rows {
         let id = row.id;
-        // 去重：进程内存活期
-        if NOTIFIED_REMINDERS.lock().unwrap().contains(&id) {
+        // 去重：进程内存活期，键为 (id, remind_at)——持续提醒顺延后
+        // remind_at 变化（新键），后续几轮照常弹（G2）
+        let dedupe_key = (id, row.remind_at);
+        if NOTIFIED_REMINDERS.lock().unwrap().contains(&dedupe_key) {
             continue;
         }
 
@@ -130,7 +155,7 @@ async fn poll_once(app: &AppHandle) {
         // 后续轮次也不会再弹；应用运行期间到期的提醒走正常路径。
         let is_first_round = !FIRST_ROUND_DONE.load(std::sync::atomic::Ordering::SeqCst);
         if is_first_round && now - row.remind_at > STALE_SKIP_MS {
-            NOTIFIED_REMINDERS.lock().unwrap().insert(id);
+            NOTIFIED_REMINDERS.lock().unwrap().insert(dedupe_key);
             continue;
         }
 
@@ -154,7 +179,15 @@ async fn poll_once(app: &AppHandle) {
         }
 
         // ① 系统通知（notify-rust 直发带推迟按钮；失败不阻塞事件通道）
-        notify_system(app, id, row.task_id, &row.title, row.remind_at);
+        //    持续提醒额外挂「完成」按钮（G2：完成即停）
+        notify_system(
+            app,
+            id,
+            row.task_id,
+            &row.title,
+            row.remind_at,
+            row.is_constant,
+        );
 
         // ② 无论成功与否 emit 事件 → 前端 sonner toast 兜底
         let _ = app.emit(
@@ -164,10 +197,12 @@ async fn poll_once(app: &AppHandle) {
                 task_id: row.task_id,
                 title: row.title.clone(),
                 remind_at: row.remind_at,
+                is_constant: row.is_constant,
             },
         );
 
-        // ③ 到期处置下沉引擎（原前端续排逻辑）：重复任务删旧建新排下一次
+        // ③ 到期处置下沉引擎（原前端续排逻辑）：持续提醒顺延到完成为止
+        //    （G2，原地改 remind_at 不克隆）；重复任务删旧建新排下一次
         //    （防雪球守卫在引擎内）；非重复/已完成行清理。窗口隐藏时照常
         let pool = pool.clone();
         let row = row.clone();
@@ -176,7 +211,7 @@ async fn poll_once(app: &AppHandle) {
         });
 
         // ④ 记入去重集合
-        NOTIFIED_REMINDERS.lock().unwrap().insert(id);
+        NOTIFIED_REMINDERS.lock().unwrap().insert(dedupe_key);
     }
 
     // 首轮标记在处理完本轮扫描后置位（无论 DB 是否就绪——未就绪时
@@ -189,8 +224,23 @@ async fn poll_once(app: &AppHandle) {
 /// Windows 侧 app_id 决定通知来源显示名与激活路由；用包标识
 /// cn.wait.orbit（正式安装后的 AUMID）。macOS/Linux 由 notify-rust
 /// 内部处理（mac 走 NSUser/UNUser 自动选择）。
-fn notify_system(app: &AppHandle, reminder_id: i64, task_id: i64, title: &str, remind_at: i64) {
-    let body = format!("待办提醒 · {}", fmt_time(remind_at));
+///
+/// `is_constant != 0`（G2 持续提醒）时额外挂「完成」按钮：点它直接完成任务
+/// （完成即停），其余档位仍是三档推迟——持续提醒的行本就会在未完成时
+/// 自动顺延重排，用户不必按推迟。
+fn notify_system(
+    app: &AppHandle,
+    reminder_id: i64,
+    task_id: i64,
+    title: &str,
+    remind_at: i64,
+    is_constant: i32,
+) {
+    let body = if is_constant != 0 {
+        format!("持续提醒 · 完成后停止 · {}", fmt_time(remind_at))
+    } else {
+        format!("待办提醒 · {}", fmt_time(remind_at))
+    };
 
     let mut n = notify_rust::Notification::new();
     // Windows 侧 app_id 决定通知来源显示名与激活路由；用包标识
@@ -214,6 +264,10 @@ fn notify_system(app: &AppHandle, reminder_id: i64, task_id: i64, title: &str, r
         .timeout(notify_rust::Timeout::Never);
 
     let mut n = n;
+    // 持续提醒的「完成」排在三档推迟之前（主要动作在前）
+    if is_constant != 0 {
+        n = n.action(COMPLETE_ACTION, action_label(COMPLETE_ACTION));
+    }
     for (action_id, _) in SNOOZE_ACTIONS {
         n = n.action(action_id, action_label(action_id));
     }
@@ -262,8 +316,51 @@ fn notify_system(app: &AppHandle, reminder_id: i64, task_id: i64, title: &str, r
                     );
                 });
             }
-            // 推迟按钮 → 删旧建新（语义不变）
+            // 推迟按钮 → 删旧建新（语义不变）；持续提醒的「完成」按钮 →
+            // 直接完成任务（G2：完成即停，顺延链由完成命令软删存活行收口）
             notify_rust::NotificationResponse::Action(action) => {
+                if action == COMPLETE_ACTION {
+                    let done = tauri::async_runtime::block_on(async {
+                        let Some(state) = app.try_state::<AppState>() else {
+                            return false;
+                        };
+                        let pool = state.pool.clone();
+                        orbit_core::api::todo_api::complete_todo_task(&pool, task_id)
+                            .await
+                            .is_ok()
+                    });
+                    if done {
+                        // 通知历史留痕（#5：完成动作；失败静默）
+                        {
+                            let app2 = app.clone();
+                            let title2 = title.clone();
+                            tauri::async_runtime::spawn(async move {
+                                if let Some(state) = app2.try_state::<AppState>() {
+                                    let _ =
+                                        orbit_core::api::notification_log_api::log_notification(
+                                            &state.pool,
+                                            "complete",
+                                            Some(task_id),
+                                            &title2,
+                                            Some(reminder_id),
+                                            "{}",
+                                        )
+                                        .await;
+                                }
+                            });
+                        }
+                        // 前端：按 reminder_id 关闭对应 in-app toast（常驻）
+                        let _ = app.emit(
+                            "todo_reminder:completed",
+                            ReminderCompletedEvent {
+                                reminder_id,
+                                task_id,
+                                title,
+                            },
+                        );
+                    }
+                    return;
+                }
                 let Some(minutes) = SNOOZE_ACTIONS
                     .iter()
                     .find(|(id, _)| *id == action)
@@ -273,6 +370,7 @@ fn notify_system(app: &AppHandle, reminder_id: i64, task_id: i64, title: &str, r
                 };
                 let next_at = remind_at + minutes * 60_000;
                 // 删旧建新（business_api 软删 + 新建；锚点=原 remind_at）。
+                // 持续标记随行传递（G2）：推迟一条持续提醒不该把它降级成一次性。
                 // 失败静默：系统通知已消失，前端 toast 兜底通道仍在。
                 let done = tauri::async_runtime::block_on(async {
                     let Some(state) = app.try_state::<AppState>() else {
@@ -288,6 +386,7 @@ fn notify_system(app: &AppHandle, reminder_id: i64, task_id: i64, title: &str, r
                         &orbit_core::models::business::TodoReminderCreateInput {
                             task_id,
                             remind_at: next_at,
+                            is_constant,
                         },
                     )
                     .await;
@@ -337,6 +436,7 @@ fn notify_system(app: &AppHandle, reminder_id: i64, task_id: i64, title: &str, r
 /// action 显示标签（与前端 SNOOZE_PRESETS 文案一致）
 fn action_label(action_id: &str) -> &'static str {
     match action_id {
+        "complete" => "完成",
         "snooze_10" => "推迟10分钟",
         "snooze_30" => "推迟30分钟",
         "snooze_60" => "推迟1小时",

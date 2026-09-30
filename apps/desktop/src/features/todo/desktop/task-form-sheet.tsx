@@ -101,6 +101,9 @@ export function buildTaskFields(projects: TodoProject[]): FieldDef[] {
     { name: "due_date", label: "截止日期", type: "date" },
     // 相对档锚点：表单内已有截止日期时，提醒选择器额外给「相对截止」档
     { name: "remind_at", label: "提醒时间", type: "datetime", relativeDateField: "due_date" },
+    // 持续提醒（G2，对标 TickTick Constant Reminder）：勾选 = 到期后任务
+    // 仍未完成则每 5 分钟再提醒一次，直至完成。未填提醒时间时该开关无效果
+    { name: "remind_constant", label: "持续提醒（响到完成为止）", type: "checkbox" },
     { name: "start_date", label: "开始日期", type: "date" },
   ];
 }
@@ -719,6 +722,8 @@ export function TaskFormSheet({
         priority: String(task.priority),
         status: task.status,
         remind_at: existingReminder ? tsToInputValue(existingReminder.remind_at) : "",
+        // 持续提醒开关回填（G2）：既有提醒的标记决定初始勾选态
+        remind_constant: existingReminder ? existingReminder.is_constant === 1 : false,
       };
     }
     // 视图默认截止（#39）：今日/本周视图预填表单字段（可见可改；依赖 open 每次打开重算）
@@ -769,16 +774,23 @@ export function TaskFormSheet({
     // 提醒时间（values 已过滤 null：undefined = 用户清空或未填）
     const remindRaw = typeof values.remind_at === "string" ? values.remind_at : "";
     const remindMs = remindRaw ? new Date(remindRaw).getTime() : null;
+    // 持续提醒标记（G2）：1 = 未完成则按间隔顺延重排
+    const remindConstant = values.remind_constant ? 1 : 0;
 
     if (task) {
       await todoTaskUpdate(task.id, payload);
-      // 同步提醒实体：清空→删；变更→删旧建新；未动→跳过
+      // 同步提醒实体：清空→删；变更（时刻或持续标记）→删旧建新；未动→跳过
       const old = existingReminder;
+      const constantChanged = old ? (old.is_constant === 1) !== (remindConstant === 1) : false;
       if (remindMs == null || Number.isNaN(remindMs)) {
         if (old) await todoReminderDelete(old.id);
-      } else if (!old || tsToInputValue(old.remind_at) !== remindRaw) {
+      } else if (!old || tsToInputValue(old.remind_at) !== remindRaw || constantChanged) {
         if (old) await todoReminderDelete(old.id);
-        await todoReminderCreate({ task_id: task.id, remind_at: remindMs });
+        await todoReminderCreate({
+          task_id: task.id,
+          remind_at: remindMs,
+          is_constant: remindConstant,
+        });
       }
     } else {
       // 视图标记静默附加（#39）：我的一天/收藏视图下新建自动带标记
@@ -796,7 +808,11 @@ export function TaskFormSheet({
         ...(viewDefaults.favorite != null && { is_favorite: viewDefaults.favorite }),
       });
       if (remindMs != null && !Number.isNaN(remindMs)) {
-        await todoReminderCreate({ task_id: created.id, remind_at: remindMs });
+        await todoReminderCreate({
+          task_id: created.id,
+          remind_at: remindMs,
+          is_constant: remindConstant,
+        });
       }
       // 标签：已有标签直接关联；待新建标签先落库再关联
       for (const t of tagSelections) {

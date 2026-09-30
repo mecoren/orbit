@@ -52,7 +52,11 @@ describe("templateDueDate", () => {
   it("offset 1 = 明天；负偏移跨月回退", () => {
     const tomorrow = templateDueDate(1);
     const back = templateDueDate(-1);
-    expect(new Date(tomorrow).getDate()).toBe(new Date().getDate() + 1 === 32 ? 1 : new Date().getDate() + 1);
+    // 期望值用 Date 自身推进一天推导：原写法「今天 +1 日序」只在 31 天月份
+    // 的月末兜住（`=== 32 ? 1`），9/30 这类 30 天月末会假红
+    const expectedTomorrow = new Date();
+    expectedTomorrow.setDate(expectedTomorrow.getDate() + 1);
+    expect(new Date(tomorrow).getDate()).toBe(expectedTomorrow.getDate());
     // 只断言可解析与格式长度（跨月/跨年由 Date 本地语义保证）
     expect(back).toMatch(/^\d{4}-\d{2}-\d{2}$/);
   });

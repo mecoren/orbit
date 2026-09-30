@@ -101,6 +101,8 @@ interface MockReminder {
   id: number;
   task_id: number;
   remind_at: number;
+  /** 持续提醒标记（G2）：1 = 未完成则按间隔顺延重排（响到完成为止） */
+  is_constant: number;
   is_deleted: number;
   created_at: number;
   updated_at: number;
@@ -1066,6 +1068,7 @@ const commands: Record<string, (args: any, ctx: Ctx) => unknown> = {
       id: db.seq++,
       task_id: input.task_id,
       remind_at: input.remind_at,
+      is_constant: input.is_constant ?? 0,
       is_deleted: 0,
       created_at: now,
       updated_at: now,

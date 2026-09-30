@@ -461,10 +461,14 @@ class NotificationService {
     for (final r in reminders) {
       if (r.isDeleted != 0 || r.remindAt <= now) continue;
       // 标题缺失（任务可能已被删）：仍排闹钟，正文回退应用名
-      final body = r.reminderTitle ?? '待办任务';
+      final taskTitle = r.reminderTitle ?? '待办任务';
+      // 持续提醒（G2）标注「完成后停止」并引导用「完成」action 收口——
+      // 未完成时引擎会按 5 分钟间隔顺延重排（reminder_scheduler 监听
+      // db-change 后自动重排下一次闹钟）
+      final body = r.constant ? '$taskTitle · 持续提醒（完成后停止）' : taskTitle;
       final ok = await _scheduleAlarm(
         id: alarmIdFor(r.taskId),
-        title: '待办提醒',
+        title: r.constant ? '持续提醒' : '待办提醒',
         body: body,
         remindAt: r.remindAt,
         payload: '${r.taskId}|${r.remindAt}|$body',

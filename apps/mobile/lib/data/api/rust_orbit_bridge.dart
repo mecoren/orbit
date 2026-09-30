@@ -475,6 +475,7 @@ class RustOrbitBridge implements OrbitBridge {
         input: gen.TodoReminderCreateInput(
           taskId: input.taskId,
           remindAt: input.remindAt,
+          isConstant: input.isConstant,
         ),
       ));
 
@@ -1559,6 +1560,7 @@ class RustOrbitBridge implements OrbitBridge {
         uuid: r.uuid,
         taskId: r.taskId,
         remindAt: r.remindAt,
+        isConstant: r.isConstant,
         isDeleted: r.isDeleted,
         createdAt: r.createdAt,
         updatedAt: r.updatedAt,

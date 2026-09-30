@@ -1511,6 +1511,7 @@ mod activity_detail_tests {
             &TodoReminderCreateInput {
                 task_id: t.id,
                 remind_at,
+                is_constant: 0, // G2：测试夹具按一次性提醒落地
             },
         )
         .await

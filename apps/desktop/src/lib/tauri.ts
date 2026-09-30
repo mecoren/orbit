@@ -435,6 +435,8 @@ export interface TodoReminder {
   uuid: string;
   task_id: number;
   remind_at: number;
+  /** 持续提醒标记（G2）：1 = 未完成则按间隔顺延重排（响到完成为止），0 = 一次性 */
+  is_constant: number;
   is_deleted: number;
   created_at: number;
   updated_at: number;
@@ -444,6 +446,8 @@ export interface TodoReminder {
 export interface TodoReminderCreateInput {
   task_id: number;
   remind_at: number;
+  /** 省略 = 0（一次性）；老调用方 JSON 不带该字段由 core serde default 兜底 */
+  is_constant?: number;
 }
 export const todoReminderList = (filter: ListFilter) => invoke<TodoReminder[]>("todo_reminders_list", { filter });
 export const todoReminderGet = (id: number) => invoke<TodoReminder>("todo_reminders_get", { id });

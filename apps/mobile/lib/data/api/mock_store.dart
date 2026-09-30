@@ -246,6 +246,7 @@ class MockStore {
       ...newEntity('r'),
       'task_id': t1['id'],
       'remind_at': now() + day ~/ 2,
+      'is_constant': 1,
       'is_deleted': 0,
       'created_at': now(),
       'updated_at': now(),

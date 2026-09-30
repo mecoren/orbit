@@ -16,6 +16,8 @@ import { SNOOZE_PRESETS, snoozeTargetLabel } from "./reminder-snooze";
 export interface ReminderToastProps {
   title: string;
   remindAt: number;
+  /** 持续提醒（G2）：副标题标注「完成后停止」，与一次性提醒区分 */
+  isConstant?: boolean;
   /** 推迟按钮回调（minutes 档位）；编排与失败提示在组件内完成 */
   onSnooze: (minutes: number) => Promise<boolean>;
   /** 查看任务按钮回调（打开详情抽屉）；调用后 toast 关闭由组件完成 */
@@ -26,6 +28,7 @@ export interface ReminderToastProps {
 export function ReminderToast({
   title,
   remindAt,
+  isConstant = false,
   onSnooze,
   onViewTask,
   onDone,
@@ -72,7 +75,7 @@ export function ReminderToast({
       <div className="min-w-0 flex-1">
         <p className="break-words text-sm font-medium leading-tight">{title}</p>
         <p className="mt-1 text-xs opacity-70">
-          待办提醒 ·{" "}
+          {isConstant ? "持续提醒 · 完成后停止 · " : "待办提醒 · "}
           {new Date(remindAt).toLocaleString("zh-CN", {
             hour: "2-digit",
             minute: "2-digit",

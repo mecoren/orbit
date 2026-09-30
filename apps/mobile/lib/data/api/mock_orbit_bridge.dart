@@ -827,6 +827,7 @@ class MockOrbitBridge implements OrbitBridge {
           ...store.newEntity('r'),
           'task_id': input.taskId,
           'remind_at': input.remindAt,
+          'is_constant': input.isConstant,
           'is_deleted': 0,
           'created_at': store.now(),
           'updated_at': store.now(),

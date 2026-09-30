@@ -408,6 +408,8 @@ pub struct TodoReminder {
     pub uuid: String,
     pub task_id: i64,
     pub remind_at: i64,
+    /// 持续提醒标记（G2）：1 = 未完成则按间隔顺延重排（响到完成为止），0 = 一次性
+    pub is_constant: i32,
     pub is_deleted: i32,
     pub created_at: i64,
     pub updated_at: i64,
@@ -416,10 +418,15 @@ pub struct TodoReminder {
 }
 
 /// todo_reminders 创建输入
+///
+/// `is_constant` 带 `#[serde(default)]`：老壳（未升级的桌面/移动端调用方）
+/// 传旧 JSON 时按 0（一次性）落地，不因缺字段反序列化失败。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TodoReminderCreateInput {
     pub task_id: i64,
     pub remind_at: i64,
+    #[serde(default)]
+    pub is_constant: i32,
 }
 
 // ---------- todo_task_attachments（任务-附件关联，引用 sys_attachments.hash）----------
