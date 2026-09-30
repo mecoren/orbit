@@ -205,6 +205,9 @@ pub fn run() {
             // 回收站 TTL 清理守护（60s tick；每日最多一次，启动首轮即补清）
             commands::trash_scheduler::trash_scheduler_start(_app.handle().clone());
 
+            // 每日摘要提醒守护（60s tick；每日一次，2026-09-30 G3）
+            commands::digest_scheduler::digest_scheduler_start(_app.handle().clone());
+
             // 定时全量备份守护（60s tick；core v4 调度器接线，
             // 钥匙串缓存同步密码作为加密口令，无缓存时静默等待）
             // 桌面专属：依赖钥匙串密码缓存，移动端无持久凭据库
@@ -378,6 +381,10 @@ pub fn run() {
             commands::trash_cmd::trash_purge_expired,
             commands::trash_cmd::trash_meta,
             commands::trash_cmd::trash_set_retention_days,
+            // 每日摘要提醒（G3：每日固定时刻汇总通知，cfg_kv 本机偏好）
+            commands::digest_cmd::digest_prefs,
+            commands::digest_cmd::digest_set_prefs,
+            commands::digest_cmd::digest_summary,
             // 统计仪表盘（backlog #25：总览/热力图/连续天数/分布）
             commands::stats_cmd::stats_aggregate,
             // 保存的筛选器（#35：Apple Smart List 同款可保存组合条件视图）

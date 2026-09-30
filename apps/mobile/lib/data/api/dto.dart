@@ -1038,6 +1038,45 @@ class TrashMeta {
   });
 }
 
+/// 每日摘要提醒偏好（G3；FRB digest.rs 镜像，存 cfg_kv 本机设置不随云同步）
+class DigestPrefs {
+  /// 总开关（默认 false：打扰型功能需显式开启）
+  final bool enabled;
+
+  /// 目标小时（0–23）
+  final int hour;
+
+  /// 目标分钟（0–59）
+  final int minute;
+
+  const DigestPrefs({
+    required this.enabled,
+    required this.hour,
+    required this.minute,
+  });
+
+  /// 默认值（与 Rust digest_api 一致：关闭 + 08:00）
+  static const DigestPrefs fallback =
+      DigestPrefs(enabled: false, hour: 8, minute: 0);
+
+  /// "HH:mm"（补零；供 TimeOfDay / 展示复用）
+  String get label =>
+      '${hour.toString().padLeft(2, '0')}:${minute.toString().padLeft(2, '0')}';
+}
+
+/// 每日摘要计数（FRB digest.rs 镜像：今日截止 / 逾期 / 今日完成）
+class DigestSummary {
+  final int dueToday;
+  final int overdue;
+  final int doneToday;
+
+  const DigestSummary({
+    required this.dueToday,
+    required this.overdue,
+    required this.doneToday,
+  });
+}
+
 /// 统计总览卡（backlog #25；FRB stats.rs 镜像）
 class StatsOverview {
   final int total;

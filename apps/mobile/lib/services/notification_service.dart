@@ -66,6 +66,15 @@ class NotificationService {
   static const _channelId = 'todo_reminder_due';
   static const _channelName = '待办提醒';
 
+  /// 每日摘要通知渠道（G3）：独立渠道——批量「待办提醒」被用户静音时，
+  /// 摘要不应跟着一起消失；反之亦然。
+  static const _digestChannelId = 'todo_digest';
+  static const _digestChannelName = '每日摘要';
+
+  /// 每日摘要通知 id（G3）：远在提醒三域（闹钟 ≤2^30 / 确认 +1e9 /
+  /// 完成确认 +1.5e9）之外，互不覆盖；全应用仅此一条摘要常驻排程
+  static const int dailyDigestId = 2000000000;
+
   /// 推迟 actionId → 分钟数（前后台回调共用解析）
   static const snoozeActions = {'snooze_10': 10, 'snooze_30': 30, 'snooze_60': 60};
 
@@ -562,5 +571,81 @@ class NotificationService {
         ],
       ),
     );
+  }
+
+  // ── 通道 4：每日摘要（G3，对标 TickTick Daily Reminder）──
+
+  /// 每日摘要通知样式：独立渠道 + 无 action。
+  ///
+  /// 与提醒通知的差异有三处，都是有意的：
+  /// - **无 action**：摘要是「看一眼」的提示，没有可操作的单个任务；
+  /// - **importance/priority default**：不抢占高优提醒的呈现优先级；
+  /// - **category reminder（非 alarm）**：不该触发灵动岛胶囊——
+  ///   灵动岛留给真正的到点提醒。
+  static NotificationDetails _digestDetails() => const NotificationDetails(
+        android: AndroidNotificationDetails(
+          _digestChannelId,
+          _digestChannelName,
+          importance: Importance.defaultImportance,
+          priority: Priority.defaultPriority,
+          category: AndroidNotificationCategory.reminder,
+          autoCancel: true,
+        ),
+      );
+
+  /// 同步每日摘要排程（G3）：enabled=false 或不符权限时先撤销既有排程。
+  ///
+  /// 用 `matchDateTimeComponents: DateTimeComponents.time` 让系统按**本地墙上
+  /// 时间**每天重复：闹钟由 AlarmManager 持有，应用被杀/Doze 均准时到达
+  /// （与未来提醒同一条后台通道，见类头「通道 2」）。
+  ///
+  /// 为什么不用 Rust 的 60s tick：手机进程会被杀，tick 随之消失；摘要的全部
+  /// 价值就在「把人叫回来」，必须走系统闹钟。代价是正文在**排程那一刻固化**
+  /// （系统通知不执行 Dart），所以 [DigestScheduler] 在启动与 db 变更后重排，
+  /// 让文案跟随最新计数。
+  Future<void> syncDailyDigest({
+    required bool enabled,
+    required int hour,
+    required int minute,
+    String? body,
+  }) async {
+    await ensureInitialized();
+    try {
+      await _plugin.cancel(id: dailyDigestId);
+    } catch (_) {
+      /* 未排过或平台不支持：继续 */
+    }
+    if (!enabled || !_granted) return;
+
+    // 目标 = 今天 HH:mm（本地墙上时间）；已过则从明天开始
+    final now = tz.TZDateTime.now(tz.local);
+    var target = tz.TZDateTime(tz.local, now.year, now.month, now.day, hour, minute);
+    if (!target.isAfter(now)) {
+      target = target.add(const Duration(days: 1));
+    }
+
+    Future<void> put(AndroidScheduleMode mode) => _plugin.zonedSchedule(
+          id: dailyDigestId,
+          title: '今日待办摘要',
+          body: body ?? '查看今天的待办',
+          payload: 'digest',
+          scheduledDate: target,
+          notificationDetails: _digestDetails(),
+          androidScheduleMode: mode,
+          matchDateTimeComponents: DateTimeComponents.time,
+        );
+
+    // 与 _scheduleAlarm 同款三级回退（精确闹钟权限缺失时降级仍可送达）
+    try {
+      await put(AndroidScheduleMode.exactAllowWhileIdle);
+      return;
+    } catch (e) {
+      debugPrint('[NotificationService] digest exact failed: $e');
+    }
+    try {
+      await put(AndroidScheduleMode.inexactAllowWhileIdle);
+    } catch (e) {
+      debugPrint('[NotificationService] digest schedule failed: $e');
+    }
   }
 }

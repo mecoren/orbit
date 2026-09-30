@@ -2,12 +2,19 @@
  * 通知历史分区（#5；Todoist 同款通知页）
  *
  * 桌面 Windows Toast 一旦错过或清掉就无处回看——本面板回看呈现轨迹
- * （提醒到期 / 推迟 / 完成），数据源 notification_log（只读本地表，
+ * （提醒到期 / 推迟 / 完成 / 每日摘要），数据源 notification_log（只读本地表，
  * 各端各自记录，不随云同步）。列表倒序 + kind 徽标 + 清空。
  */
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Bell, BellRing, CheckCircle2, Clock4, Trash2 } from "lucide-react";
+import {
+  Bell,
+  BellRing,
+  CalendarClock,
+  CheckCircle2,
+  Clock4,
+  Trash2,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -38,11 +45,13 @@ const KIND_LABELS: Record<string, string> = {
   snooze: "推迟",
   complete: "完成",
   boot_skip: "跳过",
+  digest: "每日摘要",
 };
 
 function kindIcon(kind: string) {
   if (kind === "snooze") return Clock4;
   if (kind === "complete") return CheckCircle2;
+  if (kind === "digest") return CalendarClock;
   return kind === "boot_skip" ? Bell : BellRing;
 }
 

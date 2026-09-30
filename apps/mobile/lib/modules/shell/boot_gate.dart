@@ -8,6 +8,7 @@ import '../../core/theme/app_dimens.dart';
 import '../../data/providers/bridge_provider.dart';
 import '../../data/providers/todo_widget_provider.dart';
 import '../../services/device_id.dart';
+import '../../services/digest_scheduler.dart';
 import '../../services/local_prefs.dart';
 import '../../services/todo_widget_service.dart';
 import '../../services/badge_service.dart';
@@ -61,6 +62,7 @@ class _BootGateState extends ConsumerState<BootGate>
   StreamSubscription<dynamic>? _dbChangesSub;
   StreamSubscription<dynamic>? _reminderDueSub;
   ReminderScheduler? _scheduler;
+  DigestScheduler? _digest;
   SyncOnChangeScheduler? _syncOnChange;
   // B6 图标角标：注入式服务（ROM 异常全吞）；listen/resumed 双口刷新
   final BadgeService _badge = BadgeService();
@@ -257,6 +259,10 @@ class _BootGateState extends ConsumerState<BootGate>
       ref.read(orbitBridgeProvider),
       taskSnapshot: () => ref.read(todoTasksProvider).value,
     );
+    // 每日摘要排程（G3）：读 cfg_kv 偏好 → 落一条系统闹钟「每日重复」通知。
+    // 手机进程会被杀，故不走 Rust tick 而走系统闹钟（见 digest_scheduler 类头）；
+    // 文案在排程时快照，dbChanges 后由此调度器防抖刷新
+    _digest = DigestScheduler.attachOnce(ref.read(orbitBridgeProvider));
     // 「修改后立即同步」（docs/10 §A-2 M6）：写路径 db-change → 5s 防抖后
     // cloudSyncPushOnly（门控：已配置 + 两个开关 + 已解锁 + 引擎空闲）。
     // 后台推送不产生进度事件，成功后只失效同步配置缓存刷新「上次同步」，
@@ -338,9 +344,11 @@ class _BootGateState extends ConsumerState<BootGate>
       if (affectsReminderSchedule(e.table)) {
         _scheduler?.onDbChange();
       }
-      // 小组件快照（#3）：读今日任务口径，只有任务表变化需重写
+      // 小组件快照（#3）：读今日任务口径，只有任务表变化需重写。
+      // 每日摘要同理（今日截止/逾期/今日完成都读 todo_tasks），共用同一判定
       if (affectsTaskSnapshot(e.table)) {
         _widget.refresh();
+        _digest?.onDbChange();
       }
       // 「修改后立即同步」（M6）：写路径落库即排一次防抖推送（表过滤与
       // 门控都在调度器内——不过滤表，引擎指纹未变会秒级跳过）

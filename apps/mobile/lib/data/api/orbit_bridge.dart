@@ -642,6 +642,24 @@ abstract class OrbitBridge {
   /// 每日最多清理一次 + 多日未开时启动首轮补清）
   Future<void> startTrashScheduler();
 
+  // ── 每日摘要提醒（G3：每日固定时刻汇总通知，对标 TickTick Daily Reminder）──
+
+  /// 读摘要偏好（开关 + 目标时刻；cfg_kv 本机设置）
+  Future<DigestPrefs> digestPrefs();
+
+  /// 设置摘要偏好（hour 0–23 / minute 0–59，越界抛错）
+  Future<void> digestSetPrefs({
+    required bool enabled,
+    required int hour,
+    required int minute,
+  });
+
+  /// 当前时刻摘要计数（设置页预览；只读）
+  Future<DigestSummary> digestSummary();
+
+  /// 摘要通知文案（Rust 侧 summary_body 单一真相源；排程时取一次作正文）
+  Future<String> digestBody();
+
   // ── 统计仪表盘（backlog #25：只读聚合）──
 
   /// 一次性统计聚合（year 为热力图年份；null = 当前年滚动 365 天窗口，

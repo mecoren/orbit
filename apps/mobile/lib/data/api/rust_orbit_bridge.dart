@@ -21,6 +21,7 @@ import '../../src/rust/api/auth.dart' as gen_auth;
 import '../../src/rust/api/biometric.dart' as gen_bio;
 import '../../src/rust/api/todo.dart' as gen_todo;
 import '../../src/rust/api/trash.dart' as gen_trash;
+import '../../src/rust/api/digest.dart' as gen_digest;
 import '../../src/rust/api/full_sync_backup.dart' as gen_backup;
 import '../../src/rust/api/notification_log.dart' as gen_notif;
 import '../../src/rust/api/stats.dart' as gen_stats;
@@ -1357,6 +1358,43 @@ class RustOrbitBridge implements OrbitBridge {
   @override
   Future<void> startTrashScheduler() =>
       gen_trash.startTrashScheduler();
+
+  // ── 每日摘要提醒（G3）──
+
+  @override
+  Future<DigestPrefs> digestPrefs() async {
+    final p = await gen_digest.digestPrefs();
+    return DigestPrefs(
+      enabled: p.enabled,
+      hour: p.hour.toInt(),
+      minute: p.minute.toInt(),
+    );
+  }
+
+  @override
+  Future<void> digestSetPrefs({
+    required bool enabled,
+    required int hour,
+    required int minute,
+  }) =>
+      gen_digest.digestSetPrefs(
+        enabled: enabled,
+        hour: hour,
+        minute: minute,
+      );
+
+  @override
+  Future<DigestSummary> digestSummary() async {
+    final s = await gen_digest.digestSummary();
+    return DigestSummary(
+      dueToday: s.dueToday.toInt(),
+      overdue: s.overdue.toInt(),
+      doneToday: s.doneToday.toInt(),
+    );
+  }
+
+  @override
+  Future<String> digestBody() => gen_digest.digestBody();
 
   // ── 统计仪表盘（backlog #25）──
 

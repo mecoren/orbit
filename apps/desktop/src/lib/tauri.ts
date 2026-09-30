@@ -1068,6 +1068,35 @@ export const trashMeta = () => invoke<TrashMeta>("trash_meta");
 export const trashSetRetentionDays = (days: number) =>
   invoke<void>("trash_set_retention_days", { days });
 
+// ---------- 每日摘要提醒（G3：每日固定时刻汇总通知） ----------
+
+/** 摘要偏好（存 cfg_kv，本机设置不随云同步） */
+export interface DigestPrefs {
+  /** 总开关（默认 false：打扰型功能需显式开启） */
+  enabled: boolean;
+  /** 目标小时（0–23） */
+  hour: number;
+  /** 目标分钟（0–59） */
+  minute: number;
+}
+
+/** 摘要计数（今日截止 / 逾期 / 今日完成） */
+export interface DigestSummary {
+  due_today: number;
+  overdue: number;
+  done_today: number;
+}
+
+/** 读摘要偏好 */
+export const digestPrefs = () => invoke<DigestPrefs>("digest_prefs");
+
+/** 设置摘要偏好（enabled + hour 0–23 + minute 0–59） */
+export const digestSetPrefs = (enabled: boolean, hour: number, minute: number) =>
+  invoke<void>("digest_set_prefs", { enabled, hour, minute });
+
+/** 当前时刻摘要计数（设置页预览；只读，不消耗每日记账） */
+export const digestSummary = () => invoke<DigestSummary>("digest_summary");
+
 // ========== stats（backlog #25：统计仪表盘） ==========
 export interface StatsOverview {
   total: number;

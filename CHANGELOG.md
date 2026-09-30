@@ -16,6 +16,33 @@
 
 ## [Unreleased]
 
+### 每日摘要提醒（对标 TickTick Daily Reminder）
+
+- **新增每日摘要提醒**：每天固定时刻一条汇总通知「今日 N 项 · 逾期 M 项（· 已完成 K 项）」。
+  core 新增 `digest_api`，**无新增表 / 无新增迁移**——计数是 `todo_tasks` 上的只读聚合
+  （今日截止 / 逾期 / 今日完成三档，本地时区日界，与 `stats_api::local_day_index` 同口径）。
+- **配置落 `cfg_kv` 三键**（本机偏好，不随云同步）：`digest_enabled`（默认 **0=关**，
+  打扰型功能需显式开启）、`digest_time`（`"HH:mm"`，默认 `08:00`，小时 0–23 / 分钟 0–59
+  校验与备份调度同源）、`digest_last_day`（上次**已处置**的本地日，防同一天重复判定）。
+- **每日一次判定**（`take_due_digest`）：开关开 + 当天目标时刻已过 + 当天未处置才返回；
+  同一天内迟到超过 12 小时补弹窗口（`CATCHUP_WINDOW_MS`）则静默跳过当天并照样记账，
+  避免「目标 08:00、21:00 才开机」时深夜补弹当日摘要。
+- **文案单一真相源**：`summary_body` 在 Rust 侧生成（今日与逾期皆 0 给鼓励语、今日有完成
+  追加尾巴），桌面系统通知与移动系统闹钟取同一份实现，避免双端措辞漂移。
+- **桌面**：`digest_scheduler` 60s tick 调 `take_due_digest` → `notify-rust` 系统通知
+  （无 action、默认超时；正文点击唤起主窗）+ 写 `notification_log`（kind `digest`，
+  通知历史页新增「每日摘要」标签与图标）；设置页「待办」分区新增开关 + 时刻选择器 +
+  当前口径预览（`digest_prefs` / `digest_set_prefs` / `digest_summary` 三个命令）。
+- **移动**：不走 Rust tick（手机进程会被杀）而走**系统闹钟每日重复**本地通知——
+  `NotificationService.syncDailyDigest` 用 `zonedSchedule` + `matchDateTimeComponents:
+  DateTimeComponents.time`（AlarmManager 持有，应用被杀/Doze 均准时；独立渠道
+  `todo_digest`、独立 id `2000000000`，与提醒三域互不覆盖）；新增 `DigestScheduler`
+  在启动与 `dbChanges`（任务表）后防抖重排，让正文跟上最新计数；设置页新增卡片
+  （开关 + 时刻选择 + 当前口径预览）。
+- FRB 新增 `crates/orbit-flutter/src/api/digest.rs` 桥（`digest_prefs` /
+  `digest_set_prefs` / `digest_summary` / `digest_body`），DTO 镜像 + codegen 产物已重生；
+  `stats_api::local_day_index` 提升为 `pub(crate)` 供 digest 复用（同口径不漂移）。
+
 ### 持续提醒（对标 TickTick Constant Reminder）
 
 - **新增持续提醒**：`todo_reminders.is_constant`（迁移 `0002_reminder_constant.sql`）——

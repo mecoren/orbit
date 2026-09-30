@@ -11,6 +11,8 @@ pub mod csv_import_cmd;
 pub mod data_dir;
 pub mod db_cmd;
 pub mod db_maintenance_cmd;
+pub mod digest_cmd;
+pub mod digest_scheduler;
 pub mod full_sync_cmd;
 pub mod holiday_cmd;
 pub mod holiday_scheduler;

@@ -123,7 +123,10 @@ const DAY_MS: i64 = 86_400_000;
 /// 2026-09-10 修正：原 ordinal0 + year*366 拼接在跨年边界不单调（12-31 与
 /// 次年 1-1 相差 366-365 不等，滚动窗口起点直接暴露 366 格错位），
 /// 换 num_days_from_ce 单调换算（chrono 内置历法，与 day_index_to_date 对偶）。
-fn local_day_index(ts_ms: i64) -> i64 {
+///
+/// `pub(crate)`：digest_api 的「每日一次」记账键同用此口径（同一份日界换算，
+/// 避免两处实现漂移）。
+pub(crate) fn local_day_index(ts_ms: i64) -> i64 {
     let local = Utc
         .timestamp_millis_opt(ts_ms)
         .single()

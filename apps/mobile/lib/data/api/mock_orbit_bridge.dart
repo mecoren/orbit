@@ -2390,6 +2390,67 @@ class MockOrbitBridge implements OrbitBridge {
   @override
   Future<void> startTrashScheduler() async {}
 
+  // ── 每日摘要提醒（G3；口径对齐 digest_api：本地日界 + 仅存活任务）──
+
+  /// Mock 摘要偏好（内存态；默认与 Rust 一致 = 关闭 + 08:00）
+  DigestPrefs _digestPrefs = DigestPrefs.fallback;
+
+  @override
+  Future<DigestPrefs> digestPrefs() async => _digestPrefs;
+
+  @override
+  Future<void> digestSetPrefs({
+    required bool enabled,
+    required int hour,
+    required int minute,
+  }) async {
+    if (hour < 0 || hour > 23) throw Exception('非法小时 $hour（应为 0-23）');
+    if (minute < 0 || minute > 59) throw Exception('非法分钟 $minute（应为 0-59）');
+    _digestPrefs = DigestPrefs(enabled: enabled, hour: hour, minute: minute);
+  }
+
+  @override
+  Future<DigestSummary> digestSummary() async {
+    final dayStart = DateTime.now();
+    final start = DateTime(dayStart.year, dayStart.month, dayStart.day)
+        .millisecondsSinceEpoch;
+    final end = start + 86400000;
+    var dueToday = 0;
+    var overdue = 0;
+    var doneToday = 0;
+    for (final t in store.tasks.values) {
+      if (t['is_deleted'] != 0) continue;
+      if (t['done'] == 0) {
+        final due = t['due_date'] as int?;
+        if (due == null) continue;
+        if (due < start) {
+          overdue++;
+        } else if (due < end) {
+          dueToday++;
+        }
+      } else {
+        final doneAt = t['done_at'] as int?;
+        if (doneAt != null && doneAt >= start && doneAt < end) doneToday++;
+      }
+    }
+    return DigestSummary(
+      dueToday: dueToday,
+      overdue: overdue,
+      doneToday: doneToday,
+    );
+  }
+
+  @override
+  Future<String> digestBody() async {
+    final s = await digestSummary();
+    // 与 Rust digest_api::summary_body 同措辞（mock 侧镜像，测试锁定口径）
+    if (s.dueToday == 0 && s.overdue == 0) return '今天没有待办，休息一下吧';
+    final head = s.overdue > 0
+        ? '今日 ${s.dueToday} 项 · 逾期 ${s.overdue} 项'
+        : '今日 ${s.dueToday} 项';
+    return s.doneToday > 0 ? '$head · 已完成 ${s.doneToday} 项' : head;
+  }
+
   // ── 统计仪表盘（backlog #25；口径对齐 stats_api：done_at 本地日界、仅存活任务；
   //      2026-09-10 热力图改按年——当前年滚动 365 天、历史年完整年）──
 

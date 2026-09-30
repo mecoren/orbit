@@ -29,12 +29,14 @@ import '../shell/db_invalidation.dart';
 import '../todo/logic/task_logic.dart' show formatDateTime;
 import '../todo/providers/todo_providers.dart';
 import '../../core/theme/icon_map.dart';
+import '../../services/digest_scheduler.dart';
 
 /// 设置页 /settings（移动端任务书卡片结构）
 ///
 /// - 同步卡：引擎摘要（脱敏 endpoint host/bucket）+ 上次同步时间 +
 ///   "立即同步" + "云同步设置"入口行（→ /settings/sync 配置页）；
 /// - 回收站卡：保留时间档位 + 回收站入口；
+/// - 每日摘要提醒卡（G3）：开关 + 时刻选择 + 当前口径预览；
 /// - 安全卡：指纹解锁开关（密码确认 + 指纹闸门两段式；无指纹硬件
 ///   回退只读提示）+ 桌面端迁移说明；
 /// - 数据导出/CSV 导入卡（07 报告 #15）；
@@ -71,6 +73,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
   /// 节假日自动更新总开关交互中（防重复点击）
   bool _holidayAutoBusy = false;
+
+  /// 每日摘要提醒开关交互中（防重复点击；G3）
+  bool _digestBusy = false;
 
   /// 数据导出进行中的格式（'json' / 'csv' / 'ics'），null 空闲
   String? _exporting;
@@ -407,10 +412,59 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     );
   }
 
+  /// 切换每日摘要提醒开关（G3）：改写 cfg_kv 偏好后立即重排系统闹钟
+  /// （DigestScheduler.refresh 幂等；关闭时撤销既有排程）
+  Future<void> _toggleDigest(bool enabled) async {
+    if (_digestBusy) return;
+    setState(() => _digestBusy = true);
+    final bridge = ref.read(orbitBridgeProvider);
+    final prefs = ref.read(digestPrefsProvider).value ?? DigestPrefs.fallback;
+    try {
+      await bridge.digestSetPrefs(
+        enabled: enabled,
+        hour: prefs.hour,
+        minute: prefs.minute,
+      );
+      ref.invalidate(digestPrefsProvider);
+      await DigestScheduler.attachOnce(bridge).refresh();
+      WaitToast.success(enabled ? '已开启每日摘要提醒' : '已关闭每日摘要提醒');
+    } catch (_) {
+      WaitToast.destructive('保存失败');
+    } finally {
+      if (mounted) setState(() => _digestBusy = false);
+    }
+  }
+
+  /// 选每日摘要时刻（0–23 时 / 0–59 分；本机偏好不同步）
+  Future<void> _pickDigestTime() async {
+    final bridge = ref.read(orbitBridgeProvider);
+    final prefs = ref.read(digestPrefsProvider).value ?? DigestPrefs.fallback;
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay(hour: prefs.hour, minute: prefs.minute),
+      helpText: '每日摘要提醒时刻',
+    );
+    if (picked == null) return;
+    try {
+      await bridge.digestSetPrefs(
+        enabled: prefs.enabled,
+        hour: picked.hour,
+        minute: picked.minute,
+      );
+      ref.invalidate(digestPrefsProvider);
+      await DigestScheduler.attachOnce(bridge).refresh();
+      WaitToast.success(
+        '提醒时刻已设为 ${picked.hour.toString().padLeft(2, '0')}:'
+        '${picked.minute.toString().padLeft(2, '0')}',
+      );
+    } catch (_) {
+      WaitToast.destructive('保存失败');
+    }
+  }
+
   /// 切换节假日自动更新总开关：关闭后 Rust 调度器不再联网，仅保留日历页
   /// 「手动更新」与缓存页「按年补写」；三处记账同源 holidayMetaProvider
-  Future<void> _toggleHolidayAuto(bool enabled) async {
-    if (_holidayAutoBusy) return;
+  Future<void> _toggleHolidayAuto(bool enabled) async {    if (_holidayAutoBusy) return;
     setState(() => _holidayAutoBusy = true);
     final bridge = ref.read(orbitBridgeProvider);
     try {
@@ -933,6 +987,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   ),
                 ),
                 const SizedBox(height: AppDimens.space12),
+                // 每日摘要提醒卡（G3，对标 TickTick Daily Reminder）：
+                // 开关 + 时刻选择；到点由系统闹钟发一条汇总通知
+                SectionCard(
+                  title: '每日摘要提醒',
+                  child: _buildDigestCard(context, colors),
+                ),
+                const SizedBox(height: AppDimens.space12),
                 // 三、安全卡：生物识别开关（无指纹硬件回退只读提示）
                 SectionCard(
                   title: '安全',
@@ -1452,6 +1513,95 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   /// 请求系统添加磁贴（API 33+ 一键引导；低版本原生静默回落文案引导）
   Future<void> _pinTile() async {
     await ref.read(todoWidgetServiceProvider).requestPinTile();
+  }
+
+  /// 每日摘要提醒卡（G3）：开关 + 时刻选择 + 当前口径预览
+  ///
+  /// 到点由系统闹钟（`zonedSchedule` + 每日重复）发一条汇总本地通知——
+  /// 手机进程被杀也准时到达；文案在排程时快照，故这里额外给出「当前口径」
+  /// 让用户知道此刻的计数，不承诺它就是通知里的数字。
+  Widget _buildDigestCard(BuildContext context, AppColorSet colors) {
+    final prefs = ref.watch(digestPrefsProvider).value ?? DigestPrefs.fallback;
+    final summary = ref.watch(digestSummaryProvider).value;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          '每天固定时刻一条汇总通知，回顾今天的待办与逾期；'
+          '应用不在前台也会准时提醒。',
+          style: TextStyle(fontSize: 12, color: colors.secondaryText),
+        ),
+        const SizedBox(height: AppDimens.space8),
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                '开启摘要提醒',
+                style: TextStyle(fontSize: 14, color: colors.bodyText),
+              ),
+            ),
+            Switch(
+              value: prefs.enabled,
+              onChanged: _digestBusy ? null : (v) => _toggleDigest(v),
+            ),
+          ],
+        ),
+        const SizedBox(height: AppDimens.space4),
+        InkWell(
+          borderRadius: AppShapes.medium,
+          onTap: prefs.enabled ? _pickDigestTime : null,
+          child: ConstrainedBox(
+            constraints:
+                const BoxConstraints(minHeight: AppDimens.touchTarget),
+            child: Row(
+              children: [
+                Text(
+                  '提醒时刻',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: prefs.enabled
+                        ? colors.bodyText
+                        : colors.bodyText.withValues(alpha: 0.4),
+                  ),
+                ),
+                const Spacer(),
+                Text(
+                  prefs.label,
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: prefs.enabled
+                        ? OrbitAccents.themeAccent
+                        : colors.secondaryText,
+                  ),
+                ),
+                Icon(
+                  OrbitIcons.chevronRight,
+                  size: AppDimens.iconSizeMd,
+                  color: colors.secondaryText,
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: AppDimens.space4),
+        Text(
+          summary == null
+              ? '当前口径：统计中…'
+              : '当前口径：今日截止 ${summary.dueToday} · 逾期 ${summary.overdue} · '
+                  '今日已完成 ${summary.doneToday}',
+          style: TextStyle(fontSize: 12, color: colors.secondaryText),
+        ),
+        const SizedBox(height: AppDimens.space4),
+        Text(
+          '提醒时刻为本机设置，不随云同步；同一天只提醒一次。',
+          style: TextStyle(
+            fontSize: 12,
+            color: colors.secondaryText.withValues(alpha: 0.7),
+          ),
+        ),
+      ],
+    );
   }
 
   /// 通用导航行（卡片内的「文案 + 右箭头」入口，行高满足触控热区）

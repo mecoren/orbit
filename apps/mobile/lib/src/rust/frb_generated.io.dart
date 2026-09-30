@@ -8,6 +8,7 @@ import 'api/asset.dart';
 import 'api/auth.dart';
 import 'api/biometric.dart';
 import 'api/csv_import.dart';
+import 'api/digest.dart';
 import 'api/dto.dart';
 import 'api/events.dart';
 import 'api/full_sync_backup.dart';
@@ -212,6 +213,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   DbMaintenanceView dco_decode_db_maintenance_view(dynamic raw);
+
+  @protected
+  DigestPrefs dco_decode_digest_prefs(dynamic raw);
+
+  @protected
+  DigestSummary dco_decode_digest_summary(dynamic raw);
 
   @protected
   double dco_decode_f_64(dynamic raw);
@@ -782,6 +789,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   DbMaintenanceView sse_decode_db_maintenance_view(
     SseDeserializer deserializer,
   );
+
+  @protected
+  DigestPrefs sse_decode_digest_prefs(SseDeserializer deserializer);
+
+  @protected
+  DigestSummary sse_decode_digest_summary(SseDeserializer deserializer);
 
   @protected
   double sse_decode_f_64(SseDeserializer deserializer);
@@ -1516,6 +1529,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
     DbMaintenanceView self,
     SseSerializer serializer,
   );
+
+  @protected
+  void sse_encode_digest_prefs(DigestPrefs self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_digest_summary(DigestSummary self, SseSerializer serializer);
 
   @protected
   void sse_encode_f_64(double self, SseSerializer serializer);

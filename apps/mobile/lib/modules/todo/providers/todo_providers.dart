@@ -186,6 +186,16 @@ final trashMetaProvider = FutureProvider<TrashMeta>((ref) async {
   return ref.watch(orbitBridgeProvider).trashMeta();
 });
 
+/// 每日摘要偏好（G3；设置页开关 + 目标时刻）
+final digestPrefsProvider = FutureProvider<DigestPrefs>((ref) async {
+  return ref.watch(orbitBridgeProvider).digestPrefs();
+});
+
+/// 每日摘要计数（G3；设置页「当前口径预览」）
+final digestSummaryProvider = FutureProvider<DigestSummary>((ref) async {
+  return ref.watch(orbitBridgeProvider).digestSummary();
+});
+
 /// 统计聚合（backlog #25 统计页；family 参数 = 热力图年份，
 /// 2026-09-10 对齐 wait-home：当前年滚动 365 天、历史年完整年）
 ///

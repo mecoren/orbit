@@ -17,6 +17,8 @@
 //! - [holiday]：节假日数据（每月自动更新 + 手动 + 按年/范围补写 + 60s tick 守护
 //!   + 补写进度流）
 //! - [trash]：回收站（任务软删恢复 + 保留时间 + 60s tick TTL 清理守护）
+//! - [digest]：每日摘要提醒（cfg_kv 偏好 + 只读计数 + 通知文案；发送由 Dart 侧
+//!   系统闹钟每日重复排程承担）
 //! - [stats]：统计仪表盘（总览/热力图/连续天数/分布聚合，backlog #25）
 //! - [search]：全局搜索（任务/项目/评论三路聚合，backlog #26）
 //! - [saved_filter]：保存的筛选器（可复用组合条件视图，backlog #35）
@@ -32,6 +34,7 @@ pub mod asset;
 pub mod auth;
 pub mod biometric;
 pub mod csv_import;
+pub mod digest;
 pub mod dto;
 pub mod events;
 pub mod full_sync_backup;

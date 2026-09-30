@@ -156,6 +156,8 @@ export interface MockDb {
   templates: { id: number; uuid: string; name: string; payload: string; sort_order: number }[];
   notificationLog: { id: number; kind: string; task_id: number | null; task_title: string; reminder_id: number | null; payload: string; created_at: number }[];
   activityLog: { id: number; task_id: number | null; task_title: string; action: string; detail: string; created_at: number }[];
+  /** 每日摘要偏好（G3；cfg_kv 本机偏好，默认与 Rust 一致 = 关闭 + 08:00） */
+  digestPrefs: { enabled: boolean; hour: number; minute: number };
   seq: number;
 }
 
@@ -181,6 +183,7 @@ function createDb(): MockDb {
       { id: 3, kind: "reminder_due", task_id: 2, task_title: "完成移动端重构方案评审", reminder_id: 2, payload: "{\"remind_at\":1757410000000}", created_at: Date.now() - 1_800_000 },
     ],
     activityLog: [],
+    digestPrefs: { enabled: false, hour: 8, minute: 0 },
     seq: 1,
   };
 }
@@ -1342,6 +1345,35 @@ const commands: Record<string, (args: any, ctx: Ctx) => unknown> = {
   trash_purge_expired: () => ({ purged: 0, guarded: 0, ran: false }),
   trash_meta: () => ({ retention_days: 30, last_purge_ms: 0 }),
   trash_set_retention_days: () => undefined,
+
+  // ---- 每日摘要提醒（G3；对齐 digest_api：cfg_kv 本机偏好 + 今日/逾期/今日完成计数。
+  //      mock 内内存持有偏好，默认与 Rust 一致 = 关闭 + 08:00）----
+  digest_prefs: (_a, { db }) => ({ ...db.digestPrefs }),
+  digest_set_prefs: ({ enabled, hour, minute }, { db }) => {
+    if (!Number.isInteger(hour) || hour < 0 || hour > 23) {
+      throw new Error(`非法小时 ${hour}（应为 0-23）`);
+    }
+    if (!Number.isInteger(minute) || minute < 0 || minute > 59) {
+      throw new Error(`非法分钟 ${minute}（应为 0-59）`);
+    }
+    db.digestPrefs = { enabled, hour, minute };
+  },
+  digest_summary: (_a, { db }) => {
+    const live = db.tasks.filter((t) => !t.is_deleted);
+    const dayStart = new Date();
+    dayStart.setHours(0, 0, 0, 0);
+    const start = dayStart.getTime();
+    const end = start + 86_400_000;
+    return {
+      due_today: live.filter(
+        (t) => !t.done && t.due_date != null && t.due_date >= start && t.due_date < end,
+      ).length,
+      overdue: live.filter((t) => !t.done && t.due_date != null && t.due_date < start).length,
+      done_today: live.filter(
+        (t) => t.done && t.done_at != null && t.done_at >= start && t.done_at < end,
+      ).length,
+    };
+  },
 
   // ---- 统计（backlog #25；对齐 stats_api 口径：done_at 本地日界，仅存活任务；
   //      浏览器 mock 用端侧 Date 分桶，语义与 Rust chrono Local 一致；
