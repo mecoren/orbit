@@ -261,7 +261,7 @@ function TitleRow({
         aria-label={task.done ? "标记未完成" : "标记完成"}
         className={cn(
           "h-5 w-5 shrink-0 rounded-[4px] border-2 transition-colors",
-          task.done ? "border-primary bg-primary" : "border-muted-foreground/30 hover:border-primary",
+          task.done ? "border-muted-foreground bg-muted-foreground" : "border-muted-foreground/30 hover:border-primary",
         )}
         style={
           !task.done && task.priority > 0
@@ -1265,7 +1265,7 @@ function SubtasksSection({
                 aria-label={s.done ? "标记未完成" : "标记完成"}
                 className={cn(
                   "flex h-4 w-4 shrink-0 items-center justify-center rounded-sm border-2",
-                  s.done ? "border-primary bg-primary text-white" : "border-muted-foreground/40",
+                  s.done ? "border-muted-foreground bg-muted-foreground text-white" : "border-muted-foreground/40",
                 )}
                 onClick={async () => {
                   const next = !s.done;
