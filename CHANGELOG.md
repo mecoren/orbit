@@ -16,6 +16,24 @@
 
 ## [Unreleased]
 
+### 同步故障矩阵入 CI + 夹具 absolute-form 容错（2026-09-30）
+
+- **`sync_fault_matrix` 单独点名进 CI**：rust-core job 原口径 `cargo test --workspace --lib`
+  只跑库内单测，`tests/` 整份不执行——这套 10 例是 F22（清单乐观锁条件头真的上过线）与
+  F23（≥8MiB 附件真的走分片协议）的**唯一网络级证据**，长期只在本地跑，回归会静默溜过。
+  它自带零依赖假服务（`tests/common`，std `TcpListener` 内存假 WebDAV/S3），干净机器可全绿，
+  故与「要真 WebDAV 的 `m4_sync_e2e`」区别对待：新增步骤 `cargo test -p orbit-core --test
+  sync_fault_matrix`（本机约 4.5 分钟，耗时来自用例自身的重试退避）。
+- **夹具容忍 absolute-form 请求行**（`tests/common/mod.rs` `normalize_target`）：本机常驻
+  `HTTP_PROXY` 时 reqwest 按代理约定发 `PUT http://127.0.0.1:PORT/base/... HTTP/1.1`，
+  夹具此前把请求行 target 原样当对象键，键带上 `scheme://host:port` 前缀，导致
+  `webdav_large_asset_uses_chunked_parts_protocol` 与 `truncated_and_stalled_bodies_are_not_accepted`
+  在**本机红、CI/无代理机器绿**（一度被误判为既有仓库缺陷——换 worktree 复现只证明既有，
+  环境变量会跟着一起复现）。真服务端必须容忍两种形态（RFC 7230 §5.3.2），故修夹具而非断言；
+  断言路径口径与生产实现均未改动。
+- 同批修正该模块头部过期描述（原写「短连接（响应恒带 `Connection: close`）」，实现早已是
+  keep-alive）。
+
 ### 清单文件夹分组（对标 TickTick List Folder）
 
 - **`todo_projects` 新增 `parent_uuid`**（`0003_project_parent.sql`，`TEXT DEFAULT NULL`，行尾中文注释）：

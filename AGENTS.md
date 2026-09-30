@@ -97,6 +97,10 @@ pnpm e2e                  # Playwright 冒烟（自动起 5273 端口 dev server
 pnpm test:rust            # cargo test --workspace（crates/*；不含 desktop 壳）
 cargo test --workspace    # 同上（云同步用例走 tests/common 的零依赖假服务，干净机器必须全绿；
                           # 需要真 WebDAV/MinIO 的活体方言用例带 #[ignore]，手工 --ignored 跑）
+cargo test -p orbit-core --test sync_fault_matrix   # CI 同名步骤（零外部依赖，本机约 4.5 分钟）
+# 注：本机若常驻 HTTP_PROXY/HTTPS_PROXY，reqwest 会按代理约定发 absolute-form 请求行；夹具已按
+# RFC 7230 §5.3.2 归一为路径。日后若再见到「服务端对象键/请求行里出现完整 URL」的断言失败，
+# 先查代理环境变量，不要改断言、也不要给生产 HttpClient 加 no_proxy（会剥夺用户的公司代理能力）。
 cd apps/desktop/src-tauri && cargo check   # 桌面壳单独检查（嵌套 workspace）
 # 桌面壳**不是 rustfmt-clean**（HEAD 即有数个文件不合规）：在该目录跑裸
 # `cargo fmt` 会顺手重排 9+ 个他人文件产生噪音 diff；只格式化自己改的那个文件用
@@ -122,7 +126,8 @@ pnpm bump 0.2.0           # 升版：写源 + 同步五处清单 + 两个 Cargo.
 pnpm bump:check           # 只校验一致性（零写入，CI/本地通用）
 ```
 
-- CI（`.github/workflows/ci.yml`）四 job：web（typecheck+vitest+build+e2e）/ rust-core（cargo check --workspace --all-targets + cargo test --workspace --lib）/ flutter-mobile（FRB codegen 一致性 + analyze + test）/ perf-gate（无界审计 + 内存增长曲线）。提交前本地跑通同等检查。
+- CI（`.github/workflows/ci.yml`）四 job：web（typecheck+vitest+build+e2e）/ rust-core（cargo check --workspace --all-targets + cargo test --workspace --lib + `cargo test -p orbit-core --test sync_fault_matrix`）/ flutter-mobile（FRB codegen 一致性 + analyze + test）/ perf-gate（无界审计 + 内存增长曲线）。提交前本地跑通同等检查。
+- `sync_fault_matrix` 单独点名入 CI 的原因：它自带零依赖假服务（`tests/common`，std `TcpListener` 内存假 WebDAV/S3），干净机器必全绿，且是 F22 条件头上线、F23 分片协议的**唯一网络级证据**；`--lib` 口径下整份 `tests/` 都不执行，故与「要真 WebDAV 的 m4_sync_e2e」区别对待——后者仍是本机口径的已知非回归失败。夹具的请求行解析必须容忍 origin-form 与 absolute-form 两种形态（本机常驻 `HTTP_PROXY` 时 reqwest 发后者）。
 - e2e/Playwright 专用端口 **5273**（非 vite 默认 5173，防撞其他项目 dev server）；strictPort 双保险。内存门禁端口 **5275**（`growth-curve` 自起 dist 静态服务）。
 
 ## 版本发布与更新流程（改版本号时自动执行）

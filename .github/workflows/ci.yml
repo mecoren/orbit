@@ -96,6 +96,13 @@ jobs:
       - name: 核心库单元测试
         run: cargo test --workspace --lib
 
+      # 故障矩阵与 m4 的区别是「自带零依赖假服务」（tests/common，std TcpListener 内存假
+      # WebDAV/S3），干净机器可全绿，却一直只在 --lib 之外躺着——F22 条件头上线、F23 分片
+      # 协议的**唯一网络级证据**此前从未进过 CI，回归会静默溜过。故单独显式点名执行。
+      # 本机实测约 4.5 分钟（含 9MiB 分片用例），耗时来自用例自身的重试退避，非夹具空转。
+      - name: 同步故障矩阵（零外部依赖假服务）
+        run: cargo test -p orbit-core --test sync_fault_matrix
+
   flutter-mobile:
     runs-on: ubuntu-latest
     defaults:
