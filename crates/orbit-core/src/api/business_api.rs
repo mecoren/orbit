@@ -93,18 +93,105 @@ pub async fn list_archived_todo_projects(pool: &SqlitePool) -> CoreResult<Vec<To
 pub async fn get_todo_project(pool: &SqlitePool, id: i64) -> CoreResult<TodoProject> {
     generic_repo::get_by_id(pool, "todo_projects", id).await
 }
+
+// ---------- 项目层级（M8 清单文件夹分组） ----------
+
+/// 父链上溯步数上限（哨兵）
+///
+/// 环检测已保证正常数据里父链必然终止（≤ 项目总数）；此上限只在**既有数据已被外部
+/// 写坏**（如同步自旧客户端、手改库）时才可能命中，用于把「无限自增的 while」变成
+/// 确定性报错。取值远大于真实层级，正常使用永不触发。
+const MAX_PROJECT_PARENT_HOPS: usize = 64;
+
+/// 归一化上级文件夹引用：空白串视作「顶层」
+///
+/// 表单清空上级时前端可能提交 `""` 而非 `null`，DB 里统一只存 NULL——
+/// 否则 `parent_uuid = ''` 会被双端树构建当成「父是空 uuid 的行」而多走一次查表。
+fn normalize_parent_uuid(raw: Option<&str>) -> Option<String> {
+    raw.map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(str::to_string)
+}
+
+/// 校验上级文件夹引用（M8）——返回归一化后的父 uuid（None = 顶层）
+///
+/// `child_uuid` 传 `None` 表示新建（尚无自身 uuid，不存在自引用可能）。
+/// 三类非法引用一律 `CoreError::Other`（双端直接把原文案展示给用户）：
+/// - **自引用**：把项目挂到自己下面；
+/// - **父不存在 / 父已软删**：`get_by_uuid` 只认未软删行。若放任写入，两端树构建都会
+///   把该行回落顶层渲染，用户看到的是「移动成功但没生效」的静默失败；
+/// - **成环**：候选父是当前项目的后代。沿候选父的父链上溯，遇到自己即环——
+///   无需整表建图，代价 O(深度)。
+async fn validate_project_parent(
+    pool: &SqlitePool,
+    child_uuid: Option<&str>,
+    parent_uuid: Option<String>,
+) -> CoreResult<Option<String>> {
+    let Some(parent) = parent_uuid else {
+        return Ok(None);
+    };
+    if Some(parent.as_str()) == child_uuid {
+        return Err(CoreError::Other("不能把文件夹设置为自己的上级".into()));
+    }
+
+    let mut cursor = Some(parent.clone());
+    let mut hops = 0usize;
+    while let Some(uuid) = cursor {
+        hops += 1;
+        if hops > MAX_PROJECT_PARENT_HOPS {
+            return Err(CoreError::Other(format!(
+                "文件夹层级异常（父链超过 {MAX_PROJECT_PARENT_HOPS} 层），请检查数据后重试"
+            )));
+        }
+        if Some(uuid.as_str()) == child_uuid {
+            return Err(CoreError::Other(
+                "不能把文件夹移动到它自己的下级里（会形成循环）".into(),
+            ));
+        }
+        let Some(row) = get_todo_project_by_uuid(pool, &uuid).await? else {
+            return Err(CoreError::Other(
+                "上级文件夹不存在或已在回收站，请刷新后重试".into(),
+            ));
+        };
+        cursor = normalize_parent_uuid(row.parent_uuid.as_deref());
+    }
+    // 父链完整且无环：回填归一化后的父引用（循环里已确认父行存在）
+    Ok(Some(parent))
+}
+
 pub async fn create_todo_project(
     pool: &SqlitePool,
     input: &TodoProjectCreateInput,
 ) -> CoreResult<TodoProject> {
-    generic_repo::create_todo_project(pool, input).await
+    let parent = validate_project_parent(
+        pool,
+        None,
+        normalize_parent_uuid(input.parent_uuid.as_deref()),
+    )
+    .await?;
+    let mut input = input.clone();
+    input.parent_uuid = parent;
+    generic_repo::create_todo_project(pool, &input).await
 }
+
 pub async fn update_todo_project(
     pool: &SqlitePool,
     id: i64,
     input: &TodoProjectUpdateInput,
 ) -> CoreResult<TodoProject> {
-    generic_repo::update_todo_project(pool, id, input).await
+    let mut input = input.clone();
+    if let Some(raw) = input.parent_uuid.as_ref() {
+        let current: TodoProject = generic_repo::get_by_id(pool, "todo_projects", id).await?;
+        input.parent_uuid = Some(
+            validate_project_parent(
+                pool,
+                Some(&current.uuid),
+                normalize_parent_uuid(raw.as_deref()),
+            )
+            .await?,
+        );
+    }
+    generic_repo::update_todo_project(pool, id, &input).await
 }
 pub async fn delete_todo_project(pool: &SqlitePool, id: i64) -> CoreResult<()> {
     let t: TodoProject = generic_repo::get_by_id(pool, "todo_projects", id).await?;
@@ -1138,6 +1225,7 @@ mod project_archive_tests {
                 description: None,
                 hex_color: None,
                 sort_order: None,
+                parent_uuid: None,
             },
         )
         .await
@@ -1158,6 +1246,7 @@ mod project_archive_tests {
                 hex_color: None,
                 sort_order: None,
                 is_archived: Some(1),
+                parent_uuid: None,
             },
         )
         .await
@@ -1182,6 +1271,7 @@ mod project_archive_tests {
                 description: None,
                 hex_color: None,
                 sort_order: None,
+                parent_uuid: None,
             },
         )
         .await
@@ -1215,6 +1305,7 @@ mod project_archive_tests {
                 hex_color: None,
                 sort_order: None,
                 is_archived: Some(1),
+                parent_uuid: None,
             },
         )
         .await
@@ -1242,6 +1333,7 @@ mod project_archive_tests {
                 description: None,
                 hex_color: None,
                 sort_order: None,
+                parent_uuid: None,
             },
         )
         .await
@@ -1255,6 +1347,7 @@ mod project_archive_tests {
                 hex_color: None,
                 sort_order: None,
                 is_archived: Some(1),
+                parent_uuid: None,
             },
         )
         .await
@@ -1268,6 +1361,7 @@ mod project_archive_tests {
                 hex_color: None,
                 sort_order: None,
                 is_archived: Some(0),
+                parent_uuid: None,
             },
         )
         .await
@@ -1292,6 +1386,7 @@ mod project_archive_tests {
                 description: None,
                 hex_color: None,
                 sort_order: None,
+                parent_uuid: None,
             },
         )
         .await
@@ -1305,6 +1400,7 @@ mod project_archive_tests {
                 hex_color: None,
                 sort_order: None,
                 is_archived: Some(1),
+                parent_uuid: None,
             },
         )
         .await
@@ -1316,6 +1412,189 @@ mod project_archive_tests {
         let _ = generic_repo::get_by_id::<TodoProject>(&pool, "todo_projects", p.id)
             .await
             .is_err();
+    }
+}
+
+/// 项目层级（M8 清单文件夹分组）：父引用归一化 + 三类非法引用守卫
+///
+/// core 只负责「引用是否可写」；层级树由双端壳按 parent_uuid 内存构建，
+/// 故此处不测树形渲染。
+#[cfg(test)]
+mod project_parent_tests {
+    use super::*;
+    use crate::db::repository::generic_repo;
+
+    async fn setup_db() -> SqlitePool {
+        let pool = sqlx::SqlitePool::connect("sqlite::memory:").await.unwrap();
+        sqlx::migrate!("./src/db/migrations")
+            .run(&pool)
+            .await
+            .unwrap();
+        pool
+    }
+
+    fn create_input(title: &str, parent: Option<&str>) -> TodoProjectCreateInput {
+        TodoProjectCreateInput {
+            title: title.into(),
+            description: None,
+            hex_color: None,
+            sort_order: None,
+            parent_uuid: parent.map(str::to_string),
+        }
+    }
+
+    fn parent_only(parent: Option<Option<&str>>) -> TodoProjectUpdateInput {
+        TodoProjectUpdateInput {
+            title: None,
+            description: None,
+            hex_color: None,
+            sort_order: None,
+            is_archived: None,
+            parent_uuid: parent.map(|p| p.map(str::to_string)),
+        }
+    }
+
+    #[tokio::test]
+    async fn create_under_parent_persists_uuid_reference() {
+        let pool = setup_db().await;
+        let folder = create_todo_project(&pool, &create_input("工作", None))
+            .await
+            .unwrap();
+        let child = create_todo_project(&pool, &create_input("季度目标", Some(&folder.uuid)))
+            .await
+            .unwrap();
+
+        assert_eq!(child.parent_uuid.as_deref(), Some(folder.uuid.as_str()));
+        // 顶层项目 parent_uuid 为 NULL（存量语义）
+        assert_eq!(folder.parent_uuid, None);
+    }
+
+    #[tokio::test]
+    async fn blank_and_whitespace_normalize_to_top_level() {
+        let pool = setup_db().await;
+        let folder = create_todo_project(&pool, &create_input("文件夹", None))
+            .await
+            .unwrap();
+        let child = create_todo_project(&pool, &create_input("子项", Some(&folder.uuid)))
+            .await
+            .unwrap();
+
+        // 表单清空上级时无论提交 "" 还是 "   " 都回顶层（DB 里只存 NULL）
+        for raw in ["", "   "] {
+            let row = update_todo_project(&pool, child.id, &parent_only(Some(Some(raw))))
+                .await
+                .unwrap();
+            assert_eq!(row.parent_uuid, None, "raw={raw:?} 应归一化为顶层");
+        }
+        // 内层 None（JSON null）同样表示「移到顶层」
+        let row = update_todo_project(&pool, child.id, &parent_only(Some(None)))
+            .await
+            .unwrap();
+        assert_eq!(row.parent_uuid, None);
+    }
+
+    #[tokio::test]
+    async fn self_reference_rejected() {
+        let pool = setup_db().await;
+        let p = create_todo_project(&pool, &create_input("自己", None))
+            .await
+            .unwrap();
+        let err = update_todo_project(&pool, p.id, &parent_only(Some(Some(&p.uuid))))
+            .await
+            .unwrap_err();
+        assert!(err.to_string().contains("不能把文件夹设置为自己的上级"));
+    }
+
+    #[tokio::test]
+    async fn cycle_rejected_when_moving_ancestor_under_descendant() {
+        let pool = setup_db().await;
+        // a → b → c（c 的父是 b，b 的父是 a）
+        let a = create_todo_project(&pool, &create_input("a", None))
+            .await
+            .unwrap();
+        let b = create_todo_project(&pool, &create_input("b", Some(&a.uuid)))
+            .await
+            .unwrap();
+        let c = create_todo_project(&pool, &create_input("c", Some(&b.uuid)))
+            .await
+            .unwrap();
+        assert_eq!(c.parent_uuid.as_deref(), Some(b.uuid.as_str()));
+
+        // 把 a 挂到 c 下 → a 是 c 的祖先，成环，必须拒绝且不落库
+        let err = update_todo_project(&pool, a.id, &parent_only(Some(Some(&c.uuid))))
+            .await
+            .unwrap_err();
+        assert!(err.to_string().contains("不能把文件夹移动到它自己的下级里"));
+
+        let a_after = generic_repo::get_by_id::<TodoProject>(&pool, "todo_projects", a.id)
+            .await
+            .unwrap();
+        assert_eq!(a_after.parent_uuid, None, "拒绝后不得留下半写入的父引用");
+
+        // 同级挂靠（c → b）仍允许：只有祖先链才成环
+        let moved = update_todo_project(&pool, c.id, &parent_only(Some(Some(&a.uuid))))
+            .await
+            .unwrap();
+        assert_eq!(moved.parent_uuid.as_deref(), Some(a.uuid.as_str()));
+    }
+
+    #[tokio::test]
+    async fn missing_or_soft_deleted_parent_rejected() {
+        let pool = setup_db().await;
+        let child = create_todo_project(&pool, &create_input("子项", None))
+            .await
+            .unwrap();
+
+        // 凭空 uuid：拒绝（否则两端树构建会静默回落顶层 = 无声失败）
+        let err = update_todo_project(&pool, child.id, &parent_only(Some(Some("no-such-uuid"))))
+            .await
+            .unwrap_err();
+        assert!(err.to_string().contains("上级文件夹不存在或已在回收站"));
+
+        // 新建时指向不存在的父：同样拒绝（不能靠 create 绕开校验）
+        assert!(
+            create_todo_project(&pool, &create_input("孤儿", Some("no-such-uuid")))
+                .await
+                .is_err()
+        );
+
+        // 父已进回收站（软删）：引用不可写入——恢复父项目后层级才可重建
+        let folder = create_todo_project(&pool, &create_input("待删文件夹", None))
+            .await
+            .unwrap();
+        create_todo_project(&pool, &create_input("合法子项", Some(&folder.uuid)))
+            .await
+            .unwrap();
+        delete_todo_project(&pool, folder.id).await.unwrap();
+
+        let err = update_todo_project(&pool, child.id, &parent_only(Some(Some(&folder.uuid))))
+            .await
+            .unwrap_err();
+        assert!(err.to_string().contains("上级文件夹不存在或已在回收站"));
+    }
+
+    /// 删除父项目后子行不级联改（parent_uuid 保持指向墓碑 uuid）——
+    /// 双端树构建把「父不存在」的行回落顶层渲染，父从回收站恢复后层级自动复现
+    #[tokio::test]
+    async fn deleting_parent_keeps_child_reference_intact() {
+        let pool = setup_db().await;
+        let folder = create_todo_project(&pool, &create_input("文件夹", None))
+            .await
+            .unwrap();
+        let child = create_todo_project(&pool, &create_input("子项", Some(&folder.uuid)))
+            .await
+            .unwrap();
+
+        delete_todo_project(&pool, folder.id).await.unwrap();
+
+        let child_after = generic_repo::get_by_id::<TodoProject>(&pool, "todo_projects", child.id)
+            .await
+            .unwrap();
+        assert_eq!(
+            child_after.parent_uuid.as_deref(),
+            Some(folder.uuid.as_str()),
+            "软删父项目不得改动子行父引用（恢复时层级需原样复现）"
+        );
     }
 }
 
@@ -1349,6 +1628,7 @@ mod activity_detail_tests {
                 description: None,
                 hex_color: None,
                 sort_order: None,
+                parent_uuid: None,
             },
         )
         .await

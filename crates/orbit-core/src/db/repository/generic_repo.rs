@@ -538,14 +538,15 @@ pub async fn create_todo_project(
     let uuid = uuid::Uuid::new_v4().to_string();
 
     let row = sqlx::query_as::<_, TodoProject>(
-        "INSERT INTO todo_projects (uuid, title, description, hex_color, sort_order, is_deleted, created_at, updated_at, version)
-         VALUES (?, ?, ?, ?, ?, 0, ?, ?, 1) RETURNING *",
+        "INSERT INTO todo_projects (uuid, title, description, hex_color, sort_order, parent_uuid, is_deleted, created_at, updated_at, version)
+         VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?, 1) RETURNING *",
     )
     .bind(&uuid)
     .bind(&input.title)
     .bind(input.description.as_deref())
     .bind(input.hex_color.as_deref().unwrap_or("#3B82F6"))
     .bind(input.sort_order.unwrap_or(0.0))
+    .bind(input.parent_uuid.as_deref())
     .bind(now)
     .bind(now)
     .fetch_one(pool).await?;
@@ -577,6 +578,10 @@ pub async fn update_todo_project(
     if input.is_archived.is_some() {
         sets.push("is_archived = ?".into());
     }
+    // M8 上级文件夹：内层 None = 移到顶层（写 NULL）；由 business_api 完成环/存在性校验
+    if input.parent_uuid.is_some() {
+        sets.push("parent_uuid = ?".into());
+    }
 
     let sql = format!(
         "UPDATE todo_projects SET {} WHERE id = ? RETURNING *",
@@ -596,6 +601,9 @@ pub async fn update_todo_project(
         q = q.bind(v);
     }
     if let Some(v) = input.is_archived {
+        q = q.bind(v);
+    }
+    if let Some(v) = input.parent_uuid.as_ref() {
         q = q.bind(v);
     }
     let row = q

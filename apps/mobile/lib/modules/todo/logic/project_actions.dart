@@ -68,13 +68,17 @@ Future<bool> deleteProject(
   }
 }
 
-/// 保存名称 / 颜色（无变化不写库）。返回是否成功落库（失败已 toast，调用方
-/// 只需决定是否关页面）。空标题拒绝——与新建同口径（trim 后为空即无效）
+/// 保存名称 / 颜色 / 上级文件夹（无变化不写库）。返回是否成功落库（失败已 toast，
+/// 调用方只需决定是否关页面）。空标题拒绝——与新建同口径（trim 后为空即无效）。
+///
+/// M8：[parentUuid] 为上级文件夹 uuid，null = 顶层；与项目现值一致则不提交。
+/// 传 null 表示「移到顶层」而非「不改」——「不改」由调用方传 `project.parentUuid`。
 Future<bool> saveProject(
   WidgetRef ref, {
   required TodoProject project,
   required String title,
   required String hexColor,
+  String? parentUuid,
 }) async {
   final trimmed = title.trim();
   if (trimmed.isEmpty) {
@@ -84,6 +88,8 @@ Future<bool> saveProject(
   final patch = <String, Object?>{
     if (trimmed != project.title) 'title': trimmed,
     if (hexColor != project.hexColor) 'hex_color': hexColor,
+    if (parentUuid != normalizeParentUuid(project.parentUuid))
+      'parent_uuid': parentUuid,
   };
   if (patch.isEmpty) return true;
   try {

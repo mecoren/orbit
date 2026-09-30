@@ -43,6 +43,8 @@ class TodoProject {
   final String? description;
   final String hexColor;
   final double sortOrder;
+  /// M8 上级文件夹（父项目）的同步主键 uuid；null = 顶层
+  final String? parentUuid;
   /// 项目归档标记：0 活跃 1 已归档（默认列表排除，侧栏归档区）
   final int isArchived;
   final int isDeleted;
@@ -58,6 +60,7 @@ class TodoProject {
     required this.description,
     required this.hexColor,
     required this.sortOrder,
+    required this.parentUuid,
     required this.isArchived,
     required this.isDeleted,
     required this.createdAt,
@@ -73,6 +76,7 @@ class TodoProject {
         description: j['description'] as String?,
         hexColor: j['hex_color'] as String,
         sortOrder: (j['sort_order'] as num).toDouble(),
+        parentUuid: normalizeParentUuid(j['parent_uuid'] as String?),
         isArchived: (j['is_archived'] as int?) ?? 0,
         isDeleted: j['is_deleted'] as int,
         createdAt: j['created_at'] as int,
@@ -82,17 +86,27 @@ class TodoProject {
       );
 }
 
+/// 空白串归一为 null（M8 上级文件夹口径，与 core `normalize_parent_uuid` 一致）：
+/// 表单清空上级可能提交 "" 而非 null，两侧树构建只认 null 为顶层
+String? normalizeParentUuid(String? raw) {
+  final trimmed = raw?.trim();
+  return (trimmed == null || trimmed.isEmpty) ? null : trimmed;
+}
+
 class TodoProjectCreateInput {
   final String title;
   final String? description;
   final String? hexColor;
   final double? sortOrder;
+  /// M8 上级文件夹 uuid；null / 空白串 = 顶层
+  final String? parentUuid;
 
   const TodoProjectCreateInput({
     required this.title,
     this.description,
     this.hexColor,
     this.sortOrder,
+    this.parentUuid,
   });
 }
 

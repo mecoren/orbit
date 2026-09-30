@@ -1024,6 +1024,7 @@ mod preview_tests {
                 description: None,
                 hex_color: None,
                 sort_order: None,
+                parent_uuid: None,
             },
         )
         .await

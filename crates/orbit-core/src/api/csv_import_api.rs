@@ -437,6 +437,7 @@ pub async fn execute_csv_import(
                                 description: None,
                                 hex_color: None,
                                 sort_order: None,
+                                parent_uuid: None,
                             },
                         )
                         .await;
@@ -650,6 +651,7 @@ mod tests {
                 description: None,
                 hex_color: None,
                 sort_order: None,
+                parent_uuid: None,
             },
         )
         .await

@@ -1,0 +1,23 @@
+-- 0003_project_parent.sql
+-- M8 清单文件夹分组（对标 TickTick 清单文件夹 / Todoist 项目层级）：
+-- 项目可挂在另一个项目下形成两级（或更深）文件夹树，侧栏按层级缩进渲染。
+--
+-- 为什么父引用是 uuid 而不是 parent_id INTEGER：
+--   云同步的整数外键翻译（cloud_sync::SYNC_FK_COLUMNS → db_loader/merge）只在
+--   **表间**成立——它按「父表先于子表」为 pull 定序（sync_registry::fk_parent_order_ok
+--   断言 pos(parent) < pos(child)），并且在合并前从**本端已落库**的行建 uuid→id 映射。
+--   自引用（父行与子行同表）两条前提都不成立：同表无法用父表定序保证父先到，
+--   且父行本轮未落库时 resolve_foreign_keys 直接整表 Err → 事务回滚 → 父行永不落库
+--   → 之后每轮同步都在同一处失败（todo_projects 永久合并失败的死锁）。
+--   改由 uuid（跨设备稳定，即「同步主键」）承载父引用后，parent_uuid 只是一个
+--   普通 TEXT 列，随表原样同步，**零同步引擎改动、零定序约束、零死锁类风险**；
+--   层级树由双端壳内存构建（项目量级为数十行，无索引/递归 CTE 必要）。
+--
+-- 为什么**不声明**自引用外键（parent_uuid REFERENCES todo_projects(uuid)）：
+--   其一，uuid 的 UNIQUE 索引虽有，但同步落库顺序不保证父行先写，外键会直接报错；
+--   其二，父项目被回收站物理清除后子行会短暂悬空——不设外键时悬空行照常存续，
+--   双端树构建一律把「父不存在/父已软删」的行回落顶层渲染（层级无损、不必级联改子行，
+--   父行从回收站恢复后层级自动复现）。
+--
+-- 语义：NULL = 顶层（存量行靠 DEFAULT 原地回填，语义零变化）；非空 = 上级项目 uuid。
+ALTER TABLE todo_projects ADD COLUMN parent_uuid TEXT DEFAULT NULL; -- 上级文件夹（父项目）的同步主键 uuid；NULL = 顶层

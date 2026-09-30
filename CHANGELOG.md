@@ -16,6 +16,34 @@
 
 ## [Unreleased]
 
+### 清单文件夹分组（对标 TickTick List Folder）
+
+- **`todo_projects` 新增 `parent_uuid`**（`0003_project_parent.sql`，`TEXT DEFAULT NULL`，行尾中文注释）：
+  指向父项目的**同步主键 uuid**，NULL = 顶层。刻意不用 `parent_id INTEGER`——云同步对整数外键走
+  `SYNC_FK_COLUMNS` → `_fk: {列: 父行 uuid}` 标记翻译，其正确性依赖两条前提：「父表先于子表定序」
+  （`fk_parent_order_ok()`，**仅表间成立**）与「落库时从本端已落库行建 uuid→id 映射」。**自引用同表
+  会同时破坏两者**：父行未到 → `resolve_foreign_keys` 整表 `Err` → 事务回滚 → 父行永不落库 →
+  永久死锁。改存 uuid 后父行悬空只是「回落顶层」，双端树构建按顶层渲染；父从回收站恢复后层级自动
+  复现，无需级联改写子行。也不声明自引用外键——父行软删不牵连子行。加列零 `sync_registry` 改动
+  （`todo_projects` 已在 `SYNCABLE_TABLES`，白名单为行级同步、天然覆盖新列）。
+- **写入侧三类守卫**（`business_api::validate_project_parent`，create / update 两路径统一前置）：
+  拒自引用、拒指向不存在或已软删的父、拒成环（沿父链上溯，上限 64 跳防异常数据）；守卫通过后
+  再委托 `generic_repo`，DTO 三态（缺键 = 不改 / `null` = 移到顶层）沿用既有 `nullable` 反序列化口径。
+- **双端侧栏层级树**：项目按 `parent_uuid` 构成层级树后展平渲染（父在前、子紧随其后），逐层缩进
+  14px，有子项者带折叠箭头（折叠收起整棵子树）。纯函数层双端各一份、口径完全一致——桌面
+  `features/todo/shared/project-tree.ts`、移动 `modules/todo/logic/project_tree.dart`：
+  **孤儿（父不存在 / 父已软删）回落顶层**，自引用与成环整体回落顶层（保证递归终止且行不丢），
+  同层沿用 `sort_order` 顺序。
+- **双端编辑入口提供「上级文件夹」选择**：候选**排除自身与全部后代**（否则成环，Rust 侧必拒），
+  文案带祖先路径（"父 / 子"）避免不同层级同名歧义；移动端为当前层级行 + 候选面板，桌面端为 Select。
+- **拖拽排序语义不变**：拖拽仍只改同级 `sort_order`、**不改层级**（跨层级改父留后续批次）；
+  折叠隐藏的后代不在可见序列内、保留原编号——它们只与自身兄弟集比较，不受影响。
+- **mock IPC 边界修正**（`src/test/ipc-mock.ts`）：浏览器 / e2e mock 的 invoke 参数此前直传对象，
+  与真实 Tauri IPC 的 **JSON 序列化边界**不一致——值为 `undefined` 的键在真实链路会被丢弃，在 mock 里
+  却会让 `Object.assign(entity, input)` 把字段覆盖成 `undefined`（实测：编辑项目只改颜色 → 项目标题
+  被清空）。现于命令分发入口统一做一次 JSON round-trip，与真实链路字段语义对齐。
+- **未做**（后续批次）：拖拽跨层级改父、父清单聚合子清单任务。
+
 ### 日历周视图（对标 TickTick Week View）
 
 - **桌面日历新增第四档「周」**（月 / 周 / 年 / 议程）：月历组件

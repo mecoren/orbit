@@ -86,6 +86,8 @@ pub struct TodoProject {
     pub description: Option<String>,
     pub hex_color: String,
     pub sort_order: f64,
+    /// M8 上级文件夹（父项目）的同步主键 uuid；None = 顶层
+    pub parent_uuid: Option<String>,
     pub is_archived: i32,
     pub is_deleted: i32,
     pub created_at: i64,
@@ -103,6 +105,7 @@ impl From<orbit_core::models::business::TodoProject> for TodoProject {
             description: p.description,
             hex_color: p.hex_color,
             sort_order: p.sort_order,
+            parent_uuid: p.parent_uuid,
             is_archived: p.is_archived,
             is_deleted: p.is_deleted,
             created_at: p.created_at,
@@ -121,6 +124,8 @@ pub struct TodoProjectCreateInput {
     pub description: Option<String>,
     pub hex_color: Option<String>,
     pub sort_order: Option<f64>,
+    /// 上级文件夹 uuid（M8）；None / 空白串 = 顶层
+    pub parent_uuid: Option<String>,
 }
 
 impl From<TodoProjectCreateInput> for orbit_core::models::business::TodoProjectCreateInput {
@@ -130,6 +135,7 @@ impl From<TodoProjectCreateInput> for orbit_core::models::business::TodoProjectC
             description: i.description,
             hex_color: i.hex_color,
             sort_order: i.sort_order,
+            parent_uuid: i.parent_uuid,
         }
     }
 }

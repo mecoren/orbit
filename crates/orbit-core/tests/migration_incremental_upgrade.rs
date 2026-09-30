@@ -76,6 +76,51 @@ async fn reminder_constant_column_backfills_zero() {
     assert_eq!(constant, 0, "存量提醒行应回填 0（一次性），语义零变化");
 }
 
+/// 0003 增量落地：todo_projects.parent_uuid 带 DEFAULT NULL，老项目行回落顶层
+/// （父引用用同步主键 uuid 而非 parent_id：自引用外键会破坏云同步「父行先落库」定序）
+#[tokio::test]
+async fn project_parent_uuid_backfills_null() {
+    let pool = SqlitePool::connect("sqlite::memory:").await.unwrap();
+    sqlx::migrate!("./src/db/migrations")
+        .run(&pool)
+        .await
+        .unwrap();
+
+    // 不写 parent_uuid 的老写法（增量前口径）：靠 DEFAULT 落地
+    sqlx::query(
+        "INSERT INTO todo_projects (uuid, title, sort_order, created_at, updated_at)
+         VALUES ('u-p1', '老清单', 0, 1, 1)",
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let (parent,): (Option<String>,) =
+        sqlx::query_as("SELECT parent_uuid FROM todo_projects WHERE uuid='u-p1'")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert!(
+        parent.is_none(),
+        "存量清单行应回填 NULL（顶层），层级语义零变化"
+    );
+
+    // 新行可写父引用（自引用同表列），顶层行与子行共存不互相约束
+    sqlx::query(
+        "INSERT INTO todo_projects (uuid, title, sort_order, created_at, updated_at, parent_uuid)
+         VALUES ('u-p2', '子清单', 1, 1, 1, 'u-p1')",
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let (child_parent,): (Option<String>,) =
+        sqlx::query_as("SELECT parent_uuid FROM todo_projects WHERE uuid='u-p2'")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(child_parent.as_deref(), Some("u-p1"));
+}
+
 /// 模拟老用户升级：0001 数据 → 增量加列 → 数据保留 + 默认值生效
 #[tokio::test]
 async fn incremental_add_column_preserves_rows() {

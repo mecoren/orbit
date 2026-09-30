@@ -166,6 +166,8 @@ export interface TodoProject {
   description: string | null;
   hex_color: string;
   sort_order: number;
+  /** M8 上级文件夹（父项目）的同步主键 uuid；null = 顶层 */
+  parent_uuid: string | null;
   is_archived: number;
   is_deleted: number;
   created_at: number;
@@ -178,6 +180,8 @@ export interface TodoProjectCreateInput {
   description?: string | null;
   hex_color?: string;
   sort_order?: number;
+  /** M8 上级文件夹 uuid；省略 / null / "" 均为顶层 */
+  parent_uuid?: string | null;
 }
 export interface TodoProjectUpdateInput {
   title?: string;
@@ -186,6 +190,8 @@ export interface TodoProjectUpdateInput {
   sort_order?: number;
   /** 归档切换：1=归档（默认列表收起）0=恢复 */
   is_archived?: number;
+  /** M8 上级文件夹 uuid：省略=不改；null / ""=移到顶层 */
+  parent_uuid?: string | null;
 }
 export const todoProjectList = (filter: ListFilter) => invoke<TodoProject[]>("todo_projects_list", { filter });
 export const todoProjectGet = (id: number) => invoke<TodoProject>("todo_projects_get", { id });

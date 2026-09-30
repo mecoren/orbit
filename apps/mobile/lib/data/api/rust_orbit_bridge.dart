@@ -151,6 +151,7 @@ class RustOrbitBridge implements OrbitBridge {
           description: input.description,
           hexColor: input.hexColor,
           sortOrder: input.sortOrder,
+          parentUuid: input.parentUuid,
         ),
       ));
 
@@ -1503,6 +1504,7 @@ class RustOrbitBridge implements OrbitBridge {
         description: p.description,
         hexColor: p.hexColor,
         sortOrder: p.sortOrder,
+        parentUuid: p.parentUuid,
         isArchived: p.isArchived,
         isDeleted: p.isDeleted,
         createdAt: p.createdAt,

@@ -901,6 +901,9 @@ class TodoProject {
   final String? description;
   final String hexColor;
   final double sortOrder;
+
+  /// M8 上级文件夹（父项目）的同步主键 uuid；None = 顶层
+  final String? parentUuid;
   final int isArchived;
   final int isDeleted;
   final PlatformInt64 createdAt;
@@ -915,6 +918,7 @@ class TodoProject {
     this.description,
     required this.hexColor,
     required this.sortOrder,
+    this.parentUuid,
     required this.isArchived,
     required this.isDeleted,
     required this.createdAt,
@@ -931,6 +935,7 @@ class TodoProject {
       description.hashCode ^
       hexColor.hashCode ^
       sortOrder.hashCode ^
+      parentUuid.hashCode ^
       isArchived.hashCode ^
       isDeleted.hashCode ^
       createdAt.hashCode ^
@@ -949,6 +954,7 @@ class TodoProject {
           description == other.description &&
           hexColor == other.hexColor &&
           sortOrder == other.sortOrder &&
+          parentUuid == other.parentUuid &&
           isArchived == other.isArchived &&
           isDeleted == other.isDeleted &&
           createdAt == other.createdAt &&
@@ -965,11 +971,15 @@ class TodoProjectCreateInput {
   final String? hexColor;
   final double? sortOrder;
 
+  /// 上级文件夹 uuid（M8）；None / 空白串 = 顶层
+  final String? parentUuid;
+
   const TodoProjectCreateInput({
     required this.title,
     this.description,
     this.hexColor,
     this.sortOrder,
+    this.parentUuid,
   });
 
   @override
@@ -977,7 +987,8 @@ class TodoProjectCreateInput {
       title.hashCode ^
       description.hashCode ^
       hexColor.hashCode ^
-      sortOrder.hashCode;
+      sortOrder.hashCode ^
+      parentUuid.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -987,7 +998,8 @@ class TodoProjectCreateInput {
           title == other.title &&
           description == other.description &&
           hexColor == other.hexColor &&
-          sortOrder == other.sortOrder;
+          sortOrder == other.sortOrder &&
+          parentUuid == other.parentUuid;
 }
 
 /// 提醒（镜像 orbit_core::models::business::TodoReminder）

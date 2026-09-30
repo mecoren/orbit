@@ -7121,8 +7121,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   TodoProject dco_decode_todo_project(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 12)
-      throw Exception('unexpected arr length: expect 12 but see ${arr.length}');
+    if (arr.length != 13)
+      throw Exception('unexpected arr length: expect 13 but see ${arr.length}');
     return TodoProject(
       id: dco_decode_i_64(arr[0]),
       uuid: dco_decode_String(arr[1]),
@@ -7130,12 +7130,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       description: dco_decode_opt_String(arr[3]),
       hexColor: dco_decode_String(arr[4]),
       sortOrder: dco_decode_f_64(arr[5]),
-      isArchived: dco_decode_i_32(arr[6]),
-      isDeleted: dco_decode_i_32(arr[7]),
-      createdAt: dco_decode_i_64(arr[8]),
-      updatedAt: dco_decode_i_64(arr[9]),
-      deletedAt: dco_decode_opt_box_autoadd_i_64(arr[10]),
-      version: dco_decode_i_32(arr[11]),
+      parentUuid: dco_decode_opt_String(arr[6]),
+      isArchived: dco_decode_i_32(arr[7]),
+      isDeleted: dco_decode_i_32(arr[8]),
+      createdAt: dco_decode_i_64(arr[9]),
+      updatedAt: dco_decode_i_64(arr[10]),
+      deletedAt: dco_decode_opt_box_autoadd_i_64(arr[11]),
+      version: dco_decode_i_32(arr[12]),
     );
   }
 
@@ -7143,13 +7144,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   TodoProjectCreateInput dco_decode_todo_project_create_input(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 4)
-      throw Exception('unexpected arr length: expect 4 but see ${arr.length}');
+    if (arr.length != 5)
+      throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
     return TodoProjectCreateInput(
       title: dco_decode_String(arr[0]),
       description: dco_decode_opt_String(arr[1]),
       hexColor: dco_decode_opt_String(arr[2]),
       sortOrder: dco_decode_opt_box_autoadd_f_64(arr[3]),
+      parentUuid: dco_decode_opt_String(arr[4]),
     );
   }
 
@@ -9450,6 +9452,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_description = sse_decode_opt_String(deserializer);
     var var_hexColor = sse_decode_String(deserializer);
     var var_sortOrder = sse_decode_f_64(deserializer);
+    var var_parentUuid = sse_decode_opt_String(deserializer);
     var var_isArchived = sse_decode_i_32(deserializer);
     var var_isDeleted = sse_decode_i_32(deserializer);
     var var_createdAt = sse_decode_i_64(deserializer);
@@ -9463,6 +9466,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       description: var_description,
       hexColor: var_hexColor,
       sortOrder: var_sortOrder,
+      parentUuid: var_parentUuid,
       isArchived: var_isArchived,
       isDeleted: var_isDeleted,
       createdAt: var_createdAt,
@@ -9481,11 +9485,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_description = sse_decode_opt_String(deserializer);
     var var_hexColor = sse_decode_opt_String(deserializer);
     var var_sortOrder = sse_decode_opt_box_autoadd_f_64(deserializer);
+    var var_parentUuid = sse_decode_opt_String(deserializer);
     return TodoProjectCreateInput(
       title: var_title,
       description: var_description,
       hexColor: var_hexColor,
       sortOrder: var_sortOrder,
+      parentUuid: var_parentUuid,
     );
   }
 
@@ -11601,6 +11607,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_opt_String(self.description, serializer);
     sse_encode_String(self.hexColor, serializer);
     sse_encode_f_64(self.sortOrder, serializer);
+    sse_encode_opt_String(self.parentUuid, serializer);
     sse_encode_i_32(self.isArchived, serializer);
     sse_encode_i_32(self.isDeleted, serializer);
     sse_encode_i_64(self.createdAt, serializer);
@@ -11619,6 +11626,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_opt_String(self.description, serializer);
     sse_encode_opt_String(self.hexColor, serializer);
     sse_encode_opt_box_autoadd_f_64(self.sortOrder, serializer);
+    sse_encode_opt_String(self.parentUuid, serializer);
   }
 
   @protected

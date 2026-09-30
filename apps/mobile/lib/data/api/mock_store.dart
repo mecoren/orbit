@@ -105,6 +105,8 @@ class MockStore {
         'description': null,
         'hex_color': color,
         'sort_order': order,
+        // M8 上级文件夹：seed 项目全为顶层
+        'parent_uuid': null,
         'is_deleted': 0,
         'created_at': now(),
         'updated_at': now(),

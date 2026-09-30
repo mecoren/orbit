@@ -7821,6 +7821,7 @@ impl SseDecode for crate::api::dto::TodoProject {
         let mut var_description = <Option<String>>::sse_decode(deserializer);
         let mut var_hexColor = <String>::sse_decode(deserializer);
         let mut var_sortOrder = <f64>::sse_decode(deserializer);
+        let mut var_parentUuid = <Option<String>>::sse_decode(deserializer);
         let mut var_isArchived = <i32>::sse_decode(deserializer);
         let mut var_isDeleted = <i32>::sse_decode(deserializer);
         let mut var_createdAt = <i64>::sse_decode(deserializer);
@@ -7834,6 +7835,7 @@ impl SseDecode for crate::api::dto::TodoProject {
             description: var_description,
             hex_color: var_hexColor,
             sort_order: var_sortOrder,
+            parent_uuid: var_parentUuid,
             is_archived: var_isArchived,
             is_deleted: var_isDeleted,
             created_at: var_createdAt,
@@ -7851,11 +7853,13 @@ impl SseDecode for crate::api::dto::TodoProjectCreateInput {
         let mut var_description = <Option<String>>::sse_decode(deserializer);
         let mut var_hexColor = <Option<String>>::sse_decode(deserializer);
         let mut var_sortOrder = <Option<f64>>::sse_decode(deserializer);
+        let mut var_parentUuid = <Option<String>>::sse_decode(deserializer);
         return crate::api::dto::TodoProjectCreateInput {
             title: var_title,
             description: var_description,
             hex_color: var_hexColor,
             sort_order: var_sortOrder,
+            parent_uuid: var_parentUuid,
         };
     }
 }
@@ -10272,6 +10276,7 @@ impl flutter_rust_bridge::IntoDart for crate::api::dto::TodoProject {
             self.description.into_into_dart().into_dart(),
             self.hex_color.into_into_dart().into_dart(),
             self.sort_order.into_into_dart().into_dart(),
+            self.parent_uuid.into_into_dart().into_dart(),
             self.is_archived.into_into_dart().into_dart(),
             self.is_deleted.into_into_dart().into_dart(),
             self.created_at.into_into_dart().into_dart(),
@@ -10298,6 +10303,7 @@ impl flutter_rust_bridge::IntoDart for crate::api::dto::TodoProjectCreateInput {
             self.description.into_into_dart().into_dart(),
             self.hex_color.into_into_dart().into_dart(),
             self.sort_order.into_into_dart().into_dart(),
+            self.parent_uuid.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -12063,6 +12069,7 @@ impl SseEncode for crate::api::dto::TodoProject {
         <Option<String>>::sse_encode(self.description, serializer);
         <String>::sse_encode(self.hex_color, serializer);
         <f64>::sse_encode(self.sort_order, serializer);
+        <Option<String>>::sse_encode(self.parent_uuid, serializer);
         <i32>::sse_encode(self.is_archived, serializer);
         <i32>::sse_encode(self.is_deleted, serializer);
         <i64>::sse_encode(self.created_at, serializer);
@@ -12079,6 +12086,7 @@ impl SseEncode for crate::api::dto::TodoProjectCreateInput {
         <Option<String>>::sse_encode(self.description, serializer);
         <Option<String>>::sse_encode(self.hex_color, serializer);
         <Option<f64>>::sse_encode(self.sort_order, serializer);
+        <Option<String>>::sse_encode(self.parent_uuid, serializer);
     }
 }
 

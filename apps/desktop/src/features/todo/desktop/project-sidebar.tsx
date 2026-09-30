@@ -10,6 +10,10 @@
  * 窄窗折叠（07 报告 #21 接线）：useIsNarrow（<lg=1024）驱动自动折叠，
  * 用户可手动覆盖并持久化（LS_SIDEBAR_MANUAL_COLLAPSED）；折叠态渲染
  * 图标窄条（快捷视图 + 项目 Folder 图标按项目色染色），展开恢复完整三栏。
+ *
+ * M8 清单文件夹分组：项目按 `parent_uuid` 构成层级树（父子序、depth 缩进、
+ * 有子项者带折叠箭头），孤儿/自引用/成环一律回落顶层（shared/project-tree）。
+ * 拖拽仍只改同级 sort_order——改层级走编辑弹窗的「上级文件夹」下拉。
  */
 import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -28,6 +32,13 @@ import { useIsNarrow } from "@/hooks/use-breakpoint";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   AlertDialog,
@@ -56,6 +67,13 @@ import {
 } from "@/lib/tauri";
 import { LS_UNGROUPED_AFTER, QUICK_VIEWS, TODO_ACCENT, type QuickViewKey, PRESET_10 } from "../shared/constants";
 import {
+  buildFolderPathLabels,
+  buildProjectTree,
+  flattenProjectTree,
+  normalizeParentUuid,
+  parentFolderCandidates,
+} from "../shared/project-tree";
+import {
   loadSidebarManualCollapsed,
   resolveSidebarCollapsed,
   saveSidebarManualCollapsed,
@@ -64,6 +82,9 @@ import { ProjectContextMenu } from "./task-context-menu";
 
 /** 未分组虚拟 id */
 export const UNGROUPED_ID = -1;
+
+/** Select 哨兵值：Radix Select 不接受空串 value，用哨兵代表「顶层」 */
+const PARENT_NONE = "__none__";
 
 
 interface ProjectSidebarProps {
@@ -160,22 +181,46 @@ export function ProjectSidebar({
   const effectiveQuickView = trashActive || statsActive ? null : activeQuickView;
   const effectiveProjectId = trashActive || statsActive ? null : activeProjectId;
 
-  // ---- 组合排序：未分组（UNGROUPED_ID 占位）+ 项目 ----
+  // ---- M8 层级树 + 折叠（文件夹分组）----
+  // 折叠集合按项目 uuid 记账（会话内状态，不持久化：层级是低频操作，折叠是临时浏览动作）
+  const [collapsedFolders, setCollapsedFolders] = useState<ReadonlySet<string>>(
+    () => new Set<string>(),
+  );
+  const tree = useMemo(() => buildProjectTree(projects), [projects]);
+  const flatNodes = useMemo(
+    () => flattenProjectTree(tree, (uuid) => collapsedFolders.has(uuid)),
+    [tree, collapsedFolders],
+  );
+  const nodeById = useMemo(
+    () => new Map(flatNodes.map((n) => [n.project.id, n])),
+    [flatNodes],
+  );
+  /** 渲染序列（树序展平后的可见项目 id），拖拽 items 与未分组插入位都基于它 */
+  const visibleIds = useMemo(() => flatNodes.map((n) => n.project.id), [flatNodes]);
+
+  const toggleFolder = (uuid: string) =>
+    setCollapsedFolders((prev) => {
+      const next = new Set(prev);
+      if (next.has(uuid)) next.delete(uuid);
+      else next.add(uuid);
+      return next;
+    });
+
+  // ---- 组合排序：未分组（UNGROUPED_ID 占位）+ 可见项目 ----
   // 未分组位置持久化为「前驱项目 id」（空 = 最前，默认项目第一位）
   const projectById = useMemo(() => new Map(projects.map((p) => [p.id, p])), [projects]);
   const orderedIds = useMemo(() => {
-    const ids = projects.map((p) => p.id);
     const raw = localStorage.getItem(LS_UNGROUPED_AFTER);
     const afterId = raw ? Number(raw) : null;
     let idx = 0; // 默认最前
     if (afterId != null && !Number.isNaN(afterId)) {
-      const at = ids.indexOf(afterId);
+      const at = visibleIds.indexOf(afterId);
       if (at >= 0) idx = at + 1;
     }
-    const combined = [...ids];
+    const combined = [...visibleIds];
     combined.splice(idx, 0, UNGROUPED_ID);
     return combined;
-  }, [projects]);
+  }, [visibleIds]);
 
   const submitNew = async () => {
     const title = newTitle.trim();
@@ -210,8 +255,10 @@ export function ProjectSidebar({
     });
   };
 
-  // 拖拽结束：组合列表 arraymove；未分组位置存 localStorage，
-  // 项目逐条 sortOrder=i+1 重编号落库（04 §3.1）
+  // 拖拽结束：可见序列 arraymove；未分组位置存 localStorage，
+  // 可见项目逐条 sortOrder=i+1 重编号落库（04 §3.1）。
+  // M8：拖拽只动同级 sort_order，**不改 parent_uuid**（改层级走编辑弹窗的「上级文件夹」）；
+  // 被折叠隐藏的后代不在可见序列内，保留原编号——它们只与自身兄弟集比较，不受影响。
   const handleDragEnd = async (event: DragEndEvent) => {
     const { active, over } = event;
     if (!over || active.id === over.id) return;
@@ -227,12 +274,18 @@ export function ProjectSidebar({
     const prevId = ugIdx > 0 ? reordered[ugIdx - 1] : null;
     localStorage.setItem(LS_UNGROUPED_AFTER, prevId == null ? "" : String(prevId));
 
-    // 乐观更新项目缓存，再逐条落库（跳过未分组占位）
+    // 乐观更新项目缓存：只按 id 覆盖 sort_order（M8 后列表含折叠隐藏项，
+    // 整表替换会把它们从缓存里抹掉导致展开后闪空）
     const reorderedProjects = reordered
       .filter((id) => id !== UNGROUPED_ID)
       .map((id) => projectById.get(id))
       .filter((p): p is TodoProject => p != null);
-    qc.setQueryData(["todo-project", "list"], reorderedProjects);
+    const nextOrder = new Map(reorderedProjects.map((p, i) => [p.id, i + 1]));
+    qc.setQueryData<TodoProject[]>(["todo-project", "list"], (prev) =>
+      prev == null
+        ? prev
+        : prev.map((p) => (nextOrder.has(p.id) ? { ...p, sort_order: nextOrder.get(p.id)! } : p)),
+    );
     for (let i = 0; i < reorderedProjects.length; i++) {
       await todoProjectUpdateSortOrder(reorderedProjects[i].id, i + 1);
     }
@@ -494,35 +547,48 @@ export function ProjectSidebar({
               strategy={verticalListSortingStrategy}
             >
               <div className="space-y-0.5">
-                {orderedIds.map((id) =>
-                  id === UNGROUPED_ID ? (
-                    <SortableUngroupedRow
-                      key={id}
-                      active={ungroupedActive && !trashActive && !statsActive}
-                      onSelect={onSelectUngrouped}
-                    />
-                  ) : (
+                {orderedIds.map((id) => {
+                  if (id === UNGROUPED_ID) {
+                    return (
+                      <SortableUngroupedRow
+                        key={id}
+                        active={ungroupedActive && !trashActive && !statsActive}
+                        onSelect={onSelectUngrouped}
+                      />
+                    );
+                  }
+                  const node = nodeById.get(id);
+                  const project = node?.project ?? projectById.get(id);
+                  if (project == null) return null;
+                  const uuid = normalizeParentUuid(project.uuid);
+                  const hasChildren = (node?.children.length ?? 0) > 0;
+                  const isCollapsed = hasChildren && uuid != null && collapsedFolders.has(uuid);
+                  return (
                     <SortableProjectRow
                       key={id}
-                      project={projectById.get(id)!}
+                      project={project}
+                      depth={node?.depth ?? 0}
+                      hasChildren={hasChildren}
+                      collapsed={isCollapsed}
+                      onToggleCollapse={() => uuid != null && toggleFolder(uuid)}
                       undoneCount={undoneCounts[id] ?? 0}
                       active={effectiveProjectId === id && !ungroupedActive}
                       onSelect={() => onSelectProject(id)}
                       onRequestDelete={(hasUndone, undoneCount) => {
-                        const project = projectById.get(id);
-                        if (project) setDeleteTarget({ project, hasUndone, undoneCount });
+                        const target = projectById.get(id);
+                        if (target) setDeleteTarget({ project: target, hasUndone, undoneCount });
                       }}
                       onRequestEdit={() => {
-                        const project = projectById.get(id);
-                        if (project) setEditTarget(project);
+                        const target = projectById.get(id);
+                        if (target) setEditTarget(target);
                       }}
                       onRequestArchive={() => {
-                        const project = projectById.get(id);
-                        if (project) void toggleArchive(project);
+                        const target = projectById.get(id);
+                        if (target) void toggleArchive(target);
                       }}
                     />
-                  ),
-                )}
+                  );
+                })}
 
                 {/* 内联新增：输入框固定在已有项目之后 */}
                 {adding && (
@@ -651,9 +717,10 @@ export function ProjectSidebar({
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* 编辑项目（#36）：重命名 + 10 色板改色；点确定一次提交 */}
+      {/* 编辑项目（#36 重命名 + 改色；M8 追加「上级文件夹」选择） */}
       <ProjectEditDialog
         project={editTarget}
+        projects={projects}
         onClose={() => setEditTarget(null)}
         onSaved={() => void refetchProjects()}
       />
@@ -661,35 +728,60 @@ export function ProjectSidebar({
   );
 }
 
-/** 编辑项目对话框：名称 Input + 10 色预设板；保存 = todoProjectUpdate(title, hex_color) */
+/**
+ * 编辑项目对话框：名称 Input + 10 色预设板 + 上级文件夹 Select。
+ * 保存 = todoProjectUpdate(title, hex_color, parent_uuid)，
+ * 三个字段各自「有变化才提交」（parent_uuid 走三态：null = 移到顶层）。
+ */
 function ProjectEditDialog({
   project,
+  projects,
   onClose,
   onSaved,
 }: {
   project: TodoProject | null;
+  /** 全量活跃项目：供「上级文件夹」候选计算（排除自身与后代，防成环） */
+  projects: TodoProject[];
   onClose: () => void;
   onSaved: () => void;
 }) {
   const [title, setTitle] = useState("");
   const [color, setColor] = useState("");
+  const [parentUuid, setParentUuid] = useState<string>(PARENT_NONE);
   // 打开时装载当前项目值（key 重挂载或 open 翻转均可正确初始化）
   const [loadedFor, setLoadedFor] = useState<number | null>(null);
   if (project != null && loadedFor !== project.id) {
     setLoadedFor(project.id);
     setTitle(project.title);
     setColor(project.hex_color || PRESET_10[3]);
+    setParentUuid(normalizeParentUuid(project.parent_uuid) ?? PARENT_NONE);
   }
+
+  const selfUuid = normalizeParentUuid(project?.uuid);
+  const parentOptions = useMemo(
+    () =>
+      parentFolderCandidates(projects, selfUuid).filter(
+        (c) => normalizeParentUuid(c.uuid) != null,
+      ),
+    [projects, selfUuid],
+  );
+  const folderLabels = useMemo(
+    () => buildFolderPathLabels(buildProjectTree(projects)),
+    [projects],
+  );
 
   if (project == null) return null;
 
   const save = async () => {
     const t = title.trim();
     if (!t) return;
+    const nextParent = parentUuid === PARENT_NONE ? null : parentUuid;
+    const currentParent = normalizeParentUuid(project.parent_uuid);
     try {
       await todoProjectUpdate(project.id, {
         title: t !== project.title ? t : undefined,
         hex_color: color !== project.hex_color ? color : undefined,
+        parent_uuid: nextParent !== currentParent ? nextParent : undefined,
       });
       onSaved();
     } finally {
@@ -731,6 +823,28 @@ function ProjectEditDialog({
                 style={{ background: c }}
               />
             ))}
+          </div>
+          {/* 上级文件夹：候选排除自身与后代；显示带祖先路径避免同名歧义 */}
+          <div className="space-y-1.5">
+            <label
+              className="text-xs text-muted-foreground"
+              htmlFor="project-parent-folder"
+            >
+              上级文件夹
+            </label>
+            <Select value={parentUuid} onValueChange={setParentUuid}>
+              <SelectTrigger id="project-parent-folder" className="w-full">
+                <SelectValue placeholder="顶层（不分组）" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={PARENT_NONE}>顶层（不分组）</SelectItem>
+                {parentOptions.map((c) => (
+                  <SelectItem key={c.uuid} value={c.uuid}>
+                    {folderLabels.get(c.uuid) ?? c.title}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         </div>
         <DialogFooter>
@@ -786,9 +900,13 @@ function SortableUngroupedRow({
   );
 }
 
-/** 单行可拖拽项目项 */
+/** 单行可拖拽项目项（M8：带层级缩进与子项目折叠箭头） */
 function SortableProjectRow({
   project,
+  depth,
+  hasChildren,
+  collapsed,
+  onToggleCollapse,
   undoneCount,
   active,
   onSelect,
@@ -797,12 +915,18 @@ function SortableProjectRow({
   onRequestArchive,
 }: {
   project: TodoProject;
+  /** 层级深度：顶层 0，每层缩进 14px */
+  depth: number;
+  /** 是否有子项目（无子项目时渲染占位保持图标列对齐） */
+  hasChildren: boolean;
+  collapsed: boolean;
+  onToggleCollapse: () => void;
   undoneCount: number;
   active: boolean;
   onSelect: () => void;
   /** 上报删除请求；hasUndone 决定弹窗类型（保护 / 确认） */
   onRequestDelete: (hasUndone: boolean, undoneCount: number) => void;
-  /** 上报编辑请求（重命名/改色；#36） */
+  /** 上报编辑请求（重命名/改色/改上级文件夹；#36 + M8） */
   onRequestEdit: () => void;
   /** 上报归档请求（本批新增；is_archived 翻转由父级 toggleArchive 处理） */
   onRequestArchive: () => void;
@@ -814,9 +938,17 @@ function SortableProjectRow({
   return (
     <div
       ref={setNodeRef}
-      style={{ transform: transform ? `translateY(${transform.y}px)` : undefined, transition }}
+      data-testid="project-row"
+      data-uuid={project.uuid}
+      data-depth={depth}
+      style={{
+        transform: transform ? `translateY(${transform.y}px)` : undefined,
+        transition,
+        // 层级缩进用物理属性 paddingLeft（避开与 Tailwind `px-2` 的逻辑属性 padding-inline 冲突）
+        paddingLeft: 8 + depth * 14,
+      }}
       className={cn(
-        "group flex items-center gap-2 rounded-md px-2 py-1.5 text-sm",
+        "group flex items-center gap-2 rounded-md py-1.5 pr-2 text-sm",
         active ? "bg-primary/10 font-medium text-primary" : "hover:bg-sidebar-accent/50",
       )}
     >
@@ -825,7 +957,28 @@ function SortableProjectRow({
         {...listeners}
         className="w-3 cursor-grab text-muted-foreground/30 opacity-0 group-hover:opacity-100"
       />
-      {/* 右键菜单：标题头 + 编辑项目（重命名/改色）+ 归档 + 删除（保护弹窗由父级处理） */}
+      {/* 折叠箭头：仅父节点渲染；叶子渲染等宽占位保持名称左对齐 */}
+      {hasChildren ? (
+        <button
+          type="button"
+          aria-label={`${collapsed ? "展开" : "折叠"}子项目 ${project.title}`}
+          aria-expanded={!collapsed}
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggleCollapse();
+          }}
+          className="flex size-4 shrink-0 items-center justify-center rounded text-muted-foreground hover:text-foreground"
+        >
+          {collapsed ? (
+            <ChevronRight className="size-3.5" />
+          ) : (
+            <ChevronDown className="size-3.5" />
+          )}
+        </button>
+      ) : (
+        <span className="size-4 shrink-0" aria-hidden />
+      )}
+      {/* 右键菜单：标题头 + 编辑项目（重命名/改色/改上级）+ 归档 + 删除（保护弹窗由父级处理） */}
       <ProjectContextMenu
         project={project}
         onRequestDelete={() => onRequestDelete(undoneCount > 0, undoneCount)}

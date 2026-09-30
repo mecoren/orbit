@@ -105,6 +105,12 @@ pub struct TodoProject {
     pub description: Option<String>,
     pub hex_color: String,
     pub sort_order: f64,
+    /// 上级文件夹（父项目）的**同步主键 uuid**；None = 顶层（M8 清单文件夹分组）
+    ///
+    /// 存 uuid 而非本表 id：云同步的整数外键翻译只支持表间引用（父表先于子表定序 +
+    /// 从本端已落库行建映射），自引用会让父行未到即整表合并失败并永久卡住。
+    /// 详见 `db/migrations/0003_project_parent.sql` 头注释。
+    pub parent_uuid: Option<String>,
     pub is_archived: i32,
     pub is_deleted: i32,
     pub created_at: i64,
@@ -120,6 +126,9 @@ pub struct TodoProjectCreateInput {
     pub description: Option<String>,
     pub hex_color: Option<String>,
     pub sort_order: Option<f64>,
+    /// 上级文件夹 uuid（M8）；None / 空串 = 顶层
+    #[serde(default)]
+    pub parent_uuid: Option<String>,
 }
 
 /// todo_projects 更新输入（Option<Option<T>> 模式）
@@ -131,6 +140,14 @@ pub struct TodoProjectUpdateInput {
     pub sort_order: Option<f64>,
     /// 归档切换：Some(1)=归档（侧栏折叠区+不进默认任务列表），Some(0)=恢复
     pub is_archived: Option<i32>,
+    /// 上级文件夹 uuid（M8）：外层 Some = 本次要改，内层 None = 移到顶层
+    ///
+    /// `nullable::deserialize`：JSON `null` / 缺键在这一层才能分开——
+    /// 缺键 → 外层 None（不改）；`null` → `Some(None)`（移到顶层）。
+    /// 空白串同样按「顶层」处理（见 `normalize_parent_uuid`），前端清空控件时
+    /// 无论提交 null 还是 "" 语义一致。
+    #[serde(default, deserialize_with = "nullable::deserialize")]
+    pub parent_uuid: Option<Option<String>>,
 }
 
 // ---------- todo_tasks ----------

@@ -648,6 +648,7 @@ mod tests {
                 description: None,
                 hex_color: Some("#2DB87A".to_string()),
                 sort_order: None,
+                parent_uuid: None,
             },
         )
         .await

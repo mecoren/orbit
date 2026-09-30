@@ -180,6 +180,8 @@ class MockOrbitBridge implements OrbitBridge {
           'description': input.description,
           'hex_color': input.hexColor ?? '#4E8CFF',
           'sort_order': input.sortOrder ?? store.projects.length,
+          // M8：空白串归一为 null（与 core normalize_parent_uuid 同口径）
+          'parent_uuid': normalizeParentUuid(input.parentUuid),
           'is_archived': 0,
           'is_deleted': 0,
           'created_at': store.now(),
@@ -196,6 +198,10 @@ class MockOrbitBridge implements OrbitBridge {
   Future<TodoProject> todoProjectUpdate(int id, String patchJson) => _delay(() {
         final p = store.projects[id] ?? _notFound('project $id');
         store.mergePatch(p, patchJson);
+        // M8：合并后统一归一化（缺键 = 不改，因 mergePatch 按 patch 语义写入；
+        // 写了 null / 空白串 = 移到顶层）。Dart 无 undefined 概念，不存在桌面 mock
+        // 那种「未提供字段被覆盖成 undefined」的 JSON 边界问题。
+        p['parent_uuid'] = normalizeParentUuid(p['parent_uuid'] as String?);
         _emit('todo_projects');
         return TodoProject.fromJson(p);
       });
@@ -1565,6 +1571,8 @@ class MockOrbitBridge implements OrbitBridge {
       'description': null,
       'hex_color': '#3B82F6',
       'sort_order': 0,
+      // M8：CSV 导入自动建的项目一律顶层（导入不解析文件夹列）
+      'parent_uuid': null,
       'is_deleted': 0,
       'created_at': now,
       'updated_at': now,

@@ -23,6 +23,7 @@ import '../../shared/widgets/sync_status_button.dart';
 import '../../shared/widgets/shadcn/orbit_toast.dart';
 import 'logic/project_actions.dart';
 import 'logic/project_palette.dart';
+import 'logic/project_tree.dart';
 import 'logic/task_logic.dart';
 import 'providers/todo_providers.dart';
 import 'quick_add_sheet.dart' show showQuickAddSheet;
@@ -45,6 +46,10 @@ class SidebarScreen extends ConsumerStatefulWidget {
 /// 实际取值在 `logic/project_palette.dart`（侧栏 / 编辑项目整页 / 取色抽屉共用）
 class _SidebarScreenState extends ConsumerState<SidebarScreen> {
   final _scrollController = ScrollController();
+
+  /// M8 折叠中的文件夹（按项目 uuid 记账）。会话内状态、不持久化：
+  /// 层级是低频操作，折叠是临时浏览动作。
+  final Set<String> _collapsedFolders = <String>{};
 
   @override
   void initState() {
@@ -102,6 +107,21 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
   /// 各项目未完成计数（单遍产物）
   Map<int, int> _undoneByProject(SidebarCounts counts) => counts.undoneByProject;
 
+  // ── M8 项目层级 ──
+
+  /// 按 parentUuid 构成的树 → 按折叠状态展平为渲染序列（父在前，子紧随其后）
+  List<ProjectTreeNode> _visibleProjectNodes(List<TodoProject> projects) =>
+      flattenProjectTree(
+        buildProjectTree(projects),
+        (uuid) => _collapsedFolders.contains(uuid),
+      );
+
+  void _toggleFolder(String uuid) {
+    setState(() {
+      if (!_collapsedFolders.remove(uuid)) _collapsedFolders.add(uuid);
+    });
+  }
+
   // ── 导航 ──
 
   void _openView(QuickViewKey key) => context.push('/todo/tasks?view=${key.name}');
@@ -122,9 +142,15 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
   /// onReorderItem（newIndex 已归一化为语义插入位）：本地重排 → 逐条落库
   /// sortOrder（单条失败忽略，继续其余）→ 完成后 invalidate 项目 provider
   /// 以服务端权威顺序刷新。
+  ///
+  /// M8：重排作用于**当前可见序列**（树展平后的顺序），且只改同级 sortOrder，
+  /// **不改 parentUuid**（改层级走编辑页的「上级文件夹」）。被折叠隐藏的后代
+  /// 不在可见序列内，保留原编号——它们只与自身兄弟集比较，不受影响。
   Future<void> _reorderProjects(int oldIndex, int newIndex) async {
-    final reordered =
-        reorderItems(ref.read(todoProjectsProvider).value ?? const [], oldIndex, newIndex);
+    final visible = _visibleProjectNodes(
+      ref.read(todoProjectsProvider).value ?? const [],
+    ).map((n) => n.project).toList();
+    final reordered = reorderItems(visible, oldIndex, newIndex);
     final bridge = ref.read(orbitBridgeProvider);
     for (var i = 0; i < reordered.length; i++) {
       try {
@@ -262,9 +288,11 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
     final undoneByProject = _undoneByProject(counts);
     final badgeBackground = colors.surfaceSecondary;
     final archivedProjects = _archivedProjects();
+    // M8：项目按 parentUuid 构成层级树后展平（父在前、子紧随其后；折叠节点隐藏子孙）
+    final visibleNodes = _visibleProjectNodes(projects);
     // 项目卡段数：项目行 + 末尾「新建项目」行共拼一张卡
     //（今天任务列表同款整卡口径，见任务子列表 cardListPadding + OrbitCardSegment）
-    final projectCardCount = projects.length + 1;
+    final projectCardCount = visibleNodes.length + 1;
 
     return Scaffold(
       body: Stack(
@@ -343,9 +371,9 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
                             horizontal: AppDimens.space12),
                         physics: const NeverScrollableScrollPhysics(),
                         buildDefaultDragHandles: false,
-                        itemCount: projects.length,
+                        itemCount: visibleNodes.length,
                         itemBuilder: (context, index) => _buildProjectRow(
-                          projects[index],
+                          visibleNodes[index],
                           undoneByProject,
                           index,
                           OrbitCardEdge.of(index, projectCardCount),
@@ -387,7 +415,7 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
                             horizontal: AppDimens.space12),
                         child: OrbitCardSegment(
                           edge: OrbitCardEdge.of(
-                              projects.length, projectCardCount),
+                              visibleNodes.length, projectCardCount),
                           child: ListTile(
                             leading: Icon(
                               OrbitIcons.add,
@@ -666,14 +694,21 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
     );
   }
 
+  /// 项目行（M8：带层级缩进与子项目折叠箭头）
+  ///
+  /// 缩进 = depth × 14（在 Row 首插等宽空白，Expanded 标题自适应收窄）；
+  /// 折叠箭头仅父节点渲染，叶子渲染等宽占位保持图标列对齐。
   Widget _buildProjectRow(
-    TodoProject project,
+    ProjectTreeNode node,
     Map<int, int> undoneByProject,
     int index, [
     OrbitCardEdge edge = OrbitCardEdge.none,
   ]) {
     final colors = AppColors.ofContext(context);
+    final project = node.project;
     final undone = undoneByProject[project.id] ?? 0;
+    final hasChildren = node.children.isNotEmpty;
+    final collapsed = hasChildren && _collapsedFolders.contains(project.uuid);
     return InkWell(
       key: ValueKey(project.id),
       onTap: () => _openProject(project),
@@ -689,6 +724,24 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
           ),
         child: Row(
           children: [
+            if (node.depth > 0) SizedBox(width: node.depth * 14),
+            // 折叠箭头（有子项目才有；点击只切折叠态，不触发行导航）
+            if (hasChildren)
+              GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () => _toggleFolder(project.uuid),
+                child: SizedBox(
+                  width: AppDimens.iconSizeMd + AppDimens.space8,
+                  height: AppDimens.touchTarget,
+                  child: Icon(
+                    collapsed ? OrbitIcons.chevronRight : OrbitIcons.expandMore,
+                    size: AppDimens.iconSizeMd,
+                    color: colors.secondaryText,
+                  ),
+                ),
+              )
+            else
+              const SizedBox(width: AppDimens.iconSizeMd + AppDimens.space8),
             // 项目固定图标（folder_rounded）按项目自选色染色，无色回退强调色
             Icon(
               OrbitIcons.folder,

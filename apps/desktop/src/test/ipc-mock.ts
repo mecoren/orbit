@@ -27,6 +27,8 @@ interface MockProject {
   description: string | null;
   hex_color: string;
   sort_order: number;
+  /** M8 上级文件夹（父项目）同步主键 uuid；null = 顶层 */
+  parent_uuid: string | null;
   is_archived: number;
   is_deleted: number;
   created_at: number;
@@ -198,6 +200,7 @@ export function seedDefault(db: MockDb) {
     description: null,
     hex_color: "#3B82F6",
     sort_order: 0,
+    parent_uuid: null,
     is_archived: 0,
     is_deleted: 0,
     created_at: now,
@@ -574,6 +577,8 @@ const commands: Record<string, (args: any, ctx: Ctx) => unknown> = {
       description: input.description ?? null,
       hex_color: input.hex_color ?? "#3B82F6",
       sort_order: input.sort_order ?? 0,
+      // M8：空白串归一为 null（与 core normalize_parent_uuid 同口径）
+      parent_uuid: input.parent_uuid?.trim() ? input.parent_uuid : null,
       is_archived: 0,
       is_deleted: 0,
       created_at: now,
@@ -587,7 +592,12 @@ const commands: Record<string, (args: any, ctx: Ctx) => unknown> = {
   todo_projects_update: ({ id, input }, { db }) => {
     const p = db.projects.find((x) => x.id === id);
     if (!p) throw new Error(`project ${id} 不存在`);
-    Object.assign(p, input, { updated_at: Date.now(), version: p.version + 1 });
+    const { parent_uuid, ...rest } = input;
+    Object.assign(p, rest, { updated_at: Date.now(), version: p.version + 1 });
+    // M8 三态：缺键 = 不改；null / 空白串 = 移到顶层（对齐 core nullable 反序列化）
+    if (parent_uuid !== undefined) {
+      p.parent_uuid = parent_uuid?.trim() ? parent_uuid : null;
+    }
     return ipcClone(p);
   },
   todo_projects_delete: ({ id }, { db }) => {
@@ -1856,6 +1866,7 @@ function ensureMockProject(db: MockDb, title: string): number {
     description: null,
     hex_color: "#3B82F6",
     sort_order: 0,
+    parent_uuid: null,
     is_archived: 0,
     is_deleted: 0,
     created_at: now,
@@ -1970,7 +1981,14 @@ export function installBrowserIpc() {
       const impl = commands[cmd];
       if (!impl) return Promise.reject(notImplemented(cmd));
       try {
-        const result = impl(args ?? {}, { db });
+        // 模拟真实 Tauri IPC 的 JSON 边界（mock 独有语义）：真实链路的 invoke
+        // 参数经 JSON 序列化，**值为 undefined 的键会被丢弃**；mock 直传对象
+        // 则会让命令实现里的 `Object.assign(entity, input)` 把字段覆盖成
+        // undefined——2026-09-30 实测：编辑项目只改颜色 → 项目标题被清空
+        // （由 e2e/project-folder.spec.ts 的文本断言暴露）。不做这层净化，
+        // mock 与真实链路的「缺键 = 不改」语义就永久漂移。
+        const wireArgs = JSON.parse(JSON.stringify(args ?? {})) as Record<string, unknown>;
+        const result = impl(wireArgs, { db });
         // 写命令的 db-change 广播【推迟到宏任务】：真实 Tauri 下 Rust 侧
         // EVENT_BUS 转发经 IPC 异步到达，绝不在 invoke 调用栈内同步触发。
         // mock 若在 React 事件 handler 的同步栈里广播（invoke 同步 resolve），

@@ -19,6 +19,7 @@ import '../../shared/widgets/shadcn/orbit_page_header.dart';
 import '../../shared/widgets/shadcn/orbit_section_card.dart';
 import 'logic/project_actions.dart';
 import 'logic/project_palette.dart';
+import 'logic/project_tree.dart';
 import 'logic/view_mode.dart';
 import 'providers/todo_providers.dart';
 
@@ -60,6 +61,12 @@ class _ProjectEditPageState extends ConsumerState<ProjectEditPage> {
   String _originalColor = projectNoColor;
   TaskViewMode _originalViewMode = TaskViewMode.list;
 
+  /// M8 上级文件夹：当前选择（null = 顶层）、初值快照、自身 uuid
+  /// （自身 uuid 用于「上级文件夹」候选排除——排除自身与后代，否则成环必被 Rust 拒）
+  String? _parentUuid;
+  String? _originalParentUuid;
+  String? _selfUuid;
+
   /// 已按项目初始化过一次（provider 首帧可能尚未就绪，故与 build 同帧补种）
   bool _seeded = false;
   bool _saving = false;
@@ -78,13 +85,17 @@ class _ProjectEditPageState extends ConsumerState<ProjectEditPage> {
     _originalTitle = project.title;
     _originalColor = project.hexColor;
     _originalViewMode = _viewMode;
+    _selfUuid = normalizeParentUuid(project.uuid);
+    _parentUuid = normalizeParentUuid(project.parentUuid);
+    _originalParentUuid = _parentUuid;
     _seeded = true;
   }
 
   bool _isDirty(TodoProject project) =>
       _titleController.text.trim() != _originalTitle ||
       _color != _originalColor ||
-      _viewMode != _originalViewMode;
+      _viewMode != _originalViewMode ||
+      _parentUuid != _originalParentUuid;
 
   /// 该项目下未完成任务数（删除保护流用；与侧栏计数同口径）
   ///
@@ -101,6 +112,7 @@ class _ProjectEditPageState extends ConsumerState<ProjectEditPage> {
       project: project,
       title: _titleController.text,
       hexColor: _color,
+      parentUuid: _parentUuid,
     );
     // 视图档只写「项目档」：全局档保持「非项目视图的默认值」语义；
     // 用户没改过视图档时不落盘（否则会把全局档钉死成该项目的初值）。
@@ -160,11 +172,11 @@ class _ProjectEditPageState extends ConsumerState<ProjectEditPage> {
   Widget build(BuildContext context) {
     final colors = AppColors.ofContext(context);
     final projectId = widget.projectId;
+    // M8：全量活跃项目列表既是「当前项目」的数据源，也是「上级文件夹」候选集
+    final projects = ref.watch(todoProjectsProvider).value ?? const <TodoProject>[];
     final project = projectId == null
         ? null
-        : (ref.watch(todoProjectsProvider).value ?? const <TodoProject>[])
-            .where((p) => p.id == projectId)
-            .firstOrNull;
+        : projects.where((p) => p.id == projectId).firstOrNull;
 
     // provider 首帧未就绪时就地补种（同一帧内使用，故不 setState）
     if (project != null && !_seeded) _seed(project);
@@ -185,7 +197,7 @@ class _ProjectEditPageState extends ConsumerState<ProjectEditPage> {
                     padding: EdgeInsets.only(top: topInset),
                     child: const EmptyState(message: '项目不存在或已删除'),
                   )
-                : _form(colors, project, topInset),
+                : _form(colors, project, topInset, projects),
           ),
           Positioned(
             top: 0,
@@ -246,7 +258,12 @@ class _ProjectEditPageState extends ConsumerState<ProjectEditPage> {
     );
   }
 
-  Widget _form(AppColorSet colors, TodoProject project, double topInset) {
+  Widget _form(
+    AppColorSet colors,
+    TodoProject project,
+    double topInset,
+    List<TodoProject> projects,
+  ) {
     return ListView(
       padding: EdgeInsets.fromLTRB(
         AppDimens.space16,
@@ -275,7 +292,81 @@ class _ProjectEditPageState extends ConsumerState<ProjectEditPage> {
             ],
           ),
         ),
+        // M8 上级文件夹：把本清单挂到另一个清单下（侧栏以层级树渲染）
+        const SizedBox(height: AppDimens.cardGap),
+        SectionCard(
+          title: '上级文件夹',
+          child: _parentFolderRow(colors, projects),
+        ),
       ],
+    );
+  }
+
+  /// 上级文件夹行（M8）：显示当前层级（带祖先路径），点击弹出候选面板
+  Widget _parentFolderRow(AppColorSet colors, List<TodoProject> projects) {
+    final labels = buildFolderPathLabels(buildProjectTree(projects));
+    final currentLabel = _parentUuid == null
+        ? '顶层（不分组）'
+        : (labels[_parentUuid] ?? '上级文件夹');
+    return InkWell(
+      onTap: () => _pickParentFolder(projects, labels),
+      borderRadius: AppShapes.small,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: AppDimens.space8),
+        child: Row(
+          children: [
+            Icon(
+              OrbitIcons.folder,
+              size: AppDimens.iconSizeMd,
+              color: colors.iconText,
+            ),
+            const SizedBox(width: AppDimens.space12),
+            Expanded(
+              child: Text(
+                currentLabel,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontSize: 15, color: colors.titleText),
+              ),
+            ),
+            Icon(
+              OrbitIcons.expandMore,
+              size: AppDimens.iconSizeMd,
+              color: colors.secondaryText,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// 上级文件夹候选面板（M8）
+  ///
+  /// 候选**排除自身与全部后代**——否则成环，Rust `validate_project_parent` 必拒；
+  /// 文案带祖先路径（"父 / 子"）避免不同层级同名歧义。
+  void _pickParentFolder(List<TodoProject> projects, Map<String, String> labels) {
+    final items = <OrbitPanelItem>[
+      OrbitPanelItem(
+        icon: _parentUuid == null ? OrbitIcons.check : OrbitIcons.inbox,
+        label: '顶层（不分组）',
+        onTap: () => setState(() => _parentUuid = null),
+      ),
+    ];
+    for (final c in parentFolderCandidates(projects, _selfUuid)) {
+      final uuid = normalizeParentUuid(c.uuid);
+      if (uuid == null) continue;
+      items.add(
+        OrbitPanelItem(
+          icon: _parentUuid == uuid ? OrbitIcons.check : OrbitIcons.folder,
+          label: labels[uuid] ?? c.title,
+          onTap: () => setState(() => _parentUuid = uuid),
+        ),
+      );
+    }
+    showOrbitDropdownPanel(
+      context,
+      topInset: _topInset(context),
+      groups: [items],
     );
   }
 
