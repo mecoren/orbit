@@ -16,6 +16,33 @@
 
 ## [Unreleased]
 
+### 日历周视图（对标 TickTick Week View）
+
+- **桌面日历新增第四档「周」**（月 / 周 / 年 / 议程）：月历组件
+  `components/business/month-calendar.tsx` 新增 `mode="week"`，日期网格由 6×7 月网格
+  换为**锚点周 7 格（周一→周日）**，其余全部沿用月档同一套实现——今天/休息日/选中态色块、
+  休班徽标、农历副标签、任务圆点行、右键快捷新增、**圆点拖拽改期**（落点 id 仍是
+  `day:<ms>`，`rescheduleDue` 原样复用），零交互分叉。
+- **周档锚点 = 选中日**，翻周即选中日 ±7 天（头部前后按钮与周条滚轮走同一回调），
+  不新增视图态——与月档「右栏跟随视图月、选中日高亮定位」同一心智模型，档位来回切换不丢选中日。
+- **右栏口径换为「本周任务」**：复用月档的虚拟化分组列表，区间按 ymd 字典序过滤
+  （周一 00:00 ~ 周日 24:00 闭区间）；空态与加载骨架同月/年档口径。
+- **「回到今天」在周档保留档位**（语义为「回到本周」），月档/议程档维持原有「回今天并切回月档」。
+- **周档视觉独立于 fillHeight 拉伸**：7 格拉伸到整屏高度会退化成细长条，故周条恒为
+  单行自然高度 + 在左栏内垂直居中（`cellWeek` / `gridWeek` / `numberWeek` / `titleWeek`
+  四组尺寸令牌，与 42 格网格分开调校）。
+- **日期工具收敛**：新增 `lib/date-utils.ts` 作为本地时区日期计算的单一出口
+  （`startOfDay` / `addDays` / `startOfWeek` / `formatYmd` / `dayKey` / `relativeLabel` /
+  `dayLabel` / `weekRangeLabel`），替换原先散落在月历、日历视图、快捷日期、NLP 解析的
+  4 份 `startOfDay` 与 2 份 `formatYmd`；网格构造抽为 `lib/calendar-grid.ts`
+  （`buildMonthGrid` / `buildWeekGrid`）使纯日期计算可被单测直接覆盖。
+- **移动端无需改动**：`table_calendar` 的周档（`CalendarFormat.week`，上滑月历收成单行周条）
+  已随日历页老版本落地并带专项测试（收展对齐选中日所在周 / 跨月周补位不弱化 / 横滑翻周 ±7 天），
+  本次仅核验确认，未改并发会话正在重构的日历页。
+- 测试：新增 `lib/date-utils.test.ts`（17 例）+ `lib/calendar-grid.test.ts`（10 例，含
+  周日锚点归属本周、跨年周不裁剪、逐格递增无空洞等边界）；新增 e2e `e2e/calendar-week.spec.ts`
+  （7 列网格 / 周区间标题 / 翻周 ±7 天 / 回到今天留档 / 切回月档 42 格）。桌面单测 430 passed。
+
 ### 每日摘要提醒（对标 TickTick Daily Reminder）
 
 - **新增每日摘要提醒**：每天固定时刻一条汇总通知「今日 N 项 · 逾期 M 项（· 已完成 K 项）」。

@@ -3,16 +3,16 @@
  *
  * 左右分栏（参考 wait-home important-date/calendar-view）：
  * - 左半区：月历（Days Matter 风格：内缩色块 + 休/班徽标 + 农历副标签 + 任务圆点）
- *   或年视图（点击月份标题切换；12 个迷你月历 + 干支生肖 + 春节/初一下划线）
- * - 右半区：当前范围的任务列表（月模式按日分组、选中日高亮并滚动定位；
+ *   或周条（G1：7 列周一起始 + 同款格子视觉）/ 年视图（12 个迷你月历）
+ * - 右半区：当前范围的任务列表（月/周模式按日分组、选中日高亮并滚动定位；
  *   年模式按月分节）；点击任务行打开详情抽屉
  * - 议程档保留（#24）：整月按日分组的滚动列表 + 右键菜单，与分栏布局互斥切换
  *
  * 交互：
  * - 左键日格 = 选中该日（右栏滚动定位）；右键日格 = 直接打开新增表单并预填该日
  * - 任务在格内只渲染优先级色圆点（≤4 个 + "+N"），标题移入右侧列表防撑高
- * - 今天按钮回位（含切回月模式）；节假日手动更新（显示上次更新时间，
- *   每日 8 点守护自动更新 + 錯过补更，数据层在 orbit-core holiday_api）
+ * - 今天按钮回位（月档切回月模式；周档留在周档看本周）；节假日手动更新（显示
+ *   上次更新时间，每日 8 点守护自动更新 + 錯过补更，数据层在 orbit-core holiday_api）
  *
  * 范围遵循 04 §四 内存筛选语义：由 list-page 注入已筛选的 visibleTasks。
  */
@@ -36,6 +36,7 @@ import {
   CalendarDays,
   CalendarRange,
   CalendarX,
+  Columns3,
   Inbox,
   LocateFixed,
   Loader2,
@@ -61,7 +62,7 @@ import {
   type HolidayMark,
 } from "@/components/business/month-calendar";
 import { daySubLabel } from "../shared/almanac";
-import { formatYmd } from "../shared/lunar";
+import { addDays, dayKey, dayLabel, formatYmd, relativeLabel, startOfDay, startOfWeek, weekRangeLabel } from "@/lib/date-utils";
 import { rescheduleDue } from "../shared/reschedule-due";
 import { useHolidayMarks } from "../shared/use-holiday-marks";
 import { holidaysUpdate, holidayMeta, todoTaskUpdate } from "@/lib/tauri";
@@ -74,7 +75,7 @@ import { YearOverviewPanel, MAX_YEAR, MIN_YEAR } from "./year-overview";
 import { useWheelStepRef, shiftYearMonth } from "../shared/wheel-nav";
 import type { ProjectedTaskLabel, TodoProject, TodoTask } from "@/lib/tauri";
 
-export type CalendarSubMode = "month" | "year" | "agenda";
+export type CalendarSubMode = "month" | "week" | "year" | "agenda";
 
 interface CalendarViewProps {
   tasks: TodoTask[];
@@ -99,32 +100,7 @@ const RIGHT_PANE = "flex min-h-0 flex-1 flex-col rounded-xl border bg-card/40";
  *  max-w-3xl + mx-auto 水平居中——月历 lg 尺寸 7 列 + 年视图 3 列的最佳宽度 */
 const LEFT_CONTENT = "mx-auto min-h-0 w-full max-w-3xl flex-1";
 
-/** due_date（本地毫秒）→ 本地 YYYY-MM-DD，口径同 quick-add/表单日期链 */
-function dayKey(ms: number): string {
-  const d = new Date(ms);
-  const p = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
-}
-
-function startOfDay(d: Date): Date {
-  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
-}
-
-/** 选中日距今天的口语化天数 */
-function relativeLabel(date: Date): string {
-  const diff = Math.round(
-    (startOfDay(date).getTime() - startOfDay(new Date()).getTime()) / 86400000,
-  );
-  if (diff === 0) return "今天";
-  return diff > 0 ? `${diff}天后` : `${-diff}天前`;
-}
-
-/** 范围内某天的中文日期标签（如 "9月6日"） */
-function dayLabel(date: Date): string {
-  return `${date.getMonth() + 1}月${date.getDate()}日`;
-}
-
-/** 右栏按日分组（月模式 / 年模式节内） */
+/** 右栏按日分组（月/周模式 / 年模式节内） */
 interface DayGroup {
   key: string;
   date: Date;
@@ -171,6 +147,15 @@ export function CalendarView({
   const viewYearWheelRef = useWheelStepRef(stepViewYear);
   const viewMonthWheelRef = useWheelStepRef(stepViewMonth);
   const yearPaneWheelRef = useWheelStepRef(stepYearPaneYear);
+
+  // ---- 周档锚点（G1）：选中日所在周，翻周 = selected ±7 天 ----
+  // 与月档「右栏跟随视图月、选中日高亮定位」同一心智模型：档位切换不丢
+  // 选中日，右栏范围恒围绕它——故周档不额外引入 viewTime，直接派生。
+  const weekStart = useMemo(() => startOfWeek(selected), [selected]);
+  const weekEnd = useMemo(() => addDays(weekStart, 6), [weekStart]);
+  const stepViewWeek = (n: number) => setSelected((prev) => addDays(prev, n * 7));
+  const viewWeekWheelRef = useWheelStepRef(stepViewWeek);
+
   // 月模式某日全部任务的弹层（点圆点行「展开」按钮打开）
   const [expandedDay, setExpandedDay] = useState<Date | null>(null);
   const [updatingHolidays, setUpdatingHolidays] = useState(false);
@@ -274,20 +259,36 @@ export function CalendarView({
     [setSelectedTaskId],
   );
 
-  // ---- 右栏列表数据：月模式 = 当前月按日分组；年模式 = 当年按月分节 ----
+  // ---- 右栏列表数据：月模式 = 当前月按日分组；周模式 = 本周按日分组；
+  //      年模式 = 当年按月分节 ----
   const listGroups = useMemo<DayGroup[] | YearSection[]>(() => {
-    const buildDayGroups = (year: number, month: number): DayGroup[] => {
-      const prefix = `${year}-${String(month + 1).padStart(2, "0")}`;
-      return [...byDay.entries()]
-        .filter(([key]) => key.startsWith(prefix))
+    const toGroups = (entries: [string, TodoTask[]][]): DayGroup[] =>
+      entries
         .sort(([a], [b]) => a.localeCompare(b))
         .map(([key, list]) => ({
           key,
           tasks: list,
           date: new Date(`${key}T00:00:00`),
         }));
+
+    const buildDayGroups = (year: number, month: number): DayGroup[] => {
+      const prefix = `${year}-${String(month + 1).padStart(2, "0")}`;
+      return toGroups([...byDay.entries()].filter(([key]) => key.startsWith(prefix)));
     };
 
+    // 周档：闭区间过滤。ymd 为定宽零填充串，字典序即时间序——无需解析成
+    // 时间戳逐个比较（weekStart/weekEnd 均已零点对齐）
+    const buildWeekGroups = (): DayGroup[] => {
+      const from = formatYmd(weekStart);
+      const to = formatYmd(weekEnd);
+      return toGroups(
+        [...byDay.entries()].filter(([key]) => key >= from && key <= to),
+      );
+    };
+
+    if (subMode === "week") {
+      return buildWeekGroups();
+    }
     if (subMode !== "year") {
       return buildDayGroups(viewYear, viewMonth);
     }
@@ -297,7 +298,7 @@ export function CalendarView({
       if (groups.length > 0) sections.push({ key: `m-${m}`, month: m, groups });
     }
     return sections;
-  }, [subMode, byDay, viewYear, viewMonth, yearPaneYear]);
+  }, [subMode, byDay, viewYear, viewMonth, yearPaneYear, weekStart, weekEnd]);
 
   /** 右栏条目总数 */
   const listTotal = useMemo(() => {
@@ -313,15 +314,22 @@ export function CalendarView({
   /** 选中日定位（月模式）已下沉到 VirtualGroupedList.scrollToKey：
    *  虚拟化下目标组可能不在渲染窗内，DOM scrollIntoView 会失效 */
 
-  const goToday = () => {
+  /**
+   * 回到今天：年月同步 + 选中日落回今天
+   *
+   * keepMode = true 时不切档位——周档的「回到今天」语义是「回到本周」，
+   * 若顺手切回月档会丢掉用户正在看的周粒度；月档/议程档沿用既有口径
+   * （回今天并把视图拉回月档）。
+   */
+  const goToday = (keepMode = false) => {
     const now = startOfDay(new Date());
     setViewTime({ year: now.getFullYear(), month: now.getMonth() });
     setSelected(now);
-    setSubMode("month");
+    if (!keepMode) setSubMode("month");
   };
 
-  /** 头部动作：回到今天 + 刷新节假日（月/年模式共用，参考 wait-home headerActions） */
-  const headerActions = (
+  /** 头部动作：回到今天 + 刷新节假日（月/周模式共用，参考 wait-home headerActions） */
+  const renderHeaderActions = (keepMode: boolean) => (
     <>
       <Tooltip>
         <TooltipTrigger asChild>
@@ -329,7 +337,7 @@ export function CalendarView({
             variant="ghost"
             size="icon"
             className="size-8 text-muted-foreground"
-            onClick={goToday}
+            onClick={() => goToday(keepMode)}
             aria-label="回到今天"
           >
             <LocateFixed className="size-4" />
@@ -364,13 +372,20 @@ export function CalendarView({
       {/* 三档共用的右/下留白容器：议程档无 SPLIT_LAYOUT 的 pr/pb——
           在此层统一补齐，月/年分栏与议程列表右/下边距同口径（外层 Outlet 无 padding） */}
       <div className="flex min-h-0 flex-1 flex-col pr-4 pb-3 xl:pr-5">
-      {/* 工具栏：月/年/议程三档切换 + 节假日手动更新（议程档） */}
+      {/* 工具栏：月/周/年/议程四档切换 + 节假日手动更新（议程档） */}
       <div className="flex shrink-0 items-center justify-between gap-3 px-4 py-2">
         <h2 className="text-lg font-semibold">
           {subMode === "year" ? (
             <span ref={yearPaneWheelRef} title="滚轮切换年份">
               {yearPaneYear}年
             </span>
+          ) : subMode === "week" ? (
+            <>
+              <span>{weekStart.getFullYear()}年</span>
+              <span ref={viewWeekWheelRef} title="滚轮切换周">
+                {weekRangeLabel(weekStart, weekEnd)}
+              </span>
+            </>
           ) : (
             <>
               <span ref={viewYearWheelRef} title="滚轮切换年份">
@@ -398,6 +413,16 @@ export function CalendarView({
               variant="ghost"
               size="sm"
               className="h-8 gap-1.5 rounded-none"
+              aria-pressed={subMode === "week"}
+              onClick={() => setSubMode("week")}
+            >
+              <Columns3 size={14} />
+              周
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8 gap-1.5 rounded-none"
               aria-pressed={subMode === "year"}
               onClick={() => {
                 setYearPaneYear(viewYear);
@@ -420,7 +445,7 @@ export function CalendarView({
           </div>
           {subMode === "agenda" && (
             <>
-              <Button variant="outline" size="sm" className="h-8" onClick={goToday}>
+              <Button variant="outline" size="sm" className="h-8" onClick={() => goToday()}>
                 今天
               </Button>
               <Tooltip>
@@ -484,7 +509,7 @@ export function CalendarView({
                   {relativeLabel(selected)}
                 </span>
               }
-              headerActions={headerActions}
+              headerActions={renderHeaderActions(false)}
               holidays={holidayMarks}
               subLabel={(date) => daySubLabel(date)}
               dayChips={(date) => (
@@ -525,6 +550,93 @@ export function CalendarView({
                 <p className="text-sm font-medium">本月没有带截止日期的任务</p>
                 <p className="text-xs text-muted-foreground">
                   切换月份，或右键日历日期快速新增
+                </p>
+              </div>
+            ) : (
+              <VirtualGroupedList
+                groups={listGroups as DayGroup[]}
+                today={today}
+                selectedDay={selected}
+                scrollToKey={formatYmd(selected)}
+                projects={projects}
+                projectById={projectById}
+                labelsByTask={labelsByTask}
+                remindersByTask={remindersByTask}
+                onOpenDetail={openDetail}
+              />
+            )}
+          </div>
+        </div>
+      ) : subMode === "week" ? (
+        <div className={SPLIT_LAYOUT}>
+          {/* ===== 左半区：周条（G1，7 列周一起始；与月档同款格子视觉 + 拖拽改期） ===== */}
+          <div className={LEFT_PANE}>
+            <div className={LEFT_CONTENT}>
+              <DndContext
+                sensors={sensors}
+                collisionDetection={pointerWithin}
+                onDragStart={handleDragStart}
+                onDragEnd={(e) => void handleDragEnd(e)}
+              >
+              <MonthCalendar
+                size="lg"
+                mode="week"
+                fillHeight
+                // 周档锚点 = 选中日（组件内派生所在周）；year/month 不参与渲染
+                selected={selected}
+                // 周条整体滚轮翻周（±7 天，与头部前后按钮同一回调）
+                wheelStep={stepViewWeek}
+                onWeekChange={stepViewWeek}
+                onDayClick={setSelected}
+                onDayContextMenu={(e, date) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  onAddOnDate?.(formatYmd(date));
+                }}
+              headerSubtitle={
+                <span className="mt-2 text-xs text-muted-foreground">
+                  {relativeLabel(selected)}
+                </span>
+              }
+              headerActions={renderHeaderActions(true)}
+              holidays={holidayMarks}
+              subLabel={(date) => daySubLabel(date)}
+              dayChips={(date) => (
+                <DayDotsDropZone
+                  date={date}
+                  dayTasks={byDay.get(formatYmd(date)) ?? []}
+                  draggingId={draggingTaskId}
+                />
+              )}
+              />
+              </DndContext>
+            </div>
+          </div>
+
+          {/* ===== 右半区：本周任务（按日分组，选中日高亮定位） ===== */}
+          <div className={RIGHT_PANE}>
+            <div className="flex shrink-0 items-center gap-2 border-b px-4 py-3">
+              <h3 className="text-sm font-semibold">本周任务</h3>
+              <Badge variant="secondary">{listTotal} 条</Badge>
+              {listTotal > 0 && (
+                <span className="text-xs text-muted-foreground">点击日历日期可定位</span>
+              )}
+            </div>
+            {loading && listTotal === 0 ? (
+              // 加载态与月/年档同口径（H3）：查询进行中不闪空态
+              <div aria-busy className="flex min-h-0 flex-1 flex-col gap-2 p-4" data-testid="calendar-loading">
+                {Array.from({ length: 6 }, (_, i) => (
+                  <div key={i} className="h-12 animate-pulse rounded bg-muted" />
+                ))}
+              </div>
+            ) : listTotal === 0 ? (
+              <div className="flex flex-1 flex-col items-center justify-center gap-2 p-6 text-center">
+                <span className="flex size-12 items-center justify-center rounded-full bg-muted">
+                  <CalendarX className="size-6 text-muted-foreground" />
+                </span>
+                <p className="text-sm font-medium">本周没有带截止日期的任务</p>
+                <p className="text-xs text-muted-foreground">
+                  切换周次，或右键日历日期快速新增
                 </p>
               </div>
             ) : (

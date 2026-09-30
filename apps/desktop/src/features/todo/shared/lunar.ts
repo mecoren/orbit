@@ -98,10 +98,11 @@ export function lunarToSolarDate(
   return new Date(LUNAR_BASE + offset * 86400000);
 }
 
-/** Date → YYYY-MM-DD（按本地年月日） */
-export function formatYmd(d: Date): string {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-}
+/**
+ * Date → YYYY-MM-DD（按本地年月日）
+ *
+ * 实现已收敛到 `lib/date-utils`（G1 周视图统一日期出口），此处仅保留同名
+ * 导出供既有调用点（年视图 / 模板套用 / 新增表单 / 本模块测试）继续引用，
+ * 避免一次性改动 4 处引用点造成无谓 diff——新代码请直接引 `lib/date-utils`。
+ */
+export { formatYmd } from "@/lib/date-utils";

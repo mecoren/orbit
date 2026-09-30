@@ -15,6 +15,7 @@
  * 长词保护内部短词不被二次解析（如下周三 中的 周三）。
  * 未匹配的 #/@ token 原样保留在标题中，避免误删用户文字。
  */
+import { addDays, startOfDay } from "@/lib/date-utils";
 
 export interface QuickInputContext {
   projects: { id: number; title: string }[];
@@ -34,16 +35,6 @@ export interface ParsedQuickInput {
 
 const WEEKDAY_CN: Record<string, number> = { 一: 1, 二: 2, 三: 3, 四: 4, 五: 5, 六: 6, 日: 0, 天: 0 };
 const RELATIVE_DAYS: Record<string, number> = { 今天: 0, 明天: 1, 大后天: 3, 后天: 2 };
-
-function startOfDay(d: Date): Date {
-  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
-}
-
-function addDays(d: Date, n: number): Date {
-  const x = startOfDay(d);
-  x.setDate(x.getDate() + n);
-  return x;
-}
 
 /** 距下一个周一的天数（今天为周一也取下周一），与 quick-dates.nextMonday 同口径 */
 function nextMondayDelta(now: Date): number {

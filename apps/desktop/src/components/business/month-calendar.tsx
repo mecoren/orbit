@@ -1,5 +1,5 @@
 /**
- * 月历组件（Days Matter / 系统日历风格）
+ * 月历 / 周条组件（Days Matter / 系统日历风格）
  *
  * 移植自 wait-home apps/desktop/src/components/business/month-calendar.tsx，
  * 适配 orbit 待办日历场景：
@@ -9,8 +9,13 @@
  * - 农历/节日/节气副标签（shared/almanac daySubLabel 由调用方注入）
  * - 任务强调色圆点行（dayChips：≤4 圆点 + "+N"，标题移入右侧列表防撑高）
  * - 右键日格回调（onDayContextMenu：日历视图右击快捷新增）
- * - 头部：可点击月份标题（跳年视图）+ 副标题 + 前后翻月 + 动作插槽
+ * - 头部：可点击月份标题（跳年视图）+ 副标题 + 前后翻页 + 动作插槽
  * - 受控/非受控：传 year/month 受控，否则内部自管
+ *
+ * mode="week"（G1 周视图）：日期网格换为锚点周 7 格（周一→周日），行内所有
+ * 交互（选中/右键/拖拽落点/节假日/圆点）与月档完全一致；差异仅三处——
+ * 翻页粒度改为周（onWeekChange ±1）、标题改周区间、格子不参与 fillHeight
+ * 拉伸而改为在容器内垂直居中（7 格拉伸到整屏高度会变成细长条）。
  */
 import { useMemo, useState, type ReactNode } from "react";
 import type { MouseEvent } from "react";
@@ -18,6 +23,8 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { buildMonthGrid, buildWeekGrid } from "@/lib/calendar-grid";
+import { formatYmd, startOfDay, weekRangeLabel } from "@/lib/date-utils";
 import { useWheelStepRef } from "@/features/todo/shared/wheel-nav";
 
 export type MonthCalendarSize = "lg" | "md" | "sm";
@@ -54,6 +61,13 @@ export interface HolidayMark {
 
 export interface MonthCalendarProps {
   size?: MonthCalendarSize;
+  /**
+   * 网格粒度：month = 6×7 月网格（默认）；week = 锚点周 7 格（周一→周日）
+   *
+   * 周档锚点取 `selected`（未传则今天），翻页走 `onWeekChange`；此时
+   * `year`/`month`/`onMonthChange`/`onTitleClick` 不再参与渲染。
+   */
+  mode?: "month" | "week";
   /** 受控年份/月份（month 0-based）；不传则内部自管 */
   year?: number;
   month?: number;
@@ -64,6 +78,11 @@ export interface MonthCalendarProps {
   /** 日格右键（日历视图：右击某天快捷新增任务并预填日期） */
   onDayContextMenu?: (e: MouseEvent, date: Date) => void;
   onMonthChange?: (year: number, month: number) => void;
+  /**
+   * 周档翻页回调（±1 周）：头部前后按钮与网格滚轮共用。受控语义——
+   * 组件自身不改锚点，由调用方把选中日 ±7 天后回传 `selected`。
+   */
+  onWeekChange?: (delta: number) => void;
   /**
    * 滚轮步进回调（opt-in：传了才挂监听，避免内嵌场景误接管滚动）。
    * 批量步数（快速连滑合并为一次回调）；日历视图月模式传翻月；
@@ -98,6 +117,12 @@ interface SizeSpec {
   title: string;
   grid: string;
   badge: string;
+  /** 周档专用（G1）：格子更高、列间距更宽、日期数字更大——7 格撑一屏的
+   *  视觉重心与 42 格网格不同，等比放大后仍保持"一列一天"的读法 */
+  cellWeek: string;
+  numberWeek: string;
+  gridWeek: string;
+  titleWeek: string;
 }
 
 const SIZE_SPECS: Record<MonthCalendarSize, SizeSpec> = {
@@ -110,6 +135,11 @@ const SIZE_SPECS: Record<MonthCalendarSize, SizeSpec> = {
     title: "text-3xl font-extrabold tracking-tight",
     grid: "grid-cols-7 gap-1",
     badge: "size-4 text-[9px]",
+    // 7 格宽度 = 左半区 / 7 ≈ 100px，min-h-32 使格子近正方；不随容器高度拉伸
+    cellWeek: "min-h-32 gap-1.5 rounded-2xl px-1 py-2",
+    numberWeek: "text-2xl font-extrabold leading-none",
+    gridWeek: "grid-cols-7 gap-2",
+    titleWeek: "text-2xl font-bold tracking-tight",
   },
   md: {
     // 格子 flex-col + justify-center：内容本应上下居中，此处不得加单边 pt
@@ -123,6 +153,10 @@ const SIZE_SPECS: Record<MonthCalendarSize, SizeSpec> = {
     grid: "grid-cols-7 gap-1",
     // 徽标与 lg 同口径贴日格右上角（原负偏移会越出格子压到相邻日）
     badge: "right-0.5 top-0.5 size-3 text-[7px]",
+    cellWeek: "min-h-24 gap-1 rounded-lg px-0.5",
+    numberWeek: "text-lg font-bold leading-none",
+    gridWeek: "grid-cols-7 gap-1",
+    titleWeek: "text-lg font-bold tracking-tight",
   },
   sm: {
     cell: "h-8 rounded-md",
@@ -133,31 +167,16 @@ const SIZE_SPECS: Record<MonthCalendarSize, SizeSpec> = {
     title: "text-sm font-semibold",
     grid: "grid-cols-7 gap-0.5",
     badge: "size-2.5 -right-1 -top-1 text-[6px]",
+    cellWeek: "h-10 rounded-md",
+    numberWeek: "text-xs font-semibold",
+    gridWeek: "grid-cols-7 gap-0.5",
+    titleWeek: "text-sm font-semibold",
   },
 };
 
-function startOfDay(d: Date): Date {
-  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
-}
-
-function formatYmd(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
-
-/** 构造 6×7 网格（周一起始），含前后月补位 */
-function buildGrid(year: number, month: number): Date[] {
-  const first = new Date(year, month, 1);
-  const offset = (first.getDay() + 6) % 7;
-  const start = new Date(year, month, 1 - offset);
-  return Array.from({ length: 42 }, (_, i) => {
-    const d = new Date(start);
-    d.setDate(start.getDate() + i);
-    return d;
-  });
-}
-
 export function MonthCalendar({
   size = "lg",
+  mode = "month",
   year: yearProp,
   month: monthProp,
   defaultYear,
@@ -166,6 +185,7 @@ export function MonthCalendar({
   onDayClick,
   onDayContextMenu,
   onMonthChange,
+  onWeekChange,
   showHeader = true,
   wheelStep,
   onTitleClick,
@@ -180,6 +200,7 @@ export function MonthCalendar({
 }: MonthCalendarProps) {
   const spec = SIZE_SPECS[size];
   const now = useMemo(() => startOfDay(new Date()), []);
+  const isWeek = mode === "week";
 
   const [internal, setInternal] = useState(() => ({
     year: defaultYear ?? selected?.getFullYear() ?? now.getFullYear(),
@@ -194,20 +215,35 @@ export function MonthCalendar({
   };
 
   const goPrev = () => {
-    if (month === 0) changeMonth(year - 1, 11);
+    if (isWeek) {
+      onWeekChange?.(-1);
+    } else if (month === 0) changeMonth(year - 1, 11);
     else changeMonth(year, month - 1);
   };
   const goNext = () => {
-    if (month === 11) changeMonth(year + 1, 0);
+    if (isWeek) {
+      onWeekChange?.(1);
+    } else if (month === 11) changeMonth(year + 1, 0);
     else changeMonth(year, month + 1);
   };
 
   // 透传的滚轮回调只在调用方显式传入时挂载（useWheelStepRef 自身无条件调用保 hooks 顺序）
   const wheelRef = useWheelStepRef((n) => wheelStep?.(n));
 
-  const cells = useMemo(() => buildGrid(year, month), [year, month]);
+  // 周档锚点 = 选中日（未传则今天）；以其时间戳入依赖，避免同值新实例重复计算
+  const anchorMs = (selected ?? now).getTime();
+  const cells = useMemo(
+    () => (isWeek ? buildWeekGrid(new Date(anchorMs)) : buildMonthGrid(year, month)),
+    [isWeek, anchorMs, year, month],
+  );
   const todayYmd = formatYmd(now);
   const selectedYmd = selected ? formatYmd(startOfDay(selected)) : null;
+  /** 周档单行 7 格：不参与 fillHeight 的 auto-rows-fr 拉伸（否则 100×600 细长条），
+   *  改为 shrink-0 + 根层 justify-center 在容器内垂直居中 */
+  const weekGrid = cn(spec.gridWeek, "shrink-0");
+  const gridSpec = isWeek ? weekGrid : spec.grid;
+  /** 月档 fillHeight = 6 行等分撑满剩余高度 */
+  const stretch = fillHeight && !isWeek;
 
   return (
     <div
@@ -229,7 +265,11 @@ export function MonthCalendar({
               onTitleClick && "transition-colors hover:bg-accent/60",
             )}
           >
-            <span className={spec.title}>{month + 1}月</span>
+            {isWeek ? (
+              <span className={spec.titleWeek}>{weekRangeLabel(cells[0], cells[6])}</span>
+            ) : (
+              <span className={spec.title}>{month + 1}月</span>
+            )}
           </button>
           {headerSubtitle}
           <div className="ml-auto flex items-center gap-1">
@@ -238,7 +278,7 @@ export function MonthCalendar({
               size="icon"
               className={cn(spec.navBtn)}
               onClick={goPrev}
-              aria-label="上个月"
+              aria-label={isWeek ? "上一周" : "上个月"}
             >
               <ChevronLeft className="size-4" />
             </Button>
@@ -247,7 +287,7 @@ export function MonthCalendar({
               size="icon"
               className={cn(spec.navBtn)}
               onClick={goNext}
-              aria-label="下个月"
+              aria-label={isWeek ? "下一周" : "下个月"}
             >
               <ChevronRight className="size-4" />
             </Button>
@@ -256,8 +296,8 @@ export function MonthCalendar({
         </div>
       )}
 
-      {/* 星期表头 */}
-      <div className={cn("grid", spec.grid, fillHeight && "shrink-0")}>
+      {/* 星期表头：列宽/间距必须与日格网格同口径，否则周档下表头与列错位 */}
+      <div className={cn("grid", gridSpec, (stretch || isWeek) && "shrink-0")}>
         {WEEKDAY_LABELS.map((label) => (
           <div
             key={label}
@@ -268,19 +308,21 @@ export function MonthCalendar({
         ))}
       </div>
 
-      {/* 日期网格：fillHeight 下行高由容器分配（6 行等分剩余高度），
-          整体底边与父容器对齐 */}
+      {/* 日期网格：月档 fillHeight 下行高由容器分配（6 行等分剩余高度）、
+          整体底边与父容器对齐；周档单行自然高度、由根层居中 */}
       <div
         data-testid="month-calendar-grid"
         className={cn(
           "grid",
-          spec.grid,
-          fillHeight && "min-h-0 flex-1 auto-rows-fr",
+          gridSpec,
+          stretch && "min-h-0 flex-1 auto-rows-fr",
         )}
       >
         {cells.map((date, i) => {
           const ymd = formatYmd(date);
-          const inMonth = date.getMonth() === month;
+          // 周档 7 天恒为「本周」，不做跨月弱化（8/31–9/6 是同一周，
+          // 把 8/31 灰掉会读成"不属于本周"）
+          const inMonth = isWeek ? true : date.getMonth() === month;
           const isToday = ymd === todayYmd;
           const isSelected = selectedYmd != null && ymd === selectedYmd;
           const isWeekend = date.getDay() === 0 || date.getDay() === 6;
@@ -314,8 +356,8 @@ export function MonthCalendar({
               }
               className={cn(
                 "group relative flex w-full flex-col items-center justify-center",
-                spec.cell,
-                fillHeight && "h-full min-h-0 justify-center",
+                isWeek ? spec.cellWeek : spec.cell,
+                stretch && "h-full min-h-0 justify-center",
               )}
             >
               {/* 今天/休息日/调休日/选中态：内缩圆角色块（不贴满整格，参考系统日历）；
@@ -373,7 +415,7 @@ export function MonthCalendar({
                   <span className="relative leading-none">
                     <span
                       className={cn(
-                        spec.number,
+                        isWeek ? spec.numberWeek : spec.number,
                         "tabular-nums leading-none transition-colors",
                         !inMonth && "opacity-40",
                         !isToday && isWeekend

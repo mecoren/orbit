@@ -8,6 +8,8 @@
 import { format } from "date-fns";
 import { zhCN } from "date-fns/locale";
 
+import { addDays, startOfDay } from "./date-utils";
+
 export interface QuickDateOption {
   /** 稳定标识（today / tomorrow / nextWeek / in1h / tonight） */
   key: string;
@@ -19,22 +21,10 @@ export interface QuickDateOption {
   value: Date;
 }
 
-/** 当日零点（本地时区） */
-function startOfDay(d: Date): Date {
-  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
-}
-
 /** 当日指定时分 */
 function at(d: Date, hour: number, minute = 0): Date {
   const x = startOfDay(d);
   x.setHours(hour, minute, 0, 0);
-  return x;
-}
-
-/** 加 N 天（零点） */
-function addDays(d: Date, n: number): Date {
-  const x = startOfDay(d);
-  x.setDate(x.getDate() + n);
   return x;
 }
 
