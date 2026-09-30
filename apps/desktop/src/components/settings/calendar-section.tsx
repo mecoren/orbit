@@ -3,7 +3,8 @@
  *
  * 口径（对齐 PiggyCount，2026-09-29 修订）：
  * - 自动更新由 Rust 守护执行（**每月一次**：跨月后首次 tick / 首次启动即拉取），
- *   本分区只写总开关；「上次更新」读 `holiday_meta` 记账，与日历页工具栏同源；
+ *   本分区只写总开关；「上次更新」与「连续失败计数」读 `holiday_meta` 记账，
+ *   与日历页工具栏同源、与移动端缓存页概览同口径；
  * - 手动「立即更新」拉今年（12 月加明年），无视记账；
  * - 「按年份范围获取」补写 2013 ~ 明年的历史 / 未来年份（分片并发 + 熔断），
  *   逐年进度经 `holiday-progress` 事件回传，可中途取消；
@@ -66,6 +67,7 @@ export function CalendarSection() {
   });
   const autoEnabled = metaQuery.data?.auto_enabled ?? true;
   const lastUpdate = metaQuery.data?.last_update_ms ?? 0;
+  const failureCount = metaQuery.data?.failure_count ?? 0;
 
   const autoMutation = useMutation({
     mutationFn: (enabled: boolean) => holidaySetAutoEnabled(enabled),
@@ -208,6 +210,13 @@ export function CalendarSection() {
             ? `上次更新：${new Date(lastUpdate).toLocaleString()}`
             : "尚未成功更新过"}
         </p>
+
+        {/* 连续失败计数与移动端缓存页同口径（唯一展示该字段的入口；成功后 core 清零） */}
+        {failureCount > 0 && (
+          <p className="text-xs text-muted-foreground">
+            连续失败 {failureCount} 次（旧缓存保留可用）
+          </p>
+        )}
 
         <p className="text-xs text-muted-foreground">
           提示：关闭自动更新后仍可手动更新与按年份补写；本机设置，不随云同步。
