@@ -181,7 +181,13 @@ impl WebDavAdapter {
         // 防止异常情况下的无限递归(正常路径不会超过 10 层)
         if depth > 10 {
             return Err(SyncError::Network {
-                message: format!("MKCOL 递归创建目录深度超限(>10): {url}"),
+                // F67（2026-09-30 第六轮）：F34 脱敏漏挂的最后一处 arm——
+                // 此处曾直接内插原始 URL，会把内嵌的 user:password 写进错误串
+                // （错误串一路进日志与 UI），与同函数下方两处口径不一致。
+                message: format!(
+                    "MKCOL 递归创建目录深度超限(>10): {}",
+                    crate::sync::error::redact_userinfo(url)
+                ),
                 retryable: false,
             });
         }
