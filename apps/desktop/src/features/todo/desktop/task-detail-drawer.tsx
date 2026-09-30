@@ -1826,6 +1826,8 @@ function CommentsSection({
   onChanged: () => void;
 }) {
   const [draft, setDraft] = useState("");
+  // 撰写态：折叠 = 「添加评论」占位框（点击才进入），展开 = 固定高度输入区
+  const [composing, setComposing] = useState(false);
   // 待删评论（null = 关闭）：行内确认弹框（qraft tab 删除同款）
   const [confirmDelete, setConfirmDelete] = useState<TodoComment | null>(null);
 
@@ -1834,7 +1836,13 @@ function CommentsSection({
     if (!v) return;
     await todoCommentCreate({ task_id: taskId, content: v });
     setDraft("");
+    setComposing(false);
     onChanged();
+  };
+
+  const collapse = () => {
+    setDraft("");
+    setComposing(false);
   };
 
   const relative = (ms: number) => {
@@ -1879,18 +1887,45 @@ function CommentsSection({
           </ConfirmPopover>
         ))}
 
-        <div className="flex items-center gap-2 pt-1">
-          <Input
-            value={draft}
-            placeholder="输入评论..."
-            className="h-8 flex-1 text-[13px]"
-            onChange={(e) => setDraft(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Enter") void submit(); }}
-          />
-          <Button size="icon" variant="ghost" className="h-8 w-8" disabled={!draft.trim()} onClick={() => void submit()}>
-            <Send size={14} className="text-primary" />
-          </Button>
-        </div>
+        {composing ? (
+          <div className="pt-1">
+            <Textarea
+              autoFocus
+              value={draft}
+              placeholder="输入评论..."
+              // 固定高度：max-h/min-h 双钳制抵消原语 field-sizing-content 的自适应增高，
+              // 内容超出走内部滚动（与描述区块同口径，不留裸增长的多行框）
+              className="min-h-40 max-h-40 resize-none overflow-y-auto text-[13px]"
+              onChange={(e) => setDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Escape") {
+                  e.preventDefault();
+                  // 拦在 Radix DismissableLayer 的 document 监听之前，Esc 只收起输入区不关抽屉
+                  e.stopPropagation();
+                  collapse();
+                } else if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+                  e.preventDefault();
+                  void submit();
+                }
+              }}
+            />
+            <div className="mt-1 flex items-center justify-between">
+              <span className="text-[11px] text-muted-foreground">Ctrl+Enter 发送 · Esc 取消</span>
+              <div className="flex items-center gap-2">
+                <Button size="sm" variant="outline" onClick={collapse}>取消</Button>
+                <Button size="sm" disabled={!draft.trim()} onClick={() => void submit()}>发送</Button>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setComposing(true)}
+            className="mt-1 flex h-9 w-full items-center rounded-lg border border-input px-3 text-left text-[13px] text-muted-foreground transition-colors hover:bg-accent/40 hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+          >
+            添加评论
+          </button>
+        )}
       </div>
     </SectionBlock>
   );

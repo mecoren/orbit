@@ -451,9 +451,10 @@ export function TaskContextMenu({
           </DialogHeader>
           <Textarea
             ref={commentTextareaRef}
-            rows={4}
             value={commentDraft}
             placeholder="输入评论..."
+            // 固定高度（原语 field-sizing-content 会随输入无限增高）：超出走内部滚动
+            className="min-h-40 max-h-40 resize-none overflow-y-auto"
             onChange={(e) => setCommentDraft(e.target.value)}
           />
           <DialogFooter>
