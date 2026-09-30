@@ -6,8 +6,8 @@
 //    由 tester.pump(300ms) 推进虚拟时钟再 await，否则永久挂起；
 // 2. 页面字段多于一屏（视口 600）：交互/断言前用 _scrollTo（复用
 //    form_bottom_sheet_test 的 scrollUntilVisible + 底边余量补滚模式）；
-// 3. 密码卡与解锁态同页存在两个「同步密码」TextFormField（设置/解锁），
-//    用 .first/.last 限定（设置态字段在卡上方，解锁态字段在卡下方）。
+// 3. 首次设置走共享密码抽屉（`showPasswordSheet`）：点「设置密码」入口拉起
+//    抽屉，字段是抽屉内 TextField；页内仅剩解锁态一个「同步密码」TextFormField。
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -177,15 +177,15 @@ void main() {
     await tester.pumpWidget(_wrap(bridge));
     await _flush(tester);
 
-    await _scrollTo(tester, find.text('设置并解锁'));
-    await tester.enterText(
-        find.widgetWithText(TextFormField, '同步密码').first, '123456');
+    // 点入口拉起共享密码抽屉（设置类输入统一走底部抽屉）
+    await _tapAt(tester, find.text('设置密码'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.widgetWithText(TextField, '同步密码'), '123456');
     await tester.pump();
-    await tester.enterText(
-        find.widgetWithText(TextFormField, '确认密码'), '123456');
+    await tester.enterText(find.widgetWithText(TextField, '确认密码'), '123456');
     await tester.pump();
 
-    await _tapAt(tester, find.text('设置并解锁'));
+    await tester.tap(find.text('设置并解锁'));
     await _flush(tester);
 
     expect(find.text('已解锁'), findsOneWidget);
@@ -198,17 +198,17 @@ void main() {
     await tester.pumpWidget(_wrap(bridge));
     await _flush(tester);
 
-    await _scrollTo(tester, find.text('设置并解锁'));
-    await tester.enterText(
-        find.widgetWithText(TextFormField, '同步密码').first, '123456');
+    await _tapAt(tester, find.text('设置密码'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.widgetWithText(TextField, '同步密码'), '123456');
     await tester.pump();
-    await tester.enterText(
-        find.widgetWithText(TextFormField, '确认密码'), '654321');
+    await tester.enterText(find.widgetWithText(TextField, '确认密码'), '654321');
     await tester.pump();
 
-    await _tapAt(tester, find.text('设置并解锁'));
+    await tester.tap(find.text('设置并解锁'));
     await _flush(tester);
 
+    expect(find.text('两次输入的密码不一致'), findsOneWidget);
     expect((await _probe(tester, bridge.syncCryptoStatus())).hasPassword, isFalse);
     await drainToastTimers(tester);
   });
@@ -218,17 +218,17 @@ void main() {
     await tester.pumpWidget(_wrap(bridge));
     await _flush(tester);
 
-    await _scrollTo(tester, find.text('设置并解锁'));
-    await tester.enterText(
-        find.widgetWithText(TextFormField, '同步密码').first, '123');
+    await _tapAt(tester, find.text('设置密码'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.widgetWithText(TextField, '同步密码'), '123');
     await tester.pump();
-    await tester.enterText(
-        find.widgetWithText(TextFormField, '确认密码'), '123');
+    await tester.enterText(find.widgetWithText(TextField, '确认密码'), '123');
     await tester.pump();
 
-    await _tapAt(tester, find.text('设置并解锁'));
+    await tester.tap(find.text('设置并解锁'));
     await _flush(tester);
 
+    expect(find.text('同步密码至少 6 位'), findsOneWidget);
     expect((await _probe(tester, bridge.syncCryptoStatus())).hasPassword, isFalse);
     await drainToastTimers(tester);
   });
@@ -248,10 +248,10 @@ void main() {
     await _flush(tester);
     expect(_badge('已锁定'), findsOneWidget);
 
-    // 错误密码 → 保持锁定（解锁态字段在卡下方，用 .last，纪律 3）
+    // 错误密码 → 保持锁定（页内唯一「同步密码」TextFormField 即解锁字段，纪律 3）
     await _scrollTo(tester, find.text('解锁'));
     await tester.enterText(
-        find.widgetWithText(TextFormField, '同步密码').last, '000000');
+        find.widgetWithText(TextFormField, '同步密码'), '000000');
     await tester.pump();
     await _tapAt(tester, find.text('解锁'));
     await _flush(tester);
@@ -259,7 +259,7 @@ void main() {
 
     // 正确密码 → 解锁
     await tester.enterText(
-        find.widgetWithText(TextFormField, '同步密码').last, '123456');
+        find.widgetWithText(TextFormField, '同步密码'), '123456');
     await tester.pump();
     await _tapAt(tester, find.text('解锁'));
     await _flush(tester);

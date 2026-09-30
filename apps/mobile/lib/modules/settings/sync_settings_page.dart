@@ -595,8 +595,6 @@ class _SyncCryptoCardState extends ConsumerState<_SyncCryptoCard> {
   /// 本机密钥方案版本（'v1' / 'v2'；未设置密码或探测失败为 null）
   String? _metaVersion;
 
-  late final _pwController = TextEditingController();
-  late final _confirmController = TextEditingController();
   late final _unlockController = TextEditingController();
 
   @override
@@ -610,8 +608,6 @@ class _SyncCryptoCardState extends ConsumerState<_SyncCryptoCard> {
 
   @override
   void dispose() {
-    _pwController.dispose();
-    _confirmController.dispose();
     _unlockController.dispose();
     super.dispose();
   }
@@ -649,23 +645,31 @@ class _SyncCryptoCardState extends ConsumerState<_SyncCryptoCard> {
       .replaceFirst('Exception: ', '')
       .replaceFirst(RegExp(r'^\[\w+\]\s*'), '');
 
+  /// 首次设置同步密码：输入走共享抽屉（`showPasswordSheet`，与修改密码同口径，
+  /// 密码类输入不落页面内联表单）；长度/一致校验在关闭后执行
   Future<void> _setup() async {
-    final pw = _pwController.text;
+    if (_busy) return;
+    final values = await showPasswordSheet(
+      context,
+      title: '设置同步密码',
+      message: '设置后所有上传数据以该密码端到端加密，其他设备输入相同密码即可解锁同步。',
+      labels: const ['同步密码', '确认密码'],
+      confirmLabel: '设置并解锁',
+    );
+    if (values == null || !mounted) return;
+    final pw = values[0];
     if (pw.length < 6) {
       WaitToast.destructive('同步密码至少 6 位');
       return;
     }
-    if (pw != _confirmController.text) {
+    if (pw != values[1]) {
       WaitToast.destructive('两次输入的密码不一致');
       return;
     }
-    if (_busy) return;
     setState(() => _busy = true);
     try {
       await ref.read(orbitBridgeProvider).syncCryptoInit(pw, remember: true);
       WaitToast.success('同步密码已设置，端到端加密已就绪');
-      _pwController.clear();
-      _confirmController.clear();
       await _refresh();
     } catch (e) {
       WaitToast.destructive(_errMsg(e));
@@ -920,20 +924,6 @@ class _SyncCryptoCardState extends ConsumerState<_SyncCryptoCard> {
                     style: TextStyle(fontSize: 12, color: colors.secondaryText),
                   ),
                   const SizedBox(height: AppDimens.space12),
-                  TextFormField(
-                    controller: _pwController,
-                    obscureText: true,
-                    style: TextStyle(fontSize: 15, color: colors.bodyText),
-                    decoration: const InputDecoration(labelText: '同步密码'),
-                  ),
-                  const SizedBox(height: AppDimens.space12),
-                  TextFormField(
-                    controller: _confirmController,
-                    obscureText: true,
-                    style: TextStyle(fontSize: 15, color: colors.bodyText),
-                    decoration: const InputDecoration(labelText: '确认密码'),
-                  ),
-                  const SizedBox(height: AppDimens.space12),
                   SizedBox(
                     width: double.infinity,
                     child: FilledButton(
@@ -947,7 +937,7 @@ class _SyncCryptoCardState extends ConsumerState<_SyncCryptoCard> {
                                 color: Colors.white,
                               ),
                             )
-                          : const Text('设置并解锁'),
+                          : const Text('设置密码'),
                     ),
                   ),
                 ] else ...[
