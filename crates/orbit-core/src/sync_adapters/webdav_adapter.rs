@@ -86,6 +86,19 @@ impl WebDavAdapter {
     /// S2（2026-09-13 探查）：server_url 无 scheme 时补 https://（与 S3
     /// build_url 的 normalize 同口径）——无 scheme URL 会让 reqwest 请求
     /// 构造直接失败且错误归类误导排障。
+    ///
+    /// ## 路径必须百分号编码（F61，2026-09-30 第六轮）
+    ///
+    /// 此前 `path` 裸拼进 URL 字符串，交给 reqwest 解析。两个后果：
+    ///
+    /// 1. **`#` / `?` 截断**：`base_path` 或对象名含这两个字符时，URL 在它们处
+    ///    截断（`#` 之后成为 fragment，`?` 之后成为 query）→ 请求打到**另一个
+    ///    路径**上，且 status 看着「正常」（读到 404 或别人的对象）；
+    /// 2. **空格 / 非 ASCII 依赖 reqwest 的隐式编码**：服务端按 RFC 3986 解码，
+    ///    但不同实现（坚果云、Nextcloud、自建）对未编码字符的容忍度不同。
+    ///
+    /// 编码走 `sync_adapters::uri_encode`（与 S3 同一实现，保留 `/` 作分隔符）。
+    /// 调用方一律传**原始未编码**路径——自编码会被二次编码成 `%2520`。
     fn build_url(&self, path: &str) -> String {
         let trimmed = self.config.server_url.trim();
         let base = if trimmed.starts_with("http://") || trimmed.starts_with("https://") {
@@ -95,10 +108,11 @@ impl WebDavAdapter {
                 .trim_end_matches('/')
                 .to_string()
         };
-        if path.starts_with('/') {
-            format!("{}{}", base, path)
+        let encoded = crate::sync_adapters::uri_encode(path, false);
+        if encoded.starts_with('/') {
+            format!("{}{}", base, encoded)
         } else {
-            format!("{}/{}", base, path)
+            format!("{}/{}", base, encoded)
         }
     }
 
@@ -388,9 +402,12 @@ impl WebDavAdapter {
     // → sha256 不同 → 续传判定失败 → 清目录重传。无需独立的 key 指纹
     // 字段，适配器也不必持有 crypto。
     //
-    // 断点续传：上传前 HEAD 探测已存在的分片（大小等于本片期望大小才
-    // 跳过——确定性加密保证同片字节一致，大小相等即内容相等的可靠
-    // 代理），中断重试只传缺失片。
+    // 断点续传：上传前 HEAD 探测已存在的分片，大小等于本片期望大小才跳过。
+    // **跳过只在清单已证明目录同源时启用**（F59）：清单的 size/total/sha256
+    // 全等于本轮密文 ⇒ 目录内是本轮同一份密文 ⇒ 大小相等即内容相等。清理过的
+    // 目录（清单不匹配或缺失）内容不可信，一律覆盖重传——否则 rekey 后的陈旧
+    // 分片（同明文跨 Data Key 的密文长度必然相同）会被整片跳过，写出内容与
+    // 清单不自洽的「完整」对象。
     // ================================================================
 
     /// 分片触发阈值（密文 ≥ 8MiB）与片大小（5MiB）——与 S3 侧同口径
@@ -416,8 +433,10 @@ impl WebDavAdapter {
     /// `parts_root` 由它推导——二者都必须透传，缺前缀即把分片写到 base_path 之外。
     ///
     /// 1. 读 head.json：已有清单且 size/sha256 全一致 → 续传；
-    ///    不一致（rekey 后密文不同，或上游异常）→ 删除旧分片目录重传
-    /// 2. 逐片：HEAD 探测，已存在且 Content-Length 等于本片大小 → 跳过
+    ///    不一致（rekey 后密文不同，或上游异常）→ **先删清单再**清分片目录，
+    ///    清理失败即本轮失败（F59：清理不可靠时继续上传会产出内容不自洽的对象）
+    /// 2. 逐片：**仅续传模式下** HEAD 探测跳过（Content-Length 等于本片大小）；
+    ///    清理过的目录一律覆盖重传（F59）
     /// 3. 全部片就位后**最后**写 head.json——清单是「完整」信号，读侧
     ///    只在清单存在时拼装，中断留下的半成品目录不可读
     async fn upload_asset_parts(
@@ -457,7 +476,12 @@ impl WebDavAdapter {
             Err(e) => return Err(e),
         };
         if !reusable {
-            self.delete_parts_dir(hash, parts_root).await;
+            // F59：清单不匹配 ⇒ 目录内容不可信，必须清干净才能继续——清理失败
+            // 直接上抛（外层重试），不再「尽力而为」。旧实现把失败仅记日志，随后
+            // 逐片按 size 跳过 stale 分片，最终写出声明本轮密文的 head.json、目录里
+            // 却是旧密文 → 读侧拼装 sha256 校验失败（retryable=false）→ 对象永久
+            // 不可读，每轮重试都被同一判据拒掉
+            self.delete_parts_dir(hash, parts_root).await?;
         }
 
         // 2. 逐片上传：已存在且大小一致 → 跳过（断点续传核心）
@@ -466,8 +490,11 @@ impl WebDavAdapter {
             let end = std::cmp::min(start + Self::PARTS_SIZE, encrypted.len());
             let chunk = &encrypted[start..end];
             let part_path = Self::part_bin_path(parts_root, hash, index);
-            // 已存在且大小等于本片 → 跳过（确定性加密下大小相等即内容相等）
-            if let Some(existing_len) = self.remote_file_size(&part_path).await?
+            // F59：跳过的前提是「目录已被清单证明与本轮密文同源」（reusable）——
+            // 确定性加密下同一密文的同片字节必然一致，大小相等才是内容相等的
+            // 可靠代理；清理过/新建的目录内容不可信，必须覆盖重传
+            if reusable
+                && let Some(existing_len) = self.remote_file_size(&part_path).await?
                 && existing_len == chunk.len() as u64
             {
                 continue;
@@ -504,7 +531,34 @@ impl WebDavAdapter {
         Ok(())
     }
 
-    /// 探测远端文件大小（HEAD），不存在返回 None
+    /// 轻量存在性探测（HEAD），**只看状态码，不看 `Content-Length`**
+    ///
+    /// F57（2026-09-30 第六轮）：`exists` 此前直接复用 `remote_file_size`，
+    /// 而后者在缺 `Content-Length` 时返回 `None`（部分实现对 HEAD 不回该头，
+    /// 或用 `Transfer-Encoding: chunked`）→ 存在的对象被判「不存在」。后果不是
+    /// 报错而是**静默走错分支**：附件差集每轮空跑重传、S7 空列表防御的首传三分叉
+    /// 探测误放行、pull 的活跃引用判定失真。
+    async fn remote_exists(&self, path: &str) -> Result<bool, SyncError> {
+        let url = self.build_url(path);
+        let headers = self.auth_headers();
+        let response = self
+            .http
+            .inner()
+            .head(&url)
+            .headers(headers)
+            .send()
+            .await
+            .map_err(|e| SyncError::Network {
+                message: transport_message("HEAD 请求", &e),
+                retryable: true,
+            })?;
+        SyncError::classify_head_status(response.status().as_u16())
+    }
+
+    /// 探测远端文件大小（HEAD）
+    ///
+    /// `Ok(None)` 有两种成因，调用方必须自己判断能否接受：**对象不存在**，或
+    /// **对象存在但服务端未回 `Content-Length`**。判存在请用 `remote_exists`。
     async fn remote_file_size(&self, path: &str) -> Result<Option<u64>, SyncError> {
         let url = self.build_url(path);
         let headers = self.auth_headers();
@@ -585,12 +639,26 @@ impl WebDavAdapter {
         Ok(assembled)
     }
 
-    /// 删除分片目录（尽力而为：逐片 DELETE + 清单 DELETE，失败仅日志）
+    /// 删除分片目录——**先删清单，再由分片尽力而为**
     ///
-    /// 分片按序上传（000000 起连续编号），按序删除直到首个 404 即尾后
-    /// 停止；上限 10000 片防御异常目录。部分失败留孤儿分片无碍正确性
-    /// （无 head.json 不可读、不参与 list_assets 差集不会拉回）。
-    async fn delete_parts_dir(&self, hash: &str, parts_root: &str) {
+    /// F59（2026-09-30 第六轮）：原实现「逐片 DELETE 后删清单、失败仅记日志」让清理
+    /// 变成不可靠操作，而调用方（`upload_asset_parts` 的清单不匹配分支）依赖「清理后
+    /// 目录内容不再被当成同源」这一前提。现在把顺序倒过来并分级上报：
+    ///
+    /// 1. **先删 head.json**（读侧只在清单存在时拼装）——清单消失即目录立刻不可读，
+    ///    残留分片退化成无害孤儿；删除失败（非 404）返回 `Err` 由外层重试。顺序
+    ///    不可颠倒：先删片后删清单时，任一片删除失败都会让「不匹配的清单 + 陈旧
+    ///    分片」组合继续存活，读侧持续走到拼装 sha256 校验失败。
+    /// 2. 分片按序删除（000000 起连续编号），首个 404 即尾后停止，上限 10000 片防御
+    ///    异常目录；此处失败仍仅记日志——孤儿分片无清单不可读，也不参与 `list_assets`
+    ///    差集（不会被拉回），且清单已删 ⇒ 下一轮必走覆盖重传。
+    async fn delete_parts_dir(&self, hash: &str, parts_root: &str) -> Result<(), SyncError> {
+        if let Err(e) = self.delete(&Self::parts_head_path(parts_root, hash)).await
+            && !e.is_not_found()
+        {
+            log::warn!("[webdav parts] 删除分片清单失败（清理未完成，本轮判失败）: {e}");
+            return Err(e);
+        }
         for index in 0..10_000 {
             let part_path = Self::part_bin_path(parts_root, hash, index);
             match self.delete(&part_path).await {
@@ -601,11 +669,7 @@ impl WebDavAdapter {
                 }
             }
         }
-        if let Err(e) = self.delete(&Self::parts_head_path(parts_root, hash)).await
-            && !e.is_not_found()
-        {
-            log::info!("[webdav parts] 删除清单失败（继续）: {e}");
-        }
+        Ok(())
     }
 
     /// 列出 `{parts_root}/` 下的一级子目录名（即分片附件的 hash 集合）
@@ -999,15 +1063,19 @@ impl SyncAdapter for WebDavAdapter {
     /// 附件对象还要探分片清单：大附件只有 `assets_parts/{hash}/head.json`，
     /// 单对象恒 404。漏这一腿即「大附件被判定不存在」——push 差集每轮空跑
     /// 重传、S7 空列表防御的首传三分叉探测误放行、pull 的活跃引用判定失真。
+    ///
+    /// F57（2026-09-30 第六轮）：判据由「拿得到 `Content-Length`」改为
+    /// **「HEAD 返回 2xx」**（走 `remote_exists`）——部分实现对 HEAD 不回
+    /// `Content-Length`，旧判据会把存在的对象整片判成不存在。
     async fn exists(&self, path: &str) -> Result<bool, SyncError> {
-        if self.remote_file_size(path).await?.is_some() {
+        if self.remote_exists(path).await? {
             return Ok(true);
         }
         match asset_parts_target(path) {
-            Some((hash, parts_root)) => self
-                .remote_file_size(&Self::parts_head_path(&parts_root, &hash))
-                .await
-                .map(|s| s.is_some()),
+            Some((hash, parts_root)) => {
+                self.remote_exists(&Self::parts_head_path(&parts_root, &hash))
+                    .await
+            }
             None => Ok(false),
         }
     }
@@ -1136,12 +1204,343 @@ mod tests {
     }
 
     // ========================================================================
+    // F61（2026-09-30 第六轮）：build_url 必须对路径做百分号编码
+    //
+    // 编码口径与 S3 共用同一实现（`sync_adapters::uri_encode`），此处验证接线。
+    // ========================================================================
+
+    fn adapter_for(server_url: &str) -> WebDavAdapter {
+        WebDavAdapter::new(WebDavConfig {
+            server_url: server_url.to_string(),
+            username: "u".to_string(),
+            password: "p".to_string(),
+            timeout_secs: 30,
+            skip_tls_verify: false,
+        })
+        .expect("构造 WebDAV 适配器")
+    }
+
+    /// `#` / `?` 必须编码：否则 URL 在此截断成 fragment / query，请求会打到
+    /// **另一个路径**上，且状态码看着正常（读到 404 或别人的对象）。
+    #[test]
+    fn build_url_encodes_fragment_and_query_chars() {
+        let a = adapter_for("https://dav.example.com/dav");
+        assert_eq!(
+            a.build_url("sync/user#1/a?b.orsync"),
+            "https://dav.example.com/dav/sync/user%231/a%3Fb.orsync"
+        );
+    }
+
+    /// 空格、`+` 与非 ASCII 一并编码（不同 WebDAV 实现对未编码字符的容忍度不同）
+    #[test]
+    fn build_url_encodes_space_plus_and_cjk() {
+        let a = adapter_for("https://dav.example.com/dav");
+        assert_eq!(
+            a.build_url("wait sync/a+b/清单.orsync"),
+            "https://dav.example.com/dav/wait%20sync/a%2Bb/%E6%B8%85%E5%8D%95.orsync"
+        );
+    }
+
+    /// 反向：安全字符、`/` 与尾斜杠必须原样通过（paths 模块生成的路径不得被改动）
+    #[test]
+    fn build_url_leaves_safe_paths_untouched() {
+        let a = adapter_for("https://dav.example.com/dav/");
+        assert_eq!(
+            a.build_url("assets_parts/0abc-def/"),
+            "https://dav.example.com/dav/assets_parts/0abc-def/"
+        );
+        assert_eq!(
+            a.build_url("modules/todo/data.orsync"),
+            "https://dav.example.com/dav/modules/todo/data.orsync"
+        );
+    }
+
+    /// S2 口径不得回退：无 scheme 输入补 https://、尾斜杠不产生 `//`
+    #[test]
+    fn build_url_scheme_and_slash_normalization_unchanged() {
+        let a = adapter_for("dav.example.com/dav");
+        assert_eq!(
+            a.build_url("manifest.orsync"),
+            "https://dav.example.com/dav/manifest.orsync"
+        );
+        // 前导 `/` 只补一个分隔符，不吞掉 server_url 的路径部分
+        let a = adapter_for("https://dav.example.com/dav");
+        assert_eq!(
+            a.build_url("/leading"),
+            "https://dav.example.com/dav/leading"
+        );
+    }
+
+    // ========================================================================
     // S29：dir_cache 失效——PUT 409 AncestorsNotFound 时清缓存重建
     //
     // 端到端验证需真实 WebDAV 服务器（m4 集成测试职责，本机无环境为已知
     // 边界）；此处覆盖其依赖的父路径解析纯函数，重试编排逻辑由 m4 与
     // 既有 upload 路径回归。
     // ========================================================================
+
+    // ========================================================================
+    // F59（2026-09-30 第六轮）：分片目录清理的可靠性
+    //
+    // 为什么落在这里而不是 `tests/sync_fault_matrix.rs` 的集成级用例：附件 push
+    // 会**先查云端已有附件**（`list_assets` 能看见分片目录，F23）→「云端预置
+    // stale 分片目录」的场景被判成「云端已存在」而跳过上传，根本走不到清理
+    // 路径（实测两个集成用例都因之假绿）。这里用最小内存 WebDAV 直接驱动
+    // `upload_asset_parts`，绕开上层差集判定。
+    // ========================================================================
+
+    /// 最小内存 WebDAV：只实现分片协议用到的动词
+    ///
+    /// - PROPFIND 恒 404（目录「不存在」）→ `ensure_directory` 走 MKCOL(201)
+    ///   （405 会让 `url_exists` 返回 Err，故必须回 404）
+    /// - 对象存在性只按内存表判定；HEAD 回正确的 `Content-Length` 且**无体**
+    /// - `fail_delete_ending` 命中后缀的 DELETE 回 500（F59 故障注入点）
+    struct FakeDav {
+        base_url: String,
+        objects: std::sync::Arc<std::sync::Mutex<std::collections::HashMap<String, Vec<u8>>>>,
+        fail_delete_suffix: std::sync::Arc<std::sync::Mutex<Option<String>>>,
+    }
+
+    impl FakeDav {
+        fn spawn() -> Self {
+            use std::collections::HashMap;
+            use std::sync::{Arc, Mutex};
+
+            let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("绑定空闲端口");
+            let port = listener.local_addr().unwrap().port();
+            let objects: Arc<Mutex<HashMap<String, Vec<u8>>>> =
+                Arc::new(Mutex::new(HashMap::new()));
+            let fail = Arc::new(Mutex::new(None::<String>));
+            let (objs, fl) = (objects.clone(), fail.clone());
+            std::thread::spawn(move || {
+                for stream in listener.incoming().flatten() {
+                    let (objs, fl) = (objs.clone(), fl.clone());
+                    std::thread::spawn(move || {
+                        let _ = serve_webdav(stream, objs, fl);
+                    });
+                }
+            });
+            Self {
+                base_url: format!("http://127.0.0.1:{port}"),
+                objects,
+                fail_delete_suffix: fail,
+            }
+        }
+
+        /// 以「服务端既有对象」身份预置（模拟 rekey 后残留的陈旧清单/分片）
+        fn seed(&self, path: &str, bytes: &[u8]) {
+            self.objects
+                .lock()
+                .unwrap()
+                .insert(path.to_string(), bytes.to_vec());
+        }
+
+        fn get(&self, path: &str) -> Option<Vec<u8>> {
+            self.objects.lock().unwrap().get(path).cloned()
+        }
+
+        /// 命中该后缀的 DELETE 一律回 500
+        fn fail_delete_ending(&self, suffix: &str) {
+            *self.fail_delete_suffix.lock().unwrap() = Some(suffix.to_string());
+        }
+    }
+
+    /// 单连接请求循环（HTTP/1.1 keep-alive：reqwest 连接池会复用连接）
+    fn serve_webdav(
+        mut stream: std::net::TcpStream,
+        objects: std::sync::Arc<std::sync::Mutex<std::collections::HashMap<String, Vec<u8>>>>,
+        fail_delete_suffix: std::sync::Arc<std::sync::Mutex<Option<String>>>,
+    ) -> std::io::Result<()> {
+        use std::io::{BufRead, BufReader, Read, Write};
+
+        let mut reader = BufReader::new(stream.try_clone()?);
+        loop {
+            let mut request_line = String::new();
+            if reader.read_line(&mut request_line)? == 0 {
+                return Ok(());
+            }
+            if request_line.trim().is_empty() {
+                continue;
+            }
+            let mut it = request_line.split_whitespace();
+            let (Some(method), Some(target)) = (it.next(), it.next()) else {
+                return Ok(());
+            };
+            let (method, target) = (method.to_string(), target.to_string());
+            let mut body_len = 0usize;
+            loop {
+                let mut line = String::new();
+                if reader.read_line(&mut line)? == 0 {
+                    break;
+                }
+                let trimmed = line.trim_end();
+                if trimmed.is_empty() {
+                    break;
+                }
+                if let Some((k, v)) = trimmed.split_once(':')
+                    && k.trim().eq_ignore_ascii_case("content-length")
+                {
+                    body_len = v.trim().parse().unwrap_or(0);
+                }
+            }
+            let mut body = vec![0u8; body_len];
+            if body_len > 0 && reader.read_exact(&mut body).is_err() {
+                return Ok(());
+            }
+            // absolute-form（本机常驻系统代理时 reqwest 的请求行形态）归一为路径
+            let path = target
+                .strip_prefix("http://")
+                .or_else(|| target.strip_prefix("https://"))
+                .map(|rest| match rest.find('/') {
+                    Some(i) => rest[i..].to_string(),
+                    None => "/".to_string(),
+                })
+                .unwrap_or(target);
+
+            // (状态码, 响应体, HEAD 专用声明长度)
+            let (status, payload, head_len) = match method.as_str() {
+                "PROPFIND" => (404, Vec::new(), None),
+                "MKCOL" => (201, Vec::new(), None),
+                "PUT" => {
+                    objects.lock().unwrap().insert(path.clone(), body);
+                    (200, Vec::new(), None)
+                }
+                "GET" => match objects.lock().unwrap().get(&path) {
+                    Some(b) => (200, b.clone(), None),
+                    None => (404, Vec::new(), None),
+                },
+                "HEAD" => match objects.lock().unwrap().get(&path).map(|b| b.len()) {
+                    // `/nolength/` 前缀：模拟部分实现「HEAD 不回 Content-Length」的形态
+                    // （F57 用例），`usize::MAX` 是「不写该头」的哨兵
+                    Some(_) if path.starts_with("/nolength/") => {
+                        (200, Vec::new(), Some(usize::MAX))
+                    }
+                    Some(n) => (200, Vec::new(), Some(n)),
+                    None => (404, Vec::new(), Some(0)),
+                },
+                "DELETE" => {
+                    let injected = fail_delete_suffix
+                        .lock()
+                        .unwrap()
+                        .as_deref()
+                        .is_some_and(|s| path.ends_with(s));
+                    if injected {
+                        (500, b"delete failed".to_vec(), None)
+                    } else if objects.lock().unwrap().remove(&path).is_some() {
+                        (204, Vec::new(), None)
+                    } else {
+                        (404, Vec::new(), None)
+                    }
+                }
+                _ => (405, Vec::new(), None),
+            };
+            let declared = head_len.unwrap_or(payload.len());
+            let mut head = format!("HTTP/1.1 {status} X\r\n");
+            if declared != usize::MAX {
+                head.push_str(&format!("Content-Length: {declared}\r\n"));
+            }
+            head.push_str("Connection: keep-alive\r\n\r\n");
+            stream.write_all(head.as_bytes())?;
+            if head_len.is_none() {
+                stream.write_all(&payload)?;
+            }
+            stream.flush()?;
+        }
+    }
+
+    /// F59：清单删除失败 ⇒ 清理未完成 ⇒ 必须上抛，且**不得写入新清单**
+    ///
+    /// 旧行为：失败仅记日志，随后照常逐片上传并写新 head.json——目录里是旧密文、
+    /// 清单却声明本轮密文，读侧拼装 sha256 校验永久失败（`retryable: false`，每轮
+    /// 重试都被同一判据拒掉）。
+    #[tokio::test]
+    async fn stale_manifest_delete_failure_aborts_upload() {
+        let dav = FakeDav::spawn();
+        let adapter = adapter_for(&dav.base_url);
+        let head_path = "/assets_parts/abc123/head.json";
+        let stale_head: &[u8] = br#"{"total":2,"size":1,"sha256":"stale-not-this-round"}"#;
+        dav.seed(head_path, stale_head);
+        dav.seed(
+            "/assets_parts/abc123/000000.bin",
+            &vec![0xAAu8; 5 * 1024 * 1024],
+        );
+        dav.fail_delete_ending("/head.json");
+
+        let encrypted = vec![0x5Au8; 9 * 1024 * 1024];
+        adapter
+            .upload_asset_parts("abc123", "assets_parts", "assets/abc123.orsync", &encrypted)
+            .await
+            .expect_err("清单删除失败必须上抛，不得静默继续");
+
+        assert_eq!(
+            dav.get(head_path).as_deref(),
+            Some(stale_head),
+            "清理未完成时不得写入新清单（否则产出内容与清单不自洽的「完整」对象）"
+        );
+    }
+
+    /// F59：清单不匹配 ⇒ 目录内容不可信，陈旧分片必须**覆盖重传**（不得按 size 跳过）
+    ///
+    /// 此处只让「删分片」失败：清单被删掉（目录从此不可读）、陈旧首片留下。旧实现
+    /// 逐片按 `Content-Length` 跳过（同明文跨 Data Key 的密文长度必然相同，5MiB 首片
+    /// 尺寸恒等），于是写出「清单声明本轮密文、首片还是旧密文」的对象。
+    #[tokio::test]
+    async fn stale_parts_are_overwritten_when_manifest_mismatch() {
+        let dav = FakeDav::spawn();
+        let adapter = adapter_for(&dav.base_url);
+        let head_path = "/assets_parts/abc123/head.json";
+        let first_part = "/assets_parts/abc123/000000.bin";
+        dav.seed(
+            head_path,
+            br#"{"total":2,"size":1,"sha256":"stale-not-this-round"}"#,
+        );
+        dav.seed(first_part, &vec![0xAAu8; 5 * 1024 * 1024]);
+        dav.fail_delete_ending(".bin");
+
+        let encrypted: Vec<u8> = (0..9 * 1024 * 1024).map(|i| (i % 251) as u8).collect();
+        adapter
+            .upload_asset_parts("abc123", "assets_parts", "assets/abc123.orsync", &encrypted)
+            .await
+            .expect("清单已删、目录不可读 ⇒ 清理视为完成，应能上传");
+
+        assert_eq!(
+            dav.get(first_part),
+            Some(encrypted[..5 * 1024 * 1024].to_vec()),
+            "陈旧首片必须被覆盖重传，而不是按 size 跳过"
+        );
+        let head: AssetPartsHead =
+            serde_json::from_slice(&dav.get(head_path).expect("清单已写入")).expect("清单可解析");
+        assert_eq!(head.size, encrypted.len());
+        assert_eq!(head.sha256, crate::crypto::sha256::sha256_hex(&encrypted));
+    }
+
+    /// F57：HEAD 2xx 但不回 `Content-Length` ⇒ 仍算「存在」
+    ///
+    /// 旧实现复用 `remote_file_size`，缺该头时返回 `None` → **存在的对象被判「不存在」**。
+    /// 后果不是报错而是静默走错分支：附件差集每轮空跑重传、S7 首传三分叉探测误放行、
+    /// pull 的活跃引用判定失真。这里用 `/nolength/` 前缀让假服务省略该头。
+    #[tokio::test]
+    async fn head_without_content_length_still_counts_as_existing() {
+        let dav = FakeDav::spawn();
+        let adapter = adapter_for(&dav.base_url);
+        dav.seed("/nolength/abc.orsync", b"payload");
+
+        assert!(
+            adapter
+                .exists("nolength/abc.orsync")
+                .await
+                .expect("HEAD 探测"),
+            "HEAD 2xx 即存在，与是否回 Content-Length 无关"
+        );
+        // 对照：大小语义如实反映「服务端没给长度」——所以它不能被当作存在性判据
+        assert_eq!(
+            adapter
+                .remote_file_size("/nolength/abc.orsync")
+                .await
+                .expect("HEAD 探测"),
+            None
+        );
+    }
 }
 
 // ====================================================================
