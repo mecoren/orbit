@@ -16,6 +16,46 @@
 
 ## [Unreleased]
 
+### 云同步第六轮盘查：三条 P1 + 十条 P2/P3 收口（2026-09-30）
+
+- **失败轮次不再推进增量水位线（P1）**：`push_all_impl` 引入 `round_clean =
+  failed_modules == 0`，仅干净轮次才写 `last_pushed_clock_ms`（「无变化」早退分支同样只
+  在干净轮次落盘）。此前单次限流/瞬断后，**行数不变的编辑**（改标题、勾选完成等）会
+  因为水位线被推进而永久漏传云端，且后续轮次一路报「成功」——静默数据丢失且不可自愈。
+- **rekey 不再产出密钥混合态（P1）**：`push_all_force_full` 新增
+  `require_all_tables_ok`，任一分桶上传失败即**在写清单之前**中断。此前部分表失败仍会写入
+  「已换成新 Key」的清单，导致云端出现「新 Key 清单指向旧 Key 分桶」，全体设备（含本机）
+  一律 `KeyMismatch`。
+- **清单 CAS 在弱 ETag 服务端可用（P1）**：`get_with_token` 改走与列举侧同源的
+  `normalize_etag`——剥掉 `W/` 弱校验前缀、空 ETag 归 `None`。此前弱 ETag 的 WebDAV
+  服务端上 `If-Match` 恒不匹配，合并重试耗尽后**清单永不落盘**。
+- **S3 签名与请求 URL 统一按 AWS UriEncode 编码（P2/F51）**：`s3/url.rs` 新增
+  `uri_encode`，`build_url` 成为唯一编码点。此前路径裸拼进 URL 由 `Url::parse` 按 WHATWG
+  规则归一：`base_path` 含 `#`/`?` 时路径被**截断到另一个对象**，含 `+`/`=`/`[` 时
+  canonical URI 与 AWS 重算结果不符 → 整包 403 `SignatureDoesNotMatch`。
+- **墓碑回收水位线改用「已拉取位置」（P2/F52）**：`DeviceCheckpoint` 拆出
+  `last_pulled_at`（水位线只取它），pull 成功路径回写；只推送不拉取的设备不再抬高水位线。
+  同时修掉「本轮刚写入的墓碑分桶在同轮被回收」的窗口（`prune_expired_tombstones` 增
+  `already_known` 过滤 + 按 `(table, bucket)` 精确回收）。
+- **合法清空全部数据可以上云了（P2/F53）**：空数据覆盖守卫前置「本地留有软删墓碑 ⇒ 合法
+  删除」判据。此前「逐条软删清空」被误判为删库重装而阻断 Push，删除永远传不到云端，下一轮
+  pull 又把远端活行拉回来——用户看到的是「删了还会自己回来」。
+- **全量备份导入后失效同步账本（P2/F54）**：导入提交后清 `sync_state.json` 并重置激活配置
+  的 `last_synced_at`，与「断开同步」同口径。此前恢复出的行 `updated_at` 早于旧水位线、
+  桶内行数又与远端一致时被判「干净」而漏推；陈旧守卫线还会让恢复出的软删行被提前物理清理。
+- **部分失败不再谎报「同步完成」（P2/F55）**：表级错误隔离产生的 `Ok` 但 `errors` 非空的
+  轮次，在 `Done` 帧之后补发一帧带摘要的 `Error`（最多列 3 条）。此前 UI 说「同步完成」、
+  历史表说 `failed`，而后台调度路径不把返回值交给 UI，用户唯一可见信号就是进度帧。
+- **两处 KDF 迭代下限补挂（P2/F62、F63）**：`rotate_key` 与 `unlock_master_auth` 补
+  `ensure_kdf_strength`。本地 meta 文件属不可信来源，此前被篡改降迭代即可解锁 / 把整套云端
+  密文重新包到降级强度的密钥下。
+- **错误信息与提示方向修正（P2/F67、F68）**：MKCOL 深度超限 arm 改走脱敏（credentials 不再
+  进错误串，F34 收口）；附件上传读文件改 `match`，区分「读取失败（带 IO 原因与路径）」与
+  「内容为空」——IO 故障不再被吞成「文件为空」把用户引向错误排查方向。
+- **明确可重试的状态码不再放弃（P3/F79）**：`from_http_status` 增 `408` / `425` 可重试 arm。
+- 回归：`cargo test --workspace` 全绿（orbit-core 新增 10 例，含 F48/F49/F50/F51/F52/F53
+  的定向用例）；详细清单与逐项证据见 `docs/同步功能第六轮全面盘查报告-2026-09-30.md` §八。
+
 ### 节假日记账展示收口 + 旧口径文档复原（2026-09-30）
 
 - **记账文案单一出口**：桌面新增 `features/todo/shared/holiday-meta.ts`（配 9 例单测）——
