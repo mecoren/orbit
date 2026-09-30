@@ -608,6 +608,9 @@ pub async fn import_full_sync_backup(
     // 提交事务
     tx.commit().await?;
 
+    // 5. 失效同步账本（F54，2026-09-30 第六轮）
+    invalidate_sync_ledger(pool, svc).await;
+
     let error_count = total_errors.len() as i64;
     Ok(ImportResult {
         success_count: total_success,
@@ -616,6 +619,43 @@ pub async fn import_full_sync_backup(
         manifest: decoded.manifest,
         needs_restart: false,
     })
+}
+
+/// 失效同步账本：删 `sync_state.json` + 重置激活配置的 `last_synced_at`
+///
+/// ## 为什么「整体替换本地数据」必须调用（F54，2026-09-30 第六轮）
+///
+/// 账本（`sync_state.json`）里的桶指纹快照与 F41 增量水位线，只对**被替换前**
+/// 的那份数据成立。全量备份导入把业务表整体换成备份内容后，若账本原样保留：
+///
+/// 1. 恢复出的行 `updated_at` 早于旧水位线，且桶内行数与远端 `ChunkRef.count`
+///    相同时，该桶被判「干净」而**漏推** → 云端与本地静默分歧；
+/// 2. `sync_configs.last_synced_at`（回收站物理清理守卫线）陈旧，会让恢复出的
+///    软删行被提前物理清理（`trash_api` 按它放行 `DELETE`），后续 pull 又把它
+///    复活——删除/复活的抖动。
+///
+/// 处置与 `sync_disconnect` 同口径（那边显式 `SyncStateStore::clear()` 并注明
+/// 「下次配置后触发全量重推」）：同一性质的操作不得两套口径。
+///
+/// 失败只记日志、不上抛：导入已提交，账本失效属后续加固，不能反过来把一次
+/// 成功的恢复报成失败（用户会重试并再次覆盖）。最坏情形也只是多传一轮全量。
+async fn invalidate_sync_ledger(pool: &SqlitePool, svc: &SyncCryptoService) {
+    if let Err(e) = crate::cloud_sync::state::SyncStateStore::new(svc.app_data_dir()).clear() {
+        log::warn!("[full_backup] 失效同步账本失败（不阻塞恢复完成）: {e}");
+    } else {
+        log::info!("[full_backup] 已清除 sync_state.json，下次同步触发全量重推");
+    }
+
+    let repo = SyncConfigRepo::new(pool.clone());
+    match repo.get_active_config().await {
+        Ok(Some(record)) => {
+            if let Err(e) = repo.reset_last_synced_at(record.id).await {
+                log::warn!("[full_backup] 重置激活配置 last_synced_at 失败: {e}");
+            }
+        }
+        Ok(None) => log::info!("[full_backup] 无激活云同步配置，跳过 last_synced_at 重置"),
+        Err(e) => log::warn!("[full_backup] 读取激活云同步配置失败: {e}"),
+    }
 }
 
 /// 在事务中直接 INSERT 记录，保留 JSON 中的原始字段
