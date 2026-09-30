@@ -1,3 +1,48 @@
+/// AWS SigV4 UriEncode（RFC 3986 unreserved 集）
+///
+/// 只有 `A-Z a-z 0-9 - _ . ~` 原样保留，其余字节一律 `%XX`（**大写**十六进制，
+/// 按 UTF-8 逐字节编码）——这是 AWS 对 canonical URI 与 canonical query 的
+/// 硬性要求，与 `url` crate 的 WHATWG 编码集**不等价**：
+///
+/// | 字符 | WHATWG 路径集 | AWS UriEncode | 后果 |
+/// |---|---|---|---|
+/// | 空格 | `%20` | `%20` | 一致 |
+/// | `#` `?` | `%23` / `%3F` | 同 | 一致（但见下） |
+/// | `+` `=` `&` `,` `:` `;` `@` `$` `!` `'` `(` `)` `*` `[` `]` | **原样** | **`%XX`** | 不一致 |
+///
+/// `encode_slash`：canonical URI 必须**保留** `/` 作路径分隔符（传 `false`），
+/// 而 key 名/单段值须编码（传 `true`）。
+///
+/// ## 为什么必须自己编码（F51，2026-09-30 第六轮）
+///
+/// 此前 `build_url` 把裸 `path` 直接拼进 URL 字符串，再由 `Url::parse` 按
+/// WHATWG 规则归一。两个后果：
+///
+/// 1. **`#` / `?` 截断**：key 或 `base_path` 含这两个字符时，`Url::parse`
+///    把它们当 fragment / query 起点 → 静默指向**另一个对象**（`%`/`"`/
+///    `<`/`>`/`` ` ``/`{}` 虽被 WHATWG 编码，但 canonical URI 仍是
+///    服务端未见的形态）。
+/// 2. **canonical URI 与 AWS 口径不一致**：`+`/`=`/`[` 这类字符 WHATWG
+///    不编码而 AWS 要求编码；签名一旦与服务端重算结果不同即整包 403。
+///
+/// 修法：**唯一编码点**放在 `build_url`——发出的 URL 与 `sign_request`
+/// 里的 `parsed.path()` 天然同源（`url` crate 不会改动已 `%XX` 化的路径）。
+pub fn uri_encode(s: &str, encode_slash: bool) -> String {
+    const HEX: &[u8; 16] = b"0123456789ABCDEF";
+    let mut out = String::with_capacity(s.len());
+    for &b in s.as_bytes() {
+        let unreserved = b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_' | b'.' | b'~');
+        if unreserved || (!encode_slash && b == b'/') {
+            out.push(b as char);
+        } else {
+            out.push('%');
+            out.push(HEX[(b >> 4) as usize] as char);
+            out.push(HEX[(b & 0x0f) as usize] as char);
+        }
+    }
+    out
+}
+
 /// 规范化 endpoint：补全 scheme、去掉末尾斜杠
 ///
 /// 与 Dart `S3SyncAdapter._normalizeEndpoint` 行为一致。
@@ -37,6 +82,11 @@ pub fn infer_service(endpoint: &str) -> String {
 ///
 /// Virtual-Hosted-Style: https://<bucket>.<endpoint>/<path>
 /// Path-Style: https://<endpoint>/<bucket>/<path>
+///
+/// **`bucket` 与 `path` 在此处按 AWS UriEncode 编码（F51 的唯一编码点）**：
+/// 发出的 URL 与 `S3Adapter::sign_request` 里 `Url::parse(url).path()`
+/// 因此天然同源，canonical URI 不会与 AWS 重算结果漂移。调用方传入**原始
+/// 未编码**的路径（含空格、`#`、`+` 等），不要自行百分号编码（会二次编码）。
 pub fn build_url(
     endpoint: &str,
     bucket: &str,
@@ -59,13 +109,15 @@ pub fn build_url(
         None => host.to_string(),
     };
     let mut buffer = if use_path_style {
-        format!("{}/{}", endpoint, bucket)
+        format!("{}/{}", endpoint, uri_encode(bucket, true))
     } else {
         format!("{}://{}.{}", uri.scheme(), bucket, host_with_port)
     };
     if !path.is_empty() {
+        // F51：唯一编码点。发出的 URL 与 sign_request 的 parsed.path()
+        // 必须与 AWS UriEncode 口径完全一致（保留 `/` 作分隔符）。
         buffer.push('/');
-        buffer.push_str(path);
+        buffer.push_str(&uri_encode(path, false));
     }
     if !query_params.is_empty() {
         buffer.push('?');
@@ -192,5 +244,104 @@ mod tests {
         // 兜底保证产出带 scheme 的 URL（scheme 恒存在，签名层不再失败）
         let url = build_url("   ", "b", "k", true, &[]);
         assert!(url.starts_with("https://"), "兜底也必须带 scheme: {url}");
+    }
+
+    // ========================================================================
+    // F51（2026-09-30 第六轮）：AWS UriEncode 纳入唯一编码点
+    //
+    // 此前路径裸拼进 URL 由 `Url::parse` 按 WHATWG 规则归一：`#`/`?` 截断、
+    // `+`/`=`/`[` 等 AWS 要求编码的字符原样保留 → canonical URI 与
+    // 服务端重算结果不一致（整包 403），或静默指向另一个对象。
+    // ========================================================================
+
+    #[test]
+    fn uri_encode_keeps_unreserved_and_slash() {
+        // 真实的 URL 路径形态（hash 十六进制 + 表名 + 后缀）必须原样通过
+        assert_eq!(
+            uri_encode("tables/todo_tasks/12.orsync", false),
+            "tables/todo_tasks/12.orsync"
+        );
+        assert_eq!(
+            uri_encode("assets/abc-def_1.2~3", false),
+            "assets/abc-def_1.2~3"
+        );
+    }
+
+    #[test]
+    fn uri_encode_encodes_aws_only_chars() {
+        // 这一批正是 WHATWG 路径集**不编码**而 AWS 要求编码的字符
+        assert_eq!(
+            uri_encode("a+b=c&d,e:f;g@h$i!j'k(l)m*n[o]", false),
+            "a%2Bb%3Dc%26d%2Ce%3Af%3Bg%40h%24i%21j%27k%28l%29m%2An%5Bo%5D"
+        );
+    }
+
+    #[test]
+    fn uri_encode_encodes_slash_when_asked() {
+        // encode_slash = true 供「单段值 / key 名」使用（如 canonical query）
+        assert_eq!(uri_encode("a/b", true), "a%2Fb");
+        assert_eq!(
+            uri_encode("a/b", false),
+            "a/b",
+            "canonical URI 必须保留分隔符"
+        );
+    }
+
+    #[test]
+    fn uri_encode_handles_truncation_chars_percent_and_utf8() {
+        // `#` / `?` 不编码会被 Url::parse 当 fragment / query 起点
+        assert_eq!(uri_encode("k#1?2", false), "k%231%3F2");
+        // 裸 `%` 在地址里非法，必须自身编码（否则出现非法百分号序列）
+        assert_eq!(uri_encode("100%", false), "100%25");
+        // 非 ASCII 按 UTF-8 逐字节编码（"中" = E4 B8 AD）
+        assert_eq!(uri_encode("中", true), "%E4%B8%AD");
+    }
+
+    #[test]
+    fn build_url_percent_encodes_path_and_leaves_no_fragment() {
+        // base_path 含空格 / `+` / `#` 的真实形态：此前 `#` 之后整段被截断成
+        // fragment，签名与实际对象同时指向错误目标
+        let url = build_url(
+            "https://minio.example.com",
+            "b",
+            "wait sync/a+b#c",
+            true,
+            &[],
+        );
+        assert_eq!(url, "https://minio.example.com/b/wait%20sync/a%2Bb%23c");
+
+        // 签名侧直接取 parsed.path()：与发出的形态同源，即 AWS canonical URI
+        let parsed = url::Url::parse(&url).unwrap();
+        assert_eq!(parsed.path(), "/b/wait%20sync/a%2Bb%23c");
+        assert!(parsed.fragment().is_none(), "不得残留 fragment");
+        assert!(parsed.query().is_none(), "不得把 key 里的 ? 当查询起点");
+    }
+
+    #[test]
+    fn build_url_empty_path_unchanged() {
+        assert_eq!(
+            build_url("https://minio.example.com", "b", "", true, &[]),
+            "https://minio.example.com/b"
+        );
+        assert_eq!(
+            build_url("https://s3.us-west-2.amazonaws.com", "b", "", false, &[]),
+            "https://b.s3.us-west-2.amazonaws.com"
+        );
+    }
+
+    #[test]
+    fn build_url_query_still_encoded_after_path_encoding() {
+        // 路径编码不得干扰查询串（uploadId 含 `+`/`/`/`=` 的典型值）
+        let url = build_url(
+            "https://minio.example.com",
+            "b",
+            "tables/todo/1.orsync",
+            true,
+            &[("uploadId".to_string(), "a+b/c=".to_string())],
+        );
+        assert_eq!(
+            url,
+            "https://minio.example.com/b/tables/todo/1.orsync?uploadId=a%2Bb%2Fc%3D"
+        );
     }
 }
