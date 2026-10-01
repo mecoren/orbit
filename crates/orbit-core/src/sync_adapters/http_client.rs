@@ -305,7 +305,17 @@ impl HttpClient {
         let status = response.status().as_u16();
         match status {
             412 => Ok(false),
-            // 部分 WebDAV 实现对 If-Match 失败返回 409 Conflict
+            // 部分 WebDAV 实现对 If-Match 失败返回 409 Conflict，故条件写下的 409
+            // 折成「前置条件不满足」。
+            //
+            // F56（2026-10-01 第六轮）：409 在 WebDAV 里**本来还有一个含义**——
+            // RFC 4918 的 AncestorsNotFound（父目录链缺失，见 `from_http_status`
+            // 的同码分支）。这条折叠之所以安全，前提是**调用方保证父目录存在**：
+            // `WebDavAdapter::upload_conditional` 与 `upload` 一样先
+            // `ensure_directory(parent)`，缺目录会在那里自愈（失败也会以
+            // `SyncError` 上抛，而不是走到这里）。**故本层收到的 409 只剩
+            // 「CAS 失败」一种含义**；新增条件写调用点时必须同样先补齐父目录，
+            // 否则父目录缺失会被误报成并发冲突，调用方会徒劳重读重试。
             409 if if_match.is_some() || if_none_match_star => Ok(false),
             s if crate::sync::error::is_success_status(s) => Ok(true),
             s => {

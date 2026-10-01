@@ -1100,12 +1100,35 @@ impl SyncAdapter for WebDavAdapter {
     ///
     /// 部分实现忽略条件头并返回 2xx——调用方以「写后回读校验」兜底
     /// （见 `cloud_sync::push` 的清单 CAS）。
+    ///
+    /// ## 先补齐父目录（F56，2026-10-01 第六轮）
+    ///
+    /// 此前本方法**不做** `ensure_directory`，而普通 `upload` 做。于是只要
+    /// 父目录链不存在，条件写就必然失败且**错误成因被掩盖**：
+    ///
+    /// 1. 服务端回 409（RFC 4918 AncestorsNotFound）；
+    /// 2. `put_conditional` 把「带前置条件的 409」折成 `Ok(false)`（那是为
+    ///    兼容「用 409 表示 If-Match 失败」的少数实现而设的分支）；
+    /// 3. 调用方（清单 CAS）据此判定「并发冲突」→ 重读清单 → 再重试；
+    /// 4. 目录依旧不存在 → 再 409 → 重试耗尽后报**「并发冲突重试 N 次仍未
+    ///    成功」**，而真实成因是目录缺失（可自愈），清单永不落盘。
+    ///
+    /// 触发面（不止首次推送）：云端目录被外部删除、用户在网盘控制台清空过
+    /// 目录、只跑清单 CAS 而未先写过模块数据的路径（pull 前探测、rekey 强制
+    /// 重推）。补齐父目录后 409 在本链路上只剩「CAS 失败」一种含义。
     async fn upload_conditional(
         &self,
         path: &str,
         data: &[u8],
         precondition: UploadPrecondition,
     ) -> Result<UploadOutcome, SyncError> {
+        // 与 `upload` 同口径：先确保父目录存在，避免 409 AncestorsNotFound
+        if let Some(parent) = path.rsplit_once('/').map(|(p, _)| p)
+            && !parent.is_empty()
+        {
+            self.ensure_directory(parent).await?;
+        }
+
         let url = self.build_url(path);
         let headers = self.auth_headers();
         let (if_match, if_none_star) = match &precondition {
@@ -1295,15 +1318,19 @@ mod tests {
     ///   （405 会让 `url_exists` 返回 Err，故必须回 404）
     /// - 对象存在性只按内存表判定；HEAD 回正确的 `Content-Length` 且**无体**
     /// - `fail_delete_ending` 命中后缀的 DELETE 回 500（F59 故障注入点）
+    /// - `dirs` 记录 MKCOL 创建过的目录；**路径以 `/strict/` 开头时** PUT 要求
+    ///   父目录已在 `dirs` 里，否则回 409 AncestorsNotFound（F56 故障注入点，
+    ///   与 `/nolength/` 同一套路径前缀注入手法，不影响其余用例）
     struct FakeDav {
         base_url: String,
         objects: std::sync::Arc<std::sync::Mutex<std::collections::HashMap<String, Vec<u8>>>>,
         fail_delete_suffix: std::sync::Arc<std::sync::Mutex<Option<String>>>,
+        dirs: std::sync::Arc<std::sync::Mutex<std::collections::HashSet<String>>>,
     }
 
     impl FakeDav {
         fn spawn() -> Self {
-            use std::collections::HashMap;
+            use std::collections::{HashMap, HashSet};
             use std::sync::{Arc, Mutex};
 
             let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("绑定空闲端口");
@@ -1311,12 +1338,13 @@ mod tests {
             let objects: Arc<Mutex<HashMap<String, Vec<u8>>>> =
                 Arc::new(Mutex::new(HashMap::new()));
             let fail = Arc::new(Mutex::new(None::<String>));
-            let (objs, fl) = (objects.clone(), fail.clone());
+            let dirs: Arc<Mutex<HashSet<String>>> = Arc::new(Mutex::new(HashSet::new()));
+            let (objs, fl, dr) = (objects.clone(), fail.clone(), dirs.clone());
             std::thread::spawn(move || {
                 for stream in listener.incoming().flatten() {
-                    let (objs, fl) = (objs.clone(), fl.clone());
+                    let (objs, fl, dr) = (objs.clone(), fl.clone(), dr.clone());
                     std::thread::spawn(move || {
-                        let _ = serve_webdav(stream, objs, fl);
+                        let _ = serve_webdav(stream, objs, fl, dr);
                     });
                 }
             });
@@ -1324,6 +1352,7 @@ mod tests {
                 base_url: format!("http://127.0.0.1:{port}"),
                 objects,
                 fail_delete_suffix: fail,
+                dirs,
             }
         }
 
@@ -1350,6 +1379,7 @@ mod tests {
         mut stream: std::net::TcpStream,
         objects: std::sync::Arc<std::sync::Mutex<std::collections::HashMap<String, Vec<u8>>>>,
         fail_delete_suffix: std::sync::Arc<std::sync::Mutex<Option<String>>>,
+        dirs: std::sync::Arc<std::sync::Mutex<std::collections::HashSet<String>>>,
     ) -> std::io::Result<()> {
         use std::io::{BufRead, BufReader, Read, Write};
 
@@ -1400,10 +1430,25 @@ mod tests {
             // (状态码, 响应体, HEAD 专用声明长度)
             let (status, payload, head_len) = match method.as_str() {
                 "PROPFIND" => (404, Vec::new(), None),
-                "MKCOL" => (201, Vec::new(), None),
+                "MKCOL" => {
+                    dirs.lock()
+                        .unwrap()
+                        .insert(path.trim_end_matches('/').to_string());
+                    (201, Vec::new(), None)
+                }
                 "PUT" => {
-                    objects.lock().unwrap().insert(path.clone(), body);
-                    (200, Vec::new(), None)
+                    // `/strict/` 前缀：模拟「父目录不存在即 409 AncestorsNotFound」的
+                    // 标准 WebDAV（RFC 4918）。其余路径保持宽松（PUT 恒 200），
+                    // 以免改动 F59 分片用例的既有前提。
+                    let parent = path.rsplit_once('/').map(|(p, _)| p).unwrap_or("/");
+                    let missing_parent =
+                        path.starts_with("/strict/") && !dirs.lock().unwrap().contains(parent);
+                    if missing_parent {
+                        (409, Vec::new(), None)
+                    } else {
+                        objects.lock().unwrap().insert(path.clone(), body);
+                        (200, Vec::new(), None)
+                    }
                 }
                 "GET" => match objects.lock().unwrap().get(&path) {
                     Some(b) => (200, b.clone(), None),
@@ -1446,6 +1491,48 @@ mod tests {
             }
             stream.flush()?;
         }
+    }
+
+    // ========================================================================
+    // F56（2026-10-01 第六轮）：条件写必须与普通写一样先补齐父目录
+    // ========================================================================
+
+    /// F56：父目录链不存在时，条件写必须自愈而不是报「并发冲突」
+    ///
+    /// 旧行为：`upload_conditional` 不做 `ensure_directory` → 服务端 409
+    /// AncestorsNotFound → `put_conditional` 把「带前置条件的 409」折成
+    /// `Ok(false)` → 本方法返回 `PreconditionFailed` → 调用方（清单 CAS）判
+    /// 「并发冲突」并重试，目录依旧不在 → 重试耗尽后报「并发冲突重试 N 次仍
+    /// 未成功」，而真实成因是目录缺失（可自愈），**清单永不落盘**。
+    ///
+    /// 这里用 FakeDav 的 `/strict/` 前缀模拟标准 WebDAV（父目录不存在即 409）。
+    /// 因 FakeDav 的 PROPFIND 恒 404，`ensure_directory` 会逐级 MKCOL 建链。
+    #[tokio::test]
+    async fn conditional_write_creates_missing_parent_directory() {
+        let dav = FakeDav::spawn();
+        let adapter = adapter_for(&dav.base_url);
+        let payload = b"encrypted-manifest".to_vec();
+
+        let outcome = adapter
+            .upload_conditional(
+                "strict/fresh/manifest.json",
+                &payload,
+                UploadPrecondition::Absent,
+            )
+            .await
+            .expect("条件写不得因父目录缺失而失败");
+
+        assert_eq!(
+            outcome,
+            UploadOutcome::Ok,
+            "父目录缺失不属并发冲突——不得报 PreconditionFailed（那会让调用方\
+             反复重读重试，最终以「并发冲突」掩盖真实成因）"
+        );
+        assert_eq!(
+            dav.get("/strict/fresh/manifest.json"),
+            Some(payload),
+            "补齐父目录后条件写必须真正落到云端"
+        );
     }
 
     /// F59：清单删除失败 ⇒ 清理未完成 ⇒ 必须上抛，且**不得写入新清单**
