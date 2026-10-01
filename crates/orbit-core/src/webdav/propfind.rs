@@ -33,6 +33,13 @@ pub struct WebDavFileEntry {
 /// 而资源本身 404 的条目也进列表，令 `url_exists` 对 207 恒真。
 /// 现规则：只合并 2xx（或缺省 status）propstat 的属性；一条 response 的
 /// propstat 全部非 2xx → 整条剔除（调用方据此判定资源不存在）。
+///
+/// F74（2026-10-01 第六轮）：补上 RFC 4918 的另一个合法形态——`<status>` 直属
+/// `<response>`（`(href, status)`，无 propstat 包装），它描述的是**资源本身**。
+/// 旧实现只在 propstat 内记录 status，该形态下 `merged` 恒 false → 整条被丢，
+/// 存在的资源从列举结果里消失（`url_exists` 判「不存在」、`list_assets` 少对象）。
+/// 现规则：合并过 2xx propstat **或** response 级 status 为 2xx → 收条目
+/// （后者只带 href）；两者都不满足仍整条剔除。
 pub fn parse_propfind_response(xml: &str) -> Result<Vec<WebDavFileEntry>, WebDavError> {
     let mut reader = Reader::from_str(xml);
 
@@ -49,6 +56,10 @@ pub fn parse_propfind_response(xml: &str) -> Result<Vec<WebDavFileEntry>, WebDav
     let mut merged = false;
     let mut in_propstat = false;
     let mut propstat_status: Option<u16> = None;
+    // F74：RFC 4918 允许 `<response>` 直接用 `(href, status)` 形态——`<status>`
+    // 直属 response 而不在 propstat 里，描述的是**资源本身**的结论。
+    // 旧实现只在 `in_propstat` 时记录 status，这种形态下 merged 恒 false → 整条被丢。
+    let mut response_status: Option<u16> = None;
     // resourcetype 是空元素对（<D:resourcetype><D:collection/></D:resourcetype>），
     // 不产生文本事件，须在 Start 事件识别 `collection` 子元素置位（RFC 4918 标准）。
     // 追踪当前是否位于 resourcetype 元素内部（含命名空间前缀与裸元素两种形态）。
@@ -65,6 +76,7 @@ pub fn parse_propfind_response(xml: &str) -> Result<Vec<WebDavFileEntry>, WebDav
                         props = WebDavFileEntry::default();
                         props_dirty = false;
                         merged = false;
+                        response_status = None;
                     }
                     "propstat" => {
                         in_propstat = true;
@@ -104,6 +116,9 @@ pub fn parse_propfind_response(xml: &str) -> Result<Vec<WebDavFileEntry>, WebDav
                     "status" => {
                         if in_propstat {
                             propstat_status = status_code(&current_text);
+                        } else {
+                            // F74：`<status>` 直属 response（`(href, status)` 形态）
+                            response_status = status_code(&current_text);
                         }
                     }
                     "propstat" => {
@@ -155,7 +170,16 @@ pub fn parse_propfind_response(xml: &str) -> Result<Vec<WebDavFileEntry>, WebDav
                                     }
                                     props = WebDavFileEntry::default();
                                     props_dirty = false;
-                                    if merged && !entry.href.is_empty() {
+
+                                    // F74：response 级 2xx（`(href, status)` 形态）同样
+                                    // 说明资源存在——属性取不到就只带 href 进列表。
+                                    // 旧实现只认「合并过 2xx propstat」，该形态整条被丢，
+                                    // 于是存在的资源从列举结果里消失（url_exists 判
+                                    // 「不存在」、list_assets 少对象）。
+                                    // 非 2xx 仍丢弃：与 F31「全非 2xx → 整条剔除」同口径。
+                                    let direct_ok =
+                                        response_status.is_some_and(|c| (200..=299).contains(&c));
+                                    if (merged || direct_ok) && !entry.href.is_empty() {
                                         // take 走并复位：current_entry 此处被借用，
                                         // 不能再调 current_entry.take()
                                         entries.push(std::mem::take(entry));
@@ -498,5 +522,85 @@ mod tests {
             entries[0].content_length, None,
             "404 propstat 的属性不得落地"
         );
+    }
+
+    // ─────────── F74：response 直属 `<status>` 形态 ───────────
+
+    /// RFC 4918 的 `(href, status)` 形态：status 直属 response、无 propstat
+    ///
+    /// 旧实现只在 `in_propstat` 时记录 status，于是这类 response 的 `merged`
+    /// 恒 false → **整条被丢**：存在的资源不出现在列表里。资源级非 2xx 仍按
+    /// 「不存在」剔除（这正是调用方判定资源缺失的依据）。
+    #[test]
+    fn response_level_status_form_is_supported() {
+        let xml = r#"<?xml version="1.0"?>
+<D:multistatus xmlns:D="DAV:">
+  <D:response>
+    <D:href>/dav/wait-home/exists.orsync</D:href>
+    <D:status>HTTP/1.1 200 OK</D:status>
+  </D:response>
+  <D:response>
+    <D:href>/dav/wait-home/gone.orsync</D:href>
+    <D:status>HTTP/1.1 404 Not Found</D:status>
+  </D:response>
+</D:multistatus>"#;
+        let entries = parse_propfind_response(xml).unwrap();
+        assert_eq!(entries.len(), 1, "只有 2xx 的资源级状态才收条目");
+        assert_eq!(entries[0].href, "/dav/wait-home/exists.orsync");
+        assert_eq!(entries[0].content_length, None, "该形态不带属性，只带 href");
+        assert_eq!(entries[0].etag, None);
+    }
+
+    /// F74 决策面：response 级 2xx 优先于「propstat 全非 2xx」的剔除规则
+    ///
+    /// RFC 4918 里 response 级 status 才是资源级结论；propstat 的 404 表示**该组
+    /// 属性**取不到（Nextcloud 对目录回 `getcontentlength` 404 即常态），
+    /// 不等于资源不存在。两者同时出现且冲突时以资源级结论为准。
+    #[test]
+    fn resource_level_ok_wins_over_failed_propstat() {
+        let xml = r#"<?xml version="1.0"?>
+<D:multistatus xmlns:D="DAV:">
+  <D:response>
+    <D:href>/dav/wait-home/sub/</D:href>
+    <D:propstat>
+      <D:prop><D:getcontentlength></D:getcontentlength></D:prop>
+      <D:status>HTTP/1.1 404 Not Found</D:status>
+    </D:propstat>
+    <D:status>HTTP/1.1 200 OK</D:status>
+  </D:response>
+</D:multistatus>"#;
+        let entries = parse_propfind_response(xml).unwrap();
+        assert_eq!(entries.len(), 1, "资源级 200 说明资源在，不得整条剔除");
+        assert_eq!(entries[0].href, "/dav/wait-home/sub/");
+        assert_eq!(entries[0].content_length, None);
+    }
+
+    /// 对照面：既无可用 propstat、也无 response 级 2xx → 仍整条剔除（F31 不回退）
+    #[test]
+    fn no_usable_status_at_all_is_still_dropped() {
+        let xml = r#"<?xml version="1.0"?>
+<D:multistatus xmlns:D="DAV:">
+  <D:response>
+    <D:href>/dav/wait-home/ghost.orsync</D:href>
+    <D:status>HTTP/1.1 404 Not Found</D:status>
+  </D:response>
+  <D:response>
+    <D:href>/dav/wait-home/no-props.orsync</D:href>
+  </D:response>
+  <D:response>
+    <D:href>/dav/wait-home/real.orsync</D:href>
+    <D:propstat>
+      <D:prop><D:getcontentlength>7</D:getcontentlength></D:prop>
+      <D:status>HTTP/1.1 200 OK</D:status>
+    </D:propstat>
+  </D:response>
+</D:multistatus>"#;
+        let entries = parse_propfind_response(xml).unwrap();
+        assert_eq!(
+            entries.len(),
+            1,
+            "404 资源级状态与「既无 status 也无属性」都不得进列表"
+        );
+        assert_eq!(entries[0].href, "/dav/wait-home/real.orsync");
     }
 }
