@@ -58,6 +58,24 @@ fn join_base_path(base_path: &str, path: &str) -> String {
     }
 }
 
+/// F64（2026-10-01 第六轮）：rekey 上传新配置后，判定是否需要清理旧版根目录
+/// `crypto/config` 残留。
+///
+/// - `base_path` 非空：新路径为 `{base_path}/crypto/config`，与旧路径**不同位**，
+///   返回 `Some(CRYPTO_CONFIG_LEGACY_PATH)` 供调用方删除——老版本遗留的根目录
+///   配置是旧 Key 包装密文，rekey 是「旧 Key 全面失效」的唯一时点，不清理就
+///   永远残留（旧 Key 泄露场景下旧密文仍可读）。
+/// - `base_path` 为空：新路径与旧路径**同位**（都是根目录 `crypto/config`），
+///   返回 `None`——此时删除会把刚上传的新配置一并删掉，绝不可删。
+pub fn legacy_crypto_config_cleanup_path(base_path: &str) -> Option<&'static str> {
+    let new_path = join_base_path(base_path, CRYPTO_CONFIG_PATH);
+    if new_path == CRYPTO_CONFIG_LEGACY_PATH {
+        None
+    } else {
+        Some(CRYPTO_CONFIG_LEGACY_PATH)
+    }
+}
+
 /// 判断 SyncError 是否表示「资源不存在」（404）
 ///
 /// 复用 `cloud_sync::paths::is_not_found_error`，保留此函数以维持模块独立性。
@@ -379,4 +397,30 @@ async fn migrate_legacy_to_new_path(
         return;
     }
     log::info!("[bundle_io] 自动迁移：删除旧路径 {} 成功", legacy);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// F64：base_path 为空时新旧路径同位，绝不可删（会删掉刚传的新配置）
+    #[test]
+    fn legacy_cleanup_path_skips_when_same_location() {
+        assert_eq!(legacy_crypto_config_cleanup_path(""), None);
+        assert_eq!(legacy_crypto_config_cleanup_path("/"), None);
+        assert_eq!(legacy_crypto_config_cleanup_path("///"), None);
+    }
+
+    /// F64：base_path 非空时返回旧路径供清理
+    #[test]
+    fn legacy_cleanup_path_points_to_root_config_when_based() {
+        assert_eq!(
+            legacy_crypto_config_cleanup_path("orbit"),
+            Some(CRYPTO_CONFIG_LEGACY_PATH)
+        );
+        assert_eq!(
+            legacy_crypto_config_cleanup_path("/orbit/"),
+            Some(CRYPTO_CONFIG_LEGACY_PATH)
+        );
+    }
 }

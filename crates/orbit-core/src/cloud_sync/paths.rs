@@ -36,6 +36,10 @@ pub const MANIFEST_PATH: &str = "manifest.orsync";
 /// 分桶对象是**按桶号覆盖写**的，因此本文件只能恢复「本次未被覆盖的桶」
 /// 的索引视图；它提供的是清单级诊断/辅助回滚，而非完整时间点快照
 /// （完整快照由 `.orfullsync` 全量备份承担）。
+///
+/// F64（2026-10-01 第六轮）：rekey（force）轮例外——改存**本版**新 Key 密文。
+/// 上一版是旧 Key 密文，保留即旧 Key 密文残留，且是无效回滚点（新 Key 世界
+/// 解不开，恢复它会把全体设备引回 KeyMismatch）。
 pub const MANIFEST_PREV_PATH: &str = "manifest.prev.orsync";
 
 /// 表分桶目录前缀

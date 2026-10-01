@@ -1028,6 +1028,23 @@ impl SyncEngine {
         .await?;
         log::info!("[rekey] 已上传新 crypto/config 到 {{base_path}}/crypto/config");
 
+        // F64（2026-10-01 第六轮）：清掉旧版根目录 crypto/config 残留。P2 路径
+        // 迁移后新配置只写 {base_path}/crypto/config；老版本遗留的根目录配置是
+        // 旧 Key 包装密文，rekey 是「旧 Key 全面失效」的唯一时点，不清理就永远
+        // 残留（旧 Key 泄露场景下旧密文仍可读）。404（本就无残留）不算失败；
+        // 删除失败也不阻断（残留属卫生问题，清单与分桶的覆盖才是主链路）。
+        if let Some(legacy_path) =
+            crate::sync_crypto::bundle_io::legacy_crypto_config_cleanup_path(base_path)
+        {
+            match raw_adapter.delete(legacy_path).await {
+                Ok(()) => log::info!("[rekey] 已清理旧版根目录 crypto/config 残留"),
+                Err(e) if crate::cloud_sync::paths::is_not_found_error(&e) => {}
+                Err(e) => {
+                    log::warn!("[rekey] 清理旧版根目录 crypto/config 失败（不阻断）: {e}")
+                }
+            }
+        }
+
         result.duration_ms = start.elapsed().as_millis() as u64;
         self.progress_sender.send(SyncProgress::Done {
             origin,
@@ -1811,23 +1828,40 @@ mod tests {
     /// 探针测试用 MockAdapter
     ///
     /// 维护 path → data 映射，download 命中返回数据，未命中返回 404 Network 错误。
-    /// upload/delete/list_files 等用 Mutex 记录调用，便于断言。
+    /// upload/delete/list_files 等用 Mutex 记录调用，便于断言；upload 会**更新
+    /// files**（写后回读校验依赖 download 看到新写入），delete 记录被删路径。
     struct ProbeMockAdapter {
-        files: HashMap<String, Vec<u8>>,
+        files: StdMutex<HashMap<String, Vec<u8>>>,
         upload_calls: StdMutex<Vec<(String, Vec<u8>)>>,
+        delete_calls: StdMutex<Vec<String>>,
     }
 
     impl ProbeMockAdapter {
         fn new() -> Self {
             Self {
-                files: HashMap::new(),
+                files: StdMutex::new(HashMap::new()),
                 upload_calls: StdMutex::new(Vec::new()),
+                delete_calls: StdMutex::new(Vec::new()),
             }
         }
 
-        fn with_file(mut self, path: &str, data: Vec<u8>) -> Self {
-            self.files.insert(path.to_string(), data);
+        fn with_file(self, path: &str, data: Vec<u8>) -> Self {
+            self.files.lock().unwrap().insert(path.to_string(), data);
             self
+        }
+
+        fn deleted_paths(&self) -> Vec<String> {
+            self.delete_calls.lock().unwrap().clone()
+        }
+
+        fn last_upload_to(&self, path: &str) -> Option<Vec<u8>> {
+            self.upload_calls
+                .lock()
+                .unwrap()
+                .iter()
+                .rev()
+                .find(|(p, _)| p == path)
+                .map(|(_, d)| d.clone())
         }
     }
 
@@ -1837,7 +1871,7 @@ mod tests {
             Ok(Vec::new())
         }
         async fn download(&self, path: &str) -> Result<Vec<u8>, SyncError> {
-            match self.files.get(path) {
+            match self.files.lock().unwrap().get(path) {
                 Some(data) => Ok(data.clone()),
                 None => Err(SyncError::Network {
                     message: format!("资源不存在(404): {path}"),
@@ -1850,9 +1884,15 @@ mod tests {
                 .lock()
                 .unwrap()
                 .push((path.to_string(), data.to_vec()));
+            self.files
+                .lock()
+                .unwrap()
+                .insert(path.to_string(), data.to_vec());
             Ok(())
         }
-        async fn delete(&self, _path: &str) -> Result<(), SyncError> {
+        async fn delete(&self, path: &str) -> Result<(), SyncError> {
+            self.delete_calls.lock().unwrap().push(path.to_string());
+            self.files.lock().unwrap().remove(path);
             Ok(())
         }
         async fn upload_asset(&self, _hash: &str, _data: &[u8]) -> Result<(), SyncError> {
@@ -2098,6 +2138,84 @@ mod tests {
         assert!(
             adapter.upload_calls.lock().unwrap().is_empty(),
             "rekey 被拒时不得产生云端写入"
+        );
+    }
+
+    // ========================================================================
+    // F64（2026-10-01 第六轮）：rekey 的「以本机为准」必须可达，且不留旧 Key 残留
+    // ========================================================================
+
+    /// F64 三合一：①旧 Key 清单不再阻断（以本机为准覆盖）；②manifest.prev
+    /// 存本版新 Key 密文；③根目录旧版 crypto/config 被清理。
+    ///
+    /// 旧行为：云端非空时 rekey 在读清单一步即报 KeyMismatch，整链不可达
+    ///（push 层用例 force_push_tolerates_undecryptable_manifest_and_reencrypts_prev
+    /// 钉 push 语义，本用例钉 engine 编排层：bundle 上传与 legacy 清理）。
+    #[tokio::test]
+    async fn rekey_overwrites_old_key_cloud_and_cleans_legacy_config() {
+        use crate::cloud_sync::crypto_io::{decrypt_payload, encrypt_payload};
+
+        // 云端旧世界：旧 Key 清单 + 老版本遗留的根目录 crypto/config（旧 Key 包装密文）
+        let old_key = test_data_key(0x11);
+        let old_manifest = encrypt_payload(b"{}", &old_key).unwrap();
+        let legacy_cfg = encrypt_payload(b"old-wrapped-bundle", &old_key).unwrap();
+        let adapter = ProbeMockAdapter::new()
+            .with_file(paths::MANIFEST_PATH, old_manifest)
+            .with_file(
+                crate::sync_crypto::bundle_io::CRYPTO_CONFIG_LEGACY_PATH,
+                legacy_cfg,
+            );
+
+        // 本机：已切换/解锁到新 Key（v2 改密 / 恢复「以本机为准」后的状态）
+        let pool = sqlx::SqlitePool::connect(":memory:").await.unwrap();
+        sqlx::migrate!("./src/db/migrations")
+            .run(&pool)
+            .await
+            .unwrap();
+        let tmp = tempfile::TempDir::new().unwrap();
+        let crypto = crate::sync_crypto::SyncCryptoService::new(tmp.path());
+        crypto
+            .init_with_data_key("pw", &test_data_key(0x22))
+            .unwrap();
+        let engine = SyncEngine::new_noop_progress(pool, crypto, tmp.path());
+
+        let result = engine
+            .rekey_cloud_reencrypt(
+                &adapter,
+                &adapter,
+                "user1",
+                SyncOrigin::Manual,
+                "device-1",
+                "ignored-attachments-dir",
+            )
+            .await;
+        result.expect("rekey 必须能覆盖解不开的旧清单（以本机为准，F64）");
+
+        // ① 新清单可用新 Key 解密
+        let new_manifest_raw = adapter
+            .last_upload_to(paths::MANIFEST_PATH)
+            .expect("rekey 必须重写清单");
+        decrypt_payload(&new_manifest_raw, &test_data_key(0x22)).expect("新清单必须是新 Key 密文");
+
+        // ② manifest.prev 是本版新 Key 密文，不残留旧 Key 密文
+        let prev_raw = adapter
+            .last_upload_to(paths::MANIFEST_PREV_PATH)
+            .expect("rekey 轮必须写 manifest.prev 回滚点");
+        decrypt_payload(&prev_raw, &test_data_key(0x22))
+            .expect("manifest.prev 必须重加密为本版密文，不得残留旧 Key 密文");
+
+        // ③ 新配置上传到 {base_path}/crypto/config；根目录旧版被清理
+        assert!(
+            adapter.last_upload_to("user1/crypto/config").is_some(),
+            "新 crypto/config 必须上传到 base_path 下"
+        );
+        assert!(
+            adapter
+                .deleted_paths()
+                .iter()
+                .any(|p| p == crate::sync_crypto::bundle_io::CRYPTO_CONFIG_LEGACY_PATH),
+            "根目录旧版 crypto/config 必须被清理: {:?}",
+            adapter.deleted_paths()
         );
     }
 

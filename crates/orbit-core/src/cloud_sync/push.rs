@@ -197,8 +197,9 @@ async fn push_all_impl(
 
     loop {
         // 1. 读远端清单（顺带拿并发令牌与原始密文，后者用于保留回滚点）
+        //    F64：force（rekey）轮容忍「清单用当前 Key 解不开」→ 空清单起步
         let (remote_manifest, remote_token, remote_raw) =
-            read_remote_manifest(adapter, &data_key).await?;
+            read_remote_manifest_opt(adapter, &data_key, force).await?;
 
         // 2. 空数据覆盖守卫（远端有数据 + 本地全空 + 曾同步过 → 阻断）
         guard_against_empty_overwrite(db_pool, &state, &remote_manifest).await?;
@@ -334,11 +335,19 @@ async fn push_all_impl(
 
         let payload = encrypt_payload(&serde_json::to_vec(&new_manifest)?, &data_key)?;
 
-        // 回滚点：把上一版清单密文另存一份（语义边界见 paths::MANIFEST_PREV_PATH）
-        if let Some(raw) = &remote_raw
+        // 回滚点：把上一版清单密文另存一份（语义边界见 paths::MANIFEST_PREV_PATH）。
+        // F64（2026-10-01 第六轮）：force（rekey）轮改存**本版**清单密文——
+        // 上一版（或解不开的旧清单）是旧 Key 密文，存它 = 旧 Key 密文残留 +
+        // 无效回滚点（新 Key 世界解不开，恢复它会把全体设备引回 KeyMismatch）。
+        let prev: Option<&[u8]> = if force {
+            Some(&payload)
+        } else {
+            remote_raw.as_deref()
+        };
+        if let Some(raw) = prev
             && let Err(e) = adapter.upload(paths::MANIFEST_PREV_PATH, raw).await
         {
-            log::info!("[push] 保存上一版清单失败（不影响本次同步）: {e}");
+            log::info!("[push] 保存回滚点清单失败（不影响本次同步）: {e}");
         }
 
         let precondition = match &remote_token {
@@ -448,7 +457,18 @@ async fn build_table_outcome(
     force: bool,
     scan: Option<&LocalBucketScan>,
 ) -> Result<TableOutcome, TableError> {
-    let mut table_index = remote.table(table).cloned().unwrap_or_default();
+    // F64（2026-10-01 第六轮）：force（rekey）轮索引**不以远端清单为底**。
+    // 「远端有、本机无」的桶条目对应的云端对象仍是旧 Key 密文（本机没拉到过、
+    // rekey 不会重加密它们），原样保留进新 Key 清单 = 「新 Key 清单指向旧 Key
+    // 密文」的混合态，他端 pull 到该桶必然 KeyMismatch。rekey 的声明语义是
+    // 「以本机为准覆盖云端」：索引只收本轮重加密的本机桶，被剔除的旧对象成为
+    // 无清单引用的孤儿（不再被任何设备读取）。普通轮维持「远端为底 + 本地
+    // 覆盖」的合并口径（本函数头注）——那是防他端数据被孤儿化的根基，不可波及。
+    let mut table_index = if force {
+        Default::default()
+    } else {
+        remote.table(table).cloned().unwrap_or_default()
+    };
     let mut pushed_chunks = 0u32;
     let mut skipped_chunks = 0u32;
     // AAD 绑定写入门禁（ADR 0010 第一拍）：远端清单里全部已登记设备都具备 0x02
@@ -520,8 +540,12 @@ async fn build_table_outcome(
         );
     }
 
-    // 墓碑分桶差量（索引同数据桶口径：远端为底 + 本地覆盖）
-    let mut tombstone_index = remote.tombstone_index(table).cloned().unwrap_or_default();
+    // 墓碑分桶差量（索引同数据桶口径：远端为底 + 本地覆盖；force 轮见上）
+    let mut tombstone_index = if force {
+        Default::default()
+    } else {
+        remote.tombstone_index(table).cloned().unwrap_or_default()
+    };
     let mut pushed_tombstones = 0u32;
     let buckets = load_table_tombstones(db_pool, table)
         .await
@@ -615,14 +639,41 @@ async fn read_remote_manifest(
     adapter: &dyn SyncAdapter,
     data_key: &[u8],
 ) -> Result<(Manifest, Option<String>, Option<Vec<u8>>), CloudSyncError> {
-    match adapter.download_with_token(paths::MANIFEST_PATH).await? {
-        None => Ok((Manifest::empty(""), None, None)),
-        Some((bytes, token)) => {
-            let plain = decrypt_payload(&bytes, data_key)?;
+    read_remote_manifest_opt(adapter, data_key, false).await
+}
+
+/// [`read_remote_manifest`] 的带容错变体（仅 force/rekey 轮使用）
+///
+/// F64（2026-10-01 第六轮）：rekey 的三个场景（v2 改密 / v1→v2 迁移 /
+/// KeyMismatch 恢复「以本机为准」）的共同前提是**远端密文不认当前 Key**，
+/// 但本函数此前对清单解密失败一律上抛 `KeyMismatch`——云端非空时 rekey 在
+/// 第一步就失败，「以本机为准覆盖云端」实际不可达（2026-10-01 探针用例实证，
+/// 曾以临时用例验证旧行为直接报 KeyMismatch）。force 轮解不开按空清单起步：
+/// 旧清单引用与旧 Key 分桶将被新 Key 清单整体替换，**并发令牌保留**供条件写
+/// 覆盖既有对象。非 force 轮口径不变（KeyMismatch 仍引导恢复页）。
+async fn read_remote_manifest_opt(
+    adapter: &dyn SyncAdapter,
+    data_key: &[u8],
+    allow_key_mismatch: bool,
+) -> Result<(Manifest, Option<String>, Option<Vec<u8>>), CloudSyncError> {
+    let (bytes, token) = match adapter.download_with_token(paths::MANIFEST_PATH).await? {
+        None => return Ok((Manifest::empty(""), None, None)),
+        Some((bytes, token)) => (bytes, token),
+    };
+    match decrypt_payload(&bytes, data_key) {
+        Ok(plain) => {
             let manifest: Manifest = serde_json::from_slice(&plain)?;
             manifest.check_layout_version()?;
             Ok((manifest, token, Some(bytes)))
         }
+        Err(e) if allow_key_mismatch && e.is_key_mismatch_error() => {
+            log::warn!(
+                "[push][force] 远端清单无法用当前 Key 解密——按「以本机为准」\
+                 以空清单覆盖（旧 Key 清单引用与分桶将被整体替换）: {e}"
+            );
+            Ok((Manifest::empty(""), token, None))
+        }
+        Err(e) => Err(e),
     }
 }
 
@@ -756,6 +807,10 @@ mod tests {
 
         fn put(&self, path: &str, data: Vec<u8>) {
             self.files.lock().unwrap().insert(path.to_string(), data);
+        }
+
+        fn get(&self, path: &str) -> Option<Vec<u8>> {
+            self.files.lock().unwrap().get(path).cloned()
         }
     }
 
@@ -1612,6 +1667,173 @@ mod tests {
         assert_eq!(
             after.epoch, before.epoch,
             "清单 epoch 不得推进（否则成新 Key 清单指向旧 Key 分桶）"
+        );
+    }
+
+    // ========================================================================
+    // F64（2026-10-01 第六轮）：rekey 的「以本机为准」必须可达，且不留旧 Key 残留
+    // ========================================================================
+
+    /// F64：远端清单解不开时 force（rekey）必须走通，且 manifest.prev 不得残留旧 Key 密文
+    ///
+    /// 旧行为（2026-10-01 探针用例实证）：rekey 的三个场景（v2 改密 / v1→v2 迁移 /
+    /// KeyMismatch 恢复）在云端非空时第一步读清单就报 `KeyMismatch`——
+    /// 「以本机为准覆盖云端」实际不可达；即便走通，`manifest.prev` 存的也是
+    /// 上一版旧 Key 密文（N50）。
+    #[tokio::test]
+    async fn force_push_tolerates_undecryptable_manifest_and_reencrypts_prev() {
+        // 旧世界：dev-1 用旧 Key 推送（清单 + 分桶全是旧 Key 密文）
+        let (pool_old, crypto_old, store_old, _t1) = env().await;
+        sqlx::query(
+            "INSERT INTO todo_projects (uuid, title, created_at, updated_at) VALUES ('u1','P',1,1)",
+        )
+        .execute(&pool_old)
+        .await
+        .unwrap();
+        let adapter = MemAdapter::new();
+        push_all(
+            &pool_old,
+            &crypto_old,
+            &store_old,
+            &adapter,
+            &NoopProgressSender,
+            SyncOrigin::Manual,
+            "dev-1",
+            &[],
+        )
+        .await
+        .unwrap();
+
+        // 新世界：本机已换新 Key（v2 改密 / 恢复「以本机为准」完成切换），
+        // 账本清空（rekey 前置），本地有以本机为准的数据
+        let pool_new = sqlx::SqlitePool::connect("sqlite::memory:").await.unwrap();
+        sqlx::migrate!("./src/db/migrations")
+            .run(&pool_new)
+            .await
+            .unwrap();
+        let tmp_new = tempfile::TempDir::new().unwrap();
+        let crypto_new = SyncCryptoService::new(tmp_new.path());
+        crypto_new.init_with_data_key("pw", &[9u8; 32]).unwrap();
+        let store_new = SyncStateStore::new(tmp_new.path());
+        store_new.clear().unwrap();
+        sqlx::query(
+            "INSERT INTO todo_projects (uuid, title, created_at, updated_at) VALUES ('u2','Q',1,1)",
+        )
+        .execute(&pool_new)
+        .await
+        .unwrap();
+
+        let result = push_all_force_full(
+            &pool_new,
+            &crypto_new,
+            &store_new,
+            &adapter,
+            &NoopProgressSender,
+            SyncOrigin::Manual,
+            "dev-2",
+            &[],
+        )
+        .await
+        .expect("远端清单解不开时 rekey 必须以「以本机为准」走通（F64），不得报 KeyMismatch");
+        assert!(result.manifest_written, "force 轮清单必须重写");
+        assert!(result.pushed_chunks >= 1, "本机数据必须重加密上传");
+
+        // 新清单必须可用新 Key 解密，且包含本机数据桶
+        let (manifest, _, _) = read_remote_manifest(&adapter, &[9u8; 32]).await.unwrap();
+        assert!(
+            !manifest
+                .tables
+                .get("todo_projects")
+                .is_none_or(|t| t.chunks.is_empty()),
+            "新清单必须收录本机重加密的桶"
+        );
+
+        // 回滚点必须也是新 Key 密文——旧 Key 密文残留即 F64 病灶（N50）
+        let prev_raw = adapter
+            .get(paths::MANIFEST_PREV_PATH)
+            .expect("force 轮必须写 manifest.prev 回滚点");
+        let prev_plain = decrypt_payload(&prev_raw, &[9u8; 32])
+            .expect("manifest.prev 必须是本版新 Key 密文，不得残留旧 Key 密文");
+        serde_json::from_slice::<Manifest>(&prev_plain).expect("manifest.prev 必须是合法清单");
+    }
+
+    /// F64：force（rekey）轮不得把「远端有、本机无」的桶条目保留进新清单
+    ///
+    /// 旧行为：索引以远端清单为底 → 本机没拉到过的桶条目原样保留——它指向
+    /// rekey 不会重加密的旧 Key 密文，新 Key 清单引用它 = 他端 pull 必
+    /// KeyMismatch 的混合态。
+    #[tokio::test]
+    async fn force_push_drops_remote_only_bucket_entries() {
+        let (pool, crypto, store, _tmp) = env().await;
+        sqlx::query(
+            "INSERT INTO todo_projects (uuid, title, created_at, updated_at) VALUES ('u1','P',1,1)",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        let adapter = MemAdapter::new();
+        push_all(
+            &pool,
+            &crypto,
+            &store,
+            &adapter,
+            &NoopProgressSender,
+            SyncOrigin::Manual,
+            "dev-1",
+            &[],
+        )
+        .await
+        .unwrap();
+
+        // 注入「他端推过、本机没拉过」的桶条目：清单里凭空多一个 42 号桶，
+        // 对象本体是任意旧密文占位（本机确实没有它的明文）
+        let (mut remote, _, _) = read_remote_manifest(&adapter, &[7u8; 32]).await.unwrap();
+        remote
+            .tables
+            .get_mut("todo_projects")
+            .unwrap()
+            .chunks
+            .insert(
+                42,
+                ChunkRef {
+                    fp: "fabricated-remote-only".to_string(),
+                    count: 1,
+                    size: 10,
+                },
+            );
+        adapter.put(
+            paths::MANIFEST_PATH,
+            encrypt_payload(&serde_json::to_vec(&remote).unwrap(), &[7u8; 32]).unwrap(),
+        );
+        adapter.put(
+            &paths::table_bucket_path("todo_projects", 42),
+            vec![0u8; 16],
+        );
+
+        push_all_force_full(
+            &pool,
+            &crypto,
+            &store,
+            &adapter,
+            &NoopProgressSender,
+            SyncOrigin::Manual,
+            "dev-1",
+            &[],
+        )
+        .await
+        .unwrap();
+
+        let (final_manifest, _, _) = read_remote_manifest(&adapter, &[7u8; 32]).await.unwrap();
+        let index = &final_manifest.tables["todo_projects"];
+        assert!(
+            !index.chunks.contains_key(&42),
+            "force 轮不得保留远端独有的桶条目（它指向 rekey 不重加密的旧密文，\
+             保留即新 Key 清单指向旧 Key 密文的混合态）: {:?}",
+            index.chunks.keys().collect::<Vec<_>>()
+        );
+        assert!(
+            !index.chunks.is_empty(),
+            "本机自己的桶必须仍在索引里（不得误伤）"
         );
     }
 }

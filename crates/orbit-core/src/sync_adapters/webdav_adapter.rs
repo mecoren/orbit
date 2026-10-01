@@ -1368,6 +1368,13 @@ mod tests {
             self.objects.lock().unwrap().get(path).cloned()
         }
 
+        /// MKCOL 实际建过的目录（F56 断言用：父目录链必须真实补齐）
+        fn created_dirs(&self) -> Vec<String> {
+            let mut dirs: Vec<String> = self.dirs.lock().unwrap().iter().cloned().collect();
+            dirs.sort();
+            dirs
+        }
+
         /// 命中该后缀的 DELETE 一律回 500
         fn fail_delete_ending(&self, suffix: &str) {
             *self.fail_delete_suffix.lock().unwrap() = Some(suffix.to_string());
@@ -1532,6 +1539,11 @@ mod tests {
             dav.get("/strict/fresh/manifest.json"),
             Some(payload),
             "补齐父目录后条件写必须真正落到云端"
+        );
+        assert_eq!(
+            dav.created_dirs(),
+            vec!["/strict".to_string(), "/strict/fresh".to_string()],
+            "父目录链必须逐级 MKCOL 真实补齐"
         );
     }
 
