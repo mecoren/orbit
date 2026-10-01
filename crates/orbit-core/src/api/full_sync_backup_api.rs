@@ -152,6 +152,22 @@ fn ensure_any_switch_enabled(prefs: &BackupPrefs) -> FullSyncBackupResult<()> {
     Ok(())
 }
 
+/// 判断业务表是否存在于当前库
+///
+/// F71：用于把「迁移前旧库缺表」（可安全跳过）与「表在但读不出来」（必须中止）
+/// 区分开——两者的 `list_records_as_json` 错误信息都是 sqlite 的
+/// `no such table: xxx` / 其他驱动错误，靠文案匹配不可靠，直接查 `sqlite_master`。
+///
+/// 查询本身失败时返回 `false`（保守：当作「表在」从而中止导出，不放过可能的静默丢表）。
+async fn table_exists(pool: &SqlitePool, table: &str) -> bool {
+    sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?")
+        .bind(table)
+        .fetch_one(pool)
+        .await
+        .map(|n| n > 0)
+        .unwrap_or(false)
+}
+
 /// 导出公共实现
 ///
 /// v6 重构流程（云端 → 本地 两阶段，分别记录 sync_history）：
@@ -170,6 +186,9 @@ fn ensure_any_switch_enabled(prefs: &BackupPrefs) -> FullSyncBackupResult<()> {
 ///    - 若 keep_latest=true，扫描删除其他备份
 ///
 /// 云端上传失败不会阻塞本地备份，错误信息会写入 `ExportResult.cloud_error`。
+///
+/// 表读取失败会**中止整个导出**（F71）：只有「表不存在」（迁移前旧库）才跳过。
+/// 宁可让用户看到失败并可重试，也不产出一份缺表的「完整」备份。
 #[allow(clippy::too_many_arguments)]
 async fn export_full_sync_backup_inner(
     pool: &SqlitePool,
@@ -186,6 +205,16 @@ async fn export_full_sync_backup_inner(
     let device_name = read_device_name_from_config(app_data_dir);
 
     // 3. 遍历业务表，读取 JSON 数据
+    //
+    // F71：失败处置分两类，不能一律吞掉——
+    // a) 表**不存在**（迁移前的旧库：FULL_BACKUP_TABLES 里含新表而老库尚未建）：
+    //    属预期情形，跳过并记 warn，不写入 manifest（import 阶段也就不会去
+    //    DELETE 一张不存在的表）；
+    // b) 表存在但**读取失败**（库损坏 / 被占用 / 列结构异常）：原实现仅
+    //    `eprintln!` 后 continue，出口仍是一份「成功」的备份——文件名、大小、
+    //    云端上传、sync_history 全部正常，唯独缺了整张表的数据。用户要等到用
+    //    这份备份恢复时才发现数据没了，而 `keep_latest` 很可能已把上一份好备份
+    //    删掉。现在直接中止导出，不落任何备份文件。
     let mut table_counts: BTreeMap<String, usize> = BTreeMap::new();
     let mut table_data: BTreeMap<String, String> = BTreeMap::new();
 
@@ -199,9 +228,24 @@ async fn export_full_sync_backup_inner(
                 table_data.insert(table.to_string(), json_str);
             }
             Err(e) => {
-                // 表不存在或其他查询错误：跳过此表，不加入 manifest
-                // 这样 import 阶段不会尝试 DELETE 不存在的表
-                eprintln!("[export_full_sync_backup] table {} skipped: {}", table, e);
+                // 区分「表不存在」与「表在这但读不出来」：只有前者可安全跳过
+                if !table_exists(pool, table).await {
+                    log::warn!(
+                        "[export_full_sync_backup] 表 {} 在库中不存在（迁移前旧库），已跳过: {}",
+                        table,
+                        e
+                    );
+                } else {
+                    log::error!(
+                        "[export_full_sync_backup] 表 {} 读取失败，中止导出: {}",
+                        table,
+                        e
+                    );
+                    return Err(FullSyncBackupError::Other(format!(
+                        "导出中止：表 {} 读取失败，未生成备份文件（若继续将产出缺失该表的\"完整\"备份）：{}",
+                        table, e
+                    )));
+                }
             }
         }
     }
@@ -1124,5 +1168,102 @@ mod preview_tests {
             .await
             .unwrap_err();
         assert!(err.to_string().contains("解锁"));
+    }
+}
+
+// ============================================================================
+// F71：表读取失败必须中止导出（不再静默产出缺表的「完整」备份）
+// ============================================================================
+
+#[cfg(test)]
+mod export_table_guard_tests {
+    use super::*;
+
+    async fn setup_db() -> SqlitePool {
+        let pool = sqlx::SqlitePool::connect("sqlite::memory:").await.unwrap();
+        sqlx::migrate!("./src/db/migrations")
+            .run(&pool)
+            .await
+            .unwrap();
+        pool
+    }
+
+    /// 表**在**但读不出来（列结构异常）→ 中止导出，且不落任何备份文件
+    ///
+    /// 造态用「同名壳表」：保留 `todo_saved_filters` 这个名字但去掉 `is_deleted`
+    /// 列，于是查询报 `no such column: is_deleted`，而 `sqlite_master` 里表确实存在——
+    /// 正是旧实现会 `continue` 静默跳过的分支。
+    #[tokio::test]
+    async fn unreadable_table_aborts_export() {
+        let pool = setup_db().await;
+        let tmp = tempfile::TempDir::new().unwrap();
+        sqlx::query("ALTER TABLE todo_saved_filters RENAME TO todo_saved_filters_orig")
+            .execute(&pool)
+            .await
+            .unwrap();
+        sqlx::query(
+            "CREATE TABLE todo_saved_filters (id INTEGER PRIMARY KEY AUTOINCREMENT, uuid TEXT)",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        let err = export_full_sync_backup_inner(&pool, tmp.path(), "pw-123456", None, true, false)
+            .await
+            .expect_err("表读取失败必须中止导出");
+        match err {
+            FullSyncBackupError::Other(msg) => {
+                assert!(msg.contains("todo_saved_filters"), "错误应点明表名: {msg}");
+                assert!(msg.contains("导出中止"), "错误应说明未产出备份: {msg}");
+            }
+            other => panic!("应为 Other(中止原因)，实际: {other:?}"),
+        }
+        // 中止必须发生在写文件之前：app_data_dir 下不应留下任何备份
+        let leftovers: Vec<_> = std::fs::read_dir(tmp.path())
+            .unwrap()
+            .filter_map(|e| e.ok())
+            .map(|e| e.file_name().to_string_lossy().to_string())
+            .filter(|n| n.contains(".orfullsync"))
+            .collect();
+        assert!(
+            leftovers.is_empty(),
+            "中止后不应留下备份文件: {leftovers:?}"
+        );
+    }
+
+    /// 表**不存在**（迁移前旧库）→ 仍按预期跳过并继续，manifest 不含该表
+    #[tokio::test]
+    async fn missing_table_is_still_skipped() {
+        let pool = setup_db().await;
+        let tmp = tempfile::TempDir::new().unwrap();
+        sqlx::query("DROP TABLE todo_saved_filters")
+            .execute(&pool)
+            .await
+            .unwrap();
+
+        let result =
+            export_full_sync_backup_inner(&pool, tmp.path(), "pw-123456", None, false, false)
+                .await
+                .expect("缺表属预期情形，不应中止导出");
+
+        assert!(
+            !result
+                .manifest
+                .table_counts
+                .contains_key("todo_saved_filters"),
+            "跳过的表不应进 manifest"
+        );
+        assert!(
+            result.manifest.table_counts.contains_key("todo_tasks"),
+            "其余表必须照常导出"
+        );
+    }
+
+    /// `table_exists` 是「跳过 vs 中止」的分流依据，口径要能区分缺表与在表
+    #[tokio::test]
+    async fn table_exists_distinguishes_missing_from_present() {
+        let pool = setup_db().await;
+        assert!(table_exists(&pool, "todo_tasks").await);
+        assert!(!table_exists(&pool, "no_such_table_here").await);
     }
 }
