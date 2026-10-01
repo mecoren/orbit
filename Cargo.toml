@@ -43,6 +43,8 @@ hmac = "0.12"
 sha2 = "0.10"
 subtle = "2"
 rand = "0.8"
+# 密钥材料显式擦除（F66）：drop 前覆写内存，防密钥残影
+zeroize = { version = "1", default-features = false, features = ["alloc"] }
 
 # 同步与网络
 reqwest = { version = "0.12", default-features = false, features = ["cookies", "gzip", "json", "rustls-tls"] }

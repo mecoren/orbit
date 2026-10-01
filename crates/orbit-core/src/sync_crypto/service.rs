@@ -7,6 +7,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
 
 use base64::{Engine, engine::general_purpose::STANDARD as BASE64};
+use zeroize::Zeroize;
 
 use crate::crypto::{aes_gcm_decrypt, aes_gcm_encrypt, derive_master_key, random_bytes};
 use crate::sync_crypto::error::SyncCryptoError;
@@ -299,18 +300,30 @@ impl SyncCryptoService {
     }
 
     /// 锁定同步加密（清除内存中的 Data Key）
+    ///
+    /// F66（2026-10-01 第六轮）：清空前先 `zeroize()` 原地覆写字节——直接
+    /// `*guard = None` 只 drop Vec，分配器标记回收但字节仍留在已释放内存里，
+    /// 后续分配复用同块内存时密钥残影可被旁观（堆扫描 / core dump / swap）。
     pub fn lock(&self) {
         if let Ok(mut guard) = self.data_key.write() {
-            *guard = None;
+            if let Some(mut key) = guard.take() {
+                key.zeroize();
+            }
         }
         if let Ok(mut guard) = self.unlocked_password.write() {
-            *guard = None;
+            if let Some(mut pw) = guard.take() {
+                pw.zeroize();
+            }
         }
     }
 
     /// 解锁态下缓存同步密码原始字符串（供全量备份等密码级 PBKDF2 复用）
     fn cache_password(&self, password: &str) {
         if let Ok(mut guard) = self.unlocked_password.write() {
+            // F66：替换前擦除旧密码（改密路径会换密码缓存）
+            if let Some(mut old) = guard.take() {
+                old.zeroize();
+            }
             *guard = Some(password.to_string());
         }
     }
@@ -567,8 +580,14 @@ impl SyncCryptoService {
     }
 
     /// 设置内存中的 Data Key
+    ///
+    /// F66：替换前擦除旧 Key（改密 / rotate_key / 导入 bundle 都会走这里换 Key，
+    /// 旧 Key 一旦被新 Key 取代即成死料，覆写后回收才不留残影）。
     fn set_data_key(&self, key: Vec<u8>) {
         if let Ok(mut guard) = self.data_key.write() {
+            if let Some(mut old) = guard.take() {
+                old.zeroize();
+            }
             *guard = Some(key);
         }
     }
@@ -1032,5 +1051,31 @@ mod tests {
         svc.init("pw").unwrap(); // 直接 v2
         let result = svc.upgrade_to_v2("pw");
         assert!(matches!(result, Err(SyncCryptoError::Meta { .. })));
+    }
+
+    /// F66（2026-10-01 第六轮）：lock() 后内存持有者必须清空。
+    ///
+    /// zeroize 的真正效果（drop 前原地覆写字节）在 Rust 语义内不可观测，
+    /// 此用例钉住可观测面：锁定后 `get_data_key` / `get_unlocked_password`
+    /// 都不再返回任何材料，且 `lock` 可重复调用（幂等）。字节级覆写由
+    /// lock / set_data_key / cache_password 内的 `zeroize()` 保证。
+    #[test]
+    fn lock_clears_key_and_password_holders_idempotently() {
+        let (svc, _tmp) = make_service();
+        svc.init("sync_pw").unwrap();
+        assert!(svc.is_unlocked());
+        assert!(svc.get_data_key().is_some());
+        assert!(svc.get_unlocked_password().is_some());
+
+        svc.lock();
+        assert!(!svc.is_unlocked(), "锁定后不得再持有 Data Key");
+        assert!(svc.get_data_key().is_none());
+        assert!(
+            svc.get_unlocked_password().is_none(),
+            "锁定后不得再缓存同步密码"
+        );
+
+        svc.lock(); // 幂等：空持有者上再锁一次不得 panic
+        assert!(!svc.is_unlocked());
     }
 }

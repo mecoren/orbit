@@ -42,6 +42,7 @@ hmac.workspace = true
 sha2.workspace = true
 subtle.workspace = true
 rand.workspace = true
+zeroize.workspace = true
 
 # 同步与网络
 reqwest.workspace = true
