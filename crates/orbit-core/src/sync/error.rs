@@ -60,6 +60,21 @@ pub enum SyncError {
     /// 与真正的网络错误混为一谈。现由 `from_http_status` 按状态码构造本变体。
     #[error("父目录不存在(409): {message}")]
     AncestorsNotFound { message: String },
+
+    /// 请求时间偏差过大（S3 协议错误码 `RequestTimeTooSkewed` / `RequestExpired`，
+    /// 由签名校验失败触发，HTTP 状态码同为 403）。
+    ///
+    /// F78（2026-10-01 第六轮）：此前 403 一律归 `Auth`，于是**本机时钟不准**
+    /// 被报成「认证失败」并归类 `auth` —— 用户被引导去检查 AccessKey / 权限 /
+    /// 重新解锁同步密钥，而真正的处置动作是「校准系统时间」。两者都不重试、
+    /// 都会失败到用户改配置为止，但排查方向完全相反。
+    ///
+    /// 独立成变体的意义：① 文案直接给出正确处置动作；② 分类 tag 不再落
+    /// `auth`（前端不会跳密钥相关引导）；③ `with_retry` 不重试（校时前重试
+    /// 必然同错）。判定依据是 S3 响应体里的**协议错误码元素**（`<Code>`），
+    /// 不是散文措辞——这是协议定义，不是实现方言。
+    #[error("请求时间偏差过大: {message}")]
+    ClockSkew { message: String },
 }
 
 impl SyncError {
@@ -105,6 +120,14 @@ impl SyncError {
         matches!(self, SyncError::Auth { .. })
     }
 
+    /// 是否为「本机时钟与服务器偏差过大」（F78）
+    ///
+    /// 与 [`Self::is_auth_error`] 互斥：两者都是 403，但处置动作不同
+    /// （校时 vs 改凭据），必须分开归类，否则用户会被引向错误的排查方向。
+    pub fn is_clock_skew(&self) -> bool {
+        matches!(self, SyncError::ClockSkew { .. })
+    }
+
     /// 是否为「对象取不到」错误（404，或 WebDAV 的 409 父目录链缺失）
     ///
     /// 基于变体类型判断，不再做字符串匹配。适配器层（`from_http_status`）
@@ -132,6 +155,15 @@ impl SyncError {
     pub fn from_http_status(status: u16, body: &str) -> Self {
         let brief = brief(body);
         match status {
+            // F78：S3/OSS 的签名校验失败与「请求时间偏差过大」共用 403，必须
+            // 先按协议错误码分流，否则时钟问题会被报成认证问题。
+            401 | 403 if body_indicates_clock_skew(body) => SyncError::ClockSkew {
+                message: format!(
+                    "服务器时间校验未通过({status})：本机时钟与服务器相差过大，\
+                     请开启系统自动校时（含时区）后重试。这不是 AccessKey / 权限 / \
+                     同步密钥问题。原始响应: {brief}"
+                ),
+            },
             401 | 403 => SyncError::Auth {
                 message: format!("认证失败({status}): {brief}"),
             },
@@ -328,6 +360,24 @@ pub fn redact_userinfo(s: &str) -> String {
 
 // 注：旧 `sync_bundle` 模块（52 字节 `OSYN` 容器）已随存储结构重构删除，
 // 其到本错误类型的 `From` 转换一并移除。
+
+/// 响应体是否表明「请求时间偏差过大」（S3 / OSS 的签名时间窗口校验失败）
+///
+/// F78：S3 的 `SignatureDoesNotMatch`（凭据/签名真错）与 `RequestTimeTooSkewed`
+/// / `RequestExpired`（本机时钟偏差过大）共用 403，只能靠响应体分流。
+///
+/// 判定用**协议定义的错误码**（`<Error><Code>…</Code>`，AWS S3 与阿里云 OSS
+/// 同名词），不是散文措辞——后者会随服务端换文案而静默失效（对照 S6/F32 把
+/// 「429」与「AncestorsNotFound」从 `contains` 嗅探改成类型化变体的理由，
+/// 这里无法在状态码层区分，故退一步只锚协议码）。
+///
+/// 注意**不要**把 `SignatureDoesNotMatch` 一并纳入：它是真的签名/凭据不匹配，
+/// 归 `Auth` 才对。
+fn body_indicates_clock_skew(body: &str) -> bool {
+    const CODES: [&str; 2] = ["requesttimetooskewed", "requestexpired"];
+    let lowered = body.to_ascii_lowercase();
+    CODES.iter().any(|c| lowered.contains(c))
+}
 
 #[cfg(test)]
 mod tests {
@@ -534,5 +584,78 @@ mod tests {
         assert!(SyncError::from_http_status(403, "forbidden").is_auth_error());
         assert!(SyncError::from_http_status(401, "unauthorized").is_auth_error());
         assert!(!SyncError::from_http_status(500, "x").is_auth_error());
+    }
+
+    // ========================================================================
+    // F78：403 里的「本机时钟偏差」必须与真认证失败分开
+    // ========================================================================
+
+    /// F78：S3 `RequestTimeTooSkewed` 是时钟问题，不得归 `Auth`
+    ///
+    /// 旧行为：403 一律 `Auth` → 归类 `auth` → 用户被引导去检查 AccessKey /
+    /// 权限 / 重解锁同步密钥，而正确动作是校准系统时间。两者都不重试，但排查
+    /// 方向完全相反，凭据乱改一遍仍不解决。
+    #[test]
+    fn s3_clock_skew_403_is_not_auth() {
+        let body = "<Error><Code>RequestTimeTooSkewed</Code><Message>The difference \
+                    between the request time and the current time is too large.</Message>\
+                    <RequestTime>2026-09-01T00:00:00Z</RequestTime>\
+                    <ServerTime>2026-10-01T02:00:00Z</ServerTime></Error>";
+        let err = SyncError::from_http_status(403, body);
+        assert!(
+            err.is_clock_skew(),
+            "RequestTimeTooSkewed 必须构造 ClockSkew: {err}"
+        );
+        assert!(!err.is_auth_error(), "时钟问题不得归类为认证错误: {err}");
+        assert!(!err.is_retryable(), "校时前重试必然同错，不得重试");
+        let text = err.to_string();
+        assert!(
+            text.contains("校"),
+            "文案必须给出「校准时间」的处置方向: {text}"
+        );
+    }
+
+    /// F78：`RequestExpired`（请求时间戳过期）同属时钟偏差
+    #[test]
+    fn expired_request_body_is_clock_skew() {
+        let err = SyncError::from_http_status(
+            403,
+            "<Error><Code>RequestExpired</Code><Message>Request has expired</Message></Error>",
+        );
+        assert!(err.is_clock_skew());
+        assert!(!err.is_auth_error());
+    }
+
+    /// 反向红线：真签名/凭据错误**不得**被误判成时钟问题
+    ///
+    /// `SignatureDoesNotMatch` 与 `InvalidAccessKeyId` 是 S3 最常见的两种真认证
+    /// 失败（同样 403）。把它们并进 `ClockSkew` 会让用户去校时而不去改密钥，
+    /// 是这次分类收窄最容易引入的反向错误。
+    #[test]
+    fn real_signature_and_key_errors_stay_auth() {
+        let sig = "<Error><Code>SignatureDoesNotMatch</Code><Message>The request \
+                   signature we calculated does not match the signature you provided.\
+                   </Message></Error>";
+        assert!(
+            SyncError::from_http_status(403, sig).is_auth_error(),
+            "SignatureDoesNotMatch 是真签名错，必须留 Auth"
+        );
+        let key = "<Error><Code>InvalidAccessKeyId</Code><Message>The AWS Access Key Id \
+                   you provided does not exist in our records.</Message></Error>";
+        assert!(SyncError::from_http_status(403, key).is_auth_error());
+        assert!(SyncError::from_http_status(401, "unauthorized").is_auth_error());
+    }
+
+    /// 判定只锚协议错误码，不锚散文：正文里出现同样的词但无 `<Code>` 仍算 Auth
+    #[test]
+    fn clock_skew_judgement_is_anchored_on_protocol_code() {
+        // 协议码大小写不敏感（不同实现的大小写写法）
+        assert!(body_indicates_clock_skew(
+            "<Code>requesttimetooskewed</Code>"
+        ));
+        assert!(body_indicates_clock_skew("<CODE>REQUESTEXPIRED</CODE>"));
+        // 无协议码 → 不是时钟问题
+        assert!(!body_indicates_clock_skew(""));
+        assert!(!body_indicates_clock_skew("Forbidden"));
     }
 }
