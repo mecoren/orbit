@@ -12,6 +12,7 @@ import 'package:orbit/data/api/dto.dart';
 import 'package:orbit/data/api/mock_orbit_bridge.dart';
 import 'package:orbit/data/providers/bridge_provider.dart';
 import 'package:orbit/modules/shell/boot_gate.dart';
+import 'package:orbit/modules/todo/providers/todo_providers.dart';
 import 'package:orbit/services/reminder_scheduler.dart';
 import 'package:orbit/services/sync_on_change_scheduler.dart';
 import 'support/orbit_test_app.dart';
@@ -66,6 +67,66 @@ class _OnChangeBridge extends MockOrbitBridge {
   }
 }
 
+/// F76 假桥：exit 轮 cloudSyncForce 拖到 7s——比旧 6s 外层超时长、比修复后
+/// 的 18s（15s 空闲窗 + 3s 余量）短，并统计任务缓存拉取次数作失效探针
+class _SlowExitForceBridge extends MockOrbitBridge {
+  int taskListCalls = 0;
+  String? lastForceOrigin;
+
+  @override
+  Future<SyncConfigView?> syncConfigGet() async => SyncConfigView(
+        id: 1,
+        engine: 'webdav',
+        endpoint: 'https://dav.example.com',
+        bucket: '',
+        region: '',
+        username: 'demo',
+        passwordSet: true,
+        basePath: '/orbit/',
+        intervalMinutes: 30,
+        autoSyncEnabled: true,
+        syncOnChange: false,
+        skipTlsVerify: false,
+        timeoutSeconds: 30,
+        lastSyncedAt: null,
+      );
+
+  @override
+  Future<SyncResultJson> cloudSyncForce(
+      {String origin = 'manual', int waitForIdleMs = 3000}) async {
+    lastForceOrigin = origin;
+    if (origin == 'exit') {
+      await Future<void>.delayed(const Duration(seconds: 7));
+    }
+    return const SyncResultJson(
+      pushedModules: 0,
+      pulledModules: 2,
+      uploadedAttachments: 0,
+      downloadedAttachments: 0,
+      durationMs: 910,
+      skipped: false,
+      errors: [],
+    );
+  }
+
+  @override
+  Future<List<TodoTask>> todoTaskList(ListFilter filter) async {
+    taskListCalls++;
+    return const [];
+  }
+}
+
+/// 读取任务缓存作失效探针：被 invalidate 后会经桥重拉（taskListCalls++）
+class _TaskCacheProbe extends ConsumerWidget {
+  const _TaskCacheProbe();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    ref.watch(todoTasksProvider);
+    return const Text('TASK_CACHE_PROBE');
+  }
+}
+
 void main() {
   // ReminderScheduler / SyncOnChangeScheduler 进程级单例的防抖 Timer 会活过
   // widget 树：fake_async 要求每测试退出时无 pending Timer，逐测试清场
@@ -107,5 +168,37 @@ void main() {
     await tester.pump();
     expect(bridge.pushCalls, 1);
     expect(bridge.lastOrigin, 'background');
+  });
+
+  testWidgets('F76：exit 轮同步耗时超过 6s 不被截断，完成后仍失效业务缓存', (tester) async {
+    final bridge = _SlowExitForceBridge();
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [orbitBridgeProvider.overrideWithValue(bridge)],
+        child: orbitTestApp(
+          home: BootGate(child: const _TaskCacheProbe()),
+        ),
+      ),
+    );
+    // 越过启动链路（bootstrap + 首次任务缓存拉取 = taskListCalls 第 1 次）
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pumpAndSettle();
+    expect(bridge.taskListCalls, 1);
+
+    // 模拟退到后台（exit 轮触发）
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+    await tester.pump();
+    expect(bridge.lastForceOrigin, 'exit');
+
+    // 旧代码：6s 超时在此触发 → TimeoutException → 缓存失效被跳过
+    // （taskListCalls 停在 1）→ 断言翻红；修复后 18s 超时放行 7s 同步
+    await tester.pump(const Duration(seconds: 7, milliseconds: 100));
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.pumpAndSettle();
+
+    // 同步完成必须走到失效链：任务缓存被重拉（第 2 次）
+    expect(bridge.taskListCalls, 2,
+        reason: 'exit 轮 >6s 的同步不得被外层超时截断——截断即丢失缓存失效，'
+            'UI 停在旧数据直到下次 db-change');
   });
 }

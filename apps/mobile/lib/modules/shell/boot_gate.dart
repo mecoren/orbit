@@ -122,17 +122,22 @@ class _BootGateState extends ConsumerState<BootGate>
   /// 「进入应用」「退到后台」本身就是触发条件。未配置或未解锁时 core
   /// 直接返回错误，此处静默跳过（不打扰用户）。
   ///
-  /// 超时 6 秒：移动端退到后台可能被系统冻结，超时即放弃并留痕，
-  /// 绝不阻塞生命周期回调（阻塞会被系统判定应用无响应）。
+  /// 超时随 `waitForIdleMs` 走（F76，2026-10-01 第六轮）：exit 轮要求引擎
+  /// 空闲满 15s，此前外层恒 6s 超时把空闲窗截断——15s 从未生效——且超时
+  /// 路径直接进 catch 跳过 [invalidateAfterSyncCaches]，本轮拉到的数据
+  /// 不失效业务缓存。本函数经 `unawaited` 调用，不阻塞生命周期回调，
+  /// 放宽超时无 ANR 风险（真被系统冻结时 Dart 侧计时自然失效）。
   Future<void> _forceSync({required String origin}) async {
     final bridge = ref.read(orbitBridgeProvider);
     try {
       final config = await bridge.syncConfigGet();
       if (config == null) return; // 未配置云同步
       final waitMs = origin == 'exit' ? 15000 : 3000;
+      // 空闲窗 + 3s 余量：超时只兜「桥卡死」，不吃掉正常等待窗
+      final timeout = Duration(milliseconds: waitMs + 3000);
       final result = await bridge
           .cloudSyncForce(origin: origin, waitForIdleMs: waitMs)
-          .timeout(const Duration(seconds: 6));
+          .timeout(timeout);
       // 拉取合并写入不走 db-change 事件，需在此失效业务缓存（F42 精确失效）
       invalidateAfterSyncCaches(ref, result);
     } catch (e) {
