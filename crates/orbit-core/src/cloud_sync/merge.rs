@@ -625,11 +625,22 @@ async fn batch_insert(
                 // 缺失字段绑定为 NULL
                 if let Some(val) = obj.get(*col_name) {
                     // 按列声明类型规范化值
+                    //
+                    // F58：规范化失败必须**上抛**（与下方 `update_record_in_tx` 同口径）。
+                    // 此前这里把 `Err` 折成 `Value::Null` 直接落库：远端 `"done": "true"`
+                    // （布尔被序列化成字符串）、`"deleted_at": "2026/01/01"`（本地化日期串）
+                    // 这类被 `normalize_value` 拒绝的类型漂移会静默写成 NULL——不报错、
+                    // 不进 `sync_conflicts`，而本地 version 已随本次合并推进，用户看到的是
+                    // 「某些字段在同步后凭空被清空」且无任何可追线索。
                     let normalized = match columns.get(*col_name) {
-                        Some(m) => match normalize_value(val, m) {
-                            Ok(n) => n,
-                            Err(_) => serde_json::Value::Null,
-                        },
+                        Some(m) => {
+                            normalize_value(val, m).map_err(|e| CloudSyncError::Database {
+                                message: format!(
+                                    "批量 INSERT 表 {} 列 {} 类型规范化失败: {}",
+                                    table, col_name, e
+                                ),
+                            })?
+                        }
                         None => val.clone(),
                     };
                     push_json_value(&mut q, &normalized);
@@ -1419,6 +1430,41 @@ mod tests {
                 .await
                 .unwrap();
             assert_eq!(result.inserted, 1, "表路由由调用方给出，与记录字段无关");
+        }
+
+        /// F58 回归：列值类型规范化失败必须**上抛**，不得把该列静默写成 NULL
+        ///
+        /// 旧行为（`batch_insert` 把 `normalize_value` 的 `Err` 折成 `Value::Null`）：
+        /// 对**可空**列这一步会真的落库且不报错。场景是「对端把墓碑时间序列化成本地化
+        /// 日期串」——`deleted_at` 被写成 NULL，删除时间戳静默消失，而 version 已随
+        /// 本轮合并推进，事后无任何痕迹可追（既不报错也不进 `sync_conflicts`）。
+        /// NOT NULL 列（如 `is_archived`）旧行为会在 execute 阶段撞约束报错，
+        /// 算不上静默，故用例针对可空列。
+        #[tokio::test]
+        async fn unparsable_column_value_aborts_instead_of_writing_null() {
+            let pool = setup_pool().await;
+            // 非 ISO（`2026/01/01`）且非整数 → normalize_value 无法转成 INTEGER
+            let items = vec![serde_json::json!({
+                "uuid": "bad-type-1", "title": "类型漂移",
+                "is_deleted": 1, "deleted_at": "2026/01/01",
+                "updated_at": 100, "version": 1
+            })];
+
+            let err = merge_table_items(&pool, "todo_projects", &items, &[], 0)
+                .await
+                .expect_err("规范化失败必须报错，不得静默写 NULL");
+            let msg = err.to_string();
+            assert!(
+                msg.contains("类型规范化失败") && msg.contains("deleted_at"),
+                "错误信息应点明列名与成因: {msg}"
+            );
+
+            // 整表回滚：旧行为会在库里留下一行 deleted_at=NULL
+            assert_eq!(
+                row_count(&pool, "bad-type-1").await,
+                0,
+                "失败的表必须整表回滚"
+            );
         }
 
         async fn load_map(pool: &SqlitePool) -> HashMap<String, LocalRecordState> {
