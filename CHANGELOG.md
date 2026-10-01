@@ -90,10 +90,34 @@
   此前「对端把 `deleted_at` 序列化成本地化日期串」这类漂移会把可空列静默写成 NULL——不报错、
   不进 `sync_conflicts`，而 version 已随本轮合并推进，用户只看到「字段同步后凭空被清空」
   且查无线索。
+- **桶指纹不再把嵌套同名业务字段当同步元数据（P3/F70）**：`canonicalize_value` 增 `top_level`
+  形参，`updated_at`/`id` 白名单与 `_fk` 外键排除**只在顶层记录生效**（递归分支传 `false`）。
+  嵌套对象（JSON 列里存的 `{"id":…,"updated_at":…}` 快照）里的同名字段此前被静默摘掉，后果是
+  **少算而非多算**：嵌套内容怎么改桶指纹都不变，下一轮 `bucket_is_unchanged` 判「干净」直接跳过，
+  那部分编辑永远传不上云端且每轮报成功。原实现把排除写在递归分支内，与本函数文档「仅作用于顶层
+  Object」自相矛盾。
+- **分片 ETag 不再被当成并发令牌归一化（P3/F72）**：`put_part_once` 改 `trim()`（只去首尾空白、
+  保留引号），`complete_multipart_body` doc 明确入参必须是 UploadPart 响应头原文。协议要求
+  CompleteMultipartUpload 清单里的 Part ETag 与 UploadPart 回传值**逐字节一致**，剥引号会被
+  严格校验的服务端以 `InvalidPart` / `MalformedXML` 拒绝整份清单——而分片此时已全部传完，
+  重试代价是整文件重传。归一化那套（剥 `W/` 与引号）服务的是**并发令牌比较**，与「回传服务端
+  回执原文」是两件事。
+- **S3 列举不再把半页当成完整列举（P3/F73）**：`parse_list_objects_xml` 解析 `<IsTruncated>` 并
+  落到 `ListPage.truncated`；空 `<NextContinuationToken/>` 归 `None`（空游标不是游标）；
+  `IsTruncated=true` 却拿不到游标时**直接报错**。此前 `IsTruncated` 从不解析，适配器在 `None`
+  分支 `return Ok(entries)` 把半页当完整列举（pull 拉不到第 1001 个附件、push 按「云端缺文件」
+  误判）；空游标则让服务端按「无游标」重发第一页，条目重复堆积直到 1000 页上限才报错。
+- **WebDAV 列举不再丢掉「存在但属性取不到」的资源（P3/F74）**：`propfind` 支持 RFC 4918 的
+  `(href, status)` 形态（`<status>` 直属 `<response>`，无 propstat 包装）。此前只在 `in_propstat`
+  时记录 status，该形态下 `merged` 恒 false → **整条被丢**，存在的资源从列举结果里消失
+  （`url_exists` 判「不存在」、`list_assets` 少对象）。资源级非 2xx 仍按「不存在」剔除，
+  F31 口径不回退。
 - 回归：`cargo test --workspace` 全绿（orbit-core 新增用例含 F48/F49/F50/F51/F52/F53/F57/F59/F60/F61
-  与 F58/F65/F69/F71 的定向用例；F59 因附件差集会「看见」分片目录而无法在集成级构造，改用适配器内的最小内存
-  WebDAV 假服务直测 `upload_asset_parts`；F58/F65/F71 三项均以「临时回退修复点 → 用例立即红 → 恢复」验证过
-  用例有效）；详细清单与逐项证据见
+  与 F58/F65/F69/F71、F70/F72/F73/F74 的定向用例；F59 因附件差集会「看见」分片目录而无法在集成级构造，改用适配器内的最小内存
+  WebDAV 假服务直测 `upload_asset_parts`；F58/F65/F71/F70/F72/F73/F74 八项均以「临时回退修复点 → 用例立即红 →
+  恢复」验证过用例有效；期间修掉测试夹具 `spawn_header_server` 的请求体竞态——它读完请求头就回响应并关连接，
+  换成带请求体的 PUT 用例后会撞 RST 报 `error sending request`，属与被测逻辑无关的时红时绿，F72 的先红证据
+  因此另跑一次取得）；详细清单与逐项证据见
   `docs/同步功能第六轮全面盘查报告-2026-09-30.md` §八。
 
 ### 节假日记账展示收口 + 旧口径文档复原（2026-09-30）
