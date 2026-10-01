@@ -326,6 +326,13 @@ impl HttpClient {
     ///
     /// ETag 缺失返回 `Ok(None)`：绝大多数 S3 兼容实现都回 ETag 头，
     /// 拿不到时由调用方决定缺 ETag 的 Complete 是否可行。
+    ///
+    /// **返回的是响应头的原文**（F72）：该值唯一的用途是构造
+    /// CompleteMultipartUpload 清单，而 S3 协议要求清单里的 Part ETag 与 UploadPart
+    /// 的响应值**逐字节一致**（含双引号）。这里不做任何归一化——`normalize_etag`
+    /// 那套「剥 `W/` 与引号」服务的是**并发令牌比较**（读侧/列举侧同口径），
+    /// 与「把服务端回执原文回传」是两件事，套用会让严格校验的实现以
+    /// `InvalidPart` / `MalformedXML` 拒绝整份清单（分片已全传完，代价是整文件重传）。
     pub async fn put_part_once(
         &self,
         url: &str,
@@ -349,11 +356,14 @@ impl HttpClient {
             let resp_body = response.text().await.unwrap_or_default();
             return Err(SyncError::from_http_status(status.as_u16(), &resp_body));
         }
+        // F72：原样回传服务端给的 ETag（仅去首尾 OWS，绝不改动引号）。
+        // 旧实现是 `trim_matches('"')`——把 Complete 清单要用的回执原文当成了
+        // 并发令牌来归一化。
         let etag = response
             .headers()
             .get("ETag")
             .and_then(|v| v.to_str().ok())
-            .map(|s| s.trim_matches('"').to_string());
+            .map(|s| s.trim().to_string());
         Ok(etag)
     }
 }
@@ -417,6 +427,12 @@ mod tests {
     ///
     /// 与 `spawn_slow_body_server` 同规矩：只服务单个连接、读完请求头即回，
     /// 客户端提前断开导致的写失败按正常退出处理（绝不留 accept 死循环）。
+    ///
+    /// 但**请求体必须读干净再回**：本助手既被 GET 用例用，也被 PUT 用例用
+    /// （`put_part_once`）。「头读完就回响应并关连接」时客户端可能仍在写 body，
+    /// 内核会对「关掉仍有未读数据的连接」回 RST，reqwest 报
+    /// `error sending request`（F72 用例首次带体时踩到：同一二进制时红时绿，
+    /// 与被测逻辑无关）。故按 `Content-Length` 把请求体读完再回。
     fn spawn_header_server(extra_headers: &str) -> String {
         let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
         let port = listener.local_addr().unwrap().port();
@@ -427,15 +443,36 @@ mod tests {
             };
             let mut buf = [0u8; 4096];
             let mut req = Vec::new();
-            loop {
+            let head_end = loop {
                 let n = std::io::Read::read(&mut stream, &mut buf).unwrap_or(0);
                 if n == 0 {
                     return;
                 }
                 req.extend_from_slice(&buf[..n]);
-                if req.windows(4).any(|w| w == b"\r\n\r\n") {
-                    break;
+                if let Some(p) = req.windows(4).position(|w| w == b"\r\n\r\n") {
+                    break p + 4;
                 }
+            };
+            // 按 Content-Length 把请求体读干净，避免回响应时撞客户端未写完的 body
+            let head_txt = String::from_utf8_lossy(&req[..head_end]).to_ascii_lowercase();
+            let body_need = head_txt
+                .split("content-length:")
+                .nth(1)
+                .map(|rest| {
+                    rest.trim_start()
+                        .chars()
+                        .take_while(char::is_ascii_digit)
+                        .collect::<String>()
+                })
+                .and_then(|s| s.parse::<usize>().ok())
+                .unwrap_or(0);
+            let mut remaining = body_need.saturating_sub(req.len() - head_end);
+            while remaining > 0 {
+                let n = std::io::Read::read(&mut stream, &mut buf).unwrap_or(0);
+                if n == 0 {
+                    return;
+                }
+                remaining = remaining.saturating_sub(n);
             }
             let mut out = std::io::BufWriter::new(&mut stream);
             let head =
@@ -473,6 +510,28 @@ mod tests {
             token.as_deref(),
             Some("abc"),
             "弱校验前缀 W/ 与引号都必须剥掉（与列举侧同口径）"
+        );
+    }
+
+    /// F72：分片 PUT 的 ETag 必须**原样**回传（含双引号）
+    ///
+    /// 与上面三条刻意形成对照：读侧/列举侧的令牌要归一化（剥 `W/` 与引号），
+    /// 而这里要的是「服务端回执原文」——它直接进 CompleteMultipartUpload 清单，
+    /// 协议要求与 UploadPart 响应值逐字节一致。旧实现沿用了归一化，把引号剥掉；
+    /// 严格校验的服务端会以 `InvalidPart` 拒绝整份清单，而分片已全部上传完毕。
+    #[tokio::test]
+    async fn put_part_returns_raw_etag_with_quotes() {
+        let url = spawn_header_server("ETag: \"d41d8cd98f00b204e9800998ecf8427e\"\r\n");
+        let http = HttpClient::new(30, 0, false).expect("构造 HTTP 客户端");
+        let etag = http
+            .put_part_once(&url, reqwest::header::HeaderMap::new(), b"part".to_vec())
+            .await
+            .expect("分片 PUT 必须成功");
+
+        assert_eq!(
+            etag.as_deref(),
+            Some("\"d41d8cd98f00b204e9800998ecf8427e\""),
+            "必须原样保留服务端双引号（Complete 清单要求逐字节一致）"
         );
     }
 

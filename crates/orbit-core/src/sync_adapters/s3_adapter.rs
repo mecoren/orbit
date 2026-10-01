@@ -624,6 +624,10 @@ pub(crate) fn truncate_xml(xml: &str) -> String {
 /// ETag 是**服务端回传**的串，过去用 `format!` 直拼：兼容实现（部分自建网关）
 /// 返回含 `&` / `<` 的 ETag 会让整份清单变成 MalformedXML——分片全白传，
 /// 且错误只在 Complete 阶段暴露，重试代价是整文件。
+///
+/// 入参必须是 UploadPart 响应头的**原文**（含双引号，见 `put_part_once`，F72）：
+/// 协议要求清单里的 Part ETag 与 UploadPart 的回传值逐字节一致，本函数只做
+/// XML 转义，不做任何引号增删。
 pub(crate) fn complete_multipart_body(part_etags: &[String]) -> String {
     let mut body = String::from("<CompleteMultipartUpload>\n");
     for (i, etag) in part_etags.iter().enumerate() {
@@ -718,5 +722,29 @@ mod multipart_tests {
             2,
             "空清单仍是合法对"
         );
+    }
+
+    /// F72：Part ETag 要原样落进清单（含服务端双引号），只转义、不增删引号
+    ///
+    /// 与 `put_part_once` 的「原样回传」是一条链的两端：任一端做了归一化，
+    /// 清单里的 ETag 就与 UploadPart 的回传值不等，严格校验的服务端会以
+    /// `InvalidPart` 拒绝整份清单（分片已全传完，重试代价是整文件）。
+    #[test]
+    fn complete_body_preserves_part_etag_quotes() {
+        let etags = vec![
+            "\"d41d8cd98f00b204e9800998ecf8427e\"".to_string(),
+            "\"abc123\"".to_string(),
+        ];
+        let body = complete_multipart_body(&etags);
+        assert!(
+            body.contains(
+                "<Part><PartNumber>1</PartNumber>\
+                 <ETag>\"d41d8cd98f00b204e9800998ecf8427e\"</ETag></Part>"
+            ),
+            "引号必须原样保留，实际输出: {body}"
+        );
+        assert!(body.contains("<ETag>\"abc123\"</ETag>"), "实际输出: {body}");
+        // 双引号不是 XML 特殊字符，不应被转义成 &quot;
+        assert!(!body.contains("&quot;"), "实际输出: {body}");
     }
 }
