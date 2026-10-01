@@ -95,13 +95,36 @@ pub trait SyncAdapter: Send + Sync {
     async fn delete(&self, path: &str) -> Result<(), SyncError>;
 
     /// 上传附件（内容寻址，文件名 = hash）
-    async fn upload_asset(&self, hash: &str, data: &[u8]) -> Result<(), SyncError>;
+    ///
+    /// F75（2026-10-01 第六轮）：默认实现 = 拼 `assets/{hash}.orsync` 后走
+    /// [`Self::upload`]。生产链路的调用方是 `BasePathAdapter`，它**必须覆盖**
+    /// 本方法（默认实现不知道 base_path，拼出的是无前缀路径）——但覆盖后
+    /// 委托的是内层的 `upload` 而非 `upload_asset`，故生产适配器（WebDAV/S3）
+    /// 各自的实现成了不可达死代码。逻辑收口到这一份默认实现，适配器不再
+    /// 重复实现（S3 与 WebDAV 曾各有一份逐字相同的拷贝）。
+    async fn upload_asset(&self, hash: &str, data: &[u8]) -> Result<(), SyncError> {
+        let path = crate::cloud_sync::paths::asset_path(hash);
+        self.upload(&path, data).await
+    }
 
     /// 下载附件
-    async fn download_asset(&self, hash: &str) -> Result<Vec<u8>, SyncError>;
+    ///
+    /// 默认实现同 [`Self::upload_asset`] 口径（F75 收口）：拼路径走
+    /// [`Self::download`]。分片形态回退（单对象 → 分片拼装）由各适配器的
+    /// `download` 自行承担。
+    async fn download_asset(&self, hash: &str) -> Result<Vec<u8>, SyncError> {
+        self.download(&crate::cloud_sync::paths::asset_path(hash))
+            .await
+    }
 
     /// 检查附件是否存在
-    async fn asset_exists(&self, hash: &str) -> Result<bool, SyncError>;
+    ///
+    /// 默认实现同 [`Self::upload_asset`] 口径（F75 收口）：拼路径走
+    /// [`Self::exists`]（HEAD 探测，分片感知在适配器的 `exists` 里）。
+    async fn asset_exists(&self, hash: &str) -> Result<bool, SyncError> {
+        self.exists(&crate::cloud_sync::paths::asset_path(hash))
+            .await
+    }
 
     /// 列出云端所有附件的裸 hash 列表
     ///

@@ -937,23 +937,11 @@ impl SyncAdapter for WebDavAdapter {
         SyncError::check_delete_status(response.status().as_u16())
     }
 
-    async fn upload_asset(&self, hash: &str, data: &[u8]) -> Result<(), SyncError> {
-        // 默认统一上传到 assets/{hash}.orsync
-        let path = crate::cloud_sync::paths::asset_path(hash);
-        self.upload(&path, data).await
-    }
-
-    async fn download_asset(&self, hash: &str) -> Result<Vec<u8>, SyncError> {
-        // 两段回退（单对象 → 分片拼装）已上移到 `download`（F23），此处只拼路径
-        self.download(&crate::cloud_sync::paths::asset_path(hash))
-            .await
-    }
-
-    async fn asset_exists(&self, hash: &str) -> Result<bool, SyncError> {
-        // 分片感知探测已上移到 `exists`（F23）
-        self.exists(&crate::cloud_sync::paths::asset_path(hash))
-            .await
-    }
+    // F75（2026-10-01 第六轮）：upload_asset / download_asset / asset_exists
+    // 不在此覆盖——与 S3 侧逐字相同的「拼 assets/{hash}.orsync + 委托
+    // upload/download/exists」已收口为 trait 默认实现（见 traits.rs），
+    // 这里不再保留生产不可达的重复实现。分片形态回退（F23/S4）仍由本适配器
+    // 的 upload/download/exists 按路径形态承担，不受影响。
 
     async fn list_assets(&self, assets_dir: &str) -> Result<Vec<String>, SyncError> {
         let url = self.build_url(&format!("{assets_dir}/"));

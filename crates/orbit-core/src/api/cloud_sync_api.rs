@@ -107,6 +107,9 @@ impl SyncAdapter for BasePathAdapter {
         // （`assets/{hash}.orsync`，默认格式）。此前三套口径分裂曾致死循环，
         // 现写侧统一新后缀，读侧多级回退。
         // base_path 拼接仍由本包装器负责（内层构造不含 base_path 语义）。
+        // F75：trait 默认实现（拼路径走 upload）对本包装器不可用——它拼出的
+        // 是**无 base_path 前缀**的路径；委托的也必须是内层 upload 而非
+        // inner.upload_asset（后者经默认实现同样丢前缀）。
         let path = crate::cloud_sync::paths::asset_path(hash);
         self.inner.upload(&self.join(&path), data).await
     }
@@ -114,12 +117,14 @@ impl SyncAdapter for BasePathAdapter {
     async fn download_asset(&self, hash: &str) -> Result<Vec<u8>, SyncError> {
         // 附件单一路径（无历史数据，不再回退遗留命名）。
         // 「单对象 → 分片拼装」的形态回退由内层适配器负责。
+        // F75：同 upload_asset——包装器必须自己拼 base_path。
         let path = crate::cloud_sync::paths::asset_path(hash);
         self.inner.download(&self.join(&path)).await
     }
 
     async fn asset_exists(&self, hash: &str) -> Result<bool, SyncError> {
         // 内层适配器自带「单对象 → 分片清单」两段探测（HEAD 实现）
+        // F75：同 upload_asset——包装器必须自己拼 base_path。
         let path = crate::cloud_sync::paths::asset_path(hash);
         self.inner.exists(&self.join(&path)).await
     }
