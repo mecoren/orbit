@@ -68,9 +68,32 @@
 - **WebDAV 路径按 RFC 3986 编码（P2/F61）**：`build_url` 对路径做百分号编码，复用 S3 的
   `uri_encode`（同一实现，避免两协议在「哪些字符必须 `%XX`」上漂移）。此前路径裸拼进 URL，
   `#` / `?` 处截断成 fragment / query → 请求打到**另一个路径**上且状态码看着正常。
+- **全量备份导出不再静默丢掉整张表（P3/F71）**：导出循环区分「表不存在（迁移前旧库）→ 跳过
+  并记 warn」与「表在但读取失败 → `log::error!` + 中止导出」。此前一律 `eprintln!` 后
+  `continue`，出口仍是一份「成功」的备份：文件名、大小、云端上传、`sync_history` 全部正常，
+  唯独缺一整张表的数据——用户要等到用这份备份恢复时才发现，而 `keep_latest` 很可能已把上一份
+  好备份删掉。同步域壳层残留 `eprintln!` 一并收口（桌面改 `log::*`；移动端一条**刻意保留**，
+  因为 `orbit-flutter` 未安装任何 logger，改为 `log::*` 等于删掉该端唯一输出通道，另记 F81）。
+- **备份导入不再信任文件自述长度（P2/F65）**：`decoder` 新增 `MAX_ENTRY_BYTES`(512 MiB) /
+  `MAX_TOTAL_BYTES`(2 GiB) 与 `read_entry_bounded`，去掉 `String::with_capacity(file.size())`。
+  ZIP 中央目录里的 `size` 是随文件进来的元数据：伪造成 8 GiB 时旧代码第一行就发起 8 GiB 分配
+  （分配失败即进程中止），即便报得小也会无上限读到内存耗尽；总量上限另防「每条都不越界但条数
+  极多」的 ZIP 炸弹。越界判定按「多读 1 字节」实现，等长条目不受误伤。
+- **撤销主密码元数据不再可能写出半截文件（P2/F69）**：`save_master_auth` 改走
+  `fs_util::write_atomic`（同目录 tmp + rename）；`load_master_auth` 解析失败（含非法 UTF-8）
+  先留证 `.corrupt-*` 再上抛明确错误。留证用**复制**而非既有 `quarantine_corrupt_file` 的改名：
+  `master_auth.json` 的存在性本身就是状态机输入（`has_master_auth()` 决定是否显示解锁页、
+  `master_auth_init` 是否拒绝重复初始化），改名会把「损坏」读成「未设置主密码」，从而放过
+  重新初始化——那会生成全新 DB Key，旧加密库再也打不开。
+- **同步合并不再把类型漂移静默写成 NULL（P2/F58）**：`merge` 批量 INSERT 的
+  `normalize_value` 失败由「折成 `Value::Null`」改为上抛（与同文件 UPDATE 路径同口径）。
+  此前「对端把 `deleted_at` 序列化成本地化日期串」这类漂移会把可空列静默写成 NULL——不报错、
+  不进 `sync_conflicts`，而 version 已随本轮合并推进，用户只看到「字段同步后凭空被清空」
+  且查无线索。
 - 回归：`cargo test --workspace` 全绿（orbit-core 新增用例含 F48/F49/F50/F51/F52/F53/F57/F59/F60/F61
-  的定向用例；F59 因附件差集会「看见」分片目录而无法在集成级构造，改用适配器内的最小内存
-  WebDAV 假服务直测 `upload_asset_parts`）；详细清单与逐项证据见
+  与 F58/F65/F69/F71 的定向用例；F59 因附件差集会「看见」分片目录而无法在集成级构造，改用适配器内的最小内存
+  WebDAV 假服务直测 `upload_asset_parts`；F58/F65/F71 三项均以「临时回退修复点 → 用例立即红 → 恢复」验证过
+  用例有效）；详细清单与逐项证据见
   `docs/同步功能第六轮全面盘查报告-2026-09-30.md` §八。
 
 ### 节假日记账展示收口 + 旧口径文档复原（2026-09-30）
