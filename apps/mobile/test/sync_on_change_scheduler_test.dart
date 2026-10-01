@@ -8,10 +8,23 @@
 import 'dart:async';
 
 import 'package:flutter/widgets.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:orbit/data/api/dto.dart';
 import 'package:orbit/data/api/mock_orbit_bridge.dart';
+import 'package:orbit/data/providers/bridge_provider.dart';
 import 'package:orbit/services/sync_on_change_scheduler.dart';
+import 'support/orbit_test_app.dart';
+
+/// 仿真 FRB 错误形态：AnyhowException 的 toString 就是裸消息（无
+/// "Exception: " 前缀）——Dart 原生 Exception 会带前缀，破坏 syncErrorTag
+/// 的 `^[\[(\w+)\]` 提取，测试必须与生产错误形态一致
+class _AnyhowLike implements Exception {
+  _AnyhowLike(this.message);
+  final String message;
+  @override
+  String toString() => message;
+}
 
 /// 门控可调的假桥：默认全开（已配置 + 两开关开 + 已设密码已解锁 + 引擎空闲）；
 /// 各方法无延迟（不走 Mock 的 120ms），并记录探测次数以断言门控短路
@@ -30,6 +43,9 @@ class _GatedBridge extends MockOrbitBridge {
 
   /// 非空时推送挂起（模拟慢推送）
   Completer<void>? pushGate;
+
+  /// 非空时推送抛错（模拟 core 上抛，如 [key_mismatch]）
+  Object? pushError;
 
   @override
   Future<SyncConfigView?> syncConfigGet() async => configured
@@ -67,6 +83,7 @@ class _GatedBridge extends MockOrbitBridge {
   Future<SyncResultJson> cloudSyncPushOnly({String origin = 'manual'}) async {
     pushCalls++;
     lastOrigin = origin;
+    if (pushError != null) throw pushError!;
     if (pushGate != null) await pushGate!.future;
     return const SyncResultJson(
       pushedModules: 1,
@@ -220,5 +237,55 @@ void main() {
     await tester.pump();
 
     expect(notified, 1);
+  });
+
+  testWidgets('F77：push 失败为 key_mismatch 时弹恢复引导 toast（对齐桌面 emit 引导）', (tester) async {
+    final bridge = _GatedBridge()
+      ..pushError = _AnyhowLike(
+          '[key_mismatch] Data Key 与云端密文不匹配：本地已解锁但解密云端数据失败');
+    final scheduler = SyncOnChangeScheduler.attachOnce(bridge);
+    // WaitToast.global 经 rootNavigatorKey 取浮层：必须用与生产同构的壳
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [orbitBridgeProvider.overrideWithValue(bridge)],
+        child: orbitTestApp(home: const SizedBox()),
+      ),
+    );
+    await tester.pump();
+
+    scheduler.onDbChange();
+    await tester.pump(const Duration(seconds: 5));
+    await tester.pump();
+    expect(bridge.pushCalls, 1, reason: '推送确实发起了');
+    expect(
+      find.text('同步密钥与云端数据不匹配'),
+      findsOneWidget,
+      reason: 'key_mismatch 不得静默吞掉——桌面端 on-change 失败会引导恢复页，'
+          '移动端此前任何失败都无提示（F77）',
+    );
+
+    // 收尾推掉 toast 停留计时器：带 action 钮的恢复 toast 是常驻档
+    //（onAction 非空 → showDuration=holdForever），必须按常驻档收尾
+    await drainToastTimers(tester, holdForever: true);
+  });
+
+  testWidgets('F77：push 失败为网络类错误时不弹恢复引导（维持静默口径）', (tester) async {
+    final bridge = _GatedBridge()..pushError = _AnyhowLike('[network] 连接超时');
+    final scheduler = SyncOnChangeScheduler.attachOnce(bridge);
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [orbitBridgeProvider.overrideWithValue(bridge)],
+        child: orbitTestApp(home: const SizedBox()),
+      ),
+    );
+    await tester.pump();
+
+    scheduler.onDbChange();
+    await tester.pump(const Duration(seconds: 5));
+    await tester.pump();
+    expect(bridge.pushCalls, 1);
+    expect(find.text('同步密钥与云端数据不匹配'), findsNothing,
+        reason: '非密钥类失败维持「失败静默不打扰」口径');
+    await drainToastTimers(tester);
   });
 }

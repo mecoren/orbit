@@ -889,6 +889,10 @@ class SyncResultJson {
   final bool skipped;
   final List<String> errors;
 
+  /// S28：冲突裁决数（merge LWW/复活裁决计数透传，多设备并发编辑的可见度）。
+  /// F77：补声明——core 一直下发，此前两端壳都未解析；旧引擎/ mock 缺失时为 0。
+  final int conflicts;
+
   /// 本轮 pull 真正写入的表集合（F42：按表精确失效缓存的依据；
   /// 旧引擎/ mock 不提供时为空 → 调用方回退 pulledModules 判据）
   final List<String> changedTables;
@@ -901,6 +905,7 @@ class SyncResultJson {
     required this.durationMs,
     required this.skipped,
     required this.errors,
+    this.conflicts = 0,
     this.changedTables = const [],
   });
 
@@ -912,6 +917,7 @@ class SyncResultJson {
         durationMs: j['duration_ms'] as int,
         skipped: j['skipped'] as bool,
         errors: (j['errors'] as List).cast<String>(),
+        conflicts: (j['conflicts'] as num?)?.toInt() ?? 0,
         changedTables:
             (j['changed_tables'] as List?)?.cast<String>() ?? const [],
       );
@@ -1694,7 +1700,8 @@ class NotificationLogRow {
 class SyncHistoryRow {
   final int id;
 
-  /// sync_now / push_only / pull_then_push
+  /// core 真值：incremental / push_only / pull_only（engine.rs 同名常量，
+  /// F77 对齐——旧注释里的 sync_now/pull_then_push 是臆测字符串）
   final String syncType;
   final String status;
   final int startedAt;

@@ -1352,6 +1352,8 @@ class MockOrbitBridge implements OrbitBridge {
   @override
   Future<SyncResultJson> cloudSyncNow({String origin = 'manual'}) =>
       _delay(() {
+        // F77：mock 与 core 同口径填 changedTables / conflicts——
+        // 缺省会让调用方走 pulledModules 保守全量回退，测试测不到精确失效链
         final result = SyncResultJson(
           pushedModules: 2,
           pulledModules: 1,
@@ -1360,6 +1362,8 @@ class MockOrbitBridge implements OrbitBridge {
           durationMs: 850,
           skipped: false,
           errors: [],
+          conflicts: 0,
+          changedTables: const ['todo_tasks'],
         );
         return result;
       });
@@ -1374,6 +1378,9 @@ class MockOrbitBridge implements OrbitBridge {
             durationMs: 420,
             skipped: false,
             errors: [],
+            conflicts: 0,
+            // 纯推送不产生 pull 写入：changedTables 与 core 同口径保持空
+            changedTables: [],
           ));
 
   @override
@@ -1386,6 +1393,8 @@ class MockOrbitBridge implements OrbitBridge {
             durationMs: 910,
             skipped: false,
             errors: [],
+            conflicts: 0,
+            changedTables: ['todo_tasks'],
           ));
 
   @override
@@ -1402,6 +1411,8 @@ class MockOrbitBridge implements OrbitBridge {
             durationMs: 910,
             skipped: false,
             errors: [],
+            conflicts: 0,
+            changedTables: ['todo_tasks'],
           ));
 
   @override
@@ -1430,8 +1441,19 @@ class MockOrbitBridge implements OrbitBridge {
     int limit = 20,
   }) =>
       _delay(() {
+        // F77：scope 语义与 core `incremental_history` 同口径——'all' 是
+        // 「三种增量同步类型的并集」，不是「不过滤」（否则全量备份等其他
+        // sync_type 行会混进历史卡，两端口径漂移）。sync_type 真值见
+        // core engine.rs：incremental / push_only / pull_only。
+        const incrementalTypes = ['incremental', 'push_only', 'pull_only'];
+        final wanted = switch (scope) {
+          'incremental' => ['incremental'],
+          'push_only' => ['push_only'],
+          'pull_only' => ['pull_only'],
+          _ => incrementalTypes,
+        };
         final rows = store.syncHistory
-            .where((r) => scope == 'all' || r.syncType == scope)
+            .where((r) => wanted.contains(r.syncType))
             .toList()
           ..sort((a, b) => b.startedAt.compareTo(a.startedAt));
         return rows.take(limit).toList();

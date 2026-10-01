@@ -2,7 +2,10 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 
+import '../core/routing/router_keys.dart';
 import '../data/api/orbit_bridge.dart';
+import '../shared/utils/sync_status_text.dart';
+import '../shared/widgets/shadcn/orbit_toast.dart';
 
 /// 「修改后立即同步」写路径调度器（docs/10 §A-2 M6）
 ///
@@ -100,6 +103,21 @@ class SyncOnChangeScheduler {
           '上传 ${result.uploadedAttachments} 附件 / ${result.durationMs}ms'
           '${result.skipped ? '（引擎忙跳过）' : ''}');
     } catch (e, st) {
+      // F77（2026-10-01 第六轮）：key_mismatch 不静默——桌面 on-change 失败时
+      // emit("sync-key-mismatch") 引导恢复页（sync_scheduler.rs），移动端此前
+      // 任何失败都吞掉，用户改了同步密码却只见「推不上去」。复用设置页
+      // 手动同步的恢复引导（WaitToast.global 无需 context，文案同源）；
+      // 其余失败维持静默（网络/配置类，历史卡可见，不打断编辑）。
+      final action = syncErrorAction(syncErrorTag(e.toString()));
+      if (action == SyncErrorAction.recovery) {
+        WaitToast.global(
+          '同步密钥与云端数据不匹配',
+          variant: WaitToastVariant.destructive,
+          description: '本机密钥解不开云端密文，重输密码无效',
+          actionLabel: '去恢复',
+          onAction: () => rootRouter?.push('/settings/sync'),
+        );
+      }
       // 失败静默不打扰：core 已按 sync_type=push_only 写同步历史（设置页
       // 「同步历史」可见），与桌面 log::warn! 口径一致（不弹窗、不打断编辑）
       debugPrint('[SyncOnChange] push_only 失败: $e\n$st');

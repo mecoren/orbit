@@ -1095,10 +1095,13 @@ class _SyncHistoryCardState extends ConsumerState<_SyncHistoryCard> {
     'pull_only': '先拉后推',
   };
 
+  // F77：键与 core sync_history.sync_type 真值对齐（engine.rs 常量
+  // incremental / push_only / pull_only）——旧键 'sync_now'/'pull_then_push'
+  // 是臆测值，真数据永远落不到这些标签上，回退显示原始字符串。
   static const _typeLabels = <String, String>{
-    'sync_now': '完整同步',
+    'incremental': '完整同步',
     'push_only': '仅推送',
-    'pull_then_push': '先拉后推',
+    'pull_only': '先拉后推',
   };
 
   String _scope = 'all';

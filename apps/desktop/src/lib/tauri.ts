@@ -615,6 +615,9 @@ export interface SyncResultJson {
   pulled_modules: number;
   uploaded_attachments: number;
   downloaded_attachments: number;
+  /** S28：冲突裁决数（merge LWW/复活裁决计数透传，多设备并发编辑的可见度）。
+   * F77：补声明——core 一直下发，此前两端壳都未解析。 */
+  conflicts?: number;
   duration_ms: number;
   skipped: boolean;
   errors: string[];
@@ -662,7 +665,9 @@ export const cloudSyncGetState = (): Promise<SyncStateJson> =>
  */
 export const cloudSyncForce = (
   origin: "manual" | "background" | "exit" = "background",
-  waitForIdleMs = 0,
+  // F77：与移动端 OrbitBridge 默认（3000）对齐——两端壳的桥接默认必须一致，
+  // 调用方（启动同步 3000 / BootGate 同款）始终显式传参，默认值只是契约口径
+  waitForIdleMs = 3000,
 ) =>
   invoke<string>("cloud_sync_force", { origin, waitForIdleMs }).then(parseResult);
 export const cloudSyncIsRunning = () => invoke<boolean>("cloud_sync_is_running");
@@ -689,7 +694,8 @@ export interface SyncHistoryEntry {
 
 export type SyncHistoryScope = "all" | "incremental" | "push_only" | "pull_only";
 
-export const cloudSyncHistory = (scope: SyncHistoryScope = "all", limit = 50) =>
+// F77：limit 默认与移动端 OrbitBridge（20）对齐；桌面历史卡显式传 50 不变
+export const cloudSyncHistory = (scope: SyncHistoryScope = "all", limit = 20) =>
   invoke<SyncHistoryEntry[]>("cloud_sync_history", { scope, limit });
 
 // ---------- 冲突败方副本（03 文档 §八 遗留项：查看 / 恢复 / 忽略 / 清空） ----------

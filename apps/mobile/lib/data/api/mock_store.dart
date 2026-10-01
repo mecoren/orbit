@@ -342,7 +342,7 @@ class MockStore {
     syncHistory.addAll([
       SyncHistoryRow(
         id: id,
-        syncType: 'sync_now',
+        syncType: 'incremental', // F77：core 写入真值（engine.rs SYNC_TYPE_SYNC_NOW）
         status: 'success',
         startedAt: now() - 5400000,
         finishedAt: now() - 5399000,
