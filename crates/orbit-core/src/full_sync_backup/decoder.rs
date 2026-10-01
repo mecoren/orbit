@@ -17,6 +17,18 @@ use crate::full_sync_backup::container::parse_container;
 use crate::full_sync_backup::error::{FullSyncBackupError, FullSyncBackupResult};
 use crate::full_sync_backup::manifest::BackupManifest;
 
+/// 单个 ZIP 条目解压后的字节上限（512 MiB）
+///
+/// F65：备份文件是**外部输入**（云存储对象 / 其他设备拷贝 / 手工放置），
+/// ZIP 中央目录里声明的 `size` 属于随文件一起进来的元数据，不可信。
+/// 单表全部记录序列化后的 JSON 正常在 MiB 量级，512 MiB 已远超真实用量。
+const MAX_ENTRY_BYTES: u64 = 512 * 1024 * 1024;
+
+/// 全部条目解压后的累计字节上限（2 GiB）
+///
+/// 单独设总量上限是为了防「每个条目都不越界、但条目数极多」的 ZIP 炸弹形态。
+const MAX_TOTAL_BYTES: u64 = 2 * 1024 * 1024 * 1024;
+
 /// 解码结果
 #[derive(Debug, Clone)]
 pub struct DecodedBackup {
@@ -60,6 +72,8 @@ pub fn decode_backup(bytes: &[u8], sync_password: &str) -> FullSyncBackupResult<
     let mut manifest: Option<BackupManifest> = None;
     let mut table_data: BTreeMap<String, String> = BTreeMap::new();
     let mut schema_version_json: Option<String> = None;
+    // F65：解压总量累计（双上限中的第二个）
+    let mut total_bytes: u64 = 0;
 
     for i in 0..archive.len() {
         let mut file = archive
@@ -67,9 +81,13 @@ pub fn decode_backup(bytes: &[u8], sync_password: &str) -> FullSyncBackupResult<
             .map_err(|e| FullSyncBackupError::Zip(e.to_string()))?;
         let name = file.name().to_string();
 
-        let mut buf = String::with_capacity(file.size() as usize);
-        file.read_to_string(&mut buf)
-            .map_err(|e| FullSyncBackupError::Zip(e.to_string()))?;
+        let buf = read_entry_bounded(
+            &mut file,
+            &name,
+            MAX_ENTRY_BYTES,
+            &mut total_bytes,
+            MAX_TOTAL_BYTES,
+        )?;
 
         if name == "manifest.json" {
             manifest = Some(BackupManifest::from_json(&buf)?);
@@ -93,6 +111,56 @@ pub fn decode_backup(bytes: &[u8], sync_password: &str) -> FullSyncBackupResult<
         manifest,
         table_data,
         schema_version_json,
+    })
+}
+
+/// 从 ZIP 条目读取文本内容（带双重上限）
+///
+/// F65：原实现是
+/// ```ignore
+/// let mut buf = String::with_capacity(file.size() as usize); // ← 用声明的 size 预分配
+/// file.read_to_string(&mut buf)?;                             // ← 无任何上限
+/// ```
+/// 两处都把外部文件的自述当成可信：`size` 被伪造成 8 GiB 时，第一行就发起一次
+/// 8 GiB 的分配（`with_capacity` 失败即 panic / 进程中止）；即便 size 报得小，
+/// 第二行也会一路读到内存耗尽。备份文件可经云存储或他人拷贝获得，
+/// 因此在导入路径上按「按需增长 + 越界即中止」处理。
+///
+/// - 单条目：最多读 `max_entry_bytes + 1` 字节，多读的 1 字节用于判定越界；
+/// - 总量：`total_bytes` 由调用方跨条目累加，防止多条各自不越界但总量失控。
+fn read_entry_bounded<R: std::io::Read>(
+    reader: R,
+    name: &str,
+    max_entry_bytes: u64,
+    total_bytes: &mut u64,
+    max_total_bytes: u64,
+) -> FullSyncBackupResult<String> {
+    // 不用 `Vec::with_capacity(声明 length)`：声明值不可信，交给 Vec 的
+    // 均摊增长（读到的字节数才是真实用量，且被 take 上限封顶）。
+    let mut raw: Vec<u8> = Vec::new();
+    reader
+        .take(max_entry_bytes + 1)
+        .read_to_end(&mut raw)
+        .map_err(|e| FullSyncBackupError::Zip(e.to_string()))?;
+
+    if raw.len() as u64 > max_entry_bytes {
+        return Err(FullSyncBackupError::InvalidFormat(format!(
+            "备份内条目 {} 解压后超过单条上限 {} MiB，已中止（文件可能已损坏，或非本应用产出）",
+            name,
+            max_entry_bytes / (1024 * 1024)
+        )));
+    }
+
+    *total_bytes = total_bytes.saturating_add(raw.len() as u64);
+    if *total_bytes > max_total_bytes {
+        return Err(FullSyncBackupError::InvalidFormat(format!(
+            "备份解压总量超过上限 {} MiB，已中止（疑似 ZIP 炸弹或文件损坏）",
+            max_total_bytes / (1024 * 1024)
+        )));
+    }
+
+    String::from_utf8(raw).map_err(|e| {
+        FullSyncBackupError::InvalidFormat(format!("备份内条目 {} 不是合法 UTF-8: {}", name, e))
     })
 }
 
@@ -243,5 +311,100 @@ mod tests {
         let decoded = decode_backup(&encoded.bytes, "pw").unwrap();
         let keys: Vec<&String> = decoded.table_data.keys().collect();
         assert_eq!(keys, vec!["alpha", "middle", "zebra"]);
+    }
+
+    // ─────────── F65：解压上限 ───────────
+
+    /// 单条目超限即报错（用 16 字节的小阈值验逻辑，避免真造 512 MiB 夹具；
+    /// 生产阈值由 `MAX_ENTRY_BYTES` 常量给出，调用点与其一致）
+    #[test]
+    fn read_entry_bounded_rejects_entry_over_limit() {
+        let mut total = 0u64;
+        let payload = vec![b'a'; 17];
+        let result = read_entry_bounded(
+            std::io::Cursor::new(payload),
+            "business/huge.json",
+            16,
+            &mut total,
+            1024,
+        );
+
+        match result {
+            Err(FullSyncBackupError::InvalidFormat(msg)) => {
+                assert!(msg.contains("单条上限"), "错误信息应点明单条上限: {msg}");
+                assert!(
+                    msg.contains("business/huge.json"),
+                    "错误信息应带上条目名便于定位: {msg}"
+                );
+            }
+            other => panic!("应因单条目超限被拒，实际: {other:?}"),
+        }
+        // 越界条目不得计入总量（否则会连带污染后续判定）
+        assert_eq!(total, 0, "越界条目不应计入累计字节");
+    }
+
+    /// 恰好等于上限应放行（边界：多读的 1 字节用于判定越界，不能误伤等长条目）
+    #[test]
+    fn read_entry_bounded_accepts_exact_limit() {
+        let mut total = 0u64;
+        let out = read_entry_bounded(
+            std::io::Cursor::new(vec![b'a'; 16]),
+            "business/exact.json",
+            16,
+            &mut total,
+            1024,
+        )
+        .expect("等于上限应放行");
+        assert_eq!(out.len(), 16);
+        assert_eq!(total, 16);
+    }
+
+    /// 各条目均未越界但累计超限 → 报错（ZIP 炸弹形态）
+    #[test]
+    fn read_entry_bounded_rejects_total_over_limit() {
+        let mut total = 0u64;
+        assert!(
+            read_entry_bounded(
+                std::io::Cursor::new(vec![b'a'; 8]),
+                "a.json",
+                64,
+                &mut total,
+                10
+            )
+            .is_ok(),
+            "首个条目累计 8 字节未超 10 字节上限"
+        );
+
+        match read_entry_bounded(
+            std::io::Cursor::new(vec![b'a'; 8]),
+            "b.json",
+            64,
+            &mut total,
+            10,
+        ) {
+            Err(FullSyncBackupError::InvalidFormat(msg)) => {
+                assert!(msg.contains("总量"), "错误信息应点明总量上限: {msg}");
+            }
+            other => panic!("应因累计总量超限被拒，实际: {other:?}"),
+        }
+    }
+
+    /// 非 UTF-8 内容给出可读错误（原实现由 `read_to_string` 抛 Zip 错误）
+    #[test]
+    fn read_entry_bounded_rejects_invalid_utf8() {
+        let mut total = 0u64;
+        let result = read_entry_bounded(
+            std::io::Cursor::new(vec![0xff, 0xfe, 0xfd]),
+            "business/bin.json",
+            64,
+            &mut total,
+            1024,
+        );
+        match result {
+            Err(FullSyncBackupError::InvalidFormat(msg)) => {
+                assert!(msg.contains("UTF-8"), "错误信息应点明编码问题: {msg}");
+            }
+            other => panic!("非法 UTF-8 应被拒，实际: {other:?}"),
+        }
     }
 }
