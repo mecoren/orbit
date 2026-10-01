@@ -28,6 +28,7 @@
 //! - [sync_conflict]：冲突败方副本（查看 / 恢复 / 忽略 / 清空，03 文档 §八）
 //! - [activity_log]：任务活动历史（详情抽屉/页「历史」区块只读查询）
 //! - [events]：下行事件流 + 提醒轮询守护
+//! - [logging]：`#[frb(init)]` 库加载钩子（F81：安装平台 logger，log::* 落 logcat）
 
 pub mod activity_log;
 pub mod asset;
@@ -40,6 +41,7 @@ pub mod events;
 pub mod full_sync_backup;
 pub mod holiday;
 pub mod ics_export;
+pub mod logging;
 pub mod maintenance;
 pub mod notification_log;
 pub mod plaintext_export;

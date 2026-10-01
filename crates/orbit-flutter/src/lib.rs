@@ -13,5 +13,8 @@
 
 mod api;
 mod frb_generated; /* AUTO INJECTED BY flutter_rust_bridge. This line may not be accurate, and you can change it according to your needs. */
+// F81：平台 logger 安装实现。#[frb(init)] 钩子在 api/logging.rs（rust_input
+// 只扫 crate::api，钩子必须落在其中才会被 codegen 接线）。
+mod logging;
 
 pub use api::orbit_state_initialized;
