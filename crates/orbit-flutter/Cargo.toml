@@ -38,5 +38,8 @@ base64.workspace = true
 # 数据库（守护任务直查 SQL 用）
 sqlx.workspace = true
 
-# 日志（重定向到 android logcat / 统一 tracing 由宿主配置）
+# 日志：仅依赖 `log` 门面，**本 crate 未安装任何 logger**（无 android_logger /
+# OSLog / env_logger 初始化点）——因此 orbit-core 与本 crate 的 `log::*` 在移动端
+# 目前是静默丢弃的，见第六轮报告 F81。桌面端由 tauri_plugin_log 安装，日志正常。
+# 在这些 `log::*` 真正落到 logcat 之前，移动端需要可见的告警请用 eprintln!。
 log.workspace = true

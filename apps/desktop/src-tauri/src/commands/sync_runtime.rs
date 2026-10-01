@@ -205,7 +205,7 @@ fn password_entry() -> Result<keyring::Entry, String> {
 pub fn cache_sync_password(password: &str) {
     match password_entry().and_then(|e| e.set_password(password).map_err(|e| e.to_string())) {
         Ok(()) => {}
-        Err(e) => eprintln!("[sync-runtime] 同步密码缓存失败（不影响本次会话）: {e}"),
+        Err(e) => log::warn!("[sync-runtime] 同步密码缓存失败（不影响本次会话）: {e}"),
     }
 }
 
@@ -219,7 +219,8 @@ pub fn clear_cached_sync_password() {
     if let Ok(entry) = password_entry() {
         match entry.delete_credential() {
             Ok(()) | Err(keyring::Error::NoEntry) => {}
-            Err(e) => eprintln!("[sync-runtime] 同步密码缓存清除失败: {e}"),
+            // F71：同步域日志统一走 log 宏（原 eprintln! 与 core 侧落点不一致）
+            Err(e) => log::warn!("[sync-runtime] 同步密码缓存清除失败: {e}"),
         }
     }
 }
@@ -236,7 +237,7 @@ pub fn read_cached_sync_password() -> Option<String> {
         Ok(pw) => Some(pw),
         Err(keyring::Error::NoEntry) => None,
         Err(e) => {
-            eprintln!("[sync-runtime] 同步密码缓存读取失败: {e}");
+            log::warn!("[sync-runtime] 同步密码缓存读取失败: {e}");
             None
         }
     }

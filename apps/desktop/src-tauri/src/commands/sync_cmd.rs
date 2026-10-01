@@ -251,7 +251,9 @@ fn write_config_file(input: &SyncConfigInput, engine: &str) -> Result<(), String
         storage
             .save_with_plaintext_fallback("sync_config", &cfg)
             .map_err(|e| {
-                eprintln!("[sync-cmd] 配置文件写入失败（DB 已保存）: {e}");
+                // F71：同步域日志统一走 log 宏（原 eprintln! 只进 stderr，
+                // 与 core 侧 log::warn! 的落点/格式不一致，排障时两处找）
+                log::warn!("[sync-cmd] 配置文件写入失败（DB 已保存）: {e}");
                 format!("[other] 配置文件写入失败: {e}")
             })?;
     }

@@ -162,7 +162,9 @@ pub async fn sync_crypto_change_password(
         // 回滚本机 meta 到旧密码（改密内部会重新包装/派生，回滚即恢复旧 Key）
         let rollback = svc.change_sync_password(&new_password, &old_password);
         if let Err(rb) = rollback {
-            eprintln!(
+            // F71：本机与云端 Key 失配属需人工干预的严重态，用 error 级
+            // （原 eprintln! 只进 stderr，落不到配置的日志文件里）
+            log::error!(
                 "[sync-crypto] v2 改密回滚失败（本机与云端 Key 可能不一致，\
                  建议在恢复页「以本机为准」重置云端）: {rb}"
             );
@@ -284,7 +286,8 @@ pub async fn sync_crypto_restore_session(app: AppHandle) -> Result<bool, String>
             Ok(true)
         }
         Err(e) => {
-            eprintln!("[sync-crypto] 会话恢复失败（缓存密码可能已失效）: {e}");
+            // F71：缓存密码失效属预期内自愈路径（清缓存后要求重新输入），warn 级
+            log::warn!("[sync-crypto] 会话恢复失败（缓存密码可能已失效）: {e}");
             sync_runtime::clear_cached_sync_password();
             Ok(false)
         }

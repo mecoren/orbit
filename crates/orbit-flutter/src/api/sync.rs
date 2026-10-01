@@ -852,6 +852,11 @@ pub async fn sync_crypto_change_password(
     {
         // 回滚本机密码（恢复旧 Key 与云端一致）
         if let Err(rb) = svc.change_sync_password(&new_password, &old_password) {
+            // F71：此处**刻意**保留 eprintln!，不要改成 log::* ——
+            // 移动端（本 crate）全程没有安装任何 logger（无 android_logger / OSLog /
+            // env_logger 初始化点），`log::warn!` 会静默丢弃；stderr 反而是 debug
+            // 构建下唯一可见的通道。桌面端同一条日志在 sync_crypto_cmd.rs 里用的是
+            // log::error!（Tauri 的 tauri_plugin_log 装了 logger），两端口径差异即源于此。
             eprintln!("[sync-crypto] v2 改密回滚失败: {rb}");
         } else {
             attach_password_to_runtime(&old_password);
