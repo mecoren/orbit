@@ -88,10 +88,24 @@ pub fn list_backups(backup_dir: &Path) -> FullSyncBackupResult<Vec<BackupEntry>>
 }
 
 /// 删除指定备份文件
+///
+/// F80（2026-10-01 第六轮）：删除前校验文件名必须符合备份命名规范——
+/// 此前路径未约束即 `remove_file`，上游（UI/配置的 local_path 之外的调用方）
+/// 传错路径会删掉任意文件。`keep_latest_backup` 既有同款双重检查。
 pub fn delete_backup(file_path: &Path) -> FullSyncBackupResult<()> {
     if !file_path.exists() {
         return Err(FullSyncBackupError::Other(format!(
             "文件不存在: {}",
+            file_path.display()
+        )));
+    }
+    let name = file_path
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or_default();
+    if !is_backup_filename(name) {
+        return Err(FullSyncBackupError::Other(format!(
+            "路径不是备份文件（须匹配 backup*.orfullsync 命名规范）: {}",
             file_path.display()
         )));
     }

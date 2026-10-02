@@ -52,6 +52,9 @@ pub struct SyncConfigInput {
     /// 请求超时秒数；0 = 默认 30
     #[serde(default = "default_timeout")]
     pub timeout_seconds: i64,
+    /// F80（2026-10-01 第六轮）：S3 STS 会话令牌（空 = 沿用已存令牌）
+    #[serde(default)]
+    pub session_token: String,
 }
 
 fn default_base_path() -> String {
@@ -81,6 +84,8 @@ pub struct SyncConfigView {
     pub sync_on_change: bool,
     pub skip_tls_verify: bool,
     pub timeout_seconds: i64,
+    /// 打码：仅提示已设置（F80）
+    pub session_token_set: bool,
     pub last_synced_at: Option<i64>,
 }
 
@@ -100,6 +105,7 @@ impl SyncConfigView {
             sync_on_change: r.sync_on_change != 0,
             skip_tls_verify: r.skip_tls_verify != 0,
             timeout_seconds: if r.timeout == 0 { 30 } else { r.timeout },
+            session_token_set: !r.session_token.is_empty(),
             last_synced_at: r.last_synced_at,
         }
     }
@@ -188,6 +194,15 @@ pub async fn sync_config_save(
         concurrent_reqs: 8,
         timeout: input.timeout_seconds.clamp(0, 600),
         skip_tls_verify: if input.skip_tls_verify { 1 } else { 0 },
+        // F80：令牌留空且已有配置 → 沿用原令牌（前端不回显）
+        session_token: if !input.session_token.is_empty() {
+            input.session_token.clone()
+        } else {
+            existing
+                .as_ref()
+                .map(|r| r.session_token.clone())
+                .unwrap_or_default()
+        },
         targets: "todo".to_string(),
         local_path: None,
         schedule_type: "interval".to_string(),
@@ -240,6 +255,7 @@ fn write_config_file(input: &SyncConfigInput, engine: &str) -> Result<(), String
                 "bucket": input.bucket.trim(),
                 "access_key_id": input.username,
                 "secret_access_key": input.password,
+                "session_token": input.session_token,
                 "base_path": input.base_path.trim(),
             },
             "interval_minutes": input.interval_minutes,
@@ -301,6 +317,7 @@ pub async fn sync_test_connection(app: AppHandle, input: SyncConfigInput) -> Res
         device_name: "test".to_string(),
         timeout_secs: input.timeout_seconds.max(0) as u64,
         skip_tls_verify: input.skip_tls_verify,
+        session_token: input.session_token.clone(),
     };
     orbit_core::sync::engine::validate_config(&config).map_err(|e| format!("[config] {e}"))?;
     let adapter =

@@ -405,6 +405,7 @@ pub fn engine_config_from_record(record: &SyncConfigRecord) -> Option<EngineSync
         device_name: device_id,
         timeout_secs: record.timeout.max(0) as u64,
         skip_tls_verify: record.skip_tls_verify != 0,
+        session_token: record.session_token.clone(),
     })
 }
 

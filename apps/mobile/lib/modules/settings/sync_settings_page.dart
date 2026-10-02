@@ -54,6 +54,8 @@ class _SyncSettingsPageState extends ConsumerState<SyncSettingsPage> {
   late final _regionController = TextEditingController();
   late final _usernameController = TextEditingController();
   late final _passwordController = TextEditingController();
+  // F80：S3 STS 会话令牌（留空 = 沿用已存；后端不回显令牌本身）
+  late final _sessionTokenController = TextEditingController();
   late final _basePathController = TextEditingController(text: 'orbit');
   int _intervalMin = 60;
   bool _autoEnabled = true;
@@ -80,6 +82,7 @@ class _SyncSettingsPageState extends ConsumerState<SyncSettingsPage> {
     _regionController.dispose();
     _usernameController.dispose();
     _passwordController.dispose();
+    _sessionTokenController.dispose();
     _basePathController.dispose();
     _timeoutController.dispose();
     super.dispose();
@@ -149,6 +152,8 @@ class _SyncSettingsPageState extends ConsumerState<SyncSettingsPage> {
         'sync_on_change': _onChange,
         'skip_tls_verify': _skipTls,
         'timeout_seconds': int.tryParse(_timeoutController.text) ?? 30,
+        // F80：留空沿用已存令牌（与密码同语义）
+        'session_token': _engine == 's3' ? _sessionTokenController.text : '',
       };
 
   Future<void> _testConnection() async {
@@ -397,6 +402,18 @@ class _SyncSettingsPageState extends ConsumerState<SyncSettingsPage> {
             hintText: _config?.passwordSet == true ? '已保存（修改请重新输入）' : null,
           ),
         ),
+        if (isS3) ...[
+          const SizedBox(height: AppDimens.space12),
+          TextFormField(
+            controller: _sessionTokenController,
+            obscureText: true,
+            style: TextStyle(fontSize: 15, color: colors.bodyText),
+            decoration: InputDecoration(
+              labelText: '会话令牌（STS 临时凭据专用）',
+              hintText: _config?.sessionTokenSet == true ? '已设置，留空沿用' : null,
+            ),
+          ),
+        ],
         const SizedBox(height: AppDimens.space12),
         TextFormField(
           controller: _basePathController,

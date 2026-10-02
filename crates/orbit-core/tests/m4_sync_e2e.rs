@@ -49,6 +49,7 @@ fn sync_config(endpoint: &str, device_id: &str) -> orbit_core::sync::engine::Syn
         device_name: device_id.into(),
         timeout_secs: 15,
         skip_tls_verify: false,
+        session_token: String::new(),
     }
 }
 

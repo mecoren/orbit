@@ -62,11 +62,11 @@ impl SyncConfigRepo {
                     protocol, endpoint, bucket, region, path, device_id, credential,
                     encryption_key_id, merge_strategy, sync_mode, max_update_age_hours,
                     is_encrypted, is_active, is_auto_sync, sync_interval, sync_on_change,
-                    concurrent_reqs, timeout, skip_tls_verify,
+                    concurrent_reqs, timeout, skip_tls_verify, session_token,
                     created_at, updated_at, version, targets, local_path,
                     schedule_type, schedule_time, schedule_weekday, sync_scope,
                     full_sync_interval, history_keep_count, notify_progress
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 RETURNING *",
             )
             .bind(&input.protocol)
@@ -88,6 +88,7 @@ impl SyncConfigRepo {
             .bind(input.concurrent_reqs)
             .bind(input.timeout)
             .bind(input.skip_tls_verify)
+            .bind(&input.session_token)
             .bind(now)
             .bind(now)
             .bind(&input.targets)
@@ -111,7 +112,7 @@ impl SyncConfigRepo {
                     merge_strategy = ?, sync_mode = ?, max_update_age_hours = ?,
                     is_encrypted = ?, is_active = ?, is_auto_sync = ?,
                     sync_interval = ?, sync_on_change = ?, concurrent_reqs = ?,
-                    timeout = ?, skip_tls_verify = ?, targets = ?, local_path = ?,
+                    timeout = ?, skip_tls_verify = ?, session_token = ?, targets = ?, local_path = ?,
                     schedule_type = ?, schedule_time = ?, schedule_weekday = ?,
                     sync_scope = ?, full_sync_interval = ?, history_keep_count = ?,
                     notify_progress = ?, updated_at = ?, version = version + 1
@@ -137,6 +138,7 @@ impl SyncConfigRepo {
                 .bind(input.concurrent_reqs)
                 .bind(input.timeout)
                 .bind(input.skip_tls_verify)
+                .bind(&input.session_token)
                 .bind(&input.targets)
                 .bind(input.local_path.as_deref())
                 .bind(&input.schedule_type)

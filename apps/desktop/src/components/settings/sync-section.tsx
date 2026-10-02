@@ -182,6 +182,8 @@ function ConnectionCard() {
   const [onChange, setOnChange] = useState(false);
   const [skipTls, setSkipTls] = useState(false);
   const [timeoutSecs, setTimeoutSecs] = useState(30);
+  // F80：S3 STS 会话令牌（留空 = 沿用已存，后端不回显令牌本身）
+  const [sessionToken, setSessionToken] = useState("");
   const [busy, setBusy] = useState(false);
   const [testing, setTesting] = useState(false);
   // 断开前确认（断开只清本机配置，不动本地数据与云端文件）
@@ -203,6 +205,7 @@ function ConnectionCard() {
         setOnChange(c.sync_on_change);
         setSkipTls(c.skip_tls_verify);
         setTimeoutSecs(c.timeout_seconds || 30);
+        // session_token 打码不下发，输入框保持空 = 保存时沿用已存令牌
       })
       .catch(() => {});
   }, []);
@@ -221,6 +224,8 @@ function ConnectionCard() {
     sync_on_change: onChange,
     skip_tls_verify: skipTls,
     timeout_seconds: timeoutSecs,
+    // F80：留空沿用已存令牌（与密码同语义）
+    session_token: sessionToken,
   });
 
   const handleTest = async () => {
@@ -387,6 +392,20 @@ function ConnectionCard() {
           <span className="text-xs text-muted-foreground">秒（5–600）</span>
         </div>
       </div>
+
+      {engine === "s3" && (
+        <div className="grid grid-cols-[80px_1fr] items-center gap-3">
+          <Label htmlFor="sync-session-token">会话令牌</Label>
+          <Input
+            id="sync-session-token"
+            type="password"
+            value={sessionToken}
+            onChange={(e) => setSessionToken(e.target.value)}
+            placeholder={config?.session_token_set ? "已设置，留空沿用" : "STS 临时凭据专用，长期密钥留空"}
+            autoComplete="off"
+          />
+        </div>
+      )}
 
       <div className="grid grid-cols-[80px_1fr] items-center gap-3">
         <Label htmlFor="sync-tls">跳过 TLS 验证</Label>

@@ -6,7 +6,7 @@
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `active_config`, `attach_password_to_runtime`, `attachments_dir`, `auto_sync_flag`, `base_path_normalized`, `bucket_trimmed`, `detach_password_from_runtime`, `engine_config_of_record`, `err_tagged_cloud`, `err_tagged_crypto`, `from_record`, `interval_clamped`, `parse_origin`, `password_str`, `region_trimmed`, `run_sync`, `runtime_crypto`, `runtime_engine`, `skip_tls_flag`, `sync_on_change_flag`, `timeout_clamped`, `username_str`, `with_runtime`
+// These functions are ignored because they are not marked as `pub`: `active_config`, `attach_password_to_runtime`, `attachments_dir`, `auto_sync_flag`, `base_path_normalized`, `bucket_trimmed`, `detach_password_from_runtime`, `engine_config_of_record`, `err_tagged_cloud`, `err_tagged_crypto`, `from_record`, `interval_clamped`, `parse_origin`, `password_str`, `region_trimmed`, `run_sync`, `runtime_crypto`, `runtime_engine`, `session_token_str`, `skip_tls_flag`, `sync_on_change_flag`, `timeout_clamped`, `username_str`, `with_runtime`
 // These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `SyncAction`, `SyncRuntime`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`, `from`
 
@@ -241,6 +241,9 @@ class SyncConfigInput {
   /// 请求超时秒数；0 = 默认 30
   final PlatformInt64? timeoutSeconds;
 
+  /// F80（2026-10-01 第六轮）：S3 STS 会话令牌（null/空 = 沿用已存令牌）
+  final String? sessionToken;
+
   const SyncConfigInput({
     required this.engine,
     required this.endpoint,
@@ -254,6 +257,7 @@ class SyncConfigInput {
     this.syncOnChange,
     this.skipTlsVerify,
     this.timeoutSeconds,
+    this.sessionToken,
   });
 
   @override
@@ -269,7 +273,8 @@ class SyncConfigInput {
       autoSyncEnabled.hashCode ^
       syncOnChange.hashCode ^
       skipTlsVerify.hashCode ^
-      timeoutSeconds.hashCode;
+      timeoutSeconds.hashCode ^
+      sessionToken.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -287,7 +292,8 @@ class SyncConfigInput {
           autoSyncEnabled == other.autoSyncEnabled &&
           syncOnChange == other.syncOnChange &&
           skipTlsVerify == other.skipTlsVerify &&
-          timeoutSeconds == other.timeoutSeconds;
+          timeoutSeconds == other.timeoutSeconds &&
+          sessionToken == other.sessionToken;
 }
 
 /// 前端展示用配置视图（凭据打码返回；镜像桌面 sync_cmd::SyncConfigView）
@@ -307,6 +313,9 @@ class SyncConfigView {
   final bool syncOnChange;
   final bool skipTlsVerify;
   final PlatformInt64 timeoutSeconds;
+
+  /// 打码：仅提示已设置（F80）
+  final bool sessionTokenSet;
   final PlatformInt64? lastSyncedAt;
 
   const SyncConfigView({
@@ -323,6 +332,7 @@ class SyncConfigView {
     required this.syncOnChange,
     required this.skipTlsVerify,
     required this.timeoutSeconds,
+    required this.sessionTokenSet,
     this.lastSyncedAt,
   });
 
@@ -341,6 +351,7 @@ class SyncConfigView {
       syncOnChange.hashCode ^
       skipTlsVerify.hashCode ^
       timeoutSeconds.hashCode ^
+      sessionTokenSet.hashCode ^
       lastSyncedAt.hashCode;
 
   @override
@@ -361,6 +372,7 @@ class SyncConfigView {
           syncOnChange == other.syncOnChange &&
           skipTlsVerify == other.skipTlsVerify &&
           timeoutSeconds == other.timeoutSeconds &&
+          sessionTokenSet == other.sessionTokenSet &&
           lastSyncedAt == other.lastSyncedAt;
 }
 

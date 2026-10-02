@@ -14,6 +14,38 @@ use tauri::{AppHandle, State};
 use crate::AppState;
 use crate::commands::data_dir::resolve_app_data_dir;
 
+/// F80（2026-10-01 第六轮）：解锁/初始化解出的 DB Key hex 的**进程内暂存区**。
+///
+/// key 不再作为命令返回值穿过 webview（JS 内存可被扩展/注入脚本旁观，
+/// 堆转储可导出），改为：master_auth_init / master_auth_unlock 解出后存入
+/// 本状态，db_init_encrypted / db_migrate_to_encrypted 从本状态取用——
+/// 前端只编排命令顺序，全程不经手密钥材料。消费即取走（take），
+/// db_migrate_to_encrypted 是例外（迁移后 db_init_encrypted 还要用同一把，
+/// 见其注释）。
+pub struct PendingDbKey(pub std::sync::Mutex<Option<String>>);
+
+impl PendingDbKey {
+    pub fn put(&self, hex: String) {
+        *self.0.lock().unwrap() = Some(hex);
+    }
+
+    pub fn take(&self) -> Result<String, String> {
+        self.0
+            .lock()
+            .unwrap()
+            .take()
+            .ok_or_else(|| "[not_unlocked] 密钥未就绪：请先完成解锁或初始化".to_string())
+    }
+
+    pub fn peek(&self) -> Result<String, String> {
+        self.0
+            .lock()
+            .unwrap()
+            .clone()
+            .ok_or_else(|| "[not_unlocked] 密钥未就绪：请先完成解锁或初始化".to_string())
+    }
+}
+
 // ==================== 通用加密工具 ====================
 
 /// 桥接探活：验证前端 invoke -> Rust -> orbit_core 通路
@@ -52,9 +84,14 @@ pub async fn master_auth_has(app: AppHandle) -> Result<bool, String> {
 /// 初始化主密码（首次设置）
 ///
 /// 生成 salt + DB Key，持久化元数据到 master_auth.json。
-/// 返回 db_key_hex 供前端调用 db_init_encrypted。
+/// F80：DB Key hex 存入进程内 [PendingDbKey]（不再返回给 webview），
+/// 前端随后直接调 db_init_encrypted / db_migrate_to_encrypted 取用。
 #[tauri::command]
-pub async fn master_auth_init(app: AppHandle, password: String) -> Result<String, String> {
+pub async fn master_auth_init(
+    app: AppHandle,
+    password: String,
+    pending: State<'_, PendingDbKey>,
+) -> Result<(), String> {
     let dir = resolve_app_data_dir(&app)?;
 
     // 已设置则拒绝重复初始化
@@ -67,14 +104,20 @@ pub async fn master_auth_init(app: AppHandle, password: String) -> Result<String
     let (meta, db_key) = init_master_auth(&password).map_err(|e| e.to_string())?;
     lifecycle::save_master_auth(&dir, &meta).map_err(|e| e.to_string())?;
 
-    Ok(db_key_to_hex(&db_key))
+    pending.put(db_key_to_hex(&db_key));
+    Ok(())
 }
 
 /// 解锁主密码
 ///
-/// 验证密码并解密 DB Key。成功返回 db_key_hex，前端用它调用 db_init_encrypted。
+/// 验证密码并解密 DB Key。F80：解出的 hex 存入进程内 [PendingDbKey]，
+/// 不再返回给 webview；前端随后直接调 db_init_encrypted。
 #[tauri::command]
-pub async fn master_auth_unlock(app: AppHandle, password: String) -> Result<String, String> {
+pub async fn master_auth_unlock(
+    app: AppHandle,
+    password: String,
+    pending: State<'_, PendingDbKey>,
+) -> Result<(), String> {
     let dir = resolve_app_data_dir(&app)?;
 
     let meta = lifecycle::load_master_auth(&dir)
@@ -90,7 +133,8 @@ pub async fn master_auth_unlock(app: AppHandle, password: String) -> Result<Stri
         lifecycle::save_master_auth(&dir, &new_meta).map_err(|e| e.to_string())?;
     }
 
-    Ok(db_key_to_hex(&db_key))
+    pending.put(db_key_to_hex(&db_key));
+    Ok(())
 }
 
 /// 仅验证主密码是否正确（不解锁，不返回 db_key）

@@ -15,7 +15,9 @@ use tauri::{AppHandle, Emitter, Manager};
 use tokio::sync::broadcast::error::RecvError;
 
 use crate::AppState;
+use crate::commands::crypto_cmd::PendingDbKey;
 use crate::commands::data_dir::resolve_app_data_dir;
+use tauri::State;
 
 /// 初始化明文数据库（未设置主密码时使用）
 ///
@@ -46,15 +48,23 @@ pub async fn db_init_plaintext(app: AppHandle) -> Result<(), String> {
 
 /// 初始化加密数据库（已解锁主密码后使用）
 ///
-/// 使用 master_auth_unlock 返回的 db_key_hex 打开 SQLCipher 加密数据库。
-/// hex 格式 key 会被转换为 SQLCipher 的 `x'...'` 格式。
+/// 打开 SQLCipher 加密数据库。
+///
+/// F80：不再从前端接收 db_key_hex——key 由 master_auth_unlock /
+/// master_auth_init 解出后存入进程内 [PendingDbKey]，本命令取走（take）并
+/// 转换为 SQLCipher 的 `x'...'` 格式，密钥材料全程不过 webview。
 #[tauri::command]
-pub async fn db_init_encrypted(app: AppHandle, db_key_hex: String) -> Result<(), String> {
+pub async fn db_init_encrypted(
+    app: AppHandle,
+    pending: State<'_, PendingDbKey>,
+) -> Result<(), String> {
     // 幂等守卫：同 db_init_plaintext。key 正确性已由解锁流程
     // （master_auth_unlock 验密）保证，state 就绪即视为目标库已打开。
     if app.try_state::<AppState>().is_some() {
         return Ok(());
     }
+
+    let db_key_hex = pending.take()?;
 
     let dir = resolve_app_data_dir(&app)?;
     let db_path = orbit_core::db::lifecycle::db_path(&dir);
@@ -210,8 +220,14 @@ pub async fn db_get_device_id() -> Result<String, String> {
 ///
 /// 流程：sqlcipher_export 到加密临时文件 -> 关闭旧连接池 -> 文件替换 -> 移除 AppState。
 /// 前端随后调用 master_auth_init 持久化 meta（应先行），再 db_init_encrypted 重开。
+/// F80：key 从 [PendingDbKey] 读取（peek 不取走——迁移后 db_init_encrypted
+/// 还要用同一把重开新库）。
 #[tauri::command]
-pub async fn db_migrate_to_encrypted(app: AppHandle, db_key_hex: String) -> Result<(), String> {
+pub async fn db_migrate_to_encrypted(
+    app: AppHandle,
+    pending: State<'_, PendingDbKey>,
+) -> Result<(), String> {
+    let db_key_hex = pending.peek()?;
     let pool = app
         .try_state::<AppState>()
         .ok_or_else(|| "数据库未初始化".to_string())?

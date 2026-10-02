@@ -39,6 +39,7 @@ fn webdav_config(cloud: &FakeCloud, device: &str) -> SyncConfig {
         device_name: device.into(),
         timeout_secs: 15,
         skip_tls_verify: false,
+        session_token: String::new(),
     }
 }
 

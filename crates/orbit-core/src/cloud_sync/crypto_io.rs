@@ -63,14 +63,19 @@ const ZSTD_LEVEL: i32 = 3;
 /// nonce 采用**确定性派生**：`SHA256(data_key ‖ SHA256(plaintext) ‖ len) 前 12 字节`。
 /// 同一 (key, plaintext) 永远产生同一密文——这是 multipart 分片上传断点续传
 /// 的前提（S4，2026-09-14）：重试会话中已上传的分片与新会话重加密的分片
-/// 字节一致，才能跳过重传。安全性：AES-GCM 的 nonce 唯一性要求是
-/// 「同 key 下 nonce 不重复」——本派生下不同 plaintext 的 nonce 碰撞
+/// 字节一致，才能跳过重传。
+///
+/// 安全性（F80/N36 口径对齐，2026-10-01 第六轮）：AES-GCM 的 nonce 唯一性
+/// 要求是「同 key 下 nonce 不重复」——本派生下不同 plaintext 的 nonce 碰撞
 /// 等价于 SHA-256 碰撞（第二原像），且输入含密文外部不可得的 data_key，
-/// 攻击者无法构造碰撞对（长度扩展攻击对 SHA-256 不可行，且攻击者缺
-/// key 前缀）。SIV（RFC 5297）/AES-GCM-SIV 是该构造的正规化形式，
-/// 语义相同：用「明文+key 的哈希」做 nonce 的合成 IV。格式版本仍为
-/// 0x01（随机/确定性 nonce 产出的密文均可被现有 decrypt 解开，
-/// 不构成不兼容变更）。
+/// 攻击者无法构造碰撞对。**注意有效熵是 48-bit 而非 96-bit**：最终哈希取的
+/// 是 hex 字符串的「前 12 字节」= 12 个 ASCII hex 字符，生日界约 2^24——
+/// 同步 payload 量级下可用，但不得误述为「96-bit 余量充足」（详见
+/// [`derive_deterministic_nonce`] 的口径澄清；存量密文按此格式落盘，
+/// 改派生宽度属格式演进，须走版本门禁）。SIV（RFC 5297）/AES-GCM-SIV
+/// 是该构造的正规化形式，语义相同：用「明文+key 的哈希」做 nonce 的合成
+/// IV。格式版本仍为 0x01（随机/确定性 nonce 产出的密文均可被现有 decrypt
+/// 解开，不构成不兼容变更）。
 pub fn encrypt_payload(plaintext: &[u8], data_key: &[u8]) -> Result<Vec<u8>, CloudSyncError> {
     encrypt_payload_at(plaintext, data_key, None)
 }

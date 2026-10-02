@@ -25,7 +25,7 @@ import {
  *
  * checking → masterAuthHas()
  *   ├─ false → dbInitPlaintext() → ready（免密模式）
- *   └─ true  → unlock → masterAuthUnlock(pw) → dbInitEncrypted(hex) → ready
+ *   └─ true  → unlock → masterAuthUnlock(pw)（key 留 Rust 侧）→ dbInitEncrypted() → ready
  *
  * DB 就绪后写入进程级 device_id（generic_repo 写操作自动填充依赖此值）。
  */
@@ -119,8 +119,9 @@ export default function App() {
     })();
   }, []);
 
-  const handleUnlocked = async (dbKeyHex: string) => {
-    await dbInitEncrypted(dbKeyHex);
+  // F80：key 留在 Rust 侧（PendingDbKey），解锁成功后无需传参
+  const handleUnlocked = async () => {
+    await dbInitEncrypted();
     await ensureDeviceId();
     setBoot("ready");
   };

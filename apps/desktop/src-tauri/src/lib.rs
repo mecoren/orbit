@@ -190,6 +190,11 @@ pub fn run() {
             // M3 同步域：manage 单例运行时 + 注册全局加密配置存储（钥匙串 CEK）+
             // 启动定时同步守护（60s tick，DB/配置/解锁三前置就绪才触发）
             _app.manage(SyncRuntime::default());
+            // F80：DB Key hex 进程内暂存区（解锁/初始化解出 → db_init_* 取用，
+            // 密钥材料不穿过 webview）
+            _app.manage(commands::crypto_cmd::PendingDbKey(
+                std::sync::Mutex::new(None),
+            ));
             if let Err(e) = commands::sync_runtime::register_global_encrypted_storage(_app.handle())
             {
                 eprintln!("[sync-runtime] 加密配置存储注册失败（降级明文）: {e}");

@@ -52,7 +52,13 @@ pub async fn migrate_to_plaintext(pool: &SqlitePool, db_path: &Path) -> CoreResu
     // 无论成功失败都尝试 DETACH
     let _ = sqlx::query("DETACH DATABASE plain").execute(pool).await;
 
-    result?;
+    // F80（2026-10-01 第六轮）：导出失败必须清掉半成品 tmp——plain_tmp 是
+    // **整库明文副本**，残留在磁盘上等于加密库旁边躺一分明文。成功路径由
+    // finalize_migration rename 消费，不受影响。
+    if let Err(e) = result {
+        let _ = std::fs::remove_file(&tmp_path);
+        return Err(e.into());
+    }
 
     Ok(())
 }
@@ -121,7 +127,11 @@ pub async fn migrate_to_encrypted(
 
     let _ = sqlx::query("DETACH DATABASE enc").execute(pool).await;
 
-    result?;
+    // F80：同 plain_tmp——失败清理半成品 enc_tmp（不留可被 ATTACH 冲突的旧文件）
+    if let Err(e) = result {
+        let _ = std::fs::remove_file(&tmp_path);
+        return Err(e.into());
+    }
 
     Ok(())
 }

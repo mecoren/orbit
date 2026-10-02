@@ -64,24 +64,25 @@ export async function masterAuthHas(): Promise<boolean> {
  * 初始化主密码（首次设置）
  *
  * 生成 salt + DB Key，持久化到 master_auth.json。
- * 返回 db_key_hex 供 dbInitEncrypted() 使用。
+ * F80：DB Key hex 不再返回给 webview——Rust 侧暂存（PendingDbKey），
+ * dbInitEncrypted / dbMigrateToEncrypted 直接从进程内状态取用。
  *
- * 典型流程：用户首次设置开屏密码 → masterAuthInit(pw) → dbInitEncrypted(dbKeyHex)
+ * 典型流程：用户首次设置开屏密码 → masterAuthInit(pw) → dbMigrateToEncrypted() → dbInitEncrypted()
  */
-export async function masterAuthInit(password: string): Promise<string> {
-  return invoke<string>("master_auth_init", { password });
+export async function masterAuthInit(password: string): Promise<void> {
+  return invoke<void>("master_auth_init", { password });
 }
 
 /**
  * 解锁主密码
  *
- * 验证密码并解密 DB Key。成功返回 db_key_hex。
+ * 验证密码并解密 DB Key。F80：解出的 hex 不再返回给 webview，
+ * Rust 侧暂存（PendingDbKey），随后 dbInitEncrypted() 直接取用。
  *
- * 典型流程：masterAuthUnlock(pw) → dbInitEncrypted(dbKeyHex)
  * @throws 密码错误时抛出异常
  */
-export async function masterAuthUnlock(password: string): Promise<string> {
-  return invoke<string>("master_auth_unlock", { password });
+export async function masterAuthUnlock(password: string): Promise<void> {
+  return invoke<void>("master_auth_unlock", { password });
 }
 
 /**
@@ -133,10 +134,11 @@ export async function dbInitPlaintext(): Promise<void> {
 /**
  * 初始化加密数据库（已解锁主密码后使用）
  *
- * 使用 masterAuthUnlock 返回的 db_key_hex 打开 SQLCipher 加密数据库。
+ * F80：不接收 db_key_hex——Rust 侧从 PendingDbKey 暂存取用，
+ * 密钥材料全程不过 webview。
  */
-export async function dbInitEncrypted(dbKeyHex: string): Promise<void> {
-  return invoke<void>("db_init_encrypted", { dbKeyHex });
+export async function dbInitEncrypted(): Promise<void> {
+  return invoke<void>("db_init_encrypted");
 }
 
 /**
@@ -148,9 +150,10 @@ export async function dbIsReady(): Promise<boolean> {
   return invoke<boolean>("db_is_ready");
 }
 
-/** 明文→加密迁移（设置主密码场景；随后需 dbInitEncrypted 重开连接池） */
-export async function dbMigrateToEncrypted(dbKeyHex: string): Promise<void> {
-  return invoke<void>("db_migrate_to_encrypted", { dbKeyHex });
+/** 明文→加密迁移（设置主密码场景；随后需 dbInitEncrypted 重开连接池）。
+ * F80：key 从 Rust 侧暂存读取，不经过本函数参数。 */
+export async function dbMigrateToEncrypted(): Promise<void> {
+  return invoke<void>("db_migrate_to_encrypted");
 }
 
 /** 加密→明文迁移（清除主密码场景；随后需 dbInitPlaintext 重开连接池） */
@@ -582,6 +585,8 @@ export interface SyncConfigInput {
   skip_tls_verify?: boolean;
   /** 请求超时秒数；0 = 默认 30 */
   timeout_seconds?: number;
+  /** F80：S3 STS 会话令牌（空串/缺省 = 沿用已存令牌；WebDAV 忽略） */
+  session_token?: string;
 }
 export interface SyncConfigView {
   id: number;
@@ -597,6 +602,8 @@ export interface SyncConfigView {
   sync_on_change: boolean;
   skip_tls_verify: boolean;
   timeout_seconds: number;
+  /** F80：仅提示已设置（令牌本身打码不下发） */
+  session_token_set: boolean;
   last_synced_at: number | null;
 }
 

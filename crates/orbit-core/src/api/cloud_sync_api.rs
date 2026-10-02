@@ -834,6 +834,7 @@ mod tests {
             device_name: "dev-1".into(),
             timeout_secs: 5,
             skip_tls_verify: false,
+            session_token: String::new(),
         };
         let (raw, wrapped) = create_adapters(&config).unwrap();
         assert!(

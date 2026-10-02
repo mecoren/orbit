@@ -352,6 +352,7 @@ const mockSyncConfig = () => ({
   sync_on_change: false,
   skip_tls_verify: false,
   timeout_seconds: 30,
+  session_token_set: false,
   last_synced_at: syncState.lastSyncedAt,
 });
 

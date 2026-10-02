@@ -30,6 +30,9 @@ pub struct SyncConfigRecord {
     pub concurrent_reqs: i64,
     pub timeout: i64,
     pub skip_tls_verify: i64,
+    /// F80（2026-10-01 第六轮）：S3 STS 会话令牌（空 = 长期凭据）
+    #[serde(default)]
+    pub session_token: String,
     pub last_synced_at: Option<i64>,
     pub last_gc_at: Option<i64>,
     pub created_at: i64,
@@ -72,6 +75,9 @@ pub struct SyncConfigSaveInput {
     pub concurrent_reqs: i64,
     pub timeout: i64,
     pub skip_tls_verify: i64,
+    /// F80：S3 STS 会话令牌（空 = 长期凭据；WebDAV 忽略）
+    #[serde(default)]
+    pub session_token: String,
     pub targets: String,
     pub local_path: Option<String>,
     pub schedule_type: String,

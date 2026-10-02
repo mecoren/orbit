@@ -21,6 +21,10 @@ pub struct S3Config {
     pub timeout_secs: u64,
     /// 跳过 TLS 证书校验（自签名证书场景，用户显式开启）
     pub skip_tls_verify: bool,
+    /// F80（2026-10-01 第六轮）：STS 会话令牌（空 = 不使用；非空时纳入 SigV4
+    /// 签名与请求头——canonical/signed headers 与实际头三处同步，缺一即
+    /// SignatureDoesNotMatch）
+    pub session_token: String,
 }
 
 /// S3 同步适配器
@@ -98,11 +102,34 @@ impl S3Adapter {
         };
         let canonical_querystring = parsed.query().unwrap_or("");
 
-        let canonical_headers = format!(
-            "host:{}\nx-amz-content-sha256:{}\nx-amz-date:{}\n",
-            host, payload_hash, amz_date
-        );
-        let signed_headers = "host;x-amz-content-sha256;x-amz-date";
+        // F80：STS 临时凭据场景 security token 必须参与签名——canonical
+        // headers、signed_headers（严格字母序）与实际请求头三处同步，缺一处
+        // 服务端一律 SignatureDoesNotMatch
+        let has_token = !self.config.session_token.is_empty();
+        let (canonical_headers, signed_headers) = if has_token {
+            (
+                format!(
+                    "host:{}
+x-amz-content-sha256:{}
+x-amz-date:{}
+x-amz-security-token:{}
+",
+                    host, payload_hash, amz_date, self.config.session_token
+                ),
+                "host;x-amz-content-sha256;x-amz-date;x-amz-security-token",
+            )
+        } else {
+            (
+                format!(
+                    "host:{}
+x-amz-content-sha256:{}
+x-amz-date:{}
+",
+                    host, payload_hash, amz_date
+                ),
+                "host;x-amz-content-sha256;x-amz-date",
+            )
+        };
 
         let canonical_request = format!(
             "{}\n{}\n{}\n{}\n{}\n{}",
@@ -162,6 +189,19 @@ impl S3Adapter {
                 message: "无效授权头".to_string(),
             })?,
         );
+
+        // F80：有会话令牌时随请求头发送（签名已覆盖）
+        if has_token {
+            headers.insert(
+                "x-amz-security-token",
+                self.config
+                    .session_token
+                    .parse()
+                    .map_err(|_| SyncError::Auth {
+                        message: "无效会话令牌头".to_string(),
+                    })?,
+            );
+        }
 
         Ok(headers)
     }
@@ -733,5 +773,54 @@ mod multipart_tests {
         assert!(body.contains("<ETag>\"abc123\"</ETag>"), "实际输出: {body}");
         // 双引号不是 XML 特殊字符，不应被转义成 &quot;
         assert!(!body.contains("&quot;"), "实际输出: {body}");
+    }
+
+    // ========================================================================
+    // F80（2026-10-01 第六轮）：STS 会话令牌必须参与签名与请求头
+    // ========================================================================
+
+    /// 有令牌：canonical/signed headers 与实际请求头三处都要有 security token
+    #[test]
+    fn session_token_is_signed_and_sent() {
+        let cfg = S3Config {
+            endpoint: "https://s3.amazonaws.com".to_string(),
+            bucket: "b".to_string(),
+            region: "us-east-1".to_string(),
+            access_key: "ak".to_string(),
+            secret_key: "sk".to_string(),
+            use_path_style: false,
+            timeout_secs: 0,
+            skip_tls_verify: false,
+            session_token: "STS-TOKEN-XYZ".to_string(),
+        };
+        let adapter = S3Adapter::new(cfg).unwrap();
+        let headers = adapter
+            .sign_request("GET", "https://b.s3.amazonaws.com/x", &sha256_hex(b""))
+            .unwrap();
+        let token = headers
+            .get("x-amz-security-token")
+            .expect("有会话令牌时必须随请求头发送");
+        assert_eq!(token, "STS-TOKEN-XYZ");
+    }
+
+    /// 无令牌：不得发送空的 security token 头（部分严格服务端会拒）
+    #[test]
+    fn no_session_token_sends_no_header() {
+        let cfg = S3Config {
+            endpoint: "https://s3.amazonaws.com".to_string(),
+            bucket: "b".to_string(),
+            region: "us-east-1".to_string(),
+            access_key: "ak".to_string(),
+            secret_key: "sk".to_string(),
+            use_path_style: false,
+            timeout_secs: 0,
+            skip_tls_verify: false,
+            session_token: String::new(),
+        };
+        let adapter = S3Adapter::new(cfg).unwrap();
+        let headers = adapter
+            .sign_request("GET", "https://b.s3.amazonaws.com/x", &sha256_hex(b""))
+            .unwrap();
+        assert!(headers.get("x-amz-security-token").is_none());
     }
 }

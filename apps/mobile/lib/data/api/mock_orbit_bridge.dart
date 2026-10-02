@@ -1319,6 +1319,7 @@ class MockOrbitBridge implements OrbitBridge {
           syncOnChange: false,
           skipTlsVerify: false,
           timeoutSeconds: 30,
+          sessionTokenSet: false,
           lastSyncedAt: store.now() - 3600000,
         );
       });
@@ -1331,6 +1332,9 @@ class MockOrbitBridge implements OrbitBridge {
         store.lastSyncEngine = (input['engine'] as String?) ?? 'webdav';
         store.lastSyncUsername = (input['username'] as String?) ?? '';
         store.lastSyncPassword = (input['password'] as String?) ?? '';
+        // F80：令牌留空沿用已存
+        final token = (input['session_token'] as String?) ?? '';
+        if (token.isNotEmpty) store.lastSyncSessionToken = token;
         return SyncConfigView(
           id: 1,
           engine: (input['engine'] as String?) ?? 'webdav',
@@ -1345,6 +1349,10 @@ class MockOrbitBridge implements OrbitBridge {
           syncOnChange: (input['sync_on_change'] as bool?) ?? false,
           skipTlsVerify: (input['skip_tls_verify'] as bool?) ?? false,
           timeoutSeconds: (input['timeout_seconds'] as int?) ?? 30,
+          // F80：与 Rust 侧同口径——令牌留空沿用已存（mock 记忆最后一次保存值）
+          sessionTokenSet:
+              ((input['session_token'] as String?) ?? store.lastSyncSessionToken)
+                  .isNotEmpty,
           lastSyncedAt: null,
         );
       });

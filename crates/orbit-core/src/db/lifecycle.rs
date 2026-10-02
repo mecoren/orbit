@@ -221,8 +221,12 @@ mod tests {
         let dir = tmp.path();
         std::fs::write(master_auth_path(dir), "{ half written").unwrap();
 
-        let err = load_master_auth(dir).expect_err("损坏文件必须报错而非 Ok(None)");
-        let msg = err.to_string();
+        // F80：MasterAuthMeta 不再派生 Debug（防密钥材料入日志）——错误值改用
+        // inspect_err 侧信道断言，不把 Err 显式绑定成需要 Debug 的形式
+        let msg = load_master_auth(dir)
+            .err()
+            .expect("损坏文件必须报错而非 Ok(None)")
+            .to_string();
         assert!(msg.contains("损坏"), "错误信息应点明损坏: {msg}");
         assert!(msg.contains("留证"), "错误信息应带上留证路径: {msg}");
 
@@ -252,8 +256,10 @@ mod tests {
         let tmp = TempDir::new().unwrap();
         std::fs::write(master_auth_path(tmp.path()), [0xff, 0xfe, 0xfd]).unwrap();
 
-        let err = load_master_auth(tmp.path()).expect_err("非法 UTF-8 必须报错");
-        let msg = err.to_string();
+        let msg = load_master_auth(tmp.path())
+            .err()
+            .expect("非法 UTF-8 必须报错")
+            .to_string();
         assert!(msg.contains("损坏"), "应走损坏处置分支: {msg}");
         assert!(msg.contains("UTF-8"), "错误信息应点明编码问题: {msg}");
     }

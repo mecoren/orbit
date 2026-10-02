@@ -90,9 +90,10 @@ export function SecuritySection() {
     }
     setBusy(true);
     try {
-      const hex = await masterAuthInit(setupPw);
-      await dbMigrateToEncrypted(hex);
-      await dbInitEncrypted(hex);
+      // F80：key 不出 Rust 侧，前端只编排命令顺序
+      await masterAuthInit(setupPw);
+      await dbMigrateToEncrypted();
+      await dbInitEncrypted();
       setSetupDone(true);
       refreshStatus();
     } catch (err) {

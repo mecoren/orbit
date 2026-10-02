@@ -179,6 +179,7 @@ fn engine_config_of_record(
         device_name: device_id,
         timeout_secs: record.timeout.max(0) as u64,
         skip_tls_verify: record.skip_tls_verify != 0,
+        session_token: record.session_token.clone(),
     })
 }
 
@@ -231,6 +232,8 @@ pub struct SyncConfigInput {
     pub skip_tls_verify: Option<bool>,
     /// 请求超时秒数；0 = 默认 30
     pub timeout_seconds: Option<i64>,
+    /// F80（2026-10-01 第六轮）：S3 STS 会话令牌（null/空 = 沿用已存令牌）
+    pub session_token: Option<String>,
 }
 
 impl SyncConfigInput {
@@ -269,6 +272,9 @@ impl SyncConfigInput {
     fn skip_tls_flag(&self) -> i64 {
         i64::from(self.skip_tls_verify.unwrap_or(false))
     }
+    fn session_token_str(&self) -> &str {
+        self.session_token.as_deref().unwrap_or("")
+    }
 }
 
 /// 前端展示用配置视图（凭据打码返回；镜像桌面 sync_cmd::SyncConfigView）
@@ -288,6 +294,8 @@ pub struct SyncConfigView {
     pub sync_on_change: bool,
     pub skip_tls_verify: bool,
     pub timeout_seconds: i64,
+    /// 打码：仅提示已设置（F80）
+    pub session_token_set: bool,
     pub last_synced_at: Option<i64>,
 }
 
@@ -307,6 +315,7 @@ impl SyncConfigView {
             sync_on_change: r.sync_on_change != 0,
             skip_tls_verify: r.skip_tls_verify != 0,
             timeout_seconds: if r.timeout == 0 { 30 } else { r.timeout },
+            session_token_set: !r.session_token.is_empty(),
             last_synced_at: r.last_synced_at,
         }
     }
@@ -379,6 +388,15 @@ pub async fn sync_config_save(input: SyncConfigInput) -> Result<SyncConfigView, 
         concurrent_reqs: 8,
         timeout: input.timeout_clamped(),
         skip_tls_verify: input.skip_tls_flag(),
+        // F80：令牌留空且已有配置 → 沿用原令牌（前端不回显）
+        session_token: if !input.session_token_str().is_empty() {
+            input.session_token_str().to_string()
+        } else {
+            existing
+                .as_ref()
+                .map(|r| r.session_token.clone())
+                .unwrap_or_default()
+        },
         targets: "todo".to_string(),
         local_path: None,
         schedule_type: "interval".to_string(),
@@ -438,6 +456,7 @@ pub async fn sync_test_connection(input: SyncConfigInput) -> Result<u32, String>
         device_name: "test".to_string(),
         timeout_secs: input.timeout_seconds.unwrap_or(30).max(0) as u64,
         skip_tls_verify: input.skip_tls_verify.unwrap_or(false),
+        session_token: input.session_token_str().to_string(),
     };
     orbit_core::sync::engine::validate_config(&config).map_err(|e| format!("[config] {e}"))?;
     let adapter =

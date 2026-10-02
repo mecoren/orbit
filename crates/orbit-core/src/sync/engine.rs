@@ -33,6 +33,11 @@ pub struct SyncConfig {
     /// 跳过 TLS 证书校验（自签名证书场景）
     #[serde(default)]
     pub skip_tls_verify: bool,
+    /// F80（2026-10-01 第六轮）：S3 STS 临时凭据的会话令牌（空 = 不使用）。
+    /// 非空时签名纳入 `x-amz-security-token`（canonical/signed headers 与
+    /// 实际请求头同步）。WebDAV 忽略此字段。
+    #[serde(default)]
+    pub session_token: String,
 }
 
 /// 创建同步适配器
@@ -49,6 +54,7 @@ pub fn create_adapter(config: &SyncConfig) -> Result<Box<dyn SyncAdapter>, SyncE
                 use_path_style: infer_use_path_style(&config.endpoint),
                 timeout_secs: config.timeout_secs,
                 skip_tls_verify: config.skip_tls_verify,
+                session_token: config.session_token.clone(),
             };
             Ok(Box::new(S3Adapter::new(s3_config)?))
         }
@@ -71,7 +77,9 @@ pub fn create_adapter(config: &SyncConfig) -> Result<Box<dyn SyncAdapter>, SyncE
 
 /// 校验同步配置
 pub fn validate_config(config: &SyncConfig) -> Result<(), SyncError> {
-    if config.endpoint.is_empty() {
+    // F80：全空白（空格/换行/制表符）与空串等价拒绝——纯空白的 endpoint 拼进
+    // URL 产生的请求与服务端错误毫无关联，排查成本远高于配置期拦截
+    if config.endpoint.trim().is_empty() {
         return Err(SyncError::Config {
             field: "endpoint".to_string(),
             message: "endpoint 不能为空".to_string(),
@@ -119,6 +127,7 @@ mod tests {
             device_name: "Test".to_string(),
             timeout_secs: 0,
             skip_tls_verify: false,
+            session_token: String::new(),
         }
     }
 
@@ -136,12 +145,28 @@ mod tests {
             device_name: "Test".to_string(),
             timeout_secs: 0,
             skip_tls_verify: false,
+            session_token: String::new(),
         }
     }
 
     #[test]
     fn validate_config_accepts_valid_s3() {
         assert!(validate_config(&valid_s3_config()).is_ok());
+    }
+
+    /// F80：全空白 endpoint 与空串等价拒绝——纯空白拼进 URL 的报错与
+    /// 服务端无关，排查成本远高于配置期拦截
+    #[test]
+    fn validate_config_rejects_whitespace_only_endpoint() {
+        let mut c = valid_s3_config();
+        c.endpoint = "   	
+"
+        .to_string();
+        let err = validate_config(&c).err().expect("全空白 endpoint 必须被拒");
+        assert!(
+            err.to_string().contains("endpoint"),
+            "错误须指明字段: {err}"
+        );
     }
 
     #[test]

@@ -7548,6 +7548,7 @@ impl SseDecode for crate::api::sync::SyncConfigInput {
         let mut var_syncOnChange = <Option<bool>>::sse_decode(deserializer);
         let mut var_skipTlsVerify = <Option<bool>>::sse_decode(deserializer);
         let mut var_timeoutSeconds = <Option<i64>>::sse_decode(deserializer);
+        let mut var_sessionToken = <Option<String>>::sse_decode(deserializer);
         return crate::api::sync::SyncConfigInput {
             engine: var_engine,
             endpoint: var_endpoint,
@@ -7561,6 +7562,7 @@ impl SseDecode for crate::api::sync::SyncConfigInput {
             sync_on_change: var_syncOnChange,
             skip_tls_verify: var_skipTlsVerify,
             timeout_seconds: var_timeoutSeconds,
+            session_token: var_sessionToken,
         };
     }
 }
@@ -7581,6 +7583,7 @@ impl SseDecode for crate::api::sync::SyncConfigView {
         let mut var_syncOnChange = <bool>::sse_decode(deserializer);
         let mut var_skipTlsVerify = <bool>::sse_decode(deserializer);
         let mut var_timeoutSeconds = <i64>::sse_decode(deserializer);
+        let mut var_sessionTokenSet = <bool>::sse_decode(deserializer);
         let mut var_lastSyncedAt = <Option<i64>>::sse_decode(deserializer);
         return crate::api::sync::SyncConfigView {
             id: var_id,
@@ -7596,6 +7599,7 @@ impl SseDecode for crate::api::sync::SyncConfigView {
             sync_on_change: var_syncOnChange,
             skip_tls_verify: var_skipTlsVerify,
             timeout_seconds: var_timeoutSeconds,
+            session_token_set: var_sessionTokenSet,
             last_synced_at: var_lastSyncedAt,
         };
     }
@@ -9942,6 +9946,7 @@ impl flutter_rust_bridge::IntoDart for crate::api::sync::SyncConfigInput {
             self.sync_on_change.into_into_dart().into_dart(),
             self.skip_tls_verify.into_into_dart().into_dart(),
             self.timeout_seconds.into_into_dart().into_dart(),
+            self.session_token.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -9974,6 +9979,7 @@ impl flutter_rust_bridge::IntoDart for crate::api::sync::SyncConfigView {
             self.sync_on_change.into_into_dart().into_dart(),
             self.skip_tls_verify.into_into_dart().into_dart(),
             self.timeout_seconds.into_into_dart().into_dart(),
+            self.session_token_set.into_into_dart().into_dart(),
             self.last_synced_at.into_into_dart().into_dart(),
         ]
         .into_dart()
@@ -11940,6 +11946,7 @@ impl SseEncode for crate::api::sync::SyncConfigInput {
         <Option<bool>>::sse_encode(self.sync_on_change, serializer);
         <Option<bool>>::sse_encode(self.skip_tls_verify, serializer);
         <Option<i64>>::sse_encode(self.timeout_seconds, serializer);
+        <Option<String>>::sse_encode(self.session_token, serializer);
     }
 }
 
@@ -11959,6 +11966,7 @@ impl SseEncode for crate::api::sync::SyncConfigView {
         <bool>::sse_encode(self.sync_on_change, serializer);
         <bool>::sse_encode(self.skip_tls_verify, serializer);
         <i64>::sse_encode(self.timeout_seconds, serializer);
+        <bool>::sse_encode(self.session_token_set, serializer);
         <Option<i64>>::sse_encode(self.last_synced_at, serializer);
     }
 }

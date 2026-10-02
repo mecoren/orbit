@@ -39,6 +39,7 @@ class MockStore {
   String? lastSyncEngine;
   String lastSyncUsername = '';
   String lastSyncPassword = '';
+  String lastSyncSessionToken = '';
   bool syncPasswordSet = false;
   bool syncUnlocked = false;
   String syncPassword = '';

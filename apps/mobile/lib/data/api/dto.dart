@@ -842,6 +842,8 @@ class SyncConfigView {
   final bool syncOnChange;
   final bool skipTlsVerify;
   final int timeoutSeconds;
+  /// F80：仅提示已设置（令牌本身打码不下发）
+  final bool sessionTokenSet;
   final int? lastSyncedAt;
 
   const SyncConfigView({
@@ -858,6 +860,7 @@ class SyncConfigView {
     required this.syncOnChange,
     required this.skipTlsVerify,
     required this.timeoutSeconds,
+    this.sessionTokenSet = false,
     required this.lastSyncedAt,
   });
 
@@ -875,6 +878,7 @@ class SyncConfigView {
         syncOnChange: j['sync_on_change'] as bool,
         skipTlsVerify: j['skip_tls_verify'] as bool,
         timeoutSeconds: j['timeout_seconds'] as int,
+        sessionTokenSet: (j['session_token_set'] as bool?) ?? false,
         lastSyncedAt: j['last_synced_at'] as int?,
       );
 }

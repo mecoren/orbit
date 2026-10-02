@@ -12,7 +12,9 @@
 //! - 错误类型（`error`）
 //!
 //! 加密体系与 `sync_crypto_meta` / `master_auth` 完全一致：
-//! PBKDF2-HMAC-SHA256（200000 迭代，16B salt） + AES-256-GCM
+//! PBKDF2-HMAC-SHA256（迭代数 = `container::ITERATIONS`，引用
+//! `sync_crypto::service::ITERATIONS` 单一真值，16B salt） + AES-256-GCM。
+//! F80（2026-10-01 第六轮）：模块文档曾写死 200000，与 KDF 下限升级脱节。
 
 pub mod backup_naming;
 pub mod backup_prefs;

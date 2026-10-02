@@ -1,7 +1,7 @@
 /**
  * 解锁页 — 已设置主密码时的启动入口（03 文档 §四 流程 2b）。
  *
- * 输入主密码 → masterAuthUnlock 解出 db_key_hex → onUnlocked 回调
+ * 输入主密码 → masterAuthUnlock 验密解钥（key 留在 Rust 侧暂存）→ onUnlocked 回调
  * 由 App 执行 dbInitEncrypted 进入主界面。密码错误由 Rust 返回错误展示。
  */
 import { useState, type FormEvent } from "react";
@@ -12,8 +12,8 @@ import { Label } from "@/components/ui/label";
 import { masterAuthUnlock } from "@/lib/tauri";
 
 interface UnlockPageProps {
-  /** 解锁成功回调，携带 db_key_hex（App 据此调用 dbInitEncrypted） */
-  onUnlocked: (dbKeyHex: string) => void;
+  /** 解锁成功回调（key 已在 Rust 侧暂存，App 只需调用 dbInitEncrypted） */
+  onUnlocked: () => void;
 }
 
 export function UnlockPage({ onUnlocked }: UnlockPageProps) {
@@ -27,7 +27,8 @@ export function UnlockPage({ onUnlocked }: UnlockPageProps) {
     setLoading(true);
     setError(null);
     try {
-      onUnlocked(await masterAuthUnlock(password));
+      await masterAuthUnlock(password);
+      onUnlocked();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {

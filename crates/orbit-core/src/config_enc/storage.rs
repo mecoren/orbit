@@ -116,16 +116,23 @@ impl EncryptedConfigStorage {
         name: &str,
         value: &T,
     ) -> ConfigEncResult<()> {
-        if let Err(e @ ConfigEncError::CekUnavailable(_)) = self.save(name, value) {
-            // 安全降级事件须可观测（tauri-plugin-log 未接线前 eprintln 可见）；
-            // 只记错误摘要，不落配置内容（02 §九 日志脱敏红线）
-            eprintln!("[config_enc] {name} CEK 不可用，降级明文写入: {e}");
-            let path = self.app_data_dir.join(format!("{name}.json"));
-            let content = serde_json::to_vec_pretty(value)?;
-            crate::fs_util::write_atomic(&path, &content)?;
-            return Ok(());
+        // F80（2026-10-01 第六轮）：match 一次结果，Err(CekUnavailable) 才降级
+        // 明文——旧写法 `if let Err(..) = self.save(..) { .. }` 落空后**又无条件
+        // self.save(name, value)**：CEK 可用时同一份内容加密写两遍（双倍 IO 与
+        // 额外落盘），其他 Err 也会把同一失败操作盲目重试一遍。match 版本三个
+        // 分支各走一次：成功即返回 / CekUnavailable 降级 / 其余错误原样上抛。
+        match self.save(name, value) {
+            Err(e @ ConfigEncError::CekUnavailable(_)) => {
+                // 安全降级事件须可观测（tauri-plugin-log 未接线前 eprintln 可见）；
+                // 只记错误摘要，不落配置内容（02 §九 日志脱敏红线）
+                eprintln!("[config_enc] {name} CEK 不可用，降级明文写入: {e}");
+                let path = self.app_data_dir.join(format!("{name}.json"));
+                let content = serde_json::to_vec_pretty(value)?;
+                crate::fs_util::write_atomic(&path, &content)?;
+                Ok(())
+            }
+            other => other,
         }
-        self.save(name, value)
     }
 
     /// 删除 `.enc` 配置文件

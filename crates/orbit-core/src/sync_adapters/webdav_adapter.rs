@@ -46,6 +46,12 @@ pub struct WebDavAdapter {
 /// 产出不同密文 → sha256 不同 → 续传判定失败 → 清目录重传。
 #[derive(serde::Serialize, serde::Deserialize)]
 struct AssetPartsHead {
+    /// F80（2026-10-01 第六轮）：清单头版本（当前 1）。读侧拒绝高于 1 的版本
+    /// ——字段演进（如分片粒度/编码变更）时，旧客户端拿到新头会静默误解析成
+    /// 「清单不匹配 → 清目录重传」，明示版本才是可诊断的失败。旧头无此字段
+    /// → default 0 → 视为 v1 兼容读取。
+    #[serde(default)]
+    v: u8,
     total: usize,
     size: usize,
     sha256: String,
@@ -448,6 +454,7 @@ impl WebDavAdapter {
     ) -> Result<(), SyncError> {
         let total = encrypted.len().div_ceil(Self::PARTS_SIZE);
         let head = AssetPartsHead {
+            v: 1,
             total,
             size: encrypted.len(),
             sha256: crate::crypto::sha256::sha256_hex(encrypted),
@@ -608,6 +615,16 @@ impl WebDavAdapter {
                 message: format!("解析分片清单失败: {e}"),
                 retryable: false,
             })?;
+        // F80：版本门禁——新版本头的字段语义可能已变，静默续拼装=内容损坏
+        if head.v > 1 {
+            return Err(SyncError::Network {
+                message: format!(
+                    "分片清单版本 {} 高于本客户端支持的上限 1，请升级应用后重试",
+                    head.v
+                ),
+                retryable: false,
+            });
+        }
         // 不用 with_capacity(head.size)：head.json 是明文清单，size 由服务端
         // 提供，预分配会把「篡改一个数字」放大成本地分配风暴；拼装后与
         // head.size 不符本来就会被下面的校验拒掉
@@ -1027,14 +1044,13 @@ impl SyncAdapter for WebDavAdapter {
         // 重传）与 pull 活跃引用过滤漏拉，GC 也永远看不见它们（云端孤儿
         // 永不清理）。parts_root 与 assets_dir 同前缀（F23）。
         // list_all_files 过滤目录条目（is_collection），这里用专用 PROPFIND 取目录条目名
-        for hash in self
+        // F80（2026-10-01 第六轮）：不再逐条 `contains` 去重（Vec 探测 O(n)，
+        // 并集整体 O(n²)，万级附件卡顿）——函数尾部本就有 sort + dedup，
+        // 直接 extend 后统一去重即可（O(n log n)）。
+        let parts = self
             .list_parts_hashes(&parts_root_for_assets_dir(assets_dir))
-            .await?
-        {
-            if !hashes.contains(&hash) {
-                hashes.push(hash);
-            }
-        }
+            .await?;
+        hashes.extend(parts);
 
         // S30：dedup 只去相邻重复，先排序保证同名（多后缀并存）全去
         hashes.sort();
@@ -1740,6 +1756,7 @@ fn part_paths_are_derived_correctly() {
 #[test]
 fn parts_head_serializes_to_plain_json() {
     let head = AssetPartsHead {
+        v: 1,
         total: 3,
         size: 12_000_000,
         sha256: "deadbeef".to_string(),
@@ -1752,6 +1769,17 @@ fn parts_head_serializes_to_plain_json() {
     // 明文字段可断言：清单不含任何密钥材料
     assert!(json.contains("deadbeef"));
     assert!(!json.contains("key"));
+    // F80：版本字段随 JSON 落盘
+    assert!(json.contains("\"v\":1"), "版本字段必须序列化: {json}");
+}
+
+/// F80：旧版清单头（无 v 字段）兼容读取为 v0（≤1 放行）
+#[test]
+fn parts_head_legacy_without_version_field_parses() {
+    let parsed: AssetPartsHead =
+        serde_json::from_str(r#"{"total":3,"size":12000000,"sha256":"deadbeef"}"#)
+            .expect("旧头必须可解析（serde default）");
+    assert_eq!(parsed.v, 0);
 }
 
 /// 分片数学：8MiB 阈值 = 1×5MiB + 3MiB 尾片；12MiB = 2×5MiB + 2MiB

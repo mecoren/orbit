@@ -69,6 +69,12 @@ pub fn infer_use_path_style(endpoint: &str) -> bool {
 }
 
 /// 根据 endpoint 判断签名使用的 service 名称
+///
+/// F80（2026-10-01 第六轮）口径论证：SigV4 的 credential scope service 只有两类
+/// 取值——阿里云 OSS 要求 `oss`（P0-4），其余一切 S3 兼容实现（MinIO/Ceph/B2/
+/// R2/腾讯 COS 兼容层等）按 AWS 规范均接受 `s3`。故「非 OSS 即 s3」的判定是
+/// 完备的，扩展域名清单反而会在无真机验证的情况下引入 SignatureDoesNotMatch
+/// 风险（真服务端方言验证是 N53 盲区，不做臆测性扩展）。
 pub fn infer_service(endpoint: &str) -> String {
     let lower = endpoint.to_lowercase();
     if lower.contains("aliyuncs.com") {

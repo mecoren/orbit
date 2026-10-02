@@ -6902,8 +6902,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   SyncConfigInput dco_decode_sync_config_input(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 12)
-      throw Exception('unexpected arr length: expect 12 but see ${arr.length}');
+    if (arr.length != 13)
+      throw Exception('unexpected arr length: expect 13 but see ${arr.length}');
     return SyncConfigInput(
       engine: dco_decode_String(arr[0]),
       endpoint: dco_decode_String(arr[1]),
@@ -6917,6 +6917,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       syncOnChange: dco_decode_opt_box_autoadd_bool(arr[9]),
       skipTlsVerify: dco_decode_opt_box_autoadd_bool(arr[10]),
       timeoutSeconds: dco_decode_opt_box_autoadd_i_64(arr[11]),
+      sessionToken: dco_decode_opt_String(arr[12]),
     );
   }
 
@@ -6924,8 +6925,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   SyncConfigView dco_decode_sync_config_view(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 14)
-      throw Exception('unexpected arr length: expect 14 but see ${arr.length}');
+    if (arr.length != 15)
+      throw Exception('unexpected arr length: expect 15 but see ${arr.length}');
     return SyncConfigView(
       id: dco_decode_i_64(arr[0]),
       engine: dco_decode_String(arr[1]),
@@ -6940,7 +6941,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       syncOnChange: dco_decode_bool(arr[10]),
       skipTlsVerify: dco_decode_bool(arr[11]),
       timeoutSeconds: dco_decode_i_64(arr[12]),
-      lastSyncedAt: dco_decode_opt_box_autoadd_i_64(arr[13]),
+      sessionTokenSet: dco_decode_bool(arr[13]),
+      lastSyncedAt: dco_decode_opt_box_autoadd_i_64(arr[14]),
     );
   }
 
@@ -9201,6 +9203,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_syncOnChange = sse_decode_opt_box_autoadd_bool(deserializer);
     var var_skipTlsVerify = sse_decode_opt_box_autoadd_bool(deserializer);
     var var_timeoutSeconds = sse_decode_opt_box_autoadd_i_64(deserializer);
+    var var_sessionToken = sse_decode_opt_String(deserializer);
     return SyncConfigInput(
       engine: var_engine,
       endpoint: var_endpoint,
@@ -9214,6 +9217,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       syncOnChange: var_syncOnChange,
       skipTlsVerify: var_skipTlsVerify,
       timeoutSeconds: var_timeoutSeconds,
+      sessionToken: var_sessionToken,
     );
   }
 
@@ -9233,6 +9237,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_syncOnChange = sse_decode_bool(deserializer);
     var var_skipTlsVerify = sse_decode_bool(deserializer);
     var var_timeoutSeconds = sse_decode_i_64(deserializer);
+    var var_sessionTokenSet = sse_decode_bool(deserializer);
     var var_lastSyncedAt = sse_decode_opt_box_autoadd_i_64(deserializer);
     return SyncConfigView(
       id: var_id,
@@ -9248,6 +9253,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       syncOnChange: var_syncOnChange,
       skipTlsVerify: var_skipTlsVerify,
       timeoutSeconds: var_timeoutSeconds,
+      sessionTokenSet: var_sessionTokenSet,
       lastSyncedAt: var_lastSyncedAt,
     );
   }
@@ -11468,6 +11474,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_opt_box_autoadd_bool(self.syncOnChange, serializer);
     sse_encode_opt_box_autoadd_bool(self.skipTlsVerify, serializer);
     sse_encode_opt_box_autoadd_i_64(self.timeoutSeconds, serializer);
+    sse_encode_opt_String(self.sessionToken, serializer);
   }
 
   @protected
@@ -11489,6 +11496,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_bool(self.syncOnChange, serializer);
     sse_encode_bool(self.skipTlsVerify, serializer);
     sse_encode_i_64(self.timeoutSeconds, serializer);
+    sse_encode_bool(self.sessionTokenSet, serializer);
     sse_encode_opt_box_autoadd_i_64(self.lastSyncedAt, serializer);
   }
 

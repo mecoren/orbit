@@ -50,7 +50,10 @@ const NONCE_LEN: usize = 12;
 /// - v1（legacy）：`hash` 字段存储 derived_key 本身，文件泄露即可解出 DB Key
 /// - v2（当前）：`verify_hash` 字段存储 SHA-256(derived_key)，derived_key 仅内存存在
 ///   `verify_hash = None` 表示 v1 旧文件，首次成功解锁后自动升级为 v2
-#[derive(Debug, Clone, Serialize, Deserialize)]
+// F80（2026-10-01 第六轮）：不再派生 Debug——字段含包装后的 DB Key 与派生密钥
+//（v1 `hash`），日志/调试打印会把密钥材料泄进 log 与 core dump。结构体仅用于
+// 序列化落盘，人工排查场景不需要逐字段打印。
+#[derive(Clone, Serialize, Deserialize)]
 pub struct MasterAuthMeta {
     /// PBKDF2 salt（Base64）
     pub salt: String,

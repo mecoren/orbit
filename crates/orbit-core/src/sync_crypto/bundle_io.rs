@@ -127,13 +127,20 @@ pub async fn download_and_import_crypto_bundle(
 }
 
 /// 仅下载云端 `crypto/config`（不导入），用于比对/诊断（旧版，无 base_path 前缀）
+///
+/// F80（2026-10-01 第六轮）：实现与同族 API 的文档口径对齐——云端无
+/// crypto/config（404）返回 `Ok(None)` 而非 `Err(NotFound)`。此前实现直接
+/// 上抛 404，调用方想表达「云端没有」必须先按错误类型嗅探，与
+/// `download_and_import_*` 的 `Ok(None)` 语义（双 404 → 云端无配置）相悖。
 pub async fn download_crypto_bundle(
     adapter: &dyn SyncAdapter,
 ) -> Result<Option<SyncCryptoMeta>, SyncCryptoError> {
-    let bytes = adapter
-        .download(CRYPTO_CONFIG_PATH)
-        .await
-        .map_err(SyncCryptoError::from)?;
+    let bytes = match adapter.download(CRYPTO_CONFIG_PATH).await {
+        Ok(bytes) => bytes,
+        // 云端无 crypto/config：与 import 系列同口径返回 Ok(None)
+        Err(e) if is_not_found(&e) => return Ok(None),
+        Err(e) => return Err(SyncCryptoError::from(e)),
+    };
 
     let meta: SyncCryptoMeta =
         serde_json::from_slice(&bytes).map_err(|e| SyncCryptoError::Bundle {
