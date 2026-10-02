@@ -483,7 +483,7 @@ export function CalendarView({
                 sensors={sensors}
                 collisionDetection={pointerWithin}
                 onDragStart={handleDragStart}
-                onDragEnd={(e) => void handleDragEnd(e)}
+                onDragEnd={(e: DragEndEvent) => void handleDragEnd(e)}
               >
               <MonthCalendar
                 size="lg"
@@ -578,7 +578,7 @@ export function CalendarView({
                 sensors={sensors}
                 collisionDetection={pointerWithin}
                 onDragStart={handleDragStart}
-                onDragEnd={(e) => void handleDragEnd(e)}
+                onDragEnd={(e: DragEndEvent) => void handleDragEnd(e)}
               >
               <MonthCalendar
                 size="lg"

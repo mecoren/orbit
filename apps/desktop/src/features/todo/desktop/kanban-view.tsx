@@ -307,7 +307,7 @@ export function KanbanView({ tasks, projects, groupBy, labelsByTask, remindersBy
         sensors={sensors}
         collisionDetection={pointerWithin}
         onDragStart={handleDragStart}
-        onDragEnd={(e) => void handleDragEnd(e)}
+        onDragEnd={(e: DragEndEvent) => void handleDragEnd(e)}
       >
         <div className="flex h-full gap-4 p-4">
           {columns.map((col) => (

@@ -426,7 +426,7 @@ export function TaskListView({ tasks, projects, labelsByTask, remindersByTask, d
       sensors={sensors}
       collisionDetection={rowsFirstCollision}
       onDragStart={handleDragStart}
-      onDragEnd={(e) => void handleDragEnd(e)}
+      onDragEnd={(e: DragEndEvent) => void handleDragEnd(e)}
       onDragCancel={() => setDraggingId(null)}
     >
       <div ref={scrollRef} className="flex-1 overflow-y-auto">
