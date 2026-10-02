@@ -120,6 +120,54 @@
   因此另跑一次取得）；详细清单与逐项证据见
   `docs/同步功能第六轮全面盘查报告-2026-09-30.md` §八。
 
+### 云同步第六轮盘查：剩余 9 项全部收口（2026-10-01）
+
+至此第六轮报告 P1/P2/P3 全部编号清零。
+
+- **条件写先补齐父目录（P2/F56）**：WebDAV `upload_conditional` 与普通 `upload` 同口径先
+  `ensure_directory`。此前父目录链缺失时服务端回 409 AncestorsNotFound，被「带前置条件的
+  409 → 前置条件不满足」折叠分支折成 CAS 失败，调用方反复重读重试直至报「并发冲突重试 N 次」，
+  真实成因（目录缺失，可自愈）被掩盖，清单永不落盘。
+- **rekey「以本机为准」真正可达，旧 Key 密文残留清除（P2/F64）**：处置时以临时探针实证
+  「云端非空时 rekey 第一步读清单即报 KeyMismatch」——v2 改密 / v1→v2 迁移 / KeyMismatch
+  恢复三场景的覆盖此前根本不可达。现 force 轮容忍清单解不开（按空清单起步、并发令牌保留供
+  条件写覆盖）；force 轮索引不再以远端清单为底（「远端有、本机无」的桶条目指向 rekey 不重加密
+  的旧 Key 密文，保留即混合态）；`manifest.prev` 改存本版新 Key 密文（原样另存上一版 = 旧 Key
+  残留 + 无效回滚点）；rekey 后清理老版本遗留的根目录 `crypto/config`。
+- **密钥材料换手前 zeroize 原地覆写（P2/F66）**：引入 `zeroize`，`SyncCryptoService` 的
+  Data Key 与缓存密码在锁定/替换前显式擦除——直接 drop 只把内存标记回收，密钥字节仍留在
+  已释放内存里（堆复用 / core dump / swap 可旁观）。
+- **asset 三方法收口为 trait 默认实现（P3/F75）**：S3 与 WebDAV 各自一份逐字相同的拷贝删除，
+  `BasePathAdapter` 的覆盖保留（base_path 语义唯一落点）并补注。
+- **退出同步的外层超时随空闲窗走（P3/F76，移动端）**：`waitForIdleMs=15000` 的空闲等待窗此前
+  永远被恒 6s 超时截断，且超时路径直接跳过业务缓存失效——本轮已拉到的数据不刷新 UI。
+- **两端契约与 mock 口径对齐 core（P3/F77）**：`SyncResultJson` 两端补 `conflicts`（S28 冲突
+  裁决数，core 一直下发、两端壳都未解析）；mock 桥与 core 同口径填 `changedTables`；mock 同步
+  历史 `scope='all'` 对齐 core（三种增量类型并集而非「不过滤」），sync_type 真值修正（此前移动端
+  标签映射与 mock 种子用的都是臆测字符串，真数据永远落不到标签上）；桥层默认值双端对齐；移动端
+  on-change 推送遇密钥失配不再静默，弹恢复引导（对齐桌面端行为）。
+- **403 时钟偏差不再误导为密钥错（P3/F78）**：S3/OSS 的 `RequestTimeTooSkewed` /
+  `RequestExpired` 与真签名错共用 403，现按协议错误码分流为独立 `ClockSkew` 变体——文案直接
+  给出处置方向（校准系统时间），不再引导用户乱改 AccessKey / 重新解锁同步密钥。
+- **卫生批次 14 分项（P3/F80）**：DB Key hex 不再穿过 webview（Rust 进程内暂存，解锁/初始化/
+  迁移三命令改编排式调用）；`MasterAuthMeta` 去掉 `Debug` 派生（防包装密钥进日志与 core dump）；
+  数据库加密迁移失败清理半成品明文 tmp；备份删除前校验命名规范（防误传路径删任意文件）；
+  `download_crypto_bundle` 404 语义对齐同族 API；配置加密存储去掉无条件二次写；删除无调用方的
+  legacy 确定性 nonce 附件路径；分片清单头加版本字段（防新客户端头被旧客户端静默误解析）；附件
+  列举并集去重去掉 O(n²) 探测；确定性 nonce 有效熵文档口径修正（48-bit，非 96-bit）；
+  `validate_config` 拒全空白 endpoint；**S3 STS 会话令牌贯通**（新增 0004 迁移
+  `sync_configs.session_token`，SigV4 canonical/signed headers 与请求头三处同步携带，两端配置
+  表单与契约字段齐备，留空沿用已存）。
+- **移动端日志落地（P3/F81）**：`orbit-flutter` 经 `#[frb(init)]` 钩子在库加载时安装
+  `android_logger`（logcat，级别对齐桌面端 Info）——此前 core 侧全部 `log::*`（含 F35/F37
+  「失败改 `log::warn!`」的成果）在移动端静默丢弃，排障只能靠 stderr。F71 保留的一处
+  `eprintln!` 顺势改回 `log::error!`，两端日志口径一致。
+- 回归：`cargo test --workspace` 全绿；F56/F64/F77/F78/F80（空白拒绝）均以「临时回退修复点 →
+  用例立即红 → 恢复」验证过用例有效（F64 处置中的前置阻断以临时探针用例实证后转为正式回归）；
+  F66 的 zeroize 效果在 Rust 语义内不可观测，以行为钉子用例保锁定语义；FRB codegen + fmt 复跑
+  diff 为空；flutter analyze 零问题；桌面 vitest 487 全绿。详细清单与逐项证据见
+  `docs/同步功能第六轮全面盘查报告-2026-09-30.md` §八。
+
 ### 节假日记账展示收口 + 旧口径文档复原（2026-09-30）
 
 - **记账文案单一出口**：桌面新增 `features/todo/shared/holiday-meta.ts`（配 9 例单测）——
