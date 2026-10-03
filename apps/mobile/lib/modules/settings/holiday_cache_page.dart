@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -169,9 +171,13 @@ class _HolidayCachePageState extends ConsumerState<HolidayCachePage> {
       summary = await bridge.holidayFetchRange(start, end);
     } catch (e) {
       failure = e;
-    } finally {
-      await progressSub.cancel();
     }
+    // 广播流事件是**异步投递**的：fetch 返回时「逐年失败年份」的尾包可能还在
+    // 投递队列里——先排空一拍再收口，否则此处若立即取消订阅会把未投递的
+    // year 事件一起丢掉，部分成功副文案缺失败年份（原实现 await cancel 则
+    // 在 widget 测试的 FakeAsync 下把恢复链悬停到树销毁，进度弹层永不收口，
+    // 是 holiday_cache_page 两个范围补写用例假红的根因）。
+    await Future<void>.delayed(Duration.zero);
     navigator.pop();
     await dialogClosed;
     ref.invalidate(holidayProvider);
@@ -197,6 +203,8 @@ class _HolidayCachePageState extends ConsumerState<HolidayCachePage> {
     } else {
       WaitToast.success('补写完成：成功 ${s.ok} 年 · 无数据 ${s.empty} 年');
     }
+    // 订阅清理放收尾（toast 文案已取到 failedYears 快照，取消时机不再敏感）
+    unawaited(progressSub.cancel());
   }
 
   /// 失败年份列表文案（升序、顿号分隔）；空列表返回空串

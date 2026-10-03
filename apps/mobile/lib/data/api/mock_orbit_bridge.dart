@@ -14,13 +14,15 @@ import 'orbit_bridge.dart';
 class MockOrbitBridge implements OrbitBridge {
   final store = MockStore()..seed();
 
-  static const _latency = Duration(milliseconds: 120);
+  /// 模拟桥接延迟（默认 120ms）。测试需要观察「弹层出现 → 流程收口」的
+  /// 中间态时，把本字段调大即可让窗口变宽（如节假日范围补写的进度弹层）。
+  Duration latency = const Duration(milliseconds: 120);
 
   final _dbChangesCtrl = StreamController<DbChangeEvent>.broadcast();
   final _reminderDueCtrl = StreamController<ReminderDueEvent>.broadcast();
 
   Future<T> _delay<T>(T Function() body) async {
-    await Future<void>.delayed(_latency);
+    await Future<void>.delayed(latency);
     return body();
   }
 
