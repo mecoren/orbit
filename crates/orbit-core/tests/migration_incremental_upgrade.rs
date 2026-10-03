@@ -167,3 +167,45 @@ async fn incremental_add_column_preserves_rows() {
         .unwrap();
     assert_eq!(n, 2);
 }
+
+/// 0005 增量落地：todo_tasks.duration_minutes 带 DEFAULT NULL，老任务行未设置时长
+/// （可空而非 NOT NULL DEFAULT 0：同步 merge 对老设备载荷缺失字段绑 NULL，NULL=未设置
+/// 与「清空时长」语义一致，见 0005 迁移文件头）
+#[tokio::test]
+async fn task_duration_minutes_backfills_null() {
+    let pool = SqlitePool::connect("sqlite::memory:").await.unwrap();
+    sqlx::migrate!("./src/db/migrations")
+        .run(&pool)
+        .await
+        .unwrap();
+
+    // 不写 duration_minutes 的老写法（增量前口径）：靠 DEFAULT 落地
+    sqlx::query(
+        "INSERT INTO todo_tasks (uuid, title, status, position, created_at, updated_at)
+         VALUES ('u-d1', '老任务', 'pending', 0, 1, 1)",
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let (duration,): (Option<i64>,) =
+        sqlx::query_as("SELECT duration_minutes FROM todo_tasks WHERE uuid='u-d1'")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert!(duration.is_none(), "存量任务行应回填 NULL（未设置），语义零变化");
+
+    // 新行可写时长，与未设置行共存
+    sqlx::query(
+        "INSERT INTO todo_tasks (uuid, title, status, position, created_at, updated_at, duration_minutes)
+         VALUES ('u-d2', '新任务', 'pending', 1, 1, 1, 90)",
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let (n,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM todo_tasks")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(n, 2);
+}

@@ -8073,6 +8073,7 @@ impl SseDecode for crate::api::dto::TodoTask {
         let mut var_position = <f64>::sse_decode(deserializer);
         let mut var_isFavorite = <i32>::sse_decode(deserializer);
         let mut var_myDayDate = <Option<i64>>::sse_decode(deserializer);
+        let mut var_durationMinutes = <Option<i64>>::sse_decode(deserializer);
         let mut var_isDeleted = <i32>::sse_decode(deserializer);
         let mut var_createdAt = <i64>::sse_decode(deserializer);
         let mut var_updatedAt = <i64>::sse_decode(deserializer);
@@ -8100,6 +8101,7 @@ impl SseDecode for crate::api::dto::TodoTask {
             position: var_position,
             is_favorite: var_isFavorite,
             my_day_date: var_myDayDate,
+            duration_minutes: var_durationMinutes,
             is_deleted: var_isDeleted,
             created_at: var_createdAt,
             updated_at: var_updatedAt,
@@ -8130,6 +8132,7 @@ impl SseDecode for crate::api::dto::TodoTaskCreateInput {
         let mut var_position = <Option<f64>>::sse_decode(deserializer);
         let mut var_isFavorite = <Option<i32>>::sse_decode(deserializer);
         let mut var_myDayDate = <Option<i64>>::sse_decode(deserializer);
+        let mut var_durationMinutes = <Option<i64>>::sse_decode(deserializer);
         return crate::api::dto::TodoTaskCreateInput {
             title: var_title,
             description: var_description,
@@ -8149,6 +8152,7 @@ impl SseDecode for crate::api::dto::TodoTaskCreateInput {
             position: var_position,
             is_favorite: var_isFavorite,
             my_day_date: var_myDayDate,
+            duration_minutes: var_durationMinutes,
         };
     }
 }
@@ -8177,6 +8181,7 @@ impl SseDecode for crate::api::dto::TodoTaskDetail {
         let mut var_position = <f64>::sse_decode(deserializer);
         let mut var_isFavorite = <i32>::sse_decode(deserializer);
         let mut var_myDayDate = <Option<i64>>::sse_decode(deserializer);
+        let mut var_durationMinutes = <Option<i64>>::sse_decode(deserializer);
         let mut var_isDeleted = <i32>::sse_decode(deserializer);
         let mut var_createdAt = <i64>::sse_decode(deserializer);
         let mut var_updatedAt = <i64>::sse_decode(deserializer);
@@ -8209,6 +8214,7 @@ impl SseDecode for crate::api::dto::TodoTaskDetail {
             position: var_position,
             is_favorite: var_isFavorite,
             my_day_date: var_myDayDate,
+            duration_minutes: var_durationMinutes,
             is_deleted: var_isDeleted,
             created_at: var_createdAt,
             updated_at: var_updatedAt,
@@ -10565,6 +10571,7 @@ impl flutter_rust_bridge::IntoDart for crate::api::dto::TodoTask {
             self.position.into_into_dart().into_dart(),
             self.is_favorite.into_into_dart().into_dart(),
             self.my_day_date.into_into_dart().into_dart(),
+            self.duration_minutes.into_into_dart().into_dart(),
             self.is_deleted.into_into_dart().into_dart(),
             self.created_at.into_into_dart().into_dart(),
             self.updated_at.into_into_dart().into_dart(),
@@ -10602,6 +10609,7 @@ impl flutter_rust_bridge::IntoDart for crate::api::dto::TodoTaskCreateInput {
             self.position.into_into_dart().into_dart(),
             self.is_favorite.into_into_dart().into_dart(),
             self.my_day_date.into_into_dart().into_dart(),
+            self.duration_minutes.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -10642,6 +10650,7 @@ impl flutter_rust_bridge::IntoDart for crate::api::dto::TodoTaskDetail {
             self.position.into_into_dart().into_dart(),
             self.is_favorite.into_into_dart().into_dart(),
             self.my_day_date.into_into_dart().into_dart(),
+            self.duration_minutes.into_into_dart().into_dart(),
             self.is_deleted.into_into_dart().into_dart(),
             self.created_at.into_into_dart().into_dart(),
             self.updated_at.into_into_dart().into_dart(),
@@ -12263,6 +12272,7 @@ impl SseEncode for crate::api::dto::TodoTask {
         <f64>::sse_encode(self.position, serializer);
         <i32>::sse_encode(self.is_favorite, serializer);
         <Option<i64>>::sse_encode(self.my_day_date, serializer);
+        <Option<i64>>::sse_encode(self.duration_minutes, serializer);
         <i32>::sse_encode(self.is_deleted, serializer);
         <i64>::sse_encode(self.created_at, serializer);
         <i64>::sse_encode(self.updated_at, serializer);
@@ -12292,6 +12302,7 @@ impl SseEncode for crate::api::dto::TodoTaskCreateInput {
         <Option<f64>>::sse_encode(self.position, serializer);
         <Option<i32>>::sse_encode(self.is_favorite, serializer);
         <Option<i64>>::sse_encode(self.my_day_date, serializer);
+        <Option<i64>>::sse_encode(self.duration_minutes, serializer);
     }
 }
 
@@ -12319,6 +12330,7 @@ impl SseEncode for crate::api::dto::TodoTaskDetail {
         <f64>::sse_encode(self.position, serializer);
         <i32>::sse_encode(self.is_favorite, serializer);
         <Option<i64>>::sse_encode(self.my_day_date, serializer);
+        <Option<i64>>::sse_encode(self.duration_minutes, serializer);
         <i32>::sse_encode(self.is_deleted, serializer);
         <i64>::sse_encode(self.created_at, serializer);
         <i64>::sse_encode(self.updated_at, serializer);

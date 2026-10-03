@@ -19,6 +19,7 @@ TodoTask _task({
   int? dueDate,
   int isFavorite = 0,
   int? myDayDate,
+  int? durationMinutes,
   double position = 0,
   int createdAt = 1000,
 }) {
@@ -43,6 +44,7 @@ TodoTask _task({
     percentDone: 0,
     position: position,
     isFavorite: isFavorite,
+    durationMinutes: durationMinutes,
     myDayDate: myDayDate,
     isDeleted: 0,
     createdAt: createdAt,
@@ -260,6 +262,30 @@ void main() {
       final nowMs = DateTime.now().millisecondsSinceEpoch;
       expect(relativeFromNow(nowMs + 1800000), contains('分钟后'));
       expect(relativeFromNow(nowMs + 3 * 86400000), contains('天后'));
+    });
+  });
+
+  group('formatDurationMinutes 预计时长徽标（M9 阶段一，桌面同口径）', () {
+    test('分钟 < 60 → Nm', () {
+      expect(formatDurationMinutes(45), '45m');
+      expect(formatDurationMinutes(1), '1m');
+      expect(formatDurationMinutes(59), '59m');
+    });
+
+    test('整小时 → Nh', () {
+      expect(formatDurationMinutes(60), '1h');
+      expect(formatDurationMinutes(120), '2h');
+    });
+
+    test('非整小时 → Nh Mm', () {
+      expect(formatDurationMinutes(90), '1h30m');
+      expect(formatDurationMinutes(75), '1h15m');
+    });
+
+    test('未设置/非法值 → null（行内不显示徽标）', () {
+      expect(formatDurationMinutes(null), isNull);
+      expect(formatDurationMinutes(0), isNull);
+      expect(formatDurationMinutes(-5), isNull);
     });
   });
 

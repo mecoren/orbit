@@ -160,9 +160,12 @@ void main() {
       find.descendant(of: dateCard, matching: find.text('今天')),
       findsNWidgets(2),
     );
+    expect(find.descendant(of: dateCard, matching: find.text('预计时长')),
+        findsOneWidget);
+    // 「无」占位两处：提醒未设 + 预计时长未设（M9 阶段一，同卡占位口径统一）
     expect(
       find.descendant(of: dateCard, matching: find.text('无')),
-      findsOneWidget,
+      findsNWidgets(2),
     );
   });
 

@@ -28,6 +28,7 @@ void main() {
         position: 0,
         isFavorite: 0,
         myDayDate: null,
+        durationMinutes: null,
         isDeleted: 0,
         createdAt: 0,
         updatedAt: 0,

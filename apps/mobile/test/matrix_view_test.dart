@@ -38,6 +38,7 @@ TodoTask _task({
     position: 0,
     isFavorite: 0,
     myDayDate: null,
+    durationMinutes: null,
     isDeleted: 0,
     createdAt: 1000,
     updatedAt: 1000,

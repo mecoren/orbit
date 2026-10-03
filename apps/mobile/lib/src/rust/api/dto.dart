@@ -1294,6 +1294,9 @@ class TodoTask {
   final double position;
   final int isFavorite;
   final PlatformInt64? myDayDate;
+
+  /// 任务预计时长（分钟，M9 阶段一）；None = 未设置
+  final PlatformInt64? durationMinutes;
   final int isDeleted;
   final PlatformInt64 createdAt;
   final PlatformInt64 updatedAt;
@@ -1322,6 +1325,7 @@ class TodoTask {
     required this.position,
     required this.isFavorite,
     this.myDayDate,
+    this.durationMinutes,
     required this.isDeleted,
     required this.createdAt,
     required this.updatedAt,
@@ -1352,6 +1356,7 @@ class TodoTask {
       position.hashCode ^
       isFavorite.hashCode ^
       myDayDate.hashCode ^
+      durationMinutes.hashCode ^
       isDeleted.hashCode ^
       createdAt.hashCode ^
       updatedAt.hashCode ^
@@ -1384,6 +1389,7 @@ class TodoTask {
           position == other.position &&
           isFavorite == other.isFavorite &&
           myDayDate == other.myDayDate &&
+          durationMinutes == other.durationMinutes &&
           isDeleted == other.isDeleted &&
           createdAt == other.createdAt &&
           updatedAt == other.updatedAt &&
@@ -1415,6 +1421,7 @@ class TodoTaskCreateInput {
   final double? position;
   final int? isFavorite;
   final PlatformInt64? myDayDate;
+  final PlatformInt64? durationMinutes;
 
   const TodoTaskCreateInput({
     required this.title,
@@ -1435,6 +1442,7 @@ class TodoTaskCreateInput {
     this.position,
     this.isFavorite,
     this.myDayDate,
+    this.durationMinutes,
   });
 
   @override
@@ -1456,7 +1464,8 @@ class TodoTaskCreateInput {
       repeatFromDone.hashCode ^
       position.hashCode ^
       isFavorite.hashCode ^
-      myDayDate.hashCode;
+      myDayDate.hashCode ^
+      durationMinutes.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -1480,7 +1489,8 @@ class TodoTaskCreateInput {
           repeatFromDone == other.repeatFromDone &&
           position == other.position &&
           isFavorite == other.isFavorite &&
-          myDayDate == other.myDayDate;
+          myDayDate == other.myDayDate &&
+          durationMinutes == other.durationMinutes;
 }
 
 /// 任务详情聚合：TodoTask 全部字段 + 五张子表 Vec
@@ -1513,6 +1523,9 @@ class TodoTaskDetail {
   final double position;
   final int isFavorite;
   final PlatformInt64? myDayDate;
+
+  /// 任务预计时长（分钟，M9 阶段一）；None = 未设置
+  final PlatformInt64? durationMinutes;
   final int isDeleted;
   final PlatformInt64 createdAt;
   final PlatformInt64 updatedAt;
@@ -1546,6 +1559,7 @@ class TodoTaskDetail {
     required this.position,
     required this.isFavorite,
     this.myDayDate,
+    this.durationMinutes,
     required this.isDeleted,
     required this.createdAt,
     required this.updatedAt,
@@ -1581,6 +1595,7 @@ class TodoTaskDetail {
       position.hashCode ^
       isFavorite.hashCode ^
       myDayDate.hashCode ^
+      durationMinutes.hashCode ^
       isDeleted.hashCode ^
       createdAt.hashCode ^
       updatedAt.hashCode ^
@@ -1618,6 +1633,7 @@ class TodoTaskDetail {
           position == other.position &&
           isFavorite == other.isFavorite &&
           myDayDate == other.myDayDate &&
+          durationMinutes == other.durationMinutes &&
           isDeleted == other.isDeleted &&
           createdAt == other.createdAt &&
           updatedAt == other.updatedAt &&

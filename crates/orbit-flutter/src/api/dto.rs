@@ -175,6 +175,8 @@ pub struct TodoTask {
     pub position: f64,
     pub is_favorite: i32,
     pub my_day_date: Option<i64>,
+    /// 任务预计时长（分钟，M9 阶段一）；None = 未设置
+    pub duration_minutes: Option<i64>,
     pub is_deleted: i32,
     pub created_at: i64,
     pub updated_at: i64,
@@ -206,6 +208,7 @@ impl From<orbit_core::models::business::TodoTask> for TodoTask {
             position: t.position,
             is_favorite: t.is_favorite,
             my_day_date: t.my_day_date,
+            duration_minutes: t.duration_minutes,
             is_deleted: t.is_deleted,
             created_at: t.created_at,
             updated_at: t.updated_at,
@@ -240,6 +243,7 @@ pub struct TodoTaskCreateInput {
     pub position: Option<f64>,
     pub is_favorite: Option<i32>,
     pub my_day_date: Option<i64>,
+    pub duration_minutes: Option<i64>,
 }
 
 impl From<TodoTaskCreateInput> for orbit_core::models::business::TodoTaskCreateInput {
@@ -263,6 +267,7 @@ impl From<TodoTaskCreateInput> for orbit_core::models::business::TodoTaskCreateI
             position: i.position,
             is_favorite: i.is_favorite,
             my_day_date: i.my_day_date,
+            duration_minutes: i.duration_minutes,
         }
     }
 }
@@ -658,6 +663,8 @@ pub struct TodoTaskDetail {
     pub position: f64,
     pub is_favorite: i32,
     pub my_day_date: Option<i64>,
+    /// 任务预计时长（分钟，M9 阶段一）；None = 未设置
+    pub duration_minutes: Option<i64>,
     pub is_deleted: i32,
     pub created_at: i64,
     pub updated_at: i64,
@@ -695,6 +702,7 @@ impl From<orbit_core::api::todo_api::TodoTaskDetail> for TodoTaskDetail {
             position: d.task.position,
             is_favorite: d.task.is_favorite,
             my_day_date: d.task.my_day_date,
+            duration_minutes: d.task.duration_minutes,
             is_deleted: d.task.is_deleted,
             created_at: d.task.created_at,
             updated_at: d.task.updated_at,
@@ -875,6 +883,7 @@ impl From<orbit_core::api::csv_import_api::CsvImportRow> for CsvImportRowView {
                 position: i.position,
                 is_favorite: i.is_favorite,
                 my_day_date: i.my_day_date,
+                duration_minutes: None,
             },
             skip_reason: r.skip_reason,
         }

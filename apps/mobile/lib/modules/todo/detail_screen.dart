@@ -482,6 +482,11 @@ class _InfoSection extends ConsumerWidget {
                 ? null
                 : () => onPatch(const {'start_date': null}),
           ),
+          // 预计时长（M9 阶段一，只读；编辑走任务表单）
+          InfoTile(
+            label: '预计时长',
+            value: formatDurationMinutes(detail.durationMinutes) ?? '无',
+          ),
           InfoTile(
             label: '重复',
             value: rep.repeatLabelExt(

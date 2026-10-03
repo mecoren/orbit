@@ -46,6 +46,7 @@ TodoTask _task({required int done}) => TodoTask(
       position: 0,
       isFavorite: 0,
       myDayDate: null,
+      durationMinutes: null,
       isDeleted: 0,
       createdAt: 1700000000000,
       updatedAt: 1700000000000,

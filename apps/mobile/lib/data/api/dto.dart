@@ -139,6 +139,8 @@ class TodoTask {
   final int isFavorite;
   /// 我的一天：加入当天本地零点 ms；null = 不在任何一天的 My Day
   final int? myDayDate;
+  /// 任务预计时长（分钟，M9 阶段一）；null = 未设置
+  final int? durationMinutes;
   final int isDeleted;
   final int createdAt;
   final int updatedAt;
@@ -167,6 +169,7 @@ class TodoTask {
     required this.position,
     required this.isFavorite,
     required this.myDayDate,
+    required this.durationMinutes,
     required this.isDeleted,
     required this.createdAt,
     required this.updatedAt,
@@ -196,6 +199,7 @@ class TodoTask {
         position: (j['position'] as num).toDouble(),
         isFavorite: j['is_favorite'] as int,
         myDayDate: j['my_day_date'] as int?,
+        durationMinutes: j['duration_minutes'] as int?,
         isDeleted: j['is_deleted'] as int,
         createdAt: j['created_at'] as int,
         updatedAt: j['updated_at'] as int,
@@ -238,6 +242,8 @@ class TodoTaskCreateInput {
   final double? position;
   final int? isFavorite;
   final int? myDayDate;
+  /// 预计时长（分钟）；null = 不设置
+  final int? durationMinutes;
 
   const TodoTaskCreateInput({
     required this.title,
@@ -258,6 +264,7 @@ class TodoTaskCreateInput {
     this.position,
     this.isFavorite,
     this.myDayDate,
+    this.durationMinutes,
   });
 }
 
@@ -724,6 +731,7 @@ class TodoTaskDetail extends TodoTask {
     required super.position,
     required super.isFavorite,
     required super.myDayDate,
+    required super.durationMinutes,
     required super.isDeleted,
     required super.createdAt,
     required super.updatedAt,
@@ -758,6 +766,7 @@ class TodoTaskDetail extends TodoTask {
         position: (j['position'] as num).toDouble(),
         isFavorite: j['is_favorite'] as int,
         myDayDate: j['my_day_date'] as int?,
+        durationMinutes: j['duration_minutes'] as int?,
         isDeleted: j['is_deleted'] as int,
         createdAt: j['created_at'] as int,
         updatedAt: j['updated_at'] as int,

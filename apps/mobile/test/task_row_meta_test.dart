@@ -12,7 +12,7 @@ import 'package:orbit/data/api/dto.dart';
 import 'package:orbit/modules/todo/sub_list_screen.dart';
 import 'support/orbit_test_app.dart';
 
-TodoTask _task({double percentDone = 0}) => TodoTask(
+TodoTask _task({double percentDone = 0, int? durationMinutes}) => TodoTask(
       id: 1,
       uuid: 'uuid-1',
       title: '元信息测试任务',
@@ -34,6 +34,7 @@ TodoTask _task({double percentDone = 0}) => TodoTask(
       position: 0,
       isFavorite: 0,
       myDayDate: null,
+      durationMinutes: durationMinutes,
       isDeleted: 0,
       createdAt: 1700000000000,
       updatedAt: 1700000000000,
@@ -134,5 +135,16 @@ void main() {
     await tester.pumpWidget(_harness(task: _task(percentDone: 100)));
     await tester.pump();
     expect(find.text('100%'), findsNothing);
+  });
+
+  testWidgets('时长段（M9）：有值 → 时钟图标 + 紧凑文案；null 不渲染', (tester) async {
+    await tester.pumpWidget(_harness(task: _task(durationMinutes: 90)));
+    expect(find.text('1h30m'), findsOneWidget);
+    expect(find.byIcon(OrbitIcons.clock), findsOneWidget);
+
+    await tester.pumpWidget(_harness(task: _task()));
+    await tester.pump();
+    expect(find.text('1h30m'), findsNothing);
+    expect(find.byIcon(OrbitIcons.clock), findsNothing);
   });
 }

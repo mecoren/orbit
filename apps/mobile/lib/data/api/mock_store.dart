@@ -148,6 +148,7 @@ class MockStore {
       int? dueDate,
       int isFavorite = 0,
       int? myDayDate,
+      int? durationMinutes,
       String? description,
     }) {
       final t = {
@@ -169,6 +170,7 @@ class MockStore {
             tasks.values.where((e) => e['project_id'] == projectId).length,
         'is_favorite': isFavorite,
         'my_day_date': myDayDate,
+        'duration_minutes': durationMinutes,
         'is_deleted': 0,
         'created_at': now(),
         'updated_at': now(),
@@ -186,6 +188,7 @@ class MockStore {
       description: '对照 docs/05 像素规格逐屏核对。',
       dueDate: now() + day,
       isFavorite: 1,
+      durationMinutes: 90,
     );
     task(
       title: '已完成的周报提交',

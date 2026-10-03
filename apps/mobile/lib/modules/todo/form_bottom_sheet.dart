@@ -26,6 +26,7 @@ import 'logic/task_logic.dart'
         atViewDueHour,
         dateToMidnightMs,
         formatDueShort,
+        formatDurationMinutes,
         formatStampLabel,
         priorityColorHex,
         priorityLabel,
@@ -222,6 +223,8 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
   String _status = 'pending';
   int? _startDate;
   int? _remindAt;
+  /// 预计时长（分钟，M9 阶段一）；null = 未设置
+  int? _durationMinutes;
   /// 持续提醒开关（G2）：到期未完成则每 5 分钟再提醒，直至完成
   bool _remindConstant = false;
   TodoReminder? _existingReminder;
@@ -344,6 +347,7 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
         _existingReminder = firstReminder;
         _remindAt = firstReminder?.remindAt;
         _remindConstant = firstReminder?.constant ?? false;
+        _durationMinutes = task.durationMinutes;
         _loaded = true;
       });
     } catch (_) {
@@ -390,6 +394,7 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
           repeatFromDone: _repeatFromDone ? 1 : 0,
           myDayDate: viewDefaults.myDayMs,
           isFavorite: viewDefaults.favorite,
+          durationMinutes: _durationMinutes,
         ));
         // 新建：设置提醒 → 建立提醒实体
         if (_remindAt != null) {
@@ -438,6 +443,7 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
             'repeat_end_type': _repeatEndType,
             'repeat_end_param': _repeatEndParam,
             'repeat_from_done': _repeatFromDone ? 1 : 0,
+            'duration_minutes': _durationMinutes,
           }),
         );
         // 编辑：提醒按"清空删/变更删旧建新/未动跳过"同步
@@ -510,6 +516,30 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
     // null = 取消或面板内清除；取消不动值，清空走字段行叉号（语义与桌面一致）
     if (picked == null || !mounted) return;
     setState(() => _remindAt = picked.millisecondsSinceEpoch);
+  }
+
+  /// 预计时长行 → 常用档位单选抽屉（对标 TickTick；0 = 不设置清空；
+  /// 任意分钟值走桌面表单数字输入，移动档位覆盖高频场景）
+  Future<void> _pickDuration() async {
+    await showSelectBottomSheet<int>(
+      context,
+      title: '预计时长',
+      items: const [
+        SelectItem<int>(value: 15, label: '15 分钟'),
+        SelectItem<int>(value: 30, label: '30 分钟'),
+        SelectItem<int>(value: 45, label: '45 分钟'),
+        SelectItem<int>(value: 60, label: '1 小时'),
+        SelectItem<int>(value: 90, label: '1.5 小时'),
+        SelectItem<int>(value: 120, label: '2 小时'),
+        SelectItem<int>(value: 180, label: '3 小时'),
+        SelectItem<int>(value: 0, label: '不设置'),
+      ],
+      current: _durationMinutes,
+      onSelect: (v) {
+        if (!mounted) return;
+        setState(() => _durationMinutes = v == 0 ? null : v);
+      },
+    );
   }
 
   // ── 字段行 → 底部选择抽屉（与详情页信息区同口径：行只显值，点行再选）──
@@ -899,6 +929,20 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
                                         ? null
                                         : () =>
                                             setState(() => _remindAt = null),
+                                  ),
+                                  _tileDivider(colors),
+                                  // 预计时长（M9 阶段一）：常用档位单选抽屉
+                                  _FormDateTile(
+                                    icon: OrbitIcons.clock,
+                                    label: '预计时长',
+                                    value: _durationMinutes != null
+                                        ? formatDurationMinutes(_durationMinutes)
+                                        : null,
+                                    onTap: _pickDuration,
+                                    onClear: _durationMinutes == null
+                                        ? null
+                                        : () => setState(
+                                            () => _durationMinutes = null),
                                   ),
                                   // 持续提醒（G2）：仅在已设提醒时出现——
                                   // 无提醒时刻时该开关无意义

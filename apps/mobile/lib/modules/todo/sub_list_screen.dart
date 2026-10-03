@@ -2441,11 +2441,11 @@ class TodoTaskTile extends StatelessWidget {
 
   /// 行右侧元信息图标列（日期下方、右对齐）
   ///
-  /// 顺序：重复 → 提醒（铃铛 + HH:mm，到期未完转逾期红）→ 子任务进度
-  /// （percent_done 0/100 不显示）→ 关联（C7 投影 > 0 才出）→ 星标（黄色）。
-  /// 逐项为空则整列不渲染（右列宽度对标题的挤压随之让出）。
+  /// 顺序：重复 → 提醒（铃铛 + HH:mm，到期未完转逾期红）→ 预计时长（M9）→
+  /// 子任务进度（percent_done 0/100 不显示）→ 关联（C7 投影 > 0 才出）→
+  /// 星标（黄色）。逐项为空则整列不渲染（右列宽度对标题的挤压随之让出）。
   ///
-  /// 完成态整行置灰：重复 / 提醒 / 进度 / 关联 / 星标统一走弱化灰，
+  /// 完成态整行置灰：重复 / 提醒 / 时长 / 进度 / 关联 / 星标统一走弱化灰，
   /// 不再保留逾期红与星标黄（已完成实例不再警示）。
   List<Widget> _metaIcons(AppColorSet colors, {bool done = false}) {
     final chips = <Widget>[];
@@ -2468,6 +2468,17 @@ class TodoTaskTile extends StatelessWidget {
           : (r.fired ? OrbitAccents.overdueRed : colors.secondaryText);
       add(Icon(OrbitIcons.notification, size: 12, color: color));
       add(Text(r.clock, style: TextStyle(fontSize: 12, color: color)));
+    }
+    // 预计时长（M9 阶段一；formatDurationMinutes 返回 null 不显示）
+    final duration = formatDurationMinutes(task.durationMinutes);
+    if (duration != null) {
+      add(Icon(OrbitIcons.clock,
+          size: 12, color: done ? muted : colors.secondaryText));
+      add(Text(
+        duration,
+        style:
+            TextStyle(fontSize: 12, color: done ? muted : colors.secondaryText),
+      ));
     }
     // 子任务进度（MS To Do Steps 同款体验；percent_done 由后端按勾选回算）
     final pct = task.percentDone;

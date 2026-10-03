@@ -529,6 +529,16 @@ String formatStampLabel(int ms, {DateTime? now}) {
       : '${d.year}年${d.month}月${d.day}日 $hm';
 }
 
+/// 预计时长（分钟）→ 紧凑徽标文案（M9 阶段一；桌面 shared/time.ts 同口径镜像）：
+/// <60 → `45m`；整小时 → `2h`；其余 → `1h30m`。非正数按未设置返回 null。
+String? formatDurationMinutes(int? minutes) {
+  if (minutes == null || minutes <= 0) return null;
+  if (minutes < 60) return '${minutes}m';
+  final h = minutes ~/ 60;
+  final rest = minutes % 60;
+  return rest == 0 ? '${h}h' : '${h}h${rest}m';
+}
+
 /// 周几中文名（周一..周日；「今天」页头日期副标与完成日志分组头共用）
 String weekdayCn(DateTime d) => switch (d.weekday) {
       DateTime.monday => '周一',

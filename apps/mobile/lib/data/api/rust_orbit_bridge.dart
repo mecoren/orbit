@@ -201,6 +201,7 @@ class RustOrbitBridge implements OrbitBridge {
           position: input.position?.toDouble(),
           isFavorite: input.isFavorite,
           myDayDate: input.myDayDate,
+          durationMinutes: input.durationMinutes,
         ),
       ));
 
@@ -273,6 +274,7 @@ class RustOrbitBridge implements OrbitBridge {
       position: d.position,
       isFavorite: d.isFavorite,
       myDayDate: d.myDayDate,
+      durationMinutes: d.durationMinutes,
       isDeleted: d.isDeleted,
       createdAt: d.createdAt,
       updatedAt: d.updatedAt,
@@ -1535,6 +1537,7 @@ class RustOrbitBridge implements OrbitBridge {
         position: t.position,
         isFavorite: t.isFavorite,
         myDayDate: t.myDayDate,
+        durationMinutes: t.durationMinutes,
         isDeleted: t.isDeleted,
         createdAt: t.createdAt,
         updatedAt: t.updatedAt,

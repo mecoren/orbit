@@ -7312,8 +7312,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   TodoTask dco_decode_todo_task(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 26)
-      throw Exception('unexpected arr length: expect 26 but see ${arr.length}');
+    if (arr.length != 27)
+      throw Exception('unexpected arr length: expect 27 but see ${arr.length}');
     return TodoTask(
       id: dco_decode_i_64(arr[0]),
       uuid: dco_decode_String(arr[1]),
@@ -7336,11 +7336,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       position: dco_decode_f_64(arr[18]),
       isFavorite: dco_decode_i_32(arr[19]),
       myDayDate: dco_decode_opt_box_autoadd_i_64(arr[20]),
-      isDeleted: dco_decode_i_32(arr[21]),
-      createdAt: dco_decode_i_64(arr[22]),
-      updatedAt: dco_decode_i_64(arr[23]),
-      deletedAt: dco_decode_opt_box_autoadd_i_64(arr[24]),
-      version: dco_decode_i_32(arr[25]),
+      durationMinutes: dco_decode_opt_box_autoadd_i_64(arr[21]),
+      isDeleted: dco_decode_i_32(arr[22]),
+      createdAt: dco_decode_i_64(arr[23]),
+      updatedAt: dco_decode_i_64(arr[24]),
+      deletedAt: dco_decode_opt_box_autoadd_i_64(arr[25]),
+      version: dco_decode_i_32(arr[26]),
     );
   }
 
@@ -7348,8 +7349,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   TodoTaskCreateInput dco_decode_todo_task_create_input(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 18)
-      throw Exception('unexpected arr length: expect 18 but see ${arr.length}');
+    if (arr.length != 19)
+      throw Exception('unexpected arr length: expect 19 but see ${arr.length}');
     return TodoTaskCreateInput(
       title: dco_decode_String(arr[0]),
       description: dco_decode_opt_String(arr[1]),
@@ -7369,6 +7370,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       position: dco_decode_opt_box_autoadd_f_64(arr[15]),
       isFavorite: dco_decode_opt_box_autoadd_i_32(arr[16]),
       myDayDate: dco_decode_opt_box_autoadd_i_64(arr[17]),
+      durationMinutes: dco_decode_opt_box_autoadd_i_64(arr[18]),
     );
   }
 
@@ -7376,8 +7378,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   TodoTaskDetail dco_decode_todo_task_detail(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 31)
-      throw Exception('unexpected arr length: expect 31 but see ${arr.length}');
+    if (arr.length != 32)
+      throw Exception('unexpected arr length: expect 32 but see ${arr.length}');
     return TodoTaskDetail(
       id: dco_decode_i_64(arr[0]),
       uuid: dco_decode_String(arr[1]),
@@ -7400,16 +7402,17 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       position: dco_decode_f_64(arr[18]),
       isFavorite: dco_decode_i_32(arr[19]),
       myDayDate: dco_decode_opt_box_autoadd_i_64(arr[20]),
-      isDeleted: dco_decode_i_32(arr[21]),
-      createdAt: dco_decode_i_64(arr[22]),
-      updatedAt: dco_decode_i_64(arr[23]),
-      deletedAt: dco_decode_opt_box_autoadd_i_64(arr[24]),
-      version: dco_decode_i_32(arr[25]),
-      subtasks: dco_decode_list_todo_subtask(arr[26]),
-      labels: dco_decode_list_task_label_with_id(arr[27]),
-      comments: dco_decode_list_todo_comment(arr[28]),
-      relations: dco_decode_list_todo_task_relation(arr[29]),
-      reminders: dco_decode_list_todo_reminder(arr[30]),
+      durationMinutes: dco_decode_opt_box_autoadd_i_64(arr[21]),
+      isDeleted: dco_decode_i_32(arr[22]),
+      createdAt: dco_decode_i_64(arr[23]),
+      updatedAt: dco_decode_i_64(arr[24]),
+      deletedAt: dco_decode_opt_box_autoadd_i_64(arr[25]),
+      version: dco_decode_i_32(arr[26]),
+      subtasks: dco_decode_list_todo_subtask(arr[27]),
+      labels: dco_decode_list_task_label_with_id(arr[28]),
+      comments: dco_decode_list_todo_comment(arr[29]),
+      relations: dco_decode_list_todo_task_relation(arr[30]),
+      reminders: dco_decode_list_todo_reminder(arr[31]),
     );
   }
 
@@ -9713,6 +9716,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_position = sse_decode_f_64(deserializer);
     var var_isFavorite = sse_decode_i_32(deserializer);
     var var_myDayDate = sse_decode_opt_box_autoadd_i_64(deserializer);
+    var var_durationMinutes = sse_decode_opt_box_autoadd_i_64(deserializer);
     var var_isDeleted = sse_decode_i_32(deserializer);
     var var_createdAt = sse_decode_i_64(deserializer);
     var var_updatedAt = sse_decode_i_64(deserializer);
@@ -9740,6 +9744,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       position: var_position,
       isFavorite: var_isFavorite,
       myDayDate: var_myDayDate,
+      durationMinutes: var_durationMinutes,
       isDeleted: var_isDeleted,
       createdAt: var_createdAt,
       updatedAt: var_updatedAt,
@@ -9771,6 +9776,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_position = sse_decode_opt_box_autoadd_f_64(deserializer);
     var var_isFavorite = sse_decode_opt_box_autoadd_i_32(deserializer);
     var var_myDayDate = sse_decode_opt_box_autoadd_i_64(deserializer);
+    var var_durationMinutes = sse_decode_opt_box_autoadd_i_64(deserializer);
     return TodoTaskCreateInput(
       title: var_title,
       description: var_description,
@@ -9790,6 +9796,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       position: var_position,
       isFavorite: var_isFavorite,
       myDayDate: var_myDayDate,
+      durationMinutes: var_durationMinutes,
     );
   }
 
@@ -9817,6 +9824,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_position = sse_decode_f_64(deserializer);
     var var_isFavorite = sse_decode_i_32(deserializer);
     var var_myDayDate = sse_decode_opt_box_autoadd_i_64(deserializer);
+    var var_durationMinutes = sse_decode_opt_box_autoadd_i_64(deserializer);
     var var_isDeleted = sse_decode_i_32(deserializer);
     var var_createdAt = sse_decode_i_64(deserializer);
     var var_updatedAt = sse_decode_i_64(deserializer);
@@ -9849,6 +9857,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       position: var_position,
       isFavorite: var_isFavorite,
       myDayDate: var_myDayDate,
+      durationMinutes: var_durationMinutes,
       isDeleted: var_isDeleted,
       createdAt: var_createdAt,
       updatedAt: var_updatedAt,
@@ -11817,6 +11826,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_f_64(self.position, serializer);
     sse_encode_i_32(self.isFavorite, serializer);
     sse_encode_opt_box_autoadd_i_64(self.myDayDate, serializer);
+    sse_encode_opt_box_autoadd_i_64(self.durationMinutes, serializer);
     sse_encode_i_32(self.isDeleted, serializer);
     sse_encode_i_64(self.createdAt, serializer);
     sse_encode_i_64(self.updatedAt, serializer);
@@ -11848,6 +11858,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_opt_box_autoadd_f_64(self.position, serializer);
     sse_encode_opt_box_autoadd_i_32(self.isFavorite, serializer);
     sse_encode_opt_box_autoadd_i_64(self.myDayDate, serializer);
+    sse_encode_opt_box_autoadd_i_64(self.durationMinutes, serializer);
   }
 
   @protected
@@ -11877,6 +11888,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_f_64(self.position, serializer);
     sse_encode_i_32(self.isFavorite, serializer);
     sse_encode_opt_box_autoadd_i_64(self.myDayDate, serializer);
+    sse_encode_opt_box_autoadd_i_64(self.durationMinutes, serializer);
     sse_encode_i_32(self.isDeleted, serializer);
     sse_encode_i_64(self.createdAt, serializer);
     sse_encode_i_64(self.updatedAt, serializer);
