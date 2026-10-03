@@ -239,6 +239,8 @@ export interface TodoTask {
   is_favorite: number;
   /** My Day「我的一天」：加入当天本地零点 ms；null = 不在任何一天的 My Day */
   my_day_date: number | null;
+  /** 任务预计时长（分钟，M9 阶段一）；null = 未设置 */
+  duration_minutes: number | null;
   is_deleted: number;
   created_at: number;
   updated_at: number;
@@ -264,6 +266,8 @@ export interface TodoTaskCreateInput {
   position?: number;
   is_favorite?: number;
   my_day_date?: number | null;
+  /** 预计时长（分钟）；省略/null = 不设置 */
+  duration_minutes?: number | null;
 }
 export interface TodoTaskUpdateInput {
   title?: string;
@@ -285,6 +289,8 @@ export interface TodoTaskUpdateInput {
   position?: number;
   is_favorite?: number;
   my_day_date?: number | null;
+  /** 预计时长（分钟）；null = 清除（不传 = 不改） */
+  duration_minutes?: number | null;
 }
 export const todoTaskList = (filter: ListFilter) => invoke<TodoTask[]>("todo_tasks_list", { filter });
 export const todoTaskGet = (id: number) => invoke<TodoTask>("todo_tasks_get", { id });

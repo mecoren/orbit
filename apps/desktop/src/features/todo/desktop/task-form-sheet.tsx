@@ -105,6 +105,8 @@ export function buildTaskFields(projects: TodoProject[]): FieldDef[] {
     // 仍未完成则每 5 分钟再提醒一次，直至完成。未填提醒时间时该开关无效果
     { name: "remind_constant", label: "持续提醒（响到完成为止）", type: "checkbox" },
     { name: "start_date", label: "开始日期", type: "date" },
+    // 预计时长（M9 阶段一）：分钟数，后续时间块视图（周/日档拖拽时段）的数据地基
+    { name: "duration_minutes", label: "预计时长（分钟）", type: "number", min: 1, step: 5, placeholder: "如 30" },
   ];
 }
 
@@ -769,6 +771,11 @@ export function TaskFormSheet({
       repeat_end_type: repeatEndType,
       repeat_end_param: repeatEndParam,
       repeat_from_done: repeatFromDone,
+      // 预计时长：空/非正数 = 未设置（null 落 core 为清除；下限与 core 口径一致）
+      duration_minutes:
+        values.duration_minutes == null || values.duration_minutes === ""
+          ? null
+          : Number(values.duration_minutes),
     };
 
     // 提醒时间（values 已过滤 null：undefined = 用户清空或未填）

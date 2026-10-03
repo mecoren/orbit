@@ -31,7 +31,7 @@ import {
   type DragStartEvent,
 } from "@dnd-kit/core";
 import {
-  ListChecks, Check, CircleCheck, CalendarClock, Clock, Flag, FolderInput, GripVertical, Inbox, Link2, Plus, Star, StarOff, Sunrise, Trash2, TriangleAlert, X } from "lucide-react";
+  ListChecks, Check, CircleCheck, CalendarClock, Clock, Flag, FolderInput, GripVertical, Inbox, Link2, Plus, Star, StarOff, Sunrise, Timer, Trash2, TriangleAlert, X } from "lucide-react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { toast } from "sonner";
 
@@ -63,6 +63,7 @@ import { completeTask } from "../shared/task-actions";
 import { groupOverdueFirst, todayStartMs, toggleMyDayValue } from "../shared/task-filters";
 import { isListActivationKey, listNavDirection } from "../shared/list-keyboard";
 import { midpoint } from "../shared/position";
+import { formatDuration } from "../shared/time";
 import { batchSetDueDate, batchUpdateStatus, batchUpdatePriority, batchUpdateFavorite, batchMoveToProject, batchUpdateMyDay } from "../shared/batch-actions";
 import { useUndoableDeleteAction, hideManyFromQueries } from "@/hooks/use-undoable-delete";
 import { todoTaskDelete, todoTaskUpdate, todoTaskUpdatePosition, type ProjectedTaskLabel, type TaskDependencyFlags, type TodoProject, type TodoTask } from "@/lib/tauri";
@@ -746,6 +747,7 @@ const TaskRow = memo(function TaskRow({
   const inMyDay = t.my_day_date === todayStartMs();
   // 投影只输出有出边的任务；这里再挡一次 0 计数（避免多出一个空 meta 行）
   const dep = dependency != null && dependency.relation_count > 0 ? dependency : undefined;
+  const duration = formatDuration(t.duration_minutes);
   const { attributes, listeners, setNodeRef: setDragRef } = useDraggable({
     id: `row:${t.id}`,
     // 本行拖拽进行中即禁用拖拽源（浮层副本不再作为拖拽源；边界行禁拖无意义故不处理）；
@@ -879,7 +881,7 @@ const TaskRow = memo(function TaskRow({
         >
           {t.title}
         </div>
-        {(labels.length > 0 || project != null || due || reminder != null || dep != null || t.percent_done > 0) && (
+        {(labels.length > 0 || project != null || due || reminder != null || dep != null || t.percent_done > 0 || duration != null) && (
           <div
             className={cn(
               "mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground",
@@ -920,6 +922,13 @@ const TaskRow = memo(function TaskRow({
               <span className="inline-flex items-center gap-0.5 tabular-nums">
                 <ListChecks size={11} />
                 {Math.round(t.percent_done)}%
+              </span>
+            )}
+            {/* 预计时长徽标（M9 阶段一；formatDuration 返回 null 不显示） */}
+            {duration && (
+              <span className="inline-flex items-center gap-0.5 tabular-nums">
+                <Timer size={11} />
+                {duration}
               </span>
             )}
           </div>

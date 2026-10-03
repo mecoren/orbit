@@ -28,6 +28,7 @@ function mk(partial: Partial<TodoTask>): TodoTask {
     position: 0,
     is_favorite: 0,
     my_day_date: null,
+    duration_minutes: null,
     is_deleted: 0,
     created_at: 0,
     updated_at: 0,

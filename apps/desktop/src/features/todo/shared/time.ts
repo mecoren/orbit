@@ -25,3 +25,17 @@ export function formatDateTime(ms: number): string {
   const p = (n: number) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
 }
+
+/**
+ * 预计时长（分钟）→ 紧凑徽标文案（M9 阶段一；移动端 task_logic.dart 同口径镜像）。
+ * 规则：<60 → `45m`；整小时 → `2h`；其余 → `1h30m`。非正数/非整数按未设置处理返回 null。
+ * 数字+单位风格与行内 HH:mm / 45% 徽标一致，双端同口径。
+ */
+export function formatDuration(minutes: number | null | undefined): string | null {
+  if (minutes == null || !Number.isFinite(minutes) || minutes <= 0) return null;
+  const m = Math.round(minutes);
+  if (m < 60) return `${m}m`;
+  const h = Math.floor(m / 60);
+  const rest = m % 60;
+  return rest === 0 ? `${h}h` : `${h}h${rest}m`;
+}

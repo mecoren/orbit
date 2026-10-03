@@ -43,6 +43,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { LabelChips } from "../shared/label-chips";
+import { formatDuration } from "../shared/time";
 import { ReminderChip } from "../shared/reminder-chip";
 import { displayReminder } from "../shared/reminder-meta";
 import {
@@ -68,7 +69,7 @@ export interface TaskTableViewProps {
 }
 
 export interface TableColumn {
-  key: "done" | "title" | "project" | "labels" | "due" | "priority";
+  key: "done" | "title" | "project" | "labels" | "due" | "duration" | "priority";
   label: string;
   weight: number;
 }
@@ -79,6 +80,7 @@ export const TABLE_COLUMNS: TableColumn[] = [
   { key: "project", label: "项目", weight: 1 },
   { key: "labels", label: "标签", weight: 1 },
   { key: "due", label: "截止", weight: 1 },
+  { key: "duration", label: "时长", weight: 0.8 },
   { key: "priority", label: "优先级", weight: 0.8 },
 ];
 
@@ -558,6 +560,11 @@ export default function TaskTableView({
                       "—"
                     )}
                     <ReminderChip reminder={reminder} />
+                  </span>
+
+                  {/* 时长列（M9 阶段一；未设置显示占位保持列对齐） */}
+                  <span className="inline-flex items-center gap-0.5 truncate text-sm text-muted-foreground tabular-nums">
+                    {formatDuration(t.duration_minutes) ?? "—"}
                   </span>
 
                   {/* 优先级列 */}

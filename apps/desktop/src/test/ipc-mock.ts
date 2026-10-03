@@ -55,6 +55,8 @@ interface MockTask {
   position: number;
   is_favorite: number;
   my_day_date: number | null;
+  /** 预计时长（分钟）；null = 未设置 */
+  duration_minutes: number | null;
   is_deleted: number;
   created_at: number;
   updated_at: number;
@@ -230,6 +232,7 @@ export function seedDefault(db: MockDb) {
     position: 1000,
     is_favorite: 0,
     my_day_date: null,
+    duration_minutes: null,
     is_deleted: 0,
     created_at: now,
     updated_at: now,
@@ -708,6 +711,7 @@ const commands: Record<string, (args: any, ctx: Ctx) => unknown> = {
       position: input.position ?? 100000,
       is_favorite: input.is_favorite ?? 0,
       my_day_date: input.my_day_date ?? null,
+      duration_minutes: input.duration_minutes ?? null,
       is_deleted: 0,
       created_at: now,
       updated_at: now,
@@ -775,6 +779,7 @@ const commands: Record<string, (args: any, ctx: Ctx) => unknown> = {
           position: 100000,
           is_favorite: t.is_favorite,
           my_day_date: null,
+          duration_minutes: t.duration_minutes,
           is_deleted: 0,
           created_at: now,
           updated_at: now,
@@ -971,6 +976,7 @@ const commands: Record<string, (args: any, ctx: Ctx) => unknown> = {
       position: maxPos + 1,
       is_favorite: 0,
       my_day_date: null,
+      duration_minutes: null,
       is_deleted: 0,
       created_at: now,
       updated_at: now,
@@ -1779,6 +1785,7 @@ const commands: Record<string, (args: any, ctx: Ctx) => unknown> = {
         position: 100000,
         is_favorite: 0,
         my_day_date: null,
+        duration_minutes: null,
         is_deleted: 0,
         created_at: now,
         updated_at: now,

@@ -30,6 +30,7 @@ import {
   Send,
   Star,
   Sunrise,
+  Timer,
   Tag as TagIcon,
   Trash2,
   X,
@@ -74,6 +75,7 @@ import { hideFromQueries, useUndoableDeleteAction } from "@/hooks/use-undoable-d
 import { usePasteAttachment } from "@/hooks/use-paste-attachment";
 import { PRIORITY_COLOR, TODO_ACCENT, PRIORITY_LABELS, STATUS_COLOR, STATUS_LABELS, MY_DAY_COLOR, PRESET_10 } from "../shared/constants";
 import { describeActivity } from "../shared/activity-format";
+import { formatDuration } from "../shared/time";
 import { todayStartMs, toggleMyDayValue } from "../shared/task-filters";
 import { ConfirmPopover } from "../shared/confirm-popover";
 import { renderMarkdown } from "../shared/markdown-lite";
@@ -510,6 +512,11 @@ function PropertyGrid({
       {/* 开始日期（纯日期，零点语义；与移动端详情「截止→开始」相邻同款） */}
       <InfoRow icon={CircleStop} label="开始日期">
         <StartDateEditor value={task.start_date} onChange={(ms) => void onPatch({ start_date: ms })} />
+      </InfoRow>
+
+      {/* 预计时长（M9 阶段一，只读；编辑走任务表单，时间块视图落地时统一行内编辑） */}
+      <InfoRow icon={Timer} label="预计时长">
+        {formatDuration(task.duration_minutes)}
       </InfoRow>
 
       {/* 完成进度：仅 >0 显示，占位保持对齐（04 §3.4） */}
