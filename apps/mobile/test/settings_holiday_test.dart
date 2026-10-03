@@ -28,12 +28,21 @@ Future<void> _settle(WidgetTester tester) async {
 
 /// 设置页多于一屏（视口 600）：让目标落在页头之下、视口下沿之上。
 ///
-/// 两个坑：①设置页是 `ListView(children:)`（即时构建，全树已存在），
-/// `dragUntilVisible` 立即返回**不做任何滚动**；②单向补滚只判下沿会过冲，
-/// 把目标顶到页头（56px，Stack 覆盖）之下 → 点击落空报 hit test 警告。
-/// 故此处按「低于页头 / 高于下沿」双向收敛。
+/// 三个坑：①`ListView(children:)` 的子项在**元素层面仍是懒构建**——
+/// G3 摘要卡加入后「日历与节假日」卡被推出 cacheExtent 窗口，不拖不出树
+/// （`dragUntilVisible` 对未构建的 finder 直接 No element），先有界轮询
+/// 把目标拖出来；②拖出后 `dragUntilVisible` 立即返回不做微调；③单向补滚
+/// 只判下沿会过冲，把目标顶到页头（56px，Stack 覆盖）之下 → 点击落空。
+/// 故先拖出、再按「低于页头 / 高于下沿」双向收敛。
 Future<void> _scrollTo(WidgetTester tester, Finder finder) async {
-  final scrollable = find.byType(ListView);
+  final scrollable = find
+      .descendant(of: find.byType(ListView), matching: find.byType(Scrollable))
+      .first;
+  // 懒构建：目标未 build 前任何 finder 都拿不到元素，先有界轮询拖出树
+  for (var i = 0; i < 20 && finder.evaluate().isEmpty; i++) {
+    await tester.drag(find.byType(ListView), const Offset(0, -200));
+    await tester.pumpAndSettle();
+  }
   await tester.dragUntilVisible(finder, scrollable, const Offset(0, -160));
   await tester.pumpAndSettle();
   for (var i = 0; i < 10; i++) {
@@ -59,8 +68,8 @@ void main() {
     await tester.pumpWidget(_wrap(bridge));
     await _settle(tester);
 
-    await _scrollTo(tester, find.text('每月自动更新'));
-    expect(find.text('每月自动更新'), findsOneWidget);
+    await _scrollTo(tester, find.text('自动更新'));
+    expect(find.text('自动更新'), findsOneWidget);
     // core 缺省开启（cfg_kv 无键按 1 处理），Mock 同口径
     expect(bridge.store.holidayAutoEnabled, isTrue);
     expect(tester.widget<Switch>(_holidaySwitch()).value, isTrue);
@@ -80,7 +89,7 @@ void main() {
     await tester.pumpWidget(_wrap(bridge));
     await _settle(tester);
 
-    await _scrollTo(tester, find.text('每月自动更新'));
+    await _scrollTo(tester, find.text('自动更新'));
     expect(tester.widget<Switch>(_holidaySwitch()).value, isFalse);
     expect(find.textContaining('自动更新已关闭'), findsOneWidget);
   });

@@ -6,6 +6,7 @@ import 'package:orbit/data/api/mock_orbit_bridge.dart';
 import 'package:orbit/data/providers/biometric_provider.dart';
 import 'package:orbit/data/providers/bridge_provider.dart';
 import 'package:orbit/modules/settings/settings_screen.dart';
+import 'package:orbit/shared/widgets/shadcn/orbit_section_card.dart';
 import 'package:orbit/services/biometric_service.dart';
 import 'package:orbit/data/api/orbit_bridge.dart' show BiometricSecretBundle;
 import 'support/orbit_test_app.dart';
@@ -49,6 +50,29 @@ Widget _wrap(MockOrbitBridge bridge, BiometricService service) =>
       child: orbitTestApp(home: SettingsScreen()),
     );
 
+/// 拖动列表逼出懒构建的下方卡片，直到 [finder] 出现在树上（有界轮询）。
+///
+/// 设置页 ListView 懒构建：G3「每日摘要提醒」卡上移加入后，安全卡被推到
+/// 默认测试视口（600px）之外——不拖动它根本不会被 build，任何 find 都是
+/// Found 0（此前安全卡在首屏窗口内，用例无需这一步）。
+Future<void> _dragUntilVisible(WidgetTester tester, Finder finder,
+    {int rounds = 20}) async {
+  final scrollable = find.byType(ListView).first;
+  for (var i = 0; i < rounds; i++) {
+    if (finder.evaluate().isNotEmpty) return;
+    await tester.drag(scrollable, const Offset(0, -200));
+    await tester.pumpAndSettle();
+  }
+}
+
+/// 安全卡内的指纹开关（G3 摘要提醒卡加入后全页有两个 Switch，
+/// `find.byType(Switch)` 不再唯一——收窄到「指纹解锁」行所在的 SectionCard）
+Finder _bioSwitch() => find.descendant(
+      of: find.ancestor(
+          of: find.text('指纹解锁'), matching: find.byType(SectionCard)),
+      matching: find.byType(Switch),
+    );
+
 /// 把目标滚进「标题栏之下、视口下沿之上」的可命中区间。
 ///
 /// 安全卡位于设置页第三张卡，其内容随主密码态卡片与库迁移入口增长，固定
@@ -77,6 +101,7 @@ void main() {
       ),
     ));
     await tester.pumpAndSettle();
+    await _dragUntilVisible(tester, find.textContaining('未检测到指纹硬件'));
 
     expect(find.text('指纹解锁'), findsNothing);
     expect(find.textContaining('未检测到指纹硬件'), findsOneWidget);
@@ -95,8 +120,9 @@ void main() {
     ));
     await tester.pumpAndSettle();
 
+    await _dragUntilVisible(tester, find.text('指纹解锁'));
     expect(find.text('指纹解锁'), findsOneWidget);
-    final switchFinder = find.byType(Switch);
+    final switchFinder = _bioSwitch();
     expect(switchFinder, findsOneWidget);
 
     // 开关当前关（value=false）→ 点开 → 弹密码确认
@@ -137,7 +163,8 @@ void main() {
     ));
     await tester.pumpAndSettle();
 
-    final switchFinder = find.byType(Switch);
+    await _dragUntilVisible(tester, find.text('指纹解锁'));
+    final switchFinder = _bioSwitch();
     expect(tester.widget<Switch>(switchFinder).value, true);
 
     // 同「打开开关」：先滚进可命中区间再点

@@ -18,8 +18,16 @@ Widget _wrap(MockOrbitBridge bridge) => ProviderScope(
     );
 
 /// 越过 FutureProvider 落定并收敛帧
+///
+/// **两级 mock 延迟都要冲掉**：页面 body 是 `holidaysAsync.when(loading:…)`，
+/// 概览卡（挂 `holidayMetaProvider`）要等 holidayList 的 120ms `_delay` 解析后
+/// 才挂载——那时才创建 meta 自己的 120ms 定时器。只推一拍 meta 会停在加载态
+/// （概览显示「从未成功」），且该 Timer 活到 teardown 触发
+/// 「A Timer is still pending」。第二拍就是为它准备的。
 Future<void> _settle(WidgetTester tester) async {
   await tester.pump(const Duration(milliseconds: 300));
+  await tester.pumpAndSettle();
+  await tester.pump(const Duration(milliseconds: 150));
   await tester.pumpAndSettle();
 }
 
@@ -27,6 +35,27 @@ Future<void> _settle(WidgetTester tester) async {
 Future<void> _advance(WidgetTester tester, int ms) async {
   await tester.pump(Duration(milliseconds: ms));
   await tester.pumpAndSettle();
+}
+
+/// 有界轮询等 UI 出现：抽屉「点选 → 关闭动画 → 结果回调用方」隔着两拍，
+/// 固定时长推进有竞态（结果回包在动画收尾帧之后才到），轮询对它免疫
+Future<void> _pumpUntil(WidgetTester tester, Finder finder,
+    {int rounds = 30}) async {
+  for (var i = 0; i < rounds; i++) {
+    await tester.pump(const Duration(milliseconds: 100));
+    await tester.pumpAndSettle();
+    if (finder.evaluate().isNotEmpty) return;
+  }
+}
+
+/// [`_pumpUntil`] 的消失版：等元素从树上移除
+Future<void> _pumpUntilGone(WidgetTester tester, Finder finder,
+    {int rounds = 30}) async {
+  for (var i = 0; i < rounds; i++) {
+    await tester.pump(const Duration(milliseconds: 100));
+    await tester.pumpAndSettle();
+    if (finder.evaluate().isEmpty) return;
+  }
 }
 
 void main() {
@@ -130,27 +159,31 @@ void main() {
 
   testWidgets('按年份范围获取：两级年份抽屉 → 进度弹层 → 终态汇总 toast',
       (tester) async {
-    await tester.pumpWidget(_wrap(MockOrbitBridge()));
+    final bridge = MockOrbitBridge();
+    await tester.pumpWidget(_wrap(bridge));
     await _settle(tester);
 
     await tester.tap(find.text('按年份范围获取'));
-    await tester.pumpAndSettle();
+    await _pumpUntil(tester, find.text('起始年份'));
     expect(find.text('起始年份'), findsOneWidget);
 
     // 抽屉列表 2013..明年 升序，首两项必在视口内（无需滚动）
     await tester.tap(find.text('2013 年'));
-    await tester.pumpAndSettle();
+    await _pumpUntil(tester, find.text('结束年份'));
     expect(find.text('结束年份'), findsOneWidget);
 
+    // 调大 mock 延迟让进度弹层的存在窗口可观察（默认 120ms 会被
+    // pumpAndSettle 的内部帧整段吃掉，弹层开合快到任何帧间断言都赶不上）
+    bridge.latency = const Duration(milliseconds: 300);
     await tester.tap(find.text('2014 年'));
-    await tester.pumpAndSettle();
     // 进度弹层（不可遮罩关闭，带取消）
-    expect(find.text('正在补写节假日'), findsOneWidget);
+    await _pumpUntil(tester, find.text('正在补写节假日'));
     expect(find.text('取消'), findsOneWidget);
 
-    // Mock 每年 120ms；2 年 + 收尾，显式推进假时钟让弹层自然收口
-    await _advance(tester, 2000);
-    expect(find.text('正在补写节假日'), findsNothing);
+    // Mock 每年 300ms；2 年 + 收尾，显式推进假时钟让弹层自然收口
+    await _advance(tester, 4000);
+    await tester.idle();
+    await _pumpUntilGone(tester, find.text('正在补写节假日'));
     // 2013/2014 均不在 Mock 预置表 → 全部「无数据」
     expect(find.text('补写完成：成功 0 年 · 无数据 2 年'), findsOneWidget);
     await drainToastTimers(tester);
@@ -166,13 +199,18 @@ void main() {
     bridge.store.holidayFailedYears.add(2014);
 
     await tester.tap(find.text('按年份范围获取'));
-    await tester.pumpAndSettle();
+    await _pumpUntil(tester, find.text('起始年份'));
     await tester.tap(find.text('2013 年'));
-    await tester.pumpAndSettle();
+    await _pumpUntil(tester, find.text('结束年份'));
+    bridge.latency = const Duration(milliseconds: 300);
     await tester.tap(find.text('2014 年'));
-    await tester.pumpAndSettle();
+    await _pumpUntil(tester, find.text('正在补写节假日'));
+    expect(find.text('取消'), findsOneWidget);
 
-    await _advance(tester, 2000);
+    await _advance(tester, 4000);
+    await tester.idle();
+    await _pumpUntilGone(tester, find.text('正在补写节假日'));
+    // 部分成功按事实上报：warning 级 toast 三计数 + 失败年份副文案
     expect(find.text('补写完成：成功 0 年 · 失败 1 年 · 无数据 1 年'), findsOneWidget);
     // 失败年份来自逐年进度事件（终态 done 只带计数）
     expect(find.text('失败年份：2014（沿用原缓存）'), findsOneWidget);

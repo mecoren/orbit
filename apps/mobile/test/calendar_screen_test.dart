@@ -38,6 +38,23 @@ MockOrbitBridge _seededBridge() {
 }
 
 /// 含 2026-10 国庆假期的桥（复现「翻到十月应看到假期」场景）
+/// 用上/下月钮把月历导航到目标年月——假期徽标用例写死「一次下个月到
+/// 2026-10」，跨月后（2026-10-01 起）一按就进 11 月，徽标断言整体漂移；
+/// 按当前月差导航才能与真实「今天」解耦。
+Future<void> _navigateToMonth(WidgetTester tester, int year, int month) async {
+  var diff = (year - DateTime.now().year) * 12 + (month - DateTime.now().month);
+  while (diff > 0) {
+    await tester.tap(find.byTooltip('下个月'));
+    await tester.pumpAndSettle();
+    diff--;
+  }
+  while (diff < 0) {
+    await tester.tap(find.byTooltip('上个月'));
+    await tester.pumpAndSettle();
+    diff++;
+  }
+}
+
 class _OctHolidayBridge extends MockOrbitBridge {
   @override
   Future<List<HolidayInfo>> holidayList() async => const [
@@ -405,9 +422,11 @@ void main() {
     await tester.pumpWidget(_wrap(const SizedBox(), bridge));
     await settle(tester);
 
-    // 横滑到 10 月（与上一条用例同起手：从日期格起滑，星期表头不在 PageView 内）
-    await tester.fling(find.text('${DateTime.now().day}').first,
-        const Offset(-320, 0), 900);
+    // 先导航到 2026-09（假期月的上一个月）再横滑进 10 月：从「当前月」横滑
+    // 一次的写法跨月后会漂（2026-10-01 起一滑就进 11 月，10 月徽标断言全空）。
+    // 起滑点用 15 号——任何月份网格里都存在，不依赖「今天是几号」。
+    await _navigateToMonth(tester, 2026, 9);
+    await tester.fling(find.text('15').first, const Offset(-320, 0), 900);
     await tester.pumpAndSettle();
     expect(headerText('10月'), findsOneWidget);
 
@@ -630,9 +649,8 @@ void main() {
     await tester.pumpWidget(_wrap(const SizedBox(), bridge));
     await settle(tester);
 
-    // 翻到 2026-10 后切议程档
-    await tester.tap(find.byTooltip('下个月'));
-    await tester.pumpAndSettle();
+    // 翻到 2026-10 后切议程档（按当前月差导航，跨月不漂）
+    await _navigateToMonth(tester, 2026, 10);
     expect(headerText('10月'), findsOneWidget);
     await tester.tap(find.byTooltip('切换到议程'));
     await tester.pumpAndSettle();

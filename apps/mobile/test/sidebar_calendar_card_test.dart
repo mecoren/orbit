@@ -108,16 +108,15 @@ void main() {
     await tester.pumpWidget(_wrap(bridge));
     await _settle(tester);
 
-    // 月历整张是单段卡
+    // 月历整张不再包卡（a6a13aa 去卡片化：直接铺页面底色）——
+    // 此前断言「单段卡包裹」，随竞品版式打磨一并更新为「无卡片包裹」
     final month = find.byType(OrbitMonthCalendar);
     expect(month, findsOneWidget);
-    final monthSeg = find.ancestor(
-      of: month,
-      matching: find.byType(OrbitCardSegment),
+    expect(
+      find.ancestor(of: month, matching: find.byType(OrbitCardSegment)),
+      findsNothing,
+      reason: '去卡片化后月历不得再被 OrbitCardSegment 包裹',
     );
-    expect(monthSeg, findsOneWidget);
-    expect(tester.widget<OrbitCardSegment>(monthSeg).edge,
-        OrbitCardEdge.single);
 
     // 选中日空态是单段卡（整页滚动布局下滚到可见）
     await tester.dragFrom(

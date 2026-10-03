@@ -31,7 +31,7 @@ void main() {
         reminders: [_row(10, 1, 1000)],
       );
       expect(plan.deleteIds, [10]);
-      expect(plan.creates, [(taskId: 1, remindAt: 2000)]);
+      expect(plan.creates, [(taskId: 1, remindAt: 2000, isConstant: 0)]);
       expect(plan.isEmpty, isFalse);
       expect(plan.count, 2);
     });
@@ -42,7 +42,17 @@ void main() {
         reminders: [_row(10, 1, 1000), _row(11, 1, 2000)],
       );
       expect(plan.deleteIds, [11]);
-      expect(plan.creates, [(taskId: 1, remindAt: 3000)]);
+      expect(plan.creates, [(taskId: 1, remindAt: 3000, isConstant: 0)]);
+    });
+
+    test('G2：持续提醒行推迟不降级——isConstant 随被替换旧行继承', () {
+      final plan = planSnoozeLanding(
+        pending: const [PendingAlarm(taskId: 1, remindAt: 3000)],
+        reminders: [_row(10, 1, 1000, isConstant: 1)],
+      );
+      expect(plan.deleteIds, [10]);
+      expect(plan.creates, [(taskId: 1, remindAt: 3000, isConstant: 1)],
+          reason: '持续提醒的顺延链不得因推迟降级成一次性');
     });
 
     test('已有同刻行 → 已落地，空计划', () {
@@ -98,7 +108,7 @@ void main() {
         nowMs: nowMs,
       );
       expect(plan.deleteIds, isEmpty);
-      expect(plan.creates, [(taskId: 1, remindAt: nowMs + 600000)]);
+      expect(plan.creates, [(taskId: 1, remindAt: nowMs + 600000, isConstant: 0)]);
     });
 
     test('孤儿闹钟但未启用 activeTaskIds（日常重排）→ 保守不补建', () {
