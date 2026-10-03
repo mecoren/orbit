@@ -726,6 +726,8 @@ pub fn plan_next_recurring_instance(task: &TodoTask, now_ms: i64) -> Option<Next
             position: None,
             is_favorite: Some(task.is_favorite),
             my_day_date: None,
+            // 预计时长随克隆（同一系列语义延续）
+            duration_minutes: task.duration_minutes,
         },
         delta_ms,
     })
@@ -857,9 +859,9 @@ pub async fn complete_todo_task(pool: &SqlitePool, id: i64) -> CoreResult<Comple
                 uuid, title, description, project_id, priority, status, done, done_at,
                 due_date, start_date, repeat_after, repeat_mode,
                 repeat_weekdays, repeat_end_type, repeat_end_param, repeat_from_done,
-                percent_done, position, is_favorite, my_day_date,
+                percent_done, position, is_favorite, my_day_date, duration_minutes,
                 is_deleted, created_at, updated_at, version
-            ) VALUES (?, ?, ?, ?, ?, 'pending', 0, NULL, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?, 0, ?, ?, 1)
+            ) VALUES (?, ?, ?, ?, ?, 'pending', 0, NULL, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?, ?, 0, ?, ?, 1)
             RETURNING *",
         )
         .bind(&new_uuid)
@@ -877,6 +879,7 @@ pub async fn complete_todo_task(pool: &SqlitePool, id: i64) -> CoreResult<Comple
         .bind(i.repeat_from_done.unwrap_or(0))
         .bind(i.is_favorite.unwrap_or(0))
         .bind(i.my_day_date)
+        .bind(i.duration_minutes)
         .bind(now)
         .bind(now)
         .fetch_one(&mut *tx)
@@ -1343,6 +1346,7 @@ mod repeat_tests {
             position: 0.0,
             is_favorite: 0,
             my_day_date: None,
+            duration_minutes: None,
             is_deleted: 0,
             created_at: 0,
             updated_at: 0,
@@ -1384,6 +1388,7 @@ mod repeat_tests {
             position: 0.0,
             is_favorite: 0,
             my_day_date: None,
+            duration_minutes: None,
             is_deleted: 0,
             created_at: 0,
             updated_at: 0,
@@ -1426,6 +1431,7 @@ mod repeat_tests {
             position: 0.0,
             is_favorite: 0,
             my_day_date: None,
+            duration_minutes: None,
             is_deleted: 0,
             created_at: 0,
             updated_at: 0,
@@ -1465,6 +1471,7 @@ mod repeat_tests {
             position: 0.0,
             is_favorite: 0,
             my_day_date: None,
+            duration_minutes: None,
             is_deleted: 0,
             created_at: 0,
             updated_at: 0,
@@ -1580,6 +1587,7 @@ mod repeat_tests {
             position: 0.0,
             is_favorite: 0,
             my_day_date: None,
+            duration_minutes: None,
             is_deleted: 0,
             created_at: 0,
             updated_at: 0,
@@ -1617,6 +1625,7 @@ mod repeat_tests {
             position: 0.0,
             is_favorite: 1,
             my_day_date: None,
+            duration_minutes: None,
             is_deleted: 0,
             created_at: 0,
             updated_at: 0,
@@ -2051,9 +2060,9 @@ pub async fn duplicate_todo_task(pool: &SqlitePool, id: i64) -> CoreResult<TodoT
             uuid, title, description, project_id, priority, status, done, done_at,
             due_date, start_date, repeat_after, repeat_mode,
             repeat_weekdays, repeat_end_type, repeat_end_param, repeat_from_done,
-            percent_done, position, is_favorite, my_day_date,
+            percent_done, position, is_favorite, my_day_date, duration_minutes,
             is_deleted, created_at, updated_at, version
-        ) VALUES (?, ?, ?, ?, ?, 'pending', 0, NULL, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, NULL, 0, ?, ?, 1)
+        ) VALUES (?, ?, ?, ?, ?, 'pending', 0, NULL, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, NULL, ?, 0, ?, ?, 1)
         RETURNING *",
     )
     .bind(&new_uuid)
@@ -2071,6 +2080,7 @@ pub async fn duplicate_todo_task(pool: &SqlitePool, id: i64) -> CoreResult<TodoT
     .bind(src.repeat_from_done)
     .bind(new_position)
     .bind(src.is_favorite)
+    .bind(src.duration_minutes)
     .bind(now)
     .bind(now)
     .fetch_one(&mut *tx)
@@ -2142,6 +2152,7 @@ mod duplicate_tests {
                 position: None,
                 is_favorite: Some(1),
                 my_day_date: None,
+                duration_minutes: Some(90),
             },
         )
         .await
@@ -2165,6 +2176,8 @@ mod duplicate_tests {
         assert_eq!(copy.due_date, src.due_date);
         assert_eq!(copy.repeat_mode, 1);
         assert_eq!(copy.is_favorite, 1);
+        // 预计时长随副本（任务内容属性，非社交性字段）
+        assert_eq!(copy.duration_minutes, Some(90));
         // 新实例未完成、独立 uuid、position 紧邻原任务
         assert_eq!(copy.done, 0);
         assert_ne!(copy.uuid, src.uuid);

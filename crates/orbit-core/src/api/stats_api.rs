@@ -467,6 +467,7 @@ mod tests {
             position: None,
             is_favorite: None,
             my_day_date: None,
+                duration_minutes: None,
         }
     }
 

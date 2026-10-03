@@ -51,7 +51,7 @@ pub(crate) fn current_device_id() -> String {
 const LIST_COLUMNS_TASKS_PRUNED: &str = "id, '' AS uuid, title, NULL AS description, \
     project_id, priority, status, done, done_at, due_date, start_date, \
     repeat_after, repeat_mode, repeat_weekdays, repeat_end_type, repeat_end_param, \
-    repeat_from_done, percent_done, position, is_favorite, my_day_date, \
+    repeat_from_done, percent_done, position, is_favorite, my_day_date, duration_minutes, \
     is_deleted, created_at, updated_at, deleted_at, version";
 
 /// 泛型分页列表查询：SELECT <列> FROM {table} WHERE is_deleted=0
@@ -650,9 +650,9 @@ pub async fn create_todo_task(
             uuid, title, description, project_id, priority, status, done, done_at,
             due_date, start_date, repeat_after, repeat_mode,
             repeat_weekdays, repeat_end_type, repeat_end_param, repeat_from_done,
-            percent_done, position, is_favorite, my_day_date,
+            percent_done, position, is_favorite, my_day_date, duration_minutes,
             is_deleted, created_at, updated_at, version
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, 0, ?, ?, 1)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, 0, ?, ?, 1)
         RETURNING *",
     )
     .bind(&uuid)
@@ -674,6 +674,7 @@ pub async fn create_todo_task(
     .bind(input.position.unwrap_or(0.0))
     .bind(input.is_favorite.unwrap_or(0))
     .bind(input.my_day_date)
+    .bind(input.duration_minutes.filter(|m| *m > 0))
     .bind(now)
     .bind(now)
     .fetch_one(pool)
@@ -748,6 +749,9 @@ pub async fn update_todo_task(
     if input.my_day_date.is_some() {
         sets.push("my_day_date = ?".into());
     }
+    if input.duration_minutes.is_some() {
+        sets.push("duration_minutes = ?".into());
+    }
 
     let sql = format!(
         "UPDATE todo_tasks SET {} WHERE id = ? RETURNING *",
@@ -810,6 +814,10 @@ pub async fn update_todo_task(
     }
     if let Some(v) = input.my_day_date {
         q = q.bind(v);
+    }
+    if let Some(v) = input.duration_minutes {
+        // 非 None 即落库：Some(None) 清为 NULL，Some(Some(0)) 视同清除（负值/零非合法时长）
+        q = q.bind(v.filter(|m| *m > 0));
     }
     let row = q
         .bind(id)
