@@ -37,6 +37,7 @@ import {
   CalendarRange,
   CalendarX,
   Columns3,
+  Hourglass,
   Inbox,
   LocateFixed,
   Loader2,
@@ -76,11 +77,12 @@ import {
   holidayMetaLines,
 } from "../shared/holiday-meta";
 import { TaskContextMenu } from "./task-context-menu";
+import { TimelinePanel } from "./timeline-panel";
 import { YearOverviewPanel, MAX_YEAR, MIN_YEAR } from "./year-overview";
 import { useWheelStepRef, shiftYearMonth } from "../shared/wheel-nav";
 import type { ProjectedTaskLabel, TodoProject, TodoTask } from "@/lib/tauri";
 
-export type CalendarSubMode = "month" | "week" | "year" | "agenda";
+export type CalendarSubMode = "month" | "week" | "timeline" | "year" | "agenda";
 
 interface CalendarViewProps {
   tasks: TodoTask[];
@@ -383,7 +385,7 @@ export function CalendarView({
             <span ref={yearPaneWheelRef} title="滚轮切换年份">
               {yearPaneYear}年
             </span>
-          ) : subMode === "week" ? (
+          ) : subMode === "week" || subMode === "timeline" ? (
             <>
               <span>{weekStart.getFullYear()}年</span>
               <span ref={viewWeekWheelRef} title="滚轮切换周">
@@ -427,6 +429,16 @@ export function CalendarView({
               variant="ghost"
               size="sm"
               className="h-8 gap-1.5 rounded-none"
+              aria-pressed={subMode === "timeline"}
+              onClick={() => setSubMode("timeline")}
+            >
+              <Hourglass size={14} />
+              时间
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8 gap-1.5 rounded-none"
               aria-pressed={subMode === "year"}
               onClick={() => {
                 setYearPaneYear(viewYear);
@@ -447,11 +459,19 @@ export function CalendarView({
               议程
             </Button>
           </div>
-          {subMode === "agenda" && (
+          {(subMode === "agenda" || subMode === "timeline") && (
             <>
-              <Button variant="outline" size="sm" className="h-8" onClick={() => goToday()}>
+              {/* 议程档沿用既有口径（回今天并切回月档）；时间轴档回到本周不切档
+                  ——与周档 goToday(keepMode) 同一语义 */}
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8"
+                onClick={() => goToday(subMode === "timeline")}
+              >
                 今天
               </Button>
+              {subMode === "agenda" && (
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
@@ -469,6 +489,7 @@ export function CalendarView({
                   {`${holidayLines.lastUpdate}（${holidayAutoText}，也可手动更新）${holidayFailText}`}
                 </TooltipContent>
               </Tooltip>
+              )}
             </>
           )}
         </div>
@@ -655,6 +676,16 @@ export function CalendarView({
               />
             )}
           </div>
+        </div>
+      ) : subMode === "timeline" ? (
+        /* ===== 时间轴档（M9 阶段二）：整幅 7 列 × 24h 网格，不用左右分栏 ===== */
+        <div className="min-h-0 flex-1 rounded-xl border bg-card/40 p-1">
+          <TimelinePanel
+            tasks={tasks}
+            weekStart={weekStart}
+            projects={projects}
+            onOpenDetail={openDetail}
+          />
         </div>
       ) : subMode === "year" ? (
         <div className={SPLIT_LAYOUT}>
