@@ -1580,16 +1580,20 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
             )
             : showKanban
             ? KanbanBoard(
-                columns:
-                    groupTasksForKanban(visible, _kanbanGroupBy, projects),
+                columns: groupTasksForKanban(
+                  visible,
+                  _kanbanGroupBy,
+                  projects,
+                  labelsByTask: labelsByTask,
+                ),
                 // 列卡与标准列表卡同让位：左右 12 页边（列间 12 由卡间距承担）
                 padding: cardListPadding,
                 onToggleDone: _toggleDone,
                 onOpen: (t) => context.push('/todo/${t.id}'),
                 onLongPress: _showTaskActions,
-                // 按状态分组时列头不代表项目，卡片补一行项目名
+                // 非项目分组时列头不代表项目，卡片补一行项目名
                 //（项目视图内页头已表达，行内不再重复）
-                projectTitleOf: _kanbanGroupBy == KanbanGroupBy.status &&
+                projectTitleOf: _kanbanGroupBy != KanbanGroupBy.project &&
                         _effectiveQuery.projectId == null
                     ? (t) => t.projectId == null
                         ? null

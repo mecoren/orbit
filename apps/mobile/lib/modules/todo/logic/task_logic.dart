@@ -938,15 +938,40 @@ class KanbanColumn {
   });
 }
 
+/// 截止分桶键（镜像桌面 kanban-group.ts `dueBucketOf`：纯日期口径五分桶；
+/// 返回完整列键 `due:overdue|today|week|later|none`，供分列与单测直断）。
+String kanbanDueBucket(int? dueDate, {DateTime? now}) {
+  if (dueDate == null) return 'due:none';
+  final n = now ?? DateTime.now();
+  final t0 = DateTime(n.year, n.month, n.day).millisecondsSinceEpoch;
+  const day = 86400000;
+  if (dueDate < t0) return 'due:overdue';
+  if (dueDate < t0 + day) return 'due:today';
+  if (dueDate < t0 + 7 * day) return 'due:week';
+  return 'due:later';
+}
+
 /// 看板分列（纯函数）：
 /// - 按项目：有任务的项目各一列 + 「未分组」列（无任务的项目不出现，
-///   与桌面 kanban-view 同口径——空列在移动端横滑语境下是纯噪音）；
-/// - 按状态：固定 pending → doing → done 三列（含空列，状态列本身即语义）。
+///   与桌面 kanban-view 同口径——空列在移动端横滑语境下是纯噪音；
+///   注意桌面端保留空项目列，双端此处有意不同）；
+/// - 按状态：固定 pending → doing → done 三列（含空列，状态列本身即语义）；
+/// - 按优先级：固定 P5 → P0 六列（含空列，标题/颜色与行内优先级口径同源）；
+/// - 按标签：有任务的标签各一列（标题排序）+ 「未贴标签」列；多标签任务
+///   按最小 label id 单归属（与桌面 kanban-group.ts 同口径，列间无重复卡；
+///   移动端看板不支持跨列拖拽，改归属走长按菜单）；
+/// - 按截止日期：逾期 / 今天 / 本周 / 以后 / 无截止日期五桶（含空桶）；
+///   看板/表格隐藏已完成（调用方 `hideDone` 已过滤），桶内只有未完成任务。
+///
+/// [labelsByTask] 来自标签投影（未就绪回落空表时标签档退化为全员「未贴标签」，
+/// 不阻塞渲染）；[now] 仅单测注入固定输入，生产走本地当前时刻。
 List<KanbanColumn> groupTasksForKanban(
   List<TodoTask> tasks,
   KanbanGroupBy by,
-  List<TodoProject> projects,
-) {
+  List<TodoProject> projects, {
+  Map<int, List<ProjectedTaskLabel>> labelsByTask = const {},
+  DateTime? now,
+}) {
   if (by == KanbanGroupBy.status) {
     const order = ['pending', 'doing', 'done'];
     return [
@@ -956,6 +981,71 @@ List<KanbanColumn> groupTasksForKanban(
           title: statusLabel(s),
           colorHex: statusColorHex(s),
           tasks: tasks.where((t) => t.status == s).toList(),
+        ),
+    ];
+  }
+  if (by == KanbanGroupBy.priority) {
+    return [
+      for (var lv = 5; lv >= 0; lv--)
+        KanbanColumn(
+          key: 'pri:$lv',
+          title: priorityLabel(lv),
+          colorHex: priorityColorHex(lv),
+          tasks: tasks.where((t) => t.priority == lv).toList(),
+        ),
+    ];
+  }
+  if (by == KanbanGroupBy.label) {
+    final seen = <int, ProjectedTaskLabel>{};
+    for (final t in tasks) {
+      for (final l in labelsByTask[t.id] ?? const <ProjectedTaskLabel>[]) {
+        seen.putIfAbsent(l.id, () => l);
+      }
+    }
+    final ordered = seen.values.toList()
+      ..sort((a, b) => a.title.compareTo(b.title));
+    int? primaryOf(TodoTask t) {
+      final ls = labelsByTask[t.id];
+      if (ls == null || ls.isEmpty) return null;
+      var m = ls.first.id;
+      for (final l in ls) {
+        if (l.id < m) m = l.id;
+      }
+      return m;
+    }
+    return [
+      for (final l in ordered)
+        KanbanColumn(
+          key: 'lbl:${l.id}',
+          title: l.title,
+          colorHex: l.hexColor,
+          tasks: tasks.where((t) => primaryOf(t) == l.id).toList(),
+        ),
+      KanbanColumn(
+        key: 'lbl:none',
+        title: '未贴标签',
+        colorHex: '#6B7280',
+        tasks: tasks.where((t) => primaryOf(t) == null).toList(),
+      ),
+    ];
+  }
+  if (by == KanbanGroupBy.due) {
+    const buckets = [
+      ('due:overdue', '逾期', 4),
+      ('due:today', '今天', 2),
+      ('due:week', '本周', 3),
+      ('due:later', '以后', 1),
+      ('due:none', '无截止日期', 0),
+    ];
+    return [
+      for (final (key, title, lv) in buckets)
+        KanbanColumn(
+          key: key,
+          title: title,
+          colorHex: priorityColorHex(lv),
+          tasks: tasks
+              .where((t) => kanbanDueBucket(t.dueDate, now: now) == key)
+              .toList(),
         ),
     ];
   }

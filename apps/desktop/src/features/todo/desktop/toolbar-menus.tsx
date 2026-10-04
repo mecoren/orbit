@@ -42,6 +42,7 @@ import {
   type TaskSortKey,
 } from "../shared/task-filters";
 import { type KanbanGroupBy } from "./kanban-view";
+import { KANBAN_GROUP_LABEL } from "../shared/kanban-group";
 // 仅类型反向引用（inline type 擦除，无运行时环）：三态类型真源在 task-panel
 import { type PriorityFilter, type StatusFilter, type ViewMode } from "./task-panel";
 
@@ -141,7 +142,7 @@ export function SortMenuButton(props: SortMenuButtonProps) {
             <DropdownMenuSubTrigger>
               <span className="flex-1">分组</span>
               <span className="text-xs text-muted-foreground">
-                {kanbanGroupBy === "project" ? "按项目" : "按状态"}
+                {KANBAN_GROUP_LABEL[kanbanGroupBy]}
               </span>
             </DropdownMenuSubTrigger>
             <DropdownMenuSubContent>
@@ -151,6 +152,9 @@ export function SortMenuButton(props: SortMenuButtonProps) {
               >
                 <DropdownMenuRadioItem value="project">按项目</DropdownMenuRadioItem>
                 <DropdownMenuRadioItem value="status">按状态</DropdownMenuRadioItem>
+                <DropdownMenuRadioItem value="priority">按优先级</DropdownMenuRadioItem>
+                <DropdownMenuRadioItem value="label">按标签</DropdownMenuRadioItem>
+                <DropdownMenuRadioItem value="due">按截止日期</DropdownMenuRadioItem>
               </DropdownMenuRadioGroup>
             </DropdownMenuSubContent>
           </DropdownMenuSub>

@@ -10,6 +10,7 @@ TodoTask _task({
   String status = 'pending',
   int priority = 0,
   int? projectId,
+  int? dueDate,
   String title = 't',
 }) =>
     TodoTask(
@@ -22,7 +23,7 @@ TodoTask _task({
       status: status,
       done: status == 'done' ? 1 : 0,
       doneAt: null,
-      dueDate: null,
+      dueDate: dueDate,
       startDate: null,
       repeatAfter: 1,
       repeatMode: 0,
@@ -169,6 +170,64 @@ void main() {
         [_project(10, '工作')],
       );
       expect(cols.map((c) => c.key), ['p10']);
+    });
+
+    test('按优先级：固定 P5 → P0 六列（含空列）', () {
+      final cols = groupTasksForKanban(
+        [_task(id: 1, priority: 4), _task(id: 2)],
+        KanbanGroupBy.priority,
+        const [],
+      );
+      expect(
+        cols.map((c) => c.key),
+        ['pri:5', 'pri:4', 'pri:3', 'pri:2', 'pri:1', 'pri:0'],
+      );
+      expect(cols[1].tasks.single.id, 1);
+      expect(cols[1].title, '紧急');
+      expect(cols.last.tasks.single.id, 2);
+      expect(cols.last.title, '无');
+    });
+
+    test('按标签：有任务标签各一列 + 未贴标签（多标签取最小 id 单归属）', () {
+      ProjectedTaskLabel l(int id, String title) =>
+          ProjectedTaskLabel(id: id, title: title, hexColor: '#3B82F6');
+      final cols = groupTasksForKanban(
+        [_task(id: 1), _task(id: 2), _task(id: 3)],
+        KanbanGroupBy.label,
+        const [],
+        labelsByTask: {
+          1: [l(9, '乙'), l(3, '甲')],
+          2: [l(9, '乙')],
+        },
+      );
+      expect(cols.map((c) => c.key), ['lbl:9', 'lbl:3', 'lbl:none']);
+      expect(cols[0].tasks.single.id, 2);
+      // 任务 1 主标签 = 最小 id 3，只出现在甲列
+      expect(cols[1].tasks.single.id, 1);
+      expect(cols[2].tasks.single.id, 3);
+    });
+
+    test('按截止日期：逾期 / 今天 / 本周 / 以后 / 无日期五桶', () {
+      final now = DateTime(2026, 10, 5, 12); // 周一
+      final t0 = DateTime(2026, 10, 5).millisecondsSinceEpoch;
+      const day = 86400000;
+      final cols = groupTasksForKanban(
+        [
+          _task(id: 1, dueDate: t0 - day),
+          _task(id: 2, dueDate: t0 + 3600000),
+          _task(id: 3, dueDate: t0 + 3 * day),
+          _task(id: 4, dueDate: t0 + 30 * day),
+          _task(id: 5),
+        ],
+        KanbanGroupBy.due,
+        const [],
+        now: now,
+      );
+      expect(
+        cols.map((c) => c.key),
+        ['due:overdue', 'due:today', 'due:week', 'due:later', 'due:none'],
+      );
+      expect(cols.map((c) => c.tasks.single.id), [1, 2, 3, 4, 5]);
     });
   });
 

@@ -28,13 +28,17 @@ extension TaskViewModeMeta on TaskViewMode {
       };
 }
 
-/// 看板分列维度（对齐桌面 `kanban-view.tsx` 的 `groupBy`）
-enum KanbanGroupBy { project, status }
+/// 看板分列维度（对齐桌面 `kanban-view.tsx` 的 `groupBy`；
+/// docs/07 #70 起五档：项目 / 状态 / 优先级 / 标签 / 截止日期）
+enum KanbanGroupBy { project, status, priority, label, due }
 
 extension KanbanGroupByMeta on KanbanGroupBy {
   String get label => switch (this) {
         KanbanGroupBy.project => '按项目',
         KanbanGroupBy.status => '按状态',
+        KanbanGroupBy.priority => '按优先级',
+        KanbanGroupBy.label => '按标签',
+        KanbanGroupBy.due => '按截止日期',
       };
 }
 

@@ -1,7 +1,9 @@
 /**
  * KanbanView — 看板视图（04 文档 §3.3 复刻）
  *
- * - 分列：按项目（未分组归"未分组"，列序 localeCompare）或按状态（pending→doing→done 固定）
+ * - 分列：五档 project / status / priority / label / due（纯函数见
+ *   shared/kanban-group：列头 + 归属键 + 截止桶代表时刻；跨列拖拽改归属，
+ *   标签档 = 换主标签（删源挂目），截止档 = 改期到桶代表时刻）
  * - 卡片同时挂 useDraggable + useDroppable；PointerSensor distance:5
  * - 拖拽语义：同列落卡片 → 插到目标前；同列空白 → 追加；异列 → 先改归属再排序。
  *   position 一律取中值算法写入（03 文档 §一）。
@@ -51,13 +53,16 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
+  todoTaskLabelCreate,
+  todoTaskLabelDelete,
+  todoTaskLabelList,
   todoTaskUpdate,
   todoTaskUpdatePosition,
   type ProjectedTaskLabel,
   type TodoProject,
   type TodoTask,
 } from "@/lib/tauri";
-import { FAVORITE_COLOR, PRIORITY_COLOR, PRIORITY_LABELS, STATUS_COLOR, TODO_ACCENT } from "../shared/constants";
+import { FAVORITE_COLOR, PRIORITY_COLOR, PRIORITY_LABELS } from "../shared/constants";
 import { LabelChips } from "../shared/label-chips";
 import { ReminderChip } from "../shared/reminder-chip";
 import { displayReminder, type DisplayReminder, type TaskReminderMeta } from "../shared/reminder-meta";
@@ -72,10 +77,21 @@ import {
   batchUpdateStatus,
 } from "../shared/batch-actions";
 import { midpoint } from "../shared/position";
+import {
+  dueBucketRepresentative,
+  kanbanColumnKey,
+  kanbanColumns,
+  kanbanFallbackKey,
+  type DueBucket,
+  type KanbanColumnDef,
+  type KanbanGroupBy,
+} from "../shared/kanban-group";
+
 import { TaskContextMenu } from "./task-context-menu";
 import { CheckSvg } from "./task-list-view";
 
-export type KanbanGroupBy = "project" | "status";
+/** 分组维度（定义见 shared/kanban-group；此处 re-export 保持既有 import 路径） */
+export type { KanbanGroupBy };
 
 interface KanbanViewProps {
   tasks: TodoTask[];
@@ -89,12 +105,6 @@ interface KanbanViewProps {
   sortKey: TaskSortKey;
   /** 加载态（H3）：查询进行中列内不闪「拖拽任务到此处」空态 */
   loading?: boolean;
-}
-
-interface ColumnDef {
-  key: string;
-  title: string;
-  color: string;
 }
 
 export function KanbanView({ tasks, projects, groupBy, labelsByTask, remindersByTask, sortKey, loading }: KanbanViewProps) {
@@ -148,53 +158,71 @@ export function KanbanView({ tasks, projects, groupBy, labelsByTask, remindersBy
   // 覆盖）；跨列移动改归属不受档位限制，见 handleDragEnd
   const sortable = sortKey === "manual";
 
-  // ---- 分列 ----
-  const columns = useMemo<ColumnDef[]>(() => {
-    if (groupBy === "status") {
-      return [
-        { key: "pending", title: "待办", color: STATUS_COLOR.pending },
-        { key: "doing", title: "进行中", color: STATUS_COLOR.doing },
-        { key: "done", title: "已完成", color: STATUS_COLOR.done },
-      ];
-    }
-    const byKey = new Map<string, ColumnDef>();
-    // #36：项目列头用项目自身颜色（原来统一 TODO_ACCENT）
-    for (const p of [...projects].sort((a, b) => a.title.localeCompare(b.title))) {
-      byKey.set(String(p.id), { key: String(p.id), title: p.title, color: p.hex_color || TODO_ACCENT });
-    }
-    byKey.set("ungrouped", { key: "ungrouped", title: "未分组", color: TODO_ACCENT });
-    return [...byKey.values()];
-  }, [groupBy, projects]);
+  // ---- 分列（shared/kanban-group 纯函数；五档 project/status/priority/label/due）----
+  const columns = useMemo<KanbanColumnDef[]>(
+    () => kanbanColumns(groupBy, projects, labelsByTask, tasks),
+    [groupBy, projects, labelsByTask, tasks],
+  );
 
   const grouped = useMemo(() => {
     const map = new Map<string, TodoTask[]>();
+    const fallback = kanbanFallbackKey(groupBy);
     for (const col of columns) map.set(col.key, []);
     for (const t of tasks) {
-      const key =
-        groupBy === "status"
-          ? t.status
-          : t.project_id != null
-            ? String(t.project_id)
-            : "ungrouped";
-      (map.get(key) ?? map.get("ungrouped")!).push(t);
+      const key = kanbanColumnKey(groupBy, t, labelsByTask);
+      (map.get(key) ?? map.get(fallback)!).push(t);
     }
     // 列内保留父层传入序（工具栏 sortTasks 档位）——此处若再按
     // position 重排，非拖拽档的排序选择在看板将全部失效
     return map;
-  }, [tasks, columns, groupBy]);
+  }, [tasks, columns, groupBy, labelsByTask]);
 
   const refetchTasks = () => void qc.invalidateQueries({ queryKey: ["todo_tasks"] });
 
-  /** 异列：先改归属（project_id 或 status/done 联动），由调用方继续处理排序 */
+  /** 异列：先改归属，由调用方继续处理排序 */
   const moveAcross = async (taskId: number, colKey: string) => {
     if (groupBy === "project") {
       const pid = colKey === "ungrouped" ? null : Number(colKey);
       await todoTaskUpdate(taskId, { project_id: pid });
+    } else if (groupBy === "priority") {
+      await todoTaskUpdate(taskId, { priority: Number(colKey.slice(4)) });
+    } else if (groupBy === "label") {
+      await moveTaskLabel(taskId, colKey);
+    } else if (groupBy === "due") {
+      const bucket = colKey.slice(4) as DueBucket;
+      await todoTaskUpdate(taskId, { due_date: dueBucketRepresentative(bucket) });
     } else if (colKey === "done") {
       const task = tasks.find((t) => t.id === taskId);
       if (task) await completeTask(task, qc);
     } else {
       await todoTaskUpdate(taskId, { status: colKey, done: 0, done_at: null });
+    }
+  };
+
+  /**
+   * 标签列间移动 = 换主标签：删源挂目（其余标签不动）。
+   * 源列由拖拽前归属键解析（落库前归属未变，kanbanColumnKey 仍是源列）；
+   * 挂载行按 (task_id, label_id) 查链 id 后删（投影只有展示三列、无链 id）；
+   * 查不到按「只挂目」退化（并发删除等竞态不阻断拖拽主流程）。
+   */
+  const moveTaskLabel = async (taskId: number, colKey: string) => {
+    const task = tasks.find((t) => t.id === taskId);
+    const fromKey = task ? kanbanColumnKey(groupBy, task, labelsByTask) : "lbl:none";
+    const fromId = fromKey === "lbl:none" ? null : Number(fromKey.slice(4));
+    const toId = colKey === "lbl:none" ? null : Number(colKey.slice(4));
+    if (fromId != null && fromId !== toId) {
+      try {
+        const links = await todoTaskLabelList({ page: 1, page_size: 1000 });
+        const link = links.find(
+          (l) => l.task_id === taskId && l.label_id === fromId && !l.is_deleted,
+        );
+        if (link) await todoTaskLabelDelete(link.id);
+      } catch (e) {
+        console.error("标签换列解挂失败（继续挂载目标标签）:", e);
+      }
+    }
+    if (toId != null && toId !== fromId) {
+      await todoTaskLabelCreate({ task_id: taskId, label_id: toId });
     }
   };
 
@@ -272,7 +300,7 @@ export function KanbanView({ tasks, projects, groupBy, labelsByTask, remindersBy
   };
 
   const columnKeyOf = (t: TodoTask): string =>
-    groupBy === "status" ? t.status : t.project_id != null ? String(t.project_id) : "ungrouped";
+    kanbanColumnKey(groupBy, t, labelsByTask);
 
   const draggingTask = draggingId != null ? tasks.find((t) => t.id === draggingId) : undefined;
 
@@ -473,7 +501,7 @@ const KanbanColumn = memo(function KanbanColumn({
   onToggleSelect,
   onClearSelection,
 }: {
-  column: ColumnDef;
+  column: KanbanColumnDef;
   tasks: TodoTask[];
   projects: TodoProject[];
   labelsByTask: Map<number, ProjectedTaskLabel[]>;
