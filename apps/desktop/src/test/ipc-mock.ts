@@ -1048,6 +1048,20 @@ const commands: Record<string, (args: any, ctx: Ctx) => unknown> = {
         .map(([task_id, relation_count]) => ({ task_id, relation_count })),
     );
   },
+  // 任务→「有附件」旗标（#71：与 Rust task_attachment_flags 同口径——
+  // 存活链行 DISTINCT task_id；mock 附件卸载即物理删除，无软删态，
+  // 故存量即存活。筛选器 has_attachment 数据源）
+  task_attachment_flags: (_a, { db }) => {
+    const ids = new Set<number>();
+    for (const a of db.attachments) ids.add(a.task_id);
+    return ipcClone([...ids].sort((x, y) => x - y).map((task_id) => ({ task_id })));
+  },
+  // 任务→「有未完成子任务」旗标（#71：与 Rust task_open_subtask_flags 同口径）
+  task_open_subtask_flags: (_a, { db }) => {
+    const ids = new Set<number>();
+    for (const s of db.subtasks.filter((x) => !x.is_deleted && !x.done)) ids.add(s.task_id);
+    return ipcClone([...ids].sort((x, y) => x - y).map((task_id) => ({ task_id })));
+  },
 
   // ---- labels / task_labels ----
   todo_labels_list: (_a, { db }) => ipcClone(db.labels),

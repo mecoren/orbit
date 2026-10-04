@@ -514,9 +514,15 @@ export interface TaskDependencyFlags {
   /** 出边存活行总数（> 0 即「有关联」） */
   relation_count: number;
 }
+/** 任务存在旗标一位（core TaskExistenceFlag 镜像；#71 筛选器存在键数据源） */
+export interface TaskExistenceFlag {
+  task_id: number;
+}
 export const taskLabelsProjection = () => invoke<TaskLabelsProjection[]>("task_labels_projection");
 export const taskRemindersProjection = () => invoke<TaskRemindersProjection[]>("task_reminders_projection");
 export const taskDependencyFlags = () => invoke<TaskDependencyFlags[]>("task_dependency_flags");
+export const taskAttachmentFlags = () => invoke<TaskExistenceFlag[]>("task_attachment_flags");
+export const taskOpenSubtaskFlags = () => invoke<TaskExistenceFlag[]>("task_open_subtask_flags");
 
 // ========== M3 安全与同步 ==========
 

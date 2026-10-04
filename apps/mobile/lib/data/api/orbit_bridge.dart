@@ -330,6 +330,12 @@ abstract class OrbitBridge {
   /// 任务→「有描述」投影（只出 description 非空串的存活行；行内描述图标消费）
   Future<List<TaskDescriptionFlag>> taskDescriptionFlags();
 
+  /// 任务→「有附件」旗标（#71 筛选器 has_attachment 数据源）
+  Future<List<TaskExistenceFlag>> taskAttachmentFlags();
+
+  /// 任务→「有未完成子任务」旗标（#71 筛选器 has_open_subtask 数据源）
+  Future<List<TaskExistenceFlag>> taskOpenSubtaskFlags();
+
   // ── 同步配置与执行 ──
 
   /// 当前同步配置；未配置时返回 null

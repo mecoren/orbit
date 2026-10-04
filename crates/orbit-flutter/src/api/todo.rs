@@ -565,3 +565,21 @@ pub async fn task_description_flags() -> Result<Vec<TaskDescriptionFlag>, String
         .map_err(|e| e.to_string())
         .map(|v| v.into_iter().map(TaskDescriptionFlag::from).collect())
 }
+
+/// 任务→「有附件」旗标（#71 筛选器 has_attachment 数据源；只出有存活链的行）
+pub async fn task_attachment_flags() -> Result<Vec<TaskExistenceFlag>, String> {
+    let pool = pool()?;
+    todo_api::task_attachment_flags(&pool)
+        .await
+        .map_err(|e| e.to_string())
+        .map(|v| v.into_iter().map(TaskExistenceFlag::from).collect())
+}
+
+/// 任务→「有未完成子任务」旗标（#71 筛选器 has_open_subtask 数据源）
+pub async fn task_open_subtask_flags() -> Result<Vec<TaskExistenceFlag>, String> {
+    let pool = pool()?;
+    todo_api::task_open_subtask_flags(&pool)
+        .await
+        .map_err(|e| e.to_string())
+        .map(|v| v.into_iter().map(TaskExistenceFlag::from).collect())
+}

@@ -271,6 +271,35 @@ pub async fn task_description_flags(pool: &SqlitePool) -> CoreResult<Vec<TaskDes
     Ok(rows)
 }
 
+/// 任务→存在旗标一位（#71 筛选器存在键的数据源；只读，只出有行的任务，
+/// 缺位即 false；与 TaskDescriptionFlag 同形，调用方按 task_id 建集）。
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+pub struct TaskExistenceFlag {
+    pub task_id: i64,
+}
+
+/// 任务→「有附件」投影（只读；关联表存活行；附件二进制本身不在本表）
+pub async fn task_attachment_flags(pool: &SqlitePool) -> CoreResult<Vec<TaskExistenceFlag>> {
+    let rows: Vec<TaskExistenceFlag> = sqlx::query_as(
+        "SELECT DISTINCT task_id AS task_id FROM todo_task_attachments \
+         WHERE is_deleted = 0 ORDER BY task_id",
+    )
+    .fetch_all(pool)
+    .await?;
+    Ok(rows)
+}
+
+/// 任务→「有未完成子任务」投影（只读；子任务存活且 done = 0）
+pub async fn task_open_subtask_flags(pool: &SqlitePool) -> CoreResult<Vec<TaskExistenceFlag>> {
+    let rows: Vec<TaskExistenceFlag> = sqlx::query_as(
+        "SELECT DISTINCT task_id AS task_id FROM todo_subtasks \
+         WHERE is_deleted = 0 AND done = 0 ORDER BY task_id",
+    )
+    .fetch_all(pool)
+    .await?;
+    Ok(rows)
+}
+
 /// 子任务完成状态切换 + 自动重算父任务 percent_done
 pub async fn toggle_todo_subtask_done(
     pool: &SqlitePool,
@@ -3406,5 +3435,82 @@ mod task_projection_tests {
         assert!(task_reminders_projection(&pool).await.unwrap().is_empty());
         assert!(task_dependency_flags(&pool).await.unwrap().is_empty());
         assert!(task_description_flags(&pool).await.unwrap().is_empty());
+        assert!(task_attachment_flags(&pool).await.unwrap().is_empty());
+        assert!(task_open_subtask_flags(&pool).await.unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn attachment_flags_only_alive_links() {
+        let pool = setup_db().await;
+        let t_bare = mk_task(&pool, "无附件").await;
+        let t_with = mk_task(&pool, "有附件").await;
+        // 投影只读关联行：直接插链行（uuid 随机防同步冲突；二进制本身不在本表）
+        for task_id in [t_with, t_with] {
+            sqlx::query(
+                "INSERT INTO todo_task_attachments (uuid, task_id, hash) VALUES (?, ?, 'abc')",
+            )
+            .bind(uuid::Uuid::new_v4().to_string())
+            .bind(task_id)
+            .execute(&pool)
+            .await
+            .unwrap();
+        }
+        // 同任务多链行只出一位（DISTINCT）
+        let t_dead_link = mk_task(&pool, "链已删").await;
+        let link_id: i64 = sqlx::query_scalar(
+            "INSERT INTO todo_task_attachments (uuid, task_id, hash) VALUES (?, ?, 'x') RETURNING id",
+        )
+        .bind(uuid::Uuid::new_v4().to_string())
+        .bind(t_dead_link)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        crate::api::asset_api::remove_task_attachment(&pool, link_id)
+            .await
+            .unwrap();
+
+        let flags = task_attachment_flags(&pool).await.unwrap();
+        assert_eq!(flags.len(), 1);
+        assert_eq!(flags[0].task_id, t_with);
+        assert!(flags.iter().all(|f| f.task_id != t_bare));
+        assert!(flags.iter().all(|f| f.task_id != t_dead_link));
+    }
+
+    #[tokio::test]
+    async fn open_subtask_flags_only_undone_alive() {
+        use crate::models::business::TodoSubtaskCreateInput;
+        let pool = setup_db().await;
+        let t_bare = mk_task(&pool, "无子任务").await;
+        let t_open = mk_task(&pool, "有未完成子任务").await;
+        let t_closed = mk_task(&pool, "子任务全完成").await;
+        async fn mk_sub(pool: &SqlitePool, task_id: i64, title: &str) -> i64 {
+            crate::api::business_api::create_todo_subtask(
+                pool,
+                &TodoSubtaskCreateInput {
+                    task_id,
+                    title: title.into(),
+                    position: None,
+                },
+            )
+            .await
+            .unwrap()
+            .id
+        }
+        mk_sub(&pool, t_open, "未完成").await;
+        let s_done = mk_sub(&pool, t_open, "已完成").await;
+        toggle_todo_subtask_done(&pool, s_done, true).await.unwrap();
+        let s_all = mk_sub(&pool, t_closed, "做完").await;
+        toggle_todo_subtask_done(&pool, s_all, true).await.unwrap();
+        // 软删的子任务不计（删的是未完成行也不应出现）
+        let s_del = mk_sub(&pool, t_bare, "删掉").await;
+        crate::api::business_api::delete_todo_subtask(&pool, s_del)
+            .await
+            .unwrap();
+
+        let flags = task_open_subtask_flags(&pool).await.unwrap();
+        assert_eq!(flags.len(), 1);
+        assert_eq!(flags[0].task_id, t_open);
+        assert!(flags.iter().all(|f| f.task_id != t_bare));
+        assert!(flags.iter().all(|f| f.task_id != t_closed));
     }
 }

@@ -31,8 +31,18 @@ void main() {
           [DbCacheTarget.taskActivity]);
     });
 
-    test('纯详情子表只影响详情聚合', () {
-      expect(planTableInvalidation('todo_subtasks'), [DbCacheTarget.taskDetail]);
+    test('纯详情子表只影响详情聚合（子任务另带存在旗标）', () {
+      expect(planTableInvalidation('todo_subtasks'), [
+        DbCacheTarget.taskDetail,
+        DbCacheTarget.taskOpenSubtaskProjection,
+      ]);
+    });
+
+    test('todo_task_attachments 联动详情与存在旗标', () {
+      expect(planTableInvalidation('todo_task_attachments'), [
+        DbCacheTarget.taskDetail,
+        DbCacheTarget.taskAttachmentProjection,
+      ]);
     });
 
     test('todo_task_relations 联动详情与列表关联旗标投影', () {

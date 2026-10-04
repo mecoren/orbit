@@ -1,13 +1,19 @@
 /**
- * 保存筛选器的可视化构建器模型（#35 升级：裸 JSON 手填 → 表单化）
+ * 保存筛选器的可视化构建器模型（#35 升级：裸 JSON 手填 → 表单化；#71 起 14 键）
  *
- * 表单态与条件 JSON 双向映射：表单控件（下拉/多选）↔ SavedFilterConditions
- * 七键白名单（与 Rust saved_filter_api::ALLOWED_CONDITION_KEYS 对齐）。
+ * 表单态与条件 JSON 双向映射：表单控件（下拉/多选/日期/开关）↔ SavedFilterConditions
+ * 十四键白名单（与 Rust saved_filter_api::ALLOWED_CONDITION_KEYS 对齐）。
  * 纯函数无 React 依赖，可单测；对话框组件消费产出 conditions 字符串。
  */
 import type { SavedFilterConditions } from "./saved-filter";
 
-/** 表单态：null/undefined = 该维度不过滤 */
+/**
+ * 存在三态：null = 不过滤，true = 仅有，false = 仅无
+ * （对话框以三段 chips 表达；JSON 只存非 null 键）
+ */
+export type ExistenceTriState = boolean | null;
+
+/** 表单态：null/undefined/空数组 = 该维度不过滤 */
 export interface FilterFormState {
   /** 状态等值：all = 不过滤 */
   status: string | null;
@@ -23,6 +29,17 @@ export interface FilterFormState {
   overdueOnly: boolean;
   /** 仅收藏 */
   favoriteOnly: boolean;
+  /** 截止区间（绝对 ms；YYYY-MM-DD 对话框输入转零点 ms） */
+  dueFrom: number | null;
+  dueUntil: number | null;
+  /** 创建时间下限（绝对 ms） */
+  createdFrom: number | null;
+  /** 完成时间下限（绝对 ms） */
+  doneFrom: number | null;
+  /** 存在三态：有提醒 / 有附件 / 有未完成子任务 */
+  hasReminder: ExistenceTriState;
+  hasAttachment: ExistenceTriState;
+  hasOpenSubtask: ExistenceTriState;
 }
 
 export const EMPTY_FILTER_FORM: FilterFormState = {
@@ -33,6 +50,13 @@ export const EMPTY_FILTER_FORM: FilterFormState = {
   dueWithinDays: null,
   overdueOnly: false,
   favoriteOnly: false,
+  dueFrom: null,
+  dueUntil: null,
+  createdFrom: null,
+  doneFrom: null,
+  hasReminder: null,
+  hasAttachment: null,
+  hasOpenSubtask: null,
 };
 
 /** 条件 JSON → 表单态（缺键/损坏回退空表单——与 applySavedFilter 防御同口径） */
@@ -41,7 +65,7 @@ export function parseConditions(raw: string): FilterFormState {
   try {
     c = JSON.parse(raw) as SavedFilterConditions;
   } catch {
-    return { ...EMPTY_FILTER_FORM };
+    return { ...EMPTY_FILTER_FORM, projectIds: [], labelIds: [] };
   }
   return {
     status: c.status ?? null,
@@ -51,6 +75,13 @@ export function parseConditions(raw: string): FilterFormState {
     dueWithinDays: c.due_within_days ?? null,
     overdueOnly: c.due_overdue === true,
     favoriteOnly: c.favorite_only === true,
+    dueFrom: c.due_from ?? null,
+    dueUntil: c.due_until ?? null,
+    createdFrom: c.created_from ?? null,
+    doneFrom: c.done_from ?? null,
+    hasReminder: c.has_reminder ?? null,
+    hasAttachment: c.has_attachment ?? null,
+    hasOpenSubtask: c.has_open_subtask ?? null,
   };
 }
 
@@ -67,6 +98,13 @@ export function buildConditions(f: FilterFormState): string {
   if (f.dueWithinDays != null) c.due_within_days = f.dueWithinDays;
   if (f.overdueOnly) c.due_overdue = true;
   if (f.favoriteOnly) c.favorite_only = true;
+  if (f.dueFrom != null) c.due_from = f.dueFrom;
+  if (f.dueUntil != null) c.due_until = f.dueUntil;
+  if (f.createdFrom != null) c.created_from = f.createdFrom;
+  if (f.doneFrom != null) c.done_from = f.doneFrom;
+  if (f.hasReminder != null) c.has_reminder = f.hasReminder;
+  if (f.hasAttachment != null) c.has_attachment = f.hasAttachment;
+  if (f.hasOpenSubtask != null) c.has_open_subtask = f.hasOpenSubtask;
   return JSON.stringify(c);
 }
 

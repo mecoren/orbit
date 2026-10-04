@@ -1,19 +1,22 @@
 /**
- * SavedFilterDialog — 保存筛选器的可视化构建器（#35 升级）
+ * SavedFilterDialog — 保存筛选器的可视化构建器（#35 升级；#71 起十四键）
  *
- * 替换原「名称 + 裸 JSON 手填」表单：七键条件全部控件化（状态/优先级下限/
- * 项目/标签/截止窗口/逾期/收藏），用户不再接触 JSON；高级键（如 due_overdue
- * 与 due_within_days 互斥不可同选）在 UI 层约束。
+ * 替换原「名称 + 裸 JSON 手填」表单：十四键条件全部控件化（状态/优先级下限/
+ * 项目/标签/截止窗口/逾期/收藏/截止区间/创建下限/完成下限/提醒·附件·
+ * 未完成子任务存在三态），用户不再接触 JSON；高级键（due_overdue 与
+ * due_within_days/区间三互斥不可同选）在 UI 层约束。
  *
  * 预填模式：面板「存为视图」把工具栏当前筛选映射进表单（toolbarToForm），
  * 用户补个名字即可固化常用切片——Todoist Filters 同款体验。
  */
 import { useEffect, useState } from "react";
 import { Star, TriangleAlert } from "lucide-react";
+import { format } from "date-fns";
 
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { DatePicker } from "@/components/business/date-picker";
 import {
   Dialog,
   DialogContent,
@@ -33,8 +36,58 @@ import {
   buildConditions,
   EMPTY_FILTER_FORM,
   parseConditions,
+  type ExistenceTriState,
   type FilterFormState,
 } from "../shared/saved-filter-builder";
+
+/** ms → 日期输入值（YYYY-MM-DD；null = 空） */
+const msToDateInput = (ms: number | null): string =>
+  ms == null ? "" : format(new Date(ms), "yyyy-MM-dd");
+
+/** 日期输入值 → 当日零点 ms；空/非法 → null（维度不过滤） */
+const dateInputToMs = (v: string): number | null => {
+  if (!v) return null;
+  const ms = new Date(`${v}T00:00:00`).getTime();
+  return Number.isNaN(ms) ? null : ms;
+};
+
+/** 存在三态 chips（不限 / 有 / 无） */
+function TriStateRow({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: ExistenceTriState;
+  onChange: (v: ExistenceTriState) => void;
+}) {
+  const opts: Array<{ v: ExistenceTriState; t: string }> = [
+    { v: null, t: "不限" },
+    { v: true, t: "有" },
+    { v: false, t: "无" },
+  ];
+  return (
+    <div className="flex flex-wrap items-center gap-1.5">
+      <span className="text-xs text-muted-foreground">{label}：</span>
+      {opts.map((o) => (
+        <button
+          key={o.t}
+          type="button"
+          aria-pressed={value === o.v}
+          onClick={() => onChange(value === o.v ? null : o.v)}
+          className={cn(
+            "h-7 rounded-full border px-2.5 text-xs transition-colors",
+            value === o.v
+              ? "border-primary/40 bg-primary/10 text-primary"
+              : "border-border text-muted-foreground hover:bg-accent",
+          )}
+        >
+          {o.t}
+        </button>
+      ))}
+    </div>
+  );
+}
 
 export interface SavedFilterDialogProps {
   open: boolean;
@@ -71,12 +124,25 @@ export function SavedFilterDialog({
   const set = <K extends keyof FilterFormState>(key: K, value: FilterFormState[K]) =>
     setForm((f) => ({ ...f, [key]: value }));
 
-  // 逾期与截止窗口互斥：白名单语义上一个任务不可能同时命中两条件仍被 AND 组合
+  // 逾期 / 截止窗口 / 截止区间三互斥：语义上一个任务不可能同时命中
+  // 多个日期条件仍被 AND 组合（区间与窗口叠加恒无命中，UI 层直接约束）
   const toggleOverdue = (on: boolean) =>
-    setForm((f) => ({ ...f, overdueOnly: on, dueWithinDays: on ? null : f.dueWithinDays }));
+    setForm((f) => ({
+      ...f,
+      overdueOnly: on,
+      dueWithinDays: on ? null : f.dueWithinDays,
+      dueFrom: on ? null : f.dueFrom,
+      dueUntil: on ? null : f.dueUntil,
+    }));
 
   const toggleDueWindow = (days: number | null) =>
-    setForm((f) => ({ ...f, dueWithinDays: days, overdueOnly: days != null ? false : f.overdueOnly }));
+    setForm((f) => ({
+      ...f,
+      dueWithinDays: days,
+      overdueOnly: days != null ? false : f.overdueOnly,
+      dueFrom: days != null ? null : f.dueFrom,
+      dueUntil: days != null ? null : f.dueUntil,
+    }));
 
   const submit = () => {
     if (!name.trim()) return;
@@ -171,6 +237,56 @@ export function SavedFilterDialog({
           ))}
         </div>
 
+        {/* 截止区间（绝对日期；与「N 天内/已逾期」互斥——区间是精确切片） */}
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="text-xs text-muted-foreground">截止区间：</span>
+          <DatePicker
+            value={msToDateInput(form.dueFrom)}
+            onChange={(v) =>
+              setForm((f) => ({
+                ...f,
+                dueFrom: dateInputToMs(v),
+                dueWithinDays: null,
+                overdueOnly: false,
+              }))
+            }
+            placeholder="从"
+            quick={false}
+            className="h-7 w-32 px-2 text-xs"
+          />
+          <span className="text-xs text-muted-foreground">至</span>
+          <DatePicker
+            value={msToDateInput(form.dueUntil)}
+            onChange={(v) =>
+              setForm((f) => ({
+                ...f,
+                dueUntil: dateInputToMs(v),
+                dueWithinDays: null,
+                overdueOnly: false,
+              }))
+            }
+            placeholder="到（含前一天）"
+            quick={false}
+            className="h-7 w-32 px-2 text-xs"
+          />
+          {(form.dueFrom != null || form.dueUntil != null) && (
+            <button
+              type="button"
+              onClick={() => setForm((f) => ({ ...f, dueFrom: null, dueUntil: null }))}
+              className="h-7 rounded-full border px-2.5 text-xs text-muted-foreground hover:bg-accent"
+            >
+              清除
+            </button>
+          )}
+        </div>
+        {form.dueFrom != null &&
+          form.dueUntil != null &&
+          form.dueFrom >= form.dueUntil && (
+            <p className="text-xs text-destructive">
+              起始不早于结束，该维度恒无命中（左闭右开）
+            </p>
+          )}
+
         {/* 项目集（任一命中） */}
         <div className="flex flex-wrap items-center gap-1.5">
           <span className="text-xs text-muted-foreground">项目：</span>
@@ -256,6 +372,35 @@ export function SavedFilterDialog({
             ))}
           </div>
         )}
+
+        {/* 创建/完成时间下限（绝对日期；完成维度下未完成任务恒不命中） */}
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="text-xs text-muted-foreground">创建晚于：</span>
+          <DatePicker
+            value={msToDateInput(form.createdFrom)}
+            onChange={(v) => set("createdFrom", dateInputToMs(v))}
+            placeholder="不限"
+            quick={false}
+            className="h-7 w-32 px-2 text-xs"
+          />
+          <span className="text-xs text-muted-foreground">完成晚于：</span>
+          <DatePicker
+            value={msToDateInput(form.doneFrom)}
+            onChange={(v) => set("doneFrom", dateInputToMs(v))}
+            placeholder="不限"
+            quick={false}
+            className="h-7 w-32 px-2 text-xs"
+          />
+        </div>
+
+        {/* 存在三态（有/无/不限） */}
+        <TriStateRow label="提醒" value={form.hasReminder} onChange={(v) => set("hasReminder", v)} />
+        <TriStateRow label="附件" value={form.hasAttachment} onChange={(v) => set("hasAttachment", v)} />
+        <TriStateRow
+          label="未完成子任务"
+          value={form.hasOpenSubtask}
+          onChange={(v) => set("hasOpenSubtask", v)}
+        />
 
         {/* 收藏开关 */}
         <button

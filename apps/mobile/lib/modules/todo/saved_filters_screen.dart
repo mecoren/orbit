@@ -13,6 +13,7 @@ import '../../shared/widgets/shadcn/orbit_confirm_sheet.dart';
 import '../../shared/widgets/shadcn/orbit_empty_state.dart';
 import '../../shared/widgets/shadcn/orbit_page_header.dart';
 import '../../shared/widgets/shadcn/orbit_actions_sheet.dart';
+import '../../shared/widgets/shadcn/orbit_date_picker.dart';
 import '../../shared/widgets/shadcn/orbit_select_sheet.dart';
 import '../../shared/widgets/shadcn/orbit_sheet_scaffold.dart';
 import '../../shared/widgets/shadcn/orbit_toast.dart';
@@ -43,11 +44,13 @@ class _SavedFiltersScreenState extends ConsumerState<SavedFiltersScreen> {
     super.dispose();
   }
 
-  /// 七键可视化构建抽屉（新建 + 更新共用；替代手写条件文本框）
+  /// 十四键可视化构建抽屉（新建 + 更新共用；替代手写条件文本框）
   ///
-  /// 七键：status / priority_min / project_ids / label_ids /
-  /// due_within_days / due_overdue / favorite_only。仅收纳已设置键，
-  /// 未设置键不写入 JSON（与桌面白名单校验口径一致）。
+  /// 十四键：status / priority_min / project_ids / label_ids /
+  /// due_within_days / due_overdue / favorite_only / due_from / due_until /
+  /// created_from / done_from / has_reminder / has_attachment /
+  /// has_open_subtask。仅收纳已设置键，未设置键不写入 JSON
+  /// （与桌面白名单校验口径一致）。
   Future<void> _openBuilder({TodoSavedFilter? existing}) async {
     final colors = AppColors.ofContext(context);
     final nameCtl = TextEditingController(text: existing?.name ?? '');
@@ -74,6 +77,13 @@ class _SavedFiltersScreenState extends ConsumerState<SavedFiltersScreen> {
     );
     bool overdue = init['due_overdue'] == true;
     bool favorite = init['favorite_only'] == true;
+    int? dueFrom = (init['due_from'] as num?)?.toInt();
+    int? dueUntil = (init['due_until'] as num?)?.toInt();
+    int? createdFrom = (init['created_from'] as num?)?.toInt();
+    int? doneFrom = (init['done_from'] as num?)?.toInt();
+    bool? hasReminder = init['has_reminder'] as bool?;
+    bool? hasAttachment = init['has_attachment'] as bool?;
+    bool? hasOpenSubtask = init['has_open_subtask'] as bool?;
 
     List<int>? parseIds(String raw) {
       final ids = <int>[];
@@ -184,6 +194,32 @@ class _SavedFiltersScreenState extends ConsumerState<SavedFiltersScreen> {
                   labelText: '天内截止（留空不限，如 7）',
                 ),
               ),
+              // 截止区间（绝对日期；与「天内截止/已逾期」叠加恒无命中——
+              // 桌面构建器在 UI 层互斥，此处靠条件摘要人工核对）
+              _FilterDateRow(
+                label: '截止≥',
+                value: dueFrom,
+                colors: colors,
+                onPick: (v) => setSheet(() => dueFrom = v),
+              ),
+              _FilterDateRow(
+                label: '截止＜',
+                value: dueUntil,
+                colors: colors,
+                onPick: (v) => setSheet(() => dueUntil = v),
+              ),
+              _FilterDateRow(
+                label: '创建≥',
+                value: createdFrom,
+                colors: colors,
+                onPick: (v) => setSheet(() => createdFrom = v),
+              ),
+              _FilterDateRow(
+                label: '完成≥',
+                value: doneFrom,
+                colors: colors,
+                onPick: (v) => setSheet(() => doneFrom = v),
+              ),
               TextField(
                 controller: projectCtl,
                 keyboardType: TextInputType.number,
@@ -210,6 +246,24 @@ class _SavedFiltersScreenState extends ConsumerState<SavedFiltersScreen> {
                 value: favorite,
                 onChanged: (v) => setSheet(() => favorite = v),
               ),
+              _FilterTriRow(
+                label: '提醒',
+                value: hasReminder,
+                colors: colors,
+                onPick: (v) => setSheet(() => hasReminder = v),
+              ),
+              _FilterTriRow(
+                label: '附件',
+                value: hasAttachment,
+                colors: colors,
+                onPick: (v) => setSheet(() => hasAttachment = v),
+              ),
+              _FilterTriRow(
+                label: '未完成子任务',
+                value: hasOpenSubtask,
+                colors: colors,
+                onPick: (v) => setSheet(() => hasOpenSubtask = v),
+              ),
             ],
           ),
           actions: OrbitSheetActions(
@@ -235,8 +289,21 @@ class _SavedFiltersScreenState extends ConsumerState<SavedFiltersScreen> {
     final lids = parseIds(labelCtl.text);
     if (lids != null) cond['label_ids'] = lids;
     final within = int.tryParse(withinCtl.text.trim());
-    if (within != null && within > 0) cond['due_within_days'] = within;
-    if (overdue) cond['due_overdue'] = true;
+    // 日期互斥：截止区间与「天内截止/已逾期」叠加恒无命中——区间优先，
+    // 窗口与逾期不落键（桌面构建器在 UI 层互斥，此处在组装处收敛，
+    // 条件摘要即最终口径）。创建/完成下限与其他维度正交，不参与互斥。
+    final hasRange = dueFrom != null || dueUntil != null;
+    if (dueFrom != null) cond['due_from'] = dueFrom;
+    if (dueUntil != null) cond['due_until'] = dueUntil;
+    if (!hasRange) {
+      if (within != null && within > 0) cond['due_within_days'] = within;
+      if (overdue) cond['due_overdue'] = true;
+    }
+    if (createdFrom != null) cond['created_from'] = createdFrom;
+    if (doneFrom != null) cond['done_from'] = doneFrom;
+    if (hasReminder != null) cond['has_reminder'] = hasReminder;
+    if (hasAttachment != null) cond['has_attachment'] = hasAttachment;
+    if (hasOpenSubtask != null) cond['has_open_subtask'] = hasOpenSubtask;
     if (favorite) cond['favorite_only'] = true;
     try {
       final bridge = ref.read(orbitBridgeProvider);
@@ -279,11 +346,34 @@ class _SavedFiltersScreenState extends ConsumerState<SavedFiltersScreen> {
         'due_overdue': '已逾期',
         'favorite_only': '仅收藏',
       };
+      const dateLabels = {
+        'due_from': '截止≥',
+        'due_until': '截止＜',
+        'created_from': '创建≥',
+        'done_from': '完成≥',
+      };
+      const triLabels = {
+        'has_reminder': ('有提醒', '无提醒'),
+        'has_attachment': ('有附件', '无附件'),
+        'has_open_subtask': ('有未完子任务', '无未完子任务'),
+      };
       final parts = <String>[];
       for (final e in labels.entries) {
         if (c.containsKey(e.key)) {
           final v = c[e.key];
           parts.add(v == true ? e.value : '$e.value$v');
+        }
+      }
+      for (final e in dateLabels.entries) {
+        if (c.containsKey(e.key)) {
+          final ms = (c[e.key] as num).toInt();
+          parts.add(
+              '${e.value}${OrbitDatePicker.formatDate(DateTime.fromMillisecondsSinceEpoch(ms))}');
+        }
+      }
+      for (final e in triLabels.entries) {
+        if (c.containsKey(e.key)) {
+          parts.add(c[e.key] == true ? e.value.$1 : e.value.$2);
         }
       }
       return parts.isEmpty ? '无条件' : parts.join(' · ');
@@ -292,47 +382,24 @@ class _SavedFiltersScreenState extends ConsumerState<SavedFiltersScreen> {
     }
   }
 
-  /// 应用条件到任务（与桌面 applySavedFilter 同语义）
-  List<TodoTask> _apply(List<TodoTask> tasks, String raw) {
-    Map<String, dynamic> c;
-    try {
-      c = jsonDecode(raw) as Map<String, dynamic>;
-    } catch (_) {
-      return tasks;
-    }
-    final today = DateTime.now();
-    final t0 = DateTime(
-      today.year,
-      today.month,
-      today.day,
-    ).millisecondsSinceEpoch;
-    return tasks.where((t) {
-      if (c['status'] != null && t.status != c['status']) return false;
-      if (c['priority_min'] != null &&
-          t.priority < (c['priority_min'] as num).toInt()) {
-        return false;
-      }
-      if (c['project_ids'] != null) {
-        final ids = (c['project_ids'] as List)
-            .map((e) => (e as num).toInt())
-            .toList();
-        if (!ids.contains(t.projectId ?? -1)) return false;
-      }
-      if (c['due_within_days'] != null) {
-        final d = t.dueDate;
-        if (d == null ||
-            d < t0 ||
-            d >= t0 + (c['due_within_days'] as num) * 86400000) {
-          return false;
-        }
-      }
-      if (c['due_overdue'] == true) {
-        final d = t.dueDate;
-        if (d == null || d >= t0 || t.isDone) return false;
-      }
-      if (c['favorite_only'] == true && !t.isStarred) return false;
-      return true;
-    }).toList();
+  /// 应用条件到任务（委托 [applySavedFilterConditions] 纯函数；
+  /// 标签与存在集由调用方按投影拼装传入，与桌面同口径）
+  List<TodoTask> _apply(
+    List<TodoTask> tasks,
+    String raw, {
+    Map<int, Set<int>>? labelIdsByTask,
+    Set<int>? reminderTaskIds,
+    Set<int>? attachmentTaskIds,
+    Set<int>? openSubtaskTaskIds,
+  }) {
+    return applySavedFilterConditions(
+      tasks,
+      raw,
+      labelIdsByTask: labelIdsByTask,
+      reminderTaskIds: reminderTaskIds,
+      attachmentTaskIds: attachmentTaskIds,
+      openSubtaskTaskIds: openSubtaskTaskIds,
+    );
   }
 
   @override
@@ -340,6 +407,20 @@ class _SavedFiltersScreenState extends ConsumerState<SavedFiltersScreen> {
     final colors = AppColors.ofContext(context);
     final filters = ref.watch(savedFiltersProvider);
     final tasks = ref.watch(todoTasksProvider);
+    // 预览命中数的数据源（投影未就绪传 null——对应维度跳过，
+    // 不因缺数据误杀全部行；与子列表页同源口径）
+    final labelRows = ref.watch(taskLabelsProjectionProvider).value;
+    final reminderRows = ref.watch(taskRemindersProjectionProvider).value;
+    final attachmentIds = ref.watch(taskAttachmentFlagsProvider).value;
+    final openSubtaskIds = ref.watch(taskOpenSubtaskFlagsProvider).value;
+    final labelIdsByTask =
+        labelRows == null ? null : indexLabelIdsByTask(labelRows);
+    final reminderTaskIds = reminderRows == null
+        ? null
+        : {
+            for (final r in reminderRows)
+              if (r.reminders.isNotEmpty) r.taskId,
+          };
 
     return Scaffold(
       body: Stack(
@@ -367,7 +448,14 @@ class _SavedFiltersScreenState extends ConsumerState<SavedFiltersScreen> {
                       delegate: SliverChildBuilderDelegate((context, i) {
                         final f = list[i];
                         final expanded = _expandedId == f.id;
-                        final hit = _apply(taskList, f.conditions);
+                        final hit = _apply(
+                          taskList,
+                          f.conditions,
+                          labelIdsByTask: labelIdsByTask,
+                          reminderTaskIds: reminderTaskIds,
+                          attachmentTaskIds: attachmentIds,
+                          openSubtaskTaskIds: openSubtaskIds,
+                        );
                         return Container(
                           margin: const EdgeInsets.only(
                             bottom: AppDimens.space8,
@@ -502,6 +590,134 @@ class _SavedFiltersScreenState extends ConsumerState<SavedFiltersScreen> {
         onPressed: _create,
         icon: const Icon(OrbitIcons.add),
         label: const Text('新建筛选器'),
+      ),
+    );
+  }
+}
+
+/// 筛选器构建器日期行（#71：绝对日期维度输入；点行弹日期面板，叉号清除）。
+class _FilterDateRow extends StatelessWidget {
+  const _FilterDateRow({
+    required this.label,
+    required this.value,
+    required this.colors,
+    required this.onPick,
+  });
+
+  final String label;
+  final int? value;
+  final AppColorSet colors;
+  final ValueChanged<int?> onPick;
+
+  @override
+  Widget build(BuildContext context) {
+    final text = value == null
+        ? '不限'
+        : OrbitDatePicker.formatDate(
+            DateTime.fromMillisecondsSinceEpoch(value!));
+    return SizedBox(
+      height: AppDimens.touchTarget,
+      child: Row(
+        children: [
+          Expanded(
+            child: InkWell(
+              onTap: () async {
+                final picked = await OrbitDatePicker.pick(
+                  context,
+                  initialDate: value == null
+                      ? null
+                      : DateTime.fromMillisecondsSinceEpoch(value!),
+                );
+                if (picked == null || !context.mounted) return;
+                final day =
+                    DateTime(picked.year, picked.month, picked.day);
+                onPick(day.millisecondsSinceEpoch);
+              },
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      '$label：$text',
+                      style: TextStyle(
+                        fontSize: 15,
+                        color: colors.bodyText,
+                      ),
+                    ),
+                  ),
+                  Icon(
+                    OrbitIcons.chevronRight,
+                    color: colors.secondaryText,
+                  ),
+                ],
+              ),
+            ),
+          ),
+          if (value != null)
+            IconButton(
+              visualDensity: VisualDensity.compact,
+              tooltip: '清除',
+              icon: Icon(
+                OrbitIcons.close,
+                size: AppDimens.iconSizeSm,
+                color: colors.secondaryText,
+              ),
+              onPressed: () => onPick(null),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// 筛选器构建器存在三态行（#71：不限 / 仅有 / 仅无，走底部单选抽屉）。
+class _FilterTriRow extends StatelessWidget {
+  const _FilterTriRow({
+    required this.label,
+    required this.value,
+    required this.colors,
+    required this.onPick,
+  });
+
+  final String label;
+  final bool? value;
+  final AppColorSet colors;
+  final ValueChanged<bool?> onPick;
+
+  static const _names = {null: '不限', true: '仅有', false: '仅无'};
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: AppDimens.touchTarget,
+      child: InkWell(
+        onTap: () => showSelectBottomSheet<bool?>(
+          context,
+          title: label,
+          current: value,
+          items: const [
+            SelectItem(value: null, label: '不限'),
+            SelectItem(value: true, label: '仅有'),
+            SelectItem(value: false, label: '仅无'),
+          ],
+          onSelect: onPick,
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                '$label：${_names[value]}',
+                style: TextStyle(
+                  fontSize: 15,
+                  color: colors.bodyText,
+                ),
+              ),
+            ),
+            Icon(
+              OrbitIcons.chevronRight,
+              color: colors.secondaryText,
+            ),
+          ],
+        ),
       ),
     );
   }

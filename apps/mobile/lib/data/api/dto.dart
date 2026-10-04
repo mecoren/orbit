@@ -700,6 +700,17 @@ class TaskDescriptionFlag {
       TaskDescriptionFlag(taskId: j['task_id'] as int);
 }
 
+/// 任务存在旗标一位（#71 筛选器存在键数据源；只出有行的任务，缺位即 false；
+/// 附件 / 未完成子任务两投影共用同一形状）
+class TaskExistenceFlag {
+  final int taskId;
+
+  const TaskExistenceFlag({required this.taskId});
+
+  factory TaskExistenceFlag.fromJson(Map<String, dynamic> j) =>
+      TaskExistenceFlag(taskId: j['task_id'] as int);
+}
+
 // ---------- 复杂查询：任务详情聚合 ----------
 
 class TodoTaskDetail extends TodoTask {

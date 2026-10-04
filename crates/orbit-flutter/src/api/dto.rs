@@ -841,6 +841,19 @@ impl From<orbit_core::api::todo_api::TaskDescriptionFlag> for TaskDescriptionFla
     }
 }
 
+/// 任务存在旗标一位（#71 筛选器存在键数据源；镜像 TaskExistenceFlag，
+/// 只出有行的任务，缺位即 false；附件/未完成子任务两投影共用）
+#[derive(Debug, Clone, Serialize)]
+pub struct TaskExistenceFlag {
+    pub task_id: i64,
+}
+
+impl From<orbit_core::api::todo_api::TaskExistenceFlag> for TaskExistenceFlag {
+    fn from(f: orbit_core::api::todo_api::TaskExistenceFlag) -> Self {
+        Self { task_id: f.task_id }
+    }
+}
+
 // ---------- CSV 导入（迁移路径；镜像 orbit_core::api::csv_import_api） ----------
 
 /// 一条映射后的待导入行（预览载荷）

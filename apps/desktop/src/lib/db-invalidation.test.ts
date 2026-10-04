@@ -38,10 +38,13 @@ describe("invalidateByTable 表级失效映射", () => {
     expect(calls).toEqual([{ queryKey: ["task-activity"] }]);
   });
 
-  it("todo_subtasks → 仅详情键（主列表不含子任务数据）", () => {
+  it("todo_subtasks → 详情 + 未完成子任务存在旗标（#71 筛选器存在键）", () => {
     const { qc, calls } = makeClient();
     invalidateByTable(qc, "todo_subtasks");
-    expect(calls).toEqual([{ queryKey: ["todo-task-detail"] }]);
+    expect(calls).toEqual([
+      { queryKey: ["todo-task-detail"] },
+      { queryKey: ["todo_subtasks", "open-flags"] },
+    ]);
   });
 
   it("todo_task_relations → 详情 + 行内关联旗标投影（C7）", () => {
@@ -89,6 +92,15 @@ describe("invalidateByTable 表级失效映射", () => {
     invalidateByTable(qc, "todo_templates");
     invalidateByTable(qc, "todo_saved_filters");
     expect(calls).toEqual([{ queryKey: ["templates"] }, { queryKey: ["saved-filters"] }]);
+  });
+
+  it("todo_task_attachments → 附件区 + 存在旗标（#71 筛选器存在键）", () => {
+    const { qc, calls } = makeClient();
+    invalidateByTable(qc, "todo_task_attachments");
+    expect(calls).toEqual([
+      { queryKey: ["task-attachments"] },
+      { queryKey: ["todo_task_attachments", "flags"] },
+    ]);
   });
 
   it("未知表 → null（调用方回退全量失效）", () => {

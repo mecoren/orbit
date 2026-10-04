@@ -39,6 +39,12 @@ enum DbCacheTarget {
   /// 任务→「有描述」投影（列表行内描述图标；description 在列表通道被裁剪）
   taskDescriptionProjection,
 
+  /// 任务→「有附件」旗标（#71 筛选器 has_attachment 数据源）
+  taskAttachmentProjection,
+
+  /// 任务→「有未完成子任务」旗标（#71 筛选器 has_open_subtask 数据源）
+  taskOpenSubtaskProjection,
+
   /// 保存的筛选器
   savedFilters,
 
@@ -83,7 +89,10 @@ List<DbCacheTarget> planTableInvalidation(String table) => switch (table) {
           DbCacheTarget.taskDetail,
           DbCacheTarget.taskDependencyProjection,
         ],
-      'todo_subtasks' => const [DbCacheTarget.taskDetail],
+      'todo_subtasks' => const [
+          DbCacheTarget.taskDetail,
+          DbCacheTarget.taskOpenSubtaskProjection,
+        ],
       // 提醒行另刷行内提醒徽标投影（列表行读它；增删提醒后徽标须立即跟随）
       'todo_reminders' => const [
           DbCacheTarget.taskDetail,
@@ -93,8 +102,11 @@ List<DbCacheTarget> planTableInvalidation(String table) => switch (table) {
           DbCacheTarget.taskDetail,
           DbCacheTarget.search,
         ],
-      // 附件挂/卸（内容寻址关联行）只影响任务详情的附件区，不碰主列表
-      'todo_task_attachments' => const [DbCacheTarget.taskDetail],
+      // 附件挂/卸（内容寻址关联行）：详情附件区 + 筛选器存在旗标
+      'todo_task_attachments' => const [
+          DbCacheTarget.taskDetail,
+          DbCacheTarget.taskAttachmentProjection,
+        ],
       'todo_saved_filters' => const [DbCacheTarget.savedFilters],
       'todo_activity_log' => const [DbCacheTarget.taskActivity],
       _ => const [],
@@ -136,6 +148,10 @@ bool invalidateByTable(WidgetRef ref, String table) {
         ref.invalidate(taskDependencyFlagsProvider);
       case DbCacheTarget.taskDescriptionProjection:
         ref.invalidate(taskDescriptionFlagsProvider);
+      case DbCacheTarget.taskAttachmentProjection:
+        ref.invalidate(taskAttachmentFlagsProvider);
+      case DbCacheTarget.taskOpenSubtaskProjection:
+        ref.invalidate(taskOpenSubtaskFlagsProvider);
       case DbCacheTarget.savedFilters:
         ref.invalidate(savedFiltersProvider);
       case DbCacheTarget.taskActivity:

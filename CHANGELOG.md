@@ -16,6 +16,19 @@
 
 ## [Unreleased]
 
+### 筛选器维度扩展：十四键（2026-10-04）
+
+- **白名单 7→14**：截止区间 `due_from/due_until`（绝对毫秒，左闭右开）+
+  创建/完成下限 `created_from/done_from`（未完成恒不命中 done 维）+
+  存在三态 `has_reminder/has_attachment/has_open_subtask`
+ （true 仅有 / false 仅无）。
+- **只读存在旗标投影**（零 DDL、零同步面）：core 新增
+  `task_attachment_flags` / `task_open_subtask_flags`，桌面两命令 +
+  移动 FRB 双桥 + 双端缓存（写事件精确失效）。
+- **双端构建器**：桌面日期区间 + 创建/完成下限 + 存在三态 chips
+  （区间与窗口/逾期互斥）；移动端日期行 + 三态单选 + 条件摘要短语。
+  顺手收敛移动端 `label_ids` 静默忽略的双端口径漂移。
+
 ### 看板自定义分组：对标 TickTick 看板多维度分组（2026-10-04）
 
 - **分组由两档扩为五档**：项目 / 状态 / 优先级（P5→P0 固定六列）/

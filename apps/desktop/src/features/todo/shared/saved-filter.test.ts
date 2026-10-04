@@ -110,4 +110,61 @@ describe("applySavedFilter", () => {
     const out = applySavedFilter(tasks, JSON.stringify({ status: "doing" }), {});
     expect(out.map((t) => t.id)).toEqual([1]);
   });
+
+  it("due_from/due_until 截止区间（左闭右开；无 due 恒不命中）", () => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const T0 = today.getTime();
+    const tasks = [
+      mk({ id: 1, due_date: T0 + DAY }), // 命中
+      mk({ id: 2, due_date: T0 }), // 左闭含起点
+      mk({ id: 3, due_date: T0 + 7 * DAY }), // 右开不含终点
+      mk({ id: 4, due_date: null }), // 无 due 不命中
+    ];
+    const out = applySavedFilter(
+      tasks,
+      JSON.stringify({ due_from: T0, due_until: T0 + 7 * DAY }),
+      {},
+    );
+    expect(out.map((t) => t.id)).toEqual([1, 2]);
+  });
+
+  it("created_from / done_from 时间下限（未完成恒不命中 done 维）", () => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const T0 = today.getTime();
+    const tasks = [
+      mk({ id: 1, created_at: T0 + 1000, done: 1, done_at: T0 + 2000 }), // 命中
+      mk({ id: 2, created_at: T0 - DAY, done: 1, done_at: T0 + 2000 }), // 创建太早
+      mk({ id: 3, created_at: T0 + 1000, done: 0, done_at: null }), // 未完成
+    ];
+    const out = applySavedFilter(
+      tasks,
+      JSON.stringify({ created_from: T0, done_from: T0 }),
+      {},
+    );
+    expect(out.map((t) => t.id)).toEqual([1]);
+  });
+
+  it("has_reminder/has_attachment/has_open_subtask 三态（缺集时该维跳过）", () => {
+    const tasks = [mk({ id: 1 }), mk({ id: 2 }), mk({ id: 3 })];
+    const existence = {
+      reminderTaskIds: new Set([1]),
+      attachmentTaskIds: new Set([2]),
+      openSubtaskTaskIds: new Set([1, 3]),
+    };
+    const cond = JSON.stringify({
+      has_reminder: true,
+      has_attachment: false,
+      has_open_subtask: true,
+    });
+    expect(applySavedFilter(tasks, cond, {}, existence).map((t) => t.id)).toEqual([1]);
+    // 缺集时该维跳过：只传附件集，提醒维即使有键也不生效
+    const cond2 = JSON.stringify({ has_reminder: true, has_attachment: false });
+    expect(
+      applySavedFilter(tasks, cond2, {}, { attachmentTaskIds: existence.attachmentTaskIds }).map(
+        (t) => t.id,
+      ),
+    ).toEqual([1, 3]);
+  });
 });

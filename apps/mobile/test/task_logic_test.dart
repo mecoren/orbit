@@ -951,5 +951,83 @@ group('displayReminder 行内提醒选取', () {
       expect(buckets.values.every((l) => l.isEmpty), isTrue);
     });
   });
+
+  // ---------- 保存筛选器条件应用（#71：十四键）----------
+
+  group('applySavedFilterConditions 保存筛选器条件应用', () {
+    // 固定 now：2026-10-05 周一 12:00（本地），t0 = 当日零点
+    final now = DateTime(2026, 10, 5, 12);
+    final t0 = DateTime(2026, 10, 5).millisecondsSinceEpoch;
+    const day = 86400000;
+
+    test('缺键与坏 JSON 全量通过', () {
+      final tasks = [_task(id: 1), _task(id: 2, done: 1, status: 'done')];
+      expect(applySavedFilterConditions(tasks, '{}').length, 2);
+      expect(applySavedFilterConditions(tasks, 'not-json').length, 2);
+    });
+
+    test('due_from/due_until 左闭右开；无 due 恒不命中', () {
+      final tasks = [
+        _task(id: 1, dueDate: t0 + day),
+        _task(id: 2, dueDate: t0),
+        _task(id: 3, dueDate: t0 + 7 * day),
+        _task(id: 4),
+      ];
+      final out = applySavedFilterConditions(
+        tasks,
+        '{"due_from": $t0, "due_until": ${t0 + 7 * day}}',
+        now: now,
+      );
+      expect(out.map((t) => t.id), [1, 2]);
+    });
+
+    test('created_from/done_from 下限；未完成恒不命中 done 维', () {
+      final tasks = [
+        _task(id: 1, createdAt: t0 + 1000, done: 1, doneAt: t0 + 2000),
+        _task(id: 2, createdAt: t0 - day, done: 1, doneAt: t0 + 2000),
+        _task(id: 3, createdAt: t0 + 1000),
+      ];
+      final out = applySavedFilterConditions(
+        tasks,
+        '{"created_from": $t0, "done_from": $t0}',
+        now: now,
+      );
+      expect(out.map((t) => t.id), [1]);
+    });
+
+    test('label_ids 经索引任一命中（此前移动端静默忽略，现与桌面同口径）', () {
+      final tasks = [_task(id: 1), _task(id: 2)];
+      final out = applySavedFilterConditions(
+        tasks,
+        '{"label_ids": [20, 99]}',
+        labelIdsByTask: {
+          1: {10, 20},
+          2: {30},
+        },
+      );
+      expect(out.map((t) => t.id), [1]);
+    });
+
+    test('存在三态；null 集跳过该维（投影未就绪不误杀）', () {
+      final tasks = [_task(id: 1), _task(id: 2), _task(id: 3)];
+      const cond = '{"has_reminder": true, "has_attachment": false,'
+          ' "has_open_subtask": true}';
+      final out = applySavedFilterConditions(
+        tasks,
+        cond,
+        reminderTaskIds: const {1},
+        attachmentTaskIds: const {2},
+        openSubtaskTaskIds: const {1, 3},
+      );
+      expect(out.map((t) => t.id), [1]);
+      // 提醒集未就绪（null）→ 提醒维跳过，只剩附件维
+      final out2 = applySavedFilterConditions(
+        tasks,
+        '{"has_reminder": true, "has_attachment": false}',
+        attachmentTaskIds: const {2},
+      );
+      expect(out2.map((t) => t.id), [1, 3]);
+    });
+  });
 });
 }

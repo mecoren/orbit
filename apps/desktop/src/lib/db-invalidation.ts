@@ -25,7 +25,7 @@ const TABLE_QUERY_KEYS: Record<string, string[][]> = {
   // 历史轨迹：log_activity 落库后自发事件（业务写路径的 todo_tasks 事件
   // 先于轨迹 INSERT，搭车重拉会竞态读旧——不能挂 todo_tasks 下）
   todo_activity_log: [["task-activity"]],
-  todo_subtasks: [["todo-task-detail"]],
+  todo_subtasks: [["todo-task-detail"], ["todo_subtasks", "open-flags"]],
   todo_projects: [["todo-project"]],
   todo_labels: [
     ["todo-label"],
@@ -41,7 +41,7 @@ const TABLE_QUERY_KEYS: Record<string, string[][]> = {
   todo_comments: [["todo-task-detail"]],
   // A4/C7：关联行增删既动详情区，也动列表行「有关联/被阻塞」旗标投影
   todo_task_relations: [["todo-task-detail"], ["todo_task_relations", "projection"]],
-  todo_task_attachments: [["task-attachments"]],
+  todo_task_attachments: [["task-attachments"], ["todo_task_attachments", "flags"]],
   todo_templates: [["templates"]],
   todo_saved_filters: [["saved-filters"]],
 };

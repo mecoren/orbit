@@ -69,6 +69,21 @@ final taskDescriptionFlagsProvider = FutureProvider<Set<int>>((ref) async {
   return {for (final r in rows) r.taskId};
 });
 
+/// 「有附件」任务 id 集（#71 筛选器 has_attachment 数据源；未就绪回落空集）
+final taskAttachmentFlagsProvider = FutureProvider<Set<int>>((ref) async {
+  final bridge = ref.watch(orbitBridgeProvider);
+  final rows = await bridge.taskAttachmentFlags();
+  return {for (final r in rows) r.taskId};
+});
+
+/// 「有未完成子任务」任务 id 集（#71 筛选器 has_open_subtask 数据源；
+/// 未就绪回落空集）
+final taskOpenSubtaskFlagsProvider = FutureProvider<Set<int>>((ref) async {
+  final bridge = ref.watch(orbitBridgeProvider);
+  final rows = await bridge.taskOpenSubtaskFlags();
+  return {for (final r in rows) r.taskId};
+});
+
 /// 任务列表单次拉取上限（A5/B6，与桌面 `TASK_LIST_PAGE_SIZE` 同口径）：
 /// 单份缓存与列表页「不完整」条幅共用——结果集达到它即意味着还有未取到的
 /// 任务，条幅按此判定而非另开 count 接口。
@@ -228,6 +243,8 @@ void invalidateBusinessCaches(WidgetRef ref) {
   ref.invalidate(taskRemindersProjectionProvider);
   ref.invalidate(taskDependencyFlagsProvider);
   ref.invalidate(taskDescriptionFlagsProvider);
+  ref.invalidate(taskAttachmentFlagsProvider);
+  ref.invalidate(taskOpenSubtaskFlagsProvider);
   ref.invalidate(todoTasksProvider);
   ref.invalidate(taskDetailProvider);
   ref.invalidate(taskActivityProvider);

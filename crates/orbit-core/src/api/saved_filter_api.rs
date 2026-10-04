@@ -1,9 +1,14 @@
 //! saved_filter_api — 保存的筛选器（07 竞品矩阵批次 #35）
 //!
 //! 对标 Apple Smart List / Tasks.org 可保存过滤器 / Obsidian Presets：
-//! 用户把常用组合条件（状态/优先级下限/项目集/标签集/截止窗口/收藏）存为
-//! 命名视图，侧栏直达。条件为 JSON 文本，查询侧按存在键过滤（缺键 = 不过滤），
-//! 不做服务端表达式解析——简单、可同步、跨端语义稳定。
+//! 用户把常用组合条件存为命名视图，侧栏直达。条件为 JSON 文本，查询侧按
+//! 存在键过滤（缺键 = 不过滤），不做服务端表达式解析——简单、可同步、
+//! 跨端语义稳定。
+//!
+//! 条件应用在**双端客户端内存**（桌面 `applySavedFilter` / 移动端
+//! `applySavedFilterConditions`），本模块只做存取 + 键白名单校验；
+//! `ListFilter`（`generic_repo` 服务端列表通道）是另一套命名空间，
+//! 两者不互通——新键只需进白名单 + 双端内存实现，无需动服务端谓词。
 
 use sqlx::SqlitePool;
 
@@ -16,7 +21,10 @@ use crate::models::business::{
     TodoSavedFilter, TodoSavedFilterCreateInput, TodoSavedFilterUpdateInput,
 };
 
-/// 条件 JSON 的合法键（校验用；防存进任意 JSON）
+/// 条件 JSON 的合法键（校验用；防存进任意 JSON）。
+/// #71 起 14 键：7 个旧键 + 截止区间（due_from/due_until，绝对 ms，左闭右开）
+/// + 创建/完成时间下限（created_from/done_from，绝对 ms）+ 三个存在键
+/// （has_reminder/has_attachment/has_open_subtask，true = 仅有，false = 仅无）。
 const ALLOWED_CONDITION_KEYS: &[&str] = &[
     "status",
     "priority_min",
@@ -25,6 +33,13 @@ const ALLOWED_CONDITION_KEYS: &[&str] = &[
     "due_within_days",
     "due_overdue",
     "favorite_only",
+    "due_from",
+    "due_until",
+    "created_from",
+    "done_from",
+    "has_reminder",
+    "has_attachment",
+    "has_open_subtask",
 ];
 
 /// 校验条件 JSON：必须是对象且键都在白名单内（防任意 JSON 进库）

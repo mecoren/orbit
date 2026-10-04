@@ -529,6 +529,18 @@ class RustOrbitBridge implements OrbitBridge {
           .map((f) => TaskDescriptionFlag(taskId: f.taskId))
           .toList();
 
+  @override
+  Future<List<TaskExistenceFlag>> taskAttachmentFlags() async =>
+      (await gen_todo.taskAttachmentFlags())
+          .map((f) => TaskExistenceFlag(taskId: f.taskId))
+          .toList();
+
+  @override
+  Future<List<TaskExistenceFlag>> taskOpenSubtaskFlags() async =>
+      (await gen_todo.taskOpenSubtaskFlags())
+          .map((f) => TaskExistenceFlag(taskId: f.taskId))
+          .toList();
+
   // ── 同步配置与执行 ──
 
   @override

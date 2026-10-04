@@ -301,10 +301,13 @@ pub fn run() {
             todo_cmd::todo_tasks_complete,
             todo_cmd::todo_tasks_duplicate,
             commands::todo_cmd::global_search,
-            // 任务列表投影聚合（A4，只读：标签/提醒/关联旗标一次往返）
+            // 任务列表投影聚合（A4，只读：标签/提醒/关联旗标一次往返；
+            // #71 加附件/未完成子任务存在旗标——筛选器存在键数据源）
             todo_cmd::task_labels_projection,
             todo_cmd::task_reminders_projection,
             todo_cmd::task_dependency_flags,
+            todo_cmd::task_attachment_flags,
+            todo_cmd::task_open_subtask_flags,
             // Mica 云母材质（Windows DWM 直调；setup 阶段已应用，此处供主题联动兜底）
             mica_cmd::apply_mica,
             mica_cmd::disable_mica,

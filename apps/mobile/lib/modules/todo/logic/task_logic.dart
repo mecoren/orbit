@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'dart:convert';
 
 import '../../../data/api/dto.dart';
 import 'view_mode.dart';
@@ -917,6 +918,104 @@ List<TodoTask> applyTaskListFilters(
 Map<int, Set<int>> indexLabelIdsByTask(List<TaskLabelsProjection> rows) => {
       for (final r in rows) r.taskId: {for (final l in r.labels) l.id},
     };
+
+// ---------- 保存筛选器条件应用 ----------
+
+/// 保存筛选器条件应用（#35；#71 起 14 键；与桌面 `applySavedFilter` 同语义）.
+///
+/// 条件 JSON 键（与 core `ALLOWED_CONDITION_KEYS` 白名单对齐）：
+/// status / priority_min / project_ids / label_ids / due_within_days /
+/// due_overdue / favorite_only / due_from / due_until（截止区间绝对 ms，
+/// 左闭右开）/ created_from / done_from（时间下限绝对 ms；未完成恒不命中
+/// done 维）/ has_reminder / has_attachment / has_open_subtask
+/// （true = 仅有，false = 仅无）。缺键 = 不过滤；AND 组合。
+/// 存在集与标签索引可空：null = 投影未就绪，该维跳过（不因缺数据误杀全部行）。
+List<TodoTask> applySavedFilterConditions(
+  List<TodoTask> tasks,
+  String rawConditions, {
+  Map<int, Set<int>>? labelIdsByTask,
+  Set<int>? reminderTaskIds,
+  Set<int>? attachmentTaskIds,
+  Set<int>? openSubtaskTaskIds,
+  DateTime? now,
+}) {
+  Map<String, dynamic> c;
+  try {
+    c = jsonDecode(rawConditions) as Map<String, dynamic>;
+  } catch (_) {
+    return tasks;
+  }
+  final n = now ?? DateTime.now();
+  final t0 =
+      DateTime(n.year, n.month, n.day).millisecondsSinceEpoch;
+  return tasks.where((t) {
+    if (c['status'] != null && t.status != c['status']) return false;
+    if (c['priority_min'] != null &&
+        t.priority < (c['priority_min'] as num).toInt()) {
+      return false;
+    }
+    if (c['project_ids'] != null) {
+      final ids =
+          (c['project_ids'] as List).map((e) => (e as num).toInt()).toList();
+      if (!ids.contains(t.projectId ?? -1)) return false;
+    }
+    if (c['label_ids'] != null && labelIdsByTask != null) {
+      final ids =
+          (c['label_ids'] as List).map((e) => (e as num).toInt()).toList();
+      if (ids.isNotEmpty) {
+        final owned = labelIdsByTask[t.id] ?? const <int>{};
+        if (!ids.any(owned.contains)) return false;
+      }
+    }
+    if (c['due_within_days'] != null) {
+      final d = t.dueDate;
+      if (d == null ||
+          d < t0 ||
+          d >= t0 + (c['due_within_days'] as num) * 86400000) {
+        return false;
+      }
+    }
+    if (c['due_overdue'] == true) {
+      final d = t.dueDate;
+      if (d == null || d >= t0 || t.isDone) return false;
+    }
+    if (c['favorite_only'] == true && !t.isStarred) return false;
+    if (c['due_from'] != null) {
+      final d = t.dueDate;
+      if (d == null || d < (c['due_from'] as num).toInt()) return false;
+    }
+    if (c['due_until'] != null) {
+      final d = t.dueDate;
+      if (d == null || d >= (c['due_until'] as num).toInt()) return false;
+    }
+    if (c['created_from'] != null &&
+        t.createdAt < (c['created_from'] as num).toInt()) {
+      return false;
+    }
+    if (c['done_from'] != null) {
+      if (!t.isDone) return false;
+      final doneAt = t.doneAt ?? 0;
+      if (doneAt < (c['done_from'] as num).toInt()) return false;
+    }
+    if (c['has_reminder'] != null && reminderTaskIds != null) {
+      if (reminderTaskIds.contains(t.id) != (c['has_reminder'] == true)) {
+        return false;
+      }
+    }
+    if (c['has_attachment'] != null && attachmentTaskIds != null) {
+      if (attachmentTaskIds.contains(t.id) != (c['has_attachment'] == true)) {
+        return false;
+      }
+    }
+    if (c['has_open_subtask'] != null && openSubtaskTaskIds != null) {
+      if (openSubtaskTaskIds.contains(t.id) !=
+          (c['has_open_subtask'] == true)) {
+        return false;
+      }
+    }
+    return true;
+  }).toList();
+}
 
 // ---------- 看板分列 ----------
 

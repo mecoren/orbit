@@ -152,3 +152,23 @@ pub async fn task_dependency_flags(
         .await
         .map_err(|e| e.to_string())
 }
+
+/// 任务→「有附件」旗标（#71 筛选器存在键数据源；只读，只出有存活链的行）
+#[tauri::command]
+pub async fn task_attachment_flags(
+    state: State<'_, AppState>,
+) -> Result<Vec<todo_api::TaskExistenceFlag>, String> {
+    todo_api::task_attachment_flags(&state.pool)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// 任务→「有未完成子任务」旗标（#71 筛选器存在键数据源；只读）
+#[tauri::command]
+pub async fn task_open_subtask_flags(
+    state: State<'_, AppState>,
+) -> Result<Vec<todo_api::TaskExistenceFlag>, String> {
+    todo_api::task_open_subtask_flags(&state.pool)
+        .await
+        .map_err(|e| e.to_string())
+}

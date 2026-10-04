@@ -22,6 +22,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { type TodoTask } from "@/lib/tauri";
 import { LS_HIDE_DONE, LS_VIEW_MODE, QUICK_VIEWS, TASK_LIST_PAGE_SIZE } from "../shared/constants";
 import { useTaskDependencies } from "../shared/use-task-dependencies";
+import { useTaskAttachmentIds, useTaskOpenSubtaskIds } from "../shared/use-task-existence-flags";
 import { useTaskLabels } from "../shared/use-task-labels";
 import { useTaskReminders } from "../shared/use-task-reminders";
 import { useQuery } from "@tanstack/react-query";
@@ -188,6 +189,9 @@ export default function TaskPanel() {
   const taskReminders = useTaskReminders();
   // 任务→关联旗标映射（C7 列表行「有关联 / 被阻塞」徽标；关联行写事件精确失效）
   const taskDependencies = useTaskDependencies();
+  // 存在旗标集（#71 筛选器存在键数据源；附件/子任务写事件精确失效）
+  const attachmentTaskIds = useTaskAttachmentIds();
+  const openSubtaskTaskIds = useTaskOpenSubtaskIds();
 
   // ---- 内存筛选 + 排序（共享模块，语义同 04 §四；排序档位 #26）----
   // keyword 的服务端命中集仍再过一遍本地关键词分支：击键间 placeholder 留着
@@ -222,6 +226,15 @@ export default function TaskPanel() {
         ),
         activeSavedFilter.conditions,
         labelIndex,
+        {
+          reminderTaskIds: new Set(
+            [...taskReminders]
+              .filter(([, rows]) => rows.length > 0)
+              .map(([taskId]) => taskId),
+          ),
+          attachmentTaskIds,
+          openSubtaskTaskIds,
+        },
       );
       return sortTasks(filtered, sortKey, sortDir ?? undefined);
     }

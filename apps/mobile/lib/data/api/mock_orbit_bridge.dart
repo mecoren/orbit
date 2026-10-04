@@ -973,6 +973,27 @@ class MockOrbitBridge implements OrbitBridge {
       });
 
   @override
+  Future<List<TaskExistenceFlag>> taskAttachmentFlags() => _delay(() {
+        // mock 附件挂载即记、卸载即删（无软删态），与 core 存活链行同义
+        final ids = <int>{
+          for (final a in store.attachments.values) a['task_id'] as int,
+        }.toList()
+          ..sort();
+        return [for (final id in ids) TaskExistenceFlag(taskId: id)];
+      });
+
+  @override
+  Future<List<TaskExistenceFlag>> taskOpenSubtaskFlags() => _delay(() {
+        final ids = <int>{
+          for (final s in store.subtasks.values)
+            if ((s['is_deleted'] as int) == 0 && (s['done'] as int) == 0)
+              s['task_id'] as int,
+        }.toList()
+          ..sort();
+        return [for (final id in ids) TaskExistenceFlag(taskId: id)];
+      });
+
+  @override
   Future<List<TaskAttachmentView>> taskAttachmentsList(int taskId) {
     return _delay(() {
       return store.attachments.values

@@ -267,3 +267,11 @@ Future<List<TaskDependencyFlags>> taskDependencyFlags() =>
 /// 任务→「有描述」投影（对应桌面 task_description_flags；只出有描述的行）
 Future<List<TaskDescriptionFlag>> taskDescriptionFlags() =>
     RustLib.instance.api.crateApiTodoTaskDescriptionFlags();
+
+/// 任务→「有附件」旗标（#71 筛选器 has_attachment 数据源；只出有存活链的行）
+Future<List<TaskExistenceFlag>> taskAttachmentFlags() =>
+    RustLib.instance.api.crateApiTodoTaskAttachmentFlags();
+
+/// 任务→「有未完成子任务」旗标（#71 筛选器 has_open_subtask 数据源）
+Future<List<TaskExistenceFlag>> taskOpenSubtaskFlags() =>
+    RustLib.instance.api.crateApiTodoTaskOpenSubtaskFlags();
