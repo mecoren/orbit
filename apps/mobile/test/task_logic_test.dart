@@ -688,19 +688,45 @@ group('computeSidebarCounts 单遍计数', () {
 // ---------- 提醒相对档（M2：快捷相对档）----------
 
 group('reminderPresets 提醒快捷档', () {
-  test('有截止日期：当天 9:00 + 前推 1 小时 / 30 / 15 分钟', () {
+  test('有截止日期（带时刻）：组首多「结束时」（= 截止本身）', () {
     final due = DateTime(2026, 9, 23, 18).millisecondsSinceEpoch;
     final out = reminderPresets(dueDate: due);
     expect(out.map((p) => p.label), [
+      '结束时 18:00',
       '截止当天 09:00',
       '截止前 1 小时',
       '截止前 30 分钟',
       '截止前 15 分钟',
     ]);
-    expect(out[0].ms, DateTime(2026, 9, 23, 9).millisecondsSinceEpoch);
-    expect(out[1].ms, due - const Duration(hours: 1).inMilliseconds);
-    expect(out[2].ms, due - const Duration(minutes: 30).inMilliseconds);
-    expect(out[3].ms, due - const Duration(minutes: 15).inMilliseconds);
+    expect(out[0].ms, due);
+    expect(out[1].ms, DateTime(2026, 9, 23, 9).millisecondsSinceEpoch);
+    expect(out[2].ms, due - const Duration(hours: 1).inMilliseconds);
+    expect(out[3].ms, due - const Duration(minutes: 30).inMilliseconds);
+    expect(out[4].ms, due - const Duration(minutes: 15).inMilliseconds);
+  });
+
+  test('开始带时刻 + 时长：「结束时」= start + 时长（优先于截止）', () {
+    final start = DateTime(2026, 9, 23, 17).millisecondsSinceEpoch;
+    final due = DateTime(2026, 9, 23, 20).millisecondsSinceEpoch;
+    final out = reminderPresets(
+      dueDate: due,
+      startDate: start,
+      durationMinutes: 30,
+    );
+    expect(out.first.label, '结束时 17:30');
+    expect(out.first.ms, DateTime(2026, 9, 23, 17, 30).millisecondsSinceEpoch);
+  });
+
+  test('开始是零点（无时刻）：「结束时」回落截止本身', () {
+    final day0 = DateTime(2026, 9, 23).millisecondsSinceEpoch;
+    final due = DateTime(2026, 9, 23, 18).millisecondsSinceEpoch;
+    final out = reminderPresets(
+      dueDate: due,
+      startDate: day0,
+      durationMinutes: 60,
+    );
+    expect(out.first.label, '结束时 18:00');
+    expect(out.first.ms, due);
   });
 
   test('无截止日期：今天 / 明天 9:00（按传入 now 锚定本地日界）', () {
@@ -710,19 +736,50 @@ group('reminderPresets 提醒快捷档', () {
     expect(out[1].ms, DateTime(2026, 9, 24, 9).millisecondsSinceEpoch);
   });
 
-  test('同刻去重：截止 09:15 时「当天 9:00」与「前 15 分钟」合并', () {
+  test('同刻去重：截止 09:15 时「结束时 09:15」居首，「前 15 分钟」合并', () {
     final due = DateTime(2026, 9, 23, 9, 15).millisecondsSinceEpoch;
     final out = reminderPresets(dueDate: due);
-    expect(out.length, 3);
-    expect(out.first.label, '截止当天 09:00');
+    expect(out.length, 4);
+    expect(out.first.label, '结束时 09:15');
+    expect(out[1].label, '截止当天 09:00');
     expect(out.map((p) => p.ms).toSet().length, out.length);
   });
 
   test('过期档位不过滤（与日期面板允许选过去同口径）', () {
     final now = DateTime(2026, 9, 23, 20);
     final out = reminderPresets(dueDate: now.millisecondsSinceEpoch);
-    expect(out.length, 4);
-    expect(out.every((p) => p.ms < now.millisecondsSinceEpoch), isTrue);
+    // 「结束时」= 截止本身（== due），其余四档早于截止
+    expect(out.length, 5);
+    expect(out.first.ms, now.millisecondsSinceEpoch);
+    expect(out.skip(1).every((p) => p.ms < now.millisecondsSinceEpoch), isTrue);
+  });
+});
+
+group('reminderEndMs 结束时刻推导', () {
+  test('开始带时刻 + 时长 → start + 时长', () {
+    final start = DateTime(2026, 9, 23, 17).millisecondsSinceEpoch;
+    expect(
+      reminderEndMs(startDate: start, durationMinutes: 60),
+      DateTime(2026, 9, 23, 18).millisecondsSinceEpoch,
+    );
+  });
+
+  test('不套用默认 30 分钟：有开始无时长 → null（除非截止带时刻）', () {
+    final start = DateTime(2026, 9, 23, 17).millisecondsSinceEpoch;
+    expect(reminderEndMs(startDate: start), isNull);
+    expect(reminderEndMs(startDate: start, durationMinutes: 0), isNull);
+    expect(reminderEndMs(startDate: start, durationMinutes: -30), isNull);
+    final due = DateTime(2026, 9, 23, 20).millisecondsSinceEpoch;
+    expect(reminderEndMs(startDate: start, dueDate: due), due);
+  });
+
+  test('双无时刻 / 全空 → null', () {
+    final day0 = DateTime(2026, 9, 23).millisecondsSinceEpoch;
+    expect(
+      reminderEndMs(startDate: day0, dueDate: day0, durationMinutes: 60),
+      isNull,
+    );
+    expect(reminderEndMs(), isNull);
   });
 });
 

@@ -120,6 +120,11 @@ interface DateTimePickerProps {
    * （截止当天 09:00 / 前推 1 小时·30·15 分钟）；截止日期字段自身不要传
    */
   dueDateMs?: number | null;
+  /**
+   * 任务结束时刻（ms，调用方按 `reminderEndMs` 算好）：仅**提醒时间**字段传，
+   * 相对组首位多一项「结束时 HH:mm」；null 时不渲染
+   */
+  endMs?: number | null;
 }
 
 export function DateTimePicker({
@@ -129,6 +134,7 @@ export function DateTimePicker({
   disabled,
   quick = true,
   dueDateMs,
+  endMs,
 }: DateTimePickerProps) {
   const [open, setOpen] = useState(false);
   // 快捷菜单 ⇄ 完整日历+时间视图切换；关闭弹层时复位为快捷视图
@@ -213,6 +219,7 @@ export function DateTimePicker({
             kind="datetime"
             value={value}
             dueDateMs={dueDateMs}
+            endMs={endMs}
             onSelect={(d) => {
               onChange(format(d, "yyyy-MM-dd'T'HH:mm"));
               setOpen(false);

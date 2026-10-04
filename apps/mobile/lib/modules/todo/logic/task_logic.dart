@@ -621,6 +621,32 @@ DisplayReminder? displayReminder(
 /// 与 `viewDueHour` 的 18:00 分开——提醒发生在开工时刻，截止在收工时刻）
 const int reminderPresetHour = 9;
 
+/// 提醒「结束时」预设（对标 TickTick end-time notification）。
+///
+/// 口径与桌面 `reminderEndMs`（`lib/quick-dates.ts`）逐字一致：`start` 带
+/// 时刻最强，否则 `due` 带时刻；**不套用默认 30 分钟**——通知是动作时刻，
+/// 不能按渲染占位凭空捏一个结束点，无显式时长时不给预设。
+/// - `startDate` 带时刻 + `durationMinutes > 0` → `start + 时长`；
+/// - 否则 `dueDate` 带时刻 → `due` 本身（截止即结束）；
+/// - 否则 null（调用方不渲染该项）。
+int? reminderEndMs({int? startDate, int? dueDate, int? durationMinutes}) {
+  if (startDate != null &&
+      _hasTimePart(startDate) &&
+      durationMinutes != null &&
+      durationMinutes > 0) {
+    return startDate + durationMinutes * const Duration(minutes: 1).inMilliseconds;
+  }
+  if (dueDate != null && _hasTimePart(dueDate)) return dueDate;
+  return null;
+}
+
+/// 本地时刻判定（镜像桌面 `hasTimePart`：时分秒毫秒任一非零；
+/// 刻意不用 epoch 取模——UTC+8 零点对应前日 16:00 epoch 会误判）。
+bool _hasTimePart(int ms) {
+  final d = DateTime.fromMillisecondsSinceEpoch(ms);
+  return d.hour != 0 || d.minute != 0 || d.second != 0 || d.millisecond != 0;
+}
+
 /// 提醒快捷预设（相对档）。
 ///
 /// 提交口径不变：产物仍是**绝对毫秒时刻**（`todo_reminders.remind_at`），
@@ -628,13 +654,30 @@ const int reminderPresetHour = 9;
 ///
 /// - 有截止日期 → 以截止时刻为基准：截止当天 9:00 / 前推 1 小时·30·15 分钟；
 /// - 无截止日期 → 以今天零点为基准：今天 9:00 / 明天 9:00。
+/// - 有明确结束时刻（见 [reminderEndMs]：开始+时长，或带时刻的截止）→
+///   组首多一项「结束时 HH:mm」（对标 TickTick end-time notification）。
 ///
 /// 相同时刻的档位去重（如截止恰好是当天 9:00 时，「截止当天 9:00」与
-/// 「截止前 N 分钟」不会重复出现）；已过期的档位**不过滤**——与日期面板
-/// 允许选过去时刻同口径，用户可能就是要补记一条。
-List<({String label, int ms})> reminderPresets({int? dueDate, DateTime? now}) {
+/// 「截止前 N 分钟」不会重复出现；「结束时」排首位，同刻时优先保留）；
+/// 已过期的档位**不过滤**——与日期面板允许选过去时刻同口径，
+/// 用户可能就是要补记一条。
+List<({String label, int ms})> reminderPresets({
+  int? dueDate,
+  DateTime? now,
+  int? startDate,
+  int? durationMinutes,
+}) {
   final n = now ?? DateTime.now();
   final out = <({String label, int ms})>[];
+  final end = reminderEndMs(
+    startDate: startDate,
+    dueDate: dueDate,
+    durationMinutes: durationMinutes,
+  );
+  if (end != null) {
+    final d = DateTime.fromMillisecondsSinceEpoch(end);
+    out.add((label: '结束时 ${_two(d.hour)}:${_two(d.minute)}', ms: end));
+  }
   if (dueDate != null) {
     final due = DateTime.fromMillisecondsSinceEpoch(dueDate);
     out
@@ -667,7 +710,7 @@ List<({String label, int ms})> reminderPresets({int? dueDate, DateTime? now}) {
         ms: today.add(const Duration(days: 1)).millisecondsSinceEpoch,
       ));
   }
-  // 同刻去重（保留首个标签——「截止当天 9:00」优先于相对档）
+  // 同刻去重（保留首个标签——「结束时」组首优先，其次「截止当天 9:00」）
   final seen = <int>{};
   return [
     for (final p in out)

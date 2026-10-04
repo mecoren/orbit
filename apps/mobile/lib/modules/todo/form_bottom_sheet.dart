@@ -488,7 +488,12 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
       context,
       title: '提醒时间',
       items: [
-        for (final p in reminderPresets(dueDate: _dueDate))
+        for (final p
+            in reminderPresets(
+              dueDate: _dueDate,
+              startDate: _startDate,
+              durationMinutes: _durationMinutes,
+            ))
           SelectItem<String>(value: '${p.ms}', label: p.label),
         const SelectItem<String>(
             value: _reminderCustomKey, label: '自定义时间…'),

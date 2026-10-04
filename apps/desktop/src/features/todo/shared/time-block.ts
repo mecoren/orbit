@@ -15,18 +15,14 @@
  */
 
 import type { TodoTask } from "@/lib/tauri";
+import { hasTimePart } from "@/lib/date-utils";
+
+export { hasTimePart };
 
 const MINUTE_MS = 60_000;
 export const DAY_MS = 86_400_000;
 /** 未设时长任务的默认块长（分钟） */
 export const DEFAULT_BLOCK_MINUTES = 30;
-
-/** 时间戳是否带本地非零时刻（纯日期落零点 → false） */
-export function hasTimePart(ms: number | null | undefined): boolean {
-  if (ms == null) return false;
-  const d = new Date(ms);
-  return d.getHours() !== 0 || d.getMinutes() !== 0 || d.getSeconds() !== 0 || d.getMilliseconds() !== 0;
-}
 
 export interface TaskTimeBlock {
   taskId: number;

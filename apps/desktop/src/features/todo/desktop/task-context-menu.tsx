@@ -76,6 +76,7 @@ import {
   type TodoTaskLabel,
 } from "@/lib/tauri";
 import { PRIORITY_COLOR, FAVORITE_COLOR, TODO_ACCENT, PRIORITY_LABELS, MY_DAY_COLOR } from "../shared/constants";
+import { reminderEndMs } from "@/lib/quick-dates";
 import { todayStartMs, toggleMyDayValue } from "../shared/task-filters";
 import { completeTask } from "../shared/task-actions";
 
@@ -403,6 +404,12 @@ export function TaskContextMenu({
             <p className="text-sm text-muted-foreground">提醒时间：</p>
             <DateTimePicker
               value={reminderDraft}
+              dueDateMs={task.due_date}
+              endMs={reminderEndMs({
+                start_date: task.start_date,
+                due_date: task.due_date,
+                duration_minutes: task.duration_minutes,
+              })}
               onChange={(v) => {
                 setReminderDraft(v);
                 setReminderError(null);

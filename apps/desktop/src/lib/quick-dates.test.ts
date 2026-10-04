@@ -3,6 +3,7 @@ import {
   buildQuickDateOptions,
   buildQuickDateTimeOptions,
   buildReminderDueOptions,
+  reminderEndMs,
 } from "./quick-dates";
 
 describe("buildQuickDateOptions", () => {
@@ -88,5 +89,55 @@ describe("buildReminderDueOptions（相对截止提醒档）", () => {
     expect(buildReminderDueOptions(null)).toEqual([]);
     expect(buildReminderDueOptions(undefined)).toEqual([]);
     expect(buildReminderDueOptions(Number.NaN)).toEqual([]);
+  });
+});
+
+describe("reminderEndMs（结束时提醒预设）", () => {
+  // 2026-09-23（三）:start 带时刻 + 显式时长 → start + 时长
+  it("开始带时刻 + 时长 → 结束 = start + duration", () => {
+    const start = new Date(2026, 8, 23, 17, 0).getTime();
+    expect(reminderEndMs({ start_date: start, duration_minutes: 60 })).toBe(
+      new Date(2026, 8, 23, 18, 0).getTime(),
+    );
+  });
+
+  it("start 优先于 due：两者带时刻时按 start + 时长", () => {
+    const start = new Date(2026, 8, 23, 17, 0).getTime();
+    const due = new Date(2026, 8, 23, 20, 0).getTime();
+    expect(
+      reminderEndMs({ start_date: start, due_date: due, duration_minutes: 30 }),
+    ).toBe(new Date(2026, 8, 23, 17, 30).getTime());
+  });
+
+  it("无 start 时长：due 带时刻 → 结束 = due 本身", () => {
+    const due = new Date(2026, 8, 23, 18, 0).getTime();
+    expect(reminderEndMs({ due_date: due })).toBe(due);
+    // start 是零点（无时刻）+ 有时长 → 仍回落 due
+    const day0 = new Date(2026, 8, 23).getTime();
+    expect(
+      reminderEndMs({ start_date: day0, due_date: due, duration_minutes: 60 }),
+    ).toBe(due);
+  });
+
+  it("不套用默认 30 分钟：start 带时刻但无时长 → null", () => {
+    const start = new Date(2026, 8, 23, 17, 0).getTime();
+    expect(reminderEndMs({ start_date: start })).toBeNull();
+    expect(
+      reminderEndMs({ start_date: start, duration_minutes: 0 }),
+    ).toBeNull();
+    expect(
+      reminderEndMs({ start_date: start, duration_minutes: -30 }),
+    ).toBeNull();
+  });
+
+  it("双无时刻 / 全空 → null", () => {
+    const day0 = new Date(2026, 8, 23).getTime();
+    expect(
+      reminderEndMs({ start_date: day0, due_date: day0, duration_minutes: 60 }),
+    ).toBeNull();
+    expect(reminderEndMs({})).toBeNull();
+    expect(
+      reminderEndMs({ start_date: null, due_date: null, duration_minutes: null }),
+    ).toBeNull();
   });
 });

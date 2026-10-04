@@ -50,6 +50,7 @@ import {
   repeatLabel,
 } from "../shared/repeat";
 import { formatYmd } from "../shared/lunar";
+import { reminderEndMs } from "@/lib/quick-dates";
 import { templateDueDate } from "../shared/template-apply";
 import { atViewDueHour, quickViewCreateDefaults } from "../shared/view-create-defaults";
 import { PRIORITY_COLOR, TODO_ACCENT, PRIORITY_LABELS, PRESET_10 } from "../shared/constants";
@@ -880,6 +881,17 @@ export function TaskFormSheet({
       }
       submitText={task ? "保存" : "创建"}
       onValuesChange={(values) => setDueAnchorMs(toDateMs(values.due_date))}
+      // 「结束时」预设锚定打开时任务快照：表单日期是日期级（无时刻），
+      // 现算只会得到零点/毫秒串；新建无快照 → 无此项
+      datetimeEndMs={
+        task
+          ? reminderEndMs({
+              start_date: task.start_date,
+              due_date: task.due_date,
+              duration_minutes: task.duration_minutes,
+            })
+          : null
+      }
     />
   );
 }

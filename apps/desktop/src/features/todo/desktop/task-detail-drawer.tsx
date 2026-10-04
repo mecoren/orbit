@@ -76,6 +76,7 @@ import { usePasteAttachment } from "@/hooks/use-paste-attachment";
 import { PRIORITY_COLOR, TODO_ACCENT, PRIORITY_LABELS, STATUS_COLOR, STATUS_LABELS, MY_DAY_COLOR, PRESET_10 } from "../shared/constants";
 import { describeActivity } from "../shared/activity-format";
 import { formatDuration } from "../shared/time";
+import { reminderEndMs } from "@/lib/quick-dates";
 import { todayStartMs, toggleMyDayValue } from "../shared/task-filters";
 import { ConfirmPopover } from "../shared/confirm-popover";
 import { renderMarkdown } from "../shared/markdown-lite";
@@ -202,6 +203,11 @@ export function TaskDetailDrawer({ projects }: TaskDetailDrawerProps) {
                   reminders={t.reminders}
                   taskDone={!!t.done}
                   dueDateMs={t.due_date}
+                  endMs={reminderEndMs({
+                    start_date: t.start_date,
+                    due_date: t.due_date,
+                    duration_minutes: t.duration_minutes,
+                  })}
                   repeatMode={t.repeat_mode}
                   repeatAfter={t.repeat_after}
                   repeatWeekdays={t.repeat_weekdays}
@@ -1483,6 +1489,7 @@ function RemindersSection({
   repeatEndParam,
   repeatFromDone,
   dueDateMs,
+  endMs,
   onChanged,
 }: {
   taskId: number;
@@ -1491,6 +1498,8 @@ function RemindersSection({
   taskDone: boolean;
   /** 任务截止日期（ms；null = 无）——提醒选择器据此给「相对截止」档 */
   dueDateMs: number | null;
+  /** 任务结束时刻（ms；null = 无）——提醒选择器组首给「结束时」项 */
+  endMs: number | null;
   /** 任务重复规则（>0 时提醒行显示徽标；触发后由监听器自动排下一次） */
   repeatMode: number;
   repeatAfter: number;
@@ -1564,6 +1573,7 @@ function RemindersSection({
               <DateTimePicker
                 value={editing.draft}
                 dueDateMs={dueDateMs}
+                endMs={endMs}
                 onChange={(v) => setEditing({ ...editing, draft: v })}
               />
               <label className="flex cursor-pointer items-center justify-between gap-2 text-xs text-muted-foreground">

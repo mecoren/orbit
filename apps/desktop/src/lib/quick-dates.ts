@@ -8,7 +8,7 @@
 import { format } from "date-fns";
 import { zhCN } from "date-fns/locale";
 
-import { addDays, startOfDay } from "./date-utils";
+import { addDays, hasTimePart, startOfDay } from "./date-utils";
 
 export interface QuickDateOption {
   /** 稳定标识（today / tomorrow / nextWeek / in1h / tonight） */
@@ -91,6 +91,40 @@ export function buildReminderDueOptions(
     seen.add(t);
     return true;
   });
+}
+
+/**
+ * 「结束时」提醒预设（对标 TickTick end-time notification）。
+ *
+ * 口径与 time-block.ts `taskTimeBlock` 起算一致——`start` 带时刻最强，
+ * 否则 `due` 带时刻；但**不套用默认 30 分钟**：通知是动作时刻，
+ * 不能按渲染占位凭空捏一个结束点——无显式时长时不给预设。
+ *
+ * - `start_date` 带时刻 + `duration_minutes > 0` → `start + 时长`；
+ * - 否则 `due_date` 带时刻 → `due` 本身（截止即结束）；
+ * - 否则 null（调用方不渲染该项；表单日期是零点/毫秒串、无时刻即无此项）。
+ *
+ * 产物仍是绝对毫秒时刻，提醒行落库后走既有到期通道，无新机制。
+ */
+export function reminderEndMs(input: {
+  start_date?: number | null;
+  due_date?: number | null;
+  duration_minutes?: number | null;
+}): number | null {
+  const { start_date: start, due_date: due, duration_minutes: dur } = input;
+  if (
+    typeof start === "number" &&
+    Number.isFinite(start) &&
+    hasTimePart(start) &&
+    typeof dur === "number" &&
+    dur > 0
+  ) {
+    return start + dur * MINUTE_MS;
+  }
+  if (typeof due === "number" && Number.isFinite(due) && hasTimePart(due)) {
+    return due;
+  }
+  return null;
 }
 
 /**

@@ -33,6 +33,7 @@ import {
   quickViewCreateDefaults,
 } from "../shared/view-create-defaults";
 import { PRIORITY_COLOR, TODO_ACCENT, type QuickViewKey, PRIORITY_LABELS } from "../shared/constants";
+import { reminderEndMs } from "@/lib/quick-dates";
 
 
 interface QuickAddBarProps {
@@ -354,8 +355,14 @@ export function QuickAddBar({ projects, defaultProjectId, quickView }: QuickAddB
                   <QuickDateMenu
                     kind="datetime"
                     value={remindDraft}
-                    // 已选截止 → 多一组「相对截止」档（对齐移动端 #53 口径）
+                    // 已选截止 → 多一组「相对截止」档（对齐移动端 #53 口径）；
+                    // 快加无开始/时长输入，「结束时」仅在截止本身带时刻时出现
                     dueDateMs={dueDate ? dueDate.getTime() : null}
+                    endMs={
+                      reminderEndMs({
+                        due_date: dueDate ? dueDate.getTime() : null,
+                      })
+                    }
                     onSelect={(d) => {
                       setRemindDraft(format(d, "yyyy-MM-dd'T'HH:mm"));
                       setRemindOpen(false);

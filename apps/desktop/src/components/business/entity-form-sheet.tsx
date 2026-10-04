@@ -94,6 +94,14 @@ interface EntityFormSheetProps {
    */
   onValuesChange?: (values: FormValues) => void;
   /**
+   * datetime 字段的「结束时」预设（ms；仅提醒时间字段消费，经 FieldRenderer
+   * 透给 DateTimePicker → QuickDateMenu 组首项）。
+   * 由调用方按 `reminderEndMs` 从**任务快照**算好后传入——表单内日期是
+   * 日期级（无时刻），此处不从 values 现算；编辑中改了日期/时长后该预设
+   * 仍锚定打开时快照（与相对档的零点近似同类，显式点选即确认）。
+   */
+  datetimeEndMs?: number | null;
+  /**
    * 分区标题强调色。传入时分区标题文字使用此色，不传则回退到默认前景色。
    */
   accent?: string;
@@ -114,6 +122,7 @@ export function EntityFormSheet({
   fieldAction,
   accent,
   onValuesChange,
+  datetimeEndMs,
 }: EntityFormSheetProps) {
   const [values, setValues] = useState<FormValues>({});
   const [submitting, setSubmitting] = useState(false);
@@ -251,6 +260,7 @@ export function EntityFormSheet({
                             field={field}
                             value={values[field.name]}
                             relativeDateMs={relativeDateMsOf(field, values)}
+                            datetimeEndMs={datetimeEndMs}
                             onChange={(v) => setField(field.name, v)}
                           />
                         </div>
@@ -263,6 +273,7 @@ export function EntityFormSheet({
                         field={field}
                         value={values[field.name]}
                         relativeDateMs={relativeDateMsOf(field, values)}
+                        datetimeEndMs={datetimeEndMs}
                         onChange={(v) => setField(field.name, v)}
                       />
                     )}
@@ -324,12 +335,15 @@ function FieldRenderer({
   value,
   onChange,
   relativeDateMs,
+  datetimeEndMs,
 }: {
   field: FieldDef;
   value: unknown;
   onChange: (value: unknown) => void;
   /** 「相对截止」档锚点（仅 datetime 用；见 [FieldDef.relativeDateField]） */
   relativeDateMs?: number | null;
+  /** 「结束时」预设（仅 datetime 用；见 EntityFormSheetProps.datetimeEndMs） */
+  datetimeEndMs?: number | null;
 }) {
   switch (field.type) {
     case "textarea":
@@ -374,6 +388,7 @@ function FieldRenderer({
           onChange={onChange}
           placeholder={field.placeholder}
           dueDateMs={relativeDateMs}
+          endMs={datetimeEndMs}
         />
       );
 

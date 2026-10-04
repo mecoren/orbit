@@ -16,6 +16,20 @@
 
 ## [Unreleased]
 
+### 结束时间提醒预设：对标 TickTick end-time notification（2026-10-04）
+
+- **提醒相对档组首新增「结束时 HH:mm」一键项**：`start_date` 带时刻 +
+  `duration_minutes > 0` → `start + 时长`；否则 `due_date` 带时刻 → `due`
+  本身；否则无此项。**不套用默认 30 分钟**——通知是动作时刻，不能按
+  时间轴渲染占位凭空捏一个结束点。
+- **双端口径逐字一致**：桌面 `reminderEndMs`（`lib/quick-dates.ts`）/
+  移动 `reminderEndMs`（`task_logic.dart`）；带时刻判定收敛
+  `lib/date-utils.ts` 单一出口 `hasTimePart`。
+- **桌面四入口**：详情抽屉提醒区、任务表单编辑态（打开时快照）、右键
+  设置提醒（顺手补其缺失的相对截止档）、快捷新增；**移动端表单**
+  `_pickReminder`（编辑态保留真实时刻则出现）。产物仍是绝对 `remind_at`，
+  走既有提醒到期通道，零 DDL、零同步面。
+
 ### 日历时间轴档：M9 时间轴阶段二（2026-10-03）
 
 - **日历新增第五档「时间」**：整幅 7 列（周一→周日）× 24 小时网格，任务渲染为时段色块，

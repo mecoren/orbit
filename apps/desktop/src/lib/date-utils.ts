@@ -62,6 +62,25 @@ export function dayLabel(date: Date): string {
 }
 
 /**
+ * 时间戳是否带本地非零时刻（纯日期落零点 → false）。
+ *
+ * 必须用本地字段判定：本地零点在 UTC+8 下对应前日 16:00 epoch，
+ * 按 epoch 取模会误判（time-block 口径注释）。原实现在
+ * features/todo/shared/time-block.ts，此处为跨模块单一出口，
+ * time-block 经 re-export 复用（调用方 import 路径不变）。
+ */
+export function hasTimePart(ms: number | null | undefined): boolean {
+  if (ms == null) return false;
+  const d = new Date(ms);
+  return (
+    d.getHours() !== 0 ||
+    d.getMinutes() !== 0 ||
+    d.getSeconds() !== 0 ||
+    d.getMilliseconds() !== 0
+  );
+}
+
+/**
  * 周区间中文标签（如 "9月1日 – 9月7日"）
  *
  * 跨年时起点前置年份（"2026年12月28日 – 1月3日"），同年不带年份——周档

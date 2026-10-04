@@ -9,6 +9,7 @@ import { useMemo } from "react";
 import { format } from "date-fns";
 import {
   Bell,
+  BellRing,
   Calendar,
   CalendarClock,
   CalendarDays,
@@ -33,6 +34,8 @@ const OPTION_ICONS: Record<string, LucideIcon> = {
   nextWeek: ChevronsRight,
   in1h: Clock,
   tonight: Clock,
+  // 「结束时」预设（对标 TickTick end-time notification；响铃区别于普通铃铛）
+  endAt: BellRing,
   // 「相对截止」提醒档（铃铛，与行内提醒徽标同语义）
   dueDay9: Bell,
   dueBefore1h: Bell,
@@ -57,6 +60,13 @@ interface QuickDateMenuProps {
    * 缺省或 null 时该组不渲染——非提醒场景（截止日期选择器）不要传。
    */
   dueDateMs?: number | null;
+  /**
+   * 任务结束时刻（ms，由调用方按 `reminderEndMs` 算好：start + 时长，
+   * 无显式排程时回落带时刻的 due）：datetime 档在相对组首位多一项
+   * 「结束时 HH:mm」（对标 TickTick end-time notification）。
+   * 缺省或 null 时不渲染——表单日期无时刻时天然缺席。
+   */
+  endMs?: number | null;
 }
 
 export function QuickDateMenu({
@@ -66,16 +76,35 @@ export function QuickDateMenu({
   customLabel,
   onCustom,
   dueDateMs,
+  endMs,
 }: QuickDateMenuProps) {
   const options = useMemo(
     () => (kind === "date" ? buildQuickDateOptions() : buildQuickDateTimeOptions()),
     [kind],
   );
-  // 「相对截止」组：仅 datetime 且给了截止日期时出现
-  const dueOptions = useMemo(
-    () => (kind === "datetime" ? buildReminderDueOptions(dueDateMs) : []),
-    [kind, dueDateMs],
-  );
+  // 「相对截止」组：仅 datetime 且给了截止日期时出现；「结束时」置组首
+  // （同刻去重沿用 buildReminderDueOptions 的保留首个语义，结束时优先）
+  const dueOptions = useMemo(() => {
+    if (kind !== "datetime") return [];
+    const base = buildReminderDueOptions(dueDateMs);
+    if (endMs == null || !Number.isFinite(endMs)) return base;
+    const end = new Date(endMs);
+    const seen = new Set<number>([endMs]);
+    return [
+      {
+        key: "endAt",
+        label: "结束时",
+        hint: format(end, "HH:mm"),
+        value: end,
+      } satisfies QuickDateOption,
+      ...base.filter((o) => {
+        const t = o.value.getTime();
+        if (seen.has(t)) return false;
+        seen.add(t);
+        return true;
+      }),
+    ];
+  }, [kind, dueDateMs, endMs]);
   const CustomIcon = kind === "date" ? Calendar : CalendarClock;
 
   const renderOption = (opt: QuickDateOption) => {
@@ -107,7 +136,7 @@ export function QuickDateMenu({
       {dueOptions.length > 0 && (
         <>
           <p className="px-2 pb-0.5 pt-1 text-[11px] font-medium text-muted-foreground">
-            相对截止
+            {dueOptions[0].key === "endAt" ? "结束与截止" : "相对截止"}
           </p>
           {dueOptions.map(renderOption)}
           <div className="my-1 border-t" />
