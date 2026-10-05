@@ -19,7 +19,7 @@ import { hasTimePart } from "@/lib/date-utils";
 
 export { hasTimePart };
 
-const MINUTE_MS = 60_000;
+export const MINUTE_MS = 60_000;
 export const DAY_MS = 86_400_000;
 /** 未设时长任务的默认块长（分钟） */
 export const DEFAULT_BLOCK_MINUTES = 30;
@@ -76,10 +76,10 @@ export function layoutTimeBlock(block: TaskTimeBlock, dayStartMs: number): Block
   return { topRatio: top / DAY_MS, heightRatio: (bottom - top) / DAY_MS };
 }
 
-/** 块落在周内第几列（0-6）；周外返回 -1（调用方过滤） */
-export function blockDayIndex(block: TaskTimeBlock, weekStartMs: number): number {
-  const idx = Math.floor((block.dayStartMs - weekStartMs) / DAY_MS);
-  return idx >= 0 && idx <= 6 ? idx : -1;
+/** 块落在锚点起第几列（0..dayCount-1）；面板外返回 -1（调用方过滤） */
+export function blockDayIndex(block: TaskTimeBlock, anchorMs: number, dayCount = 7): number {
+  const idx = Math.floor((block.dayStartMs - anchorMs) / DAY_MS);
+  return idx >= 0 && idx < dayCount ? idx : -1;
 }
 
 /**

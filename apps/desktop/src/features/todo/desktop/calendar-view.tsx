@@ -84,6 +84,21 @@ import type { ProjectedTaskLabel, TodoProject, TodoTask } from "@/lib/tauri";
 
 export type CalendarSubMode = "month" | "week" | "timeline" | "year" | "agenda";
 
+/**
+ * 时间轴档的跨度档（对标 TickTick 日 / 三日 / 周视图，另加两周）。
+ * 一维表达「多日 + 多周」：1 天聚焦当日排程，3 天看短周期，7 天全周，
+ * 14 天跨两周看长周期——列均为 24h 网格，逻辑同一条（TimelinePanel 只吃
+ * `dayCount`）。
+ */
+const TIMELINE_SPANS = [1, 3, 7, 14] as const;
+type TimelineSpan = (typeof TIMELINE_SPANS)[number];
+const TIMELINE_SPAN_LABEL: Record<TimelineSpan, string> = {
+  1: "日",
+  3: "三日",
+  7: "周",
+  14: "两周",
+};
+
 interface CalendarViewProps {
   tasks: TodoTask[];
   projects: TodoProject[];
@@ -162,6 +177,9 @@ export function CalendarView({
   const weekEnd = useMemo(() => addDays(weekStart, 6), [weekStart]);
   const stepViewWeek = (n: number) => setSelected((prev) => addDays(prev, n * 7));
   const viewWeekWheelRef = useWheelStepRef(stepViewWeek);
+
+  /** 时间轴档跨度（1/3/7/14 天）：局部态，切档保留；翻页步长随跨度走 */
+  const [timelineSpan, setTimelineSpan] = useState<TimelineSpan>(7);
 
   // 月模式某日全部任务的弹层（点圆点行「展开」按钮打开）
   const [expandedDay, setExpandedDay] = useState<Date | null>(null);
@@ -385,7 +403,14 @@ export function CalendarView({
             <span ref={yearPaneWheelRef} title="滚轮切换年份">
               {yearPaneYear}年
             </span>
-          ) : subMode === "week" || subMode === "timeline" ? (
+          ) : subMode === "timeline" ? (
+            <>
+              <span>{weekStart.getFullYear()}年</span>
+              <span ref={viewWeekWheelRef} title="滚轮切换">
+                {weekRangeLabel(weekStart, addDays(weekStart, timelineSpan - 1))}
+              </span>
+            </>
+          ) : subMode === "week" ? (
             <>
               <span>{weekStart.getFullYear()}年</span>
               <span ref={viewWeekWheelRef} title="滚轮切换周">
@@ -435,6 +460,23 @@ export function CalendarView({
               <Hourglass size={14} />
               时间
             </Button>
+            {/* 跨度档（仅时间档可见）：日 / 三日 / 周 / 两周 */}
+            {subMode === "timeline" && (
+              <div className="flex items-center overflow-hidden rounded-md border">
+                {TIMELINE_SPANS.map((n) => (
+                  <Button
+                    key={n}
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 rounded-none px-2 text-xs"
+                    aria-pressed={timelineSpan === n}
+                    onClick={() => setTimelineSpan(n)}
+                  >
+                    {TIMELINE_SPAN_LABEL[n]}
+                  </Button>
+                ))}
+              </div>
+            )}
             <Button
               variant="ghost"
               size="sm"
@@ -678,13 +720,30 @@ export function CalendarView({
           </div>
         </div>
       ) : subMode === "timeline" ? (
-        /* ===== 时间轴档（M9 阶段二）：整幅 7 列 × 24h 网格，不用左右分栏 ===== */
+        /* ===== 时间轴档（M9 阶段二）：整幅 dayCount 列 × 24h 网格，不用左右分栏 ===== */
         <div className="min-h-0 flex-1 rounded-xl border bg-card/40 p-1">
           <TimelinePanel
             tasks={tasks}
-            weekStart={weekStart}
+            anchor={weekStart}
+            dayCount={timelineSpan}
             projects={projects}
             onOpenDetail={openDetail}
+            onReschedule={async (taskId, patch) => {
+              try {
+                await todoTaskUpdate(taskId, patch);
+                void queryClient.invalidateQueries({ queryKey: ["todo_tasks"] });
+                void queryClient.invalidateQueries({ queryKey: ["todo-task-detail"] });
+                toast.success(
+                  "时段已调整",
+                  {
+                    description:
+                      patch.due_date != null ? "原为截止倒推块，已改截止时刻" : "开始时刻与时长已更新",
+                  },
+                );
+              } catch (err) {
+                toast.error(`调整失败：${err instanceof Error ? err.message : String(err)}`);
+              }
+            }}
           />
         </div>
       ) : subMode === "year" ? (
