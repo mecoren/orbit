@@ -7,6 +7,7 @@ Orbit（循迹）是本地优先的跨平台任务管理应用：待办（项目
 ## 快速原则
 
 - **中文工作**：对话、commit message、文档、CHANGELOG 全部中文。commit 格式 `type(scope): 中文描述`（Conventional Commits + 中文正文要点列表），如 `feat(stats): 完成热力图重构对齐 wait-home——按年视图+年份切换`。
+- **只做待办域，不做生活记录域**：功能面锁死在「项目/任务/子任务/标签/提醒/评论 + 日历 + 统计 + 云同步/备份」（首段与下方[架构边界](#架构边界)的「明确不做」清单是同一口径的两处落点）。蓝本 wait-home 里的非待办业务模块一律**不复刻、也不新造**。判据一句话：**挂不上「任务」或「任务的日期」就是生活记录域**——日历视图的农历/节气/节假日底座**不算**（它是任务日期的语义，不是用户另记的一本账）。**蓝本里有 ≠ 本仓要做**；查蓝本是否存在某功能必须**中文模块名与英文符号并用**（wait-home 的倒数日叫「重要日期 / important_date / important_events」，只 grep `Countdown|倒数|纪念` 会误判成「蓝本零覆盖」——2026-10-05 倒数日被误建、误写「本仓自订规格」的根因）。要加这类模块先在 `docs/07` 立项对照本条；已撤回项见 `docs/07` 的 ⛔ 行。
 - **单一功能单一 commit**：一批工作内每个功能独立成 commit；动 git 前先 `git status --short` 核对全清单，**逐文件 add**（目录通配会混入并发会话 WIP），add 后必查 `git diff --cached --name-only` 再 commit；commit 后核对 `git log` 归属防重复提交。
 - **业务全部下沉 Rust 核心**：新功能逻辑写在 `orbit-core` 的 `api/*_api.rs`，桌面 Tauri command（`apps/desktop/src-tauri/src/commands/`）与移动 FRB 桥（`crates/orbit-flutter/src/api/`）都是薄壳转发，不写业务。命令在 `src-tauri/src/lib.rs` 的 `invoke_handler` 集中注册。
 - **只读聚合不进同步白名单**：统计类新表/新读路径不改 `sync_registry.rs`；新增可同步表必须同步更新 SYNCABLE_TABLES + modules.rs 计数断言。
@@ -36,6 +37,10 @@ Orbit（循迹）是本地优先的跨平台任务管理应用：待办（项目
 | 质量 | tsc / vitest 4 / Playwright 冒烟 / cargo test / flutter analyze+test；内存门禁（`perf-metrics/`）；CI 四 job（web/rust-core/flutter-mobile 含 FRB codegen 一致性门禁/perf-gate） |
 
 ## 架构边界
+
+**明确不做（生活记录域，2026-10-05 复核）**
+
+下列蓝本模块**不复刻**，也不以「竞品有所以我们也要」的名义新造：重要日期/倒数日（`important_events`；蓝本侧含农历、多档重复、多档提醒、卡片墙四段分组、沉浸式详情页、日历联动、桌面提醒钩子，移动端 15 个文件）、会员卡·礼品卡、经期·孕期、习惯打卡、番茄钟、记账·工资、收藏（书/影/游/卡）、家庭成员·公司设备、速记·抽奖、出行行程。新增模块前先对 `docs/02 §四` 裁剪清单与本清单；确有必要的诉求走 `docs/07` 立项，判据仍是上方「挂得上任务或任务的日期」。
 
 **必须在 orbit-core（Rust）**
 
