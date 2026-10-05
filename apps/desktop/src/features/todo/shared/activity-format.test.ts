@@ -70,7 +70,7 @@ describe("describeActivity", () => {
     expect(describeActivity("comment_delete", "{}")).toBe("删除评论");
   });
 
-  it("repeat_rule 伪字段：六字段快照对象走 repeatLabel 口径", () => {
+  it("repeat_rule 伪字段：八字段快照对象走 repeatLabel 口径", () => {
     const snap = (mode: number, after: number, weekdays = 0) => ({
       mode,
       after,
@@ -78,11 +78,26 @@ describe("describeActivity", () => {
       end_type: 0,
       end_param: 0,
       from_done: 0,
+      month_mode: 0,
+      nth_week: 0,
     });
     const detail = JSON.stringify({
       changes: [{ field: "repeat_rule", from: snap(0, 0), to: snap(2, 1, 2) }],
     });
     expect(describeActivity("update", detail)).toBe("更新（重复规则：不重复 → 每周二）");
+  });
+
+  it("repeat_rule 月高级语义快照走 nth 口径", () => {
+    const detail = JSON.stringify({
+      changes: [
+        {
+          field: "repeat_rule",
+          from: { mode: 3, after: 1, weekdays: 0, end_type: 0, end_param: 0, from_done: 0, month_mode: 0, nth_week: 0 },
+          to: { mode: 3, after: 1, weekdays: 2, end_type: 0, end_param: 0, from_done: 0, month_mode: 1, nth_week: 2 },
+        },
+      ],
+    });
+    expect(describeActivity("update", detail)).toBe("更新（重复规则：每月 → 每月第 2 个周二）");
   });
 
   it("附件与子任务改名动作拼 target", () => {

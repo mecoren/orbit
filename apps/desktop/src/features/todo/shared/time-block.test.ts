@@ -44,6 +44,8 @@ function mk(partial: Partial<TodoTask>): TodoTask {
     repeat_end_type: 0,
     repeat_end_param: 0,
     repeat_from_done: 0,
+    repeat_month_mode: 0,
+    repeat_nth_week: 0,
     percent_done: 0,
     position: 0,
     is_favorite: 0,

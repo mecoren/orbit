@@ -78,7 +78,7 @@ export const ACTIVITY_FIELD_LABELS: Record<string, string> = {
   my_day_date: "我的一天",
 };
 
-/** 重复规则六字段快照（repeat_rule 伪字段的 from/to 值，写入端整体快照） */
+/** 重复规则八字段快照（repeat_rule 伪字段的 from/to 值，写入端整体快照） */
 export interface RepeatRuleSnapshot {
   mode: number;
   after: number;
@@ -86,6 +86,8 @@ export interface RepeatRuleSnapshot {
   end_type: number;
   end_param: number;
   from_done: number;
+  month_mode: number;
+  nth_week: number;
 }
 
 /** 变更快照单条（值类型随字段：数字/字符串/规则对象/null） */
@@ -121,6 +123,8 @@ function fmtValue(field: string, v: string | number | RepeatRuleSnapshot | null)
         endType: r.end_type,
         endParam: r.end_param,
         fromDone: r.from_done,
+        monthMode: r.month_mode,
+        nthWeek: r.nth_week,
       });
     }
     case "percent_done":

@@ -516,6 +516,8 @@ mod tests {
             repeat_end_type: None,
             repeat_end_param: None,
             repeat_from_done: None,
+            repeat_month_mode: None,
+            repeat_nth_week: None,
             position: None,
             is_favorite: None,
             my_day_date: None,

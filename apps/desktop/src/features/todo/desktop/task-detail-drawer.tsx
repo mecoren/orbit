@@ -82,6 +82,8 @@ import { ConfirmPopover } from "../shared/confirm-popover";
 import { renderMarkdown } from "../shared/markdown-lite";
 import {
   REPEAT_MODE,
+  REPEAT_MONTH_MODE,
+  REPEAT_NTH_LAST,
   REPEAT_PRESETS,
   WEEKDAY_CHIPS,
   nextRepeatLabel,
@@ -214,6 +216,8 @@ export function TaskDetailDrawer({ projects }: TaskDetailDrawerProps) {
                   repeatEndType={t.repeat_end_type}
                   repeatEndParam={t.repeat_end_param}
                   repeatFromDone={t.repeat_from_done}
+                  repeatMonthMode={t.repeat_month_mode}
+                  repeatNthWeek={t.repeat_nth_week}
                   onChanged={refetchDetail}
                 />
                 <RelationsSection
@@ -544,6 +548,8 @@ function PropertyGrid({
           endType={task.repeat_end_type}
           endParam={task.repeat_end_param}
           fromDone={task.repeat_from_done}
+          monthMode={task.repeat_month_mode}
+          nthWeek={task.repeat_nth_week}
           dueMs={task.due_date}
           onChange={(v) =>
             void onPatch({
@@ -553,6 +559,8 @@ function PropertyGrid({
               repeat_end_type: v.endType,
               repeat_end_param: v.endParam,
               repeat_from_done: v.fromDone,
+              repeat_month_mode: v.mode === REPEAT_MODE.MONTHLY ? v.monthMode : 0,
+              repeat_nth_week: v.mode === REPEAT_MODE.MONTHLY ? v.nthWeek : 0,
             })
           }
         />
@@ -672,6 +680,8 @@ function RepeatEditor({
   endType,
   endParam,
   fromDone,
+  monthMode,
+  nthWeek,
   dueMs,
   onChange,
 }: {
@@ -681,6 +691,8 @@ function RepeatEditor({
   endType: number;
   endParam: number;
   fromDone: number;
+  monthMode: number;
+  nthWeek: number;
   dueMs: number | null;
   onChange: (v: {
     mode: number;
@@ -689,6 +701,8 @@ function RepeatEditor({
     endType: number;
     endParam: number;
     fromDone: number;
+    monthMode: number;
+    nthWeek: number;
   }) => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -703,6 +717,12 @@ function RepeatEditor({
     endType === 1 && endParam > 0 ? new Date(endParam).toISOString().slice(0, 10) : "",
   );
   const [whenDone, setWhenDone] = useState(fromDone);
+  // 月高级语义（#72）：月模式 + 序数 + 单选星期（打开时从任务初始化）
+  const [monthModeState, setMonthModeState] = useState(monthMode);
+  const [nthWeekState, setNthWeekState] = useState(nthWeek);
+  const [monthWeekday, setMonthWeekday] = useState(
+    weekdays !== 0 && (weekdays & (weekdays - 1)) === 0 ? weekdays : 0,
+  );
   // 结束=日期档的内联日历开关：Popover 内禁嵌自带 Popover 的 DatePicker
   //（portal 套 portal 布局测量异常，同 DueDateEditor 的教训），此处
   // 内联项目日历 PickerCalendar 两段式切换
@@ -716,21 +736,30 @@ function RepeatEditor({
     setEndText(endType === 2 ? String(Math.max(1, endParam || 1)) : "");
     setEndDate(endType === 1 && endParam > 0 ? new Date(endParam).toISOString().slice(0, 10) : "");
     setWhenDone(fromDone);
+    setMonthModeState(monthMode);
+    setNthWeekState(nthWeek);
+    setMonthWeekday(
+      weekdays !== 0 && (weekdays & (weekdays - 1)) === 0 ? weekdays : 0,
+    );
     setEndDateCalendar(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode, after, weekdays, endType, endParam, fromDone, open]);
+  }, [mode, after, weekdays, endType, endParam, fromDone, monthMode, nthWeek, open]);
 
   const applyExt = (m: number, a: number) => {
     let param = 0;
     if (endOption === 2) param = Math.max(1, Number(endText) || 1);
     if (endOption === 1 && endDate) param = new Date(`${endDate}T23:59:59`).getTime();
+    // 月高级语义：月档 + 开关开时星期取单选位、落月模式与序数（表单 RepeatField 同口径）
+    const nthOn = m === REPEAT_MODE.MONTHLY && monthModeState === REPEAT_MONTH_MODE.NTH;
     onChange({
       mode: m,
       after: a,
-      weekdays: m === REPEAT_MODE.WEEKLY ? weekdayMask : 0,
+      weekdays: m === REPEAT_MODE.WEEKLY ? weekdayMask : nthOn ? monthWeekday : 0,
       endType: endOption,
       endParam: param,
       fromDone: whenDone,
+      monthMode: nthOn ? REPEAT_MONTH_MODE.NTH : 0,
+      nthWeek: nthOn ? nthWeekState : 0,
     });
     setOpen(false);
   };
@@ -742,7 +771,10 @@ function RepeatEditor({
     setEndText("");
     setEndDate("");
     setWhenDone(0);
-    onChange({ mode: m, after: a, weekdays: 0, endType: 0, endParam: 0, fromDone: 0 });
+    setMonthModeState(0);
+    setNthWeekState(0);
+    setMonthWeekday(0);
+    onChange({ mode: m, after: a, weekdays: 0, endType: 0, endParam: 0, fromDone: 0, monthMode: 0, nthWeek: 0 });
     setOpen(false);
   };
 
@@ -755,7 +787,7 @@ function RepeatEditor({
           <button type="button" className="truncate font-medium hover:text-primary">
             {mode === REPEAT_MODE.NONE
               ? "不重复"
-              : repeatLabel(mode, after, { weekdays, endType, endParam, fromDone })}
+              : repeatLabel(mode, after, { weekdays, endType, endParam, fromDone, monthMode, nthWeek })}
           </button>
         </PopoverTrigger>
       {/* 日历展开态独占弹层：只渲染日历 + 返回钮——原面板内容全高 675px，
@@ -879,6 +911,70 @@ function RepeatEditor({
               </button>
             )}
           </div>
+          {/* #72 月高级语义：月档时按日号 / 第N个星期X（二选一） */}
+          {mode === REPEAT_MODE.MONTHLY && (
+            <div className="flex flex-wrap items-center gap-1">
+              <span className="text-[11px] text-muted-foreground">按</span>
+              <button type="button"
+                onClick={() => setMonthModeState(REPEAT_MONTH_MODE.DAY)}
+                className={cn(
+                  "rounded-md border px-2 py-0.5 text-[11px]",
+                  monthModeState === REPEAT_MONTH_MODE.DAY
+                    ? "border-primary bg-primary/10 font-medium text-primary"
+                    : "text-muted-foreground hover:bg-accent",
+                )}
+              >
+                日号
+              </button>
+              <button type="button"
+                onClick={() => setMonthModeState(REPEAT_MONTH_MODE.NTH)}
+                className={cn(
+                  "rounded-md border px-2 py-0.5 text-[11px]",
+                  monthModeState === REPEAT_MONTH_MODE.NTH
+                    ? "border-primary bg-primary/10 font-medium text-primary"
+                    : "text-muted-foreground hover:bg-accent",
+                )}
+              >
+                第几个星期X
+              </button>
+              {monthModeState === REPEAT_MONTH_MODE.NTH && (
+                <>
+                  {[1, 2, 3, 4, 5, REPEAT_NTH_LAST].map((k) => (
+                    <button
+                      key={k}
+                      type="button"
+                      aria-label={k === REPEAT_NTH_LAST ? "最后一个" : `第${k}个`}
+                      onClick={() => setNthWeekState(k)}
+                      className={cn(
+                        "rounded-md border px-2 py-0.5 text-[11px]",
+                        nthWeekState === k
+                          ? "border-primary bg-primary/10 font-medium text-primary"
+                          : "text-muted-foreground hover:bg-accent",
+                      )}
+                    >
+                      {k === REPEAT_NTH_LAST ? "末个" : `第${k}个`}
+                    </button>
+                  ))}
+                  {WEEKDAY_CHIPS.map((d) => (
+                    <button
+                      key={d.bit}
+                      type="button"
+                      aria-label={`星期${d.label}`}
+                      onClick={() => setMonthWeekday(d.bit)}
+                      className={cn(
+                        "size-6 rounded-md border text-[11px]",
+                        monthWeekday === d.bit
+                          ? "border-primary bg-primary/10 font-medium text-primary"
+                          : "text-muted-foreground hover:bg-accent",
+                      )}
+                    >
+                      {d.label}
+                    </button>
+                  ))}
+                </>
+              )}
+            </div>
+          )}
           <div className="flex items-center gap-1.5">
             <button type="button"
               onClick={() => setWhenDone((v) => (v ? 0 : 1))}
@@ -906,9 +1002,9 @@ function RepeatEditor({
       </Popover>
       {/* 下次具体日期预览（Things 口径）：规则生效且有截止日期时展示，
           锚点 = 任务当前 due_date（与完成引擎同源） */}
-      {nextRepeatLabel(mode, after, dueMs, Date.now(), fromDone) && (
+      {nextRepeatLabel(mode, after, dueMs, Date.now(), fromDone, { weekdays, monthMode, nthWeek }) && (
         <span className="shrink-0 rounded-md bg-primary/10 px-1.5 py-0.5 text-[11px] font-medium text-primary">
-          下次 {nextRepeatLabel(mode, after, dueMs, Date.now(), fromDone)}
+          下次 {nextRepeatLabel(mode, after, dueMs, Date.now(), fromDone, { weekdays, monthMode, nthWeek })}
         </span>
       )}
     </div>
@@ -1488,6 +1584,8 @@ function RemindersSection({
   repeatEndType,
   repeatEndParam,
   repeatFromDone,
+  repeatMonthMode,
+  repeatNthWeek,
   dueDateMs,
   endMs,
   onChanged,
@@ -1508,6 +1606,9 @@ function RemindersSection({
   repeatEndType: number;
   repeatEndParam: number;
   repeatFromDone: number;
+  /** #72 月高级语义（徽标完整显示用） */
+  repeatMonthMode: number;
+  repeatNthWeek: number;
   onChanged: () => void;
 }) {
   // 编辑态：{reminderId, draft, isConstant}——编辑=删旧建新（04 §3.4）；
@@ -1643,6 +1744,8 @@ function RemindersSection({
                       endType: repeatEndType,
                       endParam: repeatEndParam,
                       fromDone: repeatFromDone,
+                      monthMode: repeatMonthMode,
+                      nthWeek: repeatNthWeek,
                     })}
                   </span>
                 )}

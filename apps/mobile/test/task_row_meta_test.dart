@@ -30,6 +30,8 @@ TodoTask _task({double percentDone = 0, int? durationMinutes}) => TodoTask(
       repeatEndType: 0,
       repeatEndParam: 0,
       repeatFromDone: 0,
+      repeatMonthMode: 0,
+      repeatNthWeek: 0,
       percentDone: percentDone,
       position: 0,
       isFavorite: 0,

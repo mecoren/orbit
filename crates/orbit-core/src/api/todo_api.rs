@@ -602,14 +602,49 @@ pub fn weekday_bit(d: &chrono::DateTime<chrono::Local>) -> u32 {
     1u32 << (d.weekday().num_days_from_monday())
 }
 
+/// 月重复模式（todo_tasks.repeat_month_mode 列语义一致；#72）
+pub const REPEAT_MONTH_DAY: i32 = 0;
+pub const REPEAT_MONTH_NTH: i32 = 1;
+/// repeat_nth_week 取值：1-5=第 N 个，6=最后一个，0=未指定（回落日号）
+pub const REPEAT_NTH_LAST: i32 = 6;
+
+/// 掩码最低位对应的星期（周一=0 … 周日=6）；掩码为 0 返回 None
+fn first_weekday_in_mask(mask: u32) -> Option<u32> {
+    (0..7).find(|b| (mask & (1u32 << b)) != 0)
+}
+
+/// 某年月的第 N 个星期 X 是几号（#72；X 来自掩码最低位）：
+/// - nth 1-5：第 N 个；月份没有该 occurrence（如 2 月第 5 个周一）返回 None
+///   （调用方跳过该月，而非截断——截断会把「第 5 个」偷换成「末个」）；
+/// - nth 6（REPEAT_NTH_LAST）：最后一个。
+fn nth_weekday_in_month(year: i32, month: u32, nth: i32, weekday_mon0: u32) -> Option<u32> {
+    let first_day = chrono::NaiveDate::from_ymd_opt(year, month, 1)?;
+    // 1 号的星期（周一=0）→ 本月首个星期 X
+    let first_wd = first_day.weekday().num_days_from_monday();
+    let first = 1 + (weekday_mon0 + 7 - first_wd) % 7;
+    let last_day = last_day_of_month(year, month);
+    if nth == REPEAT_NTH_LAST {
+        // 最后一个：从月末倒推
+        let last_wd = chrono::NaiveDate::from_ymd_opt(year, month, last_day)?
+            .weekday()
+            .num_days_from_monday();
+        return Some(last_day - (last_wd + 7 - weekday_mon0) % 7);
+    }
+    if !(1..=5).contains(&nth) {
+        return None;
+    }
+    let day = first + 7 * (nth as u32 - 1);
+    if day <= last_day { Some(day) } else { None }
+}
+
 /// base 的下一次发生时间（> from）；无规则或快进超限（>5000 步）返回 None。
 /// 天/周为固定毫秒跨度；月/年走日历语义（见 advance_calendar_months）。
 /// 快进上限按天约 13 年，防异常数据死循环（与桌面端 nextRepeatAt 一致）。
 pub fn next_repeat_at(base_ms: i64, mode: i32, after: i64, from_ms: i64) -> Option<i64> {
-    next_repeat_at_ex(base_ms, mode, after, 0, from_ms)
+    next_repeat_at_ex(base_ms, mode, after, 0, 0, 0, from_ms)
 }
 
-/// next_repeat_at 扩展版（#34 重复规则升级）：
+/// next_repeat_at 扩展版（#34 重复规则升级，#72 加每月第 N 个星期 X）:
 ///
 /// `weekdays` 位掩码（bit0=周一…bit6=周日，仅 WEEKLY 且非 0 生效）：
 /// 多选星期几时序列语义变为"在掩码内的星期几之间推进"——每次从当前点
@@ -617,12 +652,21 @@ pub fn next_repeat_at(base_ms: i64, mode: i32, after: i64, from_ms: i64) -> Opti
 /// 跨度按 7 天滚动，与 Tasks.org/MS To Do 的 weekly+daysOfWeek 对齐）。
 /// 0 = 未指定，回落旧语义（每 N 周的同一星期几）。
 ///
+/// `month_mode` / `nth_week`（仅 MONTHLY 且 month_mode=1 生效）：
+/// 序列变为"每 N 月的第 K 个星期 X"——锚定 base 所在月，按 after 步长
+/// 逐月取 occurrence；无 occurrence 的月份跳过（如 2 月无第 5 个周一，
+/// 而非截断——截断会把"第 5 个"偷换成"末个"）；时刻沿用 base 本地时刻。
+/// 配置非法（掩码无位/序数越界）回落日号语义——序列不断（UI 层已校验，
+/// 此处只防脏数据终结序列）。
+///
 /// 快进上限语义不变：掩码空转（如掩码=0 的防御）在 5000 步内必命中或返回 None。
 pub fn next_repeat_at_ex(
     base_ms: i64,
     mode: i32,
     after: i64,
     weekdays: i32,
+    month_mode: i32,
+    nth_week: i32,
     from_ms: i64,
 ) -> Option<i64> {
     if mode == REPEAT_MODE_NONE {
@@ -648,6 +692,14 @@ pub fn next_repeat_at_ex(
         }
         return None;
     }
+    if mode == REPEAT_MODE_MONTHLY && month_mode == REPEAT_MONTH_NTH {
+        if let Some(weekday) = first_weekday_in_mask(weekdays as u32) {
+            if (1..=6).contains(&nth_week) {
+                return next_monthly_nth_from(base_ms, after, weekday, nth_week, from_ms);
+            }
+        }
+        // 非法配置回落日号语义（见函数头注释）
+    }
     let step = after.max(1) as u32;
     let mut next = chrono::Local.timestamp_millis_opt(base_ms).single()?;
     for _ in 0..5000 {
@@ -658,6 +710,43 @@ pub fn next_repeat_at_ex(
             REPEAT_MODE_YEARLY => advance_calendar_months(&mut next, 12 * step as i32),
             _ => return None,
         }
+        if next.timestamp_millis() > from_ms {
+            return Some(next.timestamp_millis());
+        }
+    }
+    None
+}
+
+/// 每月第 N 个星期 X 序列：锚定 anchor 所在月，按 after 步长逐月推进，
+/// 取首个 > from_ms 的 occurrence（k 从 1 起：anchor 当月的 occurrence
+/// 属于当前周期，即使晚于 from 也不取——序列语义是"下一个周期"）。
+///
+/// 时刻沿用 anchor 本地时刻；DST 不存在时刻（如夏令时缺失的 2:30）跳过该月
+/// （沿用 advance_calendar_months 的保守口径，不捏造时刻）。
+fn next_monthly_nth_from(
+    anchor_ms: i64,
+    after: i64,
+    weekday_mon0: u32,
+    nth_week: i32,
+    from_ms: i64,
+) -> Option<i64> {
+    let anchor = chrono::Local.timestamp_millis_opt(anchor_ms).single()?;
+    let time = anchor.time();
+    let (ay, am) = (anchor.year() as i64, anchor.month() as i64);
+    let step = after.max(1);
+    for k in 1..=5000i64 {
+        let total = ay * 12 + (am - 1) + k * step;
+        let (ty, tm) = (
+            total.div_euclid(12) as i32,
+            (total.rem_euclid(12) + 1) as u32,
+        );
+        let Some(day) = nth_weekday_in_month(ty, tm, nth_week, weekday_mon0) else {
+            continue; // 该月无此 occurrence（如 2 月第 5 个周一）：跳过
+        };
+        let naive = chrono::NaiveDate::from_ymd_opt(ty, tm, day)?.and_time(time);
+        let Some(next) = chrono::Local.from_local_datetime(&naive).single() else {
+            continue; // DST 歧义/不存在时刻：跳过该月
+        };
         if next.timestamp_millis() > from_ms {
             return Some(next.timestamp_millis());
         }
@@ -717,6 +806,8 @@ pub fn plan_next_recurring_instance(task: &TodoTask, now_ms: i64) -> Option<Next
             task.repeat_mode,
             task.repeat_after,
             task.repeat_weekdays,
+            task.repeat_month_mode,
+            task.repeat_nth_week,
         )
     } else {
         next_repeat_at_ex(
@@ -724,6 +815,8 @@ pub fn plan_next_recurring_instance(task: &TodoTask, now_ms: i64) -> Option<Next
             task.repeat_mode,
             task.repeat_after,
             task.repeat_weekdays,
+            task.repeat_month_mode,
+            task.repeat_nth_week,
             now_ms,
         )
     }?;
@@ -752,6 +845,9 @@ pub fn plan_next_recurring_instance(task: &TodoTask, now_ms: i64) -> Option<Next
                 task.repeat_end_param
             }),
             repeat_from_done: Some(task.repeat_from_done),
+            // 月高级语义随克隆（同一序列延续；非法配置由推进侧回落）
+            repeat_month_mode: Some(task.repeat_month_mode),
+            repeat_nth_week: Some(task.repeat_nth_week),
             position: None,
             is_favorite: Some(task.is_favorite),
             my_day_date: None,
@@ -772,8 +868,17 @@ fn next_candidate_would_exceed(due_ms: i64, end_ms: i64) -> bool {
 ///
 /// 无掩码：DAILY/WEEKLY/MONTHLY/YEARLY 按日历语义加一个步长；
 /// 掩码星期几：从 from 起逐日扫描下一个命中掩码且周序号对齐的日期
-/// （首候选即可——完整间隔语义下 from 本身不计入）。
-fn next_full_step_from(from_ms: i64, mode: i32, after: i64, weekdays: i32) -> Option<i64> {
+/// （首候选即可——完整间隔语义下 from 本身不计入）；
+/// 每月第 N 个星期 X：从 from 所在月起按 after 步长取下个周期的 occurrence
+/// （当月 occurrence 属于当前周期，即使晚于 from 也不取——完整间隔语义）。
+fn next_full_step_from(
+    from_ms: i64,
+    mode: i32,
+    after: i64,
+    weekdays: i32,
+    month_mode: i32,
+    nth_week: i32,
+) -> Option<i64> {
     if mode == REPEAT_MODE_WEEKLY && weekdays != 0 {
         let mask = weekdays as u32;
         let n = after.max(1) as i64;
@@ -788,6 +893,14 @@ fn next_full_step_from(from_ms: i64, mode: i32, after: i64, weekdays: i32) -> Op
             }
         }
         return None;
+    }
+    if mode == REPEAT_MODE_MONTHLY && month_mode == REPEAT_MONTH_NTH {
+        if let Some(weekday) = first_weekday_in_mask(weekdays as u32) {
+            if (1..=6).contains(&nth_week) {
+                return next_monthly_nth_from(from_ms, after, weekday, nth_week, from_ms);
+            }
+        }
+        // 非法配置回落日号语义（与 next_repeat_at_ex 同口径）
     }
     let step = after.max(1) as u32;
     let mut next = chrono::Local.timestamp_millis_opt(from_ms).single()?;
@@ -888,9 +1001,10 @@ pub async fn complete_todo_task(pool: &SqlitePool, id: i64) -> CoreResult<Comple
                 uuid, title, description, project_id, priority, status, done, done_at,
                 due_date, start_date, repeat_after, repeat_mode,
                 repeat_weekdays, repeat_end_type, repeat_end_param, repeat_from_done,
+                repeat_month_mode, repeat_nth_week,
                 percent_done, position, is_favorite, my_day_date, duration_minutes,
                 is_deleted, created_at, updated_at, version
-            ) VALUES (?, ?, ?, ?, ?, 'pending', 0, NULL, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?, ?, 0, ?, ?, 1)
+            ) VALUES (?, ?, ?, ?, ?, 'pending', 0, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?, ?, 0, ?, ?, 1)
             RETURNING *",
         )
         .bind(&new_uuid)
@@ -906,6 +1020,8 @@ pub async fn complete_todo_task(pool: &SqlitePool, id: i64) -> CoreResult<Comple
         .bind(i.repeat_end_type.unwrap_or(0))
         .bind(i.repeat_end_param.unwrap_or(0))
         .bind(i.repeat_from_done.unwrap_or(0))
+        .bind(i.repeat_month_mode.unwrap_or(0))
+        .bind(i.repeat_nth_week.unwrap_or(0))
         .bind(i.is_favorite.unwrap_or(0))
         .bind(i.my_day_date)
         .bind(i.duration_minutes)
@@ -1320,16 +1436,16 @@ mod repeat_tests {
         let plain = next_repeat_at(base, REPEAT_MODE_WEEKLY, 1, base).unwrap();
         assert_eq!(weekday_of(plain), "四");
         // 掩码语义：下一个命中 一/三/五 的日期（从周四起 → 周五 8/28）
-        let masked = next_repeat_at_ex(base, REPEAT_MODE_WEEKLY, 1, 0b10101, base).unwrap();
+        let masked = next_repeat_at_ex(base, REPEAT_MODE_WEEKLY, 1, 0b10101, 0, 0, base).unwrap();
         assert_eq!(weekday_of(masked), "五");
         // 快进口径：now=9/7（周一，掩码内）但序列点须严格 > now →
         // 跳过当天，命中下一个掩码日周三 9/9（与无掩码版本的 > from 语义一致）
         let now_late = base + DAY * 11; // 9/7 周一
-        let late = next_repeat_at_ex(base, REPEAT_MODE_WEEKLY, 1, 0b10101, now_late).unwrap();
+        let late = next_repeat_at_ex(base, REPEAT_MODE_WEEKLY, 1, 0b10101, 0, 0, now_late).unwrap();
         assert_eq!(weekday_of(late), "三");
         // now 落在掩码外（9/8 周二）→ 同样命中周三 9/9
         let late2 =
-            next_repeat_at_ex(base, REPEAT_MODE_WEEKLY, 1, 0b10101, now_late + DAY).unwrap();
+            next_repeat_at_ex(base, REPEAT_MODE_WEEKLY, 1, 0b10101, 0, 0, now_late + DAY).unwrap();
         assert_eq!(weekday_of(late2), "三");
     }
 
@@ -1338,15 +1454,131 @@ mod repeat_tests {
         // 每两周 + 周三（bit2=4）：周序号 ≡ 锚点周 (mod 2)——
         // 中间那周的周三必须跳过
         let base = date_2026_08_27(); // 周四
-        let n = next_repeat_at_ex(base, REPEAT_MODE_WEEKLY, 2, 0b100, base).unwrap();
+        let n = next_repeat_at_ex(base, REPEAT_MODE_WEEKLY, 2, 0b100, 0, 0, base).unwrap();
         assert_eq!(weekday_of(n), "三");
         // 下一个候选：+14 天的周三（8/27 所在周的下一个周三 = 9/2，
         // 但 +2 周对齐要隔一周 → 9/9？逐日扫描：8/26 的周三（锚点周内、<=from 跳过），
         // 9/2 周三（周序号差 1，非 2 的倍数 → 不命中），9/9 周三（差 2 → 命中）
-        let n2 = next_repeat_at_ex(n, REPEAT_MODE_WEEKLY, 2, 0b100, n).unwrap();
+        let n2 = next_repeat_at_ex(n, REPEAT_MODE_WEEKLY, 2, 0b100, 0, 0, n).unwrap();
         let gap_days = (n2 - n) / DAY;
         assert_eq!(gap_days, 14, "每两周掩码推进必须整两周");
         assert_eq!(weekday_of(n2), "三");
+    }
+
+    // ---------- #72 每月第 N 个星期 X ----------
+
+    /// 本地时刻构造（月高级语义的时刻沿用断言用）
+    fn dt(y: i32, m: u32, d: u32, h: u32, min: u32) -> i64 {
+        chrono::Local
+            .with_ymd_and_hms(y, m, d, h, min, 0)
+            .single()
+            .unwrap()
+            .timestamp_millis()
+    }
+
+    #[test]
+    fn monthly_nth_second_tuesday() {
+        // 每月第 2 个周二 18:00：base = 1/13（1 月第 2 个周二）→ 下一个周期 2/10
+        let base = dt(2026, 1, 13, 18, 0);
+        let next = next_repeat_at_ex(base, REPEAT_MODE_MONTHLY, 1, 0b10, 1, 2, base).unwrap();
+        assert_eq!(next, dt(2026, 2, 10, 18, 0));
+        assert_eq!(weekday_of(next), "二");
+        // 时刻沿用：base 18:30 → occurrence 同样 18:30
+        let base2 = dt(2026, 1, 13, 18, 30);
+        let next2 = next_repeat_at_ex(base2, REPEAT_MODE_MONTHLY, 1, 0b10, 1, 2, base2).unwrap();
+        assert_eq!(next2, dt(2026, 2, 10, 18, 30));
+    }
+
+    #[test]
+    fn monthly_nth_last_friday() {
+        // 每月最后一个周五：base = 3/27（3 月末个周五）→ 4/24（4 月末个周五）
+        let base = dt(2026, 3, 27, 9, 0);
+        let next = next_repeat_at_ex(base, REPEAT_MODE_MONTHLY, 1, 0b10000, 1, 6, base).unwrap();
+        assert_eq!(next, dt(2026, 4, 24, 9, 0));
+        assert_eq!(weekday_of(next), "五");
+    }
+
+    #[test]
+    fn monthly_nth_fifth_monday_skips_missing_month() {
+        // 每月第 5 个周一：base = 6/29（6 月第 5 个周一）→ 7 月无第 5 个周一，
+        // 跳过（而非截断成末个周一 7/27）→ 8/31
+        let base = dt(2026, 6, 29, 9, 0);
+        let next = next_repeat_at_ex(base, REPEAT_MODE_MONTHLY, 1, 0b1, 1, 5, base).unwrap();
+        assert_eq!(next, dt(2026, 8, 31, 9, 0));
+        assert_eq!(weekday_of(next), "一");
+    }
+
+    #[test]
+    fn monthly_nth_every_two_months() {
+        // 每 2 月第 2 个周二：1/13 → 3/10（2 月整月跳过）
+        let base = dt(2026, 1, 13, 18, 0);
+        let next = next_repeat_at_ex(base, REPEAT_MODE_MONTHLY, 2, 0b10, 1, 2, base).unwrap();
+        assert_eq!(next, dt(2026, 3, 10, 18, 0));
+    }
+
+    #[test]
+    fn monthly_nth_invalid_config_falls_back_to_day() {
+        // 非法配置（掩码无位 / 序数越界）回落日号语义，序列不断：
+        // base = 1/31 → 2/28（advance_calendar_months 截断口径）
+        let base = dt(2026, 1, 31, 9, 0);
+        let no_mask = next_repeat_at_ex(base, REPEAT_MODE_MONTHLY, 1, 0, 1, 2, base).unwrap();
+        assert_eq!(no_mask, dt(2026, 2, 28, 9, 0));
+        let bad_nth = next_repeat_at_ex(base, REPEAT_MODE_MONTHLY, 1, 0b10, 1, 9, base).unwrap();
+        assert_eq!(bad_nth, dt(2026, 2, 28, 9, 0));
+        // month_mode=0 本来就是日号语义（存量行为不变）
+        let day_mode = next_repeat_at_ex(base, REPEAT_MODE_MONTHLY, 1, 0b10, 0, 2, base).unwrap();
+        assert_eq!(day_mode, dt(2026, 2, 28, 9, 0));
+    }
+
+    #[test]
+    fn monthly_nth_when_done_full_step_skips_current_cycle() {
+        // when done 完整间隔：3/10 完成 → 当月 occurrence（3/10 自身）属于
+        // 当前周期不取 → 下一个周期 4/14（4 月第 2 个周二）
+        let done_at = dt(2026, 3, 10, 20, 0);
+        let next = next_full_step_from(done_at, REPEAT_MODE_MONTHLY, 1, 0b10, 1, 2).unwrap();
+        assert_eq!(next, dt(2026, 4, 14, 20, 0));
+    }
+
+    #[tokio::test]
+    async fn monthly_nth_plan_carries_fields_and_migrates_default() {
+        let pool = setup_db().await;
+        // 存量迁移回填：0006 以前建的行两列为 0（NOT NULL DEFAULT 0 原地回填）
+        let plain = create_todo_task(
+            &pool,
+            &TodoTaskCreateInput {
+                title: "普通".into(),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap()
+        .id;
+        let row: TodoTask = generic_repo::get_by_id(&pool, "todo_tasks", plain).await.unwrap();
+        assert_eq!(row.repeat_month_mode, 0);
+        assert_eq!(row.repeat_nth_week, 0);
+
+        // 每月第 2 个周二的任务完成 → 下一实例 due 正确 + 规则字段透传
+        let task = create_todo_task(
+            &pool,
+            &TodoTaskCreateInput {
+                title: "nth".into(),
+                due_date: Some(dt(2026, 1, 13, 18, 0)),
+                repeat_mode: Some(REPEAT_MODE_MONTHLY),
+                repeat_after: Some(1),
+                repeat_weekdays: Some(0b10),
+                repeat_month_mode: Some(1),
+                repeat_nth_week: Some(2),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+        let plan = plan_next_recurring_instance(&task, dt(2026, 1, 13, 19, 0)).unwrap();
+        let next_due = plan.input.due_date.unwrap();
+        assert_eq!(next_due, dt(2026, 2, 10, 18, 0));
+        assert_eq!(plan.input.repeat_month_mode, Some(1));
+        assert_eq!(plan.input.repeat_nth_week, Some(2));
+        assert_eq!(plan.input.repeat_weekdays, Some(0b10));
     }
 
     #[test]
@@ -1371,6 +1603,8 @@ mod repeat_tests {
             repeat_end_type: 0,
             repeat_end_param: 0,
             repeat_from_done: 1,
+            repeat_month_mode: 0,
+            repeat_nth_week: 0,
             percent_done: 0.0,
             position: 0.0,
             is_favorite: 0,
@@ -1413,6 +1647,8 @@ mod repeat_tests {
             repeat_end_type: 0,
             repeat_end_param: 0,
             repeat_from_done: 1,
+            repeat_month_mode: 0,
+            repeat_nth_week: 0,
             percent_done: 0.0,
             position: 0.0,
             is_favorite: 0,
@@ -1456,6 +1692,8 @@ mod repeat_tests {
             repeat_end_type: REPEAT_END_ON_DATE,
             repeat_end_param: due + DAY * 3,
             repeat_from_done: 0,
+            repeat_month_mode: 0,
+            repeat_nth_week: 0,
             percent_done: 0.0,
             position: 0.0,
             is_favorite: 0,
@@ -1496,6 +1734,8 @@ mod repeat_tests {
             repeat_end_type: REPEAT_END_AFTER_COUNT,
             repeat_end_param: 3,
             repeat_from_done: 0,
+            repeat_month_mode: 0,
+            repeat_nth_week: 0,
             percent_done: 0.0,
             position: 0.0,
             is_favorite: 0,
@@ -1612,6 +1852,8 @@ mod repeat_tests {
             repeat_end_type: 0,
             repeat_end_param: 0,
             repeat_from_done: 0,
+            repeat_month_mode: 0,
+            repeat_nth_week: 0,
             percent_done: 0.0,
             position: 0.0,
             is_favorite: 0,
@@ -1650,6 +1892,8 @@ mod repeat_tests {
             repeat_end_type: 0,
             repeat_end_param: 0,
             repeat_from_done: 0,
+            repeat_month_mode: 0,
+            repeat_nth_week: 0,
             percent_done: 0.0,
             position: 0.0,
             is_favorite: 1,
@@ -2089,9 +2333,10 @@ pub async fn duplicate_todo_task(pool: &SqlitePool, id: i64) -> CoreResult<TodoT
             uuid, title, description, project_id, priority, status, done, done_at,
             due_date, start_date, repeat_after, repeat_mode,
             repeat_weekdays, repeat_end_type, repeat_end_param, repeat_from_done,
+            repeat_month_mode, repeat_nth_week,
             percent_done, position, is_favorite, my_day_date, duration_minutes,
             is_deleted, created_at, updated_at, version
-        ) VALUES (?, ?, ?, ?, ?, 'pending', 0, NULL, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, NULL, ?, 0, ?, ?, 1)
+        ) VALUES (?, ?, ?, ?, ?, 'pending', 0, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, NULL, ?, 0, ?, ?, 1)
         RETURNING *",
     )
     .bind(&new_uuid)
@@ -2107,6 +2352,8 @@ pub async fn duplicate_todo_task(pool: &SqlitePool, id: i64) -> CoreResult<TodoT
     .bind(src.repeat_end_type)
     .bind(src.repeat_end_param)
     .bind(src.repeat_from_done)
+    .bind(src.repeat_month_mode)
+    .bind(src.repeat_nth_week)
     .bind(new_position)
     .bind(src.is_favorite)
     .bind(src.duration_minutes)
@@ -2178,6 +2425,8 @@ mod duplicate_tests {
                 repeat_end_type: None,
                 repeat_end_param: None,
                 repeat_from_done: None,
+                repeat_month_mode: None,
+                repeat_nth_week: None,
                 position: None,
                 is_favorite: Some(1),
                 my_day_date: None,
@@ -2326,6 +2575,8 @@ pub async fn advance_fired_reminder(
             task.repeat_mode,
             task.repeat_after,
             task.repeat_weekdays,
+            task.repeat_month_mode,
+            task.repeat_nth_week,
             now,
         )
     } else {

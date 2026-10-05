@@ -77,7 +77,38 @@ RepeatUnit unitForMode(int mode) => switch (mode) {
       _ => RepeatUnit.day,
     };
 
-/// #34 重复规则中文标签（扩展字段可选：星期几/结束/when done）
+/// 月重复模式（与 Rust REPEAT_MONTH_* 对齐；仅 MONTHLY 生效）
+class RepeatMonthMode {
+  RepeatMonthMode._();
+
+  static const int day = 0;
+  static const int nth = 1;
+}
+
+/// repeat_nth_week 取值：1-5 = 第 N 个，6 = 最后一个，0 = 未指定
+const int repeatNthLast = 6;
+
+/// 序数中文（1-5 + 末；非法序数返回 null）
+String? nthWeekLabel(int nth) => switch (nth) {
+      1 => '第 1 个',
+      2 => '第 2 个',
+      3 => '第 3 个',
+      4 => '第 4 个',
+      5 => '第 5 个',
+      repeatNthLast => '最后一个',
+      _ => null,
+    };
+
+/// 掩码最低位对应的星期（周一=0 … 周日=6；0 掩码返回 null）
+int? firstWeekdayInMask(int mask) {
+  for (var b = 0; b < 7; b++) {
+    if ((mask & (1 << b)) != 0) return b;
+  }
+  return null;
+}
+
+/// #34 重复规则中文标签（扩展字段可选：星期几/结束/when done；
+/// #72 加月高级语义 monthMode/nthWeek）
 String repeatLabelExt(
   int mode,
   int after, {
@@ -85,6 +116,8 @@ String repeatLabelExt(
   int endType = 0,
   int endParam = 0,
   int fromDone = 0,
+  int monthMode = 0,
+  int nthWeek = 0,
 }) {
   var base = repeatLabel(mode, after);
   if (mode == RepeatMode.weekly && weekdays != 0) {
@@ -93,6 +126,15 @@ String repeatLabelExt(
         if ((weekdays & (1 << i)) != 0) weekdayNames[i],
     ].join();
     base = after == 1 ? '每周$parts' : '每 $after 周$parts';
+  } else if (mode == RepeatMode.monthly && monthMode == RepeatMonthMode.nth) {
+    // 月高级语义：每月第 N 个星期 X（掩码取最低位，UI 层限制单选）
+    final nth = nthWeekLabel(nthWeek);
+    final wd = firstWeekdayInMask(weekdays);
+    if (nth != null && wd != null) {
+      base = after == 1
+          ? '每月$nth周${weekdayNames[wd]}'
+          : '每 $after 个月$nth周${weekdayNames[wd]}';
+    }
   }
   final suffix = <String>[
     if (fromDone == 1) '按完成日',
@@ -136,13 +178,71 @@ String? nextRepeatLabel(
   int? anchorMs,
   int fromMs, {
   int fromDone = 0,
+  int weekdays = 0,
+  int monthMode = 0,
+  int nthWeek = 0,
 }) {
   if (mode == RepeatMode.none || anchorMs == null) return null;
+  // 月高级语义：nth 步进预览（与 Rust next_monthly_nth_from 同口径；
+  // 非法配置回落日号语义，见下）
+  if (mode == RepeatMode.monthly && monthMode == RepeatMonthMode.nth) {
+    final wd = firstWeekdayInMask(weekdays);
+    final nth = nthWeekLabel(nthWeek);
+    if (wd != null && nth != null) {
+      final next = fromDone == 0
+          ? nextMonthlyNth(anchorMs, after, wd, nthWeek, anchorMs > fromMs ? anchorMs : fromMs)
+          : nextMonthlyNth(fromMs, after, wd, nthWeek, fromMs);
+      return next == null ? null : formatCnDate(next);
+    }
+  }
   final anchor = anchorMs > fromMs ? anchorMs : fromMs;
   final next = fromDone == 0
       ? nextRepeatAt(anchorMs, mode, after, anchor)
       : nextRepeatAt(anchor, mode, after, fromMs);
   return next == null ? null : formatCnDate(next);
+}
+
+/// 某年月第 N 个星期 X 是几号（Rust nth_weekday_in_month 的 Dart 镜像；
+/// [weekdayMon0] 周一=0 … 周日=6；[nth]=6 取最后一个；无 occurrence 返回 null）
+int? nthWeekdayInMonth(int year, int month, int nth, int weekdayMon0) {
+  final firstWd = DateTime(year, month).weekday - 1; // 周一=0
+  final first = 1 + ((weekdayMon0 + 7 - firstWd) % 7);
+  final lastDay = DateTime(year, month + 1, 0).day;
+  if (nth == repeatNthLast) {
+    final lastWd = DateTime(year, month, lastDay).weekday - 1;
+    return lastDay - ((lastWd + 7 - weekdayMon0) % 7);
+  }
+  if (nth < 1 || nth > 5) return null;
+  final day = first + 7 * (nth - 1);
+  return day <= lastDay ? day : null;
+}
+
+/// 每月第 N 个星期 X 步进（Rust next_monthly_nth_from 的 Dart 镜像，
+/// 供 [nextRepeatLabel] 预览用；调度真值在 orbit-core）。
+///
+/// 口径：锚定 [anchorMs] 所在月，按 [after] 步长逐月取首个 > [fromMs] 的
+/// occurrence（k 从 1 起：anchor 当月属当前周期）；无 occurrence 的月份跳过；
+/// 时刻沿用 anchor 本地时刻。
+int? nextMonthlyNth(
+  int anchorMs,
+  int after,
+  int weekdayMon0,
+  int nth,
+  int fromMs,
+) {
+  final anchor = DateTime.fromMillisecondsSinceEpoch(anchorMs);
+  final step = after <= 0 ? 1 : after;
+  for (var k = 1; k <= 5000; k++) {
+    final total = anchor.year * 12 + (anchor.month - 1) + k * step;
+    final ty = total ~/ 12;
+    final tm = total % 12 + 1;
+    final day = nthWeekdayInMonth(ty, tm, nth, weekdayMon0);
+    if (day == null) continue;
+    final cand = DateTime(ty, tm, day, anchor.hour, anchor.minute,
+        anchor.second, anchor.millisecond);
+    if (cand.millisecondsSinceEpoch > fromMs) return cand.millisecondsSinceEpoch;
+  }
+  return null;
 }
 
 /// 毫秒时间戳 → 「M月d日（周X）」

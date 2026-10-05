@@ -178,6 +178,10 @@ pub struct TodoTask {
     pub repeat_end_param: i64,
     /// when done 语义：0=锚定原 due 推进 1=按完成日推进
     pub repeat_from_done: i32,
+    /// 月重复模式（#72）：0=按日号 1=按第N个星期X（仅 MONTHLY 生效）
+    pub repeat_month_mode: i32,
+    /// 月内第几个星期（#72）：1-5/6=末，0=未指定回落日号；星期几复用 repeat_weekdays 单 bit
+    pub repeat_nth_week: i32,
     pub percent_done: f64,
     pub position: f64,
     pub is_favorite: i32,
@@ -215,6 +219,10 @@ pub struct TodoTaskCreateInput {
     pub repeat_end_param: Option<i64>,
     #[serde(default)]
     pub repeat_from_done: Option<i32>,
+    #[serde(default)]
+    pub repeat_month_mode: Option<i32>,
+    #[serde(default)]
+    pub repeat_nth_week: Option<i32>,
     pub position: Option<f64>,
     pub is_favorite: Option<i32>,
     pub my_day_date: Option<i64>,
@@ -292,6 +300,10 @@ pub struct TodoTaskUpdateInput {
     pub repeat_end_param: Option<i64>,
     #[serde(default)]
     pub repeat_from_done: Option<i32>,
+    #[serde(default)]
+    pub repeat_month_mode: Option<i32>,
+    #[serde(default)]
+    pub repeat_nth_week: Option<i32>,
     pub percent_done: Option<f64>,
     pub position: Option<f64>,
     pub is_favorite: Option<i32>,

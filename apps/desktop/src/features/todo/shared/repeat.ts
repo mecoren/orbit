@@ -14,6 +14,25 @@ export const REPEAT_MODE = {
   YEARLY: 4,
 } as const;
 
+/** 月重复模式（与 Rust REPEAT_MONTH_* 对齐；仅 MONTHLY 生效） */
+export const REPEAT_MONTH_MODE = {
+  DAY: 0,
+  NTH: 1,
+} as const;
+
+/** repeat_nth_week 取值：1-5=第 N 个，6=最后一个，0=未指定 */
+export const REPEAT_NTH_LAST = 6;
+
+/** 序数中文（1-5 + 末） */
+const NTH_WEEK_LABEL: Record<number, string> = {
+  1: "第 1 个",
+  2: "第 2 个",
+  3: "第 3 个",
+  4: "第 4 个",
+  5: "第 5 个",
+  [REPEAT_NTH_LAST]: "最后一个",
+};
+
 /** 预设项（详情抽屉选择器用；自定义 N 天走 DAILY + after=N） */
 export const REPEAT_PRESETS = [
   { mode: REPEAT_MODE.DAILY, after: 1, label: "每天" },
@@ -44,11 +63,31 @@ export function weekdayMaskLabel(mask: number): string {
   return parts.join("");
 }
 
-/** 规则中文标签（徽标 / 属性行共用；#34 扩展字段可选） */
+/** 掩码最低位对应的星期（周一=0 … 周日=6；0 掩码返回 null） */
+export function firstWeekdayInMask(mask: number): number | null {
+  for (let b = 0; b < 7; b++) {
+    if ((mask & (1 << b)) !== 0) return b;
+  }
+  return null;
+}
+
+/** 序数标签（nth=6 → "最后一个"，其余 "第 N 个"；非法返回 null） */
+export function nthWeekLabel(nth: number): string | null {
+  return NTH_WEEK_LABEL[nth] ?? null;
+}
+
+/** 规则中文标签（徽标 / 属性行共用；#34 扩展字段可选，#72 加月高级语义） */
 export function repeatLabel(
   mode: number,
   after: number,
-  ext?: { weekdays?: number; endType?: number; endParam?: number; fromDone?: number },
+  ext?: {
+    weekdays?: number;
+    endType?: number;
+    endParam?: number;
+    fromDone?: number;
+    monthMode?: number;
+    nthWeek?: number;
+  },
 ): string {
   const n = Math.max(1, after || 1);
   let base: string;
@@ -65,9 +104,21 @@ export function repeatLabel(
       }
       break;
     }
-    case REPEAT_MODE.MONTHLY:
-      base = n === 1 ? "每月" : `每 ${n} 个月`;
+    case REPEAT_MODE.MONTHLY: {
+      // 月高级语义：每月第 N 个星期 X（掩码取最低位，UI 层限制单选）
+      const nthLabel =
+        ext?.monthMode === REPEAT_MONTH_MODE.NTH
+          ? nthWeekLabel(ext?.nthWeek ?? 0)
+          : null;
+      const wd = nthLabel != null ? firstWeekdayInMask(ext?.weekdays ?? 0) : null;
+      if (nthLabel != null && wd != null) {
+        const wdName = ["一", "二", "三", "四", "五", "六", "日"][wd];
+        base = n === 1 ? `每月${nthLabel}周${wdName}` : `每 ${n} 个月${nthLabel}周${wdName}`;
+      } else {
+        base = n === 1 ? "每月" : `每 ${n} 个月`;
+      }
       break;
+    }
     case REPEAT_MODE.YEARLY:
       base = n === 1 ? "每年" : `每 ${n} 年`;
       break;
@@ -94,8 +145,21 @@ export function nextRepeatLabel(
   anchorMs: number | null,
   fromMs: number,
   fromDone?: number,
+  ext?: { weekdays?: number; monthMode?: number; nthWeek?: number },
 ): string | null {
   if (mode === REPEAT_MODE.NONE || anchorMs == null) return null;
+  // 月高级语义：nth 步进预览（与 Rust next_monthly_nth_from 同口径；
+  // 非法配置回落日号语义，见下）
+  if (mode === REPEAT_MODE.MONTHLY && ext?.monthMode === REPEAT_MONTH_MODE.NTH) {
+    const wd = firstWeekdayInMask(ext.weekdays ?? 0);
+    const nth = ext.nthWeek ?? 0;
+    if (wd != null && nthWeekLabel(nth) != null) {
+      const base = !fromDone ? anchorMs : Math.max(anchorMs, fromMs);
+      const from = !fromDone ? Math.max(anchorMs, fromMs) : fromMs;
+      const next = nextMonthlyNth(base, after, wd, nth, from);
+      return next == null ? null : formatCnDate(next);
+    }
+  }
   // 节奏档：从 due 锚点快进到 now 之后（与完成引擎同一 nextRepeatAt 调用形态）
   if (!fromDone) {
     const next = nextRepeatAt(anchorMs, mode, after, Math.max(anchorMs, fromMs));
@@ -163,6 +227,62 @@ export function nextRepeatAt(
         return null;
     }
     if (next.getTime() > fromMs) return next.getTime();
+  }
+  return null;
+}
+
+/**
+ * 某年月第 N 个星期 X 是几号（Rust nth_weekday_in_month 的 TS 镜像；
+ * month0 = JS 月份 0 基；nth 6=最后一个；无 occurrence 返回 null）。
+ */
+export function nthWeekdayInMonth(
+  year: number,
+  month0: number,
+  nth: number,
+  weekdayMon0: number,
+): number | null {
+  const firstWd = (new Date(year, month0, 1).getDay() + 6) % 7; // 周一=0
+  const first = 1 + (((weekdayMon0 - firstWd) % 7) + 7) % 7;
+  const lastDay = new Date(year, month0 + 1, 0).getDate();
+  if (nth === REPEAT_NTH_LAST) {
+    const lastWd = (new Date(year, month0, lastDay).getDay() + 6) % 7;
+    return lastDay - (((lastWd - weekdayMon0) % 7) + 7) % 7;
+  }
+  if (nth < 1 || nth > 5) return null;
+  const day = first + 7 * (nth - 1);
+  return day <= lastDay ? day : null;
+}
+
+/**
+ * 每月第 N 个星期 X 步进（Rust next_monthly_nth_from 的 TS 镜像，
+ * 供 nextRepeatLabel 预览用；调度真值在 core）。
+ *
+ * 口径：锚定 anchor 所在月，按 after 步长逐月取首个 > from 的 occurrence
+ * （k 从 1 起：anchor 当月属当前周期）；无 occurrence 的月份跳过；
+ * 时刻沿用 anchor 本地时刻。DST 不存在时刻 JS Date 自动顺延（预览级误差，
+ * Rust 侧跳过该月——国内无夏令时，无实际分歧）。
+ */
+export function nextMonthlyNth(
+  anchorMs: number,
+  after: number,
+  weekdayMon0: number,
+  nth: number,
+  fromMs: number,
+): number | null {
+  const anchor = new Date(anchorMs);
+  const step = Math.max(1, after || 1);
+  const h = anchor.getHours();
+  const mi = anchor.getMinutes();
+  const s = anchor.getSeconds();
+  const ms = anchor.getMilliseconds();
+  for (let k = 1; k <= 5000; k++) {
+    const total = anchor.getFullYear() * 12 + anchor.getMonth() + k * step;
+    const ty = Math.floor(total / 12);
+    const tm = ((total % 12) + 12) % 12;
+    const day = nthWeekdayInMonth(ty, tm, nth, weekdayMon0);
+    if (day == null) continue;
+    const cand = new Date(ty, tm, day, h, mi, s, ms).getTime();
+    if (cand > fromMs) return cand;
   }
   return null;
 }

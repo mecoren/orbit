@@ -496,6 +496,8 @@ class _InfoSection extends ConsumerWidget {
               endType: detail.repeatEndType,
               endParam: detail.repeatEndParam,
               fromDone: detail.repeatFromDone,
+              monthMode: detail.repeatMonthMode,
+              nthWeek: detail.repeatNthWeek,
             ),
             onClick: () => _editRepeat(context),
           ),
@@ -544,6 +546,8 @@ class _InfoSection extends ConsumerWidget {
       endParam: detail.repeatEndParam,
       fromDone: detail.repeatFromDone == 1,
       dueMs: detail.dueDate,
+      monthMode: detail.repeatMonthMode,
+      nthWeek: detail.repeatNthWeek,
     );
     if (value == null) return;
     await onPatch({
@@ -553,6 +557,9 @@ class _InfoSection extends ConsumerWidget {
       'repeat_end_type': value.endType,
       'repeat_end_param': value.endParam,
       'repeat_from_done': value.fromDone ? 1 : 0,
+      // #72 月高级语义随整组 patch 落库（其余档位抽屉侧已清零）
+      'repeat_month_mode': value.monthMode,
+      'repeat_nth_week': value.nthWeek,
     });
   }
 }

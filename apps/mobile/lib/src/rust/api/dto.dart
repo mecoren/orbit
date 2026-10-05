@@ -1308,6 +1308,10 @@ class TodoTask {
   final int repeatEndType;
   final PlatformInt64 repeatEndParam;
   final int repeatFromDone;
+
+  /// #72 月高级语义（与 orbit-core TodoTask 同名列镜像）
+  final int repeatMonthMode;
+  final int repeatNthWeek;
   final double percentDone;
   final double position;
   final int isFavorite;
@@ -1339,6 +1343,8 @@ class TodoTask {
     required this.repeatEndType,
     required this.repeatEndParam,
     required this.repeatFromDone,
+    required this.repeatMonthMode,
+    required this.repeatNthWeek,
     required this.percentDone,
     required this.position,
     required this.isFavorite,
@@ -1370,6 +1376,8 @@ class TodoTask {
       repeatEndType.hashCode ^
       repeatEndParam.hashCode ^
       repeatFromDone.hashCode ^
+      repeatMonthMode.hashCode ^
+      repeatNthWeek.hashCode ^
       percentDone.hashCode ^
       position.hashCode ^
       isFavorite.hashCode ^
@@ -1403,6 +1411,8 @@ class TodoTask {
           repeatEndType == other.repeatEndType &&
           repeatEndParam == other.repeatEndParam &&
           repeatFromDone == other.repeatFromDone &&
+          repeatMonthMode == other.repeatMonthMode &&
+          repeatNthWeek == other.repeatNthWeek &&
           percentDone == other.percentDone &&
           position == other.position &&
           isFavorite == other.isFavorite &&
@@ -1436,6 +1446,8 @@ class TodoTaskCreateInput {
   final int? repeatEndType;
   final PlatformInt64? repeatEndParam;
   final int? repeatFromDone;
+  final int? repeatMonthMode;
+  final int? repeatNthWeek;
   final double? position;
   final int? isFavorite;
   final PlatformInt64? myDayDate;
@@ -1457,6 +1469,8 @@ class TodoTaskCreateInput {
     this.repeatEndType,
     this.repeatEndParam,
     this.repeatFromDone,
+    this.repeatMonthMode,
+    this.repeatNthWeek,
     this.position,
     this.isFavorite,
     this.myDayDate,
@@ -1480,6 +1494,8 @@ class TodoTaskCreateInput {
       repeatEndType.hashCode ^
       repeatEndParam.hashCode ^
       repeatFromDone.hashCode ^
+      repeatMonthMode.hashCode ^
+      repeatNthWeek.hashCode ^
       position.hashCode ^
       isFavorite.hashCode ^
       myDayDate.hashCode ^
@@ -1505,6 +1521,8 @@ class TodoTaskCreateInput {
           repeatEndType == other.repeatEndType &&
           repeatEndParam == other.repeatEndParam &&
           repeatFromDone == other.repeatFromDone &&
+          repeatMonthMode == other.repeatMonthMode &&
+          repeatNthWeek == other.repeatNthWeek &&
           position == other.position &&
           isFavorite == other.isFavorite &&
           myDayDate == other.myDayDate &&
@@ -1537,6 +1555,10 @@ class TodoTaskDetail {
   final int repeatEndType;
   final PlatformInt64 repeatEndParam;
   final int repeatFromDone;
+
+  /// #72 月高级语义（与 orbit-core TodoTask 同名列镜像）
+  final int repeatMonthMode;
+  final int repeatNthWeek;
   final double percentDone;
   final double position;
   final int isFavorite;
@@ -1573,6 +1595,8 @@ class TodoTaskDetail {
     required this.repeatEndType,
     required this.repeatEndParam,
     required this.repeatFromDone,
+    required this.repeatMonthMode,
+    required this.repeatNthWeek,
     required this.percentDone,
     required this.position,
     required this.isFavorite,
@@ -1609,6 +1633,8 @@ class TodoTaskDetail {
       repeatEndType.hashCode ^
       repeatEndParam.hashCode ^
       repeatFromDone.hashCode ^
+      repeatMonthMode.hashCode ^
+      repeatNthWeek.hashCode ^
       percentDone.hashCode ^
       position.hashCode ^
       isFavorite.hashCode ^
@@ -1647,6 +1673,8 @@ class TodoTaskDetail {
           repeatEndType == other.repeatEndType &&
           repeatEndParam == other.repeatEndParam &&
           repeatFromDone == other.repeatFromDone &&
+          repeatMonthMode == other.repeatMonthMode &&
+          repeatNthWeek == other.repeatNthWeek &&
           percentDone == other.percentDone &&
           position == other.position &&
           isFavorite == other.isFavorite &&

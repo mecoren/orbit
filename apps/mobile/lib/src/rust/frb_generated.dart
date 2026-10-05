@@ -7385,8 +7385,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   TodoTask dco_decode_todo_task(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 27)
-      throw Exception('unexpected arr length: expect 27 but see ${arr.length}');
+    if (arr.length != 29)
+      throw Exception('unexpected arr length: expect 29 but see ${arr.length}');
     return TodoTask(
       id: dco_decode_i_64(arr[0]),
       uuid: dco_decode_String(arr[1]),
@@ -7405,16 +7405,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       repeatEndType: dco_decode_i_32(arr[14]),
       repeatEndParam: dco_decode_i_64(arr[15]),
       repeatFromDone: dco_decode_i_32(arr[16]),
-      percentDone: dco_decode_f_64(arr[17]),
-      position: dco_decode_f_64(arr[18]),
-      isFavorite: dco_decode_i_32(arr[19]),
-      myDayDate: dco_decode_opt_box_autoadd_i_64(arr[20]),
-      durationMinutes: dco_decode_opt_box_autoadd_i_64(arr[21]),
-      isDeleted: dco_decode_i_32(arr[22]),
-      createdAt: dco_decode_i_64(arr[23]),
-      updatedAt: dco_decode_i_64(arr[24]),
-      deletedAt: dco_decode_opt_box_autoadd_i_64(arr[25]),
-      version: dco_decode_i_32(arr[26]),
+      repeatMonthMode: dco_decode_i_32(arr[17]),
+      repeatNthWeek: dco_decode_i_32(arr[18]),
+      percentDone: dco_decode_f_64(arr[19]),
+      position: dco_decode_f_64(arr[20]),
+      isFavorite: dco_decode_i_32(arr[21]),
+      myDayDate: dco_decode_opt_box_autoadd_i_64(arr[22]),
+      durationMinutes: dco_decode_opt_box_autoadd_i_64(arr[23]),
+      isDeleted: dco_decode_i_32(arr[24]),
+      createdAt: dco_decode_i_64(arr[25]),
+      updatedAt: dco_decode_i_64(arr[26]),
+      deletedAt: dco_decode_opt_box_autoadd_i_64(arr[27]),
+      version: dco_decode_i_32(arr[28]),
     );
   }
 
@@ -7422,8 +7424,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   TodoTaskCreateInput dco_decode_todo_task_create_input(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 19)
-      throw Exception('unexpected arr length: expect 19 but see ${arr.length}');
+    if (arr.length != 21)
+      throw Exception('unexpected arr length: expect 21 but see ${arr.length}');
     return TodoTaskCreateInput(
       title: dco_decode_String(arr[0]),
       description: dco_decode_opt_String(arr[1]),
@@ -7440,10 +7442,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       repeatEndType: dco_decode_opt_box_autoadd_i_32(arr[12]),
       repeatEndParam: dco_decode_opt_box_autoadd_i_64(arr[13]),
       repeatFromDone: dco_decode_opt_box_autoadd_i_32(arr[14]),
-      position: dco_decode_opt_box_autoadd_f_64(arr[15]),
-      isFavorite: dco_decode_opt_box_autoadd_i_32(arr[16]),
-      myDayDate: dco_decode_opt_box_autoadd_i_64(arr[17]),
-      durationMinutes: dco_decode_opt_box_autoadd_i_64(arr[18]),
+      repeatMonthMode: dco_decode_opt_box_autoadd_i_32(arr[15]),
+      repeatNthWeek: dco_decode_opt_box_autoadd_i_32(arr[16]),
+      position: dco_decode_opt_box_autoadd_f_64(arr[17]),
+      isFavorite: dco_decode_opt_box_autoadd_i_32(arr[18]),
+      myDayDate: dco_decode_opt_box_autoadd_i_64(arr[19]),
+      durationMinutes: dco_decode_opt_box_autoadd_i_64(arr[20]),
     );
   }
 
@@ -7451,8 +7455,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   TodoTaskDetail dco_decode_todo_task_detail(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 32)
-      throw Exception('unexpected arr length: expect 32 but see ${arr.length}');
+    if (arr.length != 34)
+      throw Exception('unexpected arr length: expect 34 but see ${arr.length}');
     return TodoTaskDetail(
       id: dco_decode_i_64(arr[0]),
       uuid: dco_decode_String(arr[1]),
@@ -7471,21 +7475,23 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       repeatEndType: dco_decode_i_32(arr[14]),
       repeatEndParam: dco_decode_i_64(arr[15]),
       repeatFromDone: dco_decode_i_32(arr[16]),
-      percentDone: dco_decode_f_64(arr[17]),
-      position: dco_decode_f_64(arr[18]),
-      isFavorite: dco_decode_i_32(arr[19]),
-      myDayDate: dco_decode_opt_box_autoadd_i_64(arr[20]),
-      durationMinutes: dco_decode_opt_box_autoadd_i_64(arr[21]),
-      isDeleted: dco_decode_i_32(arr[22]),
-      createdAt: dco_decode_i_64(arr[23]),
-      updatedAt: dco_decode_i_64(arr[24]),
-      deletedAt: dco_decode_opt_box_autoadd_i_64(arr[25]),
-      version: dco_decode_i_32(arr[26]),
-      subtasks: dco_decode_list_todo_subtask(arr[27]),
-      labels: dco_decode_list_task_label_with_id(arr[28]),
-      comments: dco_decode_list_todo_comment(arr[29]),
-      relations: dco_decode_list_todo_task_relation(arr[30]),
-      reminders: dco_decode_list_todo_reminder(arr[31]),
+      repeatMonthMode: dco_decode_i_32(arr[17]),
+      repeatNthWeek: dco_decode_i_32(arr[18]),
+      percentDone: dco_decode_f_64(arr[19]),
+      position: dco_decode_f_64(arr[20]),
+      isFavorite: dco_decode_i_32(arr[21]),
+      myDayDate: dco_decode_opt_box_autoadd_i_64(arr[22]),
+      durationMinutes: dco_decode_opt_box_autoadd_i_64(arr[23]),
+      isDeleted: dco_decode_i_32(arr[24]),
+      createdAt: dco_decode_i_64(arr[25]),
+      updatedAt: dco_decode_i_64(arr[26]),
+      deletedAt: dco_decode_opt_box_autoadd_i_64(arr[27]),
+      version: dco_decode_i_32(arr[28]),
+      subtasks: dco_decode_list_todo_subtask(arr[29]),
+      labels: dco_decode_list_task_label_with_id(arr[30]),
+      comments: dco_decode_list_todo_comment(arr[31]),
+      relations: dco_decode_list_todo_task_relation(arr[32]),
+      reminders: dco_decode_list_todo_reminder(arr[33]),
     );
   }
 
@@ -9808,6 +9814,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_repeatEndType = sse_decode_i_32(deserializer);
     var var_repeatEndParam = sse_decode_i_64(deserializer);
     var var_repeatFromDone = sse_decode_i_32(deserializer);
+    var var_repeatMonthMode = sse_decode_i_32(deserializer);
+    var var_repeatNthWeek = sse_decode_i_32(deserializer);
     var var_percentDone = sse_decode_f_64(deserializer);
     var var_position = sse_decode_f_64(deserializer);
     var var_isFavorite = sse_decode_i_32(deserializer);
@@ -9836,6 +9844,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       repeatEndType: var_repeatEndType,
       repeatEndParam: var_repeatEndParam,
       repeatFromDone: var_repeatFromDone,
+      repeatMonthMode: var_repeatMonthMode,
+      repeatNthWeek: var_repeatNthWeek,
       percentDone: var_percentDone,
       position: var_position,
       isFavorite: var_isFavorite,
@@ -9869,6 +9879,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_repeatEndType = sse_decode_opt_box_autoadd_i_32(deserializer);
     var var_repeatEndParam = sse_decode_opt_box_autoadd_i_64(deserializer);
     var var_repeatFromDone = sse_decode_opt_box_autoadd_i_32(deserializer);
+    var var_repeatMonthMode = sse_decode_opt_box_autoadd_i_32(deserializer);
+    var var_repeatNthWeek = sse_decode_opt_box_autoadd_i_32(deserializer);
     var var_position = sse_decode_opt_box_autoadd_f_64(deserializer);
     var var_isFavorite = sse_decode_opt_box_autoadd_i_32(deserializer);
     var var_myDayDate = sse_decode_opt_box_autoadd_i_64(deserializer);
@@ -9889,6 +9901,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       repeatEndType: var_repeatEndType,
       repeatEndParam: var_repeatEndParam,
       repeatFromDone: var_repeatFromDone,
+      repeatMonthMode: var_repeatMonthMode,
+      repeatNthWeek: var_repeatNthWeek,
       position: var_position,
       isFavorite: var_isFavorite,
       myDayDate: var_myDayDate,
@@ -9916,6 +9930,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_repeatEndType = sse_decode_i_32(deserializer);
     var var_repeatEndParam = sse_decode_i_64(deserializer);
     var var_repeatFromDone = sse_decode_i_32(deserializer);
+    var var_repeatMonthMode = sse_decode_i_32(deserializer);
+    var var_repeatNthWeek = sse_decode_i_32(deserializer);
     var var_percentDone = sse_decode_f_64(deserializer);
     var var_position = sse_decode_f_64(deserializer);
     var var_isFavorite = sse_decode_i_32(deserializer);
@@ -9949,6 +9965,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       repeatEndType: var_repeatEndType,
       repeatEndParam: var_repeatEndParam,
       repeatFromDone: var_repeatFromDone,
+      repeatMonthMode: var_repeatMonthMode,
+      repeatNthWeek: var_repeatNthWeek,
       percentDone: var_percentDone,
       position: var_position,
       isFavorite: var_isFavorite,
@@ -11939,6 +11957,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_i_32(self.repeatEndType, serializer);
     sse_encode_i_64(self.repeatEndParam, serializer);
     sse_encode_i_32(self.repeatFromDone, serializer);
+    sse_encode_i_32(self.repeatMonthMode, serializer);
+    sse_encode_i_32(self.repeatNthWeek, serializer);
     sse_encode_f_64(self.percentDone, serializer);
     sse_encode_f_64(self.position, serializer);
     sse_encode_i_32(self.isFavorite, serializer);
@@ -11972,6 +11992,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_opt_box_autoadd_i_32(self.repeatEndType, serializer);
     sse_encode_opt_box_autoadd_i_64(self.repeatEndParam, serializer);
     sse_encode_opt_box_autoadd_i_32(self.repeatFromDone, serializer);
+    sse_encode_opt_box_autoadd_i_32(self.repeatMonthMode, serializer);
+    sse_encode_opt_box_autoadd_i_32(self.repeatNthWeek, serializer);
     sse_encode_opt_box_autoadd_f_64(self.position, serializer);
     sse_encode_opt_box_autoadd_i_32(self.isFavorite, serializer);
     sse_encode_opt_box_autoadd_i_64(self.myDayDate, serializer);
@@ -12001,6 +12023,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_i_32(self.repeatEndType, serializer);
     sse_encode_i_64(self.repeatEndParam, serializer);
     sse_encode_i_32(self.repeatFromDone, serializer);
+    sse_encode_i_32(self.repeatMonthMode, serializer);
+    sse_encode_i_32(self.repeatNthWeek, serializer);
     sse_encode_f_64(self.percentDone, serializer);
     sse_encode_f_64(self.position, serializer);
     sse_encode_i_32(self.isFavorite, serializer);

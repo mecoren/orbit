@@ -100,6 +100,8 @@ void main() {
         repeatMode: 2,
         repeatAfter: 1,
         repeatFromDone: 1,
+        repeatMonthMode: 0,
+        repeatNthWeek: 0,
       ));
       final beforeComplete = DateTime.now().millisecondsSinceEpoch;
       final done = (await bridge.todoTaskComplete(t.id)).task;

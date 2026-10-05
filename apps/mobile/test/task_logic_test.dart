@@ -41,6 +41,8 @@ TodoTask _task({
     repeatEndType: 0,
     repeatEndParam: 0,
     repeatFromDone: 0,
+    repeatMonthMode: 0,
+    repeatNthWeek: 0,
     percentDone: 0,
     position: position,
     isFavorite: isFavorite,

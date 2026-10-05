@@ -53,6 +53,8 @@ void main() {
         'end_type': 0,
         'end_param': 0,
         'from_done': 0,
+        'month_mode': 0,
+        'nth_week': 0,
       };
       final weeklyMask = {...snap, 'weekdays': 0x11}; // bit0+bit4 = 周一+周五
       final weeklyFromDone = {...snap, 'from_done': 1};
@@ -67,6 +69,31 @@ void main() {
         describeActivity('update', detail),
         '更新（重复规则：不重复 → 每周、重复规则：每周 → 每周一五、'
         '重复规则：每周 → 每周（按完成日））',
+      );
+    });
+
+    test('repeat_rule 月高级语义快照走 nth 口径（缺键回落日号）', () {
+      final monthlyDay = {
+        'mode': 3,
+        'after': 1,
+        'weekdays': 0,
+        'end_type': 0,
+        'end_param': 0,
+        'from_done': 0,
+        'month_mode': 0,
+        'nth_week': 0,
+      };
+      // 旧行只有六字段（缺 month_mode/nth_week）也须回落日号口径
+      final legacySix = Map<String, dynamic>.from(monthlyDay)..remove('month_mode');
+      final nth = {...monthlyDay, 'weekdays': 2, 'month_mode': 1, 'nth_week': 2};
+      expect(
+        describeActivity('update', jsonEncode({
+          'changes': [
+            {'field': 'repeat_rule', 'from': legacySix, 'to': monthlyDay},
+            {'field': 'repeat_rule', 'from': monthlyDay, 'to': nth},
+          ]
+        })),
+        '更新（重复规则：每月 → 每月、重复规则：每月 → 每月第 2 个周二）',
       );
     });
 

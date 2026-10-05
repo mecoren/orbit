@@ -51,6 +51,10 @@ interface MockTask {
   start_date: number | null;
   repeat_after: number;
   repeat_mode: number;
+  /** 月重复模式（#72）：0=按日号 1=按第N个星期X */
+  repeat_month_mode: number;
+  /** 月内第几个星期（#72）：1-5/6=末，0=未指定 */
+  repeat_nth_week: number;
   percent_done: number;
   position: number;
   is_favorite: number;
@@ -228,6 +232,8 @@ export function seedDefault(db: MockDb) {
     start_date: null,
     repeat_after: 0,
     repeat_mode: 0,
+    repeat_month_mode: 0,
+    repeat_nth_week: 0,
     percent_done: 0,
     position: 1000,
     is_favorite: 0,
@@ -502,7 +508,7 @@ function changedTaskValues(
     ["is_favorite", raw],
     ["my_day_date", localDay],
   ];
-  // 重复规则六字段合并为一条 repeat_rule 伪字段（与 Rust changed_task_values
+  // 重复规则八字段合并为一条 repeat_rule 伪字段（与 Rust changed_task_values
   // 同口径）：值为整体快照对象，任一子字段变化即记一条
   const repeatSnap = (r: Record<string, unknown>) => ({
     mode: (r.repeat_mode as number) ?? 0,
@@ -511,6 +517,8 @@ function changedTaskValues(
     end_type: (r.repeat_end_type as number) ?? 0,
     end_param: (r.repeat_end_param as number) ?? 0,
     from_done: (r.repeat_from_done as number) ?? 0,
+    month_mode: (r.repeat_month_mode as number) ?? 0,
+    nth_week: (r.repeat_nth_week as number) ?? 0,
   });
   const out: { field: string; from: unknown; to: unknown }[] = [];
   for (const [f, fmt] of specs) {
@@ -707,6 +715,8 @@ const commands: Record<string, (args: any, ctx: Ctx) => unknown> = {
       start_date: input.start_date ?? null,
       repeat_after: input.repeat_after ?? 0,
       repeat_mode: input.repeat_mode ?? 0,
+      repeat_month_mode: input.repeat_month_mode ?? 0,
+      repeat_nth_week: input.repeat_nth_week ?? 0,
       percent_done: 0,
       position: input.position ?? 100000,
       is_favorite: input.is_favorite ?? 0,
@@ -775,6 +785,8 @@ const commands: Record<string, (args: any, ctx: Ctx) => unknown> = {
           start_date: t.start_date != null ? t.start_date + (due - t.due_date) : null,
           repeat_after: t.repeat_after,
           repeat_mode: t.repeat_mode,
+          repeat_month_mode: t.repeat_month_mode,
+          repeat_nth_week: t.repeat_nth_week,
           percent_done: 0,
           position: 100000,
           is_favorite: t.is_favorite,
@@ -972,6 +984,8 @@ const commands: Record<string, (args: any, ctx: Ctx) => unknown> = {
       start_date: parent.start_date,
       repeat_after: 0,
       repeat_mode: 0,
+      repeat_month_mode: 0,
+      repeat_nth_week: 0,
       percent_done: 0,
       position: maxPos + 1,
       is_favorite: 0,
@@ -1795,6 +1809,8 @@ const commands: Record<string, (args: any, ctx: Ctx) => unknown> = {
         start_date: r.input.start_date ?? null,
         repeat_after: 0,
         repeat_mode: 0,
+        repeat_month_mode: 0,
+        repeat_nth_week: 0,
         percent_done: 0,
         position: 100000,
         is_favorite: 0,

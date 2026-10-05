@@ -43,11 +43,12 @@ use orbit_core::models::business::{
 // 同理 ProjectedTaskLabel / ProjectedReminder 仅作为分组 labels/reminders
 // 的元素类型出现，不再导出（否则 unused_imports）。
 pub use super::dto::{
-    CompleteTaskResult, ListFilter, TaskDependencyFlags, TaskDescriptionFlag, TaskLabelsProjection,
-    TaskRemindersProjection, TodoComment, TodoCommentCreateInput, TodoLabel, TodoLabelCreateInput,
-    TodoProject, TodoProjectCreateInput, TodoReminder, TodoReminderCreateInput, TodoSubtask,
-    TodoSubtaskCreateInput, TodoTask, TodoTaskCreateInput, TodoTaskDetail, TodoTaskLabel,
-    TodoTaskLabelCreateInput, TodoTaskRelation, TodoTaskRelationCreateInput,
+    CompleteTaskResult, ListFilter, TaskDependencyFlags, TaskDescriptionFlag, TaskExistenceFlag,
+    TaskLabelsProjection, TaskRemindersProjection, TodoComment, TodoCommentCreateInput, TodoLabel,
+    TodoLabelCreateInput, TodoProject, TodoProjectCreateInput, TodoReminder,
+    TodoReminderCreateInput, TodoSubtask, TodoSubtaskCreateInput, TodoTask, TodoTaskCreateInput,
+    TodoTaskDetail, TodoTaskLabel, TodoTaskLabelCreateInput, TodoTaskRelation,
+    TodoTaskRelationCreateInput,
 };
 
 fn pool() -> Result<sqlx::SqlitePool, String> {

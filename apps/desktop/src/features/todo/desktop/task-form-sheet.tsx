@@ -44,6 +44,8 @@ import {
 } from "@/lib/tauri";
 import {
   REPEAT_MODE,
+  REPEAT_MONTH_MODE,
+  REPEAT_NTH_LAST,
   REPEAT_PRESETS,
   WEEKDAY_CHIPS,
   nextRepeatLabel,
@@ -375,6 +377,8 @@ function RepeatField({
   endType,
   endParam,
   fromDone,
+  monthMode,
+  nthWeek,
   dueAnchorMs,
   onChange,
 }: {
@@ -384,6 +388,8 @@ function RepeatField({
   endType: number;
   endParam: number;
   fromDone: number;
+  monthMode: number;
+  nthWeek: number;
   dueAnchorMs: number | null;
   onChange: (v: {
     mode: number;
@@ -392,6 +398,8 @@ function RepeatField({
     endType: number;
     endParam: number;
     fromDone: number;
+    monthMode: number;
+    nthWeek: number;
   }) => void;
 }) {
   const [intervalText, setIntervalText] = useState(
@@ -404,6 +412,12 @@ function RepeatField({
   // 扩展规则的编辑态（customOpen 展开面板时初始化一次；预设路径不触碰）
   const [weekdayMask, setWeekdayMask] = useState(weekdays);
   const [endOption, setEndOption] = useState(endType);
+  // 月高级语义（#72）：月模式 + 序数 + 单选星期（月档限定单选，多选无意义）
+  const [monthModeState, setMonthModeState] = useState(monthMode);
+  const [nthWeekState, setNthWeekState] = useState(nthWeek);
+  const [monthWeekday, setMonthWeekday] = useState(
+    weekdays !== 0 && (weekdays & (weekdays - 1)) === 0 ? weekdays : 0,
+  );
   const [endText, setEndText] = useState(
     endType === 2 ? String(Math.max(1, endParam || 1)) : "",
   );
@@ -418,7 +432,9 @@ function RepeatField({
     REPEAT_PRESETS.some((p) => p.mode === mode && p.after === after) &&
     weekdays === 0 &&
     endType === 0 &&
-    fromDone === 0;
+    fromDone === 0 &&
+    monthMode === 0 &&
+    nthWeek === 0;
   const custom = mode !== REPEAT_MODE.NONE && !isPreset;
 
   const pick = (m: number, a: number) => {
@@ -431,7 +447,10 @@ function RepeatField({
     setEndText("");
     setEndDate("");
     setWhenDone(0);
-    onChange({ mode: m, after: a, weekdays: 0, endType: 0, endParam: 0, fromDone: 0 });
+    setMonthModeState(0);
+    setNthWeekState(0);
+    setMonthWeekday(0);
+    onChange({ mode: m, after: a, weekdays: 0, endType: 0, endParam: 0, fromDone: 0, monthMode: 0, nthWeek: 0 });
   };
 
   const applyCustom = () => {
@@ -441,13 +460,18 @@ function RepeatField({
     if (endOption === 1 && endDate) {
       param = new Date(`${endDate}T23:59:59`).getTime();
     }
+    // 月高级语义：月档 + 第N个星期X 开关开时，星期取单选位、落月模式与序数；
+    // 否则月模式/序数清零（掩码多选在月档无意义，由单选态接管）
+    const nthOn = unit === REPEAT_MODE.MONTHLY && monthModeState === REPEAT_MONTH_MODE.NTH;
     onChange({
       mode: unit,
       after: n,
-      weekdays: unit === REPEAT_MODE.WEEKLY ? weekdayMask : 0,
+      weekdays: unit === REPEAT_MODE.WEEKLY ? weekdayMask : nthOn ? monthWeekday : 0,
       endType: endOption,
       endParam: param,
       fromDone: whenDone,
+      monthMode: nthOn ? REPEAT_MONTH_MODE.NTH : 0,
+      nthWeek: nthOn ? nthWeekState : 0,
     });
     setCustomOpen(false);
   };
@@ -457,7 +481,11 @@ function RepeatField({
   };
 
   // 下次具体日期预览（Things 口径）：规则生效且截止日期已填时展示
-  const nextLabel = nextRepeatLabel(mode, after, dueAnchorMs, Date.now(), fromDone);
+  const nextLabel = nextRepeatLabel(mode, after, dueAnchorMs, Date.now(), fromDone, {
+    weekdays,
+    monthMode,
+    nthWeek,
+  });
 
   return (
     <div className="flex flex-col gap-1.5">
@@ -488,7 +516,18 @@ function RepeatField({
               : "text-muted-foreground hover:bg-accent",
           )}
         >
-          {custom ? repeatLabel(mode, after) : "自定义"}
+          {custom ? (
+            repeatLabel(mode, after, {
+              weekdays,
+              endType,
+              endParam,
+              fromDone,
+              monthMode,
+              nthWeek,
+            })
+          ) : (
+            "自定义"
+          )}
         </button>
         {nextLabel && (
           <span className="rounded-md bg-primary/10 px-2 py-1 text-[11px] font-medium text-primary">
@@ -550,6 +589,71 @@ function RepeatField({
                 <span className="text-[11px] text-muted-foreground">
                   （周档 N 周 + 多选星期几）
                 </span>
+              )}
+            </div>
+          )}
+          {unit === REPEAT_MODE.MONTHLY && (
+            <div className="flex flex-wrap items-center gap-1">
+              <span className="text-[11px] text-muted-foreground">按</span>
+              <button
+                type="button"
+                onClick={() => setMonthModeState(REPEAT_MONTH_MODE.DAY)}
+                className={cn(
+                  "rounded-md border px-2 py-0.5 text-[11px]",
+                  monthModeState === REPEAT_MONTH_MODE.DAY
+                    ? "border-primary bg-primary/10 font-medium text-primary"
+                    : "text-muted-foreground hover:bg-accent",
+                )}
+              >
+                日号
+              </button>
+              <button
+                type="button"
+                onClick={() => setMonthModeState(REPEAT_MONTH_MODE.NTH)}
+                className={cn(
+                  "rounded-md border px-2 py-0.5 text-[11px]",
+                  monthModeState === REPEAT_MONTH_MODE.NTH
+                    ? "border-primary bg-primary/10 font-medium text-primary"
+                    : "text-muted-foreground hover:bg-accent",
+                )}
+              >
+                第几个星期X
+              </button>
+              {monthModeState === REPEAT_MONTH_MODE.NTH && (
+                <>
+                  {[1, 2, 3, 4, 5, REPEAT_NTH_LAST].map((k) => (
+                    <button
+                      key={k}
+                      type="button"
+                      aria-label={k === REPEAT_NTH_LAST ? "最后一个" : `第${k}个`}
+                      onClick={() => setNthWeekState(k)}
+                      className={cn(
+                        "rounded-md border px-2 py-0.5 text-[11px]",
+                        nthWeekState === k
+                          ? "border-primary bg-primary/10 font-medium text-primary"
+                          : "text-muted-foreground hover:bg-accent",
+                      )}
+                    >
+                      {k === REPEAT_NTH_LAST ? "末个" : `第${k}个`}
+                    </button>
+                  ))}
+                  {WEEKDAY_CHIPS.map((d) => (
+                    <button
+                      key={d.bit}
+                      type="button"
+                      aria-label={`星期${d.label}`}
+                      onClick={() => setMonthWeekday(d.bit)}
+                      className={cn(
+                        "size-6 rounded-md border text-[11px]",
+                        monthWeekday === d.bit
+                          ? "border-primary bg-primary/10 font-medium text-primary"
+                          : "text-muted-foreground hover:bg-accent",
+                      )}
+                    >
+                      {d.label}
+                    </button>
+                  ))}
+                </>
               )}
             </div>
           )}
@@ -665,6 +769,9 @@ export function TaskFormSheet({
   const [repeatEndType, setRepeatEndType] = useState<number>(0);
   const [repeatEndParam, setRepeatEndParam] = useState<number>(0);
   const [repeatFromDone, setRepeatFromDone] = useState<number>(0);
+  // 月高级语义（#72）：月模式 + 序数（仅 MONTHLY 生效，其余档清零入库）
+  const [repeatMonthMode, setRepeatMonthMode] = useState<number>(0);
+  const [repeatNthWeek, setRepeatNthWeek] = useState<number>(0);
   // 表单内截止日期跟踪（「下次日期」预览锚点；随 due_date 字段编辑实时更新）
   const [dueAnchorMs, setDueAnchorMs] = useState<number | null>(null);
 
@@ -678,6 +785,8 @@ export function TaskFormSheet({
       setRepeatEndType(task.repeat_end_type ?? 0);
       setRepeatEndParam(task.repeat_end_param ?? 0);
       setRepeatFromDone(task.repeat_from_done ?? 0);
+      setRepeatMonthMode(task.repeat_month_mode ?? 0);
+      setRepeatNthWeek(task.repeat_nth_week ?? 0);
     } else {
       setRepeatMode(REPEAT_MODE.NONE);
       setRepeatAfter(0);
@@ -685,6 +794,8 @@ export function TaskFormSheet({
       setRepeatEndType(0);
       setRepeatEndParam(0);
       setRepeatFromDone(0);
+      setRepeatMonthMode(0);
+      setRepeatNthWeek(0);
       setTagSelections([]);
       // 模板子任务预填（套用模板 > 空白新建）；标题留空由用户补
       setSubtaskTitles(presetTemplate?.subtasks ?? []);
@@ -772,6 +883,9 @@ export function TaskFormSheet({
       repeat_end_type: repeatEndType,
       repeat_end_param: repeatEndParam,
       repeat_from_done: repeatFromDone,
+      // 月高级语义只在月档落库（其余档清零，与星期掩码仅周档生效同口径）
+      repeat_month_mode: repeatMode === REPEAT_MODE.MONTHLY ? repeatMonthMode : 0,
+      repeat_nth_week: repeatMode === REPEAT_MODE.MONTHLY ? repeatNthWeek : 0,
       // 预计时长：空/非正数 = 未设置（null 落 core 为清除；下限与 core 口径一致）
       duration_minutes:
         values.duration_minutes == null || values.duration_minutes === ""
@@ -861,6 +975,8 @@ export function TaskFormSheet({
             endType={repeatEndType}
             endParam={repeatEndParam}
             fromDone={repeatFromDone}
+            monthMode={repeatMonthMode}
+            nthWeek={repeatNthWeek}
             dueAnchorMs={dueAnchorMs}
             onChange={(v) => {
               setRepeatMode(v.mode);
@@ -869,6 +985,8 @@ export function TaskFormSheet({
               setRepeatEndType(v.endType);
               setRepeatEndParam(v.endParam);
               setRepeatFromDone(v.fromDone);
+              setRepeatMonthMode(v.monthMode);
+              setRepeatNthWeek(v.nthWeek);
             }}
           />
           {!task && (

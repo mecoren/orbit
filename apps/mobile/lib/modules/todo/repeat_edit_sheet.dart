@@ -20,12 +20,15 @@ class RepeatRuleValue {
     this.endType = 0,
     this.endParam = 0,
     this.fromDone = false,
+    this.monthMode = rep.RepeatMonthMode.day,
+    this.nthWeek = 0,
   });
 
   final int mode;
   final int after;
 
-  /// 周档星期几掩码（bit0=周一…bit6=周日；仅 weekly 有意义）
+  /// 周档星期几掩码（bit0=周一…bit6=周日；仅 weekly 有意义）；
+  /// 月档第 N 个星期 X 档改为**单选位**（月内多选星期几无意义）
   final int weekdays;
 
   /// 结束条件（0=永不 1=按日期 2=按次数）
@@ -36,6 +39,12 @@ class RepeatRuleValue {
 
   /// 按完成日推进（下次顺延一个完整周期）
   final bool fromDone;
+
+  /// 月重复模式（0=按日号 1=按第N个星期X；仅 monthly 生效）
+  final int monthMode;
+
+  /// 月内第几个星期（1-5 / 6=最后一个；仅 monthMode=nth 生效）
+  final int nthWeek;
 }
 
 /// 重复规则编辑抽屉（详情页信息区「重复」行 + 新建/编辑表单「重复」行共用）
@@ -56,6 +65,8 @@ Future<RepeatRuleValue?> showRepeatEditSheet(
   int endParam = 0,
   bool fromDone = false,
   int? dueMs,
+  int monthMode = rep.RepeatMonthMode.day,
+  int nthWeek = 0,
 }) {
   final colors = AppColors.ofContext(context);
   return showModalBottomSheet<RepeatRuleValue>(
@@ -72,6 +83,8 @@ Future<RepeatRuleValue?> showRepeatEditSheet(
       endParam: endParam,
       fromDone: fromDone,
       dueMs: dueMs,
+      monthMode: monthMode,
+      nthWeek: nthWeek,
     ),
   );
 }
@@ -85,6 +98,8 @@ class _RepeatEditSheet extends StatefulWidget {
     required this.endParam,
     required this.fromDone,
     required this.dueMs,
+    required this.monthMode,
+    required this.nthWeek,
   });
 
   final int mode;
@@ -96,6 +111,10 @@ class _RepeatEditSheet extends StatefulWidget {
 
   /// 截止日期锚点（毫秒时间戳；「下次」预览与完成引擎同源）
   final int? dueMs;
+
+  /// #72 月高级语义（月档：按日号 / 第N个星期X）
+  final int monthMode;
+  final int nthWeek;
 
   @override
   State<_RepeatEditSheet> createState() => _RepeatEditSheetState();
@@ -113,6 +132,13 @@ class _RepeatEditSheetState extends State<_RepeatEditSheet> {
       TextEditingController(text: '${widget.after <= 0 ? 1 : widget.after}');
   late int _weekdays = widget.weekdays;
   late int _endOption = widget.endType;
+  // 月高级语义（#72）：月模式 + 序数 + 单选星期（多选掩码收敛为最低位单选）
+  late int _monthMode = widget.monthMode;
+  late int _nthWeek = widget.nthWeek;
+  late int _monthWeekday = widget.weekdays != 0 &&
+          (widget.weekdays & (widget.weekdays - 1)) == 0
+      ? widget.weekdays
+      : 0;
   late final TextEditingController _endCountController = TextEditingController(
     text: widget.endType == rep.RepeatEnd.afterCount && widget.endParam > 0
         ? '${widget.endParam}'
@@ -184,13 +210,23 @@ class _RepeatEditSheetState extends State<_RepeatEditSheet> {
       rep.RepeatEnd.onDate => _endDateMs,
       _ => 0,
     };
+    // 月高级语义：月档 + nth 开关开时星期取单选位、落月模式与序数；
+    // 否则扩展清零（与桌面 RepeatField 同口径）
+    final nthOn =
+        mode == rep.RepeatMode.monthly && _monthMode == rep.RepeatMonthMode.nth;
     Navigator.of(context).pop(RepeatRuleValue(
       mode: mode,
       after: n <= 0 ? 1 : n,
-      weekdays: mode == rep.RepeatMode.weekly ? _weekdays : 0,
+      weekdays: mode == rep.RepeatMode.weekly
+          ? _weekdays
+          : nthOn
+              ? _monthWeekday
+              : 0,
       endType: hasRepeat ? endType : rep.RepeatEnd.never,
       endParam: hasRepeat ? endParam : 0,
       fromDone: hasRepeat && _fromDone,
+      monthMode: nthOn ? rep.RepeatMonthMode.nth : rep.RepeatMonthMode.day,
+      nthWeek: nthOn ? _nthWeek : 0,
     ));
   }
 
@@ -204,6 +240,9 @@ class _RepeatEditSheetState extends State<_RepeatEditSheet> {
       widget.dueMs,
       DateTime.now().millisecondsSinceEpoch,
       fromDone: widget.fromDone ? 1 : 0,
+      weekdays: widget.weekdays,
+      monthMode: widget.monthMode,
+      nthWeek: widget.nthWeek,
     );
     // 键盘避让 / 手柄 / 标题 / 内容滚动由骨架统一承担（见 orbit_sheet_scaffold.dart）；
     // 面板宽度口径：`showModalBottomSheet` 给内容的是**宽松约束**，本面板全是
@@ -237,6 +276,8 @@ class _RepeatEditSheetState extends State<_RepeatEditSheet> {
                         endType: widget.endType,
                         endParam: widget.endParam,
                         fromDone: widget.fromDone ? 1 : 0,
+                        monthMode: widget.monthMode,
+                        nthWeek: widget.nthWeek,
                       )
                     : '自定义',
                 selected: _custom || _panelOpen,
@@ -310,6 +351,46 @@ class _RepeatEditSheetState extends State<_RepeatEditSheet> {
                   ),
                 if (_weekdays != 0)
                   _RowLabel(text: '（周档 N 周 + 多选星期几）', colors: colors),
+              ],
+            ),
+          ],
+          // 月档（#72）：按日号 / 第 N 个星期 X 二选一 + 序数 + 单选星期
+          if (_unit == rep.RepeatUnit.month) ...[
+            const SizedBox(height: AppDimens.space8),
+            Wrap(
+              spacing: AppDimens.space4,
+              runSpacing: AppDimens.space4,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                _RowLabel(text: '按', colors: colors),
+                _RepeatChip(
+                  label: '日号',
+                  dense: true,
+                  selected: _monthMode == rep.RepeatMonthMode.day,
+                  onTap: () => setState(() => _monthMode = rep.RepeatMonthMode.day),
+                ),
+                _RepeatChip(
+                  label: '第几个星期X',
+                  dense: true,
+                  selected: _monthMode == rep.RepeatMonthMode.nth,
+                  onTap: () => setState(() => _monthMode = rep.RepeatMonthMode.nth),
+                ),
+                if (_monthMode == rep.RepeatMonthMode.nth) ...[
+                  for (final k in const [1, 2, 3, 4, 5, rep.repeatNthLast])
+                    _RepeatChip(
+                      label: k == rep.repeatNthLast ? '末个' : '第$k个',
+                      dense: true,
+                      selected: _nthWeek == k,
+                      onTap: () => setState(() => _nthWeek = k),
+                    ),
+                  for (final (i, name) in rep.weekdayNames.indexed)
+                    _RepeatChip(
+                      label: name,
+                      dense: true,
+                      selected: _monthWeekday == (1 << i),
+                      onTap: () => setState(() => _monthWeekday = 1 << i),
+                    ),
+                ],
               ],
             ),
           ],

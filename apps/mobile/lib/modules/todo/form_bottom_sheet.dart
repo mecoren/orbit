@@ -237,6 +237,10 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
   int _repeatEndType = 0;
   int _repeatEndParam = 0;
   bool _repeatFromDone = false;
+  // 月高级语义（#72）：月模式 + 序数 + 单选星期（仅 MONTHLY 生效）
+  int _repeatMonthMode = rep.RepeatMonthMode.day;
+  int _repeatNthWeek = 0;
+  int _repeatMonthWeekday = 0;
   bool _saving = false;
   bool _loaded = false;
   String? _loadError;
@@ -344,6 +348,12 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
         _repeatEndType = task.repeatEndType;
         _repeatEndParam = task.repeatEndParam;
         _repeatFromDone = task.repeatFromDone == 1;
+        _repeatMonthMode = task.repeatMonthMode;
+        _repeatNthWeek = task.repeatNthWeek;
+        _repeatMonthWeekday =
+            task.repeatWeekdays != 0 && (task.repeatWeekdays & (task.repeatWeekdays - 1)) == 0
+                ? task.repeatWeekdays
+                : 0;
         _existingReminder = firstReminder;
         _remindAt = firstReminder?.remindAt;
         _remindConstant = firstReminder?.constant ?? false;
@@ -366,6 +376,18 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
     final description = _descriptionController.text.trim();
     final repeatMode = _repeatMode;
     final repeatAfter = _repeatAfter;
+    // 重复规则扩展落库口径（与桌面 RepeatField/RepeatEditor 同源）：
+    // 周档星期掩码多选；月档第 N 个星期 X 走单选星期位 + 月模式/序数两列；
+    // 其余档位扩展清零（掩码仅周档生效同口径）
+    final nthOn =
+        repeatMode == rep.RepeatMode.monthly && _repeatMonthMode == rep.RepeatMonthMode.nth;
+    final repeatWeekdays = repeatMode == rep.RepeatMode.weekly
+        ? _repeatWeekdays
+        : nthOn
+            ? _repeatMonthWeekday
+            : 0;
+    final repeatMonthMode = repeatMode == rep.RepeatMode.monthly && nthOn ? rep.RepeatMonthMode.nth : 0;
+    final repeatNthWeek = repeatMode == rep.RepeatMode.monthly && nthOn ? _repeatNthWeek : 0;
     try {
       final bridge = ref.read(orbitBridgeProvider);
       if (widget.editingTaskId == null) {
@@ -388,10 +410,12 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
           startDate: _startDate,
           repeatMode: repeatMode,
           repeatAfter: repeatAfter,
-          repeatWeekdays: repeatMode == rep.RepeatMode.weekly ? _repeatWeekdays : 0,
+          repeatWeekdays: repeatWeekdays,
           repeatEndType: _repeatEndType,
           repeatEndParam: _repeatEndParam,
           repeatFromDone: _repeatFromDone ? 1 : 0,
+          repeatMonthMode: repeatMonthMode,
+          repeatNthWeek: repeatNthWeek,
           myDayDate: viewDefaults.myDayMs,
           isFavorite: viewDefaults.favorite,
           durationMinutes: _durationMinutes,
@@ -438,11 +462,12 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
             'start_date': _startDate,
             'repeat_mode': repeatMode,
             'repeat_after': repeatAfter,
-            'repeat_weekdays':
-                repeatMode == rep.RepeatMode.weekly ? _repeatWeekdays : 0,
+            'repeat_weekdays': repeatWeekdays,
             'repeat_end_type': _repeatEndType,
             'repeat_end_param': _repeatEndParam,
             'repeat_from_done': _repeatFromDone ? 1 : 0,
+            'repeat_month_mode': repeatMonthMode,
+            'repeat_nth_week': repeatNthWeek,
             'duration_minutes': _durationMinutes,
           }),
         );
@@ -631,6 +656,8 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
       fromDone: _repeatFromDone,
       // 「下次 M月d日」预览锚点 = 表单当前截止日期（与完成引擎同源）
       dueMs: _dueDate,
+      monthMode: _repeatMonthMode,
+      nthWeek: _repeatNthWeek,
     );
     if (value == null || !mounted) return;
     setState(() {
@@ -640,6 +667,12 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
       _repeatEndType = value.endType;
       _repeatEndParam = value.endParam;
       _repeatFromDone = value.fromDone;
+      _repeatMonthMode = value.monthMode;
+      _repeatNthWeek = value.nthWeek;
+      _repeatMonthWeekday =
+          value.weekdays != 0 && (value.weekdays & (value.weekdays - 1)) == 0
+              ? value.weekdays
+              : 0;
     });
   }
 

@@ -51,7 +51,7 @@ pub(crate) fn current_device_id() -> String {
 const LIST_COLUMNS_TASKS_PRUNED: &str = "id, '' AS uuid, title, NULL AS description, \
     project_id, priority, status, done, done_at, due_date, start_date, \
     repeat_after, repeat_mode, repeat_weekdays, repeat_end_type, repeat_end_param, \
-    repeat_from_done, percent_done, position, is_favorite, my_day_date, duration_minutes, \
+    repeat_from_done, repeat_month_mode, repeat_nth_week, percent_done, position, is_favorite, my_day_date, duration_minutes, \
     is_deleted, created_at, updated_at, deleted_at, version";
 
 /// 泛型分页列表查询：SELECT <列> FROM {table} WHERE is_deleted=0
@@ -650,9 +650,10 @@ pub async fn create_todo_task(
             uuid, title, description, project_id, priority, status, done, done_at,
             due_date, start_date, repeat_after, repeat_mode,
             repeat_weekdays, repeat_end_type, repeat_end_param, repeat_from_done,
+            repeat_month_mode, repeat_nth_week,
             percent_done, position, is_favorite, my_day_date, duration_minutes,
             is_deleted, created_at, updated_at, version
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, 0, ?, ?, 1)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, 0, ?, ?, 1)
         RETURNING *",
     )
     .bind(&uuid)
@@ -671,6 +672,8 @@ pub async fn create_todo_task(
     .bind(input.repeat_end_type.unwrap_or(0))
     .bind(input.repeat_end_param.unwrap_or(0))
     .bind(input.repeat_from_done.unwrap_or(0))
+    .bind(input.repeat_month_mode.unwrap_or(0))
+    .bind(input.repeat_nth_week.unwrap_or(0))
     .bind(input.position.unwrap_or(0.0))
     .bind(input.is_favorite.unwrap_or(0))
     .bind(input.my_day_date)
@@ -737,6 +740,12 @@ pub async fn update_todo_task(
     if input.repeat_from_done.is_some() {
         sets.push("repeat_from_done = ?".into());
     }
+    if input.repeat_month_mode.is_some() {
+        sets.push("repeat_month_mode = ?".into());
+    }
+    if input.repeat_nth_week.is_some() {
+        sets.push("repeat_nth_week = ?".into());
+    }
     if input.percent_done.is_some() {
         sets.push("percent_done = ?".into());
     }
@@ -801,6 +810,12 @@ pub async fn update_todo_task(
         q = q.bind(v);
     }
     if let Some(v) = input.repeat_from_done {
+        q = q.bind(v);
+    }
+    if let Some(v) = input.repeat_month_mode {
+        q = q.bind(v);
+    }
+    if let Some(v) = input.repeat_nth_week {
         q = q.bind(v);
     }
     if let Some(v) = input.percent_done {

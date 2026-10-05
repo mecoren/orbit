@@ -234,6 +234,10 @@ export interface TodoTask {
   repeat_end_param: number;
   /** when done：0=锚定原 due 推进 1=按完成日推进 */
   repeat_from_done: number;
+  /** 月重复模式（#72）：0=按日号 1=按第N个星期X（仅 MONTHLY 生效） */
+  repeat_month_mode: number;
+  /** 月内第几个星期（#72）：1-5/6=末，0=未指定回落日号；星期几复用 repeat_weekdays 单 bit */
+  repeat_nth_week: number;
   percent_done: number;
   position: number;
   is_favorite: number;
@@ -263,6 +267,8 @@ export interface TodoTaskCreateInput {
   repeat_end_type?: number;
   repeat_end_param?: number;
   repeat_from_done?: number;
+  repeat_month_mode?: number;
+  repeat_nth_week?: number;
   position?: number;
   is_favorite?: number;
   my_day_date?: number | null;
@@ -285,6 +291,8 @@ export interface TodoTaskUpdateInput {
   repeat_end_type?: number;
   repeat_end_param?: number;
   repeat_from_done?: number;
+  repeat_month_mode?: number;
+  repeat_nth_week?: number;
   percent_done?: number;
   position?: number;
   is_favorite?: number;

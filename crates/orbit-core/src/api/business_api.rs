@@ -284,7 +284,7 @@ async fn snapshot_project(pool: &SqlitePool, id: Option<i64>) -> serde_json::Val
         .unwrap_or(serde_json::Value::Null)
 }
 
-/// 重复规则六字段整体快照（repeat_rule 伪字段的 from/to 值；前端按
+/// 重复规则八字段整体快照（repeat_rule 伪字段的 from/to 值；前端按
 /// repeatLabel 口径渲染，字段名与 TodoTask 列对应）
 fn repeat_snapshot(t: &TodoTask) -> serde_json::Value {
     serde_json::json!({
@@ -294,6 +294,8 @@ fn repeat_snapshot(t: &TodoTask) -> serde_json::Value {
         "end_type": t.repeat_end_type,
         "end_param": t.repeat_end_param,
         "from_done": t.repeat_from_done,
+        "month_mode": t.repeat_month_mode,
+        "nth_week": t.repeat_nth_week,
     })
 }
 
@@ -383,8 +385,10 @@ async fn changed_task_values(
         || before.repeat_end_type != after.repeat_end_type
         || before.repeat_end_param != after.repeat_end_param
         || before.repeat_from_done != after.repeat_from_done
+        || before.repeat_month_mode != after.repeat_month_mode
+        || before.repeat_nth_week != after.repeat_nth_week
     {
-        // 六字段合并为一条伪字段变更（单改 repeat_after 不配 mode 无意义）；
+        // 八字段合并为一条伪字段变更（单改 repeat_after 不配 mode 无意义）；
         // 值快照为对象，前端 repeatLabel 单口径渲染完整规则串
         out.push((
             "repeat_rule",
@@ -1852,7 +1856,7 @@ mod activity_detail_tests {
         assert!(other_rows.iter().any(|r| r.action == "link_remove"));
     }
 
-    /// 重复规则任一子字段变更 → 合并为一条 repeat_rule 伪字段（值为六字段对象
+    /// 重复规则任一子字段变更 → 合并为一条 repeat_rule 伪字段（值为八字段对象
     /// 快照）；子任务改名记 subtask_rename（target=「旧 → 新」对照串）
     #[tokio::test]
     async fn repeat_rule_merged_and_subtask_rename_logged() {

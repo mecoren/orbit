@@ -99,6 +99,8 @@ String _fmtValue(String field, Object? v) {
         endType: (r['end_type'] as num?)?.toInt() ?? 0,
         endParam: (r['end_param'] as num?)?.toInt() ?? 0,
         fromDone: (r['from_done'] as num?)?.toInt() ?? 0,
+        monthMode: (r['month_mode'] as num?)?.toInt() ?? 0,
+        nthWeek: (r['nth_week'] as num?)?.toInt() ?? 0,
       );
     case 'percent_done':
       return '$v%';

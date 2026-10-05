@@ -345,6 +345,49 @@ void main() {
     expect(task.repeatEndParam, 5);
   });
 
+  testWidgets('保存：重复抽屉月档「第 2 个周二」落库 month_mode/nth_week/单选星期',
+      (tester) async {
+    final bridge = await _openForm(tester);
+
+    await tester.enterText(find.byType(TextFormField).first, '重复任务Nth');
+    await _scrollTo(tester, find.text('重复'));
+    await tester.tap(find.text('重复'));
+    await tester.pumpAndSettle();
+
+    // 自定义面板切到「月」单位 → 高级语义区出现
+    await tester.tap(find.text('自定义'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('月'));
+    await tester.pumpAndSettle();
+    expect(find.text('按'), findsOneWidget);
+
+    await tester.tap(find.text('第几个星期X'));
+    await tester.pumpAndSettle();
+    expect(find.text('第1个'), findsOneWidget);
+    expect(find.text('末个'), findsOneWidget);
+
+    await tester.tap(find.text('第2个'));
+    await tester.pumpAndSettle();
+    // 单选星期：面板里出现周二（bit1），点它落单选位
+    await tester.tap(find.text('二'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('确定'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byIcon(OrbitIcons.check));
+    await _settlePastMockLatency(tester);
+
+    final tasks = await tester.runAsync(
+      () => bridge.todoTaskList(const ListFilter()),
+    );
+    final task = tasks!.firstWhere((t) => t.title == '重复任务Nth');
+    expect(task.repeatMode, 3);
+    expect(task.repeatMonthMode, 1);
+    expect(task.repeatNthWeek, 2);
+    // 星期几取单选位（周二 bit1），不是周档多选掩码
+    expect(task.repeatWeekdays, 2);
+  });
+
   testWidgets('重复抽屉：有截止日期时显示「下次 M月d日」预览徽标', (tester) async {
     await _openForm(tester);
 
