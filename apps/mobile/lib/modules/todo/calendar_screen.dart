@@ -664,12 +664,12 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
           in ref.watch(todoProjectsProvider).value ?? const <TodoProject>[])
         p.id: p,
     };
+    final days = _timelineDays;
+    // 跨度内任务 id → 任务（块渲染取项目色 + 拖拽落库取 DTO，同一份映射）
     final taskById = <int, TodoTask>{
-      for (final date in _timelineDays)
+      for (final date in days)
         for (final t in byDay[_ymd(date)] ?? const <TodoTask>[]) t.id: t,
     };
-
-    final days = _timelineDays;
     final anyBlock = days.any((d) => _blocksOf(d, byDay).isNotEmpty);
 
     return Column(
@@ -742,6 +742,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                           : hexToColor(hex);
                     },
                     onOpenTask: _openTask,
+                    onMoveTimeslot: (id, ms) => _moveTimeslot(id, ms, taskById),
                   ),
                 ],
               ),
@@ -769,6 +770,38 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
   /// 跨度内的时段总数（档内计数徽标）
   int _totalBlocks(Map<String, List<TodoTask>> byDay) => _timelineDays
       .fold<int>(0, (sum, d) => sum + _blocksOf(d, byDay).length);
+
+  /// 长按拖拽时段落位（#75）：长按 500ms 拾起后纵向拖改起点，15 分钟吸附。
+  ///
+  /// **落库字段按块来源分**（`timeslotDropPatch` 唯一出口）：显式排程块改
+  /// `start_date`；由带时刻 `due_date` 倒推的块**只改 `due_date`**（= 新起点
+  /// + 时长），绝不种 `start_date`——种 start 会让任务从「截止向截止收拢」
+  /// 漂移成「显式排程」，语义变了且与详情页显示打架。纯日期任务不渲染块，
+  /// 拖不到这里。
+  Future<void> _moveTimeslot(
+    int taskId,
+    int nextStartMs,
+    Map<int, TodoTask> taskById,
+  ) async {
+    final task = taskById[taskId];
+    if (task == null) return;
+    final patch = timeslotDropPatch(task, nextStartMs);
+    if (patch == null) return; // 无变化（同刻落回）不写库
+    try {
+      await ref
+          .read(orbitBridgeProvider)
+          .todoTaskUpdate(taskId, encodePatch(patch));
+      ref.invalidate(todoTasksProvider);
+      WaitToast.warning(
+        '时段已调整',
+        description: patch.containsKey('due_date')
+            ? '原为截止倒推块，已改截止时刻'
+            : '开始时刻已更新',
+      );
+    } catch (e) {
+      WaitToast.destructive('调整失败：$e');
+    }
+  }
 
   /// 空态主文案（「当天」/「三天」）
   String _timelineEmptyLabel() => _timelineSpan == 1 ? '当天' : '这三天';

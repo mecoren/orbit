@@ -143,3 +143,81 @@ List<({TimeBlock block, BlockLayout layout, int lane, int laneCount})>
 /// 毫秒时间戳 → 本地日零点（分桶锚点；跨 DST 日恒对齐）
 int localDayStartMs(DateTime d) =>
     DateTime(d.year, d.month, d.day).millisecondsSinceEpoch;
+
+// ============================================================================
+// 时段拖拽（docs/07 #75；镜像桌面 shared/timeslot-drag.ts 的移动端子集）
+// ============================================================================
+
+/// 拖拽吸附粒度（分钟）——15 分钟是日程软件的事实标准
+const int snapMinutes = 15;
+
+/// 纵向像素位移（正 = 向下 = 更晚）→ 吸附后的分钟增量。
+///
+/// [hourPx] 为每小时行高（网格几何）；非有限值与非法行高归 0——防 NaN
+/// 传播到写库（与桌面同款守卫）。取整用 `round` 就近吸附（14 分钟 → 15，
+/// 16 分钟 → 15）。
+int snapMinutesDelta(double deltaPx, double hourPx) {
+  if (hourPx <= 0 ||
+      hourPx.isNaN ||
+      hourPx.isInfinite ||
+      deltaPx.isNaN ||
+      deltaPx.isInfinite) {
+    return 0;
+  }
+  final raw = deltaPx * 60 / hourPx;
+  return (raw / snapMinutes).round() * snapMinutes;
+}
+
+/// 移动落点：块 + 纵向位移 → 新起点（已吸附、已夹到日内）。
+///
+/// **夹取语义**：起点不早于该日 00:00，且 `起点 + 时长 ≤ 该日 24:00`
+/// ——保证块完整落在可视日内。跨日不在本函数的能力内：移动端日维度是
+/// **竖向堆叠**，跨天要拖过整日高（1152dp）导致手指出屏，物理不可达
+/// （桌面 7 列并排才做得动横向跨列，见 `timeslot-drag.ts` 的 `snapDayDelta`）。
+({int startMs, int durationMin}) resolveTimeslotMove(
+  TimeBlock block,
+  int dayStartMs, {
+  required double deltaPx,
+  required double hourPx,
+}) {
+  final minutes = snapMinutesDelta(deltaPx, hourPx);
+  final moved = DateTime.fromMillisecondsSinceEpoch(block.startMs)
+      .add(Duration(minutes: minutes));
+  var startMs = moved.millisecondsSinceEpoch;
+  final dayEndMs = dayStartMs + 86400000;
+  if (startMs < dayStartMs) startMs = dayStartMs;
+  final latest = dayEndMs - block.durationMin * 60000;
+  if (startMs > latest) startMs = latest;
+  return (startMs: startMs, durationMin: block.durationMin);
+}
+
+/// 落库载荷（键与 `todoTaskUpdate` 的 patch 一一对应）
+typedef TimeslotPatch = Map<String, Object?>;
+
+/// 拖拽结果 → 写库字段。**三种块来源各走各的口径**（与桌面
+/// `timeslotDropPatch` 逐字一致）：
+/// - **显式排程**（`start_date` 带时刻）：写 `start_date`；
+/// - **截止倒推**（`due_date` 带时刻）：只写 `due_date`（= 起点 + 时长），
+///   **绝不种 `start_date`**——种 start 会让任务从「截止向截止收拢」漂移成
+///   「显式排程」，语义变了且与详情页显示打架；
+/// - **纯日期任务**（无任何带时刻字段）：不渲染块、拖不到这里；防御起见
+///   只落时长，绝不臆造时刻字段。
+///
+/// 无变化（起点未动）返回 null，调用方直接跳过写库。
+TimeslotPatch? timeslotDropPatch(TodoTask task, int nextStartMs) {
+  final explicitStart = hasTimePart(task.startDate);
+  final derivedFromDue = !explicitStart && hasTimePart(task.dueDate);
+  final durationMin = (task.durationMinutes != null &&
+          task.durationMinutes! > 0)
+      ? task.durationMinutes!
+      : defaultBlockMinutes;
+  final blockStart = explicitStart
+      ? task.startDate
+      : derivedFromDue
+          ? task.dueDate! - durationMin * 60000
+          : null;
+  // 块起点未动 → 无变化（时长在本函数外单独落，见时长档位抽屉）
+  if (blockStart == null || blockStart == nextStartMs) return null;
+  if (explicitStart) return {'start_date': nextStartMs};
+  return {'due_date': nextStartMs + durationMin * 60000};
+}

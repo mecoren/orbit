@@ -83,6 +83,42 @@ Future<void> _switchViewMode(
   await tester.pumpAndSettle();
 }
 
+/// 长按拾起 + 纵向拖动块（#75 手势口径：长按 500ms 后才接管纵向位移）
+///
+/// `longPress` 需要超过默认阈值才触发，必须显式给时长；随后 `moveBy` 沿
+/// 长按起点移动（tester 记的是同一个 pointer）。
+Future<void> _dragTimeslotBlock(
+  WidgetTester tester,
+  Finder block, {
+  required double dy,
+}) async {
+  final start = tester.getCenter(block);
+  final gesture = await tester.startGesture(start);
+  // 超阈值的长按（默认 500ms，这里给 600 留余量）
+  await tester.pump(const Duration(milliseconds: 600));
+  await gesture.moveBy(Offset(0, dy));
+  await tester.pump();
+  await gesture.up();
+  await tester.pumpAndSettle();
+  // 落库走桥的 Future.delayed（mock 延迟），须推过它才拿到新值
+  await tester.pump(const Duration(milliseconds: 300));
+  await tester.pumpAndSettle();
+  // 落库成功弹 WaitToast，其停留计时器在用例结束时须推掉
+  // （库内 Timer 不随条目 dispose 取消——见 AGENTS「测试收尾推掉 toast 计时器」）
+  await drainToastTimers(tester);
+}
+
+/// 时间轴块的标题文案（块内 Text，非档内工具条）
+Finder timeslotBlock(String title) => find.text(title);
+
+/// 把测试视口放大到能整屏装下 24h 网格（1152dp）——默认 800×600 下
+/// 靠后的时段块落在视口外，手势命中不到（拖拽手势必须打在块上）。
+void _wideSurface(WidgetTester tester) {
+  tester.view.devicePixelRatio = 2;
+  tester.view.physicalSize = const Size(1600, 3400); // 800×1700 逻辑像素
+  addTearDown(tester.view.reset);
+}
+
 /// 含带时刻任务的桥（时间轴档用）：显式 start / due 倒推 / 次日各一
 class _TimedBridge extends MockOrbitBridge {
   @override
@@ -798,6 +834,113 @@ void main() {
     await tester.tap(find.text('日'));
     await tester.pumpAndSettle();
     expect(find.text('次日块'), findsNothing);
+  });
+
+  // ── 时间轴拖拽（docs/07 #75：长按 500ms 拾起 + 纵向改时刻）──
+
+  testWidgets('时间轴拖拽：显式排程块长按下拖 → 落库 start_date（15 分钟吸附）',
+      (tester) async {
+    _wideSurface(tester);
+    final bridge = _timedBridge();
+    await tester.pumpWidget(_wrap(const SizedBox(), bridge));
+    await settle(tester);
+    await _switchViewMode(tester, '时间');
+
+    final block = timeslotBlock('显式排程块');
+    expect(block, findsOneWidget);
+
+    await _dragTimeslotBlock(tester, block, dy: 48); // 48px = 1 小时
+
+    final tasks = await tester.runAsync(
+      () => bridge.todoTaskList(const ListFilter()),
+    );
+    final t = tasks!.firstWhere((x) => x.title == '显式排程块');
+    final now = bridge.store.now();
+    final today = DateTime.fromMillisecondsSinceEpoch(now);
+    expect(
+      t.startDate,
+      DateTime(today.year, today.month, today.day, 10).millisecondsSinceEpoch,
+      reason: '09:00 下拖 48px（1h）→ 10:00',
+    );
+    // due 未动（只改起点）
+    expect(t.durationMinutes, 60);
+  });
+
+  testWidgets('时间轴拖拽：截止倒推块长按下拖 → 改 due_date 且不种 start',
+      (tester) async {
+    _wideSurface(tester);
+    final bridge = _timedBridge();
+    await tester.pumpWidget(_wrap(const SizedBox(), bridge));
+    await settle(tester);
+    await _switchViewMode(tester, '时间');
+
+    // 倒推块：due 18:00 / 90 分 → 块起点 16:30
+    await _dragTimeslotBlock(tester, timeslotBlock('倒推块'), dy: 48);
+
+    final tasks = await tester.runAsync(
+      () => bridge.todoTaskList(const ListFilter()),
+    );
+    final t = tasks!.firstWhere((x) => x.title == '倒推块');
+    final now = bridge.store.now();
+    final today = DateTime.fromMillisecondsSinceEpoch(now);
+    // 起点 16:30 + 48px(1h) = 17:30 → due = 17:30 + 90 分 = 19:00
+    expect(
+      t.dueDate,
+      DateTime(today.year, today.month, today.day, 19).millisecondsSinceEpoch,
+    );
+    expect(
+      t.startDate,
+      isNull,
+      reason: '倒推块绝不种 start_date（否则语义从「截止收拢」漂移成「显式排程」）',
+    );
+  });
+
+  testWidgets('时间轴拖拽：半格内位移不写库（同刻落回）', (tester) async {
+    _wideSurface(tester);
+    final bridge = _timedBridge();
+    await tester.pumpWidget(_wrap(const SizedBox(), bridge));
+    await settle(tester);
+    await _switchViewMode(tester, '时间');
+
+    final before = (await tester.runAsync(
+      () => bridge.todoTaskList(const ListFilter()),
+    ))!
+        .firstWhere((x) => x.title == '显式排程块')
+        .startDate;
+
+    // 3px = 3.75 分钟 < 半格（7.5）→ 吸回原格 → 无变化
+    await _dragTimeslotBlock(tester, timeslotBlock('显式排程块'), dy: 3);
+
+    final after = (await tester.runAsync(
+      () => bridge.todoTaskList(const ListFilter()),
+    ))!
+        .firstWhere((x) => x.title == '显式排程块')
+        .startDate;
+    expect(after, before, reason: '吸附回原格不应产生写库');
+  });
+
+  testWidgets('时间轴拖拽：轻点（不长按）仍进详情，不误触发拖拽', (tester) async {
+    _wideSurface(tester);
+    final bridge = _timedBridge();
+    await tester.pumpWidget(_wrap(const SizedBox(), bridge));
+    await settle(tester);
+    await _switchViewMode(tester, '时间');
+
+    await tester.tap(timeslotBlock('显式排程块'));
+    await tester.pumpAndSettle();
+    expect(find.text('detail:701'), findsOneWidget);
+
+    // 起点未被拖动
+    final t = (await tester.runAsync(
+      () => bridge.todoTaskList(const ListFilter()),
+    ))!
+        .firstWhere((x) => x.title == '显式排程块');
+    final now = bridge.store.now();
+    final today = DateTime.fromMillisecondsSinceEpoch(now);
+    expect(
+      t.startDate,
+      DateTime(today.year, today.month, today.day, 9).millisecondsSinceEpoch,
+    );
   });
 
   testWidgets('时间轴档：无时段时出空态（不是空白网格）', (tester) async {

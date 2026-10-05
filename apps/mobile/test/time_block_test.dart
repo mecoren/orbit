@@ -209,6 +209,90 @@ void main() {
     });
   });
 
+  // ---------- #75 拖拽（移动端子集：长按拾起 + 纵向改时刻）----------
+
+  group('snapMinutesDelta（15 分钟吸附）', () {
+    test('就近吸附到 15 分钟整数倍（48px = 1 小时，1px = 1.25 分钟）', () {
+      expect(snapMinutes, 15);
+      expect(snapMinutesDelta(48, 48), 60);
+      expect(snapMinutesDelta(24, 48), 30);
+      expect(snapMinutesDelta(12, 48), 15); // 恰好 15 分钟
+      // 半格内（<7.5 分钟）吸回原格：5px = 6.25 分钟 → 0
+      expect(snapMinutesDelta(5, 48), 0);
+      // 过半格：11px = 13.75 分钟 → 15；13px = 16.25 → 15
+      expect(snapMinutesDelta(11, 48), 15);
+      expect(snapMinutesDelta(13, 48), 15);
+      // 反向同理（负位移向下取整到格）
+      expect(snapMinutesDelta(-11, 48), -15);
+      expect(snapMinutesDelta(48 * 24, 48), 24 * 60);
+    });
+
+    test('非法网格高 / 非有限位移 → 0（防 NaN 传播到写库）', () {
+      expect(snapMinutesDelta(48, 0), 0);
+      expect(snapMinutesDelta(48, -1), 0);
+      expect(snapMinutesDelta(48, double.nan), 0);
+      expect(snapMinutesDelta(double.nan, 48), 0);
+      expect(snapMinutesDelta(double.infinity, 48), 0);
+    });
+  });
+
+  group('resolveTimeslotMove（纵向落点）', () {
+    test('下拖 2 小时 → 起点 +2 小时，时长不变', () {
+      final b = taskTimeBlock(_task(id: 1, startDate: at(9), durationMinutes: 60))!;
+      final r = resolveTimeslotMove(b, day0, deltaPx: 96, hourPx: 48);
+      expect(r.startMs, at(11));
+      expect(r.durationMin, 60);
+    });
+
+    test('15 分钟吸附：半格内吸回原格，过半格进一格', () {
+      final b = taskTimeBlock(_task(id: 2, startDate: at(9)))!;
+      // 5px = 6.25 分钟（< 半格 7.5）→ 起点不动
+      expect(resolveTimeslotMove(b, day0, deltaPx: 5, hourPx: 48).startMs, at(9));
+      // 11px = 13.75 分钟（> 半格）→ +15
+      expect(resolveTimeslotMove(b, day0, deltaPx: 11, hourPx: 48).startMs, at(9, 15));
+      // 24px = 30 分钟 → +30
+      expect(resolveTimeslotMove(b, day0, deltaPx: 24, hourPx: 48).startMs, at(9, 30));
+    });
+
+    test('上下夹取：起点 ≥ 00:00 且 起点+时长 ≤ 24:00', () {
+      final b = taskTimeBlock(_task(id: 3, startDate: at(9), durationMinutes: 60))!;
+      // 上拖 24h → 夹到当日 00:00
+      expect(resolveTimeslotMove(b, day0, deltaPx: -48 * 24, hourPx: 48).startMs, day0);
+      // 下拖 24h + 时长 60 分 → 起点夹到 23:00（块完整落在列内）
+      expect(resolveTimeslotMove(b, day0, deltaPx: 48 * 24, hourPx: 48).startMs,
+          at(23));
+    });
+
+    test('零位移 → 原起点（无变化由 timeslotDropPatch 判空）', () {
+      final b = taskTimeBlock(_task(id: 4, startDate: at(9)))!;
+      expect(resolveTimeslotMove(b, day0, deltaPx: 0, hourPx: 48).startMs, at(9));
+    });
+  });
+
+  group('timeslotDropPatch（落库口径按块来源三分）', () {
+    test('显式排程块 → 改 start_date', () {
+      final t = _task(id: 1, startDate: at(9), dueDate: at(20), durationMinutes: 60);
+      expect(timeslotDropPatch(t, at(11)), {'start_date': at(11)});
+    });
+
+    test('截止倒推块 → 只改 due_date（起点+时长），绝不种 start', () {
+      final t = _task(id: 2, dueDate: at(18), durationMinutes: 60);
+      final patch = timeslotDropPatch(t, at(19));
+      expect(patch, {'due_date': at(20)});
+      expect(patch!.containsKey('start_date'), isFalse);
+    });
+
+    test('无变化 → null（不写库）', () {
+      final t = _task(id: 3, startDate: at(9), durationMinutes: 60);
+      expect(timeslotDropPatch(t, at(9)), isNull);
+    });
+
+    test('纯日期任务（无带时刻字段）→ null（防御不臆造时刻）', () {
+      final t = _task(id: 4, startDate: day0, dueDate: day0, durationMinutes: 60);
+      expect(timeslotDropPatch(t, day0 + 3600000), isNull);
+    });
+  });
+
   group('localDayStartMs', () {
     test('任意时刻归一到当日零点', () {
       expect(localDayStartMs(DateTime(2026, 10, 5, 17, 30)), day0);
