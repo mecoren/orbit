@@ -127,7 +127,10 @@ void main() {
     _expectInSegment(tester, find.text('当天没有任务'), OrbitCardEdge.single);
 
     // 议程档组卡：日期头是首段，任务行在段内
-    await tester.tap(find.byTooltip('切换到议程'));
+    // 视图档入口是页头抽屉（月历/议程/时间三选一），点选后确认值才回调用方
+    await tester.tap(find.byTooltip('切换视图（当前：月历）'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('议程'));
     await tester.pumpAndSettle();
     expect(find.byType(OrbitMonthCalendar), findsNothing);
     _expectInSegment(tester, find.text('完成移动端重构方案评审'));

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../data/api/dto.dart';
 import '../../../data/providers/bridge_provider.dart';
+import '../logic/time_block.dart';
 
 /// 待办模块 Riverpod 手动声明（无 codegen）
 ///
@@ -137,6 +138,41 @@ final taskActivityProvider =
     FutureProvider.autoDispose.family<List<ActivityLogRow>, ({int taskId, int limit})>(
   (ref, q) =>
       ref.watch(orbitBridgeProvider).taskActivityList(q.taskId, limit: q.limit),
+);
+
+/// 时段块起点日 → 任务聚合（时间轴档专用；docs/07 #74）。
+///
+/// 与 [calendarByDayProvider] 的差别：按**块起点所在日**而非 due_date 分桶——
+/// 显式排程块（`start_date` 带时刻、due 为空或异日）的可视图就是它的起点日，
+/// 按 due 分桶会把它落在别的日子甚至整个丢掉（无 due 的任务压根不进 byDay）。
+/// 分桶键与 [calendarByDayProvider] 同为 `yyyy-MM-dd`，便于复用同一套查询。
+///
+/// 起算口径（显式 start 优先 / due 倒推 / 两者皆无时刻不出块）见
+/// `logic/time_block.dart` 头注释——本 provider 只做派生，不重复判定。
+final timelineBlocksByDayProvider = FutureProvider<Map<String, List<TodoTask>>>(
+  (ref) async {
+    final tasks = await ref.watch(todoTasksProvider.future);
+    final map = <String, List<TodoTask>>{};
+    for (final t in tasks) {
+      final block = taskTimeBlock(t);
+      if (block == null) continue;
+      final d = DateTime.fromMillisecondsSinceEpoch(block.startMs);
+      final key = '${d.year.toString().padLeft(4, '0')}-'
+          '${d.month.toString().padLeft(2, '0')}-'
+          '${d.day.toString().padLeft(2, '0')}';
+      (map[key] ??= []).add(t);
+    }
+    // 组内按块起点升序（时间轴自上而下即时间序；同刻按 id 稳定）
+    for (final list in map.values) {
+      list.sort((a, b) {
+        final sa = taskTimeBlock(a)!.startMs;
+        final sb = taskTimeBlock(b)!.startMs;
+        if (sa != sb) return sa.compareTo(sb);
+        return a.id.compareTo(b.id);
+      });
+    }
+    return map;
+  },
 );
 
 /// due_date → 本地 YYYY-MM-DD 任务聚合（日历视图月历圆点/按日分组共用）。

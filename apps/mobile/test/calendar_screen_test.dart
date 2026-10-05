@@ -17,6 +17,7 @@ import 'package:orbit/core/theme/app_colors.dart';
 import 'package:orbit/shared/widgets/shadcn/orbit_list_card.dart';
 import 'package:orbit/shared/widgets/shadcn/orbit_month_calendar.dart';
 import 'package:orbit/shared/widgets/shadcn/orbit_page_header.dart';
+import 'package:orbit/shared/widgets/shadcn/orbit_timeline_day.dart';
 import 'package:orbit/core/theme/icon_map.dart';
 import 'package:table_calendar/table_calendar.dart'
     show CalendarFormat, TableCalendar;
@@ -53,6 +54,97 @@ Future<void> _navigateToMonth(WidgetTester tester, int year, int month) async {
     await tester.pumpAndSettle();
     diff++;
   }
+}
+
+/// 视图档切换（页头档位抽屉 → 点选一项）
+///
+/// [from] 是切换前的档位名（页头 tooltip 内嵌当前档位，用它定位按钮）；
+/// 抽屉关闭有动画 + 确认值在关闭收尾后才回调用方（shadcn overlay 语义），
+/// 故点选后再 pumpAndSettle 一轮。
+/// 时间轴档的「N 个时段」徽标计数（档内工具条；-1 = 未找到徽标）
+int _badgeCount(WidgetTester tester) {
+  for (final t in tester.widgetList<Text>(find.byType(Text))) {
+    final d = t.data;
+    if (d != null && d.contains('个时段')) {
+      return int.tryParse(d.split(' ').first) ?? -1;
+    }
+  }
+  return -1;
+}
+
+Future<void> _switchViewMode(
+  WidgetTester tester,
+  String to, {
+  String from = '月历',
+}) async {
+  await tester.tap(find.byTooltip('切换视图（当前：$from）'));
+  await tester.pumpAndSettle();
+  await tester.tap(find.text(to));
+  await tester.pumpAndSettle();
+}
+
+/// 含带时刻任务的桥（时间轴档用）：显式 start / due 倒推 / 次日各一
+class _TimedBridge extends MockOrbitBridge {
+  @override
+  Future<List<HolidayInfo>> holidayList() async => const [];
+}
+
+MockOrbitBridge _timedBridge() {
+  final bridge = _TimedBridge();
+  bridge.store.seed();
+  final now = bridge.store.now();
+  final today = DateTime.fromMillisecondsSinceEpoch(now);
+
+  /// 相对今天第 dayOffset 天的 HH:mm 时间戳（锚 mock 时钟，不随真实时间漂移）
+  int at(int dayOffset, int h, [int m = 0]) => DateTime(
+        today.year,
+        today.month,
+        today.day + dayOffset,
+        h,
+        m,
+      ).millisecondsSinceEpoch;
+  final rows = <Map<String, Object?>>[
+    // 显式排程：start 带时刻 → 块起点即 start
+    {'id': 701, 'title': '显式排程块', 'start': at(0, 9), 'due': null, 'dur': 60},
+    // 截止倒推：due 带时刻 → 块起点 = due − 时长
+    {'id': 702, 'title': '倒推块', 'start': null, 'due': at(0, 18), 'dur': 90},
+    // 次日块（三日跨度才可见）
+    {'id': 703, 'title': '次日块', 'start': at(1, 10), 'due': null, 'dur': 30},
+  ];
+  for (final r in rows) {
+    bridge.store.tasks[r['id'] as int] = {
+      'id': r['id'],
+      'uuid': 'uuid-timed-${r['id']}',
+      'title': r['title'],
+      'description': null,
+      'project_id': null,
+      'priority': 0,
+      'status': 'pending',
+      'done': 0,
+      'done_at': null,
+      'due_date': r['due'],
+      'start_date': r['start'],
+      'repeat_after': 1,
+      'repeat_mode': 0,
+      'repeat_weekdays': 0,
+      'repeat_end_type': 0,
+      'repeat_end_param': 0,
+      'repeat_from_done': 0,
+      'repeat_month_mode': 0,
+      'repeat_nth_week': 0,
+      'duration_minutes': r['dur'],
+      'percent_done': 0,
+      'position': r['id'],
+      'is_favorite': 0,
+      'my_day_date': null,
+      'is_deleted': 0,
+      'created_at': now,
+      'updated_at': now,
+      'deleted_at': null,
+      'version': 1,
+    };
+  }
+  return bridge;
 }
 
 class _OctHolidayBridge extends MockOrbitBridge {
@@ -594,8 +686,7 @@ void main() {
     expect(find.byType(OrbitMonthCalendar), findsOneWidget);
     expect(find.text('长按日历快捷新增'), findsOneWidget);
 
-    await tester.tap(find.byTooltip('切换到议程'));
-    await tester.pumpAndSettle();
+    await _switchViewMode(tester, '议程');
 
     // 议程档：网格整体退出树，提示改口横滑翻月
     expect(find.byType(OrbitMonthCalendar), findsNothing);
@@ -605,8 +696,7 @@ void main() {
     expect(find.text('完成移动端重构方案评审'), findsWidgets);
 
     // 切回月档：网格恢复（注意不要先滚动页面，否则工具栏按钮不可命中）
-    await tester.tap(find.byTooltip('切换到月历'));
-    await tester.pumpAndSettle();
+    await _switchViewMode(tester, '月历', from: '议程');
     expect(find.byType(OrbitMonthCalendar), findsOneWidget);
     expect(find.text('长按日历快捷新增'), findsOneWidget);
   });
@@ -652,13 +742,74 @@ void main() {
     // 翻到 2026-10 后切议程档（按当前月差导航，跨月不漂）
     await _navigateToMonth(tester, 2026, 10);
     expect(headerText('10月'), findsOneWidget);
-    await tester.tap(find.byTooltip('切换到议程'));
-    await tester.pumpAndSettle();
+    await _switchViewMode(tester, '议程', from: '月历');
 
     expect(find.byType(OrbitMonthCalendar), findsNothing);
     expect(find.text('假期任务0'), findsOneWidget);
     expect(find.text('休'), findsWidgets);
     expect(find.text('班'), findsWidgets);
+  });
+
+  // ── 时间轴档（docs/07 #74：对标 TickTick 移动端 Timeline）──
+
+  testWidgets('时间轴档：切档隐藏月历网格，只出 24h 网格与时段块', (tester) async {
+    final bridge = _timedBridge();
+    await tester.pumpWidget(_wrap(const SizedBox(), bridge));
+    await settle(tester);
+
+    // 月档先在树内
+    expect(find.byType(OrbitMonthCalendar), findsOneWidget);
+
+    await _switchViewMode(tester, '时间');
+    expect(find.byType(OrbitMonthCalendar), findsNothing);
+    expect(find.text('时间轴'), findsOneWidget);
+    // 两个带时刻任务（显式 start + due 倒推）都出块，倒推块按 due − 时长
+    expect(find.text('显式排程块'), findsOneWidget);
+    expect(find.text('倒推块'), findsOneWidget);
+    // 24h 刻度（每 2 小时标注一次 → 00:00 与 22:00 两端可见）
+    expect(find.text('00:00'), findsOneWidget);
+    expect(find.text('22:00'), findsOneWidget);
+    // 块数徽标存在且 ≥ 本用例的两块
+    expect(_badgeCount(tester), greaterThanOrEqualTo(2));
+  });
+
+  testWidgets('时间轴档：跨度 日 ⇄ 三日 往返（三日渲染两天块）', (tester) async {
+    final bridge = _timedBridge();
+    await tester.pumpWidget(_wrap(const SizedBox(), bridge));
+    await settle(tester);
+    await _switchViewMode(tester, '时间');
+
+    // 日档：当天两个块（种子另有带时刻任务，故用本用例两块的存在性断言）
+    expect(find.text('显式排程块'), findsOneWidget);
+    expect(find.text('倒推块'), findsOneWidget);
+    final day1Badge = _badgeCount(tester);
+
+    // 切三日：第二天的块也出现（相邻两日各一个块）
+    await tester.tap(find.text('三日'));
+    await tester.pumpAndSettle();
+    expect(find.text('显式排程块'), findsOneWidget);
+    expect(find.text('倒推块'), findsOneWidget);
+    expect(find.text('次日块'), findsOneWidget);
+    // 徽标计数随跨度增长（种子任务里另有带时刻的任务，故只断言相对关系，
+    // 不断言绝对数字——那会把种子数据变化变成假红）
+    expect(_badgeCount(tester), greaterThan(day1Badge));
+
+    // 切回日档：次日块退出树
+    await tester.tap(find.text('日'));
+    await tester.pumpAndSettle();
+    expect(find.text('次日块'), findsNothing);
+  });
+
+  testWidgets('时间轴档：无时段时出空态（不是空白网格）', (tester) async {
+    // 默认种子任务的 due 均为纯日期 → 无任何时段块
+    final bridge = _seededBridge();
+    await tester.pumpWidget(_wrap(const SizedBox(), bridge));
+    await settle(tester);
+    await _switchViewMode(tester, '时间');
+
+    expect(find.byType(OrbitTimelineEmpty), findsOneWidget);
+    expect(find.text('暂无时段'), findsOneWidget);
+    expect(find.textContaining('没有可排时段的任务'), findsOneWidget);
   });
 
   testWidgets('选中日列表样式切换：卡片 ⇄ 时间线往返 + 时刻左置', (tester) async {

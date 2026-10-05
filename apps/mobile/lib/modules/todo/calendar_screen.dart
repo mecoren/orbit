@@ -21,13 +21,19 @@ import '../../shared/widgets/shadcn/orbit_list_card.dart';
 import '../../shared/widgets/shadcn/orbit_strikethrough.dart';
 import '../../shared/widgets/shadcn/orbit_month_calendar.dart';
 import '../../shared/widgets/shadcn/orbit_page_header.dart';
+import '../../shared/widgets/shadcn/orbit_select_sheet.dart';
+import '../../shared/widgets/shadcn/orbit_timeline_day.dart';
 import '../../shared/widgets/shadcn/orbit_toast.dart';
 import '../../services/local_prefs.dart';
 import 'logic/task_logic.dart';
+import 'logic/time_block.dart';
 import 'providers/todo_providers.dart';
 import 'quick_add_sheet.dart' show showQuickAddSheet;
 import 'year_overview_page.dart';
 import '../../core/theme/icon_map.dart';
+
+/// 页内视图档（见 [_CalendarScreenState._viewMode]）
+enum CalendarViewMode { month, agenda, timeline }
 
 /// 日历视图 /todo/calendar（wait-home 重要日期风格重构）
 ///
@@ -79,11 +85,54 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
   /// （table_calendar 档位序 month → week，上滑 = 下一档），竞品同款
   CalendarFormat _calFormat = CalendarFormat.month;
 
-  /// 视图档：false = 月档（月历网格 + 当月按日列表）、true = 议程档
-  /// （隐藏月历网格，整页当月按日分组列表 + 进入时定位今天）。
-  /// 对齐桌面 `CalendarSubMode.agenda`；桌面第三档是年视图，移动端为标题
-  /// 点击进入的独立页（[YearOverviewPage]），故页内只需月 ⇄ 议程两态切换。
-  bool _agendaMode = false;
+  /// 页内视图档（年档不在此列——标题点击进独立页 [YearOverviewPage]）：
+  /// - [CalendarViewMode.month]：月历网格 + 选中日任务列表（默认）；
+  /// - [CalendarViewMode.agenda]：隐藏网格，整页当月按日分组列表，
+  ///   进入时定位今天（对齐桌面 `CalendarSubMode.agenda`）；
+  /// - [CalendarViewMode.timeline]：24 小时时段轴（#74，对标 TickTick 移动端
+  ///   Timeline），跨度 [_timelineSpan] 天，从选中日当天起算。
+  ///
+  /// 档位切换入口是页头动作槽的**档位抽屉**（月历/议程/时间三选一）——
+  /// 「从一组值里挑一个」按交互约定走底部抽屉，不用 PopupMenu。
+  CalendarViewMode _viewMode = CalendarViewMode.month;
+
+  /// 时间轴跨度（天）：1 = 聚焦当天，3 = 短周期（桌面跨度档的移动同构）
+  int _timelineSpan = 1;
+
+  /// 视图档切换（抽屉回调）：切到议程档时一次性定位今天（当月今天有分组时）
+  void _setViewMode(CalendarViewMode mode) {
+    setState(() => _viewMode = mode);
+    if (mode != CalendarViewMode.agenda) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final node = _groupKeys[_ymd(DateTime.now())]?.currentContext;
+      if (node != null) {
+        Scrollable.ensureVisible(node,
+            duration: AppMotion.scrollSettle,
+            curve: AppMotion.scrollSettleCurve);
+      }
+    });
+  }
+
+  /// 页头档位抽屉（月历 / 议程 / 时间）
+  Future<void> _pickViewMode() => showSelectBottomSheet<CalendarViewMode>(
+        context,
+        title: '视图',
+        current: _viewMode,
+        items: const [
+          SelectItem(value: CalendarViewMode.month, label: '月历'),
+          SelectItem(value: CalendarViewMode.agenda, label: '议程'),
+          SelectItem(value: CalendarViewMode.timeline, label: '时间'),
+        ],
+        onSelect: _setViewMode,
+      );
+
+  /// 时间轴跨度切换（1 天 / 3 天）
+  void _setTimelineSpan(int span) => setState(() => _timelineSpan = span);
+
+  bool get _agendaMode => _viewMode == CalendarViewMode.agenda;
+
+  bool get _timelineMode => _viewMode == CalendarViewMode.timeline;
 
   /// 选中日列表样式：false = 卡片（默认），true = 时间线（时刻左置）。
   /// 本机偏好持久化（LocalPrefs，不进 DB 不进同步；读失败回落卡片）
@@ -248,23 +297,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
     }
   }
 
-  /// 切换月档 ⇄ 议程档。切入议程档时**一次性**定位到今天（当月今天有任务
-  /// 分组时）——用户随后主动滚动不再干预，与桌面议程档「自动滚到今天」同口径
-  void _toggleAgenda() {
-    setState(() => _agendaMode = !_agendaMode);
-    if (!_agendaMode) return;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      final node = _groupKeys[_ymd(DateTime.now())]?.currentContext;
-      if (node != null) {
-        Scrollable.ensureVisible(node,
-            duration: AppMotion.scrollSettle,
-            curve: AppMotion.scrollSettleCurve);
-      }
-    });
-  }
-
-  /// 月份标题点击：打开年视图，返回后定位到所选日期
+    /// 月份标题点击：打开年视图，返回后定位到所选日期
   Future<void> _openYearOverview() async {
     final picked = await YearOverviewPage.push(
       context,
@@ -345,7 +378,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                     // ===== 月历（wait-home 完整版：农历副标签/休班徽标/任务圆点）=====
                     // 议程档隐藏网格：整页让给按日分组列表（桌面 agenda 档同语义）
                     // 去卡片化：月历不再包卡片，直接铺页面底色（间隔口径见下）
-                    if (!_agendaMode) ...[
+                    if (!_agendaMode && !_timelineMode) ...[
                       // 去卡片化（竞品同款）：月历直接铺页面底色，白卡描边/
                       // 圆角/内衬一并移除；左右 space12 与页头上方 space8
                       // 留白保留（周条收起态同口径）
@@ -490,7 +523,15 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                             onOpenTask: _openTask,
                           ),
                       ],
-                    ] else
+                    ] else if (_timelineMode)
+                      _buildTimelineSection(
+                        colors,
+                        // 时段块按**起点日**分桶（timelineBlocksByDayProvider）：
+                        // 显式排程块的视图日在 start 日，按 due 分桶会丢块
+                        ref.watch(timelineBlocksByDayProvider).value ??
+                            const <String, List<TodoTask>>{},
+                      )
+                    else
                       _SelectedDayList(
                         date: _selectedDate,
                         tasks: byDay[selectedYmd] ?? const <TodoTask>[],
@@ -592,14 +633,12 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                   onPressed: _goToday,
                   tooltip: '回到今天',
                 ),
-                // 月档 ⇄ 议程档切换（年档由标题点击进入，见 _openYearOverview）
+                // 视图档抽屉（月历 / 议程 / 时间；年档由标题点击进入，
+                // 见 _openYearOverview）——「从一组值里挑一个」走底部抽屉
                 IconButton(
-                  icon: Icon(
-                    _agendaMode ? OrbitIcons.calendar : OrbitIcons.list,
-                    size: AppDimens.iconSizeMd,
-                  ),
-                  onPressed: _toggleAgenda,
-                  tooltip: _agendaMode ? '切换到月历' : '切换到议程',
+                  icon: Icon(_viewModeIcon, size: AppDimens.iconSizeMd),
+                  onPressed: _pickViewMode,
+                  tooltip: '切换视图（当前：$_viewModeLabel）',
                 ),
                 _buildUpdateButton(),
               ],
@@ -610,9 +649,147 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
     );
   }
 
+  /// 时间轴档区块（#74）：跨度天数的 24h 网格，竖向逐日铺开。
+  ///
+  /// 数据源是当月按日分桶（[calendarByDayProvider]）——**只看带时刻的时段**
+  /// （`taskTimeBlock` 口径），纯日期任务不出块（它们属于月/议程的日格）。
+  /// 跨度 3 天时每列各自独立竖向网格（窄屏横排三列会把块压到不可读）。
+  Widget _buildTimelineSection(
+    AppColorSet colors,
+    Map<String, List<TodoTask>> byDay,
+  ) {
+    // 项目色表：任务 id → 项目 hex（无项目回落 todoAccent）
+    final projectById = {
+      for (final p
+          in ref.watch(todoProjectsProvider).value ?? const <TodoProject>[])
+        p.id: p,
+    };
+    final taskById = <int, TodoTask>{
+      for (final date in _timelineDays)
+        for (final t in byDay[_ymd(date)] ?? const <TodoTask>[]) t.id: t,
+    };
+
+    final days = _timelineDays;
+    final anyBlock = days.any((d) => _blocksOf(d, byDay).isNotEmpty);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // 档内工具条：跨度切换（1 天 / 3 天）+ 块数回显
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: AppDimens.space16),
+          child: Row(
+            children: [
+              Text(
+                '时间轴',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  color: colors.titleText,
+                ),
+              ),
+              const SizedBox(width: AppDimens.space6),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                decoration: BoxDecoration(
+                  color: colors.secondaryText.withValues(alpha: 0.12),
+                  borderRadius: AppShapes.of(999),
+                ),
+                child: Text(
+                  anyBlock ? '${_totalBlocks(byDay)} 个时段' : '暂无时段',
+                  style: TextStyle(fontSize: 11, color: colors.secondaryText),
+                ),
+              ),
+              const Spacer(),
+              for (final span in const [1, 3])
+                Padding(
+                  padding: const EdgeInsets.only(left: AppDimens.space6),
+                  child: _SpanChip(
+                    label: span == 1 ? '日' : '三日',
+                    selected: _timelineSpan == span,
+                    onTap: () => _setTimelineSpan(span),
+                  ),
+                ),
+            ],
+          ),
+        ),
+        const SizedBox(height: AppDimens.space8),
+        if (!anyBlock)
+          OrbitTimelineEmpty(dayLabel: _timelineEmptyLabel())
+        else
+          for (final date in days)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                AppDimens.space16,
+                AppDimens.space8,
+                AppDimens.space16,
+                0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _TimelineDayHeader(date: date),
+                  const SizedBox(height: AppDimens.space4),
+                  OrbitTimelineDay(
+                    dayStart: DateTime(date.year, date.month, date.day),
+                    entries: _blocksOf(date, byDay),
+                    projectColorOf: (taskId) {
+                      final pid = taskById[taskId]?.projectId;
+                      final hex =
+                          pid == null ? null : projectById[pid]?.hexColor;
+                      return (hex == null || hex.isEmpty)
+                          ? OrbitAccents.todoAccent
+                          : hexToColor(hex);
+                    },
+                    onOpenTask: _openTask,
+                  ),
+                ],
+              ),
+            ),
+      ],
+    );
+  }
+
+  /// 时间轴覆盖的日期（从选中日起 span 天）
+  List<DateTime> get _timelineDays => [
+        for (var i = 0; i < _timelineSpan; i++)
+          DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day + i),
+      ];
+
+  /// 某日的时段块（已分车道；口径见 logic/time_block.dart）
+  List<({TimeBlock block, BlockLayout layout, int lane, int laneCount})>
+      _blocksOf(DateTime date, Map<String, List<TodoTask>> byDay) {
+    final blocks = [
+      for (final t in byDay[_ymd(date)] ?? const <TodoTask>[])
+        ?taskTimeBlock(t),
+    ];
+    return blocksForDay(blocks, localDayStartMs(date));
+  }
+
+  /// 跨度内的时段总数（档内计数徽标）
+  int _totalBlocks(Map<String, List<TodoTask>> byDay) => _timelineDays
+      .fold<int>(0, (sum, d) => sum + _blocksOf(d, byDay).length);
+
+  /// 空态主文案（「当天」/「三天」）
+  String _timelineEmptyLabel() => _timelineSpan == 1 ? '当天' : '这三天';
+
   /// 分组锚点 key（懒创建，跨月复用）
   GlobalKey _groupKeyFor(String ymd) =>
       _groupKeys.putIfAbsent(ymd, () => GlobalKey());
+
+  /// 当前档位的页头动作图标（进入抽屉前的回显）
+  IconData get _viewModeIcon => switch (_viewMode) {
+        CalendarViewMode.month => OrbitIcons.calendar,
+        CalendarViewMode.agenda => OrbitIcons.list,
+        CalendarViewMode.timeline => OrbitIcons.clock,
+      };
+
+  /// 当前档位中文名（tooltip 回显，与抽屉选项文案同源）
+  String get _viewModeLabel => switch (_viewMode) {
+        CalendarViewMode.month => '月历',
+        CalendarViewMode.agenda => '议程',
+        CalendarViewMode.timeline => '时间',
+      };
 
   Widget _buildUpdateButton() {
     final meta = ref.watch(holidayMetaProvider).value;
@@ -638,6 +815,99 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
 
   /// 任务优先级色（圆点用；P0「无」浅灰 #D1D5DB，六档全显）
   Color _priorityColor(TodoTask t) => hexToColor(priorityColorHex(t.priority));
+}
+
+/// 跨度切换 chip（时间轴档内工具条；样式取 repeat_edit_sheet 的档位 chip）
+class _SpanChip extends StatelessWidget {
+  const _SpanChip({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = AppColors.ofContext(context);
+    final accent = OrbitAccents.themeAccent;
+    return Material(
+      color: selected ? accent.withValues(alpha: 0.10) : Colors.transparent,
+      shape: RoundedRectangleBorder(
+        borderRadius: AppShapes.small,
+        side: BorderSide(color: selected ? accent : colors.divider),
+      ),
+      child: InkWell(
+        borderRadius: AppShapes.small,
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppDimens.space8,
+            vertical: 5,
+          ),
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: selected ? FontWeight.w500 : FontWeight.w400,
+              color: selected ? accent : colors.secondaryText,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 时间轴日头（日期 + 星期；今天带主色徽标，与月档今天强调同源）
+class _TimelineDayHeader extends StatelessWidget {
+  const _TimelineDayHeader({required this.date});
+
+  final DateTime date;
+
+  static const _weekdayNames = ['一', '二', '三', '四', '五', '六', '日'];
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = AppColors.ofContext(context);
+    final now = DateTime.now();
+    final isToday = date.year == now.year &&
+        date.month == now.month &&
+        date.day == now.day;
+    return Row(
+      children: [
+        Text(
+          '${date.month}月${date.day}日',
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: colors.titleText,
+          ),
+        ),
+        const SizedBox(width: AppDimens.space4),
+        Text(
+          '周${_weekdayNames[date.weekday - 1]}',
+          style: TextStyle(fontSize: 11, color: colors.secondaryText),
+        ),
+        if (isToday) ...[
+          const SizedBox(width: AppDimens.space6),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+            decoration: BoxDecoration(
+              color: OrbitAccents.themeAccent.withValues(alpha: 0.12),
+              borderRadius: AppShapes.small,
+            ),
+            child: Text(
+              '今天',
+              style: TextStyle(fontSize: 10, color: OrbitAccents.themeAccent),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
 }
 
 /// 下方列表的按日分组块（对齐桌面右栏 DayGroupBlock）：
