@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 /// 数据库变更事件
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DbEvent {
-    /// 表名（如 "rec_movies" / "rec_books"），前端据此失效对应查询
+    /// 表名（如 "todo_tasks" / "todo_projects"），前端据此失效对应查询
     pub table: String,
     /// 操作类型
     pub op: DbOp,

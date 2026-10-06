@@ -172,7 +172,7 @@ mod tests {
 
     fn sample_manifest() -> BackupManifest {
         let mut counts = BTreeMap::new();
-        counts.insert("rec_books".to_string(), 2);
+        counts.insert("todo_projects".to_string(), 2);
         counts.insert("todo_tasks".to_string(), 1);
         BackupManifest::new(
             "dev-001".to_string(),
@@ -187,8 +187,8 @@ mod tests {
     fn sample_table_data() -> BTreeMap<String, String> {
         let mut data = BTreeMap::new();
         data.insert(
-            "rec_books".to_string(),
-            r#"[{"id":1,"title":"Book A"},{"id":2,"title":"Book B"}]"#.to_string(),
+            "todo_projects".to_string(),
+            r#"[{"id":1,"name":"项目 A"},{"id":2,"name":"项目 B"}]"#.to_string(),
         );
         data.insert(
             "todo_tasks".to_string(),
