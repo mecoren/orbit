@@ -9,6 +9,13 @@
  */
 import { expect, test, type Page } from "@playwright/test";
 
+// 本文件用例等的是**真实墙钟**：解密预览 3s + 两段各 5s 时停，最坏合法等待
+// ≈ 45s，已经超出 playwright.config.ts 的全局 timeout 30_000。三 worker 并行
+// 时计时器被饿一顿就会撞上限被判超时——Playwright 把失败记在 test 声明行
+// （历史 flaky 报在 :121 即此因，而非断言漂移）。
+// test.slow() 把本文件预算 ×3，不靠 retries 掩盖，也不改全局口径。
+test.slow();
+
 async function gotoSyncSettings(page: Page) {
   await page.goto("/");
   await expect(page.getByRole("heading", { name: "全部任务" })).toBeVisible({
