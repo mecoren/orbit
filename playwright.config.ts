@@ -10,6 +10,11 @@
 //   若恰被同机其他项目的 dev server 占用（实测踩过），测试会全程跑在
 //   别人的页面上静默假绿/假红。5273 + strictPort 双保险。
 // - 只装 chromium：冒烟主链路单浏览器足够（07 原文「新建→完成→删除」）
+// - workers 显式钉死：默认取「逻辑核一半」，本机 12 核 → 6 worker，实测每个
+//   worker 各自冷启一套 React SPA + vite 按需编译，`page.goto("/")` 后等
+//   「全部任务」标题的 30s 会 starve：全量并行 6 个 calendar 用例假红（同一
+//   代码 --workers=3 全绿）。过订阅只在本机高核机器上出现，CI 2 核本来就跑
+//   1 worker，所以这批假红长期只在本机冒出来。钉 3/2 后本地与 CI 同口径。
 import { defineConfig, devices } from "@playwright/test";
 
 const PORT = 5273;
@@ -17,6 +22,7 @@ const PORT = 5273;
 export default defineConfig({
   testDir: "./e2e",
   timeout: 30_000,
+  workers: process.env.CI ? 2 : 3,
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
