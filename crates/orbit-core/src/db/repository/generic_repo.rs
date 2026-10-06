@@ -1,9 +1,10 @@
 //! generic_repo — 泛型仓储辅助
 //!
-//! 为 28 张业务表提供模式统一的 list/get/soft_delete 实现，避免每表重复代码（tags/tag_relations 已移除）。
-//! create/update 因字段差异大，rec_books 提供完整 typed 示范，其余表后续按需补全。
+//! 为 21 张表提供模式统一的 list/get/soft_delete 实现，避免每表重复代码。
+//! create/update 因字段差异大，由各表 typed 函数承担（todo_projects / todo_tasks /
+//! todo_subtasks / todo_labels / todo_comments 等），其余表走 create_record_by_json 泛型入口。
 //!
-//! 设计依据：rec_movies 范式（repository 写操作后 emit DbEvent）。
+//! 设计依据：写操作后 emit DbEvent。
 //! 泛型函数同样在写操作后 emit 事件，保证响应式数据流一致。
 
 use sqlx::SqlitePool;
@@ -217,65 +218,18 @@ fn build_task_predicate_clause(table: &str, filter: &ListFilter) -> TaskPredicat
 ///
 /// 白名单集中维护，遗漏字段只是搜索不到，不会崩溃。
 /// 未在白名单中的表返回空切片（不支持 keyword 搜索）。
+///
+/// 只列本仓实际建表的 `todo_*` 表（见 `db/migrations/`）。蓝本 wait-home 的
+/// 生活记录域表（rec_books / important_events / career_* / women_* / phone_numbers …）
+/// 在 AGENTS.md「明确不做」清单内，永不建表，故不列——列了只会让搜索白名单
+/// 看起来像承诺了这些模块。
 fn searchable_fields(table: &str) -> &'static [&'static str] {
     match table {
-        "rec_books" => &[
-            "title",
-            "original_title",
-            "authors",
-            "subtitle",
-            "translators",
-            "publisher",
-            "isbn",
-            "series",
-            "genre",
-            "region",
-            "language",
-            "description",
-            "review",
-        ],
-        "rec_games" => &[
-            "title",
-            "original_title",
-            "developer",
-            "publisher",
-            "genre",
-            "platform",
-            "region",
-            "description",
-            "review",
-        ],
-        "rec_devices" => &["name", "category", "model", "spec_desc"],
-        "rec_outings" => &["name", "location", "description", "remark"],
-        "important_events" => &["title", "description", "category", "location"],
-        "rec_gift_cards" => &[
-            "name",
-            "brand",
-            "card_number",
-            "store",
-            "denomination",
-            "description",
-        ],
         "todo_tasks" => &["title", "description"],
         "todo_projects" => &["title", "description"],
         "todo_subtasks" => &["title"],
         "todo_labels" => &["title"],
         "todo_comments" => &["content"],
-        "career_projects" => &["name", "description", "status", "priority"],
-        "career_experiences" => &["company", "position", "description", "location"],
-        "career_salaries" => &["company", "position", "pay_period", "description"],
-        "career_companies" => &["name", "industry", "description", "address"],
-        "phone_numbers" => &[
-            "name",
-            "brand",
-            "model",
-            "serial_number",
-            "carrier",
-            "description",
-        ],
-        "women_periods" => &["note", "symptom_json", "mood"],
-        "women_pregnancies" => &["title", "note"],
-        "women_health_logs" => &["note", "symptom_type", "symptom_value"],
         // 未列入白名单的表不支持 keyword 搜索
         _ => &[],
     }
@@ -1382,10 +1336,27 @@ mod tests {
     /// 白名单表应返回非空字段列表
     #[test]
     fn searchable_fields_returns_fields_for_known_table() {
-        let fields = searchable_fields("rec_books");
-        assert!(!fields.is_empty(), "rec_books 应支持 keyword 搜索");
+        let fields = searchable_fields("todo_tasks");
+        assert!(!fields.is_empty(), "todo_tasks 应支持 keyword 搜索");
         assert!(fields.contains(&"title"));
-        assert!(fields.contains(&"authors"));
+        assert!(fields.contains(&"description"));
+    }
+
+    /// 生活记录域表（AGENTS.md「明确不做」清单）不应出现在白名单里
+    #[test]
+    fn searchable_fields_excludes_life_tracking_tables() {
+        for table in [
+            "rec_books",
+            "important_events",
+            "career_projects",
+            "women_periods",
+            "phone_numbers",
+        ] {
+            assert!(
+                searchable_fields(table).is_empty(),
+                "{table} 属生活记录域，永不建表，不应可搜索"
+            );
+        }
     }
 
     /// 未知表返回空切片（不支持 keyword 搜索，但不崩溃）
@@ -1398,15 +1369,15 @@ mod tests {
     /// 空 keyword 应返回空子句（无 SQL 拼接、无绑定参数）
     #[test]
     fn build_keyword_clause_empty_when_no_keyword() {
-        let clause = build_keyword_clause("rec_books", None);
+        let clause = build_keyword_clause("todo_tasks", None);
         assert!(clause.clause.is_empty());
         assert!(clause.bindings.is_empty());
 
-        let clause = build_keyword_clause("rec_books", Some(""));
+        let clause = build_keyword_clause("todo_tasks", Some(""));
         assert!(clause.clause.is_empty());
         assert!(clause.bindings.is_empty());
 
-        let clause = build_keyword_clause("rec_books", Some("   "));
+        let clause = build_keyword_clause("todo_tasks", Some("   "));
         assert!(clause.clause.is_empty());
         assert!(clause.bindings.is_empty());
     }
@@ -1423,8 +1394,8 @@ mod tests {
     /// 且绑定参数数量与字段数一致
     #[test]
     fn build_keyword_clause_generates_or_clause_for_known_table() {
-        let clause = build_keyword_clause("rec_books", Some("三体"));
-        let fields = searchable_fields("rec_books");
+        let clause = build_keyword_clause("todo_tasks", Some("买牛奶"));
+        let fields = searchable_fields("todo_tasks");
 
         assert!(!clause.clause.is_empty());
         assert!(clause.clause.starts_with(" AND ("));
@@ -1437,14 +1408,14 @@ mod tests {
         assert_eq!(clause.bindings.len(), fields.len());
         for binding in &clause.bindings {
             assert!(binding.starts_with("%") && binding.ends_with("%"));
-            assert!(binding.contains("三体"));
+            assert!(binding.contains("买牛奶"));
         }
     }
 
     /// keyword 应被 trim 后再拼入 LIKE 模式
     #[test]
     fn build_keyword_clause_trims_keyword() {
-        let clause = build_keyword_clause("rec_books", Some("  abc  "));
+        let clause = build_keyword_clause("todo_tasks", Some("  abc  "));
         for binding in &clause.bindings {
             assert_eq!(binding, "%abc%");
         }
