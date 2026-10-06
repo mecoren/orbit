@@ -68,7 +68,7 @@
       "file": "apps/desktop/src/features/todo/shared/activity-format.ts",
       "rule": "ts-module-collection",
       "count": 1,
-      "note": "TARGET_ACTIONS 是字面量枚举 Set（天然有界，应加 bounded-by-data 标记）。该文件属并发会话未提交的新增文件，本批不改他人 WIP，留待其会话自行补标记"
+      "note": "TARGET_ACTIONS 是字面量枚举 Set（天然有界，应加 bounded-by-data 标记）。该文件已随 3942789 入库，属长期存量豁免，不再是「待其会话补标记」的挂账项"
     }
   ],
   "measured": {
