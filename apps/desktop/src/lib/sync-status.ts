@@ -198,7 +198,12 @@ export type SyncErrorAction = "recovery" | "unlock" | "upgrade" | "none";
  * - `upgrade`（payload_version）：云端载荷版本高于本端（ADR 0010 两拍升级），
  *   处置动作是**升级应用**——若不单独归类而塌进 key_mismatch，用户会被
  *   引到密钥恢复页并可能放弃解不开的云端数据（误导且不可逆）；
- * - `none`：网络 / 数据库 / 认证 / 限流等普通失败，按原文 toast。
+ * - `none`：网络 / 数据库 / 认证 / 限流 / 时钟偏差等普通失败，按原文 toast。
+ *
+ * `clock_skew`（S3 `RequestTimeTooSkewed`）刻意留在 `none`：处置动作是校系统
+ * 时间，指引写在错误文案里（Rust 侧 `SyncError::ClockSkew` 生成）。它绝不能
+ * 归到 `recovery`（会引去密钥恢复页）或 `unlock`（会引去重输同步密码）——
+ * 两者都与真实成因无关。
  */
 export function syncErrorAction(tag: string | null): SyncErrorAction {
   switch (tag) {

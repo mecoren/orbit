@@ -173,6 +173,16 @@ pub async fn sync_config_save(
             .unwrap_or_default()
     };
 
+    // F80：令牌留空且已有配置 → 沿用原令牌（前端不回显）
+    let session_token = if !input.session_token.is_empty() {
+        input.session_token.clone()
+    } else {
+        existing
+            .as_ref()
+            .map(|r| r.session_token.clone())
+            .unwrap_or_default()
+    };
+
     let save_input = SyncConfigSaveInput {
         id: existing.as_ref().map(|r| r.id),
         protocol: engine.clone(),
@@ -181,7 +191,7 @@ pub async fn sync_config_save(
         region: input.region.trim().to_string(),
         path: input.base_path.trim().trim_matches('/').to_string(),
         device_id: input.username.clone(),
-        credential,
+        credential: credential.clone(),
         encryption_key_id: String::new(),
         merge_strategy: "lww".to_string(),
         sync_mode: "two_way".to_string(),
@@ -194,15 +204,7 @@ pub async fn sync_config_save(
         concurrent_reqs: 8,
         timeout: input.timeout_seconds.clamp(0, 600),
         skip_tls_verify: if input.skip_tls_verify { 1 } else { 0 },
-        // F80：令牌留空且已有配置 → 沿用原令牌（前端不回显）
-        session_token: if !input.session_token.is_empty() {
-            input.session_token.clone()
-        } else {
-            existing
-                .as_ref()
-                .map(|r| r.session_token.clone())
-                .unwrap_or_default()
-        },
+        session_token: session_token.clone(),
         targets: "todo".to_string(),
         local_path: None,
         schedule_type: "interval".to_string(),
@@ -219,7 +221,9 @@ pub async fn sync_config_save(
         .await
         .map_err(|e| format!("[database] 保存同步配置失败: {e}"))?;
 
-    write_config_file(&input, &engine)?;
+    // F84：写「解析后」的凭据（编辑既有配置时 input.password 为空，
+    // 真正口令来自 DB 回填的 `credential`）
+    write_config_file(&input, &engine, &credential, &session_token)?;
 
     app.emit("sync-config-changed", ())
         .map_err(|e| format!("[other] 事件发送失败: {e}"))?;
@@ -231,7 +235,24 @@ pub async fn sync_config_save(
 ///
 /// ADR 0001 §七-① 方案 (a)：CEK 不可用（移动端）时降级写明文 sync_config.json，
 /// 与 backup_prefs「加密优先、明文降级」模式对称；桌面 CEK 可用恒走加密分支，行为不变。
-fn write_config_file(input: &SyncConfigInput, engine: &str) -> Result<(), String> {
+///
+/// ## 必须写「解析后的」凭据，而不是 `input` 里的原始值（F84）
+///
+/// UI 不回显已存密码，所以编辑既有配置时 `input.password` / `input.session_token`
+/// 必然是空的——真正的凭据由 [`sync_config_save`] 从 DB 回填到局部变量
+/// `credential` / `session_token` 后落库。此前本函数仍从 `input` 取值，
+/// 于是每次编辑都会把文件里的凭据**清空**，而 DB 里那份完好：
+/// 两份同源凭据在「最常见的编辑路径」上无声分叉。
+///
+/// 今天尚未造成功能故障（文件侧只有 `full_sync_backup_api` 读 `device_name`，
+/// 不读凭据），但这是个陷阱：文件按 03 §八 是「加密配置」的正式载体，
+/// 任何将来按契约从它读凭据的代码，都会在最常见的路径上拿到空口令。
+fn write_config_file(
+    input: &SyncConfigInput,
+    engine: &str,
+    credential: &str,
+    session_token: &str,
+) -> Result<(), String> {
     let device_name = whoami::fallible::hostname().unwrap_or_default();
     let cfg = if engine == "webdav" {
         serde_json::json!({
@@ -239,7 +260,7 @@ fn write_config_file(input: &SyncConfigInput, engine: &str) -> Result<(), String
             "webdav": {
                 "base_url": input.endpoint.trim(),
                 "username": input.username,
-                "password": input.password,
+                "password": credential,
                 "base_path": input.base_path.trim(),
             },
             "interval_minutes": input.interval_minutes,
@@ -254,8 +275,8 @@ fn write_config_file(input: &SyncConfigInput, engine: &str) -> Result<(), String
                 "region": input.region.trim(),
                 "bucket": input.bucket.trim(),
                 "access_key_id": input.username,
-                "secret_access_key": input.password,
-                "session_token": input.session_token,
+                "secret_access_key": credential,
+                "session_token": session_token,
                 "base_path": input.base_path.trim(),
             },
             "interval_minutes": input.interval_minutes,

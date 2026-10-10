@@ -200,6 +200,16 @@ describe("syncErrorAction", () => {
     expect(syncErrorAction("rate_limited")).toBe("none");
     expect(syncErrorAction(null)).toBe("none");
   });
+
+  // F81：时钟偏差（S3 RequestTimeTooSkewed）与 network/auth 同为「看起来像
+  // 失败」的 403，但处置动作是校系统时间。Rust 侧已把它从 network 里拆出来
+  // 并在错误文案里写明校时指引，故前端按普通失败 toast 展示即可——关键是
+  // **不得**被归到 auth（会让用户去改 AccessKey）或 recovery（会引去密钥恢复页）。
+  it("clock_skew 不落 recovery/unlock，按原文提示校时", () => {
+    expect(syncErrorAction("clock_skew")).toBe("none");
+    expect(syncErrorAction("clock_skew")).not.toBe("recovery");
+    expect(syncErrorAction("clock_skew")).not.toBe("unlock");
+  });
 });
 
 describe("同步账本展示口径", () => {
