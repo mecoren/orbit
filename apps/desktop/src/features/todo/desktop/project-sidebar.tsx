@@ -2,7 +2,7 @@
  * ProjectSidebar — 项目侧栏（04 文档 §3.1 复刻）
  *
  * 结构：快捷入口区（6 视图，选中才显示语义色图标）+ 项目列表区
- * （Folder 图标按项目色染色 + 名称 + 拖拽手柄，内联新增在列表尾部，
+ * （Folder 图标按项目色染色 + 名称，内联新增在列表尾部，
  * 右键删除，删除保护双 AlertDialog）。
  * 未分组为虚拟项（id=-1），可拖拽参与项目排序，默认项目第一位，
  * 位置持久化为「前驱项目 id」存 localStorage（LS_UNGROUPED_AFTER）。
@@ -17,17 +17,25 @@
  * M8+ 拖拽跨层级：横向位移即意图——右移把项目内嵌为落点行的子项、左移提升
  * 一级、位移不足则同级重排（判定在纯函数 `planProjectDrop`）；编辑弹窗的
  * 「上级文件夹」下拉仍保留，是拖拽的等价入口 + 触屏/键盘可达路径。
+ * 拖拽无把手：整行长按 250ms 激活（PointerSensor delay 约束），短击仍是选中。
  */
 import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocation, useNavigate } from "react-router";
 import { useSortable } from "@dnd-kit/sortable";
-import { closestCenter, DndContext, type DragEndEvent } from "@dnd-kit/core";
+import {
+  closestCenter,
+  DndContext,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
 import {
   SortableContext,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
-import { Archive, ArchiveRestore, BarChart3, ChevronDown, ChevronRight, Filter, Folder, GripVertical, Inbox, PanelLeftClose, PanelLeftOpen, Plus, Trash2 } from "lucide-react";
+import { Archive, ArchiveRestore, BarChart3, ChevronDown, ChevronRight, Filter, Folder, Inbox, PanelLeftClose, PanelLeftOpen, Plus, Trash2 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { hideFromQueries, useUndoableDeleteAction } from "@/hooks/use-undoable-delete";
@@ -257,6 +265,14 @@ export function ProjectSidebar({
       hide: (qc) => hideFromQueries(qc, ["todo-project"], project.id),
     });
   };
+
+  // 整行长按拖拽（无把手）：静止按住 250ms 才起拖，期间位移超 8px 视为
+  // 滚动/误触取消，短击不受影响（点击仍走选中）。只注册 PointerSensor——
+  // 默认传感器里的 KeyboardSensor 以 Space/Enter 起拖且行即 activator 时
+  // 不校验事件 target，会抢走内层按钮的键盘激活。
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { delay: 250, tolerance: 8 } }),
+  );
 
   // 拖拽结束：可见序列 arraymove（未分组位置存 localStorage）+ 项目全局重编号落库。
   //
@@ -575,7 +591,7 @@ export function ProjectSidebar({
         </div>
 
         <div>
-          <DndContext collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
             <SortableContext
               items={orderedIds}
               strategy={verticalListSortingStrategy}
@@ -894,7 +910,7 @@ function ProjectEditDialog({
   );
 }
 
-/** 未分组虚拟项（id=-1，可拖拽参与项目排序） */
+/** 未分组虚拟项（id=-1，整行长按拖拽参与项目排序） */
 function SortableUngroupedRow({
   active,
   onSelect,
@@ -902,26 +918,23 @@ function SortableUngroupedRow({
   active: boolean;
   onSelect: () => void;
 }) {
-  const { attributes, listeners, setNodeRef, transform, transition } = useSortable({
+  const { listeners, setNodeRef, transform, transition } = useSortable({
     id: UNGROUPED_ID,
   });
 
   return (
     <div
       ref={setNodeRef}
+      {...listeners}
       style={{ transform: transform ? `translateY(${transform.y}px)` : undefined, transition }}
       className={cn(
-        "group flex items-center gap-2 rounded-md px-2 py-1.5 text-sm",
+        // select-none：长按拖拽期间不把行文字刷成选中态
+        "group flex select-none items-center gap-2 rounded-md py-1.5 pl-3 pr-2 text-sm",
         active
           ? "bg-primary/10 font-medium text-primary"
           : "text-sidebar-foreground hover:bg-sidebar-accent/50",
       )}
     >
-      <GripVertical
-        {...attributes}
-        {...listeners}
-        className="w-3 cursor-grab text-muted-foreground/30 opacity-0 group-hover:opacity-100"
-      />
       <button
         type="button"
         onClick={onSelect}
@@ -934,7 +947,7 @@ function SortableUngroupedRow({
   );
 }
 
-/** 单行可拖拽项目项（M8：带层级缩进与子项目折叠箭头） */
+/** 单行可拖拽项目项（M8：带层级缩进与子项目折叠箭头；整行长按拖拽） */
 function SortableProjectRow({
   project,
   depth,
@@ -951,7 +964,7 @@ function SortableProjectRow({
   project: TodoProject;
   /** 层级深度：顶层 0，每层缩进 14px */
   depth: number;
-  /** 是否有子项目（无子项目时渲染占位保持图标列对齐） */
+  /** 是否有子项目（有则行尾渲染折叠箭头） */
   hasChildren: boolean;
   collapsed: boolean;
   onToggleCollapse: () => void;
@@ -965,13 +978,14 @@ function SortableProjectRow({
   /** 上报归档请求（本批新增；is_archived 翻转由父级 toggleArchive 处理） */
   onRequestArchive: () => void;
 }) {
-  const { attributes, listeners, setNodeRef, transform, transition } = useSortable({
+  const { listeners, setNodeRef, transform, transition } = useSortable({
     id: project.id,
   });
 
   return (
     <div
       ref={setNodeRef}
+      {...listeners}
       data-testid="project-row"
       data-uuid={project.uuid}
       data-depth={depth}
@@ -981,48 +995,16 @@ function SortableProjectRow({
           ? `translate3d(${transform.x}px, ${transform.y}px, 0)`
           : undefined,
         transition,
-        // 层级缩进用物理属性 paddingLeft（避开与 Tailwind `px-2` 的逻辑属性 padding-inline 冲突）
-        paddingLeft: 8 + depth * 14,
+        // 层级缩进用物理属性 paddingLeft（避开与 Tailwind 的逻辑属性 padding-inline 冲突）。
+        // 基准 12 = 行容器 px-3 后与快捷视图区图标列同列（图标 left 24、文字 left 48）
+        paddingLeft: 12 + depth * 14,
       }}
       className={cn(
-        "group flex items-center gap-2 rounded-md py-1.5 pr-2 text-sm",
+        // select-none：长按拖拽期间不把行文字刷成选中态
+        "group flex select-none items-center gap-2 rounded-md py-1.5 pr-2 text-sm",
         active ? "bg-primary/10 font-medium text-primary" : "hover:bg-sidebar-accent/50",
       )}
     >
-      {/* 拖拽把手（title 挂外层 span：Lucide 图标不接 title 属性）：横向位移
-          就是「改层级」手势，提示文案保证可发现性 */}
-      <span
-        title="拖动排序：向右拖成为子项，向左拖移出上一层"
-        className="flex w-3 items-center"
-      >
-        <GripVertical
-          {...attributes}
-          {...listeners}
-          aria-label={`拖动项目 ${project.title}`}
-          className="cursor-grab text-muted-foreground/30 opacity-0 group-hover:opacity-100"
-        />
-      </span>
-      {/* 折叠箭头：仅父节点渲染；叶子渲染等宽占位保持名称左对齐 */}
-      {hasChildren ? (
-        <button
-          type="button"
-          aria-label={`${collapsed ? "展开" : "折叠"}子项目 ${project.title}`}
-          aria-expanded={!collapsed}
-          onClick={(e) => {
-            e.stopPropagation();
-            onToggleCollapse();
-          }}
-          className="flex size-4 shrink-0 items-center justify-center rounded text-muted-foreground hover:text-foreground"
-        >
-          {collapsed ? (
-            <ChevronRight className="size-3.5" />
-          ) : (
-            <ChevronDown className="size-3.5" />
-          )}
-        </button>
-      ) : (
-        <span className="size-4 shrink-0" aria-hidden />
-      )}
       {/* 右键菜单：标题头 + 编辑项目（重命名/改色/改上级）+ 归档 + 删除（保护弹窗由父级处理） */}
       <ProjectContextMenu
         project={project}
@@ -1042,6 +1024,24 @@ function SortableProjectRow({
           <span className="truncate">{project.title}</span>
         </button>
       </ProjectContextMenu>
+      {/* 折叠箭头：仅父节点渲染，钉在行尾（与筛选器删除钮/取消归档钮同版式）。
+          不在图标前占槽——那会在行首与图标之间空出一条死带，
+          行尾位置由行宽决定，各天然对齐，叶子行零占位 */}
+      {hasChildren && (
+        <button
+          type="button"
+          aria-label={`${collapsed ? "展开" : "折叠"}子项目 ${project.title}`}
+          aria-expanded={!collapsed}
+          onClick={onToggleCollapse}
+          className="flex size-4 shrink-0 items-center justify-center rounded text-muted-foreground hover:text-foreground"
+        >
+          {collapsed ? (
+            <ChevronRight className="size-3.5" />
+          ) : (
+            <ChevronDown className="size-3.5" />
+          )}
+        </button>
+      )}
     </div>
   );
 }

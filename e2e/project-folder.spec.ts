@@ -64,14 +64,14 @@ test("M8：层级渲染——DFS 序 + 深度标注 + 缩进递增 + 孤儿回�
     await expect(rows.nth(i)).toHaveAttribute("data-depth", depth);
   }
 
-  // 缩进：顶层 8px，每层 +14px
+  // 缩进：顶层 12px（与视图区图标列对齐的基准），每层 +14px
   const padOf = (i: number) =>
     rows.nth(i).evaluate((el) => getComputedStyle(el).paddingLeft);
-  expect(await padOf(1)).toBe("8px");
-  expect(await padOf(2)).toBe("22px");
-  expect(await padOf(3)).toBe("36px");
+  expect(await padOf(1)).toBe("12px");
+  expect(await padOf(2)).toBe("26px");
+  expect(await padOf(3)).toBe("40px");
   // 孤儿回落顶层 → 与顶层同缩进
-  expect(await padOf(4)).toBe("8px");
+  expect(await padOf(4)).toBe("12px");
 });
 
 test("M8：折叠箭头收起/展开整棵子树", async ({ page }) => {

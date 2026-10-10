@@ -7,8 +7,10 @@
  * - 位移不足阈值 → **同级重排**，层级字段一律不动（防误改父）
  *
  * 前置：seed 在页面加载后写入内存库（mock db 为模块级，刷新即重置，故不可先 seed
- * 再 reload）；拖拽用真实指针事件驱动 dnd-kit（PointerSensor 无激活约束，按下即
- * 进入拖拽），落点按**拖拽前**测量的元素中心计算——dnd-kit 的 droppable 矩形在
+ * 再 reload）；拖拽用真实指针事件驱动 dnd-kit——把手已移除，整行长按起拖
+ * （PointerSensor activationConstraint delay:250ms tolerance:8px）：按下后静止
+ * 按住越过 delay 才进入拖拽，期间位移超 tolerance 会取消，故手势必须先等再动。
+ * 落点按**拖拽前**测量的元素中心计算——dnd-kit 的 droppable 矩形在
  * 拖拽开始时一次性测量，拖拽中的重排动画不改变判定基准。
  *
  * 注：父清单聚合子清单任务的 e2e 依赖面板客户端过滤层（`task-filters.ts::projectIds`），
@@ -68,17 +70,17 @@ async function projectRow(page: Page, uuid: string) {
 }
 
 /**
- * 真实指针拖拽：从 `active` 行把手拖到 `over` 行中心，附加横向位移 dx。
+ * 真实指针拖拽（长按激活）：从 `active` 行中心长按起拖，拖到 `over` 行中心，
+ * 附加横向位移 dx。
  *
- * 起点取把手中心（把手在行内左端、纵向居中），故：
+ * 起点取行中心（无把手，整行皆拖拽面），故：
  * - 纵向目标取落点行中心 → 拖拽后被拖行中心正落在落点行中心，closestCenter
  *   判定为落点行；
- * - **横向终点必须是「起点 x + dx」**（不是落点行中心 + dx）——起点是把手不是
- *   整行，用行中心当基准会白送一个 ≈ 半行宽的右移，dx=0 也会越过改父阈值。
+ * - **横向终点 = 起点 x + dx**（不是落点行中心 + dx），dx 语义与行宽解耦。
+ * 按下后必须静止等过 delay（250ms）再动——约束期位移超 tolerance(8px) 直接取消。
  */
 async function dragProject(page: Page, active: string, over: string, dx: number) {
-  const handle = page.locator(ROW, { hasText: active }).locator(`[aria-label="拖动项目 ${active}"]`);
-  const from = await handle.boundingBox();
+  const from = await page.locator(ROW, { hasText: active }).boundingBox();
   const to = await page.locator(ROW, { hasText: over }).boundingBox();
   if (!from || !to) throw new Error("拖拽元素不可见");
 
@@ -87,8 +89,7 @@ async function dragProject(page: Page, active: string, over: string, dx: number)
   const endY = to.y + to.height / 2;
   await page.mouse.move(startX, startY);
   await page.mouse.down();
-  // 先来一小段位移跨过 dnd-kit 的启动判定，再走完剩余路程
-  await page.mouse.move(startX + dx * 0.2, startY + (endY - startY) * 0.2);
+  await page.waitForTimeout(350);
   await page.mouse.move(startX + dx, endY, { steps: 10 });
   await page.mouse.up();
 }
