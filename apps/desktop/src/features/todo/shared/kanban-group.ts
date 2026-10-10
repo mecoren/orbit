@@ -145,8 +145,10 @@ export function kanbanColumns(
           if (!seen.has(l.id)) seen.set(l.id, l);
         }
       }
+      // 显式锁定中文拼音 collation：不传 locale 时按宿主默认环境排序，
+      // CI（en 环境）会退化成码点序导致列序漂移（与 task-filters.ts 同口径）
       const cols = [...seen.values()]
-        .sort((a, b) => a.title.localeCompare(b.title))
+        .sort((a, b) => a.title.localeCompare(b.title, "zh-Hans-CN"))
         .map((l) => ({
           key: `lbl:${l.id}`,
           title: l.title,
@@ -163,8 +165,9 @@ export function kanbanColumns(
       }));
     case "project":
     default: {
+      // 同上：锁定 zh 拼音序，防宿主 locale 差异（CI 甲/乙列序漂移）
       const cols: KanbanColumnDef[] = [...projects]
-        .sort((a, b) => a.title.localeCompare(b.title))
+        .sort((a, b) => a.title.localeCompare(b.title, "zh-Hans-CN"))
         .map((p) => ({
           key: String(p.id),
           title: p.title,
