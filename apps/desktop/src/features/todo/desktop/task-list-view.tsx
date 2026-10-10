@@ -9,7 +9,8 @@
  * - 键盘可达（P1#8）：行 role=button/tabIndex，Enter/Space 打开详情，j/k 移动焦点。
  * - 拖拽排序（P1#11）：GripVertical 手柄发起（行点击仍是打开详情），
  *   落在某行 → 插其前；落容器空白 → 尾部追加；position 中值写入后失效任务缓存。
- * - 多选批量（P2#17）：checkbox 或 shift 区间选择；两枚以上弹出批量工具条
+ * - 多选批量（P2#17）：入口 = 右键菜单「多选」（2026-10-10 起勾选框默认隐藏，
+ *   去 hover 显现）或 x 键；shift 勾选做区间选择；选中后弹出批量工具条
  *   （完成/未完成/收藏/项目移动/删除，项目移动带中值落位）。详情抽屉仍由
  *   未选中行打开，选中行点击仅切换勾选（与多数竞品一致）。
  */
@@ -385,7 +386,12 @@ export function TaskListView({ tasks, projects, labelsByTask, remindersByTask, d
         )}
         style={{ position: "absolute", top: vi.start, left: 0, width: "100%" }}
       >
-        <TaskContextMenu task={t} projects={projects} onOpenDetail={() => onOpenDetail(t.id)}>
+        <TaskContextMenu
+          task={t}
+          projects={projects}
+          onOpenDetail={() => onOpenDetail(t.id)}
+          onStartSelect={() => toggleSelect(t.id, false)}
+        >
           <TaskRow
             task={t}
             index={vi.index}
@@ -803,8 +809,9 @@ const TaskRow = memo(function TaskRow({
         onFocusMove(dir);
       }}
     >
-      {/* 多选勾选框（P2#17）：hover 或已有选中时显现；
-          shift 点击 = 以最近一次勾选为锚做区间选择 */}
+      {/* 多选勾选框（P2#17）：默认隐藏，经右键菜单「多选」进入多选态后显现
+          （2026-10-10 去 hover 显现）；shift 点击 = 以最近一次勾选为锚做区间选择。
+          隐藏时同步 pointer-events-none，避免透明按钮拦截行首区域误触 */}
       <button
         type="button"
         aria-label={selected ? "取消选中" : "选中"}
@@ -814,7 +821,7 @@ const TaskRow = memo(function TaskRow({
           selected
             ? "border-primary bg-primary text-primary-foreground"
             : "border-muted-foreground/30 hover:border-primary",
-          hasSelection ? "opacity-100" : "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100",
+          hasSelection ? "opacity-100" : "pointer-events-none opacity-0",
         )}
         onClick={(e) => {
           e.stopPropagation();

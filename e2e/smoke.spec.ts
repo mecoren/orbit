@@ -788,10 +788,13 @@ test("看板多选批量：勾选卡片 → 工具条 → 批量改期落库（2
   await switchViewViaMenu(page, "看板视图");
   await expect(page.getByText("看板批量-甲")).toBeVisible();
 
-  // 勾选两张卡的多选圈 → 工具条浮现
+  // 右键卡片 → 菜单「多选」进入多选态（2026-10-10：多选圈默认隐藏、
+  // 去 hover 显现，右键菜单是唯一入口；多选态下勾选圈常显可继续加选）
   const cardA = page.getByRole("button", { name: "未完成任务：看板批量-甲" });
   const cardB = page.getByRole("button", { name: "未完成任务：看板批量-乙" });
-  await cardA.getByRole("checkbox", { name: "选中任务" }).click();
+  await cardA.click({ button: "right" });
+  await page.getByRole("menuitem", { name: "多选" }).click();
+  await expect(page.getByText("已选 1 条")).toBeVisible();
   await cardB.getByRole("checkbox", { name: "选中任务" }).click();
   await expect(page.getByText("已选 2 条")).toBeVisible();
 

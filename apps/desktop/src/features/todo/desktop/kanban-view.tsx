@@ -580,6 +580,7 @@ const KanbanColumn = memo(function KanbanColumn({
                     task={t}
                     projects={projects}
                     onOpenDetail={() => onOpenDetail(t.id)}
+                    onStartSelect={() => onToggleSelect(t.id)}
                   >
                     <KanbanCard
                       task={t}
@@ -709,7 +710,9 @@ const KanbanCard = memo(function KanbanCard({
 
       {/* 标题行：选中勾 + 完成勾 + 标题 + 星标 */}
       <div className="flex items-start gap-1.5">
-        {/* 多选勾选圈（P2 扩展）：hover / 选中态显现；点选切换 */}
+        {/* 多选勾选圈（P2 扩展）：默认隐藏，经右键菜单「多选」进入多选态后显现
+            （2026-10-10 去 hover 显现）；隐藏时同步 pointer-events-none
+            避免透明圈拦截卡片左上角误触 */}
         {!overlay && (
           <button
             type="button"
@@ -718,11 +721,9 @@ const KanbanCard = memo(function KanbanCard({
             role="checkbox"
             className={cn(
               "mt-0.5 h-5 w-5 shrink-0 rounded border-2 transition-colors",
-              selected
-                ? "border-primary bg-primary"
-                : "border-muted-foreground/30 opacity-0 hover:opacity-100 focus-visible:opacity-100",
-              (hasSelection || selected) && "opacity-100",
-              "group-hover:opacity-100 focus-visible:outline-none",
+              selected ? "border-primary bg-primary" : "border-muted-foreground/30",
+              hasSelection || selected ? "opacity-100" : "pointer-events-none opacity-0",
+              "focus-visible:outline-none",
             )}
             onClick={(e) => {
               e.stopPropagation();

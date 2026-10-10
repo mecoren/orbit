@@ -1,10 +1,11 @@
 /**
  * 任务/项目右键菜单（04 文档 §3.7：菜单项集合与文案对齐 wait-home）
  *
- * 任务菜单：打开详情 / 标记完成·标记未完成 / 收藏·取消收藏 / ─ /
- *           设置优先级▸(6档) / 修改标签▸(勾选切换) / 更换项目▸ /
- *           设置截止时间(Dialog) / 设置提醒(Dialog) /
- *           添加评论(Dialog,Textarea) / ─ / 删除
+ * 任务菜单（2026-10-10 顶部高频段图标行化，对标 TickTick）：
+ *   日期▸图标行(今天/明天/+7天/日历Dialog/清除) / 优先级▸旗标图标行(6档) / ─ /
+ *   打开详情 / 标记完成·标记未完成 / 收藏·取消收藏 / 我的一天 / 复制任务 /
+ *   修改标签▸(勾选切换) / 更换项目▸ / 设置提醒(Dialog) /
+ *   添加评论(Dialog,Textarea) / 多选(可选,仅多选态视图传入) / ─ / 删除
  * 项目菜单：项目名标题头 + 编辑项目（重命名/改色，#36）+ 删除项目（destructive；删除保护由父级弹窗处理）
  */
 import { useRef, useState } from "react";
@@ -12,26 +13,32 @@ import { useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import {
   Archive,
-  Copy,
-  Calendar,
+  CalendarClock,
+  CalendarDays,
+  CalendarX,
   Check,
   Clock,
+  Copy,
   Eye,
   Flag,
   Folder,
   FolderOpen,
+  ListChecks,
   MessageSquare,
+  Moon,
   Pencil,
   Star,
   Sunrise,
   Tag,
   Trash2,
+  type LucideIcon,
 } from "lucide-react";
 import { toast } from "sonner";
 
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   Dialog,
   DialogContent,
@@ -76,7 +83,7 @@ import {
   type TodoTaskLabel,
 } from "@/lib/tauri";
 import { PRIORITY_COLOR, FAVORITE_COLOR, TODO_ACCENT, PRIORITY_LABELS, MY_DAY_COLOR } from "../shared/constants";
-import { reminderEndMs } from "@/lib/quick-dates";
+import { buildQuickDateTimeOptions, reminderEndMs } from "@/lib/quick-dates";
 import { todayStartMs, toggleMyDayValue } from "../shared/task-filters";
 import { completeTask } from "../shared/task-actions";
 
@@ -89,6 +96,8 @@ interface TaskContextMenuProps {
   projects: TodoProject[];
   /** 打开详情抽屉（§7-③ selectedTaskId） */
   onOpenDetail: () => void;
+  /** 传入时渲染「多选」项：进入多选态并选中当前行（列表/看板传入；日历等无批量态视图不传） */
+  onStartSelect?: () => void;
   children: React.ReactNode;
 }
 
@@ -96,6 +105,7 @@ export function TaskContextMenu({
   task,
   projects,
   onOpenDetail,
+  onStartSelect,
   children,
 }: TaskContextMenuProps) {
   const qc = useQueryClient();
@@ -166,11 +176,99 @@ export function TaskContextMenu({
     setDueOpen(false);
   };
 
+  /** 图标按快捷档语义分派：一小时后=Clock、今晚=Moon、明天=Sunrise、下周=CalendarClock */
+  const quickDateIcon = (key: string): LucideIcon =>
+    key === "in1h" ? Clock : key === "tonight" ? Moon : key === "tomorrow" ? Sunrise : CalendarClock;
+
+  // 日期图标行（对标 TickTick 右键菜单顶部段）：快捷档复用 buildQuickDateTimeOptions
+  // （一小时后/今天晚些时候/明天 09:00/下周一 09:00，目标为绝对时刻直接落库、
+  // 不做保时刻换算；已过 22:00 自动隐藏今晚档）；「选择日期和时间」点击直接弹
+  // DateTimePicker Dialog；末位清除钮写 null。
+  const dateIcons: { key: string; label: string; Icon: LucideIcon; run: () => void }[] = [
+    ...buildQuickDateTimeOptions().map((o) => ({
+      key: o.key,
+      label: `${o.label}（${o.hint}）`,
+      Icon: quickDateIcon(o.key),
+      run: () => void patch({ due_date: o.value.getTime() }),
+    })),
+    {
+      key: "picker",
+      label: "选择日期和时间",
+      Icon: CalendarDays,
+      run: () => {
+        setDueDraft(task.due_date != null ? tsToInputValue(task.due_date) : "");
+        setDueError(null);
+        setDueOpen(true);
+      },
+    },
+    { key: "clear", label: "清除截止", Icon: CalendarX, run: () => void patch({ due_date: null }) },
+  ];
+
   return (
     <>
       <ContextMenuBase
         menu={(close) => (
           <>
+            {/* 日期图标行（对标 TickTick 右键菜单顶部段）：快捷档 + 选择日期和时间
+                （直接弹 Dialog）+ 清除。 */}
+            <DropdownMenuLabel className="px-2 py-1 text-xs font-normal text-muted-foreground">
+              日期
+            </DropdownMenuLabel>
+            <div className="flex items-center gap-0.5 px-1 pb-1">
+              {dateIcons.map(({ key, label, Icon, run }) => (
+                <Tooltip key={key}>
+                  <TooltipTrigger asChild>
+                    <button
+                      type="button"
+                      aria-label={label}
+                      className="flex size-8 items-center justify-center rounded-md text-foreground/80 transition-colors hover:bg-accent hover:text-accent-foreground"
+                      onClick={() => {
+                        close();
+                        run();
+                      }}
+                    >
+                      <Icon size={16} />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent>{label}</TooltipContent>
+                </Tooltip>
+              ))}
+            </div>
+
+            {/* 优先级图标行（对标 TickTick）：6 档旗标色点，当前档高亮底；点选即改 */}
+            <DropdownMenuLabel className="px-2 py-1 text-xs font-normal text-muted-foreground">
+              优先级
+            </DropdownMenuLabel>
+            <div className="flex items-center gap-0.5 px-1 pb-1">
+              {PRIORITY_LABELS.map((label, lv) => (
+                <Tooltip key={lv}>
+                  <TooltipTrigger asChild>
+                    <button
+                      type="button"
+                      aria-label={`优先级：${label}`}
+                      aria-pressed={task.priority === lv}
+                      className={cn(
+                        "flex size-8 items-center justify-center rounded-md transition-colors hover:bg-accent",
+                        task.priority === lv && "bg-accent",
+                      )}
+                      onClick={() => {
+                        close();
+                        void patch({ priority: lv });
+                      }}
+                    >
+                      <Flag
+                        size={16}
+                        style={{ color: PRIORITY_COLOR[lv] }}
+                        className={cn(lv > 0 && "fill-current")}
+                      />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent>{label}</TooltipContent>
+                </Tooltip>
+              ))}
+            </div>
+
+            <DropdownMenuSeparator />
             <DropdownMenuItem onSelect={() => { close(); onOpenDetail(); }}>
               <Eye size={14} />
               打开详情
@@ -228,33 +326,6 @@ export function TaskContextMenu({
             </DropdownMenuItem>
 
             <DropdownMenuSeparator />
-
-            {/* 设置优先级（6 档色点） */}
-            <DropdownMenuSub>
-              <DropdownMenuSubTrigger>
-                <Flag size={14} />
-                设置优先级
-              </DropdownMenuSubTrigger>
-              <DropdownMenuSubContent className="min-w-[160px]">
-                {PRIORITY_LABELS.map((label, lv) => (
-                  <DropdownMenuItem
-                    key={lv}
-                    disabled={task.priority === lv}
-                    className={cn(task.priority === lv && "font-medium text-accent-foreground")}
-                    onSelect={() => { close(); void patch({ priority: lv }); }}
-                  >
-                    {/* 16px 前缀槽 + 色点（含 P0「无」浅灰点），保证各行文字对齐 */}
-                    <span className="flex w-4 shrink-0 items-center justify-center">
-                      <span
-                        className="h-2 w-2 rounded-full"
-                        style={{ backgroundColor: PRIORITY_COLOR[lv] }}
-                      />
-                    </span>
-                    {label}
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuSubContent>
-            </DropdownMenuSub>
 
             {/* 修改标签（勾选切换；子菜单展开时懒加载） */}
             <DropdownMenuSub onOpenChange={(o) => o && void loadLabels()}>
@@ -326,19 +397,7 @@ export function TaskContextMenu({
               </DropdownMenuSubContent>
             </DropdownMenuSub>
 
-            {/* 设置截止时间（与设置提醒同构：先关菜单再弹 Dialog） */}
-            <DropdownMenuItem
-              onSelect={() => {
-                setDueDraft(task.due_date != null ? tsToInputValue(task.due_date) : "");
-                setDueError(null);
-                close();
-                setDueOpen(true);
-              }}
-            >
-              <Calendar size={14} />
-              设置截止时间
-            </DropdownMenuItem>
-
+            {/* 设置提醒（顶部日期图标行的日历档已承担「选日期」；精确时刻仍走此 Dialog） */}
             <DropdownMenuItem onSelect={() => { close(); setReminderOpen(true); }}>
               <Clock size={14} />
               设置提醒
@@ -347,6 +406,15 @@ export function TaskContextMenu({
               <MessageSquare size={14} />
               添加评论
             </DropdownMenuItem>
+
+            {/* 多选（可选）：进入多选态并选中当前行；多选勾选框已默认隐藏，
+                此处是列表/看板唯一的批量态入口 */}
+            {onStartSelect && (
+              <DropdownMenuItem onSelect={() => { close(); onStartSelect(); }}>
+                <ListChecks size={14} />
+                多选
+              </DropdownMenuItem>
+            )}
 
             <DropdownMenuSeparator />
             <DropdownMenuItem variant="destructive" onSelect={() => { close(); setDeleteOpen(true); }}>
