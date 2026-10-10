@@ -9,7 +9,7 @@
  *
  * 窄窗折叠（07 报告 #21 接线）：useIsNarrow（<lg=1024）驱动自动折叠，
  * 用户可手动覆盖并持久化（LS_SIDEBAR_MANUAL_COLLAPSED）；折叠态渲染
- * 图标窄条（快捷视图 + 项目 Folder 图标按项目色染色），展开恢复完整三栏。
+ * 图标窄条（快捷视图 + 未分组 Inbox + 项目 Folder 图标按项目色染色），展开恢复完整三栏。
  *
  * M8 清单文件夹分组：项目按 `parent_uuid` 构成层级树（父子序、depth 缩进、
  * 有子项者带折叠箭头），孤儿/自引用/成环一律回落顶层（shared/project-tree）。
@@ -439,6 +439,25 @@ export function ProjectSidebar({
         </div>
 
         <div className="mt-2 flex w-full flex-col items-center gap-1">
+          {/* 未分组（虚拟项）在折叠窄条同样保留入口（组首，与展开态默认位置一致） */}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                aria-label="未分组"
+                onClick={onSelectUngrouped}
+                className={cn(
+                  "flex h-7 w-7 items-center justify-center rounded-md",
+                  ungroupedActive && !trashActive && !statsActive
+                    ? "bg-primary/10"
+                    : "hover:bg-accent/50",
+                )}
+              >
+                <Inbox className="h-4 w-4" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent>未分组</TooltipContent>
+          </Tooltip>
           {projects.map((p) => {
             const active = effectiveProjectId === p.id && !ungroupedActive;
             return (
