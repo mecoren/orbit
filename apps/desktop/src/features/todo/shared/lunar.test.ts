@@ -54,6 +54,14 @@ describe("solarToLunar（公历→农历）", () => {
     expect(l).toEqual({ year: 2023, month: 2, day: 1, isLeap: true });
   });
 
+  it("1933 年闰五月为 30 天（月长错位回归）", () => {
+    // 1933 闰五月应为 30 天：07-22 为闰五月三十，次日为六月初一
+    const l = solarToLunar(new Date(1933, 6, 22));
+    expect(l).toEqual({ year: 1933, month: 5, day: 30, isLeap: true });
+    const next = solarToLunar(new Date(1933, 6, 23));
+    expect(next).toEqual({ year: 1933, month: 6, day: 1, isLeap: false });
+  });
+
   it("1900-01-31（基准日）→ 庚子年正月初一", () => {
     const l = solarToLunar(new Date(1900, 0, 31));
     expect(l).toEqual({ year: 1900, month: 1, day: 1, isLeap: false });
@@ -81,6 +89,25 @@ describe("solarTermLabel / daySubLabel", () => {
     // 权威对照：2026 年立春为 2 月 4 日
     expect(solarTermLabel(new Date(2026, 1, 4))).toBe("立春");
     expect(solarTermLabel(new Date(2026, 1, 5))).toBeNull();
+  });
+
+  it("1975 年节气可解析（该年节气行曾被抄短，越界崩溃）", () => {
+    expect(solarTermLabel(new Date(1975, 6, 8))).toBe("小暑");
+    expect(solarTermLabel(new Date(1975, 6, 7))).toBeNull();
+  });
+
+  it("2013 立春 = 2/4", () => {
+    expect(solarTermLabel(new Date(2013, 1, 4))).toBe("立春");
+    expect(solarTermLabel(new Date(2013, 1, 3))).toBeNull();
+  });
+
+  it("超出节气表覆盖年份返回 null 而不越界", () => {
+    expect(solarTermLabel(new Date(2100, 0, 5))).toBeNull();
+    // 表末年 2096 仍可解析：冬至恒落 12/21–12/23 之间
+    const hits = [21, 22, 23].filter(
+      (d) => solarTermLabel(new Date(2096, 11, d)) === "冬至",
+    );
+    expect(hits).toHaveLength(1);
   });
 
   it("daySubLabel 优先级：公历节日 > 农历节日 > 节气 > 农历日", () => {

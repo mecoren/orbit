@@ -3,7 +3,7 @@
  *
  * 移植自 wait-home apps/desktop/src/modules/important-date/almanac.ts
  * （原文件注释：与 mobile/lib/core/lunar/chinese_almanac.dart 同源：
- * - 24 节气（calendar.js sTermInfo 压缩表，1900–2100）
+ * - 24 节气（calendar.js 结构 sTermInfo 压缩表，1900–2096，数值已校准）
  * - 公历/农历节日表
  * - 每日副标签优先级：公历节日 > 农历节日 > 节气 > 农历日（初一显示月名）
  * 修改任一侧时必须同步另一侧。）
@@ -18,7 +18,7 @@ const SOLAR_TERM_NAMES = [
   "寒露", "霜降", "立冬", "小雪", "大雪", "冬至",
 ] as const;
 
-/** sTermInfo 压缩表（1900–2100，共 201 项，来源 calendar.js） */
+/** sTermInfo 压缩表（1900–2096，共 197 项），数值按天文历逐项校准（2026-10-08） */
 const S_TERM_INFO: string[] = [
   "9778397bd097c36b0b6fc9274c91aa", "97b6b97bd19801ec9210c965cc920e",
   "97bcf97c3598082c95f8c965cc920f", "97bd0b06bdb0722c965ce1cfcc920f",
@@ -26,15 +26,15 @@ const S_TERM_INFO: string[] = [
   "97bcf97c359801ec95f8c965cc920f", "97bd0b06bdb0722c965ce1cfcc920f",
   "b027097bd097c36b0b6fc9274c91aa", "97b6b97bd19801ec9210c965cc920e",
   "97bcf97c359801ec95f8c965cc920f", "97bd0b06bdb0722c965ce1cfcc920f",
-  "b027097bd097c36b0b6fc9274c91aa", "9778397bd19801ec9210c965cc920e",
+  "b027097bd097c36b0b6fc9274c8dc2", "9778397bd19801ec9210c9274c920e",
   "97b6b97bd19801ec95f8c965cc920f", "97bd09801d98082c95f8e1cfcc920f",
-  "97bd097bd097c36b0b6fc9210c8dc2", "9778397bd197c36c9210c9274c91aa",
+  "97bd097bd097c36b0b6fc9210c8dc2", "9778397bd197c36c9210c9274c920e",
   "97b6b97bd19801ec95f8c965cc920e", "97bd09801d98082c95f8e1cfcc920f",
   "97bd097bd097c36b0b6fc9210c8dc2", "9778397bd097c36c9210c9274c91aa",
   "97b6b97bd19801ec95f8c965cc920e", "97bcf97c3598082c95f8e1cfcc920f",
   "97bd097bd097c36b0b6fc9210c8dc2", "9778397bd097c36c9210c9274c91aa",
-  "97b6b97bd19801ec9210c965cc920e", "97bcf97c3598082c95f8c965cc920f",
-  "97bd097bd097c35b0b6fc920fb0722", "9778397bd097c36b0b6fc9274c91aa",
+  "97b6b97bd19801ec9210c965cc920e", "97bcf97c3598082c95f8e1cfcc920f",
+  "97bd097bd097c36b0b6fc920fb0722", "9778397bd097c36b0b6fc9274c91aa",
   "97b6b97bd19801ec9210c965cc920e", "97bcf97c3598082c95f8c965cc920f",
   "97bd097bd097c35b0b6fc920fb0722", "9778397bd097c36b0b6fc9274c91aa",
   "97b6b97bd19801ec9210c965cc920e", "97bcf97c359801ec95f8c965cc920f",
@@ -57,9 +57,9 @@ const S_TERM_INFO: string[] = [
   "97bcf7f1487f531b0b0bb0b6fb0722", "7f0e397bd097c35b0b6fc920fb0722",
   "9778397bd097c36b0b6fc9274c91aa", "97b6b97bd19801ec9210c965cc920e",
   "97bcf7f1487f531b0b0bb0b6fb0722", "7f0e397bd07f595b0b6fc920fb0722",
-  "9778397bd097c36b0b6fc9274c91aa", "97b6b97bd19801ec9274c920e",
+  "9778397bd097c36b0b6fc9274c91aa", "97b6b97bd19801ec9210c9274c920e",
   "97bcf7f0e47f531b0b0bb0b6fb0722", "7f0e397bd07f595b0b0bc920fb0722",
-  "9778397bd097c36b0b6fc9210c91aa", "97b6b97bd197c36c9210c9274c920e",
+  "9778397bd097c36b0b6fc9210c91aa", "9778397bd197c36c9210c9274c920e",
   "97bcf7f0e47f531b0b0bb0b6fb0722", "7f0e397bd07f595b0b0bc920fb0722",
   "9778397bd097c36b0b6fc9210c8dc2", "9778397bd097c36c9210c9274c920e",
   "97b6b7f0e47f531b0723b0b6fb0722", "7f0e37f5307f595b0b0bc920fb0722",
@@ -72,6 +72,8 @@ const S_TERM_INFO: string[] = [
   "7f0e397bd097c35b0b6fc920fb0722", "9778397bd097c36b0b6fc9274c91aa",
   "97b6b7f0e47f531b0723b0b6fb0721", "7f0e27f1487f531b0b0bb0b6fb0722",
   "7f0e397bd097c35b0b6fc920fb0722", "9778397bd097c36b0b6fc9274c91aa",
+  "97b6b7f0e47f531b0723b0b6fb0721", "7f0e27f1487f531b0b0bb0b6fb0722",
+  "7f0e397bd07f595b0b0bc920fb0722", "9778397bd097c36b0b6fc9274c91aa",
   "97b6b7f0e47f531b0723b0787b0721", "7f0e27f0e47f531b0b0bb0b6fb0722",
   "7f0e397bd07f595b0b0bc920fb0722", "9778397bd097c36b0b6fc9210c91aa",
   "97b6b7f0e47f149b0723b0787b0721", "7f0e27f0e47f531b0723b0b6fb0722",
@@ -116,9 +118,7 @@ const S_TERM_INFO: string[] = [
   "7ec967f0e37f14998082b0787b06bd", "7f07e7f0e47f531b0723b0b6fb0721",
   "7f0e36665b66a449801e9808297c35", "665f67f0e37f14898082b072297c35",
   "7ec967f0e37f14998082b0787b06bd", "7f07e7f0e47f531b0723b0b6fb0721",
-  "7f0e26665b66a449801e9808297c35", "665f67f0e37f1489801eb072297c35",
-  "7ec967f0e37f14998082b0787b06bd", "7f07e7f0e47f531b0723b0b6fb0721",
-  "7f0e27f1487f531b0b0bb0b6fb0722",
+  "7f0e26665b66a449801e9808297c35",
 ];
 
 /** 公历节日表：key = month * 100 + day */
@@ -202,8 +202,12 @@ function yearDaysOf(y: number): number {
 
 /** 计算 y 年第 n 个节气（n: 1..24）落在当月几号；越界返回 null */
 function termDay(y: number, n: number): number | null {
-  if (y < 1900 || y > 2100 || n < 1 || n > 24) return null;
-  const table = S_TERM_INFO[y - 1900];
+  if (n < 1 || n > 24) return null;
+  // 压缩表末项对应 1900+S_TERM_INFO.length-1 年（=2096），用表长而非硬编码
+  // 年份做上界，避免越界取到 undefined 后崩在 substring
+  const index = y - 1900;
+  if (index < 0 || index >= S_TERM_INFO.length) return null;
+  const table = S_TERM_INFO[index];
   const parts: string[] = [];
   for (let i = 0; i < 6; i++) {
     parts.push(parseInt(table.substring(i * 5, i * 5 + 5), 16).toString());

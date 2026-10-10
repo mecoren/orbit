@@ -46,6 +46,20 @@ void main() {
       expect(l.isLeapMonth, isTrue);
     });
 
+    test('1933 年闰五月为 30 天（月长错位回归）', () {
+      // 1933 闰五月应为 30 天：07-22 为闰五月三十，次日为六月初一
+      final lunar = LunarCalendar.solarToLunar(DateTime(1933, 7, 22));
+      expect(lunar, isNotNull);
+      expect(lunar!.month, 5);
+      expect(lunar.day, 30);
+      expect(lunar.isLeapMonth, isTrue);
+
+      final next = LunarCalendar.solarToLunar(DateTime(1933, 7, 23))!;
+      expect(next.month, 6);
+      expect(next.day, 1);
+      expect(next.isLeapMonth, isFalse);
+    });
+
     test('农历↔公历往返：整年抽样闭环一致', () {
       for (var i = 0; i < 30; i++) {
         final solar = DateTime(2026, 1, 1 + i * 12);
@@ -79,6 +93,26 @@ void main() {
       // 普通日显示农历日名：2026-09-08 → 农历七月廿七
       //（2026-09-07 恰为白露，被节气优先级覆盖）
       expect(ChineseAlmanac.daySubLabel(DateTime(2026, 9, 8)), '廿七');
+    });
+
+    test('1975 年节气可解析（该年节气行曾被抄短，越界崩溃）', () {
+      expect(ChineseAlmanac.solarTermLabel(DateTime(1975, 7, 8)), '小暑');
+      expect(ChineseAlmanac.solarTermLabel(DateTime(1975, 7, 7)), isNull);
+    });
+
+    test('2013 立春 = 2/4', () {
+      expect(ChineseAlmanac.solarTermLabel(DateTime(2013, 2, 4)), '立春');
+      expect(ChineseAlmanac.solarTermLabel(DateTime(2013, 2, 3)), isNull);
+    });
+
+    test('超出节气表覆盖年份返回 null 而不越界', () {
+      expect(ChineseAlmanac.solarTermLabel(DateTime(2100, 1, 5)), isNull);
+      // 表末年 2096 仍可解析：冬至恒落 12/21–12/23 之间
+      final hits = [
+        for (var d = 21; d <= 23; d++)
+          ChineseAlmanac.solarTermLabel(DateTime(2096, 12, d)),
+      ].where((e) => e == '冬至');
+      expect(hits.length, 1);
     });
 
     test('除夕 = 腊月最后一天（2027-02-05 为丙午年腊月廿九）', () {
