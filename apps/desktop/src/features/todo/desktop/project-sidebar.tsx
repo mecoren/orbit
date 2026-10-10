@@ -34,7 +34,6 @@ import { hideFromQueries, useUndoableDeleteAction } from "@/hooks/use-undoable-d
 import { useIsNarrow } from "@/hooks/use-breakpoint";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Select,
   SelectContent,
@@ -335,7 +334,9 @@ export function ProjectSidebar({
   // ---- 折叠态窄条：快捷视图图标 + 项目色点 + 展开钮（hover 提示补足上下文）----
   if (collapsed) {
     return (
-      <div className="flex h-full w-12 shrink-0 flex-col items-center gap-1 border-r border-border bg-card/30 py-3">
+      // 整栏统一滚动（2026-10-10）：小窗高度下窄条内容同样溢出被裁，根列即滚动容器，
+      // 原生滚动条走全局标准常显可见（禁 scrollbar-width 非 auto 值）
+      <div className="flex h-full w-12 shrink-0 flex-col items-center gap-1 overflow-y-auto border-r border-border bg-card/30 py-3">
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
@@ -455,7 +456,12 @@ export function ProjectSidebar({
   }
 
   return (
-    <div className="flex h-full w-56 shrink-0 flex-col border-r border-border bg-card/30">
+    // 整栏统一滚动（2026-10-10）：快捷入口 + 筛选器 + 项目列表同一条滚动列，根列即
+    // 滚动容器、原生滚动条走全局标准常显可见。旧结构快捷入口区不可收缩，小窗高度下会把
+    // 项目区挤到 0 高（723×378 实测 viewport 0px、30 个项目行全部不可达），项目列表里的
+    // Radix ScrollArea 滚动条又是 hover 才渲染的悬浮条——用户感知「没有滑动条」。
+    // 取舍：「项目 +」标题与顶部「视图」头随内容滚走（不再钉住）。
+    <div className="flex h-full w-56 shrink-0 flex-col overflow-y-auto border-r border-border bg-card/30">
       {/* 展开态头部：折叠钮（#21 手动覆盖入口） */}
       <div className="flex items-center justify-between px-3 pt-3">
         <span className="text-xs uppercase tracking-wide text-muted-foreground">视图</span>
@@ -559,8 +565,8 @@ export function ProjectSidebar({
         </div>
       )}
 
-      {/* 项目列表区 */}
-      <div className="flex min-h-0 flex-1 flex-col px-3 pb-3">
+      {/* 项目列表区（整栏统一滚动：不再自带 flex-1/ScrollArea，随根列滚动） */}
+      <div className="px-3 pb-3">
         <div className="flex items-center justify-between py-1">
           <span className="text-xs uppercase tracking-wide text-muted-foreground">项目</span>
           <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setAdding(true)}>
@@ -568,7 +574,7 @@ export function ProjectSidebar({
           </Button>
         </div>
 
-        <ScrollArea className="min-h-0 flex-1">
+        <div>
           <DndContext collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
             <SortableContext
               items={orderedIds}
@@ -701,7 +707,7 @@ export function ProjectSidebar({
               </div>
             </SortableContext>
           </DndContext>
-        </ScrollArea>
+        </div>
       </div>
 
       {/* 删除保护双弹窗（04 §3.1） */}
