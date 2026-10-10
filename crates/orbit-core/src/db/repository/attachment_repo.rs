@@ -63,15 +63,31 @@ pub async fn mark_uploaded(pool: &SqlitePool, hash: &str) -> CoreResult<()> {
     Ok(())
 }
 
-/// 全部附件重置为未上传（rekey 全量重传场景）
+/// 全部**本地有二进制**的附件重置为未上传（rekey 全量重传场景）
 ///
 /// Data Key 更换（v2 改密 / v1→v2 迁移 / 以本机为准恢复）后，云端旧密文
-/// 附件已不可用，必须用新 Key 重加密重传。将 is_uploaded 全部清零后，
+/// 附件已不可用，必须用新 Key 重加密重传。将 `is_uploaded` 清零后，
 /// `sync_attachments_push` 的 get_unuploaded 会重取全部本地缓存附件重传。
+///
+/// ## 必须限定 `is_local_cached = 1`（F81）
+///
+/// 旧实现无 WHERE 条件，把**已被 LRU 逐出、本地无二进制**的行也一并置 0。
+/// 这类行的 `local_path` 指向已删除的文件，而 push 侧读不到文件即报错
+/// （F68 的「读取本地附件失败」）并计入 `result.errors`——状态从此不可恢复：
+/// 没有任何写路径能把 `is_uploaded` 拉回 1（`mark_uploaded` 只在 push 成功后
+/// 调用，而 push 永远失败）。后果被 `SyncResult::advances_ledger()` 放大：
+/// errors 非空 → `sync_configs.last_synced_at` 永不推进 → 回收站物理清理
+/// （以该字段为守卫线）被永久冻结，用户清空的回收站再也回收不了空间。
+///
+/// rekey 的语义本就是「以本机为准重加密重传」，而**没有本地文件就无从重传**
+/// （与 rekey 文档「本地已删（仅存云端）的旧密文附件不可恢复」一致）。
+/// 故逐出过的行应保持 `is_uploaded = 1`：它标记的是「云端确实有这个对象」，
+/// rekey 不改动它，pull 侧照样能在有活跃引用时把二进制拉回来。
 pub async fn mark_all_unuploaded(pool: &SqlitePool) -> CoreResult<u64> {
-    let result = sqlx::query("UPDATE sys_attachments SET is_uploaded = 0")
-        .execute(pool)
-        .await?;
+    let result =
+        sqlx::query("UPDATE sys_attachments SET is_uploaded = 0 WHERE is_local_cached = 1")
+            .execute(pool)
+            .await?;
     Ok(result.rows_affected())
 }
 
@@ -146,12 +162,29 @@ pub async fn get_all_local_cached(pool: &SqlitePool) -> CoreResult<Vec<Attachmen
     Ok(items)
 }
 
-/// 获取所有未上传的附件
+/// 获取所有待上传的附件（`is_uploaded = 0` **且本地有二进制**）
+///
+/// ## 为什么必须带 `is_local_cached = 1`（F81）
+///
+/// push 的上传单位是「本地文件」，没有本地文件就没有可上传之物：这类行
+/// 进了 `to_upload` 只会在读文件时产出「读取本地附件失败」，写进
+/// `result.errors`。而 `is_uploaded` 在那条路径上永远回不到 1（`mark_uploaded`
+/// 只在上传成功后调用），于是该行**每轮**都重复失败一次——不是一次性的噪声，
+/// 而是让 `SyncResult::advances_ledger()` 恒假的常驻错误，直接冻结
+/// `sync_configs.last_synced_at`（回收站物理清理的守卫线）。
+///
+/// 真实触发路径：LRU 逐出的行（`is_local_cached = 0`、`is_uploaded = 1`）
+/// 被 rekey 的 `mark_all_unuploaded` 误置 0。修掉误置是治本，本查询的
+/// 附加条件是治标的双保险——`upsert` 是公开写入口，任何调用方都能构造出
+/// 这类组合。
+///
+/// 附件侧契约与 `cloud_sync::attachments` 模块头「查询 `is_local_cached = 1
+/// AND is_uploaded = 0`」的声明对齐（此前文档与 SQL 分裂）。
 pub async fn get_unuploaded(pool: &SqlitePool) -> CoreResult<Vec<Attachment>> {
     let items = sqlx::query_as::<_, Attachment>(
         "SELECT hash, original_name, mime_type, size_bytes, local_path,
                 is_uploaded, is_local_cached, created_at, last_accessed_at
-         FROM sys_attachments WHERE is_uploaded = 0",
+         FROM sys_attachments WHERE is_uploaded = 0 AND is_local_cached = 1",
     )
     .fetch_all(pool)
     .await?;
@@ -306,5 +339,103 @@ pub async fn evict_local_cache(
         Ok(()) => Ok(true),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(false),
         Err(e) => Err(CoreError::Other(format!("删除附件缓存文件失败: {}", e))),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::models::business::Attachment;
+
+    async fn memory_pool() -> SqlitePool {
+        let pool = SqlitePool::connect("sqlite::memory:").await.unwrap();
+        sqlx::migrate!("./src/db/migrations")
+            .run(&pool)
+            .await
+            .unwrap();
+        pool
+    }
+
+    /// 登记一行附件（`is_uploaded` / `is_local_cached` 由用例指定）
+    async fn seed(pool: &SqlitePool, hash: &str, uploaded: i32, cached: i32) {
+        upsert(
+            pool,
+            &Attachment {
+                hash: hash.to_string(),
+                original_name: format!("{hash}.bin"),
+                mime_type: "application/octet-stream".to_string(),
+                size_bytes: 16,
+                local_path: Some(format!("/tmp/{hash}")),
+                is_uploaded: uploaded,
+                is_local_cached: cached,
+                created_at: 1,
+                last_accessed_at: 1,
+            },
+        )
+        .await
+        .unwrap();
+    }
+
+    async fn flags(pool: &SqlitePool, hash: &str) -> (i32, i32) {
+        sqlx::query_as::<_, (i32, i32)>(
+            "SELECT is_uploaded, is_local_cached FROM sys_attachments WHERE hash = ?",
+        )
+        .bind(hash)
+        .fetch_one(pool)
+        .await
+        .unwrap()
+    }
+
+    /// F81 治本：rekey 清零只作用于「本地真有二进制」的行
+    ///
+    /// 旧实现无 WHERE，把 LRU 逐出行（本地文件已删）也置 0 → push 每轮读文件
+    /// 失败 → errors 常驻非空 → `advances_ledger()` 恒假 →
+    /// `sync_configs.last_synced_at` 永久冻结（回收站物理清理守卫线）。
+    #[tokio::test]
+    async fn mark_all_unuploaded_skips_rows_without_local_binary() {
+        let pool = memory_pool().await;
+        // pending：本地有、待上传（正常 rekey 对象）
+        seed(&pool, "pending", 0, 1).await;
+        // 已上传且本地有（rekey 必须把它也清零，否则旧 Key 密文留在云端）
+        seed(&pool, "uploaded-cached", 1, 1).await;
+        // 已上传但被 LRU 逐出：本地无二进制
+        seed(&pool, "evicted", 1, 0).await;
+
+        let n = mark_all_unuploaded(&pool).await.unwrap();
+        assert_eq!(n, 2, "只有两条「本地有二进制」的行被重置");
+        assert_eq!(flags(&pool, "pending").await, (0, 1));
+        assert_eq!(
+            flags(&pool, "uploaded-cached").await,
+            (0, 1),
+            "已上传且本地有的行必须清零（否则旧 Key 密文永久滞留云端）"
+        );
+        assert_eq!(
+            flags(&pool, "evicted").await,
+            (1, 0),
+            "逐出行必须保持 is_uploaded=1：本地无文件无从重传，而该值标记的是\
+             「云端确实有这个对象」，pull 侧仍要靠它判定无需重下"
+        );
+    }
+
+    /// F81 治标（双保险）：`get_unuploaded` 只返回本地真有二进制的行
+    ///
+    /// 无论逐出行的 `is_uploaded` 被谁置 0（`upsert` 是公开写入口），push 都
+    /// 不得把它纳入上传集合——纳入了就是每轮一条读文件失败的常驻错误。
+    #[tokio::test]
+    async fn get_unuploaded_excludes_rows_without_local_binary() {
+        let pool = memory_pool().await;
+        seed(&pool, "pending", 0, 1).await;
+        // 逐出 + 被误置 0 的组合（rekey 旧行为留下的实际状态）
+        seed(&pool, "ghost", 0, 0).await;
+        // 已上传的普通行也不该出现
+        seed(&pool, "done", 1, 1).await;
+
+        let rows = get_unuploaded(&pool).await.unwrap();
+        let hashes: Vec<&str> = rows.iter().map(|a| a.hash.as_str()).collect();
+        assert_eq!(
+            hashes,
+            vec!["pending"],
+            "待传集合只含本地有文件的行（ghost 会让 push 每轮产出常驻错误）"
+        );
     }
 }

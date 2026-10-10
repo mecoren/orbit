@@ -158,7 +158,36 @@ pub async fn pull_all(
                 result.copied_conflicts += outcome.merge.copied;
                 changed_records_total +=
                     outcome.merge.inserted + outcome.merge.updated + outcome.merge.deleted;
+                // F86：行级失败必须一并登记 failed_modules。
+                //
+                // merge 的行级失败（单条 UPDATE 失败、冲突副本留档失败）只进
+                // `merge.errors` 而**不**返回 Err，于是此前它既进了 errors、
+                // 又没进 failed_modules。而 failed_modules 正是 push 侧
+                // 「跳过本表、防陈旧快照覆盖云端」的判据（P0-6）。
+                //
+                // 后果链：某条远端更新的 UPDATE 失败 → 该行在本地仍是旧版本
+                // → 但该表不在 failed_modules → push 照常执行 → 该行所在桶的
+                // 指纹与云端不同 → 整桶上传 → **云端新版本被旧行覆盖**。
+                // 也就是说，行级失败反而比整表失败更危险：整表失败至少会被
+                // push 挡住并下轮重试。
+                //
+                // 第二条后果（本行修复前同样存在，且更隐蔽）：函数末尾
+                // 「按 failed_modules 回滚 remote_tables 桶指纹、且 epoch 不推进」
+                // 这套强制重试机制**只对 failed_modules 生效**。行级失败不登记
+                // → 桶指纹被 update_from_manifest 记成已消费 → 下轮
+                // `remote_chunk_fp == chunk.fp` 命中跳过 → **那批坏记录永远
+                // 不会被重新拉取**，静默空洞且无任何重试。
+                let row_level_failed = !outcome.merge.errors.is_empty();
                 result.errors.extend(outcome.merge.errors);
+                if row_level_failed {
+                    log::warn!(
+                        "[pull] 表 {table} 存在行级合并失败（{}/{} 行已合并），\
+                         登记 failed_modules 以阻止本轮 push 用陈旧行覆盖云端",
+                        outcome.merge.inserted + outcome.merge.updated,
+                        outcome.merge.inserted + outcome.merge.updated + outcome.merge.skipped
+                    );
+                    result.failed_modules.push(table.to_string());
+                }
                 if outcome.downloaded_chunks > 0 || outcome.downloaded_tombstones > 0 {
                     result.pulled_modules = 1;
                 }
@@ -335,7 +364,7 @@ async fn pull_single_table(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::cloud_sync::chunk::split_table_items;
+    use crate::cloud_sync::chunk::{ChunkPayload, split_table_items};
     use crate::cloud_sync::crypto_io::encrypt_payload;
     use crate::cloud_sync::meta::{ChunkRef, TableIndex};
     use crate::cloud_sync::progress::NoopProgressSender;
@@ -759,6 +788,82 @@ mod tests {
                 .unwrap();
         assert_eq!(is_deleted, 1, "远端墓碑必须传播为本地软删");
         assert_eq!(deleted_at, 100, "删除时间必须保留原始值");
+    }
+
+    /// F86：行级合并失败必须同时登记 `failed_modules`
+    ///
+    /// merge 的行级失败（记录不是 JSON 对象 / 缺 uuid / 单条 UPDATE 失败 /
+    /// 冲突副本留档失败）只进 `merge.errors` 而**不**返回 Err。旧缺口就在
+    /// 这里：它既进了 errors，又没进 `failed_modules`——而后者同时守着两条
+    /// 防线：
+    ///
+    /// 1. push 侧「跳过本表、防陈旧快照覆盖云端」（P0-6）：远端更新的 UPDATE
+    ///    失败 → 该行本地仍是旧版本 → 该表不在 failed_modules → push 照常跑
+    ///    → 整桶上传 → 云端新版本被旧行覆盖；
+    /// 2. pull 侧「回滚桶指纹 + epoch 不推进」强制重试：行级失败不登记 →
+    ///    桶指纹被记成已消费 → 下轮 `remote_chunk_fp == chunk.fp` 命中跳过
+    ///    → 那批坏记录永远不会被重新拉取（静默空洞，无重试）。
+    ///
+    /// 用「非 JSON 对象记录」做注入点：merge 记一行 error 并跳过该行，
+    /// 但整表仍返回 Ok——正是旧缺口能藏身的形态。
+    #[tokio::test]
+    async fn row_level_merge_failure_marks_table_as_failed() {
+        use std::collections::BTreeMap;
+
+        let (pool, crypto, store, _tmp) = env().await;
+        let adapter = MemAdapter::new();
+
+        // 远端分桶塞一条「不是 JSON 对象」的记录
+        let mut manifest = Manifest::empty("dev-2");
+        manifest.epoch = 3;
+        let payload = ChunkPayload {
+            table: "todo_projects".to_string(),
+            bucket: 0,
+            items: vec![serde_json::json!("not-an-object")],
+        };
+        let bytes = serde_json::to_vec(&payload).unwrap();
+        adapter.put(
+            &paths::table_bucket_path("todo_projects", 0),
+            encrypt_payload(&bytes, &KEY).unwrap(),
+        );
+        manifest.tables.insert(
+            "todo_projects".to_string(),
+            TableIndex {
+                chunks: BTreeMap::from([(
+                    0,
+                    ChunkRef {
+                        fp: "fp-bad-row".to_string(),
+                        count: 1,
+                        size: bytes.len() as u64,
+                    },
+                )]),
+            },
+        );
+        let mbytes = encrypt_payload(&serde_json::to_vec(&manifest).unwrap(), &KEY).unwrap();
+        adapter.put(paths::MANIFEST_PATH, mbytes);
+
+        let result = pull_all(
+            &pool,
+            &crypto,
+            &store,
+            &adapter,
+            &NoopProgressSender,
+            SyncOrigin::Manual,
+        )
+        .await
+        .unwrap();
+
+        assert!(
+            !result.errors.is_empty(),
+            "行级失败必须留在 errors 里可观测: {:?}",
+            result.errors
+        );
+        assert!(
+            result.failed_modules.contains(&"todo_projects".to_string()),
+            "行级失败必须同时登记 failed_modules，否则 push 会拿未更新的陈旧行覆盖云端；\
+             实得 failed_modules={:?}",
+            result.failed_modules
+        );
     }
 
     /// F47：pull 的表遍历必须是「父先子后」，否则子行外键无父可解析

@@ -524,6 +524,134 @@ async fn webdav_large_asset_uses_chunked_parts_protocol() {
     assert_eq!(uploaded.0, 1, "云端已存在时要修正本地标记");
 }
 
+/// F82 网络级钉子：大附件首传的清理不得发散式删除
+///
+/// 旧实现 `delete_parts_dir` 的「首个 404 即停」分支**从未生效**——`delete`
+/// 走 `SyncError::check_delete_status`，它把 404 当幂等成功转成 `Ok(())`，
+/// 于是 `for index in 0..10_000` 真的会跑满：一个 9MiB（2 片）的首传，
+/// 云端没有任何既有分片可删，却要发出约 10000 次 DELETE。在坚果云这类
+/// 约 1 req/s 限流的服务上这就是几小时的挂起，且全程持有引擎同步互斥锁。
+///
+/// 这里断言 DELETE 请求数与分片数**同阶**。这是唯一能钉住「请求放大」的
+/// 断言形态——只断言最终对象正确的话，10000 次 404 探测同样能通过。
+#[tokio::test]
+async fn large_asset_first_upload_does_not_fire_thousands_of_deletes() {
+    let cloud = FakeCloud::spawn(Protocol::WebDav);
+    let payload = incompressible(9 * 1024 * 1024);
+    let hash = orbit_core::crypto::sha256::sha256_hex(&payload);
+
+    let a = Node::new("del-a", webdav_config(&cloud, "del-a")).await;
+    a.seed("del-0", "占位任务").await;
+    a.register_asset(&hash, &payload, true).await;
+    let r = a.sync().await;
+    assert!(r.errors.is_empty(), "大附件首传不得有错: {:?}", r.errors);
+
+    let deletes = cloud
+        .requests()
+        .iter()
+        .filter(|r| r.starts_with("DELETE "))
+        .count();
+    // 2 片 → 清理上界 2，再加末尾删旧单对象 1；留出余量但必须远离 10000
+    assert!(
+        deletes <= 8,
+        "9MiB 首传的 DELETE 请求数应与分片数同阶（≤8），实发 {deletes} 次。\
+         旧行为会发约 10000 次——限额服务上等于数小时挂起并锁死同步互斥锁"
+    );
+}
+
+/// F82 网络级钉子：WebDAV 列举必须能下探二级目录，且 name 是相对路径
+///
+/// 旧实现是 `Depth:1` 单层：二级目录里的备份文件根本不出现在结果中，而
+/// 调用方拿到的是一份**看起来正常**的列表，没有任何报错提示漏了东西。
+/// 这是与 S3 侧（递归 + 相对路径）对齐的那一半契约。
+///
+/// 夹具能力说明：`FakeCloud::peer_write` 直接写对象键，其 `PROPFIND`
+/// 会由对象键反推目录树、把中间目录作为 collection 条目回出——正是递归
+/// 列举需要的形态，无需改造夹具。
+#[tokio::test]
+async fn webdav_listing_recurses_and_returns_relative_paths() {
+    use orbit_core::sync::engine::create_adapter;
+
+    let cloud = FakeCloud::spawn(Protocol::WebDav);
+    let cfg = webdav_config(&cloud, "list-a");
+    let adapter = create_adapter(&cfg).expect("构造适配器");
+    let backups_dir = format!("{BASE_PATH}/backups");
+
+    // 顶层一个 + 二级目录里一个
+    cloud.peer_write(
+        &format!("/{backups_dir}/top.orfullsync"),
+        b"top-backup-bytes",
+    );
+    cloud.peer_write(
+        &format!("/{backups_dir}/2026-09/nested.orfullsync"),
+        b"nested-backup-bytes",
+    );
+
+    let files = adapter
+        .list_all_files(&backups_dir)
+        .await
+        .expect("列举必须成功");
+    let mut names: Vec<&str> = files.iter().map(|f| f.name.as_str()).collect();
+    names.sort();
+
+    assert_eq!(
+        names,
+        vec!["2026-09/nested.orfullsync", "top.orfullsync"],
+        "二级目录内容必须出现，且 name 为相对 base_path 的路径（与 S3 同口径）"
+    );
+}
+
+/// 对照面：目录不存在时返回空列表，不得误报成错误
+#[tokio::test]
+async fn webdav_listing_missing_directory_is_empty() {
+    use orbit_core::sync::engine::create_adapter;
+
+    let cloud = FakeCloud::spawn(Protocol::WebDav);
+    let cfg = webdav_config(&cloud, "list-b");
+    let adapter = create_adapter(&cfg).expect("构造适配器");
+
+    let files = adapter
+        .list_all_files(&format!("{BASE_PATH}/never-created"))
+        .await
+        .expect("目录不存在不是错误");
+    assert!(files.is_empty(), "未创建的目录应返回空列表");
+}
+
+/// F83 网络级钉子：连接测试形态（空 prefix）只发一次 PROPFIND
+///
+/// 初版递归实现漏了「空 prefix 不下探」闸门，会从分享根一路走进用户的
+/// 整个云盘。断言**请求条数**是唯一能钉住它的形态：只看最终返回值，
+/// 「走完整棵树」与「只看第一层」都可能给出看似合理的结果。
+#[tokio::test]
+async fn empty_prefix_listing_issues_exactly_one_propfind() {
+    use orbit_core::sync::engine::create_adapter;
+
+    let cloud = FakeCloud::spawn(Protocol::WebDav);
+    let cfg = webdav_config(&cloud, "list-root");
+    let adapter = create_adapter(&cfg).expect("构造适配器");
+    // 云端放一棵有嵌套的树
+    cloud.peer_write(&format!("/{BASE_PATH}/a.orfullsync"), b"a");
+    cloud.peer_write(&format!("/{BASE_PATH}/sub/deep.orfullsync"), b"deep");
+
+    let files = adapter.list_all_files("").await.expect("列举不得报错");
+    assert!(
+        files.iter().all(|f| !f.name.contains('/')),
+        "空 prefix 不得返回任何嵌套路径（name 含 `/` 即说明下探了），实际 {:?}",
+        files.iter().map(|f| &f.name).collect::<Vec<_>>()
+    );
+
+    let propfinds = cloud
+        .requests()
+        .iter()
+        .filter(|r| r.starts_with("PROPFIND"))
+        .count();
+    assert_eq!(
+        propfinds, 1,
+        "空 prefix 只应发一次 PROPFIND，实发 {propfinds} 次: {:?}",
+        cloud.requests()
+    );
+}
+
 /// F23 的另一半：分片下载的 GET 也得带 base_path 前缀
 ///
 /// 场景是 LRU 逐出后的真实态——`sys_attachments` 有记录、本地无二进制、

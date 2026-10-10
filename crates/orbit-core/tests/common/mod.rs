@@ -562,7 +562,15 @@ fn propfind(svc: &Svc, path: &str, depth: &str) -> Reply {
     // 一级子项由对象键反推（目录不单独存标记）
     let children = |prefix: &str| -> Vec<(String, bool, usize, i64)> {
         let mut out: Vec<(String, bool, usize, i64)> = Vec::new();
-        let needle = format!("{prefix}/");
+        // F83：根目录（prefix 为空）时 needle 必须是 `/` 而非 `//`。
+        // 原实现无条件 `format!("{prefix}/")`，对 `dir = ""` 得到 `"//"`，
+        // 于是根列举一条子项都反推不出来（表现为「空 prefix 看不到任何东西」，
+        // 与真实的「不下探」难以区分）。
+        let needle = if prefix.is_empty() {
+            "/".to_string()
+        } else {
+            format!("{prefix}/")
+        };
         for (key, obj) in st.objects.iter() {
             let Some(rest) = key.strip_prefix(&needle) else {
                 continue;

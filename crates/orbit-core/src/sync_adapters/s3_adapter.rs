@@ -264,6 +264,41 @@ x-amz-date:{}
         })
     }
 
+    /// 只取 ListObjectsV2 的**第一页**（F82：连通性探测用）
+    ///
+    /// 与 [`Self::list_all_entries_paginated`] 的区别仅在「不翻页」：调用方是
+    /// 只想知道「端点通不通、概有多少」的双壳连接测试，翻完整个桶是纯粹的
+    /// 往返浪费（1 万对象 = 10 次请求）。`truncated` 一并透出，让调用方能
+    /// 如实告知「计数已截断」而不是谎称全量。
+    async fn list_first_page(
+        &self,
+        prefix: &str,
+    ) -> Result<crate::s3::ListPage, SyncError> {
+        let prefix_with_slash = if prefix.is_empty() || prefix.ends_with('/') {
+            prefix.to_string()
+        } else {
+            format!("{}/", prefix)
+        };
+        let query: Vec<(String, String)> = vec![
+            ("list-type".to_string(), "2".to_string()),
+            ("prefix".to_string(), prefix_with_slash.clone()),
+        ];
+        let list_url = build_url(
+            &self.config.endpoint,
+            &self.config.bucket,
+            "",
+            self.config.use_path_style,
+            &query,
+        );
+        let headers = self.sign_request("GET", &list_url, &sha256_hex(b""))?;
+        let response_bytes = self.http.get_with_retry(&list_url, headers).await?;
+        let xml = String::from_utf8_lossy(&response_bytes).to_string();
+        parse_list_objects_xml(&xml, &prefix_with_slash).map_err(|e| SyncError::Network {
+            message: format!("解析 ListObjects XML 失败: {e}"),
+            retryable: false,
+        })
+    }
+
     // ====================================================================
     // S4 multipart 分片上传（2026-09-14 收口）
     //
@@ -304,11 +339,16 @@ x-amz-date:{}
         let create_url =
             self.build_object_url_with_query(path, &[("uploads".to_string(), String::new())]);
         let headers = self.sign_request("POST", &create_url, &sha256_hex(b""))?;
+        // F81：补总超时。注意**不可**套 `send_idempotent` 的重试——重发
+        // Create 会多出一个 uploadId，前一个成为永不清理的孤儿分片
+        // （正是 F28 要 Abort 清理的那类东西）。单次发 + 超时是正解：
+        // 失败时连分片都还没传，不存在清理负担。
         let response = self
             .http
             .inner()
             .post(&create_url)
             .headers(headers)
+            .timeout(self.http.control_timeout())
             .send()
             .await
             .map_err(|e| SyncError::Network {
@@ -357,12 +397,16 @@ x-amz-date:{}
         let body_bytes = complete_multipart_body(&part_etags).into_bytes();
         let payload_hash = sha256_hex(&body_bytes);
         let headers = self.sign_request("POST", &complete_url, &payload_hash)?;
+        // F81：补总超时。不走 `send_idempotent`：Complete 的重发虽被 S3 定义为
+        // 幂等，但由业务级 with_retry 重走整个 multipart 流程更简单也更安全
+        //（避免「重发成功但对象已拼装」与 Abort 时序纠缠）。
         let response = self
             .http
             .inner()
             .post(&complete_url)
             .headers(headers)
             .body(body_bytes)
+            .timeout(self.http.control_timeout())
             .send()
             .await
             .map_err(|e| SyncError::Network {
@@ -444,7 +488,11 @@ x-amz-date:{}
                 return;
             }
         };
-        match self.http.inner().delete(&url).headers(headers).send().await {
+        match self
+            .http
+            .send_idempotent(reqwest::Method::DELETE, &url, headers, None)
+            .await
+        {
             Ok(r) if r.status().is_success() => {}
             other => {
                 let desc = match other {
@@ -463,7 +511,24 @@ x-amz-date:{}
 impl SyncAdapter for S3Adapter {
     async fn list_all_files(&self, base_path: &str) -> Result<Vec<RemoteFile>, SyncError> {
         // 分页列举（P0-3）：>1000 对象不再静默截断
-        let listed = self.list_all_entries_paginated(base_path).await?;
+        //
+        // F82：空 prefix 是**连通性探测**（双壳连接测试的唯一调用形态），不是
+        // 列举。此前它在 S3 侧会递归扫完整个桶并按 1000/页翻页——1 万对象的
+        // 桶要 10 次往返才数得完，而调用方只想显示一个数字。非空 prefix
+        // （云端备份目录）仍必须翻完所有页，否则备份列表会静默少文件。
+        let listed = if base_path.trim().is_empty() {
+            let page = self.list_first_page(base_path).await?;
+            if page.truncated {
+                log::info!(
+                    "[s3] 连接测试列举命中 1000/页上限，显示的是首屏计数（非全量）: \
+                     endpoint={}",
+                    self.config.endpoint
+                );
+            }
+            page.entries
+        } else {
+            self.list_all_entries_paginated(base_path).await?
+        };
 
         // 将列举条目转为 RemoteFile（不过滤后缀，调用方自行过滤）
         // size/last_modified 直取响应字段（F27）——此前恒 0 让云端备份列表的
@@ -505,19 +570,14 @@ impl SyncAdapter for S3Adapter {
         let url = self.build_object_url(path);
         let headers = self.sign_request("DELETE", &url, &sha256_hex(b""))?;
 
+        // F81：DELETE 幂等（删不存在的 key 回 404，`check_delete_status` 已把
+        // 404 当成功），可安全走 `send_idempotent` 拿总超时 + 重试。
+        // S12 的「传输层失败可重试」口径由此落到 HTTP 级（3 次短退避），
+        // 业务级 with_retry 仍在其上兜底长退避。
         let response = self
             .http
-            .inner()
-            .delete(&url)
-            .headers(headers)
-            .send()
-            .await
-            .map_err(|e| SyncError::Network {
-                message: transport_message("DELETE 请求", &e),
-                // S12：传输层失败（连接中断/超时）是瞬态，标可重试——
-                // 此前 retryable:false 让业务级 with_retry 直接放弃
-                retryable: true,
-            })?;
+            .send_idempotent(reqwest::Method::DELETE, &url, headers, None)
+            .await?;
 
         // Fix-03：校验状态码，403/500 等失败不得静默成功
         SyncError::check_delete_status(response.status().as_u16())
@@ -556,17 +616,13 @@ impl SyncAdapter for S3Adapter {
     async fn exists(&self, path: &str) -> Result<bool, SyncError> {
         let url = self.build_object_url(path);
         let headers = self.sign_request("HEAD", &url, &sha256_hex(b""))?;
+        // F81：HEAD 幂等纯读，走 `send_idempotent` 拿到总超时 + 瞬断重试。
+        // 顺带修好一处分类退化：403 + `RequestTimeTooSkewed` 现在能拿到响应体，
+        // 由 `from_http_status` 判成 ClockSkew（校时），而不再因空体落 Auth。
         let response = self
             .http
-            .inner()
-            .head(&url)
-            .headers(headers)
-            .send()
-            .await
-            .map_err(|e| SyncError::Network {
-                message: transport_message("HEAD 请求", &e),
-                retryable: true,
-            })?;
+            .send_idempotent(reqwest::Method::HEAD, &url, headers, None)
+            .await?;
         SyncError::classify_head_status(response.status().as_u16())
     }
 

@@ -34,6 +34,20 @@ pub enum CloudSyncError {
     #[error("请求被限流: {message}")]
     RateLimited { message: String },
 
+    /// 本机时钟与服务器偏差过大（S3 签名时间窗口校验失败：`RequestTimeTooSkewed`
+    /// / `RequestExpired`，HTTP 403）。
+    ///
+    /// F81 补透传：`SyncError::ClockSkew`（F78 立的那个类型化变体）此前漏在本
+    /// 文件的 `From<SyncError>` 之外，落进兜底 `Adapter` 分支——于是 F78 声明的
+    /// 三条意图在真正消费错误的地方全部失效：`is_network_error()` 为真 →
+    /// `with_retry` 白等 2/4/8s×3；`category_tag()` 报 `network` → UI 把「校时」
+    /// 当网络故障引导重试/离线进入。
+    ///
+    /// 与 `Auth` 互斥（两者同为 403，处置动作相反：改凭据 vs 校系统时间），
+    /// 与 `RateLimited` 互斥（前者不可重试，后者要走长退避）。
+    #[error("请求时间偏差过大: {message}")]
+    ClockSkew { message: String },
+
     /// 远端资源不存在（HTTP 404 / 坚果云 409 AncestorsNotFound）。
     ///
     /// Fix-09：适配器层已按状态码构造类型化错误，此处保留类型穿透，
@@ -111,6 +125,11 @@ impl From<crate::sync::error::SyncError> for CloudSyncError {
             crate::sync::error::SyncError::Auth { message } => CloudSyncError::Auth { message },
             crate::sync::error::SyncError::RateLimited { message } => {
                 CloudSyncError::RateLimited { message }
+            }
+            // F81 补透传：此前漏在本 match 之外 → 落进兜底 `Adapter`，
+            // 使「校时」被当网络错误白等重试、tag 报 network（见变体文档）
+            crate::sync::error::SyncError::ClockSkew { message } => {
+                CloudSyncError::ClockSkew { message }
             }
             other => CloudSyncError::Adapter {
                 message: other.to_string(),
@@ -245,6 +264,17 @@ impl CloudSyncError {
         matches!(self, CloudSyncError::Auth { .. })
     }
 
+    /// 是否为「本机时钟与服务器偏差过大」（F81）
+    ///
+    /// 校时前重试必然同错，故归入本方法的错误**不可重试**：它既不是
+    /// [`Self::is_network_error`] 也不是 [`Self::is_rate_limited`]，
+    /// `with_retry` 的可重试判据据此直接短路，不再白等退避。
+    ///
+    /// 与 [`Self::is_auth_error`] 互斥：同为 403，处置动作相反。
+    pub fn is_clock_skew(&self) -> bool {
+        matches!(self, CloudSyncError::ClockSkew { .. })
+    }
+
     /// 是否为 Data Key 不匹配错误（应跳转恢复页，而非解锁页）
     ///
     /// 与 `CryptoLocked`（无 Data Key，需要解锁）语义不同：
@@ -257,7 +287,7 @@ impl CloudSyncError {
 
     /// 错误分类标签（用于桥接层向前端传递分类信息）
     ///
-    /// 返回 `password`/`key_mismatch`/`payload_version`/`database`/`network`/`other` 之一——纯 tag
+    /// 返回 `password`/`key_mismatch`/`payload_version`/`database`/`clock_skew`/`network`/`other` 之一——纯 tag
     /// 不带方括号，桥层 `format!("[{}] …")` 统一加括号。曾因 tag 自带括号被
     /// 桥层再包一层产出 `[[key_mismatch]]`，前端 `^\[(\w+)\]` 正则失配导致
     /// KeyMismatch 恢复引导失效（2026-09-10 修复）。前端通过字符串前缀匹配
@@ -276,6 +306,11 @@ impl CloudSyncError {
             "password"
         } else if self.is_database_error() {
             "database"
+        } else if self.is_clock_skew() {
+            // F81：时钟偏差单独归类——处置动作是「校准系统时间」。
+            // 落 network 会让 UI 引导重试/离线进入（重试必然同错），
+            // 落 auth 会让用户去改 AccessKey（改多少次都不解决）
+            "clock_skew"
         } else if self.is_auth_error() {
             // S6：认证错误单独归类——引导用户检查凭据/权限而非泛化网络重试
             "auth"
@@ -396,5 +431,64 @@ mod tests {
             message: "object size 4291 bytes".to_string(),
         };
         assert!(!err.is_rate_limited());
+    }
+
+    // ========================================================================
+    // F81 补漏：ClockSkew 必须在 From<SyncError> 这一层透传出去
+    //
+    // 变体只在 `sync::error` 里立起来是不够的——真正消费错误的是三处判据：
+    // `is_network_error`（决定 with_retry 是否重试）、`is_rate_limited`
+    // （决定退避档位）、`category_tag`（决定 UI 处置通道）。漏在 From 转换里
+    // 就等于三条意图全部落空：403 的时钟问题被当网络抖动白等 2/4/8s×3，
+    // UI 报 network 引导重试/离线进入，而正确动作是校准系统时间。
+    // ========================================================================
+
+    /// S3 `RequestTimeTooSkewed` 403 → 类型化 ClockSkew，三条意图全部生效
+    #[test]
+    fn clock_skew_403_keeps_its_class_through_conversion() {
+        let src = crate::sync::error::SyncError::ClockSkew {
+            message: "服务器时间校验未通过(403)：本机时钟与服务器相差过大，请开启系统自动校时"
+                .to_string(),
+        };
+        let err: CloudSyncError = src.into();
+
+        assert!(err.is_clock_skew(), "类型必须透传，不得塌进 Adapter");
+        assert!(
+            !err.is_network_error(),
+            "不可重试：校时前重试必然同错（否则 with_retry 白等 ~14s）"
+        );
+        assert!(!err.is_rate_limited(), "不可重试即不得走长退避");
+        assert!(!err.is_auth_error(), "与认证互斥：403 同码但处置动作相反");
+        assert!(!err.is_password_error(), "不得跳解锁页");
+        assert!(!err.is_key_mismatch_error(), "不得跳密钥恢复页");
+        assert_eq!(err.category_tag(), "clock_skew", "tag 必须指向「校时」");
+    }
+
+    /// 反向红线：真认证失败不得被误判成时钟问题（否则用户去校时而密钥仍是错的）
+    #[test]
+    fn real_auth_403_stays_auth_after_conversion() {
+        let src = crate::sync::error::SyncError::Auth {
+            message: "认证失败(403): SignatureDoesNotMatch".to_string(),
+        };
+        let err: CloudSyncError = src.into();
+        assert!(err.is_auth_error());
+        assert!(!err.is_clock_skew());
+        assert_eq!(err.category_tag(), "auth");
+    }
+
+    /// 文案必须自带处置方向：桥层只透传 message，前端对未知 tag 走 `none`
+    /// 分支（普通 toast），「校时」指引只能靠这句文案传达
+    #[test]
+    fn clock_skew_message_carries_remediation() {
+        let err = CloudSyncError::ClockSkew {
+            message: "服务器时间校验未通过(403)：本机时钟与服务器相差过大，请开启系统自动校时（含时区）后重试。这不是 AccessKey / 权限 / 同步密钥问题。"
+                .to_string(),
+        };
+        let text = err.to_string();
+        assert!(text.contains("校时"), "文案须点明校时: {text}");
+        assert!(
+            text.contains("不是 AccessKey"),
+            "文案须排除错误排查方向: {text}"
+        );
     }
 }

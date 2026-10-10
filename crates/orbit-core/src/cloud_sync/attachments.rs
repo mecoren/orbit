@@ -14,6 +14,19 @@
 //! `SyncAdapter: Send + Sync`，共享引用可跨并发 future 借用，无需 spawn + 'static，
 //! 读取/加密/上传（下载/解密/落盘）全流程按附件并行。
 //!
+//! ## Pull 的差集为何收窄到「有活跃引用」（S31，不是缺陷）
+//!
+//! 差集是 `云端 - 本地已缓存 - 无本地任务引用`。前两项无争议；第三项防的是
+//! 「GC ↔ pull 对打架循环」：本端 GC 删掉无引用附件后，云端对象仍在
+//! （其他设备视角可能还挂着），朴素差集会把它拉回、插占位行、下轮 GC 又删。
+//!
+//! **新设备不会因此漏附件**：两个同步入口都是先 `pull_all`（模块合并，
+//! `todo_task_attachments` 关联行随之落地）再 `attachments_pull`，所以
+//! 真实引用在过滤前已经就位——见 `pull_downloads_attachment_whose_link_arrived_same_round`。
+//! 唯一的暴露面是「模块 pull 失败但附件 pull 仍执行」的那一轮，此时关联表为空、
+//! 附件全被跳过；该轮本身带 errors、账本不推进，下一轮会重试。
+//! 收窄结果已落日志（见 F83），避免这类轮次看起来像「静默什么都没发生」。
+//!
 //! ## 错误隔离
 //! 单个附件上传/下载失败不阻塞其他附件，错误收集到返回值。
 
@@ -328,6 +341,13 @@ pub async fn sync_attachments_pull(
         .collect();
 
     // 3. 差集 = 云端有 - 本地有 - 无引用
+    //
+    // F83：三个集合的规模要落日志。差集被 `active_refs` 收窄是**静默**的
+    // （S31 的设计意图），但当收窄把候选清空时，症状是「同步成功、附件一个
+    // 都没下」——用户与排障者都无从判断这是「云端真没有」还是「本机引用表
+    // 为空」。三个数字（云端总数 / 本地已缓存 / 被引用过滤掉）足以区分：
+    // 云端有 N 个但 active_refs 为 0，说明本机的任务-附件关联还没到
+    // （模块 pull 失败或本机确实不引用它们），不是传输问题。
     let to_download: Vec<String> = cloud_hashes
         .iter()
         .filter(|h| !local_set.contains(*h) && active_refs.contains(*h))
@@ -335,6 +355,15 @@ pub async fn sync_attachments_pull(
         .collect();
 
     if to_download.is_empty() {
+        if cloud_hashes.len() > local_set.len() {
+            log::info!(
+                "[attachments_pull] 本轮无附件下载：云端 {} 个 / 本地已缓存 {} 个 / \
+                 被活跃引用过滤掉 {} 个（云端对象留在云端，等本机出现引用时再拉）",
+                cloud_hashes.len(),
+                local_set.len(),
+                cloud_hashes.len().saturating_sub(local_set.len())
+            );
+        }
         return Ok(result);
     }
 

@@ -1495,8 +1495,15 @@ impl SyncEngine {
             match operation().await {
                 Ok(v) => return Ok(v),
                 Err(e) => {
-                    let retryable =
-                        (e.is_network_error() || e.is_rate_limited()) && !e.is_auth_error();
+                    // 可重试判据：瞬态网络错误 / 限流（后者走长退避）。
+                    // 两类都明确排除：认证（凭据不会自动变对）与时钟偏差
+                    // （F81：校时前重试必然同错，白等 2/4/8s×3 纯浪费）。
+                    // 时钟偏差靠 `is_network_error()` 为假已能短路，这里再显式
+                    // 判一次是为让意图在代码里自解释，也防住将来有人把
+                    // ClockSkew 顺手并进网络类的改动。
+                    let retryable = (e.is_network_error() || e.is_rate_limited())
+                        && !e.is_auth_error()
+                        && !e.is_clock_skew();
                     if !retryable || attempt == max_retries {
                         return Err(e);
                     }

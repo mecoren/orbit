@@ -1,4 +1,3 @@
-use std::collections::HashSet;
 use std::sync::Mutex;
 
 use async_trait::async_trait;
@@ -32,10 +31,123 @@ pub struct WebDavAdapter {
     config: WebDavConfig,
     /// 已确认存在的目录路径缓存（避免重复 PROPFIND）
     ///
-    /// 使用 `Mutex<HashSet<String>>` 而非 `tokio::sync::Mutex`：
+    /// 使用 `Mutex<DirCache>` 而非 `tokio::sync::Mutex`：
     /// 检查/插入是同步快速操作，无需跨 await 持有锁。
-    /// 适配器本身通过 `Arc<WebDavAdapter>` 共享，HashSet 跨克隆共享同一份。
-    dir_cache: Mutex<HashSet<String>>,
+    /// 适配器本身通过 `Arc<WebDavAdapter>` 共享，缓存跨克隆共享同一份。
+    // bounded: MAX_CACHED_DIRS=512 条 FIFO 淘汰（F81；旧实现是无界 HashSet，
+    // 随「≥8MiB 附件个数」单调增长且进程生命周期内永不回收）
+    dir_cache: Mutex<DirCache>,
+}
+
+/// 目录存在性缓存的条目上界（F81）
+///
+/// 稳定条目只有 base_path + 固定布局目录（`tables/{表}`、`tombstones/{表}`、
+/// `assets`、`assets_parts`、`crypto` 等，约 30 条），真正会随使用增长的是
+/// `assets_parts/{hash}/`——**每个 ≥8MiB 附件一条**。旧实现是无界 `HashSet`，
+/// 条目数只增不减。2GB 磁盘缓存上限意味着本地同时存在的附件本就有界，
+/// 512 条足够覆盖；超出后按 FIFO 淘汰最旧，代价只是下次传同一附件时多一次
+/// PROPFIND（缓存是纯优化，丢了不影响正确性）。
+const MAX_CACHED_DIRS: usize = 512;
+
+/// 递归列举的深度上限（F82）
+///
+/// 当前云端布局最深只有 `assets_parts/{hash}/`（2 层），16 层留足了将来
+/// 分年归档（`backups/{年月}/`）之类的空间。越限**报错而非截断**：截断会
+/// 让用户拿到一份短列表却以为完整（与 S3 侧 F73 同理）。
+const MAX_LIST_DEPTH: usize = 16;
+
+/// 递归列举的条目数上限（F82）
+///
+/// 防御「对着一个畸形/超大目录树做无界遍历」。取 10 万：正常布局差着几个
+/// 数量级，而它真被触发时说明云端结构已经不对，报错比静默截断更有用。
+const MAX_LIST_ENTRIES: usize = 100_000;
+
+/// 拼接「相对 base_path 的路径」两段（`rel_dir` 为空表示起点）
+fn join_relative(rel_dir: &str, segment: &str) -> String {
+    if rel_dir.is_empty() {
+        segment.to_string()
+    } else {
+        format!("{rel_dir}/{segment}")
+    }
+}
+
+/// 判断 Depth:1 响应里的某个条目是不是「被查目录自身」（F83）
+///
+/// RFC 4918 规定 Depth:1 响应**包含被查资源自身**（首条目即目录本身）。递归
+/// 列举时必须排除它，否则每个目录都会把自己当子目录再 PROPFIND 一次。
+///
+/// 两个条件缺一不可：
+/// - `idx == 0`：RFC 保证自身在首位。只按路径匹配会把「路径恰好以目标目录
+///   结尾」的合法子目录误判为自身而静默丢弃（列举 `b/backups` 时误伤
+///   `…/sub/backups`）；
+/// - `is_collection`：自身必然是集合，借此排除同名文件的巧合。
+///
+/// href 侧做**百分号解码**再比对：`href` 是服务端回传的编码形式，而
+/// `self_href` 来自我们自己的原始未编码 target，目录名含空格/非 ASCII 时
+/// 两侧对不上（`sub dir` vs `sub%20dir`）。不解码的后果不是多查一次，
+/// 而是自身条目被当成子目录排队，`visited` 因每层多出一段而失效，
+/// 一路撞穿 `MAX_LIST_DEPTH` 变成硬报错。只解码一侧是安全的：目录名字面
+/// 含 `%20` 时 href 是 `%2520`，解码后正好还原成字面量。
+fn is_self_entry(idx: usize, is_collection: bool, href: &str, self_href: &str) -> bool {
+    if idx != 0 || !is_collection {
+        return false;
+    }
+    let decoded = urlencoding::decode(href)
+        .map(|c| c.into_owned())
+        .unwrap_or_else(|_| href.to_string());
+    decoded.trim_end_matches('/').ends_with(self_href)
+}
+
+/// 取 PROPFIND 条目的**单段**名（basename）
+///
+/// `display_name` 优先，但部分实现回传的是整条路径（而非末段），直接采用
+/// 会把父路径塞进 `name`——这正是 P0-1「目录条目 basename 退化为整条 URL」
+/// 的病灶形态。因此无论来源是 `display_name` 还是 `href`，都统一走
+/// 「剥尾斜杠 → 取最后一段」，且**取不到就返回空串**（调用方跳过该条目），
+/// 绝不回退成整条 URL。
+fn entry_basename(display_name: &Option<String>, href: &str) -> String {
+    let raw = display_name.as_deref().unwrap_or(href);
+    raw.trim_end_matches('/')
+        .rsplit('/')
+        .next()
+        .filter(|s| !s.is_empty())
+        .unwrap_or("")
+        .to_string()
+}
+
+/// 已确认存在的目录路径集合（bounded: MAX_CACHED_DIRS 条，FIFO 淘汰最旧）
+///
+/// 用 `VecDeque` 而非 `HashSet` 以保留插入序（FIFO 需要）；上界只有 512，
+/// 线性 `contains` 的最坏代价可忽略，换来「查/插/清」三件事都不需要第二个容器。
+#[derive(Debug, Default)]
+struct DirCache {
+    entries: std::collections::VecDeque<String>,
+}
+
+impl DirCache {
+    fn contains(&self, path: &str) -> bool {
+        self.entries.iter().any(|p| p == path)
+    }
+
+    /// 记录一条已确认存在的路径（已存在则不重复占用上界）
+    fn insert(&mut self, path: String) {
+        if self.contains(&path) {
+            return;
+        }
+        if self.entries.len() >= MAX_CACHED_DIRS {
+            self.entries.pop_front();
+        }
+        self.entries.push_back(path);
+    }
+
+    fn clear(&mut self) {
+        self.entries.clear();
+    }
+
+    #[cfg(test)]
+    fn len(&self) -> usize {
+        self.entries.len()
+    }
 }
 
 /// head.json 明文清单结构（S4 WebDAV 分片协议）
@@ -69,7 +181,7 @@ impl WebDavAdapter {
         Ok(Self {
             http,
             config,
-            dir_cache: Mutex::new(HashSet::new()),
+            dir_cache: Mutex::new(DirCache::default()),
         })
     }
 
@@ -213,17 +325,29 @@ impl WebDavAdapter {
         }
 
         let headers = self.auth_headers();
-        let response = self
+        // F81：走 `send_idempotent`（总超时 + 幂等重试）。MKCOL 可重复发：
+        // 已存在回 405/301/302、本层已把它们当成功，不产生额外副作用。
+        let response = match self
             .http
-            .inner()
-            .request(reqwest::Method::from_bytes(b"MKCOL").unwrap(), url)
-            .headers(headers)
-            .send()
+            .send_idempotent(
+                reqwest::Method::from_bytes(b"MKCOL").unwrap(),
+                url,
+                headers,
+                None,
+            )
             .await
-            .map_err(|e| SyncError::Network {
-                message: transport_message("MKCOL 请求", &e),
-                retryable: true,
-            })?;
+        {
+            Ok(r) => r,
+            Err(e) => {
+                // 5xx 耗尽 HTTP 级重试后：保留本函数原有的幂等自愈口径
+                // ——部分服务器过载时对 MKCOL 回 503，但目录可能已在前一次
+                // 请求里建好（响应丢失）。探一次存在性，存在即视为成功。
+                if e.is_retryable() && self.url_exists(url).await? {
+                    return Ok(());
+                }
+                return Err(e);
+            }
+        };
 
         let status = response.status().as_u16();
         match status {
@@ -335,16 +459,13 @@ impl WebDavAdapter {
 
         let response = self
             .http
-            .inner()
-            .request(reqwest::Method::from_bytes(b"PROPFIND").unwrap(), url)
-            .headers(headers)
-            .body(propfind_body.to_string())
-            .send()
-            .await
-            .map_err(|e| SyncError::Network {
-                message: transport_message("PROPFIND 验证请求", &e),
-                retryable: true,
-            })?;
+            .send_idempotent(
+                reqwest::Method::from_bytes(b"PROPFIND").unwrap(),
+                url,
+                headers,
+                Some(propfind_body.to_string().into_bytes()),
+            )
+            .await?;
 
         let status = response.status().as_u16();
         if status == 404 {
@@ -463,9 +584,15 @@ impl WebDavAdapter {
         // 1. 既有清单检查：全字段一致 → 续传；否则清目录重传。
         //    半成品目录（无清单）也清理——防陈旧分片与新会话混片
         let head_path = Self::parts_head_path(parts_root, hash);
+        // F82：记下云端旧清单声明的片数，供清理时确定删除上界。
+        // 读不出/读失败时为 None——此时只能按本轮片数清理（见 `delete_parts_dir`）。
+        let mut existing_total: Option<usize> = None;
         let reusable = match self.download(&head_path).await {
             Ok(bytes) => {
                 let existing: serde_json::Result<AssetPartsHead> = serde_json::from_slice(&bytes);
+                if let Ok(h) = &existing {
+                    existing_total = Some(h.total);
+                }
                 if existing.is_ok_and(|h| {
                     h.size == head.size && h.total == head.total && h.sha256 == head.sha256
                 }) {
@@ -488,7 +615,13 @@ impl WebDavAdapter {
             // 逐片按 size 跳过 stale 分片，最终写出声明本轮密文的 head.json、目录里
             // 却是旧密文 → 读侧拼装 sha256 校验失败（retryable=false）→ 对象永久
             // 不可读，每轮重试都被同一判据拒掉
-            self.delete_parts_dir(hash, parts_root).await?;
+            //
+            // F82：上界取「云端旧片数」与「本轮片数」的较大者——只按本轮片数删会
+            // 漏掉旧轮次多出来的尾片，只按旧片数删则在本轮更大时漏删。旧清单读不
+            // 出来时退回本轮片数（此前的 10000 魔数已随该退化路径一并移除）。
+            let cleanup_bound = existing_total.unwrap_or(0).max(total);
+            self.delete_parts_dir(hash, parts_root, cleanup_bound)
+                .await?;
         }
 
         // 2. 逐片上传：已存在且大小一致 → 跳过（断点续传核心）
@@ -548,17 +681,11 @@ impl WebDavAdapter {
     async fn remote_exists(&self, path: &str) -> Result<bool, SyncError> {
         let url = self.build_url(path);
         let headers = self.auth_headers();
+        // F81：HEAD 幂等纯读，走 `send_idempotent` 拿总超时 + 瞬断重试
         let response = self
             .http
-            .inner()
-            .head(&url)
-            .headers(headers)
-            .send()
-            .await
-            .map_err(|e| SyncError::Network {
-                message: transport_message("HEAD 请求", &e),
-                retryable: true,
-            })?;
+            .send_idempotent(reqwest::Method::HEAD, &url, headers, None)
+            .await?;
         SyncError::classify_head_status(response.status().as_u16())
     }
 
@@ -571,15 +698,8 @@ impl WebDavAdapter {
         let headers = self.auth_headers();
         let response = self
             .http
-            .inner()
-            .head(&url)
-            .headers(headers)
-            .send()
-            .await
-            .map_err(|e| SyncError::Network {
-                message: transport_message("HEAD 请求", &e),
-                retryable: true,
-            })?;
+            .send_idempotent(reqwest::Method::HEAD, &url, headers, None)
+            .await?;
         match SyncError::classify_head_status(response.status().as_u16())? {
             true => Ok(response
                 .headers()
@@ -666,21 +786,34 @@ impl WebDavAdapter {
     ///    残留分片退化成无害孤儿；删除失败（非 404）返回 `Err` 由外层重试。顺序
     ///    不可颠倒：先删片后删清单时，任一片删除失败都会让「不匹配的清单 + 陈旧
     ///    分片」组合继续存活，读侧持续走到拼装 sha256 校验失败。
-    /// 2. 分片按序删除（000000 起连续编号），首个 404 即尾后停止，上限 10000 片防御
-    ///    异常目录；此处失败仍仅记日志——孤儿分片无清单不可读，也不参与 `list_assets`
-    ///    差集（不会被拉回），且清单已删 ⇒ 下一轮必走覆盖重传。
-    async fn delete_parts_dir(&self, hash: &str, parts_root: &str) -> Result<(), SyncError> {
+    /// 2. 分片按**已知片数**删除（F82），不再「首个 404 即停 + 10000 上限」。
+    ///    旧写法有两个洞：(a) 编号出现空洞（`000002` 先被外部删掉）时会在
+    ///    `000002` 提前收工，`000003..` 永久残留——它们无清单不可读，但一直
+    ///    占着网盘空间，且下轮覆盖重传也不会清掉；(b) `0..10_000` 是个与
+    ///    业务无关的魔数：真要触顶得是 50GB 附件（单文件上限 50MB ⇒ 10 片），
+    ///    可它同时**掩盖**了「片数未知」这件事——未知时我们并不知道该删几个。
+    ///    现在由调用方把「云端旧清单声明的片数」与「本轮片数」的较大者传进来，
+    ///    循环上界因此有了来源，10_000 魔数得以删除。
+    ///    失败仍仅记日志：孤儿分片无清单不可读，也不参与 `list_assets` 差集
+    ///    （不会被拉回），且清单已删 ⇒ 下一轮必走覆盖重传。
+    async fn delete_parts_dir(
+        &self,
+        hash: &str,
+        parts_root: &str,
+        max_parts: usize,
+    ) -> Result<(), SyncError> {
         if let Err(e) = self.delete(&Self::parts_head_path(parts_root, hash)).await
             && !e.is_not_found()
         {
             log::warn!("[webdav parts] 删除分片清单失败（清理未完成，本轮判失败）: {e}");
             return Err(e);
         }
-        for index in 0..10_000 {
+        for index in 0..max_parts {
             let part_path = Self::part_bin_path(parts_root, hash, index);
             match self.delete(&part_path).await {
                 Ok(()) => {}
-                Err(e) if e.is_not_found() => break,
+                // 404 只跳过、不再 break：编号有洞时要继续往后删（见上）
+                Err(e) if e.is_not_found() => {}
                 Err(e) => {
                     log::info!("[webdav parts] 删除分片失败（继续）: {e}");
                 }
@@ -706,19 +839,13 @@ impl WebDavAdapter {
 </d:propfind>"#;
         let response = self
             .http
-            .inner()
-            .request(
+            .send_idempotent(
                 reqwest::Method::from_bytes(b"PROPFIND").unwrap_or(reqwest::Method::GET),
                 &url,
+                headers,
+                Some(propfind_body.to_string().into_bytes()),
             )
-            .headers(headers)
-            .body(propfind_body.to_string())
-            .send()
-            .await
-            .map_err(|e| SyncError::Network {
-                message: transport_message("PROPFIND 请求", &e),
-                retryable: true,
-            })?;
+            .await?;
         let status = response.status().as_u16();
         if status == 404 {
             return Ok(Vec::new());
@@ -757,9 +884,42 @@ impl WebDavAdapter {
 
 #[async_trait]
 impl SyncAdapter for WebDavAdapter {
+    /// 列举 `base_path` 下的文件，**递归**（F82）
+    ///
+    /// ## 为什么改成递归（F32 收口）
+    ///
+    /// 本方法此前是 `Depth:1` 单层，且 `name` 取 basename。它与 S3 侧
+    /// （`ListObjectsV2 prefix=…` 递归、`name` = 相对路径）在**两个维度上**
+    /// 都不等价：WebDAV 漏掉二级及更深的目录，同名文件还会互相覆盖。
+    /// 当年之所以能相安无事，只是因为云端布局恰好是「base_path 下一层」；
+    /// 一旦引入嵌套（例如 `backups/{年月}/xxx.orfullsync`），WebDAV 侧会
+    /// **静默漏项**——调用方拿到的是一份看起来正常的短列表，没有任何报错。
+    ///
+    /// 现按 S3 的契约对齐：`name` = 相对 `base_path` 的路径（可含 `/`），
+    /// 子目录逐层下探。
+    ///
+    /// ## 逐层下探而非 `Depth: infinity`（F82）
+    ///
+    /// RFC 4918 允许 `Depth: infinity`，但**主流服务端出于防滥用/防 DoS
+    /// 默认禁用**（Nextcloud 即如此），发了多半回 403 或被网关改写。逐层
+    /// `Depth:1` + 广度优先是唯一在两端都稳的做法，代价是每个子目录一次
+    /// PROPFIND——对当前布局（`backups/` 下全是平铺文件，无子目录）请求数
+    /// 与改前**完全相同**。
+    ///
+    /// ## 空 `base_path` 仍是单层探测（F82 契约）
+    ///
+    /// 双壳连接测试传空串。对着网盘**分享根**做递归 = 遍历用户整个云盘，
+    /// 既是分钟级请求也会在限流服务端（坚果云约 1 req/s）直接触发 503 风暴。
+    /// 故空 prefix 保留单层；这条边界同时写进了 trait 契约。
+    ///
+    /// ## 广度优先 + 环防护
+    ///
+    /// 服务端若返回指向祖先的条目（畸形 href / 符号链接），朴素递归会
+    /// 无限下探。`visited` 集合按**已请求的相对路径**去重，天然挡住环。
+    /// 另有深度与条目数两道硬上限，越限**报错而非截断**——与 S3 侧 F73
+    /// 「`IsTruncated=true` 却无游标 → 拒绝返回不完整列表」同一口径：
+    /// 宁可让用户看到「云端结构异常」，也不要一份短列表冒充完整结果。
     async fn list_all_files(&self, base_path: &str) -> Result<Vec<RemoteFile>, SyncError> {
-        let url = self.build_url(base_path);
-
         let mut headers = self.auth_headers();
         headers.insert("Depth", "1".parse().unwrap());
         headers.insert("Content-Type", "application/xml".parse().unwrap());
@@ -778,83 +938,137 @@ impl SyncAdapter for WebDavAdapter {
   </d:prop>
 </d:propfind>"#;
 
-        let response = self
-            .http
-            .inner()
-            .request(
-                reqwest::Method::from_bytes(b"PROPFIND").unwrap_or(reqwest::Method::GET),
-                &url,
-            )
-            .headers(headers)
-            .body(propfind_body.to_string())
-            .send()
-            .await
-            .map_err(|e| SyncError::Network {
-                message: transport_message("PROPFIND 请求", &e),
-                retryable: true,
+        // 空 base_path = 连通性探测（双壳连接测试），**不下探**（见方法文档）。
+        // 这一条是安全边界而非性能优化：空 prefix 的目标目录是网盘分享根，
+        // 对它递归 = 遍历用户整个云盘，在限流服务端上必然把请求打成风暴。
+        // F83：初版递归实现漏了这个闸门，会从分享根一路下探。
+        let recurse = !base_path.trim().is_empty();
+
+        // 递归广度优先：`pending` 存「相对 base_path 的待查目录」（空串 = 起点）
+        let mut pending: std::collections::VecDeque<String> =
+            std::collections::VecDeque::from([String::new()]);
+        let mut visited: std::collections::HashSet<String> = std::collections::HashSet::new();
+        let mut files: Vec<RemoteFile> = Vec::new();
+
+        while let Some(rel_dir) = pending.pop_front() {
+            if !visited.insert(rel_dir.clone()) {
+                continue;
+            }
+            if rel_dir.matches('/').count() + usize::from(!rel_dir.is_empty()) > MAX_LIST_DEPTH {
+                return Err(SyncError::Network {
+                    message: format!(
+                        "WebDAV 列举深度超过 {} 层（目录 {rel_dir}）：云端目录结构异常，\
+                         已中止以免无限下探",
+                        MAX_LIST_DEPTH
+                    ),
+                    retryable: false,
+                });
+            }
+            if files.len() >= MAX_LIST_ENTRIES {
+                return Err(SyncError::Network {
+                    message: format!(
+                        "WebDAV 列举条目数超过 {}（目录 {rel_dir}）：拒绝返回不完整列表，\
+                         请检查云端目录结构",
+                        MAX_LIST_ENTRIES
+                    ),
+                    retryable: false,
+                });
+            }
+
+            // 请求路径 = base_path + 相对目录（与 `build_url` 的拼接口径一致）
+            let target = if rel_dir.is_empty() {
+                base_path.to_string()
+            } else {
+                format!("{}/{}", base_path.trim_end_matches('/'), rel_dir)
+            };
+            let url = self.build_url(&target);
+            // F83：本目录自身在响应里的判定锚点。RFC 4918 的 Depth:1 响应
+            // **包含被查资源自身**（首条目即目录本身），初版递归实现没排除它，
+            // 于是每个目录都会把自己当成子目录再查一次（一次注定 404 的
+            // PROPFIND），深度越大浪费越多——对 1 req/s 的服务是实打实的代价。
+            // 锚点带前导 `/`：`/dav/xbackup` 不会误判成 `/…/backup` 的自身条目。
+            let self_href = format!("/{}", target.trim_matches('/').trim_end_matches('/'));
+
+            let response = self
+                .http
+                .send_idempotent(
+                    reqwest::Method::from_bytes(b"PROPFIND").unwrap_or(reqwest::Method::GET),
+                    &url,
+                    headers.clone(),
+                    Some(propfind_body.to_string().into_bytes()),
+                )
+                .await?;
+
+            let status = response.status().as_u16();
+            // 404: 目录不存在,视为空目录(首次同步时目录尚未创建)
+            // 409: WebDAV 语义同「这条路径现在不在」（坚果云对不存在路径回 409）
+            if status == 404 || status == 409 {
+                continue;
+            }
+            // S11（2026-09-13 探查，基线 P1-1）：非 2xx 错误走统一状态码框架
+            // from_http_status——此前手写 Network{retryable:false} 让 5xx 不可
+            // 重试（与统一框架相反）、body 丢弃（限流标识不可识别）、401/403
+            // 被归为 Network 误导排障方向。
+            if !response.status().is_success() && status != 207 {
+                let body = response.text().await.unwrap_or_default();
+                return Err(SyncError::from_http_status(status, &body));
+            }
+
+            let xml = response.text().await.map_err(|e| SyncError::Network {
+                message: transport_message("读取 PROPFIND 响应", &e),
+                retryable: false,
             })?;
 
-        let status = response.status().as_u16();
-        // 404: 目录不存在,视为空目录(首次同步时目录尚未创建)
-        if status == 404 {
-            return Ok(Vec::new());
-        }
-        // S11（2026-09-13 探查，基线 P1-1）：非 2xx 错误走统一状态码框架
-        // from_http_status——此前手写 Network{retryable:false} 让 5xx 不可
-        // 重试（与统一框架相反）、body 丢弃（限流标识不可识别）、401/403
-        // 被归为 Network 误导排障方向。
-        if !response.status().is_success() && status != 207 {
-            let body = response.text().await.unwrap_or_default();
-            return Err(SyncError::from_http_status(status, &body));
-        }
+            let entries = parse_propfind_response(&xml).map_err(|e| SyncError::Network {
+                message: format!("解析 PROPFIND XML 失败: {e}"),
+                retryable: false,
+            })?;
 
-        let xml = response.text().await.map_err(|e| SyncError::Network {
-            message: transport_message("读取 PROPFIND 响应", &e),
-            retryable: false,
-        })?;
-
-        let entries = parse_propfind_response(&xml).map_err(|e| SyncError::Network {
-            message: format!("解析 PROPFIND XML 失败: {e}"),
-            retryable: false,
-        })?;
-
-        // 转换为 RemoteFile（v7: 不过滤后缀，调用方自行过滤）
-        // 过滤掉目录本身（is_collection=true）和空 href 条目
-        // 将 RFC 2822 日期字符串解析为 Unix 时间戳（毫秒），解析失败时回退为 0
-        // v7: name 统一使用 basename（仅文件名），与 S3 adapter 行为一致
-        // 坚果云等 WebDAV 服务 PROPFIND 返回的 href 是服务器绝对路径
-        // （如 /dav/wait-home/backups/file.waitfullsync），直接作为 name 会导致
-        // 调用方拼接路径时重复前缀，必须提取最后一段路径作为文件名
-        let files: Vec<RemoteFile> = entries
-            .into_iter()
-            .filter(|e| !e.is_collection && !e.href.is_empty())
-            .map(|e| {
-                let last_modified = e
-                    .last_modified
-                    .as_deref()
-                    .and_then(|s| chrono::DateTime::parse_from_rfc2822(s).ok())
-                    .map(|dt| dt.timestamp())
-                    .unwrap_or(0);
-                // 优先使用 display_name，否则从 href 提取 basename。
-                // 先剥尾斜杠再取最后一段：目录条目的 href 以 "/" 结尾，
-                // rsplit 会取到空串；直接回退整条 URL 会把目录当文件混入列表
-                let name = e.display_name.unwrap_or_else(|| {
-                    e.href
-                        .trim_end_matches('/')
-                        .rsplit('/')
-                        .next()
-                        .filter(|s| !s.is_empty())
-                        .unwrap_or(&e.href)
-                        .to_string()
-                });
-                RemoteFile {
-                    name,
-                    size: e.content_length.unwrap_or(0) as u64,
-                    last_modified,
-                    etag: e.etag,
+            for (idx, e) in entries.into_iter().enumerate() {
+                // 空 href 条目无处定位，跳过（原实现的 filter 语义）
+                if e.href.is_empty() {
+                    continue;
                 }
-            })
-            .collect();
+                // href 是服务端回传的**百分号编码**形式（`self_href` 与我们自己拼的
+                // 相对路径则是未编码的），凡是要拿去和本地字符串比对、或要
+                // 拼回请求 URL 的，都得先解码。解码各做一次、互不串联：
+                // 串联会把目录名字面量 `%20` 解成空格（href 原形是 `%2520`）。
+                let href_decoded = urlencoding::decode(&e.href)
+                    .map(|c| c.into_owned())
+                    .unwrap_or_else(|_| e.href.clone());
+                // 目录自身条目既不是文件也不该再下探（判定含解码，收敛在函数内）
+                if is_self_entry(idx, e.is_collection, &e.href, &self_href) {
+                    continue;
+                }
+                // 取单段名：display_name 可能是服务端回传的**整条路径**
+                // （部分实现如此），先剥尾斜杠再取最后一段；缺失时从 href 取。
+                // 这一步是 P0-1 的原始病灶（目录条目 basename 退化为整条 URL）。
+                // href 传解码后的值：否则「从 href 取名」拿到 `sub%20dir`，
+                // 拼 URL 时再编码一次变 `sub%2520dir`，请求打到不存在的路径。
+                let segment = entry_basename(&e.display_name, &href_decoded);
+                if segment.is_empty() {
+                    continue;
+                }
+                if e.is_collection {
+                    // 空 prefix 不下探（F83：分享根递归 = 遍历用户整个云盘）
+                    if recurse {
+                        pending.push_back(join_relative(&rel_dir, &segment));
+                    }
+                } else {
+                    files.push(RemoteFile {
+                        name: join_relative(&rel_dir, &segment),
+                        size: e.content_length.unwrap_or(0) as u64,
+                        last_modified: e
+                            .last_modified
+                            .as_deref()
+                            .and_then(|s| chrono::DateTime::parse_from_rfc2822(s).ok())
+                            .map(|dt| dt.timestamp())
+                            .unwrap_or(0),
+                        etag: e.etag,
+                    });
+                }
+            }
+        }
 
         Ok(files)
     }
@@ -937,18 +1151,12 @@ impl SyncAdapter for WebDavAdapter {
         let url = self.build_url(path);
         let headers = self.auth_headers();
 
+        // F81：DELETE 幂等（删不存在的对象回 404，`check_delete_status` 已把
+        // 404 当成功），可安全走 `send_idempotent` 拿到总超时 + 瞬断重试。
         let response = self
             .http
-            .inner()
-            .delete(&url)
-            .headers(headers)
-            .send()
-            .await
-            .map_err(|e| SyncError::Network {
-                message: transport_message("DELETE 请求", &e),
-                // S12：传输层失败是瞬态，标可重试（同 S3 侧口径）
-                retryable: true,
-            })?;
+            .send_idempotent(reqwest::Method::DELETE, &url, headers, None)
+            .await?;
 
         // Fix-03：校验状态码，403/500 等失败不得静默成功
         SyncError::check_delete_status(response.status().as_u16())
@@ -979,19 +1187,13 @@ impl SyncAdapter for WebDavAdapter {
 
         let response = self
             .http
-            .inner()
-            .request(
+            .send_idempotent(
                 reqwest::Method::from_bytes(b"PROPFIND").unwrap_or(reqwest::Method::GET),
                 &url,
+                headers,
+                Some(propfind_body.to_string().into_bytes()),
             )
-            .headers(headers)
-            .body(propfind_body.to_string())
-            .send()
-            .await
-            .map_err(|e| SyncError::Network {
-                message: transport_message("PROPFIND 请求", &e),
-                retryable: true,
-            })?;
+            .await?;
 
         let status = response.status().as_u16();
         // 404 = 目录不存在（首次使用时 assets 尚未创建），视为空列表。
@@ -1330,6 +1532,8 @@ mod tests {
         objects: std::sync::Arc<std::sync::Mutex<std::collections::HashMap<String, Vec<u8>>>>,
         fail_delete_suffix: std::sync::Arc<std::sync::Mutex<Option<String>>>,
         dirs: std::sync::Arc<std::sync::Mutex<std::collections::HashSet<String>>>,
+        /// 已收到的 DELETE 路径（F82：钉住「清理不得发散式试探删除」）
+        deletes: std::sync::Arc<std::sync::Mutex<Vec<String>>>,
     }
 
     impl FakeDav {
@@ -1343,12 +1547,18 @@ mod tests {
                 Arc::new(Mutex::new(HashMap::new()));
             let fail = Arc::new(Mutex::new(None::<String>));
             let dirs: Arc<Mutex<HashSet<String>>> = Arc::new(Mutex::new(HashSet::new()));
-            let (objs, fl, dr) = (objects.clone(), fail.clone(), dirs.clone());
+            let deletes: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(Vec::new()));
+            let (objs, fl, dr, dl) = (
+                objects.clone(),
+                fail.clone(),
+                dirs.clone(),
+                deletes.clone(),
+            );
             std::thread::spawn(move || {
                 for stream in listener.incoming().flatten() {
-                    let (objs, fl, dr) = (objs.clone(), fl.clone(), dr.clone());
+                    let (objs, fl, dr, dl) = (objs.clone(), fl.clone(), dr.clone(), dl.clone());
                     std::thread::spawn(move || {
-                        let _ = serve_webdav(stream, objs, fl, dr);
+                        let _ = serve_webdav(stream, objs, fl, dr, dl);
                     });
                 }
             });
@@ -1357,6 +1567,7 @@ mod tests {
                 objects,
                 fail_delete_suffix: fail,
                 dirs,
+                deletes,
             }
         }
 
@@ -1383,14 +1594,367 @@ mod tests {
         fn fail_delete_ending(&self, suffix: &str) {
             *self.fail_delete_suffix.lock().unwrap() = Some(suffix.to_string());
         }
+
+        /// 已收到的 DELETE 路径（F82 断言用）
+        fn delete_paths(&self) -> Vec<String> {
+            self.deletes.lock().unwrap().clone()
+        }
     }
 
-    /// 单连接请求循环（HTTP/1.1 keep-alive：reqwest 连接池会复用连接）
+    // ========================================================================
+    // F81：目录存在性缓存必须有界
+    //
+    // 旧实现是无界 `HashSet`：条目数随「≥8MiB 附件个数」单调增长
+    //（`assets_parts/{hash}/` 每附件一条）且进程生命周期内永不回收。
+    // 缓存本身是纯优化，淘汰最旧条目只多一次 PROPFIND，故直接给上界。
+    // ========================================================================
+
+    #[test]
+    fn dir_cache_is_bounded_and_evicts_oldest_first() {
+        let mut cache = DirCache::default();
+        for i in 0..MAX_CACHED_DIRS {
+            cache.insert(format!("assets_parts/{i}/"));
+        }
+        assert_eq!(cache.len(), MAX_CACHED_DIRS);
+        assert!(
+            cache.contains("assets_parts/0/"),
+            "刚插入的条目必须在（上限是上界不是预分配）"
+        );
+
+        // 超一条：淘汰最旧，保留最新
+        cache.insert("assets_parts/overflow/".to_string());
+        assert_eq!(cache.len(), MAX_CACHED_DIRS, "上界不得被突破");
+        assert!(
+            !cache.contains("assets_parts/0/"),
+            "最旧条目必须被 FIFO 淘汰"
+        );
+        assert!(
+            cache.contains("assets_parts/overflow/"),
+            "新条目必须留在缓存里"
+        );
+    }
+
+    /// 重复插入不得占位：同一路径每轮 push 都会重复确认存在，
+    /// 不能把上界耗在重复项上，否则有效容量被稀释到接近 0。
+    #[test]
+    fn dir_cache_dedups_repeated_inserts() {
+        let mut cache = DirCache::default();
+        for _ in 0..1000 {
+            cache.insert("base/assets".to_string());
+        }
+        assert_eq!(cache.len(), 1, "重复插入必须原位去重");
+    }
+
+    /// clear 是 S29「409 后重建目录链」的正确性依赖：清空后必须真的重新探测
+    #[test]
+    fn dir_cache_clear_drops_everything() {
+        let mut cache = DirCache::default();
+        cache.insert("base/assets".to_string());
+        cache.clear();
+        assert_eq!(cache.len(), 0);
+        assert!(!cache.contains("base/assets"));
+    }
+
+// ========================================================================
+    // F82：递归列举 —— 两协议语义对齐（name = 相对路径）
+    // ========================================================================
+
+    /// basename 必须**归一到单段**：display_name 可能是整条路径
+    ///
+    /// 旧实现直接采用 `display_name`，部分服务端回传的是完整路径，
+    /// 于是 `name` 里带上了父目录前缀 —— 调用方拼路径时重复前缀
+    /// （P0-1 同族病灶）。这里锁死「无论如何都取末段」。
+    #[test]
+    fn entry_basename_always_yields_single_segment() {
+        // display_name 已是末段
+        assert_eq!(
+            entry_basename(&Some("file.orfullsync".to_string()), "/dav/x/file.orfullsync"),
+            "file.orfullsync"
+        );
+        // display_name 是整条路径 → 必须取末段
+        assert_eq!(
+            entry_basename(&Some("/dav/wait-home/backups/f.orfullsync".to_string()), ""),
+            "f.orfullsync"
+        );
+        // 无 display_name → 从 href 取末段
+        assert_eq!(
+            entry_basename(&None, "/dav/wait-home/backups/f.orfullsync"),
+            "f.orfullsync"
+        );
+        // 目录条目 href 带尾斜杠 → 不得取到空串（否则整条目被跳过）
+        assert_eq!(entry_basename(&None, "/dav/wait-home/backups/"), "backups");
+    }
+
+    /// 自身条目必须被排除，且**百分号编码的 href 也必须认得出**（F83）
+    ///
+    /// 后半条是这轮自查抓到的真 bug：`href` 由服务端编码回传、`self_href`
+    /// 由我们本地未编码拼出，目录名含空格或非 ASCII 时两者对不上。后果不是
+    /// 「多查一次」——自身条目会被当成子目录排队，而 `visited` 每层多出一段
+    /// 就失效，一路撞穿 `MAX_LIST_DEPTH` 变成整轮硬报错。
+    #[test]
+    fn self_entry_is_detected_including_percent_encoded_href() {
+        // 基本形态：首位 + 集合 + 路径一致
+        assert!(
+            is_self_entry(0, true, "/dav/x/backups/", "/x/backups"),
+            "首位集合条目就是自身"
+        );
+        // 尾斜杠差异必须被吸收
+        assert!(
+            is_self_entry(0, true, "/dav/x/backups", "/x/backups"),
+            "尾斜杠差异不得影响判定"
+        );
+        // 服务端带 URL 前缀（server_url 含路径段）仍要认得出
+        assert!(
+            is_self_entry(0, true, "/dav/wait-home/x/backups/", "/x/backups"),
+            "服务端前缀不得影响判定（ends_with 语义）"
+        );
+        // 编码 href：目录名含空格
+        assert!(
+            is_self_entry(0, true, "/dav/x/sub%20dir/", "/x/sub dir"),
+            "href 编码、self_href 未编码时必须仍判为自身"
+        );
+        // 编码 href：非 ASCII
+        assert!(
+            is_self_entry(0, true, "/dav/x/%E8%BA%AB%E4%BB%BD/", "/x/身份"),
+            "非 ASCII 目录名的编码 href 必须判为自身"
+        );
+        // 只解码一侧的安全性：目录名字面含 `%20` → href 是 `%2520`
+        assert!(
+            is_self_entry(0, true, "/dav/x/a%2520b/", "/x/a%20b"),
+            "字面 `%20` 目录名必须解码回字面量而不是空格"
+        );
+    }
+
+    /// 排除自身**不得**误伤合法子目录——这正是只按后缀匹配的病灶（F83）
+    #[test]
+    fn self_entry_check_does_not_drop_legitimate_children() {
+        // 列举 `backups` 时，`…/sub/backups` 是合法子目录，必须保留
+        assert!(
+            !is_self_entry(0, true, "/dav/x/sub/backups/", "/x/backups"),
+            "路径恰好以目标目录结尾的子目录不得被误判为自身"
+        );
+        // 非首位即便路径相同也不是自身（RFC 保证自身在首位）
+        assert!(
+            !is_self_entry(1, true, "/dav/x/backups/", "/x/backups"),
+            "非首位不得判为自身"
+        );
+        // 文件条目即便在首位、路径相同也不是自身
+        assert!(
+            !is_self_entry(0, false, "/dav/x/backups", "/x/backups"),
+            "文件不得判为自身"
+        );
+        // 不同名的普通子目录
+        assert!(!is_self_entry(0, true, "/dav/x/2026-09/", "/x/backups"));
+    }
+
+    #[test]
+    fn join_relative_handles_root_and_nested() {
+        assert_eq!(join_relative("", "a.orsync"), "a.orsync");
+        assert_eq!(join_relative("2026-09", "a.orfullsync"), "2026-09/a.orfullsync");
+        assert_eq!(join_relative("a/b", "c.bin"), "a/b/c.bin");
+    }
+
+    /// 单测用的内存 WebDAV：PROPFIND 按对象键反推目录树（支持嵌套），
+    /// 其余动词与 `FakeDav` 同构。用于验证递归列举真的能下探。
+    struct TreeDav {
+        base_url: String,
+    }
+
+    impl TreeDav {
+        fn spawn() -> Self {
+            use std::collections::HashMap;
+            use std::io::{BufRead, BufReader, Read, Write};
+            use std::sync::{Arc, Mutex};
+
+            let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("绑定空闲端口");
+            let port = listener.local_addr().unwrap().port();
+            // 预置一棵两层树：backups/{顶层文件, 2026-09/{子文件}}
+            let objects: Arc<Mutex<HashMap<String, Vec<u8>>>> = Arc::new(Mutex::new(HashMap::from([
+                ("/b/backups/top.orfullsync".to_string(), b"top".to_vec()),
+                ("/b/backups/2026-09/nested.orfullsync".to_string(), b"nested".to_vec()),
+            ])));
+            let objs = objects.clone();
+            std::thread::spawn(move || {
+                for stream in listener.incoming().flatten() {
+                    let objs = objs.clone();
+                    std::thread::spawn(move || {
+                        let Ok(read_half) = stream.try_clone() else { return };
+                        let mut reader = BufReader::new(read_half);
+                        let mut stream = stream;
+                        loop {
+                            let mut line = String::new();
+                            match reader.read_line(&mut line) {
+                                Ok(0) | Err(_) => return,
+                                Ok(_) => {}
+                            }
+                            if line.trim().is_empty() {
+                                continue;
+                            }
+                            let target = line.split_whitespace().nth(1).unwrap_or("/").to_string();
+                            let mut body_len = 0usize;
+                            loop {
+                                let mut h = String::new();
+                                match reader.read_line(&mut h) {
+                                    Ok(0) | Err(_) => return,
+                                    Ok(_) => {}
+                                }
+                                if h.trim().is_empty() {
+                                    break;
+                                }
+                                if let Some((k, v)) = h.split_once(':')
+                                    && k.trim().eq_ignore_ascii_case("content-length")
+                                {
+                                    body_len = v.trim().parse().unwrap_or(0);
+                                }
+                            }
+                            if body_len > 0 {
+                                let mut body = vec![0u8; body_len];
+                                if reader.read_exact(&mut body).is_err() {
+                                    return;
+                                }
+                            }
+                            let path = target
+                                .strip_prefix("http://")
+                                .map(|rest| match rest.find('/') {
+                                    Some(i) => rest[i..].to_string(),
+                                    None => "/".to_string(),
+                                })
+                                .unwrap_or(target);
+                            // 任意路径都按对象键反推目录（不预设根），这样空 prefix（连到 `/`）
+    // 与嵌套 prefix 两种形态都能被同一夹具覆盖
+                            let reply = tree_propfind(&objs, &path);
+                            let head = format!(
+                                "HTTP/1.1 {} X\r\nContent-Length: {}\r\nConnection: keep-alive\r\n\r\n",
+                                reply.0,
+                                reply.1.len()
+                            );
+                            if stream.write_all(head.as_bytes()).is_err()
+                                || stream.write_all(&reply.1).is_err()
+                                || stream.flush().is_err()
+                            {
+                                return;
+                            }
+                        }
+                    });
+                }
+            });
+            Self {
+                base_url: format!("http://127.0.0.1:{port}"),
+            }
+        }
+    }
+
+    /// 按对象键反推目录的一级子项（PROPFIND Depth:1 语义）
+    fn tree_propfind(
+        objects: &std::sync::Arc<std::sync::Mutex<std::collections::HashMap<String, Vec<u8>>>>,
+        dir: &str,
+    ) -> (u16, Vec<u8>) {
+        use std::fmt::Write as _;
+        let dir = dir.trim_end_matches('/');
+        let objs = objects.lock().unwrap();
+        let prefix = format!("{dir}/");
+        let mut children: Vec<(String, bool)> = Vec::new();
+        for key in objs.keys() {
+            let Some(rest) = key.strip_prefix(&prefix) else {
+                continue;
+            };
+            match rest.split_once('/') {
+                Some((sub, _)) => {
+                    let name = format!("{prefix}{sub}");
+                    if !children.iter().any(|(h, _)| *h == name) {
+                        children.push((name, true));
+                    }
+                }
+                None => children.push((key.clone(), false)),
+            }
+        }
+        if children.is_empty() && !objs.contains_key(dir) {
+            return (404, Vec::new());
+        }
+        children.sort();
+        let mut xml = String::from(
+            "<?xml version=\"1.0\"?><d:multistatus xmlns:d=\"DAV:\">",
+        );
+        for (href, is_dir) in children {
+            let _ = write!(
+                xml,
+                "<d:response><d:href>{href}</d:href><d:propstat><d:prop><d:resourcetype>{}</d:resourcetype><d:getcontentlength>7</d:getcontentlength></d:prop><d:status>HTTP/1.1 200 OK</d:status></d:propstat></d:response>",
+                if is_dir { "<d:collection/>" } else { "" }
+            );
+        }
+        xml.push_str("</d:multistatus>");
+        (207, xml.into_bytes())
+    }
+
+    /// F82：二级及更深的目录必须被列举到，且 `name` 是**相对 base_path 的路径**
+    ///
+    /// 这是本项修复的核心断言：旧实现 `Depth:1` 只回顶层，`nested.orfullsync`
+    /// 根本不出现在结果里——而调用方拿到的仍是一份「看起来正常」的列表，
+    /// 没有任何报错提示漏了东西。
+    #[tokio::test]
+    async fn list_all_files_recurses_into_subdirectories() {
+        let dav = TreeDav::spawn();
+        let adapter = adapter_for(&dav.base_url);
+
+        let files = adapter
+            .list_all_files("b/backups")
+            .await
+            .expect("递归列举必须成功");
+
+        let mut names: Vec<&str> = files.iter().map(|f| f.name.as_str()).collect();
+        names.sort();
+        assert_eq!(
+            names,
+            vec!["2026-09/nested.orfullsync", "top.orfullsync"],
+            "二级目录内容必须出现，且 name 为相对 base_path 的路径（与 S3 同口径）"
+        );
+    }
+
+    /// F83：空 prefix（连接测试形态）**绝不可递归下探**——安全边界，不是性能优化
+    ///
+    /// 初版递归实现漏了这个闸门：对着**网盘分享根**一路下探 = 遍历用户整个云盘。
+    /// 在坚果云这类约 1 req/s 限流的服务上，连接测试会直接变成一次请求风暴。
+    ///
+    /// 夹具里第一层只有目录 `/b`（没有顶层文件），文件都在 `b/backups/…` 之下：
+    /// 于是两种行为的输出截然不同——闸门生效时**一条文件都列不出**（只看第一层），
+    /// 闸门失效时会把整棵树走完、拿到 2 个文件。断言取「空」，反向即失效。
+    #[tokio::test]
+    async fn empty_prefix_never_descends_below_first_level() {
+        let dav = TreeDav::spawn();
+        let adapter = adapter_for(&dav.base_url);
+        let files = adapter
+            .list_all_files("")
+            .await
+            .expect("空 prefix 列举不得报错");
+        assert!(
+            files.is_empty(),
+            "空 prefix 只能看到第一层（本夹具第一层只有目录、无文件）；\
+             实际列出了 {:?} —— 说明递归闸门失效，会对着分享根遍历整个云盘",
+            files.iter().map(|f| &f.name).collect::<Vec<_>>()
+        );
+    }
+
+    /// 对照面：目录不存在仍返回空列表（不得把「没有」误报成错误）
+    #[tokio::test]
+    async fn list_all_files_missing_directory_is_empty_not_error() {
+        let dav = TreeDav::spawn();
+        let adapter = adapter_for(&dav.base_url);
+        assert!(
+            adapter
+                .list_all_files("b/not-there")
+                .await
+                .expect("目录不存在不是错误")
+                .is_empty()
+        );
+    }
+
+/// 单连接请求循环（HTTP/1.1 keep-alive：reqwest 连接池会复用连接）
     fn serve_webdav(
         mut stream: std::net::TcpStream,
         objects: std::sync::Arc<std::sync::Mutex<std::collections::HashMap<String, Vec<u8>>>>,
         fail_delete_suffix: std::sync::Arc<std::sync::Mutex<Option<String>>>,
         dirs: std::sync::Arc<std::sync::Mutex<std::collections::HashSet<String>>>,
+        deletes: std::sync::Arc<std::sync::Mutex<Vec<String>>>,
     ) -> std::io::Result<()> {
         use std::io::{BufRead, BufReader, Read, Write};
 
@@ -1475,6 +2039,8 @@ mod tests {
                     None => (404, Vec::new(), Some(0)),
                 },
                 "DELETE" => {
+                    // F82：记录每次 DELETE，供断言「清理不得发散式试探删除」
+                    deletes.lock().unwrap().push(path.clone());
                     let injected = fail_delete_suffix
                         .lock()
                         .unwrap()
@@ -1615,6 +2181,49 @@ mod tests {
             serde_json::from_slice(&dav.get(head_path).expect("清单已写入")).expect("清单可解析");
         assert_eq!(head.size, encrypted.len());
         assert_eq!(head.sha256, crate::crypto::sha256::sha256_hex(&encrypted));
+    }
+
+    /// F82（回归钉子）：清理不得发散式地试探删除
+    ///
+    /// 旧实现 `for index in 0..10_000 { … Err(is_not_found) => break }` 的
+    /// `break` **从未生效**——`WebDavAdapter::delete` 走
+    /// `SyncError::check_delete_status`，它把 404 当幂等成功转成 `Ok(())`，
+    /// 于是「首个 404 即停」的分支永远走不到。结果是：一次清单不匹配的清理
+    /// 会**真的发出约 10,000 次 DELETE**（3 片的目录 → 3 次成功 + 9,997 次 404）。
+    ///
+    /// 在坚果云这类约 1 req/s 限流的服务上，一次 rekey 触发的附件重传会把同步
+    /// 挂住数小时，且全程持有引擎的同步互斥锁（后续入口一律 `skipped`）。
+    ///
+    /// 现在上界来自「云端旧清单片数 vs 本轮片数」，请求数与实际片数同阶。
+    #[tokio::test]
+    async fn stale_parts_cleanup_does_not_fire_thousands_of_deletes() {
+        let dav = FakeDav::spawn();
+        let adapter = adapter_for(&dav.base_url);
+        // 云端旧清单声明 3 片，但只留下「编号有洞」的一片
+        dav.seed(
+            "/assets_parts/abc/head.json",
+            br#"{"total":3,"size":1,"sha256":"stale-not-this-round"}"#,
+        );
+        dav.seed("/assets_parts/abc/000002.bin", b"stale");
+        // 本轮只有 1 片（清理上界 = max(3, 1) = 3）
+        let encrypted = vec![0x5Au8; 1024];
+
+        adapter
+            .upload_asset_parts("abc", "assets_parts", "assets/abc.orsync", &encrypted)
+            .await
+            .expect("清理后应能上传");
+
+        let deletes = dav.delete_paths();
+        // 上界 = head.json 1 + 旧片数上界 3 + 尾部单对象 1（步骤 4 的 rekey 对账）
+        assert!(
+            deletes.len() <= 5,
+            "清理只应发出「清单 1 + 旧片数 3 + 尾部单对象 1」量级的 DELETE，实发 {} 次: {deletes:?}",
+            deletes.len()
+        );
+        assert!(
+            dav.get("/assets_parts/abc/000002.bin").is_none(),
+            "编号有洞时也必须把 000002 删掉（旧实现会在 000000 的 404 处收工并留下它）"
+        );
     }
 
     /// F57：HEAD 2xx 但不回 `Content-Length` ⇒ 仍算「存在」

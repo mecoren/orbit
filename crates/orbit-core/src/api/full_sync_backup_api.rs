@@ -539,6 +539,65 @@ async fn insert_sync_history(
     Ok(())
 }
 
+/// 备份自洽性闸门：清单声明的表集合必须与 `business/*.json` 条目集合一致（F88）
+///
+/// ## 为什么需要这道闸门
+///
+/// 恢复流程的两个阶段遍历的是**互相独立的来源**：
+/// - DELETE 阶段遍历 `manifest.table_counts`（`import_full_sync_backup` 第 5 步）；
+/// - INSERT 阶段遍历 `decoded.table_data`（第 6 步）。
+///
+/// 二者不一致时会出现两类静默损坏：
+///
+/// 1. **清单有、JSON 没有**（包被截断损坏，或被人为构造）：该表被物理
+///    `DELETE` 清空、一条都没插回去。而这条路径**不产生任何 error**——
+///    表是存在的、只是 JSON 缺失，既不进 `total_errors` 也不影响
+///    `success_count`——恢复照样报「成功」。**整表数据无声消失。**
+/// 2. **JSON 有、清单没有**：该表不会被清空，新数据叠加在旧数据上；
+///    撞上 `UNIQUE(uuid)` 才报错，没撞就是重复行。
+///
+/// ## 为什么不改成「取交集」
+///
+/// 交集会让残包**静默恢复成一份不完整的数据**，用户无从察觉。宁可中止。
+///
+/// ## 合法备份为何必然一致
+///
+/// 导出侧在同一个 `Ok` 分支里同时写入 `table_counts` 与 `table_data`
+/// （`export_full_sync_backup`），且表读取失败时直接**中止导出**而非产出
+/// 残包；`build_zip_bytes` 又只遍历 `table_data`。所以不自洽只可能来自
+/// 损坏或人为构造，两种都该拒绝。
+///
+/// 只校验白名单内的表：不在 `FULL_BACKUP_TABLES` 的名字在 DELETE/INSERT
+/// 两个阶段都会被跳过，不构成数据风险。
+fn ensure_backup_self_consistent(
+    manifest: &BackupManifest,
+    table_data: &BTreeMap<String, String>,
+) -> FullSyncBackupResult<()> {
+    for (table_name, declared) in &manifest.table_counts {
+        if !business_api::FULL_BACKUP_TABLES.contains(&table_name.as_str()) {
+            continue;
+        }
+        if !table_data.contains_key(table_name) {
+            return Err(FullSyncBackupError::InvalidFormat(format!(
+                "备份不完整：清单声明表 {table_name}（{declared} 条）但缺少 \
+                 business/{table_name}.json。已中止恢复——继续下去会清空该表却写不回任何数据。\
+                 请改用另一份备份文件"
+            )));
+        }
+    }
+    for table_name in table_data.keys() {
+        if business_api::FULL_BACKUP_TABLES.contains(&table_name.as_str())
+            && !manifest.table_counts.contains_key(table_name)
+        {
+            return Err(FullSyncBackupError::InvalidFormat(format!(
+                "备份不自洽：含 business/{table_name}.json 但清单未声明该表。已中止恢复——\
+                 否则该表不会被清空，新数据会叠加在旧数据上"
+            )));
+        }
+    }
+    Ok(())
+}
+
 /// 从 `.orfullsync` 文件全量覆盖恢复（兼容遗留 `.waitfullsync`）
 ///
 /// 流程：
@@ -546,6 +605,7 @@ async fn insert_sync_history(
 /// 2. decode_backup 解密 + 解压（密码错误立即返回）
 /// 3. 校验 manifest format_version
 /// 4. 校验 schema_version（可选忽略不匹配）
+/// 4.5 备份自洽性闸门（`ensure_backup_self_consistent`，必须在开事务之前）
 /// 5. 开启事务：遍历业务表 DELETE FROM <table>
 /// 6. 遍历 business/*.json，直接 INSERT 保留备份原始字段（含 uuid/created_at 等）
 /// 7. 事务提交
@@ -581,7 +641,10 @@ pub async fn import_full_sync_backup(
         });
     }
 
-    // 4. 开启事务：全量覆盖恢复
+    // 4. 备份自洽性闸门（必须在开启事务**之前**判定，见 `ensure_backup_self_consistent`）
+    ensure_backup_self_consistent(&decoded.manifest, &decoded.table_data)?;
+
+    // 5. 开启事务：全量覆盖恢复
     let mut tx = pool.begin().await?;
 
     let mut total_success: i64 = 0;
@@ -653,7 +716,7 @@ pub async fn import_full_sync_backup(
     // 提交事务
     tx.commit().await?;
 
-    // 5. 失效同步账本（F54，2026-09-30 第六轮）
+    // 6. 失效同步账本（F54，2026-09-30 第六轮）
     invalidate_sync_ledger(pool, svc).await;
 
     let error_count = total_errors.len() as i64;
@@ -1174,6 +1237,100 @@ mod preview_tests {
 
 // ============================================================================
 // F71：表读取失败必须中止导出（不再静默产出缺表的「完整」备份）
+// ============================================================================
+
+#[cfg(test)]
+mod backup_self_consistency_tests {
+    use super::*;
+
+    fn manifest_with(counts: &[(&str, usize)]) -> BackupManifest {
+        BackupManifest::new(
+            "dev-001".to_string(),
+            Some("Test Device".to_string()),
+            1,
+            counts
+                .iter()
+                .map(|(t, c)| ((*t).to_string(), *c))
+                .collect::<BTreeMap<String, usize>>(),
+            Utc::now().timestamp(),
+            "0.3.7".to_string(),
+        )
+    }
+
+    fn data_for(tables: &[&str]) -> BTreeMap<String, String> {
+        tables
+            .iter()
+            .map(|t| ((*t).to_string(), "[]".to_string()))
+            .collect()
+    }
+
+    /// 自洽的备份必须放行（闸门不能误伤正常路径）
+    #[test]
+    fn consistent_backup_passes() {
+        let manifest = manifest_with(&[("todo_projects", 3), ("todo_tasks", 7)]);
+        let data = data_for(&["todo_projects", "todo_tasks"]);
+        ensure_backup_self_consistent(&manifest, &data)
+            .expect("清单与 business/*.json 一致时必须放行");
+    }
+
+    /// 空备份（无表）也放行
+    #[test]
+    fn empty_backup_passes() {
+        let manifest = manifest_with(&[]);
+        ensure_backup_self_consistent(&manifest, &data_for(&[])).expect("空备份必须放行");
+    }
+
+    /// F88 核心：清单声明了表却缺 JSON → 必须中止，否则该表被 DELETE 空
+    #[test]
+    fn manifest_table_without_json_is_rejected() {
+        let manifest = manifest_with(&[("todo_projects", 3), ("todo_tasks", 7)]);
+        // todo_tasks 的 business/todo_tasks.json 丢失（包被截断）
+        let data = data_for(&["todo_projects"]);
+
+        let err = ensure_backup_self_consistent(&manifest, &data)
+            .expect_err("清单有表而 JSON 缺失必须中止恢复");
+        match err {
+            FullSyncBackupError::InvalidFormat(msg) => {
+                assert!(msg.contains("todo_tasks"), "错误须点名缺失的表: {msg}");
+                assert!(msg.contains("已中止恢复"), "错误须说明已中止: {msg}");
+            }
+            other => panic!("应报格式错误，实际: {other:?}"),
+        }
+    }
+
+    /// 反向：有多余 JSON 但清单未声明 → 必须中止，否则新旧数据叠加
+    #[test]
+    fn extra_json_without_manifest_entry_is_rejected() {
+        let manifest = manifest_with(&[("todo_projects", 3)]);
+        let data = data_for(&["todo_projects", "todo_tasks"]);
+
+        let err = ensure_backup_self_consistent(&manifest, &data)
+            .expect_err("多余 business/*.json 必须中止恢复");
+        match err {
+            FullSyncBackupError::InvalidFormat(msg) => {
+                assert!(msg.contains("todo_tasks"), "错误须点名多余的表: {msg}");
+            }
+            other => panic!("应报格式错误，实际: {other:?}"),
+        }
+    }
+
+    /// 非白名单的表名不参与判定（它在 DELETE/INSERT 两阶段都会被跳过，
+    /// 不构成数据风险；早期版本遗留的表名不应因此把恢复堵死）
+    #[test]
+    fn non_whitelisted_tables_are_ignored() {
+        let manifest = manifest_with(&[("todo_projects", 1), ("rec_books", 2)]);
+        let data = data_for(&["todo_projects"]);
+        ensure_backup_self_consistent(&manifest, &data)
+            .expect("非白名单表缺失不得阻断恢复");
+
+        // 反向：非白名单的 JSON 多出来也不该报错
+        let manifest = manifest_with(&[("todo_projects", 1)]);
+        let data = data_for(&["todo_projects", "rec_books"]);
+        ensure_backup_self_consistent(&manifest, &data)
+            .expect("非白名单表多余不得阻断恢复");
+    }
+}
+
 // ============================================================================
 
 #[cfg(test)]

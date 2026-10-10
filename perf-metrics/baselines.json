@@ -41,12 +41,6 @@
   },
   "knownUnbounded": [
     {
-      "file": "crates/orbit-core/src/sync_adapters/webdav_adapter.rs",
-      "rule": "rust-shared-collection",
-      "count": 1,
-      "note": "dir_cache 只插不删（A7 收 MAX_DIRS FIFO）。该文件当前有并发会话 WIP，Wave 3 落地时随改加 bounded 标记"
-    },
-    {
       "file": "crates/orbit-flutter/src/api/events.rs",
       "rule": "rust-static-collection",
       "count": 1,

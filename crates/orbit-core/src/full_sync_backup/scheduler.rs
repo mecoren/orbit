@@ -11,6 +11,39 @@
 //! - weekly：下一个 schedule_weekday 的 schedule_time
 //! - monthly：下一个 schedule_day_of_month 的 schedule_time
 //! - yearly：下一个 schedule_month/day_of_month 的 schedule_time
+//!
+//! # 已知缺陷：`schedule_time` 按 **UTC** 而非本地时区解释（F89，未修）
+//!
+//! 本模块全部用 `chrono::Utc` 构造目标时刻，`schedule_time`（"HH:mm"，
+//! 用户填的挂钟时间）被直接当作 UTC 小时。而触发侧比对的是绝对时间戳
+//! （`now_ts < prefs.next_backup_at`，`now_ts` 取 `Utc::now().timestamp()`），
+//! 所以**触发瞬间本身是准的**，错的只是「用户填的那个钟点」落在哪个时区：
+//!
+//! - UTC+8：「每天 03:00」→ 实际 **11:00** 本地时间触发；
+//! - UTC-5：「每天 03:00」→ 实际**前一天 22:00** 本地时间触发；
+//! - UTC-5：「每月 15 日 03:00」→ 实际落在**本地 14 日**，日期语义整体错位；
+//! - Hourly 的 `schedule_minute` 是「小时内第几分」，与时区无关，仅在
+//!   非整点偏移区（如 +05:30）错位到相邻刻度。
+//!
+//! 这与本仓 AGENTS.md 的既有约定相悖：「日期分桶按本地时区日界」「时间运算在
+//! 本地时区整数域做」。同步侧统计/日历都守这条，备份调度是仅存的例外。
+//!
+//! ## 为什么不就地修
+//!
+//! 正确修法是把目标时刻构造从 `Utc` 换成 `Local`（`now.with_timezone(&Local)`
+//! 后再拼 `h:m`，最后 `.timestamp()` 回绝对瞬间），并处理两个 DST 分支：
+//! 春季跳变中**不存在**的本地时刻、秋季回拨中**出现两次**的本地时刻
+//! （`Local::from_local_datetime` 分别返回 `None` 与 `Ambiguous`）。
+//!
+//! 但本模块有 20 个既有用例全部用 `Utc.with_ymd_and_hms` 构造输入并断言精确
+//! 时间戳，改语义就必须一并重写为时区无关（把 `ts()` 辅助函数改成按本地构造），
+//! 且 DST 边界日期会在非 UTC 机器上引入偶发失败。这属于需要实跑验证的行为变更，
+//! 不是可以盲改的规模——故此处只留痕，不动代码。
+//!
+//! ## 复现口径
+//!
+//! 设 `TZ=Asia/Shanghai`，偏好设为 Daily + `schedule_time = "03:00"`，调用
+//! `calculate_next_backup_at`，把返回值按本地时间格式化：得到 11:00 即命中。
 
 use chrono::{DateTime, Datelike, TimeZone, Timelike, Utc};
 
