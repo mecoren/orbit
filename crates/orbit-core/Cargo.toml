@@ -20,6 +20,8 @@ crate-type = ["rlib", "staticlib", "cdylib"]
 # 不进生产依赖面
 [dev-dependencies]
 tokio = { workspace = true, features = ["test-util"] }
+# 仅测试用：注入带 DST 的真实时区（America/New_York）验证调度 DST 边界（F89），不进生产依赖面
+chrono-tz = "0.10"
 
 [dependencies]
 # 异步运行时
