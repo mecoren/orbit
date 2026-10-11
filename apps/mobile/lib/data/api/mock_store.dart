@@ -99,6 +99,17 @@ class MockStore {
 
   void seed() {
     const day = 86400000;
+
+    /// offset 天后的**本地零点**毫秒——种子任务的 due 一律纯日期。
+    /// 用 `now() + N 天` 会把跑测墙钟时刻带进 due：时间轴档按「块起点日」
+    /// 分桶，明天截止 −90 分钟的倒推块在 00:00–01:30 窗口内会落回今天，
+    /// 让「无时段出空态」用例随跑测时刻漂移（2026-10-11 CI 假红）。
+    int dueIn(int offsetDays) {
+      final n = DateTime.fromMillisecondsSinceEpoch(now());
+      return DateTime(n.year, n.month, n.day + offsetDays)
+          .millisecondsSinceEpoch;
+    }
+
     Map<String, dynamic> project(String title, String color, int order) {
       final p = {
         ...newEntity('p'),
@@ -186,7 +197,7 @@ class MockStore {
       projectId: work['id'] as int,
       priority: 3,
       description: '对照 docs/05 像素规格逐屏核对。',
-      dueDate: now() + day,
+      dueDate: dueIn(1),
       isFavorite: 1,
       durationMinutes: 90,
     );
@@ -195,22 +206,22 @@ class MockStore {
       projectId: work['id'] as int,
       status: 'done',
       done: 1,
-      dueDate: now() - day,
+      dueDate: dueIn(-1),
     );
     task(
       title: '回复合作方邮件（逾期）',
       projectId: work['id'] as int,
       priority: 2,
-      dueDate: now() - day * 2,
+      dueDate: dueIn(-2),
     );
     final t4 = task(
       title: '采购周末露营物资',
       projectId: life['id'] as int,
       priority: 1,
-      dueDate: now() + day * 3,
+      dueDate: dueIn(3),
     );
     task(title: '未分组想法：写一篇关于 GTD 的短文');
-    task(title: '阅读《Flutter 状态管理实践》', priority: 1, dueDate: now() + day * 7);
+    task(title: '阅读《Flutter 状态管理实践》', priority: 1, dueDate: dueIn(7));
 
     void subtask(int taskId, String title, {bool done = false}) {
       final s = {

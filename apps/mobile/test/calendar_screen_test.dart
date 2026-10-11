@@ -9,6 +9,7 @@ import 'package:orbit/data/api/dto.dart';
 import 'package:orbit/data/api/mock_orbit_bridge.dart';
 import 'package:orbit/data/providers/bridge_provider.dart';
 import 'package:orbit/modules/todo/calendar_screen.dart';
+import 'package:orbit/modules/todo/logic/time_block.dart';
 import 'package:orbit/core/routing/router_keys.dart';
 import 'package:orbit/core/theme/app_dimens.dart';
 import 'package:orbit/modules/todo/sidebar_screen.dart';
@@ -943,8 +944,24 @@ void main() {
     );
   });
 
+  // 契约前置守卫：seed 的 due 必须是本地零点（纯日期）。
+  // 曾经用 `now() + N 天` 造 due 会把跑测时刻带进去，时间轴档按
+  // 「块起点日」分桶时，UTC 00:00–01:30 窗口内「明天截止 −90 分钟」的
+  // 倒推块会落回今天，把下面那条空态用例变成随跑测时刻漂移的假红
+  // （2026-10-11 flutter-mobile CI 即栽在此处）。
+  test('种子契约：seed 任务的 due 均为纯日期（无时刻）', () {
+    final bridge = _seededBridge();
+    for (final t in bridge.store.tasks.values) {
+      expect(
+        hasTimePart(t['due_date'] as int?),
+        isFalse,
+        reason: '「${t['title']}」的 due 带了时刻——时间轴档会据此出块',
+      );
+    }
+  });
+
   testWidgets('时间轴档：无时段时出空态（不是空白网格）', (tester) async {
-    // 默认种子任务的 due 均为纯日期 → 无任何时段块
+    // 默认种子任务的 due 均为纯日期 → 无任何时段块（由上一条守卫钉住）
     final bridge = _seededBridge();
     await tester.pumpWidget(_wrap(const SizedBox(), bridge));
     await settle(tester);
