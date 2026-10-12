@@ -300,6 +300,8 @@ class TodoSubtask {
   final int done;
   final int? doneAt;
   final double position;
+  /// 上级子任务（父）uuid；null = 顶层（M10 多层嵌套，同任务内）
+  final String? parentUuid;
   final int isDeleted;
   final int createdAt;
   final int updatedAt;
@@ -314,6 +316,7 @@ class TodoSubtask {
     required this.done,
     required this.doneAt,
     required this.position,
+    this.parentUuid,
     required this.isDeleted,
     required this.createdAt,
     required this.updatedAt,
@@ -329,6 +332,7 @@ class TodoSubtask {
         done: j['done'] as int,
         doneAt: j['done_at'] as int?,
         position: (j['position'] as num).toDouble(),
+        parentUuid: j['parent_uuid'] as String?,
         isDeleted: j['is_deleted'] as int,
         createdAt: j['created_at'] as int,
         updatedAt: j['updated_at'] as int,
@@ -343,11 +347,14 @@ class TodoSubtaskCreateInput {
   final int taskId;
   final String title;
   final double? position;
+  /// 挂到哪个子任务下（父的 uuid）；null = 顶层。须与 taskId 同任务
+  final String? parentUuid;
 
   const TodoSubtaskCreateInput({
     required this.taskId,
     required this.title,
     this.position,
+    this.parentUuid,
   });
 }
 

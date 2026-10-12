@@ -321,6 +321,7 @@ class RustOrbitBridge implements OrbitBridge {
           taskId: input.taskId,
           title: input.title,
           position: input.position?.toDouble(),
+          parentUuid: input.parentUuid,
         ),
       ));
 
@@ -1571,6 +1572,7 @@ class RustOrbitBridge implements OrbitBridge {
         done: s.done,
         doneAt: s.doneAt,
         position: s.position,
+        parentUuid: s.parentUuid,
         isDeleted: s.isDeleted,
         createdAt: s.createdAt,
         updatedAt: s.updatedAt,

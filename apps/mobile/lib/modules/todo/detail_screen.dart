@@ -35,6 +35,7 @@ import 'form_bottom_sheet.dart' show showTodoDatePicker, syncTaskReminder;
 import 'logic/activity_format.dart';
 import 'logic/markdown_lite.dart';
 import 'logic/repeat_logic.dart' as rep;
+import 'logic/subtask_tree.dart';
 import 'repeat_edit_sheet.dart';
 import 'logic/task_logic.dart';
 import 'providers/todo_providers.dart';
@@ -715,6 +716,8 @@ class _SubtasksSection extends ConsumerStatefulWidget {
 
 class _SubtasksSectionState extends ConsumerState<_SubtasksSection> {
   bool _adding = false;
+  /// M10：行内「加子级」——非 null 时为所挂父行的 uuid（顶层添加走 _adding）
+  String? _addingUnderUuid;
   final _draftController = TextEditingController();
 
   @override
@@ -740,21 +743,29 @@ class _SubtasksSectionState extends ConsumerState<_SubtasksSection> {
     final title = _draftController.text.trim();
     if (title.isEmpty) return;
     _draftController.clear();
-    setState(() => _adding = false);
+    final parentUuid = _addingUnderUuid;
+    setState(() {
+      _adding = false;
+      _addingUnderUuid = null;
+    });
     await _mutate(() => ref
         .read(orbitBridgeProvider)
         .todoSubtaskCreate(TodoSubtaskCreateInput(
           taskId: widget.detail.id,
           title: title,
+          parentUuid: parentUuid,
         )));
   }
 
-  /// 删除确认（对齐评论删除惯例：软删无恢复入口，防误触）
-  Future<void> _confirmDelete(TodoSubtask subtask) async {
+  /// 删除确认（对齐评论删除惯例：软删无恢复入口，防误触。
+  /// M10：带子孙时文案说明整棵子树一并删除）
+  Future<void> _confirmDelete(TodoSubtask subtask, int childCount) async {
     final confirmed = await showConfirmBottomSheet(
       context,
       title: '删除子任务',
-      message: '确定要删除「${subtask.title}」吗？',
+      message: childCount > 0
+          ? '确定要删除「${subtask.title}」吗？其下 $childCount 个子任务将一并删除。'
+          : '确定要删除「${subtask.title}」吗？',
       confirmLabel: '删除',
       destructive: true,
     );
@@ -763,8 +774,19 @@ class _SubtasksSectionState extends ConsumerState<_SubtasksSection> {
         () => ref.read(orbitBridgeProvider).todoSubtaskDelete(subtask.id));
   }
 
+  /// M10：提到顶层（嵌套行的降级出口，误嵌套不必删了重建）
+  Future<void> _liftToTop(TodoSubtask subtask) async {
+    await _mutate(
+      () => ref
+          .read(orbitBridgeProvider)
+          .todoSubtaskUpdate(subtask.id, '{"parent_uuid":null}'),
+      failMessage: '操作失败',
+    );
+    WaitToast.success('已提到顶层');
+  }
+
   /// 子任务转独立任务（承接父任务 project/priority/due 上下文；
-  /// MS To Do Steps→Task 同款语义）
+  /// MS To Do Steps→Task 同款语义。M10：子孙整棵随迁到新任务）
   Future<void> _promote(TodoSubtask subtask) async {
     try {
       await ref.read(orbitBridgeProvider).todoSubtaskPromote(subtask.id);
@@ -780,6 +802,16 @@ class _SubtasksSectionState extends ConsumerState<_SubtasksSection> {
     final colors = AppColors.ofContext(context);
     final subtasks = widget.detail.subtasks;
     final doneCount = subtasks.where((s) => s.isDone).length;
+
+    // M10：parent_uuid 树 → DFS 渲染序列（容错口径与桌面 subtask-tree.ts、
+    // project_tree.dart 同源；写侧合法性由 Rust validate_subtask_parent 拦）
+    final nodes =
+        flattenSubtaskTree(buildSubtaskTree(subtasks), (_) => false);
+    final childCountByUuid = <String, int>{};
+    for (final s in subtasks) {
+      final p = normalizeParentUuid(s.parentUuid);
+      if (p != null) childCountByUuid[p] = (childCountByUuid[p] ?? 0) + 1;
+    }
 
     final progress = subtasks.isEmpty ? 0.0 : doneCount / subtasks.length;
     return SectionCard(
@@ -803,49 +835,114 @@ class _SubtasksSectionState extends ConsumerState<_SubtasksSection> {
             ),
             const SizedBox(height: AppDimens.space8),
           ],
-          for (final subtask in subtasks)
+          for (final node in nodes)
             Padding(
-              padding: const EdgeInsets.symmetric(vertical: 2),
-              child: Row(
+              // M10：depth 缩进体现层级（16px/层，与侧栏项目树同刻度）
+              padding: EdgeInsets.only(
+                  left: node.depth * 16, top: 2, bottom: 2),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // 22px 圆 checkbox（check 14，docs/05 §四）
-                  OrbitCheckbox(
-                    checked: subtask.isDone,
-                    size: AppDimens.subtaskCheckboxSize,
-                    onToggle: () => _mutate(() => ref
-                        .read(orbitBridgeProvider)
-                        .todoSubtaskToggleDone(subtask.id, !subtask.isDone)),
-                  ),
-                  const SizedBox(width: AppDimens.space8),
-                  Expanded(
-                    child: AnimatedStrikethrough(
-                      text: subtask.title,
-                      done: subtask.isDone,
-                      style: TextStyle(
-                        fontSize: 15,
-                        color: colors.bodyText,
+                  Row(
+                    children: [
+                      // 22px 圆 checkbox（check 14，docs/05 §四）
+                      OrbitCheckbox(
+                        checked: node.subtask.isDone,
+                        size: AppDimens.subtaskCheckboxSize,
+                        onToggle: () => _mutate(() => ref
+                            .read(orbitBridgeProvider)
+                            .todoSubtaskToggleDone(
+                                node.subtask.id, !node.subtask.isDone)),
                       ),
-                      doneColor: colors.secondaryText.withValues(alpha: 0.5),
+                      const SizedBox(width: AppDimens.space8),
+                      Expanded(
+                        child: AnimatedStrikethrough(
+                          text: node.subtask.title,
+                          done: node.subtask.isDone,
+                          style: TextStyle(
+                            fontSize: 15,
+                            color: colors.bodyText,
+                          ),
+                          doneColor:
+                              colors.secondaryText.withValues(alpha: 0.5),
+                        ),
+                      ),
+                      // M10：行内「加子级」——在当前行下建嵌套子任务
+                      IconButton(
+                        visualDensity: VisualDensity.compact,
+                        tooltip: '添加子级',
+                        icon: Icon(OrbitIcons.add,
+                            size: AppDimens.iconSizeSm,
+                            color: colors.secondaryText),
+                        onPressed: () => setState(() =>
+                            _addingUnderUuid = _addingUnderUuid == node.subtask.uuid
+                                ? null
+                                : node.subtask.uuid),
+                      ),
+                      // M10：提到顶层（仅嵌套行出现）
+                      if (node.depth > 0)
+                        IconButton(
+                          visualDensity: VisualDensity.compact,
+                          tooltip: '提到顶层',
+                          icon: Icon(OrbitIcons.indentDecrease,
+                              size: AppDimens.iconSizeSm,
+                              color: colors.secondaryText),
+                          onPressed: () => _liftToTop(node.subtask),
+                        ),
+                      // 转独立任务（承接父任务上下文；对齐桌面行尾入口）
+                      IconButton(
+                        visualDensity: VisualDensity.compact,
+                        tooltip: '转为独立任务',
+                        icon: Icon(OrbitIcons.openExternal,
+                            size: AppDimens.iconSizeSm,
+                            color: colors.secondaryText),
+                        onPressed: () => _promote(node.subtask),
+                      ),
+                      // close 删除（确认弹窗防误触，对齐桌面/评论删除惯例）
+                      IconButton(
+                        tooltip: '删除子任务',
+                        visualDensity: VisualDensity.compact,
+                        icon: Icon(OrbitIcons.close,
+                            size: AppDimens.iconSizeSm,
+                            color: colors.secondaryText),
+                        onPressed: () => _confirmDelete(
+                            node.subtask,
+                            childCountByUuid[node.subtask.uuid] ?? 0),
+                      ),
+                    ],
+                  ),
+                  // M10：行内加子级输入框（缩进对齐子级层）
+                  if (_addingUnderUuid == node.subtask.uuid)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 4),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: TextField(
+                              controller: _draftController,
+                              autofocus: true,
+                              style: TextStyle(
+                                  fontSize: 15, color: colors.bodyText),
+                              decoration: const InputDecoration(
+                                hintText: '子任务标题',
+                                isDense: true,
+                                filled: false,
+                                contentPadding: EdgeInsets.symmetric(
+                                    vertical: AppDimens.space8),
+                              ),
+                              onSubmitted: (_) => _submitDraft(),
+                            ),
+                          ),
+                          IconButton(
+                            tooltip: '确定',
+                            icon: const Icon(OrbitIcons.check,
+                                size: AppDimens.iconSizeMd,
+                                color: OrbitAccents.todoAccent),
+                            onPressed: _submitDraft,
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                  // 转独立任务（承接父任务上下文；对齐桌面行尾入口）
-                  IconButton(
-                    visualDensity: VisualDensity.compact,
-                    tooltip: '转为独立任务',
-                    icon: Icon(OrbitIcons.openExternal,
-                        size: AppDimens.iconSizeSm,
-                        color: colors.secondaryText),
-                    onPressed: () => _promote(subtask),
-                  ),
-                  // close 删除（确认弹窗防误触，对齐桌面/评论删除惯例）
-                  IconButton(
-                    tooltip: '删除子任务',
-                    visualDensity: VisualDensity.compact,
-                    icon: Icon(OrbitIcons.close,
-                        size: AppDimens.iconSizeSm,
-                        color: colors.secondaryText),
-                    onPressed: () => _confirmDelete(subtask),
-                  ),
                 ],
               ),
             ),

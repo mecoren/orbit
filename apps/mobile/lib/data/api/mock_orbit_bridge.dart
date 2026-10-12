@@ -607,6 +607,7 @@ class MockOrbitBridge implements OrbitBridge {
           'done_at': null,
           'position':
               store.subtasks.values.where((e) => e['task_id'] == input.taskId).length,
+          'parent_uuid': input.parentUuid, // M10：null = 顶层
           'is_deleted': 0,
           'created_at': store.now(),
           'updated_at': store.now(),
@@ -630,8 +631,26 @@ class MockOrbitBridge implements OrbitBridge {
 
   @override
   Future<void> todoSubtaskDelete(int id) => _delay(() {
-        final s = store.subtasks.remove(id);
-        if (s != null) store.recalcPercent(s['task_id'] as int);
+        final s = store.subtasks[id] ?? _notFound('subtask $id');
+        final now = store.now();
+        // M10：整棵子树软删（对齐 Rust delete_todo_subtask 的 BFS 口径——
+        // 只删目标行会把子孙留成孤儿，双端树构建会把它们回落顶层）
+        final stack = <String?>[s['uuid'] as String];
+        while (stack.isNotEmpty) {
+          final parentUuid = stack.removeLast();
+          for (final row in store.subtasks.values) {
+            if (row['is_deleted'] == 0 && row['parent_uuid'] == parentUuid) {
+              row['is_deleted'] = 1;
+              row['deleted_at'] = now;
+              row['updated_at'] = now;
+              stack.add(row['uuid'] as String);
+            }
+          }
+        }
+        s['is_deleted'] = 1;
+        s['deleted_at'] = now;
+        s['updated_at'] = now;
+        store.recalcPercent(s['task_id'] as int);
         _emit('todo_subtasks');
       });
 
@@ -695,7 +714,23 @@ class MockOrbitBridge implements OrbitBridge {
           'version': 1,
         };
         store.tasks[t['id'] as int] = t;
+        // M10：子孙整棵随迁（task_id 改挂新任务；直接子女 parent_uuid 置
+        // null 提顶层——源行已软删，深层父链接保持 uuid 不变）
+        final carryStack = <String?>[s['uuid'] as String];
+        while (carryStack.isNotEmpty) {
+          final parentUuid = carryStack.removeLast();
+          for (final row in store.subtasks.values) {
+            if (row['is_deleted'] == 0 && row['parent_uuid'] == parentUuid) {
+              row['task_id'] = t['id'];
+              row['parent_uuid'] =
+                  parentUuid == s['uuid'] ? null : row['parent_uuid'];
+              row['updated_at'] = now;
+              carryStack.add(row['uuid'] as String);
+            }
+          }
+        }
         store.recalcPercent(parent['id'] as int);
+        store.recalcPercent(t['id'] as int);
         _emit('todo_subtasks');
         _emit('todo_tasks');
         return TodoTask.fromJson(t);

@@ -232,6 +232,7 @@ class MockStore {
         'done_at': done ? now() : null,
         'position':
             subtasks.values.where((e) => e['task_id'] == taskId).length,
+        'parent_uuid': null, // M10：null = 顶层
         'is_deleted': 0,
         'created_at': now(),
         'updated_at': now(),
