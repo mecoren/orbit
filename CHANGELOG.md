@@ -16,6 +16,13 @@
 
 ## [Unreleased]
 
+### 待办：子任务多层嵌套（M10 / B-4，2026-10-12）
+
+- **数据层**：`0007` 迁移追加 `todo_subtasks.parent_uuid`（先例 0003 项目文件夹——树形父引用用**同步键 uuid** 而非 `parent_id`：自引用整数外键会死锁同步「父行先落库」定序，uuid 列随 `SELECT *` 载荷同步，零同步引擎改动）。限定**同任务内嵌套**（跨任务移动要牵动整棵子树 task_id 与 `_fk` 重解析，v1 明确拒绝）。
+- **core 语义**：`validate_subtask_parent` 四类非法引用（自引用/跨任务/父不存在或已删/成环）一致拒绝；删除带走**整棵子树**（BFS 软删 + 逐行事件与历史）；promote 子孙**整棵随迁**（task_id 改挂新任务、直接子女提顶层）+ 新任务 percent 重算；重复任务的子任务树**拓扑序克隆 + parent_uuid 重映射**（树形随实例延续）；percent_done 口径不变（所有子孙同带 task_id，现有 COUNT 即全树聚合）。
+- **双端 UI**：详情「子任务」区改树渲染（depth 缩进，容错与 project-tree 同源：悬空父/自引用/成环保底回落顶层）；每行「添加子级」内联输入、嵌套行「提到顶层」出口；删除确认带子树规模。新增双端纯函数层 `subtask-tree.ts` / `subtask_tree.dart` 各 14 例。
+- **测试**：core +10 例（守卫 6/删除子树 1/promote 随迁 1/克隆保树 2，另 `subtasks_to_clone` 悬空父 1）、0007 迁移回填 1 例、桌面 vitest 587 例、移动 816 例，全绿。
+
 ### 桌面提醒 toast 登记表补手动划掉清理路径（2026-10-12）
 
 - **修复残留**：`reminderToastIds` 原只在 snoozed/completed 事件与「完成」按钮删除条目，用户手动划掉常驻 toast 时不触发 delete，每划掉一个残留一项。补 sonner `onDismiss` 回调覆盖该路径（按钮关闭同样经 onDismiss 回调，幂等），并标 `bounded-by-data`。
