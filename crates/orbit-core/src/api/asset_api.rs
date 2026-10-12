@@ -31,8 +31,8 @@ use sqlx::SqlitePool;
 use crate::db::repository::attachment_repo;
 use crate::error::{CoreError, CoreResult};
 use crate::eventbus::{
-    EVENT_BUS,
     events::{DbEvent, DbOp},
+    EVENT_BUS,
 };
 use crate::models::business::Attachment;
 
@@ -229,6 +229,15 @@ pub async fn read_task_attachment(
     attachments_dir: &str,
     hash: &str,
 ) -> CoreResult<Vec<u8>> {
+    // N51（2026-10-12）纵深防御：hash 将被拼成本地文件路径
+    // （`{attachments_dir}/{hash}`），格式非法即拒绝。DB 账本查找本身
+    // 已拦掉大部分非法输入，这里守住入口契约，避免后续重构旁路。
+    if !crate::crypto::sha256::is_sha256_hex(hash) {
+        return Err(CoreError::Other(format!(
+            "附件 hash 格式非法（需 64 位小写 sha256 hex）: {}",
+            hash
+        )));
+    }
     let meta = attachment_repo::get_by_hash(pool, hash)
         .await?
         .ok_or_else(|| CoreError::NotFound(format!("附件 {} 不存在", hash)))?;
@@ -621,6 +630,20 @@ mod tests {
             .unwrap();
         let err = read_task_attachment(&pool, &dir, &view.hash).await;
         assert!(err.is_err(), "未缓存附件应返回 NotFound 引导等待同步");
+    }
+
+    #[tokio::test]
+    async fn read_rejects_malformed_hash() {
+        // N51（2026-10-12）：hash 是本地文件名，路径分隔符等非法形态在入口处拒绝
+        let pool = setup_db().await;
+        let err = read_task_attachment(&pool, "unused", "../../etc/passwd")
+            .await
+            .unwrap_err();
+        assert!(
+            err.to_string().contains("格式非法"),
+            "非法 hash 应在入口处被拒，实际: {}",
+            err
+        );
     }
 
     // ---------- 磁盘缓存上限 + LRU 逐出（多设备安全口径）----------

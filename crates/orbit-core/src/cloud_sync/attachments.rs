@@ -388,6 +388,18 @@ pub async fn sync_attachments_pull(
             async move {
                 // 返回 (本地路径, 实际字节数)——size 供占位行登记（S31 修正）
                 let outcome: Result<(String, i64), String> = async {
+                    // N51（2026-10-12）纵深防御：hash 将作为本地文件名
+                    // （{attachments_dir}/{hash}）与云端对象键使用，格式非法
+                    // 即内容寻址假设被破坏或对端数据被篡改。单件失败不阻塞
+                    // 本轮其他附件（错误隔离见模块头）；内容正确性仍由 5c 的
+                    // sha256 背书校验兜底，这里只拦格式。
+                    if !crate::crypto::sha256::is_sha256_hex(&hash) {
+                        return Err(format!(
+                            "附件 {} hash 格式非法（需 64 位小写 sha256 hex），已跳过",
+                            hash
+                        ));
+                    }
+
                     // 5a. 下载
                     let encrypted = adapter
                         .download_asset(&hash)
@@ -991,11 +1003,60 @@ mod tests {
         .unwrap();
 
         assert_eq!(r.downloaded, 1);
+        assert!(attachment_repo::get_by_hash(&pool, &hash_r)
+            .await
+            .unwrap()
+            .is_some());
+    }
+
+    /// 场景 ④（N51 回归，2026-10-12）：云端列出格式非法的 hash（内容寻址
+    /// 假设被破坏/对端数据被篡改的形态），即便有活跃引用也不得进入下载与
+    /// 落盘路径——单件记错不阻塞本轮，正常附件照常拉回。
+    #[tokio::test]
+    async fn pull_rejects_malformed_hash_before_download() {
+        let (pool, crypto, tmp, mut adapter, _hash_r, _hash_o) = pull_env().await;
+        let att_dir = tmp.path().join("att");
+        std::fs::create_dir_all(&att_dir).unwrap();
+
+        // 挂一个格式非法 hash 的引用（路径分隔符注入形态），使其通过活跃引用过滤
+        sqlx::query(
+            "INSERT INTO todo_task_attachments (uuid, task_id, hash, is_deleted, created_at, updated_at, version)
+             VALUES ('link-bad', 1, ?, 0, 1, 1, 1)",
+        )
+        .bind("../../etc/passwd")
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        // 云端列表也列出该非法 hash（对端数据被篡改/内容寻址假设被破坏的形态）：
+        // 差集过滤只看「云端有 - 本地无 - 有引用」，非法值能走到下载步才有拦截意义
+        adapter
+            .files
+            .insert("../../etc/passwd".to_string(), b"whatever".to_vec());
+
+        let r = sync_attachments_pull(
+            &pool,
+            &crypto,
+            &adapter,
+            &crate::cloud_sync::progress::NoopProgressSender,
+            crate::cloud_sync::progress::SyncOrigin::Manual,
+            &att_dir.to_string_lossy(),
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(r.downloaded, 1, "仅合法 hash 的 referenced 被下载");
         assert!(
-            attachment_repo::get_by_hash(&pool, &hash_r)
+            r.errors.iter().any(|e| e.contains("格式非法")),
+            "非法 hash 应记错，实际 errors: {:?}",
+            r.errors
+        );
+        assert!(
+            attachment_repo::get_by_hash(&pool, "../../etc/passwd")
                 .await
                 .unwrap()
-                .is_some()
+                .is_none(),
+            "非法 hash 不得插占位行"
         );
     }
 }
