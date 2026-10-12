@@ -78,7 +78,8 @@ pub async fn get_recent(pool: &SqlitePool, limit: i64) -> CoreResult<Vec<SyncHis
 ///
 /// 用于桌面端 Tabs 布局下按 sync_type 过滤展示：
 /// - 「云端全量备份」Tab 传入 `["cloud_full_backup", "local_full_backup"]`
-/// - 「云端增量同步」Tab 暂不调用（功能开发中）
+/// - 「云端增量同步」Tab 经 `incremental_history` API 按 scope 传对应类型
+///   集合（incremental / push_only / pull_only / 三者合并的 all）
 ///
 /// `sync_types` 为空时返回空 Vec，避免生成 `IN ()` 非法 SQL。
 pub async fn get_recent_by_types(
