@@ -57,7 +57,14 @@ interface ReminderOpenPayload {
   title: string;
 }
 
-/** reminder.id → in-app toast id（snoozed/completed 事件到达时按源 id 关对应 toast） */
+/**
+ * reminder.id → in-app toast id（snoozed/completed 事件到达时按源 id 关对应 toast）
+ *
+ * 删除路径三条：snoozed/completed 事件、onDone 按钮、onDismiss（手动划掉）。
+ * 前两条自初始版在位；手动划掉路径 2026-10-12 补齐（docs/09 §五 复核结论，
+ * 此前每手动划掉一个常驻 toast 残留一项）。
+ */
+// bounded-by-data: 键为提醒行 id，同一提醒重复响只覆盖同键；三条删除路径覆盖后不残留
 const reminderToastIds = new Map<number, number | string>();
 
 export function useTodoReminderListener() {
@@ -143,7 +150,12 @@ export function useTodoReminderListener() {
           );
         },
         // 不自动消失：推迟/关闭都由按钮驱动；避免超时关闭后用户失去入口
-        { duration: Infinity },
+        {
+          duration: Infinity,
+          // 覆盖最后一条删除路径：用户手动划掉 toast（sonner 的 dismiss
+          // 与按钮关闭都会回调 onDismiss），避免登记表残留
+          onDismiss: () => reminderToastIds.delete(r.id),
+        },
       );
       // 到期处置（重复任务续排/已完成实例清理）由 Rust 轮询守护在 emit
       // 前后异步执行（orbit-core advance_fired_reminder），本监听器只呈现

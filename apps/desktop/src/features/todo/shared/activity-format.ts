@@ -42,6 +42,7 @@ export const ACTIVITY_ACTION_LABELS: Record<string, string> = {
 };
 
 /** detail 带 {"target"} 的从属对象动作：文案统一拼「target」 */
+// bounded-by-data: 固定 action 枚举字面量（15 项），不随数据增长
 const TARGET_ACTIONS = new Set([
   "subtask_add",
   "subtask_delete",

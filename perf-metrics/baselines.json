@@ -51,18 +51,6 @@
       "rule": "rust-static-collection",
       "count": 1,
       "note": "桌面侧同款 NOTIFIED_REMINDERS（A7 同批）"
-    },
-    {
-      "file": "apps/desktop/src/hooks/use-todo-reminder-listener.tsx",
-      "rule": "ts-module-collection",
-      "count": 1,
-      "note": "reminderToastIds 在 snoozed 事件与 onDone 里 delete，但用户手动划掉 toast 不触发 delete → 一提醒一项残留（每项两个数字）。量级可忽略，复核是否补 onDismiss 清理后再加标记"
-    },
-    {
-      "file": "apps/desktop/src/features/todo/shared/activity-format.ts",
-      "rule": "ts-module-collection",
-      "count": 1,
-      "note": "TARGET_ACTIONS 是字面量枚举 Set（天然有界，应加 bounded-by-data 标记）。该文件已随 3942789 入库，属长期存量豁免，不再是「待其会话补标记」的挂账项"
     }
   ],
   "measured": {

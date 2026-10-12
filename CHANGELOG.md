@@ -16,6 +16,11 @@
 
 ## [Unreleased]
 
+### 桌面提醒 toast 登记表补手动划掉清理路径（2026-10-12）
+
+- **修复残留**：`reminderToastIds` 原只在 snoozed/completed 事件与「完成」按钮删除条目，用户手动划掉常驻 toast 时不触发 delete，每划掉一个残留一项。补 sonner `onDismiss` 回调覆盖该路径（按钮关闭同样经 onDismiss 回调，幂等），并标 `bounded-by-data`。
+- **登记表收口**：`activity-format.ts` 的 `TARGET_ACTIONS` 字面量枚举 Set 补 `bounded-by-data` 标记；两件均从 `perf-metrics/baselines.json` 的 `knownUnbounded` 摘除（棘轮只降不升），`audit-unbounded` 门禁维持 0 违例。
+
 ### 云同步：附件 hash 格式纵深防御（N51 收口，2026-10-12）
 
 - **两个入口先拦 hash 格式**：附件 hash 是内容寻址的本地文件名（`{attachments_dir}/{hash}`）与云端对象键，异常值意味着内容寻址假设被破坏或对端数据被篡改。新增 `is_sha256_hex`（64 位小写 hex）纯函数校验，落点两处：`sync_attachments_pull` 下载前（单件记错不阻塞本轮，沿用错误隔离）、`read_task_attachment` 入口（壳层入参）。
