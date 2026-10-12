@@ -5,7 +5,7 @@
  * 数据源 todo_tasks_get_detail 五合一；变更即改即存，
  * 列表刷新依赖 db-change 全局失效；本抽屉内部经局部 refetch 同步。
  */
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import {
@@ -15,6 +15,7 @@ import {
   Calendar,
   Check,
   CircleStop,
+  CornerUpLeft,
   CornerUpRight,
   ExternalLink,
   File as FileIcon,
@@ -76,6 +77,8 @@ import { usePasteAttachment } from "@/hooks/use-paste-attachment";
 import { PRIORITY_COLOR, TODO_ACCENT, PRIORITY_LABELS, STATUS_COLOR, STATUS_LABELS, MY_DAY_COLOR, PRESET_10 } from "../shared/constants";
 import { describeActivity } from "../shared/activity-format";
 import { formatDuration } from "../shared/time";
+import { buildSubtaskTree, flattenSubtaskTree } from "../shared/subtask-tree";
+import { normalizeParentUuid } from "../shared/project-tree";
 import { reminderEndMs } from "@/lib/quick-dates";
 import { todayStartMs, toggleMyDayValue } from "../shared/task-filters";
 import { ConfirmPopover } from "../shared/confirm-popover";
@@ -106,6 +109,7 @@ import {
   todoSubtaskDelete,
   todoSubtaskPromote,
   todoSubtaskToggleDone,
+  todoSubtaskUpdate,
   todoTaskDelete,
   todoTaskGet,
   todoTaskGetDetail,
@@ -1328,17 +1332,50 @@ function SubtasksSection({
   onChanged: () => void;
 }) {
   const [newTitle, setNewTitle] = useState("");
+  // M10：行内「加子级」——addingUnder = 父行 uuid（顶层添加框为 null 语义的下方输入）
+  const [addingUnder, setAddingUnder] = useState<string | null>(null);
+  const [childTitle, setChildTitle] = useState("");
   // 待删子任务（null = 关闭）：删除前确认弹窗，防误触（与任一评论删除同惯例）
   const [confirmDelete, setConfirmDelete] = useState<TodoSubtask | null>(null);
   const qc = useQueryClient();
   const doneCount = subtasks.filter((s) => s.done).length;
 
-  const add = async () => {
-    const v = newTitle.trim();
+  // parent_uuid 树 → DFS 渲染序列（容错口径与 project-tree 同源：悬空父/
+  // 自引用/成环保底回落顶层；写侧合法性由 Rust validate_subtask_parent 拦）
+  const nodes = useMemo(
+    () => flattenSubtaskTree(buildSubtaskTree(subtasks), () => false),
+    [subtasks],
+  );
+  // 每行直接子女数（删除确认文案用：「同时删除其下 N 个子任务」）
+  const childCountByUuid = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const s of subtasks) {
+      const p = normalizeParentUuid(s.parent_uuid);
+      if (p != null) counts.set(p, (counts.get(p) ?? 0) + 1);
+    }
+    return counts;
+  }, [subtasks]);
+
+  const submitAdd = async (parentUuid: string | null) => {
+    const v = (parentUuid === null ? newTitle : childTitle).trim();
     if (!v) return;
-    await todoSubtaskCreate({ task_id: taskId, title: v });
-    setNewTitle("");
+    await todoSubtaskCreate({
+      task_id: taskId,
+      title: v,
+      ...(parentUuid === null ? {} : { parent_uuid: parentUuid }),
+    });
+    if (parentUuid === null) setNewTitle("");
+    else {
+      setChildTitle("");
+      setAddingUnder(null);
+    }
     onChanged();
+  };
+
+  const liftToTop = async (s: TodoSubtask) => {
+    await todoSubtaskUpdate(s.id, { parent_uuid: null });
+    onChanged();
+    toast.success("已提到顶层");
   };
 
   return (
@@ -1352,115 +1389,196 @@ function SubtasksSection({
       }
     >
       <div className="space-y-1">
-        {subtasks.map((s) => (
-          <ConfirmPopover
-            key={s.id}
-            open={confirmDelete?.id === s.id}
-            onOpenChange={(o) => { if (!o) setConfirmDelete(null); }}
-            title="删除子任务"
-            description={`确定要删除「${s.title}」吗？删除后无法恢复。`}
-            onConfirm={() => {
-              const target = s;
-              void (async () => {
-                await todoSubtaskDelete(target.id);
-                onChanged();
-                toast.success("已删除子任务");
-              })();
-            }}
-          >
-            {/* 触发行（确认框锚定行下方，qraft tab 删除同款） */}
-            <div className="group flex items-center gap-2 rounded-md px-1 py-1 hover:bg-accent/30">
-              <button
-                type="button"
-                aria-label={s.done ? "标记未完成" : "标记完成"}
-                className={cn(
-                  "flex h-4 w-4 shrink-0 items-center justify-center rounded-sm border-2",
-                  s.done ? "border-muted-foreground bg-muted-foreground text-white" : "border-muted-foreground/40",
-                )}
-                onClick={async () => {
-                  const next = !s.done;
-                  // 乐观勾选（D5）：percent_done = done_count/total*100，
-                  // 口径与 Rust todo_api.rs:262-284 同式，客户端可精确复算；
-                  // 真值仍走 onChanged 重拉收敛，失败翻回。
-                  const flip = (list: TodoSubtask[], done: number) =>
-                    list.map((x) => (x.id === s.id ? { ...x, done } : x));
-                  const patchDetail = (done: number) =>
-                    qc.setQueryData(["todo-task-detail", taskId], (old: unknown) => {
-                      if (old == null || typeof old !== "object" || !("subtasks" in old)) return old;
-                      const rec = old as { subtasks: TodoSubtask[] };
-                      if (!Array.isArray(rec.subtasks)) return old;
-                      const subtasks = flip(rec.subtasks, done);
-                      const n = subtasks.filter((x) => x.done).length;
-                      return {
-                        ...rec,
-                        subtasks,
-                        percent_done: subtasks.length > 0 ? Math.round((n / subtasks.length) * 100) : 0,
-                      };
-                    });
-                  patchDetail(next ? 1 : 0);
-                  try {
-                    await todoSubtaskToggleDone(s.id, next);
-                  } catch {
-                    patchDetail(s.done);
-                  }
-                  onChanged();
+        {nodes.map((node) => {
+          const s = node.subtask;
+          const childCount = childCountByUuid.get(s.uuid) ?? 0;
+          return (
+            <div key={s.id}>
+              <ConfirmPopover
+                open={confirmDelete?.id === s.id}
+                onOpenChange={(o) => { if (!o) setConfirmDelete(null); }}
+                title="删除子任务"
+                description={
+                  childCount > 0
+                    ? `确定要删除「${s.title}」吗？其下 ${childCount} 个子任务将一并删除，且无法恢复。`
+                    : `确定要删除「${s.title}」吗？删除后无法恢复。`
+                }
+                onConfirm={() => {
+                  const target = s;
+                  void (async () => {
+                    await todoSubtaskDelete(target.id);
+                    onChanged();
+                    toast.success(
+                      childCount > 0 ? "已删除子任务及其下级" : "已删除子任务",
+                    );
+                  })();
                 }}
               >
-                {s.done ? <Check className="size-2.5" /> : null}
-              </button>
-              <span
-                className={cn("flex-1 truncate text-[13px]", s.done && "text-muted-foreground line-through")}
-                title={s.title}
-              >
-                {s.title}
-              </span>
-              {/* 转独立任务（MS To Do Steps→Task 同款；承接父任务项目/
-                  优先级/截止上下文，详见 todo_api::promote_todo_subtask） */}
-              <Tooltip>
-                <TooltipTrigger asChild>
+                {/* 触发行（确认框锚定行下方，qraft tab 删除同款）；
+                    M10：按 depth 缩进体现层级（与侧栏项目树 14px/层同刻度） */}
+                <div
+                  className="group flex items-center gap-2 rounded-md px-1 py-1 hover:bg-accent/30"
+                  style={{ paddingLeft: node.depth * 14 + 4 }}
+                >
                   <button
                     type="button"
-                    aria-label={`转为独立任务 ${s.title}`}
-                    className="opacity-0 group-hover:opacity-100 group-focus-within:opacity-100"
-                    onClick={() => {
-                      void (async () => {
-                        try {
-                          await todoSubtaskPromote(s.id);
-                          onChanged();
-                          toast.success("已转为独立任务", {
-                            description: "承接了本任务的项目/优先级/截止日期",
-                          });
-                        } catch {
-                          toast.error("转换失败");
-                        }
-                      })();
+                    aria-label={s.done ? "标记未完成" : "标记完成"}
+                    className={cn(
+                      "flex h-4 w-4 shrink-0 items-center justify-center rounded-sm border-2",
+                      s.done ? "border-muted-foreground bg-muted-foreground text-white" : "border-muted-foreground/40",
+                    )}
+                    onClick={async () => {
+                      const next = !s.done;
+                      // 乐观勾选（D5）：percent_done = done_count/total*100，
+                      // 口径与 Rust todo_api.rs 同式（全树计数，层级不变语义），
+                      // 客户端可精确复算；真值仍走 onChanged 重拉收敛，失败翻回。
+                      const flip = (list: TodoSubtask[], done: number) =>
+                        list.map((x) => (x.id === s.id ? { ...x, done } : x));
+                      const patchDetail = (done: number) =>
+                        qc.setQueryData(["todo-task-detail", taskId], (old: unknown) => {
+                          if (old == null || typeof old !== "object" || !("subtasks" in old)) return old;
+                          const rec = old as { subtasks: TodoSubtask[] };
+                          if (!Array.isArray(rec.subtasks)) return old;
+                          const subtasks = flip(rec.subtasks, done);
+                          const n = subtasks.filter((x) => x.done).length;
+                          return {
+                            ...rec,
+                            subtasks,
+                            percent_done: subtasks.length > 0 ? Math.round((n / subtasks.length) * 100) : 0,
+                          };
+                        });
+                      patchDetail(next ? 1 : 0);
+                      try {
+                        await todoSubtaskToggleDone(s.id, next);
+                      } catch {
+                        patchDetail(s.done);
+                      }
+                      onChanged();
                     }}
                   >
-                    <CornerUpRight size={14} className="text-muted-foreground hover:text-foreground" />
+                    {s.done ? <Check className="size-2.5" /> : null}
                   </button>
-                </TooltipTrigger>
-                <TooltipContent>转为独立任务</TooltipContent>
-              </Tooltip>
-              <button type="button" aria-label="删除子任务"
-                className="opacity-0 group-hover:opacity-100 group-focus-within:opacity-100"
-                onClick={() => setConfirmDelete(s)}
-              >
-                <X size={14} className="text-muted-foreground hover:text-destructive" />
-              </button>
-            </div>
-          </ConfirmPopover>
-        ))}
+                  <span
+                    className={cn("flex-1 truncate text-[13px]", s.done && "text-muted-foreground line-through")}
+                    title={s.title}
+                  >
+                    {s.title}
+                  </span>
+                  {/* M10：行内「加子级」——在当前行下建嵌套子任务 */}
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button
+                        type="button"
+                        aria-label={`添加子级 ${s.title}`}
+                        className="opacity-0 group-hover:opacity-100 group-focus-within:opacity-100"
+                        onClick={() => {
+                          setAddingUnder(addingUnder === s.uuid ? null : s.uuid);
+                          setChildTitle("");
+                        }}
+                      >
+                        <Plus size={14} className="text-muted-foreground hover:text-foreground" />
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent>添加子级</TooltipContent>
+                  </Tooltip>
+                  {/* M10：提到顶层（嵌套行的降级出口；误嵌套不必删了重建） */}
+                  {node.depth > 0 && (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          type="button"
+                          aria-label={`提到顶层 ${s.title}`}
+                          className="opacity-0 group-hover:opacity-100 group-focus-within:opacity-100"
+                          onClick={() => void liftToTop(s)}
+                        >
+                          <CornerUpLeft size={14} className="text-muted-foreground hover:text-foreground" />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent>提到顶层</TooltipContent>
+                    </Tooltip>
+                  )}
+                  {/* 转独立任务（MS To Do Steps→Task 同款；承接父任务项目/
+                      优先级/截止上下文，详见 todo_api::promote_todo_subtask。
+                      M10：子孙整棵随迁到新任务） */}
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button
+                        type="button"
+                        aria-label={`转为独立任务 ${s.title}`}
+                        className="opacity-0 group-hover:opacity-100 group-focus-within:opacity-100"
+                        onClick={() => {
+                          void (async () => {
+                            try {
+                              await todoSubtaskPromote(s.id);
+                              onChanged();
+                              toast.success("已转为独立任务", {
+                                description:
+                                  childCount > 0
+                                    ? "承接了本任务的项目/优先级/截止日期，其下子任务已随迁"
+                                    : "承接了本任务的项目/优先级/截止日期",
+                              });
+                            } catch {
+                              toast.error("转换失败");
+                            }
+                          })();
+                        }}
+                      >
+                        <CornerUpRight size={14} className="text-muted-foreground hover:text-foreground" />
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent>转为独立任务</TooltipContent>
+                  </Tooltip>
+                  <button type="button" aria-label="删除子任务"
+                    className="opacity-0 group-hover:opacity-100 group-focus-within:opacity-100"
+                    onClick={() => setConfirmDelete(s)}
+                  >
+                    <X size={14} className="text-muted-foreground hover:text-destructive" />
+                  </button>
+                </div>
+              </ConfirmPopover>
 
-        {/* 内联添加框 */}
+              {/* 行内加子级输入框（缩进对齐子级层） */}
+              {addingUnder === s.uuid && (
+                <div
+                  className="flex items-center gap-2 py-1"
+                  style={{ paddingLeft: (node.depth + 1) * 14 + 4 }}
+                >
+                  <Input
+                    autoFocus
+                    value={childTitle}
+                    placeholder="添加子任务"
+                    className="h-7 flex-1 text-[13px]"
+                    onChange={(e) => setChildTitle(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") void submitAdd(s.uuid);
+                      if (e.key === "Escape") setAddingUnder(null);
+                    }}
+                  />
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-7"
+                    disabled={!childTitle.trim()}
+                    onClick={() => void submitAdd(s.uuid)}
+                  >
+                    添加
+                  </Button>
+                </div>
+              )}
+            </div>
+          );
+        })}
+
+        {/* 顶层内联添加框 */}
         <div className="flex items-center gap-2 pt-1">
           <Input
             value={newTitle}
             placeholder="添加子任务"
             className="h-7 flex-1 text-[13px]"
             onChange={(e) => setNewTitle(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Enter") void add(); }}
+            onKeyDown={(e) => { if (e.key === "Enter") void submitAdd(null); }}
           />
-          <Button size="sm" variant="ghost" className="h-7" disabled={!newTitle.trim()} onClick={() => void add()}>
+          <Button size="sm" variant="ghost" className="h-7" disabled={!newTitle.trim()} onClick={() => void submitAdd(null)}>
             添加
           </Button>
         </div>
