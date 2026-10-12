@@ -807,11 +807,12 @@ pub async fn create_todo_subtask(
     let now = crate::db::clock::next_ms();
     let uuid = uuid::Uuid::new_v4().to_string();
     let row = sqlx::query_as::<_, TodoSubtask>(
-        "INSERT INTO todo_subtasks (uuid, task_id, title, done, done_at, position, is_deleted, created_at, updated_at, version)
-         VALUES (?, ?, ?, 0, NULL, ?, 0, ?, ?, 1) RETURNING *",
+        "INSERT INTO todo_subtasks (uuid, task_id, title, done, done_at, position, parent_uuid, is_deleted, created_at, updated_at, version)
+         VALUES (?, ?, ?, 0, NULL, ?, ?, 0, ?, ?, 1) RETURNING *",
     )
     .bind(&uuid).bind(input.task_id).bind(&input.title)
     .bind(input.position.unwrap_or(0.0))
+    .bind(&input.parent_uuid)
     .bind(now).bind(now).fetch_one(pool).await?;
     emit_event("todo_subtasks", row.id, &row.uuid, DbOp::Insert, now);
     Ok(row)
@@ -836,6 +837,10 @@ pub async fn update_todo_subtask(
     if input.position.is_some() {
         sets.push("position = ?".into());
     }
+    // M10 三态：None 不动 / Some(None) 置 NULL（提顶层）/ Some(Some) 挂父
+    if input.parent_uuid.is_some() {
+        sets.push("parent_uuid = ?".into());
+    }
     let sql = format!(
         "UPDATE todo_subtasks SET {} WHERE id = ? RETURNING *",
         sets.join(", ")
@@ -852,6 +857,9 @@ pub async fn update_todo_subtask(
     }
     if let Some(v) = input.position {
         q = q.bind(v);
+    }
+    if let Some(v) = &input.parent_uuid {
+        q = q.bind(v.as_deref());
     }
     let row = q
         .bind(id)

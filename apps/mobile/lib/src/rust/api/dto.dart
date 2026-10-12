@@ -1207,6 +1207,9 @@ class TodoSubtask {
   final int done;
   final PlatformInt64? doneAt;
   final double position;
+
+  /// 上级子任务（父）uuid；NULL = 顶层（M10 多层嵌套）
+  final String? parentUuid;
   final int isDeleted;
   final PlatformInt64 createdAt;
   final PlatformInt64 updatedAt;
@@ -1221,6 +1224,7 @@ class TodoSubtask {
     required this.done,
     this.doneAt,
     required this.position,
+    this.parentUuid,
     required this.isDeleted,
     required this.createdAt,
     required this.updatedAt,
@@ -1237,6 +1241,7 @@ class TodoSubtask {
       done.hashCode ^
       doneAt.hashCode ^
       position.hashCode ^
+      parentUuid.hashCode ^
       isDeleted.hashCode ^
       createdAt.hashCode ^
       updatedAt.hashCode ^
@@ -1255,6 +1260,7 @@ class TodoSubtask {
           done == other.done &&
           doneAt == other.doneAt &&
           position == other.position &&
+          parentUuid == other.parentUuid &&
           isDeleted == other.isDeleted &&
           createdAt == other.createdAt &&
           updatedAt == other.updatedAt &&
@@ -1268,14 +1274,22 @@ class TodoSubtaskCreateInput {
   final String title;
   final double? position;
 
+  /// 挂到哪个子任务下（父的 uuid）；None = 顶层。须与 task_id 同任务
+  final String? parentUuid;
+
   const TodoSubtaskCreateInput({
     required this.taskId,
     required this.title,
     this.position,
+    this.parentUuid,
   });
 
   @override
-  int get hashCode => taskId.hashCode ^ title.hashCode ^ position.hashCode;
+  int get hashCode =>
+      taskId.hashCode ^
+      title.hashCode ^
+      position.hashCode ^
+      parentUuid.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -1284,7 +1298,8 @@ class TodoSubtaskCreateInput {
           runtimeType == other.runtimeType &&
           taskId == other.taskId &&
           title == other.title &&
-          position == other.position;
+          position == other.position &&
+          parentUuid == other.parentUuid;
 }
 
 /// 任务（镜像 orbit_core::models::business::TodoTask）

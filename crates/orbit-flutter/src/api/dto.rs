@@ -295,6 +295,8 @@ pub struct TodoSubtask {
     pub done: i32,
     pub done_at: Option<i64>,
     pub position: f64,
+    /// 上级子任务（父）uuid；NULL = 顶层（M10 多层嵌套）
+    pub parent_uuid: Option<String>,
     pub is_deleted: i32,
     pub created_at: i64,
     pub updated_at: i64,
@@ -312,6 +314,7 @@ impl From<orbit_core::models::business::TodoSubtask> for TodoSubtask {
             done: s.done,
             done_at: s.done_at,
             position: s.position,
+            parent_uuid: s.parent_uuid,
             is_deleted: s.is_deleted,
             created_at: s.created_at,
             updated_at: s.updated_at,
@@ -327,6 +330,8 @@ pub struct TodoSubtaskCreateInput {
     pub task_id: i64,
     pub title: String,
     pub position: Option<f64>,
+    /// 挂到哪个子任务下（父的 uuid）；None = 顶层。须与 task_id 同任务
+    pub parent_uuid: Option<String>,
 }
 
 impl From<TodoSubtaskCreateInput> for orbit_core::models::business::TodoSubtaskCreateInput {
@@ -335,6 +340,7 @@ impl From<TodoSubtaskCreateInput> for orbit_core::models::business::TodoSubtaskC
             task_id: i.task_id,
             title: i.title,
             position: i.position,
+            parent_uuid: i.parent_uuid,
         }
     }
 }

@@ -324,6 +324,8 @@ export interface TodoSubtask {
   done: number;
   done_at: number | null;
   position: number;
+  /** 上级子任务（父）uuid；null = 顶层（M10 多层嵌套，同任务内） */
+  parent_uuid: string | null;
   is_deleted: number;
   created_at: number;
   updated_at: number;
@@ -334,12 +336,16 @@ export interface TodoSubtaskCreateInput {
   task_id: number;
   title: string;
   position?: number;
+  /** 挂到哪个子任务下；省略 = 顶层 */
+  parent_uuid?: string | null;
 }
 export interface TodoSubtaskUpdateInput {
   title?: string;
   done?: number;
   done_at?: number | null;
   position?: number;
+  /** 三态：省略不动 / null 提到顶层 / string 挂到该 uuid 下（core 校验同任务与环） */
+  parent_uuid?: string | null;
 }
 export const todoSubtaskList = (filter: ListFilter) => invoke<TodoSubtask[]>("todo_subtasks_list", { filter });
 export const todoSubtaskGet = (id: number) => invoke<TodoSubtask>("todo_subtasks_get", { id });

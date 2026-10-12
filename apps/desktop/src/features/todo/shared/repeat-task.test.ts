@@ -26,7 +26,7 @@ function mk(partial: Partial<TodoTask>): TodoTask {
 function sub(partial: Partial<TodoSubtask>): TodoSubtask {
   return {
     id: 1, uuid: "s", task_id: 1, title: "子任务", done: 0, done_at: null,
-    position: 0, is_deleted: 0, created_at: 0, updated_at: 0,
+    position: 0, parent_uuid: null, is_deleted: 0, created_at: 0, updated_at: 0,
     deleted_at: null, version: 1,
     ...partial,
   };

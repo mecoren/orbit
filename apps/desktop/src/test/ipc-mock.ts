@@ -98,6 +98,8 @@ interface MockSubtask {
   done: number;
   done_at: number | null;
   position: number;
+  /** 上级子任务（父）uuid；null = 顶层（M10 多层嵌套） */
+  parent_uuid: string | null;
   is_deleted: number;
   created_at: number;
   updated_at: number;
@@ -799,15 +801,21 @@ const commands: Record<string, (args: any, ctx: Ctx) => unknown> = {
           version: 1,
         };
         db.tasks.push(next);
-        for (const s of db.subtasks.filter((s) => s.task_id === id && !s.is_deleted)) {
+        // M10：子任务树克隆——先建 uuid 映射（旧→新），再回填 parent_uuid
+        // （与 Rust complete_todo_task 的重映射同口径；直接复制旧父 uuid 会悬空）
+        const srcSubs = db.subtasks.filter((s) => s.task_id === id && !s.is_deleted);
+        const uuidRemap = new Map<string, string>();
+        for (const s of srcSubs) uuidRemap.set(s.uuid, uuid());
+        for (const s of srcSubs) {
           db.subtasks.push({
             id: db.seq++,
-            uuid: uuid(),
+            uuid: uuidRemap.get(s.uuid)!,
             task_id: next.id,
             title: s.title,
             done: 0,
             done_at: null,
             position: s.position,
+            parent_uuid: s.parent_uuid ? (uuidRemap.get(s.parent_uuid) ?? s.parent_uuid) : null,
             is_deleted: 0,
             created_at: now,
             updated_at: now,
@@ -873,7 +881,7 @@ const commands: Record<string, (args: any, ctx: Ctx) => unknown> = {
   todo_subtasks_list: (_a, { db }) =>
     ipcClone(db.subtasks.filter((s) => !s.is_deleted)),
   todo_subtasks_create: (
-    { input }: { input: { task_id: number; title: string } },
+    { input }: { input: { task_id: number; title: string; parent_uuid?: string | null } },
     { db },
   ) => {
     if (db.tasks.every((t) => t.id !== input.task_id)) {
@@ -888,6 +896,7 @@ const commands: Record<string, (args: any, ctx: Ctx) => unknown> = {
       done: 0,
       done_at: null,
       position: db.subtasks.filter((s) => s.task_id === input.task_id).length,
+      parent_uuid: input.parent_uuid ?? null,
       is_deleted: 0,
       created_at: now,
       updated_at: now,
@@ -899,13 +908,19 @@ const commands: Record<string, (args: any, ctx: Ctx) => unknown> = {
     return ipcClone(row);
   },
   todo_subtasks_update: (
-    { id, input }: { id: number; input: { title?: string } },
+    {
+      id,
+      input,
+    }: { id: number; input: { title?: string; parent_uuid?: string | null } },
     { db },
   ) => {
     const s = db.subtasks.find((x) => x.id === id);
     if (!s) throw new Error(`subtask ${id} 不存在`);
     const before = s.title;
     if (input.title != null) s.title = input.title;
+    // M10 三态（与 Rust update_todo_subtask 同口径）：undefined 不动 /
+    // null 提顶层 / string 挂父（mock 不做环/跨任务校验，core 才拦）
+    if (input.parent_uuid !== undefined) s.parent_uuid = input.parent_uuid;
     s.updated_at = Date.now();
     s.version += 1;
     // 改名轨迹（与 Rust update_todo_subtask 同口径）：target=「旧 → 新」对照串
@@ -937,6 +952,20 @@ const commands: Record<string, (args: any, ctx: Ctx) => unknown> = {
     const s = db.subtasks.find((x) => x.id === id);
     if (!s) return;
     const now = Date.now();
+    // M10：整棵子树软删（对齐 Rust delete_todo_subtask 的 BFS 口径）
+    const stack = [s.uuid];
+    while (stack.length > 0) {
+      const parentUuid = stack.pop()!;
+      for (const row of db.subtasks) {
+        if (row.parent_uuid === parentUuid && !row.is_deleted) {
+          row.is_deleted = 1;
+          row.deleted_at = now;
+          row.updated_at = now;
+          row.version += 1;
+          stack.push(row.uuid);
+        }
+      }
+    }
     s.is_deleted = 1;
     s.deleted_at = now;
     s.updated_at = now;
@@ -951,7 +980,8 @@ const commands: Record<string, (args: any, ctx: Ctx) => unknown> = {
     logTarget(db, s.task_id, "subtask_delete", s.title);
   },
   // 子任务转独立任务（对齐 Rust promote_todo_subtask：软删行 + 承接父任务
-  // project/priority/due 建尾位新任务；percent_done 随软删重算）
+  // project/priority/due 建尾位新任务；percent_done 随软删重算。M10：子孙
+  // 整棵随迁——task_id 改挂新任务，直接子女 parent_uuid 置 null 提顶层）
   todo_subtasks_promote: ({ subtaskId }, { db }) => {
     const s = db.subtasks.find((x) => x.id === subtaskId);
     if (!s) throw new Error(`subtask ${subtaskId} 不存在`);
@@ -998,6 +1028,26 @@ const commands: Record<string, (args: any, ctx: Ctx) => unknown> = {
       version: 1,
     };
     db.tasks.push(t);
+    // M10：子孙随迁（BFS；直接子女提顶层，深层父链接保持 uuid 不变）
+    const stack = [s.uuid];
+    while (stack.length > 0) {
+      const parentUuid = stack.pop()!;
+      for (const row of db.subtasks) {
+        if (row.parent_uuid === parentUuid && !row.is_deleted) {
+          row.task_id = t.id;
+          row.parent_uuid = parentUuid === s.uuid ? null : row.parent_uuid;
+          row.updated_at = now;
+          row.version += 1;
+          stack.push(row.uuid);
+        }
+      }
+    }
+    // 新任务 percent 随随迁子孙重算（与 Rust 同步补 recalc 同口径）
+    const carried = db.subtasks.filter((x) => x.task_id === t.id && !x.is_deleted);
+    t.percent_done =
+      carried.length === 0
+        ? 0
+        : (carried.filter((x) => x.done === 1).length / carried.length) * 100;
     // 与 Rust 同口径双埋点：新任务侧 create（from=subtask）+ 父任务侧 promote
     logActivity(db, t.id, t.title, "create", JSON.stringify({ from: "subtask", parent_id: parent.id }));
     logTarget(db, parent.id, "subtask_promote", s.title);

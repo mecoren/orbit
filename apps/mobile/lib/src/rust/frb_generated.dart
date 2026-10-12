@@ -7350,8 +7350,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   TodoSubtask dco_decode_todo_subtask(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 12)
-      throw Exception('unexpected arr length: expect 12 but see ${arr.length}');
+    if (arr.length != 13)
+      throw Exception('unexpected arr length: expect 13 but see ${arr.length}');
     return TodoSubtask(
       id: dco_decode_i_64(arr[0]),
       uuid: dco_decode_String(arr[1]),
@@ -7360,11 +7360,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       done: dco_decode_i_32(arr[4]),
       doneAt: dco_decode_opt_box_autoadd_i_64(arr[5]),
       position: dco_decode_f_64(arr[6]),
-      isDeleted: dco_decode_i_32(arr[7]),
-      createdAt: dco_decode_i_64(arr[8]),
-      updatedAt: dco_decode_i_64(arr[9]),
-      deletedAt: dco_decode_opt_box_autoadd_i_64(arr[10]),
-      version: dco_decode_i_32(arr[11]),
+      parentUuid: dco_decode_opt_String(arr[7]),
+      isDeleted: dco_decode_i_32(arr[8]),
+      createdAt: dco_decode_i_64(arr[9]),
+      updatedAt: dco_decode_i_64(arr[10]),
+      deletedAt: dco_decode_opt_box_autoadd_i_64(arr[11]),
+      version: dco_decode_i_32(arr[12]),
     );
   }
 
@@ -7372,12 +7373,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   TodoSubtaskCreateInput dco_decode_todo_subtask_create_input(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 3)
-      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
+    if (arr.length != 4)
+      throw Exception('unexpected arr length: expect 4 but see ${arr.length}');
     return TodoSubtaskCreateInput(
       taskId: dco_decode_i_64(arr[0]),
       title: dco_decode_String(arr[1]),
       position: dco_decode_opt_box_autoadd_f_64(arr[2]),
+      parentUuid: dco_decode_opt_String(arr[3]),
     );
   }
 
@@ -9758,6 +9760,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_done = sse_decode_i_32(deserializer);
     var var_doneAt = sse_decode_opt_box_autoadd_i_64(deserializer);
     var var_position = sse_decode_f_64(deserializer);
+    var var_parentUuid = sse_decode_opt_String(deserializer);
     var var_isDeleted = sse_decode_i_32(deserializer);
     var var_createdAt = sse_decode_i_64(deserializer);
     var var_updatedAt = sse_decode_i_64(deserializer);
@@ -9771,6 +9774,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       done: var_done,
       doneAt: var_doneAt,
       position: var_position,
+      parentUuid: var_parentUuid,
       isDeleted: var_isDeleted,
       createdAt: var_createdAt,
       updatedAt: var_updatedAt,
@@ -9787,10 +9791,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_taskId = sse_decode_i_64(deserializer);
     var var_title = sse_decode_String(deserializer);
     var var_position = sse_decode_opt_box_autoadd_f_64(deserializer);
+    var var_parentUuid = sse_decode_opt_String(deserializer);
     return TodoSubtaskCreateInput(
       taskId: var_taskId,
       title: var_title,
       position: var_position,
+      parentUuid: var_parentUuid,
     );
   }
 
@@ -11919,6 +11925,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_i_32(self.done, serializer);
     sse_encode_opt_box_autoadd_i_64(self.doneAt, serializer);
     sse_encode_f_64(self.position, serializer);
+    sse_encode_opt_String(self.parentUuid, serializer);
     sse_encode_i_32(self.isDeleted, serializer);
     sse_encode_i_64(self.createdAt, serializer);
     sse_encode_i_64(self.updatedAt, serializer);
@@ -11935,6 +11942,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_i_64(self.taskId, serializer);
     sse_encode_String(self.title, serializer);
     sse_encode_opt_box_autoadd_f_64(self.position, serializer);
+    sse_encode_opt_String(self.parentUuid, serializer);
   }
 
   @protected

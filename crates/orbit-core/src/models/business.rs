@@ -324,6 +324,8 @@ pub struct TodoSubtask {
     pub done: i32,
     pub done_at: Option<i64>,
     pub position: f64,
+    /// 上级子任务（父）的 uuid；NULL = 顶层（0007：多层嵌套，限定同任务内）
+    pub parent_uuid: Option<String>,
     pub is_deleted: i32,
     pub created_at: i64,
     pub updated_at: i64,
@@ -337,6 +339,8 @@ pub struct TodoSubtaskCreateInput {
     pub task_id: i64,
     pub title: String,
     pub position: Option<f64>,
+    /// 挂到哪个子任务下（父的 uuid）；None = 顶层。须与 task_id 同任务
+    pub parent_uuid: Option<String>,
 }
 
 /// todo_subtasks 更新输入
@@ -346,6 +350,9 @@ pub struct TodoSubtaskUpdateInput {
     pub done: Option<i32>,
     pub done_at: Option<Option<i64>>,
     pub position: Option<f64>,
+    /// 三态：None 不动 / Some(None) 提到顶层 / Some(Some(uuid)) 挂到父下
+    /// （父须同任务且不是自身后代——环防护在 business_api 校验）
+    pub parent_uuid: Option<Option<String>>,
 }
 
 // ---------- todo_labels ----------

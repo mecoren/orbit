@@ -121,6 +121,58 @@ async fn project_parent_uuid_backfills_null() {
     assert_eq!(child_parent.as_deref(), Some("u-p1"));
 }
 
+/// 0007 增量落地：todo_subtasks.parent_uuid 带 DEFAULT NULL，老子任务行回落顶层
+/// （父引用用同步主键 uuid 而非 parent_id：自引用外键会破坏云同步「父行先落库」定序）
+#[tokio::test]
+async fn subtask_parent_uuid_backfills_null() {
+    let pool = SqlitePool::connect("sqlite::memory:").await.unwrap();
+    sqlx::migrate!("./src/db/migrations")
+        .run(&pool)
+        .await
+        .unwrap();
+
+    // 老版本行（无 parent_uuid 时写入）：靠 DEFAULT 落地
+    sqlx::query(
+        "INSERT INTO todo_tasks (uuid, title, status, position, created_at, updated_at)
+         VALUES ('u-t1', '任务', 'pending', 0, 1, 1)",
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query(
+        "INSERT INTO todo_subtasks (uuid, task_id, title, created_at, updated_at)
+         VALUES ('u-s1', 1, '老顶层子任务', 1, 1)",
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let (parent,): (Option<String>,) =
+        sqlx::query_as("SELECT parent_uuid FROM todo_subtasks WHERE uuid='u-s1'")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert!(
+        parent.is_none(),
+        "存量子任务行应回填 NULL（顶层），层级语义零变化"
+    );
+
+    // 新行可写父引用（同任务内嵌套），顶层行与子行共存不互相约束
+    sqlx::query(
+        "INSERT INTO todo_subtasks (uuid, task_id, title, parent_uuid, created_at, updated_at)
+         VALUES ('u-s2', 1, '嵌套子任务', 'u-s1', 1, 1)",
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let (child_parent,): (Option<String>,) =
+        sqlx::query_as("SELECT parent_uuid FROM todo_subtasks WHERE uuid='u-s2'")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(child_parent.as_deref(), Some("u-s1"));
+}
+
 /// 模拟老用户升级：0001 数据 → 增量加列 → 数据保留 + 默认值生效
 #[tokio::test]
 async fn incremental_add_column_preserves_rows() {
@@ -193,7 +245,10 @@ async fn task_duration_minutes_backfills_null() {
             .fetch_one(&pool)
             .await
             .unwrap();
-    assert!(duration.is_none(), "存量任务行应回填 NULL（未设置），语义零变化");
+    assert!(
+        duration.is_none(),
+        "存量任务行应回填 NULL（未设置），语义零变化"
+    );
 
     // 新行可写时长，与未设置行共存
     sqlx::query(

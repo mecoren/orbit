@@ -1,0 +1,23 @@
+-- 0007_subtask_parent.sql
+-- M10 子任务多层嵌套（对标 TickTick / Todoist 子任务层级；先例 0003_project_parent）：
+-- 子任务可挂在同任务的另一个子任务下形成多层树，详情页按层级缩进渲染。
+--
+-- 为什么父引用是 uuid 而不是 parent_id INTEGER（与 0003 同论证）：
+--   云同步的整数外键翻译（sync_registry::SYNC_FK_COLUMNS → db_loader/merge）只在
+--   **表间**成立——它按「父表先于子表」为 pull 定序，并在合并前从本端已落库的
+--   行建 uuid→id 映射。自引用（父行与子行同表）两条前提都不成立：同表无法用
+--   父表定序保证父先到，且父行本轮未落库时 resolve_foreign_keys 直接整表 Err
+--   → 事务回滚 → 父行永不落库的死锁。parent_uuid 因此只是普通 TEXT 列，随表
+--   原样同步（load_table_items 走 SELECT *），零同步引擎改动、零定序约束。
+--
+-- 为什么不声明自引用外键（parent_uuid REFERENCES todo_subtasks(uuid)）：
+--   同步落库顺序不保证父行先写，外键会直接报错；父行被软删/清除后子行会短暂
+--   悬空——不设外键时悬空行照常存续，树构建一律把「父不存在/父已软删」的行
+--   回落顶层渲染（层级无损，不必级联改子行）。
+--
+-- 限定同任务内嵌套：父须与子同 task_id（create/update 入口校验）。跨任务移动
+-- 要牵动整棵子树的 task_id 与 _fk 重解析，v1 不做。
+--
+-- 语义：NULL = 顶层（存量行靠 DEFAULT 原地回填，语义零变化）；非空 = 上级子任务 uuid。
+ALTER TABLE todo_subtasks ADD COLUMN parent_uuid TEXT DEFAULT NULL; -- 上级子任务（父）的同步主键 uuid；NULL = 顶层
+CREATE INDEX IF NOT EXISTS idx_todo_subtasks_parent ON todo_subtasks(parent_uuid);

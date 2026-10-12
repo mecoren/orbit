@@ -427,6 +427,64 @@ async fn changed_task_values(
     out
 }
 
+// ---------- 子任务层级（M10 多层嵌套） ----------
+
+/// 父链上溯步数上限（哨兵；同项目侧 MAX_PROJECT_PARENT_HOPS 口径）
+const MAX_SUBTASK_PARENT_HOPS: usize = 64;
+
+/// 校验上级子任务引用（M10）——返回归一化后的父 uuid（None = 顶层）
+///
+/// `child_uuid` 传 `None` 表示新建（尚无自身 uuid，不存在自引用可能）。
+/// 四类非法引用一律 `CoreError::Other`（双端直接把原文案展示给用户）：
+/// - **自引用**：把子任务挂到自己下面；
+/// - **跨任务**：父与子不同 task_id（v1 限定同任务内嵌套，跨任务移动要牵动
+///   整棵子树的 task_id 与同步 `_fk` 重解析，明确不支持）；
+/// - **父不存在 / 父已软删**：只认未软删行（悬空父会被双端树构建回落顶层，
+///   用户看到「移动成功但没生效」的静默失败）；
+/// - **成环**：候选父是当前子任务的后代——沿候选父父链上溯，遇到自己即环，
+///   无需整表建图，代价 O(深度)。
+async fn validate_subtask_parent(
+    pool: &SqlitePool,
+    child_uuid: Option<&str>,
+    task_id: i64,
+    parent_uuid: Option<String>,
+) -> CoreResult<Option<String>> {
+    let Some(parent) = parent_uuid else {
+        return Ok(None);
+    };
+    if Some(parent.as_str()) == child_uuid {
+        return Err(CoreError::Other("不能把子任务设置为自己的上级".into()));
+    }
+
+    let mut cursor = Some(parent.clone());
+    let mut hops = 0usize;
+    while let Some(uuid) = cursor {
+        hops += 1;
+        if hops > MAX_SUBTASK_PARENT_HOPS {
+            return Err(CoreError::Other(format!(
+                "子任务层级异常（父链超过 {MAX_SUBTASK_PARENT_HOPS} 层），请检查数据后重试"
+            )));
+        }
+        if Some(uuid.as_str()) == child_uuid {
+            return Err(CoreError::Other(
+                "不能把子任务移动到它自己的下级里（会形成循环）".into(),
+            ));
+        }
+        let Some(row) = get_todo_subtask_by_uuid(pool, &uuid).await? else {
+            return Err(CoreError::Other(
+                "上级子任务不存在或已在回收站，请刷新后重试".into(),
+            ));
+        };
+        if row.task_id != task_id {
+            return Err(CoreError::Other(
+                "上级子任务不属于同一任务（子任务仅支持同任务内嵌套）".into(),
+            ));
+        }
+        cursor = normalize_parent_uuid(row.parent_uuid.as_deref());
+    }
+    Ok(Some(parent))
+}
+
 // ---------- todo_subtasks ----------
 pub async fn list_todo_subtasks(
     pool: &SqlitePool,
@@ -441,7 +499,16 @@ pub async fn create_todo_subtask(
     pool: &SqlitePool,
     input: &TodoSubtaskCreateInput,
 ) -> CoreResult<TodoSubtask> {
-    let row = generic_repo::create_todo_subtask(pool, input).await?;
+    let parent = validate_subtask_parent(
+        pool,
+        None,
+        input.task_id,
+        normalize_parent_uuid(input.parent_uuid.as_deref()),
+    )
+    .await?;
+    let mut input = input.clone();
+    input.parent_uuid = parent;
+    let row = generic_repo::create_todo_subtask(pool, &input).await?;
     log_target_activity(pool, row.task_id, "subtask_add", &row.title).await;
     Ok(row)
 }
@@ -451,7 +518,19 @@ pub async fn update_todo_subtask(
     input: &TodoSubtaskUpdateInput,
 ) -> CoreResult<TodoSubtask> {
     let before: TodoSubtask = generic_repo::get_by_id(pool, "todo_subtasks", id).await?;
-    let after = generic_repo::update_todo_subtask(pool, id, input).await?;
+    let mut input = input.clone();
+    if let Some(raw) = input.parent_uuid.as_ref() {
+        input.parent_uuid = Some(
+            validate_subtask_parent(
+                pool,
+                Some(&before.uuid),
+                before.task_id,
+                normalize_parent_uuid(raw.as_deref()),
+            )
+            .await?,
+        );
+    }
+    let after = generic_repo::update_todo_subtask(pool, id, &input).await?;
     if before.title != after.title {
         // 改名轨迹：target 直接给「旧 → 新」对照串
         let target = format!(
@@ -463,10 +542,42 @@ pub async fn update_todo_subtask(
     }
     Ok(after)
 }
+/// 软删整棵子树（M10）：目标行 + 全部后代（parent_uuid 上 BFS）
+///
+/// 逐行软删而非只删目标行：留着孤儿会让双端树构建把它们回落顶层，用户看到
+/// 「删了父任务，子任务还挂在那儿」。每行独立 emit 删除事件（同步墓碑）与
+/// 历史日志（详情页可追溯每一次删除）。
 pub async fn delete_todo_subtask(pool: &SqlitePool, id: i64) -> CoreResult<()> {
     let t: TodoSubtask = generic_repo::get_by_id(pool, "todo_subtasks", id).await?;
-    generic_repo::soft_delete_by_id(pool, "todo_subtasks", id, &t.uuid).await?;
+    // 同任务存活行一次取全，内存建 children 映射（任务级子任务量为十行级）
+    let rows: Vec<TodoSubtask> =
+        sqlx::query_as("SELECT * FROM todo_subtasks WHERE task_id = ? AND is_deleted = 0")
+            .bind(t.task_id)
+            .fetch_all(pool)
+            .await?;
+    let mut children: std::collections::HashMap<String, Vec<TodoSubtask>> =
+        std::collections::HashMap::new();
+    for r in rows {
+        if let Some(p) = r.parent_uuid.as_ref() {
+            children.entry(p.clone()).or_default().push(r);
+        }
+    }
+    let mut stack = vec![t.uuid.clone()];
+    let mut victims = Vec::new();
+    while let Some(uuid) = stack.pop() {
+        if let Some(kids) = children.remove(&uuid) {
+            for k in kids {
+                stack.push(k.uuid.clone());
+                victims.push(k);
+            }
+        }
+    }
+    generic_repo::soft_delete_by_id(pool, "todo_subtasks", t.id, &t.uuid).await?;
     log_target_activity(pool, t.task_id, "subtask_delete", &t.title).await;
+    for v in victims {
+        generic_repo::soft_delete_by_id(pool, "todo_subtasks", v.id, &v.uuid).await?;
+        log_target_activity(pool, v.task_id, "subtask_delete", &v.title).await;
+    }
     Ok(())
 }
 
@@ -755,6 +866,7 @@ macro_rules! impl_get_by_uuid {
 
 impl_get_by_uuid!(get_todo_project_by_uuid, "todo_projects", TodoProject);
 impl_get_by_uuid!(get_todo_task_by_uuid, "todo_tasks", TodoTask);
+impl_get_by_uuid!(get_todo_subtask_by_uuid, "todo_subtasks", TodoSubtask);
 
 // =============================================================================
 // 全量备份/导出辅助（白名单统一收口 db::sync_registry，03 文档 §六）
@@ -1123,6 +1235,7 @@ mod global_search_tests {
                 task_id: t.id,
                 title: "整理移动端重构清单".into(),
                 position: None,
+                parent_uuid: None,
             },
         )
         .await
@@ -1602,6 +1715,234 @@ mod project_parent_tests {
     }
 }
 
+/// 子任务层级（M10 多层嵌套）：父引用归一化 + 四类非法引用守卫 + 删除整棵子树
+///
+/// core 只负责「引用是否可写 / 删除是否带走子树」；层级树由双端壳按
+/// parent_uuid 内存构建（同项目侧口径），故此处不测树形渲染。
+#[cfg(test)]
+mod subtask_parent_tests {
+    use super::*;
+
+    async fn setup_db() -> SqlitePool {
+        let pool = sqlx::SqlitePool::connect("sqlite::memory:").await.unwrap();
+        sqlx::migrate!("./src/db/migrations")
+            .run(&pool)
+            .await
+            .unwrap();
+        pool
+    }
+
+    async fn seed_task(pool: &SqlitePool, title: &str) -> TodoTask {
+        create_todo_task(
+            pool,
+            &TodoTaskCreateInput {
+                title: title.into(),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap()
+    }
+
+    fn create_input(task_id: i64, title: &str, parent: Option<&str>) -> TodoSubtaskCreateInput {
+        TodoSubtaskCreateInput {
+            task_id,
+            title: title.into(),
+            position: None,
+            parent_uuid: parent.map(str::to_string),
+        }
+    }
+
+    fn parent_only(parent: Option<Option<&str>>) -> TodoSubtaskUpdateInput {
+        TodoSubtaskUpdateInput {
+            title: None,
+            done: None,
+            done_at: None,
+            position: None,
+            parent_uuid: parent.map(|p| p.map(str::to_string)),
+        }
+    }
+
+    async fn live_count(pool: &SqlitePool, task_id: i64) -> i64 {
+        sqlx::query_scalar(
+            "SELECT COUNT(*) FROM todo_subtasks WHERE task_id = ? AND is_deleted = 0",
+        )
+        .bind(task_id)
+        .fetch_one(pool)
+        .await
+        .unwrap()
+    }
+
+    #[tokio::test]
+    async fn create_under_parent_persists_uuid_reference() {
+        let pool = setup_db().await;
+        let t = seed_task(&pool, "任务").await;
+        let parent = create_todo_subtask(&pool, &create_input(t.id, "父", None))
+            .await
+            .unwrap();
+        let child = create_todo_subtask(&pool, &create_input(t.id, "子", Some(&parent.uuid)))
+            .await
+            .unwrap();
+
+        assert_eq!(child.parent_uuid.as_deref(), Some(parent.uuid.as_str()));
+        assert_eq!(
+            parent.parent_uuid, None,
+            "顶层行 parent_uuid 为 NULL（存量语义）"
+        );
+    }
+
+    #[tokio::test]
+    async fn cross_task_parent_rejected() {
+        let pool = setup_db().await;
+        let t1 = seed_task(&pool, "任务一").await;
+        let t2 = seed_task(&pool, "任务二").await;
+        let sub1 = create_todo_subtask(&pool, &create_input(t1.id, "任务一的子", None))
+            .await
+            .unwrap();
+
+        let err = create_todo_subtask(&pool, &create_input(t2.id, "越界挂靠", Some(&sub1.uuid)))
+            .await
+            .unwrap_err();
+        assert!(
+            err.to_string().contains("不属于同一任务"),
+            "跨任务嵌套必须拒绝，实际: {err}"
+        );
+    }
+
+    #[tokio::test]
+    async fn self_reference_and_cycle_rejected() {
+        let pool = setup_db().await;
+        let t = seed_task(&pool, "任务").await;
+        // a → b → c
+        let a = create_todo_subtask(&pool, &create_input(t.id, "a", None))
+            .await
+            .unwrap();
+        let b = create_todo_subtask(&pool, &create_input(t.id, "b", Some(&a.uuid)))
+            .await
+            .unwrap();
+        let c = create_todo_subtask(&pool, &create_input(t.id, "c", Some(&b.uuid)))
+            .await
+            .unwrap();
+
+        let err = update_todo_subtask(&pool, a.id, &parent_only(Some(Some(&a.uuid))))
+            .await
+            .unwrap_err();
+        assert!(err.to_string().contains("不能把子任务设置为自己的上级"));
+
+        // 把祖先 a 挂到后代 c 下 → 成环，拒绝且不落库
+        let err = update_todo_subtask(&pool, a.id, &parent_only(Some(Some(&c.uuid))))
+            .await
+            .unwrap_err();
+        assert!(err.to_string().contains("不能把子任务移动到它自己的下级里"));
+        let a_after = generic_repo::get_by_id::<TodoSubtask>(&pool, "todo_subtasks", a.id)
+            .await
+            .unwrap();
+        assert_eq!(a_after.parent_uuid, None, "拒绝后不得留下半写入的父引用");
+
+        // 同级挂靠仍允许：只有祖先链才成环
+        let moved = update_todo_subtask(&pool, c.id, &parent_only(Some(Some(&a.uuid))))
+            .await
+            .unwrap();
+        assert_eq!(moved.parent_uuid.as_deref(), Some(a.uuid.as_str()));
+    }
+
+    #[tokio::test]
+    async fn blank_normalizes_to_top_level_and_lift_clears_reference() {
+        let pool = setup_db().await;
+        let t = seed_task(&pool, "任务").await;
+        let parent = create_todo_subtask(&pool, &create_input(t.id, "父", None))
+            .await
+            .unwrap();
+        let child = create_todo_subtask(&pool, &create_input(t.id, "子", Some(&parent.uuid)))
+            .await
+            .unwrap();
+
+        for raw in ["", "   "] {
+            let row = update_todo_subtask(&pool, child.id, &parent_only(Some(Some(raw))))
+                .await
+                .unwrap();
+            assert_eq!(row.parent_uuid, None, "raw={raw:?} 应归一化为顶层");
+        }
+        // 重新挂父，再用内层 None（JSON null）显式提顶层
+        update_todo_subtask(&pool, child.id, &parent_only(Some(Some(&parent.uuid))))
+            .await
+            .unwrap();
+        let row = update_todo_subtask(&pool, child.id, &parent_only(Some(None)))
+            .await
+            .unwrap();
+        assert_eq!(row.parent_uuid, None);
+    }
+
+    #[tokio::test]
+    async fn missing_or_soft_deleted_parent_rejected() {
+        let pool = setup_db().await;
+        let t = seed_task(&pool, "任务").await;
+        let child = create_todo_subtask(&pool, &create_input(t.id, "子", None))
+            .await
+            .unwrap();
+
+        let err = update_todo_subtask(&pool, child.id, &parent_only(Some(Some("no-such-uuid"))))
+            .await
+            .unwrap_err();
+        assert!(err.to_string().contains("上级子任务不存在或已在回收站"));
+
+        // 新建时指向不存在的父：同样拒绝（不能靠 create 绕开校验）
+        assert!(
+            create_todo_subtask(&pool, &create_input(t.id, "孤儿", Some("no-such-uuid")))
+                .await
+                .is_err()
+        );
+    }
+
+    /// 删除父行带走整棵子树（M10）：孤儿回落顶层对用户是「删了父的还在」
+    #[tokio::test]
+    async fn delete_removes_whole_subtree() {
+        let pool = setup_db().await;
+        let t = seed_task(&pool, "任务").await;
+        // a → b → c（三层层级）
+        let a = create_todo_subtask(&pool, &create_input(t.id, "a", None))
+            .await
+            .unwrap();
+        let b = create_todo_subtask(&pool, &create_input(t.id, "b", Some(&a.uuid)))
+            .await
+            .unwrap();
+        let c = create_todo_subtask(&pool, &create_input(t.id, "c", Some(&b.uuid)))
+            .await
+            .unwrap();
+        // 旁支：删 a 时不受影响
+        let side = create_todo_subtask(&pool, &create_input(t.id, "旁支", None))
+            .await
+            .unwrap();
+        assert_eq!(live_count(&pool, t.id).await, 4);
+
+        delete_todo_subtask(&pool, a.id).await.unwrap();
+
+        assert_eq!(
+            live_count(&pool, t.id).await,
+            1,
+            "整棵子树（a/b/c）应软删，只剩旁支"
+        );
+        let side_after = generic_repo::get_by_id::<TodoSubtask>(&pool, "todo_subtasks", side.id)
+            .await
+            .unwrap();
+        assert_eq!(side_after.is_deleted, 0, "旁支不得被连带删除");
+        // 墓碑行仍在（软删语义），回收站/同步可判活
+        let a_tomb =
+            sqlx::query_scalar::<_, i64>("SELECT is_deleted FROM todo_subtasks WHERE id = ?")
+                .bind(a.id)
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        let c_tomb =
+            sqlx::query_scalar::<_, i64>("SELECT is_deleted FROM todo_subtasks WHERE id = ?")
+                .bind(c.id)
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        assert_eq!((a_tomb, c_tomb), (1, 1));
+    }
+}
+
 #[cfg(test)]
 mod activity_detail_tests {
     use super::*;
@@ -1763,6 +2104,7 @@ mod activity_detail_tests {
                 task_id: t.id,
                 title: "子任务甲".into(),
                 position: None,
+                parent_uuid: None,
             },
         )
         .await
@@ -1898,6 +2240,7 @@ mod activity_detail_tests {
                 task_id: t.id,
                 title: "旧名".into(),
                 position: None,
+                parent_uuid: None,
             },
         )
         .await
@@ -1910,6 +2253,7 @@ mod activity_detail_tests {
                 done: None,
                 done_at: None,
                 position: None,
+                parent_uuid: None,
             },
         )
         .await

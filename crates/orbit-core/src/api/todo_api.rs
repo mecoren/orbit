@@ -411,10 +411,48 @@ pub async fn promote_todo_subtask(pool: &SqlitePool, subtask_id: i64) -> CoreRes
     .fetch_one(&mut *tx)
     .await?;
 
+    // 3b. 子孙随迁（M10 多层嵌套）：整棵子树的 task_id 改挂新任务。更深层
+    //     行的 parent_uuid 保持 uuid 不变（其父行随迁仍存活，树形整体搬迁）；
+    //     直接子女的 parent_uuid 显式置 NULL——源行已软删，悬空父引用会被
+    //     树构建回落顶层，显式置空更清晰（ grandchildren 不受影响）。
+    //     事件提交后补发（ carried_* ）。
+    let mut carried: Vec<(i64, String)> = Vec::new();
+    let mut frontier = vec![sub.uuid.clone()];
+    while let Some(parent_uuid) = frontier.pop() {
+        let kids: Vec<(i64, String, String)> = sqlx::query_as(
+            "SELECT id, uuid, parent_uuid FROM todo_subtasks
+             WHERE parent_uuid = ? AND task_id = ? AND is_deleted = 0",
+        )
+        .bind(&parent_uuid)
+        .bind(sub.task_id)
+        .fetch_all(&mut *tx)
+        .await?;
+        for (kid_id, kid_uuid, kid_parent) in kids {
+            let new_parent: Option<&str> = if parent_uuid == sub.uuid {
+                None // 直接子女提顶层
+            } else {
+                Some(kid_parent.as_str())
+            };
+            sqlx::query(
+                "UPDATE todo_subtasks
+                 SET task_id = ?, parent_uuid = ?, updated_at = ?, version = version + 1
+                 WHERE id = ?",
+            )
+            .bind(created.id)
+            .bind(new_parent)
+            .bind(now)
+            .bind(kid_id)
+            .execute(&mut *tx)
+            .await?;
+            carried.push((kid_id, kid_uuid.clone()));
+            frontier.push(kid_uuid);
+        }
+    }
+
     tx.commit().await?;
 
     // 4. 事件（提交后发）：子任务 Delete + 父任务 Update（percent_done 变化）
-    //    + 新任务 Insert
+    //    + 新任务 Insert + 随迁子孙的 Update（task_id 变更，同步需要）
     let device_id = generic_repo::current_device_id();
     emit_todo_event(
         "todo_subtasks",
@@ -424,6 +462,16 @@ pub async fn promote_todo_subtask(pool: &SqlitePool, subtask_id: i64) -> CoreRes
         now,
         &device_id,
     );
+    for (kid_id, kid_uuid) in &carried {
+        emit_todo_event(
+            "todo_subtasks",
+            *kid_id,
+            kid_uuid,
+            DbOp::Update,
+            now,
+            &device_id,
+        );
+    }
     emit_todo_event(
         "todo_tasks",
         parent.id,
@@ -441,8 +489,11 @@ pub async fn promote_todo_subtask(pool: &SqlitePool, subtask_id: i64) -> CoreRes
         &device_id,
     );
 
-    // 5. 父任务 percent_done 重算（软删行不进分母）
+    // 5. 父任务 percent_done 重算（软删行不进分母）；新任务同样重算——
+    //    随迁子孙可能带完成态，插入时 percent_done=0 会显示成「0% 但有
+    //    已完成子任务」（M10）
     recalc_task_percent_done(pool, parent.id).await?;
+    recalc_task_percent_done(pool, created.id).await?;
 
     // 活动日志（F6 同款埋点：显式语义动作）
     let _ = crate::api::activity_log_api::log_activity(
@@ -914,16 +965,69 @@ fn next_full_step_from(
     Some(next.timestamp_millis())
 }
 
-/// 待克隆到新实例的子任务：过滤软删、position 升序、完成态不带走
-pub fn subtasks_to_clone(subtasks: &[TodoSubtask]) -> Vec<(String, f64)> {
-    let mut live: Vec<&TodoSubtask> = subtasks.iter().filter(|s| s.is_deleted == 0).collect();
-    live.sort_by(|a, b| {
-        a.position
-            .partial_cmp(&b.position)
-            .unwrap_or(std::cmp::Ordering::Equal)
+/// 待克隆到新实例的子任务：过滤软删、按「深度 → position」拓扑序（父先于子，
+/// M10 树形随迁的前提）、完成态不带走
+///
+/// 返回 (uuid, title, position, parent_uuid)：uuid 供插入时把 parent_uuid
+/// 重映射到新行的 uuid（克隆出来的树与原树同形）。
+pub fn subtasks_to_clone(subtasks: &[TodoSubtask]) -> Vec<(String, String, f64, Option<String>)> {
+    let live: Vec<&TodoSubtask> = subtasks.iter().filter(|s| s.is_deleted == 0).collect();
+    // 集合内 parent_uuid → 行索引（父不在集合内的引用按顶层处理）
+    let in_set: std::collections::HashMap<&str, &TodoSubtask> =
+        live.iter().map(|s| (s.uuid.as_str(), *s)).collect();
+    // 深度记忆化（父链在集合内逐级上溯；悬空/环按顶层兜底）
+    let mut depth_cache: std::collections::HashMap<String, usize> =
+        std::collections::HashMap::new();
+    fn depth_of(
+        s: &TodoSubtask,
+        in_set: &std::collections::HashMap<&str, &TodoSubtask>,
+        cache: &mut std::collections::HashMap<String, usize>,
+        seen: &mut Vec<String>,
+    ) -> usize {
+        if let Some(d) = cache.get(&s.uuid) {
+            return *d;
+        }
+        if seen.iter().any(|u| u == &s.uuid) {
+            return 0; // 脏数据成环：按顶层兜底
+        }
+        seen.push(s.uuid.clone());
+        let d = match s.parent_uuid.as_deref() {
+            Some(p) => match in_set.get(p) {
+                Some(parent) => 1 + depth_of(parent, in_set, cache, seen),
+                None => 0,
+            },
+            None => 0,
+        };
+        seen.pop();
+        cache.insert(s.uuid.clone(), d);
+        d
+    }
+    let mut with_depth: Vec<(usize, &TodoSubtask)> = live
+        .iter()
+        .map(|s| {
+            let mut seen = Vec::new();
+            (depth_of(s, &in_set, &mut depth_cache, &mut seen), *s)
+        })
+        .collect();
+    with_depth.sort_by(|a, b| {
+        a.0.cmp(&b.0)
+            .then_with(|| {
+                a.1.position
+                    .partial_cmp(&b.1.position)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            })
+            .then_with(|| a.1.id.cmp(&b.1.id))
     });
-    live.into_iter()
-        .map(|s| (s.title.clone(), s.position))
+    with_depth
+        .into_iter()
+        .map(|(_, s)| {
+            (
+                s.uuid.clone(),
+                s.title.clone(),
+                s.position,
+                s.parent_uuid.clone(),
+            )
+        })
         .collect()
 }
 
@@ -959,7 +1063,7 @@ pub async fn complete_todo_task(pool: &SqlitePool, id: i64) -> CoreResult<Comple
     } else {
         plan_next_recurring_instance(&task, now)
     };
-    let subtasks_to_copy: Vec<(String, f64)> = match &plan {
+    let subtasks_to_copy: Vec<(String, String, f64, Option<String>)> = match &plan {
         None => Vec::new(),
         Some(_) => {
             let rows: Vec<TodoSubtask> =
@@ -1029,20 +1133,29 @@ pub async fn complete_todo_task(pool: &SqlitePool, id: i64) -> CoreResult<Comple
         .bind(now)
         .fetch_one(&mut *tx)
         .await?;
-        for (title, position) in &subtasks_to_copy {
+        // 子任务克隆（M10：parent_uuid 重映射——uuid_map 记「源 uuid → 新
+        // uuid」，插入序已按深度拓扑（父先于子），父行就位后子行即可挂父）
+        let mut uuid_map: std::collections::HashMap<String, String> =
+            std::collections::HashMap::new();
+        for (src_uuid, title, position, parent_uuid) in &subtasks_to_copy {
             let sub_uuid = uuid::Uuid::new_v4().to_string();
+            let mapped_parent = parent_uuid
+                .as_deref()
+                .map(|p| uuid_map.get(p).cloned().unwrap_or_else(|| p.to_string()));
             sqlx::query(
-                "INSERT INTO todo_subtasks (uuid, task_id, title, done, done_at, position, is_deleted, created_at, updated_at, version)
-                 VALUES (?, ?, ?, 0, NULL, ?, 0, ?, ?, 1)",
+                "INSERT INTO todo_subtasks (uuid, task_id, title, done, done_at, position, parent_uuid, is_deleted, created_at, updated_at, version)
+                 VALUES (?, ?, ?, 0, NULL, ?, ?, 0, ?, ?, 1)",
             )
             .bind(&sub_uuid)
             .bind(created.id)
             .bind(title)
             .bind(*position)
+            .bind(&mapped_parent)
             .bind(now)
             .bind(now)
             .execute(&mut *tx)
             .await?;
+            uuid_map.insert(src_uuid.clone(), sub_uuid);
         }
         // 提醒行平移克隆到下一实例（与 due/start 同 delta；锚点口径一致）。
         // 事件先收集，事务提交后统一发射（提交前发射会让消费者读到未提交数据）
@@ -1235,6 +1348,7 @@ mod promote_subtask_tests {
                 task_id: parent.id,
                 title: "独立成长的子任务".into(),
                 position: None,
+                parent_uuid: None,
             },
         )
         .await
@@ -1273,6 +1387,7 @@ mod promote_subtask_tests {
                 task_id: parent.id,
                 title: "已完成的子任务".into(),
                 position: None,
+                parent_uuid: None,
             },
         )
         .await
@@ -1283,6 +1398,83 @@ mod promote_subtask_tests {
         assert_eq!(created.done, 1);
         assert_eq!(created.status, "done");
         assert!(created.done_at.is_some());
+    }
+
+    /// M10：promote 带走整棵子孙子树——task_id 改挂新任务，树形（parent_uuid
+    /// 链接，深层不变）整体随迁；直接子女提顶层（源行已软删）
+    #[tokio::test]
+    async fn promote_carries_descendants_to_new_task() {
+        let pool = setup_db().await;
+        let parent = create_todo_task(
+            &pool,
+            &TodoTaskCreateInput {
+                title: "父任务".into(),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+        // a → b → c（promote a）
+        let a = create_todo_subtask(
+            &pool,
+            &TodoSubtaskCreateInput {
+                task_id: parent.id,
+                title: "a".into(),
+                position: None,
+                parent_uuid: None,
+            },
+        )
+        .await
+        .unwrap();
+        let b = create_todo_subtask(
+            &pool,
+            &TodoSubtaskCreateInput {
+                task_id: parent.id,
+                title: "b".into(),
+                position: None,
+                parent_uuid: Some(a.uuid.clone()),
+            },
+        )
+        .await
+        .unwrap();
+        let c = create_todo_subtask(
+            &pool,
+            &TodoSubtaskCreateInput {
+                task_id: parent.id,
+                title: "c".into(),
+                position: None,
+                parent_uuid: Some(b.uuid.clone()),
+            },
+        )
+        .await
+        .unwrap();
+
+        let created = promote_todo_subtask(&pool, a.id).await.unwrap();
+
+        // 源行软删
+        let a_after: TodoSubtask = generic_repo::get_by_id(&pool, "todo_subtasks", a.id)
+            .await
+            .unwrap();
+        assert_eq!(a_after.is_deleted, 1);
+        // b/c 改挂新任务；b 提顶层（父 a 已软删），c 的父链接保持指向 b
+        let b_after: TodoSubtask = generic_repo::get_by_id(&pool, "todo_subtasks", b.id)
+            .await
+            .unwrap();
+        let c_after: TodoSubtask = generic_repo::get_by_id(&pool, "todo_subtasks", c.id)
+            .await
+            .unwrap();
+        assert_eq!(b_after.task_id, created.id);
+        assert_eq!(c_after.task_id, created.id);
+        assert_eq!(b_after.parent_uuid, None, "直接子女提顶层（源行已软删）");
+        assert_eq!(
+            c_after.parent_uuid.as_deref(),
+            Some(b.uuid.as_str()),
+            "更深层父链接保持 uuid 不变（树形整体随迁）"
+        );
+        assert_eq!((b_after.is_deleted, c_after.is_deleted), (0, 0));
+        // 新任务详情应能看到随迁的两个子任务（树形可追溯）
+        let detail = get_todo_task_detail(&pool, created.id).await.unwrap();
+        assert_eq!(detail.subtasks.len(), 2);
     }
 
     #[tokio::test]
@@ -1303,6 +1495,7 @@ mod promote_subtask_tests {
                 task_id: parent.id,
                 title: "甲".into(),
                 position: None,
+                parent_uuid: None,
             },
         )
         .await
@@ -1313,6 +1506,7 @@ mod promote_subtask_tests {
                 task_id: parent.id,
                 title: "乙".into(),
                 position: None,
+                parent_uuid: None,
             },
         )
         .await
@@ -1359,6 +1553,7 @@ mod promote_subtask_tests {
                 task_id: parent.id,
                 title: "尾位验证".into(),
                 position: None,
+                parent_uuid: None,
             },
         )
         .await
@@ -1553,7 +1748,9 @@ mod repeat_tests {
         .await
         .unwrap()
         .id;
-        let row: TodoTask = generic_repo::get_by_id(&pool, "todo_tasks", plain).await.unwrap();
+        let row: TodoTask = generic_repo::get_by_id(&pool, "todo_tasks", plain)
+            .await
+            .unwrap();
         assert_eq!(row.repeat_month_mode, 0);
         assert_eq!(row.repeat_nth_week, 0);
 
@@ -1933,7 +2130,63 @@ mod repeat_tests {
         let cloned = subtasks_to_clone(&rows);
         assert_eq!(
             cloned,
-            vec![("甲".to_string(), 0.0), ("丙".to_string(), 2.0)]
+            vec![
+                ("s1".to_string(), "甲".to_string(), 0.0, None),
+                ("s3".to_string(), "丙".to_string(), 2.0, None),
+            ]
+        );
+    }
+
+    #[test]
+    fn subtasks_to_clone_orders_parents_before_children_and_keeps_parent_link() {
+        // 树：甲 → 乙 → 丙（输入顺序故意打乱：孙子在前）
+        let mut grandchild = subtask_row(3, "孙", 0.0, 0);
+        grandchild.parent_uuid = Some("s2".into());
+        let mut child = subtask_row(2, "子", 1.0, 0);
+        child.parent_uuid = Some("s1".into());
+        let parent = subtask_row(1, "父", 0.0, 0);
+        let rows = vec![grandchild, child, parent];
+
+        let cloned = subtasks_to_clone(&rows);
+        assert_eq!(
+            cloned,
+            vec![
+                ("s1".to_string(), "父".to_string(), 0.0, None),
+                (
+                    "s2".to_string(),
+                    "子".to_string(),
+                    1.0,
+                    Some("s1".to_string())
+                ),
+                (
+                    "s3".to_string(),
+                    "孙".to_string(),
+                    0.0,
+                    Some("s2".to_string())
+                ),
+            ],
+            "克隆序必须拓扑（父先于子），parent_uuid 供插入时重映射"
+        );
+    }
+
+    #[test]
+    fn subtasks_to_clone_dangling_parent_counts_as_top_level() {
+        // 父不在集合内（软删/悬空）：按顶层处理，不伪造父引用
+        let mut orphan = subtask_row(2, "孤儿", 0.0, 0);
+        orphan.parent_uuid = Some("s-gone".into());
+        let rows = vec![orphan, subtask_row(1, "顶层", 0.0, 0)];
+        let cloned = subtasks_to_clone(&rows);
+        assert_eq!(
+            cloned,
+            vec![
+                ("s1".to_string(), "顶层".to_string(), 0.0, None),
+                (
+                    "s2".to_string(),
+                    "孤儿".to_string(),
+                    0.0,
+                    Some("s-gone".to_string())
+                ),
+            ]
         );
     }
 
@@ -1946,6 +2199,7 @@ mod repeat_tests {
             done: 0,
             done_at: None,
             position,
+            parent_uuid: None,
             is_deleted,
             created_at: 0,
             updated_at: 0,
@@ -2001,6 +2255,7 @@ mod repeat_tests {
                 task_id: t.id,
                 title: "子任务甲".into(),
                 position: Some(0.0),
+                parent_uuid: None,
             },
         )
         .await
@@ -2011,6 +2266,7 @@ mod repeat_tests {
                 task_id: t.id,
                 title: "子任务乙".into(),
                 position: Some(1.0),
+                parent_uuid: None,
             },
         )
         .await
@@ -2039,6 +2295,86 @@ mod repeat_tests {
         assert_eq!(subs[0].title, "子任务甲");
         assert_eq!(subs[1].title, "子任务乙");
         assert!(subs.iter().all(|s| s.done == 0));
+    }
+
+    /// M10：重复任务的子任务树随实例克隆——拓扑序插入 + parent_uuid 重映射
+    /// （克隆出来的乙.parent_uuid 指向新甲的 uuid，而非原甲的 uuid）
+    #[tokio::test]
+    async fn complete_recurring_clones_subtask_tree_with_remapped_parents() {
+        let pool = setup_db().await;
+        let due = local_midnight_days_ago(1);
+        let t = create_todo_task(
+            &pool,
+            &TodoTaskCreateInput {
+                title: "周任务".into(),
+                due_date: Some(due),
+                repeat_mode: Some(REPEAT_MODE_WEEKLY),
+                repeat_after: Some(1),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+        // 树：甲 → 乙 → 丙（原行 uuid 由 create 生成）
+        let jia = create_todo_subtask(
+            &pool,
+            &crate::models::business::TodoSubtaskCreateInput {
+                task_id: t.id,
+                title: "甲".into(),
+                position: Some(0.0),
+                parent_uuid: None,
+            },
+        )
+        .await
+        .unwrap();
+        let yi = create_todo_subtask(
+            &pool,
+            &crate::models::business::TodoSubtaskCreateInput {
+                task_id: t.id,
+                title: "乙".into(),
+                position: Some(0.0),
+                parent_uuid: Some(jia.uuid.clone()),
+            },
+        )
+        .await
+        .unwrap();
+        create_todo_subtask(
+            &pool,
+            &crate::models::business::TodoSubtaskCreateInput {
+                task_id: t.id,
+                title: "丙".into(),
+                position: Some(0.0),
+                parent_uuid: Some(yi.uuid.clone()),
+            },
+        )
+        .await
+        .unwrap();
+
+        let result = complete_todo_task(&pool, t.id).await.unwrap();
+        let next = result.next_instance.expect("应生成下一实例");
+
+        let subs: Vec<TodoSubtask> =
+            sqlx::query_as("SELECT * FROM todo_subtasks WHERE task_id = ? AND is_deleted = 0")
+                .bind(next.id)
+                .fetch_all(&pool)
+                .await
+                .unwrap();
+        assert_eq!(subs.len(), 3, "三层树应整体克隆");
+        let new_jia = subs.iter().find(|s| s.title == "甲").expect("甲");
+        let new_yi = subs.iter().find(|s| s.title == "乙").expect("乙");
+        let new_bing = subs.iter().find(|s| s.title == "丙").expect("丙");
+        assert_eq!(new_jia.parent_uuid, None, "克隆甲的父引用应保持顶层");
+        assert_eq!(
+            new_yi.parent_uuid.as_deref(),
+            Some(new_jia.uuid.as_str()),
+            "克隆乙的父引用必须重映射到新甲的 uuid（而非原甲 uuid={}）",
+            jia.uuid
+        );
+        assert_eq!(
+            new_bing.parent_uuid.as_deref(),
+            Some(new_yi.uuid.as_str()),
+            "克隆丙的父引用必须重映射到新乙的 uuid"
+        );
     }
 
     #[tokio::test]
@@ -2441,6 +2777,7 @@ mod duplicate_tests {
                 task_id: src.id,
                 title: "步骤一".into(),
                 position: None,
+                parent_uuid: None,
             },
         )
         .await
@@ -3741,6 +4078,7 @@ mod task_projection_tests {
                     task_id,
                     title: title.into(),
                     position: None,
+                    parent_uuid: None,
                 },
             )
             .await

@@ -8107,6 +8107,7 @@ impl SseDecode for crate::api::dto::TodoSubtask {
         let mut var_done = <i32>::sse_decode(deserializer);
         let mut var_doneAt = <Option<i64>>::sse_decode(deserializer);
         let mut var_position = <f64>::sse_decode(deserializer);
+        let mut var_parentUuid = <Option<String>>::sse_decode(deserializer);
         let mut var_isDeleted = <i32>::sse_decode(deserializer);
         let mut var_createdAt = <i64>::sse_decode(deserializer);
         let mut var_updatedAt = <i64>::sse_decode(deserializer);
@@ -8120,6 +8121,7 @@ impl SseDecode for crate::api::dto::TodoSubtask {
             done: var_done,
             done_at: var_doneAt,
             position: var_position,
+            parent_uuid: var_parentUuid,
             is_deleted: var_isDeleted,
             created_at: var_createdAt,
             updated_at: var_updatedAt,
@@ -8135,10 +8137,12 @@ impl SseDecode for crate::api::dto::TodoSubtaskCreateInput {
         let mut var_taskId = <i64>::sse_decode(deserializer);
         let mut var_title = <String>::sse_decode(deserializer);
         let mut var_position = <Option<f64>>::sse_decode(deserializer);
+        let mut var_parentUuid = <Option<String>>::sse_decode(deserializer);
         return crate::api::dto::TodoSubtaskCreateInput {
             task_id: var_taskId,
             title: var_title,
             position: var_position,
+            parent_uuid: var_parentUuid,
         };
     }
 }
@@ -10636,6 +10640,7 @@ impl flutter_rust_bridge::IntoDart for crate::api::dto::TodoSubtask {
             self.done.into_into_dart().into_dart(),
             self.done_at.into_into_dart().into_dart(),
             self.position.into_into_dart().into_dart(),
+            self.parent_uuid.into_into_dart().into_dart(),
             self.is_deleted.into_into_dart().into_dart(),
             self.created_at.into_into_dart().into_dart(),
             self.updated_at.into_into_dart().into_dart(),
@@ -10660,6 +10665,7 @@ impl flutter_rust_bridge::IntoDart for crate::api::dto::TodoSubtaskCreateInput {
             self.task_id.into_into_dart().into_dart(),
             self.title.into_into_dart().into_dart(),
             self.position.into_into_dart().into_dart(),
+            self.parent_uuid.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -12383,6 +12389,7 @@ impl SseEncode for crate::api::dto::TodoSubtask {
         <i32>::sse_encode(self.done, serializer);
         <Option<i64>>::sse_encode(self.done_at, serializer);
         <f64>::sse_encode(self.position, serializer);
+        <Option<String>>::sse_encode(self.parent_uuid, serializer);
         <i32>::sse_encode(self.is_deleted, serializer);
         <i64>::sse_encode(self.created_at, serializer);
         <i64>::sse_encode(self.updated_at, serializer);
@@ -12397,6 +12404,7 @@ impl SseEncode for crate::api::dto::TodoSubtaskCreateInput {
         <i64>::sse_encode(self.task_id, serializer);
         <String>::sse_encode(self.title, serializer);
         <Option<f64>>::sse_encode(self.position, serializer);
+        <Option<String>>::sse_encode(self.parent_uuid, serializer);
     }
 }
 
