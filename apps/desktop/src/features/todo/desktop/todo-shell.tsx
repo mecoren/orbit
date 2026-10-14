@@ -32,6 +32,7 @@ import {
   type TaskListPredicate,
   type TodoProject,
   type TodoTask,
+  type TodoTaskListItem,
 } from "@/lib/tauri";
 import { projectIdsWithDescendants } from "../shared/project-tree";
 import { parseTemplatePayload } from "../shared/template-apply";
@@ -69,7 +70,11 @@ interface TodoShellContextValue {
 
   // ---- 共享查询数据 ----
   projects: TodoProject[];
-  tasks: TodoTask[];
+  /**
+   * 全量任务通道（keyword 恒空）。A2 瘦行：[TodoTaskListItem] 少 10 个列表
+   * 零消费列——消费方要么只用留下的列，要么改走 todoTaskGet / detail。
+   */
+  tasks: TodoTaskListItem[];
   /** 任务全量查询加载中（面板空态/骨架用） */
   tasksLoading: boolean;
   /** 任务全量查询错误文案（仅无任何数据时的整块失败才非 null） */
@@ -264,7 +269,7 @@ export default function TodoShell() {
   // ---- 项目未完成计数聚合（侧栏删除保护判定）----
   const undoneCounts = useMemo(() => {
     const map: Record<number, number> = {};
-    for (const t of tasks as TodoTask[]) {
+    for (const t of tasks) {
       if (!t.done && t.project_id != null) {
         map[t.project_id] = (map[t.project_id] ?? 0) + 1;
       }

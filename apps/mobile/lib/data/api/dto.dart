@@ -215,6 +215,68 @@ class TodoTask {
         version: j['version'] as int,
       );
 
+  /// 列表通道瘦行构造（内存治理 A2）：core 的 `TodoTaskListItem` 不含 10 列
+  /// （uuid / repeat_after / 六个更细的 repeat_* / deleted_at / version），
+  /// App 模型（详情/表单/重复编辑页共用）保留字段并在此统一回落默认值。
+  ///
+  /// **列表视图对这 10 个字段零消费**（清单与核实结论见 core 侧
+  /// `TodoTaskListItem` 文档与 docs/09 §4.3）；新增列表消费点前必须重新核实，
+  /// 需要这些列时改走 `todoTaskGet` / `todoTaskGetDetail`（单行全列路径）。
+  const TodoTask.listRow({
+    required this.id,
+    required this.title,
+    this.description,
+    this.projectId,
+    required this.priority,
+    required this.status,
+    required this.done,
+    this.doneAt,
+    this.dueDate,
+    this.startDate,
+    required this.repeatMode,
+    required this.percentDone,
+    required this.position,
+    required this.isFavorite,
+    this.myDayDate,
+    this.durationMinutes,
+    required this.isDeleted,
+    required this.createdAt,
+    required this.updatedAt,
+  })  : uuid = '',
+        repeatAfter = 0,
+        repeatWeekdays = 0,
+        repeatEndType = 0,
+        repeatEndParam = 0,
+        repeatFromDone = 0,
+        repeatMonthMode = 0,
+        repeatNthWeek = 0,
+        deletedAt = null,
+        version = 0;
+
+  /// 列表通道 JSON → App 模型（mock 桥用；真桥走 `_mapTaskRow` 直映 FRB DTO）。
+  /// 读的键与 `TodoTaskListItem` 一致，被裁 10 列**不读**（回落默认值）。
+  factory TodoTask.fromListJson(Map<String, dynamic> j) => TodoTask.listRow(
+        id: j['id'] as int,
+        title: j['title'] as String,
+        description: j['description'] as String?,
+        projectId: j['project_id'] as int?,
+        priority: j['priority'] as int,
+        status: j['status'] as String,
+        done: j['done'] as int,
+        doneAt: j['done_at'] as int?,
+        dueDate: j['due_date'] as int?,
+        startDate: j['start_date'] as int?,
+        repeatMode: j['repeat_mode'] as int,
+        percentDone: (j['percent_done'] as num).toDouble(),
+        position: (j['position'] as num).toDouble(),
+        isFavorite: j['is_favorite'] as int,
+        myDayDate: j['my_day_date'] as int?,
+        durationMinutes: j['duration_minutes'] as int?,
+        isDeleted: j['is_deleted'] as int,
+        createdAt: j['created_at'] as int,
+        updatedAt: j['updated_at'] as int,
+      );
+
   /// 任务是否已完成（done=1）
   bool get isDone => done == 1;
 

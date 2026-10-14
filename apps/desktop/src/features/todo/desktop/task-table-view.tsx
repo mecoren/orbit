@@ -19,7 +19,7 @@ import {
   todoTaskUpdate,
   type ProjectedTaskLabel,
   type TodoProject,
-  type TodoTask,
+  type TodoTaskListItem,
 } from "@/lib/tauri";
 import {
   batchMoveToProject,
@@ -58,7 +58,7 @@ import type { TaskReminderMeta } from "../shared/reminder-meta";
 import { CheckSvg } from "./task-list-view";
 
 export interface TaskTableViewProps {
-  tasks: TodoTask[];
+  tasks: TodoTaskListItem[];
   projects: TodoProject[];
   labelsByTask: Map<number, ProjectedTaskLabel[]>;
   remindersByTask: Map<number, TaskReminderMeta[]>;
@@ -175,7 +175,7 @@ export default function TaskTableView({
     setAnchorId(null);
   };
 
-  const runBatch = async (_label: string, action: (sel: TodoTask[]) => Promise<unknown>) => {
+  const runBatch = async (_label: string, action: (sel: TodoTaskListItem[]) => Promise<unknown>) => {
     const sel = selectedTasks;
     if (sel.length === 0 || batchBusy) return;
     setBatchBusy(true);
@@ -188,13 +188,13 @@ export default function TaskTableView({
     }
   };
 
-  const batchDelete = (sel: TodoTask[]) => {
+  const batchDelete = (sel: TodoTaskListItem[]) => {
     if (sel.length === 0) return;
     const ids = sel.map((t) => t.id);
     undoableDelete({
       entityLabel: "任务",
       count: ids.length,
-      hide: (q) => hideManyFromQueries<TodoTask>(q, ["todo_tasks"], ids),
+      hide: (q) => hideManyFromQueries<TodoTaskListItem>(q, ["todo_tasks"], ids),
       commit: async () => {
         const { todoTaskDelete } = await import("@/lib/tauri");
         await Promise.all(ids.map((id) => todoTaskDelete(id)));

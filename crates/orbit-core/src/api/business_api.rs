@@ -199,7 +199,15 @@ pub async fn delete_todo_project(pool: &SqlitePool, id: i64) -> CoreResult<()> {
 }
 
 // ---------- todo_tasks ----------
-pub async fn list_todo_tasks(pool: &SqlitePool, filter: &ListFilter) -> CoreResult<Vec<TodoTask>> {
+/// 列出任务（列表通道，返回瘦行 [TodoTaskListItem]）。
+///
+/// A2：10 个「列表通道零消费」列不在返回形状里（清单与核实结论见 struct
+/// 文档）；需要这些列（uuid / repeat 细节 / version / deleted_at）的调用方
+/// 走单行全列路径（`get_todo_task` / `get_todo_task_detail` / 回收站 / 同步）。
+pub async fn list_todo_tasks(
+    pool: &SqlitePool,
+    filter: &ListFilter,
+) -> CoreResult<Vec<TodoTaskListItem>> {
     generic_repo::list(pool, "todo_tasks", filter).await
 }
 pub async fn get_todo_task(pool: &SqlitePool, id: i64) -> CoreResult<TodoTask> {

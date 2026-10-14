@@ -114,7 +114,9 @@ void main() {
           reason: 'when done 必须顺延一个完整周期（≥6 天）');
       expect(deltaFromNow, lessThan(7 * 86400000 + 60000),
           reason: 'when done 顺延恰好一个周期（容差 1 分钟）');
-      expect(next.repeatFromDone, 1, reason: '规则字段随克隆');
+      // repeat_* 属列表通道裁剪列（A2 瘦行）：断言走单行全列通道
+      final full = await bridge.todoTaskGet(next.id);
+      expect(full.repeatFromDone, 1, reason: '规则字段随克隆');
     });
 
     test('结束次数：param 递减，1 时序列终结', () async {
@@ -132,12 +134,14 @@ void main() {
       await bridge.todoTaskComplete(t.id);
       var list = await bridge.todoTaskList(const ListFilter());
       var next = list.firstWhere((x) => !x.isDone && x.title == '三次课程');
-      expect(next.repeatEndParam, 2, reason: '次数随推进递减');
+      // repeat_end_param 属列表通道裁剪列（A2 瘦行）：计数断言走单行全列通道
+      expect((await bridge.todoTaskGet(next.id)).repeatEndParam, 2,
+          reason: '次数随推进递减');
       // 第二次 → 剩 1；第三次完成后终结（param=1 时不再克隆）
       await bridge.todoTaskComplete(next.id);
       list = await bridge.todoTaskList(const ListFilter());
       next = list.firstWhere((x) => !x.isDone && x.title == '三次课程');
-      expect(next.repeatEndParam, 1);
+      expect((await bridge.todoTaskGet(next.id)).repeatEndParam, 1);
       await bridge.todoTaskComplete(next.id);
       list = await bridge.todoTaskList(const ListFilter());
       expect(list.where((x) => !x.isDone && x.title == '三次课程').length, 0,
@@ -189,7 +193,9 @@ void main() {
       await bridge.todoTaskComplete(t.id);
       final list = await bridge.todoTaskList(const ListFilter());
       final next = list.firstWhere((x) => !x.isDone && x.title == '健身');
-      expect(next.repeatWeekdays, 21, reason: '掩码随克隆保留');
+      // repeat_weekdays 属列表通道裁剪列（A2 瘦行）：断言走单行全列通道
+      expect((await bridge.todoTaskGet(next.id)).repeatWeekdays, 21,
+          reason: '掩码随克隆保留');
     });
   });
 }

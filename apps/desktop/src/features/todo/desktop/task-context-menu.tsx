@@ -79,7 +79,7 @@ import {
   todoTaskUpdate,
   type TodoLabel,
   type TodoProject,
-  type TodoTask,
+  type TodoTaskListItem,
   type TodoTaskLabel,
 } from "@/lib/tauri";
 import { PRIORITY_COLOR, FAVORITE_COLOR, TODO_ACCENT, PRIORITY_LABELS, MY_DAY_COLOR } from "../shared/constants";
@@ -92,7 +92,9 @@ import { completeTask } from "../shared/task-actions";
 const tsToInputValue = (ms: number) => format(new Date(ms), "yyyy-MM-dd'T'HH:mm");
 
 interface TaskContextMenuProps {
-  task: TodoTask;
+  /** 列表行（A2 瘦行）：菜单只读留下的列（due_date/start_date/my_day_date/
+   *  project_id/priority/is_favorite/done），不需要 uuid / repeat 细节 */
+  task: TodoTaskListItem;
   projects: TodoProject[];
   /** 打开详情抽屉（§7-③ selectedTaskId） */
   onOpenDetail: () => void;

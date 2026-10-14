@@ -300,7 +300,31 @@ export interface TodoTaskUpdateInput {
   /** 预计时长（分钟）；null = 清除（不传 = 不改） */
   duration_minutes?: number | null;
 }
-export const todoTaskList = (filter: ListFilter) => invoke<TodoTask[]>("todo_tasks_list", { filter });
+/**
+ * 列表通道瘦行类型（内存治理 A2）：`todoTaskList` 的实际返回形状。
+ *
+ * 10 个「列表通道零消费」列整体不在其中（uuid / repeat_after / 六个更细的
+ * repeat_* / deleted_at / version）——core 侧 `TodoTaskListItem` 不序列化它们，
+ * 因此这里读这些字段会直接 tsc 报错（比运行时 undefined 早一步拦下）。
+ * 需要这些列时走单行全列路径：`todoTaskGet` / `todoTaskGetDetail` / 回收站。
+ * 保留的有消费列：start_date（右键菜单提醒档）、description（搜索通道本地
+ * 收敛）、created_at（排序与 Logbook 分组）、repeat_mode（移动端徽标）。
+ */
+export type TodoTaskListItem = Omit<
+  TodoTask,
+  | "uuid"
+  | "repeat_after"
+  | "repeat_weekdays"
+  | "repeat_end_type"
+  | "repeat_end_param"
+  | "repeat_from_done"
+  | "repeat_month_mode"
+  | "repeat_nth_week"
+  | "deleted_at"
+  | "version"
+>;
+export const todoTaskList = (filter: ListFilter) =>
+  invoke<TodoTaskListItem[]>("todo_tasks_list", { filter });
 export const todoTaskGet = (id: number) => invoke<TodoTask>("todo_tasks_get", { id });
 export const todoTaskCreate = (input: TodoTaskCreateInput) => invoke<TodoTask>("todo_tasks_create", { input });
 export const todoTaskUpdate = (id: number, input: TodoTaskUpdateInput) => invoke<TodoTask>("todo_tasks_update", { id, input });

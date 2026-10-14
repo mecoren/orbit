@@ -12,7 +12,7 @@ import {
   todoTaskUpdate,
   todoTaskUpdatePosition,
   todoTaskDelete,
-  type TodoTask,
+  type TodoTaskListItem,
   type TodoTaskUpdateInput,
 } from "@/lib/tauri";
 import { patchQueriesData } from "@/lib/query-patch";
@@ -22,8 +22,8 @@ import { pushUndo } from "./undo-bridge";
 
 /** 逐条更新；返回失败条数。部分成功弹 warning（措辞由调用方语境补足） */
 export async function batchUpdate(
-  tasks: TodoTask[],
-  makeInput: (t: TodoTask) => TodoTaskUpdateInput,
+  tasks: TodoTaskListItem[],
+  makeInput: (t: TodoTaskListItem) => TodoTaskUpdateInput,
   failureHint: string,
   qc?: QueryClient,
 ): Promise<number> {
@@ -32,7 +32,7 @@ export async function batchUpdate(
   const plans = tasks.map((t) => ({ task: t, input: makeInput(t) }));
   if (qc) {
     for (const { task: t, input } of plans) {
-      patchQueriesData<TodoTask>(qc, ["todo_tasks"], [t.id], input);
+      patchQueriesData<TodoTaskListItem>(qc, ["todo_tasks"], [t.id], input);
     }
   }
   let failed = 0;
@@ -46,8 +46,8 @@ export async function batchUpdate(
         // 精确回滚：把该行本次写入的键位恢复为传入快照
         const rollback = Object.fromEntries(
           Object.keys(input).map((k) => [k, (t as unknown as Record<string, unknown>)[k]]),
-        ) as Partial<TodoTask>;
-        patchQueriesData<TodoTask>(qc, ["todo_tasks"], [t.id], rollback);
+        ) as Partial<TodoTaskListItem>;
+        patchQueriesData<TodoTaskListItem>(qc, ["todo_tasks"], [t.id], rollback);
       }
     }
   }
@@ -62,7 +62,7 @@ export async function batchUpdate(
  *  取消完成/状态切换仍走普通 update。撤销入口（A5）：恢复 done/status
  *  + 软删引擎克隆的下一实例。 */
 export async function batchUpdateStatus(
-  tasks: TodoTask[],
+  tasks: TodoTaskListItem[],
   input: TodoTaskUpdateInput,
   qc?: QueryClient,
 ): Promise<number> {
@@ -86,7 +86,7 @@ export async function batchUpdateStatus(
   const targets = tasks.filter((t) => !t.done);
   if (qc) {
     for (const t of targets) {
-      patchQueriesData<TodoTask>(qc, ["todo_tasks"], [t.id], {
+      patchQueriesData<TodoTaskListItem>(qc, ["todo_tasks"], [t.id], {
         done: 1,
         done_at: Date.now(),
         status: "done",
@@ -101,7 +101,7 @@ export async function batchUpdateStatus(
       const res = await todoTaskComplete(t.id);
       if (res.next_instance) clones.push(res.next_instance.id);
       if (qc && res.task) {
-        patchQueriesData<TodoTask>(qc, ["todo_tasks"], [t.id], {
+        patchQueriesData<TodoTaskListItem>(qc, ["todo_tasks"], [t.id], {
           done: res.task.done,
           done_at: res.task.done_at,
           status: res.task.status,
@@ -111,7 +111,7 @@ export async function batchUpdateStatus(
       failed++;
       console.error(`批量完成任务 ${t.id} 失败:`, e);
       if (qc) {
-        patchQueriesData<TodoTask>(qc, ["todo_tasks"], [t.id], {
+        patchQueriesData<TodoTaskListItem>(qc, ["todo_tasks"], [t.id], {
           done: t.done,
           done_at: t.done_at,
           status: t.status,
@@ -142,7 +142,7 @@ export async function batchUpdateStatus(
   return failed;
 }
 
-export async function batchUpdatePriority(tasks: TodoTask[], priority: number, qc?: QueryClient): Promise<number> {
+export async function batchUpdatePriority(tasks: TodoTaskListItem[], priority: number, qc?: QueryClient): Promise<number> {
   const failed = await batchUpdate(tasks, () => ({ priority }), "批量设置优先级", qc);
   if (failed < tasks.length) {
     pushUndo({
@@ -156,7 +156,7 @@ export async function batchUpdatePriority(tasks: TodoTask[], priority: number, q
   return failed;
 }
 
-export async function batchUpdateFavorite(tasks: TodoTask[], favorite: boolean, qc?: QueryClient): Promise<number> {
+export async function batchUpdateFavorite(tasks: TodoTaskListItem[], favorite: boolean, qc?: QueryClient): Promise<number> {
   const failed = await batchUpdate(tasks, () => ({ is_favorite: favorite ? 1 : 0 }), "批量更新收藏", qc);
   if (failed < tasks.length) {
     pushUndo({
@@ -171,7 +171,7 @@ export async function batchUpdateFavorite(tasks: TodoTask[], favorite: boolean, 
 }
 
 /** 批量加入/移出我的一天：加入写「今天本地零点」，移出写 null（视图按日判断） */
-export async function batchUpdateMyDay(tasks: TodoTask[], join: boolean, qc?: QueryClient): Promise<number> {
+export async function batchUpdateMyDay(tasks: TodoTaskListItem[], join: boolean, qc?: QueryClient): Promise<number> {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const failed = await batchUpdate(
@@ -196,16 +196,16 @@ export async function batchUpdateMyDay(tasks: TodoTask[], join: boolean, qc?: Qu
  *  （取中值保证不与既有 position 冲突，03 文档 §一排序口径）。
  *  撤销入口（A5）：恢复原 project_id + 原 position 双字段。 */
 export async function batchMoveToProject(
-  tasks: TodoTask[],
+  tasks: TodoTaskListItem[],
   projectId: number | null,
-  allTasks: TodoTask[],
+  allTasks: TodoTaskListItem[],
 ): Promise<void> {
   const others = allTasks.filter(
     (t) => t.project_id === projectId && !tasks.some((s) => s.id === t.id),
   );
   const maxPos = others.reduce((m, t) => Math.max(m, t.position), 0);
   let failed = 0;
-  const moved: TodoTask[] = [];
+  const moved: TodoTaskListItem[] = [];
   for (const t of tasks) {
     try {
       await todoTaskUpdate(t.id, { project_id: projectId });
@@ -258,13 +258,13 @@ export function batchDuePresetDate(preset: BatchDuePreset, now = new Date()): Da
  *  时分秒（零点/无截止 → 18:00 归一口径）；clear 档写 null 清除截止。
  *  撤销：恢复原 due_date。 */
 export async function batchSetDueDate(
-  tasks: TodoTask[],
+  tasks: TodoTaskListItem[],
   preset: BatchDuePreset,
   qc?: QueryClient,
 ): Promise<number> {
   const target = batchDuePresetDate(preset);
   // 先纯算出每行的目标值（跳过幂等行），再一次性乐观 patch
-  const plans: { task: TodoTask; next: number | null }[] = [];
+  const plans: { task: TodoTaskListItem; next: number | null }[] = [];
   for (const t of tasks) {
     let next: number | null;
     if (target == null) {
@@ -278,11 +278,11 @@ export async function batchSetDueDate(
   }
   if (qc) {
     for (const { task: t, next } of plans) {
-      patchQueriesData<TodoTask>(qc, ["todo_tasks"], [t.id], { due_date: next });
+      patchQueriesData<TodoTaskListItem>(qc, ["todo_tasks"], [t.id], { due_date: next });
     }
   }
   let failed = 0;
-  const changed: TodoTask[] = [];
+  const changed: TodoTaskListItem[] = [];
   const newDueById = new Map<number, number | null>();
   for (const { task: t, next } of plans) {
     try {
@@ -293,7 +293,7 @@ export async function batchSetDueDate(
       failed++;
       console.error(`批量改期任务 ${t.id} 失败:`, e);
       if (qc) {
-        patchQueriesData<TodoTask>(qc, ["todo_tasks"], [t.id], { due_date: t.due_date });
+        patchQueriesData<TodoTaskListItem>(qc, ["todo_tasks"], [t.id], { due_date: t.due_date });
       }
     }
   }

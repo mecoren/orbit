@@ -16,6 +16,14 @@
 
 ## [Unreleased]
 
+### 性能：任务列表通道瘦行 DTO 收口（内存治理 A2，2026-10-14）
+
+- **裁列**：`todo_tasks` 列表通道由 `TodoTask`（29 列）改独立瘦行 `TodoTaskListItem`（19 列），整体去掉 10 个「列表零消费」列——`uuid`、`repeat_after`、六个更细的 `repeat_*`（weekdays / end_type / end_param / from_done / month_mode / nth_week）、`deleted_at`、`version`。占位表达式只省值、省不掉键名（`"repeat_end_type":0,` 一行 20 字节），故走独立 DTO 而非 `NULL AS ...`（docs/09 §4.3 的既定路径）；桌面 IPC 与 FRB 桥两端的解码/对象分配同步变薄。
+- **消费边界（全仓复核，修正文档旧口径）**：保留 `start_date`（桌面右键菜单提醒档、移动时间轴）、`repeat_mode`（移动列表/日历重复徽标判 `> 0`）、`created_at`（桌面 `sortTasks` 排序与 Logbook 分组、保存筛选器 `created_from`）、`description`（桌面搜索通道的本地收敛分支）——docs/09 §4.3 原「9 列零消费」把 `start_date` 误计入，本轮实测它有列表消费。被裁 10 列只在单行全列路径消费：`todo_tasks_get` / `todo_tasks_get_detail` / 回收站 / 同步 push-pull / 活动日志 / 事件载荷。
+- **贯通**：core `business_api::list_todo_tasks` 换返回类型、`LIST_COLUMNS_TASKS` 列清单与 DTO 逐列对齐（keyword 通道走 `description` 真值分支——保住「按描述搜索」，服务端 LIKE 与本地下沉都要读原文）；桌面 Tauri `todo_tasks_list` 与 FRB `todo_tasks_list` 同名同口径；桌面新增 `TodoTaskListItem = Omit<TodoTask, 10 列>` 并把列表路径的共享纯函数与视图 props 全部收到该类型（读被裁列当场 tsc 报错，不再有「字段静默 undefined」的窗口）；移动端 `TodoTask.listRow` 统一回落被裁列默认值 + `_mapTaskRow` 直映 FRB DTO，mock 桥摘键同口径。
+- **实测收益**（口径同 `perf-metrics/column-prune.mjs`：万行夹具走 mock 真实命令面 `JSON.stringify`）：瘦行 **3.41MB** vs 上一版形状（29 键）**5.22MB**，**每行省 181 字节、万行省 1.81MB（34.7%）**——10 列键名开销 ≈18 字节/列，与 docs/09 §4.3「值不要钱、键名要钱」的判断一致。
+- **测试**：core 新增列清单漂移守卫 + 两档列清单差分（5 例）；桌面 `ipc-contract` ③ 改判「10 列不在行里」；移动新增瘦行契约例（列表回落默认值 vs 单条全列真值）；4 处原从列表行读 repeat 细节的旧用例改走单条通道。桌面 vitest 587 + e2e 57 + `cargo test --workspace --lib` 780 + 移动 826 全绿。
+
 ### 待办：子任务多层嵌套（M10 / B-4，2026-10-12）
 
 - **数据层**：`0007` 迁移追加 `todo_subtasks.parent_uuid`（先例 0003 项目文件夹——树形父引用用**同步键 uuid** 而非 `parent_id`：自引用整数外键会死锁同步「父行先落库」定序，uuid 列随 `SELECT *` 载荷同步，零同步引擎改动）。限定**同任务内嵌套**（跨任务移动要牵动整棵子树 task_id 与 `_fk` 重解析，v1 明确拒绝）。

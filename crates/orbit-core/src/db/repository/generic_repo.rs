@@ -36,24 +36,39 @@ pub(crate) fn current_device_id() -> String {
 // 泛型 list/get/soft_delete（适用于所有有 is_deleted + id 的表）
 // =============================================================================
 
-/// todo_tasks 列表通道的裁剪列清单（批2 + 内存治理 A2）：全列减两个
-/// 「列表通道零消费」列，两者都以占位表达式保持行形状（FromRow/DTO 形状不变）：
+/// todo_tasks 列表通道列清单（批2 + 内存治理 A2）：与
+/// [`TodoTaskListItem`](crate::models::business::TodoTaskListItem) 字段严格
+/// 一一对应，行形状不匹配会让 `FromRow` 直接解码失败。
 ///
-/// - `description` → `NULL AS description`（批2：万级列表实测占 IPC 序列化
-///   体积 47%，1KB/行）；
-/// - `uuid` → `'' AS uuid`（A2：单列约 450KB/万行。**必须用空串而非 NULL**——
-///   DTO 该字段是非空 `String`，NULL 会让 FromRow 解码直接失败）。
+/// 列名外的 10 列（`uuid`、`repeat_after`、六个更细的 `repeat_*`、
+/// `deleted_at`、`version`）已从列表通道 DTO 里整体移除——它们的键名本身
+/// 就是开销，占位表达式省不掉，故改走独立瘦行 DTO；消费边界与被移除列的
+/// 核实结论见该 struct 的文档注释。
 ///
-/// 消费方核实（2026-09-23）：桌面前端全仓仅 `ipc-mock` 的 `todo_tasks_get_by_uuid`
-/// 提到 uuid，移动端 modules/services 零消费（同步冲突行读的是
-/// `sync_conflicts.record_uuid`，与任务 uuid 不同源）；同步 push/pull、活动日志、
-/// 事件载荷（`DbEvent::delete`）与回收站清理都走单行 `get_by_id` 全列路径。
+/// `{desc}` 占位由 [task_list_columns] 按通道替换：
+/// - keyword 空（列表主通道）→ `NULL AS description`：万级列表实测
+///   description 占 IPC 序列化体积 47%（1KB/行），四视图与移动列表零消费；
+/// - keyword 非空（搜索通道）→ `description AS description`：桌面面板命中集
+///   落地前还要按描述做一次本地收敛（`task-panel.tsx` 的 placeholder
+///   二次过滤），描述原文必须过桥——否则「按描述搜索」会静默丢结果
+///   （A2 前置修复的教训，见 docs/09 §4.3）。
+///
 /// 字段顺序与 0001 迁移列序一致（可读性；SQLite 按名绑定）。
-const LIST_COLUMNS_TASKS_PRUNED: &str = "id, '' AS uuid, title, NULL AS description, \
-    project_id, priority, status, done, done_at, due_date, start_date, \
-    repeat_after, repeat_mode, repeat_weekdays, repeat_end_type, repeat_end_param, \
-    repeat_from_done, repeat_month_mode, repeat_nth_week, percent_done, position, is_favorite, my_day_date, duration_minutes, \
-    is_deleted, created_at, updated_at, deleted_at, version";
+const LIST_COLUMNS_TASKS: &str = "id, title, {desc} AS description, project_id, priority, \
+    status, done, done_at, due_date, start_date, repeat_mode, percent_done, position, \
+    is_favorite, my_day_date, duration_minutes, is_deleted, created_at, updated_at";
+
+/// 按通道拼 todo_tasks 列表列清单（见 [LIST_COLUMNS_TASKS]）。
+fn task_list_columns(with_description: bool) -> String {
+    LIST_COLUMNS_TASKS.replace(
+        "{desc}",
+        if with_description {
+            "description"
+        } else {
+            "NULL"
+        },
+    )
+}
 
 /// 泛型分页列表查询：SELECT <列> FROM {table} WHERE is_deleted=0
 ///     [AND (field1 LIKE ? OR field2 LIKE ? ...)]
@@ -66,13 +81,12 @@ const LIST_COLUMNS_TASKS_PRUNED: &str = "id, '' AS uuid, title, NULL AS descript
 /// 调用方混用属契约错误，但基线是不静默丢数据所以选择忽略）。
 /// 调用方需保证 T: sqlx::FromRow 且表结构匹配。
 ///
-/// todo_tasks 列裁剪（批2 + A2）：keyword 为空时 description / uuid 两列以占位
-/// 表达式不传输（清单与理由见 [LIST_COLUMNS_TASKS_PRUNED]）——万级列表场景实测
-/// description 占 IPC 序列化体积 47%（1KB/行）、uuid 约 450KB/万行，而列表/看板/
-/// 日历/表格四视图与移动列表对两者均零消费，仅 keyword 本地过滤依赖 description
-/// （keyword 非空时 SQL LIKE 已按 title+description 过滤，保留全列语义保序）。
-/// DTO 形状不变（`description` 前端 `?? null` 兜底；`uuid` 回落空串），详情
-/// get_todo_task_detail 单条保持全列。
+/// todo_tasks 列裁剪（批2 + 内存治理 A2）：列表通道只过瘦行列
+/// [`TodoTaskListItem`](crate::models::business::TodoTaskListItem)
+/// （清单与理由见 [LIST_COLUMNS_TASKS]）——10 个列表通道零消费列整体移除，
+/// description 的**值**在无 keyword 时以 `NULL` 占位不传输（万级实测占 IPC
+/// 体积 47%）；keyword 非空时 description 回真值（搜索通道本地收敛需要）。
+/// 详情 `get_todo_task_detail` / `get_by_id` / 同步 / 回收站单条路径保持全列。
 pub async fn list<T>(pool: &SqlitePool, table: &str, filter: &ListFilter) -> CoreResult<Vec<T>>
 where
     T: for<'r> sqlx::FromRow<'r, sqlx::sqlite::SqliteRow> + Send + Unpin,
@@ -100,9 +114,12 @@ where
         } else {
             ""
         };
-    // 列裁剪（批2）：无 keyword 的 todo_tasks 列表不传 description 大列
-    let select_expr = if table == "todo_tasks" && keyword_clause.clause.is_empty() {
-        LIST_COLUMNS_TASKS_PRUNED
+    // 列裁剪（批2 + A2）：todo_tasks 列表通道只过瘦行列；description 仅在
+    // keyword 通道回真值（桌面搜索的本地收敛分支要读原文）
+    let pruned_columns;
+    let select_expr = if table == "todo_tasks" {
+        pruned_columns = task_list_columns(!keyword_clause.clause.is_empty());
+        pruned_columns.as_str()
     } else {
         "*"
     };
@@ -1577,14 +1594,15 @@ mod task_predicate_tests {
     }
 }
 
-/// 列裁剪集成测试（批2）：todo_tasks 列表通道 keyword 空时 description
-/// 不传输（NULL 占位），keyword 非空时保留全列（SQL LIKE 依赖）；
-/// get_by_id 单条保持全列。
+/// 列裁剪集成测试（批2 + A2）：todo_tasks 列表通道返回瘦行
+/// [`TodoTaskListItem`](crate::models::business::TodoTaskListItem)（10 个零消费列
+/// 整体不在行列清单里），description 值仅在 keyword 通道回真值；get_by_id
+/// 单条保持全列。
 #[cfg(test)]
 mod column_prune_tests {
     use super::*;
     use crate::api::business_api::create_todo_task;
-    use crate::models::business::{ListFilter, TodoTask, TodoTaskCreateInput};
+    use crate::models::business::{ListFilter, TodoTask, TodoTaskCreateInput, TodoTaskListItem};
 
     async fn setup_db() -> sqlx::SqlitePool {
         let pool = sqlx::SqlitePool::connect("sqlite::memory:").await.unwrap();
@@ -1616,14 +1634,50 @@ mod column_prune_tests {
         .await
         .unwrap();
 
-        let rows: Vec<TodoTask> = list(&pool, "todo_tasks", &all_tasks()).await.unwrap();
+        // A2：列表通道返回瘦行 DTO——10 个零消费列不在行列清单里（uuid /
+        // repeat_after / 六个更细 repeat_* / deleted_at / version），编译期即不足
+        let rows: Vec<TodoTaskListItem> = list(&pool, "todo_tasks", &all_tasks()).await.unwrap();
         assert_eq!(rows.len(), 1);
         // 裁剪：列表通道 description 为 NULL（形状在、值不传）
         assert_eq!(rows[0].description, None);
-        // A2：uuid 同为列表通道零消费列，以空串占位（不能是 NULL——DTO 非空 String）
-        assert!(rows[0].uuid.is_empty(), "列表通道 uuid 应被裁掉");
-        // 其余字段全量（含非默认值字段防白名单漏列）
+        // 保留列全量（含非默认值字段防白名单漏列）
         assert_eq!(rows[0].title, "带描述的任务");
+        assert_eq!(rows[0].status, "pending");
+        assert_eq!(rows[0].is_deleted, 0);
+        assert!(
+            rows[0].created_at > 0,
+            "created_at 桌面排序消费，必须在瘦行里"
+        );
+    }
+
+    /// 两档列清单只差 description 表达式（防 {desc} 占位被改歪导致
+    /// keyword 通道跟着丢描述原文），且两档都不含被裁列
+    #[test]
+    fn task_list_columns_differ_only_in_description() {
+        let plain = task_list_columns(false);
+        let keyworded = task_list_columns(true);
+        assert_eq!(
+            keyworded.replace("description AS description", "NULL AS description"),
+            plain,
+            "两档列清单只应差 description 表达式"
+        );
+        for pruned in [
+            "uuid",
+            "repeat_after",
+            "repeat_weekdays",
+            "repeat_end_type",
+            "repeat_end_param",
+            "repeat_from_done",
+            "repeat_month_mode",
+            "repeat_nth_week",
+            "deleted_at",
+            "version",
+        ] {
+            assert!(
+                !plain.contains(pruned),
+                "被裁列 {pruned} 不应出现在列表通道列清单: {plain}"
+            );
+        }
     }
 
     #[tokio::test]
@@ -1642,12 +1696,11 @@ mod column_prune_tests {
 
         let mut f = all_tasks();
         f.keyword = Some("采购".into());
-        let rows: Vec<TodoTask> = list(&pool, "todo_tasks", &f).await.unwrap();
-        // keyword 命中 description → 行返回且 description 全列保留
+        // 列清单同为瘦行（同为 TodoTaskListItem），只是 description 回真值
+        let rows: Vec<TodoTaskListItem> = list(&pool, "todo_tasks", &f).await.unwrap();
+        // keyword 命中 description → 行返回且描述原文过桥（桌面本地收敛分支要读）
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0].description.as_deref(), Some("描述含关键词采购"));
-        // keyword 分支走 SELECT *：uuid 一并回全（裁剪只作用于无 keyword 通道）
-        assert!(!rows[0].uuid.is_empty(), "keyword 通道应保留 uuid");
     }
 
     #[tokio::test]
@@ -1672,8 +1725,8 @@ mod column_prune_tests {
     #[tokio::test]
     async fn other_tables_keep_select_star() {
         let pool = setup_db().await;
-        // todo_projects 列表走 list() 但不该套任务白名单（列不匹配会 FromRow 报错）
-        // 断言改为可执行即白名单未误套：若误套 LIST_COLUMNS_TASKS_PRUNED，
+        // todo_projects 列表走 list() 但不该套任务列清单（列不匹配会 FromRow 报错）
+        // 断言改为可执行即白名单未误套：若误套 LIST_COLUMNS_TASKS，
         // todo_projects 行缺 hex_color/sort_order 列 FromRow 会直接报错
         let _rows: Vec<crate::models::business::TodoProject> =
             list(&pool, "todo_projects", &ListFilter::default())

@@ -47,7 +47,7 @@ pub use super::dto::{
     TaskLabelsProjection, TaskRemindersProjection, TodoComment, TodoCommentCreateInput, TodoLabel,
     TodoLabelCreateInput, TodoProject, TodoProjectCreateInput, TodoReminder,
     TodoReminderCreateInput, TodoSubtask, TodoSubtaskCreateInput, TodoTask, TodoTaskCreateInput,
-    TodoTaskDetail, TodoTaskLabel, TodoTaskLabelCreateInput, TodoTaskRelation,
+    TodoTaskDetail, TodoTaskLabel, TodoTaskLabelCreateInput, TodoTaskListItem, TodoTaskRelation,
     TodoTaskRelationCreateInput,
 };
 
@@ -129,12 +129,15 @@ pub async fn todo_projects_update_sort_order(id: i64, sort_order: f64) -> Result
 // =============================================================================
 
 /// 列出任务（对应桌面 todo_tasks_list）
-pub async fn todo_tasks_list(filter: ListFilter) -> Result<Vec<TodoTask>, String> {
+///
+/// A2 瘦行：返回 [TodoTaskListItem]（10 个列表通道零消费列不过桥），
+/// 与桌面 Tauri 命令同名同口径。
+pub async fn todo_tasks_list(filter: ListFilter) -> Result<Vec<TodoTaskListItem>, String> {
     let pool = pool()?;
     let items = business_api::list_todo_tasks(&pool, &filter.into())
         .await
         .map_err(|e| e.to_string())?;
-    Ok(items.into_iter().map(TodoTask::from).collect())
+    Ok(items.into_iter().map(TodoTaskListItem::from).collect())
 }
 
 /// 获取单个任务（对应桌面 todo_tasks_get）

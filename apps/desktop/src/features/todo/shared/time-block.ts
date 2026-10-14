@@ -14,7 +14,7 @@
  * 4. 同列重叠分车道（贪心复用最早空闲车道），车道数由调用方取 max+1。
  */
 
-import type { TodoTask } from "@/lib/tauri";
+import type { TodoTaskListItem } from "@/lib/tauri";
 import { hasTimePart } from "@/lib/date-utils";
 
 export { hasTimePart };
@@ -40,7 +40,7 @@ export interface TaskTimeBlock {
  * 任务 → 时间块；不满足时段口径（无任何带时刻的 start/due）返回 null。
  * 完成任务照常出块（渲染层弱化），口径与日历日格一致。
  */
-export function taskTimeBlock(t: TodoTask): TaskTimeBlock | null {
+export function taskTimeBlock(t: TodoTaskListItem): TaskTimeBlock | null {
   const durationMin = t.duration_minutes != null && t.duration_minutes > 0 ? t.duration_minutes : DEFAULT_BLOCK_MINUTES;
   let startMs: number | null = null;
   if (hasTimePart(t.start_date)) {

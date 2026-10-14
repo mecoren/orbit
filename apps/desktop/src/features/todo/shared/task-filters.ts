@@ -6,7 +6,7 @@
  * 排序默认 position 升序 → created_at 降序（sortKey 可切截止/优先级/标题/创建时间，
  * 07 backlog #26 双端排序选项；非默认档下手动拖拽排序把手由 UI 隐藏）。
  */
-import { type TodoTask } from "@/lib/tauri";
+import { type TodoTaskListItem } from "@/lib/tauri";
 import { type QuickViewKey } from "./constants";
 
 export type TaskStatusFilter = "all" | "pending" | "doing" | "done" | "undone";
@@ -62,7 +62,7 @@ export function toggleMyDayValue(myDayDate: number | null, now = new Date()): nu
   return myDayDate === today ? null : today;
 }
 
-export function filterTasks(tasks: TodoTask[], input: TaskFilterInput): TodoTask[] {
+export function filterTasks(tasks: TodoTaskListItem[], input: TaskFilterInput): TodoTaskListItem[] {
   const {
     quickView = null,
     projectId = null,
@@ -158,10 +158,10 @@ export function filterTasks(tasks: TodoTask[], input: TaskFilterInput): TodoTask
  * dir 缺省 = BASE_SORT_DIR[sortKey]（收拢前现状）。
  */
 export function sortTasks(
-  tasks: TodoTask[],
+  tasks: TodoTaskListItem[],
   sortKey: TaskSortKey = "manual",
   dir?: TaskSortDir,
-): TodoTask[] {
+): TodoTaskListItem[] {
   const list = [...tasks];
   switch (sortKey) {
     case "due": {
@@ -217,11 +217,11 @@ export function sortTasks(
  * 依旧按 position 中值落位——dnd 事件照常走 tasks 原数组索引）。
  */
 export function groupOverdueFirst(
-  tasks: TodoTask[],
+  tasks: TodoTaskListItem[],
   now = Date.now(),
-): { overdue: TodoTask[]; rest: TodoTask[] } {
-  const overdue: TodoTask[] = [];
-  const rest: TodoTask[] = [];
+): { overdue: TodoTaskListItem[]; rest: TodoTaskListItem[] } {
+  const overdue: TodoTaskListItem[] = [];
+  const rest: TodoTaskListItem[] = [];
   for (const t of tasks) {
     if (!t.done && t.due_date != null && t.due_date < now) overdue.push(t);
     else rest.push(t);
@@ -234,7 +234,7 @@ export interface DoneDayGroup {
   /** 本地 YYYY-MM-DD */
   key: string;
   date: Date;
-  tasks: TodoTask[];
+  tasks: TodoTaskListItem[];
 }
 
 /**
@@ -246,7 +246,7 @@ export interface DoneDayGroup {
  * 组间倒序（今天在最上）；组内按 done_at 倒序（同日晚完成的排前）。
  */
 export function groupDoneByDay(
-  tasks: TodoTask[],
+  tasks: TodoTaskListItem[],
   fallbackToday = new Date(),
 ): DoneDayGroup[] {
   const byKey = new Map<string, DoneDayGroup>();
@@ -297,7 +297,7 @@ export const QUADRANT_COLOR: Record<EisenhowerQuadrant, string> = {
 };
 
 /** 四象限分组结果（四键恒在，空桶也要渲染格） */
-export type EisenhowerBuckets = Record<EisenhowerQuadrant, TodoTask[]>;
+export type EisenhowerBuckets = Record<EisenhowerQuadrant, TodoTaskListItem[]>;
 
 /**
  * 四象限分组纯函数：已完成不入桶（矩阵只承载未完成工作集，完成历史
@@ -306,7 +306,7 @@ export type EisenhowerBuckets = Record<EisenhowerQuadrant, TodoTask[]>;
  * 日界）。[now] 供测试注入固定时间。组内保持入参顺序（排序在调用方做）。
  */
 export function groupEisenhower(
-  tasks: TodoTask[],
+  tasks: TodoTaskListItem[],
   now = new Date(),
 ): EisenhowerBuckets {
   const dayEnd = new Date(now);

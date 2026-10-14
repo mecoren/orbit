@@ -7259,6 +7259,20 @@ impl SseDecode for Vec<crate::api::dto::TodoTaskLabel> {
     }
 }
 
+impl SseDecode for Vec<crate::api::dto::TodoTaskListItem> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut len_ = <i32>::sse_decode(deserializer);
+        let mut ans_ = Vec::with_capacity(len_ as usize);
+        for idx_ in 0..len_ {
+            ans_.push(<crate::api::dto::TodoTaskListItem>::sse_decode(
+                deserializer,
+            ));
+        }
+        return ans_;
+    }
+}
+
 impl SseDecode for Vec<crate::api::dto::TodoTaskRelation> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -8373,6 +8387,52 @@ impl SseDecode for crate::api::dto::TodoTaskLabelCreateInput {
         return crate::api::dto::TodoTaskLabelCreateInput {
             task_id: var_taskId,
             label_id: var_labelId,
+        };
+    }
+}
+
+impl SseDecode for crate::api::dto::TodoTaskListItem {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_id = <i64>::sse_decode(deserializer);
+        let mut var_title = <String>::sse_decode(deserializer);
+        let mut var_description = <Option<String>>::sse_decode(deserializer);
+        let mut var_projectId = <Option<i64>>::sse_decode(deserializer);
+        let mut var_priority = <i32>::sse_decode(deserializer);
+        let mut var_status = <String>::sse_decode(deserializer);
+        let mut var_done = <i32>::sse_decode(deserializer);
+        let mut var_doneAt = <Option<i64>>::sse_decode(deserializer);
+        let mut var_dueDate = <Option<i64>>::sse_decode(deserializer);
+        let mut var_startDate = <Option<i64>>::sse_decode(deserializer);
+        let mut var_repeatMode = <i32>::sse_decode(deserializer);
+        let mut var_percentDone = <f64>::sse_decode(deserializer);
+        let mut var_position = <f64>::sse_decode(deserializer);
+        let mut var_isFavorite = <i32>::sse_decode(deserializer);
+        let mut var_myDayDate = <Option<i64>>::sse_decode(deserializer);
+        let mut var_durationMinutes = <Option<i64>>::sse_decode(deserializer);
+        let mut var_isDeleted = <i32>::sse_decode(deserializer);
+        let mut var_createdAt = <i64>::sse_decode(deserializer);
+        let mut var_updatedAt = <i64>::sse_decode(deserializer);
+        return crate::api::dto::TodoTaskListItem {
+            id: var_id,
+            title: var_title,
+            description: var_description,
+            project_id: var_projectId,
+            priority: var_priority,
+            status: var_status,
+            done: var_done,
+            done_at: var_doneAt,
+            due_date: var_dueDate,
+            start_date: var_startDate,
+            repeat_mode: var_repeatMode,
+            percent_done: var_percentDone,
+            position: var_position,
+            is_favorite: var_isFavorite,
+            my_day_date: var_myDayDate,
+            duration_minutes: var_durationMinutes,
+            is_deleted: var_isDeleted,
+            created_at: var_createdAt,
+            updated_at: var_updatedAt,
         };
     }
 }
@@ -10867,6 +10927,44 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::dto::TodoTaskLabelCreateInput
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::dto::TodoTaskListItem {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.id.into_into_dart().into_dart(),
+            self.title.into_into_dart().into_dart(),
+            self.description.into_into_dart().into_dart(),
+            self.project_id.into_into_dart().into_dart(),
+            self.priority.into_into_dart().into_dart(),
+            self.status.into_into_dart().into_dart(),
+            self.done.into_into_dart().into_dart(),
+            self.done_at.into_into_dart().into_dart(),
+            self.due_date.into_into_dart().into_dart(),
+            self.start_date.into_into_dart().into_dart(),
+            self.repeat_mode.into_into_dart().into_dart(),
+            self.percent_done.into_into_dart().into_dart(),
+            self.position.into_into_dart().into_dart(),
+            self.is_favorite.into_into_dart().into_dart(),
+            self.my_day_date.into_into_dart().into_dart(),
+            self.duration_minutes.into_into_dart().into_dart(),
+            self.is_deleted.into_into_dart().into_dart(),
+            self.created_at.into_into_dart().into_dart(),
+            self.updated_at.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::dto::TodoTaskListItem
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::dto::TodoTaskListItem>
+    for crate::api::dto::TodoTaskListItem
+{
+    fn into_into_dart(self) -> crate::api::dto::TodoTaskListItem {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
 impl flutter_rust_bridge::IntoDart for crate::api::dto::TodoTaskRelation {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
@@ -11832,6 +11930,16 @@ impl SseEncode for Vec<crate::api::dto::TodoTaskLabel> {
     }
 }
 
+impl SseEncode for Vec<crate::api::dto::TodoTaskListItem> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.len() as _, serializer);
+        for item in self {
+            <crate::api::dto::TodoTaskListItem>::sse_encode(item, serializer);
+        }
+    }
+}
+
 impl SseEncode for Vec<crate::api::dto::TodoTaskRelation> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -12530,6 +12638,31 @@ impl SseEncode for crate::api::dto::TodoTaskLabelCreateInput {
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <i64>::sse_encode(self.task_id, serializer);
         <i64>::sse_encode(self.label_id, serializer);
+    }
+}
+
+impl SseEncode for crate::api::dto::TodoTaskListItem {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i64>::sse_encode(self.id, serializer);
+        <String>::sse_encode(self.title, serializer);
+        <Option<String>>::sse_encode(self.description, serializer);
+        <Option<i64>>::sse_encode(self.project_id, serializer);
+        <i32>::sse_encode(self.priority, serializer);
+        <String>::sse_encode(self.status, serializer);
+        <i32>::sse_encode(self.done, serializer);
+        <Option<i64>>::sse_encode(self.done_at, serializer);
+        <Option<i64>>::sse_encode(self.due_date, serializer);
+        <Option<i64>>::sse_encode(self.start_date, serializer);
+        <i32>::sse_encode(self.repeat_mode, serializer);
+        <f64>::sse_encode(self.percent_done, serializer);
+        <f64>::sse_encode(self.position, serializer);
+        <i32>::sse_encode(self.is_favorite, serializer);
+        <Option<i64>>::sse_encode(self.my_day_date, serializer);
+        <Option<i64>>::sse_encode(self.duration_minutes, serializer);
+        <i32>::sse_encode(self.is_deleted, serializer);
+        <i64>::sse_encode(self.created_at, serializer);
+        <i64>::sse_encode(self.updated_at, serializer);
     }
 }
 

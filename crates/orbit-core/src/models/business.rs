@@ -197,6 +197,47 @@ pub struct TodoTask {
     pub version: i32,
 }
 
+/// 列表通道瘦行 DTO（内存治理 A2）：`list_todo_tasks` 的返回形状。
+///
+/// 与 [TodoTask] 的差别只在**列表通道零消费**的 10 列被整体移除——
+/// `uuid`、`repeat_after`、六个更细的 `repeat_*`（weekdays/end_type/
+/// end_param/from_done/month_mode/nth_week）、`deleted_at`、`version`。
+/// 移除的是**键本身**（`"repeat_end_type":0,` 一行 20 字节，万行即 1.98MB）：
+/// 占位表达式只能省值、省不掉键名，故这里走独立 DTO 而不是 `NULL AS ...`。
+///
+/// 消费边界（2026-10-14 全仓复核，新增列表消费点前必须重新核实）：
+/// - **保留**的有消费列：`start_date`（桌面右键菜单提醒档
+///   `task-context-menu.tsx`、移动时间轴 `logic/time_block.dart`）、
+///   `repeat_mode`（移动列表/日历重复徽标判 `> 0`）、`created_at`
+///   （桌面 `sortTasks` 排序与 Logbook 分组、保存筛选器 `created_from`）、
+///   `description`（桌面搜索通道的本地收敛分支，见
+///   `generic_repo::LIST_COLUMNS_TASKS`）；
+/// - 被移除的 10 列只在**单行全列**路径消费：`get_todo_task` /
+///   `todo_task_get_detail` / 回收站列表 / 同步 push-pull / 活动日志 /
+///   事件载荷，那些路径仍返回 [TodoTask] 全列。
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+pub struct TodoTaskListItem {
+    pub id: i64,
+    pub title: String,
+    pub description: Option<String>,
+    pub project_id: Option<i64>,
+    pub priority: i32,
+    pub status: String,
+    pub done: i32,
+    pub done_at: Option<i64>,
+    pub due_date: Option<i64>,
+    pub start_date: Option<i64>,
+    pub repeat_mode: i32,
+    pub percent_done: f64,
+    pub position: f64,
+    pub is_favorite: i32,
+    pub my_day_date: Option<i64>,
+    pub duration_minutes: Option<i64>,
+    pub is_deleted: i32,
+    pub created_at: i64,
+    pub updated_at: i64,
+}
+
 /// todo_tasks 创建输入
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct TodoTaskCreateInput {

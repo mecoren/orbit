@@ -6,7 +6,7 @@
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`
 
 /// 活动日志行（todo_activity_log 为本地轨迹表，不进同步白名单）
 class ActivityLogRow {
@@ -1776,6 +1776,107 @@ class TodoTaskLabelCreateInput {
           runtimeType == other.runtimeType &&
           taskId == other.taskId &&
           labelId == other.labelId;
+}
+
+/// 列表通道瘦行任务（镜像 orbit_core::models::business::TodoTaskListItem）
+///
+/// 内存治理 A2：列表通道不再回传 10 个零消费列（uuid / repeat_after /
+/// 六个更细的 repeat_* / deleted_at / version），此处**刻意不镜像**这些字段——
+/// FRB 只为签名的具体类型生成字段级 Dart 镜像，少一列就少一份解码与 Dart 对象
+/// 分配。字段清单与 core 侧必须严格一致（core 文档注释列了消费边界与核实结论）。
+class TodoTaskListItem {
+  final PlatformInt64 id;
+  final String title;
+  final String? description;
+  final PlatformInt64? projectId;
+  final int priority;
+  final String status;
+  final int done;
+  final PlatformInt64? doneAt;
+  final PlatformInt64? dueDate;
+  final PlatformInt64? startDate;
+  final int repeatMode;
+  final double percentDone;
+  final double position;
+  final int isFavorite;
+
+  /// 我的一天：加入当天本地零点 ms；None = 不在任何一天的 My Day
+  final PlatformInt64? myDayDate;
+
+  /// 任务预计时长（分钟，M9 阶段一）；None = 未设置
+  final PlatformInt64? durationMinutes;
+  final int isDeleted;
+  final PlatformInt64 createdAt;
+  final PlatformInt64 updatedAt;
+
+  const TodoTaskListItem({
+    required this.id,
+    required this.title,
+    this.description,
+    this.projectId,
+    required this.priority,
+    required this.status,
+    required this.done,
+    this.doneAt,
+    this.dueDate,
+    this.startDate,
+    required this.repeatMode,
+    required this.percentDone,
+    required this.position,
+    required this.isFavorite,
+    this.myDayDate,
+    this.durationMinutes,
+    required this.isDeleted,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+
+  @override
+  int get hashCode =>
+      id.hashCode ^
+      title.hashCode ^
+      description.hashCode ^
+      projectId.hashCode ^
+      priority.hashCode ^
+      status.hashCode ^
+      done.hashCode ^
+      doneAt.hashCode ^
+      dueDate.hashCode ^
+      startDate.hashCode ^
+      repeatMode.hashCode ^
+      percentDone.hashCode ^
+      position.hashCode ^
+      isFavorite.hashCode ^
+      myDayDate.hashCode ^
+      durationMinutes.hashCode ^
+      isDeleted.hashCode ^
+      createdAt.hashCode ^
+      updatedAt.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is TodoTaskListItem &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          title == other.title &&
+          description == other.description &&
+          projectId == other.projectId &&
+          priority == other.priority &&
+          status == other.status &&
+          done == other.done &&
+          doneAt == other.doneAt &&
+          dueDate == other.dueDate &&
+          startDate == other.startDate &&
+          repeatMode == other.repeatMode &&
+          percentDone == other.percentDone &&
+          position == other.position &&
+          isFavorite == other.isFavorite &&
+          myDayDate == other.myDayDate &&
+          durationMinutes == other.durationMinutes &&
+          isDeleted == other.isDeleted &&
+          createdAt == other.createdAt &&
+          updatedAt == other.updatedAt;
 }
 
 /// 任务关系（镜像 orbit_core::models::business::TodoTaskRelation）

@@ -172,7 +172,7 @@ class RustOrbitBridge implements OrbitBridge {
   @override
   Future<List<TodoTask>> todoTaskList(ListFilter filter) async =>
       (await gen_todo.todoTasksList(filter: _genFilter(filter)))
-          .map(_mapTask)
+          .map(_mapTaskRow)
           .toList();
 
   @override
@@ -1530,6 +1530,30 @@ class RustOrbitBridge implements OrbitBridge {
         updatedAt: p.updatedAt,
         deletedAt: p.deletedAt,
         version: p.version,
+      );
+
+  /// 列表通道瘦行 → App 模型（A2）：`gen.TodoTaskListItem` 只带 19 列，
+  /// 被裁的 10 列由 [TodoTask.listRow] 统一回落默认值（消费边界见该方法注释）。
+  static TodoTask _mapTaskRow(gen.TodoTaskListItem t) => TodoTask.listRow(
+        id: t.id,
+        title: t.title,
+        description: t.description,
+        projectId: t.projectId,
+        priority: t.priority,
+        status: t.status,
+        done: t.done,
+        doneAt: t.doneAt,
+        dueDate: t.dueDate,
+        startDate: t.startDate,
+        repeatMode: t.repeatMode,
+        percentDone: t.percentDone,
+        position: t.position,
+        isFavorite: t.isFavorite,
+        myDayDate: t.myDayDate,
+        durationMinutes: t.durationMinutes,
+        isDeleted: t.isDeleted,
+        createdAt: t.createdAt,
+        updatedAt: t.updatedAt,
       );
 
   static TodoTask _mapTask(gen.TodoTask t) => TodoTask(

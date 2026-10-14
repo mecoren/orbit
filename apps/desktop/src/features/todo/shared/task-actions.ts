@@ -21,7 +21,7 @@ import {
   todoTaskComplete,
   todoTaskDelete,
   todoTaskUpdate,
-  type TodoTask,
+  type TodoTaskListItem,
 } from "@/lib/tauri";
 import { patchQueriesData } from "@/lib/query-patch";
 import { formatCnDate } from "./repeat";
@@ -30,12 +30,12 @@ import { pushUndo } from "./undo-bridge";
 /** 同一任务的完成编排进行中守卫（双击/连点只生效一次） */
 const completing = new Set<number>(); // bounded-by-lifecycle: completeTask 的 finally 分支 delete，只存活进行中的写
 
-export async function completeTask(task: TodoTask, qc?: QueryClient): Promise<void> {
+export async function completeTask(task: TodoTaskListItem, qc?: QueryClient): Promise<void> {
   if (completing.has(task.id)) return;
   // 取消完成
   if (task.done) {
     if (qc) {
-      patchQueriesData<TodoTask>(qc, ["todo_tasks"], [task.id], {
+      patchQueriesData<TodoTaskListItem>(qc, ["todo_tasks"], [task.id], {
         done: 0,
         done_at: null,
         status: "pending",
@@ -45,7 +45,7 @@ export async function completeTask(task: TodoTask, qc?: QueryClient): Promise<vo
       await todoTaskUpdate(task.id, { done: 0, done_at: null, status: "pending" });
     } catch (e) {
       if (qc) {
-        patchQueriesData<TodoTask>(qc, ["todo_tasks"], [task.id], {
+        patchQueriesData<TodoTaskListItem>(qc, ["todo_tasks"], [task.id], {
           done: task.done,
           done_at: task.done_at,
           status: task.status,
@@ -64,7 +64,7 @@ export async function completeTask(task: TodoTask, qc?: QueryClient): Promise<vo
   completing.add(task.id);
   // 乐观翻转：首帧即 done，不等 Rust 事务回包
   if (qc) {
-    patchQueriesData<TodoTask>(qc, ["todo_tasks"], [task.id], {
+    patchQueriesData<TodoTaskListItem>(qc, ["todo_tasks"], [task.id], {
       done: 1,
       done_at: Date.now(),
       status: "done",
@@ -75,7 +75,7 @@ export async function completeTask(task: TodoTask, qc?: QueryClient): Promise<vo
     // 收敛：以服务端真值为准复算（重复实例的 due/position 由引擎定）；
     // next_instance 故意不追加（见文件头），失效链会带出。
     if (qc) {
-      patchQueriesData<TodoTask>(qc, ["todo_tasks"], [task.id], {
+      patchQueriesData<TodoTaskListItem>(qc, ["todo_tasks"], [task.id], {
         done: res.task.done,
         done_at: res.task.done_at,
         status: res.task.status,
@@ -95,7 +95,7 @@ export async function completeTask(task: TodoTask, qc?: QueryClient): Promise<vo
     });
   } catch (e) {
     if (qc) {
-      patchQueriesData<TodoTask>(qc, ["todo_tasks"], [task.id], {
+      patchQueriesData<TodoTaskListItem>(qc, ["todo_tasks"], [task.id], {
         done: task.done,
         done_at: task.done_at,
         status: task.status,

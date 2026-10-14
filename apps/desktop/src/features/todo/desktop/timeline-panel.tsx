@@ -35,7 +35,7 @@ import {
   timeslotDropPatch,
 } from "../shared/timeslot-drag";
 import { addDays } from "@/lib/date-utils";
-import type { TodoProject, TodoTask } from "@/lib/tauri";
+import type { TodoProject, TodoTaskListItem } from "@/lib/tauri";
 
 /** 每小时行高（px）：48px 下 30 分钟块约 24px，可容一行截断标题 */
 const HOUR_PX = 48;
@@ -86,7 +86,7 @@ interface DayColumn {
 }
 
 interface TimelinePanelProps {
-  tasks: TodoTask[];
+  tasks: TodoTaskListItem[];
   /** 面板第一列的日 0 点（本地）——周档为周一零点 */
   anchor: Date;
   /** 列数（1 / 3 / 7；默认 7） */

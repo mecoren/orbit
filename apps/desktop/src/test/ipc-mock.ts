@@ -68,6 +68,36 @@ interface MockTask {
   version: number;
 }
 
+/**
+ * 列表通道瘦行投影（内存治理 A2）：与 Rust `TodoTaskListItem` 同口径——只保留
+ * 19 个有消费列，10 个零消费列（uuid / repeat_after / 六个更细 repeat_* /
+ * deleted_at / version）不出现在行里；keyword 空时 description 的**值**再以
+ * null 占位（万级列表实测占 IPC 体积 47%）。
+ */
+function taskListRow(t: MockTask, pruneDescription: boolean) {
+  return {
+    id: t.id,
+    title: t.title,
+    description: pruneDescription ? null : t.description,
+    project_id: t.project_id,
+    priority: t.priority,
+    status: t.status,
+    done: t.done,
+    done_at: t.done_at,
+    due_date: t.due_date,
+    start_date: t.start_date,
+    repeat_mode: t.repeat_mode,
+    percent_done: t.percent_done,
+    position: t.position,
+    is_favorite: t.is_favorite,
+    my_day_date: t.my_day_date,
+    duration_minutes: t.duration_minutes,
+    is_deleted: t.is_deleted,
+    created_at: t.created_at,
+    updated_at: t.updated_at,
+  };
+}
+
 interface MockLabel {
   id: number;
   uuid: string;
@@ -662,9 +692,12 @@ const commands: Record<string, (args: any, ctx: Ctx) => unknown> = {
   // 谓词下推（F5）：六键与 Rust build_task_predicate_clause 同口径（仅本命令消费）
   todo_tasks_list: ({ filter }, { db }) => {
     let rows = db.tasks.filter((t) => !t.is_deleted);
-    // 列裁剪（批2 + A2 对齐 Rust）：keyword 空时 description 与 uuid 都不传输
-    // （NULL / 空串占位保形状）；keyword 非空保留全列（SQL LIKE 依赖）
-    const pruneListColumns = !filter?.keyword?.trim();
+    // 瘦行 DTO（批2 + 内存治理 A2）：列表通道返回形状与 core `TodoTaskListItem`
+    // 一致——10 个零消费列整体不在行里（MockTask 本就未建模
+    // repeat_weekdays/repeat_end_*/repeat_from_done 四列，此处只需摘掉它有的）；
+    // description 的值仅在 keyword 空时以 null 占位（keyword 非空保留原文：
+    // SQL LIKE 已按 title+description 过滤，桌面面板本地收敛分支还要读它）
+    const pruneDescription = !filter?.keyword?.trim();
     // 归档项目任务排除（聚合视图；project_id / project_ids 谓词 = 用户主动
     // 选中该（组）项目时放行——后者是 M8+ 清单文件夹聚合）
     if (filter?.project_id == null && filter?.project_ids == null) {
@@ -695,9 +728,7 @@ const commands: Record<string, (args: any, ctx: Ctx) => unknown> = {
     // 分页（对齐 Rust LIMIT/OFFSET；调用方恒传 page:1/page_size:10000，
     // 现有链路恰一整页，行为不变；第五轮 A5/A6 真分页后门禁才有意义）
     const paged = paginateRows(keyworded, filter?.page, filter?.page_size);
-    return pruneListColumns
-      ? paged.map((t) => ({ ...t, description: null, uuid: "" }))
-      : paged;
+    return paged.map((t) => taskListRow(t, pruneDescription));
   },
   todo_tasks_get: ({ id }, { db }) => ipcClone(db.tasks.find((t) => t.id === id) ?? null),
   todo_tasks_get_by_uuid: ({ uuid: u }, { db }) => ipcClone(db.tasks.find((t) => t.uuid === u) ?? null),

@@ -16,7 +16,7 @@
  *   （true = 仅有，false = 仅无；存在集由调用方按投影拼装传入）
  * 缺键 = 不过滤；条件 AND 组合。
  */
-import type { TodoTask } from "@/lib/tauri";
+import type { TodoTaskListItem } from "@/lib/tauri";
 
 export interface SavedFilterConditions {
   status?: string;
@@ -52,11 +52,11 @@ export interface TaskExistenceIndex {
 }
 
 export function applySavedFilter(
-  tasks: TodoTask[],
+  tasks: TodoTaskListItem[],
   rawConditions: string,
   labelIndex: TaskLabelIndex,
   existence: TaskExistenceIndex = {},
-): TodoTask[] {
+): TodoTaskListItem[] {
   let c: SavedFilterConditions;
   try {
     c = JSON.parse(rawConditions) as SavedFilterConditions;

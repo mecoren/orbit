@@ -36,6 +36,26 @@ class MockOrbitBridge implements OrbitBridge {
 
   Never _notFound(String what) => throw Exception('$what not found');
 
+  /// 列表通道瘦行投影（A2）：与 core `TodoTaskListItem` 同口径——摘掉 10 个
+  /// 零消费列（uuid / repeat_after / 六个更细 repeat_* / deleted_at / version），
+  /// keyword 空时 description 的值置 null。mock 摘列而非占位，才能让「真机
+  /// 无此键、mock 有值」这类口径漂移在测试里冒出来。
+  Map<String, dynamic> _listRow(Map<String, dynamic> t, bool pruneDescription) {
+    final row = Map<String, dynamic>.from(t)
+      ..remove('uuid')
+      ..remove('repeat_after')
+      ..remove('repeat_weekdays')
+      ..remove('repeat_end_type')
+      ..remove('repeat_end_param')
+      ..remove('repeat_from_done')
+      ..remove('repeat_month_mode')
+      ..remove('repeat_nth_week')
+      ..remove('deleted_at')
+      ..remove('version');
+    if (pruneDescription) row['description'] = null;
+    return row;
+  }
+
   // ── 主密码认证 ──
 
   @override
@@ -230,15 +250,15 @@ class MockOrbitBridge implements OrbitBridge {
             .toList()
           ..sort((a, b) =>
               (a['position'] as int).compareTo(b['position'] as int));
-        // 列裁剪（批2 + A2 对齐 Rust generic_repo）：keyword 空时 description
-        // 与 uuid 都不传输（null / 空串占位）；keyword 非空保留全列（SQL LIKE 依赖）
+        // 瘦行 DTO（批2 + 内存治理 A2 对齐 core TodoTaskListItem）：10 个零消费列
+        // 整体不在行里；keyword 空时 description 的值再以 null 占位（万级列表实测
+        // 占 IPC 体积 47%），keyword 非空保留原文（服务端 LIKE 已按 title+description
+        // 过滤，表单/详情走单行全列通道）
         final keyword = filter.keyword?.trim();
-        final pruneListColumns = keyword == null || keyword.isEmpty;
+        final pruneDescription = keyword == null || keyword.isEmpty;
         return list
-            .map((t) => pruneListColumns
-                ? {...t, 'description': null, 'uuid': ''}
-                : t)
-            .map(TodoTask.fromJson)
+            .map((t) => _listRow(t, pruneDescription))
+            .map(TodoTask.fromListJson)
             .toList();
       });
 

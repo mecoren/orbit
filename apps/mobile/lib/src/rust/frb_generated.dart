@@ -593,7 +593,7 @@ abstract class RustLibApi extends BaseApi {
     required PlatformInt64 id,
   });
 
-  Future<List<TodoTask>> crateApiTodoTodoTasksList({
+  Future<List<TodoTaskListItem>> crateApiTodoTodoTasksList({
     required ListFilter filter,
   });
 
@@ -5391,7 +5391,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(debugName: "todo_tasks_get_detail", argNames: ["id"]);
 
   @override
-  Future<List<TodoTask>> crateApiTodoTodoTasksList({
+  Future<List<TodoTaskListItem>> crateApiTodoTodoTasksList({
     required ListFilter filter,
   }) {
     return handler.executeNormal(
@@ -5407,7 +5407,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
         },
         codec: SseCodec(
-          decodeSuccessData: sse_decode_list_todo_task,
+          decodeSuccessData: sse_decode_list_todo_task_list_item,
           decodeErrorData: sse_decode_String,
         ),
         constMeta: kCrateApiTodoTodoTasksListConstMeta,
@@ -6704,6 +6704,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  List<TodoTaskListItem> dco_decode_list_todo_task_list_item(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_todo_task_list_item).toList();
+  }
+
+  @protected
   List<TodoTaskRelation> dco_decode_list_todo_task_relation(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return (raw as List<dynamic>).map(dco_decode_todo_task_relation).toList();
@@ -7527,6 +7533,35 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     return TodoTaskLabelCreateInput(
       taskId: dco_decode_i_64(arr[0]),
       labelId: dco_decode_i_64(arr[1]),
+    );
+  }
+
+  @protected
+  TodoTaskListItem dco_decode_todo_task_list_item(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 19)
+      throw Exception('unexpected arr length: expect 19 but see ${arr.length}');
+    return TodoTaskListItem(
+      id: dco_decode_i_64(arr[0]),
+      title: dco_decode_String(arr[1]),
+      description: dco_decode_opt_String(arr[2]),
+      projectId: dco_decode_opt_box_autoadd_i_64(arr[3]),
+      priority: dco_decode_i_32(arr[4]),
+      status: dco_decode_String(arr[5]),
+      done: dco_decode_i_32(arr[6]),
+      doneAt: dco_decode_opt_box_autoadd_i_64(arr[7]),
+      dueDate: dco_decode_opt_box_autoadd_i_64(arr[8]),
+      startDate: dco_decode_opt_box_autoadd_i_64(arr[9]),
+      repeatMode: dco_decode_i_32(arr[10]),
+      percentDone: dco_decode_f_64(arr[11]),
+      position: dco_decode_f_64(arr[12]),
+      isFavorite: dco_decode_i_32(arr[13]),
+      myDayDate: dco_decode_opt_box_autoadd_i_64(arr[14]),
+      durationMinutes: dco_decode_opt_box_autoadd_i_64(arr[15]),
+      isDeleted: dco_decode_i_32(arr[16]),
+      createdAt: dco_decode_i_64(arr[17]),
+      updatedAt: dco_decode_i_64(arr[18]),
     );
   }
 
@@ -8937,6 +8972,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  List<TodoTaskListItem> sse_decode_list_todo_task_list_item(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <TodoTaskListItem>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_todo_task_list_item(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
   List<TodoTaskRelation> sse_decode_list_todo_task_relation(
     SseDeserializer deserializer,
   ) {
@@ -10024,6 +10073,53 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_taskId = sse_decode_i_64(deserializer);
     var var_labelId = sse_decode_i_64(deserializer);
     return TodoTaskLabelCreateInput(taskId: var_taskId, labelId: var_labelId);
+  }
+
+  @protected
+  TodoTaskListItem sse_decode_todo_task_list_item(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_id = sse_decode_i_64(deserializer);
+    var var_title = sse_decode_String(deserializer);
+    var var_description = sse_decode_opt_String(deserializer);
+    var var_projectId = sse_decode_opt_box_autoadd_i_64(deserializer);
+    var var_priority = sse_decode_i_32(deserializer);
+    var var_status = sse_decode_String(deserializer);
+    var var_done = sse_decode_i_32(deserializer);
+    var var_doneAt = sse_decode_opt_box_autoadd_i_64(deserializer);
+    var var_dueDate = sse_decode_opt_box_autoadd_i_64(deserializer);
+    var var_startDate = sse_decode_opt_box_autoadd_i_64(deserializer);
+    var var_repeatMode = sse_decode_i_32(deserializer);
+    var var_percentDone = sse_decode_f_64(deserializer);
+    var var_position = sse_decode_f_64(deserializer);
+    var var_isFavorite = sse_decode_i_32(deserializer);
+    var var_myDayDate = sse_decode_opt_box_autoadd_i_64(deserializer);
+    var var_durationMinutes = sse_decode_opt_box_autoadd_i_64(deserializer);
+    var var_isDeleted = sse_decode_i_32(deserializer);
+    var var_createdAt = sse_decode_i_64(deserializer);
+    var var_updatedAt = sse_decode_i_64(deserializer);
+    return TodoTaskListItem(
+      id: var_id,
+      title: var_title,
+      description: var_description,
+      projectId: var_projectId,
+      priority: var_priority,
+      status: var_status,
+      done: var_done,
+      doneAt: var_doneAt,
+      dueDate: var_dueDate,
+      startDate: var_startDate,
+      repeatMode: var_repeatMode,
+      percentDone: var_percentDone,
+      position: var_position,
+      isFavorite: var_isFavorite,
+      myDayDate: var_myDayDate,
+      durationMinutes: var_durationMinutes,
+      isDeleted: var_isDeleted,
+      createdAt: var_createdAt,
+      updatedAt: var_updatedAt,
+    );
   }
 
   @protected
@@ -11298,6 +11394,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_list_todo_task_list_item(
+    List<TodoTaskListItem> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_todo_task_list_item(item, serializer);
+    }
+  }
+
+  @protected
   void sse_encode_list_todo_task_relation(
     List<TodoTaskRelation> self,
     SseSerializer serializer,
@@ -12075,6 +12183,33 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_i_64(self.taskId, serializer);
     sse_encode_i_64(self.labelId, serializer);
+  }
+
+  @protected
+  void sse_encode_todo_task_list_item(
+    TodoTaskListItem self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_64(self.id, serializer);
+    sse_encode_String(self.title, serializer);
+    sse_encode_opt_String(self.description, serializer);
+    sse_encode_opt_box_autoadd_i_64(self.projectId, serializer);
+    sse_encode_i_32(self.priority, serializer);
+    sse_encode_String(self.status, serializer);
+    sse_encode_i_32(self.done, serializer);
+    sse_encode_opt_box_autoadd_i_64(self.doneAt, serializer);
+    sse_encode_opt_box_autoadd_i_64(self.dueDate, serializer);
+    sse_encode_opt_box_autoadd_i_64(self.startDate, serializer);
+    sse_encode_i_32(self.repeatMode, serializer);
+    sse_encode_f_64(self.percentDone, serializer);
+    sse_encode_f_64(self.position, serializer);
+    sse_encode_i_32(self.isFavorite, serializer);
+    sse_encode_opt_box_autoadd_i_64(self.myDayDate, serializer);
+    sse_encode_opt_box_autoadd_i_64(self.durationMinutes, serializer);
+    sse_encode_i_32(self.isDeleted, serializer);
+    sse_encode_i_64(self.createdAt, serializer);
+    sse_encode_i_64(self.updatedAt, serializer);
   }
 
   @protected

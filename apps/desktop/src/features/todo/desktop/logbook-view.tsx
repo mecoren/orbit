@@ -21,11 +21,11 @@ import { EmptyState } from "@/components/business/empty-state";
 import { TaskContextMenu } from "./task-context-menu";
 import { CalendarTaskRow } from "./calendar-view";
 import { groupDoneByDay } from "../shared/task-filters";
-import type { ProjectedTaskLabel, TodoProject, TodoTask } from "@/lib/tauri";
+import type { ProjectedTaskLabel, TodoProject, TodoTaskListItem } from "@/lib/tauri";
 
 interface LogbookViewProps {
   /** filterTasks 输出的完成集（quickView=done 语义：全部 done 任务） */
-  tasks: TodoTask[];
+  tasks: TodoTaskListItem[];
   projects: TodoProject[];
   projectById: Map<number, TodoProject>;
   labelsByTask: Map<number, ProjectedTaskLabel[]>;
@@ -36,7 +36,7 @@ interface LogbookViewProps {
 /** 打平条目：完成日头 + 任务行 */
 type FlatItem =
   | { kind: "day"; key: string; label: string; count: number; isToday: boolean }
-  | { kind: "task"; key: string; task: TodoTask };
+  | { kind: "task"; key: string; task: TodoTaskListItem };
 
 /** 完成日头标签："今天" / "M月d日 EEEE"（与统计热力图/日历日头同口径） */
 function dayHeadLabel(date: Date, today: Date): string {

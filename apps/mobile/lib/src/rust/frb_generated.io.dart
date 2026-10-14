@@ -377,6 +377,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<TodoTaskLabel> dco_decode_list_todo_task_label(dynamic raw);
 
   @protected
+  List<TodoTaskListItem> dco_decode_list_todo_task_list_item(dynamic raw);
+
+  @protected
   List<TodoTaskRelation> dco_decode_list_todo_task_relation(dynamic raw);
 
   @protected
@@ -550,6 +553,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   TodoTaskLabelCreateInput dco_decode_todo_task_label_create_input(dynamic raw);
+
+  @protected
+  TodoTaskListItem dco_decode_todo_task_list_item(dynamic raw);
 
   @protected
   TodoTaskRelation dco_decode_todo_task_relation(dynamic raw);
@@ -1018,6 +1024,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  List<TodoTaskListItem> sse_decode_list_todo_task_list_item(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   List<TodoTaskRelation> sse_decode_list_todo_task_relation(
     SseDeserializer deserializer,
   );
@@ -1233,6 +1244,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   TodoTaskLabelCreateInput sse_decode_todo_task_label_create_input(
     SseDeserializer deserializer,
   );
+
+  @protected
+  TodoTaskListItem sse_decode_todo_task_list_item(SseDeserializer deserializer);
 
   @protected
   TodoTaskRelation sse_decode_todo_task_relation(SseDeserializer deserializer);
@@ -1826,6 +1840,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_list_todo_task_list_item(
+    List<TodoTaskListItem> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_list_todo_task_relation(
     List<TodoTaskRelation> self,
     SseSerializer serializer,
@@ -2113,6 +2133,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_todo_task_label_create_input(
     TodoTaskLabelCreateInput self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_todo_task_list_item(
+    TodoTaskListItem self,
     SseSerializer serializer,
   );
 

@@ -51,7 +51,10 @@ Future<void> todoProjectsUpdateSortOrder({
 );
 
 /// 列出任务（对应桌面 todo_tasks_list）
-Future<List<TodoTask>> todoTasksList({required ListFilter filter}) =>
+///
+/// A2 瘦行：返回 [TodoTaskListItem]（10 个列表通道零消费列不过桥），
+/// 与桌面 Tauri 命令同名同口径。
+Future<List<TodoTaskListItem>> todoTasksList({required ListFilter filter}) =>
     RustLib.instance.api.crateApiTodoTodoTasksList(filter: filter);
 
 /// 获取单个任务（对应桌面 todo_tasks_get）

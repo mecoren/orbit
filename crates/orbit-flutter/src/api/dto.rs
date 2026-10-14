@@ -223,6 +223,63 @@ impl From<orbit_core::models::business::TodoTask> for TodoTask {
     }
 }
 
+/// 列表通道瘦行任务（镜像 orbit_core::models::business::TodoTaskListItem）
+///
+/// 内存治理 A2：列表通道不再回传 10 个零消费列（uuid / repeat_after /
+/// 六个更细的 repeat_* / deleted_at / version），此处**刻意不镜像**这些字段——
+/// FRB 只为签名的具体类型生成字段级 Dart 镜像，少一列就少一份解码与 Dart 对象
+/// 分配。字段清单与 core 侧必须严格一致（core 文档注释列了消费边界与核实结论）。
+#[derive(Debug, Clone, Serialize)]
+pub struct TodoTaskListItem {
+    pub id: i64,
+    pub title: String,
+    pub description: Option<String>,
+    pub project_id: Option<i64>,
+    pub priority: i32,
+    pub status: String,
+    pub done: i32,
+    pub done_at: Option<i64>,
+    pub due_date: Option<i64>,
+    pub start_date: Option<i64>,
+    pub repeat_mode: i32,
+    pub percent_done: f64,
+    pub position: f64,
+    pub is_favorite: i32,
+    /// 我的一天：加入当天本地零点 ms；None = 不在任何一天的 My Day
+    pub my_day_date: Option<i64>,
+    /// 任务预计时长（分钟，M9 阶段一）；None = 未设置
+    pub duration_minutes: Option<i64>,
+    pub is_deleted: i32,
+    pub created_at: i64,
+    pub updated_at: i64,
+}
+
+impl From<orbit_core::models::business::TodoTaskListItem> for TodoTaskListItem {
+    fn from(t: orbit_core::models::business::TodoTaskListItem) -> Self {
+        Self {
+            id: t.id,
+            title: t.title,
+            description: t.description,
+            project_id: t.project_id,
+            priority: t.priority,
+            status: t.status,
+            done: t.done,
+            done_at: t.done_at,
+            due_date: t.due_date,
+            start_date: t.start_date,
+            repeat_mode: t.repeat_mode,
+            percent_done: t.percent_done,
+            position: t.position,
+            is_favorite: t.is_favorite,
+            my_day_date: t.my_day_date,
+            duration_minutes: t.duration_minutes,
+            is_deleted: t.is_deleted,
+            created_at: t.created_at,
+            updated_at: t.updated_at,
+        }
+    }
+}
+
 /// 任务创建输入（镜像 TodoTaskCreateInput；均为普通 Option<T>/T 字段）
 ///
 /// 注：core 的 `TodoTaskUpdateInput` 才含 `Option<Option<T>>` 可空列

@@ -27,7 +27,7 @@ import { atViewDueHour } from "./view-create-defaults";
 import type {
   ProjectedTaskLabel,
   TodoProject,
-  TodoTask,
+  TodoTaskListItem,
 } from "@/lib/tauri";
 
 export type KanbanGroupBy = "project" | "status" | "priority" | "label" | "due";
@@ -123,7 +123,7 @@ export function kanbanColumns(
   groupBy: KanbanGroupBy,
   projects: TodoProject[],
   labelsByTask: Map<number, ProjectedTaskLabel[]>,
-  tasks: TodoTask[],
+  tasks: TodoTaskListItem[],
 ): KanbanColumnDef[] {
   switch (groupBy) {
     case "status":
@@ -199,7 +199,7 @@ export function kanbanFallbackKey(groupBy: KanbanGroupBy): string {
 /** 任务 → 归属列键（nowMs 仅 due 档用，单测注入固定输入） */
 export function kanbanColumnKey(
   groupBy: KanbanGroupBy,
-  task: TodoTask,
+  task: TodoTaskListItem,
   labelsByTask: Map<number, ProjectedTaskLabel[]>,
   nowMs = Date.now(),
 ): string {

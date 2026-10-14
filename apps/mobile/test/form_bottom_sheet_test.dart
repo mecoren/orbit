@@ -305,7 +305,9 @@ void main() {
     );
     final task = tasks!.firstWhere((t) => t.title == '重复任务A');
     expect(task.repeatMode, 1);
-    expect(task.repeatAfter, 1);
+    // repeat_after 属列表通道裁剪列（A2 瘦行）：断言走单行全列通道
+    final full = (await tester.runAsync(() => bridge.todoTaskGet(task.id)))!;
+    expect(full.repeatAfter, 1);
   });
 
   testWidgets('保存：重复抽屉自定义面板（每 3 天 + 剩 5 次）落库扩展字段', (tester) async {
@@ -340,9 +342,11 @@ void main() {
     );
     final task = tasks!.firstWhere((t) => t.title == '重复任务B');
     expect(task.repeatMode, 1);
-    expect(task.repeatAfter, 3);
-    expect(task.repeatEndType, 2);
-    expect(task.repeatEndParam, 5);
+    // 其余重复细节属列表通道裁剪列（A2 瘦行）：断言走单行全列通道
+    final full = (await tester.runAsync(() => bridge.todoTaskGet(task.id)))!;
+    expect(full.repeatAfter, 3);
+    expect(full.repeatEndType, 2);
+    expect(full.repeatEndParam, 5);
   });
 
   testWidgets('保存：重复抽屉月档「第 2 个周二」落库 month_mode/nth_week/单选星期',
@@ -382,10 +386,12 @@ void main() {
     );
     final task = tasks!.firstWhere((t) => t.title == '重复任务Nth');
     expect(task.repeatMode, 3);
-    expect(task.repeatMonthMode, 1);
-    expect(task.repeatNthWeek, 2);
+    // 月高级语义三列属列表通道裁剪列（A2 瘦行）：断言走单行全列通道
+    final full = (await tester.runAsync(() => bridge.todoTaskGet(task.id)))!;
+    expect(full.repeatMonthMode, 1);
+    expect(full.repeatNthWeek, 2);
     // 星期几取单选位（周二 bit1），不是周档多选掩码
-    expect(task.repeatWeekdays, 2);
+    expect(full.repeatWeekdays, 2);
   });
 
   testWidgets('重复抽屉：有截止日期时显示「下次 M月d日」预览徽标', (tester) async {

@@ -26,7 +26,7 @@ import {
   groupEisenhower,
   type EisenhowerQuadrant,
 } from "../shared/task-filters";
-import { todoTaskUpdate, type ProjectedTaskLabel, type TodoProject, type TodoTask } from "@/lib/tauri";
+import { todoTaskUpdate, type ProjectedTaskLabel, type TodoProject, type TodoTaskListItem } from "@/lib/tauri";
 import { patchQueriesData } from "@/lib/query-patch";
 import { FAVORITE_COLOR, OVERDUE_COLOR_CLASS, PRIORITY_COLOR, TODO_ACCENT } from "../shared/constants";
 import { LabelChips } from "../shared/label-chips";
@@ -35,7 +35,7 @@ import { displayReminder, type TaskReminderMeta } from "../shared/reminder-meta"
 import { dueTextOf } from "./task-table-view";
 
 export interface MatrixViewProps {
-  tasks: TodoTask[];
+  tasks: TodoTaskListItem[];
   projects: TodoProject[];
   /** 任务→标签映射（TaskPanel 级拉取，行内渲染标签 chips） */
   labelsByTask: Map<number, ProjectedTaskLabel[]>;
@@ -88,14 +88,14 @@ export function MatrixView({
   // 行动作（stable 引用：行 memo 比较器忽略函数 props，这里收口成 useCallback
   // 纯属习惯——写路径语义与 task-list-view 逐字同源）
   const toggleDone = useCallback(
-    (t: TodoTask) => {
+    (t: TodoTaskListItem) => {
       void completeTask(t, qc);
     },
     [qc],
   );
-  const toggleFavorite = useCallback((t: TodoTask) => {
+  const toggleFavorite = useCallback((t: TodoTaskListItem) => {
     // 乐观翻转（D3）：纯字段，先 paint 后收敛（失效链仍在）
-    patchQueriesData<TodoTask>(qc, ["todo_tasks"], [t.id], {
+    patchQueriesData<TodoTaskListItem>(qc, ["todo_tasks"], [t.id], {
       is_favorite: t.is_favorite ? 0 : 1,
     });
     void todoTaskUpdate(t.id, { is_favorite: t.is_favorite ? 0 : 1 });
@@ -146,13 +146,13 @@ export function MatrixView({
 
 interface QuadrantCardProps {
   quadrant: EisenhowerQuadrant;
-  tasks: TodoTask[];
+  tasks: TodoTaskListItem[];
   projectById: Map<number, TodoProject>;
   labelsByTask: Map<number, ProjectedTaskLabel[]>;
   remindersByTask: Map<number, TaskReminderMeta[]>;
   onOpenDetail: (id: number) => void;
-  onToggleDone: (t: TodoTask) => void;
-  onToggleFavorite: (t: TodoTask) => void;
+  onToggleDone: (t: TodoTaskListItem) => void;
+  onToggleFavorite: (t: TodoTaskListItem) => void;
 }
 
 /** 单象限格：色带 + 格头 + 格内独立虚拟化列表（每格一个 useVirtualizer 实例） */
@@ -242,7 +242,7 @@ function QuadrantCard({
 }
 
 interface MatrixRowProps {
-  task: TodoTask;
+  task: TodoTaskListItem;
   project?: TodoProject;
   labels: ProjectedTaskLabel[];
   /** 行内提醒徽标数据（displayReminder 产物；null = 无存活提醒行） */

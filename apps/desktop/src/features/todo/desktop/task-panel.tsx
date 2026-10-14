@@ -19,7 +19,6 @@ import {
 import { useTodoStore } from "@/features/todo/store";
 import { useAppStore } from "@/stores/app-store";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { type TodoTask } from "@/lib/tauri";
 import { LS_HIDE_DONE, LS_VIEW_MODE, QUICK_VIEWS, TASK_LIST_PAGE_SIZE } from "../shared/constants";
 import { useTaskDependencies } from "../shared/use-task-dependencies";
 import { useTaskAttachmentIds, useTaskOpenSubtaskIds } from "../shared/use-task-existence-flags";
@@ -218,7 +217,7 @@ export default function TaskPanel() {
         labelIndex[tid] = labels.map((l) => l.id);
       }
       const filtered = applySavedFilter(
-        (sourceTasks as TodoTask[]).filter((t) =>
+        sourceTasks.filter((t) =>
           debouncedKeyword
             ? t.title.toLowerCase().includes(debouncedKeyword.toLowerCase()) ||
               (t.description ?? "").toLowerCase().includes(debouncedKeyword.toLowerCase())
@@ -240,7 +239,7 @@ export default function TaskPanel() {
     }
     return sortTasks(
       filterTasks(
-        (sourceTasks as TodoTask[]).filter((t) =>
+        sourceTasks.filter((t) =>
           debouncedKeyword
             ? t.title.toLowerCase().includes(debouncedKeyword.toLowerCase()) ||
               (t.description ?? "").toLowerCase().includes(debouncedKeyword.toLowerCase())

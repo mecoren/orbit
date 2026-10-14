@@ -80,7 +80,7 @@ import { TaskContextMenu } from "./task-context-menu";
 import { TimelinePanel } from "./timeline-panel";
 import { YearOverviewPanel, MAX_YEAR, MIN_YEAR } from "./year-overview";
 import { useWheelStepRef, shiftYearMonth } from "../shared/wheel-nav";
-import type { ProjectedTaskLabel, TodoProject, TodoTask } from "@/lib/tauri";
+import type { ProjectedTaskLabel, TodoProject, TodoTaskListItem } from "@/lib/tauri";
 
 export type CalendarSubMode = "month" | "week" | "timeline" | "year" | "agenda";
 
@@ -100,7 +100,7 @@ const TIMELINE_SPAN_LABEL: Record<TimelineSpan, string> = {
 };
 
 interface CalendarViewProps {
-  tasks: TodoTask[];
+  tasks: TodoTaskListItem[];
   projects: TodoProject[];
   labelsByTask: Map<number, ProjectedTaskLabel[]>;
   /** 任务→提醒映射（TaskPanel 级拉取，行内渲染提醒徽标） */
@@ -126,7 +126,7 @@ const LEFT_CONTENT = "mx-auto min-h-0 w-full max-w-3xl flex-1";
 interface DayGroup {
   key: string;
   date: Date;
-  tasks: TodoTask[];
+  tasks: TodoTaskListItem[];
 }
 
 /** 右栏按月分节（年模式） */
@@ -265,7 +265,7 @@ export function CalendarView({
 
   /** due_date → 本地日聚合（一次遍历，三档共用） */
   const byDay = useMemo(() => {
-    const map = new Map<string, TodoTask[]>();
+    const map = new Map<string, TodoTaskListItem[]>();
     for (const t of tasks) {
       if (t.due_date == null) continue;
       const key = dayKey(t.due_date);
@@ -288,7 +288,7 @@ export function CalendarView({
   // ---- 右栏列表数据：月模式 = 当前月按日分组；周模式 = 本周按日分组；
   //      年模式 = 当年按月分节 ----
   const listGroups = useMemo<DayGroup[] | YearSection[]>(() => {
-    const toGroups = (entries: [string, TodoTask[]][]): DayGroup[] =>
+    const toGroups = (entries: [string, TodoTaskListItem[]][]): DayGroup[] =>
       entries
         .sort(([a], [b]) => a.localeCompare(b))
         .map(([key, list]) => ({
@@ -881,7 +881,7 @@ function DraggableDot({
   isToday,
   dimmed,
 }: {
-  task: TodoTask;
+  task: TodoTaskListItem;
   isToday: boolean;
   dimmed: boolean;
 }) {
@@ -913,7 +913,7 @@ function DayDotsDropZone({
   draggingId,
 }: {
   date: Date;
-  dayTasks: TodoTask[];
+  dayTasks: TodoTaskListItem[];
   draggingId: number | null;
 }) {
   const ymd = formatYmd(date);
@@ -1225,7 +1225,7 @@ function DayGroupBlock({
 // ---------------- 共用行 ----------------
 
 interface CalendarTaskRowProps {
-  task: TodoTask;
+  task: TodoTaskListItem;
   labels: ProjectedTaskLabel[];
   project?: TodoProject;
   onActivate: () => void;

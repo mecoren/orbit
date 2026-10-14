@@ -22,7 +22,7 @@
  */
 
 import { addDays, hasTimePart, startOfDay } from "@/lib/date-utils";
-import type { TodoTask } from "@/lib/tauri";
+import type { TodoTaskListItem } from "@/lib/tauri";
 import {
   DAY_MS,
   DEFAULT_BLOCK_MINUTES,
@@ -145,7 +145,7 @@ export interface TimeslotPatch {
  * 无变化（起点与时长都未动）返回 null，调用方直接跳过写库。
  */
 export function timeslotDropPatch(
-  task: TodoTask,
+  task: TodoTaskListItem,
   next: { startMs: number; durationMin: number },
 ): TimeslotPatch | null {
   const explicitStart = hasTimePart(task.start_date);
@@ -172,7 +172,7 @@ export function timeslotDropPatch(
  * 任务当前块起点（与 time-block.taskTimeBlock 同口径的轻量版——拖拽路径已
  * 持有块，不必再遍历字段推导；无带时刻的 start/due 返回 null）。
  */
-function taskTimeBlockStartOf(task: TodoTask): number | null {
+function taskTimeBlockStartOf(task: TodoTaskListItem): number | null {
   const durationMin =
     task.duration_minutes != null && task.duration_minutes > 0
       ? task.duration_minutes

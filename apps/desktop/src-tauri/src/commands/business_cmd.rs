@@ -64,11 +64,13 @@ pub async fn todo_projects_list_archived(
 }
 
 // ---------- todo_tasks ----------
+/// 列出任务（列表通道，A2 瘦行：返回 `TodoTaskListItem`，10 个列表零消费列
+/// 不过 IPC——清单与消费边界见 core 侧 struct 文档）
 #[tauri::command]
 pub async fn todo_tasks_list(
     state: State<'_, AppState>,
     filter: ListFilter,
-) -> Result<Vec<TodoTask>, String> {
+) -> Result<Vec<TodoTaskListItem>, String> {
     business_api::list_todo_tasks(&state.pool, &filter)
         .await
         .map_err(|e| e.to_string())

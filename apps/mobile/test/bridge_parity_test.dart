@@ -37,9 +37,9 @@ void main() {
   });
 
   test('get_by_uuid 往返 + business_count 计数', () async {
-    // A2 口径：uuid 是列表通道的裁剪列（空串占位），真实 uuid 需走单条全列通道
+    // A2 瘦行：uuid 属列表通道裁剪列（列表行回落空串），真实 uuid 走单条全列通道
     final listed = (await bridge.todoTaskList(const ListFilter())).first;
-    expect(listed.uuid, isEmpty, reason: '列表通道 uuid 应被裁掉');
+    expect(listed.uuid, isEmpty, reason: '列表通道不含 uuid（回落空串）');
     final task = await bridge.todoTaskGet(listed.id);
     final byUuid = await bridge.todoTaskGetByUuid(task.uuid);
     expect(byUuid?.id, task.id);
@@ -49,6 +49,47 @@ void main() {
     expect(await bridge.todoTaskGetByUuid('no-such-uuid'), isNull);
     final n = await bridge.businessCount('todo_tasks');
     expect(n, greaterThan(0));
+  });
+
+  test('列表通道瘦行契约：被裁 10 列回落默认值，真值只走单条全列通道（A2）', () async {
+    final created = await bridge.todoTaskCreate(TodoTaskCreateInput(
+      title: '瘦行契约任务',
+      repeatMode: 2,
+      repeatAfter: 3,
+      repeatWeekdays: 21,
+      repeatEndType: 2,
+      repeatEndParam: 5,
+      repeatFromDone: 1,
+      repeatMonthMode: 1,
+      repeatNthWeek: 2,
+    ));
+    final row = (await bridge.todoTaskList(const ListFilter()))
+        .firstWhere((t) => t.id == created.id);
+    // 被裁列回落默认值（mock 与真桥同口径：mock 摘键、真桥取 gen.TodoTaskListItem）
+    expect(row.uuid, isEmpty);
+    expect(row.repeatAfter, 0);
+    expect(row.repeatWeekdays, 0);
+    expect(row.repeatEndType, 0);
+    expect(row.repeatEndParam, 0);
+    expect(row.repeatFromDone, 0);
+    expect(row.repeatMonthMode, 0);
+    expect(row.repeatNthWeek, 0);
+    expect(row.deletedAt, isNull);
+    expect(row.version, 0);
+    // 有消费列照常过桥（移动列表/日历的重复徽标读 repeatMode；时间轴读 startDate）
+    expect(row.repeatMode, 2);
+    expect(row.title, '瘦行契约任务');
+    // 单条全列通道是这些列的真值来源
+    final full = await bridge.todoTaskGet(created.id);
+    expect(full.uuid, isNotEmpty);
+    expect(full.repeatAfter, 3);
+    expect(full.repeatWeekdays, 21);
+    expect(full.repeatEndType, 2);
+    expect(full.repeatEndParam, 5);
+    expect(full.repeatFromDone, 1);
+    expect(full.repeatMonthMode, 1);
+    expect(full.repeatNthWeek, 2);
+    expect(full.version, 1);
   });
 
   test('cloudSyncForce 返回结果 + 工具三件套', () async {

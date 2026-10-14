@@ -67,7 +67,7 @@ import { midpoint } from "../shared/position";
 import { formatDuration } from "../shared/time";
 import { batchSetDueDate, batchUpdateStatus, batchUpdatePriority, batchUpdateFavorite, batchMoveToProject, batchUpdateMyDay } from "../shared/batch-actions";
 import { useUndoableDeleteAction, hideManyFromQueries } from "@/hooks/use-undoable-delete";
-import { todoTaskDelete, todoTaskUpdate, todoTaskUpdatePosition, type ProjectedTaskLabel, type TaskDependencyFlags, type TodoProject, type TodoTask } from "@/lib/tauri";
+import { todoTaskDelete, todoTaskUpdate, todoTaskUpdatePosition, type ProjectedTaskLabel, type TaskDependencyFlags, type TodoProject, type TodoTaskListItem } from "@/lib/tauri";
 import { patchQueriesData } from "@/lib/query-patch";
 import { FAVORITE_COLOR, OVERDUE_COLOR_CLASS, PRIORITY_COLOR, PRIORITY_LABELS, TODO_ACCENT, MY_DAY_COLOR } from "../shared/constants";
 import { LabelChips } from "../shared/label-chips";
@@ -76,7 +76,7 @@ import { displayReminder, type DisplayReminder, type TaskReminderMeta } from "..
 import { TaskContextMenu } from "./task-context-menu";
 
 interface TaskListViewProps {
-  tasks: TodoTask[];
+  tasks: TodoTaskListItem[];
   projects: TodoProject[];
   /** 任务→标签映射（list-page 级拉取，行内渲染标签 chips） */
   labelsByTask: Map<number, ProjectedTaskLabel[]>;
@@ -230,7 +230,7 @@ export function TaskListView({ tasks, projects, labelsByTask, remindersByTask, d
   };
 
   /** 批量动作执行骨架：跑动作 → 清多选 → 统一失效任务缓存 */
-  const runBatch = async (label: string, action: (sel: TodoTask[]) => Promise<unknown>) => {
+  const runBatch = async (label: string, action: (sel: TodoTaskListItem[]) => Promise<unknown>) => {
     const sel = selectedTasks;
     if (sel.length === 0 || batchBusy) return;
     setBatchBusy(true);
@@ -253,13 +253,13 @@ export function TaskListView({ tasks, projects, labelsByTask, remindersByTask, d
    *  撤销一键整批恢复。此前实现循环 N 次调用——单槽位 pendingRef 下
    *  第 i 笔会把第 i-1 笔 flush 立即落库（真删），后续 toast 的撤销按钮
    *  全部失效（cancel 已 ran 返回 false），「整批恢复」实际只剩最后一笔。 */
-  const batchDelete = (sel: TodoTask[]) => {
+  const batchDelete = (sel: TodoTaskListItem[]) => {
     if (sel.length === 0) return;
     const ids = sel.map((t) => t.id);
     undoableDelete({
       entityLabel: "任务",
       count: ids.length,
-      hide: (q) => hideManyFromQueries<TodoTask>(q, ["todo_tasks"], ids),
+      hide: (q) => hideManyFromQueries<TodoTaskListItem>(q, ["todo_tasks"], ids),
       commit: async () => {
         await Promise.all(ids.map((id) => todoTaskDelete(id)));
       },
@@ -287,7 +287,7 @@ export function TaskListView({ tasks, projects, labelsByTask, remindersByTask, d
       if (!last || last.id === draggedId) return;
       // 乐观 patch 落点（D3）：写库成功前行先定住，不等重拉（回弹即此处缺失）
       const tailPos = midpoint(last.position);
-      patchQueriesData<TodoTask>(qc, ["todo_tasks"], [draggedId], { position: tailPos });
+      patchQueriesData<TodoTaskListItem>(qc, ["todo_tasks"], [draggedId], { position: tailPos });
       await todoTaskUpdatePosition(draggedId, tailPos);
     } else {
       const targetId = rowIdOf(over.id);
@@ -298,7 +298,7 @@ export function TaskListView({ tasks, projects, labelsByTask, remindersByTask, d
       if (prev && prev.id === draggedId) return;
       const prevPos = prev && prev.id !== draggedId ? prev.position : undefined;
       const nextPos = midpoint(prevPos, tasks[targetIdx].position);
-      patchQueriesData<TodoTask>(qc, ["todo_tasks"], [draggedId], { position: nextPos });
+      patchQueriesData<TodoTaskListItem>(qc, ["todo_tasks"], [draggedId], { position: nextPos });
       await todoTaskUpdatePosition(draggedId, nextPos);
     }
     // 排序展示口径在前端 sortTasks(position 升序)，失效后按新 position 重排
@@ -348,22 +348,22 @@ export function TaskListView({ tasks, projects, labelsByTask, remindersByTask, d
   }
 
   const projectById = new Map(projects.map((p) => [p.id, p]));
-  const toggleFavorite = (t: TodoTask) => {
+  const toggleFavorite = (t: TodoTaskListItem) => {
     // 乐观翻转（D3）：纯字段，先 paint 后收敛（失效链仍在，见 handleDragEnd 尾）
-    patchQueriesData<TodoTask>(qc, ["todo_tasks"], [t.id], { is_favorite: t.is_favorite ? 0 : 1 });
+    patchQueriesData<TodoTaskListItem>(qc, ["todo_tasks"], [t.id], { is_favorite: t.is_favorite ? 0 : 1 });
     void todoTaskUpdate(t.id, { is_favorite: t.is_favorite ? 0 : 1 });
   };
   // 我的一天：加入当天（本地零点）/ 移出（null）。视图按日判断，
   // 昨天加入的任务今天自动退出视图但数据保留（微软 To Do 同款语义）
-  const toggleMyDay = (t: TodoTask) => {
-    patchQueriesData<TodoTask>(qc, ["todo_tasks"], [t.id], {
+  const toggleMyDay = (t: TodoTaskListItem) => {
+    patchQueriesData<TodoTaskListItem>(qc, ["todo_tasks"], [t.id], {
       my_day_date: toggleMyDayValue(t.my_day_date),
     });
     void todoTaskUpdate(t.id, { my_day_date: toggleMyDayValue(t.my_day_date) });
   };
   const draggingTask = draggingId != null ? tasks.find((t) => t.id === draggingId) : undefined;
 
-  const renderRow = (t: TodoTask, vi: { index: number; start: number }) => {
+  const renderRow = (t: TodoTaskListItem, vi: { index: number; start: number }) => {
     // 每帧一次 nowMs 供行内 overdue/reminder 判定（此前每行 2 次 Date.now()，
     // 虚拟窗 ~25 行 = 50 次分配/帧）
     const nowMs = Date.now();
@@ -693,7 +693,7 @@ function RowContainerDropZone({ totalSize, children }: { totalSize: number; chil
 }
 
 interface TaskRowProps {
-  task: TodoTask;
+  task: TodoTaskListItem;
   index: number;
   count: number;
   labels: ProjectedTaskLabel[];

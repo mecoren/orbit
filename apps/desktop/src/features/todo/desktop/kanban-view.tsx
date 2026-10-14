@@ -60,7 +60,7 @@ import {
   todoTaskUpdatePosition,
   type ProjectedTaskLabel,
   type TodoProject,
-  type TodoTask,
+  type TodoTaskListItem,
 } from "@/lib/tauri";
 import { FAVORITE_COLOR, PRIORITY_COLOR, PRIORITY_LABELS } from "../shared/constants";
 import { LabelChips } from "../shared/label-chips";
@@ -94,7 +94,7 @@ import { CheckSvg } from "./task-list-view";
 export type { KanbanGroupBy };
 
 interface KanbanViewProps {
-  tasks: TodoTask[];
+  tasks: TodoTaskListItem[];
   projects: TodoProject[];
   groupBy: KanbanGroupBy;
   /** 任务→标签映射（list-page 级拉取，卡片渲染标签 chips） */
@@ -132,7 +132,7 @@ export function KanbanView({ tasks, projects, groupBy, labelsByTask, remindersBy
   }, []);
 
   const runBatch = useCallback(
-    async (label: string, action: (sel: TodoTask[]) => Promise<unknown>) => {
+    async (label: string, action: (sel: TodoTaskListItem[]) => Promise<unknown>) => {
       const sel = selectedTasks;
       if (sel.length === 0 || batchBusy) return;
       setBatchBusy(true);
@@ -165,7 +165,7 @@ export function KanbanView({ tasks, projects, groupBy, labelsByTask, remindersBy
   );
 
   const grouped = useMemo(() => {
-    const map = new Map<string, TodoTask[]>();
+    const map = new Map<string, TodoTaskListItem[]>();
     const fallback = kanbanFallbackKey(groupBy);
     for (const col of columns) map.set(col.key, []);
     for (const t of tasks) {
@@ -299,7 +299,7 @@ export function KanbanView({ tasks, projects, groupBy, labelsByTask, remindersBy
     refetchTasks();
   };
 
-  const columnKeyOf = (t: TodoTask): string =>
+  const columnKeyOf = (t: TodoTaskListItem): string =>
     kanbanColumnKey(groupBy, t, labelsByTask);
 
   const draggingTask = draggingId != null ? tasks.find((t) => t.id === draggingId) : undefined;
@@ -502,7 +502,7 @@ const KanbanColumn = memo(function KanbanColumn({
   onClearSelection,
 }: {
   column: KanbanColumnDef;
-  tasks: TodoTask[];
+  tasks: TodoTaskListItem[];
   projects: TodoProject[];
   labelsByTask: Map<number, ProjectedTaskLabel[]>;
   remindersByTask: Map<number, TaskReminderMeta[]>;
@@ -622,7 +622,7 @@ const KanbanCard = memo(function KanbanCard({
   selected = false,
   hasSelection = false,
 }: {
-  task: TodoTask;
+  task: TodoTaskListItem;
   labels: ProjectedTaskLabel[];
   /** 行内提醒徽标数据（displayReminder 产物；null = 无存活提醒行） */
   reminder: DisplayReminder | null;

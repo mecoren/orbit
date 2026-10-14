@@ -117,7 +117,6 @@ function list(filter: Record<string, unknown>) {
     id: number;
     updated_at: number;
     description: string | null;
-    uuid: string;
     title: string;
   }>;
   return impl({ filter }, { db });
@@ -156,20 +155,34 @@ describe("mock IPC 契约", () => {
     expect(paginateRows(rows, 99, 10)).toEqual([]);
   });
 
-  it("③ 列裁剪保真：空 keyword 时 description 为 null（D0 守门犬）", () => {
+  it("③ 列裁剪保真：瘦行不含 10 个零消费列，description 仅 keyword 通道回真值（D0 守门犬）", () => {
     const pruned = list({ keyword: "", page: 1, page_size: 45 });
     expect(pruned).toHaveLength(45);
     for (const t of pruned) {
       expect(t.description).toBeNull();
-      // A2：uuid 同为列表通道零消费列，以空串占位（Rust 侧 '' AS uuid）
-      expect(t.uuid).toBe("");
+      // A2 瘦行：这 10 列在列表通道整体不存在（Rust 侧 TodoTaskListItem 不含），
+      // mock 必须同口径——漏摘一列就让「真机 undefined、mock 有值」的漂移潜伏下来
+      for (const key of [
+        "uuid",
+        "repeat_after",
+        "repeat_weekdays",
+        "repeat_end_type",
+        "repeat_end_param",
+        "repeat_from_done",
+        "repeat_month_mode",
+        "repeat_nth_week",
+        "deleted_at",
+        "version",
+      ]) {
+        expect(key in t, `列表通道不应含 ${key}`).toBe(false);
+      }
     }
-    // 非空 keyword 走全列：描述保留且按 title+description 过滤
+    // 非空 keyword 走 thin 列 + description 真值：描述保留且按 title+description 过滤
     const full = list({ keyword: "描述 1", page: 1, page_size: 45 });
     expect(full.length).toBeGreaterThan(0);
     for (const t of full) {
       expect(t.description).not.toBeNull();
-      expect(t.uuid).not.toBe("");
+      expect("uuid" in t).toBe(false);
     }
   });
 });
