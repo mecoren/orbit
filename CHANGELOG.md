@@ -16,6 +16,15 @@
 
 ## [Unreleased]
 
+### 性能：push 行级增量装载（N52 第一拍，2026-10-14）
+
+- **背景**：F41 把每轮 push 的代价降到「只重算脏桶」，但那只是省掉了重算与序列化——**装载没省**：每轮仍把整表存活行全量物化成 JSON 再逐桶比对，万级库每次同步都要为此产生数 MB 的行对象与 JSON。
+- **落地**：桶扫描（`scan_local_buckets`）在脏桶集合之外**留存脏桶的全部存活行 uuid**（干净桶一份不留——整库 uuid 常驻会吃掉优化省下的内存）；`push::load_items_for_round` 以「脏桶 ∪ 与远端行数不一致的桶」为装载范围，经新增的 `db_loader::load_table_items_of`（分批 `IN`，每批 500 变量，兼容 999 变量上限的 SQLite 编译档）定向取行。**干净桶一行不取；无变化轮零装载**（`pushed_chunks`/`skipped_chunks` 语义不变：后者仍表示「与远端一致而未重算的分桶数」，只是判据前移到装载之前）。
+- **保守分支**：force（rekey）轮、扫描不可用（水位线 ≤ 0 / 首次同步 / 扫描报错）、以及「行数已变但无脏行」的桶（回收站 purge 的物理删除或他端清理，此时手里没有该桶 uuid 清单）一律退回全量装载——宁可多加载一次，不可猜。
+- **自检兜底**：装载后逐桶行数必须与扫描时的存活行数相符（`bucket_counts_match`），任一桶少行/多行/冒出意外桶即退回全量装载并告警。分桶载荷是**桶级快照**，少一行等于把他端行覆盖成子集，这是本优化唯一不可妥协的性质，故用自检把「省」与「对」绑在一起。
+- **不做（结论修正）**：第六轮报告原先设想「换 change-log 表 / 加应用维护的 `bucket` 列」——本轮实测后修正：uuid 清单 + 定向 `IN` 已达成行级装载且零 schema 改动，不再需要 `bucket` 列；change-log 表只省下那次两列扫描（主成本已消），收益降为二阶，须与「每张表三条触发器」的漂移守卫同批，无排期。N39 的空桶候选集取 `live_counts`，本次判据不动，故不受影响。
+- **测试**：`load_items_for_round_takes_only_needed_buckets`（装载范围精确到桶 + 两个保守分支 + force 轮）、`incremental_load_payload_matches_full_load`（**增量载荷与全量装载逐字节一致**，且脏桶内时间戳未变的行必须同载）、`dirty_uuids_retains_whole_dirty_bucket_only`、`load_table_items_of_takes_exactly_listed_live_rows`；`sync_fault_matrix` 14 例与 core lib 全量回归通过。
+
 ### 功能：应用内诊断分区（内存专项，双端，2026-10-14）
 
 - **只读聚合 API**：新增 `orbit-core/src/api/diagnostics_api.rs`——库体积（`PRAGMA page_count × page_size`）、各表活行数（`is_deleted = 0`，顺序 = 同步白名单）、墓碑行数合计、附件本地缓存体积/文件数；**不 emit db-change、不进同步白名单**（AGENTS「只读聚合不进同步白名单」），附件目录取不到时降级为不统计（诊断页不该因权限问题打不开）。4 例单测（表清单对齐白名单 / 活行与墓碑分列且按增量断言 / 附件只数常规文件 / 目录缺失不报错）。

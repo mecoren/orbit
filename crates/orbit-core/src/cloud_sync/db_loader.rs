@@ -46,19 +46,72 @@ pub async fn load_table_items(
     pool: &SqlitePool,
     table: &str,
 ) -> Result<Vec<serde_json::Value>, CloudSyncError> {
+    load_table_items_where(pool, table, None).await
+}
+
+/// N52：加载单表**指定 uuid 集合**的未删除记录（行级增量装载）
+///
+/// 与 [`load_table_items`] 逐字段同口径（含 `_fk` 注入），区别只在取行范围：
+/// push 只对「需要重算的桶」取行（判据见 `push::load_items_for_round`），
+/// 干净桶的行不再物化成 JSON。`uuids` 分批（每批 500）构造 `IN` 条件——
+/// SQLite 的变量上限随编译选项而异（999 / 32766），分批对两者都安全。
+pub async fn load_table_items_of(
+    pool: &SqlitePool,
+    table: &str,
+    uuids: &[String],
+) -> Result<Vec<serde_json::Value>, CloudSyncError> {
+    load_table_items_where(pool, table, Some(uuids)).await
+}
+
+/// 装载主体（`only_uuids` 为 `None` = 全表）
+async fn load_table_items_where(
+    pool: &SqlitePool,
+    table: &str,
+    only_uuids: Option<&[String]>,
+) -> Result<Vec<serde_json::Value>, CloudSyncError> {
     if !is_syncable(table) {
         return Err(CloudSyncError::Database {
             message: format!("表 {table} 不在同步白名单内"),
         });
     }
 
-    let sql = format!("SELECT * FROM \"{table}\" WHERE is_deleted = 0");
-    let rows = sqlx::query(&sql)
-        .fetch_all(pool)
-        .await
-        .map_err(|e| CloudSyncError::Database {
-            message: format!("加载表 {table} 失败: {e}"),
-        })?;
+    /// 单批 `IN` 的变量数（见 [`load_table_items_of`] 的口径说明）
+    const UUID_BATCH: usize = 500;
+
+    let rows = match only_uuids {
+        None => {
+            let sql = format!("SELECT * FROM \"{table}\" WHERE is_deleted = 0");
+            sqlx::query(&sql)
+                .fetch_all(pool)
+                .await
+                .map_err(|e| CloudSyncError::Database {
+                    message: format!("加载表 {table} 失败: {e}"),
+                })?
+        }
+        Some(uuids) => {
+            let mut out: Vec<sqlx::sqlite::SqliteRow> = Vec::with_capacity(uuids.len());
+            for batch in uuids.chunks(UUID_BATCH) {
+                let holders = std::iter::repeat_n("?", batch.len())
+                    .collect::<Vec<_>>()
+                    .join(",");
+                let sql = format!(
+                    "SELECT * FROM \"{table}\" WHERE is_deleted = 0 AND uuid IN ({holders})"
+                );
+                let mut q = sqlx::query(&sql);
+                for uuid in batch {
+                    q = q.bind(uuid);
+                }
+                out.extend(
+                    q.fetch_all(pool)
+                        .await
+                        .map_err(|e| CloudSyncError::Database {
+                            message: format!("按 uuid 加载表 {table} 失败: {e}"),
+                        })?,
+                );
+            }
+            out
+        }
+    };
 
     let mut items: Vec<serde_json::Value> = rows
         .iter()
@@ -103,6 +156,12 @@ pub struct LocalBucketScan {
     /// 存在 `updated_at` 晚于水位线的行的桶（含 `updated_at` 为 0/NULL 的
     /// 历史行——保守计入，宁可多算一个桶，不可漏传一条记录）
     pub dirty: HashSet<u32>,
+    /// 脏桶的**全部存活行 uuid**（仅脏桶，见 [`scan_local_buckets`]）
+    ///
+    /// N52：push 重算一个桶需要该桶全部存活行（分桶载荷是桶级快照），
+    /// 这份清单让装载按 uuid 定向取行，避免每轮把整表行都物化成 JSON。
+    /// 键集与 [`Self::dirty`] 一致（只多不少：dirty 的每个桶都有清单）。
+    pub dirty_uuids: HashMap<u32, Vec<String>>,
 }
 
 impl LocalBucketScan {
@@ -149,6 +208,10 @@ pub async fn scan_local_buckets(
                 message: format!("扫描表 {table} 分桶失败: {e}"),
             })?;
     let mut scan = LocalBucketScan::default();
+    // 瞬态：全部 uuid 按桶归集；循环结束后**只保留脏桶**的那几份（N52 行级
+    // 增量装载用——重算一个桶需要该桶全部存活行，得靠这份清单按 uuid 定向取行）。
+    // 干净桶的 uuid 立即释放：否则整库 uuid 会常驻整轮 push，吃掉优化省下的内存。
+    let mut all_uuids: HashMap<u32, Vec<String>> = HashMap::new();
     for (uuid, updated_at) in rows {
         if uuid.is_empty() {
             continue;
@@ -159,7 +222,12 @@ pub async fn scan_local_buckets(
         if ts <= 0 || ts > watermark {
             scan.dirty.insert(bucket);
         }
+        all_uuids.entry(bucket).or_default().push(uuid);
     }
+    scan.dirty_uuids = all_uuids
+        .into_iter()
+        .filter(|(bucket, _)| scan.dirty.contains(bucket))
+        .collect();
     Ok(Some(scan))
 }
 
@@ -392,6 +460,131 @@ mod tests {
     #[test]
     fn now_ms_returns_positive() {
         assert!(now_ms() > 0);
+    }
+
+    /// N52：`dirty_uuids` 必须给脏桶**全部存活行**的 uuid（不是只有脏行）
+    ///
+    /// 判据来自 push 的装载语义：重算一个桶需要该桶全部存活行（分桶载荷是
+    /// 桶级快照），只带脏行会让装载少行 → 载荷变子集（他端行丢失）。
+    /// 干净桶则一个 uuid 都不留（否则整库 uuid 常驻，吃掉优化省下的内存）。
+    #[tokio::test]
+    async fn dirty_uuids_retains_whole_dirty_bucket_only() {
+        let pool = SqlitePool::connect("sqlite::memory:").await.unwrap();
+        sqlx::migrate!("./src/db/migrations")
+            .run(&pool)
+            .await
+            .unwrap();
+        // 两个 uuid 须落同一桶才构成「桶内既有脏行又有干净行」的场景，
+        // 故按桶号反查一对 uuid（空 uuid 归 0 号桶，此处另挑真实 uuid）
+        let (a, b) = pick_uuid_pair_in_same_bucket();
+        sqlx::query(
+            "INSERT INTO todo_projects (uuid, title, created_at, updated_at) \
+             VALUES (?1,'干净',1,100), (?2,'脏',2,300)",
+        )
+        .bind(&a)
+        .bind(&b)
+        .execute(&pool)
+        .await
+        .unwrap();
+        // 再放一个干净桶（两个 uuid 都不在 a/b 那个桶里）
+        let clean = pick_uuid_in_other_bucket(&a);
+        sqlx::query(
+            "INSERT INTO todo_projects (uuid, title, created_at, updated_at) \
+             VALUES (?1,'旁桶',3,100)",
+        )
+        .bind(&clean)
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        let scan = scan_local_buckets(&pool, "todo_projects", 200)
+            .await
+            .unwrap()
+            .unwrap();
+        let dirty_bucket = crate::cloud_sync::chunk::bucket_of_uuid(&b);
+        let clean_bucket = crate::cloud_sync::chunk::bucket_of_uuid(&clean);
+        assert!(scan.dirty.contains(&dirty_bucket));
+        assert!(!scan.dirty.contains(&clean_bucket));
+
+        let mut kept = scan.dirty_uuids[&dirty_bucket].clone();
+        kept.sort();
+        let mut want = vec![a.clone(), b.clone()];
+        want.sort();
+        assert_eq!(
+            kept, want,
+            "脏桶要带全部存活行 uuid（含时间戳早于水位线的那行）"
+        );
+        assert!(
+            !scan.dirty_uuids.contains_key(&clean_bucket),
+            "干净桶不留 uuid 清单"
+        );
+    }
+
+    /// 找一对落在同一桶的 uuid（小整数穷举，稳定可复现）
+    fn pick_uuid_pair_in_same_bucket() -> (String, String) {
+        let mut first: std::collections::HashMap<u32, String> = Default::default();
+        for i in 0..10_000 {
+            let uuid = format!("uuid-{i}");
+            let bucket = crate::cloud_sync::chunk::bucket_of_uuid(&uuid);
+            if let Some(other) = first.get(&bucket) {
+                return (other.clone(), uuid);
+            }
+            first.insert(bucket, uuid);
+        }
+        unreachable!("64 个桶必然在 65 次内相撞")
+    }
+
+    /// 找一个与 `uuid` 不同桶的 uuid
+    fn pick_uuid_in_other_bucket(uuid: &str) -> String {
+        let want = crate::cloud_sync::chunk::bucket_of_uuid(uuid);
+        (0..10_000)
+            .map(|i| format!("other-{i}"))
+            .find(|candidate| crate::cloud_sync::chunk::bucket_of_uuid(candidate) != want)
+            .expect("64 桶必有异桶 uuid")
+    }
+
+    /// N52：按 uuid 集合装载——只取列出的存活行，软删行排除，`_fk` 照常注入
+    #[tokio::test]
+    async fn load_table_items_of_takes_exactly_listed_live_rows() {
+        let pool = SqlitePool::connect("sqlite::memory:").await.unwrap();
+        sqlx::migrate!("./src/db/migrations")
+            .run(&pool)
+            .await
+            .unwrap();
+        sqlx::query(
+            "INSERT INTO todo_tasks (uuid, title, created_at, updated_at) VALUES ('t1','T',1,1)",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        let task_id: (i64,) = sqlx::query_as("SELECT id FROM todo_tasks WHERE uuid='t1'")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        // 子表两条：一条要取、一条软删（软删行不得出现在载荷里）
+        sqlx::query(
+            "INSERT INTO todo_subtasks (uuid, task_id, title, position, is_deleted, created_at, updated_at) \
+             VALUES ('s1',?1,'要取',0,0,1,1), ('s2',?1,'已删',1,1,1,1)",
+        )
+        .bind(task_id.0)
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        let items = load_table_items_of(&pool, "todo_subtasks", &["s1".into(), "s2".into()])
+            .await
+            .unwrap();
+        assert_eq!(items.len(), 1, "软删行不参与载荷");
+        assert_eq!(items[0]["uuid"], "s1");
+        assert!(
+            items[0].get(FK_MARK).is_some(),
+            "带外键声明的表必须照常注入 _fk（增量装载不得跳过该步骤）"
+        );
+
+        let empty = load_table_items_of(&pool, "todo_subtasks", &[])
+            .await
+            .unwrap();
+        assert!(empty.is_empty(), "空集合不应产生任何行");
     }
 
     /// F41：桶扫描按水位线取舍，且行数比对能检出「时间戳早于水位线」的软删

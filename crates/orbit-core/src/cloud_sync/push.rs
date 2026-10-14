@@ -27,12 +27,13 @@ use std::collections::{BTreeMap, HashMap};
 
 use sqlx::SqlitePool;
 
-use crate::cloud_sync::chunk::{ChunkPayload, split_table_items};
+use crate::cloud_sync::chunk::{ChunkPayload, TableChunk, split_table_items};
 use crate::cloud_sync::crypto_io::{
     decrypt_bucket_payload, decrypt_payload, encrypt_bucket_payload, encrypt_payload,
 };
 use crate::cloud_sync::db_loader::{
-    LocalBucketScan, load_table_items, load_table_tombstones, now_ms, scan_local_buckets,
+    LocalBucketScan, load_table_items, load_table_items_of, load_table_tombstones, now_ms,
+    scan_local_buckets,
 };
 use crate::cloud_sync::error::CloudSyncError;
 use crate::cloud_sync::meta::{
@@ -488,6 +489,80 @@ struct TableOutcome {
     undeletable: BTreeMap<u32, String>,
 }
 
+/// N52：本轮需要装载的行（行级增量装载）与自检期望
+///
+/// 判据「哪些桶需要重算」与 F41 的 `bucket_is_unchanged` 完全同源，只是把它
+/// 从「逐桶比对后再决定跳不跳」前移成「先用它决定取哪些行」：
+/// `需要重算 = 脏桶 ∪ 与远端行数不一致的桶`（远端没有该条的桶按 0 行算，
+/// 于是「本机有、远端没有」的桶必然入选）。
+///
+/// 返回 `(items, expected)`：
+/// - `expected = Some(map)`：只装载了这些桶，`map` 是各桶应有的存活行数，
+///   调用方用 [`bucket_counts_match`] 自检后才会走到上传；
+/// - `None`：全量装载（首次同步 / 扫描不可用 / force 轮 / 存在「无脏行但行数已变」
+///   的桶——那种桶手里没有 uuid 清单，定向取行取不到，只能整表来一次）。
+///
+/// 为什么「无脏行但行数已变」不硬猜：行数变了却没有时间戳推进，只可能来自
+/// 回收站 purge 的物理删除或他端清理，此时**桶内哪些行还在本机**未知，
+/// 按清单乐观剔除会把他端行踢出载荷。
+async fn load_items_for_round(
+    db_pool: &SqlitePool,
+    table: &str,
+    force: bool,
+    scan: Option<&LocalBucketScan>,
+    remote_index: Option<&TableIndex>,
+) -> Result<(Vec<serde_json::Value>, Option<HashMap<u32, u64>>), CloudSyncError> {
+    let Some(scan) = scan.filter(|_| !force) else {
+        return Ok((load_table_items(db_pool, table).await?, None));
+    };
+
+    let mut needed: Vec<u32> = Vec::new();
+    let mut expected: HashMap<u32, u64> = HashMap::new();
+    for (bucket, live) in &scan.live_counts {
+        let remote_count = remote_index
+            .and_then(|i| i.chunks.get(bucket))
+            .map(|r| r.count)
+            .unwrap_or(0);
+        if !scan.dirty.contains(bucket) && *live == remote_count {
+            continue; // F41 快路径：逐字节一致，连行都不取
+        }
+        if scan.dirty_uuids.contains_key(bucket) {
+            expected.insert(*bucket, *live);
+            needed.push(*bucket);
+        } else {
+            log::info!(
+                "[push] 表 {table} 桶 {bucket} 行数已变但无脏行（物理删除/他端清理），本轮退回全量装载"
+            );
+            return Ok((load_table_items(db_pool, table).await?, None));
+        }
+    }
+
+    // 桶数固定 64 个，`live_counts` 已按桶聚合，`needed` 里不会重复
+    let uuids: Vec<String> = needed
+        .iter()
+        .filter_map(|b| scan.dirty_uuids.get(b))
+        .flatten()
+        .cloned()
+        .collect();
+    let items = load_table_items_of(db_pool, table, &uuids).await?;
+    Ok((items, Some(expected)))
+}
+
+/// N52 自检：增量装载产出的分桶行数必须与扫描时的存活行数**逐桶**相符
+///
+/// 两个方向都要判：少了（载荷变子集 → 他端行被覆盖丢失）与多了/多出意外桶
+/// （载荷混入不属于本轮的行）。任一不符即由调用方退回全量装载。
+fn bucket_counts_match(chunks: &[TableChunk], expected: &HashMap<u32, u64>) -> bool {
+    let mut seen: HashMap<u32, u64> = HashMap::new();
+    for chunk in chunks {
+        *seen.entry(chunk.bucket).or_insert(0) += chunk.items.len() as u64;
+    }
+    seen.len() == expected.len()
+        && expected
+            .iter()
+            .all(|(bucket, count)| seen.get(bucket) == Some(count))
+}
+
 /// 单表差量计算与上传（错误隔离单元）
 ///
 /// 索引合并口径（模块文档「为什么不会覆盖他端数据」的实现落点）：
@@ -529,14 +604,45 @@ async fn build_table_outcome(
     // 写出的仍是存量 0x01；第二拍无需改这里，靠版本号自然打开。
     let bind_aad = remote.all_devices_support_aad();
 
-    let items = load_table_items(db_pool, table)
+    // N52（2026-10-14）：**行级增量装载**——只把「需要重算的桶」的行物化成 JSON。
+    // 干净桶（行数与远端一致且无脏行）连行都不取：此前每轮 push 都要把整表行
+    // 全部加载并与远端逐桶比对，万级库仅为此产生数 MB 的 JSON 与行对象。
+    let (items, expected) = load_items_for_round(db_pool, table, force, scan, remote.table(table))
         .await
         .map_err(|e| TableError {
             table: table.to_string(),
             message: e.to_string(),
         })?;
 
-    for chunk in split_table_items(table, items) {
+    let mut chunks = split_table_items(table, items);
+    // 增量装载没取行的桶 = 判为「与远端逐字节一致」的桶，计入跳过数：该计数
+    // 仍是「与远端一致而未重算的分桶数」原义，只是判据前移到了装载之前。
+    if let Some(expected) = &expected {
+        skipped_chunks = scan
+            .map(|s| s.live_counts.len().saturating_sub(expected.len()) as u32)
+            .unwrap_or(0);
+    }
+    // 自检：增量装载的行数必须与扫描时的存活行数逐桶相符。分桶载荷是**桶级快照**，
+    // 少一行就等于把云端该桶覆盖成子集（他端行丢失），宁可贵一次全量装载。
+    if let Some(expected) = &expected
+        && !bucket_counts_match(&chunks, expected)
+    {
+        log::warn!(
+            "[push] 表 {table} 增量装载自检不符（期望 {} 桶），退回全量装载",
+            expected.len()
+        );
+        let all = load_table_items(db_pool, table)
+            .await
+            .map_err(|e| TableError {
+                table: table.to_string(),
+                message: e.to_string(),
+            })?;
+        chunks = split_table_items(table, all);
+        // 全量装载后跳过数由循环内的 F41 判据重新计数，别与上面的估算叠加
+        skipped_chunks = 0;
+    }
+
+    for chunk in chunks {
         let remote_ref = remote
             .table(table)
             .and_then(|t| t.chunks.get(&chunk.bucket));
@@ -1275,6 +1381,261 @@ mod tests {
         let uploads = adapter.uploads.lock().unwrap().clone();
         let chunk_uploads = uploads.iter().filter(|p| p.starts_with("tables/")).count();
         assert_eq!(chunk_uploads, 1);
+    }
+
+    /// N52：装载范围可观测——只取「需要重算的桶」的行，干净桶一行不取
+    ///
+    /// 造两对同桶 uuid（P 桶 a/b、Q 桶 c/d），只改 a：期望只装载 P 桶两行
+    /// （分桶载荷是桶级快照，桶内时间戳未变的 b 也得带上），Q 桶一行不取。
+    /// 再覆盖保守分支：Q 桶物理删一行（行数变了、时间戳没推进）→ 全量装载。
+    #[tokio::test]
+    async fn load_items_for_round_takes_only_needed_buckets() {
+        let (pool, crypto, store, _tmp) = env().await;
+        // 清掉迁移种子行：种子行的 updated_at = 0 会永久判脏，干扰本轮断言
+        sqlx::query("DELETE FROM todo_projects")
+            .execute(&pool)
+            .await
+            .unwrap();
+        let (a, b, c, d) = pick_uuids_in_two_buckets();
+        let mut sql =
+            String::from("INSERT INTO todo_projects (uuid, title, created_at, updated_at) VALUES ");
+        for (i, uuid) in [&a, &b, &c, &d].iter().enumerate() {
+            if i > 0 {
+                sql.push(',');
+            }
+            sql.push_str(&format!("('{uuid}','P{i}',1,1)"));
+        }
+        sqlx::query(&sql).execute(&pool).await.unwrap();
+
+        let adapter = MemAdapter::new();
+        push_all(
+            &pool,
+            &crypto,
+            &store,
+            &adapter,
+            &NoopProgressSender,
+            SyncOrigin::Manual,
+            "dev-1",
+            &[],
+        )
+        .await
+        .unwrap();
+        let (remote, _, _) = read_remote_manifest(&adapter, &[7u8; 32]).await.unwrap();
+        let index = remote.table("todo_projects").cloned().unwrap();
+
+        sqlx::query("UPDATE todo_projects SET title='X', updated_at=? WHERE uuid=?")
+            .bind(crate::db::clock::next_ms())
+            .bind(&a)
+            .execute(&pool)
+            .await
+            .unwrap();
+        let watermark = store.load().unwrap().last_pushed_clock_ms;
+        let scan = scan_local_buckets(&pool, "todo_projects", watermark)
+            .await
+            .unwrap()
+            .unwrap();
+        let p_bucket = crate::cloud_sync::chunk::bucket_of_uuid(&a);
+
+        let (items, expected) =
+            load_items_for_round(&pool, "todo_projects", false, Some(&scan), Some(&index))
+                .await
+                .unwrap();
+
+        let mut loaded: Vec<&str> = items.iter().filter_map(|i| i["uuid"].as_str()).collect();
+        loaded.sort();
+        let mut want = [a.as_str(), b.as_str()];
+        want.sort();
+        assert_eq!(
+            loaded, want,
+            "只装载脏桶两行（含桶内时间戳未变的那行），干净桶一行不取"
+        );
+        let expected = expected.expect("增量装载必须带自检期望");
+        assert_eq!(
+            expected,
+            HashMap::from([(p_bucket, 2u64)]),
+            "期望集只含需要重算的桶，且行数取扫描值"
+        );
+
+        // 保守分支：Q 桶物理删一行 → 行数少了但没有任何脏行（uuid 清单未知）→ 全量装载
+        sqlx::query("DELETE FROM todo_projects WHERE uuid=?")
+            .bind(&c)
+            .execute(&pool)
+            .await
+            .unwrap();
+        let scan2 = scan_local_buckets(&pool, "todo_projects", watermark)
+            .await
+            .unwrap()
+            .unwrap();
+        let (items2, expected2) =
+            load_items_for_round(&pool, "todo_projects", false, Some(&scan2), Some(&index))
+                .await
+                .unwrap();
+        assert!(
+            expected2.is_none(),
+            "「行数已变但无脏行」的桶必须退回全量装载（手里没有该桶 uuid 清单）"
+        );
+        assert_eq!(items2.len(), 3, "全量装载取回其余三行");
+
+        // force（rekey）轮一律全量：索引重建时任何桶都可能需要重算
+        let (_items3, expected3) =
+            load_items_for_round(&pool, "todo_projects", true, Some(&scan2), Some(&index))
+                .await
+                .unwrap();
+        assert!(expected3.is_none(), "force 轮必须全量装载");
+    }
+
+    /// 造两对同桶 uuid：(a,b) 一桶，(c,d) 另一桶（每桶只取一对，桶号可复现）
+    fn pick_uuids_in_two_buckets() -> (String, String, String, String) {
+        let mut first: HashMap<u32, String> = HashMap::new();
+        let mut done: std::collections::HashSet<u32> = Default::default();
+        let mut pairs: Vec<(String, String)> = Vec::new();
+        for i in 0..2000 {
+            let uuid = format!("uuid-{i}");
+            let bucket = crate::cloud_sync::chunk::bucket_of_uuid(&uuid);
+            if done.contains(&bucket) {
+                continue;
+            }
+            match first.get(&bucket) {
+                Some(prev) => {
+                    pairs.push((prev.clone(), uuid));
+                    done.insert(bucket);
+                }
+                None => {
+                    first.insert(bucket, uuid);
+                }
+            }
+            if pairs.len() == 2 {
+                break;
+            }
+        }
+        assert_eq!(pairs.len(), 2, "64 桶里必然凑出两对");
+        let (a, b) = pairs[0].clone();
+        let (c, d) = pairs[1].clone();
+        assert_ne!(
+            crate::cloud_sync::chunk::bucket_of_uuid(&a),
+            crate::cloud_sync::chunk::bucket_of_uuid(&c),
+            "两对必须落在不同桶"
+        );
+        (a, b, c, d)
+    }
+
+    /// N52 自检纯函数：少了/多了/冒出来的桶都要判不符
+    #[test]
+    fn bucket_counts_match_covers_shortfall_and_extra() {
+        let chunk = |bucket: u32, n: usize| TableChunk {
+            table: "todo_projects".into(),
+            bucket,
+            items: vec![serde_json::json!({}); n],
+        };
+        let expected: HashMap<u32, u64> = [(1, 2), (7, 1)].into_iter().collect();
+
+        assert!(bucket_counts_match(&[chunk(1, 2), chunk(7, 1)], &expected));
+        assert!(
+            !bucket_counts_match(&[chunk(1, 1), chunk(7, 1)], &expected),
+            "少一行 = 载荷变子集，必须判不符"
+        );
+        assert!(
+            !bucket_counts_match(&[chunk(1, 3), chunk(7, 1)], &expected),
+            "多一行同样是异常（说明装载混入了别的行）"
+        );
+        assert!(
+            !bucket_counts_match(&[chunk(1, 2)], &expected),
+            "期望的桶整桶缺席必须判不符"
+        );
+        assert!(
+            !bucket_counts_match(&[chunk(1, 2), chunk(7, 1), chunk(9, 1)], &expected),
+            "冒出期望之外的桶必须判不符"
+        );
+        assert!(
+            bucket_counts_match(&[], &HashMap::new()),
+            "空集对空集是相符"
+        );
+    }
+
+    /// N52：行级增量装载产出的分桶载荷必须与全量装载**逐字节一致**
+    ///
+    /// 这是本优化唯一不可妥协的性质：分桶载荷是桶级快照，少一行就等于把云端
+    /// 该桶覆盖成子集（他端行丢失）。用例特意让「脏行的桶」里还有一行是干净的
+    /// （时间戳早于水位线），断言增量装载仍把该桶两行都装进来、载荷与全量装载
+    /// 的结果逐字节相同。
+    #[tokio::test]
+    async fn incremental_load_payload_matches_full_load() {
+        let (pool, crypto, store, _tmp) = env().await;
+        // 清掉迁移种子行（其 updated_at = 0 会永久判脏，干扰断言）
+        sqlx::query("DELETE FROM todo_projects")
+            .execute(&pool)
+            .await
+            .unwrap();
+        // 两对同桶 uuid：(a,b) 是同桶被编辑的那对，(c,d) 是另一桶（本轮不应被上传）
+        let (a, b, c, d) = pick_uuids_in_two_buckets();
+        let mut sql =
+            String::from("INSERT INTO todo_projects (uuid, title, created_at, updated_at) VALUES ");
+        for (i, uuid) in [&a, &b, &c, &d].iter().enumerate() {
+            if i > 0 {
+                sql.push(',');
+            }
+            sql.push_str(&format!("('{uuid}','P{i}',1,1)"));
+        }
+        sqlx::query(&sql).execute(&pool).await.unwrap();
+        let dirty_bucket = crate::cloud_sync::chunk::bucket_of_uuid(&a);
+
+        let adapter = MemAdapter::new();
+        push_all(
+            &pool,
+            &crypto,
+            &store,
+            &adapter,
+            &NoopProgressSender,
+            SyncOrigin::Manual,
+            "dev-1",
+            &[],
+        )
+        .await
+        .unwrap();
+        adapter.uploads.lock().unwrap().clear();
+
+        // 只改同桶里的那行（同桶另一行保持「时间戳早于水位线」的干净态）
+        sqlx::query("UPDATE todo_projects SET title='X', updated_at=? WHERE uuid=?")
+            .bind(crate::db::clock::next_ms())
+            .bind(&a)
+            .execute(&pool)
+            .await
+            .unwrap();
+        let result = push_all(
+            &pool,
+            &crypto,
+            &store,
+            &adapter,
+            &NoopProgressSender,
+            SyncOrigin::Manual,
+            "dev-1",
+            &[],
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(result.pushed_chunks, 1, "只该重传脏行所在的那个桶");
+        let path = paths::table_bucket_path("todo_projects", dirty_bucket);
+        let raw = adapter.get(&path).expect("云端应有该桶对象");
+        let plain = decrypt_bucket_payload(&raw, &[7u8; 32], &path).unwrap();
+        let actual: ChunkPayload = serde_json::from_slice(&plain).unwrap();
+        assert_eq!(
+            actual.items.len(),
+            2,
+            "脏桶内的时间戳未变的行也必须随桶一起装载（载荷是桶级快照）"
+        );
+
+        // 期望载荷：全量装载 → 分桶 → 取同名桶
+        let all = load_table_items(&pool, "todo_projects").await.unwrap();
+        let expected_chunk = split_table_items("todo_projects", all)
+            .into_iter()
+            .find(|c| c.bucket == dirty_bucket)
+            .expect("全量装载必然含该桶");
+        let expected_plain = expected_chunk.to_payload_bytes().unwrap();
+        assert_eq!(
+            plain, expected_plain,
+            "增量装载的载荷必须与全量装载逐字节一致"
+        );
     }
 
     /// F41：非脏桶零重算的可见证据（水位线判据的直接后果）
