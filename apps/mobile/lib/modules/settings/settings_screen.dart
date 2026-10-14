@@ -1041,6 +1041,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         label: '通知历史',
                         onTap: () => context.push('/settings/notifications'),
                       ),
+                      _navRow(
+                        colors,
+                        label: '诊断',
+                        onTap: () => context.push('/settings/diagnostics'),
+                      ),
                     ],
                   ),
                 ),

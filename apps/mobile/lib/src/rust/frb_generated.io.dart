@@ -8,6 +8,7 @@ import 'api/asset.dart';
 import 'api/auth.dart';
 import 'api/biometric.dart';
 import 'api/csv_import.dart';
+import 'api/diagnostics.dart';
 import 'api/digest.dart';
 import 'api/dto.dart';
 import 'api/events.dart';
@@ -215,6 +216,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   DbMaintenanceView dco_decode_db_maintenance_view(dynamic raw);
 
   @protected
+  DiagnosticsSnapshot dco_decode_diagnostics_snapshot(dynamic raw);
+
+  @protected
   DigestPrefs dco_decode_digest_prefs(dynamic raw);
 
   @protected
@@ -326,6 +330,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<TableCount> dco_decode_list_table_count(dynamic raw);
+
+  @protected
+  List<TableRowCount> dco_decode_list_table_row_count(dynamic raw);
 
   @protected
   List<TaskAttachmentView> dco_decode_list_task_attachment_view(dynamic raw);
@@ -474,6 +481,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   TableCount dco_decode_table_count(dynamic raw);
+
+  @protected
+  TableRowCount dco_decode_table_row_count(dynamic raw);
 
   @protected
   TaskAttachmentView dco_decode_task_attachment_view(dynamic raw);
@@ -806,6 +816,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  DiagnosticsSnapshot sse_decode_diagnostics_snapshot(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   DigestPrefs sse_decode_digest_prefs(SseDeserializer deserializer);
 
   @protected
@@ -957,6 +972,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<TableCount> sse_decode_list_table_count(SseDeserializer deserializer);
+
+  @protected
+  List<TableRowCount> sse_decode_list_table_row_count(
+    SseDeserializer deserializer,
+  );
 
   @protected
   List<TaskAttachmentView> sse_decode_list_task_attachment_view(
@@ -1139,6 +1159,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   TableCount sse_decode_table_count(SseDeserializer deserializer);
+
+  @protected
+  TableRowCount sse_decode_table_row_count(SseDeserializer deserializer);
 
   @protected
   TaskAttachmentView sse_decode_task_attachment_view(
@@ -1567,6 +1590,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_diagnostics_snapshot(
+    DiagnosticsSnapshot self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_digest_prefs(DigestPrefs self, SseSerializer serializer);
 
   @protected
@@ -1749,6 +1778,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_list_table_count(
     List<TableCount> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_table_row_count(
+    List<TableRowCount> self,
     SseSerializer serializer,
   );
 
@@ -2006,6 +2041,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_table_count(TableCount self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_table_row_count(TableRowCount self, SseSerializer serializer);
 
   @protected
   void sse_encode_task_attachment_view(

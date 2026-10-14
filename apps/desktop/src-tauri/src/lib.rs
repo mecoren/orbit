@@ -416,6 +416,8 @@ pub fn run() {
             commands::asset_cmd::attachments_gc,
             // 数据库维护（WAL checkpoint / 附件 GC / 查询统计 / VACUUM）
             commands::db_maintenance_cmd::db_maintenance,
+            // 应用内诊断分区（只读读数：库体积 / 各表行数 / 附件缓存占用）
+            commands::diagnostics_cmd::diagnostics_snapshot,
             // 主窗唤起（全局热键；窗口被超时回收后走重建路径）
             commands::window_recycler::show_main_window_cmd,
             // 冷启动首屏标记（度量专用；ORBIT_PERF_MARKER 未设置时 no-op）

@@ -589,6 +589,11 @@ abstract class OrbitBridge {
   /// 清空通知历史，返回删除行数
   Future<int> notificationLogClear();
 
+  // ── 应用内诊断（只读读数，不进同步白名单）──
+
+  /// 采集诊断快照（库体积 / 各表活行数 / 墓碑行数 / 附件缓存占用）
+  Future<DiagnosticsSnapshot> diagnosticsSnapshot();
+
   // ── 节假日数据（日历视图联网更新；cfg_holidays 本地缓存）──
 
   /// 全部节假日（date 升序；空库回落预置 2026 表，冷启动可用）

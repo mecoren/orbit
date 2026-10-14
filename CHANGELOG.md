@@ -16,6 +16,13 @@
 
 ## [Unreleased]
 
+### 功能：应用内诊断分区（内存专项，双端，2026-10-14）
+
+- **只读聚合 API**：新增 `orbit-core/src/api/diagnostics_api.rs`——库体积（`PRAGMA page_count × page_size`）、各表活行数（`is_deleted = 0`，顺序 = 同步白名单）、墓碑行数合计、附件本地缓存体积/文件数；**不 emit db-change、不进同步白名单**（AGENTS「只读聚合不进同步白名单」），附件目录取不到时降级为不统计（诊断页不该因权限问题打不开）。4 例单测（表清单对齐白名单 / 活行与墓碑分列且按增量断言 / 附件只数常规文件 / 目录缺失不报错）。
+- **桌面**：新增 Tauri 薄命令 `diagnostics_cmd::diagnostics_snapshot`（附件目录与 `asset_cmd` 同源）+ `lib/tauri.ts` 包装 + 「设置 → 诊断」分区（本地存储与 WebView 运行时两类读数分栏，`performance.memory` 不可用时明写「当前环境不支持」而不是显 0；`diagnostics-format.ts` 纯函数 5 例单测）。
+- **移动**：FRB `api/diagnostics.rs` + `DiagnosticsSnapshot` 本地镜像 + `OrbitBridge.diagnosticsSnapshot()`（Rust/Mock 双实现，mock 行数真算、体积给固定假值）+ `/settings/diagnostics` 整页（`OrbitPageHeader` + 整页 ListView，运行时档取 `ProcessInfo.currentRss`）+ 设置入口；widget 测试 2 例 + 格式化 1 例。
+- **两端同口径**：读数来源与单位一致（字节/行数，格式化在 UI 层），均按需「刷新」重采而非常驻轮询——诊断分区自身不引入新的常驻开销。
+
 ### 性能：上传请求体零拷贝（内存专项 A13，2026-10-14）
 
 - **请求体改 `Bytes`**（`sync_adapters/http_client.rs`）：`put_with_retry` / `put_conditional` 的 body 由 `Vec<u8>` 改 `bytes::Bytes`——每次尝试的 `.body(body.clone())` 从「整包复制」退化为「引用计数自增」。此前一次大附件单 PUT 在 4 次尝试下最多复制 4 份载荷。

@@ -9,6 +9,7 @@ import '../../modules/settings/backup_page.dart';
 import '../../modules/settings/holiday_cache_page.dart';
 import '../../modules/settings/label_manager_page.dart';
 import '../../modules/settings/nav_modules_page.dart';
+import '../../modules/settings/diagnostics_page.dart';
 import '../../modules/settings/notification_history_page.dart';
 import '../../modules/settings/quick_actions_page.dart';
 import '../../modules/settings/settings_screen.dart';
@@ -257,6 +258,13 @@ final appRouter = GoRouter(
       path: '/settings/notifications',
       pageBuilder: (context, state) => pageSlideFromRight(
         const NotificationHistoryPage(),
+        key: state.pageKey,
+      ),
+    ),
+    GoRoute(
+      path: '/settings/diagnostics',
+      pageBuilder: (context, state) => pageSlideFromRight(
+        const DiagnosticsPage(),
         key: state.pageKey,
       ),
     ),

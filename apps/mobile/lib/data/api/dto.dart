@@ -1894,3 +1894,62 @@ class SyncStateView {
     return out;
   }
 }
+
+// ---------- 应用内诊断（docs/09 内存专项；只读聚合） ----------
+
+/// 单表活行数（镜像 core `diagnostics_api::TableRowCount`）
+class TableRowCount {
+  final String table;
+
+  /// `is_deleted = 0` 的行数
+  final int rows;
+
+  const TableRowCount({required this.table, required this.rows});
+
+  /// 列表通道 JSON → App 模型（mock 桥用；真桥走 `_mapDiagnostics` 直映 FRB DTO）
+  factory TableRowCount.fromJson(Map<String, dynamic> j) => TableRowCount(
+        table: j['table'] as String,
+        rows: (j['rows'] as num).toInt(),
+      );
+}
+
+/// 应用内诊断快照（镜像 core `diagnostics_api::DiagnosticsSnapshot`）
+///
+/// 只读读数，不进同步白名单；单位统一为字节/行数（格式化在 UI 层做）。
+class DiagnosticsSnapshot {
+  /// 本地库体积（SQLite `page_count × page_size`）
+  final int dbSizeBytes;
+
+  /// 各表活行数（顺序 = 同步白名单顺序）
+  final List<TableRowCount> tableRows;
+
+  /// 全部可同步表的墓碑行数合计
+  final int tombstoneRows;
+
+  /// 附件本地缓存体积（字节）
+  final int attachmentCacheBytes;
+
+  /// 附件本地缓存文件数
+  final int attachmentCacheFiles;
+
+  const DiagnosticsSnapshot({
+    required this.dbSizeBytes,
+    required this.tableRows,
+    required this.tombstoneRows,
+    required this.attachmentCacheBytes,
+    required this.attachmentCacheFiles,
+  });
+
+  /// 列表通道 JSON → App 模型（mock 桥用）
+  factory DiagnosticsSnapshot.fromJson(Map<String, dynamic> j) =>
+      DiagnosticsSnapshot(
+        dbSizeBytes: (j['db_size_bytes'] as num).toInt(),
+        tableRows: [
+          for (final row in (j['table_rows'] as List? ?? const []))
+            TableRowCount.fromJson(Map<String, dynamic>.from(row as Map)),
+        ],
+        tombstoneRows: (j['tombstone_rows'] as num).toInt(),
+        attachmentCacheBytes: (j['attachment_cache_bytes'] as num).toInt(),
+        attachmentCacheFiles: (j['attachment_cache_files'] as num).toInt(),
+      );
+}

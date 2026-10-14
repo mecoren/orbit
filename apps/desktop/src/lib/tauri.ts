@@ -1399,3 +1399,26 @@ export const templateDelete = (id: number) => invoke<void>("template_delete", { 
 // ========== 冷启动度量（docs/09 §六；ORBIT_PERF_MARKER 未设置时 Rust 侧 no-op）==========
 /** 上报「首屏就绪」时刻到 ORBIT_PERF_MARKER 指定文件（perf-metrics/cold-start.mjs 消费） */
 export const perfFirstScreenMark = () => invoke<void>("perf_first_screen_mark");
+
+// ========== 应用内诊断分区（docs/09 内存专项；只读读数，不进同步白名单）==========
+/** 单表活行数（`is_deleted = 0`） */
+export interface TableRowCount {
+  table: string;
+  rows: number;
+}
+/** 应用内诊断快照（镜像 orbit_core::api::diagnostics_api::DiagnosticsSnapshot） */
+export interface DiagnosticsSnapshot {
+  /** 本地库体积（字节，SQLite page_count × page_size；不含 WAL 与附件目录） */
+  db_size_bytes: number;
+  /** 各表活行数（顺序 = 同步白名单顺序） */
+  table_rows: TableRowCount[];
+  /** 全部可同步表的墓碑行数合计 */
+  tombstone_rows: number;
+  /** 附件本地缓存体积（字节） */
+  attachment_cache_bytes: number;
+  /** 附件本地缓存文件数 */
+  attachment_cache_files: number;
+}
+/** 采集诊断快照（只读聚合，不触发 db-change） */
+export const diagnosticsSnapshot = () =>
+  invoke<DiagnosticsSnapshot>("diagnostics_snapshot");

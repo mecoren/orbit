@@ -24,6 +24,7 @@ import '../../src/rust/api/trash.dart' as gen_trash;
 import '../../src/rust/api/digest.dart' as gen_digest;
 import '../../src/rust/api/full_sync_backup.dart' as gen_backup;
 import '../../src/rust/api/notification_log.dart' as gen_notif;
+import '../../src/rust/api/diagnostics.dart' as gen_diag;
 import '../../src/rust/api/stats.dart' as gen_stats;
 import '../../src/rust/api/search.dart' as gen_search;
 import '../../src/rust/frb_generated.dart' show RustLib;
@@ -1262,6 +1263,23 @@ class RustOrbitBridge implements OrbitBridge {
   @override
   Future<int> notificationLogClear() async =>
       (await gen_notif.notificationLogClear()).toInt();
+
+  // ── 应用内诊断（只读读数）──
+
+  @override
+  Future<DiagnosticsSnapshot> diagnosticsSnapshot() async {
+    final s = await gen_diag.diagnosticsSnapshot();
+    return DiagnosticsSnapshot(
+      dbSizeBytes: s.dbSizeBytes.toInt(),
+      tableRows: [
+        for (final r in s.tableRows)
+          TableRowCount(table: r.table, rows: r.rows.toInt()),
+      ],
+      tombstoneRows: s.tombstoneRows.toInt(),
+      attachmentCacheBytes: s.attachmentCacheBytes.toInt(),
+      attachmentCacheFiles: s.attachmentCacheFiles.toInt(),
+    );
+  }
 
   // ── 节假日 ──
 

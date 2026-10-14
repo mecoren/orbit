@@ -1,7 +1,7 @@
 /**
  * 设置页导航分类模型（对齐 wait-home：左导航 + 右内容布局）
  */
-import { Bell, CalendarDays, CloudUpload, FileStack, GitCompare, Keyboard, ListTodo, Palette, Power, RefreshCw, Shield, type LucideIcon } from "lucide-react";
+import { Activity, Bell, CalendarDays, CloudUpload, FileStack, GitCompare, Keyboard, ListTodo, Palette, Power, RefreshCw, Shield, type LucideIcon } from "lucide-react";
 
 export interface CategoryItem {
   key: string;
@@ -22,6 +22,8 @@ export const settingsCategories: CategoryItem[] = [
   { key: "shortcuts", label: "快捷键", icon: Keyboard },
   { key: "templates", label: "任务模板", icon: FileStack },
   { key: "notifications", label: "通知历史", icon: Bell },
+  // 应用内诊断分区（docs/09 内存专项；与「关于与更新」同为工程性面板，紧邻摆放）
+  { key: "diagnostics", label: "诊断", icon: Activity },
   { key: "updater", label: "关于与更新", icon: RefreshCw },
 ];
 

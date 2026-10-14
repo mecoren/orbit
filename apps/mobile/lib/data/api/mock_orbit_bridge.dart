@@ -2294,6 +2294,35 @@ class MockOrbitBridge implements OrbitBridge {
         return count;
       });
 
+  // ── 应用内诊断（只读读数；与 Rust diagnostics_api 同口径）──
+
+  /// mock 只有内存库：行数真算，库体积/附件缓存给固定假值（断言只对行数下）
+  @override
+  Future<DiagnosticsSnapshot> diagnosticsSnapshot() => _delay(() {
+        final tables = <String, Iterable<Map<String, dynamic>>>{
+          'todo_projects': store.projects.values,
+          'todo_tasks': store.tasks.values,
+          'todo_subtasks': store.subtasks.values,
+          'todo_labels': store.labels.values,
+          'todo_comments': store.comments.values,
+          'todo_reminders': store.reminders.values,
+        };
+        int live(Iterable<Map<String, dynamic>> rows) =>
+            rows.where((r) => r['is_deleted'] != 1).length;
+        int dead(Iterable<Map<String, dynamic>> rows) =>
+            rows.where((r) => r['is_deleted'] == 1).length;
+        return DiagnosticsSnapshot(
+          dbSizeBytes: 1024 * 1024,
+          tableRows: [
+            for (final e in tables.entries)
+              TableRowCount(table: e.key, rows: live(e.value)),
+          ],
+          tombstoneRows: tables.values.fold(0, (n, rows) => n + dead(rows)),
+          attachmentCacheBytes: 2048,
+          attachmentCacheFiles: 1,
+        );
+      });
+
   NotificationLogRow _toNotificationRow(Map<String, dynamic> n) =>
       NotificationLogRow(
         id: n['id'] as int,

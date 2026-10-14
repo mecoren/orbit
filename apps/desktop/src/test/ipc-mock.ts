@@ -1676,6 +1676,31 @@ const commands: Record<string, (args: any, ctx: Ctx) => unknown> = {
   // ---- 计数（旧基座命令；保守返回 0）----
   business_count: () => 0,
 
+  // ---- 应用内诊断分区（只读读数；形状对齐 core DiagnosticsSnapshot）----
+  // mock 只能量到内存库的行数，库体积/附件缓存按固定假值给出（契约测试只断言
+  // 形状与「行数随库变化」，不对具体字节数下断言——字节数在真机由 Rust 侧量）。
+  diagnostics_snapshot: (_args, { db }: Ctx) => {
+    const live = (rows: { is_deleted?: number }[]) =>
+      rows.filter((r) => !r.is_deleted).length;
+    const dead = (rows: { is_deleted?: number }[]) =>
+      rows.filter((r) => r.is_deleted).length;
+    const tables: [string, { is_deleted?: number }[]][] = [
+      ["todo_projects", db.projects],
+      ["todo_tasks", db.tasks],
+      ["todo_subtasks", db.subtasks],
+      ["todo_labels", db.labels],
+      ["todo_comments", db.comments],
+      ["todo_reminders", db.reminders],
+    ];
+    return {
+      db_size_bytes: 1024 * 1024,
+      table_rows: tables.map(([table, rows]) => ({ table, rows: live(rows) })),
+      tombstone_rows: tables.reduce((n, [, rows]) => n + dead(rows), 0),
+      attachment_cache_bytes: 2048,
+      attachment_cache_files: 1,
+    };
+  },
+
   // ---- 任务附件（详情抽屉区块 9；内存模拟内容寻址：hash 简化为内容指纹）----
   task_attachment_add: (
     { taskId, fileName, mimeType, data }: { taskId: number; fileName: string; mimeType: string; data: number[] },
