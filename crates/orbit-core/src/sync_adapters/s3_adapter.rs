@@ -282,10 +282,7 @@ x-amz-date:{}
     /// 只想知道「端点通不通、概有多少」的双壳连接测试，翻完整个桶是纯粹的
     /// 往返浪费（1 万对象 = 10 次请求）。`truncated` 一并透出，让调用方能
     /// 如实告知「计数已截断」而不是谎称全量。
-    async fn list_first_page(
-        &self,
-        prefix: &str,
-    ) -> Result<crate::s3::ListPage, SyncError> {
+    async fn list_first_page(&self, prefix: &str) -> Result<crate::s3::ListPage, SyncError> {
         let prefix_with_slash = if prefix.is_empty() || prefix.ends_with('/') {
             prefix.to_string()
         } else {
@@ -572,7 +569,8 @@ impl SyncAdapter for S3Adapter {
             return self.multipart_upload(path, data).await;
         }
         // 借用入参只能复制一次以换成 `Bytes`（换来的是重试不再整包复制）
-        self.put_object_bytes(path, Bytes::from(data.to_vec())).await
+        self.put_object_bytes(path, Bytes::from(data.to_vec()))
+            .await
     }
 
     /// A13：所有权移交版本——`Bytes::from(Vec)` 对独占 `Vec` 是**零拷贝**
@@ -678,12 +676,12 @@ impl SyncAdapter for S3Adapter {
         let ok = self
             .http
             .put_conditional(
-            &url,
-            headers,
-            Bytes::from(data.to_vec()),
-            if_match,
-            if_none_star,
-        )
+                &url,
+                headers,
+                Bytes::from(data.to_vec()),
+                if_match,
+                if_none_star,
+            )
             .await?;
         Ok(if ok {
             UploadOutcome::Ok

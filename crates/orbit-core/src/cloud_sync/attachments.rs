@@ -1009,10 +1009,12 @@ mod tests {
         .unwrap();
 
         assert_eq!(r.downloaded, 1);
-        assert!(attachment_repo::get_by_hash(&pool, &hash_r)
-            .await
-            .unwrap()
-            .is_some());
+        assert!(
+            attachment_repo::get_by_hash(&pool, &hash_r)
+                .await
+                .unwrap()
+                .is_some()
+        );
     }
 
     /// 场景 ④（N51 回归，2026-10-12）：云端列出格式非法的 hash（内容寻址

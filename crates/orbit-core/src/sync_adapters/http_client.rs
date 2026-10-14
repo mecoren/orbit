@@ -994,9 +994,9 @@ mod tests {
     fn budget_has_headroom_over_the_assumed_slow_uplink() {
         const SLOW_UPLINK_BPS: u64 = 350_000 / 8; // 350kbps → 字节/秒
         for size in [
-            5 * 1024 * 1024usize,     // 一片（分片粒度）
-            8 * 1024 * 1024,          // 单 PUT 上限（multipart 阈值）
-            1024 * 1024usize,         // 小分桶
+            5 * 1024 * 1024usize, // 一片（分片粒度）
+            8 * 1024 * 1024,      // 单 PUT 上限（multipart 阈值）
+            1024 * 1024usize,     // 小分桶
         ] {
             let needed = Duration::from_secs_f64(size as f64 / SLOW_UPLINK_BPS as f64);
             let budget = HttpClient::put_timeout_budget(size);
@@ -1026,7 +1026,10 @@ mod tests {
             "5MiB 分片必须落在一档；分片粒度若变更，此断言先行报警"
         );
         // 尾片只会更小，预算不得更紧
-        assert!(HttpClient::put_timeout_budget(PART_SIZE / 2) >= HttpClient::put_timeout_budget(PART_SIZE));
+        assert!(
+            HttpClient::put_timeout_budget(PART_SIZE / 2)
+                >= HttpClient::put_timeout_budget(PART_SIZE)
+        );
     }
 
     // ========================================================================

@@ -1512,8 +1512,13 @@ mod tests {
         }));
         adapter.put(
             &path,
-            encrypt_bucket_payload(&serde_json::to_vec(&payload).unwrap(), &data_key, &path, false)
-                .unwrap(),
+            encrypt_bucket_payload(
+                &serde_json::to_vec(&payload).unwrap(),
+                &data_key,
+                &path,
+                false,
+            )
+            .unwrap(),
         );
 
         // 本机把两行都删了（墓碑都在），但远端桶里还挂着他端那行
@@ -1548,11 +1553,7 @@ mod tests {
         );
 
         // 备忘生效：指纹未变的下一轮不再重复下载核对
-        let checks_before = adapter
-            .downloads()
-            .iter()
-            .filter(|p| *p == &path)
-            .count();
+        let checks_before = adapter.downloads().iter().filter(|p| *p == &path).count();
         push_all(
             &pool,
             &crypto,
@@ -1565,11 +1566,7 @@ mod tests {
         )
         .await
         .unwrap();
-        let checks_after = adapter
-            .downloads()
-            .iter()
-            .filter(|p| *p == &path)
-            .count();
+        let checks_after = adapter.downloads().iter().filter(|p| *p == &path).count();
         assert_eq!(
             checks_after, checks_before,
             "同一远端指纹下不得重复下载核对（成本上界）"

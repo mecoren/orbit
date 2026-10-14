@@ -1155,7 +1155,8 @@ impl SyncAdapter for WebDavAdapter {
                 .await;
         }
         // 借用入参只能复制一次以换成 `Bytes`（换来的是重试不再整包复制）
-        self.put_object_bytes(path, Bytes::from(data.to_vec())).await
+        self.put_object_bytes(path, Bytes::from(data.to_vec()))
+            .await
     }
 
     /// A13：所有权移交版本——`Bytes::from(Vec)` 对独占 `Vec` 是**零拷贝**
@@ -1369,12 +1370,12 @@ impl SyncAdapter for WebDavAdapter {
         let ok = self
             .http
             .put_conditional(
-            &url,
-            headers,
-            Bytes::from(data.to_vec()),
-            if_match,
-            if_none_star,
-        )
+                &url,
+                headers,
+                Bytes::from(data.to_vec()),
+                if_match,
+                if_none_star,
+            )
             .await?;
         Ok(if ok {
             UploadOutcome::Ok
@@ -1578,12 +1579,7 @@ mod tests {
             let fail = Arc::new(Mutex::new(None::<String>));
             let dirs: Arc<Mutex<HashSet<String>>> = Arc::new(Mutex::new(HashSet::new()));
             let deletes: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(Vec::new()));
-            let (objs, fl, dr, dl) = (
-                objects.clone(),
-                fail.clone(),
-                dirs.clone(),
-                deletes.clone(),
-            );
+            let (objs, fl, dr, dl) = (objects.clone(), fail.clone(), dirs.clone(), deletes.clone());
             std::thread::spawn(move || {
                 for stream in listener.incoming().flatten() {
                     let (objs, fl, dr, dl) = (objs.clone(), fl.clone(), dr.clone(), dl.clone());
@@ -1685,7 +1681,7 @@ mod tests {
         assert!(!cache.contains("base/assets"));
     }
 
-// ========================================================================
+    // ========================================================================
     // F82：递归列举 —— 两协议语义对齐（name = 相对路径）
     // ========================================================================
 
@@ -1698,7 +1694,10 @@ mod tests {
     fn entry_basename_always_yields_single_segment() {
         // display_name 已是末段
         assert_eq!(
-            entry_basename(&Some("file.orfullsync".to_string()), "/dav/x/file.orfullsync"),
+            entry_basename(
+                &Some("file.orfullsync".to_string()),
+                "/dav/x/file.orfullsync"
+            ),
             "file.orfullsync"
         );
         // display_name 是整条路径 → 必须取末段
@@ -1780,7 +1779,10 @@ mod tests {
     #[test]
     fn join_relative_handles_root_and_nested() {
         assert_eq!(join_relative("", "a.orsync"), "a.orsync");
-        assert_eq!(join_relative("2026-09", "a.orfullsync"), "2026-09/a.orfullsync");
+        assert_eq!(
+            join_relative("2026-09", "a.orfullsync"),
+            "2026-09/a.orfullsync"
+        );
         assert_eq!(join_relative("a/b", "c.bin"), "a/b/c.bin");
     }
 
@@ -1799,16 +1801,22 @@ mod tests {
             let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("绑定空闲端口");
             let port = listener.local_addr().unwrap().port();
             // 预置一棵两层树：backups/{顶层文件, 2026-09/{子文件}}
-            let objects: Arc<Mutex<HashMap<String, Vec<u8>>>> = Arc::new(Mutex::new(HashMap::from([
-                ("/b/backups/top.orfullsync".to_string(), b"top".to_vec()),
-                ("/b/backups/2026-09/nested.orfullsync".to_string(), b"nested".to_vec()),
-            ])));
+            let objects: Arc<Mutex<HashMap<String, Vec<u8>>>> =
+                Arc::new(Mutex::new(HashMap::from([
+                    ("/b/backups/top.orfullsync".to_string(), b"top".to_vec()),
+                    (
+                        "/b/backups/2026-09/nested.orfullsync".to_string(),
+                        b"nested".to_vec(),
+                    ),
+                ])));
             let objs = objects.clone();
             std::thread::spawn(move || {
                 for stream in listener.incoming().flatten() {
                     let objs = objs.clone();
                     std::thread::spawn(move || {
-                        let Ok(read_half) = stream.try_clone() else { return };
+                        let Ok(read_half) = stream.try_clone() else {
+                            return;
+                        };
                         let mut reader = BufReader::new(read_half);
                         let mut stream = stream;
                         loop {
@@ -1851,7 +1859,7 @@ mod tests {
                                 })
                                 .unwrap_or(target);
                             // 任意路径都按对象键反推目录（不预设根），这样空 prefix（连到 `/`）
-    // 与嵌套 prefix 两种形态都能被同一夹具覆盖
+                            // 与嵌套 prefix 两种形态都能被同一夹具覆盖
                             let reply = tree_propfind(&objs, &path);
                             let head = format!(
                                 "HTTP/1.1 {} X\r\nContent-Length: {}\r\nConnection: keep-alive\r\n\r\n",
@@ -1902,9 +1910,7 @@ mod tests {
             return (404, Vec::new());
         }
         children.sort();
-        let mut xml = String::from(
-            "<?xml version=\"1.0\"?><d:multistatus xmlns:d=\"DAV:\">",
-        );
+        let mut xml = String::from("<?xml version=\"1.0\"?><d:multistatus xmlns:d=\"DAV:\">");
         for (href, is_dir) in children {
             let _ = write!(
                 xml,
@@ -1978,7 +1984,7 @@ mod tests {
         );
     }
 
-/// 单连接请求循环（HTTP/1.1 keep-alive：reqwest 连接池会复用连接）
+    /// 单连接请求循环（HTTP/1.1 keep-alive：reqwest 连接池会复用连接）
     fn serve_webdav(
         mut stream: std::net::TcpStream,
         objects: std::sync::Arc<std::sync::Mutex<std::collections::HashMap<String, Vec<u8>>>>,
