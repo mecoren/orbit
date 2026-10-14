@@ -109,6 +109,27 @@ pub async fn delete_expired_buckets(
     result
 }
 
+/// 删除已从清单剔除的数据分桶对象（N39 空桶收口；尽力而为，口径同上）
+///
+/// 与墓碑回收同一模式、同一顺序约束：调用时机必须是**新清单上传成功之后**——
+/// 此时清单已不再引用这些桶，删除对象不会有设备读到「清单引用但对象不存在」。
+/// 剔除判据在 `push::bucket_fully_deleted_locally`（逐行核对，不是行数比对）。
+pub async fn delete_orphan_chunks(
+    adapter: &dyn SyncAdapter,
+    chunks: &[(String, u32)],
+) -> GcResult {
+    let mut result = GcResult::default();
+    for (table, bucket) in chunks {
+        let path = paths::table_bucket_path(table, *bucket);
+        match adapter.delete(&path).await {
+            Ok(()) => result.deleted_buckets += 1,
+            Err(e) if e.is_not_found() => result.deleted_buckets += 1,
+            Err(e) => result.errors.push(format!("删除 {path} 失败: {e}")),
+        }
+    }
+    result
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

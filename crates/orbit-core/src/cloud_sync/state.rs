@@ -66,6 +66,14 @@ pub struct SyncState {
     /// 远端墓碑桶索引快照：表 → 桶键（YYYY-MM）→ 指纹
     #[serde(default)]
     pub remote_tombstones: BTreeMap<String, BTreeMap<String, String>>,
+    /// N39 核对备忘：表 → 桶号 → **核对时**该桶的远端指纹
+    ///
+    /// 「本机已无该桶存活行」的桶每轮都要判断能否从清单里剔除，判断需要下载
+    /// 并解密该桶逐行核对（见 `push::bucket_fully_deleted_locally`）。核对结论为
+    /// 「不可剔除」时把远端指纹记在这里：指纹未变即跳过重复下载，只损失首轮的
+    /// 一次核对开销。指纹变了说明他端动过该桶，必须重新核对。
+    #[serde(default)]
+    pub undeletable_chunks: BTreeMap<String, BTreeMap<u32, String>>,
 }
 
 impl SyncState {
@@ -80,7 +88,16 @@ impl SyncState {
             manifest_epoch: 0,
             remote_tables: BTreeMap::new(),
             remote_tombstones: BTreeMap::new(),
+            undeletable_chunks: BTreeMap::new(),
         }
+    }
+
+    /// 该桶上次核对为「不可剔除」时的远端指纹（无记录返回 None）
+    pub fn undeletable_fp(&self, table: &str, bucket: u32) -> Option<&str> {
+        self.undeletable_chunks
+            .get(table)
+            .and_then(|m| m.get(&bucket))
+            .map(String::as_str)
     }
 
     /// 上次所见远端数据桶指纹（无记录返回 None）

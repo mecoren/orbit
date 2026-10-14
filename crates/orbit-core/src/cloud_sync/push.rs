@@ -15,16 +15,22 @@
 //! LWW / 复活裁决消费——因此多设备并发 push 不再出现"后写者把前写者
 //! 新增的行整块抹掉"的窗口。
 //!
+//! N39（2026-10-14）在该口径上开一条**有证据的**例外：本地已无存活行、且核对
+//! 证明「该桶远端内容本机全已删（逐行有本地墓碑）」的桶，条目从清单剔除、云端
+//! 对象在清单落定后删除。判据与安全论证见 [`build_table_outcome`]。
+//!
 //! ## 空数据覆盖守卫
 //! 本地全空 + 远端已有数据时阻断 push（删库重装后 sync_state.json 残留的
 //! 场景），要求走恢复流程而非静默清空云端。
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
 use sqlx::SqlitePool;
 
-use crate::cloud_sync::chunk::split_table_items;
-use crate::cloud_sync::crypto_io::{decrypt_payload, encrypt_bucket_payload, encrypt_payload};
+use crate::cloud_sync::chunk::{ChunkPayload, split_table_items};
+use crate::cloud_sync::crypto_io::{
+    decrypt_bucket_payload, decrypt_payload, encrypt_bucket_payload, encrypt_payload,
+};
 use crate::cloud_sync::db_loader::{
     LocalBucketScan, load_table_items, load_table_tombstones, now_ms, scan_local_buckets,
 };
@@ -34,13 +40,19 @@ use crate::cloud_sync::meta::{
 };
 use crate::cloud_sync::paths;
 use crate::cloud_sync::progress::{ProgressBuilder, ProgressSender, SyncOrigin};
-use crate::cloud_sync::state::SyncStateStore;
+use crate::cloud_sync::state::{SyncState, SyncStateStore};
 use crate::db::sync_registry::SYNCABLE_TABLES;
 use crate::sync_adapters::traits::{SyncAdapter, UploadOutcome, UploadPrecondition};
 use crate::sync_crypto::SyncCryptoService;
 
 /// 清单 CAS 冲突后的最大重试次数
 pub const CAS_MAX_RETRIES: u32 = 3;
+
+/// 单轮最多核对的「本地已空、远端仍有条目」分桶数（N39）
+///
+/// 每次核对要下载并解密一个分桶，故设上界：未核对到的桶留待下轮（条目仍在，
+/// 行为等价于本轮不做收口），避免一次同步把几十个陈旧桶全拉一遍。
+const MAX_EMPTY_BUCKET_CHECKS: usize = 8;
 
 /// Push 执行结果
 #[derive(Debug, Clone, Default)]
@@ -227,10 +239,15 @@ async fn push_all_impl(
                     table,
                     force,
                     scan,
+                    &state.undeletable_chunks,
                 )
                 .await,
             );
         }
+
+        // N39：本轮从清单剔除的空桶（清单落定后才删其云端对象）与核对备忘
+        let mut attempt_removed: Vec<(String, u32)> = Vec::new();
+        let mut attempt_undeletable: BTreeMap<String, BTreeMap<u32, String>> = BTreeMap::new();
 
         for outcome in outcomes {
             match outcome {
@@ -241,6 +258,10 @@ async fn push_all_impl(
                     if o.changed {
                         attempt.pushed_modules = 1;
                     }
+                    for bucket in &o.removed_buckets {
+                        attempt_removed.push((o.table.clone(), *bucket));
+                    }
+                    attempt_undeletable.insert(o.table.clone(), o.undeletable);
                     new_manifest.tables.insert(o.table.clone(), o.table_index);
                     new_manifest
                         .tombstones
@@ -294,9 +315,18 @@ async fn push_all_impl(
         // 与 F24 对 `last_synced_at` 建立的「不干净轮次不推进」纪律同源。
         let round_clean = attempt.failed_modules == 0;
 
+        // N39：核对备忘合并（两条保存路径都要带上，否则「不可剔除」的结论每轮重算）
+        let merged_undeletable =
+            merge_undeletable_memo(&state, &attempt_undeletable, &attempt_removed);
+
         // 4. 无任何变化 → 不写清单（避免 epoch 空转与无意义流量）；
         //    force（rekey）下清单必须重加密落盘，不受此短路影响
-        let changed_any = force || attempt.pushed_chunks > 0 || attempt.pushed_tombstones > 0;
+        //    N39：剔除空桶同样是「清单有变更」，必须走写清单路径——否则对象
+        //    被删而清单仍引用它，他端 pull 会 404
+        let changed_any = force
+            || attempt.pushed_chunks > 0
+            || attempt.pushed_tombstones > 0
+            || !attempt_removed.is_empty();
         if !changed_any {
             attempt.skipped_modules = 1;
             attempt.cas_conflicts = result.cas_conflicts;
@@ -304,6 +334,7 @@ async fn push_all_impl(
             if round_clean {
                 let mut next_state = state.clone();
                 next_state.last_synced_at = now_ms();
+                next_state.undeletable_chunks = merged_undeletable;
                 // F41：无变化轮次同样确认了「本轮上界之前的写入已全部在云端」，
                 // 推进 push 水位线使下轮脏集合不包含它们（不动 last_synced_clock_ms
                 // ——那是 pull 侧冲突判据的基线，语义见 state.rs）
@@ -414,8 +445,20 @@ async fn push_all_impl(
             result.errors.extend(gc.errors);
         }
 
+        // 6b. N39：新清单已不再引用这些空桶 → 删除其云端对象（同一顺序约束）
+        if !attempt_removed.is_empty() {
+            let gc = crate::cloud_sync::gc::delete_orphan_chunks(adapter, &attempt_removed).await;
+            log::info!(
+                "[push] 空桶收口：剔除 {} 个已清空分桶，实际删除 {} 个云端对象",
+                attempt_removed.len(),
+                gc.deleted_buckets
+            );
+            result.errors.extend(gc.errors);
+        }
+
         let mut next_state = state.clone();
         next_state.last_synced_at = now_ms();
+        next_state.undeletable_chunks = merged_undeletable;
         // F41：push 水位线推进到本轮上界（不是"现在"——本轮开始后的新写入
         // 必须留给下轮重新判脏）。last_synced_clock_ms 不动，语义见 state.rs。
         // F48：只有**本轮表级全成功**才推进；有失败表时保留旧水位线，
@@ -439,6 +482,10 @@ struct TableOutcome {
     pushed_tombstones: u32,
     /// 该表是否有任何上传
     changed: bool,
+    /// N39：本轮从清单剔除的「本地已清空」分桶（清单落定后删其云端对象）
+    removed_buckets: Vec<u32>,
+    /// N39：核对结论为**不可剔除**的桶 → 核对时的远端指纹（写进账本备忘）
+    undeletable: BTreeMap<u32, String>,
 }
 
 /// 单表差量计算与上传（错误隔离单元）
@@ -448,6 +495,11 @@ struct TableOutcome {
 /// （他端已推、本机尚未拉到的桶）原样保留——此前整体替换会把它们
 /// 变成清单不再引用的孤儿，他端数据对所有设备消失。删除语义由墓碑
 /// 表达，保留陈旧桶条目不会复活已删行（pull 侧 LWW/墓碑裁决兜底）。
+///
+/// N39（2026-10-14）在此之上加一条**有证据的**例外：本地已无存活行、
+/// 且核对证明「该桶远端内容本机全已删」的桶，条目从清单剔除（云端对象
+/// 在清单落定后删除）。核对实现见 [`bucket_fully_deleted_locally`]，
+/// 备忘见 [`SyncState::undeletable_chunks`]。
 async fn build_table_outcome(
     db_pool: &SqlitePool,
     adapter: &dyn SyncAdapter,
@@ -456,6 +508,7 @@ async fn build_table_outcome(
     table: &str,
     force: bool,
     scan: Option<&LocalBucketScan>,
+    undeletable_known: &BTreeMap<String, BTreeMap<u32, String>>,
 ) -> Result<TableOutcome, TableError> {
     // F64（2026-10-01 第六轮）：force（rekey）轮索引**不以远端清单为底**。
     // 「远端有、本机无」的桶条目对应的云端对象仍是旧 Key 密文（本机没拉到过、
@@ -540,6 +593,63 @@ async fn build_table_outcome(
         );
     }
 
+    // ── N39：本地已清空的桶，条目不能永久留在清单里 ─────────────────────
+    //
+    // 背景：非 force 轮索引以**远端为底**（头注），本地把某桶的行全删光后条目
+    // 仍被保留 → 他端（尤其新设备首同步）每轮都要下载这批陈旧行再靠墓碑把它们
+    // 删掉，云端对象也永久留着。
+    //
+    // 判据必须是「桶内每一行本机都已知删除」，**不能**用行数比对：远端 chunk 只记
+    // `count/fp` 不知道 uuid，「本机该桶存活 0 行」既可能是本机删光，也可能是
+    // 「他端刚推、本机还没拉到」。故这里下载该桶逐行核对（见
+    // [`bucket_fully_deleted_locally`]）：仅当桶内每个 uuid 在本机都有 `is_deleted = 1`
+    // 的行才剔除条目——此时不可能丢任何存活行：桶内行全在墓碑索引里（删除语义照旧
+    // 传播），而**不在**该 chunk 里的存活行（他端尚未推上来）云端本来就没有，他端
+    // 下次 push 会把条目重新建起来。
+    //
+    // 核对不通过 → 条目原样保留，并把当时的远端指纹写进账本备忘，指纹未变则
+    // 不重复下载（`SyncState::undeletable_chunks`）。
+    let mut removed_buckets: Vec<u32> = Vec::new();
+    let mut undeletable: BTreeMap<u32, String> = BTreeMap::new();
+    if !force && let Some(scan) = scan {
+        let candidates: Vec<(u32, String)> = table_index
+            .chunks
+            .iter()
+            .filter(|(bucket, _)| scan.live_counts.get(bucket).copied().unwrap_or(0) == 0)
+            .map(|(bucket, r)| (*bucket, r.fp.clone()))
+            .collect();
+        for (bucket, fp) in candidates.into_iter().take(MAX_EMPTY_BUCKET_CHECKS) {
+            let memoized = undeletable_known
+                .get(table)
+                .and_then(|m| m.get(&bucket))
+                .is_some_and(|known| known == &fp);
+            if memoized {
+                undeletable.insert(bucket, fp);
+                continue;
+            }
+            match bucket_fully_deleted_locally(db_pool, adapter, data_key, table, bucket).await {
+                Ok(true) => {
+                    log::info!(
+                        "[push] 空桶收口：{table} 桶 {bucket} 内行本机全已删（墓碑在），\
+                         从清单剔除，清单落定后删云端对象"
+                    );
+                    removed_buckets.push(bucket);
+                }
+                Ok(false) => {
+                    undeletable.insert(bucket, fp);
+                }
+                // 核对失败（网络/解密/解析）不是「不可剔除」的结论，不记备忘，
+                // 下轮重试；条目保持原样，行为等价于本特性未启用
+                Err(e) => {
+                    log::warn!("[push] 空桶核对失败（保留条目，下轮重试）: {table}/{bucket}: {e}");
+                }
+            }
+        }
+        for bucket in &removed_buckets {
+            table_index.chunks.remove(bucket);
+        }
+    }
+
     // 墓碑分桶差量（索引同数据桶口径：远端为底 + 本地覆盖；force 轮见上）
     let mut tombstone_index = if force {
         Default::default()
@@ -615,8 +725,97 @@ async fn build_table_outcome(
         pushed_chunks,
         skipped_chunks,
         pushed_tombstones,
-        changed: pushed_chunks > 0 || pushed_tombstones > 0,
+        // N39：剔除空桶同样改变了清单内容，必须视为「有变更」——否则
+        // `changed_any` 短路不写清单，而对象却已被删除，云端会留下
+        // 「清单引用 + 对象不存在」的坏引用（他端 404）
+        changed: pushed_chunks > 0 || pushed_tombstones > 0 || !removed_buckets.is_empty(),
+        removed_buckets,
+        undeletable,
     })
+}
+
+/// N39：合并核对备忘——本轮核对过的表用新结论整体覆盖（空 map 也要覆盖，
+/// 否则上一轮记下的陈旧「不可剔除」会一直生效），被剔除的桶顺手清掉旧结论。
+///
+/// 未参与本轮的失败表不出现在 `checked` 里，其旧备忘原样保留（其条目这轮也没动）。
+fn merge_undeletable_memo(
+    state: &SyncState,
+    checked: &BTreeMap<String, BTreeMap<u32, String>>,
+    removed: &[(String, u32)],
+) -> BTreeMap<String, BTreeMap<u32, String>> {
+    let mut merged = state.undeletable_chunks.clone();
+    for (table, map) in checked {
+        merged.insert(table.clone(), map.clone());
+    }
+    for (table, bucket) in removed {
+        if let Some(map) = merged.get_mut(table) {
+            map.remove(bucket);
+        }
+    }
+    merged
+}
+
+/// N39：核对「远端该分桶内的行，本机是否全部已知删除」
+///
+/// 返回 `true` 才允许把该桶条目从清单剔除。判据逐行核对**不猜行数**：
+///
+/// 1. 下载并解密远端该桶（`decrypt_bucket_payload` 兼容 0x01/0x02 两种密文）；
+/// 2. 桶内每个 uuid 在本机表中都必须存在且 `is_deleted = 1`；
+/// 3. 任一 uuid 在本机**不存在**（他端刚推、本机未拉到；或回收站 purge 物理删过）
+///    或仍然存活 → 返回 `false`（条目保留）。
+///
+/// 为什么行数比对不安全：远端 chunk 只记 `count/fp`，不知道 uuid 集合；
+/// 「本机该桶存活 0 行 + 本机墓碑数 ≥ 远端 count」仍可能是「本机删的是自己那批行、
+/// 远端留的是他端刚推的另一批行」，剔除即把他端存活行变成孤儿。
+async fn bucket_fully_deleted_locally(
+    db_pool: &SqlitePool,
+    adapter: &dyn SyncAdapter,
+    data_key: &[u8],
+    table: &str,
+    bucket: u32,
+) -> Result<bool, CloudSyncError> {
+    let path = paths::table_bucket_path(table, bucket);
+    let raw = match adapter.download(&path).await {
+        Ok(bytes) => bytes,
+        // 对象已不在（他端清理/人为删过）：不剔除——条目要么被常规差量路径重传，
+        // 要么由他端下次 push 修正，本特性不介入
+        Err(e) if e.is_not_found() => return Ok(false),
+        Err(e) => {
+            return Err(CloudSyncError::Other {
+                message: format!("下载待核对分桶 {path} 失败: {e}"),
+            });
+        }
+    };
+    let plain = decrypt_bucket_payload(&raw, data_key, &path)?;
+    let payload: ChunkPayload = serde_json::from_slice(&plain)?;
+    // 载荷自描述校验：路径与内容不一致说明对象被搬到别的桶位（AAD 未绑定时
+    // 明文校验是唯一防线），此时不得据它剔除任何条目
+    if payload.table != table || payload.bucket != bucket {
+        return Ok(false);
+    }
+    if payload.items.is_empty() {
+        return Ok(false);
+    }
+    for item in &payload.items {
+        let uuid = item.get("uuid").and_then(|v| v.as_str()).unwrap_or("");
+        if uuid.is_empty() {
+            return Ok(false);
+        }
+        let row: Option<(i64,)> = sqlx::query_as(&format!(
+            "SELECT is_deleted FROM \"{table}\" WHERE uuid = ?"
+        ))
+        .bind(uuid)
+        .fetch_optional(db_pool)
+        .await
+        .map_err(|e| CloudSyncError::Database {
+            message: format!("核对分桶 {path} 的行 {uuid} 失败: {e}"),
+        })?;
+        match row {
+            Some((deleted,)) if deleted == 1 => {}
+            _ => return Ok(false),
+        }
+    }
+    Ok(true)
 }
 
 /// 表级错误（错误隔离单元）
@@ -788,6 +987,10 @@ mod tests {
         files: Mutex<HashMap<String, Vec<u8>>>,
         version: Mutex<u64>,
         uploads: Mutex<Vec<String>>,
+        /// 已收到的 DELETE 路径（N39 空桶收口断言用）
+        deletes: Mutex<Vec<String>>,
+        /// 已收到的 GET 路径（N39 核对次数断言用）
+        downloads: Mutex<Vec<String>>,
         /// 置 true 时条件写恒报冲突（模拟他端持续并发写入，耗尽 CAS 重试）
         conflict_all: Mutex<bool>,
         /// 置为某子串时，路径包含它的普通 `upload` 恒失败（注入单表上传故障）
@@ -800,9 +1003,19 @@ mod tests {
                 files: Mutex::new(HashMap::new()),
                 version: Mutex::new(0),
                 uploads: Mutex::new(Vec::new()),
+                deletes: Mutex::new(Vec::new()),
+                downloads: Mutex::new(Vec::new()),
                 conflict_all: Mutex::new(false),
                 fail_upload_contains: Mutex::new(None),
             }
+        }
+
+        fn deletes(&self) -> Vec<String> {
+            self.deletes.lock().unwrap().clone()
+        }
+
+        fn downloads(&self) -> Vec<String> {
+            self.downloads.lock().unwrap().clone()
         }
 
         fn put(&self, path: &str, data: Vec<u8>) {
@@ -817,6 +1030,7 @@ mod tests {
     #[async_trait]
     impl SyncAdapter for MemAdapter {
         async fn download(&self, path: &str) -> Result<Vec<u8>, SyncError> {
+            self.downloads.lock().unwrap().push(path.to_string());
             self.files
                 .lock()
                 .unwrap()
@@ -841,8 +1055,16 @@ mod tests {
             self.put(path, data.to_vec());
             Ok(())
         }
-        async fn delete(&self, _: &str) -> Result<(), SyncError> {
-            Ok(())
+        async fn delete(&self, path: &str) -> Result<(), SyncError> {
+            // 真实语义：记录 DELETE 并移除对象；对象不存在时回 NotFound
+            // （生产适配器同口径，`gc` 侧把 NotFound 视为删除成功）
+            self.deletes.lock().unwrap().push(path.to_string());
+            match self.files.lock().unwrap().remove(path) {
+                Some(_) => Ok(()),
+                None => Err(SyncError::NotFound {
+                    message: path.to_string(),
+                }),
+            }
         }
         async fn upload_asset(&self, _: &str, _: &[u8]) -> Result<(), SyncError> {
             Ok(())
@@ -1110,26 +1332,256 @@ mod tests {
         assert!(!result.manifest_written);
     }
 
+    /// 取两个同桶 uuid（桶号是 sha256 取模，循环搜索必然命中）
+    fn same_bucket_pair() -> (String, String) {
+        let mut seen: HashMap<u32, String> = HashMap::new();
+        for i in 0..200 {
+            let uuid = format!("row-{i}");
+            let bucket = crate::cloud_sync::chunk::bucket_of_uuid(&uuid);
+            if let Some(prev) = seen.get(&bucket) {
+                return (prev.clone(), uuid);
+            }
+            seen.insert(bucket, uuid);
+        }
+        panic!("200 个 uuid 对 64 桶必然碰撞");
+    }
+
+    /// 软删某表一行的测试助手（墓碑时间戳用当前逻辑时钟）
+    async fn soft_delete(pool: &SqlitePool, table: &str, uuid: &str) {
+        let now = crate::db::clock::next_ms();
+        sqlx::query(&format!(
+            "UPDATE {table} SET is_deleted = 1, deleted_at = ?, updated_at = ? WHERE uuid = ?"
+        ))
+        .bind(now)
+        .bind(now)
+        .bind(uuid)
+        .execute(pool)
+        .await
+        .unwrap();
+    }
+
+    /// N39：本地把某桶的行全删光后，清单条目与云端对象都不得继续留着
+    ///
+    /// 分两段钉住判据边界：**同桶仍有活行**时条目与对象必须原样保留（他端数据
+    /// 不能被孤儿化），**同桶行全删**（且本机留有墓碑）时条目剔除、并在清单落定后
+    /// 删对象——他端（尤其新设备首同步）不必再下载这批陈旧行再靠墓碑删掉。
+    #[tokio::test]
+    async fn empty_bucket_is_dropped_and_object_deleted_after_all_rows_deleted() {
+        let (pool, crypto, store, _tmp) = env().await;
+        let (uuid_a, uuid_b) = same_bucket_pair();
+        assert_ne!(uuid_a, uuid_b);
+        let bucket = crate::cloud_sync::chunk::bucket_of_uuid(&uuid_a);
+        assert_eq!(bucket, crate::cloud_sync::chunk::bucket_of_uuid(&uuid_b));
+        let path = paths::table_bucket_path("todo_projects", bucket);
+
+        for uuid in [&uuid_a, &uuid_b] {
+            sqlx::query(
+                "INSERT INTO todo_projects (uuid, title, created_at, updated_at) VALUES (?,'P',1,1)",
+            )
+            .bind(uuid)
+            .execute(&pool)
+            .await
+            .unwrap();
+        }
+        let adapter = MemAdapter::new();
+        push_all(
+            &pool,
+            &crypto,
+            &store,
+            &adapter,
+            &NoopProgressSender,
+            SyncOrigin::Manual,
+            "dev-1",
+            &[],
+        )
+        .await
+        .unwrap();
+        assert!(adapter.get(&path).is_some(), "前置条件：桶对象已在云端");
+
+        // 段一：只删同桶的一行 → 桶内仍有活行，条目与对象都必须保留
+        soft_delete(&pool, "todo_projects", &uuid_a).await;
+        let result = push_all(
+            &pool,
+            &crypto,
+            &store,
+            &adapter,
+            &NoopProgressSender,
+            SyncOrigin::Manual,
+            "dev-1",
+            &[],
+        )
+        .await
+        .unwrap();
+        assert_eq!(result.pushed_chunks, 1, "桶内活行 2→1 仍须重算重传");
+        assert!(
+            !adapter.deletes().contains(&path),
+            "桶内还有活行时不得剔除条目/删对象（防他端数据被孤儿化）: {:?}",
+            adapter.deletes()
+        );
+        let (manifest, _, _) = read_remote_manifest(&adapter, &[7u8; 32]).await.unwrap();
+        assert!(
+            manifest
+                .table("todo_projects")
+                .unwrap()
+                .chunks
+                .contains_key(&bucket),
+            "桶内仍有活行 → 条目保留"
+        );
+
+        // 段二：删掉桶内最后一行（墓碑留在本机）→ 条目剔除 + 对象删除
+        soft_delete(&pool, "todo_projects", &uuid_b).await;
+        let result = push_all(
+            &pool,
+            &crypto,
+            &store,
+            &adapter,
+            &NoopProgressSender,
+            SyncOrigin::Manual,
+            "dev-1",
+            &[],
+        )
+        .await
+        .unwrap();
+        assert_eq!(result.pushed_chunks, 0, "桶内已无活行 → 本轮只有清单收口");
+        assert!(
+            result.manifest_written,
+            "剔除条目必须写清单——否则对象被删而清单仍引用它，他端 pull 404"
+        );
+        assert!(
+            adapter.deletes().contains(&path),
+            "空桶对象必须删除: {:?}",
+            adapter.deletes()
+        );
+        assert!(adapter.get(&path).is_none(), "对象应已从云端移除");
+        let (manifest, _, _) = read_remote_manifest(&adapter, &[7u8; 32]).await.unwrap();
+        assert!(
+            !manifest
+                .table("todo_projects")
+                .unwrap()
+                .chunks
+                .contains_key(&bucket),
+            "空桶条目必须从清单剔除"
+        );
+    }
+
+    /// N39 反向：远端桶里有**本机不知道的行**时必须保留条目
+    ///
+    /// 「本机该桶存活 0 行」不等于「桶内行全已删」——他端刚推、本机还没拉到的行
+    /// 也长这样，剔除条目会让它变成孤儿（对所有设备消失）。这里手工往远端桶内容里
+    /// 塞一条本机没有的行，核对必须拒绝剔除，并把结论记进账本备忘（指纹未变则
+    /// 下轮不再重复下载核对——成本上界靠这条）。
+    #[tokio::test]
+    async fn bucket_with_row_unknown_locally_is_kept_and_memoized() {
+        let (pool, crypto, store, _tmp) = env().await;
+        let (uuid_a, uuid_b) = same_bucket_pair();
+        let bucket = crate::cloud_sync::chunk::bucket_of_uuid(&uuid_a);
+        let path = paths::table_bucket_path("todo_projects", bucket);
+        let data_key = [7u8; 32];
+
+        for uuid in [&uuid_a, &uuid_b] {
+            sqlx::query(
+                "INSERT INTO todo_projects (uuid, title, created_at, updated_at) VALUES (?,'P',1,1)",
+            )
+            .bind(uuid)
+            .execute(&pool)
+            .await
+            .unwrap();
+        }
+        let adapter = MemAdapter::new();
+        push_all(
+            &pool,
+            &crypto,
+            &store,
+            &adapter,
+            &NoopProgressSender,
+            SyncOrigin::Manual,
+            "dev-1",
+            &[],
+        )
+        .await
+        .unwrap();
+
+        // 模拟「他端已推、本机尚未拉到」：远端桶里多一条本机没有的行
+        let raw = adapter.get(&path).expect("首轮已上传该桶");
+        let plain = decrypt_bucket_payload(&raw, &data_key, &path).unwrap();
+        let mut payload: ChunkPayload = serde_json::from_slice(&plain).unwrap();
+        payload.items.push(serde_json::json!({
+            "uuid": "foreign-row-1",
+            "title": "他端新行",
+            "is_deleted": 0,
+        }));
+        adapter.put(
+            &path,
+            encrypt_bucket_payload(&serde_json::to_vec(&payload).unwrap(), &data_key, &path, false)
+                .unwrap(),
+        );
+
+        // 本机把两行都删了（墓碑都在），但远端桶里还挂着他端那行
+        soft_delete(&pool, "todo_projects", &uuid_a).await;
+        soft_delete(&pool, "todo_projects", &uuid_b).await;
+        push_all(
+            &pool,
+            &crypto,
+            &store,
+            &adapter,
+            &NoopProgressSender,
+            SyncOrigin::Manual,
+            "dev-1",
+            &[],
+        )
+        .await
+        .unwrap();
+
+        assert!(
+            !adapter.deletes().contains(&path),
+            "桶内含本机未知行 → 不得剔除（否则他端存活行变孤儿）: {:?}",
+            adapter.deletes()
+        );
+        let (manifest, _, _) = read_remote_manifest(&adapter, &data_key).await.unwrap();
+        assert!(
+            manifest
+                .table("todo_projects")
+                .unwrap()
+                .chunks
+                .contains_key(&bucket),
+            "条目必须保留"
+        );
+
+        // 备忘生效：指纹未变的下一轮不再重复下载核对
+        let checks_before = adapter
+            .downloads()
+            .iter()
+            .filter(|p| *p == &path)
+            .count();
+        push_all(
+            &pool,
+            &crypto,
+            &store,
+            &adapter,
+            &NoopProgressSender,
+            SyncOrigin::Manual,
+            "dev-1",
+            &[],
+        )
+        .await
+        .unwrap();
+        let checks_after = adapter
+            .downloads()
+            .iter()
+            .filter(|p| *p == &path)
+            .count();
+        assert_eq!(
+            checks_after, checks_before,
+            "同一远端指纹下不得重复下载核对（成本上界）"
+        );
+    }
+
     /// F41：软删行的时间戳可能早于水位线（merge 墓碑锚定远端删除时间），
     /// 「行数比对」判据必须兜住「桶内活行减少」——纯时间戳判据是盲的
     #[tokio::test]
     async fn tombstone_applied_row_triggers_bucket_recompute() {
         let (pool, crypto, store, _tmp) = env().await;
-        // 两个同桶 uuid（桶号是 sha256 取模，循环搜索必然命中）
-        let (uuid_a, uuid_b) = {
-            let mut seen: HashMap<u32, String> = HashMap::new();
-            let mut pair = None;
-            for i in 0..200 {
-                let uuid = format!("row-{i}");
-                let bucket = crate::cloud_sync::chunk::bucket_of_uuid(&uuid);
-                if let Some(prev) = seen.get(&bucket) {
-                    pair = Some((prev.clone(), uuid));
-                    break;
-                }
-                seen.insert(bucket, uuid);
-            }
-            pair.expect("200 个 uuid 对 64 桶必然碰撞")
-        };
+        let (uuid_a, uuid_b) = same_bucket_pair();
         assert_ne!(uuid_a, uuid_b);
 
         for uuid in [&uuid_a, &uuid_b] {
