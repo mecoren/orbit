@@ -42,16 +42,19 @@ impl AppState {
 // 不再声明 tauri::mobile_entry_point。
 pub fn run() {
     // WebView2 内存参数（2026-09-12 F5/M3，Windows）：
-    // - --js-flags=--max-old-space-size=512：V8 老生代上限 512MB——万级任务
-    //   驻留数据下默认堆无界增长后 WebView2 不主动裁剪（09-10 实测隐藏
-    //   75s 不降反升）；设上限促 GC 压实，防长驻会话堆缓慢膨胀。
     // - --disk-cache-size=52428800：磁盘缓存 50MB 封顶，防附件/图片
     //   预览撑大 cache 目录。
+    //
+    // 2026-10-14（内存专项 A12）**删掉**原 `--js-flags=--max-old-space-size=512`：
+    // V8 老生代限额属「治标且可能把 OOM 变成用户可见崩溃」，ADR 0006 §五已否决，
+    // 本轮把残留参数清掉。当初设它的动因是万级任务下堆只增不减（09-10 实测隐藏
+    // 75s 不降反升），该线性项已由 A14（逾期置顶段并入同一条虚拟流）从源头消除，
+    // 并有 `perf-metrics/growth-curve.mjs` 门禁拦回退——不再需要靠限额促 GC。
     // 仅 Windows WebView2 生效（macOS WKWebView / Linux webkitgtk 忽略），
     // 须在 webview 创建前设置，故放 run() 最前。
     #[cfg(target_os = "windows")]
     {
-        const ARGS: &str = "--js-flags=--max-old-space-size=512 --disk-cache-size=52428800";
+        const ARGS: &str = "--disk-cache-size=52428800";
         // 已有外部覆盖（调试场景）时不强写。set_var 在 Rust 2024 是 unsafe：
         // 安全前提 = run() 由 main 单线程进入、此时尚无其他线程存活
         // （Tauri runtime/守护线程都在 builder.run 之后才起）。

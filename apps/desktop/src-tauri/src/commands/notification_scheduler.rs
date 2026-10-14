@@ -38,7 +38,7 @@
 //!
 //! 已剔除 wait-home 版的 important_events 段。
 
-use std::collections::HashSet;
+use std::collections::BTreeSet;
 use std::time::Duration;
 
 use once_cell::sync::Lazy;
@@ -64,8 +64,16 @@ static POLLER_STARTED: std::sync::atomic::AtomicBool = std::sync::atomic::Atomic
 ///
 /// 键带 remind_at 而非只带 id：持续提醒顺延后同一行会再次到期（G2），
 /// 按 id 去重只弹第一轮。重启后允许重新扫描历史 24h 内项。
-static NOTIFIED_REMINDERS: Lazy<std::sync::Mutex<HashSet<(i64, i64)>>> =
-    Lazy::new(|| std::sync::Mutex::new(HashSet::new()));
+///
+/// bounded: 上限 [`NOTIFIED_REMINDERS_MAX`] 条，插入时超限丢最小键
+/// （id 单调递增 → 最小即最旧、已被 `advance_fired_reminder` 处置的那条）；
+/// 有界化实现见 `orbit_core::bounded::insert_bounded`（A7，与移动壳同源）。
+static NOTIFIED_REMINDERS: Lazy<std::sync::Mutex<BTreeSet<(i64, i64)>>> =
+    Lazy::new(|| std::sync::Mutex::new(BTreeSet::new()));
+
+/// 去重集合上界：单机 24h 窗口内的到期提醒量级远小于此（每提醒每轮至多一条，
+/// 且 [`BATCH_LIMIT`] 已限单轮扫描条数）；到顶即按最旧淘汰。
+const NOTIFIED_REMINDERS_MAX: usize = 5000;
 
 /// 启动首轮完成标记：首轮须跳过「历史遗留」过期提醒——
 /// 用户未运行应用期间错过的时间点（如上午 8 点的提醒，中午 12 点才启动）
@@ -155,7 +163,11 @@ async fn poll_once(app: &AppHandle) {
         // 后续轮次也不会再弹；应用运行期间到期的提醒走正常路径。
         let is_first_round = !FIRST_ROUND_DONE.load(std::sync::atomic::Ordering::SeqCst);
         if is_first_round && now - row.remind_at > STALE_SKIP_MS {
-            NOTIFIED_REMINDERS.lock().unwrap().insert(dedupe_key);
+            orbit_core::bounded::insert_bounded(
+                &mut NOTIFIED_REMINDERS.lock().unwrap(),
+                dedupe_key,
+                NOTIFIED_REMINDERS_MAX,
+            );
             continue;
         }
 
@@ -210,8 +222,13 @@ async fn poll_once(app: &AppHandle) {
             let _ = orbit_core::api::todo_api::advance_fired_reminder(&pool, &row).await;
         });
 
-        // ④ 记入去重集合
-        NOTIFIED_REMINDERS.lock().unwrap().insert(dedupe_key);
+        // ④ 记入去重集合（有界插入 A7：超 NOTIFIED_REMINDERS_MAX 丢最小键，
+        //    防长驻会话只增不减）
+        orbit_core::bounded::insert_bounded(
+            &mut NOTIFIED_REMINDERS.lock().unwrap(),
+            dedupe_key,
+            NOTIFIED_REMINDERS_MAX,
+        );
     }
 
     // 首轮标记在处理完本轮扫描后置位（无论 DB 是否就绪——未就绪时

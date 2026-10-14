@@ -39,20 +39,7 @@
     "domNodesSlope_per_1k": "每千行 DOM 节点增量，A14 后 0。阈值 30 的用途：任何**新增**的整列表裸渲染都会把斜率抬到数百（逾期分组当年是 900）而被拦下，不受绝对量登记放松影响",
     "rssMB_10k": "浏览器进程树 RSS（按 pid 子树收敛，不含本机日常浏览器）。A14 后 354MB（前 433），已贴近目标 350。与 09-12 报告「同前端 Chromium 10k 423MB」互证同量级；真机 Tauri exe 另走 memory3.mjs"
   },
-  "knownUnbounded": [
-    {
-      "file": "crates/orbit-flutter/src/api/events.rs",
-      "rule": "rust-static-collection",
-      "count": 1,
-      "note": "NOTIFIED_REMINDERS 只插不删（A7 改 BTreeSet + 超 5000 丢最小 id）"
-    },
-    {
-      "file": "apps/desktop/src-tauri/src/commands/notification_scheduler.rs",
-      "rule": "rust-static-collection",
-      "count": 1,
-      "note": "桌面侧同款 NOTIFIED_REMINDERS（A7 同批）"
-    }
-  ],
+  "knownUnbounded": [],
   "measured": {
     "usedJSHeapMB_1k": 11.9,
     "usedJSHeapMB_10k": 37,

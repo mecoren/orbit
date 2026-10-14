@@ -16,6 +16,13 @@
 
 ## [Unreleased]
 
+### 内存清账批：A7 去重集合有界化 + A11 墓碑水位线复核 + A12 V8 参数收口（2026-10-14）
+
+- **A7 常驻集合有界化**（最后一组 `knownUnbounded` 登记）：双端提醒轮询各持一份「已通知去重集合」`(reminder.id, remind_at)`，只插不删、长驻会话单调增长。新增 core 纯函数 `orbit-core/src/bounded.rs::insert_bounded`（插入后收敛回上界，超限丢**最小**键——键有序，最小即最旧、其提醒行早被 `advance_fired_reminder` 处置；上界钳到 ≥1 保去重语义）＋ 5 例单测；移动 `crates/orbit-flutter/src/api/events.rs`、桌面 `notification_scheduler.rs` 改 `BTreeSet` + 常量 `NOTIFIED_REMINDERS_MAX = 5000`，双端共用同一份实现。去重口径不变（键带 `remind_at`，持续提醒顺延后再弹，docs/03 §五）。`perf-metrics/baselines.json` 的 `knownUnbounded` 据此清空（棘轮只降不升），`audit-unbounded --gate` 拦停违例 0 组、登记 0 组。
+- **A11 墓碑水位线复核收口**（无代码缺口，结论入库）：判据已由 F52（第六轮）改为「所有设备 `last_pulled_at` 的最小值」，四条不变量各有用例钉住——设备数 < 2 归零、取最小值、`push_only` 不抬高水位线、任一设备从未 pull（含存量清单缺字段）归零；GC 的「先上传剔除过期条目的新清单、再删云端墓碑对象」顺序约束与「上一版清单已存在的桶才可回收」豁免都在 `cloud_sync/gc.rs` 模块文档内。剩余是**红线不是缺口**：设备注销（N15）会移出低水位线设备从而抬高水位线，ADR 0010 明示动它前必须先复核本判据。
+- **A12 清掉残留 V8 堆上限参数**：`apps/desktop/src-tauri/src/lib.rs` 的 WebView2 附加参数删掉 `--js-flags=--max-old-space-size=512`，只留 `--disk-cache-size=52428800`（磁盘缓存 50MB 封顶）。依据：V8 老生代限额「治标且可能把 OOM 变成用户可见崩溃」，ADR 0006 §五已否决、ADR 0007 §四把「清存量参数」列为 A12 的全部职责；当初设它的动因（万级任务下堆只增不减）已由 A14 从源头消除，并有 `growth-curve.mjs` 门禁拦回退。
+- **顺带登记仍不做的两项**：A13（附件零拷贝）维持第五轮 N40 结论（trait 全换异步读 + 两适配器 + mock + 分片协议，成本收益倒挂；且 ADR 0010 要求它与 A10 的「指纹相等、零上传」归因口径同批）;应用内诊断分区缺仓内规格，须先定读数面。docs/09 的「未做且已知在下一波」清单已据此收敛。
+
 ### 性能：任务列表通道瘦行 DTO 收口（内存治理 A2，2026-10-14）
 
 - **裁列**：`todo_tasks` 列表通道由 `TodoTask`（29 列）改独立瘦行 `TodoTaskListItem`（19 列），整体去掉 10 个「列表零消费」列——`uuid`、`repeat_after`、六个更细的 `repeat_*`（weekdays / end_type / end_param / from_done / month_mode / nth_week）、`deleted_at`、`version`。占位表达式只省值、省不掉键名（`"repeat_end_type":0,` 一行 20 字节），故走独立 DTO 而非 `NULL AS ...`（docs/09 §4.3 的既定路径）；桌面 IPC 与 FRB 桥两端的解码/对象分配同步变薄。

@@ -16,6 +16,7 @@ pub mod context;
 pub mod error;
 
 // 基础能力域
+pub mod bounded;
 pub mod config_enc;
 pub mod crypto;
 pub mod fs_util;
