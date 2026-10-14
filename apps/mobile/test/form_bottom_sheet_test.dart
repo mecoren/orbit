@@ -438,10 +438,18 @@ void main() {
     await tester.pumpAndSettle();
 
     final now = DateTime.now();
-    // 回显走 formatDueShort 口径（本月 15 号零点；15 号落在今天±1 时出相对文案）
+    // 回显走 formatDueShort 口径（本月 15 号零点；15 号落在今天±1 时出相对
+    // 文案「明天/昨天」）。**按行定位**：本月 15 号恰为明天时，值行「明天」
+    // 与日期卡快捷胶囊「明天」会同名——裸 find.text 会撞两个（2026-10-14
+    // 实测假红），故限定在「开始日期」行的值单元格内断言
     final expected = formatDueShort(
         DateTime(now.year, now.month, 15).millisecondsSinceEpoch);
-    expect(find.text(expected), findsOneWidget);
+    final startRow = find.ancestor(
+      of: find.text('开始日期'),
+      matching: find.byType(Row),
+    );
+    expect(find.descendant(of: startRow, matching: find.text(expected)),
+        findsOneWidget);
   });
 
   group('syncTaskReminder（桌面端同语义：清空删/变更删旧建新/未动跳过）', () {
