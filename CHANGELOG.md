@@ -16,6 +16,12 @@
 
 ## [Unreleased]
 
+### 文档：云同步观察项复核（N50 划线 / N39、N52 维持不做，2026-10-14）
+
+- **N50 划线**：`manifest.prev.orsync` 存上一版旧 Key 密文的问题已随 F64（2026-10-01 第五批）收口——force 轮改写为**本版新 Key 密文**，回滚点有效性成立，用例 `force_push_tolerates_undecryptable_manifest_and_reencrypts_prev` 与 `rekey_overwrites_old_key_cloud_and_cleans_legacy_config` 锁定。第六轮报告表内此前未同步划线（同文「本轮未做」段落的「N36/N50 已随 F80/F64 顺带收口」即同一结论）。
+- **N39「桶变空不清理云端活行桶对象」维持不做（结论细化）**：机制比「留孤儿对象」更重——非 force 轮表索引以远端清单为底（`push.rs:467-471`），本地某桶全被软删后该桶条目**仍留在清单里**，他端（尤其新设备首同步）会持续下载这批陈旧行再靠墓碑删掉。安全清空需要「桶内全墓碑」判据，而远端 chunk 只记 `count/fp`、不知道具体 uuid，且并发窗口下「本地此桶无活行」可能把他端刚推的行踢出清单（有 UGC 重传兜底但属数据面扰动）——故判据必须与墓碑 GC 一并设计。
+- **N52「行级增量 / change-log 表」维持不做**：需新迁移 + 新合并语义 + 全写路径的时钟推进契约（现状是引擎在自己事务内隐式推进），收益只是把 F41 已降到 O(变更) 的常数再压小；架构演进项，无排期。
+
 ### 内存清账批：A7 去重集合有界化 + A11 墓碑水位线复核 + A12 V8 参数收口（2026-10-14）
 
 - **A7 常驻集合有界化**（最后一组 `knownUnbounded` 登记）：双端提醒轮询各持一份「已通知去重集合」`(reminder.id, remind_at)`，只插不删、长驻会话单调增长。新增 core 纯函数 `orbit-core/src/bounded.rs::insert_bounded`（插入后收敛回上界，超限丢**最小**键——键有序，最小即最旧、其提醒行早被 `advance_fired_reminder` 处置；上界钳到 ≥1 保去重语义）＋ 5 例单测；移动 `crates/orbit-flutter/src/api/events.rs`、桌面 `notification_scheduler.rs` 改 `BTreeSet` + 常量 `NOTIFIED_REMINDERS_MAX = 5000`，双端共用同一份实现。去重口径不变（键带 `remind_at`，持续提醒顺延后再弹，docs/03 §五）。`perf-metrics/baselines.json` 的 `knownUnbounded` 据此清空（棘轮只降不升），`audit-unbounded --gate` 拦停违例 0 组、登记 0 组。
