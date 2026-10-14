@@ -122,20 +122,36 @@ pub trait SyncAdapter: Send + Sync {
     /// 上传文件
     async fn upload(&self, path: &str, data: &[u8]) -> Result<(), SyncError>;
 
+    /// 上传文件（**移交缓冲区所有权**，A13 零拷贝）
+    ///
+    /// 与 [`Self::upload`] 语义完全一致，区别只是 `data` 的所有权：适配器可以把
+    /// `Vec` 直接变成 `Bytes`（零拷贝）交给请求体，省掉一次整包复制；重试时的
+    /// `body.clone()` 也随之退化为引用计数自增。
+    ///
+    /// 默认实现退回借用版本（`self.upload(path, &data)`）——未覆盖的适配器
+    /// （含各测试桩）行为与成本都不变；WebDAV / S3 覆盖它以吃满收益。
+    async fn upload_owned(&self, path: &str, data: Vec<u8>) -> Result<(), SyncError> {
+        self.upload(path, &data).await
+    }
+
     /// 删除文件
     async fn delete(&self, path: &str) -> Result<(), SyncError>;
 
-    /// 上传附件（内容寻址，文件名 = hash）
+    /// 上传附件（内容寻址，文件名 = hash；**移交缓冲区所有权**）
     ///
     /// F75（2026-10-01 第六轮）：默认实现 = 拼 `assets/{hash}.orsync` 后走
-    /// [`Self::upload`]。生产链路的调用方是 `BasePathAdapter`，它**必须覆盖**
+    /// [`Self::upload_owned`]。生产链路的调用方是 `BasePathAdapter`，它**必须覆盖**
     /// 本方法（默认实现不知道 base_path，拼出的是无前缀路径）——但覆盖后
-    /// 委托的是内层的 `upload` 而非 `upload_asset`，故生产适配器（WebDAV/S3）
+    /// 委托的是内层的上传而非 `upload_asset`，故生产适配器（WebDAV/S3）
     /// 各自的实现成了不可达死代码。逻辑收口到这一份默认实现，适配器不再
     /// 重复实现（S3 与 WebDAV 曾各有一份逐字相同的拷贝）。
-    async fn upload_asset(&self, hash: &str, data: &[u8]) -> Result<(), SyncError> {
+    ///
+    /// A13（2026-10-14）：入参由 `&[u8]` 改 `Vec<u8>`——附件是最大的一类载荷
+    /// （数十 MB），调用方（`cloud_sync::attachments`）本就把刚加密出来的 `Vec`
+    /// 交出去、之后不再使用，借用语义迫使适配器再复制一份（`to_vec()`）。
+    async fn upload_asset(&self, hash: &str, data: Vec<u8>) -> Result<(), SyncError> {
         let path = crate::cloud_sync::paths::asset_path(hash);
-        self.upload(&path, data).await
+        self.upload_owned(&path, data).await
     }
 
     /// 下载附件

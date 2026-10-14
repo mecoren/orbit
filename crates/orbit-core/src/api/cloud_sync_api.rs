@@ -98,20 +98,26 @@ impl SyncAdapter for BasePathAdapter {
         self.inner.upload(&self.join(path), data).await
     }
 
+    async fn upload_owned(&self, path: &str, data: Vec<u8>) -> Result<(), SyncError> {
+        // A13：所有权透传给内层，避免包装层复制
+        self.inner.upload_owned(&self.join(path), data).await
+    }
+
     async fn delete(&self, path: &str) -> Result<(), SyncError> {
         self.inner.delete(&self.join(path)).await
     }
 
-    async fn upload_asset(&self, hash: &str, data: &[u8]) -> Result<(), SyncError> {
+    async fn upload_asset(&self, hash: &str, data: Vec<u8>) -> Result<(), SyncError> {
         // S1（2026-09-13 探查）：统一附件命名口径为 paths::asset_path
         // （`assets/{hash}.orsync`，默认格式）。此前三套口径分裂曾致死循环，
         // 现写侧统一新后缀，读侧多级回退。
         // base_path 拼接仍由本包装器负责（内层构造不含 base_path 语义）。
-        // F75：trait 默认实现（拼路径走 upload）对本包装器不可用——它拼出的
-        // 是**无 base_path 前缀**的路径；委托的也必须是内层 upload 而非
+        // F75：trait 默认实现（拼路径走上传）对本包装器不可用——它拼出的
+        // 是**无 base_path 前缀**的路径；委托的也必须是内层上传而非
         // inner.upload_asset（后者经默认实现同样丢前缀）。
+        // A13：走 `upload_owned`，附件是最大一类载荷，借用语义会多吃一次整包复制。
         let path = crate::cloud_sync::paths::asset_path(hash);
-        self.inner.upload(&self.join(&path), data).await
+        self.inner.upload_owned(&self.join(&path), data).await
     }
 
     async fn download_asset(&self, hash: &str) -> Result<Vec<u8>, SyncError> {
@@ -532,8 +538,8 @@ mod tests {
         async fn delete(&self, _path: &str) -> Result<(), SyncError> {
             Ok(())
         }
-        async fn upload_asset(&self, hash: &str, data: &[u8]) -> Result<(), SyncError> {
-            self.upload(&format!("assets/{hash}.orsync"), data).await
+        async fn upload_asset(&self, hash: &str, data: Vec<u8>) -> Result<(), SyncError> {
+            self.upload(&format!("assets/{hash}.orsync"), &data).await
         }
         async fn download_asset(&self, hash: &str) -> Result<Vec<u8>, SyncError> {
             self.download(&format!("assets/{hash}.orsync")).await
@@ -599,7 +605,7 @@ mod tests {
         assert!(!adapter.asset_exists("missing").await.unwrap());
 
         // upload_asset：统一写 assets/{hash}.orsync 并拼接 base_path
-        adapter.upload_asset("new1", b"x").await.unwrap();
+        adapter.upload_asset("new1", b"x".to_vec()).await.unwrap();
         assert_eq!(
             uploads.lock().unwrap().as_slice(),
             ["wait-sync/user1/assets/new1.orsync"]
@@ -613,7 +619,7 @@ mod tests {
         let uploads = mock.uploads.clone();
         let adapter = BasePathAdapter::new(Arc::new(mock), "");
 
-        adapter.upload_asset("h1", b"x").await.unwrap();
+        adapter.upload_asset("h1", b"x".to_vec()).await.unwrap();
         assert_eq!(uploads.lock().unwrap().as_slice(), ["assets/h1.orsync"]);
     }
 
@@ -672,7 +678,7 @@ mod tests {
         async fn delete(&self, _: &str) -> Result<(), SyncError> {
             Ok(())
         }
-        async fn upload_asset(&self, _: &str, _: &[u8]) -> Result<(), SyncError> {
+        async fn upload_asset(&self, _: &str, _: Vec<u8>) -> Result<(), SyncError> {
             Ok(())
         }
         async fn download_asset(&self, _: &str) -> Result<Vec<u8>, SyncError> {

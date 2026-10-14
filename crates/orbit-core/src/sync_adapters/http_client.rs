@@ -1,3 +1,4 @@
+use bytes::Bytes;
 use reqwest::Client;
 use std::time::Duration;
 
@@ -265,11 +266,14 @@ impl HttpClient {
     /// 改成读超时的原因）。上限的代价是最坏情形：4 次尝试 × 各自窗口（默认
     /// `max_retries = 3`，8MiB 单 PUT 最坏约 16 分钟）——比无限期挂死好，且
     /// 真慢速上行不会触发（每档都有 2.4 倍以上余量）。
+    /// `body` 取 [`Bytes`]（A13 零拷贝）：每次尝试的 `.body(body.clone())` 是
+    /// 引用计数自增，不是整包复制——大附件（数十 MB 级）单 PUT 在 4 次尝试下
+    /// 原本要额外复制 4 份载荷；调用方用 `Bytes::from(Vec)`（零拷贝）交接所有权。
     pub async fn put_with_retry(
         &self,
         url: &str,
         headers: reqwest::header::HeaderMap,
-        body: Vec<u8>,
+        body: Bytes,
     ) -> Result<(), SyncError> {
         let mut last_error = None;
         let budget = Self::put_timeout_budget(body.len());
@@ -414,7 +418,7 @@ impl HttpClient {
         &self,
         url: &str,
         headers: reqwest::header::HeaderMap,
-        body: Vec<u8>,
+        body: Bytes,
         if_match: Option<&str>,
         if_none_match_star: bool,
     ) -> Result<bool, SyncError> {
@@ -912,7 +916,7 @@ mod tests {
             .put_conditional(
                 &url,
                 reqwest::header::HeaderMap::new(),
-                b"manifest-payload".to_vec(),
+                Bytes::from(b"manifest-payload".to_vec()),
                 Some("v1"),
                 false,
             )
@@ -932,7 +936,7 @@ mod tests {
             .put_conditional(
                 &url,
                 reqwest::header::HeaderMap::new(),
-                b"manifest-payload".to_vec(),
+                Bytes::from(b"manifest-payload".to_vec()),
                 Some("v1"),
                 false,
             )

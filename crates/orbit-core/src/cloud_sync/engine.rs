@@ -1902,7 +1902,7 @@ mod tests {
             self.files.lock().unwrap().remove(path);
             Ok(())
         }
-        async fn upload_asset(&self, _hash: &str, _data: &[u8]) -> Result<(), SyncError> {
+        async fn upload_asset(&self, _hash: &str, _data: Vec<u8>) -> Result<(), SyncError> {
             Ok(())
         }
         async fn download_asset(&self, _hash: &str) -> Result<Vec<u8>, SyncError> {

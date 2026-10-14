@@ -236,9 +236,12 @@ pub async fn sync_attachments_push(
                     Ok(enc) => enc,
                     Err(e) => return (hash, Err(format!("加密失败: {}", e))),
                 };
+                // A13：明文只在加密阶段需要——立刻释放，别让它跟着密文一起
+                // 活在整段网络上传期间（附件是最大一类载荷，白占一份整包内存）
+                drop(file_data);
 
-                // 4c. 上传
-                let outcome = match adapter.upload_asset(&hash, &encrypted).await {
+                // 4c. 上传（A13：密文所有权移交适配器，避免再一次整包复制）
+                let outcome = match adapter.upload_asset(&hash, encrypted).await {
                     Ok(()) => Ok(()),
                     Err(e) => Err(format!("上传附件 {} 失败: {}", hash, e)),
                 };
@@ -409,6 +412,9 @@ pub async fn sync_attachments_pull(
                     // 5b. 解密
                     let decrypted = decrypt_payload(&encrypted, data_key)
                         .map_err(|e| format!("解密附件 {} 失败: {}", hash, e))?;
+                    // A13：密文只在解密阶段需要——校验与落盘之前先释放，别让
+                    // 密文与明文同时活在后续的 sha256 校验 + 磁盘写期间
+                    drop(encrypted);
 
                     // 5c. 校验内容哈希与文件名（即 sha256）一致
                     // 文件名即 hash 是内容寻址约定：损坏/被篡改的内容会被"哈希背书"，
@@ -584,7 +590,7 @@ mod tests {
         async fn upload_asset(
             &self,
             hash: &str,
-            _: &[u8],
+            _: Vec<u8>,
         ) -> Result<(), crate::sync::error::SyncError> {
             self.uploads.lock().unwrap().push(hash.to_string());
             Ok(())
@@ -824,7 +830,7 @@ mod tests {
         async fn upload_asset(
             &self,
             _: &str,
-            _: &[u8],
+            _: Vec<u8>,
         ) -> Result<(), crate::sync::error::SyncError> {
             Ok(())
         }

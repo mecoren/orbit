@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+use bytes::Bytes;
 use reqwest::header::HeaderMap;
 
 use crate::s3::{
@@ -37,6 +38,17 @@ pub struct S3Adapter {
 }
 
 impl S3Adapter {
+    /// 单对象 PUT（签名 + 重试），入参是已归一的 `Bytes`（A13）
+    ///
+    /// `upload`（借用）与 `upload_owned`（移交所有权）共用这一段，
+    /// 差异只在 `Bytes` 怎么造出来；PUT 的签名用载荷 sha256，与是否零拷贝无关。
+    async fn put_object_bytes(&self, path: &str, body: Bytes) -> Result<(), SyncError> {
+        let url = self.build_object_url(path);
+        let payload_hash = sha256_hex(&body);
+        let headers = self.sign_request("PUT", &url, &payload_hash)?;
+        self.http.put_with_retry(&url, headers, body).await
+    }
+
     pub fn new(config: S3Config) -> Result<Self, SyncError> {
         let timeout = if config.timeout_secs == 0 {
             30
@@ -559,10 +571,16 @@ impl SyncAdapter for S3Adapter {
         if data.len() >= Self::MULTIPART_THRESHOLD {
             return self.multipart_upload(path, data).await;
         }
-        let url = self.build_object_url(path);
-        let payload_hash = sha256_hex(data);
-        let headers = self.sign_request("PUT", &url, &payload_hash)?;
-        self.http.put_with_retry(&url, headers, data.to_vec()).await
+        // 借用入参只能复制一次以换成 `Bytes`（换来的是重试不再整包复制）
+        self.put_object_bytes(path, Bytes::from(data.to_vec())).await
+    }
+
+    /// A13：所有权移交版本——`Bytes::from(Vec)` 对独占 `Vec` 是**零拷贝**
+    async fn upload_owned(&self, path: &str, data: Vec<u8>) -> Result<(), SyncError> {
+        if data.len() >= Self::MULTIPART_THRESHOLD {
+            return self.multipart_upload(path, &data).await;
+        }
+        self.put_object_bytes(path, Bytes::from(data)).await
     }
 
     async fn delete(&self, path: &str) -> Result<(), SyncError> {
@@ -659,7 +677,13 @@ impl SyncAdapter for S3Adapter {
         };
         let ok = self
             .http
-            .put_conditional(&url, headers, data.to_vec(), if_match, if_none_star)
+            .put_conditional(
+            &url,
+            headers,
+            Bytes::from(data.to_vec()),
+            if_match,
+            if_none_star,
+        )
             .await?;
         Ok(if ok {
             UploadOutcome::Ok

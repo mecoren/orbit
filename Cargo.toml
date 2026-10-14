@@ -48,6 +48,9 @@ zeroize = { version = "1", default-features = false, features = ["alloc"] }
 
 # 同步与网络
 reqwest = { version = "0.12", default-features = false, features = ["cookies", "gzip", "json", "rustls-tls"] }
+# 请求体零拷贝（A13）：reqwest 的 body 取 `Bytes`，重试时的 `.body(body.clone())`
+# 退化为引用计数自增（Vec 则每次尝试都要整包复制）
+bytes = "1"
 zip = { version = "2", default-features = false, features = ["deflate"] }
 base64 = "0.22"
 quick-xml = { version = "0.36", features = ["serialize"] }

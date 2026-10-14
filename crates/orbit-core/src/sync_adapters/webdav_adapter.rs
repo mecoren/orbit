@@ -1,6 +1,7 @@
 use std::sync::Mutex;
 
 use async_trait::async_trait;
+use bytes::Bytes;
 use reqwest::header::{AUTHORIZATION, HeaderMap};
 
 use crate::sync::error::{SyncError, transport_message};
@@ -231,6 +232,51 @@ impl WebDavAdapter {
             format!("{}{}", base, encoded)
         } else {
             format!("{}/{}", base, encoded)
+        }
+    }
+
+    /// 单对象 PUT（含父目录自愈与 409 重试），入参是已归一的 `Bytes`
+    ///
+    /// A13：`upload`（借用）与 `upload_owned`（移交所有权）共用这一段实现——
+    /// 两份拷贝的逻辑是漂移之源，这里只留一份，差异只在 `Bytes` 怎么造出来。
+    /// `put_with_retry` 内部每次尝试的 `.body(body.clone())` 是引用计数自增。
+    async fn put_object_bytes(&self, path: &str, body: Bytes) -> Result<(), SyncError> {
+        // 先确保父目录存在,避免 409 AncestorsNotFound
+        // (如 path = "sync/data/file.waitsync" → 创建 sync/data 目录)
+        if let Some(parent) = path.rsplit_once('/').map(|(p, _)| p)
+            && !parent.is_empty()
+        {
+            self.ensure_directory(parent).await?;
+        }
+
+        let url = self.build_url(path);
+        let headers = self.auth_headers();
+        let first = self
+            .http
+            .put_with_retry(&url, headers.clone(), body.clone())
+            .await;
+
+        // S29（2026-09-14 审查）：dir_cache 失效处理——云端目录被外部删除后，
+        // 缓存仍认为目录存在（ensure_directory 直接跳过 MKCOL），PUT 持续 409
+        // 直至进程重启。409（AncestorsNotFound，父目录缺失语义）时清空缓存、
+        // 重建目录链后重试一次；其余错误原样透传。
+        // F32：判定改按 `AncestorsNotFound` 变体（`from_http_status` 按状态码
+        // 构造），不再嗅探消息子串——嗅探会被 F34 的响应体截断打掉。
+        match first {
+            Err(e) if matches!(e, SyncError::AncestorsNotFound { .. }) => {
+                log::info!("[webdav] PUT 409 AncestorsNotFound：清空目录缓存并重建后重试 {path}");
+                if let Ok(mut cache) = self.dir_cache.lock() {
+                    cache.clear();
+                }
+                if let Some(parent) = path.rsplit_once('/').map(|(p, _)| p)
+                    && !parent.is_empty()
+                {
+                    self.ensure_directory(parent).await?;
+                }
+                let headers = self.auth_headers();
+                self.http.put_with_retry(&url, headers, body).await
+            }
+            other => other,
         }
     }
 
@@ -1108,43 +1154,21 @@ impl SyncAdapter for WebDavAdapter {
                 .upload_asset_parts(&hash, &parts_root, path, data)
                 .await;
         }
-        // 先确保父目录存在,避免 409 AncestorsNotFound
-        // (如 path = "sync/data/file.waitsync" → 创建 sync/data 目录)
-        if let Some(parent) = path.rsplit_once('/').map(|(p, _)| p)
-            && !parent.is_empty()
+        // 借用入参只能复制一次以换成 `Bytes`（换来的是重试不再整包复制）
+        self.put_object_bytes(path, Bytes::from(data.to_vec())).await
+    }
+
+    /// A13：所有权移交版本——`Bytes::from(Vec)` 对独占 `Vec` 是**零拷贝**
+    /// （不再有 `to_vec()` 那次整包复制），分派口径与 `upload` 完全一致。
+    async fn upload_owned(&self, path: &str, data: Vec<u8>) -> Result<(), SyncError> {
+        if data.len() >= Self::PARTS_THRESHOLD
+            && let Some((hash, parts_root)) = asset_parts_target(path)
         {
-            self.ensure_directory(parent).await?;
+            return self
+                .upload_asset_parts(&hash, &parts_root, path, &data)
+                .await;
         }
-
-        let url = self.build_url(path);
-        let headers = self.auth_headers();
-        let first = self
-            .http
-            .put_with_retry(&url, headers.clone(), data.to_vec())
-            .await;
-
-        // S29（2026-09-14 审查）：dir_cache 失效处理——云端目录被外部删除后，
-        // 缓存仍认为目录存在（ensure_directory 直接跳过 MKCOL），PUT 持续 409
-        // 直至进程重启。409（AncestorsNotFound，父目录缺失语义）时清空缓存、
-        // 重建目录链后重试一次；其余错误原样透传。
-        // F32：判定改按 `AncestorsNotFound` 变体（`from_http_status` 按状态码
-        // 构造），不再嗅探消息子串——嗅探会被 F34 的响应体截断打掉。
-        match first {
-            Err(e) if matches!(e, SyncError::AncestorsNotFound { .. }) => {
-                log::info!("[webdav] PUT 409 AncestorsNotFound：清空目录缓存并重建后重试 {path}");
-                if let Ok(mut cache) = self.dir_cache.lock() {
-                    cache.clear();
-                }
-                if let Some(parent) = path.rsplit_once('/').map(|(p, _)| p)
-                    && !parent.is_empty()
-                {
-                    self.ensure_directory(parent).await?;
-                }
-                let headers = self.auth_headers();
-                self.http.put_with_retry(&url, headers, data.to_vec()).await
-            }
-            other => other,
-        }
+        self.put_object_bytes(path, Bytes::from(data)).await
     }
 
     async fn delete(&self, path: &str) -> Result<(), SyncError> {
@@ -1344,7 +1368,13 @@ impl SyncAdapter for WebDavAdapter {
         };
         let ok = self
             .http
-            .put_conditional(&url, headers, data.to_vec(), if_match, if_none_star)
+            .put_conditional(
+            &url,
+            headers,
+            Bytes::from(data.to_vec()),
+            if_match,
+            if_none_star,
+        )
             .await?;
         Ok(if ok {
             UploadOutcome::Ok

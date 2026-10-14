@@ -410,7 +410,7 @@ mod tests {
         async fn delete(&self, _: &str) -> Result<(), SyncError> {
             Ok(())
         }
-        async fn upload_asset(&self, _: &str, _: &[u8]) -> Result<(), SyncError> {
+        async fn upload_asset(&self, _: &str, _: Vec<u8>) -> Result<(), SyncError> {
             Ok(())
         }
         async fn download_asset(&self, _: &str) -> Result<Vec<u8>, SyncError> {

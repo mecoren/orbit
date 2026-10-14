@@ -16,6 +16,14 @@
 
 ## [Unreleased]
 
+### 性能：上传请求体零拷贝（内存专项 A13，2026-10-14）
+
+- **请求体改 `Bytes`**（`sync_adapters/http_client.rs`）：`put_with_retry` / `put_conditional` 的 body 由 `Vec<u8>` 改 `bytes::Bytes`——每次尝试的 `.body(body.clone())` 从「整包复制」退化为「引用计数自增」。此前一次大附件单 PUT 在 4 次尝试下最多复制 4 份载荷。
+- **所有权移交通道**：trait 新增 `upload_owned(path, Vec<u8>)`（默认退回借用版本，未覆盖的适配器行为与成本不变），`upload_asset` 入参由 `&[u8]` 改 `Vec<u8>`；WebDAV / S3 覆盖 `upload_owned`，用 `Bytes::from(Vec)` **零拷贝**接管调用方刚加密出来的缓冲区（借用的 `upload` 路径仍是「复制一次换 Bytes + 重试零复制」）。`BasePathAdapter` 同步透传所有权；两适配器的单 PUT 逻辑各自抽为 `put_object_bytes`，避免借用/移交两份拷贝漂移。
+- **附件路径及时释放缓冲**（`cloud_sync/attachments.rs`）：上传的明文在加密后**立刻 drop**（原本跟着密文横跨整段网络上传），下载的密文在解密后**立刻 drop**（原本与明文一同活到 sha256 校验 + 落盘）。大附件峰值驻留由「明文 + 密文 + 请求体副本」降到「密文一份」。
+- **明确不做（及理由）**：N40 原方案的「reqwest `stream` 流式下载到文件」对本项目无收益——附件是 AES-256-GCM 整包 AEAD，解密必须持有完整密文，真流式解密要手搓 GHASH（宁可不做）；真正的剩余项是 `download` 系列返回类型改 `Bytes`（省掉 `resp.bytes().to_vec()`），涉及 12 处实现 + 12 处调用，属独立批次。ADR 0010 §四对 A10/A13「指纹相等、零上传」归因信号的要求在本批不冲突：本轮只减内存复制，不改云端对象格式与上传判定。
+- **依赖与测试**：新增直接依赖 `bytes`（1.12.1，本就随 reqwest 在依赖树内，无新下载）；`cargo test -p orbit-core --lib` 787 例、`sync_fault_matrix` 14 例（真适配器 + 零依赖假 WebDAV/S3，覆盖条件写与分片通道）全绿。
+
 ### 云同步：空桶清单收口（N39，2026-10-14）
 
 - **问题**：push 的表索引以远端清单为底（防他端数据被孤儿化），本地把某桶的行全删光后条目**仍留在清单里**——他端（尤其新设备首同步）每轮都要下载这批陈旧行再靠墓碑删掉，云端对象也永久留着。

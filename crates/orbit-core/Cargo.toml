@@ -48,6 +48,7 @@ zeroize.workspace = true
 
 # 同步与网络
 reqwest.workspace = true
+bytes.workspace = true
 zip.workspace = true
 base64.workspace = true
 quick-xml.workspace = true
