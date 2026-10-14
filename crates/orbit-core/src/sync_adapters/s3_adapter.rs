@@ -556,7 +556,7 @@ impl SyncAdapter for S3Adapter {
         Ok(files)
     }
 
-    async fn download(&self, path: &str) -> Result<Vec<u8>, SyncError> {
+    async fn download(&self, path: &str) -> Result<Bytes, SyncError> {
         let url = self.build_object_url(path);
         let headers = self.sign_request("GET", &url, &sha256_hex(b""))?;
         self.http.get_with_retry(&url, headers).await
@@ -646,7 +646,7 @@ impl SyncAdapter for S3Adapter {
     async fn download_with_token(
         &self,
         path: &str,
-    ) -> Result<Option<(Vec<u8>, Option<String>)>, SyncError> {
+    ) -> Result<Option<(Bytes, Option<String>)>, SyncError> {
         let url = self.build_object_url(path);
         let headers = self.sign_request("GET", &url, &sha256_hex(b""))?;
         match self.http.get_with_token(&url, headers).await {

@@ -17,6 +17,7 @@ use std::path::Path;
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use bytes::Bytes;
 use sqlx::SqlitePool;
 
 use crate::cloud_sync::SyncResult;
@@ -90,7 +91,7 @@ impl SyncAdapter for BasePathAdapter {
         self.inner.list_all_files(&self.join(prefix)).await
     }
 
-    async fn download(&self, path: &str) -> Result<Vec<u8>, SyncError> {
+    async fn download(&self, path: &str) -> Result<Bytes, SyncError> {
         self.inner.download(&self.join(path)).await
     }
 
@@ -120,7 +121,7 @@ impl SyncAdapter for BasePathAdapter {
         self.inner.upload_owned(&self.join(&path), data).await
     }
 
-    async fn download_asset(&self, hash: &str) -> Result<Vec<u8>, SyncError> {
+    async fn download_asset(&self, hash: &str) -> Result<Bytes, SyncError> {
         // 附件单一路径（无历史数据，不再回退遗留命名）。
         // 「单对象 → 分片拼装」的形态回退由内层适配器负责。
         // F75：同 upload_asset——包装器必须自己拼 base_path。
@@ -151,7 +152,7 @@ impl SyncAdapter for BasePathAdapter {
     async fn download_with_token(
         &self,
         path: &str,
-    ) -> Result<Option<(Vec<u8>, Option<String>)>, SyncError> {
+    ) -> Result<Option<(Bytes, Option<String>)>, SyncError> {
         // 必须转发：默认实现把令牌钉死为 None，清单 CAS 随之退化为裸覆盖
         self.inner.download_with_token(&self.join(path)).await
     }
@@ -523,9 +524,9 @@ mod tests {
             self.list_prefixes.lock().unwrap().push(prefix.to_string());
             Ok(self.listing.clone())
         }
-        async fn download(&self, path: &str) -> Result<Vec<u8>, SyncError> {
+        async fn download(&self, path: &str) -> Result<Bytes, SyncError> {
             match self.files.get(path) {
-                Some(data) => Ok(data.clone()),
+                Some(data) => Ok(Bytes::from(data.clone())),
                 None => Err(SyncError::NotFound {
                     message: format!("资源不存在: {path}"),
                 }),
@@ -541,7 +542,7 @@ mod tests {
         async fn upload_asset(&self, hash: &str, data: Vec<u8>) -> Result<(), SyncError> {
             self.upload(&format!("assets/{hash}.orsync"), &data).await
         }
-        async fn download_asset(&self, hash: &str) -> Result<Vec<u8>, SyncError> {
+        async fn download_asset(&self, hash: &str) -> Result<Bytes, SyncError> {
             self.download(&format!("assets/{hash}.orsync")).await
         }
         async fn asset_exists(&self, hash: &str) -> Result<bool, SyncError> {
@@ -591,7 +592,10 @@ mod tests {
         );
 
         // download_asset：命中即返回；未命中 → NotFound 透传（无回退）
-        assert_eq!(adapter.download_asset("abc123").await.unwrap(), b"abc-data");
+        assert_eq!(
+            &adapter.download_asset("abc123").await.unwrap()[..],
+            b"abc-data"
+        );
         assert!(
             adapter
                 .download_asset("zzz")
@@ -658,12 +662,12 @@ mod tests {
 
     #[async_trait]
     impl SyncAdapter for CasMockAdapter {
-        async fn download(&self, path: &str) -> Result<Vec<u8>, SyncError> {
+        async fn download(&self, path: &str) -> Result<Bytes, SyncError> {
             self.objects
                 .lock()
                 .unwrap()
                 .get(path)
-                .map(|(b, _)| b.clone())
+                .map(|(b, _)| Bytes::from(b.clone()))
                 .ok_or_else(|| SyncError::NotFound {
                     message: path.to_string(),
                 })
@@ -681,7 +685,7 @@ mod tests {
         async fn upload_asset(&self, _: &str, _: Vec<u8>) -> Result<(), SyncError> {
             Ok(())
         }
-        async fn download_asset(&self, _: &str) -> Result<Vec<u8>, SyncError> {
+        async fn download_asset(&self, _: &str) -> Result<Bytes, SyncError> {
             Err(SyncError::NotFound {
                 message: "无".to_string(),
             })
@@ -699,14 +703,14 @@ mod tests {
         async fn download_with_token(
             &self,
             path: &str,
-        ) -> Result<Option<(Vec<u8>, Option<String>)>, SyncError> {
+        ) -> Result<Option<(Bytes, Option<String>)>, SyncError> {
             self.seen.lock().unwrap().push(path.to_string());
             Ok(self
                 .objects
                 .lock()
                 .unwrap()
                 .get(path)
-                .map(|(b, etag)| (b.clone(), Some(etag.clone()))))
+                .map(|(b, etag)| (Bytes::from(b.clone()), Some(etag.clone()))))
         }
         async fn upload_conditional(
             &self,
@@ -753,7 +757,7 @@ mod tests {
             .await
             .unwrap()
             .expect("对象存在必须返回 Some");
-        assert_eq!(got.0, b"remote-manifest");
+        assert_eq!(&got.0[..], b"remote-manifest");
         assert_eq!(
             got.1.as_deref(),
             Some("etag-7"),

@@ -25,6 +25,7 @@
 
 use std::collections::{BTreeMap, HashMap};
 
+use bytes::Bytes;
 use sqlx::SqlitePool;
 
 use crate::cloud_sync::chunk::{ChunkPayload, TableChunk, split_table_items};
@@ -943,7 +944,7 @@ impl std::fmt::Display for TableError {
 async fn read_remote_manifest(
     adapter: &dyn SyncAdapter,
     data_key: &[u8],
-) -> Result<(Manifest, Option<String>, Option<Vec<u8>>), CloudSyncError> {
+) -> Result<(Manifest, Option<String>, Option<Bytes>), CloudSyncError> {
     read_remote_manifest_opt(adapter, data_key, false).await
 }
 
@@ -960,7 +961,7 @@ async fn read_remote_manifest_opt(
     adapter: &dyn SyncAdapter,
     data_key: &[u8],
     allow_key_mismatch: bool,
-) -> Result<(Manifest, Option<String>, Option<Vec<u8>>), CloudSyncError> {
+) -> Result<(Manifest, Option<String>, Option<Bytes>), CloudSyncError> {
     let (bytes, token) = match adapter.download_with_token(paths::MANIFEST_PATH).await? {
         None => return Ok((Manifest::empty(""), None, None)),
         Some((bytes, token)) => (bytes, token),
@@ -1135,13 +1136,14 @@ mod tests {
 
     #[async_trait]
     impl SyncAdapter for MemAdapter {
-        async fn download(&self, path: &str) -> Result<Vec<u8>, SyncError> {
+        async fn download(&self, path: &str) -> Result<Bytes, SyncError> {
             self.downloads.lock().unwrap().push(path.to_string());
             self.files
                 .lock()
                 .unwrap()
                 .get(path)
                 .cloned()
+                .map(Bytes::from)
                 .ok_or_else(|| SyncError::NotFound {
                     message: path.to_string(),
                 })
@@ -1175,7 +1177,7 @@ mod tests {
         async fn upload_asset(&self, _: &str, _: Vec<u8>) -> Result<(), SyncError> {
             Ok(())
         }
-        async fn download_asset(&self, _: &str) -> Result<Vec<u8>, SyncError> {
+        async fn download_asset(&self, _: &str) -> Result<Bytes, SyncError> {
             Err(SyncError::NotFound {
                 message: "无".to_string(),
             })
@@ -1189,11 +1191,11 @@ mod tests {
         async fn download_with_token(
             &self,
             path: &str,
-        ) -> Result<Option<(Vec<u8>, Option<String>)>, SyncError> {
+        ) -> Result<Option<(Bytes, Option<String>)>, SyncError> {
             match self.files.lock().unwrap().get(path).cloned() {
                 Some(bytes) => {
                     let token = self.version.lock().unwrap().to_string();
-                    Ok(Some((bytes, Some(token))))
+                    Ok(Some((Bytes::from(bytes), Some(token))))
                 }
                 None => Ok(None),
             }

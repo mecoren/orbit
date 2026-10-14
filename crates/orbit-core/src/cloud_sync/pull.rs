@@ -392,13 +392,14 @@ mod tests {
 
     #[async_trait]
     impl SyncAdapter for MemAdapter {
-        async fn download(&self, path: &str) -> Result<Vec<u8>, SyncError> {
+        async fn download(&self, path: &str) -> Result<bytes::Bytes, SyncError> {
             self.downloads.lock().unwrap().push(path.to_string());
             self.files
                 .lock()
                 .unwrap()
                 .get(path)
                 .cloned()
+                .map(bytes::Bytes::from)
                 .ok_or_else(|| SyncError::NotFound {
                     message: path.to_string(),
                 })
@@ -413,7 +414,7 @@ mod tests {
         async fn upload_asset(&self, _: &str, _: Vec<u8>) -> Result<(), SyncError> {
             Ok(())
         }
-        async fn download_asset(&self, _: &str) -> Result<Vec<u8>, SyncError> {
+        async fn download_asset(&self, _: &str) -> Result<bytes::Bytes, SyncError> {
             Err(SyncError::NotFound {
                 message: "无".to_string(),
             })
@@ -424,7 +425,7 @@ mod tests {
         async fn download_with_token(
             &self,
             path: &str,
-        ) -> Result<Option<(Vec<u8>, Option<String>)>, SyncError> {
+        ) -> Result<Option<(bytes::Bytes, Option<String>)>, SyncError> {
             // 读清单不记入 downloads（避免"零下载"断言被清单读取干扰）
             Ok(self
                 .files
@@ -432,7 +433,7 @@ mod tests {
                 .unwrap()
                 .get(path)
                 .cloned()
-                .map(|b| (b, None)))
+                .map(|b| (bytes::Bytes::from(b), None)))
         }
         async fn list_assets(&self, _assets_dir: &str) -> Result<Vec<String>, SyncError> {
             Ok(Vec::new())

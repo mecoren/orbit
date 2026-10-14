@@ -170,22 +170,22 @@ impl HttpClient {
     /// 限流场景（429 / 坚果云 503 BlockedTemporarily）不进行 HTTP 级重试，
     /// 直接返回错误交由业务级 with_retry 处理（30/60/120 秒长退避）。
     /// 否则短退避（100/200/400ms）的 HTTP 级重试会加剧限流。
+    /// A13：返回 [`Bytes`]（reqwest 的 `resp.bytes()` 本就是 `Bytes`）——
+    /// 直接交出去即零拷贝，调用方拿走所有权，不再有 `to_vec()` 那次整包复制。
     pub async fn get_with_retry(
         &self,
         url: &str,
         headers: reqwest::header::HeaderMap,
-    ) -> Result<Vec<u8>, SyncError> {
+    ) -> Result<Bytes, SyncError> {
         let mut last_error = None;
 
         for attempt in 0..=self.max_retries {
             match self.client.get(url).headers(headers.clone()).send().await {
                 Ok(response) => {
                     if response.status().is_success() {
-                        return response.bytes().await.map(|b| b.to_vec()).map_err(|e| {
-                            SyncError::Network {
-                                message: format!("读取响应体失败: {e}"),
-                                retryable: false,
-                            }
+                        return response.bytes().await.map_err(|e| SyncError::Network {
+                            message: format!("读取响应体失败: {e}"),
+                            retryable: false,
                         });
                     }
                     let status = response.status();
@@ -344,7 +344,7 @@ impl HttpClient {
         &self,
         url: &str,
         headers: reqwest::header::HeaderMap,
-    ) -> Result<(Vec<u8>, Option<String>), SyncError> {
+    ) -> Result<(Bytes, Option<String>), SyncError> {
         let mut last_error = None;
 
         for attempt in 0..=self.max_retries {
@@ -360,7 +360,7 @@ impl HttpClient {
                             message: format!("读取响应体失败: {e}"),
                             retryable: false,
                         })?;
-                        return Ok((bytes.to_vec(), token));
+                        return Ok((bytes, token));
                     }
                     let status = response.status();
                     let body = response.text().await.unwrap_or_default();

@@ -1877,9 +1877,9 @@ mod tests {
         async fn list_all_files(&self, _base_path: &str) -> Result<Vec<RemoteFile>, SyncError> {
             Ok(Vec::new())
         }
-        async fn download(&self, path: &str) -> Result<Vec<u8>, SyncError> {
+        async fn download(&self, path: &str) -> Result<bytes::Bytes, SyncError> {
             match self.files.lock().unwrap().get(path) {
-                Some(data) => Ok(data.clone()),
+                Some(data) => Ok(bytes::Bytes::from(data.clone())),
                 None => Err(SyncError::Network {
                     message: format!("资源不存在(404): {path}"),
                     retryable: false,
@@ -1905,7 +1905,7 @@ mod tests {
         async fn upload_asset(&self, _hash: &str, _data: Vec<u8>) -> Result<(), SyncError> {
             Ok(())
         }
-        async fn download_asset(&self, _hash: &str) -> Result<Vec<u8>, SyncError> {
+        async fn download_asset(&self, _hash: &str) -> Result<bytes::Bytes, SyncError> {
             Err(SyncError::Network {
                 message: "资源不存在(404)".to_string(),
                 retryable: false,

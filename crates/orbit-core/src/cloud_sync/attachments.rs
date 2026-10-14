@@ -576,7 +576,7 @@ mod tests {
         {
             Ok(Vec::new())
         }
-        async fn download(&self, _: &str) -> Result<Vec<u8>, crate::sync::error::SyncError> {
+        async fn download(&self, _: &str) -> Result<bytes::Bytes, crate::sync::error::SyncError> {
             Err(crate::sync::error::SyncError::NotFound {
                 message: "无".to_string(),
             })
@@ -595,7 +595,10 @@ mod tests {
             self.uploads.lock().unwrap().push(hash.to_string());
             Ok(())
         }
-        async fn download_asset(&self, _: &str) -> Result<Vec<u8>, crate::sync::error::SyncError> {
+        async fn download_asset(
+            &self,
+            _: &str,
+        ) -> Result<bytes::Bytes, crate::sync::error::SyncError> {
             Err(crate::sync::error::SyncError::NotFound {
                 message: "无".to_string(),
             })
@@ -816,7 +819,7 @@ mod tests {
         {
             Ok(Vec::new())
         }
-        async fn download(&self, _: &str) -> Result<Vec<u8>, crate::sync::error::SyncError> {
+        async fn download(&self, _: &str) -> Result<bytes::Bytes, crate::sync::error::SyncError> {
             Err(crate::sync::error::SyncError::NotFound {
                 message: "无".to_string(),
             })
@@ -837,9 +840,9 @@ mod tests {
         async fn download_asset(
             &self,
             hash: &str,
-        ) -> Result<Vec<u8>, crate::sync::error::SyncError> {
+        ) -> Result<bytes::Bytes, crate::sync::error::SyncError> {
             match self.files.get(hash) {
-                Some(d) => Ok(d.clone()),
+                Some(d) => Ok(bytes::Bytes::from(d.clone())),
                 None => Err(crate::sync::error::SyncError::NotFound {
                     message: "无".to_string(),
                 }),

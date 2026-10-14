@@ -762,18 +762,14 @@ impl WebDavAdapter {
     /// `from_http_status` 现按状态码产出 `AncestorsNotFound` 变体、
     /// `is_not_found()` 已含该变体——调用方（`download` 的分片回退、
     /// 清单探测）按类型判定即可，不再需要在此按消息子串改写为 NotFound。
-    async fn download_object(&self, path: &str) -> Result<Vec<u8>, SyncError> {
+    async fn download_object(&self, path: &str) -> Result<Bytes, SyncError> {
         let url = self.build_url(path);
         let headers = self.auth_headers();
         self.http.get_with_retry(&url, headers).await
     }
 
     /// 分片拼装下载：读 head.json → 逐片下载 → 拼接 + 大小/sha256 校验
-    async fn download_asset_parts(
-        &self,
-        hash: &str,
-        parts_root: &str,
-    ) -> Result<Vec<u8>, SyncError> {
+    async fn download_asset_parts(&self, hash: &str, parts_root: &str) -> Result<Bytes, SyncError> {
         let head_path = Self::parts_head_path(parts_root, hash);
         let head_bytes = self.download(&head_path).await?;
         let head: AssetPartsHead =
@@ -797,8 +793,10 @@ impl WebDavAdapter {
         let mut assembled = Vec::new();
         for index in 0..head.total {
             let part_path = Self::part_bin_path(parts_root, hash, index);
-            let mut part = self.download(&part_path).await?;
-            assembled.append(&mut part);
+            // A13：分片下载返回 `Bytes`，拼装是分片协议固有的一次复制
+            // （拼装结果与分片大小同量级，而单对象路径已无复制）
+            let part = self.download(&part_path).await?;
+            assembled.extend_from_slice(&part);
         }
         // 校验：清单声明的大小与整体 sha256 必须匹配（防分片目录被
         // 外部篡改/混入异源分片）
@@ -819,7 +817,7 @@ impl WebDavAdapter {
                 retryable: false,
             });
         }
-        Ok(assembled)
+        Ok(Bytes::from(assembled))
     }
 
     /// 删除分片目录——**先删清单，再由分片尽力而为**
@@ -1124,7 +1122,7 @@ impl SyncAdapter for WebDavAdapter {
     /// 回退必须挂在**路径级** `download` 上：生产链路全经 `BasePathAdapter`，
     /// 它只调 `inner.download(join(asset_path))`，挂在 `download_asset` 里的
     /// 两段回退在真机上不可达（大附件读侧必 404）。
-    async fn download(&self, path: &str) -> Result<Vec<u8>, SyncError> {
+    async fn download(&self, path: &str) -> Result<Bytes, SyncError> {
         match self.download_object(path).await {
             Ok(data) => Ok(data),
             Err(e) if e.is_not_found() => match asset_parts_target(path) {
@@ -1315,7 +1313,7 @@ impl SyncAdapter for WebDavAdapter {
     async fn download_with_token(
         &self,
         path: &str,
-    ) -> Result<Option<(Vec<u8>, Option<String>)>, SyncError> {
+    ) -> Result<Option<(Bytes, Option<String>)>, SyncError> {
         let url = self.build_url(path);
         let headers = self.auth_headers();
         match self.http.get_with_token(&url, headers).await {

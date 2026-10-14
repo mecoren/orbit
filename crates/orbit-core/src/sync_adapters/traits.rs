@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+use bytes::Bytes;
 use serde::{Deserialize, Serialize};
 
 use crate::sync::error::SyncError;
@@ -117,7 +118,12 @@ pub trait SyncAdapter: Send + Sync {
     }
 
     /// 下载文件
-    async fn download(&self, path: &str) -> Result<Vec<u8>, SyncError>;
+    ///
+    /// A13（2026-10-14）：返回 [`Bytes`] 而非 `Vec<u8>`——HTTP 层拿到响应体本就
+    /// 是 `Bytes`，此前 `to_vec()` 为每个下载对象（分桶 / 清单 / 附件）多复制
+    /// 一份整包（大附件是数十 MB）。`Bytes` 解引用即 `&[u8]`，解密 / 解析 / 落盘
+    /// 调用方无需改动。
+    async fn download(&self, path: &str) -> Result<Bytes, SyncError>;
 
     /// 上传文件
     async fn upload(&self, path: &str, data: &[u8]) -> Result<(), SyncError>;
@@ -159,7 +165,7 @@ pub trait SyncAdapter: Send + Sync {
     /// 默认实现同 [`Self::upload_asset`] 口径（F75 收口）：拼路径走
     /// [`Self::download`]。分片形态回退（单对象 → 分片拼装）由各适配器的
     /// `download` 自行承担。
-    async fn download_asset(&self, hash: &str) -> Result<Vec<u8>, SyncError> {
+    async fn download_asset(&self, hash: &str) -> Result<Bytes, SyncError> {
         self.download(&crate::cloud_sync::paths::asset_path(hash))
             .await
     }
@@ -210,7 +216,7 @@ pub trait SyncAdapter: Send + Sync {
     async fn download_with_token(
         &self,
         path: &str,
-    ) -> Result<Option<(Vec<u8>, Option<String>)>, SyncError> {
+    ) -> Result<Option<(Bytes, Option<String>)>, SyncError> {
         match self.download(path).await {
             Ok(bytes) => Ok(Some((bytes, None))),
             Err(e) if e.is_not_found() => Ok(None),

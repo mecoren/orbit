@@ -16,6 +16,13 @@
 
 ## [Unreleased]
 
+### 性能：下载链路零拷贝（内存专项 A13 第二拍，2026-10-14）
+
+- **请求体/响应体统一 `Bytes`**：`HttpClient::get_with_retry` / `get_with_token` 与适配器 trait 的 `download` / `download_asset` / `download_with_token` 一律返回 `bytes::Bytes`——reqwest 的 `resp.bytes()` 本就是 `Bytes`，此前 `to_vec()` 为**每个**下载对象（数据分桶 / 清单 / 附件）多复制一份整包；附件是数十 MB 级，分桶与清单是小对象但每轮都要过一遍。
+- **不复制的地方**：WebDAV 分片拼装由 `append(&mut part)` 改 `extend_from_slice` + 末尾 `Bytes::from(assembled)`（拼装是分片协议固有的复制，不再是额外的一次）；`push::read_remote_manifest_opt` 的回滚点原始密文改 `Option<Bytes>` 透传；`BasePathAdapter` 三个下载方法同步透传。
+- **唯一的边界复制并注明**：`full_sync_backup_api::download_cloud_backup` 仍返回 `Vec<u8>`——备份字节要交给双端壳（Tauri 序列化 / FRB 传输）继续持有，属既有 API 契约，其中的 `to_vec()` 是边界转换而非链路内复制（已在代码注释写明）。
+- **测试**：core lib 796 例、`sync_fault_matrix` 14 例（真 WebDAV / S3 适配器 + 零依赖假服务，覆盖条件写、分片通道与下载路径）全绿；桌面壳与 orbit-flutter 各自 `cargo check` 通过。
+
 ### 性能：push 行级增量装载（N52 第一拍，2026-10-14）
 
 - **背景**：F41 把每轮 push 的代价降到「只重算脏桶」，但那只是省掉了重算与序列化——**装载没省**：每轮仍把整表存活行全量物化成 JSON 再逐桶比对，万级库每次同步都要为此产生数 MB 的行对象与 JSON。

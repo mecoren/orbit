@@ -484,6 +484,10 @@ pub async fn download_cloud_backup(
     adapter
         .download(cloud_path)
         .await
+        // A13：适配器返回 `Bytes`，这里 `to_vec()` 是**边界转换**——备份字节要交给
+        // 双端壳（Tauri 序列化 / FRB 传输）继续持有，属既有 API 契约，不在本轮改；
+        // core 内部的下载链路（分桶/清单/附件）已无整包复制。
+        .map(|bytes| bytes.to_vec())
         .map_err(|e| FullSyncBackupError::Other(format!("下载云端备份失败: {}", e)))
 }
 
@@ -1320,14 +1324,12 @@ mod backup_self_consistency_tests {
     fn non_whitelisted_tables_are_ignored() {
         let manifest = manifest_with(&[("todo_projects", 1), ("rec_books", 2)]);
         let data = data_for(&["todo_projects"]);
-        ensure_backup_self_consistent(&manifest, &data)
-            .expect("非白名单表缺失不得阻断恢复");
+        ensure_backup_self_consistent(&manifest, &data).expect("非白名单表缺失不得阻断恢复");
 
         // 反向：非白名单的 JSON 多出来也不该报错
         let manifest = manifest_with(&[("todo_projects", 1)]);
         let data = data_for(&["todo_projects", "rec_books"]);
-        ensure_backup_self_consistent(&manifest, &data)
-            .expect("非白名单表多余不得阻断恢复");
+        ensure_backup_self_consistent(&manifest, &data).expect("非白名单表多余不得阻断恢复");
     }
 }
 
