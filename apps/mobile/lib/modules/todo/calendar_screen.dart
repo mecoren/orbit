@@ -17,6 +17,7 @@ import '../../data/api/dto.dart';
 import '../../data/providers/bridge_provider.dart';
 import '../../shared/utils/hex_color.dart';
 import '../../shared/widgets/shadcn/orbit_checkbox.dart';
+import '../../shared/widgets/shadcn/orbit_date_picker.dart';
 import '../../shared/widgets/shadcn/orbit_list_card.dart';
 import '../../shared/widgets/shadcn/orbit_strikethrough.dart';
 import '../../shared/widgets/shadcn/orbit_month_calendar.dart';
@@ -25,6 +26,7 @@ import '../../shared/widgets/shadcn/orbit_select_sheet.dart';
 import '../../shared/widgets/shadcn/orbit_timeline_day.dart';
 import '../../shared/widgets/shadcn/orbit_toast.dart';
 import '../../services/local_prefs.dart';
+import 'logic/reschedule_due.dart';
 import 'logic/task_logic.dart';
 import 'logic/time_block.dart';
 import 'providers/todo_providers.dart';
@@ -35,12 +37,18 @@ import '../../core/theme/icon_map.dart';
 /// 页内视图档（见 [_CalendarScreenState._viewMode]）
 enum CalendarViewMode { month, agenda, timeline }
 
+/// 圆点改期的目标日档（今天/明天/下周 + 任意日；「下周 = 下周一」与
+/// 批量改期 `batchRescheduleMs` 同口径，周一起始周）
+enum _RescheduleTarget { today, tomorrow, nextWeek, pick }
+
 /// 日历视图 /todo/calendar（wait-home 重要日期风格重构）
 ///
 /// 上下堆叠分栏（对齐桌面端左右分栏的信息架构，移动端纵向排布）：
 /// - 上：Days Matter 风格月历（农历/节气/节日副标签、休/班圆徽标、
-///   任务优先级色圆点 ≤4、今天强调块、选中描边；长按某天 = 快捷新增
-///   并预填该日为截止日期——对应桌面右键）
+///   任务优先级色圆点 ≤4 + `+N` 溢出计数、今天强调块、选中描边；
+///   点按圆点 = 改期（桌面「拖拽圆点到目标日格」的移动端形态——
+///   4dp 圆点在触屏做不到精确拖拽，改为点按选目标日，时间语义同源）；
+///   长按某天 = 快捷新增并预填该日为截止日期——对应桌面右键）
 /// - 下：当月带截止任务按日分组列表，点击日历某天滚动定位到对应分组
 /// - 点击月份标题打开年视图（12 迷你月历 + 干支生肖 + 春节/初一下划线，
 ///   PageView 滑动切年），点任意日期回月历定位该日
@@ -297,6 +305,107 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
     }
   }
 
+  // ── 圆点改期（桌面拖拽圆点的移动形态） ──
+
+  /// 点按月历圆点：选目标日 → 改任务截止日期。
+  ///
+  /// 时间语义走 [rescheduleDueMs]（镜像桌面 `shared/reschedule-due`）：
+  /// 原截止带时刻保留时分、零点/无截止归目标日 18:00、同日无变化不写库。
+  /// 圆点挂的任务从当天分桶里按 id 找（圆点载荷只带 id + 标题，不揣任务体）。
+  Future<void> _rescheduleFromDot(DateTime date, CalendarEventDot dot) async {
+    final taskId = dot.taskId;
+    if (taskId == null) return;
+    final byDay =
+        ref.read(calendarByDayProvider).value ?? const <String, List<TodoTask>>{};
+    TodoTask? found;
+    for (final t in byDay[_ymd(date)] ?? const <TodoTask>[]) {
+      if (t.id == taskId) {
+        found = t;
+        break;
+      }
+    }
+    if (found == null) return;
+    final task = found;
+
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    await showSelectBottomSheet<_RescheduleTarget>(
+      context,
+      title: '改期到',
+      current: null,
+      items: const [
+        SelectItem(value: _RescheduleTarget.today, label: '今天'),
+        SelectItem(value: _RescheduleTarget.tomorrow, label: '明天'),
+        SelectItem(value: _RescheduleTarget.nextWeek, label: '下周'),
+        SelectItem(value: _RescheduleTarget.pick, label: '选择日期…'),
+      ],
+      // 点选即回调（弹层已关闭）；「选择日期…」续开日期面板（两段式：
+      // 弹层里不再嵌弹层，见交互约定）
+      onSelect: (choice) async {
+        DateTime? target = switch (choice) {
+          _RescheduleTarget.today => today,
+          _RescheduleTarget.tomorrow => today.add(const Duration(days: 1)),
+          // 下周 = 下周一（周一起始周，与批量改期同口径）
+          _RescheduleTarget.nextWeek =>
+            today.add(Duration(days: 8 - now.weekday)),
+          _RescheduleTarget.pick => null,
+        };
+        if (choice == _RescheduleTarget.pick) {
+          target = await OrbitDatePicker.pick(
+            context,
+            initialDate: task.dueDate != null
+                ? DateTime.fromMillisecondsSinceEpoch(task.dueDate!)
+                : today,
+            showTime: false,
+            accent: OrbitAccents.todoAccent,
+          );
+        }
+        if (target == null || !mounted) return;
+        await _applyReschedule(task, target);
+      },
+    );
+  }
+
+  /// 改期落库 + 回执（文案对齐桌面拖拽：标题截 20 字 + 保留时刻说明，
+  /// 失败路径同「更新失败」口径）
+  Future<void> _applyReschedule(TodoTask task, DateTime target) async {
+    final nextDue = rescheduleDueMs(task.dueDate, target);
+    if (nextDue == null) {
+      // 桌面拖回原格静默；移动端是显式动作，给一句回执防「点了没反应」
+      WaitToast.info('截止日期已在当天');
+      return;
+    }
+    final orig = task.dueDate == null
+        ? null
+        : DateTime.fromMillisecondsSinceEpoch(task.dueDate!);
+    // 真保留了原时刻才出副标（桌面按 due 非空即出——零点档实际是归
+    // 18:00 不保留时刻，移动端收紧为真话）
+    final keptTime = orig != null &&
+        (orig.hour != 0 ||
+            orig.minute != 0 ||
+            orig.second != 0 ||
+            orig.millisecond != 0);
+    try {
+      await ref.read(orbitBridgeProvider).todoTaskUpdate(
+            task.id,
+            encodePatch({'due_date': nextDue}),
+          );
+      ref.invalidate(todoTasksProvider);
+      ref.invalidate(taskDetailProvider);
+      WaitToast.global(
+        '「${_clipTitle(task.title)}」已改期至 ${formatDueLabel(nextDue)}',
+        variant: WaitToastVariant.success,
+        description: keptTime ? '原截止时刻已保留' : null,
+      );
+    } catch (_) {
+      WaitToast.destructive('改期失败');
+    }
+  }
+
+  /// 回执标题截断（桌面 `title.slice(0, 20)` 同口径，超长补省略号）
+  String _clipTitle(String title) =>
+      title.length <= 20 ? title : '${title.substring(0, 20)}…';
+
     /// 月份标题点击：打开年视图，返回后定位到所选日期
   Future<void> _openYearOverview() async {
     final picked = await YearOverviewPage.push(
@@ -340,16 +449,24 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
     // 当月有任务的日期升序分组（下方列表数据源）
     final daysInMonth = DateTime(_month.year, _month.month + 1, 0).day;
     final monthGroups = <({DateTime date, List<TodoTask> items})>[];
-    // 当月圆点颜色表（ymd → 优先级色列表）：一次构建，月历 42 格
-    // eventDotsBuilder 直接查表——避免每格每帧重复 _ymd 拼接 + 列表遍历
-    final monthDots = <String, List<Color>>{};
+    // 当月圆点表（ymd → 事件圆点列表）：一次构建，月历 42 格
+    // eventDotsBuilder 直接查表——避免每格每帧重复 _ymd 拼接 + 列表遍历。
+    // 载荷带任务 id/标题（点按圆点改期时按 id 回头找任务本体）
+    final monthDots = <String, List<CalendarEventDot>>{};
     for (var d = 1; d <= daysInMonth; d++) {
       final date = DateTime(_month.year, _month.month, d);
       final key = _ymd(date);
       final items = byDay[key] ?? const <TodoTask>[];
       if (items.isNotEmpty) {
         monthGroups.add((date: date, items: items));
-        monthDots[key] = [for (final t in items) _priorityColor(t)];
+        monthDots[key] = [
+          for (final t in items)
+            CalendarEventDot(
+              color: _priorityColor(t),
+              taskId: t.id,
+              title: t.title,
+            ),
+        ];
       }
     }
     final monthTotal =
@@ -421,8 +538,11 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                               e.key: e.value.isHoliday,
                           },
                           subLabelBuilder: ChineseAlmanac.daySubLabel,
-                          eventDotsBuilder: (date) => monthDots[_ymd(date)] ??
-                              const <Color>[],
+                          // ≤4 圆点 + `+N` 溢出；点圆点改期（见 _rescheduleFromDot）
+                          eventDotsBuilder: (date) =>
+                              monthDots[_ymd(date)] ??
+                              const <CalendarEventDot>[],
+                          onEventDotTap: _rescheduleFromDot,
                         ),
                       ),
                       const SizedBox(height: AppDimens.space4),

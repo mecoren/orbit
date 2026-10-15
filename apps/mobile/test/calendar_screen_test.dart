@@ -1037,4 +1037,72 @@ void main() {
     expect(count(timelineRows()), 0);
     expect(count(cardSegments()) > 0, isTrue);
   });
+
+  // ===== 圆点改期（桌面拖拽圆点的移动形态）=====
+
+  testWidgets('点圆点 → 改期抽屉选「明天」：保留原时刻写 due + `+N` 溢出 + 回执',
+      (tester) async {
+    final bridge = MockOrbitBridge();
+    // 清掉种子任务：全月只有今天 5 条（确定 4 显 + `+1` 溢出、点第一枚可断言）
+    bridge.store.tasks.clear();
+    final now = DateTime.now();
+    final due =
+        DateTime(now.year, now.month, now.day, 15, 30).millisecondsSinceEpoch;
+    for (var i = 1; i <= 5; i++) {
+      final id = 8100 + i;
+      bridge.store.tasks[id] = {
+        'id': id,
+        'uuid': 'uuid-reschedule-$id',
+        'title': '改期目标$i',
+        'description': null,
+        'project_id': null,
+        'priority': 2,
+        'status': 'pending',
+        'done': 0,
+        'done_at': null,
+        'due_date': due,
+        'start_date': null,
+        'repeat_after': 1,
+        'repeat_mode': 0,
+        'percent_done': 0,
+        'position': i,
+        'is_favorite': 0,
+        'my_day_date': null,
+        'is_deleted': 0,
+        'created_at': due,
+        'updated_at': due,
+        'deleted_at': null,
+        'version': 1,
+      };
+    }
+    await tester.pumpWidget(_wrap(const SizedBox(), bridge));
+    await settle(tester);
+
+    // 4 显 + `+1`；圆点槽只属于今天格（SizedBox 10×16 是点按热区几何）
+    expect(find.text('+1'), findsOneWidget);
+    final slots = find.descendant(
+      of: find.byType(OrbitMonthCalendar),
+      matching: find.byWidgetPredicate(
+          (w) => w is SizedBox && w.width == 10 && w.height == 16),
+    );
+    expect(slots, findsNWidgets(4));
+
+    // 点第一枚圆点（position 升序 = 8101 的任务）→ 改期抽屉
+    await tester.tap(slots.first);
+    await tester.pumpAndSettle();
+    expect(find.text('改期到'), findsOneWidget);
+
+    await tester.tap(find.text('明天'));
+    await tester.pumpAndSettle();
+    await settle(tester);
+
+    // 原截止 15:30 保留时刻，只换日期（rescheduleDueMs 带时刻分支）
+    final next = DateTime(now.year, now.month, now.day + 1, 15, 30)
+        .millisecondsSinceEpoch;
+    expect(bridge.store.tasks[8101]!['due_date'], next);
+    // 其余任务不受影响（只改点中的那枚）
+    expect(bridge.store.tasks[8102]!['due_date'], due);
+    expect(find.textContaining('已改期至'), findsOneWidget);
+    await drainToastTimers(tester);
+  });
 }

@@ -60,6 +60,21 @@ class ChineseCalendarColors {
           : const Color(0x0FF59E0B);
 }
 
+/// 月历日格事件圆点（large 档；[OrbitMonthCalendar.eventDotsBuilder] 的载荷）。
+///
+/// [taskId]/[title] 供点按交互（改期）定位任务；纯装饰场景可只给颜色。
+class CalendarEventDot {
+  const CalendarEventDot({required this.color, this.taskId, this.title});
+
+  final Color color;
+
+  /// 挂载任务 id（点按改期等交互用；null = 该圆点不可交互）
+  final int? taskId;
+
+  /// 任务标题（悬浮提示/无障碍文案用，可选）
+  final String? title;
+}
+
 /// 通用月历（设计系统 v3：`table_calendar` 承载网格与手势）。
 ///
 /// **为什么换实现**：v2 的自绘月历要自己维护 42 格网格、翻页手势、行高与选中态；
@@ -107,6 +122,7 @@ class OrbitMonthCalendar extends StatelessWidget {
     this.holidays,
     this.subLabelBuilder,
     this.eventDotsBuilder,
+    this.onEventDotTap,
     this.dayCellBuilder,
     this.accentColor,
     this.weekendColor,
@@ -155,8 +171,14 @@ class OrbitMonthCalendar extends StatelessWidget {
   /// 副标签（large/medium；日历视图传 `ChineseAlmanac.daySubLabel`）
   final String? Function(DateTime date)? subLabelBuilder;
 
-  /// 事件圆点颜色（仅 large；最多 4 个，无事件也保持等高防跳动）
-  final List<Color> Function(DateTime date)? eventDotsBuilder;
+  /// 事件圆点（仅 large；最多显示 4 个 + `+N` 溢出计数，无事件也保持
+  /// 等高占位防跳动）。今天实心块内 `+N` 转白，与副标签同口径。
+  final List<CalendarEventDot> Function(DateTime date)? eventDotsBuilder;
+
+  /// 点按某个事件圆点（随日格一起回调；对应桌面端「拖拽圆点改期」的
+  /// 移动端形态——圆点视觉仅 4dp，触屏做不到精确拖拽，改为点按选目标日）。
+  /// 不传则圆点纯装饰（不拦截日格点按）。
+  final void Function(DateTime date, CalendarEventDot dot)? onEventDotTap;
 
   /// 完全接管日格渲染
   final Widget? Function(AppCalendarDayContext ctx)? dayCellBuilder;
@@ -408,6 +430,48 @@ class OrbitMonthCalendar extends StatelessWidget {
     );
   }
 
+  /// 单枚事件圆点。可交互时（[onEventDotTap] 非空）外扩为 10×16 点按盒
+  /// （视觉不变：4dp 圆居中）——4dp 圆点直接点按的命中率不可接受，
+  /// 隐形热区是「点圆点改期」能落地的前提；不可交互时保持原紧凑排布
+  /// （不拦日格点按）。
+  Widget _eventDot(CalendarEventDot dot, DateTime date, {required bool ring}) {
+    final circle = Container(
+      width: 4,
+      height: 4,
+      decoration: BoxDecoration(
+        color: dot.color,
+        shape: BoxShape.circle,
+        // 今天实心块内加白描边（桌面 isToday 同款）：深色优先级圆点点在
+        // 强调色底上会糊成一团
+        boxShadow: ring
+            ? [
+                BoxShadow(
+                  color: const Color(0xFFFFFFFF).withValues(alpha: 0.45),
+                  spreadRadius: 1,
+                ),
+              ]
+            : null,
+      ),
+    );
+    final onTap = onEventDotTap;
+    if (onTap == null) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 1),
+        child: circle,
+      );
+    }
+    return GestureDetector(
+      // 圆点槽窄于视窗时（≥5 个事件）热区随槽收窄，但圆点仍居中可辨
+      behavior: HitTestBehavior.opaque,
+      onTap: () => onTap(date, dot),
+      child: SizedBox(
+        width: 10,
+        height: 16,
+        child: Center(child: circle),
+      ),
+    );
+  }
+
   bool _outOfRange(DateTime date) =>
       (selectableStart != null && date.isBefore(selectableStart!)) ||
       (selectableEnd != null && date.isAfter(selectableEnd!));
@@ -507,21 +571,36 @@ class OrbitMonthCalendar extends StatelessWidget {
           )
         : null;
 
+    // 事件圆点（桌面 DayDotsDropZone 同口径）：最多 4 点 + `+N` 溢出计数。
+    // 行高 16（桌面落点行 h-4 同款）：圆点视觉 4dp 太小，热区靠行高兜底
+    // （点按改期的命中面积下限）；无事件也占位等高，避免选中/今天时跳动
+    final dotList = eventDotsBuilder == null
+        ? const <CalendarEventDot>[]
+        : eventDotsBuilder!(date);
+    final dotOverflow = dotList.length - 4;
     final dots = size == AppCalendarSize.large && eventDotsBuilder != null
         ? SizedBox(
-            // 固定高度占位（无事件也保持等高，避免选中/今天时格子内容跳动）
-            height: 6,
+            height: 16,
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                for (final color in eventDotsBuilder!(date).take(4))
+                for (final dot in dotList.take(4))
+                  Flexible(child: _eventDot(dot, date, ring: filled)),
+                if (dotOverflow > 0)
                   Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 1),
-                    child: Container(
-                      width: 4,
-                      height: 4,
-                      decoration:
-                          BoxDecoration(color: color, shape: BoxShape.circle),
+                    // `+N` 取固有宽度、圆点分剩余空间：窄屏（≥5 圆点）时
+                    // 圆点槽自然收窄，不会撑破 42dp 格内宽
+                    padding: const EdgeInsets.only(left: 2),
+                    child: Text(
+                      '+$dotOverflow',
+                      style: TextStyle(
+                        fontSize: 10,
+                        height: 1,
+                        // 今天实心块内转白（桌面 text-primary-foreground/90）
+                        color: filled
+                            ? const Color(0xFFFFFFFF).withValues(alpha: 0.9)
+                            : colors.secondaryText,
+                      ),
                     ),
                   ),
               ],
@@ -564,7 +643,6 @@ class OrbitMonthCalendar extends StatelessWidget {
                       ),
                     ),
                     ?sub,
-                    ?dots,
                   ],
                 ),
               ),
@@ -578,6 +656,11 @@ class OrbitMonthCalendar extends StatelessWidget {
                   weekendColor: weekend,
                 ),
               ),
+            // 圆点行**叠**在日格下缘（左起整宽、高 16）：内容列（日号 +
+            // 副标签）在 74 高格内已接近满高，圆点入列会顶溢 1px
+            // （2026-10-15 实测）；叠层不占列高，各行圆点基线还天然对齐
+            if (dots != null)
+              Positioned(bottom: 0, left: 0, right: 0, child: dots),
           ],
         ),
       ),

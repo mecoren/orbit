@@ -121,4 +121,55 @@ void main() {
     await dragPath(tester, const [Offset(0, -40), Offset(0, -40)]);
     expect(captured, isEmpty);
   });
+
+  // ===== 事件圆点（≤4 点 + `+N` 溢出；点按改期）=====
+
+  testWidgets('事件圆点：≤4 点 + `+N` 溢出；点按回调携带 (日期, 圆点)；窄屏不溢出',
+      (tester) async {
+    // 360dp 窄屏（格内宽 ~42dp）：4 圆点 + `+1` 必须靠弹性槽收窄放下，
+    // 溢出会直接以 RenderFlex 异常砸红用例
+    tester.view.physicalSize = const Size(360, 800);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    final taps = <(DateTime, CalendarEventDot)>[];
+    await tester.pumpWidget(orbitTestApp(
+      home: Scaffold(
+        body: OrbitMonthCalendar(
+          month: DateTime(2026, 2),
+          showHeader: false,
+          // 仅 2/10 挂 5 个圆点（4 显 + 1 溢出）；其余日无圆点
+          eventDotsBuilder: (d) => d.day == 10
+              ? [
+                  for (var i = 1; i <= 5; i++)
+                    CalendarEventDot(
+                      color: const Color(0xFF3B82F6),
+                      taskId: i,
+                      title: '任务$i',
+                    ),
+                ]
+              : const <CalendarEventDot>[],
+          onEventDotTap: (d, dot) => taps.add((d, dot)),
+        ),
+      ),
+    ));
+    await tester.pumpAndSettle();
+
+    // 4 显 + `+1`（第 5 个只进计数）
+    expect(find.text('+1'), findsOneWidget);
+    final slots = find.byWidgetPredicate(
+        (w) => w is SizedBox && w.width == 10 && w.height == 16);
+    expect(slots, findsNWidgets(4));
+
+    // 点第一枚圆点：回调携带格日期与本枚载荷（任务 id 保序对应）。
+    // 格日期来自 table_calendar（UTC 零时刻），只比日期字段不比 isUtc
+    await tester.tap(slots.first);
+    await tester.pump();
+    expect(taps, hasLength(1));
+    expect(taps.first.$1.year, 2026);
+    expect(taps.first.$1.month, 2);
+    expect(taps.first.$1.day, 10);
+    expect(taps.first.$2.taskId, 1);
+    expect(taps.first.$2.title, '任务1');
+  });
 }
