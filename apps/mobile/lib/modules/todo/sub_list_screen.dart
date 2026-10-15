@@ -817,7 +817,7 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
     }
   }
 
-  // ── 多选与批量操作（对齐桌面 batch-actions 的动作集裁剪版）──
+  // ── 多选与批量操作（对齐桌面 batch-actions 的动作集）──
 
   bool get _selectionMode => _selected.isNotEmpty;
 
@@ -878,6 +878,20 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
     var failures = 0;
     var spawnedRepeats = 0; // 批量完成里推进出下一期的重复任务条数
 
+    // 双向动作目标：选中集当前态派生（与桌面工具条动态文案同语义），
+    // 循环外一次算定，逐条任务只在 batchFieldPatch 里做「值已相同跳过」
+    final doneTarget = batchToggleDoneTarget(targets);
+    final statusToDoing = batchStatusToDoingTarget(targets);
+    final myDayJoin = batchMyDayJoinTarget(targets);
+    final favoriteTarget = batchFavoriteTarget(targets);
+    final myDayMs = batchMyDayMs(myDayJoin);
+    final toward = switch (action) {
+      BatchAction.status => statusToDoing,
+      BatchAction.myDay => myDayJoin,
+      BatchAction.favorite => favoriteTarget,
+      _ => null,
+    };
+
     try {
       for (final task in targets) {
         try {
@@ -886,11 +900,10 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
               await bridge.todoTaskDelete(task.id);
               changed++;
             case BatchAction.toggleDone:
-              final done = batchToggleDoneTarget(targets);
-              final patch = batchDonePatch(task, done: done);
+              final patch = batchDonePatch(task, done: doneTarget);
               if (patch == null) break;
               // 完成走 complete（重复任务单事务推进）；取消走普通 patch
-              if (done) {
+              if (doneTarget) {
                 final res = await bridge.todoTaskComplete(task.id);
                 if (res.nextInstance != null) spawnedRepeats++;
               } else {
@@ -900,6 +913,9 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
               // 「未完成但 status=done」的不一致行
               patches.add(inversePatchOf(task, patch));
               changed++;
+            case BatchAction.status:
+            case BatchAction.myDay:
+            case BatchAction.favorite:
             case BatchAction.priority:
             case BatchAction.reschedule:
             case BatchAction.moveProject:
@@ -909,6 +925,11 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
                 priority: priority,
                 dueMs: dueMs,
                 projectId: projectId,
+                myDayMs: action == BatchAction.myDay ? myDayMs : null,
+                favorite:
+                    action == BatchAction.favorite ? favoriteTarget : null,
+                statusToDoing:
+                    action == BatchAction.status ? statusToDoing : null,
               );
               if (patch == null) break;
               await bridge.todoTaskUpdate(task.id, encodePatch(patch));
@@ -941,8 +962,8 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
       }
       _offerUndo(UndoEntry(
         label: failures > 0
-            ? '${batchUndoLabel(action, changed)}（$failures 条失败）'
-            : batchUndoLabel(action, changed),
+            ? '${batchUndoLabel(action, changed, toward: toward)}（$failures 条失败）'
+            : batchUndoLabel(action, changed, toward: toward),
         patches: patches,
         restoreTaskIds:
             action == BatchAction.delete ? targets.map((t) => t.id).toList() : const [],
@@ -1251,6 +1272,11 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
     switch (action) {
       case BatchAction.toggleDone:
         _runBatch(BatchAction.toggleDone);
+      // 状态推进 / 我的一天 / 收藏：目标值由选中集派生，无参数抽屉
+      case BatchAction.status:
+      case BatchAction.myDay:
+      case BatchAction.favorite:
+        _runBatch(action);
       case BatchAction.priority:
         _batchPickPriority();
       case BatchAction.reschedule:
@@ -1983,7 +2009,7 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
 
   /// 批量动作工具条（底部浮动，从下沿上滑进入）
   ///
-  /// 六个一级动作横排 + 横向滚动：一屏放不下时横滑而非折行，避免工具条
+  /// 一级动作横排 + 横向滚动：一屏放不下时横滑而非折行，避免工具条
   /// 高度随动作数增加挤压列表可视区。
   Widget _batchToolbar(AppColorSet colors) {
     return Positioned(

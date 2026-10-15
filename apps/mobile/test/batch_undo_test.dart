@@ -11,6 +11,8 @@ TodoTask _task({
   int? projectId,
   int? dueDate,
   int done = 0,
+  int isFavorite = 0,
+  int? myDayDate,
 }) =>
     TodoTask(
       id: id,
@@ -34,8 +36,8 @@ TodoTask _task({
       repeatNthWeek: 0,
       percentDone: 0,
       position: id.toDouble(),
-      isFavorite: 0,
-      myDayDate: null,
+      isFavorite: isFavorite,
+      myDayDate: myDayDate,
       durationMinutes: null,
       isDeleted: 0,
       createdAt: 0,
@@ -141,6 +143,152 @@ void main() {
     });
   });
 
+  group('批量状态推进', () {
+    test('目标派生：含未完成 → 进行中；全完成 → 移回待办', () {
+      expect(
+        batchStatusToDoingTarget([_task(id: 1), _task(id: 2, done: 1)]),
+        isTrue,
+      );
+      expect(
+        batchStatusToDoingTarget([_task(id: 1, done: 1, status: 'done')]),
+        isFalse,
+      );
+    });
+
+    test('进行中补丁：pending 出补丁、doing 同值跳过、已完成不动', () {
+      expect(
+        batchFieldPatch(_task(id: 1),
+            action: BatchAction.status, statusToDoing: true),
+        {'status': 'doing', 'done': 0, 'done_at': null},
+      );
+      expect(
+        batchFieldPatch(_task(id: 1, status: 'doing'),
+            action: BatchAction.status, statusToDoing: true),
+        isNull,
+      );
+      // 混合选中集里的已完成任务不因"移入进行中"被取消完成
+      expect(
+        batchFieldPatch(_task(id: 1, done: 1, status: 'done'),
+            action: BatchAction.status, statusToDoing: true),
+        isNull,
+      );
+    });
+
+    test('移回待办补丁清 done/done_at（单任务三段切换同口径）', () {
+      expect(
+        batchFieldPatch(_task(id: 1, done: 1, status: 'done'),
+            action: BatchAction.status, statusToDoing: false),
+        {'status': 'pending', 'done': 0, 'done_at': null},
+      );
+      expect(
+        batchFieldPatch(_task(id: 1),
+            action: BatchAction.status, statusToDoing: false),
+        isNull,
+      );
+    });
+  });
+
+  group('批量我的一天 / 收藏', () {
+    // isInMyDay 按「真实今天」判定，测试端点须用 DateTime.now() 派生
+    final realToday = DateTime.now();
+    final todayZero = DateTime(realToday.year, realToday.month, realToday.day)
+        .millisecondsSinceEpoch;
+    final yesterdayZero = todayZero - const Duration(days: 1).inMilliseconds;
+
+    test('我的一天目标：全在今天 → 移出；否则加入（含昨天遗留）', () {
+      expect(
+        batchMyDayJoinTarget([_task(id: 1, myDayDate: todayZero)]),
+        isFalse,
+      );
+      expect(
+        batchMyDayJoinTarget([
+          _task(id: 1, myDayDate: todayZero),
+          _task(id: 2),
+        ]),
+        isTrue,
+      );
+    });
+
+    test('我的一天毫秒：加入 = 今天本地零点；移出 = 0', () {
+      final now = DateTime(2026, 10, 15, 23, 30);
+      expect(
+        batchMyDayMs(true, now),
+        DateTime(2026, 10, 15).millisecondsSinceEpoch,
+      );
+      expect(batchMyDayMs(false, now), 0);
+    });
+
+    test('我的一天补丁：加入改写昨天遗留；已是今天/移出空值跳过', () {
+      expect(
+        batchFieldPatch(_task(id: 1, myDayDate: yesterdayZero),
+            action: BatchAction.myDay, myDayMs: todayZero),
+        {'my_day_date': todayZero},
+      );
+      expect(
+        batchFieldPatch(_task(id: 1, myDayDate: todayZero),
+            action: BatchAction.myDay, myDayMs: todayZero),
+        isNull,
+      );
+      expect(
+        batchFieldPatch(_task(id: 1),
+            action: BatchAction.myDay, myDayMs: 0),
+        isNull,
+      );
+      expect(
+        batchFieldPatch(_task(id: 1, myDayDate: todayZero),
+            action: BatchAction.myDay, myDayMs: 0),
+        {'my_day_date': null},
+      );
+    });
+
+    test('收藏目标与补丁：全收藏 → 取消；同值跳过', () {
+      expect(batchFavoriteTarget([_task(id: 1, isFavorite: 1)]), isFalse);
+      expect(
+        batchFavoriteTarget([_task(id: 1, isFavorite: 1), _task(id: 2)]),
+        isTrue,
+      );
+      expect(
+        batchFieldPatch(_task(id: 1),
+            action: BatchAction.favorite, favorite: true),
+        {'is_favorite': 1},
+      );
+      expect(
+        batchFieldPatch(_task(id: 1, isFavorite: 1),
+            action: BatchAction.favorite, favorite: true),
+        isNull,
+      );
+      expect(
+        batchFieldPatch(_task(id: 1, isFavorite: 1),
+            action: BatchAction.favorite, favorite: false),
+        {'is_favorite': 0},
+      );
+    });
+  });
+
+  group('新动作反向补丁', () {
+    test('状态/我的一天/收藏三键按原快照回滚', () {
+      final t = _task(
+        id: 9,
+        status: 'doing',
+        isFavorite: 1,
+        myDayDate: 555,
+      );
+      final inverse = inversePatchOf(
+        t,
+        {'status': 'pending', 'done': 0, 'done_at': null},
+      );
+      expect(inverse.patch['status'], 'doing');
+      expect(inverse.patch['done'], 0);
+      expect(inverse.patch['done_at'], null);
+
+      final inverse2 = inversePatchOf(
+        t,
+        {'is_favorite': 0, 'my_day_date': null},
+      );
+      expect(inverse2.patch, {'is_favorite': 1, 'my_day_date': 555});
+    });
+  });
+
   group('反向补丁', () {
     test('按原快照回滚字段', () {
       final t = _task(id: 9, priority: 2, projectId: 4, status: 'doing');
@@ -189,6 +337,33 @@ void main() {
     test('按动作与条数生成', () {
       expect(batchUndoLabel(BatchAction.delete, 3), '已删除 3 个任务');
       expect(batchUndoLabel(BatchAction.addLabel, 1), '已为 1 个任务加标签');
+    });
+
+    test('双向动作按方向措辞（toward 缺省落反向）', () {
+      expect(
+        batchUndoLabel(BatchAction.myDay, 2, toward: true),
+        '已将 2 个任务加入我的一天',
+      );
+      expect(
+        batchUndoLabel(BatchAction.myDay, 2, toward: false),
+        '已将 2 个任务移出我的一天',
+      );
+      expect(
+        batchUndoLabel(BatchAction.favorite, 3, toward: true),
+        '已收藏 3 个任务',
+      );
+      expect(
+        batchUndoLabel(BatchAction.favorite, 3),
+        '已取消收藏 3 个任务',
+      );
+      expect(
+        batchUndoLabel(BatchAction.status, 4, toward: true),
+        '已推进 4 个任务到进行中',
+      );
+      expect(
+        batchUndoLabel(BatchAction.status, 4, toward: false),
+        '已将 4 个任务移回待办',
+      );
     });
   });
 }
