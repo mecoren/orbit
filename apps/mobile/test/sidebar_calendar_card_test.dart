@@ -70,9 +70,10 @@ void main() {
     await tester.pumpWidget(_wrap(bridge));
     await _settle(tester);
 
-    // 快捷视图卡：7 行（首段 / 中段 / 末段齐全）
+    // 快捷视图卡：8 行（首段 / 中段 / 末段齐全）
     _expectInSegment(tester, find.text('我的一天'), OrbitCardEdge.first);
     _expectInSegment(tester, find.text('今天'));
+    _expectInSegment(tester, find.text('未完成'));
     _expectInSegment(tester, find.text('无日期'), OrbitCardEdge.last);
     // 功能入口卡：搜索 / 筛选器 / 回收站同卡三段
     _expectInSegment(tester, find.text('搜索'), OrbitCardEdge.first);

@@ -33,11 +33,12 @@ void main() {
 
     expect(find.text('循迹'), findsOneWidget);
     // 「快捷视图」区块标题已去除（底部导航直达后无需重复标注），直接断言行内容
-    // 七个快捷视图行全部可见（07 报告新增「我的一天」置顶）
+    // 八个快捷视图行全部可见（07 报告新增「我的一天」置顶；对齐桌面补「未完成」）
     expect(find.text('我的一天'), findsOneWidget);
     expect(find.text('今天'), findsOneWidget);
     expect(find.text('近7天'), findsOneWidget);
     expect(find.text('全部任务'), findsOneWidget);
+    expect(find.text('未完成'), findsOneWidget);
     expect(find.text('已完成'), findsOneWidget);
     expect(find.text('收藏'), findsOneWidget);
     expect(find.text('无日期'), findsOneWidget);

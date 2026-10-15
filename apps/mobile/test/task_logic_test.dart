@@ -105,6 +105,12 @@ void main() {
       expect(result.map((t) => t.id), [2, 5]);
     });
 
+    test('view=undone 只含未完成（桌面 undone 筛选同口径）', () {
+      final result = filterTasks(
+          tasks, const TaskFilterInput(quickView: QuickViewKey.undone));
+      expect(result.map((t) => t.id), [1, 3, 4, 6]);
+    });
+
     test('view=today 含逾期 + 今日截止（截止 < 明日零点即命中）', () {
       final onlyToday = filterTasks(
           tasks, const TaskFilterInput(quickView: QuickViewKey.today));

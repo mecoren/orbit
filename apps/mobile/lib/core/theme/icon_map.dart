@@ -116,6 +116,9 @@ abstract final class OrbitIcons {
   static const IconData circle = LucideIcons.circle;
   static const IconData playCircle = LucideIcons.circlePlay;
 
+  /// 未完成快捷视图（对齐桌面 CircleDot）
+  static const IconData circleDot = LucideIcons.circleDot;
+
   /// 重复任务（行右侧元信息图标列）
   static const IconData repeat = LucideIcons.repeat;
 

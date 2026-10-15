@@ -14,13 +14,13 @@ import '../../../core/theme/icon_map.dart';
 ///   取消一律回 pending 并清空 done_at；
 /// - `shared/time.ts` —— 相对时间分档与 yyyy-MM-dd 格式化。
 ///
-/// 快捷视图七键（docs/05 §4.1 + 07 报告新增「我的一天」置顶）：
-/// 我的一天 / 今天 / 近7天 / 全部 / 已完成 / 收藏 / 无日期。
+/// 快捷视图八键（docs/05 §4.1 + 07 报告新增「我的一天」置顶 + 对齐桌面补「未完成」）：
+/// 我的一天 / 今天 / 近7天 / 全部 / 未完成 / 已完成 / 收藏 / 无日期。
 
 // ---------- 快捷视图定义 ----------
 
 /// 快捷视图 key
-enum QuickViewKey { myDay, today, week, all, done, favorite, nodate }
+enum QuickViewKey { myDay, today, week, all, undone, done, favorite, nodate }
 
 /// [QuickViewKey] 的展示元数据（标签 / 语义色，色值对齐 docs/05 §2.2 quickView 板）
 extension QuickViewMeta on QuickViewKey {
@@ -30,6 +30,7 @@ extension QuickViewMeta on QuickViewKey {
         QuickViewKey.today => '今天',
         QuickViewKey.week => '近7天',
         QuickViewKey.all => '全部任务',
+        QuickViewKey.undone => '未完成',
         QuickViewKey.done => '已完成',
         QuickViewKey.favorite => '收藏',
         QuickViewKey.nodate => '无日期',
@@ -41,17 +42,20 @@ extension QuickViewMeta on QuickViewKey {
         QuickViewKey.today => '#EF4444',
         QuickViewKey.week => '#F59E0B',
         QuickViewKey.all => '#3B82F6',
+        QuickViewKey.undone => '#F59E0B',
         QuickViewKey.done => '#22C55E',
         QuickViewKey.favorite => '#8B5CF6',
         QuickViewKey.nodate => '#6B7280',
       };
 
-  /// Material Rounded 图标（docs/05 §4.1 图标映射 + nodate 补充）
+  /// Material Rounded 图标（docs/05 §4.1 图标映射 + nodate 补充；
+  /// undone 对齐桌面 CircleDot）
   IconData get icon => switch (this) {
         QuickViewKey.myDay => OrbitIcons.sun,
         QuickViewKey.today => OrbitIcons.calendar,
         QuickViewKey.week => OrbitIcons.calendarRange,
         QuickViewKey.all => OrbitIcons.list,
+        QuickViewKey.undone => OrbitIcons.circleDot,
         QuickViewKey.done => OrbitIcons.success,
         QuickViewKey.favorite => OrbitIcons.starOutline,
         QuickViewKey.nodate => OrbitIcons.calendarBlocked,
@@ -116,6 +120,9 @@ List<TodoTask> filterTasks(List<TodoTask> tasks, TaskFilterInput input,
         break;
       case QuickViewKey.done:
         list = list.where((t) => t.isDone);
+      case QuickViewKey.undone:
+        // 未完成 = 排除已完成（对齐桌面 undone 状态筛选；hideDone 开关下恒等）
+        list = list.where((t) => !t.isDone);
       case QuickViewKey.today:
         // 今天 = 逾期 + 今日到期（截止 < 明日零点即命中）：逾期未完成仍是
         // 「今天要做的事」，与图标角标 dueTodayOrOverdueCount 同口径；
@@ -229,6 +236,7 @@ SidebarCounts computeSidebarCounts(
   return SidebarCounts(
     quickView: {
       QuickViewKey.all: all,
+      QuickViewKey.undone: all,
       QuickViewKey.done: done,
       QuickViewKey.today: today,
       QuickViewKey.week: week,
@@ -244,7 +252,7 @@ SidebarCounts computeSidebarCounts(
 class SidebarCounts {
   const SidebarCounts({required this.quickView, required this.undoneByProject});
 
-  /// 各快捷视图计数（all/today/week/favorite/myDay/nodate = 未完成数，
+  /// 各快捷视图计数（all/undone/today/week/favorite/myDay/nodate = 未完成数，
   /// done 视图 = 已完成数）
   final Map<QuickViewKey, int> quickView;
 
@@ -770,12 +778,13 @@ String statusLabel(String status) => switch (status) {
       _ => '待办',
     };
 
-/// 子列表空态文案映射（按入口八种，docs/05 §4.2）
+/// 子列表空态文案映射（按入口九种，docs/05 §4.2）
 String emptyMessageFor(TaskFilterInput input) {
   if (input.projectId != null) return '该项目暂无任务';
   if (input.ungrouped) return '暂无未分组任务';
   return switch (input.quickView) {
     QuickViewKey.done => '暂无已完成任务',
+    QuickViewKey.undone => '暂无未完成任务',
     QuickViewKey.today => '今天没有到期的任务',
     QuickViewKey.week => '近7天没有截止的任务',
     QuickViewKey.favorite => '暂无收藏任务',
