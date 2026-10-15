@@ -425,7 +425,7 @@ double midpointPosition(double? prev, double? next) =>
 
 // ---------- 标签勾选 diff（详情页标签编辑 Phase 7） ----------
 
-/// 固定 8 色板（新建标签选色用；对齐桌面端 PRESET_COLORS，
+/// 固定 10 色板（新建标签选色用；逐色对齐桌面端 PRESET_10，
 /// 默认选中第 4 色 #3B82F6 与桌面 LabelManager 一致）
 const List<String> labelPaletteHexes = [
   '#EF4444',
@@ -435,6 +435,8 @@ const List<String> labelPaletteHexes = [
   '#8B5CF6',
   '#EC4899',
   '#14B8A6',
+  '#F97316',
+  '#6366F1',
   '#6B7280',
 ];
 

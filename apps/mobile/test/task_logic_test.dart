@@ -436,11 +436,15 @@ void main() {
     });
   });
 
-  group('labelPaletteHexes 固定 8 色板', () {
-    test('共 8 色、无重复、含默认第 4 色 #3B82F6', () {
-      expect(labelPaletteHexes.length, 8);
-      expect(labelPaletteHexes.toSet().length, 8);
+  group('labelPaletteHexes 固定 10 色板', () {
+    test('共 10 色、无重复、含默认第 4 色 #3B82F6，逐色对齐桌面 PRESET_10', () {
+      expect(labelPaletteHexes.length, 10);
+      expect(labelPaletteHexes.toSet().length, 10);
       expect(labelPaletteHexes[3], '#3B82F6');
+      expect(labelPaletteHexes, [
+        '#EF4444', '#F59E0B', '#22C55E', '#3B82F6', '#8B5CF6',
+        '#EC4899', '#14B8A6', '#F97316', '#6366F1', '#6B7280',
+      ]);
     });
   });
 

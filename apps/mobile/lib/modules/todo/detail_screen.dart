@@ -1086,7 +1086,7 @@ class _LabelsSection extends StatelessWidget {
 }
 
 /// 标签编辑弹层（Phase 7）：现有标签多选勾选态（勾选变化即建/删关联）+
-/// 底部"新建标签"行（标题 + 固定 8 色板选色）。勾选态直接从详情 provider
+/// 底部"新建标签"行（标题 + 固定 10 色板选色）。勾选态直接从详情 provider
 /// 派生（写后 invalidate 即回读权威态），本地不复制状态避免漂移。
 class _LabelEditSheet extends ConsumerStatefulWidget {
   const _LabelEditSheet({required this.taskId});

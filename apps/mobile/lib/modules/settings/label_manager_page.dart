@@ -59,7 +59,7 @@ class _LabelManagerPageState extends ConsumerState<LabelManagerPage> {
     ref.invalidate(taskDetailProvider);
   }
 
-  // ── 色板抽屉（8 色，行高满足触控热区） ──
+  // ── 色板抽屉（10 色，行高满足触控热区） ──
 
   Future<String?> _pickColor(String current) async {
     final colors = AppColors.ofContext(context);
