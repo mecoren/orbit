@@ -126,12 +126,13 @@ import {
   type TodoTask,
 } from "@/lib/tauri";
 
-/** 关联类型中文标签（只读展示） */
+/** 关联类型中文标签（只读展示）；related 是 2026-10 前移动端旧写入值的兼容别名 */
 const RELATION_TYPE_LABEL: Record<string, string> = {
   subtask: "子任务",
   blocks: "阻塞",
   blocked_by: "被阻塞",
   relates_to: "关联",
+  related: "关联",
   duplicates: "重复于",
   duplicated_by: "重复项",
 };

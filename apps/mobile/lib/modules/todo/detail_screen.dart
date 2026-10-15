@@ -44,6 +44,18 @@ import '../../core/theme/icon_map.dart';
 /// 提醒选择列表里「自定义时间…」项的哨兵值（与表单同口径）
 const String _reminderCustomKey = 'custom';
 
+/// 关联类型中文标签（只读展示；桌面 RELATION_TYPE_LABEL 同口径）。
+/// `related` 是 2026-10 前移动端旧写入值的兼容别名（新写入一律 relates_to）
+const Map<String, String> _relationTypeLabels = {
+  'subtask': '子任务',
+  'blocks': '阻塞',
+  'blocked_by': '被阻塞',
+  'relates_to': '关联',
+  'related': '关联',
+  'duplicates': '重复于',
+  'duplicated_by': '重复项',
+};
+
 /// 详情全屏 /todo/:id（docs/05 §4.3 + 移动端任务书）
 ///
 /// 数据源 todoTaskGetDetail(id) 聚合（taskDetailProvider）。
@@ -1628,7 +1640,62 @@ class _RelationsSection extends ConsumerStatefulWidget {
 }
 
 class _RelationsSectionState extends ConsumerState<_RelationsSection> {
+  /// 对方任务快照（other_task_id → 任务；null = 查无此任务，维持 #id 回退）。
+  /// 关联行不带标题（桌面同坑，逐行 todoTaskGet 单查），按 id 缓存；
+  /// 关联变化时只补查缺的行，失败不弹错——标题是增强信息
+  final Map<int, TodoTask?> _peers = {};
+  final Set<int> _loadingPeers = {};
+
+  @override
+  void initState() {
+    super.initState();
+    _ensurePeers();
+  }
+
+  @override
+  void didUpdateWidget(covariant _RelationsSection oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _ensurePeers();
+  }
+
+  void _ensurePeers() {
+    for (final r in widget.relations) {
+      final id = r.otherTaskId;
+      if (_peers.containsKey(id) || _loadingPeers.contains(id)) continue;
+      _loadingPeers.add(id);
+      final future = ref.read(orbitBridgeProvider).todoTaskGet(id);
+      future.then((t) {
+        if (!mounted) return;
+        setState(() {
+          _peers[id] = t;
+          _loadingPeers.remove(id);
+        });
+      }, onError: (_) {
+        if (!mounted) return;
+        setState(() {
+          _peers[id] = null;
+          _loadingPeers.remove(id);
+        });
+      });
+    }
+  }
+
+  String _peerLabel(TodoTaskRelation relation) {
+    final peer = _peers[relation.otherTaskId];
+    if (peer == null) return '任务 #${relation.otherTaskId}';
+    return peer.isDone ? '${peer.title}（已完成）' : peer.title;
+  }
+
+  /// 解除关联：先确认（文案点名对方标题，桌面同口径——双方都会解除）
   Future<void> _remove(TodoTaskRelation relation) async {
+    final confirmed = await showConfirmBottomSheet(
+      context,
+      title: '删除关联',
+      message: '确定要移除与「${_peerLabel(relation)}」的关联吗？双方都会解除。',
+      confirmLabel: '删除',
+      destructive: true,
+    );
+    if (!confirmed || !mounted) return;
     try {
       await ref
           .read(orbitBridgeProvider)
@@ -1640,9 +1707,11 @@ class _RelationsSectionState extends ConsumerState<_RelationsSection> {
     }
   }
 
-  /// 关联任务搜索增删：关键词走全局搜索，多选一即建关联
+  /// 关联任务搜索增删：关键词走全局搜索，点选一行即建关联；
+  /// 候选排除自身与已关联（桌面同口径）
   Future<void> _pickAndAdd() async {
     final queryCtl = TextEditingController();
+    final linkedIds = {for (final r in widget.relations) r.otherTaskId};
     List<TodoTask> hits = [];
     bool searching = false;
     final targetId = await showModalBottomSheet<int>(
@@ -1679,16 +1748,18 @@ class _RelationsSectionState extends ConsumerState<_RelationsSection> {
                   ),
                   onSubmitted: (_) async {
                     setSheet(() => searching = true);
-                    try {
-                      final r = await ref
-                          .read(orbitBridgeProvider)
-                          .globalSearch(queryCtl.text.trim(), limit: 20);
-                      setSheet(() {
-                        hits = r.tasks
-                            .where((t) => t.id != widget.taskId)
-                            .toList();
-                        searching = false;
-                      });
+                      try {
+                        final r = await ref
+                            .read(orbitBridgeProvider)
+                            .globalSearch(queryCtl.text.trim(), limit: 20);
+                        setSheet(() {
+                          hits = r.tasks
+                              .where((t) =>
+                                  t.id != widget.taskId &&
+                                  !linkedIds.contains(t.id))
+                              .toList();
+                          searching = false;
+                        });
                     } catch (_) {
                       setSheet(() => searching = false);
                     }
@@ -1753,7 +1824,7 @@ class _RelationsSectionState extends ConsumerState<_RelationsSection> {
             TodoTaskRelationCreateInput(
               taskId: widget.taskId,
               otherTaskId: targetId,
-              relationType: 'related',
+              relationType: 'relates_to',
             ),
           );
       widget.onChanged();
@@ -1804,11 +1875,25 @@ class _RelationsSectionState extends ConsumerState<_RelationsSection> {
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
+                          Flexible(
+                            child: Text(
+                              _peerLabel(relation),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: OrbitAccents.todoAccent,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 4),
                           Text(
-                            '任务 #${relation.otherTaskId}',
-                            style: const TextStyle(
-                              fontSize: 12,
-                              color: OrbitAccents.todoAccent,
+                            _relationTypeLabels[relation.relationType] ??
+                                relation.relationType,
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: AppColors.ofContext(context)
+                                  .secondaryText,
                             ),
                           ),
                           const SizedBox(width: 4),
