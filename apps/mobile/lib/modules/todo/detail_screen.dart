@@ -41,6 +41,9 @@ import 'logic/task_logic.dart';
 import 'providers/todo_providers.dart';
 import '../../core/theme/icon_map.dart';
 
+/// 提醒选择列表里「自定义时间…」项的哨兵值（与表单同口径）
+const String _reminderCustomKey = 'custom';
+
 /// 详情全屏 /todo/:id（docs/05 §4.3 + 移动端任务书）
 ///
 /// 数据源 todoTaskGetDetail(id) 聚合（taskDetailProvider）。
@@ -260,6 +263,9 @@ class _DetailView extends StatelessWidget {
           repeatEndType: detail.repeatEndType,
           repeatEndParam: detail.repeatEndParam,
           repeatFromDone: detail.repeatFromDone,
+          dueDate: detail.dueDate,
+          startDate: detail.startDate,
+          durationMinutes: detail.durationMinutes,
           onChanged: onRefresh,
         ),
         const SizedBox(height: AppDimens.space12),
@@ -1330,6 +1336,9 @@ class _RemindersSection extends ConsumerWidget {
     required this.repeatEndType,
     required this.repeatEndParam,
     required this.repeatFromDone,
+    required this.dueDate,
+    required this.startDate,
+    required this.durationMinutes,
     required this.onChanged,
   });
 
@@ -1344,17 +1353,49 @@ class _RemindersSection extends ConsumerWidget {
   final int repeatEndParam;
   final int repeatFromDone;
 
+  /// 提醒相对档的锚定上下文（截止/开始/时长；见 [reminderPresets]）——
+  /// 与表单 `_pickReminder` 同口径，相对档是输入便捷层，产物仍是绝对时刻
+  final int? dueDate;
+  final int? startDate;
+  final int? durationMinutes;
+
   final VoidCallback onChanged;
 
-  /// 底部弹 wait 面板选日期+时间，确认返回毫秒；取消/清除返回 null
-  Future<DateTime?> _pick(BuildContext context, int? currentMs) {
-    return OrbitDatePicker.pick(
+  /// 提醒时间选择：先给相对档快捷（见 [reminderPresets]，含「结束时」/
+  /// 「截止当天 9:00」/「截止前 N 分钟」），末项进日期+时分单面板；
+  /// 与表单 `_pickReminder` 同口径（对齐桌面详情抽屉 DateTimePicker 的相对档）
+  Future<void> _pickReminder(
+    BuildContext context, {
+    required int initialMs,
+    required Future<void> Function(int ms) onPicked,
+  }) async {
+    await showSelectBottomSheet<String>(
       context,
-      initialDate: currentMs != null
-          ? DateTime.fromMillisecondsSinceEpoch(currentMs)
-          : null,
-      showTime: true,
-      accent: OrbitAccents.todoAccent,
+      title: '提醒时间',
+      items: [
+        for (final p in reminderPresets(
+          dueDate: dueDate,
+          startDate: startDate,
+          durationMinutes: durationMinutes,
+        ))
+          SelectItem<String>(value: '${p.ms}', label: p.label),
+        const SelectItem<String>(
+            value: _reminderCustomKey, label: '自定义时间…'),
+      ],
+      onSelect: (v) async {
+        if (v == _reminderCustomKey) {
+          final picked = await OrbitDatePicker.pick(
+            context,
+            initialDate: DateTime.fromMillisecondsSinceEpoch(initialMs),
+            showTime: true,
+            accent: OrbitAccents.todoAccent,
+          );
+          if (picked == null || !context.mounted) return;
+          await onPicked(picked.millisecondsSinceEpoch);
+        } else {
+          await onPicked(int.parse(v));
+        }
+      },
     );
   }
 
@@ -1372,38 +1413,40 @@ class _RemindersSection extends ConsumerWidget {
     }
   }
 
-  /// 添加提醒：默认初值一小时后
+  /// 添加提醒：相对档快捷 + 自定义；自定义初值一小时后
   Future<void> _add(BuildContext context, WidgetRef ref) async {
-    final picked = await _pick(
-        context, DateTime.now().millisecondsSinceEpoch + 3600000);
-    if (picked == null || !context.mounted) return;
-    await _mutate(context, ref, () async {
-      final bridge = ref.read(orbitBridgeProvider);
-      await bridge.todoReminderCreate(
-        TodoReminderCreateInput(
-            taskId: taskId, remindAt: picked.millisecondsSinceEpoch),
-      );
-    });
+    await _pickReminder(
+      context,
+      initialMs: DateTime.now().millisecondsSinceEpoch + 3600000,
+      onPicked: (ms) => _mutate(context, ref, () async {
+        final bridge = ref.read(orbitBridgeProvider);
+        await bridge.todoReminderCreate(
+          TodoReminderCreateInput(taskId: taskId, remindAt: ms),
+        );
+      }),
+    );
   }
 
-  /// 编辑提醒：点行唤起面板，变更走删旧建新（复用表单 syncTaskReminder）
+  /// 编辑提醒：同入口换初值，变更走删旧建新（复用表单 syncTaskReminder）
   Future<void> _edit(
     BuildContext context,
     WidgetRef ref,
     TodoReminder reminder,
   ) async {
-    final picked = await _pick(context, reminder.remindAt);
-    if (picked == null || !context.mounted) return;
-    await _mutate(context, ref, () async {
-      final bridge = ref.read(orbitBridgeProvider);
-      await syncTaskReminder(
-        bridge,
-        taskId,
-        picked.millisecondsSinceEpoch,
-        reminder,
-        isConstant: reminder.isConstant,
-      );
-    });
+    await _pickReminder(
+      context,
+      initialMs: reminder.remindAt,
+      onPicked: (ms) => _mutate(context, ref, () async {
+        final bridge = ref.read(orbitBridgeProvider);
+        await syncTaskReminder(
+          bridge,
+          taskId,
+          ms,
+          reminder,
+          isConstant: reminder.isConstant,
+        );
+      }),
+    );
   }
 
   /// 翻转持续提醒标记（G2）：时刻不变，仅标记变更——删旧建新（对齐桌面

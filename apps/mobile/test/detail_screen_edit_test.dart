@@ -125,6 +125,9 @@ void main() {
 
     await tester.tap(find.text('添加提醒'));
     await tester.pumpAndSettle();
+    // 提醒入口先出相对档快捷面板（对齐桌面），选「自定义时间…」才进月历+时分面板
+    await tester.tap(find.text('自定义时间…'));
+    await tester.pumpAndSettle();
     await _tapDay(tester, '15');
     await tester.tap(find.text('确认'));
     await _settle(tester);
@@ -158,6 +161,9 @@ void main() {
     await tester.tap(find.text(stampText));
     await tester.pumpAndSettle();
 
+    // 提醒入口先出相对档快捷面板，选「自定义时间…」才进月历+时分面板
+    await tester.tap(find.text('自定义时间…'));
+    await tester.pumpAndSettle();
     // 改选 20 号 → 确认（初始时间非 20 日零点 → 必然变化）
     await _tapDay(tester, '20');
     await tester.tap(find.text('确认'));
