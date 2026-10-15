@@ -9,13 +9,14 @@ import '../../shared/widgets/shadcn/orbit_strikethrough.dart';
 import '../../shared/widgets/shadcn/orbit_checkbox.dart';
 import 'logic/task_logic.dart';
 
-/// 表格视图（对齐桌面 `task-table-view.tsx` 的六列概览）
+/// 表格视图（对齐桌面 `task-table-view.tsx` 的七列概览）
 ///
 /// 移动端形态取舍：
-/// - 桌面六列 `完成 / 标题 / 项目 / 标签 / 截止 / 优先级` 在 360dp 宽度下
-///   放不下六栏文本，故按**权重压缩**：完成 24、标题 flex 4、项目 flex 2、
-///   标签 36（色点列）、截止 76——优先级由勾选框描边环承载（2026-09-25
-///   与列表/看板同口径），不再单设色点列，信息不丢且不折行。
+/// - 桌面七列 `完成 / 标题 / 项目 / 标签 / 截止 / 时长 / 优先级` 在 360dp
+///   宽度下放不下七栏文本，故按**权重压缩**：完成（视觉 20，热区 44 盒）、
+///   标题 flex 4、项目 flex 2、标签 36（色点列）、截止 76、时长 44——
+///   优先级由勾选框描边环承载（2026-09-25 与列表/看板同口径），不再单设
+///   色点列，信息不丢且不折行。
 /// - 不做表内编辑（桌面同样无表内编辑），点行开详情、长按弹操作菜单。
 /// - `ListView.builder` 惰性构建，不引入虚拟化库。
 class TaskTableView extends StatelessWidget {
@@ -83,11 +84,14 @@ class TaskTableView extends StatelessWidget {
       fontWeight: FontWeight.w600,
       color: colors.secondaryText,
     );
+    // 列宽/弹性必须与 [_row] 逐项一致（表头行不参与滚动，漂移即列错位）：
+    // 勾选框布局盒是热区下限 `OrbitCheckbox.minHitExtent`（视觉 20 居中），
+    // 表头首格必须按**布局盒**占位——按视觉宽 24/20 占位曾致整表列错位约 20px
     return Row(
       children: [
-        const SizedBox(width: 24),
+        const SizedBox(width: OrbitCheckbox.minHitExtent),
         const SizedBox(width: AppDimens.space8),
-        Expanded(flex: 3, child: Text('标题', style: style)),
+        Expanded(flex: 4, child: Text('标题', style: style)),
         Expanded(flex: 2, child: Text('项目', style: style)),
         // 固定列宽的表头受字号档保护：全局 TextScaler 生效后字号会变，
         // FittedBox 只在放不下时等比缩小，保证任何档位都单行不换列高
@@ -99,13 +103,20 @@ class TaskTableView extends StatelessWidget {
             child: Text('标签', style: style),
           ),
         ),
-        const SizedBox(width: 4),
         SizedBox(
           width: 76,
           child: FittedBox(
             fit: BoxFit.scaleDown,
             alignment: Alignment.centerRight,
             child: Text('截止', style: style),
+          ),
+        ),
+        SizedBox(
+          width: 44,
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerRight,
+            child: Text('时长', style: style),
           ),
         ),
       ],
@@ -205,6 +216,17 @@ class TaskTableView extends StatelessWidget {
                       ? OrbitAccents.overdueRed
                       : colors.secondaryText,
                 ),
+              ),
+            ),
+            // 时长列（对齐桌面 task-table-view；未设置显示占位保持列对齐）
+            SizedBox(
+              width: 44,
+              child: Text(
+                formatDurationMinutes(task.durationMinutes) ?? '—',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.right,
+                style: TextStyle(fontSize: 11, color: colors.secondaryText),
               ),
             ),
           ],
