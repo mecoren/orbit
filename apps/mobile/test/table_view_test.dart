@@ -2,9 +2,12 @@
 // - 表头与数据行必须共用同一列几何——勾选框布局盒是热区下限
 //   `OrbitCheckbox.minHitExtent`（44，视觉 20 居中），表头首格此前按视觉宽
 //   占位，整表列错位约 20px（2026-10-15 修复，此处锁定）；
-// - 时长列取值（formatDurationMinutes 同口径）与未设置占位「—」。
+// - 时长列取值（formatDurationMinutes 同口径）与未设置占位「—」；
+// - 标题列只读指示（星标/我的一天/进度）与截止列提醒铃铛（桌面同位同源）。
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:orbit/core/theme/icon_map.dart';
+import 'package:orbit/core/theme/orbit_accents.dart';
 import 'package:orbit/data/api/dto.dart';
 import 'package:orbit/modules/todo/table_view.dart';
 
@@ -16,6 +19,9 @@ TodoTask _task({
   String title = '写周报',
   int? dueDate,
   int? durationMinutes,
+  double percentDone = 0,
+  int isFavorite = 0,
+  int? myDayDate,
 }) {
   return TodoTask(
     id: id,
@@ -37,10 +43,10 @@ TodoTask _task({
     repeatFromDone: 0,
     repeatMonthMode: 0,
     repeatNthWeek: 0,
-    percentDone: 0,
+    percentDone: percentDone,
     position: 0,
-    isFavorite: 0,
-    myDayDate: null,
+    isFavorite: isFavorite,
+    myDayDate: myDayDate,
     durationMinutes: durationMinutes,
     isDeleted: 0,
     createdAt: 1,
@@ -50,7 +56,11 @@ TodoTask _task({
   );
 }
 
-Widget _harness(List<TodoTask> tasks) => orbitTestApp(
+Widget _harness(
+  List<TodoTask> tasks, {
+  Map<int, List<ProjectedReminder>> remindersByTask = const {},
+}) =>
+    orbitTestApp(
       home: Scaffold(
         body: TaskTableView(
           tasks: tasks,
@@ -58,6 +68,7 @@ Widget _harness(List<TodoTask> tasks) => orbitTestApp(
           onToggleDone: (_) {},
           onOpen: (_) {},
           onLongPress: (_) {},
+          remindersByTask: remindersByTask,
         ),
       ),
     );
@@ -106,5 +117,67 @@ void main() {
     ];
     expect(dashRights, contains(headerDuration));
     expect(dashRights, contains(tester.getTopRight(find.text('截止')).dx));
+  });
+
+  testWidgets('标题列只读指示：星标 / 我的一天 / 子任务进度', (tester) async {
+    final now = DateTime.now();
+    final todayZero =
+        DateTime(now.year, now.month, now.day).millisecondsSinceEpoch;
+    await tester.pumpWidget(_harness([
+      _task(
+        id: 1,
+        title: '带指示',
+        percentDone: 50,
+        isFavorite: 1,
+        myDayDate: todayZero,
+      ),
+    ]));
+
+    expect(find.byIcon(OrbitIcons.star), findsOneWidget);
+    expect(find.byIcon(OrbitIcons.sunrise), findsOneWidget);
+    expect(find.text('50%'), findsOneWidget);
+
+    // 0/100 不显示（桌面表格同口径）；未收藏/未加入我的一天不渲染
+    await tester.pumpWidget(_harness([
+      _task(id: 1, title: '满进度', percentDone: 100),
+    ]));
+    await tester.pump();
+    expect(find.text('100%'), findsNothing);
+    expect(find.byIcon(OrbitIcons.star), findsNothing);
+    expect(find.byIcon(OrbitIcons.sunrise), findsNothing);
+  });
+
+  testWidgets('截止列提醒铃铛：有存活提醒才有，到期未完转逾期红', (tester) async {
+    final futureMs =
+        DateTime.now().add(const Duration(hours: 2)).millisecondsSinceEpoch;
+    final pastMs =
+        DateTime.now().subtract(const Duration(hours: 2)).millisecondsSinceEpoch;
+
+    await tester.pumpWidget(_harness(
+      [_task(id: 1, title: '有提醒', dueDate: futureMs)],
+      remindersByTask: {
+        1: [ProjectedReminder(id: 5, remindAt: futureMs)],
+      },
+    ));
+    expect(
+      tester.widget<Icon>(find.byIcon(OrbitIcons.notification)).color,
+      isNot(OrbitAccents.overdueRed),
+    );
+
+    await tester.pumpWidget(_harness(
+      [_task(id: 1, title: '已响', dueDate: pastMs)],
+      remindersByTask: {
+        1: [ProjectedReminder(id: 5, remindAt: pastMs)],
+      },
+    ));
+    await tester.pump();
+    expect(
+      tester.widget<Icon>(find.byIcon(OrbitIcons.notification)).color,
+      OrbitAccents.overdueRed,
+    );
+
+    await tester.pumpWidget(_harness([_task(id: 1, title: '无提醒')]));
+    await tester.pump();
+    expect(find.byIcon(OrbitIcons.notification), findsNothing);
   });
 }

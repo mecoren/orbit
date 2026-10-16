@@ -23,8 +23,10 @@ import '../../core/theme/icon_map.dart';
 /// - **不做跨列拖拽**：移动端长按既承载拖拽又与「长按弹操作菜单」冲突，
 ///   跨列改归属走卡片长按菜单（改项目/改状态），语义等价且不误触。
 ///
-/// 卡片信息层级：完成勾选 + 标题（最多 2 行）+ 截止（逾期红）+ 优先级色条 +
-/// 标签色点行 + 项目名（仅「按状态」分组时显示，按项目分组时列头已表达）。
+/// 卡片信息层级：完成勾选 + 标题（最多 2 行）+ 星标 + 截止（逾期红）+
+/// 优先级色环 + 提醒徽标（铃铛 + HH:mm，到期未完转逾期红）+ 子任务进度
+/// （percent_done 0/100 不显示）+ 标签色点行 + 项目名（仅「按状态」分组时
+/// 显示，按项目分组时列头已表达）。
 class KanbanBoard extends StatelessWidget {
   const KanbanBoard({
     super.key,
@@ -35,6 +37,7 @@ class KanbanBoard extends StatelessWidget {
     required this.onLongPress,
     this.projectTitleOf,
     this.labelDotsByTask = const {},
+    this.remindersByTask = const {},
   });
 
   /// 分列表（由 `groupTasksForKanban` 纯函数产出）
@@ -51,6 +54,9 @@ class KanbanBoard extends StatelessWidget {
 
   /// 任务 → 标签色点（投影未就绪时为空，卡片退化为无标签点）
   final Map<int, List<ProjectedTaskLabel>> labelDotsByTask;
+
+  /// 任务 → 提醒投影（行内提醒徽标数据源；投影未就绪时为空，不渲染徽标）
+  final Map<int, List<ProjectedReminder>> remindersByTask;
 
   /// 列宽（264 = 一屏可见约 1.5 列，暗示可横滑）
   static const double columnWidth = 264;
@@ -140,6 +146,13 @@ class KanbanBoard extends StatelessWidget {
     final overdue = isOverdue(task);
     final dots = labelDotsByTask[task.id] ?? const <ProjectedTaskLabel>[];
     final projectTitle = projectTitleOf?.call(task);
+    // 行内提醒徽标：未来最近一条 / 全过期最早一条（列表行 displayReminder 同口径）
+    final reminder = displayReminder(
+      remindersByTask[task.id] ?? const <ProjectedReminder>[],
+      DateTime.now().millisecondsSinceEpoch,
+      taskDone: task.isDone,
+    );
+    final pct = task.percentDone;
 
     // v3 卡片：描边/圆角/填充下沉 OrbitCard，去掉 v2 的 e1 阴影；
     // OrbitCard padding 归零、内层保留原 Padding——InkWell 水波纹仍盖满整卡
@@ -216,6 +229,35 @@ class KanbanBoard extends StatelessWidget {
                     ),
                     const SizedBox(width: AppDimens.space8),
                   ],
+                  // 提醒徽标（桌面看板卡脚注 ReminderChip 同款：铃铛 + HH:mm，
+                  // 到期未完转逾期红）
+                  if (reminder != null) ...[
+                    Icon(
+                      OrbitIcons.notification,
+                      size: AppDimens.iconSizeSm - 4,
+                      color: reminder.fired
+                          ? OrbitAccents.overdueRed
+                          : colors.secondaryText,
+                    ),
+                    const SizedBox(width: AppDimens.space2),
+                    Text(
+                      reminder.clock,
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: reminder.fired
+                            ? OrbitAccents.overdueRed
+                            : colors.secondaryText,
+                      ),
+                    ),
+                    const SizedBox(width: AppDimens.space8),
+                  ],
+                  // 子任务进度（percent_done 0/100 不显示，列表/表格同口径）
+                  if (pct > 0 && pct < 100)
+                    Text(
+                      '${pct.round()}%',
+                      style: TextStyle(
+                          fontSize: 11, color: colors.secondaryText),
+                    ),
                   if (dots.isNotEmpty)
                     for (final l in dots.take(4))
                       Padding(

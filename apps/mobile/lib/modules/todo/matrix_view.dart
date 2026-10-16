@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_dimens.dart';
+import '../../core/theme/icon_map.dart';
 import '../../core/theme/orbit_accents.dart';
 import '../../data/api/dto.dart';
 import '../../shared/utils/hex_color.dart';
@@ -15,8 +16,8 @@ import 'logic/task_logic.dart';
 ///
 /// **整幅 2×2 恒在**（不再概览/下钻两态）：四个象限卡同屏等分剩余高度，
 /// 任务行直接列在格内、超出格高**格内自滚**（半屏宽的格里右侧日期列会挤掉
-/// 标题，行版式改「标题 + 截止日期」纵排两行）；空象限格内居中「没有任务」。
-/// 行为与列表档对齐：点行进详情、勾选完成、长按弹行操作菜单。
+/// 标题，行版式改「标题 + 截止日期 + 提醒/进度」纵排两行）；空象限格内居中
+/// 「没有任务」。行为与列表档对齐：点行进详情、勾选完成、长按弹行操作菜单。
 ///
 /// - **轴口径**见 [groupEisenhower]：重要 = 优先级≥高，紧急 = 截止≤今天末；
 ///   已完成不入桶——完成历史交给「已完成」视图。
@@ -31,6 +32,7 @@ class EisenhowerMatrixBoard extends StatelessWidget {
     required this.onOpen,
     required this.onToggleDone,
     this.onLongPress,
+    this.remindersByTask = const {},
   });
 
   /// 已按当前排序档排好的任务集（matrix 档 hideDone 由调用方保证，完成行不入桶）
@@ -44,6 +46,9 @@ class EisenhowerMatrixBoard extends StatelessWidget {
 
   /// 长按行（弹操作菜单）；null = 无长按语义
   final ValueChanged<TodoTask>? onLongPress;
+
+  /// 任务 → 提醒投影（行内提醒徽标数据源；投影未就绪时为空，不渲染徽标）
+  final Map<int, List<ProjectedReminder>> remindersByTask;
 
   /// 象限识别色（Ⅰ 红 / Ⅱ 琥珀 / Ⅲ 蓝 / Ⅳ 绿）
   Color _tint(AppColorSet colors, EisenhowerQuadrant q) => switch (q) {
@@ -181,12 +186,23 @@ class EisenhowerMatrixBoard extends StatelessWidget {
                     padding: const EdgeInsets.symmetric(
                         vertical: AppDimens.space2),
                     itemCount: tasks.length,
-                    itemBuilder: (context, index) => _QuadrantRow(
-                      task: tasks[index],
-                      onOpen: onOpen,
-                      onToggleDone: onToggleDone,
-                      onLongPress: onLongPress,
-                    ),
+                    itemBuilder: (context, index) {
+                      final task = tasks[index];
+                      return _QuadrantRow(
+                        task: task,
+                        // 行内提醒徽标：未来最近一条 / 全过期最早一条
+                        // （列表行 displayReminder 同口径）
+                        reminder: displayReminder(
+                          remindersByTask[task.id] ??
+                              const <ProjectedReminder>[],
+                          DateTime.now().millisecondsSinceEpoch,
+                          taskDone: task.isDone,
+                        ),
+                        onOpen: onOpen,
+                        onToggleDone: onToggleDone,
+                        onLongPress: onLongPress,
+                      );
+                    },
                   ),
           ),
         ],
@@ -195,21 +211,27 @@ class EisenhowerMatrixBoard extends StatelessWidget {
   }
 }
 
-/// 象限格内的紧凑任务行：勾选框 +「标题 / 截止日期」纵排两行
+/// 象限格内的紧凑任务行：勾选框 +「标题 / 截止日期 + 提醒铃铛 + 进度」纵排
 ///
 /// 半屏宽格里放不下列表档的右侧日期列，日期改落在标题下（竞品同款）：
 /// 相对口径 [formatDueShort]，未来/今天主题蓝、逾期红；完成态标题划线置灰。
+/// 提醒铃铛只示态不带时刻（同日历任务行口径；时刻在列表/看板/详情可读）。
 class _QuadrantRow extends StatelessWidget {
   const _QuadrantRow({
     required this.task,
     required this.onOpen,
     required this.onToggleDone,
+    this.reminder,
     this.onLongPress,
   });
 
   final TodoTask task;
   final ValueChanged<TodoTask> onOpen;
   final ValueChanged<TodoTask> onToggleDone;
+
+  /// 行内提醒载荷；null（无存活提醒）不渲染
+  final DisplayReminder? reminder;
+
   final ValueChanged<TodoTask>? onLongPress;
 
   @override
@@ -218,6 +240,9 @@ class _QuadrantRow extends StatelessWidget {
     final hex = priorityRingHex(task.priority);
     final dueLabel =
         task.dueDate == null ? null : formatDueShort(task.dueDate!);
+    final pct = task.percentDone;
+    final showMeta =
+        dueLabel != null || reminder != null || (pct > 0 && pct < 100);
 
     return InkWell(
       onTap: () => onOpen(task),
@@ -259,18 +284,53 @@ class _QuadrantRow extends StatelessWidget {
                     ),
                     doneColor: colors.secondaryText,
                   ),
-                  if (dueLabel != null)
+                  if (showMeta)
                     Padding(
                       padding: const EdgeInsets.only(top: 2),
-                      child: Text(
-                        dueLabel,
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontFeatures: const [FontFeature.tabularFigures()],
-                          color: isOverdue(task)
-                              ? OrbitAccents.overdueRed
-                              : OrbitAccents.themeAccent,
-                        ),
+                      child: Row(
+                        children: [
+                          if (dueLabel != null)
+                            Flexible(
+                              child: Text(
+                                dueLabel,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontFeatures: const [
+                                    FontFeature.tabularFigures()
+                                  ],
+                                  color: isOverdue(task)
+                                      ? OrbitAccents.overdueRed
+                                      : OrbitAccents.themeAccent,
+                                ),
+                              ),
+                            ),
+                          if (reminder != null) ...[
+                            const SizedBox(width: AppDimens.space4),
+                            Icon(
+                              OrbitIcons.notification,
+                              size: 11,
+                              // 到期未完转逾期红（日历任务行同口径）
+                              color: reminder!.fired
+                                  ? OrbitAccents.overdueRed
+                                  : colors.secondaryText,
+                            ),
+                          ],
+                          if (pct > 0 && pct < 100) ...[
+                            const SizedBox(width: AppDimens.space4),
+                            Text(
+                              '${pct.round()}%',
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontFeatures: const [
+                                  FontFeature.tabularFigures()
+                                ],
+                                color: colors.secondaryText,
+                              ),
+                            ),
+                          ],
+                        ],
                       ),
                     ),
                 ],

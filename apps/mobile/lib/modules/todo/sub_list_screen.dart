@@ -1760,6 +1760,7 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
                         : projectById[t.projectId]?.title
                     : null,
                 labelDotsByTask: labelsByTask,
+                remindersByTask: remindersByTask,
               )
             : showTable
                 ? TaskTableView(
@@ -1772,6 +1773,7 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
                         ? null
                         : projectById[t.projectId]?.title,
                     labelDotsByTask: labelsByTask,
+                    remindersByTask: remindersByTask,
                   )
                 : showMatrix
                     ? EisenhowerMatrixBoard(
@@ -1781,6 +1783,7 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
                         onOpen: (t) => context.push('/todo/${t.id}'),
                         onToggleDone: _toggleDone,
                         onLongPress: _showTaskActions,
+                        remindersByTask: remindersByTask,
                       )
                     : isLogbook
             ? _LogbookList(

@@ -1,9 +1,10 @@
 // 四象限视图 widget 测试（2×2 格内列表版）：四格齐出、任务按桶落位格内、
-// 空象限「没有任务」、点行/勾选回调。
+// 空象限「没有任务」、点行/勾选回调、行内元信息（提醒铃铛 + 子任务进度）。
 //
 // 纯函数口径（轴边界）已在 task_logic_test.dart 覆盖，此处只测装配态交互。
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:orbit/core/theme/icon_map.dart';
 import 'package:orbit/data/api/dto.dart';
 import 'package:orbit/modules/todo/matrix_view.dart';
 import 'package:orbit/shared/widgets/shadcn/orbit_checkbox.dart';
@@ -15,6 +16,7 @@ TodoTask _task({
   String title = 't',
   int priority = 0,
   int? dueDate,
+  double percentDone = 0,
 }) {
   return TodoTask(
     id: id,
@@ -36,7 +38,7 @@ TodoTask _task({
     repeatFromDone: 0,
     repeatMonthMode: 0,
     repeatNthWeek: 0,
-    percentDone: 0,
+    percentDone: percentDone,
     position: 0,
     isFavorite: 0,
     myDayDate: null,
@@ -53,9 +55,11 @@ Future<void> _pumpMatrix(
   WidgetTester tester, {
   ValueChanged<TodoTask>? onOpen,
   ValueChanged<TodoTask>? onToggleDone,
+  List<TodoTask>? tasks,
+  Map<int, List<ProjectedReminder>> remindersByTask = const {},
 }) async {
   final now = DateTime.now();
-  final tasks = [
+  tasks ??= [
     _task(id: 1, title: '救火任务', priority: 3, dueDate: now.millisecondsSinceEpoch),
     _task(id: 2, title: '要事任务', priority: 4),
     _task(id: 3, title: '杂事任务', priority: 0, dueDate: now.millisecondsSinceEpoch),
@@ -69,6 +73,7 @@ Future<void> _pumpMatrix(
           padding: EdgeInsets.zero,
           onOpen: onOpen ?? (_) {},
           onToggleDone: onToggleDone ?? (_) {},
+          remindersByTask: remindersByTask,
         ),
       ),
     ),
@@ -110,5 +115,35 @@ void main() {
     await tester.tap(find.byType(OrbitCheckbox).first);
     await tester.pumpAndSettle();
     expect(toggled, isNotNull);
+  });
+
+  testWidgets('行内元信息：提醒铃铛（有存活提醒才出）+ 子任务进度（0/100 不显示）', (tester) async {
+    final futureMs =
+        DateTime.now().add(const Duration(hours: 3)).millisecondsSinceEpoch;
+    await _pumpMatrix(
+      tester,
+      tasks: [
+        _task(id: 1, title: '带进度', priority: 4, percentDone: 50),
+        _task(
+          id: 2,
+          title: '带提醒',
+          priority: 4,
+          dueDate: DateTime.now().millisecondsSinceEpoch,
+        ),
+      ],
+      remindersByTask: {
+        2: [ProjectedReminder(id: 9, remindAt: futureMs)],
+      },
+    );
+    expect(find.text('50%'), findsOneWidget);
+    expect(find.byIcon(OrbitIcons.notification), findsOneWidget);
+
+    // 100% 不显示、无提醒不渲染（重装同板）
+    await _pumpMatrix(
+      tester,
+      tasks: [_task(id: 1, title: '满进度', priority: 4, percentDone: 100)],
+    );
+    expect(find.text('100%'), findsNothing);
+    expect(find.byIcon(OrbitIcons.notification), findsNothing);
   });
 }

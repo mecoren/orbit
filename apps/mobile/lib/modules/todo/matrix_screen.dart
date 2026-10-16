@@ -25,6 +25,12 @@ class MatrixScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final tasksAsync = ref.watch(todoTasksProvider);
     final tasks = tasksAsync.value ?? const <TodoTask>[];
+    // 提醒投影（A4 只读聚合）：行内提醒徽标数据源；未就绪回落空表
+    final reminderRows = ref.watch(taskRemindersProjectionProvider).value ??
+        const <TaskRemindersProjection>[];
+    final remindersByTask = {
+      for (final r in reminderRows) r.taskId: r.reminders,
+    };
     // 完成历史不入桶（groupEisenhower 内再兜一层）；桶内截止升序、无截止沉底
     final visible = sortTasks(
       tasks.where((t) => !t.isDone).toList(),
@@ -78,6 +84,7 @@ class MatrixScreen extends ConsumerWidget {
                       AppDimens.space12,
                       AppDimens.space16,
                     ),
+                    remindersByTask: remindersByTask,
                     onOpen: (t) => context.push('/todo/${t.id}'),
                     onToggleDone: (t) async {
                       try {
