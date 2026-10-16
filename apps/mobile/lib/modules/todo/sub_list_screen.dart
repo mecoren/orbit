@@ -105,6 +105,10 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
   // 长按拾起拖动重排 + midpoint 落库）
   TaskSortKey _sortKey = TaskSortKey.manual;
 
+  // 排序方向档（对齐桌面页头「顺序」）：会话内存态与 [_sortKey] 同进退——
+  // 退出回 manual 后无方向语义；null = 跟随 [baseSortDir] 档位默认方向
+  TaskSortDir? _sortDir;
+
   /// 本次长按拾起的行下标（[onReorderStart] 记，[onReorderEnd] 读后清）
   int? _dragFromIndex;
 
@@ -303,6 +307,18 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
     setState(() => _sortKey = key);
   }
 
+  /// 切排序方向（对齐桌面「顺序」档）：只翻转主键比较方向，回落键方向不变
+  void _setSortDir(TaskSortDir dir) {
+    if (!mounted) return;
+    setState(() => _sortDir = dir);
+  }
+
+  /// 生效方向（对齐桌面 effectiveSortDir）：未显式选过 = 跟随档位默认方向；
+  /// manual 档页头不展示方向（拣 due 档兜底只为取值不判空）
+  TaskSortDir get _effectiveSortDir =>
+      _sortDir ??
+      baseSortDir[_sortKey == TaskSortKey.manual ? TaskSortKey.due : _sortKey]!;
+
   /// 页头 ⋮ 下拉面板（2026-09-23）：两组条目——「这个列表」与「怎么操作」
   ///
   /// 页头由「返回 + 标题 + 四枚图标」收敛成「返回 + 标题 + ⋮」；视图档与排序档
@@ -394,6 +410,24 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
                 ),
             ],
           ),
+          // 排序方向（对齐桌面「顺序」档）：拖拽序无方向概念，整行隐藏
+          //（口径同桌面 manual 档隐藏）；行尾回显当前生效方向
+          if (_sortKey != TaskSortKey.manual)
+            OrbitPanelItem(
+              icon: OrbitIcons.sort,
+              label: '排序方向',
+              trailingLabel:
+                  _effectiveSortDir == TaskSortDir.asc ? '升序' : '降序',
+              children: [
+                for (final d in TaskSortDir.values)
+                  OrbitPanelItem(
+                    icon: OrbitIcons.sort,
+                    label: d == TaskSortDir.asc ? '升序' : '降序',
+                    checked: d == _effectiveSortDir,
+                    onTap: () => _setSortDir(d),
+                  ),
+              ],
+            ),
           // 批量选择仅列表档：选区行（_SelectionRow）只在列表档渲染，
           // 看板/表格/矩阵的行不换装，多选态在这些档没有视觉落点
           if (_viewMode == TaskViewMode.list)
@@ -483,7 +517,7 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
   /// 首条未完成任务——与长按菜单「多选」同语义（那里选的是被长按的那行）
   void _enterSelectionFromPanel() {
     final tasks = ref.read(todoTasksProvider).value ?? const <TodoTask>[];
-    final first = sortTasks(filterTasks(tasks, _listQuery()), _sortKey)
+    final first = sortTasks(filterTasks(tasks, _listQuery()), _sortKey, _sortDir)
         .where((t) => !t.isDone)
         .firstOrNull;
     if (first == null) {
@@ -1127,7 +1161,7 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
   Future<void> _reorderTasks(int oldIndex, int newIndex) async {
     final tasks =
         ref.read(todoTasksProvider).value ?? const <TodoTask>[];
-    final visible = sortTasks(filterTasks(tasks, _listQuery()), _sortKey)
+    final visible = sortTasks(filterTasks(tasks, _listQuery()), _sortKey, _sortDir)
         .where((t) => !t.isDone)
         .toList();
     final reordered = reorderItems(_manualReorderStream(visible), oldIndex, newIndex);
@@ -1396,7 +1430,8 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
               // 完成历史混进卡片墙/表格会淹掉这两档的工作面板语义
               filterTasks(tasks, _listQuery(projects),
                   hideDone: _viewMode != TaskViewMode.list),
-              _sortKey),
+              _sortKey,
+              _sortDir),
       _filters,
       labelIdsByTask: labelIdsByTask,
     );

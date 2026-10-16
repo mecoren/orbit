@@ -208,6 +208,90 @@ void main() {
     });
   });
 
+  group('sortTasks 排序方向（dir / baseSortDir，对齐桌面 sortTasks）', () {
+    test('baseSortDir 各档默认方向与桌面同表', () {
+      expect(baseSortDir[TaskSortKey.due], TaskSortDir.asc);
+      expect(baseSortDir[TaskSortKey.priority], TaskSortDir.desc);
+      expect(baseSortDir[TaskSortKey.title], TaskSortDir.asc);
+      expect(baseSortDir[TaskSortKey.created], TaskSortDir.desc);
+    });
+
+    test('due 档：缺省 asc；desc 只翻转主键，无截止仍沉底、同值回落键不变', () {
+      final tasks = [
+        _task(id: 1, dueDate: 300, createdAt: 100),
+        _task(id: 2, dueDate: 100, createdAt: 100),
+        _task(id: 3), // 无截止
+        _task(id: 4, dueDate: 200, createdAt: 100),
+        _task(id: 5, dueDate: 200, createdAt: 900), // 同值比创建时间
+      ];
+      // asc = 现状：按截止升序，同值创建时间降序（5 的 createdAt 更大先出）
+      expect(
+        sortTasks(tasks, TaskSortKey.due).map((t) => t.id),
+        [2, 5, 4, 1, 3],
+      );
+      // desc：截止降序；无截止沉底不翻转；同值仍按创建时间降序
+      expect(
+        sortTasks(tasks, TaskSortKey.due, TaskSortDir.desc).map((t) => t.id),
+        [1, 5, 4, 2, 3],
+      );
+    });
+
+    test('priority 档：缺省 desc（大者在前）；asc 反向且同值落回拖拽顺序', () {
+      final tasks = [
+        _task(id: 1, priority: 2, position: 2),
+        _task(id: 2, priority: 5, position: 1),
+        _task(id: 3, priority: 2, position: 1),
+      ];
+      expect(
+        sortTasks(tasks, TaskSortKey.priority).map((t) => t.id),
+        [2, 3, 1],
+      );
+      expect(
+        sortTasks(tasks, TaskSortKey.priority, TaskSortDir.asc)
+            .map((t) => t.id),
+        [3, 1, 2],
+      );
+    });
+
+    test('title 档：缺省 asc；desc 反向', () {
+      final tasks = [
+        _task(id: 1, title: 'b'),
+        _task(id: 2, title: 'a'),
+        _task(id: 3, title: 'c'),
+      ];
+      expect(sortTasks(tasks, TaskSortKey.title).map((t) => t.id), [2, 1, 3]);
+      expect(
+        sortTasks(tasks, TaskSortKey.title, TaskSortDir.desc).map((t) => t.id),
+        [3, 1, 2],
+      );
+    });
+
+    test('created 档：缺省 desc（最新在前）；asc 从旧到新', () {
+      final tasks = [
+        _task(id: 1, createdAt: 300),
+        _task(id: 2, createdAt: 100),
+        _task(id: 3, createdAt: 200),
+      ];
+      expect(sortTasks(tasks, TaskSortKey.created).map((t) => t.id), [1, 3, 2]);
+      expect(
+        sortTasks(tasks, TaskSortKey.created, TaskSortDir.asc)
+            .map((t) => t.id),
+        [2, 3, 1],
+      );
+    });
+
+    test('manual 档忽略 dir（拖拽序恒 position 升序）', () {
+      final tasks = [
+        _task(id: 1, position: 2),
+        _task(id: 2, position: 1),
+      ];
+      expect(
+        sortTasks(tasks, TaskSortKey.manual, TaskSortDir.desc).map((t) => t.id),
+        [2, 1],
+      );
+    });
+  });
+
   group('勾选语义 patch 构造（done=1+done_at+status=done）', () {
     test('未完成 → 完成：done=1 + done_at=now + status=done', () {
       final patch =

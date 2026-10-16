@@ -262,13 +262,34 @@ class SidebarCounts {
 
 enum TaskSortKey { manual, due, priority, title, created }
 
+/// 排序方向档（页头 ⋮ 面板「排序方向」；对齐桌面 `TaskSortDir`）
+enum TaskSortDir { asc, desc }
+
+/// 各档位现状默认方向（对齐桌面 `BASE_SORT_DIR`）：用户未显式选过方向时
+/// 生效方向跟随本表；manual 档无方向概念（不在此表）
+const Map<TaskSortKey, TaskSortDir> baseSortDir = {
+  TaskSortKey.due: TaskSortDir.asc,
+  TaskSortKey.priority: TaskSortDir.desc,
+  TaskSortKey.title: TaskSortDir.asc,
+  TaskSortKey.created: TaskSortDir.desc,
+};
+
 /// 排序（默认 manual：position 升序 → created_at 降序；#26 增四档）。
-/// 返回新列表，不改入参。
-List<TodoTask> sortTasks(List<TodoTask> tasks, [TaskSortKey key = TaskSortKey.manual]) {
+///
+/// [dir] 语义对齐桌面 `sortTasks`：只翻转**主键**比较方向，回落键方向不随
+/// dir 变（保平局稳定性）；due 档无截止恒沉底（升/降序都不翻到顶）；manual
+/// 档忽略 dir（拖拽序唯一语义是 position 升序）。[dir] 缺省 = [baseSortDir]
+/// 对应档位默认方向（收拢前现状顺序零变化）。返回新列表，不改入参。
+List<TodoTask> sortTasks(
+  List<TodoTask> tasks, [
+  TaskSortKey key = TaskSortKey.manual,
+  TaskSortDir? dir,
+]) {
   final sorted = [...tasks];
   switch (key) {
     case TaskSortKey.due:
-      // 无截止沉底，有截止升序（同值落回创建时间降序）
+      // 无截止沉底（方向无关），有截止按方向排（同值落回创建时间降序）
+      final sign = (dir ?? baseSortDir[key]!) == TaskSortDir.asc ? 1 : -1;
       sorted.sort((a, b) {
         if (a.dueDate == null && b.dueDate == null) {
           return b.createdAt.compareTo(a.createdAt);
@@ -276,21 +297,25 @@ List<TodoTask> sortTasks(List<TodoTask> tasks, [TaskSortKey key = TaskSortKey.ma
         if (a.dueDate == null) return 1;
         if (b.dueDate == null) return -1;
         final c = a.dueDate!.compareTo(b.dueDate!);
-        return c != 0 ? c : b.createdAt.compareTo(a.createdAt);
+        return c != 0 ? sign * c : b.createdAt.compareTo(a.createdAt);
       });
     case TaskSortKey.priority:
-      // 优先级大者在前（同值落回拖拽顺序）
+      // 主键按方向排（desc = 大者在前 = 现状），同值落回拖拽顺序
+      final sign = (dir ?? baseSortDir[key]!) == TaskSortDir.asc ? 1 : -1;
       sorted.sort((a, b) {
-        final c = b.priority.compareTo(a.priority);
-        if (c != 0) return c;
+        final c = a.priority.compareTo(b.priority);
+        if (c != 0) return sign * c;
         if (a.position != b.position) return a.position.compareTo(b.position);
         return b.createdAt.compareTo(a.createdAt);
       });
     case TaskSortKey.title:
-      // 中文拼音序（与桌面 localeCompare zh-Hans-CN 同语义）
-      sorted.sort((a, b) => a.title.compareTo(b.title));
+      // 中文拼音序（与桌面 localeCompare zh-Hans-CN 同语义；asc = 现状）
+      final sign = (dir ?? baseSortDir[key]!) == TaskSortDir.asc ? 1 : -1;
+      sorted.sort((a, b) => sign * a.title.compareTo(b.title));
     case TaskSortKey.created:
-      sorted.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      // desc = 最新在前 = 现状；asc = 从旧到新
+      final sign = (dir ?? baseSortDir[key]!) == TaskSortDir.asc ? 1 : -1;
+      sorted.sort((a, b) => sign * a.createdAt.compareTo(b.createdAt));
     case TaskSortKey.manual:
       sorted.sort((a, b) {
         if (a.position != b.position) return a.position.compareTo(b.position);
