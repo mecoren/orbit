@@ -1,7 +1,8 @@
 // 任务行元信息行回归（M3 / docs/10 §A-4 收口）：
 // 行内标签（色点 + 名，超 3 折叠 +N）、行内提醒徽标（铃铛 + HH:mm，
-// 到期未完转逾期红）、子任务进度（percent_done 0/100 不显示）。
-// 口径与桌面 LabelChips / ReminderChip / percent_done 同源；
+// 到期未完转逾期红）、子任务进度（percent_done 0/100 不显示）、
+// 我的一天指示（Sunrise，当天加入才亮）。
+// 口径与桌面 LabelChips / ReminderChip / percent_done / Sunrise 同源；
 // 直接手造 DTO（同 project_color_test 的假时钟口径）。
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -12,7 +13,12 @@ import 'package:orbit/data/api/dto.dart';
 import 'package:orbit/modules/todo/sub_list_screen.dart';
 import 'support/orbit_test_app.dart';
 
-TodoTask _task({double percentDone = 0, int? durationMinutes}) => TodoTask(
+TodoTask _task({
+  double percentDone = 0,
+  int? durationMinutes,
+  int? myDayDate,
+}) =>
+    TodoTask(
       id: 1,
       uuid: 'uuid-1',
       title: '元信息测试任务',
@@ -35,7 +41,7 @@ TodoTask _task({double percentDone = 0, int? durationMinutes}) => TodoTask(
       percentDone: percentDone,
       position: 0,
       isFavorite: 0,
-      myDayDate: null,
+      myDayDate: myDayDate,
       durationMinutes: durationMinutes,
       isDeleted: 0,
       createdAt: 1700000000000,
@@ -148,5 +154,30 @@ void main() {
     await tester.pump();
     expect(find.text('1h30m'), findsNothing);
     expect(find.byIcon(OrbitIcons.clock), findsNothing);
+  });
+
+  testWidgets('我的一天段：当天加入 → Sunrise 旭日橙；未加入/昨日不渲染', (tester) async {
+    final now = DateTime.now();
+    final todayZero =
+        DateTime(now.year, now.month, now.day).millisecondsSinceEpoch;
+
+    await tester.pumpWidget(_harness(task: _task(myDayDate: todayZero)));
+    expect(find.byIcon(OrbitIcons.sunrise), findsOneWidget);
+    // 与桌面 MY_DAY_COLOR 同源（#F59E0B）
+    expect(
+      tester.widget<Icon>(find.byIcon(OrbitIcons.sunrise)).color,
+      OrbitAccents.myDayAmber,
+    );
+
+    // 昨日加入自动退出（isInMyDay 按本地今天判断，隔日不再亮）
+    await tester.pumpWidget(
+      _harness(task: _task(myDayDate: todayZero - 86400000)),
+    );
+    await tester.pump();
+    expect(find.byIcon(OrbitIcons.sunrise), findsNothing);
+
+    await tester.pumpWidget(_harness(task: _task()));
+    await tester.pump();
+    expect(find.byIcon(OrbitIcons.sunrise), findsNothing);
   });
 }

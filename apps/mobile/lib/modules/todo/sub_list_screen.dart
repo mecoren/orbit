@@ -2607,10 +2607,11 @@ class TodoTaskTile extends StatelessWidget {
   ///
   /// 顺序：重复 → 提醒（铃铛 + HH:mm，到期未完转逾期红）→ 预计时长（M9）→
   /// 子任务进度（percent_done 0/100 不显示）→ 关联（C7 投影 > 0 才出）→
-  /// 星标（黄色）。逐项为空则整列不渲染（右列宽度对标题的挤压随之让出）。
+  /// 我的一天（Sunrise，当天加入才亮，隔日自动退出）→ 星标（黄色）。
+  /// 逐项为空则整列不渲染（右列宽度对标题的挤压随之让出）。
   ///
-  /// 完成态整行置灰：重复 / 提醒 / 时长 / 进度 / 关联 / 星标统一走弱化灰，
-  /// 不再保留逾期红与星标黄（已完成实例不再警示）。
+  /// 完成态整行置灰：重复 / 提醒 / 时长 / 进度 / 关联 / 我的一天 / 星标统一走
+  /// 弱化灰，不再保留逾期红、旭日橙与星标黄（已完成实例不再警示）。
   List<Widget> _metaIcons(AppColorSet colors, {bool done = false}) {
     final chips = <Widget>[];
     void add(Widget w) {
@@ -2659,6 +2660,16 @@ class TodoTaskTile extends StatelessWidget {
     if (relationCount > 0) {
       add(Icon(OrbitIcons.link,
           size: 12, color: done ? muted : colors.secondaryText));
+    }
+    // 我的一天（桌面列表行 Sunrise 指示同款：my_day_date == 本地今天才亮，
+    // 隔日自动退出——isInMyDay 与 is_favorite 同为只读展示，写入口径在详情/
+    // 长按菜单）
+    if (task.isInMyDay) {
+      add(Icon(
+        OrbitIcons.sunrise,
+        size: 12,
+        color: done ? muted : OrbitAccents.myDayAmber,
+      ));
     }
     if (task.isStarred) {
       // 星标与同列其余元信息图标同尺寸档（12），未完成态色走星标黄——
