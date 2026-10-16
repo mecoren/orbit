@@ -1633,23 +1633,36 @@ class _RemindersSection extends ConsumerWidget {
                             ),
                           ),
                         ),
-                        // 删除（无确认直删，对齐桌面行为）
+                        // 删除（二次确认抽屉，对齐桌面提醒行 ConfirmPopover；
+                        // 确认文案点名时刻并说明后果，措辞与桌面一致）
                         IconButton(
                           tooltip: '删除提醒',
                           visualDensity: VisualDensity.compact,
                           icon: Icon(OrbitIcons.close,
                               size: AppDimens.iconSizeSm,
                               color: colors.secondaryText),
-                          onPressed: () => _mutate(context, ref, () async {
-                            await ref
-                                .read(orbitBridgeProvider)
-                                .todoReminderDelete(reminder.id);
-                            // 同步撤掉该任务的系统闹钟：残留闹钟与「后台推迟
-                            // 产物」在系统侧无法区分，不取消会在下次重排的孤儿
-                            // 补齐里被误判而把刚删的提醒建回来
-                            await NotificationService.instance
-                                .cancelAlarmFor(reminder.taskId);
-                          }),
+                          onPressed: () async {
+                            final confirmed = await showConfirmBottomSheet(
+                              context,
+                              title: '删除提醒',
+                              message:
+                                  '确定要删除 ${formatStampLabel(reminder.remindAt)}'
+                                  ' 的提醒吗？删除后该时间不再通知。',
+                              confirmLabel: '删除',
+                              destructive: true,
+                            );
+                            if (!confirmed || !context.mounted) return;
+                            await _mutate(context, ref, () async {
+                              await ref
+                                  .read(orbitBridgeProvider)
+                                  .todoReminderDelete(reminder.id);
+                              // 同步撤掉该任务的系统闹钟：残留闹钟与「后台推迟
+                              // 产物」在系统侧无法区分，不取消会在下次重排的孤儿
+                              // 补齐里被误判而把刚删的提醒建回来
+                              await NotificationService.instance
+                                  .cancelAlarmFor(reminder.taskId);
+                            });
+                          },
                         ),
                       ],
                     ),

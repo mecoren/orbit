@@ -262,8 +262,28 @@ void main() {
 
     // IconButton+close 只在子任务/提醒两区出现且提醒在后，
     // 信息区清空按钮是裸 Icon 非 IconButton 不会误中；取 .last 即提醒的删除
+    // 删除走二次确认抽屉（对齐桌面 ConfirmPopover）：先取消验证不删、再确认删
     await tester.tap(
       find.widgetWithIcon(IconButton, OrbitIcons.close).last,
+    );
+    await tester.pumpAndSettle();
+    final sheet = find.byType(BottomSheet);
+    expect(
+        find.descendant(of: sheet, matching: find.text('删除提醒')),
+        findsOneWidget);
+    await tester.tap(find.descendant(of: sheet, matching: find.text('取消')));
+    await _settle(tester);
+    expect((await tester.runAsync(() => remindersOf(5)))!.length, 1);
+
+    await tester.tap(
+      find.widgetWithIcon(IconButton, OrbitIcons.close).last,
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.descendant(
+        of: find.byType(BottomSheet),
+        matching: find.text('删除'),
+      ),
     );
     await _settle(tester);
 
