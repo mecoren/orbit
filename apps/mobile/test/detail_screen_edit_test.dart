@@ -6,7 +6,8 @@ import 'package:orbit/data/api/dto.dart';
 import 'package:orbit/data/api/mock_orbit_bridge.dart';
 import 'package:orbit/data/providers/bridge_provider.dart';
 import 'package:orbit/modules/todo/detail_screen.dart';
-import 'package:orbit/modules/todo/logic/task_logic.dart' show formatStampLabel;
+import 'package:orbit/modules/todo/logic/task_logic.dart'
+    show formatStampLabel, quickDateTimeOptions;
 import 'package:orbit/shared/widgets/shadcn/orbit_month_calendar.dart';
 import 'support/orbit_test_app.dart';
 import 'package:orbit/core/theme/icon_map.dart';
@@ -104,6 +105,70 @@ void main() {
     final expected =
         DateTime(now.year, now.month, 15).millisecondsSinceEpoch;
     expect(detail!.startDate, expected);
+  });
+
+  testWidgets('截止日期：快捷档抽屉「明天」→ 落 09:00 绝对时刻', (tester) async {
+    await tester.pumpWidget(_wrap(const DetailScreen(taskId: 5), bridge));
+    await _settle(tester);
+
+    // 种子任务 5 已带「明天」零点截止：页面行值与抽屉选项都含「明天」文本，
+    // 所有断言限定在抽屉内（同批次二标签筛选用例的撞词规避）
+    await tester.tap(find.text('截止日期'));
+    await tester.pumpAndSettle();
+
+    final sheet = find.byType(BottomSheet);
+    expect(find.descendant(of: sheet, matching: find.text('一小时后')),
+        findsOneWidget);
+    expect(
+        find.descendant(of: sheet, matching: find.text('明天')), findsOneWidget);
+    expect(
+        find.descendant(of: sheet, matching: find.text('下周')), findsOneWidget);
+    expect(
+        find.descendant(of: sheet, matching: find.text('选择日期和时间')),
+        findsOneWidget);
+
+    await tester
+        .tap(find.descendant(of: sheet, matching: find.text('明天')));
+    await _settle(tester);
+
+    // 快捷档为绝对时刻（明早 09:00），不是归一化零点
+    final expected =
+        quickDateTimeOptions().firstWhere((o) => o.key == 'tomorrow').ms;
+    final detail = await tester.runAsync(() => detailOf(5));
+    expect(detail!.dueDate, expected);
+  });
+
+  testWidgets('截止日期：自定义选择保留原时分（不再归一化零点）', (tester) async {
+    final now = DateTime.now();
+    final seedDue =
+        DateTime(now.year, now.month, 15, 9).millisecondsSinceEpoch;
+    await tester.runAsync(
+      () => bridge.todoTaskUpdate(5, encodePatch({'due_date': seedDue})),
+    );
+    await tester.pumpWidget(_wrap(const DetailScreen(taskId: 5), bridge));
+    await _settle(tester);
+
+    await tester.tap(find.text('截止日期'));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.descendant(
+        of: find.byType(BottomSheet),
+        matching: find.text('选择日期和时间'),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // 改选 12 号（任何月份都存在）→ 确认：09:00 时分随初值保留；
+    // 旧实现（无时刻选择器 + dateToMidnightMs 截断）会退化成本日零点
+    await _tapDay(tester, '12');
+    await tester.tap(find.text('确认'));
+    await _settle(tester);
+
+    final detail = await tester.runAsync(() => detailOf(5));
+    expect(
+      detail!.dueDate,
+      DateTime(now.year, now.month, 12, 9).millisecondsSinceEpoch,
+    );
   });
 
   testWidgets('提醒：添加按钮 → 面板选日 → 提醒数 +1', (tester) async {

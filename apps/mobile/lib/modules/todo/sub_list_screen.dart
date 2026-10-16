@@ -1243,15 +1243,6 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
 
   // ── 长按菜单「日期」「优先级」快捷档（对齐桌面任务菜单顶部图标行） ──
 
-  /// 日期快捷档图标（对齐桌面菜单：一小时后 Clock / 今晚 Moon / 明天
-  /// Sunrise / 下周 CalendarClock；自定义 CalendarDays 在条目上直给）。
-  IconData _dueQuickIcon(String key) => switch (key) {
-        'in1h' => OrbitIcons.clock,
-        'tonight' => OrbitIcons.moon,
-        'tomorrow' => OrbitIcons.sunrise,
-        _ => OrbitIcons.calendarClock,
-      };
-
   /// 日期便捷选择：快捷档 + 选择日期和时间 + 清除截止（仅已有截止时）。
   /// 快捷档为绝对时刻直接落库（[quickDateTimeOptions] 与桌面同口径），
   /// 自定义走 [OrbitDatePicker]（含时刻）。
@@ -1267,7 +1258,7 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
             value: o.key,
             label: o.label,
             hint: o.hint,
-            icon: _dueQuickIcon(o.key),
+            icon: dueQuickIcon(o.key),
           ),
         const SelectItem(
           value: 'custom',

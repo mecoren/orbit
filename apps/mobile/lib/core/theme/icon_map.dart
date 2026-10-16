@@ -171,3 +171,15 @@ abstract final class OrbitIcons {
   static const IconData message = LucideIcons.messageSquare;
   static const IconData wrench = LucideIcons.wrench;
 }
+
+/// 日期快捷档图标（任务「日期」入口的快捷档，与桌面任务菜单图标行同源）
+///
+/// key 口径见 `modules/todo/logic/task_logic.dart` 的 `quickDateTimeOptions`：
+/// 一小时后 / 今晚 / 明天各有专属图标，其余（下周及未知档）回落日历钟。
+/// 收在图标域而不是逻辑层：返回值是图标取值，与 [OrbitIcons] 同类。
+IconData dueQuickIcon(String key) => switch (key) {
+      'in1h' => OrbitIcons.clock,
+      'tonight' => OrbitIcons.moon,
+      'tomorrow' => OrbitIcons.sunrise,
+      _ => OrbitIcons.calendarClock,
+    };

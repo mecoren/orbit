@@ -525,16 +525,54 @@ class _InfoSection extends ConsumerWidget {
     );
   }
 
-  /// 截止日期行点击 → 与表单抽屉同一选择器，选中归一化本地零点回填
+  /// 截止日期行点击 → 快捷档抽屉 + 选择日期和时间（对齐桌面 DueDateEditor）：
+  /// 快捷档为绝对时刻直接落库；自定义含时刻，选中原样回填——不再归一化零点，
+  /// 避免把「明天 09:00」编辑成当天零点
   Future<void> _pickDueDate(BuildContext context) async {
-    final picked = await showTodoDatePicker(
+    final options = quickDateTimeOptions();
+    await showSelectBottomSheet<String>(
       context,
-      initialDate: detail.dueDate != null
-          ? DateTime.fromMillisecondsSinceEpoch(detail.dueDate!)
-          : null,
+      title: '设置截止时间',
+      current: null,
+      items: [
+        for (final o in options)
+          SelectItem(
+            value: o.key,
+            label: o.label,
+            hint: o.hint,
+            icon: dueQuickIcon(o.key),
+          ),
+        const SelectItem(
+          value: 'custom',
+          label: '选择日期和时间',
+          icon: OrbitIcons.calendarDays,
+        ),
+      ],
+      onSelect: (v) => _applyDueChoice(context, v, options),
     );
-    if (picked == null || !context.mounted) return;
-    await onPatch({'due_date': dateToMidnightMs(picked)});
+  }
+
+  /// 快捷档直接落库；自定义走 [OrbitDatePicker]（含时刻；初值取原截止时刻，
+  /// 重选日期时原时分随初值带上——桌面 DueDateEditor 保留 prevTime 同口径）
+  Future<void> _applyDueChoice(
+    BuildContext context,
+    String choice,
+    List<({String key, String label, String hint, int ms})> options,
+  ) async {
+    if (choice == 'custom') {
+      final picked = await OrbitDatePicker.pick(
+        context,
+        initialDate: detail.dueDate != null
+            ? DateTime.fromMillisecondsSinceEpoch(detail.dueDate!)
+            : null,
+        showTime: true,
+      );
+      if (picked == null) return;
+      await onPatch({'due_date': picked.millisecondsSinceEpoch});
+      return;
+    }
+    final option = options.firstWhere((o) => o.key == choice);
+    await onPatch({'due_date': option.ms});
   }
 
   /// 开始日期行点击：与截止日期同一选择器，按 patch key 落库
