@@ -156,14 +156,9 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
     TaskSortKey.created: '创建时间',
   };
 
-  /// 优先级下限档位（对齐桌面 task-panel 的优先级筛选下拉；null = 不限）
-  static const _priorityChoices = <int, String>{
-    1: '低及以上',
-    2: '中及以上',
-    3: '高及以上',
-    4: '紧急及以上',
-    5: '仅立即处理',
-  };
+  /// 优先级等值档位（对齐桌面工具栏优先级筛选下拉的七档：无优先级 / 低 /
+  /// 中 / 高 / 紧急 / 立即处理；文案走 [priorityLabel] 全应用同源）
+  static const _priorityChoices = [0, 1, 2, 3, 4, 5];
 
   // 视图模式与看板分组（本机偏好持久化，键名对齐桌面 localStorage）
   // 视图档在 [initState] 播种：项目视图优先取该项目记忆的档位（`widget` 要到
@@ -528,7 +523,7 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
     setState(() => _selected.add(first.id));
   }
 
-  /// 列表内过滤抽屉（状态 / 优先级下限 / 标签三档，chip 即点即生效）
+  /// 列表内过滤抽屉（状态 / 优先级 / 标签三档，chip 即点即生效）
   ///
   /// 单屉三段而非「主屉→子屉」两段：三个维度可组合，多开一层会让用户
   /// 看不到已选项之间的联动；chip 行高满足热区且一屏容纳。
@@ -556,22 +551,28 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
                     setSheetState(() {});
                     _setFilters(_filters.copyWith(status: null));
                   }),
+                  // 未完成档（跨 pending/doing 的完成位口径）与桌面一致，
+                  // 故不走 statusLabel（它不是真实任务状态，只是筛选伪档）
+                  _filterChip('未完成', _filters.status == 'undone', () {
+                    setSheetState(() {});
+                    _setFilters(_filters.copyWith(status: 'undone'));
+                  }),
                   for (final s in const ['pending', 'doing', 'done'])
                     _filterChip(statusLabel(s), _filters.status == s, () {
                       setSheetState(() {});
                       _setFilters(_filters.copyWith(status: s));
                     }),
                 ]),
-                _sheetSectionTitle(sheetContext, '优先级下限'),
+                _sheetSectionTitle(sheetContext, '优先级'),
                 _chipRow([
-                  _filterChip('全部', _filters.priorityMin == null, () {
+                  _filterChip('全部', _filters.priority == null, () {
                     setSheetState(() {});
-                    _setFilters(_filters.copyWith(priorityMin: null));
+                    _setFilters(_filters.copyWith(priority: null));
                   }),
-                  for (final e in _priorityChoices.entries)
-                    _filterChip(e.value, _filters.priorityMin == e.key, () {
+                  for (final lv in _priorityChoices)
+                    _filterChip(priorityLabel(lv), _filters.priority == lv, () {
                       setSheetState(() {});
-                      _setFilters(_filters.copyWith(priorityMin: e.key));
+                      _setFilters(_filters.copyWith(priority: lv));
                     }),
                 ]),
                 _sheetSectionTitle(sheetContext, '标签'),

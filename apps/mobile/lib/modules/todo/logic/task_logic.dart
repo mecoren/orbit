@@ -949,40 +949,43 @@ const Object _keepFilterValue = Object();
 
 /// 列表内附加过滤档（null = 该维度不限制）
 ///
-/// 与桌面 `task-panel.tsx` 工具栏三枚筛选同口径：
-/// - [status]：'pending' | 'doing' | 'done'；
-/// - [priorityMin]：优先级下限（>= 该值，桌面为下拉档位）；
+/// 与桌面 `task-filters.ts` 工具栏三枚筛选同口径：
+/// - [status]：'undone'（未完成：!done）| 'pending' | 'doing' | 'done'
+///   （完成档含 `done=1` 与 `status='done'` 两种来源——与桌面
+///   `!!t.done || status==='done'` 一致，状态与完成位是两套字段）；
+/// - [priority]：优先级**等值**档（0–5 七档含「无优先级」，同桌面
+///   `t.priority === priorityFilter`；曾为「下限 ≥」语义，与桌面不等价已校正）；
 /// - [labelId]：命中该标签（需要任务→标签投影辅助判据）。
 ///
 /// 与 `filterTasks` 正交：先按入口/快捷视图筛，再叠加本档。
 class TaskListFilters {
   final String? status;
-  final int? priorityMin;
+  final int? priority;
   final int? labelId;
 
-  const TaskListFilters({this.status, this.priorityMin, this.labelId});
+  const TaskListFilters({this.status, this.priority, this.labelId});
 
   static const empty = TaskListFilters();
 
-  bool get isEmpty => status == null && priorityMin == null && labelId == null;
+  bool get isEmpty => status == null && priority == null && labelId == null;
 
   /// 已启用的过滤维度数（标题栏角标用）
   int get activeCount =>
       (status != null ? 1 : 0) +
-      (priorityMin != null ? 1 : 0) +
+      (priority != null ? 1 : 0) +
       (labelId != null ? 1 : 0);
 
   TaskListFilters copyWith({
     Object? status = _keepFilterValue,
-    Object? priorityMin = _keepFilterValue,
+    Object? priority = _keepFilterValue,
     Object? labelId = _keepFilterValue,
   }) =>
       TaskListFilters(
         status:
             identical(status, _keepFilterValue) ? this.status : status as String?,
-        priorityMin: identical(priorityMin, _keepFilterValue)
-            ? this.priorityMin
-            : priorityMin as int?,
+        priority: identical(priority, _keepFilterValue)
+            ? this.priority
+            : priority as int?,
         labelId:
             identical(labelId, _keepFilterValue) ? this.labelId : labelId as int?,
       );
@@ -998,11 +1001,15 @@ List<TodoTask> applyTaskListFilters(
   Iterable<TodoTask> list = tasks;
   final status = filters.status;
   if (status != null) {
-    list = list.where((t) => t.status == status);
+    list = switch (status) {
+      'undone' => list.where((t) => !t.isDone),
+      'done' => list.where((t) => t.isDone || t.status == 'done'),
+      _ => list.where((t) => t.status == status),
+    };
   }
-  final priorityMin = filters.priorityMin;
-  if (priorityMin != null) {
-    list = list.where((t) => t.priority >= priorityMin);
+  final priority = filters.priority;
+  if (priority != null) {
+    list = list.where((t) => t.priority == priority);
   }
   final labelId = filters.labelId;
   if (labelId != null) {

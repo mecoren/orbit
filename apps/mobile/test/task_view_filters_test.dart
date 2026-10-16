@@ -12,6 +12,7 @@ TodoTask _task({
   int? projectId,
   int? dueDate,
   String title = 't',
+  bool doneFlag = false,
 }) =>
     TodoTask(
       id: id,
@@ -21,7 +22,7 @@ TodoTask _task({
       projectId: projectId,
       priority: priority,
       status: status,
-      done: status == 'done' ? 1 : 0,
+      done: (doneFlag || status == 'done') ? 1 : 0,
       doneAt: null,
       dueDate: dueDate,
       startDate: null,
@@ -65,16 +66,16 @@ TodoProject _project(int id, String title) => TodoProject(
 void main() {
   group('TaskListFilters', () {
     test('copyWith 未传参保持原值，显式 null 清除该档', () {
-      const f = TaskListFilters(status: 'doing', priorityMin: 3, labelId: 7);
+      const f = TaskListFilters(status: 'doing', priority: 3, labelId: 7);
 
       final kept = f.copyWith(labelId: 9);
       expect(kept.status, 'doing');
-      expect(kept.priorityMin, 3);
+      expect(kept.priority, 3);
       expect(kept.labelId, 9);
 
       final cleared = f.copyWith(status: null);
       expect(cleared.status, isNull);
-      expect(cleared.priorityMin, 3);
+      expect(cleared.priority, 3);
       expect(cleared.activeCount, 2);
     });
 
@@ -90,22 +91,37 @@ void main() {
       _task(id: 1, status: 'pending', priority: 1),
       _task(id: 2, status: 'doing', priority: 3),
       _task(id: 3, status: 'done', priority: 5),
+      _task(id: 4, status: 'pending', priority: 0),
     ];
 
     test('空档位原样返回', () {
       expect(applyTaskListFilters(tasks, TaskListFilters.empty), tasks);
     });
 
-    test('状态档', () {
+    test('状态档：pending/doing/done 为 status 字段匹配', () {
       final r = applyTaskListFilters(
           tasks, const TaskListFilters(status: 'doing'));
       expect(r.map((t) => t.id), [2]);
     });
 
-    test('优先级下限档（含等于）', () {
+    test('状态档：未完成 = !done（跨 pending/doing）；完成 = done 位或状态双来源', () {
+      final undone = applyTaskListFilters(
+          tasks, const TaskListFilters(status: 'undone'));
+      expect(undone.map((t) => t.id), [1, 2, 4]);
+      // done=1 但 status 未同步为 'done' 的行也要进完成档（同桌面双来源口径）
+      final done = applyTaskListFilters(
+          [...tasks, _task(id: 5, doneFlag: true)],
+          const TaskListFilters(status: 'done'));
+      expect(done.map((t) => t.id), [3, 5]);
+    });
+
+    test('优先级等值档（含无优先级 P0）', () {
       final r = applyTaskListFilters(
-          tasks, const TaskListFilters(priorityMin: 3));
-      expect(r.map((t) => t.id), [2, 3]);
+          tasks, const TaskListFilters(priority: 3));
+      expect(r.map((t) => t.id), [2]);
+      final p0 = applyTaskListFilters(
+          tasks, const TaskListFilters(priority: 0));
+      expect(p0.map((t) => t.id), [4]);
     });
 
     test('标签档：依赖投影索引，投影缺失时结果为空', () {
@@ -131,7 +147,7 @@ void main() {
     test('多档叠加为交集', () {
       final r = applyTaskListFilters(
         tasks,
-        const TaskListFilters(status: 'doing', priorityMin: 1),
+        const TaskListFilters(status: 'doing', priority: 3),
       );
       expect(r.map((t) => t.id), [2]);
     });
