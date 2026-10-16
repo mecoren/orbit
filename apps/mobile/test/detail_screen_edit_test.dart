@@ -8,6 +8,7 @@ import 'package:orbit/data/providers/bridge_provider.dart';
 import 'package:orbit/modules/todo/detail_screen.dart';
 import 'package:orbit/modules/todo/logic/task_logic.dart'
     show formatStampLabel, quickDateTimeOptions;
+import 'package:orbit/shared/widgets/shadcn/orbit_info_row.dart';
 import 'package:orbit/shared/widgets/shadcn/orbit_month_calendar.dart';
 import 'support/orbit_test_app.dart';
 import 'package:orbit/core/theme/icon_map.dart';
@@ -42,6 +43,13 @@ Future<void> _tapDay(WidgetTester tester, String day) async {
   );
 }
 
+/// 信息区某行的值文本：限定在包含[label]的 InfoTile 内，避免与页面
+/// 其余区块（提醒行时刻等）撞词
+Finder _tileValue(String label, String value) => find.descendant(
+      of: find.ancestor(of: find.text(label), matching: find.byType(InfoTile)),
+      matching: find.text(value),
+    );
+
 void main() {
   late MockOrbitBridge bridge;
 
@@ -61,17 +69,39 @@ void main() {
     expect(find.text('信息'), findsOneWidget);
     expect(find.text('开始日期'), findsOneWidget);
     expect(find.text('重复'), findsOneWidget);
+    // 进度/完成时间行（对齐桌面详情信息区行序：时长与重复之间）
+    expect(find.text('进度'), findsOneWidget);
+    expect(find.text('完成时间'), findsOneWidget);
+    // 种子任务 5：percent_done=0 / done_at=null → 两行均为「无」占位
+    expect(_tileValue('进度', '无'), findsOneWidget);
+    expect(_tileValue('完成时间', '无'), findsOneWidget);
     // 结束日期行已移除（end_date 字段随 0004 迁移删除）
     expect(find.text('结束日期'), findsNothing);
     // 颜色行已随 97d3eab 移除（桌面改看板标签展示，颜色经项目/标签承载）
     expect(find.text('颜色'), findsNothing);
   });
 
+  testWidgets('信息区：进度/完成时间有值显示', (tester) async {
+    final doneAtMs = DateTime.now().millisecondsSinceEpoch - 3600000;
+    // 直改内存库造值（percent_done 正常由子任务勾选回算、done_at 由完成动作写入）
+    bridge.store.tasks[5]!['percent_done'] = 50;
+    bridge.store.tasks[5]!['done_at'] = doneAtMs;
+    await tester.pumpWidget(_wrap(const DetailScreen(taskId: 5), bridge));
+    await _settle(tester);
+
+    expect(_tileValue('进度', '50%'), findsOneWidget);
+    expect(_tileValue('完成时间', formatStampLabel(doneAtMs)), findsOneWidget);
+  });
+
   testWidgets('重复：弹层选「每天」→ repeat_mode/after 落库', (tester) async {
     await tester.pumpWidget(_wrap(const DetailScreen(taskId: 5), bridge));
     await _settle(tester);
 
-    // 点重复行值（初始「不重复」）唤起编辑弹层
+    // 点重复行值（初始「不重复」）唤起编辑弹层；信息区补行后该行落到
+    // 600px 测试视口外，先上滑列表把它带进可见区（用 ensureVisible 会顶到
+    // 视口最上、被浮层页头盖住导致点击落空，故用显式位移滚到中部）
+    await tester.drag(find.byType(ListView).first, const Offset(0, -150));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('不重复'));
     await tester.pumpAndSettle();
     expect(find.text('每天'), findsOneWidget);

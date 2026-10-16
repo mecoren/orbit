@@ -606,6 +606,20 @@ class _InfoSection extends ConsumerWidget {
             label: '预计时长',
             value: formatDurationMinutes(detail.durationMinutes) ?? '无',
           ),
+          // 进度（桌面详情行同款：percent_done > 0 才有值，只读）
+          InfoTile(
+            label: '进度',
+            value: detail.percentDone > 0
+                ? '${detail.percentDone.round()}%'
+                : '无',
+          ),
+          // 完成时间（done_at 仅完成任务有值；口语化口径同提醒行）
+          InfoTile(
+            label: '完成时间',
+            value: detail.doneAt != null
+                ? formatStampLabel(detail.doneAt!)
+                : '无',
+          ),
           InfoTile(
             label: '重复',
             value: rep.repeatLabelExt(
