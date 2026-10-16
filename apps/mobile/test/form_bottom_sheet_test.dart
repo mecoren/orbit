@@ -191,6 +191,31 @@ void main() {
         DateTime(now.year, now.month, now.day).millisecondsSinceEpoch);
   });
 
+  testWidgets('截止日期：快捷胶囊「下周」→ 下周一零点（对齐桌面 nextMonday）',
+      (tester) async {
+    final bridge = await _openForm(tester);
+
+    await tester.enterText(find.byType(TextFormField).first, '下周截止任务');
+    await _scrollTo(tester, find.text('截止日期'));
+    await tester.tap(find
+        .descendant(of: find.byType(SectionCard), matching: find.text('下周')));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byIcon(OrbitIcons.check));
+    await _settlePastMockLatency(tester);
+
+    final tasks = await tester.runAsync(
+      () => bridge.todoTaskList(const ListFilter()),
+    );
+    final task = tasks!.firstWhere((t) => t.title == '下周截止任务');
+    // 旧口径 +7 天（周内错位）；现与桌面 buildQuickDateOptions.nextWeek 同口径
+    final now = DateTime.now();
+    final delta = (8 - now.weekday) % 7;
+    final nextMon =
+        DateTime(now.year, now.month, now.day + (delta == 0 ? 7 : delta));
+    expect(task.dueDate, nextMon.millisecondsSinceEpoch);
+  });
+
   testWidgets('提醒：无截止 → 今天/明天 9:00 快捷档，落库绝对时刻', (tester) async {
     final bridge = await _openForm(tester);
     await tester.enterText(find.byType(TextFormField).first, '带提醒任务');

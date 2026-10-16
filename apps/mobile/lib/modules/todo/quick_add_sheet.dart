@@ -49,6 +49,7 @@ import 'logic/task_logic.dart'
         atViewDueHour,
         dateToMidnightMs,
         formatDueLabel,
+        nextMondayMidnightMs,
         priorityColorHex,
         priorityLabel,
         quickViewCreateDefaults;
@@ -359,11 +360,12 @@ class _QuickAddSheetState extends ConsumerState<_QuickAddSheet> {
   }
 
   /// 截止日期档：快捷抽屉（今天/明天/下周/选择日期…+ 已设时清除），与桌面
-  /// QuickDateMenu 和表单今天/明天/下周快捷同口径；选中态只落工具栏图标。
+  /// QuickDateMenu 和表单今天/明天/下周快捷同口径（下周＝下周一 00:00）；
+  /// 选中态只落工具栏图标。
   Future<void> _pickDue() async {
     final today = _midnightOf(0);
     final tomorrow = _midnightOf(1);
-    final nextWeek = _midnightOf(7);
+    final nextWeek = nextMondayMidnightMs();
     String? current;
     if (_dueDate == today) {
       current = 'today';

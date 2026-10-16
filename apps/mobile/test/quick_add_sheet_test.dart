@@ -326,6 +326,31 @@ void main() {
       expect(find.byTooltip('日期'), findsOneWidget);
     });
 
+    testWidgets('日期档：「下周」= 下周一 00:00（重开抽屉回勾选态）', (tester) async {
+      await _openPanel(tester);
+
+      await tester.tap(find.byTooltip('日期'));
+      await tester.pumpAndSettle();
+      Finder sheetRow(String label) => find.descendant(
+            of: find.byType(BottomSheet).last,
+            matching: find.text(label),
+          );
+      await tester.tap(sheetRow('下周'));
+      await tester.pumpAndSettle();
+
+      // 重开抽屉：所落值恰为「下周一 00:00」才与「下周」档相等（回勾选态）；
+      // 旧口径 +7 天周内错位会落空（无任何勾选）
+      await tester.tap(find.byTooltip(RegExp('^截止：')));
+      await tester.pumpAndSettle();
+      expect(
+        find.descendant(
+          of: find.byType(BottomSheet).last,
+          matching: find.byIcon(OrbitIcons.check),
+        ),
+        findsOneWidget,
+      );
+    });
+
     testWidgets('更多菜单：未启用三档 + 固定「设置」入口', (tester) async {
       await _openPanel(tester);
 

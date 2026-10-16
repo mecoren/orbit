@@ -28,6 +28,7 @@ import 'logic/task_logic.dart'
         formatDueShort,
         formatDurationMinutes,
         formatStampLabel,
+        nextMondayMidnightMs,
         priorityColorHex,
         priorityLabel,
         quickViewCreateDefaults,
@@ -719,7 +720,7 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
     );
   }
 
-  // ── 截止日期快捷项（本地时区自然日零点）──
+  // ── 截止日期快捷项（本地时区自然日零点；下周＝下周一，与桌面同口径）──
 
   int _midnightOf(int offsetDays) {
     final now = DateTime.now();
@@ -932,8 +933,9 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
                                         const SizedBox(width: 6),
                                         _QuickCapsule(
                                             label: '下周',
-                                            onTap: () => setState(
-                                                () => _dueDate = _midnightOf(7))),
+                                            onTap: () => setState(() =>
+                                                _dueDate =
+                                                    nextMondayMidnightMs())),
                                       ],
                                     ),
                                   ),
