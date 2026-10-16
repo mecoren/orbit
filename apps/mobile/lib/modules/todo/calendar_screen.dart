@@ -37,6 +37,20 @@ import '../../core/theme/icon_map.dart';
 /// 页内视图档（见 [_CalendarScreenState._viewMode]）
 enum CalendarViewMode { month, agenda, timeline }
 
+/// 时间轴跨度档（对标桌面 `TIMELINE_SPANS`：日 / 三日 / 周 / 两周）。
+/// 一维表达「多日 + 多周」：1 天聚焦当日排程，3 天看短周期，7 天全周，
+/// 14 天跨两周看长周期——列均为 24h 网格，逻辑同一条（只吃天数）。
+const List<int> timelineSpans = [1, 3, 7, 14];
+
+/// 跨度档名（对齐桌面 `TIMELINE_SPAN_LABEL`）
+String timelineSpanLabel(int span) => switch (span) {
+      1 => '日',
+      3 => '三日',
+      7 => '周',
+      14 => '两周',
+      _ => '$span 天',
+    };
+
 /// 圆点改期的目标日档（今天/明天/下周 + 任意日；「下周 = 下周一」与
 /// 批量改期 `batchRescheduleMs` 同口径，周一起始周）
 enum _RescheduleTarget { today, tomorrow, nextWeek, pick }
@@ -104,7 +118,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
   /// 「从一组值里挑一个」按交互约定走底部抽屉，不用 PopupMenu。
   CalendarViewMode _viewMode = CalendarViewMode.month;
 
-  /// 时间轴跨度（天）：1 = 聚焦当天，3 = 短周期（桌面跨度档的移动同构）
+  /// 时间轴跨度（天，见 [timelineSpans]）：1 / 3 / 7 / 14
   int _timelineSpan = 1;
 
   /// 视图档切换（抽屉回调）：切到议程档时一次性定位今天（当月今天有分组时）
@@ -135,7 +149,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
         onSelect: _setViewMode,
       );
 
-  /// 时间轴跨度切换（1 天 / 3 天）
+  /// 时间轴跨度切换（日 / 三日 / 周 / 两周）
   void _setTimelineSpan(int span) => setState(() => _timelineSpan = span);
 
   bool get _agendaMode => _viewMode == CalendarViewMode.agenda;
@@ -795,7 +809,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // 档内工具条：跨度切换（1 天 / 3 天）+ 块数回显
+        // 档内工具条：跨度切换（日 / 三日 / 周 / 两周）+ 块数回显
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: AppDimens.space16),
           child: Row(
@@ -822,11 +836,11 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                 ),
               ),
               const Spacer(),
-              for (final span in const [1, 3])
+              for (final span in timelineSpans)
                 Padding(
                   padding: const EdgeInsets.only(left: AppDimens.space6),
                   child: _SpanChip(
-                    label: span == 1 ? '日' : '三日',
+                    label: timelineSpanLabel(span),
                     selected: _timelineSpan == span,
                     onTap: () => _setTimelineSpan(span),
                   ),
@@ -923,8 +937,14 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
     }
   }
 
-  /// 空态主文案（「当天」/「三天」）
-  String _timelineEmptyLabel() => _timelineSpan == 1 ? '当天' : '这三天';
+  /// 空态主文案（「当天」/「这三天」/「这一周」/「这两周」）
+  String _timelineEmptyLabel() => switch (_timelineSpan) {
+        1 => '当天',
+        3 => '这三天',
+        7 => '这一周',
+        14 => '这两周',
+        _ => '这段时间',
+      };
 
   /// 分组锚点 key（懒创建，跨月复用）
   GlobalKey _groupKeyFor(String ymd) =>

@@ -120,7 +120,8 @@ void _wideSurface(WidgetTester tester) {
   addTearDown(tester.view.reset);
 }
 
-/// 含带时刻任务的桥（时间轴档用）：显式 start / due 倒推 / 次日各一
+/// 含带时刻任务的桥（时间轴档用）：显式 start / due 倒推 / 次日 /
+/// 次周（第 5 天）/ 两周（第 9 天）各一——后两者供跨度档断言
 class _TimedBridge extends MockOrbitBridge {
   @override
   Future<List<HolidayInfo>> holidayList() async => const [];
@@ -147,6 +148,10 @@ MockOrbitBridge _timedBridge() {
     {'id': 702, 'title': '倒推块', 'start': null, 'due': at(0, 18), 'dur': 90},
     // 次日块（三日跨度才可见）
     {'id': 703, 'title': '次日块', 'start': at(1, 10), 'due': null, 'dur': 30},
+    // 次周块（周/两周跨度才可见）
+    {'id': 704, 'title': '次周块', 'start': at(5, 10), 'due': null, 'dur': 30},
+    // 两周块（两周跨度才可见）
+    {'id': 705, 'title': '两周块', 'start': at(9, 14), 'due': null, 'dur': 30},
   ];
   for (final r in rows) {
     bridge.store.tasks[r['id'] as int] = {
@@ -835,6 +840,38 @@ void main() {
     await tester.tap(find.text('日'));
     await tester.pumpAndSettle();
     expect(find.text('次日块'), findsNothing);
+  });
+
+  testWidgets('时间轴档：跨度档补 周 / 两周（对齐桌面 TIMELINE_SPANS）', (tester) async {
+    final bridge = _timedBridge();
+    await tester.pumpWidget(_wrap(const SizedBox(), bridge));
+    await settle(tester);
+    await _switchViewMode(tester, '时间');
+
+    // 四个跨度档钮齐在；日档只见当天块
+    expect(find.text('日'), findsOneWidget);
+    expect(find.text('三日'), findsOneWidget);
+    expect(find.text('周'), findsOneWidget);
+    expect(find.text('两周'), findsOneWidget);
+    expect(find.text('次周块'), findsNothing);
+    expect(find.text('两周块'), findsNothing);
+
+    // 周档（7 天）：第 5 天的块进入树，两周块仍不可见
+    await tester.tap(find.text('周'));
+    await tester.pumpAndSettle();
+    expect(find.text('次周块'), findsOneWidget);
+    expect(find.text('两周块'), findsNothing);
+
+    // 两周档（14 天）：第 9 天的块也进入树
+    await tester.tap(find.text('两周'));
+    await tester.pumpAndSettle();
+    expect(find.text('两周块'), findsOneWidget);
+
+    // 切回日档：跨度外段落整体退出
+    await tester.tap(find.text('日'));
+    await tester.pumpAndSettle();
+    expect(find.text('次周块'), findsNothing);
+    expect(find.text('两周块'), findsNothing);
   });
 
   // ── 时间轴拖拽（docs/07 #75：长按 500ms 拾起 + 纵向改时刻）──
