@@ -4,12 +4,15 @@
 // 2. 「日期」→ 单选抽屉 = 快捷档（一小时后 / 今天晚些时候 / 明天 / 下周，
 //    行尾时刻提示）+ 选择日期和时间 +（已有截止时）清除截止；
 // 3. 点选快捷档 → 绝对时刻落库（明天 = 次日 09:00，非保时刻换算）；
-// 4. 「优先级」→ 六档色点，点选写库。
+// 4. 「优先级」→ 六档色点，点选写库；
+// 5. 「更换项目」→ 未分组 + 各项目（项目色点，当前项由抽屉选中态标注），
+//    点选写 project_id（对齐桌面右键菜单「更换项目 ▸」）。
 // 「今天晚些时候」有 22:00 截断（墙钟相关，跑测时刻漂移），其取舍由
 // task_logic_test 的纯函数用例把关，本文件只断言恒在项。
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:orbit/core/theme/icon_map.dart';
 import 'package:orbit/data/api/mock_orbit_bridge.dart';
 import 'package:orbit/data/providers/bridge_provider.dart';
 import 'package:orbit/modules/todo/logic/task_logic.dart';
@@ -123,5 +126,37 @@ void main() {
     await tester.tap(inSheet('紧急'));
     await _settlePastMockLatency(tester);
     expect(_storeTask(bridge, '完成移动端重构方案评审')['priority'], 4);
+  });
+
+  testWidgets('更换项目：抽屉列未分组 + 各项目，点选写 project_id', (tester) async {
+    final bridge = MockOrbitBridge();
+    await _pumpList(tester, bridge);
+
+    final lifeId = bridge.store.projects.values
+        .firstWhere((p) => p['title'] == '生活')['id'] as int;
+    final t1 = _storeTask(bridge, '完成移动端重构方案评审');
+    expect(t1['project_id'], isNot(lifeId), reason: '种子任务在「工作」项目下');
+
+    await _longPress('完成移动端重构方案评审', tester);
+    await tester.tap(find.text('更换项目'));
+    await tester.pumpAndSettle();
+
+    Finder inSheet(String text) => find.descendant(
+          of: find.byType(BottomSheet),
+          matching: find.text(text),
+        );
+    expect(find.text('更换项目'), findsOneWidget, reason: '菜单已收起，只剩抽屉标题');
+    expect(inSheet('未分组'), findsOneWidget);
+    expect(inSheet('生活'), findsOneWidget);
+    // 当前项（工作）由选中态打勾标注——抽屉内恰一枚勾
+    expect(
+      find.descendant(
+          of: find.byType(BottomSheet), matching: find.byIcon(OrbitIcons.check)),
+      findsOneWidget,
+    );
+
+    await tester.tap(inSheet('生活'));
+    await _settlePastMockLatency(tester);
+    expect(_storeTask(bridge, '完成移动端重构方案评审')['project_id'], lifeId);
   });
 }

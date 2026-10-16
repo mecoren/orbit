@@ -1232,6 +1232,14 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
           label: '复制任务',
           onTap: () => _duplicateTask(task),
         ),
+        // 更换项目（对齐桌面右键菜单「更换项目 ▸」：未分组 + 各项目，
+        // 当前项以选择态标注；看板卡片长按同此菜单——跨列改归属的移动端
+        // 入口，见 kanban_view 头部说明）
+        MoreActionItem(
+          icon: OrbitIcons.folder,
+          label: '更换项目',
+          onTap: () => _pickTaskProject(task),
+        ),
         MoreActionItem(
           icon: OrbitIcons.delete,
           label: '删除',
@@ -1325,6 +1333,30 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
       ],
       onSelect: (p) => _patchTask(task.id, {'priority': p},
           failMessage: '设置优先级失败'),
+    );
+  }
+
+  /// 更换项目（对齐桌面右键菜单「更换项目 ▸」语义）：未分组 + 各项目
+  /// （项目带色点，当前项由抽屉的选择态标注——桌面是当前项加粗/禁选，
+  /// 移动端复用共享抽屉的选中打勾，不另造禁用态）；点选即落库。
+  Future<void> _pickTaskProject(TodoTask task) async {
+    final projects =
+        ref.read(todoProjectsProvider).value ?? const <TodoProject>[];
+    await showSelectBottomSheet<int?>(
+      context,
+      title: '更换项目',
+      current: task.projectId,
+      items: [
+        const SelectItem<int?>(value: null, label: '未分组'),
+        for (final p in projects)
+          SelectItem<int?>(
+            value: p.id,
+            label: p.title,
+            colorDot: hexToColor(p.hexColor),
+          ),
+      ],
+      onSelect: (id) => _patchTask(task.id, {'project_id': id},
+          failMessage: '更换项目失败'),
     );
   }
 
