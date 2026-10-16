@@ -248,8 +248,10 @@ class MockOrbitBridge implements OrbitBridge {
         final list = store.tasks.values
             .where((t) => t['is_deleted'] == 0)
             .toList()
+          // 排序按 num 比较：position 是 REAL（core 复制任务写 `+ 1.0`），
+          // 写死 as int 会在复制后的列表读回时炸 double 转换
           ..sort((a, b) =>
-              (a['position'] as int).compareTo(b['position'] as int));
+              (a['position'] as num).compareTo(b['position'] as num));
         // 瘦行 DTO（批2 + 内存治理 A2 对齐 core TodoTaskListItem）：10 个零消费列
         // 整体不在行里；keyword 空时 description 的值再以 null 占位（万级列表实测
         // 占 IPC 体积 47%），keyword 非空保留原文（服务端 LIKE 已按 title+description

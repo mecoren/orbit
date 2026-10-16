@@ -24,7 +24,8 @@ import '../../shared/widgets/shadcn/orbit_image_thumb.dart';
 import '../../shared/widgets/shadcn/orbit_info_row.dart';
 import '../../shared/widgets/shadcn/orbit_page_header.dart';
 import '../../shared/widgets/shadcn/orbit_skeleton.dart';
-import '../../shared/widgets/shadcn/orbit_actions_sheet.dart' show bottomSheetTopShape;
+import '../../shared/widgets/shadcn/orbit_actions_sheet.dart'
+    show bottomSheetTopShape, showMoreActionsSheet, MoreActionItem;
 import '../../shared/widgets/shadcn/orbit_section_card.dart';
 import '../../shared/widgets/shadcn/orbit_sheet_scaffold.dart';
 import '../../shared/widgets/shadcn/orbit_select_sheet.dart';
@@ -116,6 +117,88 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
     }
   }
 
+  // ── 页头 ⋮ 任务级动作（对齐桌面详情标题行 Sunrise/Star/Copy/Trash 四枚钮；
+  //    移动端收进弹层，与列表长按菜单同族——四枚图标并排会把标题挤到半行，
+  //    列表页视图/筛选/排序收 ⋮ 是同款既有决策）──
+
+  void _showTaskActions(TodoTask task) {
+    showMoreActionsSheet(
+      context,
+      title: task.title,
+      actions: [
+        MoreActionItem(
+          icon: OrbitIcons.sun,
+          label: task.isInMyDay ? '移出我的一天' : '加入我的一天',
+          color: OrbitAccents.myDayAmber,
+          onTap: () => _toggleMyDay(task),
+        ),
+        MoreActionItem(
+          icon: OrbitIcons.star,
+          label: task.isStarred ? '取消收藏' : '收藏',
+          color: OrbitAccents.starYellow,
+          onTap: () => _toggleFavorite(task),
+        ),
+        MoreActionItem(
+          icon: OrbitIcons.copy,
+          label: '复制任务',
+          onTap: () => _duplicateTask(task),
+        ),
+        MoreActionItem(
+          icon: OrbitIcons.delete,
+          label: '删除',
+          color: OrbitAccents.overdueRed,
+          onTap: () => _deleteTask(task),
+        ),
+      ],
+    );
+  }
+
+  /// 我的一天：加入今天（本地零点）/ 移出（null）——与桌面 toggleMyDayValue 同口径
+  Future<void> _toggleMyDay(TodoTask task) {
+    final now = DateTime.now();
+    final todayZero =
+        DateTime(now.year, now.month, now.day).millisecondsSinceEpoch;
+    return _patchTask({'my_day_date': task.isInMyDay ? null : todayZero});
+  }
+
+  Future<void> _toggleFavorite(TodoTask task) =>
+      _patchTask({'is_favorite': task.isStarred ? 0 : 1});
+
+  /// 复制任务：克隆后 toast + 原页替换为新副本详情（对齐桌面复制后选中切到副本）
+  Future<void> _duplicateTask(TodoTask task) async {
+    try {
+      final copy =
+          await ref.read(orbitBridgeProvider).todoTaskDuplicate(task.id);
+      if (!mounted) return;
+      WaitToast.success('已复制为「${copy.title}」');
+      ref.invalidate(todoTasksProvider);
+      context.pushReplacement('/todo/${copy.id}');
+    } catch (_) {
+      if (mounted) WaitToast.destructive('复制失败');
+    }
+  }
+
+  /// 删除：二次确认抽屉 + 落库后返回上一页（详情页不另挂撤销条，恢复走回收站）
+  Future<void> _deleteTask(TodoTask task) async {
+    final confirmed = await showConfirmBottomSheet(
+      context,
+      title: '删除任务',
+      message: '确定要删除任务「${task.title}」吗？删除后将移入回收站，可在回收站中恢复。',
+      confirmLabel: '删除',
+      destructive: true,
+    );
+    if (!confirmed || !mounted) return;
+    try {
+      await ref.read(orbitBridgeProvider).todoTaskDelete(task.id);
+      if (!mounted) return;
+      ref.invalidate(todoTasksProvider);
+      ref.invalidate(taskDetailProvider(task.id));
+      context.pop();
+    } catch (_) {
+      WaitToast.destructive('删除失败');
+    }
+  }
+
   /// 下半五区（子任务/标签/提醒/关联/评论）增删改统一失效出口
   void _refreshDetail() {
     final id = widget.taskId;
@@ -128,6 +211,8 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
   Widget build(BuildContext context) {
     final id = widget.taskId;
     final detailAsync = id == null ? null : ref.watch(taskDetailProvider(id));
+    final detail = detailAsync?.value;
+    final colors = AppColors.ofContext(context);
 
     return Scaffold(
       body: Stack(
@@ -160,7 +245,22 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
             left: 0,
             right: 0,
             child: OrbitPageHeader(
-              title: detailAsync?.value?.title ?? '详情',
+              title: detail?.title ?? '详情',
+              // 任务级动作收进 ⋮ 弹层（对照桌面标题行四枚动作钮；标签回显
+              // 我的一天/收藏的当前状态）
+              actions: detail == null
+                  ? null
+                  : [
+                      IconButton(
+                        onPressed: () => _showTaskActions(detail),
+                        tooltip: '任务操作',
+                        icon: Icon(
+                          OrbitIcons.moreVertical,
+                          size: AppDimens.iconSizeMd,
+                          color: colors.titleText,
+                        ),
+                      ),
+                    ],
             ),
           ),
         ],
