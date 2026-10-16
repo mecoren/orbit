@@ -89,10 +89,13 @@ Future<bool> showConfirmBottomSheet(
 
 /// 单选弹层数据项（行首图标 / 12×12 色点 + 文案，二选一）
 /// - [icon] + [iconColor]：行首语义图标（快捷视图切换等与清单页图标同源的场景）；
-/// - [colorDot]：12px 语义色点（项目 / 优先级等颜色即语义的场景）。
+/// - [colorDot]：12px 语义色点（项目 / 优先级等颜色即语义的场景）；
+/// - [hint]：行尾灰字提示（如「周四, 09:00」——快捷日期菜单右侧时间提示，
+///   与桌面 QuickDateMenu 同款信息位）。
 class SelectItem<T> {
   final T value;
   final String label;
+  final String? hint;
   final Color? colorDot;
   final IconData? icon;
   final Color? iconColor;
@@ -100,6 +103,7 @@ class SelectItem<T> {
   const SelectItem(
       {required this.value,
       required this.label,
+      this.hint,
       this.colorDot,
       this.icon,
       this.iconColor});
@@ -303,6 +307,16 @@ class _SelectSheet<T> extends StatelessWidget {
                         ),
                       ),
                     ),
+                    if (item.hint != null) ...[
+                      const SizedBox(width: AppDimens.space8),
+                      Text(
+                        item.hint!,
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: colors.secondaryText,
+                        ),
+                      ),
+                    ],
                     if (selected)
                       Icon(
                         OrbitIcons.check,

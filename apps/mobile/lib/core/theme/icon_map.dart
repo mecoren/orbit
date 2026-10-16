@@ -96,6 +96,15 @@ abstract final class OrbitIcons {
   static const IconData calendarBlocked = LucideIcons.calendarX;
   static const IconData clock = LucideIcons.clock;
 
+  /// 今晚（日期快捷档「今天晚些时候」，与桌面菜单 Moon 同源）
+  static const IconData moon = LucideIcons.moon;
+
+  /// 明早（日期快捷档「明天 09:00」，与桌面菜单 Sunrise 同源）
+  static const IconData sunrise = LucideIcons.sunrise;
+
+  /// 下周（日期快捷档「下周一 09:00」，与桌面菜单 CalendarClock 同源）
+  static const IconData calendarClock = LucideIcons.calendarClock;
+
   // ── 待办业务 ──
 
   static const IconData inbox = LucideIcons.inbox;

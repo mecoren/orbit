@@ -8,6 +8,7 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:orbit/core/theme/app_colors.dart';
 import 'package:orbit/core/theme/app_dimens.dart';
+import 'package:orbit/core/theme/icon_map.dart';
 import 'package:orbit/shared/widgets/shadcn/orbit_sheets.dart';
 import 'support/orbit_test_app.dart';
 
@@ -98,6 +99,33 @@ void main() {
     expect(icon.color, iconColor);
     expect(icon.size, AppDimens.iconSizeMd);
     expect(find.text('今天'), findsOneWidget);
+  });
+
+  testWidgets('单选弹层：hint 行尾灰字（快捷日期档「周四, 09:00」信息位）',
+      (tester) async {
+    final ctx = await pumpHost(tester);
+    showSelectBottomSheet<String>(
+      ctx,
+      title: '设置截止时间',
+      items: const [
+        SelectItem(
+          value: 'tomorrow',
+          label: '明天',
+          hint: '周四, 09:00',
+          icon: Icons.wb_sunny_outlined,
+        ),
+        SelectItem(value: 'clear', label: '清除截止'),
+      ],
+      current: null,
+      onSelect: (_) {},
+    );
+    await tester.pumpAndSettle();
+
+    final hint = tester.widget<Text>(find.text('周四, 09:00'));
+    expect(hint.style?.fontSize, 13, reason: '行尾提示与主标签（15）不同档');
+    expect(hint.style?.color, AppColors.light.secondaryText);
+    // 未选中项不渲染勾选图标（hint 不是选中态）
+    expect(find.byIcon(OrbitIcons.check), findsNothing);
   });
 
   testWidgets('确认弹层：底部按钮标签水平居中（贴左即 TextAlign.start 回归）',

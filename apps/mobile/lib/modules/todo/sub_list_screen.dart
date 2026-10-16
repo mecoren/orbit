@@ -19,6 +19,7 @@ import '../../shared/utils/hex_color.dart';
 import '../../shared/widgets/shadcn/orbit_strikethrough.dart';
 import '../../shared/widgets/shadcn/orbit_checkbox.dart';
 import '../../shared/widgets/shadcn/orbit_confirm_sheet.dart';
+import '../../shared/widgets/shadcn/orbit_date_picker.dart';
 import '../../shared/widgets/shadcn/orbit_dropdown_panel.dart';
 import '../../shared/widgets/shadcn/orbit_empty_state.dart';
 import '../../shared/widgets/shadcn/orbit_list_card.dart';
@@ -1188,6 +1189,18 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
       context,
       title: task.title,
       actions: [
+        // 日期 / 优先级快捷行（对齐桌面任务菜单顶部图标行：快捷档选择
+        // 抽屉里点选即改；桌面图标行同款能力，移动端以抽屉表达）
+        MoreActionItem(
+          icon: OrbitIcons.calendarDays,
+          label: '日期',
+          onTap: () => _pickTaskDue(task),
+        ),
+        MoreActionItem(
+          icon: OrbitIcons.flag,
+          label: '优先级',
+          onTap: () => _pickTaskPriority(task),
+        ),
         // 多选入口（仅有列表档长按手势的语境；看板/表格的卡片长按留给
         // 单条操作，与桌面看板无多选同口径）
         if (_viewMode == TaskViewMode.list)
@@ -1225,6 +1238,101 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
           onTap: () => _deleteTask(task),
         ),
       ],
+    );
+  }
+
+  // ── 长按菜单「日期」「优先级」快捷档（对齐桌面任务菜单顶部图标行） ──
+
+  /// 日期快捷档图标（对齐桌面菜单：一小时后 Clock / 今晚 Moon / 明天
+  /// Sunrise / 下周 CalendarClock；自定义 CalendarDays 在条目上直给）。
+  IconData _dueQuickIcon(String key) => switch (key) {
+        'in1h' => OrbitIcons.clock,
+        'tonight' => OrbitIcons.moon,
+        'tomorrow' => OrbitIcons.sunrise,
+        _ => OrbitIcons.calendarClock,
+      };
+
+  /// 日期便捷选择：快捷档 + 选择日期和时间 + 清除截止（仅已有截止时）。
+  /// 快捷档为绝对时刻直接落库（[quickDateTimeOptions] 与桌面同口径），
+  /// 自定义走 [OrbitDatePicker]（含时刻）。
+  Future<void> _pickTaskDue(TodoTask task) async {
+    final options = quickDateTimeOptions();
+    await showSelectBottomSheet<String>(
+      context,
+      title: '设置截止时间',
+      current: null,
+      items: [
+        for (final o in options)
+          SelectItem(
+            value: o.key,
+            label: o.label,
+            hint: o.hint,
+            icon: _dueQuickIcon(o.key),
+          ),
+        const SelectItem(
+          value: 'custom',
+          label: '选择日期和时间',
+          icon: OrbitIcons.calendarDays,
+        ),
+        if (task.dueDate != null)
+          const SelectItem(
+            value: 'clear',
+            label: '清除截止',
+            icon: OrbitIcons.calendarBlocked,
+          ),
+      ],
+      onSelect: (v) => _applyTaskDueChoice(task, v, options),
+    );
+  }
+
+  Future<void> _applyTaskDueChoice(
+    TodoTask task,
+    String choice,
+    List<({String key, String label, String hint, int ms})> options,
+  ) async {
+    if (choice == 'custom') {
+      await _pickTaskDueCustom(task);
+      return;
+    }
+    if (choice == 'clear') {
+      await _patchTask(task.id, {'due_date': null}, failMessage: '清除失败');
+      return;
+    }
+    final option = options.firstWhere((o) => o.key == choice);
+    await _patchTask(task.id, {'due_date': option.ms},
+        failMessage: '设置截止失败');
+  }
+
+  Future<void> _pickTaskDueCustom(TodoTask task) async {
+    if (!mounted) return;
+    final picked = await OrbitDatePicker.pick(
+      context,
+      initialDate: task.dueDate != null
+          ? DateTime.fromMillisecondsSinceEpoch(task.dueDate!)
+          : null,
+      showTime: true,
+    );
+    if (picked == null) return;
+    await _patchTask(task.id, {'due_date': picked.millisecondsSinceEpoch},
+        failMessage: '设置截止失败');
+  }
+
+  /// 优先级便捷选择（六档色点，对齐桌面菜单优先级行）。
+  Future<void> _pickTaskPriority(TodoTask task) async {
+    await showSelectBottomSheet<int>(
+      context,
+      title: '设置优先级',
+      current: task.priority,
+      items: [
+        for (var p = 0; p <= 5; p++)
+          SelectItem(
+            value: p,
+            label: priorityLabel(p),
+            colorDot: hexToColor(priorityColorHex(p)),
+          ),
+      ],
+      onSelect: (p) => _patchTask(task.id, {'priority': p},
+          failMessage: '设置优先级失败'),
     );
   }
 

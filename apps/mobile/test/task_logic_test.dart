@@ -879,6 +879,62 @@ group('reminderEndMs 结束时刻推导', () {
   });
 });
 
+// ---------- 日期时间快捷档（长按菜单「日期」，镜像桌面 buildQuickDateTimeOptions）----------
+
+group('quickDateTimeOptions 日期时间快捷档', () {
+  test('常规时刻（周三 20:30）：四项 + 绝对时刻 + 行尾提示', () {
+    final now = DateTime(2026, 9, 23, 20, 30);
+    final out = quickDateTimeOptions(now);
+    expect(out.map((o) => o.key), ['in1h', 'tonight', 'tomorrow', 'nextWeek']);
+    expect(out.map((o) => o.label), ['一小时后', '今天晚些时候', '明天', '下周']);
+    // 一小时后 = now + 1h（唯一相对档），提示为落点时刻
+    expect(out[0].ms, now.add(const Duration(hours: 1)).millisecondsSinceEpoch);
+    expect(out[0].hint, '21:30');
+    // 晚些时候 = 当天 22:00（绝对档，不做保时刻换算）
+    expect(out[1].ms, DateTime(2026, 9, 23, 22).millisecondsSinceEpoch);
+    expect(out[1].hint, '22:00');
+    // 明天 09:00（绝对时刻，不是「次日 20:30」）
+    expect(out[2].ms, DateTime(2026, 9, 24, 9).millisecondsSinceEpoch);
+    expect(out[2].hint, '周四, 09:00');
+    // 下周 = 下周一 09:00（9/23 周三 → 9/28 周一）
+    expect(out[3].ms, DateTime(2026, 9, 28, 9).millisecondsSinceEpoch);
+    expect(out[3].hint, '周一, 09:00');
+  });
+
+  test('已过 22:00：「今天晚些时候」隐藏（避免选中过去时间）', () {
+    final out = quickDateTimeOptions(DateTime(2026, 9, 23, 22, 30));
+    expect(out.map((o) => o.key), ['in1h', 'tomorrow', 'nextWeek']);
+  });
+
+  test('恰在 22:00 前（21:59）：「今天晚些时候」保留', () {
+    final out = quickDateTimeOptions(DateTime(2026, 9, 23, 21, 59));
+    expect(out.map((o) => o.key), contains('tonight'));
+  });
+});
+
+group('nextMondayDelta / nextMondayMidnightMs 下周口径', () {
+  test('工作日 / 周六 / 周日：均取下一个周一', () {
+    expect(nextMondayDelta(DateTime(2026, 9, 23)), 5); // 周三
+    expect(nextMondayDelta(DateTime(2026, 9, 26)), 2); // 周六
+    expect(nextMondayDelta(DateTime(2026, 9, 27)), 1); // 周日
+  });
+
+  test('今天为周一也取下周一（+7，与桌面 nextMonday 同口径）', () {
+    expect(nextMondayDelta(DateTime(2026, 9, 21)), 7); // 周一
+    expect(
+      nextMondayMidnightMs(DateTime(2026, 9, 21, 15)),
+      DateTime(2026, 9, 28).millisecondsSinceEpoch,
+    );
+  });
+
+  test('落在本地日界零点（非传入时刻）', () {
+    expect(
+      nextMondayMidnightMs(DateTime(2026, 9, 23, 20, 30)),
+      DateTime(2026, 9, 28).millisecondsSinceEpoch,
+    );
+  });
+});
+
 // ---------- 行内提醒徽标（M3：镜像桌面 reminder-meta.ts）----------
 
 group('displayReminder 行内提醒选取', () {

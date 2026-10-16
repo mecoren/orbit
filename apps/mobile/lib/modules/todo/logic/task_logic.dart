@@ -754,6 +754,67 @@ List<({String label, int ms})> reminderPresets({
   ];
 }
 
+// ---------- 日期时间快捷档（长按菜单「日期」） ----------
+
+/// 距下一个周一的天数（今天为周一也取下周一）——「下周 = 下周一」与桌面
+/// `nextMonday`、日历圆点改期、批量改期、解析入口同口径。
+int nextMondayDelta(DateTime now) {
+  final delta = (8 - now.weekday) % 7;
+  return delta == 0 ? 7 : delta;
+}
+
+/// 「下周一」零点毫秒（[nextMondayDelta] 落在本地日界）
+int nextMondayMidnightMs([DateTime? now]) {
+  final n = now ?? DateTime.now();
+  final d = DateTime(n.year, n.month, n.day + nextMondayDelta(n));
+  return dateToMidnightMs(d);
+}
+
+/// 日期时间级快捷档（桌面 `buildQuickDateTimeOptions` 同口径；长按菜单「日期」
+/// 与桌面任务菜单日期图标行同源）：一小时后（HH:mm）/ 今天晚些时候 22:00
+/// （已过 22:00 隐藏，避免选中过去时间）/ 明天 09:00 / 下周一 09:00。
+/// 目标为**绝对时刻**直接落库、不做保时刻换算；[hint] 为行尾提示文案
+/// （桌面菜单同款：时刻或「周X, 09:00」）。
+List<({String key, String label, String hint, int ms})> quickDateTimeOptions(
+    [DateTime? now]) {
+  final n = now ?? DateTime.now();
+  final in1h = n.add(const Duration(hours: 1));
+  final tonight = DateTime(n.year, n.month, n.day, 22);
+  final tomorrow9 = DateTime(n.year, n.month, n.day + 1, reminderPresetHour);
+  final nextMon9 = DateTime(
+      n.year, n.month, n.day + nextMondayDelta(n), reminderPresetHour);
+  final out = <({String key, String label, String hint, int ms})>[
+    (
+      key: 'in1h',
+      label: '一小时后',
+      hint: formatHm(in1h.millisecondsSinceEpoch),
+      ms: in1h.millisecondsSinceEpoch,
+    ),
+  ];
+  if (n.isBefore(tonight)) {
+    out.add((
+      key: 'tonight',
+      label: '今天晚些时候',
+      hint: '22:00',
+      ms: tonight.millisecondsSinceEpoch,
+    ));
+  }
+  out
+    ..add((
+      key: 'tomorrow',
+      label: '明天',
+      hint: '${weekdayCn(tomorrow9)}, ${_two(reminderPresetHour)}:00',
+      ms: tomorrow9.millisecondsSinceEpoch,
+    ))
+    ..add((
+      key: 'nextWeek',
+      label: '下周',
+      hint: '${weekdayCn(nextMon9)}, ${_two(reminderPresetHour)}:00',
+      ms: nextMon9.millisecondsSinceEpoch,
+    ));
+  return out;
+}
+
 // ---------- 派生判定 ----------
 
 /// 逾期：有截止日期、早于今日零点且未完成（日期段标 #F44336）
