@@ -13,6 +13,7 @@ import '../../shared/widgets/shadcn/orbit_info_row.dart';
 import '../../shared/widgets/shadcn/orbit_actions_sheet.dart'
     show bottomSheetMotion, bottomSheetTopShape;
 import '../../shared/widgets/shadcn/orbit_section_card.dart';
+import '../../shared/widgets/shadcn/orbit_sheet_scaffold.dart';
 import '../../shared/widgets/shadcn/orbit_select_sheet.dart';
 import '../../shared/widgets/shadcn/orbit_date_picker.dart';
 import '../../shared/widgets/shadcn/orbit_toast.dart';
@@ -228,6 +229,15 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
   int? _durationMinutes;
   /// 持续提醒开关（G2）：到期未完成则每 5 分钟再提醒，直至完成
   bool _remindConstant = false;
+
+  /// 新建态手动选择的标签（G5，对齐桌面 TagsField；与 NLP 命中标签合并挂载）
+  final List<TodoLabel> _pickedLabels = [];
+
+  /// 新建态待建子任务标题（G5，对齐桌面 SubtasksField）；保存后逐条建立
+  final List<String> _subtaskTitles = [];
+
+  /// 子任务添加输入框（仅新建态挂载）
+  final _subtaskController = TextEditingController();
   TodoReminder? _existingReminder;
   // 重复规则值（预设/自定义/扩展字段的全部编辑都收敛到重复编辑抽屉，
   // 表单侧只存结果，不再持有自定义档/间隔输入等中间态）
@@ -321,6 +331,7 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
   void dispose() {
     _titleController.dispose();
     _descriptionController.dispose();
+    _subtaskController.dispose();
     super.dispose();
   }
 
@@ -431,8 +442,13 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
             isConstant: _remindConstant ? 1 : 0,
           );
         }
-        // 新建：NLP 命中的标签挂载
-        for (final labelId in _pendingLabelIds) {
+        // 新建：标签挂载（NLP 命中 ∪ 手动勾选，去重；失败不阻断保存——
+        // 部分成功口径，与桌面 TagsField 提交链一致）
+        final labelIds = <int>{
+          ..._pendingLabelIds,
+          for (final l in _pickedLabels) l.id,
+        };
+        for (final labelId in labelIds) {
           try {
             await bridge.todoTaskLabelCreate(
                 TodoTaskLabelCreateInput(taskId: created.id, labelId: labelId));
@@ -441,6 +457,14 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
           }
         }
         _pendingLabelIds = [];
+        // 新建：子任务逐条建立（手动添加 ∪ 模板预填；percent_done 由后端按
+        // 完成度回算；单条失败不阻断——部分成功口径与标签挂载一致）
+        for (final title in _subtaskTitles) {
+          try {
+            await bridge.todoSubtaskCreate(
+                TodoSubtaskCreateInput(taskId: created.id, title: title));
+          } catch (_) {}
+        }
         // 新建：模板子任务逐条建立（percent_done 由后端按完成度回算；
         // 单条失败不阻断——部分成功口径与标签挂载一致）
         final tplSubs = widget.presetTemplate?.subtasks ?? const <String>[];
@@ -1020,6 +1044,142 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
                                 ],
                               ),
                             ),
+                            // 标签 / 子任务（G5）：仅新建态（对齐桌面 footerContent
+                            // 的 `!task` 条件；编辑态标签在详情区、子任务在详情区树）
+                            if (widget.editingTaskId == null) ...[
+                              const SizedBox(height: AppDimens.space16),
+                              SectionCard(
+                                title: '标签',
+                                trailing: TextButton(
+                                  onPressed: _pickFormLabels,
+                                  child: const Text('选择'),
+                                ),
+                                child: _pickedLabels.isEmpty
+                                    ? Text(
+                                        '暂未选择标签',
+                                        style: TextStyle(
+                                          fontSize: 13,
+                                          color: colors.secondaryText
+                                              .withValues(alpha: 0.5),
+                                        ),
+                                      )
+                                    : Wrap(
+                                        spacing: AppDimens.space8,
+                                        runSpacing: AppDimens.space8,
+                                        children: [
+                                          for (final label in _pickedLabels)
+                                            Container(
+                                              padding: const EdgeInsets
+                                                  .symmetric(
+                                                horizontal:
+                                                    AppDimens.space8 + 2,
+                                                vertical: AppDimens.space4,
+                                              ),
+                                              decoration: BoxDecoration(
+                                                borderRadius:
+                                                    AppShapes.small,
+                                                border: Border.all(
+                                                  color: colors.divider,
+                                                ),
+                                              ),
+                                              child: Row(
+                                                mainAxisSize:
+                                                    MainAxisSize.min,
+                                                children: [
+                                                  Container(
+                                                    width: AppDimens
+                                                            .colorDotSize -
+                                                        2,
+                                                    height: AppDimens
+                                                            .colorDotSize -
+                                                        2,
+                                                    decoration:
+                                                        BoxDecoration(
+                                                      shape: BoxShape.circle,
+                                                      color: hexToColor(
+                                                          label.hexColor),
+                                                    ),
+                                                  ),
+                                                  const SizedBox(
+                                                      width: AppDimens
+                                                          .space8),
+                                                  Text(
+                                                    label.title,
+                                                    style: TextStyle(
+                                                      fontSize: 13,
+                                                      color: colors.bodyText,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                        ],
+                                      ),
+                              ),
+                              const SizedBox(height: AppDimens.space16),
+                              SectionCard(
+                                title: '子任务',
+                                child: Column(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.stretch,
+                                  children: [
+                                    for (final title in _subtaskTitles)
+                                      Padding(
+                                        padding: const EdgeInsets.symmetric(
+                                            vertical: AppDimens.space4),
+                                        child: Row(
+                                          children: [
+                                            Expanded(
+                                              child: Text(
+                                                title,
+                                                style: TextStyle(
+                                                  fontSize: 13,
+                                                  color: colors.bodyText,
+                                                ),
+                                              ),
+                                            ),
+                                            IconButton(
+                                              visualDensity:
+                                                  VisualDensity.compact,
+                                              tooltip: '移除子任务',
+                                              icon: Icon(
+                                                OrbitIcons.close,
+                                                size:
+                                                    AppDimens.iconSizeSm + 2,
+                                                color: colors.secondaryText,
+                                              ),
+                                              onPressed: () => setState(() =>
+                                                  _subtaskTitles
+                                                      .remove(title)),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    Row(
+                                      children: [
+                                        Expanded(
+                                          child: TextField(
+                                            controller: _subtaskController,
+                                            style: const TextStyle(
+                                                fontSize: 14),
+                                            decoration:
+                                                const InputDecoration(
+                                              hintText: '添加子任务',
+                                            ),
+                                            onSubmitted: (_) =>
+                                                _addSubtaskTitle(),
+                                          ),
+                                        ),
+                                        TextButton(
+                                          onPressed: _addSubtaskTitle,
+                                          child: const Text('添加'),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
                           ],
                         ),
                       ),
@@ -1029,6 +1189,108 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
         ),
       ),
     );
+  }
+
+  /// 标签多选抽屉（G5）：勾选即进 [_pickedLabels]（不落库——任务尚未创建，
+  /// 保存链统一挂载）；抽屉内可连选
+  Future<void> _pickFormLabels() async {
+    var labels = ref.read(todoLabelsProvider).value ?? const <TodoLabel>[];
+    if (labels.isEmpty) {
+      try {
+        labels = await ref.read(todoLabelsProvider.future);
+      } catch (_) {
+        labels = const <TodoLabel>[];
+      }
+    }
+    if (!mounted) return;
+    if (labels.isEmpty) {
+      WaitToast.info('还没有标签，可在设置 → 标签管理中新建');
+      return;
+    }
+    final colors = AppColors.ofContext(context);
+    final picked = {for (final l in _pickedLabels) l.id};
+    await showModalBottomSheet<void>(
+      context: context,
+      useRootNavigator: true,
+      isScrollControlled: true,
+      backgroundColor: colors.popup,
+      shape: bottomSheetTopShape,
+      builder: (sheetCtx) => StatefulBuilder(
+        builder: (ctx, setSheet) => OrbitSheetScaffold(
+          title: '选择标签',
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              for (final label in labels)
+                InkWell(
+                  onTap: () => setSheet(() {
+                    picked.contains(label.id)
+                        ? picked.remove(label.id)
+                        : picked.add(label.id);
+                  }),
+                  child: SizedBox(
+                    height: AppDimens.touchTarget,
+                    child: Row(
+                      children: [
+                        const SizedBox(width: AppDimens.space16),
+                        Icon(
+                          picked.contains(label.id)
+                              ? OrbitIcons.success
+                              : OrbitIcons.circle,
+                          size: AppDimens.iconSizeMd,
+                          color: picked.contains(label.id)
+                              ? OrbitAccents.todoAccent
+                              : colors.secondaryText,
+                        ),
+                        const SizedBox(width: AppDimens.space12),
+                        Container(
+                          width: AppDimens.colorDotSize,
+                          height: AppDimens.colorDotSize,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: hexToColor(label.hexColor),
+                          ),
+                        ),
+                        const SizedBox(width: AppDimens.space8),
+                        Expanded(
+                          child: Text(
+                            label.title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                                fontSize: 15, color: colors.bodyText),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          actions: OrbitSheetActions(
+            confirmLabel: '完成',
+            onConfirm: () {
+              setState(() => _pickedLabels
+                ..clear()
+                ..addAll(labels.where((l) => picked.contains(l.id))));
+              Navigator.pop(sheetCtx);
+            },
+            cancelLabel: '取消',
+            onCancel: () => Navigator.pop(sheetCtx),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// 追加子任务标题（G5）：trim 非空且不重复才入列；输入框即清
+  void _addSubtaskTitle() {
+    final title = _subtaskController.text.trim();
+    if (title.isEmpty || _subtaskTitles.contains(title)) return;
+    setState(() {
+      _subtaskTitles.add(title);
+      _subtaskController.clear();
+    });
   }
 
   Widget _loadingView() => const Padding(

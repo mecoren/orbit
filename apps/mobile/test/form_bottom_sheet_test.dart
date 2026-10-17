@@ -44,20 +44,38 @@ Future<MockOrbitBridge> _openForm(WidgetTester tester) async {
   return bridge;
 }
 
+/// 表单主滚动容器 = 抽屉内容 ListView 的 Scrollable。
+///
+/// **不能用 `Scrollable.last`**：标题/描述/子任务输入框的 EditableText 自带
+/// 内层 Scrollable（restorationId "editable"），新增输入字段会顶替树序末位，
+/// 把滚动拖动吃掉导致目标滚不回来（2026-10-16 子任务字段上线后踩坑；
+/// 同款坑见 sync_settings_page_test 头注）。按 ListView 后代的**首个**
+/// Scrollable 精确定位主容器。
+final Finder _formScrollable = find
+    .descendant(of: find.byType(ListView), matching: find.byType(Scrollable))
+    .first;
+
 /// 抽屉 ListView 懒构建：字段多于一屏，滚到目标可见再断言/交互。
-/// scrollUntilVisible 只保证元素进树（懒构建会预建视口外 item），
-/// 不保证真正滚入视口——按目标矩形底边判断，超出则继续补滚。
+///
+/// 目标可能在当前视口**上方或下方**（如滚到「提醒时间」后回头找「重复」），
+/// 而 `scrollUntilVisible` 只朝 delta 方向滚、目标被懒构建卸载后向下滚
+/// 永远找不到（曾致 `No element`）——先双向拖把目标挂进树，再
+/// `ensureVisible` 精确滚到位；按目标矩形底边判断是否真在视口内。
 Future<void> _scrollTo(WidgetTester tester, Finder finder) async {
-  await tester.scrollUntilVisible(
-    finder,
-    200,
-    scrollable: find.byType(Scrollable).last,
-  );
+  for (var i = 0; i < 20 && finder.evaluate().isEmpty; i++) {
+    await tester.drag(_formScrollable, const Offset(0, -200));
+    await tester.pumpAndSettle();
+  }
+  for (var i = 0; i < 20 && finder.evaluate().isEmpty; i++) {
+    await tester.drag(_formScrollable, const Offset(0, 200));
+    await tester.pumpAndSettle();
+  }
+  await tester.ensureVisible(finder);
   await tester.pumpAndSettle();
   for (var i = 0; i < 8; i++) {
     // 测试视口高 600，留 20px 余量确保可命中点击
     if (tester.getRect(finder).bottom <= 580) break;
-    await tester.drag(find.byType(Scrollable).last, const Offset(0, -100));
+    await tester.drag(_formScrollable, const Offset(0, -100));
     await tester.pumpAndSettle();
   }
 }
