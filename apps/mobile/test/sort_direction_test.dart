@@ -28,9 +28,16 @@ Future<void> _openPanel(WidgetTester tester) async {
 }
 
 /// 经页头 ⋮ 下拉面板切排序档（⋮ → 就地展开「排序方式」→ 点档位）
+///
+/// 面板 2026-10-16 加「存为视图」后条目超出 0.7 屏限高、面板内容可滚——
+/// 「排序方式」及其子项可能在可视区外，点前必须 ensureVisible。
 Future<void> _switchSort(WidgetTester tester, String label) async {
   await _openPanel(tester);
+  await tester.ensureVisible(find.text('排序方式'));
+  await tester.pumpAndSettle();
   await tester.tap(find.text('排序方式'));
+  await tester.pumpAndSettle();
+  await tester.ensureVisible(find.text(label).last);
   await tester.pumpAndSettle();
   await tester.tap(find.text(label).last);
   await tester.pumpAndSettle();
@@ -75,6 +82,8 @@ void main() {
     // 就地展开 → 点降序（子项展开后回显 + 子项共两处「升序」）；
     // 子项选中即执行并关面板。展开后内容超出卡片 0.7 屏高上限，
     // 先 ensureVisible 让滚动容器把目标行滚进可视区再点
+    await tester.ensureVisible(find.text('排序方向'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('排序方向'));
     await tester.pumpAndSettle();
     expect(find.text('升序'), findsNWidgets(2));
