@@ -8,6 +8,7 @@ import '../../data/api/dto.dart';
 import '../../shared/utils/hex_color.dart';
 import '../../shared/widgets/shadcn/orbit_strikethrough.dart';
 import '../../shared/widgets/shadcn/orbit_checkbox.dart';
+import '../../shared/widgets/shadcn/orbit_row_toggle.dart';
 import 'logic/task_logic.dart';
 
 /// 表格视图（对齐桌面 `task-table-view.tsx` 的七列概览）
@@ -32,9 +33,13 @@ class TaskTableView extends StatelessWidget {
     required this.onToggleDone,
     required this.onOpen,
     required this.onLongPress,
+    required this.onToggleFavorite,
+    required this.onToggleMyDay,
     this.projectTitleOf,
     this.labelDotsByTask = const {},
     this.remindersByTask = const {},
+    this.selectedIds = const {},
+    this.onToggleSelect,
   });
 
   final List<TodoTask> tasks;
@@ -42,6 +47,17 @@ class TaskTableView extends StatelessWidget {
   final ValueChanged<TodoTask> onToggleDone;
   final ValueChanged<TodoTask> onOpen;
   final ValueChanged<TodoTask> onLongPress;
+
+  /// 星标 / 我的一天行内开关（G8，对齐桌面 hover 开关钮）
+  final ValueChanged<TodoTask> onToggleFavorite;
+  final ValueChanged<TodoTask> onToggleMyDay;
+
+  /// 多选批量（G6，对齐桌面 task-table-view 的选择态）：非空即选择模式，
+  /// 行点按改切换选中、勾选位换装选区形态
+  final Set<int> selectedIds;
+
+  /// 点行切换选中（null = 非选择模式）
+  final ValueChanged<int>? onToggleSelect;
 
   /// 项目名取用口（未分组返回 null → 渲染「—」）
   final String? Function(TodoTask)? projectTitleOf;
@@ -57,6 +73,10 @@ class TaskTableView extends StatelessWidget {
 
   /// 数据行高（与列表档 56 对齐，保证触控热区）
   static const double rowHeight = 56;
+
+  /// 标题列前两枚行内开关（星标 / 我的一天）的布局盒总宽：
+  /// 2 × [OrbitRowToggle.hitExtent]（32），表头占位须同宽防列错位
+  static const double rowTogglePairWidth = 64;
 
   @override
   Widget build(BuildContext context) {
@@ -80,7 +100,11 @@ class TaskTableView extends StatelessWidget {
               bottom: padding.bottom,
             ),
             itemCount: tasks.length,
-            itemBuilder: (context, index) => _row(context, tasks[index]),
+            itemBuilder: (context, index) => _row(
+              context,
+              tasks[index],
+              selected: selectedIds.contains(tasks[index].id),
+            ),
           ),
         ),
       ],
@@ -100,6 +124,9 @@ class TaskTableView extends StatelessWidget {
       children: [
         const SizedBox(width: OrbitCheckbox.minHitExtent),
         const SizedBox(width: AppDimens.space8),
+        // 行内标题列前恒挂两枚行内开关（星标 / 我的一天，G8）：
+        // 表头首格按**布局盒**同宽占位，保持标题左沿逐像素对齐
+        const SizedBox(width: rowTogglePairWidth),
         Expanded(flex: 4, child: Text('标题', style: style)),
         Expanded(flex: 2, child: Text('项目', style: style)),
         // 固定列宽的表头受字号档保护：全局 TextScaler 生效后字号会变，
@@ -132,7 +159,7 @@ class TaskTableView extends StatelessWidget {
     );
   }
 
-  Widget _row(BuildContext context, TodoTask task) {
+  Widget _row(BuildContext context, TodoTask task, {bool selected = false}) {
     final colors = AppColors.ofContext(context);
     final overdue = isOverdue(task);
     final dots = labelDotsByTask[task.id] ?? const <ProjectedTaskLabel>[];
@@ -144,46 +171,76 @@ class TaskTableView extends StatelessWidget {
       taskDone: task.isDone,
     );
     final pct = task.percentDone;
+    // 选择模式（G6）：点行切换选中，勾选位换装选区指示
+    //（完成勾选与选中不能共用一个圆圈，列表档 _SelectionRow 同语义）
+    final selecting = onToggleSelect != null;
 
     return InkWell(
-      onTap: () => onOpen(task),
+      onTap: selecting ? () => onToggleSelect!(task.id) : () => onOpen(task),
       onLongPress: () => onLongPress(task),
       child: Container(
         height: rowHeight,
         padding: const EdgeInsets.symmetric(horizontal: AppDimens.space12),
         decoration: BoxDecoration(
+          color: selected
+              ? OrbitAccents.todoAccent.withValues(alpha: 0.10)
+              : null,
           border: Border(
             bottom: BorderSide(color: colors.divider),
           ),
         ),
         child: Row(
           children: [
-            OrbitCheckbox(
-              checked: task.isDone,
-              size: AppDimens.taskCheckboxSize,
-              // 优先级由描边环承载（列表行/看板卡同口径），不再另立方点列
-              borderColor: task.priority > 0
-                  ? hexToColor(priorityRingHex(task.priority)!)
-                  : null,
-              onToggle: () => onToggleDone(task),
-            ),
+            if (selecting)
+              Icon(
+                selected ? OrbitIcons.success : OrbitIcons.circle,
+                size: AppDimens.taskCheckboxSize,
+                color: selected
+                    ? OrbitAccents.todoAccent
+                    : colors.secondaryText,
+              )
+            else
+              OrbitCheckbox(
+                checked: task.isDone,
+                size: AppDimens.taskCheckboxSize,
+                // 优先级由描边环承载（列表行/看板卡同口径），不再另立方点列
+                borderColor: task.priority > 0
+                    ? hexToColor(priorityRingHex(task.priority)!)
+                    : null,
+                onToggle: () => onToggleDone(task),
+              ),
             const SizedBox(width: AppDimens.space8),
             Expanded(
               flex: 4,
               child: Row(
                 children: [
-                  // 星标 / 我的一天：只读指示（桌面表格行同位但为 hover 开关，
-                  // 移动无 hover，写入留在长按菜单/详情，行内只示态）
-                  if (task.isStarred) ...[
-                    Icon(OrbitIcons.star,
-                        size: 11, color: OrbitAccents.starYellow),
-                    const SizedBox(width: AppDimens.space2),
-                  ],
-                  if (task.isInMyDay) ...[
-                    Icon(OrbitIcons.sunrise,
-                        size: 11, color: OrbitAccents.myDayAmber),
-                    const SizedBox(width: AppDimens.space2),
-                  ],
+                  // 星标 / 我的一天（G8）：对齐桌面表格行 hover 开关钮
+                  //（task-table-view.tsx:481-519）——无 hover 的触控映射 =
+                  // 恒显可点，未激活弱化灰、激活语义色
+                  OrbitRowToggle(
+                    icon: OrbitIcons.star,
+                    active: task.isStarred,
+                    activeColor: task.isDone
+                        ? colors.deactivatedText
+                        : OrbitAccents.starYellow,
+                    inactiveColor: colors.deactivatedText,
+                    tooltip: task.isStarred ? '取消收藏' : '收藏',
+                    onTap: () => onToggleFavorite(task),
+                    iconSize: 11,
+                    hitExtent: 32,
+                  ),
+                  OrbitRowToggle(
+                    icon: OrbitIcons.sunrise,
+                    active: task.isInMyDay,
+                    activeColor: task.isDone
+                        ? colors.deactivatedText
+                        : OrbitAccents.myDayAmber,
+                    inactiveColor: colors.deactivatedText,
+                    tooltip: task.isInMyDay ? '移出我的一天' : '加入我的一天',
+                    onTap: () => onToggleMyDay(task),
+                    iconSize: 11,
+                    hitExtent: 32,
+                  ),
                   Flexible(
                     child: AnimatedStrikethrough(
                       text: task.title,

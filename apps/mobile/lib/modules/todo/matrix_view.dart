@@ -9,6 +9,7 @@ import '../../data/api/dto.dart';
 import '../../shared/utils/hex_color.dart';
 import '../../shared/widgets/shadcn/orbit_card.dart';
 import '../../shared/widgets/shadcn/orbit_checkbox.dart';
+import '../../shared/widgets/shadcn/orbit_row_toggle.dart';
 import '../../shared/widgets/shadcn/orbit_strikethrough.dart';
 import 'logic/task_logic.dart';
 
@@ -32,6 +33,7 @@ class EisenhowerMatrixBoard extends StatelessWidget {
     required this.onOpen,
     required this.onToggleDone,
     this.onLongPress,
+    this.onToggleFavorite,
     this.remindersByTask = const {},
   });
 
@@ -46,6 +48,9 @@ class EisenhowerMatrixBoard extends StatelessWidget {
 
   /// 长按行（弹操作菜单）；null = 无长按语义
   final ValueChanged<TodoTask>? onLongPress;
+
+  /// 星标行内开关（G8，对齐桌面矩阵行 hover 开关）；无我的一天
+  final ValueChanged<TodoTask>? onToggleFavorite;
 
   /// 任务 → 提醒投影（行内提醒徽标数据源；投影未就绪时为空，不渲染徽标）
   final Map<int, List<ProjectedReminder>> remindersByTask;
@@ -201,6 +206,7 @@ class EisenhowerMatrixBoard extends StatelessWidget {
                         onOpen: onOpen,
                         onToggleDone: onToggleDone,
                         onLongPress: onLongPress,
+                        onToggleFavorite: onToggleFavorite,
                       );
                     },
                   ),
@@ -223,6 +229,7 @@ class _QuadrantRow extends StatelessWidget {
     required this.onToggleDone,
     this.reminder,
     this.onLongPress,
+    this.onToggleFavorite,
   });
 
   final TodoTask task;
@@ -233,6 +240,10 @@ class _QuadrantRow extends StatelessWidget {
   final DisplayReminder? reminder;
 
   final ValueChanged<TodoTask>? onLongPress;
+
+  /// 星标行内开关（G8，对齐桌面 matrix-view.tsx:347-363 的 hover 开关钮）；
+  /// 无我的一天（桌面明注「象限格是优先级工作面」，不补）
+  final ValueChanged<TodoTask>? onToggleFavorite;
 
   @override
   Widget build(BuildContext context) {
@@ -336,6 +347,24 @@ class _QuadrantRow extends StatelessWidget {
                 ],
               ),
             ),
+            // 星标（G8，对齐桌面 matrix-view.tsx:347-363 hover 开关）：
+            // 恒显可点；无我的一天（桌面明注象限格是优先级工作面）
+            if (onToggleFavorite != null)
+              OrbitRowToggle(
+                icon: OrbitIcons.star,
+                active: task.isStarred,
+                activeColor: task.isDone
+                    ? colors.deactivatedText
+                    : OrbitAccents.starYellow,
+                inactiveColor: colors.deactivatedText,
+                tooltip: task.isStarred ? '取消收藏' : '收藏',
+                onTap: () {
+                  HapticFeedback.selectionClick();
+                  onToggleFavorite!(task);
+                },
+                iconSize: 14,
+                hitExtent: 32,
+              ),
           ],
         ),
       ),

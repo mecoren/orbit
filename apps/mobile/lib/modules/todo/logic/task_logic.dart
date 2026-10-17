@@ -423,6 +423,18 @@ Map<String, Object?> buildStatusPatch(String status) {
   return {'status': status, 'done': 0, 'done_at': null};
 }
 
+/// 收藏切换 patch（行内星标开关 / 长按菜单「收藏」共用，G8）
+Map<String, Object?> buildFavoriteTogglePatch(TodoTask task) =>
+    {'is_favorite': task.isStarred ? 0 : 1};
+
+/// 我的一天切换 patch（行内 Sunrise 开关 / 长按菜单共用，G8）：
+/// 加入 = 今天本地零点、移出 = null——与桌面 `toggleMyDayValue` 同口径
+Map<String, Object?> buildMyDayTogglePatch(TodoTask task, {DateTime? now}) {
+  final n = now ?? DateTime.now();
+  final todayZero = DateTime(n.year, n.month, n.day).millisecondsSinceEpoch;
+  return {'my_day_date': task.isInMyDay ? null : todayZero};
+}
+
 // ---------- 拖拽重排（侧栏项目段 Phase 7） ----------
 
 /// 通用列表重排（纯函数）：把 [oldIndex] 元素移动到语义插入位 [newIndex]。

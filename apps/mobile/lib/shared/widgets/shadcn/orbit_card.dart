@@ -23,6 +23,7 @@ class OrbitCard extends StatelessWidget {
     this.padding = const EdgeInsets.all(AppDimens.cardPadding),
     this.borderRadius = AppShapes.medium,
     this.fillColor,
+    this.borderColor,
   });
 
   final Widget child;
@@ -36,6 +37,9 @@ class OrbitCard extends StatelessWidget {
   /// 填充色（默认 `surface`）
   final Color? fillColor;
 
+  /// 描边色（默认 `outline`；选中态等场景传强调色覆盖）
+  final Color? borderColor;
+
   @override
   Widget build(BuildContext context) {
     final colors = AppColors.ofContext(context);
@@ -43,7 +47,7 @@ class OrbitCard extends StatelessWidget {
       padding: padding,
       filled: true,
       fillColor: fillColor ?? colors.surface,
-      borderColor: colors.outline,
+      borderColor: borderColor ?? colors.outline,
       borderWidth: 1,
       borderRadius: borderRadius,
       child: child,

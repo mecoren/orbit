@@ -68,6 +68,8 @@ Widget _harness(
           onToggleDone: (_) {},
           onOpen: (_) {},
           onLongPress: (_) {},
+          onToggleFavorite: (_) {},
+          onToggleMyDay: (_) {},
           remindersByTask: remindersByTask,
         ),
       ),
@@ -119,7 +121,7 @@ void main() {
     expect(dashRights, contains(tester.getTopRight(find.text('截止')).dx));
   });
 
-  testWidgets('标题列只读指示：星标 / 我的一天 / 子任务进度', (tester) async {
+  testWidgets('标题列行内开关：星标 / 我的一天 / 子任务进度', (tester) async {
     final now = DateTime.now();
     final todayZero =
         DateTime(now.year, now.month, now.day).millisecondsSinceEpoch;
@@ -137,14 +139,15 @@ void main() {
     expect(find.byIcon(OrbitIcons.sunrise), findsOneWidget);
     expect(find.text('50%'), findsOneWidget);
 
-    // 0/100 不显示（桌面表格同口径）；未收藏/未加入我的一天不渲染
+    // 0/100 不显示（桌面表格同口径）；星标/我的一天**恒显可点**（G8：
+    // 对齐桌面 hover 开关钮——无 hover 的触控映射 = 恒显，未激活弱化灰）
     await tester.pumpWidget(_harness([
       _task(id: 1, title: '满进度', percentDone: 100),
     ]));
     await tester.pump();
     expect(find.text('100%'), findsNothing);
-    expect(find.byIcon(OrbitIcons.star), findsNothing);
-    expect(find.byIcon(OrbitIcons.sunrise), findsNothing);
+    expect(find.byIcon(OrbitIcons.star), findsOneWidget);
+    expect(find.byIcon(OrbitIcons.sunrise), findsOneWidget);
   });
 
   testWidgets('截止列提醒铃铛：有存活提醒才有，到期未完转逾期红', (tester) async {
