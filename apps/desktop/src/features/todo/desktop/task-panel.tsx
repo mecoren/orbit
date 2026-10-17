@@ -40,6 +40,7 @@ import { CalendarView } from "./calendar-view";
 import TaskTableView from "./task-table-view";
 import { MatrixView } from "./matrix-view";
 import { TodayStrip } from "./today-strip";
+import { WeeklyReviewDialog } from "./weekly-review-dialog";
 
 type StatusFilter = "all" | "undone" | "pending" | "doing" | "done";
 type PriorityFilter = "all" | "0" | "1" | "2" | "3" | "4" | "5";
@@ -107,6 +108,8 @@ export default function TaskPanel() {
 
   // ---- 工具栏状态（面板私有，不跨面板保留）----
   const [keyword, setKeyword] = useState("");
+  // 周回顾向导（G5）：面板私有开关，关闭即重置向导步进
+  const [reviewOpen, setReviewOpen] = useState(false);
   // 搜索防抖（200ms，与全局搜索 250ms 同族）：输入期不再每键全量
   // filterTasks 重跑（万任务下一键一遍分组+排序），停止击键才过滤
   const debouncedKeyword = useDebouncedValue(keyword.trim(), 200);
@@ -357,6 +360,7 @@ export default function TaskPanel() {
             }
             onOpenCommand={() => setCommandOpen(true)}
             onOpenLabels={() => setLabelManagerOpen(true)}
+            onOpenReview={() => setReviewOpen(true)}
           />
 
           {/* 新增按钮 */}
@@ -499,6 +503,13 @@ export default function TaskPanel() {
         quickView={
           projectId == null && !ungrouped && savedFilterId == null ? quickView : null
         }
+      />
+
+      {/* 周回顾向导（G5）：三步引导处置逾期/无日期/停滞，写路径走既有更新通道 */}
+      <WeeklyReviewDialog
+        open={reviewOpen}
+        onOpenChange={setReviewOpen}
+        tasks={sourceTasks}
       />
     </div>
   );

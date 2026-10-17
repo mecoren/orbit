@@ -257,6 +257,7 @@ interface MoreMenuButtonProps {
   onSaveAsView: () => void;
   onOpenCommand: () => void;
   onOpenLabels: () => void;
+  onOpenReview: () => void;
 }
 
 /** 「···」更多菜单：视图图标排 + 显示/入口类低频项收拢 */
@@ -270,6 +271,7 @@ export function MoreMenuButton(props: MoreMenuButtonProps) {
     onSaveAsView,
     onOpenCommand,
     onOpenLabels,
+    onOpenReview,
   } = props;
 
   return (
@@ -322,6 +324,7 @@ export function MoreMenuButton(props: MoreMenuButtonProps) {
           <DropdownMenuShortcut>Ctrl+P</DropdownMenuShortcut>
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={() => onOpenLabels()}>标签管理</DropdownMenuItem>
+        <DropdownMenuItem onSelect={() => onOpenReview()}>周回顾</DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   );
