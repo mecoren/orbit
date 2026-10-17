@@ -717,6 +717,30 @@ void main() {
     expect(anyCard, findsWidgets);
   });
 
+  // ── 周档（docs/07 #80 残余：对齐桌面 CalendarSubMode.week）──
+
+  testWidgets('周档：周条 + 仅本周按日分组列表（非整月）', (tester) async {
+    final bridge = _seededBridge();
+    await tester.pumpWidget(_wrap(const SizedBox(), bridge));
+    await settle(tester);
+
+    await _switchViewMode(tester, '周');
+
+    // 周档：月历收缩为单行周条（table_calendar 的 week 档）
+    final cal =
+        tester.widget<OrbitMonthCalendar>(find.byType(OrbitMonthCalendar));
+    expect(cal.calendarFormat, CalendarFormat.week);
+
+    // 分组列表只含**本周**的日期组（不是整月）：日组头数 ≤ 7
+    final groupHeads = find.textContaining('星期');
+    expect(tester.widgetList(groupHeads).length, lessThanOrEqualTo(7));
+
+    // 切回月档恢复
+    await _switchViewMode(tester, '月历', from: '周');
+    expect(find.byType(OrbitMonthCalendar), findsOneWidget);
+    expect(find.text('长按日历快捷新增'), findsOneWidget);
+  });
+
   // ── 议程档（docs/07 #56：对齐桌面 CalendarSubMode.agenda）──
 
   testWidgets('议程档：切档隐藏月历网格，仅保留按日分组列表', (tester) async {

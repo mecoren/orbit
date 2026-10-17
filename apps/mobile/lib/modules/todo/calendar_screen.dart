@@ -28,6 +28,7 @@ import '../../shared/widgets/shadcn/orbit_toast.dart';
 import '../../services/local_prefs.dart';
 import 'logic/reschedule_due.dart';
 import 'logic/task_logic.dart';
+import 'logic/task_menu.dart';
 import 'logic/time_block.dart';
 import 'providers/todo_providers.dart';
 import 'quick_add_sheet.dart' show showQuickAddSheet;
@@ -35,7 +36,7 @@ import 'year_overview_page.dart';
 import '../../core/theme/icon_map.dart';
 
 /// 页内视图档（见 [_CalendarScreenState._viewMode]）
-enum CalendarViewMode { month, agenda, timeline }
+enum CalendarViewMode { month, week, agenda, timeline }
 
 /// 时间轴跨度档（对标桌面 `TIMELINE_SPANS`：日 / 三日 / 周 / 两周）。
 /// 一维表达「多日 + 多周」：1 天聚焦当日排程，3 天看短周期，7 天全周，
@@ -109,21 +110,29 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
 
   /// 页内视图档（年档不在此列——标题点击进独立页 [YearOverviewPage]）：
   /// - [CalendarViewMode.month]：月历网格 + 选中日任务列表（默认）；
+  /// - [CalendarViewMode.week]：周条 + 选中日所在周的按日分组列表
+  ///   （对齐桌面 `CalendarSubMode.week`：只看本周，非整月）；
   /// - [CalendarViewMode.agenda]：隐藏网格，整页当月按日分组列表，
   ///   进入时定位今天（对齐桌面 `CalendarSubMode.agenda`）；
   /// - [CalendarViewMode.timeline]：24 小时时段轴（#74，对标 TickTick 移动端
   ///   Timeline），跨度 [_timelineSpan] 天，从选中日当天起算。
   ///
-  /// 档位切换入口是页头动作槽的**档位抽屉**（月历/议程/时间三选一）——
+  /// 档位切换入口是页头动作槽的**档位抽屉**（月历/周/议程/时间四选一）——
   /// 「从一组值里挑一个」按交互约定走底部抽屉，不用 PopupMenu。
   CalendarViewMode _viewMode = CalendarViewMode.month;
 
   /// 时间轴跨度（天，见 [timelineSpans]）：1 / 3 / 7 / 14
   int _timelineSpan = 1;
 
-  /// 视图档切换（抽屉回调）：切到议程档时一次性定位今天（当月今天有分组时）
+  /// 视图档切换（抽屉回调）：切到议程/周档时一次性定位今天
   void _setViewMode(CalendarViewMode mode) {
-    setState(() => _viewMode = mode);
+    setState(() {
+      _viewMode = mode;
+      // 周档 = 周条形态（table_calendar week）；离开周档回整月网格
+      _calFormat = mode == CalendarViewMode.week
+          ? CalendarFormat.week
+          : CalendarFormat.month;
+    });
     if (mode != CalendarViewMode.agenda) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
@@ -136,13 +145,14 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
     });
   }
 
-  /// 页头档位抽屉（月历 / 议程 / 时间）
+  /// 页头档位抽屉（月历 / 周 / 议程 / 时间）
   Future<void> _pickViewMode() => showSelectBottomSheet<CalendarViewMode>(
         context,
         title: '视图',
         current: _viewMode,
         items: const [
           SelectItem(value: CalendarViewMode.month, label: '月历'),
+          SelectItem(value: CalendarViewMode.week, label: '周'),
           SelectItem(value: CalendarViewMode.agenda, label: '议程'),
           SelectItem(value: CalendarViewMode.timeline, label: '时间'),
         ],
@@ -299,6 +309,23 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
 
   /// 打开任务详情（稳定方法引用：分组 build 不再逐组创建闭包）
   void _openTask(int id) => context.push('/todo/$id');
+
+  /// 任务行长按菜单（G9，对齐桌面 agenda/月弹层行的 TaskContextMenu）：
+  /// 与列表/看板/表格/矩阵共用共享抽屉（logic/task_menu.dart 同套）。
+  /// 日历行无多选态，不出「多选」项。
+  void _showTaskActions(TodoTask task) {
+    showTaskActionSheet(
+      context,
+      ref,
+      task: task,
+      onChanged: () {
+        ref.invalidate(todoTasksProvider);
+        ref.invalidate(taskDetailProvider(task.id));
+        ref.invalidate(taskRemindersProjectionProvider);
+      },
+      onToggleDone: () => _toggleDone(task),
+    );
+  }
 
   /// 选中日任务卡勾选完成/取消（与列表档同口径：完成走 todoTaskComplete
   /// 单事务推进重复任务，取消走普通 patch）
@@ -483,8 +510,25 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
         ];
       }
     }
+    // 周档（G10，对齐桌面 CalendarSubMode.week）：列表只留选中日所在周
+    //（周一起始，与网格 week 档同口径）；跨月的周天数直接按 byDay 取，
+    // 不受 _month 边界裁剪
+    final weekMode = _viewMode == CalendarViewMode.week;
+    final weekStart = DateTime(_selectedDate.year, _selectedDate.month,
+        _selectedDate.day - (_selectedDate.weekday - 1));
+    final weekEnd = weekStart.add(const Duration(days: 6));
+    final shownGroups = <({DateTime date, List<TodoTask> items})>[];
+    if (weekMode) {
+      for (var i = 0; i < 7; i++) {
+        final d = DateTime(weekStart.year, weekStart.month, weekStart.day + i);
+        final items = byDay[_ymd(d)] ?? const <TodoTask>[];
+        if (items.isNotEmpty) shownGroups.add((date: d, items: items));
+      }
+    } else {
+      shownGroups.addAll(monthGroups);
+    }
     final monthTotal =
-        monthGroups.fold<int>(0, (sum, g) => sum + g.items.length);
+        shownGroups.fold<int>(0, (sum, g) => sum + g.items.length);
 
     return Scaffold(
       body: Stack(
@@ -565,14 +609,16 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                     // 月档 = 选中日任务卡（竞品口径：点日格看当天任务）；
                     // 议程档 = 整月按日分组列表（桌面 agenda 档同语义，
                     // 月标题 + 分组块原样保留）
-                    if (_agendaMode) ...[
+                    if (_agendaMode || weekMode) ...[
                       Padding(
                         padding: const EdgeInsets.symmetric(
                             horizontal: AppDimens.space16),
                         child: Row(
                           children: [
                             Text(
-                              '${_month.year}年${_month.month}月的任务',
+                              weekMode
+                                  ? '${weekStart.month}月${weekStart.day}日 - ${weekEnd.month}月${weekEnd.day}日'
+                                  : '${_month.year}年${_month.month}月的任务',
                               style: TextStyle(
                                 fontSize: 14,
                                 fontWeight: FontWeight.w700,
@@ -643,7 +689,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                         )
                       else ...[
                         const SizedBox(height: AppDimens.space8),
-                        for (final group in monthGroups)
+                        for (final group in shownGroups)
                           _MonthDayGroup(
                             key: _groupKeyFor(_ymd(group.date)),
                             date: group.date,
@@ -655,6 +701,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                                 ?.isHoliday,
                             tasks: group.items,
                             onOpenTask: _openTask,
+                            onTaskLongPress: _showTaskActions,
                           ),
                       ],
                     ] else if (_timelineMode)
@@ -678,6 +725,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                         onToggleStyle: _toggleDayStyle,
                         onOpenTask: _openTask,
                         onToggleDone: _toggleDone,
+                        onTaskLongPress: _showTaskActions,
                       ),
                   ],
                 ),
@@ -953,6 +1001,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
   /// 当前档位的页头动作图标（进入抽屉前的回显）
   IconData get _viewModeIcon => switch (_viewMode) {
         CalendarViewMode.month => OrbitIcons.calendar,
+        CalendarViewMode.week => OrbitIcons.calendarRange,
         CalendarViewMode.agenda => OrbitIcons.list,
         CalendarViewMode.timeline => OrbitIcons.clock,
       };
@@ -960,6 +1009,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
   /// 当前档位中文名（tooltip 回显，与抽屉选项文案同源）
   String get _viewModeLabel => switch (_viewMode) {
         CalendarViewMode.month => '月历',
+        CalendarViewMode.week => '周',
         CalendarViewMode.agenda => '议程',
         CalendarViewMode.timeline => '时间',
       };
@@ -1097,6 +1147,7 @@ class _MonthDayGroup extends StatelessWidget {
     required this.isToday,
     required this.tasks,
     required this.onOpenTask,
+    this.onTaskLongPress,
     this.holidayMark,
   });
 
@@ -1105,6 +1156,9 @@ class _MonthDayGroup extends StatelessWidget {
   final bool isToday;
   final List<TodoTask> tasks;
   final ValueChanged<int> onOpenTask;
+
+  /// 任务行长按（G9，对齐桌面 agenda 行 TaskContextMenu）：null 不接
+  final ValueChanged<TodoTask>? onTaskLongPress;
 
   /// 节假日徽标：true 休 / false 班 / null 不渲染（议程档传入，月档为 null）
   final bool? holidayMark;
@@ -1234,6 +1288,9 @@ class _MonthDayGroup extends StatelessWidget {
               todayMs: todayMs,
               edge: OrbitCardEdge.of(i + 1, total),
               onTap: () => onOpenTask(tasks[i].id),
+              onLongPress: onTaskLongPress == null
+                  ? null
+                  : () => onTaskLongPress!(tasks[i]),
             ),
         ],
       ),
@@ -1247,12 +1304,16 @@ class _TaskCard extends StatelessWidget {
     required this.task,
     required this.todayMs,
     required this.onTap,
+    this.onLongPress,
     this.edge = OrbitCardEdge.none,
   });
 
   final TodoTask task;
   final int todayMs;
   final VoidCallback onTap;
+
+  /// 长按（G9，对齐桌面 agenda 行的 TaskContextMenu）：null 不接
+  final VoidCallback? onLongPress;
 
   /// 卡片段位（议程组卡内续段；默认扁平，复用面不受影响）
   final OrbitCardEdge edge;
@@ -1267,6 +1328,7 @@ class _TaskCard extends StatelessWidget {
 
     return InkWell(
       onTap: onTap,
+      onLongPress: onLongPress,
       // 卡内段（今天任务列表同款：卡面由段铺，行内只定内边距与最小行高）
       child: OrbitCardSegment(
         edge: edge,
@@ -1344,6 +1406,7 @@ class _SelectedDayList extends StatelessWidget {
     required this.onToggleStyle,
     required this.onOpenTask,
     required this.onToggleDone,
+    this.onTaskLongPress,
   });
 
   final DateTime date;
@@ -1366,6 +1429,9 @@ class _SelectedDayList extends StatelessWidget {
 
   final ValueChanged<int> onOpenTask;
   final ValueChanged<TodoTask> onToggleDone;
+
+  /// 任务行长按（G9，对齐桌面右栏行 TaskContextMenu）：null 不接
+  final ValueChanged<TodoTask>? onTaskLongPress;
 
   static const _weekdayNames = ['一', '二', '三', '四', '五', '六', '日'];
 
@@ -1501,6 +1567,9 @@ class _SelectedDayList extends StatelessWidget {
                 ),
                 onToggle: () => onToggleDone(tasks[i]),
                 onOpen: () => onOpenTask(tasks[i].id),
+                onLongPress: onTaskLongPress == null
+                    ? null
+                    : () => onTaskLongPress!(tasks[i]),
               )
           else
             for (var i = 0; i < tasks.length; i++)
@@ -1517,6 +1586,9 @@ class _SelectedDayList extends StatelessWidget {
                   ),
                   onToggle: () => onToggleDone(tasks[i]),
                   onOpen: () => onOpenTask(tasks[i].id),
+                  onLongPress: onTaskLongPress == null
+                      ? null
+                      : () => onTaskLongPress!(tasks[i]),
                 ),
               ),
         ],
@@ -1537,6 +1609,7 @@ class _DayTaskRow extends StatelessWidget {
     required this.reminder,
     required this.onToggle,
     required this.onOpen,
+    this.onLongPress,
     this.showTimeColumn = true,
   });
 
@@ -1554,6 +1627,9 @@ class _DayTaskRow extends StatelessWidget {
 
   final VoidCallback onToggle;
   final VoidCallback onOpen;
+
+  /// 长按（G9，对齐桌面右栏行 TaskContextMenu）：null 不接
+  final VoidCallback? onLongPress;
 
   @override
   Widget build(BuildContext context) {
@@ -1578,6 +1654,7 @@ class _DayTaskRow extends StatelessWidget {
 
     return InkWell(
       onTap: onOpen,
+      onLongPress: onLongPress,
       child: Padding(
         padding: const EdgeInsets.symmetric(
           horizontal: AppDimens.space12,
@@ -1656,6 +1733,7 @@ class _DayTimelineRow extends StatelessWidget {
     required this.reminder,
     required this.onToggle,
     required this.onOpen,
+    this.onLongPress,
   });
 
   final TodoTask task;
@@ -1670,6 +1748,9 @@ class _DayTimelineRow extends StatelessWidget {
   final DisplayReminder? reminder;
   final VoidCallback onToggle;
   final VoidCallback onOpen;
+
+  /// 长按（G9，对齐桌面 TaskContextMenu）：null 不接
+  final VoidCallback? onLongPress;
 
   /// 时刻列宽：`HH:mm` 12px tabular 约 36px，余量对齐卡片内边距
   static const _timeColumnWidth = 42.0;
@@ -1713,6 +1794,7 @@ class _DayTimelineRow extends StatelessWidget {
               task: task,
               hasDescription: hasDescription,
               reminder: reminder,
+              onLongPress: onLongPress,
               showTimeColumn: false,
               onToggle: onToggle,
               onOpen: onOpen,
