@@ -47,6 +47,9 @@ import 'quick_add_sheet.dart';
 import 'table_view.dart';
 import '../../core/theme/icon_map.dart';
 import 'logic/task_menu.dart';
+import 'logic/capacity.dart';
+import 'today_strip.dart';
+import 'weekly_review_sheet.dart';
 
 /// 任务子列表 /todo/tasks（docs/05 §4.2 + 移动端任务书）
 ///
@@ -147,6 +150,17 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
   /// 已完成卡内联上限：展开只直显最近这么多条（完成时刻倒序），其余走卡内
   /// 「查看全部」入口进完成集视图——卡片是 Column 而非懒加载列表，必须设界
   static const _doneInlineMax = 20;
+
+  /// 每日容量预算（分钟；G4）——本机偏好，未设 = null（只报已排量）。
+  /// 键名与桌面 `todo_capacity_budget_minutes` 同族。
+  static const _capacityBudgetKey = 'todo_capacity_budget_minutes';
+  int? _budgetMinutes = _parseBudget(LocalPrefs.getString(_capacityBudgetKey));
+
+  static int? _parseBudget(String? raw) {
+    if (raw == null) return null;
+    final n = int.tryParse(raw);
+    return (n == null || n <= 0) ? null : n;
+  }
 
   static const _sortChoices = {
     TaskSortKey.manual: '拖拽顺序',
@@ -420,6 +434,13 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
                 ),
             ],
           ),
+          // 周回顾（G5，对齐桌面「···」菜单「周回顾」）：三步引导处置
+          // 逾期/无日期/停滞，免逐清单翻找
+          OrbitPanelItem(
+            icon: OrbitIcons.calendarCheck,
+            label: '周回顾',
+            onTap: _startWeeklyReview,
+          ),
           // 排序方向（对齐桌面「顺序」档）：拖拽序无方向概念，整行隐藏
           //（口径同桌面 manual 档隐藏）；行尾回显当前生效方向
           if (_sortKey != TaskSortKey.manual)
@@ -536,6 +557,87 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
       return;
     }
     setState(() => _selected.add(first.id));
+  }
+
+  /// 今日上下文条是否有内容（今日已达成 / 今日已排 / 已设预算三者其一）。
+  /// 口径与 [TodayStrip] 自身的自隐藏判断同源，供列表顶部让位计算复用。
+  bool _hasTodayStripContent(List<TodoTask> tasks) {
+    if (_budgetMinutes != null) return true;
+    final now = DateTime.now();
+    final nowMs = now.millisecondsSinceEpoch;
+    final dayStart =
+        DateTime(now.year, now.month, now.day).millisecondsSinceEpoch;
+    final doneToday = tasks.any((t) =>
+        t.isDone &&
+        t.doneAt != null &&
+        t.doneAt! >= dayStart &&
+        t.doneAt! < dayStart + 86400000);
+    return doneToday || todayLoadMinutes(tasks, nowMs) > 0;
+  }
+
+  /// 每日容量预算编辑抽屉（G4）：数字输入，空 = 清除预算（退回只报已排量）
+  Future<void> _editCapacityBudget() async {
+    final controller = TextEditingController(text: _budgetMinutes?.toString() ?? '');
+    final result = await showModalBottomSheet<int?>(
+      context: context,
+      useRootNavigator: true,
+      isScrollControlled: true,
+      backgroundColor: AppColors.ofContext(context).popup,
+      shape: bottomSheetTopShape,
+      sheetAnimationStyle: bottomSheetMotion,
+      builder: (sheetContext) => OrbitSheetScaffold(
+        title: '每日容量（分钟）',
+        content: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: AppDimens.space16),
+          child: TextField(
+            controller: controller,
+            autofocus: true,
+            keyboardType: TextInputType.number,
+            decoration: const InputDecoration(
+              hintText: '例如 480 = 8 小时；留空 = 不做超载判定',
+            ),
+            onSubmitted: (v) => Navigator.of(sheetContext).pop(_parseBudget(v.trim())),
+          ),
+        ),
+        actions: OrbitSheetActions(
+          confirmLabel: '保存',
+          cancelLabel: '取消',
+          onCancel: () => Navigator.of(sheetContext).pop(),
+          onConfirm: () =>
+              Navigator.of(sheetContext).pop(_parseBudget(controller.text.trim())),
+        ),
+      ),
+    );
+    if (result == null && mounted) return; // 取消/下滑：不写
+    setState(() => _budgetMinutes = result);
+    final v = result;
+    if (v == null) {
+      await LocalPrefs.setString(_capacityBudgetKey, '');
+    } else {
+      await LocalPrefs.setString(_capacityBudgetKey, v.toString());
+    }
+  }
+
+  /// 周回顾向导（G5）：三步引导处置逾期/无日期/停滞，写路径复用 _patchTask
+  Future<void> _startWeeklyReview() async {
+    final tasks = ref.read(todoTasksProvider).value ?? const <TodoTask>[];
+    final handled = await showWeeklyReviewSheet(
+      context,
+      tasks: tasks,
+      // 排期：改 due_date（rescheduleDueMs 口径在向导内算好传入）
+      onSetDue: (id, dueMs) async {
+        await ref.read(orbitBridgeProvider).todoTaskUpdate(
+            id, encodePatch({'due_date': dueMs}));
+      },
+      // 唤醒：空 patch 走更新通道（core 对每条写都刷 updated_at）
+      onWake: (id) async {
+        await ref.read(orbitBridgeProvider).todoTaskUpdate(id, encodePatch({}));
+      },
+    );
+    if (handled != null && handled.isNotEmpty) {
+      ref.invalidate(todoTasksProvider);
+      ref.invalidate(taskDetailProvider);
+    }
   }
 
   /// 列表内过滤抽屉（状态 / 优先级 / 标签三档，chip 即点即生效）
@@ -1466,12 +1568,16 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
     final truncated = tasks.length >= taskListPageSize;
     final topInset =
         MediaQuery.of(context).padding.top + OrbitPageHeader.rowHeight;
+    // 今日上下文条（G2 正反馈 + G4 容量）：有内容才显示（今日已达成/
+    // 今日已排/已设预算三者其一），列表顶部按其让位——与截断条幅同款约定
+    final showTodayStrip = !isLogbook && _hasTodayStripContent(tasks);
     // 底栏页签常驻（分支内容在其上方）：页尾只留呼吸留白；选择态另让出
     // 批量工具条整段占位（条体 + 底距 + 呼吸），末行不被浮动工具条遮住
     final listPadding = EdgeInsets.only(
       top: topInset +
           AppDimens.space8 +
-          (truncated ? _TruncationBanner.height : 0),
+          (truncated ? _TruncationBanner.height : 0) +
+          (showTodayStrip ? TodayStrip.height : 0),
       bottom: AppDimens.space16 +
           (_selectionMode ? _batchToolbarClearance : 0),
     );
@@ -1870,6 +1976,18 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
               left: 0,
               right: 0,
               child: const _TruncationBanner(),
+            ),
+          // 今日上下文条（G2 正反馈 + G4 容量）：紧贴截断条幅下沿（无则页头下沿）
+          if (showTodayStrip)
+            Positioned(
+              top: topInset + (truncated ? _TruncationBanner.height : 0),
+              left: 0,
+              right: 0,
+              child: TodayStrip(
+                tasks: tasks,
+                budgetMinutes: _budgetMinutes,
+                onTapBudget: _editCapacityBudget,
+              ),
             ),
           Positioned(
             top: 0,
