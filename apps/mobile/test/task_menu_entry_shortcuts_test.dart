@@ -1,8 +1,9 @@
-// 任务长按菜单「设置提醒 / 添加评论 / 修改标签」快捷项
-//（对齐桌面 task-context-menu.tsx 的同名菜单项，G2/G3/G4）：
-// 1. 长按菜单含三项；点「设置提醒」→ 相对档抽屉 → 落库提醒行；
+// 任务长按菜单「设置提醒 / 添加评论 / 修改标签 / 标记完成」快捷项
+//（对齐桌面 task-context-menu.tsx 的同名菜单项，G2/G3/G4/G7）：
+// 1. 长按菜单含四项；点「设置提醒」→ 相对档抽屉 → 落库提醒行；
 // 2. 「添加评论」→ 输入抽屉 → 保存落库评论；
-// 3. 「修改标签」→ 多选抽屉（勾选即建/删关联，可连选）→ 落库关联。
+// 3. 「修改标签」→ 多选抽屉（勾选即建/删关联，可连选）→ 落库关联；
+// 4. 「标记完成」→ 未完成任务落 done=1（对齐桌面「标记完成/标记未完成」）。
 // 种子任务「完成移动端重构方案评审」自带 1 条提醒 / 1 条评论 / 「紧急」标签
 // 关联，故断言一律用前后差值；标签用未关联的「阅读」验证建/删。
 import 'package:flutter/material.dart';
@@ -46,6 +47,9 @@ int _taskId(MockOrbitBridge bridge, String title) =>
     bridge.store.tasks.values.firstWhere((t) => t['title'] == title)['id']
         as int;
 
+Map<String, dynamic> _storeTask(MockOrbitBridge bridge, String title) =>
+    bridge.store.tasks.values.firstWhere((t) => t['title'] == title);
+
 int _reminderCount(MockOrbitBridge bridge, int taskId) => bridge
     .store.reminders.values
     .where((r) => r['task_id'] == taskId && r['is_deleted'] == 0)
@@ -66,7 +70,8 @@ Future<void> _tapInMenu(WidgetTester tester, String label) async {
 }
 
 void main() {
-  testWidgets('长按菜单含 设置提醒 / 添加评论 / 修改标签 三项', (tester) async {
+  testWidgets('长按菜单含 设置提醒 / 添加评论 / 修改标签 / 标记完成 四项',
+      (tester) async {
     final bridge = MockOrbitBridge();
     await _pumpList(tester, bridge);
 
@@ -74,6 +79,22 @@ void main() {
     expect(find.text('设置提醒'), findsOneWidget);
     expect(find.text('添加评论'), findsOneWidget);
     expect(find.text('修改标签'), findsOneWidget);
+    expect(find.text('标记完成'), findsOneWidget);
+  });
+
+  testWidgets('标记完成 → 未完成任务落 done=1（对齐桌面同名菜单项）',
+      (tester) async {
+    final bridge = MockOrbitBridge();
+    await _pumpList(tester, bridge);
+    final t = _storeTask(bridge, '完成移动端重构方案评审');
+    expect(t['done'], 0);
+
+    await _longPress('完成移动端重构方案评审', tester);
+    await _tapInMenu(tester, '标记完成');
+    await _settlePastMockLatency(tester);
+
+    expect(_storeTask(bridge, '完成移动端重构方案评审')['done'], 1);
+    await drainToastTimers(tester);
   });
 
   testWidgets('设置提醒 → 相对档抽屉点选 → 提醒落库', (tester) async {

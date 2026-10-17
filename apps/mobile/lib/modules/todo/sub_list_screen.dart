@@ -19,10 +19,10 @@ import '../../shared/utils/hex_color.dart';
 import '../../shared/widgets/shadcn/orbit_strikethrough.dart';
 import '../../shared/widgets/shadcn/orbit_checkbox.dart';
 import '../../shared/widgets/shadcn/orbit_confirm_sheet.dart';
-import '../../shared/widgets/shadcn/orbit_date_picker.dart';
 import '../../shared/widgets/shadcn/orbit_dropdown_panel.dart';
 import '../../shared/widgets/shadcn/orbit_empty_state.dart';
 import '../../shared/widgets/shadcn/orbit_list_card.dart';
+import '../../shared/widgets/shadcn/orbit_row_toggle.dart';
 import '../../shared/widgets/shadcn/orbit_page_header.dart';
 import '../../shared/widgets/shadcn/orbit_skeleton.dart';
 import '../../shared/widgets/shadcn/orbit_actions_sheet.dart';
@@ -30,7 +30,6 @@ import '../../shared/widgets/shadcn/orbit_select_sheet.dart';
 import '../../shared/widgets/shadcn/orbit_sheet_scaffold.dart';
 import '../../shared/widgets/shadcn/orbit_toast.dart';
 import '../../services/local_prefs.dart';
-import 'form_bottom_sheet.dart';
 import 'kanban_view.dart';
 import 'matrix_view.dart';
 import 'logic/batch_actions.dart';
@@ -47,10 +46,7 @@ import 'providers/undo_provider.dart';
 import 'quick_add_sheet.dart';
 import 'table_view.dart';
 import '../../core/theme/icon_map.dart';
-
-/// 长按菜单「设置提醒」抽屉里「自定义时间…」项的哨兵值（时间戳字符串空间
-/// 里不可能撞上；与表单/详情的 _reminderCustomKey 同口径但不跨文件导出）
-const String _menuReminderCustomKey = 'custom';
+import 'logic/task_menu.dart';
 
 /// 任务子列表 /todo/tasks（docs/05 §4.2 + 移动端任务书）
 ///
@@ -442,9 +438,10 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
                   ),
               ],
             ),
-          // 批量选择仅列表档：选区行（_SelectionRow）只在列表档渲染，
-          // 看板/表格/矩阵的行不换装，多选态在这些档没有视觉落点
-          if (_viewMode == TaskViewMode.list)
+          // 批量选择（对齐桌面 task-list-view / kanban-view / task-table-view
+          // 三视图的多选批量；矩阵档桌面无多选，故排除）：选择态下看板卡与
+          // 表格行换装为选区形态，与列表档同批量工具条
+          if (_viewMode != TaskViewMode.matrix)
             OrbitPanelItem(
               icon: OrbitIcons.listChecks,
               label: '批量选择',
@@ -775,21 +772,6 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
     }
   }
 
-  void _toggleFavorite(TodoTask task) => _patchTask(
-        task.id,
-        {'is_favorite': task.isStarred ? 0 : 1},
-      );
-
-  /// 我的一天：加入今天（本地零点）/ 移出（null）——与桌面同口径
-  void _toggleMyDay(TodoTask task) {
-    final now = DateTime.now();
-    final todayZero = DateTime(now.year, now.month, now.day).millisecondsSinceEpoch;
-    _patchTask(
-      task.id,
-      {'my_day_date': task.isInMyDay ? null : todayZero},
-    );
-  }
-
   /// 退场动画生效 gate：仅标准列表分支（[_withEntrance] 那一支）。
   /// 看板/表格/Logbook/手动重排/多选态全部走即时失效——行组件与
   /// 手势体系不同，不掺和（批量删除同样即时，见 [_onBatchAction]）。
@@ -875,8 +857,8 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
 
   bool get _selectionMode => _selected.isNotEmpty;
 
-  /// 长按菜单「多选」进入选择态：列表档专用（看板/表格的卡片热区与
-  /// 分组语义下多选会与横滑/列内滚动抢手势，桌面看板同样无多选）
+  /// 长按菜单「多选」进入选择态（列表/看板/表格三档，对齐桌面多选批量；
+  /// 矩阵档桌面无多选，菜单不给入口）
   void _enterSelection(TodoTask task) {
     setState(() => _selected.add(task.id));
   }
@@ -1201,401 +1183,30 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
     }
   }
 
-  // ── Tile 长按菜单（编辑 / 星标切换 / 删除确认）──
+  // ── Tile 长按菜单（共享抽屉：logic/task_menu.dart，与日历行同套）──
 
   void _showTaskActions(TodoTask task) {
-    showMoreActionsSheet(
+    showTaskActionSheet(
       context,
-      title: task.title,
-      actions: [
-        // 日期 / 优先级快捷行（对齐桌面任务菜单顶部图标行：快捷档选择
-        // 抽屉里点选即改；桌面图标行同款能力，移动端以抽屉表达）
-        MoreActionItem(
-          icon: OrbitIcons.calendarDays,
-          label: '日期',
-          onTap: () => _pickTaskDue(task),
-        ),
-        MoreActionItem(
-          icon: OrbitIcons.flag,
-          label: '优先级',
-          onTap: () => _pickTaskPriority(task),
-        ),
-        // 多选入口（仅有列表档长按手势的语境；看板/表格的卡片长按留给
-        // 单条操作，与桌面看板无多选同口径）
-        if (_viewMode == TaskViewMode.list)
-          MoreActionItem(
-            icon: OrbitIcons.listChecks,
-            label: '多选',
-            onTap: () => _enterSelection(task),
-          ),
-        MoreActionItem(
-          icon: OrbitIcons.edit,
-          label: '编辑',
-          onTap: () => showTodoFormSheet(context, editingTaskId: task.id),
-        ),
-        MoreActionItem(
-          icon: OrbitIcons.sun,
-          label: task.isInMyDay ? '移出我的一天' : '加入我的一天',
-          color: OrbitAccents.myDayAmber,
-          onTap: () => _toggleMyDay(task),
-        ),
-        MoreActionItem(
-          icon: OrbitIcons.star,
-          label: task.isStarred ? '取消收藏' : '收藏',
-          color: OrbitAccents.starYellow,
-          onTap: () => _toggleFavorite(task),
-        ),
-        MoreActionItem(
-          icon: OrbitIcons.copy,
-          label: '复制任务',
-          onTap: () => _duplicateTask(task),
-        ),
-        // 更换项目（对齐桌面右键菜单「更换项目 ▸」：未分组 + 各项目，
-        // 当前项以选择态标注；看板卡片长按同此菜单——跨列改归属的移动端
-        // 入口，见 kanban_view 头部说明）
-        MoreActionItem(
-          icon: OrbitIcons.folder,
-          label: '更换项目',
-          onTap: () => _pickTaskProject(task),
-        ),
-        // 设置提醒 / 添加评论 / 修改标签（G2/G3/G4，对齐桌面右键菜单同名
-        // 三项）：能力原本只在详情页可达，长按菜单补快捷项免进详情往返
-        MoreActionItem(
-          icon: OrbitIcons.notification,
-          label: '设置提醒',
-          onTap: () => _addTaskReminder(task),
-        ),
-        MoreActionItem(
-          icon: OrbitIcons.message,
-          label: '添加评论',
-          onTap: () => _addTaskComment(task),
-        ),
-        MoreActionItem(
-          icon: OrbitIcons.tag,
-          label: '修改标签',
-          onTap: () => _editTaskLabels(task),
-        ),
-        MoreActionItem(
-          icon: OrbitIcons.delete,
-          label: '删除',
-          color: OrbitAccents.overdueRed,
-          onTap: () => _deleteTask(task),
-        ),
-      ],
-    );
-  }
-
-  // ── 长按菜单「设置提醒 / 添加评论 / 修改标签」（G2/G3/G4） ──
-
-  /// 设置提醒：相对档快捷 + 自定义时间（桌面任务菜单「设置提醒」同语义，
-  /// 相对档锚定截止/开始/时长，产物仍是绝对时刻直接落库）
-  Future<void> _addTaskReminder(TodoTask task) async {
-    if (!mounted) return;
-    await showSelectBottomSheet<String>(
-      context,
-      title: '提醒时间',
-      items: [
-        for (final p in reminderPresets(
-          dueDate: task.dueDate,
-          startDate: task.startDate,
-          durationMinutes: task.durationMinutes,
-        ))
-          SelectItem<String>(value: '${p.ms}', label: p.label),
-        const SelectItem<String>(
-            value: _menuReminderCustomKey, label: '自定义时间…'),
-      ],
-      onSelect: (v) async {
-        int? ms;
-        if (v == _menuReminderCustomKey) {
-          final picked = await OrbitDatePicker.pick(
-            context,
-            initialDate: DateTime.now().add(const Duration(hours: 1)),
-            showTime: true,
-            accent: OrbitAccents.todoAccent,
-          );
-          ms = picked?.millisecondsSinceEpoch;
-        } else {
-          ms = int.parse(v);
-        }
-        if (ms == null) return;
-        try {
-          await ref.read(orbitBridgeProvider).todoReminderCreate(
-              TodoReminderCreateInput(taskId: task.id, remindAt: ms));
-          ref.invalidate(taskRemindersProjectionProvider);
-          ref.invalidate(taskDetailProvider(task.id));
-          if (mounted) WaitToast.success('提醒已创建');
-        } catch (_) {
-          if (mounted) WaitToast.destructive('设置提醒失败');
-        }
+      ref,
+      task: task,
+      onChanged: () {
+        ref.invalidate(todoTasksProvider);
+        ref.invalidate(taskDetailProvider(task.id));
+        ref.invalidate(taskRemindersProjectionProvider);
       },
+      // 多选入口（对齐桌面 task-context-menu 的「多选」项）：矩阵档桌面无
+      // 多选，不出该项
+      onEnterSelection:
+          _viewMode == TaskViewMode.matrix ? null : () => _enterSelection(task),
+      // 列表档有本地专属语义：完成走离场播退场、删除带 5s 撤销 + ghost 退场
+      onToggleDone: () => _toggleDone(task),
+      onDelete: () => _deleteTask(task),
     );
   }
 
-  /// 添加评论：输入型底部抽屉（桌面「添加评论」Dialog 的移动端形态），
-  /// 保存即落库并刷新评论投影。
-  /// 不持 TextEditingController（onChanged 取值）——自行持有 controller 会
-  /// 在抽屉退场动画与 dispose 之间产生竞态，TextField 内建 controller 由
-  /// 框架随抽屉回收，无生命周期负担
-  Future<void> _addTaskComment(TodoTask task) async {
-    if (!mounted) return;
-    final colors = AppColors.ofContext(context);
-    String draft = '';
-    await showModalBottomSheet<void>(
-      context: context,
-      useRootNavigator: true,
-      isScrollControlled: true,
-      backgroundColor: colors.popup,
-      shape: bottomSheetTopShape,
-      builder: (sheetCtx) => Padding(
-        // 键盘避让（输入型抽屉必有）
-        padding: EdgeInsets.only(
-            bottom: MediaQuery.viewInsetsOf(sheetCtx).bottom),
-        child: OrbitSheetScaffold(
-          title: '添加评论',
-          contentPadding: const EdgeInsets.fromLTRB(
-            AppDimens.space16,
-            0,
-            AppDimens.space16,
-            AppDimens.space16,
-          ),
-          content: TextField(
-            onChanged: (v) => draft = v,
-            minLines: 3,
-            maxLines: 6,
-            decoration: const InputDecoration(hintText: '输入评论...'),
-          ),
-          actions: OrbitSheetActions(
-            confirmLabel: '保存',
-            onConfirm: () => Navigator.pop(sheetCtx),
-            cancelLabel: '取消',
-            onCancel: () => Navigator.pop(sheetCtx),
-          ),
-        ),
-      ),
-    );
-    final content = draft.trim();
-    if (content.isEmpty) return;
-    try {
-      await ref.read(orbitBridgeProvider).todoCommentCreate(
-          TodoCommentCreateInput(taskId: task.id, content: content));
-      ref.invalidate(taskDetailProvider(task.id));
-      if (mounted) WaitToast.success('评论已添加');
-    } catch (_) {
-      if (mounted) WaitToast.destructive('添加评论失败');
-    }
-  }
-
-  /// 修改标签：多选抽屉（勾选即建/删关联，抽屉不关可连选——与详情页
-  /// 标签编辑弹层同语义）；勾选态从详情聚合派生，写后 invalidate 收敛
-  Future<void> _editTaskLabels(TodoTask task) async {
-    if (!mounted) return;
-    final bridge = ref.read(orbitBridgeProvider);
-    // 当前关联（labelId → taskLabelId 关联主键，删除要用主键）
-    Map<int, int> linked;
-    try {
-      final detail =
-          await ref.read(taskDetailProvider(task.id).future);
-      linked = {for (final l in detail.labels) l.id: l.taskLabelId};
-    } catch (_) {
-      if (mounted) WaitToast.destructive('标签加载失败');
-      return;
-    }
-    var labels = ref.read(todoLabelsProvider).value ?? const <TodoLabel>[];
-    if (labels.isEmpty) {
-      try {
-        labels = await ref.read(todoLabelsProvider.future);
-      } catch (_) {
-        labels = const <TodoLabel>[];
-      }
-    }
-    if (!mounted) return;
-    if (labels.isEmpty) {
-      WaitToast.info('还没有标签，可在设置 → 标签管理中新建');
-      return;
-    }
-    final colors = AppColors.ofContext(context);
-    await showModalBottomSheet<void>(
-      context: context,
-      useRootNavigator: true,
-      isScrollControlled: true,
-      backgroundColor: colors.popup,
-      shape: bottomSheetTopShape,
-      builder: (sheetCtx) => StatefulBuilder(
-        builder: (ctx, setSheet) => OrbitSheetScaffold(
-          title: '修改标签',
-          contentScrollable: true,
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              for (final label in labels)
-                InkWell(
-                  onTap: () async {
-                    final linkId = linked[label.id];
-                    try {
-                      if (linkId != null) {
-                        await bridge.todoTaskLabelDelete(linkId);
-                        setSheet(() => linked.remove(label.id));
-                      } else {
-                        final row = await bridge.todoTaskLabelCreate(
-                            TodoTaskLabelCreateInput(
-                                taskId: task.id, labelId: label.id));
-                        setSheet(() => linked[label.id] = row.taskLabelId);
-                      }
-                      ref.invalidate(taskLabelsProjectionProvider);
-                      ref.invalidate(taskDetailProvider(task.id));
-                    } catch (_) {
-                      if (ctx.mounted) WaitToast.destructive('操作失败');
-                    }
-                  },
-                  child: SizedBox(
-                    height: AppDimens.touchTarget,
-                    child: Row(
-                      children: [
-                        const SizedBox(width: AppDimens.space16),
-                        OrbitCheckbox(
-                          checked: linked.containsKey(label.id),
-                          size: AppDimens.iconSizeMd + 2,
-                          onToggle: () {},
-                        ),
-                        const SizedBox(width: AppDimens.space12),
-                        Container(
-                          width: AppDimens.colorDotSize,
-                          height: AppDimens.colorDotSize,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: hexToColor(label.hexColor),
-                          ),
-                        ),
-                        const SizedBox(width: AppDimens.space8),
-                        Expanded(
-                          child: Text(
-                            label.title,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                                fontSize: 15, color: colors.bodyText),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  // ── 长按菜单「日期」「优先级」快捷档（对齐桌面任务菜单顶部图标行） ──
-
-  /// 日期便捷选择：快捷档 + 选择日期和时间 + 清除截止（仅已有截止时）。
-  /// 快捷档为绝对时刻直接落库（[quickDateTimeOptions] 与桌面同口径），
-  /// 自定义走 [OrbitDatePicker]（含时刻）。
-  Future<void> _pickTaskDue(TodoTask task) async {
-    final options = quickDateTimeOptions();
-    await showSelectBottomSheet<String>(
-      context,
-      title: '设置截止时间',
-      current: null,
-      items: [
-        for (final o in options)
-          SelectItem(
-            value: o.key,
-            label: o.label,
-            hint: o.hint,
-            icon: dueQuickIcon(o.key),
-          ),
-        const SelectItem(
-          value: 'custom',
-          label: '选择日期和时间',
-          icon: OrbitIcons.calendarDays,
-        ),
-        if (task.dueDate != null)
-          const SelectItem(
-            value: 'clear',
-            label: '清除截止',
-            icon: OrbitIcons.calendarBlocked,
-          ),
-      ],
-      onSelect: (v) => _applyTaskDueChoice(task, v, options),
-    );
-  }
-
-  Future<void> _applyTaskDueChoice(
-    TodoTask task,
-    String choice,
-    List<({String key, String label, String hint, int ms})> options,
-  ) async {
-    if (choice == 'custom') {
-      await _pickTaskDueCustom(task);
-      return;
-    }
-    if (choice == 'clear') {
-      await _patchTask(task.id, {'due_date': null}, failMessage: '清除失败');
-      return;
-    }
-    final option = options.firstWhere((o) => o.key == choice);
-    await _patchTask(task.id, {'due_date': option.ms},
-        failMessage: '设置截止失败');
-  }
-
-  Future<void> _pickTaskDueCustom(TodoTask task) async {
-    if (!mounted) return;
-    final picked = await OrbitDatePicker.pick(
-      context,
-      initialDate: task.dueDate != null
-          ? DateTime.fromMillisecondsSinceEpoch(task.dueDate!)
-          : null,
-      showTime: true,
-    );
-    if (picked == null) return;
-    await _patchTask(task.id, {'due_date': picked.millisecondsSinceEpoch},
-        failMessage: '设置截止失败');
-  }
-
-  /// 优先级便捷选择（六档色点，对齐桌面菜单优先级行）。
-  Future<void> _pickTaskPriority(TodoTask task) async {
-    await showSelectBottomSheet<int>(
-      context,
-      title: '设置优先级',
-      current: task.priority,
-      items: [
-        for (var p = 0; p <= 5; p++)
-          SelectItem(
-            value: p,
-            label: priorityLabel(p),
-            colorDot: hexToColor(priorityColorHex(p)),
-          ),
-      ],
-      onSelect: (p) => _patchTask(task.id, {'priority': p},
-          failMessage: '设置优先级失败'),
-    );
-  }
-
-  /// 更换项目（对齐桌面右键菜单「更换项目 ▸」语义）：未分组 + 各项目
-  /// （项目带色点，当前项由抽屉的选择态标注——桌面是当前项加粗/禁选，
-  /// 移动端复用共享抽屉的选中打勾，不另造禁用态）；点选即落库。
-  Future<void> _pickTaskProject(TodoTask task) async {
-    final projects =
-        ref.read(todoProjectsProvider).value ?? const <TodoProject>[];
-    await showSelectBottomSheet<int?>(
-      context,
-      title: '更换项目',
-      current: task.projectId,
-      items: [
-        const SelectItem<int?>(value: null, label: '未分组'),
-        for (final p in projects)
-          SelectItem<int?>(
-            value: p.id,
-            label: p.title,
-            colorDot: hexToColor(p.hexColor),
-          ),
-      ],
-      onSelect: (id) => _patchTask(task.id, {'project_id': id},
-          failMessage: '更换项目失败'),
-    );
-  }
+  // ── 长按菜单各项（设置提醒/添加评论/修改标签/日期/优先级/更换项目）
+  // 已迁共享层 logic/task_menu.dart，与日历行同套 ──
 
   // ── 批量动作的参数抽屉（选择类交互统一底部抽屉） ──
 
@@ -1690,16 +1301,6 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
         _batchPickLabel();
       case BatchAction.delete:
         _runBatch(BatchAction.delete);
-    }
-  }
-
-  // #37 复制任务：克隆后 toast + 刷新
-  Future<void> _duplicateTask(TodoTask task) async {
-    try {
-      final copy = await ref.read(orbitBridgeProvider).todoTaskDuplicate(task.id);
-      if (mounted) WaitToast.success('已复制为「${copy.title}」');
-    } catch (_) {
-      if (mounted) WaitToast.destructive('复制失败');
     }
   }
 
@@ -1926,6 +1527,10 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
         // manual 档长按让位给整行拖动（原地松手由 _reorderEnd 兜回来弹菜单）
         onLongPress: draggable ? null : () => _showTaskActions(task),
         onDelete: () => _deleteTask(task),
+        // 星标 / 我的一天行内开关（G8）：恒显可点，写库即时失效
+        onToggleFavorite: () =>
+            _patchTask(task.id, buildFavoriteTogglePatch(task)),
+        onToggleMyDay: () => _patchTask(task.id, buildMyDayTogglePatch(task)),
         // 卡片段位（扁平行传 none，保持看板/表格/搜索口径）
         edge: edge,
       );
@@ -2021,6 +1626,9 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
                 onToggleDone: _toggleDone,
                 onOpen: (t) => context.push('/todo/${t.id}'),
                 onLongPress: _showTaskActions,
+                // 多选批量（G6）：选择态下点卡切换选中
+                selectedIds: _selected,
+                onToggleSelect: _selectionMode ? _toggleSelect : null,
                 // 非项目分组时列头不代表项目，卡片补一行项目名
                 //（项目视图内页头已表达，行内不再重复）
                 projectTitleOf: _kanbanGroupBy != KanbanGroupBy.project &&
@@ -2039,6 +1647,14 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
                     onToggleDone: _toggleDone,
                     onOpen: (t) => context.push('/todo/${t.id}'),
                     onLongPress: _showTaskActions,
+                    // 星标 / 我的一天行内开关（G8）
+                    onToggleFavorite: (t) =>
+                        _patchTask(t.id, buildFavoriteTogglePatch(t)),
+                    onToggleMyDay: (t) =>
+                        _patchTask(t.id, buildMyDayTogglePatch(t)),
+                    // 多选批量（G6）：选择态下点行切换选中
+                    selectedIds: _selected,
+                    onToggleSelect: _selectionMode ? _toggleSelect : null,
                     projectTitleOf: (t) => t.projectId == null
                         ? null
                         : projectById[t.projectId]?.title,
@@ -2053,6 +1669,9 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
                         onOpen: (t) => context.push('/todo/${t.id}'),
                         onToggleDone: _toggleDone,
                         onLongPress: _showTaskActions,
+                        // 星标行内开关（G8）：矩阵档无我的一天（桌面同口径）
+                        onToggleFavorite: (t) =>
+                            _patchTask(t.id, buildFavoriteTogglePatch(t)),
                         remindersByTask: remindersByTask,
                       )
                     : isLogbook
@@ -2793,6 +2412,8 @@ class TodoTaskTile extends StatelessWidget {
     this.showProject = true,
     this.showTags = true,
     this.onDelete,
+    this.onToggleFavorite,
+    this.onToggleMyDay,
     this.edge = OrbitCardEdge.none,
   });
 
@@ -2833,6 +2454,12 @@ class TodoTaskTile extends StatelessWidget {
 
   /// 右滑「删除」动作回调（null 时隐藏删除面板——搜索页等只读场景复用 Tile）
   final VoidCallback? onDelete;
+
+  /// 星标 / 我的一天行内开关（G8，对齐桌面 hover 开关钮）：非 null 时两枚
+  /// **恒显可点**（未激活弱化灰、激活语义色）；null 保持原只读形态
+  ///（仅激活时渲染图标——搜索页等只读复用面不动）
+  final VoidCallback? onToggleFavorite;
+  final VoidCallback? onToggleMyDay;
 
   /// 行内标签段：色点 + 标签名，最多 3 个，超出折叠 +N
   /// （与桌面 `LabelChips` 同口径——点色分辨、文字回归安静层级）
@@ -2934,17 +2561,16 @@ class TodoTaskTile extends StatelessWidget {
       add(Icon(OrbitIcons.link,
           size: 12, color: done ? muted : colors.secondaryText));
     }
-    // 我的一天（桌面列表行 Sunrise 指示同款：my_day_date == 本地今天才亮，
-    // 隔日自动退出——isInMyDay 与 is_favorite 同为只读展示，写入口径在详情/
-    // 长按菜单）
-    if (task.isInMyDay) {
+    // 我的一天 / 星标：态表达已上移到右列的 [_stateToggles]（G8 开关对），
+    // 这里只留**无开关回调**的只读形态（搜索页等只读复用面，仅激活时渲染）
+    if (onToggleMyDay == null && task.isInMyDay) {
       add(Icon(
         OrbitIcons.sunrise,
         size: 12,
         color: done ? muted : OrbitAccents.myDayAmber,
       ));
     }
-    if (task.isStarred) {
+    if (onToggleFavorite == null && task.isStarred) {
       // 星标与同列其余元信息图标同尺寸档（12），未完成态色走星标黄——
       // 与看板卡星标同口径，不再比邻项大一圈；完成态走弱化灰
       add(Icon(
@@ -2954,6 +2580,41 @@ class TodoTaskTile extends StatelessWidget {
       ));
     }
     return chips;
+  }
+
+  /// 行内状态开关对（G8，对齐桌面行内 hover 开关钮 task-list-view:945-79）：
+  /// 我的一天 + 星标**恒显可点**（未激活弱化灰、激活语义色——桌面 hover 后的
+  /// 形态即移动端常驻形态），独占右列下排（不与被动元信息抢宽）。
+  /// 无回调返回空（态由 [_metaIcons] 的只读图标表达）。
+  List<Widget> _stateToggles(AppColorSet colors, {required bool done}) {
+    final toggles = <Widget>[];
+    final muted = colors.deactivatedText;
+    if (onToggleMyDay != null) {
+      toggles.add(OrbitRowToggle(
+        icon: OrbitIcons.sunrise,
+        active: task.isInMyDay,
+        activeColor: done ? muted : OrbitAccents.myDayAmber,
+        inactiveColor: muted,
+        tooltip: task.isInMyDay ? '移出我的一天' : '加入我的一天',
+        onTap: onToggleMyDay!,
+        iconSize: 12,
+        hitExtent: 32,
+      ));
+    }
+    if (onToggleFavorite != null) {
+      if (toggles.isNotEmpty) toggles.add(const SizedBox(width: AppDimens.space4));
+      toggles.add(OrbitRowToggle(
+        icon: OrbitIcons.star,
+        active: task.isStarred,
+        activeColor: done ? muted : OrbitAccents.starYellow,
+        inactiveColor: muted,
+        tooltip: task.isStarred ? '取消收藏' : '收藏',
+        onTap: onToggleFavorite!,
+        iconSize: 12,
+        hitExtent: 32,
+      ));
+    }
+    return toggles;
   }
 
   /// 勾选框描边：优先级 1–5 取语义色，P0「无」回落组件默认中性灰
@@ -2974,6 +2635,7 @@ class TodoTaskTile extends StatelessWidget {
     final dueLabel =
         task.dueDate == null ? null : formatDueShort(task.dueDate!);
     final meta = _metaIcons(colors, done: done);
+    final toggles = _stateToggles(colors, done: done);
     // 副标题（标签 / 项目名）有无：无则整行只留标题；显示偏好逐位门控
     // （detail 关 = 单行紧凑形态，project/tags 不再参与）
     final hasSubtitle = showDetail &&
@@ -3047,7 +2709,7 @@ class TodoTaskTile extends StatelessWidget {
                   borderColor: done ? null : _priorityRingColor(),
                 ),
                 const SizedBox(width: AppDimens.space12),
-                // 左列：标题 +（标签 / 项目名）——读「这是什么」
+                // 左列：标题 +（标签 / 项目名 / 被动元信息）——读「这是什么 / 什么状态」
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -3065,9 +2727,13 @@ class TodoTaskTile extends StatelessWidget {
                         // 完成态全口径统一：划线 + 置灰（弱化灰，与日期/元信息同源）
                         doneColor: muted,
                       ),
-                      // 副标题只在有标签 / 项目名时出现：优先级已由勾选框描边
-                      // 表达，不再占一枚色点，纯标题行因此更紧凑
-                      if (hasSubtitle)
+                      // 副标题段（标签 / 项目名 / 被动元信息）按需渲染。
+                      // 元信息（重复 / 提醒 / 时长 / 进度 / 关联）跟在标签 / 项目名
+                      // 之后进同一 Wrap：**归位到标题列**（对齐桌面 task-list-view
+                      // 元信息行随标题截断的结构）——原先塞进右列会与 G8 的状态
+                      // 开关对抢宽，360dp 窄屏下把标题挤塌并溢出（2026-10-17）。
+                      // Wrap 自动换行，长标题列不再被右列挤出可视区。
+                      if (hasSubtitle || meta.isNotEmpty)
                         Padding(
                           padding: const EdgeInsets.only(top: 2),
                           child: Wrap(
@@ -3096,14 +2762,17 @@ class TodoTaskTile extends StatelessWidget {
                                             : colors.secondaryText),
                                   ),
                                 ),
+                              ...meta,
                             ],
                           ),
                         ),
                     ],
                   ),
                 ),
-                // 右列：截止日期 + 元信息图标——读「什么时候 / 什么状态」
-                if (dueLabel != null || meta.isNotEmpty) ...[
+                // 右列：截止日期 + 状态开关对——读「什么时候 / 可切换状态」
+                // （我的一天 / 星标是**可写开关**，独立右对齐列恒显可点；
+                // 被动元信息已归位左列，避免与开关对抢宽）
+                if (dueLabel != null || toggles.isNotEmpty) ...[
                   const SizedBox(width: AppDimens.space8),
                   Column(
                     mainAxisSize: MainAxisSize.min,
@@ -3122,12 +2791,12 @@ class TodoTaskTile extends StatelessWidget {
                                     : OrbitAccents.themeAccent),
                           ),
                         ),
-                      if (meta.isNotEmpty)
+                      if (toggles.isNotEmpty)
                         Padding(
                           padding: const EdgeInsets.only(top: 2),
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
-                            children: meta,
+                            children: toggles,
                           ),
                         ),
                     ],
