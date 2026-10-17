@@ -65,7 +65,8 @@ import { groupOverdueFirst, todayStartMs, toggleMyDayValue } from "../shared/tas
 import { isListActivationKey, listNavDirection } from "../shared/list-keyboard";
 import { midpoint } from "../shared/position";
 import { formatDuration } from "../shared/time";
-import { batchSetDueDate, batchUpdateStatus, batchUpdatePriority, batchUpdateFavorite, batchMoveToProject, batchUpdateMyDay } from "../shared/batch-actions";
+import { batchSetDueDate, batchUpdateStatus, batchUpdatePriority, batchUpdateFavorite, batchMoveToProject, batchUpdateMyDay, rolloverOverdueTasks } from "../shared/batch-actions";
+import { planRollover, type RolloverPreset } from "../shared/rollover-overdue";
 import { useUndoableDeleteAction, hideManyFromQueries } from "@/hooks/use-undoable-delete";
 import { todoTaskDelete, todoTaskUpdate, todoTaskUpdatePosition, type ProjectedTaskLabel, type TaskDependencyFlags, type TodoProject, type TodoTaskListItem } from "@/lib/tauri";
 import { patchQueriesData } from "@/lib/query-patch";
@@ -162,11 +163,12 @@ export function TaskListView({ tasks, projects, labelsByTask, remindersByTask, d
   // / peakMB_duringChurn 三项指标同源）。索引语义统一后键盘导航覆盖置顶段。
   // 时间基准随数据变（跨零点拉新数据即换）——不能每渲染帧重建 now，
   // 否则 useMemo 失效：拖拽/选中态每次 set 都全量重跑分组
-  const { pinned, stream } = useMemo(() => {
+  const { pinned, stream, overdueTasks } = useMemo(() => {
     const { overdue, rest } = groupOverdueFirst(tasks, Date.now());
     return {
       pinned: overdue.length,
       stream: overdue.length > 0 ? [...overdue, ...rest] : rest,
+      overdueTasks: overdue,
     };
   }, [tasks]);
 
@@ -266,6 +268,32 @@ export function TaskListView({ tasks, projects, labelsByTask, remindersByTask, d
     });
     setSelected(new Set());
     setAnchorId(null);
+  };
+
+  /** 逾期一键顺延（G1 温和处置）：把逾期置顶段的行改期到今天/明天，
+   *  免逐条手动改期。数量口径由 planRollover 现算（与写入集同源），
+   *  顺延后 toast 报「已顺延 N 条」并给 Ctrl+Z 撤销提示。 */
+  const runRollover = async (preset: RolloverPreset) => {
+    if (batchBusy) return;
+    setBatchBusy(true);
+    try {
+      const count = planRollover(overdueTasks, preset).length;
+      const { changed } = await rolloverOverdueTasks(overdueTasks, preset, qc);
+      void qc.invalidateQueries({ queryKey: ["todo_tasks"] });
+      if (changed > 0) {
+        toast.success(
+          `已顺延 ${changed} 条逾期任务到${preset === "today" ? "今天" : "明天"}`,
+          { description: "Ctrl+Z 可撤销" },
+        );
+      } else if (count === 0) {
+        toast.info("没有可顺延的逾期任务");
+      }
+    } catch (e) {
+      console.error("顺延逾期失败:", e);
+      toast.error("顺延逾期失败，已完成的条目不回滚");
+    } finally {
+      setBatchBusy(false);
+    }
   };
 
   const handleDragStart = (e: DragStartEvent) => {
@@ -449,6 +477,25 @@ export function TaskListView({ tasks, projects, labelsByTask, remindersByTask, d
           <div className="flex items-center gap-1.5 bg-destructive/5 px-4 py-1.5">
             <TriangleAlert className="size-3.5 text-destructive" />
             <span className="text-xs font-medium text-destructive">逾期 · {pinned}</span>
+            {/* 一键顺延（G1）：免逐条改期。下拉两档（今天/明天），语义与
+                batchSetDueDate 同源（保时刻/零点归 18:00），执行即 toast + Ctrl+Z */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={batchBusy}
+                  className="ml-auto h-6 gap-1 px-2 text-xs text-destructive hover:text-destructive"
+                >
+                  <CalendarClock className="size-3.5" />
+                  顺延
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onSelect={() => void runRollover("today")}>顺延到今天</DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => void runRollover("tomorrow")}>顺延到明天</DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         )}
         <RowContainerDropZone totalSize={virtualizer.getTotalSize()}>

@@ -18,6 +18,7 @@ import {
 import { patchQueriesData } from "@/lib/query-patch";
 import { midpoint } from "./position";
 import { rescheduleDue } from "./reschedule-due";
+import { planRollover, type RolloverPreset } from "./rollover-overdue";
 import { pushUndo } from "./undo-bridge";
 
 /** 逐条更新；返回失败条数。部分成功弹 warning（措辞由调用方语境补足） */
@@ -310,4 +311,49 @@ export async function batchSetDueDate(
     });
   }
   return failed;
+}
+
+/** 逾期一键顺延（G1 温和处置）：把「逾期且未完成」的行改期到今天/明天。
+ *  语义与 batchSetDueDate 同源（rescheduleDue 保时刻 / 零点归 18:00），
+ *  但目标集由 planRollover 自动筛选，调用方不必逐条挑。撤销：恢复原 due_date。
+ *  返回 { changed, failed }——changed=0 且 failed=0 表示无可顺延项。 */
+export async function rolloverOverdueTasks(
+  tasks: TodoTaskListItem[],
+  preset: RolloverPreset,
+  qc?: QueryClient,
+): Promise<{ changed: number; failed: number }> {
+  const plans = planRollover(tasks, preset);
+  if (plans.length === 0) return { changed: 0, failed: 0 };
+  if (qc) {
+    for (const { task: t, next } of plans) {
+      patchQueriesData<TodoTaskListItem>(qc, ["todo_tasks"], [t.id], { due_date: next });
+    }
+  }
+  let failed = 0;
+  const changed: TodoTaskListItem[] = [];
+  for (const { task: t, next } of plans) {
+    try {
+      await todoTaskUpdate(t.id, { due_date: next });
+      changed.push(t);
+    } catch (e) {
+      failed++;
+      console.error(`顺延任务 ${t.id} 失败:`, e);
+      if (qc) {
+        patchQueriesData<TodoTaskListItem>(qc, ["todo_tasks"], [t.id], { due_date: t.due_date });
+      }
+    }
+  }
+  if (failed > 0) {
+    toast.warning(`顺延逾期：${plans.length} 条中 ${failed} 条失败`);
+  }
+  if (changed.length > 0) {
+    pushUndo({
+      label: "顺延逾期",
+      count: changed.length,
+      undo: async () => {
+        await Promise.allSettled(changed.map((t) => todoTaskUpdate(t.id, { due_date: t.due_date })));
+      },
+    });
+  }
+  return { changed: changed.length, failed };
 }

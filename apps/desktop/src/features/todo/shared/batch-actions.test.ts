@@ -21,7 +21,7 @@ vi.mock("sonner", () => ({
   toast: { warning: vi.fn(), success: vi.fn(), error: vi.fn() },
 }));
 
-import { batchDuePresetDate, batchSetDueDate, batchUpdate, batchUpdateStatus } from "./batch-actions";
+import { batchDuePresetDate, batchSetDueDate, batchUpdate, batchUpdateStatus, rolloverOverdueTasks } from "./batch-actions";
 import type { TodoTask } from "@/lib/tauri";
 import { QueryClient } from "@tanstack/react-query";
 
@@ -180,6 +180,48 @@ describe("batchSetDueDate", () => {
     const failed = await batchSetDueDate([task(1), task(2)], "tomorrow");
     expect(failed).toBe(1);
     expect(toast.warning).toHaveBeenCalledWith("批量改期：2 条中 1 条失败");
+  });
+});
+
+describe("rolloverOverdueTasks 逾期一键顺延", () => {
+  it("只顺延逾期未完成行；今日/未来/已完成零写库", async () => {
+    updateMock.mockResolvedValue(undefined);
+    const now = new Date();
+    const overdueDue = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 2, 9, 0).getTime();
+    const futureDue = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 3, 9, 0).getTime();
+    const r = await rolloverOverdueTasks(
+      [
+        task(1, { due_date: overdueDue }),
+        task(2, { due_date: futureDue }),
+        task(3, { due_date: overdueDue, done: 1 }),
+      ],
+      "tomorrow",
+    );
+    expect(r).toEqual({ changed: 1, failed: 0 });
+    expect(updateMock).toHaveBeenCalledTimes(1);
+    expect(updateMock).toHaveBeenCalledWith(1, expect.objectContaining({ due_date: expect.any(Number) }));
+  });
+
+  it("无可顺延项：零写库零撤销", async () => {
+    updateMock.mockResolvedValue(undefined);
+    const futureDue = Date.now() + 86_400_000;
+    const r = await rolloverOverdueTasks([task(1, { due_date: futureDue }), task(2, { due_date: null })], "today");
+    expect(r).toEqual({ changed: 0, failed: 0 });
+    expect(updateMock).not.toHaveBeenCalled();
+    expect(toast.warning).not.toHaveBeenCalled();
+  });
+
+  it("条目失败不中断，按部分成功口径弹 warning", async () => {
+    updateMock.mockImplementation(async (id) => {
+      if (id === 1) throw new Error("boom");
+    });
+    const overdueDue = new Date(2026, 0, 5, 9, 0).getTime();
+    const r = await rolloverOverdueTasks([task(1, { due_date: overdueDue }), task(2, { due_date: overdueDue })], "tomorrow");
+    expect(r.changed).toBe(1);
+    expect(r.failed).toBe(1);
+    expect(toast.warning).toHaveBeenCalledWith("顺延逾期：2 条中 1 条失败");
+    // 失败行不阻断后续条目
+    expect(updateMock).toHaveBeenCalledWith(2, expect.objectContaining({ due_date: expect.any(Number) }));
   });
 });
 
