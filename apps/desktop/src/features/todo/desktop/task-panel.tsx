@@ -39,6 +39,7 @@ import { KanbanView, type KanbanGroupBy } from "./kanban-view";
 import { CalendarView } from "./calendar-view";
 import TaskTableView from "./task-table-view";
 import { MatrixView } from "./matrix-view";
+import { TodayStrip } from "./today-strip";
 
 type StatusFilter = "all" | "undone" | "pending" | "doing" | "done";
 type PriorityFilter = "all" | "0" | "1" | "2" | "3" | "4" | "5";
@@ -414,6 +415,10 @@ export default function TaskPanel() {
           任务数超过单次加载上限 {TASK_LIST_PAGE_SIZE.toLocaleString("zh-CN")} 条，当前列表不完整——请用搜索、项目或快捷视图收窄范围
         </div>
       )}
+
+      {/* 今日上下文条（G2 正反馈 + G4 容量）：今日已达成 + 今日已排/预算。
+          数据源取 shell 的任务集（内存口径，与完成进度线同源）；两项皆空时自隐藏 */}
+      <TodayStrip tasks={sourceTasks} />
 
       {/* 内容区（flex-1 撑满，QuickAddBar 无论有无数据都固定在底部） */}
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
