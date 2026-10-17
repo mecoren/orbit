@@ -39,6 +39,8 @@ class KanbanBoard extends StatelessWidget {
     this.projectTitleOf,
     this.labelDotsByTask = const {},
     this.remindersByTask = const {},
+    this.selectedIds = const {},
+    this.onToggleSelect,
   });
 
   /// 分列表（由 `groupTasksForKanban` 纯函数产出）
@@ -49,6 +51,13 @@ class KanbanBoard extends StatelessWidget {
   final ValueChanged<TodoTask> onToggleDone;
   final ValueChanged<TodoTask> onOpen;
   final ValueChanged<TodoTask> onLongPress;
+
+  /// 多选批量（G6，对齐桌面 kanban-view 的选择态）：非空即选择模式，
+  /// 卡片点按改切换选中、卡片换装选区形态
+  final Set<int> selectedIds;
+
+  /// 点卡切换选中（null = 非选择模式）
+  final ValueChanged<int>? onToggleSelect;
 
   /// 卡片项目名取用口（按项目分组时列头已表达，传 null 不渲染该行）
   final String? Function(TodoTask)? projectTitleOf;
@@ -134,7 +143,11 @@ class KanbanBoard extends StatelessWidget {
                 : ListView.builder(
                     padding: EdgeInsets.zero,
                     itemCount: column.tasks.length,
-                    itemBuilder: (context, i) => _card(context, column.tasks[i]),
+                    itemBuilder: (context, i) => _card(
+                      context,
+                      column.tasks[i],
+                      selected: selectedIds.contains(column.tasks[i].id),
+                    ),
                   ),
           ),
         ],
@@ -142,7 +155,7 @@ class KanbanBoard extends StatelessWidget {
     );
   }
 
-  Widget _card(BuildContext context, TodoTask task) {
+  Widget _card(BuildContext context, TodoTask task, {bool selected = false}) {
     final colors = AppColors.ofContext(context);
     final overdue = isOverdue(task);
     final dots = labelDotsByTask[task.id] ?? const <ProjectedTaskLabel>[];
@@ -154,6 +167,9 @@ class KanbanBoard extends StatelessWidget {
       taskDone: task.isDone,
     );
     final pct = task.percentDone;
+    // 选择模式（G6）：点卡切换选中，勾选位换装选区指示（与列表档
+    // _SelectionRow 同语义——完成勾选与选中不能共用一个圆圈）
+    final selecting = onToggleSelect != null;
 
     // v3 卡片：描边/圆角/填充下沉 OrbitCard，去掉 v2 的 e1 阴影；
     // OrbitCard padding 归零、内层保留原 Padding——InkWell 水波纹仍盖满整卡
@@ -161,9 +177,14 @@ class KanbanBoard extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: AppDimens.space8),
       child: OrbitCard(
         padding: EdgeInsets.zero,
+        // 选中态描边：覆盖 OrbitCard 默认 outline，用强调色环标出
+        borderColor:
+            selected ? OrbitAccents.todoAccent : null,
         child: InkWell(
           borderRadius: AppShapes.medium,
-          onTap: () => onOpen(task),
+          onTap: selecting
+              ? () => onToggleSelect!(task.id)
+              : () => onOpen(task),
           onLongPress: () => onLongPress(task),
           child: Padding(
             padding: const EdgeInsets.all(AppDimens.space12),
@@ -173,15 +194,24 @@ class KanbanBoard extends StatelessWidget {
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  OrbitCheckbox(
-                    checked: task.isDone,
-                    size: AppDimens.taskCheckboxSize,
-                    // 优先级由描边环承载（列表行同口径），不再另画色条
-                    borderColor: task.priority > 0
-                        ? hexToColor(priorityRingHex(task.priority)!)
-                        : null,
-                    onToggle: () => onToggleDone(task),
-                  ),
+                  if (selecting)
+                    Icon(
+                      selected ? OrbitIcons.success : OrbitIcons.circle,
+                      size: AppDimens.taskCheckboxSize,
+                      color: selected
+                          ? OrbitAccents.todoAccent
+                          : colors.secondaryText,
+                    )
+                  else
+                    OrbitCheckbox(
+                      checked: task.isDone,
+                      size: AppDimens.taskCheckboxSize,
+                      // 优先级由描边环承载（列表行同口径），不再另画色条
+                      borderColor: task.priority > 0
+                          ? hexToColor(priorityRingHex(task.priority)!)
+                          : null,
+                      onToggle: () => onToggleDone(task),
+                    ),
                   const SizedBox(width: AppDimens.space8),
                   Expanded(
                     child: AnimatedStrikethrough(
