@@ -48,6 +48,10 @@ import 'quick_add_sheet.dart';
 import 'table_view.dart';
 import '../../core/theme/icon_map.dart';
 
+/// 长按菜单「设置提醒」抽屉里「自定义时间…」项的哨兵值（时间戳字符串空间
+/// 里不可能撞上；与表单/详情的 _reminderCustomKey 同口径但不跨文件导出）
+const String _menuReminderCustomKey = 'custom';
+
 /// 任务子列表 /todo/tasks（docs/05 §4.2 + 移动端任务书）
 ///
 /// 入口三参数互斥：projectId > ungrouped > view（task_logic 同款优先级）。
@@ -1240,6 +1244,23 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
           label: '更换项目',
           onTap: () => _pickTaskProject(task),
         ),
+        // 设置提醒 / 添加评论 / 修改标签（G2/G3/G4，对齐桌面右键菜单同名
+        // 三项）：能力原本只在详情页可达，长按菜单补快捷项免进详情往返
+        MoreActionItem(
+          icon: OrbitIcons.notification,
+          label: '设置提醒',
+          onTap: () => _addTaskReminder(task),
+        ),
+        MoreActionItem(
+          icon: OrbitIcons.message,
+          label: '添加评论',
+          onTap: () => _addTaskComment(task),
+        ),
+        MoreActionItem(
+          icon: OrbitIcons.tag,
+          label: '修改标签',
+          onTap: () => _editTaskLabels(task),
+        ),
         MoreActionItem(
           icon: OrbitIcons.delete,
           label: '删除',
@@ -1247,6 +1268,208 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
           onTap: () => _deleteTask(task),
         ),
       ],
+    );
+  }
+
+  // ── 长按菜单「设置提醒 / 添加评论 / 修改标签」（G2/G3/G4） ──
+
+  /// 设置提醒：相对档快捷 + 自定义时间（桌面任务菜单「设置提醒」同语义，
+  /// 相对档锚定截止/开始/时长，产物仍是绝对时刻直接落库）
+  Future<void> _addTaskReminder(TodoTask task) async {
+    if (!mounted) return;
+    await showSelectBottomSheet<String>(
+      context,
+      title: '提醒时间',
+      items: [
+        for (final p in reminderPresets(
+          dueDate: task.dueDate,
+          startDate: task.startDate,
+          durationMinutes: task.durationMinutes,
+        ))
+          SelectItem<String>(value: '${p.ms}', label: p.label),
+        const SelectItem<String>(
+            value: _menuReminderCustomKey, label: '自定义时间…'),
+      ],
+      onSelect: (v) async {
+        int? ms;
+        if (v == _menuReminderCustomKey) {
+          final picked = await OrbitDatePicker.pick(
+            context,
+            initialDate: DateTime.now().add(const Duration(hours: 1)),
+            showTime: true,
+            accent: OrbitAccents.todoAccent,
+          );
+          ms = picked?.millisecondsSinceEpoch;
+        } else {
+          ms = int.parse(v);
+        }
+        if (ms == null) return;
+        try {
+          await ref.read(orbitBridgeProvider).todoReminderCreate(
+              TodoReminderCreateInput(taskId: task.id, remindAt: ms));
+          ref.invalidate(taskRemindersProjectionProvider);
+          ref.invalidate(taskDetailProvider(task.id));
+          if (mounted) WaitToast.success('提醒已创建');
+        } catch (_) {
+          if (mounted) WaitToast.destructive('设置提醒失败');
+        }
+      },
+    );
+  }
+
+  /// 添加评论：输入型底部抽屉（桌面「添加评论」Dialog 的移动端形态），
+  /// 保存即落库并刷新评论投影。
+  /// 不持 TextEditingController（onChanged 取值）——自行持有 controller 会
+  /// 在抽屉退场动画与 dispose 之间产生竞态，TextField 内建 controller 由
+  /// 框架随抽屉回收，无生命周期负担
+  Future<void> _addTaskComment(TodoTask task) async {
+    if (!mounted) return;
+    final colors = AppColors.ofContext(context);
+    String draft = '';
+    await showModalBottomSheet<void>(
+      context: context,
+      useRootNavigator: true,
+      isScrollControlled: true,
+      backgroundColor: colors.popup,
+      shape: bottomSheetTopShape,
+      builder: (sheetCtx) => Padding(
+        // 键盘避让（输入型抽屉必有）
+        padding: EdgeInsets.only(
+            bottom: MediaQuery.viewInsetsOf(sheetCtx).bottom),
+        child: OrbitSheetScaffold(
+          title: '添加评论',
+          contentPadding: const EdgeInsets.fromLTRB(
+            AppDimens.space16,
+            0,
+            AppDimens.space16,
+            AppDimens.space16,
+          ),
+          content: TextField(
+            onChanged: (v) => draft = v,
+            minLines: 3,
+            maxLines: 6,
+            decoration: const InputDecoration(hintText: '输入评论...'),
+          ),
+          actions: OrbitSheetActions(
+            confirmLabel: '保存',
+            onConfirm: () => Navigator.pop(sheetCtx),
+            cancelLabel: '取消',
+            onCancel: () => Navigator.pop(sheetCtx),
+          ),
+        ),
+      ),
+    );
+    final content = draft.trim();
+    if (content.isEmpty) return;
+    try {
+      await ref.read(orbitBridgeProvider).todoCommentCreate(
+          TodoCommentCreateInput(taskId: task.id, content: content));
+      ref.invalidate(taskDetailProvider(task.id));
+      if (mounted) WaitToast.success('评论已添加');
+    } catch (_) {
+      if (mounted) WaitToast.destructive('添加评论失败');
+    }
+  }
+
+  /// 修改标签：多选抽屉（勾选即建/删关联，抽屉不关可连选——与详情页
+  /// 标签编辑弹层同语义）；勾选态从详情聚合派生，写后 invalidate 收敛
+  Future<void> _editTaskLabels(TodoTask task) async {
+    if (!mounted) return;
+    final bridge = ref.read(orbitBridgeProvider);
+    // 当前关联（labelId → taskLabelId 关联主键，删除要用主键）
+    Map<int, int> linked;
+    try {
+      final detail =
+          await ref.read(taskDetailProvider(task.id).future);
+      linked = {for (final l in detail.labels) l.id: l.taskLabelId};
+    } catch (_) {
+      if (mounted) WaitToast.destructive('标签加载失败');
+      return;
+    }
+    var labels = ref.read(todoLabelsProvider).value ?? const <TodoLabel>[];
+    if (labels.isEmpty) {
+      try {
+        labels = await ref.read(todoLabelsProvider.future);
+      } catch (_) {
+        labels = const <TodoLabel>[];
+      }
+    }
+    if (!mounted) return;
+    if (labels.isEmpty) {
+      WaitToast.info('还没有标签，可在设置 → 标签管理中新建');
+      return;
+    }
+    final colors = AppColors.ofContext(context);
+    await showModalBottomSheet<void>(
+      context: context,
+      useRootNavigator: true,
+      isScrollControlled: true,
+      backgroundColor: colors.popup,
+      shape: bottomSheetTopShape,
+      builder: (sheetCtx) => StatefulBuilder(
+        builder: (ctx, setSheet) => OrbitSheetScaffold(
+          title: '修改标签',
+          contentScrollable: true,
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              for (final label in labels)
+                InkWell(
+                  onTap: () async {
+                    final linkId = linked[label.id];
+                    try {
+                      if (linkId != null) {
+                        await bridge.todoTaskLabelDelete(linkId);
+                        setSheet(() => linked.remove(label.id));
+                      } else {
+                        final row = await bridge.todoTaskLabelCreate(
+                            TodoTaskLabelCreateInput(
+                                taskId: task.id, labelId: label.id));
+                        setSheet(() => linked[label.id] = row.taskLabelId);
+                      }
+                      ref.invalidate(taskLabelsProjectionProvider);
+                      ref.invalidate(taskDetailProvider(task.id));
+                    } catch (_) {
+                      if (ctx.mounted) WaitToast.destructive('操作失败');
+                    }
+                  },
+                  child: SizedBox(
+                    height: AppDimens.touchTarget,
+                    child: Row(
+                      children: [
+                        const SizedBox(width: AppDimens.space16),
+                        OrbitCheckbox(
+                          checked: linked.containsKey(label.id),
+                          size: AppDimens.iconSizeMd + 2,
+                          onToggle: () {},
+                        ),
+                        const SizedBox(width: AppDimens.space12),
+                        Container(
+                          width: AppDimens.colorDotSize,
+                          height: AppDimens.colorDotSize,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: hexToColor(label.hexColor),
+                          ),
+                        ),
+                        const SizedBox(width: AppDimens.space8),
+                        Expanded(
+                          child: Text(
+                            label.title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                                fontSize: 15, color: colors.bodyText),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
