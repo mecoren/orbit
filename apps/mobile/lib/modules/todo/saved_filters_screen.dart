@@ -26,8 +26,13 @@ import '../../core/theme/icon_map.dart';
 ///
 /// 列表（名称 + 条件摘要 + 命中数）+ 底部新建（名称 + 条件 JSON）+ 长按删除。
 /// 条件应用在行内展开即时预览（不走独立路由——移动端轻量消费形态）。
+///
+/// [initialConditions]：入页即弹构建抽屉并预填该条件（列表面板「存为视图」
+/// 把当前筛选映射进来，G1，镜像桌面 `saved-filter-dialog` 预填链）。
 class SavedFiltersScreen extends ConsumerStatefulWidget {
-  const SavedFiltersScreen({super.key});
+  const SavedFiltersScreen({super.key, this.initialConditions});
+
+  final Map<String, dynamic>? initialConditions;
 
   @override
   ConsumerState<SavedFiltersScreen> createState() => _SavedFiltersScreenState();
@@ -37,6 +42,18 @@ class _SavedFiltersScreenState extends ConsumerState<SavedFiltersScreen> {
   final _scrollController = ScrollController();
   // 行展开态：当前展开预览的筛选器 id（null = 全收起）
   int? _expandedId;
+
+  @override
+  void initState() {
+    super.initState();
+    // 「存为视图」预填：首帧后弹构建抽屉（等本页数据骨架就位再叠加弹层）
+    final prefill = widget.initialConditions;
+    if (prefill != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _openBuilder(initialConditions: prefill);
+      });
+    }
+  }
 
   @override
   void dispose() {
@@ -51,13 +68,21 @@ class _SavedFiltersScreenState extends ConsumerState<SavedFiltersScreen> {
   /// created_from / done_from / has_reminder / has_attachment /
   /// has_open_subtask。仅收纳已设置键，未设置键不写入 JSON
   /// （与桌面白名单校验口径一致）。
-  Future<void> _openBuilder({TodoSavedFilter? existing}) async {
+  ///
+  /// [initialConditions]：预填条件（「存为视图」把面板当前筛选映射进来，
+  /// 与桌面 `toolbarToForm` 预填链同语义）；与 [existing] 互斥（编辑态忽略）。
+  Future<void> _openBuilder({
+    TodoSavedFilter? existing,
+    Map<String, dynamic>? initialConditions,
+  }) async {
     final colors = AppColors.ofContext(context);
     final nameCtl = TextEditingController(text: existing?.name ?? '');
     Map<String, dynamic> init = {};
     try {
       if (existing != null) {
         init = jsonDecode(existing.conditions) as Map<String, dynamic>;
+      } else if (initialConditions != null) {
+        init = initialConditions;
       }
     } catch (_) {}
     String? status = init['status'] as String?;

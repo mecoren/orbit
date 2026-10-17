@@ -138,7 +138,13 @@ final appRouter = GoRouter(
           GoRoute(
             path: '/todo/saved-filters',
             pageBuilder: (context, state) => pageSlideFromRight(
-              const SavedFiltersScreen(),
+              SavedFiltersScreen(
+                // 「存为视图」预填条件（列表面板传入；GoRouter extra 非持久
+                // 导航载荷，掉栈重建时丢弃即回到无预填常态）
+                initialConditions: state.extra is Map<String, dynamic>
+                    ? state.extra! as Map<String, dynamic>
+                    : null,
+              ),
               key: state.pageKey,
             ),
           ),

@@ -397,6 +397,20 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
                 _filters.isEmpty ? null : '已启用 ${_filters.activeCount} 项',
             onTap: _showFilterSheet,
           ),
+          // 存为视图（G1，对齐桌面「···」菜单「存为视图」）：把当前筛选
+          // 一键固化为保存的筛选器——跳筛选器页并预填构建抽屉
+          //（filterToSavedConditions 与桌面 toolbarToForm 同口径）
+          OrbitPanelItem(
+            icon: OrbitIcons.saveView,
+            label: '存为视图',
+            onTap: () => context.push(
+              '/todo/saved-filters',
+              extra: filterToSavedConditions(
+                filters: _filters,
+                quickView: _effectiveQuery.quickView,
+              ),
+            ),
+          ),
           OrbitPanelItem(
             icon: OrbitIcons.sort,
             label: '排序方式',

@@ -991,6 +991,28 @@ class TaskListFilters {
       );
 }
 
+/// 列表内筛选态 → 保存的筛选器条件 JSON（「存为视图」预填，G1）。
+///
+/// 镜像桌面 `saved-filter-builder.ts` 的 `toolbarToForm` + `buildConditions`：
+/// 空维度不落键（缺键 = 不过滤），全空产出空 Map（Rust 端空条件 = 万能视图）。
+/// 口径细节与桌面逐字一致：
+/// - 状态档 `undone` 无对应白名单键 → 丢弃；`pending`/`doing`/`done` 落 `status`；
+/// - 优先级档落 `priority_min`（桌面 toolbarToForm 同款映射）；
+/// - 标签档落 `label_ids` 单元素集合；
+/// - 收藏快捷视图落 `favorite_only`。
+Map<String, dynamic> filterToSavedConditions({
+  required TaskListFilters filters,
+  required QuickViewKey? quickView,
+}) {
+  final out = <String, dynamic>{};
+  final status = filters.status;
+  if (status != null && status != 'undone') out['status'] = status;
+  if (filters.priority != null) out['priority_min'] = filters.priority;
+  if (filters.labelId != null) out['label_ids'] = [filters.labelId];
+  if (quickView == QuickViewKey.favorite) out['favorite_only'] = true;
+  return out;
+}
+
 /// 应用列表内过滤（纯函数；[labelIdsByTask] 为空表时标签档不生效——投影未就绪）
 List<TodoTask> applyTaskListFilters(
   List<TodoTask> tasks,
