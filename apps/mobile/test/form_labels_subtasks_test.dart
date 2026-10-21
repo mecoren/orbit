@@ -122,4 +122,32 @@ void main() {
     );
     await drainToastTimers(tester);
   });
+
+  testWidgets('标签抽屉内就地新建 → 选中并随任务挂载', (tester) async {
+    final bridge = await _openForm(tester);
+    await tester.enterText(find.byType(TextFormField).first, '就地建标签任务');
+    await tester.pumpAndSettle();
+
+    await _scrollTo(tester, find.text('标签'));
+    await tester.tap(find.text('选择'));
+    await tester.pumpAndSettle();
+    // 抽屉内新建：输入名称 → 「新建」→ 新标签出现在列表并自动选中
+    await tester.enterText(find.byType(TextField).last, '验收标签');
+    await tester.tap(find.text('新建'));
+    await _settlePastMockLatency(tester);
+    expect(find.text('验收标签'), findsOneWidget);
+    await tester.tap(find.text('完成'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('保存'));
+    await _settlePastMockLatency(tester);
+
+    final id = bridge.store.tasks.values
+        .firstWhere((t) => t['title'] == '就地建标签任务')['id'] as int;
+    final labelId = bridge.store.labels.values
+        .firstWhere((l) => l['title'] == '验收标签')['id'] as int;
+    expect(bridge.store.taskLabels[id]?.containsKey(labelId), isTrue,
+        reason: '新建标签已挂载到任务');
+    await drainToastTimers(tester);
+  });
 }

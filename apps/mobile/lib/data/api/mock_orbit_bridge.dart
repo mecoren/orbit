@@ -1115,6 +1115,7 @@ class MockOrbitBridge implements OrbitBridge {
     return _delay(() => const DbMaintenanceResult(
           walBytesAfterCheckpoint: 0,
           attachmentsCleaned: 0,
+          logRowsPruned: 0,
           freelistBefore: 0,
           freelistAfter: 0,
           pagesReclaimed: 0,

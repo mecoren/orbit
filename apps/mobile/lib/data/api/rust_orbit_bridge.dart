@@ -782,6 +782,7 @@ class RustOrbitBridge implements OrbitBridge {
     return DbMaintenanceResult(
       walBytesAfterCheckpoint: r.walBytesAfterCheckpoint.toInt(),
       attachmentsCleaned: r.attachmentsCleaned,
+      logRowsPruned: r.logRowsPruned,
       freelistBefore: r.freelistBefore.toInt(),
       freelistAfter: r.freelistAfter.toInt(),
       pagesReclaimed: r.pagesReclaimed.toInt(),

@@ -47,6 +47,9 @@ class DbMaintenanceResult {
   /// 附件 GC 清理的孤立文件数
   final int attachmentsCleaned;
 
+  /// 活动日志 TTL 清理的行数
+  final int logRowsPruned;
+
   /// VACUUM 前空闲页数（碎片页）
   final int freelistBefore;
 
@@ -59,6 +62,7 @@ class DbMaintenanceResult {
   const DbMaintenanceResult({
     required this.walBytesAfterCheckpoint,
     required this.attachmentsCleaned,
+    required this.logRowsPruned,
     required this.freelistBefore,
     required this.freelistAfter,
     required this.pagesReclaimed,

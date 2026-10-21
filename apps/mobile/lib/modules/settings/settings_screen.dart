@@ -593,9 +593,17 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     );
     if (!second || !mounted) return;
 
+    // 主密码校验（对齐桌面关闭加密前校验当前密码；仅比对，不改动密钥）
+    final pw = await _askPassword('验证主密码', '关闭加密前请输入当前主密码');
+    if (pw == null || !mounted) return;
+
     final bridge = ref.read(orbitBridgeProvider);
     setState(() => _secBusy = true);
     try {
+      if (!await bridge.masterAuthVerify(pw)) {
+        if (mounted) WaitToast.destructive('主密码不正确');
+        return;
+      }
       await bridge.dbMigrateToPlaintext();
       await bridge.masterAuthClear();
       await bridge.dbInitPlaintext();
@@ -677,15 +685,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   /// 本行做二次确认后转调同一流程，避免用户绕过迁移单独清除。
   Future<void> _clearMasterPassword() async {
     if (_secBusy) return;
-    final confirmed = await showConfirmBottomSheet(
-      context,
-      title: '清除主密码？',
-      message: '清除前会先把加密库迁移为明文库（否则加密库将打不开），'
-          '指纹解锁一并关闭。此操作不可撤销，是否继续？',
-      confirmLabel: '继续',
-      destructive: true,
-    );
-    if (!confirmed || !mounted) return;
+    // 复用关闭加密整链（内部含两次确认 + 当前主密码校验 + 库迁移）
     await _disableEncryption();
   }
 
@@ -1252,6 +1252,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                           child: Text(
                             '回收碎片页 ${_maintenanceResult!.pagesReclaimed} ·'
                             ' 附件清理 ${_maintenanceResult!.attachmentsCleaned} ·'
+                            ' 日志清理 ${_maintenanceResult!.logRowsPruned} ·'
                             ' WAL 残留 ${_maintenanceResult!.walBytesAfterCheckpoint} B',
                             style: TextStyle(
                               fontSize: 12,

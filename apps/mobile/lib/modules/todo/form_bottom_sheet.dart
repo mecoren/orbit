@@ -219,6 +219,8 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
   final _descriptionController = TextEditingController();
   /// 自定义时长输入：由表单态持有，避免关闭动画期间被子抽屉提前 dispose
   final _durationCtl = TextEditingController();
+  /// 新建标签输入（选择标签抽屉内就地创建，对齐桌面 TagsField）
+  final _newLabelCtl = TextEditingController();
   final _formKey = GlobalKey<FormState>();
 
   int? _projectId;
@@ -337,6 +339,7 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
     _descriptionController.dispose();
     _subtaskController.dispose();
     _durationCtl.dispose();
+    _newLabelCtl.dispose();
     super.dispose();
   }
 
@@ -1286,19 +1289,17 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
   /// 标签多选抽屉（G5）：勾选即进 [_pickedLabels]（不落库——任务尚未创建，
   /// 保存链统一挂载）；抽屉内可连选
   Future<void> _pickFormLabels() async {
-    var labels = ref.read(todoLabelsProvider).value ?? const <TodoLabel>[];
+    var labels = <TodoLabel>[
+      ...?ref.read(todoLabelsProvider).value,
+    ];
     if (labels.isEmpty) {
       try {
-        labels = await ref.read(todoLabelsProvider.future);
+        labels = [...await ref.read(todoLabelsProvider.future)];
       } catch (_) {
-        labels = const <TodoLabel>[];
+        labels = <TodoLabel>[];
       }
     }
     if (!mounted) return;
-    if (labels.isEmpty) {
-      WaitToast.info('还没有标签，可在设置 → 标签管理中新建');
-      return;
-    }
     final colors = AppColors.ofContext(context);
     final picked = {for (final l in _pickedLabels) l.id};
     await showModalBottomSheet<void>(
@@ -1308,69 +1309,124 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
       backgroundColor: colors.popup,
       shape: bottomSheetTopShape,
       builder: (sheetCtx) => StatefulBuilder(
-        builder: (ctx, setSheet) => OrbitSheetScaffold(
-          title: '选择标签',
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              for (final label in labels)
-                InkWell(
-                  onTap: () => setSheet(() {
-                    picked.contains(label.id)
-                        ? picked.remove(label.id)
-                        : picked.add(label.id);
-                  }),
-                  child: SizedBox(
-                    height: AppDimens.touchTarget,
-                    child: Row(
-                      children: [
-                        const SizedBox(width: AppDimens.space16),
-                        Icon(
-                          picked.contains(label.id)
-                              ? OrbitIcons.success
-                              : OrbitIcons.circle,
-                          size: AppDimens.iconSizeMd,
-                          color: picked.contains(label.id)
-                              ? OrbitAccents.todoAccent
-                              : colors.secondaryText,
-                        ),
-                        const SizedBox(width: AppDimens.space12),
-                        Container(
-                          width: AppDimens.colorDotSize,
-                          height: AppDimens.colorDotSize,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: hexToColor(label.hexColor),
+        builder: (ctx, setSheet) {
+          // 就地新建标签（对齐桌面 TagsField）：建完即选中，无需转去设置页
+          Future<void> createLabel() async {
+            final title = _newLabelCtl.text.trim();
+            if (title.isEmpty) return;
+            try {
+              final created = await ref
+                  .read(orbitBridgeProvider)
+                  .todoLabelCreate(TodoLabelCreateInput(title: title));
+              if (!ctx.mounted) return;
+              ref.invalidate(todoLabelsProvider);
+              setSheet(() {
+                labels.add(created);
+                picked.add(created.id);
+              });
+              _newLabelCtl.clear();
+            } catch (_) {
+              if (ctx.mounted) WaitToast.destructive('创建标签失败');
+            }
+          }
+
+          return OrbitSheetScaffold(
+            title: '选择标签',
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(
+                      AppDimens.space16, AppDimens.space4, AppDimens.space16, 0),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: _newLabelCtl,
+                          textInputAction: TextInputAction.done,
+                          onSubmitted: (_) => createLabel(),
+                          decoration: const InputDecoration(
+                            hintText: '新建标签…',
+                            isDense: true,
                           ),
                         ),
-                        const SizedBox(width: AppDimens.space8),
-                        Expanded(
-                          child: Text(
-                            label.title,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                                fontSize: 15, color: colors.bodyText),
-                          ),
-                        ),
-                      ],
-                    ),
+                      ),
+                      const SizedBox(width: AppDimens.space8),
+                      TextButton(
+                        onPressed: createLabel,
+                        child: const Text('新建'),
+                      ),
+                    ],
                   ),
                 ),
-            ],
-          ),
-          actions: OrbitSheetActions(
-            confirmLabel: '完成',
-            onConfirm: () {
-              setState(() => _pickedLabels
-                ..clear()
-                ..addAll(labels.where((l) => picked.contains(l.id))));
-              Navigator.pop(sheetCtx);
-            },
-            cancelLabel: '取消',
-            onCancel: () => Navigator.pop(sheetCtx),
-          ),
-        ),
+                if (labels.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.all(AppDimens.space16),
+                    child: Text(
+                      '还没有标签，可在上方输入名称新建',
+                      style:
+                          TextStyle(fontSize: 13, color: colors.secondaryText),
+                    ),
+                  ),
+                for (final label in labels)
+                  InkWell(
+                    onTap: () => setSheet(() {
+                      picked.contains(label.id)
+                          ? picked.remove(label.id)
+                          : picked.add(label.id);
+                    }),
+                    child: SizedBox(
+                      height: AppDimens.touchTarget,
+                      child: Row(
+                        children: [
+                          const SizedBox(width: AppDimens.space16),
+                          Icon(
+                            picked.contains(label.id)
+                                ? OrbitIcons.success
+                                : OrbitIcons.circle,
+                            size: AppDimens.iconSizeMd,
+                            color: picked.contains(label.id)
+                                ? OrbitAccents.todoAccent
+                                : colors.secondaryText,
+                          ),
+                          const SizedBox(width: AppDimens.space12),
+                          Container(
+                            width: AppDimens.colorDotSize,
+                            height: AppDimens.colorDotSize,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: hexToColor(label.hexColor),
+                            ),
+                          ),
+                          const SizedBox(width: AppDimens.space8),
+                          Expanded(
+                            child: Text(
+                              label.title,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                  fontSize: 15, color: colors.bodyText),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            actions: OrbitSheetActions(
+              confirmLabel: '完成',
+              onConfirm: () {
+                setState(() => _pickedLabels
+                  ..clear()
+                  ..addAll(labels.where((l) => picked.contains(l.id))));
+                Navigator.pop(sheetCtx);
+              },
+              cancelLabel: '取消',
+              onCancel: () => Navigator.pop(sheetCtx),
+            ),
+          );
+        },
       ),
     );
   }

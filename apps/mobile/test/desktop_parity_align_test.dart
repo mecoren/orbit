@@ -5,6 +5,7 @@
 // 3. 预计时长在常用档之外支持自定义分钟数（对齐桌面数字输入）。
 // 4. 明文导出带「排除已删除条目」开关，JSON / CSV 同口径透传 excludeDeleted。
 // 5. 详情提醒区的「持续」chip 未激活时恒显可点（开启/关闭双向）。
+// 6. 关闭加密先验主密码：密码错误必须中止且不迁移库。
 
 import 'dart:convert';
 
@@ -131,6 +132,23 @@ class _SpyExportBridge extends MockOrbitBridge {
   }) async {
     csvExcludeDeleted = excludeDeleted;
     throw Exception('spy-stop-before-file-io');
+  }
+}
+
+/// 主密码恒错的桥：验证「关闭加密」在校验失败时中止（不触发库迁移）
+class _WrongPasswordBridge extends MockOrbitBridge {
+  bool verifyCalled = false;
+  bool migrated = false;
+
+  @override
+  Future<bool> masterAuthVerify(String password) async {
+    verifyCalled = true;
+    return false;
+  }
+
+  @override
+  Future<void> dbMigrateToPlaintext() async {
+    migrated = true;
   }
 }
 
@@ -422,6 +440,30 @@ void main() {
       isEmpty,
       reason: '再次点击应关闭持续提醒',
     );
+    await drainToastTimers(tester);
+  });
+  testWidgets('关闭加密：主密码错误 → 中止且不迁移库', (tester) async {
+    final bridge = _WrongPasswordBridge()..store.masterAuthSet = true;
+    await tester.pumpWidget(_wrap(const SettingsScreen(), bridge));
+    await _settle(tester);
+
+    const entry = '关闭加密（转为明文库）';
+    await _scrollSettingsTo(tester, find.text(entry));
+    await tester.tap(find.text(entry));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('继续'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('确认关闭加密'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('验证主密码'), findsOneWidget, reason: '必须先校验主密码');
+    await tester.enterText(find.byType(TextField), 'wrong-password');
+    await tester.tap(find.text('确认'));
+    await _settle(tester);
+
+    expect(bridge.verifyCalled, isTrue);
+    expect(bridge.migrated, isFalse, reason: '密码错误时不得迁移库');
     await drainToastTimers(tester);
   });
 }
