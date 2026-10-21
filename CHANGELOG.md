@@ -16,6 +16,18 @@
 
 ## [Unreleased]
 
+### 性能：云端备份上传流式化（M1 云端层，2026-10-21）
+
+> 接续 v2 流式化。本地路径已解耦，但云端上传仍要 `std::fs::read` 整包再交给适配器
+> （接口是 `&[u8]`）——等于把流式化的成果又打回整包驻留。
+
+- **`SyncAdapter::upload_file`**：适配器按块从文件读（64KiB），内存峰值与文件大小无关。默认实现退回「整包读 + `upload_owned`」，未覆盖的适配器与测试桩行为不变。
+- **`HttpClient::put_file_with_retry`**：`Body::wrap_stream(ReaderStream)` 按块送；每次重试重新 `open` 文件（流不可重放）；**必须显式 `Content-Length`**——`wrap_stream` 无长度时走 chunked，而不少 WebDAV/S3 兼容实现不接受 chunked PUT（实测会被直接断开）。
+- **WebDAV**：目录预建与 409 AncestorNotFound 重建重试语义与 `put_object_bytes` 完全一致。
+- **S3**：SigV4 要求载荷哈希，故**先流式算 SHA-256 再流式上传**——两遍顺序读换取完整性背书，不选 `UNSIGNED-PAYLOAD`（备份是丢了就恢复不了的数据）；≥ multipart 阈值仍走分片。
+- **依赖**：reqwest 加 `stream` feature、tokio-util 加 `io` feature。
+- **测试**：5 例独立 target（零依赖假服务）——WebDAV 1 MiB 逐字节一致 / S3 带载荷哈希 / 空文件 / 缺失文件不发 PUT / 默认实现回退仍传完整内容。
+
 ### 性能：全量备份 v2 帧式流式化（M1，本地路径，2026-10-21）
 
 > docs/13 §6.2 M1（`docs/07 #89`，格式见 `docs/adr/0011-backup-streaming-format.md`）。
