@@ -168,7 +168,7 @@ mod tests {
         let pool = setup_db().await;
         let now = chrono::Local::now().timestamp_millis();
         for i in 0..15 {
-            seed(&pool, &format!("任务{i}"), Some(now - 1000), (i % 6) as i32).await;
+            seed(&pool, &format!("任务{i}"), Some(now - 1000), i % 6).await;
         }
         let items = widget_todo_query(&pool, 999).await.unwrap();
         assert_eq!(items.len(), WIDGET_MAX_ITEMS as usize);

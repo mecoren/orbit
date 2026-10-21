@@ -83,6 +83,7 @@ pub struct PushResult {
 ///
 /// `skip_tables`：本轮须跳过的表（Pull 阶段失败的表，本地仍是旧快照，
 /// 重传会覆盖云端新数据）。
+#[allow(clippy::too_many_arguments)] // 八个入参各是独立依赖（池/加密/状态/适配器/进度/来源/设备/跳表），收组只是换样板
 pub async fn push_all(
     db_pool: &SqlitePool,
     crypto: &SyncCryptoService,
@@ -115,6 +116,7 @@ pub async fn push_all(
 /// 命中，增量路径会跳过全部桶且 `changed_any=false` 连清单都不重加密，
 /// 云端整体停留在旧 Key 密文（他端一律 KeyMismatch）。本入口无视指纹
 /// 比对：全桶重传 + 清单必写，`state_store.clear()` 只是辅助语义。
+#[allow(clippy::too_many_arguments)] // 与 push_all 同列集，收组只会让两个入口共享一个样板 struct
 pub async fn push_all_force_full(
     db_pool: &SqlitePool,
     crypto: &SyncCryptoService,
@@ -142,6 +144,7 @@ pub async fn push_all_force_full(
     .await
 }
 
+#[allow(clippy::too_many_arguments)] // 内部实现：对外两入口的全部入参 + 两个开关，收组会让调用侧多一层解构
 async fn push_all_impl(
     db_pool: &SqlitePool,
     crypto: &SyncCryptoService,
@@ -576,6 +579,7 @@ fn bucket_counts_match(chunks: &[TableChunk], expected: &HashMap<u32, u64>) -> b
 /// 且核对证明「该桶远端内容本机全已删」的桶，条目从清单剔除（云端对象
 /// 在清单落定后删除）。核对实现见 [`bucket_fully_deleted_locally`]，
 /// 备忘见 [`SyncState::undeletable_chunks`]。
+#[allow(clippy::too_many_arguments)] // 单表装载的完整上下文（池/适配器/密钥/远端清单/表/强制/扫描/已知不可删）
 async fn build_table_outcome(
     db_pool: &SqlitePool,
     adapter: &dyn SyncAdapter,
@@ -918,7 +922,7 @@ async fn bucket_fully_deleted_locally(
             message: format!("核对分桶 {path} 的行 {uuid} 失败: {e}"),
         })?;
         match row {
-            Some((deleted,)) if deleted == 1 => {}
+            Some((1,)) => {}
             _ => return Ok(false),
         }
     }

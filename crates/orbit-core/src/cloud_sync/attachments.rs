@@ -57,6 +57,12 @@ pub struct AttachmentSyncResult {
     pub errors: Vec<String>,
 }
 
+/// 单个附件的并发下载结果：`(hash, 下载结局, 实际字节数)`
+///
+/// 结局内层是 `(本地路径, 字节数)`；失败只带可读原因，由主流程汇总进
+/// `AttachmentSyncResult.errors`（单件失败不阻塞本轮其他附件）。
+type DownloadOutcome = (String, Result<(String, i64), String>, i64);
+
 /// 常数时间字符串比较（长度不等时按较长串比较，避免提前返回泄露前缀信息）
 fn constant_time_eq(a: &str, b: &str) -> bool {
     let (a, b) = (a.as_bytes(), b.as_bytes());
@@ -384,7 +390,7 @@ pub async fn sync_attachments_pull(
 
     // 5. 并发下载（NFR-5.5：4 路并发）
     // 下载/解密/落盘全流程并行，DB 标记回主流程串行执行。
-    let outcomes: Vec<(String, Result<(String, i64), String>, i64)> = stream::iter(to_download)
+    let outcomes: Vec<DownloadOutcome> = stream::iter(to_download)
         .map(|hash| {
             let data_key = &data_key;
             let done_counter = &done_counter;

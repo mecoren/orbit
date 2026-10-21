@@ -129,10 +129,10 @@ pub async fn export_ics(pool: &SqlitePool) -> sqlx::Result<IcsExportResult> {
         out.push_str(&format!("UID:{}@orbit\r\n", t.uuid));
         out.push_str(&format!("DTSTAMP:{}\r\n", ms_to_ics_utc(now_ms)));
         out.push_str(&format!("SUMMARY:{}\r\n", escape_ics_text(&t.title)));
-        if let Some(desc) = &t.description {
-            if !desc.is_empty() {
-                out.push_str(&format!("DESCRIPTION:{}\r\n", escape_ics_text(desc)));
-            }
+        if let Some(desc) = &t.description
+            && !desc.is_empty()
+        {
+            out.push_str(&format!("DESCRIPTION:{}\r\n", escape_ics_text(desc)));
         }
         if let Some(pid) = t.project_id
             && let Some(name) = project_title.get(&pid)
@@ -158,7 +158,7 @@ pub async fn export_ics(pool: &SqlitePool) -> sqlx::Result<IcsExportResult> {
         if let Some(start) = t.start_date {
             out.push_str(&format!(
                 "DTSTART;VALUE=DATE:{}\r\n",
-                ms_to_ics_utc(start)[..8].to_string()
+                &ms_to_ics_utc(start)[..8]
             ));
         }
         // 完成：COMPLETED（UTC）；STATUS 映射 done→COMPLETED / 其余→NEEDS-ACTION
@@ -223,9 +223,9 @@ mod tests {
         let now = Local::now().timestamp_millis();
         // 项目 + 任务（含多状态/优先级/截止/描述/项目挂载）
         sqlx::query("INSERT INTO todo_tasks (uuid, title, description, project_id, priority, status, done, done_at, due_date, is_deleted, created_at, updated_at, version) VALUES ('u1', '带描述;逗号', '多行\n描述', 1, 4, 'pending', 0, NULL, ?, 0, ?, ?, 1)")
-            .bind(now + 3600_000).bind(now).bind(now).execute(&pool).await.unwrap();
+            .bind(now + 3_600_000).bind(now).bind(now).execute(&pool).await.unwrap();
         sqlx::query("INSERT INTO todo_tasks (uuid, title, priority, status, done, done_at, due_date, is_deleted, created_at, updated_at, version) VALUES ('u2', '已完成', 0, 'done', 1, ?, ?, 0, ?, ?, 1)")
-            .bind(now - 1000).bind(now + 86400_000).bind(now).bind(now).execute(&pool).await.unwrap();
+            .bind(now - 1000).bind(now + 86_400_000).bind(now).bind(now).execute(&pool).await.unwrap();
         // 已删除任务不入导出
         sqlx::query("INSERT INTO todo_tasks (uuid, title, priority, status, done, is_deleted, deleted_at, created_at, updated_at, version) VALUES ('u3', '墓碑', 0, 'pending', 0, 1, ?, ?, ?, 1)")
             .bind(now).bind(now).bind(now).execute(&pool).await.unwrap();

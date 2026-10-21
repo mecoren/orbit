@@ -263,7 +263,7 @@ impl WebDavAdapter {
         // F32：判定改按 `AncestorsNotFound` 变体（`from_http_status` 按状态码
         // 构造），不再嗅探消息子串——嗅探会被 F34 的响应体截断打掉。
         match first {
-            Err(e) if matches!(e, SyncError::AncestorsNotFound { .. }) => {
+            Err(SyncError::AncestorsNotFound { .. }) => {
                 log::info!("[webdav] PUT 409 AncestorsNotFound：清空目录缓存并重建后重试 {path}");
                 if let Ok(mut cache) = self.dir_cache.lock() {
                     cache.clear();

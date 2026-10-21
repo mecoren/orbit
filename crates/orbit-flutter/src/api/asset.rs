@@ -4,6 +4,7 @@
 //! - [asset_cmd](../../../../../apps/desktop/src-tauri/src/commands/asset_cmd.rs)
 //!   的 task_attachment_add / task_attachments_list / task_attachment_read /
 //!   task_attachment_remove / attachments_gc。
+//!
 //! 文件读取由 Dart 侧 file_picker 完成后传 bytes（附件目录 = base_dir/attachments，
 //! 与 sync.rs 的 attachments_dir 同源）。
 

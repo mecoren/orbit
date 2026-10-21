@@ -91,7 +91,7 @@ pub fn biometric_disable(base_dir: String, password: String) -> Result<(), Strin
 
 /// hex 字符串解码为字节（DB Key hex 双向转换；小写/大写均收）
 fn hex_decode(hex: &str) -> Result<Vec<u8>, String> {
-    if hex.len() % 2 != 0 {
+    if !hex.len().is_multiple_of(2) {
         return Err("[invalid_input] DB Key hex 长度非法".to_string());
     }
     let bytes = (0..hex.len())

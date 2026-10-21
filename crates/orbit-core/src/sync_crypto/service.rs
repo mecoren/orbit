@@ -305,15 +305,15 @@ impl SyncCryptoService {
     /// `*guard = None` 只 drop Vec，分配器标记回收但字节仍留在已释放内存里，
     /// 后续分配复用同块内存时密钥残影可被旁观（堆扫描 / core dump / swap）。
     pub fn lock(&self) {
-        if let Ok(mut guard) = self.data_key.write() {
-            if let Some(mut key) = guard.take() {
-                key.zeroize();
-            }
+        if let Ok(mut guard) = self.data_key.write()
+            && let Some(mut key) = guard.take()
+        {
+            key.zeroize();
         }
-        if let Ok(mut guard) = self.unlocked_password.write() {
-            if let Some(mut pw) = guard.take() {
-                pw.zeroize();
-            }
+        if let Ok(mut guard) = self.unlocked_password.write()
+            && let Some(mut pw) = guard.take()
+        {
+            pw.zeroize();
         }
     }
 

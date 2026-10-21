@@ -162,7 +162,7 @@ mod tests {
         c.endpoint = "   	
 "
         .to_string();
-        let err = validate_config(&c).err().expect("全空白 endpoint 必须被拒");
+        let err = validate_config(&c).expect_err("全空白 endpoint 必须被拒");
         assert!(
             err.to_string().contains("endpoint"),
             "错误须指明字段: {err}"

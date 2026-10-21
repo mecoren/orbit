@@ -609,10 +609,10 @@ fn ensure_backup_self_consistent(
 /// 2. decode_backup 解密 + 解压（密码错误立即返回）
 /// 3. 校验 manifest format_version
 /// 4. 校验 schema_version（可选忽略不匹配）
-/// 4.5 备份自洽性闸门（`ensure_backup_self_consistent`，必须在开事务之前）
-/// 5. 开启事务：遍历业务表 DELETE FROM <table>
-/// 6. 遍历 business/*.json，直接 INSERT 保留备份原始字段（含 uuid/created_at 等）
-/// 7. 事务提交
+/// 5. 备份自洽性闸门（`ensure_backup_self_consistent`，必须在开事务之前）
+/// 6. 开启事务：遍历业务表 DELETE FROM <table>
+/// 7. 遍历 business/*.json，直接 INSERT 保留备份原始字段（含 uuid/created_at 等）
+/// 8. 事务提交
 ///
 /// 与 `business_api::create_record_void` 的关键差异：
 /// - 不生成新 uuid，保留备份原始 uuid（保证跨设备同步一致性）

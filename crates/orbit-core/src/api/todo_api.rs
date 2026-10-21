@@ -729,7 +729,7 @@ pub fn next_repeat_at_ex(
         // 周序号 = floor(本地日序号 / 7)，锚定自然周对齐；N=1 时即"每周的这几个天"。
         // 逐日扫描最坏 7N 天/步，5000 步上限内覆盖正常间隔。
         let mask = weekdays as u32;
-        let n = after.max(1) as i64;
+        let n = after.max(1);
         let mut next = chrono::Local.timestamp_millis_opt(base_ms).single()?;
         let anchor_week = (next.num_days_from_ce() / 7) as i64;
         for _ in 0..5000i64 * n {
@@ -743,14 +743,14 @@ pub fn next_repeat_at_ex(
         }
         return None;
     }
-    if mode == REPEAT_MODE_MONTHLY && month_mode == REPEAT_MONTH_NTH {
-        if let Some(weekday) = first_weekday_in_mask(weekdays as u32) {
-            if (1..=6).contains(&nth_week) {
-                return next_monthly_nth_from(base_ms, after, weekday, nth_week, from_ms);
-            }
-        }
-        // 非法配置回落日号语义（见函数头注释）
+    if mode == REPEAT_MODE_MONTHLY
+        && month_mode == REPEAT_MONTH_NTH
+        && let Some(weekday) = first_weekday_in_mask(weekdays as u32)
+        && (1..=6).contains(&nth_week)
+    {
+        return next_monthly_nth_from(base_ms, after, weekday, nth_week, from_ms);
     }
+    // 非法配置回落日号语义（见函数头注释）
     let step = after.max(1) as u32;
     let mut next = chrono::Local.timestamp_millis_opt(base_ms).single()?;
     for _ in 0..5000 {
@@ -932,7 +932,7 @@ fn next_full_step_from(
 ) -> Option<i64> {
     if mode == REPEAT_MODE_WEEKLY && weekdays != 0 {
         let mask = weekdays as u32;
-        let n = after.max(1) as i64;
+        let n = after.max(1);
         let mut next = chrono::Local.timestamp_millis_opt(from_ms).single()?;
         let anchor_week = (next.num_days_from_ce() / 7) as i64;
         for _ in 0..5000i64 * n {
@@ -945,14 +945,14 @@ fn next_full_step_from(
         }
         return None;
     }
-    if mode == REPEAT_MODE_MONTHLY && month_mode == REPEAT_MONTH_NTH {
-        if let Some(weekday) = first_weekday_in_mask(weekdays as u32) {
-            if (1..=6).contains(&nth_week) {
-                return next_monthly_nth_from(from_ms, after, weekday, nth_week, from_ms);
-            }
-        }
-        // 非法配置回落日号语义（与 next_repeat_at_ex 同口径）
+    if mode == REPEAT_MODE_MONTHLY
+        && month_mode == REPEAT_MONTH_NTH
+        && let Some(weekday) = first_weekday_in_mask(weekdays as u32)
+        && (1..=6).contains(&nth_week)
+    {
+        return next_monthly_nth_from(from_ms, after, weekday, nth_week, from_ms);
     }
+    // 非法配置回落日号语义（与 next_repeat_at_ex 同口径）
     let step = after.max(1) as u32;
     let mut next = chrono::Local.timestamp_millis_opt(from_ms).single()?;
     match mode {

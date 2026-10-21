@@ -1002,11 +1002,9 @@ pub async fn search_all(
     // trigram 最小 3 字符（ASCII 字母数按 char_indices 计——中文 1 字 = 1 字符）
     let use_fts = kw.chars().count() >= 3;
 
-    if use_fts {
-        if let Ok(r) = search_all_fts(pool, kw, limit).await {
-            return Ok(r);
-        }
-        // FTS 异常（语法字符/索引损坏）静默降级 LIKE——搜索永不因索引失败而不可用
+    // FTS 异常（语法字符/索引损坏）静默降级 LIKE——搜索永不因索引失败而不可用
+    if use_fts && let Ok(r) = search_all_fts(pool, kw, limit).await {
+        return Ok(r);
     }
 
     search_all_like(pool, kw, limit).await

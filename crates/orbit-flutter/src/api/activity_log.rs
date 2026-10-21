@@ -3,6 +3,7 @@
 //! 与桌面壳命令一一对应（薄包装，业务全部在 orbit_core::api::activity_log_api）：
 //! - [activity_log_cmd](../../../../apps/desktop/src-tauri/src/commands/activity_log_cmd.rs)
 //!   的 task_activity_list（单任务倒序查询，详情页「历史」区块）。
+//!
 //! 轨迹埋点（log_activity）不经桥接面——core 写路径在业务函数内直接落库；
 //! 本表是本地操作轨迹，不进同步白名单（各端各自记录）。
 

@@ -4,6 +4,7 @@
 //! orbit_core::api::db_maintenance_api）：
 //! - [db_maintenance_cmd](../../../../../apps/desktop/src-tauri/src/commands/db_maintenance_cmd.rs)
 //!   的 db_maintenance。
+//!
 //! 只读维护路径：不 emit db-change、不进同步白名单（与 core 口径一致）。
 
 use orbit_core::api::db_maintenance_api::{self, DbMaintenanceResult as CoreResultView};

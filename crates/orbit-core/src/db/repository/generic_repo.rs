@@ -204,12 +204,12 @@ fn build_task_predicate_clause(table: &str, filter: &ListFilter) -> TaskPredicat
             clause.push_str(" AND 1 = 0");
         } else {
             clause.push_str(" AND project_id IN (");
-            for i in 0..ids.len() {
+            for (i, id) in ids.iter().enumerate() {
                 if i > 0 {
                     clause.push_str(", ");
                 }
                 clause.push('?');
-                bindings.push(ids[i]);
+                bindings.push(*id);
             }
             clause.push(')');
         }

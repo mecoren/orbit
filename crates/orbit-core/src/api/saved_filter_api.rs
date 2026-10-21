@@ -24,7 +24,7 @@ use crate::models::business::{
 /// 条件 JSON 的合法键（校验用；防存进任意 JSON）。
 /// #71 起 14 键：7 个旧键 + 截止区间（due_from/due_until，绝对 ms，左闭右开）
 /// + 创建/完成时间下限（created_from/done_from，绝对 ms）+ 三个存在键
-/// （has_reminder/has_attachment/has_open_subtask，true = 仅有，false = 仅无）。
+///   （has_reminder/has_attachment/has_open_subtask，true = 仅有，false = 仅无）。
 const ALLOWED_CONDITION_KEYS: &[&str] = &[
     "status",
     "priority_min",
