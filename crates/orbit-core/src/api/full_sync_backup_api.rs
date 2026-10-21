@@ -779,7 +779,10 @@ async fn invalidate_sync_ledger(pool: &SqlitePool, svc: &SyncCryptoService) {
 /// - 按目标表列声明类型对字段值进行规范化，防止字符串写入 INTEGER 列等类型不匹配问题
 ///
 /// 列名经 `validate_column_name` 校验（只允许字母/数字/下划线），防 SQL 注入。
-async fn insert_record_raw_in_tx(
+///
+/// `pub(crate)`：v2 流式导入（`full_sync_backup_v2_api`）复用同一写库口径，
+/// 避免两套 INSERT 语义漂移（尤其是列类型规范化）。
+pub(crate) async fn insert_record_raw_in_tx(
     tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
     table: &str,
     fields: &serde_json::Map<String, serde_json::Value>,

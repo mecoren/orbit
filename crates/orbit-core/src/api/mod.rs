@@ -12,6 +12,7 @@ pub mod db_maintenance_api;
 pub mod diagnostics_api;
 pub mod digest_api;
 pub mod full_sync_backup_api;
+pub mod full_sync_backup_v2_api;
 pub mod holiday_api;
 pub mod ics_export_api;
 pub mod ics_import_api;
