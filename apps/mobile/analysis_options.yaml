@@ -11,6 +11,8 @@ analyzer:
     # FRB codegen 产物（勿手改；由
     # flutter_rust_bridge_codegen generate 维护）
     - lib/src/rust/**
+    - build/**
+    - android/**
 
 linter:
   rules:
