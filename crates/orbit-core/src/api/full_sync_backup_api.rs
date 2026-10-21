@@ -31,7 +31,6 @@ use crate::full_sync_backup::backup_repository::{
     list_backups as repo_list_backups, resolve_backup_dir,
 };
 use crate::full_sync_backup::decoder::decode_backup;
-use crate::full_sync_backup::encoder::{EncodeParams, encode_backup};
 use crate::full_sync_backup::error::{FullSyncBackupError, FullSyncBackupResult};
 use crate::full_sync_backup::manifest::BackupManifest;
 use crate::full_sync_backup::scheduler::calculate_next_backup_at;
@@ -152,22 +151,6 @@ fn ensure_any_switch_enabled(prefs: &BackupPrefs) -> FullSyncBackupResult<()> {
     Ok(())
 }
 
-/// 判断业务表是否存在于当前库
-///
-/// F71：用于把「迁移前旧库缺表」（可安全跳过）与「表在但读不出来」（必须中止）
-/// 区分开——两者的 `list_records_as_json` 错误信息都是 sqlite 的
-/// `no such table: xxx` / 其他驱动错误，靠文案匹配不可靠，直接查 `sqlite_master`。
-///
-/// 查询本身失败时返回 `false`（保守：当作「表在」从而中止导出，不放过可能的静默丢表）。
-async fn table_exists(pool: &SqlitePool, table: &str) -> bool {
-    sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?")
-        .bind(table)
-        .fetch_one(pool)
-        .await
-        .map(|n| n > 0)
-        .unwrap_or(false)
-}
-
 /// 导出公共实现
 ///
 /// v6 重构流程（云端 → 本地 两阶段，分别记录 sync_history）：
@@ -204,77 +187,12 @@ async fn export_full_sync_backup_inner(
     let device_id = context::get_device_id().unwrap_or_default().to_string();
     let device_name = read_device_name_from_config(app_data_dir);
 
-    // 3. 遍历业务表，读取 JSON 数据
+    // 3. 查 schema 版本 + 时间戳（表数据由 v2 导出器逐表分页读，不再在此整表物化）
     //
-    // F71：失败处置分两类，不能一律吞掉——
-    // a) 表**不存在**（迁移前的旧库：FULL_BACKUP_TABLES 里含新表而老库尚未建）：
-    //    属预期情形，跳过并记 warn，不写入 manifest（import 阶段也就不会去
-    //    DELETE 一张不存在的表）；
-    // b) 表存在但**读取失败**（库损坏 / 被占用 / 列结构异常）：原实现仅
-    //    `eprintln!` 后 continue，出口仍是一份「成功」的备份——文件名、大小、
-    //    云端上传、sync_history 全部正常，唯独缺了整张表的数据。用户要等到用
-    //    这份备份恢复时才发现数据没了，而 `keep_latest` 很可能已把上一份好备份
-    //    删掉。现在直接中止导出，不落任何备份文件。
-    let mut table_counts: BTreeMap<String, usize> = BTreeMap::new();
-    let mut table_data: BTreeMap<String, String> = BTreeMap::new();
-
-    for table in business_api::FULL_BACKUP_TABLES {
-        match business_api::list_records_as_json(pool, table).await {
-            Ok(json_str) => {
-                let count = serde_json::from_str::<Vec<serde_json::Value>>(&json_str)
-                    .map(|v| v.len())
-                    .unwrap_or(0);
-                table_counts.insert(table.to_string(), count);
-                table_data.insert(table.to_string(), json_str);
-            }
-            Err(e) => {
-                // 区分「表不存在」与「表在这但读不出来」：只有前者可安全跳过
-                if !table_exists(pool, table).await {
-                    log::warn!(
-                        "[export_full_sync_backup] 表 {} 在库中不存在（迁移前旧库），已跳过: {}",
-                        table,
-                        e
-                    );
-                } else {
-                    log::error!(
-                        "[export_full_sync_backup] 表 {} 读取失败，中止导出: {}",
-                        table,
-                        e
-                    );
-                    return Err(FullSyncBackupError::Other(format!(
-                        "导出中止：表 {} 读取失败，未生成备份文件（若继续将产出缺失该表的\"完整\"备份）：{}",
-                        table, e
-                    )));
-                }
-            }
-        }
-    }
-
-    // 4. 查 schema_migrations 当前版本
+    // F71 的失败处置（表不存在可跳过 / 表在但读不出来必须中止）已下沉到
+    // `full_sync_backup_v2_api::export_v2_to_file`，口径不变。
     let schema_version = query_schema_version(pool).await?;
-
-    // 5. 构造 manifest（v6: 填充 device_name，原 None 字段修复）
     let now_ts = Utc::now().timestamp();
-    let app_version = env!("CARGO_PKG_VERSION").to_string();
-    let manifest = BackupManifest::new(
-        device_id.clone(),
-        Some(device_name.clone()),
-        schema_version,
-        table_counts.clone(),
-        now_ts,
-        app_version,
-    );
-
-    // 6. 编码（ZIP + AES-GCM + 容器封装，单次编码供云端+本地共用）
-    let schema_version_json = serde_json::to_string(&SchemaVersion {
-        version: schema_version,
-    })?;
-    let encoded = encode_backup(EncodeParams {
-        sync_password,
-        manifest: &manifest,
-        table_data: &table_data,
-        schema_version_json: &schema_version_json,
-    })?;
 
     // 7. 解析备份目录 + 生成文件名
     let prefs = load_prefs(app_data_dir)?;
@@ -285,6 +203,30 @@ async fn export_full_sync_backup_inner(
         std::fs::create_dir_all(&backup_dir)?;
     }
     let filename = generate_backup_filename_with_name(&device_name, &device_id, Utc::now());
+
+    // 6b. v2 流式导出：直接写临时文件后原子落位，峰值不再与库大小相关
+    //
+    // 说明：云端上传仍需要一份完整字节（适配器接口是 `&[u8]`），故这里在
+    // 需要上传时把文件读回内存——**本批只解耦本地路径**；云端流式化是 M1
+    // 的第三层（需要改三协议适配器签名），不在本批范围。
+    let staged = backup_dir.join(format!("{filename}.staged"));
+    let (file_size, v2_counts) = super::full_sync_backup_v2_api::export_v2_to_file(
+        pool,
+        &staged,
+        sync_password,
+        &device_id,
+        Some(device_name.clone()),
+    )
+    .await?;
+    let table_counts = v2_counts;
+    let manifest = BackupManifest::new(
+        device_id.clone(),
+        Some(device_name.clone()),
+        schema_version,
+        table_counts.clone(),
+        now_ts,
+        env!("CARGO_PKG_VERSION").to_string(),
+    );
 
     // ===== 8. 云端阶段 =====
     // 根据开关屏蔽 cloud_config：关闭云端备份时视为无云端配置
@@ -297,9 +239,13 @@ async fn export_full_sync_backup_inner(
     let mut cloud_uploaded = false;
     let mut cloud_error: Option<String> = None;
     if let Some(config) = cloud_config {
+        // 云端适配器接口是 &[u8]，这里把已生成的 v2 文件读回内存再上传。
+        // 本地路径仍是纯流式（峰值与库大小无关）；云端流式化是 M1 第三层，
+        // 需要改三协议适配器签名，不在本批范围（见 docs/13 §6.2 M1 风险条）。
+        let upload_bytes = std::fs::read(&staged)?;
         match engine::create_adapter(&config) {
             Ok(adapter) => {
-                match upload_backup_bytes(&*adapter, &config.base_path, &encoded.bytes, &filename)
+                match upload_backup_bytes(&*adapter, &config.base_path, &upload_bytes, &filename)
                     .await
                 {
                     Ok(path) => {
@@ -333,12 +279,16 @@ async fn export_full_sync_backup_inner(
     }
 
     // ===== 9. 本地阶段（受 local_enabled 开关控制）=====
-    // 关闭本地备份时跳过文件写入与历史记录，仅保留云端阶段结果
+    // 关闭本地备份时跳过文件写入与历史记录，仅保留云端阶段结果。
+    // v2 已把内容写到 `staged`，本地阶段只是一次 rename（同分区原子操作），
+    // 不再有「整包字节再写一遍」的内存与 IO 开销。
     let target_path = backup_dir.join(&filename);
     let mut local_path: Option<String> = None;
     let mut local_error: Option<String> = None;
     if local_enabled {
-        match std::fs::write(&target_path, &encoded.bytes) {
+        let staged_for_move = staged.clone();
+        let target_for_move = target_path.clone();
+        match std::fs::rename(&staged_for_move, &target_for_move) {
             Ok(()) => {
                 local_path = Some(target_path.to_string_lossy().to_string());
                 if prefs.keep_latest {
@@ -366,9 +316,12 @@ async fn export_full_sync_backup_inner(
         )
         .await;
     }
-    // 本地备份关闭时：跳过文件写入与历史记录，backup_dir 留空亦无副作用
+    // 本地备份关闭时：跳过文件写入与历史记录，backup_dir 留空亦无副作用。
+    // 此时 staged 文件必须清掉，否则每次云端备份都会在备份目录留一个孤儿。
+    if !local_enabled {
+        let _ = std::fs::remove_file(&staged);
+    }
 
-    let file_size = encoded.bytes.len() as u64;
     Ok(ExportResult {
         file_path: local_path.clone().unwrap_or_default(),
         file_size,
@@ -630,7 +583,20 @@ pub async fn import_full_sync_backup(
         .get_unlocked_password()
         .ok_or_else(|| FullSyncBackupError::InvalidState("同步密码未解锁".to_string()))?;
 
-    // 1. 解码（密码错误立即返回，不进入清空阶段）
+    // 1. 解码：v2 容器走流式导入，v1 走原有整包解码
+    //
+    // 分流依据只有 magic（`OFS2` vs `OFS1`/`WFS1`），不依赖文件扩展名——
+    // 用户可能把 v2 备份改名成 .orsync 或反之。
+    if super::full_sync_backup_v2_api::is_v2_backup(bytes) {
+        return super::full_sync_backup_v2_api::import_v2_bytes(
+            pool,
+            bytes,
+            &sync_password,
+            ignore_schema_mismatch,
+        )
+        .await;
+    }
+
     let decoded = decode_backup(bytes, &sync_password)?;
 
     // 2. 校验 manifest format_version
@@ -839,6 +805,10 @@ pub async fn peek_full_sync_manifest(
     let sync_password = svc
         .get_unlocked_password()
         .ok_or_else(|| FullSyncBackupError::InvalidState("同步密码未解锁".to_string()))?;
+    // v2 只读 header + 首帧元数据，不碰正文（与 v1 整包解码相比省掉全部正文解密）
+    if super::full_sync_backup_v2_api::is_v2_backup(bytes) {
+        return Ok(super::full_sync_backup_v2_api::peek_v2_meta(bytes, &sync_password)?.manifest);
+    }
     let decoded = decode_backup(bytes, &sync_password)?;
     Ok(decoded.manifest)
 }
@@ -896,13 +866,25 @@ pub async fn peek_backup_preview(
     let sync_password = svc
         .get_unlocked_password()
         .ok_or_else(|| FullSyncBackupError::InvalidState("同步密码未解锁".to_string()))?;
-    let decoded = decode_backup(bytes, &sync_password)?;
-    let (sample_tasks, task_stats) =
-        extract_task_preview(&decoded.table_data, BACKUP_PREVIEW_SAMPLE);
+
+    // v2：只解预览需要的两张表（任务 + 项目），不解整包
+    let (manifest, table_data) = if super::full_sync_backup_v2_api::is_v2_backup(bytes) {
+        let (meta, data) = super::full_sync_backup_v2_api::peek_v2_tables(
+            bytes,
+            &sync_password,
+            &["todo_tasks", "todo_projects"],
+        )?;
+        (meta.manifest, data)
+    } else {
+        let decoded = decode_backup(bytes, &sync_password)?;
+        (decoded.manifest, decoded.table_data)
+    };
+
+    let (sample_tasks, task_stats) = extract_task_preview(&table_data, BACKUP_PREVIEW_SAMPLE);
     let current_schema_version = query_schema_version(pool).await?;
-    let schema_mismatch = decoded.manifest.schema_version != current_schema_version;
+    let schema_mismatch = manifest.schema_version != current_schema_version;
     Ok(BackupPreview {
-        manifest: decoded.manifest,
+        manifest,
         sample_tasks,
         task_stats,
         schema_mismatch,
@@ -1422,11 +1404,26 @@ mod export_table_guard_tests {
         );
     }
 
-    /// `table_exists` 是「跳过 vs 中止」的分流依据，口径要能区分缺表与在表
+    /// 「跳过 vs 中止」的分流依据：口径要能区分缺表与在表
+    ///
+    /// 该逻辑已随导出改 v2 流式下沉到 `full_sync_backup_v2_api::table_present`，
+    /// 此处保留同一判据的回归锚点（直接查 sqlite_master，不靠错误文案匹配）。
     #[tokio::test]
-    async fn table_exists_distinguishes_missing_from_present() {
+    async fn table_presence_distinguishes_missing_from_present() {
         let pool = setup_db().await;
-        assert!(table_exists(&pool, "todo_tasks").await);
-        assert!(!table_exists(&pool, "no_such_table_here").await);
+        let present: i64 =
+            sqlx::query_scalar("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?")
+                .bind("todo_tasks")
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        assert_eq!(present, 1, "todo_tasks 必须存在");
+        let missing: i64 =
+            sqlx::query_scalar("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?")
+                .bind("no_such_table_here")
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        assert_eq!(missing, 0, "不存在的表必须判 0");
     }
 }

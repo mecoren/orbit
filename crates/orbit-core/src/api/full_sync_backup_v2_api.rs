@@ -47,6 +47,14 @@ pub async fn export_v2_to_file(
     device_id: &str,
     device_name: Option<String>,
 ) -> FullSyncBackupResult<(u64, BTreeMap<String, usize>)> {
+    // 确保目标父目录存在：调用方可能只给了文件名（测试/手动路径），
+    // 而备份目录的创建在 v1 里由外层负责，v2 导出自己兜一层更稳。
+    if let Some(parent) = target.parent()
+        && !parent.as_os_str().is_empty()
+    {
+        std::fs::create_dir_all(parent)?;
+    }
+
     let schema_version = crate::api::full_sync_backup_api::query_schema_version(pool).await?;
     let now_ts = Utc::now().timestamp();
     let app_version = env!("CARGO_PKG_VERSION").to_string();
@@ -438,6 +446,60 @@ fn trim_ascii(mut b: &[u8]) -> &[u8] {
         }
     }
     b
+}
+
+/// v2 预览：只解出预览需要的表（默认 tasks + projects），不做整包解压
+///
+/// 与 v1 的 `DecodedBackup.table_data` 对齐同一形状（表名 → JSON 数组字符串），
+/// 让上层的 `extract_task_preview` 抽样逻辑可以原样复用、无需两套解析。
+pub fn peek_v2_tables(
+    bytes: &[u8],
+    sync_password: &str,
+    wanted: &[&str],
+) -> FullSyncBackupResult<(V2Meta, BTreeMap<String, String>)> {
+    let meta = peek_v2_meta(bytes, sync_password)?;
+
+    let cursor = std::io::Cursor::new(bytes);
+    let mut reader = FrameReader::new(cursor, sync_password)?;
+    let _ = reader.next_frame()?; // meta 帧
+
+    let mut out: BTreeMap<String, Vec<serde_json::Value>> = BTreeMap::new();
+    let mut current: Option<String> = None;
+    while let Some(frame) = reader.next_frame()? {
+        let frame_trimmed = trim_ascii(&frame);
+        if frame_trimmed.is_empty() {
+            continue;
+        }
+        let parsed: serde_json::Value = match serde_json::from_slice(frame_trimmed) {
+            Ok(v) => v,
+            Err(_) => continue, // 预览容错：坏帧跳过，不阻断
+        };
+        if let Some(kind) = parsed.get("kind").and_then(|k| k.as_str()) {
+            match kind {
+                "table" => {
+                    let name = parsed["name"].as_str().unwrap_or_default().to_string();
+                    current = Some(name);
+                }
+                "table_end" => current = None,
+                "end" => break,
+                _ => {}
+            }
+            continue;
+        }
+        let Some(table) = current.clone() else {
+            continue;
+        };
+        if !wanted.contains(&table.as_str()) {
+            continue; // 不在预览范围内：跳过（但仍要读完帧以保持序号连续）
+        }
+        out.entry(table).or_default().push(parsed);
+    }
+
+    let table_data = out
+        .into_iter()
+        .map(|(k, v)| Ok((k, serde_json::to_string(&v)?)))
+        .collect::<FullSyncBackupResult<BTreeMap<String, String>>>()?;
+    Ok((meta, table_data))
 }
 
 /// 临时文件路径：与目标同目录、后缀 `.tmp`
