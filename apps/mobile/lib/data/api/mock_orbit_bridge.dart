@@ -1616,6 +1616,15 @@ class MockOrbitBridge implements OrbitBridge {
 
   // ── CSV 导入（lite 解析；与桌面 ipc-mock 同构语义）──
 
+  /// 限额与 core 同口径（IMPORT_MAX_BYTES / IMPORT_MAX_ROWS）——
+  /// mock 不引 core，数值在此显式镜像，漂移由桥契约测试暴露
+  @override
+  Future<ImportLimits> csvImportLimits() {
+    return _delay(
+      () => const ImportLimits(maxBytes: 20 * 1024 * 1024, maxRows: 200000),
+    );
+  }
+
   @override
   Future<CsvImportPreview> csvImportPreview(
       String content, String preset, int previewLimit) {

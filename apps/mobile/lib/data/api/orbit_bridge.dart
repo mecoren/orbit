@@ -105,6 +105,18 @@ class CsvImportStats {
   });
 }
 
+/// 导入限额（FRB ImportLimitsView 镜像）：选文件后先比对大小，超限即拦，
+/// 不把整份内容读进内存再拒绝。上限单一来源在 orbit-core。
+class ImportLimits {
+  /// 单文件字节上限
+  final int maxBytes;
+
+  /// 单文件数据行上限
+  final int maxRows;
+
+  const ImportLimits({required this.maxBytes, required this.maxRows});
+}
+
 /// CSV 导入预览结果（FRB csv_import.rs 的 CsvImportPreviewView 镜像；
 /// rows 已映射为待创建任务字段）
 class CsvImportPreview {
@@ -397,9 +409,11 @@ abstract class OrbitBridge {
 
   // ── CSV 导入（迁移路径：orbit / todoist / ticktick）──
 
+  /// 导入限额（字节 / 行数）：选文件后先比对大小，超限即拦
+  Future<ImportLimits> csvImportLimits();
+
   /// 预览导入（不写库）：解析 + 映射 + 统计
   Future<CsvImportPreview> csvImportPreview(String content, String preset, int previewLimit);
-
   /// 执行导入（写库）：项目自动创建、逐行独立成败
   Future<CsvImportStats> csvImportExecute(String content, String preset);
 

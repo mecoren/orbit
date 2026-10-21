@@ -11,9 +11,16 @@
 use orbit_core::api::csv_import_api;
 
 use super::dto::CsvImportPreviewView;
+use super::dto::ImportLimitsView;
 
 fn pool() -> Result<sqlx::SqlitePool, String> {
     super::state::with_state(|s| Ok(s.pool.clone()))
+}
+
+/// 导入限额（字节 / 行数）：Dart 侧选文件后先比对 `length()`，超限即拦，
+/// 不把整份内容读进内存再拒绝（对应桌面 csv_import_limits）
+pub fn csv_import_limits() -> ImportLimitsView {
+    ImportLimitsView::from(csv_import_api::import_limits())
 }
 
 /// 预览导入（不写库）：解析 + 映射 + 统计（对应桌面 csv_import_preview）

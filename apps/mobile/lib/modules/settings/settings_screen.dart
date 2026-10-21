@@ -246,13 +246,30 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         dialogTitle: isIcs ? '选择要导入的 ICS 文件' : '选择要导入的 CSV 文件',
         type: FileType.custom,
         allowedExtensions: isIcs ? ['ics'] : ['csv', 'txt'],
-        withData: true,
+        // 只取路径、不把整份文件搬进内存：先 stat 比对上限，超限即拦
+        // （docs/13 §6.2 M2；上限单一来源在 orbit-core）
+        withData: false,
       );
       if (picked == null) return; // 用户取消
+      final path = picked.files.single.path;
+      if (path == null) {
+        WaitToast.destructive('无法读取文件路径');
+        return;
+      }
+      final file = File(path);
+      final limits = await ref.read(orbitBridgeProvider).csvImportLimits();
+      final size = await file.length();
+      if (size > limits.maxBytes) {
+        WaitToast.destructive(
+          '文件过大（${(size / 1024 / 1024).toStringAsFixed(1)} MB，'
+          '上限 ${(limits.maxBytes / 1024 / 1024).round()} MB），请拆分后分批导入',
+        );
+        return;
+      }
       // CSV 与 ICS 均为 UTF-8 文本（各主流应用导出统一 UTF-8）。不能用
       // String.fromCharCodes——它按 Latin-1 逐字节转码，中文任务标题会乱码。
       final content = utf8.decode(
-        picked.files.single.bytes ?? const <int>[],
+        await file.readAsBytes(),
         allowMalformed: true,
       );
       if (content.trim().isEmpty) {

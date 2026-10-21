@@ -1021,6 +1021,24 @@ impl From<orbit_core::api::csv_import_api::CsvImportPreview> for CsvImportPrevie
     }
 }
 
+/// 导入限额（core ImportLimits 镜像）：Dart 侧选文件后先比对大小，超限即拦
+#[derive(Debug, Clone, Serialize)]
+pub struct ImportLimitsView {
+    /// 单文件字节上限
+    pub max_bytes: usize,
+    /// 单文件数据行上限
+    pub max_rows: usize,
+}
+
+impl From<orbit_core::api::csv_import_api::ImportLimits> for ImportLimitsView {
+    fn from(l: orbit_core::api::csv_import_api::ImportLimits) -> Self {
+        Self {
+            max_bytes: l.max_bytes,
+            max_rows: l.max_rows,
+        }
+    }
+}
+
 // ---------- holiday 域（cfg_holidays 缓存镜像；用户需求：日历视图联网更新节假日） ----------
 
 /// 节假日行（core HolidayInfo 过桥镜像；FRB 字段级生成规则见模块注释）

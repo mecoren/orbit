@@ -2081,7 +2081,20 @@ function CsvImportCard() {
           : [{ name: "CSV 表格", extensions: ["csv", "txt"] }],
       });
       if (!path) return; // 用户取消
-      const { readTextFile } = await import("@tauri-apps/plugin-fs");
+      // 先 stat 比对大小上限：超限即拦，不把整份内容读进内存再拒绝
+      // （docs/13 §6.2 M2；上限单一来源在 orbit-core）
+      const { stat, readTextFile } = await import("@tauri-apps/plugin-fs");
+      const info = await stat(path);
+      const { csvImportLimits } = await import("@/lib/tauri");
+      const limits = await csvImportLimits();
+      if (info.size > limits.max_bytes) {
+        toast.error(
+          `文件过大（${(info.size / 1024 / 1024).toFixed(1)} MB，` +
+            `上限 ${Math.round(limits.max_bytes / 1024 / 1024)} MB），` +
+            "请拆分后分批导入",
+        );
+        return;
+      }
       const text = await readTextFile(path);
       setFileName(path.split(/[\\/]/).pop() ?? String(path));
       setContent(text);

@@ -381,6 +381,7 @@ pub fn run() {
             // CSV 导入（迁移路径：orbit 自有 / Todoist / TickTick）
             commands::csv_import_cmd::csv_import_preview,
             commands::csv_import_cmd::csv_import_execute,
+            commands::csv_import_cmd::csv_import_limits,
             // 定时自动备份偏好（backup_scheduler 守护的数据源）
             commands::backup_scheduler::backup_prefs_get,
             commands::backup_scheduler::backup_prefs_save,

@@ -7,7 +7,7 @@
 //! 文件内容读取由前端经 tauri-plugin-fs（打开对话框选文件后 readTextFile）
 //! 完成，本命令只收文本内容；三档预设 orbit / todoist / ticktick。
 
-use orbit_core::api::csv_import_api::{self, CsvImportPreview, CsvImportStats};
+use orbit_core::api::csv_import_api::{self, CsvImportPreview, CsvImportStats, ImportLimits};
 use tauri::Manager;
 
 use crate::AppState;
@@ -16,6 +16,13 @@ fn pool_of(app: &tauri::AppHandle) -> Result<sqlx::SqlitePool, String> {
     app.try_state::<AppState>()
         .ok_or_else(|| "[database] 数据库未初始化".to_string())
         .map(|s| s.pool.clone())
+}
+
+/// 导入限额（字节 / 行数）：前端选文件后先读 `stat` 比对，超限即拦，
+/// 不把整份内容读进内存再拒绝。单一来源在 orbit-core。
+#[tauri::command]
+pub fn csv_import_limits() -> ImportLimits {
+    csv_import_api::import_limits()
 }
 
 /// 预览导入（不写库）：前 N 条映射行 + 全量统计

@@ -9,6 +9,11 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
 // These functions are ignored because they are not marked as `pub`: `pool`
 
+/// 导入限额（字节 / 行数）：Dart 侧选文件后先比对 `length()`，超限即拦，
+/// 不把整份内容读进内存再拒绝（对应桌面 csv_import_limits）
+Future<ImportLimitsView> csvImportLimits() =>
+    RustLib.instance.api.crateApiCsvImportCsvImportLimits();
+
 /// 预览导入（不写库）：解析 + 映射 + 统计（对应桌面 csv_import_preview）
 Future<CsvImportPreviewView> csvImportPreview({
   required String content,

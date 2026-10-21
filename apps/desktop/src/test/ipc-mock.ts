@@ -1877,6 +1877,9 @@ const commands: Record<string, (args: any, ctx: Ctx) => unknown> = {
   // ---- CSV 导入（设置页迁移卡；冒烟不覆盖设置页，mock 提供
   //      与 Rust csv_import_api 同构的最小语义：title/content/summary
   //      列识别 + 空标题跳过 + 项目列自动建项目）----
+  // 限额与 core 同口径（IMPORT_MAX_BYTES / IMPORT_MAX_ROWS）；数值在此显式
+  // 镜像，漂移由桥契约测试暴露
+  csv_import_limits: () => ({ max_bytes: 20 * 1024 * 1024, max_rows: 200_000 }),
   csv_import_preview: ({ content, preset, previewLimit }: { content: string; preset: string; previewLimit?: number }) => {
     const rows = parseCsvLite(content);
     const mapped = rows.slice(1).map((row, i) => mapImportRowLite(preset, rows[0], row, i + 2));

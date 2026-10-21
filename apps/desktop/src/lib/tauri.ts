@@ -1005,6 +1005,14 @@ export const csvImportPreview = (content: string, preset: CsvImportPresetKey, pr
 export const csvImportExecute = (content: string, preset: CsvImportPresetKey) =>
   invoke<CsvImportStats>("csv_import_execute", { content, preset });
 
+/** 导入限额（字节 / 行数）：选文件后先比对大小，超限即拦（docs/13 §6.2 M2） */
+export interface ImportLimits {
+  max_bytes: number;
+  max_rows: number;
+}
+
+export const csvImportLimits = () => invoke<ImportLimits>("csv_import_limits");
+
 
 // ---------- 节假日数据（日历视图；用户需求：联网更新节假日） ----------
 

@@ -258,6 +258,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   IcsTableCount dco_decode_ics_table_count(dynamic raw);
 
   @protected
+  ImportLimitsView dco_decode_import_limits_view(dynamic raw);
+
+  @protected
   List<String> dco_decode_list_String(dynamic raw);
 
   @protected
@@ -866,6 +869,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   IcsTableCount sse_decode_ics_table_count(SseDeserializer deserializer);
+
+  @protected
+  ImportLimitsView sse_decode_import_limits_view(SseDeserializer deserializer);
 
   @protected
   List<String> sse_decode_list_String(SseDeserializer deserializer);
@@ -1645,6 +1651,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_ics_table_count(IcsTableCount self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_import_limits_view(
+    ImportLimitsView self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_list_String(List<String> self, SseSerializer serializer);

@@ -693,6 +693,15 @@ class RustOrbitBridge implements OrbitBridge {
   // ── CSV 导入（迁移路径）──
 
   @override
+  Future<ImportLimits> csvImportLimits() async {
+    final r = await gen_import.csvImportLimits();
+    return ImportLimits(
+      maxBytes: r.maxBytes.toInt(),
+      maxRows: r.maxRows.toInt(),
+    );
+  }
+
+  @override
   Future<CsvImportPreview> csvImportPreview(
     String content,
     String preset,

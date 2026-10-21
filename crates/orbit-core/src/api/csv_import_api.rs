@@ -27,60 +27,172 @@ use crate::error::CoreResult;
 use crate::models::business::TodoTaskCreateInput;
 
 // ============================================================================
-// 解析：RFC 4180
+// 导入硬上限（docs/13 §6.2 M2）
 // ============================================================================
 
-/// 解析 CSV 文本为行列矩阵（去 BOM、跳过空行）
-pub fn parse_csv(content: &str) -> Vec<Vec<String>> {
-    let content = content.strip_prefix('\u{feff}').unwrap_or(content);
-    let mut rows = Vec::new();
-    let mut field = String::new();
-    let mut row: Vec<String> = Vec::new();
-    let mut in_quotes = false;
-    let mut chars = content.chars().peekable();
+/// 单个导入文件的字节上限（UTF-8 原文长度，不含解码余量）。
+///
+/// 取值口径：真实用户样本里 Todoist/TickTick 全量导出多在数 MB 量级，
+/// 20MB 对应约 10 万条任务，已远超单人待办库的合理规模；再大基本是
+/// 误选文件（如整份数据库 dump）。超限直接拒绝而不是截断——截断会让
+/// 用户以为「导入成功」却丢数据。
+pub const IMPORT_MAX_BYTES: usize = 20 * 1024 * 1024;
 
-    while let Some(c) = chars.next() {
-        match c {
-            '"' => {
-                if in_quotes && chars.peek() == Some(&'"') {
-                    chars.next();
-                    field.push('"');
-                } else {
-                    in_quotes = !in_quotes;
-                }
-            }
-            ',' if !in_quotes => {
-                row.push(std::mem::take(&mut field));
-            }
-            '\r' if !in_quotes => {
-                // CRLF：等 '\n' 收行；孤立 \r 也收行
-                if chars.peek() != Some(&'\n') {
-                    row.push(std::mem::take(&mut field));
-                    finish_row(&mut rows, &mut row);
-                }
-            }
-            '\n' if !in_quotes => {
-                row.push(std::mem::take(&mut field));
-                finish_row(&mut rows, &mut row);
-            }
-            _ => field.push(c),
-        }
-    }
-    // 尾字段/尾行（无换行结尾的最后一行）
-    if !field.is_empty() || !row.is_empty() {
-        row.push(field);
-        finish_row(&mut rows, &mut row);
-    }
-    rows
+/// 单个导入文件的数据行上限（不含表头行 / 非 VTODO 块）。
+///
+/// 与 [`IMPORT_MAX_BYTES`] 互补：纯短标题的 CSV 可以在 20MB 内塞进
+/// 上百万行，行数上限防的是「字节没超但行数爆炸」的那类文件。
+pub const IMPORT_MAX_ROWS: usize = 200_000;
+
+/// 预览返回的行数上限（超出只截断预览载荷，统计仍按全量扫描）
+pub const IMPORT_PREVIEW_MAX_ROWS: usize = 200;
+
+/// 限额校验失败的可读说明（前端直接展示给用户）
+fn limit_error_bytes(len: usize) -> crate::error::CoreError {
+    crate::error::CoreError::Other(format!(
+        "文件过大（{:.1} MB，上限 {} MB），请拆分后分批导入",
+        len as f64 / (1024.0 * 1024.0),
+        IMPORT_MAX_BYTES / (1024 * 1024)
+    ))
 }
 
-fn finish_row(rows: &mut Vec<Vec<String>>, row: &mut Vec<String>) {
-    // 空行跳过（全空字段）
-    if !row.iter().all(|f| f.trim().is_empty()) {
-        rows.push(std::mem::take(row));
-    } else {
-        row.clear();
+fn limit_error_rows(rows: usize) -> crate::error::CoreError {
+    crate::error::CoreError::Other(format!(
+        "行数过多（{rows} 行，上限 {IMPORT_MAX_ROWS} 行），请拆分后分批导入"
+    ))
+}
+
+/// 导入前的字节数预检（桥层在读文件前先拦，省一次整份读入）
+pub fn check_import_bytes(len: usize) -> crate::error::CoreResult<()> {
+    if len > IMPORT_MAX_BYTES {
+        return Err(limit_error_bytes(len));
     }
+    Ok(())
+}
+
+/// 导入限额快照（桥层下发给 UI，用于选文件后即时提示，不必先 invoke 导入）
+#[derive(Debug, Clone, Copy, Serialize)]
+pub struct ImportLimits {
+    /// 单文件字节上限
+    pub max_bytes: usize,
+    /// 单文件数据行上限
+    pub max_rows: usize,
+}
+
+/// 取当前导入限额（单一来源在 core，双端 UI 不各自硬编码）
+pub fn import_limits() -> ImportLimits {
+    ImportLimits {
+        max_bytes: IMPORT_MAX_BYTES,
+        max_rows: IMPORT_MAX_ROWS,
+    }
+}
+
+// ============================================================================
+// 解析：RFC 4180（流式，逐行回调）
+// ============================================================================
+
+/// CSV 行迭代器：按需产出「一行字段」，不预先把整份文件物化。
+///
+/// 存在的理由是**执行路径需要 `await`**：写库是异步的，而闭包回调无法
+/// `await`。迭代器让调用方用 `for row in CsvRows::new(content)` 逐行取，
+/// 每写若干行再 `await` 一次，解析进度天然停在行边界上。
+///
+/// 解析口径（RFC 4180）：BOM 剥离、引号转义（`""` → `"`）、引号内逗号与
+/// 换行合法、CRLF / 孤立 CR / 裸 LF 均可收行、无换行结尾的尾行也收、
+/// 全空字段行跳过。
+pub struct CsvRows<'a> {
+    chars: std::iter::Peekable<std::str::Chars<'a>>,
+    /// 已把首字符的 BOM 剥掉（只做一次）
+    bom_checked: bool,
+    finished: bool,
+}
+
+impl<'a> CsvRows<'a> {
+    pub fn new(content: &'a str) -> Self {
+        Self {
+            chars: content.chars().peekable(),
+            bom_checked: false,
+            finished: false,
+        }
+    }
+}
+
+impl Iterator for CsvRows<'_> {
+    type Item = Vec<String>;
+
+    fn next(&mut self) -> Option<Vec<String>> {
+        if self.finished {
+            return None;
+        }
+        if !self.bom_checked {
+            self.bom_checked = true;
+            if self.chars.peek() == Some(&'\u{feff}') {
+                self.chars.next();
+            }
+        }
+
+        let mut field = String::new();
+        let mut row: Vec<String> = Vec::new();
+        let mut in_quotes = false;
+        let mut any = false; // 是否读到过任何字符（区分空文件与空行）
+
+        while let Some(c) = self.chars.next() {
+            any = true;
+            match c {
+                '"' => {
+                    if in_quotes && self.chars.peek() == Some(&'"') {
+                        self.chars.next();
+                        field.push('"');
+                    } else {
+                        in_quotes = !in_quotes;
+                    }
+                }
+                ',' if !in_quotes => {
+                    row.push(std::mem::take(&mut field));
+                }
+                '\r' if !in_quotes => {
+                    // CRLF：等 '\n' 收行；孤立 \r 也收行
+                    if self.chars.peek() != Some(&'\n') {
+                        row.push(std::mem::take(&mut field));
+                        return self.finish_row(row);
+                    }
+                }
+                '\n' if !in_quotes => {
+                    row.push(std::mem::take(&mut field));
+                    return self.finish_row(row);
+                }
+                _ => field.push(c),
+            }
+        }
+
+        if !any {
+            self.finished = true;
+            return None;
+        }
+        // 尾字段/尾行（无换行结尾的最后一行）
+        row.push(field);
+        self.finished = true;
+        self.finish_row(row)
+    }
+}
+
+impl CsvRows<'_> {
+    /// 空行跳过（全空字段）——跳过时继续取下一条，直到拿到非空行或到尾部
+    fn finish_row(&mut self, mut row: Vec<String>) -> Option<Vec<String>> {
+        if !row.iter().all(|f| f.trim().is_empty()) {
+            return Some(row);
+        }
+        row.clear();
+        self.next()
+    }
+}
+
+/// 解析 CSV 文本为行列矩阵（去 BOM、跳过空行）。
+///
+/// 保留为测试与外部便利入口：内部导入路径走 [`CsvRows`] /
+/// [`parse_csv_stream`]，不再整份物化。
+pub fn parse_csv(content: &str) -> Vec<Vec<String>> {
+    CsvRows::new(content).collect()
 }
 
 // ============================================================================
@@ -197,13 +309,61 @@ pub struct CsvImportStats {
 ///
 /// 头一行必须存在且为表头。Todoist 的非 Task 类型行（section/note 等）
 /// 与已完成且 Completed Date 为空的行会标记跳过。
+///
+/// 便利入口：返回全部映射行。导入的真实路径（预览/执行）走
+/// [`stream_csv_rows`]，不把全部行驻留内存。
 pub fn map_csv_rows(content: &str, preset: CsvImportPreset) -> CoreResult<Vec<CsvImportRow>> {
+    let mut out = Vec::new();
+    stream_csv_rows(content, preset, |row| {
+        out.push(row);
+        Ok(())
+    })?;
+    Ok(out)
+}
+
+/// 逐行映射 CSV / ICS 内容（流式，导入的真实路径）。
+///
+/// 与 [`map_csv_rows`] 的差别只在交付方式：本函数不累积行，内存与
+/// **单行宽度**相关，与文件行数无关。回调返回 `Err` 即中止（行数超限）。
+///
+/// 超限口径：字节数与数据行数都按 [`IMPORT_MAX_BYTES`] / [`IMPORT_MAX_ROWS`]
+/// 判，超出即整体拒绝——不做截断，避免用户以为导入完整却丢数据。
+pub fn stream_csv_rows<F>(content: &str, preset: CsvImportPreset, mut on_row: F) -> CoreResult<()>
+where
+    F: FnMut(CsvImportRow) -> CoreResult<()>,
+{
     // ICS 走 VTODO 解析（ics_import_api），CSV 走表头映射；产物同为 CsvImportRow
     if preset == CsvImportPreset::Ics {
-        return crate::api::ics_import_api::map_ics_rows(content);
+        check_import_bytes(content.len())?;
+        let rows = crate::api::ics_import_api::map_ics_rows(content)?;
+        if rows.len() > IMPORT_MAX_ROWS {
+            return Err(limit_error_rows(rows.len()));
+        }
+        for row in rows {
+            on_row(row)?;
+        }
+        return Ok(());
     }
-    let rows = parse_csv(content);
-    let Some(header_row) = rows.first() else {
+
+    check_import_bytes(content.len())?;
+    for row in csv_import_rows(content, preset)? {
+        on_row(row?)?;
+    }
+    Ok(())
+}
+
+/// CSV 内容 → 待导入行迭代器（表头已定型的流式入口）。
+///
+/// 与 [`stream_csv_rows`] 的区别：返回 `Iterator` 而非回调，供**异步**
+/// 执行路径 `for` 循环逐行取、按批 `await` 写库。空文件（无表头）在
+/// 迭代器构造时即报错。
+pub fn csv_import_rows<'a>(
+    content: &'a str,
+    preset: CsvImportPreset,
+) -> CoreResult<CsvImportRows<'a>> {
+    check_import_bytes(content.len())?;
+    let mut iter = CsvRows::new(content);
+    let Some(header_row) = iter.next() else {
         return Err(crate::error::CoreError::Other(
             "CSV 为空（无表头行）".into(),
         ));
@@ -213,20 +373,42 @@ pub fn map_csv_rows(content: &str, preset: CsvImportPreset) -> CoreResult<Vec<Cs
         .enumerate()
         .map(|(i, h)| (h.trim().to_lowercase(), i))
         .collect();
+    Ok(CsvImportRows {
+        iter,
+        preset,
+        header,
+        data_rows: 0,
+    })
+}
 
-    let mut out = Vec::new();
-    for (i, row) in rows.iter().enumerate().skip(1) {
-        let source_line = i + 1;
-        let mapped = match preset {
-            CsvImportPreset::Orbit => map_orbit_row(&header, row, source_line),
-            CsvImportPreset::Todoist => map_todoist_row(&header, row, source_line),
-            CsvImportPreset::TickTick => map_ticktick_row(&header, row, source_line),
-            // ICS 已在 map_csv_rows 入口分流到 VTODO 解析，不会走到 CSV 行映射
+/// [`csv_import_rows`] 的迭代器：逐行映射，行数超限即报错。
+pub struct CsvImportRows<'a> {
+    iter: CsvRows<'a>,
+    preset: CsvImportPreset,
+    header: HashMap<String, usize>,
+    data_rows: usize,
+}
+
+impl Iterator for CsvImportRows<'_> {
+    type Item = CoreResult<CsvImportRow>;
+
+    fn next(&mut self) -> Option<CoreResult<CsvImportRow>> {
+        let row = self.iter.next()?;
+        self.data_rows += 1;
+        if self.data_rows > IMPORT_MAX_ROWS {
+            return Some(Err(limit_error_rows(self.data_rows)));
+        }
+        // source_line 与旧口径一致：表头占第 1 行，数据行从第 2 行起
+        let source_line = self.data_rows + 1;
+        let mapped = match self.preset {
+            CsvImportPreset::Orbit => map_orbit_row(&self.header, &row, source_line),
+            CsvImportPreset::Todoist => map_todoist_row(&self.header, &row, source_line),
+            CsvImportPreset::TickTick => map_ticktick_row(&self.header, &row, source_line),
+            // ICS 已在入口分流到 VTODO 解析，不会走到 CSV 行映射
             CsvImportPreset::Ics => unreachable!("ICS preset 已分流"),
         };
-        out.push(mapped);
+        Some(Ok(mapped))
     }
-    Ok(out)
 }
 
 fn map_orbit_row(header: &HashMap<String, usize>, row: &[String], line: usize) -> CsvImportRow {
@@ -359,24 +541,33 @@ pub struct CsvImportPreview {
 }
 
 /// 解析并预览（不写库）：返回全部映射行中的前 `preview_limit` 条 + 全量统计
+///
+/// 流式实现：统计按全量扫描累加，但只驻留前 `preview_limit` 行。
+/// `preview_limit` 由 [`IMPORT_PREVIEW_MAX_ROWS`] 封顶（调用方传更大值
+/// 也不会让预览载荷无界）。
 pub async fn preview_csv_import(
     content: &str,
     preset_key: &str,
     preview_limit: usize,
 ) -> CoreResult<CsvImportPreview> {
     let preset = CsvImportPreset::from_key(preset_key)?;
-    let mapped = map_csv_rows(content, preset)?;
+    let limit = preview_limit.min(IMPORT_PREVIEW_MAX_ROWS);
     let mut stats = CsvImportStats::default();
-    for r in &mapped {
+    let mut rows: Vec<CsvImportRow> = Vec::new();
+    stream_csv_rows(content, preset, |r| {
         if r.skip_reason.is_some() {
             stats.skipped += 1;
         } else {
             stats.success += 1; // 预览口径：待导入条数
         }
-    }
+        if rows.len() < limit {
+            rows.push(r);
+        }
+        Ok(())
+    })?;
     Ok(CsvImportPreview {
         preset: preset_key.to_string(),
-        rows: mapped.into_iter().take(preview_limit).collect(),
+        rows,
         stats,
     })
 }
@@ -386,13 +577,18 @@ pub async fn preview_csv_import(
 // ============================================================================
 
 /// 执行导入：逐行写入（每行独立成败），项目标题不存在时自动创建
+///
+/// 流式实现：解析与写库**交错**进行（[`csv_import_rows`] 逐行产出 →
+/// 立即写库），内存只保留当前行。早期版本先 `map_csv_rows` 物化全部映射行
+/// 再逐条写库，峰值与文件行数线性相关；现在峰值与行数无关。
+///
+/// 语义不变：单行失败不阻断其余行；项目按标题自动创建（大小写不敏感复用）。
 pub async fn execute_csv_import(
     pool: &SqlitePool,
     content: &str,
     preset_key: &str,
 ) -> CoreResult<CsvImportStats> {
     let preset = CsvImportPreset::from_key(preset_key)?;
-    let mapped = map_csv_rows(content, preset)?;
     let mut stats = CsvImportStats::default();
 
     // 项目标题 → id 缓存（含既有项目；key 归一 lowercase 与查询侧一致，
@@ -405,77 +601,102 @@ pub async fn execute_csv_import(
             .map(|(title, id): (String, i64)| (title.to_lowercase(), id))
             .collect();
 
-    for r in mapped {
-        if let Some(reason) = &r.skip_reason {
-            stats.skipped += 1;
-            stats
-                .notes
-                .push(format!("第 {} 行跳过：{}", r.source_line, reason));
-            continue;
+    // ICS 与 CSV 的解析产物同为 CsvImportRow，但迭代器是两种具体类型
+    // （不能装箱成 `Box<dyn Iterator>`：非 Send，跨 await 会破坏 FRB 的
+    // 线程约束）。故分两条路径各自驱动，写库逻辑共用 write_import_row。
+    if preset == CsvImportPreset::Ics {
+        check_import_bytes(content.len())?;
+        let parsed = crate::api::ics_import_api::map_ics_rows(content)?;
+        if parsed.len() > IMPORT_MAX_ROWS {
+            return Err(limit_error_rows(parsed.len()));
         }
-        let input = &r.input;
-        let title = if input.title.trim().is_empty() {
-            stats.failed += 1;
-            stats
-                .notes
-                .push(format!("第 {} 行失败：标题为空", r.source_line));
-            continue;
-        } else {
-            input.title.trim().to_string()
-        };
-        // 项目自动创建（不区分大小写匹配）
-        let project_id = match &r.project_title {
-            Some(p) if !p.trim().is_empty() => {
-                let key = p.trim().to_lowercase();
-                match project_ids.get(&key) {
-                    Some(id) => Some(*id),
-                    None => {
-                        let created = business_api::create_todo_project(
-                            pool,
-                            &crate::models::business::TodoProjectCreateInput {
-                                title: p.trim().to_string(),
-                                description: None,
-                                hex_color: None,
-                                sort_order: None,
-                                parent_uuid: None,
-                            },
-                        )
-                        .await;
-                        match created {
-                            Ok(proj) => {
-                                project_ids.insert(key, proj.id);
-                                Some(proj.id)
-                            }
-                            Err(e) => {
-                                stats.failed += 1;
-                                stats.notes.push(format!(
-                                    "第 {} 行失败：创建项目「{}」出错（{e}）",
-                                    r.source_line, p
-                                ));
-                                continue;
-                            }
+        for r in parsed {
+            write_import_row(pool, &mut project_ids, &mut stats, r).await;
+        }
+        return Ok(stats);
+    }
+
+    for next in csv_import_rows(content, preset)? {
+        write_import_row(pool, &mut project_ids, &mut stats, next?).await;
+    }
+    Ok(stats)
+}
+
+/// 写入单条导入行并累加统计（失败只记 note，不中断整批）
+async fn write_import_row(
+    pool: &SqlitePool,
+    project_ids: &mut HashMap<String, i64>,
+    stats: &mut CsvImportStats,
+    r: CsvImportRow,
+) {
+    if let Some(reason) = &r.skip_reason {
+        stats.skipped += 1;
+        stats
+            .notes
+            .push(format!("第 {} 行跳过：{}", r.source_line, reason));
+        return;
+    }
+    let input = &r.input;
+    let title = if input.title.trim().is_empty() {
+        stats.failed += 1;
+        stats
+            .notes
+            .push(format!("第 {} 行失败：标题为空", r.source_line));
+        return;
+    } else {
+        input.title.trim().to_string()
+    };
+    // 项目自动创建（不区分大小写匹配）
+    let project_id = match &r.project_title {
+        Some(p) if !p.trim().is_empty() => {
+            let key = p.trim().to_lowercase();
+            match project_ids.get(&key) {
+                Some(id) => Some(*id),
+                None => {
+                    let created = business_api::create_todo_project(
+                        pool,
+                        &crate::models::business::TodoProjectCreateInput {
+                            title: p.trim().to_string(),
+                            description: None,
+                            hex_color: None,
+                            sort_order: None,
+                            parent_uuid: None,
+                        },
+                    )
+                    .await;
+                    match created {
+                        Ok(proj) => {
+                            project_ids.insert(key, proj.id);
+                            Some(proj.id)
+                        }
+                        Err(e) => {
+                            stats.failed += 1;
+                            stats.notes.push(format!(
+                                "第 {} 行失败：创建项目「{}」出错（{e}）",
+                                r.source_line, p
+                            ));
+                            return;
                         }
                     }
                 }
             }
-            _ => None,
-        };
-        let input = TodoTaskCreateInput {
-            title,
-            project_id,
-            ..input.clone()
-        };
-        match business_api::create_todo_task(pool, &input).await {
-            Ok(_) => stats.success += 1,
-            Err(e) => {
-                stats.failed += 1;
-                stats
-                    .notes
-                    .push(format!("第 {} 行失败：{e}", r.source_line));
-            }
+        }
+        _ => None,
+    };
+    let input = TodoTaskCreateInput {
+        title,
+        project_id,
+        ..input.clone()
+    };
+    match business_api::create_todo_task(pool, &input).await {
+        Ok(_) => stats.success += 1,
+        Err(e) => {
+            stats.failed += 1;
+            stats
+                .notes
+                .push(format!("第 {} 行失败：{e}", r.source_line));
         }
     }
-    Ok(stats)
 }
 
 // ============================================================================
@@ -689,5 +910,100 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(tasks, 0, "预览不得写库");
+    }
+
+    // ---------- M2 导入限额与流式（docs/13 §6.2） ----------
+
+    #[test]
+    fn byte_limit_rejects_oversized_before_parsing() {
+        // 超限即拒，且错误文案要能直接给用户看（含实际大小与上限）
+        let err = check_import_bytes(IMPORT_MAX_BYTES + 1).unwrap_err();
+        let msg = err.to_string();
+        assert!(msg.contains("文件过大"), "文案应可读：{msg}");
+        assert!(msg.contains("上限 20 MB"), "应给出上限：{msg}");
+        // 恰好等于上限时放行（边界含等于）
+        assert!(check_import_bytes(IMPORT_MAX_BYTES).is_ok());
+    }
+
+    #[test]
+    fn row_limit_rejects_and_reports_count() {
+        // 行数超限：字节没超也要拒（纯短标题能把行数堆到上限之上）
+        let mut csv = String::from("title\n");
+        for _ in 0..(IMPORT_MAX_ROWS + 1) {
+            csv.push_str("a\n");
+        }
+        let err = map_csv_rows(&csv, CsvImportPreset::Orbit).unwrap_err();
+        let msg = err.to_string();
+        assert!(msg.contains("行数过多"), "文案应可读：{msg}");
+        assert!(
+            msg.contains(&(IMPORT_MAX_ROWS + 1).to_string()),
+            "应报出实际行数：{msg}"
+        );
+    }
+
+    #[test]
+    fn preview_caps_rows_but_keeps_full_stats() {
+        // 预览只留前 N 行，统计仍按全量——这是 M2 的核心口径
+        let mut csv = String::from("title\n");
+        for i in 0..50 {
+            csv.push_str(&format!("任务{i}\n"));
+        }
+        let preview = futures_block_on(preview_csv_import(&csv, "orbit", 10)).unwrap();
+        assert_eq!(preview.rows.len(), 10, "预览载荷受 limit 约束");
+        assert_eq!(preview.stats.success, 50, "统计必须是全量");
+    }
+
+    #[test]
+    fn preview_limit_is_clamped_to_max() {
+        // 调用方传超大 limit 也不能让预览载荷无界
+        let mut csv = String::from("title\n");
+        for i in 0..(IMPORT_PREVIEW_MAX_ROWS + 5) {
+            csv.push_str(&format!("任务{i}\n"));
+        }
+        let preview = futures_block_on(preview_csv_import(&csv, "orbit", usize::MAX)).unwrap();
+        assert_eq!(preview.rows.len(), IMPORT_PREVIEW_MAX_ROWS);
+        assert_eq!(preview.stats.success, IMPORT_PREVIEW_MAX_ROWS + 5);
+    }
+
+    #[test]
+    fn streaming_parser_matches_materialized_one() {
+        // 迭代器与物化入口必须同口径（BOM / 引号 / CRLF / 空行 / 尾行）
+        let cases = [
+            "a,b,c\n1,2,3\n4,5,6",
+            "\u{feff}a,b\n1,2",
+            "name,desc\n\"a,b\",\"line1\nline2\"\nc,d",
+            "a,b\r\n\r\n1,2\r\n",
+            "x\n\"说\"\"好\"\"\"",
+        ];
+        for content in cases {
+            let materialized = parse_csv(content);
+            let streamed: Vec<Vec<String>> = CsvRows::new(content).collect();
+            assert_eq!(materialized, streamed, "内容：{content:?}");
+        }
+    }
+
+    #[test]
+    fn empty_and_blank_only_files_yield_no_rows() {
+        assert!(parse_csv("").is_empty());
+        assert!(parse_csv("\n\n\r\n").is_empty());
+        assert!(parse_csv("\u{feff}").is_empty());
+    }
+
+    #[test]
+    fn source_line_numbers_stay_1_based_with_header() {
+        // source_line 与旧口径一致：表头占第 1 行，数据行从第 2 行起
+        let csv = "title\n甲\n乙\n";
+        let rows = map_csv_rows(csv, CsvImportPreset::Orbit).unwrap();
+        assert_eq!(rows[0].source_line, 2);
+        assert_eq!(rows[1].source_line, 3);
+    }
+
+    /// 同步块里跑 async（仅测试用；避免为一处断言引入 tokio runtime 依赖）
+    fn futures_block_on<F: std::future::Future>(fut: F) -> F::Output {
+        tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap()
+            .block_on(fut)
     }
 }
