@@ -2,9 +2,7 @@
 
 use std::collections::BTreeMap;
 
-use orbit_core::api::full_sync_backup_api::{
-    export_full_sync_backup, import_full_sync_backup, query_schema_version,
-};
+use orbit_core::api::full_sync_backup_api::{import_full_sync_backup, query_schema_version};
 use orbit_core::api::full_sync_backup_v2_api::{
     export_v2_to_file, import_v2_bytes, is_v2_backup, peek_v2_meta,
 };
@@ -187,16 +185,17 @@ async fn v2_truncated_backup_is_rejected() {
 }
 
 #[tokio::test]
-async fn v2_export_is_atomic_on_failure() {
-    // 目标目录不可写时不得留下 .tmp 残留
+async fn v2_export_creates_parent_dir_and_leaves_no_tmp_on_success() {
+    // 父目录不存在时自动创建（调用方可能只给文件名），成功路径不留 .tmp
     let src = setup_db().await;
     seed_tasks(&src, 3).await;
     let dir = tmp_dir();
-    let bad = dir.join("no-such-subdir").join("x.orfullsync");
-    let res = export_v2_to_file(&src, &bad, PASSWORD, "dev", None).await;
-    assert!(res.is_err(), "父目录不存在应失败");
-    let tmp = dir.join("no-such-subdir").join("x.orfullsync.tmp");
-    assert!(!tmp.exists(), "失败路径不得留下临时文件");
+    let nested = dir.join("a").join("b").join("x.orfullsync");
+    let res = export_v2_to_file(&src, &nested, PASSWORD, "dev", None).await;
+    assert!(res.is_ok(), "父目录应被自动创建：{:?}", res.err());
+    assert!(nested.exists(), "目标文件应已落位");
+    let tmp = nested.with_file_name("x.orfullsync.tmp");
+    assert!(!tmp.exists(), "成功路径不得留下临时文件");
     std::fs::remove_dir_all(&dir).ok();
 }
 
@@ -246,8 +245,10 @@ async fn v2_peak_memory_does_not_scale_with_row_count() {
 
 #[tokio::test]
 async fn v1_backup_still_importable() {
-    // v1 读路径必须保留：用 v1 导出器产出备份，再用 v1 导入器恢复
-    use orbit_core::api::full_sync_backup_api::BackupOrigin;
+    // v1 读路径必须保留：用 **v1 编码器**直接产出备份（生产导出已切 v2，
+    // 所以这里不走 export_full_sync_backup），再用 v1 导入器恢复。
+    use orbit_core::full_sync_backup::encoder::{EncodeParams, encode_backup};
+    use orbit_core::full_sync_backup::manifest::BackupManifest;
     use orbit_core::sync_crypto::SyncCryptoService;
 
     let src = setup_db().await;
@@ -256,16 +257,39 @@ async fn v1_backup_still_importable() {
     let svc = SyncCryptoService::new(&dir);
     svc.init(PASSWORD).unwrap();
 
-    let exported = export_full_sync_backup(&src, &dir, &svc, BackupOrigin::Manual, None, false)
-        .await
-        .unwrap();
-
-    let bytes = std::fs::read(&exported.file_path).unwrap();
-    assert!(!is_v2_backup(&bytes), "v1 导出不应是 v2 容器");
+    // 手工构造 v1 备份：读两张表 → 编码
+    let mut table_data = BTreeMap::new();
+    for table in ["todo_tasks", "todo_projects"] {
+        let json = business_api::list_records_as_json(&src, table).await.unwrap();
+        table_data.insert(table.to_string(), json);
+    }
+    let mut counts = BTreeMap::new();
+    for (k, v) in &table_data {
+        let n = serde_json::from_str::<Vec<serde_json::Value>>(v).unwrap().len();
+        counts.insert(k.clone(), n);
+    }
+    let schema = query_schema_version(&src).await.unwrap();
+    let manifest = BackupManifest::new(
+        "dev-v1".into(),
+        Some("v1 设备".into()),
+        schema,
+        counts,
+        chrono::Utc::now().timestamp(),
+        "0.1.1".into(),
+    );
+    let schema_json = serde_json::to_string(&serde_json::json!({"version": schema})).unwrap();
+    let encoded = encode_backup(EncodeParams {
+        sync_password: PASSWORD,
+        manifest: &manifest,
+        table_data: &table_data,
+        schema_version_json: &schema_json,
+    })
+    .unwrap();
+    let bytes = encoded.bytes;
+    assert!(!is_v2_backup(&bytes), "v1 编码器产出不应是 v2 容器");
 
     let dst = setup_db().await;
     let result = import_full_sync_backup(&dst, &svc, &bytes, false).await.unwrap();
-    // 全量覆盖：目标表行数 == 备份行数（success_count 是跨表合计，不可直接比）
     let backup_rows = count_tasks(&src).await;
     assert_eq!(result.error_count, 0, "v1 恢复不应报错：{:?}", result.errors);
     assert_eq!(count_tasks(&dst).await, backup_rows);
