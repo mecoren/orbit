@@ -4,6 +4,7 @@
 // 2. 保存筛选器构建器状态含「进行中」，项目/标签按名称多选（不再裸 id 文本框）。
 // 3. 预计时长在常用档之外支持自定义分钟数（对齐桌面数字输入）。
 // 4. 明文导出带「排除已删除条目」开关，JSON / CSV 同口径透传 excludeDeleted。
+// 5. 详情提醒区的「持续」chip 未激活时恒显可点（开启/关闭双向）。
 
 import 'dart:convert';
 
@@ -379,6 +380,48 @@ void main() {
 
     expect(bridge.csvExcludeDeleted, false,
         reason: 'CSV 导出与 JSON 同口径');
+    await drainToastTimers(tester);
+  });
+  testWidgets('详情持续提醒：未激活 chip 恒显，点击可开/可关', (tester) async {
+    final bridge = MockOrbitBridge();
+    final now = DateTime.now().millisecondsSinceEpoch;
+    // 任务 7 无种子提醒：chip 初始必须是「未激活但恒显」形态
+    bridge.store.reminders[900] = {
+      'id': 900,
+      'uuid': 'uuid-reminder-900',
+      'task_id': 7,
+      'remind_at': now + 3600000,
+      'is_constant': 0,
+      'is_deleted': 0,
+      'created_at': now,
+      'updated_at': now,
+      'deleted_at': null,
+      'version': 1,
+    };
+
+    await tester.pumpWidget(_wrap(const DetailScreen(taskId: 7), bridge));
+    await _settle(tester);
+
+    await _scrollTo(tester, find.text('持续'));
+    expect(find.text('持续'), findsOneWidget, reason: '未激活也必须恒显可点');
+    await tester.tap(find.text('持续'));
+    await _settle(tester);
+    expect(
+      bridge.store.reminders.values
+          .where((r) => r['task_id'] == 7 && r['is_constant'] == 1),
+      hasLength(1),
+      reason: '点击未激活 chip 应开启持续提醒',
+    );
+
+    await _scrollTo(tester, find.text('持续'));
+    await tester.tap(find.text('持续'));
+    await _settle(tester);
+    expect(
+      bridge.store.reminders.values
+          .where((r) => r['task_id'] == 7 && r['is_constant'] == 1),
+      isEmpty,
+      reason: '再次点击应关闭持续提醒',
+    );
     await drainToastTimers(tester);
   });
 }

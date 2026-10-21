@@ -408,6 +408,8 @@ class _DetailView extends StatelessWidget {
           repeatEndType: detail.repeatEndType,
           repeatEndParam: detail.repeatEndParam,
           repeatFromDone: detail.repeatFromDone,
+          repeatMonthMode: detail.repeatMonthMode,
+          repeatNthWeek: detail.repeatNthWeek,
           dueDate: detail.dueDate,
           startDate: detail.startDate,
           durationMinutes: detail.durationMinutes,
@@ -1538,6 +1540,8 @@ class _RemindersSection extends ConsumerWidget {
     required this.repeatEndType,
     required this.repeatEndParam,
     required this.repeatFromDone,
+    required this.repeatMonthMode,
+    required this.repeatNthWeek,
     required this.dueDate,
     required this.startDate,
     required this.durationMinutes,
@@ -1554,6 +1558,8 @@ class _RemindersSection extends ConsumerWidget {
   final int repeatEndType;
   final int repeatEndParam;
   final int repeatFromDone;
+  final int repeatMonthMode;
+  final int repeatNthWeek;
 
   /// 提醒相对档的锚定上下文（截止/开始/时长；见 [reminderPresets]）——
   /// 与表单 `_pickReminder` 同口径，相对档是输入便捷层，产物仍是绝对时刻
@@ -1726,33 +1732,47 @@ class _RemindersSection extends ConsumerWidget {
                                     color: colors.secondaryText,
                                   ),
                                 ),
-                                if (reminder.constant) ...[
-                                  const SizedBox(width: AppDimens.space8),
-                                  // 持续提醒徽标（G2）：点按翻转（响了就不停，
-                                  // 直到完成；见 core advance_fired_reminder）
-                                  GestureDetector(
-                                    onTap: () =>
-                                        _toggleConstant(context, ref, reminder),
-                                    child: Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: AppDimens.space4 + 2,
-                                        vertical: 2,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        borderRadius: AppShapes.full,
-                                        color: Colors.orange
-                                            .withValues(alpha: 0.15),
-                                      ),
-                                      child: const Text(
-                                        '持续',
-                                        style: TextStyle(
-                                          fontSize: 10,
-                                          color: Colors.deepOrange,
+                                // 持续提醒徽标：恒显可点（激活警告色、未激活弱化灰）——
+                                // 桌面把开关放在提醒编辑面板，移动端无独立编辑面板，
+                                // 行内 chip 是等价能力的触控形态（能力等价、形态差异）
+                                const SizedBox(width: AppDimens.space8),
+                                Tooltip(
+                                  message: reminder.constant
+                                      ? '关闭持续提醒（未完成则每 5 分钟再提醒）'
+                                      : '开启持续提醒（未完成则每 5 分钟再提醒）',
+                                  child: InkWell(
+                                    borderRadius: AppShapes.full,
+                                    onTap: () => _toggleConstant(
+                                        context, ref, reminder),
+                                    child: SizedBox(
+                                      height: AppDimens.touchTarget,
+                                      child: Center(
+                                        child: Container(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: AppDimens.space8,
+                                            vertical: AppDimens.space4,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            borderRadius: AppShapes.full,
+                                            color: reminder.constant
+                                                ? colors.warning
+                                                    .withValues(alpha: 0.15)
+                                                : colors.surfaceSecondary,
+                                          ),
+                                          child: Text(
+                                            '持续',
+                                            style: TextStyle(
+                                              fontSize: 10,
+                                              color: reminder.constant
+                                                  ? colors.warning
+                                                  : colors.secondaryText,
+                                            ),
+                                          ),
                                         ),
                                       ),
                                     ),
                                   ),
-                                ],
+                                ),
                                 if (repeatMode > 0) ...[
                                   const SizedBox(width: AppDimens.space8),
                                   Container(
@@ -1773,6 +1793,8 @@ class _RemindersSection extends ConsumerWidget {
                                         endType: repeatEndType,
                                         endParam: repeatEndParam,
                                         fromDone: repeatFromDone,
+                                        monthMode: repeatMonthMode,
+                                        nthWeek: repeatNthWeek,
                                       ),
                                       style: TextStyle(
                                         fontSize: 10,

@@ -1007,6 +1007,8 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
                                       endType: _repeatEndType,
                                       endParam: _repeatEndParam,
                                       fromDone: _repeatFromDone ? 1 : 0,
+                                      monthMode: _repeatMonthMode,
+                                      nthWeek: _repeatNthWeek,
                                     ),
                                     onClick: _pickRepeat,
                                   ),
