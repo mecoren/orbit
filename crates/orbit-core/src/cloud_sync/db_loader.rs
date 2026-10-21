@@ -146,6 +146,153 @@ async fn load_table_items_where(
     Ok(items)
 }
 
+/// 外键标记解析器（M4：跨桶复用，避免每个桶都重扫父表）
+///
+/// `_fk` 注入需要「父表 id → uuid」全量映射。此前每个装载调用都各自重读父表；
+/// 改成按桶流式装载后，同一张表要装载 64 个桶，若每桶重读就成了 64 次父表扫描。
+/// 本结构缓存这些映射，一次装载轮内复用。
+///
+/// 有界性：键集是「该表声明的父表」（`sync_registry::fk_columns_of` 的静态集合，
+/// 至多数张），值是父表的 id→uuid 全量映射——与父表行数成正比，但不随桶数增长。
+pub struct FkResolver {
+    parents: HashMap<&'static str, HashMap<i64, String>>,
+}
+
+impl FkResolver {
+    pub fn new() -> Self {
+        Self {
+            parents: HashMap::new(),
+        }
+    }
+
+    /// 确保该表引用的所有父表映射已加载
+    pub async fn ensure(&mut self, pool: &SqlitePool, table: &str) -> Result<(), CloudSyncError> {
+        for (_, parent) in crate::db::sync_registry::fk_columns_of(table) {
+            if self.parents.contains_key(parent) {
+                continue;
+            }
+            self.parents
+                .insert(*parent, load_id_uuid_map(pool, parent).await?);
+        }
+        Ok(())
+    }
+
+    /// 给一批记录注入 `_fk`（口径见 [`load_table_items`] 的文档）
+    fn apply(&self, table: &str, items: &mut [serde_json::Value]) {
+        let fk_cols = crate::db::sync_registry::fk_columns_of(table);
+        if fk_cols.is_empty() {
+            return;
+        }
+        for item in items.iter_mut() {
+            let Some(obj) = item.as_object_mut() else {
+                continue;
+            };
+            let mut mark = serde_json::Map::new();
+            for (col, parent) in fk_cols {
+                if let Some(id) = obj.get(*col).and_then(|v| v.as_i64())
+                    && let Some(uuid) = self.parents.get(parent).and_then(|m| m.get(&id))
+                {
+                    mark.insert(
+                        (*col).to_string(),
+                        serde_json::Value::String(uuid.clone()),
+                    );
+                }
+            }
+            obj.insert(FK_MARK.to_string(), serde_json::Value::Object(mark));
+        }
+    }
+}
+
+impl Default for FkResolver {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// 单表「桶 → 存活行 uuid 清单」（M4 流式装载的索引层）
+///
+/// 只读 `uuid` 一列，不物化整行、不 JSON 化——10k 行的索引成本约等于
+/// `scan_local_buckets` 的量级（几百 KB），换来的是**逐桶物化**：任一时刻
+/// 内存里只有一个桶的行，而不是整表。
+///
+/// 桶归属由 `bucket_of_uuid`（sha256 前 8 hex % 64）决定，SQL 表达不了，
+/// 故索引在 Rust 侧建。
+pub async fn load_table_uuids_by_bucket(
+    pool: &SqlitePool,
+    table: &str,
+) -> Result<BTreeMap<u32, Vec<String>>, CloudSyncError> {
+    if !is_syncable(table) {
+        return Err(CloudSyncError::Database {
+            message: format!("表 {table} 不在同步白名单内"),
+        });
+    }
+    let sql = format!("SELECT uuid FROM \"{table}\" WHERE is_deleted = 0");
+    let uuids: Vec<String> = sqlx::query_scalar(&sql)
+        .fetch_all(pool)
+        .await
+        .map_err(|e| CloudSyncError::Database {
+            message: format!("加载表 {table} 的 uuid 索引失败: {e}"),
+        })?;
+
+    let mut out: BTreeMap<u32, Vec<String>> = BTreeMap::new();
+    for uuid in uuids {
+        out.entry(crate::cloud_sync::chunk::bucket_of_uuid(&uuid))
+            .or_default()
+            .push(uuid);
+    }
+    Ok(out)
+}
+
+/// 装载单表**指定 uuid 集合**并复用已缓存的父表映射（M4 逐桶装载）
+///
+/// 与 [`load_table_items_of`] 行为一致，区别只是 `_fk` 用的父表映射由调用方
+/// 持有的 [`FkResolver`] 提供（跨桶复用）。
+pub async fn load_table_items_of_cached(
+    pool: &SqlitePool,
+    table: &str,
+    uuids: &[String],
+    fk: &FkResolver,
+) -> Result<Vec<serde_json::Value>, CloudSyncError> {
+    if !is_syncable(table) {
+        return Err(CloudSyncError::Database {
+            message: format!("表 {table} 不在同步白名单内"),
+        });
+    }
+    if uuids.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    /// 单批 `IN` 的变量数（与 [`load_table_items_of`] 同口径）
+    const UUID_BATCH: usize = 500;
+
+    let mut rows: Vec<sqlx::sqlite::SqliteRow> = Vec::with_capacity(uuids.len());
+    for batch in uuids.chunks(UUID_BATCH) {
+        let holders = std::iter::repeat_n("?", batch.len())
+            .collect::<Vec<_>>()
+            .join(",");
+        let sql =
+            format!("SELECT * FROM \"{table}\" WHERE is_deleted = 0 AND uuid IN ({holders})");
+        let mut q = sqlx::query(&sql);
+        for uuid in batch {
+            q = q.bind(uuid);
+        }
+        rows.extend(
+            q.fetch_all(pool)
+                .await
+                .map_err(|e| CloudSyncError::Database {
+                    message: format!("按 uuid 加载表 {table} 失败: {e}"),
+                })?,
+        );
+    }
+
+    let mut items: Vec<serde_json::Value> = rows
+        .iter()
+        .map(|row| serde_json::Value::Object(sqlite_row_to_json(row)))
+        .collect();
+    fk.apply(table, &mut items);
+    Ok(items)
+}
+
 /// 本地分桶扫描结果（F41 增量 push 判据的输入）
 #[derive(Debug, Default, Clone)]
 pub struct LocalBucketScan {
@@ -644,6 +791,182 @@ mod tests {
         assert!(
             scan.dirty
                 .contains(&crate::cloud_sync::chunk::bucket_of_uuid("zero"))
+        );
+    }
+
+    // ---------- M4：逐桶装载（索引层 + 缓存父表映射） ----------
+
+    async fn setup_m4_db() -> SqlitePool {
+        let pool = SqlitePool::connect("sqlite::memory:").await.unwrap();
+        sqlx::migrate!("./src/db/migrations")
+            .run(&pool)
+            .await
+            .unwrap();
+        pool
+    }
+
+    /// uuid 索引必须覆盖全部存活行，且按 `bucket_of_uuid` 正确分桶
+    #[tokio::test]
+    async fn uuid_index_groups_live_rows_by_bucket() {
+        let pool = setup_m4_db().await;
+        // 迁移自带种子行，先记基准（断言只针对本用例插入的部分）
+        let seed: i64 =
+            sqlx::query_scalar("SELECT COUNT(*) FROM todo_projects WHERE is_deleted = 0")
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        for (uuid, deleted) in [("a", 0), ("b", 0), ("c", 1)] {
+            sqlx::query(
+                "INSERT INTO todo_projects (uuid, title, is_deleted, created_at, updated_at) \
+                 VALUES (?, ?, ?, 1, 1)",
+            )
+            .bind(uuid)
+            .bind(format!("项目{uuid}"))
+            .bind(deleted)
+            .execute(&pool)
+            .await
+            .unwrap();
+        }
+
+        let index = load_table_uuids_by_bucket(&pool, "todo_projects")
+            .await
+            .unwrap();
+        let all: Vec<&str> = index.values().flatten().map(|s| s.as_str()).collect();
+        assert_eq!(
+            all.len() as i64,
+            seed + 2,
+            "软删行不进索引（与装载口径一致）：种子 {seed} + 本用例 2 条存活"
+        );
+        assert!(!all.contains(&"c"), "墓碑行不得出现在索引里");
+
+        // 每个 uuid 都必须落在 bucket_of_uuid 算出的桶里
+        for (bucket, uuids) in &index {
+            for uuid in uuids {
+                assert_eq!(
+                    *bucket,
+                    crate::cloud_sync::chunk::bucket_of_uuid(uuid),
+                    "桶归属必须与 bucket_of_uuid 同源"
+                );
+            }
+        }
+    }
+
+    /// 逐桶装载（带缓存父表映射）的结果必须与整表装载逐行一致
+    ///
+    /// 这是 M4 唯一不可妥协的性质：拆成 64 桶装载后，每桶内容与合并后的
+    /// 整表载荷必须完全等价（含 `_fk` 注入），否则同步会把云端覆盖成子集。
+    #[tokio::test]
+    async fn per_bucket_load_equals_full_table_load() {
+        let pool = setup_m4_db().await;
+        sqlx::query(
+            "INSERT INTO todo_tasks (uuid, title, created_at, updated_at) VALUES ('t1','T',1,1)",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        let task_id: (i64,) = sqlx::query_as("SELECT id FROM todo_tasks WHERE uuid='t1'")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        for (uuid, pos) in [("s1", 0), ("s2", 1), ("s3", 2)] {
+            sqlx::query(
+                "INSERT INTO todo_subtasks (uuid, task_id, title, position, created_at, updated_at) \
+                 VALUES (?, ?, ?, ?, 1, 1)",
+            )
+            .bind(uuid)
+            .bind(task_id.0)
+            .bind(format!("子{uuid}"))
+            .bind(pos)
+            .execute(&pool)
+            .await
+            .unwrap();
+        }
+
+        // 整表口径（改造前路径，保留为对照）
+        let mut full = load_table_items(&pool, "todo_subtasks").await.unwrap();
+        full.sort_by(|a, b| a["uuid"].as_str().cmp(&b["uuid"].as_str()));
+
+        // 逐桶口径（M4 生产路径）
+        let index = load_table_uuids_by_bucket(&pool, "todo_subtasks")
+            .await
+            .unwrap();
+        let mut fk = FkResolver::new();
+        fk.ensure(&pool, "todo_subtasks").await.unwrap();
+        let mut per_bucket = Vec::new();
+        for uuids in index.values() {
+            per_bucket.extend(
+                load_table_items_of_cached(&pool, "todo_subtasks", uuids, &fk)
+                    .await
+                    .unwrap(),
+            );
+        }
+        per_bucket.sort_by(|a, b| a["uuid"].as_str().cmp(&b["uuid"].as_str()));
+
+        assert_eq!(
+            per_bucket, full,
+            "逐桶装载与整表装载必须逐行等价（含 _fk 注入）"
+        );
+        // _fk 必须真的注入了（否则上面的等价可能因两边都缺而假通过）
+        assert!(
+            per_bucket[0].get(FK_MARK).is_some(),
+            "带外键的表必须注入 _fk"
+        );
+    }
+
+    /// 索引规模只与行数成正比、不随桶数增长（M4 的内存主张）
+    #[tokio::test]
+    async fn bucket_index_is_proportional_to_rows_not_buckets() {
+        let pool = setup_m4_db().await;
+        let seed: i64 =
+            sqlx::query_scalar("SELECT COUNT(*) FROM todo_projects WHERE is_deleted = 0")
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        // 200 行散落各桶：索引条目数必须恰好等于存活行数
+        for i in 0..200 {
+            sqlx::query(
+                "INSERT INTO todo_projects (uuid, title, created_at, updated_at) \
+                 VALUES (?, ?, 1, 1)",
+            )
+            .bind(format!("p{i}"))
+            .bind(format!("项目{i}"))
+            .execute(&pool)
+            .await
+            .unwrap();
+        }
+        let index = load_table_uuids_by_bucket(&pool, "todo_projects")
+            .await
+            .unwrap();
+        let total: usize = index.values().map(|v| v.len()).sum();
+        assert_eq!(
+            total as i64,
+            seed + 200,
+            "索引条目数 == 存活行数（不多也不少）"
+        );
+        assert!(
+            index.len() <= crate::cloud_sync::chunk::TABLE_BUCKET_COUNT as usize,
+            "桶数上限由 TABLE_BUCKET_COUNT 封顶"
+        );
+    }
+
+    /// 空 uuid 清单：不查库、直接返回空（逐桶循环里空桶会走到这里）
+    #[tokio::test]
+    async fn cached_load_of_empty_uuid_set_returns_empty() {
+        let pool = setup_m4_db().await;
+        let fk = FkResolver::new();
+        let items = load_table_items_of_cached(&pool, "todo_subtasks", &[], &fk)
+            .await
+            .unwrap();
+        assert!(items.is_empty());
+    }
+
+    /// 非白名单表必须拒绝（与整表路径同口径）
+    #[tokio::test]
+    async fn uuid_index_rejects_non_syncable_table() {
+        let pool = setup_m4_db().await;
+        assert!(
+            load_table_uuids_by_bucket(&pool, "cfg_options").await.is_err(),
+            "非同步白名单表不得建立装载索引"
         );
     }
 }
