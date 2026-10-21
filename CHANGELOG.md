@@ -16,6 +16,18 @@
 
 ## [Unreleased]
 
+### 性能：移动端备份按路径过桥（M1 移动端层，2026-10-21）
+
+> 移动端恢复此前把整份备份读成 `List<int>` 再过桥：Dart 侧一份、FRB 序列化一份、
+> Rust 侧一份，三份同时驻留——v2 降低的是 Rust 侧峰值，跨桥字节数一份没少。
+
+- **core 按路径入口**：`import_full_sync_backup_from_path` / `peek_backup_preview_from_path` / `peek_full_sync_manifest_from_path`。v2 全程 `BufReader` 逐帧读（峰值 = 一帧明文 + 一帧密文，与体积无关）；v1 因格式所限仍整份读入，但**在 core 内部完成、不过桥**。
+- **v2 按路径 API**：`import_v2_from_path` / `peek_v2_meta_from_path` / `peek_v2_tables_from_path` / `is_v2_backup_path`（只读前 4 字节判 magic）。
+- **单一写库口径**：bytes 与 path 两条导入入口共用同一 `import_frames_into_pool`，避免两套逻辑漂移。
+- **双端桥**：FRB `full_backup_import_path` / `full_backup_peek_path`，Dart 桥与 mock 同口径镜像；移动端恢复页改 `withData:false` + 传路径。
+- **字节版入口保留**（小文件或已持有字节的场景）。
+- **测试**：Rust +3（按路径与按字节导入结果一致 / 按路径 peek / `is_v2_backup_path` 只读 magic），`backup_v2_streaming` 14 绿；移动端桥契约 +5。
+
 ### 性能：云端备份上传流式化（M1 云端层，2026-10-21）
 
 > 接续 v2 流式化。本地路径已解耦，但云端上传仍要 `std::fs::read` 整包再交给适配器
