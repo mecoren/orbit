@@ -5,11 +5,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_dimens.dart';
+import '../../core/theme/app_shapes.dart';
 import '../../core/theme/icon_map.dart';
 import '../../data/api/dto.dart';
 import '../../data/providers/bridge_provider.dart';
 import '../../shared/widgets/shadcn/orbit_page_header.dart';
 import '../../shared/widgets/shadcn/orbit_section_card.dart';
+import '../../shared/widgets/shadcn/orbit_select_sheet.dart';
 
 /// 诊断页 /settings/diagnostics（docs/09 内存专项「应用内诊断分区」）
 ///
@@ -31,6 +33,16 @@ class _DiagnosticsPageState extends ConsumerState<DiagnosticsPage> {
   DiagnosticsSnapshot? _snapshot;
   bool _loading = true;
 
+  /// 本轮会话内观测到的 RSS 峰值（字节）。
+  ///
+  /// **不做后台常驻采样器**（docs/13 §6.2 M5 第 2 点明确要求）：只在用户点
+  /// 「采样」或刷新时更新一次，避免诊断能力本身成为内存负担。峰值是「自进入
+  /// 本页以来的最大观测值」，不是进程历史峰值——后者需要平台侧接口。
+  int? _peakRssBytes;
+
+  /// 最近一次采样时用户标注的场景（写进读数便于对照基线，不上报、不持久化）
+  String _scenario = '未标注';
+
   @override
   void initState() {
     super.initState();
@@ -42,12 +54,53 @@ class _DiagnosticsPageState extends ConsumerState<DiagnosticsPage> {
     try {
       final snapshot =
           await ref.read(orbitBridgeProvider).diagnosticsSnapshot();
-      if (mounted) setState(() => _snapshot = snapshot);
+      if (mounted) {
+        setState(() {
+          _snapshot = snapshot;
+          _recordPeak();
+        });
+      }
     } catch (_) {
       if (mounted) setState(() => _snapshot = null);
     } finally {
       if (mounted) setState(() => _loading = false);
     }
+  }
+
+  /// 记录当前 RSS 并更新本页会话峰值
+  void _recordPeak() {
+    final rss = ProcessInfo.currentRss;
+    final peak = _peakRssBytes;
+    if (peak == null || rss > peak) _peakRssBytes = rss;
+  }
+
+  /// 手动采样一次（M5：诊断页提供「当前/峰值」采样入口）
+  Future<void> _sampleNow() async {
+    setState(() => _recordPeak());
+  }
+
+  /// 选择本次采样对应的场景（六个基线场景之一，便于与 mobile-baselines.json 对照）
+  Future<void> _pickScenario() async {
+    const scenarios = [
+      '未标注',
+      '冷启动',
+      '1 万行列表滚动',
+      '月历切换',
+      '时间轴',
+      '备份往返',
+      '全局搜索',
+    ];
+    await showSelectBottomSheet<String>(
+      context,
+      title: '采样场景',
+      current: _scenario,
+      items: [
+        for (final s in scenarios) SelectItem(value: s, label: s),
+      ],
+      onSelect: (v) async {
+        setState(() => _scenario = v);
+      },
+    );
   }
 
   @override
@@ -138,8 +191,51 @@ class _DiagnosticsPageState extends ConsumerState<DiagnosticsPage> {
                         hint: '含原生库与实际驻留',
                       ),
                       const SizedBox(height: AppDimens.space8),
+                      _reading(
+                        colors,
+                        '本页峰值 RSS',
+                        _peakRssBytes == null
+                            ? '—'
+                            : formatBytes(_peakRssBytes!),
+                        hint: '自进入本页以来的最大观测值（非进程历史峰值）',
+                      ),
+                      const SizedBox(height: AppDimens.space8),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: InkWell(
+                              onTap: _pickScenario,
+                              borderRadius: AppShapes.small,
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                    vertical: AppDimens.space8),
+                                child: Row(
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        '采样场景：$_scenario',
+                                        style: TextStyle(
+                                            fontSize: 13,
+                                            color: colors.bodyText),
+                                      ),
+                                    ),
+                                    Icon(OrbitIcons.chevronRight,
+                                        size: AppDimens.iconSizeSm,
+                                        color: colors.secondaryText),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                          TextButton(
+                            onPressed: _sampleNow,
+                            child: const Text('采样'),
+                          ),
+                        ],
+                      ),
                       Text(
-                        '只读快照，点右上「刷新」重新采集（Rust 侧会重新查询数据库）。',
+                        '只读快照，点右上「刷新」重新采集（Rust 侧会重新查询数据库）。'
+                        '采样不上报、不持久化，仅用于与本机 mobile-baselines.json 对照。',
                         style:
                             TextStyle(fontSize: 11, color: colors.secondaryText),
                       ),

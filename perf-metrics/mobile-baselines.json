@@ -1,0 +1,31 @@
+{
+  "$comment": "移动端内存门禁基线（docs/13 §6.2 M5）。与桌面 baselines.json 同构：thresholds=拦停值（今天必须过），targets=期望值（可以不过），measured=最近一次实测。真机口径走 adb dumpsys meminfo，本机无设备时脚本以「跳过」退出而不是假绿——见 mobile-mem.mjs 的 SKIP 语义。",
+  "$measurement": "采样口径：`adb shell dumpsys meminfo <pkg>` 的 TOTAL PSS（KB）。每个场景冷启动到场景完成，3 次取中位数；每次采样前先 `am force-stop` 保证冷起，避免上一次场景的分配残留。PSS 而非 RSS：Android 上 RSS 会把共享库页重复计入，跨设备不可比。",
+  "$scenarios": "六个场景（M5 §1）：cold_start=启动到首页可交互；list_10k=1 万行列表滚动 20 次；calendar_month=月历切换 3 个月；timeline=时间轴档渲染；backup_roundtrip=备份导出+导入（v2 流式后应与体积解耦）；search=全局搜索 5 次关键词。",
+  "thresholds": {
+    "cold_start_pss_mb": 180,
+    "list_10k_pss_mb": 260,
+    "calendar_month_pss_mb": 220,
+    "timeline_pss_mb": 240,
+    "backup_roundtrip_pss_mb": 300,
+    "search_pss_mb": 230,
+    "list_10k_slope_mb_per_1k": 12
+  },
+  "targets": {
+    "cold_start_pss_mb": 150,
+    "list_10k_pss_mb": 220,
+    "backup_roundtrip_pss_mb": 240
+  },
+  "$rationale": {
+    "cold_start_pss_mb": "未实测前按 Flutter release 空壳（~60MB）+ SQLCipher 库 + Riverpod 首屏估算；首次真机测量后应只紧不松",
+    "list_10k_pss_mb": "10k 行列表在移动端不虚拟化（Flutter ListView.builder 本身是懒构建，但行内 widget 常驻），按每行 ~15KB 估算 + 基线壳",
+    "list_10k_slope_mb_per_1k": "每千行增量 PSS。超此值说明有与行数成正比的常驻集（缓存按参数分叉、整行 DTO 双份等）——与桌面 domNodesSlope_per_1k 同用途",
+    "backup_roundtrip_pss_mb": "M1 v2 流式 + 移动端按路径过桥后，备份峰值应与文件大小解耦；此阈值只允许壳开销 + 单帧",
+    "measuredAt": "占位：待首次有设备时 --record 回写"
+  },
+  "measured": {
+    "$comment": "尚未在真机上测量——M5 的测量前提是有一台连上 adb 的 Android 设备。空对象表示「未测」，脚本 --gate 遇到未测项会以 SKIP 退出（exit 2），不会被读成通过。",
+    "measuredAt": null
+  },
+  "skippedReason": "本机无 Android 设备（adb devices 为空）。M5 的脚本与基线已就位，接上设备后 `node perf-metrics/mobile-mem.mjs --record` 即可填充 measured。"
+}

@@ -60,4 +60,43 @@ void main() {
     expect(formatCount(1234), '1,234');
     expect(formatCount(1000000), '1,000,000');
   });
+
+  // M5 诊断增强：当前/峰值 RSS + 场景标注（docs/13 §6.2 M5 第 2 点）
+  testWidgets('诊断页：渲染本页峰值 RSS 与场景标注行', (tester) async {
+    final bridge = MockOrbitBridge();
+    await tester.pumpWidget(_wrap(bridge));
+    await _settle(tester);
+
+    expect(find.text('本页峰值 RSS'), findsOneWidget);
+    expect(find.textContaining('采样场景：'), findsOneWidget);
+    expect(find.text('采样'), findsOneWidget);
+  });
+
+  testWidgets('诊断页：点采样不崩且峰值保持为已观测最大值', (tester) async {
+    final bridge = MockOrbitBridge();
+    await tester.pumpWidget(_wrap(bridge));
+    await _settle(tester);
+
+    // 连续点两次采样：峰值只增不减，且不应回落到占位符
+    await tester.tap(find.text('采样'));
+    await tester.pump();
+    await tester.tap(find.text('采样'));
+    await tester.pump();
+
+    expect(find.text('本页峰值 RSS'), findsOneWidget);
+    expect(find.text('—'), findsNothing, reason: '采样后峰值应有真实读数');
+  });
+
+  testWidgets('诊断页：场景抽屉可选并回显', (tester) async {
+    final bridge = MockOrbitBridge();
+    await tester.pumpWidget(_wrap(bridge));
+    await _settle(tester);
+
+    await tester.tap(find.textContaining('采样场景：'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('备份往返').last);
+    await tester.pumpAndSettle();
+
+    expect(find.text('采样场景：备份往返'), findsOneWidget);
+  });
 }

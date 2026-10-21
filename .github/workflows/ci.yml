@@ -78,6 +78,11 @@ jobs:
       - name: 内存增长曲线与泄漏门禁
         run: node perf-metrics/growth-curve.mjs --gate
 
+      # M5 代码侧门禁：禁止新增「整文件 List<int> 跨桥」的公开桥接口。
+      # 这类回归不会让任何测试变红，只会让内存悄悄翻倍，故用静态清单拦停。
+      - name: 移动端桥接口整包过桥审计
+        run: node perf-metrics/mobile-bridge-audit.mjs
+
   rust-core:
     runs-on: ubuntu-latest
     steps:

@@ -458,7 +458,10 @@ function createMockConflicts(): MockConflict[] {
 
 const mockConflicts = createMockConflicts();
 
+// 与 Rust 侧 IMPORT_JOB_KEEP_FINISHED 同口径：mock 里任务同步跑完，
+// 每次 start 前先按插入序淘汰最旧的已结束条目。
 /// 可取消导入任务（浏览器 mock：同步跑完并立即置终态）
+// bounded: 最多 8 条已结束任务，超出按结束时间淘汰；运行中不淘汰
 const mockImportJobs = new Map<
   string,
   {
@@ -473,6 +476,16 @@ const mockImportJobs = new Map<
     _preset: string;
   }
 >();
+
+/** 淘汰超量的已结束任务（mock 侧上界，防测试内长跑时 Map 无界增长） */
+function pruneMockImportJobs() {
+  const KEEP = 8;
+  const finished = [...mockImportJobs.entries()].filter(([, j]) => j.finished);
+  const excess = finished.length - KEEP;
+  for (let i = 0; i < excess; i++) {
+    mockImportJobs.delete(finished[i][0]);
+  }
+}
 
 // ---------- 命令实现 ----------
 
@@ -1898,6 +1911,7 @@ const commands: Record<string, (args: any, ctx: Ctx) => unknown> = {
   csv_import_limits: () => ({ max_bytes: 20 * 1024 * 1024, max_rows: 200_000 }),
   // 可取消导入：mock 同步跑完并立即置终态，UI 仍按轮询流程走
   csv_import_job_start: ({ content, preset }: { content: string; preset: string }) => {
+    pruneMockImportJobs();
     const jobId = `import-mock-${Date.now()}`;
     mockImportJobs.set(jobId, {
       job_id: jobId,
