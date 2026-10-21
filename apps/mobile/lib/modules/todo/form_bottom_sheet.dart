@@ -223,6 +223,8 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
   int _priority = 0;
   int? _dueDate;
   String _status = 'pending';
+  /// 编辑态原始状态：保存时据此判断是否跨 done 边界（跨边界走完成引擎）
+  String _originalStatus = 'pending';
   int? _startDate;
   int? _remindAt;
   /// 预计时长（分钟，M9 阶段一）；null = 未设置
@@ -353,6 +355,7 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
         _priority = task.priority;
         _dueDate = task.dueDate;
         _status = task.status;
+        _originalStatus = task.status;
         _startDate = task.startDate;
         _repeatMode = task.repeatMode;
         _repeatAfter = task.repeatAfter;
@@ -400,6 +403,8 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
             : 0;
     final repeatMonthMode = repeatMode == rep.RepeatMode.monthly && nthOn ? rep.RepeatMonthMode.nth : 0;
     final repeatNthWeek = repeatMode == rep.RepeatMode.monthly && nthOn ? _repeatNthWeek : 0;
+    // 完成引擎推进出的下一期 due（新建/编辑两条路径共用，成功后弹提示）
+    int? nextDueMs;
     try {
       final bridge = ref.read(orbitBridgeProvider);
       if (widget.editingTaskId == null) {
@@ -412,12 +417,14 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
         // （NLP 词/快捷胶囊/日历）均只表达日期、无时刻位，统一落 18 点
         final inDueView = widget.quickView == QuickViewKey.today ||
             widget.quickView == QuickViewKey.week;
+        // 新建即完成：先落非完成态再走完成引擎——直接写 status=done 只会
+        // 得到 done=0 的不一致行，且重复任务不会推进下一期（G11 同口径）
         final created = await bridge.todoTaskCreate(TodoTaskCreateInput(
           title: title,
           description: description.isEmpty ? null : description,
           projectId: _projectId,
           priority: _priority,
-          status: _status,
+          status: _status == 'done' ? 'pending' : _status,
           dueDate: inDueView && _dueDate != null ? atViewDueHour(_dueDate!) : _dueDate,
           startDate: _startDate,
           repeatMode: repeatMode,
@@ -474,7 +481,23 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
                 TodoSubtaskCreateInput(taskId: created.id, title: title));
           } catch (_) {}
         }
+        // 新建即完成：子任务/标签/提醒挂载完再走完成引擎（重复任务生成的
+        // 下一期才能承接子任务与提醒；直接写 status=done 会丢下一期）
+        if (_status == 'done') {
+          try {
+            final res = await bridge.todoTaskComplete(created.id);
+            nextDueMs = res.nextInstance?.dueDate;
+          } catch (_) {
+            if (mounted) {
+              WaitToast.destructive('任务已创建，但标记完成失败，请手动勾选完成');
+            }
+          }
+        }
       } else {
+        // 状态跨 done 边界：完成必须走 todoTaskComplete（重复任务由 core
+        // 单事务推进下一实例）；切回未完成要同时清 done/done_at
+        final becomesDone = _status == 'done' && _originalStatus != 'done';
+        final uncomplete = _originalStatus == 'done' && _status != 'done';
         await bridge.todoTaskUpdate(
           widget.editingTaskId!,
           encodePatch({
@@ -482,7 +505,9 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
             'description': description.isEmpty ? null : description,
             'project_id': _projectId,
             'priority': _priority,
-            'status': _status,
+            if (!becomesDone) 'status': _status,
+            if (uncomplete) 'done': 0,
+            if (uncomplete) 'done_at': null,
             'due_date': _dueDate,
             'start_date': _startDate,
             'repeat_mode': repeatMode,
@@ -496,7 +521,8 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
             'duration_minutes': _durationMinutes,
           }),
         );
-        // 编辑：提醒按"清空删/变更删旧建新/未动跳过"同步
+        // 编辑：提醒按"清空删/变更删旧建新/未动跳过"同步（先于完成引擎，
+        // 下一期承接的是本次修改后的提醒时刻）
         await syncTaskReminder(
           bridge,
           widget.editingTaskId!,
@@ -504,10 +530,26 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
           _existingReminder,
           isConstant: _remindConstant ? 1 : 0,
         );
+        if (becomesDone) {
+          try {
+            final res = await bridge.todoTaskComplete(widget.editingTaskId!);
+            nextDueMs = res.nextInstance?.dueDate;
+          } catch (_) {
+            // 普通字段已落库；完成未生效时明确提示，避免误以为整单保存失败
+            if (mounted) {
+              WaitToast.destructive('字段已保存，但完成状态未生效，请重试');
+            }
+          }
+        }
       }
       ref.invalidate(todoTasksProvider);
       ref.invalidate(taskDetailProvider);
-      if (mounted) Navigator.of(context).pop();
+      if (mounted) {
+        if (nextDueMs != null) {
+          WaitToast.success('已完成，已生成下一期：${rep.formatCnDate(nextDueMs)}');
+        }
+        Navigator.of(context).pop();
+      }
     } catch (_) {
       WaitToast.destructive('保存失败');
     } finally {

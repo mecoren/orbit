@@ -117,6 +117,32 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
     }
   }
 
+  /// 状态选择统一出口（对齐桌面详情状态设置器）：切到「已完成」必须走
+  /// `todoTaskComplete`——普通 update 只落 status/done，重复任务不会推进
+  /// 下一实例；从已完成切回未完成走普通 patch（清 done/done_at）。
+  Future<void> _setStatus(TodoTaskDetail detail, String status) async {
+    final id = widget.taskId;
+    if (id == null) return;
+    if (status == 'done' && !detail.isDone) {
+      try {
+        final res = await ref.read(orbitBridgeProvider).todoTaskComplete(id);
+        if (!mounted) return;
+        ref.invalidate(todoTasksProvider);
+        ref.invalidate(taskDetailProvider(id));
+        final next = res.nextInstance;
+        if (next != null && next.dueDate != null) {
+          WaitToast.success('已完成，已生成下一期：${rep.formatCnDate(next.dueDate!)}');
+        }
+      } catch (_) {
+        WaitToast.destructive('更新失败');
+      }
+      return;
+    }
+    // 已完成 → 待办/进行中不能走 done 翻转补丁（它固定回落 pending）；
+    // 统一落目标状态并清完成戳
+    return _patchTask(buildStatusPatch(status));
+  }
+
   // ── 页头 ⋮ 任务级动作（对齐桌面详情标题行 Sunrise/Star/Copy/Trash 四枚钮；
   //    移动端收进弹层，与列表长按菜单同族——四枚图标并排会把标题挤到半行，
   //    列表页视图/筛选/排序收 ⋮ 是同款既有决策）──
@@ -236,6 +262,7 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
                       scrollController: _scrollController,
                       onPatch: _patchTask,
                       onToggleDone: _toggleDone,
+                      onSetStatus: _setStatus,
                       onRefresh: _refreshDetail,
                     ),
                   ),
@@ -333,6 +360,7 @@ class _DetailView extends StatelessWidget {
     required this.scrollController,
     required this.onPatch,
     required this.onToggleDone,
+    required this.onSetStatus,
     required this.onRefresh,
   });
 
@@ -340,6 +368,7 @@ class _DetailView extends StatelessWidget {
   final ScrollController scrollController;
   final Future<void> Function(Map<String, Object?> patch) onPatch;
   final Future<void> Function(TodoTask task) onToggleDone;
+  final Future<void> Function(TodoTaskDetail detail, String status) onSetStatus;
   final VoidCallback onRefresh;
 
   @override
@@ -358,7 +387,11 @@ class _DetailView extends StatelessWidget {
         // 十区块固定顺序（docs/05 §4.3）
         _TitleSection(detail: detail, onPatch: onPatch, onToggleDone: onToggleDone),
         const SizedBox(height: AppDimens.space12),
-        _InfoSection(detail: detail, onPatch: onPatch),
+        _InfoSection(
+          detail: detail,
+          onPatch: onPatch,
+          onSetStatus: onSetStatus,
+        ),
         const SizedBox(height: AppDimens.space12),
         _DescriptionSection(detail: detail, onPatch: onPatch),
         const SizedBox(height: AppDimens.space12),
@@ -496,10 +529,15 @@ class _TitleSectionState extends State<_TitleSection> {
 // ── 二、基本信息 ──
 
 class _InfoSection extends ConsumerWidget {
-  const _InfoSection({required this.detail, required this.onPatch});
+  const _InfoSection({
+    required this.detail,
+    required this.onPatch,
+    required this.onSetStatus,
+  });
 
   final TodoTaskDetail detail;
   final Future<void> Function(Map<String, Object?> patch) onPatch;
+  final Future<void> Function(TodoTaskDetail detail, String status) onSetStatus;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -554,8 +592,8 @@ class _InfoSection extends ConsumerWidget {
                   ),
               ],
               current: detail.status,
-              // 选 done 自动补 done_at，切走清空（buildStatusPatch 同源语义）
-              onSelect: (v) => onPatch(buildStatusPatch(v)),
+              // done 走完成引擎（重复任务推进下一实例），其余走普通 patch
+              onSelect: (v) => onSetStatus(detail, v),
             ),
           ),
           InfoTile(

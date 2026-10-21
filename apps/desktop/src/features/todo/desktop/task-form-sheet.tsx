@@ -14,6 +14,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { Tag as TagIcon, X } from "lucide-react";
+import { toast } from "sonner";
 
 import { EntityFormSheet } from "@/components/business/entity-form-sheet";
 import { DatePicker } from "@/components/business/date-picker";
@@ -34,6 +35,7 @@ import {
   todoReminderDelete,
   todoReminderList,
   todoSubtaskCreate,
+  todoTaskComplete,
   todoTaskCreate,
   todoTaskLabelCreate,
   todoTaskUpdate,
@@ -48,6 +50,7 @@ import {
   REPEAT_NTH_LAST,
   REPEAT_PRESETS,
   WEEKDAY_CHIPS,
+  formatCnDate,
   nextRepeatLabel,
   repeatLabel,
 } from "../shared/repeat";
@@ -900,8 +903,18 @@ export function TaskFormSheet({
     const remindConstant = values.remind_constant ? 1 : 0;
 
     if (task) {
-      await todoTaskUpdate(task.id, payload);
-      // 同步提醒实体：清空→删；变更（时刻或持续标记）→删旧建新；未动→跳过
+      // 状态跨 done 边界必须走完成引擎：普通 update 只写 status/done，
+      // 重复任务不会推进下一实例（移动端 G11 同口径，双端统一）
+      const becomesDone = payload.status === "done" && task.done !== 1;
+      const uncomplete = task.done === 1 && payload.status !== "done";
+      const { status: nextStatus, ...restPayload } = payload;
+      await todoTaskUpdate(task.id, {
+        ...restPayload,
+        ...(becomesDone ? {} : { status: nextStatus }),
+        ...(uncomplete ? { done: 0, done_at: null } : {}),
+      });
+      // 同步提醒实体：清空→删；变更（时刻或持续标记）→删旧建新；未动→跳过。
+      // 放在完成引擎之前：下一期承接的是本次修改后的提醒时刻。
       const old = existingReminder;
       const constantChanged = old ? (old.is_constant === 1) !== (remindConstant === 1) : false;
       if (remindMs == null || Number.isNaN(remindMs)) {
@@ -914,6 +927,18 @@ export function TaskFormSheet({
           is_constant: remindConstant,
         });
       }
+      if (becomesDone) {
+        try {
+          const res = await todoTaskComplete(task.id);
+          const nextDue = res.next_instance?.due_date;
+          if (nextDue != null) {
+            toast.success(`已完成，已生成下一期：${formatCnDate(nextDue)}`);
+          }
+        } catch {
+          // 普通字段已落库；完成未生效时明确提示，避免误以为整单保存失败
+          toast.error("字段已保存，但完成状态未生效，请重试");
+        }
+      }
     } else {
       // 视图标记静默附加（#39）：我的一天/收藏视图下新建自动带标记
       //（表单无对应字段，用户取消可在列表行 Sunrise/星标一键解除）；
@@ -922,8 +947,11 @@ export function TaskFormSheet({
       // 纯日期型（落零点），视图内填的日期统一挪到 18 点
       const viewDefaults = quickViewCreateDefaults(quickView);
       const inDueView = quickView === "today" || quickView === "week";
+      // 新建即完成：先落非完成态再走完成引擎——直接写 status=done 只会得到
+      // done=0 的不一致行，且重复任务不会推进下一期
       const created = await todoTaskCreate({
         ...payload,
+        status: payload.status === "done" ? "pending" : payload.status,
         ...(inDueView &&
           payload.due_date != null && { due_date: atViewDueHour(payload.due_date) }),
         ...(viewDefaults.myDayMs != null && { my_day_date: viewDefaults.myDayMs }),
@@ -953,6 +981,19 @@ export function TaskFormSheet({
       // 子任务：逐条创建（percent_done 由后端按完成度回算）
       for (const title of subtaskTitles) {
         await todoSubtaskCreate({ task_id: created.id, title });
+      }
+      // 新建即完成：子任务/标签/提醒挂载完再走完成引擎（重复任务生成的
+      // 下一期才能承接子任务与提醒）
+      if (payload.status === "done") {
+        try {
+          const res = await todoTaskComplete(created.id);
+          const nextDue = res.next_instance?.due_date;
+          if (nextDue != null) {
+            toast.success(`已完成，已生成下一期：${formatCnDate(nextDue)}`);
+          }
+        } catch {
+          toast.error("任务已创建，但标记完成失败，请手动勾选完成");
+        }
       }
     }
   };
