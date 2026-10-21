@@ -25,6 +25,7 @@ pub mod encoder;
 pub mod error;
 pub mod manifest;
 pub mod scheduler;
+pub mod v2;
 
 pub use backup_naming::{
     FILE_EXTENSION, FILE_PREFIX, LEGACY_FILE_EXTENSIONS, generate_backup_filename,
