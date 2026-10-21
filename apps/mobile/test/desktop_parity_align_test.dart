@@ -3,6 +3,7 @@
 //    不得用普通 update 绕过引擎；新建即完成同理（不能只写 status=done 而 done=0）。
 // 2. 保存筛选器构建器状态含「进行中」，项目/标签按名称多选（不再裸 id 文本框）。
 // 3. 预计时长在常用档之外支持自定义分钟数（对齐桌面数字输入）。
+// 4. 明文导出带「排除已删除条目」开关，JSON / CSV 同口径透传 excludeDeleted。
 
 import 'dart:convert';
 
@@ -12,6 +13,8 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:orbit/data/api/mock_orbit_bridge.dart';
 import 'package:orbit/data/providers/bridge_provider.dart';
+import 'package:orbit/data/api/orbit_bridge.dart' show PlaintextExportResult;
+import 'package:orbit/modules/settings/settings_screen.dart';
 import 'package:orbit/modules/todo/detail_screen.dart';
 import 'package:orbit/modules/todo/form_bottom_sheet.dart';
 import 'package:orbit/modules/todo/saved_filters_screen.dart';
@@ -78,6 +81,57 @@ List<Map<String, dynamic>> _spawnedOf(
             t['is_deleted'] == 0)
           t,
     ];
+
+/// 设置页目标滚进「页头之下、视口下沿之上」的可点区（页头浮层会吃掉贴顶点击）
+Future<void> _scrollSettingsTo(WidgetTester tester, Finder finder) async {
+  final scrollable = find.byType(ListView).first;
+  for (var i = 0; i < 24 && finder.evaluate().isEmpty; i++) {
+    await tester.drag(scrollable, const Offset(0, -220));
+    await tester.pumpAndSettle();
+  }
+  for (var i = 0; i < 12; i++) {
+    final rect = tester.getRect(finder);
+    if (rect.top >= 80 && rect.bottom <= 580) break;
+    await tester.drag(scrollable, Offset(0, rect.top < 80 ? 120 : -100));
+    await tester.pumpAndSettle();
+  }
+}
+
+/// 打开导出确认抽屉 → 关闭「排除已删除条目」→ 确认（JSON/CSV 共用）
+Future<void> _exportWithoutDeleted(WidgetTester tester, String entry) async {
+  await _scrollSettingsTo(tester, find.text(entry));
+  await tester.tap(find.text(entry));
+  await tester.pumpAndSettle();
+
+  expect(find.text('排除已删除条目'), findsOneWidget);
+  await tester.tap(find.text('排除已删除条目'));
+  await tester.pumpAndSettle();
+  await tester.tap(find.text('继续'));
+  await _settle(tester);
+}
+
+class _SpyExportBridge extends MockOrbitBridge {
+  bool? jsonExcludeDeleted;
+  bool? csvExcludeDeleted;
+
+  // 只验参数透传：落盘走真实 dart:io，在 widget 测试假时钟下不会完成，
+  // 记录参数后即中断（页面会走失败 toast，不影响断言）
+  @override
+  Future<PlaintextExportResult> plaintextExportJson({
+    bool excludeDeleted = true,
+  }) async {
+    jsonExcludeDeleted = excludeDeleted;
+    throw Exception('spy-stop-before-file-io');
+  }
+
+  @override
+  Future<PlaintextExportResult> plaintextExportCsv({
+    bool excludeDeleted = true,
+  }) async {
+    csvExcludeDeleted = excludeDeleted;
+    throw Exception('spy-stop-before-file-io');
+  }
+}
 
 void main() {
   group('完成引擎接入（状态切到已完成）', () {
@@ -303,5 +357,28 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('25m'), findsOneWidget);
+  });
+  testWidgets('明文导出 JSON：关闭「排除已删除条目」→ 桥参数为 false', (tester) async {
+    final bridge = _SpyExportBridge();
+    await tester.pumpWidget(_wrap(const SettingsScreen(), bridge));
+    await _settle(tester);
+
+    await _exportWithoutDeleted(tester, '导出 JSON');
+
+    expect(bridge.jsonExcludeDeleted, false,
+        reason: '开关关闭后应导出墓碑记录');
+    await drainToastTimers(tester);
+  });
+
+  testWidgets('明文导出 CSV：开关同样透传 excludeDeleted=false', (tester) async {
+    final bridge = _SpyExportBridge();
+    await tester.pumpWidget(_wrap(const SettingsScreen(), bridge));
+    await _settle(tester);
+
+    await _exportWithoutDeleted(tester, '导出 CSV');
+
+    expect(bridge.csvExcludeDeleted, false,
+        reason: 'CSV 导出与 JSON 同口径');
+    await drainToastTimers(tester);
   });
 }

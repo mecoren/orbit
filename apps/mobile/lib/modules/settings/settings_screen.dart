@@ -142,12 +142,22 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     // ICS：日历订阅用途的独立处理链（导出到外部日历软件本就是目的；
     // 不走明文确认弹窗——日历文件语义上就是给外部消费的）
     if (kind == 'ics') return _exportIcs();
-    // 二次确认：明示未加密属性
+    // 二次确认：明示未加密属性；排除已删除（墓碑）开关对齐桌面导出弹窗
+    var excludeDeleted = true;
     final confirmed = await showConfirmBottomSheet(
       context,
       title: '导出明文数据',
       message: '导出内容为未加密明文，任何拿到该文件的人都能读取。确定继续？',
       confirmLabel: '继续',
+      content: StatefulBuilder(
+        builder: (ctx, setSheet) => SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          title: const Text('排除已删除条目'),
+          subtitle: const Text('不导出回收站中的墓碑记录'),
+          value: excludeDeleted,
+          onChanged: (v) => setSheet(() => excludeDeleted = v),
+        ),
+      ),
     );
     if (!confirmed) return;
 
@@ -155,8 +165,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     try {
       final bridge = ref.read(orbitBridgeProvider);
       final result = kind == 'json'
-          ? await bridge.plaintextExportJson()
-          : await bridge.plaintextExportCsv();
+          ? await bridge.plaintextExportJson(excludeDeleted: excludeDeleted)
+          : await bridge.plaintextExportCsv(excludeDeleted: excludeDeleted);
 
       final docs = await getApplicationDocumentsDirectory();
       final exportsDir = Directory('${docs.path}${Platform.pathSeparator}exports');
