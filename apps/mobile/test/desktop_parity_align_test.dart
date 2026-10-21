@@ -1,6 +1,9 @@
 // 双端对齐第三批交叉验证（docs/07 #87 / docs/12 §4.3）：
 // 1. 详情/表单把状态切到「已完成」必须走 todoTaskComplete（重复任务推进下一实例），
 //    不得用普通 update 绕过引擎；新建即完成同理（不能只写 status=done 而 done=0）。
+// 2. 保存筛选器构建器状态含「进行中」，项目/标签按名称多选（不再裸 id 文本框）。
+
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -10,6 +13,7 @@ import 'package:orbit/data/api/mock_orbit_bridge.dart';
 import 'package:orbit/data/providers/bridge_provider.dart';
 import 'package:orbit/modules/todo/detail_screen.dart';
 import 'package:orbit/modules/todo/form_bottom_sheet.dart';
+import 'package:orbit/modules/todo/saved_filters_screen.dart';
 import 'package:orbit/shared/widgets/shadcn/orbit_info_row.dart';
 
 import 'support/orbit_test_app.dart';
@@ -199,5 +203,72 @@ void main() {
       expect(created['done_at'], isNotNull);
       await drainToastTimers(tester);
     });
+  });
+  testWidgets('保存筛选器：状态含进行中，项目/标签按名称多选落白名单',
+      (tester) async {
+    final bridge = MockOrbitBridge();
+    await tester.pumpWidget(_wrap(const SavedFiltersScreen(), bridge));
+    await _settle(tester);
+
+    await tester.tap(find.byType(FloatingActionButton));
+    await tester.pumpAndSettle();
+
+    // 状态：全部 → 进行中（中文回显）
+    await tester.tap(find.text('状态：全部'));
+    await tester.pumpAndSettle();
+    expect(find.text('进行中'), findsWidgets);
+    await tester.tap(find.text('进行中').last);
+    await tester.pumpAndSettle();
+    expect(find.text('状态：进行中'), findsOneWidget);
+
+    // 项目行：按名称多选（不再要求用户输入数据库 id）
+    final sheetScroll = find
+        .descendant(
+          of: find.byType(BottomSheet),
+          matching: find.byType(SingleChildScrollView),
+        )
+        .first;
+    await tester.dragUntilVisible(
+      find.text('项目：不限'),
+      sheetScroll,
+      const Offset(0, -150),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('项目：不限'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('工作'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('确定'));
+    await tester.pumpAndSettle();
+    expect(find.text('项目：工作'), findsOneWidget);
+
+    // 标签行：同样按名称多选（种子标签「紧急」）
+    await tester.dragUntilVisible(
+      find.text('标签：不限'),
+      sheetScroll,
+      const Offset(0, -120),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('标签：不限'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('紧急'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('确定'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('标签：紧急'), findsOneWidget);
+
+    await tester.enterText(find.byType(TextField).first, '进行中工作视图');
+    await tester.tap(find.text('创建'));
+    await _settle(tester);
+
+    final saved = bridge.store.savedFilters.single;
+    expect(saved.name, '进行中工作视图');
+    final cond = jsonDecode(saved.conditions) as Map<String, dynamic>;
+    final labelId = bridge.store.labels.values
+        .firstWhere((l) => l['title'] == '紧急')['id'] as int;
+    expect(cond['status'], 'doing');
+    expect(cond['project_ids'], [1]);
+    expect(cond['label_ids'], [labelId]);
+    await drainToastTimers(tester);
   });
 }

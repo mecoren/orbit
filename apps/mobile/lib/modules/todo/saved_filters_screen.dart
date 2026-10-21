@@ -61,6 +61,91 @@ class _SavedFiltersScreenState extends ConsumerState<SavedFiltersScreen> {
     super.dispose();
   }
 
+  /// 筛选条件多选抽屉（项目/标签按名称勾选；返回 null = 取消）
+  Future<Set<int>?> _pickFilterIds(
+    BuildContext context, {
+    required String title,
+    required List<({int id, String title, String hexColor})> items,
+    required Set<int> selected,
+  }) async {
+    if (items.isEmpty) {
+      WaitToast.info('暂无可选项');
+      return null;
+    }
+    final colors = AppColors.ofContext(context);
+    final picked = {...selected};
+    final confirmed = await showModalBottomSheet<bool>(
+      context: context,
+      useRootNavigator: true,
+      isScrollControlled: true,
+      backgroundColor: colors.popup,
+      shape: bottomSheetTopShape,
+      builder: (sheetCtx) => StatefulBuilder(
+        builder: (ctx, setSheet) => OrbitSheetScaffold(
+          title: title,
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              for (final item in items)
+                InkWell(
+                  onTap: () => setSheet(() {
+                    picked.contains(item.id)
+                        ? picked.remove(item.id)
+                        : picked.add(item.id);
+                  }),
+                  child: SizedBox(
+                    height: AppDimens.touchTarget,
+                    child: Row(
+                      children: [
+                        Icon(
+                          picked.contains(item.id)
+                              ? OrbitIcons.success
+                              : OrbitIcons.circle,
+                          size: AppDimens.iconSizeMd,
+                          color: picked.contains(item.id)
+                              ? OrbitAccents.todoAccent
+                              : colors.secondaryText,
+                        ),
+                        const SizedBox(width: AppDimens.space12),
+                        Container(
+                          width: AppDimens.colorDotSize,
+                          height: AppDimens.colorDotSize,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: hexToColor(item.hexColor),
+                          ),
+                        ),
+                        const SizedBox(width: AppDimens.space8),
+                        Expanded(
+                          child: Text(
+                            item.title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 15,
+                              color: colors.bodyText,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          actions: OrbitSheetActions(
+            cancelLabel: '取消',
+            onCancel: () => Navigator.pop(sheetCtx),
+            confirmLabel: '确定',
+            onConfirm: () => Navigator.pop(sheetCtx, true),
+          ),
+        ),
+      ),
+    );
+    if (confirmed != true) return null;
+    return picked;
+  }
+
   /// 十四键可视化构建抽屉（新建 + 更新共用；替代手写条件文本框）
   ///
   /// 十四键：status / priority_min / project_ids / label_ids /
@@ -87,16 +172,20 @@ class _SavedFiltersScreenState extends ConsumerState<SavedFiltersScreen> {
     } catch (_) {}
     String? status = init['status'] as String?;
     int priorityMin = (init['priority_min'] as num?)?.toInt() ?? 0;
-    final projectCtl = TextEditingController(
-      text: init['project_ids'] is List
-          ? (init['project_ids'] as List).join(',')
-          : '',
-    );
-    final labelCtl = TextEditingController(
-      text: init['label_ids'] is List
-          ? (init['label_ids'] as List).join(',')
-          : '',
-    );
+    List<TodoProject> projects = const [];
+    List<TodoLabel> labels = const [];
+    try {
+      projects = await ref.read(todoProjectsProvider.future);
+      labels = await ref.read(todoLabelsProvider.future);
+    } catch (_) {}
+    final projectIds = <int>{
+      for (final v in (init['project_ids'] as List? ?? const []))
+        if (v is num) v.toInt(),
+    };
+    final labelIds = <int>{
+      for (final v in (init['label_ids'] as List? ?? const []))
+        if (v is num) v.toInt(),
+    };
     final withinCtl = TextEditingController(
       text: init['due_within_days']?.toString() ?? '',
     );
@@ -110,15 +199,16 @@ class _SavedFiltersScreenState extends ConsumerState<SavedFiltersScreen> {
     bool? hasAttachment = init['has_attachment'] as bool?;
     bool? hasOpenSubtask = init['has_open_subtask'] as bool?;
 
-    List<int>? parseIds(String raw) {
-      final ids = <int>[];
-      for (final part in raw.split(',')) {
-        final v = int.tryParse(part.trim());
-        if (v != null) ids.add(v);
-      }
-      return ids.isEmpty ? null : ids;
+    String idsSummary(Set<int> ids, List<({int id, String title})> all) {
+      if (ids.isEmpty) return '不限';
+      final names = [
+        for (final item in all)
+          if (ids.contains(item.id)) item.title,
+      ];
+      return names.isEmpty ? '已选 ${ids.length} 项' : names.join('、');
     }
 
+    if (!mounted) return;
     final saved = await showModalBottomSheet<bool>(
       context: context,
       useRootNavigator: true,
@@ -153,6 +243,7 @@ class _SavedFiltersScreenState extends ConsumerState<SavedFiltersScreen> {
                     items: const [
                       SelectItem(value: null, label: '全部状态'),
                       SelectItem(value: 'pending', label: '待办'),
+                      SelectItem(value: 'doing', label: '进行中'),
                       SelectItem(value: 'done', label: '已完成'),
                     ],
                     onSelect: (v) => setSheet(() => status = v),
@@ -161,7 +252,7 @@ class _SavedFiltersScreenState extends ConsumerState<SavedFiltersScreen> {
                     children: [
                       Expanded(
                         child: Text(
-                          '状态：${status ?? '全部'}',
+                          '状态：${status == null ? '全部' : statusLabel(status!)}',
                           style: TextStyle(
                             fontSize: 15,
                             color: colors.bodyText,
@@ -245,18 +336,94 @@ class _SavedFiltersScreenState extends ConsumerState<SavedFiltersScreen> {
                 colors: colors,
                 onPick: (v) => setSheet(() => doneFrom = v),
               ),
-              TextField(
-                controller: projectCtl,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(
-                  labelText: '项目 id（逗号分隔，留空不限）',
+              // 项目 / 标签：按名称多选（对齐桌面 chips 选择器；原裸 id 文本框
+              // 要求用户自己查数据库 id，移动端不可用）
+              SizedBox(
+                height: AppDimens.touchTarget,
+                child: InkWell(
+                  onTap: () async {
+                    final picked = await _pickFilterIds(
+                      ctx,
+                      title: '筛选项目',
+                      items: [
+                        for (final p in projects)
+                          (id: p.id, title: p.title, hexColor: p.hexColor),
+                      ],
+                      selected: projectIds,
+                    );
+                    if (picked == null) return;
+                    setSheet(() {
+                      projectIds
+                        ..clear()
+                        ..addAll(picked);
+                    });
+                  },
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          '项目：${idsSummary(projectIds, [
+                            for (final p in projects)
+                              (id: p.id, title: p.title),
+                          ])}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 15,
+                            color: colors.bodyText,
+                          ),
+                        ),
+                      ),
+                      Icon(
+                        OrbitIcons.chevronRight,
+                        color: colors.secondaryText,
+                      ),
+                    ],
+                  ),
                 ),
               ),
-              TextField(
-                controller: labelCtl,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(
-                  labelText: '标签 id（逗号分隔，留空不限）',
+              SizedBox(
+                height: AppDimens.touchTarget,
+                child: InkWell(
+                  onTap: () async {
+                    final picked = await _pickFilterIds(
+                      ctx,
+                      title: '筛选标签',
+                      items: [
+                        for (final l in labels)
+                          (id: l.id, title: l.title, hexColor: l.hexColor),
+                      ],
+                      selected: labelIds,
+                    );
+                    if (picked == null) return;
+                    setSheet(() {
+                      labelIds
+                        ..clear()
+                        ..addAll(picked);
+                    });
+                  },
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          '标签：${idsSummary(labelIds, [
+                            for (final l in labels)
+                              (id: l.id, title: l.title),
+                          ])}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 15,
+                            color: colors.bodyText,
+                          ),
+                        ),
+                      ),
+                      Icon(
+                        OrbitIcons.chevronRight,
+                        color: colors.secondaryText,
+                      ),
+                    ],
+                  ),
                 ),
               ),
               SwitchListTile(
@@ -309,9 +476,9 @@ class _SavedFiltersScreenState extends ConsumerState<SavedFiltersScreen> {
     final cond = <String, dynamic>{};
     if (status != null) cond['status'] = status;
     if (priorityMin > 0) cond['priority_min'] = priorityMin;
-    final pids = parseIds(projectCtl.text);
+    final pids = projectIds.isEmpty ? null : projectIds.toList();
     if (pids != null) cond['project_ids'] = pids;
-    final lids = parseIds(labelCtl.text);
+    final lids = labelIds.isEmpty ? null : labelIds.toList();
     if (lids != null) cond['label_ids'] = lids;
     final within = int.tryParse(withinCtl.text.trim());
     // 日期互斥：截止区间与「天内截止/已逾期」叠加恒无命中——区间优先，
