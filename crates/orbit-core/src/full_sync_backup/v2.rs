@@ -192,8 +192,7 @@ impl<W: Write> FrameWriter<W> {
         let seq = self.seq;
         let nonce = frame_nonce(&self.nonce_base, seq);
         let aad = frame_aad(seq);
-        let ciphertext =
-            aes_gcm_encrypt_with_aad(&self.key, &self.buf, &nonce, &aad)?;
+        let ciphertext = aes_gcm_encrypt_with_aad(&self.key, &self.buf, &nonce, &aad)?;
 
         self.inner.write_all(&seq.to_be_bytes())?;
         self.inner
@@ -351,7 +350,10 @@ pub fn write_records<W: Write>(
 }
 
 /// 帧明文流按行切回 JSON 记录（与 [`write_records`] 配对）
-pub fn read_records<F>(frames: impl Iterator<Item = FullSyncBackupResult<Vec<u8>>>, mut on_record: F) -> FullSyncBackupResult<usize>
+pub fn read_records<F>(
+    frames: impl Iterator<Item = FullSyncBackupResult<Vec<u8>>>,
+    mut on_record: F,
+) -> FullSyncBackupResult<usize>
 where
     F: FnMut(serde_json::Value) -> FullSyncBackupResult<()>,
 {
@@ -385,7 +387,8 @@ where
 }
 
 /// 表名 → 记录迭代器（导出侧用；由调用方提供分页读）
-pub type TableRecordStream<'a> = Box<dyn Iterator<Item = FullSyncBackupResult<serde_json::Value>> + 'a>;
+pub type TableRecordStream<'a> =
+    Box<dyn Iterator<Item = FullSyncBackupResult<serde_json::Value>> + 'a>;
 
 /// 各表记录数（manifest 用）
 pub type TableCounts = BTreeMap<String, usize>;

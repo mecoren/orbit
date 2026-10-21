@@ -599,10 +599,24 @@ abstract class OrbitBridge {
   /// 警示：会清空当前业务表再写入备份内容（事务内原子）。成功后广播
   /// db-change（table="*"）触发全量刷新。[ignoreSchemaMismatch] 用于
   /// schema 不一致时的强制二次确认。
+  ///
+  /// 从 `.orfullsync` 字节全量覆盖恢复（整包过桥；小文件或已持有字节时用）。
   Future<BackupImportResult> fullBackupImport(
     List<int> bytes, {
     bool ignoreSchemaMismatch = false,
   });
+
+  /// 从**文件路径**全量覆盖恢复（推荐：不再把整包字节跨 FFI 搬运）
+  ///
+  /// v2 容器在 core 内逐帧流式读，峰值与备份体积无关；v1 因格式所限仍需
+  /// 整份读入（core 内部处理，不过桥）。
+  Future<BackupImportResult> fullBackupImportPath(
+    String filePath, {
+    bool ignoreSchemaMismatch = false,
+  });
+
+  /// 从**文件路径**读取恢复预览（推荐；与 [fullBackupPeekLocal] 同语义）
+  Future<BackupPreview> fullBackupPeekPath(String filePath);
 
   /// 从云端备份副本恢复（先下载字节，再走与本地一致的导入路径）
   Future<BackupImportResult> fullBackupRestoreCloud(

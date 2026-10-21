@@ -2,20 +2,23 @@
 
 use std::collections::BTreeMap;
 
+use orbit_core::api::business_api;
 use orbit_core::api::full_sync_backup_api::{import_full_sync_backup, query_schema_version};
 use orbit_core::api::full_sync_backup_v2_api::{
     export_v2_to_file, import_v2_bytes, is_v2_backup, peek_v2_meta,
 };
-use orbit_core::api::business_api;
 use orbit_core::full_sync_backup::container::ITERATIONS;
-use orbit_core::full_sync_backup::v2::{FrameReader, FrameWriter, FRAME_PLAIN_MAX};
+use orbit_core::full_sync_backup::v2::{FRAME_PLAIN_MAX, FrameReader, FrameWriter};
 use sqlx::SqlitePool;
 
 const PASSWORD: &str = "test-sync-password";
 
 async fn setup_db() -> SqlitePool {
     let pool = sqlx::SqlitePool::connect("sqlite::memory:").await.unwrap();
-    sqlx::migrate!("./src/db/migrations").run(&pool).await.unwrap();
+    sqlx::migrate!("./src/db/migrations")
+        .run(&pool)
+        .await
+        .unwrap();
     pool
 }
 
@@ -95,7 +98,9 @@ async fn v2_roundtrip_restores_all_tables() {
     // 恢复到空库
     let dst = setup_db().await;
     let before = count_tasks(&dst).await;
-    let result = import_v2_bytes(&dst, &bytes, PASSWORD, false).await.unwrap();
+    let result = import_v2_bytes(&dst, &bytes, PASSWORD, false)
+        .await
+        .unwrap();
     // 恢复是「全量覆盖」：目标表行数 == 备份里 todo_tasks 的行数。
     // 注意 success_count 是**所有表**的成功记录数之和（含项目/标签等），
     // 不能拿它跟单表行数比——这是 v1 同口径的既有语义。
@@ -170,16 +175,15 @@ async fn v2_truncated_backup_is_rejected() {
     // 截断可能表现为「缺少结束标记」或帧读到一半的 IO 错误，两者都算拒绝
     let msg = err.to_string();
     assert!(
-        msg.contains("结束标记") || msg.contains("IO") || msg.contains("eof") || msg.contains("EOF"),
+        msg.contains("结束标记")
+            || msg.contains("IO")
+            || msg.contains("eof")
+            || msg.contains("EOF"),
         "截断必须被拒绝：{msg}"
     );
     // 事务未提交 → 目标库保持原状（只有种子行）
     let seed = seeded_task_count(&setup_db().await).await;
-    assert_eq!(
-        count_tasks(&dst).await,
-        seed,
-        "失败导入不得留下半份数据"
-    );
+    assert_eq!(count_tasks(&dst).await, seed, "失败导入不得留下半份数据");
 
     std::fs::remove_dir_all(&dir).ok();
 }
@@ -260,12 +264,16 @@ async fn v1_backup_still_importable() {
     // 手工构造 v1 备份：读两张表 → 编码
     let mut table_data = BTreeMap::new();
     for table in ["todo_tasks", "todo_projects"] {
-        let json = business_api::list_records_as_json(&src, table).await.unwrap();
+        let json = business_api::list_records_as_json(&src, table)
+            .await
+            .unwrap();
         table_data.insert(table.to_string(), json);
     }
     let mut counts = BTreeMap::new();
     for (k, v) in &table_data {
-        let n = serde_json::from_str::<Vec<serde_json::Value>>(v).unwrap().len();
+        let n = serde_json::from_str::<Vec<serde_json::Value>>(v)
+            .unwrap()
+            .len();
         counts.insert(k.clone(), n);
     }
     let schema = query_schema_version(&src).await.unwrap();
@@ -289,9 +297,15 @@ async fn v1_backup_still_importable() {
     assert!(!is_v2_backup(&bytes), "v1 编码器产出不应是 v2 容器");
 
     let dst = setup_db().await;
-    let result = import_full_sync_backup(&dst, &svc, &bytes, false).await.unwrap();
+    let result = import_full_sync_backup(&dst, &svc, &bytes, false)
+        .await
+        .unwrap();
     let backup_rows = count_tasks(&src).await;
-    assert_eq!(result.error_count, 0, "v1 恢复不应报错：{:?}", result.errors);
+    assert_eq!(
+        result.error_count, 0,
+        "v1 恢复不应报错：{:?}",
+        result.errors
+    );
     assert_eq!(count_tasks(&dst).await, backup_rows);
     assert!(result.success_count >= backup_rows);
 
@@ -387,8 +401,14 @@ async fn v2_empty_database_roundtrips() {
 
     let bytes = std::fs::read(&target).unwrap();
     let dst = setup_db().await;
-    let result = import_v2_bytes(&dst, &bytes, PASSWORD, false).await.unwrap();
-    assert_eq!(result.error_count, 0, "空库往返不应报错：{:?}", result.errors);
+    let result = import_v2_bytes(&dst, &bytes, PASSWORD, false)
+        .await
+        .unwrap();
+    assert_eq!(
+        result.error_count, 0,
+        "空库往返不应报错：{:?}",
+        result.errors
+    );
     std::fs::remove_dir_all(&dir).ok();
 }
 
@@ -397,6 +417,106 @@ fn is_v2_backup_detects_magic() {
     assert!(is_v2_backup(b"OFS2"));
     assert!(!is_v2_backup(b"OFS1"));
     assert!(!is_v2_backup(b""));
+}
+
+// ---------- 按路径入口（移动端按路径过桥） ----------
+
+#[tokio::test]
+async fn path_import_restores_same_as_bytes_import() {
+    // 按路径导入与按字节导入必须产出完全一致的结果（同源实现）
+    use orbit_core::api::full_sync_backup_api::import_full_sync_backup_from_path;
+    use orbit_core::sync_crypto::SyncCryptoService;
+
+    let src = setup_db().await;
+    seed_tasks(&src, 21).await;
+    let dir = tmp_dir();
+    let target = dir.join("by-path.orfullsync");
+    export_v2_to_file(&src, &target, PASSWORD, "dev", None)
+        .await
+        .unwrap();
+
+    let svc = SyncCryptoService::new(&dir);
+    svc.init(PASSWORD).unwrap();
+
+    let via_path = setup_db().await;
+    let r1 = import_full_sync_backup_from_path(&via_path, &svc, &target, false)
+        .await
+        .unwrap();
+
+    let bytes = std::fs::read(&target).unwrap();
+    let via_bytes = setup_db().await;
+    let r2 = import_v2_bytes(&via_bytes, &bytes, PASSWORD, false)
+        .await
+        .unwrap();
+
+    assert_eq!(r1.success_count, r2.success_count, "两条入口成功数必须一致");
+    assert_eq!(r1.error_count, 0);
+    assert_eq!(r2.error_count, 0);
+    assert_eq!(
+        count_tasks(&via_path).await,
+        count_tasks(&via_bytes).await,
+        "两条入口落库行数必须一致"
+    );
+    std::fs::remove_dir_all(&dir).ok();
+}
+
+#[tokio::test]
+async fn path_peek_reads_meta_and_preview() {
+    use orbit_core::api::full_sync_backup_api::{
+        peek_backup_preview_from_path, peek_full_sync_manifest_from_path,
+    };
+    use orbit_core::sync_crypto::SyncCryptoService;
+
+    let src = setup_db().await;
+    seed_tasks(&src, 8).await;
+    let dir = tmp_dir();
+    let target = dir.join("peek-path.orfullsync");
+    export_v2_to_file(&src, &target, PASSWORD, "dev-path", Some("按路径设备".into()))
+        .await
+        .unwrap();
+
+    let svc = SyncCryptoService::new(&dir);
+    svc.init(PASSWORD).unwrap();
+
+    let manifest = peek_full_sync_manifest_from_path(&svc, &target)
+        .await
+        .unwrap();
+    assert_eq!(manifest.device_id, "dev-path");
+    assert_eq!(manifest.device_name.as_deref(), Some("按路径设备"));
+
+    let preview = peek_backup_preview_from_path(&src, &svc, &target)
+        .await
+        .unwrap();
+    assert_eq!(preview.manifest.device_id, "dev-path");
+    assert!(
+        preview.task_stats.total >= 8,
+        "预览应统计到任务（实际 {}）",
+        preview.task_stats.total
+    );
+    std::fs::remove_dir_all(&dir).ok();
+}
+
+#[tokio::test]
+async fn is_v2_backup_path_reads_only_magic() {
+    use orbit_core::api::full_sync_backup_v2_api::is_v2_backup_path;
+
+    let dir = tmp_dir();
+    let v2 = dir.join("v2.orfullsync");
+    std::fs::write(&v2, b"OFS2rest-of-file").unwrap();
+    assert!(is_v2_backup_path(&v2).unwrap());
+
+    let v1 = dir.join("v1.orfullsync");
+    std::fs::write(&v1, b"OFS1rest-of-file").unwrap();
+    assert!(!is_v2_backup_path(&v1).unwrap());
+
+    // 不足 4 字节：判 false，不报错（交给后续流程给出可读错误）
+    let short = dir.join("short.orfullsync");
+    std::fs::write(&short, b"OF").unwrap();
+    assert!(!is_v2_backup_path(&short).unwrap());
+
+    // 文件不存在：报 IO 错误
+    assert!(is_v2_backup_path(&dir.join("missing.orfullsync")).is_err());
+    std::fs::remove_dir_all(&dir).ok();
 }
 
 #[allow(dead_code)]

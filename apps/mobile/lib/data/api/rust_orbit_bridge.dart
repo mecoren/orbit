@@ -1131,6 +1131,24 @@ class RustOrbitBridge implements OrbitBridge {
   }
 
   @override
+  Future<BackupImportResult> fullBackupImportPath(
+    String filePath, {
+    bool ignoreSchemaMismatch = false,
+  }) async {
+    final r = await gen_backup.fullBackupImportPath(
+      filePath: filePath,
+      ignoreSchemaMismatch: ignoreSchemaMismatch,
+    );
+    return _mapImport(r);
+  }
+
+  @override
+  Future<BackupPreview> fullBackupPeekPath(String filePath) async {
+    final r = await gen_backup.fullBackupPeekPath(filePath: filePath);
+    return _mapPreview(r);
+  }
+
+  @override
   Future<BackupImportResult> fullBackupRestoreCloud(
     String cloudPath, {
     bool ignoreSchemaMismatch = false,

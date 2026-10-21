@@ -31,12762 +31,8530 @@ import 'api/widget.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'frb_generated.dart';
-import 'frb_generated.io.dart'
-    if (dart.library.js_interop) 'frb_generated.web.dart';
+import 'frb_generated.io.dart' if (dart.library.js_interop) 'frb_generated.web.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-/// Main entrypoint of the Rust API
-class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
-  @internal
-  static final instance = RustLib._();
-
-  RustLib._();
-
-  /// Initialize flutter_rust_bridge
-  static Future<void> init({
-    RustLibApi? api,
-    BaseHandler? handler,
-    ExternalLibrary? externalLibrary,
-    bool forceSameCodegenVersion = true,
-  }) async {
-    await instance.initImpl(
-      api: api,
-      handler: handler,
-      externalLibrary: externalLibrary,
-      forceSameCodegenVersion: forceSameCodegenVersion,
-    );
-  }
-
-  /// Initialize flutter_rust_bridge in mock mode.
-  /// No libraries for FFI are loaded.
-  static void initMock({required RustLibApi api}) {
-    instance.initMockImpl(api: api);
-  }
 
-  /// Dispose flutter_rust_bridge
-  ///
-  /// The call to this function is optional, since flutter_rust_bridge (and everything else)
-  /// is automatically disposed when the app stops.
-  static void dispose() => instance.disposeImpl();
-
-  @override
-  ApiImplConstructor<RustLibApiImpl, RustLibWire> get apiImplConstructor =>
-      RustLibApiImpl.new;
-
-  @override
-  WireConstructor<RustLibWire> get wireConstructor =>
-      RustLibWire.fromExternalLibrary;
-
-  @override
-  Future<void> executeRustInitializers() async {
-    await api.crateApiLoggingInitApp();
-  }
+                /// Main entrypoint of the Rust API
+                class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
+                  @internal
+                  static final instance = RustLib._();
 
-  @override
-  ExternalLibraryLoaderConfig get defaultExternalLibraryLoaderConfig =>
-      kDefaultExternalLibraryLoaderConfig;
-
-  @override
-  String get codegenVersion => '2.12.0';
+                  RustLib._();
 
-  @override
-  int get rustContentHash => 485229385;
+                  /// Initialize flutter_rust_bridge
+                  static Future<void> init({
+                    RustLibApi? api,
+                    BaseHandler? handler,
+                    ExternalLibrary? externalLibrary,
+                    bool forceSameCodegenVersion = true,
+                  }) async {
+                    await instance.initImpl(
+                      api: api,
+                      handler: handler,
+                      externalLibrary: externalLibrary,
+                      forceSameCodegenVersion: forceSameCodegenVersion,
+                    );
+                  }
 
-  static const kDefaultExternalLibraryLoaderConfig =
-      ExternalLibraryLoaderConfig(
-        stem: 'orbit_flutter',
-        ioDirectory: '../../crates/orbit-flutter/target/release/',
-        webPrefix: 'pkg/',
-        wasmBindgenName: 'wasm_bindgen',
-      );
-}
+                  /// Initialize flutter_rust_bridge in mock mode.
+                  /// No libraries for FFI are loaded.
+                  static void initMock({
+                    required RustLibApi api,
+                  }) {
+                    instance.initMockImpl(
+                      api: api,
+                    );
+                  }
 
-abstract class RustLibApi extends BaseApi {
-  Future<BigInt> crateApiAssetAttachmentsGc();
+                  /// Dispose flutter_rust_bridge
+                  ///
+                  /// The call to this function is optional, since flutter_rust_bridge (and everything else)
+                  /// is automatically disposed when the app stops.
+                  static void dispose() => instance.disposeImpl();
 
-  Future<BackupPrefsView> crateApiFullSyncBackupBackupPrefsGet();
+                  @override
+                  ApiImplConstructor<RustLibApiImpl, RustLibWire> get apiImplConstructor => RustLibApiImpl.new;
 
-  Future<BackupPrefsView> crateApiFullSyncBackupBackupPrefsSave({
-    required BackupPrefsView prefs,
-  });
+                  @override
+                  WireConstructor<RustLibWire> get wireConstructor => RustLibWire.fromExternalLibrary;
 
-  Future<void> crateApiBiometricBiometricDisable({
-    required String baseDir,
-    required String password,
-  });
+                  @override
+                  Future<void> executeRustInitializers() async {
+                    await api.crateApiLoggingInitApp();
 
-  Future<BiometricSecretBundle> crateApiBiometricBiometricSetup({
-    required String dbKeyHex,
-  });
+                  }
 
-  Future<String> crateApiBiometricBiometricUnlock({
-    required String encryptedDbKeyBioBase64,
-    required String biometricKeyBase64,
-    required String nonceBase64,
-  });
+                  @override
+                  ExternalLibraryLoaderConfig get defaultExternalLibraryLoaderConfig => kDefaultExternalLibraryLoaderConfig;
 
-  Future<PlatformInt64> crateApiTodoBusinessCount({required String table});
+                  @override
+                  String get codegenVersion => '2.12.0';
 
-  Future<String> crateApiSyncCloudSyncForce({
-    required String origin,
-    required BigInt waitForIdleMs,
-  });
+                  @override
+                  int get rustContentHash => -1936357730;
 
-  Future<String> crateApiSyncCloudSyncGetState();
+                  static const kDefaultExternalLibraryLoaderConfig = ExternalLibraryLoaderConfig(
+                    stem: 'UNKNOWN',
+                    ioDirectory: '../../crates/orbit-flutter/target/release/',
+                    webPrefix: 'pkg/',
+                    wasmBindgenName: 'wasm_bindgen',
+                  );
+                }
+                
 
-  Future<List<SyncHistoryView>> crateApiSyncCloudSyncHistory({
-    required String scope,
-    required PlatformInt64 limit,
-  });
+                abstract class RustLibApi extends BaseApi {
+                  Future<BigInt> crateApiAssetAttachmentsGc();
 
-  Future<bool> crateApiSyncCloudSyncIsRunning();
+Future<BackupPrefsView> crateApiFullSyncBackupBackupPrefsGet();
 
-  Future<String> crateApiSyncCloudSyncNow({required String origin});
+Future<BackupPrefsView> crateApiFullSyncBackupBackupPrefsSave({required BackupPrefsView prefs });
 
-  Future<String> crateApiSyncCloudSyncPullThenPush({required String origin});
+Future<void> crateApiBiometricBiometricDisable({required String baseDir , required String password });
 
-  Future<String> crateApiSyncCloudSyncPushOnly({required String origin});
+Future<BiometricSecretBundle> crateApiBiometricBiometricSetup({required String dbKeyHex });
 
-  Future<String> crateApiSyncCloudSyncRekey();
+Future<String> crateApiBiometricBiometricUnlock({required String encryptedDbKeyBioBase64 , required String biometricKeyBase64 , required String nonceBase64 });
 
-  Future<String> crateApiAuthCryptoRandomHex({required int len});
+Future<PlatformInt64> crateApiTodoBusinessCount({required String table });
 
-  Future<String> crateApiAuthCryptoSha256({required String input});
+Future<String> crateApiSyncCloudSyncForce({required String origin , required BigInt waitForIdleMs });
 
-  Future<CsvImportStatsView> crateApiCsvImportCsvImportExecute({
-    required String content,
-    required String preset,
-  });
+Future<String> crateApiSyncCloudSyncGetState();
 
-  Future<void> crateApiCsvImportCsvImportJobCancel({required String jobId});
+Future<List<SyncHistoryView>> crateApiSyncCloudSyncHistory({required String scope , required PlatformInt64 limit });
 
-  Future<void> crateApiCsvImportCsvImportJobDrop({required String jobId});
+Future<bool> crateApiSyncCloudSyncIsRunning();
 
-  Future<String> crateApiCsvImportCsvImportJobStart({
-    required String content,
-    required String preset,
-  });
+Future<String> crateApiSyncCloudSyncNow({required String origin });
 
-  Future<ImportJobStatusView> crateApiCsvImportCsvImportJobStatus({
-    required String jobId,
-  });
+Future<String> crateApiSyncCloudSyncPullThenPush({required String origin });
 
-  Future<ImportLimitsView> crateApiCsvImportCsvImportLimits();
+Future<String> crateApiSyncCloudSyncPushOnly({required String origin });
 
-  Future<CsvImportPreviewView> crateApiCsvImportCsvImportPreview({
-    required String content,
-    required String preset,
-    BigInt? previewLimit,
-  });
+Future<String> crateApiSyncCloudSyncRekey();
 
-  Future<String> crateApiAuthDbGetDeviceId();
+Future<String> crateApiAuthCryptoRandomHex({required int len });
 
-  Future<void> crateApiAuthDbInitEncrypted({
-    required String baseDir,
-    required String dbKeyHex,
-  });
+Future<String> crateApiAuthCryptoSha256({required String input });
 
-  Future<void> crateApiAuthDbInitPlaintext({required String baseDir});
+Future<CsvImportStatsView> crateApiCsvImportCsvImportExecute({required String content , required String preset });
 
-  Future<bool> crateApiAuthDbIsReady();
+Future<void> crateApiCsvImportCsvImportJobCancel({required String jobId });
 
-  Future<DbMaintenanceView> crateApiMaintenanceDbMaintenance();
+Future<void> crateApiCsvImportCsvImportJobDrop({required String jobId });
 
-  Future<void> crateApiAuthDbMigrateToEncrypted({required String dbKeyHex});
+Future<String> crateApiCsvImportCsvImportJobStart({required String content , required String preset });
 
-  Future<void> crateApiAuthDbMigrateToPlaintext();
+Future<ImportJobStatusView> crateApiCsvImportCsvImportJobStatus({required String jobId });
 
-  Future<void> crateApiAuthDbResetState();
+Future<ImportLimitsView> crateApiCsvImportCsvImportLimits();
 
-  Future<void> crateApiAuthDbSetDeviceId({required String deviceId});
+Future<CsvImportPreviewView> crateApiCsvImportCsvImportPreview({required String content , required String preset , BigInt? previewLimit });
 
-  Future<DiagnosticsSnapshot> crateApiDiagnosticsDiagnosticsSnapshot();
+Future<String> crateApiAuthDbGetDeviceId();
 
-  Future<String> crateApiDigestDigestBody();
+Future<void> crateApiAuthDbInitEncrypted({required String baseDir , required String dbKeyHex });
 
-  Future<DigestPrefs> crateApiDigestDigestPrefs();
+Future<void> crateApiAuthDbInitPlaintext({required String baseDir });
 
-  Future<void> crateApiDigestDigestSetPrefs({
-    required bool enabled,
-    required PlatformInt64 hour,
-    required PlatformInt64 minute,
-  });
+Future<bool> crateApiAuthDbIsReady();
 
-  Future<DigestSummary> crateApiDigestDigestSummary();
+Future<DbMaintenanceView> crateApiMaintenanceDbMaintenance();
 
-  Future<void> crateApiFullSyncBackupFullBackupDeleteLocal({
-    required String filePath,
-  });
+Future<void> crateApiAuthDbMigrateToEncrypted({required String dbKeyHex });
 
-  Future<BackupDeviceInfo> crateApiFullSyncBackupFullBackupDeviceInfo();
+Future<void> crateApiAuthDbMigrateToPlaintext();
 
-  Future<BackupExportResult> crateApiFullSyncBackupFullBackupExport({
-    required bool uploadCloud,
-  });
+Future<void> crateApiAuthDbResetState();
 
-  Future<BackupImportResult> crateApiFullSyncBackupFullBackupImport({
-    required List<int> bytes,
-    required bool ignoreSchemaMismatch,
-  });
+Future<void> crateApiAuthDbSetDeviceId({required String deviceId });
 
-  Future<List<CloudBackupEntryView>>
-  crateApiFullSyncBackupFullBackupListCloud();
+Future<DiagnosticsSnapshot> crateApiDiagnosticsDiagnosticsSnapshot();
 
-  Future<List<BackupEntryView>> crateApiFullSyncBackupFullBackupListLocal();
+Future<String> crateApiDigestDigestBody();
 
-  Future<BackupPreviewView> crateApiFullSyncBackupFullBackupPeekCloud({
-    required String cloudPath,
-  });
+Future<DigestPrefs> crateApiDigestDigestPrefs();
 
-  Future<BackupPreviewView> crateApiFullSyncBackupFullBackupPeekLocal({
-    required List<int> bytes,
-  });
+Future<void> crateApiDigestDigestSetPrefs({required bool enabled , required PlatformInt64 hour , required PlatformInt64 minute });
 
-  Future<BackupImportResult> crateApiFullSyncBackupFullBackupRestoreCloud({
-    required String cloudPath,
-    required bool ignoreSchemaMismatch,
-  });
+Future<DigestSummary> crateApiDigestDigestSummary();
 
-  Future<GlobalSearchResult> crateApiSearchGlobalSearch({
-    required String keyword,
-    int? limit,
-  });
+Future<void> crateApiFullSyncBackupFullBackupDeleteLocal({required String filePath });
 
-  Future<GlobalSearchResult> crateApiSearchGlobalSearchResultDefault();
+Future<BackupDeviceInfo> crateApiFullSyncBackupFullBackupDeviceInfo();
 
-  Future<void> crateApiHolidayHolidayCancelFetch();
+Future<BackupExportResult> crateApiFullSyncBackupFullBackupExport({required bool uploadCloud });
 
-  Future<HolidayRangeSummary> crateApiHolidayHolidayFetchRange({
-    required int start,
-    required int end,
-  });
+Future<BackupImportResult> crateApiFullSyncBackupFullBackupImport({required List<int> bytes , required bool ignoreSchemaMismatch });
 
-  Future<HolidayYearOutcome> crateApiHolidayHolidayFetchYear({
-    required int year,
-  });
+Future<BackupImportResult> crateApiFullSyncBackupFullBackupImportPath({required String filePath , required bool ignoreSchemaMismatch });
 
-  Future<bool?> crateApiHolidayHolidayIsOn({required String date});
+Future<List<CloudBackupEntryView>> crateApiFullSyncBackupFullBackupListCloud();
 
-  Future<List<HolidayInfo>> crateApiHolidayHolidayList();
+Future<List<BackupEntryView>> crateApiFullSyncBackupFullBackupListLocal();
 
-  Future<HolidayMeta> crateApiHolidayHolidayMeta();
+Future<BackupPreviewView> crateApiFullSyncBackupFullBackupPeekCloud({required String cloudPath });
 
-  Future<void> crateApiHolidayHolidaySetAutoEnabled({required bool enabled});
+Future<BackupPreviewView> crateApiFullSyncBackupFullBackupPeekLocal({required List<int> bytes });
 
-  Future<HolidayMeta> crateApiHolidayHolidayUpdate();
+Future<BackupPreviewView> crateApiFullSyncBackupFullBackupPeekPath({required String filePath });
 
-  Future<IcsExportView> crateApiIcsExportIcsExport();
+Future<BackupImportResult> crateApiFullSyncBackupFullBackupRestoreCloud({required String cloudPath , required bool ignoreSchemaMismatch });
 
-  Future<void> crateApiLoggingInitApp();
+Future<GlobalSearchResult> crateApiSearchGlobalSearch({required String keyword , int? limit });
 
-  Future<void> crateApiAuthMasterAuthChangePassword({
-    required String baseDir,
-    required String oldPassword,
-    required String newPassword,
-  });
+Future<GlobalSearchResult> crateApiSearchGlobalSearchResultDefault();
 
-  Future<void> crateApiAuthMasterAuthClear({required String baseDir});
+Future<void> crateApiHolidayHolidayCancelFetch();
 
-  Future<bool> crateApiAuthMasterAuthHas({required String baseDir});
+Future<HolidayRangeSummary> crateApiHolidayHolidayFetchRange({required int start , required int end });
 
-  Future<String> crateApiAuthMasterAuthInit({
-    required String baseDir,
-    required String password,
-  });
+Future<HolidayYearOutcome> crateApiHolidayHolidayFetchYear({required int year });
 
-  Future<String> crateApiAuthMasterAuthUnlock({
-    required String baseDir,
-    required String password,
-  });
+Future<bool?> crateApiHolidayHolidayIsOn({required String date });
 
-  Future<bool> crateApiAuthMasterAuthVerify({
-    required String baseDir,
-    required String password,
-  });
+Future<List<HolidayInfo>> crateApiHolidayHolidayList();
 
-  Future<BigInt> crateApiNotificationLogNotificationLogClear();
+Future<HolidayMeta> crateApiHolidayHolidayMeta();
 
-  Future<List<NotificationLogRow>> crateApiNotificationLogNotificationLogList({
-    String? kind,
-    PlatformInt64? limit,
-  });
+Future<void> crateApiHolidayHolidaySetAutoEnabled({required bool enabled });
 
-  Future<bool> crateApiStateOrbitStateInitialized();
+Future<HolidayMeta> crateApiHolidayHolidayUpdate();
 
-  Future<String> crateApiAuthPing();
+Future<IcsExportView> crateApiIcsExportIcsExport();
 
-  Future<PlaintextExportView> crateApiPlaintextExportPlaintextExportCsv({
-    bool? excludeDeleted,
-  });
+Future<void> crateApiLoggingInitApp();
 
-  Future<PlaintextExportView> crateApiPlaintextExportPlaintextExportJson({
-    bool? excludeDeleted,
-  });
+Future<void> crateApiAuthMasterAuthChangePassword({required String baseDir , required String oldPassword , required String newPassword });
 
-  Future<TodoSavedFilter> crateApiSavedFilterSavedFilterCreate({
-    required TodoSavedFilterCreateInput input,
-  });
+Future<void> crateApiAuthMasterAuthClear({required String baseDir });
 
-  Future<void> crateApiSavedFilterSavedFilterDelete({
-    required PlatformInt64 id,
-  });
+Future<bool> crateApiAuthMasterAuthHas({required String baseDir });
 
-  Future<TodoSavedFilter> crateApiSavedFilterSavedFilterUpdate({
-    required PlatformInt64 id,
-    required TodoSavedFilterUpdateInput input,
-  });
+Future<String> crateApiAuthMasterAuthInit({required String baseDir , required String password });
 
-  Future<List<TodoSavedFilter>> crateApiSavedFilterSavedFiltersList();
+Future<String> crateApiAuthMasterAuthUnlock({required String baseDir , required String password });
 
-  Future<void> crateApiFullSyncBackupStartBackupScheduler();
+Future<bool> crateApiAuthMasterAuthVerify({required String baseDir , required String password });
 
-  Future<void> crateApiHolidayStartHolidayScheduler();
+Future<BigInt> crateApiNotificationLogNotificationLogClear();
 
-  Stream<ReminderDueDto> crateApiEventsStartReminderPoller();
+Future<List<NotificationLogRow>> crateApiNotificationLogNotificationLogList({String? kind , PlatformInt64? limit });
 
-  Future<void> crateApiTrashStartTrashScheduler();
+Future<bool> crateApiStateOrbitStateInitialized();
 
-  Future<StatsAggregate> crateApiStatsStatsAggregate({PlatformInt64? year});
+Future<String> crateApiAuthPing();
 
-  Stream<DbEventDto> crateApiEventsSubscribeDbChanges();
+Future<PlaintextExportView> crateApiPlaintextExportPlaintextExportCsv({bool? excludeDeleted });
 
-  Stream<HolidayProgressDto> crateApiHolidaySubscribeHolidayProgress();
+Future<PlaintextExportView> crateApiPlaintextExportPlaintextExportJson({bool? excludeDeleted });
 
-  Future<SyncConfigView?> crateApiSyncSyncConfigGet();
+Future<TodoSavedFilter> crateApiSavedFilterSavedFilterCreate({required TodoSavedFilterCreateInput input });
 
-  Future<SyncConfigView> crateApiSyncSyncConfigSave({
-    required SyncConfigInput input,
-  });
+Future<void> crateApiSavedFilterSavedFilterDelete({required PlatformInt64 id });
 
-  Future<PlatformInt64> crateApiSyncConflictSyncConflictClear({
-    String? resolution,
-  });
+Future<TodoSavedFilter> crateApiSavedFilterSavedFilterUpdate({required PlatformInt64 id , required TodoSavedFilterUpdateInput input });
 
-  Future<PlatformInt64> crateApiSyncConflictSyncConflictCount({
-    String? resolution,
-  });
+Future<List<TodoSavedFilter>> crateApiSavedFilterSavedFiltersList();
 
-  Future<void> crateApiSyncConflictSyncConflictDismiss({
-    required PlatformInt64 id,
-  });
+Future<void> crateApiFullSyncBackupStartBackupScheduler();
 
-  Future<List<SyncConflict>> crateApiSyncConflictSyncConflictList({
-    String? resolution,
-    required PlatformInt64 limit,
-    required PlatformInt64 offset,
-  });
+Future<void> crateApiHolidayStartHolidayScheduler();
 
-  Future<PlatformInt64> crateApiSyncConflictSyncConflictRestore({
-    required PlatformInt64 id,
-  });
+Stream<ReminderDueDto> crateApiEventsStartReminderPoller();
 
-  Future<void> crateApiSyncSyncCryptoChangePassword({
-    required String oldPassword,
-    required String newPassword,
-  });
+Future<void> crateApiTrashStartTrashScheduler();
 
-  Future<String> crateApiSyncSyncCryptoExportBundle();
+Future<StatsAggregate> crateApiStatsStatsAggregate({PlatformInt64? year });
 
-  Future<void> crateApiSyncSyncCryptoForgetSession();
+Stream<DbEventDto> crateApiEventsSubscribeDbChanges();
 
-  Future<String> crateApiSyncSyncCryptoImportBundle({
-    required String bundleJson,
-    required String password,
-    required bool force,
-  });
+Stream<HolidayProgressDto> crateApiHolidaySubscribeHolidayProgress();
 
-  Future<void> crateApiSyncSyncCryptoInit({
-    required String password,
-    required bool remember,
-  });
+Future<SyncConfigView?> crateApiSyncSyncConfigGet();
 
-  Future<void> crateApiSyncSyncCryptoLock();
+Future<SyncConfigView> crateApiSyncSyncConfigSave({required SyncConfigInput input });
 
-  Future<String?> crateApiSyncSyncCryptoMetaVersion();
+Future<PlatformInt64> crateApiSyncConflictSyncConflictClear({String? resolution });
 
-  Future<bool> crateApiSyncSyncCryptoRestoreSession();
+Future<PlatformInt64> crateApiSyncConflictSyncConflictCount({String? resolution });
 
-  Future<SyncCryptoStatus> crateApiSyncSyncCryptoStatus();
+Future<void> crateApiSyncConflictSyncConflictDismiss({required PlatformInt64 id });
 
-  Future<void> crateApiSyncSyncCryptoUnlock({
-    required String password,
-    required bool remember,
-  });
+Future<List<SyncConflict>> crateApiSyncConflictSyncConflictList({String? resolution , required PlatformInt64 limit , required PlatformInt64 offset });
 
-  Future<void> crateApiSyncSyncCryptoUpgradeV2({required String syncPassword});
+Future<PlatformInt64> crateApiSyncConflictSyncConflictRestore({required PlatformInt64 id });
 
-  Future<void> crateApiSyncSyncDisconnect();
+Future<void> crateApiSyncSyncCryptoChangePassword({required String oldPassword , required String newPassword });
 
-  Future<int> crateApiSyncSyncTestConnection({required SyncConfigInput input});
+Future<String> crateApiSyncSyncCryptoExportBundle();
 
-  Future<List<ActivityLogRow>> crateApiActivityLogTaskActivityList({
-    required PlatformInt64 taskId,
-    PlatformInt64? limit,
-  });
+Future<void> crateApiSyncSyncCryptoForgetSession();
 
-  Future<TaskAttachmentView> crateApiAssetTaskAttachmentAdd({
-    required PlatformInt64 taskId,
-    required String fileName,
-    required String mimeType,
-    required List<int> data,
-  });
+Future<String> crateApiSyncSyncCryptoImportBundle({required String bundleJson , required String password , required bool force });
 
-  Future<List<TaskExistenceFlag>> crateApiTodoTaskAttachmentFlags();
+Future<void> crateApiSyncSyncCryptoInit({required String password , required bool remember });
 
-  Future<Uint8List> crateApiAssetTaskAttachmentRead({required String hash});
+Future<void> crateApiSyncSyncCryptoLock();
 
-  Future<void> crateApiAssetTaskAttachmentRemove({
-    required PlatformInt64 linkId,
-  });
+Future<String?> crateApiSyncSyncCryptoMetaVersion();
 
-  Future<List<TaskAttachmentView>> crateApiAssetTaskAttachmentsList({
-    required PlatformInt64 taskId,
-  });
+Future<bool> crateApiSyncSyncCryptoRestoreSession();
 
-  Future<List<TaskDependencyFlags>> crateApiTodoTaskDependencyFlags();
+Future<SyncCryptoStatus> crateApiSyncSyncCryptoStatus();
 
-  Future<List<TaskDescriptionFlag>> crateApiTodoTaskDescriptionFlags();
+Future<void> crateApiSyncSyncCryptoUnlock({required String password , required bool remember });
 
-  Future<List<TaskLabelsProjection>> crateApiTodoTaskLabelsProjection();
+Future<void> crateApiSyncSyncCryptoUpgradeV2({required String syncPassword });
 
-  Future<List<TaskExistenceFlag>> crateApiTodoTaskOpenSubtaskFlags();
+Future<void> crateApiSyncSyncDisconnect();
 
-  Future<List<TaskRemindersProjection>> crateApiTodoTaskRemindersProjection();
+Future<int> crateApiSyncSyncTestConnection({required SyncConfigInput input });
 
-  Future<TodoTemplate> crateApiTemplateTemplateCreate({
-    required TodoTemplateCreateInput input,
-  });
+Future<List<ActivityLogRow>> crateApiActivityLogTaskActivityList({required PlatformInt64 taskId , PlatformInt64? limit });
 
-  Future<void> crateApiTemplateTemplateDelete({required PlatformInt64 id});
+Future<TaskAttachmentView> crateApiAssetTaskAttachmentAdd({required PlatformInt64 taskId , required String fileName , required String mimeType , required List<int> data });
 
-  Future<TodoTemplate> crateApiTemplateTemplateUpdate({
-    required PlatformInt64 id,
-    required TodoTemplateUpdateInput input,
-  });
+Future<List<TaskExistenceFlag>> crateApiTodoTaskAttachmentFlags();
 
-  Future<List<TodoTemplate>> crateApiTemplateTemplatesList();
+Future<Uint8List> crateApiAssetTaskAttachmentRead({required String hash });
 
-  Future<TodoComment> crateApiTodoTodoCommentsCreate({
-    required TodoCommentCreateInput input,
-  });
+Future<void> crateApiAssetTaskAttachmentRemove({required PlatformInt64 linkId });
 
-  Future<void> crateApiTodoTodoCommentsDelete({required PlatformInt64 id});
+Future<List<TaskAttachmentView>> crateApiAssetTaskAttachmentsList({required PlatformInt64 taskId });
 
-  Future<TodoComment> crateApiTodoTodoCommentsGet({required PlatformInt64 id});
+Future<List<TaskDependencyFlags>> crateApiTodoTaskDependencyFlags();
 
-  Future<List<TodoComment>> crateApiTodoTodoCommentsList({
-    required ListFilter filter,
-  });
+Future<List<TaskDescriptionFlag>> crateApiTodoTaskDescriptionFlags();
 
-  Future<TodoLabel> crateApiTodoTodoLabelsCreate({
-    required TodoLabelCreateInput input,
-  });
+Future<List<TaskLabelsProjection>> crateApiTodoTaskLabelsProjection();
 
-  Future<void> crateApiTodoTodoLabelsDelete({required PlatformInt64 id});
+Future<List<TaskExistenceFlag>> crateApiTodoTaskOpenSubtaskFlags();
 
-  Future<TodoLabel> crateApiTodoTodoLabelsGet({required PlatformInt64 id});
+Future<List<TaskRemindersProjection>> crateApiTodoTaskRemindersProjection();
 
-  Future<List<TodoLabel>> crateApiTodoTodoLabelsList({
-    required ListFilter filter,
-  });
+Future<TodoTemplate> crateApiTemplateTemplateCreate({required TodoTemplateCreateInput input });
 
-  Future<TodoLabel> crateApiTodoTodoLabelsUpdate({
-    required PlatformInt64 id,
-    required String patchJson,
-  });
+Future<void> crateApiTemplateTemplateDelete({required PlatformInt64 id });
 
-  Future<TodoProject> crateApiTodoTodoProjectsCreate({
-    required TodoProjectCreateInput input,
-  });
+Future<TodoTemplate> crateApiTemplateTemplateUpdate({required PlatformInt64 id , required TodoTemplateUpdateInput input });
 
-  Future<void> crateApiTodoTodoProjectsDelete({required PlatformInt64 id});
+Future<List<TodoTemplate>> crateApiTemplateTemplatesList();
 
-  Future<TodoProject> crateApiTodoTodoProjectsGet({required PlatformInt64 id});
+Future<TodoComment> crateApiTodoTodoCommentsCreate({required TodoCommentCreateInput input });
 
-  Future<TodoProject?> crateApiTodoTodoProjectsGetByUuid({
-    required String uuid,
-  });
+Future<void> crateApiTodoTodoCommentsDelete({required PlatformInt64 id });
 
-  Future<List<TodoProject>> crateApiTodoTodoProjectsList({
-    required ListFilter filter,
-  });
+Future<TodoComment> crateApiTodoTodoCommentsGet({required PlatformInt64 id });
 
-  Future<List<TodoProject>> crateApiTodoTodoProjectsListArchived();
+Future<List<TodoComment>> crateApiTodoTodoCommentsList({required ListFilter filter });
 
-  Future<TodoProject> crateApiTodoTodoProjectsUpdate({
-    required PlatformInt64 id,
-    required String patchJson,
-  });
+Future<TodoLabel> crateApiTodoTodoLabelsCreate({required TodoLabelCreateInput input });
 
-  Future<void> crateApiTodoTodoProjectsUpdateSortOrder({
-    required PlatformInt64 id,
-    required double sortOrder,
-  });
+Future<void> crateApiTodoTodoLabelsDelete({required PlatformInt64 id });
 
-  Future<TodoReminder> crateApiTodoTodoRemindersCreate({
-    required TodoReminderCreateInput input,
-  });
+Future<TodoLabel> crateApiTodoTodoLabelsGet({required PlatformInt64 id });
 
-  Future<void> crateApiTodoTodoRemindersDelete({required PlatformInt64 id});
+Future<List<TodoLabel>> crateApiTodoTodoLabelsList({required ListFilter filter });
 
-  Future<TodoReminder> crateApiTodoTodoRemindersGet({
-    required PlatformInt64 id,
-  });
+Future<TodoLabel> crateApiTodoTodoLabelsUpdate({required PlatformInt64 id , required String patchJson });
 
-  Future<List<TodoReminder>> crateApiTodoTodoRemindersList({
-    required ListFilter filter,
-  });
+Future<TodoProject> crateApiTodoTodoProjectsCreate({required TodoProjectCreateInput input });
 
-  Future<TodoSubtask> crateApiTodoTodoSubtasksCreate({
-    required TodoSubtaskCreateInput input,
-  });
+Future<void> crateApiTodoTodoProjectsDelete({required PlatformInt64 id });
 
-  Future<void> crateApiTodoTodoSubtasksDelete({required PlatformInt64 id});
+Future<TodoProject> crateApiTodoTodoProjectsGet({required PlatformInt64 id });
 
-  Future<TodoSubtask> crateApiTodoTodoSubtasksGet({required PlatformInt64 id});
+Future<TodoProject?> crateApiTodoTodoProjectsGetByUuid({required String uuid });
 
-  Future<List<TodoSubtask>> crateApiTodoTodoSubtasksList({
-    required ListFilter filter,
-  });
+Future<List<TodoProject>> crateApiTodoTodoProjectsList({required ListFilter filter });
 
-  Future<TodoTask> crateApiTodoTodoSubtasksPromote({
-    required PlatformInt64 subtaskId,
-  });
+Future<List<TodoProject>> crateApiTodoTodoProjectsListArchived();
 
-  Future<void> crateApiTodoTodoSubtasksToggleDone({
-    required PlatformInt64 subtaskId,
-    required bool done,
-  });
+Future<TodoProject> crateApiTodoTodoProjectsUpdate({required PlatformInt64 id , required String patchJson });
 
-  Future<TodoSubtask> crateApiTodoTodoSubtasksUpdate({
-    required PlatformInt64 id,
-    required String patchJson,
-  });
+Future<void> crateApiTodoTodoProjectsUpdateSortOrder({required PlatformInt64 id , required double sortOrder });
 
-  Future<TodoTaskLabel> crateApiTodoTodoTaskLabelsCreate({
-    required TodoTaskLabelCreateInput input,
-  });
+Future<TodoReminder> crateApiTodoTodoRemindersCreate({required TodoReminderCreateInput input });
 
-  Future<void> crateApiTodoTodoTaskLabelsDelete({required PlatformInt64 id});
+Future<void> crateApiTodoTodoRemindersDelete({required PlatformInt64 id });
 
-  Future<TodoTaskLabel> crateApiTodoTodoTaskLabelsGet({
-    required PlatformInt64 id,
-  });
+Future<TodoReminder> crateApiTodoTodoRemindersGet({required PlatformInt64 id });
 
-  Future<List<TodoTaskLabel>> crateApiTodoTodoTaskLabelsList({
-    required ListFilter filter,
-  });
+Future<List<TodoReminder>> crateApiTodoTodoRemindersList({required ListFilter filter });
 
-  Future<TodoTaskRelation> crateApiTodoTodoTaskRelationsCreate({
-    required TodoTaskRelationCreateInput input,
-  });
+Future<TodoSubtask> crateApiTodoTodoSubtasksCreate({required TodoSubtaskCreateInput input });
 
-  Future<void> crateApiTodoTodoTaskRelationsDelete({required PlatformInt64 id});
+Future<void> crateApiTodoTodoSubtasksDelete({required PlatformInt64 id });
 
-  Future<TodoTaskRelation> crateApiTodoTodoTaskRelationsGet({
-    required PlatformInt64 id,
-  });
+Future<TodoSubtask> crateApiTodoTodoSubtasksGet({required PlatformInt64 id });
 
-  Future<List<TodoTaskRelation>> crateApiTodoTodoTaskRelationsList({
-    required ListFilter filter,
-  });
+Future<List<TodoSubtask>> crateApiTodoTodoSubtasksList({required ListFilter filter });
 
-  Future<CompleteTaskResult> crateApiTodoTodoTasksComplete({
-    required PlatformInt64 id,
-  });
+Future<TodoTask> crateApiTodoTodoSubtasksPromote({required PlatformInt64 subtaskId });
 
-  Future<TodoTask> crateApiTodoTodoTasksCreate({
-    required TodoTaskCreateInput input,
-  });
+Future<void> crateApiTodoTodoSubtasksToggleDone({required PlatformInt64 subtaskId , required bool done });
 
-  Future<void> crateApiTodoTodoTasksDelete({required PlatformInt64 id});
+Future<TodoSubtask> crateApiTodoTodoSubtasksUpdate({required PlatformInt64 id , required String patchJson });
 
-  Future<TodoTask> crateApiTodoTodoTasksDuplicate({required PlatformInt64 id});
+Future<TodoTaskLabel> crateApiTodoTodoTaskLabelsCreate({required TodoTaskLabelCreateInput input });
 
-  Future<TodoTask> crateApiTodoTodoTasksGet({required PlatformInt64 id});
+Future<void> crateApiTodoTodoTaskLabelsDelete({required PlatformInt64 id });
 
-  Future<TodoTask?> crateApiTodoTodoTasksGetByUuid({required String uuid});
+Future<TodoTaskLabel> crateApiTodoTodoTaskLabelsGet({required PlatformInt64 id });
 
-  Future<TodoTaskDetail> crateApiTodoTodoTasksGetDetail({
-    required PlatformInt64 id,
-  });
+Future<List<TodoTaskLabel>> crateApiTodoTodoTaskLabelsList({required ListFilter filter });
 
-  Future<List<TodoTaskListItem>> crateApiTodoTodoTasksList({
-    required ListFilter filter,
-  });
+Future<TodoTaskRelation> crateApiTodoTodoTaskRelationsCreate({required TodoTaskRelationCreateInput input });
 
-  Future<void> crateApiTodoTodoTasksRecalcPercent({
-    required PlatformInt64 taskId,
-  });
+Future<void> crateApiTodoTodoTaskRelationsDelete({required PlatformInt64 id });
 
-  Future<TodoTask> crateApiTodoTodoTasksUpdate({
-    required PlatformInt64 id,
-    required String patchJson,
-  });
+Future<TodoTaskRelation> crateApiTodoTodoTaskRelationsGet({required PlatformInt64 id });
 
-  Future<void> crateApiTodoTodoTasksUpdatePosition({
-    required PlatformInt64 id,
-    required double position,
-  });
+Future<List<TodoTaskRelation>> crateApiTodoTodoTaskRelationsList({required ListFilter filter });
 
-  Future<TrashMeta> crateApiTrashTrashMeta();
+Future<CompleteTaskResult> crateApiTodoTodoTasksComplete({required PlatformInt64 id });
 
-  Future<BigInt> crateApiTrashTrashPurgeAll();
+Future<TodoTask> crateApiTodoTodoTasksCreate({required TodoTaskCreateInput input });
 
-  Future<TrashPurgeStats> crateApiTrashTrashPurgeExpired();
+Future<void> crateApiTodoTodoTasksDelete({required PlatformInt64 id });
 
-  Future<void> crateApiTrashTrashSetRetentionDays({
-    required PlatformInt64 days,
-  });
+Future<TodoTask> crateApiTodoTodoTasksDuplicate({required PlatformInt64 id });
 
-  Future<void> crateApiTrashTrashTaskPurge({required PlatformInt64 id});
+Future<TodoTask> crateApiTodoTodoTasksGet({required PlatformInt64 id });
 
-  Future<TodoTask> crateApiTrashTrashTaskRestore({required PlatformInt64 id});
+Future<TodoTask?> crateApiTodoTodoTasksGetByUuid({required String uuid });
 
-  Future<List<TodoTask>> crateApiTrashTrashTasksList();
+Future<TodoTaskDetail> crateApiTodoTodoTasksGetDetail({required PlatformInt64 id });
 
-  Future<List<WidgetTodoItem>> crateApiWidgetWidgetTodoQuery({
-    required PlatformInt64 limit,
-  });
+Future<List<TodoTaskListItem>> crateApiTodoTodoTasksList({required ListFilter filter });
 
-  Future<void> crateApiWidgetWidgetTodoToggle({
-    required PlatformInt64 id,
-    required int done,
-  });
-}
+Future<void> crateApiTodoTodoTasksRecalcPercent({required PlatformInt64 taskId });
 
-class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
-  RustLibApiImpl({
-    required super.handler,
-    required super.wire,
-    required super.generalizedFrbRustBinding,
-    required super.portManager,
-  });
+Future<TodoTask> crateApiTodoTodoTasksUpdate({required PlatformInt64 id , required String patchJson });
 
-  @override
-  Future<BigInt> crateApiAssetAttachmentsGc() {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 1,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+Future<void> crateApiTodoTodoTasksUpdatePosition({required PlatformInt64 id , required double position });
+
+Future<TrashMeta> crateApiTrashTrashMeta();
+
+Future<BigInt> crateApiTrashTrashPurgeAll();
+
+Future<TrashPurgeStats> crateApiTrashTrashPurgeExpired();
+
+Future<void> crateApiTrashTrashSetRetentionDays({required PlatformInt64 days });
+
+Future<void> crateApiTrashTrashTaskPurge({required PlatformInt64 id });
+
+Future<TodoTask> crateApiTrashTrashTaskRestore({required PlatformInt64 id });
+
+Future<List<TodoTask>> crateApiTrashTrashTasksList();
+
+Future<List<WidgetTodoItem>> crateApiWidgetWidgetTodoQuery({required PlatformInt64 limit });
+
+Future<void> crateApiWidgetWidgetTodoToggle({required PlatformInt64 id , required int done });
+
+
+                }
+                
+
+                class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
+                  RustLibApiImpl({
+                    required super.handler,
+                    required super.wire,
+                    required super.generalizedFrbRustBinding,
+                    required super.portManager,
+                  });
+
+                  @override Future<BigInt> crateApiAssetAttachmentsGc()  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 1, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_usize,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiAssetAttachmentsGcConstMeta,
-        argValues: [],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiAssetAttachmentsGcConstMeta,
+            argValues: [],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiAssetAttachmentsGcConstMeta =>
-      const TaskConstMeta(debugName: "attachments_gc", argNames: []);
 
-  @override
-  Future<BackupPrefsView> crateApiFullSyncBackupBackupPrefsGet() {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 2,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiAssetAttachmentsGcConstMeta => const TaskConstMeta(
+            debugName: "attachments_gc",
+            argNames: [],
+        );
+        
+
+@override Future<BackupPrefsView> crateApiFullSyncBackupBackupPrefsGet()  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 2, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_backup_prefs_view,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiFullSyncBackupBackupPrefsGetConstMeta,
-        argValues: [],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiFullSyncBackupBackupPrefsGetConstMeta,
+            argValues: [],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiFullSyncBackupBackupPrefsGetConstMeta =>
-      const TaskConstMeta(debugName: "backup_prefs_get", argNames: []);
 
-  @override
-  Future<BackupPrefsView> crateApiFullSyncBackupBackupPrefsSave({
-    required BackupPrefsView prefs,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_box_autoadd_backup_prefs_view(prefs, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 3,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiFullSyncBackupBackupPrefsGetConstMeta => const TaskConstMeta(
+            debugName: "backup_prefs_get",
+            argNames: [],
+        );
+        
+
+@override Future<BackupPrefsView> crateApiFullSyncBackupBackupPrefsSave({required BackupPrefsView prefs })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_box_autoadd_backup_prefs_view(prefs, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 3, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_backup_prefs_view,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiFullSyncBackupBackupPrefsSaveConstMeta,
-        argValues: [prefs],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiFullSyncBackupBackupPrefsSaveConstMeta,
+            argValues: [prefs],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiFullSyncBackupBackupPrefsSaveConstMeta =>
-      const TaskConstMeta(debugName: "backup_prefs_save", argNames: ["prefs"]);
 
-  @override
-  Future<void> crateApiBiometricBiometricDisable({
-    required String baseDir,
-    required String password,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_String(baseDir, serializer);
-          sse_encode_String(password, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 4,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiFullSyncBackupBackupPrefsSaveConstMeta => const TaskConstMeta(
+            debugName: "backup_prefs_save",
+            argNames: ["prefs"],
+        );
+        
+
+@override Future<void> crateApiBiometricBiometricDisable({required String baseDir , required String password })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_String(baseDir, serializer);
+sse_encode_String(password, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 4, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_unit,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiBiometricBiometricDisableConstMeta,
-        argValues: [baseDir, password],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiBiometricBiometricDisableConstMeta,
+            argValues: [baseDir, password],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiBiometricBiometricDisableConstMeta =>
-      const TaskConstMeta(
-        debugName: "biometric_disable",
-        argNames: ["baseDir", "password"],
-      );
 
-  @override
-  Future<BiometricSecretBundle> crateApiBiometricBiometricSetup({
-    required String dbKeyHex,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_String(dbKeyHex, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 5,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiBiometricBiometricDisableConstMeta => const TaskConstMeta(
+            debugName: "biometric_disable",
+            argNames: ["baseDir", "password"],
+        );
+        
+
+@override Future<BiometricSecretBundle> crateApiBiometricBiometricSetup({required String dbKeyHex })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_String(dbKeyHex, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 5, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_biometric_secret_bundle,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiBiometricBiometricSetupConstMeta,
-        argValues: [dbKeyHex],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiBiometricBiometricSetupConstMeta,
+            argValues: [dbKeyHex],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiBiometricBiometricSetupConstMeta =>
-      const TaskConstMeta(debugName: "biometric_setup", argNames: ["dbKeyHex"]);
 
-  @override
-  Future<String> crateApiBiometricBiometricUnlock({
-    required String encryptedDbKeyBioBase64,
-    required String biometricKeyBase64,
-    required String nonceBase64,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_String(encryptedDbKeyBioBase64, serializer);
-          sse_encode_String(biometricKeyBase64, serializer);
-          sse_encode_String(nonceBase64, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 6,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiBiometricBiometricSetupConstMeta => const TaskConstMeta(
+            debugName: "biometric_setup",
+            argNames: ["dbKeyHex"],
+        );
+        
+
+@override Future<String> crateApiBiometricBiometricUnlock({required String encryptedDbKeyBioBase64 , required String biometricKeyBase64 , required String nonceBase64 })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_String(encryptedDbKeyBioBase64, serializer);
+sse_encode_String(biometricKeyBase64, serializer);
+sse_encode_String(nonceBase64, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 6, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_String,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiBiometricBiometricUnlockConstMeta,
-        argValues: [encryptedDbKeyBioBase64, biometricKeyBase64, nonceBase64],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiBiometricBiometricUnlockConstMeta,
+            argValues: [encryptedDbKeyBioBase64, biometricKeyBase64, nonceBase64],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiBiometricBiometricUnlockConstMeta =>
-      const TaskConstMeta(
-        debugName: "biometric_unlock",
-        argNames: [
-          "encryptedDbKeyBioBase64",
-          "biometricKeyBase64",
-          "nonceBase64",
-        ],
-      );
 
-  @override
-  Future<PlatformInt64> crateApiTodoBusinessCount({required String table}) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_String(table, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 7,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiBiometricBiometricUnlockConstMeta => const TaskConstMeta(
+            debugName: "biometric_unlock",
+            argNames: ["encryptedDbKeyBioBase64", "biometricKeyBase64", "nonceBase64"],
+        );
+        
+
+@override Future<PlatformInt64> crateApiTodoBusinessCount({required String table })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_String(table, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 7, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_i_64,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiTodoBusinessCountConstMeta,
-        argValues: [table],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiTodoBusinessCountConstMeta,
+            argValues: [table],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiTodoBusinessCountConstMeta =>
-      const TaskConstMeta(debugName: "business_count", argNames: ["table"]);
 
-  @override
-  Future<String> crateApiSyncCloudSyncForce({
-    required String origin,
-    required BigInt waitForIdleMs,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_String(origin, serializer);
-          sse_encode_u_64(waitForIdleMs, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 8,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiTodoBusinessCountConstMeta => const TaskConstMeta(
+            debugName: "business_count",
+            argNames: ["table"],
+        );
+        
+
+@override Future<String> crateApiSyncCloudSyncForce({required String origin , required BigInt waitForIdleMs })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_String(origin, serializer);
+sse_encode_u_64(waitForIdleMs, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 8, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_String,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiSyncCloudSyncForceConstMeta,
-        argValues: [origin, waitForIdleMs],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiSyncCloudSyncForceConstMeta,
+            argValues: [origin, waitForIdleMs],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiSyncCloudSyncForceConstMeta => const TaskConstMeta(
-    debugName: "cloud_sync_force",
-    argNames: ["origin", "waitForIdleMs"],
-  );
 
-  @override
-  Future<String> crateApiSyncCloudSyncGetState() {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 9,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiSyncCloudSyncForceConstMeta => const TaskConstMeta(
+            debugName: "cloud_sync_force",
+            argNames: ["origin", "waitForIdleMs"],
+        );
+        
+
+@override Future<String> crateApiSyncCloudSyncGetState()  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 9, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_String,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiSyncCloudSyncGetStateConstMeta,
-        argValues: [],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiSyncCloudSyncGetStateConstMeta,
+            argValues: [],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiSyncCloudSyncGetStateConstMeta =>
-      const TaskConstMeta(debugName: "cloud_sync_get_state", argNames: []);
 
-  @override
-  Future<List<SyncHistoryView>> crateApiSyncCloudSyncHistory({
-    required String scope,
-    required PlatformInt64 limit,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_String(scope, serializer);
-          sse_encode_i_64(limit, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 10,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiSyncCloudSyncGetStateConstMeta => const TaskConstMeta(
+            debugName: "cloud_sync_get_state",
+            argNames: [],
+        );
+        
+
+@override Future<List<SyncHistoryView>> crateApiSyncCloudSyncHistory({required String scope , required PlatformInt64 limit })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_String(scope, serializer);
+sse_encode_i_64(limit, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 10, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_list_sync_history_view,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiSyncCloudSyncHistoryConstMeta,
-        argValues: [scope, limit],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiSyncCloudSyncHistoryConstMeta,
+            argValues: [scope, limit],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiSyncCloudSyncHistoryConstMeta =>
-      const TaskConstMeta(
-        debugName: "cloud_sync_history",
-        argNames: ["scope", "limit"],
-      );
 
-  @override
-  Future<bool> crateApiSyncCloudSyncIsRunning() {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 11,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiSyncCloudSyncHistoryConstMeta => const TaskConstMeta(
+            debugName: "cloud_sync_history",
+            argNames: ["scope", "limit"],
+        );
+        
+
+@override Future<bool> crateApiSyncCloudSyncIsRunning()  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 11, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_bool,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiSyncCloudSyncIsRunningConstMeta,
-        argValues: [],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiSyncCloudSyncIsRunningConstMeta,
+            argValues: [],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiSyncCloudSyncIsRunningConstMeta =>
-      const TaskConstMeta(debugName: "cloud_sync_is_running", argNames: []);
 
-  @override
-  Future<String> crateApiSyncCloudSyncNow({required String origin}) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_String(origin, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 12,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiSyncCloudSyncIsRunningConstMeta => const TaskConstMeta(
+            debugName: "cloud_sync_is_running",
+            argNames: [],
+        );
+        
+
+@override Future<String> crateApiSyncCloudSyncNow({required String origin })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_String(origin, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 12, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_String,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiSyncCloudSyncNowConstMeta,
-        argValues: [origin],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiSyncCloudSyncNowConstMeta,
+            argValues: [origin],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiSyncCloudSyncNowConstMeta =>
-      const TaskConstMeta(debugName: "cloud_sync_now", argNames: ["origin"]);
 
-  @override
-  Future<String> crateApiSyncCloudSyncPullThenPush({required String origin}) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_String(origin, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 13,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiSyncCloudSyncNowConstMeta => const TaskConstMeta(
+            debugName: "cloud_sync_now",
+            argNames: ["origin"],
+        );
+        
+
+@override Future<String> crateApiSyncCloudSyncPullThenPush({required String origin })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_String(origin, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 13, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_String,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiSyncCloudSyncPullThenPushConstMeta,
-        argValues: [origin],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiSyncCloudSyncPullThenPushConstMeta,
+            argValues: [origin],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiSyncCloudSyncPullThenPushConstMeta =>
-      const TaskConstMeta(
-        debugName: "cloud_sync_pull_then_push",
-        argNames: ["origin"],
-      );
 
-  @override
-  Future<String> crateApiSyncCloudSyncPushOnly({required String origin}) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_String(origin, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 14,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiSyncCloudSyncPullThenPushConstMeta => const TaskConstMeta(
+            debugName: "cloud_sync_pull_then_push",
+            argNames: ["origin"],
+        );
+        
+
+@override Future<String> crateApiSyncCloudSyncPushOnly({required String origin })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_String(origin, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 14, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_String,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiSyncCloudSyncPushOnlyConstMeta,
-        argValues: [origin],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiSyncCloudSyncPushOnlyConstMeta,
+            argValues: [origin],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiSyncCloudSyncPushOnlyConstMeta =>
-      const TaskConstMeta(
-        debugName: "cloud_sync_push_only",
-        argNames: ["origin"],
-      );
 
-  @override
-  Future<String> crateApiSyncCloudSyncRekey() {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 15,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiSyncCloudSyncPushOnlyConstMeta => const TaskConstMeta(
+            debugName: "cloud_sync_push_only",
+            argNames: ["origin"],
+        );
+        
+
+@override Future<String> crateApiSyncCloudSyncRekey()  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 15, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_String,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiSyncCloudSyncRekeyConstMeta,
-        argValues: [],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiSyncCloudSyncRekeyConstMeta,
+            argValues: [],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiSyncCloudSyncRekeyConstMeta =>
-      const TaskConstMeta(debugName: "cloud_sync_rekey", argNames: []);
 
-  @override
-  Future<String> crateApiAuthCryptoRandomHex({required int len}) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_u_32(len, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 16,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiSyncCloudSyncRekeyConstMeta => const TaskConstMeta(
+            debugName: "cloud_sync_rekey",
+            argNames: [],
+        );
+        
+
+@override Future<String> crateApiAuthCryptoRandomHex({required int len })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_u_32(len, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 16, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_String,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiAuthCryptoRandomHexConstMeta,
-        argValues: [len],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiAuthCryptoRandomHexConstMeta,
+            argValues: [len],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiAuthCryptoRandomHexConstMeta =>
-      const TaskConstMeta(debugName: "crypto_random_hex", argNames: ["len"]);
 
-  @override
-  Future<String> crateApiAuthCryptoSha256({required String input}) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_String(input, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 17,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiAuthCryptoRandomHexConstMeta => const TaskConstMeta(
+            debugName: "crypto_random_hex",
+            argNames: ["len"],
+        );
+        
+
+@override Future<String> crateApiAuthCryptoSha256({required String input })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_String(input, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 17, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_String,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiAuthCryptoSha256ConstMeta,
-        argValues: [input],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiAuthCryptoSha256ConstMeta,
+            argValues: [input],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiAuthCryptoSha256ConstMeta =>
-      const TaskConstMeta(debugName: "crypto_sha256", argNames: ["input"]);
 
-  @override
-  Future<CsvImportStatsView> crateApiCsvImportCsvImportExecute({
-    required String content,
-    required String preset,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_String(content, serializer);
-          sse_encode_String(preset, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 18,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiAuthCryptoSha256ConstMeta => const TaskConstMeta(
+            debugName: "crypto_sha256",
+            argNames: ["input"],
+        );
+        
+
+@override Future<CsvImportStatsView> crateApiCsvImportCsvImportExecute({required String content , required String preset })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_String(content, serializer);
+sse_encode_String(preset, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 18, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_csv_import_stats_view,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiCsvImportCsvImportExecuteConstMeta,
-        argValues: [content, preset],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiCsvImportCsvImportExecuteConstMeta,
+            argValues: [content, preset],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiCsvImportCsvImportExecuteConstMeta =>
-      const TaskConstMeta(
-        debugName: "csv_import_execute",
-        argNames: ["content", "preset"],
-      );
 
-  @override
-  Future<void> crateApiCsvImportCsvImportJobCancel({required String jobId}) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_String(jobId, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 19,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiCsvImportCsvImportExecuteConstMeta => const TaskConstMeta(
+            debugName: "csv_import_execute",
+            argNames: ["content", "preset"],
+        );
+        
+
+@override Future<void> crateApiCsvImportCsvImportJobCancel({required String jobId })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_String(jobId, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 19, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_unit,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiCsvImportCsvImportJobCancelConstMeta,
-        argValues: [jobId],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiCsvImportCsvImportJobCancelConstMeta,
+            argValues: [jobId],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiCsvImportCsvImportJobCancelConstMeta =>
-      const TaskConstMeta(
-        debugName: "csv_import_job_cancel",
-        argNames: ["jobId"],
-      );
 
-  @override
-  Future<void> crateApiCsvImportCsvImportJobDrop({required String jobId}) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_String(jobId, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 20,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiCsvImportCsvImportJobCancelConstMeta => const TaskConstMeta(
+            debugName: "csv_import_job_cancel",
+            argNames: ["jobId"],
+        );
+        
+
+@override Future<void> crateApiCsvImportCsvImportJobDrop({required String jobId })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_String(jobId, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 20, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_unit,
           decodeErrorData: null,
-        ),
-        constMeta: kCrateApiCsvImportCsvImportJobDropConstMeta,
-        argValues: [jobId],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiCsvImportCsvImportJobDropConstMeta,
+            argValues: [jobId],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiCsvImportCsvImportJobDropConstMeta =>
-      const TaskConstMeta(
-        debugName: "csv_import_job_drop",
-        argNames: ["jobId"],
-      );
 
-  @override
-  Future<String> crateApiCsvImportCsvImportJobStart({
-    required String content,
-    required String preset,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_String(content, serializer);
-          sse_encode_String(preset, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 21,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiCsvImportCsvImportJobDropConstMeta => const TaskConstMeta(
+            debugName: "csv_import_job_drop",
+            argNames: ["jobId"],
+        );
+        
+
+@override Future<String> crateApiCsvImportCsvImportJobStart({required String content , required String preset })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_String(content, serializer);
+sse_encode_String(preset, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 21, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_String,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiCsvImportCsvImportJobStartConstMeta,
-        argValues: [content, preset],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiCsvImportCsvImportJobStartConstMeta,
+            argValues: [content, preset],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiCsvImportCsvImportJobStartConstMeta =>
-      const TaskConstMeta(
-        debugName: "csv_import_job_start",
-        argNames: ["content", "preset"],
-      );
 
-  @override
-  Future<ImportJobStatusView> crateApiCsvImportCsvImportJobStatus({
-    required String jobId,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_String(jobId, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 22,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiCsvImportCsvImportJobStartConstMeta => const TaskConstMeta(
+            debugName: "csv_import_job_start",
+            argNames: ["content", "preset"],
+        );
+        
+
+@override Future<ImportJobStatusView> crateApiCsvImportCsvImportJobStatus({required String jobId })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_String(jobId, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 22, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_import_job_status_view,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiCsvImportCsvImportJobStatusConstMeta,
-        argValues: [jobId],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiCsvImportCsvImportJobStatusConstMeta,
+            argValues: [jobId],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiCsvImportCsvImportJobStatusConstMeta =>
-      const TaskConstMeta(
-        debugName: "csv_import_job_status",
-        argNames: ["jobId"],
-      );
 
-  @override
-  Future<ImportLimitsView> crateApiCsvImportCsvImportLimits() {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 23,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiCsvImportCsvImportJobStatusConstMeta => const TaskConstMeta(
+            debugName: "csv_import_job_status",
+            argNames: ["jobId"],
+        );
+        
+
+@override Future<ImportLimitsView> crateApiCsvImportCsvImportLimits()  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 23, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_import_limits_view,
           decodeErrorData: null,
-        ),
-        constMeta: kCrateApiCsvImportCsvImportLimitsConstMeta,
-        argValues: [],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiCsvImportCsvImportLimitsConstMeta,
+            argValues: [],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiCsvImportCsvImportLimitsConstMeta =>
-      const TaskConstMeta(debugName: "csv_import_limits", argNames: []);
 
-  @override
-  Future<CsvImportPreviewView> crateApiCsvImportCsvImportPreview({
-    required String content,
-    required String preset,
-    BigInt? previewLimit,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_String(content, serializer);
-          sse_encode_String(preset, serializer);
-          sse_encode_opt_box_autoadd_usize(previewLimit, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 24,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiCsvImportCsvImportLimitsConstMeta => const TaskConstMeta(
+            debugName: "csv_import_limits",
+            argNames: [],
+        );
+        
+
+@override Future<CsvImportPreviewView> crateApiCsvImportCsvImportPreview({required String content , required String preset , BigInt? previewLimit })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_String(content, serializer);
+sse_encode_String(preset, serializer);
+sse_encode_opt_box_autoadd_usize(previewLimit, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 24, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_csv_import_preview_view,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiCsvImportCsvImportPreviewConstMeta,
-        argValues: [content, preset, previewLimit],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiCsvImportCsvImportPreviewConstMeta,
+            argValues: [content, preset, previewLimit],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiCsvImportCsvImportPreviewConstMeta =>
-      const TaskConstMeta(
-        debugName: "csv_import_preview",
-        argNames: ["content", "preset", "previewLimit"],
-      );
 
-  @override
-  Future<String> crateApiAuthDbGetDeviceId() {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 25,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiCsvImportCsvImportPreviewConstMeta => const TaskConstMeta(
+            debugName: "csv_import_preview",
+            argNames: ["content", "preset", "previewLimit"],
+        );
+        
+
+@override Future<String> crateApiAuthDbGetDeviceId()  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 25, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_String,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiAuthDbGetDeviceIdConstMeta,
-        argValues: [],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiAuthDbGetDeviceIdConstMeta,
+            argValues: [],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiAuthDbGetDeviceIdConstMeta =>
-      const TaskConstMeta(debugName: "db_get_device_id", argNames: []);
 
-  @override
-  Future<void> crateApiAuthDbInitEncrypted({
-    required String baseDir,
-    required String dbKeyHex,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_String(baseDir, serializer);
-          sse_encode_String(dbKeyHex, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 26,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiAuthDbGetDeviceIdConstMeta => const TaskConstMeta(
+            debugName: "db_get_device_id",
+            argNames: [],
+        );
+        
+
+@override Future<void> crateApiAuthDbInitEncrypted({required String baseDir , required String dbKeyHex })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_String(baseDir, serializer);
+sse_encode_String(dbKeyHex, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 26, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_unit,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiAuthDbInitEncryptedConstMeta,
-        argValues: [baseDir, dbKeyHex],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiAuthDbInitEncryptedConstMeta,
+            argValues: [baseDir, dbKeyHex],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiAuthDbInitEncryptedConstMeta =>
-      const TaskConstMeta(
-        debugName: "db_init_encrypted",
-        argNames: ["baseDir", "dbKeyHex"],
-      );
 
-  @override
-  Future<void> crateApiAuthDbInitPlaintext({required String baseDir}) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_String(baseDir, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 27,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiAuthDbInitEncryptedConstMeta => const TaskConstMeta(
+            debugName: "db_init_encrypted",
+            argNames: ["baseDir", "dbKeyHex"],
+        );
+        
+
+@override Future<void> crateApiAuthDbInitPlaintext({required String baseDir })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_String(baseDir, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 27, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_unit,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiAuthDbInitPlaintextConstMeta,
-        argValues: [baseDir],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiAuthDbInitPlaintextConstMeta,
+            argValues: [baseDir],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiAuthDbInitPlaintextConstMeta =>
-      const TaskConstMeta(
-        debugName: "db_init_plaintext",
-        argNames: ["baseDir"],
-      );
 
-  @override
-  Future<bool> crateApiAuthDbIsReady() {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 28,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiAuthDbInitPlaintextConstMeta => const TaskConstMeta(
+            debugName: "db_init_plaintext",
+            argNames: ["baseDir"],
+        );
+        
+
+@override Future<bool> crateApiAuthDbIsReady()  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 28, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_bool,
           decodeErrorData: null,
-        ),
-        constMeta: kCrateApiAuthDbIsReadyConstMeta,
-        argValues: [],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiAuthDbIsReadyConstMeta,
+            argValues: [],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiAuthDbIsReadyConstMeta =>
-      const TaskConstMeta(debugName: "db_is_ready", argNames: []);
 
-  @override
-  Future<DbMaintenanceView> crateApiMaintenanceDbMaintenance() {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 29,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiAuthDbIsReadyConstMeta => const TaskConstMeta(
+            debugName: "db_is_ready",
+            argNames: [],
+        );
+        
+
+@override Future<DbMaintenanceView> crateApiMaintenanceDbMaintenance()  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 29, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_db_maintenance_view,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiMaintenanceDbMaintenanceConstMeta,
-        argValues: [],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiMaintenanceDbMaintenanceConstMeta,
+            argValues: [],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiMaintenanceDbMaintenanceConstMeta =>
-      const TaskConstMeta(debugName: "db_maintenance", argNames: []);
 
-  @override
-  Future<void> crateApiAuthDbMigrateToEncrypted({required String dbKeyHex}) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_String(dbKeyHex, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 30,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiMaintenanceDbMaintenanceConstMeta => const TaskConstMeta(
+            debugName: "db_maintenance",
+            argNames: [],
+        );
+        
+
+@override Future<void> crateApiAuthDbMigrateToEncrypted({required String dbKeyHex })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_String(dbKeyHex, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 30, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_unit,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiAuthDbMigrateToEncryptedConstMeta,
-        argValues: [dbKeyHex],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiAuthDbMigrateToEncryptedConstMeta,
+            argValues: [dbKeyHex],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiAuthDbMigrateToEncryptedConstMeta =>
-      const TaskConstMeta(
-        debugName: "db_migrate_to_encrypted",
-        argNames: ["dbKeyHex"],
-      );
 
-  @override
-  Future<void> crateApiAuthDbMigrateToPlaintext() {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 31,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiAuthDbMigrateToEncryptedConstMeta => const TaskConstMeta(
+            debugName: "db_migrate_to_encrypted",
+            argNames: ["dbKeyHex"],
+        );
+        
+
+@override Future<void> crateApiAuthDbMigrateToPlaintext()  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 31, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_unit,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiAuthDbMigrateToPlaintextConstMeta,
-        argValues: [],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiAuthDbMigrateToPlaintextConstMeta,
+            argValues: [],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiAuthDbMigrateToPlaintextConstMeta =>
-      const TaskConstMeta(debugName: "db_migrate_to_plaintext", argNames: []);
 
-  @override
-  Future<void> crateApiAuthDbResetState() {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 32,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiAuthDbMigrateToPlaintextConstMeta => const TaskConstMeta(
+            debugName: "db_migrate_to_plaintext",
+            argNames: [],
+        );
+        
+
+@override Future<void> crateApiAuthDbResetState()  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 32, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_unit,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiAuthDbResetStateConstMeta,
-        argValues: [],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiAuthDbResetStateConstMeta,
+            argValues: [],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiAuthDbResetStateConstMeta =>
-      const TaskConstMeta(debugName: "db_reset_state", argNames: []);
 
-  @override
-  Future<void> crateApiAuthDbSetDeviceId({required String deviceId}) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_String(deviceId, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 33,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiAuthDbResetStateConstMeta => const TaskConstMeta(
+            debugName: "db_reset_state",
+            argNames: [],
+        );
+        
+
+@override Future<void> crateApiAuthDbSetDeviceId({required String deviceId })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_String(deviceId, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 33, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_unit,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiAuthDbSetDeviceIdConstMeta,
-        argValues: [deviceId],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiAuthDbSetDeviceIdConstMeta,
+            argValues: [deviceId],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiAuthDbSetDeviceIdConstMeta => const TaskConstMeta(
-    debugName: "db_set_device_id",
-    argNames: ["deviceId"],
-  );
 
-  @override
-  Future<DiagnosticsSnapshot> crateApiDiagnosticsDiagnosticsSnapshot() {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 34,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiAuthDbSetDeviceIdConstMeta => const TaskConstMeta(
+            debugName: "db_set_device_id",
+            argNames: ["deviceId"],
+        );
+        
+
+@override Future<DiagnosticsSnapshot> crateApiDiagnosticsDiagnosticsSnapshot()  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 34, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_diagnostics_snapshot,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiDiagnosticsDiagnosticsSnapshotConstMeta,
-        argValues: [],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiDiagnosticsDiagnosticsSnapshotConstMeta,
+            argValues: [],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiDiagnosticsDiagnosticsSnapshotConstMeta =>
-      const TaskConstMeta(debugName: "diagnostics_snapshot", argNames: []);
 
-  @override
-  Future<String> crateApiDigestDigestBody() {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 35,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiDiagnosticsDiagnosticsSnapshotConstMeta => const TaskConstMeta(
+            debugName: "diagnostics_snapshot",
+            argNames: [],
+        );
+        
+
+@override Future<String> crateApiDigestDigestBody()  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 35, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_String,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiDigestDigestBodyConstMeta,
-        argValues: [],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiDigestDigestBodyConstMeta,
+            argValues: [],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiDigestDigestBodyConstMeta =>
-      const TaskConstMeta(debugName: "digest_body", argNames: []);
 
-  @override
-  Future<DigestPrefs> crateApiDigestDigestPrefs() {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 36,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiDigestDigestBodyConstMeta => const TaskConstMeta(
+            debugName: "digest_body",
+            argNames: [],
+        );
+        
+
+@override Future<DigestPrefs> crateApiDigestDigestPrefs()  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 36, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_digest_prefs,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiDigestDigestPrefsConstMeta,
-        argValues: [],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiDigestDigestPrefsConstMeta,
+            argValues: [],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiDigestDigestPrefsConstMeta =>
-      const TaskConstMeta(debugName: "digest_prefs", argNames: []);
 
-  @override
-  Future<void> crateApiDigestDigestSetPrefs({
-    required bool enabled,
-    required PlatformInt64 hour,
-    required PlatformInt64 minute,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_bool(enabled, serializer);
-          sse_encode_i_64(hour, serializer);
-          sse_encode_i_64(minute, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 37,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiDigestDigestPrefsConstMeta => const TaskConstMeta(
+            debugName: "digest_prefs",
+            argNames: [],
+        );
+        
+
+@override Future<void> crateApiDigestDigestSetPrefs({required bool enabled , required PlatformInt64 hour , required PlatformInt64 minute })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_bool(enabled, serializer);
+sse_encode_i_64(hour, serializer);
+sse_encode_i_64(minute, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 37, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_unit,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiDigestDigestSetPrefsConstMeta,
-        argValues: [enabled, hour, minute],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiDigestDigestSetPrefsConstMeta,
+            argValues: [enabled, hour, minute],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiDigestDigestSetPrefsConstMeta =>
-      const TaskConstMeta(
-        debugName: "digest_set_prefs",
-        argNames: ["enabled", "hour", "minute"],
-      );
 
-  @override
-  Future<DigestSummary> crateApiDigestDigestSummary() {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 38,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiDigestDigestSetPrefsConstMeta => const TaskConstMeta(
+            debugName: "digest_set_prefs",
+            argNames: ["enabled", "hour", "minute"],
+        );
+        
+
+@override Future<DigestSummary> crateApiDigestDigestSummary()  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 38, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_digest_summary,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiDigestDigestSummaryConstMeta,
-        argValues: [],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiDigestDigestSummaryConstMeta,
+            argValues: [],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiDigestDigestSummaryConstMeta =>
-      const TaskConstMeta(debugName: "digest_summary", argNames: []);
 
-  @override
-  Future<void> crateApiFullSyncBackupFullBackupDeleteLocal({
-    required String filePath,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_String(filePath, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 39,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiDigestDigestSummaryConstMeta => const TaskConstMeta(
+            debugName: "digest_summary",
+            argNames: [],
+        );
+        
+
+@override Future<void> crateApiFullSyncBackupFullBackupDeleteLocal({required String filePath })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_String(filePath, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 39, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_unit,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiFullSyncBackupFullBackupDeleteLocalConstMeta,
-        argValues: [filePath],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiFullSyncBackupFullBackupDeleteLocalConstMeta,
+            argValues: [filePath],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiFullSyncBackupFullBackupDeleteLocalConstMeta =>
-      const TaskConstMeta(
-        debugName: "full_backup_delete_local",
-        argNames: ["filePath"],
-      );
 
-  @override
-  Future<BackupDeviceInfo> crateApiFullSyncBackupFullBackupDeviceInfo() {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 40,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiFullSyncBackupFullBackupDeleteLocalConstMeta => const TaskConstMeta(
+            debugName: "full_backup_delete_local",
+            argNames: ["filePath"],
+        );
+        
+
+@override Future<BackupDeviceInfo> crateApiFullSyncBackupFullBackupDeviceInfo()  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 40, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_backup_device_info,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiFullSyncBackupFullBackupDeviceInfoConstMeta,
-        argValues: [],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiFullSyncBackupFullBackupDeviceInfoConstMeta,
+            argValues: [],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiFullSyncBackupFullBackupDeviceInfoConstMeta =>
-      const TaskConstMeta(debugName: "full_backup_device_info", argNames: []);
 
-  @override
-  Future<BackupExportResult> crateApiFullSyncBackupFullBackupExport({
-    required bool uploadCloud,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_bool(uploadCloud, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 41,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiFullSyncBackupFullBackupDeviceInfoConstMeta => const TaskConstMeta(
+            debugName: "full_backup_device_info",
+            argNames: [],
+        );
+        
+
+@override Future<BackupExportResult> crateApiFullSyncBackupFullBackupExport({required bool uploadCloud })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_bool(uploadCloud, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 41, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_backup_export_result,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiFullSyncBackupFullBackupExportConstMeta,
-        argValues: [uploadCloud],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiFullSyncBackupFullBackupExportConstMeta,
+            argValues: [uploadCloud],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiFullSyncBackupFullBackupExportConstMeta =>
-      const TaskConstMeta(
-        debugName: "full_backup_export",
-        argNames: ["uploadCloud"],
-      );
 
-  @override
-  Future<BackupImportResult> crateApiFullSyncBackupFullBackupImport({
-    required List<int> bytes,
-    required bool ignoreSchemaMismatch,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_list_prim_u_8_loose(bytes, serializer);
-          sse_encode_bool(ignoreSchemaMismatch, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 42,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiFullSyncBackupFullBackupExportConstMeta => const TaskConstMeta(
+            debugName: "full_backup_export",
+            argNames: ["uploadCloud"],
+        );
+        
+
+@override Future<BackupImportResult> crateApiFullSyncBackupFullBackupImport({required List<int> bytes , required bool ignoreSchemaMismatch })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_list_prim_u_8_loose(bytes, serializer);
+sse_encode_bool(ignoreSchemaMismatch, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 42, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_backup_import_result,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiFullSyncBackupFullBackupImportConstMeta,
-        argValues: [bytes, ignoreSchemaMismatch],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiFullSyncBackupFullBackupImportConstMeta,
+            argValues: [bytes, ignoreSchemaMismatch],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiFullSyncBackupFullBackupImportConstMeta =>
-      const TaskConstMeta(
-        debugName: "full_backup_import",
-        argNames: ["bytes", "ignoreSchemaMismatch"],
-      );
 
-  @override
-  Future<List<CloudBackupEntryView>>
-  crateApiFullSyncBackupFullBackupListCloud() {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 43,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiFullSyncBackupFullBackupImportConstMeta => const TaskConstMeta(
+            debugName: "full_backup_import",
+            argNames: ["bytes", "ignoreSchemaMismatch"],
+        );
+        
+
+@override Future<BackupImportResult> crateApiFullSyncBackupFullBackupImportPath({required String filePath , required bool ignoreSchemaMismatch })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_String(filePath, serializer);
+sse_encode_bool(ignoreSchemaMismatch, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 43, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
+          decodeSuccessData: sse_decode_backup_import_result,
+          decodeErrorData: sse_decode_String,
+        )
+        ,
+            constMeta: kCrateApiFullSyncBackupFullBackupImportPathConstMeta,
+            argValues: [filePath, ignoreSchemaMismatch],
+            apiImpl: this,
+        )); }
+
+
+        TaskConstMeta get kCrateApiFullSyncBackupFullBackupImportPathConstMeta => const TaskConstMeta(
+            debugName: "full_backup_import_path",
+            argNames: ["filePath", "ignoreSchemaMismatch"],
+        );
+        
+
+@override Future<List<CloudBackupEntryView>> crateApiFullSyncBackupFullBackupListCloud()  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 44, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_list_cloud_backup_entry_view,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiFullSyncBackupFullBackupListCloudConstMeta,
-        argValues: [],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiFullSyncBackupFullBackupListCloudConstMeta,
+            argValues: [],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiFullSyncBackupFullBackupListCloudConstMeta =>
-      const TaskConstMeta(debugName: "full_backup_list_cloud", argNames: []);
 
-  @override
-  Future<List<BackupEntryView>> crateApiFullSyncBackupFullBackupListLocal() {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 44,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiFullSyncBackupFullBackupListCloudConstMeta => const TaskConstMeta(
+            debugName: "full_backup_list_cloud",
+            argNames: [],
+        );
+        
+
+@override Future<List<BackupEntryView>> crateApiFullSyncBackupFullBackupListLocal()  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 45, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_list_backup_entry_view,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiFullSyncBackupFullBackupListLocalConstMeta,
-        argValues: [],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiFullSyncBackupFullBackupListLocalConstMeta,
+            argValues: [],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiFullSyncBackupFullBackupListLocalConstMeta =>
-      const TaskConstMeta(debugName: "full_backup_list_local", argNames: []);
 
-  @override
-  Future<BackupPreviewView> crateApiFullSyncBackupFullBackupPeekCloud({
-    required String cloudPath,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_String(cloudPath, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 45,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiFullSyncBackupFullBackupListLocalConstMeta => const TaskConstMeta(
+            debugName: "full_backup_list_local",
+            argNames: [],
+        );
+        
+
+@override Future<BackupPreviewView> crateApiFullSyncBackupFullBackupPeekCloud({required String cloudPath })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_String(cloudPath, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 46, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_backup_preview_view,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiFullSyncBackupFullBackupPeekCloudConstMeta,
-        argValues: [cloudPath],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiFullSyncBackupFullBackupPeekCloudConstMeta,
+            argValues: [cloudPath],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiFullSyncBackupFullBackupPeekCloudConstMeta =>
-      const TaskConstMeta(
-        debugName: "full_backup_peek_cloud",
-        argNames: ["cloudPath"],
-      );
 
-  @override
-  Future<BackupPreviewView> crateApiFullSyncBackupFullBackupPeekLocal({
-    required List<int> bytes,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_list_prim_u_8_loose(bytes, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 46,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiFullSyncBackupFullBackupPeekCloudConstMeta => const TaskConstMeta(
+            debugName: "full_backup_peek_cloud",
+            argNames: ["cloudPath"],
+        );
+        
+
+@override Future<BackupPreviewView> crateApiFullSyncBackupFullBackupPeekLocal({required List<int> bytes })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_list_prim_u_8_loose(bytes, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 47, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_backup_preview_view,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiFullSyncBackupFullBackupPeekLocalConstMeta,
-        argValues: [bytes],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiFullSyncBackupFullBackupPeekLocalConstMeta,
+            argValues: [bytes],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiFullSyncBackupFullBackupPeekLocalConstMeta =>
-      const TaskConstMeta(
-        debugName: "full_backup_peek_local",
-        argNames: ["bytes"],
-      );
 
-  @override
-  Future<BackupImportResult> crateApiFullSyncBackupFullBackupRestoreCloud({
-    required String cloudPath,
-    required bool ignoreSchemaMismatch,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_String(cloudPath, serializer);
-          sse_encode_bool(ignoreSchemaMismatch, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 47,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiFullSyncBackupFullBackupPeekLocalConstMeta => const TaskConstMeta(
+            debugName: "full_backup_peek_local",
+            argNames: ["bytes"],
+        );
+        
+
+@override Future<BackupPreviewView> crateApiFullSyncBackupFullBackupPeekPath({required String filePath })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_String(filePath, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 48, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
+          decodeSuccessData: sse_decode_backup_preview_view,
+          decodeErrorData: sse_decode_String,
+        )
+        ,
+            constMeta: kCrateApiFullSyncBackupFullBackupPeekPathConstMeta,
+            argValues: [filePath],
+            apiImpl: this,
+        )); }
+
+
+        TaskConstMeta get kCrateApiFullSyncBackupFullBackupPeekPathConstMeta => const TaskConstMeta(
+            debugName: "full_backup_peek_path",
+            argNames: ["filePath"],
+        );
+        
+
+@override Future<BackupImportResult> crateApiFullSyncBackupFullBackupRestoreCloud({required String cloudPath , required bool ignoreSchemaMismatch })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_String(cloudPath, serializer);
+sse_encode_bool(ignoreSchemaMismatch, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 49, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_backup_import_result,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiFullSyncBackupFullBackupRestoreCloudConstMeta,
-        argValues: [cloudPath, ignoreSchemaMismatch],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiFullSyncBackupFullBackupRestoreCloudConstMeta,
+            argValues: [cloudPath, ignoreSchemaMismatch],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiFullSyncBackupFullBackupRestoreCloudConstMeta =>
-      const TaskConstMeta(
-        debugName: "full_backup_restore_cloud",
-        argNames: ["cloudPath", "ignoreSchemaMismatch"],
-      );
 
-  @override
-  Future<GlobalSearchResult> crateApiSearchGlobalSearch({
-    required String keyword,
-    int? limit,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_String(keyword, serializer);
-          sse_encode_opt_box_autoadd_i_32(limit, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 48,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiFullSyncBackupFullBackupRestoreCloudConstMeta => const TaskConstMeta(
+            debugName: "full_backup_restore_cloud",
+            argNames: ["cloudPath", "ignoreSchemaMismatch"],
+        );
+        
+
+@override Future<GlobalSearchResult> crateApiSearchGlobalSearch({required String keyword , int? limit })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_String(keyword, serializer);
+sse_encode_opt_box_autoadd_i_32(limit, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 50, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_global_search_result,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiSearchGlobalSearchConstMeta,
-        argValues: [keyword, limit],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiSearchGlobalSearchConstMeta,
+            argValues: [keyword, limit],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiSearchGlobalSearchConstMeta => const TaskConstMeta(
-    debugName: "global_search",
-    argNames: ["keyword", "limit"],
-  );
 
-  @override
-  Future<GlobalSearchResult> crateApiSearchGlobalSearchResultDefault() {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 49,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiSearchGlobalSearchConstMeta => const TaskConstMeta(
+            debugName: "global_search",
+            argNames: ["keyword", "limit"],
+        );
+        
+
+@override Future<GlobalSearchResult> crateApiSearchGlobalSearchResultDefault()  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 51, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_global_search_result,
           decodeErrorData: null,
-        ),
-        constMeta: kCrateApiSearchGlobalSearchResultDefaultConstMeta,
-        argValues: [],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiSearchGlobalSearchResultDefaultConstMeta,
+            argValues: [],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiSearchGlobalSearchResultDefaultConstMeta =>
-      const TaskConstMeta(
-        debugName: "global_search_result_default",
-        argNames: [],
-      );
 
-  @override
-  Future<void> crateApiHolidayHolidayCancelFetch() {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 50,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiSearchGlobalSearchResultDefaultConstMeta => const TaskConstMeta(
+            debugName: "global_search_result_default",
+            argNames: [],
+        );
+        
+
+@override Future<void> crateApiHolidayHolidayCancelFetch()  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 52, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_unit,
           decodeErrorData: null,
-        ),
-        constMeta: kCrateApiHolidayHolidayCancelFetchConstMeta,
-        argValues: [],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiHolidayHolidayCancelFetchConstMeta,
+            argValues: [],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiHolidayHolidayCancelFetchConstMeta =>
-      const TaskConstMeta(debugName: "holiday_cancel_fetch", argNames: []);
 
-  @override
-  Future<HolidayRangeSummary> crateApiHolidayHolidayFetchRange({
-    required int start,
-    required int end,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_i_32(start, serializer);
-          sse_encode_i_32(end, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 51,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiHolidayHolidayCancelFetchConstMeta => const TaskConstMeta(
+            debugName: "holiday_cancel_fetch",
+            argNames: [],
+        );
+        
+
+@override Future<HolidayRangeSummary> crateApiHolidayHolidayFetchRange({required int start , required int end })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_i_32(start, serializer);
+sse_encode_i_32(end, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 53, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_holiday_range_summary,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiHolidayHolidayFetchRangeConstMeta,
-        argValues: [start, end],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiHolidayHolidayFetchRangeConstMeta,
+            argValues: [start, end],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiHolidayHolidayFetchRangeConstMeta =>
-      const TaskConstMeta(
-        debugName: "holiday_fetch_range",
-        argNames: ["start", "end"],
-      );
 
-  @override
-  Future<HolidayYearOutcome> crateApiHolidayHolidayFetchYear({
-    required int year,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_i_32(year, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 52,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiHolidayHolidayFetchRangeConstMeta => const TaskConstMeta(
+            debugName: "holiday_fetch_range",
+            argNames: ["start", "end"],
+        );
+        
+
+@override Future<HolidayYearOutcome> crateApiHolidayHolidayFetchYear({required int year })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_i_32(year, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 54, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_holiday_year_outcome,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiHolidayHolidayFetchYearConstMeta,
-        argValues: [year],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiHolidayHolidayFetchYearConstMeta,
+            argValues: [year],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiHolidayHolidayFetchYearConstMeta =>
-      const TaskConstMeta(debugName: "holiday_fetch_year", argNames: ["year"]);
 
-  @override
-  Future<bool?> crateApiHolidayHolidayIsOn({required String date}) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_String(date, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 53,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiHolidayHolidayFetchYearConstMeta => const TaskConstMeta(
+            debugName: "holiday_fetch_year",
+            argNames: ["year"],
+        );
+        
+
+@override Future<bool?> crateApiHolidayHolidayIsOn({required String date })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_String(date, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 55, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_opt_box_autoadd_bool,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiHolidayHolidayIsOnConstMeta,
-        argValues: [date],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiHolidayHolidayIsOnConstMeta,
+            argValues: [date],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiHolidayHolidayIsOnConstMeta =>
-      const TaskConstMeta(debugName: "holiday_is_on", argNames: ["date"]);
 
-  @override
-  Future<List<HolidayInfo>> crateApiHolidayHolidayList() {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 54,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiHolidayHolidayIsOnConstMeta => const TaskConstMeta(
+            debugName: "holiday_is_on",
+            argNames: ["date"],
+        );
+        
+
+@override Future<List<HolidayInfo>> crateApiHolidayHolidayList()  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 56, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_list_holiday_info,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiHolidayHolidayListConstMeta,
-        argValues: [],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiHolidayHolidayListConstMeta,
+            argValues: [],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiHolidayHolidayListConstMeta =>
-      const TaskConstMeta(debugName: "holiday_list", argNames: []);
 
-  @override
-  Future<HolidayMeta> crateApiHolidayHolidayMeta() {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 55,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiHolidayHolidayListConstMeta => const TaskConstMeta(
+            debugName: "holiday_list",
+            argNames: [],
+        );
+        
+
+@override Future<HolidayMeta> crateApiHolidayHolidayMeta()  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 57, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_holiday_meta,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiHolidayHolidayMetaConstMeta,
-        argValues: [],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiHolidayHolidayMetaConstMeta,
+            argValues: [],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiHolidayHolidayMetaConstMeta =>
-      const TaskConstMeta(debugName: "holiday_meta", argNames: []);
 
-  @override
-  Future<void> crateApiHolidayHolidaySetAutoEnabled({required bool enabled}) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_bool(enabled, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 56,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiHolidayHolidayMetaConstMeta => const TaskConstMeta(
+            debugName: "holiday_meta",
+            argNames: [],
+        );
+        
+
+@override Future<void> crateApiHolidayHolidaySetAutoEnabled({required bool enabled })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_bool(enabled, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 58, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_unit,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiHolidayHolidaySetAutoEnabledConstMeta,
-        argValues: [enabled],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiHolidayHolidaySetAutoEnabledConstMeta,
+            argValues: [enabled],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiHolidayHolidaySetAutoEnabledConstMeta =>
-      const TaskConstMeta(
-        debugName: "holiday_set_auto_enabled",
-        argNames: ["enabled"],
-      );
 
-  @override
-  Future<HolidayMeta> crateApiHolidayHolidayUpdate() {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 57,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiHolidayHolidaySetAutoEnabledConstMeta => const TaskConstMeta(
+            debugName: "holiday_set_auto_enabled",
+            argNames: ["enabled"],
+        );
+        
+
+@override Future<HolidayMeta> crateApiHolidayHolidayUpdate()  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 59, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_holiday_meta,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiHolidayHolidayUpdateConstMeta,
-        argValues: [],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiHolidayHolidayUpdateConstMeta,
+            argValues: [],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiHolidayHolidayUpdateConstMeta =>
-      const TaskConstMeta(debugName: "holiday_update", argNames: []);
 
-  @override
-  Future<IcsExportView> crateApiIcsExportIcsExport() {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 58,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiHolidayHolidayUpdateConstMeta => const TaskConstMeta(
+            debugName: "holiday_update",
+            argNames: [],
+        );
+        
+
+@override Future<IcsExportView> crateApiIcsExportIcsExport()  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 60, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_ics_export_view,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiIcsExportIcsExportConstMeta,
-        argValues: [],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiIcsExportIcsExportConstMeta,
+            argValues: [],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiIcsExportIcsExportConstMeta =>
-      const TaskConstMeta(debugName: "ics_export", argNames: []);
 
-  @override
-  Future<void> crateApiLoggingInitApp() {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 59,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiIcsExportIcsExportConstMeta => const TaskConstMeta(
+            debugName: "ics_export",
+            argNames: [],
+        );
+        
+
+@override Future<void> crateApiLoggingInitApp()  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 61, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_unit,
           decodeErrorData: null,
-        ),
-        constMeta: kCrateApiLoggingInitAppConstMeta,
-        argValues: [],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiLoggingInitAppConstMeta,
+            argValues: [],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiLoggingInitAppConstMeta =>
-      const TaskConstMeta(debugName: "init_app", argNames: []);
 
-  @override
-  Future<void> crateApiAuthMasterAuthChangePassword({
-    required String baseDir,
-    required String oldPassword,
-    required String newPassword,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_String(baseDir, serializer);
-          sse_encode_String(oldPassword, serializer);
-          sse_encode_String(newPassword, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 60,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiLoggingInitAppConstMeta => const TaskConstMeta(
+            debugName: "init_app",
+            argNames: [],
+        );
+        
+
+@override Future<void> crateApiAuthMasterAuthChangePassword({required String baseDir , required String oldPassword , required String newPassword })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_String(baseDir, serializer);
+sse_encode_String(oldPassword, serializer);
+sse_encode_String(newPassword, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 62, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_unit,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiAuthMasterAuthChangePasswordConstMeta,
-        argValues: [baseDir, oldPassword, newPassword],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiAuthMasterAuthChangePasswordConstMeta,
+            argValues: [baseDir, oldPassword, newPassword],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiAuthMasterAuthChangePasswordConstMeta =>
-      const TaskConstMeta(
-        debugName: "master_auth_change_password",
-        argNames: ["baseDir", "oldPassword", "newPassword"],
-      );
 
-  @override
-  Future<void> crateApiAuthMasterAuthClear({required String baseDir}) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_String(baseDir, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 61,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiAuthMasterAuthChangePasswordConstMeta => const TaskConstMeta(
+            debugName: "master_auth_change_password",
+            argNames: ["baseDir", "oldPassword", "newPassword"],
+        );
+        
+
+@override Future<void> crateApiAuthMasterAuthClear({required String baseDir })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_String(baseDir, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 63, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_unit,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiAuthMasterAuthClearConstMeta,
-        argValues: [baseDir],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiAuthMasterAuthClearConstMeta,
+            argValues: [baseDir],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiAuthMasterAuthClearConstMeta =>
-      const TaskConstMeta(
-        debugName: "master_auth_clear",
-        argNames: ["baseDir"],
-      );
 
-  @override
-  Future<bool> crateApiAuthMasterAuthHas({required String baseDir}) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_String(baseDir, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 62,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiAuthMasterAuthClearConstMeta => const TaskConstMeta(
+            debugName: "master_auth_clear",
+            argNames: ["baseDir"],
+        );
+        
+
+@override Future<bool> crateApiAuthMasterAuthHas({required String baseDir })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_String(baseDir, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 64, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_bool,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiAuthMasterAuthHasConstMeta,
-        argValues: [baseDir],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiAuthMasterAuthHasConstMeta,
+            argValues: [baseDir],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiAuthMasterAuthHasConstMeta =>
-      const TaskConstMeta(debugName: "master_auth_has", argNames: ["baseDir"]);
 
-  @override
-  Future<String> crateApiAuthMasterAuthInit({
-    required String baseDir,
-    required String password,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_String(baseDir, serializer);
-          sse_encode_String(password, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 63,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiAuthMasterAuthHasConstMeta => const TaskConstMeta(
+            debugName: "master_auth_has",
+            argNames: ["baseDir"],
+        );
+        
+
+@override Future<String> crateApiAuthMasterAuthInit({required String baseDir , required String password })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_String(baseDir, serializer);
+sse_encode_String(password, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 65, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_String,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiAuthMasterAuthInitConstMeta,
-        argValues: [baseDir, password],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiAuthMasterAuthInitConstMeta,
+            argValues: [baseDir, password],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiAuthMasterAuthInitConstMeta => const TaskConstMeta(
-    debugName: "master_auth_init",
-    argNames: ["baseDir", "password"],
-  );
 
-  @override
-  Future<String> crateApiAuthMasterAuthUnlock({
-    required String baseDir,
-    required String password,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_String(baseDir, serializer);
-          sse_encode_String(password, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 64,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiAuthMasterAuthInitConstMeta => const TaskConstMeta(
+            debugName: "master_auth_init",
+            argNames: ["baseDir", "password"],
+        );
+        
+
+@override Future<String> crateApiAuthMasterAuthUnlock({required String baseDir , required String password })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_String(baseDir, serializer);
+sse_encode_String(password, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 66, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_String,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiAuthMasterAuthUnlockConstMeta,
-        argValues: [baseDir, password],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiAuthMasterAuthUnlockConstMeta,
+            argValues: [baseDir, password],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiAuthMasterAuthUnlockConstMeta =>
-      const TaskConstMeta(
-        debugName: "master_auth_unlock",
-        argNames: ["baseDir", "password"],
-      );
 
-  @override
-  Future<bool> crateApiAuthMasterAuthVerify({
-    required String baseDir,
-    required String password,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_String(baseDir, serializer);
-          sse_encode_String(password, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 65,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiAuthMasterAuthUnlockConstMeta => const TaskConstMeta(
+            debugName: "master_auth_unlock",
+            argNames: ["baseDir", "password"],
+        );
+        
+
+@override Future<bool> crateApiAuthMasterAuthVerify({required String baseDir , required String password })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_String(baseDir, serializer);
+sse_encode_String(password, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 67, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_bool,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiAuthMasterAuthVerifyConstMeta,
-        argValues: [baseDir, password],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiAuthMasterAuthVerifyConstMeta,
+            argValues: [baseDir, password],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiAuthMasterAuthVerifyConstMeta =>
-      const TaskConstMeta(
-        debugName: "master_auth_verify",
-        argNames: ["baseDir", "password"],
-      );
 
-  @override
-  Future<BigInt> crateApiNotificationLogNotificationLogClear() {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 66,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiAuthMasterAuthVerifyConstMeta => const TaskConstMeta(
+            debugName: "master_auth_verify",
+            argNames: ["baseDir", "password"],
+        );
+        
+
+@override Future<BigInt> crateApiNotificationLogNotificationLogClear()  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 68, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_u_64,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiNotificationLogNotificationLogClearConstMeta,
-        argValues: [],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiNotificationLogNotificationLogClearConstMeta,
+            argValues: [],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiNotificationLogNotificationLogClearConstMeta =>
-      const TaskConstMeta(debugName: "notification_log_clear", argNames: []);
 
-  @override
-  Future<List<NotificationLogRow>> crateApiNotificationLogNotificationLogList({
-    String? kind,
-    PlatformInt64? limit,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_opt_String(kind, serializer);
-          sse_encode_opt_box_autoadd_i_64(limit, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 67,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiNotificationLogNotificationLogClearConstMeta => const TaskConstMeta(
+            debugName: "notification_log_clear",
+            argNames: [],
+        );
+        
+
+@override Future<List<NotificationLogRow>> crateApiNotificationLogNotificationLogList({String? kind , PlatformInt64? limit })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_opt_String(kind, serializer);
+sse_encode_opt_box_autoadd_i_64(limit, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 69, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_list_notification_log_row,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiNotificationLogNotificationLogListConstMeta,
-        argValues: [kind, limit],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiNotificationLogNotificationLogListConstMeta,
+            argValues: [kind, limit],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiNotificationLogNotificationLogListConstMeta =>
-      const TaskConstMeta(
-        debugName: "notification_log_list",
-        argNames: ["kind", "limit"],
-      );
 
-  @override
-  Future<bool> crateApiStateOrbitStateInitialized() {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 68,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiNotificationLogNotificationLogListConstMeta => const TaskConstMeta(
+            debugName: "notification_log_list",
+            argNames: ["kind", "limit"],
+        );
+        
+
+@override Future<bool> crateApiStateOrbitStateInitialized()  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 70, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_bool,
           decodeErrorData: null,
-        ),
-        constMeta: kCrateApiStateOrbitStateInitializedConstMeta,
-        argValues: [],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiStateOrbitStateInitializedConstMeta,
+            argValues: [],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiStateOrbitStateInitializedConstMeta =>
-      const TaskConstMeta(debugName: "orbit_state_initialized", argNames: []);
 
-  @override
-  Future<String> crateApiAuthPing() {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 69,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiStateOrbitStateInitializedConstMeta => const TaskConstMeta(
+            debugName: "orbit_state_initialized",
+            argNames: [],
+        );
+        
+
+@override Future<String> crateApiAuthPing()  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 71, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_String,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiAuthPingConstMeta,
-        argValues: [],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiAuthPingConstMeta,
+            argValues: [],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiAuthPingConstMeta =>
-      const TaskConstMeta(debugName: "ping", argNames: []);
 
-  @override
-  Future<PlaintextExportView> crateApiPlaintextExportPlaintextExportCsv({
-    bool? excludeDeleted,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_opt_box_autoadd_bool(excludeDeleted, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 70,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiAuthPingConstMeta => const TaskConstMeta(
+            debugName: "ping",
+            argNames: [],
+        );
+        
+
+@override Future<PlaintextExportView> crateApiPlaintextExportPlaintextExportCsv({bool? excludeDeleted })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_opt_box_autoadd_bool(excludeDeleted, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 72, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_plaintext_export_view,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiPlaintextExportPlaintextExportCsvConstMeta,
-        argValues: [excludeDeleted],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiPlaintextExportPlaintextExportCsvConstMeta,
+            argValues: [excludeDeleted],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiPlaintextExportPlaintextExportCsvConstMeta =>
-      const TaskConstMeta(
-        debugName: "plaintext_export_csv",
-        argNames: ["excludeDeleted"],
-      );
 
-  @override
-  Future<PlaintextExportView> crateApiPlaintextExportPlaintextExportJson({
-    bool? excludeDeleted,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_opt_box_autoadd_bool(excludeDeleted, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 71,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiPlaintextExportPlaintextExportCsvConstMeta => const TaskConstMeta(
+            debugName: "plaintext_export_csv",
+            argNames: ["excludeDeleted"],
+        );
+        
+
+@override Future<PlaintextExportView> crateApiPlaintextExportPlaintextExportJson({bool? excludeDeleted })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_opt_box_autoadd_bool(excludeDeleted, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 73, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_plaintext_export_view,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiPlaintextExportPlaintextExportJsonConstMeta,
-        argValues: [excludeDeleted],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiPlaintextExportPlaintextExportJsonConstMeta,
+            argValues: [excludeDeleted],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiPlaintextExportPlaintextExportJsonConstMeta =>
-      const TaskConstMeta(
-        debugName: "plaintext_export_json",
-        argNames: ["excludeDeleted"],
-      );
 
-  @override
-  Future<TodoSavedFilter> crateApiSavedFilterSavedFilterCreate({
-    required TodoSavedFilterCreateInput input,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_box_autoadd_todo_saved_filter_create_input(
-            input,
-            serializer,
-          );
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 72,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiPlaintextExportPlaintextExportJsonConstMeta => const TaskConstMeta(
+            debugName: "plaintext_export_json",
+            argNames: ["excludeDeleted"],
+        );
+        
+
+@override Future<TodoSavedFilter> crateApiSavedFilterSavedFilterCreate({required TodoSavedFilterCreateInput input })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_box_autoadd_todo_saved_filter_create_input(input, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 74, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_todo_saved_filter,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiSavedFilterSavedFilterCreateConstMeta,
-        argValues: [input],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiSavedFilterSavedFilterCreateConstMeta,
+            argValues: [input],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiSavedFilterSavedFilterCreateConstMeta =>
-      const TaskConstMeta(
-        debugName: "saved_filter_create",
-        argNames: ["input"],
-      );
 
-  @override
-  Future<void> crateApiSavedFilterSavedFilterDelete({
-    required PlatformInt64 id,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_i_64(id, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 73,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiSavedFilterSavedFilterCreateConstMeta => const TaskConstMeta(
+            debugName: "saved_filter_create",
+            argNames: ["input"],
+        );
+        
+
+@override Future<void> crateApiSavedFilterSavedFilterDelete({required PlatformInt64 id })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_i_64(id, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 75, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_unit,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiSavedFilterSavedFilterDeleteConstMeta,
-        argValues: [id],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiSavedFilterSavedFilterDeleteConstMeta,
+            argValues: [id],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiSavedFilterSavedFilterDeleteConstMeta =>
-      const TaskConstMeta(debugName: "saved_filter_delete", argNames: ["id"]);
 
-  @override
-  Future<TodoSavedFilter> crateApiSavedFilterSavedFilterUpdate({
-    required PlatformInt64 id,
-    required TodoSavedFilterUpdateInput input,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_i_64(id, serializer);
-          sse_encode_box_autoadd_todo_saved_filter_update_input(
-            input,
-            serializer,
-          );
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 74,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiSavedFilterSavedFilterDeleteConstMeta => const TaskConstMeta(
+            debugName: "saved_filter_delete",
+            argNames: ["id"],
+        );
+        
+
+@override Future<TodoSavedFilter> crateApiSavedFilterSavedFilterUpdate({required PlatformInt64 id , required TodoSavedFilterUpdateInput input })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_i_64(id, serializer);
+sse_encode_box_autoadd_todo_saved_filter_update_input(input, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 76, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_todo_saved_filter,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiSavedFilterSavedFilterUpdateConstMeta,
-        argValues: [id, input],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiSavedFilterSavedFilterUpdateConstMeta,
+            argValues: [id, input],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiSavedFilterSavedFilterUpdateConstMeta =>
-      const TaskConstMeta(
-        debugName: "saved_filter_update",
-        argNames: ["id", "input"],
-      );
 
-  @override
-  Future<List<TodoSavedFilter>> crateApiSavedFilterSavedFiltersList() {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 75,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiSavedFilterSavedFilterUpdateConstMeta => const TaskConstMeta(
+            debugName: "saved_filter_update",
+            argNames: ["id", "input"],
+        );
+        
+
+@override Future<List<TodoSavedFilter>> crateApiSavedFilterSavedFiltersList()  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 77, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_list_todo_saved_filter,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiSavedFilterSavedFiltersListConstMeta,
-        argValues: [],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiSavedFilterSavedFiltersListConstMeta,
+            argValues: [],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiSavedFilterSavedFiltersListConstMeta =>
-      const TaskConstMeta(debugName: "saved_filters_list", argNames: []);
 
-  @override
-  Future<void> crateApiFullSyncBackupStartBackupScheduler() {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 76,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
-          decodeSuccessData: sse_decode_unit,
-          decodeErrorData: null,
-        ),
-        constMeta: kCrateApiFullSyncBackupStartBackupSchedulerConstMeta,
-        argValues: [],
-        apiImpl: this,
-      ),
-    );
-  }
+        TaskConstMeta get kCrateApiSavedFilterSavedFiltersListConstMeta => const TaskConstMeta(
+            debugName: "saved_filters_list",
+            argNames: [],
+        );
+        
 
-  TaskConstMeta get kCrateApiFullSyncBackupStartBackupSchedulerConstMeta =>
-      const TaskConstMeta(debugName: "start_backup_scheduler", argNames: []);
-
-  @override
-  Future<void> crateApiHolidayStartHolidayScheduler() {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 77,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
-          decodeSuccessData: sse_decode_unit,
-          decodeErrorData: null,
-        ),
-        constMeta: kCrateApiHolidayStartHolidaySchedulerConstMeta,
-        argValues: [],
-        apiImpl: this,
-      ),
-    );
-  }
-
-  TaskConstMeta get kCrateApiHolidayStartHolidaySchedulerConstMeta =>
-      const TaskConstMeta(debugName: "start_holiday_scheduler", argNames: []);
-
-  @override
-  Stream<ReminderDueDto> crateApiEventsStartReminderPoller() {
-    final sink = RustStreamSink<ReminderDueDto>();
-    unawaited(
-      handler.executeNormal(
-        NormalTask(
-          callFfi: (port_) {
+@override Future<void> crateApiFullSyncBackupStartBackupScheduler()  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
             final serializer = SseSerializer(generalizedFrbRustBinding);
-            sse_encode_StreamSink_reminder_due_dto_Sse(sink, serializer);
-            pdeCallFfi(
-              generalizedFrbRustBinding,
-              serializer,
-              funcId: 78,
-              port: port_,
-            );
-          },
-          codec: SseCodec(
-            decodeSuccessData: sse_decode_unit,
-            decodeErrorData: null,
-          ),
-          constMeta: kCrateApiEventsStartReminderPollerConstMeta,
-          argValues: [sink],
-          apiImpl: this,
-        ),
-      ),
-    );
-    return sink.stream;
-  }
-
-  TaskConstMeta get kCrateApiEventsStartReminderPollerConstMeta =>
-      const TaskConstMeta(
-        debugName: "start_reminder_poller",
-        argNames: ["sink"],
-      );
-
-  @override
-  Future<void> crateApiTrashStartTrashScheduler() {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 79,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 78, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_unit,
           decodeErrorData: null,
-        ),
-        constMeta: kCrateApiTrashStartTrashSchedulerConstMeta,
-        argValues: [],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiFullSyncBackupStartBackupSchedulerConstMeta,
+            argValues: [],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiTrashStartTrashSchedulerConstMeta =>
-      const TaskConstMeta(debugName: "start_trash_scheduler", argNames: []);
 
-  @override
-  Future<StatsAggregate> crateApiStatsStatsAggregate({PlatformInt64? year}) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_opt_box_autoadd_i_64(year, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 80,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiFullSyncBackupStartBackupSchedulerConstMeta => const TaskConstMeta(
+            debugName: "start_backup_scheduler",
+            argNames: [],
+        );
+        
+
+@override Future<void> crateApiHolidayStartHolidayScheduler()  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 79, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: null,
+        )
+        ,
+            constMeta: kCrateApiHolidayStartHolidaySchedulerConstMeta,
+            argValues: [],
+            apiImpl: this,
+        )); }
+
+
+        TaskConstMeta get kCrateApiHolidayStartHolidaySchedulerConstMeta => const TaskConstMeta(
+            debugName: "start_holiday_scheduler",
+            argNames: [],
+        );
+        
+
+@override Stream<ReminderDueDto> crateApiEventsStartReminderPoller()  { 
+            final sink = RustStreamSink<ReminderDueDto>();
+            unawaited(handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_StreamSink_reminder_due_dto_Sse(sink, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 80, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: null,
+        )
+        ,
+            constMeta: kCrateApiEventsStartReminderPollerConstMeta,
+            argValues: [sink],
+            apiImpl: this,
+        )));
+            return sink.stream;
+             }
+
+
+        TaskConstMeta get kCrateApiEventsStartReminderPollerConstMeta => const TaskConstMeta(
+            debugName: "start_reminder_poller",
+            argNames: ["sink"],
+        );
+        
+
+@override Future<void> crateApiTrashStartTrashScheduler()  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 81, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: null,
+        )
+        ,
+            constMeta: kCrateApiTrashStartTrashSchedulerConstMeta,
+            argValues: [],
+            apiImpl: this,
+        )); }
+
+
+        TaskConstMeta get kCrateApiTrashStartTrashSchedulerConstMeta => const TaskConstMeta(
+            debugName: "start_trash_scheduler",
+            argNames: [],
+        );
+        
+
+@override Future<StatsAggregate> crateApiStatsStatsAggregate({PlatformInt64? year })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_opt_box_autoadd_i_64(year, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 82, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_stats_aggregate,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiStatsStatsAggregateConstMeta,
-        argValues: [year],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiStatsStatsAggregateConstMeta,
+            argValues: [year],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiStatsStatsAggregateConstMeta =>
-      const TaskConstMeta(debugName: "stats_aggregate", argNames: ["year"]);
 
-  @override
-  Stream<DbEventDto> crateApiEventsSubscribeDbChanges() {
-    final sink = RustStreamSink<DbEventDto>();
-    unawaited(
-      handler.executeNormal(
-        NormalTask(
-          callFfi: (port_) {
+        TaskConstMeta get kCrateApiStatsStatsAggregateConstMeta => const TaskConstMeta(
+            debugName: "stats_aggregate",
+            argNames: ["year"],
+        );
+        
+
+@override Stream<DbEventDto> crateApiEventsSubscribeDbChanges()  { 
+            final sink = RustStreamSink<DbEventDto>();
+            unawaited(handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_StreamSink_db_event_dto_Sse(sink, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 83, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: null,
+        )
+        ,
+            constMeta: kCrateApiEventsSubscribeDbChangesConstMeta,
+            argValues: [sink],
+            apiImpl: this,
+        )));
+            return sink.stream;
+             }
+
+
+        TaskConstMeta get kCrateApiEventsSubscribeDbChangesConstMeta => const TaskConstMeta(
+            debugName: "subscribe_db_changes",
+            argNames: ["sink"],
+        );
+        
+
+@override Stream<HolidayProgressDto> crateApiHolidaySubscribeHolidayProgress()  { 
+            final sink = RustStreamSink<HolidayProgressDto>();
+            unawaited(handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_StreamSink_holiday_progress_dto_Sse(sink, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 84, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: null,
+        )
+        ,
+            constMeta: kCrateApiHolidaySubscribeHolidayProgressConstMeta,
+            argValues: [sink],
+            apiImpl: this,
+        )));
+            return sink.stream;
+             }
+
+
+        TaskConstMeta get kCrateApiHolidaySubscribeHolidayProgressConstMeta => const TaskConstMeta(
+            debugName: "subscribe_holiday_progress",
+            argNames: ["sink"],
+        );
+        
+
+@override Future<SyncConfigView?> crateApiSyncSyncConfigGet()  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
             final serializer = SseSerializer(generalizedFrbRustBinding);
-            sse_encode_StreamSink_db_event_dto_Sse(sink, serializer);
-            pdeCallFfi(
-              generalizedFrbRustBinding,
-              serializer,
-              funcId: 81,
-              port: port_,
-            );
-          },
-          codec: SseCodec(
-            decodeSuccessData: sse_decode_unit,
-            decodeErrorData: null,
-          ),
-          constMeta: kCrateApiEventsSubscribeDbChangesConstMeta,
-          argValues: [sink],
-          apiImpl: this,
-        ),
-      ),
-    );
-    return sink.stream;
-  }
-
-  TaskConstMeta get kCrateApiEventsSubscribeDbChangesConstMeta =>
-      const TaskConstMeta(
-        debugName: "subscribe_db_changes",
-        argNames: ["sink"],
-      );
-
-  @override
-  Stream<HolidayProgressDto> crateApiHolidaySubscribeHolidayProgress() {
-    final sink = RustStreamSink<HolidayProgressDto>();
-    unawaited(
-      handler.executeNormal(
-        NormalTask(
-          callFfi: (port_) {
-            final serializer = SseSerializer(generalizedFrbRustBinding);
-            sse_encode_StreamSink_holiday_progress_dto_Sse(sink, serializer);
-            pdeCallFfi(
-              generalizedFrbRustBinding,
-              serializer,
-              funcId: 82,
-              port: port_,
-            );
-          },
-          codec: SseCodec(
-            decodeSuccessData: sse_decode_unit,
-            decodeErrorData: null,
-          ),
-          constMeta: kCrateApiHolidaySubscribeHolidayProgressConstMeta,
-          argValues: [sink],
-          apiImpl: this,
-        ),
-      ),
-    );
-    return sink.stream;
-  }
-
-  TaskConstMeta get kCrateApiHolidaySubscribeHolidayProgressConstMeta =>
-      const TaskConstMeta(
-        debugName: "subscribe_holiday_progress",
-        argNames: ["sink"],
-      );
-
-  @override
-  Future<SyncConfigView?> crateApiSyncSyncConfigGet() {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 83,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 85, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_opt_box_autoadd_sync_config_view,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiSyncSyncConfigGetConstMeta,
-        argValues: [],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiSyncSyncConfigGetConstMeta,
+            argValues: [],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiSyncSyncConfigGetConstMeta =>
-      const TaskConstMeta(debugName: "sync_config_get", argNames: []);
 
-  @override
-  Future<SyncConfigView> crateApiSyncSyncConfigSave({
-    required SyncConfigInput input,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_box_autoadd_sync_config_input(input, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 84,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiSyncSyncConfigGetConstMeta => const TaskConstMeta(
+            debugName: "sync_config_get",
+            argNames: [],
+        );
+        
+
+@override Future<SyncConfigView> crateApiSyncSyncConfigSave({required SyncConfigInput input })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_box_autoadd_sync_config_input(input, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 86, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_sync_config_view,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiSyncSyncConfigSaveConstMeta,
-        argValues: [input],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiSyncSyncConfigSaveConstMeta,
+            argValues: [input],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiSyncSyncConfigSaveConstMeta =>
-      const TaskConstMeta(debugName: "sync_config_save", argNames: ["input"]);
 
-  @override
-  Future<PlatformInt64> crateApiSyncConflictSyncConflictClear({
-    String? resolution,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_opt_String(resolution, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 85,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiSyncSyncConfigSaveConstMeta => const TaskConstMeta(
+            debugName: "sync_config_save",
+            argNames: ["input"],
+        );
+        
+
+@override Future<PlatformInt64> crateApiSyncConflictSyncConflictClear({String? resolution })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_opt_String(resolution, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 87, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_i_64,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiSyncConflictSyncConflictClearConstMeta,
-        argValues: [resolution],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiSyncConflictSyncConflictClearConstMeta,
+            argValues: [resolution],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiSyncConflictSyncConflictClearConstMeta =>
-      const TaskConstMeta(
-        debugName: "sync_conflict_clear",
-        argNames: ["resolution"],
-      );
 
-  @override
-  Future<PlatformInt64> crateApiSyncConflictSyncConflictCount({
-    String? resolution,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_opt_String(resolution, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 86,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiSyncConflictSyncConflictClearConstMeta => const TaskConstMeta(
+            debugName: "sync_conflict_clear",
+            argNames: ["resolution"],
+        );
+        
+
+@override Future<PlatformInt64> crateApiSyncConflictSyncConflictCount({String? resolution })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_opt_String(resolution, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 88, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_i_64,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiSyncConflictSyncConflictCountConstMeta,
-        argValues: [resolution],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiSyncConflictSyncConflictCountConstMeta,
+            argValues: [resolution],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiSyncConflictSyncConflictCountConstMeta =>
-      const TaskConstMeta(
-        debugName: "sync_conflict_count",
-        argNames: ["resolution"],
-      );
 
-  @override
-  Future<void> crateApiSyncConflictSyncConflictDismiss({
-    required PlatformInt64 id,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_i_64(id, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 87,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiSyncConflictSyncConflictCountConstMeta => const TaskConstMeta(
+            debugName: "sync_conflict_count",
+            argNames: ["resolution"],
+        );
+        
+
+@override Future<void> crateApiSyncConflictSyncConflictDismiss({required PlatformInt64 id })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_i_64(id, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 89, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_unit,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiSyncConflictSyncConflictDismissConstMeta,
-        argValues: [id],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiSyncConflictSyncConflictDismissConstMeta,
+            argValues: [id],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiSyncConflictSyncConflictDismissConstMeta =>
-      const TaskConstMeta(debugName: "sync_conflict_dismiss", argNames: ["id"]);
 
-  @override
-  Future<List<SyncConflict>> crateApiSyncConflictSyncConflictList({
-    String? resolution,
-    required PlatformInt64 limit,
-    required PlatformInt64 offset,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_opt_String(resolution, serializer);
-          sse_encode_i_64(limit, serializer);
-          sse_encode_i_64(offset, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 88,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiSyncConflictSyncConflictDismissConstMeta => const TaskConstMeta(
+            debugName: "sync_conflict_dismiss",
+            argNames: ["id"],
+        );
+        
+
+@override Future<List<SyncConflict>> crateApiSyncConflictSyncConflictList({String? resolution , required PlatformInt64 limit , required PlatformInt64 offset })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_opt_String(resolution, serializer);
+sse_encode_i_64(limit, serializer);
+sse_encode_i_64(offset, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 90, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_list_sync_conflict,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiSyncConflictSyncConflictListConstMeta,
-        argValues: [resolution, limit, offset],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiSyncConflictSyncConflictListConstMeta,
+            argValues: [resolution, limit, offset],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiSyncConflictSyncConflictListConstMeta =>
-      const TaskConstMeta(
-        debugName: "sync_conflict_list",
-        argNames: ["resolution", "limit", "offset"],
-      );
 
-  @override
-  Future<PlatformInt64> crateApiSyncConflictSyncConflictRestore({
-    required PlatformInt64 id,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_i_64(id, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 89,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiSyncConflictSyncConflictListConstMeta => const TaskConstMeta(
+            debugName: "sync_conflict_list",
+            argNames: ["resolution", "limit", "offset"],
+        );
+        
+
+@override Future<PlatformInt64> crateApiSyncConflictSyncConflictRestore({required PlatformInt64 id })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_i_64(id, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 91, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_i_64,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiSyncConflictSyncConflictRestoreConstMeta,
-        argValues: [id],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiSyncConflictSyncConflictRestoreConstMeta,
+            argValues: [id],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiSyncConflictSyncConflictRestoreConstMeta =>
-      const TaskConstMeta(debugName: "sync_conflict_restore", argNames: ["id"]);
 
-  @override
-  Future<void> crateApiSyncSyncCryptoChangePassword({
-    required String oldPassword,
-    required String newPassword,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_String(oldPassword, serializer);
-          sse_encode_String(newPassword, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 90,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiSyncConflictSyncConflictRestoreConstMeta => const TaskConstMeta(
+            debugName: "sync_conflict_restore",
+            argNames: ["id"],
+        );
+        
+
+@override Future<void> crateApiSyncSyncCryptoChangePassword({required String oldPassword , required String newPassword })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_String(oldPassword, serializer);
+sse_encode_String(newPassword, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 92, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_unit,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiSyncSyncCryptoChangePasswordConstMeta,
-        argValues: [oldPassword, newPassword],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiSyncSyncCryptoChangePasswordConstMeta,
+            argValues: [oldPassword, newPassword],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiSyncSyncCryptoChangePasswordConstMeta =>
-      const TaskConstMeta(
-        debugName: "sync_crypto_change_password",
-        argNames: ["oldPassword", "newPassword"],
-      );
 
-  @override
-  Future<String> crateApiSyncSyncCryptoExportBundle() {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 91,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiSyncSyncCryptoChangePasswordConstMeta => const TaskConstMeta(
+            debugName: "sync_crypto_change_password",
+            argNames: ["oldPassword", "newPassword"],
+        );
+        
+
+@override Future<String> crateApiSyncSyncCryptoExportBundle()  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 93, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_String,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiSyncSyncCryptoExportBundleConstMeta,
-        argValues: [],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiSyncSyncCryptoExportBundleConstMeta,
+            argValues: [],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiSyncSyncCryptoExportBundleConstMeta =>
-      const TaskConstMeta(debugName: "sync_crypto_export_bundle", argNames: []);
 
-  @override
-  Future<void> crateApiSyncSyncCryptoForgetSession() {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 92,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiSyncSyncCryptoExportBundleConstMeta => const TaskConstMeta(
+            debugName: "sync_crypto_export_bundle",
+            argNames: [],
+        );
+        
+
+@override Future<void> crateApiSyncSyncCryptoForgetSession()  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 94, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_unit,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiSyncSyncCryptoForgetSessionConstMeta,
-        argValues: [],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiSyncSyncCryptoForgetSessionConstMeta,
+            argValues: [],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiSyncSyncCryptoForgetSessionConstMeta =>
-      const TaskConstMeta(
-        debugName: "sync_crypto_forget_session",
-        argNames: [],
-      );
 
-  @override
-  Future<String> crateApiSyncSyncCryptoImportBundle({
-    required String bundleJson,
-    required String password,
-    required bool force,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_String(bundleJson, serializer);
-          sse_encode_String(password, serializer);
-          sse_encode_bool(force, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 93,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiSyncSyncCryptoForgetSessionConstMeta => const TaskConstMeta(
+            debugName: "sync_crypto_forget_session",
+            argNames: [],
+        );
+        
+
+@override Future<String> crateApiSyncSyncCryptoImportBundle({required String bundleJson , required String password , required bool force })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_String(bundleJson, serializer);
+sse_encode_String(password, serializer);
+sse_encode_bool(force, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 95, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_String,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiSyncSyncCryptoImportBundleConstMeta,
-        argValues: [bundleJson, password, force],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiSyncSyncCryptoImportBundleConstMeta,
+            argValues: [bundleJson, password, force],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiSyncSyncCryptoImportBundleConstMeta =>
-      const TaskConstMeta(
-        debugName: "sync_crypto_import_bundle",
-        argNames: ["bundleJson", "password", "force"],
-      );
 
-  @override
-  Future<void> crateApiSyncSyncCryptoInit({
-    required String password,
-    required bool remember,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_String(password, serializer);
-          sse_encode_bool(remember, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 94,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiSyncSyncCryptoImportBundleConstMeta => const TaskConstMeta(
+            debugName: "sync_crypto_import_bundle",
+            argNames: ["bundleJson", "password", "force"],
+        );
+        
+
+@override Future<void> crateApiSyncSyncCryptoInit({required String password , required bool remember })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_String(password, serializer);
+sse_encode_bool(remember, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 96, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_unit,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiSyncSyncCryptoInitConstMeta,
-        argValues: [password, remember],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiSyncSyncCryptoInitConstMeta,
+            argValues: [password, remember],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiSyncSyncCryptoInitConstMeta => const TaskConstMeta(
-    debugName: "sync_crypto_init",
-    argNames: ["password", "remember"],
-  );
 
-  @override
-  Future<void> crateApiSyncSyncCryptoLock() {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 95,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiSyncSyncCryptoInitConstMeta => const TaskConstMeta(
+            debugName: "sync_crypto_init",
+            argNames: ["password", "remember"],
+        );
+        
+
+@override Future<void> crateApiSyncSyncCryptoLock()  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 97, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_unit,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiSyncSyncCryptoLockConstMeta,
-        argValues: [],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiSyncSyncCryptoLockConstMeta,
+            argValues: [],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiSyncSyncCryptoLockConstMeta =>
-      const TaskConstMeta(debugName: "sync_crypto_lock", argNames: []);
 
-  @override
-  Future<String?> crateApiSyncSyncCryptoMetaVersion() {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 96,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiSyncSyncCryptoLockConstMeta => const TaskConstMeta(
+            debugName: "sync_crypto_lock",
+            argNames: [],
+        );
+        
+
+@override Future<String?> crateApiSyncSyncCryptoMetaVersion()  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 98, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_opt_String,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiSyncSyncCryptoMetaVersionConstMeta,
-        argValues: [],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiSyncSyncCryptoMetaVersionConstMeta,
+            argValues: [],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiSyncSyncCryptoMetaVersionConstMeta =>
-      const TaskConstMeta(debugName: "sync_crypto_meta_version", argNames: []);
 
-  @override
-  Future<bool> crateApiSyncSyncCryptoRestoreSession() {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 97,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiSyncSyncCryptoMetaVersionConstMeta => const TaskConstMeta(
+            debugName: "sync_crypto_meta_version",
+            argNames: [],
+        );
+        
+
+@override Future<bool> crateApiSyncSyncCryptoRestoreSession()  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 99, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_bool,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiSyncSyncCryptoRestoreSessionConstMeta,
-        argValues: [],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiSyncSyncCryptoRestoreSessionConstMeta,
+            argValues: [],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiSyncSyncCryptoRestoreSessionConstMeta =>
-      const TaskConstMeta(
-        debugName: "sync_crypto_restore_session",
-        argNames: [],
-      );
 
-  @override
-  Future<SyncCryptoStatus> crateApiSyncSyncCryptoStatus() {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 98,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiSyncSyncCryptoRestoreSessionConstMeta => const TaskConstMeta(
+            debugName: "sync_crypto_restore_session",
+            argNames: [],
+        );
+        
+
+@override Future<SyncCryptoStatus> crateApiSyncSyncCryptoStatus()  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 100, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_sync_crypto_status,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiSyncSyncCryptoStatusConstMeta,
-        argValues: [],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiSyncSyncCryptoStatusConstMeta,
+            argValues: [],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiSyncSyncCryptoStatusConstMeta =>
-      const TaskConstMeta(debugName: "sync_crypto_status", argNames: []);
 
-  @override
-  Future<void> crateApiSyncSyncCryptoUnlock({
-    required String password,
-    required bool remember,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_String(password, serializer);
-          sse_encode_bool(remember, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 99,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiSyncSyncCryptoStatusConstMeta => const TaskConstMeta(
+            debugName: "sync_crypto_status",
+            argNames: [],
+        );
+        
+
+@override Future<void> crateApiSyncSyncCryptoUnlock({required String password , required bool remember })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_String(password, serializer);
+sse_encode_bool(remember, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 101, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_unit,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiSyncSyncCryptoUnlockConstMeta,
-        argValues: [password, remember],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiSyncSyncCryptoUnlockConstMeta,
+            argValues: [password, remember],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiSyncSyncCryptoUnlockConstMeta =>
-      const TaskConstMeta(
-        debugName: "sync_crypto_unlock",
-        argNames: ["password", "remember"],
-      );
 
-  @override
-  Future<void> crateApiSyncSyncCryptoUpgradeV2({required String syncPassword}) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_String(syncPassword, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 100,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiSyncSyncCryptoUnlockConstMeta => const TaskConstMeta(
+            debugName: "sync_crypto_unlock",
+            argNames: ["password", "remember"],
+        );
+        
+
+@override Future<void> crateApiSyncSyncCryptoUpgradeV2({required String syncPassword })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_String(syncPassword, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 102, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_unit,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiSyncSyncCryptoUpgradeV2ConstMeta,
-        argValues: [syncPassword],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiSyncSyncCryptoUpgradeV2ConstMeta,
+            argValues: [syncPassword],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiSyncSyncCryptoUpgradeV2ConstMeta =>
-      const TaskConstMeta(
-        debugName: "sync_crypto_upgrade_v2",
-        argNames: ["syncPassword"],
-      );
 
-  @override
-  Future<void> crateApiSyncSyncDisconnect() {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 101,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiSyncSyncCryptoUpgradeV2ConstMeta => const TaskConstMeta(
+            debugName: "sync_crypto_upgrade_v2",
+            argNames: ["syncPassword"],
+        );
+        
+
+@override Future<void> crateApiSyncSyncDisconnect()  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 103, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_unit,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiSyncSyncDisconnectConstMeta,
-        argValues: [],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiSyncSyncDisconnectConstMeta,
+            argValues: [],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiSyncSyncDisconnectConstMeta =>
-      const TaskConstMeta(debugName: "sync_disconnect", argNames: []);
 
-  @override
-  Future<int> crateApiSyncSyncTestConnection({required SyncConfigInput input}) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_box_autoadd_sync_config_input(input, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 102,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiSyncSyncDisconnectConstMeta => const TaskConstMeta(
+            debugName: "sync_disconnect",
+            argNames: [],
+        );
+        
+
+@override Future<int> crateApiSyncSyncTestConnection({required SyncConfigInput input })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_box_autoadd_sync_config_input(input, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 104, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_u_32,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiSyncSyncTestConnectionConstMeta,
-        argValues: [input],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiSyncSyncTestConnectionConstMeta,
+            argValues: [input],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiSyncSyncTestConnectionConstMeta =>
-      const TaskConstMeta(
-        debugName: "sync_test_connection",
-        argNames: ["input"],
-      );
 
-  @override
-  Future<List<ActivityLogRow>> crateApiActivityLogTaskActivityList({
-    required PlatformInt64 taskId,
-    PlatformInt64? limit,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_i_64(taskId, serializer);
-          sse_encode_opt_box_autoadd_i_64(limit, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 103,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiSyncSyncTestConnectionConstMeta => const TaskConstMeta(
+            debugName: "sync_test_connection",
+            argNames: ["input"],
+        );
+        
+
+@override Future<List<ActivityLogRow>> crateApiActivityLogTaskActivityList({required PlatformInt64 taskId , PlatformInt64? limit })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_i_64(taskId, serializer);
+sse_encode_opt_box_autoadd_i_64(limit, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 105, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_list_activity_log_row,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiActivityLogTaskActivityListConstMeta,
-        argValues: [taskId, limit],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiActivityLogTaskActivityListConstMeta,
+            argValues: [taskId, limit],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiActivityLogTaskActivityListConstMeta =>
-      const TaskConstMeta(
-        debugName: "task_activity_list",
-        argNames: ["taskId", "limit"],
-      );
 
-  @override
-  Future<TaskAttachmentView> crateApiAssetTaskAttachmentAdd({
-    required PlatformInt64 taskId,
-    required String fileName,
-    required String mimeType,
-    required List<int> data,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_i_64(taskId, serializer);
-          sse_encode_String(fileName, serializer);
-          sse_encode_String(mimeType, serializer);
-          sse_encode_list_prim_u_8_loose(data, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 104,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiActivityLogTaskActivityListConstMeta => const TaskConstMeta(
+            debugName: "task_activity_list",
+            argNames: ["taskId", "limit"],
+        );
+        
+
+@override Future<TaskAttachmentView> crateApiAssetTaskAttachmentAdd({required PlatformInt64 taskId , required String fileName , required String mimeType , required List<int> data })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_i_64(taskId, serializer);
+sse_encode_String(fileName, serializer);
+sse_encode_String(mimeType, serializer);
+sse_encode_list_prim_u_8_loose(data, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 106, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_task_attachment_view,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiAssetTaskAttachmentAddConstMeta,
-        argValues: [taskId, fileName, mimeType, data],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiAssetTaskAttachmentAddConstMeta,
+            argValues: [taskId, fileName, mimeType, data],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiAssetTaskAttachmentAddConstMeta =>
-      const TaskConstMeta(
-        debugName: "task_attachment_add",
-        argNames: ["taskId", "fileName", "mimeType", "data"],
-      );
 
-  @override
-  Future<List<TaskExistenceFlag>> crateApiTodoTaskAttachmentFlags() {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 105,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiAssetTaskAttachmentAddConstMeta => const TaskConstMeta(
+            debugName: "task_attachment_add",
+            argNames: ["taskId", "fileName", "mimeType", "data"],
+        );
+        
+
+@override Future<List<TaskExistenceFlag>> crateApiTodoTaskAttachmentFlags()  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 107, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_list_task_existence_flag,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiTodoTaskAttachmentFlagsConstMeta,
-        argValues: [],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiTodoTaskAttachmentFlagsConstMeta,
+            argValues: [],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiTodoTaskAttachmentFlagsConstMeta =>
-      const TaskConstMeta(debugName: "task_attachment_flags", argNames: []);
 
-  @override
-  Future<Uint8List> crateApiAssetTaskAttachmentRead({required String hash}) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_String(hash, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 106,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiTodoTaskAttachmentFlagsConstMeta => const TaskConstMeta(
+            debugName: "task_attachment_flags",
+            argNames: [],
+        );
+        
+
+@override Future<Uint8List> crateApiAssetTaskAttachmentRead({required String hash })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_String(hash, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 108, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_list_prim_u_8_strict,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiAssetTaskAttachmentReadConstMeta,
-        argValues: [hash],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiAssetTaskAttachmentReadConstMeta,
+            argValues: [hash],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiAssetTaskAttachmentReadConstMeta =>
-      const TaskConstMeta(
-        debugName: "task_attachment_read",
-        argNames: ["hash"],
-      );
 
-  @override
-  Future<void> crateApiAssetTaskAttachmentRemove({
-    required PlatformInt64 linkId,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_i_64(linkId, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 107,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiAssetTaskAttachmentReadConstMeta => const TaskConstMeta(
+            debugName: "task_attachment_read",
+            argNames: ["hash"],
+        );
+        
+
+@override Future<void> crateApiAssetTaskAttachmentRemove({required PlatformInt64 linkId })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_i_64(linkId, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 109, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_unit,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiAssetTaskAttachmentRemoveConstMeta,
-        argValues: [linkId],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiAssetTaskAttachmentRemoveConstMeta,
+            argValues: [linkId],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiAssetTaskAttachmentRemoveConstMeta =>
-      const TaskConstMeta(
-        debugName: "task_attachment_remove",
-        argNames: ["linkId"],
-      );
 
-  @override
-  Future<List<TaskAttachmentView>> crateApiAssetTaskAttachmentsList({
-    required PlatformInt64 taskId,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_i_64(taskId, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 108,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiAssetTaskAttachmentRemoveConstMeta => const TaskConstMeta(
+            debugName: "task_attachment_remove",
+            argNames: ["linkId"],
+        );
+        
+
+@override Future<List<TaskAttachmentView>> crateApiAssetTaskAttachmentsList({required PlatformInt64 taskId })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_i_64(taskId, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 110, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_list_task_attachment_view,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiAssetTaskAttachmentsListConstMeta,
-        argValues: [taskId],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiAssetTaskAttachmentsListConstMeta,
+            argValues: [taskId],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiAssetTaskAttachmentsListConstMeta =>
-      const TaskConstMeta(
-        debugName: "task_attachments_list",
-        argNames: ["taskId"],
-      );
 
-  @override
-  Future<List<TaskDependencyFlags>> crateApiTodoTaskDependencyFlags() {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 109,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiAssetTaskAttachmentsListConstMeta => const TaskConstMeta(
+            debugName: "task_attachments_list",
+            argNames: ["taskId"],
+        );
+        
+
+@override Future<List<TaskDependencyFlags>> crateApiTodoTaskDependencyFlags()  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 111, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_list_task_dependency_flags,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiTodoTaskDependencyFlagsConstMeta,
-        argValues: [],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiTodoTaskDependencyFlagsConstMeta,
+            argValues: [],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiTodoTaskDependencyFlagsConstMeta =>
-      const TaskConstMeta(debugName: "task_dependency_flags", argNames: []);
 
-  @override
-  Future<List<TaskDescriptionFlag>> crateApiTodoTaskDescriptionFlags() {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 110,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiTodoTaskDependencyFlagsConstMeta => const TaskConstMeta(
+            debugName: "task_dependency_flags",
+            argNames: [],
+        );
+        
+
+@override Future<List<TaskDescriptionFlag>> crateApiTodoTaskDescriptionFlags()  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 112, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_list_task_description_flag,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiTodoTaskDescriptionFlagsConstMeta,
-        argValues: [],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiTodoTaskDescriptionFlagsConstMeta,
+            argValues: [],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiTodoTaskDescriptionFlagsConstMeta =>
-      const TaskConstMeta(debugName: "task_description_flags", argNames: []);
 
-  @override
-  Future<List<TaskLabelsProjection>> crateApiTodoTaskLabelsProjection() {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 111,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiTodoTaskDescriptionFlagsConstMeta => const TaskConstMeta(
+            debugName: "task_description_flags",
+            argNames: [],
+        );
+        
+
+@override Future<List<TaskLabelsProjection>> crateApiTodoTaskLabelsProjection()  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 113, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_list_task_labels_projection,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiTodoTaskLabelsProjectionConstMeta,
-        argValues: [],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiTodoTaskLabelsProjectionConstMeta,
+            argValues: [],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiTodoTaskLabelsProjectionConstMeta =>
-      const TaskConstMeta(debugName: "task_labels_projection", argNames: []);
 
-  @override
-  Future<List<TaskExistenceFlag>> crateApiTodoTaskOpenSubtaskFlags() {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 112,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiTodoTaskLabelsProjectionConstMeta => const TaskConstMeta(
+            debugName: "task_labels_projection",
+            argNames: [],
+        );
+        
+
+@override Future<List<TaskExistenceFlag>> crateApiTodoTaskOpenSubtaskFlags()  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 114, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_list_task_existence_flag,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiTodoTaskOpenSubtaskFlagsConstMeta,
-        argValues: [],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiTodoTaskOpenSubtaskFlagsConstMeta,
+            argValues: [],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiTodoTaskOpenSubtaskFlagsConstMeta =>
-      const TaskConstMeta(debugName: "task_open_subtask_flags", argNames: []);
 
-  @override
-  Future<List<TaskRemindersProjection>> crateApiTodoTaskRemindersProjection() {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 113,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiTodoTaskOpenSubtaskFlagsConstMeta => const TaskConstMeta(
+            debugName: "task_open_subtask_flags",
+            argNames: [],
+        );
+        
+
+@override Future<List<TaskRemindersProjection>> crateApiTodoTaskRemindersProjection()  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 115, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_list_task_reminders_projection,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiTodoTaskRemindersProjectionConstMeta,
-        argValues: [],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiTodoTaskRemindersProjectionConstMeta,
+            argValues: [],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiTodoTaskRemindersProjectionConstMeta =>
-      const TaskConstMeta(debugName: "task_reminders_projection", argNames: []);
 
-  @override
-  Future<TodoTemplate> crateApiTemplateTemplateCreate({
-    required TodoTemplateCreateInput input,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_box_autoadd_todo_template_create_input(input, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 114,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiTodoTaskRemindersProjectionConstMeta => const TaskConstMeta(
+            debugName: "task_reminders_projection",
+            argNames: [],
+        );
+        
+
+@override Future<TodoTemplate> crateApiTemplateTemplateCreate({required TodoTemplateCreateInput input })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_box_autoadd_todo_template_create_input(input, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 116, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_todo_template,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiTemplateTemplateCreateConstMeta,
-        argValues: [input],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiTemplateTemplateCreateConstMeta,
+            argValues: [input],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiTemplateTemplateCreateConstMeta =>
-      const TaskConstMeta(debugName: "template_create", argNames: ["input"]);
 
-  @override
-  Future<void> crateApiTemplateTemplateDelete({required PlatformInt64 id}) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_i_64(id, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 115,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiTemplateTemplateCreateConstMeta => const TaskConstMeta(
+            debugName: "template_create",
+            argNames: ["input"],
+        );
+        
+
+@override Future<void> crateApiTemplateTemplateDelete({required PlatformInt64 id })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_i_64(id, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 117, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_unit,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiTemplateTemplateDeleteConstMeta,
-        argValues: [id],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiTemplateTemplateDeleteConstMeta,
+            argValues: [id],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiTemplateTemplateDeleteConstMeta =>
-      const TaskConstMeta(debugName: "template_delete", argNames: ["id"]);
 
-  @override
-  Future<TodoTemplate> crateApiTemplateTemplateUpdate({
-    required PlatformInt64 id,
-    required TodoTemplateUpdateInput input,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_i_64(id, serializer);
-          sse_encode_box_autoadd_todo_template_update_input(input, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 116,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiTemplateTemplateDeleteConstMeta => const TaskConstMeta(
+            debugName: "template_delete",
+            argNames: ["id"],
+        );
+        
+
+@override Future<TodoTemplate> crateApiTemplateTemplateUpdate({required PlatformInt64 id , required TodoTemplateUpdateInput input })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_i_64(id, serializer);
+sse_encode_box_autoadd_todo_template_update_input(input, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 118, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_todo_template,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiTemplateTemplateUpdateConstMeta,
-        argValues: [id, input],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiTemplateTemplateUpdateConstMeta,
+            argValues: [id, input],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiTemplateTemplateUpdateConstMeta =>
-      const TaskConstMeta(
-        debugName: "template_update",
-        argNames: ["id", "input"],
-      );
 
-  @override
-  Future<List<TodoTemplate>> crateApiTemplateTemplatesList() {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 117,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiTemplateTemplateUpdateConstMeta => const TaskConstMeta(
+            debugName: "template_update",
+            argNames: ["id", "input"],
+        );
+        
+
+@override Future<List<TodoTemplate>> crateApiTemplateTemplatesList()  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 119, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_list_todo_template,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiTemplateTemplatesListConstMeta,
-        argValues: [],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiTemplateTemplatesListConstMeta,
+            argValues: [],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiTemplateTemplatesListConstMeta =>
-      const TaskConstMeta(debugName: "templates_list", argNames: []);
 
-  @override
-  Future<TodoComment> crateApiTodoTodoCommentsCreate({
-    required TodoCommentCreateInput input,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_box_autoadd_todo_comment_create_input(input, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 118,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiTemplateTemplatesListConstMeta => const TaskConstMeta(
+            debugName: "templates_list",
+            argNames: [],
+        );
+        
+
+@override Future<TodoComment> crateApiTodoTodoCommentsCreate({required TodoCommentCreateInput input })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_box_autoadd_todo_comment_create_input(input, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 120, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_todo_comment,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiTodoTodoCommentsCreateConstMeta,
-        argValues: [input],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiTodoTodoCommentsCreateConstMeta,
+            argValues: [input],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiTodoTodoCommentsCreateConstMeta =>
-      const TaskConstMeta(
-        debugName: "todo_comments_create",
-        argNames: ["input"],
-      );
 
-  @override
-  Future<void> crateApiTodoTodoCommentsDelete({required PlatformInt64 id}) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_i_64(id, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 119,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiTodoTodoCommentsCreateConstMeta => const TaskConstMeta(
+            debugName: "todo_comments_create",
+            argNames: ["input"],
+        );
+        
+
+@override Future<void> crateApiTodoTodoCommentsDelete({required PlatformInt64 id })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_i_64(id, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 121, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_unit,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiTodoTodoCommentsDeleteConstMeta,
-        argValues: [id],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiTodoTodoCommentsDeleteConstMeta,
+            argValues: [id],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiTodoTodoCommentsDeleteConstMeta =>
-      const TaskConstMeta(debugName: "todo_comments_delete", argNames: ["id"]);
 
-  @override
-  Future<TodoComment> crateApiTodoTodoCommentsGet({required PlatformInt64 id}) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_i_64(id, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 120,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiTodoTodoCommentsDeleteConstMeta => const TaskConstMeta(
+            debugName: "todo_comments_delete",
+            argNames: ["id"],
+        );
+        
+
+@override Future<TodoComment> crateApiTodoTodoCommentsGet({required PlatformInt64 id })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_i_64(id, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 122, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_todo_comment,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiTodoTodoCommentsGetConstMeta,
-        argValues: [id],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiTodoTodoCommentsGetConstMeta,
+            argValues: [id],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiTodoTodoCommentsGetConstMeta =>
-      const TaskConstMeta(debugName: "todo_comments_get", argNames: ["id"]);
 
-  @override
-  Future<List<TodoComment>> crateApiTodoTodoCommentsList({
-    required ListFilter filter,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_box_autoadd_list_filter(filter, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 121,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiTodoTodoCommentsGetConstMeta => const TaskConstMeta(
+            debugName: "todo_comments_get",
+            argNames: ["id"],
+        );
+        
+
+@override Future<List<TodoComment>> crateApiTodoTodoCommentsList({required ListFilter filter })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_box_autoadd_list_filter(filter, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 123, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_list_todo_comment,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiTodoTodoCommentsListConstMeta,
-        argValues: [filter],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiTodoTodoCommentsListConstMeta,
+            argValues: [filter],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiTodoTodoCommentsListConstMeta =>
-      const TaskConstMeta(
-        debugName: "todo_comments_list",
-        argNames: ["filter"],
-      );
 
-  @override
-  Future<TodoLabel> crateApiTodoTodoLabelsCreate({
-    required TodoLabelCreateInput input,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_box_autoadd_todo_label_create_input(input, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 122,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiTodoTodoCommentsListConstMeta => const TaskConstMeta(
+            debugName: "todo_comments_list",
+            argNames: ["filter"],
+        );
+        
+
+@override Future<TodoLabel> crateApiTodoTodoLabelsCreate({required TodoLabelCreateInput input })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_box_autoadd_todo_label_create_input(input, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 124, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_todo_label,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiTodoTodoLabelsCreateConstMeta,
-        argValues: [input],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiTodoTodoLabelsCreateConstMeta,
+            argValues: [input],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiTodoTodoLabelsCreateConstMeta =>
-      const TaskConstMeta(debugName: "todo_labels_create", argNames: ["input"]);
 
-  @override
-  Future<void> crateApiTodoTodoLabelsDelete({required PlatformInt64 id}) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_i_64(id, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 123,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiTodoTodoLabelsCreateConstMeta => const TaskConstMeta(
+            debugName: "todo_labels_create",
+            argNames: ["input"],
+        );
+        
+
+@override Future<void> crateApiTodoTodoLabelsDelete({required PlatformInt64 id })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_i_64(id, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 125, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_unit,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiTodoTodoLabelsDeleteConstMeta,
-        argValues: [id],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiTodoTodoLabelsDeleteConstMeta,
+            argValues: [id],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiTodoTodoLabelsDeleteConstMeta =>
-      const TaskConstMeta(debugName: "todo_labels_delete", argNames: ["id"]);
 
-  @override
-  Future<TodoLabel> crateApiTodoTodoLabelsGet({required PlatformInt64 id}) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_i_64(id, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 124,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiTodoTodoLabelsDeleteConstMeta => const TaskConstMeta(
+            debugName: "todo_labels_delete",
+            argNames: ["id"],
+        );
+        
+
+@override Future<TodoLabel> crateApiTodoTodoLabelsGet({required PlatformInt64 id })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_i_64(id, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 126, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_todo_label,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiTodoTodoLabelsGetConstMeta,
-        argValues: [id],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiTodoTodoLabelsGetConstMeta,
+            argValues: [id],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiTodoTodoLabelsGetConstMeta =>
-      const TaskConstMeta(debugName: "todo_labels_get", argNames: ["id"]);
 
-  @override
-  Future<List<TodoLabel>> crateApiTodoTodoLabelsList({
-    required ListFilter filter,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_box_autoadd_list_filter(filter, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 125,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiTodoTodoLabelsGetConstMeta => const TaskConstMeta(
+            debugName: "todo_labels_get",
+            argNames: ["id"],
+        );
+        
+
+@override Future<List<TodoLabel>> crateApiTodoTodoLabelsList({required ListFilter filter })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_box_autoadd_list_filter(filter, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 127, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_list_todo_label,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiTodoTodoLabelsListConstMeta,
-        argValues: [filter],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiTodoTodoLabelsListConstMeta,
+            argValues: [filter],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiTodoTodoLabelsListConstMeta =>
-      const TaskConstMeta(debugName: "todo_labels_list", argNames: ["filter"]);
 
-  @override
-  Future<TodoLabel> crateApiTodoTodoLabelsUpdate({
-    required PlatformInt64 id,
-    required String patchJson,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_i_64(id, serializer);
-          sse_encode_String(patchJson, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 126,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiTodoTodoLabelsListConstMeta => const TaskConstMeta(
+            debugName: "todo_labels_list",
+            argNames: ["filter"],
+        );
+        
+
+@override Future<TodoLabel> crateApiTodoTodoLabelsUpdate({required PlatformInt64 id , required String patchJson })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_i_64(id, serializer);
+sse_encode_String(patchJson, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 128, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_todo_label,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiTodoTodoLabelsUpdateConstMeta,
-        argValues: [id, patchJson],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiTodoTodoLabelsUpdateConstMeta,
+            argValues: [id, patchJson],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiTodoTodoLabelsUpdateConstMeta =>
-      const TaskConstMeta(
-        debugName: "todo_labels_update",
-        argNames: ["id", "patchJson"],
-      );
 
-  @override
-  Future<TodoProject> crateApiTodoTodoProjectsCreate({
-    required TodoProjectCreateInput input,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_box_autoadd_todo_project_create_input(input, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 127,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiTodoTodoLabelsUpdateConstMeta => const TaskConstMeta(
+            debugName: "todo_labels_update",
+            argNames: ["id", "patchJson"],
+        );
+        
+
+@override Future<TodoProject> crateApiTodoTodoProjectsCreate({required TodoProjectCreateInput input })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_box_autoadd_todo_project_create_input(input, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 129, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_todo_project,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiTodoTodoProjectsCreateConstMeta,
-        argValues: [input],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiTodoTodoProjectsCreateConstMeta,
+            argValues: [input],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiTodoTodoProjectsCreateConstMeta =>
-      const TaskConstMeta(
-        debugName: "todo_projects_create",
-        argNames: ["input"],
-      );
 
-  @override
-  Future<void> crateApiTodoTodoProjectsDelete({required PlatformInt64 id}) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_i_64(id, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 128,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiTodoTodoProjectsCreateConstMeta => const TaskConstMeta(
+            debugName: "todo_projects_create",
+            argNames: ["input"],
+        );
+        
+
+@override Future<void> crateApiTodoTodoProjectsDelete({required PlatformInt64 id })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_i_64(id, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 130, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_unit,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiTodoTodoProjectsDeleteConstMeta,
-        argValues: [id],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiTodoTodoProjectsDeleteConstMeta,
+            argValues: [id],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiTodoTodoProjectsDeleteConstMeta =>
-      const TaskConstMeta(debugName: "todo_projects_delete", argNames: ["id"]);
 
-  @override
-  Future<TodoProject> crateApiTodoTodoProjectsGet({required PlatformInt64 id}) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_i_64(id, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 129,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiTodoTodoProjectsDeleteConstMeta => const TaskConstMeta(
+            debugName: "todo_projects_delete",
+            argNames: ["id"],
+        );
+        
+
+@override Future<TodoProject> crateApiTodoTodoProjectsGet({required PlatformInt64 id })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_i_64(id, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 131, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_todo_project,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiTodoTodoProjectsGetConstMeta,
-        argValues: [id],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiTodoTodoProjectsGetConstMeta,
+            argValues: [id],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiTodoTodoProjectsGetConstMeta =>
-      const TaskConstMeta(debugName: "todo_projects_get", argNames: ["id"]);
 
-  @override
-  Future<TodoProject?> crateApiTodoTodoProjectsGetByUuid({
-    required String uuid,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_String(uuid, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 130,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiTodoTodoProjectsGetConstMeta => const TaskConstMeta(
+            debugName: "todo_projects_get",
+            argNames: ["id"],
+        );
+        
+
+@override Future<TodoProject?> crateApiTodoTodoProjectsGetByUuid({required String uuid })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_String(uuid, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 132, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_opt_box_autoadd_todo_project,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiTodoTodoProjectsGetByUuidConstMeta,
-        argValues: [uuid],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiTodoTodoProjectsGetByUuidConstMeta,
+            argValues: [uuid],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiTodoTodoProjectsGetByUuidConstMeta =>
-      const TaskConstMeta(
-        debugName: "todo_projects_get_by_uuid",
-        argNames: ["uuid"],
-      );
 
-  @override
-  Future<List<TodoProject>> crateApiTodoTodoProjectsList({
-    required ListFilter filter,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_box_autoadd_list_filter(filter, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 131,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiTodoTodoProjectsGetByUuidConstMeta => const TaskConstMeta(
+            debugName: "todo_projects_get_by_uuid",
+            argNames: ["uuid"],
+        );
+        
+
+@override Future<List<TodoProject>> crateApiTodoTodoProjectsList({required ListFilter filter })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_box_autoadd_list_filter(filter, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 133, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_list_todo_project,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiTodoTodoProjectsListConstMeta,
-        argValues: [filter],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiTodoTodoProjectsListConstMeta,
+            argValues: [filter],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiTodoTodoProjectsListConstMeta =>
-      const TaskConstMeta(
-        debugName: "todo_projects_list",
-        argNames: ["filter"],
-      );
 
-  @override
-  Future<List<TodoProject>> crateApiTodoTodoProjectsListArchived() {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 132,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiTodoTodoProjectsListConstMeta => const TaskConstMeta(
+            debugName: "todo_projects_list",
+            argNames: ["filter"],
+        );
+        
+
+@override Future<List<TodoProject>> crateApiTodoTodoProjectsListArchived()  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 134, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_list_todo_project,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiTodoTodoProjectsListArchivedConstMeta,
-        argValues: [],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiTodoTodoProjectsListArchivedConstMeta,
+            argValues: [],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiTodoTodoProjectsListArchivedConstMeta =>
-      const TaskConstMeta(
-        debugName: "todo_projects_list_archived",
-        argNames: [],
-      );
 
-  @override
-  Future<TodoProject> crateApiTodoTodoProjectsUpdate({
-    required PlatformInt64 id,
-    required String patchJson,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_i_64(id, serializer);
-          sse_encode_String(patchJson, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 133,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiTodoTodoProjectsListArchivedConstMeta => const TaskConstMeta(
+            debugName: "todo_projects_list_archived",
+            argNames: [],
+        );
+        
+
+@override Future<TodoProject> crateApiTodoTodoProjectsUpdate({required PlatformInt64 id , required String patchJson })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_i_64(id, serializer);
+sse_encode_String(patchJson, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 135, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_todo_project,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiTodoTodoProjectsUpdateConstMeta,
-        argValues: [id, patchJson],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiTodoTodoProjectsUpdateConstMeta,
+            argValues: [id, patchJson],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiTodoTodoProjectsUpdateConstMeta =>
-      const TaskConstMeta(
-        debugName: "todo_projects_update",
-        argNames: ["id", "patchJson"],
-      );
 
-  @override
-  Future<void> crateApiTodoTodoProjectsUpdateSortOrder({
-    required PlatformInt64 id,
-    required double sortOrder,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_i_64(id, serializer);
-          sse_encode_f_64(sortOrder, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 134,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiTodoTodoProjectsUpdateConstMeta => const TaskConstMeta(
+            debugName: "todo_projects_update",
+            argNames: ["id", "patchJson"],
+        );
+        
+
+@override Future<void> crateApiTodoTodoProjectsUpdateSortOrder({required PlatformInt64 id , required double sortOrder })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_i_64(id, serializer);
+sse_encode_f_64(sortOrder, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 136, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_unit,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiTodoTodoProjectsUpdateSortOrderConstMeta,
-        argValues: [id, sortOrder],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiTodoTodoProjectsUpdateSortOrderConstMeta,
+            argValues: [id, sortOrder],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiTodoTodoProjectsUpdateSortOrderConstMeta =>
-      const TaskConstMeta(
-        debugName: "todo_projects_update_sort_order",
-        argNames: ["id", "sortOrder"],
-      );
 
-  @override
-  Future<TodoReminder> crateApiTodoTodoRemindersCreate({
-    required TodoReminderCreateInput input,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_box_autoadd_todo_reminder_create_input(input, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 135,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiTodoTodoProjectsUpdateSortOrderConstMeta => const TaskConstMeta(
+            debugName: "todo_projects_update_sort_order",
+            argNames: ["id", "sortOrder"],
+        );
+        
+
+@override Future<TodoReminder> crateApiTodoTodoRemindersCreate({required TodoReminderCreateInput input })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_box_autoadd_todo_reminder_create_input(input, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 137, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_todo_reminder,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiTodoTodoRemindersCreateConstMeta,
-        argValues: [input],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiTodoTodoRemindersCreateConstMeta,
+            argValues: [input],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiTodoTodoRemindersCreateConstMeta =>
-      const TaskConstMeta(
-        debugName: "todo_reminders_create",
-        argNames: ["input"],
-      );
 
-  @override
-  Future<void> crateApiTodoTodoRemindersDelete({required PlatformInt64 id}) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_i_64(id, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 136,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiTodoTodoRemindersCreateConstMeta => const TaskConstMeta(
+            debugName: "todo_reminders_create",
+            argNames: ["input"],
+        );
+        
+
+@override Future<void> crateApiTodoTodoRemindersDelete({required PlatformInt64 id })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_i_64(id, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 138, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_unit,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiTodoTodoRemindersDeleteConstMeta,
-        argValues: [id],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiTodoTodoRemindersDeleteConstMeta,
+            argValues: [id],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiTodoTodoRemindersDeleteConstMeta =>
-      const TaskConstMeta(debugName: "todo_reminders_delete", argNames: ["id"]);
 
-  @override
-  Future<TodoReminder> crateApiTodoTodoRemindersGet({
-    required PlatformInt64 id,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_i_64(id, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 137,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiTodoTodoRemindersDeleteConstMeta => const TaskConstMeta(
+            debugName: "todo_reminders_delete",
+            argNames: ["id"],
+        );
+        
+
+@override Future<TodoReminder> crateApiTodoTodoRemindersGet({required PlatformInt64 id })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_i_64(id, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 139, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_todo_reminder,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiTodoTodoRemindersGetConstMeta,
-        argValues: [id],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiTodoTodoRemindersGetConstMeta,
+            argValues: [id],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiTodoTodoRemindersGetConstMeta =>
-      const TaskConstMeta(debugName: "todo_reminders_get", argNames: ["id"]);
 
-  @override
-  Future<List<TodoReminder>> crateApiTodoTodoRemindersList({
-    required ListFilter filter,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_box_autoadd_list_filter(filter, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 138,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiTodoTodoRemindersGetConstMeta => const TaskConstMeta(
+            debugName: "todo_reminders_get",
+            argNames: ["id"],
+        );
+        
+
+@override Future<List<TodoReminder>> crateApiTodoTodoRemindersList({required ListFilter filter })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_box_autoadd_list_filter(filter, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 140, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_list_todo_reminder,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiTodoTodoRemindersListConstMeta,
-        argValues: [filter],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiTodoTodoRemindersListConstMeta,
+            argValues: [filter],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiTodoTodoRemindersListConstMeta =>
-      const TaskConstMeta(
-        debugName: "todo_reminders_list",
-        argNames: ["filter"],
-      );
 
-  @override
-  Future<TodoSubtask> crateApiTodoTodoSubtasksCreate({
-    required TodoSubtaskCreateInput input,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_box_autoadd_todo_subtask_create_input(input, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 139,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiTodoTodoRemindersListConstMeta => const TaskConstMeta(
+            debugName: "todo_reminders_list",
+            argNames: ["filter"],
+        );
+        
+
+@override Future<TodoSubtask> crateApiTodoTodoSubtasksCreate({required TodoSubtaskCreateInput input })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_box_autoadd_todo_subtask_create_input(input, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 141, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_todo_subtask,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiTodoTodoSubtasksCreateConstMeta,
-        argValues: [input],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiTodoTodoSubtasksCreateConstMeta,
+            argValues: [input],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiTodoTodoSubtasksCreateConstMeta =>
-      const TaskConstMeta(
-        debugName: "todo_subtasks_create",
-        argNames: ["input"],
-      );
 
-  @override
-  Future<void> crateApiTodoTodoSubtasksDelete({required PlatformInt64 id}) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_i_64(id, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 140,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiTodoTodoSubtasksCreateConstMeta => const TaskConstMeta(
+            debugName: "todo_subtasks_create",
+            argNames: ["input"],
+        );
+        
+
+@override Future<void> crateApiTodoTodoSubtasksDelete({required PlatformInt64 id })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_i_64(id, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 142, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_unit,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiTodoTodoSubtasksDeleteConstMeta,
-        argValues: [id],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiTodoTodoSubtasksDeleteConstMeta,
+            argValues: [id],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiTodoTodoSubtasksDeleteConstMeta =>
-      const TaskConstMeta(debugName: "todo_subtasks_delete", argNames: ["id"]);
 
-  @override
-  Future<TodoSubtask> crateApiTodoTodoSubtasksGet({required PlatformInt64 id}) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_i_64(id, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 141,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiTodoTodoSubtasksDeleteConstMeta => const TaskConstMeta(
+            debugName: "todo_subtasks_delete",
+            argNames: ["id"],
+        );
+        
+
+@override Future<TodoSubtask> crateApiTodoTodoSubtasksGet({required PlatformInt64 id })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_i_64(id, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 143, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_todo_subtask,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiTodoTodoSubtasksGetConstMeta,
-        argValues: [id],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiTodoTodoSubtasksGetConstMeta,
+            argValues: [id],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiTodoTodoSubtasksGetConstMeta =>
-      const TaskConstMeta(debugName: "todo_subtasks_get", argNames: ["id"]);
 
-  @override
-  Future<List<TodoSubtask>> crateApiTodoTodoSubtasksList({
-    required ListFilter filter,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_box_autoadd_list_filter(filter, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 142,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiTodoTodoSubtasksGetConstMeta => const TaskConstMeta(
+            debugName: "todo_subtasks_get",
+            argNames: ["id"],
+        );
+        
+
+@override Future<List<TodoSubtask>> crateApiTodoTodoSubtasksList({required ListFilter filter })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_box_autoadd_list_filter(filter, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 144, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_list_todo_subtask,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiTodoTodoSubtasksListConstMeta,
-        argValues: [filter],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiTodoTodoSubtasksListConstMeta,
+            argValues: [filter],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiTodoTodoSubtasksListConstMeta =>
-      const TaskConstMeta(
-        debugName: "todo_subtasks_list",
-        argNames: ["filter"],
-      );
 
-  @override
-  Future<TodoTask> crateApiTodoTodoSubtasksPromote({
-    required PlatformInt64 subtaskId,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_i_64(subtaskId, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 143,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiTodoTodoSubtasksListConstMeta => const TaskConstMeta(
+            debugName: "todo_subtasks_list",
+            argNames: ["filter"],
+        );
+        
+
+@override Future<TodoTask> crateApiTodoTodoSubtasksPromote({required PlatformInt64 subtaskId })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_i_64(subtaskId, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 145, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_todo_task,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiTodoTodoSubtasksPromoteConstMeta,
-        argValues: [subtaskId],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiTodoTodoSubtasksPromoteConstMeta,
+            argValues: [subtaskId],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiTodoTodoSubtasksPromoteConstMeta =>
-      const TaskConstMeta(
-        debugName: "todo_subtasks_promote",
-        argNames: ["subtaskId"],
-      );
 
-  @override
-  Future<void> crateApiTodoTodoSubtasksToggleDone({
-    required PlatformInt64 subtaskId,
-    required bool done,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_i_64(subtaskId, serializer);
-          sse_encode_bool(done, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 144,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiTodoTodoSubtasksPromoteConstMeta => const TaskConstMeta(
+            debugName: "todo_subtasks_promote",
+            argNames: ["subtaskId"],
+        );
+        
+
+@override Future<void> crateApiTodoTodoSubtasksToggleDone({required PlatformInt64 subtaskId , required bool done })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_i_64(subtaskId, serializer);
+sse_encode_bool(done, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 146, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_unit,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiTodoTodoSubtasksToggleDoneConstMeta,
-        argValues: [subtaskId, done],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiTodoTodoSubtasksToggleDoneConstMeta,
+            argValues: [subtaskId, done],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiTodoTodoSubtasksToggleDoneConstMeta =>
-      const TaskConstMeta(
-        debugName: "todo_subtasks_toggle_done",
-        argNames: ["subtaskId", "done"],
-      );
 
-  @override
-  Future<TodoSubtask> crateApiTodoTodoSubtasksUpdate({
-    required PlatformInt64 id,
-    required String patchJson,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_i_64(id, serializer);
-          sse_encode_String(patchJson, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 145,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiTodoTodoSubtasksToggleDoneConstMeta => const TaskConstMeta(
+            debugName: "todo_subtasks_toggle_done",
+            argNames: ["subtaskId", "done"],
+        );
+        
+
+@override Future<TodoSubtask> crateApiTodoTodoSubtasksUpdate({required PlatformInt64 id , required String patchJson })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_i_64(id, serializer);
+sse_encode_String(patchJson, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 147, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_todo_subtask,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiTodoTodoSubtasksUpdateConstMeta,
-        argValues: [id, patchJson],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiTodoTodoSubtasksUpdateConstMeta,
+            argValues: [id, patchJson],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiTodoTodoSubtasksUpdateConstMeta =>
-      const TaskConstMeta(
-        debugName: "todo_subtasks_update",
-        argNames: ["id", "patchJson"],
-      );
 
-  @override
-  Future<TodoTaskLabel> crateApiTodoTodoTaskLabelsCreate({
-    required TodoTaskLabelCreateInput input,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_box_autoadd_todo_task_label_create_input(
-            input,
-            serializer,
-          );
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 146,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiTodoTodoSubtasksUpdateConstMeta => const TaskConstMeta(
+            debugName: "todo_subtasks_update",
+            argNames: ["id", "patchJson"],
+        );
+        
+
+@override Future<TodoTaskLabel> crateApiTodoTodoTaskLabelsCreate({required TodoTaskLabelCreateInput input })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_box_autoadd_todo_task_label_create_input(input, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 148, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_todo_task_label,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiTodoTodoTaskLabelsCreateConstMeta,
-        argValues: [input],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiTodoTodoTaskLabelsCreateConstMeta,
+            argValues: [input],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiTodoTodoTaskLabelsCreateConstMeta =>
-      const TaskConstMeta(
-        debugName: "todo_task_labels_create",
-        argNames: ["input"],
-      );
 
-  @override
-  Future<void> crateApiTodoTodoTaskLabelsDelete({required PlatformInt64 id}) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_i_64(id, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 147,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiTodoTodoTaskLabelsCreateConstMeta => const TaskConstMeta(
+            debugName: "todo_task_labels_create",
+            argNames: ["input"],
+        );
+        
+
+@override Future<void> crateApiTodoTodoTaskLabelsDelete({required PlatformInt64 id })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_i_64(id, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 149, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_unit,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiTodoTodoTaskLabelsDeleteConstMeta,
-        argValues: [id],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiTodoTodoTaskLabelsDeleteConstMeta,
+            argValues: [id],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiTodoTodoTaskLabelsDeleteConstMeta =>
-      const TaskConstMeta(
-        debugName: "todo_task_labels_delete",
-        argNames: ["id"],
-      );
 
-  @override
-  Future<TodoTaskLabel> crateApiTodoTodoTaskLabelsGet({
-    required PlatformInt64 id,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_i_64(id, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 148,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiTodoTodoTaskLabelsDeleteConstMeta => const TaskConstMeta(
+            debugName: "todo_task_labels_delete",
+            argNames: ["id"],
+        );
+        
+
+@override Future<TodoTaskLabel> crateApiTodoTodoTaskLabelsGet({required PlatformInt64 id })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_i_64(id, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 150, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_todo_task_label,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiTodoTodoTaskLabelsGetConstMeta,
-        argValues: [id],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiTodoTodoTaskLabelsGetConstMeta,
+            argValues: [id],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiTodoTodoTaskLabelsGetConstMeta =>
-      const TaskConstMeta(debugName: "todo_task_labels_get", argNames: ["id"]);
 
-  @override
-  Future<List<TodoTaskLabel>> crateApiTodoTodoTaskLabelsList({
-    required ListFilter filter,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_box_autoadd_list_filter(filter, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 149,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiTodoTodoTaskLabelsGetConstMeta => const TaskConstMeta(
+            debugName: "todo_task_labels_get",
+            argNames: ["id"],
+        );
+        
+
+@override Future<List<TodoTaskLabel>> crateApiTodoTodoTaskLabelsList({required ListFilter filter })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_box_autoadd_list_filter(filter, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 151, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_list_todo_task_label,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiTodoTodoTaskLabelsListConstMeta,
-        argValues: [filter],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiTodoTodoTaskLabelsListConstMeta,
+            argValues: [filter],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiTodoTodoTaskLabelsListConstMeta =>
-      const TaskConstMeta(
-        debugName: "todo_task_labels_list",
-        argNames: ["filter"],
-      );
 
-  @override
-  Future<TodoTaskRelation> crateApiTodoTodoTaskRelationsCreate({
-    required TodoTaskRelationCreateInput input,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_box_autoadd_todo_task_relation_create_input(
-            input,
-            serializer,
-          );
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 150,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiTodoTodoTaskLabelsListConstMeta => const TaskConstMeta(
+            debugName: "todo_task_labels_list",
+            argNames: ["filter"],
+        );
+        
+
+@override Future<TodoTaskRelation> crateApiTodoTodoTaskRelationsCreate({required TodoTaskRelationCreateInput input })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_box_autoadd_todo_task_relation_create_input(input, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 152, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_todo_task_relation,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiTodoTodoTaskRelationsCreateConstMeta,
-        argValues: [input],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiTodoTodoTaskRelationsCreateConstMeta,
+            argValues: [input],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiTodoTodoTaskRelationsCreateConstMeta =>
-      const TaskConstMeta(
-        debugName: "todo_task_relations_create",
-        argNames: ["input"],
-      );
 
-  @override
-  Future<void> crateApiTodoTodoTaskRelationsDelete({
-    required PlatformInt64 id,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_i_64(id, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 151,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiTodoTodoTaskRelationsCreateConstMeta => const TaskConstMeta(
+            debugName: "todo_task_relations_create",
+            argNames: ["input"],
+        );
+        
+
+@override Future<void> crateApiTodoTodoTaskRelationsDelete({required PlatformInt64 id })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_i_64(id, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 153, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_unit,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiTodoTodoTaskRelationsDeleteConstMeta,
-        argValues: [id],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiTodoTodoTaskRelationsDeleteConstMeta,
+            argValues: [id],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiTodoTodoTaskRelationsDeleteConstMeta =>
-      const TaskConstMeta(
-        debugName: "todo_task_relations_delete",
-        argNames: ["id"],
-      );
 
-  @override
-  Future<TodoTaskRelation> crateApiTodoTodoTaskRelationsGet({
-    required PlatformInt64 id,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_i_64(id, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 152,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiTodoTodoTaskRelationsDeleteConstMeta => const TaskConstMeta(
+            debugName: "todo_task_relations_delete",
+            argNames: ["id"],
+        );
+        
+
+@override Future<TodoTaskRelation> crateApiTodoTodoTaskRelationsGet({required PlatformInt64 id })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_i_64(id, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 154, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_todo_task_relation,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiTodoTodoTaskRelationsGetConstMeta,
-        argValues: [id],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiTodoTodoTaskRelationsGetConstMeta,
+            argValues: [id],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiTodoTodoTaskRelationsGetConstMeta =>
-      const TaskConstMeta(
-        debugName: "todo_task_relations_get",
-        argNames: ["id"],
-      );
 
-  @override
-  Future<List<TodoTaskRelation>> crateApiTodoTodoTaskRelationsList({
-    required ListFilter filter,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_box_autoadd_list_filter(filter, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 153,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiTodoTodoTaskRelationsGetConstMeta => const TaskConstMeta(
+            debugName: "todo_task_relations_get",
+            argNames: ["id"],
+        );
+        
+
+@override Future<List<TodoTaskRelation>> crateApiTodoTodoTaskRelationsList({required ListFilter filter })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_box_autoadd_list_filter(filter, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 155, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_list_todo_task_relation,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiTodoTodoTaskRelationsListConstMeta,
-        argValues: [filter],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiTodoTodoTaskRelationsListConstMeta,
+            argValues: [filter],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiTodoTodoTaskRelationsListConstMeta =>
-      const TaskConstMeta(
-        debugName: "todo_task_relations_list",
-        argNames: ["filter"],
-      );
 
-  @override
-  Future<CompleteTaskResult> crateApiTodoTodoTasksComplete({
-    required PlatformInt64 id,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_i_64(id, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 154,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiTodoTodoTaskRelationsListConstMeta => const TaskConstMeta(
+            debugName: "todo_task_relations_list",
+            argNames: ["filter"],
+        );
+        
+
+@override Future<CompleteTaskResult> crateApiTodoTodoTasksComplete({required PlatformInt64 id })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_i_64(id, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 156, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_complete_task_result,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiTodoTodoTasksCompleteConstMeta,
-        argValues: [id],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiTodoTodoTasksCompleteConstMeta,
+            argValues: [id],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiTodoTodoTasksCompleteConstMeta =>
-      const TaskConstMeta(debugName: "todo_tasks_complete", argNames: ["id"]);
 
-  @override
-  Future<TodoTask> crateApiTodoTodoTasksCreate({
-    required TodoTaskCreateInput input,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_box_autoadd_todo_task_create_input(input, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 155,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiTodoTodoTasksCompleteConstMeta => const TaskConstMeta(
+            debugName: "todo_tasks_complete",
+            argNames: ["id"],
+        );
+        
+
+@override Future<TodoTask> crateApiTodoTodoTasksCreate({required TodoTaskCreateInput input })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_box_autoadd_todo_task_create_input(input, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 157, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_todo_task,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiTodoTodoTasksCreateConstMeta,
-        argValues: [input],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiTodoTodoTasksCreateConstMeta,
+            argValues: [input],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiTodoTodoTasksCreateConstMeta =>
-      const TaskConstMeta(debugName: "todo_tasks_create", argNames: ["input"]);
 
-  @override
-  Future<void> crateApiTodoTodoTasksDelete({required PlatformInt64 id}) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_i_64(id, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 156,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiTodoTodoTasksCreateConstMeta => const TaskConstMeta(
+            debugName: "todo_tasks_create",
+            argNames: ["input"],
+        );
+        
+
+@override Future<void> crateApiTodoTodoTasksDelete({required PlatformInt64 id })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_i_64(id, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 158, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_unit,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiTodoTodoTasksDeleteConstMeta,
-        argValues: [id],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiTodoTodoTasksDeleteConstMeta,
+            argValues: [id],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiTodoTodoTasksDeleteConstMeta =>
-      const TaskConstMeta(debugName: "todo_tasks_delete", argNames: ["id"]);
 
-  @override
-  Future<TodoTask> crateApiTodoTodoTasksDuplicate({required PlatformInt64 id}) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_i_64(id, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 157,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiTodoTodoTasksDeleteConstMeta => const TaskConstMeta(
+            debugName: "todo_tasks_delete",
+            argNames: ["id"],
+        );
+        
+
+@override Future<TodoTask> crateApiTodoTodoTasksDuplicate({required PlatformInt64 id })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_i_64(id, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 159, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_todo_task,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiTodoTodoTasksDuplicateConstMeta,
-        argValues: [id],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiTodoTodoTasksDuplicateConstMeta,
+            argValues: [id],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiTodoTodoTasksDuplicateConstMeta =>
-      const TaskConstMeta(debugName: "todo_tasks_duplicate", argNames: ["id"]);
 
-  @override
-  Future<TodoTask> crateApiTodoTodoTasksGet({required PlatformInt64 id}) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_i_64(id, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 158,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiTodoTodoTasksDuplicateConstMeta => const TaskConstMeta(
+            debugName: "todo_tasks_duplicate",
+            argNames: ["id"],
+        );
+        
+
+@override Future<TodoTask> crateApiTodoTodoTasksGet({required PlatformInt64 id })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_i_64(id, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 160, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_todo_task,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiTodoTodoTasksGetConstMeta,
-        argValues: [id],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiTodoTodoTasksGetConstMeta,
+            argValues: [id],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiTodoTodoTasksGetConstMeta =>
-      const TaskConstMeta(debugName: "todo_tasks_get", argNames: ["id"]);
 
-  @override
-  Future<TodoTask?> crateApiTodoTodoTasksGetByUuid({required String uuid}) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_String(uuid, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 159,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiTodoTodoTasksGetConstMeta => const TaskConstMeta(
+            debugName: "todo_tasks_get",
+            argNames: ["id"],
+        );
+        
+
+@override Future<TodoTask?> crateApiTodoTodoTasksGetByUuid({required String uuid })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_String(uuid, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 161, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_opt_box_autoadd_todo_task,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiTodoTodoTasksGetByUuidConstMeta,
-        argValues: [uuid],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiTodoTodoTasksGetByUuidConstMeta,
+            argValues: [uuid],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiTodoTodoTasksGetByUuidConstMeta =>
-      const TaskConstMeta(
-        debugName: "todo_tasks_get_by_uuid",
-        argNames: ["uuid"],
-      );
 
-  @override
-  Future<TodoTaskDetail> crateApiTodoTodoTasksGetDetail({
-    required PlatformInt64 id,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_i_64(id, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 160,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiTodoTodoTasksGetByUuidConstMeta => const TaskConstMeta(
+            debugName: "todo_tasks_get_by_uuid",
+            argNames: ["uuid"],
+        );
+        
+
+@override Future<TodoTaskDetail> crateApiTodoTodoTasksGetDetail({required PlatformInt64 id })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_i_64(id, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 162, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_todo_task_detail,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiTodoTodoTasksGetDetailConstMeta,
-        argValues: [id],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiTodoTodoTasksGetDetailConstMeta,
+            argValues: [id],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiTodoTodoTasksGetDetailConstMeta =>
-      const TaskConstMeta(debugName: "todo_tasks_get_detail", argNames: ["id"]);
 
-  @override
-  Future<List<TodoTaskListItem>> crateApiTodoTodoTasksList({
-    required ListFilter filter,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_box_autoadd_list_filter(filter, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 161,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiTodoTodoTasksGetDetailConstMeta => const TaskConstMeta(
+            debugName: "todo_tasks_get_detail",
+            argNames: ["id"],
+        );
+        
+
+@override Future<List<TodoTaskListItem>> crateApiTodoTodoTasksList({required ListFilter filter })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_box_autoadd_list_filter(filter, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 163, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_list_todo_task_list_item,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiTodoTodoTasksListConstMeta,
-        argValues: [filter],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiTodoTodoTasksListConstMeta,
+            argValues: [filter],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiTodoTodoTasksListConstMeta =>
-      const TaskConstMeta(debugName: "todo_tasks_list", argNames: ["filter"]);
 
-  @override
-  Future<void> crateApiTodoTodoTasksRecalcPercent({
-    required PlatformInt64 taskId,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_i_64(taskId, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 162,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiTodoTodoTasksListConstMeta => const TaskConstMeta(
+            debugName: "todo_tasks_list",
+            argNames: ["filter"],
+        );
+        
+
+@override Future<void> crateApiTodoTodoTasksRecalcPercent({required PlatformInt64 taskId })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_i_64(taskId, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 164, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_unit,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiTodoTodoTasksRecalcPercentConstMeta,
-        argValues: [taskId],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiTodoTodoTasksRecalcPercentConstMeta,
+            argValues: [taskId],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiTodoTodoTasksRecalcPercentConstMeta =>
-      const TaskConstMeta(
-        debugName: "todo_tasks_recalc_percent",
-        argNames: ["taskId"],
-      );
 
-  @override
-  Future<TodoTask> crateApiTodoTodoTasksUpdate({
-    required PlatformInt64 id,
-    required String patchJson,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_i_64(id, serializer);
-          sse_encode_String(patchJson, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 163,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiTodoTodoTasksRecalcPercentConstMeta => const TaskConstMeta(
+            debugName: "todo_tasks_recalc_percent",
+            argNames: ["taskId"],
+        );
+        
+
+@override Future<TodoTask> crateApiTodoTodoTasksUpdate({required PlatformInt64 id , required String patchJson })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_i_64(id, serializer);
+sse_encode_String(patchJson, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 165, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_todo_task,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiTodoTodoTasksUpdateConstMeta,
-        argValues: [id, patchJson],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiTodoTodoTasksUpdateConstMeta,
+            argValues: [id, patchJson],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiTodoTodoTasksUpdateConstMeta =>
-      const TaskConstMeta(
-        debugName: "todo_tasks_update",
-        argNames: ["id", "patchJson"],
-      );
 
-  @override
-  Future<void> crateApiTodoTodoTasksUpdatePosition({
-    required PlatformInt64 id,
-    required double position,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_i_64(id, serializer);
-          sse_encode_f_64(position, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 164,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiTodoTodoTasksUpdateConstMeta => const TaskConstMeta(
+            debugName: "todo_tasks_update",
+            argNames: ["id", "patchJson"],
+        );
+        
+
+@override Future<void> crateApiTodoTodoTasksUpdatePosition({required PlatformInt64 id , required double position })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_i_64(id, serializer);
+sse_encode_f_64(position, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 166, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_unit,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiTodoTodoTasksUpdatePositionConstMeta,
-        argValues: [id, position],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiTodoTodoTasksUpdatePositionConstMeta,
+            argValues: [id, position],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiTodoTodoTasksUpdatePositionConstMeta =>
-      const TaskConstMeta(
-        debugName: "todo_tasks_update_position",
-        argNames: ["id", "position"],
-      );
 
-  @override
-  Future<TrashMeta> crateApiTrashTrashMeta() {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 165,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiTodoTodoTasksUpdatePositionConstMeta => const TaskConstMeta(
+            debugName: "todo_tasks_update_position",
+            argNames: ["id", "position"],
+        );
+        
+
+@override Future<TrashMeta> crateApiTrashTrashMeta()  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 167, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_trash_meta,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiTrashTrashMetaConstMeta,
-        argValues: [],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiTrashTrashMetaConstMeta,
+            argValues: [],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiTrashTrashMetaConstMeta =>
-      const TaskConstMeta(debugName: "trash_meta", argNames: []);
 
-  @override
-  Future<BigInt> crateApiTrashTrashPurgeAll() {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 166,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiTrashTrashMetaConstMeta => const TaskConstMeta(
+            debugName: "trash_meta",
+            argNames: [],
+        );
+        
+
+@override Future<BigInt> crateApiTrashTrashPurgeAll()  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 168, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_u_64,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiTrashTrashPurgeAllConstMeta,
-        argValues: [],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiTrashTrashPurgeAllConstMeta,
+            argValues: [],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiTrashTrashPurgeAllConstMeta =>
-      const TaskConstMeta(debugName: "trash_purge_all", argNames: []);
 
-  @override
-  Future<TrashPurgeStats> crateApiTrashTrashPurgeExpired() {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 167,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiTrashTrashPurgeAllConstMeta => const TaskConstMeta(
+            debugName: "trash_purge_all",
+            argNames: [],
+        );
+        
+
+@override Future<TrashPurgeStats> crateApiTrashTrashPurgeExpired()  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 169, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_trash_purge_stats,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiTrashTrashPurgeExpiredConstMeta,
-        argValues: [],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiTrashTrashPurgeExpiredConstMeta,
+            argValues: [],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiTrashTrashPurgeExpiredConstMeta =>
-      const TaskConstMeta(debugName: "trash_purge_expired", argNames: []);
 
-  @override
-  Future<void> crateApiTrashTrashSetRetentionDays({
-    required PlatformInt64 days,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_i_64(days, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 168,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiTrashTrashPurgeExpiredConstMeta => const TaskConstMeta(
+            debugName: "trash_purge_expired",
+            argNames: [],
+        );
+        
+
+@override Future<void> crateApiTrashTrashSetRetentionDays({required PlatformInt64 days })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_i_64(days, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 170, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_unit,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiTrashTrashSetRetentionDaysConstMeta,
-        argValues: [days],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiTrashTrashSetRetentionDaysConstMeta,
+            argValues: [days],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiTrashTrashSetRetentionDaysConstMeta =>
-      const TaskConstMeta(
-        debugName: "trash_set_retention_days",
-        argNames: ["days"],
-      );
 
-  @override
-  Future<void> crateApiTrashTrashTaskPurge({required PlatformInt64 id}) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_i_64(id, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 169,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiTrashTrashSetRetentionDaysConstMeta => const TaskConstMeta(
+            debugName: "trash_set_retention_days",
+            argNames: ["days"],
+        );
+        
+
+@override Future<void> crateApiTrashTrashTaskPurge({required PlatformInt64 id })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_i_64(id, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 171, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_unit,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiTrashTrashTaskPurgeConstMeta,
-        argValues: [id],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiTrashTrashTaskPurgeConstMeta,
+            argValues: [id],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiTrashTrashTaskPurgeConstMeta =>
-      const TaskConstMeta(debugName: "trash_task_purge", argNames: ["id"]);
 
-  @override
-  Future<TodoTask> crateApiTrashTrashTaskRestore({required PlatformInt64 id}) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_i_64(id, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 170,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiTrashTrashTaskPurgeConstMeta => const TaskConstMeta(
+            debugName: "trash_task_purge",
+            argNames: ["id"],
+        );
+        
+
+@override Future<TodoTask> crateApiTrashTrashTaskRestore({required PlatformInt64 id })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_i_64(id, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 172, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_todo_task,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiTrashTrashTaskRestoreConstMeta,
-        argValues: [id],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiTrashTrashTaskRestoreConstMeta,
+            argValues: [id],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiTrashTrashTaskRestoreConstMeta =>
-      const TaskConstMeta(debugName: "trash_task_restore", argNames: ["id"]);
 
-  @override
-  Future<List<TodoTask>> crateApiTrashTrashTasksList() {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 171,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiTrashTrashTaskRestoreConstMeta => const TaskConstMeta(
+            debugName: "trash_task_restore",
+            argNames: ["id"],
+        );
+        
+
+@override Future<List<TodoTask>> crateApiTrashTrashTasksList()  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 173, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_list_todo_task,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiTrashTrashTasksListConstMeta,
-        argValues: [],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiTrashTrashTasksListConstMeta,
+            argValues: [],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiTrashTrashTasksListConstMeta =>
-      const TaskConstMeta(debugName: "trash_tasks_list", argNames: []);
 
-  @override
-  Future<List<WidgetTodoItem>> crateApiWidgetWidgetTodoQuery({
-    required PlatformInt64 limit,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_i_64(limit, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 172,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiTrashTrashTasksListConstMeta => const TaskConstMeta(
+            debugName: "trash_tasks_list",
+            argNames: [],
+        );
+        
+
+@override Future<List<WidgetTodoItem>> crateApiWidgetWidgetTodoQuery({required PlatformInt64 limit })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_i_64(limit, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 174, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_list_widget_todo_item,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiWidgetWidgetTodoQueryConstMeta,
-        argValues: [limit],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiWidgetWidgetTodoQueryConstMeta,
+            argValues: [limit],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiWidgetWidgetTodoQueryConstMeta =>
-      const TaskConstMeta(debugName: "widget_todo_query", argNames: ["limit"]);
 
-  @override
-  Future<void> crateApiWidgetWidgetTodoToggle({
-    required PlatformInt64 id,
-    required int done,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_i_64(id, serializer);
-          sse_encode_i_32(done, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 173,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiWidgetWidgetTodoQueryConstMeta => const TaskConstMeta(
+            debugName: "widget_todo_query",
+            argNames: ["limit"],
+        );
+        
+
+@override Future<void> crateApiWidgetWidgetTodoToggle({required PlatformInt64 id , required int done })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_i_64(id, serializer);
+sse_encode_i_32(done, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 175, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_unit,
           decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiWidgetWidgetTodoToggleConstMeta,
-        argValues: [id, done],
-        apiImpl: this,
-      ),
-    );
-  }
-
-  TaskConstMeta get kCrateApiWidgetWidgetTodoToggleConstMeta =>
-      const TaskConstMeta(
-        debugName: "widget_todo_toggle",
-        argNames: ["id", "done"],
-      );
-
-  @protected
-  AnyhowException dco_decode_AnyhowException(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return AnyhowException(raw as String);
-  }
-
-  @protected
-  RustStreamSink<DbEventDto> dco_decode_StreamSink_db_event_dto_Sse(
-    dynamic raw,
-  ) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    throw UnimplementedError();
-  }
-
-  @protected
-  RustStreamSink<HolidayProgressDto>
-  dco_decode_StreamSink_holiday_progress_dto_Sse(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    throw UnimplementedError();
-  }
-
-  @protected
-  RustStreamSink<ReminderDueDto> dco_decode_StreamSink_reminder_due_dto_Sse(
-    dynamic raw,
-  ) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    throw UnimplementedError();
-  }
-
-  @protected
-  String dco_decode_String(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return raw as String;
-  }
-
-  @protected
-  ActivityLogRow dco_decode_activity_log_row(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    final arr = raw as List<dynamic>;
-    if (arr.length != 6)
-      throw Exception('unexpected arr length: expect 6 but see ${arr.length}');
-    return ActivityLogRow(
-      id: dco_decode_i_64(arr[0]),
-      taskId: dco_decode_opt_box_autoadd_i_64(arr[1]),
-      taskTitle: dco_decode_String(arr[2]),
-      action: dco_decode_String(arr[3]),
-      detail: dco_decode_String(arr[4]),
-      createdAt: dco_decode_i_64(arr[5]),
-    );
-  }
-
-  @protected
-  BackupDeviceInfo dco_decode_backup_device_info(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    final arr = raw as List<dynamic>;
-    if (arr.length != 1)
-      throw Exception('unexpected arr length: expect 1 but see ${arr.length}');
-    return BackupDeviceInfo(deviceId: dco_decode_String(arr[0]));
-  }
-
-  @protected
-  BackupEntryView dco_decode_backup_entry_view(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    final arr = raw as List<dynamic>;
-    if (arr.length != 4)
-      throw Exception('unexpected arr length: expect 4 but see ${arr.length}');
-    return BackupEntryView(
-      filename: dco_decode_String(arr[0]),
-      filePath: dco_decode_String(arr[1]),
-      modifiedAt: dco_decode_i_64(arr[2]),
-      sizeBytes: dco_decode_i_64(arr[3]),
-    );
-  }
-
-  @protected
-  BackupExportResult dco_decode_backup_export_result(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    final arr = raw as List<dynamic>;
-    if (arr.length != 9)
-      throw Exception('unexpected arr length: expect 9 but see ${arr.length}');
-    return BackupExportResult(
-      filePath: dco_decode_String(arr[0]),
-      fileSize: dco_decode_i_64(arr[1]),
-      tableCounts: dco_decode_list_backup_table_count(arr[2]),
-      manifest: dco_decode_backup_manifest_view(arr[3]),
-      cloudPath: dco_decode_opt_String(arr[4]),
-      cloudUploaded: dco_decode_bool(arr[5]),
-      cloudError: dco_decode_opt_String(arr[6]),
-      localPath: dco_decode_opt_String(arr[7]),
-      localError: dco_decode_opt_String(arr[8]),
-    );
-  }
-
-  @protected
-  BackupImportResult dco_decode_backup_import_result(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    final arr = raw as List<dynamic>;
-    if (arr.length != 5)
-      throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
-    return BackupImportResult(
-      successCount: dco_decode_i_64(arr[0]),
-      errorCount: dco_decode_i_64(arr[1]),
-      errors: dco_decode_list_String(arr[2]),
-      manifest: dco_decode_backup_manifest_view(arr[3]),
-      needsRestart: dco_decode_bool(arr[4]),
-    );
-  }
-
-  @protected
-  BackupManifestView dco_decode_backup_manifest_view(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    final arr = raw as List<dynamic>;
-    if (arr.length != 8)
-      throw Exception('unexpected arr length: expect 8 but see ${arr.length}');
-    return BackupManifestView(
-      formatVersion: dco_decode_u_32(arr[0]),
-      createdAt: dco_decode_String(arr[1]),
-      createdAtTs: dco_decode_i_64(arr[2]),
-      appVersion: dco_decode_String(arr[3]),
-      deviceId: dco_decode_String(arr[4]),
-      deviceName: dco_decode_opt_String(arr[5]),
-      schemaVersion: dco_decode_i_64(arr[6]),
-      tableCounts: dco_decode_list_backup_table_count(arr[7]),
-    );
-  }
-
-  @protected
-  BackupPrefsView dco_decode_backup_prefs_view(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    final arr = raw as List<dynamic>;
-    if (arr.length != 12)
-      throw Exception('unexpected arr length: expect 12 but see ${arr.length}');
-    return BackupPrefsView(
-      localPath: dco_decode_opt_String(arr[0]),
-      keepLatest: dco_decode_bool(arr[1]),
-      cloudBackupEnabled: dco_decode_bool(arr[2]),
-      localBackupEnabled: dco_decode_bool(arr[3]),
-      scheduleType: dco_decode_String(arr[4]),
-      scheduleTime: dco_decode_String(arr[5]),
-      scheduleMinute: dco_decode_u_32(arr[6]),
-      scheduleWeekday: dco_decode_u_32(arr[7]),
-      scheduleDayOfMonth: dco_decode_u_32(arr[8]),
-      scheduleMonth: dco_decode_u_32(arr[9]),
-      lastBackupAt: dco_decode_i_64(arr[10]),
-      nextBackupAt: dco_decode_i_64(arr[11]),
-    );
-  }
-
-  @protected
-  BackupPreviewTask dco_decode_backup_preview_task(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    final arr = raw as List<dynamic>;
-    if (arr.length != 7)
-      throw Exception('unexpected arr length: expect 7 but see ${arr.length}');
-    return BackupPreviewTask(
-      title: dco_decode_String(arr[0]),
-      status: dco_decode_String(arr[1]),
-      done: dco_decode_bool(arr[2]),
-      dueDate: dco_decode_opt_box_autoadd_i_64(arr[3]),
-      priority: dco_decode_i_64(arr[4]),
-      project: dco_decode_opt_String(arr[5]),
-      isDeleted: dco_decode_bool(arr[6]),
-    );
-  }
-
-  @protected
-  BackupPreviewView dco_decode_backup_preview_view(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    final arr = raw as List<dynamic>;
-    if (arr.length != 5)
-      throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
-    return BackupPreviewView(
-      manifest: dco_decode_backup_manifest_view(arr[0]),
-      sampleTasks: dco_decode_list_backup_preview_task(arr[1]),
-      taskStats: dco_decode_backup_task_stats(arr[2]),
-      schemaMismatch: dco_decode_bool(arr[3]),
-      currentSchemaVersion: dco_decode_i_64(arr[4]),
-    );
-  }
-
-  @protected
-  BackupTableCount dco_decode_backup_table_count(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    final arr = raw as List<dynamic>;
-    if (arr.length != 2)
-      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
-    return BackupTableCount(
-      table: dco_decode_String(arr[0]),
-      count: dco_decode_i_64(arr[1]),
-    );
-  }
-
-  @protected
-  BackupTaskStats dco_decode_backup_task_stats(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    final arr = raw as List<dynamic>;
-    if (arr.length != 4)
-      throw Exception('unexpected arr length: expect 4 but see ${arr.length}');
-    return BackupTaskStats(
-      total: dco_decode_i_64(arr[0]),
-      alive: dco_decode_i_64(arr[1]),
-      done: dco_decode_i_64(arr[2]),
-      deleted: dco_decode_i_64(arr[3]),
-    );
-  }
-
-  @protected
-  BiometricSecretBundle dco_decode_biometric_secret_bundle(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    final arr = raw as List<dynamic>;
-    if (arr.length != 3)
-      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
-    return BiometricSecretBundle(
-      encryptedDbKeyBio: dco_decode_String(arr[0]),
-      biometricKey: dco_decode_String(arr[1]),
-      nonce: dco_decode_String(arr[2]),
-    );
-  }
-
-  @protected
-  bool dco_decode_bool(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return raw as bool;
-  }
-
-  @protected
-  BackupPrefsView dco_decode_box_autoadd_backup_prefs_view(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return dco_decode_backup_prefs_view(raw);
-  }
-
-  @protected
-  bool dco_decode_box_autoadd_bool(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return raw as bool;
-  }
-
-  @protected
-  CsvImportStatsView dco_decode_box_autoadd_csv_import_stats_view(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return dco_decode_csv_import_stats_view(raw);
-  }
-
-  @protected
-  double dco_decode_box_autoadd_f_64(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return raw as double;
-  }
-
-  @protected
-  int dco_decode_box_autoadd_i_32(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return raw as int;
-  }
-
-  @protected
-  PlatformInt64 dco_decode_box_autoadd_i_64(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return dco_decode_i_64(raw);
-  }
-
-  @protected
-  ListFilter dco_decode_box_autoadd_list_filter(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return dco_decode_list_filter(raw);
-  }
-
-  @protected
-  SyncConfigInput dco_decode_box_autoadd_sync_config_input(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return dco_decode_sync_config_input(raw);
-  }
-
-  @protected
-  SyncConfigView dco_decode_box_autoadd_sync_config_view(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return dco_decode_sync_config_view(raw);
-  }
-
-  @protected
-  TodoCommentCreateInput dco_decode_box_autoadd_todo_comment_create_input(
-    dynamic raw,
-  ) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return dco_decode_todo_comment_create_input(raw);
-  }
-
-  @protected
-  TodoLabelCreateInput dco_decode_box_autoadd_todo_label_create_input(
-    dynamic raw,
-  ) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return dco_decode_todo_label_create_input(raw);
-  }
-
-  @protected
-  TodoProject dco_decode_box_autoadd_todo_project(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return dco_decode_todo_project(raw);
-  }
-
-  @protected
-  TodoProjectCreateInput dco_decode_box_autoadd_todo_project_create_input(
-    dynamic raw,
-  ) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return dco_decode_todo_project_create_input(raw);
-  }
-
-  @protected
-  TodoReminderCreateInput dco_decode_box_autoadd_todo_reminder_create_input(
-    dynamic raw,
-  ) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return dco_decode_todo_reminder_create_input(raw);
-  }
-
-  @protected
-  TodoSavedFilterCreateInput
-  dco_decode_box_autoadd_todo_saved_filter_create_input(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return dco_decode_todo_saved_filter_create_input(raw);
-  }
-
-  @protected
-  TodoSavedFilterUpdateInput
-  dco_decode_box_autoadd_todo_saved_filter_update_input(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return dco_decode_todo_saved_filter_update_input(raw);
-  }
-
-  @protected
-  TodoSubtaskCreateInput dco_decode_box_autoadd_todo_subtask_create_input(
-    dynamic raw,
-  ) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return dco_decode_todo_subtask_create_input(raw);
-  }
-
-  @protected
-  TodoTask dco_decode_box_autoadd_todo_task(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return dco_decode_todo_task(raw);
-  }
-
-  @protected
-  TodoTaskCreateInput dco_decode_box_autoadd_todo_task_create_input(
-    dynamic raw,
-  ) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return dco_decode_todo_task_create_input(raw);
-  }
-
-  @protected
-  TodoTaskLabelCreateInput dco_decode_box_autoadd_todo_task_label_create_input(
-    dynamic raw,
-  ) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return dco_decode_todo_task_label_create_input(raw);
-  }
-
-  @protected
-  TodoTaskRelationCreateInput
-  dco_decode_box_autoadd_todo_task_relation_create_input(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return dco_decode_todo_task_relation_create_input(raw);
-  }
-
-  @protected
-  TodoTemplateCreateInput dco_decode_box_autoadd_todo_template_create_input(
-    dynamic raw,
-  ) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return dco_decode_todo_template_create_input(raw);
-  }
-
-  @protected
-  TodoTemplateUpdateInput dco_decode_box_autoadd_todo_template_update_input(
-    dynamic raw,
-  ) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return dco_decode_todo_template_update_input(raw);
-  }
-
-  @protected
-  BigInt dco_decode_box_autoadd_usize(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return dco_decode_usize(raw);
-  }
-
-  @protected
-  CloudBackupEntryView dco_decode_cloud_backup_entry_view(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    final arr = raw as List<dynamic>;
-    if (arr.length != 4)
-      throw Exception('unexpected arr length: expect 4 but see ${arr.length}');
-    return CloudBackupEntryView(
-      name: dco_decode_String(arr[0]),
-      cloudPath: dco_decode_String(arr[1]),
-      sizeBytes: dco_decode_i_64(arr[2]),
-      modifiedAt: dco_decode_i_64(arr[3]),
-    );
-  }
-
-  @protected
-  CommentSearchHit dco_decode_comment_search_hit(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    final arr = raw as List<dynamic>;
-    if (arr.length != 5)
-      throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
-    return CommentSearchHit(
-      commentId: dco_decode_i_64(arr[0]),
-      taskId: dco_decode_i_64(arr[1]),
-      taskTitle: dco_decode_String(arr[2]),
-      content: dco_decode_String(arr[3]),
-      createdAt: dco_decode_i_64(arr[4]),
-    );
-  }
-
-  @protected
-  CompleteTaskResult dco_decode_complete_task_result(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    final arr = raw as List<dynamic>;
-    if (arr.length != 2)
-      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
-    return CompleteTaskResult(
-      task: dco_decode_todo_task(arr[0]),
-      nextInstance: dco_decode_opt_box_autoadd_todo_task(arr[1]),
-    );
-  }
-
-  @protected
-  CsvImportPreviewView dco_decode_csv_import_preview_view(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    final arr = raw as List<dynamic>;
-    if (arr.length != 3)
-      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
-    return CsvImportPreviewView(
-      preset: dco_decode_String(arr[0]),
-      rows: dco_decode_list_csv_import_row_view(arr[1]),
-      stats: dco_decode_csv_import_stats_view(arr[2]),
-    );
-  }
-
-  @protected
-  CsvImportRowView dco_decode_csv_import_row_view(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    final arr = raw as List<dynamic>;
-    if (arr.length != 4)
-      throw Exception('unexpected arr length: expect 4 but see ${arr.length}');
-    return CsvImportRowView(
-      sourceLine: dco_decode_usize(arr[0]),
-      projectTitle: dco_decode_opt_String(arr[1]),
-      input: dco_decode_todo_task_create_input(arr[2]),
-      skipReason: dco_decode_opt_String(arr[3]),
-    );
-  }
-
-  @protected
-  CsvImportStatsView dco_decode_csv_import_stats_view(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    final arr = raw as List<dynamic>;
-    if (arr.length != 4)
-      throw Exception('unexpected arr length: expect 4 but see ${arr.length}');
-    return CsvImportStatsView(
-      success: dco_decode_usize(arr[0]),
-      skipped: dco_decode_usize(arr[1]),
-      failed: dco_decode_usize(arr[2]),
-      notes: dco_decode_list_String(arr[3]),
-    );
-  }
-
-  @protected
-  DbEventDto dco_decode_db_event_dto(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    final arr = raw as List<dynamic>;
-    if (arr.length != 6)
-      throw Exception('unexpected arr length: expect 6 but see ${arr.length}');
-    return DbEventDto(
-      table: dco_decode_String(arr[0]),
-      op: dco_decode_String(arr[1]),
-      recordId: dco_decode_i_64(arr[2]),
-      recordUuid: dco_decode_String(arr[3]),
-      deviceId: dco_decode_String(arr[4]),
-      timestamp: dco_decode_i_64(arr[5]),
-    );
-  }
-
-  @protected
-  DbMaintenanceView dco_decode_db_maintenance_view(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    final arr = raw as List<dynamic>;
-    if (arr.length != 6)
-      throw Exception('unexpected arr length: expect 6 but see ${arr.length}');
-    return DbMaintenanceView(
-      walBytesAfterCheckpoint: dco_decode_i_64(arr[0]),
-      attachmentsCleaned: dco_decode_i_32(arr[1]),
-      logRowsPruned: dco_decode_i_32(arr[2]),
-      freelistBefore: dco_decode_i_64(arr[3]),
-      freelistAfter: dco_decode_i_64(arr[4]),
-      pagesReclaimed: dco_decode_i_64(arr[5]),
-    );
-  }
-
-  @protected
-  DiagnosticsSnapshot dco_decode_diagnostics_snapshot(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    final arr = raw as List<dynamic>;
-    if (arr.length != 5)
-      throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
-    return DiagnosticsSnapshot(
-      dbSizeBytes: dco_decode_i_64(arr[0]),
-      tableRows: dco_decode_list_table_row_count(arr[1]),
-      tombstoneRows: dco_decode_i_64(arr[2]),
-      attachmentCacheBytes: dco_decode_i_64(arr[3]),
-      attachmentCacheFiles: dco_decode_i_64(arr[4]),
-    );
-  }
-
-  @protected
-  DigestPrefs dco_decode_digest_prefs(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    final arr = raw as List<dynamic>;
-    if (arr.length != 3)
-      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
-    return DigestPrefs(
-      enabled: dco_decode_bool(arr[0]),
-      hour: dco_decode_i_64(arr[1]),
-      minute: dco_decode_i_64(arr[2]),
-    );
-  }
-
-  @protected
-  DigestSummary dco_decode_digest_summary(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    final arr = raw as List<dynamic>;
-    if (arr.length != 3)
-      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
-    return DigestSummary(
-      dueToday: dco_decode_i_64(arr[0]),
-      overdue: dco_decode_i_64(arr[1]),
-      doneToday: dco_decode_i_64(arr[2]),
-    );
-  }
-
-  @protected
-  double dco_decode_f_64(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return raw as double;
-  }
-
-  @protected
-  GlobalSearchResult dco_decode_global_search_result(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    final arr = raw as List<dynamic>;
-    if (arr.length != 3)
-      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
-    return GlobalSearchResult(
-      tasks: dco_decode_list_todo_task(arr[0]),
-      projects: dco_decode_list_todo_project(arr[1]),
-      comments: dco_decode_list_comment_search_hit(arr[2]),
-    );
-  }
-
-  @protected
-  HolidayInfo dco_decode_holiday_info(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    final arr = raw as List<dynamic>;
-    if (arr.length != 4)
-      throw Exception('unexpected arr length: expect 4 but see ${arr.length}');
-    return HolidayInfo(
-      date: dco_decode_String(arr[0]),
-      year: dco_decode_i_32(arr[1]),
-      isHoliday: dco_decode_bool(arr[2]),
-      name: dco_decode_String(arr[3]),
-    );
-  }
-
-  @protected
-  HolidayMeta dco_decode_holiday_meta(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    final arr = raw as List<dynamic>;
-    if (arr.length != 4)
-      throw Exception('unexpected arr length: expect 4 but see ${arr.length}');
-    return HolidayMeta(
-      lastUpdateMs: dco_decode_i_64(arr[0]),
-      lastAttemptMs: dco_decode_i_64(arr[1]),
-      failureCount: dco_decode_i_32(arr[2]),
-      autoEnabled: dco_decode_bool(arr[3]),
-    );
-  }
-
-  @protected
-  HolidayProgressDto dco_decode_holiday_progress_dto(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    final arr = raw as List<dynamic>;
-    if (arr.length != 10)
-      throw Exception('unexpected arr length: expect 10 but see ${arr.length}');
-    return HolidayProgressDto(
-      phase: dco_decode_String(arr[0]),
-      total: dco_decode_u_32(arr[1]),
-      year: dco_decode_i_32(arr[2]),
-      done: dco_decode_u_32(arr[3]),
-      yearOk: dco_decode_bool(arr[4]),
-      yearEmpty: dco_decode_bool(arr[5]),
-      okCount: dco_decode_u_32(arr[6]),
-      failed: dco_decode_u_32(arr[7]),
-      cancelled: dco_decode_bool(arr[8]),
-      message: dco_decode_String(arr[9]),
-    );
-  }
-
-  @protected
-  HolidayRangeSummary dco_decode_holiday_range_summary(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    final arr = raw as List<dynamic>;
-    if (arr.length != 4)
-      throw Exception('unexpected arr length: expect 4 but see ${arr.length}');
-    return HolidayRangeSummary(
-      ok: dco_decode_u_32(arr[0]),
-      failed: dco_decode_u_32(arr[1]),
-      empty: dco_decode_u_32(arr[2]),
-      cancelled: dco_decode_bool(arr[3]),
-    );
-  }
-
-  @protected
-  HolidayYearOutcome dco_decode_holiday_year_outcome(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    final arr = raw as List<dynamic>;
-    if (arr.length != 2)
-      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
-    return HolidayYearOutcome(
-      meta: dco_decode_holiday_meta(arr[0]),
-      rowCount: dco_decode_u_32(arr[1]),
-    );
-  }
-
-  @protected
-  int dco_decode_i_32(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return raw as int;
-  }
-
-  @protected
-  PlatformInt64 dco_decode_i_64(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return dcoDecodeI64(raw);
-  }
-
-  @protected
-  IcsExportView dco_decode_ics_export_view(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    final arr = raw as List<dynamic>;
-    if (arr.length != 3)
-      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
-    return IcsExportView(
-      content: dco_decode_String(arr[0]),
-      tableCounts: dco_decode_list_ics_table_count(arr[1]),
-      suggestedFilename: dco_decode_String(arr[2]),
-    );
-  }
-
-  @protected
-  IcsTableCount dco_decode_ics_table_count(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    final arr = raw as List<dynamic>;
-    if (arr.length != 2)
-      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
-    return IcsTableCount(
-      table: dco_decode_String(arr[0]),
-      count: dco_decode_usize(arr[1]),
-    );
-  }
-
-  @protected
-  ImportJobStatusView dco_decode_import_job_status_view(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    final arr = raw as List<dynamic>;
-    if (arr.length != 7)
-      throw Exception('unexpected arr length: expect 7 but see ${arr.length}');
-    return ImportJobStatusView(
-      jobId: dco_decode_String(arr[0]),
-      processed: dco_decode_usize(arr[1]),
-      total: dco_decode_opt_box_autoadd_usize(arr[2]),
-      finished: dco_decode_bool(arr[3]),
-      cancelled: dco_decode_bool(arr[4]),
-      stats: dco_decode_opt_box_autoadd_csv_import_stats_view(arr[5]),
-      error: dco_decode_opt_String(arr[6]),
-    );
-  }
-
-  @protected
-  ImportLimitsView dco_decode_import_limits_view(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    final arr = raw as List<dynamic>;
-    if (arr.length != 2)
-      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
-    return ImportLimitsView(
-      maxBytes: dco_decode_usize(arr[0]),
-      maxRows: dco_decode_usize(arr[1]),
-    );
-  }
-
-  @protected
-  List<String> dco_decode_list_String(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return (raw as List<dynamic>).map(dco_decode_String).toList();
-  }
-
-  @protected
-  List<ActivityLogRow> dco_decode_list_activity_log_row(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return (raw as List<dynamic>).map(dco_decode_activity_log_row).toList();
-  }
-
-  @protected
-  List<BackupEntryView> dco_decode_list_backup_entry_view(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return (raw as List<dynamic>).map(dco_decode_backup_entry_view).toList();
-  }
-
-  @protected
-  List<BackupPreviewTask> dco_decode_list_backup_preview_task(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return (raw as List<dynamic>).map(dco_decode_backup_preview_task).toList();
-  }
-
-  @protected
-  List<BackupTableCount> dco_decode_list_backup_table_count(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return (raw as List<dynamic>).map(dco_decode_backup_table_count).toList();
-  }
-
-  @protected
-  List<CloudBackupEntryView> dco_decode_list_cloud_backup_entry_view(
-    dynamic raw,
-  ) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return (raw as List<dynamic>)
-        .map(dco_decode_cloud_backup_entry_view)
-        .toList();
-  }
-
-  @protected
-  List<CommentSearchHit> dco_decode_list_comment_search_hit(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return (raw as List<dynamic>).map(dco_decode_comment_search_hit).toList();
-  }
-
-  @protected
-  List<CsvImportRowView> dco_decode_list_csv_import_row_view(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return (raw as List<dynamic>).map(dco_decode_csv_import_row_view).toList();
-  }
-
-  @protected
-  ListFilter dco_decode_list_filter(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    final arr = raw as List<dynamic>;
-    if (arr.length != 10)
-      throw Exception('unexpected arr length: expect 10 but see ${arr.length}');
-    return ListFilter(
-      keyword: dco_decode_opt_String(arr[0]),
-      page: dco_decode_u_32(arr[1]),
-      pageSize: dco_decode_u_32(arr[2]),
-      done: dco_decode_opt_box_autoadd_bool(arr[3]),
-      status: dco_decode_opt_String(arr[4]),
-      priorityMin: dco_decode_opt_box_autoadd_i_32(arr[5]),
-      projectId: dco_decode_opt_box_autoadd_i_64(arr[6]),
-      projectIds: dco_decode_opt_list_prim_i_64_strict(arr[7]),
-      favoriteOnly: dco_decode_opt_box_autoadd_bool(arr[8]),
-      myDayToday: dco_decode_opt_box_autoadd_i_64(arr[9]),
-    );
-  }
-
-  @protected
-  List<HolidayInfo> dco_decode_list_holiday_info(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return (raw as List<dynamic>).map(dco_decode_holiday_info).toList();
-  }
-
-  @protected
-  List<IcsTableCount> dco_decode_list_ics_table_count(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return (raw as List<dynamic>).map(dco_decode_ics_table_count).toList();
-  }
-
-  @protected
-  List<NotificationLogRow> dco_decode_list_notification_log_row(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return (raw as List<dynamic>).map(dco_decode_notification_log_row).toList();
-  }
-
-  @protected
-  Int64List dco_decode_list_prim_i_64_strict(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return dcoDecodeInt64List(raw);
-  }
-
-  @protected
-  List<int> dco_decode_list_prim_u_8_loose(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return raw as List<int>;
-  }
-
-  @protected
-  Uint8List dco_decode_list_prim_u_8_strict(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return raw as Uint8List;
-  }
-
-  @protected
-  List<ProjectedReminder> dco_decode_list_projected_reminder(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return (raw as List<dynamic>).map(dco_decode_projected_reminder).toList();
-  }
-
-  @protected
-  List<ProjectedTaskLabel> dco_decode_list_projected_task_label(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return (raw as List<dynamic>).map(dco_decode_projected_task_label).toList();
-  }
-
-  @protected
-  List<StatsHeatmapCell> dco_decode_list_stats_heatmap_cell(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return (raw as List<dynamic>).map(dco_decode_stats_heatmap_cell).toList();
-  }
-
-  @protected
-  List<StatsPriorityRow> dco_decode_list_stats_priority_row(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return (raw as List<dynamic>).map(dco_decode_stats_priority_row).toList();
-  }
-
-  @protected
-  List<StatsProjectRow> dco_decode_list_stats_project_row(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return (raw as List<dynamic>).map(dco_decode_stats_project_row).toList();
-  }
-
-  @protected
-  List<StatsWeekdayRow> dco_decode_list_stats_weekday_row(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return (raw as List<dynamic>).map(dco_decode_stats_weekday_row).toList();
-  }
-
-  @protected
-  List<SyncConflict> dco_decode_list_sync_conflict(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return (raw as List<dynamic>).map(dco_decode_sync_conflict).toList();
-  }
-
-  @protected
-  List<SyncHistoryView> dco_decode_list_sync_history_view(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return (raw as List<dynamic>).map(dco_decode_sync_history_view).toList();
-  }
-
-  @protected
-  List<TableCount> dco_decode_list_table_count(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return (raw as List<dynamic>).map(dco_decode_table_count).toList();
-  }
-
-  @protected
-  List<TableRowCount> dco_decode_list_table_row_count(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return (raw as List<dynamic>).map(dco_decode_table_row_count).toList();
-  }
-
-  @protected
-  List<TaskAttachmentView> dco_decode_list_task_attachment_view(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return (raw as List<dynamic>).map(dco_decode_task_attachment_view).toList();
-  }
-
-  @protected
-  List<TaskDependencyFlags> dco_decode_list_task_dependency_flags(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return (raw as List<dynamic>)
-        .map(dco_decode_task_dependency_flags)
-        .toList();
-  }
-
-  @protected
-  List<TaskDescriptionFlag> dco_decode_list_task_description_flag(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return (raw as List<dynamic>)
-        .map(dco_decode_task_description_flag)
-        .toList();
-  }
-
-  @protected
-  List<TaskExistenceFlag> dco_decode_list_task_existence_flag(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return (raw as List<dynamic>).map(dco_decode_task_existence_flag).toList();
-  }
-
-  @protected
-  List<TaskLabelWithId> dco_decode_list_task_label_with_id(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return (raw as List<dynamic>).map(dco_decode_task_label_with_id).toList();
-  }
-
-  @protected
-  List<TaskLabelsProjection> dco_decode_list_task_labels_projection(
-    dynamic raw,
-  ) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return (raw as List<dynamic>)
-        .map(dco_decode_task_labels_projection)
-        .toList();
-  }
-
-  @protected
-  List<TaskRemindersProjection> dco_decode_list_task_reminders_projection(
-    dynamic raw,
-  ) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return (raw as List<dynamic>)
-        .map(dco_decode_task_reminders_projection)
-        .toList();
-  }
-
-  @protected
-  List<TodoComment> dco_decode_list_todo_comment(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return (raw as List<dynamic>).map(dco_decode_todo_comment).toList();
-  }
-
-  @protected
-  List<TodoLabel> dco_decode_list_todo_label(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return (raw as List<dynamic>).map(dco_decode_todo_label).toList();
-  }
-
-  @protected
-  List<TodoProject> dco_decode_list_todo_project(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return (raw as List<dynamic>).map(dco_decode_todo_project).toList();
-  }
-
-  @protected
-  List<TodoReminder> dco_decode_list_todo_reminder(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return (raw as List<dynamic>).map(dco_decode_todo_reminder).toList();
-  }
-
-  @protected
-  List<TodoSavedFilter> dco_decode_list_todo_saved_filter(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return (raw as List<dynamic>).map(dco_decode_todo_saved_filter).toList();
-  }
-
-  @protected
-  List<TodoSubtask> dco_decode_list_todo_subtask(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return (raw as List<dynamic>).map(dco_decode_todo_subtask).toList();
-  }
-
-  @protected
-  List<TodoTask> dco_decode_list_todo_task(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return (raw as List<dynamic>).map(dco_decode_todo_task).toList();
-  }
-
-  @protected
-  List<TodoTaskLabel> dco_decode_list_todo_task_label(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return (raw as List<dynamic>).map(dco_decode_todo_task_label).toList();
-  }
-
-  @protected
-  List<TodoTaskListItem> dco_decode_list_todo_task_list_item(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return (raw as List<dynamic>).map(dco_decode_todo_task_list_item).toList();
-  }
-
-  @protected
-  List<TodoTaskRelation> dco_decode_list_todo_task_relation(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return (raw as List<dynamic>).map(dco_decode_todo_task_relation).toList();
-  }
-
-  @protected
-  List<TodoTemplate> dco_decode_list_todo_template(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return (raw as List<dynamic>).map(dco_decode_todo_template).toList();
-  }
-
-  @protected
-  List<WidgetTodoItem> dco_decode_list_widget_todo_item(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return (raw as List<dynamic>).map(dco_decode_widget_todo_item).toList();
-  }
-
-  @protected
-  NotificationLogRow dco_decode_notification_log_row(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    final arr = raw as List<dynamic>;
-    if (arr.length != 7)
-      throw Exception('unexpected arr length: expect 7 but see ${arr.length}');
-    return NotificationLogRow(
-      id: dco_decode_i_64(arr[0]),
-      kind: dco_decode_String(arr[1]),
-      taskId: dco_decode_opt_box_autoadd_i_64(arr[2]),
-      taskTitle: dco_decode_String(arr[3]),
-      reminderId: dco_decode_opt_box_autoadd_i_64(arr[4]),
-      payload: dco_decode_String(arr[5]),
-      createdAt: dco_decode_i_64(arr[6]),
-    );
-  }
-
-  @protected
-  String? dco_decode_opt_String(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return raw == null ? null : dco_decode_String(raw);
-  }
-
-  @protected
-  bool? dco_decode_opt_box_autoadd_bool(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return raw == null ? null : dco_decode_box_autoadd_bool(raw);
-  }
-
-  @protected
-  CsvImportStatsView? dco_decode_opt_box_autoadd_csv_import_stats_view(
-    dynamic raw,
-  ) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return raw == null
-        ? null
-        : dco_decode_box_autoadd_csv_import_stats_view(raw);
-  }
-
-  @protected
-  double? dco_decode_opt_box_autoadd_f_64(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return raw == null ? null : dco_decode_box_autoadd_f_64(raw);
-  }
-
-  @protected
-  int? dco_decode_opt_box_autoadd_i_32(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return raw == null ? null : dco_decode_box_autoadd_i_32(raw);
-  }
-
-  @protected
-  PlatformInt64? dco_decode_opt_box_autoadd_i_64(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return raw == null ? null : dco_decode_box_autoadd_i_64(raw);
-  }
-
-  @protected
-  SyncConfigView? dco_decode_opt_box_autoadd_sync_config_view(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return raw == null ? null : dco_decode_box_autoadd_sync_config_view(raw);
-  }
-
-  @protected
-  TodoProject? dco_decode_opt_box_autoadd_todo_project(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return raw == null ? null : dco_decode_box_autoadd_todo_project(raw);
-  }
-
-  @protected
-  TodoTask? dco_decode_opt_box_autoadd_todo_task(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return raw == null ? null : dco_decode_box_autoadd_todo_task(raw);
-  }
-
-  @protected
-  BigInt? dco_decode_opt_box_autoadd_usize(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return raw == null ? null : dco_decode_box_autoadd_usize(raw);
-  }
-
-  @protected
-  Int64List? dco_decode_opt_list_prim_i_64_strict(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return raw == null ? null : dco_decode_list_prim_i_64_strict(raw);
-  }
-
-  @protected
-  PlaintextExportView dco_decode_plaintext_export_view(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    final arr = raw as List<dynamic>;
-    if (arr.length != 3)
-      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
-    return PlaintextExportView(
-      content: dco_decode_String(arr[0]),
-      tableCounts: dco_decode_list_table_count(arr[1]),
-      suggestedFilename: dco_decode_String(arr[2]),
-    );
-  }
-
-  @protected
-  ProjectedReminder dco_decode_projected_reminder(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    final arr = raw as List<dynamic>;
-    if (arr.length != 2)
-      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
-    return ProjectedReminder(
-      id: dco_decode_i_64(arr[0]),
-      remindAt: dco_decode_i_64(arr[1]),
-    );
-  }
-
-  @protected
-  ProjectedTaskLabel dco_decode_projected_task_label(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    final arr = raw as List<dynamic>;
-    if (arr.length != 3)
-      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
-    return ProjectedTaskLabel(
-      id: dco_decode_i_64(arr[0]),
-      title: dco_decode_String(arr[1]),
-      hexColor: dco_decode_String(arr[2]),
-    );
-  }
-
-  @protected
-  ReminderDueDto dco_decode_reminder_due_dto(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    final arr = raw as List<dynamic>;
-    if (arr.length != 5)
-      throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
-    return ReminderDueDto(
-      id: dco_decode_i_64(arr[0]),
-      taskId: dco_decode_i_64(arr[1]),
-      title: dco_decode_String(arr[2]),
-      remindAt: dco_decode_i_64(arr[3]),
-      isConstant: dco_decode_i_32(arr[4]),
-    );
-  }
-
-  @protected
-  StatsAggregate dco_decode_stats_aggregate(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    final arr = raw as List<dynamic>;
-    if (arr.length != 7)
-      throw Exception('unexpected arr length: expect 7 but see ${arr.length}');
-    return StatsAggregate(
-      overview: dco_decode_stats_overview(arr[0]),
-      heatmap: dco_decode_stats_heatmap(arr[1]),
-      streak: dco_decode_stats_streak(arr[2]),
-      byProject: dco_decode_list_stats_project_row(arr[3]),
-      byPriority: dco_decode_list_stats_priority_row(arr[4]),
-      byWeekday: dco_decode_list_stats_weekday_row(arr[5]),
-      availableYears: dco_decode_list_prim_i_64_strict(arr[6]),
-    );
-  }
-
-  @protected
-  StatsHeatmap dco_decode_stats_heatmap(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    final arr = raw as List<dynamic>;
-    if (arr.length != 4)
-      throw Exception('unexpected arr length: expect 4 but see ${arr.length}');
-    return StatsHeatmap(
-      year: dco_decode_i_64(arr[0]),
-      startDate: dco_decode_String(arr[1]),
-      endDate: dco_decode_String(arr[2]),
-      cells: dco_decode_list_stats_heatmap_cell(arr[3]),
-    );
-  }
-
-  @protected
-  StatsHeatmapCell dco_decode_stats_heatmap_cell(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    final arr = raw as List<dynamic>;
-    if (arr.length != 2)
-      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
-    return StatsHeatmapCell(
-      date: dco_decode_String(arr[0]),
-      count: dco_decode_i_64(arr[1]),
-    );
-  }
-
-  @protected
-  StatsOverview dco_decode_stats_overview(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    final arr = raw as List<dynamic>;
-    if (arr.length != 5)
-      throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
-    return StatsOverview(
-      total: dco_decode_i_64(arr[0]),
-      pending: dco_decode_i_64(arr[1]),
-      done: dco_decode_i_64(arr[2]),
-      doneLast7D: dco_decode_i_64(arr[3]),
-      doneLast30D: dco_decode_i_64(arr[4]),
-    );
-  }
-
-  @protected
-  StatsPriorityRow dco_decode_stats_priority_row(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    final arr = raw as List<dynamic>;
-    if (arr.length != 3)
-      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
-    return StatsPriorityRow(
-      priority: dco_decode_i_64(arr[0]),
-      doneCount: dco_decode_i_64(arr[1]),
-      pendingCount: dco_decode_i_64(arr[2]),
-    );
-  }
-
-  @protected
-  StatsProjectRow dco_decode_stats_project_row(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    final arr = raw as List<dynamic>;
-    if (arr.length != 5)
-      throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
-    return StatsProjectRow(
-      projectId: dco_decode_opt_box_autoadd_i_64(arr[0]),
-      projectTitle: dco_decode_opt_String(arr[1]),
-      projectHexColor: dco_decode_opt_String(arr[2]),
-      doneCount: dco_decode_i_64(arr[3]),
-      pendingCount: dco_decode_i_64(arr[4]),
-    );
-  }
-
-  @protected
-  StatsStreak dco_decode_stats_streak(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    final arr = raw as List<dynamic>;
-    if (arr.length != 3)
-      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
-    return StatsStreak(
-      current: dco_decode_i_64(arr[0]),
-      best: dco_decode_i_64(arr[1]),
-      doneToday: dco_decode_bool(arr[2]),
-    );
-  }
-
-  @protected
-  StatsWeekdayRow dco_decode_stats_weekday_row(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    final arr = raw as List<dynamic>;
-    if (arr.length != 2)
-      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
-    return StatsWeekdayRow(
-      weekday: dco_decode_i_64(arr[0]),
-      doneCount: dco_decode_i_64(arr[1]),
-    );
-  }
-
-  @protected
-  SyncConfigInput dco_decode_sync_config_input(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    final arr = raw as List<dynamic>;
-    if (arr.length != 13)
-      throw Exception('unexpected arr length: expect 13 but see ${arr.length}');
-    return SyncConfigInput(
-      engine: dco_decode_String(arr[0]),
-      endpoint: dco_decode_String(arr[1]),
-      bucket: dco_decode_opt_String(arr[2]),
-      region: dco_decode_opt_String(arr[3]),
-      username: dco_decode_opt_String(arr[4]),
-      password: dco_decode_opt_String(arr[5]),
-      basePath: dco_decode_opt_String(arr[6]),
-      intervalMinutes: dco_decode_opt_box_autoadd_i_64(arr[7]),
-      autoSyncEnabled: dco_decode_opt_box_autoadd_bool(arr[8]),
-      syncOnChange: dco_decode_opt_box_autoadd_bool(arr[9]),
-      skipTlsVerify: dco_decode_opt_box_autoadd_bool(arr[10]),
-      timeoutSeconds: dco_decode_opt_box_autoadd_i_64(arr[11]),
-      sessionToken: dco_decode_opt_String(arr[12]),
-    );
-  }
-
-  @protected
-  SyncConfigView dco_decode_sync_config_view(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    final arr = raw as List<dynamic>;
-    if (arr.length != 15)
-      throw Exception('unexpected arr length: expect 15 but see ${arr.length}');
-    return SyncConfigView(
-      id: dco_decode_i_64(arr[0]),
-      engine: dco_decode_String(arr[1]),
-      endpoint: dco_decode_String(arr[2]),
-      bucket: dco_decode_String(arr[3]),
-      region: dco_decode_String(arr[4]),
-      username: dco_decode_String(arr[5]),
-      passwordSet: dco_decode_bool(arr[6]),
-      basePath: dco_decode_String(arr[7]),
-      intervalMinutes: dco_decode_i_64(arr[8]),
-      autoSyncEnabled: dco_decode_bool(arr[9]),
-      syncOnChange: dco_decode_bool(arr[10]),
-      skipTlsVerify: dco_decode_bool(arr[11]),
-      timeoutSeconds: dco_decode_i_64(arr[12]),
-      sessionTokenSet: dco_decode_bool(arr[13]),
-      lastSyncedAt: dco_decode_opt_box_autoadd_i_64(arr[14]),
-    );
-  }
-
-  @protected
-  SyncConflict dco_decode_sync_conflict(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    final arr = raw as List<dynamic>;
-    if (arr.length != 14)
-      throw Exception('unexpected arr length: expect 14 but see ${arr.length}');
-    return SyncConflict(
-      id: dco_decode_i_64(arr[0]),
-      tableName: dco_decode_String(arr[1]),
-      recordUuid: dco_decode_String(arr[2]),
-      recordTitle: dco_decode_String(arr[3]),
-      decision: dco_decode_String(arr[4]),
-      loserSide: dco_decode_String(arr[5]),
-      winnerSide: dco_decode_String(arr[6]),
-      loserPayload: dco_decode_String(arr[7]),
-      winnerPayload: dco_decode_String(arr[8]),
-      loserUpdatedAt: dco_decode_i_64(arr[9]),
-      winnerUpdatedAt: dco_decode_i_64(arr[10]),
-      resolution: dco_decode_String(arr[11]),
-      createdAt: dco_decode_i_64(arr[12]),
-      resolvedAt: dco_decode_i_64(arr[13]),
-    );
-  }
-
-  @protected
-  SyncCryptoStatus dco_decode_sync_crypto_status(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    final arr = raw as List<dynamic>;
-    if (arr.length != 2)
-      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
-    return SyncCryptoStatus(
-      hasPassword: dco_decode_bool(arr[0]),
-      isUnlocked: dco_decode_bool(arr[1]),
-    );
-  }
-
-  @protected
-  SyncHistoryView dco_decode_sync_history_view(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    final arr = raw as List<dynamic>;
-    if (arr.length != 9)
-      throw Exception('unexpected arr length: expect 9 but see ${arr.length}');
-    return SyncHistoryView(
-      id: dco_decode_i_64(arr[0]),
-      syncType: dco_decode_String(arr[1]),
-      status: dco_decode_String(arr[2]),
-      startedAt: dco_decode_i_64(arr[3]),
-      finishedAt: dco_decode_opt_box_autoadd_i_64(arr[4]),
-      pulledCount: dco_decode_i_64(arr[5]),
-      pushedCount: dco_decode_i_64(arr[6]),
-      conflictCount: dco_decode_i_64(arr[7]),
-      errorMessage: dco_decode_opt_String(arr[8]),
-    );
-  }
-
-  @protected
-  TableCount dco_decode_table_count(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    final arr = raw as List<dynamic>;
-    if (arr.length != 2)
-      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
-    return TableCount(
-      table: dco_decode_String(arr[0]),
-      count: dco_decode_usize(arr[1]),
-    );
-  }
-
-  @protected
-  TableRowCount dco_decode_table_row_count(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    final arr = raw as List<dynamic>;
-    if (arr.length != 2)
-      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
-    return TableRowCount(
-      table: dco_decode_String(arr[0]),
-      rows: dco_decode_i_64(arr[1]),
-    );
-  }
-
-  @protected
-  TaskAttachmentView dco_decode_task_attachment_view(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    final arr = raw as List<dynamic>;
-    if (arr.length != 7)
-      throw Exception('unexpected arr length: expect 7 but see ${arr.length}');
-    return TaskAttachmentView(
-      linkId: dco_decode_i_64(arr[0]),
-      linkUuid: dco_decode_String(arr[1]),
-      hash: dco_decode_String(arr[2]),
-      originalName: dco_decode_String(arr[3]),
-      mimeType: dco_decode_String(arr[4]),
-      sizeBytes: dco_decode_i_64(arr[5]),
-      isLocalCached: dco_decode_i_32(arr[6]),
-    );
-  }
-
-  @protected
-  TaskDependencyFlags dco_decode_task_dependency_flags(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    final arr = raw as List<dynamic>;
-    if (arr.length != 2)
-      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
-    return TaskDependencyFlags(
-      taskId: dco_decode_i_64(arr[0]),
-      relationCount: dco_decode_i_64(arr[1]),
-    );
-  }
-
-  @protected
-  TaskDescriptionFlag dco_decode_task_description_flag(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    final arr = raw as List<dynamic>;
-    if (arr.length != 1)
-      throw Exception('unexpected arr length: expect 1 but see ${arr.length}');
-    return TaskDescriptionFlag(taskId: dco_decode_i_64(arr[0]));
-  }
-
-  @protected
-  TaskExistenceFlag dco_decode_task_existence_flag(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    final arr = raw as List<dynamic>;
-    if (arr.length != 1)
-      throw Exception('unexpected arr length: expect 1 but see ${arr.length}');
-    return TaskExistenceFlag(taskId: dco_decode_i_64(arr[0]));
-  }
-
-  @protected
-  TaskLabelWithId dco_decode_task_label_with_id(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    final arr = raw as List<dynamic>;
-    if (arr.length != 10)
-      throw Exception('unexpected arr length: expect 10 but see ${arr.length}');
-    return TaskLabelWithId(
-      id: dco_decode_i_64(arr[0]),
-      uuid: dco_decode_String(arr[1]),
-      title: dco_decode_String(arr[2]),
-      hexColor: dco_decode_String(arr[3]),
-      isDeleted: dco_decode_i_32(arr[4]),
-      createdAt: dco_decode_i_64(arr[5]),
-      updatedAt: dco_decode_i_64(arr[6]),
-      deletedAt: dco_decode_opt_box_autoadd_i_64(arr[7]),
-      version: dco_decode_i_32(arr[8]),
-      taskLabelId: dco_decode_i_64(arr[9]),
-    );
-  }
-
-  @protected
-  TaskLabelsProjection dco_decode_task_labels_projection(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    final arr = raw as List<dynamic>;
-    if (arr.length != 2)
-      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
-    return TaskLabelsProjection(
-      taskId: dco_decode_i_64(arr[0]),
-      labels: dco_decode_list_projected_task_label(arr[1]),
-    );
-  }
-
-  @protected
-  TaskRemindersProjection dco_decode_task_reminders_projection(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    final arr = raw as List<dynamic>;
-    if (arr.length != 2)
-      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
-    return TaskRemindersProjection(
-      taskId: dco_decode_i_64(arr[0]),
-      reminders: dco_decode_list_projected_reminder(arr[1]),
-    );
-  }
-
-  @protected
-  TodoComment dco_decode_todo_comment(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    final arr = raw as List<dynamic>;
-    if (arr.length != 9)
-      throw Exception('unexpected arr length: expect 9 but see ${arr.length}');
-    return TodoComment(
-      id: dco_decode_i_64(arr[0]),
-      uuid: dco_decode_String(arr[1]),
-      taskId: dco_decode_i_64(arr[2]),
-      content: dco_decode_String(arr[3]),
-      isDeleted: dco_decode_i_32(arr[4]),
-      createdAt: dco_decode_i_64(arr[5]),
-      updatedAt: dco_decode_i_64(arr[6]),
-      deletedAt: dco_decode_opt_box_autoadd_i_64(arr[7]),
-      version: dco_decode_i_32(arr[8]),
-    );
-  }
-
-  @protected
-  TodoCommentCreateInput dco_decode_todo_comment_create_input(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    final arr = raw as List<dynamic>;
-    if (arr.length != 2)
-      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
-    return TodoCommentCreateInput(
-      taskId: dco_decode_i_64(arr[0]),
-      content: dco_decode_String(arr[1]),
-    );
-  }
-
-  @protected
-  TodoLabel dco_decode_todo_label(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    final arr = raw as List<dynamic>;
-    if (arr.length != 9)
-      throw Exception('unexpected arr length: expect 9 but see ${arr.length}');
-    return TodoLabel(
-      id: dco_decode_i_64(arr[0]),
-      uuid: dco_decode_String(arr[1]),
-      title: dco_decode_String(arr[2]),
-      hexColor: dco_decode_String(arr[3]),
-      isDeleted: dco_decode_i_32(arr[4]),
-      createdAt: dco_decode_i_64(arr[5]),
-      updatedAt: dco_decode_i_64(arr[6]),
-      deletedAt: dco_decode_opt_box_autoadd_i_64(arr[7]),
-      version: dco_decode_i_32(arr[8]),
-    );
-  }
-
-  @protected
-  TodoLabelCreateInput dco_decode_todo_label_create_input(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    final arr = raw as List<dynamic>;
-    if (arr.length != 2)
-      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
-    return TodoLabelCreateInput(
-      title: dco_decode_String(arr[0]),
-      hexColor: dco_decode_opt_String(arr[1]),
-    );
-  }
-
-  @protected
-  TodoProject dco_decode_todo_project(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    final arr = raw as List<dynamic>;
-    if (arr.length != 13)
-      throw Exception('unexpected arr length: expect 13 but see ${arr.length}');
-    return TodoProject(
-      id: dco_decode_i_64(arr[0]),
-      uuid: dco_decode_String(arr[1]),
-      title: dco_decode_String(arr[2]),
-      description: dco_decode_opt_String(arr[3]),
-      hexColor: dco_decode_String(arr[4]),
-      sortOrder: dco_decode_f_64(arr[5]),
-      parentUuid: dco_decode_opt_String(arr[6]),
-      isArchived: dco_decode_i_32(arr[7]),
-      isDeleted: dco_decode_i_32(arr[8]),
-      createdAt: dco_decode_i_64(arr[9]),
-      updatedAt: dco_decode_i_64(arr[10]),
-      deletedAt: dco_decode_opt_box_autoadd_i_64(arr[11]),
-      version: dco_decode_i_32(arr[12]),
-    );
-  }
-
-  @protected
-  TodoProjectCreateInput dco_decode_todo_project_create_input(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    final arr = raw as List<dynamic>;
-    if (arr.length != 5)
-      throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
-    return TodoProjectCreateInput(
-      title: dco_decode_String(arr[0]),
-      description: dco_decode_opt_String(arr[1]),
-      hexColor: dco_decode_opt_String(arr[2]),
-      sortOrder: dco_decode_opt_box_autoadd_f_64(arr[3]),
-      parentUuid: dco_decode_opt_String(arr[4]),
-    );
-  }
-
-  @protected
-  TodoReminder dco_decode_todo_reminder(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    final arr = raw as List<dynamic>;
-    if (arr.length != 10)
-      throw Exception('unexpected arr length: expect 10 but see ${arr.length}');
-    return TodoReminder(
-      id: dco_decode_i_64(arr[0]),
-      uuid: dco_decode_String(arr[1]),
-      taskId: dco_decode_i_64(arr[2]),
-      remindAt: dco_decode_i_64(arr[3]),
-      isConstant: dco_decode_i_32(arr[4]),
-      isDeleted: dco_decode_i_32(arr[5]),
-      createdAt: dco_decode_i_64(arr[6]),
-      updatedAt: dco_decode_i_64(arr[7]),
-      deletedAt: dco_decode_opt_box_autoadd_i_64(arr[8]),
-      version: dco_decode_i_32(arr[9]),
-    );
-  }
-
-  @protected
-  TodoReminderCreateInput dco_decode_todo_reminder_create_input(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    final arr = raw as List<dynamic>;
-    if (arr.length != 3)
-      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
-    return TodoReminderCreateInput(
-      taskId: dco_decode_i_64(arr[0]),
-      remindAt: dco_decode_i_64(arr[1]),
-      isConstant: dco_decode_i_32(arr[2]),
-    );
-  }
-
-  @protected
-  TodoSavedFilter dco_decode_todo_saved_filter(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    final arr = raw as List<dynamic>;
-    if (arr.length != 5)
-      throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
-    return TodoSavedFilter(
-      id: dco_decode_i_64(arr[0]),
-      uuid: dco_decode_String(arr[1]),
-      name: dco_decode_String(arr[2]),
-      conditions: dco_decode_String(arr[3]),
-      sortOrder: dco_decode_i_64(arr[4]),
-    );
-  }
-
-  @protected
-  TodoSavedFilterCreateInput dco_decode_todo_saved_filter_create_input(
-    dynamic raw,
-  ) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    final arr = raw as List<dynamic>;
-    if (arr.length != 3)
-      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
-    return TodoSavedFilterCreateInput(
-      name: dco_decode_String(arr[0]),
-      conditions: dco_decode_String(arr[1]),
-      sortOrder: dco_decode_opt_box_autoadd_i_64(arr[2]),
-    );
-  }
-
-  @protected
-  TodoSavedFilterUpdateInput dco_decode_todo_saved_filter_update_input(
-    dynamic raw,
-  ) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    final arr = raw as List<dynamic>;
-    if (arr.length != 3)
-      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
-    return TodoSavedFilterUpdateInput(
-      name: dco_decode_opt_String(arr[0]),
-      conditions: dco_decode_opt_String(arr[1]),
-      sortOrder: dco_decode_opt_box_autoadd_i_64(arr[2]),
-    );
-  }
-
-  @protected
-  TodoSubtask dco_decode_todo_subtask(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    final arr = raw as List<dynamic>;
-    if (arr.length != 13)
-      throw Exception('unexpected arr length: expect 13 but see ${arr.length}');
-    return TodoSubtask(
-      id: dco_decode_i_64(arr[0]),
-      uuid: dco_decode_String(arr[1]),
-      taskId: dco_decode_i_64(arr[2]),
-      title: dco_decode_String(arr[3]),
-      done: dco_decode_i_32(arr[4]),
-      doneAt: dco_decode_opt_box_autoadd_i_64(arr[5]),
-      position: dco_decode_f_64(arr[6]),
-      parentUuid: dco_decode_opt_String(arr[7]),
-      isDeleted: dco_decode_i_32(arr[8]),
-      createdAt: dco_decode_i_64(arr[9]),
-      updatedAt: dco_decode_i_64(arr[10]),
-      deletedAt: dco_decode_opt_box_autoadd_i_64(arr[11]),
-      version: dco_decode_i_32(arr[12]),
-    );
-  }
-
-  @protected
-  TodoSubtaskCreateInput dco_decode_todo_subtask_create_input(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    final arr = raw as List<dynamic>;
-    if (arr.length != 4)
-      throw Exception('unexpected arr length: expect 4 but see ${arr.length}');
-    return TodoSubtaskCreateInput(
-      taskId: dco_decode_i_64(arr[0]),
-      title: dco_decode_String(arr[1]),
-      position: dco_decode_opt_box_autoadd_f_64(arr[2]),
-      parentUuid: dco_decode_opt_String(arr[3]),
-    );
-  }
-
-  @protected
-  TodoTask dco_decode_todo_task(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    final arr = raw as List<dynamic>;
-    if (arr.length != 29)
-      throw Exception('unexpected arr length: expect 29 but see ${arr.length}');
-    return TodoTask(
-      id: dco_decode_i_64(arr[0]),
-      uuid: dco_decode_String(arr[1]),
-      title: dco_decode_String(arr[2]),
-      description: dco_decode_opt_String(arr[3]),
-      projectId: dco_decode_opt_box_autoadd_i_64(arr[4]),
-      priority: dco_decode_i_32(arr[5]),
-      status: dco_decode_String(arr[6]),
-      done: dco_decode_i_32(arr[7]),
-      doneAt: dco_decode_opt_box_autoadd_i_64(arr[8]),
-      dueDate: dco_decode_opt_box_autoadd_i_64(arr[9]),
-      startDate: dco_decode_opt_box_autoadd_i_64(arr[10]),
-      repeatAfter: dco_decode_i_64(arr[11]),
-      repeatMode: dco_decode_i_32(arr[12]),
-      repeatWeekdays: dco_decode_i_32(arr[13]),
-      repeatEndType: dco_decode_i_32(arr[14]),
-      repeatEndParam: dco_decode_i_64(arr[15]),
-      repeatFromDone: dco_decode_i_32(arr[16]),
-      repeatMonthMode: dco_decode_i_32(arr[17]),
-      repeatNthWeek: dco_decode_i_32(arr[18]),
-      percentDone: dco_decode_f_64(arr[19]),
-      position: dco_decode_f_64(arr[20]),
-      isFavorite: dco_decode_i_32(arr[21]),
-      myDayDate: dco_decode_opt_box_autoadd_i_64(arr[22]),
-      durationMinutes: dco_decode_opt_box_autoadd_i_64(arr[23]),
-      isDeleted: dco_decode_i_32(arr[24]),
-      createdAt: dco_decode_i_64(arr[25]),
-      updatedAt: dco_decode_i_64(arr[26]),
-      deletedAt: dco_decode_opt_box_autoadd_i_64(arr[27]),
-      version: dco_decode_i_32(arr[28]),
-    );
-  }
-
-  @protected
-  TodoTaskCreateInput dco_decode_todo_task_create_input(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    final arr = raw as List<dynamic>;
-    if (arr.length != 21)
-      throw Exception('unexpected arr length: expect 21 but see ${arr.length}');
-    return TodoTaskCreateInput(
-      title: dco_decode_String(arr[0]),
-      description: dco_decode_opt_String(arr[1]),
-      projectId: dco_decode_opt_box_autoadd_i_64(arr[2]),
-      priority: dco_decode_opt_box_autoadd_i_32(arr[3]),
-      status: dco_decode_opt_String(arr[4]),
-      done: dco_decode_opt_box_autoadd_i_32(arr[5]),
-      doneAt: dco_decode_opt_box_autoadd_i_64(arr[6]),
-      dueDate: dco_decode_opt_box_autoadd_i_64(arr[7]),
-      startDate: dco_decode_opt_box_autoadd_i_64(arr[8]),
-      repeatAfter: dco_decode_opt_box_autoadd_i_64(arr[9]),
-      repeatMode: dco_decode_opt_box_autoadd_i_32(arr[10]),
-      repeatWeekdays: dco_decode_opt_box_autoadd_i_32(arr[11]),
-      repeatEndType: dco_decode_opt_box_autoadd_i_32(arr[12]),
-      repeatEndParam: dco_decode_opt_box_autoadd_i_64(arr[13]),
-      repeatFromDone: dco_decode_opt_box_autoadd_i_32(arr[14]),
-      repeatMonthMode: dco_decode_opt_box_autoadd_i_32(arr[15]),
-      repeatNthWeek: dco_decode_opt_box_autoadd_i_32(arr[16]),
-      position: dco_decode_opt_box_autoadd_f_64(arr[17]),
-      isFavorite: dco_decode_opt_box_autoadd_i_32(arr[18]),
-      myDayDate: dco_decode_opt_box_autoadd_i_64(arr[19]),
-      durationMinutes: dco_decode_opt_box_autoadd_i_64(arr[20]),
-    );
-  }
-
-  @protected
-  TodoTaskDetail dco_decode_todo_task_detail(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    final arr = raw as List<dynamic>;
-    if (arr.length != 34)
-      throw Exception('unexpected arr length: expect 34 but see ${arr.length}');
-    return TodoTaskDetail(
-      id: dco_decode_i_64(arr[0]),
-      uuid: dco_decode_String(arr[1]),
-      title: dco_decode_String(arr[2]),
-      description: dco_decode_opt_String(arr[3]),
-      projectId: dco_decode_opt_box_autoadd_i_64(arr[4]),
-      priority: dco_decode_i_32(arr[5]),
-      status: dco_decode_String(arr[6]),
-      done: dco_decode_i_32(arr[7]),
-      doneAt: dco_decode_opt_box_autoadd_i_64(arr[8]),
-      dueDate: dco_decode_opt_box_autoadd_i_64(arr[9]),
-      startDate: dco_decode_opt_box_autoadd_i_64(arr[10]),
-      repeatAfter: dco_decode_i_64(arr[11]),
-      repeatMode: dco_decode_i_32(arr[12]),
-      repeatWeekdays: dco_decode_i_32(arr[13]),
-      repeatEndType: dco_decode_i_32(arr[14]),
-      repeatEndParam: dco_decode_i_64(arr[15]),
-      repeatFromDone: dco_decode_i_32(arr[16]),
-      repeatMonthMode: dco_decode_i_32(arr[17]),
-      repeatNthWeek: dco_decode_i_32(arr[18]),
-      percentDone: dco_decode_f_64(arr[19]),
-      position: dco_decode_f_64(arr[20]),
-      isFavorite: dco_decode_i_32(arr[21]),
-      myDayDate: dco_decode_opt_box_autoadd_i_64(arr[22]),
-      durationMinutes: dco_decode_opt_box_autoadd_i_64(arr[23]),
-      isDeleted: dco_decode_i_32(arr[24]),
-      createdAt: dco_decode_i_64(arr[25]),
-      updatedAt: dco_decode_i_64(arr[26]),
-      deletedAt: dco_decode_opt_box_autoadd_i_64(arr[27]),
-      version: dco_decode_i_32(arr[28]),
-      subtasks: dco_decode_list_todo_subtask(arr[29]),
-      labels: dco_decode_list_task_label_with_id(arr[30]),
-      comments: dco_decode_list_todo_comment(arr[31]),
-      relations: dco_decode_list_todo_task_relation(arr[32]),
-      reminders: dco_decode_list_todo_reminder(arr[33]),
-    );
-  }
-
-  @protected
-  TodoTaskLabel dco_decode_todo_task_label(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    final arr = raw as List<dynamic>;
-    if (arr.length != 9)
-      throw Exception('unexpected arr length: expect 9 but see ${arr.length}');
-    return TodoTaskLabel(
-      id: dco_decode_i_64(arr[0]),
-      uuid: dco_decode_String(arr[1]),
-      taskId: dco_decode_i_64(arr[2]),
-      labelId: dco_decode_i_64(arr[3]),
-      isDeleted: dco_decode_i_32(arr[4]),
-      createdAt: dco_decode_i_64(arr[5]),
-      updatedAt: dco_decode_i_64(arr[6]),
-      deletedAt: dco_decode_opt_box_autoadd_i_64(arr[7]),
-      version: dco_decode_i_32(arr[8]),
-    );
-  }
-
-  @protected
-  TodoTaskLabelCreateInput dco_decode_todo_task_label_create_input(
-    dynamic raw,
-  ) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    final arr = raw as List<dynamic>;
-    if (arr.length != 2)
-      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
-    return TodoTaskLabelCreateInput(
-      taskId: dco_decode_i_64(arr[0]),
-      labelId: dco_decode_i_64(arr[1]),
-    );
-  }
-
-  @protected
-  TodoTaskListItem dco_decode_todo_task_list_item(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    final arr = raw as List<dynamic>;
-    if (arr.length != 19)
-      throw Exception('unexpected arr length: expect 19 but see ${arr.length}');
-    return TodoTaskListItem(
-      id: dco_decode_i_64(arr[0]),
-      title: dco_decode_String(arr[1]),
-      description: dco_decode_opt_String(arr[2]),
-      projectId: dco_decode_opt_box_autoadd_i_64(arr[3]),
-      priority: dco_decode_i_32(arr[4]),
-      status: dco_decode_String(arr[5]),
-      done: dco_decode_i_32(arr[6]),
-      doneAt: dco_decode_opt_box_autoadd_i_64(arr[7]),
-      dueDate: dco_decode_opt_box_autoadd_i_64(arr[8]),
-      startDate: dco_decode_opt_box_autoadd_i_64(arr[9]),
-      repeatMode: dco_decode_i_32(arr[10]),
-      percentDone: dco_decode_f_64(arr[11]),
-      position: dco_decode_f_64(arr[12]),
-      isFavorite: dco_decode_i_32(arr[13]),
-      myDayDate: dco_decode_opt_box_autoadd_i_64(arr[14]),
-      durationMinutes: dco_decode_opt_box_autoadd_i_64(arr[15]),
-      isDeleted: dco_decode_i_32(arr[16]),
-      createdAt: dco_decode_i_64(arr[17]),
-      updatedAt: dco_decode_i_64(arr[18]),
-    );
-  }
-
-  @protected
-  TodoTaskRelation dco_decode_todo_task_relation(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    final arr = raw as List<dynamic>;
-    if (arr.length != 10)
-      throw Exception('unexpected arr length: expect 10 but see ${arr.length}');
-    return TodoTaskRelation(
-      id: dco_decode_i_64(arr[0]),
-      uuid: dco_decode_String(arr[1]),
-      taskId: dco_decode_i_64(arr[2]),
-      otherTaskId: dco_decode_i_64(arr[3]),
-      relationType: dco_decode_String(arr[4]),
-      isDeleted: dco_decode_i_32(arr[5]),
-      createdAt: dco_decode_i_64(arr[6]),
-      updatedAt: dco_decode_i_64(arr[7]),
-      deletedAt: dco_decode_opt_box_autoadd_i_64(arr[8]),
-      version: dco_decode_i_32(arr[9]),
-    );
-  }
-
-  @protected
-  TodoTaskRelationCreateInput dco_decode_todo_task_relation_create_input(
-    dynamic raw,
-  ) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    final arr = raw as List<dynamic>;
-    if (arr.length != 3)
-      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
-    return TodoTaskRelationCreateInput(
-      taskId: dco_decode_i_64(arr[0]),
-      otherTaskId: dco_decode_i_64(arr[1]),
-      relationType: dco_decode_String(arr[2]),
-    );
-  }
-
-  @protected
-  TodoTemplate dco_decode_todo_template(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    final arr = raw as List<dynamic>;
-    if (arr.length != 5)
-      throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
-    return TodoTemplate(
-      id: dco_decode_i_64(arr[0]),
-      uuid: dco_decode_String(arr[1]),
-      name: dco_decode_String(arr[2]),
-      payload: dco_decode_String(arr[3]),
-      sortOrder: dco_decode_i_64(arr[4]),
-    );
-  }
-
-  @protected
-  TodoTemplateCreateInput dco_decode_todo_template_create_input(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    final arr = raw as List<dynamic>;
-    if (arr.length != 3)
-      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
-    return TodoTemplateCreateInput(
-      name: dco_decode_String(arr[0]),
-      payload: dco_decode_String(arr[1]),
-      sortOrder: dco_decode_opt_box_autoadd_i_64(arr[2]),
-    );
-  }
-
-  @protected
-  TodoTemplateUpdateInput dco_decode_todo_template_update_input(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    final arr = raw as List<dynamic>;
-    if (arr.length != 3)
-      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
-    return TodoTemplateUpdateInput(
-      name: dco_decode_opt_String(arr[0]),
-      payload: dco_decode_opt_String(arr[1]),
-      sortOrder: dco_decode_opt_box_autoadd_i_64(arr[2]),
-    );
-  }
-
-  @protected
-  TrashMeta dco_decode_trash_meta(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    final arr = raw as List<dynamic>;
-    if (arr.length != 2)
-      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
-    return TrashMeta(
-      retentionDays: dco_decode_i_64(arr[0]),
-      lastPurgeMs: dco_decode_i_64(arr[1]),
-    );
-  }
-
-  @protected
-  TrashPurgeStats dco_decode_trash_purge_stats(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    final arr = raw as List<dynamic>;
-    if (arr.length != 3)
-      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
-    return TrashPurgeStats(
-      purged: dco_decode_u_64(arr[0]),
-      guarded: dco_decode_u_64(arr[1]),
-      ran: dco_decode_bool(arr[2]),
-    );
-  }
-
-  @protected
-  int dco_decode_u_32(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return raw as int;
-  }
-
-  @protected
-  BigInt dco_decode_u_64(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return dcoDecodeU64(raw);
-  }
-
-  @protected
-  int dco_decode_u_8(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return raw as int;
-  }
-
-  @protected
-  void dco_decode_unit(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return;
-  }
-
-  @protected
-  BigInt dco_decode_usize(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return dcoDecodeU64(raw);
-  }
-
-  @protected
-  WidgetTodoItem dco_decode_widget_todo_item(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    final arr = raw as List<dynamic>;
-    if (arr.length != 5)
-      throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
-    return WidgetTodoItem(
-      id: dco_decode_i_64(arr[0]),
-      uuid: dco_decode_String(arr[1]),
-      title: dco_decode_String(arr[2]),
-      priority: dco_decode_i_32(arr[3]),
-      done: dco_decode_i_32(arr[4]),
-    );
-  }
-
-  @protected
-  AnyhowException sse_decode_AnyhowException(SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    var inner = sse_decode_String(deserializer);
-    return AnyhowException(inner);
-  }
-
-  @protected
-  RustStreamSink<DbEventDto> sse_decode_StreamSink_db_event_dto_Sse(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    throw UnimplementedError('Unreachable ()');
-  }
-
-  @protected
-  RustStreamSink<HolidayProgressDto>
-  sse_decode_StreamSink_holiday_progress_dto_Sse(SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    throw UnimplementedError('Unreachable ()');
-  }
-
-  @protected
-  RustStreamSink<ReminderDueDto> sse_decode_StreamSink_reminder_due_dto_Sse(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    throw UnimplementedError('Unreachable ()');
-  }
-
-  @protected
-  String sse_decode_String(SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    var inner = sse_decode_list_prim_u_8_strict(deserializer);
-    return utf8.decoder.convert(inner);
-  }
-
-  @protected
-  ActivityLogRow sse_decode_activity_log_row(SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    var var_id = sse_decode_i_64(deserializer);
-    var var_taskId = sse_decode_opt_box_autoadd_i_64(deserializer);
-    var var_taskTitle = sse_decode_String(deserializer);
-    var var_action = sse_decode_String(deserializer);
-    var var_detail = sse_decode_String(deserializer);
-    var var_createdAt = sse_decode_i_64(deserializer);
-    return ActivityLogRow(
-      id: var_id,
-      taskId: var_taskId,
-      taskTitle: var_taskTitle,
-      action: var_action,
-      detail: var_detail,
-      createdAt: var_createdAt,
-    );
-  }
-
-  @protected
-  BackupDeviceInfo sse_decode_backup_device_info(SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    var var_deviceId = sse_decode_String(deserializer);
-    return BackupDeviceInfo(deviceId: var_deviceId);
-  }
-
-  @protected
-  BackupEntryView sse_decode_backup_entry_view(SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    var var_filename = sse_decode_String(deserializer);
-    var var_filePath = sse_decode_String(deserializer);
-    var var_modifiedAt = sse_decode_i_64(deserializer);
-    var var_sizeBytes = sse_decode_i_64(deserializer);
-    return BackupEntryView(
-      filename: var_filename,
-      filePath: var_filePath,
-      modifiedAt: var_modifiedAt,
-      sizeBytes: var_sizeBytes,
-    );
-  }
-
-  @protected
-  BackupExportResult sse_decode_backup_export_result(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    var var_filePath = sse_decode_String(deserializer);
-    var var_fileSize = sse_decode_i_64(deserializer);
-    var var_tableCounts = sse_decode_list_backup_table_count(deserializer);
-    var var_manifest = sse_decode_backup_manifest_view(deserializer);
-    var var_cloudPath = sse_decode_opt_String(deserializer);
-    var var_cloudUploaded = sse_decode_bool(deserializer);
-    var var_cloudError = sse_decode_opt_String(deserializer);
-    var var_localPath = sse_decode_opt_String(deserializer);
-    var var_localError = sse_decode_opt_String(deserializer);
-    return BackupExportResult(
-      filePath: var_filePath,
-      fileSize: var_fileSize,
-      tableCounts: var_tableCounts,
-      manifest: var_manifest,
-      cloudPath: var_cloudPath,
-      cloudUploaded: var_cloudUploaded,
-      cloudError: var_cloudError,
-      localPath: var_localPath,
-      localError: var_localError,
-    );
-  }
-
-  @protected
-  BackupImportResult sse_decode_backup_import_result(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    var var_successCount = sse_decode_i_64(deserializer);
-    var var_errorCount = sse_decode_i_64(deserializer);
-    var var_errors = sse_decode_list_String(deserializer);
-    var var_manifest = sse_decode_backup_manifest_view(deserializer);
-    var var_needsRestart = sse_decode_bool(deserializer);
-    return BackupImportResult(
-      successCount: var_successCount,
-      errorCount: var_errorCount,
-      errors: var_errors,
-      manifest: var_manifest,
-      needsRestart: var_needsRestart,
-    );
-  }
-
-  @protected
-  BackupManifestView sse_decode_backup_manifest_view(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    var var_formatVersion = sse_decode_u_32(deserializer);
-    var var_createdAt = sse_decode_String(deserializer);
-    var var_createdAtTs = sse_decode_i_64(deserializer);
-    var var_appVersion = sse_decode_String(deserializer);
-    var var_deviceId = sse_decode_String(deserializer);
-    var var_deviceName = sse_decode_opt_String(deserializer);
-    var var_schemaVersion = sse_decode_i_64(deserializer);
-    var var_tableCounts = sse_decode_list_backup_table_count(deserializer);
-    return BackupManifestView(
-      formatVersion: var_formatVersion,
-      createdAt: var_createdAt,
-      createdAtTs: var_createdAtTs,
-      appVersion: var_appVersion,
-      deviceId: var_deviceId,
-      deviceName: var_deviceName,
-      schemaVersion: var_schemaVersion,
-      tableCounts: var_tableCounts,
-    );
-  }
-
-  @protected
-  BackupPrefsView sse_decode_backup_prefs_view(SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    var var_localPath = sse_decode_opt_String(deserializer);
-    var var_keepLatest = sse_decode_bool(deserializer);
-    var var_cloudBackupEnabled = sse_decode_bool(deserializer);
-    var var_localBackupEnabled = sse_decode_bool(deserializer);
-    var var_scheduleType = sse_decode_String(deserializer);
-    var var_scheduleTime = sse_decode_String(deserializer);
-    var var_scheduleMinute = sse_decode_u_32(deserializer);
-    var var_scheduleWeekday = sse_decode_u_32(deserializer);
-    var var_scheduleDayOfMonth = sse_decode_u_32(deserializer);
-    var var_scheduleMonth = sse_decode_u_32(deserializer);
-    var var_lastBackupAt = sse_decode_i_64(deserializer);
-    var var_nextBackupAt = sse_decode_i_64(deserializer);
-    return BackupPrefsView(
-      localPath: var_localPath,
-      keepLatest: var_keepLatest,
-      cloudBackupEnabled: var_cloudBackupEnabled,
-      localBackupEnabled: var_localBackupEnabled,
-      scheduleType: var_scheduleType,
-      scheduleTime: var_scheduleTime,
-      scheduleMinute: var_scheduleMinute,
-      scheduleWeekday: var_scheduleWeekday,
-      scheduleDayOfMonth: var_scheduleDayOfMonth,
-      scheduleMonth: var_scheduleMonth,
-      lastBackupAt: var_lastBackupAt,
-      nextBackupAt: var_nextBackupAt,
-    );
-  }
-
-  @protected
-  BackupPreviewTask sse_decode_backup_preview_task(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    var var_title = sse_decode_String(deserializer);
-    var var_status = sse_decode_String(deserializer);
-    var var_done = sse_decode_bool(deserializer);
-    var var_dueDate = sse_decode_opt_box_autoadd_i_64(deserializer);
-    var var_priority = sse_decode_i_64(deserializer);
-    var var_project = sse_decode_opt_String(deserializer);
-    var var_isDeleted = sse_decode_bool(deserializer);
-    return BackupPreviewTask(
-      title: var_title,
-      status: var_status,
-      done: var_done,
-      dueDate: var_dueDate,
-      priority: var_priority,
-      project: var_project,
-      isDeleted: var_isDeleted,
-    );
-  }
-
-  @protected
-  BackupPreviewView sse_decode_backup_preview_view(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    var var_manifest = sse_decode_backup_manifest_view(deserializer);
-    var var_sampleTasks = sse_decode_list_backup_preview_task(deserializer);
-    var var_taskStats = sse_decode_backup_task_stats(deserializer);
-    var var_schemaMismatch = sse_decode_bool(deserializer);
-    var var_currentSchemaVersion = sse_decode_i_64(deserializer);
-    return BackupPreviewView(
-      manifest: var_manifest,
-      sampleTasks: var_sampleTasks,
-      taskStats: var_taskStats,
-      schemaMismatch: var_schemaMismatch,
-      currentSchemaVersion: var_currentSchemaVersion,
-    );
-  }
-
-  @protected
-  BackupTableCount sse_decode_backup_table_count(SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    var var_table = sse_decode_String(deserializer);
-    var var_count = sse_decode_i_64(deserializer);
-    return BackupTableCount(table: var_table, count: var_count);
-  }
-
-  @protected
-  BackupTaskStats sse_decode_backup_task_stats(SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    var var_total = sse_decode_i_64(deserializer);
-    var var_alive = sse_decode_i_64(deserializer);
-    var var_done = sse_decode_i_64(deserializer);
-    var var_deleted = sse_decode_i_64(deserializer);
-    return BackupTaskStats(
-      total: var_total,
-      alive: var_alive,
-      done: var_done,
-      deleted: var_deleted,
-    );
-  }
-
-  @protected
-  BiometricSecretBundle sse_decode_biometric_secret_bundle(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    var var_encryptedDbKeyBio = sse_decode_String(deserializer);
-    var var_biometricKey = sse_decode_String(deserializer);
-    var var_nonce = sse_decode_String(deserializer);
-    return BiometricSecretBundle(
-      encryptedDbKeyBio: var_encryptedDbKeyBio,
-      biometricKey: var_biometricKey,
-      nonce: var_nonce,
-    );
-  }
-
-  @protected
-  bool sse_decode_bool(SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    return deserializer.buffer.getUint8() != 0;
-  }
-
-  @protected
-  BackupPrefsView sse_decode_box_autoadd_backup_prefs_view(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    return (sse_decode_backup_prefs_view(deserializer));
-  }
-
-  @protected
-  bool sse_decode_box_autoadd_bool(SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    return (sse_decode_bool(deserializer));
-  }
-
-  @protected
-  CsvImportStatsView sse_decode_box_autoadd_csv_import_stats_view(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    return (sse_decode_csv_import_stats_view(deserializer));
-  }
-
-  @protected
-  double sse_decode_box_autoadd_f_64(SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    return (sse_decode_f_64(deserializer));
-  }
-
-  @protected
-  int sse_decode_box_autoadd_i_32(SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    return (sse_decode_i_32(deserializer));
-  }
-
-  @protected
-  PlatformInt64 sse_decode_box_autoadd_i_64(SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    return (sse_decode_i_64(deserializer));
-  }
-
-  @protected
-  ListFilter sse_decode_box_autoadd_list_filter(SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    return (sse_decode_list_filter(deserializer));
-  }
-
-  @protected
-  SyncConfigInput sse_decode_box_autoadd_sync_config_input(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    return (sse_decode_sync_config_input(deserializer));
-  }
-
-  @protected
-  SyncConfigView sse_decode_box_autoadd_sync_config_view(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    return (sse_decode_sync_config_view(deserializer));
-  }
-
-  @protected
-  TodoCommentCreateInput sse_decode_box_autoadd_todo_comment_create_input(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    return (sse_decode_todo_comment_create_input(deserializer));
-  }
-
-  @protected
-  TodoLabelCreateInput sse_decode_box_autoadd_todo_label_create_input(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    return (sse_decode_todo_label_create_input(deserializer));
-  }
-
-  @protected
-  TodoProject sse_decode_box_autoadd_todo_project(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    return (sse_decode_todo_project(deserializer));
-  }
-
-  @protected
-  TodoProjectCreateInput sse_decode_box_autoadd_todo_project_create_input(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    return (sse_decode_todo_project_create_input(deserializer));
-  }
-
-  @protected
-  TodoReminderCreateInput sse_decode_box_autoadd_todo_reminder_create_input(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    return (sse_decode_todo_reminder_create_input(deserializer));
-  }
-
-  @protected
-  TodoSavedFilterCreateInput
-  sse_decode_box_autoadd_todo_saved_filter_create_input(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    return (sse_decode_todo_saved_filter_create_input(deserializer));
-  }
-
-  @protected
-  TodoSavedFilterUpdateInput
-  sse_decode_box_autoadd_todo_saved_filter_update_input(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    return (sse_decode_todo_saved_filter_update_input(deserializer));
-  }
-
-  @protected
-  TodoSubtaskCreateInput sse_decode_box_autoadd_todo_subtask_create_input(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    return (sse_decode_todo_subtask_create_input(deserializer));
-  }
-
-  @protected
-  TodoTask sse_decode_box_autoadd_todo_task(SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    return (sse_decode_todo_task(deserializer));
-  }
-
-  @protected
-  TodoTaskCreateInput sse_decode_box_autoadd_todo_task_create_input(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    return (sse_decode_todo_task_create_input(deserializer));
-  }
-
-  @protected
-  TodoTaskLabelCreateInput sse_decode_box_autoadd_todo_task_label_create_input(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    return (sse_decode_todo_task_label_create_input(deserializer));
-  }
-
-  @protected
-  TodoTaskRelationCreateInput
-  sse_decode_box_autoadd_todo_task_relation_create_input(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    return (sse_decode_todo_task_relation_create_input(deserializer));
-  }
-
-  @protected
-  TodoTemplateCreateInput sse_decode_box_autoadd_todo_template_create_input(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    return (sse_decode_todo_template_create_input(deserializer));
-  }
-
-  @protected
-  TodoTemplateUpdateInput sse_decode_box_autoadd_todo_template_update_input(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    return (sse_decode_todo_template_update_input(deserializer));
-  }
-
-  @protected
-  BigInt sse_decode_box_autoadd_usize(SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    return (sse_decode_usize(deserializer));
-  }
-
-  @protected
-  CloudBackupEntryView sse_decode_cloud_backup_entry_view(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    var var_name = sse_decode_String(deserializer);
-    var var_cloudPath = sse_decode_String(deserializer);
-    var var_sizeBytes = sse_decode_i_64(deserializer);
-    var var_modifiedAt = sse_decode_i_64(deserializer);
-    return CloudBackupEntryView(
-      name: var_name,
-      cloudPath: var_cloudPath,
-      sizeBytes: var_sizeBytes,
-      modifiedAt: var_modifiedAt,
-    );
-  }
-
-  @protected
-  CommentSearchHit sse_decode_comment_search_hit(SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    var var_commentId = sse_decode_i_64(deserializer);
-    var var_taskId = sse_decode_i_64(deserializer);
-    var var_taskTitle = sse_decode_String(deserializer);
-    var var_content = sse_decode_String(deserializer);
-    var var_createdAt = sse_decode_i_64(deserializer);
-    return CommentSearchHit(
-      commentId: var_commentId,
-      taskId: var_taskId,
-      taskTitle: var_taskTitle,
-      content: var_content,
-      createdAt: var_createdAt,
-    );
-  }
-
-  @protected
-  CompleteTaskResult sse_decode_complete_task_result(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    var var_task = sse_decode_todo_task(deserializer);
-    var var_nextInstance = sse_decode_opt_box_autoadd_todo_task(deserializer);
-    return CompleteTaskResult(task: var_task, nextInstance: var_nextInstance);
-  }
-
-  @protected
-  CsvImportPreviewView sse_decode_csv_import_preview_view(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    var var_preset = sse_decode_String(deserializer);
-    var var_rows = sse_decode_list_csv_import_row_view(deserializer);
-    var var_stats = sse_decode_csv_import_stats_view(deserializer);
-    return CsvImportPreviewView(
-      preset: var_preset,
-      rows: var_rows,
-      stats: var_stats,
-    );
-  }
-
-  @protected
-  CsvImportRowView sse_decode_csv_import_row_view(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    var var_sourceLine = sse_decode_usize(deserializer);
-    var var_projectTitle = sse_decode_opt_String(deserializer);
-    var var_input = sse_decode_todo_task_create_input(deserializer);
-    var var_skipReason = sse_decode_opt_String(deserializer);
-    return CsvImportRowView(
-      sourceLine: var_sourceLine,
-      projectTitle: var_projectTitle,
-      input: var_input,
-      skipReason: var_skipReason,
-    );
-  }
-
-  @protected
-  CsvImportStatsView sse_decode_csv_import_stats_view(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    var var_success = sse_decode_usize(deserializer);
-    var var_skipped = sse_decode_usize(deserializer);
-    var var_failed = sse_decode_usize(deserializer);
-    var var_notes = sse_decode_list_String(deserializer);
-    return CsvImportStatsView(
-      success: var_success,
-      skipped: var_skipped,
-      failed: var_failed,
-      notes: var_notes,
-    );
-  }
-
-  @protected
-  DbEventDto sse_decode_db_event_dto(SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    var var_table = sse_decode_String(deserializer);
-    var var_op = sse_decode_String(deserializer);
-    var var_recordId = sse_decode_i_64(deserializer);
-    var var_recordUuid = sse_decode_String(deserializer);
-    var var_deviceId = sse_decode_String(deserializer);
-    var var_timestamp = sse_decode_i_64(deserializer);
-    return DbEventDto(
-      table: var_table,
-      op: var_op,
-      recordId: var_recordId,
-      recordUuid: var_recordUuid,
-      deviceId: var_deviceId,
-      timestamp: var_timestamp,
-    );
-  }
-
-  @protected
-  DbMaintenanceView sse_decode_db_maintenance_view(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    var var_walBytesAfterCheckpoint = sse_decode_i_64(deserializer);
-    var var_attachmentsCleaned = sse_decode_i_32(deserializer);
-    var var_logRowsPruned = sse_decode_i_32(deserializer);
-    var var_freelistBefore = sse_decode_i_64(deserializer);
-    var var_freelistAfter = sse_decode_i_64(deserializer);
-    var var_pagesReclaimed = sse_decode_i_64(deserializer);
-    return DbMaintenanceView(
-      walBytesAfterCheckpoint: var_walBytesAfterCheckpoint,
-      attachmentsCleaned: var_attachmentsCleaned,
-      logRowsPruned: var_logRowsPruned,
-      freelistBefore: var_freelistBefore,
-      freelistAfter: var_freelistAfter,
-      pagesReclaimed: var_pagesReclaimed,
-    );
-  }
-
-  @protected
-  DiagnosticsSnapshot sse_decode_diagnostics_snapshot(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    var var_dbSizeBytes = sse_decode_i_64(deserializer);
-    var var_tableRows = sse_decode_list_table_row_count(deserializer);
-    var var_tombstoneRows = sse_decode_i_64(deserializer);
-    var var_attachmentCacheBytes = sse_decode_i_64(deserializer);
-    var var_attachmentCacheFiles = sse_decode_i_64(deserializer);
-    return DiagnosticsSnapshot(
-      dbSizeBytes: var_dbSizeBytes,
-      tableRows: var_tableRows,
-      tombstoneRows: var_tombstoneRows,
-      attachmentCacheBytes: var_attachmentCacheBytes,
-      attachmentCacheFiles: var_attachmentCacheFiles,
-    );
-  }
-
-  @protected
-  DigestPrefs sse_decode_digest_prefs(SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    var var_enabled = sse_decode_bool(deserializer);
-    var var_hour = sse_decode_i_64(deserializer);
-    var var_minute = sse_decode_i_64(deserializer);
-    return DigestPrefs(
-      enabled: var_enabled,
-      hour: var_hour,
-      minute: var_minute,
-    );
-  }
-
-  @protected
-  DigestSummary sse_decode_digest_summary(SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    var var_dueToday = sse_decode_i_64(deserializer);
-    var var_overdue = sse_decode_i_64(deserializer);
-    var var_doneToday = sse_decode_i_64(deserializer);
-    return DigestSummary(
-      dueToday: var_dueToday,
-      overdue: var_overdue,
-      doneToday: var_doneToday,
-    );
-  }
-
-  @protected
-  double sse_decode_f_64(SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    return deserializer.buffer.getFloat64();
-  }
-
-  @protected
-  GlobalSearchResult sse_decode_global_search_result(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    var var_tasks = sse_decode_list_todo_task(deserializer);
-    var var_projects = sse_decode_list_todo_project(deserializer);
-    var var_comments = sse_decode_list_comment_search_hit(deserializer);
-    return GlobalSearchResult(
-      tasks: var_tasks,
-      projects: var_projects,
-      comments: var_comments,
-    );
-  }
-
-  @protected
-  HolidayInfo sse_decode_holiday_info(SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    var var_date = sse_decode_String(deserializer);
-    var var_year = sse_decode_i_32(deserializer);
-    var var_isHoliday = sse_decode_bool(deserializer);
-    var var_name = sse_decode_String(deserializer);
-    return HolidayInfo(
-      date: var_date,
-      year: var_year,
-      isHoliday: var_isHoliday,
-      name: var_name,
-    );
-  }
-
-  @protected
-  HolidayMeta sse_decode_holiday_meta(SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    var var_lastUpdateMs = sse_decode_i_64(deserializer);
-    var var_lastAttemptMs = sse_decode_i_64(deserializer);
-    var var_failureCount = sse_decode_i_32(deserializer);
-    var var_autoEnabled = sse_decode_bool(deserializer);
-    return HolidayMeta(
-      lastUpdateMs: var_lastUpdateMs,
-      lastAttemptMs: var_lastAttemptMs,
-      failureCount: var_failureCount,
-      autoEnabled: var_autoEnabled,
-    );
-  }
-
-  @protected
-  HolidayProgressDto sse_decode_holiday_progress_dto(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    var var_phase = sse_decode_String(deserializer);
-    var var_total = sse_decode_u_32(deserializer);
-    var var_year = sse_decode_i_32(deserializer);
-    var var_done = sse_decode_u_32(deserializer);
-    var var_yearOk = sse_decode_bool(deserializer);
-    var var_yearEmpty = sse_decode_bool(deserializer);
-    var var_okCount = sse_decode_u_32(deserializer);
-    var var_failed = sse_decode_u_32(deserializer);
-    var var_cancelled = sse_decode_bool(deserializer);
-    var var_message = sse_decode_String(deserializer);
-    return HolidayProgressDto(
-      phase: var_phase,
-      total: var_total,
-      year: var_year,
-      done: var_done,
-      yearOk: var_yearOk,
-      yearEmpty: var_yearEmpty,
-      okCount: var_okCount,
-      failed: var_failed,
-      cancelled: var_cancelled,
-      message: var_message,
-    );
-  }
-
-  @protected
-  HolidayRangeSummary sse_decode_holiday_range_summary(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    var var_ok = sse_decode_u_32(deserializer);
-    var var_failed = sse_decode_u_32(deserializer);
-    var var_empty = sse_decode_u_32(deserializer);
-    var var_cancelled = sse_decode_bool(deserializer);
-    return HolidayRangeSummary(
-      ok: var_ok,
-      failed: var_failed,
-      empty: var_empty,
-      cancelled: var_cancelled,
-    );
-  }
-
-  @protected
-  HolidayYearOutcome sse_decode_holiday_year_outcome(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    var var_meta = sse_decode_holiday_meta(deserializer);
-    var var_rowCount = sse_decode_u_32(deserializer);
-    return HolidayYearOutcome(meta: var_meta, rowCount: var_rowCount);
-  }
-
-  @protected
-  int sse_decode_i_32(SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    return deserializer.buffer.getInt32();
-  }
-
-  @protected
-  PlatformInt64 sse_decode_i_64(SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    return deserializer.buffer.getPlatformInt64();
-  }
-
-  @protected
-  IcsExportView sse_decode_ics_export_view(SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    var var_content = sse_decode_String(deserializer);
-    var var_tableCounts = sse_decode_list_ics_table_count(deserializer);
-    var var_suggestedFilename = sse_decode_String(deserializer);
-    return IcsExportView(
-      content: var_content,
-      tableCounts: var_tableCounts,
-      suggestedFilename: var_suggestedFilename,
-    );
-  }
-
-  @protected
-  IcsTableCount sse_decode_ics_table_count(SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    var var_table = sse_decode_String(deserializer);
-    var var_count = sse_decode_usize(deserializer);
-    return IcsTableCount(table: var_table, count: var_count);
-  }
-
-  @protected
-  ImportJobStatusView sse_decode_import_job_status_view(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    var var_jobId = sse_decode_String(deserializer);
-    var var_processed = sse_decode_usize(deserializer);
-    var var_total = sse_decode_opt_box_autoadd_usize(deserializer);
-    var var_finished = sse_decode_bool(deserializer);
-    var var_cancelled = sse_decode_bool(deserializer);
-    var var_stats = sse_decode_opt_box_autoadd_csv_import_stats_view(
-      deserializer,
-    );
-    var var_error = sse_decode_opt_String(deserializer);
-    return ImportJobStatusView(
-      jobId: var_jobId,
-      processed: var_processed,
-      total: var_total,
-      finished: var_finished,
-      cancelled: var_cancelled,
-      stats: var_stats,
-      error: var_error,
-    );
-  }
-
-  @protected
-  ImportLimitsView sse_decode_import_limits_view(SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    var var_maxBytes = sse_decode_usize(deserializer);
-    var var_maxRows = sse_decode_usize(deserializer);
-    return ImportLimitsView(maxBytes: var_maxBytes, maxRows: var_maxRows);
-  }
-
-  @protected
-  List<String> sse_decode_list_String(SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-
-    var len_ = sse_decode_i_32(deserializer);
-    var ans_ = <String>[];
-    for (var idx_ = 0; idx_ < len_; ++idx_) {
-      ans_.add(sse_decode_String(deserializer));
-    }
-    return ans_;
-  }
-
-  @protected
-  List<ActivityLogRow> sse_decode_list_activity_log_row(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-
-    var len_ = sse_decode_i_32(deserializer);
-    var ans_ = <ActivityLogRow>[];
-    for (var idx_ = 0; idx_ < len_; ++idx_) {
-      ans_.add(sse_decode_activity_log_row(deserializer));
-    }
-    return ans_;
-  }
-
-  @protected
-  List<BackupEntryView> sse_decode_list_backup_entry_view(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-
-    var len_ = sse_decode_i_32(deserializer);
-    var ans_ = <BackupEntryView>[];
-    for (var idx_ = 0; idx_ < len_; ++idx_) {
-      ans_.add(sse_decode_backup_entry_view(deserializer));
-    }
-    return ans_;
-  }
-
-  @protected
-  List<BackupPreviewTask> sse_decode_list_backup_preview_task(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-
-    var len_ = sse_decode_i_32(deserializer);
-    var ans_ = <BackupPreviewTask>[];
-    for (var idx_ = 0; idx_ < len_; ++idx_) {
-      ans_.add(sse_decode_backup_preview_task(deserializer));
-    }
-    return ans_;
-  }
-
-  @protected
-  List<BackupTableCount> sse_decode_list_backup_table_count(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-
-    var len_ = sse_decode_i_32(deserializer);
-    var ans_ = <BackupTableCount>[];
-    for (var idx_ = 0; idx_ < len_; ++idx_) {
-      ans_.add(sse_decode_backup_table_count(deserializer));
-    }
-    return ans_;
-  }
-
-  @protected
-  List<CloudBackupEntryView> sse_decode_list_cloud_backup_entry_view(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-
-    var len_ = sse_decode_i_32(deserializer);
-    var ans_ = <CloudBackupEntryView>[];
-    for (var idx_ = 0; idx_ < len_; ++idx_) {
-      ans_.add(sse_decode_cloud_backup_entry_view(deserializer));
-    }
-    return ans_;
-  }
-
-  @protected
-  List<CommentSearchHit> sse_decode_list_comment_search_hit(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-
-    var len_ = sse_decode_i_32(deserializer);
-    var ans_ = <CommentSearchHit>[];
-    for (var idx_ = 0; idx_ < len_; ++idx_) {
-      ans_.add(sse_decode_comment_search_hit(deserializer));
-    }
-    return ans_;
-  }
-
-  @protected
-  List<CsvImportRowView> sse_decode_list_csv_import_row_view(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-
-    var len_ = sse_decode_i_32(deserializer);
-    var ans_ = <CsvImportRowView>[];
-    for (var idx_ = 0; idx_ < len_; ++idx_) {
-      ans_.add(sse_decode_csv_import_row_view(deserializer));
-    }
-    return ans_;
-  }
-
-  @protected
-  ListFilter sse_decode_list_filter(SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    var var_keyword = sse_decode_opt_String(deserializer);
-    var var_page = sse_decode_u_32(deserializer);
-    var var_pageSize = sse_decode_u_32(deserializer);
-    var var_done = sse_decode_opt_box_autoadd_bool(deserializer);
-    var var_status = sse_decode_opt_String(deserializer);
-    var var_priorityMin = sse_decode_opt_box_autoadd_i_32(deserializer);
-    var var_projectId = sse_decode_opt_box_autoadd_i_64(deserializer);
-    var var_projectIds = sse_decode_opt_list_prim_i_64_strict(deserializer);
-    var var_favoriteOnly = sse_decode_opt_box_autoadd_bool(deserializer);
-    var var_myDayToday = sse_decode_opt_box_autoadd_i_64(deserializer);
-    return ListFilter(
-      keyword: var_keyword,
-      page: var_page,
-      pageSize: var_pageSize,
-      done: var_done,
-      status: var_status,
-      priorityMin: var_priorityMin,
-      projectId: var_projectId,
-      projectIds: var_projectIds,
-      favoriteOnly: var_favoriteOnly,
-      myDayToday: var_myDayToday,
-    );
-  }
-
-  @protected
-  List<HolidayInfo> sse_decode_list_holiday_info(SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-
-    var len_ = sse_decode_i_32(deserializer);
-    var ans_ = <HolidayInfo>[];
-    for (var idx_ = 0; idx_ < len_; ++idx_) {
-      ans_.add(sse_decode_holiday_info(deserializer));
-    }
-    return ans_;
-  }
-
-  @protected
-  List<IcsTableCount> sse_decode_list_ics_table_count(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-
-    var len_ = sse_decode_i_32(deserializer);
-    var ans_ = <IcsTableCount>[];
-    for (var idx_ = 0; idx_ < len_; ++idx_) {
-      ans_.add(sse_decode_ics_table_count(deserializer));
-    }
-    return ans_;
-  }
-
-  @protected
-  List<NotificationLogRow> sse_decode_list_notification_log_row(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-
-    var len_ = sse_decode_i_32(deserializer);
-    var ans_ = <NotificationLogRow>[];
-    for (var idx_ = 0; idx_ < len_; ++idx_) {
-      ans_.add(sse_decode_notification_log_row(deserializer));
-    }
-    return ans_;
-  }
-
-  @protected
-  Int64List sse_decode_list_prim_i_64_strict(SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    var len_ = sse_decode_i_32(deserializer);
-    return deserializer.buffer.getInt64List(len_);
-  }
-
-  @protected
-  List<int> sse_decode_list_prim_u_8_loose(SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    var len_ = sse_decode_i_32(deserializer);
-    return deserializer.buffer.getUint8List(len_);
-  }
-
-  @protected
-  Uint8List sse_decode_list_prim_u_8_strict(SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    var len_ = sse_decode_i_32(deserializer);
-    return deserializer.buffer.getUint8List(len_);
-  }
-
-  @protected
-  List<ProjectedReminder> sse_decode_list_projected_reminder(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-
-    var len_ = sse_decode_i_32(deserializer);
-    var ans_ = <ProjectedReminder>[];
-    for (var idx_ = 0; idx_ < len_; ++idx_) {
-      ans_.add(sse_decode_projected_reminder(deserializer));
-    }
-    return ans_;
-  }
-
-  @protected
-  List<ProjectedTaskLabel> sse_decode_list_projected_task_label(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-
-    var len_ = sse_decode_i_32(deserializer);
-    var ans_ = <ProjectedTaskLabel>[];
-    for (var idx_ = 0; idx_ < len_; ++idx_) {
-      ans_.add(sse_decode_projected_task_label(deserializer));
-    }
-    return ans_;
-  }
-
-  @protected
-  List<StatsHeatmapCell> sse_decode_list_stats_heatmap_cell(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-
-    var len_ = sse_decode_i_32(deserializer);
-    var ans_ = <StatsHeatmapCell>[];
-    for (var idx_ = 0; idx_ < len_; ++idx_) {
-      ans_.add(sse_decode_stats_heatmap_cell(deserializer));
-    }
-    return ans_;
-  }
-
-  @protected
-  List<StatsPriorityRow> sse_decode_list_stats_priority_row(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-
-    var len_ = sse_decode_i_32(deserializer);
-    var ans_ = <StatsPriorityRow>[];
-    for (var idx_ = 0; idx_ < len_; ++idx_) {
-      ans_.add(sse_decode_stats_priority_row(deserializer));
-    }
-    return ans_;
-  }
-
-  @protected
-  List<StatsProjectRow> sse_decode_list_stats_project_row(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-
-    var len_ = sse_decode_i_32(deserializer);
-    var ans_ = <StatsProjectRow>[];
-    for (var idx_ = 0; idx_ < len_; ++idx_) {
-      ans_.add(sse_decode_stats_project_row(deserializer));
-    }
-    return ans_;
-  }
-
-  @protected
-  List<StatsWeekdayRow> sse_decode_list_stats_weekday_row(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-
-    var len_ = sse_decode_i_32(deserializer);
-    var ans_ = <StatsWeekdayRow>[];
-    for (var idx_ = 0; idx_ < len_; ++idx_) {
-      ans_.add(sse_decode_stats_weekday_row(deserializer));
-    }
-    return ans_;
-  }
-
-  @protected
-  List<SyncConflict> sse_decode_list_sync_conflict(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-
-    var len_ = sse_decode_i_32(deserializer);
-    var ans_ = <SyncConflict>[];
-    for (var idx_ = 0; idx_ < len_; ++idx_) {
-      ans_.add(sse_decode_sync_conflict(deserializer));
-    }
-    return ans_;
-  }
-
-  @protected
-  List<SyncHistoryView> sse_decode_list_sync_history_view(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-
-    var len_ = sse_decode_i_32(deserializer);
-    var ans_ = <SyncHistoryView>[];
-    for (var idx_ = 0; idx_ < len_; ++idx_) {
-      ans_.add(sse_decode_sync_history_view(deserializer));
-    }
-    return ans_;
-  }
-
-  @protected
-  List<TableCount> sse_decode_list_table_count(SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-
-    var len_ = sse_decode_i_32(deserializer);
-    var ans_ = <TableCount>[];
-    for (var idx_ = 0; idx_ < len_; ++idx_) {
-      ans_.add(sse_decode_table_count(deserializer));
-    }
-    return ans_;
-  }
-
-  @protected
-  List<TableRowCount> sse_decode_list_table_row_count(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-
-    var len_ = sse_decode_i_32(deserializer);
-    var ans_ = <TableRowCount>[];
-    for (var idx_ = 0; idx_ < len_; ++idx_) {
-      ans_.add(sse_decode_table_row_count(deserializer));
-    }
-    return ans_;
-  }
-
-  @protected
-  List<TaskAttachmentView> sse_decode_list_task_attachment_view(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-
-    var len_ = sse_decode_i_32(deserializer);
-    var ans_ = <TaskAttachmentView>[];
-    for (var idx_ = 0; idx_ < len_; ++idx_) {
-      ans_.add(sse_decode_task_attachment_view(deserializer));
-    }
-    return ans_;
-  }
-
-  @protected
-  List<TaskDependencyFlags> sse_decode_list_task_dependency_flags(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-
-    var len_ = sse_decode_i_32(deserializer);
-    var ans_ = <TaskDependencyFlags>[];
-    for (var idx_ = 0; idx_ < len_; ++idx_) {
-      ans_.add(sse_decode_task_dependency_flags(deserializer));
-    }
-    return ans_;
-  }
-
-  @protected
-  List<TaskDescriptionFlag> sse_decode_list_task_description_flag(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-
-    var len_ = sse_decode_i_32(deserializer);
-    var ans_ = <TaskDescriptionFlag>[];
-    for (var idx_ = 0; idx_ < len_; ++idx_) {
-      ans_.add(sse_decode_task_description_flag(deserializer));
-    }
-    return ans_;
-  }
-
-  @protected
-  List<TaskExistenceFlag> sse_decode_list_task_existence_flag(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-
-    var len_ = sse_decode_i_32(deserializer);
-    var ans_ = <TaskExistenceFlag>[];
-    for (var idx_ = 0; idx_ < len_; ++idx_) {
-      ans_.add(sse_decode_task_existence_flag(deserializer));
-    }
-    return ans_;
-  }
-
-  @protected
-  List<TaskLabelWithId> sse_decode_list_task_label_with_id(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-
-    var len_ = sse_decode_i_32(deserializer);
-    var ans_ = <TaskLabelWithId>[];
-    for (var idx_ = 0; idx_ < len_; ++idx_) {
-      ans_.add(sse_decode_task_label_with_id(deserializer));
-    }
-    return ans_;
-  }
-
-  @protected
-  List<TaskLabelsProjection> sse_decode_list_task_labels_projection(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-
-    var len_ = sse_decode_i_32(deserializer);
-    var ans_ = <TaskLabelsProjection>[];
-    for (var idx_ = 0; idx_ < len_; ++idx_) {
-      ans_.add(sse_decode_task_labels_projection(deserializer));
-    }
-    return ans_;
-  }
-
-  @protected
-  List<TaskRemindersProjection> sse_decode_list_task_reminders_projection(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-
-    var len_ = sse_decode_i_32(deserializer);
-    var ans_ = <TaskRemindersProjection>[];
-    for (var idx_ = 0; idx_ < len_; ++idx_) {
-      ans_.add(sse_decode_task_reminders_projection(deserializer));
-    }
-    return ans_;
-  }
-
-  @protected
-  List<TodoComment> sse_decode_list_todo_comment(SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-
-    var len_ = sse_decode_i_32(deserializer);
-    var ans_ = <TodoComment>[];
-    for (var idx_ = 0; idx_ < len_; ++idx_) {
-      ans_.add(sse_decode_todo_comment(deserializer));
-    }
-    return ans_;
-  }
-
-  @protected
-  List<TodoLabel> sse_decode_list_todo_label(SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-
-    var len_ = sse_decode_i_32(deserializer);
-    var ans_ = <TodoLabel>[];
-    for (var idx_ = 0; idx_ < len_; ++idx_) {
-      ans_.add(sse_decode_todo_label(deserializer));
-    }
-    return ans_;
-  }
-
-  @protected
-  List<TodoProject> sse_decode_list_todo_project(SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-
-    var len_ = sse_decode_i_32(deserializer);
-    var ans_ = <TodoProject>[];
-    for (var idx_ = 0; idx_ < len_; ++idx_) {
-      ans_.add(sse_decode_todo_project(deserializer));
-    }
-    return ans_;
-  }
-
-  @protected
-  List<TodoReminder> sse_decode_list_todo_reminder(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-
-    var len_ = sse_decode_i_32(deserializer);
-    var ans_ = <TodoReminder>[];
-    for (var idx_ = 0; idx_ < len_; ++idx_) {
-      ans_.add(sse_decode_todo_reminder(deserializer));
-    }
-    return ans_;
-  }
-
-  @protected
-  List<TodoSavedFilter> sse_decode_list_todo_saved_filter(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-
-    var len_ = sse_decode_i_32(deserializer);
-    var ans_ = <TodoSavedFilter>[];
-    for (var idx_ = 0; idx_ < len_; ++idx_) {
-      ans_.add(sse_decode_todo_saved_filter(deserializer));
-    }
-    return ans_;
-  }
-
-  @protected
-  List<TodoSubtask> sse_decode_list_todo_subtask(SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-
-    var len_ = sse_decode_i_32(deserializer);
-    var ans_ = <TodoSubtask>[];
-    for (var idx_ = 0; idx_ < len_; ++idx_) {
-      ans_.add(sse_decode_todo_subtask(deserializer));
-    }
-    return ans_;
-  }
-
-  @protected
-  List<TodoTask> sse_decode_list_todo_task(SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-
-    var len_ = sse_decode_i_32(deserializer);
-    var ans_ = <TodoTask>[];
-    for (var idx_ = 0; idx_ < len_; ++idx_) {
-      ans_.add(sse_decode_todo_task(deserializer));
-    }
-    return ans_;
-  }
-
-  @protected
-  List<TodoTaskLabel> sse_decode_list_todo_task_label(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-
-    var len_ = sse_decode_i_32(deserializer);
-    var ans_ = <TodoTaskLabel>[];
-    for (var idx_ = 0; idx_ < len_; ++idx_) {
-      ans_.add(sse_decode_todo_task_label(deserializer));
-    }
-    return ans_;
-  }
-
-  @protected
-  List<TodoTaskListItem> sse_decode_list_todo_task_list_item(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-
-    var len_ = sse_decode_i_32(deserializer);
-    var ans_ = <TodoTaskListItem>[];
-    for (var idx_ = 0; idx_ < len_; ++idx_) {
-      ans_.add(sse_decode_todo_task_list_item(deserializer));
-    }
-    return ans_;
-  }
-
-  @protected
-  List<TodoTaskRelation> sse_decode_list_todo_task_relation(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-
-    var len_ = sse_decode_i_32(deserializer);
-    var ans_ = <TodoTaskRelation>[];
-    for (var idx_ = 0; idx_ < len_; ++idx_) {
-      ans_.add(sse_decode_todo_task_relation(deserializer));
-    }
-    return ans_;
-  }
-
-  @protected
-  List<TodoTemplate> sse_decode_list_todo_template(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-
-    var len_ = sse_decode_i_32(deserializer);
-    var ans_ = <TodoTemplate>[];
-    for (var idx_ = 0; idx_ < len_; ++idx_) {
-      ans_.add(sse_decode_todo_template(deserializer));
-    }
-    return ans_;
-  }
-
-  @protected
-  List<WidgetTodoItem> sse_decode_list_widget_todo_item(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-
-    var len_ = sse_decode_i_32(deserializer);
-    var ans_ = <WidgetTodoItem>[];
-    for (var idx_ = 0; idx_ < len_; ++idx_) {
-      ans_.add(sse_decode_widget_todo_item(deserializer));
-    }
-    return ans_;
-  }
-
-  @protected
-  NotificationLogRow sse_decode_notification_log_row(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    var var_id = sse_decode_i_64(deserializer);
-    var var_kind = sse_decode_String(deserializer);
-    var var_taskId = sse_decode_opt_box_autoadd_i_64(deserializer);
-    var var_taskTitle = sse_decode_String(deserializer);
-    var var_reminderId = sse_decode_opt_box_autoadd_i_64(deserializer);
-    var var_payload = sse_decode_String(deserializer);
-    var var_createdAt = sse_decode_i_64(deserializer);
-    return NotificationLogRow(
-      id: var_id,
-      kind: var_kind,
-      taskId: var_taskId,
-      taskTitle: var_taskTitle,
-      reminderId: var_reminderId,
-      payload: var_payload,
-      createdAt: var_createdAt,
-    );
-  }
-
-  @protected
-  String? sse_decode_opt_String(SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-
-    if (sse_decode_bool(deserializer)) {
-      return (sse_decode_String(deserializer));
-    } else {
-      return null;
-    }
-  }
-
-  @protected
-  bool? sse_decode_opt_box_autoadd_bool(SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-
-    if (sse_decode_bool(deserializer)) {
-      return (sse_decode_box_autoadd_bool(deserializer));
-    } else {
-      return null;
-    }
-  }
-
-  @protected
-  CsvImportStatsView? sse_decode_opt_box_autoadd_csv_import_stats_view(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-
-    if (sse_decode_bool(deserializer)) {
-      return (sse_decode_box_autoadd_csv_import_stats_view(deserializer));
-    } else {
-      return null;
-    }
-  }
-
-  @protected
-  double? sse_decode_opt_box_autoadd_f_64(SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-
-    if (sse_decode_bool(deserializer)) {
-      return (sse_decode_box_autoadd_f_64(deserializer));
-    } else {
-      return null;
-    }
-  }
-
-  @protected
-  int? sse_decode_opt_box_autoadd_i_32(SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-
-    if (sse_decode_bool(deserializer)) {
-      return (sse_decode_box_autoadd_i_32(deserializer));
-    } else {
-      return null;
-    }
-  }
-
-  @protected
-  PlatformInt64? sse_decode_opt_box_autoadd_i_64(SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-
-    if (sse_decode_bool(deserializer)) {
-      return (sse_decode_box_autoadd_i_64(deserializer));
-    } else {
-      return null;
-    }
-  }
-
-  @protected
-  SyncConfigView? sse_decode_opt_box_autoadd_sync_config_view(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-
-    if (sse_decode_bool(deserializer)) {
-      return (sse_decode_box_autoadd_sync_config_view(deserializer));
-    } else {
-      return null;
-    }
-  }
-
-  @protected
-  TodoProject? sse_decode_opt_box_autoadd_todo_project(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-
-    if (sse_decode_bool(deserializer)) {
-      return (sse_decode_box_autoadd_todo_project(deserializer));
-    } else {
-      return null;
-    }
-  }
-
-  @protected
-  TodoTask? sse_decode_opt_box_autoadd_todo_task(SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-
-    if (sse_decode_bool(deserializer)) {
-      return (sse_decode_box_autoadd_todo_task(deserializer));
-    } else {
-      return null;
-    }
-  }
-
-  @protected
-  BigInt? sse_decode_opt_box_autoadd_usize(SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-
-    if (sse_decode_bool(deserializer)) {
-      return (sse_decode_box_autoadd_usize(deserializer));
-    } else {
-      return null;
-    }
-  }
-
-  @protected
-  Int64List? sse_decode_opt_list_prim_i_64_strict(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-
-    if (sse_decode_bool(deserializer)) {
-      return (sse_decode_list_prim_i_64_strict(deserializer));
-    } else {
-      return null;
-    }
-  }
-
-  @protected
-  PlaintextExportView sse_decode_plaintext_export_view(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    var var_content = sse_decode_String(deserializer);
-    var var_tableCounts = sse_decode_list_table_count(deserializer);
-    var var_suggestedFilename = sse_decode_String(deserializer);
-    return PlaintextExportView(
-      content: var_content,
-      tableCounts: var_tableCounts,
-      suggestedFilename: var_suggestedFilename,
-    );
-  }
-
-  @protected
-  ProjectedReminder sse_decode_projected_reminder(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    var var_id = sse_decode_i_64(deserializer);
-    var var_remindAt = sse_decode_i_64(deserializer);
-    return ProjectedReminder(id: var_id, remindAt: var_remindAt);
-  }
-
-  @protected
-  ProjectedTaskLabel sse_decode_projected_task_label(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    var var_id = sse_decode_i_64(deserializer);
-    var var_title = sse_decode_String(deserializer);
-    var var_hexColor = sse_decode_String(deserializer);
-    return ProjectedTaskLabel(
-      id: var_id,
-      title: var_title,
-      hexColor: var_hexColor,
-    );
-  }
-
-  @protected
-  ReminderDueDto sse_decode_reminder_due_dto(SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    var var_id = sse_decode_i_64(deserializer);
-    var var_taskId = sse_decode_i_64(deserializer);
-    var var_title = sse_decode_String(deserializer);
-    var var_remindAt = sse_decode_i_64(deserializer);
-    var var_isConstant = sse_decode_i_32(deserializer);
-    return ReminderDueDto(
-      id: var_id,
-      taskId: var_taskId,
-      title: var_title,
-      remindAt: var_remindAt,
-      isConstant: var_isConstant,
-    );
-  }
-
-  @protected
-  StatsAggregate sse_decode_stats_aggregate(SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    var var_overview = sse_decode_stats_overview(deserializer);
-    var var_heatmap = sse_decode_stats_heatmap(deserializer);
-    var var_streak = sse_decode_stats_streak(deserializer);
-    var var_byProject = sse_decode_list_stats_project_row(deserializer);
-    var var_byPriority = sse_decode_list_stats_priority_row(deserializer);
-    var var_byWeekday = sse_decode_list_stats_weekday_row(deserializer);
-    var var_availableYears = sse_decode_list_prim_i_64_strict(deserializer);
-    return StatsAggregate(
-      overview: var_overview,
-      heatmap: var_heatmap,
-      streak: var_streak,
-      byProject: var_byProject,
-      byPriority: var_byPriority,
-      byWeekday: var_byWeekday,
-      availableYears: var_availableYears,
-    );
-  }
-
-  @protected
-  StatsHeatmap sse_decode_stats_heatmap(SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    var var_year = sse_decode_i_64(deserializer);
-    var var_startDate = sse_decode_String(deserializer);
-    var var_endDate = sse_decode_String(deserializer);
-    var var_cells = sse_decode_list_stats_heatmap_cell(deserializer);
-    return StatsHeatmap(
-      year: var_year,
-      startDate: var_startDate,
-      endDate: var_endDate,
-      cells: var_cells,
-    );
-  }
-
-  @protected
-  StatsHeatmapCell sse_decode_stats_heatmap_cell(SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    var var_date = sse_decode_String(deserializer);
-    var var_count = sse_decode_i_64(deserializer);
-    return StatsHeatmapCell(date: var_date, count: var_count);
-  }
-
-  @protected
-  StatsOverview sse_decode_stats_overview(SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    var var_total = sse_decode_i_64(deserializer);
-    var var_pending = sse_decode_i_64(deserializer);
-    var var_done = sse_decode_i_64(deserializer);
-    var var_doneLast7D = sse_decode_i_64(deserializer);
-    var var_doneLast30D = sse_decode_i_64(deserializer);
-    return StatsOverview(
-      total: var_total,
-      pending: var_pending,
-      done: var_done,
-      doneLast7D: var_doneLast7D,
-      doneLast30D: var_doneLast30D,
-    );
-  }
-
-  @protected
-  StatsPriorityRow sse_decode_stats_priority_row(SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    var var_priority = sse_decode_i_64(deserializer);
-    var var_doneCount = sse_decode_i_64(deserializer);
-    var var_pendingCount = sse_decode_i_64(deserializer);
-    return StatsPriorityRow(
-      priority: var_priority,
-      doneCount: var_doneCount,
-      pendingCount: var_pendingCount,
-    );
-  }
-
-  @protected
-  StatsProjectRow sse_decode_stats_project_row(SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    var var_projectId = sse_decode_opt_box_autoadd_i_64(deserializer);
-    var var_projectTitle = sse_decode_opt_String(deserializer);
-    var var_projectHexColor = sse_decode_opt_String(deserializer);
-    var var_doneCount = sse_decode_i_64(deserializer);
-    var var_pendingCount = sse_decode_i_64(deserializer);
-    return StatsProjectRow(
-      projectId: var_projectId,
-      projectTitle: var_projectTitle,
-      projectHexColor: var_projectHexColor,
-      doneCount: var_doneCount,
-      pendingCount: var_pendingCount,
-    );
-  }
-
-  @protected
-  StatsStreak sse_decode_stats_streak(SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    var var_current = sse_decode_i_64(deserializer);
-    var var_best = sse_decode_i_64(deserializer);
-    var var_doneToday = sse_decode_bool(deserializer);
-    return StatsStreak(
-      current: var_current,
-      best: var_best,
-      doneToday: var_doneToday,
-    );
-  }
-
-  @protected
-  StatsWeekdayRow sse_decode_stats_weekday_row(SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    var var_weekday = sse_decode_i_64(deserializer);
-    var var_doneCount = sse_decode_i_64(deserializer);
-    return StatsWeekdayRow(weekday: var_weekday, doneCount: var_doneCount);
-  }
-
-  @protected
-  SyncConfigInput sse_decode_sync_config_input(SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    var var_engine = sse_decode_String(deserializer);
-    var var_endpoint = sse_decode_String(deserializer);
-    var var_bucket = sse_decode_opt_String(deserializer);
-    var var_region = sse_decode_opt_String(deserializer);
-    var var_username = sse_decode_opt_String(deserializer);
-    var var_password = sse_decode_opt_String(deserializer);
-    var var_basePath = sse_decode_opt_String(deserializer);
-    var var_intervalMinutes = sse_decode_opt_box_autoadd_i_64(deserializer);
-    var var_autoSyncEnabled = sse_decode_opt_box_autoadd_bool(deserializer);
-    var var_syncOnChange = sse_decode_opt_box_autoadd_bool(deserializer);
-    var var_skipTlsVerify = sse_decode_opt_box_autoadd_bool(deserializer);
-    var var_timeoutSeconds = sse_decode_opt_box_autoadd_i_64(deserializer);
-    var var_sessionToken = sse_decode_opt_String(deserializer);
-    return SyncConfigInput(
-      engine: var_engine,
-      endpoint: var_endpoint,
-      bucket: var_bucket,
-      region: var_region,
-      username: var_username,
-      password: var_password,
-      basePath: var_basePath,
-      intervalMinutes: var_intervalMinutes,
-      autoSyncEnabled: var_autoSyncEnabled,
-      syncOnChange: var_syncOnChange,
-      skipTlsVerify: var_skipTlsVerify,
-      timeoutSeconds: var_timeoutSeconds,
-      sessionToken: var_sessionToken,
-    );
-  }
-
-  @protected
-  SyncConfigView sse_decode_sync_config_view(SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    var var_id = sse_decode_i_64(deserializer);
-    var var_engine = sse_decode_String(deserializer);
-    var var_endpoint = sse_decode_String(deserializer);
-    var var_bucket = sse_decode_String(deserializer);
-    var var_region = sse_decode_String(deserializer);
-    var var_username = sse_decode_String(deserializer);
-    var var_passwordSet = sse_decode_bool(deserializer);
-    var var_basePath = sse_decode_String(deserializer);
-    var var_intervalMinutes = sse_decode_i_64(deserializer);
-    var var_autoSyncEnabled = sse_decode_bool(deserializer);
-    var var_syncOnChange = sse_decode_bool(deserializer);
-    var var_skipTlsVerify = sse_decode_bool(deserializer);
-    var var_timeoutSeconds = sse_decode_i_64(deserializer);
-    var var_sessionTokenSet = sse_decode_bool(deserializer);
-    var var_lastSyncedAt = sse_decode_opt_box_autoadd_i_64(deserializer);
-    return SyncConfigView(
-      id: var_id,
-      engine: var_engine,
-      endpoint: var_endpoint,
-      bucket: var_bucket,
-      region: var_region,
-      username: var_username,
-      passwordSet: var_passwordSet,
-      basePath: var_basePath,
-      intervalMinutes: var_intervalMinutes,
-      autoSyncEnabled: var_autoSyncEnabled,
-      syncOnChange: var_syncOnChange,
-      skipTlsVerify: var_skipTlsVerify,
-      timeoutSeconds: var_timeoutSeconds,
-      sessionTokenSet: var_sessionTokenSet,
-      lastSyncedAt: var_lastSyncedAt,
-    );
-  }
-
-  @protected
-  SyncConflict sse_decode_sync_conflict(SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    var var_id = sse_decode_i_64(deserializer);
-    var var_tableName = sse_decode_String(deserializer);
-    var var_recordUuid = sse_decode_String(deserializer);
-    var var_recordTitle = sse_decode_String(deserializer);
-    var var_decision = sse_decode_String(deserializer);
-    var var_loserSide = sse_decode_String(deserializer);
-    var var_winnerSide = sse_decode_String(deserializer);
-    var var_loserPayload = sse_decode_String(deserializer);
-    var var_winnerPayload = sse_decode_String(deserializer);
-    var var_loserUpdatedAt = sse_decode_i_64(deserializer);
-    var var_winnerUpdatedAt = sse_decode_i_64(deserializer);
-    var var_resolution = sse_decode_String(deserializer);
-    var var_createdAt = sse_decode_i_64(deserializer);
-    var var_resolvedAt = sse_decode_i_64(deserializer);
-    return SyncConflict(
-      id: var_id,
-      tableName: var_tableName,
-      recordUuid: var_recordUuid,
-      recordTitle: var_recordTitle,
-      decision: var_decision,
-      loserSide: var_loserSide,
-      winnerSide: var_winnerSide,
-      loserPayload: var_loserPayload,
-      winnerPayload: var_winnerPayload,
-      loserUpdatedAt: var_loserUpdatedAt,
-      winnerUpdatedAt: var_winnerUpdatedAt,
-      resolution: var_resolution,
-      createdAt: var_createdAt,
-      resolvedAt: var_resolvedAt,
-    );
-  }
-
-  @protected
-  SyncCryptoStatus sse_decode_sync_crypto_status(SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    var var_hasPassword = sse_decode_bool(deserializer);
-    var var_isUnlocked = sse_decode_bool(deserializer);
-    return SyncCryptoStatus(
-      hasPassword: var_hasPassword,
-      isUnlocked: var_isUnlocked,
-    );
-  }
-
-  @protected
-  SyncHistoryView sse_decode_sync_history_view(SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    var var_id = sse_decode_i_64(deserializer);
-    var var_syncType = sse_decode_String(deserializer);
-    var var_status = sse_decode_String(deserializer);
-    var var_startedAt = sse_decode_i_64(deserializer);
-    var var_finishedAt = sse_decode_opt_box_autoadd_i_64(deserializer);
-    var var_pulledCount = sse_decode_i_64(deserializer);
-    var var_pushedCount = sse_decode_i_64(deserializer);
-    var var_conflictCount = sse_decode_i_64(deserializer);
-    var var_errorMessage = sse_decode_opt_String(deserializer);
-    return SyncHistoryView(
-      id: var_id,
-      syncType: var_syncType,
-      status: var_status,
-      startedAt: var_startedAt,
-      finishedAt: var_finishedAt,
-      pulledCount: var_pulledCount,
-      pushedCount: var_pushedCount,
-      conflictCount: var_conflictCount,
-      errorMessage: var_errorMessage,
-    );
-  }
-
-  @protected
-  TableCount sse_decode_table_count(SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    var var_table = sse_decode_String(deserializer);
-    var var_count = sse_decode_usize(deserializer);
-    return TableCount(table: var_table, count: var_count);
-  }
-
-  @protected
-  TableRowCount sse_decode_table_row_count(SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    var var_table = sse_decode_String(deserializer);
-    var var_rows = sse_decode_i_64(deserializer);
-    return TableRowCount(table: var_table, rows: var_rows);
-  }
-
-  @protected
-  TaskAttachmentView sse_decode_task_attachment_view(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    var var_linkId = sse_decode_i_64(deserializer);
-    var var_linkUuid = sse_decode_String(deserializer);
-    var var_hash = sse_decode_String(deserializer);
-    var var_originalName = sse_decode_String(deserializer);
-    var var_mimeType = sse_decode_String(deserializer);
-    var var_sizeBytes = sse_decode_i_64(deserializer);
-    var var_isLocalCached = sse_decode_i_32(deserializer);
-    return TaskAttachmentView(
-      linkId: var_linkId,
-      linkUuid: var_linkUuid,
-      hash: var_hash,
-      originalName: var_originalName,
-      mimeType: var_mimeType,
-      sizeBytes: var_sizeBytes,
-      isLocalCached: var_isLocalCached,
-    );
-  }
-
-  @protected
-  TaskDependencyFlags sse_decode_task_dependency_flags(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    var var_taskId = sse_decode_i_64(deserializer);
-    var var_relationCount = sse_decode_i_64(deserializer);
-    return TaskDependencyFlags(
-      taskId: var_taskId,
-      relationCount: var_relationCount,
-    );
-  }
-
-  @protected
-  TaskDescriptionFlag sse_decode_task_description_flag(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    var var_taskId = sse_decode_i_64(deserializer);
-    return TaskDescriptionFlag(taskId: var_taskId);
-  }
-
-  @protected
-  TaskExistenceFlag sse_decode_task_existence_flag(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    var var_taskId = sse_decode_i_64(deserializer);
-    return TaskExistenceFlag(taskId: var_taskId);
-  }
-
-  @protected
-  TaskLabelWithId sse_decode_task_label_with_id(SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    var var_id = sse_decode_i_64(deserializer);
-    var var_uuid = sse_decode_String(deserializer);
-    var var_title = sse_decode_String(deserializer);
-    var var_hexColor = sse_decode_String(deserializer);
-    var var_isDeleted = sse_decode_i_32(deserializer);
-    var var_createdAt = sse_decode_i_64(deserializer);
-    var var_updatedAt = sse_decode_i_64(deserializer);
-    var var_deletedAt = sse_decode_opt_box_autoadd_i_64(deserializer);
-    var var_version = sse_decode_i_32(deserializer);
-    var var_taskLabelId = sse_decode_i_64(deserializer);
-    return TaskLabelWithId(
-      id: var_id,
-      uuid: var_uuid,
-      title: var_title,
-      hexColor: var_hexColor,
-      isDeleted: var_isDeleted,
-      createdAt: var_createdAt,
-      updatedAt: var_updatedAt,
-      deletedAt: var_deletedAt,
-      version: var_version,
-      taskLabelId: var_taskLabelId,
-    );
-  }
-
-  @protected
-  TaskLabelsProjection sse_decode_task_labels_projection(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    var var_taskId = sse_decode_i_64(deserializer);
-    var var_labels = sse_decode_list_projected_task_label(deserializer);
-    return TaskLabelsProjection(taskId: var_taskId, labels: var_labels);
-  }
-
-  @protected
-  TaskRemindersProjection sse_decode_task_reminders_projection(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    var var_taskId = sse_decode_i_64(deserializer);
-    var var_reminders = sse_decode_list_projected_reminder(deserializer);
-    return TaskRemindersProjection(
-      taskId: var_taskId,
-      reminders: var_reminders,
-    );
-  }
-
-  @protected
-  TodoComment sse_decode_todo_comment(SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    var var_id = sse_decode_i_64(deserializer);
-    var var_uuid = sse_decode_String(deserializer);
-    var var_taskId = sse_decode_i_64(deserializer);
-    var var_content = sse_decode_String(deserializer);
-    var var_isDeleted = sse_decode_i_32(deserializer);
-    var var_createdAt = sse_decode_i_64(deserializer);
-    var var_updatedAt = sse_decode_i_64(deserializer);
-    var var_deletedAt = sse_decode_opt_box_autoadd_i_64(deserializer);
-    var var_version = sse_decode_i_32(deserializer);
-    return TodoComment(
-      id: var_id,
-      uuid: var_uuid,
-      taskId: var_taskId,
-      content: var_content,
-      isDeleted: var_isDeleted,
-      createdAt: var_createdAt,
-      updatedAt: var_updatedAt,
-      deletedAt: var_deletedAt,
-      version: var_version,
-    );
-  }
-
-  @protected
-  TodoCommentCreateInput sse_decode_todo_comment_create_input(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    var var_taskId = sse_decode_i_64(deserializer);
-    var var_content = sse_decode_String(deserializer);
-    return TodoCommentCreateInput(taskId: var_taskId, content: var_content);
-  }
-
-  @protected
-  TodoLabel sse_decode_todo_label(SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    var var_id = sse_decode_i_64(deserializer);
-    var var_uuid = sse_decode_String(deserializer);
-    var var_title = sse_decode_String(deserializer);
-    var var_hexColor = sse_decode_String(deserializer);
-    var var_isDeleted = sse_decode_i_32(deserializer);
-    var var_createdAt = sse_decode_i_64(deserializer);
-    var var_updatedAt = sse_decode_i_64(deserializer);
-    var var_deletedAt = sse_decode_opt_box_autoadd_i_64(deserializer);
-    var var_version = sse_decode_i_32(deserializer);
-    return TodoLabel(
-      id: var_id,
-      uuid: var_uuid,
-      title: var_title,
-      hexColor: var_hexColor,
-      isDeleted: var_isDeleted,
-      createdAt: var_createdAt,
-      updatedAt: var_updatedAt,
-      deletedAt: var_deletedAt,
-      version: var_version,
-    );
-  }
-
-  @protected
-  TodoLabelCreateInput sse_decode_todo_label_create_input(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    var var_title = sse_decode_String(deserializer);
-    var var_hexColor = sse_decode_opt_String(deserializer);
-    return TodoLabelCreateInput(title: var_title, hexColor: var_hexColor);
-  }
-
-  @protected
-  TodoProject sse_decode_todo_project(SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    var var_id = sse_decode_i_64(deserializer);
-    var var_uuid = sse_decode_String(deserializer);
-    var var_title = sse_decode_String(deserializer);
-    var var_description = sse_decode_opt_String(deserializer);
-    var var_hexColor = sse_decode_String(deserializer);
-    var var_sortOrder = sse_decode_f_64(deserializer);
-    var var_parentUuid = sse_decode_opt_String(deserializer);
-    var var_isArchived = sse_decode_i_32(deserializer);
-    var var_isDeleted = sse_decode_i_32(deserializer);
-    var var_createdAt = sse_decode_i_64(deserializer);
-    var var_updatedAt = sse_decode_i_64(deserializer);
-    var var_deletedAt = sse_decode_opt_box_autoadd_i_64(deserializer);
-    var var_version = sse_decode_i_32(deserializer);
-    return TodoProject(
-      id: var_id,
-      uuid: var_uuid,
-      title: var_title,
-      description: var_description,
-      hexColor: var_hexColor,
-      sortOrder: var_sortOrder,
-      parentUuid: var_parentUuid,
-      isArchived: var_isArchived,
-      isDeleted: var_isDeleted,
-      createdAt: var_createdAt,
-      updatedAt: var_updatedAt,
-      deletedAt: var_deletedAt,
-      version: var_version,
-    );
-  }
-
-  @protected
-  TodoProjectCreateInput sse_decode_todo_project_create_input(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    var var_title = sse_decode_String(deserializer);
-    var var_description = sse_decode_opt_String(deserializer);
-    var var_hexColor = sse_decode_opt_String(deserializer);
-    var var_sortOrder = sse_decode_opt_box_autoadd_f_64(deserializer);
-    var var_parentUuid = sse_decode_opt_String(deserializer);
-    return TodoProjectCreateInput(
-      title: var_title,
-      description: var_description,
-      hexColor: var_hexColor,
-      sortOrder: var_sortOrder,
-      parentUuid: var_parentUuid,
-    );
-  }
-
-  @protected
-  TodoReminder sse_decode_todo_reminder(SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    var var_id = sse_decode_i_64(deserializer);
-    var var_uuid = sse_decode_String(deserializer);
-    var var_taskId = sse_decode_i_64(deserializer);
-    var var_remindAt = sse_decode_i_64(deserializer);
-    var var_isConstant = sse_decode_i_32(deserializer);
-    var var_isDeleted = sse_decode_i_32(deserializer);
-    var var_createdAt = sse_decode_i_64(deserializer);
-    var var_updatedAt = sse_decode_i_64(deserializer);
-    var var_deletedAt = sse_decode_opt_box_autoadd_i_64(deserializer);
-    var var_version = sse_decode_i_32(deserializer);
-    return TodoReminder(
-      id: var_id,
-      uuid: var_uuid,
-      taskId: var_taskId,
-      remindAt: var_remindAt,
-      isConstant: var_isConstant,
-      isDeleted: var_isDeleted,
-      createdAt: var_createdAt,
-      updatedAt: var_updatedAt,
-      deletedAt: var_deletedAt,
-      version: var_version,
-    );
-  }
-
-  @protected
-  TodoReminderCreateInput sse_decode_todo_reminder_create_input(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    var var_taskId = sse_decode_i_64(deserializer);
-    var var_remindAt = sse_decode_i_64(deserializer);
-    var var_isConstant = sse_decode_i_32(deserializer);
-    return TodoReminderCreateInput(
-      taskId: var_taskId,
-      remindAt: var_remindAt,
-      isConstant: var_isConstant,
-    );
-  }
-
-  @protected
-  TodoSavedFilter sse_decode_todo_saved_filter(SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    var var_id = sse_decode_i_64(deserializer);
-    var var_uuid = sse_decode_String(deserializer);
-    var var_name = sse_decode_String(deserializer);
-    var var_conditions = sse_decode_String(deserializer);
-    var var_sortOrder = sse_decode_i_64(deserializer);
-    return TodoSavedFilter(
-      id: var_id,
-      uuid: var_uuid,
-      name: var_name,
-      conditions: var_conditions,
-      sortOrder: var_sortOrder,
-    );
-  }
-
-  @protected
-  TodoSavedFilterCreateInput sse_decode_todo_saved_filter_create_input(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    var var_name = sse_decode_String(deserializer);
-    var var_conditions = sse_decode_String(deserializer);
-    var var_sortOrder = sse_decode_opt_box_autoadd_i_64(deserializer);
-    return TodoSavedFilterCreateInput(
-      name: var_name,
-      conditions: var_conditions,
-      sortOrder: var_sortOrder,
-    );
-  }
-
-  @protected
-  TodoSavedFilterUpdateInput sse_decode_todo_saved_filter_update_input(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    var var_name = sse_decode_opt_String(deserializer);
-    var var_conditions = sse_decode_opt_String(deserializer);
-    var var_sortOrder = sse_decode_opt_box_autoadd_i_64(deserializer);
-    return TodoSavedFilterUpdateInput(
-      name: var_name,
-      conditions: var_conditions,
-      sortOrder: var_sortOrder,
-    );
-  }
-
-  @protected
-  TodoSubtask sse_decode_todo_subtask(SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    var var_id = sse_decode_i_64(deserializer);
-    var var_uuid = sse_decode_String(deserializer);
-    var var_taskId = sse_decode_i_64(deserializer);
-    var var_title = sse_decode_String(deserializer);
-    var var_done = sse_decode_i_32(deserializer);
-    var var_doneAt = sse_decode_opt_box_autoadd_i_64(deserializer);
-    var var_position = sse_decode_f_64(deserializer);
-    var var_parentUuid = sse_decode_opt_String(deserializer);
-    var var_isDeleted = sse_decode_i_32(deserializer);
-    var var_createdAt = sse_decode_i_64(deserializer);
-    var var_updatedAt = sse_decode_i_64(deserializer);
-    var var_deletedAt = sse_decode_opt_box_autoadd_i_64(deserializer);
-    var var_version = sse_decode_i_32(deserializer);
-    return TodoSubtask(
-      id: var_id,
-      uuid: var_uuid,
-      taskId: var_taskId,
-      title: var_title,
-      done: var_done,
-      doneAt: var_doneAt,
-      position: var_position,
-      parentUuid: var_parentUuid,
-      isDeleted: var_isDeleted,
-      createdAt: var_createdAt,
-      updatedAt: var_updatedAt,
-      deletedAt: var_deletedAt,
-      version: var_version,
-    );
-  }
-
-  @protected
-  TodoSubtaskCreateInput sse_decode_todo_subtask_create_input(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    var var_taskId = sse_decode_i_64(deserializer);
-    var var_title = sse_decode_String(deserializer);
-    var var_position = sse_decode_opt_box_autoadd_f_64(deserializer);
-    var var_parentUuid = sse_decode_opt_String(deserializer);
-    return TodoSubtaskCreateInput(
-      taskId: var_taskId,
-      title: var_title,
-      position: var_position,
-      parentUuid: var_parentUuid,
-    );
-  }
-
-  @protected
-  TodoTask sse_decode_todo_task(SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    var var_id = sse_decode_i_64(deserializer);
-    var var_uuid = sse_decode_String(deserializer);
-    var var_title = sse_decode_String(deserializer);
-    var var_description = sse_decode_opt_String(deserializer);
-    var var_projectId = sse_decode_opt_box_autoadd_i_64(deserializer);
-    var var_priority = sse_decode_i_32(deserializer);
-    var var_status = sse_decode_String(deserializer);
-    var var_done = sse_decode_i_32(deserializer);
-    var var_doneAt = sse_decode_opt_box_autoadd_i_64(deserializer);
-    var var_dueDate = sse_decode_opt_box_autoadd_i_64(deserializer);
-    var var_startDate = sse_decode_opt_box_autoadd_i_64(deserializer);
-    var var_repeatAfter = sse_decode_i_64(deserializer);
-    var var_repeatMode = sse_decode_i_32(deserializer);
-    var var_repeatWeekdays = sse_decode_i_32(deserializer);
-    var var_repeatEndType = sse_decode_i_32(deserializer);
-    var var_repeatEndParam = sse_decode_i_64(deserializer);
-    var var_repeatFromDone = sse_decode_i_32(deserializer);
-    var var_repeatMonthMode = sse_decode_i_32(deserializer);
-    var var_repeatNthWeek = sse_decode_i_32(deserializer);
-    var var_percentDone = sse_decode_f_64(deserializer);
-    var var_position = sse_decode_f_64(deserializer);
-    var var_isFavorite = sse_decode_i_32(deserializer);
-    var var_myDayDate = sse_decode_opt_box_autoadd_i_64(deserializer);
-    var var_durationMinutes = sse_decode_opt_box_autoadd_i_64(deserializer);
-    var var_isDeleted = sse_decode_i_32(deserializer);
-    var var_createdAt = sse_decode_i_64(deserializer);
-    var var_updatedAt = sse_decode_i_64(deserializer);
-    var var_deletedAt = sse_decode_opt_box_autoadd_i_64(deserializer);
-    var var_version = sse_decode_i_32(deserializer);
-    return TodoTask(
-      id: var_id,
-      uuid: var_uuid,
-      title: var_title,
-      description: var_description,
-      projectId: var_projectId,
-      priority: var_priority,
-      status: var_status,
-      done: var_done,
-      doneAt: var_doneAt,
-      dueDate: var_dueDate,
-      startDate: var_startDate,
-      repeatAfter: var_repeatAfter,
-      repeatMode: var_repeatMode,
-      repeatWeekdays: var_repeatWeekdays,
-      repeatEndType: var_repeatEndType,
-      repeatEndParam: var_repeatEndParam,
-      repeatFromDone: var_repeatFromDone,
-      repeatMonthMode: var_repeatMonthMode,
-      repeatNthWeek: var_repeatNthWeek,
-      percentDone: var_percentDone,
-      position: var_position,
-      isFavorite: var_isFavorite,
-      myDayDate: var_myDayDate,
-      durationMinutes: var_durationMinutes,
-      isDeleted: var_isDeleted,
-      createdAt: var_createdAt,
-      updatedAt: var_updatedAt,
-      deletedAt: var_deletedAt,
-      version: var_version,
-    );
-  }
-
-  @protected
-  TodoTaskCreateInput sse_decode_todo_task_create_input(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    var var_title = sse_decode_String(deserializer);
-    var var_description = sse_decode_opt_String(deserializer);
-    var var_projectId = sse_decode_opt_box_autoadd_i_64(deserializer);
-    var var_priority = sse_decode_opt_box_autoadd_i_32(deserializer);
-    var var_status = sse_decode_opt_String(deserializer);
-    var var_done = sse_decode_opt_box_autoadd_i_32(deserializer);
-    var var_doneAt = sse_decode_opt_box_autoadd_i_64(deserializer);
-    var var_dueDate = sse_decode_opt_box_autoadd_i_64(deserializer);
-    var var_startDate = sse_decode_opt_box_autoadd_i_64(deserializer);
-    var var_repeatAfter = sse_decode_opt_box_autoadd_i_64(deserializer);
-    var var_repeatMode = sse_decode_opt_box_autoadd_i_32(deserializer);
-    var var_repeatWeekdays = sse_decode_opt_box_autoadd_i_32(deserializer);
-    var var_repeatEndType = sse_decode_opt_box_autoadd_i_32(deserializer);
-    var var_repeatEndParam = sse_decode_opt_box_autoadd_i_64(deserializer);
-    var var_repeatFromDone = sse_decode_opt_box_autoadd_i_32(deserializer);
-    var var_repeatMonthMode = sse_decode_opt_box_autoadd_i_32(deserializer);
-    var var_repeatNthWeek = sse_decode_opt_box_autoadd_i_32(deserializer);
-    var var_position = sse_decode_opt_box_autoadd_f_64(deserializer);
-    var var_isFavorite = sse_decode_opt_box_autoadd_i_32(deserializer);
-    var var_myDayDate = sse_decode_opt_box_autoadd_i_64(deserializer);
-    var var_durationMinutes = sse_decode_opt_box_autoadd_i_64(deserializer);
-    return TodoTaskCreateInput(
-      title: var_title,
-      description: var_description,
-      projectId: var_projectId,
-      priority: var_priority,
-      status: var_status,
-      done: var_done,
-      doneAt: var_doneAt,
-      dueDate: var_dueDate,
-      startDate: var_startDate,
-      repeatAfter: var_repeatAfter,
-      repeatMode: var_repeatMode,
-      repeatWeekdays: var_repeatWeekdays,
-      repeatEndType: var_repeatEndType,
-      repeatEndParam: var_repeatEndParam,
-      repeatFromDone: var_repeatFromDone,
-      repeatMonthMode: var_repeatMonthMode,
-      repeatNthWeek: var_repeatNthWeek,
-      position: var_position,
-      isFavorite: var_isFavorite,
-      myDayDate: var_myDayDate,
-      durationMinutes: var_durationMinutes,
-    );
-  }
-
-  @protected
-  TodoTaskDetail sse_decode_todo_task_detail(SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    var var_id = sse_decode_i_64(deserializer);
-    var var_uuid = sse_decode_String(deserializer);
-    var var_title = sse_decode_String(deserializer);
-    var var_description = sse_decode_opt_String(deserializer);
-    var var_projectId = sse_decode_opt_box_autoadd_i_64(deserializer);
-    var var_priority = sse_decode_i_32(deserializer);
-    var var_status = sse_decode_String(deserializer);
-    var var_done = sse_decode_i_32(deserializer);
-    var var_doneAt = sse_decode_opt_box_autoadd_i_64(deserializer);
-    var var_dueDate = sse_decode_opt_box_autoadd_i_64(deserializer);
-    var var_startDate = sse_decode_opt_box_autoadd_i_64(deserializer);
-    var var_repeatAfter = sse_decode_i_64(deserializer);
-    var var_repeatMode = sse_decode_i_32(deserializer);
-    var var_repeatWeekdays = sse_decode_i_32(deserializer);
-    var var_repeatEndType = sse_decode_i_32(deserializer);
-    var var_repeatEndParam = sse_decode_i_64(deserializer);
-    var var_repeatFromDone = sse_decode_i_32(deserializer);
-    var var_repeatMonthMode = sse_decode_i_32(deserializer);
-    var var_repeatNthWeek = sse_decode_i_32(deserializer);
-    var var_percentDone = sse_decode_f_64(deserializer);
-    var var_position = sse_decode_f_64(deserializer);
-    var var_isFavorite = sse_decode_i_32(deserializer);
-    var var_myDayDate = sse_decode_opt_box_autoadd_i_64(deserializer);
-    var var_durationMinutes = sse_decode_opt_box_autoadd_i_64(deserializer);
-    var var_isDeleted = sse_decode_i_32(deserializer);
-    var var_createdAt = sse_decode_i_64(deserializer);
-    var var_updatedAt = sse_decode_i_64(deserializer);
-    var var_deletedAt = sse_decode_opt_box_autoadd_i_64(deserializer);
-    var var_version = sse_decode_i_32(deserializer);
-    var var_subtasks = sse_decode_list_todo_subtask(deserializer);
-    var var_labels = sse_decode_list_task_label_with_id(deserializer);
-    var var_comments = sse_decode_list_todo_comment(deserializer);
-    var var_relations = sse_decode_list_todo_task_relation(deserializer);
-    var var_reminders = sse_decode_list_todo_reminder(deserializer);
-    return TodoTaskDetail(
-      id: var_id,
-      uuid: var_uuid,
-      title: var_title,
-      description: var_description,
-      projectId: var_projectId,
-      priority: var_priority,
-      status: var_status,
-      done: var_done,
-      doneAt: var_doneAt,
-      dueDate: var_dueDate,
-      startDate: var_startDate,
-      repeatAfter: var_repeatAfter,
-      repeatMode: var_repeatMode,
-      repeatWeekdays: var_repeatWeekdays,
-      repeatEndType: var_repeatEndType,
-      repeatEndParam: var_repeatEndParam,
-      repeatFromDone: var_repeatFromDone,
-      repeatMonthMode: var_repeatMonthMode,
-      repeatNthWeek: var_repeatNthWeek,
-      percentDone: var_percentDone,
-      position: var_position,
-      isFavorite: var_isFavorite,
-      myDayDate: var_myDayDate,
-      durationMinutes: var_durationMinutes,
-      isDeleted: var_isDeleted,
-      createdAt: var_createdAt,
-      updatedAt: var_updatedAt,
-      deletedAt: var_deletedAt,
-      version: var_version,
-      subtasks: var_subtasks,
-      labels: var_labels,
-      comments: var_comments,
-      relations: var_relations,
-      reminders: var_reminders,
-    );
-  }
-
-  @protected
-  TodoTaskLabel sse_decode_todo_task_label(SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    var var_id = sse_decode_i_64(deserializer);
-    var var_uuid = sse_decode_String(deserializer);
-    var var_taskId = sse_decode_i_64(deserializer);
-    var var_labelId = sse_decode_i_64(deserializer);
-    var var_isDeleted = sse_decode_i_32(deserializer);
-    var var_createdAt = sse_decode_i_64(deserializer);
-    var var_updatedAt = sse_decode_i_64(deserializer);
-    var var_deletedAt = sse_decode_opt_box_autoadd_i_64(deserializer);
-    var var_version = sse_decode_i_32(deserializer);
-    return TodoTaskLabel(
-      id: var_id,
-      uuid: var_uuid,
-      taskId: var_taskId,
-      labelId: var_labelId,
-      isDeleted: var_isDeleted,
-      createdAt: var_createdAt,
-      updatedAt: var_updatedAt,
-      deletedAt: var_deletedAt,
-      version: var_version,
-    );
-  }
-
-  @protected
-  TodoTaskLabelCreateInput sse_decode_todo_task_label_create_input(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    var var_taskId = sse_decode_i_64(deserializer);
-    var var_labelId = sse_decode_i_64(deserializer);
-    return TodoTaskLabelCreateInput(taskId: var_taskId, labelId: var_labelId);
-  }
-
-  @protected
-  TodoTaskListItem sse_decode_todo_task_list_item(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    var var_id = sse_decode_i_64(deserializer);
-    var var_title = sse_decode_String(deserializer);
-    var var_description = sse_decode_opt_String(deserializer);
-    var var_projectId = sse_decode_opt_box_autoadd_i_64(deserializer);
-    var var_priority = sse_decode_i_32(deserializer);
-    var var_status = sse_decode_String(deserializer);
-    var var_done = sse_decode_i_32(deserializer);
-    var var_doneAt = sse_decode_opt_box_autoadd_i_64(deserializer);
-    var var_dueDate = sse_decode_opt_box_autoadd_i_64(deserializer);
-    var var_startDate = sse_decode_opt_box_autoadd_i_64(deserializer);
-    var var_repeatMode = sse_decode_i_32(deserializer);
-    var var_percentDone = sse_decode_f_64(deserializer);
-    var var_position = sse_decode_f_64(deserializer);
-    var var_isFavorite = sse_decode_i_32(deserializer);
-    var var_myDayDate = sse_decode_opt_box_autoadd_i_64(deserializer);
-    var var_durationMinutes = sse_decode_opt_box_autoadd_i_64(deserializer);
-    var var_isDeleted = sse_decode_i_32(deserializer);
-    var var_createdAt = sse_decode_i_64(deserializer);
-    var var_updatedAt = sse_decode_i_64(deserializer);
-    return TodoTaskListItem(
-      id: var_id,
-      title: var_title,
-      description: var_description,
-      projectId: var_projectId,
-      priority: var_priority,
-      status: var_status,
-      done: var_done,
-      doneAt: var_doneAt,
-      dueDate: var_dueDate,
-      startDate: var_startDate,
-      repeatMode: var_repeatMode,
-      percentDone: var_percentDone,
-      position: var_position,
-      isFavorite: var_isFavorite,
-      myDayDate: var_myDayDate,
-      durationMinutes: var_durationMinutes,
-      isDeleted: var_isDeleted,
-      createdAt: var_createdAt,
-      updatedAt: var_updatedAt,
-    );
-  }
-
-  @protected
-  TodoTaskRelation sse_decode_todo_task_relation(SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    var var_id = sse_decode_i_64(deserializer);
-    var var_uuid = sse_decode_String(deserializer);
-    var var_taskId = sse_decode_i_64(deserializer);
-    var var_otherTaskId = sse_decode_i_64(deserializer);
-    var var_relationType = sse_decode_String(deserializer);
-    var var_isDeleted = sse_decode_i_32(deserializer);
-    var var_createdAt = sse_decode_i_64(deserializer);
-    var var_updatedAt = sse_decode_i_64(deserializer);
-    var var_deletedAt = sse_decode_opt_box_autoadd_i_64(deserializer);
-    var var_version = sse_decode_i_32(deserializer);
-    return TodoTaskRelation(
-      id: var_id,
-      uuid: var_uuid,
-      taskId: var_taskId,
-      otherTaskId: var_otherTaskId,
-      relationType: var_relationType,
-      isDeleted: var_isDeleted,
-      createdAt: var_createdAt,
-      updatedAt: var_updatedAt,
-      deletedAt: var_deletedAt,
-      version: var_version,
-    );
-  }
-
-  @protected
-  TodoTaskRelationCreateInput sse_decode_todo_task_relation_create_input(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    var var_taskId = sse_decode_i_64(deserializer);
-    var var_otherTaskId = sse_decode_i_64(deserializer);
-    var var_relationType = sse_decode_String(deserializer);
-    return TodoTaskRelationCreateInput(
-      taskId: var_taskId,
-      otherTaskId: var_otherTaskId,
-      relationType: var_relationType,
-    );
-  }
-
-  @protected
-  TodoTemplate sse_decode_todo_template(SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    var var_id = sse_decode_i_64(deserializer);
-    var var_uuid = sse_decode_String(deserializer);
-    var var_name = sse_decode_String(deserializer);
-    var var_payload = sse_decode_String(deserializer);
-    var var_sortOrder = sse_decode_i_64(deserializer);
-    return TodoTemplate(
-      id: var_id,
-      uuid: var_uuid,
-      name: var_name,
-      payload: var_payload,
-      sortOrder: var_sortOrder,
-    );
-  }
-
-  @protected
-  TodoTemplateCreateInput sse_decode_todo_template_create_input(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    var var_name = sse_decode_String(deserializer);
-    var var_payload = sse_decode_String(deserializer);
-    var var_sortOrder = sse_decode_opt_box_autoadd_i_64(deserializer);
-    return TodoTemplateCreateInput(
-      name: var_name,
-      payload: var_payload,
-      sortOrder: var_sortOrder,
-    );
-  }
-
-  @protected
-  TodoTemplateUpdateInput sse_decode_todo_template_update_input(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    var var_name = sse_decode_opt_String(deserializer);
-    var var_payload = sse_decode_opt_String(deserializer);
-    var var_sortOrder = sse_decode_opt_box_autoadd_i_64(deserializer);
-    return TodoTemplateUpdateInput(
-      name: var_name,
-      payload: var_payload,
-      sortOrder: var_sortOrder,
-    );
-  }
-
-  @protected
-  TrashMeta sse_decode_trash_meta(SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    var var_retentionDays = sse_decode_i_64(deserializer);
-    var var_lastPurgeMs = sse_decode_i_64(deserializer);
-    return TrashMeta(
-      retentionDays: var_retentionDays,
-      lastPurgeMs: var_lastPurgeMs,
-    );
-  }
-
-  @protected
-  TrashPurgeStats sse_decode_trash_purge_stats(SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    var var_purged = sse_decode_u_64(deserializer);
-    var var_guarded = sse_decode_u_64(deserializer);
-    var var_ran = sse_decode_bool(deserializer);
-    return TrashPurgeStats(
-      purged: var_purged,
-      guarded: var_guarded,
-      ran: var_ran,
-    );
-  }
-
-  @protected
-  int sse_decode_u_32(SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    return deserializer.buffer.getUint32();
-  }
-
-  @protected
-  BigInt sse_decode_u_64(SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    return deserializer.buffer.getBigUint64();
-  }
-
-  @protected
-  int sse_decode_u_8(SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    return deserializer.buffer.getUint8();
-  }
-
-  @protected
-  void sse_decode_unit(SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-  }
-
-  @protected
-  BigInt sse_decode_usize(SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    return deserializer.buffer.getBigUint64();
-  }
-
-  @protected
-  WidgetTodoItem sse_decode_widget_todo_item(SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    var var_id = sse_decode_i_64(deserializer);
-    var var_uuid = sse_decode_String(deserializer);
-    var var_title = sse_decode_String(deserializer);
-    var var_priority = sse_decode_i_32(deserializer);
-    var var_done = sse_decode_i_32(deserializer);
-    return WidgetTodoItem(
-      id: var_id,
-      uuid: var_uuid,
-      title: var_title,
-      priority: var_priority,
-      done: var_done,
-    );
-  }
-
-  @protected
-  void sse_encode_AnyhowException(
-    AnyhowException self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_String(self.message, serializer);
-  }
-
-  @protected
-  void sse_encode_StreamSink_db_event_dto_Sse(
-    RustStreamSink<DbEventDto> self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_String(
-      self.setupAndSerialize(
-        codec: SseCodec(
-          decodeSuccessData: sse_decode_db_event_dto,
-          decodeErrorData: sse_decode_AnyhowException,
-        ),
-      ),
-      serializer,
-    );
-  }
-
-  @protected
-  void sse_encode_StreamSink_holiday_progress_dto_Sse(
-    RustStreamSink<HolidayProgressDto> self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_String(
-      self.setupAndSerialize(
-        codec: SseCodec(
-          decodeSuccessData: sse_decode_holiday_progress_dto,
-          decodeErrorData: sse_decode_AnyhowException,
-        ),
-      ),
-      serializer,
-    );
-  }
-
-  @protected
-  void sse_encode_StreamSink_reminder_due_dto_Sse(
-    RustStreamSink<ReminderDueDto> self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_String(
-      self.setupAndSerialize(
-        codec: SseCodec(
-          decodeSuccessData: sse_decode_reminder_due_dto,
-          decodeErrorData: sse_decode_AnyhowException,
-        ),
-      ),
-      serializer,
-    );
-  }
-
-  @protected
-  void sse_encode_String(String self, SseSerializer serializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_list_prim_u_8_strict(utf8.encoder.convert(self), serializer);
-  }
-
-  @protected
-  void sse_encode_activity_log_row(
-    ActivityLogRow self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_i_64(self.id, serializer);
-    sse_encode_opt_box_autoadd_i_64(self.taskId, serializer);
-    sse_encode_String(self.taskTitle, serializer);
-    sse_encode_String(self.action, serializer);
-    sse_encode_String(self.detail, serializer);
-    sse_encode_i_64(self.createdAt, serializer);
-  }
-
-  @protected
-  void sse_encode_backup_device_info(
-    BackupDeviceInfo self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_String(self.deviceId, serializer);
-  }
-
-  @protected
-  void sse_encode_backup_entry_view(
-    BackupEntryView self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_String(self.filename, serializer);
-    sse_encode_String(self.filePath, serializer);
-    sse_encode_i_64(self.modifiedAt, serializer);
-    sse_encode_i_64(self.sizeBytes, serializer);
-  }
-
-  @protected
-  void sse_encode_backup_export_result(
-    BackupExportResult self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_String(self.filePath, serializer);
-    sse_encode_i_64(self.fileSize, serializer);
-    sse_encode_list_backup_table_count(self.tableCounts, serializer);
-    sse_encode_backup_manifest_view(self.manifest, serializer);
-    sse_encode_opt_String(self.cloudPath, serializer);
-    sse_encode_bool(self.cloudUploaded, serializer);
-    sse_encode_opt_String(self.cloudError, serializer);
-    sse_encode_opt_String(self.localPath, serializer);
-    sse_encode_opt_String(self.localError, serializer);
-  }
-
-  @protected
-  void sse_encode_backup_import_result(
-    BackupImportResult self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_i_64(self.successCount, serializer);
-    sse_encode_i_64(self.errorCount, serializer);
-    sse_encode_list_String(self.errors, serializer);
-    sse_encode_backup_manifest_view(self.manifest, serializer);
-    sse_encode_bool(self.needsRestart, serializer);
-  }
-
-  @protected
-  void sse_encode_backup_manifest_view(
-    BackupManifestView self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_u_32(self.formatVersion, serializer);
-    sse_encode_String(self.createdAt, serializer);
-    sse_encode_i_64(self.createdAtTs, serializer);
-    sse_encode_String(self.appVersion, serializer);
-    sse_encode_String(self.deviceId, serializer);
-    sse_encode_opt_String(self.deviceName, serializer);
-    sse_encode_i_64(self.schemaVersion, serializer);
-    sse_encode_list_backup_table_count(self.tableCounts, serializer);
-  }
-
-  @protected
-  void sse_encode_backup_prefs_view(
-    BackupPrefsView self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_opt_String(self.localPath, serializer);
-    sse_encode_bool(self.keepLatest, serializer);
-    sse_encode_bool(self.cloudBackupEnabled, serializer);
-    sse_encode_bool(self.localBackupEnabled, serializer);
-    sse_encode_String(self.scheduleType, serializer);
-    sse_encode_String(self.scheduleTime, serializer);
-    sse_encode_u_32(self.scheduleMinute, serializer);
-    sse_encode_u_32(self.scheduleWeekday, serializer);
-    sse_encode_u_32(self.scheduleDayOfMonth, serializer);
-    sse_encode_u_32(self.scheduleMonth, serializer);
-    sse_encode_i_64(self.lastBackupAt, serializer);
-    sse_encode_i_64(self.nextBackupAt, serializer);
-  }
-
-  @protected
-  void sse_encode_backup_preview_task(
-    BackupPreviewTask self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_String(self.title, serializer);
-    sse_encode_String(self.status, serializer);
-    sse_encode_bool(self.done, serializer);
-    sse_encode_opt_box_autoadd_i_64(self.dueDate, serializer);
-    sse_encode_i_64(self.priority, serializer);
-    sse_encode_opt_String(self.project, serializer);
-    sse_encode_bool(self.isDeleted, serializer);
-  }
-
-  @protected
-  void sse_encode_backup_preview_view(
-    BackupPreviewView self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_backup_manifest_view(self.manifest, serializer);
-    sse_encode_list_backup_preview_task(self.sampleTasks, serializer);
-    sse_encode_backup_task_stats(self.taskStats, serializer);
-    sse_encode_bool(self.schemaMismatch, serializer);
-    sse_encode_i_64(self.currentSchemaVersion, serializer);
-  }
-
-  @protected
-  void sse_encode_backup_table_count(
-    BackupTableCount self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_String(self.table, serializer);
-    sse_encode_i_64(self.count, serializer);
-  }
-
-  @protected
-  void sse_encode_backup_task_stats(
-    BackupTaskStats self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_i_64(self.total, serializer);
-    sse_encode_i_64(self.alive, serializer);
-    sse_encode_i_64(self.done, serializer);
-    sse_encode_i_64(self.deleted, serializer);
-  }
-
-  @protected
-  void sse_encode_biometric_secret_bundle(
-    BiometricSecretBundle self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_String(self.encryptedDbKeyBio, serializer);
-    sse_encode_String(self.biometricKey, serializer);
-    sse_encode_String(self.nonce, serializer);
-  }
-
-  @protected
-  void sse_encode_bool(bool self, SseSerializer serializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    serializer.buffer.putUint8(self ? 1 : 0);
-  }
-
-  @protected
-  void sse_encode_box_autoadd_backup_prefs_view(
-    BackupPrefsView self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_backup_prefs_view(self, serializer);
-  }
-
-  @protected
-  void sse_encode_box_autoadd_bool(bool self, SseSerializer serializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_bool(self, serializer);
-  }
-
-  @protected
-  void sse_encode_box_autoadd_csv_import_stats_view(
-    CsvImportStatsView self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_csv_import_stats_view(self, serializer);
-  }
-
-  @protected
-  void sse_encode_box_autoadd_f_64(double self, SseSerializer serializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_f_64(self, serializer);
-  }
-
-  @protected
-  void sse_encode_box_autoadd_i_32(int self, SseSerializer serializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_i_32(self, serializer);
-  }
-
-  @protected
-  void sse_encode_box_autoadd_i_64(
-    PlatformInt64 self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_i_64(self, serializer);
-  }
-
-  @protected
-  void sse_encode_box_autoadd_list_filter(
-    ListFilter self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_list_filter(self, serializer);
-  }
-
-  @protected
-  void sse_encode_box_autoadd_sync_config_input(
-    SyncConfigInput self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_sync_config_input(self, serializer);
-  }
-
-  @protected
-  void sse_encode_box_autoadd_sync_config_view(
-    SyncConfigView self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_sync_config_view(self, serializer);
-  }
-
-  @protected
-  void sse_encode_box_autoadd_todo_comment_create_input(
-    TodoCommentCreateInput self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_todo_comment_create_input(self, serializer);
-  }
-
-  @protected
-  void sse_encode_box_autoadd_todo_label_create_input(
-    TodoLabelCreateInput self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_todo_label_create_input(self, serializer);
-  }
-
-  @protected
-  void sse_encode_box_autoadd_todo_project(
-    TodoProject self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_todo_project(self, serializer);
-  }
-
-  @protected
-  void sse_encode_box_autoadd_todo_project_create_input(
-    TodoProjectCreateInput self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_todo_project_create_input(self, serializer);
-  }
-
-  @protected
-  void sse_encode_box_autoadd_todo_reminder_create_input(
-    TodoReminderCreateInput self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_todo_reminder_create_input(self, serializer);
-  }
-
-  @protected
-  void sse_encode_box_autoadd_todo_saved_filter_create_input(
-    TodoSavedFilterCreateInput self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_todo_saved_filter_create_input(self, serializer);
-  }
-
-  @protected
-  void sse_encode_box_autoadd_todo_saved_filter_update_input(
-    TodoSavedFilterUpdateInput self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_todo_saved_filter_update_input(self, serializer);
-  }
-
-  @protected
-  void sse_encode_box_autoadd_todo_subtask_create_input(
-    TodoSubtaskCreateInput self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_todo_subtask_create_input(self, serializer);
-  }
-
-  @protected
-  void sse_encode_box_autoadd_todo_task(
-    TodoTask self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_todo_task(self, serializer);
-  }
-
-  @protected
-  void sse_encode_box_autoadd_todo_task_create_input(
-    TodoTaskCreateInput self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_todo_task_create_input(self, serializer);
-  }
-
-  @protected
-  void sse_encode_box_autoadd_todo_task_label_create_input(
-    TodoTaskLabelCreateInput self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_todo_task_label_create_input(self, serializer);
-  }
-
-  @protected
-  void sse_encode_box_autoadd_todo_task_relation_create_input(
-    TodoTaskRelationCreateInput self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_todo_task_relation_create_input(self, serializer);
-  }
-
-  @protected
-  void sse_encode_box_autoadd_todo_template_create_input(
-    TodoTemplateCreateInput self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_todo_template_create_input(self, serializer);
-  }
-
-  @protected
-  void sse_encode_box_autoadd_todo_template_update_input(
-    TodoTemplateUpdateInput self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_todo_template_update_input(self, serializer);
-  }
-
-  @protected
-  void sse_encode_box_autoadd_usize(BigInt self, SseSerializer serializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_usize(self, serializer);
-  }
-
-  @protected
-  void sse_encode_cloud_backup_entry_view(
-    CloudBackupEntryView self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_String(self.name, serializer);
-    sse_encode_String(self.cloudPath, serializer);
-    sse_encode_i_64(self.sizeBytes, serializer);
-    sse_encode_i_64(self.modifiedAt, serializer);
-  }
-
-  @protected
-  void sse_encode_comment_search_hit(
-    CommentSearchHit self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_i_64(self.commentId, serializer);
-    sse_encode_i_64(self.taskId, serializer);
-    sse_encode_String(self.taskTitle, serializer);
-    sse_encode_String(self.content, serializer);
-    sse_encode_i_64(self.createdAt, serializer);
-  }
-
-  @protected
-  void sse_encode_complete_task_result(
-    CompleteTaskResult self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_todo_task(self.task, serializer);
-    sse_encode_opt_box_autoadd_todo_task(self.nextInstance, serializer);
-  }
-
-  @protected
-  void sse_encode_csv_import_preview_view(
-    CsvImportPreviewView self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_String(self.preset, serializer);
-    sse_encode_list_csv_import_row_view(self.rows, serializer);
-    sse_encode_csv_import_stats_view(self.stats, serializer);
-  }
-
-  @protected
-  void sse_encode_csv_import_row_view(
-    CsvImportRowView self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_usize(self.sourceLine, serializer);
-    sse_encode_opt_String(self.projectTitle, serializer);
-    sse_encode_todo_task_create_input(self.input, serializer);
-    sse_encode_opt_String(self.skipReason, serializer);
-  }
-
-  @protected
-  void sse_encode_csv_import_stats_view(
-    CsvImportStatsView self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_usize(self.success, serializer);
-    sse_encode_usize(self.skipped, serializer);
-    sse_encode_usize(self.failed, serializer);
-    sse_encode_list_String(self.notes, serializer);
-  }
-
-  @protected
-  void sse_encode_db_event_dto(DbEventDto self, SseSerializer serializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_String(self.table, serializer);
-    sse_encode_String(self.op, serializer);
-    sse_encode_i_64(self.recordId, serializer);
-    sse_encode_String(self.recordUuid, serializer);
-    sse_encode_String(self.deviceId, serializer);
-    sse_encode_i_64(self.timestamp, serializer);
-  }
-
-  @protected
-  void sse_encode_db_maintenance_view(
-    DbMaintenanceView self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_i_64(self.walBytesAfterCheckpoint, serializer);
-    sse_encode_i_32(self.attachmentsCleaned, serializer);
-    sse_encode_i_32(self.logRowsPruned, serializer);
-    sse_encode_i_64(self.freelistBefore, serializer);
-    sse_encode_i_64(self.freelistAfter, serializer);
-    sse_encode_i_64(self.pagesReclaimed, serializer);
-  }
-
-  @protected
-  void sse_encode_diagnostics_snapshot(
-    DiagnosticsSnapshot self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_i_64(self.dbSizeBytes, serializer);
-    sse_encode_list_table_row_count(self.tableRows, serializer);
-    sse_encode_i_64(self.tombstoneRows, serializer);
-    sse_encode_i_64(self.attachmentCacheBytes, serializer);
-    sse_encode_i_64(self.attachmentCacheFiles, serializer);
-  }
-
-  @protected
-  void sse_encode_digest_prefs(DigestPrefs self, SseSerializer serializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_bool(self.enabled, serializer);
-    sse_encode_i_64(self.hour, serializer);
-    sse_encode_i_64(self.minute, serializer);
-  }
-
-  @protected
-  void sse_encode_digest_summary(DigestSummary self, SseSerializer serializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_i_64(self.dueToday, serializer);
-    sse_encode_i_64(self.overdue, serializer);
-    sse_encode_i_64(self.doneToday, serializer);
-  }
-
-  @protected
-  void sse_encode_f_64(double self, SseSerializer serializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    serializer.buffer.putFloat64(self);
-  }
-
-  @protected
-  void sse_encode_global_search_result(
-    GlobalSearchResult self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_list_todo_task(self.tasks, serializer);
-    sse_encode_list_todo_project(self.projects, serializer);
-    sse_encode_list_comment_search_hit(self.comments, serializer);
-  }
-
-  @protected
-  void sse_encode_holiday_info(HolidayInfo self, SseSerializer serializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_String(self.date, serializer);
-    sse_encode_i_32(self.year, serializer);
-    sse_encode_bool(self.isHoliday, serializer);
-    sse_encode_String(self.name, serializer);
-  }
-
-  @protected
-  void sse_encode_holiday_meta(HolidayMeta self, SseSerializer serializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_i_64(self.lastUpdateMs, serializer);
-    sse_encode_i_64(self.lastAttemptMs, serializer);
-    sse_encode_i_32(self.failureCount, serializer);
-    sse_encode_bool(self.autoEnabled, serializer);
-  }
-
-  @protected
-  void sse_encode_holiday_progress_dto(
-    HolidayProgressDto self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_String(self.phase, serializer);
-    sse_encode_u_32(self.total, serializer);
-    sse_encode_i_32(self.year, serializer);
-    sse_encode_u_32(self.done, serializer);
-    sse_encode_bool(self.yearOk, serializer);
-    sse_encode_bool(self.yearEmpty, serializer);
-    sse_encode_u_32(self.okCount, serializer);
-    sse_encode_u_32(self.failed, serializer);
-    sse_encode_bool(self.cancelled, serializer);
-    sse_encode_String(self.message, serializer);
-  }
-
-  @protected
-  void sse_encode_holiday_range_summary(
-    HolidayRangeSummary self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_u_32(self.ok, serializer);
-    sse_encode_u_32(self.failed, serializer);
-    sse_encode_u_32(self.empty, serializer);
-    sse_encode_bool(self.cancelled, serializer);
-  }
-
-  @protected
-  void sse_encode_holiday_year_outcome(
-    HolidayYearOutcome self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_holiday_meta(self.meta, serializer);
-    sse_encode_u_32(self.rowCount, serializer);
-  }
-
-  @protected
-  void sse_encode_i_32(int self, SseSerializer serializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    serializer.buffer.putInt32(self);
-  }
-
-  @protected
-  void sse_encode_i_64(PlatformInt64 self, SseSerializer serializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    serializer.buffer.putPlatformInt64(self);
-  }
-
-  @protected
-  void sse_encode_ics_export_view(
-    IcsExportView self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_String(self.content, serializer);
-    sse_encode_list_ics_table_count(self.tableCounts, serializer);
-    sse_encode_String(self.suggestedFilename, serializer);
-  }
-
-  @protected
-  void sse_encode_ics_table_count(
-    IcsTableCount self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_String(self.table, serializer);
-    sse_encode_usize(self.count, serializer);
-  }
-
-  @protected
-  void sse_encode_import_job_status_view(
-    ImportJobStatusView self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_String(self.jobId, serializer);
-    sse_encode_usize(self.processed, serializer);
-    sse_encode_opt_box_autoadd_usize(self.total, serializer);
-    sse_encode_bool(self.finished, serializer);
-    sse_encode_bool(self.cancelled, serializer);
-    sse_encode_opt_box_autoadd_csv_import_stats_view(self.stats, serializer);
-    sse_encode_opt_String(self.error, serializer);
-  }
-
-  @protected
-  void sse_encode_import_limits_view(
-    ImportLimitsView self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_usize(self.maxBytes, serializer);
-    sse_encode_usize(self.maxRows, serializer);
-  }
-
-  @protected
-  void sse_encode_list_String(List<String> self, SseSerializer serializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_i_32(self.length, serializer);
-    for (final item in self) {
-      sse_encode_String(item, serializer);
-    }
-  }
-
-  @protected
-  void sse_encode_list_activity_log_row(
-    List<ActivityLogRow> self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_i_32(self.length, serializer);
-    for (final item in self) {
-      sse_encode_activity_log_row(item, serializer);
-    }
-  }
-
-  @protected
-  void sse_encode_list_backup_entry_view(
-    List<BackupEntryView> self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_i_32(self.length, serializer);
-    for (final item in self) {
-      sse_encode_backup_entry_view(item, serializer);
-    }
-  }
-
-  @protected
-  void sse_encode_list_backup_preview_task(
-    List<BackupPreviewTask> self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_i_32(self.length, serializer);
-    for (final item in self) {
-      sse_encode_backup_preview_task(item, serializer);
-    }
-  }
-
-  @protected
-  void sse_encode_list_backup_table_count(
-    List<BackupTableCount> self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_i_32(self.length, serializer);
-    for (final item in self) {
-      sse_encode_backup_table_count(item, serializer);
-    }
-  }
-
-  @protected
-  void sse_encode_list_cloud_backup_entry_view(
-    List<CloudBackupEntryView> self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_i_32(self.length, serializer);
-    for (final item in self) {
-      sse_encode_cloud_backup_entry_view(item, serializer);
-    }
-  }
-
-  @protected
-  void sse_encode_list_comment_search_hit(
-    List<CommentSearchHit> self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_i_32(self.length, serializer);
-    for (final item in self) {
-      sse_encode_comment_search_hit(item, serializer);
-    }
-  }
-
-  @protected
-  void sse_encode_list_csv_import_row_view(
-    List<CsvImportRowView> self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_i_32(self.length, serializer);
-    for (final item in self) {
-      sse_encode_csv_import_row_view(item, serializer);
-    }
-  }
-
-  @protected
-  void sse_encode_list_filter(ListFilter self, SseSerializer serializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_opt_String(self.keyword, serializer);
-    sse_encode_u_32(self.page, serializer);
-    sse_encode_u_32(self.pageSize, serializer);
-    sse_encode_opt_box_autoadd_bool(self.done, serializer);
-    sse_encode_opt_String(self.status, serializer);
-    sse_encode_opt_box_autoadd_i_32(self.priorityMin, serializer);
-    sse_encode_opt_box_autoadd_i_64(self.projectId, serializer);
-    sse_encode_opt_list_prim_i_64_strict(self.projectIds, serializer);
-    sse_encode_opt_box_autoadd_bool(self.favoriteOnly, serializer);
-    sse_encode_opt_box_autoadd_i_64(self.myDayToday, serializer);
-  }
-
-  @protected
-  void sse_encode_list_holiday_info(
-    List<HolidayInfo> self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_i_32(self.length, serializer);
-    for (final item in self) {
-      sse_encode_holiday_info(item, serializer);
-    }
-  }
-
-  @protected
-  void sse_encode_list_ics_table_count(
-    List<IcsTableCount> self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_i_32(self.length, serializer);
-    for (final item in self) {
-      sse_encode_ics_table_count(item, serializer);
-    }
-  }
-
-  @protected
-  void sse_encode_list_notification_log_row(
-    List<NotificationLogRow> self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_i_32(self.length, serializer);
-    for (final item in self) {
-      sse_encode_notification_log_row(item, serializer);
-    }
-  }
-
-  @protected
-  void sse_encode_list_prim_i_64_strict(
-    Int64List self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_i_32(self.length, serializer);
-    serializer.buffer.putInt64List(self);
-  }
-
-  @protected
-  void sse_encode_list_prim_u_8_loose(
-    List<int> self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_i_32(self.length, serializer);
-    serializer.buffer.putUint8List(
-      self is Uint8List ? self : Uint8List.fromList(self),
-    );
-  }
-
-  @protected
-  void sse_encode_list_prim_u_8_strict(
-    Uint8List self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_i_32(self.length, serializer);
-    serializer.buffer.putUint8List(self);
-  }
-
-  @protected
-  void sse_encode_list_projected_reminder(
-    List<ProjectedReminder> self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_i_32(self.length, serializer);
-    for (final item in self) {
-      sse_encode_projected_reminder(item, serializer);
-    }
-  }
-
-  @protected
-  void sse_encode_list_projected_task_label(
-    List<ProjectedTaskLabel> self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_i_32(self.length, serializer);
-    for (final item in self) {
-      sse_encode_projected_task_label(item, serializer);
-    }
-  }
-
-  @protected
-  void sse_encode_list_stats_heatmap_cell(
-    List<StatsHeatmapCell> self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_i_32(self.length, serializer);
-    for (final item in self) {
-      sse_encode_stats_heatmap_cell(item, serializer);
-    }
-  }
-
-  @protected
-  void sse_encode_list_stats_priority_row(
-    List<StatsPriorityRow> self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_i_32(self.length, serializer);
-    for (final item in self) {
-      sse_encode_stats_priority_row(item, serializer);
-    }
-  }
-
-  @protected
-  void sse_encode_list_stats_project_row(
-    List<StatsProjectRow> self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_i_32(self.length, serializer);
-    for (final item in self) {
-      sse_encode_stats_project_row(item, serializer);
-    }
-  }
-
-  @protected
-  void sse_encode_list_stats_weekday_row(
-    List<StatsWeekdayRow> self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_i_32(self.length, serializer);
-    for (final item in self) {
-      sse_encode_stats_weekday_row(item, serializer);
-    }
-  }
-
-  @protected
-  void sse_encode_list_sync_conflict(
-    List<SyncConflict> self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_i_32(self.length, serializer);
-    for (final item in self) {
-      sse_encode_sync_conflict(item, serializer);
-    }
-  }
-
-  @protected
-  void sse_encode_list_sync_history_view(
-    List<SyncHistoryView> self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_i_32(self.length, serializer);
-    for (final item in self) {
-      sse_encode_sync_history_view(item, serializer);
-    }
-  }
-
-  @protected
-  void sse_encode_list_table_count(
-    List<TableCount> self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_i_32(self.length, serializer);
-    for (final item in self) {
-      sse_encode_table_count(item, serializer);
-    }
-  }
-
-  @protected
-  void sse_encode_list_table_row_count(
-    List<TableRowCount> self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_i_32(self.length, serializer);
-    for (final item in self) {
-      sse_encode_table_row_count(item, serializer);
-    }
-  }
-
-  @protected
-  void sse_encode_list_task_attachment_view(
-    List<TaskAttachmentView> self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_i_32(self.length, serializer);
-    for (final item in self) {
-      sse_encode_task_attachment_view(item, serializer);
-    }
-  }
-
-  @protected
-  void sse_encode_list_task_dependency_flags(
-    List<TaskDependencyFlags> self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_i_32(self.length, serializer);
-    for (final item in self) {
-      sse_encode_task_dependency_flags(item, serializer);
-    }
-  }
-
-  @protected
-  void sse_encode_list_task_description_flag(
-    List<TaskDescriptionFlag> self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_i_32(self.length, serializer);
-    for (final item in self) {
-      sse_encode_task_description_flag(item, serializer);
-    }
-  }
-
-  @protected
-  void sse_encode_list_task_existence_flag(
-    List<TaskExistenceFlag> self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_i_32(self.length, serializer);
-    for (final item in self) {
-      sse_encode_task_existence_flag(item, serializer);
-    }
-  }
-
-  @protected
-  void sse_encode_list_task_label_with_id(
-    List<TaskLabelWithId> self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_i_32(self.length, serializer);
-    for (final item in self) {
-      sse_encode_task_label_with_id(item, serializer);
-    }
-  }
-
-  @protected
-  void sse_encode_list_task_labels_projection(
-    List<TaskLabelsProjection> self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_i_32(self.length, serializer);
-    for (final item in self) {
-      sse_encode_task_labels_projection(item, serializer);
-    }
-  }
-
-  @protected
-  void sse_encode_list_task_reminders_projection(
-    List<TaskRemindersProjection> self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_i_32(self.length, serializer);
-    for (final item in self) {
-      sse_encode_task_reminders_projection(item, serializer);
-    }
-  }
-
-  @protected
-  void sse_encode_list_todo_comment(
-    List<TodoComment> self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_i_32(self.length, serializer);
-    for (final item in self) {
-      sse_encode_todo_comment(item, serializer);
-    }
-  }
-
-  @protected
-  void sse_encode_list_todo_label(
-    List<TodoLabel> self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_i_32(self.length, serializer);
-    for (final item in self) {
-      sse_encode_todo_label(item, serializer);
-    }
-  }
-
-  @protected
-  void sse_encode_list_todo_project(
-    List<TodoProject> self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_i_32(self.length, serializer);
-    for (final item in self) {
-      sse_encode_todo_project(item, serializer);
-    }
-  }
-
-  @protected
-  void sse_encode_list_todo_reminder(
-    List<TodoReminder> self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_i_32(self.length, serializer);
-    for (final item in self) {
-      sse_encode_todo_reminder(item, serializer);
-    }
-  }
-
-  @protected
-  void sse_encode_list_todo_saved_filter(
-    List<TodoSavedFilter> self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_i_32(self.length, serializer);
-    for (final item in self) {
-      sse_encode_todo_saved_filter(item, serializer);
-    }
-  }
-
-  @protected
-  void sse_encode_list_todo_subtask(
-    List<TodoSubtask> self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_i_32(self.length, serializer);
-    for (final item in self) {
-      sse_encode_todo_subtask(item, serializer);
-    }
-  }
-
-  @protected
-  void sse_encode_list_todo_task(
-    List<TodoTask> self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_i_32(self.length, serializer);
-    for (final item in self) {
-      sse_encode_todo_task(item, serializer);
-    }
-  }
-
-  @protected
-  void sse_encode_list_todo_task_label(
-    List<TodoTaskLabel> self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_i_32(self.length, serializer);
-    for (final item in self) {
-      sse_encode_todo_task_label(item, serializer);
-    }
-  }
-
-  @protected
-  void sse_encode_list_todo_task_list_item(
-    List<TodoTaskListItem> self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_i_32(self.length, serializer);
-    for (final item in self) {
-      sse_encode_todo_task_list_item(item, serializer);
-    }
-  }
-
-  @protected
-  void sse_encode_list_todo_task_relation(
-    List<TodoTaskRelation> self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_i_32(self.length, serializer);
-    for (final item in self) {
-      sse_encode_todo_task_relation(item, serializer);
-    }
-  }
-
-  @protected
-  void sse_encode_list_todo_template(
-    List<TodoTemplate> self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_i_32(self.length, serializer);
-    for (final item in self) {
-      sse_encode_todo_template(item, serializer);
-    }
-  }
-
-  @protected
-  void sse_encode_list_widget_todo_item(
-    List<WidgetTodoItem> self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_i_32(self.length, serializer);
-    for (final item in self) {
-      sse_encode_widget_todo_item(item, serializer);
-    }
-  }
-
-  @protected
-  void sse_encode_notification_log_row(
-    NotificationLogRow self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_i_64(self.id, serializer);
-    sse_encode_String(self.kind, serializer);
-    sse_encode_opt_box_autoadd_i_64(self.taskId, serializer);
-    sse_encode_String(self.taskTitle, serializer);
-    sse_encode_opt_box_autoadd_i_64(self.reminderId, serializer);
-    sse_encode_String(self.payload, serializer);
-    sse_encode_i_64(self.createdAt, serializer);
-  }
-
-  @protected
-  void sse_encode_opt_String(String? self, SseSerializer serializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-
-    sse_encode_bool(self != null, serializer);
-    if (self != null) {
-      sse_encode_String(self, serializer);
-    }
-  }
-
-  @protected
-  void sse_encode_opt_box_autoadd_bool(bool? self, SseSerializer serializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-
-    sse_encode_bool(self != null, serializer);
-    if (self != null) {
-      sse_encode_box_autoadd_bool(self, serializer);
-    }
-  }
-
-  @protected
-  void sse_encode_opt_box_autoadd_csv_import_stats_view(
-    CsvImportStatsView? self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-
-    sse_encode_bool(self != null, serializer);
-    if (self != null) {
-      sse_encode_box_autoadd_csv_import_stats_view(self, serializer);
-    }
-  }
-
-  @protected
-  void sse_encode_opt_box_autoadd_f_64(double? self, SseSerializer serializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-
-    sse_encode_bool(self != null, serializer);
-    if (self != null) {
-      sse_encode_box_autoadd_f_64(self, serializer);
-    }
-  }
-
-  @protected
-  void sse_encode_opt_box_autoadd_i_32(int? self, SseSerializer serializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-
-    sse_encode_bool(self != null, serializer);
-    if (self != null) {
-      sse_encode_box_autoadd_i_32(self, serializer);
-    }
-  }
-
-  @protected
-  void sse_encode_opt_box_autoadd_i_64(
-    PlatformInt64? self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-
-    sse_encode_bool(self != null, serializer);
-    if (self != null) {
-      sse_encode_box_autoadd_i_64(self, serializer);
-    }
-  }
-
-  @protected
-  void sse_encode_opt_box_autoadd_sync_config_view(
-    SyncConfigView? self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-
-    sse_encode_bool(self != null, serializer);
-    if (self != null) {
-      sse_encode_box_autoadd_sync_config_view(self, serializer);
-    }
-  }
-
-  @protected
-  void sse_encode_opt_box_autoadd_todo_project(
-    TodoProject? self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-
-    sse_encode_bool(self != null, serializer);
-    if (self != null) {
-      sse_encode_box_autoadd_todo_project(self, serializer);
-    }
-  }
-
-  @protected
-  void sse_encode_opt_box_autoadd_todo_task(
-    TodoTask? self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-
-    sse_encode_bool(self != null, serializer);
-    if (self != null) {
-      sse_encode_box_autoadd_todo_task(self, serializer);
-    }
-  }
-
-  @protected
-  void sse_encode_opt_box_autoadd_usize(
-    BigInt? self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-
-    sse_encode_bool(self != null, serializer);
-    if (self != null) {
-      sse_encode_box_autoadd_usize(self, serializer);
-    }
-  }
-
-  @protected
-  void sse_encode_opt_list_prim_i_64_strict(
-    Int64List? self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-
-    sse_encode_bool(self != null, serializer);
-    if (self != null) {
-      sse_encode_list_prim_i_64_strict(self, serializer);
-    }
-  }
-
-  @protected
-  void sse_encode_plaintext_export_view(
-    PlaintextExportView self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_String(self.content, serializer);
-    sse_encode_list_table_count(self.tableCounts, serializer);
-    sse_encode_String(self.suggestedFilename, serializer);
-  }
-
-  @protected
-  void sse_encode_projected_reminder(
-    ProjectedReminder self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_i_64(self.id, serializer);
-    sse_encode_i_64(self.remindAt, serializer);
-  }
-
-  @protected
-  void sse_encode_projected_task_label(
-    ProjectedTaskLabel self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_i_64(self.id, serializer);
-    sse_encode_String(self.title, serializer);
-    sse_encode_String(self.hexColor, serializer);
-  }
-
-  @protected
-  void sse_encode_reminder_due_dto(
-    ReminderDueDto self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_i_64(self.id, serializer);
-    sse_encode_i_64(self.taskId, serializer);
-    sse_encode_String(self.title, serializer);
-    sse_encode_i_64(self.remindAt, serializer);
-    sse_encode_i_32(self.isConstant, serializer);
-  }
-
-  @protected
-  void sse_encode_stats_aggregate(
-    StatsAggregate self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_stats_overview(self.overview, serializer);
-    sse_encode_stats_heatmap(self.heatmap, serializer);
-    sse_encode_stats_streak(self.streak, serializer);
-    sse_encode_list_stats_project_row(self.byProject, serializer);
-    sse_encode_list_stats_priority_row(self.byPriority, serializer);
-    sse_encode_list_stats_weekday_row(self.byWeekday, serializer);
-    sse_encode_list_prim_i_64_strict(self.availableYears, serializer);
-  }
-
-  @protected
-  void sse_encode_stats_heatmap(StatsHeatmap self, SseSerializer serializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_i_64(self.year, serializer);
-    sse_encode_String(self.startDate, serializer);
-    sse_encode_String(self.endDate, serializer);
-    sse_encode_list_stats_heatmap_cell(self.cells, serializer);
-  }
-
-  @protected
-  void sse_encode_stats_heatmap_cell(
-    StatsHeatmapCell self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_String(self.date, serializer);
-    sse_encode_i_64(self.count, serializer);
-  }
-
-  @protected
-  void sse_encode_stats_overview(StatsOverview self, SseSerializer serializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_i_64(self.total, serializer);
-    sse_encode_i_64(self.pending, serializer);
-    sse_encode_i_64(self.done, serializer);
-    sse_encode_i_64(self.doneLast7D, serializer);
-    sse_encode_i_64(self.doneLast30D, serializer);
-  }
-
-  @protected
-  void sse_encode_stats_priority_row(
-    StatsPriorityRow self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_i_64(self.priority, serializer);
-    sse_encode_i_64(self.doneCount, serializer);
-    sse_encode_i_64(self.pendingCount, serializer);
-  }
-
-  @protected
-  void sse_encode_stats_project_row(
-    StatsProjectRow self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_opt_box_autoadd_i_64(self.projectId, serializer);
-    sse_encode_opt_String(self.projectTitle, serializer);
-    sse_encode_opt_String(self.projectHexColor, serializer);
-    sse_encode_i_64(self.doneCount, serializer);
-    sse_encode_i_64(self.pendingCount, serializer);
-  }
-
-  @protected
-  void sse_encode_stats_streak(StatsStreak self, SseSerializer serializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_i_64(self.current, serializer);
-    sse_encode_i_64(self.best, serializer);
-    sse_encode_bool(self.doneToday, serializer);
-  }
-
-  @protected
-  void sse_encode_stats_weekday_row(
-    StatsWeekdayRow self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_i_64(self.weekday, serializer);
-    sse_encode_i_64(self.doneCount, serializer);
-  }
-
-  @protected
-  void sse_encode_sync_config_input(
-    SyncConfigInput self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_String(self.engine, serializer);
-    sse_encode_String(self.endpoint, serializer);
-    sse_encode_opt_String(self.bucket, serializer);
-    sse_encode_opt_String(self.region, serializer);
-    sse_encode_opt_String(self.username, serializer);
-    sse_encode_opt_String(self.password, serializer);
-    sse_encode_opt_String(self.basePath, serializer);
-    sse_encode_opt_box_autoadd_i_64(self.intervalMinutes, serializer);
-    sse_encode_opt_box_autoadd_bool(self.autoSyncEnabled, serializer);
-    sse_encode_opt_box_autoadd_bool(self.syncOnChange, serializer);
-    sse_encode_opt_box_autoadd_bool(self.skipTlsVerify, serializer);
-    sse_encode_opt_box_autoadd_i_64(self.timeoutSeconds, serializer);
-    sse_encode_opt_String(self.sessionToken, serializer);
-  }
-
-  @protected
-  void sse_encode_sync_config_view(
-    SyncConfigView self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_i_64(self.id, serializer);
-    sse_encode_String(self.engine, serializer);
-    sse_encode_String(self.endpoint, serializer);
-    sse_encode_String(self.bucket, serializer);
-    sse_encode_String(self.region, serializer);
-    sse_encode_String(self.username, serializer);
-    sse_encode_bool(self.passwordSet, serializer);
-    sse_encode_String(self.basePath, serializer);
-    sse_encode_i_64(self.intervalMinutes, serializer);
-    sse_encode_bool(self.autoSyncEnabled, serializer);
-    sse_encode_bool(self.syncOnChange, serializer);
-    sse_encode_bool(self.skipTlsVerify, serializer);
-    sse_encode_i_64(self.timeoutSeconds, serializer);
-    sse_encode_bool(self.sessionTokenSet, serializer);
-    sse_encode_opt_box_autoadd_i_64(self.lastSyncedAt, serializer);
-  }
-
-  @protected
-  void sse_encode_sync_conflict(SyncConflict self, SseSerializer serializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_i_64(self.id, serializer);
-    sse_encode_String(self.tableName, serializer);
-    sse_encode_String(self.recordUuid, serializer);
-    sse_encode_String(self.recordTitle, serializer);
-    sse_encode_String(self.decision, serializer);
-    sse_encode_String(self.loserSide, serializer);
-    sse_encode_String(self.winnerSide, serializer);
-    sse_encode_String(self.loserPayload, serializer);
-    sse_encode_String(self.winnerPayload, serializer);
-    sse_encode_i_64(self.loserUpdatedAt, serializer);
-    sse_encode_i_64(self.winnerUpdatedAt, serializer);
-    sse_encode_String(self.resolution, serializer);
-    sse_encode_i_64(self.createdAt, serializer);
-    sse_encode_i_64(self.resolvedAt, serializer);
-  }
-
-  @protected
-  void sse_encode_sync_crypto_status(
-    SyncCryptoStatus self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_bool(self.hasPassword, serializer);
-    sse_encode_bool(self.isUnlocked, serializer);
-  }
-
-  @protected
-  void sse_encode_sync_history_view(
-    SyncHistoryView self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_i_64(self.id, serializer);
-    sse_encode_String(self.syncType, serializer);
-    sse_encode_String(self.status, serializer);
-    sse_encode_i_64(self.startedAt, serializer);
-    sse_encode_opt_box_autoadd_i_64(self.finishedAt, serializer);
-    sse_encode_i_64(self.pulledCount, serializer);
-    sse_encode_i_64(self.pushedCount, serializer);
-    sse_encode_i_64(self.conflictCount, serializer);
-    sse_encode_opt_String(self.errorMessage, serializer);
-  }
-
-  @protected
-  void sse_encode_table_count(TableCount self, SseSerializer serializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_String(self.table, serializer);
-    sse_encode_usize(self.count, serializer);
-  }
-
-  @protected
-  void sse_encode_table_row_count(
-    TableRowCount self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_String(self.table, serializer);
-    sse_encode_i_64(self.rows, serializer);
-  }
-
-  @protected
-  void sse_encode_task_attachment_view(
-    TaskAttachmentView self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_i_64(self.linkId, serializer);
-    sse_encode_String(self.linkUuid, serializer);
-    sse_encode_String(self.hash, serializer);
-    sse_encode_String(self.originalName, serializer);
-    sse_encode_String(self.mimeType, serializer);
-    sse_encode_i_64(self.sizeBytes, serializer);
-    sse_encode_i_32(self.isLocalCached, serializer);
-  }
-
-  @protected
-  void sse_encode_task_dependency_flags(
-    TaskDependencyFlags self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_i_64(self.taskId, serializer);
-    sse_encode_i_64(self.relationCount, serializer);
-  }
-
-  @protected
-  void sse_encode_task_description_flag(
-    TaskDescriptionFlag self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_i_64(self.taskId, serializer);
-  }
-
-  @protected
-  void sse_encode_task_existence_flag(
-    TaskExistenceFlag self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_i_64(self.taskId, serializer);
-  }
-
-  @protected
-  void sse_encode_task_label_with_id(
-    TaskLabelWithId self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_i_64(self.id, serializer);
-    sse_encode_String(self.uuid, serializer);
-    sse_encode_String(self.title, serializer);
-    sse_encode_String(self.hexColor, serializer);
-    sse_encode_i_32(self.isDeleted, serializer);
-    sse_encode_i_64(self.createdAt, serializer);
-    sse_encode_i_64(self.updatedAt, serializer);
-    sse_encode_opt_box_autoadd_i_64(self.deletedAt, serializer);
-    sse_encode_i_32(self.version, serializer);
-    sse_encode_i_64(self.taskLabelId, serializer);
-  }
-
-  @protected
-  void sse_encode_task_labels_projection(
-    TaskLabelsProjection self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_i_64(self.taskId, serializer);
-    sse_encode_list_projected_task_label(self.labels, serializer);
-  }
-
-  @protected
-  void sse_encode_task_reminders_projection(
-    TaskRemindersProjection self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_i_64(self.taskId, serializer);
-    sse_encode_list_projected_reminder(self.reminders, serializer);
-  }
-
-  @protected
-  void sse_encode_todo_comment(TodoComment self, SseSerializer serializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_i_64(self.id, serializer);
-    sse_encode_String(self.uuid, serializer);
-    sse_encode_i_64(self.taskId, serializer);
-    sse_encode_String(self.content, serializer);
-    sse_encode_i_32(self.isDeleted, serializer);
-    sse_encode_i_64(self.createdAt, serializer);
-    sse_encode_i_64(self.updatedAt, serializer);
-    sse_encode_opt_box_autoadd_i_64(self.deletedAt, serializer);
-    sse_encode_i_32(self.version, serializer);
-  }
-
-  @protected
-  void sse_encode_todo_comment_create_input(
-    TodoCommentCreateInput self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_i_64(self.taskId, serializer);
-    sse_encode_String(self.content, serializer);
-  }
-
-  @protected
-  void sse_encode_todo_label(TodoLabel self, SseSerializer serializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_i_64(self.id, serializer);
-    sse_encode_String(self.uuid, serializer);
-    sse_encode_String(self.title, serializer);
-    sse_encode_String(self.hexColor, serializer);
-    sse_encode_i_32(self.isDeleted, serializer);
-    sse_encode_i_64(self.createdAt, serializer);
-    sse_encode_i_64(self.updatedAt, serializer);
-    sse_encode_opt_box_autoadd_i_64(self.deletedAt, serializer);
-    sse_encode_i_32(self.version, serializer);
-  }
-
-  @protected
-  void sse_encode_todo_label_create_input(
-    TodoLabelCreateInput self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_String(self.title, serializer);
-    sse_encode_opt_String(self.hexColor, serializer);
-  }
-
-  @protected
-  void sse_encode_todo_project(TodoProject self, SseSerializer serializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_i_64(self.id, serializer);
-    sse_encode_String(self.uuid, serializer);
-    sse_encode_String(self.title, serializer);
-    sse_encode_opt_String(self.description, serializer);
-    sse_encode_String(self.hexColor, serializer);
-    sse_encode_f_64(self.sortOrder, serializer);
-    sse_encode_opt_String(self.parentUuid, serializer);
-    sse_encode_i_32(self.isArchived, serializer);
-    sse_encode_i_32(self.isDeleted, serializer);
-    sse_encode_i_64(self.createdAt, serializer);
-    sse_encode_i_64(self.updatedAt, serializer);
-    sse_encode_opt_box_autoadd_i_64(self.deletedAt, serializer);
-    sse_encode_i_32(self.version, serializer);
-  }
-
-  @protected
-  void sse_encode_todo_project_create_input(
-    TodoProjectCreateInput self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_String(self.title, serializer);
-    sse_encode_opt_String(self.description, serializer);
-    sse_encode_opt_String(self.hexColor, serializer);
-    sse_encode_opt_box_autoadd_f_64(self.sortOrder, serializer);
-    sse_encode_opt_String(self.parentUuid, serializer);
-  }
-
-  @protected
-  void sse_encode_todo_reminder(TodoReminder self, SseSerializer serializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_i_64(self.id, serializer);
-    sse_encode_String(self.uuid, serializer);
-    sse_encode_i_64(self.taskId, serializer);
-    sse_encode_i_64(self.remindAt, serializer);
-    sse_encode_i_32(self.isConstant, serializer);
-    sse_encode_i_32(self.isDeleted, serializer);
-    sse_encode_i_64(self.createdAt, serializer);
-    sse_encode_i_64(self.updatedAt, serializer);
-    sse_encode_opt_box_autoadd_i_64(self.deletedAt, serializer);
-    sse_encode_i_32(self.version, serializer);
-  }
-
-  @protected
-  void sse_encode_todo_reminder_create_input(
-    TodoReminderCreateInput self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_i_64(self.taskId, serializer);
-    sse_encode_i_64(self.remindAt, serializer);
-    sse_encode_i_32(self.isConstant, serializer);
-  }
-
-  @protected
-  void sse_encode_todo_saved_filter(
-    TodoSavedFilter self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_i_64(self.id, serializer);
-    sse_encode_String(self.uuid, serializer);
-    sse_encode_String(self.name, serializer);
-    sse_encode_String(self.conditions, serializer);
-    sse_encode_i_64(self.sortOrder, serializer);
-  }
-
-  @protected
-  void sse_encode_todo_saved_filter_create_input(
-    TodoSavedFilterCreateInput self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_String(self.name, serializer);
-    sse_encode_String(self.conditions, serializer);
-    sse_encode_opt_box_autoadd_i_64(self.sortOrder, serializer);
-  }
-
-  @protected
-  void sse_encode_todo_saved_filter_update_input(
-    TodoSavedFilterUpdateInput self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_opt_String(self.name, serializer);
-    sse_encode_opt_String(self.conditions, serializer);
-    sse_encode_opt_box_autoadd_i_64(self.sortOrder, serializer);
-  }
-
-  @protected
-  void sse_encode_todo_subtask(TodoSubtask self, SseSerializer serializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_i_64(self.id, serializer);
-    sse_encode_String(self.uuid, serializer);
-    sse_encode_i_64(self.taskId, serializer);
-    sse_encode_String(self.title, serializer);
-    sse_encode_i_32(self.done, serializer);
-    sse_encode_opt_box_autoadd_i_64(self.doneAt, serializer);
-    sse_encode_f_64(self.position, serializer);
-    sse_encode_opt_String(self.parentUuid, serializer);
-    sse_encode_i_32(self.isDeleted, serializer);
-    sse_encode_i_64(self.createdAt, serializer);
-    sse_encode_i_64(self.updatedAt, serializer);
-    sse_encode_opt_box_autoadd_i_64(self.deletedAt, serializer);
-    sse_encode_i_32(self.version, serializer);
-  }
-
-  @protected
-  void sse_encode_todo_subtask_create_input(
-    TodoSubtaskCreateInput self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_i_64(self.taskId, serializer);
-    sse_encode_String(self.title, serializer);
-    sse_encode_opt_box_autoadd_f_64(self.position, serializer);
-    sse_encode_opt_String(self.parentUuid, serializer);
-  }
-
-  @protected
-  void sse_encode_todo_task(TodoTask self, SseSerializer serializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_i_64(self.id, serializer);
-    sse_encode_String(self.uuid, serializer);
-    sse_encode_String(self.title, serializer);
-    sse_encode_opt_String(self.description, serializer);
-    sse_encode_opt_box_autoadd_i_64(self.projectId, serializer);
-    sse_encode_i_32(self.priority, serializer);
-    sse_encode_String(self.status, serializer);
-    sse_encode_i_32(self.done, serializer);
-    sse_encode_opt_box_autoadd_i_64(self.doneAt, serializer);
-    sse_encode_opt_box_autoadd_i_64(self.dueDate, serializer);
-    sse_encode_opt_box_autoadd_i_64(self.startDate, serializer);
-    sse_encode_i_64(self.repeatAfter, serializer);
-    sse_encode_i_32(self.repeatMode, serializer);
-    sse_encode_i_32(self.repeatWeekdays, serializer);
-    sse_encode_i_32(self.repeatEndType, serializer);
-    sse_encode_i_64(self.repeatEndParam, serializer);
-    sse_encode_i_32(self.repeatFromDone, serializer);
-    sse_encode_i_32(self.repeatMonthMode, serializer);
-    sse_encode_i_32(self.repeatNthWeek, serializer);
-    sse_encode_f_64(self.percentDone, serializer);
-    sse_encode_f_64(self.position, serializer);
-    sse_encode_i_32(self.isFavorite, serializer);
-    sse_encode_opt_box_autoadd_i_64(self.myDayDate, serializer);
-    sse_encode_opt_box_autoadd_i_64(self.durationMinutes, serializer);
-    sse_encode_i_32(self.isDeleted, serializer);
-    sse_encode_i_64(self.createdAt, serializer);
-    sse_encode_i_64(self.updatedAt, serializer);
-    sse_encode_opt_box_autoadd_i_64(self.deletedAt, serializer);
-    sse_encode_i_32(self.version, serializer);
-  }
-
-  @protected
-  void sse_encode_todo_task_create_input(
-    TodoTaskCreateInput self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_String(self.title, serializer);
-    sse_encode_opt_String(self.description, serializer);
-    sse_encode_opt_box_autoadd_i_64(self.projectId, serializer);
-    sse_encode_opt_box_autoadd_i_32(self.priority, serializer);
-    sse_encode_opt_String(self.status, serializer);
-    sse_encode_opt_box_autoadd_i_32(self.done, serializer);
-    sse_encode_opt_box_autoadd_i_64(self.doneAt, serializer);
-    sse_encode_opt_box_autoadd_i_64(self.dueDate, serializer);
-    sse_encode_opt_box_autoadd_i_64(self.startDate, serializer);
-    sse_encode_opt_box_autoadd_i_64(self.repeatAfter, serializer);
-    sse_encode_opt_box_autoadd_i_32(self.repeatMode, serializer);
-    sse_encode_opt_box_autoadd_i_32(self.repeatWeekdays, serializer);
-    sse_encode_opt_box_autoadd_i_32(self.repeatEndType, serializer);
-    sse_encode_opt_box_autoadd_i_64(self.repeatEndParam, serializer);
-    sse_encode_opt_box_autoadd_i_32(self.repeatFromDone, serializer);
-    sse_encode_opt_box_autoadd_i_32(self.repeatMonthMode, serializer);
-    sse_encode_opt_box_autoadd_i_32(self.repeatNthWeek, serializer);
-    sse_encode_opt_box_autoadd_f_64(self.position, serializer);
-    sse_encode_opt_box_autoadd_i_32(self.isFavorite, serializer);
-    sse_encode_opt_box_autoadd_i_64(self.myDayDate, serializer);
-    sse_encode_opt_box_autoadd_i_64(self.durationMinutes, serializer);
-  }
-
-  @protected
-  void sse_encode_todo_task_detail(
-    TodoTaskDetail self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_i_64(self.id, serializer);
-    sse_encode_String(self.uuid, serializer);
-    sse_encode_String(self.title, serializer);
-    sse_encode_opt_String(self.description, serializer);
-    sse_encode_opt_box_autoadd_i_64(self.projectId, serializer);
-    sse_encode_i_32(self.priority, serializer);
-    sse_encode_String(self.status, serializer);
-    sse_encode_i_32(self.done, serializer);
-    sse_encode_opt_box_autoadd_i_64(self.doneAt, serializer);
-    sse_encode_opt_box_autoadd_i_64(self.dueDate, serializer);
-    sse_encode_opt_box_autoadd_i_64(self.startDate, serializer);
-    sse_encode_i_64(self.repeatAfter, serializer);
-    sse_encode_i_32(self.repeatMode, serializer);
-    sse_encode_i_32(self.repeatWeekdays, serializer);
-    sse_encode_i_32(self.repeatEndType, serializer);
-    sse_encode_i_64(self.repeatEndParam, serializer);
-    sse_encode_i_32(self.repeatFromDone, serializer);
-    sse_encode_i_32(self.repeatMonthMode, serializer);
-    sse_encode_i_32(self.repeatNthWeek, serializer);
-    sse_encode_f_64(self.percentDone, serializer);
-    sse_encode_f_64(self.position, serializer);
-    sse_encode_i_32(self.isFavorite, serializer);
-    sse_encode_opt_box_autoadd_i_64(self.myDayDate, serializer);
-    sse_encode_opt_box_autoadd_i_64(self.durationMinutes, serializer);
-    sse_encode_i_32(self.isDeleted, serializer);
-    sse_encode_i_64(self.createdAt, serializer);
-    sse_encode_i_64(self.updatedAt, serializer);
-    sse_encode_opt_box_autoadd_i_64(self.deletedAt, serializer);
-    sse_encode_i_32(self.version, serializer);
-    sse_encode_list_todo_subtask(self.subtasks, serializer);
-    sse_encode_list_task_label_with_id(self.labels, serializer);
-    sse_encode_list_todo_comment(self.comments, serializer);
-    sse_encode_list_todo_task_relation(self.relations, serializer);
-    sse_encode_list_todo_reminder(self.reminders, serializer);
-  }
-
-  @protected
-  void sse_encode_todo_task_label(
-    TodoTaskLabel self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_i_64(self.id, serializer);
-    sse_encode_String(self.uuid, serializer);
-    sse_encode_i_64(self.taskId, serializer);
-    sse_encode_i_64(self.labelId, serializer);
-    sse_encode_i_32(self.isDeleted, serializer);
-    sse_encode_i_64(self.createdAt, serializer);
-    sse_encode_i_64(self.updatedAt, serializer);
-    sse_encode_opt_box_autoadd_i_64(self.deletedAt, serializer);
-    sse_encode_i_32(self.version, serializer);
-  }
-
-  @protected
-  void sse_encode_todo_task_label_create_input(
-    TodoTaskLabelCreateInput self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_i_64(self.taskId, serializer);
-    sse_encode_i_64(self.labelId, serializer);
-  }
-
-  @protected
-  void sse_encode_todo_task_list_item(
-    TodoTaskListItem self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_i_64(self.id, serializer);
-    sse_encode_String(self.title, serializer);
-    sse_encode_opt_String(self.description, serializer);
-    sse_encode_opt_box_autoadd_i_64(self.projectId, serializer);
-    sse_encode_i_32(self.priority, serializer);
-    sse_encode_String(self.status, serializer);
-    sse_encode_i_32(self.done, serializer);
-    sse_encode_opt_box_autoadd_i_64(self.doneAt, serializer);
-    sse_encode_opt_box_autoadd_i_64(self.dueDate, serializer);
-    sse_encode_opt_box_autoadd_i_64(self.startDate, serializer);
-    sse_encode_i_32(self.repeatMode, serializer);
-    sse_encode_f_64(self.percentDone, serializer);
-    sse_encode_f_64(self.position, serializer);
-    sse_encode_i_32(self.isFavorite, serializer);
-    sse_encode_opt_box_autoadd_i_64(self.myDayDate, serializer);
-    sse_encode_opt_box_autoadd_i_64(self.durationMinutes, serializer);
-    sse_encode_i_32(self.isDeleted, serializer);
-    sse_encode_i_64(self.createdAt, serializer);
-    sse_encode_i_64(self.updatedAt, serializer);
-  }
-
-  @protected
-  void sse_encode_todo_task_relation(
-    TodoTaskRelation self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_i_64(self.id, serializer);
-    sse_encode_String(self.uuid, serializer);
-    sse_encode_i_64(self.taskId, serializer);
-    sse_encode_i_64(self.otherTaskId, serializer);
-    sse_encode_String(self.relationType, serializer);
-    sse_encode_i_32(self.isDeleted, serializer);
-    sse_encode_i_64(self.createdAt, serializer);
-    sse_encode_i_64(self.updatedAt, serializer);
-    sse_encode_opt_box_autoadd_i_64(self.deletedAt, serializer);
-    sse_encode_i_32(self.version, serializer);
-  }
-
-  @protected
-  void sse_encode_todo_task_relation_create_input(
-    TodoTaskRelationCreateInput self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_i_64(self.taskId, serializer);
-    sse_encode_i_64(self.otherTaskId, serializer);
-    sse_encode_String(self.relationType, serializer);
-  }
-
-  @protected
-  void sse_encode_todo_template(TodoTemplate self, SseSerializer serializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_i_64(self.id, serializer);
-    sse_encode_String(self.uuid, serializer);
-    sse_encode_String(self.name, serializer);
-    sse_encode_String(self.payload, serializer);
-    sse_encode_i_64(self.sortOrder, serializer);
-  }
-
-  @protected
-  void sse_encode_todo_template_create_input(
-    TodoTemplateCreateInput self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_String(self.name, serializer);
-    sse_encode_String(self.payload, serializer);
-    sse_encode_opt_box_autoadd_i_64(self.sortOrder, serializer);
-  }
-
-  @protected
-  void sse_encode_todo_template_update_input(
-    TodoTemplateUpdateInput self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_opt_String(self.name, serializer);
-    sse_encode_opt_String(self.payload, serializer);
-    sse_encode_opt_box_autoadd_i_64(self.sortOrder, serializer);
-  }
-
-  @protected
-  void sse_encode_trash_meta(TrashMeta self, SseSerializer serializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_i_64(self.retentionDays, serializer);
-    sse_encode_i_64(self.lastPurgeMs, serializer);
-  }
-
-  @protected
-  void sse_encode_trash_purge_stats(
-    TrashPurgeStats self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_u_64(self.purged, serializer);
-    sse_encode_u_64(self.guarded, serializer);
-    sse_encode_bool(self.ran, serializer);
-  }
-
-  @protected
-  void sse_encode_u_32(int self, SseSerializer serializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    serializer.buffer.putUint32(self);
-  }
-
-  @protected
-  void sse_encode_u_64(BigInt self, SseSerializer serializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    serializer.buffer.putBigUint64(self);
-  }
-
-  @protected
-  void sse_encode_u_8(int self, SseSerializer serializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    serializer.buffer.putUint8(self);
-  }
-
-  @protected
-  void sse_encode_unit(void self, SseSerializer serializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-  }
-
-  @protected
-  void sse_encode_usize(BigInt self, SseSerializer serializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    serializer.buffer.putBigUint64(self);
-  }
-
-  @protected
-  void sse_encode_widget_todo_item(
-    WidgetTodoItem self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_i_64(self.id, serializer);
-    sse_encode_String(self.uuid, serializer);
-    sse_encode_String(self.title, serializer);
-    sse_encode_i_32(self.priority, serializer);
-    sse_encode_i_32(self.done, serializer);
-  }
-}
+        )
+        ,
+            constMeta: kCrateApiWidgetWidgetTodoToggleConstMeta,
+            argValues: [id, done],
+            apiImpl: this,
+        )); }
+
+
+        TaskConstMeta get kCrateApiWidgetWidgetTodoToggleConstMeta => const TaskConstMeta(
+            debugName: "widget_todo_toggle",
+            argNames: ["id", "done"],
+        );
+        
+
+
+
+                  @protected AnyhowException dco_decode_AnyhowException(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+return AnyhowException(raw as String); }
+
+@protected RustStreamSink<DbEventDto> dco_decode_StreamSink_db_event_dto_Sse(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+throw UnimplementedError(); }
+
+@protected RustStreamSink<HolidayProgressDto> dco_decode_StreamSink_holiday_progress_dto_Sse(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+throw UnimplementedError(); }
+
+@protected RustStreamSink<ReminderDueDto> dco_decode_StreamSink_reminder_due_dto_Sse(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+throw UnimplementedError(); }
+
+@protected String dco_decode_String(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+return raw as String; }
+
+@protected ActivityLogRow dco_decode_activity_log_row(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+final arr = raw as List<dynamic>;
+                if (arr.length != 6) throw Exception('unexpected arr length: expect 6 but see ${arr.length}');
+                return ActivityLogRow(id: dco_decode_i_64(arr[0]),
+taskId: dco_decode_opt_box_autoadd_i_64(arr[1]),
+taskTitle: dco_decode_String(arr[2]),
+action: dco_decode_String(arr[3]),
+detail: dco_decode_String(arr[4]),
+createdAt: dco_decode_i_64(arr[5]),); }
+
+@protected BackupDeviceInfo dco_decode_backup_device_info(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+final arr = raw as List<dynamic>;
+                if (arr.length != 1) throw Exception('unexpected arr length: expect 1 but see ${arr.length}');
+                return BackupDeviceInfo(deviceId: dco_decode_String(arr[0]),); }
+
+@protected BackupEntryView dco_decode_backup_entry_view(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+final arr = raw as List<dynamic>;
+                if (arr.length != 4) throw Exception('unexpected arr length: expect 4 but see ${arr.length}');
+                return BackupEntryView(filename: dco_decode_String(arr[0]),
+filePath: dco_decode_String(arr[1]),
+modifiedAt: dco_decode_i_64(arr[2]),
+sizeBytes: dco_decode_i_64(arr[3]),); }
+
+@protected BackupExportResult dco_decode_backup_export_result(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+final arr = raw as List<dynamic>;
+                if (arr.length != 9) throw Exception('unexpected arr length: expect 9 but see ${arr.length}');
+                return BackupExportResult(filePath: dco_decode_String(arr[0]),
+fileSize: dco_decode_i_64(arr[1]),
+tableCounts: dco_decode_list_backup_table_count(arr[2]),
+manifest: dco_decode_backup_manifest_view(arr[3]),
+cloudPath: dco_decode_opt_String(arr[4]),
+cloudUploaded: dco_decode_bool(arr[5]),
+cloudError: dco_decode_opt_String(arr[6]),
+localPath: dco_decode_opt_String(arr[7]),
+localError: dco_decode_opt_String(arr[8]),); }
+
+@protected BackupImportResult dco_decode_backup_import_result(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+final arr = raw as List<dynamic>;
+                if (arr.length != 5) throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
+                return BackupImportResult(successCount: dco_decode_i_64(arr[0]),
+errorCount: dco_decode_i_64(arr[1]),
+errors: dco_decode_list_String(arr[2]),
+manifest: dco_decode_backup_manifest_view(arr[3]),
+needsRestart: dco_decode_bool(arr[4]),); }
+
+@protected BackupManifestView dco_decode_backup_manifest_view(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+final arr = raw as List<dynamic>;
+                if (arr.length != 8) throw Exception('unexpected arr length: expect 8 but see ${arr.length}');
+                return BackupManifestView(formatVersion: dco_decode_u_32(arr[0]),
+createdAt: dco_decode_String(arr[1]),
+createdAtTs: dco_decode_i_64(arr[2]),
+appVersion: dco_decode_String(arr[3]),
+deviceId: dco_decode_String(arr[4]),
+deviceName: dco_decode_opt_String(arr[5]),
+schemaVersion: dco_decode_i_64(arr[6]),
+tableCounts: dco_decode_list_backup_table_count(arr[7]),); }
+
+@protected BackupPrefsView dco_decode_backup_prefs_view(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+final arr = raw as List<dynamic>;
+                if (arr.length != 12) throw Exception('unexpected arr length: expect 12 but see ${arr.length}');
+                return BackupPrefsView(localPath: dco_decode_opt_String(arr[0]),
+keepLatest: dco_decode_bool(arr[1]),
+cloudBackupEnabled: dco_decode_bool(arr[2]),
+localBackupEnabled: dco_decode_bool(arr[3]),
+scheduleType: dco_decode_String(arr[4]),
+scheduleTime: dco_decode_String(arr[5]),
+scheduleMinute: dco_decode_u_32(arr[6]),
+scheduleWeekday: dco_decode_u_32(arr[7]),
+scheduleDayOfMonth: dco_decode_u_32(arr[8]),
+scheduleMonth: dco_decode_u_32(arr[9]),
+lastBackupAt: dco_decode_i_64(arr[10]),
+nextBackupAt: dco_decode_i_64(arr[11]),); }
+
+@protected BackupPreviewTask dco_decode_backup_preview_task(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+final arr = raw as List<dynamic>;
+                if (arr.length != 7) throw Exception('unexpected arr length: expect 7 but see ${arr.length}');
+                return BackupPreviewTask(title: dco_decode_String(arr[0]),
+status: dco_decode_String(arr[1]),
+done: dco_decode_bool(arr[2]),
+dueDate: dco_decode_opt_box_autoadd_i_64(arr[3]),
+priority: dco_decode_i_64(arr[4]),
+project: dco_decode_opt_String(arr[5]),
+isDeleted: dco_decode_bool(arr[6]),); }
+
+@protected BackupPreviewView dco_decode_backup_preview_view(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+final arr = raw as List<dynamic>;
+                if (arr.length != 5) throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
+                return BackupPreviewView(manifest: dco_decode_backup_manifest_view(arr[0]),
+sampleTasks: dco_decode_list_backup_preview_task(arr[1]),
+taskStats: dco_decode_backup_task_stats(arr[2]),
+schemaMismatch: dco_decode_bool(arr[3]),
+currentSchemaVersion: dco_decode_i_64(arr[4]),); }
+
+@protected BackupTableCount dco_decode_backup_table_count(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+final arr = raw as List<dynamic>;
+                if (arr.length != 2) throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+                return BackupTableCount(table: dco_decode_String(arr[0]),
+count: dco_decode_i_64(arr[1]),); }
+
+@protected BackupTaskStats dco_decode_backup_task_stats(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+final arr = raw as List<dynamic>;
+                if (arr.length != 4) throw Exception('unexpected arr length: expect 4 but see ${arr.length}');
+                return BackupTaskStats(total: dco_decode_i_64(arr[0]),
+alive: dco_decode_i_64(arr[1]),
+done: dco_decode_i_64(arr[2]),
+deleted: dco_decode_i_64(arr[3]),); }
+
+@protected BiometricSecretBundle dco_decode_biometric_secret_bundle(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+final arr = raw as List<dynamic>;
+                if (arr.length != 3) throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
+                return BiometricSecretBundle(encryptedDbKeyBio: dco_decode_String(arr[0]),
+biometricKey: dco_decode_String(arr[1]),
+nonce: dco_decode_String(arr[2]),); }
+
+@protected bool dco_decode_bool(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+return raw as bool; }
+
+@protected BackupPrefsView dco_decode_box_autoadd_backup_prefs_view(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+return dco_decode_backup_prefs_view(raw); }
+
+@protected bool dco_decode_box_autoadd_bool(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+return raw as bool; }
+
+@protected CsvImportStatsView dco_decode_box_autoadd_csv_import_stats_view(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+return dco_decode_csv_import_stats_view(raw); }
+
+@protected double dco_decode_box_autoadd_f_64(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+return raw as double; }
+
+@protected int dco_decode_box_autoadd_i_32(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+return raw as int; }
+
+@protected PlatformInt64 dco_decode_box_autoadd_i_64(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+return dco_decode_i_64(raw); }
+
+@protected ListFilter dco_decode_box_autoadd_list_filter(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+return dco_decode_list_filter(raw); }
+
+@protected SyncConfigInput dco_decode_box_autoadd_sync_config_input(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+return dco_decode_sync_config_input(raw); }
+
+@protected SyncConfigView dco_decode_box_autoadd_sync_config_view(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+return dco_decode_sync_config_view(raw); }
+
+@protected TodoCommentCreateInput dco_decode_box_autoadd_todo_comment_create_input(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+return dco_decode_todo_comment_create_input(raw); }
+
+@protected TodoLabelCreateInput dco_decode_box_autoadd_todo_label_create_input(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+return dco_decode_todo_label_create_input(raw); }
+
+@protected TodoProject dco_decode_box_autoadd_todo_project(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+return dco_decode_todo_project(raw); }
+
+@protected TodoProjectCreateInput dco_decode_box_autoadd_todo_project_create_input(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+return dco_decode_todo_project_create_input(raw); }
+
+@protected TodoReminderCreateInput dco_decode_box_autoadd_todo_reminder_create_input(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+return dco_decode_todo_reminder_create_input(raw); }
+
+@protected TodoSavedFilterCreateInput dco_decode_box_autoadd_todo_saved_filter_create_input(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+return dco_decode_todo_saved_filter_create_input(raw); }
+
+@protected TodoSavedFilterUpdateInput dco_decode_box_autoadd_todo_saved_filter_update_input(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+return dco_decode_todo_saved_filter_update_input(raw); }
+
+@protected TodoSubtaskCreateInput dco_decode_box_autoadd_todo_subtask_create_input(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+return dco_decode_todo_subtask_create_input(raw); }
+
+@protected TodoTask dco_decode_box_autoadd_todo_task(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+return dco_decode_todo_task(raw); }
+
+@protected TodoTaskCreateInput dco_decode_box_autoadd_todo_task_create_input(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+return dco_decode_todo_task_create_input(raw); }
+
+@protected TodoTaskLabelCreateInput dco_decode_box_autoadd_todo_task_label_create_input(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+return dco_decode_todo_task_label_create_input(raw); }
+
+@protected TodoTaskRelationCreateInput dco_decode_box_autoadd_todo_task_relation_create_input(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+return dco_decode_todo_task_relation_create_input(raw); }
+
+@protected TodoTemplateCreateInput dco_decode_box_autoadd_todo_template_create_input(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+return dco_decode_todo_template_create_input(raw); }
+
+@protected TodoTemplateUpdateInput dco_decode_box_autoadd_todo_template_update_input(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+return dco_decode_todo_template_update_input(raw); }
+
+@protected BigInt dco_decode_box_autoadd_usize(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+return dco_decode_usize(raw); }
+
+@protected CloudBackupEntryView dco_decode_cloud_backup_entry_view(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+final arr = raw as List<dynamic>;
+                if (arr.length != 4) throw Exception('unexpected arr length: expect 4 but see ${arr.length}');
+                return CloudBackupEntryView(name: dco_decode_String(arr[0]),
+cloudPath: dco_decode_String(arr[1]),
+sizeBytes: dco_decode_i_64(arr[2]),
+modifiedAt: dco_decode_i_64(arr[3]),); }
+
+@protected CommentSearchHit dco_decode_comment_search_hit(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+final arr = raw as List<dynamic>;
+                if (arr.length != 5) throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
+                return CommentSearchHit(commentId: dco_decode_i_64(arr[0]),
+taskId: dco_decode_i_64(arr[1]),
+taskTitle: dco_decode_String(arr[2]),
+content: dco_decode_String(arr[3]),
+createdAt: dco_decode_i_64(arr[4]),); }
+
+@protected CompleteTaskResult dco_decode_complete_task_result(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+final arr = raw as List<dynamic>;
+                if (arr.length != 2) throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+                return CompleteTaskResult(task: dco_decode_todo_task(arr[0]),
+nextInstance: dco_decode_opt_box_autoadd_todo_task(arr[1]),); }
+
+@protected CsvImportPreviewView dco_decode_csv_import_preview_view(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+final arr = raw as List<dynamic>;
+                if (arr.length != 3) throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
+                return CsvImportPreviewView(preset: dco_decode_String(arr[0]),
+rows: dco_decode_list_csv_import_row_view(arr[1]),
+stats: dco_decode_csv_import_stats_view(arr[2]),); }
+
+@protected CsvImportRowView dco_decode_csv_import_row_view(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+final arr = raw as List<dynamic>;
+                if (arr.length != 4) throw Exception('unexpected arr length: expect 4 but see ${arr.length}');
+                return CsvImportRowView(sourceLine: dco_decode_usize(arr[0]),
+projectTitle: dco_decode_opt_String(arr[1]),
+input: dco_decode_todo_task_create_input(arr[2]),
+skipReason: dco_decode_opt_String(arr[3]),); }
+
+@protected CsvImportStatsView dco_decode_csv_import_stats_view(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+final arr = raw as List<dynamic>;
+                if (arr.length != 4) throw Exception('unexpected arr length: expect 4 but see ${arr.length}');
+                return CsvImportStatsView(success: dco_decode_usize(arr[0]),
+skipped: dco_decode_usize(arr[1]),
+failed: dco_decode_usize(arr[2]),
+notes: dco_decode_list_String(arr[3]),); }
+
+@protected DbEventDto dco_decode_db_event_dto(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+final arr = raw as List<dynamic>;
+                if (arr.length != 6) throw Exception('unexpected arr length: expect 6 but see ${arr.length}');
+                return DbEventDto(table: dco_decode_String(arr[0]),
+op: dco_decode_String(arr[1]),
+recordId: dco_decode_i_64(arr[2]),
+recordUuid: dco_decode_String(arr[3]),
+deviceId: dco_decode_String(arr[4]),
+timestamp: dco_decode_i_64(arr[5]),); }
+
+@protected DbMaintenanceView dco_decode_db_maintenance_view(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+final arr = raw as List<dynamic>;
+                if (arr.length != 6) throw Exception('unexpected arr length: expect 6 but see ${arr.length}');
+                return DbMaintenanceView(walBytesAfterCheckpoint: dco_decode_i_64(arr[0]),
+attachmentsCleaned: dco_decode_i_32(arr[1]),
+logRowsPruned: dco_decode_i_32(arr[2]),
+freelistBefore: dco_decode_i_64(arr[3]),
+freelistAfter: dco_decode_i_64(arr[4]),
+pagesReclaimed: dco_decode_i_64(arr[5]),); }
+
+@protected DiagnosticsSnapshot dco_decode_diagnostics_snapshot(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+final arr = raw as List<dynamic>;
+                if (arr.length != 5) throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
+                return DiagnosticsSnapshot(dbSizeBytes: dco_decode_i_64(arr[0]),
+tableRows: dco_decode_list_table_row_count(arr[1]),
+tombstoneRows: dco_decode_i_64(arr[2]),
+attachmentCacheBytes: dco_decode_i_64(arr[3]),
+attachmentCacheFiles: dco_decode_i_64(arr[4]),); }
+
+@protected DigestPrefs dco_decode_digest_prefs(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+final arr = raw as List<dynamic>;
+                if (arr.length != 3) throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
+                return DigestPrefs(enabled: dco_decode_bool(arr[0]),
+hour: dco_decode_i_64(arr[1]),
+minute: dco_decode_i_64(arr[2]),); }
+
+@protected DigestSummary dco_decode_digest_summary(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+final arr = raw as List<dynamic>;
+                if (arr.length != 3) throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
+                return DigestSummary(dueToday: dco_decode_i_64(arr[0]),
+overdue: dco_decode_i_64(arr[1]),
+doneToday: dco_decode_i_64(arr[2]),); }
+
+@protected double dco_decode_f_64(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+return raw as double; }
+
+@protected GlobalSearchResult dco_decode_global_search_result(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+final arr = raw as List<dynamic>;
+                if (arr.length != 3) throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
+                return GlobalSearchResult(tasks: dco_decode_list_todo_task(arr[0]),
+projects: dco_decode_list_todo_project(arr[1]),
+comments: dco_decode_list_comment_search_hit(arr[2]),); }
+
+@protected HolidayInfo dco_decode_holiday_info(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+final arr = raw as List<dynamic>;
+                if (arr.length != 4) throw Exception('unexpected arr length: expect 4 but see ${arr.length}');
+                return HolidayInfo(date: dco_decode_String(arr[0]),
+year: dco_decode_i_32(arr[1]),
+isHoliday: dco_decode_bool(arr[2]),
+name: dco_decode_String(arr[3]),); }
+
+@protected HolidayMeta dco_decode_holiday_meta(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+final arr = raw as List<dynamic>;
+                if (arr.length != 4) throw Exception('unexpected arr length: expect 4 but see ${arr.length}');
+                return HolidayMeta(lastUpdateMs: dco_decode_i_64(arr[0]),
+lastAttemptMs: dco_decode_i_64(arr[1]),
+failureCount: dco_decode_i_32(arr[2]),
+autoEnabled: dco_decode_bool(arr[3]),); }
+
+@protected HolidayProgressDto dco_decode_holiday_progress_dto(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+final arr = raw as List<dynamic>;
+                if (arr.length != 10) throw Exception('unexpected arr length: expect 10 but see ${arr.length}');
+                return HolidayProgressDto(phase: dco_decode_String(arr[0]),
+total: dco_decode_u_32(arr[1]),
+year: dco_decode_i_32(arr[2]),
+done: dco_decode_u_32(arr[3]),
+yearOk: dco_decode_bool(arr[4]),
+yearEmpty: dco_decode_bool(arr[5]),
+okCount: dco_decode_u_32(arr[6]),
+failed: dco_decode_u_32(arr[7]),
+cancelled: dco_decode_bool(arr[8]),
+message: dco_decode_String(arr[9]),); }
+
+@protected HolidayRangeSummary dco_decode_holiday_range_summary(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+final arr = raw as List<dynamic>;
+                if (arr.length != 4) throw Exception('unexpected arr length: expect 4 but see ${arr.length}');
+                return HolidayRangeSummary(ok: dco_decode_u_32(arr[0]),
+failed: dco_decode_u_32(arr[1]),
+empty: dco_decode_u_32(arr[2]),
+cancelled: dco_decode_bool(arr[3]),); }
+
+@protected HolidayYearOutcome dco_decode_holiday_year_outcome(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+final arr = raw as List<dynamic>;
+                if (arr.length != 2) throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+                return HolidayYearOutcome(meta: dco_decode_holiday_meta(arr[0]),
+rowCount: dco_decode_u_32(arr[1]),); }
+
+@protected int dco_decode_i_32(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+return raw as int; }
+
+@protected PlatformInt64 dco_decode_i_64(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+return dcoDecodeI64(raw); }
+
+@protected IcsExportView dco_decode_ics_export_view(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+final arr = raw as List<dynamic>;
+                if (arr.length != 3) throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
+                return IcsExportView(content: dco_decode_String(arr[0]),
+tableCounts: dco_decode_list_ics_table_count(arr[1]),
+suggestedFilename: dco_decode_String(arr[2]),); }
+
+@protected IcsTableCount dco_decode_ics_table_count(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+final arr = raw as List<dynamic>;
+                if (arr.length != 2) throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+                return IcsTableCount(table: dco_decode_String(arr[0]),
+count: dco_decode_usize(arr[1]),); }
+
+@protected ImportJobStatusView dco_decode_import_job_status_view(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+final arr = raw as List<dynamic>;
+                if (arr.length != 7) throw Exception('unexpected arr length: expect 7 but see ${arr.length}');
+                return ImportJobStatusView(jobId: dco_decode_String(arr[0]),
+processed: dco_decode_usize(arr[1]),
+total: dco_decode_opt_box_autoadd_usize(arr[2]),
+finished: dco_decode_bool(arr[3]),
+cancelled: dco_decode_bool(arr[4]),
+stats: dco_decode_opt_box_autoadd_csv_import_stats_view(arr[5]),
+error: dco_decode_opt_String(arr[6]),); }
+
+@protected ImportLimitsView dco_decode_import_limits_view(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+final arr = raw as List<dynamic>;
+                if (arr.length != 2) throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+                return ImportLimitsView(maxBytes: dco_decode_usize(arr[0]),
+maxRows: dco_decode_usize(arr[1]),); }
+
+@protected List<String> dco_decode_list_String(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+return (raw as List<dynamic>).map(dco_decode_String).toList(); }
+
+@protected List<ActivityLogRow> dco_decode_list_activity_log_row(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+return (raw as List<dynamic>).map(dco_decode_activity_log_row).toList(); }
+
+@protected List<BackupEntryView> dco_decode_list_backup_entry_view(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+return (raw as List<dynamic>).map(dco_decode_backup_entry_view).toList(); }
+
+@protected List<BackupPreviewTask> dco_decode_list_backup_preview_task(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+return (raw as List<dynamic>).map(dco_decode_backup_preview_task).toList(); }
+
+@protected List<BackupTableCount> dco_decode_list_backup_table_count(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+return (raw as List<dynamic>).map(dco_decode_backup_table_count).toList(); }
+
+@protected List<CloudBackupEntryView> dco_decode_list_cloud_backup_entry_view(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+return (raw as List<dynamic>).map(dco_decode_cloud_backup_entry_view).toList(); }
+
+@protected List<CommentSearchHit> dco_decode_list_comment_search_hit(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+return (raw as List<dynamic>).map(dco_decode_comment_search_hit).toList(); }
+
+@protected List<CsvImportRowView> dco_decode_list_csv_import_row_view(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+return (raw as List<dynamic>).map(dco_decode_csv_import_row_view).toList(); }
+
+@protected ListFilter dco_decode_list_filter(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+final arr = raw as List<dynamic>;
+                if (arr.length != 10) throw Exception('unexpected arr length: expect 10 but see ${arr.length}');
+                return ListFilter(keyword: dco_decode_opt_String(arr[0]),
+page: dco_decode_u_32(arr[1]),
+pageSize: dco_decode_u_32(arr[2]),
+done: dco_decode_opt_box_autoadd_bool(arr[3]),
+status: dco_decode_opt_String(arr[4]),
+priorityMin: dco_decode_opt_box_autoadd_i_32(arr[5]),
+projectId: dco_decode_opt_box_autoadd_i_64(arr[6]),
+projectIds: dco_decode_opt_list_prim_i_64_strict(arr[7]),
+favoriteOnly: dco_decode_opt_box_autoadd_bool(arr[8]),
+myDayToday: dco_decode_opt_box_autoadd_i_64(arr[9]),); }
+
+@protected List<HolidayInfo> dco_decode_list_holiday_info(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+return (raw as List<dynamic>).map(dco_decode_holiday_info).toList(); }
+
+@protected List<IcsTableCount> dco_decode_list_ics_table_count(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+return (raw as List<dynamic>).map(dco_decode_ics_table_count).toList(); }
+
+@protected List<NotificationLogRow> dco_decode_list_notification_log_row(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+return (raw as List<dynamic>).map(dco_decode_notification_log_row).toList(); }
+
+@protected Int64List dco_decode_list_prim_i_64_strict(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+return dcoDecodeInt64List(raw); }
+
+@protected List<int> dco_decode_list_prim_u_8_loose(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+return raw as List<int>; }
+
+@protected Uint8List dco_decode_list_prim_u_8_strict(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+return raw as Uint8List; }
+
+@protected List<ProjectedReminder> dco_decode_list_projected_reminder(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+return (raw as List<dynamic>).map(dco_decode_projected_reminder).toList(); }
+
+@protected List<ProjectedTaskLabel> dco_decode_list_projected_task_label(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+return (raw as List<dynamic>).map(dco_decode_projected_task_label).toList(); }
+
+@protected List<StatsHeatmapCell> dco_decode_list_stats_heatmap_cell(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+return (raw as List<dynamic>).map(dco_decode_stats_heatmap_cell).toList(); }
+
+@protected List<StatsPriorityRow> dco_decode_list_stats_priority_row(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+return (raw as List<dynamic>).map(dco_decode_stats_priority_row).toList(); }
+
+@protected List<StatsProjectRow> dco_decode_list_stats_project_row(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+return (raw as List<dynamic>).map(dco_decode_stats_project_row).toList(); }
+
+@protected List<StatsWeekdayRow> dco_decode_list_stats_weekday_row(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+return (raw as List<dynamic>).map(dco_decode_stats_weekday_row).toList(); }
+
+@protected List<SyncConflict> dco_decode_list_sync_conflict(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+return (raw as List<dynamic>).map(dco_decode_sync_conflict).toList(); }
+
+@protected List<SyncHistoryView> dco_decode_list_sync_history_view(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+return (raw as List<dynamic>).map(dco_decode_sync_history_view).toList(); }
+
+@protected List<TableCount> dco_decode_list_table_count(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+return (raw as List<dynamic>).map(dco_decode_table_count).toList(); }
+
+@protected List<TableRowCount> dco_decode_list_table_row_count(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+return (raw as List<dynamic>).map(dco_decode_table_row_count).toList(); }
+
+@protected List<TaskAttachmentView> dco_decode_list_task_attachment_view(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+return (raw as List<dynamic>).map(dco_decode_task_attachment_view).toList(); }
+
+@protected List<TaskDependencyFlags> dco_decode_list_task_dependency_flags(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+return (raw as List<dynamic>).map(dco_decode_task_dependency_flags).toList(); }
+
+@protected List<TaskDescriptionFlag> dco_decode_list_task_description_flag(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+return (raw as List<dynamic>).map(dco_decode_task_description_flag).toList(); }
+
+@protected List<TaskExistenceFlag> dco_decode_list_task_existence_flag(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+return (raw as List<dynamic>).map(dco_decode_task_existence_flag).toList(); }
+
+@protected List<TaskLabelWithId> dco_decode_list_task_label_with_id(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+return (raw as List<dynamic>).map(dco_decode_task_label_with_id).toList(); }
+
+@protected List<TaskLabelsProjection> dco_decode_list_task_labels_projection(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+return (raw as List<dynamic>).map(dco_decode_task_labels_projection).toList(); }
+
+@protected List<TaskRemindersProjection> dco_decode_list_task_reminders_projection(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+return (raw as List<dynamic>).map(dco_decode_task_reminders_projection).toList(); }
+
+@protected List<TodoComment> dco_decode_list_todo_comment(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+return (raw as List<dynamic>).map(dco_decode_todo_comment).toList(); }
+
+@protected List<TodoLabel> dco_decode_list_todo_label(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+return (raw as List<dynamic>).map(dco_decode_todo_label).toList(); }
+
+@protected List<TodoProject> dco_decode_list_todo_project(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+return (raw as List<dynamic>).map(dco_decode_todo_project).toList(); }
+
+@protected List<TodoReminder> dco_decode_list_todo_reminder(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+return (raw as List<dynamic>).map(dco_decode_todo_reminder).toList(); }
+
+@protected List<TodoSavedFilter> dco_decode_list_todo_saved_filter(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+return (raw as List<dynamic>).map(dco_decode_todo_saved_filter).toList(); }
+
+@protected List<TodoSubtask> dco_decode_list_todo_subtask(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+return (raw as List<dynamic>).map(dco_decode_todo_subtask).toList(); }
+
+@protected List<TodoTask> dco_decode_list_todo_task(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+return (raw as List<dynamic>).map(dco_decode_todo_task).toList(); }
+
+@protected List<TodoTaskLabel> dco_decode_list_todo_task_label(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+return (raw as List<dynamic>).map(dco_decode_todo_task_label).toList(); }
+
+@protected List<TodoTaskListItem> dco_decode_list_todo_task_list_item(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+return (raw as List<dynamic>).map(dco_decode_todo_task_list_item).toList(); }
+
+@protected List<TodoTaskRelation> dco_decode_list_todo_task_relation(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+return (raw as List<dynamic>).map(dco_decode_todo_task_relation).toList(); }
+
+@protected List<TodoTemplate> dco_decode_list_todo_template(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+return (raw as List<dynamic>).map(dco_decode_todo_template).toList(); }
+
+@protected List<WidgetTodoItem> dco_decode_list_widget_todo_item(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+return (raw as List<dynamic>).map(dco_decode_widget_todo_item).toList(); }
+
+@protected NotificationLogRow dco_decode_notification_log_row(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+final arr = raw as List<dynamic>;
+                if (arr.length != 7) throw Exception('unexpected arr length: expect 7 but see ${arr.length}');
+                return NotificationLogRow(id: dco_decode_i_64(arr[0]),
+kind: dco_decode_String(arr[1]),
+taskId: dco_decode_opt_box_autoadd_i_64(arr[2]),
+taskTitle: dco_decode_String(arr[3]),
+reminderId: dco_decode_opt_box_autoadd_i_64(arr[4]),
+payload: dco_decode_String(arr[5]),
+createdAt: dco_decode_i_64(arr[6]),); }
+
+@protected String? dco_decode_opt_String(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+return raw == null ? null : dco_decode_String(raw); }
+
+@protected bool? dco_decode_opt_box_autoadd_bool(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+return raw == null ? null : dco_decode_box_autoadd_bool(raw); }
+
+@protected CsvImportStatsView? dco_decode_opt_box_autoadd_csv_import_stats_view(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+return raw == null ? null : dco_decode_box_autoadd_csv_import_stats_view(raw); }
+
+@protected double? dco_decode_opt_box_autoadd_f_64(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+return raw == null ? null : dco_decode_box_autoadd_f_64(raw); }
+
+@protected int? dco_decode_opt_box_autoadd_i_32(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+return raw == null ? null : dco_decode_box_autoadd_i_32(raw); }
+
+@protected PlatformInt64? dco_decode_opt_box_autoadd_i_64(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+return raw == null ? null : dco_decode_box_autoadd_i_64(raw); }
+
+@protected SyncConfigView? dco_decode_opt_box_autoadd_sync_config_view(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+return raw == null ? null : dco_decode_box_autoadd_sync_config_view(raw); }
+
+@protected TodoProject? dco_decode_opt_box_autoadd_todo_project(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+return raw == null ? null : dco_decode_box_autoadd_todo_project(raw); }
+
+@protected TodoTask? dco_decode_opt_box_autoadd_todo_task(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+return raw == null ? null : dco_decode_box_autoadd_todo_task(raw); }
+
+@protected BigInt? dco_decode_opt_box_autoadd_usize(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+return raw == null ? null : dco_decode_box_autoadd_usize(raw); }
+
+@protected Int64List? dco_decode_opt_list_prim_i_64_strict(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+return raw == null ? null : dco_decode_list_prim_i_64_strict(raw); }
+
+@protected PlaintextExportView dco_decode_plaintext_export_view(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+final arr = raw as List<dynamic>;
+                if (arr.length != 3) throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
+                return PlaintextExportView(content: dco_decode_String(arr[0]),
+tableCounts: dco_decode_list_table_count(arr[1]),
+suggestedFilename: dco_decode_String(arr[2]),); }
+
+@protected ProjectedReminder dco_decode_projected_reminder(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+final arr = raw as List<dynamic>;
+                if (arr.length != 2) throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+                return ProjectedReminder(id: dco_decode_i_64(arr[0]),
+remindAt: dco_decode_i_64(arr[1]),); }
+
+@protected ProjectedTaskLabel dco_decode_projected_task_label(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+final arr = raw as List<dynamic>;
+                if (arr.length != 3) throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
+                return ProjectedTaskLabel(id: dco_decode_i_64(arr[0]),
+title: dco_decode_String(arr[1]),
+hexColor: dco_decode_String(arr[2]),); }
+
+@protected ReminderDueDto dco_decode_reminder_due_dto(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+final arr = raw as List<dynamic>;
+                if (arr.length != 5) throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
+                return ReminderDueDto(id: dco_decode_i_64(arr[0]),
+taskId: dco_decode_i_64(arr[1]),
+title: dco_decode_String(arr[2]),
+remindAt: dco_decode_i_64(arr[3]),
+isConstant: dco_decode_i_32(arr[4]),); }
+
+@protected StatsAggregate dco_decode_stats_aggregate(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+final arr = raw as List<dynamic>;
+                if (arr.length != 7) throw Exception('unexpected arr length: expect 7 but see ${arr.length}');
+                return StatsAggregate(overview: dco_decode_stats_overview(arr[0]),
+heatmap: dco_decode_stats_heatmap(arr[1]),
+streak: dco_decode_stats_streak(arr[2]),
+byProject: dco_decode_list_stats_project_row(arr[3]),
+byPriority: dco_decode_list_stats_priority_row(arr[4]),
+byWeekday: dco_decode_list_stats_weekday_row(arr[5]),
+availableYears: dco_decode_list_prim_i_64_strict(arr[6]),); }
+
+@protected StatsHeatmap dco_decode_stats_heatmap(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+final arr = raw as List<dynamic>;
+                if (arr.length != 4) throw Exception('unexpected arr length: expect 4 but see ${arr.length}');
+                return StatsHeatmap(year: dco_decode_i_64(arr[0]),
+startDate: dco_decode_String(arr[1]),
+endDate: dco_decode_String(arr[2]),
+cells: dco_decode_list_stats_heatmap_cell(arr[3]),); }
+
+@protected StatsHeatmapCell dco_decode_stats_heatmap_cell(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+final arr = raw as List<dynamic>;
+                if (arr.length != 2) throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+                return StatsHeatmapCell(date: dco_decode_String(arr[0]),
+count: dco_decode_i_64(arr[1]),); }
+
+@protected StatsOverview dco_decode_stats_overview(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+final arr = raw as List<dynamic>;
+                if (arr.length != 5) throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
+                return StatsOverview(total: dco_decode_i_64(arr[0]),
+pending: dco_decode_i_64(arr[1]),
+done: dco_decode_i_64(arr[2]),
+doneLast7D: dco_decode_i_64(arr[3]),
+doneLast30D: dco_decode_i_64(arr[4]),); }
+
+@protected StatsPriorityRow dco_decode_stats_priority_row(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+final arr = raw as List<dynamic>;
+                if (arr.length != 3) throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
+                return StatsPriorityRow(priority: dco_decode_i_64(arr[0]),
+doneCount: dco_decode_i_64(arr[1]),
+pendingCount: dco_decode_i_64(arr[2]),); }
+
+@protected StatsProjectRow dco_decode_stats_project_row(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+final arr = raw as List<dynamic>;
+                if (arr.length != 5) throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
+                return StatsProjectRow(projectId: dco_decode_opt_box_autoadd_i_64(arr[0]),
+projectTitle: dco_decode_opt_String(arr[1]),
+projectHexColor: dco_decode_opt_String(arr[2]),
+doneCount: dco_decode_i_64(arr[3]),
+pendingCount: dco_decode_i_64(arr[4]),); }
+
+@protected StatsStreak dco_decode_stats_streak(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+final arr = raw as List<dynamic>;
+                if (arr.length != 3) throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
+                return StatsStreak(current: dco_decode_i_64(arr[0]),
+best: dco_decode_i_64(arr[1]),
+doneToday: dco_decode_bool(arr[2]),); }
+
+@protected StatsWeekdayRow dco_decode_stats_weekday_row(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+final arr = raw as List<dynamic>;
+                if (arr.length != 2) throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+                return StatsWeekdayRow(weekday: dco_decode_i_64(arr[0]),
+doneCount: dco_decode_i_64(arr[1]),); }
+
+@protected SyncConfigInput dco_decode_sync_config_input(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+final arr = raw as List<dynamic>;
+                if (arr.length != 13) throw Exception('unexpected arr length: expect 13 but see ${arr.length}');
+                return SyncConfigInput(engine: dco_decode_String(arr[0]),
+endpoint: dco_decode_String(arr[1]),
+bucket: dco_decode_opt_String(arr[2]),
+region: dco_decode_opt_String(arr[3]),
+username: dco_decode_opt_String(arr[4]),
+password: dco_decode_opt_String(arr[5]),
+basePath: dco_decode_opt_String(arr[6]),
+intervalMinutes: dco_decode_opt_box_autoadd_i_64(arr[7]),
+autoSyncEnabled: dco_decode_opt_box_autoadd_bool(arr[8]),
+syncOnChange: dco_decode_opt_box_autoadd_bool(arr[9]),
+skipTlsVerify: dco_decode_opt_box_autoadd_bool(arr[10]),
+timeoutSeconds: dco_decode_opt_box_autoadd_i_64(arr[11]),
+sessionToken: dco_decode_opt_String(arr[12]),); }
+
+@protected SyncConfigView dco_decode_sync_config_view(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+final arr = raw as List<dynamic>;
+                if (arr.length != 15) throw Exception('unexpected arr length: expect 15 but see ${arr.length}');
+                return SyncConfigView(id: dco_decode_i_64(arr[0]),
+engine: dco_decode_String(arr[1]),
+endpoint: dco_decode_String(arr[2]),
+bucket: dco_decode_String(arr[3]),
+region: dco_decode_String(arr[4]),
+username: dco_decode_String(arr[5]),
+passwordSet: dco_decode_bool(arr[6]),
+basePath: dco_decode_String(arr[7]),
+intervalMinutes: dco_decode_i_64(arr[8]),
+autoSyncEnabled: dco_decode_bool(arr[9]),
+syncOnChange: dco_decode_bool(arr[10]),
+skipTlsVerify: dco_decode_bool(arr[11]),
+timeoutSeconds: dco_decode_i_64(arr[12]),
+sessionTokenSet: dco_decode_bool(arr[13]),
+lastSyncedAt: dco_decode_opt_box_autoadd_i_64(arr[14]),); }
+
+@protected SyncConflict dco_decode_sync_conflict(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+final arr = raw as List<dynamic>;
+                if (arr.length != 14) throw Exception('unexpected arr length: expect 14 but see ${arr.length}');
+                return SyncConflict(id: dco_decode_i_64(arr[0]),
+tableName: dco_decode_String(arr[1]),
+recordUuid: dco_decode_String(arr[2]),
+recordTitle: dco_decode_String(arr[3]),
+decision: dco_decode_String(arr[4]),
+loserSide: dco_decode_String(arr[5]),
+winnerSide: dco_decode_String(arr[6]),
+loserPayload: dco_decode_String(arr[7]),
+winnerPayload: dco_decode_String(arr[8]),
+loserUpdatedAt: dco_decode_i_64(arr[9]),
+winnerUpdatedAt: dco_decode_i_64(arr[10]),
+resolution: dco_decode_String(arr[11]),
+createdAt: dco_decode_i_64(arr[12]),
+resolvedAt: dco_decode_i_64(arr[13]),); }
+
+@protected SyncCryptoStatus dco_decode_sync_crypto_status(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+final arr = raw as List<dynamic>;
+                if (arr.length != 2) throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+                return SyncCryptoStatus(hasPassword: dco_decode_bool(arr[0]),
+isUnlocked: dco_decode_bool(arr[1]),); }
+
+@protected SyncHistoryView dco_decode_sync_history_view(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+final arr = raw as List<dynamic>;
+                if (arr.length != 9) throw Exception('unexpected arr length: expect 9 but see ${arr.length}');
+                return SyncHistoryView(id: dco_decode_i_64(arr[0]),
+syncType: dco_decode_String(arr[1]),
+status: dco_decode_String(arr[2]),
+startedAt: dco_decode_i_64(arr[3]),
+finishedAt: dco_decode_opt_box_autoadd_i_64(arr[4]),
+pulledCount: dco_decode_i_64(arr[5]),
+pushedCount: dco_decode_i_64(arr[6]),
+conflictCount: dco_decode_i_64(arr[7]),
+errorMessage: dco_decode_opt_String(arr[8]),); }
+
+@protected TableCount dco_decode_table_count(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+final arr = raw as List<dynamic>;
+                if (arr.length != 2) throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+                return TableCount(table: dco_decode_String(arr[0]),
+count: dco_decode_usize(arr[1]),); }
+
+@protected TableRowCount dco_decode_table_row_count(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+final arr = raw as List<dynamic>;
+                if (arr.length != 2) throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+                return TableRowCount(table: dco_decode_String(arr[0]),
+rows: dco_decode_i_64(arr[1]),); }
+
+@protected TaskAttachmentView dco_decode_task_attachment_view(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+final arr = raw as List<dynamic>;
+                if (arr.length != 7) throw Exception('unexpected arr length: expect 7 but see ${arr.length}');
+                return TaskAttachmentView(linkId: dco_decode_i_64(arr[0]),
+linkUuid: dco_decode_String(arr[1]),
+hash: dco_decode_String(arr[2]),
+originalName: dco_decode_String(arr[3]),
+mimeType: dco_decode_String(arr[4]),
+sizeBytes: dco_decode_i_64(arr[5]),
+isLocalCached: dco_decode_i_32(arr[6]),); }
+
+@protected TaskDependencyFlags dco_decode_task_dependency_flags(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+final arr = raw as List<dynamic>;
+                if (arr.length != 2) throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+                return TaskDependencyFlags(taskId: dco_decode_i_64(arr[0]),
+relationCount: dco_decode_i_64(arr[1]),); }
+
+@protected TaskDescriptionFlag dco_decode_task_description_flag(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+final arr = raw as List<dynamic>;
+                if (arr.length != 1) throw Exception('unexpected arr length: expect 1 but see ${arr.length}');
+                return TaskDescriptionFlag(taskId: dco_decode_i_64(arr[0]),); }
+
+@protected TaskExistenceFlag dco_decode_task_existence_flag(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+final arr = raw as List<dynamic>;
+                if (arr.length != 1) throw Exception('unexpected arr length: expect 1 but see ${arr.length}');
+                return TaskExistenceFlag(taskId: dco_decode_i_64(arr[0]),); }
+
+@protected TaskLabelWithId dco_decode_task_label_with_id(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+final arr = raw as List<dynamic>;
+                if (arr.length != 10) throw Exception('unexpected arr length: expect 10 but see ${arr.length}');
+                return TaskLabelWithId(id: dco_decode_i_64(arr[0]),
+uuid: dco_decode_String(arr[1]),
+title: dco_decode_String(arr[2]),
+hexColor: dco_decode_String(arr[3]),
+isDeleted: dco_decode_i_32(arr[4]),
+createdAt: dco_decode_i_64(arr[5]),
+updatedAt: dco_decode_i_64(arr[6]),
+deletedAt: dco_decode_opt_box_autoadd_i_64(arr[7]),
+version: dco_decode_i_32(arr[8]),
+taskLabelId: dco_decode_i_64(arr[9]),); }
+
+@protected TaskLabelsProjection dco_decode_task_labels_projection(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+final arr = raw as List<dynamic>;
+                if (arr.length != 2) throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+                return TaskLabelsProjection(taskId: dco_decode_i_64(arr[0]),
+labels: dco_decode_list_projected_task_label(arr[1]),); }
+
+@protected TaskRemindersProjection dco_decode_task_reminders_projection(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+final arr = raw as List<dynamic>;
+                if (arr.length != 2) throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+                return TaskRemindersProjection(taskId: dco_decode_i_64(arr[0]),
+reminders: dco_decode_list_projected_reminder(arr[1]),); }
+
+@protected TodoComment dco_decode_todo_comment(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+final arr = raw as List<dynamic>;
+                if (arr.length != 9) throw Exception('unexpected arr length: expect 9 but see ${arr.length}');
+                return TodoComment(id: dco_decode_i_64(arr[0]),
+uuid: dco_decode_String(arr[1]),
+taskId: dco_decode_i_64(arr[2]),
+content: dco_decode_String(arr[3]),
+isDeleted: dco_decode_i_32(arr[4]),
+createdAt: dco_decode_i_64(arr[5]),
+updatedAt: dco_decode_i_64(arr[6]),
+deletedAt: dco_decode_opt_box_autoadd_i_64(arr[7]),
+version: dco_decode_i_32(arr[8]),); }
+
+@protected TodoCommentCreateInput dco_decode_todo_comment_create_input(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+final arr = raw as List<dynamic>;
+                if (arr.length != 2) throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+                return TodoCommentCreateInput(taskId: dco_decode_i_64(arr[0]),
+content: dco_decode_String(arr[1]),); }
+
+@protected TodoLabel dco_decode_todo_label(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+final arr = raw as List<dynamic>;
+                if (arr.length != 9) throw Exception('unexpected arr length: expect 9 but see ${arr.length}');
+                return TodoLabel(id: dco_decode_i_64(arr[0]),
+uuid: dco_decode_String(arr[1]),
+title: dco_decode_String(arr[2]),
+hexColor: dco_decode_String(arr[3]),
+isDeleted: dco_decode_i_32(arr[4]),
+createdAt: dco_decode_i_64(arr[5]),
+updatedAt: dco_decode_i_64(arr[6]),
+deletedAt: dco_decode_opt_box_autoadd_i_64(arr[7]),
+version: dco_decode_i_32(arr[8]),); }
+
+@protected TodoLabelCreateInput dco_decode_todo_label_create_input(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+final arr = raw as List<dynamic>;
+                if (arr.length != 2) throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+                return TodoLabelCreateInput(title: dco_decode_String(arr[0]),
+hexColor: dco_decode_opt_String(arr[1]),); }
+
+@protected TodoProject dco_decode_todo_project(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+final arr = raw as List<dynamic>;
+                if (arr.length != 13) throw Exception('unexpected arr length: expect 13 but see ${arr.length}');
+                return TodoProject(id: dco_decode_i_64(arr[0]),
+uuid: dco_decode_String(arr[1]),
+title: dco_decode_String(arr[2]),
+description: dco_decode_opt_String(arr[3]),
+hexColor: dco_decode_String(arr[4]),
+sortOrder: dco_decode_f_64(arr[5]),
+parentUuid: dco_decode_opt_String(arr[6]),
+isArchived: dco_decode_i_32(arr[7]),
+isDeleted: dco_decode_i_32(arr[8]),
+createdAt: dco_decode_i_64(arr[9]),
+updatedAt: dco_decode_i_64(arr[10]),
+deletedAt: dco_decode_opt_box_autoadd_i_64(arr[11]),
+version: dco_decode_i_32(arr[12]),); }
+
+@protected TodoProjectCreateInput dco_decode_todo_project_create_input(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+final arr = raw as List<dynamic>;
+                if (arr.length != 5) throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
+                return TodoProjectCreateInput(title: dco_decode_String(arr[0]),
+description: dco_decode_opt_String(arr[1]),
+hexColor: dco_decode_opt_String(arr[2]),
+sortOrder: dco_decode_opt_box_autoadd_f_64(arr[3]),
+parentUuid: dco_decode_opt_String(arr[4]),); }
+
+@protected TodoReminder dco_decode_todo_reminder(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+final arr = raw as List<dynamic>;
+                if (arr.length != 10) throw Exception('unexpected arr length: expect 10 but see ${arr.length}');
+                return TodoReminder(id: dco_decode_i_64(arr[0]),
+uuid: dco_decode_String(arr[1]),
+taskId: dco_decode_i_64(arr[2]),
+remindAt: dco_decode_i_64(arr[3]),
+isConstant: dco_decode_i_32(arr[4]),
+isDeleted: dco_decode_i_32(arr[5]),
+createdAt: dco_decode_i_64(arr[6]),
+updatedAt: dco_decode_i_64(arr[7]),
+deletedAt: dco_decode_opt_box_autoadd_i_64(arr[8]),
+version: dco_decode_i_32(arr[9]),); }
+
+@protected TodoReminderCreateInput dco_decode_todo_reminder_create_input(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+final arr = raw as List<dynamic>;
+                if (arr.length != 3) throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
+                return TodoReminderCreateInput(taskId: dco_decode_i_64(arr[0]),
+remindAt: dco_decode_i_64(arr[1]),
+isConstant: dco_decode_i_32(arr[2]),); }
+
+@protected TodoSavedFilter dco_decode_todo_saved_filter(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+final arr = raw as List<dynamic>;
+                if (arr.length != 5) throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
+                return TodoSavedFilter(id: dco_decode_i_64(arr[0]),
+uuid: dco_decode_String(arr[1]),
+name: dco_decode_String(arr[2]),
+conditions: dco_decode_String(arr[3]),
+sortOrder: dco_decode_i_64(arr[4]),); }
+
+@protected TodoSavedFilterCreateInput dco_decode_todo_saved_filter_create_input(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+final arr = raw as List<dynamic>;
+                if (arr.length != 3) throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
+                return TodoSavedFilterCreateInput(name: dco_decode_String(arr[0]),
+conditions: dco_decode_String(arr[1]),
+sortOrder: dco_decode_opt_box_autoadd_i_64(arr[2]),); }
+
+@protected TodoSavedFilterUpdateInput dco_decode_todo_saved_filter_update_input(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+final arr = raw as List<dynamic>;
+                if (arr.length != 3) throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
+                return TodoSavedFilterUpdateInput(name: dco_decode_opt_String(arr[0]),
+conditions: dco_decode_opt_String(arr[1]),
+sortOrder: dco_decode_opt_box_autoadd_i_64(arr[2]),); }
+
+@protected TodoSubtask dco_decode_todo_subtask(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+final arr = raw as List<dynamic>;
+                if (arr.length != 13) throw Exception('unexpected arr length: expect 13 but see ${arr.length}');
+                return TodoSubtask(id: dco_decode_i_64(arr[0]),
+uuid: dco_decode_String(arr[1]),
+taskId: dco_decode_i_64(arr[2]),
+title: dco_decode_String(arr[3]),
+done: dco_decode_i_32(arr[4]),
+doneAt: dco_decode_opt_box_autoadd_i_64(arr[5]),
+position: dco_decode_f_64(arr[6]),
+parentUuid: dco_decode_opt_String(arr[7]),
+isDeleted: dco_decode_i_32(arr[8]),
+createdAt: dco_decode_i_64(arr[9]),
+updatedAt: dco_decode_i_64(arr[10]),
+deletedAt: dco_decode_opt_box_autoadd_i_64(arr[11]),
+version: dco_decode_i_32(arr[12]),); }
+
+@protected TodoSubtaskCreateInput dco_decode_todo_subtask_create_input(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+final arr = raw as List<dynamic>;
+                if (arr.length != 4) throw Exception('unexpected arr length: expect 4 but see ${arr.length}');
+                return TodoSubtaskCreateInput(taskId: dco_decode_i_64(arr[0]),
+title: dco_decode_String(arr[1]),
+position: dco_decode_opt_box_autoadd_f_64(arr[2]),
+parentUuid: dco_decode_opt_String(arr[3]),); }
+
+@protected TodoTask dco_decode_todo_task(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+final arr = raw as List<dynamic>;
+                if (arr.length != 29) throw Exception('unexpected arr length: expect 29 but see ${arr.length}');
+                return TodoTask(id: dco_decode_i_64(arr[0]),
+uuid: dco_decode_String(arr[1]),
+title: dco_decode_String(arr[2]),
+description: dco_decode_opt_String(arr[3]),
+projectId: dco_decode_opt_box_autoadd_i_64(arr[4]),
+priority: dco_decode_i_32(arr[5]),
+status: dco_decode_String(arr[6]),
+done: dco_decode_i_32(arr[7]),
+doneAt: dco_decode_opt_box_autoadd_i_64(arr[8]),
+dueDate: dco_decode_opt_box_autoadd_i_64(arr[9]),
+startDate: dco_decode_opt_box_autoadd_i_64(arr[10]),
+repeatAfter: dco_decode_i_64(arr[11]),
+repeatMode: dco_decode_i_32(arr[12]),
+repeatWeekdays: dco_decode_i_32(arr[13]),
+repeatEndType: dco_decode_i_32(arr[14]),
+repeatEndParam: dco_decode_i_64(arr[15]),
+repeatFromDone: dco_decode_i_32(arr[16]),
+repeatMonthMode: dco_decode_i_32(arr[17]),
+repeatNthWeek: dco_decode_i_32(arr[18]),
+percentDone: dco_decode_f_64(arr[19]),
+position: dco_decode_f_64(arr[20]),
+isFavorite: dco_decode_i_32(arr[21]),
+myDayDate: dco_decode_opt_box_autoadd_i_64(arr[22]),
+durationMinutes: dco_decode_opt_box_autoadd_i_64(arr[23]),
+isDeleted: dco_decode_i_32(arr[24]),
+createdAt: dco_decode_i_64(arr[25]),
+updatedAt: dco_decode_i_64(arr[26]),
+deletedAt: dco_decode_opt_box_autoadd_i_64(arr[27]),
+version: dco_decode_i_32(arr[28]),); }
+
+@protected TodoTaskCreateInput dco_decode_todo_task_create_input(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+final arr = raw as List<dynamic>;
+                if (arr.length != 21) throw Exception('unexpected arr length: expect 21 but see ${arr.length}');
+                return TodoTaskCreateInput(title: dco_decode_String(arr[0]),
+description: dco_decode_opt_String(arr[1]),
+projectId: dco_decode_opt_box_autoadd_i_64(arr[2]),
+priority: dco_decode_opt_box_autoadd_i_32(arr[3]),
+status: dco_decode_opt_String(arr[4]),
+done: dco_decode_opt_box_autoadd_i_32(arr[5]),
+doneAt: dco_decode_opt_box_autoadd_i_64(arr[6]),
+dueDate: dco_decode_opt_box_autoadd_i_64(arr[7]),
+startDate: dco_decode_opt_box_autoadd_i_64(arr[8]),
+repeatAfter: dco_decode_opt_box_autoadd_i_64(arr[9]),
+repeatMode: dco_decode_opt_box_autoadd_i_32(arr[10]),
+repeatWeekdays: dco_decode_opt_box_autoadd_i_32(arr[11]),
+repeatEndType: dco_decode_opt_box_autoadd_i_32(arr[12]),
+repeatEndParam: dco_decode_opt_box_autoadd_i_64(arr[13]),
+repeatFromDone: dco_decode_opt_box_autoadd_i_32(arr[14]),
+repeatMonthMode: dco_decode_opt_box_autoadd_i_32(arr[15]),
+repeatNthWeek: dco_decode_opt_box_autoadd_i_32(arr[16]),
+position: dco_decode_opt_box_autoadd_f_64(arr[17]),
+isFavorite: dco_decode_opt_box_autoadd_i_32(arr[18]),
+myDayDate: dco_decode_opt_box_autoadd_i_64(arr[19]),
+durationMinutes: dco_decode_opt_box_autoadd_i_64(arr[20]),); }
+
+@protected TodoTaskDetail dco_decode_todo_task_detail(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+final arr = raw as List<dynamic>;
+                if (arr.length != 34) throw Exception('unexpected arr length: expect 34 but see ${arr.length}');
+                return TodoTaskDetail(id: dco_decode_i_64(arr[0]),
+uuid: dco_decode_String(arr[1]),
+title: dco_decode_String(arr[2]),
+description: dco_decode_opt_String(arr[3]),
+projectId: dco_decode_opt_box_autoadd_i_64(arr[4]),
+priority: dco_decode_i_32(arr[5]),
+status: dco_decode_String(arr[6]),
+done: dco_decode_i_32(arr[7]),
+doneAt: dco_decode_opt_box_autoadd_i_64(arr[8]),
+dueDate: dco_decode_opt_box_autoadd_i_64(arr[9]),
+startDate: dco_decode_opt_box_autoadd_i_64(arr[10]),
+repeatAfter: dco_decode_i_64(arr[11]),
+repeatMode: dco_decode_i_32(arr[12]),
+repeatWeekdays: dco_decode_i_32(arr[13]),
+repeatEndType: dco_decode_i_32(arr[14]),
+repeatEndParam: dco_decode_i_64(arr[15]),
+repeatFromDone: dco_decode_i_32(arr[16]),
+repeatMonthMode: dco_decode_i_32(arr[17]),
+repeatNthWeek: dco_decode_i_32(arr[18]),
+percentDone: dco_decode_f_64(arr[19]),
+position: dco_decode_f_64(arr[20]),
+isFavorite: dco_decode_i_32(arr[21]),
+myDayDate: dco_decode_opt_box_autoadd_i_64(arr[22]),
+durationMinutes: dco_decode_opt_box_autoadd_i_64(arr[23]),
+isDeleted: dco_decode_i_32(arr[24]),
+createdAt: dco_decode_i_64(arr[25]),
+updatedAt: dco_decode_i_64(arr[26]),
+deletedAt: dco_decode_opt_box_autoadd_i_64(arr[27]),
+version: dco_decode_i_32(arr[28]),
+subtasks: dco_decode_list_todo_subtask(arr[29]),
+labels: dco_decode_list_task_label_with_id(arr[30]),
+comments: dco_decode_list_todo_comment(arr[31]),
+relations: dco_decode_list_todo_task_relation(arr[32]),
+reminders: dco_decode_list_todo_reminder(arr[33]),); }
+
+@protected TodoTaskLabel dco_decode_todo_task_label(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+final arr = raw as List<dynamic>;
+                if (arr.length != 9) throw Exception('unexpected arr length: expect 9 but see ${arr.length}');
+                return TodoTaskLabel(id: dco_decode_i_64(arr[0]),
+uuid: dco_decode_String(arr[1]),
+taskId: dco_decode_i_64(arr[2]),
+labelId: dco_decode_i_64(arr[3]),
+isDeleted: dco_decode_i_32(arr[4]),
+createdAt: dco_decode_i_64(arr[5]),
+updatedAt: dco_decode_i_64(arr[6]),
+deletedAt: dco_decode_opt_box_autoadd_i_64(arr[7]),
+version: dco_decode_i_32(arr[8]),); }
+
+@protected TodoTaskLabelCreateInput dco_decode_todo_task_label_create_input(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+final arr = raw as List<dynamic>;
+                if (arr.length != 2) throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+                return TodoTaskLabelCreateInput(taskId: dco_decode_i_64(arr[0]),
+labelId: dco_decode_i_64(arr[1]),); }
+
+@protected TodoTaskListItem dco_decode_todo_task_list_item(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+final arr = raw as List<dynamic>;
+                if (arr.length != 19) throw Exception('unexpected arr length: expect 19 but see ${arr.length}');
+                return TodoTaskListItem(id: dco_decode_i_64(arr[0]),
+title: dco_decode_String(arr[1]),
+description: dco_decode_opt_String(arr[2]),
+projectId: dco_decode_opt_box_autoadd_i_64(arr[3]),
+priority: dco_decode_i_32(arr[4]),
+status: dco_decode_String(arr[5]),
+done: dco_decode_i_32(arr[6]),
+doneAt: dco_decode_opt_box_autoadd_i_64(arr[7]),
+dueDate: dco_decode_opt_box_autoadd_i_64(arr[8]),
+startDate: dco_decode_opt_box_autoadd_i_64(arr[9]),
+repeatMode: dco_decode_i_32(arr[10]),
+percentDone: dco_decode_f_64(arr[11]),
+position: dco_decode_f_64(arr[12]),
+isFavorite: dco_decode_i_32(arr[13]),
+myDayDate: dco_decode_opt_box_autoadd_i_64(arr[14]),
+durationMinutes: dco_decode_opt_box_autoadd_i_64(arr[15]),
+isDeleted: dco_decode_i_32(arr[16]),
+createdAt: dco_decode_i_64(arr[17]),
+updatedAt: dco_decode_i_64(arr[18]),); }
+
+@protected TodoTaskRelation dco_decode_todo_task_relation(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+final arr = raw as List<dynamic>;
+                if (arr.length != 10) throw Exception('unexpected arr length: expect 10 but see ${arr.length}');
+                return TodoTaskRelation(id: dco_decode_i_64(arr[0]),
+uuid: dco_decode_String(arr[1]),
+taskId: dco_decode_i_64(arr[2]),
+otherTaskId: dco_decode_i_64(arr[3]),
+relationType: dco_decode_String(arr[4]),
+isDeleted: dco_decode_i_32(arr[5]),
+createdAt: dco_decode_i_64(arr[6]),
+updatedAt: dco_decode_i_64(arr[7]),
+deletedAt: dco_decode_opt_box_autoadd_i_64(arr[8]),
+version: dco_decode_i_32(arr[9]),); }
+
+@protected TodoTaskRelationCreateInput dco_decode_todo_task_relation_create_input(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+final arr = raw as List<dynamic>;
+                if (arr.length != 3) throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
+                return TodoTaskRelationCreateInput(taskId: dco_decode_i_64(arr[0]),
+otherTaskId: dco_decode_i_64(arr[1]),
+relationType: dco_decode_String(arr[2]),); }
+
+@protected TodoTemplate dco_decode_todo_template(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+final arr = raw as List<dynamic>;
+                if (arr.length != 5) throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
+                return TodoTemplate(id: dco_decode_i_64(arr[0]),
+uuid: dco_decode_String(arr[1]),
+name: dco_decode_String(arr[2]),
+payload: dco_decode_String(arr[3]),
+sortOrder: dco_decode_i_64(arr[4]),); }
+
+@protected TodoTemplateCreateInput dco_decode_todo_template_create_input(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+final arr = raw as List<dynamic>;
+                if (arr.length != 3) throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
+                return TodoTemplateCreateInput(name: dco_decode_String(arr[0]),
+payload: dco_decode_String(arr[1]),
+sortOrder: dco_decode_opt_box_autoadd_i_64(arr[2]),); }
+
+@protected TodoTemplateUpdateInput dco_decode_todo_template_update_input(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+final arr = raw as List<dynamic>;
+                if (arr.length != 3) throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
+                return TodoTemplateUpdateInput(name: dco_decode_opt_String(arr[0]),
+payload: dco_decode_opt_String(arr[1]),
+sortOrder: dco_decode_opt_box_autoadd_i_64(arr[2]),); }
+
+@protected TrashMeta dco_decode_trash_meta(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+final arr = raw as List<dynamic>;
+                if (arr.length != 2) throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+                return TrashMeta(retentionDays: dco_decode_i_64(arr[0]),
+lastPurgeMs: dco_decode_i_64(arr[1]),); }
+
+@protected TrashPurgeStats dco_decode_trash_purge_stats(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+final arr = raw as List<dynamic>;
+                if (arr.length != 3) throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
+                return TrashPurgeStats(purged: dco_decode_u_64(arr[0]),
+guarded: dco_decode_u_64(arr[1]),
+ran: dco_decode_bool(arr[2]),); }
+
+@protected int dco_decode_u_32(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+return raw as int; }
+
+@protected BigInt dco_decode_u_64(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+return dcoDecodeU64(raw); }
+
+@protected int dco_decode_u_8(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+return raw as int; }
+
+@protected void dco_decode_unit(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+return; }
+
+@protected BigInt dco_decode_usize(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+return dcoDecodeU64(raw); }
+
+@protected WidgetTodoItem dco_decode_widget_todo_item(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+final arr = raw as List<dynamic>;
+                if (arr.length != 5) throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
+                return WidgetTodoItem(id: dco_decode_i_64(arr[0]),
+uuid: dco_decode_String(arr[1]),
+title: dco_decode_String(arr[2]),
+priority: dco_decode_i_32(arr[3]),
+done: dco_decode_i_32(arr[4]),); }
+
+@protected AnyhowException sse_decode_AnyhowException(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+var inner = sse_decode_String(deserializer);
+        return AnyhowException(inner); }
+
+@protected RustStreamSink<DbEventDto> sse_decode_StreamSink_db_event_dto_Sse(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+throw UnimplementedError('Unreachable ()'); }
+
+@protected RustStreamSink<HolidayProgressDto> sse_decode_StreamSink_holiday_progress_dto_Sse(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+throw UnimplementedError('Unreachable ()'); }
+
+@protected RustStreamSink<ReminderDueDto> sse_decode_StreamSink_reminder_due_dto_Sse(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+throw UnimplementedError('Unreachable ()'); }
+
+@protected String sse_decode_String(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+var inner = sse_decode_list_prim_u_8_strict(deserializer);
+        return utf8.decoder.convert(inner); }
+
+@protected ActivityLogRow sse_decode_activity_log_row(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+var var_id = sse_decode_i_64(deserializer);
+var var_taskId = sse_decode_opt_box_autoadd_i_64(deserializer);
+var var_taskTitle = sse_decode_String(deserializer);
+var var_action = sse_decode_String(deserializer);
+var var_detail = sse_decode_String(deserializer);
+var var_createdAt = sse_decode_i_64(deserializer);
+return ActivityLogRow(id: var_id, taskId: var_taskId, taskTitle: var_taskTitle, action: var_action, detail: var_detail, createdAt: var_createdAt); }
+
+@protected BackupDeviceInfo sse_decode_backup_device_info(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+var var_deviceId = sse_decode_String(deserializer);
+return BackupDeviceInfo(deviceId: var_deviceId); }
+
+@protected BackupEntryView sse_decode_backup_entry_view(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+var var_filename = sse_decode_String(deserializer);
+var var_filePath = sse_decode_String(deserializer);
+var var_modifiedAt = sse_decode_i_64(deserializer);
+var var_sizeBytes = sse_decode_i_64(deserializer);
+return BackupEntryView(filename: var_filename, filePath: var_filePath, modifiedAt: var_modifiedAt, sizeBytes: var_sizeBytes); }
+
+@protected BackupExportResult sse_decode_backup_export_result(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+var var_filePath = sse_decode_String(deserializer);
+var var_fileSize = sse_decode_i_64(deserializer);
+var var_tableCounts = sse_decode_list_backup_table_count(deserializer);
+var var_manifest = sse_decode_backup_manifest_view(deserializer);
+var var_cloudPath = sse_decode_opt_String(deserializer);
+var var_cloudUploaded = sse_decode_bool(deserializer);
+var var_cloudError = sse_decode_opt_String(deserializer);
+var var_localPath = sse_decode_opt_String(deserializer);
+var var_localError = sse_decode_opt_String(deserializer);
+return BackupExportResult(filePath: var_filePath, fileSize: var_fileSize, tableCounts: var_tableCounts, manifest: var_manifest, cloudPath: var_cloudPath, cloudUploaded: var_cloudUploaded, cloudError: var_cloudError, localPath: var_localPath, localError: var_localError); }
+
+@protected BackupImportResult sse_decode_backup_import_result(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+var var_successCount = sse_decode_i_64(deserializer);
+var var_errorCount = sse_decode_i_64(deserializer);
+var var_errors = sse_decode_list_String(deserializer);
+var var_manifest = sse_decode_backup_manifest_view(deserializer);
+var var_needsRestart = sse_decode_bool(deserializer);
+return BackupImportResult(successCount: var_successCount, errorCount: var_errorCount, errors: var_errors, manifest: var_manifest, needsRestart: var_needsRestart); }
+
+@protected BackupManifestView sse_decode_backup_manifest_view(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+var var_formatVersion = sse_decode_u_32(deserializer);
+var var_createdAt = sse_decode_String(deserializer);
+var var_createdAtTs = sse_decode_i_64(deserializer);
+var var_appVersion = sse_decode_String(deserializer);
+var var_deviceId = sse_decode_String(deserializer);
+var var_deviceName = sse_decode_opt_String(deserializer);
+var var_schemaVersion = sse_decode_i_64(deserializer);
+var var_tableCounts = sse_decode_list_backup_table_count(deserializer);
+return BackupManifestView(formatVersion: var_formatVersion, createdAt: var_createdAt, createdAtTs: var_createdAtTs, appVersion: var_appVersion, deviceId: var_deviceId, deviceName: var_deviceName, schemaVersion: var_schemaVersion, tableCounts: var_tableCounts); }
+
+@protected BackupPrefsView sse_decode_backup_prefs_view(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+var var_localPath = sse_decode_opt_String(deserializer);
+var var_keepLatest = sse_decode_bool(deserializer);
+var var_cloudBackupEnabled = sse_decode_bool(deserializer);
+var var_localBackupEnabled = sse_decode_bool(deserializer);
+var var_scheduleType = sse_decode_String(deserializer);
+var var_scheduleTime = sse_decode_String(deserializer);
+var var_scheduleMinute = sse_decode_u_32(deserializer);
+var var_scheduleWeekday = sse_decode_u_32(deserializer);
+var var_scheduleDayOfMonth = sse_decode_u_32(deserializer);
+var var_scheduleMonth = sse_decode_u_32(deserializer);
+var var_lastBackupAt = sse_decode_i_64(deserializer);
+var var_nextBackupAt = sse_decode_i_64(deserializer);
+return BackupPrefsView(localPath: var_localPath, keepLatest: var_keepLatest, cloudBackupEnabled: var_cloudBackupEnabled, localBackupEnabled: var_localBackupEnabled, scheduleType: var_scheduleType, scheduleTime: var_scheduleTime, scheduleMinute: var_scheduleMinute, scheduleWeekday: var_scheduleWeekday, scheduleDayOfMonth: var_scheduleDayOfMonth, scheduleMonth: var_scheduleMonth, lastBackupAt: var_lastBackupAt, nextBackupAt: var_nextBackupAt); }
+
+@protected BackupPreviewTask sse_decode_backup_preview_task(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+var var_title = sse_decode_String(deserializer);
+var var_status = sse_decode_String(deserializer);
+var var_done = sse_decode_bool(deserializer);
+var var_dueDate = sse_decode_opt_box_autoadd_i_64(deserializer);
+var var_priority = sse_decode_i_64(deserializer);
+var var_project = sse_decode_opt_String(deserializer);
+var var_isDeleted = sse_decode_bool(deserializer);
+return BackupPreviewTask(title: var_title, status: var_status, done: var_done, dueDate: var_dueDate, priority: var_priority, project: var_project, isDeleted: var_isDeleted); }
+
+@protected BackupPreviewView sse_decode_backup_preview_view(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+var var_manifest = sse_decode_backup_manifest_view(deserializer);
+var var_sampleTasks = sse_decode_list_backup_preview_task(deserializer);
+var var_taskStats = sse_decode_backup_task_stats(deserializer);
+var var_schemaMismatch = sse_decode_bool(deserializer);
+var var_currentSchemaVersion = sse_decode_i_64(deserializer);
+return BackupPreviewView(manifest: var_manifest, sampleTasks: var_sampleTasks, taskStats: var_taskStats, schemaMismatch: var_schemaMismatch, currentSchemaVersion: var_currentSchemaVersion); }
+
+@protected BackupTableCount sse_decode_backup_table_count(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+var var_table = sse_decode_String(deserializer);
+var var_count = sse_decode_i_64(deserializer);
+return BackupTableCount(table: var_table, count: var_count); }
+
+@protected BackupTaskStats sse_decode_backup_task_stats(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+var var_total = sse_decode_i_64(deserializer);
+var var_alive = sse_decode_i_64(deserializer);
+var var_done = sse_decode_i_64(deserializer);
+var var_deleted = sse_decode_i_64(deserializer);
+return BackupTaskStats(total: var_total, alive: var_alive, done: var_done, deleted: var_deleted); }
+
+@protected BiometricSecretBundle sse_decode_biometric_secret_bundle(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+var var_encryptedDbKeyBio = sse_decode_String(deserializer);
+var var_biometricKey = sse_decode_String(deserializer);
+var var_nonce = sse_decode_String(deserializer);
+return BiometricSecretBundle(encryptedDbKeyBio: var_encryptedDbKeyBio, biometricKey: var_biometricKey, nonce: var_nonce); }
+
+@protected bool sse_decode_bool(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+return deserializer.buffer.getUint8() != 0; }
+
+@protected BackupPrefsView sse_decode_box_autoadd_backup_prefs_view(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+return (sse_decode_backup_prefs_view(deserializer)); }
+
+@protected bool sse_decode_box_autoadd_bool(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+return (sse_decode_bool(deserializer)); }
+
+@protected CsvImportStatsView sse_decode_box_autoadd_csv_import_stats_view(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+return (sse_decode_csv_import_stats_view(deserializer)); }
+
+@protected double sse_decode_box_autoadd_f_64(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+return (sse_decode_f_64(deserializer)); }
+
+@protected int sse_decode_box_autoadd_i_32(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+return (sse_decode_i_32(deserializer)); }
+
+@protected PlatformInt64 sse_decode_box_autoadd_i_64(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+return (sse_decode_i_64(deserializer)); }
+
+@protected ListFilter sse_decode_box_autoadd_list_filter(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+return (sse_decode_list_filter(deserializer)); }
+
+@protected SyncConfigInput sse_decode_box_autoadd_sync_config_input(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+return (sse_decode_sync_config_input(deserializer)); }
+
+@protected SyncConfigView sse_decode_box_autoadd_sync_config_view(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+return (sse_decode_sync_config_view(deserializer)); }
+
+@protected TodoCommentCreateInput sse_decode_box_autoadd_todo_comment_create_input(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+return (sse_decode_todo_comment_create_input(deserializer)); }
+
+@protected TodoLabelCreateInput sse_decode_box_autoadd_todo_label_create_input(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+return (sse_decode_todo_label_create_input(deserializer)); }
+
+@protected TodoProject sse_decode_box_autoadd_todo_project(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+return (sse_decode_todo_project(deserializer)); }
+
+@protected TodoProjectCreateInput sse_decode_box_autoadd_todo_project_create_input(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+return (sse_decode_todo_project_create_input(deserializer)); }
+
+@protected TodoReminderCreateInput sse_decode_box_autoadd_todo_reminder_create_input(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+return (sse_decode_todo_reminder_create_input(deserializer)); }
+
+@protected TodoSavedFilterCreateInput sse_decode_box_autoadd_todo_saved_filter_create_input(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+return (sse_decode_todo_saved_filter_create_input(deserializer)); }
+
+@protected TodoSavedFilterUpdateInput sse_decode_box_autoadd_todo_saved_filter_update_input(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+return (sse_decode_todo_saved_filter_update_input(deserializer)); }
+
+@protected TodoSubtaskCreateInput sse_decode_box_autoadd_todo_subtask_create_input(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+return (sse_decode_todo_subtask_create_input(deserializer)); }
+
+@protected TodoTask sse_decode_box_autoadd_todo_task(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+return (sse_decode_todo_task(deserializer)); }
+
+@protected TodoTaskCreateInput sse_decode_box_autoadd_todo_task_create_input(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+return (sse_decode_todo_task_create_input(deserializer)); }
+
+@protected TodoTaskLabelCreateInput sse_decode_box_autoadd_todo_task_label_create_input(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+return (sse_decode_todo_task_label_create_input(deserializer)); }
+
+@protected TodoTaskRelationCreateInput sse_decode_box_autoadd_todo_task_relation_create_input(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+return (sse_decode_todo_task_relation_create_input(deserializer)); }
+
+@protected TodoTemplateCreateInput sse_decode_box_autoadd_todo_template_create_input(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+return (sse_decode_todo_template_create_input(deserializer)); }
+
+@protected TodoTemplateUpdateInput sse_decode_box_autoadd_todo_template_update_input(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+return (sse_decode_todo_template_update_input(deserializer)); }
+
+@protected BigInt sse_decode_box_autoadd_usize(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+return (sse_decode_usize(deserializer)); }
+
+@protected CloudBackupEntryView sse_decode_cloud_backup_entry_view(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+var var_name = sse_decode_String(deserializer);
+var var_cloudPath = sse_decode_String(deserializer);
+var var_sizeBytes = sse_decode_i_64(deserializer);
+var var_modifiedAt = sse_decode_i_64(deserializer);
+return CloudBackupEntryView(name: var_name, cloudPath: var_cloudPath, sizeBytes: var_sizeBytes, modifiedAt: var_modifiedAt); }
+
+@protected CommentSearchHit sse_decode_comment_search_hit(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+var var_commentId = sse_decode_i_64(deserializer);
+var var_taskId = sse_decode_i_64(deserializer);
+var var_taskTitle = sse_decode_String(deserializer);
+var var_content = sse_decode_String(deserializer);
+var var_createdAt = sse_decode_i_64(deserializer);
+return CommentSearchHit(commentId: var_commentId, taskId: var_taskId, taskTitle: var_taskTitle, content: var_content, createdAt: var_createdAt); }
+
+@protected CompleteTaskResult sse_decode_complete_task_result(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+var var_task = sse_decode_todo_task(deserializer);
+var var_nextInstance = sse_decode_opt_box_autoadd_todo_task(deserializer);
+return CompleteTaskResult(task: var_task, nextInstance: var_nextInstance); }
+
+@protected CsvImportPreviewView sse_decode_csv_import_preview_view(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+var var_preset = sse_decode_String(deserializer);
+var var_rows = sse_decode_list_csv_import_row_view(deserializer);
+var var_stats = sse_decode_csv_import_stats_view(deserializer);
+return CsvImportPreviewView(preset: var_preset, rows: var_rows, stats: var_stats); }
+
+@protected CsvImportRowView sse_decode_csv_import_row_view(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+var var_sourceLine = sse_decode_usize(deserializer);
+var var_projectTitle = sse_decode_opt_String(deserializer);
+var var_input = sse_decode_todo_task_create_input(deserializer);
+var var_skipReason = sse_decode_opt_String(deserializer);
+return CsvImportRowView(sourceLine: var_sourceLine, projectTitle: var_projectTitle, input: var_input, skipReason: var_skipReason); }
+
+@protected CsvImportStatsView sse_decode_csv_import_stats_view(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+var var_success = sse_decode_usize(deserializer);
+var var_skipped = sse_decode_usize(deserializer);
+var var_failed = sse_decode_usize(deserializer);
+var var_notes = sse_decode_list_String(deserializer);
+return CsvImportStatsView(success: var_success, skipped: var_skipped, failed: var_failed, notes: var_notes); }
+
+@protected DbEventDto sse_decode_db_event_dto(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+var var_table = sse_decode_String(deserializer);
+var var_op = sse_decode_String(deserializer);
+var var_recordId = sse_decode_i_64(deserializer);
+var var_recordUuid = sse_decode_String(deserializer);
+var var_deviceId = sse_decode_String(deserializer);
+var var_timestamp = sse_decode_i_64(deserializer);
+return DbEventDto(table: var_table, op: var_op, recordId: var_recordId, recordUuid: var_recordUuid, deviceId: var_deviceId, timestamp: var_timestamp); }
+
+@protected DbMaintenanceView sse_decode_db_maintenance_view(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+var var_walBytesAfterCheckpoint = sse_decode_i_64(deserializer);
+var var_attachmentsCleaned = sse_decode_i_32(deserializer);
+var var_logRowsPruned = sse_decode_i_32(deserializer);
+var var_freelistBefore = sse_decode_i_64(deserializer);
+var var_freelistAfter = sse_decode_i_64(deserializer);
+var var_pagesReclaimed = sse_decode_i_64(deserializer);
+return DbMaintenanceView(walBytesAfterCheckpoint: var_walBytesAfterCheckpoint, attachmentsCleaned: var_attachmentsCleaned, logRowsPruned: var_logRowsPruned, freelistBefore: var_freelistBefore, freelistAfter: var_freelistAfter, pagesReclaimed: var_pagesReclaimed); }
+
+@protected DiagnosticsSnapshot sse_decode_diagnostics_snapshot(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+var var_dbSizeBytes = sse_decode_i_64(deserializer);
+var var_tableRows = sse_decode_list_table_row_count(deserializer);
+var var_tombstoneRows = sse_decode_i_64(deserializer);
+var var_attachmentCacheBytes = sse_decode_i_64(deserializer);
+var var_attachmentCacheFiles = sse_decode_i_64(deserializer);
+return DiagnosticsSnapshot(dbSizeBytes: var_dbSizeBytes, tableRows: var_tableRows, tombstoneRows: var_tombstoneRows, attachmentCacheBytes: var_attachmentCacheBytes, attachmentCacheFiles: var_attachmentCacheFiles); }
+
+@protected DigestPrefs sse_decode_digest_prefs(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+var var_enabled = sse_decode_bool(deserializer);
+var var_hour = sse_decode_i_64(deserializer);
+var var_minute = sse_decode_i_64(deserializer);
+return DigestPrefs(enabled: var_enabled, hour: var_hour, minute: var_minute); }
+
+@protected DigestSummary sse_decode_digest_summary(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+var var_dueToday = sse_decode_i_64(deserializer);
+var var_overdue = sse_decode_i_64(deserializer);
+var var_doneToday = sse_decode_i_64(deserializer);
+return DigestSummary(dueToday: var_dueToday, overdue: var_overdue, doneToday: var_doneToday); }
+
+@protected double sse_decode_f_64(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+return deserializer.buffer.getFloat64(); }
+
+@protected GlobalSearchResult sse_decode_global_search_result(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+var var_tasks = sse_decode_list_todo_task(deserializer);
+var var_projects = sse_decode_list_todo_project(deserializer);
+var var_comments = sse_decode_list_comment_search_hit(deserializer);
+return GlobalSearchResult(tasks: var_tasks, projects: var_projects, comments: var_comments); }
+
+@protected HolidayInfo sse_decode_holiday_info(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+var var_date = sse_decode_String(deserializer);
+var var_year = sse_decode_i_32(deserializer);
+var var_isHoliday = sse_decode_bool(deserializer);
+var var_name = sse_decode_String(deserializer);
+return HolidayInfo(date: var_date, year: var_year, isHoliday: var_isHoliday, name: var_name); }
+
+@protected HolidayMeta sse_decode_holiday_meta(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+var var_lastUpdateMs = sse_decode_i_64(deserializer);
+var var_lastAttemptMs = sse_decode_i_64(deserializer);
+var var_failureCount = sse_decode_i_32(deserializer);
+var var_autoEnabled = sse_decode_bool(deserializer);
+return HolidayMeta(lastUpdateMs: var_lastUpdateMs, lastAttemptMs: var_lastAttemptMs, failureCount: var_failureCount, autoEnabled: var_autoEnabled); }
+
+@protected HolidayProgressDto sse_decode_holiday_progress_dto(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+var var_phase = sse_decode_String(deserializer);
+var var_total = sse_decode_u_32(deserializer);
+var var_year = sse_decode_i_32(deserializer);
+var var_done = sse_decode_u_32(deserializer);
+var var_yearOk = sse_decode_bool(deserializer);
+var var_yearEmpty = sse_decode_bool(deserializer);
+var var_okCount = sse_decode_u_32(deserializer);
+var var_failed = sse_decode_u_32(deserializer);
+var var_cancelled = sse_decode_bool(deserializer);
+var var_message = sse_decode_String(deserializer);
+return HolidayProgressDto(phase: var_phase, total: var_total, year: var_year, done: var_done, yearOk: var_yearOk, yearEmpty: var_yearEmpty, okCount: var_okCount, failed: var_failed, cancelled: var_cancelled, message: var_message); }
+
+@protected HolidayRangeSummary sse_decode_holiday_range_summary(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+var var_ok = sse_decode_u_32(deserializer);
+var var_failed = sse_decode_u_32(deserializer);
+var var_empty = sse_decode_u_32(deserializer);
+var var_cancelled = sse_decode_bool(deserializer);
+return HolidayRangeSummary(ok: var_ok, failed: var_failed, empty: var_empty, cancelled: var_cancelled); }
+
+@protected HolidayYearOutcome sse_decode_holiday_year_outcome(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+var var_meta = sse_decode_holiday_meta(deserializer);
+var var_rowCount = sse_decode_u_32(deserializer);
+return HolidayYearOutcome(meta: var_meta, rowCount: var_rowCount); }
+
+@protected int sse_decode_i_32(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+return deserializer.buffer.getInt32(); }
+
+@protected PlatformInt64 sse_decode_i_64(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+return deserializer.buffer.getPlatformInt64(); }
+
+@protected IcsExportView sse_decode_ics_export_view(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+var var_content = sse_decode_String(deserializer);
+var var_tableCounts = sse_decode_list_ics_table_count(deserializer);
+var var_suggestedFilename = sse_decode_String(deserializer);
+return IcsExportView(content: var_content, tableCounts: var_tableCounts, suggestedFilename: var_suggestedFilename); }
+
+@protected IcsTableCount sse_decode_ics_table_count(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+var var_table = sse_decode_String(deserializer);
+var var_count = sse_decode_usize(deserializer);
+return IcsTableCount(table: var_table, count: var_count); }
+
+@protected ImportJobStatusView sse_decode_import_job_status_view(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+var var_jobId = sse_decode_String(deserializer);
+var var_processed = sse_decode_usize(deserializer);
+var var_total = sse_decode_opt_box_autoadd_usize(deserializer);
+var var_finished = sse_decode_bool(deserializer);
+var var_cancelled = sse_decode_bool(deserializer);
+var var_stats = sse_decode_opt_box_autoadd_csv_import_stats_view(deserializer);
+var var_error = sse_decode_opt_String(deserializer);
+return ImportJobStatusView(jobId: var_jobId, processed: var_processed, total: var_total, finished: var_finished, cancelled: var_cancelled, stats: var_stats, error: var_error); }
+
+@protected ImportLimitsView sse_decode_import_limits_view(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+var var_maxBytes = sse_decode_usize(deserializer);
+var var_maxRows = sse_decode_usize(deserializer);
+return ImportLimitsView(maxBytes: var_maxBytes, maxRows: var_maxRows); }
+
+@protected List<String> sse_decode_list_String(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+
+        var len_ = sse_decode_i_32(deserializer);
+        var ans_ = <String>[];
+        for (var idx_ = 0; idx_ < len_; ++idx_) { ans_.add(sse_decode_String(deserializer)); }
+        return ans_;
+         }
+
+@protected List<ActivityLogRow> sse_decode_list_activity_log_row(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+
+        var len_ = sse_decode_i_32(deserializer);
+        var ans_ = <ActivityLogRow>[];
+        for (var idx_ = 0; idx_ < len_; ++idx_) { ans_.add(sse_decode_activity_log_row(deserializer)); }
+        return ans_;
+         }
+
+@protected List<BackupEntryView> sse_decode_list_backup_entry_view(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+
+        var len_ = sse_decode_i_32(deserializer);
+        var ans_ = <BackupEntryView>[];
+        for (var idx_ = 0; idx_ < len_; ++idx_) { ans_.add(sse_decode_backup_entry_view(deserializer)); }
+        return ans_;
+         }
+
+@protected List<BackupPreviewTask> sse_decode_list_backup_preview_task(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+
+        var len_ = sse_decode_i_32(deserializer);
+        var ans_ = <BackupPreviewTask>[];
+        for (var idx_ = 0; idx_ < len_; ++idx_) { ans_.add(sse_decode_backup_preview_task(deserializer)); }
+        return ans_;
+         }
+
+@protected List<BackupTableCount> sse_decode_list_backup_table_count(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+
+        var len_ = sse_decode_i_32(deserializer);
+        var ans_ = <BackupTableCount>[];
+        for (var idx_ = 0; idx_ < len_; ++idx_) { ans_.add(sse_decode_backup_table_count(deserializer)); }
+        return ans_;
+         }
+
+@protected List<CloudBackupEntryView> sse_decode_list_cloud_backup_entry_view(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+
+        var len_ = sse_decode_i_32(deserializer);
+        var ans_ = <CloudBackupEntryView>[];
+        for (var idx_ = 0; idx_ < len_; ++idx_) { ans_.add(sse_decode_cloud_backup_entry_view(deserializer)); }
+        return ans_;
+         }
+
+@protected List<CommentSearchHit> sse_decode_list_comment_search_hit(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+
+        var len_ = sse_decode_i_32(deserializer);
+        var ans_ = <CommentSearchHit>[];
+        for (var idx_ = 0; idx_ < len_; ++idx_) { ans_.add(sse_decode_comment_search_hit(deserializer)); }
+        return ans_;
+         }
+
+@protected List<CsvImportRowView> sse_decode_list_csv_import_row_view(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+
+        var len_ = sse_decode_i_32(deserializer);
+        var ans_ = <CsvImportRowView>[];
+        for (var idx_ = 0; idx_ < len_; ++idx_) { ans_.add(sse_decode_csv_import_row_view(deserializer)); }
+        return ans_;
+         }
+
+@protected ListFilter sse_decode_list_filter(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+var var_keyword = sse_decode_opt_String(deserializer);
+var var_page = sse_decode_u_32(deserializer);
+var var_pageSize = sse_decode_u_32(deserializer);
+var var_done = sse_decode_opt_box_autoadd_bool(deserializer);
+var var_status = sse_decode_opt_String(deserializer);
+var var_priorityMin = sse_decode_opt_box_autoadd_i_32(deserializer);
+var var_projectId = sse_decode_opt_box_autoadd_i_64(deserializer);
+var var_projectIds = sse_decode_opt_list_prim_i_64_strict(deserializer);
+var var_favoriteOnly = sse_decode_opt_box_autoadd_bool(deserializer);
+var var_myDayToday = sse_decode_opt_box_autoadd_i_64(deserializer);
+return ListFilter(keyword: var_keyword, page: var_page, pageSize: var_pageSize, done: var_done, status: var_status, priorityMin: var_priorityMin, projectId: var_projectId, projectIds: var_projectIds, favoriteOnly: var_favoriteOnly, myDayToday: var_myDayToday); }
+
+@protected List<HolidayInfo> sse_decode_list_holiday_info(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+
+        var len_ = sse_decode_i_32(deserializer);
+        var ans_ = <HolidayInfo>[];
+        for (var idx_ = 0; idx_ < len_; ++idx_) { ans_.add(sse_decode_holiday_info(deserializer)); }
+        return ans_;
+         }
+
+@protected List<IcsTableCount> sse_decode_list_ics_table_count(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+
+        var len_ = sse_decode_i_32(deserializer);
+        var ans_ = <IcsTableCount>[];
+        for (var idx_ = 0; idx_ < len_; ++idx_) { ans_.add(sse_decode_ics_table_count(deserializer)); }
+        return ans_;
+         }
+
+@protected List<NotificationLogRow> sse_decode_list_notification_log_row(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+
+        var len_ = sse_decode_i_32(deserializer);
+        var ans_ = <NotificationLogRow>[];
+        for (var idx_ = 0; idx_ < len_; ++idx_) { ans_.add(sse_decode_notification_log_row(deserializer)); }
+        return ans_;
+         }
+
+@protected Int64List sse_decode_list_prim_i_64_strict(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+var len_ = sse_decode_i_32(deserializer);
+                return deserializer.buffer.getInt64List(len_); }
+
+@protected List<int> sse_decode_list_prim_u_8_loose(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+var len_ = sse_decode_i_32(deserializer);
+                return deserializer.buffer.getUint8List(len_); }
+
+@protected Uint8List sse_decode_list_prim_u_8_strict(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+var len_ = sse_decode_i_32(deserializer);
+                return deserializer.buffer.getUint8List(len_); }
+
+@protected List<ProjectedReminder> sse_decode_list_projected_reminder(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+
+        var len_ = sse_decode_i_32(deserializer);
+        var ans_ = <ProjectedReminder>[];
+        for (var idx_ = 0; idx_ < len_; ++idx_) { ans_.add(sse_decode_projected_reminder(deserializer)); }
+        return ans_;
+         }
+
+@protected List<ProjectedTaskLabel> sse_decode_list_projected_task_label(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+
+        var len_ = sse_decode_i_32(deserializer);
+        var ans_ = <ProjectedTaskLabel>[];
+        for (var idx_ = 0; idx_ < len_; ++idx_) { ans_.add(sse_decode_projected_task_label(deserializer)); }
+        return ans_;
+         }
+
+@protected List<StatsHeatmapCell> sse_decode_list_stats_heatmap_cell(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+
+        var len_ = sse_decode_i_32(deserializer);
+        var ans_ = <StatsHeatmapCell>[];
+        for (var idx_ = 0; idx_ < len_; ++idx_) { ans_.add(sse_decode_stats_heatmap_cell(deserializer)); }
+        return ans_;
+         }
+
+@protected List<StatsPriorityRow> sse_decode_list_stats_priority_row(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+
+        var len_ = sse_decode_i_32(deserializer);
+        var ans_ = <StatsPriorityRow>[];
+        for (var idx_ = 0; idx_ < len_; ++idx_) { ans_.add(sse_decode_stats_priority_row(deserializer)); }
+        return ans_;
+         }
+
+@protected List<StatsProjectRow> sse_decode_list_stats_project_row(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+
+        var len_ = sse_decode_i_32(deserializer);
+        var ans_ = <StatsProjectRow>[];
+        for (var idx_ = 0; idx_ < len_; ++idx_) { ans_.add(sse_decode_stats_project_row(deserializer)); }
+        return ans_;
+         }
+
+@protected List<StatsWeekdayRow> sse_decode_list_stats_weekday_row(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+
+        var len_ = sse_decode_i_32(deserializer);
+        var ans_ = <StatsWeekdayRow>[];
+        for (var idx_ = 0; idx_ < len_; ++idx_) { ans_.add(sse_decode_stats_weekday_row(deserializer)); }
+        return ans_;
+         }
+
+@protected List<SyncConflict> sse_decode_list_sync_conflict(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+
+        var len_ = sse_decode_i_32(deserializer);
+        var ans_ = <SyncConflict>[];
+        for (var idx_ = 0; idx_ < len_; ++idx_) { ans_.add(sse_decode_sync_conflict(deserializer)); }
+        return ans_;
+         }
+
+@protected List<SyncHistoryView> sse_decode_list_sync_history_view(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+
+        var len_ = sse_decode_i_32(deserializer);
+        var ans_ = <SyncHistoryView>[];
+        for (var idx_ = 0; idx_ < len_; ++idx_) { ans_.add(sse_decode_sync_history_view(deserializer)); }
+        return ans_;
+         }
+
+@protected List<TableCount> sse_decode_list_table_count(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+
+        var len_ = sse_decode_i_32(deserializer);
+        var ans_ = <TableCount>[];
+        for (var idx_ = 0; idx_ < len_; ++idx_) { ans_.add(sse_decode_table_count(deserializer)); }
+        return ans_;
+         }
+
+@protected List<TableRowCount> sse_decode_list_table_row_count(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+
+        var len_ = sse_decode_i_32(deserializer);
+        var ans_ = <TableRowCount>[];
+        for (var idx_ = 0; idx_ < len_; ++idx_) { ans_.add(sse_decode_table_row_count(deserializer)); }
+        return ans_;
+         }
+
+@protected List<TaskAttachmentView> sse_decode_list_task_attachment_view(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+
+        var len_ = sse_decode_i_32(deserializer);
+        var ans_ = <TaskAttachmentView>[];
+        for (var idx_ = 0; idx_ < len_; ++idx_) { ans_.add(sse_decode_task_attachment_view(deserializer)); }
+        return ans_;
+         }
+
+@protected List<TaskDependencyFlags> sse_decode_list_task_dependency_flags(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+
+        var len_ = sse_decode_i_32(deserializer);
+        var ans_ = <TaskDependencyFlags>[];
+        for (var idx_ = 0; idx_ < len_; ++idx_) { ans_.add(sse_decode_task_dependency_flags(deserializer)); }
+        return ans_;
+         }
+
+@protected List<TaskDescriptionFlag> sse_decode_list_task_description_flag(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+
+        var len_ = sse_decode_i_32(deserializer);
+        var ans_ = <TaskDescriptionFlag>[];
+        for (var idx_ = 0; idx_ < len_; ++idx_) { ans_.add(sse_decode_task_description_flag(deserializer)); }
+        return ans_;
+         }
+
+@protected List<TaskExistenceFlag> sse_decode_list_task_existence_flag(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+
+        var len_ = sse_decode_i_32(deserializer);
+        var ans_ = <TaskExistenceFlag>[];
+        for (var idx_ = 0; idx_ < len_; ++idx_) { ans_.add(sse_decode_task_existence_flag(deserializer)); }
+        return ans_;
+         }
+
+@protected List<TaskLabelWithId> sse_decode_list_task_label_with_id(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+
+        var len_ = sse_decode_i_32(deserializer);
+        var ans_ = <TaskLabelWithId>[];
+        for (var idx_ = 0; idx_ < len_; ++idx_) { ans_.add(sse_decode_task_label_with_id(deserializer)); }
+        return ans_;
+         }
+
+@protected List<TaskLabelsProjection> sse_decode_list_task_labels_projection(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+
+        var len_ = sse_decode_i_32(deserializer);
+        var ans_ = <TaskLabelsProjection>[];
+        for (var idx_ = 0; idx_ < len_; ++idx_) { ans_.add(sse_decode_task_labels_projection(deserializer)); }
+        return ans_;
+         }
+
+@protected List<TaskRemindersProjection> sse_decode_list_task_reminders_projection(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+
+        var len_ = sse_decode_i_32(deserializer);
+        var ans_ = <TaskRemindersProjection>[];
+        for (var idx_ = 0; idx_ < len_; ++idx_) { ans_.add(sse_decode_task_reminders_projection(deserializer)); }
+        return ans_;
+         }
+
+@protected List<TodoComment> sse_decode_list_todo_comment(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+
+        var len_ = sse_decode_i_32(deserializer);
+        var ans_ = <TodoComment>[];
+        for (var idx_ = 0; idx_ < len_; ++idx_) { ans_.add(sse_decode_todo_comment(deserializer)); }
+        return ans_;
+         }
+
+@protected List<TodoLabel> sse_decode_list_todo_label(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+
+        var len_ = sse_decode_i_32(deserializer);
+        var ans_ = <TodoLabel>[];
+        for (var idx_ = 0; idx_ < len_; ++idx_) { ans_.add(sse_decode_todo_label(deserializer)); }
+        return ans_;
+         }
+
+@protected List<TodoProject> sse_decode_list_todo_project(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+
+        var len_ = sse_decode_i_32(deserializer);
+        var ans_ = <TodoProject>[];
+        for (var idx_ = 0; idx_ < len_; ++idx_) { ans_.add(sse_decode_todo_project(deserializer)); }
+        return ans_;
+         }
+
+@protected List<TodoReminder> sse_decode_list_todo_reminder(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+
+        var len_ = sse_decode_i_32(deserializer);
+        var ans_ = <TodoReminder>[];
+        for (var idx_ = 0; idx_ < len_; ++idx_) { ans_.add(sse_decode_todo_reminder(deserializer)); }
+        return ans_;
+         }
+
+@protected List<TodoSavedFilter> sse_decode_list_todo_saved_filter(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+
+        var len_ = sse_decode_i_32(deserializer);
+        var ans_ = <TodoSavedFilter>[];
+        for (var idx_ = 0; idx_ < len_; ++idx_) { ans_.add(sse_decode_todo_saved_filter(deserializer)); }
+        return ans_;
+         }
+
+@protected List<TodoSubtask> sse_decode_list_todo_subtask(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+
+        var len_ = sse_decode_i_32(deserializer);
+        var ans_ = <TodoSubtask>[];
+        for (var idx_ = 0; idx_ < len_; ++idx_) { ans_.add(sse_decode_todo_subtask(deserializer)); }
+        return ans_;
+         }
+
+@protected List<TodoTask> sse_decode_list_todo_task(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+
+        var len_ = sse_decode_i_32(deserializer);
+        var ans_ = <TodoTask>[];
+        for (var idx_ = 0; idx_ < len_; ++idx_) { ans_.add(sse_decode_todo_task(deserializer)); }
+        return ans_;
+         }
+
+@protected List<TodoTaskLabel> sse_decode_list_todo_task_label(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+
+        var len_ = sse_decode_i_32(deserializer);
+        var ans_ = <TodoTaskLabel>[];
+        for (var idx_ = 0; idx_ < len_; ++idx_) { ans_.add(sse_decode_todo_task_label(deserializer)); }
+        return ans_;
+         }
+
+@protected List<TodoTaskListItem> sse_decode_list_todo_task_list_item(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+
+        var len_ = sse_decode_i_32(deserializer);
+        var ans_ = <TodoTaskListItem>[];
+        for (var idx_ = 0; idx_ < len_; ++idx_) { ans_.add(sse_decode_todo_task_list_item(deserializer)); }
+        return ans_;
+         }
+
+@protected List<TodoTaskRelation> sse_decode_list_todo_task_relation(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+
+        var len_ = sse_decode_i_32(deserializer);
+        var ans_ = <TodoTaskRelation>[];
+        for (var idx_ = 0; idx_ < len_; ++idx_) { ans_.add(sse_decode_todo_task_relation(deserializer)); }
+        return ans_;
+         }
+
+@protected List<TodoTemplate> sse_decode_list_todo_template(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+
+        var len_ = sse_decode_i_32(deserializer);
+        var ans_ = <TodoTemplate>[];
+        for (var idx_ = 0; idx_ < len_; ++idx_) { ans_.add(sse_decode_todo_template(deserializer)); }
+        return ans_;
+         }
+
+@protected List<WidgetTodoItem> sse_decode_list_widget_todo_item(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+
+        var len_ = sse_decode_i_32(deserializer);
+        var ans_ = <WidgetTodoItem>[];
+        for (var idx_ = 0; idx_ < len_; ++idx_) { ans_.add(sse_decode_widget_todo_item(deserializer)); }
+        return ans_;
+         }
+
+@protected NotificationLogRow sse_decode_notification_log_row(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+var var_id = sse_decode_i_64(deserializer);
+var var_kind = sse_decode_String(deserializer);
+var var_taskId = sse_decode_opt_box_autoadd_i_64(deserializer);
+var var_taskTitle = sse_decode_String(deserializer);
+var var_reminderId = sse_decode_opt_box_autoadd_i_64(deserializer);
+var var_payload = sse_decode_String(deserializer);
+var var_createdAt = sse_decode_i_64(deserializer);
+return NotificationLogRow(id: var_id, kind: var_kind, taskId: var_taskId, taskTitle: var_taskTitle, reminderId: var_reminderId, payload: var_payload, createdAt: var_createdAt); }
+
+@protected String? sse_decode_opt_String(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+
+            if (sse_decode_bool(deserializer)) {
+                return (sse_decode_String(deserializer));
+            } else {
+                return null;
+            }
+             }
+
+@protected bool? sse_decode_opt_box_autoadd_bool(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+
+            if (sse_decode_bool(deserializer)) {
+                return (sse_decode_box_autoadd_bool(deserializer));
+            } else {
+                return null;
+            }
+             }
+
+@protected CsvImportStatsView? sse_decode_opt_box_autoadd_csv_import_stats_view(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+
+            if (sse_decode_bool(deserializer)) {
+                return (sse_decode_box_autoadd_csv_import_stats_view(deserializer));
+            } else {
+                return null;
+            }
+             }
+
+@protected double? sse_decode_opt_box_autoadd_f_64(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+
+            if (sse_decode_bool(deserializer)) {
+                return (sse_decode_box_autoadd_f_64(deserializer));
+            } else {
+                return null;
+            }
+             }
+
+@protected int? sse_decode_opt_box_autoadd_i_32(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+
+            if (sse_decode_bool(deserializer)) {
+                return (sse_decode_box_autoadd_i_32(deserializer));
+            } else {
+                return null;
+            }
+             }
+
+@protected PlatformInt64? sse_decode_opt_box_autoadd_i_64(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+
+            if (sse_decode_bool(deserializer)) {
+                return (sse_decode_box_autoadd_i_64(deserializer));
+            } else {
+                return null;
+            }
+             }
+
+@protected SyncConfigView? sse_decode_opt_box_autoadd_sync_config_view(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+
+            if (sse_decode_bool(deserializer)) {
+                return (sse_decode_box_autoadd_sync_config_view(deserializer));
+            } else {
+                return null;
+            }
+             }
+
+@protected TodoProject? sse_decode_opt_box_autoadd_todo_project(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+
+            if (sse_decode_bool(deserializer)) {
+                return (sse_decode_box_autoadd_todo_project(deserializer));
+            } else {
+                return null;
+            }
+             }
+
+@protected TodoTask? sse_decode_opt_box_autoadd_todo_task(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+
+            if (sse_decode_bool(deserializer)) {
+                return (sse_decode_box_autoadd_todo_task(deserializer));
+            } else {
+                return null;
+            }
+             }
+
+@protected BigInt? sse_decode_opt_box_autoadd_usize(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+
+            if (sse_decode_bool(deserializer)) {
+                return (sse_decode_box_autoadd_usize(deserializer));
+            } else {
+                return null;
+            }
+             }
+
+@protected Int64List? sse_decode_opt_list_prim_i_64_strict(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+
+            if (sse_decode_bool(deserializer)) {
+                return (sse_decode_list_prim_i_64_strict(deserializer));
+            } else {
+                return null;
+            }
+             }
+
+@protected PlaintextExportView sse_decode_plaintext_export_view(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+var var_content = sse_decode_String(deserializer);
+var var_tableCounts = sse_decode_list_table_count(deserializer);
+var var_suggestedFilename = sse_decode_String(deserializer);
+return PlaintextExportView(content: var_content, tableCounts: var_tableCounts, suggestedFilename: var_suggestedFilename); }
+
+@protected ProjectedReminder sse_decode_projected_reminder(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+var var_id = sse_decode_i_64(deserializer);
+var var_remindAt = sse_decode_i_64(deserializer);
+return ProjectedReminder(id: var_id, remindAt: var_remindAt); }
+
+@protected ProjectedTaskLabel sse_decode_projected_task_label(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+var var_id = sse_decode_i_64(deserializer);
+var var_title = sse_decode_String(deserializer);
+var var_hexColor = sse_decode_String(deserializer);
+return ProjectedTaskLabel(id: var_id, title: var_title, hexColor: var_hexColor); }
+
+@protected ReminderDueDto sse_decode_reminder_due_dto(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+var var_id = sse_decode_i_64(deserializer);
+var var_taskId = sse_decode_i_64(deserializer);
+var var_title = sse_decode_String(deserializer);
+var var_remindAt = sse_decode_i_64(deserializer);
+var var_isConstant = sse_decode_i_32(deserializer);
+return ReminderDueDto(id: var_id, taskId: var_taskId, title: var_title, remindAt: var_remindAt, isConstant: var_isConstant); }
+
+@protected StatsAggregate sse_decode_stats_aggregate(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+var var_overview = sse_decode_stats_overview(deserializer);
+var var_heatmap = sse_decode_stats_heatmap(deserializer);
+var var_streak = sse_decode_stats_streak(deserializer);
+var var_byProject = sse_decode_list_stats_project_row(deserializer);
+var var_byPriority = sse_decode_list_stats_priority_row(deserializer);
+var var_byWeekday = sse_decode_list_stats_weekday_row(deserializer);
+var var_availableYears = sse_decode_list_prim_i_64_strict(deserializer);
+return StatsAggregate(overview: var_overview, heatmap: var_heatmap, streak: var_streak, byProject: var_byProject, byPriority: var_byPriority, byWeekday: var_byWeekday, availableYears: var_availableYears); }
+
+@protected StatsHeatmap sse_decode_stats_heatmap(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+var var_year = sse_decode_i_64(deserializer);
+var var_startDate = sse_decode_String(deserializer);
+var var_endDate = sse_decode_String(deserializer);
+var var_cells = sse_decode_list_stats_heatmap_cell(deserializer);
+return StatsHeatmap(year: var_year, startDate: var_startDate, endDate: var_endDate, cells: var_cells); }
+
+@protected StatsHeatmapCell sse_decode_stats_heatmap_cell(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+var var_date = sse_decode_String(deserializer);
+var var_count = sse_decode_i_64(deserializer);
+return StatsHeatmapCell(date: var_date, count: var_count); }
+
+@protected StatsOverview sse_decode_stats_overview(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+var var_total = sse_decode_i_64(deserializer);
+var var_pending = sse_decode_i_64(deserializer);
+var var_done = sse_decode_i_64(deserializer);
+var var_doneLast7D = sse_decode_i_64(deserializer);
+var var_doneLast30D = sse_decode_i_64(deserializer);
+return StatsOverview(total: var_total, pending: var_pending, done: var_done, doneLast7D: var_doneLast7D, doneLast30D: var_doneLast30D); }
+
+@protected StatsPriorityRow sse_decode_stats_priority_row(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+var var_priority = sse_decode_i_64(deserializer);
+var var_doneCount = sse_decode_i_64(deserializer);
+var var_pendingCount = sse_decode_i_64(deserializer);
+return StatsPriorityRow(priority: var_priority, doneCount: var_doneCount, pendingCount: var_pendingCount); }
+
+@protected StatsProjectRow sse_decode_stats_project_row(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+var var_projectId = sse_decode_opt_box_autoadd_i_64(deserializer);
+var var_projectTitle = sse_decode_opt_String(deserializer);
+var var_projectHexColor = sse_decode_opt_String(deserializer);
+var var_doneCount = sse_decode_i_64(deserializer);
+var var_pendingCount = sse_decode_i_64(deserializer);
+return StatsProjectRow(projectId: var_projectId, projectTitle: var_projectTitle, projectHexColor: var_projectHexColor, doneCount: var_doneCount, pendingCount: var_pendingCount); }
+
+@protected StatsStreak sse_decode_stats_streak(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+var var_current = sse_decode_i_64(deserializer);
+var var_best = sse_decode_i_64(deserializer);
+var var_doneToday = sse_decode_bool(deserializer);
+return StatsStreak(current: var_current, best: var_best, doneToday: var_doneToday); }
+
+@protected StatsWeekdayRow sse_decode_stats_weekday_row(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+var var_weekday = sse_decode_i_64(deserializer);
+var var_doneCount = sse_decode_i_64(deserializer);
+return StatsWeekdayRow(weekday: var_weekday, doneCount: var_doneCount); }
+
+@protected SyncConfigInput sse_decode_sync_config_input(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+var var_engine = sse_decode_String(deserializer);
+var var_endpoint = sse_decode_String(deserializer);
+var var_bucket = sse_decode_opt_String(deserializer);
+var var_region = sse_decode_opt_String(deserializer);
+var var_username = sse_decode_opt_String(deserializer);
+var var_password = sse_decode_opt_String(deserializer);
+var var_basePath = sse_decode_opt_String(deserializer);
+var var_intervalMinutes = sse_decode_opt_box_autoadd_i_64(deserializer);
+var var_autoSyncEnabled = sse_decode_opt_box_autoadd_bool(deserializer);
+var var_syncOnChange = sse_decode_opt_box_autoadd_bool(deserializer);
+var var_skipTlsVerify = sse_decode_opt_box_autoadd_bool(deserializer);
+var var_timeoutSeconds = sse_decode_opt_box_autoadd_i_64(deserializer);
+var var_sessionToken = sse_decode_opt_String(deserializer);
+return SyncConfigInput(engine: var_engine, endpoint: var_endpoint, bucket: var_bucket, region: var_region, username: var_username, password: var_password, basePath: var_basePath, intervalMinutes: var_intervalMinutes, autoSyncEnabled: var_autoSyncEnabled, syncOnChange: var_syncOnChange, skipTlsVerify: var_skipTlsVerify, timeoutSeconds: var_timeoutSeconds, sessionToken: var_sessionToken); }
+
+@protected SyncConfigView sse_decode_sync_config_view(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+var var_id = sse_decode_i_64(deserializer);
+var var_engine = sse_decode_String(deserializer);
+var var_endpoint = sse_decode_String(deserializer);
+var var_bucket = sse_decode_String(deserializer);
+var var_region = sse_decode_String(deserializer);
+var var_username = sse_decode_String(deserializer);
+var var_passwordSet = sse_decode_bool(deserializer);
+var var_basePath = sse_decode_String(deserializer);
+var var_intervalMinutes = sse_decode_i_64(deserializer);
+var var_autoSyncEnabled = sse_decode_bool(deserializer);
+var var_syncOnChange = sse_decode_bool(deserializer);
+var var_skipTlsVerify = sse_decode_bool(deserializer);
+var var_timeoutSeconds = sse_decode_i_64(deserializer);
+var var_sessionTokenSet = sse_decode_bool(deserializer);
+var var_lastSyncedAt = sse_decode_opt_box_autoadd_i_64(deserializer);
+return SyncConfigView(id: var_id, engine: var_engine, endpoint: var_endpoint, bucket: var_bucket, region: var_region, username: var_username, passwordSet: var_passwordSet, basePath: var_basePath, intervalMinutes: var_intervalMinutes, autoSyncEnabled: var_autoSyncEnabled, syncOnChange: var_syncOnChange, skipTlsVerify: var_skipTlsVerify, timeoutSeconds: var_timeoutSeconds, sessionTokenSet: var_sessionTokenSet, lastSyncedAt: var_lastSyncedAt); }
+
+@protected SyncConflict sse_decode_sync_conflict(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+var var_id = sse_decode_i_64(deserializer);
+var var_tableName = sse_decode_String(deserializer);
+var var_recordUuid = sse_decode_String(deserializer);
+var var_recordTitle = sse_decode_String(deserializer);
+var var_decision = sse_decode_String(deserializer);
+var var_loserSide = sse_decode_String(deserializer);
+var var_winnerSide = sse_decode_String(deserializer);
+var var_loserPayload = sse_decode_String(deserializer);
+var var_winnerPayload = sse_decode_String(deserializer);
+var var_loserUpdatedAt = sse_decode_i_64(deserializer);
+var var_winnerUpdatedAt = sse_decode_i_64(deserializer);
+var var_resolution = sse_decode_String(deserializer);
+var var_createdAt = sse_decode_i_64(deserializer);
+var var_resolvedAt = sse_decode_i_64(deserializer);
+return SyncConflict(id: var_id, tableName: var_tableName, recordUuid: var_recordUuid, recordTitle: var_recordTitle, decision: var_decision, loserSide: var_loserSide, winnerSide: var_winnerSide, loserPayload: var_loserPayload, winnerPayload: var_winnerPayload, loserUpdatedAt: var_loserUpdatedAt, winnerUpdatedAt: var_winnerUpdatedAt, resolution: var_resolution, createdAt: var_createdAt, resolvedAt: var_resolvedAt); }
+
+@protected SyncCryptoStatus sse_decode_sync_crypto_status(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+var var_hasPassword = sse_decode_bool(deserializer);
+var var_isUnlocked = sse_decode_bool(deserializer);
+return SyncCryptoStatus(hasPassword: var_hasPassword, isUnlocked: var_isUnlocked); }
+
+@protected SyncHistoryView sse_decode_sync_history_view(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+var var_id = sse_decode_i_64(deserializer);
+var var_syncType = sse_decode_String(deserializer);
+var var_status = sse_decode_String(deserializer);
+var var_startedAt = sse_decode_i_64(deserializer);
+var var_finishedAt = sse_decode_opt_box_autoadd_i_64(deserializer);
+var var_pulledCount = sse_decode_i_64(deserializer);
+var var_pushedCount = sse_decode_i_64(deserializer);
+var var_conflictCount = sse_decode_i_64(deserializer);
+var var_errorMessage = sse_decode_opt_String(deserializer);
+return SyncHistoryView(id: var_id, syncType: var_syncType, status: var_status, startedAt: var_startedAt, finishedAt: var_finishedAt, pulledCount: var_pulledCount, pushedCount: var_pushedCount, conflictCount: var_conflictCount, errorMessage: var_errorMessage); }
+
+@protected TableCount sse_decode_table_count(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+var var_table = sse_decode_String(deserializer);
+var var_count = sse_decode_usize(deserializer);
+return TableCount(table: var_table, count: var_count); }
+
+@protected TableRowCount sse_decode_table_row_count(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+var var_table = sse_decode_String(deserializer);
+var var_rows = sse_decode_i_64(deserializer);
+return TableRowCount(table: var_table, rows: var_rows); }
+
+@protected TaskAttachmentView sse_decode_task_attachment_view(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+var var_linkId = sse_decode_i_64(deserializer);
+var var_linkUuid = sse_decode_String(deserializer);
+var var_hash = sse_decode_String(deserializer);
+var var_originalName = sse_decode_String(deserializer);
+var var_mimeType = sse_decode_String(deserializer);
+var var_sizeBytes = sse_decode_i_64(deserializer);
+var var_isLocalCached = sse_decode_i_32(deserializer);
+return TaskAttachmentView(linkId: var_linkId, linkUuid: var_linkUuid, hash: var_hash, originalName: var_originalName, mimeType: var_mimeType, sizeBytes: var_sizeBytes, isLocalCached: var_isLocalCached); }
+
+@protected TaskDependencyFlags sse_decode_task_dependency_flags(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+var var_taskId = sse_decode_i_64(deserializer);
+var var_relationCount = sse_decode_i_64(deserializer);
+return TaskDependencyFlags(taskId: var_taskId, relationCount: var_relationCount); }
+
+@protected TaskDescriptionFlag sse_decode_task_description_flag(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+var var_taskId = sse_decode_i_64(deserializer);
+return TaskDescriptionFlag(taskId: var_taskId); }
+
+@protected TaskExistenceFlag sse_decode_task_existence_flag(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+var var_taskId = sse_decode_i_64(deserializer);
+return TaskExistenceFlag(taskId: var_taskId); }
+
+@protected TaskLabelWithId sse_decode_task_label_with_id(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+var var_id = sse_decode_i_64(deserializer);
+var var_uuid = sse_decode_String(deserializer);
+var var_title = sse_decode_String(deserializer);
+var var_hexColor = sse_decode_String(deserializer);
+var var_isDeleted = sse_decode_i_32(deserializer);
+var var_createdAt = sse_decode_i_64(deserializer);
+var var_updatedAt = sse_decode_i_64(deserializer);
+var var_deletedAt = sse_decode_opt_box_autoadd_i_64(deserializer);
+var var_version = sse_decode_i_32(deserializer);
+var var_taskLabelId = sse_decode_i_64(deserializer);
+return TaskLabelWithId(id: var_id, uuid: var_uuid, title: var_title, hexColor: var_hexColor, isDeleted: var_isDeleted, createdAt: var_createdAt, updatedAt: var_updatedAt, deletedAt: var_deletedAt, version: var_version, taskLabelId: var_taskLabelId); }
+
+@protected TaskLabelsProjection sse_decode_task_labels_projection(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+var var_taskId = sse_decode_i_64(deserializer);
+var var_labels = sse_decode_list_projected_task_label(deserializer);
+return TaskLabelsProjection(taskId: var_taskId, labels: var_labels); }
+
+@protected TaskRemindersProjection sse_decode_task_reminders_projection(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+var var_taskId = sse_decode_i_64(deserializer);
+var var_reminders = sse_decode_list_projected_reminder(deserializer);
+return TaskRemindersProjection(taskId: var_taskId, reminders: var_reminders); }
+
+@protected TodoComment sse_decode_todo_comment(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+var var_id = sse_decode_i_64(deserializer);
+var var_uuid = sse_decode_String(deserializer);
+var var_taskId = sse_decode_i_64(deserializer);
+var var_content = sse_decode_String(deserializer);
+var var_isDeleted = sse_decode_i_32(deserializer);
+var var_createdAt = sse_decode_i_64(deserializer);
+var var_updatedAt = sse_decode_i_64(deserializer);
+var var_deletedAt = sse_decode_opt_box_autoadd_i_64(deserializer);
+var var_version = sse_decode_i_32(deserializer);
+return TodoComment(id: var_id, uuid: var_uuid, taskId: var_taskId, content: var_content, isDeleted: var_isDeleted, createdAt: var_createdAt, updatedAt: var_updatedAt, deletedAt: var_deletedAt, version: var_version); }
+
+@protected TodoCommentCreateInput sse_decode_todo_comment_create_input(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+var var_taskId = sse_decode_i_64(deserializer);
+var var_content = sse_decode_String(deserializer);
+return TodoCommentCreateInput(taskId: var_taskId, content: var_content); }
+
+@protected TodoLabel sse_decode_todo_label(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+var var_id = sse_decode_i_64(deserializer);
+var var_uuid = sse_decode_String(deserializer);
+var var_title = sse_decode_String(deserializer);
+var var_hexColor = sse_decode_String(deserializer);
+var var_isDeleted = sse_decode_i_32(deserializer);
+var var_createdAt = sse_decode_i_64(deserializer);
+var var_updatedAt = sse_decode_i_64(deserializer);
+var var_deletedAt = sse_decode_opt_box_autoadd_i_64(deserializer);
+var var_version = sse_decode_i_32(deserializer);
+return TodoLabel(id: var_id, uuid: var_uuid, title: var_title, hexColor: var_hexColor, isDeleted: var_isDeleted, createdAt: var_createdAt, updatedAt: var_updatedAt, deletedAt: var_deletedAt, version: var_version); }
+
+@protected TodoLabelCreateInput sse_decode_todo_label_create_input(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+var var_title = sse_decode_String(deserializer);
+var var_hexColor = sse_decode_opt_String(deserializer);
+return TodoLabelCreateInput(title: var_title, hexColor: var_hexColor); }
+
+@protected TodoProject sse_decode_todo_project(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+var var_id = sse_decode_i_64(deserializer);
+var var_uuid = sse_decode_String(deserializer);
+var var_title = sse_decode_String(deserializer);
+var var_description = sse_decode_opt_String(deserializer);
+var var_hexColor = sse_decode_String(deserializer);
+var var_sortOrder = sse_decode_f_64(deserializer);
+var var_parentUuid = sse_decode_opt_String(deserializer);
+var var_isArchived = sse_decode_i_32(deserializer);
+var var_isDeleted = sse_decode_i_32(deserializer);
+var var_createdAt = sse_decode_i_64(deserializer);
+var var_updatedAt = sse_decode_i_64(deserializer);
+var var_deletedAt = sse_decode_opt_box_autoadd_i_64(deserializer);
+var var_version = sse_decode_i_32(deserializer);
+return TodoProject(id: var_id, uuid: var_uuid, title: var_title, description: var_description, hexColor: var_hexColor, sortOrder: var_sortOrder, parentUuid: var_parentUuid, isArchived: var_isArchived, isDeleted: var_isDeleted, createdAt: var_createdAt, updatedAt: var_updatedAt, deletedAt: var_deletedAt, version: var_version); }
+
+@protected TodoProjectCreateInput sse_decode_todo_project_create_input(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+var var_title = sse_decode_String(deserializer);
+var var_description = sse_decode_opt_String(deserializer);
+var var_hexColor = sse_decode_opt_String(deserializer);
+var var_sortOrder = sse_decode_opt_box_autoadd_f_64(deserializer);
+var var_parentUuid = sse_decode_opt_String(deserializer);
+return TodoProjectCreateInput(title: var_title, description: var_description, hexColor: var_hexColor, sortOrder: var_sortOrder, parentUuid: var_parentUuid); }
+
+@protected TodoReminder sse_decode_todo_reminder(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+var var_id = sse_decode_i_64(deserializer);
+var var_uuid = sse_decode_String(deserializer);
+var var_taskId = sse_decode_i_64(deserializer);
+var var_remindAt = sse_decode_i_64(deserializer);
+var var_isConstant = sse_decode_i_32(deserializer);
+var var_isDeleted = sse_decode_i_32(deserializer);
+var var_createdAt = sse_decode_i_64(deserializer);
+var var_updatedAt = sse_decode_i_64(deserializer);
+var var_deletedAt = sse_decode_opt_box_autoadd_i_64(deserializer);
+var var_version = sse_decode_i_32(deserializer);
+return TodoReminder(id: var_id, uuid: var_uuid, taskId: var_taskId, remindAt: var_remindAt, isConstant: var_isConstant, isDeleted: var_isDeleted, createdAt: var_createdAt, updatedAt: var_updatedAt, deletedAt: var_deletedAt, version: var_version); }
+
+@protected TodoReminderCreateInput sse_decode_todo_reminder_create_input(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+var var_taskId = sse_decode_i_64(deserializer);
+var var_remindAt = sse_decode_i_64(deserializer);
+var var_isConstant = sse_decode_i_32(deserializer);
+return TodoReminderCreateInput(taskId: var_taskId, remindAt: var_remindAt, isConstant: var_isConstant); }
+
+@protected TodoSavedFilter sse_decode_todo_saved_filter(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+var var_id = sse_decode_i_64(deserializer);
+var var_uuid = sse_decode_String(deserializer);
+var var_name = sse_decode_String(deserializer);
+var var_conditions = sse_decode_String(deserializer);
+var var_sortOrder = sse_decode_i_64(deserializer);
+return TodoSavedFilter(id: var_id, uuid: var_uuid, name: var_name, conditions: var_conditions, sortOrder: var_sortOrder); }
+
+@protected TodoSavedFilterCreateInput sse_decode_todo_saved_filter_create_input(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+var var_name = sse_decode_String(deserializer);
+var var_conditions = sse_decode_String(deserializer);
+var var_sortOrder = sse_decode_opt_box_autoadd_i_64(deserializer);
+return TodoSavedFilterCreateInput(name: var_name, conditions: var_conditions, sortOrder: var_sortOrder); }
+
+@protected TodoSavedFilterUpdateInput sse_decode_todo_saved_filter_update_input(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+var var_name = sse_decode_opt_String(deserializer);
+var var_conditions = sse_decode_opt_String(deserializer);
+var var_sortOrder = sse_decode_opt_box_autoadd_i_64(deserializer);
+return TodoSavedFilterUpdateInput(name: var_name, conditions: var_conditions, sortOrder: var_sortOrder); }
+
+@protected TodoSubtask sse_decode_todo_subtask(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+var var_id = sse_decode_i_64(deserializer);
+var var_uuid = sse_decode_String(deserializer);
+var var_taskId = sse_decode_i_64(deserializer);
+var var_title = sse_decode_String(deserializer);
+var var_done = sse_decode_i_32(deserializer);
+var var_doneAt = sse_decode_opt_box_autoadd_i_64(deserializer);
+var var_position = sse_decode_f_64(deserializer);
+var var_parentUuid = sse_decode_opt_String(deserializer);
+var var_isDeleted = sse_decode_i_32(deserializer);
+var var_createdAt = sse_decode_i_64(deserializer);
+var var_updatedAt = sse_decode_i_64(deserializer);
+var var_deletedAt = sse_decode_opt_box_autoadd_i_64(deserializer);
+var var_version = sse_decode_i_32(deserializer);
+return TodoSubtask(id: var_id, uuid: var_uuid, taskId: var_taskId, title: var_title, done: var_done, doneAt: var_doneAt, position: var_position, parentUuid: var_parentUuid, isDeleted: var_isDeleted, createdAt: var_createdAt, updatedAt: var_updatedAt, deletedAt: var_deletedAt, version: var_version); }
+
+@protected TodoSubtaskCreateInput sse_decode_todo_subtask_create_input(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+var var_taskId = sse_decode_i_64(deserializer);
+var var_title = sse_decode_String(deserializer);
+var var_position = sse_decode_opt_box_autoadd_f_64(deserializer);
+var var_parentUuid = sse_decode_opt_String(deserializer);
+return TodoSubtaskCreateInput(taskId: var_taskId, title: var_title, position: var_position, parentUuid: var_parentUuid); }
+
+@protected TodoTask sse_decode_todo_task(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+var var_id = sse_decode_i_64(deserializer);
+var var_uuid = sse_decode_String(deserializer);
+var var_title = sse_decode_String(deserializer);
+var var_description = sse_decode_opt_String(deserializer);
+var var_projectId = sse_decode_opt_box_autoadd_i_64(deserializer);
+var var_priority = sse_decode_i_32(deserializer);
+var var_status = sse_decode_String(deserializer);
+var var_done = sse_decode_i_32(deserializer);
+var var_doneAt = sse_decode_opt_box_autoadd_i_64(deserializer);
+var var_dueDate = sse_decode_opt_box_autoadd_i_64(deserializer);
+var var_startDate = sse_decode_opt_box_autoadd_i_64(deserializer);
+var var_repeatAfter = sse_decode_i_64(deserializer);
+var var_repeatMode = sse_decode_i_32(deserializer);
+var var_repeatWeekdays = sse_decode_i_32(deserializer);
+var var_repeatEndType = sse_decode_i_32(deserializer);
+var var_repeatEndParam = sse_decode_i_64(deserializer);
+var var_repeatFromDone = sse_decode_i_32(deserializer);
+var var_repeatMonthMode = sse_decode_i_32(deserializer);
+var var_repeatNthWeek = sse_decode_i_32(deserializer);
+var var_percentDone = sse_decode_f_64(deserializer);
+var var_position = sse_decode_f_64(deserializer);
+var var_isFavorite = sse_decode_i_32(deserializer);
+var var_myDayDate = sse_decode_opt_box_autoadd_i_64(deserializer);
+var var_durationMinutes = sse_decode_opt_box_autoadd_i_64(deserializer);
+var var_isDeleted = sse_decode_i_32(deserializer);
+var var_createdAt = sse_decode_i_64(deserializer);
+var var_updatedAt = sse_decode_i_64(deserializer);
+var var_deletedAt = sse_decode_opt_box_autoadd_i_64(deserializer);
+var var_version = sse_decode_i_32(deserializer);
+return TodoTask(id: var_id, uuid: var_uuid, title: var_title, description: var_description, projectId: var_projectId, priority: var_priority, status: var_status, done: var_done, doneAt: var_doneAt, dueDate: var_dueDate, startDate: var_startDate, repeatAfter: var_repeatAfter, repeatMode: var_repeatMode, repeatWeekdays: var_repeatWeekdays, repeatEndType: var_repeatEndType, repeatEndParam: var_repeatEndParam, repeatFromDone: var_repeatFromDone, repeatMonthMode: var_repeatMonthMode, repeatNthWeek: var_repeatNthWeek, percentDone: var_percentDone, position: var_position, isFavorite: var_isFavorite, myDayDate: var_myDayDate, durationMinutes: var_durationMinutes, isDeleted: var_isDeleted, createdAt: var_createdAt, updatedAt: var_updatedAt, deletedAt: var_deletedAt, version: var_version); }
+
+@protected TodoTaskCreateInput sse_decode_todo_task_create_input(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+var var_title = sse_decode_String(deserializer);
+var var_description = sse_decode_opt_String(deserializer);
+var var_projectId = sse_decode_opt_box_autoadd_i_64(deserializer);
+var var_priority = sse_decode_opt_box_autoadd_i_32(deserializer);
+var var_status = sse_decode_opt_String(deserializer);
+var var_done = sse_decode_opt_box_autoadd_i_32(deserializer);
+var var_doneAt = sse_decode_opt_box_autoadd_i_64(deserializer);
+var var_dueDate = sse_decode_opt_box_autoadd_i_64(deserializer);
+var var_startDate = sse_decode_opt_box_autoadd_i_64(deserializer);
+var var_repeatAfter = sse_decode_opt_box_autoadd_i_64(deserializer);
+var var_repeatMode = sse_decode_opt_box_autoadd_i_32(deserializer);
+var var_repeatWeekdays = sse_decode_opt_box_autoadd_i_32(deserializer);
+var var_repeatEndType = sse_decode_opt_box_autoadd_i_32(deserializer);
+var var_repeatEndParam = sse_decode_opt_box_autoadd_i_64(deserializer);
+var var_repeatFromDone = sse_decode_opt_box_autoadd_i_32(deserializer);
+var var_repeatMonthMode = sse_decode_opt_box_autoadd_i_32(deserializer);
+var var_repeatNthWeek = sse_decode_opt_box_autoadd_i_32(deserializer);
+var var_position = sse_decode_opt_box_autoadd_f_64(deserializer);
+var var_isFavorite = sse_decode_opt_box_autoadd_i_32(deserializer);
+var var_myDayDate = sse_decode_opt_box_autoadd_i_64(deserializer);
+var var_durationMinutes = sse_decode_opt_box_autoadd_i_64(deserializer);
+return TodoTaskCreateInput(title: var_title, description: var_description, projectId: var_projectId, priority: var_priority, status: var_status, done: var_done, doneAt: var_doneAt, dueDate: var_dueDate, startDate: var_startDate, repeatAfter: var_repeatAfter, repeatMode: var_repeatMode, repeatWeekdays: var_repeatWeekdays, repeatEndType: var_repeatEndType, repeatEndParam: var_repeatEndParam, repeatFromDone: var_repeatFromDone, repeatMonthMode: var_repeatMonthMode, repeatNthWeek: var_repeatNthWeek, position: var_position, isFavorite: var_isFavorite, myDayDate: var_myDayDate, durationMinutes: var_durationMinutes); }
+
+@protected TodoTaskDetail sse_decode_todo_task_detail(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+var var_id = sse_decode_i_64(deserializer);
+var var_uuid = sse_decode_String(deserializer);
+var var_title = sse_decode_String(deserializer);
+var var_description = sse_decode_opt_String(deserializer);
+var var_projectId = sse_decode_opt_box_autoadd_i_64(deserializer);
+var var_priority = sse_decode_i_32(deserializer);
+var var_status = sse_decode_String(deserializer);
+var var_done = sse_decode_i_32(deserializer);
+var var_doneAt = sse_decode_opt_box_autoadd_i_64(deserializer);
+var var_dueDate = sse_decode_opt_box_autoadd_i_64(deserializer);
+var var_startDate = sse_decode_opt_box_autoadd_i_64(deserializer);
+var var_repeatAfter = sse_decode_i_64(deserializer);
+var var_repeatMode = sse_decode_i_32(deserializer);
+var var_repeatWeekdays = sse_decode_i_32(deserializer);
+var var_repeatEndType = sse_decode_i_32(deserializer);
+var var_repeatEndParam = sse_decode_i_64(deserializer);
+var var_repeatFromDone = sse_decode_i_32(deserializer);
+var var_repeatMonthMode = sse_decode_i_32(deserializer);
+var var_repeatNthWeek = sse_decode_i_32(deserializer);
+var var_percentDone = sse_decode_f_64(deserializer);
+var var_position = sse_decode_f_64(deserializer);
+var var_isFavorite = sse_decode_i_32(deserializer);
+var var_myDayDate = sse_decode_opt_box_autoadd_i_64(deserializer);
+var var_durationMinutes = sse_decode_opt_box_autoadd_i_64(deserializer);
+var var_isDeleted = sse_decode_i_32(deserializer);
+var var_createdAt = sse_decode_i_64(deserializer);
+var var_updatedAt = sse_decode_i_64(deserializer);
+var var_deletedAt = sse_decode_opt_box_autoadd_i_64(deserializer);
+var var_version = sse_decode_i_32(deserializer);
+var var_subtasks = sse_decode_list_todo_subtask(deserializer);
+var var_labels = sse_decode_list_task_label_with_id(deserializer);
+var var_comments = sse_decode_list_todo_comment(deserializer);
+var var_relations = sse_decode_list_todo_task_relation(deserializer);
+var var_reminders = sse_decode_list_todo_reminder(deserializer);
+return TodoTaskDetail(id: var_id, uuid: var_uuid, title: var_title, description: var_description, projectId: var_projectId, priority: var_priority, status: var_status, done: var_done, doneAt: var_doneAt, dueDate: var_dueDate, startDate: var_startDate, repeatAfter: var_repeatAfter, repeatMode: var_repeatMode, repeatWeekdays: var_repeatWeekdays, repeatEndType: var_repeatEndType, repeatEndParam: var_repeatEndParam, repeatFromDone: var_repeatFromDone, repeatMonthMode: var_repeatMonthMode, repeatNthWeek: var_repeatNthWeek, percentDone: var_percentDone, position: var_position, isFavorite: var_isFavorite, myDayDate: var_myDayDate, durationMinutes: var_durationMinutes, isDeleted: var_isDeleted, createdAt: var_createdAt, updatedAt: var_updatedAt, deletedAt: var_deletedAt, version: var_version, subtasks: var_subtasks, labels: var_labels, comments: var_comments, relations: var_relations, reminders: var_reminders); }
+
+@protected TodoTaskLabel sse_decode_todo_task_label(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+var var_id = sse_decode_i_64(deserializer);
+var var_uuid = sse_decode_String(deserializer);
+var var_taskId = sse_decode_i_64(deserializer);
+var var_labelId = sse_decode_i_64(deserializer);
+var var_isDeleted = sse_decode_i_32(deserializer);
+var var_createdAt = sse_decode_i_64(deserializer);
+var var_updatedAt = sse_decode_i_64(deserializer);
+var var_deletedAt = sse_decode_opt_box_autoadd_i_64(deserializer);
+var var_version = sse_decode_i_32(deserializer);
+return TodoTaskLabel(id: var_id, uuid: var_uuid, taskId: var_taskId, labelId: var_labelId, isDeleted: var_isDeleted, createdAt: var_createdAt, updatedAt: var_updatedAt, deletedAt: var_deletedAt, version: var_version); }
+
+@protected TodoTaskLabelCreateInput sse_decode_todo_task_label_create_input(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+var var_taskId = sse_decode_i_64(deserializer);
+var var_labelId = sse_decode_i_64(deserializer);
+return TodoTaskLabelCreateInput(taskId: var_taskId, labelId: var_labelId); }
+
+@protected TodoTaskListItem sse_decode_todo_task_list_item(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+var var_id = sse_decode_i_64(deserializer);
+var var_title = sse_decode_String(deserializer);
+var var_description = sse_decode_opt_String(deserializer);
+var var_projectId = sse_decode_opt_box_autoadd_i_64(deserializer);
+var var_priority = sse_decode_i_32(deserializer);
+var var_status = sse_decode_String(deserializer);
+var var_done = sse_decode_i_32(deserializer);
+var var_doneAt = sse_decode_opt_box_autoadd_i_64(deserializer);
+var var_dueDate = sse_decode_opt_box_autoadd_i_64(deserializer);
+var var_startDate = sse_decode_opt_box_autoadd_i_64(deserializer);
+var var_repeatMode = sse_decode_i_32(deserializer);
+var var_percentDone = sse_decode_f_64(deserializer);
+var var_position = sse_decode_f_64(deserializer);
+var var_isFavorite = sse_decode_i_32(deserializer);
+var var_myDayDate = sse_decode_opt_box_autoadd_i_64(deserializer);
+var var_durationMinutes = sse_decode_opt_box_autoadd_i_64(deserializer);
+var var_isDeleted = sse_decode_i_32(deserializer);
+var var_createdAt = sse_decode_i_64(deserializer);
+var var_updatedAt = sse_decode_i_64(deserializer);
+return TodoTaskListItem(id: var_id, title: var_title, description: var_description, projectId: var_projectId, priority: var_priority, status: var_status, done: var_done, doneAt: var_doneAt, dueDate: var_dueDate, startDate: var_startDate, repeatMode: var_repeatMode, percentDone: var_percentDone, position: var_position, isFavorite: var_isFavorite, myDayDate: var_myDayDate, durationMinutes: var_durationMinutes, isDeleted: var_isDeleted, createdAt: var_createdAt, updatedAt: var_updatedAt); }
+
+@protected TodoTaskRelation sse_decode_todo_task_relation(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+var var_id = sse_decode_i_64(deserializer);
+var var_uuid = sse_decode_String(deserializer);
+var var_taskId = sse_decode_i_64(deserializer);
+var var_otherTaskId = sse_decode_i_64(deserializer);
+var var_relationType = sse_decode_String(deserializer);
+var var_isDeleted = sse_decode_i_32(deserializer);
+var var_createdAt = sse_decode_i_64(deserializer);
+var var_updatedAt = sse_decode_i_64(deserializer);
+var var_deletedAt = sse_decode_opt_box_autoadd_i_64(deserializer);
+var var_version = sse_decode_i_32(deserializer);
+return TodoTaskRelation(id: var_id, uuid: var_uuid, taskId: var_taskId, otherTaskId: var_otherTaskId, relationType: var_relationType, isDeleted: var_isDeleted, createdAt: var_createdAt, updatedAt: var_updatedAt, deletedAt: var_deletedAt, version: var_version); }
+
+@protected TodoTaskRelationCreateInput sse_decode_todo_task_relation_create_input(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+var var_taskId = sse_decode_i_64(deserializer);
+var var_otherTaskId = sse_decode_i_64(deserializer);
+var var_relationType = sse_decode_String(deserializer);
+return TodoTaskRelationCreateInput(taskId: var_taskId, otherTaskId: var_otherTaskId, relationType: var_relationType); }
+
+@protected TodoTemplate sse_decode_todo_template(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+var var_id = sse_decode_i_64(deserializer);
+var var_uuid = sse_decode_String(deserializer);
+var var_name = sse_decode_String(deserializer);
+var var_payload = sse_decode_String(deserializer);
+var var_sortOrder = sse_decode_i_64(deserializer);
+return TodoTemplate(id: var_id, uuid: var_uuid, name: var_name, payload: var_payload, sortOrder: var_sortOrder); }
+
+@protected TodoTemplateCreateInput sse_decode_todo_template_create_input(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+var var_name = sse_decode_String(deserializer);
+var var_payload = sse_decode_String(deserializer);
+var var_sortOrder = sse_decode_opt_box_autoadd_i_64(deserializer);
+return TodoTemplateCreateInput(name: var_name, payload: var_payload, sortOrder: var_sortOrder); }
+
+@protected TodoTemplateUpdateInput sse_decode_todo_template_update_input(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+var var_name = sse_decode_opt_String(deserializer);
+var var_payload = sse_decode_opt_String(deserializer);
+var var_sortOrder = sse_decode_opt_box_autoadd_i_64(deserializer);
+return TodoTemplateUpdateInput(name: var_name, payload: var_payload, sortOrder: var_sortOrder); }
+
+@protected TrashMeta sse_decode_trash_meta(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+var var_retentionDays = sse_decode_i_64(deserializer);
+var var_lastPurgeMs = sse_decode_i_64(deserializer);
+return TrashMeta(retentionDays: var_retentionDays, lastPurgeMs: var_lastPurgeMs); }
+
+@protected TrashPurgeStats sse_decode_trash_purge_stats(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+var var_purged = sse_decode_u_64(deserializer);
+var var_guarded = sse_decode_u_64(deserializer);
+var var_ran = sse_decode_bool(deserializer);
+return TrashPurgeStats(purged: var_purged, guarded: var_guarded, ran: var_ran); }
+
+@protected int sse_decode_u_32(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+return deserializer.buffer.getUint32(); }
+
+@protected BigInt sse_decode_u_64(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+return deserializer.buffer.getBigUint64(); }
+
+@protected int sse_decode_u_8(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+return deserializer.buffer.getUint8(); }
+
+@protected void sse_decode_unit(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+ }
+
+@protected BigInt sse_decode_usize(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+return deserializer.buffer.getBigUint64(); }
+
+@protected WidgetTodoItem sse_decode_widget_todo_item(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+var var_id = sse_decode_i_64(deserializer);
+var var_uuid = sse_decode_String(deserializer);
+var var_title = sse_decode_String(deserializer);
+var var_priority = sse_decode_i_32(deserializer);
+var var_done = sse_decode_i_32(deserializer);
+return WidgetTodoItem(id: var_id, uuid: var_uuid, title: var_title, priority: var_priority, done: var_done); }
+
+@protected void sse_encode_AnyhowException(AnyhowException self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_String(self.message, serializer); }
+
+@protected void sse_encode_StreamSink_db_event_dto_Sse(RustStreamSink<DbEventDto> self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_String(self.setupAndSerialize(codec: SseCodec(
+            decodeSuccessData: sse_decode_db_event_dto,
+            decodeErrorData: sse_decode_AnyhowException,
+        )), serializer); }
+
+@protected void sse_encode_StreamSink_holiday_progress_dto_Sse(RustStreamSink<HolidayProgressDto> self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_String(self.setupAndSerialize(codec: SseCodec(
+            decodeSuccessData: sse_decode_holiday_progress_dto,
+            decodeErrorData: sse_decode_AnyhowException,
+        )), serializer); }
+
+@protected void sse_encode_StreamSink_reminder_due_dto_Sse(RustStreamSink<ReminderDueDto> self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_String(self.setupAndSerialize(codec: SseCodec(
+            decodeSuccessData: sse_decode_reminder_due_dto,
+            decodeErrorData: sse_decode_AnyhowException,
+        )), serializer); }
+
+@protected void sse_encode_String(String self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_list_prim_u_8_strict(utf8.encoder.convert(self), serializer); }
+
+@protected void sse_encode_activity_log_row(ActivityLogRow self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_i_64(self.id, serializer);
+sse_encode_opt_box_autoadd_i_64(self.taskId, serializer);
+sse_encode_String(self.taskTitle, serializer);
+sse_encode_String(self.action, serializer);
+sse_encode_String(self.detail, serializer);
+sse_encode_i_64(self.createdAt, serializer);
+ }
+
+@protected void sse_encode_backup_device_info(BackupDeviceInfo self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_String(self.deviceId, serializer);
+ }
+
+@protected void sse_encode_backup_entry_view(BackupEntryView self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_String(self.filename, serializer);
+sse_encode_String(self.filePath, serializer);
+sse_encode_i_64(self.modifiedAt, serializer);
+sse_encode_i_64(self.sizeBytes, serializer);
+ }
+
+@protected void sse_encode_backup_export_result(BackupExportResult self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_String(self.filePath, serializer);
+sse_encode_i_64(self.fileSize, serializer);
+sse_encode_list_backup_table_count(self.tableCounts, serializer);
+sse_encode_backup_manifest_view(self.manifest, serializer);
+sse_encode_opt_String(self.cloudPath, serializer);
+sse_encode_bool(self.cloudUploaded, serializer);
+sse_encode_opt_String(self.cloudError, serializer);
+sse_encode_opt_String(self.localPath, serializer);
+sse_encode_opt_String(self.localError, serializer);
+ }
+
+@protected void sse_encode_backup_import_result(BackupImportResult self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_i_64(self.successCount, serializer);
+sse_encode_i_64(self.errorCount, serializer);
+sse_encode_list_String(self.errors, serializer);
+sse_encode_backup_manifest_view(self.manifest, serializer);
+sse_encode_bool(self.needsRestart, serializer);
+ }
+
+@protected void sse_encode_backup_manifest_view(BackupManifestView self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_u_32(self.formatVersion, serializer);
+sse_encode_String(self.createdAt, serializer);
+sse_encode_i_64(self.createdAtTs, serializer);
+sse_encode_String(self.appVersion, serializer);
+sse_encode_String(self.deviceId, serializer);
+sse_encode_opt_String(self.deviceName, serializer);
+sse_encode_i_64(self.schemaVersion, serializer);
+sse_encode_list_backup_table_count(self.tableCounts, serializer);
+ }
+
+@protected void sse_encode_backup_prefs_view(BackupPrefsView self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_opt_String(self.localPath, serializer);
+sse_encode_bool(self.keepLatest, serializer);
+sse_encode_bool(self.cloudBackupEnabled, serializer);
+sse_encode_bool(self.localBackupEnabled, serializer);
+sse_encode_String(self.scheduleType, serializer);
+sse_encode_String(self.scheduleTime, serializer);
+sse_encode_u_32(self.scheduleMinute, serializer);
+sse_encode_u_32(self.scheduleWeekday, serializer);
+sse_encode_u_32(self.scheduleDayOfMonth, serializer);
+sse_encode_u_32(self.scheduleMonth, serializer);
+sse_encode_i_64(self.lastBackupAt, serializer);
+sse_encode_i_64(self.nextBackupAt, serializer);
+ }
+
+@protected void sse_encode_backup_preview_task(BackupPreviewTask self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_String(self.title, serializer);
+sse_encode_String(self.status, serializer);
+sse_encode_bool(self.done, serializer);
+sse_encode_opt_box_autoadd_i_64(self.dueDate, serializer);
+sse_encode_i_64(self.priority, serializer);
+sse_encode_opt_String(self.project, serializer);
+sse_encode_bool(self.isDeleted, serializer);
+ }
+
+@protected void sse_encode_backup_preview_view(BackupPreviewView self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_backup_manifest_view(self.manifest, serializer);
+sse_encode_list_backup_preview_task(self.sampleTasks, serializer);
+sse_encode_backup_task_stats(self.taskStats, serializer);
+sse_encode_bool(self.schemaMismatch, serializer);
+sse_encode_i_64(self.currentSchemaVersion, serializer);
+ }
+
+@protected void sse_encode_backup_table_count(BackupTableCount self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_String(self.table, serializer);
+sse_encode_i_64(self.count, serializer);
+ }
+
+@protected void sse_encode_backup_task_stats(BackupTaskStats self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_i_64(self.total, serializer);
+sse_encode_i_64(self.alive, serializer);
+sse_encode_i_64(self.done, serializer);
+sse_encode_i_64(self.deleted, serializer);
+ }
+
+@protected void sse_encode_biometric_secret_bundle(BiometricSecretBundle self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_String(self.encryptedDbKeyBio, serializer);
+sse_encode_String(self.biometricKey, serializer);
+sse_encode_String(self.nonce, serializer);
+ }
+
+@protected void sse_encode_bool(bool self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+serializer.buffer.putUint8(self ? 1 : 0); }
+
+@protected void sse_encode_box_autoadd_backup_prefs_view(BackupPrefsView self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_backup_prefs_view(self, serializer); }
+
+@protected void sse_encode_box_autoadd_bool(bool self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_bool(self, serializer); }
+
+@protected void sse_encode_box_autoadd_csv_import_stats_view(CsvImportStatsView self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_csv_import_stats_view(self, serializer); }
+
+@protected void sse_encode_box_autoadd_f_64(double self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_f_64(self, serializer); }
+
+@protected void sse_encode_box_autoadd_i_32(int self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_i_32(self, serializer); }
+
+@protected void sse_encode_box_autoadd_i_64(PlatformInt64 self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_i_64(self, serializer); }
+
+@protected void sse_encode_box_autoadd_list_filter(ListFilter self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_list_filter(self, serializer); }
+
+@protected void sse_encode_box_autoadd_sync_config_input(SyncConfigInput self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_sync_config_input(self, serializer); }
+
+@protected void sse_encode_box_autoadd_sync_config_view(SyncConfigView self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_sync_config_view(self, serializer); }
+
+@protected void sse_encode_box_autoadd_todo_comment_create_input(TodoCommentCreateInput self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_todo_comment_create_input(self, serializer); }
+
+@protected void sse_encode_box_autoadd_todo_label_create_input(TodoLabelCreateInput self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_todo_label_create_input(self, serializer); }
+
+@protected void sse_encode_box_autoadd_todo_project(TodoProject self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_todo_project(self, serializer); }
+
+@protected void sse_encode_box_autoadd_todo_project_create_input(TodoProjectCreateInput self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_todo_project_create_input(self, serializer); }
+
+@protected void sse_encode_box_autoadd_todo_reminder_create_input(TodoReminderCreateInput self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_todo_reminder_create_input(self, serializer); }
+
+@protected void sse_encode_box_autoadd_todo_saved_filter_create_input(TodoSavedFilterCreateInput self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_todo_saved_filter_create_input(self, serializer); }
+
+@protected void sse_encode_box_autoadd_todo_saved_filter_update_input(TodoSavedFilterUpdateInput self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_todo_saved_filter_update_input(self, serializer); }
+
+@protected void sse_encode_box_autoadd_todo_subtask_create_input(TodoSubtaskCreateInput self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_todo_subtask_create_input(self, serializer); }
+
+@protected void sse_encode_box_autoadd_todo_task(TodoTask self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_todo_task(self, serializer); }
+
+@protected void sse_encode_box_autoadd_todo_task_create_input(TodoTaskCreateInput self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_todo_task_create_input(self, serializer); }
+
+@protected void sse_encode_box_autoadd_todo_task_label_create_input(TodoTaskLabelCreateInput self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_todo_task_label_create_input(self, serializer); }
+
+@protected void sse_encode_box_autoadd_todo_task_relation_create_input(TodoTaskRelationCreateInput self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_todo_task_relation_create_input(self, serializer); }
+
+@protected void sse_encode_box_autoadd_todo_template_create_input(TodoTemplateCreateInput self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_todo_template_create_input(self, serializer); }
+
+@protected void sse_encode_box_autoadd_todo_template_update_input(TodoTemplateUpdateInput self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_todo_template_update_input(self, serializer); }
+
+@protected void sse_encode_box_autoadd_usize(BigInt self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_usize(self, serializer); }
+
+@protected void sse_encode_cloud_backup_entry_view(CloudBackupEntryView self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_String(self.name, serializer);
+sse_encode_String(self.cloudPath, serializer);
+sse_encode_i_64(self.sizeBytes, serializer);
+sse_encode_i_64(self.modifiedAt, serializer);
+ }
+
+@protected void sse_encode_comment_search_hit(CommentSearchHit self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_i_64(self.commentId, serializer);
+sse_encode_i_64(self.taskId, serializer);
+sse_encode_String(self.taskTitle, serializer);
+sse_encode_String(self.content, serializer);
+sse_encode_i_64(self.createdAt, serializer);
+ }
+
+@protected void sse_encode_complete_task_result(CompleteTaskResult self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_todo_task(self.task, serializer);
+sse_encode_opt_box_autoadd_todo_task(self.nextInstance, serializer);
+ }
+
+@protected void sse_encode_csv_import_preview_view(CsvImportPreviewView self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_String(self.preset, serializer);
+sse_encode_list_csv_import_row_view(self.rows, serializer);
+sse_encode_csv_import_stats_view(self.stats, serializer);
+ }
+
+@protected void sse_encode_csv_import_row_view(CsvImportRowView self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_usize(self.sourceLine, serializer);
+sse_encode_opt_String(self.projectTitle, serializer);
+sse_encode_todo_task_create_input(self.input, serializer);
+sse_encode_opt_String(self.skipReason, serializer);
+ }
+
+@protected void sse_encode_csv_import_stats_view(CsvImportStatsView self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_usize(self.success, serializer);
+sse_encode_usize(self.skipped, serializer);
+sse_encode_usize(self.failed, serializer);
+sse_encode_list_String(self.notes, serializer);
+ }
+
+@protected void sse_encode_db_event_dto(DbEventDto self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_String(self.table, serializer);
+sse_encode_String(self.op, serializer);
+sse_encode_i_64(self.recordId, serializer);
+sse_encode_String(self.recordUuid, serializer);
+sse_encode_String(self.deviceId, serializer);
+sse_encode_i_64(self.timestamp, serializer);
+ }
+
+@protected void sse_encode_db_maintenance_view(DbMaintenanceView self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_i_64(self.walBytesAfterCheckpoint, serializer);
+sse_encode_i_32(self.attachmentsCleaned, serializer);
+sse_encode_i_32(self.logRowsPruned, serializer);
+sse_encode_i_64(self.freelistBefore, serializer);
+sse_encode_i_64(self.freelistAfter, serializer);
+sse_encode_i_64(self.pagesReclaimed, serializer);
+ }
+
+@protected void sse_encode_diagnostics_snapshot(DiagnosticsSnapshot self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_i_64(self.dbSizeBytes, serializer);
+sse_encode_list_table_row_count(self.tableRows, serializer);
+sse_encode_i_64(self.tombstoneRows, serializer);
+sse_encode_i_64(self.attachmentCacheBytes, serializer);
+sse_encode_i_64(self.attachmentCacheFiles, serializer);
+ }
+
+@protected void sse_encode_digest_prefs(DigestPrefs self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_bool(self.enabled, serializer);
+sse_encode_i_64(self.hour, serializer);
+sse_encode_i_64(self.minute, serializer);
+ }
+
+@protected void sse_encode_digest_summary(DigestSummary self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_i_64(self.dueToday, serializer);
+sse_encode_i_64(self.overdue, serializer);
+sse_encode_i_64(self.doneToday, serializer);
+ }
+
+@protected void sse_encode_f_64(double self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+serializer.buffer.putFloat64(self); }
+
+@protected void sse_encode_global_search_result(GlobalSearchResult self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_list_todo_task(self.tasks, serializer);
+sse_encode_list_todo_project(self.projects, serializer);
+sse_encode_list_comment_search_hit(self.comments, serializer);
+ }
+
+@protected void sse_encode_holiday_info(HolidayInfo self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_String(self.date, serializer);
+sse_encode_i_32(self.year, serializer);
+sse_encode_bool(self.isHoliday, serializer);
+sse_encode_String(self.name, serializer);
+ }
+
+@protected void sse_encode_holiday_meta(HolidayMeta self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_i_64(self.lastUpdateMs, serializer);
+sse_encode_i_64(self.lastAttemptMs, serializer);
+sse_encode_i_32(self.failureCount, serializer);
+sse_encode_bool(self.autoEnabled, serializer);
+ }
+
+@protected void sse_encode_holiday_progress_dto(HolidayProgressDto self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_String(self.phase, serializer);
+sse_encode_u_32(self.total, serializer);
+sse_encode_i_32(self.year, serializer);
+sse_encode_u_32(self.done, serializer);
+sse_encode_bool(self.yearOk, serializer);
+sse_encode_bool(self.yearEmpty, serializer);
+sse_encode_u_32(self.okCount, serializer);
+sse_encode_u_32(self.failed, serializer);
+sse_encode_bool(self.cancelled, serializer);
+sse_encode_String(self.message, serializer);
+ }
+
+@protected void sse_encode_holiday_range_summary(HolidayRangeSummary self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_u_32(self.ok, serializer);
+sse_encode_u_32(self.failed, serializer);
+sse_encode_u_32(self.empty, serializer);
+sse_encode_bool(self.cancelled, serializer);
+ }
+
+@protected void sse_encode_holiday_year_outcome(HolidayYearOutcome self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_holiday_meta(self.meta, serializer);
+sse_encode_u_32(self.rowCount, serializer);
+ }
+
+@protected void sse_encode_i_32(int self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+serializer.buffer.putInt32(self); }
+
+@protected void sse_encode_i_64(PlatformInt64 self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+serializer.buffer.putPlatformInt64(self); }
+
+@protected void sse_encode_ics_export_view(IcsExportView self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_String(self.content, serializer);
+sse_encode_list_ics_table_count(self.tableCounts, serializer);
+sse_encode_String(self.suggestedFilename, serializer);
+ }
+
+@protected void sse_encode_ics_table_count(IcsTableCount self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_String(self.table, serializer);
+sse_encode_usize(self.count, serializer);
+ }
+
+@protected void sse_encode_import_job_status_view(ImportJobStatusView self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_String(self.jobId, serializer);
+sse_encode_usize(self.processed, serializer);
+sse_encode_opt_box_autoadd_usize(self.total, serializer);
+sse_encode_bool(self.finished, serializer);
+sse_encode_bool(self.cancelled, serializer);
+sse_encode_opt_box_autoadd_csv_import_stats_view(self.stats, serializer);
+sse_encode_opt_String(self.error, serializer);
+ }
+
+@protected void sse_encode_import_limits_view(ImportLimitsView self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_usize(self.maxBytes, serializer);
+sse_encode_usize(self.maxRows, serializer);
+ }
+
+@protected void sse_encode_list_String(List<String> self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_i_32(self.length, serializer);
+        for (final item in self) { sse_encode_String(item, serializer); } }
+
+@protected void sse_encode_list_activity_log_row(List<ActivityLogRow> self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_i_32(self.length, serializer);
+        for (final item in self) { sse_encode_activity_log_row(item, serializer); } }
+
+@protected void sse_encode_list_backup_entry_view(List<BackupEntryView> self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_i_32(self.length, serializer);
+        for (final item in self) { sse_encode_backup_entry_view(item, serializer); } }
+
+@protected void sse_encode_list_backup_preview_task(List<BackupPreviewTask> self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_i_32(self.length, serializer);
+        for (final item in self) { sse_encode_backup_preview_task(item, serializer); } }
+
+@protected void sse_encode_list_backup_table_count(List<BackupTableCount> self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_i_32(self.length, serializer);
+        for (final item in self) { sse_encode_backup_table_count(item, serializer); } }
+
+@protected void sse_encode_list_cloud_backup_entry_view(List<CloudBackupEntryView> self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_i_32(self.length, serializer);
+        for (final item in self) { sse_encode_cloud_backup_entry_view(item, serializer); } }
+
+@protected void sse_encode_list_comment_search_hit(List<CommentSearchHit> self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_i_32(self.length, serializer);
+        for (final item in self) { sse_encode_comment_search_hit(item, serializer); } }
+
+@protected void sse_encode_list_csv_import_row_view(List<CsvImportRowView> self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_i_32(self.length, serializer);
+        for (final item in self) { sse_encode_csv_import_row_view(item, serializer); } }
+
+@protected void sse_encode_list_filter(ListFilter self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_opt_String(self.keyword, serializer);
+sse_encode_u_32(self.page, serializer);
+sse_encode_u_32(self.pageSize, serializer);
+sse_encode_opt_box_autoadd_bool(self.done, serializer);
+sse_encode_opt_String(self.status, serializer);
+sse_encode_opt_box_autoadd_i_32(self.priorityMin, serializer);
+sse_encode_opt_box_autoadd_i_64(self.projectId, serializer);
+sse_encode_opt_list_prim_i_64_strict(self.projectIds, serializer);
+sse_encode_opt_box_autoadd_bool(self.favoriteOnly, serializer);
+sse_encode_opt_box_autoadd_i_64(self.myDayToday, serializer);
+ }
+
+@protected void sse_encode_list_holiday_info(List<HolidayInfo> self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_i_32(self.length, serializer);
+        for (final item in self) { sse_encode_holiday_info(item, serializer); } }
+
+@protected void sse_encode_list_ics_table_count(List<IcsTableCount> self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_i_32(self.length, serializer);
+        for (final item in self) { sse_encode_ics_table_count(item, serializer); } }
+
+@protected void sse_encode_list_notification_log_row(List<NotificationLogRow> self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_i_32(self.length, serializer);
+        for (final item in self) { sse_encode_notification_log_row(item, serializer); } }
+
+@protected void sse_encode_list_prim_i_64_strict(Int64List self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_i_32(self.length, serializer);
+                    serializer.buffer.putInt64List(self); }
+
+@protected void sse_encode_list_prim_u_8_loose(List<int> self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_i_32(self.length, serializer);
+                    serializer.buffer.putUint8List(self is Uint8List ? self : Uint8List.fromList(self)); }
+
+@protected void sse_encode_list_prim_u_8_strict(Uint8List self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_i_32(self.length, serializer);
+                    serializer.buffer.putUint8List(self); }
+
+@protected void sse_encode_list_projected_reminder(List<ProjectedReminder> self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_i_32(self.length, serializer);
+        for (final item in self) { sse_encode_projected_reminder(item, serializer); } }
+
+@protected void sse_encode_list_projected_task_label(List<ProjectedTaskLabel> self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_i_32(self.length, serializer);
+        for (final item in self) { sse_encode_projected_task_label(item, serializer); } }
+
+@protected void sse_encode_list_stats_heatmap_cell(List<StatsHeatmapCell> self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_i_32(self.length, serializer);
+        for (final item in self) { sse_encode_stats_heatmap_cell(item, serializer); } }
+
+@protected void sse_encode_list_stats_priority_row(List<StatsPriorityRow> self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_i_32(self.length, serializer);
+        for (final item in self) { sse_encode_stats_priority_row(item, serializer); } }
+
+@protected void sse_encode_list_stats_project_row(List<StatsProjectRow> self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_i_32(self.length, serializer);
+        for (final item in self) { sse_encode_stats_project_row(item, serializer); } }
+
+@protected void sse_encode_list_stats_weekday_row(List<StatsWeekdayRow> self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_i_32(self.length, serializer);
+        for (final item in self) { sse_encode_stats_weekday_row(item, serializer); } }
+
+@protected void sse_encode_list_sync_conflict(List<SyncConflict> self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_i_32(self.length, serializer);
+        for (final item in self) { sse_encode_sync_conflict(item, serializer); } }
+
+@protected void sse_encode_list_sync_history_view(List<SyncHistoryView> self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_i_32(self.length, serializer);
+        for (final item in self) { sse_encode_sync_history_view(item, serializer); } }
+
+@protected void sse_encode_list_table_count(List<TableCount> self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_i_32(self.length, serializer);
+        for (final item in self) { sse_encode_table_count(item, serializer); } }
+
+@protected void sse_encode_list_table_row_count(List<TableRowCount> self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_i_32(self.length, serializer);
+        for (final item in self) { sse_encode_table_row_count(item, serializer); } }
+
+@protected void sse_encode_list_task_attachment_view(List<TaskAttachmentView> self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_i_32(self.length, serializer);
+        for (final item in self) { sse_encode_task_attachment_view(item, serializer); } }
+
+@protected void sse_encode_list_task_dependency_flags(List<TaskDependencyFlags> self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_i_32(self.length, serializer);
+        for (final item in self) { sse_encode_task_dependency_flags(item, serializer); } }
+
+@protected void sse_encode_list_task_description_flag(List<TaskDescriptionFlag> self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_i_32(self.length, serializer);
+        for (final item in self) { sse_encode_task_description_flag(item, serializer); } }
+
+@protected void sse_encode_list_task_existence_flag(List<TaskExistenceFlag> self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_i_32(self.length, serializer);
+        for (final item in self) { sse_encode_task_existence_flag(item, serializer); } }
+
+@protected void sse_encode_list_task_label_with_id(List<TaskLabelWithId> self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_i_32(self.length, serializer);
+        for (final item in self) { sse_encode_task_label_with_id(item, serializer); } }
+
+@protected void sse_encode_list_task_labels_projection(List<TaskLabelsProjection> self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_i_32(self.length, serializer);
+        for (final item in self) { sse_encode_task_labels_projection(item, serializer); } }
+
+@protected void sse_encode_list_task_reminders_projection(List<TaskRemindersProjection> self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_i_32(self.length, serializer);
+        for (final item in self) { sse_encode_task_reminders_projection(item, serializer); } }
+
+@protected void sse_encode_list_todo_comment(List<TodoComment> self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_i_32(self.length, serializer);
+        for (final item in self) { sse_encode_todo_comment(item, serializer); } }
+
+@protected void sse_encode_list_todo_label(List<TodoLabel> self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_i_32(self.length, serializer);
+        for (final item in self) { sse_encode_todo_label(item, serializer); } }
+
+@protected void sse_encode_list_todo_project(List<TodoProject> self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_i_32(self.length, serializer);
+        for (final item in self) { sse_encode_todo_project(item, serializer); } }
+
+@protected void sse_encode_list_todo_reminder(List<TodoReminder> self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_i_32(self.length, serializer);
+        for (final item in self) { sse_encode_todo_reminder(item, serializer); } }
+
+@protected void sse_encode_list_todo_saved_filter(List<TodoSavedFilter> self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_i_32(self.length, serializer);
+        for (final item in self) { sse_encode_todo_saved_filter(item, serializer); } }
+
+@protected void sse_encode_list_todo_subtask(List<TodoSubtask> self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_i_32(self.length, serializer);
+        for (final item in self) { sse_encode_todo_subtask(item, serializer); } }
+
+@protected void sse_encode_list_todo_task(List<TodoTask> self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_i_32(self.length, serializer);
+        for (final item in self) { sse_encode_todo_task(item, serializer); } }
+
+@protected void sse_encode_list_todo_task_label(List<TodoTaskLabel> self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_i_32(self.length, serializer);
+        for (final item in self) { sse_encode_todo_task_label(item, serializer); } }
+
+@protected void sse_encode_list_todo_task_list_item(List<TodoTaskListItem> self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_i_32(self.length, serializer);
+        for (final item in self) { sse_encode_todo_task_list_item(item, serializer); } }
+
+@protected void sse_encode_list_todo_task_relation(List<TodoTaskRelation> self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_i_32(self.length, serializer);
+        for (final item in self) { sse_encode_todo_task_relation(item, serializer); } }
+
+@protected void sse_encode_list_todo_template(List<TodoTemplate> self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_i_32(self.length, serializer);
+        for (final item in self) { sse_encode_todo_template(item, serializer); } }
+
+@protected void sse_encode_list_widget_todo_item(List<WidgetTodoItem> self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_i_32(self.length, serializer);
+        for (final item in self) { sse_encode_widget_todo_item(item, serializer); } }
+
+@protected void sse_encode_notification_log_row(NotificationLogRow self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_i_64(self.id, serializer);
+sse_encode_String(self.kind, serializer);
+sse_encode_opt_box_autoadd_i_64(self.taskId, serializer);
+sse_encode_String(self.taskTitle, serializer);
+sse_encode_opt_box_autoadd_i_64(self.reminderId, serializer);
+sse_encode_String(self.payload, serializer);
+sse_encode_i_64(self.createdAt, serializer);
+ }
+
+@protected void sse_encode_opt_String(String? self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+
+                sse_encode_bool(self != null, serializer);
+                if (self != null) {
+                    sse_encode_String(self, serializer);
+                }
+                 }
+
+@protected void sse_encode_opt_box_autoadd_bool(bool? self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+
+                sse_encode_bool(self != null, serializer);
+                if (self != null) {
+                    sse_encode_box_autoadd_bool(self, serializer);
+                }
+                 }
+
+@protected void sse_encode_opt_box_autoadd_csv_import_stats_view(CsvImportStatsView? self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+
+                sse_encode_bool(self != null, serializer);
+                if (self != null) {
+                    sse_encode_box_autoadd_csv_import_stats_view(self, serializer);
+                }
+                 }
+
+@protected void sse_encode_opt_box_autoadd_f_64(double? self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+
+                sse_encode_bool(self != null, serializer);
+                if (self != null) {
+                    sse_encode_box_autoadd_f_64(self, serializer);
+                }
+                 }
+
+@protected void sse_encode_opt_box_autoadd_i_32(int? self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+
+                sse_encode_bool(self != null, serializer);
+                if (self != null) {
+                    sse_encode_box_autoadd_i_32(self, serializer);
+                }
+                 }
+
+@protected void sse_encode_opt_box_autoadd_i_64(PlatformInt64? self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+
+                sse_encode_bool(self != null, serializer);
+                if (self != null) {
+                    sse_encode_box_autoadd_i_64(self, serializer);
+                }
+                 }
+
+@protected void sse_encode_opt_box_autoadd_sync_config_view(SyncConfigView? self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+
+                sse_encode_bool(self != null, serializer);
+                if (self != null) {
+                    sse_encode_box_autoadd_sync_config_view(self, serializer);
+                }
+                 }
+
+@protected void sse_encode_opt_box_autoadd_todo_project(TodoProject? self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+
+                sse_encode_bool(self != null, serializer);
+                if (self != null) {
+                    sse_encode_box_autoadd_todo_project(self, serializer);
+                }
+                 }
+
+@protected void sse_encode_opt_box_autoadd_todo_task(TodoTask? self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+
+                sse_encode_bool(self != null, serializer);
+                if (self != null) {
+                    sse_encode_box_autoadd_todo_task(self, serializer);
+                }
+                 }
+
+@protected void sse_encode_opt_box_autoadd_usize(BigInt? self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+
+                sse_encode_bool(self != null, serializer);
+                if (self != null) {
+                    sse_encode_box_autoadd_usize(self, serializer);
+                }
+                 }
+
+@protected void sse_encode_opt_list_prim_i_64_strict(Int64List? self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+
+                sse_encode_bool(self != null, serializer);
+                if (self != null) {
+                    sse_encode_list_prim_i_64_strict(self, serializer);
+                }
+                 }
+
+@protected void sse_encode_plaintext_export_view(PlaintextExportView self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_String(self.content, serializer);
+sse_encode_list_table_count(self.tableCounts, serializer);
+sse_encode_String(self.suggestedFilename, serializer);
+ }
+
+@protected void sse_encode_projected_reminder(ProjectedReminder self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_i_64(self.id, serializer);
+sse_encode_i_64(self.remindAt, serializer);
+ }
+
+@protected void sse_encode_projected_task_label(ProjectedTaskLabel self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_i_64(self.id, serializer);
+sse_encode_String(self.title, serializer);
+sse_encode_String(self.hexColor, serializer);
+ }
+
+@protected void sse_encode_reminder_due_dto(ReminderDueDto self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_i_64(self.id, serializer);
+sse_encode_i_64(self.taskId, serializer);
+sse_encode_String(self.title, serializer);
+sse_encode_i_64(self.remindAt, serializer);
+sse_encode_i_32(self.isConstant, serializer);
+ }
+
+@protected void sse_encode_stats_aggregate(StatsAggregate self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_stats_overview(self.overview, serializer);
+sse_encode_stats_heatmap(self.heatmap, serializer);
+sse_encode_stats_streak(self.streak, serializer);
+sse_encode_list_stats_project_row(self.byProject, serializer);
+sse_encode_list_stats_priority_row(self.byPriority, serializer);
+sse_encode_list_stats_weekday_row(self.byWeekday, serializer);
+sse_encode_list_prim_i_64_strict(self.availableYears, serializer);
+ }
+
+@protected void sse_encode_stats_heatmap(StatsHeatmap self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_i_64(self.year, serializer);
+sse_encode_String(self.startDate, serializer);
+sse_encode_String(self.endDate, serializer);
+sse_encode_list_stats_heatmap_cell(self.cells, serializer);
+ }
+
+@protected void sse_encode_stats_heatmap_cell(StatsHeatmapCell self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_String(self.date, serializer);
+sse_encode_i_64(self.count, serializer);
+ }
+
+@protected void sse_encode_stats_overview(StatsOverview self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_i_64(self.total, serializer);
+sse_encode_i_64(self.pending, serializer);
+sse_encode_i_64(self.done, serializer);
+sse_encode_i_64(self.doneLast7D, serializer);
+sse_encode_i_64(self.doneLast30D, serializer);
+ }
+
+@protected void sse_encode_stats_priority_row(StatsPriorityRow self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_i_64(self.priority, serializer);
+sse_encode_i_64(self.doneCount, serializer);
+sse_encode_i_64(self.pendingCount, serializer);
+ }
+
+@protected void sse_encode_stats_project_row(StatsProjectRow self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_opt_box_autoadd_i_64(self.projectId, serializer);
+sse_encode_opt_String(self.projectTitle, serializer);
+sse_encode_opt_String(self.projectHexColor, serializer);
+sse_encode_i_64(self.doneCount, serializer);
+sse_encode_i_64(self.pendingCount, serializer);
+ }
+
+@protected void sse_encode_stats_streak(StatsStreak self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_i_64(self.current, serializer);
+sse_encode_i_64(self.best, serializer);
+sse_encode_bool(self.doneToday, serializer);
+ }
+
+@protected void sse_encode_stats_weekday_row(StatsWeekdayRow self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_i_64(self.weekday, serializer);
+sse_encode_i_64(self.doneCount, serializer);
+ }
+
+@protected void sse_encode_sync_config_input(SyncConfigInput self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_String(self.engine, serializer);
+sse_encode_String(self.endpoint, serializer);
+sse_encode_opt_String(self.bucket, serializer);
+sse_encode_opt_String(self.region, serializer);
+sse_encode_opt_String(self.username, serializer);
+sse_encode_opt_String(self.password, serializer);
+sse_encode_opt_String(self.basePath, serializer);
+sse_encode_opt_box_autoadd_i_64(self.intervalMinutes, serializer);
+sse_encode_opt_box_autoadd_bool(self.autoSyncEnabled, serializer);
+sse_encode_opt_box_autoadd_bool(self.syncOnChange, serializer);
+sse_encode_opt_box_autoadd_bool(self.skipTlsVerify, serializer);
+sse_encode_opt_box_autoadd_i_64(self.timeoutSeconds, serializer);
+sse_encode_opt_String(self.sessionToken, serializer);
+ }
+
+@protected void sse_encode_sync_config_view(SyncConfigView self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_i_64(self.id, serializer);
+sse_encode_String(self.engine, serializer);
+sse_encode_String(self.endpoint, serializer);
+sse_encode_String(self.bucket, serializer);
+sse_encode_String(self.region, serializer);
+sse_encode_String(self.username, serializer);
+sse_encode_bool(self.passwordSet, serializer);
+sse_encode_String(self.basePath, serializer);
+sse_encode_i_64(self.intervalMinutes, serializer);
+sse_encode_bool(self.autoSyncEnabled, serializer);
+sse_encode_bool(self.syncOnChange, serializer);
+sse_encode_bool(self.skipTlsVerify, serializer);
+sse_encode_i_64(self.timeoutSeconds, serializer);
+sse_encode_bool(self.sessionTokenSet, serializer);
+sse_encode_opt_box_autoadd_i_64(self.lastSyncedAt, serializer);
+ }
+
+@protected void sse_encode_sync_conflict(SyncConflict self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_i_64(self.id, serializer);
+sse_encode_String(self.tableName, serializer);
+sse_encode_String(self.recordUuid, serializer);
+sse_encode_String(self.recordTitle, serializer);
+sse_encode_String(self.decision, serializer);
+sse_encode_String(self.loserSide, serializer);
+sse_encode_String(self.winnerSide, serializer);
+sse_encode_String(self.loserPayload, serializer);
+sse_encode_String(self.winnerPayload, serializer);
+sse_encode_i_64(self.loserUpdatedAt, serializer);
+sse_encode_i_64(self.winnerUpdatedAt, serializer);
+sse_encode_String(self.resolution, serializer);
+sse_encode_i_64(self.createdAt, serializer);
+sse_encode_i_64(self.resolvedAt, serializer);
+ }
+
+@protected void sse_encode_sync_crypto_status(SyncCryptoStatus self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_bool(self.hasPassword, serializer);
+sse_encode_bool(self.isUnlocked, serializer);
+ }
+
+@protected void sse_encode_sync_history_view(SyncHistoryView self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_i_64(self.id, serializer);
+sse_encode_String(self.syncType, serializer);
+sse_encode_String(self.status, serializer);
+sse_encode_i_64(self.startedAt, serializer);
+sse_encode_opt_box_autoadd_i_64(self.finishedAt, serializer);
+sse_encode_i_64(self.pulledCount, serializer);
+sse_encode_i_64(self.pushedCount, serializer);
+sse_encode_i_64(self.conflictCount, serializer);
+sse_encode_opt_String(self.errorMessage, serializer);
+ }
+
+@protected void sse_encode_table_count(TableCount self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_String(self.table, serializer);
+sse_encode_usize(self.count, serializer);
+ }
+
+@protected void sse_encode_table_row_count(TableRowCount self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_String(self.table, serializer);
+sse_encode_i_64(self.rows, serializer);
+ }
+
+@protected void sse_encode_task_attachment_view(TaskAttachmentView self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_i_64(self.linkId, serializer);
+sse_encode_String(self.linkUuid, serializer);
+sse_encode_String(self.hash, serializer);
+sse_encode_String(self.originalName, serializer);
+sse_encode_String(self.mimeType, serializer);
+sse_encode_i_64(self.sizeBytes, serializer);
+sse_encode_i_32(self.isLocalCached, serializer);
+ }
+
+@protected void sse_encode_task_dependency_flags(TaskDependencyFlags self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_i_64(self.taskId, serializer);
+sse_encode_i_64(self.relationCount, serializer);
+ }
+
+@protected void sse_encode_task_description_flag(TaskDescriptionFlag self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_i_64(self.taskId, serializer);
+ }
+
+@protected void sse_encode_task_existence_flag(TaskExistenceFlag self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_i_64(self.taskId, serializer);
+ }
+
+@protected void sse_encode_task_label_with_id(TaskLabelWithId self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_i_64(self.id, serializer);
+sse_encode_String(self.uuid, serializer);
+sse_encode_String(self.title, serializer);
+sse_encode_String(self.hexColor, serializer);
+sse_encode_i_32(self.isDeleted, serializer);
+sse_encode_i_64(self.createdAt, serializer);
+sse_encode_i_64(self.updatedAt, serializer);
+sse_encode_opt_box_autoadd_i_64(self.deletedAt, serializer);
+sse_encode_i_32(self.version, serializer);
+sse_encode_i_64(self.taskLabelId, serializer);
+ }
+
+@protected void sse_encode_task_labels_projection(TaskLabelsProjection self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_i_64(self.taskId, serializer);
+sse_encode_list_projected_task_label(self.labels, serializer);
+ }
+
+@protected void sse_encode_task_reminders_projection(TaskRemindersProjection self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_i_64(self.taskId, serializer);
+sse_encode_list_projected_reminder(self.reminders, serializer);
+ }
+
+@protected void sse_encode_todo_comment(TodoComment self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_i_64(self.id, serializer);
+sse_encode_String(self.uuid, serializer);
+sse_encode_i_64(self.taskId, serializer);
+sse_encode_String(self.content, serializer);
+sse_encode_i_32(self.isDeleted, serializer);
+sse_encode_i_64(self.createdAt, serializer);
+sse_encode_i_64(self.updatedAt, serializer);
+sse_encode_opt_box_autoadd_i_64(self.deletedAt, serializer);
+sse_encode_i_32(self.version, serializer);
+ }
+
+@protected void sse_encode_todo_comment_create_input(TodoCommentCreateInput self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_i_64(self.taskId, serializer);
+sse_encode_String(self.content, serializer);
+ }
+
+@protected void sse_encode_todo_label(TodoLabel self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_i_64(self.id, serializer);
+sse_encode_String(self.uuid, serializer);
+sse_encode_String(self.title, serializer);
+sse_encode_String(self.hexColor, serializer);
+sse_encode_i_32(self.isDeleted, serializer);
+sse_encode_i_64(self.createdAt, serializer);
+sse_encode_i_64(self.updatedAt, serializer);
+sse_encode_opt_box_autoadd_i_64(self.deletedAt, serializer);
+sse_encode_i_32(self.version, serializer);
+ }
+
+@protected void sse_encode_todo_label_create_input(TodoLabelCreateInput self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_String(self.title, serializer);
+sse_encode_opt_String(self.hexColor, serializer);
+ }
+
+@protected void sse_encode_todo_project(TodoProject self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_i_64(self.id, serializer);
+sse_encode_String(self.uuid, serializer);
+sse_encode_String(self.title, serializer);
+sse_encode_opt_String(self.description, serializer);
+sse_encode_String(self.hexColor, serializer);
+sse_encode_f_64(self.sortOrder, serializer);
+sse_encode_opt_String(self.parentUuid, serializer);
+sse_encode_i_32(self.isArchived, serializer);
+sse_encode_i_32(self.isDeleted, serializer);
+sse_encode_i_64(self.createdAt, serializer);
+sse_encode_i_64(self.updatedAt, serializer);
+sse_encode_opt_box_autoadd_i_64(self.deletedAt, serializer);
+sse_encode_i_32(self.version, serializer);
+ }
+
+@protected void sse_encode_todo_project_create_input(TodoProjectCreateInput self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_String(self.title, serializer);
+sse_encode_opt_String(self.description, serializer);
+sse_encode_opt_String(self.hexColor, serializer);
+sse_encode_opt_box_autoadd_f_64(self.sortOrder, serializer);
+sse_encode_opt_String(self.parentUuid, serializer);
+ }
+
+@protected void sse_encode_todo_reminder(TodoReminder self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_i_64(self.id, serializer);
+sse_encode_String(self.uuid, serializer);
+sse_encode_i_64(self.taskId, serializer);
+sse_encode_i_64(self.remindAt, serializer);
+sse_encode_i_32(self.isConstant, serializer);
+sse_encode_i_32(self.isDeleted, serializer);
+sse_encode_i_64(self.createdAt, serializer);
+sse_encode_i_64(self.updatedAt, serializer);
+sse_encode_opt_box_autoadd_i_64(self.deletedAt, serializer);
+sse_encode_i_32(self.version, serializer);
+ }
+
+@protected void sse_encode_todo_reminder_create_input(TodoReminderCreateInput self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_i_64(self.taskId, serializer);
+sse_encode_i_64(self.remindAt, serializer);
+sse_encode_i_32(self.isConstant, serializer);
+ }
+
+@protected void sse_encode_todo_saved_filter(TodoSavedFilter self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_i_64(self.id, serializer);
+sse_encode_String(self.uuid, serializer);
+sse_encode_String(self.name, serializer);
+sse_encode_String(self.conditions, serializer);
+sse_encode_i_64(self.sortOrder, serializer);
+ }
+
+@protected void sse_encode_todo_saved_filter_create_input(TodoSavedFilterCreateInput self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_String(self.name, serializer);
+sse_encode_String(self.conditions, serializer);
+sse_encode_opt_box_autoadd_i_64(self.sortOrder, serializer);
+ }
+
+@protected void sse_encode_todo_saved_filter_update_input(TodoSavedFilterUpdateInput self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_opt_String(self.name, serializer);
+sse_encode_opt_String(self.conditions, serializer);
+sse_encode_opt_box_autoadd_i_64(self.sortOrder, serializer);
+ }
+
+@protected void sse_encode_todo_subtask(TodoSubtask self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_i_64(self.id, serializer);
+sse_encode_String(self.uuid, serializer);
+sse_encode_i_64(self.taskId, serializer);
+sse_encode_String(self.title, serializer);
+sse_encode_i_32(self.done, serializer);
+sse_encode_opt_box_autoadd_i_64(self.doneAt, serializer);
+sse_encode_f_64(self.position, serializer);
+sse_encode_opt_String(self.parentUuid, serializer);
+sse_encode_i_32(self.isDeleted, serializer);
+sse_encode_i_64(self.createdAt, serializer);
+sse_encode_i_64(self.updatedAt, serializer);
+sse_encode_opt_box_autoadd_i_64(self.deletedAt, serializer);
+sse_encode_i_32(self.version, serializer);
+ }
+
+@protected void sse_encode_todo_subtask_create_input(TodoSubtaskCreateInput self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_i_64(self.taskId, serializer);
+sse_encode_String(self.title, serializer);
+sse_encode_opt_box_autoadd_f_64(self.position, serializer);
+sse_encode_opt_String(self.parentUuid, serializer);
+ }
+
+@protected void sse_encode_todo_task(TodoTask self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_i_64(self.id, serializer);
+sse_encode_String(self.uuid, serializer);
+sse_encode_String(self.title, serializer);
+sse_encode_opt_String(self.description, serializer);
+sse_encode_opt_box_autoadd_i_64(self.projectId, serializer);
+sse_encode_i_32(self.priority, serializer);
+sse_encode_String(self.status, serializer);
+sse_encode_i_32(self.done, serializer);
+sse_encode_opt_box_autoadd_i_64(self.doneAt, serializer);
+sse_encode_opt_box_autoadd_i_64(self.dueDate, serializer);
+sse_encode_opt_box_autoadd_i_64(self.startDate, serializer);
+sse_encode_i_64(self.repeatAfter, serializer);
+sse_encode_i_32(self.repeatMode, serializer);
+sse_encode_i_32(self.repeatWeekdays, serializer);
+sse_encode_i_32(self.repeatEndType, serializer);
+sse_encode_i_64(self.repeatEndParam, serializer);
+sse_encode_i_32(self.repeatFromDone, serializer);
+sse_encode_i_32(self.repeatMonthMode, serializer);
+sse_encode_i_32(self.repeatNthWeek, serializer);
+sse_encode_f_64(self.percentDone, serializer);
+sse_encode_f_64(self.position, serializer);
+sse_encode_i_32(self.isFavorite, serializer);
+sse_encode_opt_box_autoadd_i_64(self.myDayDate, serializer);
+sse_encode_opt_box_autoadd_i_64(self.durationMinutes, serializer);
+sse_encode_i_32(self.isDeleted, serializer);
+sse_encode_i_64(self.createdAt, serializer);
+sse_encode_i_64(self.updatedAt, serializer);
+sse_encode_opt_box_autoadd_i_64(self.deletedAt, serializer);
+sse_encode_i_32(self.version, serializer);
+ }
+
+@protected void sse_encode_todo_task_create_input(TodoTaskCreateInput self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_String(self.title, serializer);
+sse_encode_opt_String(self.description, serializer);
+sse_encode_opt_box_autoadd_i_64(self.projectId, serializer);
+sse_encode_opt_box_autoadd_i_32(self.priority, serializer);
+sse_encode_opt_String(self.status, serializer);
+sse_encode_opt_box_autoadd_i_32(self.done, serializer);
+sse_encode_opt_box_autoadd_i_64(self.doneAt, serializer);
+sse_encode_opt_box_autoadd_i_64(self.dueDate, serializer);
+sse_encode_opt_box_autoadd_i_64(self.startDate, serializer);
+sse_encode_opt_box_autoadd_i_64(self.repeatAfter, serializer);
+sse_encode_opt_box_autoadd_i_32(self.repeatMode, serializer);
+sse_encode_opt_box_autoadd_i_32(self.repeatWeekdays, serializer);
+sse_encode_opt_box_autoadd_i_32(self.repeatEndType, serializer);
+sse_encode_opt_box_autoadd_i_64(self.repeatEndParam, serializer);
+sse_encode_opt_box_autoadd_i_32(self.repeatFromDone, serializer);
+sse_encode_opt_box_autoadd_i_32(self.repeatMonthMode, serializer);
+sse_encode_opt_box_autoadd_i_32(self.repeatNthWeek, serializer);
+sse_encode_opt_box_autoadd_f_64(self.position, serializer);
+sse_encode_opt_box_autoadd_i_32(self.isFavorite, serializer);
+sse_encode_opt_box_autoadd_i_64(self.myDayDate, serializer);
+sse_encode_opt_box_autoadd_i_64(self.durationMinutes, serializer);
+ }
+
+@protected void sse_encode_todo_task_detail(TodoTaskDetail self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_i_64(self.id, serializer);
+sse_encode_String(self.uuid, serializer);
+sse_encode_String(self.title, serializer);
+sse_encode_opt_String(self.description, serializer);
+sse_encode_opt_box_autoadd_i_64(self.projectId, serializer);
+sse_encode_i_32(self.priority, serializer);
+sse_encode_String(self.status, serializer);
+sse_encode_i_32(self.done, serializer);
+sse_encode_opt_box_autoadd_i_64(self.doneAt, serializer);
+sse_encode_opt_box_autoadd_i_64(self.dueDate, serializer);
+sse_encode_opt_box_autoadd_i_64(self.startDate, serializer);
+sse_encode_i_64(self.repeatAfter, serializer);
+sse_encode_i_32(self.repeatMode, serializer);
+sse_encode_i_32(self.repeatWeekdays, serializer);
+sse_encode_i_32(self.repeatEndType, serializer);
+sse_encode_i_64(self.repeatEndParam, serializer);
+sse_encode_i_32(self.repeatFromDone, serializer);
+sse_encode_i_32(self.repeatMonthMode, serializer);
+sse_encode_i_32(self.repeatNthWeek, serializer);
+sse_encode_f_64(self.percentDone, serializer);
+sse_encode_f_64(self.position, serializer);
+sse_encode_i_32(self.isFavorite, serializer);
+sse_encode_opt_box_autoadd_i_64(self.myDayDate, serializer);
+sse_encode_opt_box_autoadd_i_64(self.durationMinutes, serializer);
+sse_encode_i_32(self.isDeleted, serializer);
+sse_encode_i_64(self.createdAt, serializer);
+sse_encode_i_64(self.updatedAt, serializer);
+sse_encode_opt_box_autoadd_i_64(self.deletedAt, serializer);
+sse_encode_i_32(self.version, serializer);
+sse_encode_list_todo_subtask(self.subtasks, serializer);
+sse_encode_list_task_label_with_id(self.labels, serializer);
+sse_encode_list_todo_comment(self.comments, serializer);
+sse_encode_list_todo_task_relation(self.relations, serializer);
+sse_encode_list_todo_reminder(self.reminders, serializer);
+ }
+
+@protected void sse_encode_todo_task_label(TodoTaskLabel self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_i_64(self.id, serializer);
+sse_encode_String(self.uuid, serializer);
+sse_encode_i_64(self.taskId, serializer);
+sse_encode_i_64(self.labelId, serializer);
+sse_encode_i_32(self.isDeleted, serializer);
+sse_encode_i_64(self.createdAt, serializer);
+sse_encode_i_64(self.updatedAt, serializer);
+sse_encode_opt_box_autoadd_i_64(self.deletedAt, serializer);
+sse_encode_i_32(self.version, serializer);
+ }
+
+@protected void sse_encode_todo_task_label_create_input(TodoTaskLabelCreateInput self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_i_64(self.taskId, serializer);
+sse_encode_i_64(self.labelId, serializer);
+ }
+
+@protected void sse_encode_todo_task_list_item(TodoTaskListItem self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_i_64(self.id, serializer);
+sse_encode_String(self.title, serializer);
+sse_encode_opt_String(self.description, serializer);
+sse_encode_opt_box_autoadd_i_64(self.projectId, serializer);
+sse_encode_i_32(self.priority, serializer);
+sse_encode_String(self.status, serializer);
+sse_encode_i_32(self.done, serializer);
+sse_encode_opt_box_autoadd_i_64(self.doneAt, serializer);
+sse_encode_opt_box_autoadd_i_64(self.dueDate, serializer);
+sse_encode_opt_box_autoadd_i_64(self.startDate, serializer);
+sse_encode_i_32(self.repeatMode, serializer);
+sse_encode_f_64(self.percentDone, serializer);
+sse_encode_f_64(self.position, serializer);
+sse_encode_i_32(self.isFavorite, serializer);
+sse_encode_opt_box_autoadd_i_64(self.myDayDate, serializer);
+sse_encode_opt_box_autoadd_i_64(self.durationMinutes, serializer);
+sse_encode_i_32(self.isDeleted, serializer);
+sse_encode_i_64(self.createdAt, serializer);
+sse_encode_i_64(self.updatedAt, serializer);
+ }
+
+@protected void sse_encode_todo_task_relation(TodoTaskRelation self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_i_64(self.id, serializer);
+sse_encode_String(self.uuid, serializer);
+sse_encode_i_64(self.taskId, serializer);
+sse_encode_i_64(self.otherTaskId, serializer);
+sse_encode_String(self.relationType, serializer);
+sse_encode_i_32(self.isDeleted, serializer);
+sse_encode_i_64(self.createdAt, serializer);
+sse_encode_i_64(self.updatedAt, serializer);
+sse_encode_opt_box_autoadd_i_64(self.deletedAt, serializer);
+sse_encode_i_32(self.version, serializer);
+ }
+
+@protected void sse_encode_todo_task_relation_create_input(TodoTaskRelationCreateInput self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_i_64(self.taskId, serializer);
+sse_encode_i_64(self.otherTaskId, serializer);
+sse_encode_String(self.relationType, serializer);
+ }
+
+@protected void sse_encode_todo_template(TodoTemplate self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_i_64(self.id, serializer);
+sse_encode_String(self.uuid, serializer);
+sse_encode_String(self.name, serializer);
+sse_encode_String(self.payload, serializer);
+sse_encode_i_64(self.sortOrder, serializer);
+ }
+
+@protected void sse_encode_todo_template_create_input(TodoTemplateCreateInput self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_String(self.name, serializer);
+sse_encode_String(self.payload, serializer);
+sse_encode_opt_box_autoadd_i_64(self.sortOrder, serializer);
+ }
+
+@protected void sse_encode_todo_template_update_input(TodoTemplateUpdateInput self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_opt_String(self.name, serializer);
+sse_encode_opt_String(self.payload, serializer);
+sse_encode_opt_box_autoadd_i_64(self.sortOrder, serializer);
+ }
+
+@protected void sse_encode_trash_meta(TrashMeta self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_i_64(self.retentionDays, serializer);
+sse_encode_i_64(self.lastPurgeMs, serializer);
+ }
+
+@protected void sse_encode_trash_purge_stats(TrashPurgeStats self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_u_64(self.purged, serializer);
+sse_encode_u_64(self.guarded, serializer);
+sse_encode_bool(self.ran, serializer);
+ }
+
+@protected void sse_encode_u_32(int self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+serializer.buffer.putUint32(self); }
+
+@protected void sse_encode_u_64(BigInt self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+serializer.buffer.putBigUint64(self); }
+
+@protected void sse_encode_u_8(int self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+serializer.buffer.putUint8(self); }
+
+@protected void sse_encode_unit(void self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+ }
+
+@protected void sse_encode_usize(BigInt self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+serializer.buffer.putBigUint64(self); }
+
+@protected void sse_encode_widget_todo_item(WidgetTodoItem self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_i_64(self.id, serializer);
+sse_encode_String(self.uuid, serializer);
+sse_encode_String(self.title, serializer);
+sse_encode_i_32(self.priority, serializer);
+sse_encode_i_32(self.done, serializer);
+ }
+                }
+                

@@ -69,23 +69,20 @@ impl S3Adapter {
     ) -> Result<(), SyncError> {
         use sha2::{Digest, Sha256};
 
-        let mut file = tokio::fs::File::open(local_path).await.map_err(|e| {
-            SyncError::Network {
+        let mut file = tokio::fs::File::open(local_path)
+            .await
+            .map_err(|e| SyncError::Network {
                 message: format!("打开待上传文件失败: {e}"),
                 retryable: false,
-            }
-        })?;
+            })?;
         let mut hasher = Sha256::new();
         let mut buf = vec![0u8; 64 * 1024];
         loop {
             use tokio::io::AsyncReadExt;
-            let n = file
-                .read(&mut buf)
-                .await
-                .map_err(|e| SyncError::Network {
-                    message: format!("读取待上传文件失败: {e}"),
-                    retryable: false,
-                })?;
+            let n = file.read(&mut buf).await.map_err(|e| SyncError::Network {
+                message: format!("读取待上传文件失败: {e}"),
+                retryable: false,
+            })?;
             if n == 0 {
                 break;
             }
@@ -644,10 +641,12 @@ impl SyncAdapter for S3Adapter {
     ) -> Result<(), SyncError> {
         // 与 upload_owned 同口径：超大对象仍走分片（分片内部按块读，不整包）
         if total_len >= Self::MULTIPART_THRESHOLD as u64 {
-            let data = tokio::fs::read(local_path).await.map_err(|e| SyncError::Network {
-                message: format!("读取待上传文件失败: {e}"),
-                retryable: false,
-            })?;
+            let data = tokio::fs::read(local_path)
+                .await
+                .map_err(|e| SyncError::Network {
+                    message: format!("读取待上传文件失败: {e}"),
+                    retryable: false,
+                })?;
             return self.multipart_upload(path, &data).await;
         }
         self.put_object_file(path, local_path, total_len).await

@@ -2313,6 +2313,42 @@ class MockOrbitBridge implements OrbitBridge {
         return _mockPreview();
       });
 
+  // ── 按路径过桥（M1）：mock 只校验路径存在与解锁态，不做真解析 ──
+
+  @override
+  Future<BackupImportResult> fullBackupImportPath(
+    String filePath, {
+    bool ignoreSchemaMismatch = false,
+  }) =>
+      _delay(() {
+        if (!store.syncUnlocked) {
+          throw Exception('[not_unlocked] 同步加密未解锁，请先输入同步密码');
+        }
+        // 与字节版同口径：空路径视为无效输入（真实桥由 core 报 IO 错误）
+        if (filePath.trim().isEmpty) {
+          throw Exception('[backup] 备份路径为空');
+        }
+        _emit('*');
+        return BackupImportResult(
+          successCount: store.tasks.length,
+          errorCount: 0,
+          errors: const [],
+          manifest: store.buildManifest(),
+          needsRestart: false,
+        );
+      });
+
+  @override
+  Future<BackupPreview> fullBackupPeekPath(String filePath) => _delay(() {
+        if (!store.syncUnlocked) {
+          throw Exception('[not_unlocked] 同步加密未解锁，请先输入同步密码');
+        }
+        if (filePath.trim().isEmpty) {
+          throw Exception('[backup] 备份路径为空');
+        }
+        return _mockPreview();
+      });
+
   @override
   Future<BackupPreview> fullBackupPeekCloud(String cloudPath) => _delay(() {
         if (!store.syncConfigured) {

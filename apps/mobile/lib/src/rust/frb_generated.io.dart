@@ -34,2277 +34,1118 @@ import 'dart:ffi' as ffi;
 import 'frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated_io.dart';
 
-abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
-  RustLibApiImplPlatform({
-    required super.handler,
-    required super.wire,
-    required super.generalizedFrbRustBinding,
-    required super.portManager,
-  });
 
-  @protected
-  AnyhowException dco_decode_AnyhowException(dynamic raw);
 
-  @protected
-  RustStreamSink<DbEventDto> dco_decode_StreamSink_db_event_dto_Sse(
-    dynamic raw,
-  );
 
-  @protected
-  RustStreamSink<HolidayProgressDto>
-  dco_decode_StreamSink_holiday_progress_dto_Sse(dynamic raw);
+                abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
+                  RustLibApiImplPlatform({
+                    required super.handler,
+                    required super.wire,
+                    required super.generalizedFrbRustBinding,
+                    required super.portManager,
+                  });
 
-  @protected
-  RustStreamSink<ReminderDueDto> dco_decode_StreamSink_reminder_due_dto_Sse(
-    dynamic raw,
-  );
+                  
 
-  @protected
-  String dco_decode_String(dynamic raw);
+                  @protected AnyhowException dco_decode_AnyhowException(dynamic raw);
 
-  @protected
-  ActivityLogRow dco_decode_activity_log_row(dynamic raw);
+@protected RustStreamSink<DbEventDto> dco_decode_StreamSink_db_event_dto_Sse(dynamic raw);
 
-  @protected
-  BackupDeviceInfo dco_decode_backup_device_info(dynamic raw);
+@protected RustStreamSink<HolidayProgressDto> dco_decode_StreamSink_holiday_progress_dto_Sse(dynamic raw);
 
-  @protected
-  BackupEntryView dco_decode_backup_entry_view(dynamic raw);
+@protected RustStreamSink<ReminderDueDto> dco_decode_StreamSink_reminder_due_dto_Sse(dynamic raw);
 
-  @protected
-  BackupExportResult dco_decode_backup_export_result(dynamic raw);
+@protected String dco_decode_String(dynamic raw);
 
-  @protected
-  BackupImportResult dco_decode_backup_import_result(dynamic raw);
+@protected ActivityLogRow dco_decode_activity_log_row(dynamic raw);
 
-  @protected
-  BackupManifestView dco_decode_backup_manifest_view(dynamic raw);
+@protected BackupDeviceInfo dco_decode_backup_device_info(dynamic raw);
 
-  @protected
-  BackupPrefsView dco_decode_backup_prefs_view(dynamic raw);
+@protected BackupEntryView dco_decode_backup_entry_view(dynamic raw);
 
-  @protected
-  BackupPreviewTask dco_decode_backup_preview_task(dynamic raw);
+@protected BackupExportResult dco_decode_backup_export_result(dynamic raw);
 
-  @protected
-  BackupPreviewView dco_decode_backup_preview_view(dynamic raw);
+@protected BackupImportResult dco_decode_backup_import_result(dynamic raw);
 
-  @protected
-  BackupTableCount dco_decode_backup_table_count(dynamic raw);
+@protected BackupManifestView dco_decode_backup_manifest_view(dynamic raw);
 
-  @protected
-  BackupTaskStats dco_decode_backup_task_stats(dynamic raw);
+@protected BackupPrefsView dco_decode_backup_prefs_view(dynamic raw);
 
-  @protected
-  BiometricSecretBundle dco_decode_biometric_secret_bundle(dynamic raw);
+@protected BackupPreviewTask dco_decode_backup_preview_task(dynamic raw);
 
-  @protected
-  bool dco_decode_bool(dynamic raw);
+@protected BackupPreviewView dco_decode_backup_preview_view(dynamic raw);
 
-  @protected
-  BackupPrefsView dco_decode_box_autoadd_backup_prefs_view(dynamic raw);
+@protected BackupTableCount dco_decode_backup_table_count(dynamic raw);
 
-  @protected
-  bool dco_decode_box_autoadd_bool(dynamic raw);
+@protected BackupTaskStats dco_decode_backup_task_stats(dynamic raw);
 
-  @protected
-  CsvImportStatsView dco_decode_box_autoadd_csv_import_stats_view(dynamic raw);
+@protected BiometricSecretBundle dco_decode_biometric_secret_bundle(dynamic raw);
 
-  @protected
-  double dco_decode_box_autoadd_f_64(dynamic raw);
+@protected bool dco_decode_bool(dynamic raw);
 
-  @protected
-  int dco_decode_box_autoadd_i_32(dynamic raw);
+@protected BackupPrefsView dco_decode_box_autoadd_backup_prefs_view(dynamic raw);
 
-  @protected
-  PlatformInt64 dco_decode_box_autoadd_i_64(dynamic raw);
+@protected bool dco_decode_box_autoadd_bool(dynamic raw);
 
-  @protected
-  ListFilter dco_decode_box_autoadd_list_filter(dynamic raw);
+@protected CsvImportStatsView dco_decode_box_autoadd_csv_import_stats_view(dynamic raw);
 
-  @protected
-  SyncConfigInput dco_decode_box_autoadd_sync_config_input(dynamic raw);
+@protected double dco_decode_box_autoadd_f_64(dynamic raw);
 
-  @protected
-  SyncConfigView dco_decode_box_autoadd_sync_config_view(dynamic raw);
+@protected int dco_decode_box_autoadd_i_32(dynamic raw);
 
-  @protected
-  TodoCommentCreateInput dco_decode_box_autoadd_todo_comment_create_input(
-    dynamic raw,
-  );
+@protected PlatformInt64 dco_decode_box_autoadd_i_64(dynamic raw);
 
-  @protected
-  TodoLabelCreateInput dco_decode_box_autoadd_todo_label_create_input(
-    dynamic raw,
-  );
+@protected ListFilter dco_decode_box_autoadd_list_filter(dynamic raw);
 
-  @protected
-  TodoProject dco_decode_box_autoadd_todo_project(dynamic raw);
+@protected SyncConfigInput dco_decode_box_autoadd_sync_config_input(dynamic raw);
 
-  @protected
-  TodoProjectCreateInput dco_decode_box_autoadd_todo_project_create_input(
-    dynamic raw,
-  );
+@protected SyncConfigView dco_decode_box_autoadd_sync_config_view(dynamic raw);
 
-  @protected
-  TodoReminderCreateInput dco_decode_box_autoadd_todo_reminder_create_input(
-    dynamic raw,
-  );
+@protected TodoCommentCreateInput dco_decode_box_autoadd_todo_comment_create_input(dynamic raw);
 
-  @protected
-  TodoSavedFilterCreateInput
-  dco_decode_box_autoadd_todo_saved_filter_create_input(dynamic raw);
+@protected TodoLabelCreateInput dco_decode_box_autoadd_todo_label_create_input(dynamic raw);
 
-  @protected
-  TodoSavedFilterUpdateInput
-  dco_decode_box_autoadd_todo_saved_filter_update_input(dynamic raw);
+@protected TodoProject dco_decode_box_autoadd_todo_project(dynamic raw);
 
-  @protected
-  TodoSubtaskCreateInput dco_decode_box_autoadd_todo_subtask_create_input(
-    dynamic raw,
-  );
+@protected TodoProjectCreateInput dco_decode_box_autoadd_todo_project_create_input(dynamic raw);
 
-  @protected
-  TodoTask dco_decode_box_autoadd_todo_task(dynamic raw);
+@protected TodoReminderCreateInput dco_decode_box_autoadd_todo_reminder_create_input(dynamic raw);
 
-  @protected
-  TodoTaskCreateInput dco_decode_box_autoadd_todo_task_create_input(
-    dynamic raw,
-  );
+@protected TodoSavedFilterCreateInput dco_decode_box_autoadd_todo_saved_filter_create_input(dynamic raw);
 
-  @protected
-  TodoTaskLabelCreateInput dco_decode_box_autoadd_todo_task_label_create_input(
-    dynamic raw,
-  );
+@protected TodoSavedFilterUpdateInput dco_decode_box_autoadd_todo_saved_filter_update_input(dynamic raw);
 
-  @protected
-  TodoTaskRelationCreateInput
-  dco_decode_box_autoadd_todo_task_relation_create_input(dynamic raw);
+@protected TodoSubtaskCreateInput dco_decode_box_autoadd_todo_subtask_create_input(dynamic raw);
 
-  @protected
-  TodoTemplateCreateInput dco_decode_box_autoadd_todo_template_create_input(
-    dynamic raw,
-  );
+@protected TodoTask dco_decode_box_autoadd_todo_task(dynamic raw);
 
-  @protected
-  TodoTemplateUpdateInput dco_decode_box_autoadd_todo_template_update_input(
-    dynamic raw,
-  );
+@protected TodoTaskCreateInput dco_decode_box_autoadd_todo_task_create_input(dynamic raw);
 
-  @protected
-  BigInt dco_decode_box_autoadd_usize(dynamic raw);
+@protected TodoTaskLabelCreateInput dco_decode_box_autoadd_todo_task_label_create_input(dynamic raw);
 
-  @protected
-  CloudBackupEntryView dco_decode_cloud_backup_entry_view(dynamic raw);
+@protected TodoTaskRelationCreateInput dco_decode_box_autoadd_todo_task_relation_create_input(dynamic raw);
 
-  @protected
-  CommentSearchHit dco_decode_comment_search_hit(dynamic raw);
+@protected TodoTemplateCreateInput dco_decode_box_autoadd_todo_template_create_input(dynamic raw);
 
-  @protected
-  CompleteTaskResult dco_decode_complete_task_result(dynamic raw);
+@protected TodoTemplateUpdateInput dco_decode_box_autoadd_todo_template_update_input(dynamic raw);
 
-  @protected
-  CsvImportPreviewView dco_decode_csv_import_preview_view(dynamic raw);
+@protected BigInt dco_decode_box_autoadd_usize(dynamic raw);
 
-  @protected
-  CsvImportRowView dco_decode_csv_import_row_view(dynamic raw);
+@protected CloudBackupEntryView dco_decode_cloud_backup_entry_view(dynamic raw);
 
-  @protected
-  CsvImportStatsView dco_decode_csv_import_stats_view(dynamic raw);
+@protected CommentSearchHit dco_decode_comment_search_hit(dynamic raw);
 
-  @protected
-  DbEventDto dco_decode_db_event_dto(dynamic raw);
+@protected CompleteTaskResult dco_decode_complete_task_result(dynamic raw);
 
-  @protected
-  DbMaintenanceView dco_decode_db_maintenance_view(dynamic raw);
+@protected CsvImportPreviewView dco_decode_csv_import_preview_view(dynamic raw);
 
-  @protected
-  DiagnosticsSnapshot dco_decode_diagnostics_snapshot(dynamic raw);
+@protected CsvImportRowView dco_decode_csv_import_row_view(dynamic raw);
 
-  @protected
-  DigestPrefs dco_decode_digest_prefs(dynamic raw);
+@protected CsvImportStatsView dco_decode_csv_import_stats_view(dynamic raw);
 
-  @protected
-  DigestSummary dco_decode_digest_summary(dynamic raw);
+@protected DbEventDto dco_decode_db_event_dto(dynamic raw);
 
-  @protected
-  double dco_decode_f_64(dynamic raw);
+@protected DbMaintenanceView dco_decode_db_maintenance_view(dynamic raw);
 
-  @protected
-  GlobalSearchResult dco_decode_global_search_result(dynamic raw);
+@protected DiagnosticsSnapshot dco_decode_diagnostics_snapshot(dynamic raw);
 
-  @protected
-  HolidayInfo dco_decode_holiday_info(dynamic raw);
+@protected DigestPrefs dco_decode_digest_prefs(dynamic raw);
 
-  @protected
-  HolidayMeta dco_decode_holiday_meta(dynamic raw);
+@protected DigestSummary dco_decode_digest_summary(dynamic raw);
 
-  @protected
-  HolidayProgressDto dco_decode_holiday_progress_dto(dynamic raw);
+@protected double dco_decode_f_64(dynamic raw);
 
-  @protected
-  HolidayRangeSummary dco_decode_holiday_range_summary(dynamic raw);
+@protected GlobalSearchResult dco_decode_global_search_result(dynamic raw);
 
-  @protected
-  HolidayYearOutcome dco_decode_holiday_year_outcome(dynamic raw);
+@protected HolidayInfo dco_decode_holiday_info(dynamic raw);
 
-  @protected
-  int dco_decode_i_32(dynamic raw);
+@protected HolidayMeta dco_decode_holiday_meta(dynamic raw);
 
-  @protected
-  PlatformInt64 dco_decode_i_64(dynamic raw);
+@protected HolidayProgressDto dco_decode_holiday_progress_dto(dynamic raw);
 
-  @protected
-  IcsExportView dco_decode_ics_export_view(dynamic raw);
+@protected HolidayRangeSummary dco_decode_holiday_range_summary(dynamic raw);
 
-  @protected
-  IcsTableCount dco_decode_ics_table_count(dynamic raw);
+@protected HolidayYearOutcome dco_decode_holiday_year_outcome(dynamic raw);
 
-  @protected
-  ImportJobStatusView dco_decode_import_job_status_view(dynamic raw);
+@protected int dco_decode_i_32(dynamic raw);
 
-  @protected
-  ImportLimitsView dco_decode_import_limits_view(dynamic raw);
+@protected PlatformInt64 dco_decode_i_64(dynamic raw);
 
-  @protected
-  List<String> dco_decode_list_String(dynamic raw);
+@protected IcsExportView dco_decode_ics_export_view(dynamic raw);
 
-  @protected
-  List<ActivityLogRow> dco_decode_list_activity_log_row(dynamic raw);
+@protected IcsTableCount dco_decode_ics_table_count(dynamic raw);
 
-  @protected
-  List<BackupEntryView> dco_decode_list_backup_entry_view(dynamic raw);
+@protected ImportJobStatusView dco_decode_import_job_status_view(dynamic raw);
 
-  @protected
-  List<BackupPreviewTask> dco_decode_list_backup_preview_task(dynamic raw);
+@protected ImportLimitsView dco_decode_import_limits_view(dynamic raw);
 
-  @protected
-  List<BackupTableCount> dco_decode_list_backup_table_count(dynamic raw);
+@protected List<String> dco_decode_list_String(dynamic raw);
 
-  @protected
-  List<CloudBackupEntryView> dco_decode_list_cloud_backup_entry_view(
-    dynamic raw,
-  );
+@protected List<ActivityLogRow> dco_decode_list_activity_log_row(dynamic raw);
 
-  @protected
-  List<CommentSearchHit> dco_decode_list_comment_search_hit(dynamic raw);
+@protected List<BackupEntryView> dco_decode_list_backup_entry_view(dynamic raw);
 
-  @protected
-  List<CsvImportRowView> dco_decode_list_csv_import_row_view(dynamic raw);
+@protected List<BackupPreviewTask> dco_decode_list_backup_preview_task(dynamic raw);
 
-  @protected
-  ListFilter dco_decode_list_filter(dynamic raw);
+@protected List<BackupTableCount> dco_decode_list_backup_table_count(dynamic raw);
 
-  @protected
-  List<HolidayInfo> dco_decode_list_holiday_info(dynamic raw);
+@protected List<CloudBackupEntryView> dco_decode_list_cloud_backup_entry_view(dynamic raw);
 
-  @protected
-  List<IcsTableCount> dco_decode_list_ics_table_count(dynamic raw);
+@protected List<CommentSearchHit> dco_decode_list_comment_search_hit(dynamic raw);
 
-  @protected
-  List<NotificationLogRow> dco_decode_list_notification_log_row(dynamic raw);
+@protected List<CsvImportRowView> dco_decode_list_csv_import_row_view(dynamic raw);
 
-  @protected
-  Int64List dco_decode_list_prim_i_64_strict(dynamic raw);
+@protected ListFilter dco_decode_list_filter(dynamic raw);
 
-  @protected
-  List<int> dco_decode_list_prim_u_8_loose(dynamic raw);
+@protected List<HolidayInfo> dco_decode_list_holiday_info(dynamic raw);
 
-  @protected
-  Uint8List dco_decode_list_prim_u_8_strict(dynamic raw);
+@protected List<IcsTableCount> dco_decode_list_ics_table_count(dynamic raw);
 
-  @protected
-  List<ProjectedReminder> dco_decode_list_projected_reminder(dynamic raw);
+@protected List<NotificationLogRow> dco_decode_list_notification_log_row(dynamic raw);
 
-  @protected
-  List<ProjectedTaskLabel> dco_decode_list_projected_task_label(dynamic raw);
+@protected Int64List dco_decode_list_prim_i_64_strict(dynamic raw);
 
-  @protected
-  List<StatsHeatmapCell> dco_decode_list_stats_heatmap_cell(dynamic raw);
+@protected List<int> dco_decode_list_prim_u_8_loose(dynamic raw);
 
-  @protected
-  List<StatsPriorityRow> dco_decode_list_stats_priority_row(dynamic raw);
+@protected Uint8List dco_decode_list_prim_u_8_strict(dynamic raw);
 
-  @protected
-  List<StatsProjectRow> dco_decode_list_stats_project_row(dynamic raw);
+@protected List<ProjectedReminder> dco_decode_list_projected_reminder(dynamic raw);
 
-  @protected
-  List<StatsWeekdayRow> dco_decode_list_stats_weekday_row(dynamic raw);
+@protected List<ProjectedTaskLabel> dco_decode_list_projected_task_label(dynamic raw);
 
-  @protected
-  List<SyncConflict> dco_decode_list_sync_conflict(dynamic raw);
+@protected List<StatsHeatmapCell> dco_decode_list_stats_heatmap_cell(dynamic raw);
 
-  @protected
-  List<SyncHistoryView> dco_decode_list_sync_history_view(dynamic raw);
+@protected List<StatsPriorityRow> dco_decode_list_stats_priority_row(dynamic raw);
 
-  @protected
-  List<TableCount> dco_decode_list_table_count(dynamic raw);
+@protected List<StatsProjectRow> dco_decode_list_stats_project_row(dynamic raw);
 
-  @protected
-  List<TableRowCount> dco_decode_list_table_row_count(dynamic raw);
+@protected List<StatsWeekdayRow> dco_decode_list_stats_weekday_row(dynamic raw);
 
-  @protected
-  List<TaskAttachmentView> dco_decode_list_task_attachment_view(dynamic raw);
+@protected List<SyncConflict> dco_decode_list_sync_conflict(dynamic raw);
 
-  @protected
-  List<TaskDependencyFlags> dco_decode_list_task_dependency_flags(dynamic raw);
+@protected List<SyncHistoryView> dco_decode_list_sync_history_view(dynamic raw);
 
-  @protected
-  List<TaskDescriptionFlag> dco_decode_list_task_description_flag(dynamic raw);
+@protected List<TableCount> dco_decode_list_table_count(dynamic raw);
 
-  @protected
-  List<TaskExistenceFlag> dco_decode_list_task_existence_flag(dynamic raw);
+@protected List<TableRowCount> dco_decode_list_table_row_count(dynamic raw);
 
-  @protected
-  List<TaskLabelWithId> dco_decode_list_task_label_with_id(dynamic raw);
+@protected List<TaskAttachmentView> dco_decode_list_task_attachment_view(dynamic raw);
 
-  @protected
-  List<TaskLabelsProjection> dco_decode_list_task_labels_projection(
-    dynamic raw,
-  );
+@protected List<TaskDependencyFlags> dco_decode_list_task_dependency_flags(dynamic raw);
 
-  @protected
-  List<TaskRemindersProjection> dco_decode_list_task_reminders_projection(
-    dynamic raw,
-  );
+@protected List<TaskDescriptionFlag> dco_decode_list_task_description_flag(dynamic raw);
 
-  @protected
-  List<TodoComment> dco_decode_list_todo_comment(dynamic raw);
+@protected List<TaskExistenceFlag> dco_decode_list_task_existence_flag(dynamic raw);
 
-  @protected
-  List<TodoLabel> dco_decode_list_todo_label(dynamic raw);
+@protected List<TaskLabelWithId> dco_decode_list_task_label_with_id(dynamic raw);
 
-  @protected
-  List<TodoProject> dco_decode_list_todo_project(dynamic raw);
+@protected List<TaskLabelsProjection> dco_decode_list_task_labels_projection(dynamic raw);
 
-  @protected
-  List<TodoReminder> dco_decode_list_todo_reminder(dynamic raw);
+@protected List<TaskRemindersProjection> dco_decode_list_task_reminders_projection(dynamic raw);
 
-  @protected
-  List<TodoSavedFilter> dco_decode_list_todo_saved_filter(dynamic raw);
+@protected List<TodoComment> dco_decode_list_todo_comment(dynamic raw);
 
-  @protected
-  List<TodoSubtask> dco_decode_list_todo_subtask(dynamic raw);
+@protected List<TodoLabel> dco_decode_list_todo_label(dynamic raw);
 
-  @protected
-  List<TodoTask> dco_decode_list_todo_task(dynamic raw);
+@protected List<TodoProject> dco_decode_list_todo_project(dynamic raw);
 
-  @protected
-  List<TodoTaskLabel> dco_decode_list_todo_task_label(dynamic raw);
+@protected List<TodoReminder> dco_decode_list_todo_reminder(dynamic raw);
 
-  @protected
-  List<TodoTaskListItem> dco_decode_list_todo_task_list_item(dynamic raw);
+@protected List<TodoSavedFilter> dco_decode_list_todo_saved_filter(dynamic raw);
 
-  @protected
-  List<TodoTaskRelation> dco_decode_list_todo_task_relation(dynamic raw);
+@protected List<TodoSubtask> dco_decode_list_todo_subtask(dynamic raw);
 
-  @protected
-  List<TodoTemplate> dco_decode_list_todo_template(dynamic raw);
+@protected List<TodoTask> dco_decode_list_todo_task(dynamic raw);
 
-  @protected
-  List<WidgetTodoItem> dco_decode_list_widget_todo_item(dynamic raw);
+@protected List<TodoTaskLabel> dco_decode_list_todo_task_label(dynamic raw);
 
-  @protected
-  NotificationLogRow dco_decode_notification_log_row(dynamic raw);
+@protected List<TodoTaskListItem> dco_decode_list_todo_task_list_item(dynamic raw);
 
-  @protected
-  String? dco_decode_opt_String(dynamic raw);
+@protected List<TodoTaskRelation> dco_decode_list_todo_task_relation(dynamic raw);
 
-  @protected
-  bool? dco_decode_opt_box_autoadd_bool(dynamic raw);
+@protected List<TodoTemplate> dco_decode_list_todo_template(dynamic raw);
 
-  @protected
-  CsvImportStatsView? dco_decode_opt_box_autoadd_csv_import_stats_view(
-    dynamic raw,
-  );
+@protected List<WidgetTodoItem> dco_decode_list_widget_todo_item(dynamic raw);
 
-  @protected
-  double? dco_decode_opt_box_autoadd_f_64(dynamic raw);
+@protected NotificationLogRow dco_decode_notification_log_row(dynamic raw);
 
-  @protected
-  int? dco_decode_opt_box_autoadd_i_32(dynamic raw);
+@protected String? dco_decode_opt_String(dynamic raw);
 
-  @protected
-  PlatformInt64? dco_decode_opt_box_autoadd_i_64(dynamic raw);
+@protected bool? dco_decode_opt_box_autoadd_bool(dynamic raw);
 
-  @protected
-  SyncConfigView? dco_decode_opt_box_autoadd_sync_config_view(dynamic raw);
+@protected CsvImportStatsView? dco_decode_opt_box_autoadd_csv_import_stats_view(dynamic raw);
 
-  @protected
-  TodoProject? dco_decode_opt_box_autoadd_todo_project(dynamic raw);
+@protected double? dco_decode_opt_box_autoadd_f_64(dynamic raw);
 
-  @protected
-  TodoTask? dco_decode_opt_box_autoadd_todo_task(dynamic raw);
+@protected int? dco_decode_opt_box_autoadd_i_32(dynamic raw);
 
-  @protected
-  BigInt? dco_decode_opt_box_autoadd_usize(dynamic raw);
+@protected PlatformInt64? dco_decode_opt_box_autoadd_i_64(dynamic raw);
 
-  @protected
-  Int64List? dco_decode_opt_list_prim_i_64_strict(dynamic raw);
+@protected SyncConfigView? dco_decode_opt_box_autoadd_sync_config_view(dynamic raw);
 
-  @protected
-  PlaintextExportView dco_decode_plaintext_export_view(dynamic raw);
+@protected TodoProject? dco_decode_opt_box_autoadd_todo_project(dynamic raw);
 
-  @protected
-  ProjectedReminder dco_decode_projected_reminder(dynamic raw);
+@protected TodoTask? dco_decode_opt_box_autoadd_todo_task(dynamic raw);
 
-  @protected
-  ProjectedTaskLabel dco_decode_projected_task_label(dynamic raw);
+@protected BigInt? dco_decode_opt_box_autoadd_usize(dynamic raw);
 
-  @protected
-  ReminderDueDto dco_decode_reminder_due_dto(dynamic raw);
+@protected Int64List? dco_decode_opt_list_prim_i_64_strict(dynamic raw);
 
-  @protected
-  StatsAggregate dco_decode_stats_aggregate(dynamic raw);
+@protected PlaintextExportView dco_decode_plaintext_export_view(dynamic raw);
 
-  @protected
-  StatsHeatmap dco_decode_stats_heatmap(dynamic raw);
+@protected ProjectedReminder dco_decode_projected_reminder(dynamic raw);
 
-  @protected
-  StatsHeatmapCell dco_decode_stats_heatmap_cell(dynamic raw);
+@protected ProjectedTaskLabel dco_decode_projected_task_label(dynamic raw);
 
-  @protected
-  StatsOverview dco_decode_stats_overview(dynamic raw);
+@protected ReminderDueDto dco_decode_reminder_due_dto(dynamic raw);
 
-  @protected
-  StatsPriorityRow dco_decode_stats_priority_row(dynamic raw);
+@protected StatsAggregate dco_decode_stats_aggregate(dynamic raw);
 
-  @protected
-  StatsProjectRow dco_decode_stats_project_row(dynamic raw);
+@protected StatsHeatmap dco_decode_stats_heatmap(dynamic raw);
 
-  @protected
-  StatsStreak dco_decode_stats_streak(dynamic raw);
+@protected StatsHeatmapCell dco_decode_stats_heatmap_cell(dynamic raw);
 
-  @protected
-  StatsWeekdayRow dco_decode_stats_weekday_row(dynamic raw);
+@protected StatsOverview dco_decode_stats_overview(dynamic raw);
 
-  @protected
-  SyncConfigInput dco_decode_sync_config_input(dynamic raw);
+@protected StatsPriorityRow dco_decode_stats_priority_row(dynamic raw);
 
-  @protected
-  SyncConfigView dco_decode_sync_config_view(dynamic raw);
+@protected StatsProjectRow dco_decode_stats_project_row(dynamic raw);
 
-  @protected
-  SyncConflict dco_decode_sync_conflict(dynamic raw);
+@protected StatsStreak dco_decode_stats_streak(dynamic raw);
 
-  @protected
-  SyncCryptoStatus dco_decode_sync_crypto_status(dynamic raw);
+@protected StatsWeekdayRow dco_decode_stats_weekday_row(dynamic raw);
 
-  @protected
-  SyncHistoryView dco_decode_sync_history_view(dynamic raw);
+@protected SyncConfigInput dco_decode_sync_config_input(dynamic raw);
 
-  @protected
-  TableCount dco_decode_table_count(dynamic raw);
+@protected SyncConfigView dco_decode_sync_config_view(dynamic raw);
 
-  @protected
-  TableRowCount dco_decode_table_row_count(dynamic raw);
+@protected SyncConflict dco_decode_sync_conflict(dynamic raw);
 
-  @protected
-  TaskAttachmentView dco_decode_task_attachment_view(dynamic raw);
+@protected SyncCryptoStatus dco_decode_sync_crypto_status(dynamic raw);
 
-  @protected
-  TaskDependencyFlags dco_decode_task_dependency_flags(dynamic raw);
+@protected SyncHistoryView dco_decode_sync_history_view(dynamic raw);
 
-  @protected
-  TaskDescriptionFlag dco_decode_task_description_flag(dynamic raw);
+@protected TableCount dco_decode_table_count(dynamic raw);
 
-  @protected
-  TaskExistenceFlag dco_decode_task_existence_flag(dynamic raw);
+@protected TableRowCount dco_decode_table_row_count(dynamic raw);
 
-  @protected
-  TaskLabelWithId dco_decode_task_label_with_id(dynamic raw);
+@protected TaskAttachmentView dco_decode_task_attachment_view(dynamic raw);
 
-  @protected
-  TaskLabelsProjection dco_decode_task_labels_projection(dynamic raw);
+@protected TaskDependencyFlags dco_decode_task_dependency_flags(dynamic raw);
 
-  @protected
-  TaskRemindersProjection dco_decode_task_reminders_projection(dynamic raw);
+@protected TaskDescriptionFlag dco_decode_task_description_flag(dynamic raw);
 
-  @protected
-  TodoComment dco_decode_todo_comment(dynamic raw);
+@protected TaskExistenceFlag dco_decode_task_existence_flag(dynamic raw);
 
-  @protected
-  TodoCommentCreateInput dco_decode_todo_comment_create_input(dynamic raw);
+@protected TaskLabelWithId dco_decode_task_label_with_id(dynamic raw);
 
-  @protected
-  TodoLabel dco_decode_todo_label(dynamic raw);
+@protected TaskLabelsProjection dco_decode_task_labels_projection(dynamic raw);
 
-  @protected
-  TodoLabelCreateInput dco_decode_todo_label_create_input(dynamic raw);
+@protected TaskRemindersProjection dco_decode_task_reminders_projection(dynamic raw);
 
-  @protected
-  TodoProject dco_decode_todo_project(dynamic raw);
+@protected TodoComment dco_decode_todo_comment(dynamic raw);
 
-  @protected
-  TodoProjectCreateInput dco_decode_todo_project_create_input(dynamic raw);
+@protected TodoCommentCreateInput dco_decode_todo_comment_create_input(dynamic raw);
 
-  @protected
-  TodoReminder dco_decode_todo_reminder(dynamic raw);
+@protected TodoLabel dco_decode_todo_label(dynamic raw);
 
-  @protected
-  TodoReminderCreateInput dco_decode_todo_reminder_create_input(dynamic raw);
+@protected TodoLabelCreateInput dco_decode_todo_label_create_input(dynamic raw);
 
-  @protected
-  TodoSavedFilter dco_decode_todo_saved_filter(dynamic raw);
+@protected TodoProject dco_decode_todo_project(dynamic raw);
 
-  @protected
-  TodoSavedFilterCreateInput dco_decode_todo_saved_filter_create_input(
-    dynamic raw,
-  );
+@protected TodoProjectCreateInput dco_decode_todo_project_create_input(dynamic raw);
 
-  @protected
-  TodoSavedFilterUpdateInput dco_decode_todo_saved_filter_update_input(
-    dynamic raw,
-  );
+@protected TodoReminder dco_decode_todo_reminder(dynamic raw);
 
-  @protected
-  TodoSubtask dco_decode_todo_subtask(dynamic raw);
+@protected TodoReminderCreateInput dco_decode_todo_reminder_create_input(dynamic raw);
 
-  @protected
-  TodoSubtaskCreateInput dco_decode_todo_subtask_create_input(dynamic raw);
+@protected TodoSavedFilter dco_decode_todo_saved_filter(dynamic raw);
 
-  @protected
-  TodoTask dco_decode_todo_task(dynamic raw);
+@protected TodoSavedFilterCreateInput dco_decode_todo_saved_filter_create_input(dynamic raw);
 
-  @protected
-  TodoTaskCreateInput dco_decode_todo_task_create_input(dynamic raw);
+@protected TodoSavedFilterUpdateInput dco_decode_todo_saved_filter_update_input(dynamic raw);
 
-  @protected
-  TodoTaskDetail dco_decode_todo_task_detail(dynamic raw);
+@protected TodoSubtask dco_decode_todo_subtask(dynamic raw);
 
-  @protected
-  TodoTaskLabel dco_decode_todo_task_label(dynamic raw);
+@protected TodoSubtaskCreateInput dco_decode_todo_subtask_create_input(dynamic raw);
 
-  @protected
-  TodoTaskLabelCreateInput dco_decode_todo_task_label_create_input(dynamic raw);
+@protected TodoTask dco_decode_todo_task(dynamic raw);
 
-  @protected
-  TodoTaskListItem dco_decode_todo_task_list_item(dynamic raw);
+@protected TodoTaskCreateInput dco_decode_todo_task_create_input(dynamic raw);
 
-  @protected
-  TodoTaskRelation dco_decode_todo_task_relation(dynamic raw);
+@protected TodoTaskDetail dco_decode_todo_task_detail(dynamic raw);
 
-  @protected
-  TodoTaskRelationCreateInput dco_decode_todo_task_relation_create_input(
-    dynamic raw,
-  );
+@protected TodoTaskLabel dco_decode_todo_task_label(dynamic raw);
 
-  @protected
-  TodoTemplate dco_decode_todo_template(dynamic raw);
+@protected TodoTaskLabelCreateInput dco_decode_todo_task_label_create_input(dynamic raw);
 
-  @protected
-  TodoTemplateCreateInput dco_decode_todo_template_create_input(dynamic raw);
+@protected TodoTaskListItem dco_decode_todo_task_list_item(dynamic raw);
 
-  @protected
-  TodoTemplateUpdateInput dco_decode_todo_template_update_input(dynamic raw);
+@protected TodoTaskRelation dco_decode_todo_task_relation(dynamic raw);
 
-  @protected
-  TrashMeta dco_decode_trash_meta(dynamic raw);
+@protected TodoTaskRelationCreateInput dco_decode_todo_task_relation_create_input(dynamic raw);
 
-  @protected
-  TrashPurgeStats dco_decode_trash_purge_stats(dynamic raw);
+@protected TodoTemplate dco_decode_todo_template(dynamic raw);
 
-  @protected
-  int dco_decode_u_32(dynamic raw);
+@protected TodoTemplateCreateInput dco_decode_todo_template_create_input(dynamic raw);
 
-  @protected
-  BigInt dco_decode_u_64(dynamic raw);
+@protected TodoTemplateUpdateInput dco_decode_todo_template_update_input(dynamic raw);
 
-  @protected
-  int dco_decode_u_8(dynamic raw);
+@protected TrashMeta dco_decode_trash_meta(dynamic raw);
 
-  @protected
-  void dco_decode_unit(dynamic raw);
+@protected TrashPurgeStats dco_decode_trash_purge_stats(dynamic raw);
 
-  @protected
-  BigInt dco_decode_usize(dynamic raw);
+@protected int dco_decode_u_32(dynamic raw);
 
-  @protected
-  WidgetTodoItem dco_decode_widget_todo_item(dynamic raw);
+@protected BigInt dco_decode_u_64(dynamic raw);
 
-  @protected
-  AnyhowException sse_decode_AnyhowException(SseDeserializer deserializer);
+@protected int dco_decode_u_8(dynamic raw);
 
-  @protected
-  RustStreamSink<DbEventDto> sse_decode_StreamSink_db_event_dto_Sse(
-    SseDeserializer deserializer,
-  );
+@protected void dco_decode_unit(dynamic raw);
 
-  @protected
-  RustStreamSink<HolidayProgressDto>
-  sse_decode_StreamSink_holiday_progress_dto_Sse(SseDeserializer deserializer);
+@protected BigInt dco_decode_usize(dynamic raw);
 
-  @protected
-  RustStreamSink<ReminderDueDto> sse_decode_StreamSink_reminder_due_dto_Sse(
-    SseDeserializer deserializer,
-  );
+@protected WidgetTodoItem dco_decode_widget_todo_item(dynamic raw);
 
-  @protected
-  String sse_decode_String(SseDeserializer deserializer);
+@protected AnyhowException sse_decode_AnyhowException(SseDeserializer deserializer);
 
-  @protected
-  ActivityLogRow sse_decode_activity_log_row(SseDeserializer deserializer);
+@protected RustStreamSink<DbEventDto> sse_decode_StreamSink_db_event_dto_Sse(SseDeserializer deserializer);
 
-  @protected
-  BackupDeviceInfo sse_decode_backup_device_info(SseDeserializer deserializer);
+@protected RustStreamSink<HolidayProgressDto> sse_decode_StreamSink_holiday_progress_dto_Sse(SseDeserializer deserializer);
 
-  @protected
-  BackupEntryView sse_decode_backup_entry_view(SseDeserializer deserializer);
+@protected RustStreamSink<ReminderDueDto> sse_decode_StreamSink_reminder_due_dto_Sse(SseDeserializer deserializer);
 
-  @protected
-  BackupExportResult sse_decode_backup_export_result(
-    SseDeserializer deserializer,
-  );
+@protected String sse_decode_String(SseDeserializer deserializer);
 
-  @protected
-  BackupImportResult sse_decode_backup_import_result(
-    SseDeserializer deserializer,
-  );
+@protected ActivityLogRow sse_decode_activity_log_row(SseDeserializer deserializer);
 
-  @protected
-  BackupManifestView sse_decode_backup_manifest_view(
-    SseDeserializer deserializer,
-  );
+@protected BackupDeviceInfo sse_decode_backup_device_info(SseDeserializer deserializer);
 
-  @protected
-  BackupPrefsView sse_decode_backup_prefs_view(SseDeserializer deserializer);
+@protected BackupEntryView sse_decode_backup_entry_view(SseDeserializer deserializer);
 
-  @protected
-  BackupPreviewTask sse_decode_backup_preview_task(
-    SseDeserializer deserializer,
-  );
+@protected BackupExportResult sse_decode_backup_export_result(SseDeserializer deserializer);
 
-  @protected
-  BackupPreviewView sse_decode_backup_preview_view(
-    SseDeserializer deserializer,
-  );
+@protected BackupImportResult sse_decode_backup_import_result(SseDeserializer deserializer);
 
-  @protected
-  BackupTableCount sse_decode_backup_table_count(SseDeserializer deserializer);
+@protected BackupManifestView sse_decode_backup_manifest_view(SseDeserializer deserializer);
 
-  @protected
-  BackupTaskStats sse_decode_backup_task_stats(SseDeserializer deserializer);
+@protected BackupPrefsView sse_decode_backup_prefs_view(SseDeserializer deserializer);
 
-  @protected
-  BiometricSecretBundle sse_decode_biometric_secret_bundle(
-    SseDeserializer deserializer,
-  );
+@protected BackupPreviewTask sse_decode_backup_preview_task(SseDeserializer deserializer);
 
-  @protected
-  bool sse_decode_bool(SseDeserializer deserializer);
+@protected BackupPreviewView sse_decode_backup_preview_view(SseDeserializer deserializer);
 
-  @protected
-  BackupPrefsView sse_decode_box_autoadd_backup_prefs_view(
-    SseDeserializer deserializer,
-  );
+@protected BackupTableCount sse_decode_backup_table_count(SseDeserializer deserializer);
 
-  @protected
-  bool sse_decode_box_autoadd_bool(SseDeserializer deserializer);
+@protected BackupTaskStats sse_decode_backup_task_stats(SseDeserializer deserializer);
 
-  @protected
-  CsvImportStatsView sse_decode_box_autoadd_csv_import_stats_view(
-    SseDeserializer deserializer,
-  );
+@protected BiometricSecretBundle sse_decode_biometric_secret_bundle(SseDeserializer deserializer);
 
-  @protected
-  double sse_decode_box_autoadd_f_64(SseDeserializer deserializer);
+@protected bool sse_decode_bool(SseDeserializer deserializer);
 
-  @protected
-  int sse_decode_box_autoadd_i_32(SseDeserializer deserializer);
+@protected BackupPrefsView sse_decode_box_autoadd_backup_prefs_view(SseDeserializer deserializer);
 
-  @protected
-  PlatformInt64 sse_decode_box_autoadd_i_64(SseDeserializer deserializer);
+@protected bool sse_decode_box_autoadd_bool(SseDeserializer deserializer);
 
-  @protected
-  ListFilter sse_decode_box_autoadd_list_filter(SseDeserializer deserializer);
+@protected CsvImportStatsView sse_decode_box_autoadd_csv_import_stats_view(SseDeserializer deserializer);
 
-  @protected
-  SyncConfigInput sse_decode_box_autoadd_sync_config_input(
-    SseDeserializer deserializer,
-  );
+@protected double sse_decode_box_autoadd_f_64(SseDeserializer deserializer);
 
-  @protected
-  SyncConfigView sse_decode_box_autoadd_sync_config_view(
-    SseDeserializer deserializer,
-  );
+@protected int sse_decode_box_autoadd_i_32(SseDeserializer deserializer);
 
-  @protected
-  TodoCommentCreateInput sse_decode_box_autoadd_todo_comment_create_input(
-    SseDeserializer deserializer,
-  );
+@protected PlatformInt64 sse_decode_box_autoadd_i_64(SseDeserializer deserializer);
 
-  @protected
-  TodoLabelCreateInput sse_decode_box_autoadd_todo_label_create_input(
-    SseDeserializer deserializer,
-  );
+@protected ListFilter sse_decode_box_autoadd_list_filter(SseDeserializer deserializer);
 
-  @protected
-  TodoProject sse_decode_box_autoadd_todo_project(SseDeserializer deserializer);
+@protected SyncConfigInput sse_decode_box_autoadd_sync_config_input(SseDeserializer deserializer);
 
-  @protected
-  TodoProjectCreateInput sse_decode_box_autoadd_todo_project_create_input(
-    SseDeserializer deserializer,
-  );
+@protected SyncConfigView sse_decode_box_autoadd_sync_config_view(SseDeserializer deserializer);
 
-  @protected
-  TodoReminderCreateInput sse_decode_box_autoadd_todo_reminder_create_input(
-    SseDeserializer deserializer,
-  );
+@protected TodoCommentCreateInput sse_decode_box_autoadd_todo_comment_create_input(SseDeserializer deserializer);
 
-  @protected
-  TodoSavedFilterCreateInput
-  sse_decode_box_autoadd_todo_saved_filter_create_input(
-    SseDeserializer deserializer,
-  );
+@protected TodoLabelCreateInput sse_decode_box_autoadd_todo_label_create_input(SseDeserializer deserializer);
 
-  @protected
-  TodoSavedFilterUpdateInput
-  sse_decode_box_autoadd_todo_saved_filter_update_input(
-    SseDeserializer deserializer,
-  );
+@protected TodoProject sse_decode_box_autoadd_todo_project(SseDeserializer deserializer);
 
-  @protected
-  TodoSubtaskCreateInput sse_decode_box_autoadd_todo_subtask_create_input(
-    SseDeserializer deserializer,
-  );
+@protected TodoProjectCreateInput sse_decode_box_autoadd_todo_project_create_input(SseDeserializer deserializer);
 
-  @protected
-  TodoTask sse_decode_box_autoadd_todo_task(SseDeserializer deserializer);
+@protected TodoReminderCreateInput sse_decode_box_autoadd_todo_reminder_create_input(SseDeserializer deserializer);
 
-  @protected
-  TodoTaskCreateInput sse_decode_box_autoadd_todo_task_create_input(
-    SseDeserializer deserializer,
-  );
+@protected TodoSavedFilterCreateInput sse_decode_box_autoadd_todo_saved_filter_create_input(SseDeserializer deserializer);
 
-  @protected
-  TodoTaskLabelCreateInput sse_decode_box_autoadd_todo_task_label_create_input(
-    SseDeserializer deserializer,
-  );
+@protected TodoSavedFilterUpdateInput sse_decode_box_autoadd_todo_saved_filter_update_input(SseDeserializer deserializer);
 
-  @protected
-  TodoTaskRelationCreateInput
-  sse_decode_box_autoadd_todo_task_relation_create_input(
-    SseDeserializer deserializer,
-  );
+@protected TodoSubtaskCreateInput sse_decode_box_autoadd_todo_subtask_create_input(SseDeserializer deserializer);
 
-  @protected
-  TodoTemplateCreateInput sse_decode_box_autoadd_todo_template_create_input(
-    SseDeserializer deserializer,
-  );
+@protected TodoTask sse_decode_box_autoadd_todo_task(SseDeserializer deserializer);
 
-  @protected
-  TodoTemplateUpdateInput sse_decode_box_autoadd_todo_template_update_input(
-    SseDeserializer deserializer,
-  );
+@protected TodoTaskCreateInput sse_decode_box_autoadd_todo_task_create_input(SseDeserializer deserializer);
 
-  @protected
-  BigInt sse_decode_box_autoadd_usize(SseDeserializer deserializer);
+@protected TodoTaskLabelCreateInput sse_decode_box_autoadd_todo_task_label_create_input(SseDeserializer deserializer);
 
-  @protected
-  CloudBackupEntryView sse_decode_cloud_backup_entry_view(
-    SseDeserializer deserializer,
-  );
+@protected TodoTaskRelationCreateInput sse_decode_box_autoadd_todo_task_relation_create_input(SseDeserializer deserializer);
 
-  @protected
-  CommentSearchHit sse_decode_comment_search_hit(SseDeserializer deserializer);
+@protected TodoTemplateCreateInput sse_decode_box_autoadd_todo_template_create_input(SseDeserializer deserializer);
 
-  @protected
-  CompleteTaskResult sse_decode_complete_task_result(
-    SseDeserializer deserializer,
-  );
+@protected TodoTemplateUpdateInput sse_decode_box_autoadd_todo_template_update_input(SseDeserializer deserializer);
 
-  @protected
-  CsvImportPreviewView sse_decode_csv_import_preview_view(
-    SseDeserializer deserializer,
-  );
+@protected BigInt sse_decode_box_autoadd_usize(SseDeserializer deserializer);
 
-  @protected
-  CsvImportRowView sse_decode_csv_import_row_view(SseDeserializer deserializer);
+@protected CloudBackupEntryView sse_decode_cloud_backup_entry_view(SseDeserializer deserializer);
 
-  @protected
-  CsvImportStatsView sse_decode_csv_import_stats_view(
-    SseDeserializer deserializer,
-  );
+@protected CommentSearchHit sse_decode_comment_search_hit(SseDeserializer deserializer);
 
-  @protected
-  DbEventDto sse_decode_db_event_dto(SseDeserializer deserializer);
+@protected CompleteTaskResult sse_decode_complete_task_result(SseDeserializer deserializer);
 
-  @protected
-  DbMaintenanceView sse_decode_db_maintenance_view(
-    SseDeserializer deserializer,
-  );
+@protected CsvImportPreviewView sse_decode_csv_import_preview_view(SseDeserializer deserializer);
 
-  @protected
-  DiagnosticsSnapshot sse_decode_diagnostics_snapshot(
-    SseDeserializer deserializer,
-  );
+@protected CsvImportRowView sse_decode_csv_import_row_view(SseDeserializer deserializer);
 
-  @protected
-  DigestPrefs sse_decode_digest_prefs(SseDeserializer deserializer);
+@protected CsvImportStatsView sse_decode_csv_import_stats_view(SseDeserializer deserializer);
 
-  @protected
-  DigestSummary sse_decode_digest_summary(SseDeserializer deserializer);
+@protected DbEventDto sse_decode_db_event_dto(SseDeserializer deserializer);
 
-  @protected
-  double sse_decode_f_64(SseDeserializer deserializer);
+@protected DbMaintenanceView sse_decode_db_maintenance_view(SseDeserializer deserializer);
 
-  @protected
-  GlobalSearchResult sse_decode_global_search_result(
-    SseDeserializer deserializer,
-  );
+@protected DiagnosticsSnapshot sse_decode_diagnostics_snapshot(SseDeserializer deserializer);
 
-  @protected
-  HolidayInfo sse_decode_holiday_info(SseDeserializer deserializer);
+@protected DigestPrefs sse_decode_digest_prefs(SseDeserializer deserializer);
 
-  @protected
-  HolidayMeta sse_decode_holiday_meta(SseDeserializer deserializer);
+@protected DigestSummary sse_decode_digest_summary(SseDeserializer deserializer);
 
-  @protected
-  HolidayProgressDto sse_decode_holiday_progress_dto(
-    SseDeserializer deserializer,
-  );
+@protected double sse_decode_f_64(SseDeserializer deserializer);
 
-  @protected
-  HolidayRangeSummary sse_decode_holiday_range_summary(
-    SseDeserializer deserializer,
-  );
+@protected GlobalSearchResult sse_decode_global_search_result(SseDeserializer deserializer);
 
-  @protected
-  HolidayYearOutcome sse_decode_holiday_year_outcome(
-    SseDeserializer deserializer,
-  );
+@protected HolidayInfo sse_decode_holiday_info(SseDeserializer deserializer);
 
-  @protected
-  int sse_decode_i_32(SseDeserializer deserializer);
+@protected HolidayMeta sse_decode_holiday_meta(SseDeserializer deserializer);
 
-  @protected
-  PlatformInt64 sse_decode_i_64(SseDeserializer deserializer);
+@protected HolidayProgressDto sse_decode_holiday_progress_dto(SseDeserializer deserializer);
 
-  @protected
-  IcsExportView sse_decode_ics_export_view(SseDeserializer deserializer);
+@protected HolidayRangeSummary sse_decode_holiday_range_summary(SseDeserializer deserializer);
 
-  @protected
-  IcsTableCount sse_decode_ics_table_count(SseDeserializer deserializer);
+@protected HolidayYearOutcome sse_decode_holiday_year_outcome(SseDeserializer deserializer);
 
-  @protected
-  ImportJobStatusView sse_decode_import_job_status_view(
-    SseDeserializer deserializer,
-  );
+@protected int sse_decode_i_32(SseDeserializer deserializer);
 
-  @protected
-  ImportLimitsView sse_decode_import_limits_view(SseDeserializer deserializer);
+@protected PlatformInt64 sse_decode_i_64(SseDeserializer deserializer);
 
-  @protected
-  List<String> sse_decode_list_String(SseDeserializer deserializer);
+@protected IcsExportView sse_decode_ics_export_view(SseDeserializer deserializer);
 
-  @protected
-  List<ActivityLogRow> sse_decode_list_activity_log_row(
-    SseDeserializer deserializer,
-  );
+@protected IcsTableCount sse_decode_ics_table_count(SseDeserializer deserializer);
 
-  @protected
-  List<BackupEntryView> sse_decode_list_backup_entry_view(
-    SseDeserializer deserializer,
-  );
+@protected ImportJobStatusView sse_decode_import_job_status_view(SseDeserializer deserializer);
 
-  @protected
-  List<BackupPreviewTask> sse_decode_list_backup_preview_task(
-    SseDeserializer deserializer,
-  );
+@protected ImportLimitsView sse_decode_import_limits_view(SseDeserializer deserializer);
 
-  @protected
-  List<BackupTableCount> sse_decode_list_backup_table_count(
-    SseDeserializer deserializer,
-  );
+@protected List<String> sse_decode_list_String(SseDeserializer deserializer);
 
-  @protected
-  List<CloudBackupEntryView> sse_decode_list_cloud_backup_entry_view(
-    SseDeserializer deserializer,
-  );
+@protected List<ActivityLogRow> sse_decode_list_activity_log_row(SseDeserializer deserializer);
 
-  @protected
-  List<CommentSearchHit> sse_decode_list_comment_search_hit(
-    SseDeserializer deserializer,
-  );
+@protected List<BackupEntryView> sse_decode_list_backup_entry_view(SseDeserializer deserializer);
 
-  @protected
-  List<CsvImportRowView> sse_decode_list_csv_import_row_view(
-    SseDeserializer deserializer,
-  );
+@protected List<BackupPreviewTask> sse_decode_list_backup_preview_task(SseDeserializer deserializer);
 
-  @protected
-  ListFilter sse_decode_list_filter(SseDeserializer deserializer);
+@protected List<BackupTableCount> sse_decode_list_backup_table_count(SseDeserializer deserializer);
 
-  @protected
-  List<HolidayInfo> sse_decode_list_holiday_info(SseDeserializer deserializer);
+@protected List<CloudBackupEntryView> sse_decode_list_cloud_backup_entry_view(SseDeserializer deserializer);
 
-  @protected
-  List<IcsTableCount> sse_decode_list_ics_table_count(
-    SseDeserializer deserializer,
-  );
+@protected List<CommentSearchHit> sse_decode_list_comment_search_hit(SseDeserializer deserializer);
 
-  @protected
-  List<NotificationLogRow> sse_decode_list_notification_log_row(
-    SseDeserializer deserializer,
-  );
+@protected List<CsvImportRowView> sse_decode_list_csv_import_row_view(SseDeserializer deserializer);
 
-  @protected
-  Int64List sse_decode_list_prim_i_64_strict(SseDeserializer deserializer);
+@protected ListFilter sse_decode_list_filter(SseDeserializer deserializer);
 
-  @protected
-  List<int> sse_decode_list_prim_u_8_loose(SseDeserializer deserializer);
+@protected List<HolidayInfo> sse_decode_list_holiday_info(SseDeserializer deserializer);
 
-  @protected
-  Uint8List sse_decode_list_prim_u_8_strict(SseDeserializer deserializer);
+@protected List<IcsTableCount> sse_decode_list_ics_table_count(SseDeserializer deserializer);
 
-  @protected
-  List<ProjectedReminder> sse_decode_list_projected_reminder(
-    SseDeserializer deserializer,
-  );
+@protected List<NotificationLogRow> sse_decode_list_notification_log_row(SseDeserializer deserializer);
 
-  @protected
-  List<ProjectedTaskLabel> sse_decode_list_projected_task_label(
-    SseDeserializer deserializer,
-  );
+@protected Int64List sse_decode_list_prim_i_64_strict(SseDeserializer deserializer);
 
-  @protected
-  List<StatsHeatmapCell> sse_decode_list_stats_heatmap_cell(
-    SseDeserializer deserializer,
-  );
+@protected List<int> sse_decode_list_prim_u_8_loose(SseDeserializer deserializer);
 
-  @protected
-  List<StatsPriorityRow> sse_decode_list_stats_priority_row(
-    SseDeserializer deserializer,
-  );
+@protected Uint8List sse_decode_list_prim_u_8_strict(SseDeserializer deserializer);
 
-  @protected
-  List<StatsProjectRow> sse_decode_list_stats_project_row(
-    SseDeserializer deserializer,
-  );
+@protected List<ProjectedReminder> sse_decode_list_projected_reminder(SseDeserializer deserializer);
 
-  @protected
-  List<StatsWeekdayRow> sse_decode_list_stats_weekday_row(
-    SseDeserializer deserializer,
-  );
+@protected List<ProjectedTaskLabel> sse_decode_list_projected_task_label(SseDeserializer deserializer);
 
-  @protected
-  List<SyncConflict> sse_decode_list_sync_conflict(
-    SseDeserializer deserializer,
-  );
+@protected List<StatsHeatmapCell> sse_decode_list_stats_heatmap_cell(SseDeserializer deserializer);
 
-  @protected
-  List<SyncHistoryView> sse_decode_list_sync_history_view(
-    SseDeserializer deserializer,
-  );
+@protected List<StatsPriorityRow> sse_decode_list_stats_priority_row(SseDeserializer deserializer);
 
-  @protected
-  List<TableCount> sse_decode_list_table_count(SseDeserializer deserializer);
+@protected List<StatsProjectRow> sse_decode_list_stats_project_row(SseDeserializer deserializer);
 
-  @protected
-  List<TableRowCount> sse_decode_list_table_row_count(
-    SseDeserializer deserializer,
-  );
+@protected List<StatsWeekdayRow> sse_decode_list_stats_weekday_row(SseDeserializer deserializer);
 
-  @protected
-  List<TaskAttachmentView> sse_decode_list_task_attachment_view(
-    SseDeserializer deserializer,
-  );
+@protected List<SyncConflict> sse_decode_list_sync_conflict(SseDeserializer deserializer);
 
-  @protected
-  List<TaskDependencyFlags> sse_decode_list_task_dependency_flags(
-    SseDeserializer deserializer,
-  );
+@protected List<SyncHistoryView> sse_decode_list_sync_history_view(SseDeserializer deserializer);
 
-  @protected
-  List<TaskDescriptionFlag> sse_decode_list_task_description_flag(
-    SseDeserializer deserializer,
-  );
+@protected List<TableCount> sse_decode_list_table_count(SseDeserializer deserializer);
 
-  @protected
-  List<TaskExistenceFlag> sse_decode_list_task_existence_flag(
-    SseDeserializer deserializer,
-  );
+@protected List<TableRowCount> sse_decode_list_table_row_count(SseDeserializer deserializer);
 
-  @protected
-  List<TaskLabelWithId> sse_decode_list_task_label_with_id(
-    SseDeserializer deserializer,
-  );
+@protected List<TaskAttachmentView> sse_decode_list_task_attachment_view(SseDeserializer deserializer);
 
-  @protected
-  List<TaskLabelsProjection> sse_decode_list_task_labels_projection(
-    SseDeserializer deserializer,
-  );
+@protected List<TaskDependencyFlags> sse_decode_list_task_dependency_flags(SseDeserializer deserializer);
 
-  @protected
-  List<TaskRemindersProjection> sse_decode_list_task_reminders_projection(
-    SseDeserializer deserializer,
-  );
+@protected List<TaskDescriptionFlag> sse_decode_list_task_description_flag(SseDeserializer deserializer);
 
-  @protected
-  List<TodoComment> sse_decode_list_todo_comment(SseDeserializer deserializer);
+@protected List<TaskExistenceFlag> sse_decode_list_task_existence_flag(SseDeserializer deserializer);
 
-  @protected
-  List<TodoLabel> sse_decode_list_todo_label(SseDeserializer deserializer);
+@protected List<TaskLabelWithId> sse_decode_list_task_label_with_id(SseDeserializer deserializer);
 
-  @protected
-  List<TodoProject> sse_decode_list_todo_project(SseDeserializer deserializer);
+@protected List<TaskLabelsProjection> sse_decode_list_task_labels_projection(SseDeserializer deserializer);
 
-  @protected
-  List<TodoReminder> sse_decode_list_todo_reminder(
-    SseDeserializer deserializer,
-  );
+@protected List<TaskRemindersProjection> sse_decode_list_task_reminders_projection(SseDeserializer deserializer);
 
-  @protected
-  List<TodoSavedFilter> sse_decode_list_todo_saved_filter(
-    SseDeserializer deserializer,
-  );
+@protected List<TodoComment> sse_decode_list_todo_comment(SseDeserializer deserializer);
 
-  @protected
-  List<TodoSubtask> sse_decode_list_todo_subtask(SseDeserializer deserializer);
+@protected List<TodoLabel> sse_decode_list_todo_label(SseDeserializer deserializer);
 
-  @protected
-  List<TodoTask> sse_decode_list_todo_task(SseDeserializer deserializer);
+@protected List<TodoProject> sse_decode_list_todo_project(SseDeserializer deserializer);
 
-  @protected
-  List<TodoTaskLabel> sse_decode_list_todo_task_label(
-    SseDeserializer deserializer,
-  );
+@protected List<TodoReminder> sse_decode_list_todo_reminder(SseDeserializer deserializer);
 
-  @protected
-  List<TodoTaskListItem> sse_decode_list_todo_task_list_item(
-    SseDeserializer deserializer,
-  );
+@protected List<TodoSavedFilter> sse_decode_list_todo_saved_filter(SseDeserializer deserializer);
 
-  @protected
-  List<TodoTaskRelation> sse_decode_list_todo_task_relation(
-    SseDeserializer deserializer,
-  );
+@protected List<TodoSubtask> sse_decode_list_todo_subtask(SseDeserializer deserializer);
 
-  @protected
-  List<TodoTemplate> sse_decode_list_todo_template(
-    SseDeserializer deserializer,
-  );
+@protected List<TodoTask> sse_decode_list_todo_task(SseDeserializer deserializer);
 
-  @protected
-  List<WidgetTodoItem> sse_decode_list_widget_todo_item(
-    SseDeserializer deserializer,
-  );
+@protected List<TodoTaskLabel> sse_decode_list_todo_task_label(SseDeserializer deserializer);
 
-  @protected
-  NotificationLogRow sse_decode_notification_log_row(
-    SseDeserializer deserializer,
-  );
+@protected List<TodoTaskListItem> sse_decode_list_todo_task_list_item(SseDeserializer deserializer);
 
-  @protected
-  String? sse_decode_opt_String(SseDeserializer deserializer);
+@protected List<TodoTaskRelation> sse_decode_list_todo_task_relation(SseDeserializer deserializer);
 
-  @protected
-  bool? sse_decode_opt_box_autoadd_bool(SseDeserializer deserializer);
+@protected List<TodoTemplate> sse_decode_list_todo_template(SseDeserializer deserializer);
 
-  @protected
-  CsvImportStatsView? sse_decode_opt_box_autoadd_csv_import_stats_view(
-    SseDeserializer deserializer,
-  );
+@protected List<WidgetTodoItem> sse_decode_list_widget_todo_item(SseDeserializer deserializer);
 
-  @protected
-  double? sse_decode_opt_box_autoadd_f_64(SseDeserializer deserializer);
+@protected NotificationLogRow sse_decode_notification_log_row(SseDeserializer deserializer);
 
-  @protected
-  int? sse_decode_opt_box_autoadd_i_32(SseDeserializer deserializer);
+@protected String? sse_decode_opt_String(SseDeserializer deserializer);
 
-  @protected
-  PlatformInt64? sse_decode_opt_box_autoadd_i_64(SseDeserializer deserializer);
+@protected bool? sse_decode_opt_box_autoadd_bool(SseDeserializer deserializer);
 
-  @protected
-  SyncConfigView? sse_decode_opt_box_autoadd_sync_config_view(
-    SseDeserializer deserializer,
-  );
+@protected CsvImportStatsView? sse_decode_opt_box_autoadd_csv_import_stats_view(SseDeserializer deserializer);
 
-  @protected
-  TodoProject? sse_decode_opt_box_autoadd_todo_project(
-    SseDeserializer deserializer,
-  );
+@protected double? sse_decode_opt_box_autoadd_f_64(SseDeserializer deserializer);
 
-  @protected
-  TodoTask? sse_decode_opt_box_autoadd_todo_task(SseDeserializer deserializer);
+@protected int? sse_decode_opt_box_autoadd_i_32(SseDeserializer deserializer);
 
-  @protected
-  BigInt? sse_decode_opt_box_autoadd_usize(SseDeserializer deserializer);
+@protected PlatformInt64? sse_decode_opt_box_autoadd_i_64(SseDeserializer deserializer);
 
-  @protected
-  Int64List? sse_decode_opt_list_prim_i_64_strict(SseDeserializer deserializer);
+@protected SyncConfigView? sse_decode_opt_box_autoadd_sync_config_view(SseDeserializer deserializer);
 
-  @protected
-  PlaintextExportView sse_decode_plaintext_export_view(
-    SseDeserializer deserializer,
-  );
+@protected TodoProject? sse_decode_opt_box_autoadd_todo_project(SseDeserializer deserializer);
 
-  @protected
-  ProjectedReminder sse_decode_projected_reminder(SseDeserializer deserializer);
+@protected TodoTask? sse_decode_opt_box_autoadd_todo_task(SseDeserializer deserializer);
 
-  @protected
-  ProjectedTaskLabel sse_decode_projected_task_label(
-    SseDeserializer deserializer,
-  );
+@protected BigInt? sse_decode_opt_box_autoadd_usize(SseDeserializer deserializer);
 
-  @protected
-  ReminderDueDto sse_decode_reminder_due_dto(SseDeserializer deserializer);
+@protected Int64List? sse_decode_opt_list_prim_i_64_strict(SseDeserializer deserializer);
 
-  @protected
-  StatsAggregate sse_decode_stats_aggregate(SseDeserializer deserializer);
+@protected PlaintextExportView sse_decode_plaintext_export_view(SseDeserializer deserializer);
 
-  @protected
-  StatsHeatmap sse_decode_stats_heatmap(SseDeserializer deserializer);
+@protected ProjectedReminder sse_decode_projected_reminder(SseDeserializer deserializer);
 
-  @protected
-  StatsHeatmapCell sse_decode_stats_heatmap_cell(SseDeserializer deserializer);
+@protected ProjectedTaskLabel sse_decode_projected_task_label(SseDeserializer deserializer);
 
-  @protected
-  StatsOverview sse_decode_stats_overview(SseDeserializer deserializer);
+@protected ReminderDueDto sse_decode_reminder_due_dto(SseDeserializer deserializer);
 
-  @protected
-  StatsPriorityRow sse_decode_stats_priority_row(SseDeserializer deserializer);
+@protected StatsAggregate sse_decode_stats_aggregate(SseDeserializer deserializer);
 
-  @protected
-  StatsProjectRow sse_decode_stats_project_row(SseDeserializer deserializer);
+@protected StatsHeatmap sse_decode_stats_heatmap(SseDeserializer deserializer);
 
-  @protected
-  StatsStreak sse_decode_stats_streak(SseDeserializer deserializer);
+@protected StatsHeatmapCell sse_decode_stats_heatmap_cell(SseDeserializer deserializer);
 
-  @protected
-  StatsWeekdayRow sse_decode_stats_weekday_row(SseDeserializer deserializer);
+@protected StatsOverview sse_decode_stats_overview(SseDeserializer deserializer);
 
-  @protected
-  SyncConfigInput sse_decode_sync_config_input(SseDeserializer deserializer);
+@protected StatsPriorityRow sse_decode_stats_priority_row(SseDeserializer deserializer);
 
-  @protected
-  SyncConfigView sse_decode_sync_config_view(SseDeserializer deserializer);
+@protected StatsProjectRow sse_decode_stats_project_row(SseDeserializer deserializer);
 
-  @protected
-  SyncConflict sse_decode_sync_conflict(SseDeserializer deserializer);
+@protected StatsStreak sse_decode_stats_streak(SseDeserializer deserializer);
 
-  @protected
-  SyncCryptoStatus sse_decode_sync_crypto_status(SseDeserializer deserializer);
+@protected StatsWeekdayRow sse_decode_stats_weekday_row(SseDeserializer deserializer);
 
-  @protected
-  SyncHistoryView sse_decode_sync_history_view(SseDeserializer deserializer);
+@protected SyncConfigInput sse_decode_sync_config_input(SseDeserializer deserializer);
 
-  @protected
-  TableCount sse_decode_table_count(SseDeserializer deserializer);
+@protected SyncConfigView sse_decode_sync_config_view(SseDeserializer deserializer);
 
-  @protected
-  TableRowCount sse_decode_table_row_count(SseDeserializer deserializer);
+@protected SyncConflict sse_decode_sync_conflict(SseDeserializer deserializer);
 
-  @protected
-  TaskAttachmentView sse_decode_task_attachment_view(
-    SseDeserializer deserializer,
-  );
+@protected SyncCryptoStatus sse_decode_sync_crypto_status(SseDeserializer deserializer);
 
-  @protected
-  TaskDependencyFlags sse_decode_task_dependency_flags(
-    SseDeserializer deserializer,
-  );
+@protected SyncHistoryView sse_decode_sync_history_view(SseDeserializer deserializer);
 
-  @protected
-  TaskDescriptionFlag sse_decode_task_description_flag(
-    SseDeserializer deserializer,
-  );
+@protected TableCount sse_decode_table_count(SseDeserializer deserializer);
 
-  @protected
-  TaskExistenceFlag sse_decode_task_existence_flag(
-    SseDeserializer deserializer,
-  );
+@protected TableRowCount sse_decode_table_row_count(SseDeserializer deserializer);
 
-  @protected
-  TaskLabelWithId sse_decode_task_label_with_id(SseDeserializer deserializer);
+@protected TaskAttachmentView sse_decode_task_attachment_view(SseDeserializer deserializer);
 
-  @protected
-  TaskLabelsProjection sse_decode_task_labels_projection(
-    SseDeserializer deserializer,
-  );
+@protected TaskDependencyFlags sse_decode_task_dependency_flags(SseDeserializer deserializer);
 
-  @protected
-  TaskRemindersProjection sse_decode_task_reminders_projection(
-    SseDeserializer deserializer,
-  );
+@protected TaskDescriptionFlag sse_decode_task_description_flag(SseDeserializer deserializer);
 
-  @protected
-  TodoComment sse_decode_todo_comment(SseDeserializer deserializer);
+@protected TaskExistenceFlag sse_decode_task_existence_flag(SseDeserializer deserializer);
 
-  @protected
-  TodoCommentCreateInput sse_decode_todo_comment_create_input(
-    SseDeserializer deserializer,
-  );
+@protected TaskLabelWithId sse_decode_task_label_with_id(SseDeserializer deserializer);
 
-  @protected
-  TodoLabel sse_decode_todo_label(SseDeserializer deserializer);
+@protected TaskLabelsProjection sse_decode_task_labels_projection(SseDeserializer deserializer);
 
-  @protected
-  TodoLabelCreateInput sse_decode_todo_label_create_input(
-    SseDeserializer deserializer,
-  );
+@protected TaskRemindersProjection sse_decode_task_reminders_projection(SseDeserializer deserializer);
 
-  @protected
-  TodoProject sse_decode_todo_project(SseDeserializer deserializer);
+@protected TodoComment sse_decode_todo_comment(SseDeserializer deserializer);
 
-  @protected
-  TodoProjectCreateInput sse_decode_todo_project_create_input(
-    SseDeserializer deserializer,
-  );
+@protected TodoCommentCreateInput sse_decode_todo_comment_create_input(SseDeserializer deserializer);
 
-  @protected
-  TodoReminder sse_decode_todo_reminder(SseDeserializer deserializer);
+@protected TodoLabel sse_decode_todo_label(SseDeserializer deserializer);
 
-  @protected
-  TodoReminderCreateInput sse_decode_todo_reminder_create_input(
-    SseDeserializer deserializer,
-  );
+@protected TodoLabelCreateInput sse_decode_todo_label_create_input(SseDeserializer deserializer);
 
-  @protected
-  TodoSavedFilter sse_decode_todo_saved_filter(SseDeserializer deserializer);
+@protected TodoProject sse_decode_todo_project(SseDeserializer deserializer);
 
-  @protected
-  TodoSavedFilterCreateInput sse_decode_todo_saved_filter_create_input(
-    SseDeserializer deserializer,
-  );
+@protected TodoProjectCreateInput sse_decode_todo_project_create_input(SseDeserializer deserializer);
 
-  @protected
-  TodoSavedFilterUpdateInput sse_decode_todo_saved_filter_update_input(
-    SseDeserializer deserializer,
-  );
+@protected TodoReminder sse_decode_todo_reminder(SseDeserializer deserializer);
 
-  @protected
-  TodoSubtask sse_decode_todo_subtask(SseDeserializer deserializer);
+@protected TodoReminderCreateInput sse_decode_todo_reminder_create_input(SseDeserializer deserializer);
 
-  @protected
-  TodoSubtaskCreateInput sse_decode_todo_subtask_create_input(
-    SseDeserializer deserializer,
-  );
+@protected TodoSavedFilter sse_decode_todo_saved_filter(SseDeserializer deserializer);
 
-  @protected
-  TodoTask sse_decode_todo_task(SseDeserializer deserializer);
+@protected TodoSavedFilterCreateInput sse_decode_todo_saved_filter_create_input(SseDeserializer deserializer);
 
-  @protected
-  TodoTaskCreateInput sse_decode_todo_task_create_input(
-    SseDeserializer deserializer,
-  );
+@protected TodoSavedFilterUpdateInput sse_decode_todo_saved_filter_update_input(SseDeserializer deserializer);
 
-  @protected
-  TodoTaskDetail sse_decode_todo_task_detail(SseDeserializer deserializer);
+@protected TodoSubtask sse_decode_todo_subtask(SseDeserializer deserializer);
 
-  @protected
-  TodoTaskLabel sse_decode_todo_task_label(SseDeserializer deserializer);
+@protected TodoSubtaskCreateInput sse_decode_todo_subtask_create_input(SseDeserializer deserializer);
 
-  @protected
-  TodoTaskLabelCreateInput sse_decode_todo_task_label_create_input(
-    SseDeserializer deserializer,
-  );
+@protected TodoTask sse_decode_todo_task(SseDeserializer deserializer);
 
-  @protected
-  TodoTaskListItem sse_decode_todo_task_list_item(SseDeserializer deserializer);
+@protected TodoTaskCreateInput sse_decode_todo_task_create_input(SseDeserializer deserializer);
 
-  @protected
-  TodoTaskRelation sse_decode_todo_task_relation(SseDeserializer deserializer);
+@protected TodoTaskDetail sse_decode_todo_task_detail(SseDeserializer deserializer);
 
-  @protected
-  TodoTaskRelationCreateInput sse_decode_todo_task_relation_create_input(
-    SseDeserializer deserializer,
-  );
+@protected TodoTaskLabel sse_decode_todo_task_label(SseDeserializer deserializer);
 
-  @protected
-  TodoTemplate sse_decode_todo_template(SseDeserializer deserializer);
+@protected TodoTaskLabelCreateInput sse_decode_todo_task_label_create_input(SseDeserializer deserializer);
 
-  @protected
-  TodoTemplateCreateInput sse_decode_todo_template_create_input(
-    SseDeserializer deserializer,
-  );
+@protected TodoTaskListItem sse_decode_todo_task_list_item(SseDeserializer deserializer);
 
-  @protected
-  TodoTemplateUpdateInput sse_decode_todo_template_update_input(
-    SseDeserializer deserializer,
-  );
+@protected TodoTaskRelation sse_decode_todo_task_relation(SseDeserializer deserializer);
 
-  @protected
-  TrashMeta sse_decode_trash_meta(SseDeserializer deserializer);
+@protected TodoTaskRelationCreateInput sse_decode_todo_task_relation_create_input(SseDeserializer deserializer);
 
-  @protected
-  TrashPurgeStats sse_decode_trash_purge_stats(SseDeserializer deserializer);
+@protected TodoTemplate sse_decode_todo_template(SseDeserializer deserializer);
 
-  @protected
-  int sse_decode_u_32(SseDeserializer deserializer);
+@protected TodoTemplateCreateInput sse_decode_todo_template_create_input(SseDeserializer deserializer);
 
-  @protected
-  BigInt sse_decode_u_64(SseDeserializer deserializer);
+@protected TodoTemplateUpdateInput sse_decode_todo_template_update_input(SseDeserializer deserializer);
 
-  @protected
-  int sse_decode_u_8(SseDeserializer deserializer);
+@protected TrashMeta sse_decode_trash_meta(SseDeserializer deserializer);
 
-  @protected
-  void sse_decode_unit(SseDeserializer deserializer);
+@protected TrashPurgeStats sse_decode_trash_purge_stats(SseDeserializer deserializer);
 
-  @protected
-  BigInt sse_decode_usize(SseDeserializer deserializer);
+@protected int sse_decode_u_32(SseDeserializer deserializer);
 
-  @protected
-  WidgetTodoItem sse_decode_widget_todo_item(SseDeserializer deserializer);
+@protected BigInt sse_decode_u_64(SseDeserializer deserializer);
 
-  @protected
-  void sse_encode_AnyhowException(
-    AnyhowException self,
-    SseSerializer serializer,
-  );
+@protected int sse_decode_u_8(SseDeserializer deserializer);
 
-  @protected
-  void sse_encode_StreamSink_db_event_dto_Sse(
-    RustStreamSink<DbEventDto> self,
-    SseSerializer serializer,
-  );
+@protected void sse_decode_unit(SseDeserializer deserializer);
 
-  @protected
-  void sse_encode_StreamSink_holiday_progress_dto_Sse(
-    RustStreamSink<HolidayProgressDto> self,
-    SseSerializer serializer,
-  );
+@protected BigInt sse_decode_usize(SseDeserializer deserializer);
 
-  @protected
-  void sse_encode_StreamSink_reminder_due_dto_Sse(
-    RustStreamSink<ReminderDueDto> self,
-    SseSerializer serializer,
-  );
+@protected WidgetTodoItem sse_decode_widget_todo_item(SseDeserializer deserializer);
 
-  @protected
-  void sse_encode_String(String self, SseSerializer serializer);
+@protected void sse_encode_AnyhowException(AnyhowException self, SseSerializer serializer);
 
-  @protected
-  void sse_encode_activity_log_row(
-    ActivityLogRow self,
-    SseSerializer serializer,
-  );
+@protected void sse_encode_StreamSink_db_event_dto_Sse(RustStreamSink<DbEventDto> self, SseSerializer serializer);
 
-  @protected
-  void sse_encode_backup_device_info(
-    BackupDeviceInfo self,
-    SseSerializer serializer,
-  );
+@protected void sse_encode_StreamSink_holiday_progress_dto_Sse(RustStreamSink<HolidayProgressDto> self, SseSerializer serializer);
 
-  @protected
-  void sse_encode_backup_entry_view(
-    BackupEntryView self,
-    SseSerializer serializer,
-  );
+@protected void sse_encode_StreamSink_reminder_due_dto_Sse(RustStreamSink<ReminderDueDto> self, SseSerializer serializer);
 
-  @protected
-  void sse_encode_backup_export_result(
-    BackupExportResult self,
-    SseSerializer serializer,
-  );
+@protected void sse_encode_String(String self, SseSerializer serializer);
 
-  @protected
-  void sse_encode_backup_import_result(
-    BackupImportResult self,
-    SseSerializer serializer,
-  );
+@protected void sse_encode_activity_log_row(ActivityLogRow self, SseSerializer serializer);
 
-  @protected
-  void sse_encode_backup_manifest_view(
-    BackupManifestView self,
-    SseSerializer serializer,
-  );
+@protected void sse_encode_backup_device_info(BackupDeviceInfo self, SseSerializer serializer);
 
-  @protected
-  void sse_encode_backup_prefs_view(
-    BackupPrefsView self,
-    SseSerializer serializer,
-  );
+@protected void sse_encode_backup_entry_view(BackupEntryView self, SseSerializer serializer);
 
-  @protected
-  void sse_encode_backup_preview_task(
-    BackupPreviewTask self,
-    SseSerializer serializer,
-  );
+@protected void sse_encode_backup_export_result(BackupExportResult self, SseSerializer serializer);
 
-  @protected
-  void sse_encode_backup_preview_view(
-    BackupPreviewView self,
-    SseSerializer serializer,
-  );
+@protected void sse_encode_backup_import_result(BackupImportResult self, SseSerializer serializer);
 
-  @protected
-  void sse_encode_backup_table_count(
-    BackupTableCount self,
-    SseSerializer serializer,
-  );
+@protected void sse_encode_backup_manifest_view(BackupManifestView self, SseSerializer serializer);
 
-  @protected
-  void sse_encode_backup_task_stats(
-    BackupTaskStats self,
-    SseSerializer serializer,
-  );
+@protected void sse_encode_backup_prefs_view(BackupPrefsView self, SseSerializer serializer);
 
-  @protected
-  void sse_encode_biometric_secret_bundle(
-    BiometricSecretBundle self,
-    SseSerializer serializer,
-  );
+@protected void sse_encode_backup_preview_task(BackupPreviewTask self, SseSerializer serializer);
 
-  @protected
-  void sse_encode_bool(bool self, SseSerializer serializer);
+@protected void sse_encode_backup_preview_view(BackupPreviewView self, SseSerializer serializer);
 
-  @protected
-  void sse_encode_box_autoadd_backup_prefs_view(
-    BackupPrefsView self,
-    SseSerializer serializer,
-  );
+@protected void sse_encode_backup_table_count(BackupTableCount self, SseSerializer serializer);
 
-  @protected
-  void sse_encode_box_autoadd_bool(bool self, SseSerializer serializer);
+@protected void sse_encode_backup_task_stats(BackupTaskStats self, SseSerializer serializer);
 
-  @protected
-  void sse_encode_box_autoadd_csv_import_stats_view(
-    CsvImportStatsView self,
-    SseSerializer serializer,
-  );
+@protected void sse_encode_biometric_secret_bundle(BiometricSecretBundle self, SseSerializer serializer);
 
-  @protected
-  void sse_encode_box_autoadd_f_64(double self, SseSerializer serializer);
+@protected void sse_encode_bool(bool self, SseSerializer serializer);
 
-  @protected
-  void sse_encode_box_autoadd_i_32(int self, SseSerializer serializer);
+@protected void sse_encode_box_autoadd_backup_prefs_view(BackupPrefsView self, SseSerializer serializer);
 
-  @protected
-  void sse_encode_box_autoadd_i_64(
-    PlatformInt64 self,
-    SseSerializer serializer,
-  );
+@protected void sse_encode_box_autoadd_bool(bool self, SseSerializer serializer);
 
-  @protected
-  void sse_encode_box_autoadd_list_filter(
-    ListFilter self,
-    SseSerializer serializer,
-  );
+@protected void sse_encode_box_autoadd_csv_import_stats_view(CsvImportStatsView self, SseSerializer serializer);
 
-  @protected
-  void sse_encode_box_autoadd_sync_config_input(
-    SyncConfigInput self,
-    SseSerializer serializer,
-  );
+@protected void sse_encode_box_autoadd_f_64(double self, SseSerializer serializer);
 
-  @protected
-  void sse_encode_box_autoadd_sync_config_view(
-    SyncConfigView self,
-    SseSerializer serializer,
-  );
+@protected void sse_encode_box_autoadd_i_32(int self, SseSerializer serializer);
 
-  @protected
-  void sse_encode_box_autoadd_todo_comment_create_input(
-    TodoCommentCreateInput self,
-    SseSerializer serializer,
-  );
+@protected void sse_encode_box_autoadd_i_64(PlatformInt64 self, SseSerializer serializer);
 
-  @protected
-  void sse_encode_box_autoadd_todo_label_create_input(
-    TodoLabelCreateInput self,
-    SseSerializer serializer,
-  );
+@protected void sse_encode_box_autoadd_list_filter(ListFilter self, SseSerializer serializer);
 
-  @protected
-  void sse_encode_box_autoadd_todo_project(
-    TodoProject self,
-    SseSerializer serializer,
-  );
+@protected void sse_encode_box_autoadd_sync_config_input(SyncConfigInput self, SseSerializer serializer);
 
-  @protected
-  void sse_encode_box_autoadd_todo_project_create_input(
-    TodoProjectCreateInput self,
-    SseSerializer serializer,
-  );
+@protected void sse_encode_box_autoadd_sync_config_view(SyncConfigView self, SseSerializer serializer);
 
-  @protected
-  void sse_encode_box_autoadd_todo_reminder_create_input(
-    TodoReminderCreateInput self,
-    SseSerializer serializer,
-  );
+@protected void sse_encode_box_autoadd_todo_comment_create_input(TodoCommentCreateInput self, SseSerializer serializer);
 
-  @protected
-  void sse_encode_box_autoadd_todo_saved_filter_create_input(
-    TodoSavedFilterCreateInput self,
-    SseSerializer serializer,
-  );
+@protected void sse_encode_box_autoadd_todo_label_create_input(TodoLabelCreateInput self, SseSerializer serializer);
 
-  @protected
-  void sse_encode_box_autoadd_todo_saved_filter_update_input(
-    TodoSavedFilterUpdateInput self,
-    SseSerializer serializer,
-  );
+@protected void sse_encode_box_autoadd_todo_project(TodoProject self, SseSerializer serializer);
 
-  @protected
-  void sse_encode_box_autoadd_todo_subtask_create_input(
-    TodoSubtaskCreateInput self,
-    SseSerializer serializer,
-  );
+@protected void sse_encode_box_autoadd_todo_project_create_input(TodoProjectCreateInput self, SseSerializer serializer);
 
-  @protected
-  void sse_encode_box_autoadd_todo_task(
-    TodoTask self,
-    SseSerializer serializer,
-  );
+@protected void sse_encode_box_autoadd_todo_reminder_create_input(TodoReminderCreateInput self, SseSerializer serializer);
 
-  @protected
-  void sse_encode_box_autoadd_todo_task_create_input(
-    TodoTaskCreateInput self,
-    SseSerializer serializer,
-  );
+@protected void sse_encode_box_autoadd_todo_saved_filter_create_input(TodoSavedFilterCreateInput self, SseSerializer serializer);
 
-  @protected
-  void sse_encode_box_autoadd_todo_task_label_create_input(
-    TodoTaskLabelCreateInput self,
-    SseSerializer serializer,
-  );
+@protected void sse_encode_box_autoadd_todo_saved_filter_update_input(TodoSavedFilterUpdateInput self, SseSerializer serializer);
 
-  @protected
-  void sse_encode_box_autoadd_todo_task_relation_create_input(
-    TodoTaskRelationCreateInput self,
-    SseSerializer serializer,
-  );
+@protected void sse_encode_box_autoadd_todo_subtask_create_input(TodoSubtaskCreateInput self, SseSerializer serializer);
 
-  @protected
-  void sse_encode_box_autoadd_todo_template_create_input(
-    TodoTemplateCreateInput self,
-    SseSerializer serializer,
-  );
+@protected void sse_encode_box_autoadd_todo_task(TodoTask self, SseSerializer serializer);
 
-  @protected
-  void sse_encode_box_autoadd_todo_template_update_input(
-    TodoTemplateUpdateInput self,
-    SseSerializer serializer,
-  );
+@protected void sse_encode_box_autoadd_todo_task_create_input(TodoTaskCreateInput self, SseSerializer serializer);
 
-  @protected
-  void sse_encode_box_autoadd_usize(BigInt self, SseSerializer serializer);
+@protected void sse_encode_box_autoadd_todo_task_label_create_input(TodoTaskLabelCreateInput self, SseSerializer serializer);
 
-  @protected
-  void sse_encode_cloud_backup_entry_view(
-    CloudBackupEntryView self,
-    SseSerializer serializer,
-  );
+@protected void sse_encode_box_autoadd_todo_task_relation_create_input(TodoTaskRelationCreateInput self, SseSerializer serializer);
 
-  @protected
-  void sse_encode_comment_search_hit(
-    CommentSearchHit self,
-    SseSerializer serializer,
-  );
+@protected void sse_encode_box_autoadd_todo_template_create_input(TodoTemplateCreateInput self, SseSerializer serializer);
 
-  @protected
-  void sse_encode_complete_task_result(
-    CompleteTaskResult self,
-    SseSerializer serializer,
-  );
+@protected void sse_encode_box_autoadd_todo_template_update_input(TodoTemplateUpdateInput self, SseSerializer serializer);
 
-  @protected
-  void sse_encode_csv_import_preview_view(
-    CsvImportPreviewView self,
-    SseSerializer serializer,
-  );
+@protected void sse_encode_box_autoadd_usize(BigInt self, SseSerializer serializer);
 
-  @protected
-  void sse_encode_csv_import_row_view(
-    CsvImportRowView self,
-    SseSerializer serializer,
-  );
+@protected void sse_encode_cloud_backup_entry_view(CloudBackupEntryView self, SseSerializer serializer);
 
-  @protected
-  void sse_encode_csv_import_stats_view(
-    CsvImportStatsView self,
-    SseSerializer serializer,
-  );
+@protected void sse_encode_comment_search_hit(CommentSearchHit self, SseSerializer serializer);
 
-  @protected
-  void sse_encode_db_event_dto(DbEventDto self, SseSerializer serializer);
+@protected void sse_encode_complete_task_result(CompleteTaskResult self, SseSerializer serializer);
 
-  @protected
-  void sse_encode_db_maintenance_view(
-    DbMaintenanceView self,
-    SseSerializer serializer,
-  );
+@protected void sse_encode_csv_import_preview_view(CsvImportPreviewView self, SseSerializer serializer);
 
-  @protected
-  void sse_encode_diagnostics_snapshot(
-    DiagnosticsSnapshot self,
-    SseSerializer serializer,
-  );
+@protected void sse_encode_csv_import_row_view(CsvImportRowView self, SseSerializer serializer);
 
-  @protected
-  void sse_encode_digest_prefs(DigestPrefs self, SseSerializer serializer);
+@protected void sse_encode_csv_import_stats_view(CsvImportStatsView self, SseSerializer serializer);
 
-  @protected
-  void sse_encode_digest_summary(DigestSummary self, SseSerializer serializer);
+@protected void sse_encode_db_event_dto(DbEventDto self, SseSerializer serializer);
 
-  @protected
-  void sse_encode_f_64(double self, SseSerializer serializer);
+@protected void sse_encode_db_maintenance_view(DbMaintenanceView self, SseSerializer serializer);
 
-  @protected
-  void sse_encode_global_search_result(
-    GlobalSearchResult self,
-    SseSerializer serializer,
-  );
+@protected void sse_encode_diagnostics_snapshot(DiagnosticsSnapshot self, SseSerializer serializer);
 
-  @protected
-  void sse_encode_holiday_info(HolidayInfo self, SseSerializer serializer);
+@protected void sse_encode_digest_prefs(DigestPrefs self, SseSerializer serializer);
 
-  @protected
-  void sse_encode_holiday_meta(HolidayMeta self, SseSerializer serializer);
+@protected void sse_encode_digest_summary(DigestSummary self, SseSerializer serializer);
 
-  @protected
-  void sse_encode_holiday_progress_dto(
-    HolidayProgressDto self,
-    SseSerializer serializer,
-  );
+@protected void sse_encode_f_64(double self, SseSerializer serializer);
 
-  @protected
-  void sse_encode_holiday_range_summary(
-    HolidayRangeSummary self,
-    SseSerializer serializer,
-  );
+@protected void sse_encode_global_search_result(GlobalSearchResult self, SseSerializer serializer);
 
-  @protected
-  void sse_encode_holiday_year_outcome(
-    HolidayYearOutcome self,
-    SseSerializer serializer,
-  );
+@protected void sse_encode_holiday_info(HolidayInfo self, SseSerializer serializer);
 
-  @protected
-  void sse_encode_i_32(int self, SseSerializer serializer);
+@protected void sse_encode_holiday_meta(HolidayMeta self, SseSerializer serializer);
 
-  @protected
-  void sse_encode_i_64(PlatformInt64 self, SseSerializer serializer);
+@protected void sse_encode_holiday_progress_dto(HolidayProgressDto self, SseSerializer serializer);
 
-  @protected
-  void sse_encode_ics_export_view(IcsExportView self, SseSerializer serializer);
+@protected void sse_encode_holiday_range_summary(HolidayRangeSummary self, SseSerializer serializer);
 
-  @protected
-  void sse_encode_ics_table_count(IcsTableCount self, SseSerializer serializer);
+@protected void sse_encode_holiday_year_outcome(HolidayYearOutcome self, SseSerializer serializer);
 
-  @protected
-  void sse_encode_import_job_status_view(
-    ImportJobStatusView self,
-    SseSerializer serializer,
-  );
+@protected void sse_encode_i_32(int self, SseSerializer serializer);
 
-  @protected
-  void sse_encode_import_limits_view(
-    ImportLimitsView self,
-    SseSerializer serializer,
-  );
+@protected void sse_encode_i_64(PlatformInt64 self, SseSerializer serializer);
 
-  @protected
-  void sse_encode_list_String(List<String> self, SseSerializer serializer);
+@protected void sse_encode_ics_export_view(IcsExportView self, SseSerializer serializer);
 
-  @protected
-  void sse_encode_list_activity_log_row(
-    List<ActivityLogRow> self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_list_backup_entry_view(
-    List<BackupEntryView> self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_list_backup_preview_task(
-    List<BackupPreviewTask> self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_list_backup_table_count(
-    List<BackupTableCount> self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_list_cloud_backup_entry_view(
-    List<CloudBackupEntryView> self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_list_comment_search_hit(
-    List<CommentSearchHit> self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_list_csv_import_row_view(
-    List<CsvImportRowView> self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_list_filter(ListFilter self, SseSerializer serializer);
-
-  @protected
-  void sse_encode_list_holiday_info(
-    List<HolidayInfo> self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_list_ics_table_count(
-    List<IcsTableCount> self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_list_notification_log_row(
-    List<NotificationLogRow> self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_list_prim_i_64_strict(
-    Int64List self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_list_prim_u_8_loose(List<int> self, SseSerializer serializer);
-
-  @protected
-  void sse_encode_list_prim_u_8_strict(
-    Uint8List self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_list_projected_reminder(
-    List<ProjectedReminder> self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_list_projected_task_label(
-    List<ProjectedTaskLabel> self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_list_stats_heatmap_cell(
-    List<StatsHeatmapCell> self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_list_stats_priority_row(
-    List<StatsPriorityRow> self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_list_stats_project_row(
-    List<StatsProjectRow> self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_list_stats_weekday_row(
-    List<StatsWeekdayRow> self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_list_sync_conflict(
-    List<SyncConflict> self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_list_sync_history_view(
-    List<SyncHistoryView> self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_list_table_count(
-    List<TableCount> self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_list_table_row_count(
-    List<TableRowCount> self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_list_task_attachment_view(
-    List<TaskAttachmentView> self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_list_task_dependency_flags(
-    List<TaskDependencyFlags> self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_list_task_description_flag(
-    List<TaskDescriptionFlag> self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_list_task_existence_flag(
-    List<TaskExistenceFlag> self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_list_task_label_with_id(
-    List<TaskLabelWithId> self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_list_task_labels_projection(
-    List<TaskLabelsProjection> self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_list_task_reminders_projection(
-    List<TaskRemindersProjection> self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_list_todo_comment(
-    List<TodoComment> self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_list_todo_label(
-    List<TodoLabel> self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_list_todo_project(
-    List<TodoProject> self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_list_todo_reminder(
-    List<TodoReminder> self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_list_todo_saved_filter(
-    List<TodoSavedFilter> self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_list_todo_subtask(
-    List<TodoSubtask> self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_list_todo_task(List<TodoTask> self, SseSerializer serializer);
-
-  @protected
-  void sse_encode_list_todo_task_label(
-    List<TodoTaskLabel> self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_list_todo_task_list_item(
-    List<TodoTaskListItem> self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_list_todo_task_relation(
-    List<TodoTaskRelation> self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_list_todo_template(
-    List<TodoTemplate> self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_list_widget_todo_item(
-    List<WidgetTodoItem> self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_notification_log_row(
-    NotificationLogRow self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_opt_String(String? self, SseSerializer serializer);
-
-  @protected
-  void sse_encode_opt_box_autoadd_bool(bool? self, SseSerializer serializer);
-
-  @protected
-  void sse_encode_opt_box_autoadd_csv_import_stats_view(
-    CsvImportStatsView? self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_opt_box_autoadd_f_64(double? self, SseSerializer serializer);
-
-  @protected
-  void sse_encode_opt_box_autoadd_i_32(int? self, SseSerializer serializer);
-
-  @protected
-  void sse_encode_opt_box_autoadd_i_64(
-    PlatformInt64? self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_opt_box_autoadd_sync_config_view(
-    SyncConfigView? self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_opt_box_autoadd_todo_project(
-    TodoProject? self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_opt_box_autoadd_todo_task(
-    TodoTask? self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_opt_box_autoadd_usize(BigInt? self, SseSerializer serializer);
-
-  @protected
-  void sse_encode_opt_list_prim_i_64_strict(
-    Int64List? self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_plaintext_export_view(
-    PlaintextExportView self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_projected_reminder(
-    ProjectedReminder self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_projected_task_label(
-    ProjectedTaskLabel self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_reminder_due_dto(
-    ReminderDueDto self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_stats_aggregate(
-    StatsAggregate self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_stats_heatmap(StatsHeatmap self, SseSerializer serializer);
-
-  @protected
-  void sse_encode_stats_heatmap_cell(
-    StatsHeatmapCell self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_stats_overview(StatsOverview self, SseSerializer serializer);
-
-  @protected
-  void sse_encode_stats_priority_row(
-    StatsPriorityRow self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_stats_project_row(
-    StatsProjectRow self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_stats_streak(StatsStreak self, SseSerializer serializer);
-
-  @protected
-  void sse_encode_stats_weekday_row(
-    StatsWeekdayRow self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_sync_config_input(
-    SyncConfigInput self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_sync_config_view(
-    SyncConfigView self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_sync_conflict(SyncConflict self, SseSerializer serializer);
-
-  @protected
-  void sse_encode_sync_crypto_status(
-    SyncCryptoStatus self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_sync_history_view(
-    SyncHistoryView self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_table_count(TableCount self, SseSerializer serializer);
-
-  @protected
-  void sse_encode_table_row_count(TableRowCount self, SseSerializer serializer);
-
-  @protected
-  void sse_encode_task_attachment_view(
-    TaskAttachmentView self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_task_dependency_flags(
-    TaskDependencyFlags self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_task_description_flag(
-    TaskDescriptionFlag self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_task_existence_flag(
-    TaskExistenceFlag self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_task_label_with_id(
-    TaskLabelWithId self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_task_labels_projection(
-    TaskLabelsProjection self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_task_reminders_projection(
-    TaskRemindersProjection self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_todo_comment(TodoComment self, SseSerializer serializer);
-
-  @protected
-  void sse_encode_todo_comment_create_input(
-    TodoCommentCreateInput self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_todo_label(TodoLabel self, SseSerializer serializer);
-
-  @protected
-  void sse_encode_todo_label_create_input(
-    TodoLabelCreateInput self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_todo_project(TodoProject self, SseSerializer serializer);
-
-  @protected
-  void sse_encode_todo_project_create_input(
-    TodoProjectCreateInput self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_todo_reminder(TodoReminder self, SseSerializer serializer);
-
-  @protected
-  void sse_encode_todo_reminder_create_input(
-    TodoReminderCreateInput self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_todo_saved_filter(
-    TodoSavedFilter self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_todo_saved_filter_create_input(
-    TodoSavedFilterCreateInput self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_todo_saved_filter_update_input(
-    TodoSavedFilterUpdateInput self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_todo_subtask(TodoSubtask self, SseSerializer serializer);
-
-  @protected
-  void sse_encode_todo_subtask_create_input(
-    TodoSubtaskCreateInput self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_todo_task(TodoTask self, SseSerializer serializer);
-
-  @protected
-  void sse_encode_todo_task_create_input(
-    TodoTaskCreateInput self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_todo_task_detail(
-    TodoTaskDetail self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_todo_task_label(TodoTaskLabel self, SseSerializer serializer);
-
-  @protected
-  void sse_encode_todo_task_label_create_input(
-    TodoTaskLabelCreateInput self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_todo_task_list_item(
-    TodoTaskListItem self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_todo_task_relation(
-    TodoTaskRelation self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_todo_task_relation_create_input(
-    TodoTaskRelationCreateInput self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_todo_template(TodoTemplate self, SseSerializer serializer);
-
-  @protected
-  void sse_encode_todo_template_create_input(
-    TodoTemplateCreateInput self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_todo_template_update_input(
-    TodoTemplateUpdateInput self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_trash_meta(TrashMeta self, SseSerializer serializer);
-
-  @protected
-  void sse_encode_trash_purge_stats(
-    TrashPurgeStats self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_u_32(int self, SseSerializer serializer);
-
-  @protected
-  void sse_encode_u_64(BigInt self, SseSerializer serializer);
-
-  @protected
-  void sse_encode_u_8(int self, SseSerializer serializer);
-
-  @protected
-  void sse_encode_unit(void self, SseSerializer serializer);
-
-  @protected
-  void sse_encode_usize(BigInt self, SseSerializer serializer);
-
-  @protected
-  void sse_encode_widget_todo_item(
-    WidgetTodoItem self,
-    SseSerializer serializer,
-  );
-}
+@protected void sse_encode_ics_table_count(IcsTableCount self, SseSerializer serializer);
+
+@protected void sse_encode_import_job_status_view(ImportJobStatusView self, SseSerializer serializer);
+
+@protected void sse_encode_import_limits_view(ImportLimitsView self, SseSerializer serializer);
+
+@protected void sse_encode_list_String(List<String> self, SseSerializer serializer);
+
+@protected void sse_encode_list_activity_log_row(List<ActivityLogRow> self, SseSerializer serializer);
+
+@protected void sse_encode_list_backup_entry_view(List<BackupEntryView> self, SseSerializer serializer);
+
+@protected void sse_encode_list_backup_preview_task(List<BackupPreviewTask> self, SseSerializer serializer);
+
+@protected void sse_encode_list_backup_table_count(List<BackupTableCount> self, SseSerializer serializer);
+
+@protected void sse_encode_list_cloud_backup_entry_view(List<CloudBackupEntryView> self, SseSerializer serializer);
+
+@protected void sse_encode_list_comment_search_hit(List<CommentSearchHit> self, SseSerializer serializer);
+
+@protected void sse_encode_list_csv_import_row_view(List<CsvImportRowView> self, SseSerializer serializer);
+
+@protected void sse_encode_list_filter(ListFilter self, SseSerializer serializer);
+
+@protected void sse_encode_list_holiday_info(List<HolidayInfo> self, SseSerializer serializer);
+
+@protected void sse_encode_list_ics_table_count(List<IcsTableCount> self, SseSerializer serializer);
+
+@protected void sse_encode_list_notification_log_row(List<NotificationLogRow> self, SseSerializer serializer);
+
+@protected void sse_encode_list_prim_i_64_strict(Int64List self, SseSerializer serializer);
+
+@protected void sse_encode_list_prim_u_8_loose(List<int> self, SseSerializer serializer);
+
+@protected void sse_encode_list_prim_u_8_strict(Uint8List self, SseSerializer serializer);
+
+@protected void sse_encode_list_projected_reminder(List<ProjectedReminder> self, SseSerializer serializer);
+
+@protected void sse_encode_list_projected_task_label(List<ProjectedTaskLabel> self, SseSerializer serializer);
+
+@protected void sse_encode_list_stats_heatmap_cell(List<StatsHeatmapCell> self, SseSerializer serializer);
+
+@protected void sse_encode_list_stats_priority_row(List<StatsPriorityRow> self, SseSerializer serializer);
+
+@protected void sse_encode_list_stats_project_row(List<StatsProjectRow> self, SseSerializer serializer);
+
+@protected void sse_encode_list_stats_weekday_row(List<StatsWeekdayRow> self, SseSerializer serializer);
+
+@protected void sse_encode_list_sync_conflict(List<SyncConflict> self, SseSerializer serializer);
+
+@protected void sse_encode_list_sync_history_view(List<SyncHistoryView> self, SseSerializer serializer);
+
+@protected void sse_encode_list_table_count(List<TableCount> self, SseSerializer serializer);
+
+@protected void sse_encode_list_table_row_count(List<TableRowCount> self, SseSerializer serializer);
+
+@protected void sse_encode_list_task_attachment_view(List<TaskAttachmentView> self, SseSerializer serializer);
+
+@protected void sse_encode_list_task_dependency_flags(List<TaskDependencyFlags> self, SseSerializer serializer);
+
+@protected void sse_encode_list_task_description_flag(List<TaskDescriptionFlag> self, SseSerializer serializer);
+
+@protected void sse_encode_list_task_existence_flag(List<TaskExistenceFlag> self, SseSerializer serializer);
+
+@protected void sse_encode_list_task_label_with_id(List<TaskLabelWithId> self, SseSerializer serializer);
+
+@protected void sse_encode_list_task_labels_projection(List<TaskLabelsProjection> self, SseSerializer serializer);
+
+@protected void sse_encode_list_task_reminders_projection(List<TaskRemindersProjection> self, SseSerializer serializer);
+
+@protected void sse_encode_list_todo_comment(List<TodoComment> self, SseSerializer serializer);
+
+@protected void sse_encode_list_todo_label(List<TodoLabel> self, SseSerializer serializer);
+
+@protected void sse_encode_list_todo_project(List<TodoProject> self, SseSerializer serializer);
+
+@protected void sse_encode_list_todo_reminder(List<TodoReminder> self, SseSerializer serializer);
+
+@protected void sse_encode_list_todo_saved_filter(List<TodoSavedFilter> self, SseSerializer serializer);
+
+@protected void sse_encode_list_todo_subtask(List<TodoSubtask> self, SseSerializer serializer);
+
+@protected void sse_encode_list_todo_task(List<TodoTask> self, SseSerializer serializer);
+
+@protected void sse_encode_list_todo_task_label(List<TodoTaskLabel> self, SseSerializer serializer);
+
+@protected void sse_encode_list_todo_task_list_item(List<TodoTaskListItem> self, SseSerializer serializer);
+
+@protected void sse_encode_list_todo_task_relation(List<TodoTaskRelation> self, SseSerializer serializer);
+
+@protected void sse_encode_list_todo_template(List<TodoTemplate> self, SseSerializer serializer);
+
+@protected void sse_encode_list_widget_todo_item(List<WidgetTodoItem> self, SseSerializer serializer);
+
+@protected void sse_encode_notification_log_row(NotificationLogRow self, SseSerializer serializer);
+
+@protected void sse_encode_opt_String(String? self, SseSerializer serializer);
+
+@protected void sse_encode_opt_box_autoadd_bool(bool? self, SseSerializer serializer);
+
+@protected void sse_encode_opt_box_autoadd_csv_import_stats_view(CsvImportStatsView? self, SseSerializer serializer);
+
+@protected void sse_encode_opt_box_autoadd_f_64(double? self, SseSerializer serializer);
+
+@protected void sse_encode_opt_box_autoadd_i_32(int? self, SseSerializer serializer);
+
+@protected void sse_encode_opt_box_autoadd_i_64(PlatformInt64? self, SseSerializer serializer);
+
+@protected void sse_encode_opt_box_autoadd_sync_config_view(SyncConfigView? self, SseSerializer serializer);
+
+@protected void sse_encode_opt_box_autoadd_todo_project(TodoProject? self, SseSerializer serializer);
+
+@protected void sse_encode_opt_box_autoadd_todo_task(TodoTask? self, SseSerializer serializer);
+
+@protected void sse_encode_opt_box_autoadd_usize(BigInt? self, SseSerializer serializer);
+
+@protected void sse_encode_opt_list_prim_i_64_strict(Int64List? self, SseSerializer serializer);
+
+@protected void sse_encode_plaintext_export_view(PlaintextExportView self, SseSerializer serializer);
+
+@protected void sse_encode_projected_reminder(ProjectedReminder self, SseSerializer serializer);
+
+@protected void sse_encode_projected_task_label(ProjectedTaskLabel self, SseSerializer serializer);
+
+@protected void sse_encode_reminder_due_dto(ReminderDueDto self, SseSerializer serializer);
+
+@protected void sse_encode_stats_aggregate(StatsAggregate self, SseSerializer serializer);
+
+@protected void sse_encode_stats_heatmap(StatsHeatmap self, SseSerializer serializer);
+
+@protected void sse_encode_stats_heatmap_cell(StatsHeatmapCell self, SseSerializer serializer);
+
+@protected void sse_encode_stats_overview(StatsOverview self, SseSerializer serializer);
+
+@protected void sse_encode_stats_priority_row(StatsPriorityRow self, SseSerializer serializer);
+
+@protected void sse_encode_stats_project_row(StatsProjectRow self, SseSerializer serializer);
+
+@protected void sse_encode_stats_streak(StatsStreak self, SseSerializer serializer);
+
+@protected void sse_encode_stats_weekday_row(StatsWeekdayRow self, SseSerializer serializer);
+
+@protected void sse_encode_sync_config_input(SyncConfigInput self, SseSerializer serializer);
+
+@protected void sse_encode_sync_config_view(SyncConfigView self, SseSerializer serializer);
+
+@protected void sse_encode_sync_conflict(SyncConflict self, SseSerializer serializer);
+
+@protected void sse_encode_sync_crypto_status(SyncCryptoStatus self, SseSerializer serializer);
+
+@protected void sse_encode_sync_history_view(SyncHistoryView self, SseSerializer serializer);
+
+@protected void sse_encode_table_count(TableCount self, SseSerializer serializer);
+
+@protected void sse_encode_table_row_count(TableRowCount self, SseSerializer serializer);
+
+@protected void sse_encode_task_attachment_view(TaskAttachmentView self, SseSerializer serializer);
+
+@protected void sse_encode_task_dependency_flags(TaskDependencyFlags self, SseSerializer serializer);
+
+@protected void sse_encode_task_description_flag(TaskDescriptionFlag self, SseSerializer serializer);
+
+@protected void sse_encode_task_existence_flag(TaskExistenceFlag self, SseSerializer serializer);
+
+@protected void sse_encode_task_label_with_id(TaskLabelWithId self, SseSerializer serializer);
+
+@protected void sse_encode_task_labels_projection(TaskLabelsProjection self, SseSerializer serializer);
+
+@protected void sse_encode_task_reminders_projection(TaskRemindersProjection self, SseSerializer serializer);
+
+@protected void sse_encode_todo_comment(TodoComment self, SseSerializer serializer);
+
+@protected void sse_encode_todo_comment_create_input(TodoCommentCreateInput self, SseSerializer serializer);
+
+@protected void sse_encode_todo_label(TodoLabel self, SseSerializer serializer);
+
+@protected void sse_encode_todo_label_create_input(TodoLabelCreateInput self, SseSerializer serializer);
+
+@protected void sse_encode_todo_project(TodoProject self, SseSerializer serializer);
+
+@protected void sse_encode_todo_project_create_input(TodoProjectCreateInput self, SseSerializer serializer);
+
+@protected void sse_encode_todo_reminder(TodoReminder self, SseSerializer serializer);
+
+@protected void sse_encode_todo_reminder_create_input(TodoReminderCreateInput self, SseSerializer serializer);
+
+@protected void sse_encode_todo_saved_filter(TodoSavedFilter self, SseSerializer serializer);
+
+@protected void sse_encode_todo_saved_filter_create_input(TodoSavedFilterCreateInput self, SseSerializer serializer);
+
+@protected void sse_encode_todo_saved_filter_update_input(TodoSavedFilterUpdateInput self, SseSerializer serializer);
+
+@protected void sse_encode_todo_subtask(TodoSubtask self, SseSerializer serializer);
+
+@protected void sse_encode_todo_subtask_create_input(TodoSubtaskCreateInput self, SseSerializer serializer);
+
+@protected void sse_encode_todo_task(TodoTask self, SseSerializer serializer);
+
+@protected void sse_encode_todo_task_create_input(TodoTaskCreateInput self, SseSerializer serializer);
+
+@protected void sse_encode_todo_task_detail(TodoTaskDetail self, SseSerializer serializer);
+
+@protected void sse_encode_todo_task_label(TodoTaskLabel self, SseSerializer serializer);
+
+@protected void sse_encode_todo_task_label_create_input(TodoTaskLabelCreateInput self, SseSerializer serializer);
+
+@protected void sse_encode_todo_task_list_item(TodoTaskListItem self, SseSerializer serializer);
+
+@protected void sse_encode_todo_task_relation(TodoTaskRelation self, SseSerializer serializer);
+
+@protected void sse_encode_todo_task_relation_create_input(TodoTaskRelationCreateInput self, SseSerializer serializer);
+
+@protected void sse_encode_todo_template(TodoTemplate self, SseSerializer serializer);
+
+@protected void sse_encode_todo_template_create_input(TodoTemplateCreateInput self, SseSerializer serializer);
+
+@protected void sse_encode_todo_template_update_input(TodoTemplateUpdateInput self, SseSerializer serializer);
+
+@protected void sse_encode_trash_meta(TrashMeta self, SseSerializer serializer);
+
+@protected void sse_encode_trash_purge_stats(TrashPurgeStats self, SseSerializer serializer);
+
+@protected void sse_encode_u_32(int self, SseSerializer serializer);
+
+@protected void sse_encode_u_64(BigInt self, SseSerializer serializer);
+
+@protected void sse_encode_u_8(int self, SseSerializer serializer);
+
+@protected void sse_encode_unit(void self, SseSerializer serializer);
+
+@protected void sse_encode_usize(BigInt self, SseSerializer serializer);
+
+@protected void sse_encode_widget_todo_item(WidgetTodoItem self, SseSerializer serializer);
+                }
+                
+
 
 // Section: wire_class
 
-class RustLibWire implements BaseWire {
-  factory RustLibWire.fromExternalLibrary(ExternalLibrary lib) =>
-      RustLibWire(lib.ffiDynamicLibrary);
 
-  /// Holds the symbol lookup function.
-  final ffi.Pointer<T> Function<T extends ffi.NativeType>(String symbolName)
-  _lookup;
+        class RustLibWire implements BaseWire {
 
-  /// The symbols are looked up in [dynamicLibrary].
-  RustLibWire(ffi.DynamicLibrary dynamicLibrary)
-    : _lookup = dynamicLibrary.lookup;
-}
+            factory RustLibWire.fromExternalLibrary(ExternalLibrary lib) =>
+              RustLibWire(lib.ffiDynamicLibrary);
+        
+            /// Holds the symbol lookup function.
+            final ffi.Pointer<T> Function<T extends ffi.NativeType>(String symbolName)
+                _lookup;
+  
+            /// The symbols are looked up in [dynamicLibrary].
+            RustLibWire(ffi.DynamicLibrary dynamicLibrary)
+                : _lookup = dynamicLibrary.lookup;
+
+            
+        }
+        

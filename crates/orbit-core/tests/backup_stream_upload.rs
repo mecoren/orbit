@@ -11,7 +11,7 @@ mod common;
 
 use common::{FakeCloud, Protocol};
 use orbit_core::api::full_sync_backup_api::upload_backup_file;
-use orbit_core::sync::engine::{create_adapter, SyncConfig};
+use orbit_core::sync::engine::{SyncConfig, create_adapter};
 
 fn webdav_config(base_url: &str) -> SyncConfig {
     SyncConfig {

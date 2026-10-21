@@ -190,4 +190,59 @@ void main() {
       expect(all.where((f) => f.id == sf.id), hasLength(1));
     });
   });
+
+  // 按路径过桥（M1）：移动端不再把整包字节跨 FFI 搬运。
+  // mock 只校验解锁态与路径非空，真实解析由 Rust 侧单测覆盖。
+  group('备份按路径过桥', () {
+    test('peek 路径返回预览', () async {
+      final bridge = MockOrbitBridge();
+      bridge.store.syncUnlocked = true;
+      final preview = await bridge.fullBackupPeekPath('/tmp/dev.orfullsync');
+      expect(preview.manifest.deviceId, isNotEmpty);
+    });
+
+    test('import 路径返回导入结果', () async {
+      final bridge = MockOrbitBridge();
+      bridge.store.syncUnlocked = true;
+      final result = await bridge.fullBackupImportPath('/tmp/dev.orfullsync');
+      expect(result.errorCount, 0);
+      expect(result.successCount, greaterThanOrEqualTo(0));
+    });
+
+    test('未解锁时两条路径入口都报 not_unlocked', () async {
+      final bridge = MockOrbitBridge();
+      bridge.store.syncUnlocked = false;
+      expect(
+        () => bridge.fullBackupPeekPath('/tmp/x.orfullsync'),
+        throwsA(predicate((e) => e.toString().contains('not_unlocked'))),
+      );
+      expect(
+        () => bridge.fullBackupImportPath('/tmp/x.orfullsync'),
+        throwsA(predicate((e) => e.toString().contains('not_unlocked'))),
+      );
+    });
+
+    test('空路径视为无效输入', () async {
+      final bridge = MockOrbitBridge();
+      bridge.store.syncUnlocked = true;
+      expect(
+        () => bridge.fullBackupPeekPath('  '),
+        throwsA(predicate((e) => e.toString().contains('路径为空'))),
+      );
+      expect(
+        () => bridge.fullBackupImportPath(''),
+        throwsA(predicate((e) => e.toString().contains('路径为空'))),
+      );
+    });
+
+    test('force 标记透传到导入（schema 不一致场景）', () async {
+      final bridge = MockOrbitBridge();
+      bridge.store.syncUnlocked = true;
+      final result = await bridge.fullBackupImportPath(
+        '/tmp/dev.orfullsync',
+        ignoreSchemaMismatch: true,
+      );
+      expect(result.errorCount, 0);
+    });
+  });
 }

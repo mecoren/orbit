@@ -397,6 +397,45 @@ pub async fn full_backup_export(upload_cloud: bool) -> Result<BackupExportResult
     .map(BackupExportResult::from)
 }
 
+/// 从 `.orfullsync` **文件路径**全量覆盖恢复（移动端按路径过桥，M1）
+///
+/// 与 [`full_backup_import`] 语义完全一致，区别是**不再把整包字节跨 FFI 搬运**：
+/// Dart 选完文件把路径交过来即可。v2 容器在 core 内逐帧流式读，峰值与备份
+/// 体积无关；v1 容器因格式所限仍需整份读入（core 内部处理，不过桥）。
+pub async fn full_backup_import_path(
+    file_path: String,
+    ignore_schema_mismatch: bool,
+) -> Result<BackupImportResult, String> {
+    let pool = with_state(|s| Ok(s.pool.clone()))?;
+    let svc = runtime_crypto()?;
+
+    let result = full_sync_backup_api::import_full_sync_backup_from_path(
+        &pool,
+        &svc,
+        std::path::Path::new(&file_path),
+        ignore_schema_mismatch,
+    )
+    .await
+    .map_err(|e| format!("[backup] 导入失败: {e}"))?;
+
+    emit_full_change();
+    Ok(BackupImportResult::from(result))
+}
+
+/// 从**文件路径**读取恢复预览（移动端按路径过桥，M1）
+pub async fn full_backup_peek_path(file_path: String) -> Result<BackupPreviewView, String> {
+    let pool = with_state(|s| Ok(s.pool.clone()))?;
+    let svc = runtime_crypto()?;
+    full_sync_backup_api::peek_backup_preview_from_path(
+        &pool,
+        &svc,
+        std::path::Path::new(&file_path),
+    )
+    .await
+    .map_err(|e| format!("[backup] 读取备份预览失败: {e}"))
+    .map(BackupPreviewView::from)
+}
+
 /// 从 `.orfullsync` 字节全量覆盖恢复（兼容遗留 `.waitfullsync` / `.orsync`）
 ///
 /// 警示语义：导入会清空当前业务表再写入备份内容（事务内原子完成）。

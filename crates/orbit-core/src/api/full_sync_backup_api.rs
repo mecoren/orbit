@@ -918,6 +918,99 @@ pub async fn peek_backup_preview(
     })
 }
 
+/// 从**文件路径**导入备份（移动端按路径过桥；v2 全程流式，v1 仍需整包）
+///
+/// 与 [`import_full_sync_backup`] 语义完全一致，区别只在读取方式：
+/// - v2 容器：`BufReader` 逐帧读，峰值 = 一帧明文 + 一帧密文，与备份体积无关；
+/// - v1 容器：v1 是整包 ZIP，天然需要整份字节才能解压，故内部读入后走原路径。
+///
+/// 这条入口存在的意义是**跨 FFI 不搬整包**：移动端选完文件把路径交过来即可，
+/// 不必先把几十上百 MB 读成 `List<int>` 再过桥（那等于双份驻留）。
+pub async fn import_full_sync_backup_from_path(
+    pool: &SqlitePool,
+    svc: &SyncCryptoService,
+    path: &std::path::Path,
+    ignore_schema_mismatch: bool,
+) -> FullSyncBackupResult<ImportResult> {
+    ensure_unlocked(svc)?;
+    let sync_password = svc
+        .get_unlocked_password()
+        .ok_or_else(|| FullSyncBackupError::InvalidState("同步密码未解锁".to_string()))?;
+
+    if super::full_sync_backup_v2_api::is_v2_backup_path(path)? {
+        let result = super::full_sync_backup_v2_api::import_v2_from_path(
+            pool,
+            path,
+            &sync_password,
+            ignore_schema_mismatch,
+        )
+        .await?;
+        // 与 bytes 入口同口径：恢复后失效同步账本
+        invalidate_sync_ledger(pool, svc).await;
+        return Ok(result);
+    }
+
+    // v1：整包读入后走既有路径（v1 无法流式，这是格式决定的）
+    let bytes = std::fs::read(path)?;
+    import_full_sync_backup(pool, svc, &bytes, ignore_schema_mismatch).await
+}
+
+/// 从**文件路径**读取备份恢复预览（移动端按路径过桥）
+///
+/// v2 只解预览需要的两张表；v1 仍整包解码。
+pub async fn peek_backup_preview_from_path(
+    pool: &SqlitePool,
+    svc: &SyncCryptoService,
+    path: &std::path::Path,
+) -> FullSyncBackupResult<BackupPreview> {
+    ensure_unlocked(svc)?;
+    let sync_password = svc
+        .get_unlocked_password()
+        .ok_or_else(|| FullSyncBackupError::InvalidState("同步密码未解锁".to_string()))?;
+
+    let (manifest, table_data) = if super::full_sync_backup_v2_api::is_v2_backup_path(path)? {
+        let (meta, data) = super::full_sync_backup_v2_api::peek_v2_tables_from_path(
+            path,
+            &sync_password,
+            &["todo_tasks", "todo_projects"],
+        )?;
+        (meta.manifest, data)
+    } else {
+        let bytes = std::fs::read(path)?;
+        let decoded = decode_backup(&bytes, &sync_password)?;
+        (decoded.manifest, decoded.table_data)
+    };
+
+    let (sample_tasks, task_stats) = extract_task_preview(&table_data, BACKUP_PREVIEW_SAMPLE);
+    let current_schema_version = query_schema_version(pool).await?;
+    let schema_mismatch = manifest.schema_version != current_schema_version;
+    Ok(BackupPreview {
+        manifest,
+        sample_tasks,
+        task_stats,
+        schema_mismatch,
+        current_schema_version,
+    })
+}
+
+/// 读取备份清单（按路径版；v2 只读 header + 首帧）
+pub async fn peek_full_sync_manifest_from_path(
+    svc: &SyncCryptoService,
+    path: &std::path::Path,
+) -> FullSyncBackupResult<BackupManifest> {
+    ensure_unlocked(svc)?;
+    let sync_password = svc
+        .get_unlocked_password()
+        .ok_or_else(|| FullSyncBackupError::InvalidState("同步密码未解锁".to_string()))?;
+    if super::full_sync_backup_v2_api::is_v2_backup_path(path)? {
+        return Ok(
+            super::full_sync_backup_v2_api::peek_v2_meta_from_path(path, &sync_password)?.manifest,
+        );
+    }
+    let bytes = std::fs::read(path)?;
+    Ok(decode_backup(&bytes, &sync_password)?.manifest)
+}
+
 /// 从解码后的表数据抽取任务预览（纯函数：全量统计 + 前 N 条存活抽样）
 ///
 /// 防御性解析：单行字段缺失回落默认值，整表解析失败按空表处理（统计为零），

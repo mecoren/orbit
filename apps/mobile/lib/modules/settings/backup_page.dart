@@ -144,26 +144,33 @@ class _BackupPageState extends ConsumerState<BackupPage> {
     if (_busy != null) return;
     FilePickerResult? picked;
     try {
-      picked = await FilePicker.platform.pickFiles(withData: true);
+      // 只取路径、不把整份备份搬进内存（M1：跨 FFI 不再搬整包字节）
+      picked = await FilePicker.platform.pickFiles(withData: false);
     } catch (e) {
       if (mounted) WaitToast.destructive('选择文件失败：${_errMsg(e)}');
       return;
     }
     final file = picked?.files.singleOrNull;
-    final bytes = file?.bytes;
-    if (bytes == null) return;
+    final path = file?.path;
+    if (path == null) {
+      if (mounted && picked != null) {
+        WaitToast.destructive('无法读取文件路径');
+      }
+      return;
+    }
 
     final bridge = ref.read(orbitBridgeProvider);
     setState(() => _busy = 'restore');
     try {
-      final preview = await bridge.fullBackupPeekLocal(bytes);
+      // v2 容器在 core 内逐帧流式读，峰值与备份体积无关；v1 由 core 内部整包读
+      final preview = await bridge.fullBackupPeekPath(path);
       if (!mounted) return;
       setState(() => _busy = null);
       await _confirmAndRestore(
         preview: preview,
         sourceLabel: file!.name,
-        run: (force) => bridge.fullBackupImport(
-          bytes,
+        run: (force) => bridge.fullBackupImportPath(
+          path,
           ignoreSchemaMismatch: force,
         ),
       );

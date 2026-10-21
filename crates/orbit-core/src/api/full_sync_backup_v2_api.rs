@@ -95,7 +95,15 @@ pub async fn export_v2_to_file(
 
     // 临时文件：与目标同目录，保证 rename 原子
     let tmp = tmp_path_for(target);
-    let result = write_v2_file(pool, &tmp, sync_password, &manifest, &schema_version_json, &present_tables).await;
+    let result = write_v2_file(
+        pool,
+        &tmp,
+        sync_password,
+        &manifest,
+        &schema_version_json,
+        &present_tables,
+    )
+    .await;
 
     match result {
         Ok(size) => {
@@ -222,129 +230,12 @@ pub async fn import_v2_bytes(
         });
     }
 
-    // 2. 开事务，先 DELETE 所有已知表
-    let mut tx = pool.begin().await?;
-    let mut total_errors: Vec<String> = Vec::new();
-
-    for table_name in meta.manifest.table_counts.keys() {
-        if !business_api::FULL_BACKUP_TABLES.contains(&table_name.as_str()) {
-            total_errors.push(format!("{table_name}: 表名不在白名单"));
-            continue;
-        }
-        let exists: (i64,) =
-            sqlx::query_as("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?")
-                .bind(table_name)
-                .fetch_one(&mut *tx)
-                .await
-                .map_err(FullSyncBackupError::Db)?;
-        if exists.0 == 0 {
-            total_errors.push(format!("{table_name}: 表不存在，跳过"));
-            continue;
-        }
-        sqlx::query(&format!("DELETE FROM \"{table_name}\""))
-            .execute(&mut *tx)
-            .await
-            .map_err(FullSyncBackupError::Db)?;
-    }
-
-    // 3. 逐帧解析并写库
+    // 2. 交给共用的帧写入流程（与按路径入口同一份实现）
     let cursor = std::io::Cursor::new(bytes);
     let mut reader = FrameReader::new(cursor, sync_password)?;
     // 跳过已读的首帧（meta 已在 peek 阶段解析）
     let _ = reader.next_frame()?;
-
-    let mut current_table: Option<String> = None;
-    let mut total_success: i64 = 0;
-    let mut saw_end = false;
-    // 列元数据按表缓存（同表多帧不必重复加载）
-    let mut columns_cache: BTreeMap<String, HashMap<String, ColumnMeta>> = BTreeMap::new();
-
-    loop {
-        let Some(frame) = reader.next_frame()? else {
-            break;
-        };
-        // 一帧只有两种可能：
-        //  ① 控制帧：`{"kind":...}`（write_v2_file 显式 flush，单对象）
-        //  ② 记录帧：write_records 每写一条即落帧，故帧内是「一条 JSON + 换行」
-        // 判定依据只能是内容形状：控制帧带 `kind` 键。
-        let frame_trimmed = trim_ascii(&frame);
-        if frame_trimmed.is_empty() {
-            continue;
-        }
-        let parsed: serde_json::Value = match serde_json::from_slice(frame_trimmed) {
-            Ok(v) => v,
-            Err(e) => {
-                total_errors.push(format!("v2 帧解析失败: {e}"));
-                continue;
-            }
-        };
-        if let Some(kind) = parsed.get("kind").and_then(|k| k.as_str()) {
-            match kind {
-                "table" => {
-                    let name = parsed["name"].as_str().unwrap_or_default().to_string();
-                    current_table = Some(name);
-                }
-                "table_end" => current_table = None,
-                "end" => {
-                    saw_end = true;
-                    break;
-                }
-                "meta" => {
-                    return Err(FullSyncBackupError::InvalidFormat(
-                        "v2 正文出现重复元数据帧".into(),
-                    ));
-                }
-                other => total_errors.push(format!("未知控制帧 kind={other}")),
-            }
-            continue;
-        }
-
-        // 记录帧
-        let Some(table) = current_table.clone() else {
-            total_errors.push("记录帧出现在表边界之外".to_string());
-            continue;
-        };
-        if !business_api::FULL_BACKUP_TABLES.contains(&table.as_str()) {
-            continue;
-        }
-        if !columns_cache.contains_key(&table) {
-            match load_table_columns_in_tx(&mut tx, &table).await {
-                Ok(c) => {
-                    columns_cache.insert(table.clone(), c);
-                }
-                Err(e) => {
-                    total_errors.push(format!("{table}: 加载表结构失败: {e}"));
-                    continue;
-                }
-            }
-        }
-        let columns = columns_cache.get(&table).expect("上面刚插入");
-
-        let Some(obj) = parsed.as_object() else {
-            total_errors.push(format!("{table}: 记录帧不是 JSON 对象"));
-            continue;
-        };
-        match insert_record_raw_in_tx(&mut tx, &table, obj, columns).await {
-            Ok(()) => total_success += 1,
-            Err(e) => total_errors.push(format!("{table} 第 {} 条: {e}", total_success + 1)),
-        }
-    }
-
-    if !saw_end {
-        return Err(FullSyncBackupError::InvalidFormat(
-            "v2 备份缺少结束标记（可能被截断）".into(),
-        ));
-    }
-
-    tx.commit().await?;
-
-    Ok(crate::api::full_sync_backup_api::ImportResult {
-        success_count: total_success,
-        error_count: total_errors.len() as i64,
-        errors: total_errors,
-        manifest: meta.manifest,
-        needs_restart: false,
-    })
+    import_frames_into_pool(pool, reader, meta.manifest).await
 }
 
 /// 分页读取一页记录（JSON 数组）
@@ -359,9 +250,8 @@ async fn read_page_json(
     limit: i64,
 ) -> FullSyncBackupResult<Vec<serde_json::Value>> {
     // 与 v1 的 list_records_as_json 同源，只是加了 OFFSET/LIMIT
-    let sql = format!(
-        "SELECT * FROM \"{table}\" WHERE is_deleted = 0 ORDER BY rowid LIMIT ? OFFSET ?"
-    );
+    let sql =
+        format!("SELECT * FROM \"{table}\" WHERE is_deleted = 0 ORDER BY rowid LIMIT ? OFFSET ?");
     let rows = sqlx::query(&sql)
         .bind(limit)
         .bind(offset)
@@ -500,6 +390,253 @@ pub fn peek_v2_tables(
         .map(|(k, v)| Ok((k, serde_json::to_string(&v)?)))
         .collect::<FullSyncBackupResult<BTreeMap<String, String>>>()?;
     Ok((meta, table_data))
+}
+
+/// v2 从**文件路径**导入（移动端按路径过桥：不再把整包字节跨 FFI 搬运）
+///
+/// 与 [`import_v2_bytes`] 的语义完全一致（同一事务、同一逐条写库口径），
+/// 区别只在读取方式：这里用 `BufReader` 逐帧从文件读，峰值 = 一帧明文 +
+/// 一帧密文，与备份体积无关；而 `bytes` 版本要求调用方先持有整包。
+///
+/// v1 备份不走这条路径（v1 是整包 ZIP，天然需要整份字节才能解压）——
+/// 调用方应先 `is_v2_backup_path` 判断，v1 仍走字节入口。
+pub async fn import_v2_from_path(
+    pool: &SqlitePool,
+    path: &Path,
+    sync_password: &str,
+    ignore_schema_mismatch: bool,
+) -> FullSyncBackupResult<crate::api::full_sync_backup_api::ImportResult> {
+    let file = std::fs::File::open(path)?;
+    let reader = std::io::BufReader::with_capacity(64 * 1024, file);
+    let mut frames = FrameReader::new(reader, sync_password)?;
+
+    // 首帧：元数据（与 peek 同源，这里就地解析，避免二次打开文件）
+    let first = frames
+        .next_frame()?
+        .ok_or_else(|| FullSyncBackupError::InvalidFormat("v2 备份缺少元数据帧".into()))?;
+    let meta_json: serde_json::Value = serde_json::from_slice(&first)?;
+    if meta_json["kind"] != "meta" {
+        return Err(FullSyncBackupError::InvalidFormat(
+            "v2 首帧不是元数据信封".into(),
+        ));
+    }
+    let manifest: BackupManifest = serde_json::from_value(meta_json["manifest"].clone())?;
+    manifest.validate_format_version()?;
+
+    let current_schema = crate::api::full_sync_backup_api::query_schema_version(pool).await?;
+    if manifest.schema_version != current_schema && !ignore_schema_mismatch {
+        return Err(FullSyncBackupError::SchemaVersionMismatch {
+            backup: manifest.schema_version,
+            current: current_schema,
+        });
+    }
+
+    // 与 bytes 版本共用同一写库流程
+    import_frames_into_pool(pool, frames, manifest).await
+}
+
+/// 判断文件是否为 v2 容器（只读前 4 字节，不加载整份文件）
+pub fn is_v2_backup_path(path: &Path) -> FullSyncBackupResult<bool> {
+    use std::io::Read;
+    let mut file = std::fs::File::open(path)?;
+    let mut magic = [0u8; 4];
+    match file.read_exact(&mut magic) {
+        Ok(()) => Ok(magic == MAGIC_V2),
+        // 不足 4 字节：不是合法备份，交给后续流程报错
+        Err(_) => Ok(false),
+    }
+}
+
+/// v2 从**文件路径**预览（移动端按路径过桥）
+pub fn peek_v2_meta_from_path(path: &Path, sync_password: &str) -> FullSyncBackupResult<V2Meta> {
+    let file = std::fs::File::open(path)?;
+    let reader = std::io::BufReader::with_capacity(64 * 1024, file);
+    let mut frames = FrameReader::new(reader, sync_password)?;
+    let first = frames
+        .next_frame()?
+        .ok_or_else(|| FullSyncBackupError::InvalidFormat("v2 备份缺少元数据帧".into()))?;
+    let v: serde_json::Value = serde_json::from_slice(&first)?;
+    if v["kind"] != "meta" {
+        return Err(FullSyncBackupError::InvalidFormat(
+            "v2 首帧不是元数据信封".into(),
+        ));
+    }
+    Ok(V2Meta {
+        manifest: serde_json::from_value(v["manifest"].clone())?,
+        schema_version_json: serde_json::to_string(&v["schema_version"])?,
+    })
+}
+
+/// v2 从**文件路径**预览两张表（移动端恢复确认框用）
+pub fn peek_v2_tables_from_path(
+    path: &Path,
+    sync_password: &str,
+    wanted: &[&str],
+) -> FullSyncBackupResult<(V2Meta, BTreeMap<String, String>)> {
+    let file = std::fs::File::open(path)?;
+    let reader = std::io::BufReader::with_capacity(64 * 1024, file);
+    let mut frames = FrameReader::new(reader, sync_password)?;
+    let first = frames
+        .next_frame()?
+        .ok_or_else(|| FullSyncBackupError::InvalidFormat("v2 备份缺少元数据帧".into()))?;
+    let meta_json: serde_json::Value = serde_json::from_slice(&first)?;
+    let meta = V2Meta {
+        manifest: serde_json::from_value(meta_json["manifest"].clone())?,
+        schema_version_json: serde_json::to_string(&meta_json["schema_version"])?,
+    };
+    let table_data = collect_wanted_tables(frames, wanted)?;
+    Ok((meta, table_data))
+}
+
+/// 从已定位的帧流里收集指定表的记录（预览用）
+fn collect_wanted_tables(
+    mut frames: FrameReader<impl std::io::Read>,
+    wanted: &[&str],
+) -> FullSyncBackupResult<BTreeMap<String, String>> {
+    let mut out: BTreeMap<String, Vec<serde_json::Value>> = BTreeMap::new();
+    let mut current: Option<String> = None;
+    while let Some(frame) = frames.next_frame()? {
+        let frame_trimmed = trim_ascii(&frame);
+        if frame_trimmed.is_empty() {
+            continue;
+        }
+        let parsed: serde_json::Value = match serde_json::from_slice(frame_trimmed) {
+            Ok(v) => v,
+            Err(_) => continue, // 预览容错
+        };
+        if let Some(kind) = parsed.get("kind").and_then(|k| k.as_str()) {
+            match kind {
+                "table" => {
+                    current = Some(parsed["name"].as_str().unwrap_or_default().to_string());
+                }
+                "table_end" => current = None,
+                "end" => break,
+                _ => {}
+            }
+            continue;
+        }
+        let Some(table) = current.clone() else {
+            continue;
+        };
+        if wanted.contains(&table.as_str()) {
+            out.entry(table).or_default().push(parsed);
+        }
+    }
+    out.into_iter()
+        .map(|(k, v)| Ok((k, serde_json::to_string(&v)?)))
+        .collect()
+}
+
+/// 把已打开的帧流写进库（bytes 与 path 两个入口共用）
+async fn import_frames_into_pool(
+    pool: &SqlitePool,
+    mut reader: FrameReader<impl std::io::Read>,
+    manifest: BackupManifest,
+) -> FullSyncBackupResult<crate::api::full_sync_backup_api::ImportResult> {
+    let mut tx = pool.begin().await?;
+    let mut total_errors: Vec<String> = Vec::new();
+
+    for table_name in manifest.table_counts.keys() {
+        if !business_api::FULL_BACKUP_TABLES.contains(&table_name.as_str()) {
+            total_errors.push(format!("{table_name}: 表名不在白名单"));
+            continue;
+        }
+        let exists: (i64,) =
+            sqlx::query_as("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?")
+                .bind(table_name)
+                .fetch_one(&mut *tx)
+                .await
+                .map_err(FullSyncBackupError::Db)?;
+        if exists.0 == 0 {
+            total_errors.push(format!("{table_name}: 表不存在，跳过"));
+            continue;
+        }
+        sqlx::query(&format!("DELETE FROM \"{table_name}\""))
+            .execute(&mut *tx)
+            .await
+            .map_err(FullSyncBackupError::Db)?;
+    }
+
+    let mut current_table: Option<String> = None;
+    let mut total_success: i64 = 0;
+    let mut saw_end = false;
+    let mut columns_cache: BTreeMap<String, HashMap<String, ColumnMeta>> = BTreeMap::new();
+
+    while let Some(frame) = reader.next_frame()? {
+        let frame_trimmed = trim_ascii(&frame);
+        if frame_trimmed.is_empty() {
+            continue;
+        }
+        let parsed: serde_json::Value = match serde_json::from_slice(frame_trimmed) {
+            Ok(v) => v,
+            Err(e) => {
+                total_errors.push(format!("v2 帧解析失败: {e}"));
+                continue;
+            }
+        };
+        if let Some(kind) = parsed.get("kind").and_then(|k| k.as_str()) {
+            match kind {
+                "table" => {
+                    current_table = Some(parsed["name"].as_str().unwrap_or_default().to_string());
+                }
+                "table_end" => current_table = None,
+                "end" => {
+                    saw_end = true;
+                    break;
+                }
+                "meta" => {
+                    return Err(FullSyncBackupError::InvalidFormat(
+                        "v2 正文出现重复元数据帧".into(),
+                    ));
+                }
+                other => total_errors.push(format!("未知控制帧 kind={other}")),
+            }
+            continue;
+        }
+
+        let Some(table) = current_table.clone() else {
+            total_errors.push("记录帧出现在表边界之外".to_string());
+            continue;
+        };
+        if !business_api::FULL_BACKUP_TABLES.contains(&table.as_str()) {
+            continue;
+        }
+        if !columns_cache.contains_key(&table) {
+            match load_table_columns_in_tx(&mut tx, &table).await {
+                Ok(c) => {
+                    columns_cache.insert(table.clone(), c);
+                }
+                Err(e) => {
+                    total_errors.push(format!("{table}: 加载表结构失败: {e}"));
+                    continue;
+                }
+            }
+        }
+        let columns = columns_cache.get(&table).expect("上面刚插入");
+        let Some(obj) = parsed.as_object() else {
+            total_errors.push(format!("{table}: 记录帧不是 JSON 对象"));
+            continue;
+        };
+        match insert_record_raw_in_tx(&mut tx, &table, obj, columns).await {
+            Ok(()) => total_success += 1,
+            Err(e) => total_errors.push(format!("{table} 第 {} 条: {e}", total_success + 1)),
+        }
+    }
+
+    if !saw_end {
+        return Err(FullSyncBackupError::InvalidFormat(
+            "v2 备份缺少结束标记（可能被截断）".into(),
+        ));
+    }
+    tx.commit().await?;
+
+    Ok(crate::api::full_sync_backup_api::ImportResult {
+        success_count: total_success,
+        error_count: total_errors.len() as i64,
+        errors: total_errors,
+        manifest,
+        needs_restart: false,
+    })
 }
 
 /// 临时文件路径：与目标同目录、后缀 `.tmp`

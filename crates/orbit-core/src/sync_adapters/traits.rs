@@ -158,10 +158,12 @@ pub trait SyncAdapter: Send + Sync {
         local_path: &std::path::Path,
         total_len: u64,
     ) -> Result<(), SyncError> {
-        let data = tokio::fs::read(local_path).await.map_err(|e| SyncError::Network {
-            message: format!("读取待上传文件失败: {e}"),
-            retryable: false,
-        })?;
+        let data = tokio::fs::read(local_path)
+            .await
+            .map_err(|e| SyncError::Network {
+                message: format!("读取待上传文件失败: {e}"),
+                retryable: false,
+            })?;
         debug_assert_eq!(data.len() as u64, total_len, "调用方声明的长度应与实际一致");
         self.upload_owned(path, data).await
     }
