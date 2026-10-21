@@ -737,6 +737,34 @@ class RustOrbitBridge implements OrbitBridge {
     return _mapStats(r);
   }
 
+  // ── 可取消导入（进度 + 取消）──
+
+  @override
+  Future<String> csvImportJobStart(String content, String preset) =>
+      gen_import.csvImportJobStart(content: content, preset: preset);
+
+  @override
+  Future<ImportJobStatus> csvImportJobStatus(String jobId) async {
+    final r = await gen_import.csvImportJobStatus(jobId: jobId);
+    return ImportJobStatus(
+      jobId: r.jobId,
+      processed: r.processed.toInt(),
+      total: r.total?.toInt(),
+      finished: r.finished,
+      cancelled: r.cancelled,
+      stats: r.stats == null ? null : _mapStats(r.stats!),
+      error: r.error,
+    );
+  }
+
+  @override
+  Future<void> csvImportJobCancel(String jobId) =>
+      gen_import.csvImportJobCancel(jobId: jobId);
+
+  @override
+  Future<void> csvImportJobDrop(String jobId) =>
+      gen_import.csvImportJobDrop(jobId: jobId);
+
   CsvImportStats _mapStats(gen.CsvImportStatsView s) => CsvImportStats(
         success: s.success.toInt(),
         skipped: s.skipped.toInt(),

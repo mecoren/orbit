@@ -14,7 +14,7 @@
  *
  * sync-config-changed（保存/断开）→ 重挂连接与执行卡刷新配置视图。
  */
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { listen } from "@tauri-apps/api/event";
@@ -2068,6 +2068,12 @@ function CsvImportCard() {
   const [result, setResult] = useState<CsvImportStats | null>(null);
   // 导入执行二次确认：批量写库（普通确认即可，增量写入非覆盖）
   const [importConfirmOpen, setImportConfirmOpen] = useState(false);
+  // 可取消导入的进度（null = 未在跑）；jobRef 持 job_id 供取消钮使用
+  const [progress, setProgress] = useState<{
+    processed: number;
+    total: number | null;
+  } | null>(null);
+  const jobRef = useRef<string | null>(null);
 
   const pickFile = async () => {
     try {
@@ -2126,22 +2132,60 @@ function CsvImportCard() {
   const doExecute = async () => {
     if (content == null) return;
     setBusy("execute");
+    setProgress(null);
     try {
-      const { csvImportExecute } = await import("@/lib/tauri");
-      const stats = await csvImportExecute(content, preset);
+      // 走可取消任务：先 start 拿 job_id，再轮询进度（docs/13 §6.2 M2 第 3/5 点）
+      const { csvImportJobStart, csvImportJobStatus, csvImportJobDrop } =
+        await import("@/lib/tauri");
+      const jobId = await csvImportJobStart(content, preset);
+      jobRef.current = jobId;
+      let status = await csvImportJobStatus(jobId);
+      while (!status.finished) {
+        setProgress({ processed: status.processed, total: status.total });
+        await new Promise((r) => setTimeout(r, 200));
+        status = await csvImportJobStatus(jobId);
+      }
+      setProgress({ processed: status.processed, total: status.total });
+      await csvImportJobDrop(jobId);
+      jobRef.current = null;
+
+      if (status.error) {
+        toast.error(status.error);
+        return;
+      }
+      const stats = status.stats;
+      if (!stats) {
+        toast.error("导入未返回统计");
+        return;
+      }
       setResult(stats);
       setPreview(null);
       const parts = [`成功 ${stats.success} 条`];
       if (stats.skipped) parts.push(`跳过 ${stats.skipped} 条`);
       if (stats.failed) parts.push(`失败 ${stats.failed} 条`);
-      if (stats.failed) toast.warning(`导入完成：${parts.join("，")}`);
-      else toast.success(`导入完成：${parts.join("，")}`);
+      if (status.cancelled) parts.push("已取消（已写入的行保留）");
+      if (stats.failed || status.cancelled) {
+        toast.warning(`导入结束：${parts.join("，")}`);
+      } else {
+        toast.success(`导入完成：${parts.join("，")}`);
+      }
       // 写库后失效任务/项目缓存（事件面在真实 Tauri 下也会广播，此处兜底）
       queryClient.invalidateQueries();
     } catch (err) {
       toast.error(errMsg(err));
     } finally {
       setBusy(null);
+    }
+  };
+
+  const cancelImport = async () => {
+    const jobId = jobRef.current;
+    if (!jobId) return;
+    try {
+      const { csvImportJobCancel } = await import("@/lib/tauri");
+      await csvImportJobCancel(jobId);
+    } catch (err) {
+      toast.error(errMsg(err));
     }
   };
 
@@ -2198,7 +2242,38 @@ function CsvImportCard() {
             导入
           </Button>
         ) : null}
+        {busy === "execute" ? (
+          <Button size="sm" variant="outline" onClick={() => void cancelImport()}>
+            取消导入
+          </Button>
+        ) : null}
       </div>
+
+      {/* 导入进度：行级进度条 + 已处理/总数（可取消，行边界生效） */}
+      {busy === "execute" && progress ? (
+        <div className="space-y-1" aria-live="polite">
+          <div className="flex items-center justify-between text-xs text-muted-foreground">
+            <span>
+              正在导入 {progress.processed}
+              {progress.total != null ? ` / ${progress.total}` : ""} 行
+            </span>
+            {progress.total != null && progress.total > 0 ? (
+              <span>{Math.round((progress.processed / progress.total) * 100)}%</span>
+            ) : null}
+          </div>
+          <div className="h-1.5 overflow-hidden rounded-full bg-muted">
+            <div
+              className="h-full rounded-full bg-primary transition-[width] duration-200"
+              style={{
+                width:
+                  progress.total != null && progress.total > 0
+                    ? `${Math.min(100, (progress.processed / progress.total) * 100)}%`
+                    : "0%",
+              }}
+            />
+          </div>
+        </div>
+      ) : null}
 
       {/* 导入执行确认：批量写库前核对条数（普通确认，无需时停） */}
       <AlertDialog open={importConfirmOpen} onOpenChange={setImportConfirmOpen}>

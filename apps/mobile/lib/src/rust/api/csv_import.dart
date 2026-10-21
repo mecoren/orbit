@@ -7,29 +7,31 @@ import '../frb_generated.dart';
 import 'dto.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `pool`
 
-/// 导入限额（字节 / 行数）：Dart 侧选文件后先比对 `length()`，超限即拦，
+            // These functions are ignored because they are not marked as `pub`: `pool`
+
+
+            /// 导入限额（字节 / 行数）：Dart 侧选文件后先比对 `length()`，超限即拦，
 /// 不把整份内容读进内存再拒绝（对应桌面 csv_import_limits）
-Future<ImportLimitsView> csvImportLimits() =>
-    RustLib.instance.api.crateApiCsvImportCsvImportLimits();
+Future<ImportLimitsView>  csvImportLimits() => RustLib.instance.api.crateApiCsvImportCsvImportLimits();
 
 /// 预览导入（不写库）：解析 + 映射 + 统计（对应桌面 csv_import_preview）
-Future<CsvImportPreviewView> csvImportPreview({
-  required String content,
-  required String preset,
-  BigInt? previewLimit,
-}) => RustLib.instance.api.crateApiCsvImportCsvImportPreview(
-  content: content,
-  preset: preset,
-  previewLimit: previewLimit,
-);
+Future<CsvImportPreviewView>  csvImportPreview({required String content , required String preset , BigInt? previewLimit }) => RustLib.instance.api.crateApiCsvImportCsvImportPreview(content: content, preset: preset, previewLimit: previewLimit);
 
 /// 执行导入（写库）：项目自动创建、逐行独立成败（对应桌面 csv_import_execute）
-Future<CsvImportStatsView> csvImportExecute({
-  required String content,
-  required String preset,
-}) => RustLib.instance.api.crateApiCsvImportCsvImportExecute(
-  content: content,
-  preset: preset,
-);
+Future<CsvImportStatsView>  csvImportExecute({required String content , required String preset }) => RustLib.instance.api.crateApiCsvImportCsvImportExecute(content: content, preset: preset);
+
+/// 启动可取消导入：同步预检限额后返回 job_id（后台执行）
+Future<String>  csvImportJobStart({required String content , required String preset }) => RustLib.instance.api.crateApiCsvImportCsvImportJobStart(content: content, preset: preset);
+
+/// 轮询导入任务状态（processed / total / finished / cancelled / stats）
+Future<ImportJobStatusView>  csvImportJobStatus({required String jobId }) => RustLib.instance.api.crateApiCsvImportCsvImportJobStatus(jobId: jobId);
+
+/// 请求取消导入（行边界生效；已写入的行保留）
+Future<void>  csvImportJobCancel({required String jobId }) => RustLib.instance.api.crateApiCsvImportCsvImportJobCancel(jobId: jobId);
+
+/// 释放任务条目（拿到终态后调用，避免任务表滞留）
+Future<void>  csvImportJobDrop({required String jobId }) => RustLib.instance.api.crateApiCsvImportCsvImportJobDrop(jobId: jobId);
+
+            
+            

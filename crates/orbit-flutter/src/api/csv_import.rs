@@ -11,6 +11,7 @@
 use orbit_core::api::csv_import_api;
 
 use super::dto::CsvImportPreviewView;
+use super::dto::ImportJobStatusView;
 use super::dto::ImportLimitsView;
 
 fn pool() -> Result<sqlx::SqlitePool, String> {
@@ -47,6 +48,31 @@ pub async fn csv_import_execute(
         .await
         .map_err(|e| e.to_string())
         .map(CsvImportStatsView::from)
+}
+
+// ── 可取消导入（进度 + 取消；docs/13 §6.2 M2 第 3/5 点）──
+
+/// 启动可取消导入：同步预检限额后返回 job_id（后台执行）
+pub fn csv_import_job_start(content: String, preset: String) -> Result<String, String> {
+    let pool = pool()?;
+    csv_import_api::start_csv_import_job(pool, content, preset).map_err(|e| e.to_string())
+}
+
+/// 轮询导入任务状态（processed / total / finished / cancelled / stats）
+pub fn csv_import_job_status(job_id: String) -> Result<ImportJobStatusView, String> {
+    csv_import_api::csv_import_job_status(&job_id)
+        .map_err(|e| e.to_string())
+        .map(ImportJobStatusView::from)
+}
+
+/// 请求取消导入（行边界生效；已写入的行保留）
+pub fn csv_import_job_cancel(job_id: String) -> Result<(), String> {
+    csv_import_api::csv_import_job_cancel(&job_id).map_err(|e| e.to_string())
+}
+
+/// 释放任务条目（拿到终态后调用，避免任务表滞留）
+pub fn csv_import_job_drop(job_id: String) {
+    csv_import_api::csv_import_job_drop(&job_id);
 }
 
 pub use super::dto::CsvImportStatsView;

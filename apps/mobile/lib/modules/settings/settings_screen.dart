@@ -14,7 +14,7 @@ import '../../core/theme/app_shapes.dart';
 import '../../core/theme/orbit_accents.dart';
 import '../../data/api/dto.dart';
 import '../../data/api/orbit_bridge.dart'
-    show CsvImportPreview, CsvImportStats, DbMaintenanceResult;
+    show CsvImportPreview, CsvImportStats, DbMaintenanceResult, ImportJobStatus;
 import '../../data/providers/biometric_provider.dart';
 import '../../data/providers/todo_widget_provider.dart';
 import '../../data/providers/bridge_provider.dart';
@@ -93,6 +93,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
   /// 执行结果统计（null = 未执行）
   CsvImportStats? _importResult;
+
+  /// 正在跑的导入任务 id（取消钮用；null = 无）
+  String? _importJobId;
+
+  /// 导入进度快照（轮询更新；null = 未在跑）
+  ImportJobStatus? _importProgress;
 
   /// 待处理冲突数（03 §八 冲突败方副本；缓存 future 防 build 抖动）
   Future<int> _conflictPending = Future<int>.value(0);
@@ -325,9 +331,32 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
     setState(() => _importing = 'execute');
     try {
-      final stats = await ref
-          .read(orbitBridgeProvider)
-          .csvImportExecute(content, _importPreset);
+      // 走可取消任务：start 拿 job_id → 轮询进度 → 终态取统计
+      // （docs/13 §6.2 M2 第 3/5 点）
+      final bridge = ref.read(orbitBridgeProvider);
+      final jobId = await bridge.csvImportJobStart(content, _importPreset);
+      _importJobId = jobId;
+      var status = await bridge.csvImportJobStatus(jobId);
+      while (!status.finished) {
+        if (mounted) setState(() => _importProgress = status);
+        await Future<void>.delayed(const Duration(milliseconds: 200));
+        if (!mounted) break;
+        status = await bridge.csvImportJobStatus(jobId);
+      }
+      if (mounted) setState(() => _importProgress = status);
+      await bridge.csvImportJobDrop(jobId);
+      _importJobId = null;
+
+      if (!mounted) return;
+      if (status.error != null) {
+        WaitToast.destructive(status.error!);
+        return;
+      }
+      final stats = status.stats;
+      if (stats == null) {
+        WaitToast.destructive('导入未返回统计');
+        return;
+      }
       invalidateBusinessCaches(ref);
       setState(() {
         _importResult = stats;
@@ -336,15 +365,33 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       final parts = ['成功 ${stats.success} 条'];
       if (stats.skipped > 0) parts.add('跳过 ${stats.skipped} 行');
       if (stats.failed > 0) parts.add('失败 ${stats.failed} 条');
-      if (stats.failed > 0) {
-        WaitToast.destructive('导入完成：${parts.join("，")}');
+      if (status.cancelled) parts.add('已取消（已写入的行保留）');
+      if (stats.failed > 0 || status.cancelled) {
+        WaitToast.destructive('导入结束：${parts.join("，")}');
       } else {
         WaitToast.success('导入完成：${parts.join("，")}');
       }
     } catch (_) {
       WaitToast.destructive('导入失败');
     } finally {
-      if (mounted) setState(() => _importing = null);
+      _importJobId = null;
+      if (mounted) {
+        setState(() {
+          _importing = null;
+          _importProgress = null;
+        });
+      }
+    }
+  }
+
+  /// 取消正在跑的导入（行边界生效；已写入的行保留）
+  Future<void> _cancelImport() async {
+    final jobId = _importJobId;
+    if (jobId == null) return;
+    try {
+      await ref.read(orbitBridgeProvider).csvImportJobCancel(jobId);
+    } catch (_) {
+      WaitToast.destructive('取消失败');
     }
   }
 
@@ -1385,6 +1432,38 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                   size: AppDimens.iconSizeSm),
                           label: Text(
                               '导入 ${_importPreview!.stats.success} 条任务'),
+                        ),
+                      ],
+                      // 导入进度：行级进度 + 取消（行边界生效）
+                      if (_importing == 'execute' && _importProgress != null) ...[
+                        const SizedBox(height: AppDimens.space8),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                '正在导入 ${_importProgress!.processed}'
+                                '${_importProgress!.total != null ? " / ${_importProgress!.total}" : ""} 行',
+                                style: TextStyle(
+                                    fontSize: 12, color: colors.secondaryText),
+                              ),
+                            ),
+                            TextButton(
+                              onPressed: _cancelImport,
+                              child: const Text('取消导入'),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: AppDimens.space4),
+                        ClipRRect(
+                          borderRadius: AppShapes.full,
+                          child: LinearProgressIndicator(
+                            minHeight: 6,
+                            value: (_importProgress!.total ?? 0) > 0
+                                ? (_importProgress!.processed /
+                                        _importProgress!.total!)
+                                    .clamp(0.0, 1.0)
+                                : null,
+                          ),
                         ),
                       ],
                       // 预览结果

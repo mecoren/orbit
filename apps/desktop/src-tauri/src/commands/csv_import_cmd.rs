@@ -7,7 +7,9 @@
 //! 文件内容读取由前端经 tauri-plugin-fs（打开对话框选文件后 readTextFile）
 //! 完成，本命令只收文本内容；三档预设 orbit / todoist / ticktick。
 
-use orbit_core::api::csv_import_api::{self, CsvImportPreview, CsvImportStats, ImportLimits};
+use orbit_core::api::csv_import_api::{
+    self, CsvImportPreview, CsvImportStats, ImportJobStatus, ImportLimits,
+};
 use tauri::Manager;
 
 use crate::AppState;
@@ -52,4 +54,39 @@ pub async fn csv_import_execute(
     csv_import_api::execute_csv_import(&pool, &content, &preset)
         .await
         .map_err(|e| format!("[import] {e}"))
+}
+
+// ── 可取消导入（进度 + 取消；docs/13 §6.2 M2 第 3/5 点）──
+//
+// 一次性 `csv_import_execute` 保留给小文件（无进度需求）；大批量走 job 三件套：
+// start 返回 job_id，前端轮询 status 显示进度，cancel 在行边界中止。
+
+/// 启动可取消导入：同步预检限额后返回 job_id（后台执行）
+#[tauri::command]
+pub fn csv_import_job_start(
+    app: tauri::AppHandle,
+    content: String,
+    preset: String,
+) -> Result<String, String> {
+    let pool = pool_of(&app)?;
+    csv_import_api::start_csv_import_job(pool, content, preset)
+        .map_err(|e| format!("[import] {e}"))
+}
+
+/// 轮询导入任务状态（processed / total / finished / cancelled / stats）
+#[tauri::command]
+pub fn csv_import_job_status(job_id: String) -> Result<ImportJobStatus, String> {
+    csv_import_api::csv_import_job_status(&job_id).map_err(|e| format!("[import] {e}"))
+}
+
+/// 请求取消导入（行边界生效；已写入的行保留）
+#[tauri::command]
+pub fn csv_import_job_cancel(job_id: String) -> Result<(), String> {
+    csv_import_api::csv_import_job_cancel(&job_id).map_err(|e| format!("[import] {e}"))
+}
+
+/// 释放任务条目（拿到终态后调用，避免任务表滞留）
+#[tauri::command]
+pub fn csv_import_job_drop(job_id: String) {
+    csv_import_api::csv_import_job_drop(&job_id);
 }

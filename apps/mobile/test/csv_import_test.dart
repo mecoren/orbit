@@ -140,4 +140,50 @@ void main() {
       expect(preview.rows[1].title, 'C:\\new');
     });
   });
+
+  // 可取消导入（docs/13 §6.2 M2 第 3/5 点）：start → status → drop 三段契约。
+  // mock 同步跑完并立即置终态，故这里验的是「终态字段齐全 + 统计与
+  // csvImportExecute 同源」，真实的分步进度由 Rust 侧单测覆盖。
+  group('MockOrbitBridge 可取消导入', () {
+    test('start → status：终态带统计且 processed 等于行数', () async {
+      final bridge = MockOrbitBridge();
+      const csv = 'title\n甲\n乙\n丙\n';
+      final jobId = await bridge.csvImportJobStart(csv, 'orbit');
+      expect(jobId, isNotEmpty);
+
+      final status = await bridge.csvImportJobStatus(jobId);
+      expect(status.finished, isTrue);
+      expect(status.cancelled, isFalse);
+      expect(status.error, isNull);
+      expect(status.processed, 3);
+      expect(status.total, 3);
+      expect(status.stats?.success, 3);
+
+      // 任务确实落库
+      final tasks = await bridge.todoTaskList(const ListFilter());
+      expect(tasks.where((t) => t.title == '甲'), hasLength(1));
+    });
+
+    test('drop 后 status 报任务不存在', () async {
+      final bridge = MockOrbitBridge();
+      final jobId = await bridge.csvImportJobStart('title\n甲\n', 'orbit');
+      await bridge.csvImportJobDrop(jobId);
+      expect(
+        () => bridge.csvImportJobStatus(jobId),
+        throwsA(isA<StateError>()),
+      );
+    });
+
+    test('未知 jobId 的 status/cancel 均报错', () async {
+      final bridge = MockOrbitBridge();
+      expect(
+        () => bridge.csvImportJobStatus('import-nope'),
+        throwsA(isA<StateError>()),
+      );
+      expect(
+        () => bridge.csvImportJobCancel('import-nope'),
+        throwsA(isA<StateError>()),
+      );
+    });
+  });
 }

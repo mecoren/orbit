@@ -17,8 +17,11 @@
 //! - Todoist/TickTick 的 List/Project 列按标题自动建项目（不区分大小写匹配）
 
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex};
 
 use chrono::NaiveDate;
+use once_cell::sync::Lazy;
 use serde::Serialize;
 use sqlx::SqlitePool;
 
@@ -573,8 +576,250 @@ pub async fn preview_csv_import(
 }
 
 // ============================================================================
-// 执行（写库）
+// 可取消的导入任务（进度 + 取消；docs/13 §6.2 M2 第 3/5 点）
 // ============================================================================
+
+/// 导入任务状态快照（双端 UI 轮询用）
+#[derive(Debug, Clone, Serialize)]
+pub struct ImportJobStatus {
+    /// 任务 id（调用方持有，用于轮询与取消）
+    pub job_id: String,
+    /// 已处理行数（含跳过/失败）
+    pub processed: usize,
+    /// 预计总行数（解析阶段先数一遍；未知时为 None）
+    pub total: Option<usize>,
+    /// 是否已结束（完成 / 失败 / 取消）
+    pub finished: bool,
+    /// 是否被取消（finished 且 cancelled 才是「用户取消」）
+    pub cancelled: bool,
+    /// 结束时的统计（未结束时为 None）
+    pub stats: Option<CsvImportStats>,
+    /// 结束时的错误说明（失败时）
+    pub error: Option<String>,
+}
+
+/// 导入任务的共享状态（进程内，按 job_id 索引）
+///
+/// 有界性：条目在任务结束时保留、由调用方 `csv_import_job_drop` 或下一次
+/// `start` 时清理已完成且超龄的条目；同时最多保留
+/// [`IMPORT_JOB_KEEP_FINISHED`] 条已结束任务，超出按结束时间淘汰。
+pub struct ImportJob {
+    job_id: String,
+    processed: AtomicUsize,
+    total: AtomicUsize, // 0 = 未知
+    finished: AtomicBool,
+    cancelled: AtomicBool,
+    stats: Mutex<Option<CsvImportStats>>,
+    error: Mutex<Option<String>>,
+    finished_at: Mutex<Option<std::time::Instant>>,
+}
+
+/// 进程内任务表上限（已结束任务按结束时间淘汰；运行中的不淘汰）
+const IMPORT_JOB_KEEP_FINISHED: usize = 8;
+
+// bounded: 最多 IMPORT_JOB_KEEP_FINISHED 条已结束任务，超龄/超量即淘汰
+static IMPORT_JOBS: Lazy<Mutex<HashMap<String, Arc<ImportJob>>>> =
+    Lazy::new(|| Mutex::new(HashMap::new()));
+
+/// 生成任务 id（时间戳 + 进程内自增，避免引入 uuid 依赖差异）
+fn next_job_id() -> String {
+    static SEQ: AtomicU64 = AtomicU64::new(0);
+    let n = SEQ.fetch_add(1, Ordering::Relaxed);
+    let ts = chrono::Local::now().timestamp_millis();
+    format!("import-{ts}-{n}")
+}
+
+/// 淘汰已结束的旧任务（保留最近 [`IMPORT_JOB_KEEP_FINISHED`] 条）
+fn prune_finished_jobs(map: &mut HashMap<String, Arc<ImportJob>>) {
+    let mut finished: Vec<(String, std::time::Instant)> = map
+        .iter()
+        .filter(|(_, j)| j.finished.load(Ordering::Relaxed))
+        .map(|(k, j)| {
+            let at = j
+                .finished_at
+                .lock()
+                .ok()
+                .and_then(|g| *g)
+                .unwrap_or_else(std::time::Instant::now);
+            (k.clone(), at)
+        })
+        .collect();
+    if finished.len() <= IMPORT_JOB_KEEP_FINISHED {
+        return;
+    }
+    finished.sort_by_key(|(_, at)| *at);
+    let excess = finished.len() - IMPORT_JOB_KEEP_FINISHED;
+    for (k, _) in finished.into_iter().take(excess) {
+        map.remove(&k);
+    }
+}
+
+/// 启动一次可取消的导入（后台执行，调用方轮询 [`csv_import_job_status`]）。
+///
+/// 与 [`execute_csv_import`] 的差别只有「可观测 + 可中断」：行级写入语义
+/// 完全一致（单行失败不阻断其余行、项目按标题自动创建）。取消在**行边界**
+/// 生效——已写入的行保留（导入本就是增量写入，不做整批回滚），这与
+/// 「取消后无半写状态」的口径一致：不会留下半行。
+pub fn start_csv_import_job(
+    pool: SqlitePool,
+    content: String,
+    preset_key: String,
+) -> CoreResult<String> {
+    // 先做一次同步预检（限额 / 预设），把可立即发现的错误在启动前抛出，
+    // 不让用户在「任务已启动」之后才看到失败。
+    // 行数必须在启动前数清：行数校验藏在迭代器里，若留给后台任务，
+    // 超限会变成「跑了一会儿才失败」，且已写入的行无法收回。
+    let preset = CsvImportPreset::from_key(&preset_key)?;
+    check_import_bytes(content.len())?;
+    let total_rows = count_import_rows(&content, preset)?;
+
+    let job_id = next_job_id();
+    let job = Arc::new(ImportJob {
+        job_id: job_id.clone(),
+        processed: AtomicUsize::new(0),
+        // 启动前已数过行，total 立即就绪（UI 可显示真实百分比）
+        total: AtomicUsize::new(total_rows),
+        finished: AtomicBool::new(false),
+        cancelled: AtomicBool::new(false),
+        stats: Mutex::new(None),
+        error: Mutex::new(None),
+        finished_at: Mutex::new(None),
+    });
+
+    {
+        let mut map = IMPORT_JOBS.lock().unwrap_or_else(|e| e.into_inner());
+        prune_finished_jobs(&mut map);
+        map.insert(job_id.clone(), job.clone());
+    }
+
+    let spawned = job.clone();
+    tokio::spawn(async move {
+        let outcome = run_import_job(&spawned, &pool, &content, preset).await;
+        match outcome {
+            Ok(stats) => {
+                if let Ok(mut g) = spawned.stats.lock() {
+                    *g = Some(stats);
+                }
+            }
+            Err(e) => {
+                if let Ok(mut g) = spawned.error.lock() {
+                    *g = Some(e.to_string());
+                }
+            }
+        }
+        spawned.finished.store(true, Ordering::Relaxed);
+        if let Ok(mut g) = spawned.finished_at.lock() {
+            *g = Some(std::time::Instant::now());
+        }
+    });
+
+    Ok(job_id)
+}
+
+/// 数一遍数据行数（启动前预检；超限即报错）。
+///
+/// 代价是解析两次（一次数行、一次写库），换来两个好处：①超限在启动前
+/// 同步拒绝；②任务启动即有精确 `total`，UI 能显示真实百分比。
+/// 解析本身不物化行矩阵，两次扫描的内存都是单行宽度。
+fn count_import_rows(content: &str, preset: CsvImportPreset) -> CoreResult<usize> {
+    if preset == CsvImportPreset::Ics {
+        let rows = crate::api::ics_import_api::map_ics_rows(content)?;
+        if rows.len() > IMPORT_MAX_ROWS {
+            return Err(limit_error_rows(rows.len()));
+        }
+        return Ok(rows.len());
+    }
+    let mut n = 0usize;
+    for next in csv_import_rows(content, preset)? {
+        next?;
+        n += 1;
+    }
+    Ok(n)
+}
+
+/// 任务执行体：逐行写库，每行检查取消标记并更新进度
+async fn run_import_job(
+    job: &ImportJob,
+    pool: &SqlitePool,
+    content: &str,
+    preset: CsvImportPreset,
+) -> CoreResult<CsvImportStats> {
+    let mut stats = CsvImportStats::default();
+    let mut project_ids: HashMap<String, i64> =
+        sqlx::query_as("SELECT title, id FROM todo_projects WHERE is_deleted = 0")
+            .fetch_all(pool)
+            .await?
+            .into_iter()
+            .map(|(title, id): (String, i64)| (title.to_lowercase(), id))
+            .collect();
+
+    // 行数与限额已在 start_csv_import_job 同步预检过（total 已就绪），
+    // 这里不再重复校验，只负责逐行写 + 取消检查。
+    if preset == CsvImportPreset::Ics {
+        for r in crate::api::ics_import_api::map_ics_rows(content)? {
+            if job.cancelled.load(Ordering::Relaxed) {
+                break;
+            }
+            write_import_row(pool, &mut project_ids, &mut stats, r).await;
+            job.processed.fetch_add(1, Ordering::Relaxed);
+        }
+        return Ok(stats);
+    }
+
+    for next in csv_import_rows(content, preset)? {
+        if job.cancelled.load(Ordering::Relaxed) {
+            break;
+        }
+        write_import_row(pool, &mut project_ids, &mut stats, next?).await;
+        job.processed.fetch_add(1, Ordering::Relaxed);
+    }
+    Ok(stats)
+}
+
+/// 轮询任务状态
+pub fn csv_import_job_status(job_id: &str) -> CoreResult<ImportJobStatus> {
+    let job = {
+        let map = IMPORT_JOBS.lock().unwrap_or_else(|e| e.into_inner());
+        map.get(job_id).cloned()
+    };
+    let Some(job) = job else {
+        return Err(crate::error::CoreError::NotFound(format!(
+            "导入任务不存在或已结束清理：{job_id}"
+        )));
+    };
+    let total = job.total.load(Ordering::Relaxed);
+    Ok(ImportJobStatus {
+        job_id: job.job_id.clone(),
+        processed: job.processed.load(Ordering::Relaxed),
+        total: if total == 0 { None } else { Some(total) },
+        finished: job.finished.load(Ordering::Relaxed),
+        cancelled: job.cancelled.load(Ordering::Relaxed),
+        stats: job.stats.lock().ok().and_then(|g| g.clone()),
+        error: job.error.lock().ok().and_then(|g| g.clone()),
+    })
+}
+
+/// 请求取消任务（行边界生效；已写入的行保留，不做整批回滚）
+pub fn csv_import_job_cancel(job_id: &str) -> CoreResult<()> {
+    let map = IMPORT_JOBS.lock().unwrap_or_else(|e| e.into_inner());
+    let Some(job) = map.get(job_id) else {
+        return Err(crate::error::CoreError::NotFound(format!(
+            "导入任务不存在：{job_id}"
+        )));
+    };
+    job.cancelled.store(true, Ordering::Relaxed);
+    Ok(())
+}
+
+/// 释放任务条目（调用方在拿到终态后调用，避免任务表滞留）
+pub fn csv_import_job_drop(job_id: &str) {
+    let mut map = IMPORT_JOBS.lock().unwrap_or_else(|e| e.into_inner());
+    if let Some(job) = map.get(job_id)
+        && job.finished.load(Ordering::Relaxed)
+    {
+        map.remove(job_id);
+    }
+}
 
 /// 执行导入：逐行写入（每行独立成败），项目标题不存在时自动创建
 ///
@@ -1005,5 +1250,110 @@ mod tests {
             .build()
             .unwrap()
             .block_on(fut)
+    }
+
+    // ---------- 可取消导入任务（进度 + 取消） ----------
+
+    #[tokio::test]
+    async fn job_runs_to_completion_and_reports_stats() {
+        let pool = setup_db().await;
+        let csv = "title\n甲\n乙\n丙\n".to_string();
+        let job_id = start_csv_import_job(pool.clone(), csv, "orbit".into()).unwrap();
+
+        // 轮询到终态（最多 2s）
+        let mut status = None;
+        for _ in 0..200 {
+            let s = csv_import_job_status(&job_id).unwrap();
+            if s.finished {
+                status = Some(s);
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        }
+        let s = status.expect("任务应在 2s 内结束");
+        assert!(s.error.is_none(), "不应有错误：{:?}", s.error);
+        let stats = s.stats.expect("终态必须带统计");
+        assert_eq!(stats.success, 3);
+        assert_eq!(s.processed, 3, "processed 应与行数一致");
+        assert!(!s.cancelled);
+
+        let tasks: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM todo_tasks WHERE is_deleted = 0")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        assert_eq!(tasks, 3, "三行都应落库");
+        csv_import_job_drop(&job_id);
+        assert!(
+            csv_import_job_status(&job_id).is_err(),
+            "drop 后任务应被清理"
+        );
+    }
+
+    #[tokio::test]
+    async fn job_cancel_stops_at_row_boundary() {
+        let pool = setup_db().await;
+        // 行数够多，确保取消能在跑完前生效
+        let mut csv = String::from("title\n");
+        for i in 0..5000 {
+            csv.push_str(&format!("任务{i}\n"));
+        }
+        let job_id = start_csv_import_job(pool.clone(), csv, "orbit".into()).unwrap();
+
+        // 等到开始有进展再取消
+        for _ in 0..200 {
+            let s = csv_import_job_status(&job_id).unwrap();
+            if s.processed > 0 || s.finished {
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+        }
+        csv_import_job_cancel(&job_id).unwrap();
+
+        let mut final_status = None;
+        for _ in 0..400 {
+            let s = csv_import_job_status(&job_id).unwrap();
+            if s.finished {
+                final_status = Some(s);
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        }
+        let s = final_status.expect("取消后任务应结束");
+        assert!(s.cancelled, "cancelled 标记应为真");
+        let written: i64 =
+            sqlx::query_scalar("SELECT COUNT(*) FROM todo_tasks WHERE is_deleted = 0")
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        // 行边界语义：已写入的行保留（增量导入不回滚），但必须少于全量
+        assert!(
+            written < 5000,
+            "取消应中止后续行，实写 {written} 行（不应是全量 5000）"
+        );
+        assert_eq!(
+            written as usize, s.processed,
+            "processed 必须等于实际写入行数（无半行状态）"
+        );
+        csv_import_job_drop(&job_id);
+    }
+
+    #[test]
+    fn job_start_rejects_oversized_synchronously() {
+        // 超限在 start 时同步拒绝，不让用户等到任务跑起来才看到失败
+        let big = "title\n".to_string() + &"a\n".repeat(IMPORT_MAX_ROWS + 1);
+        let err = futures_block_on(async {
+            let pool = setup_db().await;
+            start_csv_import_job(pool, big, "orbit".into())
+        })
+        .unwrap_err();
+        assert!(err.to_string().contains("行数过多"), "{}", err);
+    }
+
+    #[test]
+    fn unknown_job_id_is_not_found() {
+        assert!(csv_import_job_status("import-nope").is_err());
+        assert!(csv_import_job_cancel("import-nope").is_err());
+        // drop 未知 id 不报错（幂等）
+        csv_import_job_drop("import-nope");
     }
 }

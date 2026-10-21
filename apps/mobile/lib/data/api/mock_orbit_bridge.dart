@@ -1694,6 +1694,97 @@ class MockOrbitBridge implements OrbitBridge {
     });
   }
 
+  // ── 可取消导入（mock：同步跑完并立即置终态；取消标记按行边界生效）──
+
+  /// mock 的 job 状态（id → 状态）；与 Rust 同口径的最小语义
+  final Map<String, ImportJobStatus> _importJobs = {};
+  int _importJobSeq = 0;
+
+  @override
+  Future<String> csvImportJobStart(String content, String preset) {
+    return _delay(() {
+      final jobId = 'import-mock-${_importJobSeq++}';
+      // mock 不做真后台：直接同步跑完并落终态，UI 仍按轮询流程走
+      final mapped = _importRowsLite(content, preset);
+      var success = 0;
+      var skipped = 0;
+      final notes = <String>[];
+      for (final m in mapped) {
+        if (m.skipReason != null) {
+          skipped++;
+          notes.add('第 ${m.sourceLine} 行跳过：${m.skipReason}');
+          continue;
+        }
+        final now = store.now();
+        final projectId =
+            m.projectTitle != null ? _ensureMockProject(m.projectTitle!) : null;
+        final t = {
+          ...store.newEntity('t'),
+          'title': m.title,
+          'description': null,
+          'project_id': projectId,
+          'priority': m.priority ?? 0,
+          'status': m.done ? 'done' : 'pending',
+          'done': m.done ? 1 : 0,
+          'done_at': m.done ? now : null,
+          'due_date': m.dueDate,
+          'start_date': null,
+          'repeat_after': 0,
+          'repeat_mode': 0,
+          'percent_done': 0,
+          'position': 100000,
+          'is_favorite': 0,
+          'my_day_date': null,
+          'duration_minutes': null,
+          'is_deleted': 0,
+          'created_at': now,
+          'updated_at': now,
+          'deleted_at': null,
+          'version': 1,
+        };
+        store.tasks[t['id'] as int] = t;
+        success++;
+      }
+      _emit('todo_tasks');
+      _importJobs[jobId] = ImportJobStatus(
+        jobId: jobId,
+        processed: mapped.length,
+        total: mapped.length,
+        finished: true,
+        cancelled: false,
+        stats: CsvImportStats(
+            success: success, skipped: skipped, failed: 0, notes: notes),
+        error: null,
+      );
+      return jobId;
+    });
+  }
+
+  @override
+  Future<ImportJobStatus> csvImportJobStatus(String jobId) {
+    return _delay(() {
+      final s = _importJobs[jobId];
+      if (s == null) throw StateError('导入任务不存在：$jobId');
+      return s;
+    });
+  }
+
+  @override
+  Future<void> csvImportJobCancel(String jobId) {
+    return _delay(() {
+      final s = _importJobs[jobId];
+      if (s == null) throw StateError('导入任务不存在：$jobId');
+      // mock 已跑完，取消无效（与 Rust 侧「终态后取消不改变结果」同口径）
+    });
+  }
+
+  @override
+  Future<void> csvImportJobDrop(String jobId) {
+    return _delay(() {
+      _importJobs.remove(jobId);
+    });
+  }
+
   /// 按标题找项目，无则创建（对齐 Rust execute_csv_import 项目复用）
   int _ensureMockProject(String title) {
     final key = title.trim().toLowerCase();

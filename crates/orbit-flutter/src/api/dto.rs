@@ -1039,6 +1039,39 @@ impl From<orbit_core::api::csv_import_api::ImportLimits> for ImportLimitsView {
     }
 }
 
+/// 可取消导入任务状态（core ImportJobStatus 镜像；UI 轮询用）
+#[derive(Debug, Clone, Serialize)]
+pub struct ImportJobStatusView {
+    /// 任务 id（轮询与取消的句柄）
+    pub job_id: String,
+    /// 已处理行数（含跳过/失败）
+    pub processed: usize,
+    /// 预计总行数（启动前已数过，通常有值）
+    pub total: Option<usize>,
+    /// 是否已结束
+    pub finished: bool,
+    /// 是否被取消
+    pub cancelled: bool,
+    /// 结束时的统计（未结束为 None）
+    pub stats: Option<CsvImportStatsView>,
+    /// 结束时的错误说明
+    pub error: Option<String>,
+}
+
+impl From<orbit_core::api::csv_import_api::ImportJobStatus> for ImportJobStatusView {
+    fn from(s: orbit_core::api::csv_import_api::ImportJobStatus) -> Self {
+        Self {
+            job_id: s.job_id,
+            processed: s.processed,
+            total: s.total,
+            finished: s.finished,
+            cancelled: s.cancelled,
+            stats: s.stats.map(CsvImportStatsView::from),
+            error: s.error,
+        }
+    }
+}
+
 // ---------- holiday 域（cfg_holidays 缓存镜像；用户需求：日历视图联网更新节假日） ----------
 
 /// 节假日行（core HolidayInfo 过桥镜像；FRB 字段级生成规则见模块注释）

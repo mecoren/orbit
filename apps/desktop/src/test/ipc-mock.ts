@@ -458,6 +458,22 @@ function createMockConflicts(): MockConflict[] {
 
 const mockConflicts = createMockConflicts();
 
+/// 可取消导入任务（浏览器 mock：同步跑完并立即置终态）
+const mockImportJobs = new Map<
+  string,
+  {
+    job_id: string;
+    processed: number;
+    total: number | null;
+    finished: boolean;
+    cancelled: boolean;
+    stats: unknown;
+    error: string | null;
+    _content: string;
+    _preset: string;
+  }
+>();
+
 // ---------- 命令实现 ----------
 
 const notImplemented = (cmd: string) => {
@@ -1880,6 +1896,43 @@ const commands: Record<string, (args: any, ctx: Ctx) => unknown> = {
   // 限额与 core 同口径（IMPORT_MAX_BYTES / IMPORT_MAX_ROWS）；数值在此显式
   // 镜像，漂移由桥契约测试暴露
   csv_import_limits: () => ({ max_bytes: 20 * 1024 * 1024, max_rows: 200_000 }),
+  // 可取消导入：mock 同步跑完并立即置终态，UI 仍按轮询流程走
+  csv_import_job_start: ({ content, preset }: { content: string; preset: string }) => {
+    const jobId = `import-mock-${Date.now()}`;
+    mockImportJobs.set(jobId, {
+      job_id: jobId,
+      processed: 0,
+      total: null,
+      finished: false,
+      cancelled: false,
+      stats: null,
+      error: null,
+      _content: content,
+      _preset: preset,
+    });
+    return jobId;
+  },
+  csv_import_job_status: ({ jobId }: { jobId: string }) => {
+    const job = mockImportJobs.get(jobId);
+    if (!job) throw new Error(`导入任务不存在：${jobId}`);
+    return {
+      job_id: job.job_id,
+      processed: job.processed,
+      total: job.total,
+      finished: job.finished,
+      cancelled: job.cancelled,
+      stats: job.stats,
+      error: job.error,
+    };
+  },
+  csv_import_job_cancel: ({ jobId }: { jobId: string }) => {
+    const job = mockImportJobs.get(jobId);
+    if (!job) throw new Error(`导入任务不存在：${jobId}`);
+    job.cancelled = true;
+  },
+  csv_import_job_drop: ({ jobId }: { jobId: string }) => {
+    mockImportJobs.delete(jobId);
+  },
   csv_import_preview: ({ content, preset, previewLimit }: { content: string; preset: string; previewLimit?: number }) => {
     const rows = parseCsvLite(content);
     const mapped = rows.slice(1).map((row, i) => mapImportRowLite(preset, rows[0], row, i + 2));

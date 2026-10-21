@@ -117,6 +117,36 @@ class ImportLimits {
   const ImportLimits({required this.maxBytes, required this.maxRows});
 }
 
+/// 可取消导入任务状态（FRB ImportJobStatusView 镜像；UI 轮询用）
+class ImportJobStatus {
+  final String jobId;
+
+  /// 已处理行数（含跳过/失败）
+  final int processed;
+
+  /// 预计总行数（启动前已数过）
+  final int? total;
+
+  final bool finished;
+  final bool cancelled;
+
+  /// 结束时的统计（未结束为 null）
+  final CsvImportStats? stats;
+
+  /// 结束时的错误说明
+  final String? error;
+
+  const ImportJobStatus({
+    required this.jobId,
+    required this.processed,
+    required this.total,
+    required this.finished,
+    required this.cancelled,
+    required this.stats,
+    required this.error,
+  });
+}
+
 /// CSV 导入预览结果（FRB csv_import.rs 的 CsvImportPreviewView 镜像；
 /// rows 已映射为待创建任务字段）
 class CsvImportPreview {
@@ -416,6 +446,18 @@ abstract class OrbitBridge {
   Future<CsvImportPreview> csvImportPreview(String content, String preset, int previewLimit);
   /// 执行导入（写库）：项目自动创建、逐行独立成败
   Future<CsvImportStats> csvImportExecute(String content, String preset);
+
+  /// 启动可取消导入：同步预检限额后返回 job_id（后台执行）
+  Future<String> csvImportJobStart(String content, String preset);
+
+  /// 轮询导入任务状态（processed / total / finished / cancelled / stats）
+  Future<ImportJobStatus> csvImportJobStatus(String jobId);
+
+  /// 请求取消导入（行边界生效；已写入的行保留）
+  Future<void> csvImportJobCancel(String jobId);
+
+  /// 释放任务条目（拿到终态后调用，避免任务表滞留）
+  Future<void> csvImportJobDrop(String jobId);
 
   // ── 任务附件（内容寻址：上传/列表/读取/卸下）──
 

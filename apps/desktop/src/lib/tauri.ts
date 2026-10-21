@@ -1013,6 +1013,35 @@ export interface ImportLimits {
 
 export const csvImportLimits = () => invoke<ImportLimits>("csv_import_limits");
 
+// ── 可取消导入（进度 + 取消；docs/13 §6.2 M2 第 3/5 点）──
+
+/** 导入任务状态快照（Rust ImportJobStatus 镜像） */
+export interface ImportJobStatus {
+  job_id: string;
+  processed: number;
+  total: number | null;
+  finished: boolean;
+  cancelled: boolean;
+  stats: CsvImportStats | null;
+  error: string | null;
+}
+
+/** 启动可取消导入：同步预检限额后返回 job_id（后台执行） */
+export const csvImportJobStart = (content: string, preset: CsvImportPresetKey) =>
+  invoke<string>("csv_import_job_start", { content, preset });
+
+/** 轮询导入任务状态 */
+export const csvImportJobStatus = (jobId: string) =>
+  invoke<ImportJobStatus>("csv_import_job_status", { jobId });
+
+/** 请求取消导入（行边界生效；已写入的行保留） */
+export const csvImportJobCancel = (jobId: string) =>
+  invoke<void>("csv_import_job_cancel", { jobId });
+
+/** 释放任务条目（拿到终态后调用） */
+export const csvImportJobDrop = (jobId: string) =>
+  invoke<void>("csv_import_job_drop", { jobId });
+
 
 // ---------- 节假日数据（日历视图；用户需求：联网更新节假日） ----------
 

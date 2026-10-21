@@ -6,243 +6,216 @@
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`
 
-/// 活动日志行（todo_activity_log 为本地轨迹表，不进同步白名单）
-class ActivityLogRow {
-  final PlatformInt64 id;
-  final PlatformInt64? taskId;
+            // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`
 
-  /// 任务标题快照（任务删除后仍可读）
-  final String taskTitle;
-  final String action;
 
-  /// 附加 JSON：{"fields"/"changes"/"label"/"target"} 四代形状（格式化在 Dart 侧）
-  final String detail;
+            
 
-  /// 记录时间（ms）
-  final PlatformInt64 createdAt;
+            /// 活动日志行（todo_activity_log 为本地轨迹表，不进同步白名单）
+class ActivityLogRow  {
+                final PlatformInt64 id;
+final PlatformInt64? taskId;
+/// 任务标题快照（任务删除后仍可读）
+final String taskTitle;
+final String action;
+/// 附加 JSON：{"fields"/"changes"/"label"/"target"} 四代形状（格式化在 Dart 侧）
+final String detail;
+/// 记录时间（ms）
+final PlatformInt64 createdAt;
 
-  const ActivityLogRow({
-    required this.id,
-    this.taskId,
-    required this.taskTitle,
-    required this.action,
-    required this.detail,
-    required this.createdAt,
-  });
+                const ActivityLogRow({required this.id ,this.taskId ,required this.taskTitle ,required this.action ,required this.detail ,required this.createdAt ,});
 
-  @override
-  int get hashCode =>
-      id.hashCode ^
-      taskId.hashCode ^
-      taskTitle.hashCode ^
-      action.hashCode ^
-      detail.hashCode ^
-      createdAt.hashCode;
+                
+                
 
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is ActivityLogRow &&
-          runtimeType == other.runtimeType &&
-          id == other.id &&
-          taskId == other.taskId &&
-          taskTitle == other.taskTitle &&
-          action == other.action &&
-          detail == other.detail &&
-          createdAt == other.createdAt;
-}
+                
+        @override
+        int get hashCode => id.hashCode^taskId.hashCode^taskTitle.hashCode^action.hashCode^detail.hashCode^createdAt.hashCode;
+        
+
+                
+        @override
+        bool operator ==(Object other) =>
+            identical(this, other) ||
+            other is ActivityLogRow &&
+                runtimeType == other.runtimeType
+                && id == other.id&& taskId == other.taskId&& taskTitle == other.taskTitle&& action == other.action&& detail == other.detail&& createdAt == other.createdAt;
+        
+            }
 
 /// 统一完成命令结果（镜像 orbit_core::api::todo_api::CompleteTaskResult；
 /// 引擎下沉三端唯一完成入口：普通标记 / 重复任务单事务推进下一实例）
-class CompleteTaskResult {
-  final TodoTask task;
+class CompleteTaskResult  {
+                final TodoTask task;
+/// 重复任务推进生成的下一实例（普通任务为 None）
+final TodoTask? nextInstance;
 
-  /// 重复任务推进生成的下一实例（普通任务为 None）
-  final TodoTask? nextInstance;
+                const CompleteTaskResult({required this.task ,this.nextInstance ,});
 
-  const CompleteTaskResult({required this.task, this.nextInstance});
+                
+                
 
-  @override
-  int get hashCode => task.hashCode ^ nextInstance.hashCode;
+                
+        @override
+        int get hashCode => task.hashCode^nextInstance.hashCode;
+        
 
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is CompleteTaskResult &&
-          runtimeType == other.runtimeType &&
-          task == other.task &&
-          nextInstance == other.nextInstance;
-}
+                
+        @override
+        bool operator ==(Object other) =>
+            identical(this, other) ||
+            other is CompleteTaskResult &&
+                runtimeType == other.runtimeType
+                && task == other.task&& nextInstance == other.nextInstance;
+        
+            }
 
 /// 预览结果：前 N 行预览载荷 + 全量统计
-class CsvImportPreviewView {
-  final String preset;
-  final List<CsvImportRowView> rows;
-  final CsvImportStatsView stats;
+class CsvImportPreviewView  {
+                final String preset;
+final List<CsvImportRowView> rows;
+final CsvImportStatsView stats;
 
-  const CsvImportPreviewView({
-    required this.preset,
-    required this.rows,
-    required this.stats,
-  });
+                const CsvImportPreviewView({required this.preset ,required this.rows ,required this.stats ,});
 
-  @override
-  int get hashCode => preset.hashCode ^ rows.hashCode ^ stats.hashCode;
+                
+                
 
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is CsvImportPreviewView &&
-          runtimeType == other.runtimeType &&
-          preset == other.preset &&
-          rows == other.rows &&
-          stats == other.stats;
-}
+                
+        @override
+        int get hashCode => preset.hashCode^rows.hashCode^stats.hashCode;
+        
+
+                
+        @override
+        bool operator ==(Object other) =>
+            identical(this, other) ||
+            other is CsvImportPreviewView &&
+                runtimeType == other.runtimeType
+                && preset == other.preset&& rows == other.rows&& stats == other.stats;
+        
+            }
 
 /// 一条映射后的待导入行（预览载荷）
-class CsvImportRowView {
-  /// 源 CSV 行号（1 起，含表头）
-  final BigInt sourceLine;
+class CsvImportRowView  {
+                /// 源 CSV 行号（1 起，含表头）
+final BigInt sourceLine;
+/// 目标项目标题（None = 未分组；执行时按需自动建项目）
+final String? projectTitle;
+/// 待创建任务字段（部分填充）
+final TodoTaskCreateInput input;
+/// 跳过原因（Some = 本行不导入）
+final String? skipReason;
 
-  /// 目标项目标题（None = 未分组；执行时按需自动建项目）
-  final String? projectTitle;
+                const CsvImportRowView({required this.sourceLine ,this.projectTitle ,required this.input ,this.skipReason ,});
 
-  /// 待创建任务字段（部分填充）
-  final TodoTaskCreateInput input;
+                
+                
 
-  /// 跳过原因（Some = 本行不导入）
-  final String? skipReason;
+                
+        @override
+        int get hashCode => sourceLine.hashCode^projectTitle.hashCode^input.hashCode^skipReason.hashCode;
+        
 
-  const CsvImportRowView({
-    required this.sourceLine,
-    this.projectTitle,
-    required this.input,
-    this.skipReason,
-  });
-
-  @override
-  int get hashCode =>
-      sourceLine.hashCode ^
-      projectTitle.hashCode ^
-      input.hashCode ^
-      skipReason.hashCode;
-
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is CsvImportRowView &&
-          runtimeType == other.runtimeType &&
-          sourceLine == other.sourceLine &&
-          projectTitle == other.projectTitle &&
-          input == other.input &&
-          skipReason == other.skipReason;
-}
+                
+        @override
+        bool operator ==(Object other) =>
+            identical(this, other) ||
+            other is CsvImportRowView &&
+                runtimeType == other.runtimeType
+                && sourceLine == other.sourceLine&& projectTitle == other.projectTitle&& input == other.input&& skipReason == other.skipReason;
+        
+            }
 
 /// 导入统计（预览口径 success=待导入条数；执行口径=实际成功条数）
-class CsvImportStatsView {
-  final BigInt success;
-  final BigInt skipped;
-  final BigInt failed;
+class CsvImportStatsView  {
+                final BigInt success;
+final BigInt skipped;
+final BigInt failed;
+/// 逐行错误/跳过说明（行号 + 原因）
+final List<String> notes;
 
-  /// 逐行错误/跳过说明（行号 + 原因）
-  final List<String> notes;
+                const CsvImportStatsView({required this.success ,required this.skipped ,required this.failed ,required this.notes ,});
 
-  const CsvImportStatsView({
-    required this.success,
-    required this.skipped,
-    required this.failed,
-    required this.notes,
-  });
+                
+                
 
-  @override
-  int get hashCode =>
-      success.hashCode ^ skipped.hashCode ^ failed.hashCode ^ notes.hashCode;
+                
+        @override
+        int get hashCode => success.hashCode^skipped.hashCode^failed.hashCode^notes.hashCode;
+        
 
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is CsvImportStatsView &&
-          runtimeType == other.runtimeType &&
-          success == other.success &&
-          skipped == other.skipped &&
-          failed == other.failed &&
-          notes == other.notes;
-}
+                
+        @override
+        bool operator ==(Object other) =>
+            identical(this, other) ||
+            other is CsvImportStatsView &&
+                runtimeType == other.runtimeType
+                && success == other.success&& skipped == other.skipped&& failed == other.failed&& notes == other.notes;
+        
+            }
 
 /// 节假日行（core HolidayInfo 过桥镜像；FRB 字段级生成规则见模块注释）
-class HolidayInfo {
-  /// YYYY-MM-DD
-  final String date;
-  final int year;
+class HolidayInfo  {
+                /// YYYY-MM-DD
+final String date;
+final int year;
+/// true = 放假日；false = 调休补班日（要上班的周末）
+final bool isHoliday;
+/// 节假日名称（如「春节」「春节前补班」）
+final String name;
 
-  /// true = 放假日；false = 调休补班日（要上班的周末）
-  final bool isHoliday;
+                const HolidayInfo({required this.date ,required this.year ,required this.isHoliday ,required this.name ,});
 
-  /// 节假日名称（如「春节」「春节前补班」）
-  final String name;
+                
+                
 
-  const HolidayInfo({
-    required this.date,
-    required this.year,
-    required this.isHoliday,
-    required this.name,
-  });
+                
+        @override
+        int get hashCode => date.hashCode^year.hashCode^isHoliday.hashCode^name.hashCode;
+        
 
-  @override
-  int get hashCode =>
-      date.hashCode ^ year.hashCode ^ isHoliday.hashCode ^ name.hashCode;
-
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is HolidayInfo &&
-          runtimeType == other.runtimeType &&
-          date == other.date &&
-          year == other.year &&
-          isHoliday == other.isHoliday &&
-          name == other.name;
-}
+                
+        @override
+        bool operator ==(Object other) =>
+            identical(this, other) ||
+            other is HolidayInfo &&
+                runtimeType == other.runtimeType
+                && date == other.date&& year == other.year&& isHoliday == other.isHoliday&& name == other.name;
+        
+            }
 
 /// 节假日更新记账（上次更新/尝试时间、失败次数、自动更新开关；日历工具栏展示用）
-class HolidayMeta {
-  /// 上次「自动更新范围内年份」成功更新（ms；0 = 从未成功）
-  final PlatformInt64 lastUpdateMs;
+class HolidayMeta  {
+                /// 上次「自动更新范围内年份」成功更新（ms；0 = 从未成功）
+final PlatformInt64 lastUpdateMs;
+/// 上次尝试（ms；0 = 从未尝试）
+final PlatformInt64 lastAttemptMs;
+/// 连续失败次数（成功后清零）
+final int failureCount;
+/// 自动更新总开关（关闭后仅手动 / 按年补写）
+final bool autoEnabled;
 
-  /// 上次尝试（ms；0 = 从未尝试）
-  final PlatformInt64 lastAttemptMs;
+                const HolidayMeta({required this.lastUpdateMs ,required this.lastAttemptMs ,required this.failureCount ,required this.autoEnabled ,});
 
-  /// 连续失败次数（成功后清零）
-  final int failureCount;
+                
+                
 
-  /// 自动更新总开关（关闭后仅手动 / 按年补写）
-  final bool autoEnabled;
+                
+        @override
+        int get hashCode => lastUpdateMs.hashCode^lastAttemptMs.hashCode^failureCount.hashCode^autoEnabled.hashCode;
+        
 
-  const HolidayMeta({
-    required this.lastUpdateMs,
-    required this.lastAttemptMs,
-    required this.failureCount,
-    required this.autoEnabled,
-  });
-
-  @override
-  int get hashCode =>
-      lastUpdateMs.hashCode ^
-      lastAttemptMs.hashCode ^
-      failureCount.hashCode ^
-      autoEnabled.hashCode;
-
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is HolidayMeta &&
-          runtimeType == other.runtimeType &&
-          lastUpdateMs == other.lastUpdateMs &&
-          lastAttemptMs == other.lastAttemptMs &&
-          failureCount == other.failureCount &&
-          autoEnabled == other.autoEnabled;
-}
+                
+        @override
+        bool operator ==(Object other) =>
+            identical(this, other) ||
+            other is HolidayMeta &&
+                runtimeType == other.runtimeType
+                && lastUpdateMs == other.lastUpdateMs&& lastAttemptMs == other.lastAttemptMs&& failureCount == other.failureCount&& autoEnabled == other.autoEnabled;
+        
+            }
 
 /// 范围补写进度（core `HolidayProgress` 枚举的**平铺**镜像）
 ///
@@ -256,1315 +229,977 @@ class HolidayMeta {
 /// - `year` 阶段：`total` / `year` / `done` / `year_ok` / `year_empty`
 /// - `done` 阶段：`ok_count` / `failed` / `cancelled`
 /// - `error` 阶段：`message`
-class HolidayProgressDto {
-  /// 阶段：`starting` / `year` / `done` / `error`
-  final String phase;
+class HolidayProgressDto  {
+                /// 阶段：`starting` / `year` / `done` / `error`
+final String phase;
+/// 总年份数（starting / year 阶段有效）
+final int total;
+/// 当前年份（year 阶段有效）
+final int year;
+/// 已结算年份数（year 阶段有效）
+final int done;
+/// 该年是否拉取成功（year 阶段有效）
+final bool yearOk;
+/// 该年是否线上无数据（year 阶段有效）
+final bool yearEmpty;
+/// 成功写入（含空响应）的年份数（done 阶段有效）
+final int okCount;
+/// 获取失败的年份数（done 阶段有效）
+final int failed;
+/// 是否被中途取消（done 阶段有效）
+final bool cancelled;
+/// 错误信息（error 阶段有效）
+final String message;
 
-  /// 总年份数（starting / year 阶段有效）
-  final int total;
+                const HolidayProgressDto({required this.phase ,required this.total ,required this.year ,required this.done ,required this.yearOk ,required this.yearEmpty ,required this.okCount ,required this.failed ,required this.cancelled ,required this.message ,});
 
-  /// 当前年份（year 阶段有效）
-  final int year;
+                
+                
 
-  /// 已结算年份数（year 阶段有效）
-  final int done;
+                
+        @override
+        int get hashCode => phase.hashCode^total.hashCode^year.hashCode^done.hashCode^yearOk.hashCode^yearEmpty.hashCode^okCount.hashCode^failed.hashCode^cancelled.hashCode^message.hashCode;
+        
 
-  /// 该年是否拉取成功（year 阶段有效）
-  final bool yearOk;
-
-  /// 该年是否线上无数据（year 阶段有效）
-  final bool yearEmpty;
-
-  /// 成功写入（含空响应）的年份数（done 阶段有效）
-  final int okCount;
-
-  /// 获取失败的年份数（done 阶段有效）
-  final int failed;
-
-  /// 是否被中途取消（done 阶段有效）
-  final bool cancelled;
-
-  /// 错误信息（error 阶段有效）
-  final String message;
-
-  const HolidayProgressDto({
-    required this.phase,
-    required this.total,
-    required this.year,
-    required this.done,
-    required this.yearOk,
-    required this.yearEmpty,
-    required this.okCount,
-    required this.failed,
-    required this.cancelled,
-    required this.message,
-  });
-
-  @override
-  int get hashCode =>
-      phase.hashCode ^
-      total.hashCode ^
-      year.hashCode ^
-      done.hashCode ^
-      yearOk.hashCode ^
-      yearEmpty.hashCode ^
-      okCount.hashCode ^
-      failed.hashCode ^
-      cancelled.hashCode ^
-      message.hashCode;
-
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is HolidayProgressDto &&
-          runtimeType == other.runtimeType &&
-          phase == other.phase &&
-          total == other.total &&
-          year == other.year &&
-          done == other.done &&
-          yearOk == other.yearOk &&
-          yearEmpty == other.yearEmpty &&
-          okCount == other.okCount &&
-          failed == other.failed &&
-          cancelled == other.cancelled &&
-          message == other.message;
-}
+                
+        @override
+        bool operator ==(Object other) =>
+            identical(this, other) ||
+            other is HolidayProgressDto &&
+                runtimeType == other.runtimeType
+                && phase == other.phase&& total == other.total&& year == other.year&& done == other.done&& yearOk == other.yearOk&& yearEmpty == other.yearEmpty&& okCount == other.okCount&& failed == other.failed&& cancelled == other.cancelled&& message == other.message;
+        
+            }
 
 /// 按年范围补写结果汇总
-class HolidayRangeSummary {
-  /// 成功写入（含空响应）的年份数
-  final int ok;
+class HolidayRangeSummary  {
+                /// 成功写入（含空响应）的年份数
+final int ok;
+/// 获取失败的年份数（含熔断后未尝试的年份）
+final int failed;
+/// 成功但线上无数据的年份数
+final int empty;
+/// 是否被中途取消
+final bool cancelled;
 
-  /// 获取失败的年份数（含熔断后未尝试的年份）
-  final int failed;
+                const HolidayRangeSummary({required this.ok ,required this.failed ,required this.empty ,required this.cancelled ,});
 
-  /// 成功但线上无数据的年份数
-  final int empty;
+                
+                
 
-  /// 是否被中途取消
-  final bool cancelled;
+                
+        @override
+        int get hashCode => ok.hashCode^failed.hashCode^empty.hashCode^cancelled.hashCode;
+        
 
-  const HolidayRangeSummary({
-    required this.ok,
-    required this.failed,
-    required this.empty,
-    required this.cancelled,
-  });
-
-  @override
-  int get hashCode =>
-      ok.hashCode ^ failed.hashCode ^ empty.hashCode ^ cancelled.hashCode;
-
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is HolidayRangeSummary &&
-          runtimeType == other.runtimeType &&
-          ok == other.ok &&
-          failed == other.failed &&
-          empty == other.empty &&
-          cancelled == other.cancelled;
-}
+                
+        @override
+        bool operator ==(Object other) =>
+            identical(this, other) ||
+            other is HolidayRangeSummary &&
+                runtimeType == other.runtimeType
+                && ok == other.ok&& failed == other.failed&& empty == other.empty&& cancelled == other.cancelled;
+        
+            }
 
 /// 按单年补写结果（记账 + 该年实际行数；`row_count == 0` = 该年线上无数据）
-class HolidayYearOutcome {
-  final HolidayMeta meta;
+class HolidayYearOutcome  {
+                final HolidayMeta meta;
+/// 该年实际拉取到的行数（0 = 线上无数据，UI 提示用）
+final int rowCount;
 
-  /// 该年实际拉取到的行数（0 = 线上无数据，UI 提示用）
-  final int rowCount;
+                const HolidayYearOutcome({required this.meta ,required this.rowCount ,});
 
-  const HolidayYearOutcome({required this.meta, required this.rowCount});
+                
+                
 
-  @override
-  int get hashCode => meta.hashCode ^ rowCount.hashCode;
+                
+        @override
+        int get hashCode => meta.hashCode^rowCount.hashCode;
+        
 
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is HolidayYearOutcome &&
-          runtimeType == other.runtimeType &&
-          meta == other.meta &&
-          rowCount == other.rowCount;
-}
+                
+        @override
+        bool operator ==(Object other) =>
+            identical(this, other) ||
+            other is HolidayYearOutcome &&
+                runtimeType == other.runtimeType
+                && meta == other.meta&& rowCount == other.rowCount;
+        
+            }
+
+/// 可取消导入任务状态（core ImportJobStatus 镜像；UI 轮询用）
+class ImportJobStatusView  {
+                /// 任务 id（轮询与取消的句柄）
+final String jobId;
+/// 已处理行数（含跳过/失败）
+final BigInt processed;
+/// 预计总行数（启动前已数过，通常有值）
+final BigInt? total;
+/// 是否已结束
+final bool finished;
+/// 是否被取消
+final bool cancelled;
+/// 结束时的统计（未结束为 None）
+final CsvImportStatsView? stats;
+/// 结束时的错误说明
+final String? error;
+
+                const ImportJobStatusView({required this.jobId ,required this.processed ,this.total ,required this.finished ,required this.cancelled ,this.stats ,this.error ,});
+
+                
+                
+
+                
+        @override
+        int get hashCode => jobId.hashCode^processed.hashCode^total.hashCode^finished.hashCode^cancelled.hashCode^stats.hashCode^error.hashCode;
+        
+
+                
+        @override
+        bool operator ==(Object other) =>
+            identical(this, other) ||
+            other is ImportJobStatusView &&
+                runtimeType == other.runtimeType
+                && jobId == other.jobId&& processed == other.processed&& total == other.total&& finished == other.finished&& cancelled == other.cancelled&& stats == other.stats&& error == other.error;
+        
+            }
 
 /// 导入限额（core ImportLimits 镜像）：Dart 侧选文件后先比对大小，超限即拦
-class ImportLimitsView {
-  /// 单文件字节上限
-  final BigInt maxBytes;
+class ImportLimitsView  {
+                /// 单文件字节上限
+final BigInt maxBytes;
+/// 单文件数据行上限
+final BigInt maxRows;
 
-  /// 单文件数据行上限
-  final BigInt maxRows;
+                const ImportLimitsView({required this.maxBytes ,required this.maxRows ,});
 
-  const ImportLimitsView({required this.maxBytes, required this.maxRows});
+                
+                
 
-  @override
-  int get hashCode => maxBytes.hashCode ^ maxRows.hashCode;
+                
+        @override
+        int get hashCode => maxBytes.hashCode^maxRows.hashCode;
+        
 
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is ImportLimitsView &&
-          runtimeType == other.runtimeType &&
-          maxBytes == other.maxBytes &&
-          maxRows == other.maxRows;
-}
+                
+        @override
+        bool operator ==(Object other) =>
+            identical(this, other) ||
+            other is ImportLimitsView &&
+                runtimeType == other.runtimeType
+                && maxBytes == other.maxBytes&& maxRows == other.maxRows;
+        
+            }
 
 /// 通用列表过滤条件（镜像 orbit_core::models::business::ListFilter；
 /// 谓词下推七键仅 todo_tasks 消费，见 core 侧注释）
-class ListFilter {
-  final String? keyword;
-  final int page;
-  final int pageSize;
-  final bool? done;
-  final String? status;
-  final int? priorityMin;
-  final PlatformInt64? projectId;
+class ListFilter  {
+                final String? keyword;
+final int page;
+final int pageSize;
+final bool? done;
+final String? status;
+final int? priorityMin;
+final PlatformInt64? projectId;
+/// 项目 id **集合**（`project_id IN (...)`）：清单文件夹聚合——选中父
+/// 清单时客户端把「自身 + 全部后代项目 id」算好传入。非空时优先于
+/// [Self::project_id]；空集合 = 空结果。
+final Int64List? projectIds;
+final bool? favoriteOnly;
+final PlatformInt64? myDayToday;
 
-  /// 项目 id **集合**（`project_id IN (...)`）：清单文件夹聚合——选中父
-  /// 清单时客户端把「自身 + 全部后代项目 id」算好传入。非空时优先于
-  /// [Self::project_id]；空集合 = 空结果。
-  final Int64List? projectIds;
-  final bool? favoriteOnly;
-  final PlatformInt64? myDayToday;
+                const ListFilter({this.keyword ,required this.page ,required this.pageSize ,this.done ,this.status ,this.priorityMin ,this.projectId ,this.projectIds ,this.favoriteOnly ,this.myDayToday ,});
 
-  const ListFilter({
-    this.keyword,
-    required this.page,
-    required this.pageSize,
-    this.done,
-    this.status,
-    this.priorityMin,
-    this.projectId,
-    this.projectIds,
-    this.favoriteOnly,
-    this.myDayToday,
-  });
+                
+                
 
-  @override
-  int get hashCode =>
-      keyword.hashCode ^
-      page.hashCode ^
-      pageSize.hashCode ^
-      done.hashCode ^
-      status.hashCode ^
-      priorityMin.hashCode ^
-      projectId.hashCode ^
-      projectIds.hashCode ^
-      favoriteOnly.hashCode ^
-      myDayToday.hashCode;
+                
+        @override
+        int get hashCode => keyword.hashCode^page.hashCode^pageSize.hashCode^done.hashCode^status.hashCode^priorityMin.hashCode^projectId.hashCode^projectIds.hashCode^favoriteOnly.hashCode^myDayToday.hashCode;
+        
 
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is ListFilter &&
-          runtimeType == other.runtimeType &&
-          keyword == other.keyword &&
-          page == other.page &&
-          pageSize == other.pageSize &&
-          done == other.done &&
-          status == other.status &&
-          priorityMin == other.priorityMin &&
-          projectId == other.projectId &&
-          projectIds == other.projectIds &&
-          favoriteOnly == other.favoriteOnly &&
-          myDayToday == other.myDayToday;
-}
+                
+        @override
+        bool operator ==(Object other) =>
+            identical(this, other) ||
+            other is ListFilter &&
+                runtimeType == other.runtimeType
+                && keyword == other.keyword&& page == other.page&& pageSize == other.pageSize&& done == other.done&& status == other.status&& priorityMin == other.priorityMin&& projectId == other.projectId&& projectIds == other.projectIds&& favoriteOnly == other.favoriteOnly&& myDayToday == other.myDayToday;
+        
+            }
 
 /// 行内提醒最小载荷（镜像 ProjectedReminder）
-class ProjectedReminder {
-  final PlatformInt64 id;
-  final PlatformInt64 remindAt;
+class ProjectedReminder  {
+                final PlatformInt64 id;
+final PlatformInt64 remindAt;
 
-  const ProjectedReminder({required this.id, required this.remindAt});
+                const ProjectedReminder({required this.id ,required this.remindAt ,});
 
-  @override
-  int get hashCode => id.hashCode ^ remindAt.hashCode;
+                
+                
 
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is ProjectedReminder &&
-          runtimeType == other.runtimeType &&
-          id == other.id &&
-          remindAt == other.remindAt;
-}
+                
+        @override
+        int get hashCode => id.hashCode^remindAt.hashCode;
+        
+
+                
+        @override
+        bool operator ==(Object other) =>
+            identical(this, other) ||
+            other is ProjectedReminder &&
+                runtimeType == other.runtimeType
+                && id == other.id&& remindAt == other.remindAt;
+        
+            }
 
 /// 行内标签 chip 最小载荷（镜像 ProjectedTaskLabel：展示三列）
-class ProjectedTaskLabel {
-  final PlatformInt64 id;
-  final String title;
-  final String hexColor;
+class ProjectedTaskLabel  {
+                final PlatformInt64 id;
+final String title;
+final String hexColor;
 
-  const ProjectedTaskLabel({
-    required this.id,
-    required this.title,
-    required this.hexColor,
-  });
+                const ProjectedTaskLabel({required this.id ,required this.title ,required this.hexColor ,});
 
-  @override
-  int get hashCode => id.hashCode ^ title.hashCode ^ hexColor.hashCode;
+                
+                
 
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is ProjectedTaskLabel &&
-          runtimeType == other.runtimeType &&
-          id == other.id &&
-          title == other.title &&
-          hexColor == other.hexColor;
-}
+                
+        @override
+        int get hashCode => id.hashCode^title.hashCode^hexColor.hashCode;
+        
+
+                
+        @override
+        bool operator ==(Object other) =>
+            identical(this, other) ||
+            other is ProjectedTaskLabel &&
+                runtimeType == other.runtimeType
+                && id == other.id&& title == other.title&& hexColor == other.hexColor;
+        
+            }
 
 /// 冲突败方副本（纯本地表，不随云同步；两个 payload 为整行字段快照 JSON 字符串）
-class SyncConflict {
-  final PlatformInt64 id;
-  final String tableName;
-  final String recordUuid;
-  final String recordTitle;
+class SyncConflict  {
+                final PlatformInt64 id;
+final String tableName;
+final String recordUuid;
+final String recordTitle;
+/// lww 时间戳裁决 / tie_version 同毫秒按 version 裁决
+final String decision;
+/// 败方归属：local 本地被覆盖 / remote 远端被丢弃
+final String loserSide;
+final String winnerSide;
+final String loserPayload;
+final String winnerPayload;
+final PlatformInt64 loserUpdatedAt;
+final PlatformInt64 winnerUpdatedAt;
+/// unresolved 未处理 / restored 已恢复 / dismissed 已忽略
+final String resolution;
+final PlatformInt64 createdAt;
+final PlatformInt64 resolvedAt;
 
-  /// lww 时间戳裁决 / tie_version 同毫秒按 version 裁决
-  final String decision;
+                const SyncConflict({required this.id ,required this.tableName ,required this.recordUuid ,required this.recordTitle ,required this.decision ,required this.loserSide ,required this.winnerSide ,required this.loserPayload ,required this.winnerPayload ,required this.loserUpdatedAt ,required this.winnerUpdatedAt ,required this.resolution ,required this.createdAt ,required this.resolvedAt ,});
 
-  /// 败方归属：local 本地被覆盖 / remote 远端被丢弃
-  final String loserSide;
-  final String winnerSide;
-  final String loserPayload;
-  final String winnerPayload;
-  final PlatformInt64 loserUpdatedAt;
-  final PlatformInt64 winnerUpdatedAt;
+                
+                
 
-  /// unresolved 未处理 / restored 已恢复 / dismissed 已忽略
-  final String resolution;
-  final PlatformInt64 createdAt;
-  final PlatformInt64 resolvedAt;
+                
+        @override
+        int get hashCode => id.hashCode^tableName.hashCode^recordUuid.hashCode^recordTitle.hashCode^decision.hashCode^loserSide.hashCode^winnerSide.hashCode^loserPayload.hashCode^winnerPayload.hashCode^loserUpdatedAt.hashCode^winnerUpdatedAt.hashCode^resolution.hashCode^createdAt.hashCode^resolvedAt.hashCode;
+        
 
-  const SyncConflict({
-    required this.id,
-    required this.tableName,
-    required this.recordUuid,
-    required this.recordTitle,
-    required this.decision,
-    required this.loserSide,
-    required this.winnerSide,
-    required this.loserPayload,
-    required this.winnerPayload,
-    required this.loserUpdatedAt,
-    required this.winnerUpdatedAt,
-    required this.resolution,
-    required this.createdAt,
-    required this.resolvedAt,
-  });
+                
+        @override
+        bool operator ==(Object other) =>
+            identical(this, other) ||
+            other is SyncConflict &&
+                runtimeType == other.runtimeType
+                && id == other.id&& tableName == other.tableName&& recordUuid == other.recordUuid&& recordTitle == other.recordTitle&& decision == other.decision&& loserSide == other.loserSide&& winnerSide == other.winnerSide&& loserPayload == other.loserPayload&& winnerPayload == other.winnerPayload&& loserUpdatedAt == other.loserUpdatedAt&& winnerUpdatedAt == other.winnerUpdatedAt&& resolution == other.resolution&& createdAt == other.createdAt&& resolvedAt == other.resolvedAt;
+        
+            }
 
-  @override
-  int get hashCode =>
-      id.hashCode ^
-      tableName.hashCode ^
-      recordUuid.hashCode ^
-      recordTitle.hashCode ^
-      decision.hashCode ^
-      loserSide.hashCode ^
-      winnerSide.hashCode ^
-      loserPayload.hashCode ^
-      winnerPayload.hashCode ^
-      loserUpdatedAt.hashCode ^
-      winnerUpdatedAt.hashCode ^
-      resolution.hashCode ^
-      createdAt.hashCode ^
-      resolvedAt.hashCode;
+class TaskAttachmentView  {
+                final PlatformInt64 linkId;
+final String linkUuid;
+final String hash;
+final String originalName;
+final String mimeType;
+final PlatformInt64 sizeBytes;
+/// 0 = 尚未从云端拉回（云端有但本机未下载），UI 置灰打开入口
+final int isLocalCached;
 
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is SyncConflict &&
-          runtimeType == other.runtimeType &&
-          id == other.id &&
-          tableName == other.tableName &&
-          recordUuid == other.recordUuid &&
-          recordTitle == other.recordTitle &&
-          decision == other.decision &&
-          loserSide == other.loserSide &&
-          winnerSide == other.winnerSide &&
-          loserPayload == other.loserPayload &&
-          winnerPayload == other.winnerPayload &&
-          loserUpdatedAt == other.loserUpdatedAt &&
-          winnerUpdatedAt == other.winnerUpdatedAt &&
-          resolution == other.resolution &&
-          createdAt == other.createdAt &&
-          resolvedAt == other.resolvedAt;
-}
+                const TaskAttachmentView({required this.linkId ,required this.linkUuid ,required this.hash ,required this.originalName ,required this.mimeType ,required this.sizeBytes ,required this.isLocalCached ,});
 
-class TaskAttachmentView {
-  final PlatformInt64 linkId;
-  final String linkUuid;
-  final String hash;
-  final String originalName;
-  final String mimeType;
-  final PlatformInt64 sizeBytes;
+                
+                
 
-  /// 0 = 尚未从云端拉回（云端有但本机未下载），UI 置灰打开入口
-  final int isLocalCached;
+                
+        @override
+        int get hashCode => linkId.hashCode^linkUuid.hashCode^hash.hashCode^originalName.hashCode^mimeType.hashCode^sizeBytes.hashCode^isLocalCached.hashCode;
+        
 
-  const TaskAttachmentView({
-    required this.linkId,
-    required this.linkUuid,
-    required this.hash,
-    required this.originalName,
-    required this.mimeType,
-    required this.sizeBytes,
-    required this.isLocalCached,
-  });
-
-  @override
-  int get hashCode =>
-      linkId.hashCode ^
-      linkUuid.hashCode ^
-      hash.hashCode ^
-      originalName.hashCode ^
-      mimeType.hashCode ^
-      sizeBytes.hashCode ^
-      isLocalCached.hashCode;
-
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is TaskAttachmentView &&
-          runtimeType == other.runtimeType &&
-          linkId == other.linkId &&
-          linkUuid == other.linkUuid &&
-          hash == other.hash &&
-          originalName == other.originalName &&
-          mimeType == other.mimeType &&
-          sizeBytes == other.sizeBytes &&
-          isLocalCached == other.isLocalCached;
-}
+                
+        @override
+        bool operator ==(Object other) =>
+            identical(this, other) ||
+            other is TaskAttachmentView &&
+                runtimeType == other.runtimeType
+                && linkId == other.linkId&& linkUuid == other.linkUuid&& hash == other.hash&& originalName == other.originalName&& mimeType == other.mimeType&& sizeBytes == other.sizeBytes&& isLocalCached == other.isLocalCached;
+        
+            }
 
 /// 单任务的关联计数旗标（镜像 TaskDependencyFlags；C7 行内关联徽标消费）
-class TaskDependencyFlags {
-  final PlatformInt64 taskId;
+class TaskDependencyFlags  {
+                final PlatformInt64 taskId;
+/// 出边存活行总数（> 0 即「有关联」）
+final PlatformInt64 relationCount;
 
-  /// 出边存活行总数（> 0 即「有关联」）
-  final PlatformInt64 relationCount;
+                const TaskDependencyFlags({required this.taskId ,required this.relationCount ,});
 
-  const TaskDependencyFlags({
-    required this.taskId,
-    required this.relationCount,
-  });
+                
+                
 
-  @override
-  int get hashCode => taskId.hashCode ^ relationCount.hashCode;
+                
+        @override
+        int get hashCode => taskId.hashCode^relationCount.hashCode;
+        
 
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is TaskDependencyFlags &&
-          runtimeType == other.runtimeType &&
-          taskId == other.taskId &&
-          relationCount == other.relationCount;
-}
+                
+        @override
+        bool operator ==(Object other) =>
+            identical(this, other) ||
+            other is TaskDependencyFlags &&
+                runtimeType == other.runtimeType
+                && taskId == other.taskId&& relationCount == other.relationCount;
+        
+            }
 
 /// 「有描述」任务 id 位（镜像 TaskDescriptionFlag；列表通道裁剪 description
 /// 后行内描述图标的来源，只出有描述的行）
-class TaskDescriptionFlag {
-  final PlatformInt64 taskId;
+class TaskDescriptionFlag  {
+                final PlatformInt64 taskId;
 
-  const TaskDescriptionFlag({required this.taskId});
+                const TaskDescriptionFlag({required this.taskId ,});
 
-  @override
-  int get hashCode => taskId.hashCode;
+                
+                
 
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is TaskDescriptionFlag &&
-          runtimeType == other.runtimeType &&
-          taskId == other.taskId;
-}
+                
+        @override
+        int get hashCode => taskId.hashCode;
+        
+
+                
+        @override
+        bool operator ==(Object other) =>
+            identical(this, other) ||
+            other is TaskDescriptionFlag &&
+                runtimeType == other.runtimeType
+                && taskId == other.taskId;
+        
+            }
 
 /// 任务存在旗标一位（#71 筛选器存在键数据源；镜像 TaskExistenceFlag，
 /// 只出有行的任务，缺位即 false；附件/未完成子任务两投影共用）
-class TaskExistenceFlag {
-  final PlatformInt64 taskId;
+class TaskExistenceFlag  {
+                final PlatformInt64 taskId;
 
-  const TaskExistenceFlag({required this.taskId});
+                const TaskExistenceFlag({required this.taskId ,});
 
-  @override
-  int get hashCode => taskId.hashCode;
+                
+                
 
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is TaskExistenceFlag &&
-          runtimeType == other.runtimeType &&
-          taskId == other.taskId;
-}
+                
+        @override
+        int get hashCode => taskId.hashCode;
+        
+
+                
+        @override
+        bool operator ==(Object other) =>
+            identical(this, other) ||
+            other is TaskExistenceFlag &&
+                runtimeType == other.runtimeType
+                && taskId == other.taskId;
+        
+            }
 
 /// 任务详情中的标签：TodoLabel 全部字段 + task_label_id
 ///
 /// core 版（orbit_core::api::todo_api::TaskLabelWithId）用
 /// `#[serde(flatten)] label: TodoLabel`，JSON 为扁平形状；此处直接平铺。
-class TaskLabelWithId {
-  final PlatformInt64 id;
-  final String uuid;
-  final String title;
-  final String hexColor;
-  final int isDeleted;
-  final PlatformInt64 createdAt;
-  final PlatformInt64 updatedAt;
-  final PlatformInt64? deletedAt;
-  final int version;
+class TaskLabelWithId  {
+                final PlatformInt64 id;
+final String uuid;
+final String title;
+final String hexColor;
+final int isDeleted;
+final PlatformInt64 createdAt;
+final PlatformInt64 updatedAt;
+final PlatformInt64? deletedAt;
+final int version;
+/// todo_task_labels 关联记录自身 id（移除关联时用）
+final PlatformInt64 taskLabelId;
 
-  /// todo_task_labels 关联记录自身 id（移除关联时用）
-  final PlatformInt64 taskLabelId;
+                const TaskLabelWithId({required this.id ,required this.uuid ,required this.title ,required this.hexColor ,required this.isDeleted ,required this.createdAt ,required this.updatedAt ,this.deletedAt ,required this.version ,required this.taskLabelId ,});
 
-  const TaskLabelWithId({
-    required this.id,
-    required this.uuid,
-    required this.title,
-    required this.hexColor,
-    required this.isDeleted,
-    required this.createdAt,
-    required this.updatedAt,
-    this.deletedAt,
-    required this.version,
-    required this.taskLabelId,
-  });
+                
+                
 
-  @override
-  int get hashCode =>
-      id.hashCode ^
-      uuid.hashCode ^
-      title.hashCode ^
-      hexColor.hashCode ^
-      isDeleted.hashCode ^
-      createdAt.hashCode ^
-      updatedAt.hashCode ^
-      deletedAt.hashCode ^
-      version.hashCode ^
-      taskLabelId.hashCode;
+                
+        @override
+        int get hashCode => id.hashCode^uuid.hashCode^title.hashCode^hexColor.hashCode^isDeleted.hashCode^createdAt.hashCode^updatedAt.hashCode^deletedAt.hashCode^version.hashCode^taskLabelId.hashCode;
+        
 
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is TaskLabelWithId &&
-          runtimeType == other.runtimeType &&
-          id == other.id &&
-          uuid == other.uuid &&
-          title == other.title &&
-          hexColor == other.hexColor &&
-          isDeleted == other.isDeleted &&
-          createdAt == other.createdAt &&
-          updatedAt == other.updatedAt &&
-          deletedAt == other.deletedAt &&
-          version == other.version &&
-          taskLabelId == other.taskLabelId;
-}
+                
+        @override
+        bool operator ==(Object other) =>
+            identical(this, other) ||
+            other is TaskLabelWithId &&
+                runtimeType == other.runtimeType
+                && id == other.id&& uuid == other.uuid&& title == other.title&& hexColor == other.hexColor&& isDeleted == other.isDeleted&& createdAt == other.createdAt&& updatedAt == other.updatedAt&& deletedAt == other.deletedAt&& version == other.version&& taskLabelId == other.taskLabelId;
+        
+            }
 
 /// 单任务的标签分组（镜像 TaskLabelsProjection）
-class TaskLabelsProjection {
-  final PlatformInt64 taskId;
-  final List<ProjectedTaskLabel> labels;
+class TaskLabelsProjection  {
+                final PlatformInt64 taskId;
+final List<ProjectedTaskLabel> labels;
 
-  const TaskLabelsProjection({required this.taskId, required this.labels});
+                const TaskLabelsProjection({required this.taskId ,required this.labels ,});
 
-  @override
-  int get hashCode => taskId.hashCode ^ labels.hashCode;
+                
+                
 
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is TaskLabelsProjection &&
-          runtimeType == other.runtimeType &&
-          taskId == other.taskId &&
-          labels == other.labels;
-}
+                
+        @override
+        int get hashCode => taskId.hashCode^labels.hashCode;
+        
+
+                
+        @override
+        bool operator ==(Object other) =>
+            identical(this, other) ||
+            other is TaskLabelsProjection &&
+                runtimeType == other.runtimeType
+                && taskId == other.taskId&& labels == other.labels;
+        
+            }
 
 /// 单任务的提醒分组（镜像 TaskRemindersProjection）
-class TaskRemindersProjection {
-  final PlatformInt64 taskId;
-  final List<ProjectedReminder> reminders;
+class TaskRemindersProjection  {
+                final PlatformInt64 taskId;
+final List<ProjectedReminder> reminders;
 
-  const TaskRemindersProjection({
-    required this.taskId,
-    required this.reminders,
-  });
+                const TaskRemindersProjection({required this.taskId ,required this.reminders ,});
 
-  @override
-  int get hashCode => taskId.hashCode ^ reminders.hashCode;
+                
+                
 
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is TaskRemindersProjection &&
-          runtimeType == other.runtimeType &&
-          taskId == other.taskId &&
-          reminders == other.reminders;
-}
+                
+        @override
+        int get hashCode => taskId.hashCode^reminders.hashCode;
+        
+
+                
+        @override
+        bool operator ==(Object other) =>
+            identical(this, other) ||
+            other is TaskRemindersProjection &&
+                runtimeType == other.runtimeType
+                && taskId == other.taskId&& reminders == other.reminders;
+        
+            }
 
 /// 评论（镜像 orbit_core::models::business::TodoComment）
-class TodoComment {
-  final PlatformInt64 id;
-  final String uuid;
-  final PlatformInt64 taskId;
-  final String content;
-  final int isDeleted;
-  final PlatformInt64 createdAt;
-  final PlatformInt64 updatedAt;
-  final PlatformInt64? deletedAt;
-  final int version;
+class TodoComment  {
+                final PlatformInt64 id;
+final String uuid;
+final PlatformInt64 taskId;
+final String content;
+final int isDeleted;
+final PlatformInt64 createdAt;
+final PlatformInt64 updatedAt;
+final PlatformInt64? deletedAt;
+final int version;
 
-  const TodoComment({
-    required this.id,
-    required this.uuid,
-    required this.taskId,
-    required this.content,
-    required this.isDeleted,
-    required this.createdAt,
-    required this.updatedAt,
-    this.deletedAt,
-    required this.version,
-  });
+                const TodoComment({required this.id ,required this.uuid ,required this.taskId ,required this.content ,required this.isDeleted ,required this.createdAt ,required this.updatedAt ,this.deletedAt ,required this.version ,});
 
-  @override
-  int get hashCode =>
-      id.hashCode ^
-      uuid.hashCode ^
-      taskId.hashCode ^
-      content.hashCode ^
-      isDeleted.hashCode ^
-      createdAt.hashCode ^
-      updatedAt.hashCode ^
-      deletedAt.hashCode ^
-      version.hashCode;
+                
+                
 
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is TodoComment &&
-          runtimeType == other.runtimeType &&
-          id == other.id &&
-          uuid == other.uuid &&
-          taskId == other.taskId &&
-          content == other.content &&
-          isDeleted == other.isDeleted &&
-          createdAt == other.createdAt &&
-          updatedAt == other.updatedAt &&
-          deletedAt == other.deletedAt &&
-          version == other.version;
-}
+                
+        @override
+        int get hashCode => id.hashCode^uuid.hashCode^taskId.hashCode^content.hashCode^isDeleted.hashCode^createdAt.hashCode^updatedAt.hashCode^deletedAt.hashCode^version.hashCode;
+        
+
+                
+        @override
+        bool operator ==(Object other) =>
+            identical(this, other) ||
+            other is TodoComment &&
+                runtimeType == other.runtimeType
+                && id == other.id&& uuid == other.uuid&& taskId == other.taskId&& content == other.content&& isDeleted == other.isDeleted&& createdAt == other.createdAt&& updatedAt == other.updatedAt&& deletedAt == other.deletedAt&& version == other.version;
+        
+            }
 
 /// 评论创建输入（镜像 TodoCommentCreateInput）
-class TodoCommentCreateInput {
-  final PlatformInt64 taskId;
-  final String content;
+class TodoCommentCreateInput  {
+                final PlatformInt64 taskId;
+final String content;
 
-  const TodoCommentCreateInput({required this.taskId, required this.content});
+                const TodoCommentCreateInput({required this.taskId ,required this.content ,});
 
-  @override
-  int get hashCode => taskId.hashCode ^ content.hashCode;
+                
+                
 
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is TodoCommentCreateInput &&
-          runtimeType == other.runtimeType &&
-          taskId == other.taskId &&
-          content == other.content;
-}
+                
+        @override
+        int get hashCode => taskId.hashCode^content.hashCode;
+        
+
+                
+        @override
+        bool operator ==(Object other) =>
+            identical(this, other) ||
+            other is TodoCommentCreateInput &&
+                runtimeType == other.runtimeType
+                && taskId == other.taskId&& content == other.content;
+        
+            }
 
 /// 标签（镜像 orbit_core::models::business::TodoLabel）
-class TodoLabel {
-  final PlatformInt64 id;
-  final String uuid;
-  final String title;
-  final String hexColor;
-  final int isDeleted;
-  final PlatformInt64 createdAt;
-  final PlatformInt64 updatedAt;
-  final PlatformInt64? deletedAt;
-  final int version;
+class TodoLabel  {
+                final PlatformInt64 id;
+final String uuid;
+final String title;
+final String hexColor;
+final int isDeleted;
+final PlatformInt64 createdAt;
+final PlatformInt64 updatedAt;
+final PlatformInt64? deletedAt;
+final int version;
 
-  const TodoLabel({
-    required this.id,
-    required this.uuid,
-    required this.title,
-    required this.hexColor,
-    required this.isDeleted,
-    required this.createdAt,
-    required this.updatedAt,
-    this.deletedAt,
-    required this.version,
-  });
+                const TodoLabel({required this.id ,required this.uuid ,required this.title ,required this.hexColor ,required this.isDeleted ,required this.createdAt ,required this.updatedAt ,this.deletedAt ,required this.version ,});
 
-  @override
-  int get hashCode =>
-      id.hashCode ^
-      uuid.hashCode ^
-      title.hashCode ^
-      hexColor.hashCode ^
-      isDeleted.hashCode ^
-      createdAt.hashCode ^
-      updatedAt.hashCode ^
-      deletedAt.hashCode ^
-      version.hashCode;
+                
+                
 
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is TodoLabel &&
-          runtimeType == other.runtimeType &&
-          id == other.id &&
-          uuid == other.uuid &&
-          title == other.title &&
-          hexColor == other.hexColor &&
-          isDeleted == other.isDeleted &&
-          createdAt == other.createdAt &&
-          updatedAt == other.updatedAt &&
-          deletedAt == other.deletedAt &&
-          version == other.version;
-}
+                
+        @override
+        int get hashCode => id.hashCode^uuid.hashCode^title.hashCode^hexColor.hashCode^isDeleted.hashCode^createdAt.hashCode^updatedAt.hashCode^deletedAt.hashCode^version.hashCode;
+        
+
+                
+        @override
+        bool operator ==(Object other) =>
+            identical(this, other) ||
+            other is TodoLabel &&
+                runtimeType == other.runtimeType
+                && id == other.id&& uuid == other.uuid&& title == other.title&& hexColor == other.hexColor&& isDeleted == other.isDeleted&& createdAt == other.createdAt&& updatedAt == other.updatedAt&& deletedAt == other.deletedAt&& version == other.version;
+        
+            }
 
 /// 标签创建输入（镜像 TodoLabelCreateInput）
-class TodoLabelCreateInput {
-  final String title;
-  final String? hexColor;
+class TodoLabelCreateInput  {
+                final String title;
+final String? hexColor;
 
-  const TodoLabelCreateInput({required this.title, this.hexColor});
+                const TodoLabelCreateInput({required this.title ,this.hexColor ,});
 
-  @override
-  int get hashCode => title.hashCode ^ hexColor.hashCode;
+                
+                
 
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is TodoLabelCreateInput &&
-          runtimeType == other.runtimeType &&
-          title == other.title &&
-          hexColor == other.hexColor;
-}
+                
+        @override
+        int get hashCode => title.hashCode^hexColor.hashCode;
+        
+
+                
+        @override
+        bool operator ==(Object other) =>
+            identical(this, other) ||
+            other is TodoLabelCreateInput &&
+                runtimeType == other.runtimeType
+                && title == other.title&& hexColor == other.hexColor;
+        
+            }
 
 /// 项目（镜像 orbit_core::models::business::TodoProject）
-class TodoProject {
-  final PlatformInt64 id;
-  final String uuid;
-  final String title;
-  final String? description;
-  final String hexColor;
-  final double sortOrder;
+class TodoProject  {
+                final PlatformInt64 id;
+final String uuid;
+final String title;
+final String? description;
+final String hexColor;
+final double sortOrder;
+/// M8 上级文件夹（父项目）的同步主键 uuid；None = 顶层
+final String? parentUuid;
+final int isArchived;
+final int isDeleted;
+final PlatformInt64 createdAt;
+final PlatformInt64 updatedAt;
+final PlatformInt64? deletedAt;
+final int version;
 
-  /// M8 上级文件夹（父项目）的同步主键 uuid；None = 顶层
-  final String? parentUuid;
-  final int isArchived;
-  final int isDeleted;
-  final PlatformInt64 createdAt;
-  final PlatformInt64 updatedAt;
-  final PlatformInt64? deletedAt;
-  final int version;
+                const TodoProject({required this.id ,required this.uuid ,required this.title ,this.description ,required this.hexColor ,required this.sortOrder ,this.parentUuid ,required this.isArchived ,required this.isDeleted ,required this.createdAt ,required this.updatedAt ,this.deletedAt ,required this.version ,});
 
-  const TodoProject({
-    required this.id,
-    required this.uuid,
-    required this.title,
-    this.description,
-    required this.hexColor,
-    required this.sortOrder,
-    this.parentUuid,
-    required this.isArchived,
-    required this.isDeleted,
-    required this.createdAt,
-    required this.updatedAt,
-    this.deletedAt,
-    required this.version,
-  });
+                
+                
 
-  @override
-  int get hashCode =>
-      id.hashCode ^
-      uuid.hashCode ^
-      title.hashCode ^
-      description.hashCode ^
-      hexColor.hashCode ^
-      sortOrder.hashCode ^
-      parentUuid.hashCode ^
-      isArchived.hashCode ^
-      isDeleted.hashCode ^
-      createdAt.hashCode ^
-      updatedAt.hashCode ^
-      deletedAt.hashCode ^
-      version.hashCode;
+                
+        @override
+        int get hashCode => id.hashCode^uuid.hashCode^title.hashCode^description.hashCode^hexColor.hashCode^sortOrder.hashCode^parentUuid.hashCode^isArchived.hashCode^isDeleted.hashCode^createdAt.hashCode^updatedAt.hashCode^deletedAt.hashCode^version.hashCode;
+        
 
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is TodoProject &&
-          runtimeType == other.runtimeType &&
-          id == other.id &&
-          uuid == other.uuid &&
-          title == other.title &&
-          description == other.description &&
-          hexColor == other.hexColor &&
-          sortOrder == other.sortOrder &&
-          parentUuid == other.parentUuid &&
-          isArchived == other.isArchived &&
-          isDeleted == other.isDeleted &&
-          createdAt == other.createdAt &&
-          updatedAt == other.updatedAt &&
-          deletedAt == other.deletedAt &&
-          version == other.version;
-}
+                
+        @override
+        bool operator ==(Object other) =>
+            identical(this, other) ||
+            other is TodoProject &&
+                runtimeType == other.runtimeType
+                && id == other.id&& uuid == other.uuid&& title == other.title&& description == other.description&& hexColor == other.hexColor&& sortOrder == other.sortOrder&& parentUuid == other.parentUuid&& isArchived == other.isArchived&& isDeleted == other.isDeleted&& createdAt == other.createdAt&& updatedAt == other.updatedAt&& deletedAt == other.deletedAt&& version == other.version;
+        
+            }
 
 /// 项目创建输入（镜像 TodoProjectCreateInput；create input 均为普通
 /// Option<T>/T，无三态字段，可直接一一映射）
-class TodoProjectCreateInput {
-  final String title;
-  final String? description;
-  final String? hexColor;
-  final double? sortOrder;
+class TodoProjectCreateInput  {
+                final String title;
+final String? description;
+final String? hexColor;
+final double? sortOrder;
+/// 上级文件夹 uuid（M8）；None / 空白串 = 顶层
+final String? parentUuid;
 
-  /// 上级文件夹 uuid（M8）；None / 空白串 = 顶层
-  final String? parentUuid;
+                const TodoProjectCreateInput({required this.title ,this.description ,this.hexColor ,this.sortOrder ,this.parentUuid ,});
 
-  const TodoProjectCreateInput({
-    required this.title,
-    this.description,
-    this.hexColor,
-    this.sortOrder,
-    this.parentUuid,
-  });
+                
+                
 
-  @override
-  int get hashCode =>
-      title.hashCode ^
-      description.hashCode ^
-      hexColor.hashCode ^
-      sortOrder.hashCode ^
-      parentUuid.hashCode;
+                
+        @override
+        int get hashCode => title.hashCode^description.hashCode^hexColor.hashCode^sortOrder.hashCode^parentUuid.hashCode;
+        
 
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is TodoProjectCreateInput &&
-          runtimeType == other.runtimeType &&
-          title == other.title &&
-          description == other.description &&
-          hexColor == other.hexColor &&
-          sortOrder == other.sortOrder &&
-          parentUuid == other.parentUuid;
-}
+                
+        @override
+        bool operator ==(Object other) =>
+            identical(this, other) ||
+            other is TodoProjectCreateInput &&
+                runtimeType == other.runtimeType
+                && title == other.title&& description == other.description&& hexColor == other.hexColor&& sortOrder == other.sortOrder&& parentUuid == other.parentUuid;
+        
+            }
 
 /// 提醒（镜像 orbit_core::models::business::TodoReminder）
-class TodoReminder {
-  final PlatformInt64 id;
-  final String uuid;
-  final PlatformInt64 taskId;
-  final PlatformInt64 remindAt;
+class TodoReminder  {
+                final PlatformInt64 id;
+final String uuid;
+final PlatformInt64 taskId;
+final PlatformInt64 remindAt;
+/// 持续提醒标记（G2）：1 = 未完成则按间隔顺延重排（响到完成为止）
+final int isConstant;
+final int isDeleted;
+final PlatformInt64 createdAt;
+final PlatformInt64 updatedAt;
+final PlatformInt64? deletedAt;
+final int version;
 
-  /// 持续提醒标记（G2）：1 = 未完成则按间隔顺延重排（响到完成为止）
-  final int isConstant;
-  final int isDeleted;
-  final PlatformInt64 createdAt;
-  final PlatformInt64 updatedAt;
-  final PlatformInt64? deletedAt;
-  final int version;
+                const TodoReminder({required this.id ,required this.uuid ,required this.taskId ,required this.remindAt ,required this.isConstant ,required this.isDeleted ,required this.createdAt ,required this.updatedAt ,this.deletedAt ,required this.version ,});
 
-  const TodoReminder({
-    required this.id,
-    required this.uuid,
-    required this.taskId,
-    required this.remindAt,
-    required this.isConstant,
-    required this.isDeleted,
-    required this.createdAt,
-    required this.updatedAt,
-    this.deletedAt,
-    required this.version,
-  });
+                
+                
 
-  @override
-  int get hashCode =>
-      id.hashCode ^
-      uuid.hashCode ^
-      taskId.hashCode ^
-      remindAt.hashCode ^
-      isConstant.hashCode ^
-      isDeleted.hashCode ^
-      createdAt.hashCode ^
-      updatedAt.hashCode ^
-      deletedAt.hashCode ^
-      version.hashCode;
+                
+        @override
+        int get hashCode => id.hashCode^uuid.hashCode^taskId.hashCode^remindAt.hashCode^isConstant.hashCode^isDeleted.hashCode^createdAt.hashCode^updatedAt.hashCode^deletedAt.hashCode^version.hashCode;
+        
 
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is TodoReminder &&
-          runtimeType == other.runtimeType &&
-          id == other.id &&
-          uuid == other.uuid &&
-          taskId == other.taskId &&
-          remindAt == other.remindAt &&
-          isConstant == other.isConstant &&
-          isDeleted == other.isDeleted &&
-          createdAt == other.createdAt &&
-          updatedAt == other.updatedAt &&
-          deletedAt == other.deletedAt &&
-          version == other.version;
-}
+                
+        @override
+        bool operator ==(Object other) =>
+            identical(this, other) ||
+            other is TodoReminder &&
+                runtimeType == other.runtimeType
+                && id == other.id&& uuid == other.uuid&& taskId == other.taskId&& remindAt == other.remindAt&& isConstant == other.isConstant&& isDeleted == other.isDeleted&& createdAt == other.createdAt&& updatedAt == other.updatedAt&& deletedAt == other.deletedAt&& version == other.version;
+        
+            }
 
 /// 提醒创建输入（镜像 TodoReminderCreateInput）
-class TodoReminderCreateInput {
-  final PlatformInt64 taskId;
-  final PlatformInt64 remindAt;
+class TodoReminderCreateInput  {
+                final PlatformInt64 taskId;
+final PlatformInt64 remindAt;
+/// 省略 = 0（一次性）——移动端表单未开持续提醒时传 0
+final int isConstant;
 
-  /// 省略 = 0（一次性）——移动端表单未开持续提醒时传 0
-  final int isConstant;
+                const TodoReminderCreateInput({required this.taskId ,required this.remindAt ,required this.isConstant ,});
 
-  const TodoReminderCreateInput({
-    required this.taskId,
-    required this.remindAt,
-    required this.isConstant,
-  });
+                
+                
 
-  @override
-  int get hashCode => taskId.hashCode ^ remindAt.hashCode ^ isConstant.hashCode;
+                
+        @override
+        int get hashCode => taskId.hashCode^remindAt.hashCode^isConstant.hashCode;
+        
 
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is TodoReminderCreateInput &&
-          runtimeType == other.runtimeType &&
-          taskId == other.taskId &&
-          remindAt == other.remindAt &&
-          isConstant == other.isConstant;
-}
+                
+        @override
+        bool operator ==(Object other) =>
+            identical(this, other) ||
+            other is TodoReminderCreateInput &&
+                runtimeType == other.runtimeType
+                && taskId == other.taskId&& remindAt == other.remindAt&& isConstant == other.isConstant;
+        
+            }
 
-class TodoSavedFilter {
-  final PlatformInt64 id;
-  final String uuid;
-  final String name;
+class TodoSavedFilter  {
+                final PlatformInt64 id;
+final String uuid;
+final String name;
+/// 条件 JSON：{status?, priority_min?, project_ids?, label_ids?, due_within_days?, due_overdue?, favorite_only?}
+final String conditions;
+final PlatformInt64 sortOrder;
 
-  /// 条件 JSON：{status?, priority_min?, project_ids?, label_ids?, due_within_days?, due_overdue?, favorite_only?}
-  final String conditions;
-  final PlatformInt64 sortOrder;
+                const TodoSavedFilter({required this.id ,required this.uuid ,required this.name ,required this.conditions ,required this.sortOrder ,});
 
-  const TodoSavedFilter({
-    required this.id,
-    required this.uuid,
-    required this.name,
-    required this.conditions,
-    required this.sortOrder,
-  });
+                
+                
 
-  @override
-  int get hashCode =>
-      id.hashCode ^
-      uuid.hashCode ^
-      name.hashCode ^
-      conditions.hashCode ^
-      sortOrder.hashCode;
+                
+        @override
+        int get hashCode => id.hashCode^uuid.hashCode^name.hashCode^conditions.hashCode^sortOrder.hashCode;
+        
 
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is TodoSavedFilter &&
-          runtimeType == other.runtimeType &&
-          id == other.id &&
-          uuid == other.uuid &&
-          name == other.name &&
-          conditions == other.conditions &&
-          sortOrder == other.sortOrder;
-}
+                
+        @override
+        bool operator ==(Object other) =>
+            identical(this, other) ||
+            other is TodoSavedFilter &&
+                runtimeType == other.runtimeType
+                && id == other.id&& uuid == other.uuid&& name == other.name&& conditions == other.conditions&& sortOrder == other.sortOrder;
+        
+            }
 
-class TodoSavedFilterCreateInput {
-  final String name;
-  final String conditions;
-  final PlatformInt64? sortOrder;
+class TodoSavedFilterCreateInput  {
+                final String name;
+final String conditions;
+final PlatformInt64? sortOrder;
 
-  const TodoSavedFilterCreateInput({
-    required this.name,
-    required this.conditions,
-    this.sortOrder,
-  });
+                const TodoSavedFilterCreateInput({required this.name ,required this.conditions ,this.sortOrder ,});
 
-  @override
-  int get hashCode => name.hashCode ^ conditions.hashCode ^ sortOrder.hashCode;
+                
+                
 
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is TodoSavedFilterCreateInput &&
-          runtimeType == other.runtimeType &&
-          name == other.name &&
-          conditions == other.conditions &&
-          sortOrder == other.sortOrder;
-}
+                
+        @override
+        int get hashCode => name.hashCode^conditions.hashCode^sortOrder.hashCode;
+        
 
-class TodoSavedFilterUpdateInput {
-  final String? name;
-  final String? conditions;
-  final PlatformInt64? sortOrder;
+                
+        @override
+        bool operator ==(Object other) =>
+            identical(this, other) ||
+            other is TodoSavedFilterCreateInput &&
+                runtimeType == other.runtimeType
+                && name == other.name&& conditions == other.conditions&& sortOrder == other.sortOrder;
+        
+            }
 
-  const TodoSavedFilterUpdateInput({
-    this.name,
-    this.conditions,
-    this.sortOrder,
-  });
+class TodoSavedFilterUpdateInput  {
+                final String? name;
+final String? conditions;
+final PlatformInt64? sortOrder;
 
-  @override
-  int get hashCode => name.hashCode ^ conditions.hashCode ^ sortOrder.hashCode;
+                const TodoSavedFilterUpdateInput({this.name ,this.conditions ,this.sortOrder ,});
 
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is TodoSavedFilterUpdateInput &&
-          runtimeType == other.runtimeType &&
-          name == other.name &&
-          conditions == other.conditions &&
-          sortOrder == other.sortOrder;
-}
+                
+                
+
+                
+        @override
+        int get hashCode => name.hashCode^conditions.hashCode^sortOrder.hashCode;
+        
+
+                
+        @override
+        bool operator ==(Object other) =>
+            identical(this, other) ||
+            other is TodoSavedFilterUpdateInput &&
+                runtimeType == other.runtimeType
+                && name == other.name&& conditions == other.conditions&& sortOrder == other.sortOrder;
+        
+            }
 
 /// 子任务（镜像 orbit_core::models::business::TodoSubtask）
-class TodoSubtask {
-  final PlatformInt64 id;
-  final String uuid;
-  final PlatformInt64 taskId;
-  final String title;
-  final int done;
-  final PlatformInt64? doneAt;
-  final double position;
+class TodoSubtask  {
+                final PlatformInt64 id;
+final String uuid;
+final PlatformInt64 taskId;
+final String title;
+final int done;
+final PlatformInt64? doneAt;
+final double position;
+/// 上级子任务（父）uuid；NULL = 顶层（M10 多层嵌套）
+final String? parentUuid;
+final int isDeleted;
+final PlatformInt64 createdAt;
+final PlatformInt64 updatedAt;
+final PlatformInt64? deletedAt;
+final int version;
 
-  /// 上级子任务（父）uuid；NULL = 顶层（M10 多层嵌套）
-  final String? parentUuid;
-  final int isDeleted;
-  final PlatformInt64 createdAt;
-  final PlatformInt64 updatedAt;
-  final PlatformInt64? deletedAt;
-  final int version;
+                const TodoSubtask({required this.id ,required this.uuid ,required this.taskId ,required this.title ,required this.done ,this.doneAt ,required this.position ,this.parentUuid ,required this.isDeleted ,required this.createdAt ,required this.updatedAt ,this.deletedAt ,required this.version ,});
 
-  const TodoSubtask({
-    required this.id,
-    required this.uuid,
-    required this.taskId,
-    required this.title,
-    required this.done,
-    this.doneAt,
-    required this.position,
-    this.parentUuid,
-    required this.isDeleted,
-    required this.createdAt,
-    required this.updatedAt,
-    this.deletedAt,
-    required this.version,
-  });
+                
+                
 
-  @override
-  int get hashCode =>
-      id.hashCode ^
-      uuid.hashCode ^
-      taskId.hashCode ^
-      title.hashCode ^
-      done.hashCode ^
-      doneAt.hashCode ^
-      position.hashCode ^
-      parentUuid.hashCode ^
-      isDeleted.hashCode ^
-      createdAt.hashCode ^
-      updatedAt.hashCode ^
-      deletedAt.hashCode ^
-      version.hashCode;
+                
+        @override
+        int get hashCode => id.hashCode^uuid.hashCode^taskId.hashCode^title.hashCode^done.hashCode^doneAt.hashCode^position.hashCode^parentUuid.hashCode^isDeleted.hashCode^createdAt.hashCode^updatedAt.hashCode^deletedAt.hashCode^version.hashCode;
+        
 
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is TodoSubtask &&
-          runtimeType == other.runtimeType &&
-          id == other.id &&
-          uuid == other.uuid &&
-          taskId == other.taskId &&
-          title == other.title &&
-          done == other.done &&
-          doneAt == other.doneAt &&
-          position == other.position &&
-          parentUuid == other.parentUuid &&
-          isDeleted == other.isDeleted &&
-          createdAt == other.createdAt &&
-          updatedAt == other.updatedAt &&
-          deletedAt == other.deletedAt &&
-          version == other.version;
-}
+                
+        @override
+        bool operator ==(Object other) =>
+            identical(this, other) ||
+            other is TodoSubtask &&
+                runtimeType == other.runtimeType
+                && id == other.id&& uuid == other.uuid&& taskId == other.taskId&& title == other.title&& done == other.done&& doneAt == other.doneAt&& position == other.position&& parentUuid == other.parentUuid&& isDeleted == other.isDeleted&& createdAt == other.createdAt&& updatedAt == other.updatedAt&& deletedAt == other.deletedAt&& version == other.version;
+        
+            }
 
 /// 子任务创建输入（镜像 TodoSubtaskCreateInput）
-class TodoSubtaskCreateInput {
-  final PlatformInt64 taskId;
-  final String title;
-  final double? position;
+class TodoSubtaskCreateInput  {
+                final PlatformInt64 taskId;
+final String title;
+final double? position;
+/// 挂到哪个子任务下（父的 uuid）；None = 顶层。须与 task_id 同任务
+final String? parentUuid;
 
-  /// 挂到哪个子任务下（父的 uuid）；None = 顶层。须与 task_id 同任务
-  final String? parentUuid;
+                const TodoSubtaskCreateInput({required this.taskId ,required this.title ,this.position ,this.parentUuid ,});
 
-  const TodoSubtaskCreateInput({
-    required this.taskId,
-    required this.title,
-    this.position,
-    this.parentUuid,
-  });
+                
+                
 
-  @override
-  int get hashCode =>
-      taskId.hashCode ^
-      title.hashCode ^
-      position.hashCode ^
-      parentUuid.hashCode;
+                
+        @override
+        int get hashCode => taskId.hashCode^title.hashCode^position.hashCode^parentUuid.hashCode;
+        
 
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is TodoSubtaskCreateInput &&
-          runtimeType == other.runtimeType &&
-          taskId == other.taskId &&
-          title == other.title &&
-          position == other.position &&
-          parentUuid == other.parentUuid;
-}
+                
+        @override
+        bool operator ==(Object other) =>
+            identical(this, other) ||
+            other is TodoSubtaskCreateInput &&
+                runtimeType == other.runtimeType
+                && taskId == other.taskId&& title == other.title&& position == other.position&& parentUuid == other.parentUuid;
+        
+            }
 
 /// 任务（镜像 orbit_core::models::business::TodoTask）
-class TodoTask {
-  final PlatformInt64 id;
-  final String uuid;
-  final String title;
-  final String? description;
-  final PlatformInt64? projectId;
-  final int priority;
-  final String status;
-  final int done;
-  final PlatformInt64? doneAt;
-  final PlatformInt64? dueDate;
-  final PlatformInt64? startDate;
-  final PlatformInt64 repeatAfter;
-  final int repeatMode;
+class TodoTask  {
+                final PlatformInt64 id;
+final String uuid;
+final String title;
+final String? description;
+final PlatformInt64? projectId;
+final int priority;
+final String status;
+final int done;
+final PlatformInt64? doneAt;
+final PlatformInt64? dueDate;
+final PlatformInt64? startDate;
+final PlatformInt64 repeatAfter;
+final int repeatMode;
+/// #34 重复规则扩展（与 orbit-core TodoTask 同名列镜像）
+final int repeatWeekdays;
+final int repeatEndType;
+final PlatformInt64 repeatEndParam;
+final int repeatFromDone;
+/// #72 月高级语义（与 orbit-core TodoTask 同名列镜像）
+final int repeatMonthMode;
+final int repeatNthWeek;
+final double percentDone;
+final double position;
+final int isFavorite;
+final PlatformInt64? myDayDate;
+/// 任务预计时长（分钟，M9 阶段一）；None = 未设置
+final PlatformInt64? durationMinutes;
+final int isDeleted;
+final PlatformInt64 createdAt;
+final PlatformInt64 updatedAt;
+final PlatformInt64? deletedAt;
+final int version;
 
-  /// #34 重复规则扩展（与 orbit-core TodoTask 同名列镜像）
-  final int repeatWeekdays;
-  final int repeatEndType;
-  final PlatformInt64 repeatEndParam;
-  final int repeatFromDone;
+                const TodoTask({required this.id ,required this.uuid ,required this.title ,this.description ,this.projectId ,required this.priority ,required this.status ,required this.done ,this.doneAt ,this.dueDate ,this.startDate ,required this.repeatAfter ,required this.repeatMode ,required this.repeatWeekdays ,required this.repeatEndType ,required this.repeatEndParam ,required this.repeatFromDone ,required this.repeatMonthMode ,required this.repeatNthWeek ,required this.percentDone ,required this.position ,required this.isFavorite ,this.myDayDate ,this.durationMinutes ,required this.isDeleted ,required this.createdAt ,required this.updatedAt ,this.deletedAt ,required this.version ,});
 
-  /// #72 月高级语义（与 orbit-core TodoTask 同名列镜像）
-  final int repeatMonthMode;
-  final int repeatNthWeek;
-  final double percentDone;
-  final double position;
-  final int isFavorite;
-  final PlatformInt64? myDayDate;
+                
+                
 
-  /// 任务预计时长（分钟，M9 阶段一）；None = 未设置
-  final PlatformInt64? durationMinutes;
-  final int isDeleted;
-  final PlatformInt64 createdAt;
-  final PlatformInt64 updatedAt;
-  final PlatformInt64? deletedAt;
-  final int version;
+                
+        @override
+        int get hashCode => id.hashCode^uuid.hashCode^title.hashCode^description.hashCode^projectId.hashCode^priority.hashCode^status.hashCode^done.hashCode^doneAt.hashCode^dueDate.hashCode^startDate.hashCode^repeatAfter.hashCode^repeatMode.hashCode^repeatWeekdays.hashCode^repeatEndType.hashCode^repeatEndParam.hashCode^repeatFromDone.hashCode^repeatMonthMode.hashCode^repeatNthWeek.hashCode^percentDone.hashCode^position.hashCode^isFavorite.hashCode^myDayDate.hashCode^durationMinutes.hashCode^isDeleted.hashCode^createdAt.hashCode^updatedAt.hashCode^deletedAt.hashCode^version.hashCode;
+        
 
-  const TodoTask({
-    required this.id,
-    required this.uuid,
-    required this.title,
-    this.description,
-    this.projectId,
-    required this.priority,
-    required this.status,
-    required this.done,
-    this.doneAt,
-    this.dueDate,
-    this.startDate,
-    required this.repeatAfter,
-    required this.repeatMode,
-    required this.repeatWeekdays,
-    required this.repeatEndType,
-    required this.repeatEndParam,
-    required this.repeatFromDone,
-    required this.repeatMonthMode,
-    required this.repeatNthWeek,
-    required this.percentDone,
-    required this.position,
-    required this.isFavorite,
-    this.myDayDate,
-    this.durationMinutes,
-    required this.isDeleted,
-    required this.createdAt,
-    required this.updatedAt,
-    this.deletedAt,
-    required this.version,
-  });
-
-  @override
-  int get hashCode =>
-      id.hashCode ^
-      uuid.hashCode ^
-      title.hashCode ^
-      description.hashCode ^
-      projectId.hashCode ^
-      priority.hashCode ^
-      status.hashCode ^
-      done.hashCode ^
-      doneAt.hashCode ^
-      dueDate.hashCode ^
-      startDate.hashCode ^
-      repeatAfter.hashCode ^
-      repeatMode.hashCode ^
-      repeatWeekdays.hashCode ^
-      repeatEndType.hashCode ^
-      repeatEndParam.hashCode ^
-      repeatFromDone.hashCode ^
-      repeatMonthMode.hashCode ^
-      repeatNthWeek.hashCode ^
-      percentDone.hashCode ^
-      position.hashCode ^
-      isFavorite.hashCode ^
-      myDayDate.hashCode ^
-      durationMinutes.hashCode ^
-      isDeleted.hashCode ^
-      createdAt.hashCode ^
-      updatedAt.hashCode ^
-      deletedAt.hashCode ^
-      version.hashCode;
-
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is TodoTask &&
-          runtimeType == other.runtimeType &&
-          id == other.id &&
-          uuid == other.uuid &&
-          title == other.title &&
-          description == other.description &&
-          projectId == other.projectId &&
-          priority == other.priority &&
-          status == other.status &&
-          done == other.done &&
-          doneAt == other.doneAt &&
-          dueDate == other.dueDate &&
-          startDate == other.startDate &&
-          repeatAfter == other.repeatAfter &&
-          repeatMode == other.repeatMode &&
-          repeatWeekdays == other.repeatWeekdays &&
-          repeatEndType == other.repeatEndType &&
-          repeatEndParam == other.repeatEndParam &&
-          repeatFromDone == other.repeatFromDone &&
-          repeatMonthMode == other.repeatMonthMode &&
-          repeatNthWeek == other.repeatNthWeek &&
-          percentDone == other.percentDone &&
-          position == other.position &&
-          isFavorite == other.isFavorite &&
-          myDayDate == other.myDayDate &&
-          durationMinutes == other.durationMinutes &&
-          isDeleted == other.isDeleted &&
-          createdAt == other.createdAt &&
-          updatedAt == other.updatedAt &&
-          deletedAt == other.deletedAt &&
-          version == other.version;
-}
+                
+        @override
+        bool operator ==(Object other) =>
+            identical(this, other) ||
+            other is TodoTask &&
+                runtimeType == other.runtimeType
+                && id == other.id&& uuid == other.uuid&& title == other.title&& description == other.description&& projectId == other.projectId&& priority == other.priority&& status == other.status&& done == other.done&& doneAt == other.doneAt&& dueDate == other.dueDate&& startDate == other.startDate&& repeatAfter == other.repeatAfter&& repeatMode == other.repeatMode&& repeatWeekdays == other.repeatWeekdays&& repeatEndType == other.repeatEndType&& repeatEndParam == other.repeatEndParam&& repeatFromDone == other.repeatFromDone&& repeatMonthMode == other.repeatMonthMode&& repeatNthWeek == other.repeatNthWeek&& percentDone == other.percentDone&& position == other.position&& isFavorite == other.isFavorite&& myDayDate == other.myDayDate&& durationMinutes == other.durationMinutes&& isDeleted == other.isDeleted&& createdAt == other.createdAt&& updatedAt == other.updatedAt&& deletedAt == other.deletedAt&& version == other.version;
+        
+            }
 
 /// 任务创建输入（镜像 TodoTaskCreateInput；均为普通 Option<T>/T 字段）
 ///
 /// 注：core 的 `TodoTaskUpdateInput` 才含 `Option<Option<T>>` 可空列
 /// （project_id/done_at/due_date/start_date 等），不在此镜像，
 /// 走 patch_json 路径。
-class TodoTaskCreateInput {
-  final String title;
-  final String? description;
-  final PlatformInt64? projectId;
-  final int? priority;
-  final String? status;
-  final int? done;
-  final PlatformInt64? doneAt;
-  final PlatformInt64? dueDate;
-  final PlatformInt64? startDate;
-  final PlatformInt64? repeatAfter;
-  final int? repeatMode;
-  final int? repeatWeekdays;
-  final int? repeatEndType;
-  final PlatformInt64? repeatEndParam;
-  final int? repeatFromDone;
-  final int? repeatMonthMode;
-  final int? repeatNthWeek;
-  final double? position;
-  final int? isFavorite;
-  final PlatformInt64? myDayDate;
-  final PlatformInt64? durationMinutes;
+class TodoTaskCreateInput  {
+                final String title;
+final String? description;
+final PlatformInt64? projectId;
+final int? priority;
+final String? status;
+final int? done;
+final PlatformInt64? doneAt;
+final PlatformInt64? dueDate;
+final PlatformInt64? startDate;
+final PlatformInt64? repeatAfter;
+final int? repeatMode;
+final int? repeatWeekdays;
+final int? repeatEndType;
+final PlatformInt64? repeatEndParam;
+final int? repeatFromDone;
+final int? repeatMonthMode;
+final int? repeatNthWeek;
+final double? position;
+final int? isFavorite;
+final PlatformInt64? myDayDate;
+final PlatformInt64? durationMinutes;
 
-  const TodoTaskCreateInput({
-    required this.title,
-    this.description,
-    this.projectId,
-    this.priority,
-    this.status,
-    this.done,
-    this.doneAt,
-    this.dueDate,
-    this.startDate,
-    this.repeatAfter,
-    this.repeatMode,
-    this.repeatWeekdays,
-    this.repeatEndType,
-    this.repeatEndParam,
-    this.repeatFromDone,
-    this.repeatMonthMode,
-    this.repeatNthWeek,
-    this.position,
-    this.isFavorite,
-    this.myDayDate,
-    this.durationMinutes,
-  });
+                const TodoTaskCreateInput({required this.title ,this.description ,this.projectId ,this.priority ,this.status ,this.done ,this.doneAt ,this.dueDate ,this.startDate ,this.repeatAfter ,this.repeatMode ,this.repeatWeekdays ,this.repeatEndType ,this.repeatEndParam ,this.repeatFromDone ,this.repeatMonthMode ,this.repeatNthWeek ,this.position ,this.isFavorite ,this.myDayDate ,this.durationMinutes ,});
 
-  @override
-  int get hashCode =>
-      title.hashCode ^
-      description.hashCode ^
-      projectId.hashCode ^
-      priority.hashCode ^
-      status.hashCode ^
-      done.hashCode ^
-      doneAt.hashCode ^
-      dueDate.hashCode ^
-      startDate.hashCode ^
-      repeatAfter.hashCode ^
-      repeatMode.hashCode ^
-      repeatWeekdays.hashCode ^
-      repeatEndType.hashCode ^
-      repeatEndParam.hashCode ^
-      repeatFromDone.hashCode ^
-      repeatMonthMode.hashCode ^
-      repeatNthWeek.hashCode ^
-      position.hashCode ^
-      isFavorite.hashCode ^
-      myDayDate.hashCode ^
-      durationMinutes.hashCode;
+                
+                
 
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is TodoTaskCreateInput &&
-          runtimeType == other.runtimeType &&
-          title == other.title &&
-          description == other.description &&
-          projectId == other.projectId &&
-          priority == other.priority &&
-          status == other.status &&
-          done == other.done &&
-          doneAt == other.doneAt &&
-          dueDate == other.dueDate &&
-          startDate == other.startDate &&
-          repeatAfter == other.repeatAfter &&
-          repeatMode == other.repeatMode &&
-          repeatWeekdays == other.repeatWeekdays &&
-          repeatEndType == other.repeatEndType &&
-          repeatEndParam == other.repeatEndParam &&
-          repeatFromDone == other.repeatFromDone &&
-          repeatMonthMode == other.repeatMonthMode &&
-          repeatNthWeek == other.repeatNthWeek &&
-          position == other.position &&
-          isFavorite == other.isFavorite &&
-          myDayDate == other.myDayDate &&
-          durationMinutes == other.durationMinutes;
-}
+                
+        @override
+        int get hashCode => title.hashCode^description.hashCode^projectId.hashCode^priority.hashCode^status.hashCode^done.hashCode^doneAt.hashCode^dueDate.hashCode^startDate.hashCode^repeatAfter.hashCode^repeatMode.hashCode^repeatWeekdays.hashCode^repeatEndType.hashCode^repeatEndParam.hashCode^repeatFromDone.hashCode^repeatMonthMode.hashCode^repeatNthWeek.hashCode^position.hashCode^isFavorite.hashCode^myDayDate.hashCode^durationMinutes.hashCode;
+        
+
+                
+        @override
+        bool operator ==(Object other) =>
+            identical(this, other) ||
+            other is TodoTaskCreateInput &&
+                runtimeType == other.runtimeType
+                && title == other.title&& description == other.description&& projectId == other.projectId&& priority == other.priority&& status == other.status&& done == other.done&& doneAt == other.doneAt&& dueDate == other.dueDate&& startDate == other.startDate&& repeatAfter == other.repeatAfter&& repeatMode == other.repeatMode&& repeatWeekdays == other.repeatWeekdays&& repeatEndType == other.repeatEndType&& repeatEndParam == other.repeatEndParam&& repeatFromDone == other.repeatFromDone&& repeatMonthMode == other.repeatMonthMode&& repeatNthWeek == other.repeatNthWeek&& position == other.position&& isFavorite == other.isFavorite&& myDayDate == other.myDayDate&& durationMinutes == other.durationMinutes;
+        
+            }
 
 /// 任务详情聚合：TodoTask 全部字段 + 五张子表 Vec
 ///
@@ -1572,233 +1207,121 @@ class TodoTaskCreateInput {
 /// `#[serde(flatten)] task: TodoTask`，JSON 为扁平形状（与桌面 Tauri 契约、
 /// 移动端 data/api/dto.dart 的 `TodoTaskDetail extends TodoTask` 一致）；
 /// 此处平铺 task 字段，避免 Dart 侧出现嵌套差异。
-class TodoTaskDetail {
-  final PlatformInt64 id;
-  final String uuid;
-  final String title;
-  final String? description;
-  final PlatformInt64? projectId;
-  final int priority;
-  final String status;
-  final int done;
-  final PlatformInt64? doneAt;
-  final PlatformInt64? dueDate;
-  final PlatformInt64? startDate;
-  final PlatformInt64 repeatAfter;
-  final int repeatMode;
+class TodoTaskDetail  {
+                final PlatformInt64 id;
+final String uuid;
+final String title;
+final String? description;
+final PlatformInt64? projectId;
+final int priority;
+final String status;
+final int done;
+final PlatformInt64? doneAt;
+final PlatformInt64? dueDate;
+final PlatformInt64? startDate;
+final PlatformInt64 repeatAfter;
+final int repeatMode;
+/// #34 重复规则扩展（与 orbit-core TodoTask 同名列镜像）
+final int repeatWeekdays;
+final int repeatEndType;
+final PlatformInt64 repeatEndParam;
+final int repeatFromDone;
+/// #72 月高级语义（与 orbit-core TodoTask 同名列镜像）
+final int repeatMonthMode;
+final int repeatNthWeek;
+final double percentDone;
+final double position;
+final int isFavorite;
+final PlatformInt64? myDayDate;
+/// 任务预计时长（分钟，M9 阶段一）；None = 未设置
+final PlatformInt64? durationMinutes;
+final int isDeleted;
+final PlatformInt64 createdAt;
+final PlatformInt64 updatedAt;
+final PlatformInt64? deletedAt;
+final int version;
+final List<TodoSubtask> subtasks;
+final List<TaskLabelWithId> labels;
+final List<TodoComment> comments;
+final List<TodoTaskRelation> relations;
+final List<TodoReminder> reminders;
 
-  /// #34 重复规则扩展（与 orbit-core TodoTask 同名列镜像）
-  final int repeatWeekdays;
-  final int repeatEndType;
-  final PlatformInt64 repeatEndParam;
-  final int repeatFromDone;
+                const TodoTaskDetail({required this.id ,required this.uuid ,required this.title ,this.description ,this.projectId ,required this.priority ,required this.status ,required this.done ,this.doneAt ,this.dueDate ,this.startDate ,required this.repeatAfter ,required this.repeatMode ,required this.repeatWeekdays ,required this.repeatEndType ,required this.repeatEndParam ,required this.repeatFromDone ,required this.repeatMonthMode ,required this.repeatNthWeek ,required this.percentDone ,required this.position ,required this.isFavorite ,this.myDayDate ,this.durationMinutes ,required this.isDeleted ,required this.createdAt ,required this.updatedAt ,this.deletedAt ,required this.version ,required this.subtasks ,required this.labels ,required this.comments ,required this.relations ,required this.reminders ,});
 
-  /// #72 月高级语义（与 orbit-core TodoTask 同名列镜像）
-  final int repeatMonthMode;
-  final int repeatNthWeek;
-  final double percentDone;
-  final double position;
-  final int isFavorite;
-  final PlatformInt64? myDayDate;
+                
+                
 
-  /// 任务预计时长（分钟，M9 阶段一）；None = 未设置
-  final PlatformInt64? durationMinutes;
-  final int isDeleted;
-  final PlatformInt64 createdAt;
-  final PlatformInt64 updatedAt;
-  final PlatformInt64? deletedAt;
-  final int version;
-  final List<TodoSubtask> subtasks;
-  final List<TaskLabelWithId> labels;
-  final List<TodoComment> comments;
-  final List<TodoTaskRelation> relations;
-  final List<TodoReminder> reminders;
+                
+        @override
+        int get hashCode => id.hashCode^uuid.hashCode^title.hashCode^description.hashCode^projectId.hashCode^priority.hashCode^status.hashCode^done.hashCode^doneAt.hashCode^dueDate.hashCode^startDate.hashCode^repeatAfter.hashCode^repeatMode.hashCode^repeatWeekdays.hashCode^repeatEndType.hashCode^repeatEndParam.hashCode^repeatFromDone.hashCode^repeatMonthMode.hashCode^repeatNthWeek.hashCode^percentDone.hashCode^position.hashCode^isFavorite.hashCode^myDayDate.hashCode^durationMinutes.hashCode^isDeleted.hashCode^createdAt.hashCode^updatedAt.hashCode^deletedAt.hashCode^version.hashCode^subtasks.hashCode^labels.hashCode^comments.hashCode^relations.hashCode^reminders.hashCode;
+        
 
-  const TodoTaskDetail({
-    required this.id,
-    required this.uuid,
-    required this.title,
-    this.description,
-    this.projectId,
-    required this.priority,
-    required this.status,
-    required this.done,
-    this.doneAt,
-    this.dueDate,
-    this.startDate,
-    required this.repeatAfter,
-    required this.repeatMode,
-    required this.repeatWeekdays,
-    required this.repeatEndType,
-    required this.repeatEndParam,
-    required this.repeatFromDone,
-    required this.repeatMonthMode,
-    required this.repeatNthWeek,
-    required this.percentDone,
-    required this.position,
-    required this.isFavorite,
-    this.myDayDate,
-    this.durationMinutes,
-    required this.isDeleted,
-    required this.createdAt,
-    required this.updatedAt,
-    this.deletedAt,
-    required this.version,
-    required this.subtasks,
-    required this.labels,
-    required this.comments,
-    required this.relations,
-    required this.reminders,
-  });
-
-  @override
-  int get hashCode =>
-      id.hashCode ^
-      uuid.hashCode ^
-      title.hashCode ^
-      description.hashCode ^
-      projectId.hashCode ^
-      priority.hashCode ^
-      status.hashCode ^
-      done.hashCode ^
-      doneAt.hashCode ^
-      dueDate.hashCode ^
-      startDate.hashCode ^
-      repeatAfter.hashCode ^
-      repeatMode.hashCode ^
-      repeatWeekdays.hashCode ^
-      repeatEndType.hashCode ^
-      repeatEndParam.hashCode ^
-      repeatFromDone.hashCode ^
-      repeatMonthMode.hashCode ^
-      repeatNthWeek.hashCode ^
-      percentDone.hashCode ^
-      position.hashCode ^
-      isFavorite.hashCode ^
-      myDayDate.hashCode ^
-      durationMinutes.hashCode ^
-      isDeleted.hashCode ^
-      createdAt.hashCode ^
-      updatedAt.hashCode ^
-      deletedAt.hashCode ^
-      version.hashCode ^
-      subtasks.hashCode ^
-      labels.hashCode ^
-      comments.hashCode ^
-      relations.hashCode ^
-      reminders.hashCode;
-
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is TodoTaskDetail &&
-          runtimeType == other.runtimeType &&
-          id == other.id &&
-          uuid == other.uuid &&
-          title == other.title &&
-          description == other.description &&
-          projectId == other.projectId &&
-          priority == other.priority &&
-          status == other.status &&
-          done == other.done &&
-          doneAt == other.doneAt &&
-          dueDate == other.dueDate &&
-          startDate == other.startDate &&
-          repeatAfter == other.repeatAfter &&
-          repeatMode == other.repeatMode &&
-          repeatWeekdays == other.repeatWeekdays &&
-          repeatEndType == other.repeatEndType &&
-          repeatEndParam == other.repeatEndParam &&
-          repeatFromDone == other.repeatFromDone &&
-          repeatMonthMode == other.repeatMonthMode &&
-          repeatNthWeek == other.repeatNthWeek &&
-          percentDone == other.percentDone &&
-          position == other.position &&
-          isFavorite == other.isFavorite &&
-          myDayDate == other.myDayDate &&
-          durationMinutes == other.durationMinutes &&
-          isDeleted == other.isDeleted &&
-          createdAt == other.createdAt &&
-          updatedAt == other.updatedAt &&
-          deletedAt == other.deletedAt &&
-          version == other.version &&
-          subtasks == other.subtasks &&
-          labels == other.labels &&
-          comments == other.comments &&
-          relations == other.relations &&
-          reminders == other.reminders;
-}
+                
+        @override
+        bool operator ==(Object other) =>
+            identical(this, other) ||
+            other is TodoTaskDetail &&
+                runtimeType == other.runtimeType
+                && id == other.id&& uuid == other.uuid&& title == other.title&& description == other.description&& projectId == other.projectId&& priority == other.priority&& status == other.status&& done == other.done&& doneAt == other.doneAt&& dueDate == other.dueDate&& startDate == other.startDate&& repeatAfter == other.repeatAfter&& repeatMode == other.repeatMode&& repeatWeekdays == other.repeatWeekdays&& repeatEndType == other.repeatEndType&& repeatEndParam == other.repeatEndParam&& repeatFromDone == other.repeatFromDone&& repeatMonthMode == other.repeatMonthMode&& repeatNthWeek == other.repeatNthWeek&& percentDone == other.percentDone&& position == other.position&& isFavorite == other.isFavorite&& myDayDate == other.myDayDate&& durationMinutes == other.durationMinutes&& isDeleted == other.isDeleted&& createdAt == other.createdAt&& updatedAt == other.updatedAt&& deletedAt == other.deletedAt&& version == other.version&& subtasks == other.subtasks&& labels == other.labels&& comments == other.comments&& relations == other.relations&& reminders == other.reminders;
+        
+            }
 
 /// 任务↔标签关联（镜像 orbit_core::models::business::TodoTaskLabel）
-class TodoTaskLabel {
-  final PlatformInt64 id;
-  final String uuid;
-  final PlatformInt64 taskId;
-  final PlatformInt64 labelId;
-  final int isDeleted;
-  final PlatformInt64 createdAt;
-  final PlatformInt64 updatedAt;
-  final PlatformInt64? deletedAt;
-  final int version;
+class TodoTaskLabel  {
+                final PlatformInt64 id;
+final String uuid;
+final PlatformInt64 taskId;
+final PlatformInt64 labelId;
+final int isDeleted;
+final PlatformInt64 createdAt;
+final PlatformInt64 updatedAt;
+final PlatformInt64? deletedAt;
+final int version;
 
-  const TodoTaskLabel({
-    required this.id,
-    required this.uuid,
-    required this.taskId,
-    required this.labelId,
-    required this.isDeleted,
-    required this.createdAt,
-    required this.updatedAt,
-    this.deletedAt,
-    required this.version,
-  });
+                const TodoTaskLabel({required this.id ,required this.uuid ,required this.taskId ,required this.labelId ,required this.isDeleted ,required this.createdAt ,required this.updatedAt ,this.deletedAt ,required this.version ,});
 
-  @override
-  int get hashCode =>
-      id.hashCode ^
-      uuid.hashCode ^
-      taskId.hashCode ^
-      labelId.hashCode ^
-      isDeleted.hashCode ^
-      createdAt.hashCode ^
-      updatedAt.hashCode ^
-      deletedAt.hashCode ^
-      version.hashCode;
+                
+                
 
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is TodoTaskLabel &&
-          runtimeType == other.runtimeType &&
-          id == other.id &&
-          uuid == other.uuid &&
-          taskId == other.taskId &&
-          labelId == other.labelId &&
-          isDeleted == other.isDeleted &&
-          createdAt == other.createdAt &&
-          updatedAt == other.updatedAt &&
-          deletedAt == other.deletedAt &&
-          version == other.version;
-}
+                
+        @override
+        int get hashCode => id.hashCode^uuid.hashCode^taskId.hashCode^labelId.hashCode^isDeleted.hashCode^createdAt.hashCode^updatedAt.hashCode^deletedAt.hashCode^version.hashCode;
+        
+
+                
+        @override
+        bool operator ==(Object other) =>
+            identical(this, other) ||
+            other is TodoTaskLabel &&
+                runtimeType == other.runtimeType
+                && id == other.id&& uuid == other.uuid&& taskId == other.taskId&& labelId == other.labelId&& isDeleted == other.isDeleted&& createdAt == other.createdAt&& updatedAt == other.updatedAt&& deletedAt == other.deletedAt&& version == other.version;
+        
+            }
 
 /// 关联创建输入（镜像 TodoTaskLabelCreateInput）
-class TodoTaskLabelCreateInput {
-  final PlatformInt64 taskId;
-  final PlatformInt64 labelId;
+class TodoTaskLabelCreateInput  {
+                final PlatformInt64 taskId;
+final PlatformInt64 labelId;
 
-  const TodoTaskLabelCreateInput({required this.taskId, required this.labelId});
+                const TodoTaskLabelCreateInput({required this.taskId ,required this.labelId ,});
 
-  @override
-  int get hashCode => taskId.hashCode ^ labelId.hashCode;
+                
+                
 
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is TodoTaskLabelCreateInput &&
-          runtimeType == other.runtimeType &&
-          taskId == other.taskId &&
-          labelId == other.labelId;
-}
+                
+        @override
+        int get hashCode => taskId.hashCode^labelId.hashCode;
+        
+
+                
+        @override
+        bool operator ==(Object other) =>
+            identical(this, other) ||
+            other is TodoTaskLabelCreateInput &&
+                runtimeType == other.runtimeType
+                && taskId == other.taskId&& labelId == other.labelId;
+        
+            }
 
 /// 列表通道瘦行任务（镜像 orbit_core::models::business::TodoTaskListItem）
 ///
@@ -1806,260 +1329,183 @@ class TodoTaskLabelCreateInput {
 /// 六个更细的 repeat_* / deleted_at / version），此处**刻意不镜像**这些字段——
 /// FRB 只为签名的具体类型生成字段级 Dart 镜像，少一列就少一份解码与 Dart 对象
 /// 分配。字段清单与 core 侧必须严格一致（core 文档注释列了消费边界与核实结论）。
-class TodoTaskListItem {
-  final PlatformInt64 id;
-  final String title;
-  final String? description;
-  final PlatformInt64? projectId;
-  final int priority;
-  final String status;
-  final int done;
-  final PlatformInt64? doneAt;
-  final PlatformInt64? dueDate;
-  final PlatformInt64? startDate;
-  final int repeatMode;
-  final double percentDone;
-  final double position;
-  final int isFavorite;
+class TodoTaskListItem  {
+                final PlatformInt64 id;
+final String title;
+final String? description;
+final PlatformInt64? projectId;
+final int priority;
+final String status;
+final int done;
+final PlatformInt64? doneAt;
+final PlatformInt64? dueDate;
+final PlatformInt64? startDate;
+final int repeatMode;
+final double percentDone;
+final double position;
+final int isFavorite;
+/// 我的一天：加入当天本地零点 ms；None = 不在任何一天的 My Day
+final PlatformInt64? myDayDate;
+/// 任务预计时长（分钟，M9 阶段一）；None = 未设置
+final PlatformInt64? durationMinutes;
+final int isDeleted;
+final PlatformInt64 createdAt;
+final PlatformInt64 updatedAt;
 
-  /// 我的一天：加入当天本地零点 ms；None = 不在任何一天的 My Day
-  final PlatformInt64? myDayDate;
+                const TodoTaskListItem({required this.id ,required this.title ,this.description ,this.projectId ,required this.priority ,required this.status ,required this.done ,this.doneAt ,this.dueDate ,this.startDate ,required this.repeatMode ,required this.percentDone ,required this.position ,required this.isFavorite ,this.myDayDate ,this.durationMinutes ,required this.isDeleted ,required this.createdAt ,required this.updatedAt ,});
 
-  /// 任务预计时长（分钟，M9 阶段一）；None = 未设置
-  final PlatformInt64? durationMinutes;
-  final int isDeleted;
-  final PlatformInt64 createdAt;
-  final PlatformInt64 updatedAt;
+                
+                
 
-  const TodoTaskListItem({
-    required this.id,
-    required this.title,
-    this.description,
-    this.projectId,
-    required this.priority,
-    required this.status,
-    required this.done,
-    this.doneAt,
-    this.dueDate,
-    this.startDate,
-    required this.repeatMode,
-    required this.percentDone,
-    required this.position,
-    required this.isFavorite,
-    this.myDayDate,
-    this.durationMinutes,
-    required this.isDeleted,
-    required this.createdAt,
-    required this.updatedAt,
-  });
+                
+        @override
+        int get hashCode => id.hashCode^title.hashCode^description.hashCode^projectId.hashCode^priority.hashCode^status.hashCode^done.hashCode^doneAt.hashCode^dueDate.hashCode^startDate.hashCode^repeatMode.hashCode^percentDone.hashCode^position.hashCode^isFavorite.hashCode^myDayDate.hashCode^durationMinutes.hashCode^isDeleted.hashCode^createdAt.hashCode^updatedAt.hashCode;
+        
 
-  @override
-  int get hashCode =>
-      id.hashCode ^
-      title.hashCode ^
-      description.hashCode ^
-      projectId.hashCode ^
-      priority.hashCode ^
-      status.hashCode ^
-      done.hashCode ^
-      doneAt.hashCode ^
-      dueDate.hashCode ^
-      startDate.hashCode ^
-      repeatMode.hashCode ^
-      percentDone.hashCode ^
-      position.hashCode ^
-      isFavorite.hashCode ^
-      myDayDate.hashCode ^
-      durationMinutes.hashCode ^
-      isDeleted.hashCode ^
-      createdAt.hashCode ^
-      updatedAt.hashCode;
-
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is TodoTaskListItem &&
-          runtimeType == other.runtimeType &&
-          id == other.id &&
-          title == other.title &&
-          description == other.description &&
-          projectId == other.projectId &&
-          priority == other.priority &&
-          status == other.status &&
-          done == other.done &&
-          doneAt == other.doneAt &&
-          dueDate == other.dueDate &&
-          startDate == other.startDate &&
-          repeatMode == other.repeatMode &&
-          percentDone == other.percentDone &&
-          position == other.position &&
-          isFavorite == other.isFavorite &&
-          myDayDate == other.myDayDate &&
-          durationMinutes == other.durationMinutes &&
-          isDeleted == other.isDeleted &&
-          createdAt == other.createdAt &&
-          updatedAt == other.updatedAt;
-}
+                
+        @override
+        bool operator ==(Object other) =>
+            identical(this, other) ||
+            other is TodoTaskListItem &&
+                runtimeType == other.runtimeType
+                && id == other.id&& title == other.title&& description == other.description&& projectId == other.projectId&& priority == other.priority&& status == other.status&& done == other.done&& doneAt == other.doneAt&& dueDate == other.dueDate&& startDate == other.startDate&& repeatMode == other.repeatMode&& percentDone == other.percentDone&& position == other.position&& isFavorite == other.isFavorite&& myDayDate == other.myDayDate&& durationMinutes == other.durationMinutes&& isDeleted == other.isDeleted&& createdAt == other.createdAt&& updatedAt == other.updatedAt;
+        
+            }
 
 /// 任务关系（镜像 orbit_core::models::business::TodoTaskRelation）
-class TodoTaskRelation {
-  final PlatformInt64 id;
-  final String uuid;
-  final PlatformInt64 taskId;
-  final PlatformInt64 otherTaskId;
-  final String relationType;
-  final int isDeleted;
-  final PlatformInt64 createdAt;
-  final PlatformInt64 updatedAt;
-  final PlatformInt64? deletedAt;
-  final int version;
+class TodoTaskRelation  {
+                final PlatformInt64 id;
+final String uuid;
+final PlatformInt64 taskId;
+final PlatformInt64 otherTaskId;
+final String relationType;
+final int isDeleted;
+final PlatformInt64 createdAt;
+final PlatformInt64 updatedAt;
+final PlatformInt64? deletedAt;
+final int version;
 
-  const TodoTaskRelation({
-    required this.id,
-    required this.uuid,
-    required this.taskId,
-    required this.otherTaskId,
-    required this.relationType,
-    required this.isDeleted,
-    required this.createdAt,
-    required this.updatedAt,
-    this.deletedAt,
-    required this.version,
-  });
+                const TodoTaskRelation({required this.id ,required this.uuid ,required this.taskId ,required this.otherTaskId ,required this.relationType ,required this.isDeleted ,required this.createdAt ,required this.updatedAt ,this.deletedAt ,required this.version ,});
 
-  @override
-  int get hashCode =>
-      id.hashCode ^
-      uuid.hashCode ^
-      taskId.hashCode ^
-      otherTaskId.hashCode ^
-      relationType.hashCode ^
-      isDeleted.hashCode ^
-      createdAt.hashCode ^
-      updatedAt.hashCode ^
-      deletedAt.hashCode ^
-      version.hashCode;
+                
+                
 
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is TodoTaskRelation &&
-          runtimeType == other.runtimeType &&
-          id == other.id &&
-          uuid == other.uuid &&
-          taskId == other.taskId &&
-          otherTaskId == other.otherTaskId &&
-          relationType == other.relationType &&
-          isDeleted == other.isDeleted &&
-          createdAt == other.createdAt &&
-          updatedAt == other.updatedAt &&
-          deletedAt == other.deletedAt &&
-          version == other.version;
-}
+                
+        @override
+        int get hashCode => id.hashCode^uuid.hashCode^taskId.hashCode^otherTaskId.hashCode^relationType.hashCode^isDeleted.hashCode^createdAt.hashCode^updatedAt.hashCode^deletedAt.hashCode^version.hashCode;
+        
+
+                
+        @override
+        bool operator ==(Object other) =>
+            identical(this, other) ||
+            other is TodoTaskRelation &&
+                runtimeType == other.runtimeType
+                && id == other.id&& uuid == other.uuid&& taskId == other.taskId&& otherTaskId == other.otherTaskId&& relationType == other.relationType&& isDeleted == other.isDeleted&& createdAt == other.createdAt&& updatedAt == other.updatedAt&& deletedAt == other.deletedAt&& version == other.version;
+        
+            }
 
 /// 关系创建输入（镜像 TodoTaskRelationCreateInput）
-class TodoTaskRelationCreateInput {
-  final PlatformInt64 taskId;
-  final PlatformInt64 otherTaskId;
-  final String relationType;
+class TodoTaskRelationCreateInput  {
+                final PlatformInt64 taskId;
+final PlatformInt64 otherTaskId;
+final String relationType;
 
-  const TodoTaskRelationCreateInput({
-    required this.taskId,
-    required this.otherTaskId,
-    required this.relationType,
-  });
+                const TodoTaskRelationCreateInput({required this.taskId ,required this.otherTaskId ,required this.relationType ,});
 
-  @override
-  int get hashCode =>
-      taskId.hashCode ^ otherTaskId.hashCode ^ relationType.hashCode;
+                
+                
 
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is TodoTaskRelationCreateInput &&
-          runtimeType == other.runtimeType &&
-          taskId == other.taskId &&
-          otherTaskId == other.otherTaskId &&
-          relationType == other.relationType;
-}
+                
+        @override
+        int get hashCode => taskId.hashCode^otherTaskId.hashCode^relationType.hashCode;
+        
 
-class TodoTemplate {
-  final PlatformInt64 id;
-  final String uuid;
-  final String name;
+                
+        @override
+        bool operator ==(Object other) =>
+            identical(this, other) ||
+            other is TodoTaskRelationCreateInput &&
+                runtimeType == other.runtimeType
+                && taskId == other.taskId&& otherTaskId == other.otherTaskId&& relationType == other.relationType;
+        
+            }
 
-  /// 模板内容 JSON：{title?, notes?, priority?, due_offset_days?, subtasks?}——套用时按存在键预填
-  final String payload;
-  final PlatformInt64 sortOrder;
+class TodoTemplate  {
+                final PlatformInt64 id;
+final String uuid;
+final String name;
+/// 模板内容 JSON：{title?, notes?, priority?, due_offset_days?, subtasks?}——套用时按存在键预填
+final String payload;
+final PlatformInt64 sortOrder;
 
-  const TodoTemplate({
-    required this.id,
-    required this.uuid,
-    required this.name,
-    required this.payload,
-    required this.sortOrder,
-  });
+                const TodoTemplate({required this.id ,required this.uuid ,required this.name ,required this.payload ,required this.sortOrder ,});
 
-  @override
-  int get hashCode =>
-      id.hashCode ^
-      uuid.hashCode ^
-      name.hashCode ^
-      payload.hashCode ^
-      sortOrder.hashCode;
+                
+                
 
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is TodoTemplate &&
-          runtimeType == other.runtimeType &&
-          id == other.id &&
-          uuid == other.uuid &&
-          name == other.name &&
-          payload == other.payload &&
-          sortOrder == other.sortOrder;
-}
+                
+        @override
+        int get hashCode => id.hashCode^uuid.hashCode^name.hashCode^payload.hashCode^sortOrder.hashCode;
+        
 
-class TodoTemplateCreateInput {
-  final String name;
-  final String payload;
-  final PlatformInt64? sortOrder;
+                
+        @override
+        bool operator ==(Object other) =>
+            identical(this, other) ||
+            other is TodoTemplate &&
+                runtimeType == other.runtimeType
+                && id == other.id&& uuid == other.uuid&& name == other.name&& payload == other.payload&& sortOrder == other.sortOrder;
+        
+            }
 
-  const TodoTemplateCreateInput({
-    required this.name,
-    required this.payload,
-    this.sortOrder,
-  });
+class TodoTemplateCreateInput  {
+                final String name;
+final String payload;
+final PlatformInt64? sortOrder;
 
-  @override
-  int get hashCode => name.hashCode ^ payload.hashCode ^ sortOrder.hashCode;
+                const TodoTemplateCreateInput({required this.name ,required this.payload ,this.sortOrder ,});
 
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is TodoTemplateCreateInput &&
-          runtimeType == other.runtimeType &&
-          name == other.name &&
-          payload == other.payload &&
-          sortOrder == other.sortOrder;
-}
+                
+                
 
-class TodoTemplateUpdateInput {
-  final String? name;
-  final String? payload;
-  final PlatformInt64? sortOrder;
+                
+        @override
+        int get hashCode => name.hashCode^payload.hashCode^sortOrder.hashCode;
+        
 
-  const TodoTemplateUpdateInput({this.name, this.payload, this.sortOrder});
+                
+        @override
+        bool operator ==(Object other) =>
+            identical(this, other) ||
+            other is TodoTemplateCreateInput &&
+                runtimeType == other.runtimeType
+                && name == other.name&& payload == other.payload&& sortOrder == other.sortOrder;
+        
+            }
 
-  @override
-  int get hashCode => name.hashCode ^ payload.hashCode ^ sortOrder.hashCode;
+class TodoTemplateUpdateInput  {
+                final String? name;
+final String? payload;
+final PlatformInt64? sortOrder;
 
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is TodoTemplateUpdateInput &&
-          runtimeType == other.runtimeType &&
-          name == other.name &&
-          payload == other.payload &&
-          sortOrder == other.sortOrder;
-}
+                const TodoTemplateUpdateInput({this.name ,this.payload ,this.sortOrder ,});
+
+                
+                
+
+                
+        @override
+        int get hashCode => name.hashCode^payload.hashCode^sortOrder.hashCode;
+        
+
+                
+        @override
+        bool operator ==(Object other) =>
+            identical(this, other) ||
+            other is TodoTemplateUpdateInput &&
+                runtimeType == other.runtimeType
+                && name == other.name&& payload == other.payload&& sortOrder == other.sortOrder;
+        
+            }
+            

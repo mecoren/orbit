@@ -382,6 +382,10 @@ pub fn run() {
             commands::csv_import_cmd::csv_import_preview,
             commands::csv_import_cmd::csv_import_execute,
             commands::csv_import_cmd::csv_import_limits,
+            commands::csv_import_cmd::csv_import_job_start,
+            commands::csv_import_cmd::csv_import_job_status,
+            commands::csv_import_cmd::csv_import_job_cancel,
+            commands::csv_import_cmd::csv_import_job_drop,
             // 定时自动备份偏好（backup_scheduler 守护的数据源）
             commands::backup_scheduler::backup_prefs_get,
             commands::backup_scheduler::backup_prefs_save,
