@@ -280,6 +280,49 @@ impl WebDavAdapter {
         }
     }
 
+    /// 从本地文件流式 PUT（M1 云端流式化：备份包不再整包驻留）
+    ///
+    /// 与 [`Self::put_object_bytes`] 的差异只有请求体来源；目录预建与 409
+    /// 重试语义完全一致（409 时清 dir_cache 重建目录链再试一次）。
+    async fn put_object_file(
+        &self,
+        path: &str,
+        local_path: &std::path::Path,
+        total_len: u64,
+    ) -> Result<(), SyncError> {
+        if let Some(parent) = path.rsplit_once('/').map(|(p, _)| p)
+            && !parent.is_empty()
+        {
+            self.ensure_directory(parent).await?;
+        }
+
+        let url = self.build_url(path);
+        let headers = self.auth_headers();
+        let first = self
+            .http
+            .put_file_with_retry(&url, headers, local_path, total_len)
+            .await;
+
+        match first {
+            Err(SyncError::AncestorsNotFound { .. }) => {
+                log::info!("[webdav] PUT 409 AncestorsNotFound：清空目录缓存并重建后重试 {path}");
+                if let Ok(mut cache) = self.dir_cache.lock() {
+                    cache.clear();
+                }
+                if let Some(parent) = path.rsplit_once('/').map(|(p, _)| p)
+                    && !parent.is_empty()
+                {
+                    self.ensure_directory(parent).await?;
+                }
+                let headers = self.auth_headers();
+                self.http
+                    .put_file_with_retry(&url, headers, local_path, total_len)
+                    .await
+            }
+            other => other,
+        }
+    }
+
     /// 确保目录存在,逐级创建(MKCOL)
     ///
     /// `path` 为目录路径(如 `sync/data` 或 `assets`),无需尾斜杠。
@@ -1168,6 +1211,20 @@ impl SyncAdapter for WebDavAdapter {
                 .await;
         }
         self.put_object_bytes(path, Bytes::from(data)).await
+    }
+
+    /// M1：备份包等大对象走文件流式 PUT（不再整包读入）
+    ///
+    /// 大附件（≥ PARTS_THRESHOLD 且目标是 assets）仍走分片协议——分片需要
+    /// 按块切分后再逐片上传，与本方法「单请求流式」是两条路径；但分片本身
+    /// 也只持有单块，不是整包，故无需在此额外处理。
+    async fn upload_file(
+        &self,
+        path: &str,
+        local_path: &std::path::Path,
+        total_len: u64,
+    ) -> Result<(), SyncError> {
+        self.put_object_file(path, local_path, total_len).await
     }
 
     async fn delete(&self, path: &str) -> Result<(), SyncError> {

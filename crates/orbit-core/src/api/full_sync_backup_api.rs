@@ -239,14 +239,19 @@ async fn export_full_sync_backup_inner(
     let mut cloud_uploaded = false;
     let mut cloud_error: Option<String> = None;
     if let Some(config) = cloud_config {
-        // 云端适配器接口是 &[u8]，这里把已生成的 v2 文件读回内存再上传。
-        // 本地路径仍是纯流式（峰值与库大小无关）；云端流式化是 M1 第三层，
-        // 需要改三协议适配器签名，不在本批范围（见 docs/13 §6.2 M1 风险条）。
-        let upload_bytes = std::fs::read(&staged)?;
+        // M1：从已生成的 v2 文件流式上传，不再整包读入内存。
+        // 适配器未覆盖 `upload_file` 时会退回「整包读入 + upload_owned」
+        // （默认实现），行为不变，只是没有流式收益。
         match engine::create_adapter(&config) {
             Ok(adapter) => {
-                match upload_backup_bytes(&*adapter, &config.base_path, &upload_bytes, &filename)
-                    .await
+                match upload_backup_file(
+                    &*adapter,
+                    &config.base_path,
+                    &staged,
+                    file_size,
+                    &filename,
+                )
+                .await
                 {
                     Ok(path) => {
                         cloud_path = Some(path);
@@ -392,6 +397,27 @@ pub async fn upload_backup_bytes(
     let cloud_path = format!("{}/backups/{}", base_path.trim_end_matches('/'), filename);
     adapter
         .upload(&cloud_path, bytes)
+        .await
+        .map_err(|e| FullSyncBackupError::Other(format!("云端上传失败: {}", e)))?;
+    Ok(cloud_path)
+}
+
+/// 从本地文件流式上传备份（M1 云端流式化：不再把整包读进内存）
+///
+/// 与 [`upload_backup_bytes`] 的目标路径与语义完全一致，区别只在请求体
+/// 来源：适配器按块从 `local_path` 读，内存峰值 = 单块大小。备份包是
+/// 最大的一类载荷，此前为了上传必须 `std::fs::read` 整包——把已经流式化
+/// 好的 v2 备份又打回整包驻留。
+pub async fn upload_backup_file(
+    adapter: &dyn SyncAdapter,
+    base_path: &str,
+    local_path: &std::path::Path,
+    total_len: u64,
+    filename: &str,
+) -> FullSyncBackupResult<String> {
+    let cloud_path = format!("{}/backups/{}", base_path.trim_end_matches('/'), filename);
+    adapter
+        .upload_file(&cloud_path, local_path, total_len)
         .await
         .map_err(|e| FullSyncBackupError::Other(format!("云端上传失败: {}", e)))?;
     Ok(cloud_path)

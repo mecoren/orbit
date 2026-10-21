@@ -140,6 +140,32 @@ pub trait SyncAdapter: Send + Sync {
         self.upload(path, &data).await
     }
 
+    /// 上传文件（**从本地文件流式读取**，M1 云端流式化的入口）
+    ///
+    /// 与 [`Self::upload`] 的区别：请求体不由调用方整包给出，而是适配器按块
+    /// 从 `path` 读取上传——内存峰值 = 单块大小，与文件大小无关。备份包
+    /// （数十到数百 MB）走这条路径后，不再需要先 `std::fs::read` 整包。
+    ///
+    /// `total_len` 由调用方给（适配器用它算超时预算与 `Content-Length`）；
+    /// 调用方已经 `stat` 过文件，避免适配器再查一次。
+    ///
+    /// 默认实现退回「整包读入 + [`Self::upload_owned`]」——未覆盖的适配器
+    /// （含各测试桩）行为不变，只是没有流式收益。生产适配器（WebDAV / S3）
+    /// 覆盖为真正的流式 PUT。
+    async fn upload_file(
+        &self,
+        path: &str,
+        local_path: &std::path::Path,
+        total_len: u64,
+    ) -> Result<(), SyncError> {
+        let data = tokio::fs::read(local_path).await.map_err(|e| SyncError::Network {
+            message: format!("读取待上传文件失败: {e}"),
+            retryable: false,
+        })?;
+        debug_assert_eq!(data.len() as u64, total_len, "调用方声明的长度应与实际一致");
+        self.upload_owned(path, data).await
+    }
+
     /// 删除文件
     async fn delete(&self, path: &str) -> Result<(), SyncError>;
 

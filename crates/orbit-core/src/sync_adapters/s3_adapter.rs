@@ -49,6 +49,57 @@ impl S3Adapter {
         self.http.put_with_retry(&url, headers, body).await
     }
 
+    /// 从本地文件流式 PUT（M1 云端流式化）
+    ///
+    /// SigV4 要求请求头带 `x-amz-content-sha256`（载荷哈希），而流式上传
+    /// 无法在签名时拿到哈希。两种正解：
+    /// - `UNSIGNED-PAYLOAD`：签名里用该字面量，服务端不校验载荷哈希。
+    ///   实现简单，但**放弃了对载荷的完整性背书**；
+    /// - **先流式算一遍哈希、再流式上传**：两遍磁盘顺序读，内存恒定，
+    ///   且保留 SigV4 的载荷校验。
+    ///
+    /// 这里选后者：备份包是「丢了就无法恢复」的数据，完整性背书不能省；
+    /// 代价只是一次顺序读（备份场景本就是磁盘密集，可接受）。
+    /// 哈希用 64KiB 块流式计算，峰值与文件大小无关。
+    async fn put_object_file(
+        &self,
+        path: &str,
+        local_path: &std::path::Path,
+        total_len: u64,
+    ) -> Result<(), SyncError> {
+        use sha2::{Digest, Sha256};
+
+        let mut file = tokio::fs::File::open(local_path).await.map_err(|e| {
+            SyncError::Network {
+                message: format!("打开待上传文件失败: {e}"),
+                retryable: false,
+            }
+        })?;
+        let mut hasher = Sha256::new();
+        let mut buf = vec![0u8; 64 * 1024];
+        loop {
+            use tokio::io::AsyncReadExt;
+            let n = file
+                .read(&mut buf)
+                .await
+                .map_err(|e| SyncError::Network {
+                    message: format!("读取待上传文件失败: {e}"),
+                    retryable: false,
+                })?;
+            if n == 0 {
+                break;
+            }
+            hasher.update(&buf[..n]);
+        }
+        let payload_hash = format!("{:x}", hasher.finalize());
+
+        let url = self.build_object_url(path);
+        let headers = self.sign_request("PUT", &url, &payload_hash)?;
+        self.http
+            .put_file_with_retry(&url, headers, local_path, total_len)
+            .await
+    }
+
     pub fn new(config: S3Config) -> Result<Self, SyncError> {
         let timeout = if config.timeout_secs == 0 {
             30
@@ -579,6 +630,27 @@ impl SyncAdapter for S3Adapter {
             return self.multipart_upload(path, &data).await;
         }
         self.put_object_bytes(path, Bytes::from(data)).await
+    }
+
+    /// M1：备份包等大对象走文件流式 PUT（不再整包读入）
+    ///
+    /// 大附件（≥ MULTIPART_THRESHOLD）仍走 multipart——分片协议本身只持有
+    /// 单块，不是整包；本方法覆盖的是「单 PUT 路径」，备份包正走这条。
+    async fn upload_file(
+        &self,
+        path: &str,
+        local_path: &std::path::Path,
+        total_len: u64,
+    ) -> Result<(), SyncError> {
+        // 与 upload_owned 同口径：超大对象仍走分片（分片内部按块读，不整包）
+        if total_len >= Self::MULTIPART_THRESHOLD as u64 {
+            let data = tokio::fs::read(local_path).await.map_err(|e| SyncError::Network {
+                message: format!("读取待上传文件失败: {e}"),
+                retryable: false,
+            })?;
+            return self.multipart_upload(path, &data).await;
+        }
+        self.put_object_file(path, local_path, total_len).await
     }
 
     async fn delete(&self, path: &str) -> Result<(), SyncError> {

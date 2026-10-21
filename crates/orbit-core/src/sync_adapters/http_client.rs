@@ -321,6 +321,97 @@ impl HttpClient {
         }))
     }
 
+    /// 从文件流式 PUT（重试时重新打开文件）
+    ///
+    /// 与 [`Self::put_with_retry`] 的区别只在请求体来源：这里用
+    /// `reqwest::Body::wrap_stream` 按块读文件，**内存峰值 = 单块大小**，
+    /// 与文件大小无关。备份包（数十到数百 MB）此前必须先 `std::fs::read`
+    /// 整包再上传，等于把已经流式化好的 v2 备份又打回整包驻留。
+    ///
+    /// ## 为什么重试要重新 open
+    ///
+    /// 流是一次性的：`wrap_stream` 消费掉 `File` 后无法重放，而 reqwest 的
+    /// `.body()` 也不支持重试克隆（与 `Bytes` 的引用计数语义不同）。故每次
+    /// 尝试都重新 `File::open` + `stream_reader`，从头再读一遍。代价是重试
+    /// 时多一次磁盘顺序读，收益是不再为「可能重试」而常驻整包。
+    ///
+    /// 超时预算按**文件字节数**给（与 `put_with_retry` 同口径），避免慢速
+    /// 上行被固定窗口掐断。
+    pub async fn put_file_with_retry(
+        &self,
+        url: &str,
+        headers: reqwest::header::HeaderMap,
+        path: &std::path::Path,
+        total_len: u64,
+    ) -> Result<(), SyncError> {
+        let mut last_error = None;
+        let budget = Self::put_timeout_budget(total_len as usize);
+
+        for attempt in 0..=self.max_retries {
+            // 每次尝试重新打开：流不可重放，这是唯一正确的做法
+            let file = match tokio::fs::File::open(path).await {
+                Ok(f) => f,
+                Err(e) => {
+                    // 本地文件读不出来属确定性失败，重试无意义
+                    return Err(SyncError::Network {
+                        message: format!("打开待上传文件失败: {e}"),
+                        retryable: false,
+                    });
+                }
+            };
+            // 64KiB 块：够大以摊薄 syscall，够小以让峰值可忽略
+            let stream = tokio_util::io::ReaderStream::with_capacity(file, 64 * 1024);
+
+            // **必须显式给 Content-Length**：`wrap_stream` 在无长度时走
+            // `Transfer-Encoding: chunked`，而不少 WebDAV/S3 兼容实现
+            // （含本仓库测试用的零依赖假服务、部分坚果云/MinIO 配置）
+            // 不接受 chunked PUT —— 请求会被直接断开。
+            let mut attempt_headers = headers.clone();
+            if let Ok(v) = reqwest::header::HeaderValue::from_str(&total_len.to_string()) {
+                attempt_headers.insert(reqwest::header::CONTENT_LENGTH, v);
+            }
+
+            match self
+                .client
+                .put(url)
+                .timeout(budget)
+                .headers(attempt_headers)
+                .body(reqwest::Body::wrap_stream(stream))
+                .send()
+                .await
+            {
+                Ok(response) => {
+                    if response.status().is_success() {
+                        return Ok(());
+                    }
+                    let status = response.status();
+                    let resp_body = response.text().await.unwrap_or_default();
+                    let error = SyncError::from_http_status(status.as_u16(), &resp_body);
+                    if !error.is_retryable() || error.is_rate_limited() {
+                        return Err(error);
+                    }
+                    last_error = Some(error);
+                }
+                Err(e) => {
+                    last_error = Some(SyncError::Network {
+                        message: transport_message("PUT 请求", &e),
+                        retryable: true,
+                    });
+                }
+            }
+
+            if attempt < self.max_retries {
+                let delay = Duration::from_millis(100 * 2u64.pow(attempt));
+                tokio::time::sleep(delay).await;
+            }
+        }
+
+        Err(last_error.unwrap_or_else(|| SyncError::Network {
+            message: "未知错误".to_string(),
+            retryable: false,
+        }))
+    }
+
     /// 带并发令牌读取的 GET（清单 CAS 的前置读取）
     ///
     /// 返回 `(响应体, ETag)`；服务端未提供 ETag 时令牌为 `None`，调用方
