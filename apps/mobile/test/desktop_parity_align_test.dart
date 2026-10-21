@@ -2,6 +2,7 @@
 // 1. 详情/表单把状态切到「已完成」必须走 todoTaskComplete（重复任务推进下一实例），
 //    不得用普通 update 绕过引擎；新建即完成同理（不能只写 status=done 而 done=0）。
 // 2. 保存筛选器构建器状态含「进行中」，项目/标签按名称多选（不再裸 id 文本框）。
+// 3. 预计时长在常用档之外支持自定义分钟数（对齐桌面数字输入）。
 
 import 'dart:convert';
 
@@ -270,5 +271,37 @@ void main() {
     expect(cond['project_ids'], [1]);
     expect(cond['label_ids'], [labelId]);
     await drainToastTimers(tester);
+  });
+  testWidgets('预计时长支持自定义分钟数', (tester) async {
+    final bridge = MockOrbitBridge();
+    await tester.pumpWidget(_wrap(
+      Scaffold(
+        body: Builder(
+          builder: (context) => TextButton(
+            onPressed: () => showTodoFormSheet(context),
+            child: const Text('开表单'),
+          ),
+        ),
+      ),
+      bridge,
+    ));
+    await _settle(tester);
+    await tester.tap(find.text('开表单'));
+    await tester.pumpAndSettle();
+
+    final durationTile = find.text('预计时长');
+    await _scrollTo(tester, durationTile);
+    await tester.tap(durationTile);
+    await tester.pumpAndSettle();
+    // 选择抽屉列表懒构建：自定义档在列表尾部，先滚到可见
+    await tester.drag(find.byType(ListView).last, const Offset(0, -200));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('自定义分钟数…'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField).last, '25');
+    await tester.tap(find.text('确定'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('25m'), findsOneWidget);
   });
 }

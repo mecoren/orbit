@@ -217,6 +217,8 @@ class _TodoFormSheet extends ConsumerStatefulWidget {
 class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
   final _titleController = TextEditingController();
   final _descriptionController = TextEditingController();
+  /// 自定义时长输入：由表单态持有，避免关闭动画期间被子抽屉提前 dispose
+  final _durationCtl = TextEditingController();
   final _formKey = GlobalKey<FormState>();
 
   int? _projectId;
@@ -334,6 +336,7 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
     _titleController.dispose();
     _descriptionController.dispose();
     _subtaskController.dispose();
+    _durationCtl.dispose();
     super.dispose();
   }
 
@@ -615,28 +618,73 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
     setState(() => _remindAt = picked.millisecondsSinceEpoch);
   }
 
-  /// 预计时长行 → 常用档位单选抽屉（对标 TickTick；0 = 不设置清空；
-  /// 任意分钟值走桌面表单数字输入，移动档位覆盖高频场景）
+  /// 预计时长行 → 常用档位单选抽屉 + 自定义分钟（对齐桌面数字输入）；
+  /// 0 = 不设置清空
   Future<void> _pickDuration() async {
-    await showSelectBottomSheet<int>(
+    await showSelectBottomSheet<String>(
       context,
       title: '预计时长',
       items: const [
-        SelectItem<int>(value: 15, label: '15 分钟'),
-        SelectItem<int>(value: 30, label: '30 分钟'),
-        SelectItem<int>(value: 45, label: '45 分钟'),
-        SelectItem<int>(value: 60, label: '1 小时'),
-        SelectItem<int>(value: 90, label: '1.5 小时'),
-        SelectItem<int>(value: 120, label: '2 小时'),
-        SelectItem<int>(value: 180, label: '3 小时'),
-        SelectItem<int>(value: 0, label: '不设置'),
+        SelectItem<String>(value: '15', label: '15 分钟'),
+        SelectItem<String>(value: '30', label: '30 分钟'),
+        SelectItem<String>(value: '45', label: '45 分钟'),
+        SelectItem<String>(value: '60', label: '1 小时'),
+        SelectItem<String>(value: '90', label: '1.5 小时'),
+        SelectItem<String>(value: '120', label: '2 小时'),
+        SelectItem<String>(value: '180', label: '3 小时'),
+        SelectItem<String>(value: 'custom', label: '自定义分钟数…'),
+        SelectItem<String>(value: '0', label: '不设置'),
       ],
-      current: _durationMinutes,
+      current: _durationMinutes?.toString(),
       onSelect: (v) {
+        if (v == 'custom') {
+          _pickCustomDuration();
+          return;
+        }
+        final n = int.tryParse(v) ?? 0;
         if (!mounted) return;
-        setState(() => _durationMinutes = v == 0 ? null : v);
+        setState(() => _durationMinutes = n == 0 ? null : n);
       },
     );
+  }
+
+  /// 自定义时长输入（1–10080 分钟；超出桌面同字段的合理跨度按无效处理）
+  Future<void> _pickCustomDuration() async {
+    final colors = AppColors.ofContext(context);
+    _durationCtl.text = _durationMinutes?.toString() ?? '';
+    final confirmed = await showModalBottomSheet<bool>(
+      context: context,
+      useRootNavigator: true,
+      isScrollControlled: true,
+      backgroundColor: colors.popup,
+      shape: bottomSheetTopShape,
+      sheetAnimationStyle: bottomSheetMotion,
+      builder: (sheetCtx) => OrbitSheetScaffold(
+        title: '自定义时长',
+        content: TextField(
+          controller: _durationCtl,
+          autofocus: true,
+          keyboardType: TextInputType.number,
+          decoration: const InputDecoration(
+            labelText: '分钟数（如 25、240）',
+          ),
+        ),
+        actions: OrbitSheetActions(
+          cancelLabel: '取消',
+          onCancel: () => Navigator.pop(sheetCtx),
+          confirmLabel: '确定',
+          onConfirm: () => Navigator.pop(sheetCtx, true),
+        ),
+      ),
+    );
+    final text = _durationCtl.text.trim();
+    if (confirmed != true || !mounted) return;
+    final n = int.tryParse(text);
+    if (n == null || n <= 0 || n > 10080) {
+      WaitToast.destructive('请输入 1–10080 之间的分钟数');
+      return;
+    }
+    setState(() => _durationMinutes = n);
   }
 
   // ── 字段行 → 底部选择抽屉（与详情页信息区同口径：行只显值，点行再选）──
