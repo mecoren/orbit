@@ -14,7 +14,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { CircleCheck, Timer } from "lucide-react";
 
-import { Input } from "@/components/ui/input";
+import { NumberInput } from "@/components/ui/number-input";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { type TodoTaskListItem } from "@/lib/tauri";
@@ -126,15 +126,14 @@ export function TodayStrip({ tasks }: TodayStripProps) {
       {/* 预算编辑：分钟数直改（空 = 清除预算） */}
       <label className="ml-auto flex items-center gap-1.5 text-muted-foreground">
         每日容量
-        <Input
-          type="number"
+        <NumberInput
+          value={budgetInput}
+          onValueChange={setBudgetInput}
           min={1}
           step={15}
-          value={budgetInput}
-          onChange={(e) => setBudgetInput(e.target.value)}
           placeholder={String(DEFAULT_CAPACITY_MINUTES)}
-          className="h-6 w-16 px-1.5 text-xs"
-          aria-label="每日容量预算（分钟）"
+          className="h-6 w-16"
+          ariaLabel="每日容量预算（分钟）"
         />
         <span className="tabular-nums">min</span>
       </label>
