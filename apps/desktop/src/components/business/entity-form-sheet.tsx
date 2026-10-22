@@ -470,7 +470,8 @@ function FieldRenderer({
           value={value != null ? String(value) : ""}
           onValueChange={(v) => onChange(v)}
         >
-          <SelectTrigger id={field.name}>
+          {/* 与文本/日期类字段同宽：SelectTrigger 原语默认 w-fit，表单内需占满整列 */}
+          <SelectTrigger id={field.name} className="w-full">
             <SelectValue placeholder={field.placeholder ?? "请选择"} />
           </SelectTrigger>
           <SelectContent>
