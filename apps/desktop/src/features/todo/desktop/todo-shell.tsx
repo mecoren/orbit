@@ -31,7 +31,6 @@ import {
   todoTaskList,
   type TaskListPredicate,
   type TodoProject,
-  type TodoTask,
   type TodoTaskListItem,
 } from "@/lib/tauri";
 import { projectIdsWithDescendants } from "../shared/project-tree";
@@ -40,7 +39,7 @@ import { TASK_LIST_PAGE_SIZE, type QuickViewKey } from "../shared/constants";
 import { needsTodoIndexNav, TODO_INDEX_PATH } from "../shared/sidebar-nav";
 import { ProjectSidebar } from "./project-sidebar";
 import { TaskDetailDrawer } from "./task-detail-drawer";
-import { TaskFormSheet } from "./task-form-sheet";
+import { TaskCreateDrawer } from "./task-create-drawer";
 import { LabelManager } from "./label-manager";
 import { SavedFilterDialog } from "./saved-filter-dialog";
 
@@ -83,10 +82,6 @@ interface TodoShellContextValue {
   taskPredicate: TaskListPredicate;
 
   // ---- 表单/标签管理（壳层挂载的弹层，面板只触发）----
-  formOpen: boolean;
-  setFormOpen: (open: boolean) => void;
-  editingTask: TodoTask | null;
-  setEditingTask: (t: TodoTask | null) => void;
   openCreateForm: () => void;
   /** 以指定截止日期打开新增表单（日历视图右键日格快捷新增） */
   openCreateFormOnDate: (dueDate: string) => void;
@@ -122,9 +117,8 @@ export default function TodoShell() {
   // #35：保存的筛选器选中态（与三选一互斥）
   const [savedFilterId, setSavedFilterId] = useState<number | null>(null);
 
-  // ---- 表单/标签管理状态（壳层持久，面板触发）----
+  // ---- 新增抽屉状态（壳层持久，面板触发）----
   const [formOpen, setFormOpen] = useState(false);
-  const [editingTask, setEditingTask] = useState<TodoTask | null>(null);
   // 新增表单预填的截止日期（日历右键日格注入；空 = 不预填）
   const [presetDueDate, setPresetDueDate] = useState<string | null>(null);
   const [labelManagerOpen, setLabelManagerOpen] = useState(false);
@@ -135,7 +129,6 @@ export default function TodoShell() {
   // 防止历史意图在页面重挂载时被重放；0 视为无待处理意图
   useEffect(() => {
     if (taskFormIntent === 0) return;
-    setEditingTask(null);
     setFormOpen(true);
     consumeTaskFormIntent();
   }, [taskFormIntent, consumeTaskFormIntent]);
@@ -322,25 +315,18 @@ export default function TodoShell() {
     tasksLoading: tasksQuery.isLoading,
     tasksError,
     taskPredicate,
-    formOpen,
-    setFormOpen,
-    editingTask,
-    setEditingTask,
     openCreateForm: () => {
-      setEditingTask(null);
       setPresetDueDate(null);
       setPresetTemplate(null);
       setFormOpen(true);
     },
     openCreateFormOnDate: (dueDate: string) => {
-      setEditingTask(null);
       setPresetDueDate(dueDate);
       setPresetTemplate(null);
       setFormOpen(true);
     },
     openCreateFormFromTemplate: (templateId: number) => {
       const tpl = templates.find((t) => t.id === templateId);
-      setEditingTask(null);
       setPresetDueDate(null);
       setPresetTemplate(tpl ? parseTemplatePayload(tpl.payload) : null);
       setFormOpen(true);
@@ -380,16 +366,15 @@ export default function TodoShell() {
           {/* 右侧详情抽屉（store 驱动，§7-③；跨面板常驻） */}
           <TaskDetailDrawer projects={projects} />
 
-          {/* 新增/编辑九字段表单（04 §3.6）；presetDueDate = 日历右键预填截止日期；
-              quickView = 当前选中快捷视图（#39 视图内新建自动带标记；仅创建分支消费） */}
-          <TaskFormSheet
+          {/* 新增任务抽屉（04 §3.6，详情形态）：与右侧详情同一套字段语言；
+              presetDueDate = 日历右键预填截止；quickView 供视图标记（#39） */}
+          <TaskCreateDrawer
             open={formOpen}
             onOpenChange={setFormOpen}
-            task={editingTask}
             projects={projects}
             defaultProjectId={ctx.activeProjectId}
-            presetDueDate={editingTask ? null : presetDueDate}
-            presetTemplate={editingTask ? null : presetTemplate}
+            presetDueDate={presetDueDate}
+            presetTemplate={presetTemplate}
             quickView={
               projectId == null && !ungrouped && savedFilterId == null ? quickView : null
             }

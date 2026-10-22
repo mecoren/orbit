@@ -4,6 +4,10 @@
  * 八区块顺序：标题行 / 属性网格 / 描述 / 子任务 / 标签 / 提醒 / 关联任务 / 评论。
  * 数据源 todo_tasks_get_detail 五合一；变更即改即存，
  * 列表刷新依赖 db-change 全局失效；本抽屉内部经局部 refetch 同步。
+ *
+ * 视觉原语外供：InfoRow / SectionBlock 与三个受控字段编辑器（开始日期 /
+ * 截止日期 / 重复）同时被 TaskCreateDrawer 复用——它们只吃 value + onChange、
+ * 不碰库，新建抽屉直接以草稿 state 驱动，保证两个抽屉同一套字段语言。
  */
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -395,7 +399,7 @@ function TitleRow({
 
 /* ================= 区块 2：属性网格 ================= */
 
-function InfoRow({
+export function InfoRow({
   icon: Icon,
   label,
   children,
@@ -580,12 +584,18 @@ function PropertyGrid({
  * 无时刻语义）——无时分输入行，选中即提交零点 ms，显示 yyyy-MM-dd。
  * 清除为二次确认（与截止日期同款交互）。
  */
-function StartDateEditor({
+export function StartDateEditor({
   value,
   onChange,
+  emptyLabel = "设置",
+  emptyClassName = "font-medium hover:text-primary",
 }: {
   value: number | null;
   onChange: (ms: number | null) => void;
+  /** 空值文案（新建态传「+ 设置」显式提示可填） */
+  emptyLabel?: string;
+  /** 空值态按钮类名（新建态传虚线胶囊，与真值拉开层级） */
+  emptyClassName?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [draft, setOpenDraft] = useState("");
@@ -626,8 +636,11 @@ function StartDateEditor({
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <button type="button" className="truncate font-medium hover:text-primary">
-          {value ? toYm(value) : "设置"}
+        <button
+          type="button"
+          className={cn("truncate", value ? "font-medium hover:text-primary" : emptyClassName)}
+        >
+          {value ? toYm(value) : emptyLabel}
         </button>
       </PopoverTrigger>
       {/* 弹层宽度交给内容（选择器月历固定 368px + p-3 内边距，与日历视图同款
@@ -678,7 +691,7 @@ function StartDateEditor({
 }
 
 /** 重复规则选择器：预设（每天/周/月/年）+ 自定义 N 天（04 §3.4 即改即存） */
-function RepeatEditor({
+export function RepeatEditor({
   mode,
   after,
   weekdays,
@@ -1017,12 +1030,18 @@ function RepeatEditor({
 }
 
 /** 截止日期编辑器：快捷选项 ⇄ 日历+时间，即改即存（04 §3.4；快捷项与表单/快捷新增同口径） */
-function DueDateEditor({
+export function DueDateEditor({
   value,
   onChange,
+  emptyLabel = "设置",
+  emptyClassName = "font-medium hover:text-primary",
 }: {
   value: number | null;
   onChange: (ms: number | null) => void;
+  /** 空值文案（新建态传「+ 设置」显式提示可填） */
+  emptyLabel?: string;
+  /** 空值态按钮类名（新建态传虚线胶囊，与真值拉开层级） */
+  emptyClassName?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState("");
@@ -1070,8 +1089,11 @@ function DueDateEditor({
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <button type="button" className="truncate font-medium hover:text-primary">
-          {value ? format(new Date(value), "yyyy-MM-dd HH:mm") : "设置"}
+        <button
+          type="button"
+          className={cn("truncate", value ? "font-medium hover:text-primary" : emptyClassName)}
+        >
+          {value ? format(new Date(value), "yyyy-MM-dd HH:mm") : emptyLabel}
         </button>
       </PopoverTrigger>
       {/* 弹层宽度固定 w-72：原实现内嵌自带 Popover 的 DateTimePicker——
@@ -1142,7 +1164,7 @@ function DueDateEditor({
 
 /* ================= 通用区块容器 ================= */
 
-function SectionBlock({
+export function SectionBlock({
   icon: Icon,
   title,
   trailing,
@@ -1811,6 +1833,7 @@ function RemindersSection({
             </div>
           ) : (
             <ConfirmPopover
+              key={r.id}
               open={confirmDelete?.id === r.id}
               onOpenChange={(o) => { if (!o) setConfirmDelete(null); }}
               title="删除提醒"
