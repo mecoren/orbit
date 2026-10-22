@@ -42,6 +42,43 @@
 - **无托盘环境的驻留降级（同日）**：托盘不可用时按「关窗驻留」处理会留下**没有唤起入口的幽灵进程**（只剩热键/任务管理器）。现在按托盘实际可用性分流：托盘可用 → 关窗隐藏驻留；托盘不可用 → 关窗直接退出（`mark_quitting` 放行 ExitRequested 拦截）；`--hidden` 自启 + 托盘不可用 → 复核后直接 `exit(0)`，不留不可见守护。实测（降权环境）：关窗 2s 内进程退出，不再残留。
 - **遗留说明**：`.window-state.json`（LocalAppData 落点）仅在 `RunEvent::Exit` 保存——需托盘「退出」一次干净退出才会建立；`%APPDATA%\cn.wait.orbit\.window-state.json` 为 9-19 旧相对名时期的遗迹，不影响现行为。
 
+### 修复：定时备份在同步密码未解锁时静默延后（2026-10-22）
+
+> 全量备份的加密复用「已解锁态缓存的同步密码」，未解锁时 core 返回
+> `InvalidState("执行全量备份前请先解锁同步密码")`。桌面守护把它当失败处理：
+> 每个周期 `eprintln` + `emit auto-backup-finished{ok:false}`，设置页据此弹
+> 「自动备份失败」。而未配置云同步时，启动根本不会恢复会话
+> （`use-startup-sync` 仅在存在 `sync_config` 时调 `restore_session`）——
+> 只开「本地定时备份」的用户会周期性收到一条永远无法自愈的失败提示。
+
+- **未锁即延后**：tick 里先判 `svc.is_unlocked()`，未解锁就静默跳过且**不推进 `next_backup_at`**，不 emit、不弹提示；解锁后下一个 tick 立即补跑。
+- **语义分层**：未解锁属「未就绪」，真正的失败（磁盘满 / 云端错误）仍走原失败路径（`last_backup_at` 保留「最近一次成功」语义）。
+- **双端同口径**：`crates/orbit-flutter` 的 `tick_once` 同步改为「未解锁跳过且不推进 next」（原实现只推进 next，等于把本轮备份永久丢掉，解锁后还得再等一个完整周期）；`start_backup_scheduler` 文档随改，FRB 产物同步重生成。
+- **设置页提示**：自动备份卡在「已到点但未执行」时显示一行警示，说明定时备份用同步密码加密、未解锁时静默延后、解锁后 1 分钟内自动补跑——替代被移除的失败 toast。
+- **验证**：`pnpm typecheck` / `pnpm test`（621 绿）/ `cargo check -p orbit-flutter` 通过；本机（未配置云同步、会话未解锁）启动后 stderr 不再出现 `[backup-scheduler] 定时备份失败` 行。
+
+### 修复：通知身份注册改为只读比对，消除受限环境假告警（2026-10-22）
+
+> AUMID 身份（`HKCU\Software\Classes\AppUserModelId\cn.wait.orbit` 的
+> DisplayName / IconUri）此前每次启动都无条件覆盖写。当进程被降为 Low
+> 完整性（受限沙箱 / 工作区内核）而注册表仍是 Medium 时，写入必被拒，
+> 于是每次启动都打一行 `[aumid] AUMID 身份注册失败…拒绝访问`——即便注册表
+> 里的值本来就完全正确。
+
+- **先读后写**：先以只读方式打开比对两个值，都已对齐则直接返回（读权限不受完整性上限限制）；不一致才申请写权限并覆盖写。
+- **效果**：值正确时零写入、零告警；真实需要更新时行为与原来一致。
+- **验证**：注册表值已正确的前提下启动，stderr 不再出现 `[aumid]` 告警行。
+
+### 修复：日志目录不可写不再阻断启动（2026-10-22）
+
+> `tauri-plugin-log` 的 `LogDir` 目标打不开日志文件时会让 `Builder::build()`
+> 返回 `PluginInitialization("log", "拒绝访问。(os error 5)")`，壳入口的
+> `.expect()` 随即 panic——日志这种旁路观测能力握有否决启动的权力。
+
+- **可写性预探**：启动时按 Tauri 口径（`data_local_dir()/<bundle identifier>/logs`）先建目录并追加打开 `app_log.log`，成功才挂 `LogDir` 目标。
+- **退化行为**：不可写（只读 AppData / 企业策略 / 受限沙箱 / 磁盘满）时仅保留 stdout 目标，stderr 打一行提示，应用照常启动。
+- **验证**：受限沙箱下 `orbit.exe` 由「必崩」变为正常驻留，stderr 输出 `[log] 日志目录不可写，本次仅输出到 stdout: …`。
+
 ### 性能：同步装载逐桶流式化（M4，2026-10-21）
 
 > `load_table_items` 此前把整表行物化成 `Vec<Value>` 常驻，直到全部桶上传完毕才
