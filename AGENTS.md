@@ -17,6 +17,7 @@ Orbit（循迹）是本地优先的跨平台任务管理应用：待办（项目
 - **双强调色体系勿混用**：待办模块色 `TODO_ACCENT = #3B82F6`（checkbox/选中态/图表）与全局主题色 `themeAccent = #4E8CFF`（OrbitFab/Spinner，shadcn `primary` 角色）两个 Context 并存（docs/05 §2.1）。
 - **悬浮提示统一主题色底白字**：桌面所有 tooltip 对齐 `ui/tooltip.tsx` 原语口径 `bg-primary text-primary-foreground`（手搓 Portal 提示也不得用 `bg-popover` 灰白弹层色——2026-09-10 热力图曾踩坑）；移动端原生 `Tooltip` 由 `app_theme.dart` 全局 `tooltipTheme` 统一（强调色底白字），不逐处覆写。
 - **滚动条全项目标准**：桌面全局 `index.css` 定义 `::-webkit-scrollbar` 10px 透明轨道主题色圆角滑块，原生 `overflow-auto` 容器自动继承——**禁设 `scrollbar-width` 非 auto 值**（会禁用 webkit 自定义退化为系统原生条）；需隐藏的用三件套 `scrollbar-width:none + -ms-overflow-style:none + ::-webkit-scrollbar display:none`。移动端全局 `ScrollbarThemeData`（app_theme.dart）只对显式 Scrollbar 生效，`SingleChildScrollView` 惯例不挂。
+- **UI 一律走 shadcn 体系，缺件自造同风格原语**：桌面先取 `components/ui/` 原语、移动先取 shadcn_flutter（`sh.` 前缀）；库内无等价物就**自绘一个与 shadcn New York 语言一致的组件并沉淀进原语层**（桌面 `components/ui/`、移动 `shared/widgets/shadcn/orbit_*.dart`），吃主题 token、不写裸魔法值。业务/页面层禁止裸用系统原生控件外观（`<input type="number">` 原生 spinner、`<select>` 原生下拉、`<input type="date">` 原生日期面板等）与手搓灰白弹层——2026-10-22 每日容量数字输入用原生 number spinner、与主题完全不搭，改 `NumberInput` 原语收口。
 - **无 prettier 约定**：仓库不配 prettier，`npx prettier` 现跑会重排整文件产生巨型噪音 diff；已跑坏的用 `git checkout HEAD --` 恢复后手工重放。
 - **文档同步链**：完成 07 竞品报告任一编号 backlog 项时——07 文档对应行划线补 `✅ 已完成（日期+一句话要点）`、CHANGELOG Unreleased 补条目、文档内过时描述随代码一并修正（07 是 backlog 唯一状态源）。
 - **版本发版走流程而非改数字**：版本真值只在 `apps/desktop/package.json`，同步走 `pnpm bump`；「改版本号」请求按下方[版本发布与更新流程](#版本发布与更新流程改版本号时自动执行)全流程执行（脚本 + 两份更新日志 + 守护测试绿），详见 `docs/08_发布与更新流程.md`。
@@ -179,7 +180,8 @@ pnpm bump:check           # 只校验一致性（零写入，CI/本地通用）
 
 **样式与 UI**
 
-- Tailwind v4 CSS-first：语义 token 全在 `src/index.css`（OKLCH 主题变量），优先用 `components/ui/` 原语；className 合并用 `cn()`；图标 lucide-react。
+- Tailwind v4 CSS-first：语义 token 全在 `src/index.css`（OKLCH 主题变量），className 合并用 `cn()`；图标 lucide-react。
+- **先取 `components/ui/` 原语，缺件自造并沉淀**：新增 UI 一律先找现有 shadcn 原语（`Button`/`Input`/`Select`/`Popover`/`NumberInput`…），**没有等价物的自绘一个与 shadcn New York 语言一致的组件放进 `components/ui/`**——吃 `index.css` 语义 token（`border-input`/`ring-ring`/`bg-accent`…）、`cn()` 合并、`data-slot` 标记，可纯函数化的逻辑抽出来 + 同目录 `.test.ts`；业务/页面层禁止裸写一次性样式或系统原生控件外观（原生 number spinner、原生 `select`/`date` 面板、手搓 `bg-popover` 灰白弹层——2026-10-22 每日容量踩坑）。
 - 双强调色：`TODO_ACCENT` 等常量上收 `features/todo/shared/constants.ts`（硬编码不走 cfg 动态读取——04 §5.1 决策）；优先级六档色 `PRIORITY_COLOR`、状态色 `STATUS_COLOR` 同文件单口径。
 - 共享纯函数（排序/分档/日期/位置）放 `features/todo/shared/` + 同目录 `.test.ts` 共置。
 - 满高预览区不嵌 Radix ScrollArea（viewport 的 table 包裹打断高度链——qraft 同款坑），用 `div.min-h-0 flex-1 overflow-auto`。
