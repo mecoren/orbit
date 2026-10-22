@@ -15,9 +15,10 @@
 //! 安装态同源，保证通知图标永远与任务栏/托盘当前版本一致；文件每次启动
 //! 全量重写，不存在旧图标缓存。
 //!
-//! 幂等性：键已存在则打开（`create` 选项语义），值覆盖写——每次启动
-//! 对齐，单值变更零成本。失败静默 eprintln——注册失败只影响通知横幅
-//! 显示身份，不应阻断启动链（与 tray/mica 同口径）。
+//! 幂等性：先只读比对现值，两个值都已对齐则完全不申请写权限（受限环境下
+//! 能消掉「值本来正确却报 ACCESS_DENIED」的假告警）；不一致时再 `create`
+//! 打开并覆盖写，保证每次启动对齐。失败静默 eprintln——注册失败只影响通知
+//! 横幅显示身份，不应阻断启动链（与 tray/mica 同口径）。
 
 use tauri::AppHandle;
 
@@ -85,8 +86,19 @@ fn export_icon_png(
 }
 
 /// HKCU\Software\Classes\AppUserModelId\cn.wait.orbit 写 DisplayName/IconUri。
-/// `options().create()` 幂等（键已存在直接打开），值覆盖写保证每次启动对齐。
+///
+/// 先只读比对再写（2026-10-22）：读权限不受完整性上限限制，两个值已对齐就
+/// 不申请写权限。既省掉每次启动的注册表写入，也避免受限环境（进程被降为
+/// Low 完整性、注册表仍是 Medium）下「值本来就对却仍报 ACCESS_DENIED」的
+/// 假告警——那种场景下用户看到的「回退显示进程名」并不存在。
 fn write_identity(icon_uri: &str) -> windows_registry::Result<()> {
+    if let Ok(key) = windows_registry::CURRENT_USER.open(AUMID_KEY)
+        && key.get_string("DisplayName").ok().as_deref() == Some(DISPLAY_NAME)
+        && key.get_string("IconUri").ok().as_deref() == Some(icon_uri)
+    {
+        return Ok(());
+    }
+
     let key = windows_registry::CURRENT_USER
         .options()
         .read()
