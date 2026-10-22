@@ -120,8 +120,10 @@ fn create_main_window(app: &AppHandle) -> tauri::Result<()> {
 
     // window-state 恢复缓存的位置/尺寸（on_window_ready 已在 build 内挂过
     // 监听，这里再手动 restore 一次以应用旧缓存——插件对 builder 创建的
-    // 窗口同样生效）；重建即恢复最大化态。
-    let _ = win.restore_state(Default::default());
+    // 窗口同样生效）；重建即恢复最大化态。标志与插件注册同源
+    // （crate::window_state_flags 剔除了 VISIBLE），故不会在此提前 show：
+    // 重建后的 webview 会重跑 main.tsx 的启动链，由前端决定显隐。
+    let _ = win.restore_state(crate::window_state_flags());
 
     // Mica 云母材质须对新 HWND 重应用（与冷启动 setup 同口径）
     #[cfg(all(desktop, target_os = "windows"))]

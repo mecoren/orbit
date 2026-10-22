@@ -9,6 +9,11 @@
 //!
 //! setup 阶段解析一次落进程级原子量，命令与壳内分支共用同一结论——
 //! 各处各自扫 argv 迟早口径漂移（漂移的可见症状就是启动闪窗）。
+//!
+//! 配套约束：window-state 插件注册时剔除了 `StateFlags::VISIBLE`
+//! （lib.rs `window_state_flags`）——否则插件会在 webview 首帧前 `show()`
+//! 主窗，既绕过 tauri.conf 的 `visible: false`，也把本条 `--hidden` 的静默
+//! 驻留变成「弹窗后再隐藏」。
 
 use std::sync::atomic::{AtomicBool, Ordering};
 

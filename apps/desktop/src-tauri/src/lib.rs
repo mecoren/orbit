@@ -38,6 +38,61 @@ impl AppState {
     }
 }
 
+/// 探测日志目录是否可写（决定 log 插件是否挂 LogDir 目标）
+///
+/// 路径口径与 Tauri 的 `app_log_dir()` 一致：macOS 取 `~/Library/Logs/<bundle identifier>`，
+/// 其余平台取 `data_local_dir()/<bundle identifier>/logs`。注意这里用的是**发布标识**
+/// `cn.wait.orbit`：dev 构建的库虽落在 `.dev` 目录，日志仍写发布目录
+/// （Tauri 只认 tauri.conf.json 的 identifier）。
+///
+/// 探测方式 = 按插件自身的方式建目录 + 追加打开 `app_log.log`
+/// （插件用 `dir.join(file_name).with_extension("log")`），任一步失败即判不可写。
+/// 动因：tauri-plugin-log 的 LogDir 目标初始化失败会让整个 `Builder::build()`
+/// 返回 Err，只读 AppData（企业策略 / 受限沙箱 / 磁盘满）下日志旁路会把启动带崩。
+fn log_dir_writable() -> bool {
+    #[cfg(target_os = "macos")]
+    let dir = dirs::home_dir()
+        .map(|home| home.join("Library/Logs").join(commands::data_dir::APP_IDENTIFIER));
+    #[cfg(not(target_os = "macos"))]
+    let dir = dirs::data_local_dir()
+        .map(|base| base.join(commands::data_dir::APP_IDENTIFIER).join("logs"));
+    let Some(dir) = dir else {
+        return false;
+    };
+    if !dir.exists() && std::fs::create_dir_all(&dir).is_err() {
+        return false;
+    }
+    let ok = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(dir.join("app_log.log"))
+        .is_ok();
+    if !ok {
+        // logger 此时尚未安装，只能走 stderr（dev 终端 / 打包后丢弃）
+        eprintln!(
+            "[log] 日志目录不可写，本次仅输出到 stdout: {}",
+            dir.display()
+        );
+    }
+    ok
+}
+
+/// window-state 插件的状态标志：位置/尺寸/最大化/装饰/全屏，**刻意剔除 VISIBLE**
+///
+/// 保留 VISIBLE 会让插件在 `on_window_ready`（WebView 还没加载出首帧）就
+/// `show() + set_focus()`：冷启动直接绕过 `tauri.conf.json` 的 `visible: false`，
+/// 闪出一帧空壳窗（透明窗无内容，观感即白屏/闪窗）——尤其状态文件缺失时走
+/// `WindowState::default()`（`visible: true`）必现；开机自启 `--hidden` 的静默
+/// 驻留也会被它强行弹窗，与前端 startup_cmd 判定相悖。
+/// 显隐时机统一归前端 `main.tsx`（探 startup_launched_hidden 后再 show），
+/// 壳层与插件只负责几何状态。窗口回收重建路径的 `restore_state` 复用同一组
+/// 标志（src/commands/window_recycler.rs），两处口径不得漂移。
+#[cfg(desktop)]
+pub(crate) fn window_state_flags() -> tauri_plugin_window_state::StateFlags {
+    use tauri_plugin_window_state::StateFlags;
+    StateFlags::all() & !StateFlags::VISIBLE
+}
+
 // 移动端已拆分为独立 Flutter 应用（apps/mobile），本壳仅服务桌面，
 // 不再声明 tauri::mobile_entry_point。
 pub fn run() {
@@ -63,33 +118,20 @@ pub fn run() {
         }
     }
 
-    // 通用插件：双端无条件注册
+    // 通用插件：双端无条件注册。
+    // 日志插件（S10）不在此链上——见 setup 开头的运行时注册及其注释。
     let builder = tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
-        .plugin(tauri_plugin_notification::init())
-        // 日志插件（S10，2026-09-13 探查）：依赖早已声明但从未注册——
-        // orbit-core 引擎全部 log::info!（探针/rekey/with_retry 重试记录）
-        // 此前无处输出，同步失败零引擎侧日志可查。
-        // targets=stdout+logdir：dev 可见 + 用户报障可取 app_log.log。
-        .plugin(
-            tauri_plugin_log::Builder::new()
-                .targets([
-                    tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Stdout),
-                    tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::LogDir {
-                        file_name: Some("app_log".into()),
-                    }),
-                ])
-                .level(log::LevelFilter::Info)
-                .build(),
-        );
+        .plugin(tauri_plugin_notification::init());
 
     // 桌面专属插件：window-state（窗口状态文件跟随数据目录，数据目录迁移后不丢）
     #[cfg(desktop)]
     let builder = builder.plugin(
         tauri_plugin_window_state::Builder::default()
             .with_filename(data_dir::window_state_file_early())
+            .with_state_flags(window_state_flags())
             .build(),
     );
 
@@ -137,6 +179,15 @@ pub fn run() {
                 if window.label() == "main"
                     && let tauri::WindowEvent::CloseRequested { api, .. } = event
                 {
+                    // 托盘不可用（Low 完整性 / IDE 终端降权启动，Shell_NotifyIcon
+                    // 被拒）时「关窗驻留」= 幽灵进程：没有托盘入口，用户只能靠
+                    // 全局热键或任务管理器找回。此时关闭即真退出——mark_quitting
+                    // 放行 run 回调里的 ExitRequested 拦截。数据无虞（本地库已写，
+                    // 云同步由 60s 调度器与下次启动兜底）。
+                    if !commands::tray::is_tray_available() {
+                        commands::window_recycler::mark_quitting();
+                        return;
+                    }
                     let _ = window.emit("tray-close-hint", ());
                     window.hide().ok();
                     commands::webview_low_power::set_memory_usage_level(window.app_handle(), true);
@@ -146,6 +197,37 @@ pub fn run() {
             }
         })
         .setup(|_app| {
+            // 日志插件（S10，2026-09-13 探查）：依赖早已声明但从未注册——
+            // orbit-core 引擎全部 log::info!（探针/rekey/with_retry 重试记录）
+            // 此前无处输出，同步失败零引擎侧日志可查。
+            // targets=stdout+logdir：dev 可见 + 用户报障可取 app_log.log。
+            //
+            // 2026-10-22 改为 setup 期运行时注册（AppHandle::plugin）：
+            // 挂在 Builder 主链上时，LogDir 打不开日志文件会让
+            // Builder::build() 整体失败，壳入口 .expect() 直接 panic——
+            // 窗口/托盘/守护全都不出现（当日实测：预探通过后插件仍可能
+            // 撞上瞬时拒绝访问 os error 5，预探挡不住这个窗口）。日志只是
+            // 旁路观测，不该有否决启动的权力：注册失败仅丢日志。预探
+            // （log_dir_writable）仍保留——不可写时优雅退化为仅 stdout，
+            // 不打错误行。
+            if let Err(e) = _app.handle().plugin({
+                let mut targets =
+                    vec![tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Stdout)];
+                if log_dir_writable() {
+                    targets.push(tauri_plugin_log::Target::new(
+                        tauri_plugin_log::TargetKind::LogDir {
+                            file_name: Some("app_log".into()),
+                        },
+                    ));
+                }
+                tauri_plugin_log::Builder::new()
+                    .targets(targets)
+                    .level(log::LevelFilter::Info)
+                    .build()
+            }) {
+                eprintln!("[log] 日志插件注册失败（不影响启动，仅无日志）: {e}");
+            }
+
             // 系统托盘（07 报告 #16）：菜单=显示主窗/快速新建/退出，
             // 快速新建经 tray-quick-add 事件由前端聚焦快速输入栏
             #[cfg(desktop)]
@@ -161,6 +243,29 @@ pub fn run() {
             if commands::startup_cmd::resolve_launch_mode() {
                 commands::webview_low_power::set_memory_usage_level(_app.handle(), true);
                 commands::window_recycler::schedule_recycle_on_hide(_app.handle());
+            }
+
+            // 冷启动显隐安全网：主窗 visible:false，显示完全依赖前端 main.tsx
+            // 的 show()。前端链路任何一环失败（权限被拒 / JS 异常 / devUrl 不可达）
+            // 窗口就永不出现——「不出现」比「迟 8 秒出现」严重得多，8 秒仍不可见
+            // 即由壳层兜底 show。--hidden 自启（静默驻留）不适用本兜底。
+            // 窗口重建路径无需覆盖：重建后 webview 重跑启动链，失败可经托盘/热键
+            // 的 Rust 侧 show_main_window_cmd 唤起。
+            #[cfg(desktop)]
+            {
+                let handle = _app.handle().clone();
+                std::thread::spawn(move || {
+                    std::thread::sleep(std::time::Duration::from_secs(8));
+                    if commands::startup_cmd::is_launched_hidden() {
+                        return;
+                    }
+                    if let Some(win) = handle.get_webview_window("main")
+                        && !win.is_visible().unwrap_or(true)
+                    {
+                        eprintln!("[startup] 前端 show 未达（8s 兜底），主窗由壳层显示");
+                        let _ = win.show();
+                    }
+                });
             }
 
             // Mica 云母材质：绕过 Tauri 原生 windowEffects 在无边框窗口上的局限，

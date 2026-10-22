@@ -49,6 +49,20 @@ pub const EXIT_SYNC_START_EVENT: &str = "sync-exit-start";
 /// 前端事件：退出同步结束（隐藏遮罩）
 pub const EXIT_SYNC_DONE_EVENT: &str = "sync-exit-done";
 
+/// 托盘是否真正注册到系统托盘（默认乐观 true，setup 后延迟复核落定）
+///
+/// 托盘注册失败在 tray-icon 内部被静默吞掉（见 setup_tray 注释），已知根因
+/// = 进程完整性级别不足（受限沙箱 / IDE 终端降权启动，Shell_NotifyIcon 被拒
+/// os error 5）。此时若仍按「关窗驻留」处理，应用会变成**没有唤起入口的幽灵
+/// 进程**（只剩全局热键与任务管理器）——故关闭主窗的拦截按本标志分流：
+/// 托盘可用 → 隐藏驻留；托盘不可用 → 直接退出。
+static TRAY_AVAILABLE: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(true);
+
+/// 托盘是否可用（当前进程能否注册托图标）
+pub fn is_tray_available() -> bool {
+    TRAY_AVAILABLE.load(std::sync::atomic::Ordering::SeqCst)
+}
+
 /// 退出应用：先尽力同步云端（阻塞 + 超时放行），再销毁主窗 + app.exit。
 ///
 /// 退出前把未来 24h 提醒注册进 Windows 系统 Toast 调度器——
@@ -251,6 +265,32 @@ pub fn setup_tray(app: &AppHandle) -> tauri::Result<()> {
     });
 
     builder.build(app)?;
+    // 托盘注册失败在 tray-icon 内部是**静默吞掉**的（仅等 explorer 重启的
+    // TaskbarCreated 重注册），失败时既无图标也无任何报错。已知根因之一：
+    // Low 完整性进程（受限沙箱 / 工作区内核启动的应用）调 Shell_NotifyIcon
+    // 被系统拒绝（os error 5）——这是环境限制而非代码缺陷，从资源管理器
+    // 正常双击启动不受影响。延迟读回 rect 复核一次，未注册成功时明确打
+    // 一行日志，避免「托盘消失」再变成无声悬案（2026-10-22 排查半天的根因）。
+    let probe_app = app.clone();
+    std::thread::spawn(move || {
+        std::thread::sleep(std::time::Duration::from_secs(2));
+        let registered = probe_app
+            .tray_by_id("orbit-tray")
+            .map(|t| matches!(t.rect(), Ok(Some(_))))
+            .unwrap_or(false);
+        TRAY_AVAILABLE.store(registered, std::sync::atomic::Ordering::SeqCst);
+        if !registered {
+            eprintln!(
+                "[tray] 托盘图标未注册成功：当前进程完整性级别不足（受限沙箱/降权启动会拒绝 Shell_NotifyIcon），托盘不可用；关窗将直接退出（不驻留），从资源管理器/普通终端启动不受影响"
+            );
+            // 自启（--hidden）姿态下托盘不可用 = 无窗口、无托盘、无任何入口，
+            // 只剩热键与任务管理器——直接退出，不留幽灵进程（用户手动启动
+            // 时至少能看到窗口）。
+            if crate::commands::startup_cmd::is_launched_hidden() {
+                probe_app.exit(0);
+            }
+        }
+    });
     Ok(())
 }
 

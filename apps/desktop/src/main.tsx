@@ -22,11 +22,14 @@ applyPlatformClass();
 
 // 首帧就绪后显示窗口：tauri.conf.json 配 visible:false 隐藏原生空窗，
 // 由前端在主题/字体初始化后主动 show，消除启动瞬间的白屏闪烁。
-// capability 已含 core:default（含 window:allow-show）；非 Tauri 环境
-// （纯浏览器 dev）无 window API，静默跳过。
+// show 需 capability 显式授权 core:window:allow-show——core:default 内含的
+// core:window:default 只有只读查询权限，不含 show（2026-10-22 曾因缺此
+// 权限 show 被拒且错误被吞，窗口永不显示）；非 Tauri 环境（纯浏览器 dev）
+// 无 window API，静默跳过。
 // 唯一例外是开机自启拉起（注册项带 --hidden）：不弹主窗，静默驻留托盘，
 // 壳层同步已接隐藏回收链（降档 + 超时销毁，常驻内存回落宿主档）。
-// 探针链任一环失败都回退「照常显示」——窗口不出现比多弹一次严重得多。
+// 探针链任一环失败都回退「照常显示」；show 失败打 console 留痕
+// （壳层另有 8s 兜底 show，见 lib.rs）——窗口不出现比多弹一次严重得多。
 void import("@tauri-apps/api/window")
   .then(async ({ getCurrentWindow }) => {
     const hidden = await import("@/lib/tauri")
@@ -34,7 +37,7 @@ void import("@tauri-apps/api/window")
       .catch(() => false);
     if (!hidden) await getCurrentWindow().show();
   })
-  .catch(() => {});
+  .catch((e) => console.error("[startup] 主窗显示失败", e));
 
 // 生产环境屏蔽默认网页右键菜单：应用内自定义右键菜单在组件层已 stopPropagation，
 // 不受此影响；输入类元素保留原生菜单以便复制粘贴。开发环境不屏蔽，便于调试。

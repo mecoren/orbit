@@ -16,6 +16,32 @@
 
 ## [Unreleased]
 
+### 修复：桌面端启动「窗口不显示 / 进程直接死」三层收口（2026-10-22）
+
+> 两个独立故障叠加出「啥都没有：托盘没、页面也没弹出来」：
+>
+> 1. **进程级死亡**：`tauri-plugin-log` 的 LogDir 目标在 `Builder::build()` 阶段
+>    打开日志文件，撞上瞬时「拒绝访问 (os error 5)」（本机复现一次：预探通过
+>    后插件仍被拒——预探与初始化之间存在毫秒级窗口，杀软/扫描类瞬时锁挡不住），
+>    壳入口 `.expect()` panic，窗口/托盘/守护全部不出现。
+> 2. **窗口级隐藏**：`capabilities/default.json` 缺 `core:window:allow-show`
+>    （`core:default` 内含的 `core:window:default` 只有只读查询权限），前端
+>    `main.tsx` 的 `getCurrentWindow().show()` 一直被权限拒绝，又被
+>    `.catch(() => {})` 吞掉——此前窗口能出来全靠 window-state 插件 Rust 侧的
+>    `show()`；剔除 VISIBLE 标志后前端这条唯一路径的缺口暴露。
+> 3. **闪现根因（前一轮已改）**：window-state 默认 `StateFlags::all()` 含
+>    `VISIBLE`，在 `on_window_ready`（webview 无首帧）就 `show()+set_focus()`，
+>    首启状态文件缺失走默认 `visible:true` 必闪空壳窗，也破坏 `--hidden` 静默驻留。
+
+- **日志插件挪 setup 期运行时注册**（`AppHandle::plugin`）：从 Builder 主链摘下，初始化失败只丢日志、不再否决启动（stderr 打一行 `[log]` 提示）；`log_dir_writable` 预探保留为优雅降级（不可写 → 仅 stdout，不打错误）。
+- **capability 补 `core:window:allow-show`**：前端 `show()` 是冷启动显隐的唯一正路；`main.tsx` 的 `.catch` 改为 `console.error` 留痕（吞错让本次排查多绕两圈），注释同步修正「core:default 含 show」的错误断言。
+- **window-state 剔除 VISIBLE**（前一轮）：注册与窗口重建路径 `restore_state` 统一走 `window_state_flags()`（`all() & !VISIBLE`），只恢复几何状态，显隐一律归前端。
+- **壳层 8s 兜底 show**：setup 起线程，8 秒后主窗仍不可见且非 `--hidden` 拉起时由壳层 `show()`——前端链路任何一环坏（权限/JS 异常/devUrl 不可达）窗口也能出来，「不出现」比「迟出现」严重得多。
+- **验证**：`cargo build` + 实跑 debug exe（vite dev server 在线）：进程存活、窗口 6 秒内由前端 show 显示（早于 8s 兜底，stderr 无兜底行）、无 panic、托盘无报错；dev server 离线直跑 exe 时 8s 兜底接住（页面加载失败场景）。`pnpm typecheck` 通过。
+- **托盘补充排查（同日）**：托盘「消失」的根因 = **本机对项目工作区目录的隔离策略**——`C:\Develop\project\...` 下的可执行文件被强制降为 Low 完整性级别，Windows 拒绝 Low IL 进程调 `Shell_NotifyIcon`（os error 5），托盘注册失败（tray-icon 库又把该失败**静默吞掉**，只等 explorer 重启重注册，故此前零报错）。三组对照实测定性：工作区内 `target\debug\orbit.exe` → IL=4096(Low)；同一 shell 起的 `notepad.exe` → 8192(Medium)；**同一 exe 复制到 `%TEMP%` 运行 → 8192(Medium) 且托盘正常**。结论：与 IDE/终端无关，**安装版与工作区外运行完全正常**；dev 需要托盘时可把 `CARGO_TARGET_DIR` 指向工作区外（如 `%USERPROFILE%\orbit-target`）再跑 `pnpm tauri dev`。setup 后延迟 2s 读回 rect 复核，未注册成功时打一行明确告警（`[tray] 托盘图标未注册成功…`），不再无声悬案。
+- **无托盘环境的驻留降级（同日）**：托盘不可用时按「关窗驻留」处理会留下**没有唤起入口的幽灵进程**（只剩热键/任务管理器）。现在按托盘实际可用性分流：托盘可用 → 关窗隐藏驻留；托盘不可用 → 关窗直接退出（`mark_quitting` 放行 ExitRequested 拦截）；`--hidden` 自启 + 托盘不可用 → 复核后直接 `exit(0)`，不留不可见守护。实测（降权环境）：关窗 2s 内进程退出，不再残留。
+- **遗留说明**：`.window-state.json`（LocalAppData 落点）仅在 `RunEvent::Exit` 保存——需托盘「退出」一次干净退出才会建立；`%APPDATA%\cn.wait.orbit\.window-state.json` 为 9-19 旧相对名时期的遗迹，不影响现行为。
+
 ### 性能：同步装载逐桶流式化（M4，2026-10-21）
 
 > `load_table_items` 此前把整表行物化成 `Vec<Value>` 常驻，直到全部桶上传完毕才
