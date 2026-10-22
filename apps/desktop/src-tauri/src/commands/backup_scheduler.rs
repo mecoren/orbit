@@ -4,8 +4,13 @@
 //! - DB 未就绪 / schedule_type=off → 静默跳过
 //! - next_backup_at 未初始化（0）→ 计算并持久化后本轮跳过
 //! - now < next_backup_at → 跳过；RUNNING 原子锁防重入
+//! - 同步密码未解锁 → 静默跳过且**不推进 next**（2026-10-22）：未就绪不是
+//!   故障，不 emit、不弹提示，解锁后下一个 tick 立即补跑。原实现按失败处理
+//!   （每周期 eprintln + emit ok:false），而未配置云同步时启动根本不会恢复
+//!   会话（`use-startup-sync` 仅在存在 sync_config 时调 restore_session），
+//!   于是只开「本地定时备份」的用户会周期性收到「自动备份失败」。
 //! - 触发：export_full_sync_backup（origin=Auto，受偏好本地/云端开关控制）；
-//!   密码复用进程级已解锁 SyncCryptoService（未解锁时导出返回可读错误）；
+//!   密码复用进程级已解锁 SyncCryptoService；
 //!   成功 → update_scheduler_state_after_trigger 推进 last/next；
 //!   失败 → 仅推进 next（last 保留"最近一次成功"语义）
 //! - 结果均 emit("auto-backup-finished", payload) 供设置页刷新与提示
@@ -98,6 +103,16 @@ async fn tick(app: &AppHandle) {
         RUNNING.store(false, Ordering::SeqCst);
         return;
     };
+
+    // 未解锁同步密码 → 静默跳过本轮，且**不推进 next_backup_at**：
+    // 解锁后下一个 tick 立即补跑，不会错过本轮。全量备份的加密复用同步密码
+    // （core `ensure_unlocked`），"会话未解锁"是未就绪状态而非故障——原先按
+    // 失败路径处理会 eprintln + emit ok:false，设置页据此弹「自动备份失败」。
+    if !svc.is_unlocked() {
+        RUNNING.store(false, Ordering::SeqCst);
+        return;
+    }
+
     let result = full_sync_backup_api::export_full_sync_backup(
         &state.pool,
         &dir,

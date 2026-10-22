@@ -1179,6 +1179,17 @@ function AutoBackupCard() {
       .catch(() => setPrefs(null));
   }, []);
 
+  /**
+   * “到点未执行”提示需要随真实时间推进：守护每 60s 一轮，故同周期刷新
+   * 当前时刻即可。到点未执行时 next_backup_at **不会**被推进（见
+   * backup_scheduler：同步密码未解锁按跳过处理），这正是提示要捕捉的状态。
+   */
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setNowMs(Date.now()), 60_000);
+    return () => clearInterval(timer);
+  }, []);
+
   // 定时备份完成事件 → 刷新上次/下次展示 + toast 提示
   useEffect(() => {
     const unlisten = listen<AutoBackupFinishedEvent>("auto-backup-finished", (evt) => {
@@ -1241,6 +1252,13 @@ function AutoBackupCard() {
   }
 
   const st = prefs.schedule_type;
+
+  /**
+   * 已到执行时间但尚未执行：同步密码未解锁时守护静默跳过着本轮且不推进
+   * next_backup_at，所以这一状态可长期停留——用它替代原先的失败 toast
+   * （未解锁属「未就绪」而非故障，不该按失败打扰用户）。
+   */
+  const overdue = st !== "off" && prefs.next_backup_at > 0 && prefs.next_backup_at * 1000 <= nowMs;
 
   return (
     <div className="space-y-4 rounded-lg border p-5">
@@ -1431,6 +1449,12 @@ function AutoBackupCard() {
           : formatTsSecs(prefs.next_backup_at) ?? "待调度"}
         （时刻按 UTC 计算，展示为本地时间）
       </p>
+
+      {overdue && (
+        <p className="text-xs text-warning">
+          已到执行时间但尚未执行：定时备份用同步密码加密，未解锁时会静默延后——解锁后 1 分钟内自动补跑。
+        </p>
+      )}
 
       <div className="flex justify-end border-t pt-3">
         <Button size="sm" disabled={busy} onClick={() => void handleSave()}>

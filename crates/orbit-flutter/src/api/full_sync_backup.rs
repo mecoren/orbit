@@ -619,8 +619,8 @@ static RUNNING: AtomicBool = AtomicBool::new(false);
 
 /// 启动定时全量备份守护（幂等；Dart 在 DB 就绪后调用一次，BootGate 接线）
 ///
-/// 移动端无跨重启用持久凭据，未解锁同步密码时导出返回可读错误——
-/// 守护仅推进 next_backup_at，不打扰用户。
+/// 移动端无跨重启用持久凭据：未解锁同步密码时**静默跳过且不推进
+/// next_backup_at**，解锁后下一个 tick（≤60s）自动补跑，不打扰用户。
 pub fn start_backup_scheduler() {
     if SCHEDULER_STARTED.swap(true, Ordering::SeqCst) {
         return;
@@ -677,6 +677,16 @@ async fn tick_once() {
             return;
         }
     };
+
+    // 未解锁同步密码 → 静默跳过本轮，且**不推进 next_backup_at**（对齐桌面
+    // backup_scheduler 2026-10-22 口径）：全量备份的加密复用同步密码
+    // （core `ensure_unlocked`），"会话未解锁"是未就绪状态而非故障。原实现
+    // 按失败处理只推进 next——移动端无跨重启凭据、多数会话本就未解锁，
+    // 等于把本轮备份永久丢掉，解锁后还得再等一个完整周期。
+    if !svc.is_unlocked() {
+        RUNNING.store(false, Ordering::SeqCst);
+        return;
+    }
 
     // origin=Auto 受偏好开关约束；upload_cloud 仅对 Manual 有意义
     let result = full_sync_backup_api::export_full_sync_backup(

@@ -101,8 +101,8 @@ Future<BackupPrefsView> backupPrefsSave({required BackupPrefsView prefs}) =>
 
 /// 启动定时全量备份守护（幂等；Dart 在 DB 就绪后调用一次，BootGate 接线）
 ///
-/// 移动端无跨重启用持久凭据，未解锁同步密码时导出返回可读错误——
-/// 守护仅推进 next_backup_at，不打扰用户。
+/// 移动端无跨重启用持久凭据：未解锁同步密码时**静默跳过且不推进
+/// next_backup_at**，解锁后下一个 tick（≤60s）自动补跑，不打扰用户。
 Future<void> startBackupScheduler() =>
     RustLib.instance.api.crateApiFullSyncBackupStartBackupScheduler();
 
