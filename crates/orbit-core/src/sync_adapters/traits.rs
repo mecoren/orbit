@@ -19,6 +19,38 @@ pub struct RemoteFile {
     pub etag: Option<String>,
 }
 
+/// 云端附件对象的形态
+///
+/// 内容寻址通道有两种布局：整包 `assets/{hash}.orsync` 与分片目录
+/// `assets_parts/{hash}/`（≥8MiB，WebDAV 分片协议）。两者可能并存
+/// （上传中断/迁移期），删除时必须都处理。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum RemoteAssetKind {
+    /// 单对象 `assets/{hash}.orsync`
+    Whole,
+    /// 分片目录 `assets_parts/{hash}/`
+    Chunked,
+    /// 两种形态并存
+    Both,
+}
+
+/// 云端附件对象及其元数据（云端孤儿清理的判据输入）
+///
+/// 与 [`RemoteFile`] 的区别：`hash` 已剥掉同步后缀（裸 hash，与 `sys_attachments.hash`
+/// 同域），且把「整包/分片」两种云端布局归并成一行——同一 hash 在两种形态下
+/// 只应被清理一次。
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct RemoteAssetObject {
+    /// 裸 sha256 hash（内容寻址键）
+    pub hash: String,
+    /// 密文体积（分片形态在 WebDAV 侧只能拿到目录 mtime，体积记 0）
+    pub cipher_bytes: u64,
+    /// 最后修改时间（Unix 秒；<=0 表示服务端未提供——调用方须跳过年龄判定）
+    pub last_modified: i64,
+    /// 云端形态
+    pub kind: RemoteAssetKind,
+}
+
 /// 上传前置条件（乐观并发控制）
 ///
 /// 清单用 `epoch` 做 CAS：写入前读到当前对象的并发令牌（ETag），
@@ -279,6 +311,31 @@ pub trait SyncAdapter: Send + Sync {
     /// WebDAV 实现还须并集 `assets_parts/` 下的分片附件（把 `assets_dir` 末段
     /// `assets` 换成 `assets_parts`）——漏掉即分片附件在差集里永远缺席。
     async fn list_assets(&self, assets_dir: &str) -> Result<Vec<String>, SyncError>;
+
+    /// 列出云端附件对象及元数据（云端孤儿清理用）
+    ///
+    /// 与 [`Self::list_assets`] 同域（**裸 hash**），区别是带体积/mtime/形态：
+    /// 孤儿清理的年龄窗口判定必须要服务端 mtime，而 `list_assets` 只回名字。
+    ///
+    /// 默认实现退化为「`list_assets` + 全零元数据」——mock 与未覆盖适配器行为
+    /// 不变；生产适配器（WebDAV/S3）必须覆盖，否则 `last_modified = 0` 会让
+    /// 年龄窗口判定一律跳过（宁可漏收，不误删，见 `cloud_sync::gc` 同款口径）。
+    async fn list_assets_with_meta(
+        &self,
+        assets_dir: &str,
+    ) -> Result<Vec<RemoteAssetObject>, SyncError> {
+        Ok(self
+            .list_assets(assets_dir)
+            .await?
+            .into_iter()
+            .map(|hash| RemoteAssetObject {
+                hash,
+                cipher_bytes: 0,
+                last_modified: 0,
+                kind: RemoteAssetKind::Whole,
+            })
+            .collect())
+    }
 
     // ========================================================================
     // 轻量存在性探测 / 并发令牌读取 / 条件写

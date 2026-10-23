@@ -8,7 +8,9 @@ use crate::s3::{
 };
 use crate::sync::error::{SyncError, transport_message};
 use crate::sync_adapters::http_client::HttpClient;
-use crate::sync_adapters::traits::{RemoteFile, SyncAdapter, UploadOutcome, UploadPrecondition};
+use crate::sync_adapters::traits::{
+    RemoteAssetKind, RemoteAssetObject, RemoteFile, SyncAdapter, UploadOutcome, UploadPrecondition,
+};
 
 /// S3 同步适配器配置
 pub struct S3Config {
@@ -806,6 +808,78 @@ impl SyncAdapter for S3Adapter {
         hashes.sort();
         hashes.dedup();
         Ok(hashes)
+    }
+
+    /// 列附件对象及其元数据（云端孤儿清理，docs/15）
+    ///
+    /// S3 侧附件走原生 multipart，最终仍是单对象 key，故主路径只有「整包」；
+    /// `assets_parts/` 的聚合适配「同一桶曾被 WebDAV 分片协议写过」的兼容形态。
+    /// 一个前缀一次分页列举即完成，不需要逐 hash 请求。
+    async fn list_assets_with_meta(
+        &self,
+        assets_dir: &str,
+    ) -> Result<Vec<RemoteAssetObject>, SyncError> {
+        use crate::cloud_sync::paths::strip_sync_extension;
+
+        let mut merged: std::collections::BTreeMap<String, RemoteAssetObject> =
+            std::collections::BTreeMap::new();
+
+        // 1) 整包对象：Size/LastModified 直取列举响应（F27 口径）
+        for e in self.list_all_entries_paginated(assets_dir).await? {
+            let hash = strip_sync_extension(&e.key).to_string();
+            // 非 sha256 形态（目录标记/遗留垃圾对象）不参与清理判据
+            if !crate::crypto::sha256::is_sha256_hex(&hash) {
+                continue;
+            }
+            merged.insert(
+                hash.clone(),
+                RemoteAssetObject {
+                    hash,
+                    cipher_bytes: e.size,
+                    last_modified: e.last_modified,
+                    kind: RemoteAssetKind::Whole,
+                },
+            );
+        }
+
+        // 2) 兼容分片目录：key 形如 `{hash}/head.json` / `{hash}/000000.bin`
+        let parts_root = assets_dir.strip_suffix("/assets").map_or_else(
+            || "assets_parts".to_string(),
+            |head| format!("{head}/assets_parts"),
+        );
+        for e in self.list_all_entries_paginated(&parts_root).await? {
+            let mut segments = e.key.split('/');
+            let hash = segments.next().unwrap_or("");
+            let Some(file) = segments.next() else {
+                continue;
+            };
+            // 只接受两层：{hash}/{head.json|*.bin}
+            if segments.next().is_some() {
+                continue;
+            }
+            if file != "head.json" && !file.ends_with(".bin") {
+                continue;
+            }
+            if !crate::crypto::sha256::is_sha256_hex(hash) {
+                continue;
+            }
+            let hash = hash.to_string();
+            merged
+                .entry(hash.clone())
+                .and_modify(|o| {
+                    o.kind = RemoteAssetKind::Both;
+                    o.last_modified = o.last_modified.max(e.last_modified);
+                    o.cipher_bytes += e.size;
+                })
+                .or_insert(RemoteAssetObject {
+                    hash,
+                    cipher_bytes: e.size,
+                    last_modified: e.last_modified,
+                    kind: RemoteAssetKind::Chunked,
+                });
+        }
+
+        Ok(merged.into_values().collect())
     }
 
     // ========================================================================

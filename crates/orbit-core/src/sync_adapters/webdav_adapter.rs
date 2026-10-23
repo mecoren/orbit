@@ -6,8 +6,10 @@ use reqwest::header::{AUTHORIZATION, HeaderMap};
 
 use crate::sync::error::{SyncError, transport_message};
 use crate::sync_adapters::http_client::HttpClient;
-use crate::sync_adapters::traits::{RemoteFile, SyncAdapter, UploadOutcome, UploadPrecondition};
-use crate::webdav::parse_propfind_response;
+use crate::sync_adapters::traits::{
+    RemoteAssetKind, RemoteAssetObject, RemoteFile, SyncAdapter, UploadOutcome, UploadPrecondition,
+};
+use crate::webdav::{WebDavFileEntry, parse_propfind_response};
 
 /// WebDAV 同步适配器配置
 pub struct WebDavConfig {
@@ -1073,6 +1075,53 @@ impl WebDavAdapter {
 
     /// 列出 `{parts_root}/` 下的一级子目录名（即分片附件的 hash 集合）
     ///
+    /// 一次 Depth:1 PROPFIND 取目录条目（404/409 视为空目录）
+    ///
+    /// `list_assets` 与 `list_assets_with_meta` 共用：两处都要「列一层、
+    /// 拿 size/mtime/etag」，此前各写一份请求/状态码/解析样板。分片根目录
+    /// 不存在（从未上传过大附件）是常态，不能当错误上报。
+    async fn propfind_depth1(&self, dir_path: &str) -> Result<Vec<WebDavFileEntry>, SyncError> {
+        let url = self.build_url(&format!("{dir_path}/"));
+        let mut headers = self.auth_headers();
+        headers.insert("Depth", "1".parse().unwrap());
+        headers.insert("Content-Type", "application/xml".parse().unwrap());
+        let propfind_body = r#"<?xml version="1.0" encoding="utf-8"?>
+<d:propfind xmlns:d="DAV:">
+  <d:prop>
+    <d:resourcetype/>
+    <d:getcontentlength/>
+    <d:getlastmodified/>
+    <d:getetag/>
+  </d:prop>
+</d:propfind>"#;
+        let response = self
+            .http
+            .send_idempotent(
+                reqwest::Method::from_bytes(b"PROPFIND").unwrap_or(reqwest::Method::GET),
+                &url,
+                headers,
+                Some(propfind_body.to_string().into_bytes()),
+            )
+            .await?;
+        let status = response.status().as_u16();
+        // 404/409：目录不存在（首次使用或从未分片上传），空目录语义
+        if status == 404 || status == 409 {
+            return Ok(Vec::new());
+        }
+        if !response.status().is_success() && status != 207 {
+            let body = response.text().await.unwrap_or_default();
+            return Err(SyncError::from_http_status(status, &body));
+        }
+        let xml = response.text().await.map_err(|e| SyncError::Network {
+            message: transport_message("读取 PROPFIND 响应", &e),
+            retryable: false,
+        })?;
+        parse_propfind_response(&xml).map_err(|e| SyncError::Network {
+            message: format!("解析 PROPFIND XML 失败: {e}"),
+            retryable: false,
+        })
+    }
+
     /// 专用 PROPFIND：`list_all_files` 过滤目录条目（is_collection），
     /// 拿不到 {hash}/ 子目录。目录不存在（从未有分片附件）返回空。
     async fn list_parts_hashes(&self, parts_root: &str) -> Result<Vec<String>, SyncError> {
@@ -1477,56 +1526,12 @@ impl SyncAdapter for WebDavAdapter {
     // 的 upload/download/exists 按路径形态承担，不受影响。
 
     async fn list_assets(&self, assets_dir: &str) -> Result<Vec<String>, SyncError> {
-        let url = self.build_url(&format!("{assets_dir}/"));
-
-        let mut headers = self.auth_headers();
-        headers.insert("Depth", "1".parse().unwrap());
-        headers.insert("Content-Type", "application/xml".parse().unwrap());
-
-        let propfind_body = r#"<?xml version="1.0" encoding="utf-8"?>
-<d:propfind xmlns:d="DAV:">
-  <d:prop>
-    <d:resourcetype/>
-    <d:getcontentlength/>
-    <d:getlastmodified/>
-    <d:getetag/>
-  </d:prop>
-</d:propfind>"#;
-
-        let response = self
-            .http
-            .send_idempotent(
-                reqwest::Method::from_bytes(b"PROPFIND").unwrap_or(reqwest::Method::GET),
-                &url,
-                headers,
-                Some(propfind_body.to_string().into_bytes()),
-            )
-            .await?;
-
-        let status = response.status().as_u16();
         // 404 = 目录不存在（首次使用时 assets 尚未创建），视为空列表。
         // 但不得提前 return：大附件只落在 assets_parts/ 下，此时 assets/ 恒 404，
         // 提前返回会让下面的分片并集永远跑不到——push 侧 S7 空列表防御误报
         // 「疑似列举异常」并跳过上传，pull 侧则永远不下载已存在的大附件（F23 补充）。
-        let entries = if status == 404 {
-            Vec::new()
-        } else {
-            // S11：非 2xx 错误走统一框架（同 list_all_files）
-            if !response.status().is_success() && status != 207 {
-                let body = response.text().await.unwrap_or_default();
-                return Err(SyncError::from_http_status(status, &body));
-            }
-
-            let xml = response.text().await.map_err(|e| SyncError::Network {
-                message: transport_message("读取 PROPFIND 响应", &e),
-                retryable: false,
-            })?;
-
-            parse_propfind_response(&xml).map_err(|e| SyncError::Network {
-                message: format!("解析 PROPFIND XML 失败: {e}"),
-                retryable: false,
-            })?
-        };
+        // 请求/状态码/解析样板收口在 `propfind_depth1`（404/409 已归一为空目录）。
+        let entries = self.propfind_depth1(assets_dir).await?;
 
         // 提取 hash：跳过目录本身（is_collection），从 display_name 或 href 提取文件名。
         // href 先剥尾斜杠（目录条目防御：rsplit 对尾斜杠取到空串）。
@@ -1566,6 +1571,100 @@ impl SyncAdapter for WebDavAdapter {
         hashes.sort();
         hashes.dedup();
         Ok(hashes)
+    }
+
+    /// 列附件对象及其元数据（云端孤儿清理，docs/15）
+    ///
+    /// 与 `list_assets` 的两点不同：
+    /// 1. **带 mtime**：孤儿清理的年龄窗口必须用服务端时间；`list_assets` 只回名字。
+    /// 2. **整包与分片归并成一行**：同一 hash 两种形态并存时只清理一次。
+    ///
+    /// 只有两次 Depth:1 PROPFIND（`assets/` + `assets_parts/`）——**绝不能**改走
+    /// 递归列举：分片目录是「每个附件一个子目录」，递归等于 N 次 PROPFIND，
+    /// 在限流服务端上直接打成请求风暴。
+    ///
+    /// 分片形态的体积不可得（WebDAV 目录条目不回 getcontentlength），记 0；
+    /// 调用方展示体积时用本地账本估算。目录 mtime ≈ 最近一次分片写入，做窗口
+    /// 判定足够（偏保守）。
+    async fn list_assets_with_meta(
+        &self,
+        assets_dir: &str,
+    ) -> Result<Vec<RemoteAssetObject>, SyncError> {
+        use crate::cloud_sync::paths::strip_sync_extension;
+
+        fn rfc2822_to_unix(raw: Option<&str>) -> i64 {
+            raw.and_then(|s| chrono::DateTime::parse_from_rfc2822(s).ok())
+                .map(|dt| dt.timestamp())
+                .unwrap_or(0)
+        }
+
+        fn decoded_name(e: &WebDavFileEntry) -> String {
+            let decoded = urlencoding::decode(&e.href)
+                .map(|c| c.into_owned())
+                .unwrap_or_else(|_| e.href.clone());
+            entry_basename(&e.display_name, &decoded)
+        }
+
+        let mut merged: std::collections::BTreeMap<String, RemoteAssetObject> =
+            std::collections::BTreeMap::new();
+
+        // 1) 整包对象：`assets/` 一层文件条目（体积与 mtime 都拿得到）
+        for e in self.propfind_depth1(assets_dir).await? {
+            if e.is_collection || e.href.is_empty() {
+                continue;
+            }
+            let hash = strip_sync_extension(&decoded_name(&e)).to_string();
+            // 非 sha256 形态（目录标记/遗留垃圾对象）不参与清理判据
+            if !crate::crypto::sha256::is_sha256_hex(&hash) {
+                continue;
+            }
+            merged.insert(
+                hash.clone(),
+                RemoteAssetObject {
+                    hash,
+                    cipher_bytes: e.content_length.unwrap_or(0).max(0) as u64,
+                    last_modified: rfc2822_to_unix(e.last_modified.as_deref()),
+                    kind: RemoteAssetKind::Whole,
+                },
+            );
+        }
+
+        // 2) 分片目录：`assets_parts/` 一层**目录**条目（名字即 hash）
+        let parts_root = parts_root_for_assets_dir(assets_dir);
+        let self_href = format!("/{}", parts_root.trim_matches('/').trim_end_matches('/'));
+        for (idx, e) in self
+            .propfind_depth1(&parts_root)
+            .await?
+            .into_iter()
+            .enumerate()
+        {
+            if e.href.is_empty() || !e.is_collection {
+                continue;
+            }
+            // Depth:1 响应首条目是被查目录自身（RFC 4918）
+            if is_self_entry(idx, true, &e.href, &self_href) {
+                continue;
+            }
+            let hash = decoded_name(&e);
+            if !crate::crypto::sha256::is_sha256_hex(&hash) {
+                continue;
+            }
+            let mtime = rfc2822_to_unix(e.last_modified.as_deref());
+            merged
+                .entry(hash.clone())
+                .and_modify(|o| {
+                    o.kind = RemoteAssetKind::Both;
+                    o.last_modified = o.last_modified.max(mtime);
+                })
+                .or_insert(RemoteAssetObject {
+                    hash,
+                    cipher_bytes: 0,
+                    last_modified: mtime,
+                    kind: RemoteAssetKind::Chunked,
+                });
+        }
+
+        Ok(merged.into_values().collect())
     }
 
     // ========================================================================
@@ -2114,21 +2213,25 @@ mod tests {
 
     impl TreeDav {
         fn spawn() -> Self {
-            use std::collections::HashMap;
+            // 预置一棵两层树：backups/{顶层文件, 2026-09/{子文件}}
+            Self::spawn_with(std::collections::HashMap::from([
+                ("/b/backups/top.orfullsync".to_string(), b"top".to_vec()),
+                (
+                    "/b/backups/2026-09/nested.orfullsync".to_string(),
+                    b"nested".to_vec(),
+                ),
+            ]))
+        }
+
+        /// 自定义对象树（`assets` 元数据用例需要 sha256 形态的键）
+        fn spawn_with(seed: std::collections::HashMap<String, Vec<u8>>) -> Self {
             use std::io::{BufRead, BufReader, Read, Write};
             use std::sync::{Arc, Mutex};
 
             let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("绑定空闲端口");
             let port = listener.local_addr().unwrap().port();
-            // 预置一棵两层树：backups/{顶层文件, 2026-09/{子文件}}
-            let objects: Arc<Mutex<HashMap<String, Vec<u8>>>> =
-                Arc::new(Mutex::new(HashMap::from([
-                    ("/b/backups/top.orfullsync".to_string(), b"top".to_vec()),
-                    (
-                        "/b/backups/2026-09/nested.orfullsync".to_string(),
-                        b"nested".to_vec(),
-                    ),
-                ])));
+            let objects: Arc<Mutex<std::collections::HashMap<String, Vec<u8>>>> =
+                Arc::new(Mutex::new(seed));
             let objs = objects.clone();
             std::thread::spawn(move || {
                 for stream in listener.incoming().flatten() {
@@ -2234,7 +2337,7 @@ mod tests {
         for (href, is_dir) in children {
             let _ = write!(
                 xml,
-                "<d:response><d:href>{href}</d:href><d:propstat><d:prop><d:resourcetype>{}</d:resourcetype><d:getcontentlength>7</d:getcontentlength></d:prop><d:status>HTTP/1.1 200 OK</d:status></d:propstat></d:response>",
+                "<d:response><d:href>{href}</d:href><d:propstat><d:prop><d:resourcetype>{}</d:resourcetype><d:getcontentlength>7</d:getcontentlength><d:getlastmodified>Wed, 01 Jan 2025 00:00:00 GMT</d:getlastmodified></d:prop><d:status>HTTP/1.1 200 OK</d:status></d:propstat></d:response>",
                 if is_dir { "<d:collection/>" } else { "" }
             );
         }
@@ -2301,6 +2404,63 @@ mod tests {
                 .await
                 .expect("目录不存在不是错误")
                 .is_empty()
+        );
+    }
+
+    /// 云端孤儿清理的元数据列举：整包/分片归并、sha256 过滤、mtime 透出
+    ///
+    /// docs/15：清理判据靠它两件事——形态（删哪种布局）与 mtime（年龄窗口）。
+    #[tokio::test]
+    async fn list_assets_with_meta_merges_whole_and_parts() {
+        let whole = "a".repeat(64);
+        let chunked = "b".repeat(64);
+        let both = "c".repeat(64);
+        let dav = TreeDav::spawn_with(std::collections::HashMap::from([
+            (format!("/b/sync/assets/{whole}.orsync"), b"whole".to_vec()),
+            (format!("/b/sync/assets/{both}.orsync"), b"whole".to_vec()),
+            // 非 sha256 键（目录标记/遗留垃圾）不得进入清理清单
+            (
+                "/b/sync/assets/not-a-hash.orsync".to_string(),
+                b"x".to_vec(),
+            ),
+            (
+                format!("/b/sync/assets_parts/{chunked}/head.json"),
+                b"{}".to_vec(),
+            ),
+            (
+                format!("/b/sync/assets_parts/{chunked}/000000.bin"),
+                b"p".to_vec(),
+            ),
+            (
+                format!("/b/sync/assets_parts/{both}/head.json"),
+                b"{}".to_vec(),
+            ),
+        ]));
+
+        let objects = adapter_for(&dav.base_url)
+            .list_assets_with_meta("b/sync/assets")
+            .await
+            .expect("列举必须成功");
+
+        let by_hash: std::collections::HashMap<&str, &RemoteAssetObject> =
+            objects.iter().map(|o| (o.hash.as_str(), o)).collect();
+        assert_eq!(
+            by_hash.len(),
+            3,
+            "非 sha256 键必须被过滤，实际: {:?}",
+            objects.iter().map(|o| &o.hash).collect::<Vec<_>>()
+        );
+        assert_eq!(by_hash[whole.as_str()].kind, RemoteAssetKind::Whole);
+        assert_eq!(by_hash[whole.as_str()].cipher_bytes, 7);
+        assert!(
+            by_hash[whole.as_str()].last_modified > 0,
+            "整包对象必须透出服务端 mtime（年龄窗口判据）"
+        );
+        assert_eq!(by_hash[chunked.as_str()].kind, RemoteAssetKind::Chunked);
+        assert_eq!(
+            by_hash[both.as_str()].kind,
+            RemoteAssetKind::Both,
+            "同一 hash 两种形态并存时归并为 Both（删除时两处都要清）"
         );
     }
 

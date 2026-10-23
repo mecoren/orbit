@@ -38,10 +38,12 @@
 //! ├── paths.rs        路径构造
 //! ├── progress.rs     SyncProgress 事件
 //! ├── attachments.rs 附件同步（内容寻址 + 分片）
+//! ├── asset_gc.rs     云端孤儿附件扫描/删除（docs/15，只手动触发）
 //! └── modules.rs      同步模块注册表（与白名单一致性断言）
 //! ```
 
 pub mod asset_container;
+pub mod asset_gc;
 pub mod attachments;
 pub mod chunk;
 pub mod crypto_io;

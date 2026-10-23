@@ -343,6 +343,16 @@ impl SyncEngine {
         }
     }
 
+    /// 数据库连接池（云端附件清理等诊断路径使用）
+    pub(crate) fn pool(&self) -> &SqlitePool {
+        &self.db_pool
+    }
+
+    /// 密钥服务（云端清单/引用桶解密用）
+    pub(crate) fn crypto_service(&self) -> &SyncCryptoService {
+        &self.crypto
+    }
+
     /// 设置同步密码（同步前自动备份使用）
     ///
     /// 由桥接层在 `sync_crypto_unlock` 成功后调用。

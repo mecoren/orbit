@@ -29,7 +29,9 @@ use crate::cloud_sync::progress::{ProgressSender, SyncOrigin};
 use crate::cloud_sync::state::SyncState;
 use crate::sync::engine::{SyncConfig, create_adapter, validate_config};
 use crate::sync::error::SyncError;
-use crate::sync_adapters::traits::{RemoteFile, SyncAdapter, UploadOutcome, UploadPrecondition};
+use crate::sync_adapters::traits::{
+    RemoteAssetObject, RemoteFile, SyncAdapter, UploadOutcome, UploadPrecondition,
+};
 use crate::sync_crypto::SyncCryptoService;
 
 // ============================================================================
@@ -166,6 +168,18 @@ impl SyncAdapter for BasePathAdapter {
         // assets_parts 下的分片附件（差集每轮缺席 → 空跑重传、云端孤儿
         // 永不清理），而内层实现（含 S4 并集逻辑）被架空成死代码。
         self.inner.list_assets(&self.join(assets_dir)).await
+    }
+
+    async fn list_assets_with_meta(
+        &self,
+        assets_dir: &str,
+    ) -> Result<Vec<RemoteAssetObject>, SyncError> {
+        // F22 口径：包装器的每个方法都必须显式转发并拼 base_path。漏转发会
+        // 退化为默认实现（list_assets + 全零元数据）——扫描结果看起来正常，
+        // 但年龄窗口判定因 mtime=0 全部跳过，清理按钮永远筛不出东西。
+        self.inner
+            .list_assets_with_meta(&self.join(assets_dir))
+            .await
     }
 
     async fn exists(&self, path: &str) -> Result<bool, SyncError> {
@@ -368,6 +382,171 @@ pub async fn force_sync(
         }
     }
     pull_then_push(engine, config, origin, device_id, attachments_dir).await
+}
+
+// ============================================================================
+// 云端孤儿附件清理（docs/15）
+//
+// 只读扫描 + 手动删除，**无自动触发路径**：本地优先，删除时机归用户。
+// 判据/兜底/删除顺序全在 `cloud_sync::asset_gc`（业务下沉），本层只做
+// 「构造适配器 + 读清单 + join 本地账本 + 账本收尾」。
+// ============================================================================
+
+/// 云端孤儿附件清单行（诊断页展示）
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct CloudUnusedAttachmentView {
+    pub hash: String,
+    /// 密文体积；WebDAV 分片形态为 0（目录条目没有长度），展示时用 `size_bytes` 兜底
+    pub cipher_bytes: u64,
+    /// 服务端最后修改时间（Unix 秒）
+    pub last_modified: i64,
+    /// 云端形态：`whole` / `chunked` / `both`
+    pub kind: String,
+    /// 本地账本元数据（账本无该行时为空/0）
+    pub original_name: String,
+    /// 明文体积（本地账本；0 表示账本无记录）
+    pub size_bytes: i64,
+    pub is_local_cached: i32,
+    pub is_uploaded: i32,
+}
+
+/// 扫描结果
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct CloudUnusedScanResult {
+    pub items: Vec<CloudUnusedAttachmentView>,
+    /// 清单 epoch——删除时必须原样回传做 CAS
+    pub epoch: u64,
+    /// 年龄窗口（UI 文案展示「仅含 N 天前的对象」）
+    pub min_age_secs: i64,
+}
+
+/// 删除结果（含本地账本收尾统计）
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct CloudUnusedDeleteResult {
+    pub deleted_assets: u32,
+    pub deleted_objects: u32,
+    pub skipped_referenced: u32,
+    pub local_rows_cleaned: usize,
+    pub stale_manifest: bool,
+    pub errors: Vec<String>,
+}
+
+/// 只读扫描云端孤儿附件
+///
+/// 不写库、不 emit 事件（`sys_attachments` 不在同步白名单，诊断读数走独立查询）。
+pub async fn cloud_unused_attachments_scan(
+    engine: &SyncEngine,
+    config: &SyncConfig,
+) -> Result<CloudUnusedScanResult, String> {
+    let (_raw, adapter) = create_adapters(config).map_err(|e| e.to_string())?;
+    let data_key = engine
+        .crypto_service()
+        .get_data_key()
+        .ok_or_else(|| "同步密钥未解锁，无法读取云端附件清单".to_string())?;
+    let manifest = crate::cloud_sync::asset_gc::read_cloud_manifest(&adapter, &data_key)
+        .await
+        .map_err(|e| format!("读取云端清单失败: {e}"))?
+        .ok_or_else(|| "云端尚无同步清单，请先完成一次同步".to_string())?;
+
+    let now = chrono::Utc::now().timestamp();
+    let objects = crate::cloud_sync::asset_gc::scan_cloud_orphan_assets(
+        &adapter,
+        &data_key,
+        &manifest,
+        crate::cloud_sync::asset_gc::DEFAULT_CLOUD_ASSET_MIN_AGE_SECS,
+        now,
+    )
+    .await
+    .map_err(|e| format!("扫描云端孤儿附件失败: {e}"))?;
+
+    // join 本地账本：展示名/明文体积/缓存状态（体积展示 WebDAV 分片时为 0 的兜底）
+    let hashes: Vec<String> = objects.iter().map(|o| o.hash.clone()).collect();
+    let rows = crate::db::repository::attachment_repo::get_by_hashes(engine.pool(), &hashes)
+        .await
+        .map_err(|e| format!("查询本地附件账本失败: {e}"))?;
+    let by_hash: std::collections::HashMap<&str, &_> =
+        rows.iter().map(|a| (a.hash.as_str(), a)).collect();
+
+    let items: Vec<CloudUnusedAttachmentView> = objects
+        .into_iter()
+        .map(|o| {
+            let row = by_hash.get(o.hash.as_str());
+            CloudUnusedAttachmentView {
+                hash: o.hash,
+                cipher_bytes: o.cipher_bytes,
+                last_modified: o.last_modified,
+                kind: match o.kind {
+                    crate::sync_adapters::traits::RemoteAssetKind::Whole => "whole",
+                    crate::sync_adapters::traits::RemoteAssetKind::Chunked => "chunked",
+                    crate::sync_adapters::traits::RemoteAssetKind::Both => "both",
+                }
+                .to_string(),
+                original_name: row.map(|r| r.original_name.clone()).unwrap_or_default(),
+                size_bytes: row.map(|r| r.size_bytes).unwrap_or(0),
+                is_local_cached: row.map(|r| r.is_local_cached).unwrap_or(0),
+                is_uploaded: row.map(|r| r.is_uploaded).unwrap_or(0),
+            }
+        })
+        .collect();
+
+    Ok(CloudUnusedScanResult {
+        items,
+        epoch: manifest.epoch,
+        min_age_secs: crate::cloud_sync::asset_gc::DEFAULT_CLOUD_ASSET_MIN_AGE_SECS,
+    })
+}
+
+/// 删除云端孤儿附件（整包 + 分片），成功后收尾本地账本
+///
+/// `expected_epoch` 来自扫描结果的 `epoch`：云端刚有他端 push（引用集可能已变）
+/// 时拒绝执行，前端提示重扫。云端删除有任一失败时**不动本地账本**——对象可能
+/// 还在，账本行仍是有价值的元数据。
+pub async fn cloud_unused_attachments_delete(
+    engine: &SyncEngine,
+    config: &SyncConfig,
+    attachments_dir: &str,
+    hashes: Vec<String>,
+    expected_epoch: u64,
+) -> Result<CloudUnusedDeleteResult, String> {
+    let (_raw, adapter) = create_adapters(config).map_err(|e| e.to_string())?;
+    let data_key = engine
+        .crypto_service()
+        .get_data_key()
+        .ok_or_else(|| "同步密钥未解锁，无法删除云端附件".to_string())?;
+    let now = chrono::Utc::now().timestamp();
+
+    let deleted = crate::cloud_sync::asset_gc::delete_cloud_assets(
+        &adapter,
+        &data_key,
+        expected_epoch,
+        &hashes,
+        crate::cloud_sync::asset_gc::DEFAULT_CLOUD_ASSET_MIN_AGE_SECS,
+        now,
+    )
+    .await
+    .map_err(|e| format!("删除云端孤儿附件失败: {e}"))?;
+
+    // 云端确认删除后，本地账本行按「无存活引用」原子复核收尾（同时清本地缓存
+    // 文件）。被重新挂载的 hash 不会命中；stale/部分失败时整体跳过，保持可重试。
+    let mut local_rows_cleaned = 0;
+    if !deleted.stale_manifest && deleted.errors.is_empty() {
+        local_rows_cleaned = crate::api::asset_api::delete_unused_attachments(
+            engine.pool(),
+            attachments_dir,
+            &hashes,
+        )
+        .await
+        .map_err(|e| format!("清理本地附件账本失败: {e}"))?;
+    }
+
+    Ok(CloudUnusedDeleteResult {
+        deleted_assets: deleted.deleted_assets,
+        deleted_objects: deleted.deleted_objects,
+        skipped_referenced: deleted.skipped_referenced,
+        local_rows_cleaned,
+        stale_manifest: deleted.stale_manifest,
+        errors: deleted.errors,
+    })
 }
 
 // ============================================================================
