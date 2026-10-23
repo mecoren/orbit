@@ -41,20 +41,20 @@
   },
   "knownUnbounded": [],
   "measured": {
-    "usedJSHeapMB_1k": 11.9,
-    "usedJSHeapMB_10k": 37,
-    "totalJSHeapMB_10k": 69.3,
-    "heapKB_per_row": 2.9,
+    "usedJSHeapMB_1k": 11.5,
+    "usedJSHeapMB_10k": 36.3,
+    "totalJSHeapMB_10k": 67.5,
+    "heapKB_per_row": 2.8,
     "churnClicks": 20,
     "switchClicks": 12,
-    "peakMB_onViewSwitch": 61.3,
-    "peakMB_duringChurn": 83.1,
+    "peakMB_onViewSwitch": 62.4,
+    "peakMB_duringChurn": 80.1,
     "leakMB_after20churn": 6,
-    "heapMB_per_extra10kCopy": 2,
-    "domNodes_10k": 863,
-    "domNodesSlope_per_1k": 0,
-    "rssMB_10k": 354,
-    "measuredAt": "2026-09-18"
+    "heapMB_per_extra10kCopy": 1.7,
+    "domNodes_10k": 797,
+    "domNodesSlope_per_1k": -2.4,
+    "rssMB_10k": 351,
+    "measuredAt": "2026-10-23"
   },
   "measuredBeforeA14": {
     "$comment": "A14 落地前同口径实测（2026-09-18，三跑恒等），留作专项报告的 before 列——--record 只回写 measured，本块手工维护",
@@ -70,5 +70,34 @@
     "domNodesSlope_per_1k": 900,
     "rssMB_10k": 433
   },
-  "recordedAt": "2026-09-18"
+  "recordedAt": "2026-10-23",
+  "desktopExe": {
+    "$comment": "memory3.mjs 真机口径（Windows 本地，不入 CI）。A=release exe + WebView2 的稳态 WorkingSet 净增；B=当前 apps/desktop/dist 在 Chromium 里 10k 行的操作期口径。B 的 jsUsedMB 是**未 GC**的分配量（growth-curve 的 36MB 是强制 GC 后的驻留），两个数不能互读。procs 只做排查（A 段按进程名全局快照，含本机其它 WebView2 应用）。",
+    "$thresholds": "拦停值按 2026-10-23 首轮实测留约 10% 余量；cpuS 受机器负载影响不设阈值，procs 只做上下文。",
+    "$targets": "只报不拦：真机 ≤390MB、Chromium 空闲 ≤350MB、未 GC JS 堆 ≤70MB。",
+    "thresholds": {
+      "tauri.wsMBStable": 420,
+      "chromium.wsMBIdle10k": 390,
+      "chromium.wsMBBusy": 440,
+      "chromium.jsUsedMB": 80
+    },
+    "targets": {
+      "tauri.wsMBStable": 390,
+      "chromium.wsMBIdle10k": 350,
+      "chromium.jsUsedMB": 70
+    },
+    "measured": {
+      "tauri.wsMBStart": 384,
+      "tauri.wsMBStable": 385,
+      "tauri.cpuS10s": 5.1,
+      "tauri.procs": 51,
+      "chromium.wsMBIdle10k": 335,
+      "chromium.wsMBBusy": 386,
+      "chromium.cpuS": 1.4,
+      "chromium.jsUsedMB": 58,
+      "chromium.jsTotalMB": 117,
+      "chromium.procs": 4
+    },
+    "measuredAt": "2026-10-23"
+  }
 }

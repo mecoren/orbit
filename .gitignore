@@ -42,8 +42,10 @@ test-results/
 # 同步修复验证产物（临时库/截图/基线 JSON，7MB+ 不入库）
 .sync-test/
 
-# 内存门禁单次运行产物（入库的基线快照是 perf-metrics/baselines.json，本机每次跑都会覆盖它）
-perf-metrics/last-run.json
+# 内存门禁单次运行产物（入库的基线快照是 perf-metrics/*-baselines.json，本机每次跑都会覆盖它们）
+perf-metrics/*last-run.json
+# 操作级探针的临时库/备份/50MB 附件样本（--keep 才保留，默认跑完即删）
+perf-metrics/.runs/
 
 # 竞品基准报告与 IDE HTML 分享包（分析产物，体积大且可随时再生成，不入库）
 todo-feature-benchmark-2026/

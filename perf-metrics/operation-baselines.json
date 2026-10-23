@@ -1,0 +1,64 @@
+{
+  "$comment": "操作级内存峰值门禁（docs/13 §6.2 M6 / 总计划 T0.1）。测的是 core 侧四类大对象操作在独立进程里的峰值增量：由 perf-metrics/operation-probe.mjs 拉起 crates/orbit-core/examples/operation_probe.rs，每个场景三跑取中位。键口径 <scenario>.<metric>：allocPeakDeltaMB=自定义 GlobalAlloc 记录的净分配峰值增量（主指标），rssPeakDeltaMB=10ms 采样 WorkingSet/VmRSS 的峰值增量（macOS 未适配为 null），durationMs/artifactMB 只做上下文。",
+  "$datasets": "数据规模必须与实测时一致才可比：backupRows=10000、csvRows=20000、attachmentMB=50；改规模要连 --record 一起更新。",
+  "$thresholds": "拦停值（防回归），按 2026-10-23 首轮实测留出缓冲（脚本内再乘 1.15）；thresholds 为空时 --gate 直接失败，避免空基线假绿。只登记内存类指标——durationMs 受机器负载影响，artifactMB 由固定数据规模决定，两者只做上下文。",
+  "$targets": "docs/13 M1/M2/M3 的验收线，只报不拦——当前实现未达标时记录在 docs/09，不要把「没变差」读成「已达标」。",
+  "$rationale": {
+    "backup-export": "10k 任务 / 5.7MB 备份：堆峰值 +5.8MB、RSS +3.8MB，M1 的逐表分页 + 4MiB 帧已让峰值与库体积解耦；阈值 10MB 防退回整包序列化。",
+    "backup-import": "堆峰值 +0.1MB（逐帧解密 + 逐条写库），RSS +5.7MB 主要是 SQLite page cache/事务；阈值 2/12MB。",
+    "csv-import": "20k 行 / 1.8MB CSV：堆峰值 +1.9MB（逐行解析写库），耗时约 80s 是逐行事务的代价而非内存问题；阈值 6/12MB。",
+    "attachment-write": "50MB 附件当前整文件读入 + AES-GCM 整包加密：堆/RSS 峰值均 +50MB，是 M3 要消掉的「唯一真实可打爆内存面」；阈值 60MB 只防更差，32MB 目标单列在 targets。"
+  },
+  "thresholds": {
+    "backup-export.allocPeakDeltaMB": 10,
+    "backup-export.rssPeakDeltaMB": 10,
+    "backup-import.allocPeakDeltaMB": 2,
+    "backup-import.rssPeakDeltaMB": 12,
+    "csv-import.allocPeakDeltaMB": 6,
+    "csv-import.rssPeakDeltaMB": 12,
+    "attachment-write.allocPeakDeltaMB": 60,
+    "attachment-write.rssPeakDeltaMB": 60
+  },
+  "targets": {
+    "backup-export.rssPeakDeltaMB": 128,
+    "backup-import.rssPeakDeltaMB": 128,
+    "csv-import.rssPeakDeltaMB": 64,
+    "attachment-write.rssPeakDeltaMB": 32
+  },
+  "datasets": {
+    "backupRows": 10000,
+    "csvRows": 20000,
+    "attachmentMB": 50,
+    "backupArtifactMB": 5.7,
+    "csvArtifactMB": 1.8,
+    "attachmentArtifactMB": 50,
+    "repeats": 3
+  },
+  "measured": {
+    "backup-export.allocPeakDeltaMB": 5.8,
+    "backup-export.allocEndDeltaMB": 0,
+    "backup-export.rssPeakDeltaMB": 3.8,
+    "backup-export.rssEndDeltaMB": 1.9,
+    "backup-export.durationMs": 649,
+    "backup-export.artifactMB": 5.7,
+    "backup-import.allocPeakDeltaMB": 0.1,
+    "backup-import.allocEndDeltaMB": 0,
+    "backup-import.rssPeakDeltaMB": 5.7,
+    "backup-import.rssEndDeltaMB": 5.7,
+    "backup-import.durationMs": 1494,
+    "backup-import.artifactMB": 5.7,
+    "csv-import.allocPeakDeltaMB": 1.9,
+    "csv-import.allocEndDeltaMB": 0.2,
+    "csv-import.rssPeakDeltaMB": 4.6,
+    "csv-import.rssEndDeltaMB": 0.9,
+    "csv-import.durationMs": 79782,
+    "csv-import.artifactMB": 1.8,
+    "attachment-write.allocPeakDeltaMB": 50.2,
+    "attachment-write.allocEndDeltaMB": 0.2,
+    "attachment-write.rssPeakDeltaMB": 50.1,
+    "attachment-write.rssEndDeltaMB": 0,
+    "attachment-write.durationMs": 234,
+    "attachment-write.artifactMB": 50
+  },
+  "measuredAt": "2026-10-23"
+}

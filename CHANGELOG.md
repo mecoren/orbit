@@ -16,6 +16,14 @@
 
 ## [Unreleased]
 
+### 性能：操作级内存探针与桌面基线刷新（T0.1，2026-10-23）
+
+- **新增操作级探针**（`perf-metrics/operation-probe.mjs` + `crates/orbit-core/examples/operation_probe.rs`）：备份导出/导入、CSV 导入、附件写入四场景各跑独立进程，自定义 `GlobalAlloc` 采净分配峰值 + 10ms 采样 RSS，三跑取中位写入 `perf-metrics/operation-baselines.json`；thresholds 拦回归、targets（docs/13 M1/M2/M3 验收线）只报不拦。
+- **首轮数字**（10k 任务 / 20k CSV 行 / 50MB 附件）：备份导出 +5.8MB 堆 / +3.8MB RSS、备份导入 +0.1MB / +5.7MB、CSV 导入 +1.9MB / +4.6MB 均在本规模验收线内；**附件写入 +50.2MB / +50.1MB，未达 32MB 目标**——`add_task_attachment` 仍是整文件读入 + AES-GCM 整包加密，即 M3（T1.1）要消掉的 before 列。
+- **修好真机口径 `memory3.mjs`**：B 段从已不存在的 `perf-snapshots/post/dist` 改到当前 `apps/desktop/dist`，路径改仓库相对，补 `--gate`/`--record` 与 `baselines.json#desktopExe`；缺 exe/dist 时 exit 2 而非假绿。首轮 Tauri release 稳态 385MB、Chromium 10k 空闲 335MB。
+- **三门禁复跑全绿**：`audit-unbounded --gate`（拦停 0）、`growth-curve --gate`（11 项阈值全过，`--record` 刷新 measured 至 36.3MB used / 797 DOM / 351MB RSS）、`memory3 --gate`、`operation-probe --gate`（8 项阈值全过）。口径与缺口见 `docs/09 §八`。
+- **验证**：`pnpm typecheck` 通过、vitest 627 绿、`cargo check --example operation_probe` 通过。
+
 ### 变更：桌面新增任务改详情形态（TaskCreateDrawer，2026-10-22）
 
 - **新增与详情同一套字段语言**：新增抽屉宽度由 `max-w-md` 提到与详情一致的 `max-w-xl`，结构改为「固定标题行 + 属性网格 + 描述/子任务/标签区块」；`InfoRow` / `SectionBlock` / 开始日期 / 截止日期 / 重复五个部件从详情模块直接复用（它们只吃 `value + onChange`），两处不再各写一套控件。

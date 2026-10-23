@@ -125,7 +125,10 @@ flutter test test/xxx_test.dart          # 定向用例
 node perf-metrics/audit-unbounded.mjs --gate   # 无界累加容器审计（零依赖，秒级）
 node perf-metrics/growth-curve.mjs --gate      # 1k/5k/10k 增长曲线与泄漏判据（需先 pnpm build）
 node perf-metrics/growth-curve.mjs --record    # 采纳新基线：只回写 baselines.json 的 measured
-node perf-metrics/memory3.mjs --gate           # 真机 Tauri exe 口径（Windows 本地，不入 CI）
+node perf-metrics/operation-probe.mjs --gate   # 操作级四场景（备份导出/导入、CSV 导入、附件写入）；首次会构建 release example
+node perf-metrics/operation-probe.mjs --record # 只回写 operation-baselines.json 的 measured/datasets，不动 thresholds
+node perf-metrics/memory3.mjs --gate           # 真机 Tauri exe 口径（Windows 本地，不入 CI；缺 exe/dist 时 exit 2）
+node perf-metrics/memory3.mjs --record         # 回写 baselines.json#desktopExe.measured
 
 # 发版（详见 docs/08_发布与更新流程.md）
 pnpm bump 0.2.0           # 升版：写源 + 同步五处清单 + 两个 Cargo.lock
