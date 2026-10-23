@@ -223,10 +223,14 @@ pub async fn restore_todo_task(pool: &SqlitePool, id: i64) -> CoreResult<TodoTas
     Ok(restored)
 }
 
-/// 彻底删除单个任务（物理 DELETE，含子任务/标签关联/评论/关系/提醒一并物理清）
+/// 彻底删除单个任务（物理 DELETE，含子任务/标签关联/评论/关系/提醒/附件关联一并物理清）
 ///
 /// 手动彻底删除是用户明确意图，不受同步守卫约束。事件 emit DbOp::Delete 触发
 /// 两端缓存失效；子表随行清理避免残留孤儿行（软删期间它们仅按 task_id 查询）。
+///
+/// **附件关联行必须一并物理清**：`todo_task_attachments` 残留的 `is_deleted=0`
+/// 行会让 `asset_api::list_unused_attachments` 的存活引用集（与 gc 同源）永远
+/// 认为该 hash 仍被引用 → 附件账本行与本地文件永不被回收。
 pub async fn purge_todo_task(pool: &SqlitePool, id: i64) -> CoreResult<()> {
     let t: TodoTask = generic_repo::get_by_id(pool, "todo_tasks", id).await?;
     if t.is_deleted != 1 {
@@ -242,6 +246,7 @@ pub async fn purge_todo_task(pool: &SqlitePool, id: i64) -> CoreResult<()> {
         "DELETE FROM todo_comments WHERE task_id = ?",
         "DELETE FROM todo_task_relations WHERE task_id = ? OR other_task_id = ?",
         "DELETE FROM todo_reminders WHERE task_id = ?",
+        "DELETE FROM todo_task_attachments WHERE task_id = ?",
         "DELETE FROM todo_tasks WHERE id = ?",
     ] {
         sqlx::query(sql).bind(id).bind(id).execute(&mut *tx).await?;
@@ -296,6 +301,7 @@ pub async fn purge_all_trashed_tasks(pool: &SqlitePool) -> CoreResult<u64> {
         "DELETE FROM todo_task_labels WHERE task_id IN (SELECT id FROM todo_tasks WHERE is_deleted = 1)",
         "DELETE FROM todo_comments WHERE task_id IN (SELECT id FROM todo_tasks WHERE is_deleted = 1)",
         "DELETE FROM todo_reminders WHERE task_id IN (SELECT id FROM todo_tasks WHERE is_deleted = 1)",
+        "DELETE FROM todo_task_attachments WHERE task_id IN (SELECT id FROM todo_tasks WHERE is_deleted = 1)",
         "DELETE FROM todo_tasks WHERE is_deleted = 1",
     ] {
         sqlx::query(sql).execute(&mut *tx).await?;
@@ -404,7 +410,7 @@ pub async fn purge_todo_tasks_before(pool: &SqlitePool, cutoff_ms: i64) -> CoreR
         return Ok((0, guarded));
     }
 
-    // 集合式删除：同一圈定条件一条子查询，6 类行各一条 DELETE（此前逐行
+    // 集合式删除：同一圈定条件一条子查询，7 类行各一条 DELETE（此前逐行
     // 6 条 × N 行 = 百行 600 条语句；同文件 purge_all_trashed_tasks 同款）
     let purge_scope =
         "is_deleted = 1 AND deleted_at IS NOT NULL AND deleted_at < ? AND deleted_at < ?";
@@ -424,6 +430,9 @@ pub async fn purge_todo_tasks_before(pool: &SqlitePool, cutoff_ms: i64) -> CoreR
         ),
         format!(
             "DELETE FROM todo_reminders WHERE task_id IN (SELECT id FROM todo_tasks WHERE {purge_scope})"
+        ),
+        format!(
+            "DELETE FROM todo_task_attachments WHERE task_id IN (SELECT id FROM todo_tasks WHERE {purge_scope})"
         ),
         // 本体最后删（子表子查询依赖它圈定范围）
         format!("DELETE FROM todo_tasks WHERE {purge_scope}"),
@@ -497,6 +506,36 @@ mod tests {
         generic_repo::get_by_id(pool, "todo_tasks", t.id)
             .await
             .unwrap()
+    }
+
+    /// 造一条附件关联行（不经 asset 写路径：purge 用例只关心绕过软删语义后的物理清理）
+    async fn insert_attachment_link(
+        pool: &SqlitePool,
+        task_id: i64,
+        uuid: &str,
+        hash: &str,
+        is_deleted: i64,
+    ) {
+        sqlx::query(
+            "INSERT INTO todo_task_attachments (uuid, task_id, hash, is_deleted) VALUES (?, ?, ?, ?)",
+        )
+        .bind(uuid)
+        .bind(task_id)
+        .bind(hash)
+        .bind(is_deleted)
+        .execute(pool)
+        .await
+        .unwrap();
+    }
+
+    async fn attachment_links(pool: &SqlitePool, task_id: i64) -> i64 {
+        let (n,): (i64,) =
+            sqlx::query_as("SELECT COUNT(*) FROM todo_task_attachments WHERE task_id = ?")
+                .bind(task_id)
+                .fetch_one(pool)
+                .await
+                .unwrap();
+        n
     }
 
     fn input(title: &str) -> TodoTaskCreateInput {
@@ -601,6 +640,44 @@ mod tests {
         // 不在回收站的任务不可彻底删除
         let live = create_todo_task(&pool, &input("活的")).await.unwrap();
         assert!(purge_todo_task(&pool, live.id).await.is_err());
+    }
+
+    /// 三处 purge 路径（单删/清空/TTL）都必须连带物理清理附件关联行：
+    /// 残留的 `is_deleted=0` 链行会让附件被判为「使用中」，本地文件与账本行
+    /// 永久无法回收（诊断页「清除未使用附件」也就永远列不出来）。
+    #[tokio::test]
+    async fn purge_paths_clear_attachment_links() {
+        let pool = setup_db().await;
+
+        // 1) 手动彻底删除单任务：活链行与软删链行都要清
+        let one = seed_trashed(&pool, "带附件", None).await;
+        insert_attachment_link(&pool, one.id, "u-att-1", "hash-1", 0).await;
+        insert_attachment_link(&pool, one.id, "u-att-1b", "hash-1b", 1).await;
+        purge_todo_task(&pool, one.id).await.unwrap();
+        assert_eq!(
+            attachment_links(&pool, one.id).await,
+            0,
+            "彻底删除应清除该任务全部附件链行（含已软删的）"
+        );
+
+        // 2) 清空回收站
+        let a = seed_trashed(&pool, "清空1", None).await;
+        let b = seed_trashed(&pool, "清空2", None).await;
+        insert_attachment_link(&pool, a.id, "u-att-2", "hash-2", 0).await;
+        insert_attachment_link(&pool, b.id, "u-att-3", "hash-3", 0).await;
+        purge_all_trashed_tasks(&pool).await.unwrap();
+        assert_eq!(attachment_links(&pool, a.id).await, 0);
+        assert_eq!(attachment_links(&pool, b.id).await, 0);
+
+        // 3) TTL 过期清理
+        let now = chrono::Utc::now().timestamp_millis();
+        let expired = seed_trashed(&pool, "过期", Some(now - 40 * DAY_MS)).await;
+        insert_attachment_link(&pool, expired.id, "u-att-4", "hash-4", 0).await;
+        let (purged, _) = purge_todo_tasks_before(&pool, now - 30 * DAY_MS)
+            .await
+            .unwrap();
+        assert_eq!(purged, 1);
+        assert_eq!(attachment_links(&pool, expired.id).await, 0);
     }
 
     /// A6 不变量：回收站**列表**按上限截断，但**清空回收站**必须覆盖全部墓碑
