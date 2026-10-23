@@ -40,7 +40,7 @@ const PROBE = path.join(
   'examples',
   process.platform === 'win32' ? 'operation_probe.exe' : 'operation_probe',
 );
-const SCENARIOS = [
+const ALL_SCENARIOS = [
   'backup-export',
   'backup-import',
   'csv-import',
@@ -48,6 +48,8 @@ const SCENARIOS = [
   'attachment-read',
   'attachment-sync-push',
   'attachment-sync-pull',
+  'backup-export-large',
+  'initial-sync',
 ];
 const ATTACHMENT_SCENARIOS = new Set([
   'attachment-write',
@@ -78,9 +80,33 @@ const REPEATS = Number(argValue('--repeats', '3'));
 const ROWS = Number(argValue('--rows', '10000'));
 const CSV_ROWS = Number(argValue('--csv-rows', '20000'));
 const ATTACHMENT_MB = Number(argValue('--attachment-mb', '50'));
+// T0.2/T1.2 验收批：200MB 级备份（50k 行 × 4KiB 描述）与 50k 行首同步
+const LARGE_ROWS = Number(argValue('--large-rows', '50000'));
+const LARGE_DESC_KB = Number(argValue('--large-description-kb', '4'));
+const INITIAL_SYNC_ROWS = Number(argValue('--initial-sync-rows', '50000'));
+const ONLY = argValue('--only', '')
+  .split(',')
+  .map((s) => s.trim())
+  .filter(Boolean);
+const SCENARIOS = ALL_SCENARIOS.filter((s) => !ONLY.length || ONLY.includes(s));
+
+/** 每场景的数据规模（未列出的走基准 10k 行 / 小描述） */
+const scenarioInput = (scenario) => {
+  if (scenario === 'backup-export-large') {
+    return { rows: LARGE_ROWS, descriptionKb: LARGE_DESC_KB };
+  }
+  if (scenario === 'initial-sync') {
+    return { rows: INITIAL_SYNC_ROWS, descriptionKb: 0 };
+  }
+  return { rows: ROWS, descriptionKb: 0 };
+};
 
 if (!Number.isFinite(REPEATS) || REPEATS < 1) {
   console.error('OPS_GATE_FAIL: --repeats 必须 ≥ 1');
+  process.exit(1);
+}
+if (!SCENARIOS.length) {
+  console.error(`OPS_GATE_FAIL: --only 未匹配到场景（可选 ${ALL_SCENARIOS.join(', ')}）`);
   process.exit(1);
 }
 
@@ -120,6 +146,7 @@ function writeAttachment(file, mb) {
 
 function runProbe({ scenario, workdir, out, backup }) {
   fs.mkdirSync(workdir, { recursive: true });
+  const { rows, descriptionKb } = scenarioInput(scenario);
   const args = [
     '--scenario',
     scenario,
@@ -128,7 +155,9 @@ function runProbe({ scenario, workdir, out, backup }) {
     '--out',
     out,
     '--rows',
-    String(ROWS),
+    String(rows),
+    '--description-kb',
+    String(descriptionKb),
     '--csv-rows',
     String(CSV_ROWS),
     '--attachment-mb',
@@ -207,16 +236,35 @@ for (const scenario of SCENARIOS) {
     );
   }
 }
+// 上下文指标：不进 thresholds，只做数据集核对（首同步上传总量验证数据确实流过链路）
+if (SCENARIOS.includes('initial-sync')) {
+  measured['initial-sync.uploadedMB'] = median(
+    samples
+      .map((s) => s['initial-sync']?.metrics?.uploadedMB)
+      .filter((v) => v !== null && v !== undefined),
+  );
+}
 
 const datasets = {
   backupRows: ROWS,
   csvRows: CSV_ROWS,
   attachmentMB: ATTACHMENT_MB,
+  backupLargeRows: LARGE_ROWS,
+  backupLargeDescriptionKb: LARGE_DESC_KB,
+  initialSyncRows: INITIAL_SYNC_ROWS,
   backupArtifactMB: measured['backup-export.artifactMB'],
+  backupLargeArtifactMB: measured['backup-export-large.artifactMB'],
   csvArtifactMB: measured['csv-import.artifactMB'],
   attachmentArtifactMB: measured['attachment-write.artifactMB'],
+  initialSyncUploadedMB: measured['initial-sync.uploadedMB'],
   repeats: REPEATS,
 };
+// --only 调试时未跑的场景指标为 undefined：record 合并写回，别清掉其他场景的基线
+const fullRun = SCENARIOS.length === ALL_SCENARIOS.length;
+if (!fullRun) delete datasets.repeats;
+const definedDatasets = Object.fromEntries(
+  Object.entries(datasets).filter(([, v]) => v !== undefined && v !== null),
+);
 
 const measuredAt = new Date().toISOString().slice(0, 10);
 const payload = { measured, datasets, measuredAt, samples };
@@ -253,8 +301,8 @@ const targetGaps = Object.entries(cfg.targets ?? {})
   .filter(Boolean);
 
 if (RECORD) {
-  cfg.measured = measured;
-  cfg.datasets = datasets;
+  cfg.measured = { ...(cfg.measured ?? {}), ...measured };
+  cfg.datasets = { ...(cfg.datasets ?? {}), ...definedDatasets };
   cfg.measuredAt = measuredAt;
   fs.writeFileSync(BASELINES, JSON.stringify(cfg, null, 2) + '\n');
   console.log(`已写回 measured → ${path.relative(ROOT, BASELINES)}`);

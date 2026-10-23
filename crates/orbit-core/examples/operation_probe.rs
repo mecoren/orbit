@@ -17,10 +17,16 @@
 //!   --scenario backup-export --workdir <dir> --out <result.json>
 //! ```
 //! 场景：`backup-export` / `backup-import` / `csv-import` / `attachment-write` /
-//! `attachment-read` / `attachment-sync-push` / `attachment-sync-pull`。
+//! `attachment-read` / `attachment-sync-push` / `attachment-sync-pull` /
+//! `backup-export-large` / `initial-sync`。
 //!
-//! 数据规模由参数控制（默认 10k 任务 / 20k CSV 行 / 50MB 附件）：基线文件记录
-//! 规模，跨版本对比时必须同规模，否则数字不可比。
+//! 数据规模由参数控制（默认 10k 任务 / 20k CSV 行 / 50MB 附件；大库场景由
+//! `--rows` + `--description-kb` 放大）：基线文件记录规模，跨版本对比时必须
+//! 同规模，否则数字不可比。
+//!
+//! `initial-sync` 用丢弃型适配器（上传字节丢弃、云端为空）量「首同步」的
+//! 装载 + 加密 + 上传峰值，不引入网络与磁盘写入噪声；云端对象总量由
+//! `uploadedMB` 单独报出。
 
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::future::Future;
@@ -35,6 +41,8 @@ use orbit_core::cloud_sync::attachments::{
     AttachmentSyncResult, sync_attachments_pull, sync_attachments_push,
 };
 use orbit_core::cloud_sync::progress::{NoopProgressSender, SyncOrigin};
+use orbit_core::cloud_sync::push::push_all;
+use orbit_core::cloud_sync::state::SyncStateStore;
 use orbit_core::db::pool::init_pool_unencrypted;
 use orbit_core::db::repository::attachment_repo;
 use orbit_core::models::business::Attachment;
@@ -263,6 +271,7 @@ struct Args {
     workdir: PathBuf,
     out: PathBuf,
     rows: usize,
+    description_kb: usize,
     csv_rows: usize,
     attachment_mb: u64,
     backup: Option<PathBuf>,
@@ -286,6 +295,9 @@ fn parse_args() -> Result<Args, String> {
         rows: get("rows", "10000")
             .parse()
             .map_err(|_| "--rows 需为整数".to_string())?,
+        description_kb: get("description-kb", "0")
+            .parse()
+            .map_err(|_| "--description-kb 需为整数".to_string())?,
         csv_rows: get("csv-rows", "20000")
             .parse()
             .map_err(|_| "--csv-rows 需为整数".to_string())?,
@@ -298,10 +310,23 @@ fn parse_args() -> Result<Args, String> {
 
 /// 直接 SQL 批量种子：与 0001 基线同构，绕开 API 的活动日志/事件开销，
 /// 保证「操作阶段」的量主要来自被测量操作而不是造数。
-async fn seed_tasks(pool: &SqlitePool, n: usize) -> Result<(), String> {
+async fn seed_tasks(pool: &SqlitePool, n: usize, description_kb: usize) -> Result<(), String> {
     let now = chrono::Utc::now().timestamp_millis();
+    // 大库场景用重复正文放大 JSON 体积：内容无意义，只保证确定性
+    let big_desc = (description_kb > 0)
+        .then(|| Some("x".repeat(description_kb * 1024)))
+        .flatten();
     let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
     for i in 0..n {
+        let description = if let Some(ref big) = big_desc {
+            Some(big.clone())
+        } else if i % 4 == 0 {
+            Some(format!(
+                "描述正文 {i}：用于让备份/导出通道产生真实 JSON 体积"
+            ))
+        } else {
+            None
+        };
         sqlx::query(
             "INSERT INTO todo_tasks
                (uuid, title, description, priority, status, position, created_at, updated_at, version)
@@ -309,11 +334,7 @@ async fn seed_tasks(pool: &SqlitePool, n: usize) -> Result<(), String> {
         )
         .bind(format!("probe-{i:08}"))
         .bind(format!("操作探针任务 {i:06}"))
-        .bind(if i % 4 == 0 {
-            Some(format!("描述正文 {i}：用于让备份/导出通道产生真实 JSON 体积"))
-        } else {
-            None
-        })
+        .bind(description)
         .bind((i % 6) as i64)
         .bind(i as f64)
         .bind(now)
@@ -371,7 +392,10 @@ async fn scenario_backup_export(args: &Args) -> Result<serde_json::Value, String
     let pool = init_pool_unencrypted(&db)
         .await
         .map_err(|e| e.to_string())?;
-    seed_tasks(&pool, args.rows).await?;
+    seed_tasks(&pool, args.rows, args.description_kb).await?;
+    let db_bytes = std::fs::metadata(&db)
+        .map_err(|e| format!("读取探针库大小失败：{e}"))?
+        .len();
     let target = args.workdir.join("probe.orfullsync");
     let (result, metrics) = measure(async {
         full_sync_backup_v2_api::export_v2_to_file(
@@ -391,6 +415,10 @@ async fn scenario_backup_export(args: &Args) -> Result<serde_json::Value, String
     obj.insert("artifactMB".into(), json!(mb(bytes as usize)));
     obj.insert("tableRows".into(), json!(counts.values().sum::<usize>()));
     obj.insert("tables".into(), json!(counts.len()));
+    obj.insert("dbBytes".into(), json!(db_bytes));
+    obj.insert("dbMB".into(), json!(mb(db_bytes as usize)));
+    obj.insert("rows".into(), json!(args.rows));
+    obj.insert("descriptionKb".into(), json!(args.description_kb));
     Ok(out)
 }
 
@@ -788,6 +816,102 @@ async fn run_attachment_sync(args: &Args, push: bool) -> Result<serde_json::Valu
     Ok(out)
 }
 
+/// 首同步探针适配器：云端为空、上传丢弃、只累计字节数
+///
+/// 不引入真实网络与磁盘写入，量的是 push 链路的「逐桶装载 + 加密 + 上传」
+/// 峰值；上传总量由 `uploadedMB` 单独报出，用于确认数据确实流过了链路。
+struct DiscardCloud {
+    uploaded: Mutex<u64>,
+}
+
+#[async_trait::async_trait]
+impl SyncAdapter for DiscardCloud {
+    async fn list_all_files(&self, _: &str) -> Result<Vec<RemoteFile>, SyncError> {
+        Ok(Vec::new())
+    }
+    async fn download(&self, path: &str) -> Result<bytes::Bytes, SyncError> {
+        Err(SyncError::NotFound {
+            message: format!("首同步探针云端为空: {path}"),
+        })
+    }
+    async fn upload(&self, _: &str, data: &[u8]) -> Result<(), SyncError> {
+        *self.uploaded.lock().unwrap() += data.len() as u64;
+        Ok(())
+    }
+    async fn delete(&self, _: &str) -> Result<(), SyncError> {
+        Ok(())
+    }
+    async fn upload_asset(&self, _: &str, data: Vec<u8>) -> Result<(), SyncError> {
+        *self.uploaded.lock().unwrap() += data.len() as u64;
+        Ok(())
+    }
+    async fn list_assets(&self, _: &str) -> Result<Vec<String>, SyncError> {
+        Ok(Vec::new())
+    }
+    async fn asset_exists(&self, _: &str) -> Result<bool, SyncError> {
+        Ok(false)
+    }
+}
+
+/// 首同步峰值（M4 验收欠账，docs/07 #91）：本地 50k 行 + 云端为空
+async fn scenario_initial_sync(args: &Args) -> Result<serde_json::Value, String> {
+    let db = args.workdir.join("initial-sync.db");
+    let pool = init_pool_unencrypted(&db)
+        .await
+        .map_err(|e| e.to_string())?;
+    seed_tasks(&pool, args.rows, args.description_kb).await?;
+    let db_bytes = std::fs::metadata(&db)
+        .map_err(|e| format!("读取探针库大小失败：{e}"))?
+        .len();
+
+    let crypto = SyncCryptoService::new(&args.workdir);
+    crypto
+        .init_with_data_key(SYNC_PASSWORD, &[0x27u8; 32])
+        .map_err(|e| format!("初始化探针 Data Key 失败: {e}"))?;
+    let state_store = SyncStateStore::new(&args.workdir);
+    let adapter = DiscardCloud {
+        uploaded: Mutex::new(0),
+    };
+    let skip: [String; 0] = [];
+
+    let (result, metrics) = measure(async {
+        push_all(
+            &pool,
+            &crypto,
+            &state_store,
+            &adapter,
+            &NoopProgressSender,
+            SyncOrigin::Manual,
+            "probe-device",
+            &skip[..],
+        )
+        .await
+        .map_err(|e| e.to_string())
+    })
+    .await;
+    let push = result?;
+    if push.failed_modules != 0 {
+        return Err(format!("首同步存在失败模块: {:?}", push.errors));
+    }
+    if push.pushed_chunks == 0 {
+        return Err("首同步没有上传任何桶——云端为空时应至少推送一桶".to_string());
+    }
+
+    let uploaded = *adapter.uploaded.lock().unwrap();
+    let mut out = metrics_json(&metrics);
+    let obj = out.as_object_mut().expect("json object");
+    obj.insert("artifactBytes".into(), json!(db_bytes));
+    obj.insert("artifactMB".into(), json!(mb(db_bytes as usize)));
+    obj.insert("uploadedBytes".into(), json!(uploaded));
+    obj.insert("uploadedMB".into(), json!(mb(uploaded as usize)));
+    obj.insert("rows".into(), json!(args.rows));
+    obj.insert("pushedChunks".into(), json!(push.pushed_chunks));
+    obj.insert("pushedModules".into(), json!(push.pushed_modules));
+    obj.insert("skippedModules".into(), json!(push.skipped_modules));
+    obj.insert("failedModules".into(), json!(push.failed_modules));
+    Ok(out)
+}
+
 async fn run(args: &Args) -> Result<serde_json::Value, String> {
     std::fs::create_dir_all(&args.workdir).map_err(|e| e.to_string())?;
     match args.scenario.as_str() {
@@ -798,9 +922,12 @@ async fn run(args: &Args) -> Result<serde_json::Value, String> {
         "attachment-read" => scenario_attachment_read(args).await,
         "attachment-sync-push" => run_attachment_sync(args, true).await,
         "attachment-sync-pull" => run_attachment_sync(args, false).await,
+        "backup-export-large" => scenario_backup_export(args).await,
+        "initial-sync" => scenario_initial_sync(args).await,
         other => Err(format!(
             "未知场景 '{other}'，可选 backup-export / backup-import / csv-import / \
-             attachment-write / attachment-read / attachment-sync-push / attachment-sync-pull"
+             attachment-write / attachment-read / attachment-sync-push / attachment-sync-pull / \
+             backup-export-large / initial-sync"
         )),
     }
 }

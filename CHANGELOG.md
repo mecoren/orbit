@@ -16,6 +16,14 @@
 
 ## [Unreleased]
 
+### 性能：50k 首同步与 200MB 级备份峰值实测（T0.2 + T1.2，2026-10-23）
+
+- 操作探针新增两个验收场景：`backup-export-large`（50k 行 × 4KiB 描述，产物 222.9MB）与 `initial-sync`（50k 行、云端为空、丢弃型适配器只统计上传字节，真实走 `push_all` 的分桶扫描 → 逐桶装载 → 加密 → 上传）。
+- 探针支持 `--description-kb` 放大字段体积、`--only` 定向调试；`--record` 改为**合并写回**，单场景调试不会清掉其他基线；`initial-sync.uploadedMB` 作为上下文指标单独记录。
+- 实测（3 次中位）：大库备份导出堆 +7.8MB / RSS +14MB / 6.6s；50k 首同步堆 +9.1MB / RSS +31.5MB / 22.1s，65 桶、上传 2.3MB。两条 128MB 验收线（`docs/13 T1.2`、`docs/07 #91`）全部达标。
+- `perf-metrics/operation-baselines.json` 新增 4 项阈值（大备份 20/30MB、首同步 24/60MB）与 2 条 targets（128MB）。
+- 文档：`docs/07 #95`、`docs/09 §8.5`、`docs/14 §三`、`docs/13` M4/6.3 表格回写实测值。
+
 ### 性能：附件流式化与分块加密（M3/T1.1，2026-10-23）
 
 - **本地写入改路径入参**：新增 `asset_api::add_task_attachment_from_path`——按 256KiB 块边读边算 SHA-256、写同目录临时文件、完成后原子 rename，峰值与文件大小解耦；`add_task_attachment(&[u8])` 保留给剪贴板/拖放。桌面文件选择器改调 `task_attachment_add_from_path`，不再把整份文件读成 JS 数组经 IPC 搬运。
