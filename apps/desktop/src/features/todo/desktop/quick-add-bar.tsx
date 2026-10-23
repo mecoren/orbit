@@ -4,12 +4,25 @@
  * 输入后浮现四个快捷 Popover（截止日期 / 提醒时间 / 优先级 / 项目）；
  * Enter 提交并保持焦点连续录入；Esc 重置。
  * 提醒时间为独立实体：任务创建成功后追加 todo_reminders_create。
+ * NLP 命中（日期/时刻/时长/重复/优先级/项目/标签）以预览 chips 展示且
+ * 可逐项取消（F4）；提交瞬间重算，NLP 显式值 > 手动 Popover 选择 > 视图默认。
  */
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { format, parse } from "date-fns";
 import { zhCN } from "date-fns/locale";
 import { useQuery } from "@tanstack/react-query";
-import { Calendar, CalendarPlus, Clock, Flag, Folder, Plus, Tag } from "lucide-react";
+import {
+  Calendar,
+  CalendarPlus,
+  Clock,
+  Flag,
+  Folder,
+  Plus,
+  Repeat as RepeatIcon,
+  Tag,
+  Timer,
+  X,
+} from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -28,12 +41,69 @@ import {
 } from "@/lib/tauri";
 import { useAppStore } from "@/stores/app-store";
 import { parseQuickInput } from "../shared/parse-quick-input";
+import { repeatLabel } from "../shared/repeat";
 import {
   atViewDueHour,
   quickViewCreateDefaults,
 } from "../shared/view-create-defaults";
 import { PRIORITY_COLOR, TODO_ACCENT, type QuickViewKey, PRIORITY_LABELS } from "../shared/constants";
 import { reminderEndMs } from "@/lib/quick-dates";
+
+/** NLP 命中预览胶囊（F4：「用户可逐项取消」） */
+function ParsedChip({
+  icon,
+  label,
+  onDismiss,
+  style,
+}: {
+  icon: ReactNode;
+  label: string;
+  onDismiss: () => void;
+  style?: CSSProperties;
+}) {
+  return (
+    <span
+      className="inline-flex items-center gap-1 rounded-sm bg-primary/10 px-1.5 py-0.5 text-primary"
+      style={style}
+    >
+      {icon}
+      {label}
+      <button
+        type="button"
+        aria-label={`取消：${label}`}
+        onClick={onDismiss}
+        className="ml-0.5 rounded-sm opacity-50 transition-opacity hover:opacity-100 focus-visible:opacity-100"
+      >
+        <X className="size-2.5" />
+      </button>
+    </span>
+  );
+}
+
+/** chips 逐项取消状态：按解析值键控——token 改动后取消态自动失效，reset 清空 */
+interface ParsedDismiss {
+  dueMs: number | null;
+  priority: number;
+  projectId: number | null;
+  labelIds: number[];
+  duration: number | null;
+  repeatKey: string | null;
+}
+const EMPTY_DISMISS: ParsedDismiss = {
+  dueMs: null,
+  priority: 0,
+  projectId: null,
+  labelIds: [],
+  duration: null,
+  repeatKey: null,
+};
+
+const repeatKeyOf = (r: { mode: number; after: number; weekdays: number }) =>
+  `${r.mode}:${r.after}:${r.weekdays}`;
+
+/** 时长 chip 文案：整小时收敛为「N 小时」 */
+const durationLabel = (n: number) =>
+  n >= 60 && n % 60 === 0 ? `${n / 60} 小时` : `${n} 分钟`;
 
 
 interface QuickAddBarProps {
@@ -67,6 +137,7 @@ export function QuickAddBar({ projects, defaultProjectId, quickView }: QuickAddB
   /** 提醒时间草稿（DateTimePicker 值格式 YYYY-MM-DDTHH:MM；空 = 不提醒） */
   const [remindDraft, setRemindDraft] = useState("");
   const [projectId, setProjectId] = useState<number | null | "default">("default");
+  const [dismiss, setDismiss] = useState<ParsedDismiss>(EMPTY_DISMISS);
 
   // 托盘「快速新建」意图（07 #16）：壳层 bump → 此处消费聚焦；
   // 归零防重放（机制同 list-page 的 taskFormIntent 消费）
@@ -104,7 +175,9 @@ export function QuickAddBar({ projects, defaultProjectId, quickView }: QuickAddB
     parsed.dueDate != null ||
     parsed.priority > 0 ||
     parsed.projectId != null ||
-    parsed.labelIds.length > 0;
+    parsed.labelIds.length > 0 ||
+    parsed.durationMinutes != null ||
+    parsed.repeat != null;
 
   const reset = () => {
     setTitle("");
@@ -112,6 +185,7 @@ export function QuickAddBar({ projects, defaultProjectId, quickView }: QuickAddB
     setDueDate(null);
     setRemindDraft("");
     setProjectId("default");
+    setDismiss(EMPTY_DISMISS);
   };
 
   const submit = async () => {
@@ -123,26 +197,44 @@ export function QuickAddBar({ projects, defaultProjectId, quickView }: QuickAddB
     });
     const t = p.title.trim();
     if (!t) return;
+    // chips 取消的维度回落到手动 Popover 选择（视图标记注入 #39 仍静默附加）
+    const nlpDueMs =
+      p.dueDate != null && p.dueDate.getTime() !== dismiss.dueMs
+        ? p.dueDate.getTime()
+        : null;
+    const nlpPriority = p.priority !== dismiss.priority ? p.priority : 0;
+    const nlpProjectId = p.projectId !== dismiss.projectId ? p.projectId : null;
+    const nlpLabels = p.labelIds.filter((id) => !dismiss.labelIds.includes(id));
     // 视图标记注入（#39）：提交瞬间重算默认值（跨零点不落昨天）；
     // NLP 显式值 > 手动 Popover 选择 > 本视图默认。
-    // 今日/本周视图内截止时刻归一 18:00（用户口径）：三个日期来源
-    // （NLP 词/Popover/视图默认）均只表达日期、无时刻位，统一落 18 点
+    // 今日/本周视图内截止时刻归一 18:00（用户口径）：手动 Popover 与视图默认
+    // 仍只表达日期；NLP 显式时刻（F4）跳过归一原样落库
     const viewDefaults = quickViewCreateDefaults(quickView);
     const inDueView = quickView === "today" || quickView === "week";
-    const resolvedDue =
-      p.dueDate?.getTime() ?? dueDate?.getTime() ?? viewDefaults.dueMs ?? null;
+    const resolvedDue = nlpDueMs ?? dueDate?.getTime() ?? viewDefaults.dueMs ?? null;
+    const skipViewHour = nlpDueMs != null && p.dueHasTime;
     try {
       const created = await todoTaskCreate({
         title: t,
-        priority: p.priority || priority,
+        priority: nlpPriority || priority,
         due_date:
-          inDueView && resolvedDue != null ? atViewDueHour(resolvedDue) : resolvedDue,
-        project_id: p.projectId ?? effectiveProjectId,
+          inDueView && resolvedDue != null && !skipViewHour
+            ? atViewDueHour(resolvedDue)
+            : resolvedDue,
+        project_id: nlpProjectId ?? effectiveProjectId,
         ...(viewDefaults.myDayMs != null && { my_day_date: viewDefaults.myDayMs }),
         ...(viewDefaults.favorite != null && { is_favorite: viewDefaults.favorite }),
+        ...(p.durationMinutes != null &&
+          p.durationMinutes !== dismiss.duration && { duration_minutes: p.durationMinutes }),
+        ...(p.repeat != null &&
+          repeatKeyOf(p.repeat) !== dismiss.repeatKey && {
+            repeat_mode: p.repeat.mode,
+            repeat_after: p.repeat.after,
+            repeat_weekdays: p.repeat.weekdays,
+          }),
       });
       // 标签挂载：单个失败不阻断任务本身
-      for (const labelId of p.labelIds) {
+      for (const labelId of nlpLabels) {
         try {
           await todoTaskLabelCreate({ task_id: created.id, label_id: labelId });
         } catch {
@@ -168,43 +260,67 @@ export function QuickAddBar({ projects, defaultProjectId, quickView }: QuickAddB
   // 此处再叠任何不透明底都会与周围所见背景产生色差
   return (
     <div className="border-t border-border px-4 py-2.5">
-      {/* NLP 解析预览 chips（07 §五-P1#7）：仅展示命中项 */}
+      {/* NLP 解析预览 chips（07 §五-P1#7 + F4 时刻/时长/重复）：仅展示命中项，可逐项取消 */}
       {hasInput && hasHits && (
         <div
           role="status"
           aria-live="polite"
           className="mb-1.5 flex flex-wrap items-center gap-1.5 px-1 text-xs text-muted-foreground"
         >
-          {parsed.dueDate && (
-            <span className="inline-flex items-center gap-1 rounded-sm bg-primary/10 px-1.5 py-0.5 text-primary">
-              <Calendar className="size-3" />
-              {format(parsed.dueDate, "M月d日 EEEE", { locale: zhCN })}
-            </span>
+          {parsed.dueDate && parsed.dueDate.getTime() !== dismiss.dueMs && (
+            <ParsedChip
+              icon={<Calendar className="size-3" />}
+              label={`${format(parsed.dueDate, "M月d日 EEEE", { locale: zhCN })}${
+                parsed.dueHasTime ? format(parsed.dueDate, " HH:mm") : ""
+              }`}
+              onDismiss={() => setDismiss((d) => ({ ...d, dueMs: parsed.dueDate!.getTime() }))}
+            />
           )}
-          {parsed.priority > 0 && (
-            <span className="inline-flex items-center gap-1 rounded-sm bg-primary/10 px-1.5 py-0.5 text-primary">
-              <Flag className="size-3" />
-              {PRIORITY_LABELS[parsed.priority]}
-            </span>
+          {parsed.priority > 0 && parsed.priority !== dismiss.priority && (
+            <ParsedChip
+              icon={<Flag className="size-3" />}
+              label={PRIORITY_LABELS[parsed.priority]}
+              onDismiss={() => setDismiss((d) => ({ ...d, priority: parsed.priority }))}
+            />
           )}
-          {parsed.projectId != null && (
-            <span
-              className="inline-flex items-center gap-1 rounded-sm bg-primary/10 px-1.5 py-0.5"
-              style={{ color: projects.find((pr) => pr.id === parsed.projectId)?.hex_color || TODO_ACCENT }}
-            >
-              <Folder className="size-3" />
-              {projects.find((pr) => pr.id === parsed.projectId)?.title}
-            </span>
+          {parsed.projectId != null && parsed.projectId !== dismiss.projectId && (
+            <ParsedChip
+              icon={<Folder className="size-3" />}
+              label={projects.find((pr) => pr.id === parsed.projectId)?.title ?? ""}
+              style={{
+                color: projects.find((pr) => pr.id === parsed.projectId)?.hex_color || TODO_ACCENT,
+              }}
+              onDismiss={() => setDismiss((d) => ({ ...d, projectId: parsed.projectId }))}
+            />
           )}
-          {parsed.labelIds.map((id) => (
-            <span
-              key={id}
-              className="inline-flex items-center gap-1 rounded-sm bg-primary/10 px-1.5 py-0.5 text-primary"
-            >
-              <Tag className="size-3" />
-              {(labelsQuery.data ?? []).find((l) => l.id === id)?.title}
-            </span>
-          ))}
+          {parsed.labelIds
+            .filter((id) => !dismiss.labelIds.includes(id))
+            .map((id) => (
+              <ParsedChip
+                key={id}
+                icon={<Tag className="size-3" />}
+                label={(labelsQuery.data ?? []).find((l) => l.id === id)?.title ?? ""}
+                onDismiss={() =>
+                  setDismiss((d) => ({ ...d, labelIds: [...d.labelIds, id] }))
+                }
+              />
+            ))}
+          {parsed.durationMinutes != null && parsed.durationMinutes !== dismiss.duration && (
+            <ParsedChip
+              icon={<Timer className="size-3" />}
+              label={`时长 ${durationLabel(parsed.durationMinutes)}`}
+              onDismiss={() => setDismiss((d) => ({ ...d, duration: parsed.durationMinutes }))}
+            />
+          )}
+          {parsed.repeat && repeatKeyOf(parsed.repeat) !== dismiss.repeatKey && (
+            <ParsedChip
+              icon={<RepeatIcon className="size-3" />}
+              label={repeatLabel(parsed.repeat.mode, parsed.repeat.after, {
+                weekdays: parsed.repeat.weekdays,
+              })}
+              onDismiss={() => setDismiss((d) => ({ ...d, repeatKey: repeatKeyOf(parsed.repeat!) }))}
+            />
+          )}
         </div>
       )}
       <div className="flex items-center gap-2 rounded-md border border-border px-2 py-1.5 shadow-sm">
@@ -226,7 +342,7 @@ export function QuickAddBar({ projects, defaultProjectId, quickView }: QuickAddB
             if (e.key === "Enter") void submit();
             if (e.key === "Escape") reset();
           }}
-          placeholder="添加任务…支持「明天 #项目 @标签 !3」"
+          placeholder="添加任务…支持「明天下午3点 每天 30分钟 #项目 @标签 !3」"
           className="h-7 min-w-0 flex-1 border-0 bg-transparent px-1 shadow-none focus-visible:ring-0"
         />
 

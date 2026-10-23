@@ -379,28 +379,28 @@ test("崩溃边界：页面崩溃后标题栏仍在、可恢复（D14）", async
 
 test("重复任务：完成推进下一实例（引擎下沉 todo_tasks_complete 单命令）", async ({ page }) => {
   // 快加一条任务，mock 内存库直改 repeat 字段为每天重复（表单编辑路径不在此用例范围）
-  await quickAdd(page, "冒烟任务-每天喝水");
-  await expect(page.getByText("冒烟任务-每天喝水")).toBeVisible();
+  await quickAdd(page, "冒烟任务-周期喝水");
+  await expect(page.getByText("冒烟任务-周期喝水")).toBeVisible();
 
   await page.evaluate(() => {
     const m = (window as any).__orbitMock;
-    const t = m.db.tasks.find((x: any) => x.title === "冒烟任务-每天喝水");
+    const t = m.db.tasks.find((x: any) => x.title === "冒烟任务-周期喝水");
     t.repeat_mode = 1; // 每天
     t.repeat_after = 1;
     t.due_date = Date.now() + 86400000; // 明天到期（提前完成仍按原排程推进）
     m.emitDbChange();
   });
   await expect(
-    page.getByRole("button", { name: "未完成任务：冒烟任务-每天喝水" }),
+    page.getByRole("button", { name: "未完成任务：冒烟任务-周期喝水" }),
   ).toBeVisible();
 
   // 完成：单命令单事务——旧实例标记完成 + 下一实例出现
-  const row = page.getByRole("button", { name: "未完成任务：冒烟任务-每天喝水" });
+  const row = page.getByRole("button", { name: "未完成任务：冒烟任务-周期喝水" });
   await row.getByRole("button", { name: "标记完成" }).click();
 
   const dbState = await page.evaluate(() => {
     const m = (window as any).__orbitMock;
-    const rows = m.db.tasks.filter((x: any) => x.title === "冒烟任务-每天喝水");
+    const rows = m.db.tasks.filter((x: any) => x.title === "冒烟任务-周期喝水");
     return rows.map((x: any) => ({
       done: x.done,
       due_date: x.due_date as number | null,
@@ -414,6 +414,47 @@ test("重复任务：完成推进下一实例（引擎下沉 todo_tasks_complete
   expect(next).toBeTruthy();
   expect(next!.repeat_mode).toBe(1);
   expect(next!.due_date).toBeGreaterThan(Date.now());
+});
+
+test("NLP 快速输入：时长/重复/显式时刻随快加一次落库（F4）", async ({ page }) => {
+  // 「每天 30分钟」→ 标题剥离 token、repeat/duration 落库、锚点日=今天零点
+  await quickAdd(page, "冒烟任务-每天喝水30分钟");
+  const t = await page.evaluate(() => {
+    const m = (window as any).__orbitMock;
+    return m.db.tasks.find((x: any) => x.title === "冒烟任务-喝水") ?? null;
+  });
+  expect(t).toBeTruthy();
+  expect(t.repeat_mode).toBe(1);
+  expect(t.repeat_after).toBe(1);
+  expect(t.duration_minutes).toBe(30);
+  expect(t.due_date).not.toBeNull();
+  const today = new Date();
+  const due = new Date(t.due_date as number);
+  expect(
+    due.getFullYear() === today.getFullYear() &&
+      due.getMonth() === today.getMonth() &&
+      due.getDate() === today.getDate() &&
+      due.getHours() === 0 &&
+      due.getMinutes() === 0,
+  ).toBe(true);
+
+  // 「明晚8点半」→ 组合词：次日 20:30（显式时刻不归一零点）
+  await quickAdd(page, "冒烟任务-明晚8点半复盘");
+  const t2 = await page.evaluate(() => {
+    const m = (window as any).__orbitMock;
+    return m.db.tasks.find((x: any) => x.title === "冒烟任务-复盘") ?? null;
+  });
+  expect(t2).toBeTruthy();
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const due2 = new Date(t2.due_date as number);
+  expect(
+    due2.getFullYear() === tomorrow.getFullYear() &&
+      due2.getMonth() === tomorrow.getMonth() &&
+      due2.getDate() === tomorrow.getDate() &&
+      due2.getHours() === 20 &&
+      due2.getMinutes() === 30,
+  ).toBe(true);
 });
 
 test("完成态乐观：重复任务完成即翻已完成，撤销删克隆（D4）", async ({ page }) => {
