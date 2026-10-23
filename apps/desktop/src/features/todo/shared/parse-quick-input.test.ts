@@ -2,6 +2,11 @@
 // parseQuickInput 规则表驱动测试（07 报告 §五-P1#7）
 // 基准时刻 2026-08-26 为周三；日期 token 一律落到当日零点（本地时区），
 // 与 lib/quick-dates.ts 快捷菜单「今天」口径一致。
+//
+// F4（时刻/时长/重复）用例来自双端共享向量 parse-quick-input-vectors.json
+// ——与 Dart 侧 parse_quick_input_test.dart 跑同一组输入/期望，防漂移。
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { parseQuickInput } from "./parse-quick-input";
@@ -126,4 +131,64 @@ describe("parseQuickInput · 兜底语义", () => {
     expect(parseQuickInput("礼拜六加班", CTX).dueDate!.getTime()).toBe(day(8, 29));
     expect(parseQuickInput("9月10号体检", CTX).dueDate!.getTime()).toBe(day(9, 10));
   });
+});
+
+// ---- F4 共享向量（docs/13 §五；JSON 为双端唯一真相源）----
+
+interface VectorSpec {
+  now: string;
+  projects: { id: number; title: string }[];
+  labels: { id: number; title: string }[];
+  vectors: {
+    name: string;
+    input: string;
+    expect: {
+      title: string;
+      due?: string;
+      dueHasTime?: boolean;
+      priority?: number;
+      projectId?: number | null;
+      labelIds?: number[];
+      durationMinutes?: number | null;
+      repeat?: { mode: number; after: number; weekdays: number } | null;
+    };
+  }[];
+}
+
+/** "2026-08-27T15:00" → 本地时区 Date（不写绝对时间戳，任意时区机器可复算） */
+function localDate(s: string): Date {
+  const [d, t = "00:00"] = s.split("T");
+  const [y, mo, da] = d.split("-").map(Number);
+  const [h, mi] = t.split(":").map(Number);
+  return new Date(y, mo - 1, da, h, mi);
+}
+
+const spec: VectorSpec = JSON.parse(
+  readFileSync(path.join(import.meta.dirname, "./parse-quick-input-vectors.json"), "utf8"),
+);
+const vectorCtx = {
+  projects: spec.projects,
+  labels: spec.labels,
+  now: localDate(spec.now),
+};
+
+describe("parseQuickInput · F4 共享向量（时刻/时长/重复）", () => {
+  for (const v of spec.vectors) {
+    it(v.name, () => {
+      const r = parseQuickInput(v.input, vectorCtx);
+      expect(r.title).toBe(v.expect.title);
+      if (v.expect.due != null) {
+        expect(r.dueDate).not.toBeNull();
+        expect(r.dueDate!.getTime()).toBe(localDate(v.expect.due).getTime());
+      } else {
+        expect(r.dueDate).toBeNull();
+      }
+      expect(r.dueHasTime).toBe(v.expect.dueHasTime ?? false);
+      expect(r.priority).toBe(v.expect.priority ?? 0);
+      expect(r.projectId).toBe(v.expect.projectId ?? null);
+      expect(r.labelIds).toEqual(v.expect.labelIds ?? []);
+      expect(r.durationMinutes).toBe(v.expect.durationMinutes ?? null);
+      expect(r.repeat).toEqual(v.expect.repeat ?? null);
+    });
+  }
 });
