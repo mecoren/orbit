@@ -11,6 +11,22 @@ pub fn sha256_hex(data: &[u8]) -> String {
     result.iter().map(|b| format!("{:02x}", b)).collect()
 }
 
+/// 常数时间字符串比较（长度不等时按较长串比较，避免提前返回泄露前缀信息）
+///
+/// 用于内容寻址校验（`sha256(明文) == 对象键`）：正常路径下两边恒等，
+/// 但校验失败的场景可能面对被篡改的输入，比较过程不应成为可观测旁路。
+pub fn constant_time_eq(a: &str, b: &str) -> bool {
+    let (a, b) = (a.as_bytes(), b.as_bytes());
+    let max = a.len().max(b.len());
+    let mut diff: u8 = (a.len() ^ b.len()) as u8;
+    for i in 0..max {
+        let x = a.get(i).copied().unwrap_or(0);
+        let y = b.get(i).copied().unwrap_or(0);
+        diff |= x ^ y;
+    }
+    diff == 0
+}
+
 /// 校验是否为合法 sha256 hex 摘要（64 位小写十六进制）
 ///
 /// 附件内容寻址链路的入口纵深防御：hash 会直接作为本地文件名

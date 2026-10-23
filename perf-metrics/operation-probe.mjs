@@ -2,8 +2,12 @@
  * operation-probe.mjs — 大对象操作的内存峰值探针（docs/13 §6.2 M6 / 总计划 T0.1）
  *
  * 与 growth-curve.mjs 的分工：曲线量的是**前端列表**在 1k/5k/10k 数据量下的
- * 驻留与重拉峰值；本脚本量的是 **core 侧四类大对象操作**（备份导出/导入、
- * CSV 导入、附件写入）的峰值增量。两者指标不通用，不要互相替换。
+ * 驻留与重拉峰值；本脚本量的是 **core 侧大对象操作**（备份导出/导入、CSV 导入、
+ * 附件写入/导出/云端推拉）的峰值增量。两者指标不通用，不要互相替换。
+ *
+ * M3/T1.1 后附件场景的口径：`attachment-write` 走路径入参（流式 SHA-256 + 落盘），
+ * `attachment-read` 走流式导出，`attachment-sync-push/pull` 走 OSAC 分块容器
+ * 加解密 + 适配器按块传输——四者峰值都应与 50MB 规模解耦（验收线 32MB）。
  *
  * 口径：
  * - 每个场景跑在独立进程（`orbit-core/examples/operation_probe.rs`），避免上一
@@ -36,7 +40,21 @@ const PROBE = path.join(
   'examples',
   process.platform === 'win32' ? 'operation_probe.exe' : 'operation_probe',
 );
-const SCENARIOS = ['backup-export', 'backup-import', 'csv-import', 'attachment-write'];
+const SCENARIOS = [
+  'backup-export',
+  'backup-import',
+  'csv-import',
+  'attachment-write',
+  'attachment-read',
+  'attachment-sync-push',
+  'attachment-sync-pull',
+];
+const ATTACHMENT_SCENARIOS = new Set([
+  'attachment-write',
+  'attachment-read',
+  'attachment-sync-push',
+  'attachment-sync-pull',
+]);
 const METRICS = [
   'allocPeakDeltaMB',
   'allocEndDeltaMB',
@@ -149,7 +167,7 @@ try {
       const workdir = path.join(runDir, scenario);
       fs.mkdirSync(workdir, { recursive: true });
       if (scenario === 'csv-import') writeCsv(path.join(workdir, 'probe.csv'), CSV_ROWS);
-      if (scenario === 'attachment-write') {
+      if (ATTACHMENT_SCENARIOS.has(scenario)) {
         writeAttachment(path.join(workdir, 'probe-attachment.bin'), ATTACHMENT_MB);
       }
       const backup =

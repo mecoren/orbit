@@ -53,6 +53,74 @@ pub fn write_atomic(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
     }
 }
 
+/// 同目录临时路径：`{filename}.{tag}-{random}.tmp`
+///
+/// 供流式写入方（附件写入/解密落盘）复用同一套「临时文件 + rename」协议：
+/// 临时文件必须与目标同目录，rename 才是原子的（跨卷会退回复制，且不原子）。
+pub fn temp_sibling(path: &Path, tag: &str) -> PathBuf {
+    use base64::Engine;
+    let parent = path.parent().unwrap_or_else(|| Path::new("."));
+    let name = path
+        .file_name()
+        .map(|s| s.to_string_lossy().to_string())
+        .unwrap_or_default();
+    let suffix =
+        base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(crate::crypto::random_bytes(6));
+    parent.join(format!("{name}.{tag}-{suffix}.tmp"))
+}
+
+/// 原子替换：`tmp` → `target`（Windows 不允许 rename 覆盖已存在目标，先删）
+///
+/// 调用方负责保证 `tmp` 与 `target` 同目录；失败时清理 `tmp`，不留垃圾。
+pub fn replace_atomic(tmp: &Path, target: &Path) -> std::io::Result<()> {
+    if target.exists() {
+        // Windows 上目标存在时 rename 失败；删除窗口极小且调用方均为
+        // 「重新生成同内容」的场景（内容寻址/缓存导出），可接受
+        std::fs::remove_file(target)?;
+    }
+    match std::fs::rename(tmp, target) {
+        Ok(()) => Ok(()),
+        Err(e) => {
+            let _ = std::fs::remove_file(tmp);
+            Err(e)
+        }
+    }
+}
+
+/// 流式复制文件：读一块写一块，峰值 = `buf_size`，与文件大小无关
+///
+/// 先写同目录临时文件再 [`replace_atomic`]，目标要么是完整新内容、要么不存在。
+/// 返回复制的字节数。源文件读失败时清理临时文件并透传错误。
+pub fn copy_file_atomic(src: &Path, dst: &Path, buf_size: usize) -> std::io::Result<u64> {
+    use std::io::{Read, Write};
+    let mut reader = std::fs::File::open(src)?;
+    let tmp = temp_sibling(dst, "copy");
+    let result = (|| -> std::io::Result<u64> {
+        if let Some(parent) = dst.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        let mut writer = std::fs::File::create(&tmp)?;
+        let mut buf = vec![0u8; buf_size.max(4096)];
+        let mut copied = 0u64;
+        loop {
+            let n = reader.read(&mut buf)?;
+            if n == 0 {
+                break;
+            }
+            writer.write_all(&buf[..n])?;
+            copied += n as u64;
+        }
+        writer.flush()?;
+        drop(writer);
+        replace_atomic(&tmp, dst)?;
+        Ok(copied)
+    })();
+    if result.is_err() {
+        let _ = std::fs::remove_file(&tmp);
+    }
+    result
+}
+
 /// 将损坏的元数据文件改名留证（`{path}.corrupt-{unix_ms}`），并返回新路径。
 ///
 /// 用于加载阶段解析失败的场景：调用方应向用户明确报错，而不是把损坏文件

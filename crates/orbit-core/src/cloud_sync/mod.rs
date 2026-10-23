@@ -41,6 +41,7 @@
 //! └── modules.rs      同步模块注册表（与白名单一致性断言）
 //! ```
 
+pub mod asset_container;
 pub mod attachments;
 pub mod chunk;
 pub mod crypto_io;

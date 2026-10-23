@@ -526,6 +526,43 @@ function logTarget(db: MockDb, taskId: number, action: string, target: string) {
 /** 长文本快照截断（与 Rust snapshot_text 同口径：60 字外折叠为 …） */
 const truncText = (s: string) => (s.length > 60 ? `${s.slice(0, 60)}…` : s);
 
+/** 附件挂载（字节入口；路径入口在浏览器 mock 不可用）——与 Rust 幂等/上限同口径 */
+function mockAddAttachment(
+  db: MockDb,
+  taskId: number,
+  fileName: string,
+  mimeType: string,
+  data: number[],
+): MockAttachmentLink {
+  const t = db.tasks.find((x) => x.id === taskId && !x.is_deleted);
+  if (!t) throw new Error(`task ${taskId} not found`);
+  if (!data?.length) throw new Error("附件内容为空");
+  if (data.length > 50 * 1024 * 1024) throw new Error("附件超过单文件上限 50MB");
+  // 简化 hash：非加密用途，仅保证同内容同键（djb2）
+  let h = 5381;
+  for (const b of data) h = ((h << 5) + h + b) >>> 0;
+  const hash = h.toString(16).padStart(8, "0");
+  const existing = db.attachments.find((a) => a.task_id === taskId && a.hash === hash);
+  if (existing) return ipcClone(existing);
+  if (db.attachments.filter((a) => a.task_id === taskId).length >= 20) {
+    throw new Error("单任务附件数已达上限 20");
+  }
+  const link: MockAttachmentLink = {
+    link_id: db.seq++,
+    link_uuid: uuid(),
+    task_id: taskId,
+    hash,
+    original_name: fileName,
+    mime_type: mimeType,
+    size_bytes: data.length,
+    is_local_cached: 1,
+  };
+  db.attachments.push(link);
+  // 附件轨迹仅新挂载记（幂等路径不重复记，与 Rust 同口径）
+  logTarget(db, taskId, "attachment_add", fileName);
+  return ipcClone(link);
+}
+
 const pad2 = (n: number) => String(n).padStart(2, "0");
 const localDay = (ms: unknown): string | null => {
   if (ms == null) return null;
@@ -1734,36 +1771,11 @@ const commands: Record<string, (args: any, ctx: Ctx) => unknown> = {
   task_attachment_add: (
     { taskId, fileName, mimeType, data }: { taskId: number; fileName: string; mimeType: string; data: number[] },
     { db }: Ctx,
-  ) => {
-    const t = db.tasks.find((x) => x.id === taskId && !x.is_deleted);
-    if (!t) throw new Error(`task ${taskId} not found`);
-    if (!data?.length) throw new Error("附件内容为空");
-    if (data.length > 50 * 1024 * 1024) throw new Error("附件超过单文件上限 50MB");
-    // 简化 hash：非加密用途，仅保证同内容同键（djb2）
-    let h = 5381;
-    for (const b of data) h = ((h << 5) + h + b) >>> 0;
-    const hash = h.toString(16).padStart(8, "0");
-    const existing = db.attachments.find(
-      (a) => a.task_id === taskId && a.hash === hash,
-    );
-    if (existing) return ipcClone(existing);
-    if (db.attachments.filter((a) => a.task_id === taskId).length >= 20) {
-      throw new Error("单任务附件数已达上限 20");
-    }
-    const link: MockAttachmentLink = {
-      link_id: db.seq++,
-      link_uuid: uuid(),
-      task_id: taskId,
-      hash,
-      original_name: fileName,
-      mime_type: mimeType,
-      size_bytes: data.length,
-      is_local_cached: 1,
-    };
-    db.attachments.push(link);
-    // 附件轨迹仅新挂载记（幂等路径不重复记，与 Rust 同口径）
-    logTarget(db, taskId, "attachment_add", fileName);
-    return ipcClone(link);
+  ) => mockAddAttachment(db, taskId, fileName, mimeType, data),
+  // 路径入参（M3/T1.1）：浏览器 mock 没有磁盘访问通道（对话框插件也不可用），
+  // 显式报错而不是伪造一份空内容——真实 Tauri 壳走 Rust 流式读取。
+  task_attachment_add_from_path: () => {
+    throw new Error("浏览器 mock 不支持从路径导入附件，请改用字节通道或真机验证");
   },
   task_attachments_list: ({ taskId }: { taskId: number }, { db }: Ctx) =>
     ipcClone(db.attachments.filter((a) => a.task_id === taskId)),
@@ -1772,6 +1784,10 @@ const commands: Record<string, (args: any, ctx: Ctx) => unknown> = {
     if (!meta) throw new Error(`附件 ${hash} 不存在`);
     if (meta.is_local_cached === 0) throw new Error("附件尚未从云端同步到本机");
     return [];
+  },
+  // 流式导出（M3/T1.1）：浏览器 mock 无写盘通道，显式报错
+  task_attachment_export: () => {
+    throw new Error("浏览器 mock 不支持导出附件到本地文件，请改用真机验证");
   },
   task_attachment_remove: ({ linkId }: { linkId: number }, { db }: Ctx) => {
     const idx = db.attachments.findIndex((a) => a.link_id === linkId);

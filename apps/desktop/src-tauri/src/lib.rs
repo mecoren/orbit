@@ -518,10 +518,12 @@ pub fn run() {
             commands::template_cmd::template_create,
             commands::template_cmd::template_update,
             commands::template_cmd::template_delete,
-            // 任务附件（上传/列表/读取/卸下 + 本地 GC）
+            // 任务附件（上传/列表/读取/导出/卸下 + 本地 GC）
             commands::asset_cmd::task_attachment_add,
+            commands::asset_cmd::task_attachment_add_from_path,
             commands::asset_cmd::task_attachments_list,
             commands::asset_cmd::task_attachment_read,
+            commands::asset_cmd::task_attachment_export,
             commands::asset_cmd::task_attachment_remove,
             commands::asset_cmd::attachments_gc,
             // 数据库维护（WAL checkpoint / 附件 GC / 查询统计 / VACUUM）

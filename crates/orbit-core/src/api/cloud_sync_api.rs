@@ -129,6 +129,30 @@ impl SyncAdapter for BasePathAdapter {
         self.inner.download(&self.join(&path)).await
     }
 
+    async fn upload_asset_file(
+        &self,
+        hash: &str,
+        local_path: &std::path::Path,
+        total_len: u64,
+    ) -> Result<(), SyncError> {
+        // M3：必须转发——内层 `upload_file` 才有流式/分片能力；
+        // 默认实现会把加密容器整包读回来，等于白做流式化。
+        let path = crate::cloud_sync::paths::asset_path(hash);
+        self.inner
+            .upload_file(&self.join(&path), local_path, total_len)
+            .await
+    }
+
+    async fn download_asset_to_file(
+        &self,
+        hash: &str,
+        target: &std::path::Path,
+    ) -> Result<u64, SyncError> {
+        // M3：路径级转发，保留内层「单对象 → 分片拼装」回退。
+        let path = crate::cloud_sync::paths::asset_path(hash);
+        self.inner.download_to_file(&self.join(&path), target).await
+    }
+
     async fn asset_exists(&self, hash: &str) -> Result<bool, SyncError> {
         // 内层适配器自带「单对象 → 分片清单」两段探测（HEAD 实现）
         // F75：同 upload_asset——包装器必须自己拼 base_path。

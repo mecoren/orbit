@@ -16,7 +16,8 @@
 //! cargo run --release -p orbit-core --example operation_probe -- \
 //!   --scenario backup-export --workdir <dir> --out <result.json>
 //! ```
-//! 场景：`backup-export` / `backup-import` / `csv-import` / `attachment-write`。
+//! 场景：`backup-export` / `backup-import` / `csv-import` / `attachment-write` /
+//! `attachment-read` / `attachment-sync-push` / `attachment-sync-pull`。
 //!
 //! 数据规模由参数控制（默认 10k 任务 / 20k CSV 行 / 50MB 附件）：基线文件记录
 //! 规模，跨版本对比时必须同规模，否则数字不可比。
@@ -24,12 +25,22 @@
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::future::Future;
 use std::path::PathBuf;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use orbit_core::api::{asset_api, csv_import_api, full_sync_backup_v2_api};
+use orbit_core::cloud_sync::asset_container;
+use orbit_core::cloud_sync::attachments::{
+    AttachmentSyncResult, sync_attachments_pull, sync_attachments_push,
+};
+use orbit_core::cloud_sync::progress::{NoopProgressSender, SyncOrigin};
 use orbit_core::db::pool::init_pool_unencrypted;
+use orbit_core::db::repository::attachment_repo;
+use orbit_core::models::business::Attachment;
+use orbit_core::sync::error::SyncError;
+use orbit_core::sync_adapters::traits::{RemoteFile, SyncAdapter};
+use orbit_core::sync_crypto::SyncCryptoService;
 use serde_json::json;
 use sqlx::SqlitePool;
 
@@ -436,12 +447,9 @@ async fn scenario_csv_import(args: &Args) -> Result<serde_json::Value, String> {
     Ok(out)
 }
 
-async fn scenario_attachment_write(args: &Args) -> Result<serde_json::Value, String> {
-    let file = args.workdir.join("probe-attachment.bin");
-    let size = std::fs::metadata(&file)
-        .map_err(|e| format!("读取附件样本失败：{e}"))?
-        .len();
-    let db = args.workdir.join("attachment.db");
+/// 建库 + 一个任务，返回 (pool, task_id)
+async fn attachment_db(args: &Args, name: &str) -> Result<(SqlitePool, i64), String> {
+    let db = args.workdir.join(name);
     let pool = init_pool_unencrypted(&db)
         .await
         .map_err(|e| e.to_string())?;
@@ -455,19 +463,49 @@ async fn scenario_attachment_write(args: &Args) -> Result<serde_json::Value, Str
         .fetch_one(&pool)
         .await
         .map_err(|e| e.to_string())?;
+    Ok((pool, task_id))
+}
+
+/// 流式计算文件 sha256（与 asset_api 生产口径一致；探针内不做整文件读）
+fn file_sha256(path: &std::path::Path) -> Result<String, String> {
+    use sha2::{Digest, Sha256};
+    use std::io::Read;
+
+    let mut file = std::fs::File::open(path).map_err(|e| e.to_string())?;
+    let mut hasher = Sha256::new();
+    let mut buf = vec![0u8; 256 * 1024];
+    loop {
+        let n = file.read(&mut buf).map_err(|e| e.to_string())?;
+        if n == 0 {
+            break;
+        }
+        hasher.update(&buf[..n]);
+    }
+    Ok(hasher
+        .finalize()
+        .iter()
+        .map(|b| format!("{:02x}", b))
+        .collect())
+}
+
+async fn scenario_attachment_write(args: &Args) -> Result<serde_json::Value, String> {
+    let file = args.workdir.join("probe-attachment.bin");
+    let size = std::fs::metadata(&file)
+        .map_err(|e| format!("读取附件样本失败：{e}"))?
+        .len();
+    let (pool, task_id) = attachment_db(args, "attachment.db").await?;
     let attachments_dir = args.workdir.join("attachments");
     std::fs::create_dir_all(&attachments_dir).map_err(|e| e.to_string())?;
     let dir_str = attachments_dir.to_string_lossy().to_string();
     let (result, metrics) = measure(async {
-        // 当前实现入参是 &[u8]：读整文件的这 50MB 正是 M3 要去掉的那一份
-        let data = std::fs::read(&file).map_err(|e| e.to_string())?;
-        asset_api::add_task_attachment(
+        // M3/T1.1：路径入参——core 按 256KiB 块读盘 + 算 hash，峰值与文件大小无关
+        asset_api::add_task_attachment_from_path(
             &pool,
             &dir_str,
             task_id,
             "probe-attachment.bin",
             "application/octet-stream",
-            &data,
+            &file,
         )
         .await
         .map_err(|e| e.to_string())
@@ -483,6 +521,273 @@ async fn scenario_attachment_write(args: &Args) -> Result<serde_json::Value, Str
     Ok(out)
 }
 
+async fn scenario_attachment_read(args: &Args) -> Result<serde_json::Value, String> {
+    let file = args.workdir.join("probe-attachment.bin");
+    let size = std::fs::metadata(&file)
+        .map_err(|e| format!("读取附件样本失败：{e}"))?
+        .len();
+    let (pool, task_id) = attachment_db(args, "attachment-read.db").await?;
+    let attachments_dir = args.workdir.join("attachments");
+    std::fs::create_dir_all(&attachments_dir).map_err(|e| e.to_string())?;
+    let dir_str = attachments_dir.to_string_lossy().to_string();
+    // 写入不计入本场景（由 attachment-write 覆盖）
+    let view = asset_api::add_task_attachment_from_path(
+        &pool,
+        &dir_str,
+        task_id,
+        "probe-attachment.bin",
+        "application/octet-stream",
+        &file,
+    )
+    .await
+    .map_err(|e| e.to_string())?;
+
+    let target = args.workdir.join("exported.bin");
+    let (result, metrics) = measure(async {
+        asset_api::export_task_attachment(&pool, &dir_str, &view.hash, &target)
+            .await
+            .map_err(|e| e.to_string())
+    })
+    .await;
+    let written = result?;
+    let mut out = metrics_json(&metrics);
+    let obj = out.as_object_mut().expect("json object");
+    obj.insert("artifactBytes".into(), json!(size));
+    obj.insert("artifactMB".into(), json!(mb(size as usize)));
+    obj.insert("exportedBytes".into(), json!(written));
+    Ok(out)
+}
+
+/// 探针用「网络」适配器：上传按 64KiB 块读临时容器并丢弃；下载把预置容器
+/// 按 OS 级 copy 写到目标——两者峰值都与对象大小无关，用来量 core 侧
+/// 「加密 → 上传」「下载 → 解密」链路的峰值，而不是适配器自身的缓冲策略。
+struct ProbeCloud {
+    /// pull 场景的云端对象（容器文件）
+    object: Option<PathBuf>,
+    /// push 场景的云端已有 hash（非空列表，跳过首传防御探测）
+    cloud_hash: Option<String>,
+    uploaded_bytes: Mutex<u64>,
+}
+
+#[async_trait::async_trait]
+impl SyncAdapter for ProbeCloud {
+    async fn list_all_files(&self, _: &str) -> Result<Vec<RemoteFile>, SyncError> {
+        Ok(Vec::new())
+    }
+    async fn download(&self, _: &str) -> Result<bytes::Bytes, SyncError> {
+        Err(SyncError::NotFound {
+            message: "探针不提供普通对象下载".to_string(),
+        })
+    }
+    async fn upload(&self, _: &str, _: &[u8]) -> Result<(), SyncError> {
+        Ok(())
+    }
+    async fn delete(&self, _: &str) -> Result<(), SyncError> {
+        Ok(())
+    }
+    async fn upload_asset(&self, _: &str, _: Vec<u8>) -> Result<(), SyncError> {
+        panic!("M3 后 push 不得走整包 upload_asset");
+    }
+    async fn upload_asset_file(
+        &self,
+        _hash: &str,
+        local_path: &std::path::Path,
+        total_len: u64,
+    ) -> Result<(), SyncError> {
+        use tokio::io::AsyncReadExt;
+        let mut file = tokio::fs::File::open(local_path)
+            .await
+            .map_err(|e| SyncError::Network {
+                message: format!("探针读取容器失败: {e}"),
+                retryable: false,
+            })?;
+        let mut buf = vec![0u8; 64 * 1024];
+        let mut got = 0u64;
+        loop {
+            let n = file.read(&mut buf).await.map_err(|e| SyncError::Network {
+                message: format!("探针读取容器失败: {e}"),
+                retryable: false,
+            })?;
+            if n == 0 {
+                break;
+            }
+            got += n as u64;
+        }
+        assert_eq!(got, total_len, "上传声明长度必须与实际容器一致");
+        *self.uploaded_bytes.lock().unwrap() += got;
+        Ok(())
+    }
+    async fn download_asset(&self, _: &str) -> Result<bytes::Bytes, SyncError> {
+        Err(SyncError::NotFound {
+            message: "探针走 download_asset_to_file".to_string(),
+        })
+    }
+    async fn download_asset_to_file(
+        &self,
+        _hash: &str,
+        target: &std::path::Path,
+    ) -> Result<u64, SyncError> {
+        let src = self.object.as_ref().ok_or_else(|| SyncError::Network {
+            message: "探针未预置云端对象".to_string(),
+            retryable: false,
+        })?;
+        tokio::fs::copy(src, target)
+            .await
+            .map_err(|e| SyncError::Network {
+                message: format!("探针写下载目标失败: {e}"),
+                retryable: false,
+            })
+    }
+    async fn asset_exists(&self, _: &str) -> Result<bool, SyncError> {
+        Ok(false)
+    }
+    async fn list_assets(&self, _: &str) -> Result<Vec<String>, SyncError> {
+        Ok(vec![
+            self.cloud_hash
+                .clone()
+                .unwrap_or_else(|| "probe-cloud-sentinel".to_string()),
+        ])
+    }
+}
+
+fn sync_crypto(
+    workdir: &std::path::Path,
+    name: &str,
+) -> Result<(SyncCryptoService, [u8; 32]), String> {
+    let crypto = SyncCryptoService::new(workdir);
+    let key = [0x5Au8; 32];
+    crypto
+        .init_with_data_key("probe-pass", &key)
+        .map_err(|e| format!("初始化探针 Data Key 失败（{name}）: {e}"))?;
+    Ok((crypto, key))
+}
+
+async fn run_attachment_sync(args: &Args, push: bool) -> Result<serde_json::Value, String> {
+    let file = args.workdir.join("probe-attachment.bin");
+    let size = std::fs::metadata(&file)
+        .map_err(|e| format!("读取附件样本失败：{e}"))?
+        .len();
+    let hash = file_sha256(&file)?;
+    let (pool, task_id) =
+        attachment_db(args, if push { "sync-push.db" } else { "sync-pull.db" }).await?;
+    let attachments_dir = args.workdir.join("attachments");
+    std::fs::create_dir_all(&attachments_dir).map_err(|e| e.to_string())?;
+    let dir_str = attachments_dir.to_string_lossy().to_string();
+    let (crypto, key) = sync_crypto(&args.workdir, if push { "push" } else { "pull" })?;
+
+    let (adapter, artifact) = if push {
+        // 本地账本：已缓存、待上传
+        attachment_repo::upsert(
+            &pool,
+            &Attachment {
+                hash: hash.clone(),
+                original_name: "probe-attachment.bin".to_string(),
+                mime_type: "application/octet-stream".to_string(),
+                size_bytes: size as i64,
+                local_path: Some(file.to_string_lossy().to_string()),
+                is_uploaded: 0,
+                is_local_cached: 1,
+                created_at: 1,
+                last_accessed_at: 1,
+            },
+        )
+        .await
+        .map_err(|e| e.to_string())?;
+        // 把样本放到「本地缓存文件」位置（内容寻址路径）
+        std::fs::copy(&file, attachments_dir.join(&hash)).map_err(|e| e.to_string())?;
+        (
+            ProbeCloud {
+                object: None,
+                cloud_hash: Some("probe-cloud-existing".to_string()),
+                uploaded_bytes: Mutex::new(0),
+            },
+            size,
+        )
+    } else {
+        // 云端对象 = 预生成的 OSAC 容器（setup 不计入测量）
+        let container = args.workdir.join("probe-container.bin");
+        let info = asset_container::encrypt_file_to_container(&file, &container, &key, &hash)
+            .map_err(|e| format!("生成探针容器失败: {e}"))?;
+        // 任务引用（pull 只拉有存活引用的附件）
+        sqlx::query(
+            "INSERT INTO todo_task_attachments
+               (uuid, task_id, hash, is_deleted, created_at, updated_at, version)
+             VALUES ('probe-link', ?, ?, 0, 1, 1, 1)",
+        )
+        .bind(task_id)
+        .bind(&hash)
+        .execute(&pool)
+        .await
+        .map_err(|e| e.to_string())?;
+        (
+            ProbeCloud {
+                object: Some(container),
+                cloud_hash: Some(hash.clone()),
+                uploaded_bytes: Mutex::new(0),
+            },
+            info.container_bytes,
+        )
+    };
+
+    let (result, metrics) = measure(async {
+        if push {
+            sync_attachments_push(
+                &pool,
+                &crypto,
+                &adapter,
+                &NoopProgressSender,
+                SyncOrigin::Manual,
+                &dir_str,
+            )
+            .await
+            .map_err(|e| e.to_string())
+        } else {
+            sync_attachments_pull(
+                &pool,
+                &crypto,
+                &adapter,
+                &NoopProgressSender,
+                SyncOrigin::Manual,
+                &dir_str,
+            )
+            .await
+            .map_err(|e| e.to_string())
+        }
+    })
+    .await;
+    let sync: AttachmentSyncResult = result?;
+    if !sync.errors.is_empty() {
+        return Err(format!("附件同步出现错误: {:?}", sync.errors));
+    }
+    if push && sync.uploaded != 1 {
+        return Err(format!("push 期望上传 1 件，实际 {}", sync.uploaded));
+    }
+    if !push && sync.downloaded != 1 {
+        return Err(format!("pull 期望下载 1 件，实际 {}", sync.downloaded));
+    }
+    if !push {
+        let restored = std::fs::read(attachments_dir.join(&hash)).map_err(|e| e.to_string())?;
+        if restored.len() as u64 != size {
+            return Err(format!(
+                "pull 落盘大小不符：期望 {} 实际 {}",
+                size,
+                restored.len()
+            ));
+        }
+    }
+
+    let mut out = metrics_json(&metrics);
+    let obj = out.as_object_mut().expect("json object");
+    obj.insert("artifactBytes".into(), json!(size));
+    obj.insert("artifactMB".into(), json!(mb(size as usize)));
+    obj.insert("containerBytes".into(), json!(artifact));
+    obj.insert(
+        "uploadedContainerBytes".into(),
+        json!(*adapter.uploaded_bytes.lock().unwrap()),
+    );
+    Ok(out)
+}
+
 async fn run(args: &Args) -> Result<serde_json::Value, String> {
     std::fs::create_dir_all(&args.workdir).map_err(|e| e.to_string())?;
     match args.scenario.as_str() {
@@ -490,8 +795,12 @@ async fn run(args: &Args) -> Result<serde_json::Value, String> {
         "backup-import" => scenario_backup_import(args).await,
         "csv-import" => scenario_csv_import(args).await,
         "attachment-write" => scenario_attachment_write(args).await,
+        "attachment-read" => scenario_attachment_read(args).await,
+        "attachment-sync-push" => run_attachment_sync(args, true).await,
+        "attachment-sync-pull" => run_attachment_sync(args, false).await,
         other => Err(format!(
-            "未知场景 '{other}'，可选 backup-export / backup-import / csv-import / attachment-write"
+            "未知场景 '{other}'，可选 backup-export / backup-import / csv-import / \
+             attachment-write / attachment-read / attachment-sync-push / attachment-sync-pull"
         )),
     }
 }

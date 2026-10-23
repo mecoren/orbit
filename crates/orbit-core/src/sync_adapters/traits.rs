@@ -198,6 +198,67 @@ pub trait SyncAdapter: Send + Sync {
             .await
     }
 
+    /// 上传附件（**从本地文件流式读取**，M3/T1.1）
+    ///
+    /// 调用方（`cloud_sync::attachments`）已把明文流式加密成 `OSAC` 容器
+    /// 临时文件，这里只负责把文件传上去——峰值 = 适配器单块大小，与附件
+    /// 大小无关。默认实现退回「整包读入 + [`Self::upload_asset`]」：测试桩
+    /// 行为不变，生产适配器（WebDAV/S3）覆盖为真正的流式/分片上传。
+    async fn upload_asset_file(
+        &self,
+        hash: &str,
+        local_path: &std::path::Path,
+        total_len: u64,
+    ) -> Result<(), SyncError> {
+        let data = tokio::fs::read(local_path)
+            .await
+            .map_err(|e| SyncError::Network {
+                message: format!("读取待上传附件失败: {e}"),
+                retryable: false,
+            })?;
+        debug_assert_eq!(data.len() as u64, total_len, "调用方声明的长度应与实际一致");
+        self.upload_asset(hash, data).await
+    }
+
+    /// 下载附件到本地文件（**流式落盘**，M3/T1.1）
+    ///
+    /// 默认实现退回「整包下载 + 写盘」（测试桩/未覆盖适配器），生产适配器
+    /// 覆盖为流式 GET；WebDAV 还须保留「单对象 404 → 分片拼装」回退。
+    /// 返回写入的字节数（密文长度）。
+    async fn download_asset_to_file(
+        &self,
+        hash: &str,
+        target: &std::path::Path,
+    ) -> Result<u64, SyncError> {
+        let bytes = self.download_asset(hash).await?;
+        tokio::fs::write(target, &bytes)
+            .await
+            .map_err(|e| SyncError::Network {
+                message: format!("保存下载附件失败: {e}"),
+                retryable: false,
+            })?;
+        Ok(bytes.len() as u64)
+    }
+
+    /// 下载任意对象到本地文件（路径级流式，供附件下载复用分片回退）
+    ///
+    /// 与 [`Self::download`] 的区别只在落点：请求体按块写入 `target`，
+    /// 峰值 = 单块大小。默认实现退回整包下载后写盘。
+    async fn download_to_file(
+        &self,
+        path: &str,
+        target: &std::path::Path,
+    ) -> Result<u64, SyncError> {
+        let bytes = self.download(path).await?;
+        tokio::fs::write(target, &bytes)
+            .await
+            .map_err(|e| SyncError::Network {
+                message: format!("保存下载文件失败: {e}"),
+                retryable: false,
+            })?;
+        Ok(bytes.len() as u64)
+    }
+
     /// 检查附件是否存在
     ///
     /// 默认实现同 [`Self::upload_asset`] 口径（F75 收口）：拼路径走

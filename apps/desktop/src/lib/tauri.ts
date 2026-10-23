@@ -1293,10 +1293,26 @@ export const taskAttachmentAdd = (
     mimeType,
     data,
   });
+/** 从本地路径流式写入附件（文件选择器主路径；M3 起不再经 IPC 搬运整份字节） */
+export const taskAttachmentAddFromPath = (
+  taskId: number,
+  fileName: string,
+  mimeType: string,
+  sourcePath: string,
+) =>
+  invoke<TaskAttachmentView>("task_attachment_add_from_path", {
+    taskId,
+    fileName,
+    mimeType,
+    sourcePath,
+  });
 export const taskAttachmentsList = (taskId: number) =>
   invoke<TaskAttachmentView[]>("task_attachments_list", { taskId });
 export const taskAttachmentRead = (hash: string) =>
   invoke<number[]>("task_attachment_read", { hash });
+/** 流式导出附件到指定路径（大文件/系统程序打开；返回写入字节数） */
+export const taskAttachmentExport = (hash: string, targetPath: string) =>
+  invoke<number>("task_attachment_export", { hash, targetPath });
 export const taskAttachmentRemove = (linkId: number) =>
   invoke<void>("task_attachment_remove", { linkId });
 export const attachmentsGc = () => invoke<number>("attachments_gc");

@@ -101,7 +101,8 @@ import { patchQueriesData } from "@/lib/query-patch";
 import {
   todoTaskDuplicate,
   globalSearch,
-  taskAttachmentAdd,
+  taskAttachmentAddFromPath,
+  taskAttachmentExport,
   taskAttachmentRemove,
   taskAttachmentsList,
   type TaskAttachmentView,
@@ -2217,6 +2218,15 @@ function humanSize(bytes: number): string {
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
+/**
+ * 图片附件走应用内 lightbox 的大小上限（M3/T1.1）。
+ *
+ * lightbox 需要把整份图片字节经 IPC 读进 JS 堆并解码成位图，峰值与图片大小
+ * 线性相关；超过该阈值改走「导出到缓存文件 + 系统默认程序打开」，避免
+ * 单张 50MB 图片把渲染进程内存顶穿。普通截图/照片远小于此值。
+ */
+const IMAGE_LIGHTBOX_MAX_BYTES = 12 * 1024 * 1024;
+
 function AttachmentsSection({ taskId }: { taskId: number }) {
   // B3：剪贴板截图 Ctrl+V 直粘为附件（零依赖，DOM paste 读 clipboardData.files）；
   // B3+：拖放文件入附件（onDrop 由下方容器消费，与粘贴共用 bytes 通道）
@@ -2240,10 +2250,10 @@ function AttachmentsSection({ taskId }: { taskId: number }) {
 
     setBusy(true);
     try {
-      const { readFile } = await import("@tauri-apps/plugin-fs");
-      const data = Array.from(await readFile(selected));
       const fileName = selected.split(/[\/]/).pop() ?? "附件";
-      await taskAttachmentAdd(taskId, fileName, mimeFromFileName(fileName), data);
+      // M3/T1.1：路径直传 core，由 Rust 按块读盘 + 算 hash——不再把整份文件
+      // 读成 JS 数组再经 IPC 搬运（50MB 附件省去两份额外内存）
+      await taskAttachmentAddFromPath(taskId, fileName, mimeFromFileName(fileName), selected);
       await refetch();
       toast.success(`已添加附件「${fileName}」`);
     } catch (e) {
@@ -2259,23 +2269,26 @@ function AttachmentsSection({ taskId }: { taskId: number }) {
       return;
     }
     try {
-      const { taskAttachmentRead } = await import("@/lib/tauri");
-      const bytes = await taskAttachmentRead(att.hash);
       // 图片：应用内 lightbox 预览（2026-09-12 F4——新窗口裸图体验断裂，
-      //  且 blob 新窗被弹窗拦截时静默失败）；其他类型：落临时文件走系统默认程序
-      if (att.mime_type.startsWith("image/")) {
+      //  且 blob 新窗被弹窗拦截时静默失败）；其他类型 / 超大图片：导出到
+      //  缓存文件后走系统默认程序（M3：不经 JS 堆搬运整份内容）
+      if (att.mime_type.startsWith("image/") && att.size_bytes <= IMAGE_LIGHTBOX_MAX_BYTES) {
+        const { taskAttachmentRead } = await import("@/lib/tauri");
+        const bytes = await taskAttachmentRead(att.hash);
         const buf = new Uint8Array(bytes);
         const blob = new Blob([buf], { type: att.mime_type });
         setLightbox({ url: URL.createObjectURL(blob), name: att.original_name });
       } else {
-        const { writeFile } = await import("@tauri-apps/plugin-fs");
         const ext = att.original_name.split(".").pop() ?? "";
         const { appCacheDir, join } = await import("@tauri-apps/api/path");
         const dir = await appCacheDir();
         const target = await join(dir, `orbit-preview-${att.hash.slice(0, 12)}${ext ? "." + ext : ""}`);
-        await writeFile(target, new Uint8Array(bytes));
+        await taskAttachmentExport(att.hash, target);
         const { open: openPath } = await import("@tauri-apps/plugin-shell");
         await openPath(target);
+        if (att.mime_type.startsWith("image/")) {
+          toast.info("图片较大，已用系统默认程序打开");
+        }
       }
     } catch (e) {
       toast.error(`打开附件失败：${e}`);

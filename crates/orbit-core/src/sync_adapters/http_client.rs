@@ -218,6 +218,140 @@ impl HttpClient {
         }))
     }
 
+    /// 流式 GET 到文件（M3/T1.1：附件下载不再整包进内存）
+    ///
+    /// 与 [`Self::get_with_retry`] 的区别只在落点：响应体按块写入 `target`，
+    /// 峰值 = 单块大小（reqwest 的 chunk），与对象大小无关。
+    ///
+    /// `append = true` 用于分片拼装（`assets_parts` 的逐片追加）：每次重试
+    /// 前把文件截回**本次尝试开始时的长度**，避免「半截体 + 重试重写」叠加出
+    /// 一个比服务端数据更长的损坏文件；`append = false` 则整文件重写。
+    pub async fn get_to_file_with_retry(
+        &self,
+        url: &str,
+        headers: reqwest::header::HeaderMap,
+        target: &std::path::Path,
+        append: bool,
+    ) -> Result<u64, SyncError> {
+        use futures::StreamExt;
+        use tokio::io::AsyncWriteExt;
+
+        let mut last_error: Option<SyncError> = None;
+
+        for attempt in 0..=self.max_retries {
+            // 本次尝试的起点长度：重试失败时截回，保证 append 语义可重放
+            let start_len = if append {
+                tokio::fs::metadata(target)
+                    .await
+                    .map(|m| m.len())
+                    .unwrap_or(0)
+            } else {
+                0
+            };
+
+            let response = match self.client.get(url).headers(headers.clone()).send().await {
+                Ok(response) => response,
+                Err(e) => {
+                    last_error = Some(SyncError::Network {
+                        message: transport_message("GET 请求", &e),
+                        retryable: true,
+                    });
+                    if attempt < self.max_retries {
+                        tokio::time::sleep(Duration::from_millis(100 * 2u64.pow(attempt))).await;
+                    }
+                    continue;
+                }
+            };
+
+            if !response.status().is_success() {
+                let status = response.status();
+                let body = response.text().await.unwrap_or_default();
+                let error = SyncError::from_http_status(status.as_u16(), &body);
+                if !error.is_retryable() || error.is_rate_limited() {
+                    return Err(error);
+                }
+                last_error = Some(error);
+                if attempt < self.max_retries {
+                    tokio::time::sleep(Duration::from_millis(100 * 2u64.pow(attempt))).await;
+                }
+                continue;
+            }
+
+            let file = tokio::fs::OpenOptions::new()
+                .create(true)
+                .write(true)
+                .append(append)
+                .open(target)
+                .await;
+            let mut file = match file {
+                Ok(f) => f,
+                Err(e) => {
+                    return Err(SyncError::Network {
+                        message: format!("打开下载目标文件失败: {e}"),
+                        retryable: false,
+                    });
+                }
+            };
+            if !append && file.set_len(0).await.is_err() {
+                return Err(SyncError::Network {
+                    message: "清空下载目标文件失败".to_string(),
+                    retryable: false,
+                });
+            }
+
+            let mut written: u64 = 0;
+            let mut failure: Option<SyncError> = None;
+            let mut stream = response.bytes_stream();
+            while let Some(chunk) = stream.next().await {
+                match chunk {
+                    Ok(bytes) => {
+                        if let Err(e) = file.write_all(&bytes).await {
+                            failure = Some(SyncError::Network {
+                                message: format!("写入下载文件失败: {e}"),
+                                retryable: false,
+                            });
+                            break;
+                        }
+                        written += bytes.len() as u64;
+                    }
+                    Err(e) => {
+                        // 体读取中途断开：网络级抖动，可重试（重试前截回起点）
+                        failure = Some(SyncError::Network {
+                            message: transport_message("读取响应体", &e),
+                            retryable: true,
+                        });
+                        break;
+                    }
+                }
+            }
+            let _ = file.flush().await;
+            drop(file);
+
+            match failure {
+                None => return Ok(written),
+                Some(e) => {
+                    // 截回本次尝试起点（append 模式下不破坏已确认的片）
+                    if let Ok(f) = tokio::fs::OpenOptions::new().write(true).open(target).await {
+                        let _ = f.set_len(start_len).await;
+                    }
+                    if !e.is_retryable() || e.is_rate_limited() {
+                        return Err(e);
+                    }
+                    last_error = Some(e);
+                }
+            }
+
+            if attempt < self.max_retries {
+                tokio::time::sleep(Duration::from_millis(100 * 2u64.pow(attempt))).await;
+            }
+        }
+
+        Err(last_error.unwrap_or_else(|| SyncError::Network {
+            message: "未知错误".to_string(),
+            retryable: false,
+        }))
+    }
+
     /// PUT 请求的 per-request 总超时预算（F60 建档，F82 加余量）
     ///
     /// 口径：每 5MiB 给 120s **×1.25 安全余量**，不足 5MiB 也至少一档。

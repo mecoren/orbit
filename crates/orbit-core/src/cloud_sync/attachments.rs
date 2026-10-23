@@ -3,16 +3,28 @@
 //! 附件以 sha256 hash 为云端文件名，用 Data Key AES-256-GCM 加密后上传。
 //! Push 上传本地有但云端无的附件，Pull 下载云端有但本地无的附件。
 //!
-//! ## 同步策略
+//! ## 同步策略（M3/T1.1 起改为流式）
 //! - **Push**：查询 `sys_attachments WHERE is_local_cached = 1 AND is_uploaded = 0`，
-//!   读取本地文件 → 加密 → `adapter.upload_asset(hash, encrypted)` → 标记 `is_uploaded = 1`
-//! - **Pull**：列出云端附件 → 对比本地 `sys_attachments` → 下载缺失附件 → 解密 →
-//!   保存到本地文件 → 更新 `is_local_cached = 1`
+//!   把本地明文流式加密成 `OSAC` 分块容器临时文件（峰值 ≈ 一帧明文 + 一帧密文）→
+//!   `adapter.upload_asset_file(hash, tmp, len)` 由适配器按块读取上传 →
+//!   删除临时文件 → 标记 `is_uploaded = 1`
+//! - **Pull**：列出云端附件 → 对比本地 `sys_attachments` → 流式下载到临时文件 →
+//!   按首字节分流：`OSAC` 逐帧解密（末尾整体 sha256 校验），存量整包 `OSZS` 仍
+//!   走旧路径 → 原子重命名到 `{attachments_dir}/{hash}` → 更新 `is_local_cached = 1`
+//!
+//! 存量对象无需迁移：读侧按 magic 分流，旧附件照常可读（整包路径的峰值仍是
+//! 对象大小，但只发生在尚未重传的旧对象上）。
 //!
 //! ## 并发控制
-//! 使用 `futures::stream::buffer_unordered(4)` 限制并发上传/下载数为 4，避免压满网络。
-//! `SyncAdapter: Send + Sync`，共享引用可跨并发 future 借用，无需 spawn + 'static，
-//! 读取/加密/上传（下载/解密/落盘）全流程按附件并行。
+//! 默认 **2 路并发**（原为 4 路）并叠加**在途字节预算**（默认 64MiB，可配置）：
+//! 4 路并发在大附件场景下等于把峰值乘以 4，而流式化之后单件本身已与文件大小
+//! 解耦，瓶颈回到网络——2 路足以跑满家用上行/下行，预算则防「两个 50MB 同时
+//! 在途」把适配器内部的整包回退路径叠加起来。
+//! `SyncAdapter: Send + Sync`，共享引用可跨并发 future 借用，无需 spawn + 'static。
+//!
+//! 预算口径：Push 按附件明文大小申请配额（单件超过预算时按预算上限放行，
+//! 不因超额而永久排队）；Pull 的云端列表不含大小，且下载已是分块流式，故按
+//! 1 个并发单位申请——真正约束 pull 峰值的是帧大小而非预算。
 //!
 //! ## Pull 的差集为何收窄到「有活跃引用」（S31，不是缺陷）
 //!
@@ -32,17 +44,66 @@
 
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
 
 use futures::stream::{self, StreamExt};
 use sqlx::SqlitePool;
+use tokio::sync::{OwnedSemaphorePermit, Semaphore};
 
-use crate::cloud_sync::crypto_io::{decrypt_payload, encrypt_payload};
+use crate::cloud_sync::asset_container;
+use crate::cloud_sync::crypto_io::decrypt_payload;
 use crate::cloud_sync::error::CloudSyncError;
 use crate::cloud_sync::progress::{ProgressSender, SyncOrigin, SyncProgress};
 use crate::db::repository::attachment_repo;
 use crate::sync_adapters::traits::SyncAdapter;
 use crate::sync_crypto::SyncCryptoService;
+
+/// 默认并发路数（4 → 2：大附件并发叠加是原方案的主要峰值来源）
+pub const DEFAULT_MAX_CONCURRENT_TRANSFERS: usize = 2;
+
+/// 默认在途字节预算（64MiB：两个 32MB 级流式传输的上限档）
+pub const DEFAULT_MAX_IN_FLIGHT_BYTES: u64 = 64 * 1024 * 1024;
+
+/// 附件传输限额（可配置：测试与未来的「网络带宽设置」共用同一入口）
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct AttachmentTransferLimits {
+    /// 同时进行的上传/下载件数
+    pub max_concurrent: usize,
+    /// 在途字节预算（Push 按明文大小申请；单件超预算时按预算上限放行）
+    pub max_in_flight_bytes: u64,
+}
+
+impl Default for AttachmentTransferLimits {
+    fn default() -> Self {
+        Self {
+            max_concurrent: DEFAULT_MAX_CONCURRENT_TRANSFERS,
+            max_in_flight_bytes: DEFAULT_MAX_IN_FLIGHT_BYTES,
+        }
+    }
+}
+
+/// 在途字节预算闸门（按 MiB 粒度加权，`Semaphore` 保证公平等待）
+struct TransferGate {
+    budget_mib: usize,
+    sem: Arc<Semaphore>,
+}
+
+impl TransferGate {
+    fn new(limits: AttachmentTransferLimits) -> Self {
+        let budget_mib = ((limits.max_in_flight_bytes / (1024 * 1024)) as usize).max(1);
+        Self {
+            budget_mib,
+            sem: Arc::new(Semaphore::new(budget_mib)),
+        }
+    }
+
+    /// 申请 `bytes` 对应的配额（1MiB 起算；超预算按预算上限，避免大文件饿死）
+    async fn acquire(&self, bytes: u64) -> Option<OwnedSemaphorePermit> {
+        let units = ((bytes / (1024 * 1024)) as usize + 1).min(self.budget_mib);
+        self.sem.clone().acquire_many_owned(units as u32).await.ok()
+    }
+}
 
 /// 附件同步结果
 #[derive(Debug, Clone, Default)]
@@ -63,19 +124,6 @@ pub struct AttachmentSyncResult {
 /// `AttachmentSyncResult.errors`（单件失败不阻塞本轮其他附件）。
 type DownloadOutcome = (String, Result<(String, i64), String>, i64);
 
-/// 常数时间字符串比较（长度不等时按较长串比较，避免提前返回泄露前缀信息）
-fn constant_time_eq(a: &str, b: &str) -> bool {
-    let (a, b) = (a.as_bytes(), b.as_bytes());
-    let max = a.len().max(b.len());
-    let mut diff: u8 = (a.len() ^ b.len()) as u8;
-    for i in 0..max {
-        let x = a.get(i).copied().unwrap_or(0);
-        let y = b.get(i).copied().unwrap_or(0);
-        diff |= x ^ y;
-    }
-    diff == 0
-}
-
 /// 抽取本地未上传附件中的首个 hash（空列表防御的探针）
 ///
 /// 返回 None 表示列表为空（调用方已提前 return，此分支不可达，防御性处理）。
@@ -83,9 +131,9 @@ fn to_upload_probe(unuploaded: &[crate::models::business::Attachment]) -> Option
     unuploaded.first().map(|a| a.hash.as_str())
 }
 
-/// Push 附件：上传本地有但云端无的附件
+/// Push 附件：上传本地有但云端无的附件（默认限额）
 ///
-/// `attachments_dir` 是本地附件文件目录（与 `asset_api::write_local_file` 使用同一目录）。
+/// `attachments_dir` 是本地附件文件目录（与 `asset_api` 使用同一目录）。
 /// `origin` 标识事件来源（Background/Manual/Exit），用于 UI 层过滤重复显示。
 pub async fn sync_attachments_push(
     db_pool: &SqlitePool,
@@ -94,6 +142,28 @@ pub async fn sync_attachments_push(
     progress_sender: &dyn ProgressSender,
     origin: SyncOrigin,
     attachments_dir: &str,
+) -> Result<AttachmentSyncResult, CloudSyncError> {
+    sync_attachments_push_with_limits(
+        db_pool,
+        crypto,
+        adapter,
+        progress_sender,
+        origin,
+        attachments_dir,
+        AttachmentTransferLimits::default(),
+    )
+    .await
+}
+
+/// Push 附件（显式并发/字节预算，测试与未来「带宽设置」用）
+pub async fn sync_attachments_push_with_limits(
+    db_pool: &SqlitePool,
+    crypto: &SyncCryptoService,
+    adapter: &dyn SyncAdapter,
+    progress_sender: &dyn ProgressSender,
+    origin: SyncOrigin,
+    attachments_dir: &str,
+    limits: AttachmentTransferLimits,
 ) -> Result<AttachmentSyncResult, CloudSyncError> {
     let data_key = crypto.get_data_key().ok_or(CloudSyncError::CryptoLocked)?;
 
@@ -196,61 +266,67 @@ pub async fn sync_attachments_push(
     let total = to_upload.len() as u32;
     // 已完成计数（并发下按完成序报告进度，而非任务下标序）
     let done_counter = AtomicU32::new(0);
+    let gate = TransferGate::new(limits);
+    let max_concurrent = limits.max_concurrent.max(1);
 
-    // 4. 并发上传（NFR-5.5：4 路并发）
+    // 4. 并发上传（默认 2 路 + 在途字节预算，M3/T1.1）
     //
-    // `buffer_unordered(4)` 在当前 task 内并发驱动至多 4 个 future，
+    // `buffer_unordered` 在当前 task 内并发驱动至多 N 个 future，
     // future 仅借用 `adapter`/`data_key` 等共享引用（SyncAdapter: Send + Sync），
-    // 无需 tokio::spawn 的 'static 约束。读取/加密/上传全流程并行。
+    // 无需 tokio::spawn 的 'static 约束。加密与上传全流程并行，但**每一步都
+    // 是分块流式**：内存峰值 ≈ 一帧明文 + 一帧密文，与附件大小无关。
     let outcomes: Vec<(String, Result<(), String>)> = stream::iter(to_upload)
         .map(|attachment| {
             let data_key = &data_key;
             let done_counter = &done_counter;
+            let gate = &gate;
             async move {
                 let hash = attachment.hash.clone();
                 let local_path = attachment.local_path.clone().unwrap_or_default();
+                let _budget = gate.acquire(attachment.size_bytes.max(0) as u64).await;
 
-                // 4a. 读取本地文件
+                // 4a. 定位本地明文
                 //
-                // F68（2026-09-30 第六轮）：此前用 `unwrap_or_default()` 把读取
-                // 失败一律吞成空 `Vec`，随后统一报「本地文件为空或不存在」——
-                // 权限不足 / 文件被外部删除 / 磁盘错误全都指向「文件内容为空」
-                // 这个错误方向，真实原因（`io::Error`）永久丢失，用户按提示去
-                // 查文件内容只会白费功夫。这里把两种情形分开报。
+                // F68（2026-09-30 第六轮）：读取失败必须报真实原因（权限不足 /
+                // 文件被外部删除 / 磁盘错误），不得统一吞成「文件内容为空」。
                 let path = if local_path.is_empty() {
-                    // local_path 为空时从 attachments_dir 读取
                     Path::new(attachments_dir).join(&hash)
                 } else {
                     PathBuf::from(&local_path)
                 };
-                let file_data = match tokio::fs::read(&path).await {
-                    Ok(bytes) => bytes,
+                if let Ok(meta) = tokio::fs::metadata(&path).await {
+                    if meta.len() == 0 {
+                        return (hash, Err(format!("本地附件内容为空: {}", path.display())));
+                    }
+                } else {
+                    return (hash, Err(format!("读取本地附件失败 {}", path.display())));
+                }
+
+                // 4b. 流式加密成临时容器（峰值 ≈ 2 帧，不再整包读 + 整包加密）
+                let tmp_container =
+                    crate::fs_util::temp_sibling(&Path::new(attachments_dir).join(&hash), "upload");
+                let encrypted = match asset_container::encrypt_file_to_container(
+                    &path,
+                    &tmp_container,
+                    data_key,
+                    &hash,
+                ) {
+                    Ok(info) => info,
                     Err(e) => {
-                        return (
-                            hash,
-                            Err(format!("读取本地附件失败 {}: {e}", path.display())),
-                        );
+                        let _ = tokio::fs::remove_file(&tmp_container).await;
+                        return (hash.clone(), Err(format!("加密附件 {} 失败: {}", hash, e)));
                     }
                 };
 
-                if file_data.is_empty() {
-                    return (hash, Err(format!("本地附件内容为空: {}", path.display())));
-                }
-
-                // 4b. 加密
-                let encrypted = match encrypt_payload(&file_data, data_key) {
-                    Ok(enc) => enc,
-                    Err(e) => return (hash, Err(format!("加密失败: {}", e))),
-                };
-                // A13：明文只在加密阶段需要——立刻释放，别让它跟着密文一起
-                // 活在整段网络上传期间（附件是最大一类载荷，白占一份整包内存）
-                drop(file_data);
-
-                // 4c. 上传（A13：密文所有权移交适配器，避免再一次整包复制）
-                let outcome = match adapter.upload_asset(&hash, encrypted).await {
+                // 4c. 上传（适配器按块读取临时容器；失败路径同样清理）
+                let outcome = match adapter
+                    .upload_asset_file(&hash, &tmp_container, encrypted.container_bytes)
+                    .await
+                {
                     Ok(()) => Ok(()),
                     Err(e) => Err(format!("上传附件 {} 失败: {}", hash, e)),
                 };
+                let _ = tokio::fs::remove_file(&tmp_container).await;
 
                 // 4d. 按完成序发送进度
                 let current = done_counter.fetch_add(1, Ordering::SeqCst) + 1;
@@ -264,7 +340,7 @@ pub async fn sync_attachments_push(
                 (hash, outcome)
             }
         })
-        .buffer_unordered(4)
+        .buffer_unordered(max_concurrent)
         .collect()
         .await;
 
@@ -291,7 +367,7 @@ pub async fn sync_attachments_push(
     Ok(result)
 }
 
-/// Pull 附件：下载云端有但本地无的附件
+/// Pull 附件：下载云端有但本地无的附件（默认限额）
 ///
 /// 对比云端附件列表与本地 `sys_attachments`，下载缺失的附件。
 /// `origin` 标识事件来源（Background/Manual/Exit），用于 UI 层过滤重复显示。
@@ -302,6 +378,28 @@ pub async fn sync_attachments_pull(
     progress_sender: &dyn ProgressSender,
     origin: SyncOrigin,
     attachments_dir: &str,
+) -> Result<AttachmentSyncResult, CloudSyncError> {
+    sync_attachments_pull_with_limits(
+        db_pool,
+        crypto,
+        adapter,
+        progress_sender,
+        origin,
+        attachments_dir,
+        AttachmentTransferLimits::default(),
+    )
+    .await
+}
+
+/// Pull 附件（显式并发/字节预算）
+pub async fn sync_attachments_pull_with_limits(
+    db_pool: &SqlitePool,
+    crypto: &SyncCryptoService,
+    adapter: &dyn SyncAdapter,
+    progress_sender: &dyn ProgressSender,
+    origin: SyncOrigin,
+    attachments_dir: &str,
+    limits: AttachmentTransferLimits,
 ) -> Result<AttachmentSyncResult, CloudSyncError> {
     let data_key = crypto.get_data_key().ok_or(CloudSyncError::CryptoLocked)?;
 
@@ -387,20 +485,23 @@ pub async fn sync_attachments_pull(
 
     // 已完成计数（并发下按完成序报告进度）
     let done_counter = AtomicU32::new(0);
+    let gate = TransferGate::new(limits);
+    let max_concurrent = limits.max_concurrent.max(1);
 
-    // 5. 并发下载（NFR-5.5：4 路并发）
-    // 下载/解密/落盘全流程并行，DB 标记回主流程串行执行。
+    // 5. 并发下载（默认 2 路 + 预算闸门，M3/T1.1）
+    // 下载/解密/落盘全流程并行，DB 标记回主流程串行执行；每一步都是分块流式。
     let outcomes: Vec<DownloadOutcome> = stream::iter(to_download)
         .map(|hash| {
             let data_key = &data_key;
             let done_counter = &done_counter;
+            let gate = &gate;
             async move {
                 // 返回 (本地路径, 实际字节数)——size 供占位行登记（S31 修正）
                 let outcome: Result<(String, i64), String> = async {
                     // N51（2026-10-12）纵深防御：hash 将作为本地文件名
                     // （{attachments_dir}/{hash}）与云端对象键使用，格式非法
                     // 即内容寻址假设被破坏或对端数据被篡改。单件失败不阻塞
-                    // 本轮其他附件（错误隔离见模块头）；内容正确性仍由 5c 的
+                    // 本轮其他附件（错误隔离见模块头）；内容正确性仍由末尾的
                     // sha256 背书校验兜底，这里只拦格式。
                     if !crate::crypto::sha256::is_sha256_hex(&hash) {
                         return Err(format!(
@@ -408,62 +509,101 @@ pub async fn sync_attachments_pull(
                             hash
                         ));
                     }
+                    // 云端列表不含大小：按 1 个单位申请（下载本身已分块流式）
+                    let _budget = gate.acquire(0).await;
 
-                    // 5a. 下载
-                    let encrypted = adapter
-                        .download_asset(&hash)
-                        .await
-                        .map_err(|e| format!("下载附件 {} 失败: {}", hash, e))?;
-
-                    // 5b. 解密
-                    let decrypted = decrypt_payload(&encrypted, data_key)
-                        .map_err(|e| format!("解密附件 {} 失败: {}", hash, e))?;
-                    // A13：密文只在解密阶段需要——校验与落盘之前先释放，别让
-                    // 密文与明文同时活在后续的 sha256 校验 + 磁盘写期间
-                    drop(encrypted);
-
-                    // 5c. 校验内容哈希与文件名（即 sha256）一致
-                    // 文件名即 hash 是内容寻址约定：损坏/被篡改的内容会被"哈希背书"，
-                    // 后续所有按 hash 取文件的场景（含上传去重）都建立在内容与名字
-                    // 一致的假设上，这里在落盘前校验，不一致视为损坏直接失败。
-                    let actual = crate::crypto::sha256::sha256_hex(&decrypted);
-                    if !constant_time_eq(&actual, hash.as_str()) {
-                        return Err(format!(
-                            "附件 {} 内容哈希校验失败（实际 {}），疑似传输损坏，已丢弃",
-                            hash, actual
-                        ));
-                    }
-
-                    // 5d. 原子落盘（P0-8）
-                    // 下载中途崩溃留半截文件会被后续同步当作"已缓存"（文件名即 hash，
-                    // 内容寻址天然幂等），损坏内容无法自愈。tmp+rename 保证要么完整
-                    // 写入、要么不存在，与 orbit-core 其他落盘路径（fs_util::write_atomic）
-                    // 同口径；附件目录无 fs_util 依赖，此处内联实现等价逻辑。
                     let file_path = Path::new(attachments_dir).join(&hash);
-                    let tmp_path = Path::new(attachments_dir).join(format!(
-                        "{}.tmp-{}",
-                        hash,
-                        std::process::id()
-                    ));
-                    tokio::fs::write(&tmp_path, &decrypted)
-                        .await
-                        .map_err(|e| format!("保存附件 {} 失败: {}", hash, e))?;
-                    // Windows 上目标已存在时 rename 失败，先删目标再重命名
-                    if tokio::fs::rename(&tmp_path, &file_path).await.is_err() {
+                    let tmp_cipher = crate::fs_util::temp_sibling(&file_path, "download");
+                    let tmp_plain = crate::fs_util::temp_sibling(&file_path, "plain");
+
+                    // 5a. 流式下载密文到临时文件（适配器按块写盘）
+                    let downloaded = match adapter.download_asset_to_file(&hash, &tmp_cipher).await
+                    {
+                        Ok(n) => n,
+                        Err(e) => {
+                            // 适配器可能已写了半截（或空文件），失败路径一并清理
+                            let _ = tokio::fs::remove_file(&tmp_cipher).await;
+                            return Err(format!("下载附件 {} 失败: {}", hash, e));
+                        }
+                    };
+
+                    // 5b. 分流解密：
+                    //   - OSAC：逐帧 AES-GCM + 末尾整体 sha256 校验（新格式）
+                    //   - 其余：存量整包 OSZS（旧对象仍可读；峰值=对象大小）
+                    let plain_len: u64 = if asset_container::is_container_file(&tmp_cipher) {
+                        match asset_container::decrypt_container_to_file(
+                            &tmp_cipher,
+                            &tmp_plain,
+                            data_key,
+                            &hash,
+                        ) {
+                            Ok(n) => n,
+                            Err(e) => {
+                                let _ = tokio::fs::remove_file(&tmp_cipher).await;
+                                let _ = tokio::fs::remove_file(&tmp_plain).await;
+                                return Err(format!("解密附件 {} 失败: {}", hash, e));
+                            }
+                        }
+                    } else {
+                        let encrypted = match tokio::fs::read(&tmp_cipher).await {
+                            Ok(b) => b,
+                            Err(e) => {
+                                let _ = tokio::fs::remove_file(&tmp_cipher).await;
+                                return Err(format!("读取附件密文 {} 失败: {}", hash, e));
+                            }
+                        };
+                        let decrypted = match decrypt_payload(&encrypted, data_key) {
+                            Ok(d) => d,
+                            Err(e) => {
+                                let _ = tokio::fs::remove_file(&tmp_cipher).await;
+                                return Err(format!("解密附件 {} 失败: {}", hash, e));
+                            }
+                        };
+                        // 密文只在解密阶段需要：旧对象整包路径也要尽早释放，
+                        // 别让密文与明文同时活在后续 sha256 + 写盘期间
+                        drop(encrypted);
+                        // 校验内容哈希与文件名（即 sha256）一致：损坏/被篡改的
+                        // 内容会被"哈希背书"，后续按 hash 取文件的一切假设都建立在
+                        // 内容与名字一致上，落盘前必须校验。
+                        let actual = crate::crypto::sha256::sha256_hex(&decrypted);
+                        if !crate::crypto::sha256::constant_time_eq(&actual, &hash) {
+                            let _ = tokio::fs::remove_file(&tmp_cipher).await;
+                            return Err(format!(
+                                "附件 {} 内容哈希校验失败（实际 {}），疑似传输损坏，已丢弃",
+                                hash, actual
+                            ));
+                        }
+                        if let Err(e) = tokio::fs::write(&tmp_plain, &decrypted).await {
+                            let _ = tokio::fs::remove_file(&tmp_cipher).await;
+                            let _ = tokio::fs::remove_file(&tmp_plain).await;
+                            return Err(format!("保存附件 {} 失败: {}", hash, e));
+                        }
+                        decrypted.len() as u64
+                    };
+                    let _ = tokio::fs::remove_file(&tmp_cipher).await;
+
+                    // 5c. 原子落位（P0-8）：tmp+rename 保证要么完整写入、要么不存在。
+                    // 下载中途崩溃留半截文件会被后续同步当作"已缓存"（文件名即 hash），
+                    // 损坏内容无法自愈。
+                    if tokio::fs::rename(&tmp_plain, &file_path).await.is_err() {
                         tokio::fs::remove_file(&file_path).await.ok();
-                        tokio::fs::rename(&tmp_path, &file_path)
-                            .await
-                            .map_err(|e| format!("附件 {} 原子落盘失败: {}", hash, e))?;
+                        if let Err(e) = tokio::fs::rename(&tmp_plain, &file_path).await {
+                            let _ = tokio::fs::remove_file(&tmp_plain).await;
+                            return Err(format!("附件 {} 原子落盘失败: {}", hash, e));
+                        }
                     }
 
-                    Ok((
-                        file_path.to_string_lossy().to_string(),
-                        decrypted.len() as i64,
-                    ))
+                    log::debug!(
+                        "[attachments_pull] {} 下载 {} 字节密文 → 明文 {} 字节",
+                        hash,
+                        downloaded,
+                        plain_len
+                    );
+                    Ok((file_path.to_string_lossy().to_string(), plain_len as i64))
                 }
                 .await;
 
-                // 5e. 按完成序发送进度
+                // 5d. 按完成序发送进度
                 let current = done_counter.fetch_add(1, Ordering::SeqCst) + 1;
                 progress_sender.send(SyncProgress::Attachments {
                     origin,
@@ -476,7 +616,7 @@ pub async fn sync_attachments_pull(
                 (hash, outcome, size)
             }
         })
-        .buffer_unordered(4)
+        .buffer_unordered(max_concurrent)
         .collect()
         .await;
 
@@ -510,6 +650,7 @@ pub async fn sync_attachments_pull(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::cloud_sync::crypto_io::encrypt_payload;
     use crate::models::business::Attachment;
 
     #[test]
@@ -1075,5 +1216,193 @@ mod tests {
                 .is_none(),
             "非法 hash 不得插占位行"
         );
+    }
+
+    // ========================================================================
+    // M3/T1.1：流式上传（OSAC 容器）与 OSAC 拉回
+    // ========================================================================
+
+    /// 流式上传 mock：从临时文件按块读取容器字节并记录，证明 push 走的是
+    /// `upload_asset_file` 而不是「整包 `upload_asset`」。
+    struct StreamingPushMock {
+        uploaded: std::sync::Mutex<Vec<(String, Vec<u8>)>>,
+    }
+
+    #[async_trait::async_trait]
+    impl SyncAdapter for StreamingPushMock {
+        async fn list_all_files(
+            &self,
+            _: &str,
+        ) -> Result<Vec<crate::sync_adapters::traits::RemoteFile>, crate::sync::error::SyncError>
+        {
+            Ok(Vec::new())
+        }
+        async fn download(&self, _: &str) -> Result<bytes::Bytes, crate::sync::error::SyncError> {
+            Err(crate::sync::error::SyncError::NotFound {
+                message: "无".to_string(),
+            })
+        }
+        async fn upload(&self, _: &str, _: &[u8]) -> Result<(), crate::sync::error::SyncError> {
+            Ok(())
+        }
+        async fn delete(&self, _: &str) -> Result<(), crate::sync::error::SyncError> {
+            Ok(())
+        }
+        async fn upload_asset(
+            &self,
+            _: &str,
+            _: Vec<u8>,
+        ) -> Result<(), crate::sync::error::SyncError> {
+            panic!("M3 后 push 不得走整包 upload_asset");
+        }
+        async fn upload_asset_file(
+            &self,
+            hash: &str,
+            local_path: &std::path::Path,
+            total_len: u64,
+        ) -> Result<(), crate::sync::error::SyncError> {
+            let bytes = tokio::fs::read(local_path).await.unwrap();
+            assert_eq!(bytes.len() as u64, total_len, "声明长度必须与容器一致");
+            self.uploaded
+                .lock()
+                .unwrap()
+                .push((hash.to_string(), bytes));
+            Ok(())
+        }
+        async fn asset_exists(&self, _: &str) -> Result<bool, crate::sync::error::SyncError> {
+            Ok(false)
+        }
+        async fn list_assets(&self, _: &str) -> Result<Vec<String>, crate::sync::error::SyncError> {
+            // 非空列表 + 探测 404 → 视为「本机其余附件已上传」，只上传待传项
+            Ok(vec!["already-uploaded-other-hash".to_string()])
+        }
+    }
+
+    #[tokio::test]
+    async fn push_uploads_osac_container_via_streaming_entrypoint() {
+        let (pool, crypto, tmp) = att_sync_env().await;
+        let adapter = StreamingPushMock {
+            uploaded: std::sync::Mutex::new(Vec::new()),
+        };
+        let uploaded = &adapter.uploaded;
+
+        let r = sync_attachments_push(
+            &pool,
+            &crypto,
+            &adapter,
+            &crate::cloud_sync::progress::NoopProgressSender,
+            crate::cloud_sync::progress::SyncOrigin::Manual,
+            &att_dir(&tmp),
+        )
+        .await
+        .unwrap();
+        assert_eq!(r.uploaded, 2);
+        assert!(r.errors.is_empty(), "errors: {:?}", r.errors);
+
+        let uploaded = uploaded.lock().unwrap();
+        assert_eq!(uploaded.len(), 2);
+        for (hash, bytes) in uploaded.iter() {
+            assert!(
+                asset_container::is_container(bytes),
+                "云端对象必须是 OSAC 分块容器（hash={hash}）"
+            );
+            let plain = if hash == "h-first" {
+                b"data1".to_vec()
+            } else {
+                b"data2".to_vec()
+            };
+            let dir = tempfile::TempDir::new().unwrap();
+            let container = dir.path().join("c.bin");
+            let out = dir.path().join("out.bin");
+            std::fs::write(&container, bytes).unwrap();
+            // 测试账本的 hash 是假值（h-first），但容器内容是真明文——
+            // 校验用明文 sha256（生产口径：hash 即明文 hash）
+            let expect_hash = crate::crypto::sha256::sha256_hex(&plain);
+            let n = asset_container::decrypt_container_to_file(
+                &container,
+                &out,
+                crypto.get_data_key().as_deref().unwrap(),
+                &expect_hash,
+            )
+            .unwrap();
+            assert_eq!(n as usize, plain.len());
+            assert_eq!(std::fs::read(&out).unwrap(), plain, "容器必须可还原明文");
+        }
+
+        // 临时容器文件不得残留
+        let leftovers: Vec<_> = std::fs::read_dir(att_dir(&tmp))
+            .unwrap()
+            .filter_map(|e| e.ok())
+            .filter(|e| e.file_name().to_string_lossy().contains(".tmp"))
+            .collect();
+        assert!(leftovers.is_empty(), "上传临时容器必须清理");
+    }
+
+    #[tokio::test]
+    async fn pull_decrypts_osac_container_written_by_push() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let pool = sqlx::SqlitePool::connect("sqlite::memory:").await.unwrap();
+        sqlx::migrate!("./src/db/migrations")
+            .run(&pool)
+            .await
+            .unwrap();
+        let crypto = crate::sync_crypto::SyncCryptoService::new(tmp.path());
+        crypto.init_with_data_key("pw", &[9u8; 32]).unwrap();
+
+        // 明文跨帧（4MiB + 17B），覆盖多帧解密与末尾哈希校验
+        let plain = vec![0xA5u8; asset_container::CHUNK_PLAIN_BYTES + 17];
+        let hash = crate::crypto::sha256::sha256_hex(&plain);
+        let src = tmp.path().join("src.bin");
+        std::fs::write(&src, &plain).unwrap();
+        let container = tmp.path().join("container.bin");
+        asset_container::encrypt_file_to_container(
+            &src,
+            &container,
+            crypto.get_data_key().as_deref().unwrap(),
+            &hash,
+        )
+        .unwrap();
+
+        let mut files = std::collections::HashMap::new();
+        files.insert(hash.clone(), std::fs::read(&container).unwrap());
+        let adapter = PullMockAdapter { files };
+
+        sqlx::query(
+            "INSERT INTO todo_tasks (uuid, title, created_at, updated_at) VALUES ('t1', 'T', 1, 1)",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        sqlx::query(
+            "INSERT INTO todo_task_attachments (uuid, task_id, hash, is_deleted, created_at, updated_at, version)
+             VALUES ('link-1', 1, ?, 0, 1, 1, 1)",
+        )
+        .bind(&hash)
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        let att_dir = tmp.path().join("att");
+        std::fs::create_dir_all(&att_dir).unwrap();
+        let r = sync_attachments_pull(
+            &pool,
+            &crypto,
+            &adapter,
+            &crate::cloud_sync::progress::NoopProgressSender,
+            crate::cloud_sync::progress::SyncOrigin::Manual,
+            &att_dir.to_string_lossy(),
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(r.downloaded, 1);
+        assert!(r.errors.is_empty(), "errors: {:?}", r.errors);
+        assert_eq!(
+            std::fs::read(att_dir.join(&hash)).unwrap(),
+            plain,
+            "OSAC 容器必须流式解密为原始明文"
+        );
+        let total = attachment_repo::cached_total_bytes(&pool).await.unwrap();
+        assert_eq!(total, plain.len() as i64, "账本 size 必须是明文长度");
     }
 }

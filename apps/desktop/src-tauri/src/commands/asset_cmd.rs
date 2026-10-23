@@ -23,7 +23,7 @@ fn attachments_dir_of(app: &tauri::AppHandle) -> Result<String, String> {
     Ok(crate::commands::sync_runtime::attachments_dir(&dir))
 }
 
-/// 上传并挂载附件到任务（bytes 由前端 fs 插件读得）
+/// 上传并挂载附件到任务（bytes 由前端 fs 插件读得，剪贴板/拖放路径用）
 #[tauri::command]
 pub async fn task_attachment_add(
     app: tauri::AppHandle,
@@ -37,6 +37,32 @@ pub async fn task_attachment_add(
     asset_api::add_task_attachment(&pool, &dir, task_id, &file_name, &mime_type, &data)
         .await
         .map_err(|e| format!("[attachment] {e}"))
+}
+
+/// 从本地文件路径流式上传并挂载附件（文件选择器主路径，M3/T1.1）
+///
+/// 与 `task_attachment_add` 的区别只在数据来源：core 直接从磁盘按块读取并
+/// 计算 hash，IPC 不再搬运整份文件字节（50MB 附件省去 JS→Rust 的整包拷贝）。
+#[tauri::command]
+pub async fn task_attachment_add_from_path(
+    app: tauri::AppHandle,
+    task_id: i64,
+    file_name: String,
+    mime_type: String,
+    source_path: String,
+) -> Result<TaskAttachmentView, String> {
+    let pool = pool_of(&app)?;
+    let dir = attachments_dir_of(&app)?;
+    asset_api::add_task_attachment_from_path(
+        &pool,
+        &dir,
+        task_id,
+        &file_name,
+        &mime_type,
+        std::path::Path::new(&source_path),
+    )
+    .await
+    .map_err(|e| format!("[attachment] {e}"))
 }
 
 /// 列出任务全部附件（含本地缓存状态）
@@ -60,6 +86,23 @@ pub async fn task_attachment_read(
     let pool = pool_of(&app)?;
     let dir = attachments_dir_of(&app)?;
     asset_api::read_task_attachment(&pool, &dir, &hash)
+        .await
+        .map_err(|e| format!("[attachment] {e}"))
+}
+
+/// 流式导出附件到指定路径（大文件预览/系统程序打开，M3/T1.1）
+///
+/// 不把内容带进前端内存：按块复制到 `target_path`（壳层选的缓存路径），
+/// 返回写入字节数。
+#[tauri::command]
+pub async fn task_attachment_export(
+    app: tauri::AppHandle,
+    hash: String,
+    target_path: String,
+) -> Result<i64, String> {
+    let pool = pool_of(&app)?;
+    let dir = attachments_dir_of(&app)?;
+    asset_api::export_task_attachment(&pool, &dir, &hash, std::path::Path::new(&target_path))
         .await
         .map_err(|e| format!("[attachment] {e}"))
 }

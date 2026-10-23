@@ -6,12 +6,15 @@
 //! hash"的引用关系，二进制走 cloud_sync/attachments 的 assets/ 通道）。
 //!
 //! 流程：
-//! - `add_task_attachment`：算 hash → 原子落盘 → upsert sys_attachments →
-//!   建任务关联（已挂载同 hash 则幂等返回）→ emit 事件（触发 on-change push）
-//!   → 超出磁盘缓存上限时 LRU 逐出最久未访问的已上传附件
+//! - `add_task_attachment` / `add_task_attachment_from_path`：算 hash → 原子
+//!   落盘 → upsert sys_attachments → 建任务关联（已挂载同 hash 则幂等返回）
+//!   → emit 事件（触发 on-change push）→ 超出磁盘缓存上限时 LRU 逐出最久
+//!   未访问的已上传附件
 //! - `get_task_attachments`：关联 join 元数据（原始文件名/mime/大小）
-//! - `read_task_attachment`：读本地文件字节（详情页预览/另存用；读取即
-//!   刷新 last_accessed_at，LRU 新鲜度依据）
+//! - `read_task_attachment`：读本地文件字节（小图预览用；读取即刷新
+//!   last_accessed_at，LRU 新鲜度依据）
+//! - `export_task_attachment`：流式导出到指定路径（大文件/系统程序打开用），
+//!   峰值只与复制缓冲有关，与附件大小无关（M3/T1.1）
 //! - `remove_task_attachment`：软删关联；无任何任务引用的 hash 触发本地 GC
 //!   （删文件 + 删账本行；云端对象留给下次同步的 push 侧自然对账，不做
 //!   云端删除——多设备引用计数不可靠，宁可多留不误删）
@@ -31,8 +34,8 @@ use sqlx::SqlitePool;
 use crate::db::repository::attachment_repo;
 use crate::error::{CoreError, CoreResult};
 use crate::eventbus::{
-    events::{DbEvent, DbOp},
     EVENT_BUS,
+    events::{DbEvent, DbOp},
 };
 use crate::models::business::Attachment;
 
@@ -55,10 +58,13 @@ pub const MAX_ATTACHMENT_BYTES: i64 = 50 * 1024 * 1024;
 /// 附件磁盘缓存总上限（2GB：20 任务档日常远够；超出走 LRU 逐出重拉兜底）
 pub const MAX_ATTACHMENT_CACHE_BYTES: i64 = 2 * 1024 * 1024 * 1024;
 
-/// 上传并挂载附件到任务
+/// 上传并挂载附件到任务（字节入参：剪贴板/拖放等已在内存里的内容）
 ///
 /// 幂等：同任务重复挂同 hash 直接返回已有关联（不重复计费上限）。
 /// 文件写入用 fs_util::write_atomic（tmp+rename，防半截文件被内容寻址"背书"）。
+///
+/// 大文件（文件选择器路径）请用 [`add_task_attachment_from_path`]——本入口
+/// 要求调用方已持有完整字节，峰值与文件大小线性相关。
 pub async fn add_task_attachment(
     pool: &SqlitePool,
     attachments_dir: &str,
@@ -71,20 +77,7 @@ pub async fn add_task_attachment(
         return Err(CoreError::Other("附件内容为空".to_string()));
     }
     if data.len() as i64 > MAX_ATTACHMENT_BYTES {
-        return Err(CoreError::Other(format!(
-            "附件超过单文件上限 {}MB",
-            MAX_ATTACHMENT_BYTES / 1024 / 1024
-        )));
-    }
-
-    // 0. 任务存在性校验（外键只防孤儿，报错信息要可读）
-    let task_exists: (i64,) =
-        sqlx::query_as("SELECT COUNT(*) FROM todo_tasks WHERE id = ? AND is_deleted = 0")
-            .bind(task_id)
-            .fetch_one(pool)
-            .await?;
-    if task_exists.0 == 0 {
-        return Err(CoreError::NotFound(format!("任务 {} 不存在", task_id)));
+        return Err(oversize_error());
     }
 
     let hash = crate::crypto::sha256::sha256_hex(data);
@@ -99,14 +92,184 @@ pub async fn add_task_attachment(
             .map_err(|e| CoreError::Other(format!("附件落盘失败: {}", e)))?;
     }
 
+    finish_add_attachment(
+        pool,
+        attachments_dir,
+        task_id,
+        file_name,
+        mime_type,
+        &hash,
+        data.len() as i64,
+        now,
+    )
+    .await
+}
+
+/// 从本地文件流式上传并挂载附件（UI 选文件→挂载的主路径，M3/T1.1）
+///
+/// 与 [`add_task_attachment`] 的区别只在**内存口径**：这里按 256KiB 块边读边
+/// 算 SHA-256、边写同目录临时文件，峰值与文件大小无关（不再 `fs::read` 整文件
+/// 后由 core 再持一份）。落位仍是「临时文件 → rename 到 `{attachments_dir}/{hash}`」，
+/// 内容寻址与幂等语义逐字不变。
+///
+/// 校验口径：读前按元数据先拦空文件/超限（避免为明显非法文件白读一遍），
+/// 读中累计再拦一次（文件可能在 stat 与读之间被替换成更大内容）。
+pub async fn add_task_attachment_from_path(
+    pool: &SqlitePool,
+    attachments_dir: &str,
+    task_id: i64,
+    file_name: &str,
+    mime_type: &str,
+    source_path: &std::path::Path,
+) -> CoreResult<TaskAttachmentView> {
+    let meta = std::fs::metadata(source_path)
+        .map_err(|e| CoreError::NotFound(format!("读取附件源文件失败: {}", e)))?;
+    if !meta.is_file() {
+        return Err(CoreError::Other("附件源路径不是常规文件".to_string()));
+    }
+    if meta.len() == 0 {
+        return Err(CoreError::Other("附件内容为空".to_string()));
+    }
+    if meta.len() as i64 > MAX_ATTACHMENT_BYTES {
+        return Err(oversize_error());
+    }
+
+    std::fs::create_dir_all(attachments_dir)
+        .map_err(|e| CoreError::Other(format!("创建附件目录失败: {}", e)))?;
+    let now = crate::db::clock::next_ms();
+
+    // 1. 流式：算 hash + 写临时文件（双保险上限在循环内再拦一次）
+    let (hash, size_bytes, tmp_path) = stream_hash_and_copy(source_path, attachments_dir)?;
+
+    // 2. 内容寻址落位：同 hash 已存在则丢弃临时文件（去重）
+    let target = std::path::Path::new(attachments_dir).join(&hash);
+    if target.exists() {
+        let _ = std::fs::remove_file(&tmp_path);
+    } else if let Err(e) = crate::fs_util::replace_atomic(&tmp_path, &target) {
+        let _ = std::fs::remove_file(&tmp_path);
+        return Err(CoreError::Other(format!("附件落盘失败: {}", e)));
+    }
+
+    finish_add_attachment(
+        pool,
+        attachments_dir,
+        task_id,
+        file_name,
+        mime_type,
+        &hash,
+        size_bytes,
+        now,
+    )
+    .await
+}
+
+fn oversize_error() -> CoreError {
+    CoreError::Other(format!(
+        "附件超过单文件上限 {}MB",
+        MAX_ATTACHMENT_BYTES / 1024 / 1024
+    ))
+}
+
+/// 流式「算 SHA-256 + 复制到附件目录临时文件」
+///
+/// 返回 `(hash, 实际字节数, 临时文件路径)`；调用方负责 rename 或删除。
+/// 读中超过上限立即中止并清理临时文件（源文件可能被并发替换，stat 的
+/// 大小不可作为最终依据）。
+fn stream_hash_and_copy(
+    source_path: &std::path::Path,
+    attachments_dir: &str,
+) -> CoreResult<(String, i64, std::path::PathBuf)> {
+    use sha2::{Digest, Sha256};
+    use std::io::{Read, Write};
+
+    const COPY_BUF: usize = 256 * 1024;
+
+    let mut reader = std::fs::File::open(source_path)
+        .map_err(|e| CoreError::Other(format!("打开附件源文件失败: {}", e)))?;
+    let tmp_path = crate::fs_util::temp_sibling(
+        &std::path::Path::new(attachments_dir).join("incoming"),
+        "upload",
+    );
+    let mut writer = std::fs::File::create(&tmp_path)
+        .map_err(|e| CoreError::Other(format!("创建附件临时文件失败: {}", e)))?;
+
+    let mut hasher = Sha256::new();
+    let mut buf = vec![0u8; COPY_BUF];
+    let mut total: i64 = 0;
+    let result = (|| -> CoreResult<()> {
+        loop {
+            let n = reader
+                .read(&mut buf)
+                .map_err(|e| CoreError::Other(format!("读取附件源文件失败: {}", e)))?;
+            if n == 0 {
+                break;
+            }
+            total += n as i64;
+            if total > MAX_ATTACHMENT_BYTES {
+                return Err(oversize_error());
+            }
+            hasher.update(&buf[..n]);
+            writer
+                .write_all(&buf[..n])
+                .map_err(|e| CoreError::Other(format!("写入附件临时文件失败: {}", e)))?;
+        }
+        writer
+            .flush()
+            .map_err(|e| CoreError::Other(format!("写入附件临时文件失败: {}", e)))?;
+        Ok(())
+    })();
+
+    if let Err(e) = result {
+        drop(writer);
+        let _ = std::fs::remove_file(&tmp_path);
+        return Err(e);
+    }
+    drop(writer);
+    if total == 0 {
+        let _ = std::fs::remove_file(&tmp_path);
+        return Err(CoreError::Other("附件内容为空".to_string()));
+    }
+
+    let hash = hasher
+        .finalize()
+        .iter()
+        .map(|b| format!("{:02x}", b))
+        .collect::<String>();
+    Ok((hash, total, tmp_path))
+}
+
+/// 落盘之后的公共收尾：upsert 账本 → 建关联（幂等）→ emit → 缓存上限 → 历史
+#[allow(clippy::too_many_arguments)]
+async fn finish_add_attachment(
+    pool: &SqlitePool,
+    attachments_dir: &str,
+    task_id: i64,
+    file_name: &str,
+    mime_type: &str,
+    hash: &str,
+    size_bytes: i64,
+    now: i64,
+) -> CoreResult<TaskAttachmentView> {
+    // 0. 任务存在性校验（外键只防孤儿，报错信息要可读）
+    let task_exists: (i64,) =
+        sqlx::query_as("SELECT COUNT(*) FROM todo_tasks WHERE id = ? AND is_deleted = 0")
+            .bind(task_id)
+            .fetch_one(pool)
+            .await?;
+    if task_exists.0 == 0 {
+        return Err(CoreError::NotFound(format!("任务 {} 不存在", task_id)));
+    }
+
+    let file_path = std::path::Path::new(attachments_dir).join(hash);
+
     // 2. upsert 附件元数据（本地账本；is_uploaded=0 等同步 push 上传）
     attachment_repo::upsert(
         pool,
         &Attachment {
-            hash: hash.clone(),
+            hash: hash.to_string(),
             original_name: file_name.to_string(),
             mime_type: mime_type.to_string(),
-            size_bytes: data.len() as i64,
+            size_bytes,
             local_path: Some(file_path.to_string_lossy().to_string()),
             is_uploaded: 0,
             is_local_cached: 1,
@@ -120,7 +283,7 @@ pub async fn add_task_attachment(
     let existing: Option<(i64, String)> =
         sqlx::query_as("SELECT id, uuid FROM todo_task_attachments WHERE task_id = ? AND hash = ? AND is_deleted = 0")
             .bind(task_id)
-            .bind(&hash)
+            .bind(hash)
             .fetch_optional(pool)
             .await?;
     let link = match existing {
@@ -147,7 +310,7 @@ pub async fn add_task_attachment(
             )
             .bind(&link_uuid)
             .bind(task_id)
-            .bind(&hash)
+            .bind(hash)
             .bind(now)
             .bind(now)
             .fetch_one(pool)
@@ -176,10 +339,10 @@ pub async fn add_task_attachment(
     Ok(TaskAttachmentView {
         link_id: link.0,
         link_uuid: link.1,
-        hash,
+        hash: hash.to_string(),
         original_name: file_name.to_string(),
         mime_type: mime_type.to_string(),
-        size_bytes: data.len() as i64,
+        size_bytes,
         is_local_cached: 1,
     })
 }
@@ -224,6 +387,9 @@ pub async fn get_task_attachments(
 ///
 /// `is_local_cached = 0`（云端有但本机未拉回）时返回 NotFound，UI 引导
 /// 等待下次同步拉取。
+///
+/// 峰值与文件大小线性相关，只适合小文件（图片预览）。大文件/交给系统程序
+/// 打开的场景用 [`export_task_attachment`] 流式导出到目标路径。
 pub async fn read_task_attachment(
     pool: &SqlitePool,
     attachments_dir: &str,
@@ -252,6 +418,41 @@ pub async fn read_task_attachment(
     // 读取即访问：刷新 LRU 新鲜度（不 await 失败也无关紧要——仅排序键失真）
     let _ = attachment_repo::touch_last_accessed(pool, hash).await;
     Ok(bytes)
+}
+
+/// 流式导出附件到指定路径（大文件预览/交给系统程序打开，M3/T1.1）
+///
+/// 与 [`read_task_attachment`] 的区别：这里不把内容带进调用方内存，而是按
+/// 256KiB 块复制到 `target_path`（先写同目录临时文件再原子替换），峰值与
+/// 附件大小无关。返回写入字节数。
+///
+/// `target_path` 由壳层决定（通常是 app cache 下的预览文件）；同名目标会被
+/// 覆盖（重新导出同内容），失败时不会留下半截文件。
+pub async fn export_task_attachment(
+    pool: &SqlitePool,
+    attachments_dir: &str,
+    hash: &str,
+    target_path: &std::path::Path,
+) -> CoreResult<i64> {
+    if !crate::crypto::sha256::is_sha256_hex(hash) {
+        return Err(CoreError::Other(format!(
+            "附件 hash 格式非法（需 64 位小写 sha256 hex）: {}",
+            hash
+        )));
+    }
+    let meta = attachment_repo::get_by_hash(pool, hash)
+        .await?
+        .ok_or_else(|| CoreError::NotFound(format!("附件 {} 不存在", hash)))?;
+    if meta.is_local_cached == 0 {
+        return Err(CoreError::NotFound(
+            "附件尚未从云端同步到本机，请稍后重试".to_string(),
+        ));
+    }
+    let src = std::path::Path::new(attachments_dir).join(hash);
+    let written = crate::fs_util::copy_file_atomic(&src, target_path, 256 * 1024)
+        .map_err(|e| CoreError::Other(format!("导出附件失败: {}", e)))?;
+    let _ = attachment_repo::touch_last_accessed(pool, hash).await;
+    Ok(written as i64)
 }
 
 /// 卸下任务附件（软删关联行）
@@ -751,5 +952,150 @@ mod tests {
             attachment_repo::cached_total_bytes(&pool).await.unwrap(),
             30
         );
+    }
+
+    // ==================================================================
+    // M3/T1.1：路径入参流式写入 与 流式导出
+    // ==================================================================
+
+    #[tokio::test]
+    async fn from_path_streams_and_matches_bytes_entrypoint() {
+        let pool = setup_db().await;
+        let task_id = create_task(&pool).await;
+        let dir = tmp_dir("from-path");
+        let payload = vec![7u8; 1024 * 1024];
+
+        // 源文件放在附件目录之外（模拟用户下载目录）
+        let src_dir = tempfile::TempDir::new().unwrap();
+        let src = src_dir.path().join("report.pdf");
+        std::fs::write(&src, &payload).unwrap();
+
+        let view = add_task_attachment_from_path(
+            &pool,
+            &dir,
+            task_id,
+            "report.pdf",
+            "application/pdf",
+            &src,
+        )
+        .await
+        .unwrap();
+
+        let expected_hash = crate::crypto::sha256::sha256_hex(&payload);
+        assert_eq!(view.hash, expected_hash);
+        assert_eq!(view.size_bytes, payload.len() as i64);
+        assert_eq!(
+            std::fs::read(std::path::Path::new(&dir).join(&view.hash)).unwrap(),
+            payload,
+            "内容寻址落盘内容必须与源文件逐字节一致"
+        );
+        // 临时文件不得残留（rename 成功即清理）
+        let leftovers: Vec<_> = std::fs::read_dir(&dir)
+            .unwrap()
+            .filter_map(|e| e.ok())
+            .filter(|e| e.file_name().to_string_lossy().contains(".tmp"))
+            .collect();
+        assert!(leftovers.is_empty(), "附件目录不得残留临时文件");
+
+        // 与字节入口同内容同 hash → 幂等（同任务不重复挂载）
+        let again = add_task_attachment(
+            &pool,
+            &dir,
+            task_id,
+            "report-renamed.pdf",
+            "application/pdf",
+            &payload,
+        )
+        .await
+        .unwrap();
+        assert_eq!(again.link_id, view.link_id);
+    }
+
+    #[tokio::test]
+    async fn from_path_rejects_empty_and_missing_source() {
+        let pool = setup_db().await;
+        let task_id = create_task(&pool).await;
+        let dir = tmp_dir("from-path-invalid");
+        let src_dir = tempfile::TempDir::new().unwrap();
+        let empty = src_dir.path().join("empty.bin");
+        std::fs::write(&empty, b"").unwrap();
+
+        let err = add_task_attachment_from_path(
+            &pool,
+            &dir,
+            task_id,
+            "empty.bin",
+            "application/octet-stream",
+            &empty,
+        )
+        .await
+        .unwrap_err();
+        assert!(err.to_string().contains("为空"), "实际: {err}");
+
+        let missing = src_dir.path().join("nope.bin");
+        let err = add_task_attachment_from_path(
+            &pool,
+            &dir,
+            task_id,
+            "nope.bin",
+            "application/octet-stream",
+            &missing,
+        )
+        .await
+        .unwrap_err();
+        assert!(
+            err.to_string().contains("读取附件源文件失败"),
+            "实际: {err}"
+        );
+    }
+
+    #[tokio::test]
+    async fn export_streams_to_target_and_refreshes_lru() {
+        let pool = setup_db().await;
+        let task_id = create_task(&pool).await;
+        let dir = tmp_dir("export");
+        let payload = vec![3u8; 300 * 1024];
+        let view = add_task_attachment(&pool, &dir, task_id, "photo.png", "image/png", &payload)
+            .await
+            .unwrap();
+
+        let out_dir = tempfile::TempDir::new().unwrap();
+        let target = out_dir.path().join("preview.png");
+        let written = export_task_attachment(&pool, &dir, &view.hash, &target)
+            .await
+            .unwrap();
+        assert_eq!(written, payload.len() as i64);
+        assert_eq!(std::fs::read(&target).unwrap(), payload);
+
+        // 覆盖导出（同内容重导出）不得留下临时/半截文件
+        export_task_attachment(&pool, &dir, &view.hash, &target)
+            .await
+            .unwrap();
+        assert_eq!(std::fs::read(&target).unwrap(), payload);
+        let leftovers: Vec<_> = std::fs::read_dir(out_dir.path())
+            .unwrap()
+            .filter_map(|e| e.ok())
+            .filter(|e| e.file_name().to_string_lossy().contains(".tmp"))
+            .collect();
+        assert!(leftovers.is_empty(), "导出目录不得残留临时文件");
+    }
+
+    #[tokio::test]
+    async fn export_rejects_uncached_and_malformed_hash() {
+        let pool = setup_db().await;
+        let dir = tmp_dir("export-invalid");
+        let out = tempfile::TempDir::new().unwrap();
+        let target = out.path().join("x.bin");
+
+        let err = export_task_attachment(&pool, &dir, "not-a-hash", &target)
+            .await
+            .unwrap_err();
+        assert!(err.to_string().contains("hash 格式非法"), "实际: {err}");
+
+        let real = crate::crypto::sha256::sha256_hex(b"never-added");
+        let err = export_task_attachment(&pool, &dir, &real, &target)
+            .await
+            .unwrap_err();
+        assert!(err.to_string().contains("不存在"), "实际: {err}");
     }
 }

@@ -42,10 +42,18 @@ struct Obj {
     mtime: i64,
 }
 
+/// 一段 multipart 会话的分片集合（partNumber, bytes）
+type MultipartParts = Vec<(usize, Vec<u8>)>;
+
 #[derive(Default)]
 struct State {
     /// 键为 URL 路径本体（含前导 `/`），如 `/orbit/manifest.orsync`
     objects: HashMap<String, Obj>,
+    /// S3 multipart 会话：(对象路径, uploadId) → 分片集合
+    ///
+    /// 只实现「Create → UploadPart* → Complete」与 Abort 的最小语义：Complete
+    /// 按 partNumber 升序拼装成普通对象，与真 S3 的产物一致（对象键不变）。
+    uploads: HashMap<(String, String), MultipartParts>,
     seq: u64,
 }
 
@@ -415,6 +423,7 @@ fn dispatch(
             path,
             headers.get("depth").map(|s| s.as_str()).unwrap_or("1"),
         ),
+        "POST" if svc.protocol == Protocol::S3 => s3_post(svc, path, query),
         "DELETE" => {
             let mut st = svc.state.lock().unwrap();
             if st.objects.remove(path).is_some() {
@@ -422,6 +431,9 @@ fn dispatch(
             } else {
                 not_found(svc)
             }
+        }
+        "PUT" if svc.protocol == Protocol::S3 && query.contains("uploadId=") => {
+            s3_put_part(svc, path, query, body)
         }
         "PUT" => put(svc, path, headers, body),
         "GET" | "HEAD" => {
@@ -456,6 +468,87 @@ fn not_found(svc: &Svc) -> Reply {
             "<?xml version=\"1.0\"?><d:error xmlns:d=\"DAV:\"><S:status xmlns:S=\"http://apache.org/webdav/error\">404</S:status></d:error>",
         ),
     }
+}
+
+/// 查询参数解析（`uploads` 无值也保留键；`uploadId=x` 取值）
+fn query_params(query: &str) -> HashMap<String, String> {
+    query
+        .split('&')
+        .filter(|s| !s.is_empty())
+        .map(|kv| match kv.split_once('=') {
+            Some((k, v)) => (k.to_string(), v.to_string()),
+            None => (kv.to_string(), String::new()),
+        })
+        .collect()
+}
+
+/// S3 multipart：CreateMultipartUpload（`?uploads`）与 Complete（`?uploadId=`）
+fn s3_post(svc: &Svc, path: &str, query: &str) -> Reply {
+    let params = query_params(query);
+    let mut st = svc.state.lock().unwrap();
+
+    if params.contains_key("uploads") {
+        st.seq += 1;
+        let upload_id = format!("upload-{}", st.seq);
+        st.uploads
+            .insert((path.to_string(), upload_id.clone()), Vec::new());
+        return Reply::text(
+            200,
+            &format!(
+                "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\
+                 <InitiateMultipartUploadResult><Bucket>{FAKE_BUCKET}</Bucket>\
+                 <Key>{path}</Key><UploadId>{upload_id}</UploadId>\
+                 </InitiateMultipartUploadResult>"
+            ),
+        );
+    }
+
+    let Some(upload_id) = params.get("uploadId").cloned() else {
+        return Reply::text(400, "<Error><Code>InvalidRequest</Code></Error>");
+    };
+    let Some(mut parts) = st.uploads.remove(&(path.to_string(), upload_id)) else {
+        return Reply::text(404, "<Error><Code>NoSuchUpload</Code></Error>");
+    };
+    parts.sort_by_key(|(n, _)| *n);
+    let mut bytes = Vec::new();
+    for (_, part) in parts {
+        bytes.extend_from_slice(&part);
+    }
+    st.seq += 1;
+    let etag = format!("v{}", st.seq);
+    let mtime = 1_700_000_000 + st.seq as i64;
+    st.objects
+        .insert(path.to_string(), Obj { bytes, etag, mtime });
+    Reply::text(
+        200,
+        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\
+         <CompleteMultipartUploadResult><ETag>\"complete\"</ETag>\
+         </CompleteMultipartUploadResult>",
+    )
+}
+
+/// S3 UploadPart（`PUT ?partNumber=N&uploadId=…`）：只入会话，不落对象键
+fn s3_put_part(svc: &Svc, path: &str, query: &str, body: &[u8]) -> Reply {
+    let params = query_params(query);
+    let Some(upload_id) = params.get("uploadId").cloned() else {
+        return Reply::text(400, "<Error><Code>InvalidRequest</Code></Error>");
+    };
+    let Some(part_number) = params
+        .get("partNumber")
+        .and_then(|v| v.parse::<usize>().ok())
+    else {
+        return Reply::text(400, "<Error><Code>InvalidArgument</Code></Error>");
+    };
+
+    let mut st = svc.state.lock().unwrap();
+    let Some(parts) = st.uploads.get_mut(&(path.to_string(), upload_id)) else {
+        return Reply::text(404, "<Error><Code>NoSuchUpload</Code></Error>");
+    };
+    parts.retain(|(n, _)| *n != part_number);
+    parts.push((part_number, body.to_vec()));
+    let mut r = Reply::text(200, "");
+    r.etag = Some(format!("part-{part_number}"));
+    r
 }
 
 fn put(svc: &Svc, path: &str, headers: &HashMap<String, String>, body: &[u8]) -> Reply {

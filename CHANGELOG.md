@@ -16,6 +16,18 @@
 
 ## [Unreleased]
 
+### 性能：附件流式化与分块加密（M3/T1.1，2026-10-23）
+
+- **本地写入改路径入参**：新增 `asset_api::add_task_attachment_from_path`——按 256KiB 块边读边算 SHA-256、写同目录临时文件、完成后原子 rename，峰值与文件大小解耦；`add_task_attachment(&[u8])` 保留给剪贴板/拖放。桌面文件选择器改调 `task_attachment_add_from_path`，不再把整份文件读成 JS 数组经 IPC 搬运。
+- **预览/另存走流式导出**：新增 `export_task_attachment`（256KiB 块 copy → tmp+rename）与 Tauri 命令 `task_attachment_export`；非图片附件与大于 12MB 的图片改「导出缓存 + 系统默认程序打开」，不再把整份内容读进渲染进程。
+- **云端附件换 `OSAC` 分块容器**（ADR 0012）：magic + version + 4MiB 定长帧 + 确定性 nonce（Data Key 与附件 hash 派生）+ 帧序号/总长进 AAD；逐帧加解密，峰值 ≈ 一帧明文 + 一帧密文。**存量 `OSZS` 对象读兼容**，内容寻址 hash 与对象键（`assets/{hash}.orsync`）不变。
+- **适配器流式通道**：trait 新增 `upload_asset_file` / `download_asset_to_file` / `download_to_file`；WebDAV 分片协议改为从文件按块读 5MiB、下载支持流式 GET 与「分片拼装到文件」（逐片 append + 失败截回重试）；S3 新增 `multipart_upload_file`（逐片 5MiB 读盘）与流式 GET；`BasePathAdapter` 显式转发，避免默认实现把容器整包读回。
+- **并发与背压**：附件推拉并发 4 → 2，叠加默认 64MiB 在途字节预算（`AttachmentTransferLimits`，push 按明文大小加权、单件超预算按上限放行）。
+- **实测**（50MB 附件，`perf-metrics/operation-baselines.json`）：写入 +0.3MB 堆 / +0.4MB RSS、导出 +0.3MB / +0.3MB、推送 +12MB / 8–10MB、拉回 +8MB / +8.3MB——四条 32MB targets 全达；写入前值 +50.2MB / +50.1MB。thresholds 同步收紧（写入/导出 8MB、推送 24MB、拉回 20MB）。
+- **桌面壳**：`asset_cmd` 增 `task_attachment_add_from_path` / `task_attachment_export` 并在 `invoke_handler` 注册；`tauri.ts` 与浏览器 mock 同步（mock 对路径导入/导出显式报「不支持」而非伪造成功）。
+- **验证**：`cargo test -p orbit-core --lib` 837 绿、`sync_fault_matrix` 14 绿、新增 `asset_stream_transfer` 4 例（WebDAV 小/大附件分片拼装、S3 小/大附件 multipart，含对象键与请求链路断言）、`pnpm typecheck` / `pnpm test` 627 绿、`operation-probe --gate` 7 场景 14 项全过。
+- **发布注意**：旧版本客户端读到 `OSAC` 对象会报「payload 格式不匹配」，需升级后再同步；旧客户端已上传的 `OSZS` 对象不受影响。
+
 ### 性能：操作级内存探针与桌面基线刷新（T0.1，2026-10-23）
 
 - **新增操作级探针**（`perf-metrics/operation-probe.mjs` + `crates/orbit-core/examples/operation_probe.rs`）：备份导出/导入、CSV 导入、附件写入四场景各跑独立进程，自定义 `GlobalAlloc` 采净分配峰值 + 10ms 采样 RSS，三跑取中位写入 `perf-metrics/operation-baselines.json`；thresholds 拦回归、targets（docs/13 M1/M2/M3 验收线）只报不拦。

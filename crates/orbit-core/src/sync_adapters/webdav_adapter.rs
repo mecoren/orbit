@@ -669,9 +669,110 @@ impl WebDavAdapter {
             size: encrypted.len(),
             sha256: crate::crypto::sha256::sha256_hex(encrypted),
         };
+        let reusable = self.prepare_parts_upload(hash, parts_root, &head).await?;
 
-        // 1. 既有清单检查：全字段一致 → 续传；否则清目录重传。
-        //    半成品目录（无清单）也清理——防陈旧分片与新会话混片
+        // 逐片上传：已存在且大小一致 → 跳过（断点续传核心）
+        for index in 0..total {
+            let start = index * Self::PARTS_SIZE;
+            let end = std::cmp::min(start + Self::PARTS_SIZE, encrypted.len());
+            let chunk = &encrypted[start..end];
+            let part_path = Self::part_bin_path(parts_root, hash, index);
+            // F59：跳过的前提是「目录已被清单证明与本轮密文同源」（reusable）——
+            // 确定性加密下同一密文的同片字节必然一致，大小相等才是内容相等的
+            // 可靠代理；清理过/新建的目录内容不可信，必须覆盖重传
+            if reusable
+                && let Some(existing_len) = self.remote_file_size(&part_path).await?
+                && existing_len == chunk.len() as u64
+            {
+                continue;
+            }
+            // 分片 PUT：长窗口单次 PUT（120s 总超时覆盖发送阶段——客户端
+            // 默认 read_timeout 不覆盖 PUT 上行，慢速上行会被中途掐断）；
+            // 外层业务级 with_retry 兜底整链路重试
+            if let Some(parent) = part_path.rsplit_once('/').map(|(p, _)| p) {
+                self.ensure_directory(parent).await?;
+            }
+            let url = self.build_url(&part_path);
+            let headers = self.auth_headers();
+            self.http
+                .put_part_once(&url, headers, chunk.to_vec())
+                .await?;
+        }
+
+        self.finish_parts_upload(hash, parts_root, asset_path, &head)
+            .await
+    }
+
+    /// 分片上传（**从本地文件按块读取**，M3/T1.1）
+    ///
+    /// 与 [`Self::upload_asset_parts`] 语义完全一致，区别只在分片来源：
+    /// 这里逐片 `read_exact` 5MiB，内存峰值 = 单片大小，与附件大小无关。
+    /// 清单 sha256 先按 64KiB 块流式算一遍（与 S3 的 `put_object_file` 同口径：
+    /// 两遍磁盘顺序读换取流式 + 完整性背书）。
+    async fn upload_asset_parts_file(
+        &self,
+        hash: &str,
+        parts_root: &str,
+        asset_path: &str,
+        local_path: &std::path::Path,
+        total_len: u64,
+    ) -> Result<(), SyncError> {
+        use tokio::io::AsyncReadExt;
+
+        let total = total_len.div_ceil(Self::PARTS_SIZE as u64) as usize;
+        let (size, sha256) = file_size_and_sha256(local_path).await?;
+        let head = AssetPartsHead {
+            v: 1,
+            total,
+            size: size as usize,
+            sha256,
+        };
+        let reusable = self.prepare_parts_upload(hash, parts_root, &head).await?;
+
+        let mut file = tokio::fs::File::open(local_path)
+            .await
+            .map_err(|e| SyncError::Network {
+                message: format!("打开待上传附件失败: {e}"),
+                retryable: false,
+            })?;
+        let mut remaining = size;
+        for index in 0..total {
+            let expected = remaining.min(Self::PARTS_SIZE as u64) as usize;
+            let mut chunk = vec![0u8; expected];
+            file.read_exact(&mut chunk)
+                .await
+                .map_err(|e| SyncError::Network {
+                    message: format!("读取待上传附件失败（第 {index} 片）: {e}"),
+                    retryable: false,
+                })?;
+            remaining -= expected as u64;
+
+            let part_path = Self::part_bin_path(parts_root, hash, index);
+            if reusable
+                && let Some(existing_len) = self.remote_file_size(&part_path).await?
+                && existing_len == expected as u64
+            {
+                continue;
+            }
+            if let Some(parent) = part_path.rsplit_once('/').map(|(p, _)| p) {
+                self.ensure_directory(parent).await?;
+            }
+            let url = self.build_url(&part_path);
+            let headers = self.auth_headers();
+            self.http.put_part_once(&url, headers, chunk).await?;
+        }
+
+        self.finish_parts_upload(hash, parts_root, asset_path, &head)
+            .await
+    }
+
+    /// 清单检查 + 不匹配时清目录；返回是否可续传
+    async fn prepare_parts_upload(
+        &self,
+        hash: &str,
+        parts_root: &str,
+        head: &AssetPartsHead,
+    ) -> Result<bool, SyncError> {
         let head_path = Self::parts_head_path(parts_root, hash);
         // F82：记下云端旧清单声明的片数，供清理时确定删除上界。
         // 读不出/读失败时为 None——此时只能按本轮片数清理（见 `delete_parts_dir`）。
@@ -708,50 +809,32 @@ impl WebDavAdapter {
             // F82：上界取「云端旧片数」与「本轮片数」的较大者——只按本轮片数删会
             // 漏掉旧轮次多出来的尾片，只按旧片数删则在本轮更大时漏删。旧清单读不
             // 出来时退回本轮片数（此前的 10000 魔数已随该退化路径一并移除）。
-            let cleanup_bound = existing_total.unwrap_or(0).max(total);
+            let cleanup_bound = existing_total.unwrap_or(0).max(head.total);
             self.delete_parts_dir(hash, parts_root, cleanup_bound)
                 .await?;
         }
+        Ok(reusable)
+    }
 
-        // 2. 逐片上传：已存在且大小一致 → 跳过（断点续传核心）
-        for index in 0..total {
-            let start = index * Self::PARTS_SIZE;
-            let end = std::cmp::min(start + Self::PARTS_SIZE, encrypted.len());
-            let chunk = &encrypted[start..end];
-            let part_path = Self::part_bin_path(parts_root, hash, index);
-            // F59：跳过的前提是「目录已被清单证明与本轮密文同源」（reusable）——
-            // 确定性加密下同一密文的同片字节必然一致，大小相等才是内容相等的
-            // 可靠代理；清理过/新建的目录内容不可信，必须覆盖重传
-            if reusable
-                && let Some(existing_len) = self.remote_file_size(&part_path).await?
-                && existing_len == chunk.len() as u64
-            {
-                continue;
-            }
-            // 分片 PUT：长窗口单次 PUT（120s 总超时覆盖发送阶段——客户端
-            // 默认 read_timeout 不覆盖 PUT 上行，慢速上行会被中途掐断）；
-            // 外层业务级 with_retry 兜底整链路重试
-            if let Some(parent) = part_path.rsplit_once('/').map(|(p, _)| p) {
-                self.ensure_directory(parent).await?;
-            }
-            let url = self.build_url(&part_path);
-            let headers = self.auth_headers();
-            self.http
-                .put_part_once(&url, headers, chunk.to_vec())
-                .await?;
-        }
-
-        // 3. 最后写清单（「完整」信号）
-        let head_json = serde_json::to_vec(&head).map_err(|e| SyncError::Network {
+    /// 全部片就位后写清单 + 删除旧单对象（rekey 对账）
+    async fn finish_parts_upload(
+        &self,
+        hash: &str,
+        parts_root: &str,
+        asset_path: &str,
+        head: &AssetPartsHead,
+    ) -> Result<(), SyncError> {
+        let head_path = Self::parts_head_path(parts_root, hash);
+        let head_json = serde_json::to_vec(head).map_err(|e| SyncError::Network {
             message: format!("序列化分片清单失败: {e}"),
             retryable: false,
         })?;
         self.upload(&head_path, &head_json).await?;
 
-        // 4. 删除旧单对象（rekey 对账）：分片就位后清掉同名单对象——
-        //    读侧优先命中单对象，残留旧 Key 密文会导致他端解密失败。
-        //    404（本就无旧对象，大附件首传走分片）忽略；其余失败透传
-        //    （留旧对象 = 他端解密报错，不如本轮失败重试）
+        // 删除旧单对象（rekey 对账）：分片就位后清掉同名单对象——
+        // 读侧优先命中单对象，残留旧 Key 密文会导致他端解密失败。
+        // 404（本就无旧对象，大附件首传走分片）忽略；其余失败透传
+        // （留旧对象 = 他端解密报错，不如本轮失败重试）
         if let Err(e) = self.delete(asset_path).await
             && !e.is_not_found()
         {
@@ -861,6 +944,85 @@ impl WebDavAdapter {
             });
         }
         Ok(Bytes::from(assembled))
+    }
+
+    /// 分片拼装下载到文件（逐片 append，峰值 = 单片大小）
+    ///
+    /// 与 `download_asset_parts` 同语义（清单版本门禁 + 大小/sha256 校验），
+    /// 只是不把整包拼进内存：每片流式写入同一目标文件，最后按 64KiB 块
+    /// 重算整文件 sha256 校验。失败时删除目标，避免半截文件被当成缓存。
+    async fn download_asset_parts_to_file(
+        &self,
+        hash: &str,
+        parts_root: &str,
+        target: &std::path::Path,
+    ) -> Result<u64, SyncError> {
+        let head_path = Self::parts_head_path(parts_root, hash);
+        let head_bytes = self.download(&head_path).await?;
+        let head: AssetPartsHead =
+            serde_json::from_slice(&head_bytes).map_err(|e| SyncError::Network {
+                message: format!("解析分片清单失败: {e}"),
+                retryable: false,
+            })?;
+        if head.v > 1 {
+            return Err(SyncError::Network {
+                message: format!(
+                    "分片清单版本 {} 高于本客户端支持的上限 1，请升级应用后重试",
+                    head.v
+                ),
+                retryable: false,
+            });
+        }
+
+        // 先清空目标（append 语义依赖起点为 0）
+        if let Err(e) = tokio::fs::write(target, b"").await {
+            return Err(SyncError::Network {
+                message: format!("创建下载目标文件失败: {e}"),
+                retryable: false,
+            });
+        }
+        for index in 0..head.total {
+            let part_path = Self::part_bin_path(parts_root, hash, index);
+            let url = self.build_url(&part_path);
+            let headers = self.auth_headers();
+            if let Err(e) = self
+                .http
+                .get_to_file_with_retry(&url, headers, target, true)
+                .await
+            {
+                let _ = tokio::fs::remove_file(target).await;
+                return Err(e);
+            }
+        }
+
+        match file_size_and_sha256(target).await {
+            Ok((size, actual)) => {
+                if size as usize != head.size {
+                    let _ = tokio::fs::remove_file(target).await;
+                    return Err(SyncError::Network {
+                        message: format!(
+                            "分片拼装大小不符：期望 {} 实际 {}（{hash}）",
+                            head.size, size
+                        ),
+                        retryable: false,
+                    });
+                }
+                if actual != head.sha256 {
+                    let _ = tokio::fs::remove_file(target).await;
+                    return Err(SyncError::Network {
+                        message: format!(
+                            "分片拼装 sha256 校验失败（{hash}），疑似分片损坏或被篡改"
+                        ),
+                        retryable: false,
+                    });
+                }
+                Ok(size)
+            }
+            Err(e) => {
+                let _ = tokio::fs::remove_file(target).await;
+                Err(e)
+            }
+        }
     }
 
     /// 删除分片目录——**先删清单，再由分片尽力而为**
@@ -1213,18 +1375,84 @@ impl SyncAdapter for WebDavAdapter {
         self.put_object_bytes(path, Bytes::from(data)).await
     }
 
-    /// M1：备份包等大对象走文件流式 PUT（不再整包读入）
+    /// 大对象按文件流式上传（M1 备份 / M3 附件）
     ///
-    /// 大附件（≥ PARTS_THRESHOLD 且目标是 assets）仍走分片协议——分片需要
-    /// 按块切分后再逐片上传，与本方法「单请求流式」是两条路径；但分片本身
-    /// 也只持有单块，不是整包，故无需在此额外处理。
+    /// - 目标是附件对象且 ≥ PARTS_THRESHOLD：走分片协议（片段从文件按块读，
+    ///   峰值 = 单片 5MiB），保留断点续传与慢速上行能力；
+    /// - 其余（备份包等）：单请求流式 PUT。
     async fn upload_file(
         &self,
         path: &str,
         local_path: &std::path::Path,
         total_len: u64,
     ) -> Result<(), SyncError> {
+        if total_len >= Self::PARTS_THRESHOLD as u64
+            && let Some((hash, parts_root)) = asset_parts_target(path)
+        {
+            return self
+                .upload_asset_parts_file(&hash, &parts_root, path, local_path, total_len)
+                .await;
+        }
         self.put_object_file(path, local_path, total_len).await
+    }
+
+    /// 上传附件（文件级流式，M3/T1.1）
+    ///
+    /// 裸适配器路径（未经 `BasePathAdapter` 包装的测试/内部调用）也必须走
+    /// 文件通道，否则 trait 默认实现会把加密容器整包读回来。分片根目录由
+    /// `asset_parts_target` 从 `assets/{hash}.orsync` 推导，与整包路径一致。
+    async fn upload_asset_file(
+        &self,
+        hash: &str,
+        local_path: &std::path::Path,
+        total_len: u64,
+    ) -> Result<(), SyncError> {
+        let path = crate::cloud_sync::paths::asset_path(hash);
+        if total_len >= Self::PARTS_THRESHOLD as u64
+            && let Some((h, parts_root)) = asset_parts_target(&path)
+        {
+            return self
+                .upload_asset_parts_file(&h, &parts_root, &path, local_path, total_len)
+                .await;
+        }
+        self.put_object_file(&path, local_path, total_len).await
+    }
+
+    /// 下载附件到文件（文件级流式 + 分片拼装回退，M3/T1.1）
+    async fn download_asset_to_file(
+        &self,
+        hash: &str,
+        target: &std::path::Path,
+    ) -> Result<u64, SyncError> {
+        let path = crate::cloud_sync::paths::asset_path(hash);
+        self.download_to_file(&path, target).await
+    }
+
+    /// 路径级流式下载到文件（M3：附件不再整包进内存）
+    ///
+    /// 单对象 404 且路径是附件对象 → 回退分片拼装（逐片 append 到同一文件）。
+    async fn download_to_file(
+        &self,
+        path: &str,
+        target: &std::path::Path,
+    ) -> Result<u64, SyncError> {
+        let url = self.build_url(path);
+        let headers = self.auth_headers();
+        match self
+            .http
+            .get_to_file_with_retry(&url, headers, target, false)
+            .await
+        {
+            Ok(n) => Ok(n),
+            Err(e) if e.is_not_found() => match asset_parts_target(path) {
+                Some((hash, parts_root)) => {
+                    self.download_asset_parts_to_file(&hash, &parts_root, target)
+                        .await
+                }
+                None => Err(e),
+            },
+            Err(e) => Err(e),
+        }
     }
 
     async fn delete(&self, path: &str) -> Result<(), SyncError> {
@@ -1450,6 +1678,43 @@ fn parts_root_for_assets_dir(assets_dir: &str) -> String {
         || "assets_parts".to_string(),
         |head| format!("{head}/assets_parts"),
     )
+}
+
+/// 流式计算文件大小与 sha256（分片清单背书 / 拼装校验用）
+///
+/// 64KiB 块，峰值与文件大小无关。用于「先算清单哈希、再按片重读上传」的
+/// 两遍顺序读——顺序读 50MB 的成本远低于整包驻留，且上传途中不与加密路径
+/// 抢内存。
+async fn file_size_and_sha256(path: &std::path::Path) -> Result<(u64, String), SyncError> {
+    use sha2::Digest;
+    use tokio::io::AsyncReadExt;
+
+    let mut file = tokio::fs::File::open(path)
+        .await
+        .map_err(|e| SyncError::Network {
+            message: format!("打开文件读取 sha256 失败: {e}"),
+            retryable: false,
+        })?;
+    let mut hasher = sha2::Sha256::new();
+    let mut buf = vec![0u8; 64 * 1024];
+    let mut size: u64 = 0;
+    loop {
+        let n = file.read(&mut buf).await.map_err(|e| SyncError::Network {
+            message: format!("读取文件计算 sha256 失败: {e}"),
+            retryable: false,
+        })?;
+        if n == 0 {
+            break;
+        }
+        hasher.update(&buf[..n]);
+        size += n as u64;
+    }
+    let hex = hasher
+        .finalize()
+        .iter()
+        .map(|b| format!("{:02x}", b))
+        .collect();
+    Ok((size, hex))
 }
 
 /// 从对象路径识别「附件对象」，返回 (裸 hash, 该附件的分片根目录)

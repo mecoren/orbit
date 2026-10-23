@@ -392,14 +392,103 @@ x-amz-date:{}
     /// 任一步失败尝试 Abort（尽力而为，失败仅记日志——未 Abort 的分片由
     /// S3 生命周期规则/存储桶清理策略兜底，不影响数据正确性）。
     async fn multipart_upload(&self, path: &str, data: &[u8]) -> Result<(), SyncError> {
-        // 1. CreateMultipartUpload：POST {path}?uploads
+        let upload_id = self.create_multipart_upload(path).await?;
+
+        // 2. 逐片 UploadPart（分片级重试：失败重传单片而非整文件）
+        let mut part_etags: Vec<String> = Vec::new();
+        for (idx, chunk) in data.chunks(Self::MULTIPART_PART_SIZE).enumerate() {
+            let part_number = idx + 1;
+            match self
+                .upload_part_with_retry(&upload_id, path, part_number, chunk)
+                .await
+            {
+                Ok(etag) => part_etags.push(etag),
+                // F28：任一片失败必须 Abort。已上传的前若干片不会随请求失败
+                // 自动消失，未拼装的孤儿分片长期占桶计费——原注释把清理推给
+                // 「桶生命周期规则」，而自建 MinIO/NAS 默认没有这条规则。
+                Err(e) => {
+                    self.abort_multipart(path, &upload_id).await;
+                    return Err(e);
+                }
+            }
+        }
+
+        self.complete_multipart_upload(path, &upload_id, &part_etags)
+            .await
+    }
+
+    /// 大对象 multipart 分片上传（**从本地文件按块读取**，M3/T1.1）
+    ///
+    /// 与 [`Self::multipart_upload`] 的协议行为完全一致，区别只在分片来源：
+    /// 逐片 `read_exact` 5MiB，内存峰值 = 单片大小，与对象大小无关。
+    /// 附带收益：备份包 >8MiB 的单 PUT 整包读取也走这里，一并消掉。
+    async fn multipart_upload_file(
+        &self,
+        path: &str,
+        local_path: &std::path::Path,
+    ) -> Result<(), SyncError> {
+        use tokio::io::AsyncReadExt;
+
+        let mut file = tokio::fs::File::open(local_path)
+            .await
+            .map_err(|e| SyncError::Network {
+                message: format!("打开待上传文件失败: {e}"),
+                retryable: false,
+            })?;
+        let upload_id = self.create_multipart_upload(path).await?;
+
+        let mut part_etags: Vec<String> = Vec::new();
+        let mut part_number = 1usize;
+        let mut buf = vec![0u8; Self::MULTIPART_PART_SIZE];
+        loop {
+            // 顺序填满一片（除末片外必须正好 5MiB，S3 的最小片长约束）
+            let mut filled = 0usize;
+            while filled < buf.len() {
+                let n = file
+                    .read(&mut buf[filled..])
+                    .await
+                    .map_err(|e| SyncError::Network {
+                        message: format!("读取待上传文件失败（第 {part_number} 片）: {e}"),
+                        retryable: false,
+                    })?;
+                if n == 0 {
+                    break;
+                }
+                filled += n;
+            }
+            if filled == 0 {
+                break;
+            }
+            match self
+                .upload_part_with_retry(&upload_id, path, part_number, &buf[..filled])
+                .await
+            {
+                Ok(etag) => part_etags.push(etag),
+                Err(e) => {
+                    self.abort_multipart(path, &upload_id).await;
+                    return Err(e);
+                }
+            }
+            part_number += 1;
+            if filled < buf.len() {
+                break;
+            }
+        }
+
+        self.complete_multipart_upload(path, &upload_id, &part_etags)
+            .await
+    }
+
+    /// CreateMultipartUpload（POST `{path}?uploads`）
+    ///
+    /// F81：补总超时。注意**不可**套 `send_idempotent` 的重试——重发
+    /// Create 会多出一个 uploadId，前一个成为永不清理的孤儿分片
+    /// （正是 F28 要 Abort 清理的那类东西）。单次发 + 超时是正解：
+    /// 失败时连分片都还没传，不存在清理负担。
+    async fn create_multipart_upload(&self, path: &str) -> Result<String, SyncError> {
         let create_url =
             self.build_object_url_with_query(path, &[("uploads".to_string(), String::new())]);
         let headers = self.sign_request("POST", &create_url, &sha256_hex(b""))?;
-        // F81：补总超时。注意**不可**套 `send_idempotent` 的重试——重发
-        // Create 会多出一个 uploadId，前一个成为永不清理的孤儿分片
-        // （正是 F28 要 Abort 清理的那类东西）。单次发 + 超时是正解：
-        // 失败时连分片都还没传，不存在清理负担。
         let response = self
             .http
             .inner()
@@ -421,42 +510,31 @@ x-amz-date:{}
             message: transport_message("读取 CreateMultipartUpload 响应", &e),
             retryable: false,
         })?;
-        let upload_id = parse_upload_id(&create_xml).ok_or_else(|| SyncError::Network {
+        parse_upload_id(&create_xml).ok_or_else(|| SyncError::Network {
             message: format!(
                 "CreateMultipartUpload 响应缺少 UploadId: {}",
                 truncate_xml(&create_xml)
             ),
             retryable: false,
-        })?;
+        })
+    }
 
-        // 2. 逐片 UploadPart（分片级重试：失败重传单片而非整文件）
-        let mut part_etags: Vec<String> = Vec::new();
-        for (idx, chunk) in data.chunks(Self::MULTIPART_PART_SIZE).enumerate() {
-            let part_number = idx + 1;
-            match self
-                .upload_part_with_retry(&upload_id, path, part_number, chunk)
-                .await
-            {
-                Ok(etag) => part_etags.push(etag),
-                // F28：任一片失败必须 Abort。已上传的前若干片不会随请求失败
-                // 自动消失，未拼装的孤儿分片长期占桶计费——原注释把清理推给
-                // 「桶生命周期规则」，而自建 MinIO/NAS 默认没有这条规则。
-                Err(e) => {
-                    self.abort_multipart(path, &upload_id).await;
-                    return Err(e);
-                }
-            }
-        }
-
-        // 3. CompleteMultipartUpload：POST {path}?uploadId=…（带分片清单 body）
-        let complete_url =
-            self.build_object_url_with_query(path, &[("uploadId".to_string(), upload_id.clone())]);
-        let body_bytes = complete_multipart_body(&part_etags).into_bytes();
+    /// CompleteMultipartUpload（POST `{path}?uploadId=…`，body 为分片清单）
+    ///
+    /// F81：补总超时。不走 `send_idempotent`：Complete 的重发虽被 S3 定义为
+    /// 幂等，但由业务级 with_retry 重走整个 multipart 流程更简单也更安全
+    ///（避免「重发成功但对象已拼装」与 Abort 时序纠缠）。
+    async fn complete_multipart_upload(
+        &self,
+        path: &str,
+        upload_id: &str,
+        part_etags: &[String],
+    ) -> Result<(), SyncError> {
+        let complete_url = self
+            .build_object_url_with_query(path, &[("uploadId".to_string(), upload_id.to_string())]);
+        let body_bytes = complete_multipart_body(part_etags).into_bytes();
         let payload_hash = sha256_hex(&body_bytes);
         let headers = self.sign_request("POST", &complete_url, &payload_hash)?;
-        // F81：补总超时。不走 `send_idempotent`：Complete 的重发虽被 S3 定义为
-        // 幂等，但由业务级 with_retry 重走整个 multipart 流程更简单也更安全
-        //（避免「重发成功但对象已拼装」与 Abort 时序纠缠）。
         let response = self
             .http
             .inner()
@@ -477,7 +555,7 @@ x-amz-date:{}
             // 但 body 已消费），直接报错由业务级 with_retry 重走全流程
             let resp_body = response.text().await.unwrap_or_default();
             // Abort 尽力而为
-            self.abort_multipart(path, &upload_id).await;
+            self.abort_multipart(path, upload_id).await;
             return Err(SyncError::from_http_status(status, &resp_body));
         }
         Ok(())
@@ -629,27 +707,62 @@ impl SyncAdapter for S3Adapter {
         self.put_object_bytes(path, Bytes::from(data)).await
     }
 
-    /// M1：备份包等大对象走文件流式 PUT（不再整包读入）
+    /// 大对象按文件上传（M1 备份 / M3 附件）
     ///
-    /// 大附件（≥ MULTIPART_THRESHOLD）仍走 multipart——分片协议本身只持有
-    /// 单块，不是整包；本方法覆盖的是「单 PUT 路径」，备份包正走这条。
+    /// ≥ MULTIPART_THRESHOLD 走**文件分片**（逐片 5MiB 读盘，峰值=单片）；
+    /// 小对象单 PUT 流式。两分支都不再把整文件读入内存。
     async fn upload_file(
         &self,
         path: &str,
         local_path: &std::path::Path,
         total_len: u64,
     ) -> Result<(), SyncError> {
-        // 与 upload_owned 同口径：超大对象仍走分片（分片内部按块读，不整包）
         if total_len >= Self::MULTIPART_THRESHOLD as u64 {
-            let data = tokio::fs::read(local_path)
-                .await
-                .map_err(|e| SyncError::Network {
-                    message: format!("读取待上传文件失败: {e}"),
-                    retryable: false,
-                })?;
-            return self.multipart_upload(path, &data).await;
+            return self.multipart_upload_file(path, local_path).await;
         }
         self.put_object_file(path, local_path, total_len).await
+    }
+
+    /// 上传附件（文件级流式，M3/T1.1）
+    ///
+    /// 裸适配器路径（未经 `BasePathAdapter` 包装）也必须走文件通道，
+    /// 否则 trait 默认实现会把加密容器整包读回来。
+    async fn upload_asset_file(
+        &self,
+        hash: &str,
+        local_path: &std::path::Path,
+        total_len: u64,
+    ) -> Result<(), SyncError> {
+        let path = crate::cloud_sync::paths::asset_path(hash);
+        if total_len >= Self::MULTIPART_THRESHOLD as u64 {
+            return self.multipart_upload_file(&path, local_path).await;
+        }
+        self.put_object_file(&path, local_path, total_len).await
+    }
+
+    /// 下载附件到文件（文件级流式，M3/T1.1）
+    async fn download_asset_to_file(
+        &self,
+        hash: &str,
+        target: &std::path::Path,
+    ) -> Result<u64, SyncError> {
+        let path = crate::cloud_sync::paths::asset_path(hash);
+        self.download_to_file(&path, target).await
+    }
+
+    /// 路径级流式下载到文件（M3：附件不再整包进内存）
+    ///
+    /// S3 的 GET 无分片协议，单请求流式写盘即可；峰值 = 响应块大小。
+    async fn download_to_file(
+        &self,
+        path: &str,
+        target: &std::path::Path,
+    ) -> Result<u64, SyncError> {
+        let url = self.build_object_url(path);
+        let headers = self.sign_request("GET", &url, &sha256_hex(b""))?;
+        self.http
+            .get_to_file_with_retry(&url, headers, target, false)
+            .await
     }
 
     async fn delete(&self, path: &str) -> Result<(), SyncError> {
