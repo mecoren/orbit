@@ -15,11 +15,14 @@
  */
 import { spawn, execSync } from 'node:child_process';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const ROUNDS = 5;
-const MARKER = path.join(os.tmpdir(), `orbit-cold-start-${process.pid}.marker`);
+const ROUNDS = 10;
+// 落仓库内而非系统 TEMP：本机对工作区可执行文件强制 Low 完整性级别，
+// 它无权写用户 TEMP（operation-probe 同样踩过），工作区内可写。
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const MARKER = path.join(ROOT, 'perf-metrics', '.runs', `cold-start-${process.pid}.marker`);
 // 包名改名过渡期（orbit-desktop → orbit）两候选：取存在的那个
 const RELEASE_DIR = 'C:/Develop/project/00_AI/orbit/apps/desktop/src-tauri/target/release';
 const EXE = ['orbit.exe', 'orbit-desktop.exe']
@@ -31,6 +34,7 @@ if (!EXE) {
   console.error('未找到 release exe（先 `cargo build --release` 且先 `pnpm build` 出新前端）');
   process.exit(1);
 }
+fs.mkdirSync(path.dirname(MARKER), { recursive: true });
 
 const run = async () => new Promise((resolve) => {
   try { fs.rmSync(MARKER, { force: true }); } catch { /* 无残留 */ }
@@ -63,9 +67,12 @@ for (let i = 0; i < ROUNDS; i++) {
   await new Promise((r2) => setTimeout(r2, 1500));
 }
 const arr = results.filter(Boolean).map((r) => r.firstScreenMs).sort((a, b) => a - b);
+/** 最近秩分位（n=10 时 p50 取第 5 个、p95 取第 10 个） */
+const pct = (p) => arr[Math.min(arr.length - 1, Math.ceil(arr.length * p) - 1)];
 if (arr.length === 0) {
   console.log('MEDIAN_FIRST_SCREEN=n/a（全部轮次未收到 marker：确认 exe 为含 perf_first_screen_mark 的最新 release 构建）');
 } else {
   console.log('MEDIAN_FIRST_SCREEN=' + arr[Math.floor(arr.length / 2)]);
+  console.log(`P50=${pct(0.5)} P95=${pct(0.95)}`);
   console.log('MIN=' + arr[0] + ' MAX=' + arr[arr.length - 1] + `（${arr.length}/${ROUNDS} 轮有效）`);
 }

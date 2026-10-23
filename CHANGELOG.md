@@ -16,6 +16,10 @@
 
 ## [Unreleased]
 
+### 性能：冷启动脚本补 10 轮 p50/p95（T4.1 口径，2026-10-23）
+
+- `cold-start.mjs` 改为 10 轮采样 + 最近秩 p50/p95，marker 落 `perf-metrics/.runs/`（工作区可写，避开 Low 完整性进程无法写用户 TEMP）；本机数值仍需在桌面会话人工跑。
+
 ### 同步：孤儿分桶物理回收（T1.3，2026-10-23）
 
 - 新增 `cloud_sync::gc::scan_orphan_chunks` / `collect_and_delete_orphan_chunks`：遍历每张可同步表的 `tables/{table}/` 目录，回收「清单无引用 + mtime 早于 24h 保留窗口」的孤儿桶对象；`last_modified <= 0`（服务端不回时间）一律跳过，刚写入的桶留给下一轮，防删其他设备上传中的对象。
