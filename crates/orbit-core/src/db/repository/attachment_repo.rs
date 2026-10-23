@@ -91,6 +91,23 @@ pub async fn mark_all_unuploaded(pool: &SqlitePool) -> CoreResult<u64> {
     Ok(result.rows_affected())
 }
 
+/// 标记单个附件待重传（云端缺失自愈，docs/15 §4.5）
+///
+/// pull 侧发现「活跃引用 + 云端无对象」且本地仍缓存着明文时调用：
+/// `is_uploaded = 0` 让下一轮 push 以同一 hash 重新上传（内容寻址，键不变）。
+/// 仅作用于 `is_local_cached = 1` 的行——没有本地文件就没有可上传之物
+/// （与 `get_unuploaded` / rekey 的 F81 口径一致）。
+pub async fn mark_pending_reupload(pool: &SqlitePool, hash: &str) -> CoreResult<u64> {
+    let result = sqlx::query(
+        "UPDATE sys_attachments SET is_uploaded = 0
+         WHERE hash = ? AND is_local_cached = 1",
+    )
+    .bind(hash)
+    .execute(pool)
+    .await?;
+    Ok(result.rows_affected())
+}
+
 /// 标记附件已本地缓存
 pub async fn mark_local_cached(pool: &SqlitePool, hash: &str, local_path: &str) -> CoreResult<()> {
     sqlx::query("UPDATE sys_attachments SET is_local_cached = 1, local_path = ? WHERE hash = ?")

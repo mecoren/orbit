@@ -420,9 +420,8 @@ pub async fn sync_attachments_pull_with_limits(
             return Ok(result);
         }
     };
-    if cloud_hashes.is_empty() {
-        return Ok(result);
-    }
+    // 注意：云端为空时**不能**提前 return——本端有活跃引用但云端对象已消失
+    // （网盘端误删/他端旧版本清理）同样要走下面的缺失对账自愈（2.6）。
 
     // 2. 查询本地已缓存的附件 hash 集合
     let local_cached = attachment_repo::get_all_local_cached(db_pool)
@@ -430,7 +429,7 @@ pub async fn sync_attachments_pull_with_limits(
         .map_err(|e| CloudSyncError::Database {
             message: format!("查询本地缓存附件失败: {}", e),
         })?;
-    let local_set: HashSet<String> = local_cached.into_iter().map(|a| a.hash).collect();
+    let local_set: HashSet<String> = local_cached.iter().map(|a| a.hash.clone()).collect();
 
     // 2.5 活跃引用集合（S31：GC ↔ pull 对打架循环修复，2026-09-14 审查）
     //
@@ -446,6 +445,61 @@ pub async fn sync_attachments_pull_with_limits(
         })?
         .into_iter()
         .collect();
+
+    // 2.6 云端缺失对账（docs/15 §4.5，必须与云端清理同批上线）
+    //
+    // 场景：云端对象已不存在（本机手动清理、用户在网盘端误删、其他设备旧版
+    // 清理），但本端任务仍挂着它。朴素差集只会「云端有 - 本地无」→ 这一步
+    // 静默跳过，附件永久缺失且用户无感知。收口：
+    //   - 本地仍有明文 → 置 is_uploaded = 0，下一轮 push 以同一 hash 重传
+    //     （内容寻址，云端键不变，其他设备可重新拉到）；
+    //   - 账本有行但本地无明文 → 无法自愈，汇总一条 error 让 UI 可见；
+    //   - 账本无行（新设备关联行先到、对象后到）→ 本轮差集负责拉取，不处理。
+    let cloud_set: HashSet<&str> = cloud_hashes.iter().map(String::as_str).collect();
+    let mut pending_reupload = 0u32;
+    for hash in &active_refs {
+        if cloud_set.contains(hash.as_str()) {
+            continue;
+        }
+        if let Some(row) = local_cached.iter().find(|a| &a.hash == hash) {
+            // 已是待传（上轮标过）就不重复写库，防每轮同步写放大
+            if row.is_uploaded == 0 {
+                continue;
+            }
+            match attachment_repo::mark_pending_reupload(db_pool, hash).await {
+                Ok(_) => pending_reupload += 1,
+                Err(e) => result
+                    .errors
+                    .push(format!("附件 {} 标记待重传失败: {}", hash, e)),
+            }
+        }
+    }
+    let missing_without_local: Vec<String> = active_refs
+        .iter()
+        .filter(|h| !cloud_set.contains(h.as_str()) && !local_set.contains(h.as_str()))
+        .cloned()
+        .collect();
+    let mut unrestorable = 0u32;
+    if !missing_without_local.is_empty() {
+        let rows = attachment_repo::get_by_hashes(db_pool, &missing_without_local)
+            .await
+            .map_err(|e| CloudSyncError::Database {
+                message: format!("查询缺失附件账本失败: {}", e),
+            })?;
+        unrestorable = rows.iter().filter(|a| a.is_local_cached == 0).count() as u32;
+    }
+    if pending_reupload > 0 {
+        log::warn!(
+            "[attachments_pull] {} 个附件云端缺失但本地有副本，已置待重传（下轮 push 自愈）",
+            pending_reupload
+        );
+    }
+    if unrestorable > 0 {
+        result.errors.push(format!(
+            "{} 个附件云端缺失且本地无副本，无法自动恢复",
+            unrestorable
+        ));
+    }
 
     // 3. 差集 = 云端有 - 本地有 - 无引用
     //
@@ -1164,6 +1218,97 @@ mod tests {
                 .await
                 .unwrap()
                 .is_some()
+        );
+    }
+
+    /// 场景 ⑤（docs/15 §4.5）：云端对象消失但本地仍有明文 → 置待重传自愈
+    ///
+    /// 这是云端孤儿清理的必备配套：清理后他端引用复活、或用户误删网盘对象时，
+    /// 有明文副本的设备必须能自动把对象传回去，而不是静默缺附件。
+    #[tokio::test]
+    async fn pull_marks_local_copy_for_reupload_when_cloud_object_missing() {
+        let (pool, crypto, tmp, mut adapter, hash_r, _hash_o) = pull_env().await;
+        adapter.files.remove(&hash_r); // 云端对象已不存在
+        let att_dir = tmp.path().join("att");
+        std::fs::create_dir_all(&att_dir).unwrap();
+        let local_path = att_dir.join(&hash_r);
+        std::fs::write(&local_path, b"referenced-content").unwrap();
+        sqlx::query(
+            "INSERT INTO sys_attachments (hash, original_name, mime_type, size_bytes, local_path,
+                                          is_uploaded, is_local_cached, created_at, last_accessed_at)
+             VALUES (?, 'x', 'application/octet-stream', 18, ?, 1, 1, 1, 1)",
+        )
+        .bind(&hash_r)
+        .bind(local_path.to_string_lossy().to_string())
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        let r = sync_attachments_pull(
+            &pool,
+            &crypto,
+            &adapter,
+            &crate::cloud_sync::progress::NoopProgressSender,
+            crate::cloud_sync::progress::SyncOrigin::Manual,
+            &att_dir.to_string_lossy(),
+        )
+        .await
+        .unwrap();
+
+        assert!(
+            r.errors.is_empty(),
+            "本地有副本时不应报不可恢复: {:?}",
+            r.errors
+        );
+        let row = attachment_repo::get_by_hash(&pool, &hash_r)
+            .await
+            .unwrap()
+            .expect("账本行仍在");
+        assert_eq!(row.is_uploaded, 0, "本地有副本 → 置待重传，下轮 push 自愈");
+        assert_eq!(row.is_local_cached, 1);
+    }
+
+    /// 场景 ⑥：云端缺失且本地无副本 → 无法自愈，须汇总让 UI 可见
+    #[tokio::test]
+    async fn pull_reports_unrestorable_when_cloud_and_local_both_missing() {
+        let (pool, crypto, tmp, mut adapter, hash_r, _hash_o) = pull_env().await;
+        adapter.files.remove(&hash_r);
+        let att_dir = tmp.path().join("att");
+        std::fs::create_dir_all(&att_dir).unwrap();
+        sqlx::query(
+            "INSERT INTO sys_attachments (hash, original_name, mime_type, size_bytes, local_path,
+                                          is_uploaded, is_local_cached, created_at, last_accessed_at)
+             VALUES (?, 'x', 'application/octet-stream', 18, NULL, 1, 0, 1, 1)",
+        )
+        .bind(&hash_r)
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        let r = sync_attachments_pull(
+            &pool,
+            &crypto,
+            &adapter,
+            &crate::cloud_sync::progress::NoopProgressSender,
+            crate::cloud_sync::progress::SyncOrigin::Manual,
+            &att_dir.to_string_lossy(),
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(r.errors.len(), 1, "不可恢复场景必须汇总一条错误");
+        assert!(
+            r.errors[0].contains("无法自动恢复"),
+            "错误文案要能让用户定位: {:?}",
+            r.errors
+        );
+        let row = attachment_repo::get_by_hash(&pool, &hash_r)
+            .await
+            .unwrap()
+            .expect("账本行仍在");
+        assert_eq!(
+            row.is_uploaded, 1,
+            "无本地文件不得标待传（push 没有可上传之物，会每轮空转）"
         );
     }
 
