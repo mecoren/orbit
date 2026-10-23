@@ -474,6 +474,24 @@ abstract class OrbitBridge {
   /// 卸下附件（软删关联，孤儿二进制由 GC 清）
   Future<void> taskAttachmentRemove(int linkId);
 
+  // ── 云端孤儿附件清理（docs/15；需已配置云同步且密钥已解锁）──
+
+  /// 扫描云端孤儿附件（只读）
+  ///
+  /// 判据 = 云端对象集 − 云端引用集（`todo_task_attachments` 云端分桶
+  /// `is_deleted = 0` 的行），只列 30 天前、且服务端提供 mtime 的对象。
+  Future<CloudUnusedScanResult> cloudUnusedAttachmentsScan();
+
+  /// 删除云端孤儿附件（整包 + 分片，成功后本地账本按无引用复核收尾）
+  ///
+  /// [expectedEpoch] 原样回传扫描结果的 epoch：云端刚有他端 push 时
+  /// [CloudUnusedDeleteResult.staleManifest] 为 true 且一个对象都不删，
+  /// 调用方须提示重新扫描。
+  Future<CloudUnusedDeleteResult> cloudUnusedAttachmentsDelete({
+    required List<String> hashes,
+    required int expectedEpoch,
+  });
+
   // ── 任务活动日志（详情页「历史」区块：只读轨迹）──
 
   /// 单任务活动历史（时间倒序；limit 缺省 30、上限 100 由 core 收口）

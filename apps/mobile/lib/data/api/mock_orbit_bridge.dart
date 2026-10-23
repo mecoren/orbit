@@ -1092,6 +1092,37 @@ class MockOrbitBridge implements OrbitBridge {
     });
   }
 
+  // ── 云端孤儿附件清理（docs/15）──
+  //
+  // mock 没有云端后端：内存里的附件都有任务挂载行，云端对象集 = 引用集，
+  // 孤儿恒为空。真实判据（云端分桶引用集 / 30 天窗口 / epoch 复核）在 core，
+  // 浏览器/测试里点清理只会看到「没有可清理的云端附件」。
+
+  @override
+  Future<CloudUnusedScanResult> cloudUnusedAttachmentsScan() => _delay(
+        () => const CloudUnusedScanResult(
+          items: [],
+          epoch: 0,
+          minAgeSecs: 30 * 24 * 3600,
+        ),
+      );
+
+  @override
+  Future<CloudUnusedDeleteResult> cloudUnusedAttachmentsDelete({
+    required List<String> hashes,
+    required int expectedEpoch,
+  }) =>
+      _delay(
+        () => const CloudUnusedDeleteResult(
+          deletedAssets: 0,
+          deletedObjects: 0,
+          skippedReferenced: 0,
+          localRowsCleaned: 0,
+          staleManifest: false,
+          errors: [],
+        ),
+      );
+
   // ── 任务活动日志（历史区块；排序/截断口径同桌面 ipc-mock task_activity_list）──
 
   @override

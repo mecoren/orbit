@@ -1374,6 +1374,92 @@ class TaskAttachmentView {
   });
 }
 
+/// 云端孤儿附件行（docs/15；云端清理清单）
+///
+/// 与 [TaskAttachmentView] 的区别：这是**云端对象**，不是任务挂载行——
+/// 体积有密文/明文两个来源，[kind] 标明整包/分片布局。
+class CloudUnusedAttachmentView {
+  final String hash;
+
+  /// 密文体积；WebDAV 分片形态为 0（目录条目没有长度）
+  final int cipherBytes;
+
+  /// 服务端最后修改时间（Unix 秒；<=0 表示不可得）
+  final int lastModified;
+
+  /// whole / chunked / both
+  final String kind;
+
+  final String originalName;
+
+  /// 本地账本明文体积（0 = 账本无该行）
+  final int sizeBytes;
+
+  final int isLocalCached;
+  final int isUploaded;
+
+  const CloudUnusedAttachmentView({
+    required this.hash,
+    required this.cipherBytes,
+    required this.lastModified,
+    required this.kind,
+    required this.originalName,
+    required this.sizeBytes,
+    required this.isLocalCached,
+    required this.isUploaded,
+  });
+
+  /// 展示体积：密文优先，WebDAV 分片回退本地明文（与桌面 `cloudItemBytes` 同口径）
+  int get displayBytes => cipherBytes > 0 ? cipherBytes : sizeBytes;
+
+  /// 清单显示名：账本无原始文件名时用 hash 前 12 位
+  String get label =>
+      originalName.trim().isNotEmpty ? originalName : '${hash.substring(0, 12)}…';
+
+  /// 云端形态文案（删除覆盖两种布局，不能让用户以为只删一份）
+  String get kindLabel => switch (kind) {
+        'chunked' => '分片',
+        'both' => '整包+分片',
+        _ => '整包',
+      };
+}
+
+/// 云端孤儿扫描结果
+class CloudUnusedScanResult {
+  final List<CloudUnusedAttachmentView> items;
+
+  /// 清单 epoch：删除时原样回传做 CAS（不一致说明云端刚有他端 push）
+  final int epoch;
+
+  /// 年龄窗口（秒），UI 文案用「仅含 N 天前的对象」
+  final int minAgeSecs;
+
+  const CloudUnusedScanResult({
+    required this.items,
+    required this.epoch,
+    required this.minAgeSecs,
+  });
+}
+
+/// 云端孤儿删除结果
+class CloudUnusedDeleteResult {
+  final int deletedAssets;
+  final int deletedObjects;
+  final int skippedReferenced;
+  final int localRowsCleaned;
+  final bool staleManifest;
+  final List<String> errors;
+
+  const CloudUnusedDeleteResult({
+    required this.deletedAssets,
+    required this.deletedObjects,
+    required this.skippedReferenced,
+    required this.localRowsCleaned,
+    required this.staleManifest,
+    required this.errors,
+  });
+}
+
 /// 人类可读大小（移动端附件行展示；与桌面 humanSize 同口径）
 String humanFileSize(int bytes) {
   if (bytes < 1024) return '$bytes B';

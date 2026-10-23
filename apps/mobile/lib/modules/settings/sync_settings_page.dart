@@ -13,6 +13,7 @@ import '../../core/theme/orbit_accents.dart';
 import '../../data/api/dto.dart';
 import '../../data/providers/bridge_provider.dart';
 import '../../shared/utils/sync_status_text.dart';
+import '../../shared/widgets/shadcn/orbit_checkbox.dart';
 import '../../shared/widgets/shadcn/orbit_confirm_sheet.dart';
 import '../../shared/widgets/shadcn/orbit_password_sheet.dart';
 import '../../shared/widgets/shadcn/orbit_page_header.dart';
@@ -244,6 +245,8 @@ class _SyncSettingsPageState extends ConsumerState<SyncSettingsPage> {
                 const _SyncHistoryCard(),
                 const SizedBox(height: AppDimens.space12),
                 const _SyncLedgerCard(),
+                const SizedBox(height: AppDimens.space12),
+                const _CloudCleanupCard(),
               ],
             ),
           ),
@@ -1482,6 +1485,267 @@ class _SyncLedgerCardState extends ConsumerState<_SyncLedgerCard> {
             ),
           ),
       ],
+    );
+  }
+}
+
+// ── 云端清理卡（docs/15）────────────────────────────────────────────
+
+/// 云端孤儿附件清理（设置 → 云同步配置 → 云端清理）
+///
+/// 判据与兜底全在 core：云端对象集 − 云端引用集（`todo_task_attachments`
+/// 云端分桶 `is_deleted = 0`）、30 天 mtime 窗口、删除前 epoch 复核。
+/// 移动端只做清单勾选与确认，与桌面诊断页「云端存储」卡片同口径。
+///
+/// mock 桥没有云端后端，扫描恒返回空清单（点击只会提示没有可清理项）。
+class _CloudCleanupCard extends ConsumerStatefulWidget {
+  const _CloudCleanupCard();
+
+  @override
+  ConsumerState<_CloudCleanupCard> createState() => _CloudCleanupCardState();
+}
+
+class _CloudCleanupCardState extends ConsumerState<_CloudCleanupCard> {
+  bool _scanning = false;
+
+  String _errMsg(Object e) => e
+      .toString()
+      .replaceFirst('Exception: ', '')
+      .replaceFirst(RegExp(r'^\[\w+\]\s*'), '');
+
+  Future<void> _scan() async {
+    setState(() => _scanning = true);
+    try {
+      final result =
+          await ref.read(orbitBridgeProvider).cloudUnusedAttachmentsScan();
+      if (!mounted) return;
+      if (result.items.isEmpty) {
+        WaitToast.success('没有可清理的云端附件');
+        return;
+      }
+      await _openList(result);
+    } catch (e) {
+      WaitToast.destructive('扫描云端附件失败：${_errMsg(e)}');
+    } finally {
+      if (mounted) setState(() => _scanning = false);
+    }
+  }
+
+  Future<void> _openList(CloudUnusedScanResult result) async {
+    final colors = AppColors.ofContext(context);
+    final selected = <String>{};
+    var busy = false;
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: colors.surfaceElevated,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (sheetContext) => StatefulBuilder(
+        builder: (context, setSheetState) {
+          final allSelected = selected.length == result.items.length;
+          var bytes = 0;
+          for (final item in result.items) {
+            if (selected.contains(item.hash)) bytes += item.displayBytes;
+          }
+          final days = result.minAgeSecs ~/ 86400;
+
+          return SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(
+                AppDimens.space16,
+                AppDimens.space16,
+                AppDimens.space16,
+                AppDimens.space12,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    '清理云端孤儿附件',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: colors.bodyText,
+                    ),
+                  ),
+                  const SizedBox(height: AppDimens.space8),
+                  Text(
+                    '以下对象无任何设备引用，且写入超过 $days 天。删除的是云端密文副本；'
+                    '其他设备若仍有本地副本会在下次同步自动重传。',
+                    style: TextStyle(fontSize: 12, color: colors.secondaryText),
+                  ),
+                  const SizedBox(height: AppDimens.space8),
+                  Row(
+                    children: [
+                      TextButton(
+                        onPressed: busy
+                            ? null
+                            : () => setSheetState(() {
+                                  if (allSelected) {
+                                    selected.clear();
+                                  } else {
+                                    selected
+                                      ..clear()
+                                      ..addAll(result.items.map((i) => i.hash));
+                                  }
+                                }),
+                        child: Text(allSelected ? '取消全选' : '全选'),
+                      ),
+                      const Spacer(),
+                      Text(
+                        '已选 ${selected.length} / 共 ${result.items.length} 项 · '
+                        '${humanFileSize(bytes)}',
+                        style:
+                            TextStyle(fontSize: 12, color: colors.secondaryText),
+                      ),
+                    ],
+                  ),
+                  Flexible(
+                    child: ListView.separated(
+                      shrinkWrap: true,
+                      itemCount: result.items.length,
+                      separatorBuilder: (_, _) =>
+                          Divider(height: 1, color: colors.divider),
+                      itemBuilder: (context, index) {
+                        final item = result.items[index];
+                        final checked = selected.contains(item.hash);
+                        return ListTile(
+                          dense: true,
+                          contentPadding: EdgeInsets.zero,
+                          leading: OrbitCheckbox(
+                            checked: checked,
+                            onToggle: busy
+                                ? () {}
+                                : () => setSheetState(() {
+                                      if (checked) {
+                                        selected.remove(item.hash);
+                                      } else {
+                                        selected.add(item.hash);
+                                      }
+                                    }),
+                          ),
+                          title: Text(
+                            item.label,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: colors.bodyText,
+                            ),
+                          ),
+                          subtitle: Text(
+                            '${item.kindLabel} · '
+                            '${humanFileSize(item.displayBytes)}'
+                            '${item.isLocalCached == 1 ? ' · 本地有副本' : ''}',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: colors.secondaryText,
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                  const SizedBox(height: AppDimens.space8),
+                  Row(
+                    children: [
+                      OutlinedButton(
+                        onPressed:
+                            busy ? null : () => Navigator.pop(sheetContext),
+                        child: const Text('取消'),
+                      ),
+                      const SizedBox(width: AppDimens.space12),
+                      Expanded(
+                        child: FilledButton(
+                          onPressed: busy || selected.isEmpty
+                              ? null
+                              : () async {
+                                  setSheetState(() => busy = true);
+                                  try {
+                                    final r = await ref
+                                        .read(orbitBridgeProvider)
+                                        .cloudUnusedAttachmentsDelete(
+                                          hashes: selected.toList(),
+                                          expectedEpoch: result.epoch,
+                                        );
+                                    if (!sheetContext.mounted) return;
+                                    Navigator.pop(sheetContext);
+                                    if (r.staleManifest) {
+                                      WaitToast.success(
+                                          '云端刚有新的同步活动，已重新扫描');
+                                      await _scan();
+                                      return;
+                                    }
+                                    if (r.deletedAssets == 0) {
+                                      WaitToast.success('没有可清理的云端附件');
+                                    } else if (r.errors.isNotEmpty) {
+                                      WaitToast.destructive(
+                                          '已清理 ${r.deletedAssets} 个（部分失败：${r.errors.first}）');
+                                    } else {
+                                      WaitToast.success(
+                                          '已清理 ${r.deletedAssets} 个云端附件（${r.deletedObjects} 个对象）');
+                                    }
+                                  } catch (e) {
+                                    setSheetState(() => busy = false);
+                                    WaitToast.destructive('清理失败：${_errMsg(e)}');
+                                  }
+                                },
+                          child: busy
+                              ? const SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : Text(
+                                  '删除选中${selected.isEmpty ? '' : ' (${selected.length})'}',
+                                ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = AppColors.ofContext(context);
+    return SectionCard(
+      title: '云端清理',
+      subtitle: '孤儿附件（无任何设备引用）',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            '云端附件对象不会被自动回收（删除任务/卸载附件后仍留在网盘）。'
+            '这里只扫描 30 天前、且无任何设备引用的对象；服务端不提供时间的对象'
+            '一律跳过。需同步密钥已解锁。',
+            style: TextStyle(fontSize: 12, color: colors.secondaryText),
+          ),
+          const SizedBox(height: AppDimens.space12),
+          OutlinedButton(
+            onPressed: _scanning ? null : _scan,
+            child: _scanning
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Text('清理云端孤儿附件'),
+          ),
+        ],
+      ),
     );
   }
 }

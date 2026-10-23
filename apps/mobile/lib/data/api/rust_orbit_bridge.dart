@@ -802,6 +802,49 @@ class RustOrbitBridge implements OrbitBridge {
   Future<void> taskAttachmentRemove(int linkId) =>
       gen_asset.taskAttachmentRemove(linkId: linkId);
 
+  // ── 云端孤儿附件清理（docs/15）──
+
+  @override
+  Future<CloudUnusedScanResult> cloudUnusedAttachmentsScan() async {
+    final r = await gen_sync.cloudUnusedAttachmentsScan();
+    return CloudUnusedScanResult(
+      items: [
+        for (final i in r.items)
+          CloudUnusedAttachmentView(
+            hash: i.hash,
+            cipherBytes: i.cipherBytes.toInt(),
+            lastModified: i.lastModified.toInt(),
+            kind: i.kind,
+            originalName: i.originalName,
+            sizeBytes: i.sizeBytes.toInt(),
+            isLocalCached: i.isLocalCached,
+            isUploaded: i.isUploaded,
+          ),
+      ],
+      epoch: r.epoch.toInt(),
+      minAgeSecs: r.minAgeSecs.toInt(),
+    );
+  }
+
+  @override
+  Future<CloudUnusedDeleteResult> cloudUnusedAttachmentsDelete({
+    required List<String> hashes,
+    required int expectedEpoch,
+  }) async {
+    final r = await gen_sync.cloudUnusedAttachmentsDelete(
+      hashes: hashes,
+      expectedEpoch: expectedEpoch,
+    );
+    return CloudUnusedDeleteResult(
+      deletedAssets: r.deletedAssets.toInt(),
+      deletedObjects: r.deletedObjects.toInt(),
+      skippedReferenced: r.skippedReferenced.toInt(),
+      localRowsCleaned: r.localRowsCleaned.toInt(),
+      staleManifest: r.staleManifest,
+      errors: r.errors,
+    );
+  }
+
   // ── 任务活动日志（历史区块只读轨迹）──
 
   @override
