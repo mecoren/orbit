@@ -1006,9 +1006,12 @@ mod tests {
     // 修复后：差集 = 云端有 - 本地无 - 无存活任务引用。
     // ========================================================================
 
-    /// Pull 测试 mock：hash → 密文映射（用真实 encrypt_payload 保证解密链路）
+    /// Pull/Push 测试 mock：hash → 密文映射（用真实 encrypt_payload 保证加解密链路）
+    ///
+    /// `files` 用 `Mutex` 做内部可变：自愈闭环用例要跑一轮真 push，上传结果必须
+    /// 写回同一张表（只读 HashMap 会让「重传成功」无从断言）。
     struct PullMockAdapter {
-        files: std::collections::HashMap<String, Vec<u8>>,
+        files: std::sync::Mutex<std::collections::HashMap<String, Vec<u8>>>,
     }
 
     #[async_trait::async_trait]
@@ -1033,16 +1036,18 @@ mod tests {
         }
         async fn upload_asset(
             &self,
-            _: &str,
-            _: Vec<u8>,
+            hash: &str,
+            data: Vec<u8>,
         ) -> Result<(), crate::sync::error::SyncError> {
+            self.files.lock().unwrap().insert(hash.to_string(), data);
             Ok(())
         }
         async fn download_asset(
             &self,
             hash: &str,
         ) -> Result<bytes::Bytes, crate::sync::error::SyncError> {
-            match self.files.get(hash) {
+            let files = self.files.lock().unwrap();
+            match files.get(hash) {
                 Some(d) => Ok(bytes::Bytes::from(d.clone())),
                 None => Err(crate::sync::error::SyncError::NotFound {
                     message: "无".to_string(),
@@ -1056,7 +1061,7 @@ mod tests {
             &self,
             _assets_dir: &str,
         ) -> Result<Vec<String>, crate::sync::error::SyncError> {
-            Ok(self.files.keys().cloned().collect())
+            Ok(self.files.lock().unwrap().keys().cloned().collect())
         }
     }
 
@@ -1097,7 +1102,9 @@ mod tests {
             hash_o.clone(),
             encrypt_payload(&orphan_plain, &[9u8; 32]).unwrap(),
         );
-        let adapter = PullMockAdapter { files };
+        let adapter = PullMockAdapter {
+            files: std::sync::Mutex::new(files),
+        };
 
         // 任务 + 关联：仅挂载 referenced
         sqlx::query(
@@ -1227,8 +1234,8 @@ mod tests {
     /// 有明文副本的设备必须能自动把对象传回去，而不是静默缺附件。
     #[tokio::test]
     async fn pull_marks_local_copy_for_reupload_when_cloud_object_missing() {
-        let (pool, crypto, tmp, mut adapter, hash_r, _hash_o) = pull_env().await;
-        adapter.files.remove(&hash_r); // 云端对象已不存在
+        let (pool, crypto, tmp, adapter, hash_r, _hash_o) = pull_env().await;
+        adapter.files.lock().unwrap().remove(&hash_r); // 云端对象已不存在
         let att_dir = tmp.path().join("att");
         std::fs::create_dir_all(&att_dir).unwrap();
         let local_path = att_dir.join(&hash_r);
@@ -1271,8 +1278,8 @@ mod tests {
     /// 场景 ⑥：云端缺失且本地无副本 → 无法自愈，须汇总让 UI 可见
     #[tokio::test]
     async fn pull_reports_unrestorable_when_cloud_and_local_both_missing() {
-        let (pool, crypto, tmp, mut adapter, hash_r, _hash_o) = pull_env().await;
-        adapter.files.remove(&hash_r);
+        let (pool, crypto, tmp, adapter, hash_r, _hash_o) = pull_env().await;
+        adapter.files.lock().unwrap().remove(&hash_r);
         let att_dir = tmp.path().join("att");
         std::fs::create_dir_all(&att_dir).unwrap();
         sqlx::query(
@@ -1312,12 +1319,83 @@ mod tests {
         );
     }
 
+    /// 场景 ⑦（docs/15 §4.5 闭环）：置待传之后，下一轮 push 必须真的把对象传回云端
+    ///
+    /// 场景 ⑤ 只断言到 `is_uploaded = 0`，那只是「打算重传」；本轮把 push 也跑完，
+    /// 断言云端对象回归且键仍是原 hash（内容寻址，其他设备无需改引用）。
+    #[tokio::test]
+    async fn pull_marked_reupload_restores_cloud_object_on_next_push() {
+        let (pool, crypto, tmp, adapter, hash_r, _hash_o) = pull_env().await;
+        adapter.files.lock().unwrap().remove(&hash_r);
+        let att_dir = tmp.path().join("att");
+        std::fs::create_dir_all(&att_dir).unwrap();
+        let local_path = att_dir.join(&hash_r);
+        std::fs::write(&local_path, b"referenced-content").unwrap();
+        sqlx::query(
+            "INSERT INTO sys_attachments (hash, original_name, mime_type, size_bytes, local_path,
+                                          is_uploaded, is_local_cached, created_at, last_accessed_at)
+             VALUES (?, 'x', 'application/octet-stream', 18, ?, 1, 1, 1, 1)",
+        )
+        .bind(&hash_r)
+        .bind(local_path.to_string_lossy().to_string())
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        // 第一轮 pull：云端缺失 → 置待传
+        sync_attachments_pull(
+            &pool,
+            &crypto,
+            &adapter,
+            &crate::cloud_sync::progress::NoopProgressSender,
+            crate::cloud_sync::progress::SyncOrigin::Manual,
+            &att_dir.to_string_lossy(),
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            attachment_repo::get_by_hash(&pool, &hash_r)
+                .await
+                .unwrap()
+                .unwrap()
+                .is_uploaded,
+            0
+        );
+
+        // 第二轮 push：真的重传，云端对象回归（hash 不变）
+        let pushed = sync_attachments_push_with_limits(
+            &pool,
+            &crypto,
+            &adapter,
+            &crate::cloud_sync::progress::NoopProgressSender,
+            crate::cloud_sync::progress::SyncOrigin::Manual,
+            &att_dir.to_string_lossy(),
+            AttachmentTransferLimits::default(),
+        )
+        .await
+        .unwrap();
+        assert_eq!(pushed.uploaded, 1, "自愈必须真的重传，而不是只改标记");
+        assert!(
+            adapter.files.lock().unwrap().contains_key(&hash_r),
+            "云端对象必须回归，键仍是原 hash（其他设备引用无需改）"
+        );
+        assert_eq!(
+            attachment_repo::get_by_hash(&pool, &hash_r)
+                .await
+                .unwrap()
+                .unwrap()
+                .is_uploaded,
+            1,
+            "上传成功后标记回到已上传"
+        );
+    }
+
     /// 场景 ④（N51 回归，2026-10-12）：云端列出格式非法的 hash（内容寻址
     /// 假设被破坏/对端数据被篡改的形态），即便有活跃引用也不得进入下载与
     /// 落盘路径——单件记错不阻塞本轮，正常附件照常拉回。
     #[tokio::test]
     async fn pull_rejects_malformed_hash_before_download() {
-        let (pool, crypto, tmp, mut adapter, _hash_r, _hash_o) = pull_env().await;
+        let (pool, crypto, tmp, adapter, _hash_r, _hash_o) = pull_env().await;
         let att_dir = tmp.path().join("att");
         std::fs::create_dir_all(&att_dir).unwrap();
 
@@ -1335,6 +1413,8 @@ mod tests {
         // 差集过滤只看「云端有 - 本地无 - 有引用」，非法值能走到下载步才有拦截意义
         adapter
             .files
+            .lock()
+            .unwrap()
             .insert("../../etc/passwd".to_string(), b"whatever".to_vec());
 
         let r = sync_attachments_pull(
@@ -1510,7 +1590,9 @@ mod tests {
 
         let mut files = std::collections::HashMap::new();
         files.insert(hash.clone(), std::fs::read(&container).unwrap());
-        let adapter = PullMockAdapter { files };
+        let adapter = PullMockAdapter {
+            files: std::sync::Mutex::new(files),
+        };
 
         sqlx::query(
             "INSERT INTO todo_tasks (uuid, title, created_at, updated_at) VALUES ('t1', 'T', 1, 1)",

@@ -267,11 +267,19 @@ async fn assert_scan_and_delete(cloud: &FakeCloud, config: &SyncConfig, prefix: 
     assert_eq!(again.deleted_assets, 1, "已不存在的 hash 按幂等计为已处理");
     assert!(again.errors.is_empty());
 
-    // 4) epoch 复核：扫描后他端 push 过（epoch 变了）→ 一个对象都不删
+    // 4) epoch 复核：真实注入一次「他端 push」——云端清单 epoch 从 EPOCH 变到 EPOCH+1，
+    //    再用扫描时的旧 epoch 删除 → 必须整体拒绝（一个对象都不删）
+    let mut next_manifest = manifest_with_link_bucket(2);
+    next_manifest.epoch = EPOCH + 1;
+    cloud.put_object_at(
+        &format!("{prefix}manifest.orsync"),
+        &seal_manifest(&next_manifest),
+        now,
+    );
     let stale = delete_cloud_assets(
         &*adapter,
         &KEY,
-        EPOCH - 1,
+        EPOCH,
         &[tombstoned.clone()],
         DEFAULT_CLOUD_ASSET_MIN_AGE_SECS,
         now,
