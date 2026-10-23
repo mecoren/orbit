@@ -54,7 +54,8 @@ const run = async () => new Promise((resolve) => {
         return;
       }
     } catch { /* 写入中，下一轮再读 */ }
-    if (Date.now() - t0 > 30000) finish(null);
+    // 超时也带回 pid：否则 10 轮会堆 10 个 exe，互相争数据目录
+    if (Date.now() - t0 > 15000) finish({ firstScreenMs: null, pid: p.pid });
   }, 10);
 });
 
@@ -62,11 +63,16 @@ const results = [];
 for (let i = 0; i < ROUNDS; i++) {
   const r = await run();
   results.push(r);
-  console.log(`round ${i + 1}: firstScreen=${r ? r.firstScreenMs + 'ms' : '未上报（超时）'}`);
+  console.log(
+    `round ${i + 1}: firstScreen=${Number.isFinite(r?.firstScreenMs) ? r.firstScreenMs + 'ms' : '未上报（超时）'}`,
+  );
   if (r) runPS(`Stop-Process -Id ${r.pid} -Force`);
   await new Promise((r2) => setTimeout(r2, 1500));
 }
-const arr = results.filter(Boolean).map((r) => r.firstScreenMs).sort((a, b) => a - b);
+const arr = results
+  .map((r) => r?.firstScreenMs)
+  .filter(Number.isFinite)
+  .sort((a, b) => a - b);
 /** 最近秩分位（n=10 时 p50 取第 5 个、p95 取第 10 个） */
 const pct = (p) => arr[Math.min(arr.length - 1, Math.ceil(arr.length * p) - 1)];
 if (arr.length === 0) {
