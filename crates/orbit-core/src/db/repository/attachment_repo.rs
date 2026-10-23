@@ -260,32 +260,6 @@ pub async fn get_by_hashes(pool: &SqlitePool, hashes: &[String]) -> CoreResult<V
     Ok(items)
 }
 
-/// 删除不在活跃哈希列表中的附件（垃圾回收）
-pub async fn delete_orphans(pool: &SqlitePool, active_hashes: &[String]) -> CoreResult<()> {
-    if active_hashes.is_empty() {
-        // 无活跃附件时清空全部
-        sqlx::query("DELETE FROM sys_attachments")
-            .execute(pool)
-            .await?;
-        return Ok(());
-    }
-    // SQLite 不支持绑定 Vec<String>，逐条删除（附件数量通常不大）
-    let active_set: std::collections::HashSet<&str> =
-        active_hashes.iter().map(|s| s.as_str()).collect();
-    let all: Vec<(String,)> = sqlx::query_as("SELECT hash FROM sys_attachments")
-        .fetch_all(pool)
-        .await?;
-    for (hash,) in &all {
-        if !active_set.contains(hash.as_str()) {
-            sqlx::query("DELETE FROM sys_attachments WHERE hash = ?")
-                .bind(hash)
-                .execute(pool)
-                .await?;
-        }
-    }
-    Ok(())
-}
-
 // ---------- 磁盘缓存上限 + LRU 逐出（多设备安全口径）----------
 
 /// 刷新附件最近访问时间（读取/挂载时调用；LRU 排序键）
