@@ -12,12 +12,13 @@
  */
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Activity, HardDrive, RefreshCw } from "lucide-react";
+import { Activity, FileCog, HardDrive, RefreshCw } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { diagnosticsSnapshot } from "@/lib/tauri";
 import { formatBytes, formatCount } from "./diagnostics-format";
+import { UnusedAttachmentsDialog } from "./unused-attachments-dialog";
 
 /** Chromium 私有扩展（TS 标准库无此声明） */
 interface ChromiumPerformance extends Performance {
@@ -58,6 +59,7 @@ function Reading({ label, value, hint }: { label: string; value: string; hint?: 
 
 export function DiagnosticsSection() {
   const [runtime, setRuntime] = useState<RuntimeReadings>(() => readRuntime());
+  const [cleanupOpen, setCleanupOpen] = useState(false);
   const { data, isFetching, refetch } = useQuery({
     queryKey: ["diagnostics"],
     queryFn: diagnosticsSnapshot,
@@ -86,9 +88,15 @@ export function DiagnosticsSection() {
       </div>
 
       <div className="space-y-2 rounded-lg border p-5">
-        <div className="flex items-center gap-2">
-          <HardDrive className="size-4 text-muted-foreground" />
-          <p className="text-sm font-medium">本地存储</p>
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <HardDrive className="size-4 text-muted-foreground" />
+            <p className="text-sm font-medium">本地存储</p>
+          </div>
+          <Button variant="outline" size="sm" onClick={() => setCleanupOpen(true)}>
+            <FileCog className="size-4" />
+            清除未使用附件
+          </Button>
         </div>
         {(data?.table_rows.length ?? 0) > 0 && (
           <div className="flex flex-wrap gap-x-2 gap-y-1 text-xs text-muted-foreground">
@@ -145,6 +153,12 @@ export function DiagnosticsSection() {
           只读快照，点「刷新」重新采集；库体积与行数来自 Rust 侧（重新查询数据库）。
         </p>
       </div>
+
+      <UnusedAttachmentsDialog
+        open={cleanupOpen}
+        onOpenChange={setCleanupOpen}
+        onCleaned={() => void refetch()}
+      />
     </div>
   );
 }

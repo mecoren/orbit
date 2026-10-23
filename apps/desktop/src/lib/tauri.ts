@@ -1316,6 +1316,22 @@ export const taskAttachmentExport = (hash: string, targetPath: string) =>
 export const taskAttachmentRemove = (linkId: number) =>
   invoke<void>("task_attachment_remove", { linkId });
 export const attachmentsGc = () => invoke<number>("attachments_gc");
+/** 未使用附件（无任何存活任务引用的账本行；诊断页清理入口的清单行） */
+export interface UnusedAttachmentView {
+  hash: string;
+  original_name: string;
+  mime_type: string;
+  size_bytes: number;
+  /** 0 = 尚未上传云端（删除后无法从其他设备找回） */
+  is_uploaded: number;
+  is_local_cached: number;
+  created_at: number;
+}
+export const attachmentsUnusedList = () =>
+  invoke<UnusedAttachmentView[]>("attachments_unused_list");
+/** 按 hash 批量清除未使用附件（本地文件+账本行；云端对象保留），返回清理数 */
+export const attachmentsUnusedDelete = (hashes: string[]) =>
+  invoke<number>("attachments_unused_delete", { hashes });
 
 // ========== 数据库维护（性能批次：WAL checkpoint / 附件 GC / 日志 TTL / 查询统计 / VACUUM）==========
 export interface DbMaintenanceResult {

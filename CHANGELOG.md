@@ -16,6 +16,16 @@
 
 ## [Unreleased]
 
+### 新增：诊断页「清除未使用附件」（2026-10-23）
+
+- 设置 → 诊断 → 本地存储卡片新增「清除未使用附件」入口：弹窗列出 `sys_attachments` 中无任何存活任务引用的账本行（文件名 / 大小 / 缓存状态，按体积降序），支持多选批量删除与一键全部删除，破坏性操作走 `DangerousConfirmDialog` 五秒冷静期。
+- core 新增 `asset_api::list_unused_attachments` / `delete_unused_attachments`，口径与 `gc_local_attachments` 同源（存活引用集 = `todo_task_attachments.is_deleted = 0`）；删除执行时重查引用集复核，弹窗打开期间被重新挂载的 hash 跳过不删。只删本地文件与账本行，云端 `assets/` 对象保留（多设备安全）。
+- 新增 shadcn 风格 `Checkbox` 原语（Radix 底座 + 语义 token）；桥接三处同口径：Tauri 命令 `attachments_unused_list` / `attachments_unused_delete`、`tauri.ts` 绑定、`ipc-mock` 内存实现（含复核语义）、FRB 镜像。
+
+### 修复：回收站彻底删除补齐附件链行清理（2026-10-23）
+
+- `trash_api` 三处物理删除路径（单任务彻底删除 / 清空回收站 / TTL 过期清理）此前漏清 `todo_task_attachments`，残留的 `is_deleted = 0` 链行会让已彻底删除任务的附件被永久判为「使用中」，本地文件与账本行无法回收（诊断页清理入口也列不出来）。现按 task_id 一并物理清除，并补 `purge_paths_clear_attachment_links` 用例锁定三条路径。
+
 ### 性能：冷启动脚本补 10 轮 p50/p95（T4.1 口径，2026-10-23）
 
 - `cold-start.mjs` 改为 10 轮采样 + 最近秩 p50/p95，marker 落 `perf-metrics/.runs/`（工作区可写，避开 Low 完整性进程无法写用户 TEMP）；本机数值仍需在桌面会话人工跑。

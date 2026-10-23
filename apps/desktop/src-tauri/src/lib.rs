@@ -526,6 +526,8 @@ pub fn run() {
             commands::asset_cmd::task_attachment_export,
             commands::asset_cmd::task_attachment_remove,
             commands::asset_cmd::attachments_gc,
+            commands::asset_cmd::attachments_unused_list,
+            commands::asset_cmd::attachments_unused_delete,
             // 数据库维护（WAL checkpoint / 附件 GC / 查询统计 / VACUUM）
             commands::db_maintenance_cmd::db_maintenance,
             // 应用内诊断分区（只读读数：库体积 / 各表行数 / 附件缓存占用）

@@ -566,6 +566,89 @@ pub async fn gc_local_attachments(pool: &SqlitePool, attachments_dir: &str) -> C
     Ok(cleaned)
 }
 
+/// 未使用附件视图（诊断页「清除未使用附件」入口的清单行）
+///
+/// 只读聚合 DTO：不 emit db-change、不进同步白名单（`sys_attachments` 是本地账本表）。
+#[derive(Debug, Clone, serde::Serialize, sqlx::FromRow)]
+pub struct UnusedAttachmentView {
+    pub hash: String,
+    pub original_name: String,
+    pub mime_type: String,
+    pub size_bytes: i64,
+    pub is_uploaded: i32,
+    pub is_local_cached: i32,
+    pub created_at: i64,
+}
+
+/// 列出无任何存活任务引用（`todo_task_attachments.is_deleted = 0`）的附件账本行
+///
+/// 口径与 [`gc_local_attachments`] 同源：被软删的关联不计引用（卸载后即可清理）；
+/// **回收站里尚未彻底删除的任务其关联行仍存活**，附件仍算「使用中」（任务可能
+/// 被恢复）。按体积降序，让 UI 优先展示占空间的大文件。
+pub async fn list_unused_attachments(pool: &SqlitePool) -> CoreResult<Vec<UnusedAttachmentView>> {
+    let rows = sqlx::query_as::<_, UnusedAttachmentView>(
+        "SELECT a.hash, a.original_name, a.mime_type, a.size_bytes,
+                a.is_uploaded, a.is_local_cached, a.created_at
+         FROM sys_attachments a
+         WHERE NOT EXISTS (
+             SELECT 1 FROM todo_task_attachments ta
+             WHERE ta.hash = a.hash AND ta.is_deleted = 0
+         )
+         ORDER BY a.size_bytes DESC, a.created_at DESC",
+    )
+    .fetch_all(pool)
+    .await?;
+    Ok(rows)
+}
+
+/// 按 hash 物理删除未使用附件（本地文件 + 账本行；云端对象不删）
+///
+/// **执行时复核**：每条 hash 用一条 `DELETE ... WHERE NOT EXISTS(存活链行)` 原子
+/// 复核并删除——清单加载后被重新挂载的附件（`is_deleted = 0` 链行存在）不会命中，
+/// 避免前端过期清单误删活跃附件；账本行本就不存在时同样不命中（幂等）。
+/// 仅当账本行确被删除才动本地文件。返回实际清理的账本条数。
+///
+/// 云端 `assets/` 对象保留：本机「无引用」只是本机视角，多设备引用计数不可靠
+/// （与 GC 同一多设备安全口径，pull 差集自然对账）。写路径但不 emit db-change：
+/// `sys_attachments` 不在同步白名单，且被清理的 hash 已无存活关联行。
+pub async fn delete_unused_attachments(
+    pool: &SqlitePool,
+    attachments_dir: &str,
+    hashes: &[String],
+) -> CoreResult<usize> {
+    let mut cleaned = 0;
+    for hash in hashes {
+        // hash 是本地文件名：与 read/export 同口径校验，拒绝异常形态拼出越界路径
+        if !crate::crypto::sha256::is_sha256_hex(hash) {
+            continue;
+        }
+        let res = sqlx::query(
+            "DELETE FROM sys_attachments
+             WHERE hash = ?
+               AND NOT EXISTS (
+                   SELECT 1 FROM todo_task_attachments
+                   WHERE hash = ? AND is_deleted = 0
+               )",
+        )
+        .bind(hash)
+        .bind(hash)
+        .execute(pool)
+        .await?;
+        if res.rows_affected() == 0 {
+            continue;
+        }
+        let path = std::path::Path::new(attachments_dir).join(hash);
+        if let Err(e) = std::fs::remove_file(&path) {
+            // 文件被占用/权限不足时不中断（账本行已删，文件成孤儿）；留可观测日志
+            if e.kind() != std::io::ErrorKind::NotFound {
+                log::warn!("[attachments] 删除未使用附件文件失败 {}: {}", hash, e);
+            }
+        }
+        cleaned += 1;
+    }
+    Ok(cleaned)
+}
+
 /// emit DbEvent 辅助（与 todo_api::emit_todo_event 同构）
 fn emit_attachment_event(table: &str, id: i64, uuid: &str, op: DbOp, timestamp: i64) {
     EVENT_BUS.emit(DbEvent {
@@ -770,6 +853,111 @@ mod tests {
             !std::path::Path::new(&dir).join(&drop.hash).exists(),
             "孤儿附件文件应删除"
         );
+    }
+
+    // ---------- 未使用附件（诊断页清理入口，口径与 gc 同源）----------
+
+    /// 清单只含无存活引用的账本行，按体积降序；仍被引用的附件不出现
+    #[tokio::test]
+    async fn list_unused_attachments_only_returns_unreferenced() {
+        let pool = setup_db().await;
+        let task_id = create_task(&pool).await;
+        let dir = tmp_dir("unused-list");
+
+        let keep = add_task_attachment(&pool, &dir, task_id, "keep.txt", "text/plain", b"keep")
+            .await
+            .unwrap();
+        let small = add_task_attachment(&pool, &dir, task_id, "small.txt", "text/plain", b"drop")
+            .await
+            .unwrap();
+        let big = add_task_attachment(
+            &pool,
+            &dir,
+            task_id,
+            "big.txt",
+            "text/plain",
+            b"a-much-longer-detached-payload",
+        )
+        .await
+        .unwrap();
+        remove_task_attachment(&pool, small.link_id).await.unwrap();
+        remove_task_attachment(&pool, big.link_id).await.unwrap();
+
+        let list = list_unused_attachments(&pool).await.unwrap();
+        assert_eq!(list.len(), 2);
+        assert_eq!(list[0].hash, big.hash, "按体积降序，大文件在前");
+        assert_eq!(list[1].hash, small.hash);
+        assert_eq!(list[0].original_name, "big.txt");
+        assert_eq!(
+            list[0].size_bytes,
+            "a-much-longer-detached-payload".len() as i64
+        );
+        assert_eq!(list[0].is_local_cached, 1);
+        assert!(
+            !list.iter().any(|a| a.hash == keep.hash),
+            "仍被引用的附件不属于未使用"
+        );
+    }
+
+    /// 删除未使用附件：本地文件 + 账本行一并清除，重复调用幂等
+    #[tokio::test]
+    async fn delete_unused_attachments_removes_file_and_ledger() {
+        let pool = setup_db().await;
+        let task_id = create_task(&pool).await;
+        let dir = tmp_dir("unused-delete");
+        let v = add_task_attachment(&pool, &dir, task_id, "old.txt", "text/plain", b"old-bytes")
+            .await
+            .unwrap();
+        remove_task_attachment(&pool, v.link_id).await.unwrap();
+
+        let n = delete_unused_attachments(&pool, &dir, &[v.hash.clone()])
+            .await
+            .unwrap();
+        assert_eq!(n, 1);
+        assert!(
+            attachment_repo::get_by_hash(&pool, &v.hash)
+                .await
+                .unwrap()
+                .is_none(),
+            "账本行应删除"
+        );
+        assert!(
+            !std::path::Path::new(&dir).join(&v.hash).exists(),
+            "本地文件应删除"
+        );
+        let again = delete_unused_attachments(&pool, &dir, &[v.hash.clone()])
+            .await
+            .unwrap();
+        assert_eq!(again, 0, "重复清理幂等");
+    }
+
+    /// 执行时复核存活引用：清单加载后又被重新挂载的 hash 必须跳过
+    #[tokio::test]
+    async fn delete_unused_attachments_skips_relinked_hash() {
+        let pool = setup_db().await;
+        let task_id = create_task(&pool).await;
+        let dir = tmp_dir("unused-relink");
+        let v = add_task_attachment(&pool, &dir, task_id, "back.txt", "text/plain", b"come-back")
+            .await
+            .unwrap();
+        remove_task_attachment(&pool, v.link_id).await.unwrap();
+        // 前端拿到清单后，用户又把同内容挂回任务
+        add_task_attachment(&pool, &dir, task_id, "back.txt", "text/plain", b"come-back")
+            .await
+            .unwrap();
+
+        let n = delete_unused_attachments(&pool, &dir, &[v.hash.clone()])
+            .await
+            .unwrap();
+        assert_eq!(n, 0, "复核发现已被重新引用，跳过不删");
+        assert!(
+            attachment_repo::get_by_hash(&pool, &v.hash)
+                .await
+                .unwrap()
+                .is_some(),
+            "账本行必须保留"
+        );
+        assert!(std::path::Path::new(&dir).join(&v.hash).exists());
     }
 
     #[tokio::test]

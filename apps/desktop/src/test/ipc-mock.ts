@@ -192,6 +192,8 @@ export interface MockDb {
   comments: MockComment[];
   relations: MockRelation[];
   attachments: MockAttachmentLink[];
+  /** 已卸载但账本仍留存的附件（诊断页「清除未使用附件」的数据源） */
+  detachedAttachments: MockAttachmentLink[];
   savedFilters: { id: number; uuid: string; name: string; conditions: string; sort_order: number }[];
   templates: { id: number; uuid: string; name: string; payload: string; sort_order: number }[];
   notificationLog: { id: number; kind: string; task_id: number | null; task_title: string; reminder_id: number | null; payload: string; created_at: number }[];
@@ -215,6 +217,7 @@ function createDb(): MockDb {
     comments: [],
     relations: [],
     attachments: [],
+    detachedAttachments: [],
     savedFilters: [],
     templates: [],
     notificationLog: [
@@ -558,6 +561,8 @@ function mockAddAttachment(
     is_local_cached: 1,
   };
   db.attachments.push(link);
+  // 同内容重新挂回 → 不再是「未使用附件」（账本行被重新引用）
+  db.detachedAttachments = db.detachedAttachments.filter((a) => a.hash !== hash);
   // 附件轨迹仅新挂载记（幂等路径不重复记，与 Rust 同口径）
   logTarget(db, taskId, "attachment_add", fileName);
   return ipcClone(link);
@@ -1568,6 +1573,10 @@ const commands: Record<string, (args: any, ctx: Ctx) => unknown> = {
     db.taskLabels = db.taskLabels.filter((l) => l.task_id !== id);
     db.reminders = db.reminders.filter((r) => r.task_id !== id);
     db.comments = db.comments.filter((c) => c.task_id !== id);
+    // 对齐 Rust：彻底删除连带物理清附件链行（账本行转入 detached，仍可能被他处引用）
+    const links = db.attachments.filter((a) => a.task_id === id);
+    db.attachments = db.attachments.filter((a) => a.task_id !== id);
+    db.detachedAttachments.push(...links);
   },
   trash_purge_all: (_a, { db }) => {
     let n = 0;
@@ -1577,6 +1586,9 @@ const commands: Record<string, (args: any, ctx: Ctx) => unknown> = {
         db.taskLabels = db.taskLabels.filter((l) => l.task_id !== id);
         db.reminders = db.reminders.filter((r) => r.task_id !== id);
         db.comments = db.comments.filter((c) => c.task_id !== id);
+        const links = db.attachments.filter((a) => a.task_id === id);
+        db.attachments = db.attachments.filter((a) => a.task_id !== id);
+        db.detachedAttachments.push(...links);
         db.tasks.splice(i, 1);
         n++;
       }
@@ -1794,10 +1806,44 @@ const commands: Record<string, (args: any, ctx: Ctx) => unknown> = {
     if (idx >= 0) {
       const link = db.attachments[idx];
       db.attachments.splice(idx, 1);
+      // 关联软删但账本行仍在（可能被其他任务/设备引用），留给诊断页清理入口
+      db.detachedAttachments.push(link);
       logTarget(db, link.task_id, "attachment_delete", link.original_name);
     }
   },
   attachments_gc: () => 0,
+  // 未使用附件清单（口径与 Rust 同源：仍被任一任务引用的 hash 不算未使用）
+  attachments_unused_list: (_a: unknown, { db }: Ctx) => {
+    const referenced = new Set(db.attachments.map((a) => a.hash));
+    // content addressing：同 hash 多条记录按账本去重（取最新一条元数据）
+    const ledger = new Map<string, MockAttachmentLink>();
+    for (const a of db.detachedAttachments) ledger.set(a.hash, a);
+    const rows = [...ledger.values()]
+      .filter((a) => !referenced.has(a.hash))
+      .map((a) => ({
+        hash: a.hash,
+        original_name: a.original_name,
+        mime_type: a.mime_type,
+        size_bytes: a.size_bytes,
+        is_uploaded: 0,
+        is_local_cached: a.is_local_cached,
+        created_at: 0,
+      }))
+      .sort((x, y) => y.size_bytes - x.size_bytes);
+    return ipcClone(rows);
+  },
+  // 批量清除未使用附件：执行时复核引用（与 Rust 同口径）
+  attachments_unused_delete: ({ hashes }: { hashes: string[] }, { db }: Ctx) => {
+    const referenced = new Set(db.attachments.map((a) => a.hash));
+    let cleaned = 0;
+    for (const hash of hashes) {
+      if (referenced.has(hash)) continue;
+      const before = db.detachedAttachments.length;
+      db.detachedAttachments = db.detachedAttachments.filter((a) => a.hash !== hash);
+      if (db.detachedAttachments.length < before) cleaned += 1;
+    }
+    return cleaned;
+  },
   // ---- 数据库维护（性能批次；内存 mock 库无碎片，各步返回零值）----
   // ---- ICS 日历导出（#4；内存 mock 最小语义：头 + 每任务一个 VTODO 段）----
   // ---- 通知历史（#5；内存 mock 最小语义：种子三条 + 倒序/过滤/清空）----

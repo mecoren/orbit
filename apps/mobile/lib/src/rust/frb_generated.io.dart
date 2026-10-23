@@ -402,6 +402,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<TodoTemplate> dco_decode_list_todo_template(dynamic raw);
 
   @protected
+  List<UnusedAttachmentView> dco_decode_list_unused_attachment_view(
+    dynamic raw,
+  );
+
+  @protected
   List<WidgetTodoItem> dco_decode_list_widget_todo_item(dynamic raw);
 
   @protected
@@ -615,6 +620,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void dco_decode_unit(dynamic raw);
+
+  @protected
+  UnusedAttachmentView dco_decode_unused_attachment_view(dynamic raw);
 
   @protected
   BigInt dco_decode_usize(dynamic raw);
@@ -1086,6 +1094,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  List<UnusedAttachmentView> sse_decode_list_unused_attachment_view(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   List<WidgetTodoItem> sse_decode_list_widget_todo_item(
     SseDeserializer deserializer,
   );
@@ -1341,6 +1354,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_decode_unit(SseDeserializer deserializer);
+
+  @protected
+  UnusedAttachmentView sse_decode_unused_attachment_view(
+    SseDeserializer deserializer,
+  );
 
   @protected
   BigInt sse_decode_usize(SseDeserializer deserializer);
@@ -1943,6 +1961,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_list_unused_attachment_view(
+    List<UnusedAttachmentView> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_list_widget_todo_item(
     List<WidgetTodoItem> self,
     SseSerializer serializer,
@@ -2283,6 +2307,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_unit(void self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_unused_attachment_view(
+    UnusedAttachmentView self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_usize(BigInt self, SseSerializer serializer);

@@ -36,3 +36,11 @@ Future<void> taskAttachmentRemove({required PlatformInt64 linkId}) =>
 /// 本地附件 GC（清无引用文件与账本行），返回清理数
 Future<BigInt> attachmentsGc() =>
     RustLib.instance.api.crateApiAssetAttachmentsGc();
+
+/// 列出未使用附件（无任何存活任务引用的账本行；诊断页清理入口，只读）
+Future<List<UnusedAttachmentView>> attachmentsUnusedList() =>
+    RustLib.instance.api.crateApiAssetAttachmentsUnusedList();
+
+/// 按 hash 批量删除未使用附件（本地文件 + 账本行；云端对象保留），返回清理数
+Future<BigInt> attachmentsUnusedDelete({required List<String> hashes}) =>
+    RustLib.instance.api.crateApiAssetAttachmentsUnusedDelete(hashes: hashes);

@@ -3,14 +3,15 @@
 //! 与桌面壳命令一一对应（薄包装，业务全部在 orbit_core::api::asset_api）：
 //! - [asset_cmd](../../../../../apps/desktop/src-tauri/src/commands/asset_cmd.rs)
 //!   的 task_attachment_add / task_attachments_list / task_attachment_read /
-//!   task_attachment_remove / attachments_gc。
+//!   task_attachment_remove / attachments_gc / attachments_unused_list /
+//!   attachments_unused_delete。
 //!
 //! 文件读取由 Dart 侧 file_picker 完成后传 bytes（附件目录 = base_dir/attachments，
 //! 与 sync.rs 的 attachments_dir 同源）。
 
 use orbit_core::api::asset_api;
 
-use super::dto::TaskAttachmentView;
+use super::dto::{TaskAttachmentView, UnusedAttachmentView};
 use super::state::with_state;
 
 /// 上传并挂载附件到任务（bytes 由 Dart file_picker 读得）
@@ -59,6 +60,24 @@ pub async fn attachments_gc() -> Result<usize, String> {
     let (pool, base_dir) = with_state(|s| Ok((s.pool.clone(), s.base_dir.clone())))?;
     let dir = base_dir.join("attachments").to_string_lossy().to_string();
     asset_api::gc_local_attachments(&pool, &dir)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// 列出未使用附件（无任何存活任务引用的账本行；诊断页清理入口，只读）
+pub async fn attachments_unused_list() -> Result<Vec<UnusedAttachmentView>, String> {
+    let pool = with_state(|s| Ok(s.pool.clone()))?;
+    asset_api::list_unused_attachments(&pool)
+        .await
+        .map_err(|e| e.to_string())
+        .map(|list| list.into_iter().map(UnusedAttachmentView::from).collect())
+}
+
+/// 按 hash 批量删除未使用附件（本地文件 + 账本行；云端对象保留），返回清理数
+pub async fn attachments_unused_delete(hashes: Vec<String>) -> Result<usize, String> {
+    let (pool, base_dir) = with_state(|s| Ok((s.pool.clone(), s.base_dir.clone())))?;
+    let dir = base_dir.join("attachments").to_string_lossy().to_string();
+    asset_api::delete_unused_attachments(&pool, &dir, &hashes)
         .await
         .map_err(|e| e.to_string())
 }

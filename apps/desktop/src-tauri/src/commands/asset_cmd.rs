@@ -3,11 +3,13 @@
 //! 薄壳包装 orbit_core::api::asset_api：
 //! - `task_attachment_add`：前端经 tauri-plugin-fs 读文件后传 {文件名, mime, bytes}；
 //! - `task_attachments_list` / `task_attachment_read` / `task_attachment_remove`；
-//! - `attachments_gc`：本地孤儿清理（启动时/手动触发）。
+//! - `attachments_gc`：本地孤儿清理（启动时/手动触发）；
+//! - `attachments_unused_list` / `attachments_unused_delete`：诊断页「清除未使用
+//!   附件」的清单与按 hash 清理（只删本地文件+账本行，云端对象保留）。
 //!
 //! 附件目录 = `{app_data_dir}/attachments`（与 sync_runtime::attachments_dir 同源）。
 
-use orbit_core::api::asset_api::{self, TaskAttachmentView};
+use orbit_core::api::asset_api::{self, TaskAttachmentView, UnusedAttachmentView};
 use tauri::Manager;
 
 use crate::AppState;
@@ -125,6 +127,30 @@ pub async fn attachments_gc(app: tauri::AppHandle) -> Result<usize, String> {
     let pool = pool_of(&app)?;
     let dir = attachments_dir_of(&app)?;
     asset_api::gc_local_attachments(&pool, &dir)
+        .await
+        .map_err(|e| format!("[attachment] {e}"))
+}
+
+/// 列出未使用附件（无任何存活任务引用的账本行；诊断页清理入口，只读）
+#[tauri::command]
+pub async fn attachments_unused_list(
+    app: tauri::AppHandle,
+) -> Result<Vec<UnusedAttachmentView>, String> {
+    let pool = pool_of(&app)?;
+    asset_api::list_unused_attachments(&pool)
+        .await
+        .map_err(|e| format!("[attachment] {e}"))
+}
+
+/// 按 hash 批量删除未使用附件（本地文件 + 账本行；云端对象保留），返回清理数
+#[tauri::command]
+pub async fn attachments_unused_delete(
+    app: tauri::AppHandle,
+    hashes: Vec<String>,
+) -> Result<usize, String> {
+    let pool = pool_of(&app)?;
+    let dir = attachments_dir_of(&app)?;
+    asset_api::delete_unused_attachments(&pool, &dir, &hashes)
         .await
         .map_err(|e| format!("[attachment] {e}"))
 }

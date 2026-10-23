@@ -1277,6 +1277,33 @@ impl From<orbit_core::api::asset_api::TaskAttachmentView> for TaskAttachmentView
     }
 }
 
+// ---------- 未使用附件（诊断页清理入口；镜像桌面 UnusedAttachmentView）----------
+#[derive(Debug, Clone, Serialize)]
+pub struct UnusedAttachmentView {
+    pub hash: String,
+    pub original_name: String,
+    pub mime_type: String,
+    pub size_bytes: i64,
+    /// 0 = 尚未上传云端（删除后其他设备无法找回）
+    pub is_uploaded: i32,
+    pub is_local_cached: i32,
+    pub created_at: i64,
+}
+
+impl From<orbit_core::api::asset_api::UnusedAttachmentView> for UnusedAttachmentView {
+    fn from(v: orbit_core::api::asset_api::UnusedAttachmentView) -> Self {
+        Self {
+            hash: v.hash,
+            original_name: v.original_name,
+            mime_type: v.mime_type,
+            size_bytes: v.size_bytes,
+            is_uploaded: v.is_uploaded,
+            is_local_cached: v.is_local_cached,
+            created_at: v.created_at,
+        }
+    }
+}
+
 // ---------- todo_saved_filters（保存的筛选器，#35）----------
 #[derive(Debug, Clone, Serialize)]
 pub struct TodoSavedFilter {
