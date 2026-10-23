@@ -265,8 +265,17 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
   /// 标题 NLP 实时解析结果（新建态生效；编辑态不启用避免覆盖回填字段）
   ParsedQuickInput? _titleParse;
 
-  /// 标题输入实时解析（parseQuickInput 同源移植桌面 #7）：
-  /// 命中日期/优先级/项目/标签时在标题下显示预览 chips，保存时应用并剥离
+  /// 标题 NLP 命中的逐项取消（F4）：按解析值键控——token 改动后取消态自动失效
+  int? _dismissDueMs;
+  int _dismissPriority = 0;
+  int? _dismissProjectId;
+  List<int> _dismissLabelIds = const [];
+  int? _dismissDuration;
+  String? _dismissRepeatKey;
+
+  /// 标题输入实时解析（parseQuickInput 同源移植桌面 #7 + F4 时刻/时长/重复）：
+  /// 命中日期/时刻/时长/重复/优先级/项目/标签时在标题下显示预览 chips
+  ///（可逐项取消），保存时应用未取消项并剥离 token
   void _onTitleChanged(String raw) {
     if (widget.editingTaskId != null) return; // 编辑态不启用
     final projects = ref.read(todoProjectsProvider).value ?? [];
@@ -287,21 +296,45 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
     final hit = parsed.dueDate != null ||
         parsed.priority > 0 ||
         parsed.projectId != null ||
-        parsed.labelIds.isNotEmpty;
+        parsed.labelIds.isNotEmpty ||
+        parsed.durationMinutes != null ||
+        parsed.repeat != null;
     setState(() => _titleParse = hit ? parsed : null);
   }
 
-  /// 保存时应用标题解析结果：字段填充 + 标题剥离（与桌面 QuickAddBar 同口径）
+  /// 保存时应用标题解析结果：字段填充 + 标题剥离（与桌面 QuickAddBar 同口径；
+  /// chips 取消的维度跳过，回落到表单字段当前值）
   void _applyTitleParse() {
     final p = _titleParse;
     if (p == null) return;
-    if (p.dueDate != null) {
-      _dueDate = dateToMidnightMs(p.dueDate!);
+    if (p.dueDate != null &&
+        p.dueDate!.millisecondsSinceEpoch != _dismissDueMs) {
+      // F4：显式时刻原样保留（今日/本周视图的 18 点归一见 _save）
+      _dueDate = p.dueHasTime
+          ? p.dueDate!.millisecondsSinceEpoch
+          : dateToMidnightMs(p.dueDate!);
     }
-    if (p.priority > 0) _priority = p.priority;
-    if (p.projectId != null) _projectId = p.projectId;
+    if (p.priority > 0 && p.priority != _dismissPriority) {
+      _priority = p.priority;
+    }
+    if (p.projectId != null && p.projectId != _dismissProjectId) {
+      _projectId = p.projectId;
+    }
+    if (p.durationMinutes != null && p.durationMinutes != _dismissDuration) {
+      _durationMinutes = p.durationMinutes;
+    }
+    final rep = p.repeat;
+    if (rep != null && _repeatKeyOf(rep) != _dismissRepeatKey) {
+      // 结束条件/月高级语义不参与 NLP，维持表单当前值
+      _repeatMode = rep.mode;
+      _repeatAfter = rep.after;
+      _repeatWeekdays = rep.weekdays;
+    }
     // 标签挂载在任务创建后进行（见 _save 的 _pendingLabelIds）
-    _pendingLabelIds = p.labelIds;
+    _pendingLabelIds = [
+      for (final id in p.labelIds)
+        if (!_dismissLabelIds.contains(id)) id,
+    ];
     _titleController.text = p.title;
   }
 
@@ -419,10 +452,16 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
         //（表单跨零点长开时 myDayDate 不落昨天）。dueDate 用户手动清空时
         // 不回注视图默认（_dueDate 预填后可被用户删掉，此时尊重显式选择）。
         final viewDefaults = quickViewCreateDefaults(widget.quickView);
-        // 今日/本周视图内截止时刻归一 18:00（用户口径）：各日期来源
-        // （NLP 词/快捷胶囊/日历）均只表达日期、无时刻位，统一落 18 点
+        // 今日/本周视图内截止时刻归一 18:00（用户口径）：快捷胶囊/日历等日期
+        // 来源只表达日期；NLP 显式时刻（F4，未被取消且未被手动改期）跳过归一
         final inDueView = widget.quickView == QuickViewKey.today ||
             widget.quickView == QuickViewKey.week;
+        final tp = _titleParse;
+        final nlpDueHasTime = tp != null &&
+            tp.dueHasTime &&
+            tp.dueDate != null &&
+            tp.dueDate!.millisecondsSinceEpoch != _dismissDueMs &&
+            _dueDate == tp.dueDate!.millisecondsSinceEpoch;
         // 新建即完成：先落非完成态再走完成引擎——直接写 status=done 只会
         // 得到 done=0 的不一致行，且重复任务不会推进下一期（G11 同口径）
         final created = await bridge.todoTaskCreate(TodoTaskCreateInput(
@@ -431,7 +470,9 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
           projectId: _projectId,
           priority: _priority,
           status: _status == 'done' ? 'pending' : _status,
-          dueDate: inDueView && _dueDate != null ? atViewDueHour(_dueDate!) : _dueDate,
+          dueDate: inDueView && _dueDate != null && !nlpDueHasTime
+              ? atViewDueHour(_dueDate!)
+              : _dueDate,
           startDate: _startDate,
           repeatMode: repeatMode,
           repeatAfter: repeatAfter,
@@ -950,10 +991,44 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
                                   v == null || v.trim().isEmpty ? '请输入标题' : null,
                               onChanged: _onTitleChanged,
                             ),
-                            // NLP 命中预览 chips（对齐桌面 QuickAddBar 形制）
+                            // NLP 命中预览 chips（对齐桌面 QuickAddBar 形制 + F4 可取消）
                             if (_titleParse != null) ...[
                               const SizedBox(height: AppDimens.space8),
-                              _TitleParseChips(parse: _titleParse!),
+                              _TitleParseChips(
+                                parse: _titleParse!,
+                                dismissedDueMs: _dismissDueMs,
+                                dismissedPriority: _dismissPriority,
+                                dismissedProjectId: _dismissProjectId,
+                                dismissedLabelIds: _dismissLabelIds,
+                                dismissedDuration: _dismissDuration,
+                                dismissedRepeatKey: _dismissRepeatKey,
+                                labels: ref.watch(todoLabelsProvider).value ??
+                                    const <TodoLabel>[],
+                                onDismiss: (dim) => setState(() {
+                                  final tp = _titleParse;
+                                  if (tp == null) return;
+                                  switch (dim) {
+                                    case _ParseDim.due:
+                                      _dismissDueMs =
+                                          tp.dueDate?.millisecondsSinceEpoch;
+                                    case _ParseDim.priority:
+                                      _dismissPriority = tp.priority;
+                                    case _ParseDim.project:
+                                      _dismissProjectId = tp.projectId;
+                                    case _ParseDim.duration:
+                                      _dismissDuration = tp.durationMinutes;
+                                    case _ParseDim.repeat:
+                                      _dismissRepeatKey = tp.repeat == null
+                                          ? null
+                                          : _repeatKeyOf(tp.repeat!);
+                                  }
+                                }),
+                                onDismissLabel: (id) => setState(() =>
+                                    _dismissLabelIds = [
+                                      ..._dismissLabelIds,
+                                      id,
+                                    ]),
+                              ),
                             ],
                             const SizedBox(height: AppDimens.space12),
                             // 2. 描述：默认 3 行起随内容长高，封顶 8 行后内部滚动
@@ -1605,47 +1680,114 @@ class _QuickCapsule extends StatelessWidget {
   }
 }
 
+/// 标题 NLP 命中的可取消维度（F4「用户可逐项取消」）
+enum _ParseDim { due, priority, project, duration, repeat }
+
+/// 重复规则 → 取消态键（token 改动后取消态自动失效）
+String _repeatKeyOf(ParsedRepeat r) => '${r.mode}:${r.after}:${r.weekdays}';
+
+/// 时长 chip 文案：整小时收敛为「N 小时」（与桌面 QuickAddBar 同口径）
+String _durationChipLabel(int minutes) => minutes >= 60 && minutes % 60 == 0
+    ? '${minutes ~/ 60} 小时'
+    : '$minutes 分钟';
+
 /// 标题 NLP 命中预览 chips（对齐桌面 QuickAddBar 形制）：
-/// 截止日期 / P1-P5 优先级 / 项目 / 标签数 逐项小胶囊，保存时自动应用
+/// 截止日期(含时刻) / P1-P5 优先级 / 项目 / 标签 / 时长 / 重复 逐项小胶囊，
+/// 点 × 取消该维度（保存时不再应用；token 改动后取消态自动失效）
 class _TitleParseChips extends StatelessWidget {
-  const _TitleParseChips({required this.parse});
+  const _TitleParseChips({
+    required this.parse,
+    required this.dismissedDueMs,
+    required this.dismissedPriority,
+    required this.dismissedProjectId,
+    required this.dismissedLabelIds,
+    required this.dismissedDuration,
+    required this.dismissedRepeatKey,
+    required this.labels,
+    required this.onDismiss,
+    required this.onDismissLabel,
+  });
 
   final ParsedQuickInput parse;
+
+  /// 逐项取消状态：与解析值相等即视为已取消（不渲染该 chip）
+  final int? dismissedDueMs;
+  final int dismissedPriority;
+  final int? dismissedProjectId;
+  final List<int> dismissedLabelIds;
+  final int? dismissedDuration;
+  final String? dismissedRepeatKey;
+
+  /// 标签标题解析（chip 文案用）
+  final List<TodoLabel> labels;
+
+  final ValueChanged<_ParseDim> onDismiss;
+  final ValueChanged<int> onDismissLabel;
 
   @override
   Widget build(BuildContext context) {
     final colors = AppColors.ofContext(context);
+    final dueMs = parse.dueDate?.millisecondsSinceEpoch;
     return Wrap(
       spacing: AppDimens.space8,
       runSpacing: AppDimens.space4,
       children: [
-        if (parse.dueDate != null)
+        if (dueMs != null && dueMs != dismissedDueMs)
           _parseChip(
             context,
             icon: OrbitIcons.calendar,
-            label: '截止 ${formatDueShort(parse.dueDate!.millisecondsSinceEpoch)}',
+            // formatDueShort 对带时刻的时间戳自动补 HH:mm（F4 显式时刻）
+            label: '截止 ${formatDueShort(dueMs)}',
             color: colors.secondaryText,
+            onDismiss: () => onDismiss(_ParseDim.due),
           ),
-        if (parse.priority > 0)
+        if (parse.priority > 0 && parse.priority != dismissedPriority)
           _parseChip(
             context,
             icon: OrbitIcons.flag,
             label: 'P${parse.priority} ${priorityLabel(parse.priority)}',
             color: hexToColor(priorityColorHex(parse.priority)),
+            onDismiss: () => onDismiss(_ParseDim.priority),
           ),
-        if (parse.projectId != null)
+        if (parse.projectId != null && parse.projectId != dismissedProjectId)
           _parseChip(
             context,
             icon: OrbitIcons.folder,
             label: '项目已识别',
             color: colors.secondaryText,
+            onDismiss: () => onDismiss(_ParseDim.project),
           ),
-        if (parse.labelIds.isNotEmpty)
+        for (final id in parse.labelIds)
+          if (!dismissedLabelIds.contains(id))
+            _parseChip(
+              context,
+              icon: OrbitIcons.tag,
+              label:
+                  labels.where((l) => l.id == id).firstOrNull?.title ?? '标签',
+              color: colors.secondaryText,
+              onDismiss: () => onDismissLabel(id),
+            ),
+        if (parse.durationMinutes != null &&
+            parse.durationMinutes != dismissedDuration)
           _parseChip(
             context,
-            icon: OrbitIcons.tag,
-            label: '标签 ×${parse.labelIds.length}',
+            icon: OrbitIcons.clock,
+            label: '时长 ${_durationChipLabel(parse.durationMinutes!)}',
             color: colors.secondaryText,
+            onDismiss: () => onDismiss(_ParseDim.duration),
+          ),
+        if (parse.repeat != null &&
+            _repeatKeyOf(parse.repeat!) != dismissedRepeatKey)
+          _parseChip(
+            context,
+            icon: OrbitIcons.repeat,
+            label: rep.repeatLabelExt(
+              parse.repeat!.mode,
+              parse.repeat!.after,
+              weekdays: parse.repeat!.weekdays,
+            ),
+            color: colors.secondaryText,
+            onDismiss: () => onDismiss(_ParseDim.repeat),
           ),
       ],
     );
@@ -1656,6 +1798,7 @@ class _TitleParseChips extends StatelessWidget {
     required IconData icon,
     required String label,
     required Color color,
+    VoidCallback? onDismiss,
   }) {
     final colors = AppColors.ofContext(context);
     return Container(
@@ -1675,6 +1818,18 @@ class _TitleParseChips extends StatelessWidget {
             label,
             style: TextStyle(fontSize: 12, color: color),
           ),
+          if (onDismiss != null) ...[
+            const SizedBox(width: AppDimens.space2),
+            GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: onDismiss,
+              child: Icon(
+                OrbitIcons.close,
+                size: 12,
+                color: color.withValues(alpha: 0.6),
+              ),
+            ),
+          ],
         ],
       ),
     );

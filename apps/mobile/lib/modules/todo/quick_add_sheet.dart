@@ -204,8 +204,12 @@ class _QuickAddSheetState extends ConsumerState<_QuickAddSheet> {
       final inDueView =
           widget.quickView == QuickViewKey.today ||
           widget.quickView == QuickViewKey.week;
+      // F4：NLP 显式时刻原样落库（勿归一零点/视图 18 点），无时刻沿用零点口径
+      final nlpHasTime = parsed.dueHasTime && parsed.dueDate != null;
       final due = parsed.dueDate != null
-          ? dateToMidnightMs(parsed.dueDate!)
+          ? (nlpHasTime
+                ? parsed.dueDate!.millisecondsSinceEpoch
+                : dateToMidnightMs(parsed.dueDate!))
           : (_dueDate ?? viewDefaults.dueMs);
       final created = await bridge.todoTaskCreate(
         TodoTaskCreateInput(
@@ -213,11 +217,18 @@ class _QuickAddSheetState extends ConsumerState<_QuickAddSheet> {
           projectId: parsed.projectId ?? _projectId,
           priority: parsed.priority > 0 ? parsed.priority : _priority,
           status: 'pending',
-          dueDate: inDueView && due != null ? atViewDueHour(due) : due,
+          dueDate: inDueView && due != null && !nlpHasTime
+              ? atViewDueHour(due)
+              : due,
           // 开始日期默认今天（与移动端表单同口径：新建任务恒有开始日期）
           startDate: dateToMidnightMs(DateTime.now()),
           myDayDate: viewDefaults.myDayMs,
           isFavorite: viewDefaults.favorite,
+          // F4：NLP 命中的时长/重复随任务一次落库（重复锚点日已在 dueDate 里）
+          durationMinutes: parsed.durationMinutes,
+          repeatMode: parsed.repeat?.mode,
+          repeatAfter: parsed.repeat?.after,
+          repeatWeekdays: parsed.repeat?.weekdays,
         ),
       );
       // 标签：NLP 命中 ∪ 手动选择（去重；单条失败不阻断任务本身）

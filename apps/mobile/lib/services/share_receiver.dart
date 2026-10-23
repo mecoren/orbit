@@ -67,9 +67,15 @@ class ShareReceiver {
     try {
       final created = await bridge.todoTaskCreate(TodoTaskCreateInput(
         title: title,
+        // 解析器无显式时刻时 dueDate 本就是当日零点，直接取毫秒即可
         dueDate: parsed.dueDate?.millisecondsSinceEpoch,
         priority: parsed.priority == 0 ? null : parsed.priority,
         projectId: parsed.projectId,
+        // F4：分享文本里的时长/重复随任务一次落库（同快加面板口径）
+        durationMinutes: parsed.durationMinutes,
+        repeatMode: parsed.repeat?.mode,
+        repeatAfter: parsed.repeat?.after,
+        repeatWeekdays: parsed.repeat?.weekdays,
       ));
       // NLP 命中的标签挂载（失败不阻断——部分成功口径）
       for (final labelId in parsed.labelIds) {
