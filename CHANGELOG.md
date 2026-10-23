@@ -23,6 +23,9 @@
 - 适配器新增 `list_assets_with_meta`（裸 hash + 密文体积 + mtime + 整包/分片形态）：WebDAV 用两次 Depth:1 PROPFIND 归并（递归列举等于每附件一次请求，不可用），S3 用前缀分页列举聚合；`BasePathAdapter` 显式转发，避免退化为全零元数据。
 - 配套自愈（必做，非可选）：附件 pull 侧新增「活跃引用 + 云端无对象」对账——本地仍有明文的置 `is_uploaded = 0`，下一轮 push 以同一 hash 自动重传（封住清理竞态与用户手工误删网盘对象的历史静默缺附件）；本地也无副本的汇总一条错误让 UI 可见。
 - 桥接四处同口径：Tauri `cloud_unused_attachments_scan` / `cloud_unused_attachments_delete`、`tauri.ts`、`ipc-mock`（账本模型模拟云端对象集）、FRB 镜像 + codegen 产物。
+- 移动端：设置 → 云同步配置新增「云端清理」卡（清单底部抽屉、全选/多选、epoch 过期自动重扫），`OrbitBridge` / Rust / Mock 三实现同口径；mock 无云端后端，清单恒为空。
+- 同卡新增「回收孤儿数据桶」（docs/07 #96 尾款）：`cloud_orphan_chunks_gc` 把手动入口接到 `collect_and_delete_orphan_chunks`，清的是同步清单已不再引用、且写入超过 24h 的 `tables/` 分桶，与附件对象无关。
+- 测试补强：pull 置待传 → 下一轮 push 真重传的闭环用例；epoch 竞态改为真实改写云端清单后验证拒绝；删除零调用方的 `attachment_repo::delete_orphans`（第二套孤儿判定口径）。
 
 ### 新增：诊断页「清除未使用附件」（2026-10-23）
 
