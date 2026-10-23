@@ -268,3 +268,64 @@ pub async fn sync_disconnect(app: AppHandle) -> Result<(), String> {
         .map_err(|e| format!("[other] 事件发送失败: {e}"))?;
     Ok(())
 }
+
+// ============================================================================
+// 云端孤儿附件清理（docs/15，诊断页手动触发，无自动路径）
+// ============================================================================
+
+/// 云端清理的同步上下文（配置 + 引擎 + 附件目录）
+///
+/// 与 `run_sync` 的前置完全同口径：未配置 / 本地配置 / 未解锁都直接拒绝。
+/// 云端清理依赖 Data Key 解密引用桶，未解锁时算不出可信引用集。
+async fn sync_target(
+    app: &AppHandle,
+) -> Result<
+    (
+        orbit_core::sync::engine::SyncConfig,
+        orbit_core::cloud_sync::engine::SyncEngine,
+        String,
+    ),
+    String,
+> {
+    let record = sync_runtime::get_active_config(app)
+        .await?
+        .ok_or_else(|| "[config] 尚未配置同步，请先在设置中填写连接信息".to_string())?;
+    let config = sync_runtime::engine_config_of_record(&record)
+        .ok_or_else(|| "[config] 当前为本地同步配置，不参与云同步".to_string())?;
+
+    let engine = sync_runtime::sync_engine(app)?;
+    let crypto = sync_runtime::sync_crypto(app)?;
+    if !crypto.is_unlocked() {
+        return Err("[not_unlocked] 同步加密未解锁，请先输入同步密码".to_string());
+    }
+
+    let dir = resolve_app_data_dir(app)?;
+    Ok((config, engine, sync_runtime::attachments_dir(&dir)))
+}
+
+/// 扫描云端孤儿附件（只读，诊断页清单；docs/15）
+#[tauri::command]
+pub async fn cloud_unused_attachments_scan(
+    app: AppHandle,
+) -> Result<cloud_sync_api::CloudUnusedScanResult, String> {
+    let (config, engine, _attachments) = sync_target(&app).await?;
+    cloud_sync_api::cloud_unused_attachments_scan(&engine, &config).await
+}
+
+/// 删除云端孤儿附件（勾选批量；`expected_epoch` 原样回传扫描结果的 epoch）
+#[tauri::command]
+pub async fn cloud_unused_attachments_delete(
+    app: AppHandle,
+    hashes: Vec<String>,
+    expected_epoch: u64,
+) -> Result<cloud_sync_api::CloudUnusedDeleteResult, String> {
+    let (config, engine, attachments) = sync_target(&app).await?;
+    cloud_sync_api::cloud_unused_attachments_delete(
+        &engine,
+        &config,
+        &attachments,
+        hashes,
+        expected_epoch,
+    )
+    .await
+}

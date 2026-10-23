@@ -1333,6 +1333,53 @@ export const attachmentsUnusedList = () =>
 export const attachmentsUnusedDelete = (hashes: string[]) =>
   invoke<number>("attachments_unused_delete", { hashes });
 
+/** 云端孤儿附件行（docs/15；诊断页「云端存储」清理入口） */
+export interface CloudUnusedAttachmentView {
+  hash: string;
+  /** 密文体积；WebDAV 分片形态为 0（目录条目没有长度），展示用 size_bytes 兜底 */
+  cipher_bytes: number;
+  /** 服务端最后修改时间（Unix 秒） */
+  last_modified: number;
+  /** 云端形态：整包 / 分片 / 两者并存 */
+  kind: "whole" | "chunked" | "both";
+  original_name: string;
+  /** 本地账本明文体积（0 = 账本无该行） */
+  size_bytes: number;
+  is_local_cached: number;
+  is_uploaded: number;
+}
+
+export interface CloudUnusedScanResult {
+  items: CloudUnusedAttachmentView[];
+  /** 清单 epoch：删除时原样回传做 CAS（不一致要求重扫） */
+  epoch: number;
+  /** 年龄窗口（秒），UI 文案用「仅含 N 天前的对象」 */
+  min_age_secs: number;
+}
+
+export interface CloudUnusedDeleteResult {
+  deleted_assets: number;
+  deleted_objects: number;
+  skipped_referenced: number;
+  local_rows_cleaned: number;
+  stale_manifest: boolean;
+  errors: string[];
+}
+
+/** 只读扫描云端孤儿附件（需已配置同步且已解锁） */
+export const cloudUnusedAttachmentsScan = () =>
+  invoke<CloudUnusedScanResult>("cloud_unused_attachments_scan");
+
+/** 删除勾选的云端孤儿附件（整包+分片；本地账本按无引用复核收尾） */
+export const cloudUnusedAttachmentsDelete = (
+  hashes: string[],
+  expectedEpoch: number,
+) =>
+  invoke<CloudUnusedDeleteResult>("cloud_unused_attachments_delete", {
+    hashes,
+    expectedEpoch,
+  });
+
 // ========== 数据库维护（性能批次：WAL checkpoint / 附件 GC / 日志 TTL / 查询统计 / VACUUM）==========
 export interface DbMaintenanceResult {
   /** WAL checkpoint 后 -wal 文件剩余大小（字节） */

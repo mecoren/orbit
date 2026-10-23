@@ -1844,6 +1844,68 @@ const commands: Record<string, (args: any, ctx: Ctx) => unknown> = {
     }
     return cleaned;
   },
+  // 云端孤儿附件（docs/15）：mock 用账本模型模拟云端对象集
+  //   - 引用集 = db.attachments 的 hash（等价于云端关联行）
+  //   - 云端对象集 = 已卸下账本行（mock 世界没有「云端有而本地账本无」的对象）
+  //   - 无服务端 mtime，年龄窗口不模拟：所有孤儿都视作足够旧
+  cloud_unused_attachments_scan: (_a: unknown, { db }: Ctx) => {
+    const referenced = new Set(db.attachments.map((a) => a.hash));
+    const ledger = new Map<string, MockAttachmentLink>();
+    for (const a of db.detachedAttachments) ledger.set(a.hash, a);
+    const old = Math.floor(Date.now() / 1000) - 40 * 24 * 3600;
+    const items = [...ledger.values()]
+      .filter((a) => !referenced.has(a.hash))
+      .map((a) => ({
+        hash: a.hash,
+        cipher_bytes: a.size_bytes,
+        last_modified: old,
+        kind: "whole",
+        original_name: a.original_name,
+        size_bytes: a.size_bytes,
+        is_local_cached: a.is_local_cached,
+        is_uploaded: 0,
+      }))
+      .sort((x, y) => y.size_bytes - x.size_bytes);
+    return ipcClone({ items, epoch: 0, min_age_secs: 30 * 24 * 3600 });
+  },
+  // 云端孤儿附件删除：复核引用（与 Rust 同口径），epoch 非 0 视作清单已变
+  cloud_unused_attachments_delete: (
+    { hashes, expectedEpoch }: { hashes: string[]; expectedEpoch: number },
+    { db }: Ctx,
+  ) => {
+    const referenced = new Set(db.attachments.map((a) => a.hash));
+    if (expectedEpoch !== 0) {
+      return ipcClone({
+        deleted_assets: 0,
+        deleted_objects: 0,
+        skipped_referenced: 0,
+        local_rows_cleaned: 0,
+        stale_manifest: true,
+        errors: [],
+      });
+    }
+    let deleted = 0;
+    let skipped = 0;
+    for (const hash of hashes) {
+      if (referenced.has(hash)) {
+        skipped += 1;
+        continue;
+      }
+      const before = db.detachedAttachments.length;
+      db.detachedAttachments = db.detachedAttachments.filter(
+        (a) => a.hash !== hash,
+      );
+      if (db.detachedAttachments.length < before) deleted += 1;
+    }
+    return ipcClone({
+      deleted_assets: deleted,
+      deleted_objects: deleted,
+      skipped_referenced: skipped,
+      local_rows_cleaned: deleted,
+      stale_manifest: false,
+      errors: [],
+    });
+  },
   // ---- 数据库维护（性能批次；内存 mock 库无碎片，各步返回零值）----
   // ---- ICS 日历导出（#4；内存 mock 最小语义：头 + 每任务一个 VTODO 段）----
   // ---- 通知历史（#5；内存 mock 最小语义：种子三条 + 倒序/过滤/清空）----

@@ -528,6 +528,9 @@ pub fn run() {
             commands::asset_cmd::attachments_gc,
             commands::asset_cmd::attachments_unused_list,
             commands::asset_cmd::attachments_unused_delete,
+            // 云端孤儿附件清理（诊断页手动触发；docs/15）
+            commands::cloud_sync_cmd::cloud_unused_attachments_scan,
+            commands::cloud_sync_cmd::cloud_unused_attachments_delete,
             // 数据库维护（WAL checkpoint / 附件 GC / 查询统计 / VACUUM）
             commands::db_maintenance_cmd::db_maintenance,
             // 应用内诊断分区（只读读数：库体积 / 各表行数 / 附件缓存占用）

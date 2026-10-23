@@ -12,12 +12,13 @@
  */
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Activity, FileCog, HardDrive, RefreshCw } from "lucide-react";
+import { Activity, Cloud, FileCog, HardDrive, RefreshCw } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { diagnosticsSnapshot } from "@/lib/tauri";
+import { diagnosticsSnapshot, syncConfigGet } from "@/lib/tauri";
 import { formatBytes, formatCount } from "./diagnostics-format";
+import { CloudUnusedAttachmentsDialog } from "./cloud-unused-attachments-dialog";
 import { UnusedAttachmentsDialog } from "./unused-attachments-dialog";
 
 /** Chromium 私有扩展（TS 标准库无此声明） */
@@ -60,6 +61,7 @@ function Reading({ label, value, hint }: { label: string; value: string; hint?: 
 export function DiagnosticsSection() {
   const [runtime, setRuntime] = useState<RuntimeReadings>(() => readRuntime());
   const [cleanupOpen, setCleanupOpen] = useState(false);
+  const [cloudCleanupOpen, setCloudCleanupOpen] = useState(false);
   const { data, isFetching, refetch } = useQuery({
     queryKey: ["diagnostics"],
     queryFn: diagnosticsSnapshot,
@@ -67,6 +69,15 @@ export function DiagnosticsSection() {
     staleTime: 0,
     gcTime: 0,
   });
+  // 云同步是否已配置：未配置时云端清理卡片整块隐藏（点了也只会报「尚未配置」）。
+  // 密钥解锁状态不在这里判定——它是会话态，卡片副标题提示，点击时由 core 拒绝。
+  const { data: syncConfig } = useQuery({
+    queryKey: ["sync_config"],
+    queryFn: syncConfigGet,
+    staleTime: 60_000,
+  });
+  const cloudConfigured =
+    syncConfig != null && (syncConfig.engine === "webdav" || syncConfig.engine === "s3");
   const refresh = () => {
     setRuntime(readRuntime());
     void refetch();
@@ -133,6 +144,25 @@ export function DiagnosticsSection() {
         </p>
       </div>
 
+      {cloudConfigured ? (
+        <div className="space-y-2 rounded-lg border p-5">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <Cloud className="size-4 text-muted-foreground" />
+              <p className="text-sm font-medium">云端存储</p>
+            </div>
+            <Button variant="outline" size="sm" onClick={() => setCloudCleanupOpen(true)}>
+              <FileCog className="size-4" />
+              清理云端孤儿附件
+            </Button>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            云端附件对象不会被自动回收（删除任务/卸载附件后仍留在网盘）。这里只扫描 30
+            天前、且无任何设备引用的对象；服务端不提供时间的对象一律跳过。需同步密钥已解锁。
+          </p>
+        </div>
+      ) : null}
+
       <div className="space-y-2 rounded-lg border p-5">
         <div className="flex items-center gap-2">
           <Activity className="size-4 text-muted-foreground" />
@@ -157,6 +187,12 @@ export function DiagnosticsSection() {
       <UnusedAttachmentsDialog
         open={cleanupOpen}
         onOpenChange={setCleanupOpen}
+        onCleaned={() => void refetch()}
+      />
+
+      <CloudUnusedAttachmentsDialog
+        open={cloudCleanupOpen}
+        onOpenChange={setCloudCleanupOpen}
         onCleaned={() => void refetch()}
       />
     </div>
