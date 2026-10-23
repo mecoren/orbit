@@ -12,11 +12,13 @@
  */
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Activity, Cloud, FileCog, HardDrive, RefreshCw } from "lucide-react";
+import { Activity, Cloud, FileCog, HardDrive, RefreshCw, Trash2 } from "lucide-react";
+import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import { DangerousConfirmDialog } from "@/components/ui/dangerous-confirm-dialog";
 import { cn } from "@/lib/utils";
-import { diagnosticsSnapshot, syncConfigGet } from "@/lib/tauri";
+import { cloudOrphanChunksGc, diagnosticsSnapshot, syncConfigGet } from "@/lib/tauri";
 import { formatBytes, formatCount } from "./diagnostics-format";
 import { CloudUnusedAttachmentsDialog } from "./cloud-unused-attachments-dialog";
 import { UnusedAttachmentsDialog } from "./unused-attachments-dialog";
@@ -62,6 +64,8 @@ export function DiagnosticsSection() {
   const [runtime, setRuntime] = useState<RuntimeReadings>(() => readRuntime());
   const [cleanupOpen, setCleanupOpen] = useState(false);
   const [cloudCleanupOpen, setCloudCleanupOpen] = useState(false);
+  const [chunkGcOpen, setChunkGcOpen] = useState(false);
+  const [chunkGcBusy, setChunkGcBusy] = useState(false);
   const { data, isFetching, refetch } = useQuery({
     queryKey: ["diagnostics"],
     queryFn: diagnosticsSnapshot,
@@ -81,6 +85,33 @@ export function DiagnosticsSection() {
   const refresh = () => {
     setRuntime(readRuntime());
     void refetch();
+  };
+
+  /** 孤儿数据分桶回收（#96 尾款入口）：只动 tables/，与附件对象无关 */
+  const runChunkGc = async () => {
+    setChunkGcBusy(true);
+    try {
+      const result = await cloudOrphanChunksGc();
+      if (result.deleted_buckets === 0) {
+        toast.info("没有可回收的孤儿数据桶", {
+          description: "清单仍在引用的桶全部保留；写入不足 24 小时的桶留给下一轮。",
+        });
+      } else if (result.errors.length > 0) {
+        toast.warning(`已回收 ${formatCount(result.deleted_buckets)} 个孤儿分桶（部分失败）`, {
+          description: result.errors[0],
+        });
+      } else {
+        toast.success(`已回收 ${formatCount(result.deleted_buckets)} 个孤儿数据分桶`);
+      }
+      setChunkGcOpen(false);
+      void refetch();
+    } catch (e) {
+      toast.error("回收孤儿数据分桶失败", {
+        description: e instanceof Error ? e.message : String(e),
+      });
+    } finally {
+      setChunkGcBusy(false);
+    }
   };
 
   return (
@@ -151,14 +182,21 @@ export function DiagnosticsSection() {
               <Cloud className="size-4 text-muted-foreground" />
               <p className="text-sm font-medium">云端存储</p>
             </div>
-            <Button variant="outline" size="sm" onClick={() => setCloudCleanupOpen(true)}>
-              <FileCog className="size-4" />
-              清理云端孤儿附件
-            </Button>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button variant="outline" size="sm" onClick={() => setCloudCleanupOpen(true)}>
+                <FileCog className="size-4" />
+                清理云端孤儿附件
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => setChunkGcOpen(true)}>
+                <Trash2 className="size-4" />
+                回收孤儿数据桶
+              </Button>
+            </div>
           </div>
           <p className="text-xs text-muted-foreground">
-            云端附件对象不会被自动回收（删除任务/卸载附件后仍留在网盘）。这里只扫描 30
-            天前、且无任何设备引用的对象；服务端不提供时间的对象一律跳过。需同步密钥已解锁。
+            云端附件对象不会被自动回收（删除任务/卸载附件后仍留在网盘）。附件清理只扫描 30
+            天前、且无任何设备引用的对象；服务端不提供时间的对象一律跳过。「回收孤儿数据桶」
+            清的是同步清单已不再引用的旧分桶（24 小时窗口）。均需同步密钥已解锁。
           </p>
         </div>
       ) : null}
@@ -194,6 +232,21 @@ export function DiagnosticsSection() {
         open={cloudCleanupOpen}
         onOpenChange={setCloudCleanupOpen}
         onCleaned={() => void refetch()}
+      />
+
+      <DangerousConfirmDialog
+        open={chunkGcOpen}
+        onOpenChange={setChunkGcOpen}
+        title="回收孤儿数据分桶"
+        description={
+          <>
+            将删除云端 <code>tables/</code> 下「同步清单已不再引用、且写入超过 24
+            小时」的分桶对象。清单仍在引用的数据与全部附件对象不受影响。
+          </>
+        }
+        confirmLabel="回收"
+        busy={chunkGcBusy}
+        onConfirm={() => void runChunkGc()}
       />
     </div>
   );

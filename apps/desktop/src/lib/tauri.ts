@@ -1366,6 +1366,12 @@ export interface CloudUnusedDeleteResult {
   errors: string[];
 }
 
+/** 孤儿数据分桶回收结果（#96 尾款入口；只动 tables/，不碰附件对象） */
+export interface OrphanChunkGcResult {
+  deleted_buckets: number;
+  errors: string[];
+}
+
 /** 只读扫描云端孤儿附件（需已配置同步且已解锁） */
 export const cloudUnusedAttachmentsScan = () =>
   invoke<CloudUnusedScanResult>("cloud_unused_attachments_scan");
@@ -1379,6 +1385,10 @@ export const cloudUnusedAttachmentsDelete = (
     hashes,
     expectedEpoch,
   });
+
+/** 回收孤儿数据分桶（清单无引用 + 24h 窗口；#96 尾款入口） */
+export const cloudOrphanChunksGc = () =>
+  invoke<OrphanChunkGcResult>("cloud_orphan_chunks_gc");
 
 // ========== 数据库维护（性能批次：WAL checkpoint / 附件 GC / 日志 TTL / 查询统计 / VACUUM）==========
 export interface DbMaintenanceResult {

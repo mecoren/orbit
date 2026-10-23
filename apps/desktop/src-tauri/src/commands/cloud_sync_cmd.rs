@@ -312,6 +312,15 @@ pub async fn cloud_unused_attachments_scan(
     cloud_sync_api::cloud_unused_attachments_scan(&engine, &config).await
 }
 
+/// 回收孤儿数据分桶（清单无引用 + mtime 早于 24h；#96 尾款入口）
+#[tauri::command]
+pub async fn cloud_orphan_chunks_gc(
+    app: AppHandle,
+) -> Result<cloud_sync_api::OrphanChunkGcResult, String> {
+    let (config, engine, _attachments) = sync_target(&app).await?;
+    cloud_sync_api::cloud_orphan_chunks_gc(&engine, &config).await
+}
+
 /// 删除云端孤儿附件（勾选批量；`expected_epoch` 原样回传扫描结果的 epoch）
 #[tauri::command]
 pub async fn cloud_unused_attachments_delete(

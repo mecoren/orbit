@@ -1906,6 +1906,8 @@ const commands: Record<string, (args: any, ctx: Ctx) => unknown> = {
       errors: [],
     });
   },
+  // 孤儿数据分桶回收（#96 尾款）：mock 没有分桶概念，恒零
+  cloud_orphan_chunks_gc: () => ({ deleted_buckets: 0, errors: [] }),
   // ---- 数据库维护（性能批次；内存 mock 库无碎片，各步返回零值）----
   // ---- ICS 日历导出（#4；内存 mock 最小语义：头 + 每任务一个 VTODO 段）----
   // ---- 通知历史（#5；内存 mock 最小语义：种子三条 + 倒序/过滤/清空）----

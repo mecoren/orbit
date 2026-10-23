@@ -496,6 +496,46 @@ pub async fn cloud_unused_attachments_scan(
     })
 }
 
+/// 孤儿数据分桶回收结果（docs/07 #96 尾款入口）
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct OrphanChunkGcResult {
+    /// 删除成功（含原本已不存在）的分桶对象数
+    pub deleted_buckets: u32,
+    /// 单对象失败明细（不中断）
+    pub errors: Vec<String>,
+}
+
+/// 回收「清单已无引用 + mtime 早于 24h」的孤儿数据分桶（手动触发）
+///
+/// 对应 `cloud_sync::gc::collect_and_delete_orphan_chunks` 的生产入口（此前只有
+/// 原语没有调用方）。与附件清理同一张「云端存储」卡片，但**只动 `tables/`**，
+/// 不碰附件对象；判据是清单索引（无引用即不可达）而不是引用行内容。
+///
+/// 必须在清单落定之后执行：本函数先读一次云端清单，删除的都是它未引用的桶。
+pub async fn cloud_orphan_chunks_gc(
+    engine: &SyncEngine,
+    config: &SyncConfig,
+) -> Result<OrphanChunkGcResult, String> {
+    let (_raw, adapter) = create_adapters(config).map_err(|e| e.to_string())?;
+    let data_key = engine
+        .crypto_service()
+        .get_data_key()
+        .ok_or_else(|| "同步密钥未解锁，无法读取云端清单".to_string())?;
+    let manifest = crate::cloud_sync::asset_gc::read_cloud_manifest(&adapter, &data_key)
+        .await
+        .map_err(|e| format!("读取云端清单失败: {e}"))?
+        .ok_or_else(|| "云端尚无同步清单，请先完成一次同步".to_string())?;
+
+    let result =
+        crate::cloud_sync::gc::collect_and_delete_orphan_chunks(&adapter, &manifest, 24 * 3600)
+            .await
+            .map_err(|e| format!("回收孤儿数据分桶失败: {e}"))?;
+    Ok(OrphanChunkGcResult {
+        deleted_buckets: result.deleted_buckets,
+        errors: result.errors,
+    })
+}
+
 /// 删除云端孤儿附件（整包 + 分片），成功后收尾本地账本
 ///
 /// `expected_epoch` 来自扫描结果的 `epoch`：云端刚有他端 push（引用集可能已变）
