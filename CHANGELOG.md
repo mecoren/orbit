@@ -16,6 +16,14 @@
 
 ## [Unreleased]
 
+### 新增：云端孤儿附件清理（T1.4，2026-10-23）
+
+- 设置 → 诊断新增「云端存储」卡片（仅已配置云同步时显示）：「清理云端孤儿附件」扫描 `assets/` 与 `assets_parts/` 中无任何设备引用、且写入超过 30 天的对象，列明整包/分片形态、密文体积与最后写入时间，支持多选/全选/全部删除，破坏性操作走 `DangerousConfirmDialog` 五秒冷静期。移动端 UI 入口留第二批（FRB 桥接已就位）。
+- core 新增 `cloud_sync::asset_gc`：判据为「云端对象集 − 云端引用集」，引用集取 `tables/todo_task_attachments` 云端分桶中 `is_deleted = 0` 行的 hash 并集——以云端表（跨设备并集）为权威，不看本机账本；服务端不提供 mtime 的对象一律跳过。删除前重读清单比对 `epoch`，扫描后他端 push 过即拒绝执行并要求重扫；分片形态先删 `head.json` 再逐 `.bin`，单对象失败只记 errors 不中断。
+- 适配器新增 `list_assets_with_meta`（裸 hash + 密文体积 + mtime + 整包/分片形态）：WebDAV 用两次 Depth:1 PROPFIND 归并（递归列举等于每附件一次请求，不可用），S3 用前缀分页列举聚合；`BasePathAdapter` 显式转发，避免退化为全零元数据。
+- 配套自愈（必做，非可选）：附件 pull 侧新增「活跃引用 + 云端无对象」对账——本地仍有明文的置 `is_uploaded = 0`，下一轮 push 以同一 hash 自动重传（封住清理竞态与用户手工误删网盘对象的历史静默缺附件）；本地也无副本的汇总一条错误让 UI 可见。
+- 桥接四处同口径：Tauri `cloud_unused_attachments_scan` / `cloud_unused_attachments_delete`、`tauri.ts`、`ipc-mock`（账本模型模拟云端对象集）、FRB 镜像 + codegen 产物。
+
 ### 新增：诊断页「清除未使用附件」（2026-10-23）
 
 - 设置 → 诊断 → 本地存储卡片新增「清除未使用附件」入口：弹窗列出 `sys_attachments` 中无任何存活任务引用的账本行（文件名 / 大小 / 缓存状态，按体积降序），支持多选批量删除与一键全部删除，破坏性操作走 `DangerousConfirmDialog` 五秒冷静期。
