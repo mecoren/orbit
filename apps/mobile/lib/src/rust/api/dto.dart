@@ -6,7 +6,7 @@
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`
 
 /// 活动日志行（todo_activity_log 为本地轨迹表，不进同步白名单）
 class ActivityLogRow {
@@ -52,6 +52,132 @@ class ActivityLogRow {
           action == other.action &&
           detail == other.detail &&
           createdAt == other.createdAt;
+}
+
+/// 云端孤儿附件行（诊断页「云端存储」清单）
+///
+/// 与 `UnusedAttachmentView` 的区别：这是**云端对象**，不是本地账本行——
+/// 体积有密文/明文两个来源，`kind` 标明整包/分片布局。
+class CloudUnusedAttachmentView {
+  final String hash;
+
+  /// 密文体积；WebDAV 分片形态为 0（目录条目没有长度）
+  final PlatformInt64 cipherBytes;
+
+  /// 服务端最后修改时间（Unix 秒；<=0 表示不可得）
+  final PlatformInt64 lastModified;
+
+  /// 云端形态：`whole` / `chunked` / `both`
+  final String kind;
+  final String originalName;
+
+  /// 本地账本明文体积（0 = 账本无该行）
+  final PlatformInt64 sizeBytes;
+  final int isLocalCached;
+  final int isUploaded;
+
+  const CloudUnusedAttachmentView({
+    required this.hash,
+    required this.cipherBytes,
+    required this.lastModified,
+    required this.kind,
+    required this.originalName,
+    required this.sizeBytes,
+    required this.isLocalCached,
+    required this.isUploaded,
+  });
+
+  @override
+  int get hashCode =>
+      hash.hashCode ^
+      cipherBytes.hashCode ^
+      lastModified.hashCode ^
+      kind.hashCode ^
+      originalName.hashCode ^
+      sizeBytes.hashCode ^
+      isLocalCached.hashCode ^
+      isUploaded.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is CloudUnusedAttachmentView &&
+          runtimeType == other.runtimeType &&
+          hash == other.hash &&
+          cipherBytes == other.cipherBytes &&
+          lastModified == other.lastModified &&
+          kind == other.kind &&
+          originalName == other.originalName &&
+          sizeBytes == other.sizeBytes &&
+          isLocalCached == other.isLocalCached &&
+          isUploaded == other.isUploaded;
+}
+
+/// 云端孤儿删除结果
+class CloudUnusedDeleteResult {
+  final PlatformInt64 deletedAssets;
+  final PlatformInt64 deletedObjects;
+  final PlatformInt64 skippedReferenced;
+  final PlatformInt64 localRowsCleaned;
+  final bool staleManifest;
+  final List<String> errors;
+
+  const CloudUnusedDeleteResult({
+    required this.deletedAssets,
+    required this.deletedObjects,
+    required this.skippedReferenced,
+    required this.localRowsCleaned,
+    required this.staleManifest,
+    required this.errors,
+  });
+
+  @override
+  int get hashCode =>
+      deletedAssets.hashCode ^
+      deletedObjects.hashCode ^
+      skippedReferenced.hashCode ^
+      localRowsCleaned.hashCode ^
+      staleManifest.hashCode ^
+      errors.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is CloudUnusedDeleteResult &&
+          runtimeType == other.runtimeType &&
+          deletedAssets == other.deletedAssets &&
+          deletedObjects == other.deletedObjects &&
+          skippedReferenced == other.skippedReferenced &&
+          localRowsCleaned == other.localRowsCleaned &&
+          staleManifest == other.staleManifest &&
+          errors == other.errors;
+}
+
+/// 云端孤儿扫描结果
+class CloudUnusedScanResult {
+  final List<CloudUnusedAttachmentView> items;
+
+  /// 清单 epoch：删除时原样回传做 CAS
+  final PlatformInt64 epoch;
+  final PlatformInt64 minAgeSecs;
+
+  const CloudUnusedScanResult({
+    required this.items,
+    required this.epoch,
+    required this.minAgeSecs,
+  });
+
+  @override
+  int get hashCode => items.hashCode ^ epoch.hashCode ^ minAgeSecs.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is CloudUnusedScanResult &&
+          runtimeType == other.runtimeType &&
+          items == other.items &&
+          epoch == other.epoch &&
+          minAgeSecs == other.minAgeSecs;
 }
 
 /// 统一完成命令结果（镜像 orbit_core::api::todo_api::CompleteTaskResult；

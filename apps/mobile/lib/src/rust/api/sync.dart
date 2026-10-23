@@ -4,6 +4,7 @@
 // ignore_for_file: invalid_use_of_internal_member, unused_import, unnecessary_import
 
 import '../frb_generated.dart';
+import 'dto.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
 // These functions are ignored because they are not marked as `pub`: `active_config`, `attach_password_to_runtime`, `attachments_dir`, `auto_sync_flag`, `base_path_normalized`, `bucket_trimmed`, `detach_password_from_runtime`, `engine_config_of_record`, `err_tagged_cloud`, `err_tagged_crypto`, `from_record`, `interval_clamped`, `parse_origin`, `password_str`, `region_trimmed`, `run_sync`, `runtime_crypto`, `runtime_engine`, `session_token_str`, `skip_tls_flag`, `sync_on_change_flag`, `timeout_clamped`, `username_str`, `with_runtime`
@@ -74,6 +75,25 @@ Future<String> cloudSyncGetState() =>
 /// 对齐桌面 `cloud_sync_is_running`。
 Future<bool> cloudSyncIsRunning() =>
     RustLib.instance.api.crateApiSyncCloudSyncIsRunning();
+
+/// 云端孤儿附件扫描（只读；docs/15）
+///
+/// 对齐桌面 `cloud_unused_attachments_scan`。需已配置云同步且密钥已解锁——
+/// 扫描要解密云端 `todo_task_attachments` 分桶算引用集，未解锁算不出可信清单。
+Future<CloudUnusedScanResult> cloudUnusedAttachmentsScan() =>
+    RustLib.instance.api.crateApiSyncCloudUnusedAttachmentsScan();
+
+/// 删除云端孤儿附件（整包+分片；对齐桌面 `cloud_unused_attachments_delete`）
+///
+/// `expected_epoch` 原样回传扫描结果的 epoch；云端刚有他端 push 时返回
+/// `stale_manifest = true` 且一个对象都不删，调用方须要求重扫。
+Future<CloudUnusedDeleteResult> cloudUnusedAttachmentsDelete({
+  required List<String> hashes,
+  required PlatformInt64 expectedEpoch,
+}) => RustLib.instance.api.crateApiSyncCloudUnusedAttachmentsDelete(
+  hashes: hashes,
+  expectedEpoch: expectedEpoch,
+);
 
 /// 查询增量同步历史（P1-17 展示面；设置页「同步历史」卡数据源）
 ///

@@ -1304,6 +1304,88 @@ impl From<orbit_core::api::asset_api::UnusedAttachmentView> for UnusedAttachment
     }
 }
 
+// ---------- 云端孤儿附件清理（docs/15）----------
+
+/// 云端孤儿附件行（诊断页「云端存储」清单）
+///
+/// 与 `UnusedAttachmentView` 的区别：这是**云端对象**，不是本地账本行——
+/// 体积有密文/明文两个来源，`kind` 标明整包/分片布局。
+#[derive(Debug, Clone, Serialize)]
+pub struct CloudUnusedAttachmentView {
+    pub hash: String,
+    /// 密文体积；WebDAV 分片形态为 0（目录条目没有长度）
+    pub cipher_bytes: i64,
+    /// 服务端最后修改时间（Unix 秒；<=0 表示不可得）
+    pub last_modified: i64,
+    /// 云端形态：`whole` / `chunked` / `both`
+    pub kind: String,
+    pub original_name: String,
+    /// 本地账本明文体积（0 = 账本无该行）
+    pub size_bytes: i64,
+    pub is_local_cached: i32,
+    pub is_uploaded: i32,
+}
+
+/// 云端孤儿扫描结果
+#[derive(Debug, Clone, Serialize)]
+pub struct CloudUnusedScanResult {
+    pub items: Vec<CloudUnusedAttachmentView>,
+    /// 清单 epoch：删除时原样回传做 CAS
+    pub epoch: i64,
+    pub min_age_secs: i64,
+}
+
+/// 云端孤儿删除结果
+#[derive(Debug, Clone, Serialize)]
+pub struct CloudUnusedDeleteResult {
+    pub deleted_assets: i64,
+    pub deleted_objects: i64,
+    pub skipped_referenced: i64,
+    pub local_rows_cleaned: i64,
+    pub stale_manifest: bool,
+    pub errors: Vec<String>,
+}
+
+impl From<orbit_core::api::cloud_sync_api::CloudUnusedAttachmentView>
+    for CloudUnusedAttachmentView
+{
+    fn from(v: orbit_core::api::cloud_sync_api::CloudUnusedAttachmentView) -> Self {
+        Self {
+            hash: v.hash,
+            cipher_bytes: v.cipher_bytes as i64,
+            last_modified: v.last_modified,
+            kind: v.kind,
+            original_name: v.original_name,
+            size_bytes: v.size_bytes,
+            is_local_cached: v.is_local_cached,
+            is_uploaded: v.is_uploaded,
+        }
+    }
+}
+
+impl From<orbit_core::api::cloud_sync_api::CloudUnusedScanResult> for CloudUnusedScanResult {
+    fn from(v: orbit_core::api::cloud_sync_api::CloudUnusedScanResult) -> Self {
+        Self {
+            items: v.items.into_iter().map(Into::into).collect(),
+            epoch: v.epoch as i64,
+            min_age_secs: v.min_age_secs,
+        }
+    }
+}
+
+impl From<orbit_core::api::cloud_sync_api::CloudUnusedDeleteResult> for CloudUnusedDeleteResult {
+    fn from(v: orbit_core::api::cloud_sync_api::CloudUnusedDeleteResult) -> Self {
+        Self {
+            deleted_assets: v.deleted_assets as i64,
+            deleted_objects: v.deleted_objects as i64,
+            skipped_referenced: v.skipped_referenced as i64,
+            local_rows_cleaned: v.local_rows_cleaned as i64,
+            stale_manifest: v.stale_manifest,
+            errors: v.errors,
+        }
+    }
+}
+
 // ---------- todo_saved_filters（保存的筛选器，#35）----------
 #[derive(Debug, Clone, Serialize)]
 pub struct TodoSavedFilter {

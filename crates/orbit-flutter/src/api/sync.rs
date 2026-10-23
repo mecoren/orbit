@@ -57,6 +57,7 @@ use orbit_core::sync_crypto::meta_store::SyncCryptoMeta;
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 
+use super::dto::{CloudUnusedDeleteResult, CloudUnusedScanResult};
 use super::state::with_state;
 
 // ============================================================================
@@ -589,6 +590,61 @@ pub async fn cloud_sync_get_state() -> Result<String, String> {
 pub async fn cloud_sync_is_running() -> Result<bool, String> {
     let engine = runtime_engine()?;
     Ok(cloud_sync_api::is_running(&engine))
+}
+
+/// 云端孤儿附件扫描（只读；docs/15）
+///
+/// 对齐桌面 `cloud_unused_attachments_scan`。需已配置云同步且密钥已解锁——
+/// 扫描要解密云端 `todo_task_attachments` 分桶算引用集，未解锁算不出可信清单。
+pub async fn cloud_unused_attachments_scan() -> Result<CloudUnusedScanResult, String> {
+    let record = active_config()
+        .await?
+        .ok_or_else(|| "[config] 尚未配置同步，请先在设置中填写连接信息".to_string())?;
+    let config = engine_config_of_record(&record)
+        .ok_or_else(|| "[config] 当前为本地同步配置，不参与云同步".to_string())?;
+
+    let crypto = runtime_crypto()?;
+    if !crypto.is_unlocked() {
+        return Err("[not_unlocked] 同步加密未解锁，请先输入同步密码".to_string());
+    }
+
+    let engine = runtime_engine()?;
+    cloud_sync_api::cloud_unused_attachments_scan(&engine, &config)
+        .await
+        .map(CloudUnusedScanResult::from)
+}
+
+/// 删除云端孤儿附件（整包+分片；对齐桌面 `cloud_unused_attachments_delete`）
+///
+/// `expected_epoch` 原样回传扫描结果的 epoch；云端刚有他端 push 时返回
+/// `stale_manifest = true` 且一个对象都不删，调用方须要求重扫。
+pub async fn cloud_unused_attachments_delete(
+    hashes: Vec<String>,
+    expected_epoch: i64,
+) -> Result<CloudUnusedDeleteResult, String> {
+    let record = active_config()
+        .await?
+        .ok_or_else(|| "[config] 尚未配置同步，请先在设置中填写连接信息".to_string())?;
+    let config = engine_config_of_record(&record)
+        .ok_or_else(|| "[config] 当前为本地同步配置，不参与云同步".to_string())?;
+
+    let crypto = runtime_crypto()?;
+    if !crypto.is_unlocked() {
+        return Err("[not_unlocked] 同步加密未解锁，请先输入同步密码".to_string());
+    }
+
+    let engine = runtime_engine()?;
+    let base_dir = with_state(|s| Ok(s.base_dir.clone()))?;
+    let attachments = attachments_dir(&base_dir);
+    cloud_sync_api::cloud_unused_attachments_delete(
+        &engine,
+        &config,
+        &attachments,
+        hashes,
+        expected_epoch.max(0) as u64,
+    )
+    .await
+    .map(CloudUnusedDeleteResult::from)
 }
 
 /// 增量同步历史行（镜像 orbit_core::models::business::SyncHistory）

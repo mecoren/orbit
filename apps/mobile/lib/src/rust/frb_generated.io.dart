@@ -198,6 +198,17 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   CloudBackupEntryView dco_decode_cloud_backup_entry_view(dynamic raw);
 
   @protected
+  CloudUnusedAttachmentView dco_decode_cloud_unused_attachment_view(
+    dynamic raw,
+  );
+
+  @protected
+  CloudUnusedDeleteResult dco_decode_cloud_unused_delete_result(dynamic raw);
+
+  @protected
+  CloudUnusedScanResult dco_decode_cloud_unused_scan_result(dynamic raw);
+
+  @protected
   CommentSearchHit dco_decode_comment_search_hit(dynamic raw);
 
   @protected
@@ -283,6 +294,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<CloudBackupEntryView> dco_decode_list_cloud_backup_entry_view(
+    dynamic raw,
+  );
+
+  @protected
+  List<CloudUnusedAttachmentView> dco_decode_list_cloud_unused_attachment_view(
     dynamic raw,
   );
 
@@ -814,6 +830,21 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  CloudUnusedAttachmentView sse_decode_cloud_unused_attachment_view(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  CloudUnusedDeleteResult sse_decode_cloud_unused_delete_result(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  CloudUnusedScanResult sse_decode_cloud_unused_scan_result(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   CommentSearchHit sse_decode_comment_search_hit(SseDeserializer deserializer);
 
   @protected
@@ -927,6 +958,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<CloudBackupEntryView> sse_decode_list_cloud_backup_entry_view(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  List<CloudUnusedAttachmentView> sse_decode_list_cloud_unused_attachment_view(
     SseDeserializer deserializer,
   );
 
@@ -1607,6 +1643,24 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_cloud_unused_attachment_view(
+    CloudUnusedAttachmentView self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_cloud_unused_delete_result(
+    CloudUnusedDeleteResult self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_cloud_unused_scan_result(
+    CloudUnusedScanResult self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_comment_search_hit(
     CommentSearchHit self,
     SseSerializer serializer,
@@ -1744,6 +1798,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_list_cloud_backup_entry_view(
     List<CloudBackupEntryView> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_cloud_unused_attachment_view(
+    List<CloudUnusedAttachmentView> self,
     SseSerializer serializer,
   );
 
