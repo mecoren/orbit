@@ -2378,6 +2378,13 @@ export function installBrowserIpc() {
         return Promise.resolve();
       }
 
+      // ---- 窗口插件命令（main.tsx 启动链 getCurrentWindow().show() 等）----
+      // 浏览器 mock 无窗口语义，一律 no-op；不实现会以 startup 报错
+      // 污染 e2e 的 console errors 断言（plugin:window|show 踩坑）
+      if (cmd.startsWith("plugin:window|")) {
+        return Promise.resolve();
+      }
+
       // ---- 业务命令 ----
       const impl = commands[cmd];
       if (!impl) return Promise.reject(notImplemented(cmd));
