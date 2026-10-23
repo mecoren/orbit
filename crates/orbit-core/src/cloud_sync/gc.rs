@@ -17,9 +17,19 @@
 //!
 //! ## 孤儿分桶
 //! 数据分桶对象不随行删除而消失（push 只增不删索引条目）。孤儿对象不参与
-//! 清单索引 → 不会被 pull 读到，仅占存储；其清理需要「桶内所有 uuid 都有
-//! 墓碑」的判据，属后续增强项，当前不在本模块范围内。
+//! 清单索引 → 不会被 pull 读到，仅占存储。回收判据（T1.3）：
+//!
+//! 1. 云端存在 `tables/{table}/{bucket}.orsync`，但当前清单的该表索引里没有
+//!    这个桶（清单是唯一真相源，无引用即不可达）；
+//! 2. 对象 mtime 早于 `min_age_secs`（默认 24h）——防删其他设备刚上传、清单
+//!    尚未落定的新桶；
+//! 3. `last_modified <= 0`（服务端不提供时间）一律跳过：宁可漏收，不误删。
+//!
+//! 顺序约束同墓碑回收：必须在清单落定之后执行。扫描是只读的，删除复用
+//! [`delete_orphan_chunks`]，单个失败只记 `errors` 不中断。
 
+use crate::cloud_sync::chunk::TABLE_BUCKET_COUNT;
+use crate::cloud_sync::error::CloudSyncError;
 use crate::cloud_sync::meta::Manifest;
 use crate::cloud_sync::paths;
 use crate::sync_adapters::traits::SyncAdapter;
@@ -125,6 +135,71 @@ pub async fn delete_orphan_chunks(adapter: &dyn SyncAdapter, chunks: &[(String, 
         }
     }
     result
+}
+
+/// 从列举条目名解析桶号（兼容 WebDAV 的 basename 与 S3 的完整 key）
+fn parse_bucket_name(name: &str) -> Option<u32> {
+    let base = name.rsplit('/').next().unwrap_or(name);
+    base.strip_suffix(".orsync")?.parse::<u32>().ok()
+}
+
+/// 扫描云端孤儿数据分桶（只读，不删除）
+///
+/// 遍历每张可同步表的 `tables/{table}/` 目录，返回「清单无引用 + 对象足够旧」
+/// 的 `(表名, 桶号)`。`now_secs` 由调用方传入（便于测试固定时钟）。
+pub async fn scan_orphan_chunks(
+    adapter: &dyn SyncAdapter,
+    manifest: &Manifest,
+    min_age_secs: i64,
+    now_secs: i64,
+) -> Result<Vec<(String, u32)>, CloudSyncError> {
+    let mut orphans = Vec::new();
+    for table in crate::db::sync_registry::SYNCABLE_TABLES {
+        let prefix = format!("tables/{table}");
+        let listed = match adapter.list_all_files(&prefix).await {
+            Ok(files) => files,
+            // 表目录不存在 = 该表从未上传过，没有孤儿
+            Err(e) if e.is_not_found() => continue,
+            Err(e) => {
+                return Err(CloudSyncError::Adapter {
+                    message: format!("列举 {prefix} 失败: {e}"),
+                });
+            }
+        };
+        let referenced = manifest.tables.get(*table).map(|idx| &idx.chunks);
+        for file in listed {
+            let Some(bucket) = parse_bucket_name(&file.name) else {
+                continue;
+            };
+            if bucket >= TABLE_BUCKET_COUNT {
+                continue;
+            }
+            if referenced.is_some_and(|chunks| chunks.contains_key(&bucket)) {
+                continue;
+            }
+            // 时间不可信（服务端未回 mtime）或对象太新：留给下一轮
+            if file.last_modified <= 0 || now_secs.saturating_sub(file.last_modified) < min_age_secs
+            {
+                continue;
+            }
+            orphans.push((table.to_string(), bucket));
+        }
+    }
+    Ok(orphans)
+}
+
+/// 扫描并删除孤儿分桶（调用方须在清单落定后执行）
+///
+/// `min_age_secs` 建议 24h；返回的 `deleted_buckets` 是删除成功（含原本不存在）
+/// 的对象数，`errors` 是失败明细。
+pub async fn collect_and_delete_orphan_chunks(
+    adapter: &dyn SyncAdapter,
+    manifest: &Manifest,
+    min_age_secs: i64,
+) -> Result<GcResult, CloudSyncError> {
+    let now = chrono::Utc::now().timestamp();
+    let orphans = scan_orphan_chunks(adapter, manifest, min_age_secs, now).await?;
+    Ok(delete_orphan_chunks(adapter, &orphans).await)
 }
 
 #[cfg(test)]

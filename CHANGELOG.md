@@ -16,6 +16,14 @@
 
 ## [Unreleased]
 
+### 同步：孤儿分桶物理回收（T1.3，2026-10-23）
+
+- 新增 `cloud_sync::gc::scan_orphan_chunks` / `collect_and_delete_orphan_chunks`：遍历每张可同步表的 `tables/{table}/` 目录，回收「清单无引用 + mtime 早于 24h 保留窗口」的孤儿桶对象；`last_modified <= 0`（服务端不回时间）一律跳过，刚写入的桶留给下一轮，防删其他设备上传中的对象。
+- 删除复用既有的 `delete_orphan_chunks`，单个失败只记 `errors` 不中断；顺序约束同墓碑回收（清单落定后执行）。
+- 修正测试夹具 `FakeCloud` 的 S3 列表口径：此前 `prefix` 未 percent-decode、对象键未剥前导斜杠，导致 S3 列表恒空（假绿）；修正后 `sync_fault_matrix` 14 例仍全绿。
+- 新增 `tests/orphan_chunk_gc.rs`（WebDAV / S3 各一）：孤儿（旧）被删、清单引用保留、孤儿（新）保留，断言 `deleted_buckets` 与云端对象数下降。
+- 文档：`docs/07 #96`、`docs/03` 同步模型。
+
 ### 性能：50k 首同步与 200MB 级备份峰值实测（T0.2 + T1.2，2026-10-23）
 
 - 操作探针新增两个验收场景：`backup-export-large`（50k 行 × 4KiB 描述，产物 222.9MB）与 `initial-sync`（50k 行、云端为空、丢弃型适配器只统计上传字节，真实走 `push_all` 的分桶扫描 → 逐桶装载 → 加密 → 上传）。

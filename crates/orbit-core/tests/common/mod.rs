@@ -171,6 +171,21 @@ impl FakeCloud {
         );
     }
 
+    /// 测试专用：直接写入对象并指定 mtime（秒），用于孤儿回收的时间判据
+    pub fn put_object_at(&self, path: &str, bytes: &[u8], mtime: i64) {
+        let mut st = self.state.lock().unwrap();
+        st.seq += 1;
+        let etag = format!("v{}", st.seq);
+        st.objects.insert(
+            path.to_string(),
+            Obj {
+                bytes: bytes.to_vec(),
+                etag,
+                mtime,
+            },
+        );
+    }
+
     pub fn reset_faults(&self) {
         let f = &self.faults;
         for c in [
@@ -600,14 +615,41 @@ fn iso8601(secs: i64) -> String {
         .unwrap_or_default()
 }
 
+/// 最小 percent-decode（S3 query 里的 prefix 会把 `/` 编码成 `%2F`）
+fn percent_decode(input: &str) -> String {
+    let mut out = String::with_capacity(input.len());
+    let bytes = input.as_bytes();
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'%' && i + 2 < bytes.len() {
+            let hex = std::str::from_utf8(&bytes[i + 1..i + 3]).unwrap_or("");
+            if let Ok(v) = u8::from_str_radix(hex, 16) {
+                out.push(v as char);
+                i += 3;
+                continue;
+            }
+        }
+        out.push(bytes[i] as char);
+        i += 1;
+    }
+    out
+}
+
+/// 对象键 → 桶内相对键（兼容带/不带前导 `/` 的存储口径）
+fn strip_bucket<'a>(key: &'a str, bucket_prefix: &str) -> Option<&'a str> {
+    key.trim_start_matches('/').strip_prefix(bucket_prefix)
+}
+
 /// S3 ListObjectsV2：按 `prefix` 查询参数做字面前缀匹配（与真 S3 同口径）
 fn list(svc: &Svc, path: &str, query: &str) -> Reply {
     let params: HashMap<&str, &str> = query
         .split('&')
         .filter_map(|kv| kv.split_once('='))
         .collect();
-    let prefix = params.get("prefix").copied().unwrap_or("");
-    let bucket_prefix = format!("{}/", path.trim_start_matches('/'));
+    let prefix = percent_decode(params.get("prefix").copied().unwrap_or(""));
+    // 对象键在假服务里带前导 `/`（`/bucket/key`），S3 请求路径也是 `/bucket`；
+    // 统一剥离前导斜杠后再比对，避免「列表永远为空」的假绿
+    let bucket_prefix = format!("{}/", path.trim_matches('/'));
 
     let st = svc.state.lock().unwrap();
     let mut xml = String::from(
@@ -620,15 +662,15 @@ fn list(svc: &Svc, path: &str, query: &str) -> Reply {
         .objects
         .iter()
         .filter(|(key, _)| {
-            key.strip_prefix(&bucket_prefix)
-                .map(|obj_key| obj_key.starts_with(prefix))
+            strip_bucket(key, &bucket_prefix)
+                .map(|obj_key| obj_key.starts_with(&prefix))
                 .unwrap_or(false)
         })
         .collect();
     matched.sort_by_key(|(key, _)| (*key).clone());
     let matched_count = matched.len();
     for (key, obj) in matched.iter() {
-        let obj_key = key.strip_prefix(&bucket_prefix).unwrap_or(key);
+        let obj_key = strip_bucket(key, &bucket_prefix).unwrap_or(key);
         xml.push_str(&format!(
             "<Contents><Key>{}</Key><LastModified>{}</LastModified><ETag>\"{}\"</ETag><Size>{}</Size></Contents>",
             obj_key,
