@@ -330,6 +330,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   Uint8List dco_decode_list_prim_u_8_strict(dynamic raw);
 
   @protected
+  List<ProjectReviewStatus> dco_decode_list_project_review_status(dynamic raw);
+
+  @protected
   List<ProjectedReminder> dco_decode_list_projected_reminder(dynamic raw);
 
   @protected
@@ -465,6 +468,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   PlaintextExportView dco_decode_plaintext_export_view(dynamic raw);
+
+  @protected
+  ProjectReviewStatus dco_decode_project_review_status(dynamic raw);
 
   @protected
   ProjectedReminder dco_decode_projected_reminder(dynamic raw);
@@ -1002,6 +1008,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   Uint8List sse_decode_list_prim_u_8_strict(SseDeserializer deserializer);
 
   @protected
+  List<ProjectReviewStatus> sse_decode_list_project_review_status(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   List<ProjectedReminder> sse_decode_list_projected_reminder(
     SseDeserializer deserializer,
   );
@@ -1185,6 +1196,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   PlaintextExportView sse_decode_plaintext_export_view(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  ProjectReviewStatus sse_decode_project_review_status(
     SseDeserializer deserializer,
   );
 
@@ -1856,6 +1872,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_list_project_review_status(
+    List<ProjectReviewStatus> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_list_projected_reminder(
     List<ProjectedReminder> self,
     SseSerializer serializer,
@@ -2092,6 +2114,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_plaintext_export_view(
     PlaintextExportView self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_project_review_status(
+    ProjectReviewStatus self,
     SseSerializer serializer,
   );
 

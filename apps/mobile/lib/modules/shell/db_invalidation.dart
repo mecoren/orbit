@@ -24,6 +24,9 @@ enum DbCacheTarget {
   projects,
   archivedProjects,
 
+  /// 待回顾项目清单（F1 回顾中心/侧栏徽标；open_task_count 聚合自任务表）
+  reviewDue,
+
   /// 标签列表
   labels,
 
@@ -69,11 +72,14 @@ List<DbCacheTarget> planTableInvalidation(String table) => switch (table) {
           DbCacheTarget.stats,
           DbCacheTarget.search,
           DbCacheTarget.taskDescriptionProjection,
+          // F1 回顾行的 open_task_count 聚合自任务表（完成/软删后计数收敛）
+          DbCacheTarget.reviewDue,
         ],
       'todo_projects' => const [
           DbCacheTarget.projects,
           DbCacheTarget.archivedProjects,
           DbCacheTarget.search,
+          DbCacheTarget.reviewDue,
         ],
       'todo_labels' => const [
           DbCacheTarget.labels,
@@ -138,6 +144,8 @@ bool invalidateByTable(WidgetRef ref, String table) {
         ref.invalidate(todoProjectsProvider);
       case DbCacheTarget.archivedProjects:
         ref.invalidate(todoArchivedProjectsProvider);
+      case DbCacheTarget.reviewDue:
+        ref.invalidate(reviewDueProvider);
       case DbCacheTarget.labels:
         ref.invalidate(todoLabelsProvider);
       case DbCacheTarget.taskLabelProjection:

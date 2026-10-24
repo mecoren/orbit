@@ -177,4 +177,32 @@ void main() {
 
     expect(find.text('项目不存在或已删除'), findsOneWidget);
   });
+
+  testWidgets('回顾周期：抽屉挑「每周」+ 保存走语义化入口（F1）', (tester) async {
+    // 回顾周期段在表单最底部：加高测试视口让它直接可见（对齐
+    // calendar_screen_test 的 physicalSize 范式），免滚动定位
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(800, 2000);
+    addTearDown(tester.view.reset);
+
+    final bridge = MockOrbitBridge();
+    final id = _projectId(bridge, '工作');
+    await _pump(tester, bridge, id);
+
+    // 默认关闭（SectionCard 标题 + 行内当前值「关闭」；点击行弹抽屉）
+    expect(find.text('回顾周期'), findsOneWidget);
+    await tester.tap(find.text('关闭'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('每周'));
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pumpAndSettle();
+
+    // 保存（回顾周期变化即 dirty，✓ 可用）
+    await _save(tester);
+
+    final p = bridge.store.projects[id]!;
+    expect(p['review_interval_days'], 7);
+    expect(p['review_last_at'], isNotNull, reason: '开启时从未回顾过则从现在起算');
+    expect(p['review_snooze_until'], isNull, reason: '开启时清残留暂缓');
+  });
 }

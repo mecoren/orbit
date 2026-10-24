@@ -241,6 +241,103 @@ class MockOrbitBridge implements OrbitBridge {
         if (p != null) p['sort_order'] = sortOrder;
       });
 
+  // ── 项目回顾节奏（F1；口径镜像 core project_review_api） ──
+
+  /// 本地日序号（days since epoch）——与 Rust local_day_index 同算法：
+  /// 取本地年月日拼 UTC 零点再除日长，不受 DST 偏移影响
+  static int _localDayIndex(int tsMs) {
+    final d = DateTime.fromMillisecondsSinceEpoch(tsMs);
+    return DateTime.utc(d.year, d.month, d.day).millisecondsSinceEpoch ~/
+        Duration.millisecondsPerDay;
+  }
+
+  @override
+  Future<List<ProjectReviewStatus>> todoProjectsDueForReview(int nowMs) =>
+      _delay(() {
+        final today = _localDayIndex(nowMs);
+        final counts = <int, int>{};
+        for (final t in store.tasks.values) {
+          if (t['is_deleted'] == 0 && t['done'] == 0) {
+            final pid = t['project_id'] as int?;
+            if (pid != null) counts[pid] = (counts[pid] ?? 0) + 1;
+          }
+        }
+        final due = <ProjectReviewStatus>[];
+        for (final p in store.projects.values) {
+          if (p['is_deleted'] != 0 || (p['is_archived'] ?? 0) != 0) continue;
+          final interval = p['review_interval_days'] as int?;
+          if (interval == null || interval <= 0) continue;
+          final lastAt = p['review_last_at'] as int?;
+          // 从未回顾 = 立即到期；到期 = 上次回顾日 + 周期；暂缓只往后推（取 max）
+          final base =
+              lastAt == null ? today : _localDayIndex(lastAt) + interval;
+          final snoozeUntil = p['review_snooze_until'] as int?;
+          final dueIndex = snoozeUntil == null
+              ? base
+              : base > _localDayIndex(snoozeUntil)
+                  ? base
+                  : _localDayIndex(snoozeUntil);
+          if (dueIndex > today) continue;
+          due.add(ProjectReviewStatus(
+            project: TodoProject.fromJson(p),
+            dueDayIndex: dueIndex,
+            overdueDays: today - dueIndex,
+            openTaskCount: counts[p['id'] as int] ?? 0,
+          ));
+        }
+        due.sort((a, b) {
+          final byOverdue = b.overdueDays.compareTo(a.overdueDays);
+          if (byOverdue != 0) return byOverdue;
+          return a.project.title.compareTo(b.project.title);
+        });
+        return due;
+      });
+
+  @override
+  Future<TodoProject> todoProjectMarkReviewed(int projectId) => _delay(() {
+        final p = store.projects[projectId] ?? _notFound('project $projectId');
+        p['review_last_at'] = store.now();
+        p['review_snooze_until'] = null;
+        _emit('todo_projects');
+        return TodoProject.fromJson(p);
+      });
+
+  @override
+  Future<TodoProject> todoProjectSetReviewInterval(int projectId, int? days) =>
+      _delay(() {
+        final p = store.projects[projectId] ?? _notFound('project $projectId');
+        if (days != null && days > 0) {
+          p['review_interval_days'] = days;
+          // 开启时从未回顾过则从现在起算（core 同款：首次到期 = 设定日 + 周期）
+          if (p['review_last_at'] == null) {
+            p['review_last_at'] = store.now();
+          }
+        } else {
+          p['review_interval_days'] = null;
+        }
+        p['review_snooze_until'] = null;
+        _emit('todo_projects');
+        return TodoProject.fromJson(p);
+      });
+
+  @override
+  Future<TodoProject> todoProjectSnoozeReview(
+          int projectId, int days, int nowMs) =>
+      _delay(() {
+        final p = store.projects[projectId] ?? _notFound('project $projectId');
+        if (days <= 0) {
+          throw Exception('暂缓天数必须为正整数');
+        }
+        // 暂缓截止 = 今天零点 + N 天（core local_day_start 同口径）
+        final n = DateTime.fromMillisecondsSinceEpoch(nowMs);
+        final dayStart =
+            DateTime(n.year, n.month, n.day).millisecondsSinceEpoch;
+        p['review_snooze_until'] =
+            dayStart + days * Duration.millisecondsPerDay;
+        _emit('todo_projects');
+        return TodoProject.fromJson(p);
+      });
+
   // ── todo_tasks ──
 
   @override

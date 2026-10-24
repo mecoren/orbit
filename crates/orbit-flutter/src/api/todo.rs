@@ -30,7 +30,7 @@
 //! - get_by_uuid 已导出（todo_projects/tasks_get_by_uuid，与桌面 business_cmd 宏口径一致）；
 //! - business_count / recalc_percent 只读聚合已对齐桌面。
 
-use orbit_core::api::{business_api, todo_api};
+use orbit_core::api::{business_api, project_review_api, todo_api};
 // patch_json 仅在本模块内部反序列化为 core UpdateInput（不过 FRB 桥）
 use orbit_core::models::business::{
     TodoLabelUpdateInput, TodoProjectUpdateInput, TodoSubtaskUpdateInput, TodoTaskUpdateInput,
@@ -43,12 +43,12 @@ use orbit_core::models::business::{
 // 同理 ProjectedTaskLabel / ProjectedReminder 仅作为分组 labels/reminders
 // 的元素类型出现，不再导出（否则 unused_imports）。
 pub use super::dto::{
-    CompleteTaskResult, ListFilter, TaskDependencyFlags, TaskDescriptionFlag, TaskExistenceFlag,
-    TaskLabelsProjection, TaskRemindersProjection, TodoComment, TodoCommentCreateInput, TodoLabel,
-    TodoLabelCreateInput, TodoProject, TodoProjectCreateInput, TodoReminder,
-    TodoReminderCreateInput, TodoSubtask, TodoSubtaskCreateInput, TodoTask, TodoTaskCreateInput,
-    TodoTaskDetail, TodoTaskLabel, TodoTaskLabelCreateInput, TodoTaskListItem, TodoTaskRelation,
-    TodoTaskRelationCreateInput,
+    CompleteTaskResult, ListFilter, ProjectReviewStatus, TaskDependencyFlags, TaskDescriptionFlag,
+    TaskExistenceFlag, TaskLabelsProjection, TaskRemindersProjection, TodoComment,
+    TodoCommentCreateInput, TodoLabel, TodoLabelCreateInput, TodoProject, TodoProjectCreateInput,
+    TodoReminder, TodoReminderCreateInput, TodoSubtask, TodoSubtaskCreateInput, TodoTask,
+    TodoTaskCreateInput, TodoTaskDetail, TodoTaskLabel, TodoTaskLabelCreateInput, TodoTaskListItem,
+    TodoTaskRelation, TodoTaskRelationCreateInput,
 };
 
 fn pool() -> Result<sqlx::SqlitePool, String> {
@@ -122,6 +122,52 @@ pub async fn todo_projects_update_sort_order(id: i64, sort_order: f64) -> Result
     todo_api::update_todo_project_sort_order(&pool, id, sort_order)
         .await
         .map_err(|e| e.to_string())
+}
+
+// ---------- 项目回顾节奏（F1；对应桌面 business_cmd 回顾四命令） ----------
+
+/// 待回顾项目清单（回顾中心/侧栏徽标共用；now_ms 由 Dart 传
+/// DateTime.now().millisecondsSinceEpoch——本地日界换算在 core）
+pub async fn todo_projects_due_for_review(now_ms: i64) -> Result<Vec<ProjectReviewStatus>, String> {
+    let pool = pool()?;
+    project_review_api::list_projects_due_for_review(&pool, now_ms)
+        .await
+        .map_err(|e| e.to_string())
+        .map(|list| list.into_iter().map(ProjectReviewStatus::from).collect())
+}
+
+/// 标记项目已回顾（下次到期 = 今天 + 周期；顺带清空暂缓）
+pub async fn todo_project_mark_reviewed(project_id: i64) -> Result<TodoProject, String> {
+    let pool = pool()?;
+    project_review_api::mark_project_reviewed(&pool, project_id)
+        .await
+        .map_err(|e| e.to_string())
+        .map(TodoProject::from)
+}
+
+/// 设置项目回顾周期（days 缺失/≤0 = 关闭；开启时从未回顾过则从现在起算）
+pub async fn todo_project_set_review_interval(
+    project_id: i64,
+    days: Option<i64>,
+) -> Result<TodoProject, String> {
+    let pool = pool()?;
+    project_review_api::set_project_review_interval(&pool, project_id, days)
+        .await
+        .map_err(|e| e.to_string())
+        .map(TodoProject::from)
+}
+
+/// 暂缓项目回顾（到期推到今天 + days 天，不重置周期）
+pub async fn todo_project_snooze_review(
+    project_id: i64,
+    days: i64,
+    now_ms: i64,
+) -> Result<TodoProject, String> {
+    let pool = pool()?;
+    project_review_api::snooze_project_review(&pool, project_id, days, now_ms)
+        .await
+        .map_err(|e| e.to_string())
+        .map(TodoProject::from)
 }
 
 // =============================================================================

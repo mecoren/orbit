@@ -50,6 +50,39 @@ Future<void> todoProjectsUpdateSortOrder({
   sortOrder: sortOrder,
 );
 
+/// 待回顾项目清单（回顾中心/侧栏徽标共用；now_ms 由 Dart 传
+/// DateTime.now().millisecondsSinceEpoch——本地日界换算在 core）
+Future<List<ProjectReviewStatus>> todoProjectsDueForReview({
+  required PlatformInt64 nowMs,
+}) => RustLib.instance.api.crateApiTodoTodoProjectsDueForReview(nowMs: nowMs);
+
+/// 标记项目已回顾（下次到期 = 今天 + 周期；顺带清空暂缓）
+Future<TodoProject> todoProjectMarkReviewed({
+  required PlatformInt64 projectId,
+}) => RustLib.instance.api.crateApiTodoTodoProjectMarkReviewed(
+  projectId: projectId,
+);
+
+/// 设置项目回顾周期（days 缺失/≤0 = 关闭；开启时从未回顾过则从现在起算）
+Future<TodoProject> todoProjectSetReviewInterval({
+  required PlatformInt64 projectId,
+  PlatformInt64? days,
+}) => RustLib.instance.api.crateApiTodoTodoProjectSetReviewInterval(
+  projectId: projectId,
+  days: days,
+);
+
+/// 暂缓项目回顾（到期推到今天 + days 天，不重置周期）
+Future<TodoProject> todoProjectSnoozeReview({
+  required PlatformInt64 projectId,
+  required PlatformInt64 days,
+  required PlatformInt64 nowMs,
+}) => RustLib.instance.api.crateApiTodoTodoProjectSnoozeReview(
+  projectId: projectId,
+  days: days,
+  nowMs: nowMs,
+);
+
 /// 列出任务（对应桌面 todo_tasks_list）
 ///
 /// A2 瘦行：返回 [TodoTaskListItem]（10 个列表通道零消费列不过桥），

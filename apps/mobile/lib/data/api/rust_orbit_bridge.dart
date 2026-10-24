@@ -168,6 +168,38 @@ class RustOrbitBridge implements OrbitBridge {
   Future<void> todoProjectUpdateSortOrder(int id, int sortOrder) =>
       gen_todo.todoProjectsUpdateSortOrder(id: id, sortOrder: sortOrder.toDouble());
 
+  // ── 项目回顾节奏（F1） ──
+
+  @override
+  Future<List<ProjectReviewStatus>> todoProjectsDueForReview(int nowMs) async =>
+      (await gen_todo.todoProjectsDueForReview(nowMs: nowMs))
+          .map((s) => ProjectReviewStatus(
+                project: _mapProject(s.project),
+                dueDayIndex: s.dueDayIndex,
+                overdueDays: s.overdueDays,
+                openTaskCount: s.openTaskCount,
+              ))
+          .toList();
+
+  @override
+  Future<TodoProject> todoProjectMarkReviewed(int projectId) async =>
+      _mapProject(await gen_todo.todoProjectMarkReviewed(projectId: projectId));
+
+  @override
+  Future<TodoProject> todoProjectSetReviewInterval(int projectId, int? days) async =>
+      _mapProject(await gen_todo.todoProjectSetReviewInterval(
+        projectId: projectId,
+        days: days,
+      ));
+
+  @override
+  Future<TodoProject> todoProjectSnoozeReview(int projectId, int days, int nowMs) async =>
+      _mapProject(await gen_todo.todoProjectSnoozeReview(
+        projectId: projectId,
+        days: days,
+        nowMs: nowMs,
+      ));
+
   // ── todo_tasks ──
 
   @override
@@ -1641,6 +1673,9 @@ class RustOrbitBridge implements OrbitBridge {
         hexColor: p.hexColor,
         sortOrder: p.sortOrder,
         parentUuid: p.parentUuid,
+        reviewIntervalDays: p.reviewIntervalDays,
+        reviewLastAt: p.reviewLastAt,
+        reviewSnoozeUntil: p.reviewSnoozeUntil,
         isArchived: p.isArchived,
         isDeleted: p.isDeleted,
         createdAt: p.createdAt,

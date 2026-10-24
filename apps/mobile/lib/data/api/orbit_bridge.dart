@@ -286,6 +286,20 @@ abstract class OrbitBridge {
   Future<void> todoProjectDelete(int id);
   Future<void> todoProjectUpdateSortOrder(int id, int sortOrder);
 
+  // ── 项目回顾节奏（F1；判定真值在 core，nowMs 由调用方传本地毫秒） ──
+
+  /// 待回顾项目清单（回顾中心/侧栏徽标共用）
+  Future<List<ProjectReviewStatus>> todoProjectsDueForReview(int nowMs);
+
+  /// 标记项目已回顾（下次到期 = 今天 + 周期；顺带清空暂缓）
+  Future<TodoProject> todoProjectMarkReviewed(int projectId);
+
+  /// 设置项目回顾周期（days null/≤0 = 关闭；开启时从未回顾过则从现在起算）
+  Future<TodoProject> todoProjectSetReviewInterval(int projectId, int? days);
+
+  /// 暂缓项目回顾 days 天（不重置周期）
+  Future<TodoProject> todoProjectSnoozeReview(int projectId, int days, int nowMs);
+
   // ── todo_tasks ──
 
   Future<List<TodoTask>> todoTaskList(ListFilter filter);

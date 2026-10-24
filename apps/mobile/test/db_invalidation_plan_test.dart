@@ -78,6 +78,8 @@ void main() {
           DbCacheTarget.projects,
           DbCacheTarget.archivedProjects,
           DbCacheTarget.search,
+          // F1：项目回顾三列随整行同步，待回顾清单随之失效
+          DbCacheTarget.reviewDue,
         ],
       );
       expect(planTableInvalidation('todo_labels'),

@@ -455,8 +455,8 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
                           ],
                         ),
                       ),
-                      // 二、功能入口卡（搜索 / 筛选器 / 回收站；与快捷卡各自成卡，
-                      // 间距 cardGap——三行皆无分区头，同卡即同组）
+                      // 二、功能入口卡（搜索 / 筛选器 / 回顾 / 回收站；与快捷卡各自
+                      // 成卡，间距 cardGap——四行皆无分区头，同卡即同组）
                       const SizedBox(height: AppDimens.cardGap),
                       Padding(
                         padding: const EdgeInsets.symmetric(
@@ -465,11 +465,13 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
                             _buildSearchRow(
-                                context, OrbitCardEdge.of(0, 3)),
+                                context, OrbitCardEdge.of(0, 4)),
                             _buildSavedFiltersRow(
-                                context, OrbitCardEdge.of(1, 3)),
+                                context, OrbitCardEdge.of(1, 4)),
+                            _buildReviewRow(context, badgeBackground,
+                                OrbitCardEdge.of(2, 4)),
                             _buildTrashRow(context, badgeBackground,
-                                OrbitCardEdge.of(2, 3)),
+                                OrbitCardEdge.of(3, 4)),
                           ],
                         ),
                       ),
@@ -700,6 +702,43 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
     );
   }
 
+  /// 回顾入口行（F1 项目回顾节奏：到期项目归集进回顾中心整页）
+  Widget _buildReviewRow(BuildContext context, Color badgeBackground,
+      [OrbitCardEdge edge = OrbitCardEdge.none]) {
+    final colors = AppColors.ofContext(context);
+    final dueCount = ref.watch(reviewDueProvider).value?.length ?? 0;
+    return OrbitCardSegment(
+      edge: edge,
+      child: ListTile(
+        leading: Icon(
+          OrbitIcons.calendarCheck,
+          size: AppDimens.iconSizeMd,
+          color: colors.secondaryText,
+        ),
+        title: Text(
+          '回顾',
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w500,
+            color: colors.titleText,
+          ),
+        ),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            CountBadge.wrap(n: dueCount, background: badgeBackground),
+            Icon(
+              OrbitIcons.chevronRight,
+              size: AppDimens.iconSizeMd,
+              color: colors.secondaryText,
+            ),
+          ],
+        ),
+        onTap: () => context.push('/todo/review-center'),
+      ),
+    );
+  }
+
   /// 回收站入口行（已删除任务的恢复入口；独立路由页，同日历行模式）
   Widget _buildTrashRow(BuildContext context, Color badgeBackground,
       [OrbitCardEdge edge = OrbitCardEdge.none]) {
@@ -887,6 +926,23 @@ class _SidebarScreenState extends ConsumerState<SidebarScreen> {
                   ),
                 ),
               ),
+              // F1 待回顾徽标（琥珀点）：到期状态提示，入口在功能卡的「回顾」行
+              //（点状提示即可——到期是「状态」不是「计数」，行点击仍进项目列表）
+              if ((ref.watch(reviewDueProvider).value ?? const [])
+                  .any((s) => s.project.id == project.id)) ...[
+                Semantics(
+                  label: '待回顾',
+                  child: Container(
+                    width: 8,
+                    height: 8,
+                    decoration: BoxDecoration(
+                      color: OrbitAccents.myDayAmber,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: AppDimens.space8),
+              ],
               if (undone > 0) ...[
                 CountBadge(
                   n: undone,

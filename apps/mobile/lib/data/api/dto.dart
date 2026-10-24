@@ -45,6 +45,12 @@ class TodoProject {
   final double sortOrder;
   /// M8 上级文件夹（父项目）的同步主键 uuid；null = 顶层
   final String? parentUuid;
+  /// F1 回顾周期（天）；null/0 = 关闭（7=每周 14=每两周 30=每月）
+  final int? reviewIntervalDays;
+  /// 上次回顾时间（毫秒）；null = 从未回顾
+  final int? reviewLastAt;
+  /// 回顾暂缓截止（毫秒，本地零点口径）；null = 未暂缓
+  final int? reviewSnoozeUntil;
   /// 项目归档标记：0 活跃 1 已归档（默认列表排除，侧栏归档区）
   final int isArchived;
   final int isDeleted;
@@ -61,6 +67,9 @@ class TodoProject {
     required this.hexColor,
     required this.sortOrder,
     required this.parentUuid,
+    this.reviewIntervalDays,
+    this.reviewLastAt,
+    this.reviewSnoozeUntil,
     required this.isArchived,
     required this.isDeleted,
     required this.createdAt,
@@ -77,6 +86,9 @@ class TodoProject {
         hexColor: j['hex_color'] as String,
         sortOrder: (j['sort_order'] as num).toDouble(),
         parentUuid: normalizeParentUuid(j['parent_uuid'] as String?),
+        reviewIntervalDays: (j['review_interval_days'] as num?)?.toInt(),
+        reviewLastAt: (j['review_last_at'] as num?)?.toInt(),
+        reviewSnoozeUntil: (j['review_snooze_until'] as num?)?.toInt(),
         isArchived: (j['is_archived'] as int?) ?? 0,
         isDeleted: j['is_deleted'] as int,
         createdAt: j['created_at'] as int,
@@ -84,6 +96,24 @@ class TodoProject {
         deletedAt: j['deleted_at'] as int?,
         version: j['version'] as int,
       );
+}
+
+/// F1 回顾状态行（core project_review_api::ProjectReviewStatus 的 Dart 镜像）
+class ProjectReviewStatus {
+  final TodoProject project;
+  /// 到期日序号（days since epoch，本地时区日界）
+  final int dueDayIndex;
+  /// 已逾期天数（0 = 今天到期）
+  final int overdueDays;
+  /// 项目内未完成且未软删的任务数
+  final int openTaskCount;
+
+  const ProjectReviewStatus({
+    required this.project,
+    required this.dueDayIndex,
+    required this.overdueDays,
+    required this.openTaskCount,
+  });
 }
 
 /// 空白串归一为 null（M8 上级文件夹口径，与 core `normalize_parent_uuid` 一致）：

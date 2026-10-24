@@ -26,6 +26,16 @@ final todoArchivedProjectsProvider =
   return bridge.todoProjectListArchived();
 });
 
+/// 待回顾项目清单（F1；queryKey 语义 ["todo-project","review-due"]——
+/// 到期/逾期判定真值在 core，本 provider 只传「现在」；回顾写操作与
+/// db-change 后经 db_invalidation 的 reviewDue 目标刷新）
+final reviewDueProvider =
+    FutureProvider<List<ProjectReviewStatus>>((ref) async {
+  final bridge = ref.watch(orbitBridgeProvider);
+  return bridge
+      .todoProjectsDueForReview(DateTime.now().millisecondsSinceEpoch);
+});
+
 /// 标签列表（React queryKey ["todo-label","list"]；详情页标签编辑弹层消费）
 final todoLabelsProvider = FutureProvider<List<TodoLabel>>((ref) async {
   final bridge = ref.watch(orbitBridgeProvider);

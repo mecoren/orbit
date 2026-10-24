@@ -22,6 +22,7 @@ import '../../modules/todo/calendar_screen.dart';
 import '../../modules/todo/detail_screen.dart';
 import '../../modules/todo/matrix_screen.dart';
 import '../../modules/todo/project_edit_page.dart';
+import '../../modules/todo/review_center_page.dart';
 import '../../modules/todo/saved_filters_screen.dart';
 import '../../modules/todo/search_screen.dart';
 import '../../modules/todo/sidebar_screen.dart';
@@ -145,6 +146,14 @@ final appRouter = GoRouter(
                     ? state.extra! as Map<String, dynamic>
                     : null,
               ),
+              key: state.pageKey,
+            ),
+          ),
+          // 回顾中心（F1 项目回顾节奏）：到期项目归集 + 逐项目三步向导
+          GoRoute(
+            path: '/todo/review-center',
+            pageBuilder: (context, state) => pageSlideFromRight(
+              const ReviewCenterPage(),
               key: state.pageKey,
             ),
           ),

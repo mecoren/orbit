@@ -10,6 +10,7 @@ import '../../core/theme/app_shapes.dart';
 import '../../core/theme/icon_map.dart';
 import '../../core/theme/orbit_accents.dart';
 import '../../data/api/dto.dart';
+import '../../data/providers/bridge_provider.dart';
 import '../../shared/utils/hex_color.dart';
 import '../../shared/widgets/shadcn/orbit_card.dart';
 import '../../shared/widgets/shadcn/orbit_color_picker.dart';
@@ -17,8 +18,11 @@ import '../../shared/widgets/shadcn/orbit_dropdown_panel.dart';
 import '../../shared/widgets/shadcn/orbit_empty_state.dart';
 import '../../shared/widgets/shadcn/orbit_page_header.dart';
 import '../../shared/widgets/shadcn/orbit_section_card.dart';
+import '../../shared/widgets/shadcn/orbit_select_sheet.dart';
+import '../../shared/widgets/shadcn/orbit_toast.dart';
 import 'logic/project_actions.dart';
 import 'logic/project_palette.dart';
+import 'logic/project_review.dart';
 import 'logic/project_tree.dart';
 import 'logic/view_mode.dart';
 import 'providers/todo_providers.dart';
@@ -67,6 +71,11 @@ class _ProjectEditPageState extends ConsumerState<ProjectEditPage> {
   String? _originalParentUuid;
   String? _selfUuid;
 
+  /// F1 回顾周期：当前选择（null = 关闭）与初值快照；
+  /// 保存走 setReviewInterval 语义化入口（开启起算/关闭清暂缓在 core）
+  int? _reviewDays;
+  int? _originalReviewDays;
+
   /// 已按项目初始化过一次（provider 首帧可能尚未就绪，故与 build 同帧补种）
   bool _seeded = false;
   bool _saving = false;
@@ -88,6 +97,11 @@ class _ProjectEditPageState extends ConsumerState<ProjectEditPage> {
     _selfUuid = normalizeParentUuid(project.uuid);
     _parentUuid = normalizeParentUuid(project.parentUuid);
     _originalParentUuid = _parentUuid;
+    _reviewDays = (project.reviewIntervalDays != null &&
+            project.reviewIntervalDays! > 0)
+        ? project.reviewIntervalDays
+        : null;
+    _originalReviewDays = _reviewDays;
     _seeded = true;
   }
 
@@ -95,7 +109,8 @@ class _ProjectEditPageState extends ConsumerState<ProjectEditPage> {
       _titleController.text.trim() != _originalTitle ||
       _color != _originalColor ||
       _viewMode != _originalViewMode ||
-      _parentUuid != _originalParentUuid;
+      _parentUuid != _originalParentUuid ||
+      _reviewDays != _originalReviewDays;
 
   /// 该项目下未完成任务数（删除保护流用；与侧栏计数同口径）
   ///
@@ -114,6 +129,17 @@ class _ProjectEditPageState extends ConsumerState<ProjectEditPage> {
       hexColor: _color,
       parentUuid: _parentUuid,
     );
+    // F1 回顾周期：有变化才写；语义化入口负责「开启时从未回顾过则从现在
+    // 起算、关闭时清残留暂缓」（raw patch 不带这些语义，故不走 saveProject）
+    if (_reviewDays != _originalReviewDays) {
+      try {
+        await ref.read(orbitBridgeProvider).todoProjectSetReviewInterval(
+            project.id, _reviewDays);
+        ref.invalidate(reviewDueProvider);
+      } catch (_) {
+        WaitToast.destructive('回顾周期保存失败');
+      }
+    }
     // 视图档只写「项目档」：全局档保持「非项目视图的默认值」语义；
     // 用户没改过视图档时不落盘（否则会把全局档钉死成该项目的初值）。
     // 不 await 落盘（与列表页 [_setViewMode] 同口径）：内存态即时生效，
@@ -298,7 +324,64 @@ class _ProjectEditPageState extends ConsumerState<ProjectEditPage> {
           title: '上级文件夹',
           child: _parentFolderRow(colors, projects),
         ),
+        // F1 回顾周期：到期项目进侧栏「回顾」中心，逐项目走三步向导
+        const SizedBox(height: AppDimens.cardGap),
+        SectionCard(
+          title: '回顾周期',
+          child: _reviewIntervalRow(colors),
+        ),
       ],
+    );
+  }
+
+  /// 回顾周期行（F1）：点击弹底部抽屉挑档位（选择类交互统一口径）
+  Widget _reviewIntervalRow(AppColorSet colors) {
+    return InkWell(
+      onTap: _pickReviewInterval,
+      borderRadius: AppShapes.small,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: AppDimens.space8),
+        child: Row(
+          children: [
+            Icon(
+              OrbitIcons.calendarCheck,
+              size: AppDimens.iconSizeMd,
+              color: colors.iconText,
+            ),
+            const SizedBox(width: AppDimens.space12),
+            Expanded(
+              child: Text(
+                _reviewDays == null ? '关闭' : formatReviewInterval(_reviewDays),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontSize: 15, color: colors.titleText),
+              ),
+            ),
+            Icon(
+              OrbitIcons.expandMore,
+              size: AppDimens.iconSizeMd,
+              color: colors.secondaryText,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// 回顾周期档位抽屉（T = int? 承载「关闭」档：null 即关闭）
+  Future<void> _pickReviewInterval() async {
+    final items = <SelectItem<int?>>[
+      const SelectItem<int?>(value: null, label: '关闭', hint: '不参与周期回顾'),
+      for (final p in reviewIntervalPresets)
+        SelectItem<int?>(
+            value: p.days, label: p.label, hint: '每 ${p.days} 天回顾一次'),
+    ];
+    await showSelectBottomSheet<int?>(
+      context,
+      title: '回顾周期',
+      current: _reviewDays,
+      items: items,
+      onSelect: (days) => setState(() => _reviewDays = days),
     );
   }
 

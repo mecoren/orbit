@@ -38,7 +38,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.12.0";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 1085698285;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -1044884452;
 
 // Section: executor
 
@@ -4856,6 +4856,127 @@ fn wire__crate__api__todo__todo_labels_update_impl(
         },
     )
 }
+fn wire__crate__api__todo__todo_project_mark_reviewed_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "todo_project_mark_reviewed",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_project_id = <i64>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| async move {
+                transform_result_sse::<_, String>(
+                    (move || async move {
+                        let output_ok =
+                            crate::api::todo::todo_project_mark_reviewed(api_project_id).await?;
+                        Ok(output_ok)
+                    })()
+                    .await,
+                )
+            }
+        },
+    )
+}
+fn wire__crate__api__todo__todo_project_set_review_interval_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "todo_project_set_review_interval",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_project_id = <i64>::sse_decode(&mut deserializer);
+            let api_days = <Option<i64>>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| async move {
+                transform_result_sse::<_, String>(
+                    (move || async move {
+                        let output_ok = crate::api::todo::todo_project_set_review_interval(
+                            api_project_id,
+                            api_days,
+                        )
+                        .await?;
+                        Ok(output_ok)
+                    })()
+                    .await,
+                )
+            }
+        },
+    )
+}
+fn wire__crate__api__todo__todo_project_snooze_review_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "todo_project_snooze_review",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_project_id = <i64>::sse_decode(&mut deserializer);
+            let api_days = <i64>::sse_decode(&mut deserializer);
+            let api_now_ms = <i64>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| async move {
+                transform_result_sse::<_, String>(
+                    (move || async move {
+                        let output_ok = crate::api::todo::todo_project_snooze_review(
+                            api_project_id,
+                            api_days,
+                            api_now_ms,
+                        )
+                        .await?;
+                        Ok(output_ok)
+                    })()
+                    .await,
+                )
+            }
+        },
+    )
+}
 fn wire__crate__api__todo__todo_projects_create_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -4921,6 +5042,43 @@ fn wire__crate__api__todo__todo_projects_delete_impl(
                 transform_result_sse::<_, String>(
                     (move || async move {
                         let output_ok = crate::api::todo::todo_projects_delete(api_id).await?;
+                        Ok(output_ok)
+                    })()
+                    .await,
+                )
+            }
+        },
+    )
+}
+fn wire__crate__api__todo__todo_projects_due_for_review_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "todo_projects_due_for_review",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_now_ms = <i64>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| async move {
+                transform_result_sse::<_, String>(
+                    (move || async move {
+                        let output_ok =
+                            crate::api::todo::todo_projects_due_for_review(api_now_ms).await?;
                         Ok(output_ok)
                     })()
                     .await,
@@ -7500,6 +7658,20 @@ impl SseDecode for Vec<u8> {
     }
 }
 
+impl SseDecode for Vec<crate::api::dto::ProjectReviewStatus> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut len_ = <i32>::sse_decode(deserializer);
+        let mut ans_ = Vec::with_capacity(len_ as usize);
+        for idx_ in 0..len_ {
+            ans_.push(<crate::api::dto::ProjectReviewStatus>::sse_decode(
+                deserializer,
+            ));
+        }
+        return ans_;
+    }
+}
+
 impl SseDecode for Vec<crate::api::dto::ProjectedReminder> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -8058,6 +8230,22 @@ impl SseDecode for crate::api::plaintext_export::PlaintextExportView {
     }
 }
 
+impl SseDecode for crate::api::dto::ProjectReviewStatus {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_project = <crate::api::dto::TodoProject>::sse_decode(deserializer);
+        let mut var_dueDayIndex = <i64>::sse_decode(deserializer);
+        let mut var_overdueDays = <i64>::sse_decode(deserializer);
+        let mut var_openTaskCount = <i64>::sse_decode(deserializer);
+        return crate::api::dto::ProjectReviewStatus {
+            project: var_project,
+            due_day_index: var_dueDayIndex,
+            overdue_days: var_overdueDays,
+            open_task_count: var_openTaskCount,
+        };
+    }
+}
+
 impl SseDecode for crate::api::dto::ProjectedReminder {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -8591,6 +8779,9 @@ impl SseDecode for crate::api::dto::TodoProject {
         let mut var_hexColor = <String>::sse_decode(deserializer);
         let mut var_sortOrder = <f64>::sse_decode(deserializer);
         let mut var_parentUuid = <Option<String>>::sse_decode(deserializer);
+        let mut var_reviewIntervalDays = <Option<i64>>::sse_decode(deserializer);
+        let mut var_reviewLastAt = <Option<i64>>::sse_decode(deserializer);
+        let mut var_reviewSnoozeUntil = <Option<i64>>::sse_decode(deserializer);
         let mut var_isArchived = <i32>::sse_decode(deserializer);
         let mut var_isDeleted = <i32>::sse_decode(deserializer);
         let mut var_createdAt = <i64>::sse_decode(deserializer);
@@ -8605,6 +8796,9 @@ impl SseDecode for crate::api::dto::TodoProject {
             hex_color: var_hexColor,
             sort_order: var_sortOrder,
             parent_uuid: var_parentUuid,
+            review_interval_days: var_reviewIntervalDays,
+            review_last_at: var_reviewLastAt,
+            review_snooze_until: var_reviewSnoozeUntil,
             is_archived: var_isArchived,
             is_deleted: var_isDeleted,
             created_at: var_createdAt,
@@ -9659,118 +9853,142 @@ fn pde_ffi_dispatcher_primary_impl(
         130 => wire__crate__api__todo__todo_labels_get_impl(port, ptr, rust_vec_len, data_len),
         131 => wire__crate__api__todo__todo_labels_list_impl(port, ptr, rust_vec_len, data_len),
         132 => wire__crate__api__todo__todo_labels_update_impl(port, ptr, rust_vec_len, data_len),
-        133 => wire__crate__api__todo__todo_projects_create_impl(port, ptr, rust_vec_len, data_len),
-        134 => wire__crate__api__todo__todo_projects_delete_impl(port, ptr, rust_vec_len, data_len),
-        135 => wire__crate__api__todo__todo_projects_get_impl(port, ptr, rust_vec_len, data_len),
-        136 => wire__crate__api__todo__todo_projects_get_by_uuid_impl(
+        133 => wire__crate__api__todo__todo_project_mark_reviewed_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        137 => wire__crate__api__todo__todo_projects_list_impl(port, ptr, rust_vec_len, data_len),
-        138 => wire__crate__api__todo__todo_projects_list_archived_impl(
+        134 => wire__crate__api__todo__todo_project_set_review_interval_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        139 => wire__crate__api__todo__todo_projects_update_impl(port, ptr, rust_vec_len, data_len),
-        140 => wire__crate__api__todo__todo_projects_update_sort_order_impl(
+        135 => wire__crate__api__todo__todo_project_snooze_review_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        141 => {
+        136 => wire__crate__api__todo__todo_projects_create_impl(port, ptr, rust_vec_len, data_len),
+        137 => wire__crate__api__todo__todo_projects_delete_impl(port, ptr, rust_vec_len, data_len),
+        138 => wire__crate__api__todo__todo_projects_due_for_review_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        139 => wire__crate__api__todo__todo_projects_get_impl(port, ptr, rust_vec_len, data_len),
+        140 => wire__crate__api__todo__todo_projects_get_by_uuid_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        141 => wire__crate__api__todo__todo_projects_list_impl(port, ptr, rust_vec_len, data_len),
+        142 => wire__crate__api__todo__todo_projects_list_archived_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        143 => wire__crate__api__todo__todo_projects_update_impl(port, ptr, rust_vec_len, data_len),
+        144 => wire__crate__api__todo__todo_projects_update_sort_order_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        145 => {
             wire__crate__api__todo__todo_reminders_create_impl(port, ptr, rust_vec_len, data_len)
         }
-        142 => {
+        146 => {
             wire__crate__api__todo__todo_reminders_delete_impl(port, ptr, rust_vec_len, data_len)
         }
-        143 => wire__crate__api__todo__todo_reminders_get_impl(port, ptr, rust_vec_len, data_len),
-        144 => wire__crate__api__todo__todo_reminders_list_impl(port, ptr, rust_vec_len, data_len),
-        145 => wire__crate__api__todo__todo_subtasks_create_impl(port, ptr, rust_vec_len, data_len),
-        146 => wire__crate__api__todo__todo_subtasks_delete_impl(port, ptr, rust_vec_len, data_len),
-        147 => wire__crate__api__todo__todo_subtasks_get_impl(port, ptr, rust_vec_len, data_len),
-        148 => wire__crate__api__todo__todo_subtasks_list_impl(port, ptr, rust_vec_len, data_len),
-        149 => {
+        147 => wire__crate__api__todo__todo_reminders_get_impl(port, ptr, rust_vec_len, data_len),
+        148 => wire__crate__api__todo__todo_reminders_list_impl(port, ptr, rust_vec_len, data_len),
+        149 => wire__crate__api__todo__todo_subtasks_create_impl(port, ptr, rust_vec_len, data_len),
+        150 => wire__crate__api__todo__todo_subtasks_delete_impl(port, ptr, rust_vec_len, data_len),
+        151 => wire__crate__api__todo__todo_subtasks_get_impl(port, ptr, rust_vec_len, data_len),
+        152 => wire__crate__api__todo__todo_subtasks_list_impl(port, ptr, rust_vec_len, data_len),
+        153 => {
             wire__crate__api__todo__todo_subtasks_promote_impl(port, ptr, rust_vec_len, data_len)
         }
-        150 => wire__crate__api__todo__todo_subtasks_toggle_done_impl(
+        154 => wire__crate__api__todo__todo_subtasks_toggle_done_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        151 => wire__crate__api__todo__todo_subtasks_update_impl(port, ptr, rust_vec_len, data_len),
-        152 => {
+        155 => wire__crate__api__todo__todo_subtasks_update_impl(port, ptr, rust_vec_len, data_len),
+        156 => {
             wire__crate__api__todo__todo_task_labels_create_impl(port, ptr, rust_vec_len, data_len)
         }
-        153 => {
+        157 => {
             wire__crate__api__todo__todo_task_labels_delete_impl(port, ptr, rust_vec_len, data_len)
         }
-        154 => wire__crate__api__todo__todo_task_labels_get_impl(port, ptr, rust_vec_len, data_len),
-        155 => {
+        158 => wire__crate__api__todo__todo_task_labels_get_impl(port, ptr, rust_vec_len, data_len),
+        159 => {
             wire__crate__api__todo__todo_task_labels_list_impl(port, ptr, rust_vec_len, data_len)
         }
-        156 => wire__crate__api__todo__todo_task_relations_create_impl(
+        160 => wire__crate__api__todo__todo_task_relations_create_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        157 => wire__crate__api__todo__todo_task_relations_delete_impl(
+        161 => wire__crate__api__todo__todo_task_relations_delete_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        158 => {
+        162 => {
             wire__crate__api__todo__todo_task_relations_get_impl(port, ptr, rust_vec_len, data_len)
         }
-        159 => {
+        163 => {
             wire__crate__api__todo__todo_task_relations_list_impl(port, ptr, rust_vec_len, data_len)
         }
-        160 => wire__crate__api__todo__todo_tasks_complete_impl(port, ptr, rust_vec_len, data_len),
-        161 => wire__crate__api__todo__todo_tasks_create_impl(port, ptr, rust_vec_len, data_len),
-        162 => wire__crate__api__todo__todo_tasks_delete_impl(port, ptr, rust_vec_len, data_len),
-        163 => wire__crate__api__todo__todo_tasks_duplicate_impl(port, ptr, rust_vec_len, data_len),
-        164 => wire__crate__api__todo__todo_tasks_get_impl(port, ptr, rust_vec_len, data_len),
-        165 => {
+        164 => wire__crate__api__todo__todo_tasks_complete_impl(port, ptr, rust_vec_len, data_len),
+        165 => wire__crate__api__todo__todo_tasks_create_impl(port, ptr, rust_vec_len, data_len),
+        166 => wire__crate__api__todo__todo_tasks_delete_impl(port, ptr, rust_vec_len, data_len),
+        167 => wire__crate__api__todo__todo_tasks_duplicate_impl(port, ptr, rust_vec_len, data_len),
+        168 => wire__crate__api__todo__todo_tasks_get_impl(port, ptr, rust_vec_len, data_len),
+        169 => {
             wire__crate__api__todo__todo_tasks_get_by_uuid_impl(port, ptr, rust_vec_len, data_len)
         }
-        166 => {
+        170 => {
             wire__crate__api__todo__todo_tasks_get_detail_impl(port, ptr, rust_vec_len, data_len)
         }
-        167 => wire__crate__api__todo__todo_tasks_list_impl(port, ptr, rust_vec_len, data_len),
-        168 => wire__crate__api__todo__todo_tasks_recalc_percent_impl(
+        171 => wire__crate__api__todo__todo_tasks_list_impl(port, ptr, rust_vec_len, data_len),
+        172 => wire__crate__api__todo__todo_tasks_recalc_percent_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        169 => wire__crate__api__todo__todo_tasks_update_impl(port, ptr, rust_vec_len, data_len),
-        170 => wire__crate__api__todo__todo_tasks_update_position_impl(
+        173 => wire__crate__api__todo__todo_tasks_update_impl(port, ptr, rust_vec_len, data_len),
+        174 => wire__crate__api__todo__todo_tasks_update_position_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        171 => wire__crate__api__trash__trash_meta_impl(port, ptr, rust_vec_len, data_len),
-        172 => wire__crate__api__trash__trash_purge_all_impl(port, ptr, rust_vec_len, data_len),
-        173 => wire__crate__api__trash__trash_purge_expired_impl(port, ptr, rust_vec_len, data_len),
-        174 => wire__crate__api__trash__trash_set_retention_days_impl(
+        175 => wire__crate__api__trash__trash_meta_impl(port, ptr, rust_vec_len, data_len),
+        176 => wire__crate__api__trash__trash_purge_all_impl(port, ptr, rust_vec_len, data_len),
+        177 => wire__crate__api__trash__trash_purge_expired_impl(port, ptr, rust_vec_len, data_len),
+        178 => wire__crate__api__trash__trash_set_retention_days_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        175 => wire__crate__api__trash__trash_task_purge_impl(port, ptr, rust_vec_len, data_len),
-        176 => wire__crate__api__trash__trash_task_restore_impl(port, ptr, rust_vec_len, data_len),
-        177 => wire__crate__api__trash__trash_tasks_list_impl(port, ptr, rust_vec_len, data_len),
-        178 => wire__crate__api__widget__widget_todo_query_impl(port, ptr, rust_vec_len, data_len),
-        179 => wire__crate__api__widget__widget_todo_toggle_impl(port, ptr, rust_vec_len, data_len),
+        179 => wire__crate__api__trash__trash_task_purge_impl(port, ptr, rust_vec_len, data_len),
+        180 => wire__crate__api__trash__trash_task_restore_impl(port, ptr, rust_vec_len, data_len),
+        181 => wire__crate__api__trash__trash_tasks_list_impl(port, ptr, rust_vec_len, data_len),
+        182 => wire__crate__api__widget__widget_todo_query_impl(port, ptr, rust_vec_len, data_len),
+        183 => wire__crate__api__widget__widget_todo_toggle_impl(port, ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
@@ -10708,6 +10926,29 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::plaintext_export::PlaintextEx
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::dto::ProjectReviewStatus {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.project.into_into_dart().into_dart(),
+            self.due_day_index.into_into_dart().into_dart(),
+            self.overdue_days.into_into_dart().into_dart(),
+            self.open_task_count.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::dto::ProjectReviewStatus
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::dto::ProjectReviewStatus>
+    for crate::api::dto::ProjectReviewStatus
+{
+    fn into_into_dart(self) -> crate::api::dto::ProjectReviewStatus {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
 impl flutter_rust_bridge::IntoDart for crate::api::dto::ProjectedReminder {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
@@ -11397,6 +11638,9 @@ impl flutter_rust_bridge::IntoDart for crate::api::dto::TodoProject {
             self.hex_color.into_into_dart().into_dart(),
             self.sort_order.into_into_dart().into_dart(),
             self.parent_uuid.into_into_dart().into_dart(),
+            self.review_interval_days.into_into_dart().into_dart(),
+            self.review_last_at.into_into_dart().into_dart(),
+            self.review_snooze_until.into_into_dart().into_dart(),
             self.is_archived.into_into_dart().into_dart(),
             self.is_deleted.into_into_dart().into_dart(),
             self.created_at.into_into_dart().into_dart(),
@@ -12659,6 +12903,16 @@ impl SseEncode for Vec<u8> {
     }
 }
 
+impl SseEncode for Vec<crate::api::dto::ProjectReviewStatus> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.len() as _, serializer);
+        for item in self {
+            <crate::api::dto::ProjectReviewStatus>::sse_encode(item, serializer);
+        }
+    }
+}
+
 impl SseEncode for Vec<crate::api::dto::ProjectedReminder> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -13091,6 +13345,16 @@ impl SseEncode for crate::api::plaintext_export::PlaintextExportView {
     }
 }
 
+impl SseEncode for crate::api::dto::ProjectReviewStatus {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <crate::api::dto::TodoProject>::sse_encode(self.project, serializer);
+        <i64>::sse_encode(self.due_day_index, serializer);
+        <i64>::sse_encode(self.overdue_days, serializer);
+        <i64>::sse_encode(self.open_task_count, serializer);
+    }
+}
+
 impl SseEncode for crate::api::dto::ProjectedReminder {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -13420,6 +13684,9 @@ impl SseEncode for crate::api::dto::TodoProject {
         <String>::sse_encode(self.hex_color, serializer);
         <f64>::sse_encode(self.sort_order, serializer);
         <Option<String>>::sse_encode(self.parent_uuid, serializer);
+        <Option<i64>>::sse_encode(self.review_interval_days, serializer);
+        <Option<i64>>::sse_encode(self.review_last_at, serializer);
+        <Option<i64>>::sse_encode(self.review_snooze_until, serializer);
         <i32>::sse_encode(self.is_archived, serializer);
         <i32>::sse_encode(self.is_deleted, serializer);
         <i64>::sse_encode(self.created_at, serializer);

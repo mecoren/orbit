@@ -94,6 +94,12 @@ pub struct TodoProject {
     pub sort_order: f64,
     /// M8 上级文件夹（父项目）的同步主键 uuid；None = 顶层
     pub parent_uuid: Option<String>,
+    /// F1 回顾周期（天）；None/0 = 关闭（7=每周 14=每两周 30=每月）
+    pub review_interval_days: Option<i64>,
+    /// 上次回顾时间（毫秒）；None = 从未回顾
+    pub review_last_at: Option<i64>,
+    /// 回顾暂缓截止（毫秒，本地零点口径）；None = 未暂缓
+    pub review_snooze_until: Option<i64>,
     pub is_archived: i32,
     pub is_deleted: i32,
     pub created_at: i64,
@@ -112,12 +118,38 @@ impl From<orbit_core::models::business::TodoProject> for TodoProject {
             hex_color: p.hex_color,
             sort_order: p.sort_order,
             parent_uuid: p.parent_uuid,
+            review_interval_days: p.review_interval_days,
+            review_last_at: p.review_last_at,
+            review_snooze_until: p.review_snooze_until,
             is_archived: p.is_archived,
             is_deleted: p.is_deleted,
             created_at: p.created_at,
             updated_at: p.updated_at,
             deleted_at: p.deleted_at,
             version: p.version,
+        }
+    }
+}
+
+/// 回顾状态行（镜像 project_review_api::ProjectReviewStatus；F1 回顾中心用）
+#[derive(Debug, Clone, Serialize)]
+pub struct ProjectReviewStatus {
+    pub project: TodoProject,
+    /// 到期日序号（days since epoch，本地时区日界）
+    pub due_day_index: i64,
+    /// 已逾期天数（0 = 今天到期）
+    pub overdue_days: i64,
+    /// 项目内未完成且未软删的任务数
+    pub open_task_count: i64,
+}
+
+impl From<orbit_core::api::project_review_api::ProjectReviewStatus> for ProjectReviewStatus {
+    fn from(s: orbit_core::api::project_review_api::ProjectReviewStatus) -> Self {
+        Self {
+            project: s.project.into(),
+            due_day_index: s.due_day_index,
+            overdue_days: s.overdue_days,
+            open_task_count: s.open_task_count,
         }
     }
 }

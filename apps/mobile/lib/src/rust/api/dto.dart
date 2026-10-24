@@ -6,7 +6,7 @@
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`
 
 /// 活动日志行（todo_activity_log 为本地轨迹表，不进同步白名单）
 class ActivityLogRow {
@@ -653,6 +653,44 @@ class ListFilter {
           myDayToday == other.myDayToday;
 }
 
+/// 回顾状态行（镜像 project_review_api::ProjectReviewStatus；F1 回顾中心用）
+class ProjectReviewStatus {
+  final TodoProject project;
+
+  /// 到期日序号（days since epoch，本地时区日界）
+  final PlatformInt64 dueDayIndex;
+
+  /// 已逾期天数（0 = 今天到期）
+  final PlatformInt64 overdueDays;
+
+  /// 项目内未完成且未软删的任务数
+  final PlatformInt64 openTaskCount;
+
+  const ProjectReviewStatus({
+    required this.project,
+    required this.dueDayIndex,
+    required this.overdueDays,
+    required this.openTaskCount,
+  });
+
+  @override
+  int get hashCode =>
+      project.hashCode ^
+      dueDayIndex.hashCode ^
+      overdueDays.hashCode ^
+      openTaskCount.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ProjectReviewStatus &&
+          runtimeType == other.runtimeType &&
+          project == other.project &&
+          dueDayIndex == other.dueDayIndex &&
+          overdueDays == other.overdueDays &&
+          openTaskCount == other.openTaskCount;
+}
+
 /// 行内提醒最小载荷（镜像 ProjectedReminder）
 class ProjectedReminder {
   final PlatformInt64 id;
@@ -1135,6 +1173,15 @@ class TodoProject {
 
   /// M8 上级文件夹（父项目）的同步主键 uuid；None = 顶层
   final String? parentUuid;
+
+  /// F1 回顾周期（天）；None/0 = 关闭（7=每周 14=每两周 30=每月）
+  final PlatformInt64? reviewIntervalDays;
+
+  /// 上次回顾时间（毫秒）；None = 从未回顾
+  final PlatformInt64? reviewLastAt;
+
+  /// 回顾暂缓截止（毫秒，本地零点口径）；None = 未暂缓
+  final PlatformInt64? reviewSnoozeUntil;
   final int isArchived;
   final int isDeleted;
   final PlatformInt64 createdAt;
@@ -1150,6 +1197,9 @@ class TodoProject {
     required this.hexColor,
     required this.sortOrder,
     this.parentUuid,
+    this.reviewIntervalDays,
+    this.reviewLastAt,
+    this.reviewSnoozeUntil,
     required this.isArchived,
     required this.isDeleted,
     required this.createdAt,
@@ -1167,6 +1217,9 @@ class TodoProject {
       hexColor.hashCode ^
       sortOrder.hashCode ^
       parentUuid.hashCode ^
+      reviewIntervalDays.hashCode ^
+      reviewLastAt.hashCode ^
+      reviewSnoozeUntil.hashCode ^
       isArchived.hashCode ^
       isDeleted.hashCode ^
       createdAt.hashCode ^
@@ -1186,6 +1239,9 @@ class TodoProject {
           hexColor == other.hexColor &&
           sortOrder == other.sortOrder &&
           parentUuid == other.parentUuid &&
+          reviewIntervalDays == other.reviewIntervalDays &&
+          reviewLastAt == other.reviewLastAt &&
+          reviewSnoozeUntil == other.reviewSnoozeUntil &&
           isArchived == other.isArchived &&
           isDeleted == other.isDeleted &&
           createdAt == other.createdAt &&
