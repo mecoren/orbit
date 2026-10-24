@@ -31,6 +31,14 @@ interface AppState {
   quickAddIntent: number;
   bumpQuickAddIntent: () => void;
   consumeQuickAddIntent: () => void;
+  /**
+   * 「收件箱分诊」意图计数器（docs/13 §五 F2）：侧栏未分组行（分诊入口钮）
+   * 与分诊弹窗（挂 task-panel）跨层传递，机制同 taskFormIntent；
+   * 消费即归零防重放。
+   */
+  triageIntent: number;
+  bumpTriageIntent: () => void;
+  consumeTriageIntent: () => void;
 }
 
 export const useAppStore = create<AppState>((set) => ({
@@ -50,4 +58,7 @@ export const useAppStore = create<AppState>((set) => ({
   quickAddIntent: 0,
   bumpQuickAddIntent: () => set((s) => ({ quickAddIntent: s.quickAddIntent + 1 })),
   consumeQuickAddIntent: () => set({ quickAddIntent: 0 }),
+  triageIntent: 0,
+  bumpTriageIntent: () => set((s) => ({ triageIntent: s.triageIntent + 1 })),
+  consumeTriageIntent: () => set({ triageIntent: 0 }),
 }));

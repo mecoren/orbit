@@ -35,9 +35,10 @@ import {
   SortableContext,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
-import { Archive, ArchiveRestore, BarChart3, CalendarCheck, ChevronDown, ChevronRight, Filter, Folder, Inbox, PanelLeftClose, PanelLeftOpen, Plus, Trash2 } from "lucide-react";
+import { Archive, ArchiveRestore, BarChart3, CalendarCheck, ChevronDown, ChevronRight, Filter, Folder, FolderInput, Inbox, PanelLeftClose, PanelLeftOpen, Plus, Trash2 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
+import { useAppStore } from "@/stores/app-store";
 import { hideFromQueries, useUndoableDeleteAction } from "@/hooks/use-undoable-delete";
 import { useIsNarrow } from "@/hooks/use-breakpoint";
 import { Button } from "@/components/ui/button";
@@ -138,6 +139,8 @@ export function ProjectSidebar({
   const qc = useQueryClient();
   const navigate = useNavigate();
   const location = useLocation();
+  // 收件箱分诊（F2）：未分组行入口经意图计数器传到 task-panel 的弹窗
+  const bumpTriageIntent = useAppStore((s) => s.bumpTriageIntent);
   const [adding, setAdding] = useState(false);
   const [newTitle, setNewTitle] = useState("");
   // 回收站/统计/回顾面板激活态（/todo/trash、/todo/stats、/todo/review；
@@ -675,6 +678,7 @@ export function ProjectSidebar({
                         key={id}
                         active={ungroupedActive && !trashActive && !statsActive}
                         onSelect={onSelectUngrouped}
+                        onRequestTriage={bumpTriageIntent}
                       />
                     );
                   }
@@ -1022,13 +1026,16 @@ function ProjectEditDialog({
   );
 }
 
-/** 未分组虚拟项（id=-1，整行长按拖拽参与项目排序） */
+/** 未分组虚拟项（id=-1，整行长按拖拽参与项目排序；行尾 hover 出分诊入口 F2） */
 function SortableUngroupedRow({
   active,
   onSelect,
+  onRequestTriage,
 }: {
   active: boolean;
   onSelect: () => void;
+  /** 分诊入口（F2）：经 app-store 意图计数器传到 task-panel 的分诊弹窗 */
+  onRequestTriage: () => void;
 }) {
   const { listeners, setNodeRef, transform, transition } = useSortable({
     id: UNGROUPED_ID,
@@ -1055,6 +1062,23 @@ function SortableUngroupedRow({
         <Inbox className="size-4 shrink-0" />
         <span className="truncate">未分组</span>
       </button>
+      {/* 分诊入口（与归档行「取消归档」同版式：hover 才出现，不占常态行宽） */}
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button
+            type="button"
+            aria-label="分诊未分组"
+            onClick={(e) => {
+              e.stopPropagation();
+              onRequestTriage();
+            }}
+            className="flex size-4 shrink-0 items-center justify-center opacity-0 group-hover:opacity-100 group-focus-within:opacity-100"
+          >
+            <FolderInput className="size-3 text-muted-foreground hover:text-foreground" />
+          </button>
+        </TooltipTrigger>
+        <TooltipContent>分诊未分组（逐条决定归属）</TooltipContent>
+      </Tooltip>
     </div>
   );
 }

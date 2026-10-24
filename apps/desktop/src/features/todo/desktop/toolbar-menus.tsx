@@ -258,6 +258,8 @@ interface MoreMenuButtonProps {
   onOpenCommand: () => void;
   onOpenLabels: () => void;
   onOpenReview: () => void;
+  /** 收件箱分诊（F2）：未分组任务逐条定归属的弹窗入口 */
+  onTriageUngrouped: () => void;
 }
 
 /** 「···」更多菜单：视图图标排 + 显示/入口类低频项收拢 */
@@ -272,6 +274,7 @@ export function MoreMenuButton(props: MoreMenuButtonProps) {
     onOpenCommand,
     onOpenLabels,
     onOpenReview,
+    onTriageUngrouped,
   } = props;
 
   return (
@@ -325,6 +328,7 @@ export function MoreMenuButton(props: MoreMenuButtonProps) {
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={() => onOpenLabels()}>标签管理</DropdownMenuItem>
         <DropdownMenuItem onSelect={() => onOpenReview()}>周回顾</DropdownMenuItem>
+        <DropdownMenuItem onSelect={() => onTriageUngrouped()}>分诊未分组</DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   );

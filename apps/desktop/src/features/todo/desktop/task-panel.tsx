@@ -41,6 +41,7 @@ import TaskTableView from "./task-table-view";
 import { MatrixView } from "./matrix-view";
 import { TodayStrip } from "./today-strip";
 import { WeeklyReviewDialog } from "./weekly-review-dialog";
+import { TriageDialog } from "./triage-dialog";
 
 type StatusFilter = "all" | "undone" | "pending" | "doing" | "done";
 type PriorityFilter = "all" | "0" | "1" | "2" | "3" | "4" | "5";
@@ -86,6 +87,9 @@ export default function TaskPanel() {
   const setCommandOpen = useAppStore((s) => s.setCommandOpen);
   const viewToggleIntent = useAppStore((s) => s.viewToggleIntent);
   const consumeViewToggleIntent = useAppStore((s) => s.consumeViewToggleIntent);
+  // 收件箱分诊（F2）：侧栏未分组行入口经意图计数器跨层传到本面板的弹窗
+  const triageIntent = useAppStore((s) => s.triageIntent);
+  const consumeTriageIntent = useAppStore((s) => s.consumeTriageIntent);
 
   const {
     quickView,
@@ -110,6 +114,13 @@ export default function TaskPanel() {
   const [keyword, setKeyword] = useState("");
   // 周回顾向导（G5）：面板私有开关，关闭即重置向导步进
   const [reviewOpen, setReviewOpen] = useState(false);
+  // 收件箱分诊（F2）：面板私有开关；侧栏未分组行的入口钮经 app-store 意图触发
+  const [triageOpen, setTriageOpen] = useState(false);
+  useEffect(() => {
+    if (triageIntent === 0) return;
+    consumeTriageIntent();
+    setTriageOpen(true);
+  }, [triageIntent, consumeTriageIntent]);
   // 搜索防抖（200ms，与全局搜索 250ms 同族）：输入期不再每键全量
   // filterTasks 重跑（万任务下一键一遍分组+排序），停止击键才过滤
   const debouncedKeyword = useDebouncedValue(keyword.trim(), 200);
@@ -361,6 +372,7 @@ export default function TaskPanel() {
             onOpenCommand={() => setCommandOpen(true)}
             onOpenLabels={() => setLabelManagerOpen(true)}
             onOpenReview={() => setReviewOpen(true)}
+            onTriageUngrouped={() => setTriageOpen(true)}
           />
 
           {/* 新增按钮 */}
@@ -510,6 +522,14 @@ export default function TaskPanel() {
         open={reviewOpen}
         onOpenChange={setReviewOpen}
         tasks={sourceTasks}
+      />
+
+      {/* 收件箱分诊（F2）：未分组任务逐条定归属；队列用全量缓存（非搜索命中集） */}
+      <TriageDialog
+        open={triageOpen}
+        onOpenChange={setTriageOpen}
+        tasks={tasks}
+        projects={projects}
       />
     </div>
   );
