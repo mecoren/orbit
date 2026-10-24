@@ -50,6 +50,7 @@ const ALL_SCENARIOS = [
   'attachment-sync-pull',
   'backup-export-large',
   'initial-sync',
+  'global-search',
 ];
 const ATTACHMENT_SCENARIOS = new Set([
   'attachment-write',
@@ -64,6 +65,9 @@ const METRICS = [
   'rssEndDeltaMB',
   'durationMs',
   'artifactMB',
+  // global-search 延迟尺子（docs/13 §七 P3）：其他场景无该键，median(null) 跳过
+  'overallP50Ms',
+  'overallP95Ms',
 ];
 const BUFFER = 1.15; // 操作级采样受调度/磁盘缓存影响，缓冲带比 growth-curve 的 10% 略宽
 
@@ -237,6 +241,18 @@ for (const scenario of SCENARIOS) {
   }
 }
 // 上下文指标：不进 thresholds，只做数据集核对（首同步上传总量验证数据确实流过链路）
+if (SCENARIOS.includes('global-search')) {
+  // 拼音首查（含首次 reconcile 全量回填）是「存量库升级后第一发」的体验哨兵：
+  // 逐行自动事务 7.8s → 单事务批量 0.12s，若回退说明批量路径被绕开
+  measured['global-search.pinyinFirstMs'] = median(
+    samples
+      .map((s) => {
+        const pq = s['global-search']?.metrics?.perQuery ?? [];
+        return pq.find((q) => q.query === 'pinyin-initials')?.firstMs;
+      })
+      .filter((v) => v !== null && v !== undefined),
+  );
+}
 if (SCENARIOS.includes('initial-sync')) {
   measured['initial-sync.uploadedMB'] = median(
     samples

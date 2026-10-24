@@ -12,7 +12,8 @@
     "attachment-sync-push": "OSAC 4MiB 分块容器加密 + 适配器按块读取上传，50MB 附件堆峰值 +12MB（含 4MiB 明文/密文帧 + tokio 缓冲）；阈值 24MB 防退回整包加密。",
     "attachment-sync-pull": "流式下载到临时文件 + 逐帧解密 + 末尾整体 sha256 校验，50MB 附件堆峰值 +8MB；阈值 20MB。",
     "backup-export-large": "223MB 备份（50k 行 × 4KiB 描述）：M1 的按 500 行分页 + 4MiB 帧让峰值与库体积解耦，堆峰值 +7.8MB、RSS +14MB；阈值 20/30MB，target 128MB（docs/13 T1.2）。",
-    "initial-sync": "50k 行首同步（云端为空，上传丢弃）：M4 逐桶装载让内存只驻留一个桶，堆峰值 +9.1MB、RSS +30.9MB；阈值 24/60MB，target 128MB（docs/07 #91）。"
+    "initial-sync": "50k 行首同步（云端为空，上传丢弃）：M4 逐桶装载让内存只驻留一个桶，堆峰值 +9.1MB、RSS +30.9MB；阈值 24/60MB，target 128MB（docs/07 #91）。",
+    "global-search": "10k 任务搜索延迟尺子（docs/13 §七 P3）：中文 FTS 唯一 p50 2ms / 宽词 7ms / LIKE 短词 2ms / 稳态拼音 p50 约 11–17ms（随采样波动），四口径合计 overall p50 6ms / p95 14ms；拼音首查含 10k 回填 133ms（单事务批量；逐行自动事务 7.8s 已修）。阈值 8/16/500ms 防延迟回退（尤其 reconcile 被改回逐行）；target 100ms 为本轮自定体验线（docs/13 P3 原文只要求建立基线，未给数值门限）。内存四指标照常登记（堆 +0MB）。"
   },
   "thresholds": {
     "backup-export.allocPeakDeltaMB": 10,
@@ -32,7 +33,10 @@
     "backup-export-large.allocPeakDeltaMB": 20,
     "backup-export-large.rssPeakDeltaMB": 30,
     "initial-sync.allocPeakDeltaMB": 24,
-    "initial-sync.rssPeakDeltaMB": 60
+    "initial-sync.rssPeakDeltaMB": 60,
+    "global-search.overallP50Ms": 8,
+    "global-search.overallP95Ms": 16,
+    "global-search.pinyinFirstMs": 500
   },
   "targets": {
     "backup-export.rssPeakDeltaMB": 128,
@@ -43,7 +47,9 @@
     "attachment-sync-push.rssPeakDeltaMB": 32,
     "attachment-sync-pull.rssPeakDeltaMB": 32,
     "backup-export-large.rssPeakDeltaMB": 128,
-    "initial-sync.rssPeakDeltaMB": 128
+    "initial-sync.rssPeakDeltaMB": 128,
+    "global-search.overallP95Ms": 100,
+    "global-search.pinyinFirstMs": 100
   },
   "datasets": {
     "backupRows": 10000,
@@ -114,7 +120,16 @@
     "initial-sync.rssEndDeltaMB": 23,
     "initial-sync.durationMs": 22097,
     "initial-sync.artifactMB": 22.5,
-    "initial-sync.uploadedMB": 2.3
+    "initial-sync.uploadedMB": 2.3,
+    "global-search.allocPeakDeltaMB": 0,
+    "global-search.allocEndDeltaMB": 0,
+    "global-search.rssPeakDeltaMB": 0,
+    "global-search.rssEndDeltaMB": 0.2,
+    "global-search.durationMs": 7,
+    "global-search.artifactMB": null,
+    "global-search.overallP50Ms": 6,
+    "global-search.overallP95Ms": 14,
+    "global-search.pinyinFirstMs": 133
   },
-  "measuredAt": "2026-10-23"
+  "measuredAt": "2026-10-24"
 }

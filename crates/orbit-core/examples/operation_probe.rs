@@ -18,7 +18,12 @@
 //! ```
 //! 场景：`backup-export` / `backup-import` / `csv-import` / `attachment-write` /
 //! `attachment-read` / `attachment-sync-push` / `attachment-sync-pull` /
-//! `backup-export-large` / `initial-sync`。
+//! `backup-export-large` / `initial-sync` / `global-search`。
+//!
+//! `global-search`（docs/13 §七 P3 测量前置）：对 10k 任务库跑三口径搜索——
+//! 中文 FTS 短语（主路径）/ 中文两字 LIKE（兜底全表扫）/ 拼音首字母（含
+//! 首次 reconcile 全量回填），各采样多次报 p50/p95 毫秒；量的是「搜索延迟
+//! 尺子」，不是内存场景（内存四指标照常输出但阈值不设）。
 //!
 //! 数据规模由参数控制（默认 10k 任务 / 20k CSV 行 / 50MB 附件；大库场景由
 //! `--rows` + `--description-kb` 放大）：基线文件记录规模，跨版本对比时必须
@@ -854,6 +859,76 @@ impl SyncAdapter for DiscardCloud {
 }
 
 /// 首同步峰值（M4 验收欠账，docs/07 #91）：本地 50k 行 + 云端为空
+/// 全局搜索延迟场景（docs/13 §七 P3）：三口径各采样 N 次报 p50/p95 毫秒。
+/// 候选标题模式 = seed_tasks 的「操作探针任务 NNNNNN」；中文精确查询取唯一
+/// 编号（FTS 短语命中 1 行），中文宽词「操作探针」命中全表（截断 limit），
+/// 两字词「任务」走 LIKE 兜底，拼音首字母走 reconcile 回填 + initials 前缀。
+async fn scenario_global_search(args: &Args) -> Result<serde_json::Value, String> {
+    use orbit_core::api::business_api::search_all;
+
+    let db = args.workdir.join("global-search.db");
+    let pool = init_pool_unencrypted(&db)
+        .await
+        .map_err(|e| e.to_string())?;
+    seed_tasks(&pool, args.rows, 0).await?;
+
+    let limit = 20;
+    let samples_per_query = 30;
+    // (口径名, 查询词)
+    let queries: Vec<(&str, String)> = vec![
+        ("fts-unique", "操作探针任务 000123".into()),
+        ("fts-broad", "操作探针".into()),
+        ("like-short", "任务".into()),
+        ("pinyin-initials", "cztc".into()),
+    ];
+
+    let mut per_query: Vec<serde_json::Value> = Vec::new();
+    let mut all_ms: Vec<u128> = Vec::new();
+    for (name, kw) in &queries {
+        // 预热一次（含拼音通道的首次 reconcile 全量回填——单独计时报出）
+        let t0 = Instant::now();
+        let _ = search_all(&pool, kw, limit).await.map_err(|e| e.to_string())?;
+        let first_ms = t0.elapsed().as_millis();
+
+        let mut lat: Vec<u128> = Vec::new();
+        for _ in 0..samples_per_query {
+            let t = Instant::now();
+            let _ = search_all(&pool, kw, limit).await.map_err(|e| e.to_string())?;
+            lat.push(t.elapsed().as_millis());
+        }
+        lat.sort();
+        let p50 = lat[lat.len() / 2];
+        let p95 = lat[(lat.len() as f64 * 0.95) as usize % lat.len()];
+        all_ms.extend(&lat);
+        per_query.push(json!({
+            "query": name,
+            "firstMs": first_ms,
+            "p50Ms": p50,
+            "p95Ms": p95,
+        }));
+    }
+    all_ms.sort();
+    let overall_p50 = all_ms[all_ms.len() / 2];
+    let overall_p95 = all_ms[(all_ms.len() as f64 * 0.95) as usize % all_ms.len()];
+
+    let (_, metrics) = measure(async {
+        // 收尾再跑一次混合查询进内存/延迟四指标（口径对齐其他场景）
+        search_all(&pool, "操作探针", limit)
+            .await
+            .map_err(|e| e.to_string())
+    })
+    .await;
+
+    let mut out = metrics_json(&metrics);
+    let obj = out.as_object_mut().expect("json object");
+    obj.insert("rows".into(), json!(args.rows));
+    obj.insert("samplesPerQuery".into(), json!(samples_per_query));
+    obj.insert("overallP50Ms".into(), json!(overall_p50));
+    obj.insert("overallP95Ms".into(), json!(overall_p95));
+    obj.insert("perQuery".into(), json!(per_query));
+    Ok(out)
+}
+
 async fn scenario_initial_sync(args: &Args) -> Result<serde_json::Value, String> {
     let db = args.workdir.join("initial-sync.db");
     let pool = init_pool_unencrypted(&db)
@@ -924,6 +999,7 @@ async fn run(args: &Args) -> Result<serde_json::Value, String> {
         "attachment-sync-pull" => run_attachment_sync(args, false).await,
         "backup-export-large" => scenario_backup_export(args).await,
         "initial-sync" => scenario_initial_sync(args).await,
+        "global-search" => scenario_global_search(args).await,
         other => Err(format!(
             "未知场景 '{other}'，可选 backup-export / backup-import / csv-import / \
              attachment-write / attachment-read / attachment-sync-push / attachment-sync-pull / \
