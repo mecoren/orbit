@@ -24,6 +24,7 @@ import '../../modules/todo/matrix_screen.dart';
 import '../../modules/todo/project_edit_page.dart';
 import '../../modules/todo/review_center_page.dart';
 import '../../modules/todo/saved_filters_screen.dart';
+import '../../modules/todo/triage_page.dart';
 import '../../modules/todo/search_screen.dart';
 import '../../modules/todo/sidebar_screen.dart';
 import '../../modules/todo/stats_screen.dart';
@@ -154,6 +155,14 @@ final appRouter = GoRouter(
             path: '/todo/review-center',
             pageBuilder: (context, state) => pageSlideFromRight(
               const ReviewCenterPage(),
+              key: state.pageKey,
+            ),
+          ),
+          // 收件箱分诊（F2）：未分组任务逐条定归属的一次一卡流程页
+          GoRoute(
+            path: '/todo/triage',
+            pageBuilder: (context, state) => pageSlideFromRight(
+              const TriagePage(),
               key: state.pageKey,
             ),
           ),

@@ -213,6 +213,47 @@ class TodoTask {
     required this.version,
   });
 
+  /// 就地字段覆盖（分诊页快照队列的本地更新用；可空字段配 clear* 旗标——
+  /// Dart 无法区分「没传」与「传 null」，与 BackupPrefs.copyWith 同款惯例）
+  TodoTask copyWith({
+    int? projectId,
+    bool clearProjectId = false,
+    int? priority,
+    int? dueDate,
+    bool clearDueDate = false,
+  }) =>
+      TodoTask(
+        id: id,
+        uuid: uuid,
+        title: title,
+        description: description,
+        projectId: clearProjectId ? null : (projectId ?? this.projectId),
+        priority: priority ?? this.priority,
+        status: status,
+        done: done,
+        doneAt: doneAt,
+        dueDate: clearDueDate ? null : (dueDate ?? this.dueDate),
+        startDate: startDate,
+        repeatAfter: repeatAfter,
+        repeatMode: repeatMode,
+        repeatWeekdays: repeatWeekdays,
+        repeatEndType: repeatEndType,
+        repeatEndParam: repeatEndParam,
+        repeatFromDone: repeatFromDone,
+        repeatMonthMode: repeatMonthMode,
+        repeatNthWeek: repeatNthWeek,
+        percentDone: percentDone,
+        position: position,
+        isFavorite: isFavorite,
+        myDayDate: myDayDate,
+        durationMinutes: durationMinutes,
+        isDeleted: isDeleted,
+        createdAt: createdAt,
+        updatedAt: updatedAt,
+        deletedAt: deletedAt,
+        version: version,
+      );
+
   factory TodoTask.fromJson(Map<String, dynamic> j) => TodoTask(
         id: j['id'] as int,
         uuid: j['uuid'] as String,

@@ -441,6 +441,13 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
             label: '周回顾',
             onTap: _startWeeklyReview,
           ),
+          // 收件箱分诊（F2，对齐桌面「···」菜单「分诊未分组」）：未分组
+          // 任务一次一卡定归属的流程页
+          OrbitPanelItem(
+            icon: OrbitIcons.inbox,
+            label: '分诊未分组',
+            onTap: () => context.push('/todo/triage'),
+          ),
           // 排序方向（对齐桌面「顺序」档）：拖拽序无方向概念，整行隐藏
           //（口径同桌面 manual 档隐藏）；行尾回显当前生效方向
           if (_sortKey != TaskSortKey.manual)
