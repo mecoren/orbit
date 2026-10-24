@@ -20,6 +20,25 @@ pub async fn day_plan_preview(
         .map_err(|e| e.to_string())
 }
 
+/// 读取排程偏好（cfg_kv，缺键回落默认；编辑区初值）
+#[tauri::command]
+pub async fn day_plan_prefs_get(state: State<'_, AppState>) -> Result<DayPlanPrefs, String> {
+    day_planner_api::get_day_plan_prefs(&state.pool)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// 保存排程偏好（校验钳制后落库，返回存后生效值供 UI 回显）
+#[tauri::command]
+pub async fn day_plan_prefs_set(
+    state: State<'_, AppState>,
+    prefs: DayPlanPrefs,
+) -> Result<DayPlanPrefs, String> {
+    day_planner_api::set_day_plan_prefs(&state.pool, &prefs)
+        .await
+        .map_err(|e| e.to_string())
+}
+
 /// 应用排程（阶段二）：勾选槽位写入 my_day_date + start_date（不改 due_date，
 /// 单事务）；返回 prev 快照供前端撤销。day_start_ms 由前端传今天本地零点。
 #[tauri::command]

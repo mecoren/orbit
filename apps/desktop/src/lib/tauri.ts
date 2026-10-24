@@ -1367,6 +1367,11 @@ export interface ApplyResult {
 /** 应用排程（阶段二）：写 my_day_date + start_date（不改 due_date，单事务） */
 export const dayPlanApply = (dayStartMs: number, slots: ApplySlotInput[]) =>
   invoke<ApplyResult>("day_plan_apply", { dayStartMs, slots });
+/** 读取排程偏好（cfg_kv，缺键回落默认；编辑区初值） */
+export const dayPlanPrefsGet = () => invoke<DayPlanPrefs>("day_plan_prefs_get");
+/** 保存排程偏好（校验钳制后落库，返回存后生效值供 UI 回显） */
+export const dayPlanPrefsSet = (prefs: DayPlanPrefs) =>
+  invoke<DayPlanPrefs>("day_plan_prefs_set", { prefs });
 
 /** 一键复制任务（#37：克隆字段+子任务，副本标题后缀） */
 export const todoTaskDuplicate = (id: number) =>

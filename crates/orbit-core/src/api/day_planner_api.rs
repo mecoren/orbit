@@ -31,7 +31,7 @@ const MINUTES_PER_DAY: i64 = 24 * 60;
 
 /// 排程偏好（阶段一双端传默认值；阶段三落 cfg_kv 本地偏好可编辑。
 /// Deserialize 供双端壳的 JSON 反序列化进命令入参）
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DayPlanPrefs {
     /// 工作开始（相对今天零点的分钟；默认 09:00 = 540）
     pub work_start_minute: i64,
@@ -428,6 +428,70 @@ pub async fn apply_day_plan(
         timestamp: clock::peek(),
     });
     Ok(ApplyResult { applied })
+}
+
+// ============================================================================
+// 阶段三：作息偏好持久化（cfg_kv 单键 JSON，本机偏好不同步——digest_api 同款口径）
+// ============================================================================
+
+/// cfg_kv 键：排程偏好（JSON 序列化的 DayPlanPrefs）
+const KV_PREFS: &str = "day_plan_prefs";
+
+/// 读取排程偏好（缺键/非法 JSON 逐次回落默认——损坏的偏好不阻断预览）
+pub async fn get_day_plan_prefs(pool: &SqlitePool) -> CoreResult<DayPlanPrefs> {
+    let row: Option<(String,)> = sqlx::query_as("SELECT value FROM cfg_kv WHERE key = ?1")
+        .bind(KV_PREFS)
+        .fetch_optional(pool)
+        .await?;
+    match row.map(|(v,)| v) {
+        Some(raw) => Ok(serde_json::from_str(&raw).unwrap_or_default()),
+        None => Ok(DayPlanPrefs::default()),
+    }
+}
+
+/// 保存排程偏好：逐字段校验钳制后落库，返回**存后生效值**（UI 以此回显）。
+///
+/// - 工作窗：`work_start_minute ∈ [0, 1440)` 且 `work_end_minute ∈ (start, 1440]`，
+///   越界整体回落默认工作窗；
+/// - 午休：`lunch_start < lunch_end` 且落在工作窗内才生效，否则清 0（= 无午休，
+///   plan_day_slots 对无效午休已容忍）；
+/// - 粒度钳 1–60 分钟、默认时长钳 1–480 分钟。
+pub async fn set_day_plan_prefs(
+    pool: &SqlitePool,
+    input: &DayPlanPrefs,
+) -> CoreResult<DayPlanPrefs> {
+    let mut p = input.clone();
+    // 工作窗校验：越界回落默认（9:00-18:00）
+    if p.work_start_minute >= p.work_end_minute
+        || !(0..1440).contains(&p.work_start_minute)
+        || !(1..=1440).contains(&p.work_end_minute)
+    {
+        p.work_start_minute = 9 * 60;
+        p.work_end_minute = 18 * 60;
+    }
+    // 午休校验：无效或越出工作窗 = 无午休（0,0）
+    if p.lunch_start_minute >= p.lunch_end_minute
+        || p.lunch_start_minute < p.work_start_minute
+        || p.lunch_end_minute > p.work_end_minute
+    {
+        p.lunch_start_minute = 0;
+        p.lunch_end_minute = 0;
+    }
+    p.granularity_minutes = p.granularity_minutes.clamp(1, 60);
+    p.default_task_minutes = p.default_task_minutes.clamp(1, 480);
+
+    let raw = serde_json::to_string(&p)
+        .map_err(|e| CoreError::Other(format!("序列化排程偏好失败: {e}")))?;
+    let now = clock::next_ms();
+    sqlx::query(
+        "INSERT INTO cfg_kv (key, value, updated_at) VALUES (?1, ?2, ?3)          ON CONFLICT(key) DO UPDATE SET value = ?2, updated_at = ?3",
+    )
+    .bind(KV_PREFS)
+    .bind(&raw)
+    .bind(now)
+    .execute(pool)
+    .await?;
+    Ok(p)
 }
 
 // ============================================================================
@@ -856,6 +920,74 @@ mod api_tests {
             .await
             .unwrap();
         assert!(r.applied.is_empty());
+    }
+
+    #[tokio::test]
+    async fn prefs_roundtrip_and_validation_clamps() {
+        let pool = setup_db().await;
+        // 缺键 = 默认
+        let d = get_day_plan_prefs(&pool).await.unwrap();
+        assert_eq!(d.work_start_minute, 9 * 60);
+        assert!(d.include_overdue);
+
+        // 合法值 roundtrip
+        let input = DayPlanPrefs {
+            work_start_minute: 8 * 60,
+            work_end_minute: 17 * 60,
+            lunch_start_minute: 12 * 60,
+            lunch_end_minute: 13 * 60,
+            granularity_minutes: 30,
+            default_task_minutes: 45,
+            include_overdue: false,
+        };
+        let saved = set_day_plan_prefs(&pool, &input).await.unwrap();
+        assert_eq!(saved, input);
+        assert_eq!(get_day_plan_prefs(&pool).await.unwrap(), input);
+    }
+
+    #[tokio::test]
+    async fn prefs_invalid_values_fall_back_or_clamp() {
+        let pool = setup_db().await;
+        // 工作窗倒挂 → 整体回落默认
+        let saved = set_day_plan_prefs(
+            &pool,
+            &DayPlanPrefs {
+                work_start_minute: 18 * 60,
+                work_end_minute: 9 * 60,
+                ..DayPlanPrefs::default()
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(saved.work_start_minute, 9 * 60);
+        assert_eq!(saved.work_end_minute, 18 * 60);
+        // 午休按**回落后的工作窗**（540-1080）校验：12-13 点仍有效 → 保留
+        assert_eq!((saved.lunch_start_minute, saved.lunch_end_minute), (720, 780));
+
+        // 粒度/默认时长钳制
+        let saved = set_day_plan_prefs(
+            &pool,
+            &DayPlanPrefs {
+                granularity_minutes: 999,
+                default_task_minutes: 0,
+                ..DayPlanPrefs::default()
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(saved.granularity_minutes, 60);
+        assert_eq!(saved.default_task_minutes, 1);
+    }
+
+    #[tokio::test]
+    async fn prefs_corrupt_json_falls_back_to_default() {
+        let pool = setup_db().await;
+        sqlx::query("INSERT INTO cfg_kv (key, value, updated_at) VALUES ('day_plan_prefs', '{oops', 1)")
+            .execute(&pool)
+            .await
+            .unwrap();
+        let d = get_day_plan_prefs(&pool).await.unwrap();
+        assert_eq!(d, DayPlanPrefs::default(), "损坏偏好回落默认不阻断");
     }
 
     #[tokio::test]

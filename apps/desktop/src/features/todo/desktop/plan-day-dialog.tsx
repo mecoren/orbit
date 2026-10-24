@@ -11,13 +11,20 @@
  * 经通用撤销栈回滚（Ctrl+Z）。应用后弹窗内即时重拉预览（候选集随 my_day/
  * start 变化收敛）。
  */
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { CalendarClock, TriangleAlert } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Dialog,
   DialogContent,
@@ -29,6 +36,8 @@ import {
 import {
   DAY_PLAN_DEFAULT_PREFS,
   dayPlanApply,
+  dayPlanPrefsGet,
+  dayPlanPrefsSet,
   dayPlanPreview,
   todoTaskUpdate,
   type ApplySlotInput,
@@ -60,15 +69,27 @@ function reasonTone(reason: string): string {
 
 export function PlanDayDialog({ open, onOpenChange }: PlanDayDialogProps) {
   const qc = useQueryClient();
-  const [prefs] = useState<DayPlanPrefs>(DAY_PLAN_DEFAULT_PREFS);
+  // 阶段三：作息偏好从 cfg_kv 载入（单一来源）——预览/编辑/保存共用同一份，
+  // 保存后 setPrefs 触发 queryKey 变化重拉预览
+  const [prefs, setPrefs] = useState<DayPlanPrefs | null>(null);
   // 勾选集（task_id；默认全选——新预览到达时重置）
   const [checked, setChecked] = useState<ReadonlySet<number>>(new Set());
   const [applying, setApplying] = useState(false);
+  // 阶段三作息编辑：null = 收起；展开时从 cfg_kv 载入当前偏好
+  const [prefsOpen, setPrefsOpen] = useState(false);
+  const [prefsDraft, setPrefsDraft] = useState<DayPlanPrefs | null>(null);
+  const [prefsSaving, setPrefsSaving] = useState(false);
+
+  useEffect(() => {
+    if (open && prefs == null) {
+      void dayPlanPrefsGet().then(setPrefs);
+    }
+  }, [open, prefs]);
 
   const planQuery = useQuery({
     queryKey: ["day-plan", prefs],
-    queryFn: () => dayPlanPreview(prefs, Date.now()),
-    enabled: open,
+    queryFn: () => dayPlanPreview(prefs ?? DAY_PLAN_DEFAULT_PREFS, Date.now()),
+    enabled: open && prefs != null,
     staleTime: 60 * 1000,
     placeholderData: (prev) => prev,
   });
@@ -92,6 +113,23 @@ export function PlanDayDialog({ open, onOpenChange }: PlanDayDialogProps) {
       else next.add(id);
       return next;
     });
+  };
+
+  const openPrefs = () => {
+    setPrefsDraft(prefs ?? DAY_PLAN_DEFAULT_PREFS);
+    setPrefsOpen((v) => !v);
+  };
+
+  const savePrefs = async () => {
+    if (prefsDraft == null || prefsSaving) return;
+    setPrefsSaving(true);
+    try {
+      const saved = await dayPlanPrefsSet(prefsDraft);
+      setPrefsDraft(saved);
+      setPrefs(saved); // queryKey 变化 → 预览按新作息重拉
+    } finally {
+      setPrefsSaving(false);
+    }
   };
 
   const applyChecked = async () => {
@@ -132,7 +170,19 @@ export function PlanDayDialog({ open, onOpenChange }: PlanDayDialogProps) {
           <DialogTitle className="flex items-center gap-2">
             <CalendarClock className="size-4 text-primary" />
             规划今天
-            <span className="ml-auto text-xs font-normal text-muted-foreground">
+            <button
+              type="button"
+              onClick={() => void openPrefs()}
+              className={cn(
+                "ml-auto rounded-md px-2 py-0.5 text-xs",
+                prefsOpen
+                  ? "bg-primary/10 font-medium text-primary"
+                  : "text-muted-foreground hover:bg-accent/50",
+              )}
+            >
+              作息
+            </button>
+            <span className="text-xs font-normal text-muted-foreground">
               剩余可排 {plan ? plan.capacity_minutes : "–"} 分钟 · 候选{" "}
               {plan ? plan.load_minutes : "–"} 分钟
             </span>
@@ -216,6 +266,67 @@ export function PlanDayDialog({ open, onOpenChange }: PlanDayDialogProps) {
           </>
         )}
 
+        {/* 阶段三作息编辑：cfg_kv 本机偏好（不同步），保存即重拉预览 */}
+        {prefsOpen && prefsDraft != null && (
+          <div className="space-y-2 rounded-lg border p-3" data-testid="plan-prefs">
+            <div className="grid grid-cols-2 gap-2">
+              <PrefSelect
+                label="工作开始"
+                value={prefsDraft.work_start_minute}
+                onChange={(v) => setPrefsDraft({ ...prefsDraft, work_start_minute: v })}
+              />
+              <PrefSelect
+                label="工作结束"
+                value={prefsDraft.work_end_minute}
+                onChange={(v) => setPrefsDraft({ ...prefsDraft, work_end_minute: v })}
+              />
+              <PrefSelect
+                label="午休开始"
+                value={prefsDraft.lunch_start_minute}
+                onChange={(v) => setPrefsDraft({ ...prefsDraft, lunch_start_minute: v })}
+              />
+              <PrefSelect
+                label="午休结束"
+                value={prefsDraft.lunch_end_minute}
+                onChange={(v) => setPrefsDraft({ ...prefsDraft, lunch_end_minute: v })}
+              />
+              <PrefSelect
+                label="排程粒度"
+                value={prefsDraft.granularity_minutes}
+                onChange={(v) => setPrefsDraft({ ...prefsDraft, granularity_minutes: v })}
+                options={[5, 10, 15, 30, 60]}
+              />
+              <PrefSelect
+                label="无时长兜底"
+                value={prefsDraft.default_task_minutes}
+                onChange={(v) => setPrefsDraft({ ...prefsDraft, default_task_minutes: v })}
+                options={[15, 30, 45, 60, 90, 120]}
+              />
+            </div>
+            <div className="flex items-center justify-between">
+              <label className="flex items-center gap-2 text-sm">
+                <Checkbox
+                  checked={prefsDraft.include_overdue}
+                  onCheckedChange={(v) =>
+                    setPrefsDraft({ ...prefsDraft, include_overdue: v === true })
+                  }
+                />
+                把逾期任务纳入排程
+              </label>
+              <Button
+                size="sm"
+                disabled={prefsSaving}
+                onClick={() => void savePrefs()}
+              >
+                {prefsSaving ? "保存中…" : "保存作息"}
+              </Button>
+            </div>
+            <p className="text-[10px] text-muted-foreground">
+              作息保存在本机（不参与云同步），越界值保存时自动回落默认。
+            </p>
+          </div>
+        )}
+
         <DialogFooter className="gap-2">
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             关闭
@@ -231,5 +342,45 @@ export function PlanDayDialog({ open, onOpenChange }: PlanDayDialogProps) {
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/** 作息档位选择（半小时时间档或给定数值档） */
+function PrefSelect({
+  label,
+  value,
+  onChange,
+  options,
+}: {
+  label: string;
+  value: number;
+  onChange: (v: number) => void;
+  /** 给定数值档（粒度/兜底时长）；缺省 = 时间半小时档 */
+  options?: number[];
+}) {
+  const opts = options ?? Array.from({ length: 48 }, (_, i) => i * 30);
+  const labelOf = (v: number) =>
+    options
+      ? `${v} 分钟`
+      : `${String(Math.floor(v / 60) % 24).padStart(2, "0")}:${String(v % 60).padStart(2, "0")}`;
+  const id = `plan-pref-${label}`;
+  return (
+    <div className="space-y-1">
+      <label className="text-xs text-muted-foreground" htmlFor={id}>
+        {label}
+      </label>
+      <Select value={String(value)} onValueChange={(v) => onChange(Number(v))}>
+        <SelectTrigger id={id} className="w-full">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {opts.map((o) => (
+            <SelectItem key={o} value={String(o)}>
+              {labelOf(o)}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
   );
 }

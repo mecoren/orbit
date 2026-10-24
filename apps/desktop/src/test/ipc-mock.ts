@@ -972,6 +972,15 @@ const commands: Record<string, (args: any, ctx: Ctx) => unknown> = {
       day_start_ms: dayStart,
     });
   },
+  // F3 阶段三偏好：cfg_kv 单键 JSON（真桥 core 校验钳制；mock 直存直读）
+  day_plan_prefs_get: (_a, { db }) => {
+    const raw = (db as any).__dayPlanPrefs as string | undefined;
+    return raw ? JSON.parse(raw) : { ...({ work_start_minute: 540, work_end_minute: 1080, lunch_start_minute: 720, lunch_end_minute: 780, granularity_minutes: 15, default_task_minutes: 30, include_overdue: true }) };
+  },
+  day_plan_prefs_set: ({ prefs }, { db }) => {
+    (db as any).__dayPlanPrefs = JSON.stringify(prefs);
+    return ipcClone(prefs);
+  },
   // F3 阶段二应用：写 my_day_date + start_date（不改 due_date），返回 prev 快照
   day_plan_apply: ({ dayStartMs, slots }, { db }) => {
     const applied = (slots ?? []).map((s: any) => {

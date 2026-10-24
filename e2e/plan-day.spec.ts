@@ -51,6 +51,10 @@ async function addTask(
   await expect(page.getByText(title)).toBeVisible({ timeout: 10_000 });
 }
 
+function slotsOf(dialog: ReturnType<Page["getByRole"]>) {
+  return dialog.getByTestId("plan-slots");
+}
+
 async function openPlanDay(page: Page) {
   await page.getByRole("button", { name: "更多" }).click();
   await page.getByRole("menuitem", { name: "规划今天" }).click();
@@ -131,6 +135,32 @@ test("勾选应用：写 my_day/start 不改 due，Ctrl+Z 撤销写回 prev", as
   });
   expect(reverted.my_day).toBe(dayStart);
   expect(reverted.start).toBeNull();
+});
+
+test("作息编辑：改工作开始时段后预览随之变化并持久化", async ({ page }) => {
+  await addTask(page, "作息活", { myDay: true, duration: 30 });
+  await openPlanDay(page);
+  const dialog = page.getByRole("dialog");
+
+  // 展开作息 → 工作开始改 12:00（fake clock 10:00 → 首槽从 12:00 起）
+  await dialog.getByRole("button", { name: "作息" }).click();
+  const prefs = dialog.getByTestId("plan-prefs");
+  await expect(prefs).toBeVisible();
+  await prefs.getByLabel("工作开始").click();
+  await page.getByRole("option", { name: "12:00", exact: true }).click();
+  await prefs.getByRole("button", { name: "保存作息" }).click();
+
+  // 预览重拉：首槽从 12:00 起（原 10:00 起的行已换时段）
+  await expect(slotsOf(dialog).getByText(/12:00 – /).first()).toBeVisible({
+    timeout: 10_000,
+  });
+
+  // 持久化：重开弹窗（编辑区组件态保留直接展开）回显 12:00
+  await dialog.getByRole("button", { name: "关闭" }).first().click();
+  await openPlanDay(page);
+  const prefs2 = page.getByRole("dialog").getByTestId("plan-prefs");
+  await expect(prefs2).toBeVisible();
+  await expect(prefs2.getByLabel("工作开始")).toHaveText(/12:00/);
 });
 
 test("超载警示与未排入：容量满时给提示条与原因", async ({ page }) => {
