@@ -58,6 +58,9 @@ async function openPlanDay(page: Page) {
 }
 
 test.beforeEach(async ({ page }) => {
+  // 排程从「现在」起排且工作窗 09:00-18:00——挂 fake clock 固定到今天 10:00，
+  // 用例不再随跑测墙钟漂移（晚间跑会整窗已过、全部未排入）
+  await page.clock.install({ time: new Date(new Date().setHours(10, 0, 0, 0)) });
   await page.goto("/");
   await expect(page.getByRole("heading", { name: "全部任务" })).toBeVisible({
     timeout: 30_000,
@@ -80,8 +83,8 @@ test("候选归集与理由徽标：逾期最先、截止时刻、我的一天",
   await expect(slots.getByText(/已逾期/)).toBeVisible();
   await expect(slots.getByText(/截止 1[56]:/)).toBeVisible();
   await expect(slots.getByText("我的一天", { exact: true })).toBeVisible();
-  // 时段文本为 HH:mm – HH:mm（首槽从 now 起向上对齐粒度，不假定 09:00）
-  await expect(slots.getByText(/\d{2}:\d{2} – \d{2}:\d{2}/).first()).toBeVisible();
+  // 时段文本为 HH:mm – HH:mm（fake clock 10:00 → 首槽 10:00 起）
+  await expect(slots.getByText(/10:00 – /).first()).toBeVisible();
   // 只读：任务时间未被写入
   const untouched = await page.evaluate(() => {
     const m = (window as any).__orbitMock;
