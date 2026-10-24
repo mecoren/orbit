@@ -22,7 +22,10 @@
 - 10k 实测：四口径合计 p50 6ms / p95 14ms（FTS 唯一 2/2、宽词 7/8、LIKE 短词 2/3、拼音 11/15），内存四指标照常登记（堆 +0MB）。
 - 修复存量库首次拼音检索卡顿：`search_pinyin::reconcile` 逐行走 `sync_row` 的自动事务，per-row fsync 让 10k 行首次回填耗时 7.8s；改单事务批量写（WAL 一次提交）后 **133ms**。
 - FTS `optimize`/`merge` 时机评估（`perf-metrics/fts-optimize-eval.py`，10k/50k 四状态各 30 采样）：导入后 optimize 只省 0.12ms 却要 0.5s，日常 10k 库零收益；仅「更新量 ≥30% 且库 ≥50k」时有效（p50 1.01→0.22ms），且 optimize **不缩体积**（需 VACUUM）。结论：不挂导入/启动路径，按段行数阈值在空闲窗口触发。
-- 遗留：50k 全链路档未测（本机会话探针写盘被拒 `OS Error 5`，待桌面会话补跑）；详见 docs/13 §七 P3 记录。
+- 50k 全链路补测（探针三档同口径，每口径 30 采样）：FTS 唯一 1/1ms、宽词 46/65ms、短词 LIKE 16/19ms、拼音首字母 **316/374ms**，四口径合计 p50 36ms / **p95 337ms**——**未达 P1 的「50k 搜索 p95 < 150ms」，超 2.25 倍**。唯一超标且唯一超线性的是拼音通道（10k→50k 数据涨 5 倍、延迟涨 24 倍），FTS 主路径不受影响。
+- 根因定位：`search_all` 在拼音查询时每次调用都先跑 `search_pinyin::reconcile`，3 条 `DELETE ... NOT IN` 加 3 条 `LEFT JOIN` 共 6 次全表扫描——只读查询路径上挂写事务（`perf-metrics/pinyin-reconcile-cost.py` 逐语句拆解：DELETE 34ms + LEFT JOIN 42ms + 命中 10ms）。已立项 `docs/07 #104`（脏标记 / 降频两方案），本轮只测量未改产品代码。
+- 环境结论修正：探针 exe 并非「完全无写盘权限」——`target/` 与工作区其他目录内被拒（`OS Error 5`），复制到用户 `%TEMP%` 后写盘正常，Python 3.13.14 / Node 22.22.2 则不受限。此前记为「环境阻塞」的 50k 遗留由此解除。
+- 详见 docs/13 §七 P3 记录。
 
 ### 新增：排程作息偏好编辑（docs/13 §五 F3 阶段三，2026-10-24）
 
