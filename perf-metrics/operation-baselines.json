@@ -13,7 +13,7 @@
     "attachment-sync-pull": "流式下载到临时文件 + 逐帧解密 + 末尾整体 sha256 校验，50MB 附件堆峰值 +8MB；阈值 20MB。",
     "backup-export-large": "223MB 备份（50k 行 × 4KiB 描述）：M1 的按 500 行分页 + 4MiB 帧让峰值与库体积解耦，堆峰值 +7.8MB、RSS +14MB；阈值 20/30MB，target 128MB（docs/13 T1.2）。",
     "initial-sync": "50k 行首同步（云端为空，上传丢弃）：M4 逐桶装载让内存只驻留一个桶，堆峰值 +9.1MB、RSS +30.9MB；阈值 24/60MB，target 128MB（docs/07 #91）。",
-    "global-search": "10k 任务搜索延迟尺子（docs/13 §七 P3）：中文 FTS 唯一 p50 2ms / 宽词 7ms / LIKE 短词 2ms / 稳态拼音 p50 约 11–17ms（随采样波动），四口径合计 overall p50 6ms / p95 14ms；拼音首查含 10k 回填 133ms（单事务批量；逐行自动事务 7.8s 已修）。阈值 8/16/500ms 防延迟回退（尤其 reconcile 被改回逐行）；target 100ms 为本轮自定体验线（docs/13 P3 原文只要求建立基线，未给数值门限）。内存四指标照常登记（堆 +0MB）。"
+    "global-search": "10k 任务搜索延迟尺子（docs/13 §七 P3）：中文 FTS 唯一 p50 2ms / 宽词 7ms / LIKE 短词 2ms / 稳态拼音 p50 约 11–17ms（随采样波动），四口径合计 overall p50 6ms / p95 14ms；拼音首查含 10k 回填 133ms（单事务批量；逐行自动事务 7.8s 已修）。阈值 8/16/500ms 防延迟回退（尤其 reconcile 被改回逐行）；target 100ms 为本轮自定体验线（docs/13 P3 原文只要求建立基线，未给数值门限）。内存四指标照常登记（堆 +0MB）。2026-10-25 起拼音对账改为事件驱动（docs/07 #104 脏标记）：稳态拼音 p50 1–3ms、四口径合计 p95 8ms；本 measured 仍是 2026-10-24 修复前的一次 --record 记录，阈值不变（缓冲足以拦回归）。"
   },
   "thresholds": {
     "backup-export.allocPeakDeltaMB": 10,

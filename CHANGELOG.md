@@ -16,6 +16,16 @@
 
 ## [Unreleased]
 
+### 修复：拼音对账移出查询路径（docs/07 #104，2026-10-25）
+
+- **问题**：`search_all` 在纯字母查询时每次调用都先跑 `search_pinyin::reconcile`——3 条 `DELETE ... NOT IN` + 3 条 `LEFT JOIN title 比对`，合计 6 次全表扫描，等于**在只读查询路径上挂写事务**。50k 行下单次对账 ≈316ms，把拼音通道 p95 拖到 374ms、四口径合计 p95 337ms，**未达 P1 的「50k 搜索 p95 < 150ms」验收线**；而检索本身只要 11ms。
+- **修法（脏标记 / 事件驱动对账）**：新增 `0010_search_pinyin_state` 单行哨兵表（`dirty`/`gen`/`reconciled_at`，不同步不进备份，缺行等价「需对账」）。`search_all` 拼音分支改为 `ensure_fresh`——只读哨兵行 O(1) 判定，脏了才对账一次；对账结束按 `gen` 乐观锁清零，对账期间并发的置脏不会被误清。
+- **置脏点（直写路径穷举，5 处）**：云同步 `pull_all`（`changed_tables` 命中三表）、全量备份恢复 v1/v2（无条件——DELETE + 裸 INSERT 后索引必失配）、批量导入 `bulk_import_records_from_values`、冲突副本 `restore_conflict`。
+- **顺带补齐三处裸 INSERT 的索引缺口**（原先靠「每查必对账」掩盖，只置脏会变成长期漏命中）：子任务转出 `promote_todo_subtask`、重复任务下次实例、复制任务 `duplicate_todo_task` 提交后精确 `sync_row`。
+- **复测（同口径 50k，每口径 30 采样，两跑）**：拼音首字母 316/374ms → **15/22ms 与 13/23ms（降 17 倍）**，四口径合计 p95 337ms → **77ms 与 72ms（达标）**；10k 档 p50 2 / p95 8ms（修前 6/14）、拼音首查 129ms，门禁三阈值 8/16/500ms 全绿。宽词/短词的小幅波动属跑间抖动（该路径未改）。
+- 契约用例 3 例：直写未置脏→查不到、置脏→下一查补齐且清零；`gen` 单调 + 清零乐观锁 + 干净态幂等；两条裸 INSERT 路径提交即入索引。
+- **新增直写路径的硬约定**：凡直接写 `todo_tasks`/`todo_projects`/`todo_comments` 的 `title`/`content` 且不经 generic_repo 钩子，提交后必须 `mark_dirty`（或 `sync_row` 补那一行）。
+
 ### 性能：搜索延迟基线 + 拼音对账批量化（docs/13 §七 P3，2026-10-24）
 
 - 操作级探针新增 `global-search` 场景（10k 任务库）：中文 FTS 唯一 / 宽词、两字短词 LIKE 兜底、拼音首字母四口径各 30 次采样，报 p50/p95 与拼音首查耗时；`operation-baselines.json` 增 `overallP50Ms=8` / `overallP95Ms=16` / `pinyinFirstMs=500` 三项阈值（含 15% 缓冲，防对账路径被改回逐行）。
