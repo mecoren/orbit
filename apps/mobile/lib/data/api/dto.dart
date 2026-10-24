@@ -116,6 +116,93 @@ class ProjectReviewStatus {
   });
 }
 
+// ---------- F3 日排程（阶段一只读预览，ADR 0013） ----------
+
+/// 排程偏好（相对今天零点的分钟；阶段一双端传默认值）
+class DayPlanPrefs {
+  final int workStartMinute;
+  final int workEndMinute;
+  final int lunchStartMinute;
+  final int lunchEndMinute;
+  final int granularityMinutes;
+  final int defaultTaskMinutes;
+  final bool includeOverdue;
+
+  const DayPlanPrefs({
+    required this.workStartMinute,
+    required this.workEndMinute,
+    required this.lunchStartMinute,
+    required this.lunchEndMinute,
+    required this.granularityMinutes,
+    required this.defaultTaskMinutes,
+    required this.includeOverdue,
+  });
+
+  /// 默认作息：09:00-18:00，午休 12:00-13:00，15 分钟粒度，无时长兜底 30 分钟
+  static const DayPlanPrefs defaults = DayPlanPrefs(
+    workStartMinute: 9 * 60,
+    workEndMinute: 18 * 60,
+    lunchStartMinute: 12 * 60,
+    lunchEndMinute: 13 * 60,
+    granularityMinutes: 15,
+    defaultTaskMinutes: 30,
+    includeOverdue: true,
+  );
+}
+
+/// 单个排程建议（时段 + 任务 + 可解释理由）
+class PlanSlot {
+  final int taskId;
+  final String title;
+  final int startMs;
+  final int endMs;
+  final int durationMinutes;
+  final String reason;
+
+  const PlanSlot({
+    required this.taskId,
+    required this.title,
+    required this.startMs,
+    required this.endMs,
+    required this.durationMinutes,
+    required this.reason,
+  });
+}
+
+/// 未排入任务与原因
+class UnscheduledTask {
+  final int taskId;
+  final String title;
+  final String reason;
+
+  const UnscheduledTask({
+    required this.taskId,
+    required this.title,
+    required this.reason,
+  });
+}
+
+/// 日排程预览（只读）
+class DayPlan {
+  final List<PlanSlot> slots;
+  final List<UnscheduledTask> unscheduled;
+  /// 今天剩余可排容量（分钟，已扣午休与已过时段）
+  final int capacityMinutes;
+  /// 候选任务总时长（分钟）
+  final int loadMinutes;
+  final bool overloaded;
+  final int dayStartMs;
+
+  const DayPlan({
+    required this.slots,
+    required this.unscheduled,
+    required this.capacityMinutes,
+    required this.loadMinutes,
+    required this.overloaded,
+    required this.dayStartMs,
+  });
+}
+
 /// 空白串归一为 null（M8 上级文件夹口径，与 core `normalize_parent_uuid` 一致）：
 /// 表单清空上级可能提交 "" 而非 null，两侧树构建只认 null 为顶层
 String? normalizeParentUuid(String? raw) {

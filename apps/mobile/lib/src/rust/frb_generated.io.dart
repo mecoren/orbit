@@ -18,6 +18,7 @@ import 'api/ics_export.dart';
 import 'api/maintenance.dart';
 import 'api/notification_log.dart';
 import 'api/plaintext_export.dart';
+import 'api/planner.dart';
 import 'api/saved_filter.dart';
 import 'api/search.dart';
 import 'api/state.dart';
@@ -109,6 +110,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   CsvImportStatsView dco_decode_box_autoadd_csv_import_stats_view(dynamic raw);
+
+  @protected
+  DayPlanPrefs dco_decode_box_autoadd_day_plan_prefs(dynamic raw);
 
   @protected
   double dco_decode_box_autoadd_f_64(dynamic raw);
@@ -224,6 +228,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   CsvImportStatsView dco_decode_csv_import_stats_view(dynamic raw);
 
   @protected
+  DayPlan dco_decode_day_plan(dynamic raw);
+
+  @protected
+  DayPlanPrefs dco_decode_day_plan_prefs(dynamic raw);
+
+  @protected
   DbEventDto dco_decode_db_event_dto(dynamic raw);
 
   @protected
@@ -319,6 +329,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<NotificationLogRow> dco_decode_list_notification_log_row(dynamic raw);
+
+  @protected
+  List<PlanSlot> dco_decode_list_plan_slot(dynamic raw);
 
   @protected
   Int64List dco_decode_list_prim_i_64_strict(dynamic raw);
@@ -421,6 +434,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<TodoTemplate> dco_decode_list_todo_template(dynamic raw);
 
   @protected
+  List<UnscheduledTask> dco_decode_list_unscheduled_task(dynamic raw);
+
+  @protected
   List<UnusedAttachmentView> dco_decode_list_unused_attachment_view(
     dynamic raw,
   );
@@ -468,6 +484,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   PlaintextExportView dco_decode_plaintext_export_view(dynamic raw);
+
+  @protected
+  PlanSlot dco_decode_plan_slot(dynamic raw);
 
   @protected
   ProjectReviewStatus dco_decode_project_review_status(dynamic raw);
@@ -644,6 +663,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void dco_decode_unit(dynamic raw);
 
   @protected
+  UnscheduledTask dco_decode_unscheduled_task(dynamic raw);
+
+  @protected
   UnusedAttachmentView dco_decode_unused_attachment_view(dynamic raw);
 
   @protected
@@ -733,6 +755,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   CsvImportStatsView sse_decode_box_autoadd_csv_import_stats_view(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  DayPlanPrefs sse_decode_box_autoadd_day_plan_prefs(
     SseDeserializer deserializer,
   );
 
@@ -872,6 +899,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  DayPlan sse_decode_day_plan(SseDeserializer deserializer);
+
+  @protected
+  DayPlanPrefs sse_decode_day_plan_prefs(SseDeserializer deserializer);
+
+  @protected
   DbEventDto sse_decode_db_event_dto(SseDeserializer deserializer);
 
   @protected
@@ -997,6 +1030,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<NotificationLogRow> sse_decode_list_notification_log_row(
     SseDeserializer deserializer,
   );
+
+  @protected
+  List<PlanSlot> sse_decode_list_plan_slot(SseDeserializer deserializer);
 
   @protected
   Int64List sse_decode_list_prim_i_64_strict(SseDeserializer deserializer);
@@ -1141,6 +1177,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  List<UnscheduledTask> sse_decode_list_unscheduled_task(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   List<UnusedAttachmentView> sse_decode_list_unused_attachment_view(
     SseDeserializer deserializer,
   );
@@ -1198,6 +1239,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   PlaintextExportView sse_decode_plaintext_export_view(
     SseDeserializer deserializer,
   );
+
+  @protected
+  PlanSlot sse_decode_plan_slot(SseDeserializer deserializer);
 
   @protected
   ProjectReviewStatus sse_decode_project_review_status(
@@ -1408,6 +1452,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_decode_unit(SseDeserializer deserializer);
 
   @protected
+  UnscheduledTask sse_decode_unscheduled_task(SseDeserializer deserializer);
+
+  @protected
   UnusedAttachmentView sse_decode_unused_attachment_view(
     SseDeserializer deserializer,
   );
@@ -1532,6 +1579,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_box_autoadd_csv_import_stats_view(
     CsvImportStatsView self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_box_autoadd_day_plan_prefs(
+    DayPlanPrefs self,
     SseSerializer serializer,
   );
 
@@ -1707,6 +1760,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_day_plan(DayPlan self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_day_plan_prefs(DayPlanPrefs self, SseSerializer serializer);
+
+  @protected
   void sse_encode_db_event_dto(DbEventDto self, SseSerializer serializer);
 
   @protected
@@ -1855,6 +1914,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
     List<NotificationLogRow> self,
     SseSerializer serializer,
   );
+
+  @protected
+  void sse_encode_list_plan_slot(List<PlanSlot> self, SseSerializer serializer);
 
   @protected
   void sse_encode_list_prim_i_64_strict(
@@ -2043,6 +2105,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_list_unscheduled_task(
+    List<UnscheduledTask> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_list_unused_attachment_view(
     List<UnusedAttachmentView> self,
     SseSerializer serializer,
@@ -2116,6 +2184,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
     PlaintextExportView self,
     SseSerializer serializer,
   );
+
+  @protected
+  void sse_encode_plan_slot(PlanSlot self, SseSerializer serializer);
 
   @protected
   void sse_encode_project_review_status(
@@ -2395,6 +2466,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_unit(void self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_unscheduled_task(
+    UnscheduledTask self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_unused_attachment_view(

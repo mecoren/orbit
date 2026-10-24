@@ -49,6 +49,7 @@ import '../../core/theme/icon_map.dart';
 import 'logic/task_menu.dart';
 import 'logic/capacity.dart';
 import 'today_strip.dart';
+import 'plan_day_sheet.dart';
 import 'weekly_review_sheet.dart';
 
 /// 任务子列表 /todo/tasks（docs/05 §4.2 + 移动端任务书）
@@ -447,6 +448,12 @@ class _SubListScreenState extends ConsumerState<SubListScreen> {
             icon: OrbitIcons.inbox,
             label: '分诊未分组',
             onTap: () => context.push('/todo/triage'),
+          ),
+          // 规划今天（F3 阶段一，对齐桌面「···」菜单）：只读排程预览弹层
+          OrbitPanelItem(
+            icon: OrbitIcons.calendarClock,
+            label: '规划今天',
+            onTap: () => showPlanDaySheet(context),
           ),
           // 排序方向（对齐桌面「顺序」档）：拖拽序无方向概念，整行隐藏
           //（口径同桌面 manual 档隐藏）；行尾回显当前生效方向

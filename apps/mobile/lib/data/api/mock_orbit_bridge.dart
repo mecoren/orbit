@@ -338,6 +338,172 @@ class MockOrbitBridge implements OrbitBridge {
         return TodoProject.fromJson(p);
       });
 
+  // ── 日排程（F3 阶段一；口径镜像 core day_planner_api） ──
+
+  @override
+  Future<DayPlan> dayPlanPreview(DayPlanPrefs prefs, int nowMs) =>
+      _delay(() {
+        final n = DateTime.fromMillisecondsSinceEpoch(nowMs);
+        final dayStart =
+            DateTime(n.year, n.month, n.day).millisecondsSinceEpoch;
+        final dayEnd = dayStart + Duration.millisecondsPerDay;
+        final nowMinute =
+            ((nowMs - dayStart) / Duration.millisecondsPerMinute).floor();
+        final gran = prefs.granularityMinutes < 1
+            ? 1
+            : prefs.granularityMinutes;
+        int durOf(Map<String, dynamic> t) {
+          final d = t['duration_minutes'] as int?;
+          return (d != null && d > 0) ? d : prefs.defaultTaskMinutes;
+        }
+
+        // 候选四类谓词（core plan_day 同款）
+        final cands = <Map<String, Object?>>[];
+        for (final t in store.tasks.values) {
+          if (t['is_deleted'] != 0 || t['done'] != 0) continue;
+          final due = t['due_date'] as int?;
+          final myDay = t['my_day_date'] as int?;
+          final dueInToday = due != null && due >= dayStart && due < dayEnd;
+          final overdue = due != null && due < dayStart;
+          final myDayToday = myDay != null && myDay >= dayStart && myDay < dayEnd;
+          final undatedWithDuration = due == null && t['duration_minutes'] != null;
+          if (overdue && !prefs.includeOverdue) continue;
+          if (dueInToday || overdue || myDayToday || undatedWithDuration) {
+            cands.add({
+              't': t,
+              'dueMin': due == null
+                  ? null
+                  : ((due - dayStart) ~/ Duration.millisecondsPerMinute),
+              'myDay': myDayToday,
+            });
+          }
+        }
+        int bucketOf(Map<String, Object?> c) {
+          final dueMin = c['dueMin'] as int?;
+          if (dueMin == null) return (c['myDay'] as bool) ? 3 : 4;
+          if (dueMin < 0) return 0;
+          if (dueMin > 0 && dueMin < 1440) return 1;
+          return 2;
+        }
+
+        cands.sort((a, b) {
+          final ba = bucketOf(a);
+          final bb = bucketOf(b);
+          if (ba != bb) return ba - bb;
+          if (ba == 0 || ba == 1) {
+            final da = a['dueMin'] as int?;
+            final db2 = b['dueMin'] as int?;
+            if (da == null || db2 == null) return 0;
+            return da.compareTo(db2);
+          }
+          final pa = (a['t'] as Map<String, dynamic>)['priority'] as int;
+          final pb = (b['t'] as Map<String, dynamic>)['priority'] as int;
+          return pb - pa;
+        });
+
+        // 段：工作窗挖午休
+        final lunchActive = prefs.lunchStartMinute > prefs.workStartMinute &&
+            prefs.lunchEndMinute < prefs.workEndMinute;
+        final segments = lunchActive
+            ? [
+                [prefs.workStartMinute, prefs.lunchStartMinute],
+                [prefs.lunchEndMinute, prefs.workEndMinute],
+              ]
+            : [
+                [prefs.workStartMinute, prefs.workEndMinute],
+              ];
+        final capacity = lunchActive
+            ? (prefs.lunchStartMinute -
+                    (prefs.workStartMinute > nowMinute
+                        ? prefs.workStartMinute
+                        : nowMinute))
+                .clamp(0, 1 << 30) +
+                (prefs.workEndMinute -
+                    (prefs.lunchEndMinute > nowMinute
+                        ? prefs.lunchEndMinute
+                        : nowMinute))
+                .clamp(0, 1 << 30)
+            : (prefs.workEndMinute -
+                    (prefs.workStartMinute > nowMinute
+                        ? prefs.workStartMinute
+                        : nowMinute))
+                .clamp(0, 1 << 30);
+
+        var cursor = nowMinute;
+        int? prevEnd;
+        final slots = <PlanSlot>[];
+        final unscheduled = <UnscheduledTask>[];
+        String hhmm(int minute) =>
+            '${(minute ~/ 60).toString().padLeft(2, '0')}:${(minute % 60).toString().padLeft(2, '0')}';
+        for (final c in cands) {
+          final t = c['t'] as Map<String, dynamic>;
+          final duration = durOf(t);
+          final dueMin = c['dueMin'] as int?;
+          final deadline =
+              (dueMin != null && dueMin > 0 && dueMin < 1440) ? dueMin : null;
+          List<int>? placed;
+          for (final seg in segments) {
+            final segStart =
+                seg[0] > cursor ? seg[0] : cursor;
+            final start = segStart + (gran - segStart % gran) % gran;
+            final end = start + duration;
+            if (start >= seg[1] || end > seg[1]) continue;
+            if (deadline != null && end > deadline) continue;
+            placed = [start, end];
+            break;
+          }
+          if (placed != null) {
+            final start = placed[0];
+            final end = placed[1];
+            final bucket = bucketOf(c);
+            final reason = bucket == 0
+                ? '已逾期'
+                : deadline != null
+                    ? '截止 ${hhmm(deadline)}'
+                    : t['priority'] >= 4
+                        ? '紧急优先'
+                        : t['priority'] == 3
+                            ? '高优先级'
+                            : bucket == 3
+                                ? '我的一天'
+                                : (prevEnd != null && start > prevEnd)
+                                    ? '填充空档'
+                                    : '顺序安排';
+            prevEnd = end;
+            cursor = end;
+            slots.add(PlanSlot(
+              taskId: t['id'] as int,
+              title: t['title'] as String,
+              startMs: dayStart + start * Duration.millisecondsPerMinute,
+              endMs: dayStart + end * Duration.millisecondsPerMinute,
+              durationMinutes: duration,
+              reason: reason,
+            ));
+          } else {
+            final reason = nowMinute >= prefs.workEndMinute
+                ? '已过工作时间'
+                : deadline != null
+                    ? '晚于截止 ${hhmm(deadline)}'
+                    : '今日时段已满';
+            unscheduled.add(UnscheduledTask(
+              taskId: t['id'] as int,
+              title: t['title'] as String,
+              reason: reason,
+            ));
+          }
+        }
+        final load =
+            cands.fold<int>(0, (sum, c) => sum + durOf(c['t'] as Map<String, dynamic>));
+        return DayPlan(
+          slots: slots,
+          unscheduled: unscheduled,
+          capacityMinutes: capacity,
+          loadMinutes: load,
+          overloaded: load > capacity,
+          dayStartMs: dayStart,
+        );
+      });
+
   // ── todo_tasks ──
 
   @override

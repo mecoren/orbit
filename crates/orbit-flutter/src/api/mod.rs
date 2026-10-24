@@ -47,6 +47,7 @@ pub mod logging;
 pub mod maintenance;
 pub mod notification_log;
 pub mod plaintext_export;
+pub mod planner;
 pub mod saved_filter;
 pub mod search;
 pub mod state;

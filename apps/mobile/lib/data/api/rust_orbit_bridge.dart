@@ -20,6 +20,7 @@ import '../../src/rust/api/sync.dart' as gen_sync;
 import '../../src/rust/api/auth.dart' as gen_auth;
 import '../../src/rust/api/biometric.dart' as gen_bio;
 import '../../src/rust/api/todo.dart' as gen_todo;
+import '../../src/rust/api/planner.dart' as gen_planner;
 import '../../src/rust/api/trash.dart' as gen_trash;
 import '../../src/rust/api/digest.dart' as gen_digest;
 import '../../src/rust/api/full_sync_backup.dart' as gen_backup;
@@ -199,6 +200,45 @@ class RustOrbitBridge implements OrbitBridge {
         days: days,
         nowMs: nowMs,
       ));
+
+  // ── 日排程（F3 阶段一） ──
+
+  @override
+  Future<DayPlan> dayPlanPreview(DayPlanPrefs prefs, int nowMs) async {
+    final plan = await gen_planner.dayPlanPreview(
+      prefs: gen_planner.DayPlanPrefs(
+        workStartMinute: prefs.workStartMinute,
+        workEndMinute: prefs.workEndMinute,
+        lunchStartMinute: prefs.lunchStartMinute,
+        lunchEndMinute: prefs.lunchEndMinute,
+        granularityMinutes: prefs.granularityMinutes,
+        defaultTaskMinutes: prefs.defaultTaskMinutes,
+        includeOverdue: prefs.includeOverdue,
+      ),
+      nowMs: nowMs,
+    );
+    return DayPlan(
+      slots: [
+        for (final s in plan.slots)
+          PlanSlot(
+            taskId: s.taskId,
+            title: s.title,
+            startMs: s.startMs,
+            endMs: s.endMs,
+            durationMinutes: s.durationMinutes,
+            reason: s.reason,
+          ),
+      ],
+      unscheduled: [
+        for (final u in plan.unscheduled)
+          UnscheduledTask(taskId: u.taskId, title: u.title, reason: u.reason),
+      ],
+      capacityMinutes: plan.capacityMinutes,
+      loadMinutes: plan.loadMinutes,
+      overloaded: plan.overloaded,
+      dayStartMs: plan.dayStartMs,
+    );
+  }
 
   // ── todo_tasks ──
 

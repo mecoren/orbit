@@ -300,6 +300,11 @@ abstract class OrbitBridge {
   /// 暂缓项目回顾 days 天（不重置周期）
   Future<TodoProject> todoProjectSnoozeReview(int projectId, int days, int nowMs);
 
+  // ── 日排程（F3 阶段一只读预览） ──
+
+  /// 规划今天：只读排程预览（不写库；nowMs 由调用方传本地毫秒）
+  Future<DayPlan> dayPlanPreview(DayPlanPrefs prefs, int nowMs);
+
   // ── todo_tasks ──
 
   Future<List<TodoTask>> todoTaskList(ListFilter filter);
