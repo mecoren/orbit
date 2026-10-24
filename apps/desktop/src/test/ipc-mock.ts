@@ -29,6 +29,12 @@ interface MockProject {
   sort_order: number;
   /** M8 上级文件夹（父项目）同步主键 uuid；null = 顶层 */
   parent_uuid: string | null;
+  /** F1 回顾周期（天）；null/0 = 关闭 */
+  review_interval_days: number | null;
+  /** 上次回顾时间（毫秒）；null = 从未回顾 */
+  review_last_at: number | null;
+  /** 回顾暂缓截止（毫秒）；null = 未暂缓 */
+  review_snooze_until: number | null;
   is_archived: number;
   is_deleted: number;
   created_at: number;
@@ -242,6 +248,9 @@ export function seedDefault(db: MockDb) {
     hex_color: "#3B82F6",
     sort_order: 0,
     parent_uuid: null,
+    review_interval_days: null,
+    review_last_at: null,
+    review_snooze_until: null,
     is_archived: 0,
     is_deleted: 0,
     created_at: now,
@@ -685,6 +694,24 @@ function validateTemplatePayload(payload: string): void {
   }
 }
 
+/** 本地日序号（days since epoch）——与 Rust local_day_index 同算法 */
+const localDayIndex = (tsMs: number) => {
+  const d = new Date(tsMs);
+  return Math.round(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) / 86_400_000);
+};
+
+/** 到期日序号（core review_due_day_index 镜像）：从未回顾 = 立即到期；
+ *  到期 = 上次回顾日 + 周期；暂缓只往后推（取 max） */
+const reviewDueDayIndex = (p: MockProject, todayIndex: number): number | null => {
+  const interval = p.review_interval_days;
+  if (interval == null || interval <= 0) return null;
+  const base =
+    p.review_last_at == null ? todayIndex : localDayIndex(p.review_last_at) + interval;
+  const due =
+    p.review_snooze_until == null ? base : Math.max(base, localDayIndex(p.review_snooze_until));
+  return due;
+};
+
 const commands: Record<string, (args: any, ctx: Ctx) => unknown> = {
   // ---- 启动链（App.tsx：master_auth_has=false → db_init_plaintext）----
   master_auth_has: () => false,
@@ -722,6 +749,9 @@ const commands: Record<string, (args: any, ctx: Ctx) => unknown> = {
       sort_order: input.sort_order ?? 0,
       // M8：空白串归一为 null（与 core normalize_parent_uuid 同口径）
       parent_uuid: input.parent_uuid?.trim() ? input.parent_uuid : null,
+      review_interval_days: null,
+      review_last_at: null,
+      review_snooze_until: null,
       is_archived: 0,
       is_deleted: 0,
       created_at: now,
@@ -756,6 +786,68 @@ const commands: Record<string, (args: any, ctx: Ctx) => unknown> = {
     p.sort_order = sortOrder;
     p.updated_at = Date.now();
     p.version += 1;
+  },
+  // ---- F1 项目回顾节奏（与 core project_review_api 同口径） ----
+  todo_projects_due_for_review: ({ nowMs }, { db }) => {
+    const today = localDayIndex(nowMs ?? Date.now());
+    const counts = new Map<number, number>();
+    for (const t of db.tasks) {
+      if (t.project_id != null && !t.is_deleted && !t.done) {
+        counts.set(t.project_id, (counts.get(t.project_id) ?? 0) + 1);
+      }
+    }
+    return ipcClone(
+      db.projects
+        .filter((p) => !p.is_deleted && !p.is_archived)
+        .map((p) => {
+          const due = reviewDueDayIndex(p, today);
+          if (due == null || due > today) return null;
+          return {
+            project: p,
+            due_day_index: due,
+            overdue_days: Math.max(0, today - due),
+            open_task_count: counts.get(p.id) ?? 0,
+          };
+        })
+        .filter((s) => s != null)
+        .sort((a, b) => b!.overdue_days - a!.overdue_days || a!.project.title.localeCompare(b!.project.title)),
+    );
+  },
+  todo_project_mark_reviewed: ({ projectId }, { db }) => {
+    const p = db.projects.find((x) => x.id === projectId);
+    if (!p) throw new Error(`project ${projectId} 不存在`);
+    p.review_last_at = Date.now();
+    p.review_snooze_until = null;
+    p.updated_at = Date.now();
+    p.version += 1;
+    return ipcClone(p);
+  },
+  todo_project_set_review_interval: ({ projectId, days }, { db }) => {
+    const p = db.projects.find((x) => x.id === projectId);
+    if (!p) throw new Error(`project ${projectId} 不存在`);
+    if (days != null && days > 0) {
+      p.review_interval_days = days;
+      // 开启时从未回顾过则从现在起算（core 同款：首次到期 = 设定日 + 周期）
+      if (p.review_last_at == null) p.review_last_at = Date.now();
+    } else {
+      p.review_interval_days = null;
+    }
+    p.review_snooze_until = null;
+    p.updated_at = Date.now();
+    p.version += 1;
+    return ipcClone(p);
+  },
+  todo_project_snooze_review: ({ projectId, days, nowMs }, { db }) => {
+    const p = db.projects.find((x) => x.id === projectId);
+    if (!p) throw new Error(`project ${projectId} 不存在`);
+    if (days == null || days <= 0) throw new Error("暂缓天数必须为正整数");
+    const now = nowMs ?? Date.now();
+    const d = new Date(now);
+    const dayStart = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+    p.review_snooze_until = dayStart + days * 86_400_000;
+    p.updated_at = now;
+    p.version += 1;
+    return ipcClone(p);
   },
 
   // ---- tasks ----
@@ -2256,6 +2348,9 @@ function ensureMockProject(db: MockDb, title: string): number {
     hex_color: "#3B82F6",
     sort_order: 0,
     parent_uuid: null,
+    review_interval_days: null,
+    review_last_at: null,
+    review_snooze_until: null,
     is_archived: 0,
     is_deleted: 0,
     created_at: now,
@@ -2271,7 +2366,11 @@ function ensureMockProject(db: MockDb, title: string): number {
  *  trash 恢复/彻底删除/清空写后同样要失效列表缓存） */
 const isWriteCommand = (cmd: string) =>
   /_(create|update|update_position|complete|delete|toggle_done|recalc_percent|restore|purge|execute|add|remove)$/.test(cmd) ||
-  cmd === "trash_purge_all";
+  cmd === "trash_purge_all" ||
+  // F1 项目回顾写路径（core 侧经 generic_repo 统一 emit db-change）
+  cmd === "todo_project_mark_reviewed" ||
+  cmd === "todo_project_set_review_interval" ||
+  cmd === "todo_project_snooze_review";
 
 // ---------- 安装 ----------
 

@@ -358,6 +358,11 @@ pub fn run() {
             business_cmd::todo_projects_list_archived,
             business_cmd::todo_projects_delete,
             business_cmd::todo_projects_get_by_uuid,
+            // 项目回顾节奏（F1）
+            business_cmd::todo_projects_due_for_review,
+            business_cmd::todo_project_mark_reviewed,
+            business_cmd::todo_project_set_review_interval,
+            business_cmd::todo_project_snooze_review,
             // todo_tasks
             business_cmd::todo_tasks_list,
             business_cmd::todo_tasks_get,

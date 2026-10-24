@@ -21,6 +21,8 @@ const TABLE_QUERY_KEYS: Record<string, string[][]> = {
     ["global-search"],
     ["stats"],
     ["trash"],
+    // F1 回顾中心的 open_task_count 聚合自任务表（完成/软删后计数随之收敛）
+    ["todo-project", "review-due"],
   ],
   // 历史轨迹：log_activity 落库后自发事件（业务写路径的 todo_tasks 事件
   // 先于轨迹 INSERT，搭车重拉会竞态读旧——不能挂 todo_tasks 下）

@@ -3,6 +3,7 @@
 //! 平移自 wait-home（02 文档 §四 A 类）；表集合与 db::sync_registry 对齐。
 
 use orbit_core::api::business_api;
+use orbit_core::api::project_review_api;
 use orbit_core::models::business::*;
 use tauri::State;
 
@@ -59,6 +60,51 @@ pub async fn todo_projects_list_archived(
     state: State<'_, AppState>,
 ) -> Result<Vec<TodoProject>, String> {
     business_api::list_archived_todo_projects(&state.pool)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+// ---------- 项目回顾节奏（F1，docs/13 §五 F1；语义见 project_review_api 模块文档） ----------
+/// 待回顾项目清单（回顾中心列表与侧栏「待回顾」徽标共用；now_ms 由前端传 Date.now()）
+#[tauri::command]
+pub async fn todo_projects_due_for_review(
+    state: State<'_, AppState>,
+    now_ms: i64,
+) -> Result<Vec<project_review_api::ProjectReviewStatus>, String> {
+    project_review_api::list_projects_due_for_review(&state.pool, now_ms)
+        .await
+        .map_err(|e| e.to_string())
+}
+/// 标记项目已回顾（下次到期 = 今天 + 周期；顺带清空暂缓）
+#[tauri::command]
+pub async fn todo_project_mark_reviewed(
+    state: State<'_, AppState>,
+    project_id: i64,
+) -> Result<TodoProject, String> {
+    project_review_api::mark_project_reviewed(&state.pool, project_id)
+        .await
+        .map_err(|e| e.to_string())
+}
+/// 设置项目回顾周期（days 省略/≤0 = 关闭；开启时从未回顾过则从现在起算）
+#[tauri::command]
+pub async fn todo_project_set_review_interval(
+    state: State<'_, AppState>,
+    project_id: i64,
+    days: Option<i64>,
+) -> Result<TodoProject, String> {
+    project_review_api::set_project_review_interval(&state.pool, project_id, days)
+        .await
+        .map_err(|e| e.to_string())
+}
+/// 暂缓项目回顾（到期推到今天 + days 天，不重置周期）
+#[tauri::command]
+pub async fn todo_project_snooze_review(
+    state: State<'_, AppState>,
+    project_id: i64,
+    days: i64,
+    now_ms: i64,
+) -> Result<TodoProject, String> {
+    project_review_api::snooze_project_review(&state.pool, project_id, days, now_ms)
         .await
         .map_err(|e| e.to_string())
 }

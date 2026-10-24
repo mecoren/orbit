@@ -116,8 +116,9 @@ test("M8：编辑弹窗「上级文件夹」候选排除自身，改层级后落
   await expect(dialog).toBeVisible();
 
   // 候选排除自身（否则 Rust 侧自引用必拒）；
-  // 候选文案带祖先路径（"文件夹父 / 子项目甲"），故用 exact 精确锁定顶层项
-  await page.getByRole("combobox").click();
+  // 候选文案带祖先路径（"文件夹父 / 子项目甲"），故用 exact 精确锁定顶层项；
+  // 编辑弹窗自 F1 起还有「回顾周期」Select，combobox 须按名收窄
+  await page.getByRole("combobox", { name: "上级文件夹" }).click();
   await expect(page.getByRole("option", { name: "孤儿项目", exact: true })).toHaveCount(0);
   await expect(page.getByRole("option", { name: "文件夹父", exact: true })).toBeVisible();
   await page.getByRole("option", { name: "文件夹父", exact: true }).click();

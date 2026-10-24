@@ -20,6 +20,9 @@ const TrashPanel = lazy(() =>
 const StatsPanel = lazy(() =>
   import("@/features/todo/desktop/stats-page").then((m) => ({ default: m.StatsPanel })),
 );
+const ReviewPanel = lazy(() =>
+  import("@/features/todo/desktop/review-center").then((m) => ({ default: m.ReviewPanel })),
+);
 const SettingsPage = lazy(() =>
   import("@/pages/settings-page").then((m) => ({ default: m.SettingsPage })),
 );
@@ -55,6 +58,7 @@ const desktopChildren = [
       { index: true, element: page(<TaskPanel />), errorElement: <RouteError /> },
       { path: "trash", element: page(<TrashPanel />), errorElement: <RouteError /> },
       { path: "stats", element: page(<StatsPanel />), errorElement: <RouteError /> },
+      { path: "review", element: page(<ReviewPanel />), errorElement: <RouteError /> },
     ],
   },
   { path: "settings", element: page(<SettingsPage />), errorElement: <RouteError /> },

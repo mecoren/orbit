@@ -25,11 +25,18 @@ beforeEach(() => {
 });
 
 describe("invalidateByTable 表级失效映射", () => {
-  it("todo_tasks → 主列表 + 详情 + 搜索 + 统计 + 回收站（跨表派生全联动）", () => {
+  it("todo_tasks → 主列表 + 详情 + 搜索 + 统计 + 回收站 + 回顾到期计数（跨表派生全联动）", () => {
     const { qc, calls } = makeClient();
     const keys = invalidateByTable(qc, "todo_tasks");
-    expect(keys).toEqual([["todo_tasks"], ["todo-task-detail"], ["global-search"], ["stats"], ["trash"]]);
-    expect(calls).toHaveLength(5);
+    expect(keys).toEqual([
+      ["todo_tasks"],
+      ["todo-task-detail"],
+      ["global-search"],
+      ["stats"],
+      ["trash"],
+      ["todo-project", "review-due"],
+    ]);
+    expect(calls).toHaveLength(6);
   });
 
   it("todo_activity_log → 仅历史键（轨迹落库后自发事件，不搭 todo_tasks 竞态车）", () => {
@@ -165,7 +172,7 @@ describe("D2 突发合并决策", () => {
       }
     }
     expect(full).toBe(true);
-    // todo_tasks 的 5 路先进了 calls，全量由调用方补一次（此处只断决策）
-    expect(calls).toHaveLength(5);
+    // todo_tasks 的 6 路先进了 calls，全量由调用方补一次（此处只断决策）
+    expect(calls).toHaveLength(6);
   });
 });

@@ -35,7 +35,7 @@ import {
   SortableContext,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
-import { Archive, ArchiveRestore, BarChart3, ChevronDown, ChevronRight, Filter, Folder, Inbox, PanelLeftClose, PanelLeftOpen, Plus, Trash2 } from "lucide-react";
+import { Archive, ArchiveRestore, BarChart3, CalendarCheck, ChevronDown, ChevronRight, Filter, Folder, Inbox, PanelLeftClose, PanelLeftOpen, Plus, Trash2 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { hideFromQueries, useUndoableDeleteAction } from "@/hooks/use-undoable-delete";
@@ -71,11 +71,14 @@ import {
   todoProjectCreate,
   todoProjectDelete,
   todoProjectListArchived,
+  todoProjectSetReviewInterval,
+  todoProjectsDueForReview,
   todoProjectUpdate,
   todoProjectUpdateSortOrder,
   type TodoProject,
 } from "@/lib/tauri";
 import { LS_UNGROUPED_AFTER, QUICK_VIEWS, TODO_ACCENT, type QuickViewKey, PRESET_10 } from "../shared/constants";
+import { REVIEW_INTERVAL_PRESETS, REVIEW_OFF } from "../shared/project-review";
 import {
   buildFolderPathLabels,
   buildProjectTree,
@@ -137,9 +140,11 @@ export function ProjectSidebar({
   const location = useLocation();
   const [adding, setAdding] = useState(false);
   const [newTitle, setNewTitle] = useState("");
-  // 回收站/统计面板激活态（/todo/trash、/todo/stats；激活时快捷视图/项目/未分组行全部不高亮）
+  // 回收站/统计/回顾面板激活态（/todo/trash、/todo/stats、/todo/review；
+  // 激活时快捷视图/项目/未分组行全部不高亮）
   const trashActive = location.pathname === "/todo/trash";
   const statsActive = location.pathname === "/todo/stats";
+  const reviewActive = location.pathname === "/todo/review";
 
   // ---- 折叠态（#21）：断点自动 + 手动覆盖（语义见 shared/sidebar-collapsed）----
   const isNarrow = useIsNarrow();
@@ -175,6 +180,17 @@ export function ProjectSidebar({
   const refetchArchived = () =>
     qc.invalidateQueries({ queryKey: ["todo-project", "archived"] });
 
+  // ---- 待回顾徽标（F1）：到期项目 id 集（判定真值在 core，前端只渲染点）----
+  const { data: reviewDue = [] } = useQuery({
+    queryKey: ["todo-project", "review-due"],
+    queryFn: () => todoProjectsDueForReview(Date.now()),
+    staleTime: 60 * 1000,
+  });
+  const reviewDueIds = useMemo(
+    () => new Set(reviewDue.map((s) => s.project.id)),
+    [reviewDue],
+  );
+
   /** 归档切换：is_archived 翻转；当前视图正选中该归档项目时跳走 /todo
    * （归档项目不进默认任务聚合，视图留着会看到空列表误导） */
   const toggleArchive = async (project: TodoProject) => {
@@ -188,9 +204,9 @@ export function ProjectSidebar({
 
   const refetchProjects = () => qc.invalidateQueries({ queryKey: ["todo-project", "list"] });
 
-  // 回收站/统计面板激活时清空快捷视图/项目/未分组的行高亮（三选一互斥语义的扩展态）
-  const effectiveQuickView = trashActive || statsActive ? null : activeQuickView;
-  const effectiveProjectId = trashActive || statsActive ? null : activeProjectId;
+  // 回收站/统计/回顾面板激活时清空快捷视图/项目/未分组的行高亮（互斥语义的扩展态）
+  const effectiveQuickView = trashActive || statsActive || reviewActive ? null : activeQuickView;
+  const effectiveProjectId = trashActive || statsActive || reviewActive ? null : activeProjectId;
 
   // ---- M8 层级树 + 折叠（文件夹分组）----
   // 折叠集合按项目 uuid 记账（会话内状态，不持久化：层级是低频操作，折叠是临时浏览动作）
@@ -436,6 +452,25 @@ export function ProjectSidebar({
             </TooltipTrigger>
             <TooltipContent>统计</TooltipContent>
           </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                aria-label="回顾"
+                onClick={() => navigate("/todo/review")}
+                className={cn(
+                  "relative flex h-8 w-8 items-center justify-center rounded-md",
+                  reviewActive ? "bg-primary/10" : "hover:bg-accent/50",
+                )}
+              >
+                <CalendarCheck className="size-4" />
+                {reviewDue.length > 0 && (
+                  <span className="absolute right-1 top-1 size-1.5 rounded-full bg-amber-500" />
+                )}
+              </button>
+            </TooltipTrigger>
+            <TooltipContent>回顾{reviewDue.length > 0 ? ` · 待回顾 ${reviewDue.length}` : ""}</TooltipContent>
+          </Tooltip>
         </div>
 
         <div className="mt-2 flex w-full flex-col items-center gap-1">
@@ -448,7 +483,7 @@ export function ProjectSidebar({
                 onClick={onSelectUngrouped}
                 className={cn(
                   "flex h-7 w-7 items-center justify-center rounded-md",
-                  ungroupedActive && !trashActive && !statsActive
+                  ungroupedActive && !trashActive && !statsActive && !reviewActive
                     ? "bg-primary/10"
                     : "hover:bg-accent/50",
                 )}
@@ -535,7 +570,7 @@ export function ProjectSidebar({
             </button>
           );
         })}
-        {/* 回收站/统计（壳层嵌套路由面板，不参与快捷视图筛选状态机） */}
+        {/* 回收站/统计/回顾（壳层嵌套路由面板，不参与快捷视图筛选状态机） */}
         <button
           type="button"
           onClick={() => navigate("/todo/trash")}
@@ -557,6 +592,23 @@ export function ProjectSidebar({
         >
           <BarChart3 className="size-4" />
           <span>统计</span>
+        </button>
+        {/* 回顾中心（F1 项目回顾节奏）：到期时右侧给计数徽标提示 */}
+        <button
+          type="button"
+          onClick={() => navigate("/todo/review")}
+          className={cn(
+            "flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm",
+            reviewActive ? "bg-primary/10 font-medium text-primary" : "hover:bg-accent/50",
+          )}
+        >
+          <CalendarCheck className="size-4" />
+          <span>回顾</span>
+          {reviewDue.length > 0 && (
+            <span className="ml-auto rounded-md bg-amber-500/15 px-1.5 py-0.5 text-xs tabular-nums text-amber-600 dark:text-amber-400">
+              {reviewDue.length}
+            </span>
+          )}
         </button>
       </div>
 
@@ -641,6 +693,7 @@ export function ProjectSidebar({
                       collapsed={isCollapsed}
                       onToggleCollapse={() => uuid != null && toggleFolder(uuid)}
                       undoneCount={undoneCounts[id] ?? 0}
+                      dueForReview={reviewDueIds.has(id)}
                       active={effectiveProjectId === id && !ungroupedActive}
                       onSelect={() => onSelectProject(id)}
                       onRequestDelete={(hasUndone, undoneCount) => {
@@ -817,6 +870,8 @@ function ProjectEditDialog({
   const [title, setTitle] = useState("");
   const [color, setColor] = useState("");
   const [parentUuid, setParentUuid] = useState<string>(PARENT_NONE);
+  // F1 回顾周期档（REVIEW_OFF 哨兵 = 关闭；档位天数为唯一真值）
+  const [reviewDays, setReviewDays] = useState<string>(REVIEW_OFF);
   // 打开时装载当前项目值（key 重挂载或 open 翻转均可正确初始化）
   const [loadedFor, setLoadedFor] = useState<number | null>(null);
   if (project != null && loadedFor !== project.id) {
@@ -824,6 +879,11 @@ function ProjectEditDialog({
     setTitle(project.title);
     setColor(project.hex_color || PRESET_10[3]);
     setParentUuid(normalizeParentUuid(project.parent_uuid) ?? PARENT_NONE);
+    setReviewDays(
+      project.review_interval_days && project.review_interval_days > 0
+        ? String(project.review_interval_days)
+        : REVIEW_OFF,
+    );
   }
 
   const selfUuid = normalizeParentUuid(project?.uuid);
@@ -846,12 +906,23 @@ function ProjectEditDialog({
     if (!t) return;
     const nextParent = parentUuid === PARENT_NONE ? null : parentUuid;
     const currentParent = normalizeParentUuid(project.parent_uuid);
+    // F1 回顾周期：有变化才写；走 setReviewInterval 语义化入口
+    //（开启时从未回顾过则从现在起算、关闭时清残留暂缓——raw update 不带这些语义）
+    const nextReviewDays =
+      reviewDays === REVIEW_OFF ? null : Number(reviewDays);
+    const currentReviewDays =
+      project.review_interval_days && project.review_interval_days > 0
+        ? project.review_interval_days
+        : null;
     try {
       await todoProjectUpdate(project.id, {
         title: t !== project.title ? t : undefined,
         hex_color: color !== project.hex_color ? color : undefined,
         parent_uuid: nextParent !== currentParent ? nextParent : undefined,
       });
+      if (nextReviewDays !== currentReviewDays) {
+        await todoProjectSetReviewInterval(project.id, nextReviewDays);
+      }
       onSaved();
     } finally {
       onClose();
@@ -910,6 +981,28 @@ function ProjectEditDialog({
                 {parentOptions.map((c) => (
                   <SelectItem key={c.uuid} value={c.uuid}>
                     {folderLabels.get(c.uuid) ?? c.title}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          {/* F1 回顾周期：到期项目进侧栏「回顾」中心，逐项目走三步向导 */}
+          <div className="space-y-1.5">
+            <label
+              className="text-xs text-muted-foreground"
+              htmlFor="project-review-interval"
+            >
+              回顾周期
+            </label>
+            <Select value={reviewDays} onValueChange={setReviewDays}>
+              <SelectTrigger id="project-review-interval" className="w-full">
+                <SelectValue placeholder="关闭" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={REVIEW_OFF}>关闭</SelectItem>
+                {REVIEW_INTERVAL_PRESETS.map((p) => (
+                  <SelectItem key={p.days} value={String(p.days)}>
+                    {p.label}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -974,6 +1067,7 @@ function SortableProjectRow({
   collapsed,
   onToggleCollapse,
   undoneCount,
+  dueForReview,
   active,
   onSelect,
   onRequestDelete,
@@ -988,6 +1082,8 @@ function SortableProjectRow({
   collapsed: boolean;
   onToggleCollapse: () => void;
   undoneCount: number;
+  /** F1 项目回顾：该项目已到期待回顾（琥珀点徽标，点击进回顾中心） */
+  dueForReview: boolean;
   active: boolean;
   onSelect: () => void;
   /** 上报删除请求；hasUndone 决定弹窗类型（保护 / 确认） */
@@ -1000,6 +1096,7 @@ function SortableProjectRow({
   const { listeners, setNodeRef, transform, transition } = useSortable({
     id: project.id,
   });
+  const navigate = useNavigate();
 
   return (
     <div
@@ -1042,6 +1139,26 @@ function SortableProjectRow({
           />
           <span className="truncate">{project.title}</span>
         </button>
+        {/* F1 待回顾徽标：琥珀圆点 + tooltip，点击直达回顾中心（钉在行尾箭头前，
+            不占标题空间——到期是「状态」不是「计数」，点状提示即可） */}
+        {dueForReview && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                aria-label={`${project.title}待回顾`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  navigate("/todo/review");
+                }}
+                className="flex size-4 shrink-0 items-center justify-center"
+              >
+                <span className="size-2 rounded-full bg-amber-500" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent>待回顾 · 点击进入回顾中心</TooltipContent>
+          </Tooltip>
+        )}
       </ProjectContextMenu>
       {/* 折叠箭头：仅父节点渲染，钉在行尾（与筛选器删除钮/取消归档钮同版式）。
           不在图标前占槽——那会在行首与图标之间空出一条死带，

@@ -176,6 +176,12 @@ export interface TodoProject {
   sort_order: number;
   /** M8 上级文件夹（父项目）的同步主键 uuid；null = 顶层 */
   parent_uuid: string | null;
+  /** F1 回顾周期（天）；null/0 = 关闭（7=每周 14=每两周 30=每月） */
+  review_interval_days: number | null;
+  /** 上次回顾时间（毫秒）；null = 从未回顾 */
+  review_last_at: number | null;
+  /** 回顾暂缓截止（毫秒，本地零点口径）；null = 未暂缓 */
+  review_snooze_until: number | null;
   is_archived: number;
   is_deleted: number;
   created_at: number;
@@ -200,6 +206,22 @@ export interface TodoProjectUpdateInput {
   is_archived?: number;
   /** M8 上级文件夹 uuid：省略=不改；null / ""=移到顶层 */
   parent_uuid?: string | null;
+  /** F1 回顾周期（天）：省略=不改；null=关闭（常规写路径建议走 setReviewInterval 保起算/清暂缓语义） */
+  review_interval_days?: number | null;
+  /** 上次回顾时间：省略=不改；null=清空（标记已回顾走 markReviewed） */
+  review_last_at?: number | null;
+  /** 回顾暂缓截止：省略=不改；null=清空 */
+  review_snooze_until?: number | null;
+}
+/** F1 回顾状态行（core project_review_api::ProjectReviewStatus 的前端镜像） */
+export interface ProjectReviewStatus {
+  project: TodoProject;
+  /** 到期日序号（days since epoch，本地时区日界） */
+  due_day_index: number;
+  /** 已逾期天数（0 = 今天到期） */
+  overdue_days: number;
+  /** 项目内未完成且未软删的任务数 */
+  open_task_count: number;
 }
 export const todoProjectList = (filter: ListFilter) => invoke<TodoProject[]>("todo_projects_list", { filter });
 export const todoProjectGet = (id: number) => invoke<TodoProject>("todo_projects_get", { id });
@@ -210,6 +232,14 @@ export const todoProjectGetByUuid = (uuid: string) => invoke<TodoProject | null>
 export const todoProjectUpdateSortOrder = (id: number, sortOrder: number) => invoke<void>("todo_projects_update_sort_order", { id, sortOrder });
 /** 归档项目列表（侧栏「已归档」折叠区数据源） */
 export const todoProjectListArchived = () => invoke<TodoProject[]>("todo_projects_list_archived");
+/** 待回顾项目清单（F1 回顾中心/侧栏徽标共用） */
+export const todoProjectsDueForReview = (nowMs: number) => invoke<ProjectReviewStatus[]>("todo_projects_due_for_review", { nowMs: nowMs });
+/** 标记项目已回顾 */
+export const todoProjectMarkReviewed = (projectId: number) => invoke<TodoProject>("todo_project_mark_reviewed", { projectId });
+/** 设置项目回顾周期（null = 关闭） */
+export const todoProjectSetReviewInterval = (projectId: number, days: number | null) => invoke<TodoProject>("todo_project_set_review_interval", { projectId, days });
+/** 暂缓项目回顾 days 天 */
+export const todoProjectSnoozeReview = (projectId: number, days: number, nowMs: number) => invoke<TodoProject>("todo_project_snooze_review", { projectId, days, nowMs: nowMs });
 
 // ========== todo_tasks ==========
 export interface TodoTask {

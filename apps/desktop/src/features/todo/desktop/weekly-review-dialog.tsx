@@ -38,6 +38,10 @@ interface WeeklyReviewDialogProps {
   onOpenChange: (open: boolean) => void;
   /** 内存任务集（回顾清单在其上归集） */
   tasks: TodoTaskListItem[];
+  /** 标题前缀（默认「周回顾」；回顾中心按项目发起时传项目名） */
+  heading?: string;
+  /** 向导走完最后一步时回调（项目回顾在此标记 review_last_at） */
+  onFinish?: () => void | Promise<void>;
 }
 
 /** 每步的标题/图标/说明 */
@@ -66,7 +70,7 @@ function presetDueMs(preset: "today" | "tomorrow" | "nextWeek"): number {
   }
 }
 
-export function WeeklyReviewDialog({ open, onOpenChange, tasks }: WeeklyReviewDialogProps) {
+export function WeeklyReviewDialog({ open, onOpenChange, tasks, heading, onFinish }: WeeklyReviewDialogProps) {
   const qc = useQueryClient();
   const [stepIdx, setStepIdx] = useState(0);
   /** 已处置的任务 id（各步内「跳过/处理」都算处置，出清单） */
@@ -152,7 +156,8 @@ export function WeeklyReviewDialog({ open, onOpenChange, tasks }: WeeklyReviewDi
       onOpenChange(false);
       setStepIdx(0);
       setHandled(new Set());
-      toast.success("周回顾完成", { description: "清单已收拢，保持节奏" });
+      toast.success(`${heading ?? "周回顾"}完成`, { description: "清单已收拢，保持节奏" });
+      void onFinish?.();
     }
   };
 
@@ -171,7 +176,7 @@ export function WeeklyReviewDialog({ open, onOpenChange, tasks }: WeeklyReviewDi
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <meta.icon className="size-4 text-primary" />
-            周回顾 · {meta.title}
+            {heading ?? "周回顾"} · {meta.title}
             <span className="ml-auto text-xs font-normal text-muted-foreground">
               第 {stepIdx + 1} / {STEP_ORDER.length} 步
             </span>
