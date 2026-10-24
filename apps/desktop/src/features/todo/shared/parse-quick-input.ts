@@ -66,6 +66,7 @@ export interface ParsedQuickInput {
 const WEEKDAY_CN: Record<string, number> = { 一: 1, 二: 2, 三: 3, 四: 4, 五: 5, 六: 6, 日: 0, 天: 0 };
 const RELATIVE_DAYS: Record<string, number> = { 今天: 0, 明天: 1, 大后天: 3, 后天: 2 };
 /** 时段词 → 是否午后（午后小时数 <12 时 +12；12 点恒 12 点口径） */
+// bounded: 固定 3 元素源码字面量集（永不增长，无淘汰需求）
 const PM_PARTS = new Set(["下午", "傍晚", "晚上"]);
 
 /** 距下一个周一的天数（今天为周一也取下周一），与 quick-dates.nextMonday 同口径 */
