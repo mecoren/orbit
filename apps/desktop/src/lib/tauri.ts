@@ -1296,6 +1296,59 @@ export interface StatsAggregate {
 export const statsAggregate = (year?: number) =>
   invoke<StatsAggregate>("stats_aggregate", { year });
 
+// ========== day_planner（F3 日排程：阶段一只读预览，ADR 0013）==========
+/** 排程偏好（相对今天零点的分钟；阶段一双端传默认值，阶段三落 cfg_kv 可编辑） */
+export interface DayPlanPrefs {
+  work_start_minute: number;
+  work_end_minute: number;
+  lunch_start_minute: number;
+  lunch_end_minute: number;
+  granularity_minutes: number;
+  default_task_minutes: number;
+  include_overdue: boolean;
+}
+/** 默认作息：09:00-18:00，午休 12:00-13:00，15 分钟粒度，无时长兜底 30 分钟 */
+export const DAY_PLAN_DEFAULT_PREFS: DayPlanPrefs = {
+  work_start_minute: 9 * 60,
+  work_end_minute: 18 * 60,
+  lunch_start_minute: 12 * 60,
+  lunch_end_minute: 13 * 60,
+  granularity_minutes: 15,
+  default_task_minutes: 30,
+  include_overdue: true,
+};
+/** 单个排程建议（时段 + 任务 + 可解释理由） */
+export interface PlanSlot {
+  task_id: number;
+  title: string;
+  start_ms: number;
+  end_ms: number;
+  duration_minutes: number;
+  /** 「已逾期 N 天」「截止 HH:mm」「高优先级」「我的一天」「填充空档」「顺序安排」 */
+  reason: string;
+}
+/** 未排入任务与原因 */
+export interface UnscheduledTask {
+  task_id: number;
+  title: string;
+  /** 「晚于截止 HH:mm」「今日时段已满」「已过工作时间」 */
+  reason: string;
+}
+/** 日排程预览（只读） */
+export interface DayPlan {
+  slots: PlanSlot[];
+  unscheduled: UnscheduledTask[];
+  /** 今天剩余可排容量（分钟，已扣午休与已过时段） */
+  capacity_minutes: number;
+  /** 候选任务总时长（分钟） */
+  load_minutes: number;
+  overloaded: boolean;
+  day_start_ms: number;
+}
+/** 规划今天：只读排程预览（不写库；应用写入属阶段二） */
+export const dayPlanPreview = (prefs: DayPlanPrefs, nowMs: number) =>
+  invoke<DayPlan>("day_plan_preview", { prefs, nowMs: nowMs });
+
 /** 一键复制任务（#37：克隆字段+子任务，副本标题后缀） */
 export const todoTaskDuplicate = (id: number) =>
   invoke<TodoTask>("todo_tasks_duplicate", { id });

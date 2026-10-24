@@ -42,6 +42,7 @@ import { MatrixView } from "./matrix-view";
 import { TodayStrip } from "./today-strip";
 import { WeeklyReviewDialog } from "./weekly-review-dialog";
 import { TriageDialog } from "./triage-dialog";
+import { PlanDayDialog } from "./plan-day-dialog";
 
 type StatusFilter = "all" | "undone" | "pending" | "doing" | "done";
 type PriorityFilter = "all" | "0" | "1" | "2" | "3" | "4" | "5";
@@ -121,6 +122,8 @@ export default function TaskPanel() {
     consumeTriageIntent();
     setTriageOpen(true);
   }, [triageIntent, consumeTriageIntent]);
+  // 规划今天（F3 阶段一）：只读排程预览弹窗
+  const [planDayOpen, setPlanDayOpen] = useState(false);
   // 搜索防抖（200ms，与全局搜索 250ms 同族）：输入期不再每键全量
   // filterTasks 重跑（万任务下一键一遍分组+排序），停止击键才过滤
   const debouncedKeyword = useDebouncedValue(keyword.trim(), 200);
@@ -373,6 +376,7 @@ export default function TaskPanel() {
             onOpenLabels={() => setLabelManagerOpen(true)}
             onOpenReview={() => setReviewOpen(true)}
             onTriageUngrouped={() => setTriageOpen(true)}
+            onPlanDay={() => setPlanDayOpen(true)}
           />
 
           {/* 新增按钮 */}
@@ -531,6 +535,9 @@ export default function TaskPanel() {
         tasks={tasks}
         projects={projects}
       />
+
+      {/* 规划今天（F3 阶段一）：只读排程预览，不写库 */}
+      <PlanDayDialog open={planDayOpen} onOpenChange={setPlanDayOpen} />
     </div>
   );
 }

@@ -35,8 +35,9 @@ describe("invalidateByTable 表级失效映射", () => {
       ["stats"],
       ["trash"],
       ["todo-project", "review-due"],
+      ["day-plan"],
     ]);
-    expect(calls).toHaveLength(6);
+    expect(calls).toHaveLength(7);
   });
 
   it("todo_activity_log → 仅历史键（轨迹落库后自发事件，不搭 todo_tasks 竞态车）", () => {
@@ -172,7 +173,7 @@ describe("D2 突发合并决策", () => {
       }
     }
     expect(full).toBe(true);
-    // todo_tasks 的 6 路先进了 calls，全量由调用方补一次（此处只断决策）
-    expect(calls).toHaveLength(6);
+    // todo_tasks 的 7 路先进了 calls，全量由调用方补一次（此处只断决策）
+    expect(calls).toHaveLength(7);
   });
 });

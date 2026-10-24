@@ -850,6 +850,127 @@ const commands: Record<string, (args: any, ctx: Ctx) => unknown> = {
     return ipcClone(p);
   },
 
+  // ---- F3 日排程预览（与 core day_planner_api 同口径；阶段一只读） ----
+  /** 分钟域排程镜像：排序五桶（逾期→今日带时刻 EDF→纯日期→我的一天→未排期带
+   *  时长；同档短任务优先）+ 工作窗挖午休两段 + 截止越线不排 + now 起对齐粒度 */
+  day_plan_preview: ({ prefs, nowMs }, { db }) => {
+    const p = { ...prefs };
+    const now = nowMs ?? Date.now();
+    const n = new Date(now);
+    const dayStart = new Date(n.getFullYear(), n.getMonth(), n.getDate()).getTime();
+    const dayEnd = dayStart + 86_400_000;
+    const nowMinute = Math.max(0, Math.floor((now - dayStart) / 60_000));
+    const gran = Math.max(1, p.granularity_minutes);
+    const durOf = (t: MockTask) =>
+      t.duration_minutes != null && t.duration_minutes > 0 ? t.duration_minutes : p.default_task_minutes;
+
+    // 候选四类谓词（core plan_day 同款）
+    type Cand = { t: MockTask; dueMin: number | null; myDay: boolean };
+    const cands: Cand[] = db.tasks
+      .filter((t) => {
+        if (t.is_deleted || t.done) return false;
+        const dueInToday = t.due_date != null && t.due_date >= dayStart && t.due_date < dayEnd;
+        const overdue = t.due_date != null && t.due_date < dayStart;
+        const myDayToday = t.my_day_date != null && t.my_day_date >= dayStart && t.my_day_date < dayEnd;
+        const undatedWithDuration = t.due_date == null && t.duration_minutes != null;
+        if (overdue && !p.include_overdue) return false;
+        return dueInToday || overdue || myDayToday || undatedWithDuration;
+      })
+      .map((t) => ({
+        t,
+        dueMin: t.due_date == null ? null : Math.floor((t.due_date - dayStart) / 60_000),
+        myDay: t.my_day_date != null && t.my_day_date >= dayStart && t.my_day_date < dayEnd,
+      }));
+    const bucketOf = (c: Cand) =>
+      c.dueMin == null ? (c.myDay ? 3 : 4) : c.dueMin < 0 ? 0 : c.dueMin > 0 && c.dueMin < 1440 ? 1 : 2;
+    const sorted = [...cands].sort((a, b) => {
+      const ba = bucketOf(a);
+      const bb = bucketOf(b);
+      if (ba !== bb) return ba - bb;
+      if (ba === 0 || ba === 1) return (a.dueMin ?? 0) - (b.dueMin ?? 0);
+      return b.t.priority - a.t.priority;
+    });
+
+    // 段：工作窗挖午休
+    const lunchActive =
+      p.lunch_start_minute > p.work_start_minute && p.lunch_end_minute < p.work_end_minute;
+    const segments: [number, number][] = lunchActive
+      ? [
+          [p.work_start_minute, p.lunch_start_minute],
+          [p.lunch_end_minute, p.work_end_minute],
+        ]
+      : [[p.work_start_minute, p.work_end_minute]];
+    const capacity =
+      lunchActive
+        ? Math.max(0, p.lunch_start_minute - Math.max(p.work_start_minute, nowMinute)) +
+          Math.max(0, p.work_end_minute - Math.max(p.lunch_end_minute, nowMinute))
+        : Math.max(0, p.work_end_minute - Math.max(p.work_start_minute, nowMinute));
+
+    let cursor = nowMinute;
+    let prevEnd: number | null = null;
+    const slots: unknown[] = [];
+    const unscheduled: unknown[] = [];
+    for (const c of sorted) {
+      const duration = durOf(c.t);
+      const deadline =
+        c.dueMin != null && c.dueMin > 0 && c.dueMin < 1440 ? c.dueMin : null;
+      let placed: [number, number] | null = null;
+      for (const [s, e] of segments) {
+        const segStart = Math.max(s, cursor);
+        const start = segStart + ((gran - (segStart % gran)) % gran);
+        const end = start + duration;
+        if (start >= e || end > e) continue;
+        if (deadline != null && end > deadline) continue;
+        placed = [start, end];
+        break;
+      }
+      if (placed) {
+        const [start, end] = placed;
+        const reason =
+          bucketOf(c) === 0
+            ? "已逾期"
+            : deadline != null
+              ? `截止 ${String(Math.floor(deadline / 60)).padStart(2, "0")}:${String(deadline % 60).padStart(2, "0")}`
+              : c.t.priority >= 4
+                ? "紧急优先"
+                : c.t.priority === 3
+                  ? "高优先级"
+                  : bucketOf(c) === 3
+                    ? "我的一天"
+                    : prevEnd != null && start > prevEnd
+                      ? "填充空档"
+                      : "顺序安排";
+        prevEnd = end;
+        cursor = end;
+        slots.push({
+          task_id: c.t.id,
+          title: c.t.title,
+          start_ms: dayStart + start * 60_000,
+          end_ms: dayStart + end * 60_000,
+          duration_minutes: duration,
+          reason,
+        });
+      } else {
+        const reason =
+          nowMinute >= p.work_end_minute
+            ? "已过工作时间"
+            : deadline != null
+              ? `晚于截止 ${String(Math.floor(deadline / 60)).padStart(2, "0")}:${String(deadline % 60).padStart(2, "0")}`
+              : "今日时段已满";
+        unscheduled.push({ task_id: c.t.id, title: c.t.title, reason });
+      }
+    }
+    const load = cands.reduce((sum, c) => sum + durOf(c.t), 0);
+    return ipcClone({
+      slots,
+      unscheduled,
+      capacity_minutes: capacity,
+      load_minutes: load,
+      overloaded: load > capacity,
+      day_start_ms: dayStart,
+    });
+  },
+
   // ---- tasks ----
   // 对齐 Rust generic_repo::list 的 WHERE is_deleted = 0（删除走软删，墓碑进回收站）。
   // 谓词下推（F5）：六键与 Rust build_task_predicate_clause 同口径（仅本命令消费）

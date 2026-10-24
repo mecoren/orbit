@@ -15,7 +15,7 @@
 //!   运算（零 chrono 依赖），毫秒 ↔ 分钟的换算只在 [plan_day] 边界做一次；
 //! - **只读聚合不进同步白名单**、不 emit db-change（与统计同族）。
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
 
 use crate::api::digest_api::local_day_start;
@@ -24,8 +24,9 @@ use crate::error::CoreResult;
 /// 一天的分钟数（分钟域的天界）
 const MINUTES_PER_DAY: i64 = 24 * 60;
 
-/// 排程偏好（阶段一双端传默认值；阶段三落 cfg_kv 本地偏好可编辑）
-#[derive(Debug, Clone, Serialize)]
+/// 排程偏好（阶段一双端传默认值；阶段三落 cfg_kv 本地偏好可编辑。
+/// Deserialize 供双端壳的 JSON 反序列化进命令入参）
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DayPlanPrefs {
     /// 工作开始（相对今天零点的分钟；默认 09:00 = 540）
     pub work_start_minute: i64,

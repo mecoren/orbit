@@ -258,6 +258,8 @@ interface MoreMenuButtonProps {
   onOpenCommand: () => void;
   onOpenLabels: () => void;
   onOpenReview: () => void;
+  /** 规划今天（F3 阶段一）：只读排程预览弹窗入口 */
+  onPlanDay: () => void;
   /** 收件箱分诊（F2）：未分组任务逐条定归属的弹窗入口 */
   onTriageUngrouped: () => void;
 }
@@ -275,6 +277,7 @@ export function MoreMenuButton(props: MoreMenuButtonProps) {
     onOpenLabels,
     onOpenReview,
     onTriageUngrouped,
+    onPlanDay,
   } = props;
 
   return (
@@ -329,6 +332,7 @@ export function MoreMenuButton(props: MoreMenuButtonProps) {
         <DropdownMenuItem onSelect={() => onOpenLabels()}>标签管理</DropdownMenuItem>
         <DropdownMenuItem onSelect={() => onOpenReview()}>周回顾</DropdownMenuItem>
         <DropdownMenuItem onSelect={() => onTriageUngrouped()}>分诊未分组</DropdownMenuItem>
+        <DropdownMenuItem onSelect={() => onPlanDay()}>规划今天</DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   );

@@ -21,6 +21,7 @@ pub mod ics_export_cmd;
 pub mod mica_cmd;
 pub mod activity_log_cmd;
 pub mod notification_log_cmd;
+pub mod planner_cmd;
 pub mod notification_scheduler;
 pub mod perf_cmd;
 pub mod plaintext_export_cmd;
