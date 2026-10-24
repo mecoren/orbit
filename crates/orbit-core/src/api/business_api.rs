@@ -1370,6 +1370,7 @@ mod project_archive_tests {
                 sort_order: None,
                 is_archived: Some(1),
                 parent_uuid: None,
+                ..Default::default()
             },
         )
         .await
@@ -1429,6 +1430,7 @@ mod project_archive_tests {
                 sort_order: None,
                 is_archived: Some(1),
                 parent_uuid: None,
+                ..Default::default()
             },
         )
         .await
@@ -1471,6 +1473,7 @@ mod project_archive_tests {
                 sort_order: None,
                 is_archived: Some(1),
                 parent_uuid: None,
+                ..Default::default()
             },
         )
         .await
@@ -1485,6 +1488,7 @@ mod project_archive_tests {
                 sort_order: None,
                 is_archived: Some(0),
                 parent_uuid: None,
+                ..Default::default()
             },
         )
         .await
@@ -1524,6 +1528,7 @@ mod project_archive_tests {
                 sort_order: None,
                 is_archived: Some(1),
                 parent_uuid: None,
+                ..Default::default()
             },
         )
         .await
@@ -1574,6 +1579,7 @@ mod project_parent_tests {
             sort_order: None,
             is_archived: None,
             parent_uuid: parent.map(|p| p.map(str::to_string)),
+            ..Default::default()
         }
     }
 

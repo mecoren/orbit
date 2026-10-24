@@ -19,6 +19,7 @@ pub mod ics_import_api;
 pub mod import_api;
 pub mod notification_log_api;
 pub mod plaintext_export_api;
+pub mod project_review_api;
 pub mod saved_filter_api;
 pub mod stats_api;
 pub mod sync_conflict_api;

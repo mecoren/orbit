@@ -572,6 +572,17 @@ pub async fn update_todo_project(
     if input.parent_uuid.is_some() {
         sets.push("parent_uuid = ?".into());
     }
+    // F1 项目回顾节奏三列：外层 Some = 本次要改，内层 None = 写 NULL
+    //（关闭回顾 / 从未回顾 / 未暂缓）；SET 与 bind 顺序必须一致
+    if input.review_interval_days.is_some() {
+        sets.push("review_interval_days = ?".into());
+    }
+    if input.review_last_at.is_some() {
+        sets.push("review_last_at = ?".into());
+    }
+    if input.review_snooze_until.is_some() {
+        sets.push("review_snooze_until = ?".into());
+    }
 
     let sql = format!(
         "UPDATE todo_projects SET {} WHERE id = ? RETURNING *",
@@ -594,6 +605,15 @@ pub async fn update_todo_project(
         q = q.bind(v);
     }
     if let Some(v) = input.parent_uuid.as_ref() {
+        q = q.bind(v);
+    }
+    if let Some(v) = input.review_interval_days.as_ref() {
+        q = q.bind(v);
+    }
+    if let Some(v) = input.review_last_at.as_ref() {
+        q = q.bind(v);
+    }
+    if let Some(v) = input.review_snooze_until.as_ref() {
         q = q.bind(v);
     }
     let row = q

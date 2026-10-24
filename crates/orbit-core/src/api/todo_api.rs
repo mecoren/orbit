@@ -3732,6 +3732,7 @@ mod predicate_pushdown_tests {
                 sort_order: None,
                 is_archived: Some(1),
                 parent_uuid: None,
+                ..Default::default()
             },
         )
         .await

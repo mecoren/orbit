@@ -115,6 +115,14 @@ pub struct TodoProject {
     /// 从本端已落库行建映射），自引用会让父行未到即整表合并失败并永久卡住。
     /// 详见 `db/migrations/0003_project_parent.sql` 头注释。
     pub parent_uuid: Option<String>,
+    /// 项目回顾节奏（F1，0008 迁移）：回顾周期天数；None/0 = 关闭
+    /// （7=每周 14=每两周 30=每月；到期判定与归集见 project_review_api）
+    pub review_interval_days: Option<i64>,
+    /// 上次回顾时间（毫秒）；None = 从未回顾（开启周期即视为到期，最需要被看见）
+    pub review_last_at: Option<i64>,
+    /// 回顾暂缓截止（毫秒，本地零点口径）；None = 未暂缓。
+    /// 到期取 max(周期到期, 暂缓日)——暂缓只推迟不重置周期
+    pub review_snooze_until: Option<i64>,
     pub is_archived: i32,
     pub is_deleted: i32,
     pub created_at: i64,
@@ -136,7 +144,7 @@ pub struct TodoProjectCreateInput {
 }
 
 /// todo_projects 更新输入（Option<Option<T>> 模式）
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct TodoProjectUpdateInput {
     pub title: Option<String>,
     pub description: Option<Option<String>>,
@@ -152,6 +160,15 @@ pub struct TodoProjectUpdateInput {
     /// 无论提交 null 还是 "" 语义一致。
     #[serde(default, deserialize_with = "nullable::deserialize")]
     pub parent_uuid: Option<Option<String>>,
+    /// 项目回顾节奏（F1）：外层 Some = 本次要改，内层 None/0 = 关闭回顾。
+    /// 常规写路径走 project_review_api 的语义化入口（开启时补 last_at 起算、
+    /// 关闭时清残留暂缓），直写本字段仅同步合并与导入链路
+    #[serde(default, deserialize_with = "nullable::deserialize")]
+    pub review_interval_days: Option<Option<i64>>,
+    #[serde(default, deserialize_with = "nullable::deserialize")]
+    pub review_last_at: Option<Option<i64>>,
+    #[serde(default, deserialize_with = "nullable::deserialize")]
+    pub review_snooze_until: Option<Option<i64>>,
 }
 
 // ---------- todo_tasks ----------

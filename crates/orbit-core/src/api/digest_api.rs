@@ -165,7 +165,10 @@ pub fn format_hhmm(hour: i64, minute: i64) -> String {
 }
 
 /// 本地今日零点（毫秒）
-fn local_day_start(now_ms: i64) -> i64 {
+///
+/// `pub(crate)`：project_review_api 的「暂缓 N 天」落库值（暂缓日零点）同用此口径，
+/// 避免两处日界换算漂移。
+pub(crate) fn local_day_start(now_ms: i64) -> i64 {
     let local = Utc
         .timestamp_millis_opt(now_ms)
         .single()
