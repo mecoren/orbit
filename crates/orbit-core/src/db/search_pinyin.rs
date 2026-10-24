@@ -6,12 +6,19 @@
 //! 整表重建的索引，不是业务数据。
 //!
 //! ## 写入双通道（正确性设计）
-//! 1. **实时维护**：generic_repo 的三表 create/update/软删与 trash restore
-//!    在写库成功后调 [sync_row] / [remove_row]（单行重建约微秒级，见 spike）；
-//! 2. **幂等兜底**：同步合并、CSV/ICS 导入、备份恢复等**直写路径**绕过
-//!    generic_repo——[reconcile] 在查询入口对账（补缺失 / 清幽灵 / 按 title
-//!    不一致重建，通常 0 行改动，10k 行 < 5ms），保证「查询时索引恒新鲜」
-//!    而不必在每个直写路径挂钩。
+//! 1. **实时维护**：generic_repo 的三表 create/update/软删、trash restore，
+//!    以及绕过 generic_repo 的裸 INSERT（子任务转出 / 重复任务下次实例 /
+//!    复制任务）在写库成功后调 [sync_row] / [remove_row]（单行重建微秒级）；
+//! 2. **置脏 + 按需对账**：同步合并、全量备份恢复、批量导入、冲突副本恢复等
+//!    **直写路径**在提交后调 [mark_dirty]；查询入口 [ensure_fresh] 先读哨兵行
+//!    （O(1)），仅在脏时跑 [reconcile]（补缺失 / 清幽灵 / 按 title 不一致重建）。
+//!
+//! ## 为什么不「每查必对账」（2026-10-25，docs/07 #104）
+//! 50k 行实测：对账 6 次全表扫描 ≈316ms，把纯字母查询 p95 拖到 374ms（P1 验收
+//! 线 150ms）；而检索本身只要 11ms。故对账降级为**事件驱动**，代价是新增直写
+//! 路径必须显式置脏——判据：**凡直接写 todo_tasks/todo_projects/todo_comments
+//! 的 title/content 且不经 generic_repo 钩子，提交后一律 [mark_dirty]（或直接
+//! [sync_row] 精确补行）**。[ensure_fresh] 的脏判定见 `search_pinyin_state`。
 //!
 //! ## 多音字口径
 //! 取 pinyin crate 的首选音（如「银行」只收 yin）。行文本变更时整行重建；
@@ -27,6 +34,14 @@ use crate::error::CoreResult;
 pub const KIND_TASK: &str = "task";
 pub const KIND_PROJECT: &str = "project";
 pub const KIND_COMMENT: &str = "comment";
+
+/// 进拼音索引面的源表名（直写路径置脏判定用）
+pub const INDEXED_TABLES: [&str; 3] = ["todo_tasks", "todo_projects", "todo_comments"];
+
+/// 源表是否进拼音索引面
+pub fn is_indexed_table(table: &str) -> bool {
+    INDEXED_TABLES.contains(&table)
+}
 
 /// 拼音索引纯函数：文本 → (全拼串, 首字母串)。
 ///
@@ -116,18 +131,70 @@ pub async fn search_hits(
     Ok(rows.into_iter().map(|(u,)| u).collect())
 }
 
+/// 置脏：直写路径提交后调用，下次拼音查询入口做一次全量对账。
+///
+/// 适用：云同步合并、全量备份恢复、批量导入、冲突副本恢复等**绕过
+/// generic_repo 钩子**的写路径。成本为单行 UPSERT（µs 级），把对账的
+/// 全表扫描从「每次查询」挪到「每次直写之后的一次查询」。
+pub async fn mark_dirty(pool: &SqlitePool) -> CoreResult<()> {
+    sqlx::query(
+        "INSERT INTO search_pinyin_state (id, dirty, gen, reconciled_at) VALUES (1, 1, 1, 0) \
+         ON CONFLICT(id) DO UPDATE SET dirty = 1, gen = search_pinyin_state.gen + 1",
+    )
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
+/// 查询入口保鲜：索引新鲜时零成本返回，脏时对账一次并清零。
+///
+/// 清零带 `gen` 乐观锁——对账期间若有新的直写置脏（gen 已推进），本次不清零，
+/// 下一查再对账一遍。语义上「宁多对账一次，不少对账」。
+pub async fn ensure_fresh(pool: &SqlitePool) -> CoreResult<()> {
+    let state: Option<(i64, i64)> =
+        sqlx::query_as("SELECT dirty, gen FROM search_pinyin_state WHERE id = 1")
+            .fetch_optional(pool)
+            .await?;
+
+    let Some((dirty, generation)) = state else {
+        // 哨兵行缺失（迁移前老库被外部工具改写等）：补对账 + 补行，避免永久失鲜
+        reconcile(pool).await?;
+        sqlx::query(
+            "INSERT INTO search_pinyin_state (id, dirty, gen, reconciled_at) VALUES (1, 0, 1, ?) \
+             ON CONFLICT(id) DO UPDATE SET dirty = 0, reconciled_at = excluded.reconciled_at",
+        )
+        .bind(clock::next_ms())
+        .execute(pool)
+        .await?;
+        return Ok(());
+    };
+
+    if dirty == 0 {
+        return Ok(());
+    }
+    reconcile(pool).await?;
+    sqlx::query(
+        "UPDATE search_pinyin_state SET dirty = 0, reconciled_at = ? WHERE id = 1 AND gen = ?",
+    )
+    .bind(clock::next_ms())
+    .bind(generation)
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
 /// 幂等对账：三表与索引全量校准，返回 (重建行数, 移除行数)。
 ///
 /// ① 清幽灵：源行已软删/不存在的索引行删除；
 /// ② 补缺失 + 更新不一致：源表活跃行在索引缺失或 title 不一致的重建
 /// （title 相等即跳过——拼音由 title 确定性导出，无需比较拼音串）。
-/// 直写路径（同步合并/导入/备份恢复）的兜底入口：查询前调用保证索引新鲜。
+/// 直写路径的兜底：只在 [ensure_fresh] 认定脏（或哨兵行缺失）时调用——
+/// 50k 行下 6 次全表扫描 ≈316ms，不能挂在每次查询上（docs/07 #104）。
 ///
 /// 重建走**单事务批量**：存量库首次对账可达万行级，逐行自动事务的 per-row
 /// fsync 会把首次拼音查询拖到秒级（探针 global-search 实测 7.8s）；WAL 下
 /// 单事务一次提交，万行 < 500ms。
 pub async fn reconcile(pool: &SqlitePool) -> CoreResult<(usize, usize)> {
-
     // ① 清幽灵（三类各一条；NOT IN 子查询走各表 uuid 索引）
     let mut removed = 0usize;
     for (kind, table) in [
@@ -586,5 +653,119 @@ mod integration_tests {
                 .is_empty(),
             "泛型 soft_delete_by_id 路径也必须移除索引"
         );
+    }
+
+    /// 哨兵行读值（(dirty, gen)）
+    async fn state_row(pool: &SqlitePool) -> (i64, i64) {
+        sqlx::query_as("SELECT dirty, gen FROM search_pinyin_state WHERE id = 1")
+            .fetch_one(pool)
+            .await
+            .unwrap()
+    }
+
+    /// 查询入口的对账是**事件驱动**的（docs/07 #104）：
+    /// 索引干净时走 O(1) 快路径，直写行必须显式置脏才会被下一次查询收进来。
+    #[tokio::test]
+    async fn direct_write_needs_mark_dirty_then_next_query_covers_it() {
+        let pool = setup_db().await;
+
+        // 迁移种子 dirty = 1 → 首次拼音查询对账一次后清零
+        assert!(
+            search_all(&pool, "gzzj", 20)
+                .await
+                .unwrap()
+                .tasks
+                .is_empty()
+        );
+        assert_eq!(state_row(&pool).await.0, 0, "对账完成后哨兵行清零");
+
+        // 直写（模拟同步合并/导入）但不置脏：查询只读哨兵行，索引保持不新鲜
+        sqlx::query(
+            "INSERT INTO todo_tasks (uuid, title, is_deleted, done, created_at, updated_at, version) \
+             VALUES ('direct-1', '工作总结', 0, 0, 1, 1, 1)",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        assert!(
+            search_all(&pool, "gzzj", 20)
+                .await
+                .unwrap()
+                .tasks
+                .is_empty(),
+            "未置脏 → 不跑对账（这是 50k 搜索达标的代价，直写路径必须自行置脏）"
+        );
+
+        // 置脏 → 下一次查询对账补齐，且对账后哨兵行再次清零
+        mark_dirty(&pool).await.unwrap();
+        assert_eq!(state_row(&pool).await.0, 1);
+        let r = search_all(&pool, "gzzj", 20).await.unwrap();
+        assert!(r.tasks.iter().any(|t| t.uuid == "direct-1"));
+        assert_eq!(state_row(&pool).await.0, 0);
+    }
+
+    /// 置脏代数单调递增；对账清零只在「代数未被推进」时生效（乐观锁）
+    #[tokio::test]
+    async fn mark_dirty_bumps_gen_and_clear_is_optimistic() {
+        let pool = setup_db().await;
+        let (_, gen0) = state_row(&pool).await;
+
+        mark_dirty(&pool).await.unwrap();
+        mark_dirty(&pool).await.unwrap();
+        let (dirty, gen1) = state_row(&pool).await;
+        assert_eq!(dirty, 1);
+        assert_eq!(gen1, gen0 + 2, "每次置脏推进一代");
+
+        ensure_fresh(&pool).await.unwrap();
+        let (dirty, gen2) = state_row(&pool).await;
+        assert_eq!((dirty, gen2), (0, gen1), "对账完成只清 dirty，不动代数");
+
+        // 幂等：干净状态下重复调用零改动
+        ensure_fresh(&pool).await.unwrap();
+        ensure_fresh(&pool).await.unwrap();
+        assert_eq!(state_row(&pool).await, (0, gen1));
+    }
+
+    /// 三条绕过 generic_repo 的裸 INSERT 路径：提交后立即补索引（无需等对账）
+    #[tokio::test]
+    async fn raw_insert_paths_index_task_immediately() {
+        use crate::api::business_api::create_todo_subtask;
+        use crate::api::todo_api::{duplicate_todo_task, promote_todo_subtask};
+        use crate::models::business::TodoSubtaskCreateInput;
+
+        let pool = setup_db().await;
+        let t = create_todo_task(
+            &pool,
+            &TodoTaskCreateInput {
+                title: "宿主任务".into(),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+
+        // ① 子任务转出为独立任务（promote_todo_subtask 内裸 INSERT）
+        let sub = create_todo_subtask(
+            &pool,
+            &TodoSubtaskCreateInput {
+                task_id: t.id,
+                title: "会议纪要".into(),
+                position: None,
+                parent_uuid: None,
+            },
+        )
+        .await
+        .unwrap();
+        let promoted = promote_todo_subtask(&pool, sub.id).await.unwrap();
+        assert_eq!(
+            search_hits(&pool, KIND_TASK, "hyjy", 20).await.unwrap(),
+            vec![promoted.uuid.clone()],
+            "转出任务提交后即入索引"
+        );
+
+        // ② 复制任务（duplicate_todo_task 内裸 INSERT）
+        let dup = duplicate_todo_task(&pool, t.id).await.unwrap();
+        let hits = search_hits(&pool, KIND_TASK, "szrw", 20).await.unwrap();
+        assert!(hits.contains(&dup.uuid), "复制体提交后即入索引: {hits:?}");
     }
 }

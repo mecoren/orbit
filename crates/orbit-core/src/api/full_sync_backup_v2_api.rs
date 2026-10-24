@@ -630,6 +630,11 @@ async fn import_frames_into_pool(
     }
     tx.commit().await?;
 
+    // F5 拼音索引：同 v1——全量覆盖（DELETE + 裸 INSERT）后索引必失配，置脏待对账
+    if let Err(e) = crate::db::search_pinyin::mark_dirty(pool).await {
+        log::warn!("[full_backup_v2] 拼音索引置脏失败（恢复后拼音检索可能漏命中）: {e}");
+    }
+
     Ok(crate::api::full_sync_backup_api::ImportResult {
         success_count: total_success,
         error_count: total_errors.len() as i64,

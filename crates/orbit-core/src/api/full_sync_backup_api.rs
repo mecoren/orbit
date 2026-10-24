@@ -712,6 +712,13 @@ pub async fn import_full_sync_backup(
     // 提交事务
     tx.commit().await?;
 
+    // F5 拼音索引：恢复是「先 DELETE 再裸 INSERT」的全量覆盖，索引行全部失配
+    // （幽灵 + 缺失并存）——无条件置脏，由下一次拼音查询入口对账一次
+    // （docs/07 #104；即便备份里不含待办表，索引也必须重对账）
+    if let Err(e) = crate::db::search_pinyin::mark_dirty(pool).await {
+        log::warn!("[full_backup] 拼音索引置脏失败（恢复后拼音检索可能漏命中）: {e}");
+    }
+
     // 6. 失效同步账本（F54，2026-09-30 第六轮）
     invalidate_sync_ledger(pool, svc).await;
 

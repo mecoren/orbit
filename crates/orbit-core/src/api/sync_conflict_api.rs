@@ -276,6 +276,14 @@ pub async fn restore_conflict(pool: &SqlitePool, id: i64) -> CoreResult<i64> {
 
     tx.commit().await?;
 
+    // F5 拼音索引：冲突副本可写回 title/content（裸 UPDATE，不经 generic_repo
+    // 钩子）——置脏，由下一次拼音查询入口对账（docs/07 #104）
+    if crate::db::search_pinyin::is_indexed_table(&table)
+        && let Err(e) = crate::db::search_pinyin::mark_dirty(pool).await
+    {
+        log::warn!("[conflict] 拼音索引置脏失败（写回行可能暂不出现于拼音检索）: {e}");
+    }
+
     EVENT_BUS.emit(DbEvent {
         table,
         op: DbOp::Update,

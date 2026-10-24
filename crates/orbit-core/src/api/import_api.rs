@@ -242,6 +242,14 @@ pub async fn bulk_import_records_from_values(
     // 7. 提交事务
     tx.commit().await?;
 
+    // F5 拼音索引：批量导入是裸 SQL 直写、不经 generic_repo 钩子——置脏，
+    // 由下一次拼音查询入口按需对账（docs/07 #104；失败不阻断导入结果回报）
+    if crate::db::search_pinyin::is_indexed_table(table_name)
+        && let Err(e) = crate::db::search_pinyin::mark_dirty(pool).await
+    {
+        log::warn!("[import] 拼音索引置脏失败（导入行可能暂不出现在拼音检索里）: {e}");
+    }
+
     Ok(json!({
         "success": success,
         "skip": skip,

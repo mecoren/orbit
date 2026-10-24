@@ -451,6 +451,19 @@ pub async fn promote_todo_subtask(pool: &SqlitePool, subtask_id: i64) -> CoreRes
 
     tx.commit().await?;
 
+    // F5 拼音索引：裸 INSERT 不经 generic_repo 钩子，提交后精确补索引行
+    // （失败不阻断业务写——置脏兜底，下次拼音查询对账补齐）
+    if let Err(e) = crate::db::search_pinyin::sync_row(
+        pool,
+        crate::db::search_pinyin::KIND_TASK,
+        &created.uuid,
+        &created.title,
+    )
+    .await
+    {
+        log::warn!("search_pinyin sync(promote subtask) failed: {e}");
+    }
+
     // 4. 事件（提交后发）：子任务 Delete + 父任务 Update（percent_done 变化）
     //    + 新任务 Insert + 随迁子孙的 Update（task_id 变更，同步需要）
     let device_id = generic_repo::current_device_id();
@@ -1215,6 +1228,17 @@ pub async fn complete_todo_task(pool: &SqlitePool, id: i64) -> CoreResult<Comple
     // 事件在提交后发出（提交前发出会让消费者读到未提交数据）
     let device_id = generic_repo::current_device_id();
     if let Some(next) = &next_instance {
+        // F5 拼音索引：重复任务的下一次实例是裸 INSERT，提交后精确补索引行
+        if let Err(e) = crate::db::search_pinyin::sync_row(
+            pool,
+            crate::db::search_pinyin::KIND_TASK,
+            &next.uuid,
+            &next.title,
+        )
+        .await
+        {
+            log::warn!("search_pinyin sync(repeat next instance) failed: {e}");
+        }
         emit_todo_event(
             "todo_tasks",
             next.id,
@@ -2713,6 +2737,19 @@ pub async fn duplicate_todo_task(pool: &SqlitePool, id: i64) -> CoreResult<TodoT
         .await?;
     }
     tx.commit().await?;
+
+    // F5 拼音索引：复制任务是裸 INSERT，提交后精确补索引行
+    // （失败不阻断业务写——置脏兜底，下次拼音查询对账补齐）
+    if let Err(e) = crate::db::search_pinyin::sync_row(
+        pool,
+        crate::db::search_pinyin::KIND_TASK,
+        &created.uuid,
+        &created.title,
+    )
+    .await
+    {
+        log::warn!("search_pinyin sync(duplicate task) failed: {e}");
+    }
 
     emit_todo_event(
         "todo_tasks",

@@ -216,6 +216,18 @@ pub async fn pull_all(
         builder.local_data_applied(changed_records_total);
     }
 
+    // F5 拼音索引：合并是裸 SQL 直写、不经 generic_repo 钩子，索引需对账。
+    // 只置脏不在此处对账——对账是 6 次全表扫描（50k 行 ≈316ms），放在同步线程
+    // 里会拖慢每轮 pull；置脏后由下一次拼音查询入口按需对账（docs/07 #104）。
+    if result
+        .changed_tables
+        .iter()
+        .any(|t| crate::db::search_pinyin::is_indexed_table(t))
+        && let Err(e) = crate::db::search_pinyin::mark_dirty(db_pool).await
+    {
+        log::warn!("[pull] 拼音索引置脏失败（下次查询将缺少本轮合并行）: {e}");
+    }
+
     // 3. 刷新整体快照；失败表回滚桶指纹到最后一次成功状态（强制下轮重试）。
     //    存在失败表时 epoch 不推进——否则下轮在「epoch 未变」快速跳过处
     //    整轮早退，失败表要等他端改写清单才有机会重试。

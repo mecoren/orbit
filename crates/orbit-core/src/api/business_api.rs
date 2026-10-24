@@ -1011,10 +1011,10 @@ pub async fn search_all(
     };
 
     // F5 拼音通道：纯字母查询额外命中「gzs → 工作总结 / gongzuo → 工作…」。
-    // 查询入口先 reconcile 幂等对账（同步合并/导入等直写路径的行在此补齐/
-    // 清幽灵，通常 0 行改动）——中文查询不走拼音通道，省一次对账。
+    // 查询入口只读哨兵行（O(1)）判断索引是否需对账；同步合并/导入/备份恢复等
+    // 直写路径在提交后置脏（docs/07 #104——50k 行对账 316ms，不能每查必跑）。
     if search_pinyin::is_pinyin_query(kw) {
-        search_pinyin::reconcile(pool).await?;
+        search_pinyin::ensure_fresh(pool).await?;
         merge_pinyin_hits(pool, &kw.to_lowercase(), limit, &mut result).await?;
     }
 
