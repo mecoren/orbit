@@ -22,6 +22,9 @@ crate-type = ["rlib", "staticlib", "cdylib"]
 tokio = { workspace = true, features = ["test-util"] }
 # 仅测试用：注入带 DST 的真实时区（America/New_York）验证调度 DST 边界（F89），不进生产依赖面
 chrono-tz = "0.10"
+# 仅 spike 用：拼音首字母搜索技术验证探针（examples/pinyin_spike.rs，docs/07 #101；
+# 结论落 docs/13 §五 F5——正式立项才转 [dependencies]，spike 不达标即移除）
+pinyin = "0.11"
 
 [dependencies]
 # 异步运行时
