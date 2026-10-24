@@ -8,6 +8,7 @@ pub mod asset_api;
 pub mod business_api;
 pub mod cloud_sync_api;
 pub mod csv_import_api;
+pub mod day_planner_api;
 pub mod db_maintenance_api;
 pub mod diagnostics_api;
 pub mod digest_api;
