@@ -7,7 +7,7 @@ import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
 // These functions are ignored because they are not marked as `pub`: `pool`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`
 
 /// 规划今天：只读排程预览（对应桌面 day_plan_preview；now_ms 由 Dart 传
 /// DateTime.now().millisecondsSinceEpoch——本地日界换算在 core）
@@ -18,6 +18,78 @@ Future<DayPlan> dayPlanPreview({
   prefs: prefs,
   nowMs: nowMs,
 );
+
+/// 应用排程（阶段二）：写 my_day_date + start_date（不改 due_date，单事务）；
+/// 返回 prev 快照供 Dart 侧撤销写回。day_start_ms 由 Dart 传今天本地零点。
+Future<ApplyResult> dayPlanApply({
+  required PlatformInt64 dayStartMs,
+  required List<ApplySlotInput> slots,
+}) => RustLib.instance.api.crateApiPlannerDayPlanApply(
+  dayStartMs: dayStartMs,
+  slots: slots,
+);
+
+/// 单行应用结果（镜像 core AppliedRow；prev 快照供撤销写回）
+class AppliedRow {
+  final PlatformInt64 taskId;
+  final PlatformInt64? prevStartDate;
+  final PlatformInt64? prevMyDayDate;
+
+  const AppliedRow({
+    required this.taskId,
+    this.prevStartDate,
+    this.prevMyDayDate,
+  });
+
+  @override
+  int get hashCode =>
+      taskId.hashCode ^ prevStartDate.hashCode ^ prevMyDayDate.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is AppliedRow &&
+          runtimeType == other.runtimeType &&
+          taskId == other.taskId &&
+          prevStartDate == other.prevStartDate &&
+          prevMyDayDate == other.prevMyDayDate;
+}
+
+/// 应用结果（镜像 core ApplyResult）
+class ApplyResult {
+  final List<AppliedRow> applied;
+
+  const ApplyResult({required this.applied});
+
+  @override
+  int get hashCode => applied.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ApplyResult &&
+          runtimeType == other.runtimeType &&
+          applied == other.applied;
+}
+
+/// 应用输入单条（镜像 core ApplySlotInput）
+class ApplySlotInput {
+  final PlatformInt64 taskId;
+  final PlatformInt64 startMs;
+
+  const ApplySlotInput({required this.taskId, required this.startMs});
+
+  @override
+  int get hashCode => taskId.hashCode ^ startMs.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ApplySlotInput &&
+          runtimeType == other.runtimeType &&
+          taskId == other.taskId &&
+          startMs == other.startMs;
+}
 
 /// 日排程预览（镜像 core DayPlan）
 class DayPlan {

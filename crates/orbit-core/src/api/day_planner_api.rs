@@ -378,7 +378,9 @@ pub async fn apply_day_plan(
     slots: &[ApplySlotInput],
 ) -> CoreResult<ApplyResult> {
     if slots.is_empty() {
-        return Ok(ApplyResult { applied: Vec::new() });
+        return Ok(ApplyResult {
+            applied: Vec::new(),
+        });
     }
     let device_id = crate::db::repository::generic_repo::current_device_id();
     let mut tx = pool.begin().await?;
@@ -391,10 +393,7 @@ pub async fn apply_day_plan(
         .fetch_optional(&mut *tx)
         .await?;
         let Some((prev_start, prev_my_day)) = prev else {
-            return Err(CoreError::NotFound(format!(
-                "todo_task id={}",
-                s.task_id
-            )));
+            return Err(CoreError::NotFound(format!("todo_task id={}", s.task_id)));
         };
         let now = clock::next_ms();
         let r = sqlx::query(
@@ -407,10 +406,7 @@ pub async fn apply_day_plan(
         .execute(&mut *tx)
         .await?;
         if r.rows_affected() == 0 {
-            return Err(CoreError::NotFound(format!(
-                "todo_task id={}",
-                s.task_id
-            )));
+            return Err(CoreError::NotFound(format!("todo_task id={}", s.task_id)));
         }
         applied.push(AppliedRow {
             task_id: s.task_id,
@@ -738,7 +734,14 @@ mod api_tests {
         let pool = setup_db().await;
         let now = noon_today_ms();
         let day_start = local_day_start(now);
-        let t = mk_task(&pool, "待排", Some(day_start + 14 * 3_600_000), None, Some(30)).await;
+        let t = mk_task(
+            &pool,
+            "待排",
+            Some(day_start + 14 * 3_600_000),
+            None,
+            Some(30),
+        )
+        .await;
         let slot_start = day_start + 10 * 3_600_000;
 
         let r = apply_day_plan(
@@ -849,7 +852,9 @@ mod api_tests {
     async fn apply_empty_slots_is_noop() {
         let pool = setup_db().await;
         let now = noon_today_ms();
-        let r = apply_day_plan(&pool, local_day_start(now), &[]).await.unwrap();
+        let r = apply_day_plan(&pool, local_day_start(now), &[])
+            .await
+            .unwrap();
         assert!(r.applied.is_empty());
     }
 

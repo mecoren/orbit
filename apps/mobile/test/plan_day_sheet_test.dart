@@ -18,7 +18,13 @@ Widget _wrap(MockOrbitBridge bridge) => ProviderScope(
           builder: (context) => Scaffold(
             body: Center(
               child: FilledButton(
-                onPressed: () => showPlanDaySheet(context),
+                // 排程从「现在」起排：注入今天 10:00，用例不随跑测墙钟漂移
+                onPressed: () {
+                  final n = DateTime.now();
+                  final at10 = DateTime(n.year, n.month, n.day, 10)
+                      .millisecondsSinceEpoch;
+                  showPlanDaySheet(context, nowMs: at10);
+                },
                 child: const Text('打开'),
               ),
             ),
@@ -78,7 +84,13 @@ Future<void> _pumpOpen(WidgetTester tester) async {
 
 void main() {
   testWidgets('候选渲染：时段 + 理由（逾期/我的一天），且不写库', (tester) async {
+    // 抽屉 maxH = 视口 82%：加高视口让全部槽行与底部按钮进入挂载区
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(800, 2000);
+    addTearDown(tester.view.reset);
+
     final bridge = MockOrbitBridge();
+    _clearSeedCandidates(bridge);
     _addTask(bridge, '逾期活', dueOffsetMin: -60, duration: 30);
     _addTask(bridge, '我的一天活', myDay: true, duration: 30);
     final store0 = {
@@ -100,6 +112,63 @@ void main() {
       expect(e.value['start_date'], before['start_date']);
       expect(e.value['due_date'], before['due_date']);
     }
+  });
+
+  testWidgets('勾选应用：写 my_day/start 不改 due，撤销钮写回 prev', (tester) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(800, 2000);
+    addTearDown(tester.view.reset);
+    final bridge = MockOrbitBridge();
+    _clearSeedCandidates(bridge);
+    final n = DateTime.now();
+    final dayStart =
+        DateTime(n.year, n.month, n.day).millisecondsSinceEpoch;
+    final t = {
+      ...bridge.store.newEntity('t'),
+      'title': '待排的活',
+      'description': null,
+      'project_id': null,
+      'priority': 0,
+      'status': 'pending',
+      'done': 0,
+      'done_at': null,
+      'due_date': dayStart + 14 * 3_600_000,
+      'start_date': null,
+      'repeat_after': 0,
+      'repeat_mode': 0,
+      'percent_done': 0,
+      'position': 100.0,
+      'is_favorite': 0,
+      'my_day_date': null,
+      'duration_minutes': 30,
+      'is_deleted': 0,
+      'created_at': dayStart,
+      'updated_at': dayStart,
+      'deleted_at': null,
+      'version': 1,
+    };
+    bridge.store.tasks[t['id'] as int] = t;
+    await tester.pumpWidget(_wrap(bridge));
+    await _pumpOpen(tester);
+
+    // 勾选默认全选 → 应用
+    await tester.tap(find.text('应用到 1 条任务'));
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pumpAndSettle();
+
+    final row = bridge.store.tasks[t['id'] as int]!;
+    expect(row['my_day_date'], dayStart);
+    expect(row['start_date'], isNotNull);
+    expect(row['due_date'], dayStart + 14 * 3_600_000, reason: 'due 不被改动');
+
+    // 撤销钮：prev 写回（原值均 null）
+    await tester.tap(find.text('撤销'));
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pumpAndSettle();
+    expect(row['my_day_date'], isNull);
+    expect(row['start_date'], isNull);
+    // 收尾推掉 toast 计时器
+    await tester.pump(const Duration(seconds: 5));
   });
 
   testWidgets('超载警示：大时长任务超容量给提示条', (tester) async {

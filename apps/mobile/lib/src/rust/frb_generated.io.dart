@@ -67,6 +67,15 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   ActivityLogRow dco_decode_activity_log_row(dynamic raw);
 
   @protected
+  AppliedRow dco_decode_applied_row(dynamic raw);
+
+  @protected
+  ApplyResult dco_decode_apply_result(dynamic raw);
+
+  @protected
+  ApplySlotInput dco_decode_apply_slot_input(dynamic raw);
+
+  @protected
   BackupDeviceInfo dco_decode_backup_device_info(dynamic raw);
 
   @protected
@@ -292,6 +301,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<ActivityLogRow> dco_decode_list_activity_log_row(dynamic raw);
+
+  @protected
+  List<AppliedRow> dco_decode_list_applied_row(dynamic raw);
+
+  @protected
+  List<ApplySlotInput> dco_decode_list_apply_slot_input(dynamic raw);
 
   @protected
   List<BackupEntryView> dco_decode_list_backup_entry_view(dynamic raw);
@@ -698,6 +713,15 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   ActivityLogRow sse_decode_activity_log_row(SseDeserializer deserializer);
 
   @protected
+  AppliedRow sse_decode_applied_row(SseDeserializer deserializer);
+
+  @protected
+  ApplyResult sse_decode_apply_result(SseDeserializer deserializer);
+
+  @protected
+  ApplySlotInput sse_decode_apply_slot_input(SseDeserializer deserializer);
+
+  @protected
   BackupDeviceInfo sse_decode_backup_device_info(SseDeserializer deserializer);
 
   @protected
@@ -977,6 +1001,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<ActivityLogRow> sse_decode_list_activity_log_row(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  List<AppliedRow> sse_decode_list_applied_row(SseDeserializer deserializer);
+
+  @protected
+  List<ApplySlotInput> sse_decode_list_apply_slot_input(
     SseDeserializer deserializer,
   );
 
@@ -1499,6 +1531,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_applied_row(AppliedRow self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_apply_result(ApplyResult self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_apply_slot_input(
+    ApplySlotInput self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_backup_device_info(
     BackupDeviceInfo self,
     SseSerializer serializer,
@@ -1849,6 +1893,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_list_activity_log_row(
     List<ActivityLogRow> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_applied_row(
+    List<AppliedRow> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_apply_slot_input(
+    List<ApplySlotInput> self,
     SseSerializer serializer,
   );
 

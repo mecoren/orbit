@@ -240,6 +240,27 @@ class RustOrbitBridge implements OrbitBridge {
     );
   }
 
+  @override
+  Future<ApplyResult> dayPlanApply(int dayStartMs, List<ApplySlotInput> slots) async {
+    final r = await gen_planner.dayPlanApply(
+      dayStartMs: dayStartMs,
+      slots: [
+        for (final s in slots)
+          gen_planner.ApplySlotInput(taskId: s.taskId, startMs: s.startMs),
+      ],
+    );
+    return ApplyResult(
+      applied: [
+        for (final a in r.applied)
+          AppliedRow(
+            taskId: a.taskId,
+            prevStartDate: a.prevStartDate,
+            prevMyDayDate: a.prevMyDayDate,
+          ),
+      ],
+    );
+  }
+
   // ── todo_tasks ──
 
   @override

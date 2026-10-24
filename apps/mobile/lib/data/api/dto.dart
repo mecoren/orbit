@@ -182,6 +182,34 @@ class UnscheduledTask {
   });
 }
 
+/// 应用输入单条（预览结果中勾选的槽位）
+class ApplySlotInput {
+  final int taskId;
+  final int startMs;
+
+  const ApplySlotInput({required this.taskId, required this.startMs});
+}
+
+/// 单行应用结果（撤销快照：prev 值经既有更新通道写回）
+class AppliedRow {
+  final int taskId;
+  final int? prevStartDate;
+  final int? prevMyDayDate;
+
+  const AppliedRow({
+    required this.taskId,
+    required this.prevStartDate,
+    required this.prevMyDayDate,
+  });
+}
+
+/// 应用结果
+class ApplyResult {
+  final List<AppliedRow> applied;
+
+  const ApplyResult({required this.applied});
+}
+
 /// 日排程预览（只读）
 class DayPlan {
   final List<PlanSlot> slots;

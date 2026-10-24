@@ -107,6 +107,54 @@ impl From<day_planner_api::DayPlan> for DayPlan {
     }
 }
 
+/// 应用输入单条（镜像 core ApplySlotInput）
+#[derive(Debug, Clone, Deserialize)]
+pub struct ApplySlotInput {
+    pub task_id: i64,
+    pub start_ms: i64,
+}
+
+impl From<ApplySlotInput> for day_planner_api::ApplySlotInput {
+    fn from(s: ApplySlotInput) -> Self {
+        Self {
+            task_id: s.task_id,
+            start_ms: s.start_ms,
+        }
+    }
+}
+
+/// 单行应用结果（镜像 core AppliedRow；prev 快照供撤销写回）
+#[derive(Debug, Clone, Serialize)]
+pub struct AppliedRow {
+    pub task_id: i64,
+    pub prev_start_date: Option<i64>,
+    pub prev_my_day_date: Option<i64>,
+}
+
+impl From<day_planner_api::AppliedRow> for AppliedRow {
+    fn from(a: day_planner_api::AppliedRow) -> Self {
+        Self {
+            task_id: a.task_id,
+            prev_start_date: a.prev_start_date,
+            prev_my_day_date: a.prev_my_day_date,
+        }
+    }
+}
+
+/// 应用结果（镜像 core ApplyResult）
+#[derive(Debug, Clone, Serialize)]
+pub struct ApplyResult {
+    pub applied: Vec<AppliedRow>,
+}
+
+impl From<day_planner_api::ApplyResult> for ApplyResult {
+    fn from(r: day_planner_api::ApplyResult) -> Self {
+        Self {
+            applied: r.applied.into_iter().map(AppliedRow::from).collect(),
+        }
+    }
+}
+
 fn pool() -> Result<sqlx::SqlitePool, String> {
     super::state::with_state(|s| Ok(s.pool.clone()))
 }
@@ -119,4 +167,18 @@ pub async fn day_plan_preview(prefs: DayPlanPrefs, now_ms: i64) -> Result<DayPla
         .await
         .map_err(|e| e.to_string())
         .map(DayPlan::from)
+}
+
+/// 应用排程（阶段二）：写 my_day_date + start_date（不改 due_date，单事务）；
+/// 返回 prev 快照供 Dart 侧撤销写回。day_start_ms 由 Dart 传今天本地零点。
+pub async fn day_plan_apply(
+    day_start_ms: i64,
+    slots: Vec<ApplySlotInput>,
+) -> Result<ApplyResult, String> {
+    let pool = pool()?;
+    let slots: Vec<day_planner_api::ApplySlotInput> = slots.into_iter().map(Into::into).collect();
+    day_planner_api::apply_day_plan(&pool, day_start_ms, &slots)
+        .await
+        .map_err(|e| e.to_string())
+        .map(ApplyResult::from)
 }

@@ -504,6 +504,29 @@ class MockOrbitBridge implements OrbitBridge {
         );
       });
 
+  @override
+  Future<ApplyResult> dayPlanApply(int dayStartMs, List<ApplySlotInput> slots) =>
+      _delay(() {
+        final applied = <AppliedRow>[];
+        for (final s in slots) {
+          final t = store.tasks[s.taskId];
+          if (t == null) {
+            throw Exception('task ${s.taskId} 不存在');
+          }
+          applied.add(AppliedRow(
+            taskId: s.taskId,
+            prevStartDate: t['start_date'] as int?,
+            prevMyDayDate: t['my_day_date'] as int?,
+          ));
+          t['my_day_date'] = dayStartMs;
+          t['start_date'] = s.startMs;
+          t['updated_at'] = store.now();
+          t['version'] = ((t['version'] as int?) ?? 1) + 1;
+        }
+        _emit('todo_tasks');
+        return ApplyResult(applied: applied);
+      });
+
   // ── todo_tasks ──
 
   @override

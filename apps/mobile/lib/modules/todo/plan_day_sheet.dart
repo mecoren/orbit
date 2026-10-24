@@ -1,11 +1,13 @@
-// 「规划今天」底部抽屉（F3 日排程阶段一，docs/13 §五 F3 / §八 U3，ADR 0013）——
-// 本地启发式排程的只读预览：时间轴建议列表（HH:mm–HH:mm + 标题 + 理由徽标）、
-// 未排入区（带原因）、超载警示条；**不写库**（应用写入属阶段二）。
+// 「规划今天」底部抽屉（F3 日排程，docs/13 §五 F3 / §八 U3，ADR 0013）——
+// 本地启发式排程：时间轴建议列表（HH:mm–HH:mm + 勾选 + 理由徽标）、未排入
+// 区（带原因）、超载警示条；**阶段二应用**：勾选槽位写 my_day_date + start_date
+//（不改 due_date，core 单事务），prev 快照经 WaitToast 撤销钮写回。
 //
 // 口径：算法真值在 core day_planner_api（纯函数分钟域），mock 桥镜像同口径；
 // 弹层机制 = showModalBottomSheet + bottomSheetTopShape/Motion（共享弹层族）。
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shadcn_flutter/shadcn_flutter.dart' as sh;
 
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_dimens.dart';
@@ -17,9 +19,11 @@ import '../../data/providers/bridge_provider.dart';
 import '../../shared/widgets/shadcn/orbit_actions_sheet.dart';
 import '../../shared/widgets/shadcn/orbit_empty_state.dart';
 import '../../shared/widgets/shadcn/orbit_toast.dart';
+import 'providers/todo_providers.dart';
 
-/// 规划今天：只读排程预览弹层（纯展示无结果值）
-Future<void> showPlanDaySheet(BuildContext context) {
+/// 规划今天：排程预览弹层。[nowMs] 仅测试注入用（排程从「现在」起排，
+/// 假时钟注入固定到工作窗内，用例不随跑测墙钟漂移）
+Future<void> showPlanDaySheet(BuildContext context, {int? nowMs}) {
   return showModalBottomSheet<void>(
     context: context,
     useRootNavigator: true,
@@ -27,7 +31,7 @@ Future<void> showPlanDaySheet(BuildContext context) {
     backgroundColor: AppColors.ofContext(context).popup,
     shape: bottomSheetTopShape,
     sheetAnimationStyle: bottomSheetMotion,
-    builder: (sheetContext) => const _PlanDaySheet(),
+    builder: (sheetContext) => _PlanDaySheet(nowMs: nowMs),
   );
 }
 
@@ -37,7 +41,10 @@ String _hhmm(int ms) {
 }
 
 class _PlanDaySheet extends ConsumerStatefulWidget {
-  const _PlanDaySheet();
+  const _PlanDaySheet({this.nowMs});
+
+  /// 测试注入的「现在」（null = 真实当前）
+  final int? nowMs;
 
   @override
   ConsumerState<_PlanDaySheet> createState() => _PlanDaySheetState();
@@ -46,6 +53,9 @@ class _PlanDaySheet extends ConsumerStatefulWidget {
 class _PlanDaySheetState extends ConsumerState<_PlanDaySheet> {
   DayPlan? _plan;
   String? _error;
+  /// 勾选集（task_id；新预览到达时重置为全选）
+  Set<int> _checked = {};
+  bool _applying = false;
 
   @override
   void initState() {
@@ -56,11 +66,69 @@ class _PlanDaySheetState extends ConsumerState<_PlanDaySheet> {
   Future<void> _load() async {
     try {
       final plan = await ref.read(orbitBridgeProvider).dayPlanPreview(
-          DayPlanPrefs.defaults, DateTime.now().millisecondsSinceEpoch);
-      if (mounted) setState(() => _plan = plan);
+          DayPlanPrefs.defaults,
+          widget.nowMs ?? DateTime.now().millisecondsSinceEpoch);
+      if (mounted) {
+        setState(() {
+          _plan = plan;
+          _checked = {for (final s in plan.slots) s.taskId};
+        });
+      }
     } catch (_) {
       if (mounted) setState(() => _error = '排程预览加载失败');
       WaitToast.destructive('排程预览加载失败');
+    }
+  }
+
+  /// 应用勾选槽位：写 my_day/start（core 单事务）；prev 快照进撤销栈
+  ///（WaitToast 撤销钮逐条写回）
+  Future<void> _apply() async {
+    final plan = _plan;
+    if (plan == null || _applying || _checked.isEmpty) return;
+    setState(() => _applying = true);
+    try {
+      final picked = [
+        for (final s in plan.slots)
+          if (_checked.contains(s.taskId))
+            ApplySlotInput(taskId: s.taskId, startMs: s.startMs),
+      ];
+      final r = await ref
+          .read(orbitBridgeProvider)
+          .dayPlanApply(plan.dayStartMs, picked);
+      ref.invalidate(todoTasksProvider);
+      ref.invalidate(taskDetailProvider);
+      if (!mounted) return;
+      setState(() {
+        _applying = false;
+        _checked = {};
+      });
+      await _load();
+      if (!mounted) return;
+      WaitToast.global(
+        '已应用 ${r.applied.length} 条排程',
+        variant: WaitToastVariant.success,
+        description: '写入开始时间与我的一天，截止日期不变',
+        actionLabel: '撤销',
+        onAction: () async {
+          try {
+            for (final a in r.applied) {
+              await ref.read(orbitBridgeProvider).todoTaskUpdate(
+                  a.taskId,
+                  encodePatch({
+                    'my_day_date': a.prevMyDayDate,
+                    'start_date': a.prevStartDate,
+                  }));
+            }
+            ref.invalidate(todoTasksProvider);
+          } catch (_) {
+            WaitToast.destructive('撤销失败');
+          }
+        },
+        autoDismissAfter: WaitToast.undoDwell,
+      );
+    } catch (_) {
+      if (mounted) setState(() => _applying = false);
+      WaitToast.destructive('应用失败');
     }
   }
 
@@ -231,6 +299,21 @@ class _PlanDaySheetState extends ConsumerState<_PlanDaySheet> {
                                 ],
                               ),
                       ),
+                      // 应用按钮（拇指区底部；勾选默认全选，可逐条取消）
+                      if (plan.slots.isNotEmpty) ...[
+                        const SizedBox(height: AppDimens.space8),
+                        sh.Button.primary(
+                          onPressed: _applying || _checked.isEmpty
+                              ? null
+                              : _apply,
+                          child: Text(
+                            _applying
+                                ? '应用中…'
+                                : '应用到 ${_checked.length} 条任务',
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
+                      ],
                     ],
                   ),
       ),

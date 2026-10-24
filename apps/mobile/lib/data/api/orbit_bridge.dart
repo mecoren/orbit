@@ -305,6 +305,10 @@ abstract class OrbitBridge {
   /// 规划今天：只读排程预览（不写库；nowMs 由调用方传本地毫秒）
   Future<DayPlan> dayPlanPreview(DayPlanPrefs prefs, int nowMs);
 
+  /// 应用排程（阶段二）：写 my_day_date + start_date（不改 due_date，单事务）；
+  /// 返回 prev 快照供撤销写回
+  Future<ApplyResult> dayPlanApply(int dayStartMs, List<ApplySlotInput> slots);
+
   // ── todo_tasks ──
 
   Future<List<TodoTask>> todoTaskList(ListFilter filter);
