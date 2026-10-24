@@ -17,8 +17,6 @@
 //! 取 pinyin crate 的首选音（如「银行」只收 yin）。行文本变更时整行重建；
 //! heteronym 多音展开留待真实检索缺口出现再评估（spike 与本实现同口径）。
 
-use std::time::Instant;
-
 use pinyin::ToPinyin;
 use sqlx::SqlitePool;
 
@@ -124,9 +122,11 @@ pub async fn search_hits(
 /// ② 补缺失 + 更新不一致：源表活跃行在索引缺失或 title 不一致的重建
 /// （title 相等即跳过——拼音由 title 确定性导出，无需比较拼音串）。
 /// 直写路径（同步合并/导入/备份恢复）的兜底入口：查询前调用保证索引新鲜。
+///
+/// 重建走**单事务批量**：存量库首次对账可达万行级，逐行自动事务的 per-row
+/// fsync 会把首次拼音查询拖到秒级（探针 global-search 实测 7.8s）；WAL 下
+/// 单事务一次提交，万行 < 500ms。
 pub async fn reconcile(pool: &SqlitePool) -> CoreResult<(usize, usize)> {
-    let t = Instant::now();
-    let _ = t;
 
     // ① 清幽灵（三类各一条；NOT IN 子查询走各表 uuid 索引）
     let mut removed = 0usize;
@@ -143,7 +143,10 @@ pub async fn reconcile(pool: &SqlitePool) -> CoreResult<(usize, usize)> {
         removed += r.rows_affected() as usize;
     }
 
-    // ② 补缺失 / 更新不一致（三类各一条；title 相等跳过）
+    // ② 补缺失 / 更新不一致（三类各一条；title 相等跳过）。
+    // 重建走**单事务批量**：存量库首次对账可达万行级，逐行自动事务的 per-row
+    // fsync 会把首次拼音查询拖到秒级（探针 global-search 实测 7.8s）；WAL 下
+    // 单事务一次提交，万行 < 500ms。
     let mut rebuilt = 0usize;
     for (kind, table, column) in [
         (KIND_TASK, "todo_tasks", "title"),
@@ -156,11 +159,33 @@ pub async fn reconcile(pool: &SqlitePool) -> CoreResult<(usize, usize)> {
              WHERE t.is_deleted = 0 AND (s.uuid IS NULL OR s.title != t.{column})"
         );
         let stale: Vec<(String, String)> = sqlx::query_as(&sql).fetch_all(pool).await?;
-
-        for (uuid, text) in stale {
-            sync_row(pool, kind, &uuid, &text).await?;
+        if stale.is_empty() {
+            continue;
+        }
+        let mut tx = pool.begin().await?;
+        for (uuid, text) in &stale {
+            if text.trim().is_empty() {
+                continue;
+            }
+            let (full, initials) = pinyin_index_text(text);
+            sqlx::query(
+                "INSERT INTO search_pinyin (uuid, kind, title, pinyin_full, initials, updated_at) \
+                 VALUES (?, ?, ?, ?, ?, ?) \
+                 ON CONFLICT(uuid) DO UPDATE SET kind = excluded.kind, title = excluded.title, \
+                   pinyin_full = excluded.pinyin_full, initials = excluded.initials, \
+                   updated_at = excluded.updated_at",
+            )
+            .bind(uuid)
+            .bind(kind)
+            .bind(text)
+            .bind(&full)
+            .bind(&initials)
+            .bind(clock::next_ms())
+            .execute(&mut *tx)
+            .await?;
             rebuilt += 1;
         }
+        tx.commit().await?;
     }
     Ok((rebuilt, removed))
 }
