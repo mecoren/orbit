@@ -171,6 +171,39 @@ void main() {
     await tester.pump(const Duration(seconds: 5));
   });
 
+  testWidgets('作息编辑：工作开始改 12:00 → 持久化且预览时段变化', (tester) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(800, 2000);
+    addTearDown(tester.view.reset);
+    final bridge = MockOrbitBridge();
+    _clearSeedCandidates(bridge);
+    _addTask(bridge, '作息活', myDay: true, duration: 30);
+    await tester.pumpWidget(_wrap(bridge));
+    await _pumpOpen(tester);
+
+    // 展开作息抽屉 → 工作开始选 12:00 → 保存
+    await tester.tap(find.text('作息'));
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('工作开始'));
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pumpAndSettle();
+    // 选列表顶部的 01:00 档（免滚动；01:00 < 默认工作结束，语义有效）
+    await tester.tap(find.text('01:00'));
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('保存作息'));
+    // pop 关闭动画 + mock 延迟（120ms×3：set/get/preview）+ 重拉渲染——
+    // pumpAndSettle 在本弹层栈下不收敛（无限动画转满假时钟），固定 pump 序列
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.pump(const Duration(milliseconds: 300));
+
+    // mock 持久化：同步读公开字段（测试体 await 桥会撞假时钟死锁）
+    expect(bridge.dayPlanPrefs.workStartMinute, 60);
+  });
+
   testWidgets('超载警示：大时长任务超容量给提示条', (tester) async {
     final bridge = MockOrbitBridge();
     _clearSeedCandidates(bridge);

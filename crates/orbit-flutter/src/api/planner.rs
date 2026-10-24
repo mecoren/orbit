@@ -23,6 +23,20 @@ pub struct DayPlanPrefs {
     pub include_overdue: bool,
 }
 
+impl From<day_planner_api::DayPlanPrefs> for DayPlanPrefs {
+    fn from(p: day_planner_api::DayPlanPrefs) -> Self {
+        Self {
+            work_start_minute: p.work_start_minute,
+            work_end_minute: p.work_end_minute,
+            lunch_start_minute: p.lunch_start_minute,
+            lunch_end_minute: p.lunch_end_minute,
+            granularity_minutes: p.granularity_minutes,
+            default_task_minutes: p.default_task_minutes,
+            include_overdue: p.include_overdue,
+        }
+    }
+}
+
 impl From<DayPlanPrefs> for day_planner_api::DayPlanPrefs {
     fn from(p: DayPlanPrefs) -> Self {
         Self {
@@ -167,6 +181,24 @@ pub async fn day_plan_preview(prefs: DayPlanPrefs, now_ms: i64) -> Result<DayPla
         .await
         .map_err(|e| e.to_string())
         .map(DayPlan::from)
+}
+
+/// 读取排程偏好（cfg_kv，缺键回落默认；编辑抽屉初值）
+pub async fn day_plan_prefs_get() -> Result<DayPlanPrefs, String> {
+    let pool = pool()?;
+    day_planner_api::get_day_plan_prefs(&pool)
+        .await
+        .map_err(|e| e.to_string())
+        .map(DayPlanPrefs::from)
+}
+
+/// 保存排程偏好（校验钳制后落库，返回存后生效值供 UI 回显）
+pub async fn day_plan_prefs_set(prefs: DayPlanPrefs) -> Result<DayPlanPrefs, String> {
+    let pool = pool()?;
+    day_planner_api::set_day_plan_prefs(&pool, &prefs.into())
+        .await
+        .map_err(|e| e.to_string())
+        .map(DayPlanPrefs::from)
 }
 
 /// 应用排程（阶段二）：写 my_day_date + start_date（不改 due_date，单事务）；

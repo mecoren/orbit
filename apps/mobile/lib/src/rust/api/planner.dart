@@ -7,7 +7,7 @@ import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
 // These functions are ignored because they are not marked as `pub`: `pool`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`
 
 /// 规划今天：只读排程预览（对应桌面 day_plan_preview；now_ms 由 Dart 传
 /// DateTime.now().millisecondsSinceEpoch——本地日界换算在 core）
@@ -18,6 +18,14 @@ Future<DayPlan> dayPlanPreview({
   prefs: prefs,
   nowMs: nowMs,
 );
+
+/// 读取排程偏好（cfg_kv，缺键回落默认；编辑抽屉初值）
+Future<DayPlanPrefs> dayPlanPrefsGet() =>
+    RustLib.instance.api.crateApiPlannerDayPlanPrefsGet();
+
+/// 保存排程偏好（校验钳制后落库，返回存后生效值供 UI 回显）
+Future<DayPlanPrefs> dayPlanPrefsSet({required DayPlanPrefs prefs}) =>
+    RustLib.instance.api.crateApiPlannerDayPlanPrefsSet(prefs: prefs);
 
 /// 应用排程（阶段二）：写 my_day_date + start_date（不改 due_date，单事务）；
 /// 返回 prev 快照供 Dart 侧撤销写回。day_start_ms 由 Dart 传今天本地零点。

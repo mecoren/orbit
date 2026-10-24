@@ -19,6 +19,7 @@ import '../../data/providers/bridge_provider.dart';
 import '../../shared/widgets/shadcn/orbit_actions_sheet.dart';
 import '../../shared/widgets/shadcn/orbit_empty_state.dart';
 import '../../shared/widgets/shadcn/orbit_toast.dart';
+import 'plan_prefs_sheet.dart';
 import 'providers/todo_providers.dart';
 
 /// 规划今天：排程预览弹层。[nowMs] 仅测试注入用（排程从「现在」起排，
@@ -52,6 +53,7 @@ class _PlanDaySheet extends ConsumerStatefulWidget {
 
 class _PlanDaySheetState extends ConsumerState<_PlanDaySheet> {
   DayPlan? _plan;
+  DayPlanPrefs _prefs = DayPlanPrefs.defaults;
   String? _error;
   /// 勾选集（task_id；新预览到达时重置为全选）
   Set<int> _checked = {};
@@ -65,9 +67,9 @@ class _PlanDaySheetState extends ConsumerState<_PlanDaySheet> {
 
   Future<void> _load() async {
     try {
+      _prefs = await ref.read(orbitBridgeProvider).dayPlanPrefsGet();
       final plan = await ref.read(orbitBridgeProvider).dayPlanPreview(
-          DayPlanPrefs.defaults,
-          widget.nowMs ?? DateTime.now().millisecondsSinceEpoch);
+          _prefs, widget.nowMs ?? DateTime.now().millisecondsSinceEpoch);
       if (mounted) {
         setState(() {
           _plan = plan;
@@ -78,6 +80,19 @@ class _PlanDaySheetState extends ConsumerState<_PlanDaySheet> {
       if (mounted) setState(() => _error = '排程预览加载失败');
       WaitToast.destructive('排程预览加载失败');
     }
+  }
+
+  /// 作息编辑：逐项底部抽屉选档（选择类交互统一口径）；保存走
+  /// dayPlanPrefsSet（core 校验钳制，返回存后生效值），保存即重拉预览
+  Future<void> _pickPrefs() async {
+    final draft =
+        await showPlanPrefsSheet(context, initial: _prefs);
+    if (draft == null || !mounted) return;
+    final effective =
+        await ref.read(orbitBridgeProvider).dayPlanPrefsSet(draft);
+    if (!mounted) return;
+    setState(() => _prefs = effective);
+    await _load();
   }
 
   /// 应用勾选槽位：写 my_day/start（core 单事务）；prev 快照进撤销栈
@@ -160,14 +175,23 @@ class _PlanDaySheetState extends ConsumerState<_PlanDaySheet> {
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      // 标题行 + 容量
-                      Text(
-                        '规划今天',
-                        style: TextStyle(
-                          fontSize: 17,
-                          fontWeight: FontWeight.w600,
-                          color: colors.titleText,
-                        ),
+                      // 标题行 + 作息入口 + 容量
+                      Row(
+                        children: [
+                          Text(
+                            '规划今天',
+                            style: TextStyle(
+                              fontSize: 17,
+                              fontWeight: FontWeight.w600,
+                              color: colors.titleText,
+                            ),
+                          ),
+                          const SizedBox(width: AppDimens.space8),
+                          TextButton(
+                            onPressed: _pickPrefs,
+                            child: const Text('作息'),
+                          ),
+                        ],
                       ),
                       const SizedBox(height: 2),
                       Text(

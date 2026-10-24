@@ -962,7 +962,10 @@ mod api_tests {
         assert_eq!(saved.work_start_minute, 9 * 60);
         assert_eq!(saved.work_end_minute, 18 * 60);
         // 午休按**回落后的工作窗**（540-1080）校验：12-13 点仍有效 → 保留
-        assert_eq!((saved.lunch_start_minute, saved.lunch_end_minute), (720, 780));
+        assert_eq!(
+            (saved.lunch_start_minute, saved.lunch_end_minute),
+            (720, 780)
+        );
 
         // 粒度/默认时长钳制
         let saved = set_day_plan_prefs(
@@ -982,10 +985,12 @@ mod api_tests {
     #[tokio::test]
     async fn prefs_corrupt_json_falls_back_to_default() {
         let pool = setup_db().await;
-        sqlx::query("INSERT INTO cfg_kv (key, value, updated_at) VALUES ('day_plan_prefs', '{oops', 1)")
-            .execute(&pool)
-            .await
-            .unwrap();
+        sqlx::query(
+            "INSERT INTO cfg_kv (key, value, updated_at) VALUES ('day_plan_prefs', '{oops', 1)",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
         let d = get_day_plan_prefs(&pool).await.unwrap();
         assert_eq!(d, DayPlanPrefs::default(), "损坏偏好回落默认不阻断");
     }

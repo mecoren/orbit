@@ -309,6 +309,12 @@ abstract class OrbitBridge {
   /// 返回 prev 快照供撤销写回
   Future<ApplyResult> dayPlanApply(int dayStartMs, List<ApplySlotInput> slots);
 
+  /// 读取排程偏好（cfg_kv，缺键回落默认；编辑抽屉初值）
+  Future<DayPlanPrefs> dayPlanPrefsGet();
+
+  /// 保存排程偏好（校验钳制后落库，返回存后生效值供 UI 回显）
+  Future<DayPlanPrefs> dayPlanPrefsSet(DayPlanPrefs prefs);
+
   // ── todo_tasks ──
 
   Future<List<TodoTask>> todoTaskList(ListFilter filter);

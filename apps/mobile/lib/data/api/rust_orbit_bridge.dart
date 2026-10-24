@@ -261,6 +261,44 @@ class RustOrbitBridge implements OrbitBridge {
     );
   }
 
+  @override
+  Future<DayPlanPrefs> dayPlanPrefsGet() async {
+    final p = await gen_planner.dayPlanPrefsGet();
+    return DayPlanPrefs(
+      workStartMinute: p.workStartMinute,
+      workEndMinute: p.workEndMinute,
+      lunchStartMinute: p.lunchStartMinute,
+      lunchEndMinute: p.lunchEndMinute,
+      granularityMinutes: p.granularityMinutes,
+      defaultTaskMinutes: p.defaultTaskMinutes,
+      includeOverdue: p.includeOverdue,
+    );
+  }
+
+  @override
+  Future<DayPlanPrefs> dayPlanPrefsSet(DayPlanPrefs prefs) async {
+    final p = await gen_planner.dayPlanPrefsSet(
+      prefs: gen_planner.DayPlanPrefs(
+        workStartMinute: prefs.workStartMinute,
+        workEndMinute: prefs.workEndMinute,
+        lunchStartMinute: prefs.lunchStartMinute,
+        lunchEndMinute: prefs.lunchEndMinute,
+        granularityMinutes: prefs.granularityMinutes,
+        defaultTaskMinutes: prefs.defaultTaskMinutes,
+        includeOverdue: prefs.includeOverdue,
+      ),
+    );
+    return DayPlanPrefs(
+      workStartMinute: p.workStartMinute,
+      workEndMinute: p.workEndMinute,
+      lunchStartMinute: p.lunchStartMinute,
+      lunchEndMinute: p.lunchEndMinute,
+      granularityMinutes: p.granularityMinutes,
+      defaultTaskMinutes: p.defaultTaskMinutes,
+      includeOverdue: p.includeOverdue,
+    );
+  }
+
   // ── todo_tasks ──
 
   @override

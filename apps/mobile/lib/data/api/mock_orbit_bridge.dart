@@ -241,6 +241,10 @@ class MockOrbitBridge implements OrbitBridge {
         if (p != null) p['sort_order'] = sortOrder;
       });
 
+  /// 排程偏好（F3 阶段三；mock 会话内存态，真桥落 cfg_kv。
+  /// 公开字段：测试同步断言用——测试体 await 桥方法会撞假时钟死锁）
+  DayPlanPrefs dayPlanPrefs = DayPlanPrefs.defaults;
+
   // ── 项目回顾节奏（F1；口径镜像 core project_review_api） ──
 
   /// 本地日序号（days since epoch）——与 Rust local_day_index 同算法：
@@ -525,6 +529,16 @@ class MockOrbitBridge implements OrbitBridge {
         }
         _emit('todo_tasks');
         return ApplyResult(applied: applied);
+      });
+
+  @override
+  Future<DayPlanPrefs> dayPlanPrefsGet() => _delay(() => dayPlanPrefs);
+
+  @override
+  Future<DayPlanPrefs> dayPlanPrefsSet(DayPlanPrefs prefs) =>
+      _delay(() {
+        dayPlanPrefs = prefs;
+        return prefs;
       });
 
   // ── todo_tasks ──
