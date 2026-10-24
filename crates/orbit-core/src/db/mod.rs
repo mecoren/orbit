@@ -15,4 +15,5 @@ pub mod lifecycle;
 pub mod migrate;
 pub mod pool;
 pub mod repository;
+pub mod search_pinyin;
 pub mod sync_registry;

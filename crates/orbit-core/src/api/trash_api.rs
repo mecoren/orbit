@@ -220,6 +220,17 @@ pub async fn restore_todo_task(pool: &SqlitePool, id: i64) -> CoreResult<TodoTas
         "{}",
     )
     .await;
+    // F5 拼音索引：恢复即重建（软删时已移除；失败由查询入口 reconcile 兜底）
+    if let Err(e) = crate::db::search_pinyin::sync_row(
+        pool,
+        crate::db::search_pinyin::KIND_TASK,
+        &restored.uuid,
+        &restored.title,
+    )
+    .await
+    {
+        log::warn!("search_pinyin sync(restore) failed: {e}");
+    }
     Ok(restored)
 }
 

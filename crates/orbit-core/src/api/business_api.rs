@@ -12,6 +12,7 @@ use sqlx::SqlitePool;
 use crate::api::activity_log_api;
 use crate::db::repository::generic_repo;
 use crate::db::repository::import_type_validator::normalize_import_fields;
+use crate::db::search_pinyin;
 use crate::error::{CoreError, CoreResult};
 use crate::eventbus::{
     EVENT_BUS,
@@ -1003,11 +1004,107 @@ pub async fn search_all(
     let use_fts = kw.chars().count() >= 3;
 
     // FTS 异常（语法字符/索引损坏）静默降级 LIKE——搜索永不因索引失败而不可用
-    if use_fts && let Ok(r) = search_all_fts(pool, kw, limit).await {
-        return Ok(r);
+    let mut result = if use_fts && let Ok(r) = search_all_fts(pool, kw, limit).await {
+        r
+    } else {
+        search_all_like(pool, kw, limit).await?
+    };
+
+    // F5 拼音通道：纯字母查询额外命中「gzs → 工作总结 / gongzuo → 工作…」。
+    // 查询入口先 reconcile 幂等对账（同步合并/导入等直写路径的行在此补齐/
+    // 清幽灵，通常 0 行改动）——中文查询不走拼音通道，省一次对账。
+    if search_pinyin::is_pinyin_query(kw) {
+        search_pinyin::reconcile(pool).await?;
+        merge_pinyin_hits(pool, &kw.to_lowercase(), limit, &mut result).await?;
     }
 
-    search_all_like(pool, kw, limit).await
+    Ok(result)
+}
+
+/// 拼音命中合并：search_pinyin 按 kind 各取命中 uuid → 回源活跃行，追加在
+/// 主路径结果之后（去重；中文精确命中优先于拼音猜测——「排序不劣于现状」）。
+/// 拼音索引失败静默跳过（主路径结果已可用，搜索永不因派生索引失败而不可用）。
+async fn merge_pinyin_hits(
+    pool: &SqlitePool,
+    query: &str,
+    limit: i32,
+    result: &mut GlobalSearchResult,
+) -> CoreResult<()> {
+    use std::collections::HashSet;
+
+    // ---- tasks ----
+    let seen: HashSet<i64> = result.tasks.iter().map(|t| t.id).collect();
+    let uuids = search_pinyin::search_hits(pool, search_pinyin::KIND_TASK, query, limit * 2)
+        .await
+        .unwrap_or_default();
+    if !uuids.is_empty() {
+        let placeholders = vec!["?"; uuids.len()].join(",");
+        let sql = format!(
+            "SELECT * FROM todo_tasks WHERE is_deleted = 0 AND uuid IN ({placeholders}) \
+             ORDER BY updated_at DESC LIMIT ?"
+        );
+        let mut q = sqlx::query_as::<_, TodoTask>(&sql);
+        for u in &uuids {
+            q = q.bind(u);
+        }
+        q = q.bind(limit);
+        for t in q.fetch_all(pool).await? {
+            if !seen.contains(&t.id) && result.tasks.len() < limit as usize {
+                result.tasks.push(t);
+            }
+        }
+    }
+
+    // ---- projects ----
+    let seen: HashSet<i64> = result.projects.iter().map(|p| p.id).collect();
+    let uuids = search_pinyin::search_hits(pool, search_pinyin::KIND_PROJECT, query, limit * 2)
+        .await
+        .unwrap_or_default();
+    if !uuids.is_empty() {
+        let placeholders = vec!["?"; uuids.len()].join(",");
+        let sql = format!(
+            "SELECT * FROM todo_projects WHERE is_deleted = 0 AND uuid IN ({placeholders}) \
+             ORDER BY sort_order ASC, id ASC LIMIT ?"
+        );
+        let mut q = sqlx::query_as::<_, TodoProject>(&sql);
+        for u in &uuids {
+            q = q.bind(u);
+        }
+        q = q.bind(limit);
+        for p in q.fetch_all(pool).await? {
+            if !seen.contains(&p.id) && result.projects.len() < limit as usize {
+                result.projects.push(p);
+            }
+        }
+    }
+
+    // ---- comments（命中评论 → 现有 CommentSearchHit 形状回源）----
+    let seen: HashSet<i64> = result.comments.iter().map(|c| c.comment_id).collect();
+    let uuids = search_pinyin::search_hits(pool, search_pinyin::KIND_COMMENT, query, limit * 2)
+        .await
+        .unwrap_or_default();
+    if !uuids.is_empty() {
+        let placeholders = vec!["?"; uuids.len()].join(",");
+        let sql = format!(
+            "SELECT c.id AS comment_id, c.task_id AS task_id, \
+                    t.title AS task_title, c.content AS content, c.created_at AS created_at \
+             FROM todo_comments c \
+             JOIN todo_tasks t ON t.id = c.task_id AND t.is_deleted = 0 \
+             WHERE c.is_deleted = 0 AND c.uuid IN ({placeholders}) \
+             ORDER BY c.created_at DESC LIMIT ?"
+        );
+        let mut q = sqlx::query_as::<_, CommentSearchHit>(&sql);
+        for u in &uuids {
+            q = q.bind(u);
+        }
+        q = q.bind(limit);
+        for c in q.fetch_all(pool).await? {
+            if !seen.contains(&c.comment_id) && result.comments.len() < limit as usize {
+                result.comments.push(c);
+            }
+        }
+    }
+    Ok(())
 }
 
 /// FTS 主路径：MATCH 命中 → 按 kind 分流回源表。

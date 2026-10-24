@@ -21,7 +21,10 @@ const COMMON: &str = "的了在是我有和人个时上去一来去说大到地�
 struct Lcg(u64);
 impl Lcg {
     fn next(&mut self) -> u64 {
-        self.0 = self.0.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+        self.0 = self
+            .0
+            .wrapping_mul(6364136223846793005)
+            .wrapping_add(1442695040888963407);
         self.0 >> 33
     }
 }
@@ -34,7 +37,10 @@ fn rand_title(rng: &mut Lcg, chars: &[char]) -> String {
 }
 
 fn main() {
-    let chars: Vec<char> = COMMON.chars().filter(|c| !c.is_whitespace() && c.is_alphabetic() || (*c as u32) >= 0x4E00).collect();
+    let chars: Vec<char> = COMMON
+        .chars()
+        .filter(|c| !c.is_whitespace() && c.is_alphabetic() || (*c as u32) >= 0x4E00)
+        .collect();
     let mut rng = Lcg(2026_10_24);
 
     // 10k 中文标题
@@ -97,11 +103,21 @@ fn main() {
 
     println!("=== F5 拼音 spike（10k 中文标题，确定性样本） ===");
     println!("① 回填耗时           : {:?}", backfill);
-    println!("② 索引字节量（近似） : {} bytes（{} MB）", bytes, bytes / 1024 / 1024);
-    println!("③ 首字母查询 p50/p95 : {} / {} μs（线性扫描，命中 {} 条）", p50, p95, hits_total);
+    println!(
+        "② 索引字节量（近似） : {} bytes（{} MB）",
+        bytes,
+        bytes / 1024 / 1024
+    );
+    println!(
+        "③ 首字母查询 p50/p95 : {} / {} μs（线性扫描，命中 {} 条）",
+        p50, p95, hits_total
+    );
     println!("样例（前 3 条）       :");
     for (i, title) in titles.iter().take(3).enumerate() {
-        println!("  {:?} → full={:?} initials={:?}", title, index[i].1, index[i].2);
+        println!(
+            "  {:?} → full={:?} initials={:?}",
+            title, index[i].1, index[i].2
+        );
     }
 
     // 门限判定（docs/13 §五 F5）

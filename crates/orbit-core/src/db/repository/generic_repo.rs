@@ -509,6 +509,14 @@ pub async fn soft_delete_by_id(
 
     EVENT_BUS.emit(DbEvent::delete(table, id, record_uuid, &device_id));
 
+    // F5 拼音索引：被索引的三表软删即移除（防幽灵命中；恢复由 restore 钩子
+    // 与查询入口 reconcile 兜底重建）
+    if matches!(table, "todo_tasks" | "todo_projects" | "todo_comments") {
+        if let Err(e) = crate::db::search_pinyin::remove_row(pool, record_uuid).await {
+            log::warn!("search_pinyin remove(soft_delete) failed: {e}");
+        }
+    }
+
     Ok(())
 }
 
@@ -542,6 +550,17 @@ pub async fn create_todo_project(
     .fetch_one(pool).await?;
 
     emit_event("todo_projects", row.id, &row.uuid, DbOp::Insert, now);
+    // F5 拼音索引：项目标题入检索面（失败不阻断业务写——reconcile 兜底）
+    if let Err(e) = crate::db::search_pinyin::sync_row(
+        pool,
+        crate::db::search_pinyin::KIND_PROJECT,
+        &row.uuid,
+        &row.title,
+    )
+    .await
+    {
+        log::warn!("search_pinyin sync(project insert) failed: {e}");
+    }
     Ok(row)
 }
 
@@ -623,6 +642,17 @@ pub async fn update_todo_project(
         .ok_or_else(|| CoreError::NotFound(format!("todo_project id={}", id)))?;
 
     emit_event("todo_projects", row.id, &row.uuid, DbOp::Update, now);
+    // F5 拼音索引：检索文本变更随行重建（失败不阻断业务写——reconcile 兜底）
+    if let Err(e) = crate::db::search_pinyin::sync_row(
+        pool,
+        crate::db::search_pinyin::KIND_PROJECT,
+        &row.uuid,
+        &row.title,
+    )
+    .await
+    {
+        log::warn!("search_pinyin sync(KIND_PROJECT) failed: {e}");
+    }
     Ok(row)
 }
 
@@ -675,6 +705,17 @@ pub async fn create_todo_task(
     .await?;
 
     emit_event("todo_tasks", row.id, &row.uuid, DbOp::Insert, now);
+    // F5 拼音索引：检索文本变更随行重建（失败不阻断业务写——reconcile 兜底）
+    if let Err(e) = crate::db::search_pinyin::sync_row(
+        pool,
+        crate::db::search_pinyin::KIND_TASK,
+        &row.uuid,
+        &row.title,
+    )
+    .await
+    {
+        log::warn!("search_pinyin sync(KIND_TASK) failed: {e}");
+    }
     Ok(row)
 }
 
@@ -832,6 +873,17 @@ pub async fn update_todo_task(
         .ok_or_else(|| CoreError::NotFound(format!("todo_task id={}", id)))?;
 
     emit_event("todo_tasks", row.id, &row.uuid, DbOp::Update, now);
+    // F5 拼音索引：检索文本变更随行重建（失败不阻断业务写——reconcile 兜底）
+    if let Err(e) = crate::db::search_pinyin::sync_row(
+        pool,
+        crate::db::search_pinyin::KIND_TASK,
+        &row.uuid,
+        &row.title,
+    )
+    .await
+    {
+        log::warn!("search_pinyin sync(KIND_TASK) failed: {e}");
+    }
     Ok(row)
 }
 
@@ -992,6 +1044,17 @@ pub async fn create_todo_comment(
     .bind(&uuid).bind(input.task_id).bind(&input.content)
     .bind(now).bind(now).fetch_one(pool).await?;
     emit_event("todo_comments", row.id, &row.uuid, DbOp::Insert, now);
+    // F5 拼音索引：检索文本变更随行重建（失败不阻断业务写——reconcile 兜底）
+    if let Err(e) = crate::db::search_pinyin::sync_row(
+        pool,
+        crate::db::search_pinyin::KIND_COMMENT,
+        &row.uuid,
+        &row.content,
+    )
+    .await
+    {
+        log::warn!("search_pinyin sync(KIND_COMMENT) failed: {e}");
+    }
     Ok(row)
 }
 
