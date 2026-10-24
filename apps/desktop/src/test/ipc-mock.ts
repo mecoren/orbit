@@ -869,6 +869,8 @@ const commands: Record<string, (args: any, ctx: Ctx) => unknown> = {
     const cands: Cand[] = db.tasks
       .filter((t) => {
         if (t.is_deleted || t.done) return false;
+        // 今日已有 start_date 的行不再入候选（阶段二应用过的不重复建议）
+        if (t.start_date != null && t.start_date >= dayStart && t.start_date < dayEnd) return false;
         const dueInToday = t.due_date != null && t.due_date >= dayStart && t.due_date < dayEnd;
         const overdue = t.due_date != null && t.due_date < dayStart;
         const myDayToday = t.my_day_date != null && t.my_day_date >= dayStart && t.my_day_date < dayEnd;
@@ -969,6 +971,24 @@ const commands: Record<string, (args: any, ctx: Ctx) => unknown> = {
       overloaded: load > capacity,
       day_start_ms: dayStart,
     });
+  },
+  // F3 阶段二应用：写 my_day_date + start_date（不改 due_date），返回 prev 快照
+  day_plan_apply: ({ dayStartMs, slots }, { db }) => {
+    const applied = (slots ?? []).map((s: any) => {
+      const t = db.tasks.find((x) => x.id === s.task_id);
+      if (!t) throw new Error(`task ${s.task_id} 不存在`);
+      const prev = {
+        task_id: t.id,
+        prev_start_date: t.start_date,
+        prev_my_day_date: t.my_day_date,
+      };
+      t.my_day_date = dayStartMs;
+      t.start_date = s.start_ms;
+      t.updated_at = Date.now();
+      t.version += 1;
+      return prev;
+    });
+    return ipcClone({ applied });
   },
 
   // ---- tasks ----
@@ -2490,6 +2510,8 @@ const isWriteCommand = (cmd: string) =>
   cmd === "trash_purge_all" ||
   // F1 项目回顾写路径（core 侧经 generic_repo 统一 emit db-change）
   cmd === "todo_project_mark_reviewed" ||
+  // F3 阶段二：排程应用写 my_day/start（core 聚合 emit）
+  cmd === "day_plan_apply" ||
   cmd === "todo_project_set_review_interval" ||
   cmd === "todo_project_snooze_review";
 

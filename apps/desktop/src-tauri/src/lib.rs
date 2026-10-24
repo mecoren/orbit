@@ -513,8 +513,9 @@ pub fn run() {
             commands::digest_cmd::digest_summary,
             // 统计仪表盘（backlog #25：总览/热力图/连续天数/分布）
             commands::stats_cmd::stats_aggregate,
-            // 日排程预览（F3 阶段一只读）
+            // 日排程（F3：预览 + 阶段二应用）
             commands::planner_cmd::day_plan_preview,
+            commands::planner_cmd::day_plan_apply,
             // 保存的筛选器（#35：Apple Smart List 同款可保存组合条件视图）
             commands::saved_filter_cmd::saved_filters_list,
             commands::saved_filter_cmd::saved_filter_create,

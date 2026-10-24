@@ -19,7 +19,12 @@ use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
 
 use crate::api::digest_api::local_day_start;
-use crate::error::CoreResult;
+use crate::db::clock;
+use crate::error::{CoreError, CoreResult};
+use crate::eventbus::{
+    EVENT_BUS,
+    events::{DbEvent, DbOp},
+};
 
 /// 一天的分钟数（分钟域的天界）
 const MINUTES_PER_DAY: i64 = 24 * 60;
@@ -272,8 +277,10 @@ fn capacity_minutes(prefs: &DayPlanPrefs, now_minute: i64) -> i64 {
 /// 日排程预览（只读聚合）：从库内归集候选任务 → 分钟域投影 → [plan_day_slots]。
 ///
 /// 候选口径（docs/13 F3 输入）：今日到期 / 逾期 / 我的一天（今天）/ 未排期且带时长，
-/// 均须未完成未软删。fetch_all 无 LIMIT：候选由日期窗口与 my_day/时长谓词收敛
-/// （「今天相关」的任务，非全库；上界来源登记 docs/14 C 档）。
+/// 均须未完成未软删，且**今日已有 start_date 的行不再入候选**（阶段二应用过
+/// 的任务不重复建议——应用语义的自然闭环）。fetch_all 无 LIMIT：候选由日期
+/// 窗口与 my_day/时长谓词收敛（「今天相关」的任务，非全库；上界来源登记
+/// docs/14 C 档）。
 pub async fn plan_day(pool: &SqlitePool, prefs: &DayPlanPrefs, now_ms: i64) -> CoreResult<DayPlan> {
     let day_start_ms = local_day_start(now_ms);
     let day_end_ms = day_start_ms + 86_400_000;
@@ -331,6 +338,100 @@ pub async fn plan_day(pool: &SqlitePool, prefs: &DayPlanPrefs, now_ms: i64) -> C
         unscheduled,
         day_start_ms,
     })
+}
+
+/// 阶段二·应用输入：预览结果中用户勾选的单条（start_ms 已含今天零点基准）
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ApplySlotInput {
+    pub task_id: i64,
+    /// 应用后的开始时间（今天内的墙钟毫秒）
+    pub start_ms: i64,
+}
+
+/// 单行应用结果（撤销快照：prev 值回传，撤销由双端经既有更新通道写回）
+#[derive(Debug, Clone, Serialize)]
+pub struct AppliedRow {
+    pub task_id: i64,
+    pub prev_start_date: Option<i64>,
+    pub prev_my_day_date: Option<i64>,
+}
+
+/// 应用结果
+#[derive(Debug, Clone, Serialize)]
+pub struct ApplyResult {
+    pub applied: Vec<AppliedRow>,
+}
+
+/// 阶段二·应用排程（docs/13 F3 方案第 3 条）：把勾选的槽位写入任务——
+/// `my_day_date = 今天零点` + `start_date = 槽起点`，**不修改 due_date**。
+///
+/// - **单事务**：任一行失败整体回滚，不留下半应用状态；
+/// - **快照**：每行的 prev 值随结果返回，撤销由双端经既有 todoTaskUpdate
+///   通道逐条写回（core 不存撤销栈——撤销是短时 UI 行为补偿，见两端
+///   undo_stack 的设计注释）；
+/// - **聚合事件**：事务提交后 emit 一条 todo_tasks Update 聚合事件
+///   （record_id=0），双端失效链按表刷新；
+/// - **幂等**：重复应用同一计划时 prev 与新值相同，写回无副作用。
+pub async fn apply_day_plan(
+    pool: &SqlitePool,
+    day_start_ms: i64,
+    slots: &[ApplySlotInput],
+) -> CoreResult<ApplyResult> {
+    if slots.is_empty() {
+        return Ok(ApplyResult { applied: Vec::new() });
+    }
+    let device_id = crate::db::repository::generic_repo::current_device_id();
+    let mut tx = pool.begin().await?;
+    let mut applied = Vec::with_capacity(slots.len());
+    for s in slots {
+        let prev: Option<(Option<i64>, Option<i64>)> = sqlx::query_as(
+            "SELECT start_date, my_day_date FROM todo_tasks WHERE id = ? AND is_deleted = 0",
+        )
+        .bind(s.task_id)
+        .fetch_optional(&mut *tx)
+        .await?;
+        let Some((prev_start, prev_my_day)) = prev else {
+            return Err(CoreError::NotFound(format!(
+                "todo_task id={}",
+                s.task_id
+            )));
+        };
+        let now = clock::next_ms();
+        let r = sqlx::query(
+            "UPDATE todo_tasks SET my_day_date = ?, start_date = ?, updated_at = ?, version = version + 1              WHERE id = ? AND is_deleted = 0",
+        )
+        .bind(day_start_ms)
+        .bind(s.start_ms)
+        .bind(now)
+        .bind(s.task_id)
+        .execute(&mut *tx)
+        .await?;
+        if r.rows_affected() == 0 {
+            return Err(CoreError::NotFound(format!(
+                "todo_task id={}",
+                s.task_id
+            )));
+        }
+        applied.push(AppliedRow {
+            task_id: s.task_id,
+            prev_start_date: prev_start,
+            prev_my_day_date: prev_my_day,
+        });
+    }
+    tx.commit().await?;
+
+    // 聚合事件（提交后）：失效链按表刷新，逐行 emit 会被尾随窗口去重成同一次，
+    // 一条聚合即可
+    EVENT_BUS.emit(DbEvent {
+        table: "todo_tasks".into(),
+        op: DbOp::Update,
+        record_id: 0,
+        record_uuid: String::new(),
+        payload: None,
+        device_id,
+        timestamp: clock::peek(),
+    });
+    Ok(ApplyResult { applied })
 }
 
 // ============================================================================
@@ -630,6 +731,126 @@ mod api_tests {
             .unwrap();
         assert!(plan.overloaded);
         assert!(plan.load_minutes > plan.capacity_minutes);
+    }
+
+    #[tokio::test]
+    async fn apply_writes_my_day_and_start_without_touching_due() {
+        let pool = setup_db().await;
+        let now = noon_today_ms();
+        let day_start = local_day_start(now);
+        let t = mk_task(&pool, "待排", Some(day_start + 14 * 3_600_000), None, Some(30)).await;
+        let slot_start = day_start + 10 * 3_600_000;
+
+        let r = apply_day_plan(
+            &pool,
+            day_start,
+            &[ApplySlotInput {
+                task_id: t,
+                start_ms: slot_start,
+            }],
+        )
+        .await
+        .unwrap();
+        assert_eq!(r.applied.len(), 1);
+        assert_eq!(r.applied[0].task_id, t);
+        assert_eq!(r.applied[0].prev_my_day_date, None);
+        assert_eq!(r.applied[0].prev_start_date, None);
+
+        let row: (i64, i64, Option<i64>) =
+            sqlx::query_as("SELECT my_day_date, start_date, due_date FROM todo_tasks WHERE id = ?")
+                .bind(t)
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        assert_eq!(row.0, day_start, "my_day_date = 今天零点");
+        assert_eq!(row.1, slot_start, "start_date = 槽起点");
+        assert_eq!(row.2, Some(day_start + 14 * 3_600_000), "due_date 不被改动");
+    }
+
+    #[tokio::test]
+    async fn apply_prev_snapshot_rolls_back_via_update_channel() {
+        let pool = setup_db().await;
+        let now = noon_today_ms();
+        let day_start = local_day_start(now);
+        let prev_start = day_start + 8 * 3_600_000;
+        let prev_my_day = day_start - 86_400_000; // 昨天的标记
+        let t = mk_task(&pool, "带旧值", None, Some(prev_my_day), None).await;
+        sqlx::query("UPDATE todo_tasks SET start_date = ? WHERE id = ?")
+            .bind(prev_start)
+            .bind(t)
+            .execute(&pool)
+            .await
+            .unwrap();
+
+        let r = apply_day_plan(
+            &pool,
+            day_start,
+            &[ApplySlotInput {
+                task_id: t,
+                start_ms: day_start + 9 * 3_600_000,
+            }],
+        )
+        .await
+        .unwrap();
+        assert_eq!(r.applied[0].prev_start_date, Some(prev_start));
+        assert_eq!(r.applied[0].prev_my_day_date, Some(prev_my_day));
+
+        // 撤销：prev 经既有更新通道写回（双端 undo 的等价路径）
+        sqlx::query("UPDATE todo_tasks SET start_date = ?, my_day_date = ? WHERE id = ?")
+            .bind(r.applied[0].prev_start_date)
+            .bind(r.applied[0].prev_my_day_date)
+            .bind(t)
+            .execute(&pool)
+            .await
+            .unwrap();
+        let row: (Option<i64>, Option<i64>) =
+            sqlx::query_as("SELECT start_date, my_day_date FROM todo_tasks WHERE id = ?")
+                .bind(t)
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        assert_eq!(row, (Some(prev_start), Some(prev_my_day)));
+    }
+
+    #[tokio::test]
+    async fn apply_missing_task_fails_and_rolls_back_whole_batch() {
+        let pool = setup_db().await;
+        let now = noon_today_ms();
+        let day_start = local_day_start(now);
+        let t = mk_task(&pool, "存活", None, None, Some(30)).await;
+        // 第二条 id 不存在 → 整批回滚：存活行不被写入
+        let err = apply_day_plan(
+            &pool,
+            day_start,
+            &[
+                ApplySlotInput {
+                    task_id: t,
+                    start_ms: day_start + 9 * 3_600_000,
+                },
+                ApplySlotInput {
+                    task_id: 999_999,
+                    start_ms: day_start + 10 * 3_600_000,
+                },
+            ],
+        )
+        .await
+        .unwrap_err();
+        assert!(matches!(err, crate::error::CoreError::NotFound(_)));
+        let row: (Option<i64>, Option<i64>) =
+            sqlx::query_as("SELECT my_day_date, start_date FROM todo_tasks WHERE id = ?")
+                .bind(t)
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        assert_eq!(row, (None, None), "单事务：任一行失败整批回滚");
+    }
+
+    #[tokio::test]
+    async fn apply_empty_slots_is_noop() {
+        let pool = setup_db().await;
+        let now = noon_today_ms();
+        let r = apply_day_plan(&pool, local_day_start(now), &[]).await.unwrap();
+        assert!(r.applied.is_empty());
     }
 
     #[tokio::test]

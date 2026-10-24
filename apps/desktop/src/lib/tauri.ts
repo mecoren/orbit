@@ -1345,9 +1345,28 @@ export interface DayPlan {
   overloaded: boolean;
   day_start_ms: number;
 }
-/** 规划今天：只读排程预览（不写库；应用写入属阶段二） */
+/** 规划今天：排程预览 */
 export const dayPlanPreview = (prefs: DayPlanPrefs, nowMs: number) =>
   invoke<DayPlan>("day_plan_preview", { prefs, nowMs: nowMs });
+
+/** 应用输入：预览结果中勾选的单条 */
+export interface ApplySlotInput {
+  task_id: number;
+  /** 应用后的开始时间（今天内的墙钟毫秒） */
+  start_ms: number;
+}
+/** 单行应用结果（撤销快照：prev 值经既有更新通道写回） */
+export interface AppliedRow {
+  task_id: number;
+  prev_start_date: number | null;
+  prev_my_day_date: number | null;
+}
+export interface ApplyResult {
+  applied: AppliedRow[];
+}
+/** 应用排程（阶段二）：写 my_day_date + start_date（不改 due_date，单事务） */
+export const dayPlanApply = (dayStartMs: number, slots: ApplySlotInput[]) =>
+  invoke<ApplyResult>("day_plan_apply", { dayStartMs, slots });
 
 /** 一键复制任务（#37：克隆字段+子任务，副本标题后缀） */
 export const todoTaskDuplicate = (id: number) =>

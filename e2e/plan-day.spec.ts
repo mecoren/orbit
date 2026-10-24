@@ -94,6 +94,45 @@ test("候选归集与理由徽标：逾期最先、截止时刻、我的一天",
   expect(untouched).toBe(true);
 });
 
+test("勾选应用：写 my_day/start 不改 due，Ctrl+Z 撤销写回 prev", async ({ page }) => {
+  await addTask(page, "要排的活", { myDay: true, duration: 30 });
+  await openPlanDay(page);
+  const dialog = page.getByRole("dialog");
+  const slots = dialog.getByTestId("plan-slots");
+  await expect(slots.getByText("要排的活")).toBeVisible();
+
+  // 默认全选 → 应用（预览重拉后该任务已有今日 start_date，不再入候选；
+  // seed 的「既有任务-今天截止」是另一候选，预览非空）
+  await dialog.getByRole("button", { name: /应用到 \d+ 条任务/ }).click();
+  await expect(slots.getByText("要排的活")).toHaveCount(0, { timeout: 10_000 });
+
+  const n = new Date();
+  const dayStart = new Date(n.getFullYear(), n.getMonth(), n.getDate()).getTime();
+  const after = await page.evaluate(() => {
+    const m = (window as any).__orbitMock;
+    const t = m.db.tasks.find((x: any) => x.title === "要排的活");
+    return {
+      my_day: t.my_day_date as number | null,
+      start: t.start_date as number | null,
+      due: t.due_date as number | null,
+    };
+  });
+  expect(after.my_day).toBe(dayStart);
+  expect(after.start).not.toBeNull();
+  expect(after.start! >= dayStart + 10 * 3_600_000).toBe(true, "fake clock 10:00 → 首槽 10:00 起");
+
+  // Ctrl+Z 撤销：prev 写回（造数时 myDay:true → prev_my_day = 今天零点；
+  // 原无 start_date → prev_start = null）
+  await page.keyboard.press("Control+z");
+  const reverted = await page.evaluate(() => {
+    const m = (window as any).__orbitMock;
+    const t = m.db.tasks.find((x: any) => x.title === "要排的活");
+    return { my_day: t.my_day_date, start: t.start_date };
+  });
+  expect(reverted.my_day).toBe(dayStart);
+  expect(reverted.start).toBeNull();
+});
+
 test("超载警示与未排入：容量满时给提示条与原因", async ({ page }) => {
   // 正午后（nowMinute 已过大半工作窗），600 分钟大活必然超容量
   await addTask(page, "超大活", { duration: 600 });
