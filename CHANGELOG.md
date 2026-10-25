@@ -16,6 +16,19 @@
 
 ## [Unreleased]
 
+### 性能：维护改全量 ANALYZE，`PRAGMA optimize` 退场（docs/13 §七 P5，2026-10-25）
+
+- **评估**（新增探针 `crates/orbit-core/examples/pragma_eval.rs`，50k 行、每口径 30 采样；同库同池，逐连接抓 `EXPLAIN QUERY PLAN` + `sqlite_stat1` 摘要 + `INDEXED BY` 强制计划比价）：
+  - **统计有明确收益**：首屏列表 10～12ms → **0ms**（计划从 `idx_todo_tasks_trash` + 临时 B 树排序，变为 `idx_todo_tasks_updated_at` 有序扫 + `LIMIT 50` 提前终止）；按项目 9→0ms、未完成 10→0ms。
+  - **不是缓存的功劳**：先把表与两个候选索引整扫一遍（15ms）再量，无统计仍是 10～11ms——排除了「ANALYZE 顺带预热页缓存」这一误判（首版探针差点据此得出反向结论）。
+  - **必须全量，不能采样**：`analysis_limit=400` 把等值前缀的平均行数夹在采样规模上（`is_deleted=0` 写成 `50000 401`，真值 `50000 25000`，低估 60 倍），重开池后仍是排序计划 9/15ms——**等于没建**。全量 ANALYZE 50k 行 47～88ms，`stat1` 只多 25 行，VACUUM 后库反而更小。
+  - **`PRAGMA optimize` 恒为空转**：从未分析过的库 0ms 且 `stat1` 0→0（默认掩码 `0xfffe` 不含 `0x1`）；10 倍膨胀导入（5k→50k、同一连接）后 3ms、`stat1` 摘要一字未变；新鲜态 0～1ms 幂等。
+  - **导入后不需要 ANALYZE**：10 倍膨胀的陈旧统计下计划与时延都不变（0/0ms）——缩放的是绝对行数，选择率比例没变。
+  - **生效范围是连接**：`ANALYZE` 后不重开池时 3 条连接只有 1 条换新计划，再 `VACUUM` 也只到 2 条（`VACUUM` 不刷新语句缓存）；要全量生效需重建连接池。
+- **改动**：`db_maintenance_api` 的 `PRAGMA optimize` 换成全量 `ANALYZE`（新 `analyze_plan_stats`，注释带上述口径与「为什么不采样」），顺序仍在 `VACUUM` 之前（`VACUUM` 原样保留 `sqlite_stat1`，已单独实测）。
+- **回归锚点**：`maintenance_builds_plan_stats` —— 维护跑完 `sqlite_stat1` 必须真实存在且覆盖 `idx_todo_tasks_updated_at`；旧实现（`PRAGMA optimize`）在从未分析过的库上跑完是**空的**，这条用例会翻红。lib **893 绿**（892 + 1）。
+- **未接线（本轮刻意不做）**：普通用户不点「立即维护」就永远没有统计。建议「首次导入/同步完成 + 空闲时」一次性引导（门槛 ≥5k 行）；挂 `init_pool` 会让启动同步付 50ms～2s，与 P1「首屏可交互 < 1.5s」冲突，属 shell 侧空闲调度，需与移动端一起定。连接池 3 与 `cache_size` 8MB 口径未动（实测差异全部来自计划选择与连接级语句缓存，与池大小无关）。
+
 ### 修复：拼音对账移出查询路径（docs/07 #104，2026-10-25）
 
 - **问题**：`search_all` 在纯字母查询时每次调用都先跑 `search_pinyin::reconcile`——3 条 `DELETE ... NOT IN` + 3 条 `LEFT JOIN title 比对`，合计 6 次全表扫描，等于**在只读查询路径上挂写事务**。50k 行下单次对账 ≈316ms，把拼音通道 p95 拖到 374ms、四口径合计 p95 337ms，**未达 P1 的「50k 搜索 p95 < 150ms」验收线**；而检索本身只要 11ms。
