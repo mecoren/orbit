@@ -1512,7 +1512,7 @@ export interface DbMaintenanceResult {
   /** VACUUM 实际回收的页数 */
   pages_reclaimed: number;
 }
-/** 一键数据库维护：WAL checkpoint → 附件 GC → 附件缓存上限 → 日志 TTL → PRAGMA optimize → VACUUM */
+/** 一键数据库维护：WAL checkpoint → 附件 GC → 附件缓存上限 → 日志 TTL → 全量 ANALYZE（查询计划统计） → VACUUM */
 export const dbMaintenance = () => invoke<DbMaintenanceResult>("db_maintenance");
 
 // ========== 主窗唤起（托盘驻留内存优化：窗口可能被超时回收）==========

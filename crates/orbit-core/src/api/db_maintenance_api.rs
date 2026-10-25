@@ -7,7 +7,7 @@
 //! 口径：
 //! - `db_maintenance`：一条命令跑完全套维护，返回各步量化结果；
 //!   顺序 = WAL checkpoint → 附件 GC → 附件缓存上限（LRU）→ 日志表
-//!   TTL prune → `PRAGMA optimize` → `VACUUM`。
+//!   TTL prune → 全量 `ANALYZE` → `VACUUM`。
 //!   checkpoint 在前：把 WAL 帧回写主文件，VACUUM 才能真正回收磁盘空间
 //!   （否则已 checkpoint 的页仍留在 -wal 里，主文件膨胀照旧）。
 //! - 日志表 TTL：notification_log / todo_activity_log 各自 30 天
@@ -16,8 +16,10 @@
 //! - VACUUM 前后 `freelist_count` 对比即碎片回收量（页数）；重写整库
 //!   耗时与库体积成正比，本地应用秒级可接受，故不做 incremental_vacuum
 //!   分档（auto_vacuum 未开启，回档需整库重写）。
-//! - `PRAGMA optimize` 按 sqlite 官方建议跑 ANALYZE 子集（analysis_limit
-//!   400 行采样），更新查询计划统计——排序/筛选类查询扫全表时可观提速。
+//! - `PRAGMA optimize` **不再使用**（2026-10-25 P5 实测：它在本应用里恒为空转，
+//!   详见 [`analyze_plan_stats`]）；改为显式全量 `ANALYZE`——这是唯一能让
+//!   `sqlite_stat1` 从无到有的路径，也是首屏列表计划从「索引扫全表 + 临时
+//!   B 树排序」翻到「有序索引 + LIMIT 提前终止」的唯一开关。
 
 use sqlx::SqlitePool;
 
@@ -67,6 +69,33 @@ async fn checkpoint_wal(pool: &SqlitePool) -> CoreResult<i64> {
     Ok(0)
 }
 
+/// 全量 `ANALYZE`：把 `sqlite_stat1` 从无到有（或从旧到新）地建起来
+///
+/// **为什么不是 `PRAGMA optimize`**（P5 实测，50k 行，2026-10-25）：
+/// - 默认掩码（0xfffe）不含「从未分析过」的表 → 新库/空库跑它等于空转
+///   （实测：stat1 行数 0 → 0，耗时 0ms）；
+/// - 它的「行数漂移」判据是**连接级**状态 → 一次 10 倍膨胀的导入（45k 行）
+///   之后在写连接上跑，仍是 3ms 空转，stat1 摘要一字未变；
+/// - 统计新鲜时它 0～1ms、幂等不改统计 —— 有价值但收益为零。
+///
+/// **为什么不带 `analysis_limit`**（采样口径反而更差）：`analysis_limit=400`
+/// 会把每个等值前缀的平均行数夹到采样规模上（实测 `is_deleted=0` 写成
+/// `50000 401`，真值 `50000 25000`），软删列这种「98% 行都命中」的选择率
+/// 被低估 60 倍，规划器于是继续选「索引扫全表 + 排序」。全量 ANALYZE 才写
+/// 真值，首屏列表在 50k 行上从 10～12ms 掉到 0ms（计划改为
+/// `SCAN todo_tasks USING INDEX idx_todo_tasks_updated_at`，`ORDER BY
+/// updated_at DESC LIMIT 50` 直接走有序索引提前终止，不再建临时 B 树）。
+/// 成本：50k 行 47～88ms，库体积不增（实测 21,835,776 → 21,020,672 字节，
+/// VACUUM 之后）——放在本就是秒级的维护动作里可忽略。
+///
+/// **生效范围是连接**：`ANALYZE` 后未重开池时，只有重新准备过语句的连接
+/// 换新计划（实测 3 条连接里 1～2 条换新）；本函数不重建池，收益会在
+/// 各连接下次重连时陆续到位。
+pub async fn analyze_plan_stats(pool: &SqlitePool) -> CoreResult<()> {
+    sqlx::query("ANALYZE").execute(pool).await?;
+    Ok(())
+}
+
 /// 执行全套数据库维护（设置页「立即维护」入口）
 ///
 /// 各步独立容错：附件 GC 失败（如目录不可达）不影响其余步骤，
@@ -92,8 +121,10 @@ pub async fn db_maintenance(
     let activity_pruned = crate::api::activity_log_api::prune_old(pool, LOG_TTL_DAYS).await?;
     let log_rows_pruned = notification_pruned + activity_pruned;
 
-    // 3. 更新查询计划统计（ANALYZE 采样）——排序/筛选查询提速
-    sqlx::query("PRAGMA optimize").execute(pool).await?;
+    // 3. 更新查询计划统计（全量 ANALYZE）——见 analyze_plan_stats 的实测口径；
+    //    放在 VACUUM 之前：stat1 会被 VACUUM 原样保留（实测），顺序只影响
+    //    「这次维护里查询是否已用上新计划」
+    analyze_plan_stats(pool).await?;
 
     // 4. VACUUM：整库重写，回收软删/编辑留下的碎片页
     let freelist_before = pragma_i64(pool, "freelist_count").await?;
@@ -172,6 +203,60 @@ mod tests {
                 .await
                 .unwrap();
         assert_eq!(title, "锚点项目");
+    }
+
+    /// 维护必须真的建出查询计划统计（P5）
+    ///
+    /// 回归锚点：此前维护跑的是 `PRAGMA optimize`，它在「从未分析过」的库上
+    /// 是空转（默认掩码不含 0x1）——维护跑完 `sqlite_stat1` 依然不存在，
+    /// 首屏列表在 50k 行上继续走「索引扫全表 + 临时 B 树排序」（10～12ms）。
+    /// 这条用例只锁「统计被建出来」这一档事实，不锁具体数值。
+    #[tokio::test]
+    async fn maintenance_builds_plan_stats() {
+        let pool = setup_db().await;
+        // 造点行：统计要能覆盖到 todo_tasks 才算数
+        for i in 0..50 {
+            sqlx::query(
+                "INSERT INTO todo_tasks (uuid, title, created_at, updated_at) VALUES (?, ?, ?, ?)",
+            )
+            .bind(format!("stats-{i}"))
+            .bind(format!("统计样本 {i}"))
+            .bind(i)
+            .bind(i)
+            .execute(&pool)
+            .await
+            .unwrap();
+        }
+        let before: (i64,) = sqlx::query_as(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='sqlite_stat1'",
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_eq!(before.0, 0, "前提：内存库此前没有统计");
+
+        let tmp = tempfile::tempdir().unwrap();
+        db_maintenance(&pool, tmp.path().to_str().unwrap())
+            .await
+            .unwrap();
+
+        let rows: Vec<(String, String)> = sqlx::query_as(
+            "SELECT tbl, COALESCE(idx, '') FROM sqlite_stat1 WHERE tbl = 'todo_tasks'",
+        )
+        .fetch_all(&pool)
+        .await
+        .unwrap();
+        // SQLite 3.45 对 rowid 表不额外写「表行」（idx 为 NULL 的那行），
+        // 行数统计挂在索引行上——所以这里按索引行断言，不假设表行的存在
+        assert!(
+            !rows.is_empty(),
+            "todo_tasks 必须有统计行（否则维护等于没做）"
+        );
+        assert!(
+            rows.iter()
+                .any(|(_, idx)| idx == "idx_todo_tasks_updated_at"),
+            "首屏列表依赖的 updated_at 索引必须有统计（计划切换的判据）: {rows:?}"
+        );
     }
 
     /// 日志表 TTL 接线：30 天前的通知/活动日志在维护中物理删除，30 天内保留

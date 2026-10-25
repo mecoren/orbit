@@ -42,7 +42,7 @@ impl From<CoreResultView> for DbMaintenanceView {
     }
 }
 
-/// 一键数据库维护：WAL checkpoint → 附件 GC → 附件缓存上限 → 日志 TTL → PRAGMA optimize → VACUUM
+/// 一键数据库维护：WAL checkpoint → 附件 GC → 附件缓存上限 → 日志 TTL → 全量 ANALYZE → VACUUM
 pub async fn db_maintenance() -> Result<DbMaintenanceView, String> {
     let (pool, base_dir) = with_state(|s| Ok((s.pool.clone(), s.base_dir.clone())))?;
     let dir = base_dir.join("attachments").to_string_lossy().to_string();

@@ -8,7 +8,7 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `fmt`, `from`
 
-/// 一键数据库维护：WAL checkpoint → 附件 GC → 附件缓存上限 → 日志 TTL → PRAGMA optimize → VACUUM
+/// 一键数据库维护：WAL checkpoint → 附件 GC → 附件缓存上限 → 日志 TTL → 全量 ANALYZE → VACUUM
 Future<DbMaintenanceView> dbMaintenance() =>
     RustLib.instance.api.crateApiMaintenanceDbMaintenance();
 

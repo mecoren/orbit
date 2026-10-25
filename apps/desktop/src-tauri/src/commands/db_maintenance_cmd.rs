@@ -2,7 +2,7 @@
 //!
 //! 薄壳包装 orbit_core::api::db_maintenance_api：
 //! - `db_maintenance`：一条命令跑全套维护（WAL checkpoint → 附件 GC →
-//!   PRAGMA optimize → VACUUM），返回量化结果供设置页展示。
+//!   全量 ANALYZE → VACUUM），返回量化结果供设置页展示。
 //!
 //! 只读维护路径：不 emit db-change（前端缓存无需失效），不进同步白名单。
 
