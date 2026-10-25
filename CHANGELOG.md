@@ -28,7 +28,9 @@
 - **改动**：`db_maintenance_api` 的 `PRAGMA optimize` 换成全量 `ANALYZE`（新 `analyze_plan_stats`，注释带上述口径与「为什么不采样」），顺序仍在 `VACUUM` 之前（`VACUUM` 原样保留 `sqlite_stat1`，已单独实测）。
 - **回归锚点**：`maintenance_builds_plan_stats` —— 维护跑完 `sqlite_stat1` 必须真实存在且覆盖 `idx_todo_tasks_updated_at`；旧实现（`PRAGMA optimize`）在从未分析过的库上跑完是**空的**，这条用例会翻红。lib **893 绿**（892 + 1）。
 - **空闲引导（桌面已接线）**：`setup` 期 `db_maintenance_cmd::spawn_idle_plan_stats` —— 启动后 15s 在后台运行时调 core 的 `maybe_analyze_plan_stats`，只在「从未建过统计 + `todo_tasks` ≥ 5k 行」时真跑一次，跑过之后每次启动零成本空转；不压启动预算（全量 ANALYZE 50k 47～88ms、1M 行外推 1～2s，与 P1「首屏可交互 < 1.5s」互斥），失败只记日志。
-- **移动端不需单独引导**：`boot_gate` 每次启动已 `unawaited` 跑完整 `db_maintenance`（含全量 ANALYZE）。顺带记录观察项：这条 boot 路径还含 `VACUUM`（50k 325ms，加密库更贵）与附件 GC，即移动端每次启动都在做最重的那档维护，而桌面只在设置页手动做——降级牵涉「孤儿附件是否还有自动清理」的产品取舍，本轮只记录不动。
+- **启动路径不再 VACUUM（移动端已改）**：新增 `db_maintenance_routine`（WAL checkpoint → 附件 GC → 缓存上限 → 日志 TTL → 统计仅在缺失时），移动端 `boot_gate` 改调它。实测（`scenarioD_maintenanceCost`，50k / 21MB，两跑）：稳态整套维护 **435～499ms，其中 VACUUM 332～429ms 占 76%～86%，而空闲页为 0**——重写 20MB 换回 0 字节；只有「当次 TTL 删掉 2 万行日志」那一次才有 416 页 / 1.7MB 可收。改后这条路稳态 **5ms**，首次多一次 62～79ms 的 ANALYZE。手动「立即维护」保持无条件 VACUUM（`freelist_count` 看不见「页内半空」的内部碎片，只有整库重写能收）。
+- **顺带否证一个想当然的理由**（`scenarioE_bootContention`）：维护与首屏列表并发跑，列表 p50 **0ms** / p95 0～1ms / max 1～2ms，与无维护基线一致（WAL 读者不被写者挡）。故这条改动的收益是**省 IO 与电量**（移动端每次冷启动一次整库重写 + flash 磨损），不是「VACUUM 卡首屏」。
+- 桌面仍只做统计引导、不顺手加 GC/TTL：`gc_local_attachments` 判「无引用」= 无存活 `todo_task_attachments` 行，若账本行与关联行不同事务写入，空闲 GC 会撞进窗口误删；移动端该风险是既有的，桌面不新引入。桌面「不点维护就只涨不清」的日志缺口留待确认写入事务性后单独接。
 - 连接池 3 与 `cache_size` 8MB 口径未动（实测差异全部来自计划选择与连接级语句缓存，与池大小无关）。
 
 ### 修复：拼音对账移出查询路径（docs/07 #104，2026-10-25）
