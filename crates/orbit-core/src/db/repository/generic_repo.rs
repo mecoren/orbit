@@ -510,11 +510,11 @@ pub async fn soft_delete_by_id(
     EVENT_BUS.emit(DbEvent::delete(table, id, record_uuid, &device_id));
 
     // F5 拼音索引：被索引的三表软删即移除（防幽灵命中；恢复由 restore 钩子
-    // 与查询入口 reconcile 兜底重建）
-    if matches!(table, "todo_tasks" | "todo_projects" | "todo_comments") {
-        if let Err(e) = crate::db::search_pinyin::remove_row(pool, record_uuid).await {
-            log::warn!("search_pinyin remove(soft_delete) failed: {e}");
-        }
+    // 与置脏后的对账兜底重建）。表清单只在 search_pinyin::INDEXED_TABLES 一处定义。
+    if crate::db::search_pinyin::is_indexed_table(table)
+        && let Err(e) = crate::db::search_pinyin::remove_row(pool, record_uuid).await
+    {
+        log::warn!("search_pinyin remove(soft_delete) failed: {e}");
     }
 
     Ok(())
