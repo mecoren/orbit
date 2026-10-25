@@ -27,7 +27,9 @@
   - **生效范围是连接**：`ANALYZE` 后不重开池时 3 条连接只有 1 条换新计划，再 `VACUUM` 也只到 2 条（`VACUUM` 不刷新语句缓存）；要全量生效需重建连接池。
 - **改动**：`db_maintenance_api` 的 `PRAGMA optimize` 换成全量 `ANALYZE`（新 `analyze_plan_stats`，注释带上述口径与「为什么不采样」），顺序仍在 `VACUUM` 之前（`VACUUM` 原样保留 `sqlite_stat1`，已单独实测）。
 - **回归锚点**：`maintenance_builds_plan_stats` —— 维护跑完 `sqlite_stat1` 必须真实存在且覆盖 `idx_todo_tasks_updated_at`；旧实现（`PRAGMA optimize`）在从未分析过的库上跑完是**空的**，这条用例会翻红。lib **893 绿**（892 + 1）。
-- **未接线（本轮刻意不做）**：普通用户不点「立即维护」就永远没有统计。建议「首次导入/同步完成 + 空闲时」一次性引导（门槛 ≥5k 行）；挂 `init_pool` 会让启动同步付 50ms～2s，与 P1「首屏可交互 < 1.5s」冲突，属 shell 侧空闲调度，需与移动端一起定。连接池 3 与 `cache_size` 8MB 口径未动（实测差异全部来自计划选择与连接级语句缓存，与池大小无关）。
+- **空闲引导（桌面已接线）**：`setup` 期 `db_maintenance_cmd::spawn_idle_plan_stats` —— 启动后 15s 在后台运行时调 core 的 `maybe_analyze_plan_stats`，只在「从未建过统计 + `todo_tasks` ≥ 5k 行」时真跑一次，跑过之后每次启动零成本空转；不压启动预算（全量 ANALYZE 50k 47～88ms、1M 行外推 1～2s，与 P1「首屏可交互 < 1.5s」互斥），失败只记日志。
+- **移动端不需单独引导**：`boot_gate` 每次启动已 `unawaited` 跑完整 `db_maintenance`（含全量 ANALYZE）。顺带记录观察项：这条 boot 路径还含 `VACUUM`（50k 325ms，加密库更贵）与附件 GC，即移动端每次启动都在做最重的那档维护，而桌面只在设置页手动做——降级牵涉「孤儿附件是否还有自动清理」的产品取舍，本轮只记录不动。
+- 连接池 3 与 `cache_size` 8MB 口径未动（实测差异全部来自计划选择与连接级语句缓存，与池大小无关）。
 
 ### 修复：拼音对账移出查询路径（docs/07 #104，2026-10-25）
 
