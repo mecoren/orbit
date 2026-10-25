@@ -530,7 +530,17 @@ abstract class OrbitBridge {
 
   /// 一键数据库维护：回收 WAL 日志与磁盘碎片、清理无引用附件、更新查询统计。
   /// 只读维护路径：不触发 db-change、不触碰同步数据。
+  ///
+  /// 设置页「立即维护」用，含 VACUUM（整库重写）。**不要放进启动路径**——见
+  /// [dbMaintenanceRoutine] 的实测口径。
   Future<DbMaintenanceResult> dbMaintenance();
+
+  /// 启动轻维护：WAL checkpoint → 附件 GC → 缓存上限 → 日志 TTL → 统计（仅缺失时）。
+  ///
+  /// 与 [dbMaintenance] 的唯一差别是不做 VACUUM：前四步都是「不跑就会无界增长」
+  /// 且成本与库体积无关；VACUUM 的成本却与库体积成正比、收益只与空闲页成正比
+  /// （50k 稳态实测 332～429ms 换回 0 字节），故只归手动入口。
+  Future<DbMaintenanceResult> dbMaintenanceRoutine();
 
   // ── 保存的筛选器（#35：Apple Smart List 同款）──
 

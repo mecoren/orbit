@@ -7,7 +7,10 @@
 //! 口径：
 //! - `db_maintenance`：一条命令跑完全套维护，返回各步量化结果；
 //!   顺序 = WAL checkpoint → 附件 GC → 附件缓存上限（LRU）→ 日志表
-//!   TTL prune → 全量 `ANALYZE` → `VACUUM`。
+//!   TTL prune → 全量 `ANALYZE` → `VACUUM`。**手动入口**（设置页「立即维护」）。
+//! - `db_maintenance_routine`：**启动入口**，同上但去掉 `VACUUM`、统计改成
+//!   「缺失才建」。两者的分工由实测决定：`VACUUM` 成本与库体积成正比、
+//!   收益只与空闲页成正比，50k 稳态 332～429ms 换回 0 字节（见该函数文档）。
 //!   checkpoint 在前：把 WAL 帧回写主文件，VACUUM 才能真正回收磁盘空间
 //!   （否则已 checkpoint 的页仍留在 -wal 里，主文件膨胀照旧）。
 //! - 日志表 TTL：notification_log / todo_activity_log 各自 30 天
@@ -146,14 +149,21 @@ pub async fn maybe_analyze_plan_stats(pool: &SqlitePool, min_rows: i64) -> CoreR
     Ok(true)
 }
 
-/// 执行全套数据库维护（设置页「立即维护」入口）
+/// 维护前半段（步骤 1～2.6）的量化结果
 ///
-/// 各步独立容错：附件 GC 失败（如目录不可达）不影响其余步骤，
-/// 失败步骤以 map_err 透传首个错误——调用方 toast 展示即可。
-pub async fn db_maintenance(
-    pool: &SqlitePool,
-    attachments_dir: &str,
-) -> CoreResult<DbMaintenanceResult> {
+/// 这几步的共同点是**成本与库体积无关、不跑就会无界增长**（-wal 帧、孤儿
+/// 附件文件、超 2GB 的附件缓存、只进不出的日志表），所以可以放进启动路径。
+struct RoutineOutcome {
+    wal_bytes_after_checkpoint: i64,
+    attachments_cleaned: usize,
+    log_rows_pruned: u64,
+}
+
+/// 维护前半段：WAL checkpoint → 附件 GC → 附件缓存上限 → 日志 TTL
+///
+/// 抽出来给 [`db_maintenance`]（手动全量）与 [`db_maintenance_routine`]
+/// （启动轻维护）共用，避免两处步骤顺序漂移。
+async fn run_routine_steps(pool: &SqlitePool, attachments_dir: &str) -> CoreResult<RoutineOutcome> {
     // 1. WAL checkpoint：回收 -wal 磁盘占用，也让后续 VACUUM 能整库重写
     let wal_bytes_after_checkpoint = checkpoint_wal(pool).await?;
 
@@ -169,7 +179,23 @@ pub async fn db_maintenance(
     let notification_pruned =
         crate::api::notification_log_api::prune_old(pool, LOG_TTL_DAYS).await?;
     let activity_pruned = crate::api::activity_log_api::prune_old(pool, LOG_TTL_DAYS).await?;
-    let log_rows_pruned = notification_pruned + activity_pruned;
+
+    Ok(RoutineOutcome {
+        wal_bytes_after_checkpoint,
+        attachments_cleaned,
+        log_rows_pruned: notification_pruned + activity_pruned,
+    })
+}
+
+/// 执行全套数据库维护（设置页「立即维护」入口）
+///
+/// 各步独立容错：附件 GC 失败（如目录不可达）不影响其余步骤，
+/// 失败步骤以 map_err 透传首个错误——调用方 toast 展示即可。
+pub async fn db_maintenance(
+    pool: &SqlitePool,
+    attachments_dir: &str,
+) -> CoreResult<DbMaintenanceResult> {
+    let s = run_routine_steps(pool, attachments_dir).await?;
 
     // 3. 更新查询计划统计（全量 ANALYZE）——见 analyze_plan_stats 的实测口径；
     //    放在 VACUUM 之前：stat1 会被 VACUUM 原样保留（实测），顺序只影响
@@ -177,17 +203,57 @@ pub async fn db_maintenance(
     analyze_plan_stats(pool).await?;
 
     // 4. VACUUM：整库重写，回收软删/编辑留下的碎片页
+    //
+    //    手动入口**无条件**跑：只有它能回收「不缺空闲页、但页内有空洞」的
+    //    内部碎片（`freelist_count` 只统计整页空闲，看不见半空页），而用户
+    //    点「立即维护」就是要这个彻底整理，不能替它省。
     let freelist_before = pragma_i64(pool, "freelist_count").await?;
     sqlx::query("VACUUM").execute(pool).await?;
     let freelist_after = pragma_i64(pool, "freelist_count").await?;
 
     Ok(DbMaintenanceResult {
-        wal_bytes_after_checkpoint,
-        attachments_cleaned,
-        log_rows_pruned,
+        wal_bytes_after_checkpoint: s.wal_bytes_after_checkpoint,
+        attachments_cleaned: s.attachments_cleaned,
+        log_rows_pruned: s.log_rows_pruned,
         freelist_before,
         freelist_after,
         pages_reclaimed: (freelist_before - freelist_after).max(0),
+    })
+}
+
+/// 启动用的轻维护：全套步骤减去 `VACUUM`
+///
+/// **为什么启动不做 VACUUM**（P5 场景 D 实测，50k 行 / 21MB 库）：VACUUM 的成本与
+/// **库体积**成正比、收益只与**空闲页**成正比，两者不是一回事。稳态（上一次维护刚
+/// 跑完）整套维护 499ms，其中 VACUUM **429ms 占 86%**，而 `freelist_count` 为 0
+/// ——重写 20MB 换回 0 字节。只有当次 TTL prune 删掉的 2 万行日志产生了 416 个空闲
+/// 页（1.7MB）时，VACUUM 才有活干，且那笔活是一次性的。
+///
+/// 另一半原因是**口径一致**：桌面从来没有「启动自动维护」，只有设置页手动触发；
+/// 移动端此前每次冷启动都跑完整 `db_maintenance`，是唯一做这件事的路径。
+///
+/// 保留的四步都是「不跑就会无界增长」的部分；统计走 [`maybe_analyze_plan_stats`]
+/// （只在从没建过时补一次），所以稳态下这条路只有个位数毫秒。
+///
+/// 返回值的 `freelist_before` / `freelist_after` 相同、`pages_reclaimed` 恒为 0
+/// ——没跑 VACUUM 就没有「回收」可言，不虚报。
+pub async fn db_maintenance_routine(
+    pool: &SqlitePool,
+    attachments_dir: &str,
+) -> CoreResult<DbMaintenanceResult> {
+    let s = run_routine_steps(pool, attachments_dir).await?;
+    // 统计：从没建过 + 数据到门槛才真跑一次（启动路径不能无条件 ANALYZE，
+    // 50k 一次 47～88ms 是白花）
+    maybe_analyze_plan_stats(pool, MIN_ROWS_FOR_PLAN_STATS).await?;
+    let freelist = pragma_i64(pool, "freelist_count").await?;
+
+    Ok(DbMaintenanceResult {
+        wal_bytes_after_checkpoint: s.wal_bytes_after_checkpoint,
+        attachments_cleaned: s.attachments_cleaned,
+        log_rows_pruned: s.log_rows_pruned,
+        freelist_before: freelist,
+        freelist_after: freelist,
+        pages_reclaimed: 0,
     })
 }
 
@@ -347,6 +413,70 @@ mod tests {
 
         // 再调一次：已有统计 → 空转（幂等）
         assert!(!maybe_analyze_plan_stats(&pool, 50).await.unwrap());
+    }
+
+    /// 启动轻维护：TTL 照跑，但**绝不** VACUUM，也不为小库建统计（P5 场景 D）
+    ///
+    /// 锚点意义：移动端每次冷启动都跑这条路。实测 50k 稳态整套 499ms，其中
+    /// VACUUM 429ms（86%）而空闲页为 0——这条用例把「轻维护不得顺手 VACUUM」
+    /// 钉住，防止日后有人为了「省一次维护」把它加回去。
+    #[tokio::test]
+    async fn routine_maintenance_skips_vacuum_and_reports_no_reclaim() {
+        let pool = setup_db().await;
+
+        // 制造真实碎片（VACUUM 若跑了，freelist 一定归零）
+        sqlx::query("CREATE TABLE junk (id INTEGER PRIMARY KEY, pad TEXT)")
+            .execute(&pool)
+            .await
+            .unwrap();
+        sqlx::query(
+            "WITH RECURSIVE s(n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM s WHERE n < 400)
+             INSERT INTO junk (pad) SELECT hex(randomblob(200)) FROM s",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        sqlx::query("DROP TABLE junk").execute(&pool).await.unwrap();
+
+        // 一条过期日志：轻维护必须照样清掉（这是「不跑就会无界增长」的那一半）
+        let old_ms = chrono::Utc::now().timestamp_millis() - (LOG_TTL_DAYS + 1) * 86_400_000;
+        sqlx::query(
+            "INSERT INTO notification_log (kind, task_id, task_title, reminder_id, payload, created_at)
+             VALUES ('reminder_due', 1, '旧通知', 1, '{}', ?)",
+        )
+        .bind(old_ms)
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        let tmp = tempfile::tempdir().unwrap();
+        let dir = tmp.path().to_str().unwrap().to_string();
+        let (free_before,): (i64,) = sqlx::query_as("PRAGMA freelist_count")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+
+        let r = db_maintenance_routine(&pool, &dir).await.unwrap();
+
+        let (free_after,): (i64,) = sqlx::query_as("PRAGMA freelist_count")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        assert_eq!(r.log_rows_pruned, 1, "轻维护照样清过期日志");
+        assert_eq!(r.pages_reclaimed, 0, "没跑 VACUUM 就不该虚报回收");
+        assert_eq!(r.freelist_before, r.freelist_after);
+        assert_eq!(
+            free_before, free_after,
+            "轻维护不得改变空闲页（那是 VACUUM 的活）"
+        );
+
+        let (stat1,): (i64,) = sqlx::query_as(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'sqlite_stat1'",
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_eq!(stat1, 0, "行数远低于门槛，轻维护不写统计");
     }
 
     /// 日志表 TTL 接线：30 天前的通知/活动日志在维护中物理删除，30 天内保留

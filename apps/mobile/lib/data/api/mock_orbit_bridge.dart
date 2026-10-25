@@ -1453,6 +1453,19 @@ class MockOrbitBridge implements OrbitBridge {
         ));
   }
 
+  @override
+  Future<DbMaintenanceResult> dbMaintenanceRoutine() {
+    // 轻维护不做 VACUUM：pages_reclaimed 恒为 0（与真实现同语义）
+    return _delay(() => const DbMaintenanceResult(
+          walBytesAfterCheckpoint: 0,
+          attachmentsCleaned: 0,
+          logRowsPruned: 0,
+          freelistBefore: 0,
+          freelistAfter: 0,
+          pagesReclaimed: 0,
+        ));
+  }
+
   // ── 保存的筛选器（#35；与桌面 ipc-mock 同构语义）──
 
   @override

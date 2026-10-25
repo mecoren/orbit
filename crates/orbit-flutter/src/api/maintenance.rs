@@ -3,7 +3,9 @@
 //! 与桌面壳命令一一对应（薄包装，业务全部在
 //! orbit_core::api::db_maintenance_api）：
 //! - [db_maintenance_cmd](../../../../../apps/desktop/src-tauri/src/commands/db_maintenance_cmd.rs)
-//!   的 db_maintenance。
+//!   的 db_maintenance（设置页「立即维护」，含 VACUUM）；
+//! - 同文件的轻维护口径（启动路径，不含 VACUUM）在移动端由
+//!   [db_maintenance_routine] 承载。
 //!
 //! 只读维护路径：不 emit db-change、不进同步白名单（与 core 口径一致）。
 
@@ -43,10 +45,30 @@ impl From<CoreResultView> for DbMaintenanceView {
 }
 
 /// 一键数据库维护：WAL checkpoint → 附件 GC → 附件缓存上限 → 日志 TTL → 全量 ANALYZE → VACUUM
+///
+/// 设置页「立即维护」用。**不要在启动路径调用**——`VACUUM` 的成本与库体积
+/// 成正比、收益只与空闲页成正比，50k 稳态实测 429ms 换回 0 字节（见
+/// `db_maintenance_api::db_maintenance_routine` 的实测口径）。
 pub async fn db_maintenance() -> Result<DbMaintenanceView, String> {
     let (pool, base_dir) = with_state(|s| Ok((s.pool.clone(), s.base_dir.clone())))?;
     let dir = base_dir.join("attachments").to_string_lossy().to_string();
     db_maintenance_api::db_maintenance(&pool, &dir)
+        .await
+        .map_err(|e| e.to_string())
+        .map(DbMaintenanceView::from)
+}
+
+/// 启动轻维护：WAL checkpoint → 附件 GC → 附件缓存上限 → 日志 TTL → 统计（仅在缺失时）
+///
+/// 与 [db_maintenance] 的唯一差别是**不做 VACUUM**：四步都是「不跑就会无界增长」
+/// 且成本与库体积无关的动作，适合每次冷启动；VACUUM 只回收磁盘空间，归设置页
+/// 手动入口（口径与桌面一致——桌面从来没有启动自动 VACUUM）。
+///
+/// 返回值里 `pages_reclaimed` 恒为 0：没跑 VACUUM 就没有「回收」可言。
+pub async fn db_maintenance_routine() -> Result<DbMaintenanceView, String> {
+    let (pool, base_dir) = with_state(|s| Ok((s.pool.clone(), s.base_dir.clone())))?;
+    let dir = base_dir.join("attachments").to_string_lossy().to_string();
+    db_maintenance_api::db_maintenance_routine(&pool, &dir)
         .await
         .map_err(|e| e.to_string())
         .map(DbMaintenanceView::from)

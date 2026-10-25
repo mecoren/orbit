@@ -42,7 +42,7 @@
 use std::path::PathBuf;
 use std::time::Instant;
 
-use orbit_core::api::{business_api, stats_api};
+use orbit_core::api::{asset_api, business_api, stats_api};
 use orbit_core::db::pool::init_pool_unencrypted;
 use orbit_core::models::business::ListFilter;
 use serde_json::{Map, Value, json};
@@ -406,6 +406,230 @@ async fn run(args: &Args) -> Result<Value, String> {
         }),
     );
     pool_c.close().await;
+
+    // ========================================================================
+    // 场景 D：维护成本拆解 —— 哪几步该在「启动」做
+    //
+    // 起因：移动端 boot_gate 每次冷启动都 `unawaited` 跑完整 db_maintenance
+    // （WAL checkpoint → 附件 GC → 缓存 LRU → 日志 TTL → 全量 ANALYZE →
+    // VACUUM），而桌面只在设置页手动做。VACUUM 的成本与**库体积**成正比、
+    // 收益只与**空闲页**成正比，两者不是一回事。
+    //
+    // 量三件事：
+    //   ① 脏库上真函数跑一次 = 第一次启动的真实成本（含 TTL 清掉的页）；
+    //   ② 紧接着跑第二次 = 之后每次启动的稳态成本；
+    //   ③ 在稳态库上把六步拆开计时 = 每一步各自多少钱，以及 TTL prune 到底
+    //      释放了几个页（决定「按判据 VACUUM」能不能省掉整库重写）。
+    // ========================================================================
+    let db_d = args.workdir.join("d-maintenance-cost.db");
+    fresh_db_files(&db_d);
+    let pool_d = init_pool_unencrypted(&db_d)
+        .await
+        .map_err(|e| e.to_string())?;
+    seed_projects_and_tasks(&pool_d, 0, args.rows).await?;
+    checkpoint(&pool_d).await?;
+
+    let att_dir = args.workdir.join("d-attachments");
+    std::fs::create_dir_all(&att_dir).map_err(|e| e.to_string())?;
+    let att_dir_str = att_dir.to_string_lossy().to_string();
+
+    let page_size = pragma_of(&pool_d, "page_size").await?;
+    let clean_bytes = file_len(&db_d);
+    let clean_free = pragma_of(&pool_d, "freelist_count").await?;
+
+    // 造「用了一段时间」的库：编辑/软删（不释放页）+ 清空回收站/TTL 过期日志（释放页）
+    let churn = churn_usage(&pool_d).await?;
+    checkpoint(&pool_d).await?;
+    let dirty_bytes = file_len(&db_d);
+    let dirty_free = pragma_of(&pool_d, "freelist_count").await?;
+
+    // ---- ① 第一次启动：真函数在脏库上跑一次 ----
+    let t = Instant::now();
+    let first = orbit_core::api::db_maintenance_api::db_maintenance(&pool_d, &att_dir_str)
+        .await
+        .map_err(|e| e.to_string())?;
+    let first_boot_ms = t.elapsed().as_millis();
+    let bytes_after_first = file_len(&db_d);
+
+    // ---- ② 第二次启动：刚跑完的库再跑一次（稳态）----
+    let t = Instant::now();
+    let second = orbit_core::api::db_maintenance_api::db_maintenance(&pool_d, &att_dir_str)
+        .await
+        .map_err(|e| e.to_string())?;
+    let second_boot_ms = t.elapsed().as_millis();
+    let bytes_after_second = file_len(&db_d);
+
+    // ---- ③ 稳态库上分步计时 ----
+    // 顺序与 db_maintenance 内部一致；每步后记 freelist，看谁在释放页、谁在回收页
+    let mut steps = Map::new();
+    let free_at = |n: i64| json!(n);
+
+    let free_before_steps = pragma_of(&pool_d, "freelist_count").await?;
+    steps.insert("freelistAtStepsStart".into(), free_at(free_before_steps));
+
+    let t = Instant::now();
+    checkpoint(&pool_d).await?;
+    let checkpoint_ms = t.elapsed().as_millis();
+    steps.insert("walCheckpointMs".into(), json!(checkpoint_ms));
+
+    let t = Instant::now();
+    let cleaned = asset_api::gc_local_attachments(&pool_d, &att_dir_str)
+        .await
+        .map_err(|e| e.to_string())?;
+    let gc_ms = t.elapsed().as_millis();
+    steps.insert("attachmentGcMs".into(), json!(gc_ms));
+    steps.insert("attachmentGcFiles".into(), json!(cleaned));
+
+    let t = Instant::now();
+    asset_api::enforce_attachment_cache_limit(&pool_d, &att_dir_str)
+        .await
+        .map_err(|e| e.to_string())?;
+    let cache_ms = t.elapsed().as_millis();
+    steps.insert("attachmentCacheLimitMs".into(), json!(cache_ms));
+
+    let free_before_prune = pragma_of(&pool_d, "freelist_count").await?;
+    let t = Instant::now();
+    let n_notif = orbit_core::api::notification_log_api::prune_old(&pool_d, 30)
+        .await
+        .map_err(|e| e.to_string())?;
+    let n_act = orbit_core::api::activity_log_api::prune_old(&pool_d, 30)
+        .await
+        .map_err(|e| e.to_string())?;
+    let prune_ms = t.elapsed().as_millis();
+    let free_after_prune = pragma_of(&pool_d, "freelist_count").await?;
+    steps.insert("logTtlPruneMs".into(), json!(prune_ms));
+    steps.insert("logRowsPruned".into(), json!(n_notif + n_act));
+    steps.insert("freelistBeforePrune".into(), free_at(free_before_prune));
+    steps.insert("freelistAfterPrune".into(), free_at(free_after_prune));
+
+    let t = Instant::now();
+    orbit_core::api::db_maintenance_api::analyze_plan_stats(&pool_d)
+        .await
+        .map_err(|e| e.to_string())?;
+    let analyze_ms = t.elapsed().as_millis();
+    steps.insert("analyzeMs".into(), json!(analyze_ms));
+
+    let free_before_vacuum = pragma_of(&pool_d, "freelist_count").await?;
+    let t = Instant::now();
+    sqlx::query("VACUUM")
+        .execute(&pool_d)
+        .await
+        .map_err(|e| e.to_string())?;
+    let vacuum_ms = t.elapsed().as_millis();
+    let free_after_vacuum = pragma_of(&pool_d, "freelist_count").await?;
+    steps.insert("vacuumMs".into(), json!(vacuum_ms));
+    steps.insert("freelistBeforeVacuum".into(), free_at(free_before_vacuum));
+    steps.insert("freelistAfterVacuum".into(), free_at(free_after_vacuum));
+
+    // 「轻维护」= 除 VACUUM 之外的五步（候选的启动路径）
+    let routine_ms = checkpoint_ms + gc_ms + cache_ms + prune_ms + analyze_ms;
+    steps.insert("routineTotalMs".into(), json!(routine_ms));
+    steps.insert(
+        "routineWithoutAnalyzeMs".into(),
+        json!(routine_ms - analyze_ms),
+    );
+    steps.insert(
+        // VACUUM 相对「其余五步合计」的倍数（不是占比：占比 = r/(r+1)）
+        "vacuumOverRoutineRatio".into(),
+        json!(if routine_ms == 0 {
+            0.0
+        } else {
+            vacuum_ms as f64 / routine_ms as f64
+        }),
+    );
+
+    out.insert(
+        "scenarioD_maintenanceCost".into(),
+        json!({
+            "reclaimableBytesGate": {
+                // 判据候选：空闲页 × 页大小 就是「VACUUM 至多能还回多少」
+                "pageSize": page_size,
+                "cleanFreelistPages": clean_free,
+                "dirtyFreelistPages": dirty_free,
+                "dirtyReclaimableBytes": dirty_free * page_size,
+                "steadyStateFreelistPages": free_before_vacuum,
+                "steadyStateReclaimableBytes": free_before_vacuum * page_size,
+            },
+            "size": {
+                "afterSeedBytes": clean_bytes,
+                "afterChurnBytes": dirty_bytes,
+                "afterFirstMaintenanceBytes": bytes_after_first,
+                "afterSecondMaintenanceBytes": bytes_after_second,
+            },
+            "churn": churn,
+            "firstBoot": {
+                "totalMs": first_boot_ms,
+                "logRowsPruned": first.log_rows_pruned,
+                "freelistBefore": first.freelist_before,
+                "pagesReclaimed": first.pages_reclaimed,
+                "bytesReclaimed": first.pages_reclaimed * page_size,
+            },
+            "secondBoot": {
+                "totalMs": second_boot_ms,
+                "logRowsPruned": second.log_rows_pruned,
+                "freelistBefore": second.freelist_before,
+                "pagesReclaimed": second.pages_reclaimed,
+            },
+            "steadyStateSteps": steps,
+        }),
+    );
+    // ========================================================================
+    // 场景 E：启动争用 —— 维护与首屏列表抢同一套连接/锁
+    //
+    // 壳层两条路径都是 `unawaited`（不 await），看起来「不挡启动」；但
+    // `wal_checkpoint(TRUNCATE)` 要等所有读者放手、`VACUUM` 要独占写锁，
+    // 所以真实影响只能靠并发测量，不能靠「异步所以不影响」推断。
+    // ========================================================================
+    let first_page_sql = format!(
+        "SELECT {} FROM todo_tasks WHERE is_deleted = 0{} ORDER BY updated_at DESC LIMIT 50 OFFSET 0",
+        LIST_COLS, ARCHIVED_EXCLUDE
+    );
+
+    // 基线：维护不参与时的首屏列表（此时统计已建好，应为 0ms 档）
+    let mut base = Vec::new();
+    for _ in 0..args.samples {
+        let t = Instant::now();
+        let _ = sqlx::query_as::<_, (i64,)>(&first_page_sql)
+            .fetch_all(&pool_d)
+            .await
+            .map_err(|e| e.to_string())?;
+        base.push(t.elapsed().as_millis());
+    }
+
+    // 争用：维护在后台跑的同时打同一批查询
+    let maint_pool = pool_d.clone();
+    let maint_dir = att_dir_str.clone();
+    let maint = tokio::spawn(async move {
+        let t = Instant::now();
+        let r = orbit_core::api::db_maintenance_api::db_maintenance(&maint_pool, &maint_dir).await;
+        (t.elapsed().as_millis(), r.is_ok())
+    });
+
+    let mut contended = Vec::new();
+    for _ in 0..args.samples {
+        let t = Instant::now();
+        let _ = sqlx::query_as::<_, (i64,)>(&first_page_sql)
+            .fetch_all(&pool_d)
+            .await
+            .map_err(|e| e.to_string())?;
+        contended.push(t.elapsed().as_millis());
+    }
+    let (contended_total_ms, contested_ok) = maint.await.map_err(|e| e.to_string())?;
+
+    out.insert(
+        "scenarioE_bootContention".into(),
+        json!({
+            "samplesPerSide": args.samples,
+            "baselineListMs": percentile_pair(&base),
+            "contendedListMs": percentile_pair(&contended),
+            "baselineMaxMs": base.iter().copied().max().unwrap_or(0),
+            "contendedMaxMs": contended.iter().copied().max().unwrap_or(0),
+            "maintenanceTotalMs": contended_total_ms,
+            "maintenanceSucceeded": contested_ok,
+        }),
+    );
+
+    pool_d.close().await;
 
     Ok(Value::Object(out))
 }
@@ -963,6 +1187,98 @@ async fn checkpoint(pool: &SqlitePool) -> Result<(), String> {
         .await
         .map_err(|e| e.to_string())?;
     Ok(())
+}
+
+/// 读单值 PRAGMA（`freelist_count` / `page_size` 这类单列整数口径）
+async fn pragma_of(pool: &SqlitePool, name: &str) -> Result<i64, String> {
+    // name 全部为本文件内字面量，无注入面
+    let row: (i64,) = sqlx::query_as(&format!("PRAGMA {name}"))
+        .fetch_one(pool)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(row.0)
+}
+
+/// p50 / p95（最近秩，与 `ProbeSet::measure` 同口径）
+fn percentile_pair(samples: &[u128]) -> Value {
+    if samples.is_empty() {
+        return json!({ "p50Ms": 0, "p95Ms": 0 });
+    }
+    let mut v = samples.to_vec();
+    v.sort_unstable();
+    json!({
+        "p50Ms": v[v.len() / 2],
+        "p95Ms": v[(v.len() as f64 * 0.95) as usize % v.len()],
+    })
+}
+
+/// 造「用了一段时间」的库，四类变化各管一件事：
+/// - 编辑 / 软删：**不**释放页（只改行内容，页仍是满的）；
+/// - 清空回收站：真删任务行 → 释放整页（这是唯一由用户操作产生的真实碎片）；
+/// - 过期日志：20k 行 > 30 天 → 只有 TTL prune 才会删，用来量「TTL 释放多少页」。
+async fn churn_usage(pool: &SqlitePool) -> Result<Value, String> {
+    let now = chrono::Utc::now().timestamp_millis();
+
+    let edited = sqlx::query(
+        "UPDATE todo_tasks SET title = title || ' ✓', updated_at = ? WHERE id % 20 = 0",
+    )
+    .bind(now)
+    .execute(pool)
+    .await
+    .map_err(|e| e.to_string())?
+    .rows_affected();
+
+    let soft_deleted =
+        sqlx::query("UPDATE todo_tasks SET is_deleted = 1, updated_at = ? WHERE id % 20 = 1")
+            .bind(now)
+            .execute(pool)
+            .await
+            .map_err(|e| e.to_string())?
+            .rows_affected();
+
+    // 「清空回收站」：物理删 4% 的任务，再删掉失主张的评论
+    let purged = sqlx::query("DELETE FROM todo_tasks WHERE id % 25 = 1")
+        .execute(pool)
+        .await
+        .map_err(|e| e.to_string())?
+        .rows_affected();
+    let purged_comments =
+        sqlx::query("DELETE FROM todo_comments WHERE task_id NOT IN (SELECT id FROM todo_tasks)")
+            .execute(pool)
+            .await
+            .map_err(|e| e.to_string())?
+            .rows_affected();
+
+    // 过期日志 20k 行（31 天前）+ 新鲜日志 2k 行（本次启动新产生的）
+    sqlx::query(
+        "WITH RECURSIVE seq(n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM seq WHERE n < 20000)
+         INSERT INTO notification_log (kind, task_title, payload, created_at)
+         SELECT 'reminder_due', '历史通知 ' || n, '{}', ? - ? * 86400000 - n * 60000 FROM seq",
+    )
+    .bind(now)
+    .bind(31)
+    .execute(pool)
+    .await
+    .map_err(|e| e.to_string())?;
+
+    sqlx::query(
+        "WITH RECURSIVE seq(n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM seq WHERE n < 2000)
+         INSERT INTO notification_log (kind, task_title, payload, created_at)
+         SELECT 'reminder_due', '新通知 ' || n, '{}', ? - n * 60000 FROM seq",
+    )
+    .bind(now)
+    .execute(pool)
+    .await
+    .map_err(|e| e.to_string())?;
+
+    Ok(json!({
+        "editedTasks": edited,
+        "softDeletedTasks": soft_deleted,
+        "purgedTasks": purged,
+        "purgedComments": purged_comments,
+        "expiredLogRows": 20_000,
+        "freshLogRows": 2_000,
+    }))
 }
 
 fn fresh_db_files(path: &std::path::Path) {

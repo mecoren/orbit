@@ -988,8 +988,18 @@ class RustOrbitBridge implements OrbitBridge {
 
   @override
   Future<DbMaintenanceResult> dbMaintenance() async {
-    // PlatformInt64 在 Web 语义是 BigInt，逐个 .toInt() 归一（架构约定）
     final r = await gen_maintenance.dbMaintenance();
+    return _mapDbMaintenance(r);
+  }
+
+  @override
+  Future<DbMaintenanceResult> dbMaintenanceRoutine() async {
+    final r = await gen_maintenance.dbMaintenanceRoutine();
+    return _mapDbMaintenance(r);
+  }
+
+  /// FRB 视图 → 领域 DTO（PlatformInt64 在 Web 语义是 BigInt，逐个 .toInt() 归一）
+  DbMaintenanceResult _mapDbMaintenance(gen_maintenance.DbMaintenanceView r) {
     return DbMaintenanceResult(
       walBytesAfterCheckpoint: r.walBytesAfterCheckpoint.toInt(),
       attachmentsCleaned: r.attachmentsCleaned,

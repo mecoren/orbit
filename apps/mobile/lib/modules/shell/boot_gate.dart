@@ -287,9 +287,12 @@ class _BootGateState extends ConsumerState<BootGate>
     // 自动备份守护（Rust 60s tick：按 backup_prefs 频率触发；未解锁同步
     // 密码时静默跳过只推进下次时间，不打扰用户）
     ref.read(orbitBridgeProvider).startBackupScheduler();
-    // 开机清理过期通知日志：db_maintenance 内含通知历史 + 活动日志 30 天
-    // TTL 修剪（core db_maintenance_api 口径），失败静默不阻断启动
-    unawaited(ref.read(orbitBridgeProvider).dbMaintenance().then((_) {}).catchError((e) {
+    // 开机清理过期通知日志：走**轻维护**（不含 VACUUM）——WAL checkpoint +
+    // 附件 GC + 缓存上限 + 30 天日志 TTL + 统计（仅在缺失时）。这四步不跑会
+    // 无界增长，且成本与库体积无关；VACUUM 每次整库重写（50k 稳态实测
+    // 332～429ms）却只回收空闲页，稳态下换回 0 字节，故留在设置页「立即维护」。
+    // 失败静默不阻断启动
+    unawaited(ref.read(orbitBridgeProvider).dbMaintenanceRoutine().then((_) {}).catchError((e) {
       debugPrint('[BootGate] boot maintenance skipped: $e');
     }));
     // 小组件勾选通道挂载 + 首刷快照（#3：通知完成回调同款位置——ready 后

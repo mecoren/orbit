@@ -9,8 +9,22 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `fmt`, `from`
 
 /// 一键数据库维护：WAL checkpoint → 附件 GC → 附件缓存上限 → 日志 TTL → 全量 ANALYZE → VACUUM
+///
+/// 设置页「立即维护」用。**不要在启动路径调用**——`VACUUM` 的成本与库体积
+/// 成正比、收益只与空闲页成正比，50k 稳态实测 429ms 换回 0 字节（见
+/// `db_maintenance_api::db_maintenance_routine` 的实测口径）。
 Future<DbMaintenanceView> dbMaintenance() =>
     RustLib.instance.api.crateApiMaintenanceDbMaintenance();
+
+/// 启动轻维护：WAL checkpoint → 附件 GC → 附件缓存上限 → 日志 TTL → 统计（仅在缺失时）
+///
+/// 与 [db_maintenance] 的唯一差别是**不做 VACUUM**：四步都是「不跑就会无界增长」
+/// 且成本与库体积无关的动作，适合每次冷启动；VACUUM 只回收磁盘空间，归设置页
+/// 手动入口（口径与桌面一致——桌面从来没有启动自动 VACUUM）。
+///
+/// 返回值里 `pages_reclaimed` 恒为 0：没跑 VACUUM 就没有「回收」可言。
+Future<DbMaintenanceView> dbMaintenanceRoutine() =>
+    RustLib.instance.api.crateApiMaintenanceDbMaintenanceRoutine();
 
 /// 数据库维护结果视图（core DbMaintenanceResult 的本地 DTO 镜像——
 /// FRB 不跨 crate 暴露 core 类型，保持两端壳独立演进自由度）
