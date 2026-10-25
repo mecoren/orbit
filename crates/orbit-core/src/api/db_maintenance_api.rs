@@ -96,6 +96,56 @@ pub async fn analyze_plan_stats(pool: &SqlitePool) -> CoreResult<()> {
     Ok(())
 }
 
+/// 建统计的行数门槛（`todo_tasks` 总行数）
+///
+/// 为什么要有门槛：统计只在「数据到规模」时才有收益——5k 行实测无统计 1ms /
+/// 有统计 0ms（差 1ms，不值得为写一次 `sqlite_stat1` 而写）；50k 行是 10～12ms
+/// / 0ms。拐点在两者之间未细分，取 5k 作为保守下限。门槛以内 ANALYZE 本身也
+/// 只要约 10ms，即便误判也无害；门槛设在这里主要是让「刚装的空库 / 小库」
+/// 一次盘都不写。
+pub const MIN_ROWS_FOR_PLAN_STATS: i64 = 5_000;
+
+/// 空闲时补一次查询计划统计：只在「从来没有统计 + 数据已到规模」时真跑
+///
+/// 调用时机由壳层决定（桌面在首屏之后的空闲时；见 `db_maintenance_cmd`）。
+/// 返回 `true` 表示这次真的跑了 `ANALYZE`。
+///
+/// 判据刻意只认「统计是否缺失」，不认「统计是否陈旧」：
+/// - 陈旧不影响计划选择——10 倍膨胀（5k → 50k）后计划与时延都不变，因为缩放的
+///   是绝对行数、选择率比例没变（P5 实测）；
+/// - 而 `PRAGMA optimize` 的「漂移判据」在连接池下看不见别的连接的写，实测
+///   45k 行导入后仍空转，故这里不用它。
+///
+/// 幂等：已有覆盖 `todo_tasks` 的统计行即返回 `false`（重复调用零成本）。
+pub async fn maybe_analyze_plan_stats(pool: &SqlitePool, min_rows: i64) -> CoreResult<bool> {
+    // 1) 已经建过统计 → 什么都不做（sqlite_stat1 不存在时不能直接查它）
+    let stat1_exists: (i64,) = sqlx::query_as(
+        "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'sqlite_stat1'",
+    )
+    .fetch_one(pool)
+    .await?;
+    if stat1_exists.0 > 0 {
+        let covered: (i64,) =
+            sqlx::query_as("SELECT COUNT(*) FROM sqlite_stat1 WHERE tbl = 'todo_tasks'")
+                .fetch_one(pool)
+                .await?;
+        if covered.0 > 0 {
+            return Ok(false);
+        }
+    }
+
+    // 2) 数据量没到门槛 → 收益为零，别为它写库
+    let (rows,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM todo_tasks")
+        .fetch_one(pool)
+        .await?;
+    if rows < min_rows {
+        return Ok(false);
+    }
+
+    analyze_plan_stats(pool).await?;
+    Ok(true)
+}
+
 /// 执行全套数据库维护（设置页「立即维护」入口）
 ///
 /// 各步独立容错：附件 GC 失败（如目录不可达）不影响其余步骤，
@@ -257,6 +307,46 @@ mod tests {
                 .any(|(_, idx)| idx == "idx_todo_tasks_updated_at"),
             "首屏列表依赖的 updated_at 索引必须有统计（计划切换的判据）: {rows:?}"
         );
+    }
+
+    /// 空闲引导：小库/空库不写统计，到门槛才建一次，且只建一次（P5）
+    #[tokio::test]
+    async fn maybe_analyze_plan_stats_respects_threshold_and_is_idempotent() {
+        let pool = setup_db().await;
+
+        // 空库：低于门槛 → 不建
+        assert!(!maybe_analyze_plan_stats(&pool, 50).await.unwrap());
+        let (n,): (i64,) = sqlx::query_as(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='sqlite_stat1'",
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_eq!(n, 0, "小库不该为统计写盘");
+
+        // 到门槛 → 建一次，返回 true
+        for i in 0..60 {
+            sqlx::query(
+                "INSERT INTO todo_tasks (uuid, title, created_at, updated_at) VALUES (?, ?, ?, ?)",
+            )
+            .bind(format!("idle-{i}"))
+            .bind(format!("空闲引导样本 {i}"))
+            .bind(i)
+            .bind(i)
+            .execute(&pool)
+            .await
+            .unwrap();
+        }
+        assert!(maybe_analyze_plan_stats(&pool, 50).await.unwrap());
+        let (covered,): (i64,) =
+            sqlx::query_as("SELECT COUNT(*) FROM sqlite_stat1 WHERE tbl = 'todo_tasks'")
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        assert!(covered > 0, "门槛以上必须真的建出统计");
+
+        // 再调一次：已有统计 → 空转（幂等）
+        assert!(!maybe_analyze_plan_stats(&pool, 50).await.unwrap());
     }
 
     /// 日志表 TTL 接线：30 天前的通知/活动日志在维护中物理删除，30 天内保留
