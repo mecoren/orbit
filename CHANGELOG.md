@@ -16,6 +16,18 @@
 
 ## [Unreleased]
 
+### 性能：50k 规模档键集分页与列表窗口化（docs/07 #105，2026-10-26）
+
+- **core 读通道**：新增 `list_todo_tasks_page`（键集游标 `ListCursor` = 排序键值 + 主键，`has_more` 靠多取一条判定，不逐页 `COUNT`）与 `todo_task_overview`（总数 + 按项目未完成计数，替代壳层万行数组内存分组）。`ListFilter` 新增 `sort_key`/`sort_dir`（manual/due/priority/created 四档下推）、`ungrouped`/`priority_eq`/`exclude_due_before` 三个谓词。
+- **`title` 档显式拒绝分页**：前端按 `localeCompare("zh-Hans-CN")` 排中文拼音序，SQLite 的 BINARY collation 复刻不了（多音字/声调都会分叉）；强行下推会让翻页边界与视觉顺序不一致——该档继续走全量单页通道，core 侧返回可读错误而不是静默乱序。
+- **索引**：新增 `0011_task_keyset_indexes.sql` —— priority/created/due 三档的 `(is_deleted, 排序键, id)` 索引（due 档用表达式索引把「无截止沉底」纳入排序），manual 档复用既有 `idx_todo_tasks_position`。
+- **桥接双端同签名**：Tauri `todo_tasks_page`/`todo_task_overview`、FRB 同名函数与镜像 DTO、桌面 `ipc-mock` 同语义实现（含游标谓词与四档排序）。
+- **桌面窗口化**：列表与表格改 `useInfiniteQuery`，200 条/页，虚拟列表在末尾 5 行内预取；逾期置顶段独立查询后按 id 去重（时间戳不进 queryKey——否则每分钟重拉首屏、滚动位置回跳）；条幅从「任务数超过单次加载上限」改为「已加载 X / 共 Y」；壳层全量通道按视图启停（列表视图不再拉 10k），周回顾/分诊打开时各自取全集；分页窗口下禁用容器尾部拖拽落位（跨窗口落点不可知）。
+- **修复**：`query-patch`/`hideFromQueries` 原假设缓存是行数组——分页缓存是 `{pages:[{items,next_cursor}]}`，原实现会在 `old.some` 抛 `page.map is not a function`，且异常发生在 `todoTaskComplete` 之前，表现为「点勾选没反应、删除不提交」。现同时支持「页 = 行数组」与「页 = `{items}`」两种形态。
+- **回归锚点**：`keyset_paging_tests`（四档 × 多页长逐页遍历必须等于单页全量、换档作废、总览口径）、`buildPagedFilter` 单测、`ipc-contract` 分页保真用例、`query-patch` 分页形态用例；桌面 vitest **730 绿**、e2e **73 绿**。
+- **看板/四象限/日历/Logbook 接入窗口通道**：新增 `list_todo_tasks_board`（先 `GROUP BY` 拿每组总数，再逐组 `LIMIT 60` 取前 N 条；组键与前端 `kanbanColumnKey` 逐字一致）；看板列头报真实总数、列内注明「还有 N 条」；四象限的「已完成」筛选与 `groupEisenhower` 同口径（追加 `done = 0`，显式筛已完成时为空）；日历按月窗口 `due_from`/`due_to` 取数（月/周/议程/时间轴取前后各一月，年视图整年），范围查询首屏计入加载态；Logbook 新增 `done_at` 排序档 + `0012_task_done_at_index.sql` 表达式索引（`done_at` 为空的历史行沉底），滚到底部续拉。标签看板保留全量——列定义随任务标签动态变化，窗口内的标签会让空列消失。
+- **未做（如实记账）**：移动端 provider 仍走 10k 全量（FRB `todo_tasks_page`/`todo_tasks_board` 已就绪；`sub_list_screen` 3000+ 行、多选/批量/周回顾/退场动画都直接读全量缓存，游标状态、逾期独立段与滚动预取需单独一轮）；50k 真机验收线（首屏/滚动 p95/heap/DOM/筛选）未实测。
+
 ### 性能：维护改全量 ANALYZE，`PRAGMA optimize` 退场（docs/13 §七 P5，2026-10-25）
 
 - **评估**（新增探针 `crates/orbit-core/examples/pragma_eval.rs`，50k 行、每口径 30 采样；同库同池，逐连接抓 `EXPLAIN QUERY PLAN` + `sqlite_stat1` 摘要 + `INDEXED BY` 强制计划比价）：
