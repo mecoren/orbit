@@ -97,3 +97,5 @@ export const LS_DESC_PREVIEW_ENABLED = "desc_preview_enabled";
 export const LS_DESC_PREVIEW_DELAY = "desc_preview_delay";
 /** 隐藏已完成开关持久化键（Logbook 治理，默认开；"1"=开 "0"=关） */
 export const LS_HIDE_DONE = "todo_hide_done";
+/** 日历视图日期口径持久化键（"start"=按开始日期，缺省/其它=按截止日期） */
+export const LS_CALENDAR_DATE_FIELD = "todo_calendar_date_field";

@@ -804,6 +804,8 @@ interface MockTaskFilter {
   sort_dir?: string | null;
   due_from?: number | null;
   due_to?: number | null;
+  start_from?: number | null;
+  start_to?: number | null;
   page?: number;
   page_size?: number;
 }
@@ -859,6 +861,17 @@ function filterTaskRows(db: MockDb, filter?: MockTaskFilter | null): MockTask[] 
   }
   if (filter?.due_to != null) {
     rows = rows.filter((t) => t.due_date != null && t.due_date < (filter.due_to as number));
+  }
+  // 开始区间（日历「按开始日期」口径）：NULL 不命中，与 Rust 侧同口径
+  if (filter?.start_from != null) {
+    rows = rows.filter(
+      (t) => t.start_date != null && t.start_date >= (filter.start_from as number),
+    );
+  }
+  if (filter?.start_to != null) {
+    rows = rows.filter(
+      (t) => t.start_date != null && t.start_date < (filter.start_to as number),
+    );
   }
   return rows;
 }

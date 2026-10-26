@@ -15,6 +15,10 @@
  *   上次更新时间，每月一次守护自动更新 + 跨月后首轮补更，数据层在 orbit-core holiday_api）
  *
  * 范围遵循 04 §四 内存筛选语义：由 list-page 注入已筛选的 visibleTasks。
+ *
+ * 日期口径：格子与右栏可按「截止日期」（历史默认）或「开始日期」分桶，工具栏
+ * 分段切换并 localStorage 持久化；口径缺失的任务不回落另一字段（两种语义不混排）。
+ * 时间轴档按块起点渲染，不提供该开关。
  */
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useVirtualizer } from "@tanstack/react-virtual";
@@ -63,6 +67,13 @@ import {
   type HolidayMark,
 } from "@/components/business/month-calendar";
 import { daySubLabel } from "../shared/almanac";
+import {
+  calendarDateFieldLabel,
+  calendarTaskDateMs,
+  parseCalendarDateField,
+  rescheduleStartDate,
+  type CalendarDateField,
+} from "../shared/calendar-date-field";
 import { addDays, dayKey, dayLabel, formatYmd, relativeLabel, startOfDay, startOfWeek, weekRangeLabel } from "@/lib/date-utils";
 import { rescheduleDue } from "../shared/reschedule-due";
 import { useHolidayMarks } from "../shared/use-holiday-marks";
@@ -73,7 +84,12 @@ import {
   todoTaskUpdate,
   type ListFilter,
 } from "@/lib/tauri";
-import { OVERDUE_COLOR_CLASS, PRIORITY_COLOR, TODO_ACCENT } from "../shared/constants";
+import {
+  LS_CALENDAR_DATE_FIELD,
+  OVERDUE_COLOR_CLASS,
+  PRIORITY_COLOR,
+  TODO_ACCENT,
+} from "../shared/constants";
 import { LabelChips } from "../shared/label-chips";
 import { ReminderChip } from "../shared/reminder-chip";
 import { displayReminder, type DisplayReminder, type TaskReminderMeta } from "../shared/reminder-meta";
@@ -113,8 +129,8 @@ interface CalendarViewProps {
   remindersByTask: Map<number, TaskReminderMeta[]>;
   /** 空「新建任务」动作回调（议程空态引导，由 list-page 注入打开表单） */
   onCreateClick?: () => void;
-  /** 右击某天：以该日为截止日期快捷新增（由壳层注入打开表单并预填） */
-  onAddOnDate?: (date: string) => void;
+  /** 右击某天：以该日为当前日历口径日期快捷新增（由壳层注入打开表单并预填） */
+  onAddOnDate?: (date: string, field: CalendarDateField) => void;
   /** 加载态（H3）：查询进行中右栏不闪空态 */
   loading?: boolean;
   /**
@@ -164,6 +180,17 @@ export function CalendarView({
 }: CalendarViewProps) {
   const setSelectedTaskId = useTodoStore((s) => s.setSelectedTaskId);
   const [subMode, setSubMode] = useState<CalendarSubMode>("month");
+  /**
+   * 日历日期口径（截止 / 开始）：格子与右栏统一按它分桶，跨会话持久化。
+   * 只在有日分组语义的档位（月/周/年/议程）生效；时间轴档按块起点渲染，
+   * 有自己的排程语义，不提供该开关。
+   */
+  const [dateField, setDateField] = useState<CalendarDateField>(() =>
+    parseCalendarDateField(localStorage.getItem(LS_CALENDAR_DATE_FIELD)),
+  );
+  useEffect(() => {
+    localStorage.setItem(LS_CALENDAR_DATE_FIELD, dateField);
+  }, [dateField]);
   /** 视图年月合并为单一 state：两键需原子变更，函数式更新规避连滑时的过期闭包 */
   const [viewTime, setViewTime] = useState(() => ({
     year: new Date().getFullYear(),
@@ -190,15 +217,37 @@ export function CalendarView({
     };
   }, [subMode, yearPaneYear, viewYear, viewMonth]);
   const rangeQuery = useQuery({
-    queryKey: ["todo_tasks", "calendar", calendarRange.from, calendarRange.to, filter],
+    queryKey: [
+      "todo_tasks",
+      "calendar",
+      dateField,
+      calendarRange.from,
+      calendarRange.to,
+      filter,
+    ],
     queryFn: () =>
       todoTaskPage(
         {
           ...(filter ?? { page: 1, page_size: 0 }),
           page: 1,
           page_size: CALENDAR_RANGE_LIMIT,
-          due_from: calendarRange.from,
-          due_to: calendarRange.to,
+          // 按开始日期看时，可见范围必须由 start_date 圈定：只按 due 取会漏掉
+          // 「start 在范围内、due 在范围外/为空」的排期任务。同时清掉截止语义
+          // 的区间（快捷视图「今天/近7天」注入的 due_to）——两套区间 AND 会把
+          // 「今天开始、明天截止」的任务挡在窗口外，与当前口径自相矛盾。
+          ...(dateField === "start"
+            ? {
+                due_from: null,
+                due_to: null,
+                start_from: calendarRange.from,
+                start_to: calendarRange.to,
+              }
+            : {
+                start_from: null,
+                start_to: null,
+                due_from: calendarRange.from,
+                due_to: calendarRange.to,
+              }),
         },
         null,
         CALENDAR_RANGE_LIMIT,
@@ -266,15 +315,25 @@ export function CalendarView({
     const target = new Date(Number(overRaw.slice(4)));
     if (Number.isNaN(target.getTime())) return;
 
-    const nextDue = rescheduleDue(task.due_date, target);
-    if (nextDue == null) return; // 同日落回原处，无变化
+    // 改的是当前口径对应的字段：按开始日期看时不能偷偷改截止（反之亦然），
+    // 否则拖拽后任务会从当前格消失却出现在用户没预期的语义里。
+    const nextDate =
+      dateField === "start"
+        ? rescheduleStartDate(task.start_date, target)
+        : rescheduleDue(task.due_date, target);
+    if (nextDate == null) return; // 同日落回原处，无变化
+    const fieldLabel = calendarDateFieldLabel(dateField);
+    const originalMs = dateField === "start" ? task.start_date : task.due_date;
     try {
-      await todoTaskUpdate(taskId, { due_date: nextDue });
+      await todoTaskUpdate(
+        taskId,
+        dateField === "start" ? { start_date: nextDate } : { due_date: nextDate },
+      );
       void queryClient.invalidateQueries({ queryKey: ["todo_tasks"] });
       void queryClient.invalidateQueries({ queryKey: ["todo-task-detail"] });
       toast.success(
-        `「${task.title.slice(0, 20)}」已改期至 ${formatYmd(target)}`,
-        { description: task.due_date != null ? "原截止时刻已保留" : undefined },
+        `「${task.title.slice(0, 20)}」已改${fieldLabel}至 ${formatYmd(target)}`,
+        { description: originalMs != null ? "原时刻已保留" : undefined },
       );
     } catch (err) {
       toast.error(`改期失败：${err instanceof Error ? err.message : String(err)}`);
@@ -316,12 +375,14 @@ export function CalendarView({
     return d;
   }, []);
 
-  /** due_date → 本地日聚合（一次遍历，三档共用） */
+  /** 当前口径日期（due/start）→ 本地日聚合（一次遍历，三档共用） */
   const byDay = useMemo(() => {
     const map = new Map<string, TodoTaskListItem[]>();
     for (const t of tasks) {
-      if (t.due_date == null) continue;
-      const key = dayKey(t.due_date);
+      const ms = calendarTaskDateMs(t, dateField);
+      // 该口径缺失即不参与分桶（不回落另一字段，避免两种日期语义混排）
+      if (ms == null) continue;
+      const key = dayKey(ms);
       const list = map.get(key);
       if (list) list.push(t);
       else map.set(key, [t]);
@@ -329,7 +390,7 @@ export function CalendarView({
     // 组内保留父层传入序（task-panel 已按工具栏档位 sortTasks）——
     // 此处若再按 position 重排，截止/优先级/标题/创建档在日历全部失效
     return map;
-  }, [tasks]);
+  }, [tasks, dateField]);
 
   const projectById = useMemo(() => new Map(projects.map((p) => [p.id, p])), [projects]);
   // memo 友好：打开详情回调恒定引用，日期头/任务行 props 只随业务数据变化
@@ -482,11 +543,40 @@ export function CalendarView({
           )}
         </h2>
         <div className="flex items-center gap-2">
+          {/* 日期口径：格子与右栏按开始/截止日期排布。时间轴档按块起点渲染，
+              自带排程语义，显示本开关反而误导，故隐藏。 */}
+          {subMode !== "timeline" && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div
+                  className="flex items-center overflow-hidden rounded-md border"
+                  role="group"
+                  aria-label="日历日期口径"
+                >
+                  {(["start", "due"] as const).map((field) => (
+                    <Button
+                      key={field}
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 rounded-none px-2.5 text-xs aria-pressed:bg-accent aria-pressed:text-accent-foreground"
+                      aria-pressed={dateField === field}
+                      onClick={() => setDateField(field)}
+                    >
+                      {field === "start" ? "开始" : "截止"}
+                    </Button>
+                  ))}
+                </div>
+              </TooltipTrigger>
+              <TooltipContent>
+                日历按「开始日期」或「截止日期」排布任务
+              </TooltipContent>
+            </Tooltip>
+          )}
           <div className="flex items-center overflow-hidden rounded-md border">
             <Button
               variant="ghost"
               size="sm"
-              className="h-8 gap-1.5 rounded-none"
+              className="h-8 gap-1.5 rounded-none aria-pressed:bg-accent aria-pressed:text-accent-foreground"
               aria-pressed={subMode === "month"}
               onClick={() => setSubMode("month")}
             >
@@ -496,7 +586,7 @@ export function CalendarView({
             <Button
               variant="ghost"
               size="sm"
-              className="h-8 gap-1.5 rounded-none"
+              className="h-8 gap-1.5 rounded-none aria-pressed:bg-accent aria-pressed:text-accent-foreground"
               aria-pressed={subMode === "week"}
               onClick={() => setSubMode("week")}
             >
@@ -506,7 +596,7 @@ export function CalendarView({
             <Button
               variant="ghost"
               size="sm"
-              className="h-8 gap-1.5 rounded-none"
+              className="h-8 gap-1.5 rounded-none aria-pressed:bg-accent aria-pressed:text-accent-foreground"
               aria-pressed={subMode === "timeline"}
               onClick={() => setSubMode("timeline")}
             >
@@ -521,7 +611,7 @@ export function CalendarView({
                     key={n}
                     variant="ghost"
                     size="sm"
-                    className="h-8 rounded-none px-2 text-xs"
+                    className="h-8 rounded-none px-2 text-xs aria-pressed:bg-accent aria-pressed:text-accent-foreground"
                     aria-pressed={timelineSpan === n}
                     onClick={() => setTimelineSpan(n)}
                   >
@@ -533,7 +623,7 @@ export function CalendarView({
             <Button
               variant="ghost"
               size="sm"
-              className="h-8 gap-1.5 rounded-none"
+              className="h-8 gap-1.5 rounded-none aria-pressed:bg-accent aria-pressed:text-accent-foreground"
               aria-pressed={subMode === "year"}
               onClick={() => {
                 setYearPaneYear(viewYear);
@@ -546,7 +636,7 @@ export function CalendarView({
             <Button
               variant="ghost"
               size="sm"
-              className="h-8 gap-1.5 rounded-none"
+              className="h-8 gap-1.5 rounded-none aria-pressed:bg-accent aria-pressed:text-accent-foreground"
               aria-pressed={subMode === "agenda"}
               onClick={() => setSubMode("agenda")}
             >
@@ -616,7 +706,7 @@ export function CalendarView({
                 onDayContextMenu={(e, date) => {
                   e.preventDefault();
                   e.stopPropagation();
-                  onAddOnDate?.(formatYmd(date));
+                  onAddOnDate?.(formatYmd(date), dateField);
                 }}
                 onTitleClick={() => {
                   setYearPaneYear(viewYear);
@@ -665,7 +755,9 @@ export function CalendarView({
                 <span className="flex size-12 items-center justify-center rounded-full bg-muted">
                   <CalendarX className="size-6 text-muted-foreground" />
                 </span>
-                <p className="text-sm font-medium">本月没有带截止日期的任务</p>
+                <p className="text-sm font-medium">
+                  本月没有带{calendarDateFieldLabel(dateField)}的任务
+                </p>
                 <p className="text-xs text-muted-foreground">
                   切换月份，或右键日历日期快速新增
                 </p>
@@ -674,6 +766,7 @@ export function CalendarView({
               <VirtualGroupedList
                 groups={listGroups as DayGroup[]}
                 today={today}
+                dateField={dateField}
                 selectedDay={selected}
                 scrollToKey={formatYmd(selected)}
                 projects={projects}
@@ -709,7 +802,7 @@ export function CalendarView({
                 onDayContextMenu={(e, date) => {
                   e.preventDefault();
                   e.stopPropagation();
-                  onAddOnDate?.(formatYmd(date));
+                  onAddOnDate?.(formatYmd(date), dateField);
                 }}
               headerSubtitle={
                 <span className="mt-2 text-xs text-muted-foreground">
@@ -752,7 +845,9 @@ export function CalendarView({
                 <span className="flex size-12 items-center justify-center rounded-full bg-muted">
                   <CalendarX className="size-6 text-muted-foreground" />
                 </span>
-                <p className="text-sm font-medium">本周没有带截止日期的任务</p>
+                <p className="text-sm font-medium">
+                  本周没有带{calendarDateFieldLabel(dateField)}的任务
+                </p>
                 <p className="text-xs text-muted-foreground">
                   切换周次，或右键日历日期快速新增
                 </p>
@@ -761,6 +856,7 @@ export function CalendarView({
               <VirtualGroupedList
                 groups={listGroups as DayGroup[]}
                 today={today}
+                dateField={dateField}
                 selectedDay={selected}
                 scrollToKey={formatYmd(selected)}
                 projects={projects}
@@ -844,13 +940,16 @@ export function CalendarView({
                 <span className="flex size-12 items-center justify-center rounded-full bg-muted">
                   <CalendarX className="size-6 text-muted-foreground" />
                 </span>
-                <p className="text-sm font-medium">本年没有带截止日期的任务</p>
+                <p className="text-sm font-medium">
+                  本年没有带{calendarDateFieldLabel(dateField)}的任务
+                </p>
                 <p className="text-xs text-muted-foreground">切换年份，或右键日历日期快速新增</p>
               </div>
             ) : (
               <VirtualGroupedList
                 sections={listGroups as YearSection[]}
                 today={today}
+                dateField={dateField}
                 projects={projects}
                 projectById={projectById}
                 labelsByTask={labelsByTask}
@@ -865,8 +964,8 @@ export function CalendarView({
         <div className="flex min-h-0 flex-1 items-center justify-center overflow-y-auto">
           <EmptyState
             icon={Inbox}
-            title="本月没有带截止日期的任务"
-            hint="给任务设置截止日期后，会按天排列在这里"
+            title={`本月没有带${calendarDateFieldLabel(dateField)}的任务`}
+            hint={`给任务设置${calendarDateFieldLabel(dateField)}后，会按天排列在这里`}
             action={
               onCreateClick ? (
                 <Button size="sm" variant="outline" onClick={onCreateClick}>
@@ -880,6 +979,7 @@ export function CalendarView({
         <VirtualGroupedList
           groups={listGroups as DayGroup[]}
           today={today}
+          dateField={dateField}
           scrollToToday
           holidayMarks={holidayMarks}
           projects={projects}
@@ -914,6 +1014,7 @@ export function CalendarView({
                     labels={labelsByTask.get(t.id) ?? []}
                     project={t.project_id != null ? projectById.get(t.project_id) : undefined}
                     reminder={displayReminder(remindersByTask.get(t.id) ?? [], Date.now(), !!t.done)}
+                    dateField={dateField}
                     onActivate={() => openDetail(t.id)}
                   />
                 </TaskContextMenu>
@@ -1050,6 +1151,8 @@ interface VirtualGroupedListProps {
   scrollToToday?: boolean;
   /** 议程档日期头是否带节假日徽标（与月历共用同一份 marks） */
   holidayMarks?: Record<string, HolidayMark>;
+  /** 当前日期口径：行尾时刻与逾期判定都按它取字段 */
+  dateField: CalendarDateField;
   projects: TodoProject[];
   projectById: Map<number, TodoProject>;
   labelsByTask: Map<number, ProjectedTaskLabel[]>;
@@ -1077,6 +1180,7 @@ function VirtualGroupedList({
   scrollToKey,
   scrollToToday,
   holidayMarks,
+  dateField,
   projects,
   projectById,
   labelsByTask,
@@ -1167,6 +1271,7 @@ function VirtualGroupedList({
                   isSelectedDay={selectedDay != null && isSameDay(item.group.date, selectedDay)}
                   showHolidayBadge={holidayMarks != null}
                   holiday={holidayMarks?.[item.group.key]}
+                  dateField={dateField}
                   projects={projects}
                   projectById={projectById}
                   labelsByTask={labelsByTask}
@@ -1190,6 +1295,7 @@ function DayGroupBlock({
   isSelectedDay,
   showHolidayBadge,
   holiday,
+  dateField,
   projects,
   projectById,
   labelsByTask,
@@ -1202,6 +1308,7 @@ function DayGroupBlock({
   /** true = 议程档日期头样式（带徽标/条数分隔线） */
   showHolidayBadge: boolean;
   holiday?: HolidayMark;
+  dateField: CalendarDateField;
   projects: TodoProject[];
   projectById: Map<number, TodoProject>;
   labelsByTask: Map<number, ProjectedTaskLabel[]>;
@@ -1265,7 +1372,14 @@ function DayGroupBlock({
               labels={labelsByTask.get(t.id) ?? []}
               project={t.project_id != null ? projectById.get(t.project_id) : undefined}
               onActivate={() => onOpenDetail(t.id)}
-              overdue={!t.done && t.due_date! < today.getTime()}
+              dateField={dateField}
+              // 逾期是截止语义：按开始日期看时不染红（否则无截止任务会被误判）
+              overdue={
+                dateField === "due" &&
+                !t.done &&
+                t.due_date != null &&
+                t.due_date < today.getTime()
+              }
               reminder={displayReminder(remindersByTask.get(t.id) ?? [], Date.now(), !!t.done)}
             />
           </TaskContextMenu>
@@ -1283,6 +1397,8 @@ interface CalendarTaskRowProps {
   project?: TodoProject;
   onActivate: () => void;
   overdue?: boolean;
+  /** 日期口径：行尾时刻取该字段（缺省 = 截止日期，Logbook 沿用） */
+  dateField?: CalendarDateField;
   /** 行内提醒徽标数据（displayReminder 产物；null = 无存活提醒行） */
   reminder?: DisplayReminder | null;
 }
@@ -1298,9 +1414,12 @@ export const CalendarTaskRow = memo(function CalendarTaskRow({
   project,
   onActivate,
   overdue = false,
+  dateField = "due",
   reminder = null,
 }: CalendarTaskRowProps) {
   const hasMeta = labels.length > 0 || project != null || reminder != null;
+  // 行尾时刻跟随当前口径：按开始日期看时显示开始时刻（截止时刻仍可在详情里看）
+  const timeMs = dateField === "start" ? t.start_date : t.due_date;
   return (
     <div
       role="button"
@@ -1349,7 +1468,7 @@ export const CalendarTaskRow = memo(function CalendarTaskRow({
           overdue && OVERDUE_COLOR_CLASS,
         )}
       >
-        {t.due_date != null ? format(new Date(t.due_date), "HH:mm", { locale: zhCN }) : ""}
+        {timeMs != null ? format(new Date(timeMs), "HH:mm", { locale: zhCN }) : ""}
       </span>
     </div>
   );

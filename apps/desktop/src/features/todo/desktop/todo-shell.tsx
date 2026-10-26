@@ -37,6 +37,7 @@ import {
 } from "@/lib/tauri";
 import { projectIdsWithDescendants } from "../shared/project-tree";
 import { parseTemplatePayload } from "../shared/template-apply";
+import type { CalendarDateField } from "../shared/calendar-date-field";
 import { TASK_LIST_PAGE_SIZE, type QuickViewKey } from "../shared/constants";
 import { needsTodoIndexNav, TODO_INDEX_PATH } from "../shared/sidebar-nav";
 import { ProjectSidebar } from "./project-sidebar";
@@ -93,8 +94,8 @@ interface TodoShellContextValue {
 
   // ---- 表单/标签管理（壳层挂载的弹层，面板只触发）----
   openCreateForm: () => void;
-  /** 以指定截止日期打开新增表单（日历视图右键日格快捷新增） */
-  openCreateFormOnDate: (dueDate: string) => void;
+  /** 以指定日期打开新增表单（日历视图右键日格快捷新增；field = 日历当前口径） */
+  openCreateFormOnDate: (date: string, field?: CalendarDateField) => void;
   /** 套用模板打开新增表单（任务模板：payload 按存在键预填） */
   openCreateFormFromTemplate: (templateId: number) => void;
   /** 任务模板列表（面板入口展示；空列表时入口隐藏） */
@@ -131,6 +132,8 @@ export default function TodoShell() {
   const [formOpen, setFormOpen] = useState(false);
   // 新增表单预填的截止日期（日历右键日格注入；空 = 不预填）
   const [presetDueDate, setPresetDueDate] = useState<string | null>(null);
+  // 新增表单预填的开始日期（日历「按开始日期」口径下右键日格注入）
+  const [presetStartDate, setPresetStartDate] = useState<string | null>(null);
   const [labelManagerOpen, setLabelManagerOpen] = useState(false);
   // 任务模板预填（套用模板打开表单时注入；关闭表单后清空）
   const [presetTemplate, setPresetTemplate] = useState<import("../shared/template-apply").TemplatePayload | null>(null);
@@ -346,17 +349,21 @@ export default function TodoShell() {
     overview: overviewQuery.data,
     openCreateForm: () => {
       setPresetDueDate(null);
+      setPresetStartDate(null);
       setPresetTemplate(null);
       setFormOpen(true);
     },
-    openCreateFormOnDate: (dueDate: string) => {
-      setPresetDueDate(dueDate);
+    openCreateFormOnDate: (date: string, field: CalendarDateField = "due") => {
+      // 预填字段跟随日历当前口径：按开始日期看时，右键新增的日期就该是开始日期
+      setPresetDueDate(field === "due" ? date : null);
+      setPresetStartDate(field === "start" ? date : null);
       setPresetTemplate(null);
       setFormOpen(true);
     },
     openCreateFormFromTemplate: (templateId: number) => {
       const tpl = templates.find((t) => t.id === templateId);
       setPresetDueDate(null);
+      setPresetStartDate(null);
       setPresetTemplate(tpl ? parseTemplatePayload(tpl.payload) : null);
       setFormOpen(true);
     },
@@ -403,6 +410,7 @@ export default function TodoShell() {
             projects={projects}
             defaultProjectId={ctx.activeProjectId}
             presetDueDate={presetDueDate}
+            presetStartDate={presetStartDate}
             presetTemplate={presetTemplate}
             quickView={
               projectId == null && !ungrouped && savedFilterId == null ? quickView : null

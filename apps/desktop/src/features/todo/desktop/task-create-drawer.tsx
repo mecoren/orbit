@@ -187,6 +187,15 @@ function initialDueMs(args: {
   return args.viewDueMs ?? null;
 }
 
+/** 开始日期初始值：日历「按开始日期」口径右键注入 > 今天零点 */
+function initialStartMs(presetStartDate?: string | null): number {
+  if (presetStartDate) {
+    const ms = new Date(`${presetStartDate}T00:00:00`).getTime();
+    if (!Number.isNaN(ms)) return ms;
+  }
+  return todayStartMs();
+}
+
 /** 预计时长输入串 → 分钟数（空/非正数 = 未设置，与 core 下限口径一致） */
 function parseDurationMinutes(text: string): number | null {
   const n = Number.parseInt(text, 10);
@@ -201,6 +210,8 @@ interface TaskCreateDrawerProps {
   defaultProjectId?: number | null;
   /** 日历视图右键日格注入的截止日期（YYYY-MM-DD） */
   presetDueDate?: string | null;
+  /** 日历「按开始日期」口径下右键日格注入的开始日期（YYYY-MM-DD） */
+  presetStartDate?: string | null;
   /** 当前快捷视图（今日/本周/我的一天/收藏 → 创建载荷自动带视图标记） */
   quickView?: QuickViewKey | null;
   /** 任务模板预填（优先级：模板 > 日历右键 > 视图默认） */
@@ -213,6 +224,7 @@ export function TaskCreateDrawer({
   projects,
   defaultProjectId,
   presetDueDate,
+  presetStartDate,
   quickView,
   presetTemplate,
 }: TaskCreateDrawerProps) {
@@ -232,7 +244,7 @@ export function TaskCreateDrawer({
       description: tpl?.notes ?? "",
       projectId: defaultProjectId != null ? String(defaultProjectId) : "",
       priority: tpl?.priority ?? 0,
-      startMs: todayStartMs(),
+      startMs: initialStartMs(presetStartDate),
       dueMs: initialDueMs({
         presetDueDate,
         templateOffsetDays: tpl?.due_offset_days,
@@ -245,7 +257,7 @@ export function TaskCreateDrawer({
     // Radix 打开后会把焦点交给内容区，下一帧再聚焦标题才稳
     const raf = requestAnimationFrame(() => titleRef.current?.focus());
     return () => cancelAnimationFrame(raf);
-  }, [open, defaultProjectId, presetDueDate, quickView, presetTemplate]);
+  }, [open, defaultProjectId, presetDueDate, presetStartDate, quickView, presetTemplate]);
 
   const patch = (next: Partial<DraftState>) =>
     setDraft((prev) => ({ ...prev, ...next }));

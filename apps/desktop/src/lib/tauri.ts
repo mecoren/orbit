@@ -51,6 +51,10 @@ export interface ListFilter {
   due_from?: number | null;
   /** 截止区间上界（毫秒，不含） */
   due_to?: number | null;
+  /** 开始区间下界（毫秒，含）：日历「按开始日期」口径取数（NULL 不命中） */
+  start_from?: number | null;
+  /** 开始区间上界（毫秒，不含） */
+  start_to?: number | null;
 }
 
 /** 键集分页支持的排序档（title 档走旧的全量通道） */
