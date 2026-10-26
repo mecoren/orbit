@@ -370,6 +370,9 @@ pub fn run() {
             business_cmd::todo_project_snooze_review,
             // todo_tasks
             business_cmd::todo_tasks_list,
+            business_cmd::todo_tasks_page,
+            business_cmd::todo_task_overview,
+            business_cmd::todo_tasks_board,
             business_cmd::todo_tasks_get,
             business_cmd::todo_tasks_create,
             business_cmd::todo_tasks_update,

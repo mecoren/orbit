@@ -29,9 +29,11 @@ import {
   todoLabelList,
   todoProjectList,
   todoTaskList,
+  todoTaskOverview,
   type TaskListPredicate,
   type TodoProject,
   type TodoTaskListItem,
+  type TodoTaskOverview,
 } from "@/lib/tauri";
 import { projectIdsWithDescendants } from "../shared/project-tree";
 import { parseTemplatePayload } from "../shared/template-apply";
@@ -80,6 +82,14 @@ interface TodoShellContextValue {
   tasksError: string | null;
   /** 任务列表谓词下推参数（快捷视图/项目互斥选中 → SQL 端过滤；面板搜索查询复用） */
   taskPredicate: TaskListPredicate;
+  /**
+   * 面板控制壳层全量通道开关（P1 窗口化）：列表/表格视图 + 非 title 排序 +
+   * 未选保存筛选器时不再拉万行——列表走自身的键集分页通道。
+   * 壳层仍用它在看板/日历/四象限/Logbook/回顾等全量消费方下保持旧行为。
+   */
+  setNeedsFullTasks: (needs: boolean) => void;
+  /** 任务总览（总数 + 按项目未完成计数）：侧栏角标不再依赖全量数组 */
+  overview: TodoTaskOverview | undefined;
 
   // ---- 表单/标签管理（壳层挂载的弹层，面板只触发）----
   openCreateForm: () => void;
@@ -183,8 +193,15 @@ export default function TodoShell() {
     }
   }, [quickView, activeProjectIds, todayZero]);
 
+  // P1 窗口化：全量通道只在「确实需要整份数组」的视图启用。列表/表格
+  // 走各自的分页通道后，这里常驻关闭——否则分页省下的内存又被这条万行
+  // 查询填回去。面板在 /todo 页面内通过 setNeedsFullTasks 切换；离开
+  // /todo（回顾中心等独立页面）时下面用路由强制开启。
+  const [panelNeedsFullTasks, setNeedsFullTasks] = useState(true);
+  const needsFullTasks = needsTodoIndexNav(pathname) || panelNeedsFullTasks;
+
   const tasksQuery = useQuery({
-    // keyword 恒空 = 全量通道（侧栏计数、详情导航、无搜索时的列表渲染都吃它）。
+    // keyword 恒空 = 全量通道（详情导航、看板/日历/四象限/Logbook 渲染都吃它）。
     // 搜索态另开一路带 keyword 的小结果集查询（task-panel）：SQL 端的
     // keyword LIKE 命中集才带 description——本通道按批2 列裁剪把该列以
     // NULL 占位不传输，在这里传 keyword 只会搜到标题。
@@ -196,12 +213,22 @@ export default function TodoShell() {
         page_size: TASK_LIST_PAGE_SIZE,
         ...taskPredicate,
       }),
+    enabled: needsFullTasks,
     staleTime: 2 * 60 * 1000,
     // A1 缓存驻留收敛：大列表不再挂 placeholderData（换谓词重拉的窗口里
     // 不留旧万行数组），并把空闲回收从全局 10min 收到 10s。实测一份万行
     // 结果集只值 2MB（growth-curve 的 heapMB_per_extra10kCopy），故这是
     // 廉价保险而非内存收益来源；换视图首帧走骨架是它的取舍。
     gcTime: 10_000,
+  });
+
+  // 任务总览（P1 窗口化配套）：侧栏角标与「共 N 条」不再从万行数组内存聚合
+  const overviewQuery = useQuery({
+    // 挂在 ["todo_tasks"] 前缀下，让 db-change 的列表失效顺带刷新角标
+    queryKey: ["todo_tasks", "overview"],
+    queryFn: () => todoTaskOverview({ page: 1, page_size: 0 }),
+    staleTime: 2 * 60 * 1000,
+    placeholderData: (prev) => prev,
   });
 
   const projects = projectsQuery.data ?? [];
@@ -259,16 +286,16 @@ export default function TodoShell() {
         : String(tasksQuery.error)
       : null;
 
-  // ---- 项目未完成计数聚合（侧栏删除保护判定）----
+  // ---- 项目未完成计数聚合（侧栏角标/删除保护判定）----
+  // P1 窗口化：改用 SQL 聚合（全局口径），不再从万行数组内存分组——
+  // 列表只装已加载窗口时，内存聚合会随窗口大小漂移。
   const undoneCounts = useMemo(() => {
     const map: Record<number, number> = {};
-    for (const t of tasks) {
-      if (!t.done && t.project_id != null) {
-        map[t.project_id] = (map[t.project_id] ?? 0) + 1;
-      }
+    for (const bucket of overviewQuery.data?.undone_by_project ?? []) {
+      if (bucket.project_id != null) map[bucket.project_id] = bucket.count;
     }
     return map;
-  }, [tasks]);
+  }, [overviewQuery.data]);
 
   // 选中入口点击改的是壳层 state，只有 TaskPanel（/todo index）消费它；
   // 停在 trash/stats 子面板时须先导航回 /todo，否则点击静默无反应
@@ -315,6 +342,8 @@ export default function TodoShell() {
     tasksLoading: tasksQuery.isLoading,
     tasksError,
     taskPredicate,
+    setNeedsFullTasks,
+    overview: overviewQuery.data,
     openCreateForm: () => {
       setPresetDueDate(null);
       setPresetTemplate(null);

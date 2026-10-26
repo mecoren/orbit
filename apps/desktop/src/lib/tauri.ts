@@ -29,6 +29,67 @@ export interface ListFilter {
   favorite_only?: boolean | null;
   /** 我的一天零点毫秒（调用方算好本地零点传入） */
   my_day_today?: number | null;
+  /** 未分组视图：true = project_id IS NULL */
+  ungrouped?: boolean | null;
+  /** 优先级等值（工具栏单值档；priority_min 是区间下限，两者不同） */
+  priority_eq?: number | null;
+  /**
+   * 排除早于此时刻的截止（毫秒），但**保留无截止行**：
+   * 逾期置顶段由独立查询取走后，主列表用它把逾期行排除，避免重复渲染。
+   */
+  exclude_due_before?: number | null;
+  /** 是否有截止：false = due_date IS NULL（日历「未排期」区） */
+  has_due?: boolean | null;
+  /**
+   * 排序键下推（P1 键集分页，仅 todo_tasks 分页通道消费）：
+   * manual/due/priority/created/done_at。`title` 不支持——中文拼音序无法在 SQL 侧复刻。
+   */
+  sort_key?: TaskPageSortKey | null;
+  /** 排序方向；缺省 = 各档默认方向（与 BASE_SORT_DIR 一致） */
+  sort_dir?: TaskSortDir | null;
+  /** 截止区间下界（毫秒，含）：日历按可见范围取数 */
+  due_from?: number | null;
+  /** 截止区间上界（毫秒，不含） */
+  due_to?: number | null;
+}
+
+/** 键集分页支持的排序档（title 档走旧的全量通道） */
+export type TaskPageSortKey = "manual" | "due" | "priority" | "created" | "done_at";
+export type TaskSortDir = "asc" | "desc";
+
+/**
+ * 键集分页游标：上一页最后一行的排序键值 + 主键。
+ *
+ * `sort_key`/`dir` 与本次请求不一致时后端返回空页——换档后沿用旧游标属于
+ * 正常的 UI 竞态（用户快速切排序），让它自然收敛比报错好。
+ */
+export interface ListCursor {
+  sort_key: string;
+  dir: string;
+  /** 主排序键值（position/priority/created_at/due_date）；due 档 null = 无截止尾段 */
+  key: number | null;
+  /** 次排序键（仅 priority 档：同优先级按 position 升序） */
+  key2: number | null;
+  id: number;
+}
+
+/** 任务分页结果：`total` 不在这里（由 todoTaskOverview 独立聚合给） */
+export interface TodoTaskPage {
+  items: TodoTaskListItem[];
+  next_cursor: ListCursor | null;
+  has_more: boolean;
+}
+
+/** 单个项目的未完成计数 */
+export interface TodoProjectUndone {
+  project_id: number | null;
+  count: number;
+}
+
+/** 任务总览：总数 + 侧栏未完成计数（全局口径，不受当前视图谓词影响） */
+export interface TodoTaskOverview {
+  total: number;
+  undone_by_project: TodoProjectUndone[];
 }
 
 /**
@@ -355,6 +416,59 @@ export type TodoTaskListItem = Omit<
 >;
 export const todoTaskList = (filter: ListFilter) =>
   invoke<TodoTaskListItem[]>("todo_tasks_list", { filter });
+
+/**
+ * 任务键集分页（P1 50k 规模档）：列表/表格窗口化的唯一读通道。
+ *
+ * 与 `todoTaskList` 的分工：`title` 排序档需要 `localeCompare` 的中文拼音序，
+ * SQL 侧复刻不了，仍走旧的全量通道；其余四档一律走本通道。
+ */
+export const todoTaskPage = (
+  filter: ListFilter,
+  cursor: ListCursor | null,
+  limit: number,
+) => invoke<TodoTaskPage>("todo_tasks_page", { filter, cursor, limit });
+
+/** 任务总览：总数（「已加载 X / 共 Y」）+ 侧栏未完成计数 */
+export const todoTaskOverview = (filter: ListFilter) =>
+  invoke<TodoTaskOverview>("todo_task_overview", { filter });
+
+/** 看板/四象限分组维度（列键与 shared/kanban-group 的 kanbanColumnKey 同形） */
+export type BoardGroupBy = "project" | "status" | "priority" | "due" | "quadrant";
+
+/** 看板单列：组键 + 组总数（不受 limit 影响）+ 前 N 条 */
+export interface TodoTaskBoardGroup {
+  key: string;
+  total: number;
+  items: TodoTaskListItem[];
+}
+
+/** 看板/四象限一次往返（groups 只含实际有任务的组） */
+export interface TodoTaskBoard {
+  groups: TodoTaskBoardGroup[];
+  total: number;
+}
+
+/**
+ * 看板/四象限窗口化：每列前 `limitPerGroup` 条 + 每列总数。
+ *
+ * `dayStart`/`dayEnd` 由调用方按本地时区算好传入（due 五分桶与四象限
+ * 「今天以内到期 = 紧急」的界）；Rust 侧不重复做日界换算。
+ */
+export const todoTaskBoard = (
+  filter: ListFilter,
+  groupBy: BoardGroupBy,
+  limitPerGroup: number,
+  dayStart: number,
+  dayEnd: number,
+) =>
+  invoke<TodoTaskBoard>("todo_tasks_board", {
+    filter,
+    groupBy,
+    limitPerGroup,
+    dayStart,
+    dayEnd,
+  });
 export const todoTaskGet = (id: number) => invoke<TodoTask>("todo_tasks_get", { id });
 export const todoTaskCreate = (input: TodoTaskCreateInput) => invoke<TodoTask>("todo_tasks_create", { input });
 export const todoTaskUpdate = (id: number, input: TodoTaskUpdateInput) => invoke<TodoTask>("todo_tasks_update", { id, input });

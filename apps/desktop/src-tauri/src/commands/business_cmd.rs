@@ -121,6 +121,56 @@ pub async fn todo_tasks_list(
         .await
         .map_err(|e| e.to_string())
 }
+/// 任务键集分页（P1 50k 规模档）：列表窗口化的唯一读通道。
+///
+/// `cursor` 为上一页返回值，首页传 `null`；`limit` 钳制在 1..=1000。
+#[tauri::command]
+pub async fn todo_tasks_page(
+    state: State<'_, AppState>,
+    filter: ListFilter,
+    cursor: Option<ListCursor>,
+    limit: u32,
+) -> Result<TodoTaskPage, String> {
+    business_api::list_todo_tasks_page(&state.pool, &filter, cursor.as_ref(), limit)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// 任务总览（总数 + 按项目未完成计数）：侧栏角标与「已加载 X / 共 Y」。
+#[tauri::command]
+pub async fn todo_task_overview(
+    state: State<'_, AppState>,
+    filter: ListFilter,
+) -> Result<TodoTaskOverview, String> {
+    business_api::todo_task_overview(&state.pool, &filter)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// 看板/四象限窗口化：每列前 N 条 + 每列总数（列键与前端 kanbanColumnKey 同形）。
+///
+/// `day_start` / `day_end` 由前端按本地时区算好传入（due 五分桶与四象限紧急性界）。
+#[tauri::command]
+pub async fn todo_tasks_board(
+    state: State<'_, AppState>,
+    filter: ListFilter,
+    group_by: BoardGroupBy,
+    limit_per_group: u32,
+    day_start: i64,
+    day_end: i64,
+) -> Result<TodoTaskBoard, String> {
+    business_api::list_todo_tasks_board(
+        &state.pool,
+        &filter,
+        group_by,
+        limit_per_group,
+        day_start,
+        day_end,
+    )
+    .await
+    .map_err(|e| e.to_string())
+}
+
 #[tauri::command]
 pub async fn todo_tasks_get(state: State<'_, AppState>, id: i64) -> Result<TodoTask, String> {
     business_api::get_todo_task(&state.pool, id)

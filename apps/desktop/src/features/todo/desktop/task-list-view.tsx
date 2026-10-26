@@ -14,7 +14,7 @@
  *   （完成/未完成/收藏/项目移动/删除，项目移动带中值落位）。详情抽屉仍由
  *   未选中行打开，选中行点击仅切换勾选（与多数竞品一致）。
  */
-import { memo, useMemo, useRef, useState, type ReactNode } from "react";
+import { memo, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { formatDistanceToNow } from "date-fns";
 import { zhCN } from "date-fns/locale";
 import { useQueryClient } from "@tanstack/react-query";
@@ -93,6 +93,13 @@ interface TaskListViewProps {
   onOpenDetail: (id: number) => void;
   /** 是否允许手动拖拽（仅排序档 manual；#26） */
   sortable?: boolean;
+  /**
+   * 滚动到底部附近时请求下一页（P1 窗口化）；缺省 = 单页全量通道，不触发。
+   * 调用方负责去重（isFetchingNextPage / hasNextPage 守卫）。
+   */
+  onLoadMore?: () => void;
+  /** 是否还有下一页（false/缺省 → 不再请求） */
+  hasMore?: boolean;
 }
 
 /** 截止文案：±15 天内相对时间，否则 MM-dd（04 §3.2） */
@@ -122,7 +129,7 @@ const rowsFirstCollision: CollisionDetection = (args) => {
   return rowHits.length > 0 ? rowHits : collisions;
 };
 
-export function TaskListView({ tasks, projects, labelsByTask, remindersByTask, dependenciesByTask, loading, error, onCreateClick, onOpenDetail, sortable = true }: TaskListViewProps) {
+export function TaskListView({ tasks, projects, labelsByTask, remindersByTask, dependenciesByTask, loading, error, onCreateClick, onOpenDetail, sortable = true, onLoadMore, hasMore = false }: TaskListViewProps) {
   const qc = useQueryClient();
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -182,6 +189,24 @@ export function TaskListView({ tasks, projects, labelsByTask, remindersByTask, d
     overscan: 8,
     getItemKey: (i) => stream[i].id,
   });
+
+  // 触底预取（P1 窗口化）：最后可见行进入末尾 5 行内即请求下一页。
+  // loadMoreRef 防同一窗口内重复触发（effect 会随滚动反复重跑）；
+  // stream.length 变化（新一页到账）后解锁。
+  const virtualItems = virtualizer.getVirtualItems();
+  const lastVirtualIndex =
+    virtualItems.length > 0 ? virtualItems[virtualItems.length - 1].index : -1;
+  const loadMoreLock = useRef(false);
+  useEffect(() => {
+    loadMoreLock.current = false;
+  }, [stream.length]);
+  useEffect(() => {
+    if (!hasMore || !onLoadMore || lastVirtualIndex < 0) return;
+    if (lastVirtualIndex < stream.length - 5) return;
+    if (loadMoreLock.current) return;
+    loadMoreLock.current = true;
+    onLoadMore();
+  }, [lastVirtualIndex, stream.length, hasMore, onLoadMore]);
 
   // 拖拽（P1#11）：PointerSensor distance:6 —— 小位移不算拖拽，保证行点击；
   // hooks 全部集中在早退分支之前，保证无条件执行
@@ -310,7 +335,10 @@ export function TaskListView({ tasks, projects, labelsByTask, remindersByTask, d
     if (Number.isNaN(draggedId) || idx < 0) return;
 
     if (String(over.id) === "rows-container") {
-      // 容器空白 → 尾部追加
+      // 容器空白 → 尾部追加。分页窗口下「最后一行」只是已加载窗口的末行，
+      // 它后面还有未加载的行（position 可能更大）——此时落位会插到看不见的
+      // 位置，直接不处理（docs/13 P1 第 4 条：跨窗口拖拽不猜）。
+      if (hasMore) return;
       const last = tasks[tasks.length - 1];
       if (!last || last.id === draggedId) return;
       // 乐观 patch 落点（D3）：写库成功前行先定住，不等重拉（回弹即此处缺失）
@@ -499,7 +527,7 @@ export function TaskListView({ tasks, projects, labelsByTask, remindersByTask, d
           </div>
         )}
         <RowContainerDropZone totalSize={virtualizer.getTotalSize()}>
-          {virtualizer.getVirtualItems().map((vi) => renderRow(stream[vi.index], vi))}
+          {virtualItems.map((vi) => renderRow(stream[vi.index], vi))}
         </RowContainerDropZone>
       </div>
 

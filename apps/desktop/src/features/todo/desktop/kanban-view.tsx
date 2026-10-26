@@ -105,9 +105,23 @@ interface KanbanViewProps {
   sortKey: TaskSortKey;
   /** 加载态（H3）：查询进行中列内不闪「拖拽任务到此处」空态 */
   loading?: boolean;
+  /**
+   * 列键 → 该组总条数（P1 窗口化：列内只装前 N 条，角标仍报真实总数）。
+   * 缺省 = 用已加载条数（全量通道，label 档等）。
+   */
+  groupTotals?: ReadonlyMap<string, number>;
 }
 
-export function KanbanView({ tasks, projects, groupBy, labelsByTask, remindersByTask, sortKey, loading }: KanbanViewProps) {
+export function KanbanView({
+  tasks,
+  projects,
+  groupBy,
+  labelsByTask,
+  remindersByTask,
+  sortKey,
+  loading,
+  groupTotals,
+}: KanbanViewProps) {
   const qc = useQueryClient();
   const setSelectedTaskId = useTodoStore((s) => s.setSelectedTaskId);
   // memo 友好：打开详情回调恒定引用，列/卡片 props 只随业务数据变化
@@ -343,6 +357,7 @@ export function KanbanView({ tasks, projects, groupBy, labelsByTask, remindersBy
               key={col.key}
               column={col}
               tasks={grouped.get(col.key) ?? []}
+              total={groupTotals?.get(col.key)}
               projects={projects}
               labelsByTask={labelsByTask}
               remindersByTask={remindersByTask}
@@ -489,6 +504,7 @@ export function KanbanView({ tasks, projects, groupBy, labelsByTask, remindersBy
 const KanbanColumn = memo(function KanbanColumn({
   column,
   tasks,
+  total,
   projects,
   labelsByTask,
   remindersByTask,
@@ -503,6 +519,8 @@ const KanbanColumn = memo(function KanbanColumn({
 }: {
   column: KanbanColumnDef;
   tasks: TodoTaskListItem[];
+  /** 该列真实总数（窗口化下大于 tasks.length）；缺省 = tasks.length */
+  total?: number;
   projects: TodoProject[];
   labelsByTask: Map<number, ProjectedTaskLabel[]>;
   remindersByTask: Map<number, TaskReminderMeta[]>;
@@ -536,12 +554,17 @@ const KanbanColumn = memo(function KanbanColumn({
         isOver ? "border-primary/40 bg-muted/40" : "border-border/50",
       )}
     >
-      {/* 列头 */}
+      {/* 列头（P1 窗口化：角标报真实总数；窗口内只装了前 N 条） */}
       <div className="flex items-center gap-2 border-b px-3 py-2">
         <span className="h-2 w-2 rounded-full" style={{ background: column.color }} />
         <span className="text-sm font-medium">{column.title}</span>
-        <span className="text-xs text-muted-foreground">{tasks.length}</span>
+        <span className="text-xs text-muted-foreground">{total ?? tasks.length}</span>
       </div>
+      {total != null && total > tasks.length && (
+        <div className="border-b bg-muted/30 px-3 py-1 text-[11px] text-muted-foreground">
+          已显示前 {tasks.length} 条，还有 {total - tasks.length} 条未加载
+        </div>
+      )}
 
       {/* 卡片区：虚拟化行容器（绝对定位行 + gap 以 padding 计入 estimate 初值）。
           原 flex+gap 控制间距的说明已随虚拟化失效——间距改由行容器的 margin 承担 */}

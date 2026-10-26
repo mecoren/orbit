@@ -31,6 +31,9 @@ interface LogbookViewProps {
   labelsByTask: Map<number, ProjectedTaskLabel[]>;
   loading?: boolean;
   onOpenDetail: (id: number) => void;
+  /** P1 窗口化：滚到底部附近继续拉下一页（done_at 倒序游标在父层持有） */
+  onLoadMore?: () => void;
+  hasMore?: boolean;
 }
 
 /** 打平条目：完成日头 + 任务行 */
@@ -57,6 +60,8 @@ export function LogbookView({
   labelsByTask,
   loading,
   onOpenDetail,
+  onLoadMore,
+  hasMore,
 }: LogbookViewProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const today = useMemo(() => new Date(), []);
@@ -109,8 +114,16 @@ export function LogbookView({
     );
   }
 
+  /** 触底预取：离底 400px 内拉下一页（游标与去重都在父层） */
+  const handleScroll = () => {
+    if (!hasMore || !onLoadMore) return;
+    const el = scrollRef.current;
+    if (!el) return;
+    if (el.scrollTop + el.clientHeight >= el.scrollHeight - 400) onLoadMore();
+  };
+
   return (
-    <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto p-2">
+    <div ref={scrollRef} onScroll={handleScroll} className="min-h-0 flex-1 overflow-y-auto p-2">
       <div style={{ height: virtualizer.getTotalSize(), position: "relative", width: "100%" }}>
         {virtualizer.getVirtualItems().map((vi) => {
           const item = flat[vi.index];
@@ -162,6 +175,11 @@ export function LogbookView({
           );
         })}
       </div>
+      {hasMore && (
+        <div className="py-3 text-center text-xs text-muted-foreground">
+          已加载 {tasks.length} 条，继续向下滚动加载更早的记录
+        </div>
+      )}
     </div>
   );
 }

@@ -92,21 +92,28 @@ export function TriageDialog({ open, onOpenChange, tasks, projects }: TriageDial
   const [busy, setBusy] = useState(false);
 
   // 打开即快照队列（关闭再打开重算——期间可能有新捕获）。
-  // 只依赖 open：写库后的 refetch 会换 tasks 引用，跟着重置会把进行中的
-  // 队列/撤销栈整个清掉（分诊到一半被拉回起点）——tasks 经 ref 取当帧值
-  const tasksRef = useRef(tasks);
-  tasksRef.current = tasks;
+  // 依赖 open + tasks，但**只做一次性播种**：写库后的 refetch 会换 tasks
+  // 引用，若每次都重算，进行中的分诊会被拉回起点。
+  //
+  // P1 窗口化后 tasks 在打开首帧可能还是空数组（分页模式按需查询未返回），
+  // 此时不能播种——否则队列被定死为空，数据到账也不重算（弹窗永远显示
+  // 「收件箱已清空」）。seededRef 在数据到位的那一帧补播，关闭时复位。
+  const seededRef = useRef(false);
   useEffect(() => {
-    if (open) {
-      setQueue(collectTriageQueue(tasksRef.current));
-      setIdx(0);
-      setMoved(0);
-      setScheduled(0);
-      setSkipped(0);
-      setDeleted(0);
-      setHistory([]);
+    if (!open) {
+      seededRef.current = false;
+      return;
     }
-  }, [open]);
+    if (seededRef.current || tasks.length === 0) return;
+    seededRef.current = true;
+    setQueue(collectTriageQueue(tasks));
+    setIdx(0);
+    setMoved(0);
+    setScheduled(0);
+    setSkipped(0);
+    setDeleted(0);
+    setHistory([]);
+  }, [open, tasks]);
 
   const current = queue[idx];
   const finished = idx >= queue.length;

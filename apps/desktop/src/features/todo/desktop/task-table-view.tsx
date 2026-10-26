@@ -7,7 +7,7 @@
  * 多选批量语义与列表视图一致（selected Set + shift 区间 + runBatch）。
  * 不做列头点击排序与表内编辑（YAGNI，留后续）；manual 档不可拖（与看板一致）。
  */
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { useQueryClient } from "@tanstack/react-query";
 import { formatDistanceToNow } from "date-fns";
@@ -66,6 +66,10 @@ export interface TaskTableViewProps {
   /** 列表同款加载/错误态通道（H3：查询进行中不闪「暂无任务」空态） */
   loading?: boolean;
   error?: string | null;
+  /** 滚动到底部附近时请求下一页（P1 窗口化）；调用方负责去重 */
+  onLoadMore?: () => void;
+  /** 是否还有下一页 */
+  hasMore?: boolean;
 }
 
 export interface TableColumn {
@@ -110,6 +114,8 @@ export default function TaskTableView({
   onOpenDetail,
   loading,
   error,
+  onLoadMore,
+  hasMore = false,
 }: TaskTableViewProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const qc = useQueryClient();
@@ -136,6 +142,22 @@ export default function TaskTableView({
     overscan: 8,
     getItemKey: (i) => tasks[i].id,
   });
+
+  // 触底预取（P1 窗口化）：与列表视图同口径（末尾 5 行内请求下一页）
+  const virtualItems = virtualizer.getVirtualItems();
+  const lastVirtualIndex =
+    virtualItems.length > 0 ? virtualItems[virtualItems.length - 1].index : -1;
+  const loadMoreLock = useRef(false);
+  useEffect(() => {
+    loadMoreLock.current = false;
+  }, [tasks.length]);
+  useEffect(() => {
+    if (!hasMore || !onLoadMore || lastVirtualIndex < 0) return;
+    if (lastVirtualIndex < tasks.length - 5) return;
+    if (loadMoreLock.current) return;
+    loadMoreLock.current = true;
+    onLoadMore();
+  }, [lastVirtualIndex, tasks.length, hasMore, onLoadMore]);
 
   // ---- 多选批量（与列表视图同语义）----
   const [selected, setSelected] = useState<Set<number>>(new Set());
@@ -365,7 +387,7 @@ export default function TaskTableView({
           {livePos}
         </div>
         <div style={{ height: virtualizer.getTotalSize(), position: "relative" }}>
-          {virtualizer.getVirtualItems().map((vi) => {
+          {virtualItems.map((vi) => {
             const t = tasks[vi.index];
             const labels = labelsByTask.get(t.id) ?? [];
             const project = projects.find((p) => p.id === t.project_id) ?? null;

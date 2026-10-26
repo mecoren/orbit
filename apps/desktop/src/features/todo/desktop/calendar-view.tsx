@@ -66,7 +66,13 @@ import { daySubLabel } from "../shared/almanac";
 import { addDays, dayKey, dayLabel, formatYmd, relativeLabel, startOfDay, startOfWeek, weekRangeLabel } from "@/lib/date-utils";
 import { rescheduleDue } from "../shared/reschedule-due";
 import { useHolidayMarks } from "../shared/use-holiday-marks";
-import { holidaysUpdate, holidayMeta, todoTaskUpdate } from "@/lib/tauri";
+import {
+  holidaysUpdate,
+  holidayMeta,
+  todoTaskPage,
+  todoTaskUpdate,
+  type ListFilter,
+} from "@/lib/tauri";
 import { OVERDUE_COLOR_CLASS, PRIORITY_COLOR, TODO_ACCENT } from "../shared/constants";
 import { LabelChips } from "../shared/label-chips";
 import { ReminderChip } from "../shared/reminder-chip";
@@ -111,7 +117,16 @@ interface CalendarViewProps {
   onAddOnDate?: (date: string) => void;
   /** 加载态（H3）：查询进行中右栏不闪空态 */
   loading?: boolean;
+  /**
+   * P1 窗口化：按可见范围取数（月/周/议程/时间轴取前后各一月，年视图取整年）。
+   * 给了 filter 且 rangeEnabled=true 时，组件自己发范围查询，props.tasks 只作兜底。
+   */
+  filter?: ListFilter;
+  rangeEnabled?: boolean;
 }
+
+/** 日历窗口上限：年视图整年、月视图三个月，超出时提示截断（不静默少显示） */
+const CALENDAR_RANGE_LIMIT = 5000;
 
 /** 左右分栏：窄窗口退化为上下堆叠（参考 wait-home SPLIT_LAYOUT）。
  *  右/下留白在 CalendarView 根层统一补（三档共用），左半区只保留左侧内距 */
@@ -137,13 +152,15 @@ interface YearSection {
 }
 
 export function CalendarView({
-  tasks,
+  tasks: fallbackTasks,
   projects,
   labelsByTask,
   remindersByTask,
   onCreateClick,
   onAddOnDate,
   loading,
+  filter,
+  rangeEnabled = false,
 }: CalendarViewProps) {
   const setSelectedTaskId = useTodoStore((s) => s.setSelectedTaskId);
   const [subMode, setSubMode] = useState<CalendarSubMode>("month");
@@ -157,6 +174,42 @@ export function CalendarView({
   const [selected, setSelected] = useState<Date>(() => startOfDay(new Date()));
   /** 年模式下独立管理的年份（切回月历时同步为 viewYear） */
   const [yearPaneYear, setYearPaneYear] = useState(() => new Date().getFullYear());
+
+  // ---- P1 窗口化：按可见范围取数（月/周/议程/时间轴取前后各一月，年视图取整年）----
+  // 范围有界，不做无限滚动；queryKey 用数值边界，翻月即换 key 自然重查
+  const calendarRange = useMemo(() => {
+    if (subMode === "year") {
+      return {
+        from: new Date(yearPaneYear, 0, 1).getTime(),
+        to: new Date(yearPaneYear + 1, 0, 1).getTime(),
+      };
+    }
+    return {
+      from: new Date(viewYear, viewMonth - 1, 1).getTime(),
+      to: new Date(viewYear, viewMonth + 2, 1).getTime(),
+    };
+  }, [subMode, yearPaneYear, viewYear, viewMonth]);
+  const rangeQuery = useQuery({
+    queryKey: ["todo_tasks", "calendar", calendarRange.from, calendarRange.to, filter],
+    queryFn: () =>
+      todoTaskPage(
+        {
+          ...(filter ?? { page: 1, page_size: 0 }),
+          page: 1,
+          page_size: CALENDAR_RANGE_LIMIT,
+          due_from: calendarRange.from,
+          due_to: calendarRange.to,
+        },
+        null,
+        CALENDAR_RANGE_LIMIT,
+      ),
+    enabled: rangeEnabled && filter != null,
+    staleTime: 2 * 60 * 1000,
+  });
+  // 遮蔽 props.tasks：下游所有分日/分月构建都读这一份
+  const tasks = rangeEnabled ? (rangeQuery.data?.items ?? []) : fallbackTasks;
+  // 范围查询首屏也算加载态，否则翻月瞬间右栏会闪「当天无任务」空态
+  const isLoading = loading || (rangeEnabled && rangeQuery.isLoading);
 
   // ---- 滚轮步进翻页（桌面 mouse/trackpad 手势） ----
   // 回调经 useWheelStepRef 转存最新闭包；批量步数一次归一，
@@ -600,7 +653,7 @@ export function CalendarView({
                 <span className="text-xs text-muted-foreground">点击日历日期可定位</span>
               )}
             </div>
-            {loading && listTotal === 0 ? (
+            {isLoading && listTotal === 0 ? (
               // 加载态与列表视图同口径（H3）：查询进行中不闪「本月没有…」空态
               <div aria-busy className="flex min-h-0 flex-1 flex-col gap-2 p-4" data-testid="calendar-loading">
                 {Array.from({ length: 6 }, (_, i) => (
@@ -687,7 +740,7 @@ export function CalendarView({
                 <span className="text-xs text-muted-foreground">点击日历日期可定位</span>
               )}
             </div>
-            {loading && listTotal === 0 ? (
+            {isLoading && listTotal === 0 ? (
               // 加载态与月/年档同口径（H3）：查询进行中不闪空态
               <div aria-busy className="flex min-h-0 flex-1 flex-col gap-2 p-4" data-testid="calendar-loading">
                 {Array.from({ length: 6 }, (_, i) => (
@@ -779,7 +832,7 @@ export function CalendarView({
               <h3 className="text-sm font-semibold">{yearPaneYear}年的任务</h3>
               <Badge variant="secondary">{listTotal} 条</Badge>
             </div>
-            {loading && listTotal === 0 ? (
+            {isLoading && listTotal === 0 ? (
               // 同月模式（H3）：年模式右栏加载骨架
               <div aria-busy className="flex min-h-0 flex-1 flex-col gap-2 p-4" data-testid="calendar-loading">
                 {Array.from({ length: 6 }, (_, i) => (

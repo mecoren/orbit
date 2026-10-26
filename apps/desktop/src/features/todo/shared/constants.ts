@@ -45,6 +45,17 @@ export const OVERDUE_COLOR_CLASS = "text-destructive";
  */
 export const TASK_LIST_PAGE_SIZE = 10000;
 
+/**
+ * 列表/表格窗口化的单页大小（P1 50k 规模档）。
+ *
+ * 200 条 ≈ 首屏一屏半：首屏 IPC 体积与可交互时间随页长线性下降，同时
+ * 滚动到底前有足够余量预取下一页（虚拟列表在末尾 5 行内触发）。
+ */
+export const TASK_PAGE_WINDOW = 200;
+
+/** 逾期置顶段的单次上限（逾期集是有界小集合；超限时只显示最早逾期的 200 条） */
+export const OVERDUE_PAGE_LIMIT = 200;
+
 /** 「我的一天」日出高亮色（列表/表格/详情/右键菜单四处同口径，04 §5.2） */
 export const MY_DAY_COLOR = "#F59E0B";
 

@@ -17,6 +17,7 @@ import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
 import { UNDO_DELAY_MS, createDelayedRun, type DelayedRun } from "@/features/todo/shared/undo-delete";
+import { removeRowsFromData } from "@/lib/query-patch";
 
 export interface UndoableDeleteInput {
   /** 实体中文名，如"任务"/"项目"/"标签" */
@@ -31,15 +32,20 @@ export interface UndoableDeleteInput {
   hide: (qc: QueryClient) => void;
 }
 
-/** 按 id 从匹配 keyPrefix 的数组缓存中隐藏一行（前缀匹配多个同族变体 key） */
+/**
+ * 按 id 从匹配 keyPrefix 的缓存中隐藏一行（前缀匹配多个同族变体 key）。
+ *
+ * 必须同时认识数组形态与分页形态（P1 窗口化后列表是 useInfiniteQuery 的
+ * `{pages}`）：此前只处理数组，遇上分页缓存会在 `old.some` 抛错，
+ * 导致 undoableDelete 整个函数体中断——commit 从未排期，行永不消失。
+ */
 export function hideFromQueries<T extends { id: number }>(
   qc: QueryClient,
   keyPrefix: readonly unknown[],
   id: number,
 ) {
-  qc.setQueriesData<T[]>({ queryKey: keyPrefix }, (old) =>
-    old?.some((r) => r.id === id) ? old.filter((r) => r.id !== id) : old,
-  );
+  const ids = new Set([id]);
+  qc.setQueriesData({ queryKey: keyPrefix }, (old) => removeRowsFromData<T>(old, ids));
 }
 
 /** 批量隐藏：一次摘除多行（批量删除单笔化的配套工具） */
@@ -49,9 +55,7 @@ export function hideManyFromQueries<T extends { id: number }>(
   ids: number[],
 ) {
   const remove = new Set(ids);
-  qc.setQueriesData<T[]>({ queryKey: keyPrefix }, (old) =>
-    old?.some((r) => remove.has(r.id)) ? old.filter((r) => !remove.has(r.id)) : old,
-  );
+  qc.setQueriesData({ queryKey: keyPrefix }, (old) => removeRowsFromData<T>(old, remove));
 }
 
 function useUndoableDeleteImpl() {

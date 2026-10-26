@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { type TodoTask } from "@/lib/tauri";
-import { BASE_SORT_DIR, filterTasks, groupDoneByDay, groupEisenhower, groupOverdueFirst, sortTasks, todayStartMs, toggleMyDayValue } from "./task-filters";
+import { BASE_SORT_DIR, buildPagedFilter, filterTasks, groupDoneByDay, groupEisenhower, groupOverdueFirst, sortTasks, todayStartMs, toggleMyDayValue } from "./task-filters";
 
 /** 补齐 TodoTask 全部必填字段的工厂 */
 function mk(partial: Partial<TodoTask>): TodoTask {
@@ -595,5 +595,89 @@ describe("groupEisenhower - 四象限分组（TickTick 矩阵口径，与移动�
     const buckets = groupEisenhower([], now);
     expect(Object.keys(buckets)).toHaveLength(4);
     expect(Object.values(buckets).every((l) => l.length === 0)).toBe(true);
+  });
+});
+
+describe("buildPagedFilter（分页通道下推，P1）", () => {
+  const now = new Date("2026-10-26T10:00:00");
+  const base = {
+    keyword: "",
+    predicate: {},
+    ungrouped: false,
+    hasProjectView: false,
+    quickView: null,
+    statusFilter: "all" as const,
+    priorityFilter: null,
+    hideDone: false,
+    sortKey: "manual" as const,
+    now,
+  };
+
+  it("无筛选：只带排序与分页键，不臆造谓词", () => {
+    const f = buildPagedFilter(base);
+    expect(f.sort_key).toBe("manual");
+    expect(f.done ?? null).toBe(null);
+    expect(f.status ?? null).toBe(null);
+    expect(f.ungrouped).toBe(null);
+    expect(f.priority_eq).toBe(null);
+    expect(f.due_to ?? null).toBe(null);
+    expect(f.keyword).toBe(null);
+  });
+
+  it("hideDone 落成 done=false；done 快捷视图与 done 状态筛选不剔除", () => {
+    expect(buildPagedFilter({ ...base, hideDone: true }).done).toBe(false);
+    expect(
+      buildPagedFilter({ ...base, hideDone: true, quickView: "done", predicate: { done: true } })
+        .done,
+    ).toBe(true);
+    expect(
+      buildPagedFilter({ ...base, hideDone: true, statusFilter: "done" }).done,
+    ).toBe(true);
+  });
+
+  it("项目视图下工具栏状态/优先级不生效（与 filterTasks 分支一致）", () => {
+    const f = buildPagedFilter({
+      ...base,
+      hasProjectView: true,
+      statusFilter: "doing",
+      priorityFilter: 3,
+    });
+    expect(f.status ?? null).toBe(null);
+    expect(f.priority_eq).toBe(null);
+  });
+
+  it("未分组目标同样不下推工具栏筛选", () => {
+    const f = buildPagedFilter({
+      ...base,
+      ungrouped: true,
+      statusFilter: "pending",
+      priorityFilter: 2,
+    });
+    expect(f.ungrouped).toBe(true);
+    expect(f.status ?? null).toBe(null);
+    expect(f.priority_eq).toBe(null);
+  });
+
+  it("today/week 转成 due_to（本地日界，含今日结束前）", () => {
+    const today = buildPagedFilter({ ...base, quickView: "today" });
+    const todayEnd = new Date(now);
+    todayEnd.setHours(0, 0, 0, 0);
+    expect(today.due_to).toBe(todayEnd.getTime() + 86_400_000);
+    const week = buildPagedFilter({ ...base, quickView: "week" });
+    expect(week.due_to).toBe(todayEnd.getTime() + 7 * 86_400_000);
+  });
+
+  it("keyword 去空白、空串归 null；逾期排除时刻透传；方向透传", () => {
+    const f = buildPagedFilter({
+      ...base,
+      keyword: "  会议  ",
+      sortKey: "due",
+      sortDir: "desc",
+      excludeOverdueBefore: 1234,
+    });
+    expect(f.keyword).toBe("会议");
+    expect(f.sort_key).toBe("due");
+    expect(f.sort_dir).toBe("desc");
+    expect(f.exclude_due_before).toBe(1234);
   });
 });

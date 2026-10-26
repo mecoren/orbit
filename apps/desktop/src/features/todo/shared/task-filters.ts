@@ -6,7 +6,7 @@
  * 排序默认 position 升序 → created_at 降序（sortKey 可切截止/优先级/标题/创建时间，
  * 07 backlog #26 双端排序选项；非默认档下手动拖拽排序把手由 UI 隐藏）。
  */
-import { type TodoTaskListItem } from "@/lib/tauri";
+import { type ListFilter, type TaskListPredicate, type TodoTaskListItem } from "@/lib/tauri";
 import { type QuickViewKey } from "./constants";
 
 export type TaskStatusFilter = "all" | "pending" | "doing" | "done" | "undone";
@@ -227,6 +227,85 @@ export function groupOverdueFirst(
     else rest.push(t);
   }
   return { overdue, rest };
+}
+
+// =============================================================================
+// 键集分页通道的过滤条件下推（P1 50k 规模档）
+// =============================================================================
+
+/** 可分页的排序档：`title` 需要 localeCompare 的中文拼音序，SQL 侧复刻不了 */
+export type PagedSortKey = Exclude<TaskSortKey, "title">;
+
+export interface PagedFilterInput {
+  keyword: string;
+  /** 壳层已下推的视图谓词（快捷视图/项目集合/我的一天/收藏） */
+  predicate: TaskListPredicate;
+  ungrouped: boolean;
+  /** 是否处于项目视图（含清单聚合）：工具栏状态/优先级在其中不生效（04 §四） */
+  hasProjectView: boolean;
+  quickView: QuickViewKey | null;
+  statusFilter: TaskStatusFilter;
+  priorityFilter: number | null;
+  hideDone: boolean;
+  sortKey: PagedSortKey;
+  sortDir?: TaskSortDir | null;
+  /** 主列表排除逾期行的时刻（毫秒）；null = 不排除（表格视图无逾期置顶段） */
+  excludeOverdueBefore?: number | null;
+  now?: Date;
+}
+
+/**
+ * 把「视图谓词 + 工具栏筛选 + 排序」组装成一条分页查询的 ListFilter。
+ *
+ * 这是 `filterTasks` 的 SQL 版：两者必须同语义——分页通道不再对结果做内存
+ * `filterTasks`/`sortTasks`，任何一处漏下推都会表现为「筛选后条数不对」或
+ * 「翻页顺序与视觉顺序不一致」。
+ *
+ * 优先级链与 `filterTasks` 一致：predicate（项目/未分组/快捷视图）优先，
+ * 工具栏状态/优先级只在非项目目标下叠加；`hideDone` 最后施加，但
+ * `done` 快捷视图与 `done` 状态筛选不剔除（明确要看完成集的入口）。
+ */
+export function buildPagedFilter(input: PagedFilterInput): ListFilter {
+  const now = input.now ?? new Date();
+  const dayStart = new Date(now);
+  dayStart.setHours(0, 0, 0, 0);
+  const todayEnd = dayStart.getTime() + 86_400_000;
+  const weekEnd = todayEnd + 6 * 86_400_000;
+
+  const toolbarApplies = !input.ungrouped && !input.hasProjectView;
+
+  let done = input.predicate.done ?? null;
+  let status: string | null = null;
+  let dueTo: number | null = null;
+
+  if (toolbarApplies) {
+    if (input.quickView === "today") dueTo = todayEnd;
+    if (input.quickView === "week") dueTo = weekEnd;
+
+    if (input.statusFilter === "undone") done = false;
+    if (input.statusFilter === "pending") status = "pending";
+    if (input.statusFilter === "doing") status = "doing";
+    if (input.statusFilter === "done") done = true;
+  }
+
+  if (input.hideDone && input.quickView !== "done" && input.statusFilter !== "done") {
+    done = false;
+  }
+
+  return {
+    keyword: input.keyword.trim() || null,
+    page: 1,
+    page_size: 0,
+    ...input.predicate,
+    ungrouped: input.ungrouped ? true : null,
+    priority_eq: toolbarApplies ? (input.priorityFilter ?? null) : null,
+    done,
+    status,
+    due_to: dueTo,
+    exclude_due_before: input.excludeOverdueBefore ?? null,
+    sort_key: input.sortKey,
+    sort_dir: input.sortDir ?? null,
+  };
 }
 
 /** Logbook 按完成日分组单元（Things Logbook：完成历史按日聚合回看） */

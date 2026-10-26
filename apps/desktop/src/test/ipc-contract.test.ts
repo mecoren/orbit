@@ -155,6 +155,96 @@ describe("mock IPC 契约", () => {
     expect(paginateRows(rows, 99, 10)).toEqual([]);
   });
 
+  it("④ 键集分页保真：四档逐页遍历 = 单页全量（无重复、无遗漏、同序）", () => {
+    type Cursor = {
+      sort_key: string;
+      dir: string;
+      key: number | null;
+      key2: number | null;
+      id: number;
+    };
+    type Page = {
+      items: Array<{ id: number }>;
+      next_cursor: Cursor | null;
+      has_more: boolean;
+    };
+    const page = (
+      filter: Record<string, unknown>,
+      cursor: Cursor | null,
+      limit: number,
+    ): Page => {
+      const db = seedTasks(45);
+      const impl = mockCommands.todo_tasks_page as (
+        args: unknown,
+        ctx: unknown,
+      ) => Page;
+      return impl({ filter, cursor, limit }, { db });
+    };
+
+    for (const sort_key of ["manual", "due", "priority", "created"]) {
+      for (const sort_dir of [null, "desc"]) {
+        const filter = { sort_key, sort_dir };
+        const full = page(filter, null, 1000).items.map((t) => t.id);
+        expect(full).toHaveLength(45);
+        for (const limit of [1, 7, 44]) {
+          let cursor: Cursor | null = null;
+          const collected: number[] = [];
+          for (let guard = 0; guard < 100; guard += 1) {
+            const p = page(filter, cursor, limit);
+            collected.push(...p.items.map((t) => t.id));
+            expect(p.has_more).toBe(p.next_cursor !== null);
+            if (!p.next_cursor) break;
+            cursor = p.next_cursor;
+          }
+          expect(collected, `${sort_key}/${sort_dir} limit=${limit}`).toEqual(full);
+        }
+      }
+    }
+  });
+
+  it("④-1 分页通道的 done 下推与总览同口径（hideDone 依赖它剔除完成行）", () => {
+    const db = seedTasks(45);
+    (db.tasks[0] as { done: number }).done = 1;
+    const impl = mockCommands.todo_tasks_page as (
+      args: unknown,
+      ctx: unknown,
+    ) => { items: Array<{ id: number }> };
+    const undone = impl({ filter: { done: false }, cursor: null, limit: 100 }, { db });
+    expect(undone.items).toHaveLength(44);
+    const all = impl({ filter: {}, cursor: null, limit: 100 }, { db });
+    expect(all.items).toHaveLength(45);
+  });
+
+  it("④-2 换排序档沿用旧游标 → 空页（不报错、不给错数据）", () => {
+    const db = seedTasks(45);
+    const impl = mockCommands.todo_tasks_page as (
+      args: unknown,
+      ctx: unknown,
+    ) => { items: unknown[]; next_cursor: unknown; has_more: boolean };
+    const first = impl({ filter: { sort_key: "manual" }, cursor: null, limit: 5 }, { db });
+    const stale = first.next_cursor;
+    const page = impl({ filter: { sort_key: "due" }, cursor: stale, limit: 5 }, { db });
+    expect(page.items).toEqual([]);
+    expect(page.has_more).toBe(false);
+  });
+
+  it("④-3 总览聚合：total 跟随筛选，未完成计数是全局口径", () => {
+    const db = seedTasks(45);
+    (db.tasks[0] as { done: number }).done = 1;
+    const impl = mockCommands.todo_task_overview as (
+      args: unknown,
+      ctx: unknown,
+    ) => { total: number; undone_by_project: Array<{ project_id: number | null; count: number }> };
+
+    expect(impl({ filter: {} }, { db }).total).toBe(45);
+    expect(impl({ filter: { done: false } }, { db }).total).toBe(44);
+    // done 谓词只影响 total；侧栏计数恒为全局未完成
+    const bucket = impl({ filter: { done: true } }, { db }).undone_by_project.find(
+      (b) => b.project_id === null,
+    );
+    expect(bucket?.count).toBe(44);
+  });
+
   it("③ 列裁剪保真：瘦行不含 10 个零消费列，description 仅 keyword 通道回真值（D0 守门犬）", () => {
     const pruned = list({ keyword: "", page: 1, page_size: 45 });
     expect(pruned).toHaveLength(45);

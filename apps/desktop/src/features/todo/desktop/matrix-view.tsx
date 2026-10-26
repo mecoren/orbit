@@ -44,6 +44,8 @@ export interface MatrixViewProps {
   loading?: boolean;
   /** 列表查询错误文案；非空时整块渲染 ErrorState */
   error?: string | null;
+  /** 象限键 → 该象限总条数（P1 窗口化：格内只装前 N 条，角标仍报真实总数） */
+  groupTotals?: ReadonlyMap<string, number>;
   onOpenDetail: (id: number) => void;
 }
 
@@ -73,6 +75,7 @@ export function MatrixView({
   remindersByTask,
   loading,
   error,
+  groupTotals,
   onOpenDetail,
 }: MatrixViewProps) {
   const qc = useQueryClient();
@@ -132,6 +135,7 @@ export function MatrixView({
           key={q}
           quadrant={q}
           tasks={buckets[q]}
+          total={groupTotals?.get(q)}
           projectById={projectById}
           labelsByTask={labelsByTask}
           remindersByTask={remindersByTask}
@@ -147,6 +151,8 @@ export function MatrixView({
 interface QuadrantCardProps {
   quadrant: EisenhowerQuadrant;
   tasks: TodoTaskListItem[];
+  /** 该象限真实总数（窗口化下大于 tasks.length）；缺省 = tasks.length */
+  total?: number;
   projectById: Map<number, TodoProject>;
   labelsByTask: Map<number, ProjectedTaskLabel[]>;
   remindersByTask: Map<number, TaskReminderMeta[]>;
@@ -159,6 +165,7 @@ interface QuadrantCardProps {
 function QuadrantCard({
   quadrant,
   tasks,
+  total,
   projectById,
   labelsByTask,
   remindersByTask,
@@ -200,9 +207,14 @@ function QuadrantCard({
           {meta.action}
         </h2>
         <span className="ml-auto shrink-0 text-xs font-semibold tabular-nums text-muted-foreground">
-          {tasks.length}
+          {total ?? tasks.length}
         </span>
       </header>
+      {total != null && total > tasks.length && (
+        <div className="shrink-0 px-3 pb-1 text-[11px] text-muted-foreground">
+          已显示前 {tasks.length} 条，还有 {total - tasks.length} 条
+        </div>
+      )}
       {tasks.length === 0 ? (
         <div className="flex flex-1 items-center justify-center pb-4 text-xs text-muted-foreground/70">
           暂无任务

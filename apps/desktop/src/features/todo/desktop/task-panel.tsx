@@ -5,7 +5,7 @@
  * 工具栏（标题/搜索/筛选/视图切换）+ 内容区（列表/看板/日历）+ 快加栏。
  * 选中态经 useTodoShell 取用——从回收站面板切回来时筛选原样保留。
  */
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, CopyPlus, ListTodo, Search } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -19,15 +19,39 @@ import {
 import { useTodoStore } from "@/features/todo/store";
 import { useAppStore } from "@/stores/app-store";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { LS_HIDE_DONE, LS_VIEW_MODE, QUICK_VIEWS, TASK_LIST_PAGE_SIZE } from "../shared/constants";
+import {
+  LS_HIDE_DONE,
+  LS_VIEW_MODE,
+  OVERDUE_PAGE_LIMIT,
+  QUICK_VIEWS,
+  TASK_LIST_PAGE_SIZE,
+  TASK_PAGE_WINDOW,
+} from "../shared/constants";
 import { useTaskDependencies } from "../shared/use-task-dependencies";
 import { useTaskAttachmentIds, useTaskOpenSubtaskIds } from "../shared/use-task-existence-flags";
 import { useTaskLabels } from "../shared/use-task-labels";
 import { useTaskReminders } from "../shared/use-task-reminders";
-import { useQuery } from "@tanstack/react-query";
-import { filterTasks, sortTasks, BASE_SORT_DIR, type TaskSortDir, type TaskSortKey } from "../shared/task-filters";
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
+import {
+  filterTasks,
+  sortTasks,
+  BASE_SORT_DIR,
+  buildPagedFilter,
+  type PagedSortKey,
+  type TaskSortDir,
+  type TaskSortKey,
+} from "../shared/task-filters";
 import { applySavedFilter } from "../shared/saved-filter";
-import { savedFiltersList, todoTaskList } from "@/lib/tauri";
+import {
+  savedFiltersList,
+  todoTaskBoard,
+  todoTaskList,
+  todoTaskPage,
+  type BoardGroupBy,
+  type ListCursor,
+  type ListFilter,
+} from "@/lib/tauri";
+import { startOfDay } from "@/lib/date-utils";
 import { useTodoShell } from "./todo-shell";
 import { TaskListView } from "./task-list-view";
 import { LogbookView } from "./logbook-view";
@@ -48,6 +72,9 @@ type StatusFilter = "all" | "undone" | "pending" | "doing" | "done";
 type PriorityFilter = "all" | "0" | "1" | "2" | "3" | "4" | "5";
 /** 五档视图（矩阵 = 四象限 Eisenhower Matrix，TickTick 同款；2026-09-25 与移动端对齐） */
 export type ViewMode = "list" | "kanban" | "calendar" | "table" | "matrix";
+
+/** 看板/矩阵每列首屏条数（列内「还有 N 条」由组总数给，不再拉全量） */
+const BOARD_PAGE_LIMIT = 60;
 export type { StatusFilter, PriorityFilter };
 
 /** 视图切换状态持久化（04 §二；07-P2#14 增 calendar 档；2026-09-25 增 matrix 档） */
@@ -103,6 +130,8 @@ export default function TaskPanel() {
     tasksLoading,
     tasksError,
     taskPredicate,
+    setNeedsFullTasks,
+    overview,
     openCreateForm,
     openCreateFormOnDate,
     openCreateFormFromTemplate,
@@ -226,7 +255,261 @@ export default function TaskPanel() {
   // 下方 filterTasks 已保证）；其余视图照旧走列表/看板/日历/表格
   const isLogbook = quickView === "done" && projectId == null && !ungrouped && savedFilterId == null;
 
+  // ===========================================================================
+  // P1 窗口化：列表/表格改走键集分页
+  // ===========================================================================
+  //
+  // 只有列表与表格两档可分页：它们按单一全局顺序渲染，SQL 排序即视觉顺序。
+  // 看板（按列聚合）、日历（按日分组）、四象限（按桶计数）、Logbook（按完成日
+  // 分组）都需要「全量才能算对的计数/分组」，继续走旧的全量通道——
+  // docs/07 #105 已把「按列/按日独立分页」留作后续批次。
+  //
+  // title 排序档例外：中文拼音序依赖 localeCompare，SQL 侧复刻不了，
+  // 该档也回落全量通道（否则翻页边界与视觉顺序会分叉）。
+  // 窗口化基线：保存筛选器（条件应用在本地）与 title 档（拼音序 SQL 复刻不了）
+  // 必须全量；其余视图各走自己的服务端窗口通道
+  const windowedBase = !activeSavedFilter && sortKey !== "title";
+  const pagedMode = (viewMode === "list" || viewMode === "table") && !isLogbook && windowedBase;
+  // 看板/矩阵：每列前 N 条 + 组总数。标签档保留全量——分列定义来自标签投影，
+  // 列数随任务标签动态变化，窗口内的标签会让空列消失
+  const boardGroupBy: BoardGroupBy | null =
+    windowedBase && !isLogbook
+      ? viewMode === "kanban"
+        ? kanbanGroupBy === "label"
+          ? null
+          : (kanbanGroupBy as BoardGroupBy)
+        : viewMode === "matrix"
+          ? "quadrant"
+          : null
+      : null;
+  // Logbook：完成时间倒序键集分页（done_at 档）
+  const logbookPagedMode = isLogbook && viewMode === "list" && !activeSavedFilter;
+  // 日历：按可见月范围取数（范围有界，不需要无限滚动）
+  const calendarPagedMode = viewMode === "calendar" && windowedBase;
+
+  useEffect(() => {
+    setNeedsFullTasks(
+      !(pagedMode || boardGroupBy != null || logbookPagedMode || calendarPagedMode),
+    );
+  }, [pagedMode, boardGroupBy, logbookPagedMode, calendarPagedMode, setNeedsFullTasks]);
+
+  // 逾期判定基准每分钟走一格：既不会每帧重建 queryKey，也不至于跨零点后一直用旧值
+  const [nowTick, setNowTick] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = window.setInterval(() => setNowTick(Date.now()), 60_000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  // 逾期置顶段单独取（主列表用 exclude_due_before 把逾期行排除，避免重复渲染）
+  const overdueEnabled = pagedMode && viewMode === "list";
+
+  const pageFilter = useMemo(
+    () =>
+      buildPagedFilter({
+        keyword: debouncedKeyword,
+        predicate: taskPredicate,
+        ungrouped,
+        hasProjectView: activeProjectIds != null || projectId != null,
+        // 快捷视图只在非项目/未分组目标下生效（与 filterTasks 分支同义）
+        quickView: projectId == null && !ungrouped && savedFilterId == null ? quickView : null,
+        statusFilter,
+        priorityFilter: priorityFilter === "all" ? null : Number(priorityFilter),
+        hideDone,
+        sortKey: (sortKey === "title" ? "manual" : sortKey) as PagedSortKey,
+        sortDir,
+        // 逾期行不在这里排除：把它写进 filter 会让 queryKey 带上时间戳，
+        // 每分钟重拉首屏、滚动位置回跳。改由下方合并时按 id 去重（见 visibleTasks）
+        excludeOverdueBefore: null,
+        now: new Date(nowTick),
+      }),
+    [
+      debouncedKeyword,
+      taskPredicate,
+      ungrouped,
+      activeProjectIds,
+      projectId,
+      savedFilterId,
+      quickView,
+      statusFilter,
+      priorityFilter,
+      hideDone,
+      sortKey,
+      sortDir,
+      viewMode,
+      nowTick,
+    ],
+  );
+
+  const pagedQuery = useInfiniteQuery({
+    // 前缀必须挂在 ["todo_tasks"] 下：db-change 失效链是前缀匹配
+    // （lib/db-invalidation.ts），换独立前缀会让写操作后列表不刷新
+    queryKey: ["todo_tasks", "page", pageFilter],
+    queryFn: ({ pageParam }) => todoTaskPage(pageFilter, pageParam, TASK_PAGE_WINDOW),
+    initialPageParam: null as ListCursor | null,
+    getNextPageParam: (last) => last.next_cursor,
+    enabled: pagedMode,
+    staleTime: 2 * 60 * 1000,
+  });
+
+  // 逾期置顶段：同一套筛选，只把截止上界收到「现在」并要求未完成
+  const overdueFilter = useMemo(
+    () =>
+      buildPagedFilter({
+        keyword: debouncedKeyword,
+        predicate: taskPredicate,
+        ungrouped,
+        hasProjectView: activeProjectIds != null || projectId != null,
+        quickView: projectId == null && !ungrouped && savedFilterId == null ? quickView : null,
+        statusFilter,
+        priorityFilter: priorityFilter === "all" ? null : Number(priorityFilter),
+        // 逾期段只装未完成行；完成行不可能逾期
+        hideDone: true,
+        sortKey: "due",
+        sortDir: "asc",
+        excludeOverdueBefore: null,
+        now: new Date(nowTick),
+      }),
+    [
+      debouncedKeyword,
+      taskPredicate,
+      ungrouped,
+      activeProjectIds,
+      projectId,
+      savedFilterId,
+      quickView,
+      statusFilter,
+      priorityFilter,
+      nowTick,
+    ],
+  );
+
+  const overdueQuery = useQuery({
+    queryKey: ["todo_tasks", "overdue", overdueFilter, nowTick],
+    queryFn: () =>
+      todoTaskPage(
+        // 强制未完成：逾期段不该混进已完成行（statusFilter=done 时 hideDone 不生效）
+        { ...overdueFilter, done: false, due_to: nowTick },
+        null,
+        OVERDUE_PAGE_LIMIT,
+      ).then((p) => p.items),
+    enabled: overdueEnabled,
+    staleTime: 60_000,
+  });
+
+  const pagedTasks = useMemo(
+    () => pagedQuery.data?.pages.flatMap((p) => p.items) ?? [],
+    [pagedQuery.data],
+  );
+
+  // ---- 看板/四象限窗口（每列前 BOARD_PAGE_LIMIT 条 + 组总数）----
+  const dayStartMs = useMemo(() => startOfDay(new Date(nowTick)).getTime(), [nowTick]);
+  const boardQuery = useQuery({
+    queryKey: [
+      "todo_tasks",
+      "board",
+      boardGroupBy,
+      pageFilter,
+      dayStartMs,
+      // 四象限「紧急」界 = 今日 24:00；放在 key 里使跨零点自动重算
+      dayStartMs + 86_400_000,
+    ],
+    queryFn: () =>
+      todoTaskBoard(
+        pageFilter,
+        boardGroupBy as BoardGroupBy,
+        BOARD_PAGE_LIMIT,
+        dayStartMs,
+        dayStartMs + 86_400_000,
+      ),
+    enabled: boardGroupBy != null,
+    staleTime: 2 * 60 * 1000,
+  });
+  const boardTasks = useMemo(
+    () => boardQuery.data?.groups.flatMap((g) => g.items) ?? [],
+    [boardQuery.data],
+  );
+  /** 列键 → 组总数（看板列头「还有 N 条」与角标用） */
+  const boardTotals = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const g of boardQuery.data?.groups ?? []) map.set(g.key, g.total);
+    return map;
+  }, [boardQuery.data]);
+
+  // ---- Logbook 窗口（done_at 倒序增量加载）----
+  const logbookFilter = useMemo<ListFilter>(
+    () => ({ ...pageFilter, done: true, sort_key: "done_at", sort_dir: "desc" }),
+    [pageFilter],
+  );
+  const logbookQuery = useInfiniteQuery({
+    queryKey: ["todo_tasks", "logbook", logbookFilter],
+    queryFn: ({ pageParam }) => todoTaskPage(logbookFilter, pageParam, TASK_PAGE_WINDOW),
+    initialPageParam: null as ListCursor | null,
+    getNextPageParam: (last) => last.next_cursor,
+    enabled: logbookPagedMode,
+    staleTime: 2 * 60 * 1000,
+  });
+  const logbookTasks = useMemo(
+    () => logbookQuery.data?.pages.flatMap((p) => p.items) ?? [],
+    [logbookQuery.data],
+  );
+
+  // 分页模式下两个弹窗仍需「整份集合」：打开时才拉，关闭即不占缓存
+  // （周回顾要跨全部逾期/无日期/停滞；分诊要全部未分组）
+  const reviewTasksQuery = useQuery({
+    queryKey: ["todo_tasks", "", taskPredicate, "review-dialog"],
+    queryFn: () =>
+      todoTaskList({
+        keyword: "",
+        page: 1,
+        page_size: TASK_LIST_PAGE_SIZE,
+        ...taskPredicate,
+      }),
+    enabled: (pagedMode || boardGroupBy != null || logbookPagedMode) && reviewOpen,
+    staleTime: 2 * 60 * 1000,
+  });
+  const triageTasksQuery = useQuery({
+    queryKey: ["todo_tasks", "", "ungrouped-triage"],
+    queryFn: () =>
+      todoTaskList({ keyword: "", page: 1, page_size: TASK_LIST_PAGE_SIZE, ungrouped: true }),
+    enabled: (pagedMode || boardGroupBy != null || logbookPagedMode) && triageOpen,
+    staleTime: 2 * 60 * 1000,
+  });
+
+  // 下一页预取：React Query 在 fetching 中重复调用会排队，这里再加一道 ref 守卫
+  const loadMoreLock = useRef(false);
+  useEffect(() => {
+    if (!pagedQuery.isFetchingNextPage) loadMoreLock.current = false;
+  }, [pagedQuery.isFetchingNextPage]);
+  const loadMore = useCallback(() => {
+    // Logbook 走 done_at 通道，与列表分页各自持有游标
+    if (logbookPagedMode) {
+      if (!logbookQuery.hasNextPage || logbookQuery.isFetchingNextPage) return;
+      void logbookQuery.fetchNextPage();
+      return;
+    }
+    if (!pagedMode || !pagedQuery.hasNextPage || pagedQuery.isFetchingNextPage) return;
+    if (loadMoreLock.current) return;
+    loadMoreLock.current = true;
+    void pagedQuery.fetchNextPage();
+  }, [pagedMode, pagedQuery, logbookPagedMode, logbookQuery]);
+
   const visibleTasks = useMemo(() => {
+    // 看板/矩阵：列内容与列内顺序都由 board 通道给定（每组前 N 条），
+    // 这里只做扁平合并供组件按同一套 kanbanColumnKey 再分列
+    if (boardGroupBy) return boardTasks;
+    // Logbook：done_at 倒序的窗口集，分组仍由视图内按天做
+    if (logbookPagedMode) return logbookTasks;
+    // 分页通道：服务端已按同一套谓词过滤并排序，这里只拼接逾期置顶段。
+    // 不再跑 filterTasks/sortTasks——任何本地重排都会让「翻页边界」与
+    // 「视觉顺序」分叉（新一页的行插到已看过的位置上方）。
+    if (pagedMode) {
+      // 逾期行已由独立查询取回并置顶；分页窗口里同一行还在原位置，
+      // 必须按 id 去重，否则会渲染两份（checkbox 出现两次是灾难）
+      const overdue = overdueQuery.data ?? [];
+      if (overdue.length === 0) return pagedTasks;
+      const pinned = new Set(overdue.map((t) => t.id));
+      return [...overdue, ...pagedTasks.filter((t) => !pinned.has(t.id))];
+    }
     // 保存筛选器选中时：优先走条件应用（快捷视图/项目/工具栏筛选不叠加——
     // 筛选器即完整视图语义，keyword 仍作为本地搜索叠加）
     if (activeSavedFilter) {
@@ -278,6 +561,13 @@ export default function TaskPanel() {
       sortDir ?? undefined,
     );
   }, [
+    pagedMode,
+    boardGroupBy,
+    boardTasks,
+    logbookPagedMode,
+    logbookTasks,
+    overdueQuery.data,
+    pagedTasks,
     sourceTasks,
     debouncedKeyword,
     quickView,
@@ -293,12 +583,31 @@ export default function TaskPanel() {
     hideDone,
   ]);
 
-  // 拉取命中上限（A5）：壳层/搜索通道单次最多取 TASK_LIST_PAGE_SIZE 条，命中
-  // 即意味着还有未取到的任务。条幅按**当前取数源**判定（搜索时是服务端命中集，
-  // 关键词命中上万条同样是截断），计数后缀「+」只在该视图真的显示到上限时出现
-  // ——否则筛出 2 条也写「2+」反而读不通。静默少显示比显示慢更糟。
-  const listTruncated = sourceTasks.length >= TASK_LIST_PAGE_SIZE;
-  const countCapped = visibleTasks.length >= TASK_LIST_PAGE_SIZE;
+  const errorText = (e: unknown): string | null =>
+    e == null ? null : e instanceof Error ? e.message : String(e);
+
+  // 拉取命中上限（A5）：只有真正走全量通道的视图会命中
+  const anyWindowed = pagedMode || boardGroupBy != null || logbookPagedMode || calendarPagedMode;
+  const listTruncated = !anyWindowed && sourceTasks.length >= TASK_LIST_PAGE_SIZE;
+  const countCapped = !anyWindowed && visibleTasks.length >= TASK_LIST_PAGE_SIZE;
+
+  // 各通道的加载/错误（全量通道继续用壳层那一份）
+  const listLoading = pagedMode
+    ? pagedQuery.isLoading
+    : logbookPagedMode
+      ? logbookQuery.isLoading
+      : tasksLoading;
+  const listError = pagedMode
+    ? errorText(pagedQuery.error)
+    : logbookPagedMode
+      ? errorText(logbookQuery.error)
+      : tasksError;
+  const boardLoading = boardGroupBy != null ? boardQuery.isLoading : tasksLoading;
+  const boardError = boardGroupBy != null ? errorText(boardQuery.error) : tasksError;
+  // 「已加载 X / 共 Y」：Y 由独立聚合给（分页接口不逐页 COUNT）；
+  // Logbook 的总数不可复用 overview（它不含 done 谓词），只报已加载条数
+  const pagedLoaded = pagedMode ? pagedTasks.length : logbookPagedMode ? logbookTasks.length : 0;
+  const pagedTotal = pagedMode ? overview?.total : undefined;
 
   // 完成进度线（TickTick 列表页头语义；移动端 2026-09-25 先落地，本端对齐）：
   // 只在「既有未完成又有已完成」时出现——看板/表格随隐藏开关剔除完成行、
@@ -436,9 +745,30 @@ export default function TaskPanel() {
         </div>
       )}
 
+      {/* 分页通道的增量提示（P1）：加载完即消失；「已加载 X / 共 Y」给滚动一个终点感 */}
+      {pagedMode && pagedQuery.hasNextPage && (
+        <div className="flex items-center gap-1.5 border-b bg-muted/40 px-4 py-1.5 text-xs text-muted-foreground">
+          {pagedQuery.isFetchingNextPage
+            ? "正在加载更多…"
+            : `向下滚动加载更多 · 已加载 ${pagedLoaded} 条${
+                pagedTotal != null ? ` / 共 ${pagedTotal} 条` : ""
+              }`}
+        </div>
+      )}
+      {/* Logbook 通道的总数不可复用 overview（后者不含 done 谓词），只报已加载 */}
+      {logbookPagedMode && logbookQuery.hasNextPage && (
+        <div className="flex items-center gap-1.5 border-b bg-muted/40 px-4 py-1.5 text-xs text-muted-foreground">
+          {logbookQuery.isFetchingNextPage
+            ? "正在加载更多…"
+            : `向下滚动加载更早的完成记录 · 已加载 ${logbookTasks.length} 条`}
+        </div>
+      )}
+
       {/* 今日上下文条（G2 正反馈 + G4 容量）：今日已达成 + 今日已排/预算。
           数据源取 shell 的任务集（内存口径，与完成进度线同源）；两项皆空时自隐藏 */}
-      <TodayStrip tasks={sourceTasks} />
+      {/* 分页模式下只算已加载窗口（窗口外的今日完成会漏计，随滚动逼近真值）；
+          旧通道仍是完整结果集 */}
+      <TodayStrip tasks={anyWindowed ? visibleTasks : sourceTasks} />
 
       {/* 内容区（flex-1 撑满，QuickAddBar 无论有无数据都固定在底部） */}
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
@@ -448,7 +778,9 @@ export default function TaskPanel() {
             projects={projects}
             projectById={new Map(projects.map((p) => [p.id, p]))}
             labelsByTask={taskLabels}
-            loading={tasksLoading}
+            loading={listLoading}
+            onLoadMore={loadMore}
+            hasMore={logbookPagedMode && logbookQuery.hasNextPage}
             onOpenDetail={(id) => setSelectedTaskId(id)}
           />
         ) : viewMode === "kanban" ? (
@@ -459,7 +791,8 @@ export default function TaskPanel() {
             labelsByTask={taskLabels}
             remindersByTask={taskReminders}
             sortKey={sortKey}
-            loading={tasksLoading}
+            loading={boardLoading}
+            groupTotals={boardGroupBy ? boardTotals : undefined}
           />
         ) : viewMode === "calendar" ? (
           <CalendarView
@@ -468,6 +801,8 @@ export default function TaskPanel() {
             labelsByTask={taskLabels}
             remindersByTask={taskReminders}
             loading={tasksLoading}
+            filter={pageFilter}
+            rangeEnabled={calendarPagedMode}
             onCreateClick={() => {
               openCreateForm();
             }}
@@ -479,8 +814,10 @@ export default function TaskPanel() {
             projects={projects}
             labelsByTask={taskLabels}
             remindersByTask={taskReminders}
-            loading={tasksLoading}
-            error={tasksError}
+            loading={listLoading}
+            error={listError}
+            onLoadMore={loadMore}
+            hasMore={pagedMode && pagedQuery.hasNextPage}
             onOpenDetail={(id) => setSelectedTaskId(id)}
           />
         ) : viewMode === "matrix" ? (
@@ -489,8 +826,9 @@ export default function TaskPanel() {
             projects={projects}
             labelsByTask={taskLabels}
             remindersByTask={taskReminders}
-            loading={tasksLoading}
-            error={tasksError}
+            loading={boardLoading}
+            error={boardError}
+            groupTotals={boardGroupBy ? boardTotals : undefined}
             onOpenDetail={(id) => setSelectedTaskId(id)}
           />
         ) : (
@@ -500,8 +838,10 @@ export default function TaskPanel() {
             labelsByTask={taskLabels}
             remindersByTask={taskReminders}
             dependenciesByTask={taskDependencies}
-            loading={tasksLoading}
-            error={tasksError}
+            loading={listLoading}
+            error={listError}
+            onLoadMore={loadMore}
+            hasMore={pagedMode && pagedQuery.hasNextPage}
             // #26：仅拖拽顺序档显示拖拽把手
             sortable={sortKey === "manual"}
             onCreateClick={() => {
@@ -525,14 +865,14 @@ export default function TaskPanel() {
       <WeeklyReviewDialog
         open={reviewOpen}
         onOpenChange={setReviewOpen}
-        tasks={sourceTasks}
+        tasks={pagedMode ? (reviewTasksQuery.data ?? []) : sourceTasks}
       />
 
       {/* 收件箱分诊（F2）：未分组任务逐条定归属；队列用全量缓存（非搜索命中集） */}
       <TriageDialog
         open={triageOpen}
         onOpenChange={setTriageOpen}
-        tasks={tasks}
+        tasks={pagedMode ? (triageTasksQuery.data ?? []) : tasks}
         projects={projects}
       />
 

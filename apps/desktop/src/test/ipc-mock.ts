@@ -667,6 +667,202 @@ function filterByKeyword<T extends { title: string; description: string | null }
     .map(clone);
 }
 
+// ============================================================================
+// 任务键集分页（P1 50k 规模档）：mock 侧按 Rust generic_repo 的 SQL 语义复刻
+// ============================================================================
+
+type MockTaskSortKey = "manual" | "due" | "priority" | "created" | "done_at";
+
+/** 排序方向：缺省 = 各档默认（priority/created/done_at 降序，其余升序），与 BASE_SORT_DIR 一致 */
+function taskSortDesc(key: MockTaskSortKey, dir?: string | null): boolean {
+  if (dir === "asc") return false;
+  if (dir === "desc") return true;
+  return key === "priority" || key === "created" || key === "done_at";
+}
+
+/** 与 Rust TaskSortKey::order_by 逐档对应；manual 忽略方向 */
+function sortTaskRows(rows: MockTask[], key: MockTaskSortKey, dir?: string | null): MockTask[] {
+  const desc = taskSortDesc(key, dir);
+  const cmp = (a: number, b: number) => (desc ? b - a : a - b);
+  const out = [...rows];
+  switch (key) {
+    case "manual":
+      return out.sort((a, b) => a.position - b.position || a.id - b.id);
+    case "due":
+      return out.sort((a, b) => {
+        const an = a.due_date == null;
+        const bn = b.due_date == null;
+        if (an !== bn) return an ? 1 : -1; // 无截止恒沉底
+        // 无截止段内部仍按 id 方向（Rust: `id ASC|DESC`，方向随档位而非恒升序）
+        if (an && bn) return cmp(a.id, b.id);
+        return cmp(a.due_date as number, b.due_date as number) || cmp(a.id, b.id);
+      });
+    case "priority":
+      return out.sort(
+        (a, b) => cmp(a.priority, b.priority) || a.position - b.position || a.id - b.id,
+      );
+    case "created":
+      return out.sort((a, b) => cmp(a.created_at, b.created_at) || cmp(a.id, b.id));
+    case "done_at":
+      return out.sort((a, b) => {
+        const an = a.done_at == null;
+        const bn = b.done_at == null;
+        if (an !== bn) return an ? 1 : -1; // 无完成时间恒沉底（历史数据）
+        if (an && bn) return cmp(a.id, b.id);
+        return cmp(a.done_at as number, b.done_at as number) || cmp(a.id, b.id);
+      });
+  }
+}
+
+/** 「严格位于游标之后」的行；语义与 Rust cursor_predicate 一致 */
+function tasksAfterCursor(
+  rows: MockTask[],
+  key: MockTaskSortKey,
+  cursor: { sort_key: string; dir: string; key: number | null; key2: number | null; id: number },
+  dir?: string | null,
+): MockTask[] {
+  const desc = key === "manual" ? false : taskSortDesc(key, dir);
+  const k = cursor.key ?? 0;
+  switch (key) {
+    case "manual":
+      return rows.filter((t) => t.position > k || (t.position === k && t.id > cursor.id));
+    case "created":
+      return rows.filter((t) =>
+        desc
+          ? t.created_at < k || (t.created_at === k && t.id < cursor.id)
+          : t.created_at > k || (t.created_at === k && t.id > cursor.id),
+      );
+    case "priority": {
+      const k2 = cursor.key2 ?? 0;
+      return rows.filter((t) => {
+        if (t.priority !== k) return desc ? t.priority < k : t.priority > k;
+        return t.position > k2 || (t.position === k2 && t.id > cursor.id);
+      });
+    }
+    case "due": {
+      if (cursor.key == null) {
+        // 无截止尾段：只剩 id 顺序
+        return rows.filter(
+          (t) => t.due_date == null && (desc ? t.id < cursor.id : t.id > cursor.id),
+        );
+      }
+      return rows.filter((t) => {
+        if (t.due_date == null) return true; // NULL 段整体在游标之后
+        if (t.due_date !== k) return desc ? t.due_date < k : t.due_date > k;
+        return desc ? t.id < cursor.id : t.id > cursor.id;
+      });
+    }
+    case "done_at": {
+      if (cursor.key == null) {
+        return rows.filter(
+          (t) => t.done_at == null && (desc ? t.id < cursor.id : t.id > cursor.id),
+        );
+      }
+      return rows.filter((t) => {
+        if (t.done_at == null) return true;
+        if (t.done_at !== k) return desc ? t.done_at < k : t.done_at > k;
+        return desc ? t.id < cursor.id : t.id > cursor.id;
+      });
+    }
+  }
+}
+
+function cursorFromMockTask(key: MockTaskSortKey, dir: string, t: MockTask) {
+  const keyValue =
+    key === "manual"
+      ? t.position
+      : key === "due"
+        ? t.due_date
+        : key === "priority"
+          ? t.priority
+          : key === "done_at"
+            ? t.done_at
+            : t.created_at;
+  return {
+    sort_key: key,
+    dir,
+    key: keyValue ?? null,
+    key2: key === "priority" ? t.position : null,
+    id: t.id,
+  };
+}
+
+interface MockTaskFilter {
+  keyword?: string | null;
+  done?: boolean | null;
+  status?: string | null;
+  priority_min?: number | null;
+  priority_eq?: number | null;
+  ungrouped?: boolean | null;
+  exclude_due_before?: number | null;
+  has_due?: boolean | null;
+  project_id?: number | null;
+  project_ids?: number[] | null;
+  favorite_only?: boolean | null;
+  my_day_today?: number | null;
+  sort_key?: string | null;
+  sort_dir?: string | null;
+  due_from?: number | null;
+  due_to?: number | null;
+  page?: number;
+  page_size?: number;
+}
+
+/**
+ * 任务谓词下推（mock 侧）：与 Rust build_task_predicate_clause + due 区间 +
+ * 归档排除同口径。keyword 不在本函数处理——三条命令各自决定是否叠加。
+ */
+function filterTaskRows(db: MockDb, filter?: MockTaskFilter | null): MockTask[] {
+  let rows = db.tasks.filter((t) => !t.is_deleted);
+  // 归档项目任务排除（聚合视图；project_id / project_ids 谓词 = 用户主动选中时放行）
+  if (filter?.project_id == null && filter?.project_ids == null) {
+    const archivedIds = new Set(
+      db.projects.filter((p) => p.is_archived && !p.is_deleted).map((p) => p.id),
+    );
+    rows = rows.filter((t) => t.project_id == null || !archivedIds.has(t.project_id));
+  }
+  if (filter?.done === true) rows = rows.filter((t) => t.done === 1);
+  if (filter?.done === false) rows = rows.filter((t) => t.done !== 1);
+  if (filter?.status != null) rows = rows.filter((t) => t.status === filter.status);
+  if (filter?.priority_min != null) {
+    const minPriority = filter.priority_min;
+    rows = rows.filter((t) => t.priority >= minPriority);
+  }
+  if (filter?.project_ids != null) {
+    const ids = new Set(filter.project_ids);
+    rows =
+      filter.project_ids.length === 0
+        ? []
+        : rows.filter((t) => t.project_id != null && ids.has(t.project_id));
+  } else if (filter?.project_id != null) {
+    rows = rows.filter((t) => t.project_id === filter.project_id);
+  }
+  if (filter?.favorite_only === true) rows = rows.filter((t) => t.is_favorite === 1);
+  if (filter?.my_day_today != null) rows = rows.filter((t) => t.my_day_date === filter.my_day_today);
+  // 未分组视图（P1 窗口化下推）：project_id IS NULL
+  if (filter?.ungrouped === true) rows = rows.filter((t) => t.project_id == null);
+  // 优先级等值（工具栏单值档，与 priority_min 区间不同）
+  if (filter?.priority_eq != null) {
+    const eq = filter.priority_eq;
+    rows = rows.filter((t) => t.priority === eq);
+  }
+  // 排除早于该时刻的截止（保留无截止行）：逾期置顶段已由独立查询取走
+  if (filter?.exclude_due_before != null) {
+    const before = filter.exclude_due_before;
+    rows = rows.filter((t) => t.due_date == null || t.due_date >= before);
+  }
+  // 是否有截止（日历「未排期」区）
+  if (filter?.has_due === true) rows = rows.filter((t) => t.due_date != null);
+  if (filter?.has_due === false) rows = rows.filter((t) => t.due_date == null);
+  if (filter?.due_from != null) {
+    rows = rows.filter((t) => t.due_date != null && t.due_date >= (filter.due_from as number));
+  }
+  if (filter?.due_to != null) {
+    rows = rows.filter((t) => t.due_date != null && t.due_date < (filter.due_to as number));
+  }
+  return rows;
+}
+
 /** 冒烟主链路所需的命令集（未列出的命令走 notImplemented） */
 /** 模板 payload 白名单校验（与 Rust ALLOWED_PAYLOAD_KEYS 同口径） */
 const TEMPLATE_PAYLOAD_KEYS = ["title", "notes", "priority", "due_offset_days", "subtasks"];
@@ -1004,44 +1200,114 @@ const commands: Record<string, (args: any, ctx: Ctx) => unknown> = {
   // 对齐 Rust generic_repo::list 的 WHERE is_deleted = 0（删除走软删，墓碑进回收站）。
   // 谓词下推（F5）：六键与 Rust build_task_predicate_clause 同口径（仅本命令消费）
   todo_tasks_list: ({ filter }, { db }) => {
-    let rows = db.tasks.filter((t) => !t.is_deleted);
     // 瘦行 DTO（批2 + 内存治理 A2）：列表通道返回形状与 core `TodoTaskListItem`
-    // 一致——10 个零消费列整体不在行里（MockTask 本就未建模
-    // repeat_weekdays/repeat_end_*/repeat_from_done 四列，此处只需摘掉它有的）；
-    // description 的值仅在 keyword 空时以 null 占位（keyword 非空保留原文：
-    // SQL LIKE 已按 title+description 过滤，桌面面板本地收敛分支还要读它）
+    // 一致——10 个零消费列整体不在行里；description 的值仅在 keyword 空时以
+    // null 占位（keyword 非空保留原文：桌面面板本地收敛分支还要读它）
     const pruneDescription = !filter?.keyword?.trim();
-    // 归档项目任务排除（聚合视图；project_id / project_ids 谓词 = 用户主动
-    // 选中该（组）项目时放行——后者是 M8+ 清单文件夹聚合）
-    if (filter?.project_id == null && filter?.project_ids == null) {
-      const archivedIds = new Set(db.projects.filter((p) => p.is_archived && !p.is_deleted).map((p) => p.id));
-      rows = rows.filter((t) => t.project_id == null || !archivedIds.has(t.project_id));
-    }
-    if (filter?.done === true) rows = rows.filter((t) => t.done === 1);
-    if (filter?.done === false) rows = rows.filter((t) => t.done !== 1);
-    if (filter?.status != null) rows = rows.filter((t) => t.status === filter.status);
-    if (filter?.priority_min != null) rows = rows.filter((t) => t.priority >= filter.priority_min);
-    // 集合谓词（M8+）：非空时优先于等值（与 Rust build_task_predicate_clause 同口径）；
-    // 空集合 = 覆盖 0 个项目 → 空结果（**不能退化成「不加子句」**）
-    if (filter?.project_ids != null) {
-      const ids = new Set(filter.project_ids);
-      rows =
-        filter.project_ids.length === 0
-          ? []
-          : rows.filter((t) => t.project_id != null && ids.has(t.project_id));
-    } else if (filter?.project_id != null) {
-      rows = rows.filter((t) => t.project_id === filter.project_id);
-    }
-    if (filter?.favorite_only === true) rows = rows.filter((t) => t.is_favorite === 1);
-    if (filter?.my_day_today != null) rows = rows.filter((t) => t.my_day_date === filter.my_day_today);
     // 排序（对齐 Rust generic_repo ORDER BY updated_at DESC）：插入序≠更新序，
-    // 贴近上限截断时它决定哪些行可见；mock 此前返回插入序，不可复现截断行为
-    rows = [...rows].sort((a, b) => b.updated_at - a.updated_at);
+    // 贴近上限截断时它决定哪些行可见
+    const rows = [...filterTaskRows(db, filter)].sort((a, b) => b.updated_at - a.updated_at);
     const keyworded = filterByKeyword(rows, filter?.keyword);
-    // 分页（对齐 Rust LIMIT/OFFSET；调用方恒传 page:1/page_size:10000，
-    // 现有链路恰一整页，行为不变；第五轮 A5/A6 真分页后门禁才有意义）
+    // offset 分页：旧通道保留（title 档与历史调用方）；列表窗口化走 todo_tasks_page
     const paged = paginateRows(keyworded, filter?.page, filter?.page_size);
     return paged.map((t) => taskListRow(t, pruneDescription));
+  },
+  // 任务键集分页（P1 50k 规模档）：与 Rust list_tasks_page 同语义
+  todo_tasks_page: ({ filter, cursor, limit }, { db }) => {
+    const key = (filter?.sort_key ?? "manual") as MockTaskSortKey;
+    if (!["manual", "due", "priority", "created", "done_at"].includes(key)) {
+      throw new Error(`未知或不可分页的排序键: ${key}`);
+    }
+    const desc = key === "manual" ? false : taskSortDesc(key, filter?.sort_dir);
+    const dirStr = desc ? "desc" : "asc";
+    // 换档即作废：旧游标返回空页（UI 快速切档的竞态自愈）
+    if (cursor && (cursor.sort_key !== key || cursor.dir !== dirStr)) {
+      return { items: [], next_cursor: null, has_more: false };
+    }
+    const size = Math.min(Math.max(Number(limit) || 1, 1), 1000);
+    const sorted = sortTaskRows(filterTaskRows(db, filter), key, filter?.sort_dir);
+    const rest = cursor ? tasksAfterCursor(sorted, key, cursor, filter?.sort_dir) : sorted;
+    const page = rest.slice(0, size);
+    const hasMore = rest.length > size;
+    return {
+      items: page.map((t) => taskListRow(t, !filter?.keyword?.trim())),
+      next_cursor: hasMore && page.length > 0
+        ? cursorFromMockTask(key, dirStr, page[page.length - 1])
+        : null,
+      has_more: hasMore,
+    };
+  },
+  // 任务总览：总数（含 keyword 收敛）+ 全局未完成计数（与 Rust task_overview 同口径）
+  todo_task_overview: ({ filter }, { db }) => {
+    const rows = filterByKeyword(filterTaskRows(db, filter), filter?.keyword);
+    const archivedIds = new Set(
+      db.projects.filter((p) => p.is_archived && !p.is_deleted).map((p) => p.id),
+    );
+    const buckets = new Map<number | null, number>();
+    for (const t of db.tasks) {
+      if (t.is_deleted || t.done === 1) continue;
+      if (t.project_id != null && archivedIds.has(t.project_id)) continue;
+      buckets.set(t.project_id, (buckets.get(t.project_id) ?? 0) + 1);
+    }
+    return {
+      total: rows.length,
+      undone_by_project: [...buckets.entries()].map(([project_id, count]) => ({
+        project_id,
+        count,
+      })),
+    };
+  },
+  // 看板/四象限窗口化：每列前 N 条 + 每列总数（与 Rust task_board 同口径）
+  todo_tasks_board: ({ filter, groupBy, limitPerGroup, dayStart, dayEnd }, { db }) => {
+    // 四象限与 groupEisenhower 一致：只看未完成。用追加过滤而不是覆盖 done——
+    // 用户显式筛「已完成」时结果应为空（与前端同一行为）
+    const rows = filterTaskRows(db, filter).filter(
+      (t) => groupBy !== "quadrant" || t.done !== 1,
+    );
+    const key = (filter?.sort_key ?? "manual") as MockTaskSortKey;
+    const sorted = sortTaskRows(rows, key, filter?.sort_dir);
+    const DAY = 86_400_000;
+    const keyOf = (t: MockTask): string => {
+      switch (groupBy) {
+        case "status":
+          return t.status === "doing" || t.status === "done" ? t.status : "pending";
+        case "priority":
+          return `pri:${t.priority >= 0 && t.priority <= 5 ? t.priority : 0}`;
+        case "due":
+          if (t.due_date == null) return "due:none";
+          if (t.due_date < dayStart) return "due:overdue";
+          if (t.due_date < dayStart + DAY) return "due:today";
+          if (t.due_date < dayStart + 7 * DAY) return "due:week";
+          return "due:later";
+        case "quadrant": {
+          const urgent = t.due_date != null && t.due_date < dayEnd;
+          const important = t.priority >= 3;
+          if (urgent) return important ? "urgentImportant" : "urgentNotImportant";
+          return important ? "importantNotUrgent" : "neither";
+        }
+        case "project":
+        default:
+          return t.project_id != null ? String(t.project_id) : "ungrouped";
+      }
+    };
+    const map = new Map<string, MockTask[]>();
+    for (const t of sorted) {
+      const k = keyOf(t);
+      const list = map.get(k);
+      if (list) list.push(t);
+      else map.set(k, [t]);
+    }
+    const limit = Math.min(Math.max(Number(limitPerGroup) || 1, 1), 200);
+    return {
+      groups: [...map.entries()]
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([k, list]) => ({
+          key: k,
+          total: list.length,
+          items: list.slice(0, limit).map((t) => taskListRow(t, !filter?.keyword?.trim())),
+        })),
+      total: rows.length,
+    };
   },
   todo_tasks_get: ({ id }, { db }) => ipcClone(db.tasks.find((t) => t.id === id) ?? null),
   todo_tasks_get_by_uuid: ({ uuid: u }, { db }) => ipcClone(db.tasks.find((t) => t.uuid === u) ?? null),
