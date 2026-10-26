@@ -43,6 +43,22 @@ pub struct ListFilter {
     pub project_ids: Option<Vec<i64>>,
     pub favorite_only: Option<bool>,
     pub my_day_today: Option<i64>,
+    /// 未分组视图：true = project_id IS NULL
+    pub ungrouped: Option<bool>,
+    /// 优先级等值（工具栏单值档）
+    pub priority_eq: Option<i32>,
+    /// 排除早于此时刻的截止（保留无截止行）：逾期置顶段已由独立查询取走
+    pub exclude_due_before: Option<i64>,
+    /// 是否有截止（日历「未排期」区用）：Some(false) = due_date IS NULL
+    pub has_due: Option<bool>,
+    /// 排序键（P1 键集分页）：manual/due/priority/created/done_at；title 走全量通道
+    pub sort_key: Option<String>,
+    /// 排序方向 asc/desc；None = 各档默认方向
+    pub sort_dir: Option<String>,
+    /// 截止区间下界（毫秒，含）：日历按可见范围取数
+    pub due_from: Option<i64>,
+    /// 截止区间上界（毫秒，不含）
+    pub due_to: Option<i64>,
 }
 
 impl From<orbit_core::models::business::ListFilter> for ListFilter {
@@ -58,6 +74,14 @@ impl From<orbit_core::models::business::ListFilter> for ListFilter {
             project_ids: f.project_ids,
             favorite_only: f.favorite_only,
             my_day_today: f.my_day_today,
+            ungrouped: f.ungrouped,
+            priority_eq: f.priority_eq,
+            exclude_due_before: f.exclude_due_before,
+            has_due: f.has_due,
+            sort_key: f.sort_key,
+            sort_dir: f.sort_dir,
+            due_from: f.due_from,
+            due_to: f.due_to,
         }
     }
 }
@@ -75,6 +99,132 @@ impl From<ListFilter> for orbit_core::models::business::ListFilter {
             project_ids: f.project_ids,
             favorite_only: f.favorite_only,
             my_day_today: f.my_day_today,
+            ungrouped: f.ungrouped,
+            priority_eq: f.priority_eq,
+            exclude_due_before: f.exclude_due_before,
+            has_due: f.has_due,
+            sort_key: f.sort_key,
+            sort_dir: f.sort_dir,
+            due_from: f.due_from,
+            due_to: f.due_to,
+        }
+    }
+}
+
+// =============================================================================
+// 键集分页（P1 50k 规模档）
+// =============================================================================
+
+/// 键集分页游标（镜像 orbit_core::models::business::ListCursor）
+#[derive(Debug, Clone, Serialize)]
+pub struct ListCursor {
+    pub sort_key: String,
+    pub dir: String,
+    /// 主排序键值（position/priority/created_at/due_date）；due 档 None = 无截止尾段
+    pub key: Option<f64>,
+    /// 次排序键（仅 priority 档：同优先级按 position 升序）
+    pub key2: Option<f64>,
+    pub id: i64,
+}
+
+impl From<orbit_core::models::business::ListCursor> for ListCursor {
+    fn from(c: orbit_core::models::business::ListCursor) -> Self {
+        Self {
+            sort_key: c.sort_key,
+            dir: c.dir,
+            key: c.key,
+            key2: c.key2,
+            id: c.id,
+        }
+    }
+}
+
+impl From<ListCursor> for orbit_core::models::business::ListCursor {
+    fn from(c: ListCursor) -> Self {
+        Self {
+            sort_key: c.sort_key,
+            dir: c.dir,
+            key: c.key,
+            key2: c.key2,
+            id: c.id,
+        }
+    }
+}
+
+/// 任务分页结果（镜像 orbit_core::models::business::TodoTaskPage）
+#[derive(Debug, Clone, Serialize)]
+pub struct TodoTaskPage {
+    pub items: Vec<TodoTaskListItem>,
+    pub next_cursor: Option<ListCursor>,
+    pub has_more: bool,
+}
+
+/// 单个项目的未完成计数（镜像 orbit_core::models::business::TodoProjectUndone）
+#[derive(Debug, Clone, Serialize)]
+pub struct TodoProjectUndone {
+    pub project_id: Option<i64>,
+    pub count: i64,
+}
+
+/// 任务总览（镜像 orbit_core::models::business::TodoTaskOverview）
+#[derive(Debug, Clone, Serialize)]
+pub struct TodoTaskOverview {
+    pub total: i64,
+    pub undone_by_project: Vec<TodoProjectUndone>,
+}
+
+/// 看板/四象限分组维度（镜像 orbit_core::models::business::BoardGroupBy）
+#[derive(Debug, Clone, Copy, Serialize)]
+pub enum BoardGroupBy {
+    Project,
+    Status,
+    Priority,
+    Due,
+    Quadrant,
+}
+
+impl BoardGroupBy {
+    /// `pub(crate)`：core 类型不得出现在 FRB 扫描面上（会要求 core 侧实现
+    /// SseEncode，生成物直接编译失败）
+    pub(crate) fn as_core(self) -> orbit_core::models::business::BoardGroupBy {
+        match self {
+            Self::Project => orbit_core::models::business::BoardGroupBy::Project,
+            Self::Status => orbit_core::models::business::BoardGroupBy::Status,
+            Self::Priority => orbit_core::models::business::BoardGroupBy::Priority,
+            Self::Due => orbit_core::models::business::BoardGroupBy::Due,
+            Self::Quadrant => orbit_core::models::business::BoardGroupBy::Quadrant,
+        }
+    }
+}
+
+/// 看板单列（镜像 orbit_core::models::business::TodoTaskBoardGroup）
+#[derive(Debug, Clone, Serialize)]
+pub struct TodoTaskBoardGroup {
+    pub key: String,
+    pub total: i64,
+    pub items: Vec<TodoTaskListItem>,
+}
+
+/// 看板/四象限一次往返（镜像 orbit_core::models::business::TodoTaskBoard）
+#[derive(Debug, Clone, Serialize)]
+pub struct TodoTaskBoard {
+    pub groups: Vec<TodoTaskBoardGroup>,
+    pub total: i64,
+}
+
+impl From<orbit_core::models::business::TodoTaskBoard> for TodoTaskBoard {
+    fn from(b: orbit_core::models::business::TodoTaskBoard) -> Self {
+        Self {
+            groups: b
+                .groups
+                .into_iter()
+                .map(|g| TodoTaskBoardGroup {
+                    key: g.key,
+                    total: g.total,
+                    items: g.items.into_iter().map(Into::into).collect(),
+                })
+                .collect(),
+            total: b.total,
         }
     }
 }

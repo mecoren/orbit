@@ -308,6 +308,55 @@ class RustOrbitBridge implements OrbitBridge {
           .toList();
 
   @override
+  Future<TodoTaskPage> todoTaskPage(
+    ListFilter filter,
+    ListCursor? cursor,
+    int limit,
+  ) async {
+    final page = await gen_todo.todoTasksPage(
+      filter: _genFilter(filter),
+      cursor: cursor == null
+          ? null
+          : gen.ListCursor(
+              sortKey: cursor.sortKey,
+              dir: cursor.dir,
+              key: cursor.key,
+              key2: cursor.key2,
+              id: cursor.id,
+            ),
+      limit: limit,
+    );
+    final next = page.nextCursor;
+    return TodoTaskPage(
+      items: page.items.map(_mapTaskRow).toList(),
+      nextCursor: next == null
+          ? null
+          : ListCursor(
+              sortKey: next.sortKey,
+              dir: next.dir,
+              key: next.key,
+              key2: next.key2,
+              id: next.id.toInt(),
+            ),
+      hasMore: page.hasMore,
+    );
+  }
+
+  @override
+  Future<TodoTaskOverview> todoTaskOverview(ListFilter filter) async {
+    final ov = await gen_todo.todoTaskOverview(filter: _genFilter(filter));
+    return TodoTaskOverview(
+      total: ov.total.toInt(),
+      undoneByProject: ov.undoneByProject
+          .map((b) => TodoProjectUndone(
+                projectId: b.projectId?.toInt(),
+                count: b.count.toInt(),
+              ))
+          .toList(),
+    );
+  }
+
+  @override
   Future<TodoTask> todoTaskGet(int id) async =>
       _mapTask(await gen_todo.todoTasksGet(id: id));
 
@@ -1772,6 +1821,10 @@ class RustOrbitBridge implements OrbitBridge {
         keyword: f.keyword,
         page: f.page,
         pageSize: f.pageSize,
+        sortKey: f.sortKey,
+        sortDir: f.sortDir,
+        dueFrom: f.dueFrom,
+        dueTo: f.dueTo,
       );
 
   static TodoProject _mapProject(gen.TodoProject p) => TodoProject(

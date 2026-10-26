@@ -90,6 +90,42 @@ Future<TodoProject> todoProjectSnoozeReview({
 Future<List<TodoTaskListItem>> todoTasksList({required ListFilter filter}) =>
     RustLib.instance.api.crateApiTodoTodoTasksList(filter: filter);
 
+/// 任务键集分页（对应桌面 todo_tasks_page，P1 50k 规模档）
+///
+/// `cursor` 为上一页返回值，首页传 None；`limit` 由 core 钳制到 1..=1000。
+/// 换排序档后沿用旧游标返回空页（UI 竞态自愈）。
+Future<TodoTaskPage> todoTasksPage({
+  required ListFilter filter,
+  ListCursor? cursor,
+  required int limit,
+}) => RustLib.instance.api.crateApiTodoTodoTasksPage(
+  filter: filter,
+  cursor: cursor,
+  limit: limit,
+);
+
+/// 任务总览（对应桌面 todo_task_overview）：总数 + 按项目未完成计数
+Future<TodoTaskOverview> todoTaskOverview({required ListFilter filter}) =>
+    RustLib.instance.api.crateApiTodoTodoTaskOverview(filter: filter);
+
+/// 看板/四象限窗口化（对应桌面 todo_tasks_board）：每列前 N 条 + 每列总数。
+///
+/// `day_start` / `day_end` 由 Dart 侧按本地时区算好传入（due 五分桶与
+/// 「今天以内到期 = 紧急」的界）。
+Future<TodoTaskBoard> todoTasksBoard({
+  required ListFilter filter,
+  required BoardGroupBy groupBy,
+  required int limitPerGroup,
+  required PlatformInt64 dayStart,
+  required PlatformInt64 dayEnd,
+}) => RustLib.instance.api.crateApiTodoTodoTasksBoard(
+  filter: filter,
+  groupBy: groupBy,
+  limitPerGroup: limitPerGroup,
+  dayStart: dayStart,
+  dayEnd: dayEnd,
+);
+
 /// 获取单个任务（对应桌面 todo_tasks_get）
 Future<TodoTask> todoTasksGet({required PlatformInt64 id}) =>
     RustLib.instance.api.crateApiTodoTodoTasksGet(id: id);

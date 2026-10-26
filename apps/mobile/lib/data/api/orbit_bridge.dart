@@ -318,6 +318,16 @@ abstract class OrbitBridge {
   // ── todo_tasks ──
 
   Future<List<TodoTask>> todoTaskList(ListFilter filter);
+
+  /// 任务键集分页（P1 50k 规模档）：列表窗口化的唯一读通道。
+  ///
+  /// `cursor` 为上一页返回值，首页传 null；`limit` 由 Rust 钳制到 1..=1000。
+  /// 换排序档后沿用旧游标返回空页（UI 竞态自愈）。
+  Future<TodoTaskPage> todoTaskPage(ListFilter filter, ListCursor? cursor, int limit);
+
+  /// 任务总览：总数（「已加载 X / 共 Y」）+ 按项目未完成计数（侧栏角标）
+  Future<TodoTaskOverview> todoTaskOverview(ListFilter filter);
+
   Future<TodoTask> todoTaskGet(int id);
   Future<TodoTask> todoTaskCreate(TodoTaskCreateInput input);
   Future<TodoTask> todoTaskUpdate(int id, String patchJson);

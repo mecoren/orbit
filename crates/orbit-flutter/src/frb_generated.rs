@@ -38,7 +38,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.12.0";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 279825506;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -1108791481;
 
 // Section: executor
 
@@ -6044,6 +6044,42 @@ fn wire__crate__api__todo__todo_task_labels_list_impl(
         },
     )
 }
+fn wire__crate__api__todo__todo_task_overview_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "todo_task_overview",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_filter = <crate::api::dto::ListFilter>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| async move {
+                transform_result_sse::<_, String>(
+                    (move || async move {
+                        let output_ok = crate::api::todo::todo_task_overview(api_filter).await?;
+                        Ok(output_ok)
+                    })()
+                    .await,
+                )
+            }
+        },
+    )
+}
 fn wire__crate__api__todo__todo_task_relations_create_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -6184,6 +6220,53 @@ fn wire__crate__api__todo__todo_task_relations_list_impl(
                     (move || async move {
                         let output_ok =
                             crate::api::todo::todo_task_relations_list(api_filter).await?;
+                        Ok(output_ok)
+                    })()
+                    .await,
+                )
+            }
+        },
+    )
+}
+fn wire__crate__api__todo__todo_tasks_board_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "todo_tasks_board",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_filter = <crate::api::dto::ListFilter>::sse_decode(&mut deserializer);
+            let api_group_by = <crate::api::dto::BoardGroupBy>::sse_decode(&mut deserializer);
+            let api_limit_per_group = <u32>::sse_decode(&mut deserializer);
+            let api_day_start = <i64>::sse_decode(&mut deserializer);
+            let api_day_end = <i64>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| async move {
+                transform_result_sse::<_, String>(
+                    (move || async move {
+                        let output_ok = crate::api::todo::todo_tasks_board(
+                            api_filter,
+                            api_group_by,
+                            api_limit_per_group,
+                            api_day_start,
+                            api_day_end,
+                        )
+                        .await?;
                         Ok(output_ok)
                     })()
                     .await,
@@ -6472,6 +6555,46 @@ fn wire__crate__api__todo__todo_tasks_list_impl(
                 transform_result_sse::<_, String>(
                     (move || async move {
                         let output_ok = crate::api::todo::todo_tasks_list(api_filter).await?;
+                        Ok(output_ok)
+                    })()
+                    .await,
+                )
+            }
+        },
+    )
+}
+fn wire__crate__api__todo__todo_tasks_page_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "todo_tasks_page",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_filter = <crate::api::dto::ListFilter>::sse_decode(&mut deserializer);
+            let api_cursor = <Option<crate::api::dto::ListCursor>>::sse_decode(&mut deserializer);
+            let api_limit = <u32>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| async move {
+                transform_result_sse::<_, String>(
+                    (move || async move {
+                        let output_ok =
+                            crate::api::todo::todo_tasks_page(api_filter, api_cursor, api_limit)
+                                .await?;
                         Ok(output_ok)
                     })()
                     .await,
@@ -7240,6 +7363,21 @@ impl SseDecode for crate::api::biometric::BiometricSecretBundle {
     }
 }
 
+impl SseDecode for crate::api::dto::BoardGroupBy {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut inner = <i32>::sse_decode(deserializer);
+        return match inner {
+            0 => crate::api::dto::BoardGroupBy::Project,
+            1 => crate::api::dto::BoardGroupBy::Status,
+            2 => crate::api::dto::BoardGroupBy::Priority,
+            3 => crate::api::dto::BoardGroupBy::Due,
+            4 => crate::api::dto::BoardGroupBy::Quadrant,
+            _ => unreachable!("Invalid variant for BoardGroupBy: {}", inner),
+        };
+    }
+}
+
 impl SseDecode for bool {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -7857,6 +7995,24 @@ impl SseDecode for Vec<crate::api::dto::CsvImportRowView> {
     }
 }
 
+impl SseDecode for crate::api::dto::ListCursor {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_sortKey = <String>::sse_decode(deserializer);
+        let mut var_dir = <String>::sse_decode(deserializer);
+        let mut var_key = <Option<f64>>::sse_decode(deserializer);
+        let mut var_key2 = <Option<f64>>::sse_decode(deserializer);
+        let mut var_id = <i64>::sse_decode(deserializer);
+        return crate::api::dto::ListCursor {
+            sort_key: var_sortKey,
+            dir: var_dir,
+            key: var_key,
+            key2: var_key2,
+            id: var_id,
+        };
+    }
+}
+
 impl SseDecode for crate::api::dto::ListFilter {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -7870,6 +8026,14 @@ impl SseDecode for crate::api::dto::ListFilter {
         let mut var_projectIds = <Option<Vec<i64>>>::sse_decode(deserializer);
         let mut var_favoriteOnly = <Option<bool>>::sse_decode(deserializer);
         let mut var_myDayToday = <Option<i64>>::sse_decode(deserializer);
+        let mut var_ungrouped = <Option<bool>>::sse_decode(deserializer);
+        let mut var_priorityEq = <Option<i32>>::sse_decode(deserializer);
+        let mut var_excludeDueBefore = <Option<i64>>::sse_decode(deserializer);
+        let mut var_hasDue = <Option<bool>>::sse_decode(deserializer);
+        let mut var_sortKey = <Option<String>>::sse_decode(deserializer);
+        let mut var_sortDir = <Option<String>>::sse_decode(deserializer);
+        let mut var_dueFrom = <Option<i64>>::sse_decode(deserializer);
+        let mut var_dueTo = <Option<i64>>::sse_decode(deserializer);
         return crate::api::dto::ListFilter {
             keyword: var_keyword,
             page: var_page,
@@ -7881,6 +8045,14 @@ impl SseDecode for crate::api::dto::ListFilter {
             project_ids: var_projectIds,
             favorite_only: var_favoriteOnly,
             my_day_today: var_myDayToday,
+            ungrouped: var_ungrouped,
+            priority_eq: var_priorityEq,
+            exclude_due_before: var_excludeDueBefore,
+            has_due: var_hasDue,
+            sort_key: var_sortKey,
+            sort_dir: var_sortDir,
+            due_from: var_dueFrom,
+            due_to: var_dueTo,
         };
     }
 }
@@ -8243,6 +8415,20 @@ impl SseDecode for Vec<crate::api::dto::TodoProject> {
     }
 }
 
+impl SseDecode for Vec<crate::api::dto::TodoProjectUndone> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut len_ = <i32>::sse_decode(deserializer);
+        let mut ans_ = Vec::with_capacity(len_ as usize);
+        for idx_ in 0..len_ {
+            ans_.push(<crate::api::dto::TodoProjectUndone>::sse_decode(
+                deserializer,
+            ));
+        }
+        return ans_;
+    }
+}
+
 impl SseDecode for Vec<crate::api::dto::TodoReminder> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -8286,6 +8472,20 @@ impl SseDecode for Vec<crate::api::dto::TodoTask> {
         let mut ans_ = Vec::with_capacity(len_ as usize);
         for idx_ in 0..len_ {
             ans_.push(<crate::api::dto::TodoTask>::sse_decode(deserializer));
+        }
+        return ans_;
+    }
+}
+
+impl SseDecode for Vec<crate::api::dto::TodoTaskBoardGroup> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut len_ = <i32>::sse_decode(deserializer);
+        let mut ans_ = Vec::with_capacity(len_ as usize);
+        for idx_ in 0..len_ {
+            ans_.push(<crate::api::dto::TodoTaskBoardGroup>::sse_decode(
+                deserializer,
+            ));
         }
         return ans_;
     }
@@ -8469,6 +8669,17 @@ impl SseDecode for Option<i64> {
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         if (<bool>::sse_decode(deserializer)) {
             return Some(<i64>::sse_decode(deserializer));
+        } else {
+            return None;
+        }
+    }
+}
+
+impl SseDecode for Option<crate::api::dto::ListCursor> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        if (<bool>::sse_decode(deserializer)) {
+            return Some(<crate::api::dto::ListCursor>::sse_decode(deserializer));
         } else {
             return None;
         }
@@ -9162,6 +9373,18 @@ impl SseDecode for crate::api::dto::TodoProjectCreateInput {
     }
 }
 
+impl SseDecode for crate::api::dto::TodoProjectUndone {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_projectId = <Option<i64>>::sse_decode(deserializer);
+        let mut var_count = <i64>::sse_decode(deserializer);
+        return crate::api::dto::TodoProjectUndone {
+            project_id: var_projectId,
+            count: var_count,
+        };
+    }
+}
+
 impl SseDecode for crate::api::dto::TodoReminder {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -9362,6 +9585,32 @@ impl SseDecode for crate::api::dto::TodoTask {
             updated_at: var_updatedAt,
             deleted_at: var_deletedAt,
             version: var_version,
+        };
+    }
+}
+
+impl SseDecode for crate::api::dto::TodoTaskBoard {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_groups = <Vec<crate::api::dto::TodoTaskBoardGroup>>::sse_decode(deserializer);
+        let mut var_total = <i64>::sse_decode(deserializer);
+        return crate::api::dto::TodoTaskBoard {
+            groups: var_groups,
+            total: var_total,
+        };
+    }
+}
+
+impl SseDecode for crate::api::dto::TodoTaskBoardGroup {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_key = <String>::sse_decode(deserializer);
+        let mut var_total = <i64>::sse_decode(deserializer);
+        let mut var_items = <Vec<crate::api::dto::TodoTaskListItem>>::sse_decode(deserializer);
+        return crate::api::dto::TodoTaskBoardGroup {
+            key: var_key,
+            total: var_total,
+            items: var_items,
         };
     }
 }
@@ -9572,6 +9821,33 @@ impl SseDecode for crate::api::dto::TodoTaskListItem {
             is_deleted: var_isDeleted,
             created_at: var_createdAt,
             updated_at: var_updatedAt,
+        };
+    }
+}
+
+impl SseDecode for crate::api::dto::TodoTaskOverview {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_total = <i64>::sse_decode(deserializer);
+        let mut var_undoneByProject =
+            <Vec<crate::api::dto::TodoProjectUndone>>::sse_decode(deserializer);
+        return crate::api::dto::TodoTaskOverview {
+            total: var_total,
+            undone_by_project: var_undoneByProject,
+        };
+    }
+}
+
+impl SseDecode for crate::api::dto::TodoTaskPage {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_items = <Vec<crate::api::dto::TodoTaskListItem>>::sse_decode(deserializer);
+        let mut var_nextCursor = <Option<crate::api::dto::ListCursor>>::sse_decode(deserializer);
+        let mut var_hasMore = <bool>::sse_decode(deserializer);
+        return crate::api::dto::TodoTaskPage {
+            items: var_items,
+            next_cursor: var_nextCursor,
+            has_more: var_hasMore,
         };
     }
 }
@@ -10291,63 +10567,66 @@ fn pde_ffi_dispatcher_primary_impl(
         164 => {
             wire__crate__api__todo__todo_task_labels_list_impl(port, ptr, rust_vec_len, data_len)
         }
-        165 => wire__crate__api__todo__todo_task_relations_create_impl(
+        165 => wire__crate__api__todo__todo_task_overview_impl(port, ptr, rust_vec_len, data_len),
+        166 => wire__crate__api__todo__todo_task_relations_create_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        166 => wire__crate__api__todo__todo_task_relations_delete_impl(
+        167 => wire__crate__api__todo__todo_task_relations_delete_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        167 => {
+        168 => {
             wire__crate__api__todo__todo_task_relations_get_impl(port, ptr, rust_vec_len, data_len)
         }
-        168 => {
+        169 => {
             wire__crate__api__todo__todo_task_relations_list_impl(port, ptr, rust_vec_len, data_len)
         }
-        169 => wire__crate__api__todo__todo_tasks_complete_impl(port, ptr, rust_vec_len, data_len),
-        170 => wire__crate__api__todo__todo_tasks_create_impl(port, ptr, rust_vec_len, data_len),
-        171 => wire__crate__api__todo__todo_tasks_delete_impl(port, ptr, rust_vec_len, data_len),
-        172 => wire__crate__api__todo__todo_tasks_duplicate_impl(port, ptr, rust_vec_len, data_len),
-        173 => wire__crate__api__todo__todo_tasks_get_impl(port, ptr, rust_vec_len, data_len),
-        174 => {
+        170 => wire__crate__api__todo__todo_tasks_board_impl(port, ptr, rust_vec_len, data_len),
+        171 => wire__crate__api__todo__todo_tasks_complete_impl(port, ptr, rust_vec_len, data_len),
+        172 => wire__crate__api__todo__todo_tasks_create_impl(port, ptr, rust_vec_len, data_len),
+        173 => wire__crate__api__todo__todo_tasks_delete_impl(port, ptr, rust_vec_len, data_len),
+        174 => wire__crate__api__todo__todo_tasks_duplicate_impl(port, ptr, rust_vec_len, data_len),
+        175 => wire__crate__api__todo__todo_tasks_get_impl(port, ptr, rust_vec_len, data_len),
+        176 => {
             wire__crate__api__todo__todo_tasks_get_by_uuid_impl(port, ptr, rust_vec_len, data_len)
         }
-        175 => {
+        177 => {
             wire__crate__api__todo__todo_tasks_get_detail_impl(port, ptr, rust_vec_len, data_len)
         }
-        176 => wire__crate__api__todo__todo_tasks_list_impl(port, ptr, rust_vec_len, data_len),
-        177 => wire__crate__api__todo__todo_tasks_recalc_percent_impl(
+        178 => wire__crate__api__todo__todo_tasks_list_impl(port, ptr, rust_vec_len, data_len),
+        179 => wire__crate__api__todo__todo_tasks_page_impl(port, ptr, rust_vec_len, data_len),
+        180 => wire__crate__api__todo__todo_tasks_recalc_percent_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        178 => wire__crate__api__todo__todo_tasks_update_impl(port, ptr, rust_vec_len, data_len),
-        179 => wire__crate__api__todo__todo_tasks_update_position_impl(
+        181 => wire__crate__api__todo__todo_tasks_update_impl(port, ptr, rust_vec_len, data_len),
+        182 => wire__crate__api__todo__todo_tasks_update_position_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        180 => wire__crate__api__trash__trash_meta_impl(port, ptr, rust_vec_len, data_len),
-        181 => wire__crate__api__trash__trash_purge_all_impl(port, ptr, rust_vec_len, data_len),
-        182 => wire__crate__api__trash__trash_purge_expired_impl(port, ptr, rust_vec_len, data_len),
-        183 => wire__crate__api__trash__trash_set_retention_days_impl(
+        183 => wire__crate__api__trash__trash_meta_impl(port, ptr, rust_vec_len, data_len),
+        184 => wire__crate__api__trash__trash_purge_all_impl(port, ptr, rust_vec_len, data_len),
+        185 => wire__crate__api__trash__trash_purge_expired_impl(port, ptr, rust_vec_len, data_len),
+        186 => wire__crate__api__trash__trash_set_retention_days_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        184 => wire__crate__api__trash__trash_task_purge_impl(port, ptr, rust_vec_len, data_len),
-        185 => wire__crate__api__trash__trash_task_restore_impl(port, ptr, rust_vec_len, data_len),
-        186 => wire__crate__api__trash__trash_tasks_list_impl(port, ptr, rust_vec_len, data_len),
-        187 => wire__crate__api__widget__widget_todo_query_impl(port, ptr, rust_vec_len, data_len),
-        188 => wire__crate__api__widget__widget_todo_toggle_impl(port, ptr, rust_vec_len, data_len),
+        187 => wire__crate__api__trash__trash_task_purge_impl(port, ptr, rust_vec_len, data_len),
+        188 => wire__crate__api__trash__trash_task_restore_impl(port, ptr, rust_vec_len, data_len),
+        189 => wire__crate__api__trash__trash_tasks_list_impl(port, ptr, rust_vec_len, data_len),
+        190 => wire__crate__api__widget__widget_todo_query_impl(port, ptr, rust_vec_len, data_len),
+        191 => wire__crate__api__widget__widget_todo_toggle_impl(port, ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
@@ -10714,6 +10993,27 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::biometric::BiometricSecretBun
     for crate::api::biometric::BiometricSecretBundle
 {
     fn into_into_dart(self) -> crate::api::biometric::BiometricSecretBundle {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::dto::BoardGroupBy {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        match self {
+            Self::Project => 0.into_dart(),
+            Self::Status => 1.into_dart(),
+            Self::Priority => 2.into_dart(),
+            Self::Due => 3.into_dart(),
+            Self::Quadrant => 4.into_dart(),
+            _ => unreachable!(),
+        }
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive for crate::api::dto::BoardGroupBy {}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::dto::BoardGroupBy>
+    for crate::api::dto::BoardGroupBy
+{
+    fn into_into_dart(self) -> crate::api::dto::BoardGroupBy {
         self
     }
 }
@@ -11319,6 +11619,27 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::dto::ImportLimitsView>
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::dto::ListCursor {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.sort_key.into_into_dart().into_dart(),
+            self.dir.into_into_dart().into_dart(),
+            self.key.into_into_dart().into_dart(),
+            self.key2.into_into_dart().into_dart(),
+            self.id.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive for crate::api::dto::ListCursor {}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::dto::ListCursor>
+    for crate::api::dto::ListCursor
+{
+    fn into_into_dart(self) -> crate::api::dto::ListCursor {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
 impl flutter_rust_bridge::IntoDart for crate::api::dto::ListFilter {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
@@ -11332,6 +11653,14 @@ impl flutter_rust_bridge::IntoDart for crate::api::dto::ListFilter {
             self.project_ids.into_into_dart().into_dart(),
             self.favorite_only.into_into_dart().into_dart(),
             self.my_day_today.into_into_dart().into_dart(),
+            self.ungrouped.into_into_dart().into_dart(),
+            self.priority_eq.into_into_dart().into_dart(),
+            self.exclude_due_before.into_into_dart().into_dart(),
+            self.has_due.into_into_dart().into_dart(),
+            self.sort_key.into_into_dart().into_dart(),
+            self.sort_dir.into_into_dart().into_dart(),
+            self.due_from.into_into_dart().into_dart(),
+            self.due_to.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -12173,6 +12502,27 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::dto::TodoProjectCreateInput>
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::dto::TodoProjectUndone {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.project_id.into_into_dart().into_dart(),
+            self.count.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::dto::TodoProjectUndone
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::dto::TodoProjectUndone>
+    for crate::api::dto::TodoProjectUndone
+{
+    fn into_into_dart(self) -> crate::api::dto::TodoProjectUndone {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
 impl flutter_rust_bridge::IntoDart for crate::api::dto::TodoReminder {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
@@ -12384,6 +12734,49 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::dto::TodoTask> for crate::api
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::dto::TodoTaskBoard {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.groups.into_into_dart().into_dart(),
+            self.total.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::dto::TodoTaskBoard
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::dto::TodoTaskBoard>
+    for crate::api::dto::TodoTaskBoard
+{
+    fn into_into_dart(self) -> crate::api::dto::TodoTaskBoard {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::dto::TodoTaskBoardGroup {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.key.into_into_dart().into_dart(),
+            self.total.into_into_dart().into_dart(),
+            self.items.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::dto::TodoTaskBoardGroup
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::dto::TodoTaskBoardGroup>
+    for crate::api::dto::TodoTaskBoardGroup
+{
+    fn into_into_dart(self) -> crate::api::dto::TodoTaskBoardGroup {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
 impl flutter_rust_bridge::IntoDart for crate::api::dto::TodoTaskCreateInput {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
@@ -12560,6 +12953,46 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::dto::TodoTaskListItem>
     for crate::api::dto::TodoTaskListItem
 {
     fn into_into_dart(self) -> crate::api::dto::TodoTaskListItem {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::dto::TodoTaskOverview {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.total.into_into_dart().into_dart(),
+            self.undone_by_project.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::dto::TodoTaskOverview
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::dto::TodoTaskOverview>
+    for crate::api::dto::TodoTaskOverview
+{
+    fn into_into_dart(self) -> crate::api::dto::TodoTaskOverview {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::dto::TodoTaskPage {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.items.into_into_dart().into_dart(),
+            self.next_cursor.into_into_dart().into_dart(),
+            self.has_more.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive for crate::api::dto::TodoTaskPage {}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::dto::TodoTaskPage>
+    for crate::api::dto::TodoTaskPage
+{
+    fn into_into_dart(self) -> crate::api::dto::TodoTaskPage {
         self
     }
 }
@@ -13007,6 +13440,25 @@ impl SseEncode for crate::api::biometric::BiometricSecretBundle {
     }
 }
 
+impl SseEncode for crate::api::dto::BoardGroupBy {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(
+            match self {
+                crate::api::dto::BoardGroupBy::Project => 0,
+                crate::api::dto::BoardGroupBy::Status => 1,
+                crate::api::dto::BoardGroupBy::Priority => 2,
+                crate::api::dto::BoardGroupBy::Due => 3,
+                crate::api::dto::BoardGroupBy::Quadrant => 4,
+                _ => {
+                    unimplemented!("");
+                }
+            },
+            serializer,
+        );
+    }
+}
+
 impl SseEncode for bool {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -13417,6 +13869,17 @@ impl SseEncode for Vec<crate::api::dto::CsvImportRowView> {
     }
 }
 
+impl SseEncode for crate::api::dto::ListCursor {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <String>::sse_encode(self.sort_key, serializer);
+        <String>::sse_encode(self.dir, serializer);
+        <Option<f64>>::sse_encode(self.key, serializer);
+        <Option<f64>>::sse_encode(self.key2, serializer);
+        <i64>::sse_encode(self.id, serializer);
+    }
+}
+
 impl SseEncode for crate::api::dto::ListFilter {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -13430,6 +13893,14 @@ impl SseEncode for crate::api::dto::ListFilter {
         <Option<Vec<i64>>>::sse_encode(self.project_ids, serializer);
         <Option<bool>>::sse_encode(self.favorite_only, serializer);
         <Option<i64>>::sse_encode(self.my_day_today, serializer);
+        <Option<bool>>::sse_encode(self.ungrouped, serializer);
+        <Option<i32>>::sse_encode(self.priority_eq, serializer);
+        <Option<i64>>::sse_encode(self.exclude_due_before, serializer);
+        <Option<bool>>::sse_encode(self.has_due, serializer);
+        <Option<String>>::sse_encode(self.sort_key, serializer);
+        <Option<String>>::sse_encode(self.sort_dir, serializer);
+        <Option<i64>>::sse_encode(self.due_from, serializer);
+        <Option<i64>>::sse_encode(self.due_to, serializer);
     }
 }
 
@@ -13703,6 +14174,16 @@ impl SseEncode for Vec<crate::api::dto::TodoProject> {
     }
 }
 
+impl SseEncode for Vec<crate::api::dto::TodoProjectUndone> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.len() as _, serializer);
+        for item in self {
+            <crate::api::dto::TodoProjectUndone>::sse_encode(item, serializer);
+        }
+    }
+}
+
 impl SseEncode for Vec<crate::api::dto::TodoReminder> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -13739,6 +14220,16 @@ impl SseEncode for Vec<crate::api::dto::TodoTask> {
         <i32>::sse_encode(self.len() as _, serializer);
         for item in self {
             <crate::api::dto::TodoTask>::sse_encode(item, serializer);
+        }
+    }
+}
+
+impl SseEncode for Vec<crate::api::dto::TodoTaskBoardGroup> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.len() as _, serializer);
+        for item in self {
+            <crate::api::dto::TodoTaskBoardGroup>::sse_encode(item, serializer);
         }
     }
 }
@@ -13882,6 +14373,16 @@ impl SseEncode for Option<i64> {
         <bool>::sse_encode(self.is_some(), serializer);
         if let Some(value) = self {
             <i64>::sse_encode(value, serializer);
+        }
+    }
+}
+
+impl SseEncode for Option<crate::api::dto::ListCursor> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <bool>::sse_encode(self.is_some(), serializer);
+        if let Some(value) = self {
+            <crate::api::dto::ListCursor>::sse_encode(value, serializer);
         }
     }
 }
@@ -14319,6 +14820,14 @@ impl SseEncode for crate::api::dto::TodoProjectCreateInput {
     }
 }
 
+impl SseEncode for crate::api::dto::TodoProjectUndone {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <Option<i64>>::sse_encode(self.project_id, serializer);
+        <i64>::sse_encode(self.count, serializer);
+    }
+}
+
 impl SseEncode for crate::api::dto::TodoReminder {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -14437,6 +14946,23 @@ impl SseEncode for crate::api::dto::TodoTask {
     }
 }
 
+impl SseEncode for crate::api::dto::TodoTaskBoard {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <Vec<crate::api::dto::TodoTaskBoardGroup>>::sse_encode(self.groups, serializer);
+        <i64>::sse_encode(self.total, serializer);
+    }
+}
+
+impl SseEncode for crate::api::dto::TodoTaskBoardGroup {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <String>::sse_encode(self.key, serializer);
+        <i64>::sse_encode(self.total, serializer);
+        <Vec<crate::api::dto::TodoTaskListItem>>::sse_encode(self.items, serializer);
+    }
+}
+
 impl SseEncode for crate::api::dto::TodoTaskCreateInput {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -14549,6 +15075,23 @@ impl SseEncode for crate::api::dto::TodoTaskListItem {
         <i32>::sse_encode(self.is_deleted, serializer);
         <i64>::sse_encode(self.created_at, serializer);
         <i64>::sse_encode(self.updated_at, serializer);
+    }
+}
+
+impl SseEncode for crate::api::dto::TodoTaskOverview {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i64>::sse_encode(self.total, serializer);
+        <Vec<crate::api::dto::TodoProjectUndone>>::sse_encode(self.undone_by_project, serializer);
+    }
+}
+
+impl SseEncode for crate::api::dto::TodoTaskPage {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <Vec<crate::api::dto::TodoTaskListItem>>::sse_encode(self.items, serializer);
+        <Option<crate::api::dto::ListCursor>>::sse_encode(self.next_cursor, serializer);
+        <bool>::sse_encode(self.has_more, serializer);
     }
 }
 

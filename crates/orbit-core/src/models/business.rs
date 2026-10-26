@@ -98,6 +98,125 @@ pub struct ListFilter {
     /// 我的一天：仅 my_day_date = 今天本地零点（调用方算好零点传入；
     /// Rust 侧不做本地日界换算以免时区口径分裂）
     pub my_day_today: Option<i64>,
+    /// 未分组视图：Some(true) = `project_id IS NULL`（与前端 ungrouped 分支同义）
+    pub ungrouped: Option<bool>,
+    /// 优先级等值（工具栏优先级筛选是单值档，不是区间）
+    pub priority_eq: Option<i32>,
+    /// 排除早于此时刻的截止（毫秒）：逾期置顶段由独立查询取走后，主列表用
+    /// `(due_date IS NULL OR due_date >= ?)` 把逾期行排除，避免同一行渲染两次。
+    /// 与 [Self::due_from] 的区别：本项**保留无截止行**，due_from 是严格区间。
+    pub exclude_due_before: Option<i64>,
+    /// 是否有截止日期：`Some(false)` = `due_date IS NULL`（日历「未排期」区），
+    /// `Some(true)` = 有截止；None 不限。与 [Self::due_from] 的严格区间互补。
+    pub has_due: Option<bool>,
+    /// 排序键（仅 todo_tasks 的分页通道消费）：`manual` / `due` / `priority` /
+    /// `created` / `done_at`（Logbook 完成时间倒序）；None = `manual`（与桌面
+    /// `TaskSortKey` 默认值一致）。
+    ///
+    /// `title` 档**不在此列**：前端按 `localeCompare("zh-Hans-CN")` 排中文拼音序，
+    /// SQLite 的 BINARY collation 复刻不了（多音字与声调都会分叉），强行下推会让
+    /// 分页边界与用户看到的顺序不一致。该档继续走旧的全量单页通道。
+    pub sort_key: Option<String>,
+    /// 排序方向 `asc` / `desc`；None = 各档默认方向（manual 恒升序、due 升序、
+    /// priority 降序、created 降序），与前端 `BASE_SORT_DIR` 同口径。
+    pub sort_dir: Option<String>,
+    /// 截止时间下界（毫秒，含）。日历视图按可见范围取数用（P1 窗口化）。
+    pub due_from: Option<i64>,
+    /// 截止时间上界（毫秒，不含）。与 [Self::due_from] 组成半开区间。
+    pub due_to: Option<i64>,
+}
+
+/// 键集分页游标（P1 50k 规模档）。
+///
+/// 键集（keyset）而非 offset：offset 在数据变动时会跳过/重复行，且 `OFFSET N`
+/// 让 SQLite 先扫过前 N 行（50k 档翻到尾部是 O(N)）。游标取「上一页最后一行的
+/// 排序键值 + 主键 id」，下一页从该位置严格向后取。
+///
+/// 三个值共同描述边界，缺一不可：
+/// - `sort_key` / `dir`：防止换排序档后误用旧游标（换档即作废，返回空页由
+///   前端重置）；
+/// - `key` / `key2`：排序主键与次键（`priority` 档的 `position` 回落）；
+/// - `id`：唯一 tiebreaker（`todo_tasks.id` 是 rowid 别名，单调且唯一）。
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct ListCursor {
+    /// 生成游标时的排序键（manual/due/priority/created）
+    pub sort_key: String,
+    /// 生成游标时的方向（asc/desc）
+    pub dir: String,
+    /// 排序主键值（position / priority / created_at / due_date）。
+    /// `due` 档为 None 表示已进入「无截止」尾段。
+    pub key: Option<f64>,
+    /// 次排序键（仅 `priority` 档使用：同优先级按 `position` 升序）
+    pub key2: Option<f64>,
+    /// 唯一 tiebreaker（todo_tasks.id）
+    pub id: i64,
+}
+
+/// 任务分页结果（[crate::db::repository::generic_repo::list_tasks_page]）。
+///
+/// 不返回 `total`：每次翻页都 `COUNT(*)` 会把 50k 档的首屏成本翻倍。总数由
+/// [TodoTaskOverview] 的独立聚合接口给（前端「已加载 X / 共 Y」用）。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TodoTaskPage {
+    pub items: Vec<TodoTaskListItem>,
+    /// 下一页游标；None = 已到末页
+    pub next_cursor: Option<ListCursor>,
+    /// 是否还有下一页（比 `next_cursor.is_some()` 更直白，供桥层直接用）
+    pub has_more: bool,
+}
+
+/// 任务总览聚合（P1 窗口化后替代「壳层拉全量再内存聚合」）。
+///
+/// 侧栏未完成计数原先从壳层万行数组 `GROUP BY` 得来，窗口化后列表只装已加载
+/// 窗口，必须由 SQL 直接聚合。口径与旧的内存聚合一致：
+/// - 只算 `is_deleted = 0` 的活行；
+/// - 只算 `done = 0`；
+/// - 归档项目的任务不计入（对齐旧壳层查询的归档排除子句）。
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct TodoTaskOverview {
+    /// 当前筛选下的任务总数（不含分页，`done`/项目等谓词照常生效）
+    pub total: i64,
+    /// 各项目的未完成计数（含 project_id = None 的「未分组」桶）
+    pub undone_by_project: Vec<TodoProjectUndone>,
+}
+
+/// 单个项目的未完成计数（[TodoTaskOverview] 的行）
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TodoProjectUndone {
+    pub project_id: Option<i64>,
+    pub count: i64,
+}
+
+/// 看板/四象限分组维度（P1 窗口化：列内只取前 N 条 + 组总数）
+///
+/// 列键与桌面 `shared/kanban-group.ts` 的 `kanbanColumnKey` 逐字一致
+/// （`"ungrouped"` / `"pri:3"` / `"due:today"` / `"urgentImportant"`…），
+/// 前端拿 key 直接对列，不需要二次映射。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum BoardGroupBy {
+    Project,
+    Status,
+    Priority,
+    Due,
+    /// 四象限（艾森豪威尔）：截止 < 今日 24:00 = 紧急，priority ≥ 3 = 重要
+    Quadrant,
+}
+
+/// 看板单列：组键 + 该组总条数（不受 limit 影响）+ 前 N 条
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TodoTaskBoardGroup {
+    pub key: String,
+    pub total: i64,
+    pub items: Vec<TodoTaskListItem>,
+}
+
+/// 看板/四象限一次往返（groups 只含实际有任务的组）
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TodoTaskBoard {
+    pub groups: Vec<TodoTaskBoardGroup>,
+    /// 各组合计（= 当前筛选下命中总数，供「共 Y 条」条幅）
+    pub total: i64,
 }
 
 // ---------- todo_projects ----------

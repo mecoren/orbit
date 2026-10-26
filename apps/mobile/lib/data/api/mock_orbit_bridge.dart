@@ -56,6 +56,133 @@ class MockOrbitBridge implements OrbitBridge {
     return row;
   }
 
+  // ── 任务键集分页辅助（与 Rust generic_repo::list_tasks_page 同语义）──
+
+  /// 排序方向：缺省 = 各档默认（priority/created 降序），与 BASE_SORT_DIR 一致
+  static bool _taskSortDesc(String key, String? dir) {
+    if (dir == 'asc') return false;
+    if (dir == 'desc') return true;
+    return key == 'priority' || key == 'created';
+  }
+
+  static num _taskNum(Map<String, dynamic> t, String field) =>
+      (t[field] as num?) ?? 0;
+
+  static int _cmpNum(num a, num b, bool desc) =>
+      desc ? b.compareTo(a) : a.compareTo(b);
+
+  /// manual 忽略方向；due 无截止恒沉底；priority 同值回落 position 升序
+  static int _compareTasks(
+    Map<String, dynamic> a,
+    Map<String, dynamic> b,
+    String key,
+    bool desc,
+  ) {
+    final ida = _taskNum(a, 'id').toInt();
+    final idb = _taskNum(b, 'id').toInt();
+    switch (key) {
+      case 'manual':
+        final byPos = _cmpNum(_taskNum(a, 'position'), _taskNum(b, 'position'), false);
+        return byPos != 0 ? byPos : ida.compareTo(idb);
+      case 'due':
+        final ad = a['due_date'] as num?;
+        final bd = b['due_date'] as num?;
+        if ((ad == null) != (bd == null)) return ad == null ? 1 : -1;
+        if (ad == null && bd == null) return _cmpNum(ida, idb, desc);
+        final byDue = _cmpNum(ad!, bd!, desc);
+        return byDue != 0 ? byDue : _cmpNum(ida, idb, desc);
+      case 'priority':
+        final byPri = _cmpNum(_taskNum(a, 'priority'), _taskNum(b, 'priority'), desc);
+        if (byPri != 0) return byPri;
+        final byPos = _cmpNum(_taskNum(a, 'position'), _taskNum(b, 'position'), false);
+        return byPos != 0 ? byPos : ida.compareTo(idb);
+      default: // created
+        final byCreated = _cmpNum(_taskNum(a, 'created_at'), _taskNum(b, 'created_at'), desc);
+        return byCreated != 0 ? byCreated : _cmpNum(ida, idb, desc);
+    }
+  }
+
+  /// 「严格位于游标之后」的行；语义与 Rust cursor_predicate 一致
+  static bool _isAfterCursor(
+    Map<String, dynamic> t,
+    String key,
+    bool desc,
+    ListCursor c,
+  ) {
+    final id = _taskNum(t, 'id').toInt();
+    final k = c.key ?? 0;
+    switch (key) {
+      case 'manual':
+        final pos = _taskNum(t, 'position');
+        return pos > k || (pos == k && id > c.id);
+      case 'due':
+        final due = t['due_date'] as num?;
+        if (c.key == null) {
+          return due == null && (desc ? id < c.id : id > c.id);
+        }
+        if (due == null) return true;
+        if (due != k) return desc ? due < k : due > k;
+        return desc ? id < c.id : id > c.id;
+      case 'priority':
+        final pri = _taskNum(t, 'priority');
+        if (pri != k) return desc ? pri < k : pri > k;
+        final pos = _taskNum(t, 'position');
+        final k2 = c.key2 ?? 0;
+        return pos > k2 || (pos == k2 && id > c.id);
+      default: // created
+        final ts = _taskNum(t, 'created_at');
+        if (ts != k) return desc ? ts < k : ts > k;
+        return desc ? id < c.id : id > c.id;
+    }
+  }
+
+  static ListCursor _cursorOf(Map<String, dynamic> t, String key, String dir) {
+    final value = key == 'manual'
+        ? _taskNum(t, 'position').toDouble()
+        : key == 'due'
+            ? (t['due_date'] as num?)?.toDouble()
+            : key == 'priority'
+                ? _taskNum(t, 'priority').toDouble()
+                : _taskNum(t, 'created_at').toDouble();
+    return ListCursor(
+      sortKey: key,
+      dir: dir,
+      key: value,
+      key2: key == 'priority' ? _taskNum(t, 'position').toDouble() : null,
+      id: _taskNum(t, 'id').toInt(),
+    );
+  }
+
+  /// 谓词过滤（mock 侧）：is_deleted 基线 + keyword + 截止区间。
+  /// done/项目等谓词在移动端 ListFilter DTO 尚未暴露（列表仍走全量缓存派生），
+  /// 故此处与旧 todoTaskList 口径一致，不起那几档。
+  List<Map<String, dynamic>> _taskRows(ListFilter f) {
+    var rows = store.tasks.values.where((t) => t['is_deleted'] == 0).toList();
+    final kw = f.keyword?.trim().toLowerCase();
+    if (kw != null && kw.isNotEmpty) {
+      rows = rows
+          .where((t) =>
+              (t['title'] as String? ?? '').toLowerCase().contains(kw) ||
+              (t['description'] as String? ?? '').toLowerCase().contains(kw))
+          .toList();
+    }
+    if (f.dueFrom != null) {
+      final from = f.dueFrom!;
+      rows = rows.where((t) {
+        final due = t['due_date'] as num?;
+        return due != null && due >= from;
+      }).toList();
+    }
+    if (f.dueTo != null) {
+      final to = f.dueTo!;
+      rows = rows.where((t) {
+        final due = t['due_date'] as num?;
+        return due != null && due < to;
+      }).toList();
+    }
+    return rows;
+  }
+
   // ── 主密码认证 ──
 
   @override
@@ -562,6 +689,65 @@ class MockOrbitBridge implements OrbitBridge {
             .map((t) => _listRow(t, pruneDescription))
             .map(TodoTask.fromListJson)
             .toList();
+      });
+
+  @override
+  Future<TodoTaskPage> todoTaskPage(
+    ListFilter filter,
+    ListCursor? cursor,
+    int limit,
+  ) =>
+      _delay(() {
+        final key = filter.sortKey ?? 'manual';
+        if (!const ['manual', 'due', 'priority', 'created'].contains(key)) {
+          throw ArgumentError('未知或不可分页的排序键: $key');
+        }
+        final desc = key == 'manual' ? false : _taskSortDesc(key, filter.sortDir);
+        final dir = desc ? 'desc' : 'asc';
+        // 换档即作废：旧游标返回空页（UI 快速切档的竞态自愈）
+        if (cursor != null && (cursor.sortKey != key || cursor.dir != dir)) {
+          return const TodoTaskPage(items: [], nextCursor: null, hasMore: false);
+        }
+        final size = limit.clamp(1, 1000);
+        final sorted = _taskRows(filter)
+          ..sort((a, b) => _compareTasks(a, b, key, desc));
+        final rest = cursor == null
+            ? sorted
+            : sorted.where((t) => _isAfterCursor(t, key, desc, cursor)).toList();
+        final page = rest.take(size).toList();
+        final hasMore = rest.length > size;
+        final prune = filter.keyword?.trim().isEmpty ?? true;
+        return TodoTaskPage(
+          items: page
+              .map((t) => TodoTask.fromListJson(_listRow(t, prune)))
+              .toList(),
+          nextCursor: hasMore && page.isNotEmpty
+              ? _cursorOf(page.last, key, dir)
+              : null,
+          hasMore: hasMore,
+        );
+      });
+
+  @override
+  Future<TodoTaskOverview> todoTaskOverview(ListFilter filter) => _delay(() {
+        final total = _taskRows(filter).length;
+        final archived = store.projects.values
+            .where((p) => p['is_archived'] == 1 && p['is_deleted'] == 0)
+            .map((p) => p['id'])
+            .toSet();
+        final buckets = <int?, int>{};
+        for (final t in store.tasks.values) {
+          if (t['is_deleted'] != 0 || t['done'] == 1) continue;
+          final pid = t['project_id'] as int?;
+          if (pid != null && archived.contains(pid)) continue;
+          buckets[pid] = (buckets[pid] ?? 0) + 1;
+        }
+        return TodoTaskOverview(
+          total: total,
+          undoneByProject: buckets.entries
+              .map((e) => TodoProjectUndone(projectId: e.key, count: e.value))
+              .toList(),
+        );
       });
 
   @override

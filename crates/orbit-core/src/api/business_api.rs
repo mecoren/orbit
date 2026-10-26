@@ -211,6 +211,51 @@ pub async fn list_todo_tasks(
 ) -> CoreResult<Vec<TodoTaskListItem>> {
     generic_repo::list(pool, "todo_tasks", filter).await
 }
+
+/// 任务键集分页（P1 50k 规模档）：列表窗口化/增量加载的唯一读通道。
+///
+/// - `filter.sort_key` 只接受 manual/due/priority/created（title 走旧通道）；
+/// - `cursor` 为上一页返回的 [ListCursor]，首页传 None；
+/// - `limit` 内部钳制到 1..=1000。
+///
+/// 换排序档后沿用旧游标返回空页（UI 竞态自然收敛），不报错。
+pub async fn list_todo_tasks_page(
+    pool: &SqlitePool,
+    filter: &ListFilter,
+    cursor: Option<&ListCursor>,
+    limit: u32,
+) -> CoreResult<TodoTaskPage> {
+    generic_repo::list_tasks_page(pool, filter, cursor, limit).await
+}
+
+/// 任务总览（P1 窗口化配套）：总数 + 按项目的未完成计数。
+///
+/// 侧栏角标不再依赖「壳层拉万行再内存聚合」；`total` 供列表显示
+/// 「已加载 X / 共 Y」。
+pub async fn todo_task_overview(
+    pool: &SqlitePool,
+    filter: &ListFilter,
+) -> CoreResult<TodoTaskOverview> {
+    generic_repo::task_overview(pool, filter).await
+}
+
+/// 看板/四象限窗口化查询（P1）：每列前 `limit_per_group` 条 + 每列总数。
+///
+/// 替代看板/矩阵「先拉全量再前端分列」——四象限与项目列在 50k 档下每帧
+/// 重跑一次分组是线性成本。列键与前端 `kanbanColumnKey` 逐字一致。
+///
+/// `day_start` / `day_end` 由壳层按本地时区算好传入（due 五分桶与
+/// 「今天以内到期 = 紧急」的界）；Rust 侧不重复做日界换算。
+pub async fn list_todo_tasks_board(
+    pool: &SqlitePool,
+    filter: &ListFilter,
+    group_by: BoardGroupBy,
+    limit_per_group: u32,
+    day_start: i64,
+    day_end: i64,
+) -> CoreResult<TodoTaskBoard> {
+    generic_repo::task_board(pool, filter, group_by, limit_per_group, day_start, day_end).await
+}
 pub async fn get_todo_task(pool: &SqlitePool, id: i64) -> CoreResult<TodoTask> {
     generic_repo::get_by_id(pool, "todo_tasks", id).await
 }

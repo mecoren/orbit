@@ -109,6 +109,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   BiometricSecretBundle dco_decode_biometric_secret_bundle(dynamic raw);
 
   @protected
+  BoardGroupBy dco_decode_board_group_by(dynamic raw);
+
+  @protected
   bool dco_decode_bool(dynamic raw);
 
   @protected
@@ -131,6 +134,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   PlatformInt64 dco_decode_box_autoadd_i_64(dynamic raw);
+
+  @protected
+  ListCursor dco_decode_box_autoadd_list_cursor(dynamic raw);
 
   @protected
   ListFilter dco_decode_box_autoadd_list_filter(dynamic raw);
@@ -334,6 +340,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<CsvImportRowView> dco_decode_list_csv_import_row_view(dynamic raw);
 
   @protected
+  ListCursor dco_decode_list_cursor(dynamic raw);
+
+  @protected
   ListFilter dco_decode_list_filter(dynamic raw);
 
   @protected
@@ -425,6 +434,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<TodoProject> dco_decode_list_todo_project(dynamic raw);
 
   @protected
+  List<TodoProjectUndone> dco_decode_list_todo_project_undone(dynamic raw);
+
+  @protected
   List<TodoReminder> dco_decode_list_todo_reminder(dynamic raw);
 
   @protected
@@ -435,6 +447,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<TodoTask> dco_decode_list_todo_task(dynamic raw);
+
+  @protected
+  List<TodoTaskBoardGroup> dco_decode_list_todo_task_board_group(dynamic raw);
 
   @protected
   List<TodoTaskLabel> dco_decode_list_todo_task_label(dynamic raw);
@@ -481,6 +496,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   PlatformInt64? dco_decode_opt_box_autoadd_i_64(dynamic raw);
+
+  @protected
+  ListCursor? dco_decode_opt_box_autoadd_list_cursor(dynamic raw);
 
   @protected
   SyncConfigView? dco_decode_opt_box_autoadd_sync_config_view(dynamic raw);
@@ -600,6 +618,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   TodoProjectCreateInput dco_decode_todo_project_create_input(dynamic raw);
 
   @protected
+  TodoProjectUndone dco_decode_todo_project_undone(dynamic raw);
+
+  @protected
   TodoReminder dco_decode_todo_reminder(dynamic raw);
 
   @protected
@@ -628,6 +649,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   TodoTask dco_decode_todo_task(dynamic raw);
 
   @protected
+  TodoTaskBoard dco_decode_todo_task_board(dynamic raw);
+
+  @protected
+  TodoTaskBoardGroup dco_decode_todo_task_board_group(dynamic raw);
+
+  @protected
   TodoTaskCreateInput dco_decode_todo_task_create_input(dynamic raw);
 
   @protected
@@ -641,6 +668,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   TodoTaskListItem dco_decode_todo_task_list_item(dynamic raw);
+
+  @protected
+  TodoTaskOverview dco_decode_todo_task_overview(dynamic raw);
+
+  @protected
+  TodoTaskPage dco_decode_todo_task_page(dynamic raw);
 
   @protected
   TodoTaskRelation dco_decode_todo_task_relation(dynamic raw);
@@ -767,6 +800,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  BoardGroupBy sse_decode_board_group_by(SseDeserializer deserializer);
+
+  @protected
   bool sse_decode_bool(SseDeserializer deserializer);
 
   @protected
@@ -795,6 +831,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   PlatformInt64 sse_decode_box_autoadd_i_64(SseDeserializer deserializer);
+
+  @protected
+  ListCursor sse_decode_box_autoadd_list_cursor(SseDeserializer deserializer);
 
   @protected
   ListFilter sse_decode_box_autoadd_list_filter(SseDeserializer deserializer);
@@ -1048,6 +1087,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  ListCursor sse_decode_list_cursor(SseDeserializer deserializer);
+
+  @protected
   ListFilter sse_decode_list_filter(SseDeserializer deserializer);
 
   @protected
@@ -1173,6 +1215,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<TodoProject> sse_decode_list_todo_project(SseDeserializer deserializer);
 
   @protected
+  List<TodoProjectUndone> sse_decode_list_todo_project_undone(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   List<TodoReminder> sse_decode_list_todo_reminder(
     SseDeserializer deserializer,
   );
@@ -1187,6 +1234,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<TodoTask> sse_decode_list_todo_task(SseDeserializer deserializer);
+
+  @protected
+  List<TodoTaskBoardGroup> sse_decode_list_todo_task_board_group(
+    SseDeserializer deserializer,
+  );
 
   @protected
   List<TodoTaskLabel> sse_decode_list_todo_task_label(
@@ -1247,6 +1299,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   PlatformInt64? sse_decode_opt_box_autoadd_i_64(SseDeserializer deserializer);
+
+  @protected
+  ListCursor? sse_decode_opt_box_autoadd_list_cursor(
+    SseDeserializer deserializer,
+  );
 
   @protected
   SyncConfigView? sse_decode_opt_box_autoadd_sync_config_view(
@@ -1394,6 +1451,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  TodoProjectUndone sse_decode_todo_project_undone(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   TodoReminder sse_decode_todo_reminder(SseDeserializer deserializer);
 
   @protected
@@ -1426,6 +1488,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   TodoTask sse_decode_todo_task(SseDeserializer deserializer);
 
   @protected
+  TodoTaskBoard sse_decode_todo_task_board(SseDeserializer deserializer);
+
+  @protected
+  TodoTaskBoardGroup sse_decode_todo_task_board_group(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   TodoTaskCreateInput sse_decode_todo_task_create_input(
     SseDeserializer deserializer,
   );
@@ -1443,6 +1513,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   TodoTaskListItem sse_decode_todo_task_list_item(SseDeserializer deserializer);
+
+  @protected
+  TodoTaskOverview sse_decode_todo_task_overview(SseDeserializer deserializer);
+
+  @protected
+  TodoTaskPage sse_decode_todo_task_page(SseDeserializer deserializer);
 
   @protected
   TodoTaskRelation sse_decode_todo_task_relation(SseDeserializer deserializer);
@@ -1609,6 +1685,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_board_group_by(BoardGroupBy self, SseSerializer serializer);
+
+  @protected
   void sse_encode_bool(bool self, SseSerializer serializer);
 
   @protected
@@ -1641,6 +1720,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_box_autoadd_i_64(
     PlatformInt64 self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_box_autoadd_list_cursor(
+    ListCursor self,
     SseSerializer serializer,
   );
 
@@ -1951,6 +2036,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_list_cursor(ListCursor self, SseSerializer serializer);
+
+  @protected
   void sse_encode_list_filter(ListFilter self, SseSerializer serializer);
 
   @protected
@@ -2116,6 +2204,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_list_todo_project_undone(
+    List<TodoProjectUndone> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_list_todo_reminder(
     List<TodoReminder> self,
     SseSerializer serializer,
@@ -2135,6 +2229,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_list_todo_task(List<TodoTask> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_todo_task_board_group(
+    List<TodoTaskBoardGroup> self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_list_todo_task_label(
@@ -2205,6 +2305,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_opt_box_autoadd_i_64(
     PlatformInt64? self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_opt_box_autoadd_list_cursor(
+    ListCursor? self,
     SseSerializer serializer,
   );
 
@@ -2410,6 +2516,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_todo_project_undone(
+    TodoProjectUndone self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_todo_reminder(TodoReminder self, SseSerializer serializer);
 
   @protected
@@ -2449,6 +2561,15 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_todo_task(TodoTask self, SseSerializer serializer);
 
   @protected
+  void sse_encode_todo_task_board(TodoTaskBoard self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_todo_task_board_group(
+    TodoTaskBoardGroup self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_todo_task_create_input(
     TodoTaskCreateInput self,
     SseSerializer serializer,
@@ -2474,6 +2595,15 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
     TodoTaskListItem self,
     SseSerializer serializer,
   );
+
+  @protected
+  void sse_encode_todo_task_overview(
+    TodoTaskOverview self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_todo_task_page(TodoTaskPage self, SseSerializer serializer);
 
   @protected
   void sse_encode_todo_task_relation(

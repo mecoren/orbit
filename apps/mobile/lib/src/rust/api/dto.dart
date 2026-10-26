@@ -6,7 +6,8 @@
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`
+// These functions are ignored because they are not marked as `pub`: `as_core`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`
 
 /// 活动日志行（todo_activity_log 为本地轨迹表，不进同步白名单）
 class ActivityLogRow {
@@ -53,6 +54,9 @@ class ActivityLogRow {
           detail == other.detail &&
           createdAt == other.createdAt;
 }
+
+/// 看板/四象限分组维度（镜像 orbit_core::models::business::BoardGroupBy）
+enum BoardGroupBy { project, status, priority, due, quadrant }
 
 /// 云端孤儿附件行（诊断页「云端存储」清单）
 ///
@@ -592,6 +596,46 @@ class ImportLimitsView {
           maxRows == other.maxRows;
 }
 
+/// 键集分页游标（镜像 orbit_core::models::business::ListCursor）
+class ListCursor {
+  final String sortKey;
+  final String dir;
+
+  /// 主排序键值（position/priority/created_at/due_date）；due 档 None = 无截止尾段
+  final double? key;
+
+  /// 次排序键（仅 priority 档：同优先级按 position 升序）
+  final double? key2;
+  final PlatformInt64 id;
+
+  const ListCursor({
+    required this.sortKey,
+    required this.dir,
+    this.key,
+    this.key2,
+    required this.id,
+  });
+
+  @override
+  int get hashCode =>
+      sortKey.hashCode ^
+      dir.hashCode ^
+      key.hashCode ^
+      key2.hashCode ^
+      id.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ListCursor &&
+          runtimeType == other.runtimeType &&
+          sortKey == other.sortKey &&
+          dir == other.dir &&
+          key == other.key &&
+          key2 == other.key2 &&
+          id == other.id;
+}
+
 /// 通用列表过滤条件（镜像 orbit_core::models::business::ListFilter；
 /// 谓词下推七键仅 todo_tasks 消费，见 core 侧注释）
 class ListFilter {
@@ -610,6 +654,30 @@ class ListFilter {
   final bool? favoriteOnly;
   final PlatformInt64? myDayToday;
 
+  /// 未分组视图：true = project_id IS NULL
+  final bool? ungrouped;
+
+  /// 优先级等值（工具栏单值档）
+  final int? priorityEq;
+
+  /// 排除早于此时刻的截止（保留无截止行）：逾期置顶段已由独立查询取走
+  final PlatformInt64? excludeDueBefore;
+
+  /// 是否有截止（日历「未排期」区用）：Some(false) = due_date IS NULL
+  final bool? hasDue;
+
+  /// 排序键（P1 键集分页）：manual/due/priority/created/done_at；title 走全量通道
+  final String? sortKey;
+
+  /// 排序方向 asc/desc；None = 各档默认方向
+  final String? sortDir;
+
+  /// 截止区间下界（毫秒，含）：日历按可见范围取数
+  final PlatformInt64? dueFrom;
+
+  /// 截止区间上界（毫秒，不含）
+  final PlatformInt64? dueTo;
+
   const ListFilter({
     this.keyword,
     required this.page,
@@ -621,6 +689,14 @@ class ListFilter {
     this.projectIds,
     this.favoriteOnly,
     this.myDayToday,
+    this.ungrouped,
+    this.priorityEq,
+    this.excludeDueBefore,
+    this.hasDue,
+    this.sortKey,
+    this.sortDir,
+    this.dueFrom,
+    this.dueTo,
   });
 
   @override
@@ -634,7 +710,15 @@ class ListFilter {
       projectId.hashCode ^
       projectIds.hashCode ^
       favoriteOnly.hashCode ^
-      myDayToday.hashCode;
+      myDayToday.hashCode ^
+      ungrouped.hashCode ^
+      priorityEq.hashCode ^
+      excludeDueBefore.hashCode ^
+      hasDue.hashCode ^
+      sortKey.hashCode ^
+      sortDir.hashCode ^
+      dueFrom.hashCode ^
+      dueTo.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -650,7 +734,15 @@ class ListFilter {
           projectId == other.projectId &&
           projectIds == other.projectIds &&
           favoriteOnly == other.favoriteOnly &&
-          myDayToday == other.myDayToday;
+          myDayToday == other.myDayToday &&
+          ungrouped == other.ungrouped &&
+          priorityEq == other.priorityEq &&
+          excludeDueBefore == other.excludeDueBefore &&
+          hasDue == other.hasDue &&
+          sortKey == other.sortKey &&
+          sortDir == other.sortDir &&
+          dueFrom == other.dueFrom &&
+          dueTo == other.dueTo;
 }
 
 /// 回顾状态行（镜像 project_review_api::ProjectReviewStatus；F1 回顾中心用）
@@ -1289,6 +1381,25 @@ class TodoProjectCreateInput {
           parentUuid == other.parentUuid;
 }
 
+/// 单个项目的未完成计数（镜像 orbit_core::models::business::TodoProjectUndone）
+class TodoProjectUndone {
+  final PlatformInt64? projectId;
+  final PlatformInt64 count;
+
+  const TodoProjectUndone({this.projectId, required this.count});
+
+  @override
+  int get hashCode => projectId.hashCode ^ count.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is TodoProjectUndone &&
+          runtimeType == other.runtimeType &&
+          projectId == other.projectId &&
+          count == other.count;
+}
+
 /// 提醒（镜像 orbit_core::models::business::TodoReminder）
 class TodoReminder {
   final PlatformInt64 id;
@@ -1699,6 +1810,50 @@ class TodoTask {
           updatedAt == other.updatedAt &&
           deletedAt == other.deletedAt &&
           version == other.version;
+}
+
+/// 看板/四象限一次往返（镜像 orbit_core::models::business::TodoTaskBoard）
+class TodoTaskBoard {
+  final List<TodoTaskBoardGroup> groups;
+  final PlatformInt64 total;
+
+  const TodoTaskBoard({required this.groups, required this.total});
+
+  @override
+  int get hashCode => groups.hashCode ^ total.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is TodoTaskBoard &&
+          runtimeType == other.runtimeType &&
+          groups == other.groups &&
+          total == other.total;
+}
+
+/// 看板单列（镜像 orbit_core::models::business::TodoTaskBoardGroup）
+class TodoTaskBoardGroup {
+  final String key;
+  final PlatformInt64 total;
+  final List<TodoTaskListItem> items;
+
+  const TodoTaskBoardGroup({
+    required this.key,
+    required this.total,
+    required this.items,
+  });
+
+  @override
+  int get hashCode => key.hashCode ^ total.hashCode ^ items.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is TodoTaskBoardGroup &&
+          runtimeType == other.runtimeType &&
+          key == other.key &&
+          total == other.total &&
+          items == other.items;
 }
 
 /// 任务创建输入（镜像 TodoTaskCreateInput；均为普通 Option<T>/T 字段）
@@ -2138,6 +2293,50 @@ class TodoTaskListItem {
           isDeleted == other.isDeleted &&
           createdAt == other.createdAt &&
           updatedAt == other.updatedAt;
+}
+
+/// 任务总览（镜像 orbit_core::models::business::TodoTaskOverview）
+class TodoTaskOverview {
+  final PlatformInt64 total;
+  final List<TodoProjectUndone> undoneByProject;
+
+  const TodoTaskOverview({required this.total, required this.undoneByProject});
+
+  @override
+  int get hashCode => total.hashCode ^ undoneByProject.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is TodoTaskOverview &&
+          runtimeType == other.runtimeType &&
+          total == other.total &&
+          undoneByProject == other.undoneByProject;
+}
+
+/// 任务分页结果（镜像 orbit_core::models::business::TodoTaskPage）
+class TodoTaskPage {
+  final List<TodoTaskListItem> items;
+  final ListCursor? nextCursor;
+  final bool hasMore;
+
+  const TodoTaskPage({
+    required this.items,
+    this.nextCursor,
+    required this.hasMore,
+  });
+
+  @override
+  int get hashCode => items.hashCode ^ nextCursor.hashCode ^ hasMore.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is TodoTaskPage &&
+          runtimeType == other.runtimeType &&
+          items == other.items &&
+          nextCursor == other.nextCursor &&
+          hasMore == other.hasMore;
 }
 
 /// 任务关系（镜像 orbit_core::models::business::TodoTaskRelation）

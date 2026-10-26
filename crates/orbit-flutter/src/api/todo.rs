@@ -43,12 +43,13 @@ use orbit_core::models::business::{
 // 同理 ProjectedTaskLabel / ProjectedReminder 仅作为分组 labels/reminders
 // 的元素类型出现，不再导出（否则 unused_imports）。
 pub use super::dto::{
-    CompleteTaskResult, ListFilter, ProjectReviewStatus, TaskDependencyFlags, TaskDescriptionFlag,
-    TaskExistenceFlag, TaskLabelsProjection, TaskRemindersProjection, TodoComment,
-    TodoCommentCreateInput, TodoLabel, TodoLabelCreateInput, TodoProject, TodoProjectCreateInput,
-    TodoReminder, TodoReminderCreateInput, TodoSubtask, TodoSubtaskCreateInput, TodoTask,
+    BoardGroupBy, CompleteTaskResult, ListCursor, ListFilter, ProjectReviewStatus,
+    TaskDependencyFlags, TaskDescriptionFlag, TaskExistenceFlag, TaskLabelsProjection,
+    TaskRemindersProjection, TodoComment, TodoCommentCreateInput, TodoLabel, TodoLabelCreateInput,
+    TodoProject, TodoProjectCreateInput, TodoProjectUndone, TodoReminder, TodoReminderCreateInput,
+    TodoSubtask, TodoSubtaskCreateInput, TodoTask, TodoTaskBoard, TodoTaskBoardGroup,
     TodoTaskCreateInput, TodoTaskDetail, TodoTaskLabel, TodoTaskLabelCreateInput, TodoTaskListItem,
-    TodoTaskRelation, TodoTaskRelationCreateInput,
+    TodoTaskOverview, TodoTaskPage, TodoTaskRelation, TodoTaskRelationCreateInput,
 };
 
 fn pool() -> Result<sqlx::SqlitePool, String> {
@@ -184,6 +185,72 @@ pub async fn todo_tasks_list(filter: ListFilter) -> Result<Vec<TodoTaskListItem>
         .await
         .map_err(|e| e.to_string())?;
     Ok(items.into_iter().map(TodoTaskListItem::from).collect())
+}
+
+/// 任务键集分页（对应桌面 todo_tasks_page，P1 50k 规模档）
+///
+/// `cursor` 为上一页返回值，首页传 None；`limit` 由 core 钳制到 1..=1000。
+/// 换排序档后沿用旧游标返回空页（UI 竞态自愈）。
+pub async fn todo_tasks_page(
+    filter: ListFilter,
+    cursor: Option<ListCursor>,
+    limit: u32,
+) -> Result<TodoTaskPage, String> {
+    let pool = pool()?;
+    let core_cursor = cursor.map(Into::into);
+    let page =
+        business_api::list_todo_tasks_page(&pool, &filter.into(), core_cursor.as_ref(), limit)
+            .await
+            .map_err(|e| e.to_string())?;
+    Ok(TodoTaskPage {
+        items: page.items.into_iter().map(TodoTaskListItem::from).collect(),
+        next_cursor: page.next_cursor.map(ListCursor::from),
+        has_more: page.has_more,
+    })
+}
+
+/// 任务总览（对应桌面 todo_task_overview）：总数 + 按项目未完成计数
+pub async fn todo_task_overview(filter: ListFilter) -> Result<TodoTaskOverview, String> {
+    let pool = pool()?;
+    let ov = business_api::todo_task_overview(&pool, &filter.into())
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(TodoTaskOverview {
+        total: ov.total,
+        undone_by_project: ov
+            .undone_by_project
+            .into_iter()
+            .map(|b| TodoProjectUndone {
+                project_id: b.project_id,
+                count: b.count,
+            })
+            .collect(),
+    })
+}
+
+/// 看板/四象限窗口化（对应桌面 todo_tasks_board）：每列前 N 条 + 每列总数。
+///
+/// `day_start` / `day_end` 由 Dart 侧按本地时区算好传入（due 五分桶与
+/// 「今天以内到期 = 紧急」的界）。
+pub async fn todo_tasks_board(
+    filter: ListFilter,
+    group_by: BoardGroupBy,
+    limit_per_group: u32,
+    day_start: i64,
+    day_end: i64,
+) -> Result<TodoTaskBoard, String> {
+    let pool = pool()?;
+    business_api::list_todo_tasks_board(
+        &pool,
+        &filter.into(),
+        group_by.as_core(),
+        limit_per_group,
+        day_start,
+        day_end,
+    )
+    .await
+    .map(TodoTaskBoard::from)
+    .map_err(|e| e.to_string())
 }
 
 /// 获取单个任务（对应桌面 todo_tasks_get）

@@ -13,14 +13,85 @@ class ListFilter {
   final String? keyword;
   final int page;
   final int pageSize;
+  /// 排序键（P1 键集分页）：manual/due/priority/created；title 走全量通道
+  final String? sortKey;
+  /// 排序方向 asc/desc；null = 各档默认方向
+  final String? sortDir;
+  /// 截止区间下界（毫秒，含）：日历按可见范围取数
+  final int? dueFrom;
+  /// 截止区间上界（毫秒，不含）
+  final int? dueTo;
 
-  const ListFilter({this.keyword, this.page = 1, this.pageSize = 500});
+  const ListFilter({
+    this.keyword,
+    this.page = 1,
+    this.pageSize = 500,
+    this.sortKey,
+    this.sortDir,
+    this.dueFrom,
+    this.dueTo,
+  });
 
   Map<String, dynamic> toJson() => {
         'keyword': keyword,
         'page': page,
         'page_size': pageSize,
+        'sort_key': sortKey,
+        'sort_dir': sortDir,
+        'due_from': dueFrom,
+        'due_to': dueTo,
       };
+}
+
+/// 键集分页游标（镜像 Rust ListCursor）
+class ListCursor {
+  final String sortKey;
+  final String dir;
+  /// 主排序键值（position/priority/createdAt/dueDate）；due 档 null = 无截止尾段
+  final double? key;
+  /// 次排序键（仅 priority 档：同优先级按 position 升序）
+  final double? key2;
+  final int id;
+
+  const ListCursor({
+    required this.sortKey,
+    required this.dir,
+    required this.key,
+    required this.key2,
+    required this.id,
+  });
+}
+
+/// 任务分页结果（镜像 Rust TodoTaskPage）
+class TodoTaskPage {
+  final List<TodoTask> items;
+  final ListCursor? nextCursor;
+  final bool hasMore;
+
+  const TodoTaskPage({
+    required this.items,
+    required this.nextCursor,
+    required this.hasMore,
+  });
+}
+
+/// 单个项目的未完成计数
+class TodoProjectUndone {
+  final int? projectId;
+  final int count;
+
+  const TodoProjectUndone({required this.projectId, required this.count});
+}
+
+/// 任务总览（镜像 Rust TodoTaskOverview）
+class TodoTaskOverview {
+  final int total;
+  final List<TodoProjectUndone> undoneByProject;
+
+  const TodoTaskOverview({
+    required this.total,
+    required this.undoneByProject,
+  });
 }
 
 /// 更新载荷构建约定（对齐 Rust `Option<Option<T>>` 三态语义）：

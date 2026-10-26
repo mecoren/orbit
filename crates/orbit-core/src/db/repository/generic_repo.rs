@@ -16,11 +16,13 @@ use crate::eventbus::{
     events::{DbEvent, DbOp},
 };
 use crate::models::business::{
-    ListFilter, TodoComment, TodoCommentCreateInput, TodoLabel, TodoLabelCreateInput,
-    TodoLabelUpdateInput, TodoProject, TodoProjectCreateInput, TodoProjectUpdateInput,
-    TodoReminder, TodoReminderCreateInput, TodoSubtask, TodoSubtaskCreateInput,
-    TodoSubtaskUpdateInput, TodoTask, TodoTaskCreateInput, TodoTaskLabel, TodoTaskLabelCreateInput,
-    TodoTaskRelation, TodoTaskRelationCreateInput, TodoTaskUpdateInput,
+    BoardGroupBy, ListCursor, ListFilter, TodoComment, TodoCommentCreateInput, TodoLabel,
+    TodoLabelCreateInput, TodoLabelUpdateInput, TodoProject, TodoProjectCreateInput,
+    TodoProjectUndone, TodoProjectUpdateInput, TodoReminder, TodoReminderCreateInput, TodoSubtask,
+    TodoSubtaskCreateInput, TodoSubtaskUpdateInput, TodoTask, TodoTaskBoard, TodoTaskBoardGroup,
+    TodoTaskCreateInput, TodoTaskLabel, TodoTaskLabelCreateInput, TodoTaskListItem,
+    TodoTaskOverview, TodoTaskPage, TodoTaskRelation, TodoTaskRelationCreateInput,
+    TodoTaskUpdateInput,
 };
 
 // =============================================================================
@@ -148,6 +150,531 @@ where
     Ok(items)
 }
 
+// =============================================================================
+// 任务键集分页（P1 50k 规模档）
+// =============================================================================
+
+/// 分页通道支持的排序键。
+///
+/// 只覆盖能**在 SQL 里精确定序**的档位；`title` 档由前端用
+/// `localeCompare("zh-Hans-CN")` 排中文拼音序，SQLite 的 BINARY collation
+/// 复刻不了（见 [ListFilter::sort_key] 注释），故不进本枚举。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum TaskSortKey {
+    /// 拖拽顺序：position 升序（方向不生效，与前端 manual 档一致）
+    Manual,
+    /// 截止时间：无截止恒沉底，其余按方向
+    Due,
+    /// 优先级：默认降序，同值回落 position 升序
+    Priority,
+    /// 创建时间：默认降序
+    Created,
+    /// 完成时间（Logbook 通道）：无完成时间恒沉底，默认降序
+    DoneAt,
+}
+
+impl TaskSortKey {
+    fn parse(raw: Option<&str>) -> CoreResult<Self> {
+        match raw.map(str::trim).filter(|s| !s.is_empty()) {
+            None | Some("manual") => Ok(Self::Manual),
+            Some("due") => Ok(Self::Due),
+            Some("priority") => Ok(Self::Priority),
+            Some("created") => Ok(Self::Created),
+            Some("done_at") => Ok(Self::DoneAt),
+            Some("title") => Err(CoreError::Other(
+                "title 排序不支持键集分页（中文拼音序无法在 SQL 侧复刻），请走全量通道".into(),
+            )),
+            Some(other) => Err(CoreError::Other(format!("未知排序键: {other}"))),
+        }
+    }
+
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Manual => "manual",
+            Self::Due => "due",
+            Self::Priority => "priority",
+            Self::Created => "created",
+            Self::DoneAt => "done_at",
+        }
+    }
+
+    /// 该档在某方向下是否降序（None = 该档默认方向，与前端 BASE_SORT_DIR 一致）
+    fn is_desc(self, raw: Option<&str>) -> bool {
+        match raw.map(str::trim) {
+            Some("asc") => false,
+            Some("desc") => true,
+            _ => matches!(self, Self::Priority | Self::Created | Self::DoneAt),
+        }
+    }
+
+    /// ORDER BY 片段。manual 忽略方向（拖拽顺序的唯一语义是 position 升序）。
+    fn order_by(self, desc: bool) -> &'static str {
+        match (self, desc) {
+            (Self::Manual, _) => "ORDER BY position ASC, id ASC",
+            (Self::Due, false) => "ORDER BY (due_date IS NULL) ASC, due_date ASC, id ASC",
+            (Self::Due, true) => "ORDER BY (due_date IS NULL) ASC, due_date DESC, id DESC",
+            (Self::Priority, false) => "ORDER BY priority ASC, position ASC, id ASC",
+            (Self::Priority, true) => "ORDER BY priority DESC, position ASC, id ASC",
+            (Self::Created, false) => "ORDER BY created_at ASC, id ASC",
+            (Self::Created, true) => "ORDER BY created_at DESC, id DESC",
+            (Self::DoneAt, false) => "ORDER BY (done_at IS NULL) ASC, done_at ASC, id ASC",
+            (Self::DoneAt, true) => "ORDER BY (done_at IS NULL) ASC, done_at DESC, id DESC",
+        }
+    }
+}
+
+/// 绑定值（分页 WHERE 的占位符参数类型不统一，按声明顺序入列）
+#[derive(Clone)]
+enum BindVal {
+    Text(String),
+    Int(i64),
+    Real(f64),
+}
+
+/// 任务查询的 WHERE 拼装结果（分页与聚合共用同一口径）
+struct TaskWhere {
+    /// 以 " AND ..." 开头的子句串
+    clause: String,
+    binds: Vec<BindVal>,
+}
+
+/// 构造任务查询的 WHERE（软删基线 + keyword + 谓词 + 截止区间 + 归档排除 + 游标）。
+///
+/// 参数顺序与 `clause` 中 `?` 的出现顺序严格一致：keyword 各字段 →
+/// status 文本 → 谓词数值 → due 区间 → 游标。
+fn build_task_where(
+    filter: &ListFilter,
+    sort: TaskSortKey,
+    desc: bool,
+    cursor: Option<&ListCursor>,
+) -> TaskWhere {
+    let keyword_clause = build_keyword_clause("todo_tasks", filter.keyword.as_deref());
+    let predicate_clause = build_task_predicate_clause("todo_tasks", filter);
+    let archived_exclude_clause = if filter.project_id.is_none() && filter.project_ids.is_none() {
+        " AND (project_id IS NULL OR project_id NOT IN \
+             (SELECT id FROM todo_projects WHERE is_deleted = 0 AND is_archived = 1))"
+    } else {
+        ""
+    };
+
+    let mut clause = String::new();
+    let mut binds = Vec::new();
+
+    clause.push_str(&keyword_clause.clause);
+    for value in keyword_clause.bindings {
+        binds.push(BindVal::Text(value));
+    }
+    if let Some(status) = predicate_clause.status_binding {
+        binds.push(BindVal::Text(status));
+    }
+    clause.push_str(&predicate_clause.clause);
+    for value in predicate_clause.bindings {
+        binds.push(BindVal::Int(value));
+    }
+
+    if let Some(from) = filter.due_from {
+        clause.push_str(" AND due_date >= ?");
+        binds.push(BindVal::Int(from));
+    }
+    if let Some(to) = filter.due_to {
+        clause.push_str(" AND due_date < ?");
+        binds.push(BindVal::Int(to));
+    }
+    // 逾期行已由置顶段的独立查询取走：主列表排除它们但保留无截止行
+    if let Some(before) = filter.exclude_due_before {
+        clause.push_str(" AND (due_date IS NULL OR due_date >= ?)");
+        binds.push(BindVal::Int(before));
+    }
+
+    clause.push_str(archived_exclude_clause);
+
+    if let Some(c) = cursor {
+        let (frag, cursor_binds) = cursor_predicate(sort, desc, c);
+        clause.push_str(&frag);
+        binds.extend(cursor_binds);
+    }
+
+    TaskWhere { clause, binds }
+}
+
+/// 游标比较谓词：「严格位于游标之后」的行。
+///
+/// 每个档位手写而非用行值比较：`priority` 档是「主键降序 + 次键升序」的混合
+/// 方向，`due` 档还要把 NULL 尾段整体排在游标之后——行值比较表达不了。
+fn cursor_predicate(sort: TaskSortKey, desc: bool, c: &ListCursor) -> (String, Vec<BindVal>) {
+    let mut binds = Vec::new();
+    let frag = match sort {
+        TaskSortKey::Manual => {
+            let pos = c.key.unwrap_or(0.0);
+            binds.push(BindVal::Real(pos));
+            binds.push(BindVal::Real(pos));
+            binds.push(BindVal::Int(c.id));
+            " AND (position > ? OR (position = ? AND id > ?))".to_string()
+        }
+        TaskSortKey::Created => {
+            let ts = c.key.unwrap_or(0.0);
+            binds.push(BindVal::Real(ts));
+            binds.push(BindVal::Real(ts));
+            binds.push(BindVal::Int(c.id));
+            if desc {
+                " AND (created_at < ? OR (created_at = ? AND id < ?))".to_string()
+            } else {
+                " AND (created_at > ? OR (created_at = ? AND id > ?))".to_string()
+            }
+        }
+        TaskSortKey::Priority => {
+            let pri = c.key.unwrap_or(0.0);
+            let pos = c.key2.unwrap_or(0.0);
+            binds.push(BindVal::Real(pri));
+            binds.push(BindVal::Real(pri));
+            binds.push(BindVal::Real(pos));
+            binds.push(BindVal::Real(pos));
+            binds.push(BindVal::Int(c.id));
+            let cmp = if desc { "<" } else { ">" };
+            format!(
+                " AND (priority {cmp} ? OR (priority = ? AND \
+                 (position > ? OR (position = ? AND id > ?))))"
+            )
+        }
+        TaskSortKey::Due => {
+            let cmp = if desc { "<" } else { ">" };
+            match c.key {
+                // 已进入「无截止」尾段：只剩同段内 id 顺序
+                None => {
+                    binds.push(BindVal::Int(c.id));
+                    format!(" AND (due_date IS NULL AND id {cmp} ?)")
+                }
+                // 有截止值：无截止行整体在后，或截止值更靠后，或同值比 id
+                Some(due) => {
+                    binds.push(BindVal::Real(due));
+                    binds.push(BindVal::Real(due));
+                    binds.push(BindVal::Int(c.id));
+                    format!(
+                        " AND (due_date IS NULL OR due_date {cmp} ? OR \
+                         (due_date = ? AND id {cmp} ?))"
+                    )
+                }
+            }
+        }
+        // 与 Due 同构：NULL 尾段（历史数据可能没写 done_at）整体沉底
+        TaskSortKey::DoneAt => {
+            let cmp = if desc { "<" } else { ">" };
+            match c.key {
+                None => {
+                    binds.push(BindVal::Int(c.id));
+                    format!(" AND (done_at IS NULL AND id {cmp} ?)")
+                }
+                Some(at) => {
+                    binds.push(BindVal::Real(at));
+                    binds.push(BindVal::Real(at));
+                    binds.push(BindVal::Int(c.id));
+                    format!(
+                        " AND (done_at IS NULL OR done_at {cmp} ? OR \
+                         (done_at = ? AND id {cmp} ?))"
+                    )
+                }
+            }
+        }
+    };
+    (frag, binds)
+}
+
+/// 从一行任务构造下一页游标（key/key2 按排序档取对应列）
+fn cursor_from_task(
+    sort: TaskSortKey,
+    sort_str: &str,
+    dir_str: &str,
+    t: &TodoTaskListItem,
+) -> ListCursor {
+    let (key, key2) = match sort {
+        TaskSortKey::Manual => (Some(t.position), None),
+        TaskSortKey::Due => (t.due_date.map(|v| v as f64), None),
+        TaskSortKey::Priority => (Some(t.priority as f64), Some(t.position)),
+        TaskSortKey::Created => (Some(t.created_at as f64), None),
+        // 游标里 done_at 可能为空（历史数据）——真实空值不能折成 0，
+        // 否则会落进「有完成时间」段而不是 NULL 尾段
+        TaskSortKey::DoneAt => (t.done_at.map(|v| v as f64), None),
+    };
+    ListCursor {
+        sort_key: sort_str.to_string(),
+        dir: dir_str.to_string(),
+        key,
+        key2,
+        id: t.id,
+    }
+}
+
+/// 任务键集分页查询（P1 50k 规模档）。
+///
+/// 与 [list] 的区别：排序键下推到 SQL（四档）、用游标代替 OFFSET、返回
+/// `has_more` 与下一页游标。`limit` 上限 1000（窗口化首屏 200～500 足够；
+/// 大值只会让单次 IPC 传输变大，失去窗口化意义）。
+///
+/// 游标与当前排序档不一致时返回**空页**（`has_more = false`）：调用方换了
+/// 排序却沿用旧游标属于正常的 UI 竞态（用户快速切档），让它自然收敛比报错好。
+pub async fn list_tasks_page(
+    pool: &SqlitePool,
+    filter: &ListFilter,
+    cursor: Option<&ListCursor>,
+    limit: u32,
+) -> CoreResult<TodoTaskPage> {
+    let sort = TaskSortKey::parse(filter.sort_key.as_deref())?;
+    let desc = sort.is_desc(filter.sort_dir.as_deref());
+    let dir_str = if sort == TaskSortKey::Manual {
+        "asc"
+    } else if desc {
+        "desc"
+    } else {
+        "asc"
+    };
+    let sort_str = sort.as_str();
+    let limit = limit.clamp(1, 1000) as i64;
+
+    // 换档即作废：游标记录的排序档与本次请求不一致，说明是竞态下的旧游标
+    if let Some(c) = cursor {
+        if c.sort_key != sort_str || c.dir != dir_str {
+            return Ok(TodoTaskPage {
+                items: Vec::new(),
+                next_cursor: None,
+                has_more: false,
+            });
+        }
+    }
+
+    let where_clause = build_task_where(filter, sort, desc, cursor);
+    let has_keyword = filter
+        .keyword
+        .as_deref()
+        .map(str::trim)
+        .is_some_and(|k| !k.is_empty());
+    let select_expr = task_list_columns(has_keyword);
+    let sql = format!(
+        "SELECT {} FROM todo_tasks WHERE is_deleted = 0{} {} LIMIT ?",
+        select_expr,
+        where_clause.clause,
+        sort.order_by(desc),
+    );
+
+    let mut q = sqlx::query_as::<_, TodoTaskListItem>(&sql);
+    for bind in where_clause.binds {
+        q = match bind {
+            BindVal::Text(v) => q.bind(v),
+            BindVal::Int(v) => q.bind(v),
+            BindVal::Real(v) => q.bind(v),
+        };
+    }
+    // 多取一条用于判定 has_more（比再发一次 COUNT 便宜）
+    q = q.bind(limit + 1);
+    let mut rows = q.fetch_all(pool).await?;
+
+    let has_more = rows.len() as i64 > limit;
+    if has_more {
+        rows.truncate(limit as usize);
+    }
+    let next_cursor = if has_more {
+        rows.last()
+            .map(|t| cursor_from_task(sort, sort_str, dir_str, t))
+    } else {
+        None
+    };
+    Ok(TodoTaskPage {
+        items: rows,
+        next_cursor,
+        has_more,
+    })
+}
+
+/// 任务总览聚合（P1 窗口化后侧栏计数/总数的唯一来源）。
+///
+/// `total` 与分页共用同一套谓词（keyword/项目/完成态/截止区间/归档排除），
+/// 但忽略游标与 limit；`undone_by_project` 是**全局口径**（不看当前视图谓词，
+/// 与旧侧栏计数"从当前视图任务聚合"的错误行为解耦——切到「我的一天」时其它
+/// 项目的角标不该归零）。
+pub async fn task_overview(pool: &SqlitePool, filter: &ListFilter) -> CoreResult<TodoTaskOverview> {
+    // total
+    let where_clause = build_task_where(filter, TaskSortKey::Manual, false, None);
+    let sql = format!(
+        "SELECT COUNT(*) FROM todo_tasks WHERE is_deleted = 0{}",
+        where_clause.clause
+    );
+    let mut q = sqlx::query_as::<_, (i64,)>(&sql);
+    for bind in where_clause.binds {
+        q = match bind {
+            BindVal::Text(v) => q.bind(v),
+            BindVal::Int(v) => q.bind(v),
+            BindVal::Real(v) => q.bind(v),
+        };
+    }
+    let (total,) = q.fetch_one(pool).await?;
+
+    // 侧栏未完成计数（全局，不含归档项目任务）
+    let rows: Vec<(Option<i64>, i64)> = sqlx::query_as(
+        "SELECT project_id, COUNT(*) FROM todo_tasks \
+         WHERE is_deleted = 0 AND done = 0 AND \
+         (project_id IS NULL OR project_id NOT IN \
+          (SELECT id FROM todo_projects WHERE is_deleted = 0 AND is_archived = 1)) \
+         GROUP BY project_id",
+    )
+    .fetch_all(pool)
+    .await?;
+
+    Ok(TodoTaskOverview {
+        total,
+        undone_by_project: rows
+            .into_iter()
+            .map(|(project_id, count)| TodoProjectUndone { project_id, count })
+            .collect(),
+    })
+}
+
+/// 看板/四象限分组表达式（列键与桌面 `kanbanColumnKey` 逐字一致）。
+///
+/// `day_start` 是本地今日零点（due 五分桶的界），`day_end` 是今日 24:00
+/// （四象限的「紧急」界 = 今天以内到期，含逾期）。两者都由调用方按本地
+/// 时区算好传入——Rust 侧不重复做日界换算以免口径分裂。
+fn board_group_expr(
+    group_by: BoardGroupBy,
+    day_start: i64,
+    day_end: i64,
+) -> (String, Vec<BindVal>) {
+    const DAY: i64 = 86_400_000;
+    match group_by {
+        BoardGroupBy::Project => (
+            "CASE WHEN project_id IS NULL THEN 'ungrouped' ELSE CAST(project_id AS TEXT) END"
+                .into(),
+            Vec::new(),
+        ),
+        BoardGroupBy::Status => (
+            "CASE WHEN status IN ('doing', 'done') THEN status ELSE 'pending' END".into(),
+            Vec::new(),
+        ),
+        BoardGroupBy::Priority => (
+            "'pri:' || (CASE WHEN priority BETWEEN 0 AND 5 THEN priority ELSE 0 END)".into(),
+            Vec::new(),
+        ),
+        BoardGroupBy::Due => (
+            "'due:' || (CASE WHEN due_date IS NULL THEN 'none' \
+             WHEN due_date < ? THEN 'overdue' \
+             WHEN due_date < ? THEN 'today' \
+             WHEN due_date < ? THEN 'week' ELSE 'later' END)"
+                .into(),
+            vec![
+                BindVal::Int(day_start),
+                BindVal::Int(day_start + DAY),
+                BindVal::Int(day_start + 7 * DAY),
+            ],
+        ),
+        BoardGroupBy::Quadrant => (
+            "CASE WHEN due_date IS NOT NULL AND due_date < ? THEN \
+               (CASE WHEN priority >= 3 THEN 'urgentImportant' ELSE 'urgentNotImportant' END) \
+             ELSE (CASE WHEN priority >= 3 THEN 'importantNotUrgent' ELSE 'neither' END) END"
+                .into(),
+            vec![BindVal::Int(day_end)],
+        ),
+    }
+}
+
+/// 把 [BindVal] 绑到查询上（类型按值分支，`QueryAs` 三个参数原样透传）
+fn bind_val<'q, O>(
+    q: sqlx::query::QueryAs<'q, sqlx::Sqlite, O, sqlx::sqlite::SqliteArguments<'q>>,
+    v: BindVal,
+) -> sqlx::query::QueryAs<'q, sqlx::Sqlite, O, sqlx::sqlite::SqliteArguments<'q>>
+where
+    O: for<'r> sqlx::FromRow<'r, sqlx::sqlite::SqliteRow>,
+{
+    match v {
+        BindVal::Text(s) => q.bind(s),
+        BindVal::Int(i) => q.bind(i),
+        BindVal::Real(f) => q.bind(f),
+    }
+}
+
+/// 看板/四象限窗口化查询：一次往返取「每列前 N 条 + 每列总数」。
+///
+/// 不用窗口函数一次查完的原因：`TodoTaskListItem` 有 18 列，`ROW_NUMBER()`
+/// 会给每行多带附加列、解码要手写 18 次 `try_get`；而实际有任务的组数
+/// （= 看板列数）通常个位数到十几个，`GROUP BY` + 逐组 `LIMIT` 的总成本
+/// 反而更低，且每组都是同一索引前缀上的有序扫描。
+///
+/// 组键口径与桌面 `kanbanColumnKey` 逐字一致；`quadrant` 强制只看未完成
+/// （`groupEisenhower` 跳过 done 行），其余维度沿用调用方 `done` 谓词。
+pub async fn task_board(
+    pool: &SqlitePool,
+    filter: &ListFilter,
+    group_by: BoardGroupBy,
+    limit_per_group: u32,
+    day_start: i64,
+    day_end: i64,
+) -> CoreResult<TodoTaskBoard> {
+    let filter = filter.clone();
+    // 四象限与前端 groupEisenhower 一致：只看未完成。用**追加 AND** 而不是
+    // 覆盖 `filter.done`——用户显式筛「已完成」时结果应为空（前端同一行为），
+    // 覆盖会把它悄悄变回「全部未完成」。
+    let quadrant_clause = if group_by == BoardGroupBy::Quadrant {
+        " AND done = 0"
+    } else {
+        ""
+    };
+    let (expr, expr_binds) = board_group_expr(group_by, day_start, day_end);
+    let where_clause = build_task_where(&filter, TaskSortKey::Manual, false, None);
+
+    // 1) 组键 + 组总数（不受 limit 影响，供「还有 N 条」与列头角标）
+    let sql = format!(
+        "SELECT {expr} AS g, COUNT(*) FROM todo_tasks \
+         WHERE is_deleted = 0{}{quadrant_clause} GROUP BY g ORDER BY g",
+        where_clause.clause
+    );
+    let mut q = sqlx::query_as::<_, (String, i64)>(&sql);
+    for bind in where_clause
+        .binds
+        .iter()
+        .cloned()
+        .chain(expr_binds.iter().cloned())
+    {
+        q = bind_val(q, bind);
+    }
+    let counts = q.fetch_all(pool).await?;
+
+    // 2) 每组前 N 条（列内沿用工具栏排序档）
+    let sort = TaskSortKey::parse(filter.sort_key.as_deref())?;
+    let desc = sort.is_desc(filter.sort_dir.as_deref());
+    let order = sort.order_by(desc);
+    let has_keyword = filter
+        .keyword
+        .as_deref()
+        .map(|k| !k.trim().is_empty())
+        .unwrap_or(false);
+    let cols = task_list_columns(has_keyword);
+    let limit = limit_per_group.clamp(1, 200) as i64;
+    let mut groups = Vec::with_capacity(counts.len());
+    let mut total = 0i64;
+    for (key, count) in counts {
+        total += count;
+        let sql = format!(
+            "SELECT {cols} FROM todo_tasks WHERE is_deleted = 0{}{quadrant_clause} \
+             AND ({expr}) = ? {order} LIMIT ?",
+            where_clause.clause
+        );
+        let mut q = sqlx::query_as::<_, TodoTaskListItem>(&sql);
+        for bind in where_clause
+            .binds
+            .iter()
+            .cloned()
+            .chain(expr_binds.iter().cloned())
+        {
+            q = bind_val(q, bind);
+        }
+        q = q.bind(key.clone()).bind(limit);
+        let items = q.fetch_all(pool).await?;
+        groups.push(TodoTaskBoardGroup {
+            key,
+            total: count,
+            items,
+        });
+    }
+    Ok(TodoTaskBoard { groups, total })
+}
+
 /// 关键词过滤子句构造结果
 struct KeywordClause {
     /// SQL 子句文本（如 " AND (title LIKE ? OR author LIKE ?)"），无 keyword 时为空串
@@ -223,6 +750,21 @@ fn build_task_predicate_clause(table: &str, filter: &ListFilter) -> TaskPredicat
     if let Some(zero) = filter.my_day_today {
         clause.push_str(" AND my_day_date = ?");
         bindings.push(zero);
+    }
+    // 未分组视图（P1 窗口化下推）：project_id IS NULL，无绑定
+    if filter.ungrouped == Some(true) {
+        clause.push_str(" AND project_id IS NULL");
+    }
+    // 优先级等值（工具栏单值档）
+    if let Some(p) = filter.priority_eq {
+        clause.push_str(" AND priority = ?");
+        bindings.push(p as i64);
+    }
+    // 是否有截止（日历「未排期」区用）：false = due_date IS NULL
+    match filter.has_due {
+        Some(true) => clause.push_str(" AND due_date IS NOT NULL"),
+        Some(false) => clause.push_str(" AND due_date IS NULL"),
+        None => {}
     }
     TaskPredicateClause {
         clause,
@@ -1677,6 +2219,266 @@ mod task_predicate_tests {
     }
 }
 
+/// 键集分页测试（P1 50k 规模档）。
+///
+/// 重点不是「单页内容对不对」，而是**翻页遍历结果与一次性全量完全一致**：
+/// 键集分页最容易出的错是边界重复/漏行（`>` 写成 `>=`、tiebreaker 漏掉、
+/// NULL 段漏判），它们不会让任何单页断言翻红，只有「逐页收集 vs 全量」能抓到。
+#[cfg(test)]
+mod keyset_paging_tests {
+    use super::*;
+    use crate::api::business_api::create_todo_task;
+    use crate::models::business::{ListCursor, ListFilter, TodoTaskCreateInput};
+
+    async fn setup_db() -> SqlitePool {
+        let pool = sqlx::SqlitePool::connect("sqlite::memory:").await.unwrap();
+        sqlx::migrate!("./src/db/migrations")
+            .run(&pool)
+            .await
+            .unwrap();
+        pool
+    }
+
+    /// 造 25 条任务：priority 只有 0/1/2 三值、due 有 6 条无截止、position 留给手工
+    async fn seed(pool: &SqlitePool) -> Vec<i64> {
+        let mut ids = Vec::new();
+        for i in 0..25i64 {
+            let t = create_todo_task(
+                pool,
+                &TodoTaskCreateInput {
+                    title: format!("任务 {i:02}"),
+                    priority: Some((i % 3) as i32),
+                    due_date: if i % 4 == 0 {
+                        None
+                    } else {
+                        Some(1_700_000_000_000 + (i % 5) * 86_400_000)
+                    },
+                    ..Default::default()
+                },
+            )
+            .await
+            .unwrap();
+            // 拖拽序刻意与 id 逆序，才能区分 manual 档有没有真的按 position 排
+            sqlx::query("UPDATE todo_tasks SET position = ? WHERE id = ?")
+                .bind((100 - i) as f64)
+                .bind(t.id)
+                .execute(pool)
+                .await
+                .unwrap();
+            ids.push(t.id);
+        }
+        ids
+    }
+
+    fn filter(sort_key: &str, sort_dir: Option<&str>) -> ListFilter {
+        ListFilter {
+            sort_key: Some(sort_key.into()),
+            sort_dir: sort_dir.map(str::to_string),
+            page_size: 10_000,
+            ..Default::default()
+        }
+    }
+
+    /// 逐页收集（带死循环护栏）
+    async fn collect_all(pool: &SqlitePool, f: &ListFilter, limit: u32) -> Vec<i64> {
+        let mut out = Vec::new();
+        let mut cursor: Option<ListCursor> = None;
+        for _ in 0..1000 {
+            let page = list_tasks_page(pool, f, cursor.as_ref(), limit)
+                .await
+                .unwrap();
+            out.extend(page.items.iter().map(|t| t.id));
+            assert_eq!(page.has_more, page.next_cursor.is_some());
+            match page.next_cursor {
+                Some(c) => cursor = Some(c),
+                None => return out,
+            }
+        }
+        panic!("翻页未收敛（游标没有推进）");
+    }
+
+    /// 四档 × 多种页长：逐页遍历必须与单页全量等价（同序、无重复、无遗漏）
+    #[tokio::test]
+    async fn paging_traversal_matches_single_page() {
+        let pool = setup_db().await;
+        seed(&pool).await;
+        for (key, dir) in [
+            ("manual", None),
+            ("due", None),
+            ("due", Some("desc")),
+            ("priority", None),
+            ("priority", Some("asc")),
+            ("created", None),
+        ] {
+            let f = filter(key, dir);
+            let full: Vec<i64> = list_tasks_page(&pool, &f, None, 1000)
+                .await
+                .unwrap()
+                .items
+                .iter()
+                .map(|t| t.id)
+                .collect();
+            assert_eq!(full.len(), 25, "{key}/{dir:?} 单页应取满");
+            for limit in [1u32, 3, 7, 24] {
+                let paged = collect_all(&pool, &f, limit).await;
+                assert_eq!(
+                    paged, full,
+                    "{key}/{dir:?} limit={limit} 逐页序应与全量一致"
+                );
+            }
+        }
+    }
+
+    /// 各档主键顺序（不是随便排；tiebreaker 之外必须按声明键）
+    #[tokio::test]
+    async fn sort_orders_follow_declared_keys() {
+        let pool = setup_db().await;
+        seed(&pool).await;
+
+        let manual = list_tasks_page(&pool, &filter("manual", None), None, 1000)
+            .await
+            .unwrap();
+        let positions: Vec<f64> = manual.items.iter().map(|t| t.position).collect();
+        assert!(
+            positions.windows(2).all(|w| w[0] <= w[1]),
+            "manual 档必须 position 升序"
+        );
+
+        let priority = list_tasks_page(&pool, &filter("priority", None), None, 1000)
+            .await
+            .unwrap();
+        assert!(
+            priority
+                .items
+                .windows(2)
+                .all(|w| w[0].priority >= w[1].priority),
+            "priority 档默认降序"
+        );
+        // 同优先级内 position 升序
+        for pair in priority.items.windows(2) {
+            if pair[0].priority == pair[1].priority {
+                assert!(pair[0].position <= pair[1].position);
+            }
+        }
+
+        let due = list_tasks_page(&pool, &filter("due", None), None, 1000)
+            .await
+            .unwrap();
+        let first_null = due.items.iter().position(|t| t.due_date.is_none());
+        if let Some(idx) = first_null {
+            assert!(
+                due.items[idx..].iter().all(|t| t.due_date.is_none()),
+                "due 档无截止必须整体沉底"
+            );
+        }
+        // 方向只翻主键：desc 时无截止仍在最后
+        let due_desc = list_tasks_page(&pool, &filter("due", Some("desc")), None, 1000)
+            .await
+            .unwrap();
+        let first_null_desc = due_desc.items.iter().position(|t| t.due_date.is_none());
+        if let Some(idx) = first_null_desc {
+            assert!(due_desc.items[idx..].iter().all(|t| t.due_date.is_none()));
+        }
+        assert!(
+            due_desc.items[..first_null_desc.unwrap_or(due_desc.items.len())]
+                .windows(2)
+                .all(|w| w[0].due_date >= w[1].due_date),
+            "due desc 主键应降序"
+        );
+    }
+
+    /// 换排序档沿用旧游标 → 空页（UI 快速切档的竞态自愈，不报错也不给错数据）
+    #[tokio::test]
+    async fn stale_cursor_from_other_sort_yields_empty_page() {
+        let pool = setup_db().await;
+        seed(&pool).await;
+        let first = list_tasks_page(&pool, &filter("manual", None), None, 5)
+            .await
+            .unwrap();
+        let stale = first.next_cursor.unwrap();
+        let page = list_tasks_page(&pool, &filter("due", None), Some(&stale), 5)
+            .await
+            .unwrap();
+        assert!(page.items.is_empty());
+        assert!(!page.has_more);
+    }
+
+    /// 未知排序键报错；title 档明确拒绝（必须走全量通道）
+    #[tokio::test]
+    async fn unsupported_sort_keys_are_rejected() {
+        let pool = setup_db().await;
+        for key in ["title", "position"] {
+            let err = list_tasks_page(&pool, &filter(key, None), None, 10)
+                .await
+                .unwrap_err();
+            assert!(err.to_string().contains(key), "错误信息应点名排序键: {err}");
+        }
+    }
+
+    /// 总览聚合：total 与筛选一致；侧栏计数是全局口径（不受 done 谓词影响）
+    #[tokio::test]
+    async fn overview_total_and_project_counts() {
+        let pool = setup_db().await;
+        seed(&pool).await;
+        let project = crate::api::business_api::create_todo_project(
+            &pool,
+            &crate::models::business::TodoProjectCreateInput {
+                title: "项目".into(),
+                description: None,
+                hex_color: None,
+                sort_order: None,
+                parent_uuid: None,
+            },
+        )
+        .await
+        .unwrap();
+        // 两条进项目、一条完成（完成后不应计入未完成角标）
+        for (idx, done) in [(0, false), (1, true)] {
+            let t = create_todo_task(
+                &pool,
+                &TodoTaskCreateInput {
+                    title: format!("项目任务 {idx}"),
+                    project_id: Some(project.id),
+                    ..Default::default()
+                },
+            )
+            .await
+            .unwrap();
+            if done {
+                crate::api::todo_api::complete_todo_task(&pool, t.id)
+                    .await
+                    .unwrap();
+            }
+        }
+
+        let ov = task_overview(&pool, &ListFilter::default()).await.unwrap();
+        assert_eq!(ov.total, 27, "25 条种子 + 2 条项目任务");
+        let bucket = ov
+            .undone_by_project
+            .iter()
+            .find(|b| b.project_id == Some(project.id))
+            .expect("项目桶应存在");
+        assert_eq!(bucket.count, 1, "已完成的那条不计入未完成");
+
+        // done 谓词只影响 total，不影响侧栏全局计数
+        let ov_done = task_overview(&pool, &filter_done(true)).await.unwrap();
+        assert_eq!(ov_done.total, 1);
+        let bucket_done = ov_done
+            .undone_by_project
+            .iter()
+            .find(|b| b.project_id == Some(project.id))
+            .expect("项目桶仍应在");
+        assert_eq!(bucket_done.count, 1);
+    }
+
+    fn filter_done(done: bool) -> ListFilter {
+        ListFilter {
+            done: Some(done),
+            ..Default::default()
+        }
+    }
+}
+
 /// 列裁剪集成测试（批2 + A2）：todo_tasks 列表通道返回瘦行
 /// [`TodoTaskListItem`](crate::models::business::TodoTaskListItem)（10 个零消费列
 /// 整体不在行列清单里），description 值仅在 keyword 通道回真值；get_by_id
@@ -1815,5 +2617,198 @@ mod column_prune_tests {
             list(&pool, "todo_projects", &ListFilter::default())
                 .await
                 .unwrap();
+    }
+}
+
+/// 看板/四象限窗口化（P1）：列键与桌面 `kanbanColumnKey` 一致、每组限流、
+/// 组总数不受限流影响、四象限跳过已完成。
+#[cfg(test)]
+mod board_tests {
+    use super::*;
+    use crate::api::business_api::create_todo_task;
+    use crate::models::business::{BoardGroupBy, TodoTaskCreateInput};
+
+    const DAY: i64 = 86_400_000;
+    /// 固定「今日零点」与「今日 24:00」：测试不随运行时刻漂移
+    const DAY_START: i64 = 1_700_000_000_000;
+    const DAY_END: i64 = DAY_START + DAY;
+
+    async fn setup_db() -> SqlitePool {
+        let pool = sqlx::SqlitePool::connect("sqlite::memory:").await.unwrap();
+        sqlx::migrate!("./src/db/migrations")
+            .run(&pool)
+            .await
+            .unwrap();
+        pool
+    }
+
+    /// 5 条：逾期+重要 / 今天+重要 / 本周+不重要 / 无截止 / 已完成（逾期+重要）
+    async fn seed(pool: &SqlitePool) {
+        let rows: [(i32, Option<i64>, bool); 5] = [
+            (5, Some(DAY_START - DAY), false),
+            (3, Some(DAY_START + 1_000), false),
+            (0, Some(DAY_START + 3 * DAY), false),
+            (0, None, false),
+            (5, Some(DAY_START - DAY), true),
+        ];
+        for (idx, (priority, due, done)) in rows.into_iter().enumerate() {
+            let t = create_todo_task(
+                pool,
+                &TodoTaskCreateInput {
+                    title: format!("看板任务 {idx}"),
+                    priority: Some(priority),
+                    due_date: due,
+                    ..Default::default()
+                },
+            )
+            .await
+            .unwrap();
+            if done {
+                crate::api::todo_api::complete_todo_task(pool, t.id)
+                    .await
+                    .unwrap();
+            }
+        }
+    }
+
+    fn undone() -> ListFilter {
+        ListFilter {
+            done: Some(false),
+            ..Default::default()
+        }
+    }
+
+    fn find<'a>(board: &'a TodoTaskBoard, key: &str) -> &'a TodoTaskBoardGroup {
+        board
+            .groups
+            .iter()
+            .find(|g| g.key == key)
+            .unwrap_or_else(|| panic!("缺少分组 {key}，实际: {:?}", keys_of(board)))
+    }
+
+    fn keys_of(board: &TodoTaskBoard) -> Vec<&str> {
+        board.groups.iter().map(|g| g.key.as_str()).collect()
+    }
+
+    #[tokio::test]
+    async fn priority_groups_limit_items_but_not_total() {
+        let pool = setup_db().await;
+        seed(&pool).await;
+        let board = task_board(
+            &pool,
+            &undone(),
+            BoardGroupBy::Priority,
+            1,
+            DAY_START,
+            DAY_END,
+        )
+        .await
+        .unwrap();
+        // 列键与桌面 kanbanColumnKey 同形
+        assert_eq!(keys_of(&board), vec!["pri:0", "pri:3", "pri:5"]);
+        assert_eq!(find(&board, "pri:0").total, 2);
+        // 限流只截 items，total 仍是整组
+        assert_eq!(find(&board, "pri:0").items.len(), 1);
+        assert_eq!(find(&board, "pri:5").total, 1);
+        assert_eq!(board.total, 4, "done 行被 undone 谓词排除");
+    }
+
+    #[tokio::test]
+    async fn due_groups_follow_local_five_buckets() {
+        let pool = setup_db().await;
+        seed(&pool).await;
+        let board = task_board(&pool, &undone(), BoardGroupBy::Due, 10, DAY_START, DAY_END)
+            .await
+            .unwrap();
+        assert_eq!(
+            keys_of(&board),
+            vec!["due:none", "due:overdue", "due:today", "due:week"]
+        );
+        for key in ["due:none", "due:overdue", "due:today", "due:week"] {
+            assert_eq!(find(&board, key).total, 1, "{key} 应各 1 条");
+        }
+    }
+
+    #[tokio::test]
+    async fn quadrant_skips_done_and_splits_by_urgency() {
+        let pool = setup_db().await;
+        seed(&pool).await;
+        // 不传 done 谓词：四象限自己排除已完成（与 groupEisenhower 一致）
+        let board = task_board(
+            &pool,
+            &ListFilter::default(),
+            BoardGroupBy::Quadrant,
+            10,
+            DAY_START,
+            DAY_END,
+        )
+        .await
+        .unwrap();
+        assert_eq!(board.total, 4, "已完成那条不进四象限");
+        // 只返回有行的组（空列由前端按固定列定义补），逾期(P5) 与今天(P3)
+        // 都算紧急；本周(P0) 与无截止(P0) 都不紧急
+        assert_eq!(keys_of(&board), vec!["neither", "urgentImportant"]);
+        assert_eq!(find(&board, "urgentImportant").total, 2);
+        assert_eq!(find(&board, "neither").total, 2);
+    }
+
+    #[tokio::test]
+    async fn quadrant_with_explicit_done_filter_is_empty() {
+        // groupEisenhower 跳过 done：用户把状态筛成「已完成」时四象限必须为空，
+        // 不能因为内部强制 done=0 而变回「全部未完成」
+        let pool = setup_db().await;
+        seed(&pool).await;
+        let filter = ListFilter {
+            done: Some(true),
+            ..Default::default()
+        };
+        let board = task_board(
+            &pool,
+            &filter,
+            BoardGroupBy::Quadrant,
+            10,
+            DAY_START,
+            DAY_END,
+        )
+        .await
+        .unwrap();
+        assert_eq!(board.total, 0);
+        assert!(board.groups.is_empty());
+    }
+
+    #[tokio::test]
+    async fn project_groups_use_ungrouped_key() {
+        let pool = setup_db().await;
+        seed(&pool).await;
+        let board = task_board(
+            &pool,
+            &undone(),
+            BoardGroupBy::Project,
+            10,
+            DAY_START,
+            DAY_END,
+        )
+        .await
+        .unwrap();
+        assert_eq!(keys_of(&board), vec!["ungrouped"]);
+        assert_eq!(find(&board, "ungrouped").total, 4);
+    }
+
+    #[tokio::test]
+    async fn status_groups_collapse_unknown_status() {
+        let pool = setup_db().await;
+        seed(&pool).await;
+        let board = task_board(
+            &pool,
+            &undone(),
+            BoardGroupBy::Status,
+            10,
+            DAY_START,
+            DAY_END,
+        )
+        .await
+        .unwrap();
+        assert_eq!(keys_of(&board), vec!["pending"]);
+        assert_eq!(find(&board, "pending").total, 4);
     }
 }
