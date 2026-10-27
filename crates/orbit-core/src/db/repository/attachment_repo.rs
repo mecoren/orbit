@@ -3,10 +3,25 @@
 //! 管理 sys_attachments 表的 CRUD 操作。
 //! 附件以 hash 为主键，记录上传/缓存状态，供 AssetSyncService 使用。
 
-use sqlx::SqlitePool;
+use sqlx::{Sqlite, SqliteConnection, SqlitePool, Transaction};
 
 use crate::error::{CoreError, CoreResult};
 use crate::models::business::Attachment;
+
+/// 账本 upsert 的唯一 SQL 文本（池路径与事务路径共用，避免两处漂移）
+const UPSERT_SQL: &str =
+    "INSERT INTO sys_attachments (hash, original_name, mime_type, size_bytes, local_path,
+                                  is_uploaded, is_local_cached, created_at, last_accessed_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(hash) DO UPDATE SET
+            original_name = excluded.original_name,
+            mime_type = excluded.mime_type,
+            size_bytes = excluded.size_bytes,
+            local_path = excluded.local_path,
+            is_uploaded = excluded.is_uploaded,
+            is_local_cached = excluded.is_local_cached,
+            created_at = excluded.created_at,
+            last_accessed_at = MAX(sys_attachments.last_accessed_at, excluded.last_accessed_at)";
 
 /// 根据 hash 查询单个附件
 pub async fn get_by_hash(pool: &SqlitePool, hash: &str) -> CoreResult<Option<Attachment>> {
@@ -26,31 +41,31 @@ pub async fn get_by_hash(pool: &SqlitePool, hash: &str) -> CoreResult<Option<Att
 /// 冲突路径的 last_accessed_at 取新旧较大值——重挂载同 hash 不把既有
 /// 附件的 LRU 新鲜度倒退回 created_at。
 pub async fn upsert(pool: &SqlitePool, a: &Attachment) -> CoreResult<()> {
-    sqlx::query(
-        "INSERT INTO sys_attachments (hash, original_name, mime_type, size_bytes, local_path,
-                                  is_uploaded, is_local_cached, created_at, last_accessed_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-         ON CONFLICT(hash) DO UPDATE SET
-            original_name = excluded.original_name,
-            mime_type = excluded.mime_type,
-            size_bytes = excluded.size_bytes,
-            local_path = excluded.local_path,
-            is_uploaded = excluded.is_uploaded,
-            is_local_cached = excluded.is_local_cached,
-            created_at = excluded.created_at,
-            last_accessed_at = MAX(sys_attachments.last_accessed_at, excluded.last_accessed_at)",
-    )
-    .bind(&a.hash)
-    .bind(&a.original_name)
-    .bind(&a.mime_type)
-    .bind(a.size_bytes)
-    .bind(&a.local_path)
-    .bind(a.is_uploaded)
-    .bind(a.is_local_cached)
-    .bind(a.created_at)
-    .bind(a.last_accessed_at)
-    .execute(pool)
-    .await?;
+    let mut conn = pool.acquire().await?;
+    upsert_with(&mut conn, a).await
+}
+
+/// 事务内 upsert：与任务关联行同事务落库
+///
+/// 用途见 [`crate::api::asset_api`] 的挂载收尾——「账本已写、关联未写」的窗口
+/// 会让启动期附件 GC 把刚上传的文件判成孤儿删掉，故两者必须原子。
+pub async fn upsert_in_tx(tx: &mut Transaction<'_, Sqlite>, a: &Attachment) -> CoreResult<()> {
+    upsert_with(&mut *tx, a).await
+}
+
+async fn upsert_with(conn: &mut SqliteConnection, a: &Attachment) -> CoreResult<()> {
+    sqlx::query(UPSERT_SQL)
+        .bind(&a.hash)
+        .bind(&a.original_name)
+        .bind(&a.mime_type)
+        .bind(a.size_bytes)
+        .bind(&a.local_path)
+        .bind(a.is_uploaded)
+        .bind(a.is_local_cached)
+        .bind(a.created_at)
+        .bind(a.last_accessed_at)
+        .execute(&mut *conn)
+        .await?;
     Ok(())
 }
 
@@ -168,6 +183,7 @@ pub async fn is_local_cached(pool: &SqlitePool, hash: &str) -> CoreResult<bool> 
 }
 
 /// 获取所有本地已缓存的附件
+// bounded-by-lifecycle: 账本全表的临时读取（规模 = 本地缓存附件数），调用方消费后释放
 pub async fn get_all_local_cached(pool: &SqlitePool) -> CoreResult<Vec<Attachment>> {
     let items = sqlx::query_as::<_, Attachment>(
         "SELECT hash, original_name, mime_type, size_bytes, local_path,
@@ -197,6 +213,7 @@ pub async fn get_all_local_cached(pool: &SqlitePool) -> CoreResult<Vec<Attachmen
 ///
 /// 附件侧契约与 `cloud_sync::attachments` 模块头「查询 `is_local_cached = 1
 /// AND is_uploaded = 0`」的声明对齐（此前文档与 SQL 分裂）。
+// bounded-by-lifecycle: 待上传集合是 push 的临时输入（规模 = 待传附件数），推完即释放
 pub async fn get_unuploaded(pool: &SqlitePool) -> CoreResult<Vec<Attachment>> {
     let items = sqlx::query_as::<_, Attachment>(
         "SELECT hash, original_name, mime_type, size_bytes, local_path,
@@ -214,6 +231,7 @@ pub async fn get_unuploaded(pool: &SqlitePool) -> CoreResult<Vec<Attachment>> {
 /// 任务引用——拉回它们只会重插占位行、耗磁盘与流量，且下一轮 GC 又删、
 /// 再下一轮 pull 又拉回，形成「GC ↔ pull」对打架循环。pull 差集只保留
 /// 本端有活跃引用的 hash，无引用的云端对象留在云端等真正需要时再拉。
+// bounded-by-lifecycle: pull 差集用的存活引用集合，函数返回后由调用方消费并释放
 pub async fn get_active_referenced_hashes(pool: &SqlitePool) -> CoreResult<Vec<String>> {
     let rows: Vec<(String,)> =
         sqlx::query_as("SELECT DISTINCT hash FROM todo_task_attachments WHERE is_deleted = 0")
@@ -245,6 +263,7 @@ pub async fn get_by_hashes(pool: &SqlitePool, hashes: &[String]) -> CoreResult<V
         return Ok(Vec::new());
     }
     // SQLite 不支持绑定 Vec<String>，用 IN (?, ?, ...) 动态拼接
+    // bounded-by-data: 按调用方给的 hash 列表（单任务详情页 ≤ 20 个）
     let placeholders: Vec<&str> = hashes.iter().map(|_| "?").collect();
     let sql = format!(
         "SELECT hash, original_name, mime_type, size_bytes, local_path,
@@ -290,6 +309,8 @@ pub async fn cached_total_bytes(pool: &SqlitePool) -> CoreResult<i64> {
 /// 「本地无缓存（is_local_cached=0）」判定会自然重拉有活跃引用的附件。
 /// 未上传的（is_uploaded=0）绝不逐出：文件是云端唯一副本的 pending 源，
 /// 删了会让每轮 push 读不到文件持续报错。
+// bounded-by-lifecycle: 全表 LRU 候选读取后按 limit_bytes 前缀截断，
+// 返回的 `out` 只含凑够上限的前缀（临时集合，调用方逐出后释放）
 pub async fn get_lru_evictable(pool: &SqlitePool, limit_bytes: i64) -> CoreResult<Vec<Attachment>> {
     let items = sqlx::query_as::<_, Attachment>(
         "SELECT hash, original_name, mime_type, size_bytes, local_path,

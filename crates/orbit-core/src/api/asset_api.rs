@@ -250,11 +250,17 @@ async fn finish_add_attachment(
     size_bytes: i64,
     now: i64,
 ) -> CoreResult<TaskAttachmentView> {
+    // 单事务：账本行与任务关联行必须原子落库
+    //
+    // 启动期附件 GC 判「无引用」只看 `todo_task_attachments`：两个写分处不同
+    // 事务时，GC 会撞进「账本已写、关联未写」的窗口，把刚上传的文件当孤儿删掉。
+    let mut tx = pool.begin().await?;
+
     // 0. 任务存在性校验（外键只防孤儿，报错信息要可读）
     let task_exists: (i64,) =
         sqlx::query_as("SELECT COUNT(*) FROM todo_tasks WHERE id = ? AND is_deleted = 0")
             .bind(task_id)
-            .fetch_one(pool)
+            .fetch_one(&mut *tx)
             .await?;
     if task_exists.0 == 0 {
         return Err(CoreError::NotFound(format!("任务 {} 不存在", task_id)));
@@ -263,8 +269,8 @@ async fn finish_add_attachment(
     let file_path = std::path::Path::new(attachments_dir).join(hash);
 
     // 2. upsert 附件元数据（本地账本；is_uploaded=0 等同步 push 上传）
-    attachment_repo::upsert(
-        pool,
+    attachment_repo::upsert_in_tx(
+        &mut tx,
         &Attachment {
             hash: hash.to_string(),
             original_name: file_name.to_string(),
@@ -280,12 +286,14 @@ async fn finish_add_attachment(
     .await?;
 
     // 3. 建任务关联（幂等：同任务已有同 hash 直接返回）
-    let existing: Option<(i64, String)> =
-        sqlx::query_as("SELECT id, uuid FROM todo_task_attachments WHERE task_id = ? AND hash = ? AND is_deleted = 0")
-            .bind(task_id)
-            .bind(hash)
-            .fetch_optional(pool)
-            .await?;
+    let existing: Option<(i64, String)> = sqlx::query_as(
+        "SELECT id, uuid FROM todo_task_attachments WHERE task_id = ? AND hash = ? AND is_deleted = 0",
+    )
+    .bind(task_id)
+    .bind(hash)
+    .fetch_optional(&mut *tx)
+    .await?;
+    let mut new_link: Option<(i64, String)> = None;
     let link = match existing {
         Some((id, uuid)) => (id, uuid),
         None => {
@@ -294,7 +302,7 @@ async fn finish_add_attachment(
                 "SELECT COUNT(*) FROM todo_task_attachments WHERE task_id = ? AND is_deleted = 0",
             )
             .bind(task_id)
-            .fetch_one(pool)
+            .fetch_one(&mut *tx)
             .await?;
             if count.0 as usize >= MAX_ATTACHMENTS_PER_TASK {
                 return Err(CoreError::Other(format!(
@@ -313,28 +321,31 @@ async fn finish_add_attachment(
             .bind(hash)
             .bind(now)
             .bind(now)
-            .fetch_one(pool)
+            .fetch_one(&mut *tx)
             .await?;
-            emit_attachment_event(
-                "todo_task_attachments",
-                link_id.0,
-                &link_uuid,
-                DbOp::Insert,
-                now,
-            );
-            // 新挂载落盘后检查磁盘缓存总上限（幂等路径无新增字节不触发）
-            enforce_attachment_cache_limit(pool, attachments_dir).await?;
-            // 历史轨迹仅新挂载记（幂等重复挂同 hash 不重复记），target=文件名
-            crate::api::business_api::log_target_activity(
-                pool,
-                task_id,
-                "attachment_add",
-                file_name,
-            )
-            .await;
+            new_link = Some((link_id.0, link_uuid.clone()));
             (link_id.0, link_uuid)
         }
     };
+
+    tx.commit().await?;
+
+    // 4. 提交后才发事件 / 清缓存 / 记历史：事件不能早于数据可见（订阅方会读旧值）；
+    //    缓存上限与历史轨迹失败不回滚挂载结果（与原实现同口径）
+    if let Some((link_id, link_uuid)) = new_link {
+        emit_attachment_event(
+            "todo_task_attachments",
+            link_id,
+            &link_uuid,
+            DbOp::Insert,
+            now,
+        );
+        // 新挂载落盘后检查磁盘缓存总上限（幂等路径无新增字节不触发）
+        enforce_attachment_cache_limit(pool, attachments_dir).await?;
+        // 历史轨迹仅新挂载记（幂等重复挂同 hash 不重复记），target=文件名
+        crate::api::business_api::log_target_activity(pool, task_id, "attachment_add", file_name)
+            .await;
+    }
 
     Ok(TaskAttachmentView {
         link_id: link.0,
@@ -348,6 +359,7 @@ async fn finish_add_attachment(
 }
 
 /// 列出任务的全部附件（含本地缓存状态）
+// bounded-by-data: 单任务附件数上限 MAX_ATTACHMENTS_PER_TASK（20），与任务总数无关
 pub async fn get_task_attachments(
     pool: &SqlitePool,
     task_id: i64,
@@ -536,6 +548,10 @@ async fn evict_over_limit(
 /// 返回清理数量。多设备安全：本机判定"无引用"只代表本机视角，
 /// 云端 assets/ 对象不删（其他设备可能仍挂载着该 hash），由同步的
 /// push/pull diff 自然对账——宁可多留一个孤儿对象，不做误删。
+// bounded-by-lifecycle: 引用集与账本行是本次 GC 的临时集合，函数返回即释放
+//
+// 规模 = 附件/关联行数（必须全量比对才能判孤儿），不是常驻容器；与「列表页常驻
+// 全表」的风险不同，这里没有跨调用存活的持有者。
 pub async fn gc_local_attachments(pool: &SqlitePool, attachments_dir: &str) -> CoreResult<usize> {
     // 1. 收集仍被引用的 hash
     let active: Vec<(String,)> =
@@ -585,6 +601,8 @@ pub struct UnusedAttachmentView {
 /// 口径与 [`gc_local_attachments`] 同源：被软删的关联不计引用（卸载后即可清理）；
 /// **回收站里尚未彻底删除的任务其关联行仍存活**，附件仍算「使用中」（任务可能
 /// 被恢复）。按体积降序，让 UI 优先展示占空间的大文件。
+// bounded-by-data: `ta.hash = a.hash` 命中单个 hash 的引用行（附件在单任务内的引用数
+// 受 MAX_ATTACHMENTS_PER_TASK 约束），不是全表扫描
 pub async fn list_unused_attachments(pool: &SqlitePool) -> CoreResult<Vec<UnusedAttachmentView>> {
     let rows = sqlx::query_as::<_, UnusedAttachmentView>(
         "SELECT a.hash, a.original_name, a.mime_type, a.size_bytes,
@@ -719,6 +737,52 @@ mod tests {
 
         let bytes = read_task_attachment(&pool, &dir, &view.hash).await.unwrap();
         assert_eq!(bytes, b"pdf-bytes");
+    }
+
+    /// 关联插入被拒（单任务上限）时账本行必须回滚
+    ///
+    /// 「账本有行、无关联」会被启动期附件 GC 判成孤儿并连文件一起删掉；
+    /// 挂载收尾（账本 upsert + 关联插入）在同一事务里就是为了堵这个窗口。
+    #[tokio::test]
+    async fn add_attachment_rolls_back_ledger_when_link_rejected() {
+        let pool = setup_db().await;
+        let task_id = create_task(&pool).await;
+        let dir = tmp_dir("rollback");
+
+        for i in 0..MAX_ATTACHMENTS_PER_TASK {
+            add_task_attachment(
+                &pool,
+                &dir,
+                task_id,
+                &format!("f{i}.txt"),
+                "text/plain",
+                format!("body-{i}").as_bytes(),
+            )
+            .await
+            .unwrap();
+        }
+
+        let err = add_task_attachment(&pool, &dir, task_id, "over.txt", "text/plain", b"over")
+            .await
+            .unwrap_err();
+        assert!(
+            err.to_string().contains("上限"),
+            "应被单任务上限拒绝: {err}"
+        );
+
+        let over_hash = crate::crypto::sha256::sha256_hex(b"over");
+        assert!(
+            attachment_repo::get_by_hash(&pool, &over_hash)
+                .await
+                .unwrap()
+                .is_none(),
+            "关联被拒时账本行必须随事务回滚"
+        );
+        assert_eq!(
+            get_task_attachments(&pool, task_id).await.unwrap().len(),
+            MAX_ATTACHMENTS_PER_TASK,
+            "已成功挂载的附件不受影响"
+        );
     }
 
     /// 附件挂/卸落任务历史（target=文件名）；幂等重复挂不重复记
