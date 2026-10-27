@@ -748,6 +748,14 @@ abstract class OrbitBridge {
   /// 采集诊断快照（库体积 / 各表活行数 / 墓碑行数 / 附件缓存占用）
   Future<DiagnosticsSnapshot> diagnosticsSnapshot();
 
+  // ── 测试数据（仅 debug 构建；设置页入口由 kDebugMode 门禁，Rust 侧再拒一次）──
+
+  /// 一键生成示例数据（先按 uuid 前缀清上一批，不碰手工数据）
+  Future<DevSeedResult> devSeedDemoData(DevSeedPlan plan);
+
+  /// 清除示例数据（按 uuid 前缀物理删除）
+  Future<DevSeedClearResult> devSeedClear();
+
   // ── 节假日数据（日历视图联网更新；cfg_holidays 本地缓存）──
 
   /// 全部节假日（date 升序；空库回落预置 2026 表，冷启动可用）

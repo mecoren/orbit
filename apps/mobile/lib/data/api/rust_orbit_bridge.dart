@@ -30,6 +30,7 @@ import '../../src/rust/api/digest.dart' as gen_digest;
 import '../../src/rust/api/full_sync_backup.dart' as gen_backup;
 import '../../src/rust/api/notification_log.dart' as gen_notif;
 import '../../src/rust/api/diagnostics.dart' as gen_diag;
+import '../../src/rust/api/dev_seed.dart' as gen_dev_seed;
 import '../../src/rust/api/stats.dart' as gen_stats;
 import '../../src/rust/api/search.dart' as gen_search;
 import '../../src/rust/frb_generated.dart' show RustLib;
@@ -1606,6 +1607,40 @@ class RustOrbitBridge implements OrbitBridge {
       attachmentCacheFiles: s.attachmentCacheFiles.toInt(),
     );
   }
+
+  // ── 测试数据（仅 debug 构建；release 下 Rust 侧返回不可用错误）──
+
+  @override
+  Future<DevSeedResult> devSeedDemoData(DevSeedPlan plan) async {
+    final r = await gen_dev_seed.devSeedDemoData(
+      plan: gen_dev_seed.DevSeedPlan(tasks: plan.tasks),
+    );
+    return DevSeedResult(
+      created: _mapDevSeedCounts(r.created),
+      cleared: _mapDevSeedCounts(r.cleared),
+      elapsedMs: r.elapsedMs.toInt(),
+    );
+  }
+
+  @override
+  Future<DevSeedClearResult> devSeedClear() async {
+    final r = await gen_dev_seed.devSeedClear();
+    return DevSeedClearResult(
+      removed: _mapDevSeedCounts(r.removed),
+      elapsedMs: r.elapsedMs.toInt(),
+    );
+  }
+
+  DevSeedCounts _mapDevSeedCounts(gen_dev_seed.DevSeedCounts c) => DevSeedCounts(
+        projects: c.projects.toInt(),
+        labels: c.labels.toInt(),
+        tasks: c.tasks.toInt(),
+        subtasks: c.subtasks.toInt(),
+        reminders: c.reminders.toInt(),
+        comments: c.comments.toInt(),
+        taskLabels: c.taskLabels.toInt(),
+        taskRelations: c.taskRelations.toInt(),
+      );
 
   // ── 节假日 ──
 

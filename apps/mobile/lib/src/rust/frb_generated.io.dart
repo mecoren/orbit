@@ -8,6 +8,7 @@ import 'api/asset.dart';
 import 'api/auth.dart';
 import 'api/biometric.dart';
 import 'api/csv_import.dart';
+import 'api/dev_seed.dart';
 import 'api/diagnostics.dart';
 import 'api/digest.dart';
 import 'api/dto.dart';
@@ -125,6 +126,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   DayPlanPrefs dco_decode_box_autoadd_day_plan_prefs(dynamic raw);
+
+  @protected
+  DevSeedPlan dco_decode_box_autoadd_dev_seed_plan(dynamic raw);
 
   @protected
   double dco_decode_box_autoadd_f_64(dynamic raw);
@@ -253,6 +257,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   DbMaintenanceView dco_decode_db_maintenance_view(dynamic raw);
+
+  @protected
+  DevSeedClearResult dco_decode_dev_seed_clear_result(dynamic raw);
+
+  @protected
+  DevSeedCounts dco_decode_dev_seed_counts(dynamic raw);
+
+  @protected
+  DevSeedPlan dco_decode_dev_seed_plan(dynamic raw);
+
+  @protected
+  DevSeedResult dco_decode_dev_seed_result(dynamic raw);
 
   @protected
   DiagnosticsSnapshot dco_decode_diagnostics_snapshot(dynamic raw);
@@ -824,6 +840,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  DevSeedPlan sse_decode_box_autoadd_dev_seed_plan(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   double sse_decode_box_autoadd_f_64(SseDeserializer deserializer);
 
   @protected
@@ -974,6 +995,20 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   DbMaintenanceView sse_decode_db_maintenance_view(
     SseDeserializer deserializer,
   );
+
+  @protected
+  DevSeedClearResult sse_decode_dev_seed_clear_result(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  DevSeedCounts sse_decode_dev_seed_counts(SseDeserializer deserializer);
+
+  @protected
+  DevSeedPlan sse_decode_dev_seed_plan(SseDeserializer deserializer);
+
+  @protected
+  DevSeedResult sse_decode_dev_seed_result(SseDeserializer deserializer);
 
   @protected
   DiagnosticsSnapshot sse_decode_diagnostics_snapshot(
@@ -1712,6 +1747,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_box_autoadd_dev_seed_plan(
+    DevSeedPlan self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_box_autoadd_f_64(double self, SseSerializer serializer);
 
   @protected
@@ -1902,6 +1943,21 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
     DbMaintenanceView self,
     SseSerializer serializer,
   );
+
+  @protected
+  void sse_encode_dev_seed_clear_result(
+    DevSeedClearResult self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_dev_seed_counts(DevSeedCounts self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_dev_seed_plan(DevSeedPlan self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_dev_seed_result(DevSeedResult self, SseSerializer serializer);
 
   @protected
   void sse_encode_diagnostics_snapshot(

@@ -10,6 +10,7 @@
 //! - [asset]：任务附件（内容寻址上传/列表/读取/卸下 + 本地 GC）
 //! - [maintenance]：数据库维护（WAL checkpoint / 附件 GC / 查询统计 / VACUUM）
 //! - [diagnostics]：应用内诊断读数（库体积 / 各表行数 / 附件缓存，只读聚合）
+//! - [dev_seed]：测试数据（仅 debug 构建；一键生成/清除示例库，联调用）
 //! - [sync]：同步配置 / 云同步执行（含增量历史）/ 同步加密
 //! - [full_sync_backup]：全量备份（.orfullsync 导出/导入/云端副本/恢复预览/
 //!   自动备份偏好 + 60s tick 调度守护）
@@ -36,6 +37,7 @@ pub mod asset;
 pub mod auth;
 pub mod biometric;
 pub mod csv_import;
+pub mod dev_seed;
 pub mod diagnostics;
 pub mod digest;
 pub mod dto;

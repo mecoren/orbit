@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -1120,6 +1121,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         label: '诊断',
                         onTap: () => context.push('/settings/diagnostics'),
                       ),
+                      // 测试数据（仅开发构建：入口按 kDebugMode 隐藏，页面与
+                      // Rust 桥层各自再拒一次，release 包不出现该链路）
+                      if (kDebugMode)
+                        _navRow(
+                          colors,
+                          label: '测试数据',
+                          onTap: () => context.push('/settings/test-data'),
+                        ),
                     ],
                   ),
                 ),

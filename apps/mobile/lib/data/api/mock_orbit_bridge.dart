@@ -3208,6 +3208,262 @@ class MockOrbitBridge implements OrbitBridge {
         );
       });
 
+  // ── 测试数据（仅 debug 入口展示；mock 在内存库按 core 比例铺样本）──
+
+  /// 示例行 uuid 前缀（与 core `SEED_UUID_PREFIX` 同口径）
+  static const _seedUuidPrefix = 'dev-seed-';
+
+  /// 示例标题前缀（与 core `SEED_TITLE_PREFIX` 同口径）
+  static const _seedTitlePrefix = '【示例】';
+
+  @override
+  Future<DevSeedResult> devSeedDemoData(DevSeedPlan plan) => _delay(() {
+        final watch = Stopwatch()..start();
+        final cleared = _clearSeedRows();
+        final created = _insertSeedRows(plan.tasks.clamp(1, 20000));
+        _emitSeedChanges();
+        return DevSeedResult(
+          created: created,
+          cleared: cleared,
+          elapsedMs: watch.elapsedMilliseconds,
+        );
+      });
+
+  @override
+  Future<DevSeedClearResult> devSeedClear() => _delay(() {
+        final watch = Stopwatch()..start();
+        final removed = _clearSeedRows();
+        _emitSeedChanges();
+        return DevSeedClearResult(
+          removed: removed,
+          elapsedMs: watch.elapsedMilliseconds,
+        );
+      });
+
+  /// 按 core 的派生比例铺样本（项目/标签固定，子表按任务序号取模）
+  DevSeedCounts _insertSeedRows(int taskCount) {
+    final now = store.now();
+    final local = DateTime.fromMillisecondsSinceEpoch(now);
+    final today =
+        DateTime(local.year, local.month, local.day).millisecondsSinceEpoch;
+    const day = 86400000;
+
+    Map<String, dynamic> row(String tag) => {
+          'id': store.id,
+          'uuid': '$_seedUuidPrefix$tag',
+          'is_deleted': 0,
+          'created_at': now,
+          'updated_at': now,
+          'deleted_at': null,
+          'version': 1,
+        };
+
+    final projectIds = <int>[];
+    for (var i = 0; i < 2; i++) {
+      final p = {
+        ...row('p$i'),
+        'title': '$_seedTitlePrefix${i == 0 ? "工作" : "生活"}',
+        'description': null,
+        'hex_color': i == 0 ? '#3B82F6' : '#2DB87A',
+        'sort_order': 1000 + i,
+        'parent_uuid': null,
+        'is_archived': 0,
+      };
+      store.projects[p['id'] as int] = p;
+      projectIds.add(p['id'] as int);
+    }
+
+    final labelIds = <int>[];
+    for (var i = 0; i < 2; i++) {
+      final l = {
+        ...row('l$i'),
+        'title': '$_seedTitlePrefix${i == 0 ? "紧急" : "阅读"}',
+        'hex_color': i == 0 ? '#F44336' : '#8B5CF6',
+      };
+      store.labels[l['id'] as int] = l;
+      labelIds.add(l['id'] as int);
+    }
+
+    var subtasks = 0;
+    var reminders = 0;
+    var comments = 0;
+    var taskLabels = 0;
+    var relations = 0;
+    int? previousLiveTask;
+
+    for (var i = 0; i < taskCount; i++) {
+      // 每 50 条 1 条回收站墓碑（约 2%，与 core 同口径）
+      final trashed = i % 50 == 0;
+      final done = !trashed && i % 7 == 0;
+      final t = {
+        ...row('t$i'),
+        'title': '$_seedTitlePrefix任务 ${i + 1}',
+        'description': i % 9 == 0 ? '$_seedTitlePrefix用于核对详情页排版。' : null,
+        'project_id': projectIds[i % projectIds.length],
+        'priority': i % 4,
+        'status': done ? 'done' : 'pending',
+        'done': done ? 1 : 0,
+        'done_at': done ? now - (i % 30) * day : null,
+        'due_date': i % 5 == 0 ? null : today + ((i % 60) - 20) * day,
+        'start_date': i % 6 == 0 ? null : today + ((i % 30) - 10) * day,
+        'repeat_after': 1,
+        'repeat_mode': 0,
+        'repeat_weekdays': 0,
+        'repeat_end_type': 0,
+        'repeat_end_param': 0,
+        'repeat_from_done': 0,
+        'repeat_month_mode': 0,
+        'repeat_nth_week': 0,
+        'hex_color': '',
+        'percent_done': 0.0,
+        'position': i,
+        'is_favorite': i % 13 == 0 ? 1 : 0,
+        'my_day_date': i % 17 == 0 ? today : null,
+        'duration_minutes': i % 6 == 0 ? (i % 4 + 1) * 15 : null,
+        'is_deleted': trashed ? 1 : 0,
+        'deleted_at': trashed ? now - (i % 5) * day : null,
+      };
+      store.tasks[t['id'] as int] = t;
+
+      // 回收站任务不挂子表（与 core 的墓碑分支一致）
+      if (trashed) continue;
+
+      final taskId = t['id'] as int;
+
+      // 子任务：每 4 条 2–3 个，首个子任务在 i%8==0 时已完成
+      if (i % 4 == 0) {
+        final n = 2 + i % 2;
+        var doneSubtasks = 0;
+        for (var s = 0; s < n; s++) {
+          final subDone = s == 0 && i % 8 == 0;
+          final sub = {
+            ...row('sub${i}_$s'),
+            'task_id': taskId,
+            'title': '$_seedTitlePrefix子步骤 $s',
+            'done': subDone ? 1 : 0,
+            'done_at': subDone ? now : null,
+            'position': s,
+            'parent_uuid': null,
+          };
+          store.subtasks[sub['id'] as int] = sub;
+          subtasks += 1;
+          if (subDone) doneSubtasks += 1;
+        }
+        t['percent_done'] = doneSubtasks * 100.0 / n;
+      }
+
+      // 提醒：每 29 条 1 条（落在未来 1–3 天）
+      if (i % 29 == 0) {
+        final rem = {
+          ...row('rem$i'),
+          'task_id': taskId,
+          'remind_at': now + (i % 3 + 1) * day,
+          'is_constant': 0,
+        };
+        store.reminders[rem['id'] as int] = rem;
+        reminders += 1;
+      }
+
+      // 评论：每 23 条 1 条
+      if (i % 23 == 0) {
+        final cmt = {
+          ...row('cmt$i'),
+          'task_id': taskId,
+          'content': '$_seedTitlePrefix示例评论：用于核对详情页评论区块。',
+        };
+        store.comments[cmt['id'] as int] = cmt;
+        comments += 1;
+      }
+
+      // 标签：每 3 条挂 1–2 个
+      if (i % 3 == 0) {
+        for (var k = 0; k < 1 + i % 2; k++) {
+          final labelId = labelIds[(i + k) % labelIds.length];
+          (store.taskLabels[taskId] ??= {})[labelId] = store.id;
+          taskLabels += 1;
+        }
+      }
+
+      // 关联：每 37 条 1 条（指向上一活行任务）
+      if (i % 37 == 0 && previousLiveTask != null) {
+        final rel = {
+          ...row('rel$i'),
+          'task_id': taskId,
+          'other_task_id': previousLiveTask,
+          'relation_type': 'relates_to',
+        };
+        store.relations[rel['id'] as int] = rel;
+        relations += 1;
+      }
+
+      previousLiveTask = taskId;
+    }
+
+    return DevSeedCounts(
+      projects: projectIds.length,
+      labels: labelIds.length,
+      tasks: taskCount,
+      subtasks: subtasks,
+      reminders: reminders,
+      comments: comments,
+      taskLabels: taskLabels,
+      taskRelations: relations,
+    );
+  }
+
+  /// 按 uuid 前缀物理清除示例行（与 core 的 `clear_demo_data` 同判据）
+  DevSeedCounts _clearSeedRows() {
+    final removedTaskIds = store.tasks.values
+        .where(_isSeedRow)
+        .map((t) => t['id'] as int)
+        .toSet();
+    // task_labels 没有独立 uuid：按被清掉的示例任务 id 摘链接
+    final links = removedTaskIds.fold<int>(
+      0,
+      (sum, id) => sum + (store.taskLabels.remove(id)?.length ?? 0),
+    );
+
+    return DevSeedCounts(
+      projects: _removeSeedRows(store.projects),
+      labels: _removeSeedRows(store.labels),
+      tasks: _removeSeedRows(store.tasks),
+      subtasks: _removeSeedRows(store.subtasks),
+      reminders: _removeSeedRows(store.reminders),
+      comments: _removeSeedRows(store.comments),
+      taskLabels: links,
+      taskRelations: _removeSeedRows(store.relations),
+    );
+  }
+
+  bool _isSeedRow(Map<String, dynamic> row) =>
+      (row['uuid'] as String?)?.startsWith(_seedUuidPrefix) ?? false;
+
+  int _removeSeedRows(Map<int, Map<String, dynamic>> rows) {
+    final ids = rows.entries
+        .where((e) => _isSeedRow(e.value))
+        .map((e) => e.key)
+        .toList();
+    for (final id in ids) {
+      rows.remove(id);
+    }
+    return ids.length;
+  }
+
+  void _emitSeedChanges() {
+    for (final table in const [
+      'todo_projects',
+      'todo_labels',
+      'todo_tasks',
+      'todo_subtasks',
+      'todo_reminders',
+      'todo_comments',
+      'todo_task_labels',
+      'todo_task_relations',
+    ]) {
+      _emit(table);
+    }
+  }
+
   NotificationLogRow _toNotificationRow(Map<String, dynamic> n) =>
       NotificationLogRow(
         id: n['id'] as int,

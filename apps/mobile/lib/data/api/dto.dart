@@ -2550,3 +2550,72 @@ class DiagnosticsSnapshot {
         attachmentCacheFiles: (j['attachment_cache_files'] as num).toInt(),
       );
 }
+
+// ---------- 测试数据（仅 debug 构建；镜像 core `dev_seed_api`） ----------
+
+/// 生成规模（镜像 core `dev_seed_api::DevSeedPlan`；只暴露任务条数）
+class DevSeedPlan {
+  /// 任务条数（含约 2% 回收站墓碑行）
+  final int tasks;
+
+  const DevSeedPlan({required this.tasks});
+}
+
+/// 各表写入/清除条数（镜像 core `dev_seed_api::DevSeedCounts`）
+class DevSeedCounts {
+  final int projects;
+  final int labels;
+  final int tasks;
+  final int subtasks;
+  final int reminders;
+  final int comments;
+  final int taskLabels;
+  final int taskRelations;
+
+  const DevSeedCounts({
+    required this.projects,
+    required this.labels,
+    required this.tasks,
+    required this.subtasks,
+    required this.reminders,
+    required this.comments,
+    required this.taskLabels,
+    required this.taskRelations,
+  });
+
+  /// 全表合计（结果卡片的「已写入 N 行」口径，与桌面 `totalOf` 一致）
+  int get total =>
+      projects +
+      labels +
+      tasks +
+      subtasks +
+      reminders +
+      comments +
+      taskLabels +
+      taskRelations;
+}
+
+/// 生成结果（`cleared` = 生成前清掉的上一批）
+class DevSeedResult {
+  final DevSeedCounts created;
+  final DevSeedCounts cleared;
+
+  /// Rust 侧实测耗时（毫秒）
+  final int elapsedMs;
+
+  const DevSeedResult({
+    required this.created,
+    required this.cleared,
+    required this.elapsedMs,
+  });
+}
+
+/// 清理结果
+class DevSeedClearResult {
+  final DevSeedCounts removed;
+
+  /// Rust 侧实测耗时（毫秒）
+  final int elapsedMs;
+
+  const DevSeedClearResult({required this.removed, required this.elapsedMs});
+}

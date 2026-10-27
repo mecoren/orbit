@@ -10,6 +10,7 @@ import '../../modules/settings/holiday_cache_page.dart';
 import '../../modules/settings/label_manager_page.dart';
 import '../../modules/settings/nav_modules_page.dart';
 import '../../modules/settings/diagnostics_page.dart';
+import '../../modules/settings/test_data_page.dart';
 import '../../modules/settings/notification_history_page.dart';
 import '../../modules/settings/quick_actions_page.dart';
 import '../../modules/settings/settings_screen.dart';
@@ -289,6 +290,14 @@ final appRouter = GoRouter(
       path: '/settings/diagnostics',
       pageBuilder: (context, state) => pageSlideFromRight(
         const DiagnosticsPage(),
+        key: state.pageKey,
+      ),
+    ),
+    // 测试数据（仅 debug 构建；入口在设置页按 kDebugMode 隐藏，页面内再自检一次）
+    GoRoute(
+      path: '/settings/test-data',
+      pageBuilder: (context, state) => pageSlideFromRight(
+        const TestDataPage(),
         key: state.pageKey,
       ),
     ),
