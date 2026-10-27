@@ -8,8 +8,8 @@
  *
  * 提炼口径：`git log v<上一 tag>..HEAD --oneline` 按功能合并同类提交，
  * 忽略 docs/chore/style 等过程性噪声。首版 0.1.0 由 2026-08-23 初始提交至
- * 2026-09-24 的全部 543 次提交归并总结（222 feat / 130 fix / 32 perf / 84 docs，
- * 明细见 CHANGELOG.md）。
+ * 2026-09-26 的全部工作归并总结（首批至 2026-09-24 的 543 次提交：222 feat /
+ * 130 fix / 32 perf / 84 docs，加上随后的移动端对标优化批次；明细见 CHANGELOG.md）。
  */
 
 export type ChangeCategory = "feature" | "fix" | "refactor" | "chore";
@@ -29,10 +29,10 @@ export interface ChangelogVersion {
 /** 新版本发布时在数组头部追加（与 CHANGELOG.md 同一次提交） */
 export const CHANGELOG_VERSIONS: ChangelogVersion[] = [
   {
-    version: "0.1.1",
+    version: "0.1.0",
     date: "2026-09-26",
     summary:
-      "移动端对标优化批次：底部导航可配置、今天页签快捷视图、四象限与完成态收敛、日历打磨、节假日缓存查看",
+      "首个版本：本地优先 + 端到端加密的跨平台待办——桌面与移动双端全功能、云同步/备份、附件、统计与 ICS/CSV 数据出口；含移动端对标优化批次（底部导航可配置、今天页签快捷视图、四象限与完成态收敛、日历打磨、节假日缓存查看）",
     changes: [
       {
         category: "feature",
@@ -73,14 +73,7 @@ export const CHANGELOG_VERSIONS: ChangelogVersion[] = [
         category: "fix",
         description: "内存收口：family provider 改 autoDispose + 图片解码缓存封顶",
       },
-    ],
-  },
-  {
-    version: "0.1.0",
-    date: "2026-09-24",
-    summary:
-      "首个版本：本地优先 + 端到端加密的跨平台待办——桌面与移动双端全功能、云同步/备份、附件、统计与 ICS/CSV 数据出口一次到位",
-    changes: [
+      // ===== 以下为首批能力（2026-09-24）内容，与上段同属 0.1.0 =====
       {
         category: "feature",
         description:

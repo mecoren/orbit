@@ -4,7 +4,7 @@
 
 **Goal:** 全栈移除 `todo_tasks.end_date` 列——DB（0004 迁移）、Rust 核心、orbit-flutter DTO/FRB 生成物、桌面端 TS/React、移动端 Dart，同步文档。
 
-**Architecture:** 走新增 `0004_remove_end_date.sql` 增量迁移删列（不能改 0001：v0.1.1 已发布，改 checksum 会让存量库打不开），从内到外逐层拔字段，每层测试门禁通过后再动下一层。`StatsHeatmap.end_date`（热力图区间端点，字符串日期）与任务 end_date 无关，**不动**。
+**Architecture:** 走新增 `0004_remove_end_date.sql` 增量迁移删列（不能改 0001：v0.1.0 已发布，改 checksum 会让存量库打不开），从内到外逐层拔字段，每层测试门禁通过后再动下一层。`StatsHeatmap.end_date`（热力图区间端点，字符串日期）与任务 end_date 无关，**不动**。
 
 **Tech Stack:** Rust/sqlx/SQLCipher（sqlx::migrate! 宏）、flutter_rust_bridge 2.12 codegen、React/Tauri+vitest、Flutter/Dart。
 

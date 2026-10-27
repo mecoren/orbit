@@ -283,7 +283,7 @@ async fn v1_backup_still_importable() {
         schema,
         counts,
         chrono::Utc::now().timestamp(),
-        "0.1.1".into(),
+        "0.1.0".into(),
     );
     let schema_json = serde_json::to_string(&serde_json::json!({"version": schema})).unwrap();
     let encoded = encode_backup(EncodeParams {

@@ -99,9 +99,8 @@ MVP 发布（06 文档 §二 M5）要求五端产物签名/分发就绪。现状
 
 - 分发：GitHub Releases。触发：push tag `v*`；发版前可用
   `workflow_dispatch(dry_run)` 预演（详见 `docs/08_发布与更新流程.md`）。
-- **版本收敛（2026-09-15）**：历史 `v0.1.0` / `v0.1.1` 两个 tag 的全部工作内容
-  并入单一 **0.1.0** 条目（`CHANGELOG.md` 与应用内更新日志同源双写），清单各处
-  统一为 `0.1.0`。
+- **版本收敛（2026-09-15）**：历史 tag 的全部工作内容并入单一 **0.1.0** 条目
+  （`CHANGELOG.md` 与应用内更新日志同源双写），清单各处统一为 `0.1.0`。
 - **版本唯一数据源**：`apps/desktop/package.json#version`。其余五处由
   `scripts/bump-version.mjs`（`pnpm bump X.Y.Z`）同步，**不手改**：
   `apps/desktop/src-tauri/tauri.conf.json#version`、
@@ -109,8 +108,8 @@ MVP 发布（06 文档 §二 M5）要求五端产物签名/分发就绪。现状
   根 `Cargo.toml [workspace.package]`、`apps/mobile/pubspec.yaml#version`、
   以及两个 `Cargo.lock` 的本地包版本行（漏改会让 `cargo --locked` 失败）。
   前端版本经 `vite.config.ts` 构建期注入 `__APP_VERSION__`，源码不硬编码。
-  修订动因：2026-09-15 发现 `apps/desktop/package.json`（0.1.0）与其余处
-  （0.1.1）已实际漂移、关于页版本徽标停在 0.1.0——手工三处同步不可持续。
+  修订动因：2026-09-15 发现 `apps/desktop/package.json` 与其余清单已实际漂移、
+  关于页版本徽标停在 0.1.0——手工三处同步不可持续。
 - 一致性由 `pnpm bump:check`（发版门禁）与
   `apps/desktop/src/test/release-consistency.test.ts`（回归护栏）双向守护。
 - 更新日志**两份同源双写**：`CHANGELOG.md`（Keep a Changelog 1.1.0 + semver，
