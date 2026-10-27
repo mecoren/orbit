@@ -17,6 +17,15 @@
 
 ## [Unreleased]
 
+### 维护：代码收尾四件套——桌面启动轻维护 / 附件事务化 / 移动端附件路径入参 / 审计翻正（2026-10-27，docs/07 #106）
+
+- **桌面启动轻维护**：新增 `spawn_idle_maintenance`（`db_maintenance_cmd`），启动 15s 后跑 core 的 `db_maintenance_routine`——WAL checkpoint → 附件 GC → 附件缓存上限 → 日志 TTL → 统计仅在缺失时。与移动端 `boot_gate` 同一函数、同一顺序；`VACUUM` 仍只走手动「立即维护」。补掉此前如实记账的「桌面不点维护就只涨不清」缺口（`CHANGELOG` 2026-10-25 条目）。
+- **附件写入收进单事务**：`attachment_repo::upsert_in_tx` + `finish_add_attachment` 把账本 upsert 与任务关联 INSERT 放进同一事务，提交后才 emit / 清缓存 / 记历史。启动期附件 GC 判「无引用」只看 `todo_task_attachments`，原两个独立写事务之间窗口会把刚上传的文件当孤儿删掉。新增 `add_attachment_rolls_back_ledger_when_link_rejected`（上限拒绝 → 账本行随事务回滚、既有挂载不受影响）。
+- **移动端附件改路径入参**（docs/07 #94 遗留）：FRB 新增 `task_attachment_add_path`、`OrbitBridge.taskAttachmentAddPath` 与 Rust/Mock 两实现；详情页文件来源传 file_picker 路径（core 按 256KiB 块流式读盘），不再 `readAsBytes` 整份过桥；拍照等内存内字节来源仍走字节版。契约用例补两条断言（磁盘字节数 = 挂载大小、源文件缺失抛错）。
+- **`sql-fetch-all` 审计复核收口**：19 个文件 / 58 处逐个人工判定（按 task_id 等键查询、结果集 = 桶数/项目数/列数等天然小集、导出·GC·同步索引这类函数内临时集合），结论随源码 `bounded-by-data` / `bounded-by-lifecycle` 标记落地；提示级清零后规则由 `blocking:false` 翻正为拦停，`audit-unbounded --gate` 0 处 0 组。
+- **a11y 地标层**：侧栏两态改 `<nav aria-label="侧栏导航">`，任务面板 / 回顾中心 / 回收站 / Logbook 补 `role="region"` + 区域标签；全量 `role` 语义化（`list`/`grid` 等）仍属持续项。
+- **回归锚点**：core lib 914 绿、桌面 vitest 743 绿、flutter 1081 绿、`flutter analyze` 零问题。
+
 ### 修复：统计热力图年份切换时尺寸跳动 + 年份栏被裁（2026-10-27）
 
 - **现象**：切到 2023 年时格阵整体缩小一点（格宽少 1px、格阵矮一截），下方分布卡跟着上下跳；年份按钮到第 4 个「2023」时被卡片下沿裁掉一半（滚动条按既定口径隐藏，看不出可滚）；窄窗口下格阵横滚还会把整列年份推出可视区。
