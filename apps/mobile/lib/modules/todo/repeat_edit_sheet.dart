@@ -4,7 +4,8 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_dimens.dart';
 import '../../core/theme/app_shapes.dart';
 import '../../core/theme/orbit_accents.dart';
-import '../../shared/widgets/shadcn/orbit_actions_sheet.dart' show bottomSheetTopShape;
+import '../../shared/widgets/shadcn/orbit_actions_sheet.dart'
+    show bottomSheetTopShape;
 import '../../shared/widgets/shadcn/orbit_card.dart';
 import '../../shared/widgets/shadcn/orbit_date_picker.dart';
 import '../../shared/widgets/shadcn/orbit_sheet_scaffold.dart';
@@ -128,15 +129,16 @@ class _RepeatEditSheetState extends State<_RepeatEditSheet> {
   late bool _panelOpen = _custom;
 
   late rep.RepeatUnit _unit = rep.unitForMode(widget.mode);
-  late final TextEditingController _intervalController =
-      TextEditingController(text: '${widget.after <= 0 ? 1 : widget.after}');
+  late final TextEditingController _intervalController = TextEditingController(
+    text: '${widget.after <= 0 ? 1 : widget.after}',
+  );
   late int _weekdays = widget.weekdays;
   late int _endOption = widget.endType;
   // 月高级语义（#72）：月模式 + 序数 + 单选星期（多选掩码收敛为最低位单选）
   late int _monthMode = widget.monthMode;
   late int _nthWeek = widget.nthWeek;
-  late int _monthWeekday = widget.weekdays != 0 &&
-          (widget.weekdays & (widget.weekdays - 1)) == 0
+  late int _monthWeekday =
+      widget.weekdays != 0 && (widget.weekdays & (widget.weekdays - 1)) == 0
       ? widget.weekdays
       : 0;
   late final TextEditingController _endCountController = TextEditingController(
@@ -148,14 +150,15 @@ class _RepeatEditSheetState extends State<_RepeatEditSheet> {
   /// 结束日期（日期档的 endParam = 本地日末毫秒时间戳；0 = 未选）
   late int _endDateMs =
       widget.endType == rep.RepeatEnd.onDate && widget.endParam > 0
-          ? widget.endParam
-          : 0;
+      ? widget.endParam
+      : 0;
   late bool _fromDone = widget.fromDone;
 
   /// 预设档判定（mode+间隔双匹配；「不重复」不比间隔）
   static bool _isPreset(int mode, int after) => rep.repeatPresets.any(
-        (p) => p.mode == mode && (p.mode == rep.RepeatMode.none || after == p.after),
-      );
+    (p) =>
+        p.mode == mode && (p.mode == rep.RepeatMode.none || after == p.after),
+  );
 
   @override
   void dispose() {
@@ -166,10 +169,9 @@ class _RepeatEditSheetState extends State<_RepeatEditSheet> {
 
   /// 预设档：点选即应用并关闭（扩展字段随预设清空）
   void _pickPreset(rep.RepeatPreset preset) {
-    Navigator.of(context).pop(RepeatRuleValue(
-      mode: preset.mode,
-      after: preset.after,
-    ));
+    Navigator.of(
+      context,
+    ).pop(RepeatRuleValue(mode: preset.mode, after: preset.after));
   }
 
   /// 结束条件切换：日期档顺带拉起日期选择（不选则退回未选态）
@@ -189,9 +191,14 @@ class _RepeatEditSheetState extends State<_RepeatEditSheet> {
     setState(() {
       _endOption = rep.RepeatEnd.onDate;
       // 桌面端同口径：结束日取当日 23:59:59（引擎按「越过结束日即终结」判定）
-      _endDateMs =
-          DateTime(picked.year, picked.month, picked.day, 23, 59, 59)
-              .millisecondsSinceEpoch;
+      _endDateMs = DateTime(
+        picked.year,
+        picked.month,
+        picked.day,
+        23,
+        59,
+        59,
+      ).millisecondsSinceEpoch;
     });
   }
 
@@ -214,20 +221,22 @@ class _RepeatEditSheetState extends State<_RepeatEditSheet> {
     // 否则扩展清零（与桌面 RepeatField 同口径）
     final nthOn =
         mode == rep.RepeatMode.monthly && _monthMode == rep.RepeatMonthMode.nth;
-    Navigator.of(context).pop(RepeatRuleValue(
-      mode: mode,
-      after: n <= 0 ? 1 : n,
-      weekdays: mode == rep.RepeatMode.weekly
-          ? _weekdays
-          : nthOn
-              ? _monthWeekday
-              : 0,
-      endType: hasRepeat ? endType : rep.RepeatEnd.never,
-      endParam: hasRepeat ? endParam : 0,
-      fromDone: hasRepeat && _fromDone,
-      monthMode: nthOn ? rep.RepeatMonthMode.nth : rep.RepeatMonthMode.day,
-      nthWeek: nthOn ? _nthWeek : 0,
-    ));
+    Navigator.of(context).pop(
+      RepeatRuleValue(
+        mode: mode,
+        after: n <= 0 ? 1 : n,
+        weekdays: mode == rep.RepeatMode.weekly
+            ? _weekdays
+            : nthOn
+            ? _monthWeekday
+            : 0,
+        endType: hasRepeat ? endType : rep.RepeatEnd.never,
+        endParam: hasRepeat ? endParam : 0,
+        fromDone: hasRepeat && _fromDone,
+        monthMode: nthOn ? rep.RepeatMonthMode.nth : rep.RepeatMonthMode.day,
+        nthWeek: nthOn ? _nthWeek : 0,
+      ),
+    );
   }
 
   @override
@@ -296,10 +305,7 @@ class _RepeatEditSheetState extends State<_RepeatEditSheet> {
       // 「确定」= 应用自定义面板里的规则，固定在抽屉底部（预设是点选即存即关，
       // 无需按钮，故仅自定义面板展开时出现）
       actions: _panelOpen
-          ? OrbitSheetActions(
-              confirmLabel: '确定',
-              onConfirm: _applyCustom,
-            )
+          ? OrbitSheetActions(confirmLabel: '确定', onConfirm: _applyCustom)
           : null,
     );
   }
@@ -367,13 +373,15 @@ class _RepeatEditSheetState extends State<_RepeatEditSheet> {
                   label: '日号',
                   dense: true,
                   selected: _monthMode == rep.RepeatMonthMode.day,
-                  onTap: () => setState(() => _monthMode = rep.RepeatMonthMode.day),
+                  onTap: () =>
+                      setState(() => _monthMode = rep.RepeatMonthMode.day),
                 ),
                 _RepeatChip(
                   label: '第几个星期X',
                   dense: true,
                   selected: _monthMode == rep.RepeatMonthMode.nth,
-                  onTap: () => setState(() => _monthMode = rep.RepeatMonthMode.nth),
+                  onTap: () =>
+                      setState(() => _monthMode = rep.RepeatMonthMode.nth),
                 ),
                 if (_monthMode == rep.RepeatMonthMode.nth) ...[
                   for (final k in const [1, 2, 3, 4, 5, rep.repeatNthLast])
@@ -488,7 +496,7 @@ class _NextBadge extends StatelessWidget {
       ),
       child: Text(
         label,
-        style: const TextStyle(
+        style: TextStyle(
           fontSize: 11,
           fontWeight: FontWeight.w500,
           color: OrbitAccents.themeAccent,

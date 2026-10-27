@@ -188,12 +188,13 @@ Future<void> syncTaskReminder(
 }
 
 class _TodoFormSheet extends ConsumerStatefulWidget {
-  const _TodoFormSheet(
-      {this.editingTaskId,
-      this.defaultProjectId,
-      this.initialDueDate,
-      this.quickView,
-      this.presetTemplate});
+  const _TodoFormSheet({
+    this.editingTaskId,
+    this.defaultProjectId,
+    this.initialDueDate,
+    this.quickView,
+    this.presetTemplate,
+  });
 
   /// 有值 = 编辑态（异步预填 todoTaskGet）
   final int? editingTaskId;
@@ -217,8 +218,10 @@ class _TodoFormSheet extends ConsumerStatefulWidget {
 class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
   final _titleController = TextEditingController();
   final _descriptionController = TextEditingController();
+
   /// 自定义时长输入：由表单态持有，避免关闭动画期间被子抽屉提前 dispose
   final _durationCtl = TextEditingController();
+
   /// 新建标签输入（选择标签抽屉内就地创建，对齐桌面 TagsField）
   final _newLabelCtl = TextEditingController();
   final _formKey = GlobalKey<FormState>();
@@ -227,12 +230,15 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
   int _priority = 0;
   int? _dueDate;
   String _status = 'pending';
+
   /// 编辑态原始状态：保存时据此判断是否跨 done 边界（跨边界走完成引擎）
   String _originalStatus = 'pending';
   int? _startDate;
   int? _remindAt;
+
   /// 预计时长（分钟，M9 阶段一）；null = 未设置
   int? _durationMinutes;
+
   /// 持续提醒开关（G2）：到期未完成则每 5 分钟再提醒，直至完成
   bool _remindConstant = false;
 
@@ -293,7 +299,8 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
       ),
     );
     // 有任何命中才显示（无命中时清空预览）
-    final hit = parsed.dueDate != null ||
+    final hit =
+        parsed.dueDate != null ||
         parsed.priority > 0 ||
         parsed.projectId != null ||
         parsed.labelIds.isNotEmpty ||
@@ -405,9 +412,10 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
         _repeatMonthMode = task.repeatMonthMode;
         _repeatNthWeek = task.repeatNthWeek;
         _repeatMonthWeekday =
-            task.repeatWeekdays != 0 && (task.repeatWeekdays & (task.repeatWeekdays - 1)) == 0
-                ? task.repeatWeekdays
-                : 0;
+            task.repeatWeekdays != 0 &&
+                (task.repeatWeekdays & (task.repeatWeekdays - 1)) == 0
+            ? task.repeatWeekdays
+            : 0;
         _existingReminder = firstReminder;
         _remindAt = firstReminder?.remindAt;
         _remindConstant = firstReminder?.constant ?? false;
@@ -434,14 +442,19 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
     // 周档星期掩码多选；月档第 N 个星期 X 走单选星期位 + 月模式/序数两列；
     // 其余档位扩展清零（掩码仅周档生效同口径）
     final nthOn =
-        repeatMode == rep.RepeatMode.monthly && _repeatMonthMode == rep.RepeatMonthMode.nth;
+        repeatMode == rep.RepeatMode.monthly &&
+        _repeatMonthMode == rep.RepeatMonthMode.nth;
     final repeatWeekdays = repeatMode == rep.RepeatMode.weekly
         ? _repeatWeekdays
         : nthOn
-            ? _repeatMonthWeekday
-            : 0;
-    final repeatMonthMode = repeatMode == rep.RepeatMode.monthly && nthOn ? rep.RepeatMonthMode.nth : 0;
-    final repeatNthWeek = repeatMode == rep.RepeatMode.monthly && nthOn ? _repeatNthWeek : 0;
+        ? _repeatMonthWeekday
+        : 0;
+    final repeatMonthMode = repeatMode == rep.RepeatMode.monthly && nthOn
+        ? rep.RepeatMonthMode.nth
+        : 0;
+    final repeatNthWeek = repeatMode == rep.RepeatMode.monthly && nthOn
+        ? _repeatNthWeek
+        : 0;
     // 完成引擎推进出的下一期 due（新建/编辑两条路径共用，成功后弹提示）
     int? nextDueMs;
     try {
@@ -454,38 +467,42 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
         final viewDefaults = quickViewCreateDefaults(widget.quickView);
         // 今日/本周视图内截止时刻归一 18:00（用户口径）：快捷胶囊/日历等日期
         // 来源只表达日期；NLP 显式时刻（F4，未被取消且未被手动改期）跳过归一
-        final inDueView = widget.quickView == QuickViewKey.today ||
+        final inDueView =
+            widget.quickView == QuickViewKey.today ||
             widget.quickView == QuickViewKey.week;
         final tp = _titleParse;
-        final nlpDueHasTime = tp != null &&
+        final nlpDueHasTime =
+            tp != null &&
             tp.dueHasTime &&
             tp.dueDate != null &&
             tp.dueDate!.millisecondsSinceEpoch != _dismissDueMs &&
             _dueDate == tp.dueDate!.millisecondsSinceEpoch;
         // 新建即完成：先落非完成态再走完成引擎——直接写 status=done 只会
         // 得到 done=0 的不一致行，且重复任务不会推进下一期（G11 同口径）
-        final created = await bridge.todoTaskCreate(TodoTaskCreateInput(
-          title: title,
-          description: description.isEmpty ? null : description,
-          projectId: _projectId,
-          priority: _priority,
-          status: _status == 'done' ? 'pending' : _status,
-          dueDate: inDueView && _dueDate != null && !nlpDueHasTime
-              ? atViewDueHour(_dueDate!)
-              : _dueDate,
-          startDate: _startDate,
-          repeatMode: repeatMode,
-          repeatAfter: repeatAfter,
-          repeatWeekdays: repeatWeekdays,
-          repeatEndType: _repeatEndType,
-          repeatEndParam: _repeatEndParam,
-          repeatFromDone: _repeatFromDone ? 1 : 0,
-          repeatMonthMode: repeatMonthMode,
-          repeatNthWeek: repeatNthWeek,
-          myDayDate: viewDefaults.myDayMs,
-          isFavorite: viewDefaults.favorite,
-          durationMinutes: _durationMinutes,
-        ));
+        final created = await bridge.todoTaskCreate(
+          TodoTaskCreateInput(
+            title: title,
+            description: description.isEmpty ? null : description,
+            projectId: _projectId,
+            priority: _priority,
+            status: _status == 'done' ? 'pending' : _status,
+            dueDate: inDueView && _dueDate != null && !nlpDueHasTime
+                ? atViewDueHour(_dueDate!)
+                : _dueDate,
+            startDate: _startDate,
+            repeatMode: repeatMode,
+            repeatAfter: repeatAfter,
+            repeatWeekdays: repeatWeekdays,
+            repeatEndType: _repeatEndType,
+            repeatEndParam: _repeatEndParam,
+            repeatFromDone: _repeatFromDone ? 1 : 0,
+            repeatMonthMode: repeatMonthMode,
+            repeatNthWeek: repeatNthWeek,
+            myDayDate: viewDefaults.myDayMs,
+            isFavorite: viewDefaults.favorite,
+            durationMinutes: _durationMinutes,
+          ),
+        );
         // 新建：设置提醒 → 建立提醒实体
         if (_remindAt != null) {
           await syncTaskReminder(
@@ -505,7 +522,8 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
         for (final labelId in labelIds) {
           try {
             await bridge.todoTaskLabelCreate(
-                TodoTaskLabelCreateInput(taskId: created.id, labelId: labelId));
+              TodoTaskLabelCreateInput(taskId: created.id, labelId: labelId),
+            );
           } catch (_) {
             // 标签挂载失败不阻断保存（部分成功口径）
           }
@@ -516,7 +534,8 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
         for (final title in _subtaskTitles) {
           try {
             await bridge.todoSubtaskCreate(
-                TodoSubtaskCreateInput(taskId: created.id, title: title));
+              TodoSubtaskCreateInput(taskId: created.id, title: title),
+            );
           } catch (_) {}
         }
         // 新建：模板子任务逐条建立（percent_done 由后端按完成度回算；
@@ -525,7 +544,8 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
         for (final title in tplSubs) {
           try {
             await bridge.todoSubtaskCreate(
-                TodoSubtaskCreateInput(taskId: created.id, title: title));
+              TodoSubtaskCreateInput(taskId: created.id, title: title),
+            );
           } catch (_) {}
         }
         // 新建即完成：子任务/标签/提醒挂载完再走完成引擎（重复任务生成的
@@ -627,15 +647,13 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
       context,
       title: '提醒时间',
       items: [
-        for (final p
-            in reminderPresets(
-              dueDate: _dueDate,
-              startDate: _startDate,
-              durationMinutes: _durationMinutes,
-            ))
+        for (final p in reminderPresets(
+          dueDate: _dueDate,
+          startDate: _startDate,
+          durationMinutes: _durationMinutes,
+        ))
           SelectItem<String>(value: '${p.ms}', label: p.label),
-        const SelectItem<String>(
-            value: _reminderCustomKey, label: '自定义时间…'),
+        const SelectItem<String>(value: _reminderCustomKey, label: '自定义时间…'),
       ],
       onSelect: (v) {
         if (v == _reminderCustomKey) {
@@ -709,9 +727,7 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
           controller: _durationCtl,
           autofocus: true,
           keyboardType: TextInputType.number,
-          decoration: const InputDecoration(
-            labelText: '分钟数（如 25、240）',
-          ),
+          decoration: const InputDecoration(labelText: '分钟数（如 25、240）'),
         ),
         actions: OrbitSheetActions(
           cancelLabel: '取消',
@@ -745,8 +761,10 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
           SelectItem(
             value: '${project.id}',
             label: project.title,
-            colorDot:
-                hexToColor(project.hexColor, fallback: OrbitAccents.todoAccent),
+            colorDot: hexToColor(
+              project.hexColor,
+              fallback: OrbitAccents.todoAccent,
+            ),
           ),
       ],
       current: _projectId == null ? '' : '$_projectId',
@@ -789,11 +807,7 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
           ('doing', '进行中', '#3B82F6'),
           ('done', '已完成', '#22C55E'),
         ])
-          SelectItem(
-            value: s.$1,
-            label: s.$2,
-            colorDot: hexToColor(s.$3),
-          ),
+          SelectItem(value: s.$1, label: s.$2, colorDot: hexToColor(s.$3)),
       ],
       current: _status,
       onSelect: (v) {
@@ -830,16 +844,14 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
       _repeatNthWeek = value.nthWeek;
       _repeatMonthWeekday =
           value.weekdays != 0 && (value.weekdays & (value.weekdays - 1)) == 0
-              ? value.weekdays
-              : 0;
+          ? value.weekdays
+          : 0;
     });
   }
 
   /// 行间分隔线（日期与提醒卡片内）
-  Widget _tileDivider(AppColorSet colors) => Container(
-        height: 1,
-        color: colors.divider,
-      );
+  Widget _tileDivider(AppColorSet colors) =>
+      Container(height: 1, color: colors.divider);
 
   /// 标题/描述输入框装饰：背景走 surface（亮色 #F9F9F9），
   /// 边框与信息卡片同口径（divider@30%、radius 12）。
@@ -865,7 +877,7 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: AppShapes.medium,
-        borderSide: const BorderSide(color: OrbitAccents.themeAccent, width: 1.5),
+        borderSide: BorderSide(color: OrbitAccents.themeAccent, width: 1.5),
       ),
       errorBorder: OutlineInputBorder(
         borderRadius: AppShapes.medium,
@@ -882,7 +894,9 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
 
   int _midnightOf(int offsetDays) {
     final now = DateTime.now();
-    return dateToMidnightMs(DateTime(now.year, now.month, now.day + offsetDays));
+    return dateToMidnightMs(
+      DateTime(now.year, now.month, now.day + offsetDays),
+    );
   }
 
   Future<void> _pickCustomDate() async {
@@ -908,10 +922,13 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
 
     // 键盘避让：底部 padding 跟随 viewInsets
     return Padding(
-      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).viewInsets.bottom,
+      ),
       child: Container(
-        constraints:
-            BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.85),
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(context).size.height * 0.85,
+        ),
         decoration: BoxDecoration(
           color: colors.popup,
           borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
@@ -982,13 +999,16 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
                               controller: _titleController,
                               maxLength: 200,
                               style: TextStyle(
-                                  fontSize: 15, color: colors.bodyText),
+                                fontSize: 15,
+                                color: colors.bodyText,
+                              ),
                               decoration: _fieldDecoration(
                                 label: '标题 *',
                                 hint: '请输入标题',
                               ),
-                              validator: (v) =>
-                                  v == null || v.trim().isEmpty ? '请输入标题' : null,
+                              validator: (v) => v == null || v.trim().isEmpty
+                                  ? '请输入标题'
+                                  : null,
                               onChanged: _onTitleChanged,
                             ),
                             // NLP 命中预览 chips（对齐桌面 QuickAddBar 形制 + F4 可取消）
@@ -1002,7 +1022,8 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
                                 dismissedLabelIds: _dismissLabelIds,
                                 dismissedDuration: _dismissDuration,
                                 dismissedRepeatKey: _dismissRepeatKey,
-                                labels: ref.watch(todoLabelsProvider).value ??
+                                labels:
+                                    ref.watch(todoLabelsProvider).value ??
                                     const <TodoLabel>[],
                                 onDismiss: (dim) => setState(() {
                                   final tp = _titleParse;
@@ -1023,11 +1044,12 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
                                           : _repeatKeyOf(tp.repeat!);
                                   }
                                 }),
-                                onDismissLabel: (id) => setState(() =>
-                                    _dismissLabelIds = [
-                                      ..._dismissLabelIds,
-                                      id,
-                                    ]),
+                                onDismissLabel: (id) => setState(
+                                  () => _dismissLabelIds = [
+                                    ..._dismissLabelIds,
+                                    id,
+                                  ],
+                                ),
                               ),
                             ],
                             const SizedBox(height: AppDimens.space12),
@@ -1040,7 +1062,9 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
                               // 与桌面端 task-form-sheet description(5000) 统一
                               maxLength: 5000,
                               style: TextStyle(
-                                  fontSize: 15, color: colors.bodyText),
+                                fontSize: 15,
+                                color: colors.bodyText,
+                              ),
                               decoration: _fieldDecoration(
                                 label: '描述',
                                 hint: '请输入描述',
@@ -1059,8 +1083,10 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
                                     value: project?.title ?? '未分组',
                                     // #36：项目名按项目色着字
                                     valueColor: project != null
-                                        ? hexToColor(project.hexColor,
-                                            fallback: colors.bodyText)
+                                        ? hexToColor(
+                                            project.hexColor,
+                                            fallback: colors.bodyText,
+                                          )
                                         : null,
                                     onClick: _pickProject,
                                   ),
@@ -1110,26 +1136,31 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
                                     onTap: _pickCustomDate,
                                     onClear: _dueDate == null
                                         ? null
-                                        : () =>
-                                            setState(() => _dueDate = null),
+                                        : () => setState(() => _dueDate = null),
                                     trailing: Row(
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
                                         _QuickCapsule(
-                                            label: '今天',
-                                            onTap: () => setState(
-                                                () => _dueDate = _midnightOf(0))),
+                                          label: '今天',
+                                          onTap: () => setState(
+                                            () => _dueDate = _midnightOf(0),
+                                          ),
+                                        ),
                                         const SizedBox(width: 6),
                                         _QuickCapsule(
-                                            label: '明天',
-                                            onTap: () => setState(
-                                                () => _dueDate = _midnightOf(1))),
+                                          label: '明天',
+                                          onTap: () => setState(
+                                            () => _dueDate = _midnightOf(1),
+                                          ),
+                                        ),
                                         const SizedBox(width: 6),
                                         _QuickCapsule(
-                                            label: '下周',
-                                            onTap: () => setState(() =>
-                                                _dueDate =
-                                                    nextMondayMidnightMs())),
+                                          label: '下周',
+                                          onTap: () => setState(
+                                            () => _dueDate =
+                                                nextMondayMidnightMs(),
+                                          ),
+                                        ),
                                       ],
                                     ),
                                   ),
@@ -1148,7 +1179,7 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
                                     onClear: _startDate == null
                                         ? null
                                         : () =>
-                                            setState(() => _startDate = null),
+                                              setState(() => _startDate = null),
                                   ),
                                   _tileDivider(colors),
                                   // 提醒时间（虚拟字段：提交时同步 todo_reminders）
@@ -1162,7 +1193,7 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
                                     onClear: _remindAt == null
                                         ? null
                                         : () =>
-                                            setState(() => _remindAt = null),
+                                              setState(() => _remindAt = null),
                                   ),
                                   _tileDivider(colors),
                                   // 预计时长（M9 阶段一）：常用档位单选抽屉
@@ -1170,13 +1201,16 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
                                     icon: OrbitIcons.clock,
                                     label: '预计时长',
                                     value: _durationMinutes != null
-                                        ? formatDurationMinutes(_durationMinutes)
+                                        ? formatDurationMinutes(
+                                            _durationMinutes,
+                                          )
                                         : null,
                                     onTap: _pickDuration,
                                     onClear: _durationMinutes == null
                                         ? null
                                         : () => setState(
-                                            () => _durationMinutes = null),
+                                            () => _durationMinutes = null,
+                                          ),
                                   ),
                                   // 持续提醒（G2）：仅在已设提醒时出现——
                                   // 无提醒时刻时该开关无意义
@@ -1189,8 +1223,9 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
                                           Icon(
                                             OrbitIcons.notification,
                                             size: 18,
-                                            color: colors.bodyText
-                                                .withValues(alpha: 0.7),
+                                            color: colors.bodyText.withValues(
+                                              alpha: 0.7,
+                                            ),
                                           ),
                                           const SizedBox(width: 12),
                                           Expanded(
@@ -1205,7 +1240,8 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
                                           Switch(
                                             value: _remindConstant,
                                             onChanged: (v) => setState(
-                                                () => _remindConstant = v),
+                                              () => _remindConstant = v,
+                                            ),
                                           ),
                                         ],
                                       ),
@@ -1239,40 +1275,38 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
                                         children: [
                                           for (final label in _pickedLabels)
                                             Container(
-                                              padding: const EdgeInsets
-                                                  .symmetric(
-                                                horizontal:
-                                                    AppDimens.space8 + 2,
-                                                vertical: AppDimens.space4,
-                                              ),
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                    horizontal:
+                                                        AppDimens.space8 + 2,
+                                                    vertical: AppDimens.space4,
+                                                  ),
                                               decoration: BoxDecoration(
-                                                borderRadius:
-                                                    AppShapes.small,
+                                                borderRadius: AppShapes.small,
                                                 border: Border.all(
                                                   color: colors.divider,
                                                 ),
                                               ),
                                               child: Row(
-                                                mainAxisSize:
-                                                    MainAxisSize.min,
+                                                mainAxisSize: MainAxisSize.min,
                                                 children: [
                                                   Container(
-                                                    width: AppDimens
-                                                            .colorDotSize -
+                                                    width:
+                                                        AppDimens.colorDotSize -
                                                         2,
-                                                    height: AppDimens
-                                                            .colorDotSize -
+                                                    height:
+                                                        AppDimens.colorDotSize -
                                                         2,
-                                                    decoration:
-                                                        BoxDecoration(
+                                                    decoration: BoxDecoration(
                                                       shape: BoxShape.circle,
                                                       color: hexToColor(
-                                                          label.hexColor),
+                                                        label.hexColor,
+                                                      ),
                                                     ),
                                                   ),
                                                   const SizedBox(
-                                                      width: AppDimens
-                                                          .space8),
+                                                    width: AppDimens.space8,
+                                                  ),
                                                   Text(
                                                     label.title,
                                                     style: TextStyle(
@@ -1296,7 +1330,8 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
                                     for (final title in _subtaskTitles)
                                       Padding(
                                         padding: const EdgeInsets.symmetric(
-                                            vertical: AppDimens.space4),
+                                          vertical: AppDimens.space4,
+                                        ),
                                         child: Row(
                                           children: [
                                             Expanded(
@@ -1314,13 +1349,14 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
                                               tooltip: '移除子任务',
                                               icon: Icon(
                                                 OrbitIcons.close,
-                                                size:
-                                                    AppDimens.iconSizeSm + 2,
+                                                size: AppDimens.iconSizeSm + 2,
                                                 color: colors.secondaryText,
                                               ),
-                                              onPressed: () => setState(() =>
-                                                  _subtaskTitles
-                                                      .remove(title)),
+                                              onPressed: () => setState(
+                                                () => _subtaskTitles.remove(
+                                                  title,
+                                                ),
+                                              ),
                                             ),
                                           ],
                                         ),
@@ -1331,9 +1367,9 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
                                           child: TextField(
                                             controller: _subtaskController,
                                             style: const TextStyle(
-                                                fontSize: 14),
-                                            decoration:
-                                                const InputDecoration(
+                                              fontSize: 14,
+                                            ),
+                                            decoration: const InputDecoration(
                                               hintText: '添加子任务',
                                             ),
                                             onSubmitted: (_) =>
@@ -1364,9 +1400,7 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
   /// 标签多选抽屉（G5）：勾选即进 [_pickedLabels]（不落库——任务尚未创建，
   /// 保存链统一挂载）；抽屉内可连选
   Future<void> _pickFormLabels() async {
-    var labels = <TodoLabel>[
-      ...?ref.read(todoLabelsProvider).value,
-    ];
+    var labels = <TodoLabel>[...?ref.read(todoLabelsProvider).value];
     if (labels.isEmpty) {
       try {
         labels = [...await ref.read(todoLabelsProvider.future)];
@@ -1412,7 +1446,11 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
               children: [
                 Padding(
                   padding: const EdgeInsets.fromLTRB(
-                      AppDimens.space16, AppDimens.space4, AppDimens.space16, 0),
+                    AppDimens.space16,
+                    AppDimens.space4,
+                    AppDimens.space16,
+                    0,
+                  ),
                   child: Row(
                     children: [
                       Expanded(
@@ -1439,8 +1477,10 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
                     padding: const EdgeInsets.all(AppDimens.space16),
                     child: Text(
                       '还没有标签，可在上方输入名称新建',
-                      style:
-                          TextStyle(fontSize: 13, color: colors.secondaryText),
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: colors.secondaryText,
+                      ),
                     ),
                   ),
                 for (final label in labels)
@@ -1480,7 +1520,9 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
-                                  fontSize: 15, color: colors.bodyText),
+                                fontSize: 15,
+                                color: colors.bodyText,
+                              ),
                             ),
                           ),
                         ],
@@ -1492,9 +1534,11 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
             actions: OrbitSheetActions(
               confirmLabel: '完成',
               onConfirm: () {
-                setState(() => _pickedLabels
-                  ..clear()
-                  ..addAll(labels.where((l) => picked.contains(l.id))));
+                setState(
+                  () => _pickedLabels
+                    ..clear()
+                    ..addAll(labels.where((l) => picked.contains(l.id))),
+                );
                 Navigator.pop(sheetCtx);
               },
               cancelLabel: '取消',
@@ -1516,35 +1560,34 @@ class _TodoFormSheetState extends ConsumerState<_TodoFormSheet> {
     });
   }
 
-  Widget _loadingView() => const Padding(
-        padding: EdgeInsets.all(AppDimens.space32),
-        child: Center(
-          child: SizedBox(
-            width: 24,
-            height: 24,
-            child:
-                CircularProgressIndicator(color: OrbitAccents.themeAccent),
-          ),
-        ),
-      );
+  Widget _loadingView() => Padding(
+    padding: EdgeInsets.all(AppDimens.space32),
+    child: Center(
+      child: SizedBox(
+        width: 24,
+        height: 24,
+        child: CircularProgressIndicator(color: OrbitAccents.themeAccent),
+      ),
+    ),
+  );
 
   Widget _errorView(AppColorSet colors) => Padding(
-        padding: const EdgeInsets.all(AppDimens.space32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              _loadError!,
-              style: TextStyle(fontSize: 14, color: colors.secondaryText),
-            ),
-            const SizedBox(height: AppDimens.space16),
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('返回'),
-            ),
-          ],
+    padding: const EdgeInsets.all(AppDimens.space32),
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          _loadError!,
+          style: TextStyle(fontSize: 14, color: colors.secondaryText),
         ),
-      );
+        const SizedBox(height: AppDimens.space16),
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('返回'),
+        ),
+      ],
+    ),
+  );
 }
 
 /// 日期/提醒信息行（与详情页 _InfoTile 同设计语言，表单版）
@@ -1584,8 +1627,7 @@ class _FormDateTile extends StatelessWidget {
 
     final row = Row(
       children: [
-        Icon(icon,
-            size: AppDimens.iconSizeSm + 2, color: colors.secondaryText),
+        Icon(icon, size: AppDimens.iconSizeSm + 2, color: colors.secondaryText),
         const SizedBox(width: AppDimens.space12),
         Text(label, style: TextStyle(fontSize: 14, color: colors.bodyText)),
         const Spacer(),
@@ -1643,11 +1685,7 @@ class _FormDateTile extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: AppDimens.space12),
       child: onTap == null
           ? row
-          : InkWell(
-              borderRadius: AppShapes.small,
-              onTap: onTap,
-              child: row,
-            ),
+          : InkWell(borderRadius: AppShapes.small, onTap: onTap, child: row),
     );
   }
 }
@@ -1667,10 +1705,13 @@ class _QuickCapsule extends StatelessWidget {
       child: Container(
         // 4pt 网格口径（10→12 / 4 不变）
         padding: const EdgeInsets.symmetric(
-            horizontal: AppDimens.space12, vertical: AppDimens.space4),
+          horizontal: AppDimens.space12,
+          vertical: AppDimens.space4,
+        ),
         decoration: BoxDecoration(
-            borderRadius: AppShapes.full,
-            border: Border.all(color: colors.outline)),
+          borderRadius: AppShapes.full,
+          border: Border.all(color: colors.outline),
+        ),
         child: Text(
           label,
           style: TextStyle(fontSize: 12, color: colors.secondaryText),
@@ -1687,9 +1728,8 @@ enum _ParseDim { due, priority, project, duration, repeat }
 String _repeatKeyOf(ParsedRepeat r) => '${r.mode}:${r.after}:${r.weekdays}';
 
 /// 时长 chip 文案：整小时收敛为「N 小时」（与桌面 QuickAddBar 同口径）
-String _durationChipLabel(int minutes) => minutes >= 60 && minutes % 60 == 0
-    ? '${minutes ~/ 60} 小时'
-    : '$minutes 分钟';
+String _durationChipLabel(int minutes) =>
+    minutes >= 60 && minutes % 60 == 0 ? '${minutes ~/ 60} 小时' : '$minutes 分钟';
 
 /// 标题 NLP 命中预览 chips（对齐桌面 QuickAddBar 形制）：
 /// 截止日期(含时刻) / P1-P5 优先级 / 项目 / 标签 / 时长 / 重复 逐项小胶囊，
@@ -1762,8 +1802,7 @@ class _TitleParseChips extends StatelessWidget {
             _parseChip(
               context,
               icon: OrbitIcons.tag,
-              label:
-                  labels.where((l) => l.id == id).firstOrNull?.title ?? '标签',
+              label: labels.where((l) => l.id == id).firstOrNull?.title ?? '标签',
               color: colors.secondaryText,
               onDismiss: () => onDismissLabel(id),
             ),
@@ -1804,7 +1843,9 @@ class _TitleParseChips extends StatelessWidget {
     return Container(
       // 4pt 网格口径（3→4）
       padding: const EdgeInsets.symmetric(
-          horizontal: AppDimens.space8, vertical: AppDimens.space4),
+        horizontal: AppDimens.space8,
+        vertical: AppDimens.space4,
+      ),
       decoration: BoxDecoration(
         borderRadius: AppShapes.full,
         border: Border.all(color: colors.outline),
@@ -1814,10 +1855,7 @@ class _TitleParseChips extends StatelessWidget {
         children: [
           Icon(icon, size: 12, color: color),
           const SizedBox(width: AppDimens.space4),
-          Text(
-            label,
-            style: TextStyle(fontSize: 12, color: color),
-          ),
+          Text(label, style: TextStyle(fontSize: 12, color: color)),
           if (onDismiss != null) ...[
             const SizedBox(width: AppDimens.space2),
             GestureDetector(
