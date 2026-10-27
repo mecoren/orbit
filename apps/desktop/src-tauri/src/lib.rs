@@ -318,10 +318,10 @@ pub fn run() {
             // 回收站 TTL 清理守护（60s tick；每日最多一次，启动首轮即补清）
             commands::trash_scheduler::trash_scheduler_start(_app.handle().clone());
 
-            // 首屏之后的空闲时机补一次查询计划统计（docs/13 §七 P5）：
-            // 只在「从来没建过统计 + 数据到门槛」时真跑，跑过之后每次启动零成本。
+            // 首屏之后的空闲时机跑一次轻维护（docs/13 §七 P5 / docs/09 §八）：
+            // WAL checkpoint → 附件 GC → 缓存上限 → 日志 TTL → 统计仅在缺失时。
             // 刻意延迟 15s，不与首屏首个列表查询抢预算（全量 ANALYZE 50k 47～88ms）。
-            commands::db_maintenance_cmd::spawn_idle_plan_stats(_app.handle().clone());
+            commands::db_maintenance_cmd::spawn_idle_maintenance(_app.handle().clone());
 
             // 每日摘要提醒守护（60s tick；每日一次，2026-09-30 G3）
             commands::digest_scheduler::digest_scheduler_start(_app.handle().clone());
