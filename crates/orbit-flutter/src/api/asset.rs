@@ -108,3 +108,15 @@ pub async fn attachments_unused_delete(hashes: Vec<String>) -> Result<usize, Str
         .await
         .map_err(|e| e.to_string())
 }
+
+/// 流式导出附件到指定路径（另存/分享），返回写入字节数
+///
+/// 与 [`task_attachment_read`] 的区别：不把整份内容带过桥，峰值与附件大小无关；
+/// 目标路径由 Dart 侧用 file_picker 的目录选择拼出（同名覆盖，失败不留半截文件）。
+pub async fn export_task_attachment(hash: String, target_path: String) -> Result<i64, String> {
+    let (pool, base_dir) = with_state(|s| Ok((s.pool.clone(), s.base_dir.clone())))?;
+    let dir = base_dir.join("attachments").to_string_lossy().to_string();
+    asset_api::export_task_attachment(&pool, &dir, &hash, std::path::Path::new(&target_path))
+        .await
+        .map_err(|e| e.to_string())
+}

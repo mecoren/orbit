@@ -29,6 +29,7 @@ import 'api/sync_conflict.dart';
 import 'api/template.dart';
 import 'api/todo.dart';
 import 'api/trash.dart';
+import 'api/update.dart';
 import 'api/widget.dart';
 import 'dart:async';
 import 'dart:convert';
@@ -731,6 +732,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   UnusedAttachmentView dco_decode_unused_attachment_view(dynamic raw);
+
+  @protected
+  UpdateInfo dco_decode_update_info(dynamic raw);
 
   @protected
   BigInt dco_decode_usize(dynamic raw);
@@ -1601,6 +1605,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   UnusedAttachmentView sse_decode_unused_attachment_view(
     SseDeserializer deserializer,
   );
+
+  @protected
+  UpdateInfo sse_decode_update_info(SseDeserializer deserializer);
 
   @protected
   BigInt sse_decode_usize(SseDeserializer deserializer);
@@ -2720,6 +2727,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
     UnusedAttachmentView self,
     SseSerializer serializer,
   );
+
+  @protected
+  void sse_encode_update_info(UpdateInfo self, SseSerializer serializer);
 
   @protected
   void sse_encode_usize(BigInt self, SseSerializer serializer);

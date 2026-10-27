@@ -28,4 +28,5 @@ pub mod sync_conflict_api;
 pub mod template_api;
 pub mod todo_api;
 pub mod trash_api;
+pub mod update_api;
 pub mod widget_api;

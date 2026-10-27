@@ -28,6 +28,7 @@
 //! - [widget]：Android 桌面小组件数据口（快照查询 + 勾选落库，#3）
 //! - [ics_export]：ICS 日历导出（VTODO 日历，#4）
 //! - [sync_conflict]：冲突败方副本（查看 / 恢复 / 忽略 / 清空，03 文档 §八）
+//! - [update]：检查更新（只在用户点击时拉一次 GitHub Releases 清单，#107）
 //! - [activity_log]：任务活动历史（详情抽屉/页「历史」区块只读查询）
 //! - [events]：下行事件流 + 提醒轮询守护
 //! - [logging]：`#[frb(init)]` 库加载钩子（F81：安装平台 logger，log::* 落 logcat）
@@ -59,6 +60,7 @@ pub mod sync_conflict;
 pub mod template;
 pub mod todo;
 pub mod trash;
+pub mod update;
 pub mod widget;
 
 pub use state::orbit_state_initialized;

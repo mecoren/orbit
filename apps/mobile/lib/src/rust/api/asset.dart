@@ -61,3 +61,15 @@ Future<List<UnusedAttachmentView>> attachmentsUnusedList() =>
 /// 按 hash 批量删除未使用附件（本地文件 + 账本行；云端对象保留），返回清理数
 Future<BigInt> attachmentsUnusedDelete({required List<String> hashes}) =>
     RustLib.instance.api.crateApiAssetAttachmentsUnusedDelete(hashes: hashes);
+
+/// 流式导出附件到指定路径（另存/分享），返回写入字节数
+///
+/// 与 [`task_attachment_read`] 的区别：不把整份内容带过桥，峰值与附件大小无关；
+/// 目标路径由 Dart 侧用 file_picker 的目录选择拼出（同名覆盖，失败不留半截文件）。
+Future<PlatformInt64> exportTaskAttachment({
+  required String hash,
+  required String targetPath,
+}) => RustLib.instance.api.crateApiAssetExportTaskAttachment(
+  hash: hash,
+  targetPath: targetPath,
+);
