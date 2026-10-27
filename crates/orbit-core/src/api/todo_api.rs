@@ -3749,6 +3749,307 @@ mod predicate_pushdown_tests {
         assert!(none.is_empty());
     }
 
+    /// start 区间谓词（日历时间轴按块起点取数）：NULL 不命中，半开区间。
+    ///
+    /// 走分页通道（`list_todo_tasks_page`）——范围谓词只在键集分页的
+    /// `build_task_where` 里下推，旧全量 `list` 通道维持原有谓词面。
+    #[tokio::test]
+    async fn start_range_predicate_filters_sql_side() {
+        use crate::api::business_api::list_todo_tasks_page;
+
+        let pool = setup_db().await;
+        const DAY: i64 = 86_400_000;
+        let base = 1_700_000_000_000i64;
+        let in_range = mk(&pool, "范围内", |i| i.start_date = Some(base + 1_000)).await;
+        let before = mk(&pool, "范围前", |i| i.start_date = Some(base - DAY)).await;
+        let after = mk(&pool, "范围后", |i| i.start_date = Some(base + 2 * DAY)).await;
+        let no_start = mk(&pool, "无开始", |_| {}).await;
+
+        // [base, base + DAY)：只命中范围内的显式排程
+        let page = list_todo_tasks_page(
+            &pool,
+            &ListFilter {
+                start_from: Some(base),
+                start_to: Some(base + DAY),
+                ..Default::default()
+            },
+            None,
+            100,
+        )
+        .await
+        .unwrap();
+        assert_eq!(page.items.len(), 1);
+        assert_eq!(page.items[0].id, in_range);
+
+        // 只有下界：NULL 仍不命中（与 due_from/due_to 同口径）
+        let from_only = list_todo_tasks_page(
+            &pool,
+            &ListFilter {
+                start_from: Some(base),
+                ..Default::default()
+            },
+            None,
+            100,
+        )
+        .await
+        .unwrap();
+        let ids: Vec<i64> = from_only.items.iter().map(|t| t.id).collect();
+        assert!(ids.contains(&in_range));
+        assert!(ids.contains(&after));
+        assert!(!ids.contains(&before));
+        assert!(!ids.contains(&no_start));
+    }
+
+    /// 保存筛选器谓词下推（2026-10-26）：标签任一 / 三档存在性 / 创建·完成
+    /// 时间下界。
+    ///
+    /// 这些键此前只存在于本地过滤（`applySavedFilterConditions`），保存筛选器
+    /// 一旦要在某个清单内取交集就得回退全量 10k 行——现在同一份子句被
+    /// `list` / `list_tasks_page` / `task_overview` / `task_board` 共用，
+    /// 窗口化通道不再丢条件。用例走**分页通道**验证，正是移动端读取路径。
+    #[tokio::test]
+    async fn saved_filter_predicates_filter_sql_side() {
+        use crate::api::business_api::{
+            create_todo_label, create_todo_reminder, create_todo_subtask, create_todo_task_label,
+            get_todo_task,
+        };
+        use crate::models::business::{
+            ListFilter, TodoLabelCreateInput, TodoReminderCreateInput, TodoSubtaskCreateInput,
+            TodoTaskLabelCreateInput,
+        };
+
+        // 嵌套项不继承外层块级 use，签名与调用都走全限定路径
+        async fn page_ids(
+            pool: &SqlitePool,
+            filter: crate::models::business::ListFilter,
+        ) -> Vec<i64> {
+            let page = crate::api::business_api::list_todo_tasks_page(pool, &filter, None, 100)
+                .await
+                .unwrap();
+            let mut ids: Vec<i64> = page.items.iter().map(|t| t.id).collect();
+            ids.sort_unstable();
+            ids
+        }
+
+        let pool = setup_db().await;
+        const DAY: i64 = 86_400_000;
+        let base = 1_700_000_000_000i64;
+
+        let l1 = create_todo_label(
+            &pool,
+            &TodoLabelCreateInput {
+                title: "甲".into(),
+                hex_color: None,
+            },
+        )
+        .await
+        .unwrap();
+        let l2 = create_todo_label(
+            &pool,
+            &TodoLabelCreateInput {
+                title: "乙".into(),
+                hex_color: None,
+            },
+        )
+        .await
+        .unwrap();
+
+        let both = mk(&pool, "甲乙都有", |_| {}).await;
+        let second = mk(&pool, "只有乙", |_| {}).await;
+        let bare = mk(&pool, "无标签", |_| {}).await;
+        for (task_id, label_id) in [(both, l1.id), (both, l2.id), (second, l2.id)] {
+            create_todo_task_label(&pool, &TodoTaskLabelCreateInput { task_id, label_id })
+                .await
+                .unwrap();
+        }
+
+        // 标签「任一命中」：甲 → 只有 both
+        assert_eq!(
+            page_ids(
+                &pool,
+                ListFilter {
+                    label_ids: Some(vec![l1.id]),
+                    ..Default::default()
+                }
+            )
+            .await,
+            vec![both]
+        );
+        // 多个标签仍是 OR 而非 AND
+        assert_eq!(
+            page_ids(
+                &pool,
+                ListFilter {
+                    label_ids: Some(vec![l1.id, l2.id]),
+                    ..Default::default()
+                }
+            )
+            .await,
+            vec![both, second]
+        );
+        // 空集合 = 不过滤（条件里「没选标签」不该清空列表）
+        assert_eq!(
+            page_ids(
+                &pool,
+                ListFilter {
+                    label_ids: Some(vec![]),
+                    ..Default::default()
+                }
+            )
+            .await,
+            vec![both, second, bare]
+        );
+
+        // has_reminder 两态
+        create_todo_reminder(
+            &pool,
+            &TodoReminderCreateInput {
+                task_id: second,
+                remind_at: base,
+                is_constant: 0,
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            page_ids(
+                &pool,
+                ListFilter {
+                    has_reminder: Some(true),
+                    ..Default::default()
+                }
+            )
+            .await,
+            vec![second]
+        );
+        assert_eq!(
+            page_ids(
+                &pool,
+                ListFilter {
+                    has_reminder: Some(false),
+                    ..Default::default()
+                }
+            )
+            .await,
+            vec![both, bare]
+        );
+
+        // has_open_subtask：子任务完成后该谓词翻面
+        let sub = create_todo_subtask(
+            &pool,
+            &TodoSubtaskCreateInput {
+                task_id: both,
+                title: "子任务".into(),
+                position: None,
+                parent_uuid: None,
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            page_ids(
+                &pool,
+                ListFilter {
+                    has_open_subtask: Some(true),
+                    ..Default::default()
+                }
+            )
+            .await,
+            vec![both]
+        );
+        toggle_todo_subtask_done(&pool, sub.id, true).await.unwrap();
+        assert!(
+            page_ids(
+                &pool,
+                ListFilter {
+                    has_open_subtask: Some(true),
+                    ..Default::default()
+                }
+            )
+            .await
+            .is_empty()
+        );
+
+        // has_attachment：内容寻址要真实文件，故直接落一行关联（谓词只看活行）
+        sqlx::query(
+            "INSERT INTO todo_task_attachments \
+             (uuid, task_id, hash, is_deleted, created_at, updated_at, version) \
+             VALUES ('att-1', ?, 'h1', 0, 0, 0, 1)",
+        )
+        .bind(bare)
+        .execute(&pool)
+        .await
+        .unwrap();
+        assert_eq!(
+            page_ids(
+                &pool,
+                ListFilter {
+                    has_attachment: Some(true),
+                    ..Default::default()
+                }
+            )
+            .await,
+            vec![bare]
+        );
+
+        // created_from：下界含界（用已存在行的 created_at 当界，时钟单调递增）
+        let first_created = get_todo_task(&pool, both).await.unwrap().created_at;
+        let third_created = get_todo_task(&pool, bare).await.unwrap().created_at;
+        assert_eq!(
+            page_ids(
+                &pool,
+                ListFilter {
+                    created_from: Some(first_created),
+                    ..Default::default()
+                }
+            )
+            .await,
+            vec![both, second, bare]
+        );
+        // 以末尾行的 created_at + 1 为界：一条也不命中
+        assert!(
+            page_ids(
+                &pool,
+                ListFilter {
+                    created_from: Some(third_created + 1),
+                    ..Default::default()
+                }
+            )
+            .await
+            .is_empty()
+        );
+
+        // done_from：隐含只看已完成，且未完成行恒不命中
+        let finished = mk(&pool, "已完成", |i| {
+            i.done = Some(1);
+            i.status = Some("done".into());
+            i.done_at = Some(base + DAY);
+        })
+        .await;
+        assert_eq!(
+            page_ids(
+                &pool,
+                ListFilter {
+                    done_from: Some(base + DAY),
+                    ..Default::default()
+                }
+            )
+            .await,
+            vec![finished]
+        );
+        assert!(
+            page_ids(
+                &pool,
+                ListFilter {
+                    done_from: Some(base + 2 * DAY),
+                    ..Default::default()
+                }
+            )
+            .await
+            .is_empty()
+        );
+    }
+
     /// project_ids 与 project_id 同口径放行归档项目任务
     ///（选中父清单时其归档子清单的任务仍可见：归档=从默认列表收起，非软删）
     #[tokio::test]

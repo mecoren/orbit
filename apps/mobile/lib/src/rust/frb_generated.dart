@@ -7590,8 +7590,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   ListFilter dco_decode_list_filter(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 18)
-      throw Exception('unexpected arr length: expect 18 but see ${arr.length}');
+    if (arr.length != 26)
+      throw Exception('unexpected arr length: expect 26 but see ${arr.length}');
     return ListFilter(
       keyword: dco_decode_opt_String(arr[0]),
       page: dco_decode_u_32(arr[1]),
@@ -7611,6 +7611,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       sortDir: dco_decode_opt_String(arr[15]),
       dueFrom: dco_decode_opt_box_autoadd_i_64(arr[16]),
       dueTo: dco_decode_opt_box_autoadd_i_64(arr[17]),
+      startFrom: dco_decode_opt_box_autoadd_i_64(arr[18]),
+      startTo: dco_decode_opt_box_autoadd_i_64(arr[19]),
+      labelIds: dco_decode_opt_list_prim_i_64_strict(arr[20]),
+      hasReminder: dco_decode_opt_box_autoadd_bool(arr[21]),
+      hasAttachment: dco_decode_opt_box_autoadd_bool(arr[22]),
+      hasOpenSubtask: dco_decode_opt_box_autoadd_bool(arr[23]),
+      createdFrom: dco_decode_opt_box_autoadd_i_64(arr[24]),
+      doneFrom: dco_decode_opt_box_autoadd_i_64(arr[25]),
     );
   }
 
@@ -10153,6 +10161,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_sortDir = sse_decode_opt_String(deserializer);
     var var_dueFrom = sse_decode_opt_box_autoadd_i_64(deserializer);
     var var_dueTo = sse_decode_opt_box_autoadd_i_64(deserializer);
+    var var_startFrom = sse_decode_opt_box_autoadd_i_64(deserializer);
+    var var_startTo = sse_decode_opt_box_autoadd_i_64(deserializer);
+    var var_labelIds = sse_decode_opt_list_prim_i_64_strict(deserializer);
+    var var_hasReminder = sse_decode_opt_box_autoadd_bool(deserializer);
+    var var_hasAttachment = sse_decode_opt_box_autoadd_bool(deserializer);
+    var var_hasOpenSubtask = sse_decode_opt_box_autoadd_bool(deserializer);
+    var var_createdFrom = sse_decode_opt_box_autoadd_i_64(deserializer);
+    var var_doneFrom = sse_decode_opt_box_autoadd_i_64(deserializer);
     return ListFilter(
       keyword: var_keyword,
       page: var_page,
@@ -10172,6 +10188,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       sortDir: var_sortDir,
       dueFrom: var_dueFrom,
       dueTo: var_dueTo,
+      startFrom: var_startFrom,
+      startTo: var_startTo,
+      labelIds: var_labelIds,
+      hasReminder: var_hasReminder,
+      hasAttachment: var_hasAttachment,
+      hasOpenSubtask: var_hasOpenSubtask,
+      createdFrom: var_createdFrom,
+      doneFrom: var_doneFrom,
     );
   }
 
@@ -13098,6 +13122,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_opt_String(self.sortDir, serializer);
     sse_encode_opt_box_autoadd_i_64(self.dueFrom, serializer);
     sse_encode_opt_box_autoadd_i_64(self.dueTo, serializer);
+    sse_encode_opt_box_autoadd_i_64(self.startFrom, serializer);
+    sse_encode_opt_box_autoadd_i_64(self.startTo, serializer);
+    sse_encode_opt_list_prim_i_64_strict(self.labelIds, serializer);
+    sse_encode_opt_box_autoadd_bool(self.hasReminder, serializer);
+    sse_encode_opt_box_autoadd_bool(self.hasAttachment, serializer);
+    sse_encode_opt_box_autoadd_bool(self.hasOpenSubtask, serializer);
+    sse_encode_opt_box_autoadd_i_64(self.createdFrom, serializer);
+    sse_encode_opt_box_autoadd_i_64(self.doneFrom, serializer);
   }
 
   @protected

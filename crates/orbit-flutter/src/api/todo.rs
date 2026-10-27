@@ -47,9 +47,9 @@ pub use super::dto::{
     TaskDependencyFlags, TaskDescriptionFlag, TaskExistenceFlag, TaskLabelsProjection,
     TaskRemindersProjection, TodoComment, TodoCommentCreateInput, TodoLabel, TodoLabelCreateInput,
     TodoProject, TodoProjectCreateInput, TodoProjectUndone, TodoReminder, TodoReminderCreateInput,
-    TodoSubtask, TodoSubtaskCreateInput, TodoTask, TodoTaskBoard, TodoTaskBoardGroup,
-    TodoTaskCreateInput, TodoTaskDetail, TodoTaskLabel, TodoTaskLabelCreateInput, TodoTaskListItem,
-    TodoTaskOverview, TodoTaskPage, TodoTaskRelation, TodoTaskRelationCreateInput,
+    TodoSubtask, TodoSubtaskCreateInput, TodoTask, TodoTaskBoard, TodoTaskCreateInput,
+    TodoTaskDetail, TodoTaskLabel, TodoTaskLabelCreateInput, TodoTaskListItem, TodoTaskOverview,
+    TodoTaskPage, TodoTaskRelation, TodoTaskRelationCreateInput,
 };
 
 fn pool() -> Result<sqlx::SqlitePool, String> {

@@ -280,6 +280,15 @@ fn build_task_where(
         clause.push_str(" AND due_date < ?");
         binds.push(BindVal::Int(to));
     }
+    // 开始时间范围（日历时间轴按块起点取数）：NULL 不命中，与 due 区间同口径
+    if let Some(from) = filter.start_from {
+        clause.push_str(" AND start_date >= ?");
+        binds.push(BindVal::Int(from));
+    }
+    if let Some(to) = filter.start_to {
+        clause.push_str(" AND start_date < ?");
+        binds.push(BindVal::Int(to));
+    }
     // 逾期行已由置顶段的独立查询取走：主列表排除它们但保留无截止行
     if let Some(before) = filter.exclude_due_before {
         clause.push_str(" AND (due_date IS NULL OR due_date >= ?)");
@@ -431,14 +440,12 @@ pub async fn list_tasks_page(
     let limit = limit.clamp(1, 1000) as i64;
 
     // 换档即作废：游标记录的排序档与本次请求不一致，说明是竞态下的旧游标
-    if let Some(c) = cursor {
-        if c.sort_key != sort_str || c.dir != dir_str {
-            return Ok(TodoTaskPage {
-                items: Vec::new(),
-                next_cursor: None,
-                has_more: false,
-            });
-        }
+    if cursor.is_some_and(|c| c.sort_key != sort_str || c.dir != dir_str) {
+        return Ok(TodoTaskPage {
+            items: Vec::new(),
+            next_cursor: None,
+            has_more: false,
+        });
     }
 
     let where_clause = build_task_where(filter, sort, desc, cursor);
@@ -694,8 +701,14 @@ struct TaskPredicateClause {
 }
 
 /// 拼接 todo_tasks 的谓词下推子句（其他表返回空——结构上没有这些列）。
+///
 /// 语义对齐前端 filterTasks：done/status/priority_min/project_id/
 /// favorite_only/my_day_today（零点值由调用方传入）。
+///
+/// 保存筛选器相关键（label_ids 任一 / has_reminder / has_attachment /
+/// has_open_subtask / created_from / done_from）也在这里下推——它们与本文件
+/// `list` / `list_tasks_page` / `task_overview` / `task_board` 共用同一份
+/// 子句，故窗口化通道与全量通道的谓词面不会分叉。
 fn build_task_predicate_clause(table: &str, filter: &ListFilter) -> TaskPredicateClause {
     if table != "todo_tasks" {
         return TaskPredicateClause {
@@ -766,11 +779,77 @@ fn build_task_predicate_clause(table: &str, filter: &ListFilter) -> TaskPredicat
         Some(false) => clause.push_str(" AND due_date IS NULL"),
         None => {}
     }
+    // 标签任一命中（保存筛选器 label_ids / 列表内标签筛选）：用 EXISTS 子查询
+    // 而非 JOIN——列表通道是单表投影，JOIN 会让多标签任务产生重复行，翻页
+    // 边界与去重都要另写一套。
+    if let Some(ids) = filter.label_ids.as_deref().filter(|ids| !ids.is_empty()) {
+        clause.push_str(
+            " AND EXISTS (SELECT 1 FROM todo_task_labels tl \
+             WHERE tl.task_id = todo_tasks.id AND tl.is_deleted = 0 AND tl.label_id IN (",
+        );
+        for (i, id) in ids.iter().enumerate() {
+            if i > 0 {
+                clause.push_str(", ");
+            }
+            clause.push('?');
+            bindings.push(*id);
+        }
+        clause.push_str("))");
+    }
+    // 存在性谓词（保存筛选器 has_reminder/has_attachment/has_open_subtask）：
+    // true/false 只差一个 NOT，故共用同一段子查询文本。
+    push_related_exists(&mut clause, filter.has_reminder, "todo_reminders", "tr", "");
+    push_related_exists(
+        &mut clause,
+        filter.has_attachment,
+        "todo_task_attachments",
+        "ta",
+        "",
+    );
+    push_related_exists(
+        &mut clause,
+        filter.has_open_subtask,
+        "todo_subtasks",
+        "ts",
+        " AND ts.done = 0",
+    );
+    // 创建 / 完成时间下界（保存筛选器 created_from / done_from）
+    if let Some(from) = filter.created_from {
+        clause.push_str(" AND created_at >= ?");
+        bindings.push(from);
+    }
+    if let Some(from) = filter.done_from {
+        // 未完成行没有完成时间：本谓词隐含「只看已完成」
+        clause.push_str(" AND done = 1 AND done_at >= ?");
+        bindings.push(from);
+    }
     TaskPredicateClause {
         clause,
         bindings,
         status_binding,
     }
+}
+
+/// 追加「存在 / 不存在关联行」谓词（子表统一带 `task_id` 与 `is_deleted`）。
+///
+/// `extra` 为附加条件，须以 `" AND "` 起头（如子任务的 `done = 0`）。
+/// 表名与别名都是本文件内的编译期常量，不来自用户输入。
+fn push_related_exists(
+    clause: &mut String,
+    flag: Option<bool>,
+    table: &str,
+    alias: &str,
+    extra: &str,
+) {
+    let negate = match flag {
+        Some(true) => "",
+        Some(false) => "NOT ",
+        None => return,
+    };
+    clause.push_str(&format!(
+        " AND {negate}EXISTS (SELECT 1 FROM {table} {alias} \
+         WHERE {alias}.task_id = todo_tasks.id AND {alias}.is_deleted = 0{extra})"
+    ));
 }
 
 /// 返回指定业务表的可搜索字符串字段白名单

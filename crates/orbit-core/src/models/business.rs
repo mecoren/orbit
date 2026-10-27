@@ -124,6 +124,42 @@ pub struct ListFilter {
     pub due_from: Option<i64>,
     /// 截止时间上界（毫秒，不含）。与 [Self::due_from] 组成半开区间。
     pub due_to: Option<i64>,
+    /// 开始时间下界（毫秒，含）。日历时间轴按**块起点**取数用：显式排程块
+    /// 的视图日由 `start_date` 决定，只按 due 范围取会漏掉「start 在可见
+    /// 范围内、due 在范围外/为空」的块。
+    ///
+    /// `serde(default)`：桌面壳的历史调用方不传本字段（TS 侧可选），缺省按
+    /// None 处理，不能因新增谓词让旧调用反序列化失败。
+    #[serde(default)]
+    pub start_from: Option<i64>,
+    /// 开始时间上界（毫秒，不含）。与 [Self::start_from] 组成半开区间。
+    #[serde(default)]
+    pub start_to: Option<i64>,
+    /// 标签集合（**任一命中**，与桌面/移动保存筛选器的 `label_ids` 同义）：
+    /// 任务至少挂其中一个标签。空集合 = 不过滤（与 [Self::project_ids] 的
+    /// 空集合 = 空结果不同——条件里的空标签列表就是「没选」，不该清空列表）。
+    #[serde(default)]
+    pub label_ids: Option<Vec<i64>>,
+    /// 有提醒：`Some(true)` = 至少一条活提醒行，`Some(false)` = 一条也没有。
+    /// 由「存在关联行」下推，不在内存里按投影集过滤。
+    #[serde(default)]
+    pub has_reminder: Option<bool>,
+    /// 有附件：语义同 [Self::has_reminder]（`todo_task_attachments` 活行）。
+    #[serde(default)]
+    pub has_attachment: Option<bool>,
+    /// 有**未完成**子任务：语义同 [Self::has_reminder]，子任务须 `done = 0`。
+    #[serde(default)]
+    pub has_open_subtask: Option<bool>,
+    /// 创建时间下界（毫秒，含）：保存筛选器 `created_from` 下推。
+    #[serde(default)]
+    pub created_from: Option<i64>,
+    /// 完成时间下界（毫秒，含）：保存筛选器 `done_from` 下推。
+    ///
+    /// 隐含「只看已完成」：未完成行没有完成时间，与本地
+    /// `applySavedFilterConditions` 的「未完成恒不命中 done 维」同口径。
+    /// 与主窗口的 `done = Some(false)` 同时给出时结果必空（AND 语义）。
+    #[serde(default)]
+    pub done_from: Option<i64>,
 }
 
 /// 键集分页游标（P1 50k 规模档）。

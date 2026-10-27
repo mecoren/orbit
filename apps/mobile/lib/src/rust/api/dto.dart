@@ -678,6 +678,30 @@ class ListFilter {
   /// 截止区间上界（毫秒，不含）
   final PlatformInt64? dueTo;
 
+  /// 开始区间下界（毫秒，含）：日历时间轴按块起点取数
+  final PlatformInt64? startFrom;
+
+  /// 开始区间上界（毫秒，不含）
+  final PlatformInt64? startTo;
+
+  /// 标签集合（任一命中）：空集合 = 不过滤
+  final Int64List? labelIds;
+
+  /// 有提醒：true = 至少一条活提醒，false = 一条也没有
+  final bool? hasReminder;
+
+  /// 有附件：语义同上
+  final bool? hasAttachment;
+
+  /// 有未完成子任务：语义同上
+  final bool? hasOpenSubtask;
+
+  /// 创建时间下界（毫秒，含）
+  final PlatformInt64? createdFrom;
+
+  /// 完成时间下界（毫秒，含；隐含只看已完成）
+  final PlatformInt64? doneFrom;
+
   const ListFilter({
     this.keyword,
     required this.page,
@@ -697,6 +721,14 @@ class ListFilter {
     this.sortDir,
     this.dueFrom,
     this.dueTo,
+    this.startFrom,
+    this.startTo,
+    this.labelIds,
+    this.hasReminder,
+    this.hasAttachment,
+    this.hasOpenSubtask,
+    this.createdFrom,
+    this.doneFrom,
   });
 
   @override
@@ -718,7 +750,15 @@ class ListFilter {
       sortKey.hashCode ^
       sortDir.hashCode ^
       dueFrom.hashCode ^
-      dueTo.hashCode;
+      dueTo.hashCode ^
+      startFrom.hashCode ^
+      startTo.hashCode ^
+      labelIds.hashCode ^
+      hasReminder.hashCode ^
+      hasAttachment.hashCode ^
+      hasOpenSubtask.hashCode ^
+      createdFrom.hashCode ^
+      doneFrom.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -742,7 +782,15 @@ class ListFilter {
           sortKey == other.sortKey &&
           sortDir == other.sortDir &&
           dueFrom == other.dueFrom &&
-          dueTo == other.dueTo;
+          dueTo == other.dueTo &&
+          startFrom == other.startFrom &&
+          startTo == other.startTo &&
+          labelIds == other.labelIds &&
+          hasReminder == other.hasReminder &&
+          hasAttachment == other.hasAttachment &&
+          hasOpenSubtask == other.hasOpenSubtask &&
+          createdFrom == other.createdFrom &&
+          doneFrom == other.doneFrom;
 }
 
 /// 回顾状态行（镜像 project_review_api::ProjectReviewStatus；F1 回顾中心用）

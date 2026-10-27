@@ -59,6 +59,22 @@ pub struct ListFilter {
     pub due_from: Option<i64>,
     /// 截止区间上界（毫秒，不含）
     pub due_to: Option<i64>,
+    /// 开始区间下界（毫秒，含）：日历时间轴按块起点取数
+    pub start_from: Option<i64>,
+    /// 开始区间上界（毫秒，不含）
+    pub start_to: Option<i64>,
+    /// 标签集合（任一命中）：空集合 = 不过滤
+    pub label_ids: Option<Vec<i64>>,
+    /// 有提醒：true = 至少一条活提醒，false = 一条也没有
+    pub has_reminder: Option<bool>,
+    /// 有附件：语义同上
+    pub has_attachment: Option<bool>,
+    /// 有未完成子任务：语义同上
+    pub has_open_subtask: Option<bool>,
+    /// 创建时间下界（毫秒，含）
+    pub created_from: Option<i64>,
+    /// 完成时间下界（毫秒，含；隐含只看已完成）
+    pub done_from: Option<i64>,
 }
 
 impl From<orbit_core::models::business::ListFilter> for ListFilter {
@@ -82,6 +98,14 @@ impl From<orbit_core::models::business::ListFilter> for ListFilter {
             sort_dir: f.sort_dir,
             due_from: f.due_from,
             due_to: f.due_to,
+            start_from: f.start_from,
+            start_to: f.start_to,
+            label_ids: f.label_ids,
+            has_reminder: f.has_reminder,
+            has_attachment: f.has_attachment,
+            has_open_subtask: f.has_open_subtask,
+            created_from: f.created_from,
+            done_from: f.done_from,
         }
     }
 }
@@ -107,6 +131,14 @@ impl From<ListFilter> for orbit_core::models::business::ListFilter {
             sort_dir: f.sort_dir,
             due_from: f.due_from,
             due_to: f.due_to,
+            start_from: f.start_from,
+            start_to: f.start_to,
+            label_ids: f.label_ids,
+            has_reminder: f.has_reminder,
+            has_attachment: f.has_attachment,
+            has_open_subtask: f.has_open_subtask,
+            created_from: f.created_from,
+            done_from: f.done_from,
         }
     }
 }

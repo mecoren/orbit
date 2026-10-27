@@ -27,7 +27,7 @@
 // Section: imports
 
 use flutter_rust_bridge::for_generated::byteorder::{NativeEndian, ReadBytesExt, WriteBytesExt};
-use flutter_rust_bridge::for_generated::{transform_result_dco, Lifetimeable, Lockable};
+use flutter_rust_bridge::for_generated::{Lifetimeable, Lockable, transform_result_dco};
 use flutter_rust_bridge::{Handler, IntoIntoDart};
 
 // Section: boilerplate
@@ -8034,6 +8034,14 @@ impl SseDecode for crate::api::dto::ListFilter {
         let mut var_sortDir = <Option<String>>::sse_decode(deserializer);
         let mut var_dueFrom = <Option<i64>>::sse_decode(deserializer);
         let mut var_dueTo = <Option<i64>>::sse_decode(deserializer);
+        let mut var_startFrom = <Option<i64>>::sse_decode(deserializer);
+        let mut var_startTo = <Option<i64>>::sse_decode(deserializer);
+        let mut var_labelIds = <Option<Vec<i64>>>::sse_decode(deserializer);
+        let mut var_hasReminder = <Option<bool>>::sse_decode(deserializer);
+        let mut var_hasAttachment = <Option<bool>>::sse_decode(deserializer);
+        let mut var_hasOpenSubtask = <Option<bool>>::sse_decode(deserializer);
+        let mut var_createdFrom = <Option<i64>>::sse_decode(deserializer);
+        let mut var_doneFrom = <Option<i64>>::sse_decode(deserializer);
         return crate::api::dto::ListFilter {
             keyword: var_keyword,
             page: var_page,
@@ -8053,6 +8061,14 @@ impl SseDecode for crate::api::dto::ListFilter {
             sort_dir: var_sortDir,
             due_from: var_dueFrom,
             due_to: var_dueTo,
+            start_from: var_startFrom,
+            start_to: var_startTo,
+            label_ids: var_labelIds,
+            has_reminder: var_hasReminder,
+            has_attachment: var_hasAttachment,
+            has_open_subtask: var_hasOpenSubtask,
+            created_from: var_createdFrom,
+            done_from: var_doneFrom,
         };
     }
 }
@@ -11661,6 +11677,14 @@ impl flutter_rust_bridge::IntoDart for crate::api::dto::ListFilter {
             self.sort_dir.into_into_dart().into_dart(),
             self.due_from.into_into_dart().into_dart(),
             self.due_to.into_into_dart().into_dart(),
+            self.start_from.into_into_dart().into_dart(),
+            self.start_to.into_into_dart().into_dart(),
+            self.label_ids.into_into_dart().into_dart(),
+            self.has_reminder.into_into_dart().into_dart(),
+            self.has_attachment.into_into_dart().into_dart(),
+            self.has_open_subtask.into_into_dart().into_dart(),
+            self.created_from.into_into_dart().into_dart(),
+            self.done_from.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -13901,6 +13925,14 @@ impl SseEncode for crate::api::dto::ListFilter {
         <Option<String>>::sse_encode(self.sort_dir, serializer);
         <Option<i64>>::sse_encode(self.due_from, serializer);
         <Option<i64>>::sse_encode(self.due_to, serializer);
+        <Option<i64>>::sse_encode(self.start_from, serializer);
+        <Option<i64>>::sse_encode(self.start_to, serializer);
+        <Option<Vec<i64>>>::sse_encode(self.label_ids, serializer);
+        <Option<bool>>::sse_encode(self.has_reminder, serializer);
+        <Option<bool>>::sse_encode(self.has_attachment, serializer);
+        <Option<bool>>::sse_encode(self.has_open_subtask, serializer);
+        <Option<i64>>::sse_encode(self.created_from, serializer);
+        <Option<i64>>::sse_encode(self.done_from, serializer);
     }
 }
 
@@ -15246,7 +15278,7 @@ mod io {
     use flutter_rust_bridge::for_generated::byteorder::{
         NativeEndian, ReadBytesExt, WriteBytesExt,
     };
-    use flutter_rust_bridge::for_generated::{transform_result_dco, Lifetimeable, Lockable};
+    use flutter_rust_bridge::for_generated::{Lifetimeable, Lockable, transform_result_dco};
     use flutter_rust_bridge::{Handler, IntoIntoDart};
 
     // Section: boilerplate

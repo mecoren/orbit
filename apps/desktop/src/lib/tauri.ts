@@ -55,6 +55,21 @@ export interface ListFilter {
   start_from?: number | null;
   /** 开始区间上界（毫秒，不含） */
   start_to?: number | null;
+  /**
+   * 标签集合（**任一命中**，EXISTS 子查询）：保存筛选器 label_ids 与列表内
+   * 标签筛选共用。空集合 = 不过滤（≠ 空结果：条件里没选标签就是没限制）。
+   */
+  label_ids?: number[] | null;
+  /** 有提醒（至少一条活提醒行）；null = 不限 */
+  has_reminder?: boolean | null;
+  /** 有附件（todo_task_attachments 活行）；null = 不限 */
+  has_attachment?: boolean | null;
+  /** 有未完成子任务；null = 不限 */
+  has_open_subtask?: boolean | null;
+  /** 创建时间下界（毫秒，含）：保存筛选器 created_from */
+  created_from?: number | null;
+  /** 完成时间下界（毫秒，含；隐含只看已完成）：保存筛选器 done_from */
+  done_from?: number | null;
 }
 
 /** 键集分页支持的排序档（title 档走旧的全量通道） */
