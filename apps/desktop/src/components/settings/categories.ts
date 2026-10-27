@@ -1,7 +1,7 @@
 /**
  * 设置页导航分类模型（对齐 wait-home：左导航 + 右内容布局）
  */
-import { Activity, Bell, CalendarDays, CloudUpload, FileStack, GitCompare, Keyboard, ListTodo, Palette, Power, RefreshCw, Shield, type LucideIcon } from "lucide-react";
+import { Activity, Bell, CalendarDays, CloudUpload, FileStack, FlaskConical, GitCompare, Keyboard, ListTodo, Palette, Power, RefreshCw, Shield, type LucideIcon } from "lucide-react";
 
 export interface CategoryItem {
   key: string;
@@ -25,6 +25,11 @@ export const settingsCategories: CategoryItem[] = [
   // 应用内诊断分区（docs/09 内存专项；与「关于与更新」同为工程性面板，紧邻摆放）
   { key: "diagnostics", label: "诊断", icon: Activity },
   { key: "updater", label: "关于与更新", icon: RefreshCw },
+  // 测试数据生成：只有开发构建（pnpm tauri dev）列出。release 包里
+  // import.meta.env.DEV 恒为 false，与 Rust 命令侧的 debug 门禁同口径。
+  ...(import.meta.env.DEV
+    ? [{ key: "test-data", label: "测试数据", icon: FlaskConical }]
+    : []),
 ];
 
 export type SettingsCategoryKey = (typeof settingsCategories)[number]["key"];

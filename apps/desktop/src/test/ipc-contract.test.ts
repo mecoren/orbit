@@ -75,6 +75,9 @@ const MOCK_ALLOWLIST = new Set<string>([
   "todo_task_relations_get",
   "todo_tasks_duplicate",
   "todo_tasks_recalc_percent",
+  // —— 开发专用（仅 pnpm tauri dev 下可见；浏览器冒烟不走，批量为 core 侧事务）——
+  "dev_seed_clear",
+  "dev_seed_demo_data",
 ]);
 
 /** 45 行任务库：updated_at 严格递增，插入序 = 更新序的逆序可区分 */

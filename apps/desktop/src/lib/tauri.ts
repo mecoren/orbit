@@ -1788,3 +1788,37 @@ export interface DiagnosticsSnapshot {
 /** 采集诊断快照（只读聚合，不触发 db-change） */
 export const diagnosticsSnapshot = () =>
   invoke<DiagnosticsSnapshot>("diagnostics_snapshot");
+
+// ========== 测试数据（仅开发构建；release 命令返回不可用，前端入口 DEV 门禁）==========
+/** 生成规模（镜像 orbit_core::api::dev_seed_api::DevSeedPlan；只暴露任务条数） */
+export interface DevSeedPlan {
+  /** 任务条数（含约 2% 回收站行） */
+  tasks: number;
+}
+/** 各表写入/清除条数（镜像 orbit_core::api::dev_seed_api::DevSeedCounts） */
+export interface DevSeedCounts {
+  projects: number;
+  labels: number;
+  tasks: number;
+  subtasks: number;
+  reminders: number;
+  comments: number;
+  task_labels: number;
+  task_relations: number;
+}
+/** 生成结果（`cleared` = 生成前清掉的上一批） */
+export interface DevSeedResult {
+  created: DevSeedCounts;
+  cleared: DevSeedCounts;
+  elapsed_ms: number;
+}
+/** 清理结果 */
+export interface DevSeedClearResult {
+  removed: DevSeedCounts;
+  elapsed_ms: number;
+}
+/** 一键生成示例数据（先清上一批，不碰手工数据） */
+export const devSeedDemoData = (plan: DevSeedPlan) =>
+  invoke<DevSeedResult>("dev_seed_demo_data", { plan });
+/** 清除示例数据（按 uuid 前缀物理删除） */
+export const devSeedClear = () => invoke<DevSeedClearResult>("dev_seed_clear");

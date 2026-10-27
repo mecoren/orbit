@@ -22,6 +22,7 @@ import { TodoSection } from "@/components/settings/todo-section";
 import { ShortcutsSection } from "@/components/settings/shortcuts-section";
 import { TemplatesSection } from "@/components/settings/templates-section";
 import { NotificationHistorySection } from "@/components/settings/notification-history-section";
+import { TestDataSection } from "@/components/settings/test-data-section";
 import { UpdaterSection } from "@/components/settings/updater-section";
 
 export function SettingsPage() {
@@ -69,6 +70,8 @@ export function SettingsPage() {
             {active === "templates" && <TemplatesSection />}
             {active === "notifications" && <NotificationHistorySection />}
             {active === "diagnostics" && <DiagnosticsSection />}
+            {/* DEV 门禁：release 构建里该分支被常量折叠掉，入口也不渲染 */}
+            {import.meta.env.DEV && active === "test-data" && <TestDataSection />}
             {active === "updater" && <UpdaterSection />}
           </div>
         </div>
